@@ -13,7 +13,7 @@ type message struct {
 	err  error
 }
 
-func Run(graph []*api.StepNode) error {
+func Run(graph []*api.StepNode, dry bool) error {
 	var seen []api.StepLink
 	results := make(chan message)
 	done := make(chan bool)
@@ -25,7 +25,7 @@ func Run(graph []*api.StepNode) error {
 	}()
 
 	for _, root := range graph {
-		go runStep(root, results)
+		go runStep(root, results, dry)
 	}
 
 	var errors []error
@@ -44,7 +44,7 @@ func Run(graph []*api.StepNode) error {
 					// when the last of its parents finishes.
 					if containsAll(child.Step.Requires(), seen) {
 						wg.Add(1)
-						go runStep(child, results)
+						go runStep(child, results, dry)
 					}
 				}
 			}
@@ -66,10 +66,10 @@ func Run(graph []*api.StepNode) error {
 	}
 }
 
-func runStep(node *api.StepNode, out chan<- message) {
+func runStep(node *api.StepNode, out chan<- message, dry bool) {
 	out <- message{
 		node: node,
-		err:  node.Step.Run(),
+		err:  node.Step.Run(dry),
 	}
 }
 

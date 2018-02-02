@@ -5,11 +5,9 @@ import (
 	"strconv"
 
 	buildapi "github.com/openshift/api/build/v1"
+	"github.com/openshift/ci-operator/pkg/api"
 	buildclientset "github.com/openshift/client-go/build/clientset/versioned/typed/build/v1"
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
-
-	"github.com/openshift/ci-operator/pkg/api"
 )
 
 func rawCommandDockerfile(from api.PipelineImageStreamTagReference, commands string) string {
@@ -24,19 +22,15 @@ type pipelineImageCacheStep struct {
 	jobSpec     *JobSpec
 }
 
-func (s *pipelineImageCacheStep) Run() error {
+func (s *pipelineImageCacheStep) Run(dry bool) error {
 	dockerfile := rawCommandDockerfile(s.config.From, s.config.Commands)
-	build, err := s.buildClient.Create(buildFromSource(
+	return handleBuild(s.buildClient, buildFromSource(
 		s.jobSpec, s.config.From, s.config.To,
 		buildapi.BuildSource{
 			Type:       buildapi.BuildSourceDockerfile,
 			Dockerfile: &dockerfile,
 		},
-	))
-	if ! errors.IsAlreadyExists(err) {
-		return err
-	}
-	return waitForBuild(s.buildClient, build.Name)
+	), dry)
 }
 
 func (s *pipelineImageCacheStep) Done() (bool, error) {

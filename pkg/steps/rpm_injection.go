@@ -7,7 +7,6 @@ import (
 	buildclientset "github.com/openshift/client-go/build/clientset/versioned/typed/build/v1"
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 	routeclientset "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/openshift/ci-operator/pkg/api"
@@ -26,23 +25,25 @@ type rpmImageInjectionStep struct {
 	jobSpec     *JobSpec
 }
 
-func (s *rpmImageInjectionStep) Run() error {
-	route, err := s.routeClient.Get(RPMRepoName, meta.GetOptions{})
-	if err != nil {
-		return fmt.Errorf("could not get Route for RPM server: %v", err)
+func (s *rpmImageInjectionStep) Run(dry bool) error {
+	var host string
+	if dry {
+		host = "dry-fake"
+	} else {
+		route, err := s.routeClient.Get(RPMRepoName, meta.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("could not get Route for RPM server: %v", err)
+		}
+		host = route.Spec.Host
 	}
-	dockerfile := rpmInjectionDockerfile(s.config.From, route.Spec.Host)
-	build, err := s.buildClient.Create(buildFromSource(
+	dockerfile := rpmInjectionDockerfile(s.config.From, host)
+	return handleBuild(s.buildClient, buildFromSource(
 		s.jobSpec, s.config.From, s.config.To,
 		buildapi.BuildSource{
 			Type:       buildapi.BuildSourceDockerfile,
 			Dockerfile: &dockerfile,
 		},
-	))
-	if ! errors.IsAlreadyExists(err) {
-		return err
-	}
-	return waitForBuild(s.buildClient, build.Name)
+	), dry)
 }
 
 func (s *rpmImageInjectionStep) Done() (bool, error) {

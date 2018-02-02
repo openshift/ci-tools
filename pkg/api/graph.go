@@ -3,7 +3,7 @@ package api
 // Step is a self-contained bit of work that the
 // build pipeline needs to do.
 type Step interface {
-	Run() error
+	Run(dry bool) error
 	Done() (bool, error)
 
 	Requires() []StepLink

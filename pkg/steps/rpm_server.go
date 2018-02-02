@@ -1,6 +1,7 @@
 package steps
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 
@@ -33,10 +34,16 @@ type rpmServerStep struct {
 	jobSpec          *JobSpec
 }
 
-func (s *rpmServerStep) Run() error {
-	ist, err := s.istClient.Get(fmt.Sprintf("%s:%s", PipelineImageStream, s.config.From), meta.GetOptions{})
-	if err != nil {
-		return fmt.Errorf("could not find source ImageStreamTag for RPM repo deployment: %v", err)
+func (s *rpmServerStep) Run(dry bool) error {
+	var imageReference string
+	if dry {
+		imageReference = "dry-fake"
+	} else {
+		ist, err := s.istClient.Get(fmt.Sprintf("%s:%s", PipelineImageStream, s.config.From), meta.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("could not find source ImageStreamTag for RPM repo deployment: %v", err)
+		}
+		imageReference = ist.Image.DockerImageReference
 	}
 
 	labelSet := map[string]string{
@@ -65,7 +72,8 @@ func (s *rpmServerStep) Run() error {
 		SuccessThreshold:    1,
 		TimeoutSeconds:      1,
 	}
-	deploymentConfig, err := s.deploymentClient.Create(&appsapi.DeploymentConfig{
+
+	deploymentConfig := &appsapi.DeploymentConfig{
 		ObjectMeta: commonMeta,
 		Spec: appsapi.DeploymentConfigSpec{
 			Selector: labelSet,
@@ -76,7 +84,7 @@ func (s *rpmServerStep) Run() error {
 				Spec: coreapi.PodSpec{
 					Containers: []coreapi.Container{{
 						Name:            RPMRepoName,
-						Image:           ist.Image.DockerImageReference,
+						Image:           imageReference,
 						ImagePullPolicy: coreapi.PullAlways,
 						Command:         []string{"/bin/python"},
 						Args:            []string{"-m", "SimpleHTTPServer", "8080"},
@@ -91,11 +99,22 @@ func (s *rpmServerStep) Run() error {
 				},
 			},
 		},
-	})
-	if ! kerrors.IsAlreadyExists(err) {
-		return err
 	}
-	if _, err = s.serviceClient.Create(&coreapi.Service{
+	if dry {
+		deploymentConfigJSON, err := json.Marshal(deploymentConfig)
+		if err != nil {
+			return fmt.Errorf("failed to marshal deploymentconfig: %v", err)
+		}
+		fmt.Printf("%s", deploymentConfigJSON)
+	} else {
+		var err error
+		deploymentConfig, err = s.deploymentClient.Create(deploymentConfig)
+		if ! kerrors.IsAlreadyExists(err) {
+			return err
+		}
+	}
+
+	service := &coreapi.Service{
 		ObjectMeta: commonMeta,
 		Spec: coreapi.ServiceSpec{
 			Ports: []coreapi.ServicePort{{
@@ -105,10 +124,17 @@ func (s *rpmServerStep) Run() error {
 			}},
 			Selector: labelSet,
 		},
-	}); ! kerrors.IsAlreadyExists(err) {
+	}
+	if dry {
+		serviceJSON, err := json.Marshal(service)
+		if err != nil {
+			return fmt.Errorf("failed to marshal service: %v", err)
+		}
+		fmt.Printf("%s", serviceJSON)
+	} else if _, err := s.serviceClient.Create(service); ! kerrors.IsAlreadyExists(err) {
 		return err
 	}
-	if _, err = s.routeClient.Create(&routeapi.Route{
+	route := &routeapi.Route{
 		ObjectMeta: commonMeta,
 		Spec: routeapi.RouteSpec{
 			To: routeapi.RouteTargetReference{
@@ -118,7 +144,15 @@ func (s *rpmServerStep) Run() error {
 				TargetPort: intstr.FromInt(8080),
 			},
 		},
-	}); ! kerrors.IsAlreadyExists(err) {
+	}
+	if dry {
+		routeJSON, err := json.Marshal(route)
+		if err != nil {
+			return fmt.Errorf("failed to marshal route: %v", err)
+		}
+		fmt.Printf("%s", routeJSON)
+		return nil
+	} else if _, err := s.routeClient.Create(route); ! kerrors.IsAlreadyExists(err) {
 		return err
 	}
 	return waitForDeployment(s.deploymentClient, deploymentConfig.Name)

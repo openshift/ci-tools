@@ -1,6 +1,7 @@
 package steps
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 
@@ -21,9 +22,9 @@ type imageTagStep struct {
 	jobSpec *JobSpec
 }
 
-func (s *imageTagStep) Run() error {
+func (s *imageTagStep) Run(dry bool) error {
 	log.Printf("Tagging %s/%s:%s into %s/%s:%s\n", s.config.BaseImage.Namespace, s.config.BaseImage.Name, s.config.BaseImage.Tag, s.jobSpec.Identifier(), PipelineImageStream, s.config.To)
-	_, err := s.client.Update(&imageapi.ImageStreamTag{
+	ist := &imageapi.ImageStreamTag{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      fmt.Sprintf("%s:%s", PipelineImageStream, s.config.To),
 			Namespace: s.jobSpec.Identifier(),
@@ -38,7 +39,17 @@ func (s *imageTagStep) Run() error {
 				Namespace: s.config.BaseImage.Namespace,
 			},
 		},
-	})
+	}
+	if dry {
+		istJSON, err := json.Marshal(ist)
+		if err != nil {
+			return fmt.Errorf("failed to marshal imagestreamtag: %v", err)
+		}
+		fmt.Printf("%s", istJSON)
+		return nil
+	}
+
+	_, err := s.client.Update(ist)
 	if errors.IsAlreadyExists(err) {
 		// another job raced with us, but the end
 		// err will be the same so we don't care

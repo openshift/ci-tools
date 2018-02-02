@@ -2,7 +2,7 @@ package steps
 
 import (
 	"fmt"
-
+	
 	appsclientset "github.com/openshift/client-go/apps/clientset/versioned/typed/apps/v1"
 	buildclientset "github.com/openshift/client-go/build/clientset/versioned/typed/build/v1"
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
@@ -44,35 +44,43 @@ func FromConfig(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec, cluster
 
 	jobNamespace := jobSpec.Identifier()
 
-	buildGetter, err := buildclientset.NewForConfig(clusterConfig)
-	if err != nil {
-		return buildSteps, fmt.Errorf("could not get Build client for cluster config: %v", err)
-	}
-	buildClient := buildGetter.Builds(jobNamespace)
+	var buildClient buildclientset.BuildInterface
+	var imageStreamTagClient imageclientset.ImageStreamTagInterface
+	var routeClient routeclientset.RouteInterface
+	var deploymentClient appsclientset.DeploymentConfigInterface
+	var serviceClient coreclientset.ServiceInterface
 
-	imageGetter, err := imageclientset.NewForConfig(clusterConfig)
-	if err != nil {
-		return buildSteps, fmt.Errorf("could not get Image client for cluster config: %v", err)
-	}
-	imageStreamTagClient := imageGetter.ImageStreamTags(jobNamespace)
+	if clusterConfig != nil {
+		buildGetter, err := buildclientset.NewForConfig(clusterConfig)
+		if err != nil {
+			return buildSteps, fmt.Errorf("could not get Build client for cluster config: %v", err)
+		}
+		buildClient = buildGetter.Builds(jobNamespace)
 
-	routeGetter, err := routeclientset.NewForConfig(clusterConfig)
-	if err != nil {
-		return buildSteps, fmt.Errorf("could not get Route client for cluster config: %v", err)
-	}
-	routeClient := routeGetter.Routes(jobNamespace)
+		imageGetter, err := imageclientset.NewForConfig(clusterConfig)
+		if err != nil {
+			return buildSteps, fmt.Errorf("could not get Image client for cluster config: %v", err)
+		}
+		imageStreamTagClient = imageGetter.ImageStreamTags(jobNamespace)
 
-	appsGetter, err := appsclientset.NewForConfig(clusterConfig)
-	if err != nil {
-		return buildSteps, fmt.Errorf("could not get DeploymentConfig client for cluster config: %v", err)
-	}
-	deploymentClient := appsGetter.DeploymentConfigs(jobNamespace)
+		routeGetter, err := routeclientset.NewForConfig(clusterConfig)
+		if err != nil {
+			return buildSteps, fmt.Errorf("could not get Route client for cluster config: %v", err)
+		}
+		routeClient = routeGetter.Routes(jobNamespace)
 
-	coreGetter, err := coreclientset.NewForConfig(clusterConfig)
-	if err != nil {
-		return buildSteps, fmt.Errorf("could not get Service client for cluster config: %v", err)
+		appsGetter, err := appsclientset.NewForConfig(clusterConfig)
+		if err != nil {
+			return buildSteps, fmt.Errorf("could not get DeploymentConfig client for cluster config: %v", err)
+		}
+		deploymentClient = appsGetter.DeploymentConfigs(jobNamespace)
+
+		coreGetter, err := coreclientset.NewForConfig(clusterConfig)
+		if err != nil {
+			return buildSteps, fmt.Errorf("could not get Service client for cluster config: %v", err)
+		}
+		serviceClient = coreGetter.Services(jobNamespace)
 	}
-	serviceClient := coreGetter.Services(jobNamespace)
 
 	for _, rawStep := range stepConfigsForBuild(config, jobSpec) {
 		var step api.Step

@@ -11,7 +11,6 @@ import (
 	buildclientset "github.com/openshift/client-go/build/clientset/versioned/typed/build/v1"
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 	coreapi "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -22,21 +21,28 @@ type projectDirectoryImageBuildStep struct {
 	jobSpec     *JobSpec
 }
 
-func (s *projectDirectoryImageBuildStep) Run() error {
+func (s *projectDirectoryImageBuildStep) Run(dry bool) error {
 	log.Printf("Creating build for %s/%s:%s", s.jobSpec.Identifier(), PipelineImageStream, s.config.To)
 	source := fmt.Sprintf("%s:%s", PipelineImageStream, api.PipelineImageStreamTagReferenceSource)
-	ist, err := s.istClient.Get(source, meta.GetOptions{})
-	if err != nil {
-		return fmt.Errorf("could not fetch source ImageStreamTag: %v", err)
+
+	var workingDir string
+	if dry {
+		workingDir = "dry-fake"
+	} else {
+		ist, err := s.istClient.Get(source, meta.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("could not fetch source ImageStreamTag: %v", err)
+		}
+		metadata := &docker10.DockerImage{}
+		if len(ist.Image.DockerImageMetadata.Raw) == 0 {
+			return fmt.Errorf("could not fetch Docker image metadata for ImageStreamTag %s", source)
+		}
+		if err := json.Unmarshal(ist.Image.DockerImageMetadata.Raw, metadata); err != nil {
+			return fmt.Errorf("malformed Docker image metadata on ImageStreamTag: %v", err)
+		}
+		workingDir = metadata.Config.WorkingDir
 	}
-	metadata := &docker10.DockerImage{}
-	if len(ist.Image.DockerImageMetadata.Raw) == 0 {
-		return fmt.Errorf("could not fetch Docker image metadata for ImageStreamTag %s", source)
-	}
-	if err := json.Unmarshal(ist.Image.DockerImageMetadata.Raw, metadata); err != nil {
-		return fmt.Errorf("malformed Docker image metadata on ImageStreamTag: %v", err)
-	}
-	build, err := s.buildClient.Create(buildFromSource(
+	return handleBuild(s.buildClient, buildFromSource(
 		s.jobSpec, s.config.From, s.config.To,
 		buildapi.BuildSource{
 			Type: buildapi.BuildSourceImage,
@@ -46,16 +52,12 @@ func (s *projectDirectoryImageBuildStep) Run() error {
 					Name: source,
 				},
 				Paths: []buildapi.ImageSourcePath{{
-					SourcePath:     fmt.Sprintf("%s/%s", metadata.Config.WorkingDir, s.config.ContextDir),
+					SourcePath:     fmt.Sprintf("%s/%s", workingDir, s.config.ContextDir),
 					DestinationDir: ".",
 				}},
 			}},
 		},
-	))
-	if ! errors.IsAlreadyExists(err) {
-		return err
-	}
-	return waitForBuild(s.buildClient, build.Name)
+	), dry)
 }
 
 func (s *projectDirectoryImageBuildStep) Done() (bool, error) {

@@ -1,6 +1,7 @@
 package steps
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 
@@ -47,19 +48,15 @@ type sourceStep struct {
 	jobSpec     *JobSpec
 }
 
-func (s *sourceStep) Run() error {
+func (s *sourceStep) Run(dry bool) error {
 	dockerfile := sourceDockerfile(s.config.From, s.jobSpec.Refs)
-	build, err := s.buildClient.Create(buildFromSource(
+	return handleBuild(s.buildClient, buildFromSource(
 		s.jobSpec, s.config.From, s.config.To,
 		buildapi.BuildSource{
 			Type:       buildapi.BuildSourceDockerfile,
 			Dockerfile: &dockerfile,
 		},
-	))
-	if ! errors.IsAlreadyExists(err) {
-		return err
-	}
-	return waitForBuild(s.buildClient, build.Name)
+	), dry)
 }
 
 func buildFromSource(jobSpec *JobSpec, fromTag, toTag api.PipelineImageStreamTagReference, source buildapi.BuildSource) *buildapi.Build {
@@ -105,6 +102,22 @@ func buildFromSource(jobSpec *JobSpec, fromTag, toTag api.PipelineImageStreamTag
 			},
 		},
 	}
+}
+
+func handleBuild(buildClient buildclientset.BuildInterface, build *buildapi.Build, dry bool) error {
+	if dry {
+		buildJSON, err := json.Marshal(build)
+		if err != nil {
+			return fmt.Errorf("failed to marshal build: %v", err)
+		}
+		fmt.Printf("%s", buildJSON)
+		return nil
+	}
+	build, err := buildClient.Create(build)
+	if ! errors.IsAlreadyExists(err) {
+		return err
+	}
+	return waitForBuild(buildClient, build.Name)
 }
 
 func waitForBuild(buildClient buildclientset.BuildInterface, name string) error {

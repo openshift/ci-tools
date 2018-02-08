@@ -17,6 +17,7 @@ type StepLink struct {
 	externalImage *ImageStreamTagReference
 	internalImage *PipelineImageStreamTagReference
 	rpmRepo       *bool
+	releaseImages *bool
 }
 
 func InternalImageLink(ref PipelineImageStreamTagReference) StepLink {
@@ -32,6 +33,11 @@ func RPMRepoLink() StepLink {
 	return StepLink{rpmRepo: &link}
 }
 
+func ReleaseImagesLink() StepLink {
+	link := true
+	return StepLink{releaseImages: &link}
+}
+
 func (r *StepLink) Matches(other StepLink) bool {
 	if r.externalImage != nil && other.externalImage != nil {
 		return *r.externalImage == *other.externalImage
@@ -43,6 +49,10 @@ func (r *StepLink) Matches(other StepLink) bool {
 
 	if r.rpmRepo != nil && other.rpmRepo != nil {
 		return *r.rpmRepo == *other.rpmRepo
+	}
+
+	if r.releaseImages != nil && other.releaseImages != nil {
+		return *r.releaseImages == *other.releaseImages
 	}
 
 	return false

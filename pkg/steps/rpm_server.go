@@ -76,6 +76,7 @@ func (s *rpmServerStep) Run(dry bool) error {
 	deploymentConfig := &appsapi.DeploymentConfig{
 		ObjectMeta: commonMeta,
 		Spec: appsapi.DeploymentConfigSpec{
+			Replicas: 1,
 			Selector: labelSet,
 			Template: &coreapi.PodTemplateSpec{
 				ObjectMeta: meta.ObjectMeta{
@@ -107,9 +108,7 @@ func (s *rpmServerStep) Run(dry bool) error {
 		}
 		fmt.Printf("%s", deploymentConfigJSON)
 	} else {
-		var err error
-		deploymentConfig, err = s.deploymentClient.Create(deploymentConfig)
-		if ! kerrors.IsAlreadyExists(err) {
+		if _, err := s.deploymentClient.Create(deploymentConfig); err != nil && ! kerrors.IsAlreadyExists(err) {
 			return err
 		}
 	}
@@ -131,7 +130,7 @@ func (s *rpmServerStep) Run(dry bool) error {
 			return fmt.Errorf("failed to marshal service: %v", err)
 		}
 		fmt.Printf("%s", serviceJSON)
-	} else if _, err := s.serviceClient.Create(service); ! kerrors.IsAlreadyExists(err) {
+	} else if _, err := s.serviceClient.Create(service); err != nil && ! kerrors.IsAlreadyExists(err) {
 		return err
 	}
 	route := &routeapi.Route{
@@ -152,7 +151,7 @@ func (s *rpmServerStep) Run(dry bool) error {
 		}
 		fmt.Printf("%s", routeJSON)
 		return nil
-	} else if _, err := s.routeClient.Create(route); ! kerrors.IsAlreadyExists(err) {
+	} else if _, err := s.routeClient.Create(route); err != nil && ! kerrors.IsAlreadyExists(err) {
 		return err
 	}
 	return waitForDeployment(s.deploymentClient, deploymentConfig.Name)

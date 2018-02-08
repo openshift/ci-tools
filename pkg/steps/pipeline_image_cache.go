@@ -12,7 +12,7 @@ import (
 
 func rawCommandDockerfile(from api.PipelineImageStreamTagReference, commands string) string {
 	return fmt.Sprintf(`FROM %s:%s
-RUN ["/bin/bash", "-c", "set -o errexit; umask 0002; %s"]`, PipelineImageStream, from, strconv.Quote(commands))
+RUN ["/bin/bash", "-c", %s]`, PipelineImageStream, from, strconv.Quote(fmt.Sprintf("set -o errexit; umask 0002; %s", commands)))
 }
 
 type pipelineImageCacheStep struct {

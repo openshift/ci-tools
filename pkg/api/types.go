@@ -84,21 +84,30 @@ type ReleaseTagConfiguration struct {
 // StepConfiguration holds one step configuration.
 // Only one of the fields in this can be non-null.
 type StepConfiguration struct {
-	ImageTagStepConfiguration                   *ImageTagStepConfiguration                   `json:"image_tag_step,omitempty"`
+	InputImageTagStepConfiguration              *InputImageTagStepConfiguration              `json:"input_image_tag_step,omitempty"`
 	PipelineImageCacheStepConfiguration         *PipelineImageCacheStepConfiguration         `json:"pipeline_image_cache_step,omitempty"`
 	SourceStepConfiguration                     *SourceStepConfiguration                     `json:"source_step,omitempty"`
 	ProjectDirectoryImageBuildStepConfiguration *ProjectDirectoryImageBuildStepConfiguration `json:"project_directory_image_build_step,omitempty"`
 	RPMImageInjectionStepConfiguration          *RPMImageInjectionStepConfiguration          `json:"rpm_image_injection_step,omitempty"`
 	RPMServeStepConfiguration                   *RPMServeStepConfiguration                   `json:"rpm_serve_step,omitempty"`
+	OutputImageTagStepConfiguration             *OutputImageTagStepConfiguration             `json:"output_image_tag_step,omitempty"`
+	ReleaseImagesTagStepConfiguration           *ReleaseTagConfiguration                     `json:"release_images_tag_step,omitempty"`
 }
 
-// ImageTagStepConfiguration describes a step that
+// InputImageTagStepConfiguration describes a step that
 // tags an externalImage image in to the build pipeline.
 // if no explicit output tag is provided, the name
 // of the image is used as the tag.
-type ImageTagStepConfiguration struct {
+type InputImageTagStepConfiguration struct {
 	BaseImage ImageStreamTagReference         `json:"base_image"`
 	To        PipelineImageStreamTagReference `json:"to,omitempty"`
+}
+
+// OutputImageTagStepConfiguration describes a step that
+// tags a pipeline image out from the build pipeline.
+type OutputImageTagStepConfiguration struct {
+	From PipelineImageStreamTagReference `json:"from"`
+	To   ImageStreamTagReference         `json:"to"`
 }
 
 // PipelineImageCacheStepConfiguration describes a

@@ -113,8 +113,7 @@ func handleBuild(buildClient buildclientset.BuildInterface, build *buildapi.Buil
 		fmt.Printf("%s", buildJSON)
 		return nil
 	}
-	build, err := buildClient.Create(build)
-	if ! errors.IsAlreadyExists(err) {
+	if _, err := buildClient.Create(build); err != nil && ! errors.IsAlreadyExists(err) {
 		return err
 	}
 	return waitForBuild(buildClient, build.Name)
@@ -152,7 +151,7 @@ func waitForBuildOrTimeout(buildClient buildclientset.BuildInterface, name strin
 		return false, fmt.Errorf("could not find build %s", name)
 	}
 	if isOK(&list.Items[0]) {
-		return true, nil
+		return false, nil
 	}
 	if isFailed(&list.Items[0]) {
 		return false, fmt.Errorf("the build %s/%s failed with status %q", list.Items[0].Namespace, list.Items[0].Name, list.Items[0].Status.Phase)

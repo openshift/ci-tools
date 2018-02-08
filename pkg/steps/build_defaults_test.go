@@ -34,7 +34,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 					To:   api.PipelineImageStreamTagReferenceSource,
 				},
 			}, {
-				ImageTagStepConfiguration: &api.ImageTagStepConfiguration{
+				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					BaseImage: api.ImageStreamTagReference{
 						Namespace: StableImageNamespace,
 						Name:      "repo-test-base",
@@ -63,7 +63,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 					To:   api.PipelineImageStreamTagReferenceSource,
 				},
 			}, {
-				ImageTagStepConfiguration: &api.ImageTagStepConfiguration{
+				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					BaseImage: api.ImageStreamTagReference{
 						Namespace: StableImageNamespace,
 						Name:      "repo-test-base",
@@ -99,7 +99,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 					To:   api.PipelineImageStreamTagReferenceSource,
 				},
 			}, {
-				ImageTagStepConfiguration: &api.ImageTagStepConfiguration{
+				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					BaseImage: api.ImageStreamTagReference{
 						Namespace: StableImageNamespace,
 						Name:      "repo-test-base",
@@ -144,7 +144,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 					To:   api.PipelineImageStreamTagReferenceSource,
 				},
 			}, {
-				ImageTagStepConfiguration: &api.ImageTagStepConfiguration{
+				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					BaseImage: api.ImageStreamTagReference{
 						Namespace: StableImageNamespace,
 						Name:      "repo-test-base",
@@ -184,7 +184,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 					To:   api.PipelineImageStreamTagReferenceSource,
 				},
 			}, {
-				ImageTagStepConfiguration: &api.ImageTagStepConfiguration{
+				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					BaseImage: api.ImageStreamTagReference{
 						Namespace: StableImageNamespace,
 						Name:      "repo-test-base",
@@ -227,7 +227,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 					To:   api.PipelineImageStreamTagReferenceSource,
 				},
 			}, {
-				ImageTagStepConfiguration: &api.ImageTagStepConfiguration{
+				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					BaseImage: api.ImageStreamTagReference{
 						Namespace: StableImageNamespace,
 						Name:      "repo-test-base",
@@ -236,7 +236,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 					To: api.PipelineImageStreamTagReferenceBase,
 				},
 			}, {
-				ImageTagStepConfiguration: &api.ImageTagStepConfiguration{
+				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					BaseImage: api.ImageStreamTagReference{
 						Namespace: "namespace",
 						Name:      "name",
@@ -269,7 +269,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 					To:   api.PipelineImageStreamTagReferenceSource,
 				},
 			}, {
-				ImageTagStepConfiguration: &api.ImageTagStepConfiguration{
+				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					BaseImage: api.ImageStreamTagReference{
 						Namespace: StableImageNamespace,
 						Name:      "repo-test-base",
@@ -278,7 +278,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 					To: api.PipelineImageStreamTagReferenceBase,
 				},
 			}, {
-				ImageTagStepConfiguration: &api.ImageTagStepConfiguration{
+				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					BaseImage: api.ImageStreamTagReference{
 						Namespace: "namespace",
 						Name:      "name",
@@ -335,8 +335,8 @@ func formatSteps(steps []api.StepConfiguration) string {
 }
 
 func formatStep(step api.StepConfiguration) string {
-	if step.ImageTagStepConfiguration != nil {
-		return fmt.Sprintf("Tag %s to pipeline:%s", formatReference(step.ImageTagStepConfiguration.BaseImage), step.ImageTagStepConfiguration.To)
+	if step.InputImageTagStepConfiguration != nil {
+		return fmt.Sprintf("Tag %s to pipeline:%s", formatReference(step.InputImageTagStepConfiguration.BaseImage), step.InputImageTagStepConfiguration.To)
 	}
 
 	if step.PipelineImageCacheStepConfiguration != nil {

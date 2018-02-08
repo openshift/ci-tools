@@ -1,0 +1,27 @@
+{
+  "test_base_image": {
+    "tag": "golang-1.9"
+  },
+  "binary_build_commands": "make build",
+  "test_binary_build_commands": "OS_GOFLAGS='-race' make build",
+  "rpm_build_commands": "make build-rpms",
+  "base_rpm_images": [
+    {
+      "namespace": "stable",
+      "name": "origin-base",
+      "tag": "latest"
+    }
+  ],
+  "images": [
+    {
+      "from": "origin-base",
+      "to": "origin-docker-registry",
+      "context_dir": "images/dockerregistry/"
+    }
+  ],
+  "tag_specification": {
+    "namespace": "stable",
+    "tag": "latest",
+    "tag_overrides": {}
+  }
+}

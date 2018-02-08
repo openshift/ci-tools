@@ -52,7 +52,7 @@ func (s *projectDirectoryImageBuildStep) Run(dry bool) error {
 					Name: source,
 				},
 				Paths: []buildapi.ImageSourcePath{{
-					SourcePath:     fmt.Sprintf("%s/%s", workingDir, s.config.ContextDir),
+					SourcePath:     fmt.Sprintf("%s/%s/.", workingDir, s.config.ContextDir),
 					DestinationDir: ".",
 				}},
 			}},

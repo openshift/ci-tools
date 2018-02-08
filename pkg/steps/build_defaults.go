@@ -2,7 +2,7 @@ package steps
 
 import (
 	"fmt"
-	
+
 	appsclientset "github.com/openshift/client-go/apps/clientset/versioned/typed/apps/v1"
 	buildclientset "github.com/openshift/client-go/build/clientset/versioned/typed/build/v1"
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
@@ -32,6 +32,10 @@ const (
 	// that holds stable published images as parts of
 	// a full release.
 	StableImageNamespace = "stable"
+
+	// PublishedImageTag is the tag that pipeline
+	// images are tagged to when publishing a release
+	PublishedImageTag = "ci"
 )
 
 // FromConfig interprets the human-friendly fields in
@@ -46,46 +50,55 @@ func FromConfig(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec, cluster
 
 	var buildClient buildclientset.BuildInterface
 	var imageStreamTagClient imageclientset.ImageStreamTagInterface
+	var imageStreamGetter imageclientset.ImageStreamsGetter
+	var imageStreamTagsGetter imageclientset.ImageStreamTagsGetter
+	var imageStreamClient imageclientset.ImageStreamInterface
+	var routeGetter routeclientset.RoutesGetter
 	var routeClient routeclientset.RouteInterface
 	var deploymentClient appsclientset.DeploymentConfigInterface
 	var serviceClient coreclientset.ServiceInterface
+	var configMapClient coreclientset.ConfigMapInterface
 
 	if clusterConfig != nil {
 		buildGetter, err := buildclientset.NewForConfig(clusterConfig)
 		if err != nil {
-			return buildSteps, fmt.Errorf("could not get Build client for cluster config: %v", err)
+			return buildSteps, fmt.Errorf("could not get build client for cluster config: %v", err)
 		}
 		buildClient = buildGetter.Builds(jobNamespace)
 
 		imageGetter, err := imageclientset.NewForConfig(clusterConfig)
 		if err != nil {
-			return buildSteps, fmt.Errorf("could not get Image client for cluster config: %v", err)
+			return buildSteps, fmt.Errorf("could not get image client for cluster config: %v", err)
 		}
+		imageStreamGetter = imageGetter
+		imageStreamTagsGetter = imageGetter
 		imageStreamTagClient = imageGetter.ImageStreamTags(jobNamespace)
+		imageStreamClient = imageGetter.ImageStreams(jobNamespace)
 
-		routeGetter, err := routeclientset.NewForConfig(clusterConfig)
+		routeGetter, err = routeclientset.NewForConfig(clusterConfig)
 		if err != nil {
-			return buildSteps, fmt.Errorf("could not get Route client for cluster config: %v", err)
+			return buildSteps, fmt.Errorf("could not get route client for cluster config: %v", err)
 		}
 		routeClient = routeGetter.Routes(jobNamespace)
 
 		appsGetter, err := appsclientset.NewForConfig(clusterConfig)
 		if err != nil {
-			return buildSteps, fmt.Errorf("could not get DeploymentConfig client for cluster config: %v", err)
+			return buildSteps, fmt.Errorf("could not get apps client for cluster config: %v", err)
 		}
 		deploymentClient = appsGetter.DeploymentConfigs(jobNamespace)
 
 		coreGetter, err := coreclientset.NewForConfig(clusterConfig)
 		if err != nil {
-			return buildSteps, fmt.Errorf("could not get Service client for cluster config: %v", err)
+			return buildSteps, fmt.Errorf("could not get core client for cluster config: %v", err)
 		}
 		serviceClient = coreGetter.Services(jobNamespace)
+		configMapClient = coreGetter.ConfigMaps(jobNamespace)
 	}
 
 	for _, rawStep := range stepConfigsForBuild(config, jobSpec) {
 		var step api.Step
-		if rawStep.ImageTagStepConfiguration != nil {
-			step = ImageTagStep(*rawStep.ImageTagStepConfiguration, imageStreamTagClient, jobSpec)
+		if rawStep.InputImageTagStepConfiguration != nil {
+			step = InputImageTagStep(*rawStep.InputImageTagStepConfiguration, imageStreamTagsGetter, jobSpec)
 		} else if rawStep.PipelineImageCacheStepConfiguration != nil {
 			step = PipelineImageCacheStep(*rawStep.PipelineImageCacheStepConfiguration, buildClient, imageStreamTagClient, jobSpec)
 		} else if rawStep.SourceStepConfiguration != nil {
@@ -96,8 +109,11 @@ func FromConfig(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec, cluster
 			step = RPMImageInjectionStep(*rawStep.RPMImageInjectionStepConfiguration, buildClient, routeClient, imageStreamTagClient, jobSpec)
 		} else if rawStep.RPMServeStepConfiguration != nil {
 			step = RPMServerStep(*rawStep.RPMServeStepConfiguration, deploymentClient, routeClient, serviceClient, imageStreamTagClient, jobSpec)
+		} else if rawStep.OutputImageTagStepConfiguration != nil {
+			step = OutputImageTagStep(*rawStep.OutputImageTagStepConfiguration, imageStreamTagClient, imageStreamClient, jobSpec)
+		} else if rawStep.ReleaseImagesTagStepConfiguration != nil {
+			step = ReleaseImagesTagStep(*rawStep.ReleaseImagesTagStepConfiguration, imageStreamTagClient, imageStreamGetter, routeGetter, configMapClient, jobSpec)
 		}
-
 		buildSteps = append(buildSteps, step)
 	}
 
@@ -114,8 +130,8 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec
 		if config.TestBaseImage.Name == "" {
 			config.TestBaseImage.Name = fmt.Sprintf("%s-test-base", jobSpec.Refs.Repo)
 		}
-		buildSteps = append(buildSteps, api.StepConfiguration{ImageTagStepConfiguration:
-		&api.ImageTagStepConfiguration{
+		buildSteps = append(buildSteps, api.StepConfiguration{InputImageTagStepConfiguration:
+		&api.InputImageTagStepConfiguration{
 			BaseImage: *config.TestBaseImage,
 			To:        api.PipelineImageStreamTagReferenceBase,
 		}})
@@ -174,8 +190,8 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec
 	}
 
 	for _, baseImage := range config.BaseImages {
-		buildSteps = append(buildSteps, api.StepConfiguration{ImageTagStepConfiguration:
-		&api.ImageTagStepConfiguration{
+		buildSteps = append(buildSteps, api.StepConfiguration{InputImageTagStepConfiguration:
+		&api.InputImageTagStepConfiguration{
 			BaseImage: baseImage,
 			To:        api.PipelineImageStreamTagReference(baseImage.Name),
 		}})
@@ -183,8 +199,8 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec
 
 	for _, baseRPMImage := range config.BaseRPMImages {
 		intermediateTag := api.PipelineImageStreamTagReference(fmt.Sprintf("%s-without-rpms", baseRPMImage.Name))
-		buildSteps = append(buildSteps, api.StepConfiguration{ImageTagStepConfiguration:
-		&api.ImageTagStepConfiguration{
+		buildSteps = append(buildSteps, api.StepConfiguration{InputImageTagStepConfiguration:
+		&api.InputImageTagStepConfiguration{
 			BaseImage: baseRPMImage,
 			To:        intermediateTag,
 		}})
@@ -198,6 +214,17 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec
 
 	for _, image := range config.Images {
 		buildSteps = append(buildSteps, api.StepConfiguration{ProjectDirectoryImageBuildStepConfiguration: &image})
+		buildSteps = append(buildSteps, api.StepConfiguration{OutputImageTagStepConfiguration: &api.OutputImageTagStepConfiguration{
+			From: image.To,
+			To: api.ImageStreamTagReference{
+				Name: string(image.To),
+				Tag:  PublishedImageTag,
+			},
+		}})
+	}
+
+	if config.ReleaseTagConfiguration != nil {
+		buildSteps = append(buildSteps, api.StepConfiguration{ReleaseImagesTagStepConfiguration: config.ReleaseTagConfiguration})
 	}
 
 	buildSteps = append(buildSteps, config.RawSteps...)

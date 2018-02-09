@@ -11,51 +11,73 @@ type Step interface {
 }
 
 // StepLink abstracts the types of links that steps
-// require and create. Only one of the fields may be
-// non-nil.
-type StepLink struct {
-	externalImage *ImageStreamTagReference
-	internalImage *PipelineImageStreamTagReference
-	rpmRepo       *bool
-	releaseImages *bool
-}
-
-func InternalImageLink(ref PipelineImageStreamTagReference) StepLink {
-	return StepLink{internalImage: &ref}
+// require and create.
+type StepLink interface {
+	Matches(other StepLink) bool
 }
 
 func ExternalImageLink(ref ImageStreamTagReference) StepLink {
-	return StepLink{externalImage: &ref}
+	return &externalImageLink{image: ref}
+}
+
+type externalImageLink struct {
+	image ImageStreamTagReference
+}
+
+func (l *externalImageLink) Matches(other StepLink) bool {
+	switch link := other.(type) {
+	case *externalImageLink:
+		return l.image == link.image
+	default:
+		return false
+	}
+}
+
+func InternalImageLink(ref PipelineImageStreamTagReference) StepLink {
+	return &internalImageLink{image: ref}
+}
+
+type internalImageLink struct {
+	image PipelineImageStreamTagReference
+}
+
+func (l *internalImageLink) Matches(other StepLink) bool {
+	switch link := other.(type) {
+	case *internalImageLink:
+		return l.image == link.image
+	default:
+		return false
+	}
 }
 
 func RPMRepoLink() StepLink {
-	link := true
-	return StepLink{rpmRepo: &link}
+	return &rpmRepoLink{}
+}
+
+type rpmRepoLink struct{}
+
+func (l *rpmRepoLink) Matches(other StepLink) bool {
+	switch other.(type) {
+	case *rpmRepoLink:
+		return true
+	default:
+		return false
+	}
 }
 
 func ReleaseImagesLink() StepLink {
-	link := true
-	return StepLink{releaseImages: &link}
+	return &releaseImagesLink{}
 }
 
-func (r *StepLink) Matches(other StepLink) bool {
-	if r.externalImage != nil && other.externalImage != nil {
-		return *r.externalImage == *other.externalImage
-	}
+type releaseImagesLink struct{}
 
-	if r.internalImage != nil && other.internalImage != nil {
-		return *r.internalImage == *other.internalImage
+func (l *releaseImagesLink) Matches(other StepLink) bool {
+	switch other.(type) {
+	case *releaseImagesLink:
+		return true
+	default:
+		return false
 	}
-
-	if r.rpmRepo != nil && other.rpmRepo != nil {
-		return *r.rpmRepo == *other.rpmRepo
-	}
-
-	if r.releaseImages != nil && other.releaseImages != nil {
-		return *r.releaseImages == *other.releaseImages
-	}
-
-	return false
 }
 
 type StepNode struct {

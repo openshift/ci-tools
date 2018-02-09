@@ -102,7 +102,7 @@ type fakeStep struct {
 	creates  []StepLink
 }
 
-func (f *fakeStep) Run() error           { return nil }
+func (f *fakeStep) Run(dry bool) error   { return nil }
 func (f *fakeStep) Done() (bool, error)  { return true, nil }
 func (f *fakeStep) Requires() []StepLink { return f.requires }
 func (f *fakeStep) Creates() []StepLink  { return f.creates }

@@ -107,6 +107,11 @@ func buildFromSource(jobSpec *JobSpec, fromTag, toTag api.PipelineImageStreamTag
 			},
 		},
 	}
+	if owner := jobSpec.Owner(); owner != nil {
+		build.OwnerReferences = append(build.OwnerReferences, *owner)
+	}
+
+	return build
 }
 
 func handleBuild(buildClient buildclientset.BuildInterface, build *buildapi.Build, dry bool) error {

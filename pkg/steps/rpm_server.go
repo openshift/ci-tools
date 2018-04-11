@@ -101,6 +101,10 @@ func (s *rpmServerStep) Run(dry bool) error {
 			},
 		},
 	}
+	if owner := s.jobSpec.Owner(); owner != nil {
+		deploymentConfig.OwnerReferences = append(deploymentConfig.OwnerReferences, *owner)
+	}
+
 	if dry {
 		deploymentConfigJSON, err := json.Marshal(deploymentConfig)
 		if err != nil {
@@ -124,6 +128,10 @@ func (s *rpmServerStep) Run(dry bool) error {
 			Selector: labelSet,
 		},
 	}
+	if owner := s.jobSpec.Owner(); owner != nil {
+		service.OwnerReferences = append(service.OwnerReferences, *owner)
+	}
+
 	if dry {
 		serviceJSON, err := json.Marshal(service)
 		if err != nil {
@@ -144,6 +152,10 @@ func (s *rpmServerStep) Run(dry bool) error {
 			},
 		},
 	}
+	if owner := s.jobSpec.Owner(); owner != nil {
+		route.OwnerReferences = append(route.OwnerReferences, *owner)
+	}
+
 	if dry {
 		routeJSON, err := json.Marshal(route)
 		if err != nil {

@@ -24,7 +24,7 @@ type outputImageTagStep struct {
 }
 
 func (s *outputImageTagStep) Run(dry bool) error {
-	log.Printf("Creating ImageStream %s/%s\n", s.jobSpec.Identifier(), s.config.To.Name)
+	log.Printf("Creating ImageStream %s/%s", s.jobSpec.Namespace(), s.config.To.Name)
 	is := &imageapi.ImageStream{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      s.config.To.Name,

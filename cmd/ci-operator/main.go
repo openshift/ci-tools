@@ -93,11 +93,6 @@ func loadClusterConfig() (*rest.Config, error) {
 }
 
 func (o *options) Run() error {
-	buildSteps, err := steps.FromConfig(o.buildConfig, o.jobSpec, o.clusterConfig)
-	if err != nil {
-		return fmt.Errorf("failed to generate steps from config: %v\n", err)
-	}
-
 	if !o.dry {
 		if len(o.namespace) == 0 {
 			log.Println("Setting up namespace for testing...")
@@ -121,14 +116,34 @@ func (o *options) Run() error {
 			return fmt.Errorf("could not get image client for cluster config: %v", err)
 		}
 
-		if _, err := imageGetter.ImageStreams(o.jobSpec.Identifier()).Create(&imageapi.ImageStream{
+		// create the image stream or read it to get its uid
+		is, err := imageGetter.ImageStreams(o.jobSpec.Namespace()).Create(&imageapi.ImageStream{
 			ObjectMeta: meta.ObjectMeta{
-				Namespace: o.jobSpec.Identifier(),
+				Namespace: o.jobSpec.Namespace(),
 				Name:      steps.PipelineImageStream,
 			},
-		}); err != nil && ! errors.IsAlreadyExists(err) {
-			return fmt.Errorf("could not set up pipeline imagestream for test: %v", err)
+		})
+		if err != nil {
+			if !errors.IsAlreadyExists(err) {
+				return fmt.Errorf("could not set up pipeline imagestream for test: %v", err)
+			}
+			is, _ = imageGetter.ImageStreams(o.jobSpec.Namespace()).Get(steps.PipelineImageStream, meta.GetOptions{})
 		}
+		if is != nil {
+			isTrue := true
+			o.jobSpec.SetOwner(&meta.OwnerReference{
+				APIVersion: "image.openshift.io/v1",
+				Kind:       "ImageStream",
+				Name:       steps.PipelineImageStream,
+				UID:        is.UID,
+				Controller: &isTrue,
+			})
+		}
+	}
+
+	buildSteps, err := steps.FromConfig(o.buildConfig, o.jobSpec, o.clusterConfig)
+	if err != nil {
+		return fmt.Errorf("failed to generate steps from config: %v", err)
 	}
 
 	if err := steps.Run(api.BuildGraph(buildSteps), o.dry); err != nil {

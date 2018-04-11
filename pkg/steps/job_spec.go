@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // JobSpec is a superset of the upstream spec, but

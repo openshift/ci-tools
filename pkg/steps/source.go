@@ -60,11 +60,12 @@ func (s *sourceStep) Run(dry bool) error {
 }
 
 func buildFromSource(jobSpec *JobSpec, fromTag, toTag api.PipelineImageStreamTagReference, source buildapi.BuildSource) *buildapi.Build {
-	log.Printf("Creating build for %s/%s:%s", jobSpec.Identifier(), PipelineImageStream, toTag)
-	return &buildapi.Build{
+	log.Printf("Creating build for %s/%s:%s", jobSpec.Namespace(), PipelineImageStream, toTag)
+	layer := buildapi.ImageOptimizationSkipLayers
+	build := &buildapi.Build{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      string(toTag),
-			Namespace: jobSpec.Identifier(),
+			Namespace: jobSpec.Namespace(),
 			Labels: map[string]string{
 				PersistsLabel:    "false",
 				JobLabel:         jobSpec.Job,
@@ -85,17 +86,21 @@ func buildFromSource(jobSpec *JobSpec, fromTag, toTag api.PipelineImageStreamTag
 					DockerStrategy: &buildapi.DockerBuildStrategy{
 						From: &coreapi.ObjectReference{
 							Kind:      "ImageStreamTag",
-							Namespace: jobSpec.Identifier(),
+							Namespace: jobSpec.Namespace(),
 							Name:      fmt.Sprintf("%s:%s", PipelineImageStream, fromTag),
 						},
 						ForcePull: true,
 						NoCache:   true,
+						Env: []coreapi.EnvVar{
+							{Name: "JOB_SPEC", Value: jobSpec.rawSpec},
+						},
+						ImageOptimizationPolicy: &layer,
 					},
 				},
 				Output: buildapi.BuildOutput{
 					To: &coreapi.ObjectReference{
 						Kind:      "ImageStreamTag",
-						Namespace: jobSpec.Identifier(),
+						Namespace: jobSpec.Namespace(),
 						Name:      fmt.Sprintf("%s:%s", PipelineImageStream, toTag),
 					},
 				},

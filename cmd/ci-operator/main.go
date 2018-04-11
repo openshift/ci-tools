@@ -22,6 +22,8 @@ import (
 
 func bindOptions() *options {
 	opt := &options{}
+	flag.StringVar(&opt.namespace, "namespace", "", "Namespace to create builds into, defaults to build_id from JOB_SPEC")
+	flag.StringVar(&opt.baseNamespace, "base-namespace", "stable", "Namespace to read builds from, defaults to stable.")
 	flag.StringVar(&opt.rawBuildConfig, "build-config", "", "Configuration for the build to run, as JSON.")
 	flag.BoolVar(&opt.dry, "dry-run", true, "Do not contact the API server.")
 	return opt
@@ -30,6 +32,9 @@ func bindOptions() *options {
 type options struct {
 	rawBuildConfig string
 	dry            bool
+
+	namespace     string
+	baseNamespace string
 
 	buildConfig   *api.ReleaseBuildConfiguration
 	jobSpec       *steps.JobSpec
@@ -48,6 +53,8 @@ func (o *options) Complete() error {
 	if err != nil {
 		return fmt.Errorf("failed to resolve job spec: %v\n", err)
 	}
+	jobSpec.SetNamespace(o.namespace)
+	jobSpec.SetBaseNamespace(o.baseNamespace)
 	o.jobSpec = jobSpec
 
 	if err := json.Unmarshal([]byte(o.rawBuildConfig), &o.buildConfig); err != nil {
@@ -92,19 +99,20 @@ func (o *options) Run() error {
 	}
 
 	if !o.dry {
-		log.Println("Setting up namespace for testing...")
-		projectGetter, err := versioned.NewForConfig(o.clusterConfig)
-		if err != nil {
-			return fmt.Errorf("could not get project client for cluster config: %v", err)
-		}
+		if len(o.namespace) == 0 {
+			log.Println("Setting up namespace for testing...")
+			projectGetter, err := versioned.NewForConfig(o.clusterConfig)
+			if err != nil {
+				return fmt.Errorf("could not get project client for cluster config: %v", err)
+			}
 
-		if _, err := projectGetter.ProjectV1().ProjectRequests().Create(&projectapi.ProjectRequest{
-			ObjectMeta: meta.ObjectMeta{
-				Namespace: o.jobSpec.Identifier(),
-				Name:      o.jobSpec.Identifier(),
-			},
-		}); err != nil && ! errors.IsAlreadyExists(err) {
-			return fmt.Errorf("could not set up namespace for test: %v", err)
+			if _, err := projectGetter.ProjectV1().ProjectRequests().Create(&projectapi.ProjectRequest{
+				ObjectMeta: meta.ObjectMeta{
+					Name: o.jobSpec.Identifier(),
+				},
+			}); err != nil && !errors.IsAlreadyExists(err) {
+				return fmt.Errorf("could not set up namespace for test: %v", err)
+			}
 		}
 
 		log.Println("Setting up pipeline imagestream for testing...")

@@ -22,7 +22,7 @@ type projectDirectoryImageBuildStep struct {
 }
 
 func (s *projectDirectoryImageBuildStep) Run(dry bool) error {
-	log.Printf("Creating build for %s/%s:%s", s.jobSpec.Identifier(), PipelineImageStream, s.config.To)
+	log.Printf("Creating build for %s/%s:%s", s.jobSpec.Namespace(), PipelineImageStream, s.config.To)
 	source := fmt.Sprintf("%s:%s", PipelineImageStream, api.PipelineImageStreamTagReferenceSource)
 
 	var workingDir string

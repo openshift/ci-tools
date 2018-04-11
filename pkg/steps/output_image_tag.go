@@ -28,7 +28,7 @@ func (s *outputImageTagStep) Run(dry bool) error {
 	is := &imageapi.ImageStream{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      s.config.To.Name,
-			Namespace: s.jobSpec.Identifier(),
+			Namespace: s.jobSpec.Namespace(),
 		},
 	}
 	if dry {
@@ -44,7 +44,7 @@ func (s *outputImageTagStep) Run(dry bool) error {
 		}
 	}
 
-	log.Printf("Tagging %s/%s:%s into %s/%s:%s\n", s.jobSpec.Identifier(), PipelineImageStream, s.config.From, s.jobSpec.Identifier(), s.config.To.Name, s.config.To.Tag)
+	log.Printf("Tagging %s/%s:%s into %s/%s:%s", s.jobSpec.Namespace(), PipelineImageStream, s.config.From, s.jobSpec.Namespace(), s.config.To.Name, s.config.To.Tag)
 	fromImage := "dry-fake"
 	if !dry {
 		from, err := s.istClient.Get(fmt.Sprintf("%s:%s", PipelineImageStream, s.config.From), meta.GetOptions{})
@@ -56,7 +56,7 @@ func (s *outputImageTagStep) Run(dry bool) error {
 	ist := &imageapi.ImageStreamTag{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      fmt.Sprintf("%s:%s", s.config.To.Name, s.config.To.Tag),
-			Namespace: s.jobSpec.Identifier(),
+			Namespace: s.jobSpec.Namespace(),
 		},
 		Tag: &imageapi.TagReference{
 			ReferencePolicy: imageapi.TagReferencePolicy{
@@ -65,7 +65,7 @@ func (s *outputImageTagStep) Run(dry bool) error {
 			From: &coreapi.ObjectReference{
 				Kind:      "ImageStreamImage",
 				Name:      fmt.Sprintf("%s@%s", PipelineImageStream, fromImage),
-				Namespace: s.jobSpec.Identifier(),
+				Namespace: s.jobSpec.Namespace(),
 			},
 		},
 	}
@@ -89,7 +89,7 @@ func (s *outputImageTagStep) Run(dry bool) error {
 }
 
 func (s *outputImageTagStep) Done() (bool, error) {
-	log.Printf("Checking for existence of %s/%s:%s\n", s.jobSpec.Identifier(), PipelineImageStream, s.config.To)
+	log.Printf("Checking for existence of %s/%s:%s", s.jobSpec.Namespace(), PipelineImageStream, s.config.To)
 	_, err := s.istClient.Get(
 		fmt.Sprintf("%s:%s", PipelineImageStream, s.config.To),
 		meta.GetOptions{},

@@ -55,7 +55,7 @@ func (s *rpmServerStep) Run(dry bool) error {
 	}
 	commonMeta := meta.ObjectMeta{
 		Name:      RPMRepoName,
-		Namespace: s.jobSpec.Identifier(),
+		Namespace: s.jobSpec.Namespace(),
 		Labels:    labelSet,
 	}
 

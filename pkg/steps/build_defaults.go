@@ -3,12 +3,13 @@ package steps
 import (
 	"fmt"
 
+	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/rest"
+
 	appsclientset "github.com/openshift/client-go/apps/clientset/versioned/typed/apps/v1"
 	buildclientset "github.com/openshift/client-go/build/clientset/versioned/typed/build/v1"
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 	routeclientset "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
-	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
-	"k8s.io/client-go/rest"
 
 	"github.com/openshift/ci-operator/pkg/api"
 )
@@ -28,11 +29,6 @@ const (
 	// we will serve RPMs after they are built.
 	RPMServeLocation = "/srv/repo"
 
-	// StableImageNamespace is the default namespace
-	// that holds stable published images as parts of
-	// a full release.
-	StableImageNamespace = "stable"
-
 	// PublishedImageTag is the tag that pipeline
 	// images are tagged to when publishing a release
 	PublishedImageTag = "ci"
@@ -46,7 +42,7 @@ const (
 func FromConfig(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec, clusterConfig *rest.Config) ([]api.Step, error) {
 	var buildSteps []api.Step
 
-	jobNamespace := jobSpec.Identifier()
+	jobNamespace := jobSpec.Namespace()
 
 	var buildClient buildclientset.BuildInterface
 	var imageStreamTagClient imageclientset.ImageStreamTagInterface
@@ -125,27 +121,24 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec
 
 	if config.TestBaseImage != nil {
 		if config.TestBaseImage.Namespace == "" {
-			config.TestBaseImage.Namespace = StableImageNamespace
+			config.TestBaseImage.Namespace = jobSpec.baseNamespace
 		}
 		if config.TestBaseImage.Name == "" {
 			config.TestBaseImage.Name = fmt.Sprintf("%s-test-base", jobSpec.Refs.Repo)
 		}
-		buildSteps = append(buildSteps, api.StepConfiguration{InputImageTagStepConfiguration:
-		&api.InputImageTagStepConfiguration{
+		buildSteps = append(buildSteps, api.StepConfiguration{InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 			BaseImage: *config.TestBaseImage,
 			To:        api.PipelineImageStreamTagReferenceBase,
 		}})
 	}
 
-	buildSteps = append(buildSteps, api.StepConfiguration{SourceStepConfiguration:
-	&api.SourceStepConfiguration{
+	buildSteps = append(buildSteps, api.StepConfiguration{SourceStepConfiguration: &api.SourceStepConfiguration{
 		From: api.PipelineImageStreamTagReferenceBase,
 		To:   api.PipelineImageStreamTagReferenceSource,
 	}})
 
 	if len(config.BinaryBuildCommands) > 0 {
-		buildSteps = append(buildSteps, api.StepConfiguration{PipelineImageCacheStepConfiguration:
-		&api.PipelineImageCacheStepConfiguration{
+		buildSteps = append(buildSteps, api.StepConfiguration{PipelineImageCacheStepConfiguration: &api.PipelineImageCacheStepConfiguration{
 			From:     api.PipelineImageStreamTagReferenceSource,
 			To:       api.PipelineImageStreamTagReferenceBinaries,
 			Commands: config.BinaryBuildCommands,
@@ -153,8 +146,7 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec
 	}
 
 	if len(config.TestBinaryBuildCommands) > 0 {
-		buildSteps = append(buildSteps, api.StepConfiguration{PipelineImageCacheStepConfiguration:
-		&api.PipelineImageCacheStepConfiguration{
+		buildSteps = append(buildSteps, api.StepConfiguration{PipelineImageCacheStepConfiguration: &api.PipelineImageCacheStepConfiguration{
 			From:     api.PipelineImageStreamTagReferenceSource,
 			To:       api.PipelineImageStreamTagReferenceTestBinaries,
 			Commands: config.TestBinaryBuildCommands,
@@ -176,22 +168,19 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec
 			out = DefaultRPMLocation
 		}
 
-		buildSteps = append(buildSteps, api.StepConfiguration{PipelineImageCacheStepConfiguration:
-		&api.PipelineImageCacheStepConfiguration{
+		buildSteps = append(buildSteps, api.StepConfiguration{PipelineImageCacheStepConfiguration: &api.PipelineImageCacheStepConfiguration{
 			From:     from,
 			To:       api.PipelineImageStreamTagReferenceRPMs,
 			Commands: fmt.Sprintf(`%s; ln -s $( pwd )/%s %s`, config.RpmBuildCommands, out, RPMServeLocation),
 		}})
 
-		buildSteps = append(buildSteps, api.StepConfiguration{RPMServeStepConfiguration:
-		&api.RPMServeStepConfiguration{
+		buildSteps = append(buildSteps, api.StepConfiguration{RPMServeStepConfiguration: &api.RPMServeStepConfiguration{
 			From: api.PipelineImageStreamTagReferenceRPMs,
 		}})
 	}
 
 	for _, baseImage := range config.BaseImages {
-		buildSteps = append(buildSteps, api.StepConfiguration{InputImageTagStepConfiguration:
-		&api.InputImageTagStepConfiguration{
+		buildSteps = append(buildSteps, api.StepConfiguration{InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 			BaseImage: baseImage,
 			To:        api.PipelineImageStreamTagReference(baseImage.Name),
 		}})
@@ -199,14 +188,12 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec
 
 	for _, baseRPMImage := range config.BaseRPMImages {
 		intermediateTag := api.PipelineImageStreamTagReference(fmt.Sprintf("%s-without-rpms", baseRPMImage.Name))
-		buildSteps = append(buildSteps, api.StepConfiguration{InputImageTagStepConfiguration:
-		&api.InputImageTagStepConfiguration{
+		buildSteps = append(buildSteps, api.StepConfiguration{InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 			BaseImage: baseRPMImage,
 			To:        intermediateTag,
 		}})
 
-		buildSteps = append(buildSteps, api.StepConfiguration{RPMImageInjectionStepConfiguration:
-		&api.RPMImageInjectionStepConfiguration{
+		buildSteps = append(buildSteps, api.StepConfiguration{RPMImageInjectionStepConfiguration: &api.RPMImageInjectionStepConfiguration{
 			From: intermediateTag,
 			To:   api.PipelineImageStreamTagReference(baseRPMImage.Name),
 		}})

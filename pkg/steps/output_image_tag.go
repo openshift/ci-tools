@@ -36,10 +36,10 @@ func (s *outputImageTagStep) Run(dry bool) error {
 		if err != nil {
 			return fmt.Errorf("failed to marshal imagestream: %v", err)
 		}
-		fmt.Printf("%s", isJSON)
+		fmt.Printf("%s\n", isJSON)
 	} else {
 		_, err := s.isClient.Create(is)
-		if err != nil && ! errors.IsAlreadyExists(err) {
+		if err != nil && !errors.IsAlreadyExists(err) {
 			return err
 		}
 	}
@@ -74,7 +74,7 @@ func (s *outputImageTagStep) Run(dry bool) error {
 		if err != nil {
 			return fmt.Errorf("failed to marshal imagestreamtag: %v", err)
 		}
-		fmt.Printf("%s", istJSON)
+		fmt.Printf("%s\n", istJSON)
 	} else {
 		_, err := s.istClient.Create(ist)
 		if errors.IsAlreadyExists(err) {

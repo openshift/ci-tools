@@ -120,10 +120,10 @@ func handleBuild(buildClient buildclientset.BuildInterface, build *buildapi.Buil
 		if err != nil {
 			return fmt.Errorf("failed to marshal build: %v", err)
 		}
-		fmt.Printf("%s", buildJSON)
+		fmt.Printf("%s\n", buildJSON)
 		return nil
 	}
-	if _, err := buildClient.Create(build); err != nil && ! errors.IsAlreadyExists(err) {
+	if _, err := buildClient.Create(build); err != nil && !errors.IsAlreadyExists(err) {
 		return err
 	}
 	return waitForBuild(buildClient, build.Name)
@@ -198,7 +198,7 @@ func (s *sourceStep) Done() (bool, error) {
 }
 
 func imageStreamTagExists(reference api.PipelineImageStreamTagReference, istClient imageclientset.ImageStreamTagInterface) (bool, error) {
-	log.Printf("Checking for existence of %s:%s\n", PipelineImageStream, reference)
+	log.Printf("Checking for existence of %s:%s", PipelineImageStream, reference)
 	_, err := istClient.Get(
 		fmt.Sprintf("%s:%s", PipelineImageStream, reference),
 		meta.GetOptions{},

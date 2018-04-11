@@ -51,19 +51,19 @@ func (o *options) Validate() error {
 func (o *options) Complete() error {
 	jobSpec, err := steps.ResolveSpecFromEnv()
 	if err != nil {
-		return fmt.Errorf("failed to resolve job spec: %v\n", err)
+		return fmt.Errorf("failed to resolve job spec: %v", err)
 	}
 	jobSpec.SetNamespace(o.namespace)
 	jobSpec.SetBaseNamespace(o.baseNamespace)
 	o.jobSpec = jobSpec
 
 	if err := json.Unmarshal([]byte(o.rawBuildConfig), &o.buildConfig); err != nil {
-		return fmt.Errorf("malformed build configuration: %v\n", err)
+		return fmt.Errorf("malformed build configuration: %v", err)
 	}
 
 	clusterConfig, err := loadClusterConfig()
 	if err != nil {
-		return fmt.Errorf("failed to load cluster config: %v\n", err)
+		return fmt.Errorf("failed to load cluster config: %v", err)
 	}
 	o.clusterConfig = clusterConfig
 
@@ -147,7 +147,7 @@ func (o *options) Run() error {
 	}
 
 	if err := steps.Run(api.BuildGraph(buildSteps), o.dry); err != nil {
-		return fmt.Errorf("failed to run steps: %v\n", err)
+		return fmt.Errorf("failed to run steps: %v", err)
 	}
 
 	return nil
@@ -158,17 +158,17 @@ func main() {
 	flag.Parse()
 
 	if err := opt.Validate(); err != nil {
-		fmt.Printf("Invalid options: %v", err)
+		fmt.Printf("Invalid options: %v\n", err)
 		os.Exit(1)
 	}
 
 	if err := opt.Complete(); err != nil {
-		fmt.Printf("Invalid environment: %v", err)
+		fmt.Printf("Invalid environment: %v\n", err)
 		os.Exit(1)
 	}
 
 	if err := opt.Run(); err != nil {
-		fmt.Printf("Failed: %v", err)
+		fmt.Printf("error: %v\n", err)
 		os.Exit(1)
 	}
 }

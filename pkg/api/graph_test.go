@@ -92,7 +92,7 @@ func TestMatches(t *testing.T) {
 			if testCase.matches {
 				message = "match"
 			}
-			t.Errorf("%s: expected links to %s, but they didn't:\nfirst:\n\t%v\nsecond:\n\t%v\n", testCase.name, message, testCase.first, testCase.second)
+			t.Errorf("%s: expected links to %s, but they didn't:\nfirst:\n\t%v\nsecond:\n\t%v", testCase.name, message, testCase.first, testCase.second)
 		}
 	}
 }
@@ -185,7 +185,7 @@ func TestBuildGraph(t *testing.T) {
 
 	for _, testCase := range testCases {
 		if actual, expected := BuildGraph(testCase.input), testCase.output; !reflect.DeepEqual(actual, expected) {
-			t.Errorf("%s: did not generate step graph as expected:\nwant:\n\t%v\nhave:\n\t%v\n", testCase.name, expected, actual)
+			t.Errorf("%s: did not generate step graph as expected:\nwant:\n\t%v\nhave:\n\t%v", testCase.name, expected, actual)
 		}
 	}
 }

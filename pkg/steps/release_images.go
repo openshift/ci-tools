@@ -78,7 +78,7 @@ func (s *releaseImagesTagStep) Run(dry bool) error {
 					if err != nil {
 						return fmt.Errorf("failed to marshal imagestreamtag: %v", err)
 					}
-					fmt.Printf("%s", istJSON)
+					fmt.Printf("%s\n", istJSON)
 					continue
 				}
 				_, err := s.istClient.Create(ist)
@@ -133,17 +133,17 @@ func (s *releaseImagesTagStep) createReleaseConfigMap(dry bool) error {
 		if err != nil {
 			return fmt.Errorf("failed to marshal configmap: %v", err)
 		}
-		fmt.Printf("%s", cmJSON)
+		fmt.Printf("%s\n", cmJSON)
 		return nil
 	}
-	if _, err := s.configMapClient.Create(cm); err != nil && ! errors.IsAlreadyExists(err) {
+	if _, err := s.configMapClient.Create(cm); err != nil && !errors.IsAlreadyExists(err) {
 		return err
 	}
 	return nil
 }
 
 func (s *releaseImagesTagStep) Done() (bool, error) {
-	log.Printf("Checking for existence of %s ConfigMap\n", ConfigMapName)
+	log.Printf("Checking for existence of %s ConfigMap", ConfigMapName)
 	if _, err := s.configMapClient.Get(ConfigMapName, meta.GetOptions{}); err != nil {
 		if errors.IsNotFound(err) {
 			return false, nil

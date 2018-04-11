@@ -57,9 +57,9 @@ func Run(graph []*api.StepNode, dry bool) error {
 			if len(errors) > 0 {
 				message := bytes.Buffer{}
 				for _, err := range errors {
-					message.WriteString(fmt.Sprintf("%s\n", err.Error()))
+					message.WriteString(fmt.Sprintf("\n%s", err.Error()))
 				}
-				aggregateErr = fmt.Errorf("encountered errors running steps:\n%s", message.String())
+				aggregateErr = fmt.Errorf("encountered errors running steps:%s", message.String())
 			}
 			return aggregateErr
 		}
@@ -81,7 +81,7 @@ func containsAll(needles, haystack []api.StepLink) bool {
 				contains = true
 			}
 		}
-		if ! contains {
+		if !contains {
 			return false
 		}
 	}

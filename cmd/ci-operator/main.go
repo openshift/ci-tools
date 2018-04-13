@@ -22,6 +22,8 @@ import (
 
 func bindOptions() *options {
 	opt := &options{}
+	flag.StringVar(&opt.namespace, "namespace", "", "Namespace to create builds into, defaults to build_id from JOB_SPEC")
+	flag.StringVar(&opt.baseNamespace, "base-namespace", "stable", "Namespace to read builds from, defaults to stable.")
 	flag.StringVar(&opt.rawBuildConfig, "build-config", "", "Configuration for the build to run, as JSON.")
 	flag.BoolVar(&opt.dry, "dry-run", true, "Do not contact the API server.")
 	return opt
@@ -30,6 +32,9 @@ func bindOptions() *options {
 type options struct {
 	rawBuildConfig string
 	dry            bool
+
+	namespace     string
+	baseNamespace string
 
 	buildConfig   *api.ReleaseBuildConfiguration
 	jobSpec       *steps.JobSpec
@@ -46,17 +51,19 @@ func (o *options) Validate() error {
 func (o *options) Complete() error {
 	jobSpec, err := steps.ResolveSpecFromEnv()
 	if err != nil {
-		return fmt.Errorf("failed to resolve job spec: %v\n", err)
+		return fmt.Errorf("failed to resolve job spec: %v", err)
 	}
+	jobSpec.SetNamespace(o.namespace)
+	jobSpec.SetBaseNamespace(o.baseNamespace)
 	o.jobSpec = jobSpec
 
 	if err := json.Unmarshal([]byte(o.rawBuildConfig), &o.buildConfig); err != nil {
-		return fmt.Errorf("malformed build configuration: %v\n", err)
+		return fmt.Errorf("malformed build configuration: %v", err)
 	}
 
 	clusterConfig, err := loadClusterConfig()
 	if err != nil {
-		return fmt.Errorf("failed to load cluster config: %v\n", err)
+		return fmt.Errorf("failed to load cluster config: %v", err)
 	}
 	o.clusterConfig = clusterConfig
 
@@ -86,25 +93,21 @@ func loadClusterConfig() (*rest.Config, error) {
 }
 
 func (o *options) Run() error {
-	buildSteps, err := steps.FromConfig(o.buildConfig, o.jobSpec, o.clusterConfig)
-	if err != nil {
-		return fmt.Errorf("failed to generate steps from config: %v\n", err)
-	}
-
 	if !o.dry {
-		log.Println("Setting up namespace for testing...")
-		projectGetter, err := versioned.NewForConfig(o.clusterConfig)
-		if err != nil {
-			return fmt.Errorf("could not get project client for cluster config: %v", err)
-		}
+		if len(o.namespace) == 0 {
+			log.Println("Setting up namespace for testing...")
+			projectGetter, err := versioned.NewForConfig(o.clusterConfig)
+			if err != nil {
+				return fmt.Errorf("could not get project client for cluster config: %v", err)
+			}
 
-		if _, err := projectGetter.ProjectV1().ProjectRequests().Create(&projectapi.ProjectRequest{
-			ObjectMeta: meta.ObjectMeta{
-				Namespace: o.jobSpec.Identifier(),
-				Name:      o.jobSpec.Identifier(),
-			},
-		}); err != nil && ! errors.IsAlreadyExists(err) {
-			return fmt.Errorf("could not set up namespace for test: %v", err)
+			if _, err := projectGetter.ProjectV1().ProjectRequests().Create(&projectapi.ProjectRequest{
+				ObjectMeta: meta.ObjectMeta{
+					Name: o.jobSpec.Identifier(),
+				},
+			}); err != nil && !errors.IsAlreadyExists(err) {
+				return fmt.Errorf("could not set up namespace for test: %v", err)
+			}
 		}
 
 		log.Println("Setting up pipeline imagestream for testing...")
@@ -113,18 +116,38 @@ func (o *options) Run() error {
 			return fmt.Errorf("could not get image client for cluster config: %v", err)
 		}
 
-		if _, err := imageGetter.ImageStreams(o.jobSpec.Identifier()).Create(&imageapi.ImageStream{
+		// create the image stream or read it to get its uid
+		is, err := imageGetter.ImageStreams(o.jobSpec.Namespace()).Create(&imageapi.ImageStream{
 			ObjectMeta: meta.ObjectMeta{
-				Namespace: o.jobSpec.Identifier(),
+				Namespace: o.jobSpec.Namespace(),
 				Name:      steps.PipelineImageStream,
 			},
-		}); err != nil && ! errors.IsAlreadyExists(err) {
-			return fmt.Errorf("could not set up pipeline imagestream for test: %v", err)
+		})
+		if err != nil {
+			if !errors.IsAlreadyExists(err) {
+				return fmt.Errorf("could not set up pipeline imagestream for test: %v", err)
+			}
+			is, _ = imageGetter.ImageStreams(o.jobSpec.Namespace()).Get(steps.PipelineImageStream, meta.GetOptions{})
+		}
+		if is != nil {
+			isTrue := true
+			o.jobSpec.SetOwner(&meta.OwnerReference{
+				APIVersion: "image.openshift.io/v1",
+				Kind:       "ImageStream",
+				Name:       steps.PipelineImageStream,
+				UID:        is.UID,
+				Controller: &isTrue,
+			})
 		}
 	}
 
+	buildSteps, err := steps.FromConfig(o.buildConfig, o.jobSpec, o.clusterConfig)
+	if err != nil {
+		return fmt.Errorf("failed to generate steps from config: %v", err)
+	}
+
 	if err := steps.Run(api.BuildGraph(buildSteps), o.dry); err != nil {
-		return fmt.Errorf("failed to run steps: %v\n", err)
+		return fmt.Errorf("failed to run steps: %v", err)
 	}
 
 	return nil
@@ -135,17 +158,17 @@ func main() {
 	flag.Parse()
 
 	if err := opt.Validate(); err != nil {
-		fmt.Printf("Invalid options: %v", err)
+		fmt.Printf("Invalid options: %v\n", err)
 		os.Exit(1)
 	}
 
 	if err := opt.Complete(); err != nil {
-		fmt.Printf("Invalid environment: %v", err)
+		fmt.Printf("Invalid environment: %v\n", err)
 		os.Exit(1)
 	}
 
 	if err := opt.Run(); err != nil {
-		fmt.Printf("Failed: %v", err)
+		fmt.Printf("error: %v\n", err)
 		os.Exit(1)
 	}
 }

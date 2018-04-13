@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // JobSpec is a superset of the upstream spec, but
@@ -20,8 +22,15 @@ type JobSpec struct {
 	Refs Refs `json:"refs,omitempty"`
 
 	// rawSpec is the serialized form of the Spec
-	rawSpec   string
-	identifer string
+	rawSpec string
+
+	// these fields allow the job to be targeted at a location
+	identifer     string
+	namespace     string
+	baseNamespace string
+
+	// if set, any new artifacts will be a child of this object
+	owner *meta.OwnerReference
 }
 
 type ProwJobType string
@@ -55,6 +64,29 @@ func (r Refs) String() string {
 		rs = append(rs, fmt.Sprintf("%d:%s", pull.Number, pull.SHA))
 	}
 	return strings.Join(rs, ",")
+}
+
+func (s *JobSpec) Namespace() string {
+	if s.namespace == "" {
+		s.namespace = s.Identifier()
+	}
+	return s.namespace
+}
+
+func (s *JobSpec) Owner() *meta.OwnerReference {
+	return s.owner
+}
+
+func (s *JobSpec) SetNamespace(ns string) {
+	s.namespace = ns
+}
+
+func (s *JobSpec) SetBaseNamespace(ns string) {
+	s.baseNamespace = ns
+}
+
+func (s *JobSpec) SetOwner(owner *meta.OwnerReference) {
+	s.owner = owner
 }
 
 func (s *JobSpec) Identifier() string {

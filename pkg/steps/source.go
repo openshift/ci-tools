@@ -32,13 +32,13 @@ var (
 	JobSpecAnnotation = fmt.Sprintf("%s/%s", CiAnnotationPrefix, "job-spec")
 )
 
-func sourceDockerfile(fromTag api.PipelineImageStreamTagReference, refs Refs) string {
+func sourceDockerfile(fromTag api.PipelineImageStreamTagReference, job *JobSpec) string {
 	return fmt.Sprintf(`FROM %s:%s
 ENV GIT_COMMITTER_NAME=developer GIT_COMMITTER_EMAIL=developer@redhat.com
 ENV REPO_OWNER=%s REPO_NAME=%s PULL_REFS=%s
-RUN umask 0002 && /usr/bin/release-ci cloneref --src-root=/go
+RUN umask 0002 && /usr/bin/clonerefs --src-root=/go --log=-
 WORKDIR /go/src/github.com/%s/%s/
-`, PipelineImageStream, fromTag, refs.Org, refs.Repo, refs.String(), refs.Org, refs.Repo)
+`, PipelineImageStream, fromTag, job.Refs.Org, job.Refs.Repo, job.Refs.String(), job.Refs.Org, job.Refs.Repo)
 }
 
 type sourceStep struct {
@@ -49,7 +49,7 @@ type sourceStep struct {
 }
 
 func (s *sourceStep) Run(dry bool) error {
-	dockerfile := sourceDockerfile(s.config.From, s.jobSpec.Refs)
+	dockerfile := sourceDockerfile(s.config.From, s.jobSpec)
 	return handleBuild(s.buildClient, buildFromSource(
 		s.jobSpec, s.config.From, s.config.To,
 		buildapi.BuildSource{
@@ -60,11 +60,12 @@ func (s *sourceStep) Run(dry bool) error {
 }
 
 func buildFromSource(jobSpec *JobSpec, fromTag, toTag api.PipelineImageStreamTagReference, source buildapi.BuildSource) *buildapi.Build {
-	log.Printf("Creating build for %s/%s:%s", jobSpec.Identifier(), PipelineImageStream, toTag)
-	return &buildapi.Build{
+	log.Printf("Creating build for %s/%s:%s", jobSpec.Namespace(), PipelineImageStream, toTag)
+	layer := buildapi.ImageOptimizationSkipLayers
+	build := &buildapi.Build{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      string(toTag),
-			Namespace: jobSpec.Identifier(),
+			Namespace: jobSpec.Namespace(),
 			Labels: map[string]string{
 				PersistsLabel:    "false",
 				JobLabel:         jobSpec.Job,
@@ -85,23 +86,32 @@ func buildFromSource(jobSpec *JobSpec, fromTag, toTag api.PipelineImageStreamTag
 					DockerStrategy: &buildapi.DockerBuildStrategy{
 						From: &coreapi.ObjectReference{
 							Kind:      "ImageStreamTag",
-							Namespace: jobSpec.Identifier(),
+							Namespace: jobSpec.Namespace(),
 							Name:      fmt.Sprintf("%s:%s", PipelineImageStream, fromTag),
 						},
 						ForcePull: true,
 						NoCache:   true,
+						Env: []coreapi.EnvVar{
+							{Name: "JOB_SPEC", Value: jobSpec.rawSpec},
+						},
+						ImageOptimizationPolicy: &layer,
 					},
 				},
 				Output: buildapi.BuildOutput{
 					To: &coreapi.ObjectReference{
 						Kind:      "ImageStreamTag",
-						Namespace: jobSpec.Identifier(),
+						Namespace: jobSpec.Namespace(),
 						Name:      fmt.Sprintf("%s:%s", PipelineImageStream, toTag),
 					},
 				},
 			},
 		},
 	}
+	if owner := jobSpec.Owner(); owner != nil {
+		build.OwnerReferences = append(build.OwnerReferences, *owner)
+	}
+
+	return build
 }
 
 func handleBuild(buildClient buildclientset.BuildInterface, build *buildapi.Build, dry bool) error {
@@ -110,10 +120,10 @@ func handleBuild(buildClient buildclientset.BuildInterface, build *buildapi.Buil
 		if err != nil {
 			return fmt.Errorf("failed to marshal build: %v", err)
 		}
-		fmt.Printf("%s", buildJSON)
+		fmt.Printf("%s\n", buildJSON)
 		return nil
 	}
-	if _, err := buildClient.Create(build); err != nil && ! errors.IsAlreadyExists(err) {
+	if _, err := buildClient.Create(build); err != nil && !errors.IsAlreadyExists(err) {
 		return err
 	}
 	return waitForBuild(buildClient, build.Name)
@@ -188,7 +198,7 @@ func (s *sourceStep) Done() (bool, error) {
 }
 
 func imageStreamTagExists(reference api.PipelineImageStreamTagReference, istClient imageclientset.ImageStreamTagInterface) (bool, error) {
-	log.Printf("Checking for existence of %s:%s\n", PipelineImageStream, reference)
+	log.Printf("Checking for existence of %s:%s", PipelineImageStream, reference)
 	_, err := istClient.Get(
 		fmt.Sprintf("%s:%s", PipelineImageStream, reference),
 		meta.GetOptions{},

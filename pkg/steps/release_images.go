@@ -33,7 +33,7 @@ type releaseImagesTagStep struct {
 }
 
 func (s *releaseImagesTagStep) Run(dry bool) error {
-	log.Printf("Tagging release images into %s\n", s.jobSpec.Identifier())
+	log.Printf("Tagging release images into %s", s.jobSpec.Namespace())
 	stableImageStreams, err := s.isGetter.ImageStreams(s.config.Namespace).List(meta.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("could not resolve stable imagestreams: %v", err)
@@ -48,7 +48,7 @@ func (s *releaseImagesTagStep) Run(dry bool) error {
 
 		for _, tag := range stableImageStream.Spec.Tags {
 			if tag.Name == targetTag {
-				log.Printf("Cross-tagging %s/%s:%s from %s/%s:%s", s.jobSpec.Identifier(), stableImageStream.Name, targetTag, stableImageStream.Namespace, stableImageStream.Name, targetTag)
+				log.Printf("Cross-tagging %s/%s:%s from %s/%s:%s", s.jobSpec.Namespace(), stableImageStream.Name, targetTag, stableImageStream.Namespace, stableImageStream.Name, targetTag)
 				var id string
 				for _, tagStatus := range stableImageStream.Status.Tags {
 					if tagStatus.Tag == targetTag {
@@ -60,7 +60,7 @@ func (s *releaseImagesTagStep) Run(dry bool) error {
 				}
 				ist := &imageapi.ImageStreamTag{
 					ObjectMeta: meta.ObjectMeta{
-						Namespace: s.jobSpec.Identifier(),
+						Namespace: s.jobSpec.Namespace(),
 						Name:      fmt.Sprintf("%s:%s", stableImageStream.Name, targetTag),
 					},
 					Tag: &imageapi.TagReference{
@@ -78,7 +78,7 @@ func (s *releaseImagesTagStep) Run(dry bool) error {
 					if err != nil {
 						return fmt.Errorf("failed to marshal imagestreamtag: %v", err)
 					}
-					fmt.Printf("%s", istJSON)
+					fmt.Printf("%s\n", istJSON)
 					continue
 				}
 				_, err := s.istClient.Create(ist)
@@ -97,7 +97,7 @@ func (s *releaseImagesTagStep) createReleaseConfigMap(dry bool) error {
 	imageBase := "dry-fake"
 	rpmRepo := "dry-fake"
 	if !dry {
-		originImageStream, err := s.isGetter.ImageStreams(s.jobSpec.Identifier()).Get("origin", meta.GetOptions{})
+		originImageStream, err := s.isGetter.ImageStreams(s.jobSpec.Namespace()).Get("origin", meta.GetOptions{})
 		if err != nil {
 			return fmt.Errorf("could not resolve main release ImageStream: %v", err)
 		}
@@ -106,8 +106,8 @@ func (s *releaseImagesTagStep) createReleaseConfigMap(dry bool) error {
 		}
 		imageBase = originImageStream.Status.PublicDockerImageRepository
 
-		rpmRepoServer, err := s.routeClient.Routes(s.jobSpec.Identifier()).Get(RPMRepoName, meta.GetOptions{})
-		if ! errors.IsNotFound(err) {
+		rpmRepoServer, err := s.routeClient.Routes(s.jobSpec.Namespace()).Get(RPMRepoName, meta.GetOptions{})
+		if !errors.IsNotFound(err) {
 			return err
 		} else {
 			rpmRepoServer, err = s.routeClient.Routes(s.config.Namespace).Get(RPMRepoName, meta.GetOptions{})
@@ -121,7 +121,7 @@ func (s *releaseImagesTagStep) createReleaseConfigMap(dry bool) error {
 	cm := &coreapi.ConfigMap{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      ConfigMapName,
-			Namespace: s.jobSpec.Identifier(),
+			Namespace: s.jobSpec.Namespace(),
 		},
 		Data: map[string]string{
 			"image-base": imageBase,
@@ -133,17 +133,17 @@ func (s *releaseImagesTagStep) createReleaseConfigMap(dry bool) error {
 		if err != nil {
 			return fmt.Errorf("failed to marshal configmap: %v", err)
 		}
-		fmt.Printf("%s", cmJSON)
+		fmt.Printf("%s\n", cmJSON)
 		return nil
 	}
-	if _, err := s.configMapClient.Create(cm); err != nil && ! errors.IsAlreadyExists(err) {
+	if _, err := s.configMapClient.Create(cm); err != nil && !errors.IsAlreadyExists(err) {
 		return err
 	}
 	return nil
 }
 
 func (s *releaseImagesTagStep) Done() (bool, error) {
-	log.Printf("Checking for existence of %s ConfigMap\n", ConfigMapName)
+	log.Printf("Checking for existence of %s ConfigMap", ConfigMapName)
 	if _, err := s.configMapClient.Get(ConfigMapName, meta.GetOptions{}); err != nil {
 		if errors.IsNotFound(err) {
 			return false, nil

@@ -27,6 +27,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 				Refs: Refs{
 					Repo: "repo",
 				},
+				baseNamespace: "base-1",
 			},
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: &api.SourceStepConfiguration{
@@ -36,7 +37,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					BaseImage: api.ImageStreamTagReference{
-						Namespace: StableImageNamespace,
+						Namespace: "base-1",
 						Name:      "repo-test-base",
 						Tag:       "manual",
 					},
@@ -56,6 +57,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 				Refs: Refs{
 					Repo: "repo",
 				},
+				baseNamespace: "base-1",
 			},
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: &api.SourceStepConfiguration{
@@ -65,7 +67,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					BaseImage: api.ImageStreamTagReference{
-						Namespace: StableImageNamespace,
+						Namespace: "base-1",
 						Name:      "repo-test-base",
 						Tag:       "manual",
 					},
@@ -92,6 +94,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 				Refs: Refs{
 					Repo: "repo",
 				},
+				baseNamespace: "base-1",
 			},
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: &api.SourceStepConfiguration{
@@ -101,7 +104,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					BaseImage: api.ImageStreamTagReference{
-						Namespace: StableImageNamespace,
+						Namespace: "base-1",
 						Name:      "repo-test-base",
 						Tag:       "manual",
 					},
@@ -137,6 +140,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 				Refs: Refs{
 					Repo: "repo",
 				},
+				baseNamespace: "base-1",
 			},
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: &api.SourceStepConfiguration{
@@ -146,7 +150,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					BaseImage: api.ImageStreamTagReference{
-						Namespace: StableImageNamespace,
+						Namespace: "base-1",
 						Name:      "repo-test-base",
 						Tag:       "manual",
 					},
@@ -177,6 +181,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 				Refs: Refs{
 					Repo: "repo",
 				},
+				baseNamespace: "base-1",
 			},
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: &api.SourceStepConfiguration{
@@ -186,7 +191,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					BaseImage: api.ImageStreamTagReference{
-						Namespace: StableImageNamespace,
+						Namespace: "base-1",
 						Name:      "repo-test-base",
 						Tag:       "manual",
 					},
@@ -220,6 +225,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 				Refs: Refs{
 					Repo: "repo",
 				},
+				baseNamespace: "base-1",
 			},
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: &api.SourceStepConfiguration{
@@ -229,7 +235,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					BaseImage: api.ImageStreamTagReference{
-						Namespace: StableImageNamespace,
+						Namespace: "base-1",
 						Name:      "repo-test-base",
 						Tag:       "manual",
 					},
@@ -262,6 +268,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 				Refs: Refs{
 					Repo: "repo",
 				},
+				baseNamespace: "base-1",
 			},
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: &api.SourceStepConfiguration{
@@ -271,7 +278,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					BaseImage: api.ImageStreamTagReference{
-						Namespace: StableImageNamespace,
+						Namespace: "base-1",
 						Name:      "repo-test-base",
 						Tag:       "manual",
 					},
@@ -296,9 +303,11 @@ func TestStepConfigsForBuild(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		if configs := stepConfigsForBuild(testCase.input, testCase.jobSpec); ! stepListsEqual(configs, testCase.output) {
-			t.Errorf("%s: incorrect defaulted step configurations,\n\tgot:\n%s\n\texpected:\n%s", testCase.name, formatSteps(configs), formatSteps(testCase.output))
-		}
+		t.Run(testCase.name, func(t *testing.T) {
+			if configs := stepConfigsForBuild(testCase.input, testCase.jobSpec); !stepListsEqual(configs, testCase.output) {
+				t.Errorf("incorrect defaulted step configurations,\n\tgot:\n%s\n\texpected:\n%s", formatSteps(configs), formatSteps(testCase.output))
+			}
+		})
 	}
 }
 

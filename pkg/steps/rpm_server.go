@@ -55,7 +55,7 @@ func (s *rpmServerStep) Run(dry bool) error {
 	}
 	commonMeta := meta.ObjectMeta{
 		Name:      RPMRepoName,
-		Namespace: s.jobSpec.Identifier(),
+		Namespace: s.jobSpec.Namespace(),
 		Labels:    labelSet,
 	}
 
@@ -101,14 +101,18 @@ func (s *rpmServerStep) Run(dry bool) error {
 			},
 		},
 	}
+	if owner := s.jobSpec.Owner(); owner != nil {
+		deploymentConfig.OwnerReferences = append(deploymentConfig.OwnerReferences, *owner)
+	}
+
 	if dry {
 		deploymentConfigJSON, err := json.Marshal(deploymentConfig)
 		if err != nil {
 			return fmt.Errorf("failed to marshal deploymentconfig: %v", err)
 		}
-		fmt.Printf("%s", deploymentConfigJSON)
+		fmt.Printf("%s\n", deploymentConfigJSON)
 	} else {
-		if _, err := s.deploymentClient.Create(deploymentConfig); err != nil && ! kerrors.IsAlreadyExists(err) {
+		if _, err := s.deploymentClient.Create(deploymentConfig); err != nil && !kerrors.IsAlreadyExists(err) {
 			return err
 		}
 	}
@@ -124,13 +128,17 @@ func (s *rpmServerStep) Run(dry bool) error {
 			Selector: labelSet,
 		},
 	}
+	if owner := s.jobSpec.Owner(); owner != nil {
+		service.OwnerReferences = append(service.OwnerReferences, *owner)
+	}
+
 	if dry {
 		serviceJSON, err := json.Marshal(service)
 		if err != nil {
 			return fmt.Errorf("failed to marshal service: %v", err)
 		}
-		fmt.Printf("%s", serviceJSON)
-	} else if _, err := s.serviceClient.Create(service); err != nil && ! kerrors.IsAlreadyExists(err) {
+		fmt.Printf("%s\n", serviceJSON)
+	} else if _, err := s.serviceClient.Create(service); err != nil && !kerrors.IsAlreadyExists(err) {
 		return err
 	}
 	route := &routeapi.Route{
@@ -144,14 +152,18 @@ func (s *rpmServerStep) Run(dry bool) error {
 			},
 		},
 	}
+	if owner := s.jobSpec.Owner(); owner != nil {
+		route.OwnerReferences = append(route.OwnerReferences, *owner)
+	}
+
 	if dry {
 		routeJSON, err := json.Marshal(route)
 		if err != nil {
 			return fmt.Errorf("failed to marshal route: %v", err)
 		}
-		fmt.Printf("%s", routeJSON)
+		fmt.Printf("%s\n", routeJSON)
 		return nil
-	} else if _, err := s.routeClient.Create(route); err != nil && ! kerrors.IsAlreadyExists(err) {
+	} else if _, err := s.routeClient.Create(route); err != nil && !kerrors.IsAlreadyExists(err) {
 		return err
 	}
 	return waitForDeployment(s.deploymentClient, deploymentConfig.Name)

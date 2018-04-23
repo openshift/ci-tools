@@ -60,15 +60,27 @@ type ImageStreamTagReference struct {
 	Namespace string `json:"namespace"`
 	Name      string `json:"name"`
 	Tag       string `json:"tag"`
+
+	// As is an optional string to use as the intermediate name for this reference.
+	As string `json:"as"`
 }
 
 // ReleaseTagConfiguration describes how a release is
-// assembled from release arifacts.
+// assembled from release arifacts. There are two primary modes,
+// single stream, multiple tags (openshift/origin-v3.9:control-plane)
+// on one stream, or multiple streams with one tag
+// (openshift/origin-control-plane:v3.9). The former works well for
+// central control, the latter for distributed control.
 type ReleaseTagConfiguration struct {
 	// Namespace identifies the namespace from which
 	// all release artifacts not built in the current
 	// job are tagged from.
 	Namespace string `json:"namespace"`
+
+	// Name is an optional image stream name to use that
+	// contains all component tags. If specified, tag is
+	// ignored.
+	Name string `json:"name"`
 
 	// Tag is the ImageStreamTag tagged in for each
 	// ImageStream in the above Namespace.
@@ -131,7 +143,7 @@ type PipelineImageCacheStepConfiguration struct {
 type PipelineImageStreamTagReference string
 
 const (
-	PipelineImageStreamTagReferenceBase         PipelineImageStreamTagReference = "base"
+	PipelineImageStreamTagReferenceRoot         PipelineImageStreamTagReference = "root"
 	PipelineImageStreamTagReferenceSource                                       = "src"
 	PipelineImageStreamTagReferenceBinaries                                     = "bin"
 	PipelineImageStreamTagReferenceTestBinaries                                 = "test-bin"

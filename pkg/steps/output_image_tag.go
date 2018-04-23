@@ -24,26 +24,6 @@ type outputImageTagStep struct {
 }
 
 func (s *outputImageTagStep) Run(dry bool) error {
-	log.Printf("Creating ImageStream %s/%s", s.jobSpec.Namespace(), s.config.To.Name)
-	is := &imageapi.ImageStream{
-		ObjectMeta: meta.ObjectMeta{
-			Name:      s.config.To.Name,
-			Namespace: s.jobSpec.Namespace(),
-		},
-	}
-	if dry {
-		isJSON, err := json.Marshal(is)
-		if err != nil {
-			return fmt.Errorf("failed to marshal imagestream: %v", err)
-		}
-		fmt.Printf("%s\n", isJSON)
-	} else {
-		_, err := s.isClient.Create(is)
-		if err != nil && !errors.IsAlreadyExists(err) {
-			return err
-		}
-	}
-
 	log.Printf("Tagging %s/%s:%s into %s/%s:%s", s.jobSpec.Namespace(), PipelineImageStream, s.config.From, s.jobSpec.Namespace(), s.config.To.Name, s.config.To.Tag)
 	fromImage := "dry-fake"
 	if !dry {
@@ -76,6 +56,9 @@ func (s *outputImageTagStep) Run(dry bool) error {
 		}
 		fmt.Printf("%s\n", istJSON)
 	} else {
+		if err := s.istClient.Delete(ist.Name, nil); err != nil && !errors.IsNotFound(err) {
+			return err
+		}
 		_, err := s.istClient.Create(ist)
 		if errors.IsAlreadyExists(err) {
 			// another job raced with us, but the end
@@ -110,6 +93,9 @@ func (s *outputImageTagStep) Requires() []api.StepLink {
 }
 
 func (s *outputImageTagStep) Creates() []api.StepLink {
+	if len(s.config.To.As) > 0 {
+		return []api.StepLink{api.ExternalImageLink(s.config.To), api.InternalImageLink(api.PipelineImageStreamTagReference(s.config.To.As))}
+	}
 	return []api.StepLink{api.ExternalImageLink(s.config.To)}
 }
 

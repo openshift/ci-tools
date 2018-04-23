@@ -72,7 +72,7 @@ func (s *rpmServerStep) Run(dry bool) error {
 		SuccessThreshold:    1,
 		TimeoutSeconds:      1,
 	}
-
+	one := int64(1)
 	deploymentConfig := &appsapi.DeploymentConfig{
 		ObjectMeta: commonMeta,
 		Spec: appsapi.DeploymentConfigSpec{
@@ -97,6 +97,7 @@ func (s *rpmServerStep) Run(dry bool) error {
 						ReadinessProbe: probe,
 						LivenessProbe:  probe,
 					}},
+					TerminationGracePeriodSeconds: &one,
 				},
 			},
 		},

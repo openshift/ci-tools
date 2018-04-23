@@ -35,7 +35,7 @@ func TestRunNormalCase(t *testing.T) {
 		name:      "root",
 		shouldRun: true,
 		requires:  []api.StepLink{api.ExternalImageLink(api.ImageStreamTagReference{Namespace: "ns", Name: "base", Tag: "latest"})},
-		creates:   []api.StepLink{api.InternalImageLink(api.PipelineImageStreamTagReferenceBase)},
+		creates:   []api.StepLink{api.InternalImageLink(api.PipelineImageStreamTagReferenceRoot)},
 	}
 	other := &fakeStep{
 		name:      "other",
@@ -46,7 +46,7 @@ func TestRunNormalCase(t *testing.T) {
 	src := &fakeStep{
 		name:      "src",
 		shouldRun: true,
-		requires:  []api.StepLink{api.InternalImageLink(api.PipelineImageStreamTagReferenceBase)},
+		requires:  []api.StepLink{api.InternalImageLink(api.PipelineImageStreamTagReferenceRoot)},
 		creates:   []api.StepLink{api.InternalImageLink(api.PipelineImageStreamTagReferenceSource)},
 	}
 	bin := &fakeStep{
@@ -99,7 +99,7 @@ func TestRunFailureCase(t *testing.T) {
 		name:      "root",
 		shouldRun: true,
 		requires:  []api.StepLink{api.ExternalImageLink(api.ImageStreamTagReference{Namespace: "ns", Name: "base", Tag: "latest"})},
-		creates:   []api.StepLink{api.InternalImageLink(api.PipelineImageStreamTagReferenceBase)},
+		creates:   []api.StepLink{api.InternalImageLink(api.PipelineImageStreamTagReferenceRoot)},
 	}
 	other := &fakeStep{
 		name:      "other",
@@ -110,7 +110,7 @@ func TestRunFailureCase(t *testing.T) {
 	src := &fakeStep{
 		name:      "src",
 		shouldRun: true,
-		requires:  []api.StepLink{api.InternalImageLink(api.PipelineImageStreamTagReferenceBase)},
+		requires:  []api.StepLink{api.InternalImageLink(api.PipelineImageStreamTagReferenceRoot)},
 		creates:   []api.StepLink{api.InternalImageLink(api.PipelineImageStreamTagReferenceSource)},
 	}
 	bin := &fakeStep{

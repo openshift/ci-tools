@@ -32,8 +32,67 @@ type releaseImagesTagStep struct {
 	jobSpec         *JobSpec
 }
 
+func findStatusTag(is *imageapi.ImageStream, tag string) *coreapi.ObjectReference {
+	for _, t := range is.Status.Tags {
+		if t.Tag != tag {
+			continue
+		}
+		if len(t.Items) == 0 {
+			return nil
+		}
+		if len(t.Items[0].Image) == 0 {
+			return &coreapi.ObjectReference{
+				Kind: "DockerImage",
+				Name: t.Items[0].DockerImageReference,
+			}
+		}
+		return &coreapi.ObjectReference{
+			Kind:      "ImageStreamImage",
+			Namespace: is.Namespace,
+			Name:      fmt.Sprintf("%s@%s", is.Name, t.Items[0].Image),
+		}
+	}
+	return nil
+}
+
 func (s *releaseImagesTagStep) Run(dry bool) error {
 	log.Printf("Tagging release images into %s", s.jobSpec.Namespace())
+
+	if len(s.config.Name) > 0 {
+		is, err := s.isGetter.ImageStreams(s.config.Namespace).Get(s.config.Name, meta.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("could not resolve stable imagestream: %v", err)
+		}
+		is.UID = ""
+		newIS := &imageapi.ImageStream{
+			ObjectMeta: meta.ObjectMeta{
+				Name: StableImageStream,
+			},
+		}
+		for _, tag := range is.Spec.Tags {
+			if valid := findStatusTag(is, tag.Name); valid != nil {
+				newIS.Spec.Tags = append(newIS.Spec.Tags, imageapi.TagReference{
+					Name: tag.Name,
+					From: valid,
+				})
+			}
+		}
+
+		if dry {
+			istJSON, err := json.Marshal(newIS)
+			if err != nil {
+				return fmt.Errorf("failed to marshal image stream: %v", err)
+			}
+			fmt.Printf("%s\n", istJSON)
+			return nil
+		}
+		_, err = s.isGetter.ImageStreams(s.jobSpec.Namespace()).Create(newIS)
+		if err != nil && !errors.IsAlreadyExists(err) {
+			return fmt.Errorf("could not copy stable imagestreamtag: %v", err)
+		}
+		return nil
+	}
+
 	stableImageStreams, err := s.isGetter.ImageStreams(s.config.Namespace).List(meta.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("could not resolve stable imagestreams: %v", err)

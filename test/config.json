@@ -1,5 +1,6 @@
 {
   "test_base_image": {
+    "name": "release",
     "tag": "golang-1.9"
   },
   "binary_build_commands": "make build",
@@ -7,21 +8,23 @@
   "rpm_build_commands": "make build-rpms",
   "base_rpm_images": [
     {
-      "namespace": "stable",
-      "name": "origin-base",
-      "tag": "latest"
+      "namespace": "openshift",
+      "name": "origin-v3.10",
+      "tag": "base",
+      "as": "base"
     }
   ],
   "images": [
     {
-      "from": "origin-base",
-      "to": "origin-docker-registry",
+      "from": "base",
+      "to": "docker-registry",
       "context_dir": "images/dockerregistry/"
     }
   ],
   "tag_specification": {
-    "namespace": "stable",
-    "tag": "latest",
+    "namespace": "openshift",
+    "name": "origin-v3.10",
+    "tag": "",
     "tag_overrides": {}
   }
 }

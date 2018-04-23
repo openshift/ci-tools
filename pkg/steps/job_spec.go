@@ -67,9 +67,6 @@ func (r Refs) String() string {
 }
 
 func (s *JobSpec) Namespace() string {
-	if s.namespace == "" {
-		s.namespace = s.Identifier()
-	}
 	return s.namespace
 }
 
@@ -89,17 +86,20 @@ func (s *JobSpec) SetOwner(owner *meta.OwnerReference) {
 	s.owner = owner
 }
 
-func (s *JobSpec) Identifier() string {
-	if s.identifer != "" {
-		return s.identifer
+// Hash returns a unique hash representing the inputs to this job.
+func (s *JobSpec) Hash() string {
+	spec := &JobSpec{
+		Refs: s.Refs,
 	}
-
+	raw, err := json.Marshal(spec)
+	if err != nil {
+		panic(err)
+	}
 	// Object names can't be too long so we truncate
 	// the hash. This increases chances of collision
 	// but we can tolerate it as our input space is
 	// tiny.
-	s.identifer = fmt.Sprintf("%x", sha256.Sum256([]byte(s.rawSpec)))[40:]
-	return s.identifer
+	return fmt.Sprintf("%x", sha256.Sum256(raw))[54:]
 }
 
 // ResolveSpecFromEnv will determine the Refs being

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	imageapi "github.com/openshift/api/image/v1"
 	projectapi "github.com/openshift/api/project/v1"
@@ -53,8 +54,15 @@ func (o *options) Complete() error {
 	if err != nil {
 		return fmt.Errorf("failed to resolve job spec: %v", err)
 	}
+
+	if len(o.namespace) == 0 {
+		o.namespace = "ci-op-{id}"
+	}
+	o.namespace = strings.Replace(o.namespace, "{id}", jobSpec.Hash(), -1)
+
 	jobSpec.SetNamespace(o.namespace)
 	jobSpec.SetBaseNamespace(o.baseNamespace)
+
 	o.jobSpec = jobSpec
 
 	if err := json.Unmarshal([]byte(o.rawBuildConfig), &o.buildConfig); err != nil {
@@ -94,20 +102,18 @@ func loadClusterConfig() (*rest.Config, error) {
 
 func (o *options) Run() error {
 	if !o.dry {
-		if len(o.namespace) == 0 {
-			log.Println("Setting up namespace for testing...")
-			projectGetter, err := versioned.NewForConfig(o.clusterConfig)
-			if err != nil {
-				return fmt.Errorf("could not get project client for cluster config: %v", err)
-			}
+		projectGetter, err := versioned.NewForConfig(o.clusterConfig)
+		if err != nil {
+			return fmt.Errorf("could not get project client for cluster config: %v", err)
+		}
 
-			if _, err := projectGetter.ProjectV1().ProjectRequests().Create(&projectapi.ProjectRequest{
-				ObjectMeta: meta.ObjectMeta{
-					Name: o.jobSpec.Identifier(),
-				},
-			}); err != nil && !errors.IsAlreadyExists(err) {
-				return fmt.Errorf("could not set up namespace for test: %v", err)
-			}
+		log.Println("Setting up namespace for testing...")
+		if _, err := projectGetter.ProjectV1().ProjectRequests().Create(&projectapi.ProjectRequest{
+			ObjectMeta: meta.ObjectMeta{
+				Name: o.namespace,
+			},
+		}); err != nil && !errors.IsAlreadyExists(err) {
+			return fmt.Errorf("could not set up namespace for test: %v", err)
 		}
 
 		log.Println("Setting up pipeline imagestream for testing...")

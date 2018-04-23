@@ -29,9 +29,7 @@ const (
 	// we will serve RPMs after they are built.
 	RPMServeLocation = "/srv/repo"
 
-	// PublishedImageTag is the tag that pipeline
-	// images are tagged to when publishing a release
-	PublishedImageTag = "ci"
+	StableImageStream = "stable"
 )
 
 // FromConfig interprets the human-friendly fields in
@@ -128,12 +126,12 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec
 		}
 		buildSteps = append(buildSteps, api.StepConfiguration{InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 			BaseImage: *config.TestBaseImage,
-			To:        api.PipelineImageStreamTagReferenceBase,
+			To:        api.PipelineImageStreamTagReferenceRoot,
 		}})
 	}
 
 	buildSteps = append(buildSteps, api.StepConfiguration{SourceStepConfiguration: &api.SourceStepConfiguration{
-		From: api.PipelineImageStreamTagReferenceBase,
+		From: api.PipelineImageStreamTagReferenceRoot,
 		To:   api.PipelineImageStreamTagReferenceSource,
 	}})
 
@@ -187,7 +185,11 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec
 	}
 
 	for _, baseRPMImage := range config.BaseRPMImages {
-		intermediateTag := api.PipelineImageStreamTagReference(fmt.Sprintf("%s-without-rpms", baseRPMImage.Name))
+		as := baseRPMImage.As
+		if len(as) == 0 {
+			as = baseRPMImage.Name
+		}
+		intermediateTag := api.PipelineImageStreamTagReference(fmt.Sprintf("%s-without-rpms", as))
 		buildSteps = append(buildSteps, api.StepConfiguration{InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 			BaseImage: baseRPMImage,
 			To:        intermediateTag,
@@ -195,19 +197,29 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec
 
 		buildSteps = append(buildSteps, api.StepConfiguration{RPMImageInjectionStepConfiguration: &api.RPMImageInjectionStepConfiguration{
 			From: intermediateTag,
-			To:   api.PipelineImageStreamTagReference(baseRPMImage.Name),
+			To:   api.PipelineImageStreamTagReference(as),
 		}})
 	}
 
 	for _, image := range config.Images {
 		buildSteps = append(buildSteps, api.StepConfiguration{ProjectDirectoryImageBuildStepConfiguration: &image})
-		buildSteps = append(buildSteps, api.StepConfiguration{OutputImageTagStepConfiguration: &api.OutputImageTagStepConfiguration{
-			From: image.To,
-			To: api.ImageStreamTagReference{
-				Name: string(image.To),
-				Tag:  PublishedImageTag,
-			},
-		}})
+		if config.ReleaseTagConfiguration != nil && len(config.ReleaseTagConfiguration.Name) > 0 {
+			buildSteps = append(buildSteps, api.StepConfiguration{OutputImageTagStepConfiguration: &api.OutputImageTagStepConfiguration{
+				From: image.To,
+				To: api.ImageStreamTagReference{
+					Name: StableImageStream,
+					Tag:  string(image.To),
+				},
+			}})
+		} else {
+			buildSteps = append(buildSteps, api.StepConfiguration{OutputImageTagStepConfiguration: &api.OutputImageTagStepConfiguration{
+				From: image.To,
+				To: api.ImageStreamTagReference{
+					Name: string(image.To),
+					Tag:  "ci",
+				},
+			}})
+		}
 	}
 
 	if config.ReleaseTagConfiguration != nil {

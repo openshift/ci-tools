@@ -110,14 +110,14 @@ func (f *fakeStep) Creates() []StepLink  { return f.creates }
 func TestBuildGraph(t *testing.T) {
 	root := &fakeStep{
 		requires: []StepLink{ExternalImageLink(ImageStreamTagReference{Namespace: "ns", Name: "base", Tag: "latest"})},
-		creates:  []StepLink{InternalImageLink(PipelineImageStreamTagReferenceBase)},
+		creates:  []StepLink{InternalImageLink(PipelineImageStreamTagReferenceRoot)},
 	}
 	other := &fakeStep{
 		requires: []StepLink{ExternalImageLink(ImageStreamTagReference{Namespace: "ns", Name: "base", Tag: "other"})},
 		creates:  []StepLink{InternalImageLink(PipelineImageStreamTagReference("other"))},
 	}
 	src := &fakeStep{
-		requires: []StepLink{InternalImageLink(PipelineImageStreamTagReferenceBase)},
+		requires: []StepLink{InternalImageLink(PipelineImageStreamTagReferenceRoot)},
 		creates:  []StepLink{InternalImageLink(PipelineImageStreamTagReferenceSource)},
 	}
 	bin := &fakeStep{

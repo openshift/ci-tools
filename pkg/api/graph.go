@@ -27,7 +27,9 @@ type externalImageLink struct {
 func (l *externalImageLink) Matches(other StepLink) bool {
 	switch link := other.(type) {
 	case *externalImageLink:
-		return l.image == link.image
+		return l.image.Name == link.image.Name &&
+			l.image.Namespace == link.image.Namespace &&
+			l.image.Tag == link.image.Tag
 	default:
 		return false
 	}

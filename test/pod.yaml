@@ -1,0 +1,53 @@
+kind: Pod
+apiVersion: v1
+metadata:
+  name: image-registry-ci-operator
+spec:
+  restartPolicy: Never
+  terminationGracePeriodSeconds: 1
+  serviceAccountName: builder
+  containers:
+  - name: test
+    image: docker-registry.default.svc:5000/ci/ci-operator:latest
+    env:
+    - name: JOB_SPEC
+      value: '{"type":"postsubmit","job":"build_sample_image","buildid":"f506c368-39d5-11e8-a837-0a58ac100475","refs":{"org":"openshift","repo":"image-registry","base_ref":"master","base_sha":"1c82db343d8a3ef7b08f5c0a21d2f5f4961e0121"}}'
+    command:
+    - /bin/bash
+    - -c
+    - |
+      #!bin/bash
+      cat << END > /tmp/config.json
+      {
+        "test_base_image": {
+          "namespace": "ci",
+          "name": "release-with-clonerefs",
+          "tag": "golang-1.9"
+        },
+        "binary_build_commands": "make build",
+        "test_binary_build_commands": "OS_GOFLAGS='-race' make build",
+        "rpm_build_commands": "make build-rpms",
+        "base_rpm_images": [
+          {
+            "namespace": "openshift",
+            "name": "origin-v3.10",
+            "tag": "base",
+            "as": "base"
+          }
+        ],
+        "images": [
+          {
+            "from": "base",
+            "to": "docker-registry",
+            "context_dir": "images/dockerregistry/"
+          }
+        ],
+        "tag_specification": {
+          "namespace": "openshift",
+          "name": "origin-v3.10",
+          "tag": "",
+          "tag_overrides": {}
+        }
+      }
+      END
+      exec ci-operator --build-config "$(cat /tmp/config.json)" --dry-run

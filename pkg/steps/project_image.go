@@ -3,7 +3,6 @@ package steps
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 
 	buildapi "github.com/openshift/api/build/v1"
 	"github.com/openshift/api/image/docker10"
@@ -22,7 +21,6 @@ type projectDirectoryImageBuildStep struct {
 }
 
 func (s *projectDirectoryImageBuildStep) Run(dry bool) error {
-	log.Printf("Creating build for %s/%s:%s", s.jobSpec.Namespace(), PipelineImageStream, s.config.To)
 	source := fmt.Sprintf("%s:%s", PipelineImageStream, api.PipelineImageStreamTagReferenceSource)
 
 	var workingDir string

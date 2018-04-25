@@ -185,7 +185,7 @@ func (o *options) Run() error {
 			} else {
 				format = fmt.Sprintf("%s/%s/%s:%s", registry, tagConfig.Namespace, "${component}", tagConfig.Tag)
 			}
-			params = append(params, fmt.Sprintf("IMAGE_FORMAT=%q", format))
+			params = append(params, fmt.Sprintf("IMAGE_FORMAT='%s'", strings.Replace(strings.Replace(format, "\\", "\\\\", -1), "'", "\\'", -1)))
 		}
 		if len(o.buildConfig.RpmBuildCommands) > 0 {
 			if o.dry {

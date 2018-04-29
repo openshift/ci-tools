@@ -169,7 +169,9 @@ func (o *options) Run() error {
 	if len(o.writeParams) > 0 {
 		log.Printf("Writing parameters to %s", o.writeParams)
 		var params []string
+
 		params = append(params, fmt.Sprintf("NAMESPACE=%q", o.namespace))
+
 		if tagConfig := o.buildConfig.ReleaseTagConfiguration; tagConfig != nil {
 			registry := "REGISTRY"
 			if is != nil {
@@ -181,12 +183,13 @@ func (o *options) Run() error {
 			}
 			var format string
 			if len(tagConfig.Name) > 0 {
-				format = fmt.Sprintf("%s/%s/%s:%s", registry, tagConfig.Namespace, tagConfig.Name, "${component}")
+				format = fmt.Sprintf("%s/%s/%s:%s", registry, o.namespace, fmt.Sprintf("%s%s", tagConfig.NamePrefix, steps.StableImageStream), "${component}")
 			} else {
-				format = fmt.Sprintf("%s/%s/%s:%s", registry, tagConfig.Namespace, "${component}", tagConfig.Tag)
+				format = fmt.Sprintf("%s/%s/%s:%s", registry, o.namespace, fmt.Sprintf("%s${component}", tagConfig.NamePrefix), tagConfig.Tag)
 			}
 			params = append(params, fmt.Sprintf("IMAGE_FORMAT='%s'", strings.Replace(strings.Replace(format, "\\", "\\\\", -1), "'", "\\'", -1)))
 		}
+
 		if len(o.buildConfig.RpmBuildCommands) > 0 {
 			if o.dry {
 				params = append(params, "RPM_REPO=\"\"")
@@ -210,6 +213,7 @@ func (o *options) Run() error {
 				}
 			}
 		}
+
 		if o.dry {
 			log.Printf("\n%s", strings.Join(params, "\n"))
 		} else {

@@ -86,6 +86,10 @@ type ReleaseTagConfiguration struct {
 	// ImageStream in the above Namespace.
 	Tag string `json:"tag"`
 
+	// NamePrefix is prepended to the final output image name
+	// if specified.
+	NamePrefix string `json:"name_prefix"`
+
 	// TagOverrides is map of ImageStream name to
 	// tag, allowing for specific components in the
 	// above namespace to be tagged in at a different

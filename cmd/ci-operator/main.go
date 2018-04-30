@@ -170,6 +170,7 @@ func (o *options) Run() error {
 		log.Printf("Writing parameters to %s", o.writeParams)
 		var params []string
 
+		params = append(params, fmt.Sprintf("JOB_NAME=%q", o.jobSpec.Job))
 		params = append(params, fmt.Sprintf("NAMESPACE=%q", o.namespace))
 
 		if tagConfig := o.buildConfig.ReleaseTagConfiguration; tagConfig != nil {

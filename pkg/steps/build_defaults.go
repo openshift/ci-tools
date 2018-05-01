@@ -42,7 +42,8 @@ func FromConfig(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec, cluster
 
 	jobNamespace := jobSpec.Namespace()
 
-	var buildClient buildclientset.BuildInterface
+	var buildClient BuildClient
+	var buildRESTClient rest.Interface
 	var imageStreamTagClient imageclientset.ImageStreamTagInterface
 	var imageStreamGetter imageclientset.ImageStreamsGetter
 	var imageStreamTagsGetter imageclientset.ImageStreamTagsGetter
@@ -58,7 +59,8 @@ func FromConfig(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec, cluster
 		if err != nil {
 			return buildSteps, fmt.Errorf("could not get build client for cluster config: %v", err)
 		}
-		buildClient = buildGetter.Builds(jobNamespace)
+		buildRESTClient = buildGetter.RESTClient()
+		buildClient = NewBuildClient(buildGetter.Builds(jobNamespace), buildRESTClient, jobNamespace)
 
 		imageGetter, err := imageclientset.NewForConfig(clusterConfig)
 		if err != nil {

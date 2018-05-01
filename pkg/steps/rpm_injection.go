@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	buildapi "github.com/openshift/api/build/v1"
-	buildclientset "github.com/openshift/client-go/build/clientset/versioned/typed/build/v1"
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 	routeclientset "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -19,7 +18,7 @@ RUN echo $'[built]\nname = Built RPMs\nbaseurl = http://%s\ngpgcheck = 0\nenable
 
 type rpmImageInjectionStep struct {
 	config      api.RPMImageInjectionStepConfiguration
-	buildClient buildclientset.BuildInterface
+	buildClient BuildClient
 	routeClient routeclientset.RouteInterface
 	istClient   imageclientset.ImageStreamTagInterface
 	jobSpec     *JobSpec
@@ -58,7 +57,7 @@ func (s *rpmImageInjectionStep) Creates() []api.StepLink {
 	return []api.StepLink{api.InternalImageLink(s.config.To)}
 }
 
-func RPMImageInjectionStep(config api.RPMImageInjectionStepConfiguration, buildClient buildclientset.BuildInterface, routeClient routeclientset.RouteInterface, istClient imageclientset.ImageStreamTagInterface, jobSpec *JobSpec) api.Step {
+func RPMImageInjectionStep(config api.RPMImageInjectionStepConfiguration, buildClient BuildClient, routeClient routeclientset.RouteInterface, istClient imageclientset.ImageStreamTagInterface, jobSpec *JobSpec) api.Step {
 	return &rpmImageInjectionStep{
 		config:      config,
 		buildClient: buildClient,

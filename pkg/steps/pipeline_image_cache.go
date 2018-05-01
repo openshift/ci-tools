@@ -6,7 +6,6 @@ import (
 
 	buildapi "github.com/openshift/api/build/v1"
 	"github.com/openshift/ci-operator/pkg/api"
-	buildclientset "github.com/openshift/client-go/build/clientset/versioned/typed/build/v1"
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 )
 
@@ -17,7 +16,7 @@ RUN ["/bin/bash", "-c", %s]`, PipelineImageStream, from, strconv.Quote(fmt.Sprin
 
 type pipelineImageCacheStep struct {
 	config      api.PipelineImageCacheStepConfiguration
-	buildClient buildclientset.BuildInterface
+	buildClient BuildClient
 	istClient   imageclientset.ImageStreamTagInterface
 	jobSpec     *JobSpec
 }
@@ -45,7 +44,7 @@ func (s *pipelineImageCacheStep) Creates() []api.StepLink {
 	return []api.StepLink{api.InternalImageLink(s.config.To)}
 }
 
-func PipelineImageCacheStep(config api.PipelineImageCacheStepConfiguration, buildClient buildclientset.BuildInterface, istClient imageclientset.ImageStreamTagInterface, jobSpec *JobSpec) api.Step {
+func PipelineImageCacheStep(config api.PipelineImageCacheStepConfiguration, buildClient BuildClient, istClient imageclientset.ImageStreamTagInterface, jobSpec *JobSpec) api.Step {
 	return &pipelineImageCacheStep{
 		config:      config,
 		buildClient: buildClient,

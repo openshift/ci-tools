@@ -7,7 +7,6 @@ import (
 	buildapi "github.com/openshift/api/build/v1"
 	"github.com/openshift/api/image/docker10"
 	"github.com/openshift/ci-operator/pkg/api"
-	buildclientset "github.com/openshift/client-go/build/clientset/versioned/typed/build/v1"
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 	coreapi "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -15,7 +14,7 @@ import (
 
 type projectDirectoryImageBuildStep struct {
 	config      api.ProjectDirectoryImageBuildStepConfiguration
-	buildClient buildclientset.BuildInterface
+	buildClient BuildClient
 	istClient   imageclientset.ImageStreamTagInterface
 	jobSpec     *JobSpec
 }
@@ -70,7 +69,7 @@ func (s *projectDirectoryImageBuildStep) Creates() []api.StepLink {
 	return []api.StepLink{api.InternalImageLink(s.config.To)}
 }
 
-func ProjectDirectoryImageBuildStep(config api.ProjectDirectoryImageBuildStepConfiguration, buildClient buildclientset.BuildInterface, istClient imageclientset.ImageStreamTagInterface, jobSpec *JobSpec) api.Step {
+func ProjectDirectoryImageBuildStep(config api.ProjectDirectoryImageBuildStepConfiguration, buildClient BuildClient, istClient imageclientset.ImageStreamTagInterface, jobSpec *JobSpec) api.Step {
 	return &projectDirectoryImageBuildStep{
 		config:      config,
 		buildClient: buildClient,

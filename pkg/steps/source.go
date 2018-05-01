@@ -3,10 +3,11 @@ package steps
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"os"
 
 	buildapi "github.com/openshift/api/build/v1"
-	buildclientset "github.com/openshift/client-go/build/clientset/versioned/typed/build/v1"
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -43,7 +44,7 @@ WORKDIR /go/src/github.com/%s/%s/
 
 type sourceStep struct {
 	config      api.SourceStepConfiguration
-	buildClient buildclientset.BuildInterface
+	buildClient BuildClient
 	istClient   imageclientset.ImageStreamTagInterface
 	jobSpec     *JobSpec
 }
@@ -114,7 +115,7 @@ func buildFromSource(jobSpec *JobSpec, fromTag, toTag api.PipelineImageStreamTag
 	return build
 }
 
-func handleBuild(buildClient buildclientset.BuildInterface, build *buildapi.Build, dry bool) error {
+func handleBuild(buildClient BuildClient, build *buildapi.Build, dry bool) error {
 	if dry {
 		buildJSON, err := json.Marshal(build)
 		if err != nil {
@@ -129,7 +130,7 @@ func handleBuild(buildClient buildclientset.BuildInterface, build *buildapi.Buil
 	return waitForBuild(buildClient, build.Name)
 }
 
-func waitForBuild(buildClient buildclientset.BuildInterface, name string) error {
+func waitForBuild(buildClient BuildClient, name string) error {
 	log.Printf("Waiting for build %s to finish", name)
 	for {
 		retry, err := waitForBuildOrTimeout(buildClient, name)
@@ -144,7 +145,7 @@ func waitForBuild(buildClient buildclientset.BuildInterface, name string) error 
 	return nil
 }
 
-func waitForBuildOrTimeout(buildClient buildclientset.BuildInterface, name string) (bool, error) {
+func waitForBuildOrTimeout(buildClient BuildClient, name string) (bool, error) {
 	isOK := func(b *buildapi.Build) bool {
 		return b.Status.Phase == buildapi.BuildPhaseComplete
 	}
@@ -160,11 +161,14 @@ func waitForBuildOrTimeout(buildClient buildclientset.BuildInterface, name strin
 	if len(list.Items) != 1 {
 		return false, fmt.Errorf("could not find build %s", name)
 	}
-	if isOK(&list.Items[0]) {
+	build := &list.Items[0]
+	if isOK(build) {
 		return false, nil
 	}
-	if isFailed(&list.Items[0]) {
-		return false, fmt.Errorf("the build %s/%s failed with status %q", list.Items[0].Namespace, list.Items[0].Name, list.Items[0].Status.Phase)
+	if isFailed(build) {
+		log.Printf("Build %s/%s failed, printing logs:", build.Namespace, build.Name)
+		printBuildLogs(buildClient, build.Name)
+		return false, fmt.Errorf("the build %s/%s failed with status %q", build.Namespace, build.Name, build.Status.Phase)
 	}
 
 	watcher, err := buildClient.Watch(meta.ListOptions{
@@ -187,9 +191,25 @@ func waitForBuildOrTimeout(buildClient buildclientset.BuildInterface, name strin
 				return false, nil
 			}
 			if isFailed(build) {
+				log.Printf("Build %s/%s failed, printing logs:", build.Namespace, build.Name)
+				printBuildLogs(buildClient, build.Name)
 				return false, fmt.Errorf("the build %s/%s failed with status %q", build.Namespace, build.Name, build.Status.Phase)
 			}
 		}
+	}
+}
+
+func printBuildLogs(buildClient BuildClient, name string) {
+	if s, err := buildClient.Logs(name, &buildapi.BuildLogOptions{
+		NoWait:     true,
+		Timestamps: true,
+	}); err == nil {
+		defer s.Close()
+		if _, err := io.Copy(os.Stdout, s); err != nil {
+			log.Printf("error: Unable to copy log output from failed build: %v", err)
+		}
+	} else {
+		log.Printf("error: Unable to retrieve logs from failed build: %v", err)
 	}
 }
 
@@ -222,7 +242,7 @@ func (s *sourceStep) Creates() []api.StepLink {
 	return []api.StepLink{api.InternalImageLink(s.config.To)}
 }
 
-func SourceStep(config api.SourceStepConfiguration, buildClient buildclientset.BuildInterface, istClient imageclientset.ImageStreamTagInterface, jobSpec *JobSpec) api.Step {
+func SourceStep(config api.SourceStepConfiguration, buildClient BuildClient, istClient imageclientset.ImageStreamTagInterface, jobSpec *JobSpec) api.Step {
 	return &sourceStep{
 		config:      config,
 		buildClient: buildClient,

@@ -11,9 +11,12 @@ import (
 	"time"
 
 	coreapi "k8s.io/api/core/v1"
+	rbacapi "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
+	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
+	rbacclientset "k8s.io/client-go/kubernetes/typed/rbac/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
@@ -35,6 +38,7 @@ func bindOptions() *options {
 	flag.StringVar(&opt.rawBuildConfig, "build-config", "", "Configuration for the build to run, as JSON.")
 	flag.BoolVar(&opt.dry, "dry-run", true, "Do not contact the API server.")
 	flag.StringVar(&opt.writeParams, "write-params", "", "If set write an env-compatible file with the output of the job.")
+	flag.DurationVar(&opt.idleCleanupDuration, "delete-when-idle", opt.idleCleanupDuration, "If no pod is running for longer than this interval, delete the namespace.")
 	return opt
 }
 
@@ -43,8 +47,9 @@ type options struct {
 	dry            bool
 	writeParams    string
 
-	namespace     string
-	baseNamespace string
+	namespace           string
+	baseNamespace       string
+	idleCleanupDuration time.Duration
 
 	buildConfig   *api.ReleaseBuildConfiguration
 	jobSpec       *steps.JobSpec
@@ -117,7 +122,7 @@ func (o *options) Run() error {
 			return fmt.Errorf("could not get project client for cluster config: %v", err)
 		}
 
-		log.Println("Setting up namespace for testing...")
+		log.Println("Setting up namespace for testing ...")
 		if _, err := projectGetter.ProjectV1().ProjectRequests().Create(&projectapi.ProjectRequest{
 			ObjectMeta: meta.ObjectMeta{
 				Name: o.namespace,
@@ -126,7 +131,13 @@ func (o *options) Run() error {
 			return fmt.Errorf("could not set up namespace for test: %v", err)
 		}
 
-		log.Println("Setting up pipeline imagestream for testing...")
+		if o.idleCleanupDuration > 0 {
+			if err := o.createNamespaceCleanupPod(); err != nil {
+				return err
+			}
+		}
+
+		log.Println("Setting up pipeline imagestream for testing ...")
 		imageGetter, err := imageclientset.NewForConfig(o.clusterConfig)
 		if err != nil {
 			return fmt.Errorf("could not get image client for cluster config: %v", err)
@@ -265,6 +276,105 @@ func (o *options) writeParameters(path string, is *imageapi.ImageStream) error {
 		if err := ioutil.WriteFile(path, []byte(strings.Join(params, "\n")), 0640); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// createNamespaceCleanupPod creates a pod that deletes the job namespace if no other run-once pods are running
+// for more than idleCleanupDuration.
+func (o *options) createNamespaceCleanupPod() error {
+	log.Printf("Marking the namespace as slated for deletion after %s of idle time ...", o.idleCleanupDuration)
+	client, err := coreclientset.NewForConfig(o.clusterConfig)
+	if err != nil {
+		return fmt.Errorf("could not get image client for cluster config: %v", err)
+	}
+	rbacClient, err := rbacclientset.NewForConfig(o.clusterConfig)
+	if err != nil {
+		return fmt.Errorf("could not get image client for cluster config: %v", err)
+	}
+
+	if _, err := client.ServiceAccounts(o.namespace).Create(&coreapi.ServiceAccount{
+		ObjectMeta: meta.ObjectMeta{
+			Name: "cleanup",
+		},
+	}); err != nil && !errors.IsAlreadyExists(err) {
+		return fmt.Errorf("could not create service account for cleanup: %v", err)
+	}
+	if _, err := rbacClient.RoleBindings(o.namespace).Create(&rbacapi.RoleBinding{
+		ObjectMeta: meta.ObjectMeta{
+			Name: "cleanup",
+		},
+		Subjects: []rbacapi.Subject{{Kind: "ServiceAccount", Name: "cleanup"}},
+		RoleRef: rbacapi.RoleRef{
+			Kind: "ClusterRole",
+			Name: "admin",
+		},
+	}); err != nil && !errors.IsAlreadyExists(err) {
+		return fmt.Errorf("could not create role binding for cleanup: %v", err)
+	}
+
+	grace := int64(30)
+	deadline := int64(12 * time.Hour / time.Second)
+	if _, err := client.Pods(o.namespace).Create(&coreapi.Pod{
+		ObjectMeta: meta.ObjectMeta{
+			Name: "cleanup-when-idle",
+		},
+		Spec: coreapi.PodSpec{
+			ActiveDeadlineSeconds:         &deadline,
+			RestartPolicy:                 coreapi.RestartPolicyNever,
+			TerminationGracePeriodSeconds: &grace,
+			ServiceAccountName:            "cleanup",
+			Containers: []coreapi.Container{
+				{
+					Name:  "cleanup",
+					Image: "openshift/origin-cli:latest",
+					Env: []coreapi.EnvVar{
+						{
+							Name:      "NAMESPACE",
+							ValueFrom: &coreapi.EnvVarSource{FieldRef: &coreapi.ObjectFieldSelector{FieldPath: "metadata.namespace"}},
+						},
+						{
+							Name:  "WAIT",
+							Value: fmt.Sprintf("%d", int(o.idleCleanupDuration.Seconds())),
+						},
+					},
+					Command: []string{"/bin/bash", "-c"},
+					Args: []string{`
+						#!/bin/bash
+						set -euo pipefail
+
+						function cleanup() {
+							set +e
+							oc delete project ${NAMESPACE}
+						}
+
+						trap 'kill $(jobs -p); echo "Pod deleted, deleting project ..."; exit 1' TERM
+						trap cleanup EXIT
+
+						echo "Waiting for all running pods to terminate (max idle ${WAIT}s) ..."
+						count=0
+						while true; do
+							alive="$( oc get pods --template '{{ range .items }}{{ if and (not (eq .metadata.name "cleanup-when-idle")) (eq .spec.restartPolicy "Never") (or (eq .status.phase "Pending") (eq .status.phase "Running") (eq .status.phase "Unknown")) }} {{ .metadata.name }}{{ end }}{{ end }}' )"
+							if [[ -n "${alive}" ]]; then
+								count=0
+								sleep ${WAIT} & wait
+								continue
+							fi
+							if [[ "${count}" -lt 1 ]]; then
+								count+=1
+								sleep ${WAIT} & wait
+								continue
+							fi
+							echo "No pods running for more than ${WAIT}s, deleting project ..."
+							exit 0
+						done
+						`,
+					},
+				},
+			},
+		},
+	}); err != nil && !errors.IsAlreadyExists(err) {
+		return fmt.Errorf("could not create pod for cleanup: %v", err)
 	}
 	return nil
 }

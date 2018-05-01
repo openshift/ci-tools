@@ -163,65 +163,12 @@ func (o *options) Run() error {
 	}
 
 	if err := steps.Run(api.BuildGraph(buildSteps), o.dry); err != nil {
-		return fmt.Errorf("failed to run steps: %v", err)
+		return err
 	}
 
 	if len(o.writeParams) > 0 {
-		log.Printf("Writing parameters to %s", o.writeParams)
-		var params []string
-
-		params = append(params, fmt.Sprintf("JOB_NAME=%q", o.jobSpec.Job))
-		params = append(params, fmt.Sprintf("NAMESPACE=%q", o.namespace))
-
-		if tagConfig := o.buildConfig.ReleaseTagConfiguration; tagConfig != nil {
-			registry := "REGISTRY"
-			if is != nil {
-				if len(is.Status.PublicDockerImageRepository) > 0 {
-					registry = strings.SplitN(is.Status.PublicDockerImageRepository, "/", 2)[0]
-				} else if len(is.Status.DockerImageRepository) > 0 {
-					registry = strings.SplitN(is.Status.DockerImageRepository, "/", 2)[0]
-				}
-			}
-			var format string
-			if len(tagConfig.Name) > 0 {
-				format = fmt.Sprintf("%s/%s/%s:%s", registry, o.namespace, fmt.Sprintf("%s%s", tagConfig.NamePrefix, steps.StableImageStream), "${component}")
-			} else {
-				format = fmt.Sprintf("%s/%s/%s:%s", registry, o.namespace, fmt.Sprintf("%s${component}", tagConfig.NamePrefix), tagConfig.Tag)
-			}
-			params = append(params, fmt.Sprintf("IMAGE_FORMAT='%s'", strings.Replace(strings.Replace(format, "\\", "\\\\", -1), "'", "\\'", -1)))
-		}
-
-		if len(o.buildConfig.RpmBuildCommands) > 0 {
-			if o.dry {
-				params = append(params, "RPM_REPO=\"\"")
-			} else {
-				routeclient, err := routeclientset.NewForConfig(o.clusterConfig)
-				if err != nil {
-					return fmt.Errorf("could not get route client for cluster config: %v", err)
-				}
-				if err := wait.PollImmediate(time.Second, time.Minute, func() (bool, error) {
-					route, err := routeclient.Routes(o.namespace).Get(steps.RPMRepoName, meta.GetOptions{})
-					if err != nil {
-						return false, err
-					}
-					if host, ok := admittedRoute(route); ok {
-						params = append(params, fmt.Sprintf("RPM_REPO=%q", host))
-						return true, nil
-					}
-					return false, nil
-				}); err != nil {
-					return err
-				}
-			}
-		}
-
-		if o.dry {
-			log.Printf("\n%s", strings.Join(params, "\n"))
-		} else {
-			params = append(params, "")
-			if err := ioutil.WriteFile(o.writeParams, []byte(strings.Join(params, "\n")), 0640); err != nil {
-				return err
-			}
+		if err := o.writeParameters(o.writeParams, is); err != nil {
+			return fmt.Errorf("failed to write parameters: %v", err)
 		}
 	}
 
@@ -260,4 +207,64 @@ func main() {
 		fmt.Printf("error: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+func (o *options) writeParameters(path string, is *imageapi.ImageStream) error {
+	log.Printf("Writing parameters to %s", path)
+	var params []string
+
+	params = append(params, fmt.Sprintf("JOB_NAME=%q", o.jobSpec.Job))
+	params = append(params, fmt.Sprintf("NAMESPACE=%q", o.namespace))
+
+	if tagConfig := o.buildConfig.ReleaseTagConfiguration; tagConfig != nil {
+		registry := "REGISTRY"
+		if is != nil {
+			if len(is.Status.PublicDockerImageRepository) > 0 {
+				registry = strings.SplitN(is.Status.PublicDockerImageRepository, "/", 2)[0]
+			} else if len(is.Status.DockerImageRepository) > 0 {
+				registry = strings.SplitN(is.Status.DockerImageRepository, "/", 2)[0]
+			}
+		}
+		var format string
+		if len(tagConfig.Name) > 0 {
+			format = fmt.Sprintf("%s/%s/%s:%s", registry, o.namespace, fmt.Sprintf("%s%s", tagConfig.NamePrefix, steps.StableImageStream), "${component}")
+		} else {
+			format = fmt.Sprintf("%s/%s/%s:%s", registry, o.namespace, fmt.Sprintf("%s${component}", tagConfig.NamePrefix), tagConfig.Tag)
+		}
+		params = append(params, fmt.Sprintf("IMAGE_FORMAT='%s'", strings.Replace(strings.Replace(format, "\\", "\\\\", -1), "'", "\\'", -1)))
+	}
+
+	if len(o.buildConfig.RpmBuildCommands) > 0 {
+		if o.dry {
+			params = append(params, "RPM_REPO=\"\"")
+		} else {
+			routeclient, err := routeclientset.NewForConfig(o.clusterConfig)
+			if err != nil {
+				return fmt.Errorf("could not get route client for cluster config: %v", err)
+			}
+			if err := wait.PollImmediate(time.Second, time.Minute, func() (bool, error) {
+				route, err := routeclient.Routes(o.namespace).Get(steps.RPMRepoName, meta.GetOptions{})
+				if err != nil {
+					return false, err
+				}
+				if host, ok := admittedRoute(route); ok {
+					params = append(params, fmt.Sprintf("RPM_REPO=%q", host))
+					return true, nil
+				}
+				return false, nil
+			}); err != nil {
+				return err
+			}
+		}
+	}
+
+	if o.dry {
+		log.Printf("\n%s", strings.Join(params, "\n"))
+	} else {
+		params = append(params, "")
+		if err := ioutil.WriteFile(path, []byte(strings.Join(params, "\n")), 0640); err != nil {
+			return err
+		}
+	}
+	return nil
 }

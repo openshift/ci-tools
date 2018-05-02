@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"time"
 
 	buildapi "github.com/openshift/api/build/v1"
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
@@ -131,7 +132,6 @@ func handleBuild(buildClient BuildClient, build *buildapi.Build, dry bool) error
 }
 
 func waitForBuild(buildClient BuildClient, name string) error {
-	log.Printf("Waiting for build %s to finish", name)
 	for {
 		retry, err := waitForBuildOrTimeout(buildClient, name)
 		if err != nil {
@@ -141,7 +141,6 @@ func waitForBuild(buildClient BuildClient, name string) error {
 			break
 		}
 	}
-
 	return nil
 }
 
@@ -163,6 +162,7 @@ func waitForBuildOrTimeout(buildClient BuildClient, name string) (bool, error) {
 	}
 	build := &list.Items[0]
 	if isOK(build) {
+		log.Printf("Build %s/%s already succeeded in %s", build.Namespace, build.Name, buildDuration(build))
 		return false, nil
 	}
 	if isFailed(build) {
@@ -188,15 +188,29 @@ func waitForBuildOrTimeout(buildClient BuildClient, name string) (bool, error) {
 		}
 		if build, ok := event.Object.(*buildapi.Build); ok {
 			if isOK(build) {
+				log.Printf("Build %s/%s succeeded after %s", build.Namespace, build.Name, buildDuration(build))
 				return false, nil
 			}
 			if isFailed(build) {
 				log.Printf("Build %s/%s failed, printing logs:", build.Namespace, build.Name)
 				printBuildLogs(buildClient, build.Name)
-				return false, fmt.Errorf("the build %s/%s failed with status %q", build.Namespace, build.Name, build.Status.Phase)
+				return false, fmt.Errorf("the build %s/%s failed after %s with status %q", build.Namespace, build.Name, buildDuration(build), build.Status.Phase)
 			}
 		}
 	}
+}
+
+func buildDuration(build *buildapi.Build) time.Duration {
+	start := build.Status.StartTimestamp
+	if start == nil {
+		start = &build.CreationTimestamp
+	}
+	end := build.Status.CompletionTimestamp
+	if end == nil {
+		end = &meta.Time{Time: time.Now()}
+	}
+	duration := end.Sub(start.Time)
+	return duration
 }
 
 func printBuildLogs(buildClient BuildClient, name string) {

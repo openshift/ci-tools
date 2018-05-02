@@ -115,6 +115,10 @@ func loadClusterConfig() (*rest.Config, error) {
 }
 
 func (o *options) Run() error {
+	start := time.Now()
+	defer func() {
+		log.Printf("Ran for %s", time.Now().Sub(start).Truncate(time.Second))
+	}()
 	var is *imageapi.ImageStream
 	if !o.dry {
 		projectGetter, err := versioned.NewForConfig(o.clusterConfig)
@@ -137,7 +141,6 @@ func (o *options) Run() error {
 			}
 		}
 
-		log.Println("Setting up pipeline imagestream for testing ...")
 		imageGetter, err := imageclientset.NewForConfig(o.clusterConfig)
 		if err != nil {
 			return fmt.Errorf("could not get image client for cluster config: %v", err)
@@ -283,7 +286,7 @@ func (o *options) writeParameters(path string, is *imageapi.ImageStream) error {
 // createNamespaceCleanupPod creates a pod that deletes the job namespace if no other run-once pods are running
 // for more than idleCleanupDuration.
 func (o *options) createNamespaceCleanupPod() error {
-	log.Printf("Marking the namespace as slated for deletion after %s of idle time ...", o.idleCleanupDuration)
+	log.Printf("Namespace will be deleted after %s of idle time", o.idleCleanupDuration)
 	client, err := coreclientset.NewForConfig(o.clusterConfig)
 	if err != nil {
 		return fmt.Errorf("could not get image client for cluster config: %v", err)

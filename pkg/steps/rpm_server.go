@@ -3,7 +3,6 @@ package steps
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 
 	appsapi "github.com/openshift/api/apps/v1"
 	routeapi "github.com/openshift/api/route/v1"
@@ -164,7 +163,8 @@ func (s *rpmServerStep) Run(dry bool) error {
 		}
 		fmt.Printf("%s\n", routeJSON)
 		return nil
-	} else if _, err := s.routeClient.Create(route); err != nil && !kerrors.IsAlreadyExists(err) {
+	}
+	if _, err := s.routeClient.Create(route); err != nil && !kerrors.IsAlreadyExists(err) {
 		return err
 	}
 	return waitForDeployment(s.deploymentClient, deploymentConfig.Name)
@@ -175,7 +175,6 @@ func (s *rpmServerStep) Done() (bool, error) {
 }
 
 func waitForDeployment(client appsclientset.DeploymentConfigInterface, name string) error {
-	log.Printf("Waiting for DeploymentConfig %s to finish", name)
 	for {
 		retry, err := waitForDeploymentOrTimeout(client, name)
 		if err != nil {

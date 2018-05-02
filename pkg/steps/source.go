@@ -35,12 +35,11 @@ var (
 )
 
 func sourceDockerfile(fromTag api.PipelineImageStreamTagReference, job *JobSpec) string {
-	return fmt.Sprintf(`FROM %s:%s
-ENV GIT_COMMITTER_NAME=developer GIT_COMMITTER_EMAIL=developer@redhat.com
-ENV REPO_OWNER=%s REPO_NAME=%s PULL_REFS=%s
-RUN umask 0002 && /usr/bin/clonerefs --src-root=/go --log=-
-WORKDIR /go/src/github.com/%s/%s/
-`, PipelineImageStream, fromTag, job.Refs.Org, job.Refs.Repo, job.Refs.String(), job.Refs.Org, job.Refs.Repo)
+	return fmt.Sprintf(`
+		FROM %s:%s
+		RUN umask 0002 && /usr/bin/clonerefs
+		WORKDIR /go/src/github.com/%s/%s/
+		`, PipelineImageStream, fromTag, job.Refs.Org, job.Refs.Repo)
 }
 
 type sourceStep struct {
@@ -62,7 +61,20 @@ func (s *sourceStep) Run(dry bool) error {
 }
 
 func buildFromSource(jobSpec *JobSpec, fromTag, toTag api.PipelineImageStreamTagReference, source buildapi.BuildSource) *buildapi.Build {
-	log.Printf("Creating build for %s/%s:%s", jobSpec.Namespace(), PipelineImageStream, toTag)
+	log.Printf("Building %s/%s:%s", jobSpec.Namespace(), PipelineImageStream, toTag)
+	optionsSpec := map[string]interface{}{
+		"src_root":       "/go",
+		"log":            "-",
+		"git_user_name":  "ci-robot",
+		"git_user_email": "ci-robot@openshift.io",
+		"refs": []interface{}{
+			jobSpec.Refs,
+		},
+	}
+	optionsJSON, err := json.Marshal(optionsSpec)
+	if err != nil {
+		panic(fmt.Errorf("couldn't create JSON spec for clonerefs: %v", err))
+	}
 	layer := buildapi.ImageOptimizationSkipLayers
 	build := &buildapi.Build{
 		ObjectMeta: meta.ObjectMeta{
@@ -94,7 +106,7 @@ func buildFromSource(jobSpec *JobSpec, fromTag, toTag api.PipelineImageStreamTag
 						ForcePull: true,
 						NoCache:   true,
 						Env: []coreapi.EnvVar{
-							{Name: "JOB_SPEC", Value: jobSpec.rawSpec},
+							{Name: "CLONEREFS_OPTIONS", Value: string(optionsJSON)},
 						},
 						ImageOptimizationPolicy: &layer,
 					},

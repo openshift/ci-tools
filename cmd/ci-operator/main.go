@@ -126,13 +126,31 @@ func (o *options) Run() error {
 			return fmt.Errorf("could not get project client for cluster config: %v", err)
 		}
 
-		log.Println("Setting up namespace for testing ...")
-		if _, err := projectGetter.ProjectV1().ProjectRequests().Create(&projectapi.ProjectRequest{
-			ObjectMeta: meta.ObjectMeta{
-				Name: o.namespace,
-			},
-		}); err != nil && !errors.IsAlreadyExists(err) {
-			return fmt.Errorf("could not set up namespace for test: %v", err)
+		log.Printf("Creating namespace %s", o.namespace)
+		for {
+			project, err := projectGetter.ProjectV1().ProjectRequests().Create(&projectapi.ProjectRequest{
+				ObjectMeta: meta.ObjectMeta{
+					Name: o.namespace,
+				},
+			})
+			if err != nil && !errors.IsAlreadyExists(err) {
+				return fmt.Errorf("could not set up namespace for test: %v", err)
+			}
+			if err != nil {
+				project, err = projectGetter.ProjectV1().Projects().Get(o.namespace, meta.GetOptions{})
+				if err != nil {
+					if errors.IsNotFound(err) {
+						continue
+					}
+					return fmt.Errorf("cannot retrieve test namespace: %v", err)
+				}
+			}
+			if project.Status.Phase == coreapi.NamespaceTerminating {
+				log.Println("Waiting for namespace to finish terminating before creating another")
+				time.Sleep(3 * time.Second)
+				continue
+			}
+			break
 		}
 
 		if o.idleCleanupDuration > 0 {

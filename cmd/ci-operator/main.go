@@ -137,6 +137,8 @@ func (o *options) Run() error {
 				ObjectMeta: meta.ObjectMeta{
 					Name: o.namespace,
 				},
+				DisplayName: fmt.Sprintf("%s - %s", o.namespace, o.jobSpec.Job),
+				Description: jobDescription(o.jobSpec, o.buildConfig),
 			})
 			if err != nil && !errors.IsAlreadyExists(err) {
 				return fmt.Errorf("could not set up namespace for test: %v", err)

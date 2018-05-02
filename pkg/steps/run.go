@@ -54,12 +54,15 @@ func Run(graph []*api.StepNode, dry bool) error {
 			close(done)
 
 			var aggregateErr error
-			if len(errors) > 0 {
+			if len(errors) == 1 {
+				return errors[0]
+			}
+			if len(errors) > 1 {
 				message := bytes.Buffer{}
 				for _, err := range errors {
-					message.WriteString(fmt.Sprintf("\n%s", err.Error()))
+					message.WriteString(fmt.Sprintf("\n  * %s", err.Error()))
 				}
-				aggregateErr = fmt.Errorf("encountered errors running steps:%s", message.String())
+				aggregateErr = fmt.Errorf("some steps failed:%s", message.String())
 			}
 			return aggregateErr
 		}

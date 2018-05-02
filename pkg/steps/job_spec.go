@@ -1,7 +1,6 @@
 package steps
 
 import (
-	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -86,8 +85,9 @@ func (s *JobSpec) SetOwner(owner *meta.OwnerReference) {
 	s.owner = owner
 }
 
-// Hash returns a unique hash representing the inputs to this job.
-func (s *JobSpec) Hash() string {
+// RefSpec returns a string that represents the canonical form of
+// the references for use in uniqueness tests.
+func (s *JobSpec) RefSpec() string {
 	spec := &JobSpec{
 		Refs: s.Refs,
 	}
@@ -95,11 +95,7 @@ func (s *JobSpec) Hash() string {
 	if err != nil {
 		panic(err)
 	}
-	// Object names can't be too long so we truncate
-	// the hash. This increases chances of collision
-	// but we can tolerate it as our input space is
-	// tiny.
-	return fmt.Sprintf("%x", sha256.Sum256(raw))[54:]
+	return string(raw)
 }
 
 // ResolveSpecFromEnv will determine the Refs being

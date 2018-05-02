@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -51,6 +52,7 @@ type options struct {
 	baseNamespace       string
 	idleCleanupDuration time.Duration
 
+	inputHash     string
 	buildConfig   *api.ReleaseBuildConfiguration
 	jobSpec       *steps.JobSpec
 	clusterConfig *rest.Config
@@ -64,24 +66,27 @@ func (o *options) Validate() error {
 }
 
 func (o *options) Complete() error {
+	if err := json.Unmarshal([]byte(o.rawBuildConfig), &o.buildConfig); err != nil {
+		return fmt.Errorf("malformed build configuration: %v", err)
+	}
+
 	jobSpec, err := steps.ResolveSpecFromEnv()
 	if err != nil {
 		return fmt.Errorf("failed to resolve job spec: %v", err)
 	}
 
+	// input hash is unique for a given job definition and input refs
+	o.inputHash = inputHash(jobSpec, o.buildConfig)
+
 	if len(o.namespace) == 0 {
 		o.namespace = "ci-op-{id}"
 	}
-	o.namespace = strings.Replace(o.namespace, "{id}", jobSpec.Hash(), -1)
+	o.namespace = strings.Replace(o.namespace, "{id}", o.inputHash, -1)
 
 	jobSpec.SetNamespace(o.namespace)
 	jobSpec.SetBaseNamespace(o.baseNamespace)
 
 	o.jobSpec = jobSpec
-
-	if err := json.Unmarshal([]byte(o.rawBuildConfig), &o.buildConfig); err != nil {
-		return fmt.Errorf("malformed build configuration: %v", err)
-	}
 
 	clusterConfig, err := loadClusterConfig()
 	if err != nil {
@@ -132,6 +137,8 @@ func (o *options) Run() error {
 				ObjectMeta: meta.ObjectMeta{
 					Name: o.namespace,
 				},
+				DisplayName: fmt.Sprintf("%s - %s", o.namespace, o.jobSpec.Job),
+				Description: jobDescription(o.jobSpec, o.buildConfig),
 			})
 			if err != nil && !errors.IsAlreadyExists(err) {
 				return fmt.Errorf("could not set up namespace for test: %v", err)
@@ -398,4 +405,32 @@ func (o *options) createNamespaceCleanupPod() error {
 		return fmt.Errorf("could not create pod for cleanup: %v", err)
 	}
 	return nil
+}
+
+// inputHash returns a string that hashes the unique parts of the input to avoid collisions.
+func inputHash(job *steps.JobSpec, config *api.ReleaseBuildConfiguration) string {
+	// only the ref spec off the job must be unique
+	refSpec := job.RefSpec()
+	// the entire config must be unique
+	configSpec, err := json.Marshal(config)
+	if err != nil {
+		panic(err)
+	}
+	// Object names can't be too long so we truncate
+	// the hash. This increases chances of collision
+	// but we can tolerate it as our input space is
+	// tiny.
+	return fmt.Sprintf("%x", sha256.Sum256([]byte(refSpec+string(configSpec))))[54:]
+}
+
+// jobDescription returns a string representing the job's description.
+func jobDescription(job *steps.JobSpec, config *api.ReleaseBuildConfiguration) string {
+	var links []string
+	for _, pull := range job.Refs.Pulls {
+		links = append(links, fmt.Sprintf("https://github.com/%s/%s/pull/%d - %s", job.Refs.Org, job.Refs.Repo, pull.Number, pull.Author))
+	}
+	if len(links) > 0 {
+		return fmt.Sprintf("%s on https://github.com/%s/%s\n\n%s", job.Job, job.Refs.Org, job.Refs.Repo, strings.Join(links, "\n"))
+	}
+	return fmt.Sprintf("%s on https://github.com/%s/%s ref=%s commit=%s", job.Job, job.Refs.Org, job.Refs.Repo, job.Refs.BaseRef, job.Refs.BaseSHA)
 }

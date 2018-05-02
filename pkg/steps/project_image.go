@@ -62,7 +62,10 @@ func (s *projectDirectoryImageBuildStep) Done() (bool, error) {
 }
 
 func (s *projectDirectoryImageBuildStep) Requires() []api.StepLink {
-	return []api.StepLink{api.InternalImageLink(s.config.From)}
+	return []api.StepLink{
+		api.InternalImageLink(api.PipelineImageStreamTagReferenceSource),
+		api.InternalImageLink(s.config.From),
+	}
 }
 
 func (s *projectDirectoryImageBuildStep) Creates() []api.StepLink {

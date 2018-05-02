@@ -72,6 +72,10 @@ func (s *projectDirectoryImageBuildStep) Creates() []api.StepLink {
 	return []api.StepLink{api.InternalImageLink(s.config.To)}
 }
 
+func (s *projectDirectoryImageBuildStep) Provides() (api.ParameterMap, api.StepLink) {
+	return nil, nil
+}
+
 func ProjectDirectoryImageBuildStep(config api.ProjectDirectoryImageBuildStepConfiguration, buildClient BuildClient, istClient imageclientset.ImageStreamTagInterface, jobSpec *JobSpec) api.Step {
 	return &projectDirectoryImageBuildStep{
 		config:      config,

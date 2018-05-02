@@ -267,6 +267,10 @@ func (s *sourceStep) Creates() []api.StepLink {
 	return []api.StepLink{api.InternalImageLink(s.config.To)}
 }
 
+func (s *sourceStep) Provides() (api.ParameterMap, api.StepLink) {
+	return nil, nil
+}
+
 func SourceStep(config api.SourceStepConfiguration, buildClient BuildClient, istClient imageclientset.ImageStreamTagInterface, jobSpec *JobSpec) api.Step {
 	return &sourceStep{
 		config:      config,

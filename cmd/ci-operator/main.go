@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -15,7 +16,6 @@ import (
 	rbacapi "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/wait"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	rbacclientset "k8s.io/client-go/kubernetes/typed/rbac/v1"
 	"k8s.io/client-go/rest"
@@ -23,14 +23,53 @@ import (
 
 	imageapi "github.com/openshift/api/image/v1"
 	projectapi "github.com/openshift/api/project/v1"
-	routeapi "github.com/openshift/api/route/v1"
+	templateapi "github.com/openshift/api/template/v1"
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 	"github.com/openshift/client-go/project/clientset/versioned"
-	routeclientset "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
+	templatescheme "github.com/openshift/client-go/template/clientset/versioned/scheme"
 
 	"github.com/openshift/ci-operator/pkg/api"
 	"github.com/openshift/ci-operator/pkg/steps"
 )
+
+func main() {
+	opt := bindOptions()
+	flag.Parse()
+	opt.templatePaths = flag.Args()
+
+	if err := opt.Validate(); err != nil {
+		fmt.Printf("Invalid options: %v\n", err)
+		os.Exit(1)
+	}
+
+	if err := opt.Complete(); err != nil {
+		fmt.Printf("Invalid environment: %v\n", err)
+		os.Exit(1)
+	}
+
+	if err := opt.Run(); err != nil {
+		fmt.Printf("error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+type options struct {
+	rawBuildConfig string
+	templatePaths  []string
+
+	dry         bool
+	writeParams string
+
+	namespace           string
+	baseNamespace       string
+	idleCleanupDuration time.Duration
+
+	inputHash     string
+	templates     []*templateapi.Template
+	buildConfig   *api.ReleaseBuildConfiguration
+	jobSpec       *steps.JobSpec
+	clusterConfig *rest.Config
+}
 
 func bindOptions() *options {
 	opt := &options{}
@@ -41,21 +80,6 @@ func bindOptions() *options {
 	flag.StringVar(&opt.writeParams, "write-params", "", "If set write an env-compatible file with the output of the job.")
 	flag.DurationVar(&opt.idleCleanupDuration, "delete-when-idle", opt.idleCleanupDuration, "If no pod is running for longer than this interval, delete the namespace.")
 	return opt
-}
-
-type options struct {
-	rawBuildConfig string
-	dry            bool
-	writeParams    string
-
-	namespace           string
-	baseNamespace       string
-	idleCleanupDuration time.Duration
-
-	inputHash     string
-	buildConfig   *api.ReleaseBuildConfiguration
-	jobSpec       *steps.JobSpec
-	clusterConfig *rest.Config
 }
 
 func (o *options) Validate() error {
@@ -87,6 +111,26 @@ func (o *options) Complete() error {
 	jobSpec.SetBaseNamespace(o.baseNamespace)
 
 	o.jobSpec = jobSpec
+
+	for _, path := range o.templatePaths {
+		contents, err := ioutil.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		obj, gvk, err := templatescheme.Codecs.UniversalDeserializer().Decode(contents, nil, nil)
+		if err != nil {
+			return fmt.Errorf("unable to parse template %s: %v", path, err)
+		}
+		template, ok := obj.(*templateapi.Template)
+		if !ok {
+			return fmt.Errorf("%s is not a template: %v", path, gvk)
+		}
+		if len(template.Name) == 0 {
+			template.Name = filepath.Base(path)
+			template.Name = strings.TrimSuffix(template.Name, filepath.Ext(template.Name))
+		}
+		o.templates = append(o.templates, template)
+	}
 
 	clusterConfig, err := loadClusterConfig()
 	if err != nil {
@@ -196,7 +240,7 @@ func (o *options) Run() error {
 		}
 	}
 
-	buildSteps, err := steps.FromConfig(o.buildConfig, o.jobSpec, o.clusterConfig)
+	buildSteps, err := steps.FromConfig(o.buildConfig, o.jobSpec, o.templates, o.writeParams, o.clusterConfig)
 	if err != nil {
 		return fmt.Errorf("failed to generate steps from config: %v", err)
 	}
@@ -205,108 +249,31 @@ func (o *options) Run() error {
 		return err
 	}
 
-	if len(o.writeParams) > 0 {
-		if err := o.writeParameters(o.writeParams, is); err != nil {
-			return fmt.Errorf("failed to write parameters: %v", err)
-		}
-	}
-
 	return nil
 }
 
-func admittedRoute(route *routeapi.Route) (string, bool) {
-	for _, ingress := range route.Status.Ingress {
-		if len(ingress.Host) == 0 {
-			continue
-		}
-		for _, condition := range ingress.Conditions {
-			if condition.Type == routeapi.RouteAdmitted && condition.Status == coreapi.ConditionTrue {
-				return ingress.Host, true
-			}
-		}
-	}
-	return "", false
-}
+// if len(o.writeParams) > 0 {
+// 	if err := o.writeParameters(o.writeParams, is); err != nil {
+// 		return fmt.Errorf("failed to write parameters: %v", err)
+// 	}
+// }
+// func (o *options) writeParameters(path string, is *imageapi.ImageStream) error {
+// 	log.Printf("Writing parameters to %s", path)
+// 	var params []string
 
-func main() {
-	opt := bindOptions()
-	flag.Parse()
+// 	params = append(params, fmt.Sprintf("JOB_NAME=%q", o.jobSpec.Job))
+// 	params = append(params, fmt.Sprintf("NAMESPACE=%q", o.namespace))
 
-	if err := opt.Validate(); err != nil {
-		fmt.Printf("Invalid options: %v\n", err)
-		os.Exit(1)
-	}
-
-	if err := opt.Complete(); err != nil {
-		fmt.Printf("Invalid environment: %v\n", err)
-		os.Exit(1)
-	}
-
-	if err := opt.Run(); err != nil {
-		fmt.Printf("error: %v\n", err)
-		os.Exit(1)
-	}
-}
-
-func (o *options) writeParameters(path string, is *imageapi.ImageStream) error {
-	log.Printf("Writing parameters to %s", path)
-	var params []string
-
-	params = append(params, fmt.Sprintf("JOB_NAME=%q", o.jobSpec.Job))
-	params = append(params, fmt.Sprintf("NAMESPACE=%q", o.namespace))
-
-	if tagConfig := o.buildConfig.ReleaseTagConfiguration; tagConfig != nil {
-		registry := "REGISTRY"
-		if is != nil {
-			if len(is.Status.PublicDockerImageRepository) > 0 {
-				registry = strings.SplitN(is.Status.PublicDockerImageRepository, "/", 2)[0]
-			} else if len(is.Status.DockerImageRepository) > 0 {
-				registry = strings.SplitN(is.Status.DockerImageRepository, "/", 2)[0]
-			}
-		}
-		var format string
-		if len(tagConfig.Name) > 0 {
-			format = fmt.Sprintf("%s/%s/%s:%s", registry, o.namespace, fmt.Sprintf("%s%s", tagConfig.NamePrefix, steps.StableImageStream), "${component}")
-		} else {
-			format = fmt.Sprintf("%s/%s/%s:%s", registry, o.namespace, fmt.Sprintf("%s${component}", tagConfig.NamePrefix), tagConfig.Tag)
-		}
-		params = append(params, fmt.Sprintf("IMAGE_FORMAT='%s'", strings.Replace(strings.Replace(format, "\\", "\\\\", -1), "'", "\\'", -1)))
-	}
-
-	if len(o.buildConfig.RpmBuildCommands) > 0 {
-		if o.dry {
-			params = append(params, "RPM_REPO=\"\"")
-		} else {
-			routeclient, err := routeclientset.NewForConfig(o.clusterConfig)
-			if err != nil {
-				return fmt.Errorf("could not get route client for cluster config: %v", err)
-			}
-			if err := wait.PollImmediate(time.Second, time.Minute, func() (bool, error) {
-				route, err := routeclient.Routes(o.namespace).Get(steps.RPMRepoName, meta.GetOptions{})
-				if err != nil {
-					return false, err
-				}
-				if host, ok := admittedRoute(route); ok {
-					params = append(params, fmt.Sprintf("RPM_REPO=%q", host))
-					return true, nil
-				}
-				return false, nil
-			}); err != nil {
-				return err
-			}
-		}
-	}
-
-	if o.dry {
-		log.Printf("\n%s", strings.Join(params, "\n"))
-	} else {
-		params = append(params, "")
-		if err := ioutil.WriteFile(path, []byte(strings.Join(params, "\n")), 0640); err != nil {
-			return err
-		}
-	}
-	return nil
-}
+// 	if o.dry {
+// 		log.Printf("\n%s", strings.Join(params, "\n"))
+// 	} else {
+// 		params = append(params, "")
+// 		if err := ioutil.WriteFile(path, []byte(strings.Join(params, "\n")), 0640); err != nil {
+// 			return err
+// 		}
+// 	}
+// 	return nil
+// }
 
 // createNamespaceCleanupPod creates a pod that deletes the job namespace if no other run-once pods are running
 // for more than idleCleanupDuration.

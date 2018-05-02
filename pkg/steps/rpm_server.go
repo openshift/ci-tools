@@ -3,6 +3,7 @@ package steps
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	appsapi "github.com/openshift/api/apps/v1"
 	routeapi "github.com/openshift/api/route/v1"
@@ -14,6 +15,7 @@ import (
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/wait"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 
 	"github.com/openshift/ci-operator/pkg/api"
@@ -273,6 +275,42 @@ func (s *rpmServerStep) Requires() []api.StepLink {
 
 func (s *rpmServerStep) Creates() []api.StepLink {
 	return []api.StepLink{api.RPMRepoLink()}
+}
+
+func (s *rpmServerStep) Provides() (api.ParameterMap, api.StepLink) {
+	return api.ParameterMap{
+		"RPM_REPO": func() (string, error) {
+			var repoHost string
+			if err := wait.PollImmediate(time.Second, time.Minute, func() (bool, error) {
+				route, err := s.routeClient.Get(RPMRepoName, meta.GetOptions{})
+				if err != nil {
+					return false, err
+				}
+				if host, ok := admittedRoute(route); ok {
+					repoHost = host
+					return true, nil
+				}
+				return false, nil
+			}); err != nil {
+				return "", fmt.Errorf("retrieving RPM_REPO: %v", err)
+			}
+			return repoHost, nil
+		},
+	}, api.RPMRepoLink()
+}
+
+func admittedRoute(route *routeapi.Route) (string, bool) {
+	for _, ingress := range route.Status.Ingress {
+		if len(ingress.Host) == 0 {
+			continue
+		}
+		for _, condition := range ingress.Conditions {
+			if condition.Type == routeapi.RouteAdmitted && condition.Status == coreapi.ConditionTrue {
+				return ingress.Host, true
+			}
+		}
+	}
+	return "", false
 }
 
 func RPMServerStep(

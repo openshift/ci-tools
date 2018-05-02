@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 
 	imageapi "github.com/openshift/api/image/v1"
 	"github.com/openshift/ci-operator/pkg/api"
@@ -97,6 +98,25 @@ func (s *outputImageTagStep) Creates() []api.StepLink {
 		return []api.StepLink{api.ExternalImageLink(s.config.To), api.InternalImageLink(api.PipelineImageStreamTagReference(s.config.To.As))}
 	}
 	return []api.StepLink{api.ExternalImageLink(s.config.To)}
+}
+
+func (s *outputImageTagStep) Provides() (api.ParameterMap, api.StepLink) {
+	if len(s.config.To.As) == 0 {
+		return nil, nil
+	}
+	return api.ParameterMap{
+		fmt.Sprintf("IMAGE_%s", strings.ToUpper(strings.Replace(s.config.To.As, "-", "_", -1))): func() (string, error) {
+			registry := "REGISTRY"
+			if is, err := s.isClient.Get(s.config.To.Name, meta.GetOptions{}); err == nil {
+				if len(is.Status.PublicDockerImageRepository) > 0 {
+					registry = is.Status.PublicDockerImageRepository
+				} else if len(is.Status.DockerImageRepository) > 0 {
+					registry = is.Status.DockerImageRepository
+				}
+			}
+			return fmt.Sprintf("%s:%s", registry, s.config.To.Tag), nil
+		},
+	}, api.ExternalImageLink(s.config.To)
 }
 
 func OutputImageTagStep(config api.OutputImageTagStepConfiguration, istClient imageclientset.ImageStreamTagInterface, isClient imageclientset.ImageStreamInterface, jobSpec *JobSpec) api.Step {

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 
 	imageapi "github.com/openshift/api/image/v1"
 	"github.com/openshift/ci-operator/pkg/api"
@@ -220,6 +221,28 @@ func (s *releaseImagesTagStep) Requires() []api.StepLink {
 
 func (s *releaseImagesTagStep) Creates() []api.StepLink {
 	return []api.StepLink{api.ReleaseImagesLink()}
+}
+
+func (s *releaseImagesTagStep) Provides() (api.ParameterMap, api.StepLink) {
+	return api.ParameterMap{
+		"IMAGE_FORMAT": func() (string, error) {
+			registry := "REGISTRY"
+			if is, err := s.isGetter.ImageStreams(s.jobSpec.Namespace()).Get(PipelineImageStream, meta.GetOptions{}); err == nil {
+				if len(is.Status.PublicDockerImageRepository) > 0 {
+					registry = strings.SplitN(is.Status.PublicDockerImageRepository, "/", 2)[0]
+				} else if len(is.Status.DockerImageRepository) > 0 {
+					registry = strings.SplitN(is.Status.DockerImageRepository, "/", 2)[0]
+				}
+			}
+			var format string
+			if len(s.config.Name) > 0 {
+				format = fmt.Sprintf("%s/%s/%s:%s", registry, s.jobSpec.Namespace(), fmt.Sprintf("%s%s", s.config.NamePrefix, StableImageStream), "${component}")
+			} else {
+				format = fmt.Sprintf("%s/%s/%s:%s", registry, s.jobSpec.Namespace(), fmt.Sprintf("%s${component}", s.config.NamePrefix), s.config.Tag)
+			}
+			return format, nil
+		},
+	}, api.ReleaseImagesLink()
 }
 
 func ReleaseImagesTagStep(config api.ReleaseTagConfiguration, istClient imageclientset.ImageStreamTagInterface, isGetter imageclientset.ImageStreamsGetter, routeClient routeclientset.RoutesGetter, configMapClient coreclientset.ConfigMapInterface, jobSpec *JobSpec) api.Step {

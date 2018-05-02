@@ -44,6 +44,10 @@ func (s *pipelineImageCacheStep) Creates() []api.StepLink {
 	return []api.StepLink{api.InternalImageLink(s.config.To)}
 }
 
+func (s *pipelineImageCacheStep) Provides() (api.ParameterMap, api.StepLink) {
+	return nil, nil
+}
+
 func PipelineImageCacheStep(config api.PipelineImageCacheStepConfiguration, buildClient BuildClient, istClient imageclientset.ImageStreamTagInterface, jobSpec *JobSpec) api.Step {
 	return &pipelineImageCacheStep{
 		config:      config,

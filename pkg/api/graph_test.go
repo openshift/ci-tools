@@ -107,6 +107,8 @@ func (f *fakeStep) Done() (bool, error)  { return true, nil }
 func (f *fakeStep) Requires() []StepLink { return f.requires }
 func (f *fakeStep) Creates() []StepLink  { return f.creates }
 
+func (f *fakeStep) Provides() (ParameterMap, StepLink) { return nil, nil }
+
 func TestBuildGraph(t *testing.T) {
 	root := &fakeStep{
 		requires: []StepLink{ExternalImageLink(ImageStreamTagReference{Namespace: "ns", Name: "base", Tag: "latest"})},

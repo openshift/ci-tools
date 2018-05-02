@@ -8,7 +8,10 @@ type Step interface {
 
 	Requires() []StepLink
 	Creates() []StepLink
+	Provides() (ParameterMap, StepLink)
 }
+
+type ParameterMap map[string]func() (string, error)
 
 // StepLink abstracts the types of links that steps
 // require and create.

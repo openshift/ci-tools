@@ -1,15 +1,19 @@
 package steps
 
 import (
+	"crypto/sha256"
 	"fmt"
+	"strings"
 
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
 
+	templateapi "github.com/openshift/api/template/v1"
 	appsclientset "github.com/openshift/client-go/apps/clientset/versioned/typed/apps/v1"
 	buildclientset "github.com/openshift/client-go/build/clientset/versioned/typed/build/v1"
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 	routeclientset "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
+	templateclientset "github.com/openshift/client-go/template/clientset/versioned/typed/template/v1"
 
 	"github.com/openshift/ci-operator/pkg/api"
 )
@@ -37,7 +41,7 @@ const (
 // them, returning the full set of steps requires for the
 // build, including defaulted steps, generated steps and
 // all raw steps that the user provided.
-func FromConfig(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec, clusterConfig *rest.Config) ([]api.Step, error) {
+func FromConfig(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec, templates []*templateapi.Template, paramFile string, clusterConfig *rest.Config) ([]api.Step, error) {
 	var buildSteps []api.Step
 
 	jobNamespace := jobSpec.Namespace()
@@ -51,7 +55,9 @@ func FromConfig(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec, cluster
 	var routeGetter routeclientset.RoutesGetter
 	var routeClient routeclientset.RouteInterface
 	var deploymentClient appsclientset.DeploymentConfigInterface
+	var podClient coreclientset.PodInterface
 	var serviceClient coreclientset.ServiceInterface
+	var templateClient TemplateClient
 	var configMapClient coreclientset.ConfigMapInterface
 
 	if clusterConfig != nil {
@@ -77,6 +83,12 @@ func FromConfig(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec, cluster
 		}
 		routeClient = routeGetter.Routes(jobNamespace)
 
+		templateGetter, err := templateclientset.NewForConfig(clusterConfig)
+		if err != nil {
+			return buildSteps, fmt.Errorf("could not get template client for cluster config: %v", err)
+		}
+		templateClient = NewTemplateClient(templateGetter, templateGetter.RESTClient(), jobNamespace)
+
 		appsGetter, err := appsclientset.NewForConfig(clusterConfig)
 		if err != nil {
 			return buildSteps, fmt.Errorf("could not get apps client for cluster config: %v", err)
@@ -89,7 +101,14 @@ func FromConfig(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec, cluster
 		}
 		serviceClient = coreGetter.Services(jobNamespace)
 		configMapClient = coreGetter.ConfigMaps(jobNamespace)
+		podClient = coreGetter.Pods(jobNamespace)
 	}
+
+	params := NewDeferredParameters()
+	params.Add("JOB_NAME", nil, func() (string, error) { return jobSpec.Job, nil })
+	params.Add("JOB_NAME_HASH", nil, func() (string, error) { return fmt.Sprintf("%x", sha256.Sum256([]byte(jobSpec.Job)))[:5], nil })
+	params.Add("JOB_NAME_SAFE", nil, func() (string, error) { return strings.Replace(jobSpec.Job, "_", "-", -1), nil })
+	params.Add("NAMESPACE", nil, func() (string, error) { return jobNamespace, nil })
 
 	for _, rawStep := range stepConfigsForBuild(config, jobSpec) {
 		var step api.Step
@@ -110,7 +129,18 @@ func FromConfig(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec, cluster
 		} else if rawStep.ReleaseImagesTagStepConfiguration != nil {
 			step = ReleaseImagesTagStep(*rawStep.ReleaseImagesTagStepConfiguration, imageStreamTagClient, imageStreamGetter, routeGetter, configMapClient, jobSpec)
 		}
+		provides, link := step.Provides()
+		for name, fn := range provides {
+			params.Add(name, link, fn)
+		}
 		buildSteps = append(buildSteps, step)
+	}
+	for _, template := range templates {
+		step := TemplateExecutionStep(template, params, podClient, templateClient, jobSpec)
+		buildSteps = append(buildSteps, step)
+	}
+	if len(paramFile) > 0 {
+		buildSteps = append(buildSteps, WriteParametersStep(params, paramFile, jobSpec))
 	}
 
 	return buildSteps, nil

@@ -57,6 +57,10 @@ func (s *rpmImageInjectionStep) Creates() []api.StepLink {
 	return []api.StepLink{api.InternalImageLink(s.config.To)}
 }
 
+func (s *rpmImageInjectionStep) Provides() (api.ParameterMap, api.StepLink) {
+	return nil, nil
+}
+
 func RPMImageInjectionStep(config api.RPMImageInjectionStepConfiguration, buildClient BuildClient, routeClient routeclientset.RouteInterface, istClient imageclientset.ImageStreamTagInterface, jobSpec *JobSpec) api.Step {
 	return &rpmImageInjectionStep{
 		config:      config,

@@ -84,6 +84,10 @@ func (s *inputImageTagStep) Creates() []api.StepLink {
 	return []api.StepLink{api.InternalImageLink(s.config.To)}
 }
 
+func (s *inputImageTagStep) Provides() (api.ParameterMap, api.StepLink) {
+	return nil, nil
+}
+
 func InputImageTagStep(config api.InputImageTagStepConfiguration, client imageclientset.ImageStreamTagsGetter, jobSpec *JobSpec) api.Step {
 	return &inputImageTagStep{
 		config:  config,

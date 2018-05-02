@@ -30,6 +30,8 @@ func (f *fakeStep) Done() (bool, error)      { return true, nil }
 func (f *fakeStep) Requires() []api.StepLink { return f.requires }
 func (f *fakeStep) Creates() []api.StepLink  { return f.creates }
 
+func (f *fakeStep) Provides() (api.ParameterMap, api.StepLink) { return nil, nil }
+
 func TestRunNormalCase(t *testing.T) {
 	root := &fakeStep{
 		name:      "root",

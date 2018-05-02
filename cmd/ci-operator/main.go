@@ -115,6 +115,10 @@ func loadClusterConfig() (*rest.Config, error) {
 }
 
 func (o *options) Run() error {
+	start := time.Now()
+	defer func() {
+		log.Printf("Ran for %s", time.Now().Sub(start).Truncate(time.Second))
+	}()
 	var is *imageapi.ImageStream
 	if !o.dry {
 		projectGetter, err := versioned.NewForConfig(o.clusterConfig)
@@ -122,13 +126,31 @@ func (o *options) Run() error {
 			return fmt.Errorf("could not get project client for cluster config: %v", err)
 		}
 
-		log.Println("Setting up namespace for testing ...")
-		if _, err := projectGetter.ProjectV1().ProjectRequests().Create(&projectapi.ProjectRequest{
-			ObjectMeta: meta.ObjectMeta{
-				Name: o.namespace,
-			},
-		}); err != nil && !errors.IsAlreadyExists(err) {
-			return fmt.Errorf("could not set up namespace for test: %v", err)
+		log.Printf("Creating namespace %s", o.namespace)
+		for {
+			project, err := projectGetter.ProjectV1().ProjectRequests().Create(&projectapi.ProjectRequest{
+				ObjectMeta: meta.ObjectMeta{
+					Name: o.namespace,
+				},
+			})
+			if err != nil && !errors.IsAlreadyExists(err) {
+				return fmt.Errorf("could not set up namespace for test: %v", err)
+			}
+			if err != nil {
+				project, err = projectGetter.ProjectV1().Projects().Get(o.namespace, meta.GetOptions{})
+				if err != nil {
+					if errors.IsNotFound(err) {
+						continue
+					}
+					return fmt.Errorf("cannot retrieve test namespace: %v", err)
+				}
+			}
+			if project.Status.Phase == coreapi.NamespaceTerminating {
+				log.Println("Waiting for namespace to finish terminating before creating another")
+				time.Sleep(3 * time.Second)
+				continue
+			}
+			break
 		}
 
 		if o.idleCleanupDuration > 0 {
@@ -137,7 +159,6 @@ func (o *options) Run() error {
 			}
 		}
 
-		log.Println("Setting up pipeline imagestream for testing ...")
 		imageGetter, err := imageclientset.NewForConfig(o.clusterConfig)
 		if err != nil {
 			return fmt.Errorf("could not get image client for cluster config: %v", err)
@@ -283,7 +304,7 @@ func (o *options) writeParameters(path string, is *imageapi.ImageStream) error {
 // createNamespaceCleanupPod creates a pod that deletes the job namespace if no other run-once pods are running
 // for more than idleCleanupDuration.
 func (o *options) createNamespaceCleanupPod() error {
-	log.Printf("Marking the namespace as slated for deletion after %s of idle time ...", o.idleCleanupDuration)
+	log.Printf("Namespace will be deleted after %s of idle time", o.idleCleanupDuration)
 	client, err := coreclientset.NewForConfig(o.clusterConfig)
 	if err != nil {
 		return fmt.Errorf("could not get image client for cluster config: %v", err)

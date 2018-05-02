@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"time"
 
 	buildapi "github.com/openshift/api/build/v1"
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
@@ -34,12 +35,11 @@ var (
 )
 
 func sourceDockerfile(fromTag api.PipelineImageStreamTagReference, job *JobSpec) string {
-	return fmt.Sprintf(`FROM %s:%s
-ENV GIT_COMMITTER_NAME=developer GIT_COMMITTER_EMAIL=developer@redhat.com
-ENV REPO_OWNER=%s REPO_NAME=%s PULL_REFS=%s
-RUN umask 0002 && /usr/bin/clonerefs --src-root=/go --log=-
-WORKDIR /go/src/github.com/%s/%s/
-`, PipelineImageStream, fromTag, job.Refs.Org, job.Refs.Repo, job.Refs.String(), job.Refs.Org, job.Refs.Repo)
+	return fmt.Sprintf(`
+		FROM %s:%s
+		RUN umask 0002 && /usr/bin/clonerefs
+		WORKDIR /go/src/github.com/%s/%s/
+		`, PipelineImageStream, fromTag, job.Refs.Org, job.Refs.Repo)
 }
 
 type sourceStep struct {
@@ -61,7 +61,20 @@ func (s *sourceStep) Run(dry bool) error {
 }
 
 func buildFromSource(jobSpec *JobSpec, fromTag, toTag api.PipelineImageStreamTagReference, source buildapi.BuildSource) *buildapi.Build {
-	log.Printf("Creating build for %s/%s:%s", jobSpec.Namespace(), PipelineImageStream, toTag)
+	log.Printf("Building %s/%s:%s", jobSpec.Namespace(), PipelineImageStream, toTag)
+	optionsSpec := map[string]interface{}{
+		"src_root":       "/go",
+		"log":            "-",
+		"git_user_name":  "ci-robot",
+		"git_user_email": "ci-robot@openshift.io",
+		"refs": []interface{}{
+			jobSpec.Refs,
+		},
+	}
+	optionsJSON, err := json.Marshal(optionsSpec)
+	if err != nil {
+		panic(fmt.Errorf("couldn't create JSON spec for clonerefs: %v", err))
+	}
 	layer := buildapi.ImageOptimizationSkipLayers
 	build := &buildapi.Build{
 		ObjectMeta: meta.ObjectMeta{
@@ -93,7 +106,7 @@ func buildFromSource(jobSpec *JobSpec, fromTag, toTag api.PipelineImageStreamTag
 						ForcePull: true,
 						NoCache:   true,
 						Env: []coreapi.EnvVar{
-							{Name: "JOB_SPEC", Value: jobSpec.rawSpec},
+							{Name: "CLONEREFS_OPTIONS", Value: string(optionsJSON)},
 						},
 						ImageOptimizationPolicy: &layer,
 					},
@@ -131,7 +144,6 @@ func handleBuild(buildClient BuildClient, build *buildapi.Build, dry bool) error
 }
 
 func waitForBuild(buildClient BuildClient, name string) error {
-	log.Printf("Waiting for build %s to finish", name)
 	for {
 		retry, err := waitForBuildOrTimeout(buildClient, name)
 		if err != nil {
@@ -141,7 +153,6 @@ func waitForBuild(buildClient BuildClient, name string) error {
 			break
 		}
 	}
-
 	return nil
 }
 
@@ -163,6 +174,7 @@ func waitForBuildOrTimeout(buildClient BuildClient, name string) (bool, error) {
 	}
 	build := &list.Items[0]
 	if isOK(build) {
+		log.Printf("Build %s/%s already succeeded in %s", build.Namespace, build.Name, buildDuration(build))
 		return false, nil
 	}
 	if isFailed(build) {
@@ -188,15 +200,29 @@ func waitForBuildOrTimeout(buildClient BuildClient, name string) (bool, error) {
 		}
 		if build, ok := event.Object.(*buildapi.Build); ok {
 			if isOK(build) {
+				log.Printf("Build %s/%s succeeded after %s", build.Namespace, build.Name, buildDuration(build))
 				return false, nil
 			}
 			if isFailed(build) {
 				log.Printf("Build %s/%s failed, printing logs:", build.Namespace, build.Name)
 				printBuildLogs(buildClient, build.Name)
-				return false, fmt.Errorf("the build %s/%s failed with status %q", build.Namespace, build.Name, build.Status.Phase)
+				return false, fmt.Errorf("the build %s/%s failed after %s with status %q", build.Namespace, build.Name, buildDuration(build), build.Status.Phase)
 			}
 		}
 	}
+}
+
+func buildDuration(build *buildapi.Build) time.Duration {
+	start := build.Status.StartTimestamp
+	if start == nil {
+		start = &build.CreationTimestamp
+	}
+	end := build.Status.CompletionTimestamp
+	if end == nil {
+		end = &meta.Time{Time: time.Now()}
+	}
+	duration := end.Sub(start.Time)
+	return duration
 }
 
 func printBuildLogs(buildClient BuildClient, name string) {

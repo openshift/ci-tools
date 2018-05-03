@@ -227,8 +227,7 @@ func buildDuration(build *buildapi.Build) time.Duration {
 
 func printBuildLogs(buildClient BuildClient, name string) {
 	if s, err := buildClient.Logs(name, &buildapi.BuildLogOptions{
-		NoWait:     true,
-		Timestamps: true,
+		NoWait: true,
 	}); err == nil {
 		defer s.Close()
 		if _, err := io.Copy(os.Stdout, s); err != nil {

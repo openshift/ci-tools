@@ -53,9 +53,23 @@ func main() {
 	}
 }
 
+type stringSlice struct {
+	values []string
+}
+
+func (s *stringSlice) String() string {
+	return strings.Join(s.values, string(filepath.Separator))
+}
+
+func (s *stringSlice) Set(value string) error {
+	s.values = append(s.values, value)
+	return nil
+}
+
 type options struct {
-	rawBuildConfig string
-	templatePaths  []string
+	rawBuildConfig    string
+	templatePaths     []string
+	secretDirectories stringSlice
 
 	dry         bool
 	writeParams string
@@ -65,6 +79,7 @@ type options struct {
 	idleCleanupDuration time.Duration
 
 	inputHash     string
+	secrets       []*coreapi.Secret
 	templates     []*templateapi.Template
 	buildConfig   *api.ReleaseBuildConfiguration
 	jobSpec       *steps.JobSpec
@@ -75,6 +90,7 @@ func bindOptions() *options {
 	opt := &options{}
 	flag.StringVar(&opt.namespace, "namespace", "", "Namespace to create builds into, defaults to build_id from JOB_SPEC")
 	flag.StringVar(&opt.baseNamespace, "base-namespace", "stable", "Namespace to read builds from, defaults to stable.")
+	flag.Var(&opt.secretDirectories, "secret-dir", "One or more directories that should converted into secrets in the test namespace.")
 	flag.StringVar(&opt.rawBuildConfig, "build-config", "", "Configuration for the build to run, as JSON.")
 	flag.BoolVar(&opt.dry, "dry-run", true, "Do not contact the API server.")
 	flag.StringVar(&opt.writeParams, "write-params", "", "If set write an env-compatible file with the output of the job.")
@@ -111,6 +127,26 @@ func (o *options) Complete() error {
 	jobSpec.SetBaseNamespace(o.baseNamespace)
 
 	o.jobSpec = jobSpec
+
+	for _, path := range o.secretDirectories.values {
+		secret := &coreapi.Secret{Data: make(map[string][]byte)}
+		secret.Type = coreapi.SecretTypeOpaque
+		secret.Name = filepath.Base(path)
+		files, err := ioutil.ReadDir(path)
+		if err != nil {
+			return err
+		}
+		for _, f := range files {
+			if f.IsDir() {
+				continue
+			}
+			secret.Data[f.Name()], err = ioutil.ReadFile(filepath.Join(path, f.Name()))
+			if err != nil {
+				return err
+			}
+		}
+		o.secrets = append(o.secrets, secret)
+	}
 
 	for _, path := range o.templatePaths {
 		contents, err := ioutil.ReadFile(path)
@@ -238,6 +274,32 @@ func (o *options) Run() error {
 				Controller: &isTrue,
 			})
 		}
+
+		client, err := coreclientset.NewForConfig(o.clusterConfig)
+		if err != nil {
+			return fmt.Errorf("could not get core client for cluster config: %v", err)
+		}
+		for _, secret := range o.secrets {
+			_, err := client.Secrets(o.namespace).Create(secret)
+			if errors.IsAlreadyExists(err) {
+				existing, err := client.Secrets(o.namespace).Get(secret.Name, meta.GetOptions{})
+				if err != nil {
+					return err
+				}
+				for k, v := range secret.Data {
+					existing.Data[k] = v
+				}
+				if _, err := client.Secrets(o.namespace).Update(existing); err != nil {
+					return err
+				}
+				log.Printf("Updated secret %s", secret.Name)
+				continue
+			}
+			if err != nil {
+				return err
+			}
+			log.Printf("Created secret %s", secret.Name)
+		}
 	}
 
 	buildSteps, err := steps.FromConfig(o.buildConfig, o.jobSpec, o.templates, o.writeParams, o.clusterConfig)
@@ -251,29 +313,6 @@ func (o *options) Run() error {
 
 	return nil
 }
-
-// if len(o.writeParams) > 0 {
-// 	if err := o.writeParameters(o.writeParams, is); err != nil {
-// 		return fmt.Errorf("failed to write parameters: %v", err)
-// 	}
-// }
-// func (o *options) writeParameters(path string, is *imageapi.ImageStream) error {
-// 	log.Printf("Writing parameters to %s", path)
-// 	var params []string
-
-// 	params = append(params, fmt.Sprintf("JOB_NAME=%q", o.jobSpec.Job))
-// 	params = append(params, fmt.Sprintf("NAMESPACE=%q", o.namespace))
-
-// 	if o.dry {
-// 		log.Printf("\n%s", strings.Join(params, "\n"))
-// 	} else {
-// 		params = append(params, "")
-// 		if err := ioutil.WriteFile(path, []byte(strings.Join(params, "\n")), 0640); err != nil {
-// 			return err
-// 		}
-// 	}
-// 	return nil
-// }
 
 // createNamespaceCleanupPod creates a pod that deletes the job namespace if no other run-once pods are running
 // for more than idleCleanupDuration.

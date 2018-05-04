@@ -65,7 +65,7 @@ func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 				if err != nil {
 					return err
 				}
-				s.template.Parameters[i].Value = strings.Replace(format, "${component}", component, -1)
+				s.template.Parameters[i].Value = strings.Replace(format, componentFormatReplacement, component, -1)
 			}
 		}
 	}
@@ -240,13 +240,14 @@ func (p *DeferredParameters) Has(name string) bool {
 	if ok {
 		return true
 	}
-	return len(os.Getenv(name)) > 0
+	_, ok = os.LookupEnv(name)
+	return ok
 }
 
 func (p *DeferredParameters) Links(name string) []api.StepLink {
 	p.lock.Lock()
 	defer p.lock.Unlock()
-	if len(os.Getenv(name)) > 0 {
+	if _, ok := os.LookupEnv(name); ok {
 		return nil
 	}
 	return p.links[name]
@@ -257,7 +258,7 @@ func (p *DeferredParameters) AllLinks() []api.StepLink {
 	defer p.lock.Unlock()
 	var links []api.StepLink
 	for name, v := range p.links {
-		if len(os.Getenv(name)) > 0 {
+		if _, ok := os.LookupEnv(name); ok {
 			continue
 		}
 		links = append(links, v...)
@@ -271,7 +272,7 @@ func (p *DeferredParameters) Get(name string) (string, error) {
 	if value, ok := p.values[name]; ok {
 		return value, nil
 	}
-	if value := os.Getenv(name); len(value) > 0 {
+	if value, ok := os.LookupEnv(name); ok {
 		p.values[name] = value
 		return value, nil
 	}

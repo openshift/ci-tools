@@ -19,6 +19,8 @@ import (
 
 const (
 	ConfigMapName = "release"
+
+	componentFormatReplacement = "${component}"
 )
 
 // releaseImagesTagStep will tag a full release suite
@@ -237,9 +239,9 @@ func (s *releaseImagesTagStep) Provides() (api.ParameterMap, api.StepLink) {
 			}
 			var format string
 			if len(s.config.Name) > 0 {
-				format = fmt.Sprintf("%s/%s/%s:%s", registry, s.jobSpec.Namespace(), fmt.Sprintf("%s%s", s.config.NamePrefix, StableImageStream), "${component}")
+				format = fmt.Sprintf("%s/%s/%s:%s", registry, s.jobSpec.Namespace(), fmt.Sprintf("%s%s", s.config.NamePrefix, StableImageStream), componentFormatReplacement)
 			} else {
-				format = fmt.Sprintf("%s/%s/%s:%s", registry, s.jobSpec.Namespace(), fmt.Sprintf("%s${component}", s.config.NamePrefix), s.config.Tag)
+				format = fmt.Sprintf("%s/%s/%s:%s", registry, s.jobSpec.Namespace(), fmt.Sprintf("%s%s", s.config.NamePrefix, componentFormatReplacement), s.config.Tag)
 			}
 			return format, nil
 		},

@@ -107,13 +107,17 @@ func (s *outputImageTagStep) Provides() (api.ParameterMap, api.StepLink) {
 	}
 	return api.ParameterMap{
 		fmt.Sprintf("IMAGE_%s", strings.ToUpper(strings.Replace(s.config.To.As, "-", "_", -1))): func() (string, error) {
-			registry := "REGISTRY"
-			if is, err := s.isClient.Get(s.config.To.Name, meta.GetOptions{}); err == nil {
-				if len(is.Status.PublicDockerImageRepository) > 0 {
-					registry = is.Status.PublicDockerImageRepository
-				} else if len(is.Status.DockerImageRepository) > 0 {
-					registry = is.Status.DockerImageRepository
-				}
+			is, err := s.isClient.Get(s.config.To.Name, meta.GetOptions{})
+			if err != nil {
+				return "", err
+			}
+			var registry string
+			if len(is.Status.PublicDockerImageRepository) > 0 {
+				registry = is.Status.PublicDockerImageRepository
+			} else if len(is.Status.DockerImageRepository) > 0 {
+				registry = is.Status.DockerImageRepository
+			} else {
+				return "", fmt.Errorf("image stream %s has no accessible image registry value", s.config.To.As)
 			}
 			return fmt.Sprintf("%s:%s", registry, s.config.To.Tag), nil
 		},

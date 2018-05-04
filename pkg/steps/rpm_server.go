@@ -299,6 +299,8 @@ func (s *rpmServerStep) Provides() (api.ParameterMap, api.StepLink) {
 	}, api.RPMRepoLink()
 }
 
+func (s *rpmServerStep) Name() string { return "" }
+
 func admittedRoute(route *routeapi.Route) (string, bool) {
 	for _, ingress := range route.Status.Ingress {
 		if len(ingress.Host) == 0 {

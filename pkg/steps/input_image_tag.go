@@ -88,6 +88,8 @@ func (s *inputImageTagStep) Provides() (api.ParameterMap, api.StepLink) {
 	return nil, nil
 }
 
+func (s *inputImageTagStep) Name() string { return "" }
+
 func InputImageTagStep(config api.InputImageTagStepConfiguration, client imageclientset.ImageStreamTagsGetter, jobSpec *JobSpec) api.Step {
 	return &inputImageTagStep{
 		config:  config,

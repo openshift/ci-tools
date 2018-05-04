@@ -48,6 +48,8 @@ func (s *pipelineImageCacheStep) Provides() (api.ParameterMap, api.StepLink) {
 	return nil, nil
 }
 
+func (s *pipelineImageCacheStep) Name() string { return string(s.config.To) }
+
 func PipelineImageCacheStep(config api.PipelineImageCacheStepConfiguration, buildClient BuildClient, istClient imageclientset.ImageStreamTagInterface, jobSpec *JobSpec) api.Step {
 	return &pipelineImageCacheStep{
 		config:      config,

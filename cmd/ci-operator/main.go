@@ -70,6 +70,8 @@ type options struct {
 	templatePaths     []string
 	secretDirectories stringSlice
 
+	targets stringSlice
+
 	dry         bool
 	writeParams string
 
@@ -87,6 +89,7 @@ type options struct {
 
 func bindOptions() *options {
 	opt := &options{}
+	flag.Var(&opt.targets, "target", "A set of names in the config to target. Only steps that are required for these targets will be run.")
 	flag.StringVar(&opt.namespace, "namespace", "", "Namespace to create builds into, defaults to build_id from JOB_SPEC")
 	flag.StringVar(&opt.baseNamespace, "base-namespace", "stable", "Namespace to read builds from, defaults to stable.")
 	flag.Var(&opt.secretDirectories, "secret-dir", "One or more directories that should converted into secrets in the test namespace.")
@@ -203,106 +206,9 @@ func (o *options) Run() error {
 	defer func() {
 		log.Printf("Ran for %s", time.Now().Sub(start).Truncate(time.Second))
 	}()
-	var is *imageapi.ImageStream
-	if !o.dry {
-		projectGetter, err := versioned.NewForConfig(o.clusterConfig)
-		if err != nil {
-			return fmt.Errorf("could not get project client for cluster config: %v", err)
-		}
 
-		log.Printf("Creating namespace %s", o.namespace)
-		for {
-			project, err := projectGetter.ProjectV1().ProjectRequests().Create(&projectapi.ProjectRequest{
-				ObjectMeta: meta.ObjectMeta{
-					Name: o.namespace,
-				},
-				DisplayName: fmt.Sprintf("%s - %s", o.namespace, o.jobSpec.Job),
-				Description: jobDescription(o.jobSpec, o.buildConfig),
-			})
-			if err != nil && !errors.IsAlreadyExists(err) {
-				return fmt.Errorf("could not set up namespace for test: %v", err)
-			}
-			if err != nil {
-				project, err = projectGetter.ProjectV1().Projects().Get(o.namespace, meta.GetOptions{})
-				if err != nil {
-					if errors.IsNotFound(err) {
-						continue
-					}
-					return fmt.Errorf("cannot retrieve test namespace: %v", err)
-				}
-			}
-			if project.Status.Phase == coreapi.NamespaceTerminating {
-				log.Println("Waiting for namespace to finish terminating before creating another")
-				time.Sleep(3 * time.Second)
-				continue
-			}
-			break
-		}
-
-		if o.idleCleanupDuration > 0 {
-			if err := o.createNamespaceCleanupPod(); err != nil {
-				return err
-			}
-		}
-
-		imageGetter, err := imageclientset.NewForConfig(o.clusterConfig)
-		if err != nil {
-			return fmt.Errorf("could not get image client for cluster config: %v", err)
-		}
-
-		// create the image stream or read it to get its uid
-		is, err = imageGetter.ImageStreams(o.jobSpec.Namespace()).Create(&imageapi.ImageStream{
-			ObjectMeta: meta.ObjectMeta{
-				Namespace: o.jobSpec.Namespace(),
-				Name:      steps.PipelineImageStream,
-			},
-			Spec: imageapi.ImageStreamSpec{
-				// pipeline:* will now be directly referenceable
-				LookupPolicy: imageapi.ImageLookupPolicy{Local: true},
-			},
-		})
-		if err != nil {
-			if !errors.IsAlreadyExists(err) {
-				return fmt.Errorf("could not set up pipeline imagestream for test: %v", err)
-			}
-			is, _ = imageGetter.ImageStreams(o.jobSpec.Namespace()).Get(steps.PipelineImageStream, meta.GetOptions{})
-		}
-		if is != nil {
-			isTrue := true
-			o.jobSpec.SetOwner(&meta.OwnerReference{
-				APIVersion: "image.openshift.io/v1",
-				Kind:       "ImageStream",
-				Name:       steps.PipelineImageStream,
-				UID:        is.UID,
-				Controller: &isTrue,
-			})
-		}
-
-		client, err := coreclientset.NewForConfig(o.clusterConfig)
-		if err != nil {
-			return fmt.Errorf("could not get core client for cluster config: %v", err)
-		}
-		for _, secret := range o.secrets {
-			_, err := client.Secrets(o.namespace).Create(secret)
-			if errors.IsAlreadyExists(err) {
-				existing, err := client.Secrets(o.namespace).Get(secret.Name, meta.GetOptions{})
-				if err != nil {
-					return err
-				}
-				for k, v := range secret.Data {
-					existing.Data[k] = v
-				}
-				if _, err := client.Secrets(o.namespace).Update(existing); err != nil {
-					return err
-				}
-				log.Printf("Updated secret %s", secret.Name)
-				continue
-			}
-			if err != nil {
-				return err
-			}
-			log.Printf("Created secret %s", secret.Name)
-		}
+	if err := o.initializeNamespace(); err != nil {
+		return err
 	}
 
 	buildSteps, err := steps.FromConfig(o.buildConfig, o.jobSpec, o.templates, o.writeParams, o.clusterConfig)
@@ -310,10 +216,120 @@ func (o *options) Run() error {
 		return fmt.Errorf("failed to generate steps from config: %v", err)
 	}
 
-	if err := steps.Run(api.BuildGraph(buildSteps), o.dry); err != nil {
+	nodes, err := api.BuildPartialGraph(buildSteps, o.targets.values)
+	if err != nil {
 		return err
 	}
 
+	if err := steps.Run(nodes, o.dry); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (o *options) initializeNamespace() error {
+	if o.dry {
+		return nil
+	}
+	projectGetter, err := versioned.NewForConfig(o.clusterConfig)
+	if err != nil {
+		return fmt.Errorf("could not get project client for cluster config: %v", err)
+	}
+
+	log.Printf("Creating namespace %s", o.namespace)
+	for {
+		project, err := projectGetter.ProjectV1().ProjectRequests().Create(&projectapi.ProjectRequest{
+			ObjectMeta: meta.ObjectMeta{
+				Name: o.namespace,
+			},
+			DisplayName: fmt.Sprintf("%s - %s", o.namespace, o.jobSpec.Job),
+			Description: jobDescription(o.jobSpec, o.buildConfig),
+		})
+		if err != nil && !errors.IsAlreadyExists(err) {
+			return fmt.Errorf("could not set up namespace for test: %v", err)
+		}
+		if err != nil {
+			project, err = projectGetter.ProjectV1().Projects().Get(o.namespace, meta.GetOptions{})
+			if err != nil {
+				if errors.IsNotFound(err) {
+					continue
+				}
+				return fmt.Errorf("cannot retrieve test namespace: %v", err)
+			}
+		}
+		if project.Status.Phase == coreapi.NamespaceTerminating {
+			log.Println("Waiting for namespace to finish terminating before creating another")
+			time.Sleep(3 * time.Second)
+			continue
+		}
+		break
+	}
+
+	if o.idleCleanupDuration > 0 {
+		if err := o.createNamespaceCleanupPod(); err != nil {
+			return err
+		}
+	}
+
+	imageGetter, err := imageclientset.NewForConfig(o.clusterConfig)
+	if err != nil {
+		return fmt.Errorf("could not get image client for cluster config: %v", err)
+	}
+
+	// create the image stream or read it to get its uid
+	is, err := imageGetter.ImageStreams(o.jobSpec.Namespace()).Create(&imageapi.ImageStream{
+		ObjectMeta: meta.ObjectMeta{
+			Namespace: o.jobSpec.Namespace(),
+			Name:      steps.PipelineImageStream,
+		},
+		Spec: imageapi.ImageStreamSpec{
+			// pipeline:* will now be directly referenceable
+			LookupPolicy: imageapi.ImageLookupPolicy{Local: true},
+		},
+	})
+	if err != nil {
+		if !errors.IsAlreadyExists(err) {
+			return fmt.Errorf("could not set up pipeline imagestream for test: %v", err)
+		}
+		is, _ = imageGetter.ImageStreams(o.jobSpec.Namespace()).Get(steps.PipelineImageStream, meta.GetOptions{})
+	}
+	if is != nil {
+		isTrue := true
+		o.jobSpec.SetOwner(&meta.OwnerReference{
+			APIVersion: "image.openshift.io/v1",
+			Kind:       "ImageStream",
+			Name:       steps.PipelineImageStream,
+			UID:        is.UID,
+			Controller: &isTrue,
+		})
+	}
+
+	client, err := coreclientset.NewForConfig(o.clusterConfig)
+	if err != nil {
+		return fmt.Errorf("could not get core client for cluster config: %v", err)
+	}
+	for _, secret := range o.secrets {
+		_, err := client.Secrets(o.namespace).Create(secret)
+		if errors.IsAlreadyExists(err) {
+			existing, err := client.Secrets(o.namespace).Get(secret.Name, meta.GetOptions{})
+			if err != nil {
+				return err
+			}
+			for k, v := range secret.Data {
+				existing.Data[k] = v
+			}
+			if _, err := client.Secrets(o.namespace).Update(existing); err != nil {
+				return err
+			}
+			log.Printf("Updated secret %s", secret.Name)
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		log.Printf("Created secret %s", secret.Name)
+	}
 	return nil
 }
 

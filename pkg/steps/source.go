@@ -272,6 +272,8 @@ func (s *sourceStep) Provides() (api.ParameterMap, api.StepLink) {
 	return nil, nil
 }
 
+func (s *sourceStep) Name() string { return string(s.config.To) }
+
 func SourceStep(config api.SourceStepConfiguration, buildClient BuildClient, istClient imageclientset.ImageStreamTagInterface, jobSpec *JobSpec) api.Step {
 	return &sourceStep{
 		config:      config,

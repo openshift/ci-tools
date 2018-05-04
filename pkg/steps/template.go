@@ -178,6 +178,8 @@ func (s *templateExecutionStep) Provides() (api.ParameterMap, api.StepLink) {
 	return nil, nil
 }
 
+func (s *templateExecutionStep) Name() string { return s.template.Name }
+
 func TemplateExecutionStep(template *templateapi.Template, params *DeferredParameters, podClient coreclientset.PodInterface, templateClient TemplateClient, jobSpec *JobSpec) api.Step {
 	return &templateExecutionStep{
 		template:       template,

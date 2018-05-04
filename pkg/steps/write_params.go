@@ -61,6 +61,8 @@ func (s *writeParametersStep) Provides() (api.ParameterMap, api.StepLink) {
 	return nil, nil
 }
 
+func (s *writeParametersStep) Name() string { return "parameters/write" }
+
 func WriteParametersStep(params *DeferredParameters, paramFile string, jobSpec *JobSpec) api.Step {
 	return &writeParametersStep{
 		params:    params,

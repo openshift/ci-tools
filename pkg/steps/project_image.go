@@ -76,6 +76,8 @@ func (s *projectDirectoryImageBuildStep) Provides() (api.ParameterMap, api.StepL
 	return nil, nil
 }
 
+func (s *projectDirectoryImageBuildStep) Name() string { return string(s.config.To) }
+
 func ProjectDirectoryImageBuildStep(config api.ProjectDirectoryImageBuildStepConfiguration, buildClient BuildClient, istClient imageclientset.ImageStreamTagInterface, jobSpec *JobSpec) api.Step {
 	return &projectDirectoryImageBuildStep{
 		config:      config,

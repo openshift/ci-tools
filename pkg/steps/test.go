@@ -91,6 +91,8 @@ func (s *testStep) Provides() (api.ParameterMap, api.StepLink) {
 	return nil, nil
 }
 
+func (s *testStep) Name() string { return s.config.As }
+
 func TestStep(config api.TestStepConfiguration, podClient coreclientset.PodInterface, jobSpec *JobSpec) api.Step {
 	return &testStep{
 		config:    config,

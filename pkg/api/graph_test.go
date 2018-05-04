@@ -100,12 +100,14 @@ func TestMatches(t *testing.T) {
 type fakeStep struct {
 	requires []StepLink
 	creates  []StepLink
+	name     string
 }
 
 func (f *fakeStep) Run(dry bool) error   { return nil }
 func (f *fakeStep) Done() (bool, error)  { return true, nil }
 func (f *fakeStep) Requires() []StepLink { return f.requires }
 func (f *fakeStep) Creates() []StepLink  { return f.creates }
+func (f *fakeStep) Name() string         { return f.name }
 
 func (f *fakeStep) Provides() (ParameterMap, StepLink) { return nil, nil }
 

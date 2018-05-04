@@ -1,11 +1,19 @@
 package api
 
+import (
+	"fmt"
+	"strings"
+)
+
 // Step is a self-contained bit of work that the
 // build pipeline needs to do.
 type Step interface {
 	Run(dry bool) error
 	Done() (bool, error)
 
+	// Name is the name of the stage, used to target it.
+	// If this is the empty string the stage cannot be targeted.
+	Name() string
 	Requires() []StepLink
 	Creates() []StepLink
 	Provides() (ParameterMap, StepLink)
@@ -135,6 +143,57 @@ func BuildGraph(steps []Step) []*StepNode {
 	return roots
 }
 
+// BuildPartialGraph returns a graph or graphs that include
+// only the dependencies of the named steps.
+func BuildPartialGraph(steps []Step, names []string) ([]*StepNode, error) {
+	if len(names) == 0 {
+		return BuildGraph(steps), nil
+	}
+
+	var required []StepLink
+	candidates := make([]bool, len(steps))
+	for i, step := range steps {
+		for j, name := range names {
+			if name != step.Name() {
+				continue
+			}
+			candidates[i] = true
+			required = append(required, step.Requires()...)
+			names = append(names[:j], names[j+1:]...)
+			break
+		}
+	}
+	if len(names) > 0 {
+		return nil, fmt.Errorf("the following names were not found in the config or were duplicates: %s", strings.Join(names, ", "))
+	}
+
+	// identify all other steps that provide any links required by the current set
+	for {
+		added := 0
+		for i, step := range steps {
+			if candidates[i] {
+				continue
+			}
+			if HasAnyLinks(required, step.Creates()) {
+				added++
+				candidates[i] = true
+				required = append(required, step.Requires()...)
+			}
+		}
+		if added == 0 {
+			break
+		}
+	}
+
+	var targeted []Step
+	for i, candidate := range candidates {
+		if candidate {
+			targeted = append(targeted, steps[i])
+		}
+	}
+	return BuildGraph(targeted), nil
+}
+
 func addToNode(parent, child *StepNode) bool {
 	for _, s := range parent.Children {
 		if s == child {
@@ -143,4 +202,15 @@ func addToNode(parent, child *StepNode) bool {
 	}
 	parent.Children = append(parent.Children, child)
 	return true
+}
+
+func HasAnyLinks(steps, candidates []StepLink) bool {
+	for _, candidate := range candidates {
+		for _, step := range steps {
+			if step.Matches(candidate) {
+				return true
+			}
+		}
+	}
+	return false
 }

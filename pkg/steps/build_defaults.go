@@ -110,6 +110,7 @@ func FromConfig(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec, templat
 	params.Add("JOB_NAME_SAFE", nil, func() (string, error) { return strings.Replace(jobSpec.Job, "_", "-", -1), nil })
 	params.Add("NAMESPACE", nil, func() (string, error) { return jobNamespace, nil })
 
+	var imageStepLinks []api.StepLink
 	for _, rawStep := range stepConfigsForBuild(config, jobSpec) {
 		var step api.Step
 		if rawStep.InputImageTagStepConfiguration != nil {
@@ -126,8 +127,10 @@ func FromConfig(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec, templat
 			step = RPMServerStep(*rawStep.RPMServeStepConfiguration, deploymentClient, routeClient, serviceClient, imageStreamTagClient, jobSpec)
 		} else if rawStep.OutputImageTagStepConfiguration != nil {
 			step = OutputImageTagStep(*rawStep.OutputImageTagStepConfiguration, imageStreamTagClient, imageStreamClient, jobSpec)
+			imageStepLinks = append(imageStepLinks, step.Creates()...)
 		} else if rawStep.ReleaseImagesTagStepConfiguration != nil {
 			step = ReleaseImagesTagStep(*rawStep.ReleaseImagesTagStepConfiguration, imageStreamTagClient, imageStreamGetter, routeGetter, configMapClient, jobSpec)
+			imageStepLinks = append(imageStepLinks, step.Creates()...)
 		} else if rawStep.TestStepConfiguration != nil {
 			step = TestStep(*rawStep.TestStepConfiguration, podClient, jobSpec)
 		}
@@ -137,13 +140,17 @@ func FromConfig(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec, templat
 		}
 		buildSteps = append(buildSteps, step)
 	}
+
 	for _, template := range templates {
 		step := TemplateExecutionStep(template, params, podClient, templateClient, jobSpec)
 		buildSteps = append(buildSteps, step)
 	}
+
 	if len(paramFile) > 0 {
 		buildSteps = append(buildSteps, WriteParametersStep(params, paramFile, jobSpec))
 	}
+
+	buildSteps = append(buildSteps, ImagesReadyStep(imageStepLinks, jobSpec))
 
 	return buildSteps, nil
 }

@@ -55,6 +55,21 @@ func (l *internalImageLink) Matches(other StepLink) bool {
 	}
 }
 
+func ImagesReadyLink() StepLink {
+	return &imagesReadyLink{}
+}
+
+type imagesReadyLink struct{}
+
+func (l *imagesReadyLink) Matches(other StepLink) bool {
+	switch other.(type) {
+	case *imagesReadyLink:
+		return true
+	default:
+		return false
+	}
+}
+
 func RPMRepoLink() StepLink {
 	return &rpmRepoLink{}
 }

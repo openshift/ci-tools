@@ -242,7 +242,7 @@ func (s *releaseImagesTagStep) Provides() (api.ParameterMap, api.StepLink) {
 			}
 			return format, nil
 		},
-	}, api.ReleaseImagesLink()
+	}, api.ImagesReadyLink()
 }
 
 func ReleaseImagesTagStep(config api.ReleaseTagConfiguration, istClient imageclientset.ImageStreamTagInterface, isGetter imageclientset.ImageStreamsGetter, routeClient routeclientset.RoutesGetter, configMapClient coreclientset.ConfigMapInterface, jobSpec *JobSpec) api.Step {

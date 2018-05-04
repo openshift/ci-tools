@@ -107,7 +107,7 @@ func BuildGraph(steps []Step) []*StepNode {
 				for _, otherCreates := range other.Step.Creates() {
 					if nodeRequires.Matches(otherCreates) {
 						isRoot = false
-						other.Children = append(other.Children, node)
+						addToNode(other, node)
 					}
 				}
 			}
@@ -118,4 +118,14 @@ func BuildGraph(steps []Step) []*StepNode {
 	}
 
 	return roots
+}
+
+func addToNode(parent, child *StepNode) bool {
+	for _, s := range parent.Children {
+		if s == child {
+			return false
+		}
+	}
+	parent.Children = append(parent.Children, child)
+	return true
 }

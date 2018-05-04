@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -366,8 +367,9 @@ func waitForPodDeletion(podClient coreclientset.PodInterface, name string) error
 }
 
 func waitForPodCompletion(podClient coreclientset.PodInterface, name string) error {
+	completed := make(map[string]time.Time)
 	for {
-		retry, err := waitForPodCompletionOrTimeout(podClient, name)
+		retry, err := waitForPodCompletionOrTimeout(podClient, name, completed)
 		if err != nil {
 			return err
 		}
@@ -378,30 +380,7 @@ func waitForPodCompletion(podClient coreclientset.PodInterface, name string) err
 	return nil
 }
 
-func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name string) (bool, error) {
-	isOK := func(p *coreapi.Pod) bool {
-		return p.Status.Phase == coreapi.PodSucceeded
-	}
-	isFailed := func(p *coreapi.Pod) bool {
-		if p.Status.Phase == coreapi.PodFailed {
-			return true
-		}
-		for _, status := range p.Status.InitContainerStatuses {
-			if s := status.State.Terminated; s != nil {
-				if s.ExitCode != 0 {
-					return true
-				}
-			}
-		}
-		for _, status := range p.Status.ContainerStatuses {
-			if s := status.State.Terminated; s != nil {
-				if s.ExitCode != 0 {
-					return true
-				}
-			}
-		}
-		return false
-	}
+func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name string, completed map[string]time.Time) (bool, error) {
 	list, err := podClient.List(meta.ListOptions{FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String()})
 	if err != nil {
 		return false, err
@@ -413,13 +392,13 @@ func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name st
 	if pod.Spec.RestartPolicy == coreapi.RestartPolicyAlways {
 		return false, nil
 	}
-	if isOK(pod) {
+	podLogNewFailedContainers(podClient, pod, completed)
+	if podJobIsOK(pod) {
 		log.Printf("Pod %s already succeeded in %s", pod.Name, podDuration(pod))
 		return false, nil
 	}
-	if isFailed(pod) {
-		printFailedPodLogs(podClient, pod)
-		return false, fmt.Errorf("the pod %s/%s failed with status %q", pod.Namespace, pod.Name, pod.Status.Phase)
+	if podJobIsFailed(pod) {
+		return false, fmt.Errorf("the pod %s/%s failed after %s (failed containers: %s)", pod.Namespace, pod.Name, podDuration(pod), strings.Join(namesFromMap(completed), ", "))
 	}
 
 	watcher, err := podClient.Watch(meta.ListOptions{
@@ -438,18 +417,18 @@ func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name st
 			return true, nil
 		}
 		if pod, ok := event.Object.(*coreapi.Pod); ok {
-			if isOK(pod) {
+			podLogNewFailedContainers(podClient, pod, completed)
+			if podJobIsOK(pod) {
 				log.Printf("Pod %s succeeded after %s", pod.Name, podDuration(pod))
 				return false, nil
 			}
-			if isFailed(pod) {
-				printFailedPodLogs(podClient, pod)
-				return false, fmt.Errorf("the pod %s/%s failed after %s with status %q", pod.Namespace, pod.Name, podDuration(pod), pod.Status.Phase)
+			if podJobIsFailed(pod) {
+				return false, fmt.Errorf("the pod %s/%s failed after %s (failed containers: %s)", pod.Namespace, pod.Name, podDuration(pod), strings.Join(namesFromMap(completed), ", "))
 			}
 		}
 		if event.Type == watch.Deleted {
-			printFailedPodLogs(podClient, pod)
-			return false, fmt.Errorf("the pod %s/%s was deleted without completing after %s with status %q", pod.Namespace, pod.Name, podDuration(pod), pod.Status.Phase)
+			podLogNewFailedContainers(podClient, pod, completed)
+			return false, fmt.Errorf("the pod %s/%s was deleted without completing after %s (failed containers: %s)", pod.Namespace, pod.Name, podDuration(pod), strings.Join(namesFromMap(completed), ", "))
 		}
 	}
 }
@@ -484,15 +463,67 @@ func podDuration(pod *coreapi.Pod) time.Duration {
 	return duration
 }
 
-func printFailedPodLogs(podClient coreclientset.PodInterface, pod *coreapi.Pod) {
+func templateInstanceReady(instance *templateapi.TemplateInstance) (ready bool, err error) {
+	for _, c := range instance.Status.Conditions {
+		switch {
+		case c.Type == templateapi.TemplateInstanceReady && c.Status == coreapi.ConditionTrue:
+			return true, nil
+		case c.Type == templateapi.TemplateInstanceInstantiateFailure && c.Status == coreapi.ConditionTrue:
+			return true, fmt.Errorf("failed to create objects: %s", c.Message)
+		}
+	}
+	return false, nil
+}
+
+func podJobIsOK(p *coreapi.Pod) bool {
+	return p.Status.Phase == coreapi.PodSucceeded
+}
+
+func podJobIsFailed(p *coreapi.Pod) bool {
+	if p.Status.Phase == coreapi.PodFailed {
+		return true
+	}
+	for _, status := range p.Status.InitContainerStatuses {
+		if s := status.State.Terminated; s != nil {
+			if s.ExitCode != 0 {
+				return true
+			}
+		}
+	}
+	for _, status := range p.Status.ContainerStatuses {
+		if s := status.State.Terminated; s != nil {
+			if s.ExitCode != 0 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func namesFromMap(completed map[string]time.Time) []string {
+	var names []string
+	for k := range completed {
+		names = append(names, k)
+	}
+	sort.Strings(names)
+	return names
+}
+
+func podLogNewFailedContainers(podClient coreclientset.PodInterface, pod *coreapi.Pod, completed map[string]time.Time) {
 	var statuses []coreapi.ContainerStatus
 	statuses = append(statuses, pod.Status.InitContainerStatuses...)
 	statuses = append(statuses, pod.Status.ContainerStatuses...)
 
 	for _, status := range statuses {
-		if status.State.Terminated == nil || status.State.Terminated.ExitCode == 0 {
+		if _, ok := completed[status.Name]; ok {
 			continue
 		}
+		s := status.State.Terminated
+		if s == nil || s.ExitCode == 0 {
+			continue
+		}
+		completed[status.Name] = s.FinishedAt.Time
+
 		if s, err := podClient.GetLogs(pod.Name, &coreapi.PodLogOptions{
 			Container: status.Name,
 		}).Stream(); err == nil {
@@ -505,16 +536,4 @@ func printFailedPodLogs(podClient coreclientset.PodInterface, pod *coreapi.Pod) 
 			log.Printf("error: Unable to retrieve logs from failed pod container %s: %v", status.Name, err)
 		}
 	}
-}
-
-func templateInstanceReady(instance *templateapi.TemplateInstance) (ready bool, err error) {
-	for _, c := range instance.Status.Conditions {
-		switch {
-		case c.Type == templateapi.TemplateInstanceReady && c.Status == coreapi.ConditionTrue:
-			return true, nil
-		case c.Type == templateapi.TemplateInstanceInstantiateFailure && c.Status == coreapi.ConditionTrue:
-			return true, fmt.Errorf("failed to create objects: %s", c.Message)
-		}
-	}
-	return false, nil
 }

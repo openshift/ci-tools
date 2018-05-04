@@ -1,6 +1,7 @@
 package steps
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 
@@ -21,7 +22,7 @@ type pipelineImageCacheStep struct {
 	jobSpec     *JobSpec
 }
 
-func (s *pipelineImageCacheStep) Run(dry bool) error {
+func (s *pipelineImageCacheStep) Run(ctx context.Context, dry bool) error {
 	dockerfile := rawCommandDockerfile(s.config.From, s.config.Commands)
 	return handleBuild(s.buildClient, buildFromSource(
 		s.jobSpec, s.config.From, s.config.To,

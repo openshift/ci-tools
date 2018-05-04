@@ -1,6 +1,7 @@
 package steps
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -50,7 +51,7 @@ type sourceStep struct {
 	jobSpec     *JobSpec
 }
 
-func (s *sourceStep) Run(dry bool) error {
+func (s *sourceStep) Run(ctx context.Context, dry bool) error {
 	dockerfile := sourceDockerfile(s.config.From, s.jobSpec)
 	return handleBuild(s.buildClient, buildFromSource(
 		s.jobSpec, s.config.From, s.config.To,

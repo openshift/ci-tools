@@ -1,6 +1,7 @@
 package steps
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -33,7 +34,7 @@ type templateExecutionStep struct {
 	jobSpec        *JobSpec
 }
 
-func (s *templateExecutionStep) Run(dry bool) error {
+func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 	log.Printf("Executing template %s", s.template.Name)
 
 	if len(s.template.Objects) == 0 {
@@ -74,6 +75,14 @@ func (s *templateExecutionStep) Run(dry bool) error {
 		log.Printf("template:\n%s", j)
 		return nil
 	}
+
+	go func() {
+		<-ctx.Done()
+		log.Printf("cleanup: Deleting template %s", s.template.Name)
+		if err := s.templateClient.TemplateInstances(s.jobSpec.Namespace()).Delete(s.template.Name, nil); err != nil && !errors.IsNotFound(err) {
+			log.Printf("error: Could not delete template instance: %v", err)
+		}
+	}()
 
 	// TODO: enforce single namespace behavior
 	instance := &templateapi.TemplateInstance{

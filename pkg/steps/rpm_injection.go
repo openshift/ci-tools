@@ -1,6 +1,7 @@
 package steps
 
 import (
+	"context"
 	"fmt"
 
 	buildapi "github.com/openshift/api/build/v1"
@@ -24,7 +25,7 @@ type rpmImageInjectionStep struct {
 	jobSpec     *JobSpec
 }
 
-func (s *rpmImageInjectionStep) Run(dry bool) error {
+func (s *rpmImageInjectionStep) Run(ctx context.Context, dry bool) error {
 	var host string
 	if dry {
 		host = "dry-fake"

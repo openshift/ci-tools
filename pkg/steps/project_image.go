@@ -1,6 +1,7 @@
 package steps
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
@@ -19,7 +20,7 @@ type projectDirectoryImageBuildStep struct {
 	jobSpec     *JobSpec
 }
 
-func (s *projectDirectoryImageBuildStep) Run(dry bool) error {
+func (s *projectDirectoryImageBuildStep) Run(ctx context.Context, dry bool) error {
 	source := fmt.Sprintf("%s:%s", PipelineImageStream, api.PipelineImageStreamTagReferenceSource)
 
 	var workingDir string

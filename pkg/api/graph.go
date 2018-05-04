@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"strings"
 )
@@ -8,7 +9,7 @@ import (
 // Step is a self-contained bit of work that the
 // build pipeline needs to do.
 type Step interface {
-	Run(dry bool) error
+	Run(ctx context.Context, dry bool) error
 	Done() (bool, error)
 
 	// Name is the name of the stage, used to target it.

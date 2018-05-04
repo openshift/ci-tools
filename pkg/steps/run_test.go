@@ -1,6 +1,7 @@
 package steps
 
 import (
+	"context"
 	"errors"
 	"sync"
 	"testing"
@@ -19,7 +20,7 @@ type fakeStep struct {
 	numRuns int
 }
 
-func (f *fakeStep) Run(dry bool) error {
+func (f *fakeStep) Run(ctx context.Context, dry bool) error {
 	defer f.lock.Unlock()
 	f.lock.Lock()
 	f.numRuns = f.numRuns + 1
@@ -83,7 +84,7 @@ func TestRunNormalCase(t *testing.T) {
 		creates:   []api.StepLink{api.InternalImageLink(api.PipelineImageStreamTagReference("final"))},
 	}
 
-	if err := Run(api.BuildGraph([]api.Step{root, other, src, bin, testBin, rpm, unrelated, final}), false); err != nil {
+	if err := Run(context.Background(), api.BuildGraph([]api.Step{root, other, src, bin, testBin, rpm, unrelated, final}), false); err != nil {
 		t.Errorf("got an error but expected none: %v", err)
 	}
 
@@ -148,7 +149,7 @@ func TestRunFailureCase(t *testing.T) {
 		creates:   []api.StepLink{api.InternalImageLink(api.PipelineImageStreamTagReference("final"))},
 	}
 
-	if err := Run(api.BuildGraph([]api.Step{root, other, src, bin, testBin, rpm, unrelated, final}), false); err == nil {
+	if err := Run(context.Background(), api.BuildGraph([]api.Step{root, other, src, bin, testBin, rpm, unrelated, final}), false); err == nil {
 		t.Error("got no error but expected one")
 	}
 

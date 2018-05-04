@@ -1,6 +1,7 @@
 package steps
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -19,7 +20,7 @@ type writeParametersStep struct {
 
 var safeEnv = regexp.MustCompile(`^[a-zA-Z0-9_\-\.]*$`)
 
-func (s *writeParametersStep) Run(dry bool) error {
+func (s *writeParametersStep) Run(ctx context.Context, dry bool) error {
 	log.Printf("Writing parameters to %s", s.paramFile)
 	var params []string
 

@@ -1,6 +1,7 @@
 package steps
 
 import (
+	"context"
 	"log"
 
 	"github.com/openshift/ci-operator/pkg/api"
@@ -10,7 +11,7 @@ type imagesReadyStep struct {
 	links []api.StepLink
 }
 
-func (s *imagesReadyStep) Run(dry bool) error {
+func (s *imagesReadyStep) Run(ctx context.Context, dry bool) error {
 	log.Printf("All images ready")
 	return nil
 }

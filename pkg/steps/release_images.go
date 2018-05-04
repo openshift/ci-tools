@@ -1,6 +1,7 @@
 package steps
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -56,7 +57,7 @@ func findStatusTag(is *imageapi.ImageStream, tag string) *coreapi.ObjectReferenc
 	return nil
 }
 
-func (s *releaseImagesTagStep) Run(dry bool) error {
+func (s *releaseImagesTagStep) Run(ctx context.Context, dry bool) error {
 	log.Printf("Tagging release images into %s", s.jobSpec.Namespace())
 
 	if len(s.config.Name) > 0 {

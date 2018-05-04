@@ -1,11 +1,13 @@
 package steps
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 
 	coreapi "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 
@@ -21,7 +23,7 @@ type testStep struct {
 	jobSpec   *JobSpec
 }
 
-func (s *testStep) Run(dry bool) error {
+func (s *testStep) Run(ctx context.Context, dry bool) error {
 	log.Printf("Executing test %s", s.config.As)
 
 	pod := &coreapi.Pod{
@@ -48,6 +50,14 @@ func (s *testStep) Run(dry bool) error {
 		log.Printf("pod:\n%s", j)
 		return nil
 	}
+
+	go func() {
+		<-ctx.Done()
+		log.Printf("cleanup: Deleting test pod %s", s.config.As)
+		if err := s.podClient.Delete(s.config.As, nil); err != nil && !errors.IsNotFound(err) {
+			log.Printf("error: Could not delete test pod: %v", err)
+		}
+	}()
 
 	pod, err := createOrRestartPod(s.podClient, pod)
 	if err != nil {

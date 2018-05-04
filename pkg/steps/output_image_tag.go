@@ -1,6 +1,7 @@
 package steps
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -24,7 +25,7 @@ type outputImageTagStep struct {
 	jobSpec   *JobSpec
 }
 
-func (s *outputImageTagStep) Run(dry bool) error {
+func (s *outputImageTagStep) Run(ctx context.Context, dry bool) error {
 	log.Printf("Tagging %s/%s:%s into %s:%s", s.jobSpec.Namespace(), PipelineImageStream, s.config.From, s.config.To.Name, s.config.To.Tag)
 	fromImage := "dry-fake"
 	if !dry {

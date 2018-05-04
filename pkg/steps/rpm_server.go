@@ -1,6 +1,7 @@
 package steps
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -35,7 +36,7 @@ type rpmServerStep struct {
 	jobSpec          *JobSpec
 }
 
-func (s *rpmServerStep) Run(dry bool) error {
+func (s *rpmServerStep) Run(ctx context.Context, dry bool) error {
 	var imageReference string
 	if dry {
 		imageReference = "dry-fake"

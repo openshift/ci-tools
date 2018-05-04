@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"flag"
@@ -29,6 +30,7 @@ import (
 	templatescheme "github.com/openshift/client-go/template/clientset/versioned/scheme"
 
 	"github.com/openshift/ci-operator/pkg/api"
+	"github.com/openshift/ci-operator/pkg/interrupt"
 	"github.com/openshift/ci-operator/pkg/steps"
 )
 
@@ -179,28 +181,6 @@ func (o *options) Complete() error {
 	return nil
 }
 
-// loadClusterConfig loads connection configuration
-// for the cluster we're deploying to. We prefer to
-// use in-cluster configuration if possible, but will
-// fall back to using default rules otherwise.
-func loadClusterConfig() (*rest.Config, error) {
-	clusterConfig, err := rest.InClusterConfig()
-	if err == nil {
-		return clusterConfig, nil
-	}
-
-	credentials, err := clientcmd.NewDefaultClientConfigLoadingRules().Load()
-	if err != nil {
-		return nil, fmt.Errorf("could not load credentials from config: %v", err)
-	}
-
-	clusterConfig, err = clientcmd.NewDefaultClientConfig(*credentials, &clientcmd.ConfigOverrides{}).ClientConfig()
-	if err != nil {
-		return nil, fmt.Errorf("could not load client configuration: %v", err)
-	}
-	return clusterConfig, nil
-}
-
 func (o *options) Run() error {
 	start := time.Now()
 	defer func() {
@@ -221,11 +201,46 @@ func (o *options) Run() error {
 		return err
 	}
 
-	if err := steps.Run(nodes, o.dry); err != nil {
+	ctx, cancel := context.WithCancel(context.Background())
+	handler := func(s os.Signal) {
+		if o.dry {
+			return
+			os.Exit(1)
+		}
+		log.Printf("error: Process interrupted with signal %s, exiting in 2s ...", s)
+		cancel()
+		time.Sleep(2 * time.Second)
+		os.Exit(1)
+	}
+	if err := interrupt.New(handler).Run(func() error {
+		return steps.Run(ctx, nodes, o.dry)
+	}); err != nil {
 		return err
 	}
 
 	return nil
+}
+
+// loadClusterConfig loads connection configuration
+// for the cluster we're deploying to. We prefer to
+// use in-cluster configuration if possible, but will
+// fall back to using default rules otherwise.
+func loadClusterConfig() (*rest.Config, error) {
+	clusterConfig, err := rest.InClusterConfig()
+	if err == nil {
+		return clusterConfig, nil
+	}
+
+	credentials, err := clientcmd.NewDefaultClientConfigLoadingRules().Load()
+	if err != nil {
+		return nil, fmt.Errorf("could not load credentials from config: %v", err)
+	}
+
+	clusterConfig, err = clientcmd.NewDefaultClientConfig(*credentials, &clientcmd.ConfigOverrides{}).ClientConfig()
+	if err != nil {
+		return nil, fmt.Errorf("could not load client configuration: %v", err)
+	}
+	return clusterConfig, nil
 }
 
 func (o *options) initializeNamespace() error {

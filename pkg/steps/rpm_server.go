@@ -245,7 +245,7 @@ func waitForDeploymentOrTimeout(client appsclientset.DeploymentConfigInterface, 
 				return false, nil
 			}
 			if deploymentFailed(deploymentConfig) {
-				return false, fmt.Errorf("the DeploymentConfig %s/%s failed with status %q", deploymentConfig.Namespace, deploymentConfig.Name, deploymentReason(deploymentConfig))
+				return false, fmt.Errorf("the deployment config %s/%s failed with status %q", deploymentConfig.Namespace, deploymentConfig.Name, deploymentReason(deploymentConfig))
 			}
 		}
 	}
@@ -263,7 +263,7 @@ func currentDeploymentStatus(client appsclientset.DeploymentConfigInterface, nam
 		return true, nil
 	}
 	if deploymentFailed(&list.Items[0]) {
-		return false, fmt.Errorf("the DeploymentConfig %s/%s failed with status %q", list.Items[0].Namespace, list.Items[0].Name, deploymentReason(&list.Items[0]))
+		return false, fmt.Errorf("the deployment config %s/%s failed with status %q", list.Items[0].Namespace, list.Items[0].Name, deploymentReason(&list.Items[0]))
 	}
 
 	return false, nil

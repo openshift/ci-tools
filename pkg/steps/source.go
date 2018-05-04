@@ -61,7 +61,7 @@ func (s *sourceStep) Run(dry bool) error {
 }
 
 func buildFromSource(jobSpec *JobSpec, fromTag, toTag api.PipelineImageStreamTagReference, source buildapi.BuildSource) *buildapi.Build {
-	log.Printf("Building %s/%s:%s", jobSpec.Namespace(), PipelineImageStream, toTag)
+	log.Printf("Building %s:%s", PipelineImageStream, toTag)
 	optionsSpec := map[string]interface{}{
 		"src_root":       "/go",
 		"log":            "-",
@@ -174,11 +174,11 @@ func waitForBuildOrTimeout(buildClient BuildClient, name string) (bool, error) {
 	}
 	build := &list.Items[0]
 	if isOK(build) {
-		log.Printf("Build %s/%s already succeeded in %s", build.Namespace, build.Name, buildDuration(build))
+		log.Printf("Build %s already succeeded in %s", build.Name, buildDuration(build))
 		return false, nil
 	}
 	if isFailed(build) {
-		log.Printf("Build %s/%s failed, printing logs:", build.Namespace, build.Name)
+		log.Printf("Build %s failed, printing logs:", build.Name)
 		printBuildLogs(buildClient, build.Name)
 		return false, fmt.Errorf("the build %s/%s failed with status %q", build.Namespace, build.Name, build.Status.Phase)
 	}
@@ -200,11 +200,11 @@ func waitForBuildOrTimeout(buildClient BuildClient, name string) (bool, error) {
 		}
 		if build, ok := event.Object.(*buildapi.Build); ok {
 			if isOK(build) {
-				log.Printf("Build %s/%s succeeded after %s", build.Namespace, build.Name, buildDuration(build))
+				log.Printf("Build %s succeeded after %s", build.Name, buildDuration(build))
 				return false, nil
 			}
 			if isFailed(build) {
-				log.Printf("Build %s/%s failed, printing logs:", build.Namespace, build.Name)
+				log.Printf("Build %s failed, printing logs:", build.Name)
 				printBuildLogs(buildClient, build.Name)
 				return false, fmt.Errorf("the build %s/%s failed after %s with status %q", build.Namespace, build.Name, buildDuration(build), build.Status.Phase)
 			}

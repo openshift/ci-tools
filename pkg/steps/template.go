@@ -33,7 +33,7 @@ type templateExecutionStep struct {
 }
 
 func (s *templateExecutionStep) Run(dry bool) error {
-	log.Printf("Executing template %s in %s", s.template.Name, s.jobSpec.Namespace())
+	log.Printf("Executing template %s", s.template.Name)
 
 	if len(s.template.Objects) == 0 {
 		return fmt.Errorf("template %s has no objects", s.template.Name)
@@ -74,14 +74,19 @@ func (s *templateExecutionStep) Run(dry bool) error {
 		return nil
 	}
 
-	instance, err := s.templateClient.TemplateInstances(s.jobSpec.Namespace()).Create(&templateapi.TemplateInstance{
+	// TODO: enforce single namespace behavior
+	instance := &templateapi.TemplateInstance{
 		ObjectMeta: meta.ObjectMeta{
 			Name: s.template.Name,
 		},
 		Spec: templateapi.TemplateInstanceSpec{
 			Template: *s.template,
 		},
-	})
+	}
+	if owner := s.jobSpec.Owner(); owner != nil {
+		instance.OwnerReferences = append(instance.OwnerReferences, *owner)
+	}
+	instance, err := s.templateClient.TemplateInstances(s.jobSpec.Namespace()).Create(instance)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		return fmt.Errorf("unable to process template: %v", err)
 	}
@@ -105,7 +110,7 @@ func (s *templateExecutionStep) Run(dry bool) error {
 	for _, ref := range instance.Status.Objects {
 		switch {
 		case ref.Ref.Kind == "Pod" && ref.Ref.APIVersion == "v1":
-			log.Printf("Running pod %s/%s", ref.Ref.Namespace, ref.Ref.Name)
+			log.Printf("Running pod %s", ref.Ref.Name)
 		}
 	}
 	for _, ref := range instance.Status.Objects {
@@ -386,7 +391,7 @@ func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name st
 		return false, nil
 	}
 	if isOK(pod) {
-		log.Printf("Pod %s/%s already succeeded in %s", pod.Namespace, pod.Name, podDuration(pod))
+		log.Printf("Pod %s already succeeded in %s", pod.Name, podDuration(pod))
 		return false, nil
 	}
 	if isFailed(pod) {
@@ -411,7 +416,7 @@ func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name st
 		}
 		if pod, ok := event.Object.(*coreapi.Pod); ok {
 			if isOK(pod) {
-				log.Printf("Pod %s/%s succeeded after %s", pod.Namespace, pod.Name, podDuration(pod))
+				log.Printf("Pod %s succeeded after %s", pod.Name, podDuration(pod))
 				return false, nil
 			}
 			if isFailed(pod) {
@@ -468,7 +473,7 @@ func printFailedPodLogs(podClient coreclientset.PodInterface, pod *coreapi.Pod) 
 		if s, err := podClient.GetLogs(pod.Name, &coreapi.PodLogOptions{
 			Container: status.Name,
 		}).Stream(); err == nil {
-			log.Printf("Pod %s/%s container %s failed, exit code %d:", pod.Namespace, pod.Name, status.Name, status.State.Terminated.ExitCode)
+			log.Printf("Pod %s container %s failed, exit code %d:", pod.Name, status.Name, status.State.Terminated.ExitCode)
 			if _, err := io.Copy(os.Stdout, s); err != nil {
 				log.Printf("error: Unable to copy log output from failed pod container %s: %v", status.Name, err)
 			}

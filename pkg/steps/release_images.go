@@ -108,7 +108,7 @@ func (s *releaseImagesTagStep) Run(dry bool) error {
 
 		for _, tag := range stableImageStream.Spec.Tags {
 			if tag.Name == targetTag {
-				log.Printf("Cross-tagging %s/%s:%s from %s/%s:%s", s.jobSpec.Namespace(), stableImageStream.Name, targetTag, stableImageStream.Namespace, stableImageStream.Name, targetTag)
+				log.Printf("Cross-tagging %s:%s from %s/%s:%s", stableImageStream.Name, targetTag, stableImageStream.Namespace, stableImageStream.Name, targetTag)
 				var id string
 				for _, tagStatus := range stableImageStream.Status.Tags {
 					if tagStatus.Tag == targetTag {

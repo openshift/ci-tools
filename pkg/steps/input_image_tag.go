@@ -23,7 +23,7 @@ type inputImageTagStep struct {
 }
 
 func (s *inputImageTagStep) Run(dry bool) error {
-	log.Printf("Tagging %s/%s:%s into %s/%s:%s", s.config.BaseImage.Namespace, s.config.BaseImage.Name, s.config.BaseImage.Tag, s.jobSpec.Namespace(), PipelineImageStream, s.config.To)
+	log.Printf("Tagging %s/%s:%s into %s:%s", s.config.BaseImage.Namespace, s.config.BaseImage.Name, s.config.BaseImage.Tag, PipelineImageStream, s.config.To)
 	from, err := s.client.ImageStreamTags(s.config.BaseImage.Namespace).Get(fmt.Sprintf("%s:%s", s.config.BaseImage.Name, s.config.BaseImage.Tag), meta.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("could not resolve base image: %v", err)
@@ -60,7 +60,7 @@ func (s *inputImageTagStep) Run(dry bool) error {
 }
 
 func (s *inputImageTagStep) Done() (bool, error) {
-	log.Printf("Checking for existence of %s/%s:%s", s.jobSpec.Namespace(), PipelineImageStream, s.config.To)
+	log.Printf("Checking for existence of %s:%s", PipelineImageStream, s.config.To)
 	_, err := s.client.ImageStreamTags(s.jobSpec.Namespace()).Get(
 		fmt.Sprintf("%s:%s", PipelineImageStream, s.config.To),
 		meta.GetOptions{},

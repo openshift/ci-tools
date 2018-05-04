@@ -87,25 +87,15 @@ func (s *templateExecutionStep) Run(dry bool) error {
 	if owner := s.jobSpec.Owner(); owner != nil {
 		instance.OwnerReferences = append(instance.OwnerReferences, *owner)
 	}
-	instance, err := s.templateClient.TemplateInstances(s.jobSpec.Namespace()).Create(instance)
-	if err != nil && !errors.IsAlreadyExists(err) {
-		return fmt.Errorf("unable to process template: %v", err)
+
+	instance, err := createOrRestartTemplateInstance(s.templateClient.TemplateInstances(s.jobSpec.Namespace()), s.podClient, instance)
+	if err != nil {
+		return err
 	}
-	for {
-		if instance != nil {
-			ready, err := templateInstanceReady(instance)
-			if err != nil {
-				return err
-			}
-			if ready {
-				break
-			}
-			time.Sleep(2 * time.Second)
-		}
-		instance, err = s.templateClient.TemplateInstances(s.jobSpec.Namespace()).Get(s.template.Name, meta.GetOptions{})
-		if err != nil {
-			return fmt.Errorf("unable to retrieve existing template: %v", err)
-		}
+
+	instance, err = waitForTemplateInstanceReady(s.templateClient.TemplateInstances(s.jobSpec.Namespace()), instance)
+	if err != nil {
+		return err
 	}
 
 	for _, ref := range instance.Status.Objects {
@@ -345,22 +335,153 @@ func isPodCompleted(podClient coreclientset.PodInterface, name string) (bool, er
 	return false, nil
 }
 
-func waitForPodDeletion(podClient coreclientset.PodInterface, name string) error {
-	err := podClient.Delete(name, nil)
-	if !errors.IsNotFound(err) {
+func waitForTemplateInstanceReady(templateClient templateclientset.TemplateInstanceInterface, instance *templateapi.TemplateInstance) (*templateapi.TemplateInstance, error) {
+	for {
+		ready, err := templateInstanceReady(instance)
+		if err != nil {
+			return nil, err
+		}
+		if ready {
+			return instance, nil
+		}
+
+		time.Sleep(2 * time.Second)
+		instance, err = templateClient.Get(instance.Name, meta.GetOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("unable to retrieve existing template instance: %v", err)
+		}
+	}
+}
+
+func createOrRestartTemplateInstance(templateClient templateclientset.TemplateInstanceInterface, podClient coreclientset.PodInterface, instance *templateapi.TemplateInstance) (*templateapi.TemplateInstance, error) {
+	if err := waitForCompletedTemplateInstanceDeletion(templateClient, podClient, instance.Name); err != nil {
+		return nil, fmt.Errorf("unable to delete completed template instance: %v", err)
+	}
+	created, err := templateClient.Create(instance)
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return nil, fmt.Errorf("unable to create template instance: %v", err)
+	}
+	if err != nil {
+		created, err = templateClient.Get(instance.Name, meta.GetOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("unable to retrieve pod: %v", err)
+		}
+		log.Printf("Waiting for running template %s to finish", instance.Name)
+	}
+	return created, nil
+}
+
+func waitForCompletedTemplateInstanceDeletion(templateClient templateclientset.TemplateInstanceInterface, podClient coreclientset.PodInterface, name string) error {
+	instance, err := templateClient.Get(name, meta.GetOptions{})
+	if errors.IsNotFound(err) {
+		return nil
+	}
+
+	// if the instance is running
+	if instance.DeletionTimestamp == nil {
+		ok, err := templateInstanceReady(instance)
+		if err != nil {
+			return err
+		}
+		// creating template instances are left to run
+		if !ok {
+			return nil
+		}
+
+		// if any of the pods referenced by the template are still running, just continue
+		for _, ref := range instance.Status.Objects {
+			switch {
+			case ref.Ref.Kind == "Pod" && ref.Ref.APIVersion == "v1":
+				ok, err := isPodCompleted(podClient, ref.Ref.Name)
+				if err != nil {
+					return err
+				}
+				if !ok {
+					return nil
+				}
+			}
+		}
+	}
+
+	// delete the instance we had before, otherwise another user has relaunched this template
+	uid := instance.UID
+	policy := meta.DeletePropagationForeground
+	err = templateClient.Delete(name, &meta.DeleteOptions{
+		PropagationPolicy: &policy,
+		Preconditions:     &meta.Preconditions{UID: &uid},
+	})
+	if errors.IsNotFound(err) {
 		return nil
 	}
 	if err != nil {
 		return err
 	}
-	log.Printf("Waiting for pod %s to be deleted ...", name)
+
+	log.Printf("Waiting for template instance %s to be deleted ...", name)
 	for {
-		_, err := podClient.Get(name, meta.GetOptions{})
+		instance, err := templateClient.Get(name, meta.GetOptions{})
 		if errors.IsNotFound(err) {
 			return nil
 		}
 		if err != nil {
 			return err
+		}
+		if instance.UID != uid {
+			return nil
+		}
+		time.Sleep(2 * time.Second)
+	}
+}
+
+func createOrRestartPod(podClient coreclientset.PodInterface, pod *coreapi.Pod) (*coreapi.Pod, error) {
+	if err := waitForCompletedPodDeletion(podClient, pod.Name); err != nil {
+		return nil, fmt.Errorf("unable to delete completed pod: %v", err)
+	}
+	created, err := podClient.Create(pod)
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return nil, fmt.Errorf("unable to create pod: %v", err)
+	}
+	if err != nil {
+		created, err = podClient.Get(pod.Name, meta.GetOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("unable to retrieve pod: %v", err)
+		}
+		log.Printf("Waiting for running pod %s to finish", pod.Name)
+	}
+	return created, nil
+}
+
+func waitForCompletedPodDeletion(podClient coreclientset.PodInterface, name string) error {
+	pod, err := podClient.Get(name, meta.GetOptions{})
+	if errors.IsNotFound(err) {
+		return nil
+	}
+	// running pods are left to run, we just wait for them to finish
+	if pod.Status.Phase != coreapi.PodSucceeded && pod.Status.Phase != coreapi.PodFailed && pod.DeletionTimestamp == nil {
+		return nil
+	}
+
+	// delete the pod we expect, otherwise another user has relaunched this pod
+	uid := pod.UID
+	err = podClient.Delete(name, &meta.DeleteOptions{Preconditions: &meta.Preconditions{UID: &uid}})
+	if errors.IsNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+
+	log.Printf("Waiting for pod %s to be deleted ...", name)
+	for {
+		pod, err := podClient.Get(name, meta.GetOptions{})
+		if errors.IsNotFound(err) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if pod.UID != uid {
+			return nil
 		}
 		time.Sleep(2 * time.Second)
 	}

@@ -6,7 +6,6 @@ import (
 	"log"
 
 	coreapi "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 
@@ -50,15 +49,9 @@ func (s *testStep) Run(dry bool) error {
 		return nil
 	}
 
-	pod, err := s.podClient.Create(pod)
-	if err != nil && !errors.IsAlreadyExists(err) {
-		return fmt.Errorf("unable to create pod: %v", err)
-	}
+	pod, err := createOrRestartPod(s.podClient, pod)
 	if err != nil {
-		pod, err = s.podClient.Get(s.config.As, meta.GetOptions{})
-		if err != nil {
-			return fmt.Errorf("unable to retrieve pod: %v", err)
-		}
+		return err
 	}
 
 	if err := waitForPodCompletion(s.podClient, pod.Name); err != nil {

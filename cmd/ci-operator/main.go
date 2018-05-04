@@ -67,7 +67,6 @@ func (s *stringSlice) Set(value string) error {
 }
 
 type options struct {
-	rawBuildConfig    string
 	templatePaths     []string
 	secretDirectories stringSlice
 
@@ -91,7 +90,6 @@ func bindOptions() *options {
 	flag.StringVar(&opt.namespace, "namespace", "", "Namespace to create builds into, defaults to build_id from JOB_SPEC")
 	flag.StringVar(&opt.baseNamespace, "base-namespace", "stable", "Namespace to read builds from, defaults to stable.")
 	flag.Var(&opt.secretDirectories, "secret-dir", "One or more directories that should converted into secrets in the test namespace.")
-	flag.StringVar(&opt.rawBuildConfig, "build-config", "", "Configuration for the build to run, as JSON.")
 	flag.BoolVar(&opt.dry, "dry-run", true, "Do not contact the API server.")
 	flag.StringVar(&opt.writeParams, "write-params", "", "If set write an env-compatible file with the output of the job.")
 	flag.DurationVar(&opt.idleCleanupDuration, "delete-when-idle", opt.idleCleanupDuration, "If no pod is running for longer than this interval, delete the namespace.")
@@ -99,14 +97,15 @@ func bindOptions() *options {
 }
 
 func (o *options) Validate() error {
-	if o.rawBuildConfig == "" {
-		return fmt.Errorf("job configuration must be provided with `--build-config`")
-	}
 	return nil
 }
 
 func (o *options) Complete() error {
-	if err := json.Unmarshal([]byte(o.rawBuildConfig), &o.buildConfig); err != nil {
+	configSpec := os.Getenv("CONFIG_SPEC")
+	if len(configSpec) == 0 {
+		return fmt.Errorf("no CONFIG_SPEC environment variable defined")
+	}
+	if err := json.Unmarshal([]byte(configSpec), &o.buildConfig); err != nil {
 		return fmt.Errorf("malformed build configuration: %v", err)
 	}
 

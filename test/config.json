@@ -1,6 +1,7 @@
 {
   "test_base_image": {
-    "name": "release",
+    "namespace": "ci",
+    "name": "release-with-clonerefs",
     "tag": "golang-1.9"
   },
   "binary_build_commands": "make build",
@@ -26,5 +27,12 @@
     "name": "origin-v3.10",
     "tag": "",
     "tag_overrides": {}
-  }
+  },
+  "tests": [
+    {
+      "as": "unit",
+      "from": "test-bin",
+      "commands": "hack/test-go.sh"
+    }
+  ]
 }

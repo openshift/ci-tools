@@ -342,6 +342,27 @@ func isPodCompleted(podClient coreclientset.PodInterface, name string) (bool, er
 	return false, nil
 }
 
+func waitForPodDeletion(podClient coreclientset.PodInterface, name string) error {
+	err := podClient.Delete(name, nil)
+	if !errors.IsNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	log.Printf("Waiting for pod %s to be deleted ...", name)
+	for {
+		_, err := podClient.Get(name, meta.GetOptions{})
+		if errors.IsNotFound(err) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		time.Sleep(2 * time.Second)
+	}
+}
+
 func waitForPodCompletion(podClient coreclientset.PodInterface, name string) error {
 	for {
 		retry, err := waitForPodCompletionOrTimeout(podClient, name)

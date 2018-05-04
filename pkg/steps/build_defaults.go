@@ -128,6 +128,8 @@ func FromConfig(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec, templat
 			step = OutputImageTagStep(*rawStep.OutputImageTagStepConfiguration, imageStreamTagClient, imageStreamClient, jobSpec)
 		} else if rawStep.ReleaseImagesTagStepConfiguration != nil {
 			step = ReleaseImagesTagStep(*rawStep.ReleaseImagesTagStepConfiguration, imageStreamTagClient, imageStreamGetter, routeGetter, configMapClient, jobSpec)
+		} else if rawStep.TestStepConfiguration != nil {
+			step = TestStep(*rawStep.TestStepConfiguration, podClient, jobSpec)
 		}
 		provides, link := step.Provides()
 		for name, fn := range provides {
@@ -233,8 +235,9 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec
 		}})
 	}
 
-	for _, image := range config.Images {
-		buildSteps = append(buildSteps, api.StepConfiguration{ProjectDirectoryImageBuildStepConfiguration: &image})
+	for i := range config.Images {
+		image := &config.Images[i]
+		buildSteps = append(buildSteps, api.StepConfiguration{ProjectDirectoryImageBuildStepConfiguration: image})
 		if config.ReleaseTagConfiguration != nil && len(config.ReleaseTagConfiguration.Name) > 0 {
 			buildSteps = append(buildSteps, api.StepConfiguration{OutputImageTagStepConfiguration: &api.OutputImageTagStepConfiguration{
 				From: image.To,
@@ -252,6 +255,10 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec
 				},
 			}})
 		}
+	}
+
+	for i := range config.Tests {
+		buildSteps = append(buildSteps, api.StepConfiguration{TestStepConfiguration: &config.Tests[i]})
 	}
 
 	if config.ReleaseTagConfiguration != nil {

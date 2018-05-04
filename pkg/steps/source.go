@@ -8,12 +8,13 @@ import (
 	"os"
 	"time"
 
-	buildapi "github.com/openshift/api/build/v1"
-	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
+
+	buildapi "github.com/openshift/api/build/v1"
+	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 
 	"github.com/openshift/ci-operator/pkg/api"
 )

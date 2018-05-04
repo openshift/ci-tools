@@ -256,6 +256,10 @@ func (o *options) Run() error {
 				Namespace: o.jobSpec.Namespace(),
 				Name:      steps.PipelineImageStream,
 			},
+			Spec: imageapi.ImageStreamSpec{
+				// pipeline:* will now be directly referenceable
+				LookupPolicy: imageapi.ImageLookupPolicy{Local: true},
+			},
 		})
 		if err != nil {
 			if !errors.IsAlreadyExists(err) {

@@ -29,10 +29,10 @@ const (
 // a later point, selectively
 type releaseImagesTagStep struct {
 	config          api.ReleaseTagConfiguration
-	istClient       imageclientset.ImageStreamTagInterface
+	istClient       imageclientset.ImageStreamTagsGetter
 	isGetter        imageclientset.ImageStreamsGetter
 	routeClient     routeclientset.RoutesGetter
-	configMapClient coreclientset.ConfigMapInterface
+	configMapClient coreclientset.ConfigMapsGetter
 	jobSpec         *JobSpec
 }
 
@@ -59,8 +59,19 @@ func findStatusTag(is *imageapi.ImageStream, tag string) *coreapi.ObjectReferenc
 	return nil
 }
 
+func (s *releaseImagesTagStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
+	return nil, nil
+}
+
+func sourceName(config api.ReleaseTagConfiguration) string {
+	if len(config.Name) > 0 {
+		return fmt.Sprintf("%s/%s:${component}", config.Namespace, config.Name)
+	}
+	return fmt.Sprintf("%s/${component}:%s", config.Namespace, config.Tag)
+}
+
 func (s *releaseImagesTagStep) Run(ctx context.Context, dry bool) error {
-	log.Printf("Tagging release images into %s", s.jobSpec.Namespace())
+	log.Printf("Tagging release images from %s", sourceName(s.config))
 
 	if len(s.config.Name) > 0 {
 		is, err := s.isGetter.ImageStreams(s.config.Namespace).Get(s.config.Name, meta.GetOptions{})
@@ -144,7 +155,7 @@ func (s *releaseImagesTagStep) Run(ctx context.Context, dry bool) error {
 					fmt.Printf("%s\n", istJSON)
 					continue
 				}
-				_, err := s.istClient.Create(ist)
+				_, err := s.istClient.ImageStreamTags(s.jobSpec.Namespace()).Create(ist)
 				if err != nil && !errors.IsAlreadyExists(err) {
 					return fmt.Errorf("could not copy stable imagestreamtag: %v", err)
 				}
@@ -199,7 +210,7 @@ func (s *releaseImagesTagStep) createReleaseConfigMap(dry bool) error {
 		fmt.Printf("%s\n", cmJSON)
 		return nil
 	}
-	if _, err := s.configMapClient.Create(cm); err != nil && !errors.IsAlreadyExists(err) {
+	if _, err := s.configMapClient.ConfigMaps(s.jobSpec.Namespace()).Create(cm); err != nil && !errors.IsAlreadyExists(err) {
 		return err
 	}
 	return nil
@@ -207,7 +218,7 @@ func (s *releaseImagesTagStep) createReleaseConfigMap(dry bool) error {
 
 func (s *releaseImagesTagStep) Done() (bool, error) {
 	log.Printf("Checking for existence of %s ConfigMap", ConfigMapName)
-	if _, err := s.configMapClient.Get(ConfigMapName, meta.GetOptions{}); err != nil {
+	if _, err := s.configMapClient.ConfigMaps(s.jobSpec.Namespace()).Get(ConfigMapName, meta.GetOptions{}); err != nil {
 		if errors.IsNotFound(err) {
 			return false, nil
 		} else {
@@ -250,7 +261,7 @@ func (s *releaseImagesTagStep) Provides() (api.ParameterMap, api.StepLink) {
 
 func (s *releaseImagesTagStep) Name() string { return "" }
 
-func ReleaseImagesTagStep(config api.ReleaseTagConfiguration, istClient imageclientset.ImageStreamTagInterface, isGetter imageclientset.ImageStreamsGetter, routeClient routeclientset.RoutesGetter, configMapClient coreclientset.ConfigMapInterface, jobSpec *JobSpec) api.Step {
+func ReleaseImagesTagStep(config api.ReleaseTagConfiguration, istClient imageclientset.ImageStreamTagsGetter, isGetter imageclientset.ImageStreamsGetter, routeClient routeclientset.RoutesGetter, configMapClient coreclientset.ConfigMapsGetter, jobSpec *JobSpec) api.Step {
 	return &releaseImagesTagStep{
 		config:          config,
 		istClient:       istClient,

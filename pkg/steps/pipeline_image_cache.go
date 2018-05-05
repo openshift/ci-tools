@@ -18,8 +18,12 @@ RUN ["/bin/bash", "-c", %s]`, PipelineImageStream, from, strconv.Quote(fmt.Sprin
 type pipelineImageCacheStep struct {
 	config      api.PipelineImageCacheStepConfiguration
 	buildClient BuildClient
-	istClient   imageclientset.ImageStreamTagInterface
+	istClient   imageclientset.ImageStreamTagsGetter
 	jobSpec     *JobSpec
+}
+
+func (s *pipelineImageCacheStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
+	return nil, nil
 }
 
 func (s *pipelineImageCacheStep) Run(ctx context.Context, dry bool) error {
@@ -34,7 +38,7 @@ func (s *pipelineImageCacheStep) Run(ctx context.Context, dry bool) error {
 }
 
 func (s *pipelineImageCacheStep) Done() (bool, error) {
-	return imageStreamTagExists(s.config.To, s.istClient)
+	return imageStreamTagExists(s.config.To, s.istClient.ImageStreamTags(s.jobSpec.Namespace()))
 }
 
 func (s *pipelineImageCacheStep) Requires() []api.StepLink {
@@ -51,7 +55,7 @@ func (s *pipelineImageCacheStep) Provides() (api.ParameterMap, api.StepLink) {
 
 func (s *pipelineImageCacheStep) Name() string { return string(s.config.To) }
 
-func PipelineImageCacheStep(config api.PipelineImageCacheStepConfiguration, buildClient BuildClient, istClient imageclientset.ImageStreamTagInterface, jobSpec *JobSpec) api.Step {
+func PipelineImageCacheStep(config api.PipelineImageCacheStepConfiguration, buildClient BuildClient, istClient imageclientset.ImageStreamTagsGetter, jobSpec *JobSpec) api.Step {
 	return &pipelineImageCacheStep{
 		config:      config,
 		buildClient: buildClient,

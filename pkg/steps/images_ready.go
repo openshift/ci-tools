@@ -11,6 +11,10 @@ type imagesReadyStep struct {
 	links []api.StepLink
 }
 
+func (s *imagesReadyStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
+	return nil, nil
+}
+
 func (s *imagesReadyStep) Run(ctx context.Context, dry bool) error {
 	log.Printf("All images ready")
 	return nil

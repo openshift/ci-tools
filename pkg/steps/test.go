@@ -18,9 +18,13 @@ import (
 
 type testStep struct {
 	config    api.TestStepConfiguration
-	podClient coreclientset.PodInterface
-	istClient imageclientset.ImageStreamTagInterface
+	podClient coreclientset.PodsGetter
+	istClient imageclientset.ImageStreamTagsGetter
 	jobSpec   *JobSpec
+}
+
+func (s *testStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
+	return nil, nil
 }
 
 func (s *testStep) Run(ctx context.Context, dry bool) error {
@@ -54,17 +58,17 @@ func (s *testStep) Run(ctx context.Context, dry bool) error {
 	go func() {
 		<-ctx.Done()
 		log.Printf("cleanup: Deleting test pod %s", s.config.As)
-		if err := s.podClient.Delete(s.config.As, nil); err != nil && !errors.IsNotFound(err) {
+		if err := s.podClient.Pods(s.jobSpec.Namespace()).Delete(s.config.As, nil); err != nil && !errors.IsNotFound(err) {
 			log.Printf("error: Could not delete test pod: %v", err)
 		}
 	}()
 
-	pod, err := createOrRestartPod(s.podClient, pod)
+	pod, err := createOrRestartPod(s.podClient.Pods(s.jobSpec.Namespace()), pod)
 	if err != nil {
 		return err
 	}
 
-	if err := waitForPodCompletion(s.podClient, pod.Name); err != nil {
+	if err := waitForPodCompletion(s.podClient.Pods(s.jobSpec.Namespace()), pod.Name); err != nil {
 		return err
 	}
 
@@ -72,7 +76,7 @@ func (s *testStep) Run(ctx context.Context, dry bool) error {
 }
 
 func (s *testStep) Done() (bool, error) {
-	ready, err := isPodCompleted(s.podClient, s.config.As)
+	ready, err := isPodCompleted(s.podClient.Pods(s.jobSpec.Namespace()), s.config.As)
 	if err != nil {
 		return false, err
 	}
@@ -96,7 +100,7 @@ func (s *testStep) Provides() (api.ParameterMap, api.StepLink) {
 
 func (s *testStep) Name() string { return s.config.As }
 
-func TestStep(config api.TestStepConfiguration, podClient coreclientset.PodInterface, jobSpec *JobSpec) api.Step {
+func TestStep(config api.TestStepConfiguration, podClient coreclientset.PodsGetter, jobSpec *JobSpec) api.Step {
 	return &testStep{
 		config:    config,
 		podClient: podClient,

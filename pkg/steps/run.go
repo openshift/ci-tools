@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"log"
 	"sync"
 
 	"github.com/openshift/ci-operator/pkg/api"
@@ -36,6 +37,7 @@ func Run(ctx context.Context, graph []*api.StepNode, dry bool) error {
 		case <-ctxDone:
 		case out := <-results:
 			if out.err != nil {
+				log.Printf("DEBUG: error in step %T", out.node.Step)
 				errors = append(errors, out.err)
 			} else {
 				seen = append(seen, out.node.Step.Creates()...)

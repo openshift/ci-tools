@@ -30,8 +30,12 @@ type templateExecutionStep struct {
 	template       *templateapi.Template
 	params         *DeferredParameters
 	templateClient TemplateClient
-	podClient      coreclientset.PodInterface
+	podClient      coreclientset.PodsGetter
 	jobSpec        *JobSpec
+}
+
+func (s *templateExecutionStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
+	return nil, nil
 }
 
 func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
@@ -97,7 +101,7 @@ func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 		instance.OwnerReferences = append(instance.OwnerReferences, *owner)
 	}
 
-	instance, err := createOrRestartTemplateInstance(s.templateClient.TemplateInstances(s.jobSpec.Namespace()), s.podClient, instance)
+	instance, err := createOrRestartTemplateInstance(s.templateClient.TemplateInstances(s.jobSpec.Namespace()), s.podClient.Pods(s.jobSpec.Namespace()), instance)
 	if err != nil {
 		return err
 	}
@@ -116,7 +120,7 @@ func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 	for _, ref := range instance.Status.Objects {
 		switch {
 		case ref.Ref.Kind == "Pod" && ref.Ref.APIVersion == "v1":
-			if err := waitForPodCompletion(s.podClient, ref.Ref.Name); err != nil {
+			if err := waitForPodCompletion(s.podClient.Pods(s.jobSpec.Namespace()), ref.Ref.Name); err != nil {
 				return err
 			}
 		}
@@ -143,7 +147,7 @@ func (s *templateExecutionStep) Done() (bool, error) {
 	for _, ref := range instance.Status.Objects {
 		switch {
 		case ref.Ref.Kind == "Pod" && ref.Ref.APIVersion == "v1":
-			ready, err := isPodCompleted(s.podClient, ref.Ref.Name)
+			ready, err := isPodCompleted(s.podClient.Pods(s.jobSpec.Namespace()), ref.Ref.Name)
 			if err != nil {
 				return false, err
 			}
@@ -180,7 +184,7 @@ func (s *templateExecutionStep) Provides() (api.ParameterMap, api.StepLink) {
 
 func (s *templateExecutionStep) Name() string { return s.template.Name }
 
-func TemplateExecutionStep(template *templateapi.Template, params *DeferredParameters, podClient coreclientset.PodInterface, templateClient TemplateClient, jobSpec *JobSpec) api.Step {
+func TemplateExecutionStep(template *templateapi.Template, params *DeferredParameters, podClient coreclientset.PodsGetter, templateClient TemplateClient, jobSpec *JobSpec) api.Step {
 	return &templateExecutionStep{
 		template:       template,
 		params:         params,
@@ -289,27 +293,25 @@ func (p *DeferredParameters) Get(name string) (string, error) {
 
 type TemplateClient interface {
 	templateclientset.TemplateV1Interface
-	Process(template *templateapi.Template) (*templateapi.Template, error)
+	Process(namespace string, template *templateapi.Template) (*templateapi.Template, error)
 }
 
 type templateClient struct {
 	templateclientset.TemplateV1Interface
 	restClient rest.Interface
-	namespace  string
 }
 
-func NewTemplateClient(client templateclientset.TemplateV1Interface, restClient rest.Interface, namespace string) TemplateClient {
+func NewTemplateClient(client templateclientset.TemplateV1Interface, restClient rest.Interface) TemplateClient {
 	return &templateClient{
 		TemplateV1Interface: client,
 		restClient:          restClient,
-		namespace:           namespace,
 	}
 }
 
-func (c *templateClient) Process(template *templateapi.Template) (*templateapi.Template, error) {
+func (c *templateClient) Process(namespace string, template *templateapi.Template) (*templateapi.Template, error) {
 	processed := &templateapi.Template{}
 	err := c.restClient.Post().
-		Namespace(c.namespace).
+		Namespace(namespace).
 		Resource("processedtemplates").
 		Body(template).
 		Do().

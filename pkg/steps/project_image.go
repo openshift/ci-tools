@@ -16,8 +16,12 @@ import (
 type projectDirectoryImageBuildStep struct {
 	config      api.ProjectDirectoryImageBuildStepConfiguration
 	buildClient BuildClient
-	istClient   imageclientset.ImageStreamTagInterface
+	istClient   imageclientset.ImageStreamTagsGetter
 	jobSpec     *JobSpec
+}
+
+func (s *projectDirectoryImageBuildStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
+	return nil, nil
 }
 
 func (s *projectDirectoryImageBuildStep) Run(ctx context.Context, dry bool) error {
@@ -27,7 +31,7 @@ func (s *projectDirectoryImageBuildStep) Run(ctx context.Context, dry bool) erro
 	if dry {
 		workingDir = "dry-fake"
 	} else {
-		ist, err := s.istClient.Get(source, meta.GetOptions{})
+		ist, err := s.istClient.ImageStreamTags(s.jobSpec.Namespace()).Get(source, meta.GetOptions{})
 		if err != nil {
 			return fmt.Errorf("could not fetch source ImageStreamTag: %v", err)
 		}
@@ -59,7 +63,7 @@ func (s *projectDirectoryImageBuildStep) Run(ctx context.Context, dry bool) erro
 }
 
 func (s *projectDirectoryImageBuildStep) Done() (bool, error) {
-	return imageStreamTagExists(s.config.To, s.istClient)
+	return imageStreamTagExists(s.config.To, s.istClient.ImageStreamTags(s.jobSpec.Namespace()))
 }
 
 func (s *projectDirectoryImageBuildStep) Requires() []api.StepLink {
@@ -79,7 +83,7 @@ func (s *projectDirectoryImageBuildStep) Provides() (api.ParameterMap, api.StepL
 
 func (s *projectDirectoryImageBuildStep) Name() string { return string(s.config.To) }
 
-func ProjectDirectoryImageBuildStep(config api.ProjectDirectoryImageBuildStepConfiguration, buildClient BuildClient, istClient imageclientset.ImageStreamTagInterface, jobSpec *JobSpec) api.Step {
+func ProjectDirectoryImageBuildStep(config api.ProjectDirectoryImageBuildStepConfiguration, buildClient BuildClient, istClient imageclientset.ImageStreamTagsGetter, jobSpec *JobSpec) api.Step {
 	return &projectDirectoryImageBuildStep{
 		config:      config,
 		buildClient: buildClient,

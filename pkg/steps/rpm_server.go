@@ -29,11 +29,15 @@ const (
 
 type rpmServerStep struct {
 	config           api.RPMServeStepConfiguration
-	deploymentClient appsclientset.DeploymentConfigInterface
-	routeClient      routeclientset.RouteInterface
-	serviceClient    coreclientset.ServiceInterface
-	istClient        imageclientset.ImageStreamTagInterface
+	deploymentClient appsclientset.DeploymentConfigsGetter
+	routeClient      routeclientset.RoutesGetter
+	serviceClient    coreclientset.ServicesGetter
+	istClient        imageclientset.ImageStreamTagsGetter
 	jobSpec          *JobSpec
+}
+
+func (s *rpmServerStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
+	return nil, nil
 }
 
 func (s *rpmServerStep) Run(ctx context.Context, dry bool) error {
@@ -41,7 +45,7 @@ func (s *rpmServerStep) Run(ctx context.Context, dry bool) error {
 	if dry {
 		imageReference = "dry-fake"
 	} else {
-		ist, err := s.istClient.Get(fmt.Sprintf("%s:%s", PipelineImageStream, s.config.From), meta.GetOptions{})
+		ist, err := s.istClient.ImageStreamTags(s.jobSpec.Namespace()).Get(fmt.Sprintf("%s:%s", PipelineImageStream, s.config.From), meta.GetOptions{})
 		if err != nil {
 			return fmt.Errorf("could not find source ImageStreamTag for RPM repo deployment: %v", err)
 		}
@@ -115,7 +119,7 @@ func (s *rpmServerStep) Run(ctx context.Context, dry bool) error {
 		}
 		fmt.Printf("%s\n", deploymentConfigJSON)
 	} else {
-		if _, err := s.deploymentClient.Create(deploymentConfig); err != nil && !kerrors.IsAlreadyExists(err) {
+		if _, err := s.deploymentClient.DeploymentConfigs(s.jobSpec.Namespace()).Create(deploymentConfig); err != nil && !kerrors.IsAlreadyExists(err) {
 			return err
 		}
 	}
@@ -141,7 +145,7 @@ func (s *rpmServerStep) Run(ctx context.Context, dry bool) error {
 			return fmt.Errorf("failed to marshal service: %v", err)
 		}
 		fmt.Printf("%s\n", serviceJSON)
-	} else if _, err := s.serviceClient.Create(service); err != nil && !kerrors.IsAlreadyExists(err) {
+	} else if _, err := s.serviceClient.Services(s.jobSpec.Namespace()).Create(service); err != nil && !kerrors.IsAlreadyExists(err) {
 		return err
 	}
 	route := &routeapi.Route{
@@ -167,14 +171,14 @@ func (s *rpmServerStep) Run(ctx context.Context, dry bool) error {
 		fmt.Printf("%s\n", routeJSON)
 		return nil
 	}
-	if _, err := s.routeClient.Create(route); err != nil && !kerrors.IsAlreadyExists(err) {
+	if _, err := s.routeClient.Routes(s.jobSpec.Namespace()).Create(route); err != nil && !kerrors.IsAlreadyExists(err) {
 		return err
 	}
-	return waitForDeployment(s.deploymentClient, deploymentConfig.Name)
+	return waitForDeployment(s.deploymentClient.DeploymentConfigs(s.jobSpec.Namespace()), deploymentConfig.Name)
 }
 
 func (s *rpmServerStep) Done() (bool, error) {
-	return currentDeploymentStatus(s.deploymentClient, RPMRepoName)
+	return currentDeploymentStatus(s.deploymentClient.DeploymentConfigs(s.jobSpec.Namespace()), RPMRepoName)
 }
 
 func waitForDeployment(client appsclientset.DeploymentConfigInterface, name string) error {
@@ -283,7 +287,7 @@ func (s *rpmServerStep) Provides() (api.ParameterMap, api.StepLink) {
 		"RPM_REPO": func() (string, error) {
 			var repoHost string
 			if err := wait.PollImmediate(time.Second, time.Minute, func() (bool, error) {
-				route, err := s.routeClient.Get(RPMRepoName, meta.GetOptions{})
+				route, err := s.routeClient.Routes(s.jobSpec.Namespace()).Get(RPMRepoName, meta.GetOptions{})
 				if err != nil {
 					return false, err
 				}
@@ -318,10 +322,10 @@ func admittedRoute(route *routeapi.Route) (string, bool) {
 
 func RPMServerStep(
 	config api.RPMServeStepConfiguration,
-	deploymentClient appsclientset.DeploymentConfigInterface,
-	routeClient routeclientset.RouteInterface,
-	serviceClient coreclientset.ServiceInterface,
-	istClient imageclientset.ImageStreamTagInterface,
+	deploymentClient appsclientset.DeploymentConfigsGetter,
+	routeClient routeclientset.RoutesGetter,
+	serviceClient coreclientset.ServicesGetter,
+	istClient imageclientset.ImageStreamTagsGetter,
 	jobSpec *JobSpec) api.Step {
 	return &rpmServerStep{
 		config:           config,

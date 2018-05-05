@@ -47,8 +47,12 @@ func sourceDockerfile(fromTag api.PipelineImageStreamTagReference, job *JobSpec)
 type sourceStep struct {
 	config      api.SourceStepConfiguration
 	buildClient BuildClient
-	istClient   imageclientset.ImageStreamTagInterface
+	istClient   imageclientset.ImageStreamTagsGetter
 	jobSpec     *JobSpec
+}
+
+func (s *sourceStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
+	return s.jobSpec.Inputs(), nil
 }
 
 func (s *sourceStep) Run(ctx context.Context, dry bool) error {
@@ -139,15 +143,15 @@ func handleBuild(buildClient BuildClient, build *buildapi.Build, dry bool) error
 		fmt.Printf("%s\n", buildJSON)
 		return nil
 	}
-	if _, err := buildClient.Create(build); err != nil && !errors.IsAlreadyExists(err) {
+	if _, err := buildClient.Builds(build.Namespace).Create(build); err != nil && !errors.IsAlreadyExists(err) {
 		return err
 	}
-	return waitForBuild(buildClient, build.Name)
+	return waitForBuild(buildClient, build.Namespace, build.Name)
 }
 
-func waitForBuild(buildClient BuildClient, name string) error {
+func waitForBuild(buildClient BuildClient, namespace, name string) error {
 	for {
-		retry, err := waitForBuildOrTimeout(buildClient, name)
+		retry, err := waitForBuildOrTimeout(buildClient, namespace, name)
 		if err != nil {
 			return err
 		}
@@ -158,7 +162,7 @@ func waitForBuild(buildClient BuildClient, name string) error {
 	return nil
 }
 
-func waitForBuildOrTimeout(buildClient BuildClient, name string) (bool, error) {
+func waitForBuildOrTimeout(buildClient BuildClient, namespace, name string) (bool, error) {
 	isOK := func(b *buildapi.Build) bool {
 		return b.Status.Phase == buildapi.BuildPhaseComplete
 	}
@@ -167,7 +171,7 @@ func waitForBuildOrTimeout(buildClient BuildClient, name string) (bool, error) {
 			b.Status.Phase == buildapi.BuildPhaseCancelled ||
 			b.Status.Phase == buildapi.BuildPhaseError
 	}
-	list, err := buildClient.List(meta.ListOptions{FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String()})
+	list, err := buildClient.Builds(namespace).List(meta.ListOptions{FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String()})
 	if err != nil {
 		return false, err
 	}
@@ -181,11 +185,11 @@ func waitForBuildOrTimeout(buildClient BuildClient, name string) (bool, error) {
 	}
 	if isFailed(build) {
 		log.Printf("Build %s failed, printing logs:", build.Name)
-		printBuildLogs(buildClient, build.Name)
+		printBuildLogs(buildClient, build.Namespace, build.Name)
 		return false, fmt.Errorf("the build %s/%s failed with status %q", build.Namespace, build.Name, build.Status.Phase)
 	}
 
-	watcher, err := buildClient.Watch(meta.ListOptions{
+	watcher, err := buildClient.Builds(namespace).Watch(meta.ListOptions{
 		FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String(),
 		Watch:         true,
 	})
@@ -207,7 +211,7 @@ func waitForBuildOrTimeout(buildClient BuildClient, name string) (bool, error) {
 			}
 			if isFailed(build) {
 				log.Printf("Build %s failed, printing logs:", build.Name)
-				printBuildLogs(buildClient, build.Name)
+				printBuildLogs(buildClient, build.Namespace, build.Name)
 				return false, fmt.Errorf("the build %s/%s failed after %s with status %q", build.Namespace, build.Name, buildDuration(build), build.Status.Phase)
 			}
 		}
@@ -227,8 +231,8 @@ func buildDuration(build *buildapi.Build) time.Duration {
 	return duration
 }
 
-func printBuildLogs(buildClient BuildClient, name string) {
-	if s, err := buildClient.Logs(name, &buildapi.BuildLogOptions{
+func printBuildLogs(buildClient BuildClient, namespace, name string) {
+	if s, err := buildClient.Logs(namespace, name, &buildapi.BuildLogOptions{
 		NoWait: true,
 	}); err == nil {
 		defer s.Close()
@@ -241,7 +245,7 @@ func printBuildLogs(buildClient BuildClient, name string) {
 }
 
 func (s *sourceStep) Done() (bool, error) {
-	return imageStreamTagExists(s.config.To, s.istClient)
+	return imageStreamTagExists(s.config.To, s.istClient.ImageStreamTags(s.jobSpec.Namespace()))
 }
 
 func imageStreamTagExists(reference api.PipelineImageStreamTagReference, istClient imageclientset.ImageStreamTagInterface) (bool, error) {
@@ -275,7 +279,7 @@ func (s *sourceStep) Provides() (api.ParameterMap, api.StepLink) {
 
 func (s *sourceStep) Name() string { return string(s.config.To) }
 
-func SourceStep(config api.SourceStepConfiguration, buildClient BuildClient, istClient imageclientset.ImageStreamTagInterface, jobSpec *JobSpec) api.Step {
+func SourceStep(config api.SourceStepConfiguration, buildClient BuildClient, istClient imageclientset.ImageStreamTagsGetter, jobSpec *JobSpec) api.Step {
 	return &sourceStep{
 		config:      config,
 		buildClient: buildClient,

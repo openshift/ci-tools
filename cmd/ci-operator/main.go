@@ -156,7 +156,7 @@ type options struct {
 	inputHash     string
 	secrets       []*coreapi.Secret
 	templates     []*templateapi.Template
-	buildConfig   *api.ReleaseBuildConfiguration
+	configSpec    *api.ReleaseBuildConfiguration
 	jobSpec       *steps.JobSpec
 	clusterConfig *rest.Config
 }
@@ -214,18 +214,7 @@ func (o *options) Complete() error {
 	if err != nil {
 		return fmt.Errorf("failed to resolve job spec: %v", err)
 	}
-
-	// input hash is unique for a given job definition and input refs
-	o.inputHash = inputHash(jobSpec, o.buildConfig)
-
-	if len(o.namespace) == 0 {
-		o.namespace = "ci-op-{id}"
-	}
-	o.namespace = strings.Replace(o.namespace, "{id}", o.inputHash, -1)
-
-	jobSpec.SetNamespace(o.namespace)
 	jobSpec.SetBaseNamespace(o.baseNamespace)
-
 	o.jobSpec = jobSpec
 
 	for _, path := range o.secretDirectories.values {
@@ -283,21 +272,14 @@ func (o *options) Run() error {
 		log.Printf("Ran for %s", time.Now().Sub(start).Truncate(time.Second))
 	}()
 
-	if err := o.initializeNamespace(); err != nil {
-		return err
-	}
-
-	buildSteps, err := steps.FromConfig(o.buildConfig, o.jobSpec, o.templates, o.writeParams, o.clusterConfig)
+	// load the graph from the configuration
+	buildSteps, err := steps.FromConfig(o.configSpec, o.jobSpec, o.templates, o.writeParams, o.clusterConfig)
 	if err != nil {
 		return fmt.Errorf("failed to generate steps from config: %v", err)
 	}
 
-	nodes, err := api.BuildPartialGraph(buildSteps, o.targets.values)
-	if err != nil {
-		return err
-	}
-
 	ctx, cancel := context.WithCancel(context.Background())
+
 	handler := func(s os.Signal) {
 		if o.dry {
 			return
@@ -308,13 +290,29 @@ func (o *options) Run() error {
 		time.Sleep(2 * time.Second)
 		os.Exit(1)
 	}
-	if err := interrupt.New(handler).Run(func() error {
-		return steps.Run(ctx, nodes, o.dry)
-	}); err != nil {
-		return err
-	}
 
-	return nil
+	return interrupt.New(handler).Run(func() error {
+		// before we create the namespace, we need to ensure all inputs to the graph
+		// have been resolved
+		if err := o.resolveInputs(ctx, buildSteps); err != nil {
+			return err
+		}
+
+		// convert the full graph into the subset we must run
+		nodes, err := api.BuildPartialGraph(buildSteps, o.targets.values)
+		if err != nil {
+			return err
+		}
+
+		// initialize the namespace if necessary and create any resources that must
+		// exist prior to execution
+		if err := o.initializeNamespace(); err != nil {
+			return err
+		}
+
+		// execute the graph
+		return steps.Run(ctx, nodes, o.dry)
+	})
 }
 
 // loadClusterConfig loads connection configuration
@@ -339,6 +337,37 @@ func loadClusterConfig() (*rest.Config, error) {
 	return clusterConfig, nil
 }
 
+func (o *options) resolveInputs(ctx context.Context, steps []api.Step) error {
+	var inputs api.InputDefinition
+	for _, step := range steps {
+		definition, err := step.Inputs(ctx, o.dry)
+		if err != nil {
+			return err
+		}
+		inputs = append(inputs, definition...)
+	}
+
+	// a change in the config for the build changes the output
+	configSpec, err := json.Marshal(o.configSpec)
+	if err != nil {
+		panic(err)
+	}
+	inputs = append(inputs, string(configSpec))
+
+	o.inputHash = inputHash(inputs)
+
+	// input hash is unique for a given job definition and input refs
+	if len(o.namespace) == 0 {
+		o.namespace = "ci-op-{id}"
+	}
+	o.namespace = strings.Replace(o.namespace, "{id}", o.inputHash, -1)
+	// TODO: instead of mutating this here, we should pass the parts of graph execution that are resolved
+	// after the graph is created but before it is run down into the run step.
+	o.jobSpec.SetNamespace(o.namespace)
+
+	return nil
+}
+
 func (o *options) initializeNamespace() error {
 	if o.dry {
 		return nil
@@ -355,7 +384,7 @@ func (o *options) initializeNamespace() error {
 				Name: o.namespace,
 			},
 			DisplayName: fmt.Sprintf("%s - %s", o.namespace, o.jobSpec.Job),
-			Description: jobDescription(o.jobSpec, o.buildConfig),
+			Description: jobDescription(o.jobSpec, o.configSpec),
 		})
 		if err != nil && !errors.IsAlreadyExists(err) {
 			return fmt.Errorf("could not set up namespace for test: %v", err)
@@ -544,19 +573,19 @@ func (o *options) createNamespaceCleanupPod() error {
 }
 
 // inputHash returns a string that hashes the unique parts of the input to avoid collisions.
-func inputHash(job *steps.JobSpec, config *api.ReleaseBuildConfiguration) string {
-	// only the ref spec off the job must be unique
-	refSpec := job.RefSpec()
-	// the entire config must be unique
-	configSpec, err := json.Marshal(config)
-	if err != nil {
-		panic(err)
+func inputHash(inputs api.InputDefinition) string {
+	hash := sha256.New()
+
+	// the inputs form a part of the hash
+	for _, s := range inputs {
+		hash.Write([]byte(s))
 	}
+
 	// Object names can't be too long so we truncate
 	// the hash. This increases chances of collision
 	// but we can tolerate it as our input space is
 	// tiny.
-	return fmt.Sprintf("%x", sha256.Sum256([]byte(refSpec+string(configSpec))))[54:]
+	return fmt.Sprintf("%x", hash.Sum(nil))[54:]
 }
 
 // jobDescription returns a string representing the job's description.

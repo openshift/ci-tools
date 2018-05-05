@@ -9,6 +9,7 @@ import (
 // Step is a self-contained bit of work that the
 // build pipeline needs to do.
 type Step interface {
+	Inputs(ctx context.Context, dry bool) (InputDefinition, error)
 	Run(ctx context.Context, dry bool) error
 	Done() (bool, error)
 
@@ -19,6 +20,8 @@ type Step interface {
 	Creates() []StepLink
 	Provides() (ParameterMap, StepLink)
 }
+
+type InputDefinition []string
 
 type ParameterMap map[string]func() (string, error)
 

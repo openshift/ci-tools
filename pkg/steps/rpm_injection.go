@@ -20,9 +20,13 @@ RUN echo $'[built]\nname = Built RPMs\nbaseurl = http://%s\ngpgcheck = 0\nenable
 type rpmImageInjectionStep struct {
 	config      api.RPMImageInjectionStepConfiguration
 	buildClient BuildClient
-	routeClient routeclientset.RouteInterface
-	istClient   imageclientset.ImageStreamTagInterface
+	routeClient routeclientset.RoutesGetter
+	istClient   imageclientset.ImageStreamTagsGetter
 	jobSpec     *JobSpec
+}
+
+func (s *rpmImageInjectionStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
+	return nil, nil
 }
 
 func (s *rpmImageInjectionStep) Run(ctx context.Context, dry bool) error {
@@ -30,7 +34,7 @@ func (s *rpmImageInjectionStep) Run(ctx context.Context, dry bool) error {
 	if dry {
 		host = "dry-fake"
 	} else {
-		route, err := s.routeClient.Get(RPMRepoName, meta.GetOptions{})
+		route, err := s.routeClient.Routes(s.jobSpec.Namespace()).Get(RPMRepoName, meta.GetOptions{})
 		if err != nil {
 			return fmt.Errorf("could not get Route for RPM server: %v", err)
 		}
@@ -47,7 +51,7 @@ func (s *rpmImageInjectionStep) Run(ctx context.Context, dry bool) error {
 }
 
 func (s *rpmImageInjectionStep) Done() (bool, error) {
-	return imageStreamTagExists(s.config.To, s.istClient)
+	return imageStreamTagExists(s.config.To, s.istClient.ImageStreamTags(s.jobSpec.Namespace()))
 }
 
 func (s *rpmImageInjectionStep) Requires() []api.StepLink {
@@ -64,7 +68,7 @@ func (s *rpmImageInjectionStep) Provides() (api.ParameterMap, api.StepLink) {
 
 func (s *rpmImageInjectionStep) Name() string { return string(s.config.To) }
 
-func RPMImageInjectionStep(config api.RPMImageInjectionStepConfiguration, buildClient BuildClient, routeClient routeclientset.RouteInterface, istClient imageclientset.ImageStreamTagInterface, jobSpec *JobSpec) api.Step {
+func RPMImageInjectionStep(config api.RPMImageInjectionStepConfiguration, buildClient BuildClient, routeClient routeclientset.RoutesGetter, istClient imageclientset.ImageStreamTagsGetter, jobSpec *JobSpec) api.Step {
 	return &rpmImageInjectionStep{
 		config:      config,
 		buildClient: buildClient,

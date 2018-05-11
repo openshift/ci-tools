@@ -2,7 +2,9 @@ package steps
 
 import (
 	"bytes"
+	"context"
 	"fmt"
+	"log"
 	"sync"
 
 	"github.com/openshift/ci-operator/pkg/api"
@@ -13,10 +15,11 @@ type message struct {
 	err  error
 }
 
-func Run(graph []*api.StepNode, dry bool) error {
+func Run(ctx context.Context, graph []*api.StepNode, dry bool) error {
 	var seen []api.StepLink
 	results := make(chan message)
 	done := make(chan bool)
+	ctxDone := ctx.Done()
 	wg := &sync.WaitGroup{}
 	wg.Add(len(graph))
 	go func() {
@@ -25,14 +28,16 @@ func Run(graph []*api.StepNode, dry bool) error {
 	}()
 
 	for _, root := range graph {
-		go runStep(root, results, dry)
+		go runStep(ctx, root, results, dry)
 	}
 
 	var errors []error
 	for {
 		select {
+		case <-ctxDone:
 		case out := <-results:
 			if out.err != nil {
+				log.Printf("DEBUG: error in step %T", out.node.Step)
 				errors = append(errors, out.err)
 			} else {
 				seen = append(seen, out.node.Step.Creates()...)
@@ -44,7 +49,7 @@ func Run(graph []*api.StepNode, dry bool) error {
 					// when the last of its parents finishes.
 					if containsAll(child.Step.Requires(), seen) {
 						wg.Add(1)
-						go runStep(child, results, dry)
+						go runStep(ctx, child, results, dry)
 					}
 				}
 			}
@@ -69,10 +74,10 @@ func Run(graph []*api.StepNode, dry bool) error {
 	}
 }
 
-func runStep(node *api.StepNode, out chan<- message, dry bool) {
+func runStep(ctx context.Context, node *api.StepNode, out chan<- message, dry bool) {
 	out <- message{
 		node: node,
-		err:  node.Step.Run(dry),
+		err:  node.Step.Run(ctx, dry),
 	}
 }
 

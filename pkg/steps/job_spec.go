@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/openshift/ci-operator/pkg/api"
 )
 
 // JobSpec is a superset of the upstream spec, but
@@ -24,7 +26,6 @@ type JobSpec struct {
 	rawSpec string
 
 	// these fields allow the job to be targeted at a location
-	identifer     string
 	namespace     string
 	baseNamespace string
 
@@ -85,9 +86,9 @@ func (s *JobSpec) SetOwner(owner *meta.OwnerReference) {
 	s.owner = owner
 }
 
-// RefSpec returns a string that represents the canonical form of
-// the references for use in uniqueness tests.
-func (s *JobSpec) RefSpec() string {
+// Inputs returns the definition of the job as an input to
+// the execution graph.
+func (s *JobSpec) Inputs() api.InputDefinition {
 	spec := &JobSpec{
 		Refs: s.Refs,
 	}
@@ -95,7 +96,7 @@ func (s *JobSpec) RefSpec() string {
 	if err != nil {
 		panic(err)
 	}
-	return string(raw)
+	return api.InputDefinition{string(raw)}
 }
 
 // ResolveSpecFromEnv will determine the Refs being

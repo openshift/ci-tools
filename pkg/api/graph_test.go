@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"reflect"
 	"testing"
 )
@@ -100,12 +101,19 @@ func TestMatches(t *testing.T) {
 type fakeStep struct {
 	requires []StepLink
 	creates  []StepLink
+	name     string
 }
 
-func (f *fakeStep) Run(dry bool) error   { return nil }
+func (f *fakeStep) Inputs(ctx context.Context, dry bool) (InputDefinition, error) { return nil, nil }
+
+func (f *fakeStep) Run(ctx context.Context, dry bool) error { return nil }
+
 func (f *fakeStep) Done() (bool, error)  { return true, nil }
 func (f *fakeStep) Requires() []StepLink { return f.requires }
 func (f *fakeStep) Creates() []StepLink  { return f.creates }
+func (f *fakeStep) Name() string         { return f.name }
+
+func (f *fakeStep) Provides() (ParameterMap, StepLink) { return nil, nil }
 
 func TestBuildGraph(t *testing.T) {
 	root := &fakeStep{
@@ -139,6 +147,18 @@ func TestBuildGraph(t *testing.T) {
 	final := &fakeStep{
 		requires: []StepLink{InternalImageLink(PipelineImageStreamTagReference("unrelated"))},
 		creates:  []StepLink{InternalImageLink(PipelineImageStreamTagReference("final"))},
+	}
+
+	duplicateRoot := &fakeStep{
+		requires: []StepLink{ExternalImageLink(ImageStreamTagReference{Namespace: "ns", Name: "base", Tag: "latest"})},
+		creates:  []StepLink{InternalImageLink(PipelineImageStreamTagReferenceRoot)},
+	}
+	duplicateSrc := &fakeStep{
+		requires: []StepLink{
+			InternalImageLink(PipelineImageStreamTagReferenceRoot),
+			InternalImageLink(PipelineImageStreamTagReferenceRoot),
+		},
+		creates: []StepLink{InternalImageLink(PipelineImageStreamTagReference("other"))},
 	}
 
 	var testCases = []struct {
@@ -178,6 +198,17 @@ func TestBuildGraph(t *testing.T) {
 						Step:     final,
 						Children: []*StepNode{},
 					}},
+				}},
+			}},
+		},
+		{
+			name:  "duplicate links",
+			input: []Step{duplicateRoot, duplicateSrc},
+			output: []*StepNode{{
+				Step: duplicateRoot,
+				Children: []*StepNode{{
+					Step:     duplicateSrc,
+					Children: []*StepNode{},
 				}},
 			}},
 		},

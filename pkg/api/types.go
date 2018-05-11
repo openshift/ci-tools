@@ -50,6 +50,8 @@ type ReleaseBuildConfiguration struct {
 	// full release is assembled.
 	ReleaseTagConfiguration *ReleaseTagConfiguration `json:"tag_specification,omitempty"`
 
+	Tests []TestStepConfiguration `json:"tests,omitempty"`
+
 	// RawSteps are literal Steps that should be
 	// included in the final pipeline.
 	RawSteps []StepConfiguration `json:"raw_steps,omitempty"`
@@ -108,6 +110,7 @@ type StepConfiguration struct {
 	RPMServeStepConfiguration                   *RPMServeStepConfiguration                   `json:"rpm_serve_step,omitempty"`
 	OutputImageTagStepConfiguration             *OutputImageTagStepConfiguration             `json:"output_image_tag_step,omitempty"`
 	ReleaseImagesTagStepConfiguration           *ReleaseTagConfiguration                     `json:"release_images_tag_step,omitempty"`
+	TestStepConfiguration                       *TestStepConfiguration                       `json:"test_step,omitempty"`
 }
 
 // InputImageTagStepConfiguration describes a step that
@@ -137,6 +140,21 @@ type PipelineImageCacheStepConfiguration struct {
 	// the repository root to create the cached
 	// content.
 	Commands string `json:"commands"`
+}
+
+type TestStepConfiguration struct {
+	// As is the name of the test.
+	As string `json:"as"`
+	// From is the image stream tag in the pipeline to run this
+	// command in.
+	From PipelineImageStreamTagReference `json:"from"`
+	// Commands are the shell commands to run in
+	// the repository root to execute tests.
+	Commands string `json:"commands"`
+	// ArtifactDir is an optional directory that contains the
+	// artifacts to upload. If unset, this will default under
+	// the repository root to _output/local/artifacts.
+	ArtifactDir string `json:"artifact_dir"`
 }
 
 // PipelineImageStreamTagReference is a tag on the

@@ -9,16 +9,9 @@ func TestOptions_Validate(t *testing.T) {
 		expectedErr bool
 	}{
 		{
-			name: "all good",
-			input: options{
-				rawBuildConfig: "test",
-			},
-			expectedErr: false,
-		},
-		{
-			name:        "missing raw build config",
+			name:        "all good",
 			input:       options{},
-			expectedErr: true,
+			expectedErr: false,
 		},
 	}
 

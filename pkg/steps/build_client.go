@@ -11,28 +11,26 @@ import (
 )
 
 type BuildClient interface {
-	buildclientset.BuildInterface
-	Logs(name string, options *buildapi.BuildLogOptions) (io.ReadCloser, error)
+	buildclientset.BuildsGetter
+	Logs(namespace, name string, options *buildapi.BuildLogOptions) (io.ReadCloser, error)
 }
 
 type buildClient struct {
-	buildclientset.BuildInterface
+	buildclientset.BuildsGetter
 
-	client    rest.Interface
-	namespace string
+	client rest.Interface
 }
 
-func NewBuildClient(client buildclientset.BuildInterface, restClient rest.Interface, namespace string) BuildClient {
+func NewBuildClient(client buildclientset.BuildsGetter, restClient rest.Interface) BuildClient {
 	return &buildClient{
-		BuildInterface: client,
-		client:         restClient,
-		namespace:      namespace,
+		BuildsGetter: client,
+		client:       restClient,
 	}
 }
 
-func (c *buildClient) Logs(name string, options *buildapi.BuildLogOptions) (io.ReadCloser, error) {
+func (c *buildClient) Logs(namespace, name string, options *buildapi.BuildLogOptions) (io.ReadCloser, error) {
 	return c.client.Get().
-		Namespace(c.namespace).
+		Namespace(namespace).
 		Name(name).
 		Resource("builds").
 		SubResource("log").

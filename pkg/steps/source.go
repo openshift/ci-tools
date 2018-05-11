@@ -1,6 +1,7 @@
 package steps
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -8,12 +9,13 @@ import (
 	"os"
 	"time"
 
-	buildapi "github.com/openshift/api/build/v1"
-	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
+
+	buildapi "github.com/openshift/api/build/v1"
+	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 
 	"github.com/openshift/ci-operator/pkg/api"
 )
@@ -45,11 +47,15 @@ func sourceDockerfile(fromTag api.PipelineImageStreamTagReference, job *JobSpec)
 type sourceStep struct {
 	config      api.SourceStepConfiguration
 	buildClient BuildClient
-	istClient   imageclientset.ImageStreamTagInterface
+	istClient   imageclientset.ImageStreamTagsGetter
 	jobSpec     *JobSpec
 }
 
-func (s *sourceStep) Run(dry bool) error {
+func (s *sourceStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
+	return s.jobSpec.Inputs(), nil
+}
+
+func (s *sourceStep) Run(ctx context.Context, dry bool) error {
 	dockerfile := sourceDockerfile(s.config.From, s.jobSpec)
 	return handleBuild(s.buildClient, buildFromSource(
 		s.jobSpec, s.config.From, s.config.To,
@@ -61,7 +67,7 @@ func (s *sourceStep) Run(dry bool) error {
 }
 
 func buildFromSource(jobSpec *JobSpec, fromTag, toTag api.PipelineImageStreamTagReference, source buildapi.BuildSource) *buildapi.Build {
-	log.Printf("Building %s/%s:%s", jobSpec.Namespace(), PipelineImageStream, toTag)
+	log.Printf("Building %s:%s", PipelineImageStream, toTag)
 	optionsSpec := map[string]interface{}{
 		"src_root":       "/go",
 		"log":            "-",
@@ -137,15 +143,15 @@ func handleBuild(buildClient BuildClient, build *buildapi.Build, dry bool) error
 		fmt.Printf("%s\n", buildJSON)
 		return nil
 	}
-	if _, err := buildClient.Create(build); err != nil && !errors.IsAlreadyExists(err) {
+	if _, err := buildClient.Builds(build.Namespace).Create(build); err != nil && !errors.IsAlreadyExists(err) {
 		return err
 	}
-	return waitForBuild(buildClient, build.Name)
+	return waitForBuild(buildClient, build.Namespace, build.Name)
 }
 
-func waitForBuild(buildClient BuildClient, name string) error {
+func waitForBuild(buildClient BuildClient, namespace, name string) error {
 	for {
-		retry, err := waitForBuildOrTimeout(buildClient, name)
+		retry, err := waitForBuildOrTimeout(buildClient, namespace, name)
 		if err != nil {
 			return err
 		}
@@ -156,7 +162,7 @@ func waitForBuild(buildClient BuildClient, name string) error {
 	return nil
 }
 
-func waitForBuildOrTimeout(buildClient BuildClient, name string) (bool, error) {
+func waitForBuildOrTimeout(buildClient BuildClient, namespace, name string) (bool, error) {
 	isOK := func(b *buildapi.Build) bool {
 		return b.Status.Phase == buildapi.BuildPhaseComplete
 	}
@@ -165,7 +171,7 @@ func waitForBuildOrTimeout(buildClient BuildClient, name string) (bool, error) {
 			b.Status.Phase == buildapi.BuildPhaseCancelled ||
 			b.Status.Phase == buildapi.BuildPhaseError
 	}
-	list, err := buildClient.List(meta.ListOptions{FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String()})
+	list, err := buildClient.Builds(namespace).List(meta.ListOptions{FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String()})
 	if err != nil {
 		return false, err
 	}
@@ -174,16 +180,16 @@ func waitForBuildOrTimeout(buildClient BuildClient, name string) (bool, error) {
 	}
 	build := &list.Items[0]
 	if isOK(build) {
-		log.Printf("Build %s/%s already succeeded in %s", build.Namespace, build.Name, buildDuration(build))
+		log.Printf("Build %s already succeeded in %s", build.Name, buildDuration(build))
 		return false, nil
 	}
 	if isFailed(build) {
-		log.Printf("Build %s/%s failed, printing logs:", build.Namespace, build.Name)
-		printBuildLogs(buildClient, build.Name)
+		log.Printf("Build %s failed, printing logs:", build.Name)
+		printBuildLogs(buildClient, build.Namespace, build.Name)
 		return false, fmt.Errorf("the build %s/%s failed with status %q", build.Namespace, build.Name, build.Status.Phase)
 	}
 
-	watcher, err := buildClient.Watch(meta.ListOptions{
+	watcher, err := buildClient.Builds(namespace).Watch(meta.ListOptions{
 		FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String(),
 		Watch:         true,
 	})
@@ -200,12 +206,12 @@ func waitForBuildOrTimeout(buildClient BuildClient, name string) (bool, error) {
 		}
 		if build, ok := event.Object.(*buildapi.Build); ok {
 			if isOK(build) {
-				log.Printf("Build %s/%s succeeded after %s", build.Namespace, build.Name, buildDuration(build))
+				log.Printf("Build %s succeeded after %s", build.Name, buildDuration(build))
 				return false, nil
 			}
 			if isFailed(build) {
-				log.Printf("Build %s/%s failed, printing logs:", build.Namespace, build.Name)
-				printBuildLogs(buildClient, build.Name)
+				log.Printf("Build %s failed, printing logs:", build.Name)
+				printBuildLogs(buildClient, build.Namespace, build.Name)
 				return false, fmt.Errorf("the build %s/%s failed after %s with status %q", build.Namespace, build.Name, buildDuration(build), build.Status.Phase)
 			}
 		}
@@ -225,10 +231,9 @@ func buildDuration(build *buildapi.Build) time.Duration {
 	return duration
 }
 
-func printBuildLogs(buildClient BuildClient, name string) {
-	if s, err := buildClient.Logs(name, &buildapi.BuildLogOptions{
-		NoWait:     true,
-		Timestamps: true,
+func printBuildLogs(buildClient BuildClient, namespace, name string) {
+	if s, err := buildClient.Logs(namespace, name, &buildapi.BuildLogOptions{
+		NoWait: true,
 	}); err == nil {
 		defer s.Close()
 		if _, err := io.Copy(os.Stdout, s); err != nil {
@@ -240,7 +245,7 @@ func printBuildLogs(buildClient BuildClient, name string) {
 }
 
 func (s *sourceStep) Done() (bool, error) {
-	return imageStreamTagExists(s.config.To, s.istClient)
+	return imageStreamTagExists(s.config.To, s.istClient.ImageStreamTags(s.jobSpec.Namespace()))
 }
 
 func imageStreamTagExists(reference api.PipelineImageStreamTagReference, istClient imageclientset.ImageStreamTagInterface) (bool, error) {
@@ -268,7 +273,13 @@ func (s *sourceStep) Creates() []api.StepLink {
 	return []api.StepLink{api.InternalImageLink(s.config.To)}
 }
 
-func SourceStep(config api.SourceStepConfiguration, buildClient BuildClient, istClient imageclientset.ImageStreamTagInterface, jobSpec *JobSpec) api.Step {
+func (s *sourceStep) Provides() (api.ParameterMap, api.StepLink) {
+	return nil, nil
+}
+
+func (s *sourceStep) Name() string { return string(s.config.To) }
+
+func SourceStep(config api.SourceStepConfiguration, buildClient BuildClient, istClient imageclientset.ImageStreamTagsGetter, jobSpec *JobSpec) api.Step {
 	return &sourceStep{
 		config:      config,
 		buildClient: buildClient,

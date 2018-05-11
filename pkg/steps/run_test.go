@@ -1,6 +1,7 @@
 package steps
 
 import (
+	"context"
 	"errors"
 	"sync"
 	"testing"
@@ -19,7 +20,9 @@ type fakeStep struct {
 	numRuns int
 }
 
-func (f *fakeStep) Run(dry bool) error {
+func (f *fakeStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) { return nil, nil }
+
+func (f *fakeStep) Run(ctx context.Context, dry bool) error {
 	defer f.lock.Unlock()
 	f.lock.Lock()
 	f.numRuns = f.numRuns + 1
@@ -29,6 +32,9 @@ func (f *fakeStep) Run(dry bool) error {
 func (f *fakeStep) Done() (bool, error)      { return true, nil }
 func (f *fakeStep) Requires() []api.StepLink { return f.requires }
 func (f *fakeStep) Creates() []api.StepLink  { return f.creates }
+func (f *fakeStep) Name() string             { return f.name }
+
+func (f *fakeStep) Provides() (api.ParameterMap, api.StepLink) { return nil, nil }
 
 func TestRunNormalCase(t *testing.T) {
 	root := &fakeStep{
@@ -80,7 +86,7 @@ func TestRunNormalCase(t *testing.T) {
 		creates:   []api.StepLink{api.InternalImageLink(api.PipelineImageStreamTagReference("final"))},
 	}
 
-	if err := Run(api.BuildGraph([]api.Step{root, other, src, bin, testBin, rpm, unrelated, final}), false); err != nil {
+	if err := Run(context.Background(), api.BuildGraph([]api.Step{root, other, src, bin, testBin, rpm, unrelated, final}), false); err != nil {
 		t.Errorf("got an error but expected none: %v", err)
 	}
 
@@ -145,7 +151,7 @@ func TestRunFailureCase(t *testing.T) {
 		creates:   []api.StepLink{api.InternalImageLink(api.PipelineImageStreamTagReference("final"))},
 	}
 
-	if err := Run(api.BuildGraph([]api.Step{root, other, src, bin, testBin, rpm, unrelated, final}), false); err == nil {
+	if err := Run(context.Background(), api.BuildGraph([]api.Step{root, other, src, bin, testBin, rpm, unrelated, final}), false); err == nil {
 		t.Error("got no error but expected one")
 	}
 

@@ -109,12 +109,12 @@ func main() {
 	}
 
 	if err := opt.Validate(); err != nil {
-		fmt.Printf("Invalid options: %v\n", err)
+		fmt.Printf("error: %v\n", err)
 		os.Exit(1)
 	}
 
 	if err := opt.Complete(); err != nil {
-		fmt.Printf("Invalid environment: %v\n", err)
+		fmt.Printf("error: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -201,13 +201,14 @@ func (o *options) Complete() error {
 		}
 		configSpec = string(data)
 	} else {
-		configSpec := os.Getenv("CONFIG_SPEC")
-		if len(configSpec) == 0 {
-			return fmt.Errorf("no CONFIG_SPEC environment variable defined")
+		var ok bool
+		configSpec, ok = os.LookupEnv("CONFIG_SPEC")
+		if !ok || len(configSpec) == 0 {
+			return fmt.Errorf("CONFIG_SPEC environment variable is not set or empty and no --config file was set")
 		}
 	}
 	if err := json.Unmarshal([]byte(configSpec), &o.configSpec); err != nil {
-		return fmt.Errorf("invalid configuration: %v", err)
+		return fmt.Errorf("invalid configuration: %v\nvalue:\n%s", err, string(configSpec))
 	}
 
 	jobSpec, err := steps.ResolveSpecFromEnv()
@@ -229,7 +230,12 @@ func (o *options) Complete() error {
 			if f.IsDir() {
 				continue
 			}
-			secret.Data[f.Name()], err = ioutil.ReadFile(filepath.Join(path, f.Name()))
+			path := filepath.Join(path, f.Name())
+			// if the file is a broken symlink or a symlink to a dir, skip it
+			if fi, err := os.Stat(path); err != nil || fi.IsDir() {
+				continue
+			}
+			secret.Data[f.Name()], err = ioutil.ReadFile(path)
 			if err != nil {
 				return err
 			}

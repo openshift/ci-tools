@@ -9,7 +9,6 @@ import (
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
-	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 
@@ -17,10 +16,11 @@ import (
 )
 
 type testStep struct {
-	config    api.TestStepConfiguration
-	podClient coreclientset.PodsGetter
-	istClient imageclientset.ImageStreamTagsGetter
-	jobSpec   *JobSpec
+	config      api.TestStepConfiguration
+	podClient   PodClient
+	istClient   imageclientset.ImageStreamTagsGetter
+	artifactDir string
+	jobSpec     *JobSpec
 }
 
 func (s *testStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
@@ -40,10 +40,19 @@ func (s *testStep) Run(ctx context.Context, dry bool) error {
 				{
 					Name:    "test",
 					Image:   fmt.Sprintf("%s:%s", PipelineImageStream, s.config.From),
-					Command: []string{"/bin/bash", "-c", "#!/bin/bash\nset -euo pipefail\n" + s.config.Commands},
+					Command: []string{"/bin/sh", "-c", "#!/bin/sh\nset -euo pipefail\n" + s.config.Commands},
 				},
 			},
 		},
+	}
+	var podsWithArtifacts podContainersMap
+	if s.gatherArtifacts() {
+		pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, coreapi.VolumeMount{
+			Name:      "artifacts",
+			MountPath: s.config.ArtifactDir,
+		})
+		addArtifactsContainer(pod, s.config.ArtifactDir)
+		podsWithArtifacts = podContainersMap{pod.Name: {"test": struct{}{}}}
 	}
 	if owner := s.jobSpec.Owner(); owner != nil {
 		pod.OwnerReferences = append(pod.OwnerReferences, *owner)
@@ -68,11 +77,21 @@ func (s *testStep) Run(ctx context.Context, dry bool) error {
 		return err
 	}
 
-	if err := waitForPodCompletion(s.podClient.Pods(s.jobSpec.Namespace()), pod.Name); err != nil {
+	// when the test container terminates and artifact directory has been set, grab everything under the directory
+	notifyFn, err := newPodArtifactWorker(s.podClient, s.artifactDir, s.config.As, podsWithArtifacts)
+	if err != nil {
+		return err
+	}
+
+	if err := waitForPodCompletion(s.podClient.Pods(s.jobSpec.Namespace()), pod.Name, notifyFn); err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func (s *testStep) gatherArtifacts() bool {
+	return len(s.config.ArtifactDir) > 0 && len(s.artifactDir) > 0
 }
 
 func (s *testStep) Done() (bool, error) {
@@ -100,10 +119,11 @@ func (s *testStep) Provides() (api.ParameterMap, api.StepLink) {
 
 func (s *testStep) Name() string { return s.config.As }
 
-func TestStep(config api.TestStepConfiguration, podClient coreclientset.PodsGetter, jobSpec *JobSpec) api.Step {
+func TestStep(config api.TestStepConfiguration, podClient PodClient, artifactDir string, jobSpec *JobSpec) api.Step {
 	return &testStep{
-		config:    config,
-		podClient: podClient,
-		jobSpec:   jobSpec,
+		config:      config,
+		podClient:   podClient,
+		artifactDir: artifactDir,
+		jobSpec:     jobSpec,
 	}
 }

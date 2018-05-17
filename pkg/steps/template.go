@@ -30,7 +30,8 @@ type templateExecutionStep struct {
 	template       *templateapi.Template
 	params         *DeferredParameters
 	templateClient TemplateClient
-	podClient      coreclientset.PodsGetter
+	podClient      PodClient
+	artifactDir    string
 	jobSpec        *JobSpec
 }
 
@@ -54,7 +55,9 @@ func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 		if s.params.Has(p.Name) {
 			value, err := s.params.Get(p.Name)
 			if err != nil {
-				return fmt.Errorf("cannot resolve parameter %s into template %s: %v", p.Name, s.template.Name, err)
+				if !dry {
+					return fmt.Errorf("cannot resolve parameter %s into template %s: %v", p.Name, s.template.Name, err)
+				}
 			}
 			if len(value) > 0 {
 				s.template.Parameters[i].Value = value
@@ -73,6 +76,8 @@ func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 			}
 		}
 	}
+
+	podsWithArtifacts := addArtifactsToTemplate(s.template)
 
 	if dry {
 		j, _ := json.MarshalIndent(s.template, "", "  ")
@@ -101,7 +106,12 @@ func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 		instance.OwnerReferences = append(instance.OwnerReferences, *owner)
 	}
 
-	instance, err := createOrRestartTemplateInstance(s.templateClient.TemplateInstances(s.jobSpec.Namespace()), s.podClient.Pods(s.jobSpec.Namespace()), instance)
+	notifyFn, err := newPodArtifactWorker(s.podClient, s.artifactDir, s.template.Name, podsWithArtifacts)
+	if err != nil {
+		return err
+	}
+
+	instance, err = createOrRestartTemplateInstance(s.templateClient.TemplateInstances(s.jobSpec.Namespace()), s.podClient.Pods(s.jobSpec.Namespace()), instance)
 	if err != nil {
 		return err
 	}
@@ -120,7 +130,7 @@ func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 	for _, ref := range instance.Status.Objects {
 		switch {
 		case ref.Ref.Kind == "Pod" && ref.Ref.APIVersion == "v1":
-			if err := waitForPodCompletion(s.podClient.Pods(s.jobSpec.Namespace()), ref.Ref.Name); err != nil {
+			if err := waitForPodCompletion(s.podClient.Pods(s.jobSpec.Namespace()), ref.Ref.Name, notifyFn); err != nil {
 				return err
 			}
 		}
@@ -184,12 +194,13 @@ func (s *templateExecutionStep) Provides() (api.ParameterMap, api.StepLink) {
 
 func (s *templateExecutionStep) Name() string { return s.template.Name }
 
-func TemplateExecutionStep(template *templateapi.Template, params *DeferredParameters, podClient coreclientset.PodsGetter, templateClient TemplateClient, jobSpec *JobSpec) api.Step {
+func TemplateExecutionStep(template *templateapi.Template, params *DeferredParameters, podClient PodClient, templateClient TemplateClient, artifactDir string, jobSpec *JobSpec) api.Step {
 	return &templateExecutionStep{
 		template:       template,
 		params:         params,
 		podClient:      podClient,
 		templateClient: templateClient,
+		artifactDir:    artifactDir,
 		jobSpec:        jobSpec,
 	}
 }
@@ -483,7 +494,6 @@ func waitForCompletedPodDeletion(podClient coreclientset.PodInterface, name stri
 		return err
 	}
 
-	log.Printf("Waiting for pod %s to be deleted ...", name)
 	for {
 		pod, err := podClient.Get(name, meta.GetOptions{})
 		if errors.IsNotFound(err) {
@@ -495,14 +505,17 @@ func waitForCompletedPodDeletion(podClient coreclientset.PodInterface, name stri
 		if pod.UID != uid {
 			return nil
 		}
+		log.Printf("Waiting for pod %s to be deleted ...", name)
 		time.Sleep(2 * time.Second)
 	}
 }
 
-func waitForPodCompletion(podClient coreclientset.PodInterface, name string) error {
+type ContainerCompleteFunc func(pod *coreapi.Pod, containerName string)
+
+func waitForPodCompletion(podClient coreclientset.PodInterface, name string, notifyFn ContainerCompleteFunc) error {
 	completed := make(map[string]time.Time)
 	for {
-		retry, err := waitForPodCompletionOrTimeout(podClient, name, completed)
+		retry, err := waitForPodCompletionOrTimeout(podClient, name, completed, notifyFn)
 		if err != nil {
 			return err
 		}
@@ -513,7 +526,7 @@ func waitForPodCompletion(podClient coreclientset.PodInterface, name string) err
 	return nil
 }
 
-func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name string, completed map[string]time.Time) (bool, error) {
+func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name string, completed map[string]time.Time, notifyFn ContainerCompleteFunc) (bool, error) {
 	list, err := podClient.List(meta.ListOptions{FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String()})
 	if err != nil {
 		return false, err
@@ -525,7 +538,7 @@ func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name st
 	if pod.Spec.RestartPolicy == coreapi.RestartPolicyAlways {
 		return false, nil
 	}
-	podLogNewFailedContainers(podClient, pod, completed)
+	podLogNewFailedContainers(podClient, pod, completed, notifyFn)
 	if podJobIsOK(pod) {
 		log.Printf("Pod %s already succeeded in %s", pod.Name, podDuration(pod))
 		return false, nil
@@ -550,7 +563,7 @@ func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name st
 			return true, nil
 		}
 		if pod, ok := event.Object.(*coreapi.Pod); ok {
-			podLogNewFailedContainers(podClient, pod, completed)
+			podLogNewFailedContainers(podClient, pod, completed, notifyFn)
 			if podJobIsOK(pod) {
 				log.Printf("Pod %s succeeded after %s", pod.Name, podDuration(pod))
 				return false, nil
@@ -560,7 +573,7 @@ func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name st
 			}
 		}
 		if event.Type == watch.Deleted {
-			podLogNewFailedContainers(podClient, pod, completed)
+			podLogNewFailedContainers(podClient, pod, completed, notifyFn)
 			return false, fmt.Errorf("the pod %s/%s was deleted without completing after %s (failed containers: %s)", pod.Namespace, pod.Name, podDuration(pod), strings.Join(namesFromMap(completed), ", "))
 		}
 	}
@@ -642,7 +655,7 @@ func namesFromMap(completed map[string]time.Time) []string {
 	return names
 }
 
-func podLogNewFailedContainers(podClient coreclientset.PodInterface, pod *coreapi.Pod, completed map[string]time.Time) {
+func podLogNewFailedContainers(podClient coreclientset.PodInterface, pod *coreapi.Pod, completed map[string]time.Time, notifyFn ContainerCompleteFunc) {
 	var statuses []coreapi.ContainerStatus
 	statuses = append(statuses, pod.Status.InitContainerStatuses...)
 	statuses = append(statuses, pod.Status.ContainerStatuses...)
@@ -652,10 +665,17 @@ func podLogNewFailedContainers(podClient coreclientset.PodInterface, pod *coreap
 			continue
 		}
 		s := status.State.Terminated
-		if s == nil || s.ExitCode == 0 {
+		if s == nil {
 			continue
 		}
 		completed[status.Name] = s.FinishedAt.Time
+		if notifyFn != nil {
+			notifyFn(pod, status.Name)
+		}
+
+		if s.ExitCode == 0 {
+			continue
+		}
 
 		if s, err := podClient.GetLogs(pod.Name, &coreapi.PodLogOptions{
 			Container: status.Name,

@@ -41,7 +41,7 @@ const (
 // them, returning the full set of steps requires for the
 // build, including defaulted steps, generated steps and
 // all raw steps that the user provided.
-func FromConfig(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec, templates []*templateapi.Template, paramFile string, clusterConfig *rest.Config) ([]api.Step, error) {
+func FromConfig(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec, templates []*templateapi.Template, paramFile, artifactDir string, clusterConfig *rest.Config) ([]api.Step, error) {
 	var buildSteps []api.Step
 
 	var buildClient BuildClient
@@ -49,10 +49,10 @@ func FromConfig(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec, templat
 	var imageStreamTagsGetter imageclientset.ImageStreamTagsGetter
 	var routeGetter routeclientset.RoutesGetter
 	var deploymentGetter appsclientset.DeploymentConfigsGetter
-	var podGetter coreclientset.PodsGetter
 	var templateClient TemplateClient
 	var configMapGetter coreclientset.ConfigMapsGetter
 	var serviceGetter coreclientset.ServicesGetter
+	var podClient PodClient
 
 	if clusterConfig != nil {
 		buildGetter, err := buildclientset.NewForConfig(clusterConfig)
@@ -91,7 +91,8 @@ func FromConfig(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec, templat
 		}
 		serviceGetter = coreGetter
 		configMapGetter = coreGetter
-		podGetter = coreGetter
+
+		podClient = NewPodClient(coreGetter, clusterConfig, coreGetter.RESTClient())
 	}
 
 	params := NewDeferredParameters()
@@ -122,7 +123,7 @@ func FromConfig(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec, templat
 			step = ReleaseImagesTagStep(*rawStep.ReleaseImagesTagStepConfiguration, imageStreamTagsGetter, imageStreamGetter, routeGetter, configMapGetter, jobSpec)
 			imageStepLinks = append(imageStepLinks, step.Creates()...)
 		} else if rawStep.TestStepConfiguration != nil {
-			step = TestStep(*rawStep.TestStepConfiguration, podGetter, jobSpec)
+			step = TestStep(*rawStep.TestStepConfiguration, podClient, artifactDir, jobSpec)
 		}
 		provides, link := step.Provides()
 		for name, fn := range provides {
@@ -132,7 +133,7 @@ func FromConfig(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec, templat
 	}
 
 	for _, template := range templates {
-		step := TemplateExecutionStep(template, params, podGetter, templateClient, jobSpec)
+		step := TemplateExecutionStep(template, params, podClient, templateClient, artifactDir, jobSpec)
 		buildSteps = append(buildSteps, step)
 	}
 

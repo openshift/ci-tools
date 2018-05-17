@@ -54,7 +54,9 @@ func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 		if s.params.Has(p.Name) {
 			value, err := s.params.Get(p.Name)
 			if err != nil {
-				return fmt.Errorf("cannot resolve parameter %s into template %s: %v", p.Name, s.template.Name, err)
+				if !dry {
+					return fmt.Errorf("cannot resolve parameter %s into template %s: %v", p.Name, s.template.Name, err)
+				}
 			}
 			if len(value) > 0 {
 				s.template.Parameters[i].Value = value
@@ -483,7 +485,6 @@ func waitForCompletedPodDeletion(podClient coreclientset.PodInterface, name stri
 		return err
 	}
 
-	log.Printf("Waiting for pod %s to be deleted ...", name)
 	for {
 		pod, err := podClient.Get(name, meta.GetOptions{})
 		if errors.IsNotFound(err) {
@@ -495,6 +496,7 @@ func waitForCompletedPodDeletion(podClient coreclientset.PodInterface, name stri
 		if pod.UID != uid {
 			return nil
 		}
+		log.Printf("Waiting for pod %s to be deleted ...", name)
 		time.Sleep(2 * time.Second)
 	}
 }

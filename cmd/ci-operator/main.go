@@ -92,6 +92,12 @@ of dynamic parameters that are inferred from previous steps. These parameters ar
 
 Dynamic environment variables are overriden by process environment variables.
 
+Both test and template jobs can gather artifacts created by pods. Set
+--artifact-dir to define the top level artifact directory, and any test task
+that defines artifact_dir or template that has an "artifacts" volume mounted
+into a container will have artifacts extracted after the container has completed.
+Errors in artifact extraction will not cause build failures.
+
 `
 
 func main() {
@@ -144,10 +150,12 @@ type options struct {
 
 	target string
 
-	verbose     bool
-	help        bool
-	dry         bool
+	verbose bool
+	help    bool
+	dry     bool
+
 	writeParams string
+	artifactDir string
 
 	namespace           string
 	baseNamespace       string
@@ -183,6 +191,7 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.DurationVar(&opt.idleCleanupDuration, "delete-when-idle", opt.idleCleanupDuration, "If no pod is running for longer than this interval, delete the namespace.")
 
 	// output control
+	flag.StringVar(&opt.artifactDir, "artifact-dir", "", "If set grab artifacts from test and template jobs.")
 	flag.StringVar(&opt.writeParams, "write-params", "", "If set write an env-compatible file with the output of the job.")
 
 	return opt
@@ -279,7 +288,7 @@ func (o *options) Run() error {
 	}()
 
 	// load the graph from the configuration
-	buildSteps, err := steps.FromConfig(o.configSpec, o.jobSpec, o.templates, o.writeParams, o.clusterConfig)
+	buildSteps, err := steps.FromConfig(o.configSpec, o.jobSpec, o.templates, o.writeParams, o.artifactDir, o.clusterConfig)
 	if err != nil {
 		return fmt.Errorf("failed to generate steps from config: %v", err)
 	}

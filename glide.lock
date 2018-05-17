@@ -1,6 +1,10 @@
 hash: 807902f7a8816796427eae112c9ccebfefebe69d76e075fd8b68298363ca0ad6
-updated: 2018-02-08T11:31:49.324755063-08:00
+updated: 2018-05-16T23:26:41.003170956-04:00
 imports:
+- name: github.com/docker/spdystream
+  version: 449fdfce4d962303d702fec724ef0ad181c92528
+  subpackages:
+  - spdy
 - name: github.com/emicklei/go-restful
   version: ff4f55a206334ef123e4f79bbf348980da81ca46
   subpackages:
@@ -59,17 +63,19 @@ imports:
   - jlexer
   - jwriter
 - name: github.com/openshift/api
-  version: 0d921e363e951d89f583292c60d013c318df64dc
+  version: 54917e0ae540d86047a321158f860f2143c1c81d
   subpackages:
   - apps/v1
   - build/v1
   - image/docker10
   - image/dockerpre012
   - image/v1
+  - pkg/serialization
   - project/v1
   - route/v1
+  - template/v1
 - name: github.com/openshift/client-go
-  version: 2984d09fd660358a074693faa5d2dc527088acd3
+  version: c6778f7b6f84c0d3a26cb3bae1d8fd6282bb8025
   subpackages:
   - apps/clientset/versioned/scheme
   - apps/clientset/versioned/typed/apps/v1
@@ -82,6 +88,8 @@ imports:
   - project/clientset/versioned/typed/project/v1
   - route/clientset/versioned/scheme
   - route/clientset/versioned/typed/route/v1
+  - template/clientset/versioned/scheme
+  - template/clientset/versioned/typed/template/v1
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/PuerkitoBio/purell
@@ -97,13 +105,10 @@ imports:
 - name: golang.org/x/net
   version: 1c05540f6879653db88113bc4a2b70aec4bd491f
   subpackages:
-  - html
-  - html/atom
   - http2
   - http2/hpack
   - idna
   - lex/httplex
-  - websocket
 - name: golang.org/x/sys
   version: 95c6576299259db960f6c5b9b69ea52422860fce
   subpackages:
@@ -128,7 +133,7 @@ imports:
 - name: gopkg.in/yaml.v2
   version: 53feefa2559fb8dfa8d81baad31be332c97d6c77
 - name: k8s.io/api
-  version: acf347b865f29325eb61f4cd2df11e86e073a5ee
+  version: 9273ee02527c608cecc74969b3e489f5dba686da
   subpackages:
   - admissionregistration/v1alpha1
   - admissionregistration/v1beta1
@@ -159,7 +164,7 @@ imports:
   - storage/v1alpha1
   - storage/v1beta1
 - name: k8s.io/apimachinery
-  version: 19e3f5aa3adca672c153d324e6b7d82ff8935f03
+  version: 21efb2924c7cf1920f76af05b1fd6a325bf46dfc
   subpackages:
   - pkg/api/errors
   - pkg/api/meta
@@ -184,9 +189,12 @@ imports:
   - pkg/util/clock
   - pkg/util/errors
   - pkg/util/framer
+  - pkg/util/httpstream
+  - pkg/util/httpstream/spdy
   - pkg/util/intstr
   - pkg/util/json
   - pkg/util/net
+  - pkg/util/remotecommand
   - pkg/util/runtime
   - pkg/util/sets
   - pkg/util/validation
@@ -195,6 +203,7 @@ imports:
   - pkg/util/yaml
   - pkg/version
   - pkg/watch
+  - third_party/forked/golang/netutil
   - third_party/forked/golang/reflect
 - name: k8s.io/client-go
   version: 9389c055a838d4f208b699b3c7c51b70f2368861
@@ -202,6 +211,7 @@ imports:
   - discovery
   - kubernetes/scheme
   - kubernetes/typed/core/v1
+  - kubernetes/typed/rbac/v1
   - pkg/version
   - rest
   - rest/watch
@@ -212,14 +222,16 @@ imports:
   - tools/clientcmd/api/v1
   - tools/metrics
   - tools/reference
+  - tools/remotecommand
   - transport
+  - transport/spdy
   - util/cert
+  - util/exec
   - util/flowcontrol
   - util/homedir
   - util/integer
 - name: k8s.io/kube-openapi
-  version: 39a7bf85c140f972372c2a0d1ee40adbf0c8bfe1
+  version: 7ee50c0aa8059d610950c952a9ed7a5e33ab336a
   subpackages:
   - pkg/common
-  - pkg/util/proto
 testImports: []

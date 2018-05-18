@@ -401,6 +401,7 @@ func (o *options) initializeNamespace() error {
 	}
 
 	log.Printf("Creating namespace %s", o.namespace)
+	retries := 5
 	for {
 		project, err := projectGetter.ProjectV1().ProjectRequests().Create(&projectapi.ProjectRequest{
 			ObjectMeta: meta.ObjectMeta{
@@ -416,6 +417,12 @@ func (o *options) initializeNamespace() error {
 			project, err = projectGetter.ProjectV1().Projects().Get(o.namespace, meta.GetOptions{})
 			if err != nil {
 				if errors.IsNotFound(err) {
+					continue
+				}
+				// wait a few seconds for auth caches to catch up
+				if errors.IsForbidden(err) && retries > 0 {
+					retries--
+					time.Sleep(time.Second)
 					continue
 				}
 				return fmt.Errorf("cannot retrieve test namespace: %v", err)

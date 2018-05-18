@@ -98,10 +98,7 @@ func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 		instance.OwnerReferences = append(instance.OwnerReferences, *owner)
 	}
 
-	notifier, err := newPodArtifactWorker(s.podClient, s.artifactDir, s.jobSpec.Namespace(), s.template.Name, podsWithArtifacts)
-	if err != nil {
-		return err
-	}
+	var notifier ContainerNotifier
 
 	go func() {
 		<-ctx.Done()
@@ -114,12 +111,30 @@ func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 		}
 	}()
 
-	instance, err = createOrRestartTemplateInstance(s.templateClient.TemplateInstances(s.jobSpec.Namespace()), s.podClient.Pods(s.jobSpec.Namespace()), instance)
+	instance, err := createOrRestartTemplateInstance(s.templateClient.TemplateInstances(s.jobSpec.Namespace()), s.podClient.Pods(s.jobSpec.Namespace()), instance)
 	if err != nil {
 		return err
 	}
 
 	instance, err = waitForTemplateInstanceReady(s.templateClient.TemplateInstances(s.jobSpec.Namespace()), instance)
+	if err != nil {
+		return err
+	}
+
+	// now that the pods have been resolved by the template, add them to the artifact map
+	podsWithArtifacts = make(podContainersMap)
+	for _, ref := range instance.Status.Objects {
+		switch {
+		case ref.Ref.Kind == "Pod" && ref.Ref.APIVersion == "v1":
+			pod, err := s.podClient.Pods(s.jobSpec.Namespace()).Get(ref.Ref.Name, meta.GetOptions{})
+			if err != nil {
+				return fmt.Errorf("unable to retrieve pod from template - possibly deleted: %v", err)
+			}
+			addArtifactContainersFromPod(pod, podsWithArtifacts)
+		}
+	}
+
+	notifier, err = newPodArtifactWorker(s.podClient, s.artifactDir, s.jobSpec.Namespace(), s.template.Name, podsWithArtifacts)
 	if err != nil {
 		return err
 	}
@@ -138,7 +153,6 @@ func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 			}
 		}
 	}
-
 	return nil
 }
 
@@ -344,14 +358,15 @@ func isPodCompleted(podClient coreclientset.PodInterface, name string) (bool, er
 	if pod.Status.Phase == coreapi.PodSucceeded || pod.Status.Phase == coreapi.PodFailed {
 		return true, nil
 	}
-	for _, status := range pod.Status.InitContainerStatuses {
-		if s := status.State.Terminated; s != nil {
-			if s.ExitCode != 0 {
-				return true, nil
-			}
+	for _, status := range append(append([]coreapi.ContainerStatus{}, pod.Status.InitContainerStatuses...), pod.Status.ContainerStatuses...) {
+		// don't fail until everything has started at least once
+		if status.State.Waiting != nil && status.LastTerminationState.Terminated == nil {
+			return false, nil
 		}
-	}
-	for _, status := range pod.Status.ContainerStatuses {
+		// artifacts doesn't count as requiring completion
+		if status.Name == "artifacts" {
+			continue
+		}
 		if s := status.State.Terminated; s != nil {
 			if s.ExitCode != 0 {
 				return true, nil
@@ -588,11 +603,13 @@ func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name st
 			if podJobIsFailed(pod) {
 				return false, fmt.Errorf("the pod %s/%s failed after %s (failed containers: %s)", pod.Namespace, pod.Name, podDuration(pod), strings.Join(namesFromMap(completed), ", "))
 			}
+			continue
 		}
 		if event.Type == watch.Deleted {
 			podLogNewFailedContainers(podClient, pod, completed, notifier)
 			return false, fmt.Errorf("the pod %s/%s was deleted without completing after %s (failed containers: %s)", pod.Namespace, pod.Name, podDuration(pod), strings.Join(namesFromMap(completed), ", "))
 		}
+		log.Printf("error: Unrecognized event in watch: %v %#v", event.Type, event.Object)
 	}
 }
 
@@ -604,7 +621,7 @@ func podDuration(pod *coreapi.Pod) time.Duration {
 	var end meta.Time
 	for _, status := range pod.Status.ContainerStatuses {
 		if s := status.State.Terminated; s != nil {
-			if end.IsZero() || s.FinishedAt.Time.Before(end.Time) {
+			if end.IsZero() || s.FinishedAt.Time.After(end.Time) {
 				end = s.FinishedAt
 			}
 		}
@@ -612,7 +629,7 @@ func podDuration(pod *coreapi.Pod) time.Duration {
 	if end.IsZero() {
 		for _, status := range pod.Status.InitContainerStatuses {
 			if s := status.State.Terminated; s != nil && s.ExitCode != 0 {
-				if end.IsZero() || s.FinishedAt.Time.Before(end.Time) {
+				if end.IsZero() || s.FinishedAt.Time.After(end.Time) {
 					end = s.FinishedAt
 					break
 				}
@@ -639,21 +656,46 @@ func templateInstanceReady(instance *templateapi.TemplateInstance) (ready bool, 
 }
 
 func podJobIsOK(p *coreapi.Pod) bool {
-	return p.Status.Phase == coreapi.PodSucceeded
+	if p.Status.Phase == coreapi.PodSucceeded {
+		return true
+	}
+	// if all containers except artifacts are in terminated and have exit code 0, we're ok
+	for _, status := range append(append([]coreapi.ContainerStatus{}, p.Status.InitContainerStatuses...), p.Status.ContainerStatuses...) {
+		// don't succeed until everything has started at least once
+		if status.State.Waiting != nil && status.LastTerminationState.Terminated == nil {
+			return false
+		}
+		if status.Name == "artifacts" {
+			continue
+		}
+		s := status.State.Terminated
+		if s == nil {
+			return false
+		}
+		if s.ExitCode != 0 {
+			return false
+		}
+	}
+	return true
+
 }
 
 func podJobIsFailed(p *coreapi.Pod) bool {
 	if p.Status.Phase == coreapi.PodFailed {
 		return true
 	}
-	for _, status := range p.Status.InitContainerStatuses {
-		if s := status.State.Terminated; s != nil {
-			if s.ExitCode != 0 {
-				return true
-			}
-		}
+	if p.Status.Phase == coreapi.PodPending || p.Status.Phase == coreapi.PodUnknown {
+		return false
 	}
-	for _, status := range p.Status.ContainerStatuses {
+	// if any container is in a non-zero status we have failed
+	for _, status := range append(append([]coreapi.ContainerStatus{}, p.Status.InitContainerStatuses...), p.Status.ContainerStatuses...) {
+		// don't fail until everything has started at least once
+		if status.State.Waiting != nil && status.LastTerminationState.Terminated == nil {
+			return false
+		}
+		if status.Name == "artifacts" {
+			continue
+		}
 		if s := status.State.Terminated; s != nil {
 			if s.ExitCode != 0 {
 				return true

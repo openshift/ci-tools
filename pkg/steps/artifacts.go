@@ -112,6 +112,7 @@ func copyArtifacts(podClient PodClient, into, ns, name, containerName string, pa
 		}
 		size += h.Size
 	}
+
 	if size > 0 {
 		log.Printf("Copied %0.2fMi of artifacts from %s to %s", float64(size)/1000000, name, into)
 	}
@@ -173,7 +174,7 @@ while true; do
 		echo "Artifacts extracted"
 		exit 0
 	fi
-	sleep 10 & wait
+	sleep 5 & wait
 done
 `,
 		},
@@ -210,7 +211,7 @@ func newPodArtifactWorker(podClient PodClient, dir, namespace, name string, pods
 	}
 
 	var pods []string
-	for podName, _ := range podsWithArtifacts {
+	for podName := range podsWithArtifacts {
 		pods = append(pods, podName)
 	}
 	sort.Strings(pods)
@@ -236,7 +237,13 @@ func (w *artifactWorker) run(artifactDir string) {
 		if err := copyArtifacts(w.podClient, artifactDir, c.pod.Namespace, c.pod.Name, "artifacts", []string{"/tmp/artifacts"}); err != nil {
 			log.Printf("error: Unable to retrieve artifacts from pod %s: %v", c.pod.Name, err)
 		}
-		removeFile(w.podClient, c.pod.Namespace, c.pod.Name, "artifacts", []string{"/tmp/done"})
+		if err := removeFile(w.podClient, c.pod.Namespace, c.pod.Name, "artifacts", []string{"/tmp/done"}); err != nil {
+			log.Printf("error: Unable to signal to artifacts container to terminate in pod %s: %v", c.pod.Name, err)
+		}
+		// indicate we are done with this pod by removing the map entry
+		w.lock.Lock()
+		delete(w.remaining, c.pod.Name)
+		w.lock.Unlock()
 	}
 }
 
@@ -259,10 +266,7 @@ func (w *artifactWorker) Notify(pod *coreapi.Pod, containerName string) {
 	}
 	delete(artifactContainers, containerName)
 	if len(artifactContainers) == 0 {
-		delete(w.remaining, pod.Name)
-	}
-	// when all containers in a given pod that output artifacts have completed, exit
-	if len(artifactContainers) == 0 {
+		// when all containers in a given pod that output artifacts have completed, exit
 		w.ch <- namedContainer{pod: pod, container: containerName}
 	}
 	if len(w.remaining) == 0 {
@@ -273,7 +277,34 @@ func (w *artifactWorker) Notify(pod *coreapi.Pod, containerName string) {
 func (w *artifactWorker) Done(podName string) bool {
 	w.lock.Lock()
 	defer w.lock.Unlock()
-	return len(w.remaining[podName]) == 0
+	_, ok := w.remaining[podName]
+	return !ok
+}
+
+func addArtifactContainersFromPod(pod *coreapi.Pod, artifacts map[string]map[string]struct{}) map[string]map[string]struct{} {
+	s := artifacts[pod.Name]
+	if s == nil {
+		s = make(map[string]struct{})
+		artifacts[pod.Name] = s
+	}
+	for _, container := range append(append([]coreapi.Container{}, pod.Spec.InitContainers...), pod.Spec.Containers...) {
+		if container.Name == "artifacts" {
+			continue
+		}
+		if containerHasVolumeName(container, "artifacts") {
+			s[container.Name] = struct{}{}
+		}
+	}
+	return artifacts
+}
+
+func containerHasVolumeName(container coreapi.Container, name string) bool {
+	for _, v := range container.VolumeMounts {
+		if v.Name == name {
+			return true
+		}
+	}
+	return true
 }
 
 func addArtifactsToTemplate(template *templateapi.Template) map[string]map[string]struct{} {

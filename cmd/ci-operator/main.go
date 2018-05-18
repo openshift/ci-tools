@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -157,6 +158,7 @@ type options struct {
 	writeParams string
 	artifactDir string
 
+	gitRef              string
 	namespace           string
 	baseNamespace       string
 	idleCleanupDuration time.Duration
@@ -194,6 +196,9 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.StringVar(&opt.artifactDir, "artifact-dir", "", "If set grab artifacts from test and template jobs.")
 	flag.StringVar(&opt.writeParams, "write-params", "", "If set write an env-compatible file with the output of the job.")
 
+	// experimental flags
+	flag.StringVar(&opt.gitRef, "git-ref", "", "[EXPERIMENTAL] Populate the job spec from this local Git reference")
+
 	return opt
 }
 
@@ -222,7 +227,11 @@ func (o *options) Complete() error {
 
 	jobSpec, err := steps.ResolveSpecFromEnv()
 	if err != nil {
-		return fmt.Errorf("failed to resolve job spec: %v", err)
+		spec, refErr := jobSpecFromGitRef(o.gitRef)
+		if refErr != nil {
+			return fmt.Errorf("failed to resolve job spec: %v", err)
+		}
+		jobSpec = spec
 	}
 	jobSpec.SetBaseNamespace(o.baseNamespace)
 	o.jobSpec = jobSpec
@@ -612,4 +621,22 @@ func jobDescription(job *steps.JobSpec, config *api.ReleaseBuildConfiguration) s
 		return fmt.Sprintf("%s on https://github.com/%s/%s\n\n%s", job.Job, job.Refs.Org, job.Refs.Repo, strings.Join(links, "\n"))
 	}
 	return fmt.Sprintf("%s on https://github.com/%s/%s ref=%s commit=%s", job.Job, job.Refs.Org, job.Refs.Repo, job.Refs.BaseRef, job.Refs.BaseSHA)
+}
+
+func jobSpecFromGitRef(ref string) (*steps.JobSpec, error) {
+	parts := strings.Split(ref, "@")
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("must be ORG/NAME@COMMIT")
+	}
+	prefix := strings.Split(parts[0], "/")
+	if len(prefix) != 2 {
+		return nil, fmt.Errorf("must be ORG/NAME@COMMIT")
+	}
+	out, err := exec.Command("git", "ls-remote", fmt.Sprintf("https://github.com/%s/%s.git", prefix[0], prefix[1]), parts[1]).Output()
+	sha := strings.Split(strings.Split(string(out), "\n")[0], "\t")[0]
+	if len(sha) == 0 || err != nil {
+		return &steps.JobSpec{Type: steps.PeriodicJob, Job: "dev", Refs: steps.Refs{Org: prefix[0], Repo: prefix[1], BaseSHA: parts[1]}}, nil
+	}
+	log.Printf("Resolved %s to commit %s", ref, sha)
+	return &steps.JobSpec{Type: steps.PeriodicJob, Job: "dev", Refs: steps.Refs{Org: prefix[0], Repo: prefix[1], BaseRef: parts[1], BaseSHA: sha}}, nil
 }

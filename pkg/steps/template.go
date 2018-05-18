@@ -418,32 +418,6 @@ func waitForCompletedTemplateInstanceDeletion(templateClient templateclientset.T
 		return nil
 	}
 
-	// if the instance is running
-	if instance.DeletionTimestamp == nil {
-		ok, err := templateInstanceReady(instance)
-		if err != nil {
-			return err
-		}
-		// creating template instances are left to run
-		if !ok {
-			return nil
-		}
-
-		// if any of the pods referenced by the template are still running, just continue
-		for _, ref := range instance.Status.Objects {
-			switch {
-			case ref.Ref.Kind == "Pod" && ref.Ref.APIVersion == "v1":
-				ok, err := isPodCompleted(podClient, ref.Ref.Name)
-				if err != nil {
-					return err
-				}
-				if !ok {
-					return nil
-				}
-			}
-		}
-	}
-
 	// delete the instance we had before, otherwise another user has relaunched this template
 	uid := instance.UID
 	policy := meta.DeletePropagationForeground
@@ -461,7 +435,7 @@ func waitForCompletedTemplateInstanceDeletion(templateClient templateclientset.T
 	for {
 		instance, err := templateClient.Get(name, meta.GetOptions{})
 		if errors.IsNotFound(err) {
-			return nil
+			break
 		}
 		if err != nil {
 			return err
@@ -472,6 +446,15 @@ func waitForCompletedTemplateInstanceDeletion(templateClient templateclientset.T
 		log.Printf("Waiting for template instance %s to be deleted ...", name)
 		time.Sleep(2 * time.Second)
 	}
+
+	// TODO: we have to wait for all pods because graceful deletion foreground isn't working on template instance
+	for _, ref := range instance.Status.Objects {
+		switch {
+		case ref.Ref.Kind == "Pod" && ref.Ref.APIVersion == "v1":
+			waitForPodCompletion(podClient, ref.Ref.Name, nil)
+		}
+	}
+	return nil
 }
 
 func createOrRestartPod(podClient coreclientset.PodInterface, pod *coreapi.Pod) (*coreapi.Pod, error) {

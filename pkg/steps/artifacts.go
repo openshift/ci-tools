@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 
@@ -112,7 +113,7 @@ func copyArtifacts(podClient PodClient, into, ns, name, containerName string, pa
 		size += h.Size
 	}
 	if size > 0 {
-		log.Printf("Copied %0.2fMi of artifacts to %s", float64(size)/1000000, into)
+		log.Printf("Copied %0.2fMi of artifacts from %s to %s", float64(size)/1000000, name, into)
 	}
 
 	return nil
@@ -184,7 +185,6 @@ type podContainersMap map[string]map[string]struct{}
 type namedContainer struct {
 	pod       *coreapi.Pod
 	container string
-	done      bool
 }
 
 type artifactWorker struct {
@@ -209,6 +209,13 @@ func newPodArtifactWorker(podClient PodClient, dir, namespace, name string, pods
 		return nil, err
 	}
 
+	var pods []string
+	for podName, _ := range podsWithArtifacts {
+		pods = append(pods, podName)
+	}
+	sort.Strings(pods)
+	log.Printf("Artifacts will be gathered from the following pods: %s", strings.Join(pods, ", "))
+
 	// stream artifacts in the background
 	w := &artifactWorker{
 		podClient: podClient,
@@ -229,9 +236,7 @@ func (w *artifactWorker) run(artifactDir string) {
 		if err := copyArtifacts(w.podClient, artifactDir, c.pod.Namespace, c.pod.Name, "artifacts", []string{"/tmp/artifacts"}); err != nil {
 			log.Printf("error: Unable to retrieve artifacts from pod %s: %v", c.pod.Name, err)
 		}
-		if c.done {
-			removeFile(w.podClient, c.pod.Namespace, c.pod.Name, "artifacts", []string{"/tmp/done"})
-		}
+		removeFile(w.podClient, c.pod.Namespace, c.pod.Name, "artifacts", []string{"/tmp/done"})
 	}
 }
 
@@ -256,7 +261,10 @@ func (w *artifactWorker) Notify(pod *coreapi.Pod, containerName string) {
 	if len(artifactContainers) == 0 {
 		delete(w.remaining, pod.Name)
 	}
-	w.ch <- namedContainer{pod: pod, container: containerName, done: len(artifactContainers) == 0}
+	// when all containers in a given pod that output artifacts have completed, exit
+	if len(artifactContainers) == 0 {
+		w.ch <- namedContainer{pod: pod, container: containerName}
+	}
 	if len(w.remaining) == 0 {
 		close(w.ch)
 	}

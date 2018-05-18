@@ -1,7 +1,7 @@
 kind: Template
 apiVersion: template.openshift.io/v1
 metadata:
-  name: artifacts
+  name: test-with-artifacts
 
 parameters:
 - name: NAMESPACE
@@ -25,7 +25,7 @@ objects:
 - kind: Pod
   apiVersion: v1
   metadata:
-    name: artifacts
+    name: test-with-artifacts
     namespace: ${NAMESPACE}
   spec:
     restartPolicy: Never

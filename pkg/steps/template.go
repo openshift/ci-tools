@@ -85,14 +85,6 @@ func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 		return nil
 	}
 
-	go func() {
-		<-ctx.Done()
-		log.Printf("cleanup: Deleting template %s", s.template.Name)
-		if err := s.templateClient.TemplateInstances(s.jobSpec.Namespace()).Delete(s.template.Name, nil); err != nil && !errors.IsNotFound(err) {
-			log.Printf("error: Could not delete template instance: %v", err)
-		}
-	}()
-
 	// TODO: enforce single namespace behavior
 	instance := &templateapi.TemplateInstance{
 		ObjectMeta: meta.ObjectMeta{
@@ -106,10 +98,21 @@ func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 		instance.OwnerReferences = append(instance.OwnerReferences, *owner)
 	}
 
-	notifier, err := newPodArtifactWorker(s.podClient, s.artifactDir, s.template.Name, podsWithArtifacts)
+	notifier, err := newPodArtifactWorker(s.podClient, s.artifactDir, s.jobSpec.Namespace(), s.template.Name, podsWithArtifacts)
 	if err != nil {
 		return err
 	}
+
+	go func() {
+		<-ctx.Done()
+		if notifier != nil {
+			notifier.Cancel()
+		}
+		log.Printf("cleanup: Deleting template %s", s.template.Name)
+		if err := s.templateClient.TemplateInstances(s.jobSpec.Namespace()).Delete(s.template.Name, nil); err != nil && !errors.IsNotFound(err) {
+			log.Printf("error: Could not delete template instance: %v", err)
+		}
+	}()
 
 	instance, err = createOrRestartTemplateInstance(s.templateClient.TemplateInstances(s.jobSpec.Namespace()), s.podClient.Pods(s.jobSpec.Namespace()), instance)
 	if err != nil {
@@ -512,13 +515,17 @@ func waitForCompletedPodDeletion(podClient coreclientset.PodInterface, name stri
 
 type ContainerNotifier interface {
 	Notify(pod *coreapi.Pod, containerName string)
-	Done() bool
+	Done(podName string) bool
+	Cancel()
 }
 
 func waitForPodCompletion(podClient coreclientset.PodInterface, name string, notifier ContainerNotifier) error {
 	if notifier != nil {
 		defer func() {
-			for !notifier.Done() {
+			if !notifier.Done(name) {
+				log.Printf("Waiting for artifact download to finish for pod %s", name)
+			}
+			for !notifier.Done(name) {
 				time.Sleep(1 * time.Second)
 			}
 		}()
@@ -684,6 +691,7 @@ func podLogNewFailedContainers(podClient coreclientset.PodInterface, pod *coreap
 		}
 
 		if s.ExitCode == 0 {
+			log.Printf("Container %s in pod %s completed successfully", status.Name, pod.Name)
 			continue
 		}
 

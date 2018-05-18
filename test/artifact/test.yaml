@@ -37,6 +37,22 @@ objects:
 
     containers:
 
+    - name: test2
+      image: ${IMAGE_TESTS}
+      volumeMounts:
+      - name: artifacts
+        mountPath: /tmp/artifacts
+      command:
+      - /bin/bash
+      - -c
+      - |
+        #!/bin/bash
+        set -euo pipefail
+
+        echo "hi, artifacts" > /tmp/artifacts/test2
+
+        exit 0
+
     - name: test
       image: ${IMAGE_TESTS}
       volumeMounts:
@@ -51,4 +67,4 @@ objects:
 
         echo "hi, artifacts" > /tmp/artifacts/test1
 
-        exit 1
+        exit 0

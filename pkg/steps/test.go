@@ -64,26 +64,29 @@ func (s *testStep) Run(ctx context.Context, dry bool) error {
 		return nil
 	}
 
+	// when the test container terminates and artifact directory has been set, grab everything under the directory
+	notifier, err := newPodArtifactWorker(s.podClient, s.artifactDir, s.jobSpec.Namespace(), s.config.As, podsWithArtifacts)
+	if err != nil {
+		return err
+	}
+
 	go func() {
 		<-ctx.Done()
+		if notifier != nil {
+			notifier.Cancel()
+		}
 		log.Printf("cleanup: Deleting test pod %s", s.config.As)
 		if err := s.podClient.Pods(s.jobSpec.Namespace()).Delete(s.config.As, nil); err != nil && !errors.IsNotFound(err) {
 			log.Printf("error: Could not delete test pod: %v", err)
 		}
 	}()
 
-	pod, err := createOrRestartPod(s.podClient.Pods(s.jobSpec.Namespace()), pod)
+	pod, err = createOrRestartPod(s.podClient.Pods(s.jobSpec.Namespace()), pod)
 	if err != nil {
 		return err
 	}
 
-	// when the test container terminates and artifact directory has been set, grab everything under the directory
-	notifyFn, err := newPodArtifactWorker(s.podClient, s.artifactDir, s.config.As, podsWithArtifacts)
-	if err != nil {
-		return err
-	}
-
-	if err := waitForPodCompletion(s.podClient.Pods(s.jobSpec.Namespace()), pod.Name, notifyFn); err != nil {
+	if err := waitForPodCompletion(s.podClient.Pods(s.jobSpec.Namespace()), pod.Name, notifier); err != nil {
 		return err
 	}
 

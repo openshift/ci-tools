@@ -167,14 +167,13 @@ trap 'kill $(jobs -p); exit 0' TERM
 
 touch /tmp/done
 echo "Waiting for artifacts to be extracted"
-for i in ` + "`" + `seq 1 120` + "`" + `; do
+while true; do
 	if [[ ! -f /tmp/done ]]; then
 		echo "Artifacts extracted"
 		exit 0
 	fi
-	sleep 5 & wait
+	sleep 10 & wait
 done
-echo "Timeout"
 `,
 		},
 	}
@@ -189,13 +188,16 @@ type namedContainer struct {
 }
 
 type artifactWorker struct {
+	podClient PodClient
+	namespace string
+
+	ch chan namedContainer
+
 	lock      sync.Mutex
 	remaining podContainersMap
-	ch        chan namedContainer
-	done      chan struct{}
 }
 
-func newPodArtifactWorker(podClient PodClient, dir, name string, podsWithArtifacts podContainersMap) (ContainerNotifier, error) {
+func newPodArtifactWorker(podClient PodClient, dir, namespace, name string, podsWithArtifacts podContainersMap) (ContainerNotifier, error) {
 	if len(podsWithArtifacts) == 0 {
 		return nil, nil
 	}
@@ -209,26 +211,38 @@ func newPodArtifactWorker(podClient PodClient, dir, name string, podsWithArtifac
 
 	// stream artifacts in the background
 	w := &artifactWorker{
+		podClient: podClient,
+		namespace: namespace,
+
 		remaining: podsWithArtifacts,
-		ch:        make(chan namedContainer, 4),
-		done:      make(chan struct{}),
+
+		ch: make(chan namedContainer, 4),
 	}
-	go w.run(podClient, artifactDir)
+	go w.run(artifactDir)
 
 	// track which containers still need artifacts collected before terminating the artifact container
 	return w, nil
 }
 
-func (w *artifactWorker) run(podClient PodClient, artifactDir string) {
+func (w *artifactWorker) run(artifactDir string) {
 	for c := range w.ch {
-		if err := copyArtifacts(podClient, artifactDir, c.pod.Namespace, c.pod.Name, "artifacts", []string{"/tmp/artifacts"}); err != nil {
+		if err := copyArtifacts(w.podClient, artifactDir, c.pod.Namespace, c.pod.Name, "artifacts", []string{"/tmp/artifacts"}); err != nil {
 			log.Printf("error: Unable to retrieve artifacts from pod %s: %v", c.pod.Name, err)
 		}
 		if c.done {
-			removeFile(podClient, c.pod.Namespace, c.pod.Name, "artifacts", []string{"/tmp/done"})
+			removeFile(w.podClient, c.pod.Namespace, c.pod.Name, "artifacts", []string{"/tmp/done"})
 		}
 	}
-	close(w.done)
+}
+
+func (w *artifactWorker) Cancel() {
+	w.lock.Lock()
+	defer w.lock.Unlock()
+	for podName := range w.remaining {
+		go func(podName string) {
+			removeFile(w.podClient, w.namespace, podName, "artifacts", []string{"/tmp/done"})
+		}(podName)
+	}
 }
 
 func (w *artifactWorker) Notify(pod *coreapi.Pod, containerName string) {
@@ -248,18 +262,10 @@ func (w *artifactWorker) Notify(pod *coreapi.Pod, containerName string) {
 	}
 }
 
-func (w *artifactWorker) Done() bool {
+func (w *artifactWorker) Done(podName string) bool {
 	w.lock.Lock()
 	defer w.lock.Unlock()
-	if len(w.remaining) > 0 {
-		return false
-	}
-	select {
-	case <-w.done:
-		return true
-	default:
-		return false
-	}
+	return len(w.remaining[podName]) == 0
 }
 
 func addArtifactsToTemplate(template *templateapi.Template) map[string]map[string]struct{} {

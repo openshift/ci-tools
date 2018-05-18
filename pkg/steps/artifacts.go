@@ -11,6 +11,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -187,7 +188,14 @@ type namedContainer struct {
 	done      bool
 }
 
-func newPodArtifactWorker(podClient PodClient, dir, name string, podsWithArtifacts podContainersMap) (ContainerCompleteFunc, error) {
+type artifactWorker struct {
+	lock      sync.Mutex
+	remaining podContainersMap
+	ch        chan namedContainer
+	done      chan struct{}
+}
+
+func newPodArtifactWorker(podClient PodClient, dir, name string, podsWithArtifacts podContainersMap) (ContainerNotifier, error) {
 	if len(podsWithArtifacts) == 0 {
 		return nil, nil
 	}
@@ -200,27 +208,58 @@ func newPodArtifactWorker(podClient PodClient, dir, name string, podsWithArtifac
 	}
 
 	// stream artifacts in the background
-	ch := make(chan namedContainer, 4)
-	go func() {
-		for c := range ch {
-			if err := copyArtifacts(podClient, artifactDir, c.pod.Namespace, c.pod.Name, "artifacts", []string{"/tmp/artifacts"}); err != nil {
-				log.Printf("error: Unable to retrieve artifacts from pod %s: %v", c.pod.Name, err)
-			}
-			if c.done {
-				removeFile(podClient, c.pod.Namespace, c.pod.Name, "artifacts", []string{"/tmp/done"})
-			}
-		}
-	}()
+	w := &artifactWorker{
+		remaining: podsWithArtifacts,
+		ch:        make(chan namedContainer, 4),
+		done:      make(chan struct{}),
+	}
+	go w.run(podClient, artifactDir)
 
 	// track which containers still need artifacts collected before terminating the artifact container
-	return func(pod *coreapi.Pod, containerName string) {
-		artifactContainers := podsWithArtifacts[pod.Name]
-		if _, ok := artifactContainers[containerName]; !ok {
-			return
+	return w, nil
+}
+
+func (w *artifactWorker) run(podClient PodClient, artifactDir string) {
+	for c := range w.ch {
+		if err := copyArtifacts(podClient, artifactDir, c.pod.Namespace, c.pod.Name, "artifacts", []string{"/tmp/artifacts"}); err != nil {
+			log.Printf("error: Unable to retrieve artifacts from pod %s: %v", c.pod.Name, err)
 		}
-		delete(artifactContainers, containerName)
-		ch <- namedContainer{pod: pod, container: containerName, done: len(artifactContainers) == 0}
-	}, nil
+		if c.done {
+			removeFile(podClient, c.pod.Namespace, c.pod.Name, "artifacts", []string{"/tmp/done"})
+		}
+	}
+	close(w.done)
+}
+
+func (w *artifactWorker) Notify(pod *coreapi.Pod, containerName string) {
+	w.lock.Lock()
+	defer w.lock.Unlock()
+	artifactContainers := w.remaining[pod.Name]
+	if _, ok := artifactContainers[containerName]; !ok {
+		return
+	}
+	delete(artifactContainers, containerName)
+	if len(artifactContainers) == 0 {
+		delete(w.remaining, pod.Name)
+	}
+	w.ch <- namedContainer{pod: pod, container: containerName, done: len(artifactContainers) == 0}
+	if len(w.remaining) == 0 {
+		close(w.ch)
+	}
+}
+
+func (w *artifactWorker) Done() bool {
+	w.lock.Lock()
+	defer w.lock.Unlock()
+	if len(w.remaining) > 0 {
+		return false
+	}
+	select {
+	case <-w.done:
+		return true
+	default:
+		return false
+	}
 }
 
 func addArtifactsToTemplate(template *templateapi.Template) map[string]map[string]struct{} {

@@ -1,0 +1,54 @@
+kind: Template
+apiVersion: template.openshift.io/v1
+metadata:
+  name: artifacts
+
+parameters:
+- name: NAMESPACE
+  requried: true
+- name: IMAGE_TESTS
+  required: true
+objects:
+
+# We want the cluster to be able to access these images
+- kind: RoleBinding
+  apiVersion: authorization.openshift.io/v1
+  metadata:
+    name: ${JOB_NAME_SAFE}-image-puller
+    namespace: ${NAMESPACE}
+  roleRef:
+    name: system:image-puller
+  subjects:
+  - kind: SystemGroup
+    name: system:unauthenticated
+
+- kind: Pod
+  apiVersion: v1
+  metadata:
+    name: artifacts
+    namespace: ${NAMESPACE}
+  spec:
+    restartPolicy: Never
+    activeDeadlineSeconds: 7200
+    terminationGracePeriodSeconds: 600
+    volumes:
+    - name: artifacts
+      emptyDir: {}
+
+    containers:
+
+    - name: test
+      image: ${IMAGE_TESTS}
+      volumeMounts:
+      - name: artifacts
+        mountPath: /tmp/artifacts
+      command:
+      - /bin/bash
+      - -c
+      - |
+        #!/bin/bash
+        set -euo pipefail
+
+        echo "hi, artifacts" > /tmp/artifacts/test1
+
+        exit 1

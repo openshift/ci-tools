@@ -234,12 +234,14 @@ func newPodArtifactWorker(podClient PodClient, dir, namespace, name string, pods
 
 func (w *artifactWorker) run(artifactDir string) {
 	for c := range w.ch {
+		log.Printf("DEBUG: starting copy for %s", c.pod.Name)
 		if err := copyArtifacts(w.podClient, artifactDir, c.pod.Namespace, c.pod.Name, "artifacts", []string{"/tmp/artifacts"}); err != nil {
 			log.Printf("error: Unable to retrieve artifacts from pod %s: %v", c.pod.Name, err)
 		}
 		if err := removeFile(w.podClient, c.pod.Namespace, c.pod.Name, "artifacts", []string{"/tmp/done"}); err != nil {
 			log.Printf("error: Unable to signal to artifacts container to terminate in pod %s: %v", c.pod.Name, err)
 		}
+		log.Printf("DEBUG: done copying for %s", c.pod.Name)
 		// indicate we are done with this pod by removing the map entry
 		w.lock.Lock()
 		delete(w.remaining, c.pod.Name)
@@ -266,10 +268,12 @@ func (w *artifactWorker) Notify(pod *coreapi.Pod, containerName string) {
 	}
 	delete(artifactContainers, containerName)
 	if len(artifactContainers) == 0 {
+		log.Printf("DEBUG: no more containers in %s", pod.Name)
 		// when all containers in a given pod that output artifacts have completed, exit
 		w.ch <- namedContainer{pod: pod, container: containerName}
 	}
 	if len(w.remaining) == 0 {
+		log.Printf("DEBUG: no more pods")
 		close(w.ch)
 	}
 }
@@ -277,6 +281,7 @@ func (w *artifactWorker) Notify(pod *coreapi.Pod, containerName string) {
 func (w *artifactWorker) Done(podName string) bool {
 	w.lock.Lock()
 	defer w.lock.Unlock()
+	log.Printf("DEBUG: remaining containers for pod %s %v", podName, w.remaining[podName])
 	_, ok := w.remaining[podName]
 	return !ok
 }

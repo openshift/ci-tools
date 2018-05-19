@@ -37,7 +37,7 @@ objects:
 
     containers:
 
-    - name: test2
+    - name: pass1
       image: ${IMAGE_TESTS}
       volumeMounts:
       - name: artifacts
@@ -50,10 +50,26 @@ objects:
         set -euo pipefail
 
         echo "hi, artifacts" > /tmp/artifacts/test2
-
+        sleep 3
         exit 0
 
-    - name: test
+    - name: fail2
+      image: ${IMAGE_TESTS}
+      volumeMounts:
+      - name: artifacts
+        mountPath: /tmp/artifacts
+      command:
+      - /bin/bash
+      - -c
+      - |
+        #!/bin/bash
+        set -euo pipefail
+
+        echo "hi, artifacts" > /tmp/artifacts/test2
+        sleep 5
+        exit 1
+
+    - name: wait3
       image: ${IMAGE_TESTS}
       volumeMounts:
       - name: artifacts
@@ -66,5 +82,5 @@ objects:
         set -euo pipefail
 
         echo "hi, artifacts" > /tmp/artifacts/test1
-
+        sleep 7
         exit 0

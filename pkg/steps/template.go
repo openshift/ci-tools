@@ -106,7 +106,11 @@ func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 			notifier.Cancel()
 		}
 		log.Printf("cleanup: Deleting template %s", s.template.Name)
-		if err := s.templateClient.TemplateInstances(s.jobSpec.Namespace()).Delete(s.template.Name, nil); err != nil && !errors.IsNotFound(err) {
+		policy := meta.DeletePropagationForeground
+		opt := &meta.DeleteOptions{
+			PropagationPolicy: &policy,
+		}
+		if err := s.templateClient.TemplateInstances(s.jobSpec.Namespace()).Delete(s.template.Name, opt); err != nil && !errors.IsNotFound(err) {
 			log.Printf("error: Could not delete template instance: %v", err)
 		}
 	}()
@@ -518,19 +522,16 @@ type ContainerNotifier interface {
 }
 
 func waitForPodCompletion(podClient coreclientset.PodInterface, name string, notifier ContainerNotifier) error {
-	if notifier != nil {
-		defer func() {
-			if !notifier.Done(name) {
-				log.Printf("Waiting for artifact download to finish for pod %s", name)
-			}
-			for !notifier.Done(name) {
-				time.Sleep(1 * time.Second)
-			}
-		}()
-	}
 	completed := make(map[string]time.Time)
 	for {
 		retry, err := waitForPodCompletionOrTimeout(podClient, name, completed, notifier)
+		// continue waiting if the container notifier is not yet complete for the given pod
+		if notifier != nil && !notifier.Done(name) {
+			if !retry || err == nil {
+				time.Sleep(5 * time.Second)
+			}
+			continue
+		}
 		if err != nil {
 			return err
 		}
@@ -559,7 +560,7 @@ func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name st
 		return false, nil
 	}
 	if podJobIsFailed(pod) {
-		return false, fmt.Errorf("the pod %s/%s failed after %s (failed containers: %s)", pod.Namespace, pod.Name, podDuration(pod), strings.Join(namesFromMap(completed), ", "))
+		return false, fmt.Errorf("the pod %s/%s failed after %s (failed containers: %s)", pod.Namespace, pod.Name, podDuration(pod), strings.Join(failedContainerNames(pod), ", "))
 	}
 
 	watcher, err := podClient.Watch(meta.ListOptions{
@@ -584,13 +585,13 @@ func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name st
 				return false, nil
 			}
 			if podJobIsFailed(pod) {
-				return false, fmt.Errorf("the pod %s/%s failed after %s (failed containers: %s)", pod.Namespace, pod.Name, podDuration(pod), strings.Join(namesFromMap(completed), ", "))
+				return false, fmt.Errorf("the pod %s/%s failed after %s (failed containers: %s)", pod.Namespace, pod.Name, podDuration(pod), strings.Join(failedContainerNames(pod), ", "))
 			}
 			continue
 		}
 		if event.Type == watch.Deleted {
 			podLogNewFailedContainers(podClient, pod, completed, notifier)
-			return false, fmt.Errorf("the pod %s/%s was deleted without completing after %s (failed containers: %s)", pod.Namespace, pod.Name, podDuration(pod), strings.Join(namesFromMap(completed), ", "))
+			return false, fmt.Errorf("the pod %s/%s was deleted without completing after %s (failed containers: %s)", pod.Namespace, pod.Name, podDuration(pod), strings.Join(failedContainerNames(pod), ", "))
 		}
 		log.Printf("error: Unrecognized event in watch: %v %#v", event.Type, event.Object)
 	}
@@ -638,12 +639,12 @@ func templateInstanceReady(instance *templateapi.TemplateInstance) (ready bool, 
 	return false, nil
 }
 
-func podJobIsOK(p *coreapi.Pod) bool {
-	if p.Status.Phase == coreapi.PodSucceeded {
+func podJobIsOK(pod *coreapi.Pod) bool {
+	if pod.Status.Phase == coreapi.PodSucceeded {
 		return true
 	}
 	// if all containers except artifacts are in terminated and have exit code 0, we're ok
-	for _, status := range append(append([]coreapi.ContainerStatus{}, p.Status.InitContainerStatuses...), p.Status.ContainerStatuses...) {
+	for _, status := range append(append([]coreapi.ContainerStatus{}, pod.Status.InitContainerStatuses...), pod.Status.ContainerStatuses...) {
 		// don't succeed until everything has started at least once
 		if status.State.Waiting != nil && status.LastTerminationState.Terminated == nil {
 			return false
@@ -663,15 +664,15 @@ func podJobIsOK(p *coreapi.Pod) bool {
 
 }
 
-func podJobIsFailed(p *coreapi.Pod) bool {
-	if p.Status.Phase == coreapi.PodFailed {
+func podJobIsFailed(pod *coreapi.Pod) bool {
+	if pod.Status.Phase == coreapi.PodFailed {
 		return true
 	}
-	if p.Status.Phase == coreapi.PodPending || p.Status.Phase == coreapi.PodUnknown {
+	if pod.Status.Phase == coreapi.PodPending || pod.Status.Phase == coreapi.PodUnknown {
 		return false
 	}
 	// if any container is in a non-zero status we have failed
-	for _, status := range append(append([]coreapi.ContainerStatus{}, p.Status.InitContainerStatuses...), p.Status.ContainerStatuses...) {
+	for _, status := range append(append([]coreapi.ContainerStatus{}, pod.Status.InitContainerStatuses...), pod.Status.ContainerStatuses...) {
 		// don't fail until everything has started at least once
 		if status.State.Waiting != nil && status.LastTerminationState.Terminated == nil {
 			return false
@@ -688,10 +689,14 @@ func podJobIsFailed(p *coreapi.Pod) bool {
 	return false
 }
 
-func namesFromMap(completed map[string]time.Time) []string {
+func failedContainerNames(pod *coreapi.Pod) []string {
 	var names []string
-	for k := range completed {
-		names = append(names, k)
+	for _, status := range append(append([]coreapi.ContainerStatus{}, pod.Status.InitContainerStatuses...), pod.Status.ContainerStatuses...) {
+		if s := status.State.Terminated; s != nil {
+			if s.ExitCode != 0 {
+				names = append(names, status.Name)
+			}
+		}
 	}
 	sort.Strings(names)
 	return names
@@ -723,7 +728,6 @@ func podLogNewFailedContainers(podClient coreclientset.PodInterface, pod *coreap
 		if s, err := podClient.GetLogs(pod.Name, &coreapi.PodLogOptions{
 			Container: status.Name,
 		}).Stream(); err == nil {
-			log.Printf("Pod %s container %s failed, exit code %d:", pod.Name, status.Name, status.State.Terminated.ExitCode)
 			if _, err := io.Copy(os.Stdout, s); err != nil {
 				log.Printf("error: Unable to copy log output from failed pod container %s: %v", status.Name, err)
 			}
@@ -731,5 +735,7 @@ func podLogNewFailedContainers(podClient coreclientset.PodInterface, pod *coreap
 		} else {
 			log.Printf("error: Unable to retrieve logs from failed pod container %s: %v", status.Name, err)
 		}
+
+		log.Printf("Container %s in pod %s failed, exit code %d", status.Name, pod.Name, status.State.Terminated.ExitCode)
 	}
 }

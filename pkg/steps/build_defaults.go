@@ -149,23 +149,45 @@ func FromConfig(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec, templat
 func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec) []api.StepConfiguration {
 	var buildSteps []api.StepConfiguration
 
-	if config.TestBaseImage != nil {
-		if config.TestBaseImage.Namespace == "" {
-			config.TestBaseImage.Namespace = jobSpec.baseNamespace
-		}
-		if config.TestBaseImage.Name == "" {
-			config.TestBaseImage.Name = fmt.Sprintf("%s-test-base", jobSpec.Refs.Repo)
-		}
-		buildSteps = append(buildSteps, api.StepConfiguration{InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
-			BaseImage: *config.TestBaseImage,
-			To:        api.PipelineImageStreamTagReferenceRoot,
-		}})
+	if config.InputConfiguration.BaseImages == nil {
+		config.InputConfiguration.BaseImages = make(map[string]api.ImageStreamTagReference)
+	}
+	if config.InputConfiguration.BaseRPMImages == nil {
+		config.InputConfiguration.BaseRPMImages = make(map[string]api.ImageStreamTagReference)
+	}
+
+	// ensure the "As" field is set to the provided alias.
+	for alias, target := range config.InputConfiguration.BaseImages {
+		target.As = alias
+		config.InputConfiguration.BaseImages[alias] = target
+	}
+	for alias, target := range config.InputConfiguration.BaseRPMImages {
+		target.As = alias
+		config.InputConfiguration.BaseRPMImages[alias] = target
 	}
 
 	buildSteps = append(buildSteps, api.StepConfiguration{SourceStepConfiguration: &api.SourceStepConfiguration{
 		From: api.PipelineImageStreamTagReferenceRoot,
 		To:   api.PipelineImageStreamTagReferenceSource,
 	}})
+
+	if target := config.InputConfiguration.TestBaseImage; target != nil {
+		if target.Namespace == "" {
+			target.Namespace = jobSpec.baseNamespace
+		}
+		if target.Name == "" {
+			target.Name = fmt.Sprintf("%s-test-base", jobSpec.Refs.Repo)
+		}
+		alias := target.As
+		if len(alias) == 0 {
+			alias = target.Tag
+		}
+
+		buildSteps = append(buildSteps, api.StepConfiguration{InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
+			BaseImage: *target,
+			To:        api.PipelineImageStreamTagReferenceRoot,
+		}})
+	}
 
 	if len(config.BinaryBuildCommands) > 0 {
 		buildSteps = append(buildSteps, api.StepConfiguration{PipelineImageCacheStepConfiguration: &api.PipelineImageCacheStepConfiguration{
@@ -209,27 +231,23 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec
 		}})
 	}
 
-	for _, baseImage := range config.BaseImages {
+	for alias, baseImage := range config.BaseImages {
 		buildSteps = append(buildSteps, api.StepConfiguration{InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 			BaseImage: baseImage,
-			To:        api.PipelineImageStreamTagReference(baseImage.Name),
+			To:        api.PipelineImageStreamTagReference(alias),
 		}})
 	}
 
-	for _, baseRPMImage := range config.BaseRPMImages {
-		as := baseRPMImage.As
-		if len(as) == 0 {
-			as = baseRPMImage.Name
-		}
-		intermediateTag := api.PipelineImageStreamTagReference(fmt.Sprintf("%s-without-rpms", as))
+	for alias, target := range config.InputConfiguration.BaseRPMImages {
+		intermediateTag := api.PipelineImageStreamTagReference(fmt.Sprintf("%s-without-rpms", alias))
 		buildSteps = append(buildSteps, api.StepConfiguration{InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
-			BaseImage: baseRPMImage,
+			BaseImage: target,
 			To:        intermediateTag,
 		}})
 
 		buildSteps = append(buildSteps, api.StepConfiguration{RPMImageInjectionStepConfiguration: &api.RPMImageInjectionStepConfiguration{
 			From: intermediateTag,
-			To:   api.PipelineImageStreamTagReference(as),
+			To:   api.PipelineImageStreamTagReference(alias),
 		}})
 	}
 

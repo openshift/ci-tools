@@ -7,14 +7,13 @@
   "binary_build_commands": "make build",
   "test_binary_build_commands": "OS_GOFLAGS='-race' make build",
   "rpm_build_commands": "make build-rpms",
-  "base_rpm_images": [
-    {
+  "base_rpm_images": {
+    "base": {
       "namespace": "openshift",
       "name": "origin-v3.10",
-      "tag": "base",
-      "as": "base"
+      "tag": "base"
     }
-  ],
+  },
   "images": [
     {
       "from": "base",

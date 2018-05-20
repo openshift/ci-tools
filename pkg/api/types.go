@@ -11,12 +11,7 @@ package api
 //  - raw steps that can be used to create custom and
 //    fine-grained build flows
 type ReleaseBuildConfiguration struct {
-	// TestBaseImage is the image we base our pipeline
-	// image caches on. It should contain all build-time
-	// dependencies for the project. It is valid to set
-	// only the tag and allow for the other fields to be
-	// defaulted.
-	TestBaseImage *ImageStreamTagReference `json:"test_base_image,omitempty"`
+	InputConfiguration `json:",inline"`
 
 	// The following commands describe how binaries,
 	// test binaries and RPMs are built baseImage
@@ -33,28 +28,43 @@ type ReleaseBuildConfiguration struct {
 	// _output/local/releases/rpms/.
 	RpmBuildLocation string `json:"rpm_build_location,omitempty"`
 
-	// The following lists of base images describe
-	// which images are going to be necessary outside
-	// of the pipeline. RPM repositories will be
-	// injected into the baseRPMImages for downstream
-	// image builds that require built project RPMs.
-	BaseImages    []ImageStreamTagReference `json:"base_images,omitempty"`
-	BaseRPMImages []ImageStreamTagReference `json:"base_rpm_images,omitempty"`
-
 	// Images describes the images that are built
 	// baseImage the project as part of the release
 	// process
 	Images []ProjectDirectoryImageBuildStepConfiguration `json:"images,omitempty"`
 
-	// ReleaseTagConfiguration determines how the
-	// full release is assembled.
-	ReleaseTagConfiguration *ReleaseTagConfiguration `json:"tag_specification,omitempty"`
-
+	// Tests describes the tests to run inside of built images.
+	// The images launched as pods but have no explicit access to
+	// the cluster they are running on.
 	Tests []TestStepConfiguration `json:"tests,omitempty"`
 
 	// RawSteps are literal Steps that should be
 	// included in the final pipeline.
 	RawSteps []StepConfiguration `json:"raw_steps,omitempty"`
+}
+
+// InputConfiguration contains the set of image inputs
+// to a build and can be used as an override to the
+// canonical inputs by a local process.
+type InputConfiguration struct {
+	// The list of base images describe
+	// which images are going to be necessary outside
+	// of the pipeline. The key will be the alias that other
+	// steps use to refer to this image.
+	BaseImages map[string]ImageStreamTagReference `json:"base_images,omitempty"`
+	// BaseRPMImages is a list of the images and their aliases that will
+	// have RPM repositories injected into them for downstream
+	// image builds that require built project RPMs.
+	BaseRPMImages map[string]ImageStreamTagReference `json:"base_rpm_images,omitempty"`
+
+	// TestBaseImage is the image we should base our
+	// pipeline image caches on. It should contain all
+	// build-time dependencies for the project.
+	TestBaseImage *ImageStreamTagReference `json:"test_base_image,omitempty"`
+
+	// ReleaseTagConfiguration determines how the
+	// full release is assembled.
+	ReleaseTagConfiguration *ReleaseTagConfiguration `json:"tag_specification,omitempty"`
 }
 
 // ImageStreamTagReference identifies an ImageStreamTag

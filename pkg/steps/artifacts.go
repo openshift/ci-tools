@@ -23,6 +23,31 @@ import (
 	templateapi "github.com/openshift/api/template/v1"
 )
 
+// ContainerNotifier receives updates about the status of a poll action on a pod. The caller
+// is required to define what notifications are made.
+type ContainerNotifier interface {
+	// Notify indicates that the provided container name has transitioned to an appropriate state and
+	// any per container actions should be taken.
+	Notify(pod *coreapi.Pod, containerName string)
+	// Complete indicates the specified pod has completed execution, been deleted, or that no further
+	// Notify() calls will be made.
+	Complete(podName string)
+	// Done returns true if the specified pod name has already completed any work it had pending.
+	Done(podName string) bool
+	// Cancel indicates that any actions the notifier is taking should be aborted immediately.
+	Cancel()
+}
+
+// NopNotifier takes no action when notified.
+var NopNotifier = nopNotifier{}
+
+type nopNotifier struct{}
+
+func (nopNotifier) Notify(_ *coreapi.Pod, _ string) {}
+func (nopNotifier) Complete(_ string)               {}
+func (nopNotifier) Done(_ string) bool              { return true }
+func (nopNotifier) Cancel()                         {}
+
 type podClient struct {
 	coreclientset.PodsGetter
 	config *rest.Config
@@ -183,16 +208,11 @@ done
 
 type podContainersMap map[string]map[string]struct{}
 
-type namedContainer struct {
-	pod       *coreapi.Pod
-	container string
-}
-
 type artifactWorker struct {
 	podClient PodClient
 	namespace string
 
-	ch chan namedContainer
+	podsToDownload chan string
 
 	lock      sync.Mutex
 	remaining podContainersMap
@@ -224,7 +244,7 @@ func newPodArtifactWorker(podClient PodClient, dir, namespace, name string, pods
 
 		remaining: podsWithArtifacts,
 
-		ch: make(chan namedContainer, 4),
+		podsToDownload: make(chan string, 4),
 	}
 	go w.run(artifactDir)
 
@@ -233,19 +253,38 @@ func newPodArtifactWorker(podClient PodClient, dir, namespace, name string, pods
 }
 
 func (w *artifactWorker) run(artifactDir string) {
-	for c := range w.ch {
-		log.Printf("DEBUG: starting copy for %s", c.pod.Name)
-		if err := copyArtifacts(w.podClient, artifactDir, c.pod.Namespace, c.pod.Name, "artifacts", []string{"/tmp/artifacts"}); err != nil {
-			log.Printf("error: Unable to retrieve artifacts from pod %s: %v", c.pod.Name, err)
+	for podName := range w.podsToDownload {
+		log.Printf("DEBUG: starting copy for %s", podName)
+		if err := copyArtifacts(w.podClient, artifactDir, w.namespace, podName, "artifacts", []string{"/tmp/artifacts"}); err != nil {
+			log.Printf("error: Unable to retrieve artifacts from pod %s: %v", podName, err)
 		}
-		if err := removeFile(w.podClient, c.pod.Namespace, c.pod.Name, "artifacts", []string{"/tmp/done"}); err != nil {
-			log.Printf("error: Unable to signal to artifacts container to terminate in pod %s: %v", c.pod.Name, err)
+		if err := removeFile(w.podClient, w.namespace, podName, "artifacts", []string{"/tmp/done"}); err != nil {
+			log.Printf("error: Unable to signal to artifacts container to terminate in pod %s: %v", podName, err)
 		}
-		log.Printf("DEBUG: done copying for %s", c.pod.Name)
+		log.Printf("DEBUG: done copying for %s", podName)
 		// indicate we are done with this pod by removing the map entry
 		w.lock.Lock()
-		delete(w.remaining, c.pod.Name)
+		delete(w.remaining, podName)
 		w.lock.Unlock()
+	}
+}
+
+func (w *artifactWorker) Complete(podName string) {
+	w.lock.Lock()
+	defer w.lock.Unlock()
+
+	artifactContainers, ok := w.remaining[podName]
+	if !ok {
+		return
+	}
+	if len(artifactContainers) > 0 {
+		log.Printf("DEBUG: marking pod complete, grabbing artifacts %s", podName)
+		// when all containers in a given pod that output artifacts have completed, exit
+		w.podsToDownload <- podName
+	}
+	if len(w.remaining) == 0 {
+		log.Printf("DEBUG: no more pods")
+		close(w.podsToDownload)
 	}
 }
 
@@ -270,11 +309,11 @@ func (w *artifactWorker) Notify(pod *coreapi.Pod, containerName string) {
 	if len(artifactContainers) == 0 {
 		log.Printf("DEBUG: no more containers in %s", pod.Name)
 		// when all containers in a given pod that output artifacts have completed, exit
-		w.ch <- namedContainer{pod: pod, container: containerName}
+		w.podsToDownload <- pod.Name
 	}
 	if len(w.remaining) == 0 {
 		log.Printf("DEBUG: no more pods")
-		close(w.ch)
+		close(w.podsToDownload)
 	}
 }
 

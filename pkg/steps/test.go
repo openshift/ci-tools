@@ -69,12 +69,13 @@ func (s *testStep) Run(ctx context.Context, dry bool) error {
 	if err != nil {
 		return err
 	}
+	if notifier == nil {
+		notifier = NopNotifier
+	}
 
 	go func() {
 		<-ctx.Done()
-		if notifier != nil {
-			notifier.Cancel()
-		}
+		notifier.Cancel()
 		log.Printf("cleanup: Deleting test pod %s", s.config.As)
 		if err := s.podClient.Pods(s.jobSpec.Namespace()).Delete(s.config.As, nil); err != nil && !errors.IsNotFound(err) {
 			log.Printf("error: Could not delete test pod: %v", err)

@@ -98,13 +98,11 @@ func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 		instance.OwnerReferences = append(instance.OwnerReferences, *owner)
 	}
 
-	var notifier ContainerNotifier
+	var notifier ContainerNotifier = NopNotifier
 
 	go func() {
 		<-ctx.Done()
-		if notifier != nil {
-			notifier.Cancel()
-		}
+		notifier.Cancel()
 		log.Printf("cleanup: Deleting template %s", s.template.Name)
 		policy := meta.DeletePropagationForeground
 		opt := &meta.DeleteOptions{
@@ -515,18 +513,15 @@ func waitForCompletedPodDeletion(podClient coreclientset.PodInterface, name stri
 	}
 }
 
-type ContainerNotifier interface {
-	Notify(pod *coreapi.Pod, containerName string)
-	Done(podName string) bool
-	Cancel()
-}
-
 func waitForPodCompletion(podClient coreclientset.PodInterface, name string, notifier ContainerNotifier) error {
+	if notifier == nil {
+		notifier = NopNotifier
+	}
 	completed := make(map[string]time.Time)
 	for {
 		retry, err := waitForPodCompletionOrTimeout(podClient, name, completed, notifier)
 		// continue waiting if the container notifier is not yet complete for the given pod
-		if notifier != nil && !notifier.Done(name) {
+		if !notifier.Done(name) {
 			if !retry || err == nil {
 				time.Sleep(5 * time.Second)
 			}
@@ -548,6 +543,7 @@ func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name st
 		return false, err
 	}
 	if len(list.Items) != 1 {
+		notifier.Complete(name)
 		return false, fmt.Errorf("pod %s was already deleted", name)
 	}
 	pod := &list.Items[0]
@@ -560,6 +556,7 @@ func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name st
 		return false, nil
 	}
 	if podJobIsFailed(pod) {
+		notifier.Complete(name)
 		return false, fmt.Errorf("the pod %s/%s failed after %s (failed containers: %s)", pod.Namespace, pod.Name, podDuration(pod), strings.Join(failedContainerNames(pod), ", "))
 	}
 
@@ -585,12 +582,14 @@ func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name st
 				return false, nil
 			}
 			if podJobIsFailed(pod) {
+				notifier.Complete(name)
 				return false, fmt.Errorf("the pod %s/%s failed after %s (failed containers: %s)", pod.Namespace, pod.Name, podDuration(pod), strings.Join(failedContainerNames(pod), ", "))
 			}
 			continue
 		}
 		if event.Type == watch.Deleted {
 			podLogNewFailedContainers(podClient, pod, completed, notifier)
+			notifier.Complete(name)
 			return false, fmt.Errorf("the pod %s/%s was deleted without completing after %s (failed containers: %s)", pod.Namespace, pod.Name, podDuration(pod), strings.Join(failedContainerNames(pod), ", "))
 		}
 		log.Printf("error: Unrecognized event in watch: %v %#v", event.Type, event.Object)
@@ -716,9 +715,7 @@ func podLogNewFailedContainers(podClient coreclientset.PodInterface, pod *coreap
 			continue
 		}
 		completed[status.Name] = s.FinishedAt.Time
-		if notifier != nil {
-			notifier.Notify(pod, status.Name)
-		}
+		notifier.Notify(pod, status.Name)
 
 		if s.ExitCode == 0 {
 			log.Printf("Container %s in pod %s completed successfully", status.Name, pod.Name)

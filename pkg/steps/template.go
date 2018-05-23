@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -77,7 +78,7 @@ func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 		}
 	}
 
-	podsWithArtifacts := addArtifactsToTemplate(s.template)
+	addArtifactsToTemplate(s.template)
 
 	if dry {
 		j, _ := json.MarshalIndent(s.template, "", "  ")
@@ -124,21 +125,19 @@ func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 	}
 
 	// now that the pods have been resolved by the template, add them to the artifact map
-	podsWithArtifacts = make(podContainersMap)
-	for _, ref := range instance.Status.Objects {
-		switch {
-		case ref.Ref.Kind == "Pod" && ref.Ref.APIVersion == "v1":
-			pod, err := s.podClient.Pods(s.jobSpec.Namespace()).Get(ref.Ref.Name, meta.GetOptions{})
-			if err != nil {
-				return fmt.Errorf("unable to retrieve pod from template - possibly deleted: %v", err)
+	if len(s.artifactDir) > 0 {
+		artifacts := NewArtifactWorker(s.podClient, filepath.Join(s.artifactDir, s.template.Name), s.jobSpec.Namespace())
+		for _, ref := range instance.Status.Objects {
+			switch {
+			case ref.Ref.Kind == "Pod" && ref.Ref.APIVersion == "v1":
+				pod, err := s.podClient.Pods(s.jobSpec.Namespace()).Get(ref.Ref.Name, meta.GetOptions{})
+				if err != nil {
+					return fmt.Errorf("unable to retrieve pod from template - possibly deleted: %v", err)
+				}
+				addArtifactContainersFromPod(pod, artifacts)
 			}
-			addArtifactContainersFromPod(pod, podsWithArtifacts)
 		}
-	}
-
-	notifier, err = newPodArtifactWorker(s.podClient, s.artifactDir, s.jobSpec.Namespace(), s.template.Name, podsWithArtifacts)
-	if err != nil {
-		return err
+		notifier = artifacts
 	}
 
 	for _, ref := range instance.Status.Objects {
@@ -556,7 +555,6 @@ func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name st
 		return false, nil
 	}
 	if podJobIsFailed(pod) {
-		notifier.Complete(name)
 		return false, fmt.Errorf("the pod %s/%s failed after %s (failed containers: %s)", pod.Namespace, pod.Name, podDuration(pod), strings.Join(failedContainerNames(pod), ", "))
 	}
 
@@ -582,14 +580,12 @@ func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name st
 				return false, nil
 			}
 			if podJobIsFailed(pod) {
-				notifier.Complete(name)
 				return false, fmt.Errorf("the pod %s/%s failed after %s (failed containers: %s)", pod.Namespace, pod.Name, podDuration(pod), strings.Join(failedContainerNames(pod), ", "))
 			}
 			continue
 		}
 		if event.Type == watch.Deleted {
 			podLogNewFailedContainers(podClient, pod, completed, notifier)
-			notifier.Complete(name)
 			return false, fmt.Errorf("the pod %s/%s was deleted without completing after %s (failed containers: %s)", pod.Namespace, pod.Name, podDuration(pod), strings.Join(failedContainerNames(pod), ", "))
 		}
 		log.Printf("error: Unrecognized event in watch: %v %#v", event.Type, event.Object)

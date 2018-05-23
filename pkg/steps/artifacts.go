@@ -10,7 +10,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
 
@@ -30,7 +29,7 @@ type ContainerNotifier interface {
 	// any per container actions should be taken.
 	Notify(pod *coreapi.Pod, containerName string)
 	// Complete indicates the specified pod has completed execution, been deleted, or that no further
-	// Notify() calls will be made.
+	// Notify() calls can be made.
 	Complete(podName string)
 	// Done returns true if the specified pod name has already completed any work it had pending.
 	Done(podName string) bool
@@ -208,7 +207,8 @@ done
 
 type podContainersMap map[string]map[string]struct{}
 
-type artifactWorker struct {
+type ArtifactWorker struct {
+	dir       string
 	podClient PodClient
 	namespace string
 
@@ -216,52 +216,30 @@ type artifactWorker struct {
 
 	lock      sync.Mutex
 	remaining podContainersMap
+	required  podContainersMap
 }
 
-func newPodArtifactWorker(podClient PodClient, dir, namespace, name string, podsWithArtifacts podContainersMap) (ContainerNotifier, error) {
-	if len(podsWithArtifacts) == 0 {
-		return nil, nil
-	}
-	if len(dir) == 0 {
-		return nil, nil
-	}
-	artifactDir := filepath.Join(dir, name)
-	if err := os.MkdirAll(artifactDir, 0750); err != nil {
-		return nil, err
-	}
-
-	var pods []string
-	for podName := range podsWithArtifacts {
-		pods = append(pods, podName)
-	}
-	sort.Strings(pods)
-	log.Printf("Artifacts will be gathered from the following pods: %s", strings.Join(pods, ", "))
-
+func NewArtifactWorker(podClient PodClient, artifactDir, namespace string) *ArtifactWorker {
 	// stream artifacts in the background
-	w := &artifactWorker{
+	w := &ArtifactWorker{
 		podClient: podClient,
 		namespace: namespace,
+		dir:       artifactDir,
 
-		remaining: podsWithArtifacts,
+		remaining: make(podContainersMap),
+		required:  make(podContainersMap),
 
 		podsToDownload: make(chan string, 4),
 	}
-	go w.run(artifactDir)
-
-	// track which containers still need artifacts collected before terminating the artifact container
-	return w, nil
+	go w.run()
+	return w
 }
 
-func (w *artifactWorker) run(artifactDir string) {
+func (w *ArtifactWorker) run() {
 	for podName := range w.podsToDownload {
-		log.Printf("DEBUG: starting copy for %s", podName)
-		if err := copyArtifacts(w.podClient, artifactDir, w.namespace, podName, "artifacts", []string{"/tmp/artifacts"}); err != nil {
-			log.Printf("error: Unable to retrieve artifacts from pod %s: %v", podName, err)
+		if err := w.downloadArtifacts(podName); err != nil {
+			log.Printf("error: %v", err)
 		}
-		if err := removeFile(w.podClient, w.namespace, podName, "artifacts", []string{"/tmp/done"}); err != nil {
-			log.Printf("error: Unable to signal to artifacts container to terminate in pod %s: %v", podName, err)
-		}
-		log.Printf("DEBUG: done copying for %s", podName)
 		// indicate we are done with this pod by removing the map entry
 		w.lock.Lock()
 		delete(w.remaining, podName)
@@ -269,7 +247,60 @@ func (w *artifactWorker) run(artifactDir string) {
 	}
 }
 
-func (w *artifactWorker) Complete(podName string) {
+func (w *ArtifactWorker) downloadArtifacts(podName string) error {
+	if err := os.MkdirAll(w.dir, 0750); err != nil {
+		return fmt.Errorf("unable to create artifact directory %s: %v", w.dir, err)
+	}
+	log.Printf("DEBUG: starting copy for %s", podName)
+	if err := copyArtifacts(w.podClient, w.dir, w.namespace, podName, "artifacts", []string{"/tmp/artifacts"}); err != nil {
+		return fmt.Errorf("unable to retrieve artifacts from pod %s: %v", podName, err)
+	}
+	if err := removeFile(w.podClient, w.namespace, podName, "artifacts", []string{"/tmp/done"}); err != nil {
+		return fmt.Errorf("unable to signal to artifacts container to terminate in pod %s: %v", podName, err)
+	}
+	log.Printf("DEBUG: done copying for %s", podName)
+	return nil
+}
+
+func (w *ArtifactWorker) CollectFromPod(podName string, hasArtifacts []string, waitForContainers []string) {
+	w.lock.Lock()
+	defer w.lock.Unlock()
+
+	m := w.remaining[podName]
+	if m == nil {
+		m = make(map[string]struct{})
+		w.remaining[podName] = m
+	}
+
+	r := w.required[podName]
+	if r == nil {
+		r = make(map[string]struct{})
+		w.required[podName] = r
+	}
+
+	for _, name := range hasArtifacts {
+		if name == "artifacts" {
+			continue
+		}
+		if _, ok := m[name]; !ok {
+			m[name] = struct{}{}
+		}
+	}
+
+	for _, name := range waitForContainers {
+		if name == "artifacts" {
+			continue
+		}
+		if _, ok := m[name]; !ok {
+			continue
+		}
+		if _, ok := r[name]; !ok {
+			r[name] = struct{}{}
+		}
+	}
+}
+
+func (w *ArtifactWorker) Complete(podName string) {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
@@ -288,7 +319,7 @@ func (w *artifactWorker) Complete(podName string) {
 	}
 }
 
-func (w *artifactWorker) Cancel() {
+func (w *ArtifactWorker) Cancel() {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 	for podName := range w.remaining {
@@ -298,26 +329,48 @@ func (w *artifactWorker) Cancel() {
 	}
 }
 
-func (w *artifactWorker) Notify(pod *coreapi.Pod, containerName string) {
+func hasFailedContainers(pod *coreapi.Pod) bool {
+	for _, status := range append(append([]coreapi.ContainerStatus(nil), pod.Status.ContainerStatuses...), pod.Status.InitContainerStatuses...) {
+		if status.State.Terminated != nil && status.State.Terminated.ExitCode != 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func (w *ArtifactWorker) Notify(pod *coreapi.Pod, containerName string) {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 	artifactContainers := w.remaining[pod.Name]
 	if _, ok := artifactContainers[containerName]; !ok {
 		return
 	}
+	requiredContainers := w.required[pod.Name]
+
 	delete(artifactContainers, containerName)
+	delete(requiredContainers, containerName)
+
+	// if at least one container has failed, and there are no longer any
+	// remaining required containers, we don't have to wait for other artifact containers
+	// to exit
+	if hasFailedContainers(pod) && len(requiredContainers) == 0 {
+		for k := range artifactContainers {
+			delete(artifactContainers, k)
+		}
+	}
+	// no more artifact containers, we can start grabbing artifacts
 	if len(artifactContainers) == 0 {
 		log.Printf("DEBUG: no more containers in %s", pod.Name)
-		// when all containers in a given pod that output artifacts have completed, exit
 		w.podsToDownload <- pod.Name
 	}
+	// no more pods, we can shutdown the worker gracefully
 	if len(w.remaining) == 0 {
 		log.Printf("DEBUG: no more pods")
 		close(w.podsToDownload)
 	}
 }
 
-func (w *artifactWorker) Done(podName string) bool {
+func (w *ArtifactWorker) Done(podName string) bool {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 	log.Printf("DEBUG: remaining containers for pod %s %v", podName, w.remaining[podName])
@@ -325,21 +378,19 @@ func (w *artifactWorker) Done(podName string) bool {
 	return !ok
 }
 
-func addArtifactContainersFromPod(pod *coreapi.Pod, artifacts map[string]map[string]struct{}) map[string]map[string]struct{} {
-	s := artifacts[pod.Name]
-	if s == nil {
-		s = make(map[string]struct{})
-		artifacts[pod.Name] = s
-	}
+func addArtifactContainersFromPod(pod *coreapi.Pod, worker *ArtifactWorker) {
+	var containers []string
 	for _, container := range append(append([]coreapi.Container{}, pod.Spec.InitContainers...), pod.Spec.Containers...) {
-		if container.Name == "artifacts" {
+		if !containerHasVolumeName(container, "artifacts") {
 			continue
 		}
-		if containerHasVolumeName(container, "artifacts") {
-			s[container.Name] = struct{}{}
-		}
+		containers = append(containers, container.Name)
 	}
-	return artifacts
+	var waitForContainers []string
+	if names := pod.Annotations["ci-operator.openshift.io/wait-for-container-artifacts"]; len(names) > 0 {
+		waitForContainers = strings.Split(names, ",")
+	}
+	worker.CollectFromPod(pod.Name, containers, waitForContainers)
 }
 
 func containerHasVolumeName(container coreapi.Container, name string) bool {
@@ -351,8 +402,7 @@ func containerHasVolumeName(container coreapi.Container, name string) bool {
 	return true
 }
 
-func addArtifactsToTemplate(template *templateapi.Template) map[string]map[string]struct{} {
-	allPodsWithArtifacts := make(map[string]map[string]struct{})
+func addArtifactsToTemplate(template *templateapi.Template) {
 	for i := range template.Objects {
 		t := &template.Objects[i]
 		var pod map[string]interface{}
@@ -370,7 +420,6 @@ func addArtifactsToTemplate(template *templateapi.Template) map[string]map[strin
 		if len(names) == 0 {
 			continue
 		}
-		allPodsWithArtifacts[jsonString(pod, "metadata", "name")] = names
 		data, err := json.Marshal(artifactsContainer())
 		if err != nil {
 			panic(err)
@@ -388,7 +437,6 @@ func addArtifactsToTemplate(template *templateapi.Template) map[string]map[strin
 		t.Object = nil
 		t.Raw = data
 	}
-	return allPodsWithArtifacts
 }
 
 func jsonMap(obj map[string]interface{}, keys ...string) map[string]interface{} {

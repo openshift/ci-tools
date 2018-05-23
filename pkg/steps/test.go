@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"path/filepath"
 
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -45,15 +46,19 @@ func (s *testStep) Run(ctx context.Context, dry bool) error {
 			},
 		},
 	}
-	var podsWithArtifacts podContainersMap
+
+	var notifier ContainerNotifier = NopNotifier
 	if s.gatherArtifacts() {
+		artifacts := NewArtifactWorker(s.podClient, filepath.Join(s.artifactDir, s.config.As), s.jobSpec.Namespace())
 		pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, coreapi.VolumeMount{
 			Name:      "artifacts",
 			MountPath: s.config.ArtifactDir,
 		})
 		addArtifactsContainer(pod, s.config.ArtifactDir)
-		podsWithArtifacts = podContainersMap{pod.Name: {"test": struct{}{}}}
+		artifacts.CollectFromPod(pod.Name, []string{"test"}, nil)
+		notifier = artifacts
 	}
+
 	if owner := s.jobSpec.Owner(); owner != nil {
 		pod.OwnerReferences = append(pod.OwnerReferences, *owner)
 	}
@@ -65,13 +70,6 @@ func (s *testStep) Run(ctx context.Context, dry bool) error {
 	}
 
 	// when the test container terminates and artifact directory has been set, grab everything under the directory
-	notifier, err := newPodArtifactWorker(s.podClient, s.artifactDir, s.jobSpec.Namespace(), s.config.As, podsWithArtifacts)
-	if err != nil {
-		return err
-	}
-	if notifier == nil {
-		notifier = NopNotifier
-	}
 
 	go func() {
 		<-ctx.Done()
@@ -82,7 +80,7 @@ func (s *testStep) Run(ctx context.Context, dry bool) error {
 		}
 	}()
 
-	pod, err = createOrRestartPod(s.podClient.Pods(s.jobSpec.Namespace()), pod)
+	pod, err := createOrRestartPod(s.podClient.Pods(s.jobSpec.Namespace()), pod)
 	if err != nil {
 		return err
 	}

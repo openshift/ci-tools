@@ -27,6 +27,8 @@ objects:
   metadata:
     name: test-with-artifacts
     namespace: ${NAMESPACE}
+    annotations:
+      ci-operator.openshift.io/wait-for-container-artifacts: wait3
   spec:
     restartPolicy: Never
     activeDeadlineSeconds: 7200
@@ -81,6 +83,6 @@ objects:
         #!/bin/bash
         set -euo pipefail
 
-        echo "hi, artifacts" > /tmp/artifacts/test1
+        echo "CHANGED, artifacts" > /tmp/artifacts/test1
         sleep 7
         exit 0

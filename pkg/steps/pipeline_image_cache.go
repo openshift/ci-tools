@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 
 	buildapi "github.com/openshift/api/build/v1"
 	"github.com/openshift/ci-operator/pkg/api"
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
+	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func rawCommandDockerfile(from api.PipelineImageStreamTagReference, commands string) string {
@@ -19,6 +21,7 @@ type pipelineImageCacheStep struct {
 	config      api.PipelineImageCacheStepConfiguration
 	buildClient BuildClient
 	istClient   imageclientset.ImageStreamTagsGetter
+	isClient    imageclientset.ImageStreamsGetter
 	jobSpec     *JobSpec
 }
 
@@ -50,16 +53,36 @@ func (s *pipelineImageCacheStep) Creates() []api.StepLink {
 }
 
 func (s *pipelineImageCacheStep) Provides() (api.ParameterMap, api.StepLink) {
-	return nil, nil
+	if len(s.config.To) == 0 {
+		return nil, nil
+	}
+	return api.ParameterMap{
+		fmt.Sprintf("LOCAL_IMAGE_%s", strings.ToUpper(strings.Replace(string(s.config.To), "-", "_", -1))): func() (string, error) {
+			is, err := s.isClient.ImageStreams(s.jobSpec.Namespace()).Get(PipelineImageStream, meta.GetOptions{})
+			if err != nil {
+				return "", err
+			}
+			var registry string
+			if len(is.Status.PublicDockerImageRepository) > 0 {
+				registry = is.Status.PublicDockerImageRepository
+			} else if len(is.Status.DockerImageRepository) > 0 {
+				registry = is.Status.DockerImageRepository
+			} else {
+				return "", fmt.Errorf("image stream %s has no accessible image registry value", s.config.To)
+			}
+			return fmt.Sprintf("%s:%s", registry, s.config.To), nil
+		},
+	}, api.InternalImageLink(s.config.To)
 }
 
 func (s *pipelineImageCacheStep) Name() string { return string(s.config.To) }
 
-func PipelineImageCacheStep(config api.PipelineImageCacheStepConfiguration, buildClient BuildClient, istClient imageclientset.ImageStreamTagsGetter, jobSpec *JobSpec) api.Step {
+func PipelineImageCacheStep(config api.PipelineImageCacheStepConfiguration, buildClient BuildClient, istClient imageclientset.ImageStreamTagsGetter, isClient imageclientset.ImageStreamsGetter, jobSpec *JobSpec) api.Step {
 	return &pipelineImageCacheStep{
 		config:      config,
 		buildClient: buildClient,
 		istClient:   istClient,
+		isClient:    isClient,
 		jobSpec:     jobSpec,
 	}
 }

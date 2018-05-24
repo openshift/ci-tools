@@ -78,6 +78,11 @@ of dynamic parameters that are inferred from previous steps. These parameters ar
     The public image repository URL for an output image. If specified the template
     will depend on the image being built.
 
+  LOCAL_IMAGE_<component>
+    The public image repository URL for an image that was built during this run but
+    was not part of the output (such as pipeline cache images). If specified the
+    template will depend on the image being built.
+
   JOB_NAME
     The job name from the JOB_SPEC
 

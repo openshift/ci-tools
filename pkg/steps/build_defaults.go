@@ -107,7 +107,7 @@ func FromConfig(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec, templat
 		if rawStep.InputImageTagStepConfiguration != nil {
 			step = InputImageTagStep(*rawStep.InputImageTagStepConfiguration, imageStreamTagsGetter, jobSpec)
 		} else if rawStep.PipelineImageCacheStepConfiguration != nil {
-			step = PipelineImageCacheStep(*rawStep.PipelineImageCacheStepConfiguration, buildClient, imageStreamTagsGetter, jobSpec)
+			step = PipelineImageCacheStep(*rawStep.PipelineImageCacheStepConfiguration, buildClient, imageStreamTagsGetter, imageStreamGetter, jobSpec)
 		} else if rawStep.SourceStepConfiguration != nil {
 			step = SourceStep(*rawStep.SourceStepConfiguration, buildClient, imageStreamTagsGetter, jobSpec)
 		} else if rawStep.ProjectDirectoryImageBuildStepConfiguration != nil {

@@ -195,7 +195,7 @@ func (s *templateExecutionStep) Requires() []api.StepLink {
 			continue
 		}
 		if strings.HasPrefix(p.Name, "IMAGE_") {
-			links = append(links, s.params.Links("IMAGE_FORMAT")...)
+			links = append(links, api.ReleaseImagesLink())
 			continue
 		}
 	}
@@ -255,6 +255,18 @@ func (p *DeferredParameters) Map() (map[string]string, error) {
 		m[k] = v
 	}
 	return m, nil
+}
+
+func (p *DeferredParameters) Set(name, value string) {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+	if _, ok := p.fns[name]; ok {
+		return
+	}
+	if _, ok := p.values[name]; ok {
+		return
+	}
+	p.values[name] = value
 }
 
 func (p *DeferredParameters) Add(name string, link api.StepLink, fn func() (string, error)) {

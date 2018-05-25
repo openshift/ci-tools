@@ -33,6 +33,7 @@ type releaseImagesTagStep struct {
 	isGetter        imageclientset.ImageStreamsGetter
 	routeClient     routeclientset.RoutesGetter
 	configMapClient coreclientset.ConfigMapsGetter
+	params          *DeferredParameters
 	jobSpec         *JobSpec
 }
 
@@ -101,10 +102,19 @@ func (s *releaseImagesTagStep) Run(ctx context.Context, dry bool) error {
 			fmt.Printf("%s\n", istJSON)
 			return nil
 		}
-		_, err = s.isGetter.ImageStreams(s.jobSpec.Namespace()).Create(newIS)
+		is, err = s.isGetter.ImageStreams(s.jobSpec.Namespace()).Create(newIS)
 		if err != nil && !errors.IsAlreadyExists(err) {
 			return fmt.Errorf("could not copy stable imagestreamtag: %v", err)
 		}
+
+		for _, tag := range is.Spec.Tags {
+			spec, ok := resolvePullSpec(is, tag.Name)
+			if !ok {
+				continue
+			}
+			s.params.Set(componentToParamName(tag.Name), spec)
+		}
+
 		return nil
 	}
 
@@ -155,9 +165,13 @@ func (s *releaseImagesTagStep) Run(ctx context.Context, dry bool) error {
 					fmt.Printf("%s\n", istJSON)
 					continue
 				}
-				_, err := s.istClient.ImageStreamTags(s.jobSpec.Namespace()).Create(ist)
+				ist, err := s.istClient.ImageStreamTags(s.jobSpec.Namespace()).Create(ist)
 				if err != nil && !errors.IsAlreadyExists(err) {
 					return fmt.Errorf("could not copy stable imagestreamtag: %v", err)
+				}
+
+				if spec, ok := resolvePullSpec(&stableImageStream, tag.Name); ok {
+					s.params.Set(componentToParamName(tag.Name), spec)
 				}
 			}
 		}
@@ -261,13 +275,45 @@ func (s *releaseImagesTagStep) Provides() (api.ParameterMap, api.StepLink) {
 
 func (s *releaseImagesTagStep) Name() string { return "" }
 
-func ReleaseImagesTagStep(config api.ReleaseTagConfiguration, istClient imageclientset.ImageStreamTagsGetter, isGetter imageclientset.ImageStreamsGetter, routeClient routeclientset.RoutesGetter, configMapClient coreclientset.ConfigMapsGetter, jobSpec *JobSpec) api.Step {
+func ReleaseImagesTagStep(config api.ReleaseTagConfiguration, istClient imageclientset.ImageStreamTagsGetter, isGetter imageclientset.ImageStreamsGetter, routeClient routeclientset.RoutesGetter, configMapClient coreclientset.ConfigMapsGetter, params *DeferredParameters, jobSpec *JobSpec) api.Step {
 	return &releaseImagesTagStep{
 		config:          config,
 		istClient:       istClient,
 		isGetter:        isGetter,
 		routeClient:     routeClient,
 		configMapClient: configMapClient,
+		params:          params,
 		jobSpec:         jobSpec,
 	}
+}
+
+func componentToParamName(component string) string {
+	return strings.ToUpper(strings.Replace(component, "-", "_", -1))
+}
+
+func resolvePullSpec(is *imageapi.ImageStream, tag string) (string, bool) {
+	for _, tags := range is.Status.Tags {
+		if tags.Tag != tag {
+			continue
+		}
+		if len(tags.Items) == 0 {
+			break
+		}
+		if image := tags.Items[0].Image; len(image) > 0 {
+			if len(is.Status.PublicDockerImageRepository) > 0 {
+				return fmt.Sprintf("%s@%s", is.Status.PublicDockerImageRepository, image), true
+			}
+			if len(is.Status.DockerImageRepository) > 0 {
+				return fmt.Sprintf("%s@%s", is.Status.DockerImageRepository, image), true
+			}
+		}
+		break
+	}
+	if len(is.Status.PublicDockerImageRepository) > 0 {
+		return fmt.Sprintf("%s:%s", is.Status.PublicDockerImageRepository, tag), true
+	}
+	if len(is.Status.DockerImageRepository) > 0 {
+		return fmt.Sprintf("%s:%s", is.Status.DockerImageRepository, tag), true
+	}
+	return "", false
 }

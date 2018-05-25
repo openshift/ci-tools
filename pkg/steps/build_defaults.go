@@ -120,7 +120,7 @@ func FromConfig(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec, templat
 			step = OutputImageTagStep(*rawStep.OutputImageTagStepConfiguration, imageStreamTagsGetter, imageStreamGetter, jobSpec)
 			imageStepLinks = append(imageStepLinks, step.Creates()...)
 		} else if rawStep.ReleaseImagesTagStepConfiguration != nil {
-			step = ReleaseImagesTagStep(*rawStep.ReleaseImagesTagStepConfiguration, imageStreamTagsGetter, imageStreamGetter, routeGetter, configMapGetter, jobSpec)
+			step = ReleaseImagesTagStep(*rawStep.ReleaseImagesTagStepConfiguration, imageStreamTagsGetter, imageStreamGetter, routeGetter, configMapGetter, params, jobSpec)
 			imageStepLinks = append(imageStepLinks, step.Creates()...)
 		} else if rawStep.TestStepConfiguration != nil {
 			step = TestStep(*rawStep.TestStepConfiguration, podClient, artifactDir, jobSpec)

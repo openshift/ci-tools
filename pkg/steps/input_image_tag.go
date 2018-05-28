@@ -18,9 +18,10 @@ import (
 // in the pipeline ImageStream that resolves to
 // the base image
 type inputImageTagStep struct {
-	config  api.InputImageTagStepConfiguration
-	client  imageclientset.ImageStreamTagsGetter
-	jobSpec *JobSpec
+	config    api.InputImageTagStepConfiguration
+	srcClient imageclientset.ImageV1Interface
+	dstClient imageclientset.ImageV1Interface
+	jobSpec   *JobSpec
 
 	imageName string
 }
@@ -30,17 +31,25 @@ func (s *inputImageTagStep) Inputs(ctx context.Context, dry bool) (api.InputDefi
 		return api.InputDefinition{s.imageName}, nil
 	}
 
-	from, err := s.client.ImageStreamTags(s.config.BaseImage.Namespace).Get(fmt.Sprintf("%s:%s", s.config.BaseImage.Name, s.config.BaseImage.Tag), meta.GetOptions{})
+	from, err := s.srcClient.ImageStreamTags(s.config.BaseImage.Namespace).Get(fmt.Sprintf("%s:%s", s.config.BaseImage.Name, s.config.BaseImage.Tag), meta.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("could not resolve base image: %v", err)
 	}
-	log.Printf("Resolved %s/%s:%s to %s", s.config.BaseImage.Namespace, s.config.BaseImage.Name, s.config.BaseImage.Tag, from.Image.Name)
+	if len(s.config.BaseImage.Cluster) > 0 {
+		log.Printf("Resolved %s/%s/%s:%s to %s", s.config.BaseImage.Cluster, s.config.BaseImage.Namespace, s.config.BaseImage.Name, s.config.BaseImage.Tag, from.Image.Name)
+	} else {
+		log.Printf("Resolved %s/%s:%s to %s", s.config.BaseImage.Namespace, s.config.BaseImage.Name, s.config.BaseImage.Tag, from.Image.Name)
+	}
 	s.imageName = from.Image.Name
 	return api.InputDefinition{from.Image.Name}, nil
 }
 
 func (s *inputImageTagStep) Run(ctx context.Context, dry bool) error {
-	log.Printf("Tagging %s/%s:%s into %s:%s", s.config.BaseImage.Namespace, s.config.BaseImage.Name, s.config.BaseImage.Tag, PipelineImageStream, s.config.To)
+	if len(s.config.BaseImage.Cluster) > 0 {
+		log.Printf("Tagging %s/%s/%s:%s into %s:%s", s.config.BaseImage.Cluster, s.config.BaseImage.Namespace, s.config.BaseImage.Name, s.config.BaseImage.Tag, PipelineImageStream, s.config.To)
+	} else {
+		log.Printf("Tagging %s/%s:%s into %s:%s", s.config.BaseImage.Namespace, s.config.BaseImage.Name, s.config.BaseImage.Tag, PipelineImageStream, s.config.To)
+	}
 
 	_, err := s.Inputs(ctx, dry)
 	if err != nil {
@@ -63,6 +72,23 @@ func (s *inputImageTagStep) Run(ctx context.Context, dry bool) error {
 			},
 		},
 	}
+
+	if len(s.config.BaseImage.Cluster) > 0 && s.srcClient != s.dstClient {
+		from, err := s.srcClient.ImageStreams(s.config.BaseImage.Namespace).Get(fmt.Sprintf("%s", s.config.BaseImage.Name), meta.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("could not resolve base image stream: %v", err)
+		}
+		var repo string
+		if len(from.Status.PublicDockerImageRepository) > 0 {
+			repo = from.Status.PublicDockerImageRepository
+		} else if len(from.Status.DockerImageRepository) > 0 {
+			repo = from.Status.DockerImageRepository
+		} else {
+			return fmt.Errorf("remote image stream %s has no accessible image registry value", s.config.BaseImage.Name)
+		}
+		ist.Tag.From = &coreapi.ObjectReference{Kind: "DockerImage", Name: fmt.Sprintf("%s@%s", repo, s.imageName)}
+	}
+
 	if dry {
 		istJSON, err := json.Marshal(ist)
 		if err != nil {
@@ -72,7 +98,7 @@ func (s *inputImageTagStep) Run(ctx context.Context, dry bool) error {
 		return nil
 	}
 
-	if _, err := s.client.ImageStreamTags(s.jobSpec.Namespace()).Create(ist); err != nil && !errors.IsAlreadyExists(err) {
+	if _, err := s.dstClient.ImageStreamTags(s.jobSpec.Namespace()).Create(ist); err != nil && !errors.IsAlreadyExists(err) {
 		return err
 	}
 	return nil
@@ -80,7 +106,7 @@ func (s *inputImageTagStep) Run(ctx context.Context, dry bool) error {
 
 func (s *inputImageTagStep) Done() (bool, error) {
 	log.Printf("Checking for existence of %s:%s", PipelineImageStream, s.config.To)
-	_, err := s.client.ImageStreamTags(s.jobSpec.Namespace()).Get(
+	_, err := s.dstClient.ImageStreamTags(s.jobSpec.Namespace()).Get(
 		fmt.Sprintf("%s:%s", PipelineImageStream, s.config.To),
 		meta.GetOptions{},
 	)
@@ -109,10 +135,11 @@ func (s *inputImageTagStep) Provides() (api.ParameterMap, api.StepLink) {
 
 func (s *inputImageTagStep) Name() string { return "" }
 
-func InputImageTagStep(config api.InputImageTagStepConfiguration, client imageclientset.ImageStreamTagsGetter, jobSpec *JobSpec) api.Step {
+func InputImageTagStep(config api.InputImageTagStepConfiguration, srcClient, dstClient imageclientset.ImageV1Interface, jobSpec *JobSpec) api.Step {
 	return &inputImageTagStep{
-		config:  config,
-		client:  client,
-		jobSpec: jobSpec,
+		config:    config,
+		srcClient: srcClient,
+		dstClient: dstClient,
+		jobSpec:   jobSpec,
 	}
 }

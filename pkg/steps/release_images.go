@@ -29,35 +29,35 @@ const (
 // a later point, selectively
 type releaseImagesTagStep struct {
 	config          api.ReleaseTagConfiguration
-	istClient       imageclientset.ImageStreamTagsGetter
-	isGetter        imageclientset.ImageStreamsGetter
+	srcClient       imageclientset.ImageV1Interface
+	dstClient       imageclientset.ImageV1Interface
 	routeClient     routeclientset.RoutesGetter
 	configMapClient coreclientset.ConfigMapsGetter
 	params          *DeferredParameters
 	jobSpec         *JobSpec
 }
 
-func findStatusTag(is *imageapi.ImageStream, tag string) *coreapi.ObjectReference {
+func findStatusTag(is *imageapi.ImageStream, tag string) (*coreapi.ObjectReference, string) {
 	for _, t := range is.Status.Tags {
 		if t.Tag != tag {
 			continue
 		}
 		if len(t.Items) == 0 {
-			return nil
+			return nil, ""
 		}
 		if len(t.Items[0].Image) == 0 {
 			return &coreapi.ObjectReference{
 				Kind: "DockerImage",
 				Name: t.Items[0].DockerImageReference,
-			}
+			}, ""
 		}
 		return &coreapi.ObjectReference{
 			Kind:      "ImageStreamImage",
 			Namespace: is.Namespace,
 			Name:      fmt.Sprintf("%s@%s", is.Name, t.Items[0].Image),
-		}
+		}, t.Items[0].Image
 	}
-	return nil
+	return nil, ""
 }
 
 func (s *releaseImagesTagStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
@@ -75,10 +75,21 @@ func (s *releaseImagesTagStep) Run(ctx context.Context, dry bool) error {
 	log.Printf("Tagging release images from %s", sourceName(s.config))
 
 	if len(s.config.Name) > 0 {
-		is, err := s.isGetter.ImageStreams(s.config.Namespace).Get(s.config.Name, meta.GetOptions{})
+		is, err := s.srcClient.ImageStreams(s.config.Namespace).Get(s.config.Name, meta.GetOptions{})
 		if err != nil {
 			return fmt.Errorf("could not resolve stable imagestream: %v", err)
 		}
+		var repo string
+		if len(s.config.Cluster) > 0 {
+			if len(is.Status.PublicDockerImageRepository) > 0 {
+				repo = is.Status.PublicDockerImageRepository
+			} else if len(is.Status.DockerImageRepository) > 0 {
+				repo = is.Status.DockerImageRepository
+			} else {
+				return fmt.Errorf("remote image stream %s has no accessible image registry value", s.config.Name)
+			}
+		}
+
 		is.UID = ""
 		newIS := &imageapi.ImageStream{
 			ObjectMeta: meta.ObjectMeta{
@@ -86,7 +97,14 @@ func (s *releaseImagesTagStep) Run(ctx context.Context, dry bool) error {
 			},
 		}
 		for _, tag := range is.Spec.Tags {
-			if valid := findStatusTag(is, tag.Name); valid != nil {
+			if valid, image := findStatusTag(is, tag.Name); valid != nil {
+				if len(s.config.Cluster) > 0 {
+					if len(image) > 0 {
+						valid = &coreapi.ObjectReference{Kind: "DockerImage", Name: fmt.Sprintf("%s@%s", repo, image)}
+					} else {
+						valid = &coreapi.ObjectReference{Kind: "DockerImage", Name: fmt.Sprintf("%s:%s", repo, tag.Name)}
+					}
+				}
 				newIS.Spec.Tags = append(newIS.Spec.Tags, imageapi.TagReference{
 					Name: tag.Name,
 					From: valid,
@@ -102,7 +120,7 @@ func (s *releaseImagesTagStep) Run(ctx context.Context, dry bool) error {
 			fmt.Printf("%s\n", istJSON)
 			return nil
 		}
-		is, err = s.isGetter.ImageStreams(s.jobSpec.Namespace()).Create(newIS)
+		is, err = s.dstClient.ImageStreams(s.jobSpec.Namespace()).Create(newIS)
 		if err != nil && !errors.IsAlreadyExists(err) {
 			return fmt.Errorf("could not copy stable imagestreamtag: %v", err)
 		}
@@ -118,7 +136,7 @@ func (s *releaseImagesTagStep) Run(ctx context.Context, dry bool) error {
 		return nil
 	}
 
-	stableImageStreams, err := s.isGetter.ImageStreams(s.config.Namespace).List(meta.ListOptions{})
+	stableImageStreams, err := s.srcClient.ImageStreams(s.config.Namespace).List(meta.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("could not resolve stable imagestreams: %v", err)
 	}
@@ -128,6 +146,17 @@ func (s *releaseImagesTagStep) Run(ctx context.Context, dry bool) error {
 		targetTag := s.config.Tag
 		if override, ok := s.config.TagOverrides[stableImageStream.Name]; ok {
 			targetTag = override
+		}
+
+		var repo string
+		if len(s.config.Cluster) > 0 {
+			if len(stableImageStream.Status.PublicDockerImageRepository) > 0 {
+				repo = stableImageStream.Status.PublicDockerImageRepository
+			} else if len(stableImageStream.Status.DockerImageRepository) > 0 {
+				repo = stableImageStream.Status.DockerImageRepository
+			} else {
+				return fmt.Errorf("remote image stream %s has no accessible image registry value", s.config.Name)
+			}
 		}
 
 		for _, tag := range stableImageStream.Spec.Tags {
@@ -157,6 +186,10 @@ func (s *releaseImagesTagStep) Run(ctx context.Context, dry bool) error {
 					},
 				}
 
+				if len(s.config.Cluster) > 0 {
+					ist.Tag.From = &coreapi.ObjectReference{Kind: "DockerImage", Name: fmt.Sprintf("%s@%s", repo, id)}
+				}
+
 				if dry {
 					istJSON, err := json.Marshal(ist)
 					if err != nil {
@@ -165,7 +198,7 @@ func (s *releaseImagesTagStep) Run(ctx context.Context, dry bool) error {
 					fmt.Printf("%s\n", istJSON)
 					continue
 				}
-				ist, err := s.istClient.ImageStreamTags(s.jobSpec.Namespace()).Create(ist)
+				ist, err := s.dstClient.ImageStreamTags(s.jobSpec.Namespace()).Create(ist)
 				if err != nil && !errors.IsAlreadyExists(err) {
 					return fmt.Errorf("could not copy stable imagestreamtag: %v", err)
 				}
@@ -185,7 +218,7 @@ func (s *releaseImagesTagStep) createReleaseConfigMap(dry bool) error {
 	imageBase := "dry-fake"
 	rpmRepo := "dry-fake"
 	if !dry {
-		originImageStream, err := s.isGetter.ImageStreams(s.jobSpec.Namespace()).Get("origin", meta.GetOptions{})
+		originImageStream, err := s.dstClient.ImageStreams(s.jobSpec.Namespace()).Get("origin", meta.GetOptions{})
 		if err != nil {
 			return fmt.Errorf("could not resolve main release ImageStream: %v", err)
 		}
@@ -255,7 +288,7 @@ func (s *releaseImagesTagStep) Provides() (api.ParameterMap, api.StepLink) {
 	return api.ParameterMap{
 		"IMAGE_FORMAT": func() (string, error) {
 			registry := "REGISTRY"
-			if is, err := s.isGetter.ImageStreams(s.jobSpec.Namespace()).Get(PipelineImageStream, meta.GetOptions{}); err == nil {
+			if is, err := s.dstClient.ImageStreams(s.jobSpec.Namespace()).Get(PipelineImageStream, meta.GetOptions{}); err == nil {
 				if len(is.Status.PublicDockerImageRepository) > 0 {
 					registry = strings.SplitN(is.Status.PublicDockerImageRepository, "/", 2)[0]
 				} else if len(is.Status.DockerImageRepository) > 0 {
@@ -275,11 +308,11 @@ func (s *releaseImagesTagStep) Provides() (api.ParameterMap, api.StepLink) {
 
 func (s *releaseImagesTagStep) Name() string { return "" }
 
-func ReleaseImagesTagStep(config api.ReleaseTagConfiguration, istClient imageclientset.ImageStreamTagsGetter, isGetter imageclientset.ImageStreamsGetter, routeClient routeclientset.RoutesGetter, configMapClient coreclientset.ConfigMapsGetter, params *DeferredParameters, jobSpec *JobSpec) api.Step {
+func ReleaseImagesTagStep(config api.ReleaseTagConfiguration, srcClient, dstClient imageclientset.ImageV1Interface, routeClient routeclientset.RoutesGetter, configMapClient coreclientset.ConfigMapsGetter, params *DeferredParameters, jobSpec *JobSpec) api.Step {
 	return &releaseImagesTagStep{
 		config:          config,
-		istClient:       istClient,
-		isGetter:        isGetter,
+		srcClient:       srcClient,
+		dstClient:       dstClient,
 		routeClient:     routeClient,
 		configMapClient: configMapClient,
 		params:          params,

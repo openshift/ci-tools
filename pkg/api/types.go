@@ -69,6 +69,12 @@ type InputConfiguration struct {
 
 // ImageStreamTagReference identifies an ImageStreamTag
 type ImageStreamTagReference struct {
+	// Cluster is an optional cluster string (host, host:port, or
+	// scheme://host:port) to connect to for this image stream. The
+	// referenced cluster must support anonymous access to retrieve
+	// image streams, image stream tags, and image stream images in
+	// the provided namespace.
+	Cluster   string `json:"cluster"`
 	Namespace string `json:"namespace"`
 	Name      string `json:"name"`
 	Tag       string `json:"tag"`
@@ -84,6 +90,13 @@ type ImageStreamTagReference struct {
 // (openshift/origin-control-plane:v3.9). The former works well for
 // central control, the latter for distributed control.
 type ReleaseTagConfiguration struct {
+	// Cluster is an optional cluster string (host, host:port, or
+	// scheme://host:port) to connect to for this image stream. The
+	// referenced cluster must support anonymous access to retrieve
+	// image streams, image stream tags, and image stream images in
+	// the provided namespace.
+	Cluster string `json:"cluster"`
+
 	// Namespace identifies the namespace from which
 	// all release artifacts not built in the current
 	// job are tagged from.

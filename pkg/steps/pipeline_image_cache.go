@@ -19,6 +19,7 @@ RUN ["/bin/bash", "-c", %s]`, PipelineImageStream, from, strconv.Quote(fmt.Sprin
 
 type pipelineImageCacheStep struct {
 	config      api.PipelineImageCacheStepConfiguration
+	resources   api.ResourceConfiguration
 	buildClient BuildClient
 	imageClient imageclientset.ImageV1Interface
 	jobSpec     *JobSpec
@@ -36,6 +37,7 @@ func (s *pipelineImageCacheStep) Run(ctx context.Context, dry bool) error {
 			Type:       buildapi.BuildSourceDockerfile,
 			Dockerfile: &dockerfile,
 		},
+		s.resources,
 	), dry)
 }
 
@@ -76,9 +78,10 @@ func (s *pipelineImageCacheStep) Provides() (api.ParameterMap, api.StepLink) {
 
 func (s *pipelineImageCacheStep) Name() string { return string(s.config.To) }
 
-func PipelineImageCacheStep(config api.PipelineImageCacheStepConfiguration, buildClient BuildClient, imageClient imageclientset.ImageV1Interface, jobSpec *JobSpec) api.Step {
+func PipelineImageCacheStep(config api.PipelineImageCacheStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, imageClient imageclientset.ImageV1Interface, jobSpec *JobSpec) api.Step {
 	return &pipelineImageCacheStep{
 		config:      config,
+		resources:   resources,
 		buildClient: buildClient,
 		imageClient: imageClient,
 		jobSpec:     jobSpec,

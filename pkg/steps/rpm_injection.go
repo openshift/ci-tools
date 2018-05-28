@@ -19,6 +19,7 @@ RUN echo $'[built]\nname = Built RPMs\nbaseurl = http://%s\ngpgcheck = 0\nenable
 
 type rpmImageInjectionStep struct {
 	config      api.RPMImageInjectionStepConfiguration
+	resources   api.ResourceConfiguration
 	buildClient BuildClient
 	routeClient routeclientset.RoutesGetter
 	istClient   imageclientset.ImageStreamTagsGetter
@@ -47,6 +48,7 @@ func (s *rpmImageInjectionStep) Run(ctx context.Context, dry bool) error {
 			Type:       buildapi.BuildSourceDockerfile,
 			Dockerfile: &dockerfile,
 		},
+		s.resources,
 	), dry)
 }
 
@@ -68,9 +70,10 @@ func (s *rpmImageInjectionStep) Provides() (api.ParameterMap, api.StepLink) {
 
 func (s *rpmImageInjectionStep) Name() string { return string(s.config.To) }
 
-func RPMImageInjectionStep(config api.RPMImageInjectionStepConfiguration, buildClient BuildClient, routeClient routeclientset.RoutesGetter, istClient imageclientset.ImageStreamTagsGetter, jobSpec *JobSpec) api.Step {
+func RPMImageInjectionStep(config api.RPMImageInjectionStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, routeClient routeclientset.RoutesGetter, istClient imageclientset.ImageStreamTagsGetter, jobSpec *JobSpec) api.Step {
 	return &rpmImageInjectionStep{
 		config:      config,
+		resources:   resources,
 		buildClient: buildClient,
 		routeClient: routeClient,
 		istClient:   istClient,

@@ -41,6 +41,49 @@ type ReleaseBuildConfiguration struct {
 	// RawSteps are literal Steps that should be
 	// included in the final pipeline.
 	RawSteps []StepConfiguration `json:"raw_steps,omitempty"`
+
+	// Resources is a set of resource requests or limits over the
+	// input types. The special name '*' may be used to set default
+	// requests and limits.
+	Resources ResourceConfiguration
+}
+
+// ResourceConfiguration defines resource overrides for jobs run
+// by the operator.
+type ResourceConfiguration map[string]ResourceRequirements
+
+func (c ResourceConfiguration) RequirementsForStep(name string) ResourceRequirements {
+	req := ResourceRequirements{
+		Requests: make(ResourceList),
+		Limits:   make(ResourceList),
+	}
+	if defaults, ok := c["*"]; ok {
+		req.Requests.Add(defaults.Requests)
+		req.Limits.Add(defaults.Limits)
+	}
+	if values, ok := c[name]; ok {
+		req.Requests.Add(values.Requests)
+		req.Limits.Add(values.Limits)
+	}
+	return req
+}
+
+// ResourceRequirements are resource requests and limits applied
+// to the individual steps in the job. They are passed directly to
+// builds or pods.
+type ResourceRequirements struct {
+	Requests ResourceList `json:"requests"`
+	Limits   ResourceList `json:"limits"`
+}
+
+// ResourceList is a map of string resource names and resource
+// quantities, as defined on Kubernetes objects.
+type ResourceList map[string]string
+
+func (l ResourceList) Add(values ResourceList) {
+	for name, value := range values {
+		l[name] = value
+	}
 }
 
 // InputConfiguration contains the set of image inputs

@@ -3,6 +3,7 @@ package steps
 import (
 	"crypto/sha256"
 	"fmt"
+	"net/url"
 	"strings"
 
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -45,8 +46,7 @@ func FromConfig(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec, templat
 	var buildSteps []api.Step
 
 	var buildClient BuildClient
-	var imageStreamGetter imageclientset.ImageStreamsGetter
-	var imageStreamTagsGetter imageclientset.ImageStreamTagsGetter
+	var imageClient imageclientset.ImageV1Interface
 	var routeGetter routeclientset.RoutesGetter
 	var deploymentGetter appsclientset.DeploymentConfigsGetter
 	var templateClient TemplateClient
@@ -65,8 +65,7 @@ func FromConfig(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec, templat
 		if err != nil {
 			return buildSteps, fmt.Errorf("could not get image client for cluster config: %v", err)
 		}
-		imageStreamGetter = imageGetter
-		imageStreamTagsGetter = imageGetter
+		imageClient = imageGetter
 
 		routeGetter, err = routeclientset.NewForConfig(clusterConfig)
 		if err != nil {
@@ -105,25 +104,33 @@ func FromConfig(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec, templat
 	for _, rawStep := range stepConfigsForBuild(config, jobSpec) {
 		var step api.Step
 		if rawStep.InputImageTagStepConfiguration != nil {
-			step = InputImageTagStep(*rawStep.InputImageTagStepConfiguration, imageStreamTagsGetter, jobSpec)
+			srcClient, err := anonymousClusterImageStreamClient(imageClient, clusterConfig, rawStep.InputImageTagStepConfiguration.BaseImage.Cluster)
+			if err != nil {
+				return nil, fmt.Errorf("unable to access image stream tag on remote cluster: %v", err)
+			}
+			step = InputImageTagStep(*rawStep.InputImageTagStepConfiguration, srcClient, imageClient, jobSpec)
 		} else if rawStep.PipelineImageCacheStepConfiguration != nil {
-			step = PipelineImageCacheStep(*rawStep.PipelineImageCacheStepConfiguration, buildClient, imageStreamTagsGetter, imageStreamGetter, jobSpec)
+			step = PipelineImageCacheStep(*rawStep.PipelineImageCacheStepConfiguration, config.Resources, buildClient, imageClient, jobSpec)
 		} else if rawStep.SourceStepConfiguration != nil {
-			step = SourceStep(*rawStep.SourceStepConfiguration, buildClient, imageStreamTagsGetter, jobSpec)
+			step = SourceStep(*rawStep.SourceStepConfiguration, config.Resources, buildClient, imageClient, jobSpec)
 		} else if rawStep.ProjectDirectoryImageBuildStepConfiguration != nil {
-			step = ProjectDirectoryImageBuildStep(*rawStep.ProjectDirectoryImageBuildStepConfiguration, buildClient, imageStreamTagsGetter, jobSpec)
+			step = ProjectDirectoryImageBuildStep(*rawStep.ProjectDirectoryImageBuildStepConfiguration, config.Resources, buildClient, imageClient, jobSpec)
 		} else if rawStep.RPMImageInjectionStepConfiguration != nil {
-			step = RPMImageInjectionStep(*rawStep.RPMImageInjectionStepConfiguration, buildClient, routeGetter, imageStreamTagsGetter, jobSpec)
+			step = RPMImageInjectionStep(*rawStep.RPMImageInjectionStepConfiguration, config.Resources, buildClient, routeGetter, imageClient, jobSpec)
 		} else if rawStep.RPMServeStepConfiguration != nil {
-			step = RPMServerStep(*rawStep.RPMServeStepConfiguration, deploymentGetter, routeGetter, serviceGetter, imageStreamTagsGetter, jobSpec)
+			step = RPMServerStep(*rawStep.RPMServeStepConfiguration, deploymentGetter, routeGetter, serviceGetter, imageClient, jobSpec)
 		} else if rawStep.OutputImageTagStepConfiguration != nil {
-			step = OutputImageTagStep(*rawStep.OutputImageTagStepConfiguration, imageStreamTagsGetter, imageStreamGetter, jobSpec)
+			step = OutputImageTagStep(*rawStep.OutputImageTagStepConfiguration, imageClient, imageClient, jobSpec)
 			imageStepLinks = append(imageStepLinks, step.Creates()...)
 		} else if rawStep.ReleaseImagesTagStepConfiguration != nil {
-			step = ReleaseImagesTagStep(*rawStep.ReleaseImagesTagStepConfiguration, imageStreamTagsGetter, imageStreamGetter, routeGetter, configMapGetter, params, jobSpec)
+			srcClient, err := anonymousClusterImageStreamClient(imageClient, clusterConfig, rawStep.ReleaseImagesTagStepConfiguration.Cluster)
+			if err != nil {
+				return nil, fmt.Errorf("unable to access release images on remote cluster: %v", err)
+			}
+			step = ReleaseImagesTagStep(*rawStep.ReleaseImagesTagStepConfiguration, srcClient, imageClient, routeGetter, configMapGetter, params, jobSpec)
 			imageStepLinks = append(imageStepLinks, step.Creates()...)
 		} else if rawStep.TestStepConfiguration != nil {
-			step = TestStep(*rawStep.TestStepConfiguration, podClient, artifactDir, jobSpec)
+			step = TestStep(*rawStep.TestStepConfiguration, config.Resources, podClient, artifactDir, jobSpec)
 		}
 		provides, link := step.Provides()
 		for name, fn := range provides {
@@ -146,26 +153,83 @@ func FromConfig(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec, templat
 	return buildSteps, nil
 }
 
+func anonymousClusterImageStreamClient(client imageclientset.ImageV1Interface, config *rest.Config, overrideClusterHost string) (imageclientset.ImageV1Interface, error) {
+	if config == nil || len(overrideClusterHost) == 0 {
+		return client, nil
+	}
+	if equivalentHosts(config.Host, overrideClusterHost) {
+		return client, nil
+	}
+	newConfig := rest.AnonymousClientConfig(config)
+	newConfig.Host = overrideClusterHost
+	return imageclientset.NewForConfig(newConfig)
+}
+
+func equivalentHosts(a, b string) bool {
+	a = normalizeURL(a)
+	b = normalizeURL(b)
+	return a == b
+}
+
+func normalizeURL(s string) string {
+	u, err := url.Parse(s)
+	if err != nil {
+		return s
+	}
+	if u.Scheme == "https" {
+		u.Scheme = ""
+	}
+	if strings.HasSuffix(u.Host, ":443") {
+		u.Host = strings.TrimSuffix(u.Host, ":443")
+	}
+	if u.Scheme == "" && u.Path == "" && u.Fragment == "" && u.RawQuery == "" {
+		return u.Host
+	}
+	return s
+}
+
 func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec) []api.StepConfiguration {
 	var buildSteps []api.StepConfiguration
 
-	if config.TestBaseImage != nil {
-		if config.TestBaseImage.Namespace == "" {
-			config.TestBaseImage.Namespace = jobSpec.baseNamespace
-		}
-		if config.TestBaseImage.Name == "" {
-			config.TestBaseImage.Name = fmt.Sprintf("%s-test-base", jobSpec.Refs.Repo)
-		}
-		buildSteps = append(buildSteps, api.StepConfiguration{InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
-			BaseImage: *config.TestBaseImage,
-			To:        api.PipelineImageStreamTagReferenceRoot,
-		}})
+	if config.InputConfiguration.BaseImages == nil {
+		config.InputConfiguration.BaseImages = make(map[string]api.ImageStreamTagReference)
+	}
+	if config.InputConfiguration.BaseRPMImages == nil {
+		config.InputConfiguration.BaseRPMImages = make(map[string]api.ImageStreamTagReference)
+	}
+
+	// ensure the "As" field is set to the provided alias.
+	for alias, target := range config.InputConfiguration.BaseImages {
+		target.As = alias
+		config.InputConfiguration.BaseImages[alias] = target
+	}
+	for alias, target := range config.InputConfiguration.BaseRPMImages {
+		target.As = alias
+		config.InputConfiguration.BaseRPMImages[alias] = target
 	}
 
 	buildSteps = append(buildSteps, api.StepConfiguration{SourceStepConfiguration: &api.SourceStepConfiguration{
 		From: api.PipelineImageStreamTagReferenceRoot,
 		To:   api.PipelineImageStreamTagReferenceSource,
 	}})
+
+	if target := config.InputConfiguration.TestBaseImage; target != nil {
+		if target.Namespace == "" {
+			target.Namespace = jobSpec.baseNamespace
+		}
+		if target.Name == "" {
+			target.Name = fmt.Sprintf("%s-test-base", jobSpec.Refs.Repo)
+		}
+		alias := target.As
+		if len(alias) == 0 {
+			alias = target.Tag
+		}
+
+		buildSteps = append(buildSteps, api.StepConfiguration{InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
+			BaseImage: *target,
+			To:        api.PipelineImageStreamTagReferenceRoot,
+		}})
+	}
 
 	if len(config.BinaryBuildCommands) > 0 {
 		buildSteps = append(buildSteps, api.StepConfiguration{PipelineImageCacheStepConfiguration: &api.PipelineImageCacheStepConfiguration{
@@ -209,27 +273,23 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec
 		}})
 	}
 
-	for _, baseImage := range config.BaseImages {
+	for alias, baseImage := range config.BaseImages {
 		buildSteps = append(buildSteps, api.StepConfiguration{InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 			BaseImage: baseImage,
-			To:        api.PipelineImageStreamTagReference(baseImage.Name),
+			To:        api.PipelineImageStreamTagReference(alias),
 		}})
 	}
 
-	for _, baseRPMImage := range config.BaseRPMImages {
-		as := baseRPMImage.As
-		if len(as) == 0 {
-			as = baseRPMImage.Name
-		}
-		intermediateTag := api.PipelineImageStreamTagReference(fmt.Sprintf("%s-without-rpms", as))
+	for alias, target := range config.InputConfiguration.BaseRPMImages {
+		intermediateTag := api.PipelineImageStreamTagReference(fmt.Sprintf("%s-without-rpms", alias))
 		buildSteps = append(buildSteps, api.StepConfiguration{InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
-			BaseImage: baseRPMImage,
+			BaseImage: target,
 			To:        intermediateTag,
 		}})
 
 		buildSteps = append(buildSteps, api.StepConfiguration{RPMImageInjectionStepConfiguration: &api.RPMImageInjectionStepConfiguration{
 			From: intermediateTag,
-			To:   api.PipelineImageStreamTagReference(as),
+			To:   api.PipelineImageStreamTagReference(alias),
 		}})
 	}
 

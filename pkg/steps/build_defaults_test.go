@@ -19,8 +19,8 @@ func TestStepConfigsForBuild(t *testing.T) {
 		{
 			name: "minimal information provided",
 			input: &api.ReleaseBuildConfiguration{
-				TestBaseImage: &api.ImageStreamTagReference{
-					Tag: "manual",
+				InputConfiguration: api.InputConfiguration{
+					TestBaseImage: &api.ImageStreamTagReference{Tag: "manual"},
 				},
 			},
 			jobSpec: &JobSpec{
@@ -48,8 +48,8 @@ func TestStepConfigsForBuild(t *testing.T) {
 		{
 			name: "binary build requested",
 			input: &api.ReleaseBuildConfiguration{
-				TestBaseImage: &api.ImageStreamTagReference{
-					Tag: "manual",
+				InputConfiguration: api.InputConfiguration{
+					TestBaseImage: &api.ImageStreamTagReference{Tag: "manual"},
 				},
 				BinaryBuildCommands: "hi",
 			},
@@ -84,8 +84,8 @@ func TestStepConfigsForBuild(t *testing.T) {
 		{
 			name: "binary and rpm build requested",
 			input: &api.ReleaseBuildConfiguration{
-				TestBaseImage: &api.ImageStreamTagReference{
-					Tag: "manual",
+				InputConfiguration: api.InputConfiguration{
+					TestBaseImage: &api.ImageStreamTagReference{Tag: "manual"},
 				},
 				BinaryBuildCommands: "hi",
 				RpmBuildCommands:    "hello",
@@ -131,8 +131,8 @@ func TestStepConfigsForBuild(t *testing.T) {
 		{
 			name: "rpm but not binary build requested",
 			input: &api.ReleaseBuildConfiguration{
-				TestBaseImage: &api.ImageStreamTagReference{
-					Tag: "manual",
+				InputConfiguration: api.InputConfiguration{
+					TestBaseImage: &api.ImageStreamTagReference{Tag: "manual"},
 				},
 				RpmBuildCommands: "hello",
 			},
@@ -171,8 +171,8 @@ func TestStepConfigsForBuild(t *testing.T) {
 		{
 			name: "rpm with custom output but not binary build requested",
 			input: &api.ReleaseBuildConfiguration{
-				TestBaseImage: &api.ImageStreamTagReference{
-					Tag: "manual",
+				InputConfiguration: api.InputConfiguration{
+					TestBaseImage: &api.ImageStreamTagReference{Tag: "manual"},
 				},
 				RpmBuildLocation: "testing",
 				RpmBuildCommands: "hello",
@@ -212,14 +212,16 @@ func TestStepConfigsForBuild(t *testing.T) {
 		{
 			name: "explicit base image requested",
 			input: &api.ReleaseBuildConfiguration{
-				TestBaseImage: &api.ImageStreamTagReference{
-					Tag: "manual",
+				InputConfiguration: api.InputConfiguration{
+					TestBaseImage: &api.ImageStreamTagReference{Tag: "manual"},
+					BaseImages: map[string]api.ImageStreamTagReference{
+						"name": {
+							Namespace: "namespace",
+							Name:      "name",
+							Tag:       "tag",
+						},
+					},
 				},
-				BaseImages: []api.ImageStreamTagReference{{
-					Namespace: "namespace",
-					Name:      "name",
-					Tag:       "tag",
-				}},
 			},
 			jobSpec: &JobSpec{
 				Refs: Refs{
@@ -247,6 +249,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 						Namespace: "namespace",
 						Name:      "name",
 						Tag:       "tag",
+						As:        "name",
 					},
 					To: api.PipelineImageStreamTagReference("name"),
 				},
@@ -255,14 +258,16 @@ func TestStepConfigsForBuild(t *testing.T) {
 		{
 			name: "rpm base image requested",
 			input: &api.ReleaseBuildConfiguration{
-				TestBaseImage: &api.ImageStreamTagReference{
-					Tag: "manual",
+				InputConfiguration: api.InputConfiguration{
+					TestBaseImage: &api.ImageStreamTagReference{Tag: "manual"},
+					BaseRPMImages: map[string]api.ImageStreamTagReference{
+						"name": {
+							Namespace: "namespace",
+							Name:      "name",
+							Tag:       "tag",
+						},
+					},
 				},
-				BaseRPMImages: []api.ImageStreamTagReference{{
-					Namespace: "namespace",
-					Name:      "name",
-					Tag:       "tag",
-				}},
 			},
 			jobSpec: &JobSpec{
 				Refs: Refs{
@@ -290,6 +295,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 						Namespace: "namespace",
 						Name:      "name",
 						Tag:       "tag",
+						As:        "name",
 					},
 					To: api.PipelineImageStreamTagReference("name-without-rpms"),
 				},
@@ -372,5 +378,5 @@ func formatStep(step api.StepConfiguration) string {
 }
 
 func formatReference(ref api.ImageStreamTagReference) string {
-	return fmt.Sprintf("%s/%s:%s", ref.Namespace, ref.Name, ref.Tag)
+	return fmt.Sprintf("%s/%s:%s (as:%s)", ref.Namespace, ref.Name, ref.Tag, ref.As)
 }

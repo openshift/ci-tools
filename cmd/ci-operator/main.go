@@ -104,6 +104,9 @@ that defines artifact_dir or template that has an "artifacts" volume mounted
 into a container will have artifacts extracted after the container has completed.
 Errors in artifact extraction will not cause build failures.
 
+In CI environments the inputs to a job may be different than what a normal
+development workflow would use. The --override file will override fields
+defined in the config file, such as base images and the release tag configuration.
 `
 
 func main() {
@@ -151,6 +154,7 @@ func (s *stringSlice) Set(value string) error {
 
 type options struct {
 	configSpecPath    string
+	overrideSpecPath  string
 	templatePaths     stringSlice
 	secretDirectories stringSlice
 
@@ -185,6 +189,7 @@ func bindOptions(flag *flag.FlagSet) *options {
 
 	// what we will run
 	flag.StringVar(&opt.configSpecPath, "config", "", "The configuration file. If not specified the CONFIG_SPEC environment variable will be used.")
+	flag.StringVar(&opt.overrideSpecPath, "override", "", "A configuration file that can override fields defined in the input part of the configuration.")
 	flag.StringVar(&opt.target, "target", "", "A config nofig to target. Only steps that are required for this target will be run.")
 	flag.BoolVar(&opt.dry, "dry-run", true, "Do not contact the API server.")
 
@@ -212,6 +217,7 @@ func (o *options) Validate() error {
 }
 
 func (o *options) Complete() error {
+	// Load the standard configuration from the path or env
 	var configSpec string
 	if len(o.configSpecPath) > 0 {
 		data, err := ioutil.ReadFile(o.configSpecPath)
@@ -228,6 +234,23 @@ func (o *options) Complete() error {
 	}
 	if err := json.Unmarshal([]byte(configSpec), &o.configSpec); err != nil {
 		return fmt.Errorf("invalid configuration: %v\nvalue:\n%s", err, string(configSpec))
+	}
+
+	// If the user specifies an input override, apply it after the config spec has been loaded.
+	var overrideSpec []byte
+	if len(o.overrideSpecPath) > 0 {
+		data, err := ioutil.ReadFile(o.overrideSpecPath)
+		if err != nil {
+			return fmt.Errorf("--input error: %v", err)
+		}
+		overrideSpec = data
+	} else {
+		overrideSpec = []byte(os.Getenv("OVERRIDE_SPEC"))
+	}
+	if len(overrideSpec) > 0 {
+		if err := json.Unmarshal(overrideSpec, &o.configSpec); err != nil {
+			return fmt.Errorf("invalid configuration: %v\nvalue:\n%s", err, string(overrideSpec))
+		}
 	}
 
 	jobSpec, err := steps.ResolveSpecFromEnv()

@@ -18,6 +18,7 @@ import (
 
 type testStep struct {
 	config      api.TestStepConfiguration
+	resources   api.ResourceConfiguration
 	podClient   PodClient
 	istClient   imageclientset.ImageStreamTagsGetter
 	artifactDir string
@@ -31,6 +32,11 @@ func (s *testStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, e
 func (s *testStep) Run(ctx context.Context, dry bool) error {
 	log.Printf("Executing test %s", s.config.As)
 
+	containerResources, err := resourcesFor(s.resources.RequirementsForStep(s.config.As))
+	if err != nil {
+		return fmt.Errorf("unable to calculate test pod resources for %s: %s", s.config.As, err)
+	}
+
 	pod := &coreapi.Pod{
 		ObjectMeta: meta.ObjectMeta{
 			Name: s.config.As,
@@ -39,14 +45,16 @@ func (s *testStep) Run(ctx context.Context, dry bool) error {
 			RestartPolicy: coreapi.RestartPolicyNever,
 			Containers: []coreapi.Container{
 				{
-					Name:    "test",
-					Image:   fmt.Sprintf("%s:%s", PipelineImageStream, s.config.From),
-					Command: []string{"/bin/sh", "-c", "#!/bin/sh\nset -euo pipefail\n" + s.config.Commands},
+					Name:      "test",
+					Image:     fmt.Sprintf("%s:%s", PipelineImageStream, s.config.From),
+					Command:   []string{"/bin/sh", "-c", "#!/bin/sh\nset -euo pipefail\n" + s.config.Commands},
+					Resources: containerResources,
 				},
 			},
 		},
 	}
 
+	// when the test container terminates and artifact directory has been set, grab everything under the directory
 	var notifier ContainerNotifier = NopNotifier
 	if s.gatherArtifacts() {
 		artifacts := NewArtifactWorker(s.podClient, filepath.Join(s.artifactDir, s.config.As), s.jobSpec.Namespace())
@@ -69,8 +77,6 @@ func (s *testStep) Run(ctx context.Context, dry bool) error {
 		return nil
 	}
 
-	// when the test container terminates and artifact directory has been set, grab everything under the directory
-
 	go func() {
 		<-ctx.Done()
 		notifier.Cancel()
@@ -80,7 +86,7 @@ func (s *testStep) Run(ctx context.Context, dry bool) error {
 		}
 	}()
 
-	pod, err := createOrRestartPod(s.podClient.Pods(s.jobSpec.Namespace()), pod)
+	pod, err = createOrRestartPod(s.podClient.Pods(s.jobSpec.Namespace()), pod)
 	if err != nil {
 		return err
 	}
@@ -121,9 +127,10 @@ func (s *testStep) Provides() (api.ParameterMap, api.StepLink) {
 
 func (s *testStep) Name() string { return s.config.As }
 
-func TestStep(config api.TestStepConfiguration, podClient PodClient, artifactDir string, jobSpec *JobSpec) api.Step {
+func TestStep(config api.TestStepConfiguration, resources api.ResourceConfiguration, podClient PodClient, artifactDir string, jobSpec *JobSpec) api.Step {
 	return &testStep{
 		config:      config,
+		resources:   resources,
 		podClient:   podClient,
 		artifactDir: artifactDir,
 		jobSpec:     jobSpec,

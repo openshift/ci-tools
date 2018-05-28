@@ -15,6 +15,7 @@ import (
 
 type projectDirectoryImageBuildStep struct {
 	config      api.ProjectDirectoryImageBuildStepConfiguration
+	resources   api.ResourceConfiguration
 	buildClient BuildClient
 	istClient   imageclientset.ImageStreamTagsGetter
 	jobSpec     *JobSpec
@@ -59,6 +60,7 @@ func (s *projectDirectoryImageBuildStep) Run(ctx context.Context, dry bool) erro
 				}},
 			}},
 		},
+		s.resources,
 	), dry)
 }
 
@@ -83,9 +85,10 @@ func (s *projectDirectoryImageBuildStep) Provides() (api.ParameterMap, api.StepL
 
 func (s *projectDirectoryImageBuildStep) Name() string { return string(s.config.To) }
 
-func ProjectDirectoryImageBuildStep(config api.ProjectDirectoryImageBuildStepConfiguration, buildClient BuildClient, istClient imageclientset.ImageStreamTagsGetter, jobSpec *JobSpec) api.Step {
+func ProjectDirectoryImageBuildStep(config api.ProjectDirectoryImageBuildStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, istClient imageclientset.ImageStreamTagsGetter, jobSpec *JobSpec) api.Step {
 	return &projectDirectoryImageBuildStep{
 		config:      config,
+		resources:   resources,
 		buildClient: buildClient,
 		istClient:   istClient,
 		jobSpec:     jobSpec,

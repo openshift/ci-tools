@@ -19,9 +19,9 @@ RUN ["/bin/bash", "-c", %s]`, PipelineImageStream, from, strconv.Quote(fmt.Sprin
 
 type pipelineImageCacheStep struct {
 	config      api.PipelineImageCacheStepConfiguration
+	resources   api.ResourceConfiguration
 	buildClient BuildClient
-	istClient   imageclientset.ImageStreamTagsGetter
-	isClient    imageclientset.ImageStreamsGetter
+	imageClient imageclientset.ImageV1Interface
 	jobSpec     *JobSpec
 }
 
@@ -37,11 +37,12 @@ func (s *pipelineImageCacheStep) Run(ctx context.Context, dry bool) error {
 			Type:       buildapi.BuildSourceDockerfile,
 			Dockerfile: &dockerfile,
 		},
+		s.resources,
 	), dry)
 }
 
 func (s *pipelineImageCacheStep) Done() (bool, error) {
-	return imageStreamTagExists(s.config.To, s.istClient.ImageStreamTags(s.jobSpec.Namespace()))
+	return imageStreamTagExists(s.config.To, s.imageClient.ImageStreamTags(s.jobSpec.Namespace()))
 }
 
 func (s *pipelineImageCacheStep) Requires() []api.StepLink {
@@ -58,7 +59,7 @@ func (s *pipelineImageCacheStep) Provides() (api.ParameterMap, api.StepLink) {
 	}
 	return api.ParameterMap{
 		fmt.Sprintf("LOCAL_IMAGE_%s", strings.ToUpper(strings.Replace(string(s.config.To), "-", "_", -1))): func() (string, error) {
-			is, err := s.isClient.ImageStreams(s.jobSpec.Namespace()).Get(PipelineImageStream, meta.GetOptions{})
+			is, err := s.imageClient.ImageStreams(s.jobSpec.Namespace()).Get(PipelineImageStream, meta.GetOptions{})
 			if err != nil {
 				return "", err
 			}
@@ -77,12 +78,12 @@ func (s *pipelineImageCacheStep) Provides() (api.ParameterMap, api.StepLink) {
 
 func (s *pipelineImageCacheStep) Name() string { return string(s.config.To) }
 
-func PipelineImageCacheStep(config api.PipelineImageCacheStepConfiguration, buildClient BuildClient, istClient imageclientset.ImageStreamTagsGetter, isClient imageclientset.ImageStreamsGetter, jobSpec *JobSpec) api.Step {
+func PipelineImageCacheStep(config api.PipelineImageCacheStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, imageClient imageclientset.ImageV1Interface, jobSpec *JobSpec) api.Step {
 	return &pipelineImageCacheStep{
 		config:      config,
+		resources:   resources,
 		buildClient: buildClient,
-		istClient:   istClient,
-		isClient:    isClient,
+		imageClient: imageClient,
 		jobSpec:     jobSpec,
 	}
 }

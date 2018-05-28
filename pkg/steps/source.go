@@ -11,6 +11,7 @@ import (
 
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 
@@ -46,6 +47,7 @@ func sourceDockerfile(fromTag api.PipelineImageStreamTagReference, job *JobSpec)
 
 type sourceStep struct {
 	config      api.SourceStepConfiguration
+	resources   api.ResourceConfiguration
 	buildClient BuildClient
 	istClient   imageclientset.ImageStreamTagsGetter
 	jobSpec     *JobSpec
@@ -63,10 +65,11 @@ func (s *sourceStep) Run(ctx context.Context, dry bool) error {
 			Type:       buildapi.BuildSourceDockerfile,
 			Dockerfile: &dockerfile,
 		},
+		s.resources,
 	), dry)
 }
 
-func buildFromSource(jobSpec *JobSpec, fromTag, toTag api.PipelineImageStreamTagReference, source buildapi.BuildSource) *buildapi.Build {
+func buildFromSource(jobSpec *JobSpec, fromTag, toTag api.PipelineImageStreamTagReference, source buildapi.BuildSource, resources api.ResourceConfiguration) *buildapi.Build {
 	log.Printf("Building %s:%s", PipelineImageStream, toTag)
 	optionsSpec := map[string]interface{}{
 		"src_root":       "/go",
@@ -80,6 +83,10 @@ func buildFromSource(jobSpec *JobSpec, fromTag, toTag api.PipelineImageStreamTag
 	optionsJSON, err := json.Marshal(optionsSpec)
 	if err != nil {
 		panic(fmt.Errorf("couldn't create JSON spec for clonerefs: %v", err))
+	}
+	buildResources, err := resourcesFor(resources.RequirementsForStep(string(toTag)))
+	if err != nil {
+		panic(fmt.Errorf("unable to parse resource requirement for build %s: %v", toTag, err))
 	}
 	layer := buildapi.ImageOptimizationSkipLayers
 	build := &buildapi.Build{
@@ -99,6 +106,7 @@ func buildFromSource(jobSpec *JobSpec, fromTag, toTag api.PipelineImageStreamTag
 		},
 		Spec: buildapi.BuildSpec{
 			CommonSpec: buildapi.CommonSpec{
+				Resources:      buildResources,
 				ServiceAccount: "builder", // TODO: remove when build cluster has https://github.com/openshift/origin/pull/17668
 				Source:         source,
 				Strategy: buildapi.BuildStrategy{
@@ -244,6 +252,31 @@ func printBuildLogs(buildClient BuildClient, namespace, name string) {
 	}
 }
 
+func resourcesFor(req api.ResourceRequirements) (coreapi.ResourceRequirements, error) {
+	apireq := coreapi.ResourceRequirements{}
+	for name, value := range req.Requests {
+		q, err := resource.ParseQuantity(value)
+		if err != nil {
+			return coreapi.ResourceRequirements{}, err
+		}
+		if apireq.Requests == nil {
+			apireq.Requests = make(coreapi.ResourceList)
+		}
+		apireq.Requests[coreapi.ResourceName(name)] = q
+	}
+	for name, value := range req.Limits {
+		q, err := resource.ParseQuantity(value)
+		if err != nil {
+			return coreapi.ResourceRequirements{}, err
+		}
+		if apireq.Limits == nil {
+			apireq.Limits = make(coreapi.ResourceList)
+		}
+		apireq.Limits[coreapi.ResourceName(name)] = q
+	}
+	return apireq, nil
+}
+
 func (s *sourceStep) Done() (bool, error) {
 	return imageStreamTagExists(s.config.To, s.istClient.ImageStreamTags(s.jobSpec.Namespace()))
 }
@@ -279,9 +312,10 @@ func (s *sourceStep) Provides() (api.ParameterMap, api.StepLink) {
 
 func (s *sourceStep) Name() string { return string(s.config.To) }
 
-func SourceStep(config api.SourceStepConfiguration, buildClient BuildClient, istClient imageclientset.ImageStreamTagsGetter, jobSpec *JobSpec) api.Step {
+func SourceStep(config api.SourceStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, istClient imageclientset.ImageStreamTagsGetter, jobSpec *JobSpec) api.Step {
 	return &sourceStep{
 		config:      config,
+		resources:   resources,
 		buildClient: buildClient,
 		istClient:   istClient,
 		jobSpec:     jobSpec,

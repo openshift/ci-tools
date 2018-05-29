@@ -161,6 +161,7 @@ func anonymousClusterImageStreamClient(client imageclientset.ImageV1Interface, c
 		return client, nil
 	}
 	newConfig := rest.AnonymousClientConfig(config)
+	newConfig.TLSClientConfig = rest.TLSClientConfig{}
 	newConfig.Host = overrideClusterHost
 	return imageclientset.NewForConfig(newConfig)
 }

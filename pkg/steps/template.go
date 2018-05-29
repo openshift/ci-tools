@@ -650,6 +650,9 @@ func podJobIsOK(pod *coreapi.Pod) bool {
 	if pod.Status.Phase == coreapi.PodSucceeded {
 		return true
 	}
+	if pod.Status.Phase == coreapi.PodPending || pod.Status.Phase == coreapi.PodUnknown {
+		return false
+	}
 	// if all containers except artifacts are in terminated and have exit code 0, we're ok
 	for _, status := range append(append([]coreapi.ContainerStatus{}, pod.Status.InitContainerStatuses...), pod.Status.ContainerStatuses...) {
 		// don't succeed until everything has started at least once

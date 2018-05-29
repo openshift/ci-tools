@@ -31,6 +31,16 @@ type StepLink interface {
 	Matches(other StepLink) bool
 }
 
+func AllStepsLink() StepLink {
+	return allStepsLink{}
+}
+
+type allStepsLink struct{}
+
+func (_ allStepsLink) Matches(other StepLink) bool {
+	return true
+}
+
 func ExternalImageLink(ref ImageStreamTagReference) StepLink {
 	return &externalImageLink{image: ref}
 }

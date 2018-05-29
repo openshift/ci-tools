@@ -42,6 +42,13 @@ type ReleaseBuildConfiguration struct {
 	// included in the final pipeline.
 	RawSteps []StepConfiguration `json:"raw_steps,omitempty"`
 
+	// PromotionConfiguration determines how images are promoted
+	// by this command. It is ignored unless promotion has specifically
+	// been requested. Promotion is performed after all other steps
+	// have been completed so that tests can be run prior to promotion.
+	// If no promotion is defined, it is defaulted from the ReleaseTagConfiguration.
+	PromotionConfiguration *PromotionConfiguration `json:"promotion,omitempty"`
+
 	// Resources is a set of resource requests or limits over the
 	// input types. The special name '*' may be used to set default
 	// requests and limits.
@@ -127,7 +134,7 @@ type ImageStreamTagReference struct {
 }
 
 // ReleaseTagConfiguration describes how a release is
-// assembled from release arifacts. There are two primary modes,
+// assembled from release artifacts. There are two primary modes,
 // single stream, multiple tags (openshift/origin-v3.9:control-plane)
 // on one stream, or multiple streams with one tag
 // (openshift/origin-control-plane:v3.9). The former works well for
@@ -163,6 +170,28 @@ type ReleaseTagConfiguration struct {
 	// above namespace to be tagged in at a different
 	// level than the rest.
 	TagOverrides map[string]string `json:"tag_overrides"`
+}
+
+// PromotionConfiguration describes where images created by this
+// config should be published to. The release tag configuration
+// defines the inputs, while this defines the outputs.
+type PromotionConfiguration struct {
+	// Namespace identifies the namespace to which the built
+	// artifacts will be published to.
+	Namespace string `json:"namespace"`
+
+	// Name is an optional image stream name to use that
+	// contains all component tags. If specified, tag is
+	// ignored.
+	Name string `json:"name"`
+
+	// Tag is the ImageStreamTag tagged in for each
+	// build image's ImageStream.
+	Tag string `json:"tag"`
+
+	// NamePrefix is prepended to the final output image name
+	// if specified.
+	NamePrefix string `json:"name_prefix"`
 }
 
 // StepConfiguration holds one step configuration.
@@ -208,6 +237,9 @@ type PipelineImageCacheStepConfiguration struct {
 	Commands string `json:"commands"`
 }
 
+// TestStepConfiguration describes a step that runs a
+// command in one of the previously built images and then
+// gathers artifacts from that step.
 type TestStepConfiguration struct {
 	// As is the name of the test.
 	As string `json:"as"`

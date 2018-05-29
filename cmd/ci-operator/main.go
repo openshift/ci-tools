@@ -158,7 +158,8 @@ type options struct {
 	templatePaths     stringSlice
 	secretDirectories stringSlice
 
-	target string
+	target  string
+	promote bool
 
 	verbose bool
 	help    bool
@@ -201,6 +202,9 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.StringVar(&opt.namespace, "namespace", "", "Namespace to create builds into, defaults to build_id from JOB_SPEC. If the string '{id}' is in this value it will be replaced with the build input hash.")
 	flag.StringVar(&opt.baseNamespace, "base-namespace", "stable", "Namespace to read builds from, defaults to stable.")
 	flag.DurationVar(&opt.idleCleanupDuration, "delete-when-idle", opt.idleCleanupDuration, "If no pod is running for longer than this interval, delete the namespace.")
+
+	// actions to add to the graph
+	flag.BoolVar(&opt.promote, "promote", false, "When all other targets complete, publish the set of images built by this job into the release configuration.")
 
 	// output control
 	flag.StringVar(&opt.artifactDir, "artifact-dir", "", "If set grab artifacts from test and template jobs.")
@@ -325,7 +329,7 @@ func (o *options) Run() error {
 	}()
 
 	// load the graph from the configuration
-	buildSteps, err := steps.FromConfig(o.configSpec, o.jobSpec, o.templates, o.writeParams, o.artifactDir, o.clusterConfig)
+	buildSteps, postSteps, err := steps.FromConfig(o.configSpec, o.jobSpec, o.templates, o.writeParams, o.artifactDir, o.promote, o.clusterConfig)
 	if err != nil {
 		return fmt.Errorf("failed to generate steps from config: %v", err)
 	}
@@ -362,7 +366,17 @@ func (o *options) Run() error {
 		}
 
 		// execute the graph
-		return steps.Run(ctx, nodes, o.dry)
+		if err := steps.Run(ctx, nodes, o.dry); err != nil {
+			return err
+		}
+
+		for _, step := range postSteps {
+			if err := step.Run(ctx, o.dry); err != nil {
+				return err
+			}
+		}
+
+		return nil
 	})
 }
 

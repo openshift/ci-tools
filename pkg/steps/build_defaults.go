@@ -42,8 +42,16 @@ const (
 // them, returning the full set of steps requires for the
 // build, including defaulted steps, generated steps and
 // all raw steps that the user provided.
-func FromConfig(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec, templates []*templateapi.Template, paramFile, artifactDir string, clusterConfig *rest.Config) ([]api.Step, error) {
+func FromConfig(
+	config *api.ReleaseBuildConfiguration,
+	jobSpec *JobSpec,
+	templates []*templateapi.Template,
+	paramFile, artifactDir string,
+	promote bool,
+	clusterConfig *rest.Config,
+) ([]api.Step, []api.Step, error) {
 	var buildSteps []api.Step
+	var postSteps []api.Step
 
 	var buildClient BuildClient
 	var imageClient imageclientset.ImageV1Interface
@@ -57,36 +65,36 @@ func FromConfig(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec, templat
 	if clusterConfig != nil {
 		buildGetter, err := buildclientset.NewForConfig(clusterConfig)
 		if err != nil {
-			return buildSteps, fmt.Errorf("could not get build client for cluster config: %v", err)
+			return nil, nil, fmt.Errorf("could not get build client for cluster config: %v", err)
 		}
 		buildClient = NewBuildClient(buildGetter, buildGetter.RESTClient())
 
 		imageGetter, err := imageclientset.NewForConfig(clusterConfig)
 		if err != nil {
-			return buildSteps, fmt.Errorf("could not get image client for cluster config: %v", err)
+			return nil, nil, fmt.Errorf("could not get image client for cluster config: %v", err)
 		}
 		imageClient = imageGetter
 
 		routeGetter, err = routeclientset.NewForConfig(clusterConfig)
 		if err != nil {
-			return buildSteps, fmt.Errorf("could not get route client for cluster config: %v", err)
+			return nil, nil, fmt.Errorf("could not get route client for cluster config: %v", err)
 		}
 
 		templateGetter, err := templateclientset.NewForConfig(clusterConfig)
 		if err != nil {
-			return buildSteps, fmt.Errorf("could not get template client for cluster config: %v", err)
+			return nil, nil, fmt.Errorf("could not get template client for cluster config: %v", err)
 		}
 		templateClient = NewTemplateClient(templateGetter, templateGetter.RESTClient())
 
 		appsGetter, err := appsclientset.NewForConfig(clusterConfig)
 		if err != nil {
-			return buildSteps, fmt.Errorf("could not get apps client for cluster config: %v", err)
+			return nil, nil, fmt.Errorf("could not get apps client for cluster config: %v", err)
 		}
 		deploymentGetter = appsGetter
 
 		coreGetter, err := coreclientset.NewForConfig(clusterConfig)
 		if err != nil {
-			return buildSteps, fmt.Errorf("could not get core client for cluster config: %v", err)
+			return nil, nil, fmt.Errorf("could not get core client for cluster config: %v", err)
 		}
 		serviceGetter = coreGetter
 		configMapGetter = coreGetter
@@ -106,7 +114,7 @@ func FromConfig(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec, templat
 		if rawStep.InputImageTagStepConfiguration != nil {
 			srcClient, err := anonymousClusterImageStreamClient(imageClient, clusterConfig, rawStep.InputImageTagStepConfiguration.BaseImage.Cluster)
 			if err != nil {
-				return nil, fmt.Errorf("unable to access image stream tag on remote cluster: %v", err)
+				return nil, nil, fmt.Errorf("unable to access image stream tag on remote cluster: %v", err)
 			}
 			step = InputImageTagStep(*rawStep.InputImageTagStepConfiguration, srcClient, imageClient, jobSpec)
 		} else if rawStep.PipelineImageCacheStepConfiguration != nil {
@@ -125,7 +133,7 @@ func FromConfig(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec, templat
 		} else if rawStep.ReleaseImagesTagStepConfiguration != nil {
 			srcClient, err := anonymousClusterImageStreamClient(imageClient, clusterConfig, rawStep.ReleaseImagesTagStepConfiguration.Cluster)
 			if err != nil {
-				return nil, fmt.Errorf("unable to access release images on remote cluster: %v", err)
+				return nil, nil, fmt.Errorf("unable to access release images on remote cluster: %v", err)
 			}
 			step = ReleaseImagesTagStep(*rawStep.ReleaseImagesTagStepConfiguration, srcClient, imageClient, routeGetter, configMapGetter, params, jobSpec)
 			imageStepLinks = append(imageStepLinks, step.Creates()...)
@@ -150,7 +158,39 @@ func FromConfig(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec, templat
 
 	buildSteps = append(buildSteps, ImagesReadyStep(imageStepLinks, jobSpec))
 
-	return buildSteps, nil
+	if promote {
+		cfg, err := promotionDefaults(config)
+		if err != nil {
+			return nil, nil, err
+		}
+		var tags []string
+		for _, image := range config.Images {
+			tags = append(tags, string(image.To))
+		}
+		postSteps = append(postSteps, PromotionStep(*cfg, tags, imageClient, imageClient, jobSpec))
+	}
+
+	return buildSteps, postSteps, nil
+}
+
+func promotionDefaults(configSpec *api.ReleaseBuildConfiguration) (*api.PromotionConfiguration, error) {
+	config := configSpec.PromotionConfiguration
+	if config == nil {
+		if input := configSpec.ReleaseTagConfiguration; input != nil {
+			config = &api.PromotionConfiguration{}
+			config.Namespace = input.Namespace
+			config.Name = input.Name
+			config.NamePrefix = input.NamePrefix
+			config.Tag = input.Tag
+		}
+	}
+	if config == nil {
+		return nil, fmt.Errorf("cannot promote images, no promotion or release tag configuration defined")
+	}
+	if len(config.Name) == 0 && len(config.Tag) == 0 {
+		return nil, fmt.Errorf("no name or tag defined for promotion config")
+	}
+	return config, nil
 }
 
 func anonymousClusterImageStreamClient(client imageclientset.ImageV1Interface, config *rest.Config, overrideClusterHost string) (imageclientset.ImageV1Interface, error) {

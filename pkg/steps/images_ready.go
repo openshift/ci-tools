@@ -36,7 +36,7 @@ func (s *imagesReadyStep) Provides() (api.ParameterMap, api.StepLink) {
 	return nil, nil
 }
 
-func (s *imagesReadyStep) Name() string { return "" }
+func (s *imagesReadyStep) Name() string { return "[images]" }
 
 func ImagesReadyStep(links []api.StepLink, jobSpec *JobSpec) api.Step {
 	return &imagesReadyStep{

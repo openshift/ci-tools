@@ -34,6 +34,7 @@ func Run(ctx context.Context, graph []*api.StepNode, dry bool) error {
 	for {
 		select {
 		case <-ctxDone:
+			return aggregateError(errors)
 		case out := <-results:
 			if out.err != nil {
 				errors = append(errors, out.err)
@@ -55,27 +56,34 @@ func Run(ctx context.Context, graph []*api.StepNode, dry bool) error {
 		case <-done:
 			close(results)
 			close(done)
-
-			var aggregateErr error
-			if len(errors) == 1 {
-				return errors[0]
-			}
-			if len(errors) > 1 {
-				message := bytes.Buffer{}
-				for _, err := range errors {
-					message.WriteString(fmt.Sprintf("\n  * %s", err.Error()))
-				}
-				aggregateErr = fmt.Errorf("some steps failed:%s", message.String())
-			}
-			return aggregateErr
+			return aggregateError(errors)
 		}
 	}
 }
 
+func aggregateError(errors []error) error {
+	var aggregateErr error
+	if len(errors) == 0 {
+		return nil
+	}
+	if len(errors) == 1 {
+		return errors[0]
+	}
+	if len(errors) > 1 {
+		message := bytes.Buffer{}
+		for _, err := range errors {
+			message.WriteString(fmt.Sprintf("\n  * %s", err.Error()))
+		}
+		aggregateErr = fmt.Errorf("some steps failed:%s", message.String())
+	}
+	return aggregateErr
+}
+
 func runStep(ctx context.Context, node *api.StepNode, out chan<- message, dry bool) {
+	err := node.Step.Run(ctx, dry)
 	out <- message{
 		node: node,
-		err:  node.Step.Run(ctx, dry),
+		err:  err,
 	}
 }
 

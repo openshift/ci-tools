@@ -158,7 +158,7 @@ type options struct {
 	templatePaths     stringSlice
 	secretDirectories stringSlice
 
-	target  string
+	targets stringSlice
 	promote bool
 
 	verbose bool
@@ -191,7 +191,7 @@ func bindOptions(flag *flag.FlagSet) *options {
 	// what we will run
 	flag.StringVar(&opt.configSpecPath, "config", "", "The configuration file. If not specified the CONFIG_SPEC environment variable will be used.")
 	flag.StringVar(&opt.overrideSpecPath, "override", "", "A configuration file that can override fields defined in the input part of the configuration.")
-	flag.StringVar(&opt.target, "target", "", "A config nofig to target. Only steps that are required for this target will be run.")
+	flag.Var(&opt.targets, "target", "One or more targets in the configuration to build. Only steps that are required for this target will be run.")
 	flag.BoolVar(&opt.dry, "dry-run", true, "Do not contact the API server.")
 
 	// add to the graph of things we run or create
@@ -354,7 +354,7 @@ func (o *options) Run() error {
 		}
 
 		// convert the full graph into the subset we must run
-		nodes, err := api.BuildPartialGraph(buildSteps, []string{o.target})
+		nodes, err := api.BuildPartialGraph(buildSteps, o.targets.values)
 		if err != nil {
 			return err
 		}

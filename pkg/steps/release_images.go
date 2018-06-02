@@ -211,7 +211,6 @@ func (s *releaseImagesTagStep) Run(ctx context.Context, dry bool) error {
 	}
 
 	return nil
-	//return s.createReleaseConfigMap(dry)
 }
 
 func (s *releaseImagesTagStep) createReleaseConfigMap(dry bool) error {

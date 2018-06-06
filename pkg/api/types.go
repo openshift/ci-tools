@@ -22,6 +22,12 @@ type ReleaseBuildConfiguration struct {
 	TestBinaryBuildCommands string `json:"test_binary_build_commands,omitempty"`
 	RpmBuildCommands        string `json:"rpm_build_commands,omitempty"`
 
+	// CanonicalGoRepository is a directory path that represents
+	// the desired location of the contents of this repository in
+	// Go. If specified the location of the repository we are
+	// cloning from is ignored.
+	CanonicalGoRepository string `json:"canonical_go_repository"`
+
 	// RpmBuildLocation is where RPms are deposited
 	// after being built. If unset, this will default
 	// under the repository root to
@@ -277,6 +283,11 @@ const (
 type SourceStepConfiguration struct {
 	From PipelineImageStreamTagReference `json:"from"`
 	To   PipelineImageStreamTagReference `json:"to,omitempty"`
+
+	// SourcePath is the location within the source repository
+	// to place source contents. It defaults to
+	// github.com/ORG/REPO.
+	PathAlias string `json:"source_path"`
 }
 
 // ProjectDirectoryImageBuildStepConfiguration describes an

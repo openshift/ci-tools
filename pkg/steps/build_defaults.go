@@ -250,8 +250,9 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec
 	}
 
 	buildSteps = append(buildSteps, api.StepConfiguration{SourceStepConfiguration: &api.SourceStepConfiguration{
-		From: api.PipelineImageStreamTagReferenceRoot,
-		To:   api.PipelineImageStreamTagReferenceSource,
+		From:      api.PipelineImageStreamTagReferenceRoot,
+		To:        api.PipelineImageStreamTagReferenceSource,
+		PathAlias: config.CanonicalGoRepository,
 	}})
 
 	if target := config.InputConfiguration.TestBaseImage; target != nil {

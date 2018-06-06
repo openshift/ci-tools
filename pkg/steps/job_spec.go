@@ -56,6 +56,8 @@ type Refs struct {
 	BaseSHA string `json:"base_sha,omitempty"`
 
 	Pulls []Pull `json:"pulls,omitempty"`
+
+	PathAlias string `json:"path_alias,omitempty"`
 }
 
 func (r Refs) String() string {

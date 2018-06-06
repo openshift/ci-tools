@@ -37,12 +37,16 @@ var (
 	JobSpecAnnotation = fmt.Sprintf("%s/%s", CiAnnotationPrefix, "job-spec")
 )
 
-func sourceDockerfile(fromTag api.PipelineImageStreamTagReference, job *JobSpec) string {
+func sourceDockerfile(fromTag api.PipelineImageStreamTagReference, pathAlias string, job *JobSpec) string {
+	workingDir := fmt.Sprintf("github.com/%s/%s", job.Refs.Org, job.Refs.Repo)
+	if len(pathAlias) > 0 {
+		workingDir = pathAlias
+	}
 	return fmt.Sprintf(`
 		FROM %s:%s
-		RUN umask 0002 && /usr/bin/clonerefs
-		WORKDIR /go/src/github.com/%s/%s/
-		`, PipelineImageStream, fromTag, job.Refs.Org, job.Refs.Repo)
+		RUN umask 0002 && /usr/bin/clonerefs && chmod g+xw -R /go/src
+		WORKDIR /go/src/%s/
+		`, PipelineImageStream, fromTag, workingDir)
 }
 
 type sourceStep struct {
@@ -58,36 +62,54 @@ func (s *sourceStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition,
 }
 
 func (s *sourceStep) Run(ctx context.Context, dry bool) error {
-	dockerfile := sourceDockerfile(s.config.From, s.jobSpec)
-	return handleBuild(s.buildClient, buildFromSource(
+	dockerfile := sourceDockerfile(s.config.From, s.config.PathAlias, s.jobSpec)
+
+	build := buildFromSource(
 		s.jobSpec, s.config.From, s.config.To,
 		buildapi.BuildSource{
 			Type:       buildapi.BuildSourceDockerfile,
 			Dockerfile: &dockerfile,
 		},
 		s.resources,
-	), dry)
-}
+	)
 
-func buildFromSource(jobSpec *JobSpec, fromTag, toTag api.PipelineImageStreamTagReference, source buildapi.BuildSource, resources api.ResourceConfiguration) *buildapi.Build {
-	log.Printf("Building %s:%s", PipelineImageStream, toTag)
+	refs := s.jobSpec.Refs
+	refs.PathAlias = s.config.PathAlias
 	optionsSpec := map[string]interface{}{
 		"src_root":       "/go",
 		"log":            "-",
 		"git_user_name":  "ci-robot",
 		"git_user_email": "ci-robot@openshift.io",
-		"refs": []interface{}{
-			jobSpec.Refs,
-		},
+		"refs":           []interface{}{refs},
 	}
 	optionsJSON, err := json.Marshal(optionsSpec)
 	if err != nil {
 		panic(fmt.Errorf("couldn't create JSON spec for clonerefs: %v", err))
 	}
+
+	build.Spec.CommonSpec.Strategy.DockerStrategy.Env = append(
+		build.Spec.CommonSpec.Strategy.DockerStrategy.Env,
+		coreapi.EnvVar{Name: "CLONEREFS_OPTIONS", Value: string(optionsJSON)},
+	)
+
+	return handleBuild(s.buildClient, build, dry)
+}
+
+func buildFromSource(jobSpec *JobSpec, fromTag, toTag api.PipelineImageStreamTagReference, source buildapi.BuildSource, dockerfilePath string, resources api.ResourceConfiguration) *buildapi.Build {
+	log.Printf("Building %s:%s", PipelineImageStream, toTag)
 	buildResources, err := resourcesFor(resources.RequirementsForStep(string(toTag)))
 	if err != nil {
 		panic(fmt.Errorf("unable to parse resource requirement for build %s: %v", toTag, err))
 	}
+	var from *coreapi.ObjectReference
+	if len(fromTag) > 0 {
+		from = &coreapi.ObjectReference{
+			Kind:      "ImageStreamTag",
+			Namespace: jobSpec.Namespace(),
+			Name:      fmt.Sprintf("%s:%s", PipelineImageStream, fromTag),
+		}
+	}
+
 	layer := buildapi.ImageOptimizationSkipLayers
 	build := &buildapi.Build{
 		ObjectMeta: meta.ObjectMeta{
@@ -112,16 +134,11 @@ func buildFromSource(jobSpec *JobSpec, fromTag, toTag api.PipelineImageStreamTag
 				Strategy: buildapi.BuildStrategy{
 					Type: buildapi.DockerBuildStrategyType,
 					DockerStrategy: &buildapi.DockerBuildStrategy{
-						From: &coreapi.ObjectReference{
-							Kind:      "ImageStreamTag",
-							Namespace: jobSpec.Namespace(),
-							Name:      fmt.Sprintf("%s:%s", PipelineImageStream, fromTag),
-						},
-						ForcePull: true,
-						NoCache:   true,
-						Env: []coreapi.EnvVar{
-							{Name: "CLONEREFS_OPTIONS", Value: string(optionsJSON)},
-						},
+						DockerfilePath: dockerfilePath,
+						From:           from,
+						ForcePull:      true,
+						NoCache:        true,
+						Env:            []coreapi.EnvVar{},
 						ImageOptimizationPolicy: &layer,
 					},
 				},

@@ -37,6 +37,7 @@ func (s *pipelineImageCacheStep) Run(ctx context.Context, dry bool) error {
 			Type:       buildapi.BuildSourceDockerfile,
 			Dockerfile: &dockerfile,
 		},
+		"",
 		s.resources,
 	), dry)
 }

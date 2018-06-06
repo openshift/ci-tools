@@ -299,6 +299,39 @@ type ProjectDirectoryImageBuildStepConfiguration struct {
 	// ContextDir is the directory in the project
 	// from which this build should be run.
 	ContextDir string `json:"context_dir"`
+
+	// DockerfilePath is the path to a Dockerfile in the
+	// project to run relative to the context_dir.
+	DockerfilePath string `json:"dockerfile_path"`
+
+	// Inputs is a map of tag reference name to image input changes
+	// that will populate the build context for the Dockerfile or
+	// alter the input image for a multi-stage build.
+	Inputs map[string]ImageBuildInputs `json:"inputs"`
+}
+
+// ImageBuildInputs is a subset of the v1 OpenShift Build API object
+// defining an input source.
+type ImageBuildInputs struct {
+	// Paths is a list of paths to copy out of this image and into the
+	// context directory.
+	Paths []ImageSourcePath `json:"paths"`
+	// As is a list of multi-stage step names or image names that will
+	// be replaced by the image reference from this step. For instance,
+	// if the Dockerfile defines FROM nginx:latest AS base, specifying
+	// either "nginx:latest" or "base" in this array will replace that
+	// image with the pipeline input.
+	As []string `json:"as"`
+}
+
+// ImageSourcePath maps a path in the source image into a destination
+// path in the context. See the v1 OpenShift Build API for more info.
+type ImageSourcePath struct {
+	// SourcePath is a file or directory in the source image to copy from.
+	SourcePath string `json:"source_path"`
+	// DestinationDir is the directory in the destination image to copy
+	// to.
+	DestinationDir string `json:"destination_dir"`
 }
 
 // RPMImageInjectionStepConfiguration describes a step

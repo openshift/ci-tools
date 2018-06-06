@@ -49,7 +49,7 @@ func (s *projectDirectoryImageBuildStep) Run(ctx context.Context, dry bool) erro
 		s.jobSpec, s.config.From, s.config.To,
 		buildapi.BuildSource{
 			Type: buildapi.BuildSourceImage,
-			Images: []buildapi.ImageSource{{
+			Images: append(buildInputsFromStep(s.config.Inputs), buildapi.ImageSource{
 				From: coreapi.ObjectReference{
 					Kind: "ImageStreamTag",
 					Name: source,
@@ -58,8 +58,9 @@ func (s *projectDirectoryImageBuildStep) Run(ctx context.Context, dry bool) erro
 					SourcePath:     fmt.Sprintf("%s/%s/.", workingDir, s.config.ContextDir),
 					DestinationDir: ".",
 				}},
-			}},
+			}),
 		},
+		s.config.DockerfilePath,
 		s.resources,
 	), dry)
 }
@@ -69,10 +70,16 @@ func (s *projectDirectoryImageBuildStep) Done() (bool, error) {
 }
 
 func (s *projectDirectoryImageBuildStep) Requires() []api.StepLink {
-	return []api.StepLink{
+	links := []api.StepLink{
 		api.InternalImageLink(api.PipelineImageStreamTagReferenceSource),
-		api.InternalImageLink(s.config.From),
 	}
+	if len(s.config.From) > 0 {
+		links = append(links, api.InternalImageLink(s.config.From))
+	}
+	for name := range s.config.Inputs {
+		links = append(links, api.InternalImageLink(api.PipelineImageStreamTagReference(name)))
+	}
+	return links
 }
 
 func (s *projectDirectoryImageBuildStep) Creates() []api.StepLink {

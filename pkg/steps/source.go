@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"sort"
 	"time"
 
 	coreapi "k8s.io/api/core/v1"
@@ -70,6 +71,7 @@ func (s *sourceStep) Run(ctx context.Context, dry bool) error {
 			Type:       buildapi.BuildSourceDockerfile,
 			Dockerfile: &dockerfile,
 		},
+		"",
 		s.resources,
 	)
 
@@ -157,6 +159,31 @@ func buildFromSource(jobSpec *JobSpec, fromTag, toTag api.PipelineImageStreamTag
 	}
 
 	return build
+}
+
+func buildInputsFromStep(inputs map[string]api.ImageBuildInputs) []buildapi.ImageSource {
+	var names []string
+	for k := range inputs {
+		names = append(names, k)
+	}
+	sort.Strings(names)
+	var refs []buildapi.ImageSource
+	for _, name := range names {
+		value := inputs[name]
+		var paths []buildapi.ImageSourcePath
+		for _, path := range value.Paths {
+			paths = append(paths, buildapi.ImageSourcePath{SourcePath: path.SourcePath, DestinationDir: path.DestinationDir})
+		}
+		refs = append(refs, buildapi.ImageSource{
+			From: coreapi.ObjectReference{
+				Kind: "ImageStreamTag",
+				Name: fmt.Sprintf("%s:%s", PipelineImageStream, name),
+			},
+			As:    value.As,
+			Paths: paths,
+		})
+	}
+	return refs
 }
 
 func handleBuild(buildClient BuildClient, build *buildapi.Build, dry bool) error {

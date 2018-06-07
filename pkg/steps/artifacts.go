@@ -251,14 +251,12 @@ func (w *ArtifactWorker) downloadArtifacts(podName string) error {
 	if err := os.MkdirAll(w.dir, 0750); err != nil {
 		return fmt.Errorf("unable to create artifact directory %s: %v", w.dir, err)
 	}
-	log.Printf("DEBUG: starting copy for %s", podName)
 	if err := copyArtifacts(w.podClient, w.dir, w.namespace, podName, "artifacts", []string{"/tmp/artifacts"}); err != nil {
 		return fmt.Errorf("unable to retrieve artifacts from pod %s: %v", podName, err)
 	}
 	if err := removeFile(w.podClient, w.namespace, podName, "artifacts", []string{"/tmp/done"}); err != nil {
 		return fmt.Errorf("unable to signal to artifacts container to terminate in pod %s: %v", podName, err)
 	}
-	log.Printf("DEBUG: done copying for %s", podName)
 	return nil
 }
 
@@ -309,12 +307,10 @@ func (w *ArtifactWorker) Complete(podName string) {
 		return
 	}
 	if len(artifactContainers) > 0 {
-		log.Printf("DEBUG: marking pod complete, grabbing artifacts %s", podName)
 		// when all containers in a given pod that output artifacts have completed, exit
 		w.podsToDownload <- podName
 	}
 	if len(w.remaining) == 0 {
-		log.Printf("DEBUG: no more pods")
 		close(w.podsToDownload)
 	}
 }
@@ -360,12 +356,10 @@ func (w *ArtifactWorker) Notify(pod *coreapi.Pod, containerName string) {
 	}
 	// no more artifact containers, we can start grabbing artifacts
 	if len(artifactContainers) == 0 {
-		log.Printf("DEBUG: no more containers in %s", pod.Name)
 		w.podsToDownload <- pod.Name
 	}
 	// no more pods, we can shutdown the worker gracefully
 	if len(w.remaining) == 0 {
-		log.Printf("DEBUG: no more pods")
 		close(w.podsToDownload)
 	}
 }
@@ -373,7 +367,7 @@ func (w *ArtifactWorker) Notify(pod *coreapi.Pod, containerName string) {
 func (w *ArtifactWorker) Done(podName string) bool {
 	w.lock.Lock()
 	defer w.lock.Unlock()
-	log.Printf("DEBUG: remaining containers for pod %s %v", podName, w.remaining[podName])
+	// log.Printf("DEBUG: remaining containers for pod %s %v", podName, w.remaining[podName])
 	_, ok := w.remaining[podName]
 	return !ok
 }

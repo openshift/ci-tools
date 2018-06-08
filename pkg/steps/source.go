@@ -258,13 +258,13 @@ func waitForBuildOrTimeout(buildClient BuildClient, namespace, name string) (boo
 		}
 		if build, ok := event.Object.(*buildapi.Build); ok {
 			if isOK(build) {
-				log.Printf("Build %s succeeded after %s", build.Name, buildDuration(build))
+				log.Printf("Build %s succeeded after %s", build.Name, buildDuration(build).Truncate(time.Second))
 				return false, nil
 			}
 			if isFailed(build) {
 				log.Printf("Build %s failed, printing logs:", build.Name)
 				printBuildLogs(buildClient, build.Namespace, build.Name)
-				return false, fmt.Errorf("the build %s/%s failed after %s with status %q", build.Namespace, build.Name, buildDuration(build), build.Status.Phase)
+				return false, fmt.Errorf("the build %s/%s failed after %s with status %q", build.Namespace, build.Name, buildDuration(build).Truncate(time.Second), build.Status.Phase)
 			}
 		}
 	}

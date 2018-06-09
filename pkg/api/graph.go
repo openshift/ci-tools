@@ -228,3 +228,18 @@ func HasAnyLinks(steps, candidates []StepLink) bool {
 	}
 	return false
 }
+
+func HasAllLinks(needles, haystack []StepLink) bool {
+	for _, needle := range needles {
+		contains := false
+		for _, hay := range haystack {
+			if hay.Matches(needle) {
+				contains = true
+			}
+		}
+		if !contains {
+			return false
+		}
+	}
+	return true
+}

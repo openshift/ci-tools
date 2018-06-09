@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/base32"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -347,8 +348,10 @@ func (o *options) Run() error {
 	}
 
 	return interrupt.New(handler).Run(func() error {
-		// before we create the namespace, we need to ensure all inputs to the graph
-		// have been resolved
+		// Before we create the namespace, we need to ensure all inputs to the graph
+		// have been resolved. We must run this step before we resolve the partial
+		// graph or otherwise two jobs with different targets would create different
+		// artifact caches.
 		if err := o.resolveInputs(ctx, buildSteps); err != nil {
 			return err
 		}
@@ -356,6 +359,10 @@ func (o *options) Run() error {
 		// convert the full graph into the subset we must run
 		nodes, err := api.BuildPartialGraph(buildSteps, o.targets.values)
 		if err != nil {
+			return err
+		}
+
+		if err := printExecutionOrder(nodes); err != nil {
 			return err
 		}
 
@@ -644,6 +651,10 @@ func (o *options) createNamespaceCleanupPod() error {
 	return nil
 }
 
+// oneWayEncoding can be used to encode hex to a 62-character set (0 and 1 are duplicates) for use in
+// short display names that are safe for use in kubernetes as resource names.
+var oneWayNameEncoding = base32.NewEncoding("bcdfghijklmnpqrstvwxyz0123456789").WithPadding(base32.NoPadding)
+
 // inputHash returns a string that hashes the unique parts of the input to avoid collisions.
 func inputHash(inputs api.InputDefinition) string {
 	hash := sha256.New()
@@ -657,7 +668,7 @@ func inputHash(inputs api.InputDefinition) string {
 	// the hash. This increases chances of collision
 	// but we can tolerate it as our input space is
 	// tiny.
-	return fmt.Sprintf("%x", hash.Sum(nil))[54:]
+	return oneWayNameEncoding.EncodeToString(hash.Sum(nil)[:5])
 }
 
 // jobDescription returns a string representing the job's description.
@@ -688,4 +699,74 @@ func jobSpecFromGitRef(ref string) (*steps.JobSpec, error) {
 	}
 	log.Printf("Resolved %s to commit %s", ref, sha)
 	return &steps.JobSpec{Type: steps.PeriodicJob, Job: "dev", Refs: steps.Refs{Org: prefix[0], Repo: prefix[1], BaseRef: parts[1], BaseSHA: sha}}, nil
+}
+
+func nodeNames(nodes []*api.StepNode) []string {
+	var names []string
+	for _, node := range nodes {
+		name := node.Step.Name()
+		if len(name) == 0 {
+			name = fmt.Sprintf("<%T>", node.Step)
+		}
+		names = append(names, name)
+	}
+	return names
+}
+
+func linkNames(links []api.StepLink) []string {
+	var names []string
+	for _, link := range links {
+		name := fmt.Sprintf("<%T>", link)
+		names = append(names, name)
+	}
+	return names
+}
+
+func topologicalSort(nodes []*api.StepNode) ([]*api.StepNode, error) {
+	var sortedNodes []*api.StepNode
+	var satisfied []api.StepLink
+	seen := make(map[api.Step]struct{})
+	for len(nodes) > 0 {
+		var changed bool
+		var waiting []*api.StepNode
+		for _, node := range nodes {
+			seen[node.Step] = struct{}{}
+			for _, child := range node.Children {
+				if _, ok := seen[child.Step]; !ok {
+					waiting = append(waiting, child)
+				}
+			}
+			if !api.HasAllLinks(node.Step.Requires(), satisfied) {
+				waiting = append(waiting, node)
+				continue
+			}
+			satisfied = append(satisfied, node.Step.Creates()...)
+			sortedNodes = append(sortedNodes, node)
+			changed = true
+		}
+		if !changed {
+			var links []api.StepLink
+			for _, node := range waiting {
+				links = append(links, node.Step.Requires()...)
+			}
+			var unsatisfied []api.StepLink
+			for _, link := range links {
+				if !api.HasAllLinks([]api.StepLink{link}, satisfied) {
+					unsatisfied = append(unsatisfied, link)
+				}
+			}
+			return nil, fmt.Errorf("steps (%s) are missing dependencies (%s)", strings.Join(nodeNames(waiting), ", "), strings.Join(linkNames(unsatisfied), ", "))
+		}
+		nodes = waiting
+	}
+	return sortedNodes, nil
+}
+
+func printExecutionOrder(nodes []*api.StepNode) error {
+	ordered, err := topologicalSort(nodes)
+	if err != nil {
+		return err
+	}
+	log.Printf("Running %s", strings.Join(nodeNames(ordered), ", "))
+	return nil
 }

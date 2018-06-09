@@ -46,7 +46,7 @@ func Run(ctx context.Context, graph []*api.StepNode, dry bool) error {
 					// We can ignore the child if it does not have prerequisites
 					// finished as we know that we will process it here again
 					// when the last of its parents finishes.
-					if containsAll(child.Step.Requires(), seen) {
+					if api.HasAllLinks(child.Step.Requires(), seen) {
 						wg.Add(1)
 						go runStep(ctx, child, results, dry)
 					}
@@ -85,19 +85,4 @@ func runStep(ctx context.Context, node *api.StepNode, out chan<- message, dry bo
 		node: node,
 		err:  err,
 	}
-}
-
-func containsAll(needles, haystack []api.StepLink) bool {
-	for _, needle := range needles {
-		contains := false
-		for _, hay := range haystack {
-			if hay.Matches(needle) {
-				contains = true
-			}
-		}
-		if !contains {
-			return false
-		}
-	}
-	return true
 }

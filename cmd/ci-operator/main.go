@@ -362,6 +362,10 @@ func (o *options) Run() error {
 			return err
 		}
 
+		if err := printExecutionOrder(nodes); err != nil {
+			return err
+		}
+
 		// initialize the namespace if necessary and create any resources that must
 		// exist prior to execution
 		if err := o.initializeNamespace(); err != nil {
@@ -695,4 +699,74 @@ func jobSpecFromGitRef(ref string) (*steps.JobSpec, error) {
 	}
 	log.Printf("Resolved %s to commit %s", ref, sha)
 	return &steps.JobSpec{Type: steps.PeriodicJob, Job: "dev", Refs: steps.Refs{Org: prefix[0], Repo: prefix[1], BaseRef: parts[1], BaseSHA: sha}}, nil
+}
+
+func nodeNames(nodes []*api.StepNode) []string {
+	var names []string
+	for _, node := range nodes {
+		name := node.Step.Name()
+		if len(name) == 0 {
+			name = fmt.Sprintf("<%T>", node.Step)
+		}
+		names = append(names, name)
+	}
+	return names
+}
+
+func linkNames(links []api.StepLink) []string {
+	var names []string
+	for _, link := range links {
+		name := fmt.Sprintf("<%T>", link)
+		names = append(names, name)
+	}
+	return names
+}
+
+func topologicalSort(nodes []*api.StepNode) ([]*api.StepNode, error) {
+	var sortedNodes []*api.StepNode
+	var satisfied []api.StepLink
+	seen := make(map[api.Step]struct{})
+	for len(nodes) > 0 {
+		var changed bool
+		var waiting []*api.StepNode
+		for _, node := range nodes {
+			seen[node.Step] = struct{}{}
+			for _, child := range node.Children {
+				if _, ok := seen[child.Step]; !ok {
+					waiting = append(waiting, child)
+				}
+			}
+			if !api.HasAllLinks(node.Step.Requires(), satisfied) {
+				waiting = append(waiting, node)
+				continue
+			}
+			satisfied = append(satisfied, node.Step.Creates()...)
+			sortedNodes = append(sortedNodes, node)
+			changed = true
+		}
+		if !changed {
+			var links []api.StepLink
+			for _, node := range waiting {
+				links = append(links, node.Step.Requires()...)
+			}
+			var unsatisfied []api.StepLink
+			for _, link := range links {
+				if !api.HasAllLinks([]api.StepLink{link}, satisfied) {
+					unsatisfied = append(unsatisfied, link)
+				}
+			}
+			return nil, fmt.Errorf("steps (%s) are missing dependencies (%s)", strings.Join(nodeNames(waiting), ", "), strings.Join(linkNames(unsatisfied), ", "))
+		}
+		nodes = waiting
+	}
+	return sortedNodes, nil
+}
+
+func printExecutionOrder(nodes []*api.StepNode) error {
+	ordered, err := topologicalSort(nodes)
+	if err != nil {
+		return err
+	}
+	log.Printf("Running %s", strings.Join(nodeNames(ordered), ", "))
+	return nil
 }

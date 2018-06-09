@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/base32"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -347,8 +348,10 @@ func (o *options) Run() error {
 	}
 
 	return interrupt.New(handler).Run(func() error {
-		// before we create the namespace, we need to ensure all inputs to the graph
-		// have been resolved
+		// Before we create the namespace, we need to ensure all inputs to the graph
+		// have been resolved. We must run this step before we resolve the partial
+		// graph or otherwise two jobs with different targets would create different
+		// artifact caches.
 		if err := o.resolveInputs(ctx, buildSteps); err != nil {
 			return err
 		}
@@ -644,6 +647,10 @@ func (o *options) createNamespaceCleanupPod() error {
 	return nil
 }
 
+// oneWayEncoding can be used to encode hex to a 62-character set (0 and 1 are duplicates) for use in
+// short display names that are safe for use in kubernetes as resource names.
+var oneWayNameEncoding = base32.NewEncoding("bcdfghijklmnpqrstvwxyz0123456789").WithPadding(base32.NoPadding)
+
 // inputHash returns a string that hashes the unique parts of the input to avoid collisions.
 func inputHash(inputs api.InputDefinition) string {
 	hash := sha256.New()
@@ -657,7 +664,7 @@ func inputHash(inputs api.InputDefinition) string {
 	// the hash. This increases chances of collision
 	// but we can tolerate it as our input space is
 	// tiny.
-	return fmt.Sprintf("%x", hash.Sum(nil))[54:]
+	return oneWayNameEncoding.EncodeToString(hash.Sum(nil)[:5])
 }
 
 // jobDescription returns a string representing the job's description.

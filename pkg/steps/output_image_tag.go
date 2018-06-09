@@ -128,7 +128,12 @@ func (s *outputImageTagStep) Provides() (api.ParameterMap, api.StepLink) {
 	}, api.ExternalImageLink(s.config.To)
 }
 
-func (s *outputImageTagStep) Name() string { return s.config.To.As }
+func (s *outputImageTagStep) Name() string {
+	if len(s.config.To.As) == 0 {
+		return fmt.Sprintf("[output:%s:%s]", s.config.To.Name, s.config.To.Tag)
+	}
+	return s.config.To.As
+}
 
 func OutputImageTagStep(config api.OutputImageTagStepConfiguration, istClient imageclientset.ImageStreamTagsGetter, isClient imageclientset.ImageStreamsGetter, jobSpec *JobSpec) api.Step {
 	return &outputImageTagStep{

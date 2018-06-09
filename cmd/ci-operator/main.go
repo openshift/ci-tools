@@ -730,11 +730,13 @@ func topologicalSort(nodes []*api.StepNode) ([]*api.StepNode, error) {
 		var changed bool
 		var waiting []*api.StepNode
 		for _, node := range nodes {
-			seen[node.Step] = struct{}{}
 			for _, child := range node.Children {
 				if _, ok := seen[child.Step]; !ok {
 					waiting = append(waiting, child)
 				}
+			}
+			if _, ok := seen[node.Step]; ok {
+				continue
 			}
 			if !api.HasAllLinks(node.Step.Requires(), satisfied) {
 				waiting = append(waiting, node)
@@ -742,9 +744,10 @@ func topologicalSort(nodes []*api.StepNode) ([]*api.StepNode, error) {
 			}
 			satisfied = append(satisfied, node.Step.Creates()...)
 			sortedNodes = append(sortedNodes, node)
+			seen[node.Step] = struct{}{}
 			changed = true
 		}
-		if !changed {
+		if !changed && len(waiting) > 0 {
 			var links []api.StepLink
 			for _, node := range waiting {
 				links = append(links, node.Step.Requires()...)

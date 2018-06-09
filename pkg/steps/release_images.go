@@ -305,7 +305,7 @@ func (s *releaseImagesTagStep) Provides() (api.ParameterMap, api.StepLink) {
 	}, api.ImagesReadyLink()
 }
 
-func (s *releaseImagesTagStep) Name() string { return "" }
+func (s *releaseImagesTagStep) Name() string { return "[release-inputs]" }
 
 func ReleaseImagesTagStep(config api.ReleaseTagConfiguration, srcClient, dstClient imageclientset.ImageV1Interface, routeClient routeclientset.RoutesGetter, configMapClient coreclientset.ConfigMapsGetter, params *DeferredParameters, jobSpec *JobSpec) api.Step {
 	return &releaseImagesTagStep{

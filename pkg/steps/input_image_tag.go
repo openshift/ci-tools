@@ -133,7 +133,7 @@ func (s *inputImageTagStep) Provides() (api.ParameterMap, api.StepLink) {
 	return nil, nil
 }
 
-func (s *inputImageTagStep) Name() string { return "" }
+func (s *inputImageTagStep) Name() string { return fmt.Sprintf("[input:%s]", s.config.To) }
 
 func InputImageTagStep(config api.InputImageTagStepConfiguration, srcClient, dstClient imageclientset.ImageV1Interface, jobSpec *JobSpec) api.Step {
 	return &inputImageTagStep{

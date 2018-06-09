@@ -304,7 +304,7 @@ func (s *rpmServerStep) Provides() (api.ParameterMap, api.StepLink) {
 	}, api.RPMRepoLink()
 }
 
-func (s *rpmServerStep) Name() string { return "" }
+func (s *rpmServerStep) Name() string { return "[serve:rpms]" }
 
 func admittedRoute(route *routeapi.Route) (string, bool) {
 	for _, ingress := range route.Status.Ingress {

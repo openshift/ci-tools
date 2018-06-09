@@ -98,7 +98,7 @@ func (s *sourceStep) Run(ctx context.Context, dry bool) error {
 }
 
 func buildFromSource(jobSpec *JobSpec, fromTag, toTag api.PipelineImageStreamTagReference, source buildapi.BuildSource, dockerfilePath string, resources api.ResourceConfiguration) *buildapi.Build {
-	log.Printf("Building %s:%s", PipelineImageStream, toTag)
+	log.Printf("Building %s", toTag)
 	buildResources, err := resourcesFor(resources.RequirementsForStep(string(toTag)))
 	if err != nil {
 		panic(fmt.Errorf("unable to parse resource requirement for build %s: %v", toTag, err))

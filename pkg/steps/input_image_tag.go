@@ -122,7 +122,7 @@ func (s *inputImageTagStep) Done() (bool, error) {
 }
 
 func (s *inputImageTagStep) Requires() []api.StepLink {
-	return []api.StepLink{api.ExternalImageLink(s.config.BaseImage)}
+	return nil //[]api.StepLink{api.ExternalImageLink(s.config.BaseImage)}
 }
 
 func (s *inputImageTagStep) Creates() []api.StepLink {

@@ -30,7 +30,8 @@ func (s *outputImageTagStep) Inputs(ctx context.Context, dry bool) (api.InputDef
 }
 
 func (s *outputImageTagStep) Run(ctx context.Context, dry bool) error {
-	log.Printf("Tagging %s/%s:%s into %s:%s", s.jobSpec.Namespace(), PipelineImageStream, s.config.From, s.config.To.Name, s.config.To.Tag)
+	toNamespace := s.namespace()
+	log.Printf("Tagging %s into %s/%s:%s", s.config.From, toNamespace, s.config.To.Name, s.config.To.Tag)
 	fromImage := "dry-fake"
 	if !dry {
 		from, err := s.istClient.ImageStreamTags(s.jobSpec.Namespace()).Get(fmt.Sprintf("%s:%s", PipelineImageStream, s.config.From), meta.GetOptions{})
@@ -42,7 +43,7 @@ func (s *outputImageTagStep) Run(ctx context.Context, dry bool) error {
 	ist := &imageapi.ImageStreamTag{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      fmt.Sprintf("%s:%s", s.config.To.Name, s.config.To.Tag),
-			Namespace: s.jobSpec.Namespace(),
+			Namespace: toNamespace,
 		},
 		Tag: &imageapi.TagReference{
 			ReferencePolicy: imageapi.TagReferencePolicy{
@@ -62,10 +63,10 @@ func (s *outputImageTagStep) Run(ctx context.Context, dry bool) error {
 		}
 		fmt.Printf("%s\n", istJSON)
 	} else {
-		if err := s.istClient.ImageStreamTags(s.jobSpec.Namespace()).Delete(ist.Name, nil); err != nil && !errors.IsNotFound(err) {
+		if err := s.istClient.ImageStreamTags(toNamespace).Delete(ist.Name, nil); err != nil && !errors.IsNotFound(err) {
 			return err
 		}
-		_, err := s.istClient.ImageStreamTags(s.jobSpec.Namespace()).Create(ist)
+		_, err := s.istClient.ImageStreamTags(toNamespace).Create(ist)
 		if errors.IsAlreadyExists(err) {
 			// another job raced with us, but the end
 			// result will be the same so we don't care
@@ -78,12 +79,12 @@ func (s *outputImageTagStep) Run(ctx context.Context, dry bool) error {
 }
 
 func (s *outputImageTagStep) Done() (bool, error) {
-	log.Printf("Checking for existence of %s:%s", PipelineImageStream, s.config.To)
-	_, err := s.istClient.ImageStreamTags(s.jobSpec.Namespace()).Get(
-		fmt.Sprintf("%s:%s", PipelineImageStream, s.config.To),
+	toNamespace := s.namespace()
+	log.Printf("Checking for existence of %s/%s:%s", toNamespace, s.config.To.Name, s.config.To.Tag)
+	if _, err := s.istClient.ImageStreamTags(toNamespace).Get(
+		fmt.Sprintf("%s:%s", s.config.To.Name, s.config.To.Tag),
 		meta.GetOptions{},
-	)
-	if err != nil {
+	); err != nil {
 		if errors.IsNotFound(err) {
 			return false, nil
 		} else {
@@ -111,7 +112,7 @@ func (s *outputImageTagStep) Provides() (api.ParameterMap, api.StepLink) {
 	}
 	return api.ParameterMap{
 		fmt.Sprintf("IMAGE_%s", strings.ToUpper(strings.Replace(s.config.To.As, "-", "_", -1))): func() (string, error) {
-			is, err := s.isClient.ImageStreams(s.jobSpec.Namespace()).Get(s.config.To.Name, meta.GetOptions{})
+			is, err := s.isClient.ImageStreams(s.namespace()).Get(s.config.To.Name, meta.GetOptions{})
 			if err != nil {
 				return "", err
 			}
@@ -133,6 +134,13 @@ func (s *outputImageTagStep) Name() string {
 		return fmt.Sprintf("[output:%s:%s]", s.config.To.Name, s.config.To.Tag)
 	}
 	return s.config.To.As
+}
+
+func (s *outputImageTagStep) namespace() string {
+	if len(s.config.To.Namespace) != 0 {
+		return s.config.To.Namespace
+	}
+	return s.jobSpec.Namespace()
 }
 
 func OutputImageTagStep(config api.OutputImageTagStepConfiguration, istClient imageclientset.ImageStreamTagsGetter, isClient imageclientset.ImageStreamsGetter, jobSpec *JobSpec) api.Step {

@@ -13,14 +13,24 @@ package api
 type ReleaseBuildConfiguration struct {
 	InputConfiguration `json:",inline"`
 
-	// The following commands describe how binaries,
-	// test binaries and RPMs are built baseImage
-	// source in the repo under test. If a command is
-	// omitted by the user, the resulting image is
-	// not built.
-	BinaryBuildCommands     string `json:"binary_build_commands,omitempty"`
+	// BinaryBuildCommands will create a "bin" image based on "src" that
+	// contains the output of this command. This allows reuse of binary artifacts
+	// across other steps. If empty, no "bin" image will be created.
+	BinaryBuildCommands string `json:"binary_build_commands,omitempty"`
+	// TestBinaryBuildCommands will create a "test-bin" image based on "src" that
+	// contains the output of this command. This allows reuse of binary artifacts
+	// across other steps. If empty, no "test-bin" image will be created.
 	TestBinaryBuildCommands string `json:"test_binary_build_commands,omitempty"`
-	RpmBuildCommands        string `json:"rpm_build_commands,omitempty"`
+
+	// RpmBuildCommands will create an "rpms" image from "bin" (or "src", if no
+	// binary build commands were specified) that contains the output of this
+	// command. The created RPMs will then be served via HTTP to the "base" image
+	// via an injected rpm.repo in the standard location at /etc/yum.repos.d.
+	RpmBuildCommands string `json:"rpm_build_commands,omitempty"`
+	// RpmBuildLocation is where RPms are deposited/ after being built. If
+	// unset, this will default/ under the repository root to
+	// _output/local/releases/rpms/.
+	RpmBuildLocation string `json:"rpm_build_location,omitempty"`
 
 	// CanonicalGoRepository is a directory path that represents
 	// the desired location of the contents of this repository in
@@ -28,15 +38,10 @@ type ReleaseBuildConfiguration struct {
 	// cloning from is ignored.
 	CanonicalGoRepository string `json:"canonical_go_repository"`
 
-	// RpmBuildLocation is where RPms are deposited
-	// after being built. If unset, this will default
-	// under the repository root to
-	// _output/local/releases/rpms/.
-	RpmBuildLocation string `json:"rpm_build_location,omitempty"`
-
 	// Images describes the images that are built
 	// baseImage the project as part of the release
-	// process
+	// process. The name of each image is its "to" value
+	// and can be used to build only a specific image.
 	Images []ProjectDirectoryImageBuildStepConfiguration `json:"images,omitempty"`
 
 	// Tests describes the tests to run inside of built images.

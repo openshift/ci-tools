@@ -120,7 +120,11 @@ func FromConfig(
 		} else if rawStep.PipelineImageCacheStepConfiguration != nil {
 			step = PipelineImageCacheStep(*rawStep.PipelineImageCacheStepConfiguration, config.Resources, buildClient, imageClient, jobSpec)
 		} else if rawStep.SourceStepConfiguration != nil {
-			step = SourceStep(*rawStep.SourceStepConfiguration, config.Resources, buildClient, imageClient, jobSpec)
+			srcClient, err := anonymousClusterImageStreamClient(imageClient, clusterConfig, rawStep.SourceStepConfiguration.ClonerefsImage.Cluster)
+			if err != nil {
+				return nil, nil, fmt.Errorf("unable to access image stream tag on remote cluster: %v", err)
+			}
+			step = SourceStep(*rawStep.SourceStepConfiguration, config.Resources, buildClient, srcClient, imageClient, jobSpec)
 		} else if rawStep.ProjectDirectoryImageBuildStepConfiguration != nil {
 			step = ProjectDirectoryImageBuildStep(*rawStep.ProjectDirectoryImageBuildStepConfiguration, config.Resources, buildClient, imageClient, jobSpec)
 		} else if rawStep.RPMImageInjectionStepConfiguration != nil {
@@ -253,6 +257,13 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec
 		From:      api.PipelineImageStreamTagReferenceRoot,
 		To:        api.PipelineImageStreamTagReferenceSource,
 		PathAlias: config.CanonicalGoRepository,
+		ClonerefsImage: api.ImageStreamTagReference{
+			Cluster:   "api.ci.openshift.org",
+			Namespace: "ci",
+			Name:      "clonerefs",
+			Tag:       "latest",
+		},
+		ClonerefsPath: "/clonerefs",
 	}})
 
 	if target := config.InputConfiguration.TestBaseImage; target != nil {

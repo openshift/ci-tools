@@ -74,19 +74,11 @@ func (s *inputImageTagStep) Run(ctx context.Context, dry bool) error {
 	}
 
 	if len(s.config.BaseImage.Cluster) > 0 && s.srcClient != s.dstClient {
-		from, err := s.srcClient.ImageStreams(s.config.BaseImage.Namespace).Get(fmt.Sprintf("%s", s.config.BaseImage.Name), meta.GetOptions{})
+		from, err := istObjectReference(s.srcClient, s.config.BaseImage)
 		if err != nil {
-			return fmt.Errorf("could not resolve base image stream: %v", err)
+			return fmt.Errorf("failed to reference source image stream tag: %v", err)
 		}
-		var repo string
-		if len(from.Status.PublicDockerImageRepository) > 0 {
-			repo = from.Status.PublicDockerImageRepository
-		} else if len(from.Status.DockerImageRepository) > 0 {
-			repo = from.Status.DockerImageRepository
-		} else {
-			return fmt.Errorf("remote image stream %s has no accessible image registry value", s.config.BaseImage.Name)
-		}
-		ist.Tag.From = &coreapi.ObjectReference{Kind: "DockerImage", Name: fmt.Sprintf("%s@%s", repo, s.imageName)}
+		ist.Tag.From = &from
 	}
 
 	if dry {
@@ -102,6 +94,26 @@ func (s *inputImageTagStep) Run(ctx context.Context, dry bool) error {
 		return err
 	}
 	return nil
+}
+
+func istObjectReference(client imageclientset.ImageV1Interface, reference api.ImageStreamTagReference) (coreapi.ObjectReference, error) {
+	is, err := client.ImageStreams(reference.Namespace).Get(fmt.Sprintf("%s", reference.Name), meta.GetOptions{})
+	if err != nil {
+		return coreapi.ObjectReference{}, fmt.Errorf("could not resolve remote image stream: %v", err)
+	}
+	var repo string
+	if len(is.Status.PublicDockerImageRepository) > 0 {
+		repo = is.Status.PublicDockerImageRepository
+	} else if len(is.Status.DockerImageRepository) > 0 {
+		repo = is.Status.DockerImageRepository
+	} else {
+		return coreapi.ObjectReference{}, fmt.Errorf("remote image stream %s has no accessible image registry value", reference.Name)
+	}
+	ist, err := client.ImageStreamTags(reference.Namespace).Get(fmt.Sprintf("%s:%s", reference.Name, reference.Tag), meta.GetOptions{})
+	if err != nil {
+		return coreapi.ObjectReference{}, fmt.Errorf("could not resolve remote image stream tag: %v", err)
+	}
+	return coreapi.ObjectReference{Kind: "DockerImage", Name: fmt.Sprintf("%s@%s", repo, ist.Image.Name)}, nil
 }
 
 func (s *inputImageTagStep) Done() (bool, error) {

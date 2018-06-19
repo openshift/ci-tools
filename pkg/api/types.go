@@ -289,10 +289,15 @@ type SourceStepConfiguration struct {
 	From PipelineImageStreamTagReference `json:"from"`
 	To   PipelineImageStreamTagReference `json:"to,omitempty"`
 
-	// SourcePath is the location within the source repository
+	// PathAlias is the location within the source repository
 	// to place source contents. It defaults to
 	// github.com/ORG/REPO.
 	PathAlias string `json:"source_path"`
+	// ClonerefsImage is the image where we get the clonerefs tool
+	ClonerefsImage ImageStreamTagReference `json:"clonerefs_image"`
+	// ClonerefsPath is the path in the above image where the
+	// clonerefs tool is placed
+	ClonerefsPath string `json:"clonerefs_path"`
 }
 
 // ProjectDirectoryImageBuildStepConfiguration describes an

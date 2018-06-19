@@ -28,10 +28,7 @@ const (
 	JobLabel           = "job"
 	BuildIdLabel       = "build-id"
 	CreatesLabel       = "creates"
-)
-
-const (
-	CreatedByCILabel = "created-by-ci"
+	CreatedByCILabel   = "created-by-ci"
 )
 
 var (
@@ -44,18 +41,19 @@ func sourceDockerfile(fromTag api.PipelineImageStreamTagReference, pathAlias str
 		workingDir = pathAlias
 	}
 	return fmt.Sprintf(`
-		FROM %s:%s
-		RUN umask 0002 && /usr/bin/clonerefs && chmod g+xw -R /go/src
-		WORKDIR /go/src/%s/
-		`, PipelineImageStream, fromTag, workingDir)
+FROM %s:%s
+ADD ./clonerefs /clonerefs
+RUN umask 0002 && /clonerefs && chmod g+xw -R /go/src
+WORKDIR /go/src/%s/`, PipelineImageStream, fromTag, workingDir)
 }
 
 type sourceStep struct {
-	config      api.SourceStepConfiguration
-	resources   api.ResourceConfiguration
-	buildClient BuildClient
-	istClient   imageclientset.ImageStreamTagsGetter
-	jobSpec     *JobSpec
+	config             api.SourceStepConfiguration
+	resources          api.ResourceConfiguration
+	buildClient        BuildClient
+	istClient          imageclientset.ImageStreamTagsGetter
+	clonerefsSrcClient imageclientset.ImageV1Interface
+	jobSpec            *JobSpec
 }
 
 func (s *sourceStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
@@ -65,11 +63,26 @@ func (s *sourceStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition,
 func (s *sourceStep) Run(ctx context.Context, dry bool) error {
 	dockerfile := sourceDockerfile(s.config.From, s.config.PathAlias, s.jobSpec)
 
+	clonerefsRef, err := istObjectReference(s.clonerefsSrcClient, s.config.ClonerefsImage)
+	if err != nil {
+		return fmt.Errorf("could not resolve clonerefs source: %v", err)
+	}
 	build := buildFromSource(
 		s.jobSpec, s.config.From, s.config.To,
 		buildapi.BuildSource{
 			Type:       buildapi.BuildSourceDockerfile,
 			Dockerfile: &dockerfile,
+			Images: []buildapi.ImageSource{
+				{
+					From: clonerefsRef,
+					Paths: []buildapi.ImageSourcePath{
+						{
+							SourcePath:     s.config.ClonerefsPath,
+							DestinationDir: ".",
+						},
+					},
+				},
+			},
 		},
 		"",
 		s.resources,
@@ -136,11 +149,11 @@ func buildFromSource(jobSpec *JobSpec, fromTag, toTag api.PipelineImageStreamTag
 				Strategy: buildapi.BuildStrategy{
 					Type: buildapi.DockerBuildStrategyType,
 					DockerStrategy: &buildapi.DockerBuildStrategy{
-						DockerfilePath: dockerfilePath,
-						From:           from,
-						ForcePull:      true,
-						NoCache:        true,
-						Env:            []coreapi.EnvVar{},
+						DockerfilePath:          dockerfilePath,
+						From:                    from,
+						ForcePull:               true,
+						NoCache:                 true,
+						Env:                     []coreapi.EnvVar{},
 						ImageOptimizationPolicy: &layer,
 					},
 				},
@@ -356,12 +369,13 @@ func (s *sourceStep) Provides() (api.ParameterMap, api.StepLink) {
 
 func (s *sourceStep) Name() string { return string(s.config.To) }
 
-func SourceStep(config api.SourceStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, istClient imageclientset.ImageStreamTagsGetter, jobSpec *JobSpec) api.Step {
+func SourceStep(config api.SourceStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, clonerefsSrcClient imageclientset.ImageV1Interface, istClient imageclientset.ImageStreamTagsGetter, jobSpec *JobSpec) api.Step {
 	return &sourceStep{
-		config:      config,
-		resources:   resources,
-		buildClient: buildClient,
-		istClient:   istClient,
-		jobSpec:     jobSpec,
+		config:             config,
+		resources:          resources,
+		buildClient:        buildClient,
+		istClient:          istClient,
+		clonerefsSrcClient: clonerefsSrcClient,
+		jobSpec:            jobSpec,
 	}
 }

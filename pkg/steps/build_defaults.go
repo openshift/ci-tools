@@ -258,7 +258,7 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec
 		To:        api.PipelineImageStreamTagReferenceSource,
 		PathAlias: config.CanonicalGoRepository,
 		ClonerefsImage: api.ImageStreamTagReference{
-			Cluster:   "api.ci.openshift.org",
+			Cluster:   "https://api.ci.openshift.org",
 			Namespace: "ci",
 			Name:      "clonerefs",
 			Tag:       "latest",

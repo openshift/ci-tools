@@ -97,7 +97,7 @@ func (s *inputImageTagStep) Run(ctx context.Context, dry bool) error {
 }
 
 func istObjectReference(client imageclientset.ImageV1Interface, reference api.ImageStreamTagReference) (coreapi.ObjectReference, error) {
-	is, err := client.ImageStreams(reference.Namespace).Get(fmt.Sprintf("%s", reference.Name), meta.GetOptions{})
+	is, err := client.ImageStreams(reference.Namespace).Get(reference.Name, meta.GetOptions{})
 	if err != nil {
 		return coreapi.ObjectReference{}, fmt.Errorf("could not resolve remote image stream: %v", err)
 	}

@@ -47,7 +47,7 @@ func (s *testStep) Run(ctx context.Context, dry bool) error {
 				{
 					Name:      "test",
 					Image:     fmt.Sprintf("%s:%s", PipelineImageStream, s.config.From),
-					Command:   []string{"/bin/sh", "-c", "#!/bin/sh\nset -euo pipefail\n" + s.config.Commands},
+					Command:   []string{"/bin/sh", "-c", "#!/bin/sh\nset -eu\n" + s.config.Commands},
 					Resources: containerResources,
 				},
 			},

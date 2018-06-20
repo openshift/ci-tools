@@ -716,7 +716,7 @@ func nodeNames(nodes []*api.StepNode) []string {
 func linkNames(links []api.StepLink) []string {
 	var names []string
 	for _, link := range links {
-		name := fmt.Sprintf("<%T>", link)
+		name := fmt.Sprintf("<%#v>", link)
 		names = append(names, name)
 	}
 	return names
@@ -752,6 +752,7 @@ func topologicalSort(nodes []*api.StepNode) ([]*api.StepNode, error) {
 			for _, node := range waiting {
 				links = append(links, node.Step.Requires()...)
 			}
+			links = api.Reduce(links)
 			var unsatisfied []api.StepLink
 			for _, link := range links {
 				if !api.HasAllLinks([]api.StepLink{link}, satisfied) {

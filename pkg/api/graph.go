@@ -29,6 +29,7 @@ type ParameterMap map[string]func() (string, error)
 // require and create.
 type StepLink interface {
 	Matches(other StepLink) bool
+	Same(other StepLink) bool
 }
 
 func AllStepsLink() StepLink {
@@ -36,6 +37,14 @@ func AllStepsLink() StepLink {
 }
 
 type allStepsLink struct{}
+
+func (_ allStepsLink) Same(other StepLink) bool {
+	_, ok := other.(allStepsLink)
+	if !ok {
+		return false
+	}
+	return true
+}
 
 func (_ allStepsLink) Matches(other StepLink) bool {
 	return true
@@ -47,6 +56,14 @@ func ExternalImageLink(ref ImageStreamTagReference) StepLink {
 
 type externalImageLink struct {
 	image ImageStreamTagReference
+}
+
+func (l *externalImageLink) Same(other StepLink) bool {
+	o, ok := other.(*externalImageLink)
+	if !ok {
+		return false
+	}
+	return o.image == l.image
 }
 
 func (l *externalImageLink) Matches(other StepLink) bool {
@@ -68,6 +85,14 @@ type internalImageLink struct {
 	image PipelineImageStreamTagReference
 }
 
+func (l *internalImageLink) Same(other StepLink) bool {
+	o, ok := other.(*internalImageLink)
+	if !ok {
+		return false
+	}
+	return o.image == l.image
+}
+
 func (l *internalImageLink) Matches(other StepLink) bool {
 	switch link := other.(type) {
 	case *internalImageLink:
@@ -82,6 +107,14 @@ func ImagesReadyLink() StepLink {
 }
 
 type imagesReadyLink struct{}
+
+func (l *imagesReadyLink) Same(other StepLink) bool {
+	_, ok := other.(*imagesReadyLink)
+	if !ok {
+		return false
+	}
+	return true
+}
 
 func (l *imagesReadyLink) Matches(other StepLink) bool {
 	switch other.(type) {
@@ -98,6 +131,14 @@ func RPMRepoLink() StepLink {
 
 type rpmRepoLink struct{}
 
+func (l *rpmRepoLink) Same(other StepLink) bool {
+	_, ok := other.(*rpmRepoLink)
+	if !ok {
+		return false
+	}
+	return true
+}
+
 func (l *rpmRepoLink) Matches(other StepLink) bool {
 	switch other.(type) {
 	case *rpmRepoLink:
@@ -112,6 +153,14 @@ func ReleaseImagesLink() StepLink {
 }
 
 type releaseImagesLink struct{}
+
+func (l *releaseImagesLink) Same(other StepLink) bool {
+	_, ok := other.(*releaseImagesLink)
+	if !ok {
+		return false
+	}
+	return true
+}
 
 func (l *releaseImagesLink) Matches(other StepLink) bool {
 	switch other.(type) {
@@ -216,6 +265,27 @@ func addToNode(parent, child *StepNode) bool {
 	}
 	parent.Children = append(parent.Children, child)
 	return true
+}
+
+func Reduce(steps []StepLink) []StepLink {
+	top := 0
+	for i := 1; i < len(steps); i++ {
+		if Same(steps[:top], steps[i]) {
+			continue
+		}
+		steps[top] = steps[i]
+		top++
+	}
+	return steps[:top]
+}
+
+func Same(steps []StepLink, step StepLink) bool {
+	for _, other := range steps {
+		if step.Same(other) {
+			return true
+		}
+	}
+	return false
 }
 
 func HasAnyLinks(steps, candidates []StepLink) bool {

@@ -7,11 +7,13 @@ import (
 	"log"
 	"strings"
 
+	"k8s.io/apimachinery/pkg/api/errors"
+	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
+
 	imageapi "github.com/openshift/api/image/v1"
 	"github.com/openshift/ci-operator/pkg/api"
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
-	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // promotionStep will tag a full release suite
@@ -37,7 +39,18 @@ func (s *promotionStep) Inputs(ctx context.Context, dry bool) (api.InputDefiniti
 }
 
 func (s *promotionStep) Run(ctx context.Context, dry bool) error {
-	log.Printf("Promoting tags to %s: %s", targetName(s.config), strings.Join(s.tags, ", "))
+	tags := make(map[string]string)
+	names := sets.NewString()
+	for _, tag := range s.tags {
+		tags[tag] = tag
+		names.Insert(tag)
+	}
+	for dst, src := range s.config.AdditionalImages {
+		tags[dst] = src
+		names.Insert(dst)
+	}
+
+	log.Printf("Promoting tags to %s: %s", targetName(s.config), strings.Join(names.List(), ", "))
 
 	pipeline, err := s.srcClient.ImageStreams(s.jobSpec.Namespace()).Get(PipelineImageStream, meta.GetOptions{})
 	if err != nil {
@@ -58,10 +71,10 @@ func (s *promotionStep) Run(ctx context.Context, dry bool) error {
 			return fmt.Errorf("could not retrieve target imagestream: %v", err)
 		}
 
-		for _, tag := range s.tags {
-			if valid, _ := findStatusTag(pipeline, tag); valid != nil {
+		for dst, src := range tags {
+			if valid, _ := findStatusTag(pipeline, src); valid != nil {
 				is.Spec.Tags = append(is.Spec.Tags, imageapi.TagReference{
-					Name: tag,
+					Name: dst,
 					From: valid,
 				})
 			}
@@ -84,14 +97,14 @@ func (s *promotionStep) Run(ctx context.Context, dry bool) error {
 	}
 
 	client := s.dstClient.ImageStreamTags(s.config.Namespace)
-	for _, tag := range s.tags {
-		valid, _ := findStatusTag(pipeline, tag)
+	for dst, src := range tags {
+		valid, _ := findStatusTag(pipeline, src)
 		if valid == nil {
 			continue
 		}
 		ist := &imageapi.ImageStreamTag{
 			ObjectMeta: meta.ObjectMeta{
-				Name:      fmt.Sprintf("%s%s:%s", s.config.NamePrefix, tag, s.config.Tag),
+				Name:      fmt.Sprintf("%s%s:%s", s.config.NamePrefix, dst, s.config.Tag),
 				Namespace: s.config.Namespace,
 			},
 			Tag: &imageapi.TagReference{
@@ -109,7 +122,7 @@ func (s *promotionStep) Run(ctx context.Context, dry bool) error {
 		}
 		_, err := client.Update(ist)
 		if err != nil {
-			return fmt.Errorf("could not promote imagestreamtag %s: %v", tag, err)
+			return fmt.Errorf("could not promote imagestreamtag %s: %v", dst, err)
 		}
 	}
 

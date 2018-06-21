@@ -203,6 +203,13 @@ type PromotionConfiguration struct {
 	// NamePrefix is prepended to the final output image name
 	// if specified.
 	NamePrefix string `json:"name_prefix"`
+
+	// AdditionalImages is a mapping of images to promote. The
+	// images will be taken from the pipeline image stream. The
+	// key is the name to promote as and the value is the source
+	// name. If you specify a tag that does not exist as the source
+	// the destination tag will not be created.
+	AdditionalImages map[string]string `json:"additional_images"`
 }
 
 // StepConfiguration holds one step configuration.

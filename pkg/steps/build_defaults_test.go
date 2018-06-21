@@ -9,6 +9,12 @@ import (
 	"github.com/openshift/ci-operator/pkg/api"
 )
 
+func addCloneRefs(cfg *api.SourceStepConfiguration) *api.SourceStepConfiguration {
+	cfg.ClonerefsImage = api.ImageStreamTagReference{Cluster: "https://api.ci.openshift.org", Namespace: "ci", Name: "clonerefs", Tag: "latest"}
+	cfg.ClonerefsPath = "/clonerefs"
+	return cfg
+}
+
 func TestStepConfigsForBuild(t *testing.T) {
 	var testCases = []struct {
 		name    string
@@ -30,10 +36,10 @@ func TestStepConfigsForBuild(t *testing.T) {
 				baseNamespace: "base-1",
 			},
 			output: []api.StepConfiguration{{
-				SourceStepConfiguration: &api.SourceStepConfiguration{
+				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
 					From: api.PipelineImageStreamTagReferenceRoot,
 					To:   api.PipelineImageStreamTagReferenceSource,
-				},
+				}),
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					BaseImage: api.ImageStreamTagReference{
@@ -60,10 +66,10 @@ func TestStepConfigsForBuild(t *testing.T) {
 				baseNamespace: "base-1",
 			},
 			output: []api.StepConfiguration{{
-				SourceStepConfiguration: &api.SourceStepConfiguration{
+				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
 					From: api.PipelineImageStreamTagReferenceRoot,
 					To:   api.PipelineImageStreamTagReferenceSource,
-				},
+				}),
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					BaseImage: api.ImageStreamTagReference{
@@ -97,10 +103,10 @@ func TestStepConfigsForBuild(t *testing.T) {
 				baseNamespace: "base-1",
 			},
 			output: []api.StepConfiguration{{
-				SourceStepConfiguration: &api.SourceStepConfiguration{
+				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
 					From: api.PipelineImageStreamTagReferenceRoot,
 					To:   api.PipelineImageStreamTagReferenceSource,
-				},
+				}),
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					BaseImage: api.ImageStreamTagReference{
@@ -143,10 +149,10 @@ func TestStepConfigsForBuild(t *testing.T) {
 				baseNamespace: "base-1",
 			},
 			output: []api.StepConfiguration{{
-				SourceStepConfiguration: &api.SourceStepConfiguration{
+				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
 					From: api.PipelineImageStreamTagReferenceRoot,
 					To:   api.PipelineImageStreamTagReferenceSource,
-				},
+				}),
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					BaseImage: api.ImageStreamTagReference{
@@ -184,10 +190,10 @@ func TestStepConfigsForBuild(t *testing.T) {
 				baseNamespace: "base-1",
 			},
 			output: []api.StepConfiguration{{
-				SourceStepConfiguration: &api.SourceStepConfiguration{
+				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
 					From: api.PipelineImageStreamTagReferenceRoot,
 					To:   api.PipelineImageStreamTagReferenceSource,
-				},
+				}),
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					BaseImage: api.ImageStreamTagReference{
@@ -230,10 +236,10 @@ func TestStepConfigsForBuild(t *testing.T) {
 				baseNamespace: "base-1",
 			},
 			output: []api.StepConfiguration{{
-				SourceStepConfiguration: &api.SourceStepConfiguration{
+				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
 					From: api.PipelineImageStreamTagReferenceRoot,
 					To:   api.PipelineImageStreamTagReferenceSource,
-				},
+				}),
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					BaseImage: api.ImageStreamTagReference{
@@ -276,10 +282,10 @@ func TestStepConfigsForBuild(t *testing.T) {
 				baseNamespace: "base-1",
 			},
 			output: []api.StepConfiguration{{
-				SourceStepConfiguration: &api.SourceStepConfiguration{
+				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
 					From: api.PipelineImageStreamTagReferenceRoot,
 					To:   api.PipelineImageStreamTagReferenceSource,
-				},
+				}),
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
 					BaseImage: api.ImageStreamTagReference{

@@ -113,7 +113,7 @@ func (s *releaseImagesTagStep) Run(ctx context.Context, dry bool) error {
 		}
 
 		if dry {
-			istJSON, err := json.Marshal(newIS)
+			istJSON, err := json.MarshalIndent(newIS, "", "  ")
 			if err != nil {
 				return fmt.Errorf("failed to marshal image stream: %v", err)
 			}
@@ -191,7 +191,7 @@ func (s *releaseImagesTagStep) Run(ctx context.Context, dry bool) error {
 				}
 
 				if dry {
-					istJSON, err := json.Marshal(ist)
+					istJSON, err := json.MarshalIndent(ist, "", "  ")
 					if err != nil {
 						return fmt.Errorf("failed to marshal imagestreamtag: %v", err)
 					}
@@ -249,7 +249,7 @@ func (s *releaseImagesTagStep) createReleaseConfigMap(dry bool) error {
 		},
 	}
 	if dry {
-		cmJSON, err := json.Marshal(cm)
+		cmJSON, err := json.MarshalIndent(cm, "", "  ")
 		if err != nil {
 			return fmt.Errorf("failed to marshal configmap: %v", err)
 		}

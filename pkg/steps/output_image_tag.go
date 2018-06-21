@@ -57,7 +57,7 @@ func (s *outputImageTagStep) Run(ctx context.Context, dry bool) error {
 		},
 	}
 	if dry {
-		istJSON, err := json.Marshal(ist)
+		istJSON, err := json.MarshalIndent(ist, "", "  ")
 		if err != nil {
 			return fmt.Errorf("failed to marshal imagestreamtag: %v", err)
 		}

@@ -108,6 +108,11 @@ Errors in artifact extraction will not cause build failures.
 In CI environments the inputs to a job may be different than what a normal
 development workflow would use. The --override file will override fields
 defined in the config file, such as base images and the release tag configuration.
+
+After a successful build the --promote will tag each built image (in "images")
+to the image stream(s) identified by the "promotion" config, which defaults to
+the same image stream as the release configuration. You may add additional 
+images to promote and their target names via the "additional_images" map.
 `
 
 func main() {
@@ -268,6 +273,13 @@ func (o *options) Complete() error {
 	}
 	jobSpec.SetBaseNamespace(o.baseNamespace)
 	o.jobSpec = jobSpec
+
+	if o.dry {
+		config, _ := json.MarshalIndent(o.configSpec, "", "  ")
+		log.Printf("Resolved configuration:\n%s", string(config))
+		job, _ := json.MarshalIndent(o.jobSpec, "", "  ")
+		log.Printf("Resolved job spec:\n%s", string(job))
+	}
 
 	for _, path := range o.secretDirectories.values {
 		secret := &coreapi.Secret{Data: make(map[string][]byte)}

@@ -68,7 +68,7 @@ func (s *promotionStep) Run(ctx context.Context, dry bool) error {
 		}
 
 		if dry {
-			istJSON, err := json.Marshal(is)
+			istJSON, err := json.MarshalIndent(is, "", "  ")
 			if err != nil {
 				return fmt.Errorf("failed to marshal image stream: %v", err)
 			}
@@ -100,7 +100,7 @@ func (s *promotionStep) Run(ctx context.Context, dry bool) error {
 			},
 		}
 		if dry {
-			istJSON, err := json.Marshal(ist)
+			istJSON, err := json.MarshalIndent(ist, "", "  ")
 			if err != nil {
 				return fmt.Errorf("failed to marshal imagestreamtag: %v", err)
 			}

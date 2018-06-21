@@ -113,7 +113,7 @@ func (s *rpmServerStep) Run(ctx context.Context, dry bool) error {
 	}
 
 	if dry {
-		deploymentConfigJSON, err := json.Marshal(deploymentConfig)
+		deploymentConfigJSON, err := json.MarshalIndent(deploymentConfig, "", "  ")
 		if err != nil {
 			return fmt.Errorf("failed to marshal deploymentconfig: %v", err)
 		}
@@ -140,7 +140,7 @@ func (s *rpmServerStep) Run(ctx context.Context, dry bool) error {
 	}
 
 	if dry {
-		serviceJSON, err := json.Marshal(service)
+		serviceJSON, err := json.MarshalIndent(service, "", "  ")
 		if err != nil {
 			return fmt.Errorf("failed to marshal service: %v", err)
 		}
@@ -164,7 +164,7 @@ func (s *rpmServerStep) Run(ctx context.Context, dry bool) error {
 	}
 
 	if dry {
-		routeJSON, err := json.Marshal(route)
+		routeJSON, err := json.MarshalIndent(route, "", "  ")
 		if err != nil {
 			return fmt.Errorf("failed to marshal route: %v", err)
 		}

@@ -149,11 +149,11 @@ func buildFromSource(jobSpec *JobSpec, fromTag, toTag api.PipelineImageStreamTag
 				Strategy: buildapi.BuildStrategy{
 					Type: buildapi.DockerBuildStrategyType,
 					DockerStrategy: &buildapi.DockerBuildStrategy{
-						DockerfilePath:          dockerfilePath,
-						From:                    from,
-						ForcePull:               true,
-						NoCache:                 true,
-						Env:                     []coreapi.EnvVar{},
+						DockerfilePath: dockerfilePath,
+						From:           from,
+						ForcePull:      true,
+						NoCache:        true,
+						Env:            []coreapi.EnvVar{},
 						ImageOptimizationPolicy: &layer,
 					},
 				},
@@ -201,7 +201,7 @@ func buildInputsFromStep(inputs map[string]api.ImageBuildInputs) []buildapi.Imag
 
 func handleBuild(buildClient BuildClient, build *buildapi.Build, dry bool) error {
 	if dry {
-		buildJSON, err := json.Marshal(build)
+		buildJSON, err := json.MarshalIndent(build, "", "  ")
 		if err != nil {
 			return fmt.Errorf("failed to marshal build: %v", err)
 		}

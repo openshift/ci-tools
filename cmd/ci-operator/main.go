@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -281,6 +282,16 @@ func (o *options) Complete() error {
 		log.Printf("Resolved configuration:\n%s", string(config))
 		job, _ := json.MarshalIndent(o.jobSpec, "", "  ")
 		log.Printf("Resolved job spec:\n%s", string(job))
+	}
+	refs := o.jobSpec.Refs
+	if len(refs.Pulls) > 0 {
+		var pulls []string
+		for _, pull := range refs.Pulls {
+			pulls = append(pulls, fmt.Sprintf("#%d %s @%s", pull.Number, shorten(pull.SHA, 8), pull.Author))
+		}
+		log.Printf("Resolved source https://github.com/%s/%s to %s@%s, merging: %s", refs.Org, refs.Repo, refs.BaseRef, shorten(refs.BaseSHA, 8), strings.Join(pulls, ", "))
+	} else {
+		log.Printf("Resolved source https://github.com/%s/%s to %s@%s", refs.Org, refs.Repo, refs.BaseRef, shorten(refs.BaseSHA, 8))
 	}
 
 	for _, path := range o.secretDirectories.values {
@@ -787,4 +798,16 @@ func printExecutionOrder(nodes []*api.StepNode) error {
 	}
 	log.Printf("Running %s", strings.Join(nodeNames(ordered), ", "))
 	return nil
+}
+
+var shaRegex = regexp.MustCompile(`^[0-9a-fA-F]+$`)
+
+// shorten takes a string, and if it looks like a hexadecimal Git SHA it truncates it to
+// l characters. The values provided to job spec are not required to be SHAs but could also be
+// tags or other git refs.
+func shorten(value string, l int) string {
+	if len(value) > l && shaRegex.MatchString(value) {
+		return value[:l]
+	}
+	return value
 }

@@ -44,7 +44,9 @@ func sourceDockerfile(fromTag api.PipelineImageStreamTagReference, pathAlias str
 FROM %s:%s
 ADD ./clonerefs /clonerefs
 RUN umask 0002 && /clonerefs && chmod g+xw -R /go/src
-WORKDIR /go/src/%s/`, PipelineImageStream, fromTag, workingDir)
+WORKDIR /go/src/%s/
+RUN git submodule update --init
+`, PipelineImageStream, fromTag, workingDir)
 }
 
 type sourceStep struct {

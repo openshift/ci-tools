@@ -188,7 +188,9 @@ type options struct {
 }
 
 func bindOptions(flag *flag.FlagSet) *options {
-	opt := &options{}
+	opt := &options{
+		idleCleanupDuration: time.Duration(10 * time.Minute),
+	}
 
 	// command specific options
 	flag.BoolVar(&opt.help, "h", false, "See help for this command.")
@@ -207,7 +209,7 @@ func bindOptions(flag *flag.FlagSet) *options {
 	// the target namespace and cleanup behavior
 	flag.StringVar(&opt.namespace, "namespace", "", "Namespace to create builds into, defaults to build_id from JOB_SPEC. If the string '{id}' is in this value it will be replaced with the build input hash.")
 	flag.StringVar(&opt.baseNamespace, "base-namespace", "stable", "Namespace to read builds from, defaults to stable.")
-	flag.DurationVar(&opt.idleCleanupDuration, "delete-when-idle", opt.idleCleanupDuration, "If no pod is running for longer than this interval, delete the namespace.")
+	flag.DurationVar(&opt.idleCleanupDuration, "delete-when-idle", opt.idleCleanupDuration, "If no pod is running for longer than this interval, delete the namespace. Set to zero to retain the contents.")
 
 	// actions to add to the graph
 	flag.BoolVar(&opt.promote, "promote", false, "When all other targets complete, publish the set of images built by this job into the release configuration.")

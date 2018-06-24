@@ -299,7 +299,7 @@ func (s *rpmServerStep) Provides() (api.ParameterMap, api.StepLink) {
 			}); err != nil {
 				return "", fmt.Errorf("retrieving RPM_REPO: %v", err)
 			}
-			return repoHost, nil
+			return fmt.Sprintf("http://%s", repoHost), nil
 		},
 	}, api.RPMRepoLink()
 }

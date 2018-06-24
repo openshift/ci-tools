@@ -240,6 +240,11 @@ type InputImageTagStepConfiguration struct {
 type OutputImageTagStepConfiguration struct {
 	From PipelineImageStreamTagReference `json:"from"`
 	To   ImageStreamTagReference         `json:"to"`
+
+	// Optional means the output step is not built, published, or
+	// promoted unless explicitly targeted. Use for builds which
+	// are invoked only when testing certain parts of the repo.
+	Optional bool `json:"optional"`
 }
 
 // PipelineImageCacheStepConfiguration describes a
@@ -325,6 +330,11 @@ type ProjectDirectoryImageBuildStepConfiguration struct {
 	// that will populate the build context for the Dockerfile or
 	// alter the input image for a multi-stage build.
 	Inputs map[string]ImageBuildInputs `json:"inputs"`
+
+	// Optional means the build step is not built, published, or
+	// promoted unless explicitly targeted. Use for builds which
+	// are invoked only when testing certain parts of the repo.
+	Optional bool `json:"optional"`
 }
 
 // ImageBuildInputs is a subset of the v1 OpenShift Build API object

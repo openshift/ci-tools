@@ -31,7 +31,11 @@ func (s *outputImageTagStep) Inputs(ctx context.Context, dry bool) (api.InputDef
 
 func (s *outputImageTagStep) Run(ctx context.Context, dry bool) error {
 	toNamespace := s.namespace()
-	log.Printf("Tagging %s into %s/%s:%s", s.config.From, toNamespace, s.config.To.Name, s.config.To.Tag)
+	if string(s.config.From) == s.config.To.Tag && toNamespace == s.jobSpec.Namespace() && s.config.To.Name == StableImageStream {
+		log.Printf("Tagging %s into %s", s.config.From, s.config.To.Name)
+	} else {
+		log.Printf("Tagging %s into %s/%s:%s", s.config.From, toNamespace, s.config.To.Name, s.config.To.Tag)
+	}
 	fromImage := "dry-fake"
 	if !dry {
 		from, err := s.istClient.ImageStreamTags(s.jobSpec.Namespace()).Get(fmt.Sprintf("%s:%s", PipelineImageStream, s.config.From), meta.GetOptions{})

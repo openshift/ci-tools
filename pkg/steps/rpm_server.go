@@ -93,9 +93,46 @@ func (s *rpmServerStep) Run(ctx context.Context, dry bool) error {
 						Name:            RPMRepoName,
 						Image:           imageReference,
 						ImagePullPolicy: coreapi.PullAlways,
-						Command:         []string{"/bin/python"},
-						Args:            []string{"-m", "SimpleHTTPServer", "8080"},
-						WorkingDir:      RPMServeLocation,
+
+						// SimpleHTTPServer is too simple - it can't handle threading. Use a threaded implementation
+						// that binds multiple simple servers to the same port.
+						Command: []string{"/bin/bash", "-c"},
+						Args: []string{
+							`
+#!/bin/bash
+cat <<END >>/tmp/serve.py
+import time, threading, socket, SocketServer, BaseHTTPServer, SimpleHTTPServer
+
+# Create socket
+addr = ('', 8080)
+sock = socket.socket (socket.AF_INET, socket.SOCK_STREAM)
+sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+sock.bind(addr)
+sock.listen(5)
+
+# Launch multiple listeners as threads
+class Thread(threading.Thread):
+	def __init__(self, i):
+		threading.Thread.__init__(self)
+		self.i = i
+		self.daemon = True
+		self.start()
+	def run(self):
+		httpd = BaseHTTPServer.HTTPServer(addr, SimpleHTTPServer.SimpleHTTPRequestHandler, False)
+
+		# Prevent the HTTP server from re-binding every handler.
+		# https://stackoverflow.com/questions/46210672/
+		httpd.socket = sock
+		httpd.server_bind = self.server_close = lambda self: None
+
+		httpd.serve_forever()
+[Thread(i) for i in range(100)]
+time.sleep(9e9)
+END
+python /tmp/serve.py
+							`,
+						},
+						WorkingDir: RPMServeLocation,
 						Ports: []coreapi.ContainerPort{{
 							ContainerPort: 8080,
 							Protocol:      coreapi.ProtocolTCP,

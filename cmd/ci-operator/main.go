@@ -355,7 +355,7 @@ func (o *options) Run() error {
 	}()
 
 	// load the graph from the configuration
-	buildSteps, postSteps, err := steps.FromConfig(o.configSpec, o.jobSpec, o.templates, o.writeParams, o.artifactDir, o.promote, o.clusterConfig)
+	buildSteps, postSteps, err := steps.FromConfig(o.configSpec, o.jobSpec, o.templates, o.writeParams, o.artifactDir, o.promote, o.clusterConfig, o.targets.values)
 	if err != nil {
 		return fmt.Errorf("failed to generate steps from config: %v", err)
 	}

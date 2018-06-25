@@ -49,9 +49,15 @@ func FromConfig(
 	paramFile, artifactDir string,
 	promote bool,
 	clusterConfig *rest.Config,
+	requiredTargets []string,
 ) ([]api.Step, []api.Step, error) {
 	var buildSteps []api.Step
 	var postSteps []api.Step
+
+	requiredNames := make(map[string]struct{})
+	for _, target := range requiredTargets {
+		requiredNames[target] = struct{}{}
+	}
 
 	var buildClient BuildClient
 	var imageClient imageclientset.ImageV1Interface
@@ -133,7 +139,10 @@ func FromConfig(
 			step = RPMServerStep(*rawStep.RPMServeStepConfiguration, deploymentGetter, routeGetter, serviceGetter, imageClient, jobSpec)
 		} else if rawStep.OutputImageTagStepConfiguration != nil {
 			step = OutputImageTagStep(*rawStep.OutputImageTagStepConfiguration, imageClient, imageClient, jobSpec)
-			imageStepLinks = append(imageStepLinks, step.Creates()...)
+			// all required or non-optional output images are considered part of [images]
+			if _, ok := requiredNames[string(rawStep.OutputImageTagStepConfiguration.From)]; ok || !rawStep.OutputImageTagStepConfiguration.Optional {
+				imageStepLinks = append(imageStepLinks, step.Creates()...)
+			}
 		} else if rawStep.ReleaseImagesTagStepConfiguration != nil {
 			srcClient, err := anonymousClusterImageStreamClient(imageClient, clusterConfig, rawStep.ReleaseImagesTagStepConfiguration.Cluster)
 			if err != nil {
@@ -169,7 +178,10 @@ func FromConfig(
 		}
 		var tags []string
 		for _, image := range config.Images {
-			tags = append(tags, string(image.To))
+			// if the image is required or non-optional, include it in promotion
+			if _, ok := requiredNames[string(image.To)]; ok || !image.Optional {
+				tags = append(tags, string(image.To))
+			}
 		}
 		postSteps = append(postSteps, PromotionStep(*cfg, tags, imageClient, imageClient, jobSpec))
 	}
@@ -356,6 +368,7 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec
 					Name: fmt.Sprintf("%s%s", config.ReleaseTagConfiguration.NamePrefix, StableImageStream),
 					Tag:  string(image.To),
 				},
+				Optional: image.Optional,
 			}})
 		} else {
 			buildSteps = append(buildSteps, api.StepConfiguration{OutputImageTagStepConfiguration: &api.OutputImageTagStepConfiguration{
@@ -364,6 +377,7 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec
 					Name: string(image.To),
 					Tag:  "ci",
 				},
+				Optional: image.Optional,
 			}})
 		}
 	}

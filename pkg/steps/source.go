@@ -53,7 +53,7 @@ type sourceStep struct {
 	config             api.SourceStepConfiguration
 	resources          api.ResourceConfiguration
 	buildClient        BuildClient
-	istClient          imageclientset.ImageStreamTagsGetter
+	imageClient        imageclientset.ImageV1Interface
 	clonerefsSrcClient imageclientset.ImageV1Interface
 	jobSpec            *JobSpec
 }
@@ -337,7 +337,7 @@ func resourcesFor(req api.ResourceRequirements) (coreapi.ResourceRequirements, e
 }
 
 func (s *sourceStep) Done() (bool, error) {
-	return imageStreamTagExists(s.config.To, s.istClient.ImageStreamTags(s.jobSpec.Namespace()))
+	return imageStreamTagExists(s.config.To, s.imageClient.ImageStreamTags(s.jobSpec.Namespace()))
 }
 
 func imageStreamTagExists(reference api.PipelineImageStreamTagReference, istClient imageclientset.ImageStreamTagInterface) (bool, error) {
@@ -366,17 +366,33 @@ func (s *sourceStep) Creates() []api.StepLink {
 }
 
 func (s *sourceStep) Provides() (api.ParameterMap, api.StepLink) {
-	return nil, nil
+	return api.ParameterMap{
+		"LOCAL_IMAGE_SRC": func() (string, error) {
+			is, err := s.imageClient.ImageStreams(s.jobSpec.Namespace()).Get(PipelineImageStream, meta.GetOptions{})
+			if err != nil {
+				return "", err
+			}
+			var registry string
+			if len(is.Status.PublicDockerImageRepository) > 0 {
+				registry = is.Status.PublicDockerImageRepository
+			} else if len(is.Status.DockerImageRepository) > 0 {
+				registry = is.Status.DockerImageRepository
+			} else {
+				return "", fmt.Errorf("image stream %s has no accessible image registry value", s.config.To)
+			}
+			return fmt.Sprintf("%s:%s", registry, s.config.To), nil
+		},
+	}, api.InternalImageLink("src")
 }
 
 func (s *sourceStep) Name() string { return string(s.config.To) }
 
-func SourceStep(config api.SourceStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, clonerefsSrcClient imageclientset.ImageV1Interface, istClient imageclientset.ImageStreamTagsGetter, jobSpec *JobSpec) api.Step {
+func SourceStep(config api.SourceStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, clonerefsSrcClient imageclientset.ImageV1Interface, imageClient imageclientset.ImageV1Interface, jobSpec *JobSpec) api.Step {
 	return &sourceStep{
 		config:             config,
 		resources:          resources,
 		buildClient:        buildClient,
-		istClient:          istClient,
+		imageClient:        imageClient,
 		clonerefsSrcClient: clonerefsSrcClient,
 		jobSpec:            jobSpec,
 	}

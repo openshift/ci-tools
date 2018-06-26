@@ -86,7 +86,7 @@ func TestRunNormalCase(t *testing.T) {
 		creates:   []api.StepLink{api.InternalImageLink(api.PipelineImageStreamTagReference("final"))},
 	}
 
-	if err := Run(context.Background(), api.BuildGraph([]api.Step{root, other, src, bin, testBin, rpm, unrelated, final}), false); err != nil {
+	if _, err := Run(context.Background(), api.BuildGraph([]api.Step{root, other, src, bin, testBin, rpm, unrelated, final}), false); err != nil {
 		t.Errorf("got an error but expected none: %v", err)
 	}
 
@@ -151,8 +151,12 @@ func TestRunFailureCase(t *testing.T) {
 		creates:   []api.StepLink{api.InternalImageLink(api.PipelineImageStreamTagReference("final"))},
 	}
 
-	if err := Run(context.Background(), api.BuildGraph([]api.Step{root, other, src, bin, testBin, rpm, unrelated, final}), false); err == nil {
+	suites, err := Run(context.Background(), api.BuildGraph([]api.Step{root, other, src, bin, testBin, rpm, unrelated, final}), false)
+	if err == nil {
 		t.Error("got no error but expected one")
+	}
+	if len(suites.Suites) != 1 || len(suites.Suites[0].TestCases) != 6 || suites.Suites[0].NumTests != 6 || suites.Suites[0].NumFailed != 1 {
+		t.Errorf("unexpected junit output: %#v", suites.Suites[0])
 	}
 
 	for _, step := range []*fakeStep{root, other, src, bin, testBin, rpm, unrelated, final} {

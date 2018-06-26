@@ -5,16 +5,19 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/openshift/ci-operator/pkg/api"
+	"github.com/openshift/ci-operator/pkg/junit"
 )
 
 type message struct {
-	node *api.StepNode
-	err  error
+	node     *api.StepNode
+	duration time.Duration
+	err      error
 }
 
-func Run(ctx context.Context, graph []*api.StepNode, dry bool) error {
+func Run(ctx context.Context, graph []*api.StepNode, dry bool) (*junit.TestSuites, error) {
 	var seen []api.StepLink
 	results := make(chan message)
 	done := make(chan bool)
@@ -26,19 +29,36 @@ func Run(ctx context.Context, graph []*api.StepNode, dry bool) error {
 		done <- true
 	}()
 
+	start := time.Now()
 	for _, root := range graph {
 		go runStep(ctx, root, results, dry)
 	}
 
+	suites := &junit.TestSuites{
+		Suites: []*junit.TestSuite{
+			{},
+		},
+	}
+	suite := suites.Suites[0]
 	var errors []error
 	for {
 		select {
 		case <-ctxDone:
-			return aggregateError(errors)
+			suite.Duration = time.Now().Sub(start).Seconds()
+			return suites, aggregateError(errors)
 		case out := <-results:
+			testCase := &junit.TestCase{Name: out.node.Step.Name(), Duration: out.duration.Seconds()}
+			suite.TestCases = append(suite.TestCases, testCase)
+			suite.NumTests++
 			if out.err != nil {
+				testCase.FailureOutput = &junit.FailureOutput{Message: out.err.Error()}
+				suite.NumFailed++
 				errors = append(errors, out.err)
 			} else {
+				if dry {
+					testCase.SkipMessage = &junit.SkipMessage{Message: "Dry run"}
+					suite.NumSkipped++
+				}
 				seen = append(seen, out.node.Step.Creates()...)
 				for _, child := range out.node.Children {
 					// we can trigger a child if all of it's pre-requisites
@@ -56,7 +76,8 @@ func Run(ctx context.Context, graph []*api.StepNode, dry bool) error {
 		case <-done:
 			close(results)
 			close(done)
-			return aggregateError(errors)
+			suite.Duration = time.Now().Sub(start).Seconds()
+			return suites, aggregateError(errors)
 		}
 	}
 }
@@ -80,9 +101,12 @@ func aggregateError(errors []error) error {
 }
 
 func runStep(ctx context.Context, node *api.StepNode, out chan<- message, dry bool) {
+	start := time.Now()
 	err := node.Step.Run(ctx, dry)
+	duration := time.Now().Sub(start)
 	out <- message{
-		node: node,
-		err:  err,
+		node:     node,
+		duration: duration,
+		err:      err,
 	}
 }

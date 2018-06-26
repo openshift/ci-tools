@@ -567,7 +567,7 @@ func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name st
 		return false, nil
 	}
 	if podJobIsFailed(pod) {
-		return false, fmt.Errorf("the pod %s/%s failed after %s (failed containers: %s)", pod.Namespace, pod.Name, podDuration(pod), strings.Join(failedContainerNames(pod), ", "))
+		return false, fmt.Errorf("the pod %s/%s failed after %s (failed containers: %s): %s %s", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", "), pod.Status.Reason, pod.Status.Message)
 	}
 
 	watcher, err := podClient.Watch(meta.ListOptions{
@@ -592,7 +592,7 @@ func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name st
 				return false, nil
 			}
 			if podJobIsFailed(pod) {
-				return false, fmt.Errorf("the pod %s/%s failed after %s (failed containers: %s)", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", "))
+				return false, fmt.Errorf("the pod %s/%s failed after %s (failed containers: %s): %s %s", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", "), pod.Status.Reason, pod.Status.Message)
 			}
 			continue
 		}

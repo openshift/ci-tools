@@ -567,7 +567,7 @@ func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name st
 		return false, nil
 	}
 	if podJobIsFailed(pod) {
-		return false, fmt.Errorf("the pod %s/%s failed after %s (failed containers: %s)", pod.Namespace, pod.Name, podDuration(pod), strings.Join(failedContainerNames(pod), ", "))
+		return false, fmt.Errorf("the pod %s/%s failed after %s (failed containers: %s): %s %s", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", "), pod.Status.Reason, pod.Status.Message)
 	}
 
 	watcher, err := podClient.Watch(meta.ListOptions{
@@ -592,7 +592,7 @@ func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name st
 				return false, nil
 			}
 			if podJobIsFailed(pod) {
-				return false, fmt.Errorf("the pod %s/%s failed after %s (failed containers: %s)", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", "))
+				return false, fmt.Errorf("the pod %s/%s failed after %s (failed containers: %s): %s %s", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", "), pod.Status.Reason, pod.Status.Message)
 			}
 			continue
 		}
@@ -646,6 +646,17 @@ func templateInstanceReady(instance *templateapi.TemplateInstance) (ready bool, 
 	return false, nil
 }
 
+func podRunningContainers(pod *coreapi.Pod) []string {
+	var names []string
+	for _, status := range append(append([]coreapi.ContainerStatus{}, pod.Status.InitContainerStatuses...), pod.Status.ContainerStatuses...) {
+		if status.State.Running != nil || status.State.Waiting != nil || status.State.Terminated == nil {
+			continue
+		}
+		names = append(names, status.Name)
+	}
+	return names
+}
+
 func podJobIsOK(pod *coreapi.Pod) bool {
 	if pod.Status.Phase == coreapi.PodSucceeded {
 		return true
@@ -654,12 +665,14 @@ func podJobIsOK(pod *coreapi.Pod) bool {
 		return false
 	}
 	// if all containers except artifacts are in terminated and have exit code 0, we're ok
+	hasArtifacts := false
 	for _, status := range append(append([]coreapi.ContainerStatus{}, pod.Status.InitContainerStatuses...), pod.Status.ContainerStatuses...) {
 		// don't succeed until everything has started at least once
 		if status.State.Waiting != nil && status.LastTerminationState.Terminated == nil {
 			return false
 		}
 		if status.Name == "artifacts" {
+			hasArtifacts = true
 			continue
 		}
 		s := status.State.Terminated
@@ -670,8 +683,10 @@ func podJobIsOK(pod *coreapi.Pod) bool {
 			return false
 		}
 	}
+	if pod.Status.Phase == coreapi.PodFailed && !hasArtifacts {
+		return false
+	}
 	return true
-
 }
 
 func podJobIsFailed(pod *coreapi.Pod) bool {
@@ -745,5 +760,9 @@ func podLogNewFailedContainers(podClient coreclientset.PodInterface, pod *coreap
 		}
 
 		log.Printf("Container %s in pod %s failed, exit code %d", status.Name, pod.Name, status.State.Terminated.ExitCode)
+	}
+	// if there are no running containers and we're in a terminal state, mark the pod complete
+	if (pod.Status.Phase == coreapi.PodFailed || pod.Status.Phase == coreapi.PodSucceeded) && len(podRunningContainers(pod)) == 0 {
+		notifier.Complete(pod.Name)
 	}
 }

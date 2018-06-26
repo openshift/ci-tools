@@ -13,6 +13,7 @@ import (
 	routeclientset "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
 	coreapi "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -139,6 +140,12 @@ python /tmp/serve.py
 						}},
 						ReadinessProbe: probe,
 						LivenessProbe:  probe,
+						Resources: coreapi.ResourceRequirements{
+							Requests: coreapi.ResourceList{
+								coreapi.ResourceCPU:    resource.MustParse("50m"),
+								coreapi.ResourceMemory: resource.MustParse("50Mi"),
+							},
+						},
 					}},
 					TerminationGracePeriodSeconds: &one,
 				},

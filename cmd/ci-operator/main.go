@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base32"
 	"encoding/json"
+	"encoding/xml"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -34,6 +35,7 @@ import (
 
 	"github.com/openshift/ci-operator/pkg/api"
 	"github.com/openshift/ci-operator/pkg/interrupt"
+	"github.com/openshift/ci-operator/pkg/junit"
 	"github.com/openshift/ci-operator/pkg/steps"
 )
 
@@ -398,7 +400,11 @@ func (o *options) Run() error {
 		}
 
 		// execute the graph
-		if err := steps.Run(ctx, nodes, o.dry); err != nil {
+		suites, err := steps.Run(ctx, nodes, o.dry)
+		if err := o.writeJUnit(suites, "operator"); err != nil {
+			log.Printf("warning: Unable to write JUnit result: %v", err)
+		}
+		if err != nil {
 			return err
 		}
 
@@ -674,6 +680,18 @@ func (o *options) createNamespaceCleanupPod() error {
 		return fmt.Errorf("could not create pod for cleanup: %v", err)
 	}
 	return nil
+}
+
+func (o *options) writeJUnit(suites *junit.TestSuites, name string) error {
+	if len(o.artifactDir) == 0 || suites == nil {
+		return nil
+	}
+	suites.Suites[0].Name = name
+	out, err := xml.MarshalIndent(suites, "", "  ")
+	if err != nil {
+		return err
+	}
+	return ioutil.WriteFile(filepath.Join(o.artifactDir, fmt.Sprintf("junit_%s.xml", name)), out, 0640)
 }
 
 // oneWayEncoding can be used to encode hex to a 62-character set (0 and 1 are duplicates) for use in

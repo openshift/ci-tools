@@ -92,6 +92,10 @@ func (s *projectDirectoryImageBuildStep) Provides() (api.ParameterMap, api.StepL
 
 func (s *projectDirectoryImageBuildStep) Name() string { return string(s.config.To) }
 
+func (s *projectDirectoryImageBuildStep) Description() string {
+	return fmt.Sprintf("Build image %s from the repository", s.config.To)
+}
+
 func ProjectDirectoryImageBuildStep(config api.ProjectDirectoryImageBuildStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, istClient imageclientset.ImageStreamTagsGetter, jobSpec *JobSpec) api.Step {
 	return &projectDirectoryImageBuildStep{
 		config:      config,

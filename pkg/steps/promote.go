@@ -148,6 +148,10 @@ func (s *promotionStep) Provides() (api.ParameterMap, api.StepLink) {
 
 func (s *promotionStep) Name() string { return "" }
 
+func (s *promotionStep) Description() string {
+	return fmt.Sprintf("Promote built images into the release image stream %s", targetName(s.config))
+}
+
 // PromotionStep copies tags from the pipeline image stream to the destination defined in the promotion config.
 // If the source tag does not exist it is silently skippe.d
 func PromotionStep(config api.PromotionConfiguration, tags []string, srcClient, dstClient imageclientset.ImageV1Interface, jobSpec *JobSpec) api.Step {

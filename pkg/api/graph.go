@@ -16,6 +16,8 @@ type Step interface {
 	// Name is the name of the stage, used to target it.
 	// If this is the empty string the stage cannot be targeted.
 	Name() string
+	// Description is a short, human readable description of this step.
+	Description() string
 	Requires() []StepLink
 	Creates() []StepLink
 	Provides() (ParameterMap, StepLink)

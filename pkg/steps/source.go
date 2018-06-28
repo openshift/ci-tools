@@ -387,6 +387,10 @@ func (s *sourceStep) Provides() (api.ParameterMap, api.StepLink) {
 
 func (s *sourceStep) Name() string { return string(s.config.To) }
 
+func (s *sourceStep) Description() string {
+	return fmt.Sprintf("Clone the correct source code into an image and tag it as %s", s.config.To)
+}
+
 func SourceStep(config api.SourceStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, clonerefsSrcClient imageclientset.ImageV1Interface, imageClient imageclientset.ImageV1Interface, jobSpec *JobSpec) api.Step {
 	return &sourceStep{
 		config:             config,

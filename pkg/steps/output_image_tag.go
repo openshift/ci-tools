@@ -140,6 +140,13 @@ func (s *outputImageTagStep) Name() string {
 	return s.config.To.As
 }
 
+func (s *outputImageTagStep) Description() string {
+	if len(s.config.To.As) == 0 {
+		return fmt.Sprintf("Tag the image %s into the image stream tag %s:%s", s.config.From, s.config.To.Name, s.config.To.Tag)
+	}
+	return fmt.Sprintf("Tag the image %s into the stable image stream", s.config.From)
+}
+
 func (s *outputImageTagStep) namespace() string {
 	if len(s.config.To.Namespace) != 0 {
 		return s.config.To.Namespace

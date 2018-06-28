@@ -112,6 +112,7 @@ func (f *fakeStep) Done() (bool, error)  { return true, nil }
 func (f *fakeStep) Requires() []StepLink { return f.requires }
 func (f *fakeStep) Creates() []StepLink  { return f.creates }
 func (f *fakeStep) Name() string         { return f.name }
+func (f *fakeStep) Description() string  { return f.name }
 
 func (f *fakeStep) Provides() (ParameterMap, StepLink) { return nil, nil }
 

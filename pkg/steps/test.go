@@ -127,6 +127,10 @@ func (s *testStep) Provides() (api.ParameterMap, api.StepLink) {
 
 func (s *testStep) Name() string { return s.config.As }
 
+func (s *testStep) Description() string {
+	return fmt.Sprintf("Run the tests for %s in a pod and wait for success or failure", s.config.As)
+}
+
 func TestStep(config api.TestStepConfiguration, resources api.ResourceConfiguration, podClient PodClient, artifactDir string, jobSpec *JobSpec) api.Step {
 	return &testStep{
 		config:      config,

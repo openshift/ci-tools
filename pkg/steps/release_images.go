@@ -307,6 +307,10 @@ func (s *releaseImagesTagStep) Provides() (api.ParameterMap, api.StepLink) {
 
 func (s *releaseImagesTagStep) Name() string { return "[release-inputs]" }
 
+func (s *releaseImagesTagStep) Description() string {
+	return fmt.Sprintf("Find all of the input images from %s and tag them into the output image stream", sourceName(s.config))
+}
+
 func ReleaseImagesTagStep(config api.ReleaseTagConfiguration, srcClient, dstClient imageclientset.ImageV1Interface, routeClient routeclientset.RoutesGetter, configMapClient coreclientset.ConfigMapsGetter, params *DeferredParameters, jobSpec *JobSpec) api.Step {
 	return &releaseImagesTagStep{
 		config:          config,

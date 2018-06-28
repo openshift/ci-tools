@@ -212,6 +212,10 @@ func (s *templateExecutionStep) Provides() (api.ParameterMap, api.StepLink) {
 
 func (s *templateExecutionStep) Name() string { return s.template.Name }
 
+func (s *templateExecutionStep) Description() string {
+	return fmt.Sprintf("Instantiate the template %s into the operator namespace and wait for any pods to complete", s.template.Name)
+}
+
 func TemplateExecutionStep(template *templateapi.Template, params *DeferredParameters, podClient PodClient, templateClient TemplateClient, artifactDir string, jobSpec *JobSpec) api.Step {
 	return &templateExecutionStep{
 		template:       template,

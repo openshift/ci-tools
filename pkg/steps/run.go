@@ -47,11 +47,11 @@ func Run(ctx context.Context, graph []*api.StepNode, dry bool) (*junit.TestSuite
 			suite.Duration = time.Now().Sub(start).Seconds()
 			return suites, aggregateError(errors)
 		case out := <-results:
-			testCase := &junit.TestCase{Name: out.node.Step.Name(), Duration: out.duration.Seconds()}
+			testCase := &junit.TestCase{Name: out.node.Step.Description(), Duration: out.duration.Seconds()}
 			suite.TestCases = append(suite.TestCases, testCase)
 			suite.NumTests++
 			if out.err != nil {
-				testCase.FailureOutput = &junit.FailureOutput{Message: out.err.Error()}
+				testCase.FailureOutput = &junit.FailureOutput{Output: out.err.Error()}
 				suite.NumFailed++
 				errors = append(errors, out.err)
 			} else {

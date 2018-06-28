@@ -68,6 +68,8 @@ func (s *writeParametersStep) Provides() (api.ParameterMap, api.StepLink) {
 
 func (s *writeParametersStep) Name() string { return "parameters/write" }
 
+func (s *writeParametersStep) Description() string { return "Write the job parameters to disk" }
+
 func WriteParametersStep(params *DeferredParameters, paramFile string, jobSpec *JobSpec) api.Step {
 	return &writeParametersStep{
 		params:    params,

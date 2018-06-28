@@ -147,6 +147,10 @@ func (s *inputImageTagStep) Provides() (api.ParameterMap, api.StepLink) {
 
 func (s *inputImageTagStep) Name() string { return fmt.Sprintf("[input:%s]", s.config.To) }
 
+func (s *inputImageTagStep) Description() string {
+	return fmt.Sprintf("Find the input image %s and tag it into the pipeline", s.config.To)
+}
+
 func InputImageTagStep(config api.InputImageTagStepConfiguration, srcClient, dstClient imageclientset.ImageV1Interface, jobSpec *JobSpec) api.Step {
 	return &inputImageTagStep{
 		config:    config,

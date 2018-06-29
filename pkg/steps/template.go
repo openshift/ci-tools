@@ -571,7 +571,10 @@ func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name st
 		return false, nil
 	}
 	if podJobIsFailed(pod) {
-		return false, fmt.Errorf("the pod %s/%s failed after %s (failed containers: %s): %s %s", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", "), pod.Status.Reason, pod.Status.Message)
+		return false, errorWithOutput{
+			err:    fmt.Errorf("the pod %s/%s failed after %s (failed containers: %s): %s", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", "), podReason(pod)),
+			output: podMessages(pod),
+		}
 	}
 
 	watcher, err := podClient.Watch(meta.ListOptions{
@@ -596,16 +599,62 @@ func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name st
 				return false, nil
 			}
 			if podJobIsFailed(pod) {
-				return false, fmt.Errorf("the pod %s/%s failed after %s (failed containers: %s): %s %s", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", "), pod.Status.Reason, pod.Status.Message)
+				return false, errorWithOutput{
+					err:    fmt.Errorf("the pod %s/%s failed after %s (failed containers: %s): %s", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", "), podReason(pod)),
+					output: podMessages(pod),
+				}
 			}
 			continue
 		}
 		if event.Type == watch.Deleted {
 			podLogNewFailedContainers(podClient, pod, completed, notifier)
-			return false, fmt.Errorf("the pod %s/%s was deleted without completing after %s (failed containers: %s)", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", "))
+			return false, errorWithOutput{
+				err:    fmt.Errorf("the pod %s/%s was deleted without completing after %s (failed containers: %s)", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", ")),
+				output: podMessages(pod),
+			}
 		}
 		log.Printf("error: Unrecognized event in watch: %v %#v", event.Type, event.Object)
 	}
+}
+
+// podReason returns the pod's reason and message for exit or tries to find one from the pod.
+func podReason(pod *coreapi.Pod) string {
+	reason := pod.Status.Reason
+	message := pod.Status.Message
+	if len(message) == 0 {
+		message = "unknown"
+	}
+	if len(reason) == 0 {
+		for _, status := range append(append([]coreapi.ContainerStatus{}, pod.Status.InitContainerStatuses...), pod.Status.ContainerStatuses...) {
+			state := status.State.Terminated
+			if state == nil || state.ExitCode == 0 {
+				continue
+			}
+			if len(reason) == 0 {
+				continue
+			}
+			reason = state.Reason
+			if len(message) == 0 {
+				message = fmt.Sprintf("container failure with exit code %d", state.ExitCode)
+			}
+			break
+		}
+	}
+	return fmt.Sprintf("%s %s", reason, message)
+}
+
+// podMessages returns a string containing the messages and reasons for all terminated containers with a non-zero exit code.
+func podMessages(pod *coreapi.Pod) string {
+	var messages []string
+	for _, status := range append(append([]coreapi.ContainerStatus{}, pod.Status.InitContainerStatuses...), pod.Status.ContainerStatuses...) {
+		if state := status.State.Terminated; state != nil && state.ExitCode != 0 {
+			messages = append(messages, fmt.Sprintf("Container %s exited with code %d, reason %s", status.Name, state.ExitCode, state.Reason))
+			if msg := state.Message; len(msg) > 0 {
+				messages = append(messages, "---", msg, "---")
+			}
+		}
+	}
+	return strings.Join(messages, "\n")
 }
 
 func podDuration(pod *coreapi.Pod) time.Duration {
@@ -763,7 +812,7 @@ func podLogNewFailedContainers(podClient coreclientset.PodInterface, pod *coreap
 			log.Printf("error: Unable to retrieve logs from failed pod container %s: %v", status.Name, err)
 		}
 
-		log.Printf("Container %s in pod %s failed, exit code %d", status.Name, pod.Name, status.State.Terminated.ExitCode)
+		log.Printf("Container %s in pod %s failed, exit code %d, reason %s", status.Name, pod.Name, status.State.Terminated.ExitCode, status.State.Terminated.Reason)
 	}
 	// if there are no running containers and we're in a terminal state, mark the pod complete
 	if (pod.Status.Phase == coreapi.PodFailed || pod.Status.Phase == coreapi.PodSucceeded) && len(podRunningContainers(pod)) == 0 {

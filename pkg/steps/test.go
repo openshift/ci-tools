@@ -45,10 +45,11 @@ func (s *testStep) Run(ctx context.Context, dry bool) error {
 			RestartPolicy: coreapi.RestartPolicyNever,
 			Containers: []coreapi.Container{
 				{
-					Name:      "test",
-					Image:     fmt.Sprintf("%s:%s", PipelineImageStream, s.config.From),
-					Command:   []string{"/bin/sh", "-c", "#!/bin/sh\nset -eu\n" + s.config.Commands},
-					Resources: containerResources,
+					Name:                     "test",
+					Image:                    fmt.Sprintf("%s:%s", PipelineImageStream, s.config.From),
+					Command:                  []string{"/bin/sh", "-c", "#!/bin/sh\nset -eu\n" + s.config.Commands},
+					Resources:                containerResources,
+					TerminationMessagePolicy: coreapi.TerminationMessageFallbackToLogsOnError,
 				},
 			},
 		},

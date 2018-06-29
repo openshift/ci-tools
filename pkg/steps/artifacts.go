@@ -14,6 +14,7 @@ import (
 	"sync"
 
 	coreapi "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/kubernetes/scheme"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
@@ -248,14 +249,29 @@ func (w *ArtifactWorker) run() {
 }
 
 func (w *ArtifactWorker) downloadArtifacts(podName string) error {
+	defer func() {
+		// signal to artifacts container to gracefully shut don
+		err := removeFile(w.podClient, w.namespace, podName, "artifacts", []string{"/tmp/done"})
+		if err == nil {
+			return
+		}
+		log.Printf("error: unable to signal to artifacts container to terminate in pod %s, triggering deletion: %v", podName, err)
+
+		// attempt to delete the pod
+		err = w.podClient.Pods(w.namespace).Delete(podName, nil)
+		if err == nil || errors.IsNotFound(err) {
+			return
+		}
+		log.Printf("error: unable to retrieve artifacts from pod %s and the pod could not be deleted: %v", podName, err)
+
+		// give up, expect another process to clean up the pods
+	}()
+
 	if err := os.MkdirAll(w.dir, 0750); err != nil {
 		return fmt.Errorf("unable to create artifact directory %s: %v", w.dir, err)
 	}
 	if err := copyArtifacts(w.podClient, w.dir, w.namespace, podName, "artifacts", []string{"/tmp/artifacts"}); err != nil {
 		return fmt.Errorf("unable to retrieve artifacts from pod %s: %v", podName, err)
-	}
-	if err := removeFile(w.podClient, w.namespace, podName, "artifacts", []string{"/tmp/done"}); err != nil {
-		return fmt.Errorf("unable to signal to artifacts container to terminate in pod %s: %v", podName, err)
 	}
 	return nil
 }

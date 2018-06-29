@@ -253,7 +253,10 @@ func waitForBuildOrTimeout(buildClient BuildClient, namespace, name string) (boo
 	if isFailed(build) {
 		log.Printf("Build %s failed, printing logs:", build.Name)
 		printBuildLogs(buildClient, build.Namespace, build.Name)
-		return false, fmt.Errorf("the build %s/%s failed with status %q", build.Namespace, build.Name, build.Status.Phase)
+		return false, errorWithOutput{
+			err:    fmt.Errorf("the build %s failed with reason %s: %s", build.Name, build.Status.Reason, build.Status.Message),
+			output: build.Status.LogSnippet,
+		}
 	}
 
 	watcher, err := buildClient.Builds(namespace).Watch(meta.ListOptions{
@@ -279,10 +282,26 @@ func waitForBuildOrTimeout(buildClient BuildClient, namespace, name string) (boo
 			if isFailed(build) {
 				log.Printf("Build %s failed, printing logs:", build.Name)
 				printBuildLogs(buildClient, build.Namespace, build.Name)
-				return false, fmt.Errorf("the build %s/%s failed after %s with status %q", build.Namespace, build.Name, buildDuration(build).Truncate(time.Second), build.Status.Phase)
+				return false, errorWithOutput{
+					err:    fmt.Errorf("the build %s failed after %s with reason %s: %s", build.Name, buildDuration(build).Truncate(time.Second), build.Status.Reason, build.Status.Message),
+					output: build.Status.LogSnippet,
+				}
 			}
 		}
 	}
+}
+
+type errorWithOutput struct {
+	err    error
+	output string
+}
+
+func (e errorWithOutput) Error() string {
+	return e.err.Error()
+}
+
+func (e errorWithOutput) ErrorOutput() string {
+	return e.output
 }
 
 func buildDuration(build *buildapi.Build) time.Duration {

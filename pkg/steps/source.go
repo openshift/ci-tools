@@ -189,6 +189,9 @@ func buildInputsFromStep(inputs map[string]api.ImageBuildInputs) []buildapi.Imag
 		for _, path := range value.Paths {
 			paths = append(paths, buildapi.ImageSourcePath{SourcePath: path.SourcePath, DestinationDir: path.DestinationDir})
 		}
+		if len(value.As) == 0 && len(paths) == 0 {
+			continue
+		}
 		refs = append(refs, buildapi.ImageSource{
 			From: coreapi.ObjectReference{
 				Kind: "ImageStreamTag",

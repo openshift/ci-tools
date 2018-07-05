@@ -45,20 +45,24 @@ func (s *projectDirectoryImageBuildStep) Run(ctx context.Context, dry bool) erro
 		}
 		workingDir = metadata.Config.WorkingDir
 	}
+	images := buildInputsFromStep(s.config.Inputs)
+	if _, ok := s.config.Inputs["src"]; !ok {
+		images = append(images, buildapi.ImageSource{
+			From: coreapi.ObjectReference{
+				Kind: "ImageStreamTag",
+				Name: source,
+			},
+			Paths: []buildapi.ImageSourcePath{{
+				SourcePath:     fmt.Sprintf("%s/%s/.", workingDir, s.config.ContextDir),
+				DestinationDir: ".",
+			}},
+		})
+	}
 	return handleBuild(s.buildClient, buildFromSource(
 		s.jobSpec, s.config.From, s.config.To,
 		buildapi.BuildSource{
-			Type: buildapi.BuildSourceImage,
-			Images: append(buildInputsFromStep(s.config.Inputs), buildapi.ImageSource{
-				From: coreapi.ObjectReference{
-					Kind: "ImageStreamTag",
-					Name: source,
-				},
-				Paths: []buildapi.ImageSourcePath{{
-					SourcePath:     fmt.Sprintf("%s/%s/.", workingDir, s.config.ContextDir),
-					DestinationDir: ".",
-				}},
-			}),
+			Type:   buildapi.BuildSourceImage,
+			Images: images,
 		},
 		s.config.DockerfilePath,
 		s.resources,

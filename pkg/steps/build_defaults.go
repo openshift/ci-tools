@@ -192,8 +192,10 @@ func FromConfig(
 func promotionDefaults(configSpec *api.ReleaseBuildConfiguration) (*api.PromotionConfiguration, error) {
 	config := configSpec.PromotionConfiguration
 	if config == nil {
+		config = &api.PromotionConfiguration{}
+	}
+	if len(config.Tag) == 0 && len(config.Name) == 0 {
 		if input := configSpec.ReleaseTagConfiguration; input != nil {
-			config = &api.PromotionConfiguration{}
 			config.Namespace = input.Namespace
 			config.Name = input.Name
 			config.NamePrefix = input.NamePrefix

@@ -153,7 +153,7 @@ func (s *promotionStep) Description() string {
 }
 
 // PromotionStep copies tags from the pipeline image stream to the destination defined in the promotion config.
-// If the source tag does not exist it is silently skippe.d
+// If the source tag does not exist it is silently skipped.
 func PromotionStep(config api.PromotionConfiguration, tags []string, srcClient, dstClient imageclientset.ImageV1Interface, jobSpec *JobSpec) api.Step {
 	return &promotionStep{
 		config:    config,

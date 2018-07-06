@@ -94,7 +94,7 @@ func (s *sourceStep) Run(ctx context.Context, dry bool) error {
 	refs.PathAlias = s.config.PathAlias
 	optionsSpec := map[string]interface{}{
 		"src_root":       "/go",
-		"log":            "-",
+		"log":            "/dev/null",
 		"git_user_name":  "ci-robot",
 		"git_user_email": "ci-robot@openshift.io",
 		"refs":           []interface{}{refs},

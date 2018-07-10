@@ -222,7 +222,7 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.StringVar(&opt.writeParams, "write-params", "", "If set write an env-compatible file with the output of the job.")
 
 	// experimental flags
-	flag.StringVar(&opt.gitRef, "git-ref", "", "[EXPERIMENTAL] Populate the job spec from this local Git reference")
+	flag.StringVar(&opt.gitRef, "git-ref", "", "Populate the job spec from this local Git reference. If JOB_SPEC is set, the refs field will be overwritten.")
 
 	return opt
 }
@@ -275,6 +275,12 @@ func (o *options) Complete() error {
 			return fmt.Errorf("failed to resolve job spec: %v", err)
 		}
 		jobSpec = spec
+	} else if len(o.gitRef) > 0 {
+		spec, err := jobSpecFromGitRef(o.gitRef)
+		if err != nil {
+			return fmt.Errorf("failed to resolve --git-ref: %v", err)
+		}
+		jobSpec.Refs = spec.Refs
 	}
 	jobSpec.SetBaseNamespace(o.baseNamespace)
 	o.jobSpec = jobSpec

@@ -595,11 +595,11 @@ func (o *options) createNamespaceCleanupPod() error {
 	log.Printf("Namespace will be deleted after %s of idle time", o.idleCleanupDuration)
 	client, err := coreclientset.NewForConfig(o.clusterConfig)
 	if err != nil {
-		return fmt.Errorf("could not get image client for cluster config: %v", err)
+		return fmt.Errorf("could not get core client for cluster config: %v", err)
 	}
 	rbacClient, err := rbacclientset.NewForConfig(o.clusterConfig)
 	if err != nil {
-		return fmt.Errorf("could not get image client for cluster config: %v", err)
+		return fmt.Errorf("could not get RBAC client for cluster config: %v", err)
 	}
 
 	if _, err := client.ServiceAccounts(o.namespace).Create(&coreapi.ServiceAccount{

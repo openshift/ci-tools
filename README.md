@@ -1,0 +1,45 @@
+# CI Operator
+
+CI Operator automates and simplifies the process of building and testing
+OpenShift component images (i.e. any `openshift/origin-{component}` images).
+
+Given a Git repository reference and a component-specific JSON configuration
+file, describing base images and which images should be built and tested and
+how, CI Operator builds the component images within an OpenShift cluster and
+runs the tests. All artifacts are built in a new namespace named using a hash of
+all inputs, so the artifacts can be reused when the inputs are identical.
+
+CI Operator is mainly intended to be run inside a pod in a cluster, triggered by
+the Prow CI infrastructure, but it is also possible to run it as a CLI tool on a
+developer laptop.
+
+Note: CI Operator is not a [Kubernetes operator](https://coreos.com/operators/).
+
+## Obtaining CI Operator
+
+Currently, users must download the source and build it themselves:
+
+```
+$ git clone https://github.com/openshift/ci-operator.git
+$ cd ci-operator
+$ go build ./cmd/ci-operator
+```
+
+You can execute CI Operator locally afterwards:
+
+```
+./ci-operator --config master.json --namespace 'test-namespace' --git-ref=openshift/{repo}@master
+```
+
+See [ONBOARDING.md](ONBOARDING.md#config.json) on how to write repository
+configuration.
+
+## Onboarding a component to CI Operator and Prow
+
+See [ONBOARD.md](ONBOARD.md)
+
+## OpenShift components using CI Operator
+
+A number of [OpenShift
+components](https://github.com/openshift/release/tree/master/ci-operator/config)
+are already using CI Operator.

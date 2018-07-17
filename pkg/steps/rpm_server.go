@@ -83,7 +83,7 @@ func (s *rpmServerStep) Run(ctx context.Context, dry bool) error {
 	deploymentConfig := &appsapi.DeploymentConfig{
 		ObjectMeta: commonMeta,
 		Spec: appsapi.DeploymentConfigSpec{
-			Replicas: 1,
+			Replicas: 2,
 			Selector: labelSet,
 			Template: &coreapi.PodTemplateSpec{
 				ObjectMeta: meta.ObjectMeta{

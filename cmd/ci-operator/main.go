@@ -16,10 +16,11 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"errors"
 
 	coreapi "k8s.io/api/core/v1"
 	rbacapi "k8s.io/api/rbac/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	rbacclientset "k8s.io/client-go/kubernetes/typed/rbac/v1"
@@ -496,17 +497,17 @@ func (o *options) initializeNamespace() error {
 			DisplayName: fmt.Sprintf("%s - %s", o.namespace, o.jobSpec.Job),
 			Description: jobDescription(o.jobSpec, o.configSpec),
 		})
-		if err != nil && !errors.IsAlreadyExists(err) {
+		if err != nil && !kerrors.IsAlreadyExists(err) {
 			return fmt.Errorf("could not set up namespace for test: %v", err)
 		}
 		if err != nil {
 			project, err = projectGetter.ProjectV1().Projects().Get(o.namespace, meta.GetOptions{})
 			if err != nil {
-				if errors.IsNotFound(err) {
+				if kerrors.IsNotFound(err) {
 					continue
 				}
 				// wait a few seconds for auth caches to catch up
-				if errors.IsForbidden(err) && retries > 0 {
+				if kerrors.IsForbidden(err) && retries > 0 {
 					retries--
 					time.Sleep(time.Second)
 					continue
@@ -545,7 +546,7 @@ func (o *options) initializeNamespace() error {
 		},
 	})
 	if err != nil {
-		if !errors.IsAlreadyExists(err) {
+		if !kerrors.IsAlreadyExists(err) {
 			return fmt.Errorf("could not set up pipeline imagestream for test: %v", err)
 		}
 		is, _ = imageGetter.ImageStreams(o.jobSpec.Namespace()).Get(steps.PipelineImageStream, meta.GetOptions{})
@@ -567,7 +568,7 @@ func (o *options) initializeNamespace() error {
 	}
 	for _, secret := range o.secrets {
 		_, err := client.Secrets(o.namespace).Create(secret)
-		if errors.IsAlreadyExists(err) {
+		if kerrors.IsAlreadyExists(err) {
 			existing, err := client.Secrets(o.namespace).Get(secret.Name, meta.GetOptions{})
 			if err != nil {
 				return err
@@ -606,7 +607,7 @@ func (o *options) createNamespaceCleanupPod() error {
 		ObjectMeta: meta.ObjectMeta{
 			Name: "cleanup",
 		},
-	}); err != nil && !errors.IsAlreadyExists(err) {
+	}); err != nil && !kerrors.IsAlreadyExists(err) {
 		return fmt.Errorf("could not create service account for cleanup: %v", err)
 	}
 	if _, err := rbacClient.RoleBindings(o.namespace).Create(&rbacapi.RoleBinding{
@@ -618,7 +619,7 @@ func (o *options) createNamespaceCleanupPod() error {
 			Kind: "ClusterRole",
 			Name: "admin",
 		},
-	}); err != nil && !errors.IsAlreadyExists(err) {
+	}); err != nil && !kerrors.IsAlreadyExists(err) {
 		return fmt.Errorf("could not create role binding for cleanup: %v", err)
 	}
 
@@ -682,7 +683,7 @@ func (o *options) createNamespaceCleanupPod() error {
 				},
 			},
 		},
-	}); err != nil && !errors.IsAlreadyExists(err) {
+	}); err != nil && !kerrors.IsAlreadyExists(err) {
 		return fmt.Errorf("could not create pod for cleanup: %v", err)
 	}
 	return nil
@@ -797,18 +798,16 @@ func topologicalSort(nodes []*api.StepNode) ([]*api.StepNode, error) {
 			changed = true
 		}
 		if !changed && len(waiting) > 0 {
-			var links []api.StepLink
 			for _, node := range waiting {
-				links = append(links, node.Step.Requires()...)
-			}
-			links = api.Reduce(links)
-			var unsatisfied []api.StepLink
-			for _, link := range links {
-				if !api.HasAllLinks([]api.StepLink{link}, satisfied) {
-					unsatisfied = append(unsatisfied, link)
+				var missing []api.StepLink
+				for _, link := range node.Step.Requires() {
+					if !api.HasAllLinks([]api.StepLink{link}, satisfied) {
+						missing = append(missing, link)
+					}
+					log.Printf("step <%T> is missing dependencies: %s", node.Step, strings.Join(linkNames(missing), ", "))
 				}
 			}
-			return nil, fmt.Errorf("steps (%s) are missing dependencies (%s)", strings.Join(nodeNames(waiting), ", "), strings.Join(linkNames(unsatisfied), ", "))
+			return nil, errors.New("steps are missing dependencies")
 		}
 		nodes = waiting
 	}

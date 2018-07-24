@@ -6,6 +6,7 @@ import (
 	"encoding/base32"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -16,12 +17,13 @@ import (
 	"regexp"
 	"strings"
 	"time"
-	"errors"
 
+	batchapi "k8s.io/api/batch/v1"
 	coreapi "k8s.io/api/core/v1"
 	rbacapi "k8s.io/api/rbac/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	batchclientset "k8s.io/client-go/kubernetes/typed/batch/v1"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	rbacclientset "k8s.io/client-go/kubernetes/typed/rbac/v1"
 	"k8s.io/client-go/rest"
@@ -602,6 +604,10 @@ func (o *options) createNamespaceCleanupPod() error {
 	if err != nil {
 		return fmt.Errorf("could not get RBAC client for cluster config: %v", err)
 	}
+	batchClient, err := batchclientset.NewForConfig(o.clusterConfig)
+	if err != nil {
+		return fmt.Errorf("could not get image client for cluster config: %v", err)
+	}
 
 	if _, err := client.ServiceAccounts(o.namespace).Create(&coreapi.ServiceAccount{
 		ObjectMeta: meta.ObjectMeta{
@@ -625,37 +631,41 @@ func (o *options) createNamespaceCleanupPod() error {
 
 	grace := int64(30)
 	deadline := int64(12 * time.Hour / time.Second)
-	if _, err := client.Pods(o.namespace).Create(&coreapi.Pod{
+	if _, err := batchClient.Jobs(o.namespace).Create(&batchapi.Job{
 		ObjectMeta: meta.ObjectMeta{
 			Name: "cleanup-when-idle",
 		},
-		Spec: coreapi.PodSpec{
-			ActiveDeadlineSeconds:         &deadline,
-			RestartPolicy:                 coreapi.RestartPolicyNever,
-			TerminationGracePeriodSeconds: &grace,
-			ServiceAccountName:            "cleanup",
-			Containers: []coreapi.Container{
-				{
-					Name:  "cleanup",
-					Image: "openshift/origin-cli:latest",
-					Env: []coreapi.EnvVar{
+		Spec: batchapi.JobSpec{
+			Template: coreapi.PodTemplateSpec{
+				Spec: coreapi.PodSpec{
+					ActiveDeadlineSeconds:         &deadline,
+					RestartPolicy:                 coreapi.RestartPolicyNever,
+					TerminationGracePeriodSeconds: &grace,
+					ServiceAccountName:            "cleanup",
+					Containers: []coreapi.Container{
 						{
-							Name:      "NAMESPACE",
-							ValueFrom: &coreapi.EnvVarSource{FieldRef: &coreapi.ObjectFieldSelector{FieldPath: "metadata.namespace"}},
-						},
-						{
-							Name:  "WAIT",
-							Value: fmt.Sprintf("%d", int(o.idleCleanupDuration.Seconds())),
-						},
-					},
-					Command: []string{"/bin/bash", "-c"},
-					Args: []string{`
+							Name:  "cleanup",
+							Image: "openshift/origin-cli:latest",
+							Env: []coreapi.EnvVar{
+								{
+									Name:      "NAMESPACE",
+									ValueFrom: &coreapi.EnvVarSource{FieldRef: &coreapi.ObjectFieldSelector{FieldPath: "metadata.namespace"}},
+								},
+								{
+									Name:  "WAIT",
+									Value: fmt.Sprintf("%d", int(o.idleCleanupDuration.Seconds())),
+								},
+							},
+							Command: []string{"/bin/bash", "-c"},
+							Args: []string{`
 						#!/bin/bash
 						set -euo pipefail
 
 						function cleanup() {
-							set +e
+							e=$?
+							if [[ -f /tmp/skip ]]; then return; fi
 							oc delete project ${NAMESPACE}
+							exit $e
 						}
 
 						trap 'kill $(jobs -p); echo "Pod deleted, deleting project ..."; exit 1' TERM
@@ -664,7 +674,7 @@ func (o *options) createNamespaceCleanupPod() error {
 						echo "Waiting for all running pods to terminate (max idle ${WAIT}s) ..."
 						count=0
 						while true; do
-							alive="$( oc get pods --template '{{ range .items }}{{ if and (not (eq .metadata.name "cleanup-when-idle")) (eq .spec.restartPolicy "Never") (or (eq .status.phase "Pending") (eq .status.phase "Running") (eq .status.phase "Unknown")) }} {{ .metadata.name }}{{ end }}{{ end }}' )"
+							alive="$( oc get pods --template '{{ range .items }}{{ if and (eq .spec.restartPolicy "Never") (or (eq .status.phase "Pending") (eq .status.phase "Running") (eq .status.phase "Unknown")) }}{{ if not .metadata.labels  }} {{ .metadata.name}}{{ else if not (index .metadata.labels "job-name") }} {{ .metadata.name }}{{ else if not (eq (index .metadata.labels "job-name") "cleanup-when-idle") }} {{ .metadata.name }}{{ end }}{{ end }}{{ end }}' )"
 							if [[ -n "${alive}" ]]; then
 								count=0
 								sleep ${WAIT} & wait
@@ -679,6 +689,8 @@ func (o *options) createNamespaceCleanupPod() error {
 							exit 0
 						done
 						`,
+							},
+						},
 					},
 				},
 			},

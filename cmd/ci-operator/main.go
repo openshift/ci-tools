@@ -629,6 +629,7 @@ func (o *options) createNamespaceCleanupPod() error {
 		return fmt.Errorf("could not create role binding for cleanup: %v", err)
 	}
 
+	retries := int32(60)
 	grace := int64(30)
 	deadline := int64(12 * time.Hour / time.Second)
 	if _, err := batchClient.Jobs(o.namespace).Create(&batchapi.Job{
@@ -636,6 +637,7 @@ func (o *options) createNamespaceCleanupPod() error {
 			Name: "cleanup-when-idle",
 		},
 		Spec: batchapi.JobSpec{
+			BackoffLimit: &retries,
 			Template: coreapi.PodTemplateSpec{
 				Spec: coreapi.PodSpec{
 					ActiveDeadlineSeconds:         &deadline,
@@ -661,15 +663,7 @@ func (o *options) createNamespaceCleanupPod() error {
 						#!/bin/bash
 						set -euo pipefail
 
-						function cleanup() {
-							e=$?
-							if [[ -f /tmp/skip ]]; then return; fi
-							oc delete project ${NAMESPACE}
-							exit $e
-						}
-
-						trap 'kill $(jobs -p); echo "Pod deleted, deleting project ..."; exit 1' TERM
-						trap cleanup EXIT
+						trap 'kill $(jobs -p); exit 1' TERM
 
 						echo "Waiting for all running pods to terminate (max idle ${WAIT}s) ..."
 						count=0
@@ -686,6 +680,7 @@ func (o *options) createNamespaceCleanupPod() error {
 								continue
 							fi
 							echo "No pods running for more than ${WAIT}s, deleting project ..."
+							oc delete project ${NAMESPACE}
 							exit 0
 						done
 						`,

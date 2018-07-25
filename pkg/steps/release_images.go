@@ -312,6 +312,10 @@ func (s *releaseImagesTagStep) Description() string {
 }
 
 func ReleaseImagesTagStep(config api.ReleaseTagConfiguration, srcClient, dstClient imageclientset.ImageV1Interface, routeClient routeclientset.RoutesGetter, configMapClient coreclientset.ConfigMapsGetter, params *DeferredParameters, jobSpec *JobSpec) api.Step {
+	// when source and destination are the same, we don't need to use external imports
+	if srcClient == dstClient {
+		config.Cluster = ""
+	}
 	return &releaseImagesTagStep{
 		config:          config,
 		srcClient:       srcClient,

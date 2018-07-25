@@ -152,6 +152,10 @@ func (s *inputImageTagStep) Description() string {
 }
 
 func InputImageTagStep(config api.InputImageTagStepConfiguration, srcClient, dstClient imageclientset.ImageV1Interface, jobSpec *JobSpec) api.Step {
+	// when source and destination are the same, we don't need to use external imports
+	if srcClient == dstClient {
+		config.BaseImage.Cluster = ""
+	}
 	return &inputImageTagStep{
 		config:    config,
 		srcClient: srcClient,

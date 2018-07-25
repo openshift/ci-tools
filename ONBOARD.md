@@ -1,13 +1,13 @@
 ## Prepare configuration for component repo
 
 The JSON configuration file describes how to build different images in a
-testing pipeline for your repository. CI Operator has different *”targets”*
+testing pipeline for your repository. ci-operator has different *”targets”*
 that describe the goal images to build, and later targets build on successfully
 built earlier targets.
 
 ### Source code image target
 
-By default, CI Operator builds the `src` target image. The `src` image is
+By default, ci-operator builds the `src` target image. The `src` image is
 expected to contain the component source code together with all build
 dependencies. You can specify the base image to which the source code will be
 injected with the `test_base_image` key (the base image will almost always be

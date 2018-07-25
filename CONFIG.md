@@ -1,4 +1,4 @@
-# CI Operator configuration file
+# ci-operator configuration file
 
 ### test_base_image
 

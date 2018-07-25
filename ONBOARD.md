@@ -1,3 +1,12 @@
+This document describes how to add new CI jobs (utilizing ci-operator) for
+OpenShift components to the OpenShift CI system. In general, two steps are
+needed:
+
+1. [Prepare configuration file](#prepare-configuration-for-component-repo),
+   describing how ci-operator should build and test your component.
+2. [Add new jobs to Prow](#add-prow-jobs), hooking ci-operator to important
+   GitHub events for your repository.
+
 ## Prepare configuration for component repo
 
 The JSON configuration file describes how to build different images in a
@@ -29,7 +38,7 @@ Given your component can be built in the context of the `openshift/release`
 image, you can test building the `src` target:
 
 ```
-$ ./ci-operator --config example.json --namespace 'ciop-test' --git-ref=openshift/<component>@master --target=src
+$ ./ci-operator --config example.json --namespace 'ciop-test' --git-ref=openshift/<component>@<revision> --target=src
 ```
 
 ### Test targets
@@ -99,6 +108,6 @@ which will be a result of running `make build` over a `src` image.
 
 TODO
 
-## Create a Prow job for the component
+## Add Prow jobs
 
 TODO

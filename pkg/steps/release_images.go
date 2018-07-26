@@ -79,6 +79,14 @@ func (s *releaseImagesTagStep) Run(ctx context.Context, dry bool) error {
 		if err != nil {
 			return fmt.Errorf("could not resolve stable imagestream: %v", err)
 		}
+
+		// check to see if the src and dst are the same cluster, in which case we can use a more efficient tagging path
+		if len(s.config.Cluster) > 0 {
+			if dstIs, err := s.dstClient.ImageStreams(is.Namespace).Get(is.Name, meta.GetOptions{}); err == nil && dstIs.UID == is.UID {
+				s.config.Cluster = ""
+			}
+		}
+
 		var repo string
 		if len(s.config.Cluster) > 0 {
 			if len(is.Status.PublicDockerImageRepository) > 0 {
@@ -141,11 +149,18 @@ func (s *releaseImagesTagStep) Run(ctx context.Context, dry bool) error {
 		return fmt.Errorf("could not resolve stable imagestreams: %v", err)
 	}
 
-	for _, stableImageStream := range stableImageStreams.Items {
+	for i, stableImageStream := range stableImageStreams.Items {
 		log.Printf("Considering stable image stream %s", stableImageStream.Name)
 		targetTag := s.config.Tag
 		if override, ok := s.config.TagOverrides[stableImageStream.Name]; ok {
 			targetTag = override
+		}
+
+		// check exactly once to see if the src and dst are the same cluster, in which case we can use a more efficient tagging path
+		if i == 0 && len(s.config.Cluster) > 0 {
+			if dstIs, err := s.dstClient.ImageStreams(stableImageStream.Namespace).Get(stableImageStream.Name, meta.GetOptions{}); err == nil && dstIs.UID == stableImageStream.UID {
+				s.config.Cluster = ""
+			}
 		}
 
 		var repo string
@@ -312,7 +327,7 @@ func (s *releaseImagesTagStep) Description() string {
 }
 
 func ReleaseImagesTagStep(config api.ReleaseTagConfiguration, srcClient, dstClient imageclientset.ImageV1Interface, routeClient routeclientset.RoutesGetter, configMapClient coreclientset.ConfigMapsGetter, params *DeferredParameters, jobSpec *JobSpec) api.Step {
-	// when source and destination are the same, we don't need to use external imports
+	// when source and destination client are the same, we don't need to use external imports
 	if srcClient == dstClient {
 		config.Cluster = ""
 	}

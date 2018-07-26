@@ -30,11 +30,18 @@ func (s *inputImageTagStep) Inputs(ctx context.Context, dry bool) (api.InputDefi
 	if len(s.imageName) > 0 {
 		return api.InputDefinition{s.imageName}, nil
 	}
-
 	from, err := s.srcClient.ImageStreamTags(s.config.BaseImage.Namespace).Get(fmt.Sprintf("%s:%s", s.config.BaseImage.Name, s.config.BaseImage.Tag), meta.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("could not resolve base image: %v", err)
 	}
+
+	// check to see if the src and dst are the same cluster, in which case we can use a more efficient tagging path
+	if len(s.config.BaseImage.Cluster) > 0 {
+		if dstFrom, err := s.dstClient.ImageStreamTags(from.Namespace).Get(from.Name, meta.GetOptions{}); err == nil && dstFrom.UID == from.UID {
+			s.config.BaseImage.Cluster = ""
+		}
+	}
+
 	if len(s.config.BaseImage.Cluster) > 0 {
 		log.Printf("Resolved %s/%s/%s:%s to %s", s.config.BaseImage.Cluster, s.config.BaseImage.Namespace, s.config.BaseImage.Name, s.config.BaseImage.Tag, from.Image.Name)
 	} else {
@@ -152,7 +159,7 @@ func (s *inputImageTagStep) Description() string {
 }
 
 func InputImageTagStep(config api.InputImageTagStepConfiguration, srcClient, dstClient imageclientset.ImageV1Interface, jobSpec *JobSpec) api.Step {
-	// when source and destination are the same, we don't need to use external imports
+	// when source and destination client are the same, we don't need to use external imports
 	if srcClient == dstClient {
 		config.BaseImage.Cluster = ""
 	}

@@ -449,7 +449,7 @@ func waitForCompletedTemplateInstanceDeletion(templateClient templateclientset.T
 		return err
 	}
 
-	for {
+	for i := 0; ; i++ {
 		instance, err := templateClient.Get(name, meta.GetOptions{})
 		if errors.IsNotFound(err) {
 			break
@@ -460,6 +460,11 @@ func waitForCompletedTemplateInstanceDeletion(templateClient templateclientset.T
 		if instance.UID != uid {
 			return nil
 		}
+		if i == 1800 {
+			data, _ := json.MarshalIndent(instance.Status, "", "  ")
+			log.Printf("Template instance %s has not completed deletion after 30 minutes, possible error in controller:\n%s", name, string(data))
+		}
+
 		log.Printf("Waiting for template instance %s to be deleted ...", name)
 		time.Sleep(2 * time.Second)
 	}

@@ -64,6 +64,9 @@ func (s *rpmServerStep) Run(ctx context.Context, dry bool) error {
 		CreatedByCILabel: "true",
 		AppLabel:         RPMRepoName,
 	}
+	selectorSet := map[string]string{
+		AppLabel: RPMRepoName,
+	}
 	commonMeta := meta.ObjectMeta{
 		Name:      RPMRepoName,
 		Namespace: s.jobSpec.Namespace(),
@@ -180,7 +183,7 @@ python /tmp/serve.py
 				Protocol:   coreapi.ProtocolTCP,
 				TargetPort: intstr.FromInt(8080),
 			}},
-			Selector: labelSet,
+			Selector: selectorSet,
 		},
 	}
 	if owner := s.jobSpec.Owner(); owner != nil {

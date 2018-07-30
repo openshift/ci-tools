@@ -75,6 +75,10 @@ component repository would need to have these targets for this to work).
 }
 ```
 
+By default, ci-operator runs all specified test targets, building all their
+dependencies (and transitively, their dependencies) before. You can limit the
+execution to build just one or more targets using the `--target` option.
+
 ### Intermediary binary targets
 
 Two test targets in the previous example assume their `make` targets take care
@@ -114,6 +118,66 @@ conditions):
 Here, `unit` and `integration` targets will both be built from a `bin` image,
 which will be a result of running `make build` over a `src` image.
 
+### Submit the configuration file to openshift/release
+
+When you describe the targets for your component in the configuration file, you
+will need to add the file to the
+[openshift/release](https://github.com/openshift/release) repository,
+specifically to its `ci-operator/config/openshift` subdirectory
+[tree](https://github.com/openshift/release/tree/master/ci-operator/config/openshift).
+Each OpenShift component has a separate directory there, and there is a
+configuration file in it per branch.
+
+### Images targets, end-to-end tests and more
+
+Building the source code and running unit tests is the trivial basic use case.
+ci-operator is able to build component images, provision test clusters using
+them and run end-to-end tests on them. These use cases would use more features
+in both configuration file and Prow job and would not fit into this document.
+
 ## Add Prow jobs
 
-TODO
+Once the config file is prepared and commited, you can add a Prow job that will
+run ci-operator to build the selected targets before or after a PR is merged (or
+even periodically). You can find information about how to create Prow jobs in
+[test-infra
+documentation](https://github.com/openshift/test-infra/tree/master/prow#how-to-add-new-jobs).
+Long story short, you need to add a new job definition to the [config
+file](https://github.com/openshift/release/blob/master/cluster/ci/config/prow/config.yaml)
+in `openshift/release` repository. You need to add a job definition to the
+appropriate section of either `presubmits`, `postsubmits` or `periodicals` key
+of the config file:
+
+```yaml
+presubmits:
+  openshift/<repo>:
+  - name: <unique-name-of-presubmit-repo>
+    agent: kubernetes
+    context: ci/prow/unit
+    branches:
+    - master
+    rerun_command: "/test unit"
+    always_run: true
+    trigger: "((?m)^/test( all| unit),?(\\s+|$))"
+    decorate: true
+    skip_cloning: true
+    spec:
+      serviceAccountName: ci-operator
+      containers:
+      - name: test
+        image: ci-operator:latest
+        env:
+        - name: CONFIG_SPEC
+          valueFrom:
+            configMapKeyRef:
+              name: ci-operator-openshift-<repo>
+              key: <name of config file in ‘ci-operator/config/openshift/repo>
+        command:
+        - ci-operator
+        args:
+        - --target=unit
+        - <more ci-operator arguments>
+```
+
+Unfortunately, this is a lot of boilerplate in already a huge file. We hope we
+will be able to reduce the necessary amount of configuration soon.

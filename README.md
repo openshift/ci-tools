@@ -28,14 +28,23 @@ $ cd ci-operator
 $ go build ./cmd/ci-operator
 ```
 
-You can execute ci-operator locally afterwards:
+## Usage
+
+ci-operator is mainly intended to be run automatically by the CI system, but
+after you build it, you can also run it locally:
 
 ```
-./ci-operator --config master.json --namespace 'test-namespace' --git-ref=openshift/{repo}@master
+./ci-operator --config component.json --git-ref=openshift/{repo}@master
 ```
 
-See [ONBOARDING.md](ONBOARDING.md#config.json) on how to write repository
-configuration.
+For more information about ci-operator options, use the `--help` parameter:
+
+```
+./ci-operator --help
+```
+
+See [ONBOARD.md](ONBOARD.md#prepare-configuration-for-component-repo) for more
+information about how to write component repository configuration file.
 
 ## Onboarding a component to ci-operator and Prow
 
@@ -44,5 +53,5 @@ See [ONBOARD.md](ONBOARD.md)
 ## OpenShift components using ci-operator
 
 A number of [OpenShift
-components](https://github.com/openshift/release/tree/master/ci-operator/config)
+components](https://github.com/openshift/release/tree/master/ci-operator/config/openshift)
 are already using ci-operator.

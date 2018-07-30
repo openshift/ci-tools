@@ -60,7 +60,6 @@ component repository would need to have these targets for this to work).
 
 ```json
 {
-  (...)
   "tests": [
     {
       "as": "unit",
@@ -90,7 +89,6 @@ conditions):
 
 ```json
 {
-  (...)
   “binary_build_commands”: “make build”,
   “test_binary_builds_commands”: “make instrumented-build”,
   “tests”: [

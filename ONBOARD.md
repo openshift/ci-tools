@@ -16,14 +16,15 @@ built earlier targets.
 
 ### Source code image target
 
-By default, ci-operator builds the `src` target image. The `src` image is
-expected to contain the component source code together with all build
-dependencies. You can specify the base image to which the source code will be
-injected with the `test_base_image` key (the base image will almost always be
-some `openshift/release:<tag>` image.
+By default, ci-operator builds the `src` target image, expected by later targets
+to contain the source code of the component together with its build
+dependencies. Using [cloneref](https://github.com/kubernetes/test-infra/tree/master/prow/cmd/clonerefs)
+, ci-operator fetches the refs to be tested from the component repository
+and injects the source code into the base image specified by the
+`test_base_image` key.  The base image should contain all build dependencies of
+the tested component, so the it will often be a `openshift/release:<tag>` image.
 
-```
-$ cat example.json
+```json
 {
   "test_base_image": {
     "cluster": "https://api.ci.openshift.org",
@@ -38,7 +39,7 @@ Given your component can be built in the context of the `openshift/release`
 image, you can test building the `src` target:
 
 ```
-$ ./ci-operator --config example.json --namespace 'ciop-test' --git-ref=openshift/<component>@<revision> --target=src
+$ ./ci-operator --config example.json --git-ref=openshift/<component>@<revision> --target=src
 ```
 
 ### Test targets
@@ -49,7 +50,7 @@ example of two test targets, each performing a different test by calling
 different `make` target in a `src` image (of course, a `Makefile` in your
 component repository would need to have these targets for this to work).
 
-```
+```json
 {
   (...)
   "tests": [
@@ -71,12 +72,15 @@ component repository would need to have these targets for this to work).
 
 Two test targets in the previous example assume their `make` targets take care
 of full build from source till the actual test. This is often the case, but it
-is ineffient because each test target will then perform the build separately. CI
+is ineffient because each test target performs the build separately. CI
 operator can create `bin` and `test-bin` targets for the test targets to share
 by providing `binary_build_commands` and `test_binary_build_commands`
-respectively:
+respectively (we have two test lists here because often it's a different
+compilation process for test binaries than for normal ones -- in Go that is the
+difference between "normal" compilation and compilation to test race
+conditions):
 
-```
+```json
 {
   (...)
   “binary_build_commands”: “make build”,
@@ -103,10 +107,6 @@ respectively:
 
 Here, `unit` and `integration` targets will both be built from a `bin` image,
 which will be a result of running `make build` over a `src` image.
-
-### Images targets
-
-TODO
 
 ## Add Prow jobs
 

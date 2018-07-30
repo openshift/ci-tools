@@ -3,11 +3,12 @@
 ci-operator automates and simplifies the process of building and testing
 OpenShift component images (i.e. any `openshift/origin-{component}` images).
 
-Given a Git repository reference and a component-specific JSON configuration
-file, describing base images and which images should be built and tested and
-how, ci-operator builds the component images within an OpenShift cluster and
-runs the tests. All artifacts are built in a new namespace named using a hash of
-all inputs, so the artifacts can be reused when the inputs are identical.
+Given a Git repository reference and a component-specific configuration file
+(JSON at the moment, but we [plan to switch to YAML](#46)), describing base
+images and which images should be built and tested and how, ci-operator builds
+the component images within an OpenShift cluster and runs the tests. All
+artifacts are built in a new namespace named using a hash of all inputs, so the
+artifacts can be reused when the inputs are identical.
 
 ci-operator is mainly intended to be run inside a pod in a cluster, triggered by
 the Prow CI infrastructure, but it is also possible to run it as a CLI tool on a

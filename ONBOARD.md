@@ -7,12 +7,20 @@ needed:
 2. [Add new jobs to Prow](#add-prow-jobs), hooking ci-operator to important
    GitHub events for your repository.
 
+This walkthrough covers a simple use case of hooking up a job running source
+code level tests (unit, performance etc.) on pull requests on a component
+repository. Although ci-operator can perform more sophisticated test steps than
+simply running unit tests, these use cases are beyond the scope of this doc.
+
 ## Prepare configuration for component repo
 
 The JSON configuration file describes how to build different images in a
 testing pipeline for your repository. ci-operator has different *”targets”*
 that describe the goal images to build, and later targets build on successfully
-built earlier targets.
+built earlier targets. You will probably want to write and test your config file
+locally first. After you make sure it works, you need to create a subdirectory
+of `ci-operator/config/openshift` in the `openshift/release` repository for your
+component and put the config file there.
 
 ### Source code image target
 

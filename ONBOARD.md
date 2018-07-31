@@ -17,10 +17,20 @@ simply running unit tests, these use cases are beyond the scope of this doc.
 The JSON configuration file describes how to build different images in a
 testing pipeline for your repository. ci-operator has different *”targets”*
 that describe the goal images to build, and later targets build on successfully
-built earlier targets. You will probably want to write and test your config file
-locally first. After you make sure it works, you need to create a subdirectory
-of `ci-operator/config/openshift` in the `openshift/release` repository for your
-component and put the config file there.
+built earlier targets. You will probably want to write and test your config
+file locally first, and test whether it builds all targets and runs all tests
+as expected (you need to be logged in to a cluster, e.g. to
+[api.ci](https://api.ci.openshift.org)):
+
+```
+./ci-operator --config config.json --git-ref openshift/<repo>@<revision>
+```
+
+After you make sure everything works, you need to create a subdirectory
+of
+[ci-operator/config/openshift](https://github.com/openshift/release/tree/master/ci-operator/config/openshift)
+in the [openshift/release](https://github.com/openshift/release/) repository for
+your component and put the config file there.
 
 ### Source code image target
 
@@ -86,39 +96,41 @@ of full build from source till the actual test. This is often the case, but it
 is ineffient because each test target performs the build separately. CI
 operator can create `bin` and `test-bin` targets for the test targets to share
 by providing `binary_build_commands` and `test_binary_build_commands`
-respectively (we have two test lists here because often it's a different
-compilation process for test binaries than for normal ones -- in Go that is the
-difference between "normal" compilation and compilation to test race
-conditions):
+respectively. Note that ci-operator allows separate `bin` and `test-bin`
+targets because often the compilation process is different for “normal” and
+test binaries, for example in Go you might want do compile in a different way
+to test for race conditions.
+
+Here, `unit` and `integration` targets will both be built from a `test-bin`
+image, which will be a result of running `make instrumented-build` over a `src`
+image, while `performance` test target will be run from a `bin` image:
 
 ```json
 {
-  “binary_build_commands”: “make build”,
-  “test_binary_builds_commands”: “make instrumented-build”,
-  “tests”: [
+  "binary_build_commands": "make build",
+  "test_binary_builds_commands": "make instrumented-build",
+  "tests": [
     {
-      “as”: “unit”,
-      “from”: “bin”,
-      “commands”: “make test-unit”
+      "as": "unit",
+      "from": "test-bin",
+      "commands": "make test-unit"
     },
     {
-      “as”: “integration”,
-      “from”: “bin”,
-      “commands”: “make test-integration”,
+      "as": "integration",
+      "from": "test-bin",
+      "commands": "make test-integration",
     },
     {
-      “as”: “performance”,
-      “from”: “test-bin”,
-      “commands”: “make test-performance”
+      "as": "performance",
+      "from": "bin",
+      "commands": "make test-performance"
     }
   ]
 }
 ```
 
-Here, `unit` and `integration` targets will both be built from a `bin` image,
-which will be a result of running `make build` over a `src` image.
 
-### Submit the configuration file to openshift/release
+### Submit the configuration file to `openshift/release`
 
 When you describe the targets for your component in the configuration file, you
 will need to add the file to the
@@ -126,14 +138,17 @@ will need to add the file to the
 specifically to its `ci-operator/config/openshift` subdirectory
 [tree](https://github.com/openshift/release/tree/master/ci-operator/config/openshift).
 Each OpenShift component has a separate directory there, and there is a
-configuration file in it per branch.
+configuration file in it per branch of the repository under test (all files
+should be in the `master` branch of the `openshift/release` repository).
 
 ### Images targets, end-to-end tests and more
 
-Building the source code and running unit tests is the trivial basic use case.
-ci-operator is able to build component images, provision test clusters using
-them and run end-to-end tests on them. These use cases would use more features
-in both configuration file and Prow job and would not fit into this document.
+Building the source code and running unit tests is basic use case for
+ci-operator. In addition to that, ci-operator is able to build component images,
+provision test clusters using them and run end-to-end tests on them. These use
+cases would use more features in both configuration file and Prow job and would
+not fit into this document. We will provide more documentation describing other
+use cases soon.
 
 ## Add Prow jobs
 

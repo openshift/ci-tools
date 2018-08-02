@@ -273,12 +273,19 @@ func (o *options) Complete() error {
 
 	jobSpec, err := steps.ResolveSpecFromEnv()
 	if err != nil {
-		spec, refErr := jobSpecFromGitRef(o.gitRef)
-		if refErr != nil {
+		if len(o.gitRef) == 0 {
+			// Failed to read $JOB_SPEC and --git-ref was not passed
 			return fmt.Errorf("failed to resolve job spec: %v", err)
+		} else {
+			// Failed to read $JOB_SPEC but --git-ref was passed, so try that instead
+			spec, refErr := jobSpecFromGitRef(o.gitRef)
+			if refErr != nil {
+				return fmt.Errorf("failed to resolve --git-ref: %v", refErr)
+			}
+			jobSpec = spec
 		}
-		jobSpec = spec
 	} else if len(o.gitRef) > 0 {
+		// Read from $JOB_SPEC but --git-ref was also passed, so merge them
 		spec, err := jobSpecFromGitRef(o.gitRef)
 		if err != nil {
 			return fmt.Errorf("failed to resolve --git-ref: %v", err)
@@ -749,10 +756,14 @@ func jobSpecFromGitRef(ref string) (*steps.JobSpec, error) {
 	if len(prefix) != 2 {
 		return nil, fmt.Errorf("must be ORG/NAME@COMMIT")
 	}
-	out, err := exec.Command("git", "ls-remote", fmt.Sprintf("https://github.com/%s/%s.git", prefix[0], prefix[1]), parts[1]).Output()
+	repo := fmt.Sprintf("https://github.com/%s/%s.git", prefix[0], prefix[1])
+	out, err := exec.Command("git", "ls-remote", repo, parts[1]).Output()
+	if err != nil {
+		return nil, fmt.Errorf("'git ls-remote %s %s' failed with '%s'", repo, parts[1], err)
+	}
 	sha := strings.Split(strings.Split(string(out), "\n")[0], "\t")[0]
-	if len(sha) == 0 || err != nil {
-		return &steps.JobSpec{Type: steps.PeriodicJob, Job: "dev", Refs: steps.Refs{Org: prefix[0], Repo: prefix[1], BaseSHA: parts[1]}}, nil
+	if len(sha) == 0 {
+		return nil, fmt.Errorf("ref '%s' does not point to any commit in '%s'", parts[1], parts[0])
 	}
 	log.Printf("Resolved %s to commit %s", ref, sha)
 	return &steps.JobSpec{Type: steps.PeriodicJob, Job: "dev", Refs: steps.Refs{Org: prefix[0], Repo: prefix[1], BaseRef: parts[1], BaseSHA: sha}}, nil

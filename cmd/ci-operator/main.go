@@ -131,6 +131,7 @@ func main() {
 	}
 	if opt.help {
 		fmt.Printf(usage)
+		flagSet.SetOutput(os.Stdout)
 		flagSet.Usage()
 		os.Exit(0)
 	}
@@ -199,7 +200,8 @@ func bindOptions(flag *flag.FlagSet) *options {
 	}
 
 	// command specific options
-	flag.BoolVar(&opt.help, "h", false, "See help for this command.")
+	flag.BoolVar(&opt.help, "h", false, "short for --help")
+	flag.BoolVar(&opt.help, "help", false, "See help for this command.")
 	flag.BoolVar(&opt.verbose, "v", false, "Show verbose output.")
 
 	// what we will run

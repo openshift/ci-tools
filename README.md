@@ -24,7 +24,7 @@ Currently, users must download the source and build it themselves:
 ```
 $ git clone https://github.com/openshift/ci-operator.git
 $ cd ci-operator
-$ go build ./cmd/ci-operator
+$ make build
 ```
 
 ## Usage

@@ -192,6 +192,8 @@ type options struct {
 	configSpec    *api.ReleaseBuildConfiguration
 	jobSpec       *steps.JobSpec
 	clusterConfig *rest.Config
+
+	givePrAuthorAccessToNamespace bool
 }
 
 func bindOptions(flag *flag.FlagSet) *options {
@@ -228,6 +230,7 @@ func bindOptions(flag *flag.FlagSet) *options {
 
 	// experimental flags
 	flag.StringVar(&opt.gitRef, "git-ref", "", "Populate the job spec from this local Git reference. If JOB_SPEC is set, the refs field will be overwritten.")
+	flag.BoolVar(&opt.givePrAuthorAccessToNamespace, "give-pr-author-access-to-namespace", false, "Give view access to the temporarily created namespace to the PR author.")
 
 	return opt
 }
@@ -532,6 +535,31 @@ func (o *options) initializeNamespace() error {
 			continue
 		}
 		break
+	}
+
+	if o.givePrAuthorAccessToNamespace {
+		// Generate rolebinding for all the PR Authors.
+		for _, pull := range o.jobSpec.Refs.Pulls {
+			rbacClient, err := rbacclientset.NewForConfig(o.clusterConfig)
+			if err != nil {
+				return fmt.Errorf("could not get RBAC client for cluster config: %v", err)
+			}
+
+			log.Printf("Creating rolebinding for user %s in namespace %s", pull.Author, o.namespace)
+			if _, err := rbacClient.RoleBindings(o.namespace).Create(&rbacapi.RoleBinding{
+				ObjectMeta: meta.ObjectMeta{
+					Name:      "temp-namespace-admin",
+					Namespace: o.namespace,
+				},
+				Subjects: []rbacapi.Subject{{Kind: "User", Name: pull.Author}},
+				RoleRef: rbacapi.RoleRef{
+					Kind: "ClusterRole",
+					Name: "admin",
+				},
+			}); err != nil && !kerrors.IsAlreadyExists(err) {
+				return fmt.Errorf("could not create role binding for temp-namespace-admin: %v", err)
+			}
+		}
 	}
 
 	if o.idleCleanupDuration > 0 {

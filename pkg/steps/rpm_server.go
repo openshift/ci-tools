@@ -28,8 +28,9 @@ import (
 )
 
 const (
-	RPMRepoName = "rpm-repo"
-	AppLabel    = "app"
+	RPMRepoName    = "rpm-repo"
+	AppLabel       = "app"
+	TTLIgnoreLabel = "ci.openshift.io/ttl.ignore"
 )
 
 type rpmServerStep struct {
@@ -63,6 +64,7 @@ func (s *rpmServerStep) Run(ctx context.Context, dry bool) error {
 		BuildIdLabel:     s.jobSpec.BuildId,
 		CreatedByCILabel: "true",
 		AppLabel:         RPMRepoName,
+		TTLIgnoreLabel:   "true",
 	}
 	selectorSet := map[string]string{
 		AppLabel: RPMRepoName,

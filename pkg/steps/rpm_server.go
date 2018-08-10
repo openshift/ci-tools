@@ -61,6 +61,7 @@ func (s *rpmServerStep) Run(ctx context.Context, dry bool) error {
 		PersistsLabel:    "true",
 		JobLabel:         s.jobSpec.Job,
 		BuildIdLabel:     s.jobSpec.BuildId,
+		ProwJobIdLabel:   s.jobSpec.ProwJobID,
 		CreatedByCILabel: "true",
 		AppLabel:         RPMRepoName,
 	}

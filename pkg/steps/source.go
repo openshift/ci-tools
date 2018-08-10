@@ -29,6 +29,8 @@ const (
 	BuildIdLabel       = "build-id"
 	CreatesLabel       = "creates"
 	CreatedByCILabel   = "created-by-ci"
+
+	ProwJobIdLabel = "prow.k8s.io/id"
 )
 
 var (
@@ -136,6 +138,7 @@ func buildFromSource(jobSpec *JobSpec, fromTag, toTag api.PipelineImageStreamTag
 				PersistsLabel:    "false",
 				JobLabel:         jobSpec.Job,
 				BuildIdLabel:     jobSpec.BuildId,
+				ProwJobIdLabel:   jobSpec.ProwJobID,
 				CreatesLabel:     string(toTag),
 				CreatedByCILabel: "true",
 			},
@@ -151,11 +154,11 @@ func buildFromSource(jobSpec *JobSpec, fromTag, toTag api.PipelineImageStreamTag
 				Strategy: buildapi.BuildStrategy{
 					Type: buildapi.DockerBuildStrategyType,
 					DockerStrategy: &buildapi.DockerBuildStrategy{
-						DockerfilePath: dockerfilePath,
-						From:           from,
-						ForcePull:      true,
-						NoCache:        true,
-						Env:            []coreapi.EnvVar{},
+						DockerfilePath:          dockerfilePath,
+						From:                    from,
+						ForcePull:               true,
+						NoCache:                 true,
+						Env:                     []coreapi.EnvVar{},
 						ImageOptimizationPolicy: &layer,
 					},
 				},

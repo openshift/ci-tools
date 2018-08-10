@@ -16,9 +16,10 @@ import (
 // we do not import it as importing test-infra is a
 // massive hassle.
 type JobSpec struct {
-	Type    ProwJobType `json:"type,omitempty"`
-	Job     string      `json:"job,omitempty"`
-	BuildId string      `json:"buildid,omitempty"`
+	Type      ProwJobType `json:"type,omitempty"`
+	Job       string      `json:"job,omitempty"`
+	BuildId   string      `json:"buildid,omitempty"`
+	ProwJobID string      `json:"prowjobid,omitempty"`
 
 	Refs Refs `json:"refs,omitempty"`
 

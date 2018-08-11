@@ -540,25 +540,24 @@ func (o *options) initializeNamespace() error {
 
 	if o.givePrAuthorAccessToNamespace {
 		// Generate rolebinding for all the PR Authors.
+		rbacClient, err := rbacclientset.NewForConfig(o.clusterConfig)
+		if err != nil {
+			return fmt.Errorf("could not get RBAC client for cluster config: %v", err)
+		}
 		for _, pull := range o.jobSpec.Refs.Pulls {
-			rbacClient, err := rbacclientset.NewForConfig(o.clusterConfig)
-			if err != nil {
-				return fmt.Errorf("could not get RBAC client for cluster config: %v", err)
-			}
-
 			log.Printf("Creating rolebinding for user %s in namespace %s", pull.Author, o.namespace)
 			if _, err := rbacClient.RoleBindings(o.namespace).Create(&rbacapi.RoleBinding{
 				ObjectMeta: meta.ObjectMeta{
-					Name:      "temp-namespace-admin",
+					Name:      "ci-op-author-access",
 					Namespace: o.namespace,
 				},
 				Subjects: []rbacapi.Subject{{Kind: "User", Name: pull.Author}},
 				RoleRef: rbacapi.RoleRef{
-					Kind: "ClusterRole",
+					Kind: "Role",
 					Name: "admin",
 				},
 			}); err != nil && !kerrors.IsAlreadyExists(err) {
-				return fmt.Errorf("could not create role binding for temp-namespace-admin: %v", err)
+				return fmt.Errorf("could not create role binding for: %v", err)
 			}
 		}
 	}

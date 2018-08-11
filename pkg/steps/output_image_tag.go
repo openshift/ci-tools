@@ -68,7 +68,7 @@ func (s *outputImageTagStep) Run(ctx context.Context, dry bool) error {
 		fmt.Printf("%s\n", istJSON)
 	} else {
 		if err := s.istClient.ImageStreamTags(toNamespace).Delete(ist.Name, nil); err != nil && !errors.IsNotFound(err) {
-			return err
+			return fmt.Errorf("could not remove output imagestreamtag: %v", err)
 		}
 		_, err := s.istClient.ImageStreamTags(toNamespace).Create(ist)
 		if errors.IsAlreadyExists(err) {
@@ -76,7 +76,7 @@ func (s *outputImageTagStep) Run(ctx context.Context, dry bool) error {
 			// result will be the same so we don't care
 			return nil
 		}
-		return err
+		return fmt.Errorf("could not create output imagestreamtag: %v", err)
 	}
 
 	return nil
@@ -92,7 +92,7 @@ func (s *outputImageTagStep) Done() (bool, error) {
 		if errors.IsNotFound(err) {
 			return false, nil
 		} else {
-			return false, err
+			return false, fmt.Errorf("could not retrieve output imagestreamtag: %v", err)
 		}
 	} else {
 		return true, nil
@@ -118,7 +118,7 @@ func (s *outputImageTagStep) Provides() (api.ParameterMap, api.StepLink) {
 		fmt.Sprintf("IMAGE_%s", strings.ToUpper(strings.Replace(s.config.To.As, "-", "_", -1))): func() (string, error) {
 			is, err := s.isClient.ImageStreams(s.namespace()).Get(s.config.To.Name, meta.GetOptions{})
 			if err != nil {
-				return "", err
+				return "", fmt.Errorf("could not retrieve output imagestream: %v", err)
 			}
 			var registry string
 			if len(is.Status.PublicDockerImageRepository) > 0 {

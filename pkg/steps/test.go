@@ -89,11 +89,11 @@ func (s *testStep) Run(ctx context.Context, dry bool) error {
 
 	pod, err = createOrRestartPod(s.podClient.Pods(s.jobSpec.Namespace()), pod)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create or restart test pod: %v", err)
 	}
 
 	if err := waitForPodCompletion(s.podClient.Pods(s.jobSpec.Namespace()), pod.Name, notifier); err != nil {
-		return err
+		return fmt.Errorf("failed to wait for test pod to complete: %v", err)
 	}
 
 	return nil
@@ -106,7 +106,7 @@ func (s *testStep) gatherArtifacts() bool {
 func (s *testStep) Done() (bool, error) {
 	ready, err := isPodCompleted(s.podClient.Pods(s.jobSpec.Namespace()), s.config.As)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("failed to determine if test pod was completed: %v", err)
 	}
 	if !ready {
 		return false, nil

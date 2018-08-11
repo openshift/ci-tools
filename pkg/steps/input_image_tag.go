@@ -60,7 +60,7 @@ func (s *inputImageTagStep) Run(ctx context.Context, dry bool) error {
 
 	_, err := s.Inputs(ctx, dry)
 	if err != nil {
-		return err
+		return fmt.Errorf("could not resolve inputs for image tag step: %v", err)
 	}
 
 	ist := &imageapi.ImageStreamTag{
@@ -98,7 +98,7 @@ func (s *inputImageTagStep) Run(ctx context.Context, dry bool) error {
 	}
 
 	if _, err := s.dstClient.ImageStreamTags(s.jobSpec.Namespace()).Create(ist); err != nil && !errors.IsAlreadyExists(err) {
-		return err
+		return fmt.Errorf("failed to create imagestreamtag for input image: %v", err)
 	}
 	return nil
 }
@@ -133,7 +133,7 @@ func (s *inputImageTagStep) Done() (bool, error) {
 		if errors.IsNotFound(err) {
 			return false, nil
 		} else {
-			return false, err
+			return false, fmt.Errorf("could not retrieve input imagestreamtag: %v", err)
 		}
 	} else {
 		return true, nil

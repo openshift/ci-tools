@@ -68,6 +68,7 @@ type PodClient interface {
 }
 
 func copyArtifacts(podClient PodClient, into, ns, name, containerName string, paths []string) error {
+	log.Printf("Copying artifacts from %s into %s", name, into)
 	var args []string
 	for _, s := range paths {
 		args = append(args, "-C", s, ".")
@@ -82,7 +83,7 @@ func copyArtifacts(podClient PodClient, into, ns, name, containerName string, pa
 
 	e, err := remotecommand.NewSPDYExecutor(podClient.RESTConfig(), "POST", u)
 	if err != nil {
-		return err
+		return fmt.Errorf("could not initialize a new SPDY executor: %v", err)
 	}
 	r, w := io.Pipe()
 	defer w.CloseWithError(fmt.Errorf("cancelled"))
@@ -98,7 +99,7 @@ func copyArtifacts(podClient PodClient, into, ns, name, containerName string, pa
 	size := int64(0)
 	gr, err := gzip.NewReader(r)
 	if err != nil {
-		return err
+		return fmt.Errorf("could not read gzipped artifacts: %v", err)
 	}
 	tr := tar.NewReader(gr)
 	for {
@@ -107,7 +108,7 @@ func copyArtifacts(podClient PodClient, into, ns, name, containerName string, pa
 			if err == io.EOF {
 				break
 			}
-			return err
+			return fmt.Errorf("could not read artifact tarball: %v", err)
 		}
 		name := path.Clean(h.Name)
 		if name == "." || name == ".." || strings.HasPrefix(name, "../") {
@@ -116,7 +117,7 @@ func copyArtifacts(podClient PodClient, into, ns, name, containerName string, pa
 		p := filepath.Join(into, name)
 		if h.FileInfo().IsDir() {
 			if err := os.MkdirAll(p, 0750); err != nil {
-				return err
+				return fmt.Errorf("could not create target directory %s for artifacts: %v", p, err)
 			}
 			continue
 		}
@@ -126,14 +127,14 @@ func copyArtifacts(podClient PodClient, into, ns, name, containerName string, pa
 		}
 		f, err := os.Create(p)
 		if err != nil {
-			return err
+			return fmt.Errorf("could not create target file %s for artifact: %v", p, err)
 		}
 		if _, err := io.Copy(f, tr); err != nil {
 			f.Close()
-			return err
+			return fmt.Errorf("could not copy contents of file %s: %v", p, err)
 		}
 		if err := f.Close(); err != nil {
-			return err
+			return fmt.Errorf("could not close copied file %s: %v", p, err)
 		}
 		size += h.Size
 	}
@@ -155,14 +156,14 @@ func removeFile(podClient PodClient, ns, name, containerName string, paths []str
 
 	e, err := remotecommand.NewSPDYExecutor(podClient.RESTConfig(), "POST", u)
 	if err != nil {
-		return err
+		return fmt.Errorf("could not initialize a new SPDY executor: %v", err)
 	}
 	if err := e.Stream(remotecommand.StreamOptions{
 		Stdout: os.Stderr,
 		Stdin:  nil,
 		Stderr: os.Stderr,
 	}); err != nil {
-		return err
+		return fmt.Errorf("could not run remote command: %v", err)
 	}
 
 	return nil

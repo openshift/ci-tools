@@ -173,7 +173,7 @@ python /tmp/serve.py
 		fmt.Printf("%s\n", deploymentConfigJSON)
 	} else {
 		if _, err := s.deploymentClient.DeploymentConfigs(s.jobSpec.Namespace()).Create(deploymentConfig); err != nil && !kerrors.IsAlreadyExists(err) {
-			return err
+			return fmt.Errorf("could not create RPM repo server deploymentconfig: %v", err)
 		}
 	}
 
@@ -199,7 +199,7 @@ python /tmp/serve.py
 		}
 		fmt.Printf("%s\n", serviceJSON)
 	} else if _, err := s.serviceClient.Services(s.jobSpec.Namespace()).Create(service); err != nil && !kerrors.IsAlreadyExists(err) {
-		return err
+		return fmt.Errorf("could not create RPM repo server service: %v", err)
 	}
 	route := &routeapi.Route{
 		ObjectMeta: commonMeta,
@@ -225,10 +225,10 @@ python /tmp/serve.py
 		return nil
 	}
 	if _, err := s.routeClient.Routes(s.jobSpec.Namespace()).Create(route); err != nil && !kerrors.IsAlreadyExists(err) {
-		return err
+		return fmt.Errorf("could not create RPM repo server route: %v", err)
 	}
 	if err := waitForDeployment(s.deploymentClient.DeploymentConfigs(s.jobSpec.Namespace()), deploymentConfig.Name); err != nil {
-		return err
+		return fmt.Errorf("could not wait for RPM repo server to deploy: %v", err)
 	}
 	return waitForRouteReachable(s.routeClient, s.jobSpec.Namespace(), route.Name, "http")
 }
@@ -241,7 +241,7 @@ func waitForDeployment(client appsclientset.DeploymentConfigInterface, name stri
 	for {
 		retry, err := waitForDeploymentOrTimeout(client, name)
 		if err != nil {
-			return err
+			return fmt.Errorf("could not wait for deployment: %v", err)
 		}
 		if !retry {
 			break
@@ -281,7 +281,7 @@ func deploymentReason(b *appsapi.DeploymentConfig) string {
 func waitForDeploymentOrTimeout(client appsclientset.DeploymentConfigInterface, name string) (bool, error) {
 	done, err := currentDeploymentStatus(client, name)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("could not determine current deployment status: %v", err)
 	}
 	if done {
 		return false, nil
@@ -292,7 +292,7 @@ func waitForDeploymentOrTimeout(client appsclientset.DeploymentConfigInterface, 
 		Watch:         true,
 	})
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("could not create watcher for deploymentconfig %s: %v", name, err)
 	}
 	defer watcher.Stop()
 
@@ -316,7 +316,7 @@ func waitForDeploymentOrTimeout(client appsclientset.DeploymentConfigInterface, 
 func currentDeploymentStatus(client appsclientset.DeploymentConfigInterface, name string) (bool, error) {
 	list, err := client.List(meta.ListOptions{FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String()})
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("could not list DeploymentConfigs: %v", err)
 	}
 	if len(list.Items) != 1 {
 		return false, fmt.Errorf("could not find DeploymentConfig %s", name)
@@ -334,13 +334,13 @@ func currentDeploymentStatus(client appsclientset.DeploymentConfigInterface, nam
 func waitForRouteReachable(client routeclientset.RoutesGetter, namespace, name, scheme string, pathSegments ...string) error {
 	host, err := admittedHostForRoute(client, namespace, name, 5*time.Minute)
 	if err != nil {
-		return err
+		return fmt.Errorf("could not determine admitted host for route: %v", err)
 	}
 	for {
 		u := &url.URL{Scheme: scheme, Host: host, Path: "/" + path.Join(pathSegments...)}
 		req, err := http.NewRequest("GET", u.String(), nil)
 		if err != nil {
-			return err
+			return fmt.Errorf("could not create HTTP request: %v", err)
 		}
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
@@ -390,7 +390,7 @@ func admittedHostForRoute(routeClient routeclientset.RoutesGetter, namespace, na
 	if err := wait.PollImmediate(time.Second, timeout, func() (bool, error) {
 		route, err := routeClient.Routes(namespace).Get(name, meta.GetOptions{})
 		if err != nil {
-			return false, err
+			return false, fmt.Errorf("could not get route %s: %v", name, err)
 		}
 		if host, ok := admittedRoute(route); ok {
 			repoHost = host
@@ -398,7 +398,7 @@ func admittedHostForRoute(routeClient routeclientset.RoutesGetter, namespace, na
 		}
 		return false, nil
 	}); err != nil {
-		return "", fmt.Errorf("retrieving route host: %v", err)
+		return "", fmt.Errorf("could not retrieve route host: %v", err)
 	}
 	return repoHost, nil
 }

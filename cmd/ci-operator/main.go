@@ -324,7 +324,7 @@ func (o *options) Complete() error {
 		secret.Name = filepath.Base(path)
 		files, err := ioutil.ReadDir(path)
 		if err != nil {
-			return err
+			return fmt.Errorf("could not read dir %s for secret: %v", path, err)
 		}
 		for _, f := range files {
 			if f.IsDir() {
@@ -337,7 +337,7 @@ func (o *options) Complete() error {
 			}
 			secret.Data[f.Name()], err = ioutil.ReadFile(path)
 			if err != nil {
-				return err
+				return fmt.Errorf("could not read file %s for secret: %v", path, err)
 			}
 		}
 		o.secrets = append(o.secrets, secret)
@@ -346,7 +346,7 @@ func (o *options) Complete() error {
 	for _, path := range o.templatePaths.values {
 		contents, err := ioutil.ReadFile(path)
 		if err != nil {
-			return err
+			return fmt.Errorf("could not read dir %s for template: %v", path, err)
 		}
 		obj, gvk, err := templatescheme.Codecs.UniversalDeserializer().Decode(contents, nil, nil)
 		if err != nil {
@@ -402,23 +402,23 @@ func (o *options) Run() error {
 		// graph or otherwise two jobs with different targets would create different
 		// artifact caches.
 		if err := o.resolveInputs(ctx, buildSteps); err != nil {
-			return err
+			return fmt.Errorf("could not resolve inputs: %v", err)
 		}
 
 		// convert the full graph into the subset we must run
 		nodes, err := api.BuildPartialGraph(buildSteps, o.targets.values)
 		if err != nil {
-			return err
+			return fmt.Errorf("could not build execution graph: %v", err)
 		}
 
 		if err := printExecutionOrder(nodes); err != nil {
-			return err
+			return fmt.Errorf("could not print execution order: %v", err)
 		}
 
 		// initialize the namespace if necessary and create any resources that must
 		// exist prior to execution
 		if err := o.initializeNamespace(); err != nil {
-			return err
+			return fmt.Errorf("could not initialize namespace: %v", err)
 		}
 
 		// execute the graph
@@ -427,12 +427,12 @@ func (o *options) Run() error {
 			log.Printf("warning: Unable to write JUnit result: %v", err)
 		}
 		if err != nil {
-			return err
+			return fmt.Errorf("could not run steps: %v", err)
 		}
 
 		for _, step := range postSteps {
 			if err := step.Run(ctx, o.dry); err != nil {
-				return err
+				return fmt.Errorf("could not run post step %s: %v", step.Name(), err)
 			}
 		}
 
@@ -463,11 +463,12 @@ func loadClusterConfig() (*rest.Config, error) {
 }
 
 func (o *options) resolveInputs(ctx context.Context, steps []api.Step) error {
+	log.Printf("Resolving inputs for the test")
 	var inputs api.InputDefinition
 	for _, step := range steps {
 		definition, err := step.Inputs(ctx, o.dry)
 		if err != nil {
-			return err
+			return fmt.Errorf("could not determine inputs for step %s: %v", step.Name(), err)
 		}
 		inputs = append(inputs, definition...)
 	}
@@ -489,6 +490,7 @@ func (o *options) resolveInputs(ctx context.Context, steps []api.Step) error {
 	// TODO: instead of mutating this here, we should pass the parts of graph execution that are resolved
 	// after the graph is created but before it is run down into the run step.
 	o.jobSpec.SetNamespace(o.namespace)
+	log.Printf("Resolved inputs, targetting namespace %s", o.namespace)
 
 	return nil
 }
@@ -581,7 +583,7 @@ func (o *options) initializeNamespace() error {
 	if len(updates) > 0 {
 		ns, err := client.Namespaces().Get(o.namespace, meta.GetOptions{})
 		if err != nil {
-			return err
+			return fmt.Errorf("could not retrieve namespace: %v", err)
 		}
 
 		update := ns.DeepCopy()
@@ -589,10 +591,11 @@ func (o *options) initializeNamespace() error {
 			update.ObjectMeta.Annotations[key] = value
 		}
 		if _, err := client.Namespaces().Update(update); err != nil {
-			return err
+			return fmt.Errorf("could not update namespace to add TTLs: %v", err)
 		}
 	}
 
+	log.Printf("Setting up pipeline imagestream for the test")
 	imageGetter, err := imageclientset.NewForConfig(o.clusterConfig)
 	if err != nil {
 		return fmt.Errorf("could not get image client for cluster config: %v", err)
@@ -626,24 +629,25 @@ func (o *options) initializeNamespace() error {
 		})
 	}
 
+	log.Printf("Populating secrets for test")
 	for _, secret := range o.secrets {
 		_, err := client.Secrets(o.namespace).Create(secret)
 		if kerrors.IsAlreadyExists(err) {
 			existing, err := client.Secrets(o.namespace).Get(secret.Name, meta.GetOptions{})
 			if err != nil {
-				return err
+				return fmt.Errorf("could not retrieve secret %s: %v", secret.Name, err)
 			}
 			for k, v := range secret.Data {
 				existing.Data[k] = v
 			}
 			if _, err := client.Secrets(o.namespace).Update(existing); err != nil {
-				return err
+				return fmt.Errorf("could not update secret %s: %v", secret.Name, err)
 			}
 			log.Printf("Updated secret %s", secret.Name)
 			continue
 		}
 		if err != nil {
-			return err
+			return fmt.Errorf("could not create secret %s: %v", secret.Name, err)
 		}
 		log.Printf("Created secret %s", secret.Name)
 	}
@@ -657,7 +661,7 @@ func (o *options) writeJUnit(suites *junit.TestSuites, name string) error {
 	suites.Suites[0].Name = name
 	out, err := xml.MarshalIndent(suites, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("could not marshal jUnit XML: %v", err)
 	}
 	return ioutil.WriteFile(filepath.Join(o.artifactDir, fmt.Sprintf("junit_%s.xml", name)), out, 0640)
 }
@@ -782,7 +786,7 @@ func topologicalSort(nodes []*api.StepNode) ([]*api.StepNode, error) {
 func printExecutionOrder(nodes []*api.StepNode) error {
 	ordered, err := topologicalSort(nodes)
 	if err != nil {
-		return err
+		return fmt.Errorf("could not sort nodes: %v", err)
 	}
 	log.Printf("Running %s", strings.Join(nodeNames(ordered), ", "))
 	return nil

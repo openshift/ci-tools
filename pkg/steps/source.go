@@ -151,11 +151,11 @@ func buildFromSource(jobSpec *JobSpec, fromTag, toTag api.PipelineImageStreamTag
 				Strategy: buildapi.BuildStrategy{
 					Type: buildapi.DockerBuildStrategyType,
 					DockerStrategy: &buildapi.DockerBuildStrategy{
-						DockerfilePath: dockerfilePath,
-						From:           from,
-						ForcePull:      true,
-						NoCache:        true,
-						Env:            []coreapi.EnvVar{},
+						DockerfilePath:          dockerfilePath,
+						From:                    from,
+						ForcePull:               true,
+						NoCache:                 true,
+						Env:                     []coreapi.EnvVar{},
 						ImageOptimizationPolicy: &layer,
 					},
 				},
@@ -214,7 +214,7 @@ func handleBuild(buildClient BuildClient, build *buildapi.Build, dry bool) error
 		return nil
 	}
 	if _, err := buildClient.Builds(build.Namespace).Create(build); err != nil && !errors.IsAlreadyExists(err) {
-		return err
+		fmt.Errorf("could not create build %s: %v", build.Name, err)
 	}
 	return waitForBuild(buildClient, build.Namespace, build.Name)
 }
@@ -223,7 +223,7 @@ func waitForBuild(buildClient BuildClient, namespace, name string) error {
 	for {
 		retry, err := waitForBuildOrTimeout(buildClient, namespace, name)
 		if err != nil {
-			return err
+			return fmt.Errorf("could not wait for build: %v", err)
 		}
 		if !retry {
 			break
@@ -243,7 +243,7 @@ func waitForBuildOrTimeout(buildClient BuildClient, namespace, name string) (boo
 	}
 	list, err := buildClient.Builds(namespace).List(meta.ListOptions{FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String()})
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("could not list builds: %v", err)
 	}
 	if len(list.Items) != 1 {
 		return false, fmt.Errorf("could not find build %s", name)
@@ -267,7 +267,7 @@ func waitForBuildOrTimeout(buildClient BuildClient, namespace, name string) (boo
 		Watch:         true,
 	})
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("could not create watcher for build %s: %v", name, err)
 	}
 	defer watcher.Stop()
 
@@ -338,7 +338,7 @@ func resourcesFor(req api.ResourceRequirements) (coreapi.ResourceRequirements, e
 	for name, value := range req.Requests {
 		q, err := resource.ParseQuantity(value)
 		if err != nil {
-			return coreapi.ResourceRequirements{}, err
+			return coreapi.ResourceRequirements{}, fmt.Errorf("invalid resource request: %v", err)
 		}
 		if apireq.Requests == nil {
 			apireq.Requests = make(coreapi.ResourceList)
@@ -348,7 +348,7 @@ func resourcesFor(req api.ResourceRequirements) (coreapi.ResourceRequirements, e
 	for name, value := range req.Limits {
 		q, err := resource.ParseQuantity(value)
 		if err != nil {
-			return coreapi.ResourceRequirements{}, err
+			return coreapi.ResourceRequirements{}, fmt.Errorf("invalid resource limit: %v", err)
 		}
 		if apireq.Limits == nil {
 			apireq.Limits = make(coreapi.ResourceList)
@@ -372,7 +372,7 @@ func imageStreamTagExists(reference api.PipelineImageStreamTagReference, istClie
 		if errors.IsNotFound(err) {
 			return false, nil
 		} else {
-			return false, err
+			return false, fmt.Errorf("could not get output imagestreamtag: %v", err)
 		}
 	} else {
 		return true, nil
@@ -392,7 +392,7 @@ func (s *sourceStep) Provides() (api.ParameterMap, api.StepLink) {
 		"LOCAL_IMAGE_SRC": func() (string, error) {
 			is, err := s.imageClient.ImageStreams(s.jobSpec.Namespace()).Get(PipelineImageStream, meta.GetOptions{})
 			if err != nil {
-				return "", err
+				return "", fmt.Errorf("could not get output imagestream: %v", err)
 			}
 			var registry string
 			if len(is.Status.PublicDockerImageRepository) > 0 {

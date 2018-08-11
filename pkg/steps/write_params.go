@@ -30,7 +30,7 @@ func (s *writeParametersStep) Run(ctx context.Context, dry bool) error {
 
 	values, err := s.params.Map()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to resolve parameters: %v", err)
 	}
 	for k, v := range values {
 		if safeEnv.MatchString(v) {

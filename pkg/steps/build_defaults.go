@@ -174,7 +174,7 @@ func FromConfig(
 	if promote {
 		cfg, err := promotionDefaults(config)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, fmt.Errorf("could not determine promotion defaults: %v", err)
 		}
 		var tags []string
 		for _, image := range config.Images {

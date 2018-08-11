@@ -62,7 +62,7 @@ func (s *pipelineImageCacheStep) Provides() (api.ParameterMap, api.StepLink) {
 		fmt.Sprintf("LOCAL_IMAGE_%s", strings.ToUpper(strings.Replace(string(s.config.To), "-", "_", -1))): func() (string, error) {
 			is, err := s.imageClient.ImageStreams(s.jobSpec.Namespace()).Get(PipelineImageStream, meta.GetOptions{})
 			if err != nil {
-				return "", err
+				return "", fmt.Errorf("could not retrieve output imagestream: %v", err)
 			}
 			var registry string
 			if len(is.Status.PublicDockerImageRepository) > 0 {

@@ -243,11 +243,11 @@ func (s *releaseImagesTagStep) createReleaseConfigMap(dry bool) error {
 
 		rpmRepoServer, err := s.routeClient.Routes(s.jobSpec.Namespace()).Get(RPMRepoName, meta.GetOptions{})
 		if !errors.IsNotFound(err) {
-			return err
+			return fmt.Errorf("could not retrieve RPM repo server route: %v", err)
 		} else {
 			rpmRepoServer, err = s.routeClient.Routes(s.config.Namespace).Get(RPMRepoName, meta.GetOptions{})
 			if err != nil {
-				return err
+				return fmt.Errorf("could not retrieve RPM repo server route: %v", err)
 			}
 		}
 		rpmRepo = rpmRepoServer.Spec.Host
@@ -272,7 +272,7 @@ func (s *releaseImagesTagStep) createReleaseConfigMap(dry bool) error {
 		return nil
 	}
 	if _, err := s.configMapClient.ConfigMaps(s.jobSpec.Namespace()).Create(cm); err != nil && !errors.IsAlreadyExists(err) {
-		return err
+		return fmt.Errorf("could not create release configmap: %v", err)
 	}
 	return nil
 }
@@ -283,7 +283,7 @@ func (s *releaseImagesTagStep) Done() (bool, error) {
 		if errors.IsNotFound(err) {
 			return false, nil
 		} else {
-			return false, err
+			return false, fmt.Errorf("could not retrieve release configmap: %v", err)
 		}
 	} else {
 		return true, nil

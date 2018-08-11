@@ -71,7 +71,7 @@ func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 				component = strings.Replace(component, "_", "-", -1)
 				format, err := s.params.Get("IMAGE_FORMAT")
 				if err != nil {
-					return err
+					return fmt.Errorf("could not resolve image format: %v", err)
 				}
 				s.template.Parameters[i].Value = strings.Replace(format, componentFormatReplacement, component, -1)
 			}
@@ -114,14 +114,16 @@ func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 		}
 	}()
 
+	log.Printf("Creating or restarting template instance")
 	instance, err := createOrRestartTemplateInstance(s.templateClient.TemplateInstances(s.jobSpec.Namespace()), s.podClient.Pods(s.jobSpec.Namespace()), instance)
 	if err != nil {
-		return err
+		return fmt.Errorf("could not create or restart template instance: %v", err)
 	}
 
+	log.Printf("Waiting for template instance to be ready")
 	instance, err = waitForTemplateInstanceReady(s.templateClient.TemplateInstances(s.jobSpec.Namespace()), instance)
 	if err != nil {
-		return err
+		return fmt.Errorf("could not wait for template instance to be ready: %v", err)
 	}
 
 	// now that the pods have been resolved by the template, add them to the artifact map
@@ -150,7 +152,7 @@ func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 		switch {
 		case ref.Ref.Kind == "Pod" && ref.Ref.APIVersion == "v1":
 			if err := waitForPodCompletion(s.podClient.Pods(s.jobSpec.Namespace()), ref.Ref.Name, notifier); err != nil {
-				return err
+				return fmt.Errorf("could not wait for pod to complete: %v", err)
 			}
 		}
 	}
@@ -167,7 +169,7 @@ func (s *templateExecutionStep) Done() (bool, error) {
 	}
 	ready, err := templateInstanceReady(instance)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("could not determine if template instance was ready: %v", err)
 	}
 	if !ready {
 		return false, nil
@@ -177,7 +179,7 @@ func (s *templateExecutionStep) Done() (bool, error) {
 		case ref.Ref.Kind == "Pod" && ref.Ref.APIVersion == "v1":
 			ready, err := isPodCompleted(s.podClient.Pods(s.jobSpec.Namespace()), ref.Ref.Name)
 			if err != nil {
-				return false, err
+				return false, fmt.Errorf("could not determine if pod completed: %v", err)
 			}
 			if !ready {
 				return false, nil
@@ -253,7 +255,7 @@ func (p *DeferredParameters) Map() (map[string]string, error) {
 		}
 		v, err := fn()
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("could not lazily evaluate deferred parameter: %v", err)
 		}
 		p.values[k] = v
 		m[k] = v
@@ -328,7 +330,7 @@ func (p *DeferredParameters) Get(name string) (string, error) {
 	if fn, ok := p.fns[name]; ok {
 		value, err := fn()
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("could not lazily evaluate deferred parameter: %v", err)
 		}
 		p.values[name] = value
 		return value, nil
@@ -361,7 +363,7 @@ func (c *templateClient) Process(namespace string, template *templateapi.Templat
 		Body(template).
 		Do().
 		Into(processed)
-	return processed, err
+	return processed, fmt.Errorf("could not process template: %v", err)
 }
 
 func isPodCompleted(podClient coreclientset.PodInterface, name string) (bool, error) {
@@ -370,7 +372,7 @@ func isPodCompleted(podClient coreclientset.PodInterface, name string) (bool, er
 		return false, nil
 	}
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("could not retrieve pod: %v", err)
 	}
 	if pod.Status.Phase == coreapi.PodSucceeded || pod.Status.Phase == coreapi.PodFailed {
 		return true, nil
@@ -397,7 +399,7 @@ func waitForTemplateInstanceReady(templateClient templateclientset.TemplateInsta
 	for {
 		ready, err := templateInstanceReady(instance)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("could not determine if template instance was ready: %v", err)
 		}
 		if ready {
 			return instance, nil
@@ -446,7 +448,7 @@ func waitForCompletedTemplateInstanceDeletion(templateClient templateclientset.T
 		return nil
 	}
 	if err != nil {
-		return err
+		return fmt.Errorf("could not delete completed template instance: %v", err)
 	}
 
 	for i := 0; ; i++ {
@@ -455,7 +457,7 @@ func waitForCompletedTemplateInstanceDeletion(templateClient templateclientset.T
 			break
 		}
 		if err != nil {
-			return err
+			return fmt.Errorf("could not retrieve deleting template instance: %v", err)
 		}
 		if instance.UID != uid {
 			return nil
@@ -514,7 +516,7 @@ func waitForCompletedPodDeletion(podClient coreclientset.PodInterface, name stri
 		return nil
 	}
 	if err != nil {
-		return err
+		return fmt.Errorf("could not delete completed pod: %v", err)
 	}
 
 	for {
@@ -523,7 +525,7 @@ func waitForCompletedPodDeletion(podClient coreclientset.PodInterface, name stri
 			return nil
 		}
 		if err != nil {
-			return err
+			return fmt.Errorf("could not retrieve deleting pod: %v", err)
 		}
 		if pod.UID != uid {
 			return nil
@@ -548,7 +550,7 @@ func waitForPodCompletion(podClient coreclientset.PodInterface, name string, not
 			continue
 		}
 		if err != nil {
-			return err
+			return fmt.Errorf("could not wait for pod completion: %v", err)
 		}
 		if !retry {
 			break
@@ -560,7 +562,7 @@ func waitForPodCompletion(podClient coreclientset.PodInterface, name string, not
 func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name string, completed map[string]time.Time, notifier ContainerNotifier) (bool, error) {
 	list, err := podClient.List(meta.ListOptions{FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String()})
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("could not list pod: %v", err)
 	}
 	if len(list.Items) != 1 {
 		notifier.Complete(name)
@@ -587,7 +589,7 @@ func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name st
 		Watch:         true,
 	})
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("could not create watcher for pod: %v", err)
 	}
 	defer watcher.Stop()
 

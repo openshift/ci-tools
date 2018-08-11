@@ -590,7 +590,16 @@ func (o *options) initializeNamespace() error {
 		for key, value := range updates {
 			update.ObjectMeta.Annotations[key] = value
 		}
-		if _, err := client.Namespaces().Update(update); err != nil {
+		var updateErr error
+		for retries := 5; retries > 0; retries-- {
+			if _, err := client.Namespaces().Update(update); err == nil {
+				updateErr = nil
+				break
+			} else {
+				updateErr = err
+			}
+		}
+		if updateErr != nil {
 			return fmt.Errorf("could not update namespace to add TTLs: %v", err)
 		}
 	}

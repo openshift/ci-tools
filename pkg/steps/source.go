@@ -29,6 +29,8 @@ const (
 	BuildIdLabel       = "build-id"
 	CreatesLabel       = "creates"
 	CreatedByCILabel   = "created-by-ci"
+
+	ProwJobIdLabel = "prow.k8s.io/id"
 )
 
 var (
@@ -136,6 +138,7 @@ func buildFromSource(jobSpec *JobSpec, fromTag, toTag api.PipelineImageStreamTag
 				PersistsLabel:    "false",
 				JobLabel:         jobSpec.Job,
 				BuildIdLabel:     jobSpec.BuildId,
+				ProwJobIdLabel:   jobSpec.ProwJobID,
 				CreatesLabel:     string(toTag),
 				CreatedByCILabel: "true",
 			},

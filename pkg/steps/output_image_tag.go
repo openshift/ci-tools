@@ -66,19 +66,16 @@ func (s *outputImageTagStep) Run(ctx context.Context, dry bool) error {
 			return fmt.Errorf("failed to marshal imagestreamtag: %v", err)
 		}
 		fmt.Printf("%s\n", istJSON)
-	} else {
-		if err := s.istClient.ImageStreamTags(toNamespace).Delete(ist.Name, nil); err != nil && !errors.IsNotFound(err) {
-			return fmt.Errorf("could not remove output imagestreamtag: %v", err)
-		}
-		_, err := s.istClient.ImageStreamTags(toNamespace).Create(ist)
-		if errors.IsAlreadyExists(err) {
-			// another job raced with us, but the end
-			// result will be the same so we don't care
-			return nil
-		}
-		return fmt.Errorf("could not create output imagestreamtag: %v", err)
+		return nil
 	}
 
+	if err := s.istClient.ImageStreamTags(toNamespace).Delete(ist.Name, nil); err != nil && !errors.IsNotFound(err) {
+		return fmt.Errorf("could not remove output imagestreamtag: %v", err)
+	}
+	_, err := s.istClient.ImageStreamTags(toNamespace).Create(ist)
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return fmt.Errorf("could not create output imagestreamtag: %v", err)
+	}
 	return nil
 }
 

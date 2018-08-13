@@ -26,6 +26,7 @@ import (
 	rbacclientset "k8s.io/client-go/kubernetes/typed/rbac/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/util/retry"
 
 	imageapi "github.com/openshift/api/image/v1"
 	projectapi "github.com/openshift/api/project/v1"
@@ -581,16 +582,22 @@ func (o *options) initializeNamespace() error {
 	}
 
 	if len(updates) > 0 {
-		ns, err := client.Namespaces().Get(o.namespace, meta.GetOptions{})
-		if err != nil {
-			return fmt.Errorf("could not retrieve namespace: %v", err)
-		}
+		if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			ns, err := client.Namespaces().Get(o.namespace, meta.GetOptions{})
+			if err != nil {
+				return err
+			}
 
-		update := ns.DeepCopy()
-		for key, value := range updates {
-			update.ObjectMeta.Annotations[key] = value
-		}
-		if _, err := client.Namespaces().Update(update); err != nil {
+			if ns.Annotations == nil {
+				ns.Annotations = make(map[string]string)
+			}
+			for key, value := range updates {
+				ns.ObjectMeta.Annotations[key] = value
+			}
+
+			_, updateErr := client.Namespaces().Update(ns)
+			return updateErr
+		}); err != nil {
 			return fmt.Errorf("could not update namespace to add TTLs: %v", err)
 		}
 	}

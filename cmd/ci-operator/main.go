@@ -596,6 +596,10 @@ func (o *options) initializeNamespace() error {
 			}
 
 			_, updateErr := client.Namespaces().Update(ns)
+			if kerrors.IsForbidden(updateErr) {
+				log.Printf("warning: Could not mark the namespace to be deleted later because you do not have permission to update the namespace (details: %v)", updateErr)
+				return nil
+			}
 			return updateErr
 		}); err != nil {
 			return fmt.Errorf("could not update namespace to add TTLs: %v", err)

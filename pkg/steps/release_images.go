@@ -72,7 +72,15 @@ func sourceName(config api.ReleaseTagConfiguration) string {
 }
 
 func (s *releaseImagesTagStep) Run(ctx context.Context, dry bool) error {
-	log.Printf("Tagging release images from %s", sourceName(s.config))
+	if dry {
+		log.Printf("Tagging release images from %s", sourceName(s.config))
+	} else {
+		if format, err := s.imageFormat(); err == nil {
+			log.Printf("Tagged release images from %s, images will be pullable from %s", sourceName(s.config), format)
+		} else {
+			log.Printf("Tagged release images from %s", sourceName(s.config))
+		}
+	}
 
 	if len(s.config.Name) > 0 {
 		is, err := s.srcClient.ImageStreams(s.config.Namespace).Get(s.config.Name, meta.GetOptions{})
@@ -300,24 +308,37 @@ func (s *releaseImagesTagStep) Creates() []api.StepLink {
 
 func (s *releaseImagesTagStep) Provides() (api.ParameterMap, api.StepLink) {
 	return api.ParameterMap{
-		"IMAGE_FORMAT": func() (string, error) {
-			registry := "REGISTRY"
-			if is, err := s.dstClient.ImageStreams(s.jobSpec.Namespace()).Get(PipelineImageStream, meta.GetOptions{}); err == nil {
-				if len(is.Status.PublicDockerImageRepository) > 0 {
-					registry = strings.SplitN(is.Status.PublicDockerImageRepository, "/", 2)[0]
-				} else if len(is.Status.DockerImageRepository) > 0 {
-					registry = strings.SplitN(is.Status.DockerImageRepository, "/", 2)[0]
-				}
-			}
-			var format string
-			if len(s.config.Name) > 0 {
-				format = fmt.Sprintf("%s/%s/%s:%s", registry, s.jobSpec.Namespace(), fmt.Sprintf("%s%s", s.config.NamePrefix, StableImageStream), componentFormatReplacement)
-			} else {
-				format = fmt.Sprintf("%s/%s/%s:%s", registry, s.jobSpec.Namespace(), fmt.Sprintf("%s%s", s.config.NamePrefix, componentFormatReplacement), s.config.Tag)
-			}
-			return format, nil
-		},
+		"IMAGE_FORMAT": s.imageFormat,
 	}, api.ImagesReadyLink()
+}
+
+func (s *releaseImagesTagStep) imageFormat() (string, error) {
+	spec, err := s.repositoryPullSpec()
+	if err != nil {
+		return "REGISTRY", err
+	}
+	registry := strings.SplitN(spec, "/", 2)[0]
+	var format string
+	if len(s.config.Name) > 0 {
+		format = fmt.Sprintf("%s/%s/%s:%s", registry, s.jobSpec.Namespace(), fmt.Sprintf("%s%s", s.config.NamePrefix, StableImageStream), componentFormatReplacement)
+	} else {
+		format = fmt.Sprintf("%s/%s/%s:%s", registry, s.jobSpec.Namespace(), fmt.Sprintf("%s%s", s.config.NamePrefix, componentFormatReplacement), s.config.Tag)
+	}
+	return format, nil
+}
+
+func (s *releaseImagesTagStep) repositoryPullSpec() (string, error) {
+	is, err := s.dstClient.ImageStreams(s.jobSpec.Namespace()).Get(PipelineImageStream, meta.GetOptions{})
+	if err != nil {
+		return "", err
+	}
+	if len(is.Status.PublicDockerImageRepository) > 0 {
+		return is.Status.PublicDockerImageRepository, nil
+	}
+	if len(is.Status.DockerImageRepository) > 0 {
+		return is.Status.DockerImageRepository, nil
+	}
+	return "", fmt.Errorf("no pull spec available for image stream %s", PipelineImageStream)
 }
 
 func (s *releaseImagesTagStep) Name() string { return "[release-inputs]" }

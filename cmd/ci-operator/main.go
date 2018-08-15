@@ -116,7 +116,7 @@ defined in the config file, such as base images and the release tag configuratio
 
 After a successful build the --promote will tag each built image (in "images")
 to the image stream(s) identified by the "promotion" config, which defaults to
-the same image stream as the release configuration. You may add additional 
+the same image stream as the release configuration. You may add additional
 images to promote and their target names via the "additional_images" map.
 `
 
@@ -556,7 +556,7 @@ func (o *options) initializeNamespace() error {
 				},
 				Subjects: []rbacapi.Subject{{Kind: "User", Name: pull.Author}},
 				RoleRef: rbacapi.RoleRef{
-					Kind: "Role",
+					Kind: "ClusterRole",
 					Name: "admin",
 				},
 			}); err != nil && !kerrors.IsAlreadyExists(err) {

@@ -10,6 +10,10 @@ check: ## Lint code
 build: ## Build binary
 	go build -v -o ci-operator ./cmd/ci-operator
 
+.PHONY: install
+install: ## Install binary
+	go install ./cmd/ci-operator
+
 .PHONY: test
 test: ## Run tests
 	go test ./...

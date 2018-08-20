@@ -129,6 +129,48 @@ image, while `performance` test target will be run from a `bin` image:
 }
 ```
 
+### Using Separate Build Environment and Release Environment Images
+
+Often, you will want to run your builds in an environment where all of your build-
+time dependencies exist, but you will not want those to be present in your final
+container image. For this case, `ci-operator` allows you to use a separate image
+for your builds and we make use of the OpenShift `Build` image source mechanism
+to deliver artifacts from one container image to another. In the following example,
+we configure `ci-operator` to run such a build:
+
+```json
+{
+  "base_images": {
+    "release_base": {
+      "name": "release",
+      "tag": "latest"
+    }
+  },
+  "test_base_image": {
+    "name": "tests",
+    "tag": "latest"
+  },
+  "binary_build_commands": "make build",
+  "images": [{
+    "from": "release_base",
+    "to": "product",
+    "context_dir": "images/product",
+    "inputs": {
+      "bin": {
+        "paths": [{
+         "source_path": "path/to/binary",
+         "destination_dir": "/usr/bin/binary"
+       }]
+      }
+    }
+  }]
+}
+```
+
+In the example, we build the binaries using `make build` in the `tests` environment
+image and commit the result to the `bin` tag. Then, we build the `product` image
+using the `release_base` and copying in the binary from that `bin` tag.
+
 
 ### Submit the configuration file to `openshift/release`
 

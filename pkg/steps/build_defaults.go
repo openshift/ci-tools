@@ -363,24 +363,26 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec
 	for i := range config.Images {
 		image := &config.Images[i]
 		buildSteps = append(buildSteps, api.StepConfiguration{ProjectDirectoryImageBuildStepConfiguration: image})
-		if config.ReleaseTagConfiguration != nil && len(config.ReleaseTagConfiguration.Name) > 0 {
-			buildSteps = append(buildSteps, api.StepConfiguration{OutputImageTagStepConfiguration: &api.OutputImageTagStepConfiguration{
-				From: image.To,
-				To: api.ImageStreamTagReference{
-					Name: fmt.Sprintf("%s%s", config.ReleaseTagConfiguration.NamePrefix, StableImageStream),
-					Tag:  string(image.To),
-				},
-				Optional: image.Optional,
-			}})
-		} else {
-			buildSteps = append(buildSteps, api.StepConfiguration{OutputImageTagStepConfiguration: &api.OutputImageTagStepConfiguration{
-				From: image.To,
-				To: api.ImageStreamTagReference{
-					Name: string(image.To),
-					Tag:  "ci",
-				},
-				Optional: image.Optional,
-			}})
+		if config.ReleaseTagConfiguration != nil {
+			if len(config.ReleaseTagConfiguration.Name) > 0 {
+				buildSteps = append(buildSteps, api.StepConfiguration{OutputImageTagStepConfiguration: &api.OutputImageTagStepConfiguration{
+					From: image.To,
+					To: api.ImageStreamTagReference{
+						Name: fmt.Sprintf("%s%s", config.ReleaseTagConfiguration.NamePrefix, StableImageStream),
+						Tag:  string(image.To),
+					},
+					Optional: image.Optional,
+				}})
+			} else {
+				buildSteps = append(buildSteps, api.StepConfiguration{OutputImageTagStepConfiguration: &api.OutputImageTagStepConfiguration{
+					From: image.To,
+					To: api.ImageStreamTagReference{
+						Name: string(image.To),
+						Tag:  "ci",
+					},
+					Optional: image.Optional,
+				}})
+			}
 		}
 	}
 

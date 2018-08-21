@@ -63,7 +63,7 @@ type ReleaseBuildConfiguration struct {
 	// Resources is a set of resource requests or limits over the
 	// input types. The special name '*' may be used to set default
 	// requests and limits.
-	Resources ResourceConfiguration
+	Resources ResourceConfiguration `json:"resources,omitempty"`
 }
 
 // ResourceConfiguration defines resource overrides for jobs run

@@ -23,6 +23,60 @@ const (
 	componentFormatReplacement = "${component}"
 )
 
+// stableImagesTagStep is used when no release configuration is necessary
+type stableImagesTagStep struct {
+	jobSpec   *JobSpec
+	dstClient imageclientset.ImageV1Interface
+}
+
+func StableImagesTagStep(dstClient imageclientset.ImageV1Interface, jobSpec *JobSpec) api.Step {
+	return &stableImagesTagStep{
+		dstClient: dstClient,
+		jobSpec:   jobSpec,
+	}
+}
+
+func (s *stableImagesTagStep) Run(ctx context.Context, dry bool) error {
+	log.Printf("Will output images to %s:${component}", StableImageStream)
+
+	newIS := &imageapi.ImageStream{
+		ObjectMeta: meta.ObjectMeta{
+			Name: StableImageStream,
+		},
+	}
+	if dry {
+		istJSON, err := json.MarshalIndent(newIS, "", "  ")
+		if err != nil {
+			return fmt.Errorf("failed to marshal image stream: %v", err)
+		}
+		fmt.Printf("%s\n", istJSON)
+		return nil
+	}
+	_, err := s.dstClient.ImageStreams(s.jobSpec.Namespace()).Create(newIS)
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return fmt.Errorf("could not create stable imagestreamtag: %v", err)
+	}
+	return nil
+}
+
+func (s *stableImagesTagStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
+	return nil, nil
+}
+
+func (s *stableImagesTagStep) Done() (bool, error) { return true, nil }
+
+func (s *stableImagesTagStep) Requires() []api.StepLink { return []api.StepLink{} }
+
+func (s *stableImagesTagStep) Creates() []api.StepLink { return []api.StepLink{api.ReleaseImagesLink()} }
+
+func (s *stableImagesTagStep) Provides() (api.ParameterMap, api.StepLink) { return nil, nil }
+
+func (s *stableImagesTagStep) Name() string { return "[output-images]" }
+
+func (s *stableImagesTagStep) Description() string {
+	return fmt.Sprintf("Create the output image stream %s", StableImageStream)
+}
+
 // releaseImagesTagStep will tag a full release suite
 // of images in from the configured namespace. It is
 // expected that builds will overwrite these tags at

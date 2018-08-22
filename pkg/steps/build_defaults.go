@@ -115,6 +115,7 @@ func FromConfig(
 	params.Add("NAMESPACE", nil, func() (string, error) { return jobSpec.Namespace(), nil })
 
 	var imageStepLinks []api.StepLink
+	var hasReleaseConfiguration bool
 	for _, rawStep := range stepConfigsForBuild(config, jobSpec) {
 		var step api.Step
 		if rawStep.InputImageTagStepConfiguration != nil {
@@ -148,6 +149,7 @@ func FromConfig(
 			if err != nil {
 				return nil, nil, fmt.Errorf("unable to access release images on remote cluster: %v", err)
 			}
+			hasReleaseConfiguration = true
 			step = ReleaseImagesTagStep(*rawStep.ReleaseImagesTagStepConfiguration, srcClient, imageClient, routeGetter, configMapGetter, params, jobSpec)
 			imageStepLinks = append(imageStepLinks, step.Creates()...)
 		} else if rawStep.TestStepConfiguration != nil {
@@ -167,6 +169,10 @@ func FromConfig(
 
 	if len(paramFile) > 0 {
 		buildSteps = append(buildSteps, WriteParametersStep(params, paramFile, jobSpec))
+	}
+
+	if !hasReleaseConfiguration {
+		buildSteps = append(buildSteps, StableImagesTagStep(imageClient, jobSpec))
 	}
 
 	buildSteps = append(buildSteps, ImagesReadyStep(imageStepLinks, jobSpec))
@@ -383,6 +389,15 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec
 					Optional: image.Optional,
 				}})
 			}
+		} else {
+			buildSteps = append(buildSteps, api.StepConfiguration{OutputImageTagStepConfiguration: &api.OutputImageTagStepConfiguration{
+				From: image.To,
+				To: api.ImageStreamTagReference{
+					Name: StableImageStream,
+					Tag:  string(image.To),
+				},
+				Optional: image.Optional,
+			}})
 		}
 	}
 

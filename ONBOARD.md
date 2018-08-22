@@ -200,10 +200,11 @@ even periodically). You can find information about how to create Prow jobs in
 [test-infra
 documentation](https://github.com/openshift/test-infra/tree/master/prow#how-to-add-new-jobs).
 Long story short, you need to add a new job definition to the [config
-file](https://github.com/openshift/release/blob/master/cluster/ci/config/prow/config.yaml)
+directory](https://github.com/openshift/release/blob/master/ci-operator/jobs)
 in `openshift/release` repository. You need to add a job definition to the
-appropriate section of either `presubmits`, `postsubmits` or `periodicals` key
-of the config file:
+appropriate file under the `ci-operator/jobs/$org/$repo` directory, in a file
+like `$org-$repo-$jobtype.yaml` where the job type can be `presubmits`,
+`postsubmits` or `periodicals`. The job should look like:
 
 ```yaml
 presubmits:

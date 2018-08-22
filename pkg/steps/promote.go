@@ -102,9 +102,25 @@ func (s *promotionStep) Run(ctx context.Context, dry bool) error {
 		if valid == nil {
 			continue
 		}
+
+		name := fmt.Sprintf("%s%s", s.config.NamePrefix, dst)
+
+		_, err := s.dstClient.ImageStreams(s.config.Namespace).Get(name, meta.GetOptions{})
+		if errors.IsNotFound(err) {
+			_, err = s.dstClient.ImageStreams(s.config.Namespace).Create(&imageapi.ImageStream{
+				ObjectMeta: meta.ObjectMeta{
+					Name:      name,
+					Namespace: s.config.Namespace,
+				},
+			})
+		}
+		if err != nil {
+			return fmt.Errorf("could not ensure target imagestream: %v", err)
+		}
+
 		ist := &imageapi.ImageStreamTag{
 			ObjectMeta: meta.ObjectMeta{
-				Name:      fmt.Sprintf("%s%s:%s", s.config.NamePrefix, dst, s.config.Tag),
+				Name:      fmt.Sprintf("%s:%s", name, s.config.Tag),
 				Namespace: s.config.Namespace,
 			},
 			Tag: &imageapi.TagReference{
@@ -120,7 +136,7 @@ func (s *promotionStep) Run(ctx context.Context, dry bool) error {
 			fmt.Printf("%s\n", istJSON)
 			continue
 		}
-		_, err := client.Update(ist)
+		_, err = client.Update(ist)
 		if err != nil {
 			return fmt.Errorf("could not promote imagestreamtag %s: %v", dst, err)
 		}

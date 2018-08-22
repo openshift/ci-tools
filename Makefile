@@ -9,10 +9,12 @@ check: ## Lint code
 .PHONY: build
 build: ## Build binary
 	go build -v -o ci-operator ./cmd/ci-operator
+	go build -v -o ci-operator-checkconfig ./cmd/ci-operator-checkconfig
 
 .PHONY: install
 install: ## Install binary
 	go install ./cmd/ci-operator
+	go install ./cmd/ci-operator-checkconfig
 
 .PHONY: test
 test: ## Run tests

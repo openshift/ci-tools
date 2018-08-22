@@ -26,6 +26,7 @@ import (
 	rbacclientset "k8s.io/client-go/kubernetes/typed/rbac/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
 
 	imageapi "github.com/openshift/api/image/v1"
@@ -422,17 +423,30 @@ func (o *options) Run() error {
 			return fmt.Errorf("could not initialize namespace: %v", err)
 		}
 
+		client, err := coreclientset.NewForConfig(o.clusterConfig)
+		if err != nil {
+			return fmt.Errorf("could not get core client for cluster config: %v", err)
+		}
+		eventRecorder := eventRecorder(client, o.namespace)
+		runtimeObject := &coreapi.ObjectReference{Namespace: o.namespace}
+
+		eventRecorder.Event(runtimeObject, coreapi.EventTypeNormal, "CiJobStarted", eventJobDescription(o.jobSpec, o.namespace))
 		// execute the graph
 		suites, err := steps.Run(ctx, nodes, o.dry)
 		if err := o.writeJUnit(suites, "operator"); err != nil {
 			log.Printf("warning: Unable to write JUnit result: %v", err)
 		}
 		if err != nil {
+			eventRecorder.Event(runtimeObject, coreapi.EventTypeNormal, "CiJobFailed", eventJobDescription(o.jobSpec, o.namespace))
+			time.Sleep(time.Second)
 			return fmt.Errorf("could not run steps: %v", err)
 		}
 
 		for _, step := range postSteps {
 			if err := step.Run(ctx, o.dry); err != nil {
+				eventRecorder.Event(runtimeObject, coreapi.EventTypeNormal, "PostStepFailed",
+					fmt.Sprintf("Post step %s failed while %s", step.Name(), eventJobDescription(o.jobSpec, o.namespace)))
+				time.Sleep(time.Second)
 				return fmt.Errorf("could not run post step %s: %v", step.Name(), err)
 			}
 		}
@@ -697,6 +711,25 @@ func inputHash(inputs api.InputDefinition) string {
 	return oneWayNameEncoding.EncodeToString(hash.Sum(nil)[:5])
 }
 
+// eventJobDescription returns a string representing the pull requests and authors description, to be used in events.
+func eventJobDescription(jobSpec *steps.JobSpec, namespace string) string {
+	pulls := []string{}
+	authors := []string{}
+
+	if len(jobSpec.Refs.Pulls) == 1 {
+		pull := jobSpec.Refs.Pulls[0]
+		return fmt.Sprintf("Running job %s for PR https://github.com/%s/%s/pull/%d in namespace %s from author %s",
+			jobSpec.Job, jobSpec.Refs.Org, jobSpec.Refs.Repo, pull.Number, namespace, pull.Author)
+	} else {
+		for _, pull := range jobSpec.Refs.Pulls {
+			pulls = append(pulls, fmt.Sprintf("https://github.com/%s/%s/pull/%d", jobSpec.Refs.Org, jobSpec.Refs.Repo, pull.Number))
+			authors = append(authors, pull.Author)
+		}
+		return fmt.Sprintf("Running job %s for PRs (%s) in namespace %s from authors (%s)",
+			jobSpec.Job, strings.Join(pulls, ", "), namespace, strings.Join(authors, ", "))
+	}
+}
+
 // jobDescription returns a string representing the job's description.
 func jobDescription(job *steps.JobSpec, config *api.ReleaseBuildConfiguration) string {
 	var links []string
@@ -813,4 +846,13 @@ func shorten(value string, l int) string {
 		return value[:l]
 	}
 	return value
+}
+
+func eventRecorder(kubeClient *coreclientset.CoreV1Client, namespace string) record.EventRecorder {
+	eventBroadcaster := record.NewBroadcaster()
+	eventBroadcaster.StartLogging(log.Printf)
+	eventBroadcaster.StartRecordingToSink(&coreclientset.EventSinkImpl{
+		Interface: coreclientset.New(kubeClient.RESTClient()).Events("")})
+	return eventBroadcaster.NewRecorder(
+		templatescheme.Scheme, coreapi.EventSource{Component: namespace})
 }

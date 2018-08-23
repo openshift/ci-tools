@@ -3,3 +3,5 @@
 .vscode/
 cmd/ci-operator/debug
 bin/
+ci-operator
+ci-operator-checkconfig

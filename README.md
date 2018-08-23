@@ -45,7 +45,9 @@ For more information about ci-operator options, use the `--help` parameter:
 ## Onboarding a component to ci-operator and Prow
 
 See [ONBOARD.md](ONBOARD.md#prepare-configuration-for-component-repo) for more
-information about how to write component repository configuration file.
+information about how to write component repository configuration file. See the
+configuration reference at [CONFIGURATION.md](CONFIGURATION.md) for details on
+the configuration file keys.
 
 ## OpenShift components using ci-operator
 

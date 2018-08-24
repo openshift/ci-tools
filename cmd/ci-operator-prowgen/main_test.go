@@ -104,6 +104,115 @@ func TestGeneratePodSpec(t *testing.T) {
 	}
 }
 
+func TestGeneratePodSpecTemplate(t *testing.T) {
+	tests := []struct {
+		org        string
+		repo       string
+		configFile string
+		release    string
+		test       ciop.TestStepConfiguration
+
+		expected *kubeapi.PodSpec
+	}{
+		{
+			org:        "organization",
+			repo:       "repo",
+			configFile: "organization-repo-branch.json",
+			release:    "origin-v4.0",
+			test: ciop.TestStepConfiguration{
+				As:       "test",
+				Commands: "commands",
+				OpenshiftAnsibleClusterTestConfiguration: &ciop.OpenshiftAnsibleClusterTestConfiguration{
+					ClusterTestConfiguration: ciop.ClusterTestConfiguration{TargetCloud: "gcp"},
+				},
+			},
+
+			expected: &kubeapi.PodSpec{
+				ServiceAccountName: "ci-operator",
+				Volumes: []kubeapi.Volume{
+					{
+						Name: "job-definition",
+						VolumeSource: kubeapi.VolumeSource{
+							ConfigMap: &kubeapi.ConfigMapVolumeSource{
+								LocalObjectReference: kubeapi.LocalObjectReference{
+									Name: "prow-job-cluster-launch-e2e",
+								},
+							},
+						},
+					},
+					{
+						Name: "cluster-profile",
+						VolumeSource: kubeapi.VolumeSource{
+							Projected: &kubeapi.ProjectedVolumeSource{
+								Sources: []kubeapi.VolumeProjection{
+									{
+										Secret: &kubeapi.SecretProjection{
+											LocalObjectReference: kubeapi.LocalObjectReference{
+												Name: "cluster-secrets-gcp",
+											},
+										},
+									},
+									{
+										ConfigMap: &kubeapi.ConfigMapProjection{
+											LocalObjectReference: kubeapi.LocalObjectReference{
+												Name: "cluster-profile-gcp",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				Containers: []kubeapi.Container{{
+					Image:           "ci-operator:latest",
+					ImagePullPolicy: kubeapi.PullAlways,
+					Command:         []string{"ci-operator"},
+					Args: []string{
+						"--give-pr-author-access-to-namespace=true",
+						"--artifact-dir=$(ARTIFACTS)",
+						"--target=test",
+						"--secret-dir=/usr/local/test-cluster-profile",
+						"--template=/usr/local/test"},
+					Resources: kubeapi.ResourceRequirements{
+						Requests: kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
+						Limits:   kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(500, resource.DecimalSI)},
+					},
+					Env: []kubeapi.EnvVar{
+						{
+							Name: "CONFIG_SPEC",
+							ValueFrom: &kubeapi.EnvVarSource{
+								ConfigMapKeyRef: &kubeapi.ConfigMapKeySelector{
+									LocalObjectReference: kubeapi.LocalObjectReference{
+										Name: "ci-operator-configs",
+									},
+									Key: "organization-repo-branch.json",
+								},
+							},
+						},
+						{Name: "CLUSTER_TYPE", Value: "gcp"},
+						{Name: "JOB_NAME_SAFE", Value: "test"},
+						{Name: "TEST_COMMAND", Value: "commands"},
+						{Name: "RPM_REPO_OPENSHIFT_ORIGIN", Value: "https://rpms.svc.ci.openshift.org/openshift-origin-v4.0/"},
+					},
+					VolumeMounts: []kubeapi.VolumeMount{
+						{Name: "cluster-profile", MountPath: "/usr/local/test-cluster-profile"},
+						{Name: "job-definition", MountPath: "/usr/local/test", SubPath: "cluster-launch-e2e.yaml"},
+					},
+				}},
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		var podSpec *kubeapi.PodSpec
+		podSpec = generatePodSpecTemplate(tc.org, tc.repo, tc.configFile, tc.release, &tc.test)
+		if !equality.Semantic.DeepEqual(podSpec, tc.expected) {
+			t.Errorf("expected PodSpec diff:\n%s", diff.ObjectDiff(tc.expected, podSpec))
+		}
+	}
+}
+
 func TestGeneratePresubmitForTest(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -206,7 +315,9 @@ func TestGenerateJobs(t *testing.T) {
 		{
 			id: "two tests and empty Images so only two test presubmits are generated",
 			config: &ciop.ReleaseBuildConfiguration{
-				Tests: []ciop.TestStepConfiguration{{As: "derTest"}, {As: "leTest"}},
+				Tests: []ciop.TestStepConfiguration{
+					{As: "derTest", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "from"}},
+					{As: "leTest", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "from"}}},
 			},
 			repoInfo: &configFilePathElements{
 				org:            "organization",
@@ -224,7 +335,9 @@ func TestGenerateJobs(t *testing.T) {
 		}, {
 			id: "two tests and nonempty Images so two test presubmits and images pre/postsubmits are generated ",
 			config: &ciop.ReleaseBuildConfiguration{
-				Tests:  []ciop.TestStepConfiguration{{As: "derTest"}, {As: "leTest"}},
+				Tests: []ciop.TestStepConfiguration{
+					{As: "derTest", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "from"}},
+					{As: "leTest", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "from"}}},
 				Images: []ciop.ProjectDirectoryImageBuildStepConfiguration{{}},
 			},
 			repoInfo: &configFilePathElements{
@@ -241,6 +354,31 @@ func TestGenerateJobs(t *testing.T) {
 				}},
 				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {
 					{Name: "branch-ci-organization-repository-branch-images"},
+				}},
+			},
+		}, {
+			id: "template test",
+			config: &ciop.ReleaseBuildConfiguration{
+				InputConfiguration: ciop.InputConfiguration{
+					ReleaseTagConfiguration: &ciop.ReleaseTagConfiguration{Name: "origin-v4.0"}},
+				Tests: []ciop.TestStepConfiguration{
+					{
+						As: "oTeste",
+						OpenshiftAnsibleClusterTestConfiguration: &ciop.OpenshiftAnsibleClusterTestConfiguration{
+							ClusterTestConfiguration: ciop.ClusterTestConfiguration{TargetCloud: "gcp"},
+						},
+					},
+				},
+			},
+			repoInfo: &configFilePathElements{
+				org:            "organization",
+				repo:           "repository",
+				branch:         "branch",
+				configFilename: "konfig.yaml",
+			},
+			expected: &prowconfig.JobConfig{
+				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
+					{Name: "pull-ci-organization-repository-branch-oTeste"},
 				}},
 			},
 		}, {

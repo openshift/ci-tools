@@ -109,6 +109,86 @@ func generatePodSpec(configFile, target string, additionalArgs ...string) *kubea
 	}
 }
 
+func generatePodSpecTemplate(org, repo, configFile, release string, test *cioperatorapi.TestStepConfiguration, additionalArgs ...string) *kubeapi.PodSpec {
+	var template, targetCloud string
+	var needsReleaseRpms bool
+	if conf := test.OpenshiftAnsibleClusterTestConfiguration; conf != nil {
+		template = "cluster-launch-e2e"
+		targetCloud = string(conf.TargetCloud)
+		needsReleaseRpms = true
+	} else if conf := test.OpenshiftAnsibleSrcClusterTestConfiguration; conf != nil {
+		template = "cluster-launch-src"
+		targetCloud = string(conf.TargetCloud)
+		needsReleaseRpms = true
+	} else if conf := test.OpenshiftInstallerClusterTestConfiguration; conf != nil {
+		template = "cluster-launch-installer-e2e"
+		targetCloud = string(conf.TargetCloud)
+	} else if conf := test.OpenshiftInstallerSmokeClusterTestConfiguration; conf != nil {
+		template = "cluster-launch-installer-e2e-smoke"
+		targetCloud = string(conf.TargetCloud)
+	}
+	clusterProfile := fmt.Sprintf("%s-cluster-profile", test.As)
+	clusterProfilePath := fmt.Sprintf("/usr/local/%s", clusterProfile)
+	templatePath := fmt.Sprintf("/usr/local/%s", test.As)
+	podSpec := generatePodSpec(configFile, test.As, additionalArgs...)
+	podSpec.Volumes = []kubeapi.Volume{
+		{
+			Name: "job-definition",
+			VolumeSource: kubeapi.VolumeSource{
+				ConfigMap: &kubeapi.ConfigMapVolumeSource{
+					LocalObjectReference: kubeapi.LocalObjectReference{
+						Name: fmt.Sprintf("prow-job-%s", template),
+					},
+				},
+			},
+		},
+		{
+			Name: "cluster-profile",
+			VolumeSource: kubeapi.VolumeSource{
+				Projected: &kubeapi.ProjectedVolumeSource{
+					Sources: []kubeapi.VolumeProjection{
+						{
+							Secret: &kubeapi.SecretProjection{
+								LocalObjectReference: kubeapi.LocalObjectReference{
+									Name: fmt.Sprintf("cluster-secrets-%s", targetCloud),
+								},
+							},
+						},
+						{
+							ConfigMap: &kubeapi.ConfigMapProjection{
+								LocalObjectReference: kubeapi.LocalObjectReference{
+									Name: fmt.Sprintf("cluster-profile-%s", targetCloud),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	container := &podSpec.Containers[0]
+	container.Args = append(
+		container.Args,
+		fmt.Sprintf("--secret-dir=%s", clusterProfilePath),
+		fmt.Sprintf("--template=%s", templatePath))
+	container.VolumeMounts = []kubeapi.VolumeMount{
+		{Name: "cluster-profile", MountPath: clusterProfilePath},
+		{Name: "job-definition", MountPath: templatePath, SubPath: fmt.Sprintf("%s.yaml", template)},
+	}
+	container.Env = append(
+		container.Env,
+		kubeapi.EnvVar{Name: "CLUSTER_TYPE", Value: targetCloud},
+		kubeapi.EnvVar{Name: "JOB_NAME_SAFE", Value: strings.Replace(test.As, "_", "-", -1)},
+		kubeapi.EnvVar{Name: "TEST_COMMAND", Value: test.Commands})
+	if needsReleaseRpms && (org != "openshift" || repo != "origin") {
+		container.Env = append(container.Env, kubeapi.EnvVar{
+			Name:  "RPM_REPO_OPENSHIFT_ORIGIN",
+			Value: fmt.Sprintf("https://rpms.svc.ci.openshift.org/openshift-%s/", release),
+		})
+	}
+	return podSpec
+}
+
 type testDescription struct {
 	Name   string
 	Target string
@@ -201,7 +281,14 @@ func generateJobs(
 	postsubmits := map[string][]prowconfig.Postsubmit{}
 
 	for _, element := range configSpec.Tests {
-		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(element.As, repoInfo, generatePodSpec(repoInfo.configFilename, element.As)))
+		var podSpec *kubeapi.PodSpec
+		if len(element.From) != 0 || element.ContainerTestConfiguration != nil {
+			// TODO remove when the migration is completed
+			podSpec = generatePodSpec(repoInfo.configFilename, element.As)
+		} else {
+			podSpec = generatePodSpecTemplate(repoInfo.org, repoInfo.repo, repoInfo.configFilename, configSpec.ReleaseTagConfiguration.Name, &element)
+		}
+		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(element.As, repoInfo, podSpec))
 	}
 
 	if len(configSpec.Images) > 0 {

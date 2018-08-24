@@ -36,7 +36,7 @@ $ docker pull registry.svc.ci.openshift.org/ci/ci-operator-prowgen:latest
 
 ### Generate Prow jobs for new ci-operator config
 
-The generator can use the naming conventions and directory structure of the
+The generator uses the naming conventions and directory structure of the
 [openshift/release](https://github.com/openshift/release) repository. Provided
 you placed your `ci-operator` configuration file to the correct place in
 [ci-operator/config](https://github.com/openshift/release/tree/master/ci-operator/config),

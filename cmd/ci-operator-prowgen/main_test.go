@@ -38,12 +38,12 @@ func TestGeneratePodSpec(t *testing.T) {
 			expected: &kubeapi.PodSpec{
 				ServiceAccountName: "ci-operator",
 				Containers: []kubeapi.Container{
-					kubeapi.Container{
+					{
 						Image:   "ci-operator:latest",
 						Command: []string{"ci-operator"},
 						Args:    []string{"--artifact-dir=$(ARTIFACTS)", "--target=target"},
 						Env: []kubeapi.EnvVar{
-							kubeapi.EnvVar{
+							{
 								Name: "CONFIG_SPEC",
 								ValueFrom: &kubeapi.EnvVarSource{
 									ConfigMapKeyRef: &kubeapi.ConfigMapKeySelector{
@@ -69,12 +69,12 @@ func TestGeneratePodSpec(t *testing.T) {
 			expected: &kubeapi.PodSpec{
 				ServiceAccountName: "ci-operator",
 				Containers: []kubeapi.Container{
-					kubeapi.Container{
+					{
 						Image:   "ci-operator:latest",
 						Command: []string{"ci-operator"},
 						Args:    []string{"--artifact-dir=$(ARTIFACTS)", "--target=target", "--promote", "something"},
 						Env: []kubeapi.EnvVar{
-							kubeapi.EnvVar{
+							{
 								Name: "CONFIG_SPEC",
 								ValueFrom: &kubeapi.EnvVarSource{
 									ConfigMapKeyRef: &kubeapi.ConfigMapKeySelector{
@@ -227,8 +227,8 @@ func TestGenerateJobs(t *testing.T) {
 		{
 			config: &ciop.ReleaseBuildConfiguration{
 				Tests: []ciop.TestStepConfiguration{
-					ciop.TestStepConfiguration{As: "derTest"},
-					ciop.TestStepConfiguration{As: "leTest"},
+					{As: "derTest"},
+					{As: "leTest"},
 				},
 			},
 			org:    "organization",
@@ -236,9 +236,9 @@ func TestGenerateJobs(t *testing.T) {
 			branch: "branch",
 			expected: &prowconfig.JobConfig{
 				Presubmits: map[string][]prowconfig.Presubmit{
-					"organization/repository": []prowconfig.Presubmit{
-						prowconfig.Presubmit{Name: "pull-ci-organization-repository-branch-derTest"},
-						prowconfig.Presubmit{Name: "pull-ci-organization-repository-branch-leTest"},
+					"organization/repository": {
+						{Name: "pull-ci-organization-repository-branch-derTest"},
+						{Name: "pull-ci-organization-repository-branch-leTest"},
 					},
 				},
 				Postsubmits: map[string][]prowconfig.Postsubmit{},
@@ -246,11 +246,11 @@ func TestGenerateJobs(t *testing.T) {
 		}, {
 			config: &ciop.ReleaseBuildConfiguration{
 				Tests: []ciop.TestStepConfiguration{
-					ciop.TestStepConfiguration{As: "derTest"},
-					ciop.TestStepConfiguration{As: "leTest"},
+					{As: "derTest"},
+					{As: "leTest"},
 				},
 				Images: []ciop.ProjectDirectoryImageBuildStepConfiguration{
-					ciop.ProjectDirectoryImageBuildStepConfiguration{},
+					{},
 				},
 			},
 			org:    "organization",
@@ -258,15 +258,15 @@ func TestGenerateJobs(t *testing.T) {
 			branch: "branch",
 			expected: &prowconfig.JobConfig{
 				Presubmits: map[string][]prowconfig.Presubmit{
-					"organization/repository": []prowconfig.Presubmit{
-						prowconfig.Presubmit{Name: "pull-ci-organization-repository-branch-derTest"},
-						prowconfig.Presubmit{Name: "pull-ci-organization-repository-branch-leTest"},
-						prowconfig.Presubmit{Name: "pull-ci-organization-repository-branch-images"},
+					"organization/repository": {
+						{Name: "pull-ci-organization-repository-branch-derTest"},
+						{Name: "pull-ci-organization-repository-branch-leTest"},
+						{Name: "pull-ci-organization-repository-branch-images"},
 					},
 				},
 				Postsubmits: map[string][]prowconfig.Postsubmit{
-					"organization/repository": []prowconfig.Postsubmit{
-						prowconfig.Postsubmit{
+					"organization/repository": {
+						{
 							Name: "branch-ci-organization-repository-branch-images",
 						},
 					},
@@ -275,10 +275,10 @@ func TestGenerateJobs(t *testing.T) {
 		}, {
 			config: &ciop.ReleaseBuildConfiguration{
 				Tests: []ciop.TestStepConfiguration{
-					ciop.TestStepConfiguration{As: "images"},
+					{As: "images"},
 				},
 				Images: []ciop.ProjectDirectoryImageBuildStepConfiguration{
-					ciop.ProjectDirectoryImageBuildStepConfiguration{},
+					{},
 				},
 			},
 			org:    "organization",
@@ -286,14 +286,14 @@ func TestGenerateJobs(t *testing.T) {
 			branch: "branch",
 			expected: &prowconfig.JobConfig{
 				Presubmits: map[string][]prowconfig.Presubmit{
-					"organization/repository": []prowconfig.Presubmit{
-						prowconfig.Presubmit{Name: "pull-ci-organization-repository-branch-images"},
-						prowconfig.Presubmit{Name: "pull-ci-organization-repository-branch-[images]"},
+					"organization/repository": {
+						{Name: "pull-ci-organization-repository-branch-images"},
+						{Name: "pull-ci-organization-repository-branch-[images]"},
 					},
 				},
 				Postsubmits: map[string][]prowconfig.Postsubmit{
-					"organization/repository": []prowconfig.Postsubmit{
-						prowconfig.Postsubmit{
+					"organization/repository": {
+						{
 							Name: "branch-ci-organization-repository-branch-[images]",
 						},
 					},
@@ -381,60 +381,60 @@ func TestMergeJobConfig(t *testing.T) {
 			destination: &prowconfig.JobConfig{},
 			source: &prowconfig.JobConfig{
 				Presubmits: map[string][]prowconfig.Presubmit{
-					"organization/repository": []prowconfig.Presubmit{
-						prowconfig.Presubmit{Name: "source-job", Context: "ci/prow/source"},
+					"organization/repository": {
+						{Name: "source-job", Context: "ci/prow/source"},
 					},
 				},
 			},
 			expected: &prowconfig.JobConfig{
 				Presubmits: map[string][]prowconfig.Presubmit{
-					"organization/repository": []prowconfig.Presubmit{
-						prowconfig.Presubmit{Name: "source-job", Context: "ci/prow/source"},
+					"organization/repository": {
+						{Name: "source-job", Context: "ci/prow/source"},
 					},
 				},
 			},
 		}, {
 			destination: &prowconfig.JobConfig{
 				Presubmits: map[string][]prowconfig.Presubmit{
-					"organization/repository": []prowconfig.Presubmit{
-						prowconfig.Presubmit{Name: "another-job", Context: "ci/prow/another"},
+					"organization/repository": {
+						{Name: "another-job", Context: "ci/prow/another"},
 					},
 				},
 			},
 			source: &prowconfig.JobConfig{
 				Presubmits: map[string][]prowconfig.Presubmit{
-					"organization/repository": []prowconfig.Presubmit{
-						prowconfig.Presubmit{Name: "source-job", Context: "ci/prow/source"},
+					"organization/repository": {
+						{Name: "source-job", Context: "ci/prow/source"},
 					},
 				},
 			},
 			expected: &prowconfig.JobConfig{
 				Presubmits: map[string][]prowconfig.Presubmit{
-					"organization/repository": []prowconfig.Presubmit{
-						prowconfig.Presubmit{Name: "source-job", Context: "ci/prow/source"},
-						prowconfig.Presubmit{Name: "another-job", Context: "ci/prow/another"},
+					"organization/repository": {
+						{Name: "source-job", Context: "ci/prow/source"},
+						{Name: "another-job", Context: "ci/prow/another"},
 					},
 				},
 			},
 		}, {
 			destination: &prowconfig.JobConfig{
 				Presubmits: map[string][]prowconfig.Presubmit{
-					"organization/repository": []prowconfig.Presubmit{
-						prowconfig.Presubmit{Name: "same-job", Context: "ci/prow/same"},
+					"organization/repository": {
+						{Name: "same-job", Context: "ci/prow/same"},
 					},
 				},
 			},
 			source: &prowconfig.JobConfig{
 				Presubmits: map[string][]prowconfig.Presubmit{
-					"organization/repository": []prowconfig.Presubmit{
-						prowconfig.Presubmit{Name: "same-job", Context: "ci/prow/different"},
+					"organization/repository": {
+						{Name: "same-job", Context: "ci/prow/different"},
 					},
 				},
 			},
 			expected: &prowconfig.JobConfig{
 				Presubmits: map[string][]prowconfig.Presubmit{
-					"organization/repository": []prowconfig.Presubmit{
-						prowconfig.Presubmit{Name: "same-job", Context: "ci/prow/different"},
+					"organization/repository": {
+						{Name: "same-job", Context: "ci/prow/different"},
 					},
 				},
 			},
@@ -442,82 +442,82 @@ func TestMergeJobConfig(t *testing.T) {
 			destination: &prowconfig.JobConfig{},
 			source: &prowconfig.JobConfig{
 				Postsubmits: map[string][]prowconfig.Postsubmit{
-					"organization/repository": []prowconfig.Postsubmit{
-						prowconfig.Postsubmit{Name: "source-job", Agent: "ci/prow/source"},
+					"organization/repository": {
+						{Name: "source-job", Agent: "ci/prow/source"},
 					},
 				},
 			},
 			expected: &prowconfig.JobConfig{
 				Postsubmits: map[string][]prowconfig.Postsubmit{
-					"organization/repository": []prowconfig.Postsubmit{
-						prowconfig.Postsubmit{Name: "source-job", Agent: "ci/prow/source"},
+					"organization/repository": {
+						{Name: "source-job", Agent: "ci/prow/source"},
 					},
 				},
 			},
 		}, {
 			destination: &prowconfig.JobConfig{
 				Postsubmits: map[string][]prowconfig.Postsubmit{
-					"organization/repository": []prowconfig.Postsubmit{
-						prowconfig.Postsubmit{Name: "another-job", Agent: "ci/prow/another"},
+					"organization/repository": {
+						{Name: "another-job", Agent: "ci/prow/another"},
 					},
 				},
 			},
 			source: &prowconfig.JobConfig{
 				Postsubmits: map[string][]prowconfig.Postsubmit{
-					"organization/repository": []prowconfig.Postsubmit{
-						prowconfig.Postsubmit{Name: "source-job", Agent: "ci/prow/source"},
+					"organization/repository": {
+						{Name: "source-job", Agent: "ci/prow/source"},
 					},
 				},
 			},
 			expected: &prowconfig.JobConfig{
 				Postsubmits: map[string][]prowconfig.Postsubmit{
-					"organization/repository": []prowconfig.Postsubmit{
-						prowconfig.Postsubmit{Name: "source-job", Agent: "ci/prow/source"},
-						prowconfig.Postsubmit{Name: "another-job", Agent: "ci/prow/another"},
+					"organization/repository": {
+						{Name: "source-job", Agent: "ci/prow/source"},
+						{Name: "another-job", Agent: "ci/prow/another"},
 					},
 				},
 			},
 		}, {
 			destination: &prowconfig.JobConfig{
 				Postsubmits: map[string][]prowconfig.Postsubmit{
-					"organization/repository": []prowconfig.Postsubmit{
-						prowconfig.Postsubmit{Name: "same-job", Agent: "ci/prow/same"},
+					"organization/repository": {
+						{Name: "same-job", Agent: "ci/prow/same"},
 					},
 				},
 			},
 			source: &prowconfig.JobConfig{
 				Postsubmits: map[string][]prowconfig.Postsubmit{
-					"organization/repository": []prowconfig.Postsubmit{
-						prowconfig.Postsubmit{Name: "same-job", Agent: "ci/prow/different"},
+					"organization/repository": {
+						{Name: "same-job", Agent: "ci/prow/different"},
 					},
 				},
 			},
 			expected: &prowconfig.JobConfig{
 				Postsubmits: map[string][]prowconfig.Postsubmit{
-					"organization/repository": []prowconfig.Postsubmit{
-						prowconfig.Postsubmit{Name: "same-job", Agent: "ci/prow/different"},
+					"organization/repository": {
+						{Name: "same-job", Agent: "ci/prow/different"},
 					},
 				},
 			},
 		}, {
 			destination: &prowconfig.JobConfig{
 				Postsubmits: map[string][]prowconfig.Postsubmit{
-					"organization/repository": []prowconfig.Postsubmit{
-						prowconfig.Postsubmit{Name: "same-job", Agent: "ci/prow/same"},
+					"organization/repository": {
+						{Name: "same-job", Agent: "ci/prow/same"},
 					},
 				},
 			},
 			source: &prowconfig.JobConfig{
 				Postsubmits: map[string][]prowconfig.Postsubmit{
-					"organization/repository": []prowconfig.Postsubmit{
-						prowconfig.Postsubmit{Name: "same-job", Agent: "ci/prow/same"},
+					"organization/repository": {
+						{Name: "same-job", Agent: "ci/prow/same"},
 					},
 				},
 			},
 			expected: &prowconfig.JobConfig{
 				Postsubmits: map[string][]prowconfig.Postsubmit{
-					"organization/repository": []prowconfig.Postsubmit{
-						prowconfig.Postsubmit{Name: "same-job", Agent: "ci/prow/same"},
+					"organization/repository": {
+						{Name: "same-job", Agent: "ci/prow/same"},
 					},
 				},
 			},

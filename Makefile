@@ -3,8 +3,13 @@ all: check test build
 
 .PHONY: check
 check: ## Lint code
+	gofmt -s -l $(shell go list -f '{{ .Dir }}' ./... ) | grep ".*\.go"; if [ "$$?" = "0" ]; then exit 1; fi
 	golint ./cmd/...
 	go vet ./cmd/...
+
+format:
+	gofmt -s -w $(shell go list -f '{{ .Dir }}' ./... )
+.PHONY: format
 
 .PHONY: build
 build: ## Build binary

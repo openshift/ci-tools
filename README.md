@@ -16,29 +16,19 @@ $ go build ./tools/ci-operator-prowgen
 
 ### Full-repository
 
-The generator can use the naming convention and directory structure of this
-repository. Using this mode, all you need to do is to place your `ci-operator`
-configuration file to the correct place in
-[ci-operator/config](../../ci-operator/config) directory and then run the generator
-with `--full-repo` parameter:
+The generator can use the naming convention and directory structure `openshift/release`.
+Using this mode, all you need to do is to place your `ci-operator` configuration file
+to the correct place in [ci-operator/config](https://github.com/openshift/release/tree/master/ci-operator/config)
+directory and then run the generator with `--prow-jobs-dir` and `--config-dir` parameters:
 
 ```
-$ ./ci-operator-prowgen --full-repo
+$ ./ci-operator-prowgen --config-dir ../../ci-operator/config/ --prow-jobs-dir ../../ci-operator/jobs/
 ```
 
 This will create Prow job configuration files under the
 [ci-operator/jobs](../../ci-operator/jobs) directory, including one for your new
 configuration file. The naming structure is the same like in the
 `ci-operator/config` directory.
-
-With `--full-repo` option, the generator uses `git` to detect a root directory
-of the repo and then it constructs paths to both directories from it. It is
-possible to not use the auto-detection and pass the paths directly too. This
-call is identical to `./ci-operator-prowgen --full-repo`:
-
-```
-$ ./ci-operator-prowgen --config-dir ../../ci-operator/config/ --prow-jobs-dir ../../ci-operator/jobs/
-```
 
 ### Single configuration
 

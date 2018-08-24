@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -37,8 +36,6 @@ func bindOptions(flag *flag.FlagSet) *options {
 
 	flag.StringVar(&opt.ciOperatorConfigPath, "source-config", "", "Path to ci-operator configuration file in openshift/release repository.")
 	flag.StringVar(&opt.prowJobConfigPath, "target-job-config", "", "Path to a file wher Prow job config will be written. If the file already exists and contains Prow job config, generated jobs will be merged with existing ones")
-
-	flag.BoolVar(&opt.fullRepoMode, "full-repo", false, "If set to true, the generator will walk over all ci-operator config files in openshift/release repository and regenerate all component prow job config files")
 
 	flag.StringVar(&opt.ciOperatorConfigDir, "config-dir", "", "Path to a root of directory structure with ci-operator config files (ci-operator/config in openshift/release)")
 	flag.StringVar(&opt.prowJobConfigDir, "prow-jobs-dir", "", "Path to a root of directory structure with Prow job config files (ci-operator/jobs in openshift/release)")
@@ -275,21 +272,6 @@ func generateAllProwJobs(configDir, jobDir string) error {
 	return nil
 }
 
-// Detect the root directory of this Git repository and then return absolute
-// ci-operator config (`ci-operator/config`) and prow job config
-// (`ci-operator/jobs`) directory paths in it.
-func inferConfigDirectories() (string, string, error) {
-	repoRootRaw, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
-	if err != nil {
-		return "", "", fmt.Errorf("failed to determine repository root with 'git rev-parse --show-toplevel' (%v)", err)
-	}
-	repoRoot := strings.TrimSpace(string(repoRootRaw))
-	configDir := filepath.Join(repoRoot, "ci-operator", "config")
-	jobDir := filepath.Join(repoRoot, "ci-operator", "jobs")
-
-	return configDir, jobDir, nil
-}
-
 func readJobConfig(path string) (*prowconfig.JobConfig, error) {
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
@@ -427,17 +409,10 @@ func main() {
 			}
 
 		}
-	} else if opt.fullRepoMode {
-		configDir, jobDir, err := inferConfigDirectories()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "%v\n", err)
-			os.Exit(1)
-		}
-		generateAllProwJobs(configDir, jobDir)
 	} else if len(opt.ciOperatorConfigDir) > 0 && len(opt.prowJobConfigDir) > 0 {
 		generateAllProwJobs(opt.ciOperatorConfigDir, opt.prowJobConfigDir)
 	} else {
-		fmt.Fprintf(os.Stderr, "ci-operator-prowgen needs --source-config, --full-repo or --{config,prow-jobs}-dir option\n")
+		fmt.Fprintf(os.Stderr, "ci-operator-prowgen needs --source-config, or --{config,prow-jobs}-dir option\n")
 		os.Exit(1)
 	}
 }

@@ -65,12 +65,12 @@ func generatePodSpec(org, repo, branch, target string, additionalArgs ...string)
 	return &kubeapi.PodSpec{
 		ServiceAccountName: "ci-operator",
 		Containers: []kubeapi.Container{
-			kubeapi.Container{
+			{
 				Image:   "ci-operator:latest",
 				Command: []string{"ci-operator"},
 				Args:    append([]string{"--artifact-dir=$(ARTIFACTS)", fmt.Sprintf("--target=%s", target)}, additionalArgs...),
 				Env: []kubeapi.EnvVar{
-					kubeapi.EnvVar{
+					{
 						Name:      "CONFIG_SPEC",
 						ValueFrom: &configMapKeyRef,
 					},

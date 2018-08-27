@@ -46,6 +46,32 @@ func bindOptions(flag *flag.FlagSet) *options {
 	return opt
 }
 
+func (o *options) process() error {
+	var err error
+
+	if o.fromReleaseRepo {
+		if o.fromDir, err = getReleaseRepoDir("ci-operator/config"); err != nil {
+			return fmt.Errorf("--from-release-repo error: %v", err)
+		}
+	}
+
+	if o.toReleaseRepo {
+		if o.toDir, err = getReleaseRepoDir("ci-operator/jobs"); err != nil {
+			return fmt.Errorf("--to-release-repo error: %v", err)
+		}
+	}
+
+	if (o.fromFile == "" && o.fromDir == "") || (o.fromFile != "" && o.fromDir != "") {
+		return fmt.Errorf("ci-operator-prowgen needs exactly one of `--from-{file,dir,release-repo}` options")
+	}
+
+	if (o.toFile == "" && o.toDir == "") || (o.toFile != "" && o.toDir != "") {
+		return fmt.Errorf("ci-operator-prowgen needs exactly one of `--to-{file,dir,release-repo}` options")
+	}
+
+	return nil
+}
+
 // Generate a PodSpec that runs `ci-operator`, to be used in Presubmit/Postsubmit
 // Various pieces are derived from `org`, `repo`, `branch` and `target`.
 // `additionalArgs` are passed as additional arguments to `ci-operator`
@@ -411,54 +437,32 @@ func main() {
 		os.Exit(0)
 	}
 
-	if opt.fromReleaseRepo {
-		var err error
-		if opt.fromDir, err = getReleaseRepoDir("ci-operator/config"); err != nil {
-			fmt.Fprintf(os.Stderr, "--from-release-repo error: %v\n", err)
-			os.Exit(1)
-		}
-	}
-	if opt.toReleaseRepo {
-		var err error
-		if opt.toDir, err = getReleaseRepoDir("ci-operator/jobs"); err != nil {
-			fmt.Fprintf(os.Stderr, "--to-release-repo error: %v\n", err)
-			os.Exit(1)
-		}
+	if err := opt.process(); err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
 	}
 
 	if len(opt.fromFile) > 0 {
-
 		jobConfig, org, repo, err := generateProwJobsFromConfigFile(opt.fromFile)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "failed to generate jobs from '%s' (%v)\n", opt.fromFile, err)
 			os.Exit(1)
 		}
-		if len(opt.toFile) > 0 {
+		if len(opt.toFile) > 0 { // from file to file
 			if err := mergeJobsIntoFile(opt.toFile, jobConfig); err != nil {
 				fmt.Fprintf(os.Stderr, "failed to write jobs to '%s' (%v)\n", opt.toFile, err)
 				os.Exit(1)
 			}
-		} else if len(opt.toDir) > 0 {
+		} else { // from file to directory
 			if err := writeJobsIntoComponentDirectory(opt.toDir, org, repo, jobConfig); err != nil {
 				fmt.Fprintf(os.Stderr, "failed to write jobs to '%s' (%v)\n", opt.toDir, err)
 				os.Exit(1)
 			}
-		} else {
-			fmt.Fprintf(os.Stderr, "ci-operator-prowgen needs at least one of `--to-{file,dir,release-repo}` options\n")
+		}
+	} else { // from directory
+		if err := generateJobsFromDirectory(opt.fromDir, opt.toDir, opt.toFile); err != nil {
+			fmt.Fprintf(os.Stderr, "failed to generate jobs from '%s' (%v)\n", opt.fromDir, err)
 			os.Exit(1)
 		}
-	} else if len(opt.fromDir) > 0 {
-		if len(opt.toFile) > 0 || len(opt.toDir) > 0 {
-			if err := generateJobsFromDirectory(opt.fromDir, opt.toDir, opt.toFile); err != nil {
-				fmt.Fprintf(os.Stderr, "failed to generate jobs from '%s' (%v)\n", opt.fromDir, err)
-				os.Exit(1)
-			}
-		} else {
-			fmt.Fprintf(os.Stderr, "ci-operator-prowgen needs at least one of `--to-{file,dir,release-repo}` options\n")
-			os.Exit(1)
-		}
-	} else {
-		fmt.Fprintf(os.Stderr, "ci-operator-prowgen needs at least one of `--from-{file,dir,release-repo}` options\n")
-		os.Exit(1)
 	}
 }

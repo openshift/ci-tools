@@ -194,48 +194,14 @@ use cases soon.
 
 ## Add Prow jobs
 
-Once the config file is prepared and commited, you can add a Prow job that will
-run ci-operator to build the selected targets before or after a PR is merged (or
-even periodically). You can find information about how to create Prow jobs in
-[test-infra
+Once the config file is prepared, you can create Prow jobs that will build
+selected targets before or after a PR is merged (or even periodically). Prow
+job configuration files also live in `openshift/release` repository,
+specifically in `ci-operator/jobs/$org/$repo` directories. The easiest way how
+to create them is to use the
+[generator](https://github.com/openshift/ci-operator-prowgen). The generator can
+create a good set of default Prow jobs from your ci-operator configuration
+file. All you need to do is to commit the generated files.
+
+You can find more information about how to create Prow jobs in [test-infra
 documentation](https://github.com/openshift/test-infra/tree/master/prow#how-to-add-new-jobs).
-Long story short, you need to add a new job definition to the [config
-directory](https://github.com/openshift/release/blob/master/ci-operator/jobs)
-in `openshift/release` repository. You need to add a job definition to the
-appropriate file under the `ci-operator/jobs/$org/$repo` directory, in a file
-like `$org-$repo-$jobtype.yaml` where the job type can be `presubmits`,
-`postsubmits` or `periodicals`. The job should look like:
-
-```yaml
-presubmits:
-  openshift/<repo>:
-  - name: <unique-name-of-presubmit-repo>
-    agent: kubernetes
-    context: ci/prow/unit
-    branches:
-    - master
-    rerun_command: "/test unit"
-    always_run: true
-    trigger: "((?m)^/test( all| unit),?(\\s+|$))"
-    decorate: true
-    skip_cloning: true
-    spec:
-      serviceAccountName: ci-operator
-      containers:
-      - name: test
-        image: ci-operator:latest
-        env:
-        - name: CONFIG_SPEC
-          valueFrom:
-            configMapKeyRef:
-              name: ci-operator-openshift-<repo>
-              key: <name of config file in ‘ci-operator/config/openshift/repo>
-        command:
-        - ci-operator
-        args:
-        - --target=unit
-        - <more ci-operator arguments>
-```
-
-Unfortunately, this is a lot of boilerplate in already a huge file. We hope we
-will be able to reduce the necessary amount of configuration soon.

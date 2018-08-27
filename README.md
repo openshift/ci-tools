@@ -6,6 +6,19 @@ owners need to write when they use
 component. The generator is able to entirely generate the necessary Prow job
 configuration from the ci-operator configuration file.
 
+## TL;DR
+
+**Question:** How do I create Prow jobs running ci-operator for a newly onboarded OpenShift
+component?
+
+**Answer:**
+1. Get a working copy of [openshift/release](https://github.com/openshift/release) (we’ll shorten path to it to `$RELEASE`)
+2. Create a [ci-operator configuration file](https://github.com/openshift/ci-operator/blob/master/ONBOARD.md#prepare-configuration-for-component-repo) under `$RELEASE/ci-operator/config`, following the `organization/component/branch.json` convention.
+3. Run `ci-operator-prowgen --from-dir $RELEASE/ci-operator/config/<org>/<component> --to-dir $RELEASE/ci-operator/jobs`
+4. Review Prow job configuration files created in `$RELEASE/ci-operator/jobs/<org>/<component>` 
+5. Commit both ci-operator configuration file and Prow job configuration files and issue a PR to upstream.
+6. Profit after merge.
+
 ## Use
 
 To use the generator, you need to build it:

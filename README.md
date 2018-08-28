@@ -6,48 +6,78 @@ owners need to write when they use
 component. The generator is able to entirely generate the necessary Prow job
 configuration from the ci-operator configuration file.
 
+## TL;DR
+
+**Question:** How do I create Prow jobs running ci-operator for a newly onboarded OpenShift
+component?
+
+**Answer:**
+1. Get a working copy of [openshift/release](https://github.com/openshift/release) (we’ll shorten path to it to `$RELEASE`)
+2. Create a [ci-operator configuration file](https://github.com/openshift/ci-operator/blob/master/ONBOARD.md#prepare-configuration-for-component-repo) under `$RELEASE/ci-operator/config`, following the `organization/component/branch.json` convention.
+3. Run `ci-operator-prowgen --from-dir $RELEASE/ci-operator/config/<org>/<component> --to-dir $RELEASE/ci-operator/jobs`
+4. Review Prow job configuration files created in `$RELEASE/ci-operator/jobs/<org>/<component>` 
+5. Commit both ci-operator configuration file and Prow job configuration files and issue a PR to upstream.
+6. Profit after merge.
+
 ## Use
 
 To use the generator, you need to build it:
 
 ```
-$ go build ./tools/ci-operator-prowgen
+$ make build
 ```
 
-### Full-repository
-
-The generator can use the naming convention and directory structure `openshift/release`.
-Using this mode, all you need to do is to place your `ci-operator` configuration file
-to the correct place in [ci-operator/config](https://github.com/openshift/release/tree/master/ci-operator/config)
-directory and then run the generator with `--prow-jobs-dir` and `--config-dir` parameters:
+Alternatively, you may obtain a containerized version from the registry on
+`api.ci.openshift.org`:
 
 ```
-$ ./ci-operator-prowgen --config-dir ../../ci-operator/config/ --prow-jobs-dir ../../ci-operator/jobs/
+$ docker pull registry.svc.ci.openshift.org/ci/ci-operator-prowgen:latest
 ```
 
-This will create Prow job configuration files under the
-[ci-operator/jobs](../../ci-operator/jobs) directory, including one for your new
-configuration file. The naming structure is the same like in the
-`ci-operator/config` directory.
+### Generate Prow jobs for new ci-operator config file
 
-### Single configuration
-
-You can use `--source-config` option instead to pass a single `ci-operator`
-configuration file. In this case, the generator will print the Prow job config
-YAML to the standard output:
+The generator can use the naming conventions and directory structure of the
+[openshift/release](https://github.com/openshift/release) repository. Provided
+you placed your `ci-operator` configuration file to the correct place in
+[ci-operator/config](https://github.com/openshift/release/tree/master/ci-operator/config),
+you may run the following (`$REPO is a path to `openshift/release` working
+copy):
 
 ```
-$ ./ci-operator-prowgen --source-config path/to/ci-operator/config.json
-postsubmits:
-  openshift/service-serving-cert-signer:
-  - agent: kubernetes
-(...)
+$ ./ci-operator-prowgen --from-file $REPO/ci-operator/config/org/component/branch.json \
+ --to-dir $REPO/ci-operator/jobs
 ```
 
-Please note that elements of the file path are still used to identify
-organization/repo/branch, so the path cannot be entirely arbirary. The path is
-expected to have a `(anything)/ORGANIZATION/REPO/BRANCH.extension` form, just
-likes path in [ci-operator/config](../..ci-operator/config) do.
+This extracts the `org` and `component` from the configuration file path, reads
+the `branch.json` file and generates new Prow job configuration files in the
+`(...)/ci-operator/jobs/` directory, creating the necessary directory structure
+and files if needed. If the target files already exist and contain Prow job
+configuration, newly generated jobs will be merged with the old ones (jobs are
+matched by name).
+
+### Generate Prow jobs for multiple ci-operator config files
+
+The generator may take a directory as an input. In this case, the generator
+walks the directory structure under the given directory, finds all JSON files
+there and generates jobs for all of them.
+
+You can generate jobs for a certain component, organization, or everything:
+
+```
+$ ./ci-operator-prowgen --from-dir $REPO/ci-operator/config/org/component --to-dir $REPO/ci-operator/jobs
+$ ./ci-operator-prowgen --from-dir $REPO/ci-operator/config/org --to-dir $REPO/ci-operator/jobs
+$ ./ci-operator-prowgen --from-dir $REPO/ci-operator/config --to-dir $REPO/ci-operator/jobs
+```
+
+If you have cloned `openshift/release` with `go get` and you have `$GOPATH` set
+correctly, the generator can derive the paths for the input/output directories.
+These invocations are equivalent:
+
+```
+$ ./ci-operator-prowgen --from-release-repo --to-release-repo
+$ ./ci-operator-prowgen --from-dir $GOPATH/src/github.com/openshift/release/ci-operator/config \
+ --to-dir $GOPATH/src/github.com/openshift/release/ci-operator/jobs
+```
 
 ## What does the generator create
 
@@ -63,7 +93,7 @@ presubmits:
     - master
     context: ci/prow/TEST
     decorate: true
-    name: pull-ci-ORG-REPO-TEST
+    name: pull-ci-ORG-REPO-BRANCH-TEST
     rerun_command: /test TEST
     skip_cloning: true
     spec:
@@ -97,11 +127,11 @@ way.
 To build the generator, run:
 
 ```
-$ go build ./ci-operator-prowgen
+$ make build
 ```
 
 To run unit-tests, run:
 
 ```
-$ go test ./ci-operator-prowgen
+$ make test
 ```

@@ -19,31 +19,57 @@ import (
 )
 
 type options struct {
-	ciOperatorConfigPath string
-	prowJobConfigPath    string
+	fromFile        string
+	fromDir         string
+	fromReleaseRepo bool
 
-	fullRepoMode bool
+	toFile        string
+	toDir         string
+	toReleaseRepo bool
 
-	ciOperatorConfigDir string
-	prowJobConfigDir    string
-
-	help    bool
-	verbose bool
+	help bool
 }
 
 func bindOptions(flag *flag.FlagSet) *options {
 	opt := &options{}
 
-	flag.StringVar(&opt.ciOperatorConfigPath, "source-config", "", "Path to ci-operator configuration file in openshift/release repository.")
-	flag.StringVar(&opt.prowJobConfigPath, "target-job-config", "", "Path to a file wher Prow job config will be written. If the file already exists and contains Prow job config, generated jobs will be merged with existing ones")
+	flag.StringVar(&opt.fromFile, "from-file", "", "Path to a ci-operator configuration file")
+	flag.StringVar(&opt.fromDir, "from-dir", "", "Path to a directory with a directory structure holding ci-operator configuration files for multiple components")
+	flag.BoolVar(&opt.fromReleaseRepo, "from-release-repo", false, "If set, it behaves like --from-dir=$GOPATH/src/github.com/openshift/release/ci-operator/config")
 
-	flag.StringVar(&opt.ciOperatorConfigDir, "config-dir", "", "Path to a root of directory structure with ci-operator config files (ci-operator/config in openshift/release)")
-	flag.StringVar(&opt.prowJobConfigDir, "prow-jobs-dir", "", "Path to a root of directory structure with Prow job config files (ci-operator/jobs in openshift/release)")
+	flag.StringVar(&opt.toFile, "to-file", "", "Path to a Prow job configuration file where new jobs will be added. If the file does not exist, it will be created")
+	flag.StringVar(&opt.toDir, "to-dir", "", "Path to a directory with a directory structure holding Prow job configuration files for multiple components")
+	flag.BoolVar(&opt.toReleaseRepo, "to-release-repo", false, "If set, it behaves like --to-dir=$GOPATH/src/github.com/openshift/release/ci-operator/jobs")
 
 	flag.BoolVar(&opt.help, "h", false, "Show help for ci-operator-prowgen")
-	flag.BoolVar(&opt.verbose, "v", false, "Show verbose output")
 
 	return opt
+}
+
+func (o *options) process() error {
+	var err error
+
+	if o.fromReleaseRepo {
+		if o.fromDir, err = getReleaseRepoDir("ci-operator/config"); err != nil {
+			return fmt.Errorf("--from-release-repo error: %v", err)
+		}
+	}
+
+	if o.toReleaseRepo {
+		if o.toDir, err = getReleaseRepoDir("ci-operator/jobs"); err != nil {
+			return fmt.Errorf("--to-release-repo error: %v", err)
+		}
+	}
+
+	if (o.fromFile == "" && o.fromDir == "") || (o.fromFile != "" && o.fromDir != "") {
+		return fmt.Errorf("ci-operator-prowgen needs exactly one of `--from-{file,dir,release-repo}` options")
+	}
+
+	if (o.toFile == "" && o.toDir == "") || (o.toFile != "" && o.toDir != "") {
+		return fmt.Errorf("ci-operator-prowgen needs exactly one of `--to-{file,dir,release-repo}` options")
+	}
+
+	return nil
 }
 
 // Generate a PodSpec that runs `ci-operator`, to be used in Presubmit/Postsubmit
@@ -246,7 +272,7 @@ func writeJobsIntoComponentDirectory(jobDir, org, repo string, jobConfig *prowco
 // Iterate over all ci-operator config files under a given path and generate a
 // Prow job configuration files for each one under a different path, mimicking
 // the directory structure.
-func generateAllProwJobs(configDir, jobDir string) error {
+func generateJobsFromDirectory(configDir, jobDir, jobFile string) error {
 	err := filepath.Walk(configDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error encontered while generating Prow job config: %v\n", err)
@@ -258,15 +284,21 @@ func generateAllProwJobs(configDir, jobDir string) error {
 				return err
 			}
 
-			if err = writeJobsIntoComponentDirectory(jobDir, org, repo, jobConfig); err != nil {
-				return err
+			if len(jobDir) > 0 {
+				if err = writeJobsIntoComponentDirectory(jobDir, org, repo, jobConfig); err != nil {
+					return err
+				}
+			} else if len(jobFile) > 0 {
+				if err = mergeJobsIntoFile(jobFile, jobConfig); err != nil {
+					return err
+				}
 			}
 		}
 		return nil
 	})
 
 	if err != nil {
-		return fmt.Errorf("Failed to generate all Prow jobs")
+		return fmt.Errorf("failed to generate all Prow jobs (%v)", err)
 	}
 
 	return nil
@@ -383,6 +415,18 @@ func mergeJobsIntoFile(prowConfigPath string, jobConfig *prowconfig.JobConfig) e
 	return nil
 }
 
+func getReleaseRepoDir(directory string) (string, error) {
+	var gopath string
+	if gopath = os.Getenv("GOPATH"); len(gopath) == 0 {
+		return "", fmt.Errorf("GOPATH not set, cannot infer openshift/release repo location")
+	}
+	tentative := filepath.Join(gopath, "src/github.com/openshift/release", directory)
+	if stat, err := os.Stat(tentative); err == nil && stat.IsDir() {
+		return tentative, nil
+	}
+	return "", fmt.Errorf("%s is not an existing directory", tentative)
+}
+
 func main() {
 	flagSet := flag.NewFlagSet("", flag.ExitOnError)
 	opt := bindOptions(flagSet)
@@ -393,26 +437,32 @@ func main() {
 		os.Exit(0)
 	}
 
-	if len(opt.ciOperatorConfigPath) > 0 {
-		if jobConfig, _, _, err := generateProwJobsFromConfigFile(opt.ciOperatorConfigPath); err != nil {
-			fmt.Fprintf(os.Stderr, "%v\n", err)
+	if err := opt.process(); err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
+
+	if len(opt.fromFile) > 0 {
+		jobConfig, org, repo, err := generateProwJobsFromConfigFile(opt.fromFile)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "failed to generate jobs from '%s' (%v)\n", opt.fromFile, err)
 			os.Exit(1)
-		} else {
-			if len(opt.prowJobConfigPath) > 0 {
-				err = mergeJobsIntoFile(opt.prowJobConfigPath, jobConfig)
-			} else {
-				err = writeJobs(jobConfig)
-			}
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "failed to write the job configuration (%v)\n", err)
+		}
+		if len(opt.toFile) > 0 { // from file to file
+			if err := mergeJobsIntoFile(opt.toFile, jobConfig); err != nil {
+				fmt.Fprintf(os.Stderr, "failed to write jobs to '%s' (%v)\n", opt.toFile, err)
 				os.Exit(1)
 			}
-
+		} else { // from file to directory
+			if err := writeJobsIntoComponentDirectory(opt.toDir, org, repo, jobConfig); err != nil {
+				fmt.Fprintf(os.Stderr, "failed to write jobs to '%s' (%v)\n", opt.toDir, err)
+				os.Exit(1)
+			}
 		}
-	} else if len(opt.ciOperatorConfigDir) > 0 && len(opt.prowJobConfigDir) > 0 {
-		generateAllProwJobs(opt.ciOperatorConfigDir, opt.prowJobConfigDir)
-	} else {
-		fmt.Fprintf(os.Stderr, "ci-operator-prowgen needs --source-config, or --{config,prow-jobs}-dir option\n")
-		os.Exit(1)
+	} else { // from directory
+		if err := generateJobsFromDirectory(opt.fromDir, opt.toDir, opt.toFile); err != nil {
+			fmt.Fprintf(os.Stderr, "failed to generate jobs from '%s' (%v)\n", opt.fromDir, err)
+			os.Exit(1)
+		}
 	}
 }

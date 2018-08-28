@@ -112,6 +112,11 @@ func (s *promotionStep) Run(ctx context.Context, dry bool) error {
 					Name:      name,
 					Namespace: s.config.Namespace,
 				},
+				Spec: imageapi.ImageStreamSpec{
+					LookupPolicy: imageapi.ImageLookupPolicy{
+						Local: true,
+					},
+				},
 			})
 		}
 		if err != nil {

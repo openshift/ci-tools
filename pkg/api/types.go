@@ -274,6 +274,7 @@ type PipelineImageCacheStepConfiguration struct {
 type TestStepConfiguration struct {
 	// As is the name of the test.
 	As string `json:"as"`
+	// TODO remove when the migration is completed
 	// From is the image stream tag in the pipeline to run this
 	// command in.
 	From PipelineImageStreamTagReference `json:"from"`
@@ -284,6 +285,65 @@ type TestStepConfiguration struct {
 	// artifacts to upload. If unset, this will default under
 	// the repository root to _output/local/artifacts.
 	ArtifactDir string `json:"artifact_dir"`
+
+	// Only one of the following can be not-null.
+	ContainerTestConfiguration                      *ContainerTestConfiguration                      `json:"container,omitempty"`
+	OpenshiftAnsibleClusterTestConfiguration        *OpenshiftAnsibleClusterTestConfiguration        `json:"openshift_ansible,omitempty"`
+	OpenshiftAnsibleSrcClusterTestConfiguration     *OpenshiftAnsibleSrcClusterTestConfiguration     `json:"openshift_ansible_src,omitempty"`
+	OpenshiftInstallerClusterTestConfiguration      *OpenshiftInstallerClusterTestConfiguration      `json:"openshift_installer,omitempty"`
+	OpenshiftInstallerSmokeClusterTestConfiguration *OpenshiftInstallerSmokeClusterTestConfiguration `json:"openshift_installer_smoke,omitempty"`
+}
+
+// ContainerTestConfiguration describes a test that runs a
+// command in one of the previously built images.
+type ContainerTestConfiguration struct {
+	// From is the image stream tag in the pipeline to run this
+	// command in.
+	From PipelineImageStreamTagReference `json:"from"`
+}
+
+// TargetCloud determines which cloud provider should be
+// used to provision the cluster.
+type TargetCloud string
+
+// Types of clusters supported by the provisioners.
+const (
+	TargetCloudAWS TargetCloud = "aws"
+	TargetCloudGCP             = "gcp"
+)
+
+// ClusterTestConfiguration describes a test that provisions
+// a cluster and runs a command in it.
+type ClusterTestConfiguration struct {
+	TargetCloud TargetCloud `json:"target_cloud"`
+}
+
+// OpenshiftAnsibleClusterTestConfiguration describes a test
+// that provisions a cluster using openshift-ansible and runs
+// conformance tests.
+type OpenshiftAnsibleClusterTestConfiguration struct {
+	ClusterTestConfiguration `json:",inline"`
+}
+
+// OpenshiftAnsibleSrcClusterTestConfiguration describes a
+// test that provisions a cluster using openshift-ansible and
+// executes a command in the `src` image.
+type OpenshiftAnsibleSrcClusterTestConfiguration struct {
+	ClusterTestConfiguration `json:",inline"`
+}
+
+// OpenshiftInstallerClusterTestConfiguration describes a test
+// that provisions a cluster using openshift-installer and runs
+// conformance tests.
+type OpenshiftInstallerClusterTestConfiguration struct {
+	ClusterTestConfiguration `json:",inline"`
+}
+
+// OpenshiftInstallerSmokeClusterTestConfiguration describes
+// a test that provisions a cluster using openshift-installer
+// and runs smoke tests.
+type OpenshiftInstallerSmokeClusterTestConfiguration struct {
+	ClusterTestConfiguration `json:",inline"`
 }
 
 // PipelineImageStreamTagReference is a tag on the

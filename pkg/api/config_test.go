@@ -20,7 +20,8 @@ func TestValidate(t *testing.T) {
 				InputConfiguration: dummyInput,
 				Tests: []TestStepConfiguration{
 					{
-						As: "unit",
+						As:   "unit",
+						From: "ignored",
 					},
 				},
 			},
@@ -32,7 +33,88 @@ func TestValidate(t *testing.T) {
 				InputConfiguration: dummyInput,
 				Tests: []TestStepConfiguration{
 					{
-						As: "images",
+						As:   "images",
+						From: "ignored",
+					},
+				},
+			},
+			expectedValid: false,
+		},
+		{
+			id: "test with `from`",
+			config: ReleaseBuildConfiguration{
+				InputConfiguration: dummyInput,
+				Tests: []TestStepConfiguration{
+					{
+						As:   "test",
+						From: "from",
+					},
+				},
+			},
+			expectedValid: true,
+		},
+		{
+			id: "No test type",
+			config: ReleaseBuildConfiguration{
+				InputConfiguration: dummyInput,
+				Tests: []TestStepConfiguration{
+					{
+						As: "test",
+					},
+				},
+			},
+			expectedValid: false,
+		},
+		{
+			id: "Multiple test types",
+			config: ReleaseBuildConfiguration{
+				InputConfiguration: dummyInput,
+				Tests: []TestStepConfiguration{
+					{
+						As: "test",
+						ContainerTestConfiguration: &ContainerTestConfiguration{},
+						OpenshiftAnsibleClusterTestConfiguration: &OpenshiftAnsibleClusterTestConfiguration{
+							ClusterTestConfiguration{TargetCloud: TargetCloudGCP}},
+					},
+				},
+			},
+			expectedValid: false,
+		},
+		{
+			id: "From + ContainerTestConfiguration",
+			config: ReleaseBuildConfiguration{
+				InputConfiguration: dummyInput,
+				Tests: []TestStepConfiguration{
+					{
+						As:   "test",
+						From: "from",
+						ContainerTestConfiguration: &ContainerTestConfiguration{},
+					},
+				},
+			},
+			expectedValid: false,
+		},
+		{
+			id: "container test without `from`",
+			config: ReleaseBuildConfiguration{
+				InputConfiguration: dummyInput,
+				Tests: []TestStepConfiguration{
+					{
+						As: "test",
+						ContainerTestConfiguration: &ContainerTestConfiguration{},
+					},
+				},
+			},
+			expectedValid: false,
+		},
+		{
+			id: "invalid target cloud",
+			config: ReleaseBuildConfiguration{
+				InputConfiguration: dummyInput,
+				Tests: []TestStepConfiguration{
+					{
+						As: "test",
+						OpenshiftAnsibleClusterTestConfiguration: &OpenshiftAnsibleClusterTestConfiguration{},
 					},
 				},
 			},

@@ -284,14 +284,13 @@ func (o *options) Complete() error {
 		if len(o.gitRef) == 0 {
 			// Failed to read $JOB_SPEC and --git-ref was not passed
 			return fmt.Errorf("failed to resolve job spec: %v", err)
-		} else {
-			// Failed to read $JOB_SPEC but --git-ref was passed, so try that instead
-			spec, refErr := jobSpecFromGitRef(o.gitRef)
-			if refErr != nil {
-				return fmt.Errorf("failed to resolve --git-ref: %v", refErr)
-			}
-			jobSpec = spec
 		}
+		// Failed to read $JOB_SPEC but --git-ref was passed, so try that instead
+		spec, refErr := jobSpecFromGitRef(o.gitRef)
+		if refErr != nil {
+			return fmt.Errorf("failed to resolve --git-ref: %v", refErr)
+		}
+		jobSpec = spec
 	} else if len(o.gitRef) > 0 {
 		// Read from $JOB_SPEC but --git-ref was also passed, so merge them
 		spec, err := jobSpecFromGitRef(o.gitRef)
@@ -720,14 +719,13 @@ func eventJobDescription(jobSpec *steps.JobSpec, namespace string) string {
 		pull := jobSpec.Refs.Pulls[0]
 		return fmt.Sprintf("Running job %s for PR https://github.com/%s/%s/pull/%d in namespace %s from author %s",
 			jobSpec.Job, jobSpec.Refs.Org, jobSpec.Refs.Repo, pull.Number, namespace, pull.Author)
-	} else {
-		for _, pull := range jobSpec.Refs.Pulls {
-			pulls = append(pulls, fmt.Sprintf("https://github.com/%s/%s/pull/%d", jobSpec.Refs.Org, jobSpec.Refs.Repo, pull.Number))
-			authors = append(authors, pull.Author)
-		}
-		return fmt.Sprintf("Running job %s for PRs (%s) in namespace %s from authors (%s)",
-			jobSpec.Job, strings.Join(pulls, ", "), namespace, strings.Join(authors, ", "))
 	}
+	for _, pull := range jobSpec.Refs.Pulls {
+		pulls = append(pulls, fmt.Sprintf("https://github.com/%s/%s/pull/%d", jobSpec.Refs.Org, jobSpec.Refs.Repo, pull.Number))
+		authors = append(authors, pull.Author)
+	}
+	return fmt.Sprintf("Running job %s for PRs (%s) in namespace %s from authors (%s)",
+		jobSpec.Job, strings.Join(pulls, ", "), namespace, strings.Join(authors, ", "))
 }
 
 // jobDescription returns a string representing the job's description.

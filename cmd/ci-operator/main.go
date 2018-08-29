@@ -279,6 +279,10 @@ func (o *options) Complete() error {
 		}
 	}
 
+	if err := o.configSpec.Validate(); err != nil {
+		return fmt.Errorf("invalid configuration: %v", err)
+	}
+
 	jobSpec, err := steps.ResolveSpecFromEnv()
 	if err != nil {
 		if len(o.gitRef) == 0 {

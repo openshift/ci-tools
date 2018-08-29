@@ -42,6 +42,11 @@ func main() {
 			if err := json.Unmarshal(data, &config); err != nil {
 				return fmt.Errorf("invalid configuration from %s: %v\nvalue:%s", name, err, string(data))
 			}
+
+			if err := config.Validate(); err != nil {
+				return fmt.Errorf("invalid configuration from %s: %v", name, err)
+
+			}
 			fmt.Printf("validated configuration at %s\n", name)
 		}
 		return nil

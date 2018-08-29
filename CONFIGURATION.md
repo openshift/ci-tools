@@ -309,6 +309,9 @@ under test are promoted by creating `ImageStreamTag`s in external namespaces.
 Promotion is run when the `--promote` flag is passed to `ci-operator` and will
 be run only if all the `--target`s are successful in that run.
 
+If no promotion options are provided, the `tag_specification` fields will be used
+to provide default values.
+
 ## `promotion.namespace`
 `namespace` is the namespace in which the promoted images will be exposed.
 

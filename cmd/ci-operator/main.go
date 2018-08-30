@@ -852,7 +852,6 @@ func shorten(value string, l int) string {
 
 func eventRecorder(kubeClient *coreclientset.CoreV1Client, namespace string) record.EventRecorder {
 	eventBroadcaster := record.NewBroadcaster()
-	eventBroadcaster.StartLogging(log.Printf)
 	eventBroadcaster.StartRecordingToSink(&coreclientset.EventSinkImpl{
 		Interface: coreclientset.New(kubeClient.RESTClient()).Events("")})
 	return eventBroadcaster.NewRecorder(

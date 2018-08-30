@@ -217,7 +217,7 @@ func handleBuild(buildClient BuildClient, build *buildapi.Build, dry bool) error
 		return nil
 	}
 	if _, err := buildClient.Builds(build.Namespace).Create(build); err != nil && !errors.IsAlreadyExists(err) {
-		fmt.Errorf("could not create build %s: %v", build.Name, err)
+		return fmt.Errorf("could not create build %s: %v", build.Name, err)
 	}
 	return waitForBuild(buildClient, build.Namespace, build.Name)
 }

@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -169,31 +168,13 @@ func generateJobs(
 	presubmits := map[string][]prowconfig.Presubmit{}
 	postsubmits := map[string][]prowconfig.Postsubmit{}
 
-	imagesTest := false
-
 	for _, element := range configSpec.Tests {
-		// Check if config file has "images" test defined to avoid name clash
-		// (we generate the additional `--target=[images]` jobs name with `images`
-		// as an identifier, but a user can have `images` test defined in his
-		// config file which would result in a clash)
-		if element.As == "images" {
-			imagesTest = true
-		}
 		test := testDescription{Name: element.As, Target: element.As}
 		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(test, org, repo, branch))
 	}
 
 	if len(configSpec.Images) > 0 {
-		var test testDescription
-		if imagesTest {
-			log.Print(
-				"WARNING: input config file has 'images' test defined\n" +
-					"This may get confused with built-in '[images]' target. Consider renaming this test.\n",
-			)
-			test = testDescription{Name: "[images]", Target: "[images]"}
-		} else {
-			test = testDescription{Name: "images", Target: "[images]"}
-		}
+		test := testDescription{Name: "images", Target: "[images]"}
 
 		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(test, org, repo, branch))
 

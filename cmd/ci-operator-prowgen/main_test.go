@@ -298,34 +298,6 @@ func TestGenerateJobs(t *testing.T) {
 				},
 			},
 		}, {
-			id: "test called 'images' and nonemtpy Images",
-			config: &ciop.ReleaseBuildConfiguration{
-				Tests: []ciop.TestStepConfiguration{
-					{As: "images"},
-				},
-				Images: []ciop.ProjectDirectoryImageBuildStepConfiguration{
-					{},
-				},
-			},
-			org:    "organization",
-			repo:   "repository",
-			branch: "branch",
-			expected: &prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{
-					"organization/repository": {
-						{Name: "pull-ci-organization-repository-branch-images"},
-						{Name: "pull-ci-organization-repository-branch-[images]"},
-					},
-				},
-				Postsubmits: map[string][]prowconfig.Postsubmit{
-					"organization/repository": {
-						{
-							Name: "branch-ci-organization-repository-branch-[images]",
-						},
-					},
-				},
-			},
-		}, {
 			id: "Promotion.Namespace is 'openshift'",
 			config: &ciop.ReleaseBuildConfiguration{
 				Tests: []ciop.TestStepConfiguration{},

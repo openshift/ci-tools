@@ -153,6 +153,7 @@ func TestGeneratePostSumitForTest(t *testing.T) {
 		org            string
 		repo           string
 		branch         string
+		labels         map[string]string
 		additionalArgs []string
 
 		expected *prowconfig.Postsubmit
@@ -163,6 +164,7 @@ func TestGeneratePostSumitForTest(t *testing.T) {
 			org:            "organization",
 			repo:           "repository",
 			branch:         "branch",
+			labels:         map[string]string{},
 			additionalArgs: []string{},
 
 			expected: &prowconfig.Postsubmit{
@@ -180,6 +182,7 @@ func TestGeneratePostSumitForTest(t *testing.T) {
 			org:            "organization",
 			repo:           "repository",
 			branch:         "branch",
+			labels:         map[string]string{},
 			additionalArgs: []string{"--promote", "additionalArg"},
 
 			expected: &prowconfig.Postsubmit{
@@ -191,14 +194,33 @@ func TestGeneratePostSumitForTest(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:           "Name",
+			target:         "Target",
+			org:            "Organization",
+			repo:           "Repository",
+			branch:         "Branch",
+			labels:         map[string]string{"artifacts": "images"},
+			additionalArgs: []string{"--promote", "additionalArg"},
+
+			expected: &prowconfig.Postsubmit{
+				Agent:  "kubernetes",
+				Name:   "branch-ci-Organization-Repository-Branch-Name",
+				Labels: map[string]string{"artifacts": "images"},
+				UtilityConfig: prowconfig.UtilityConfig{
+					DecorationConfig: &prowkube.DecorationConfig{SkipCloning: true},
+					Decorate:         true,
+				},
+			},
+		},
 	}
 	for _, tc := range tests {
 		var postsubmit *prowconfig.Postsubmit
 
 		if len(tc.additionalArgs) == 0 {
-			postsubmit = generatePostsubmitForTest(testDescription{tc.name, tc.target}, tc.org, tc.repo, tc.branch)
+			postsubmit = generatePostsubmitForTest(testDescription{tc.name, tc.target}, tc.org, tc.repo, tc.branch, tc.labels)
 		} else {
-			postsubmit = generatePostsubmitForTest(testDescription{tc.name, tc.target}, tc.org, tc.repo, tc.branch, tc.additionalArgs...)
+			postsubmit = generatePostsubmitForTest(testDescription{tc.name, tc.target}, tc.org, tc.repo, tc.branch, tc.labels, tc.additionalArgs...)
 			// tests that additional args were propagated to the PodSpec
 			if !equality.Semantic.DeepEqual(postsubmit.Spec.Containers[0].Args[2:], tc.additionalArgs) {
 				t.Errorf("additional args not propagated to postsubmit:\n%s", diff.ObjectDiff(tc.additionalArgs, postsubmit.Spec.Containers[0].Args[2:]))
@@ -215,6 +237,7 @@ func TestGeneratePostSumitForTest(t *testing.T) {
 
 func TestGenerateJobs(t *testing.T) {
 	tests := []struct {
+		id     string
 		config *ciop.ReleaseBuildConfiguration
 		org    string
 		repo   string
@@ -225,6 +248,7 @@ func TestGenerateJobs(t *testing.T) {
 		expected            *prowconfig.JobConfig
 	}{
 		{
+			id: "two tests and empty Images",
 			config: &ciop.ReleaseBuildConfiguration{
 				Tests: []ciop.TestStepConfiguration{
 					{As: "derTest"},
@@ -244,6 +268,7 @@ func TestGenerateJobs(t *testing.T) {
 				Postsubmits: map[string][]prowconfig.Postsubmit{},
 			},
 		}, {
+			id: "two tests and nonempty Images",
 			config: &ciop.ReleaseBuildConfiguration{
 				Tests: []ciop.TestStepConfiguration{
 					{As: "derTest"},
@@ -273,6 +298,7 @@ func TestGenerateJobs(t *testing.T) {
 				},
 			},
 		}, {
+			id: "test called 'images' and nonemtpy Images",
 			config: &ciop.ReleaseBuildConfiguration{
 				Tests: []ciop.TestStepConfiguration{
 					{As: "images"},
@@ -299,6 +325,191 @@ func TestGenerateJobs(t *testing.T) {
 					},
 				},
 			},
+		}, {
+			id: "Promotion.Namespace is 'openshift'",
+			config: &ciop.ReleaseBuildConfiguration{
+				Tests: []ciop.TestStepConfiguration{},
+				Images: []ciop.ProjectDirectoryImageBuildStepConfiguration{
+					{},
+				},
+				PromotionConfiguration: &ciop.PromotionConfiguration{
+					Namespace: "openshift",
+				},
+			},
+			org:    "organization",
+			repo:   "repository",
+			branch: "branch",
+			expected: &prowconfig.JobConfig{
+				Presubmits: map[string][]prowconfig.Presubmit{
+					"organization/repository": {
+						{Name: "pull-ci-organization-repository-branch-images"},
+					},
+				},
+				Postsubmits: map[string][]prowconfig.Postsubmit{
+					"organization/repository": {
+						{
+							Name:   "branch-ci-organization-repository-branch-images",
+							Labels: map[string]string{"artifacts": "images"},
+						},
+					},
+				},
+			},
+		}, {
+			id: "Promotion.Namespace is not 'openshift'",
+			config: &ciop.ReleaseBuildConfiguration{
+				Tests: []ciop.TestStepConfiguration{},
+				Images: []ciop.ProjectDirectoryImageBuildStepConfiguration{
+					{},
+				},
+				PromotionConfiguration: &ciop.PromotionConfiguration{
+					Namespace: "ci",
+				},
+			},
+			org:    "organization",
+			repo:   "repository",
+			branch: "branch",
+			expected: &prowconfig.JobConfig{
+				Presubmits: map[string][]prowconfig.Presubmit{
+					"organization/repository": {
+						{Name: "pull-ci-organization-repository-branch-images"},
+					},
+				},
+				Postsubmits: map[string][]prowconfig.Postsubmit{
+					"organization/repository": {
+						{
+							Name: "branch-ci-organization-repository-branch-images",
+						},
+					},
+				},
+			},
+		}, {
+			id: "tag_specification.Namespace is 'openshift' and no Promotion",
+			config: &ciop.ReleaseBuildConfiguration{
+				Tests: []ciop.TestStepConfiguration{},
+				Images: []ciop.ProjectDirectoryImageBuildStepConfiguration{
+					{},
+				},
+				InputConfiguration: ciop.InputConfiguration{
+					ReleaseTagConfiguration: &ciop.ReleaseTagConfiguration{
+						Namespace: "openshift",
+					},
+				},
+			},
+			org:    "organization",
+			repo:   "repository",
+			branch: "branch",
+			expected: &prowconfig.JobConfig{
+				Presubmits: map[string][]prowconfig.Presubmit{
+					"organization/repository": {
+						{Name: "pull-ci-organization-repository-branch-images"},
+					},
+				},
+				Postsubmits: map[string][]prowconfig.Postsubmit{
+					"organization/repository": {
+						{
+							Name:   "branch-ci-organization-repository-branch-images",
+							Labels: map[string]string{"artifacts": "images"},
+						},
+					},
+				},
+			},
+		}, {
+			id: "tag_specification.Namespace is not 'openshift' and no Promotion",
+			config: &ciop.ReleaseBuildConfiguration{
+				Tests: []ciop.TestStepConfiguration{},
+				Images: []ciop.ProjectDirectoryImageBuildStepConfiguration{
+					{},
+				},
+				InputConfiguration: ciop.InputConfiguration{
+					ReleaseTagConfiguration: &ciop.ReleaseTagConfiguration{
+						Namespace: "ci",
+					},
+				},
+			},
+			org:    "organization",
+			repo:   "repository",
+			branch: "branch",
+			expected: &prowconfig.JobConfig{
+				Presubmits: map[string][]prowconfig.Presubmit{
+					"organization/repository": {
+						{Name: "pull-ci-organization-repository-branch-images"},
+					},
+				},
+				Postsubmits: map[string][]prowconfig.Postsubmit{
+					"organization/repository": {
+						{
+							Name: "branch-ci-organization-repository-branch-images",
+						},
+					},
+				},
+			},
+		}, {
+			id: "tag_specification.Namespace is 'openshift' and Promotion.Namespace is 'ci'",
+			config: &ciop.ReleaseBuildConfiguration{
+				Tests: []ciop.TestStepConfiguration{},
+				Images: []ciop.ProjectDirectoryImageBuildStepConfiguration{
+					{},
+				},
+				InputConfiguration: ciop.InputConfiguration{
+					ReleaseTagConfiguration: &ciop.ReleaseTagConfiguration{
+						Namespace: "openshift",
+					},
+				},
+				PromotionConfiguration: &ciop.PromotionConfiguration{
+					Namespace: "ci",
+				},
+			},
+			org:    "organization",
+			repo:   "repository",
+			branch: "branch",
+			expected: &prowconfig.JobConfig{
+				Presubmits: map[string][]prowconfig.Presubmit{
+					"organization/repository": {
+						{Name: "pull-ci-organization-repository-branch-images"},
+					},
+				},
+				Postsubmits: map[string][]prowconfig.Postsubmit{
+					"organization/repository": {
+						{
+							Name: "branch-ci-organization-repository-branch-images",
+						},
+					},
+				},
+			},
+		}, {
+			id: "tag_specification.Namespace is 'ci' and Promotion.Namespace is 'openshift'",
+			config: &ciop.ReleaseBuildConfiguration{
+				Tests: []ciop.TestStepConfiguration{},
+				Images: []ciop.ProjectDirectoryImageBuildStepConfiguration{
+					{},
+				},
+				InputConfiguration: ciop.InputConfiguration{
+					ReleaseTagConfiguration: &ciop.ReleaseTagConfiguration{
+						Namespace: "ci",
+					},
+				},
+				PromotionConfiguration: &ciop.PromotionConfiguration{
+					Namespace: "openshift",
+				},
+			},
+			org:    "organization",
+			repo:   "repository",
+			branch: "branch",
+			expected: &prowconfig.JobConfig{
+				Presubmits: map[string][]prowconfig.Presubmit{
+					"organization/repository": {
+						{Name: "pull-ci-organization-repository-branch-images"},
+					},
+				},
+				Postsubmits: map[string][]prowconfig.Postsubmit{
+					"organization/repository": {
+						{
+							Name:   "branch-ci-organization-repository-branch-images",
+							Labels: map[string]string{"artifacts": "images"},
+						},
+					},
+				},
+			},
 		},
 	}
 
@@ -309,7 +520,7 @@ func TestGenerateJobs(t *testing.T) {
 		prune(jobConfig) // prune the fields that are tested in TestGeneratePre/PostsubmitForTest
 
 		if !equality.Semantic.DeepEqual(jobConfig, tc.expected) {
-			t.Errorf("expected job config diff:\n%s", diff.ObjectDiff(tc.expected, jobConfig))
+			t.Errorf("testcase: %s\nexpected job config diff:\n%s", tc.id, diff.ObjectDiff(tc.expected, jobConfig))
 		}
 	}
 }
@@ -589,6 +800,8 @@ func TestFromCIOperatorConfigToProwYaml(t *testing.T) {
   super/duper:
   - agent: kubernetes
     decorate: true
+    labels:
+      artifacts: images
     name: branch-ci-super-duper-branch-images
     skip_cloning: true
     spec:
@@ -712,6 +925,8 @@ presubmits:
   super/duper:
   - agent: kubernetes
     decorate: true
+    labels:
+      artifacts: images
     name: branch-ci-super-duper-branch-images
     skip_cloning: true
     spec:

@@ -127,16 +127,30 @@ func generatePresubmitForTest(test testDescription, org, repo, branch string) *p
 }
 
 // Generate a Presubmit job for the given parameters
-func generatePostsubmitForTest(test testDescription, org, repo, branch string, additionalArgs ...string) *prowconfig.Postsubmit {
+func generatePostsubmitForTest(test testDescription, org, repo, branch string, labels map[string]string, additionalArgs ...string) *prowconfig.Postsubmit {
 	return &prowconfig.Postsubmit{
-		Agent: "kubernetes",
-		Name:  fmt.Sprintf("branch-ci-%s-%s-%s-%s", org, repo, branch, test.Name),
-		Spec:  generatePodSpec(org, repo, branch, test.Target, additionalArgs...),
+		Agent:  "kubernetes",
+		Name:   fmt.Sprintf("branch-ci-%s-%s-%s-%s", org, repo, branch, test.Name),
+		Spec:   generatePodSpec(org, repo, branch, test.Target, additionalArgs...),
+		Labels: labels,
 		UtilityConfig: prowconfig.UtilityConfig{
 			DecorationConfig: &prowkube.DecorationConfig{SkipCloning: true},
 			Decorate:         true,
 		},
 	}
+}
+
+func extractPromotionNamespace(configSpec *cioperatorapi.ReleaseBuildConfiguration) string {
+	if configSpec.PromotionConfiguration != nil && configSpec.PromotionConfiguration.Namespace != "" {
+		return configSpec.PromotionConfiguration.Namespace
+	}
+
+	if configSpec.InputConfiguration.ReleaseTagConfiguration != nil &&
+		configSpec.InputConfiguration.ReleaseTagConfiguration.Namespace != "" {
+		return configSpec.InputConfiguration.ReleaseTagConfiguration.Namespace
+	}
+
+	return ""
 }
 
 // Given a ci-operator configuration file and basic information about what
@@ -182,7 +196,14 @@ func generateJobs(
 		}
 
 		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(test, org, repo, branch))
-		imagesPostsubmit := generatePostsubmitForTest(test, org, repo, branch, "--promote")
+
+		// If the images are promoted to 'openshift' namespace, we may want to add
+		// 'artifacts: images' label to the [images] postsubmit.
+		labels := map[string]string{}
+		if extractPromotionNamespace(configSpec) == "openshift" {
+			labels["artifacts"] = "images"
+		}
+		imagesPostsubmit := generatePostsubmitForTest(test, org, repo, branch, labels, "--promote")
 		postsubmits[orgrepo] = append(postsubmits[orgrepo], *imagesPostsubmit)
 	}
 

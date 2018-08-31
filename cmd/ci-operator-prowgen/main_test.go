@@ -37,26 +37,22 @@ func TestGeneratePodSpec(t *testing.T) {
 
 			expected: &kubeapi.PodSpec{
 				ServiceAccountName: "ci-operator",
-				Containers: []kubeapi.Container{
-					{
-						Image:   "ci-operator:latest",
-						Command: []string{"ci-operator"},
-						Args:    []string{"--artifact-dir=$(ARTIFACTS)", "--target=target"},
-						Env: []kubeapi.EnvVar{
-							{
-								Name: "CONFIG_SPEC",
-								ValueFrom: &kubeapi.EnvVarSource{
-									ConfigMapKeyRef: &kubeapi.ConfigMapKeySelector{
-										LocalObjectReference: kubeapi.LocalObjectReference{
-											Name: "ci-operator-organization-repo",
-										},
-										Key: "branch.json",
-									},
+				Containers: []kubeapi.Container{{
+					Image:   "ci-operator:latest",
+					Command: []string{"ci-operator"},
+					Args:    []string{"--artifact-dir=$(ARTIFACTS)", "--target=target"},
+					Env: []kubeapi.EnvVar{{
+						Name: "CONFIG_SPEC",
+						ValueFrom: &kubeapi.EnvVarSource{
+							ConfigMapKeyRef: &kubeapi.ConfigMapKeySelector{
+								LocalObjectReference: kubeapi.LocalObjectReference{
+									Name: "ci-operator-organization-repo",
 								},
+								Key: "branch.json",
 							},
 						},
-					},
-				},
+					}},
+				}},
 			},
 		},
 		{
@@ -68,26 +64,22 @@ func TestGeneratePodSpec(t *testing.T) {
 
 			expected: &kubeapi.PodSpec{
 				ServiceAccountName: "ci-operator",
-				Containers: []kubeapi.Container{
-					{
-						Image:   "ci-operator:latest",
-						Command: []string{"ci-operator"},
-						Args:    []string{"--artifact-dir=$(ARTIFACTS)", "--target=target", "--promote", "something"},
-						Env: []kubeapi.EnvVar{
-							{
-								Name: "CONFIG_SPEC",
-								ValueFrom: &kubeapi.EnvVarSource{
-									ConfigMapKeyRef: &kubeapi.ConfigMapKeySelector{
-										LocalObjectReference: kubeapi.LocalObjectReference{
-											Name: "ci-operator-organization-repo",
-										},
-										Key: "branch.json",
-									},
+				Containers: []kubeapi.Container{{
+					Image:   "ci-operator:latest",
+					Command: []string{"ci-operator"},
+					Args:    []string{"--artifact-dir=$(ARTIFACTS)", "--target=target", "--promote", "something"},
+					Env: []kubeapi.EnvVar{{
+						Name: "CONFIG_SPEC",
+						ValueFrom: &kubeapi.EnvVarSource{
+							ConfigMapKeyRef: &kubeapi.ConfigMapKeySelector{
+								LocalObjectReference: kubeapi.LocalObjectReference{
+									Name: "ci-operator-organization-repo",
 								},
+								Key: "branch.json",
 							},
 						},
-					},
-				},
+					}},
+				}},
 			},
 		},
 	}
@@ -250,237 +242,157 @@ func TestGenerateJobs(t *testing.T) {
 		{
 			id: "two tests and empty Images",
 			config: &ciop.ReleaseBuildConfiguration{
-				Tests: []ciop.TestStepConfiguration{
-					{As: "derTest"},
-					{As: "leTest"},
-				},
+				Tests: []ciop.TestStepConfiguration{{As: "derTest"}, {As: "leTest"}},
 			},
 			org:    "organization",
 			repo:   "repository",
 			branch: "branch",
 			expected: &prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{
-					"organization/repository": {
-						{Name: "pull-ci-organization-repository-branch-derTest"},
-						{Name: "pull-ci-organization-repository-branch-leTest"},
-					},
-				},
+				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
+					{Name: "pull-ci-organization-repository-branch-derTest"},
+					{Name: "pull-ci-organization-repository-branch-leTest"},
+				}},
 				Postsubmits: map[string][]prowconfig.Postsubmit{},
 			},
 		}, {
 			id: "two tests and nonempty Images",
 			config: &ciop.ReleaseBuildConfiguration{
-				Tests: []ciop.TestStepConfiguration{
-					{As: "derTest"},
-					{As: "leTest"},
-				},
-				Images: []ciop.ProjectDirectoryImageBuildStepConfiguration{
-					{},
-				},
+				Tests:  []ciop.TestStepConfiguration{{As: "derTest"}, {As: "leTest"}},
+				Images: []ciop.ProjectDirectoryImageBuildStepConfiguration{{}},
 			},
 			org:    "organization",
 			repo:   "repository",
 			branch: "branch",
 			expected: &prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{
-					"organization/repository": {
-						{Name: "pull-ci-organization-repository-branch-derTest"},
-						{Name: "pull-ci-organization-repository-branch-leTest"},
-						{Name: "pull-ci-organization-repository-branch-images"},
-					},
-				},
-				Postsubmits: map[string][]prowconfig.Postsubmit{
-					"organization/repository": {
-						{
-							Name: "branch-ci-organization-repository-branch-images",
-						},
-					},
-				},
+				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
+					{Name: "pull-ci-organization-repository-branch-derTest"},
+					{Name: "pull-ci-organization-repository-branch-leTest"},
+					{Name: "pull-ci-organization-repository-branch-images"},
+				}},
+				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {
+					{Name: "branch-ci-organization-repository-branch-images"},
+				}},
 			},
 		}, {
 			id: "Promotion.Namespace is 'openshift'",
 			config: &ciop.ReleaseBuildConfiguration{
-				Tests: []ciop.TestStepConfiguration{},
-				Images: []ciop.ProjectDirectoryImageBuildStepConfiguration{
-					{},
-				},
-				PromotionConfiguration: &ciop.PromotionConfiguration{
-					Namespace: "openshift",
-				},
+				Tests:                  []ciop.TestStepConfiguration{},
+				Images:                 []ciop.ProjectDirectoryImageBuildStepConfiguration{{}},
+				PromotionConfiguration: &ciop.PromotionConfiguration{Namespace: "openshift"},
 			},
 			org:    "organization",
 			repo:   "repository",
 			branch: "branch",
 			expected: &prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{
-					"organization/repository": {
-						{Name: "pull-ci-organization-repository-branch-images"},
-					},
-				},
-				Postsubmits: map[string][]prowconfig.Postsubmit{
-					"organization/repository": {
-						{
-							Name:   "branch-ci-organization-repository-branch-images",
-							Labels: map[string]string{"artifacts": "images"},
-						},
-					},
-				},
+				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
+					{Name: "pull-ci-organization-repository-branch-images"},
+				}},
+				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {{
+					Name:   "branch-ci-organization-repository-branch-images",
+					Labels: map[string]string{"artifacts": "images"},
+				}}},
 			},
 		}, {
 			id: "Promotion.Namespace is not 'openshift'",
 			config: &ciop.ReleaseBuildConfiguration{
-				Tests: []ciop.TestStepConfiguration{},
-				Images: []ciop.ProjectDirectoryImageBuildStepConfiguration{
-					{},
-				},
-				PromotionConfiguration: &ciop.PromotionConfiguration{
-					Namespace: "ci",
-				},
+				Tests:                  []ciop.TestStepConfiguration{},
+				Images:                 []ciop.ProjectDirectoryImageBuildStepConfiguration{{}},
+				PromotionConfiguration: &ciop.PromotionConfiguration{Namespace: "ci"},
 			},
 			org:    "organization",
 			repo:   "repository",
 			branch: "branch",
 			expected: &prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{
-					"organization/repository": {
-						{Name: "pull-ci-organization-repository-branch-images"},
-					},
-				},
-				Postsubmits: map[string][]prowconfig.Postsubmit{
-					"organization/repository": {
-						{
-							Name: "branch-ci-organization-repository-branch-images",
-						},
-					},
-				},
+				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
+					{Name: "pull-ci-organization-repository-branch-images"},
+				}},
+				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {
+					{Name: "branch-ci-organization-repository-branch-images"},
+				}},
 			},
 		}, {
 			id: "tag_specification.Namespace is 'openshift' and no Promotion",
 			config: &ciop.ReleaseBuildConfiguration{
-				Tests: []ciop.TestStepConfiguration{},
-				Images: []ciop.ProjectDirectoryImageBuildStepConfiguration{
-					{},
-				},
+				Tests:  []ciop.TestStepConfiguration{},
+				Images: []ciop.ProjectDirectoryImageBuildStepConfiguration{{}},
 				InputConfiguration: ciop.InputConfiguration{
-					ReleaseTagConfiguration: &ciop.ReleaseTagConfiguration{
-						Namespace: "openshift",
-					},
+					ReleaseTagConfiguration: &ciop.ReleaseTagConfiguration{Namespace: "openshift"},
 				},
 			},
 			org:    "organization",
 			repo:   "repository",
 			branch: "branch",
 			expected: &prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{
-					"organization/repository": {
-						{Name: "pull-ci-organization-repository-branch-images"},
-					},
-				},
-				Postsubmits: map[string][]prowconfig.Postsubmit{
-					"organization/repository": {
-						{
-							Name:   "branch-ci-organization-repository-branch-images",
-							Labels: map[string]string{"artifacts": "images"},
-						},
-					},
-				},
+				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
+					{Name: "pull-ci-organization-repository-branch-images"},
+				}},
+				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {{
+					Name:   "branch-ci-organization-repository-branch-images",
+					Labels: map[string]string{"artifacts": "images"},
+				}}},
 			},
 		}, {
 			id: "tag_specification.Namespace is not 'openshift' and no Promotion",
 			config: &ciop.ReleaseBuildConfiguration{
-				Tests: []ciop.TestStepConfiguration{},
-				Images: []ciop.ProjectDirectoryImageBuildStepConfiguration{
-					{},
-				},
+				Tests:  []ciop.TestStepConfiguration{},
+				Images: []ciop.ProjectDirectoryImageBuildStepConfiguration{{}},
 				InputConfiguration: ciop.InputConfiguration{
-					ReleaseTagConfiguration: &ciop.ReleaseTagConfiguration{
-						Namespace: "ci",
-					},
+					ReleaseTagConfiguration: &ciop.ReleaseTagConfiguration{Namespace: "ci"},
 				},
 			},
 			org:    "organization",
 			repo:   "repository",
 			branch: "branch",
 			expected: &prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{
-					"organization/repository": {
-						{Name: "pull-ci-organization-repository-branch-images"},
-					},
-				},
-				Postsubmits: map[string][]prowconfig.Postsubmit{
-					"organization/repository": {
-						{
-							Name: "branch-ci-organization-repository-branch-images",
-						},
-					},
-				},
+				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
+					{Name: "pull-ci-organization-repository-branch-images"},
+				}},
+				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {
+					{Name: "branch-ci-organization-repository-branch-images"},
+				}},
 			},
 		}, {
 			id: "tag_specification.Namespace is 'openshift' and Promotion.Namespace is 'ci'",
 			config: &ciop.ReleaseBuildConfiguration{
-				Tests: []ciop.TestStepConfiguration{},
-				Images: []ciop.ProjectDirectoryImageBuildStepConfiguration{
-					{},
-				},
+				Tests:  []ciop.TestStepConfiguration{},
+				Images: []ciop.ProjectDirectoryImageBuildStepConfiguration{{}},
 				InputConfiguration: ciop.InputConfiguration{
-					ReleaseTagConfiguration: &ciop.ReleaseTagConfiguration{
-						Namespace: "openshift",
-					},
+					ReleaseTagConfiguration: &ciop.ReleaseTagConfiguration{Namespace: "openshift"},
 				},
-				PromotionConfiguration: &ciop.PromotionConfiguration{
-					Namespace: "ci",
-				},
+				PromotionConfiguration: &ciop.PromotionConfiguration{Namespace: "ci"},
 			},
 			org:    "organization",
 			repo:   "repository",
 			branch: "branch",
 			expected: &prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{
-					"organization/repository": {
-						{Name: "pull-ci-organization-repository-branch-images"},
-					},
-				},
-				Postsubmits: map[string][]prowconfig.Postsubmit{
-					"organization/repository": {
-						{
-							Name: "branch-ci-organization-repository-branch-images",
-						},
-					},
-				},
+				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
+					{Name: "pull-ci-organization-repository-branch-images"},
+				}},
+				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {
+					{Name: "branch-ci-organization-repository-branch-images"},
+				}},
 			},
 		}, {
 			id: "tag_specification.Namespace is 'ci' and Promotion.Namespace is 'openshift'",
 			config: &ciop.ReleaseBuildConfiguration{
-				Tests: []ciop.TestStepConfiguration{},
-				Images: []ciop.ProjectDirectoryImageBuildStepConfiguration{
-					{},
-				},
+				Tests:  []ciop.TestStepConfiguration{},
+				Images: []ciop.ProjectDirectoryImageBuildStepConfiguration{{}},
 				InputConfiguration: ciop.InputConfiguration{
-					ReleaseTagConfiguration: &ciop.ReleaseTagConfiguration{
-						Namespace: "ci",
-					},
+					ReleaseTagConfiguration: &ciop.ReleaseTagConfiguration{Namespace: "ci"},
 				},
-				PromotionConfiguration: &ciop.PromotionConfiguration{
-					Namespace: "openshift",
-				},
+				PromotionConfiguration: &ciop.PromotionConfiguration{Namespace: "openshift"},
 			},
 			org:    "organization",
 			repo:   "repository",
 			branch: "branch",
 			expected: &prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{
-					"organization/repository": {
-						{Name: "pull-ci-organization-repository-branch-images"},
-					},
-				},
-				Postsubmits: map[string][]prowconfig.Postsubmit{
-					"organization/repository": {
-						{
-							Name:   "branch-ci-organization-repository-branch-images",
-							Labels: map[string]string{"artifacts": "images"},
-						},
-					},
-				},
+				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
+					{Name: "pull-ci-organization-repository-branch-images"},
+				}},
+				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {{
+					Name:   "branch-ci-organization-repository-branch-images",
+					Labels: map[string]string{"artifacts": "images"},
+				}}},
 			},
 		},
 	}
@@ -563,146 +475,108 @@ func TestMergeJobConfig(t *testing.T) {
 		{
 			destination: &prowconfig.JobConfig{},
 			source: &prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{
-					"organization/repository": {
-						{Name: "source-job", Context: "ci/prow/source"},
-					},
-				},
+				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
+					{Name: "source-job", Context: "ci/prow/source"},
+				}},
 			},
 			expected: &prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{
-					"organization/repository": {
-						{Name: "source-job", Context: "ci/prow/source"},
-					},
-				},
+				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
+					{Name: "source-job", Context: "ci/prow/source"},
+				}},
 			},
 		}, {
 			destination: &prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{
-					"organization/repository": {
-						{Name: "another-job", Context: "ci/prow/another"},
-					},
-				},
+				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
+					{Name: "another-job", Context: "ci/prow/another"},
+				}},
 			},
 			source: &prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{
-					"organization/repository": {
-						{Name: "source-job", Context: "ci/prow/source"},
-					},
-				},
+				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
+					{Name: "source-job", Context: "ci/prow/source"},
+				}},
 			},
 			expected: &prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{
-					"organization/repository": {
-						{Name: "source-job", Context: "ci/prow/source"},
-						{Name: "another-job", Context: "ci/prow/another"},
-					},
-				},
+				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
+					{Name: "source-job", Context: "ci/prow/source"},
+					{Name: "another-job", Context: "ci/prow/another"},
+				}},
 			},
 		}, {
 			destination: &prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{
-					"organization/repository": {
-						{Name: "same-job", Context: "ci/prow/same"},
-					},
-				},
+				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
+					{Name: "same-job", Context: "ci/prow/same"},
+				}},
 			},
 			source: &prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{
-					"organization/repository": {
-						{Name: "same-job", Context: "ci/prow/different"},
-					},
-				},
+				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
+					{Name: "same-job", Context: "ci/prow/different"},
+				}},
 			},
 			expected: &prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{
-					"organization/repository": {
-						{Name: "same-job", Context: "ci/prow/different"},
-					},
-				},
+				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
+					{Name: "same-job", Context: "ci/prow/different"},
+				}},
 			},
 		}, {
 			destination: &prowconfig.JobConfig{},
 			source: &prowconfig.JobConfig{
-				Postsubmits: map[string][]prowconfig.Postsubmit{
-					"organization/repository": {
-						{Name: "source-job", Agent: "ci/prow/source"},
-					},
-				},
+				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {
+					{Name: "source-job", Agent: "ci/prow/source"},
+				}},
 			},
 			expected: &prowconfig.JobConfig{
-				Postsubmits: map[string][]prowconfig.Postsubmit{
-					"organization/repository": {
-						{Name: "source-job", Agent: "ci/prow/source"},
-					},
-				},
+				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {
+					{Name: "source-job", Agent: "ci/prow/source"},
+				}},
 			},
 		}, {
 			destination: &prowconfig.JobConfig{
-				Postsubmits: map[string][]prowconfig.Postsubmit{
-					"organization/repository": {
-						{Name: "another-job", Agent: "ci/prow/another"},
-					},
-				},
+				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {
+					{Name: "another-job", Agent: "ci/prow/another"},
+				}},
 			},
 			source: &prowconfig.JobConfig{
-				Postsubmits: map[string][]prowconfig.Postsubmit{
-					"organization/repository": {
-						{Name: "source-job", Agent: "ci/prow/source"},
-					},
-				},
+				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {
+					{Name: "source-job", Agent: "ci/prow/source"},
+				}},
 			},
 			expected: &prowconfig.JobConfig{
-				Postsubmits: map[string][]prowconfig.Postsubmit{
-					"organization/repository": {
-						{Name: "source-job", Agent: "ci/prow/source"},
-						{Name: "another-job", Agent: "ci/prow/another"},
-					},
-				},
+				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {
+					{Name: "source-job", Agent: "ci/prow/source"},
+					{Name: "another-job", Agent: "ci/prow/another"},
+				}},
 			},
 		}, {
 			destination: &prowconfig.JobConfig{
-				Postsubmits: map[string][]prowconfig.Postsubmit{
-					"organization/repository": {
-						{Name: "same-job", Agent: "ci/prow/same"},
-					},
-				},
+				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {
+					{Name: "same-job", Agent: "ci/prow/same"},
+				}},
 			},
 			source: &prowconfig.JobConfig{
-				Postsubmits: map[string][]prowconfig.Postsubmit{
-					"organization/repository": {
-						{Name: "same-job", Agent: "ci/prow/different"},
-					},
-				},
+				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {
+					{Name: "same-job", Agent: "ci/prow/different"},
+				}},
 			},
 			expected: &prowconfig.JobConfig{
-				Postsubmits: map[string][]prowconfig.Postsubmit{
-					"organization/repository": {
-						{Name: "same-job", Agent: "ci/prow/different"},
-					},
-				},
+				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {
+					{Name: "same-job", Agent: "ci/prow/different"},
+				}},
 			},
 		}, {
 			destination: &prowconfig.JobConfig{
-				Postsubmits: map[string][]prowconfig.Postsubmit{
-					"organization/repository": {
-						{Name: "same-job", Agent: "ci/prow/same"},
-					},
-				},
+				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {
+					{Name: "same-job", Agent: "ci/prow/same"},
+				}},
 			},
 			source: &prowconfig.JobConfig{
-				Postsubmits: map[string][]prowconfig.Postsubmit{
-					"organization/repository": {
-						{Name: "same-job", Agent: "ci/prow/same"},
-					},
-				},
+				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {
+					{Name: "same-job", Agent: "ci/prow/same"},
+				}},
 			},
 			expected: &prowconfig.JobConfig{
-				Postsubmits: map[string][]prowconfig.Postsubmit{
-					"organization/repository": {
-						{Name: "same-job", Agent: "ci/prow/same"},
-					},
-				},
+				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {
+					{Name: "same-job", Agent: "ci/prow/same"},
+				}},
 			},
 		},
 	}

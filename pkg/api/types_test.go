@@ -1,9 +1,10 @@
 package api
 
 import (
-	"encoding/json"
 	"reflect"
 	"testing"
+
+	"github.com/ghodss/yaml"
 )
 
 func TestOverlay(t *testing.T) {
@@ -115,13 +116,13 @@ func TestOverlay(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			config := &ReleaseBuildConfiguration{}
 			input := &InputConfiguration{}
-			if err := json.Unmarshal([]byte(tt.base), config); err != nil {
+			if err := yaml.Unmarshal([]byte(tt.base), config); err != nil {
 				t.Fatal(err)
 			}
-			if err := json.Unmarshal([]byte(tt.overlay), config); err != nil {
+			if err := yaml.Unmarshal([]byte(tt.overlay), config); err != nil {
 				t.Fatal(err)
 			}
-			if err := json.Unmarshal([]byte(tt.overlay), input); err != nil {
+			if err := yaml.Unmarshal([]byte(tt.overlay), input); err != nil {
 				t.Fatal(err)
 			}
 			if got := input; !reflect.DeepEqual(got, tt.wantInput) {

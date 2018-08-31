@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base32"
-	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"flag"
@@ -29,6 +28,8 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
 
+	"github.com/ghodss/yaml"
+
 	imageapi "github.com/openshift/api/image/v1"
 	projectapi "github.com/openshift/api/project/v1"
 	templateapi "github.com/openshift/api/template/v1"
@@ -44,7 +45,7 @@ import (
 
 const usage = `Orchestrate multi-stage image-based builds
 
-The ci-operator reads a declarative configuration JSON file and executes a set of build
+The ci-operator reads a declarative configuration YAML file and executes a set of build
 steps on an OpenShift cluster for image-based components. By default, all steps are run,
 but a caller may select one or more targets (image names or test names) to limit to only
 steps that those targets depend on. The build creates a new project to run the builds in
@@ -258,7 +259,7 @@ func (o *options) Complete() error {
 			return fmt.Errorf("CONFIG_SPEC environment variable is not set or empty and no --config file was set")
 		}
 	}
-	if err := json.Unmarshal([]byte(configSpec), &o.configSpec); err != nil {
+	if err := yaml.Unmarshal([]byte(configSpec), &o.configSpec); err != nil {
 		return fmt.Errorf("invalid configuration: %v\nvalue:\n%s", err, string(configSpec))
 	}
 
@@ -274,7 +275,7 @@ func (o *options) Complete() error {
 		overrideSpec = []byte(os.Getenv("OVERRIDE_SPEC"))
 	}
 	if len(overrideSpec) > 0 {
-		if err := json.Unmarshal(overrideSpec, &o.configSpec); err != nil {
+		if err := yaml.Unmarshal(overrideSpec, &o.configSpec); err != nil {
 			return fmt.Errorf("invalid configuration: %v\nvalue:\n%s", err, string(overrideSpec))
 		}
 	}
@@ -307,9 +308,9 @@ func (o *options) Complete() error {
 	o.jobSpec = jobSpec
 
 	if o.dry {
-		config, _ := json.MarshalIndent(o.configSpec, "", "  ")
+		config, _ := yaml.Marshal(o.configSpec)
 		log.Printf("Resolved configuration:\n%s", string(config))
-		job, _ := json.MarshalIndent(o.jobSpec, "", "  ")
+		job, _ := yaml.Marshal(o.jobSpec)
 		log.Printf("Resolved job spec:\n%s", string(job))
 	}
 	refs := o.jobSpec.Refs
@@ -492,7 +493,7 @@ func (o *options) resolveInputs(ctx context.Context, steps []api.Step) error {
 	}
 
 	// a change in the config for the build changes the output
-	configSpec, err := json.Marshal(o.configSpec)
+	configSpec, err := yaml.Marshal(o.configSpec)
 	if err != nil {
 		panic(err)
 	}

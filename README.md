@@ -33,7 +33,7 @@ ci-operator is mainly intended to be run automatically by the CI system, but
 after you build it, you can also run it locally:
 
 ```
-./ci-operator --config component.json --git-ref=openshift/{repo}@master
+./ci-operator --config component.yaml --git-ref=openshift/{repo}@master
 ```
 
 For more information about ci-operator options, use the `--help` parameter:

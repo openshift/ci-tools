@@ -1,12 +1,13 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+
+	"github.com/ghodss/yaml"
 
 	"github.com/openshift/ci-operator/pkg/api"
 )
@@ -26,8 +27,8 @@ func main() {
 			fmt.Printf("prevent panic by handling failure accessing a path %q: %v\n", configDir, err)
 			return err
 		}
-		if filepath.Ext(path) == ".json" {
-			// we assume any JSON in the config dir is a CI Operator config
+		if filepath.Ext(path) == ".yaml" || filepath.Ext(path) == ".json" {
+			// we assume any JSON or YAML in the config dir is a CI Operator config
 			name, err := filepath.Rel(configDir, path)
 			if err != nil {
 				return fmt.Errorf("could not determine relative path name for %s: %v", path, err)
@@ -39,7 +40,7 @@ func main() {
 			}
 
 			var config api.ReleaseBuildConfiguration
-			if err := json.Unmarshal(data, &config); err != nil {
+			if err := yaml.Unmarshal(data, &config); err != nil {
 				return fmt.Errorf("invalid configuration from %s: %v\nvalue:%s", name, err, string(data))
 			}
 

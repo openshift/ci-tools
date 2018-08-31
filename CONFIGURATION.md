@@ -4,94 +4,62 @@ The CI Operator consumes a configuration file that describes how release artifac
 are built from a repository's branch. An example file is shown below with all
 optional fields present:
 
-```json
-{
-  "tag_specification": {
-    "cluster": "",
-    "namespace": "",
-    "name": "",
-    "tag": "",
-    "tag_overrides": {
-
-    }
-  },
-  "base_images": {
-    "": {
-      "cluster": "",
-      "namespace": "",
-      "name": "",
-      "tag": ""
-    }
-  },
-  "test_base_image": {
-    "cluster": "",
-    "namespace": "",
-    "name": "",
-    "tag": ""
-  },
-
-  "canonical_go_repository": "",
-
-  "binary_build_commands": "",
-  "test_binary_build_commands": "",
-  "rpm_build_commands": "",
-  "rpm_build_location": "",
-
-  "images": [
-    {
-      "from": "",
-      "to": "",
-      "context_dir": "",
-      "dockerfile_path": "",
-      "inputs": {
-        "": {
-          "as": "",
-          "paths": [
-            {
-              "source_path": "",
-              "destination_dir": ""
-            }
-          ]
-        }
-      },
-      "optional": false
-    }
-  ],
-
-  "tests": [
-    {
-      "as": "",
-      "from": "",
-      "commands": "",
-      "artifact_dir": ""
-    }
-  ],
-
-  "raw_steps": [],
-
-  "promotion": {
-    "namespace": "",
-    "name": "",
-    "tag": "",
-    "name_prefix": "",
-    "additional_images": {
-      "": ""
-    }
-  },
-
-  "resources": {
-    "": {
-      "requests": {
-        "cpu": "",
-        "memory": ""
-      },
-      "limits": {
-        "cpu": "",
-        "memory": ""
-      }
-    }
-  }
-}
+```yaml
+base_images:
+  <name>:
+    cluster: ''
+    name: ''
+    namespace: ''
+    tag: ''
+binary_build_commands: ''
+canonical_go_repository: ''
+images:
+- context_dir: ''
+  dockerfile_path: ''
+  from: ''
+  inputs:
+    <name>:
+      as: ''
+      paths:
+      - destination_dir: ''
+        source_path: ''
+  optional: false
+  to: ''
+promotion:
+  additional_images:
+    <name>: ''
+  name: ''
+  name_prefix: ''
+  namespace: ''
+  tag: ''
+raw_steps: []
+resources:
+  <name>:
+    limits:
+      cpu: ''
+      memory: ''
+    requests:
+      cpu: ''
+      memory: ''
+rpm_build_commands: ''
+rpm_build_location: ''
+tag_specification:
+  cluster: ''
+  name: ''
+  namespace: ''
+  tag: ''
+  tag_overrides: {}
+test_base_image:
+  cluster: ''
+  name: ''
+  namespace: ''
+  tag: ''
+test_binary_build_commands: ''
+tests:
+- artifact_dir: ''
+  as: ''
+  commands: ''
+  from: ''
 ```
 
 # `tag_specification`
@@ -100,14 +68,13 @@ tagged into tests for the repository. The Origin CI assembles latest releases
 for all components using one `ImageStream` and many tags. To use these releases,
 use the following specification:
 
-```json
-"tag_specification": {
-  "cluster": "https://api.ci.openshift.org",
-  "namespace": "openshift",
-  "name": "origin-v3.11",
-  "tag": "",
-  "tag_overrides": {}
-}
+```yaml
+tag_specification:
+  cluster: https://api.ci.openshift.org
+  name: origin-v3.11
+  namespace: openshift
+  tag: ''
+  tag_overrides: {}
 ```
 
 There are two primary modes for assembling a release:
@@ -151,15 +118,13 @@ streams and one tag are used to assemble a release.
 from the repository. The field is a mapping from pipeline image name to remote
 `ImageStream` specification. A common base image might be an operating system:
 
-```json
-"base_images": {
-  "os": {
-    "cluster": "https://api.ci.openshift.org",
-    "namespace": "openshift",
-    "name": "centos",
-    "tag": "7"
-  }
-}
+```yaml
+base_images:
+  os:
+    cluster: https://api.ci.openshift.org
+    name: centos
+    namespace: openshift
+    tag: '7'
 ```
 
 The key in this mapping is the name that can be used in `"from"` fields elsewhere
@@ -178,13 +143,12 @@ be used as the build environment for the source code cloning and any downstream
 builds like compilation or unit tests. Commonly, the `openshift/release` image
 is used:
 
-```json
-"test_base_image": {
-  "cluster": "https://api.ci.openshift.org",
-  "namespace": "openshift",
-  "name": "release",
-  "tag": "golang-1.10"
-}
+```yaml
+test_base_image:
+  cluster: https://api.ci.openshift.org
+  name: release
+  namespace: openshift
+  tag: golang-1.10
 ```
 
 # `canonical_go_repository`

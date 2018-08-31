@@ -79,48 +79,10 @@ $ ./ci-operator-prowgen --from-dir $GOPATH/src/github.com/openshift/release/ci-o
  --to-dir $GOPATH/src/github.com/openshift/release/ci-operator/jobs
 ```
 
-## What does the generator create
+## What does the generator create?
 
-The generator creates one presubmit job for each test specified in the
-ci-operator config file (in `tests` list):
+See [GENERATOR.md](GENERATOR.md).
 
-```yaml
-presubmits:
-  ORG/REPO:
-  - agent: kubernetes
-    always_run: true
-    branches:
-    - master
-    context: ci/prow/TEST
-    decorate: true
-    name: pull-ci-ORG-REPO-BRANCH-TEST
-    rerun_command: /test TEST
-    skip_cloning: true
-    spec:
-      containers:
-      - args:
-        - --artifact-dir=$(ARTIFACTS)
-        - --target=TEST
-        command:
-        - ci-operator
-        env:
-        - name: CONFIG_SPEC
-          valueFrom:
-            configMapKeyRef:
-              key: BRANCH.json
-              name: ci-operator-ORG-REPO
-        image: ci-operator:latest
-        name: ""
-        resources: {}
-      serviceAccountName: ci-operator
-    trigger: ((?m)^/test( all| TEST),?(\\s+|$))
-```
-
-Also, if the configuration file has a non-empty `images` list, one additional
-presubmit and postsubmit job is generated with `--target=[images]` option passed
-to `ci-operator` to attempt to build the component images. This postsubmit job
-also uses the `--promote` option to promote the component images built in this
-way.
 
 ## Develop
 

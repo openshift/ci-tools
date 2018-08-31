@@ -1,37 +1,25 @@
-{
-  "test_base_image": {
-    "namespace": "ci",
-    "name": "release-with-clonerefs",
-    "tag": "golang-1.9"
-  },
-  "binary_build_commands": "make build",
-  "test_binary_build_commands": "OS_GOFLAGS='-race' make build",
-  "rpm_build_commands": "make build-rpms",
-  "base_rpm_images": {
-    "base": {
-      "namespace": "openshift",
-      "name": "origin-v3.10",
-      "tag": "base"
-    }
-  },
-  "images": [
-    {
-      "from": "base",
-      "to": "docker-registry",
-      "context_dir": "images/dockerregistry/"
-    }
-  ],
-  "tag_specification": {
-    "namespace": "openshift",
-    "name": "origin-v3.10",
-    "tag": "",
-    "tag_overrides": {}
-  },
-  "tests": [
-    {
-      "as": "unit",
-      "from": "test-bin",
-      "commands": "hack/test-go.sh"
-    }
-  ]
-}
+base_rpm_images:
+  base:
+    name: origin-v3.10
+    namespace: openshift
+    tag: base
+binary_build_commands: make build
+images:
+- context_dir: images/dockerregistry/
+  from: base
+  to: docker-registry
+rpm_build_commands: make build-rpms
+tag_specification:
+  name: origin-v3.10
+  namespace: openshift
+  tag: ''
+  tag_overrides: {}
+test_base_image:
+  name: release-with-clonerefs
+  namespace: ci
+  tag: golang-1.9
+test_binary_build_commands: OS_GOFLAGS='-race' make build
+tests:
+- as: unit
+  commands: hack/test-go.sh
+  from: test-bin

@@ -23,7 +23,7 @@ as expected (you need to be logged in to a cluster, e.g. to
 [api.ci](https://api.ci.openshift.org)):
 
 ```
-./ci-operator --config config.json --git-ref openshift/<repo>@<revision>
+./ci-operator --config config.yaml --git-ref openshift/<repo>@<revision>
 ```
 
 After you make sure everything works, you need to create a subdirectory
@@ -42,22 +42,19 @@ and injects the source code into the base image specified by the
 `test_base_image` key.  The base image should contain all build dependencies of
 the tested component, so the it will often be a `openshift/release:<tag>` image.
 
-```json
-{
-  "test_base_image": {
-    "cluster": "https://api.ci.openshift.org",
-    "namespace": "openshift",
-    "name": "release",
-    "tag": "golang-1.10"
-  }
-}
+```yaml
+test_base_image:
+  cluster: https://api.ci.openshift.org
+  name: release
+  namespace: openshift
+  tag: golang-1.10
 ```
 
 Given your component can be built in the context of the `openshift/release`
 image, you can test building the `src` target:
 
 ```
-$ ./ci-operator --config example.json --git-ref=openshift/<component>@<revision> --target=src
+$ ./ci-operator --config example.yaml --git-ref=openshift/<component>@<revision> --target=src
 ```
 
 ### Test targets
@@ -68,21 +65,14 @@ example of two test targets, each performing a different test by calling
 different `make` target in a `src` image (of course, a `Makefile` in your
 component repository would need to have these targets for this to work).
 
-```json
-{
-  "tests": [
-    {
-      "as": "unit",
-      "from": "src",
-      "commands": "make test-unit"
-    },
-    {
-      "as": "performance",
-      "from": "src",
-      "commands": "make test-performance"
-    }
-  ]
-}
+```yaml
+tests:
+- as: unit
+  commands: make test-unit
+  from: src
+- as: performance
+  commands: make test-performance
+  from: src
 ```
 
 By default, ci-operator runs all specified test targets, building all their
@@ -105,28 +95,19 @@ Here, `unit` and `integration` targets will both be built from a `test-bin`
 image, which will be a result of running `make instrumented-build` over a `src`
 image, while `performance` test target will be run from a `bin` image:
 
-```json
-{
-  "binary_build_commands": "make build",
-  "test_binary_builds_commands": "make instrumented-build",
-  "tests": [
-    {
-      "as": "unit",
-      "from": "test-bin",
-      "commands": "make test-unit"
-    },
-    {
-      "as": "integration",
-      "from": "test-bin",
-      "commands": "make test-integration",
-    },
-    {
-      "as": "performance",
-      "from": "bin",
-      "commands": "make test-performance"
-    }
-  ]
-}
+```yaml
+binary_build_commands: make build
+test_binary_builds_commands: make instrumented-build
+tests:
+- as: unit
+  commands: make test-unit
+  from: test-bin
+- as: integration
+  commands: make test-integration
+  from: test-bin
+- as: performance
+  commands: make test-performance
+  from: bin
 ```
 
 ### Using Separate Build Environment and Release Environment Images

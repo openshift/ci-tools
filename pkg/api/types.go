@@ -123,9 +123,21 @@ type InputConfiguration struct {
 	// build-time dependencies for the project.
 	TestBaseImage *ImageStreamTagReference `json:"test_base_image,omitempty"`
 
+	// BuildRootImage supports two ways to get the image that
+	// the pipeline will caches on. The one way is to take the reference
+	// from an image stream, and the other from a dockerfile.
+	BuildRootImage *BuildRootImageConfiguration `json:"build_root,omitempty"`
+
 	// ReleaseTagConfiguration determines how the
 	// full release is assembled.
 	ReleaseTagConfiguration *ReleaseTagConfiguration `json:"tag_specification,omitempty"`
+}
+
+// BuildRootImageConfiguration holds the two ways of using a base image
+// that the pipeline will caches on.
+type BuildRootImageConfiguration struct {
+	ImageStreamTagReference *ImageStreamTagReference          `json:"image_stream_tag,omitempty"`
+	ProjectImageBuild       *ProjectDirectoryImageBuildInputs `json:"project_image_build,omitempty"`
 }
 
 // ImageStreamTagReference identifies an ImageStreamTag
@@ -224,6 +236,7 @@ type StepConfiguration struct {
 	OutputImageTagStepConfiguration             *OutputImageTagStepConfiguration             `json:"output_image_tag_step,omitempty"`
 	ReleaseImagesTagStepConfiguration           *ReleaseTagConfiguration                     `json:"release_images_tag_step,omitempty"`
 	TestStepConfiguration                       *TestStepConfiguration                       `json:"test_step,omitempty"`
+	ProjectDirectoryImageBuildInputs            *ProjectDirectoryImageBuildInputs            `json:"project_directory_image_build_inputs,omitempty"`
 }
 
 // InputImageTagStepConfiguration describes a step that
@@ -318,6 +331,16 @@ type ProjectDirectoryImageBuildStepConfiguration struct {
 	From PipelineImageStreamTagReference `json:"from"`
 	To   PipelineImageStreamTagReference `json:"to"`
 
+	ProjectDirectoryImageBuildInputs `json:",inline"`
+
+	// Optional means the build step is not built, published, or
+	// promoted unless explicitly targeted. Use for builds which
+	// are invoked only when testing certain parts of the repo.
+	Optional bool `json:"optional"`
+}
+
+// ProjectDirectoryImageBuildInputs holds inputs for an image build from the repo under test
+type ProjectDirectoryImageBuildInputs struct {
 	// ContextDir is the directory in the project
 	// from which this build should be run.
 	ContextDir string `json:"context_dir"`
@@ -330,11 +353,6 @@ type ProjectDirectoryImageBuildStepConfiguration struct {
 	// that will populate the build context for the Dockerfile or
 	// alter the input image for a multi-stage build.
 	Inputs map[string]ImageBuildInputs `json:"inputs"`
-
-	// Optional means the build step is not built, published, or
-	// promoted unless explicitly targeted. Use for builds which
-	// are invoked only when testing certain parts of the repo.
-	Optional bool `json:"optional"`
 }
 
 // ImageBuildInputs is a subset of the v1 OpenShift Build API object

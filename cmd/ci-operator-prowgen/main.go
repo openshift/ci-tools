@@ -1,13 +1,14 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/ghodss/yaml"
 
 	cioperatorapi "github.com/openshift/ci-operator/pkg/api"
 	kubeapi "k8s.io/api/core/v1"
@@ -80,7 +81,7 @@ func generatePodSpec(org, repo, branch, target string, additionalArgs ...string)
 			LocalObjectReference: kubeapi.LocalObjectReference{
 				Name: fmt.Sprintf("ci-operator-%s-%s", org, repo),
 			},
-			Key: fmt.Sprintf("%s.json", branch),
+			Key: fmt.Sprintf("%s.yaml", branch),
 		},
 	}
 
@@ -202,7 +203,7 @@ func readCiOperatorConfig(configFilePath string) (*cioperatorapi.ReleaseBuildCon
 	}
 
 	var configSpec *cioperatorapi.ReleaseBuildConfiguration
-	if err := json.Unmarshal(data, &configSpec); err != nil {
+	if err := yaml.Unmarshal(data, &configSpec); err != nil {
 		return nil, fmt.Errorf("failed to load ci-operator config (%v)", err)
 	}
 
@@ -212,17 +213,17 @@ func readCiOperatorConfig(configFilePath string) (*cioperatorapi.ReleaseBuildCon
 // We use the directory/file naming convention to encode useful information
 // about component repository information.
 // The convention for ci-operator config files in this repo:
-// ci-operator/config/ORGANIZATION/COMPONENT/BRANCH.json
+// ci-operator/config/ORGANIZATION/COMPONENT/BRANCH.yaml
 func extractRepoElementsFromPath(configFilePath string) (string, string, string, error) {
 	configSpecDir := filepath.Dir(configFilePath)
 	repo := filepath.Base(configSpecDir)
 	if repo == "." || repo == "/" {
-		return "", "", "", fmt.Errorf("Could not extract repo from '%s' (expected path like '.../ORG/REPO/BRANCH.json", configFilePath)
+		return "", "", "", fmt.Errorf("Could not extract repo from '%s' (expected path like '.../ORG/REPO/BRANCH.yaml", configFilePath)
 	}
 
 	org := filepath.Base(filepath.Dir(configSpecDir))
 	if org == "." || org == "/" {
-		return "", "", "", fmt.Errorf("Could not extract org from '%s' (expected path like '.../ORG/REPO/BRANCH.json", configFilePath)
+		return "", "", "", fmt.Errorf("Could not extract org from '%s' (expected path like '.../ORG/REPO/BRANCH.yaml", configFilePath)
 	}
 
 	branch := strings.TrimSuffix(filepath.Base(configFilePath), filepath.Ext(configFilePath))
@@ -281,7 +282,7 @@ func generateJobsFromDirectory(configDir, jobDir, jobFile string) error {
 			fmt.Fprintf(os.Stderr, "Error encontered while generating Prow job config: %v\n", err)
 			return err
 		}
-		if !info.IsDir() && filepath.Ext(path) == ".json" {
+		if !info.IsDir() && filepath.Ext(path) == ".yaml" {
 			jobConfig, org, repo, err := generateProwJobsFromConfigFile(path)
 			if err != nil {
 				return err

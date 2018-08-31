@@ -240,7 +240,7 @@ func TestGenerateJobs(t *testing.T) {
 		expected            *prowconfig.JobConfig
 	}{
 		{
-			id: "two tests and empty Images",
+			id: "two tests and empty Images so only two test presubmits are generated",
 			config: &ciop.ReleaseBuildConfiguration{
 				Tests: []ciop.TestStepConfiguration{{As: "derTest"}, {As: "leTest"}},
 			},
@@ -255,7 +255,7 @@ func TestGenerateJobs(t *testing.T) {
 				Postsubmits: map[string][]prowconfig.Postsubmit{},
 			},
 		}, {
-			id: "two tests and nonempty Images",
+			id: "two tests and nonempty Images so two test presubmits and images pre/postsubmits are generated ",
 			config: &ciop.ReleaseBuildConfiguration{
 				Tests:  []ciop.TestStepConfiguration{{As: "derTest"}, {As: "leTest"}},
 				Images: []ciop.ProjectDirectoryImageBuildStepConfiguration{{}},
@@ -274,7 +274,7 @@ func TestGenerateJobs(t *testing.T) {
 				}},
 			},
 		}, {
-			id: "Promotion.Namespace is 'openshift'",
+			id: "Promotion.Namespace is 'openshift' so artifact label is added",
 			config: &ciop.ReleaseBuildConfiguration{
 				Tests:                  []ciop.TestStepConfiguration{},
 				Images:                 []ciop.ProjectDirectoryImageBuildStepConfiguration{{}},
@@ -293,7 +293,7 @@ func TestGenerateJobs(t *testing.T) {
 				}}},
 			},
 		}, {
-			id: "Promotion.Namespace is not 'openshift'",
+			id: "Promotion.Namespace is not 'openshift' so no artifact label is added",
 			config: &ciop.ReleaseBuildConfiguration{
 				Tests:                  []ciop.TestStepConfiguration{},
 				Images:                 []ciop.ProjectDirectoryImageBuildStepConfiguration{{}},
@@ -311,7 +311,7 @@ func TestGenerateJobs(t *testing.T) {
 				}},
 			},
 		}, {
-			id: "tag_specification.Namespace is 'openshift' and no Promotion",
+			id: "no Promotion but tag_specification.Namespace is 'openshift' so artifact label is added",
 			config: &ciop.ReleaseBuildConfiguration{
 				Tests:  []ciop.TestStepConfiguration{},
 				Images: []ciop.ProjectDirectoryImageBuildStepConfiguration{{}},
@@ -332,7 +332,7 @@ func TestGenerateJobs(t *testing.T) {
 				}}},
 			},
 		}, {
-			id: "tag_specification.Namespace is not 'openshift' and no Promotion",
+			id: "tag_specification.Namespace is not 'openshift' and no Promotion so artifact label is not added",
 			config: &ciop.ReleaseBuildConfiguration{
 				Tests:  []ciop.TestStepConfiguration{},
 				Images: []ciop.ProjectDirectoryImageBuildStepConfiguration{{}},
@@ -352,7 +352,7 @@ func TestGenerateJobs(t *testing.T) {
 				}},
 			},
 		}, {
-			id: "tag_specification.Namespace is 'openshift' and Promotion.Namespace is 'ci'",
+			id: "tag_specification.Namespace is 'openshift' and Promotion.Namespace is 'ci' so artifact label is not added",
 			config: &ciop.ReleaseBuildConfiguration{
 				Tests:  []ciop.TestStepConfiguration{},
 				Images: []ciop.ProjectDirectoryImageBuildStepConfiguration{{}},
@@ -373,7 +373,7 @@ func TestGenerateJobs(t *testing.T) {
 				}},
 			},
 		}, {
-			id: "tag_specification.Namespace is 'ci' and Promotion.Namespace is 'openshift'",
+			id: "tag_specification.Namespace is 'ci' and Promotion.Namespace is 'openshift' so artifact label is added",
 			config: &ciop.ReleaseBuildConfiguration{
 				Tests:  []ciop.TestStepConfiguration{},
 				Images: []ciop.ProjectDirectoryImageBuildStepConfiguration{{}},

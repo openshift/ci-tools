@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -127,16 +126,30 @@ func generatePresubmitForTest(test testDescription, org, repo, branch string) *p
 }
 
 // Generate a Presubmit job for the given parameters
-func generatePostsubmitForTest(test testDescription, org, repo, branch string, additionalArgs ...string) *prowconfig.Postsubmit {
+func generatePostsubmitForTest(test testDescription, org, repo, branch string, labels map[string]string, additionalArgs ...string) *prowconfig.Postsubmit {
 	return &prowconfig.Postsubmit{
-		Agent: "kubernetes",
-		Name:  fmt.Sprintf("branch-ci-%s-%s-%s-%s", org, repo, branch, test.Name),
-		Spec:  generatePodSpec(org, repo, branch, test.Target, additionalArgs...),
+		Agent:  "kubernetes",
+		Name:   fmt.Sprintf("branch-ci-%s-%s-%s-%s", org, repo, branch, test.Name),
+		Spec:   generatePodSpec(org, repo, branch, test.Target, additionalArgs...),
+		Labels: labels,
 		UtilityConfig: prowconfig.UtilityConfig{
 			DecorationConfig: &prowkube.DecorationConfig{SkipCloning: true},
 			Decorate:         true,
 		},
 	}
+}
+
+func extractPromotionNamespace(configSpec *cioperatorapi.ReleaseBuildConfiguration) string {
+	if configSpec.PromotionConfiguration != nil && configSpec.PromotionConfiguration.Namespace != "" {
+		return configSpec.PromotionConfiguration.Namespace
+	}
+
+	if configSpec.InputConfiguration.ReleaseTagConfiguration != nil &&
+		configSpec.InputConfiguration.ReleaseTagConfiguration.Namespace != "" {
+		return configSpec.InputConfiguration.ReleaseTagConfiguration.Namespace
+	}
+
+	return ""
 }
 
 // Given a ci-operator configuration file and basic information about what
@@ -155,34 +168,23 @@ func generateJobs(
 	presubmits := map[string][]prowconfig.Presubmit{}
 	postsubmits := map[string][]prowconfig.Postsubmit{}
 
-	imagesTest := false
-
 	for _, element := range configSpec.Tests {
-		// Check if config file has "images" test defined to avoid name clash
-		// (we generate the additional `--target=[images]` jobs name with `images`
-		// as an identifier, but a user can have `images` test defined in his
-		// config file which would result in a clash)
-		if element.As == "images" {
-			imagesTest = true
-		}
 		test := testDescription{Name: element.As, Target: element.As}
 		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(test, org, repo, branch))
 	}
 
 	if len(configSpec.Images) > 0 {
-		var test testDescription
-		if imagesTest {
-			log.Print(
-				"WARNING: input config file has 'images' test defined\n" +
-					"This may get confused with built-in '[images]' target. Consider renaming this test.\n",
-			)
-			test = testDescription{Name: "[images]", Target: "[images]"}
-		} else {
-			test = testDescription{Name: "images", Target: "[images]"}
-		}
+		test := testDescription{Name: "images", Target: "[images]"}
 
 		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(test, org, repo, branch))
-		imagesPostsubmit := generatePostsubmitForTest(test, org, repo, branch, "--promote")
+
+		// If the images are promoted to 'openshift' namespace, we may want to add
+		// 'artifacts: images' label to the [images] postsubmit.
+		labels := map[string]string{}
+		if extractPromotionNamespace(configSpec) == "openshift" {
+			labels["artifacts"] = "images"
+		}
+		imagesPostsubmit := generatePostsubmitForTest(test, org, repo, branch, labels, "--promote")
 		postsubmits[orgrepo] = append(postsubmits[orgrepo], *imagesPostsubmit)
 	}
 

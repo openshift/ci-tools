@@ -75,13 +75,13 @@ func (o *options) process() error {
 // Generate a PodSpec that runs `ci-operator`, to be used in Presubmit/Postsubmit
 // Various pieces are derived from `org`, `repo`, `branch` and `target`.
 // `additionalArgs` are passed as additional arguments to `ci-operator`
-func generatePodSpec(org, repo, branch, target string, additionalArgs ...string) *kubeapi.PodSpec {
+func generatePodSpec(org, repo, configFile, target string, additionalArgs ...string) *kubeapi.PodSpec {
 	configMapKeyRef := kubeapi.EnvVarSource{
 		ConfigMapKeyRef: &kubeapi.ConfigMapKeySelector{
 			LocalObjectReference: kubeapi.LocalObjectReference{
 				Name: fmt.Sprintf("ci-operator-%s-%s", org, repo),
 			},
-			Key: fmt.Sprintf("%s.yaml", branch),
+			Key: configFile,
 		},
 	}
 
@@ -92,12 +92,7 @@ func generatePodSpec(org, repo, branch, target string, additionalArgs ...string)
 				Image:   "ci-operator:latest",
 				Command: []string{"ci-operator"},
 				Args:    append([]string{"--artifact-dir=$(ARTIFACTS)", fmt.Sprintf("--target=%s", target)}, additionalArgs...),
-				Env: []kubeapi.EnvVar{
-					{
-						Name:      "CONFIG_SPEC",
-						ValueFrom: &configMapKeyRef,
-					},
-				},
+				Env:     []kubeapi.EnvVar{{Name: "CONFIG_SPEC", ValueFrom: &configMapKeyRef}},
 			},
 		},
 	}
@@ -109,7 +104,7 @@ type testDescription struct {
 }
 
 // Generate a Presubmit job for the given parameters
-func generatePresubmitForTest(test testDescription, org, repo, branch string) *prowconfig.Presubmit {
+func generatePresubmitForTest(test testDescription, org, repo, branch, configFilename string) *prowconfig.Presubmit {
 	return &prowconfig.Presubmit{
 		Agent:        "kubernetes",
 		AlwaysRun:    true,
@@ -117,7 +112,7 @@ func generatePresubmitForTest(test testDescription, org, repo, branch string) *p
 		Context:      fmt.Sprintf("ci/prow/%s", test.Name),
 		Name:         fmt.Sprintf("pull-ci-%s-%s-%s-%s", org, repo, branch, test.Name),
 		RerunCommand: fmt.Sprintf("/test %s", test.Name),
-		Spec:         generatePodSpec(org, repo, branch, test.Target),
+		Spec:         generatePodSpec(org, repo, configFilename, test.Target),
 		Trigger:      fmt.Sprintf(`((?m)^/test( all| %s),?(\\s+|$))`, test.Name),
 		UtilityConfig: prowconfig.UtilityConfig{
 			DecorationConfig: &prowkube.DecorationConfig{SkipCloning: true},
@@ -127,12 +122,12 @@ func generatePresubmitForTest(test testDescription, org, repo, branch string) *p
 }
 
 // Generate a Presubmit job for the given parameters
-func generatePostsubmitForTest(test testDescription, org, repo, branch string, labels map[string]string, additionalArgs ...string) *prowconfig.Postsubmit {
+func generatePostsubmitForTest(test testDescription, org, repo, branch, configFilename string, labels map[string]string, additionalArgs ...string) *prowconfig.Postsubmit {
 	return &prowconfig.Postsubmit{
 		Agent:    "kubernetes",
 		Brancher: prowconfig.Brancher{Branches: []string{branch}},
 		Name:     fmt.Sprintf("branch-ci-%s-%s-%s-%s", org, repo, branch, test.Name),
-		Spec:     generatePodSpec(org, repo, branch, test.Target, additionalArgs...),
+		Spec:     generatePodSpec(org, repo, configFilename, test.Target, additionalArgs...),
 		Labels:   labels,
 		UtilityConfig: prowconfig.UtilityConfig{
 			DecorationConfig: &prowkube.DecorationConfig{SkipCloning: true},
@@ -163,7 +158,7 @@ func extractPromotionNamespace(configSpec *cioperatorapi.ReleaseBuildConfigurati
 //   will additionally pass `--promote` to ci-operator
 func generateJobs(
 	configSpec *cioperatorapi.ReleaseBuildConfiguration,
-	org, repo, branch string,
+	org, repo, branch, configFilename string,
 ) *prowconfig.JobConfig {
 
 	orgrepo := fmt.Sprintf("%s/%s", org, repo)
@@ -172,13 +167,13 @@ func generateJobs(
 
 	for _, element := range configSpec.Tests {
 		test := testDescription{Name: element.As, Target: element.As}
-		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(test, org, repo, branch))
+		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(test, org, repo, branch, configFilename))
 	}
 
 	if len(configSpec.Images) > 0 {
 		test := testDescription{Name: "images", Target: "[images]"}
 
-		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(test, org, repo, branch))
+		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(test, org, repo, branch, configFilename))
 
 		// If the images are promoted to 'openshift' namespace, we may want to add
 		// 'artifacts: images' label to the [images] postsubmit.
@@ -186,7 +181,7 @@ func generateJobs(
 		if extractPromotionNamespace(configSpec) == "openshift" {
 			labels["artifacts"] = "images"
 		}
-		imagesPostsubmit := generatePostsubmitForTest(test, org, repo, branch, labels, "--promote")
+		imagesPostsubmit := generatePostsubmitForTest(test, org, repo, branch, configFilename, labels, "--promote")
 		postsubmits[orgrepo] = append(postsubmits[orgrepo], *imagesPostsubmit)
 	}
 
@@ -214,21 +209,23 @@ func readCiOperatorConfig(configFilePath string) (*cioperatorapi.ReleaseBuildCon
 // about component repository information.
 // The convention for ci-operator config files in this repo:
 // ci-operator/config/ORGANIZATION/COMPONENT/BRANCH.yaml
-func extractRepoElementsFromPath(configFilePath string) (string, string, string, error) {
+func extractRepoElementsFromPath(configFilePath string) (string, string, string, string, error) {
 	configSpecDir := filepath.Dir(configFilePath)
 	repo := filepath.Base(configSpecDir)
 	if repo == "." || repo == "/" {
-		return "", "", "", fmt.Errorf("Could not extract repo from '%s' (expected path like '.../ORG/REPO/BRANCH.yaml", configFilePath)
+		return "", "", "", "", fmt.Errorf("Could not extract repo from '%s' (expected path like '.../ORG/REPO/BRANCH.yaml", configFilePath)
 	}
 
 	org := filepath.Base(filepath.Dir(configSpecDir))
 	if org == "." || org == "/" {
-		return "", "", "", fmt.Errorf("Could not extract org from '%s' (expected path like '.../ORG/REPO/BRANCH.yaml", configFilePath)
+		return "", "", "", "", fmt.Errorf("Could not extract org from '%s' (expected path like '.../ORG/REPO/BRANCH.yaml", configFilePath)
 	}
 
-	branch := strings.TrimSuffix(filepath.Base(configFilePath), filepath.Ext(configFilePath))
+	fileName := filepath.Base(configFilePath)
 
-	return org, repo, branch, nil
+	branch := strings.TrimSuffix(fileName, filepath.Ext(configFilePath))
+
+	return org, repo, branch, fileName, nil
 }
 
 func generateProwJobsFromConfigFile(configFilePath string) (*prowconfig.JobConfig, string, string, error) {
@@ -237,12 +234,11 @@ func generateProwJobsFromConfigFile(configFilePath string) (*prowconfig.JobConfi
 		return nil, "", "", err
 	}
 
-	org, repo, branch, err := extractRepoElementsFromPath(configFilePath)
+	org, repo, branch, configFilename, err := extractRepoElementsFromPath(configFilePath)
 	if err != nil {
 		return nil, "", "", err
 	}
-
-	jobConfig := generateJobs(configSpec, org, repo, branch)
+	jobConfig := generateJobs(configSpec, org, repo, branch, configFilename)
 
 	return jobConfig, org, repo, nil
 }

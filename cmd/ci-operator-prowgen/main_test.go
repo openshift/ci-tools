@@ -22,7 +22,7 @@ func TestGeneratePodSpec(t *testing.T) {
 	tests := []struct {
 		org            string
 		repo           string
-		branch         string
+		configFile     string
 		target         string
 		additionalArgs []string
 
@@ -31,7 +31,7 @@ func TestGeneratePodSpec(t *testing.T) {
 		{
 			org:            "organization",
 			repo:           "repo",
-			branch:         "branch",
+			configFile:     "config.json",
 			target:         "target",
 			additionalArgs: []string{},
 
@@ -48,7 +48,7 @@ func TestGeneratePodSpec(t *testing.T) {
 								LocalObjectReference: kubeapi.LocalObjectReference{
 									Name: "ci-operator-organization-repo",
 								},
-								Key: "branch.yaml",
+								Key: "config.json",
 							},
 						},
 					}},
@@ -58,7 +58,7 @@ func TestGeneratePodSpec(t *testing.T) {
 		{
 			org:            "organization",
 			repo:           "repo",
-			branch:         "branch",
+			configFile:     "config.yml",
 			target:         "target",
 			additionalArgs: []string{"--promote", "something"},
 
@@ -75,7 +75,7 @@ func TestGeneratePodSpec(t *testing.T) {
 								LocalObjectReference: kubeapi.LocalObjectReference{
 									Name: "ci-operator-organization-repo",
 								},
-								Key: "branch.yaml",
+								Key: "config.yml",
 							},
 						},
 					}},
@@ -87,9 +87,9 @@ func TestGeneratePodSpec(t *testing.T) {
 	for _, tc := range tests {
 		var podSpec *kubeapi.PodSpec
 		if len(tc.additionalArgs) == 0 {
-			podSpec = generatePodSpec(tc.org, tc.repo, tc.branch, tc.target)
+			podSpec = generatePodSpec(tc.org, tc.repo, tc.configFile, tc.target)
 		} else {
-			podSpec = generatePodSpec(tc.org, tc.repo, tc.branch, tc.target, tc.additionalArgs...)
+			podSpec = generatePodSpec(tc.org, tc.repo, tc.configFile, tc.target, tc.additionalArgs...)
 		}
 		if !equality.Semantic.DeepEqual(podSpec, tc.expected) {
 			t.Errorf("expected PodSpec diff:\n%s", diff.ObjectDiff(tc.expected, podSpec))
@@ -129,7 +129,7 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 		},
 	}
 	for _, tc := range tests {
-		presubmit := generatePresubmitForTest(testDescription{tc.name, tc.target}, tc.org, tc.repo, tc.branch)
+		presubmit := generatePresubmitForTest(testDescription{tc.name, tc.target}, tc.org, tc.repo, tc.branch, "config.yaml")
 		presubmit.Spec = nil // tested in generatePodSpec
 
 		if !equality.Semantic.DeepEqual(presubmit, tc.expected) {
@@ -213,9 +213,9 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 		var postsubmit *prowconfig.Postsubmit
 
 		if len(tc.additionalArgs) == 0 {
-			postsubmit = generatePostsubmitForTest(testDescription{tc.name, tc.target}, tc.org, tc.repo, tc.branch, tc.labels)
+			postsubmit = generatePostsubmitForTest(testDescription{tc.name, tc.target}, tc.org, tc.repo, tc.branch, "branch.yaml", tc.labels)
 		} else {
-			postsubmit = generatePostsubmitForTest(testDescription{tc.name, tc.target}, tc.org, tc.repo, tc.branch, tc.labels, tc.additionalArgs...)
+			postsubmit = generatePostsubmitForTest(testDescription{tc.name, tc.target}, tc.org, tc.repo, tc.branch, "branch.yaml", tc.labels, tc.additionalArgs...)
 			// tests that additional args were propagated to the PodSpec
 			if !equality.Semantic.DeepEqual(postsubmit.Spec.Containers[0].Args[2:], tc.additionalArgs) {
 				t.Errorf("additional args not propagated to postsubmit:\n%s", diff.ObjectDiff(tc.additionalArgs, postsubmit.Spec.Containers[0].Args[2:]))
@@ -402,7 +402,7 @@ func TestGenerateJobs(t *testing.T) {
 
 	log.SetOutput(ioutil.Discard)
 	for _, tc := range tests {
-		jobConfig := generateJobs(tc.config, tc.org, tc.repo, tc.branch)
+		jobConfig := generateJobs(tc.config, tc.org, tc.repo, tc.branch, "branch.yml")
 
 		prune(jobConfig) // prune the fields that are tested in TestGeneratePre/PostsubmitForTest
 
@@ -437,19 +437,20 @@ func prune(jobConfig *prowconfig.JobConfig) {
 
 func TestExtractRepoElementsFromPath(t *testing.T) {
 	testCases := []struct {
-		path           string
-		expectedOrg    string
-		expectedRepo   string
-		expectedBranch string
-		expectedError  bool
+		path                   string
+		expectedOrg            string
+		expectedRepo           string
+		expectedBranch         string
+		expectedConfigFilename string
+		expectedError          bool
 	}{
-		{"../../ci-operator/openshift/component/master.yaml", "openshift", "component", "master", false},
-		{"master.yaml", "", "", "", true},
-		{"dir/master.yaml", "", "", "", true},
+		{"../../ci-operator/openshift/component/master.yaml", "openshift", "component", "master", "master.yaml", false},
+		{"master.yaml", "", "", "", "", true},
+		{"dir/master.yaml", "", "", "", "", true},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.path, func(t *testing.T) {
-			org, repo, branch, err := extractRepoElementsFromPath(tc.path)
+			org, repo, branch, configFile, err := extractRepoElementsFromPath(tc.path)
 			if !tc.expectedError {
 				if err != nil {
 					t.Errorf("returned unexpected error '%v", err)
@@ -462,6 +463,9 @@ func TestExtractRepoElementsFromPath(t *testing.T) {
 				}
 				if branch != tc.expectedBranch {
 					t.Errorf("branch extracted incorrectly: got '%s', expected '%s'", branch, tc.expectedBranch)
+				}
+				if configFile != tc.expectedConfigFilename {
+					t.Errorf("configFilename extracted incorrectly: got '%s', expected '%s'", configFile, tc.expectedConfigFilename)
 				}
 			} else { // expected error
 				if err == nil {
@@ -619,6 +623,7 @@ func prepareInputs(org, component, branch string, configYAML, prowConfigYAML []b
 
 func TestFromCIOperatorConfigToProwYaml(t *testing.T) {
 	tests := []struct {
+		id               string
 		org              string
 		component        string
 		branch           string
@@ -627,6 +632,7 @@ func TestFromCIOperatorConfigToProwYaml(t *testing.T) {
 		prowExpectedYAML []byte
 	}{
 		{
+			id:        "one test and images, no previous jobs. Expect test presubmit + pre/post submit images jobs",
 			org:       "super",
 			component: "duper",
 			branch:    "branch",
@@ -731,6 +737,7 @@ presubmits:
       serviceAccountName: ci-operator
     trigger: ((?m)^/test( all| images),?(\\s+|$))
 `)}, {
+			id:        "One test and images, one existing job. Expect one presubmit, pre/post submit images jobs. Existing job should not be changed.",
 			org:       "super",
 			component: "duper",
 			branch:    "branch",
@@ -884,6 +891,7 @@ presubmits:
     trigger: ((?m)^/test( all| images),?(\\s+|$))
 `),
 		}, {
+			id:        "Input is YAML and it is correctly processed",
 			org:       "super",
 			component: "duper",
 			branch:    "branch",
@@ -941,6 +949,8 @@ tests:
     branches:
     - branch
     decorate: true
+    labels:
+      artifacts: images
     name: branch-ci-super-duper-branch-images
     skip_cloning: true
     spec:

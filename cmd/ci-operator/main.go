@@ -192,7 +192,7 @@ type options struct {
 	secrets       []*coreapi.Secret
 	templates     []*templateapi.Template
 	configSpec    *api.ReleaseBuildConfiguration
-	jobSpec       *steps.JobSpec
+	jobSpec       *api.JobSpec
 	clusterConfig *rest.Config
 
 	givePrAuthorAccessToNamespace bool
@@ -284,7 +284,7 @@ func (o *options) Complete() error {
 		return fmt.Errorf("invalid configuration: %v", err)
 	}
 
-	jobSpec, err := steps.ResolveSpecFromEnv()
+	jobSpec, err := api.ResolveSpecFromEnv()
 	if err != nil {
 		if len(o.gitRef) == 0 {
 			// Failed to read $JOB_SPEC and --git-ref was not passed
@@ -304,7 +304,7 @@ func (o *options) Complete() error {
 		}
 		jobSpec.Refs = spec.Refs
 	}
-	jobSpec.SetBaseNamespace(o.baseNamespace)
+	jobSpec.BaseNamespace = o.baseNamespace
 	o.jobSpec = jobSpec
 
 	if o.dry {
@@ -508,7 +508,7 @@ func (o *options) resolveInputs(ctx context.Context, steps []api.Step) error {
 	o.namespace = strings.Replace(o.namespace, "{id}", o.inputHash, -1)
 	// TODO: instead of mutating this here, we should pass the parts of graph execution that are resolved
 	// after the graph is created but before it is run down into the run step.
-	o.jobSpec.SetNamespace(o.namespace)
+	o.jobSpec.Namespace = o.namespace
 	log.Printf("Resolved inputs, targetting namespace %s", o.namespace)
 
 	return nil
@@ -631,9 +631,9 @@ func (o *options) initializeNamespace() error {
 	}
 
 	// create the image stream or read it to get its uid
-	is, err := imageGetter.ImageStreams(o.jobSpec.Namespace()).Create(&imageapi.ImageStream{
+	is, err := imageGetter.ImageStreams(o.jobSpec.Namespace).Create(&imageapi.ImageStream{
 		ObjectMeta: meta.ObjectMeta{
-			Namespace: o.jobSpec.Namespace(),
+			Namespace: o.jobSpec.Namespace,
 			Name:      steps.PipelineImageStream,
 		},
 		Spec: imageapi.ImageStreamSpec{
@@ -645,7 +645,7 @@ func (o *options) initializeNamespace() error {
 		if !kerrors.IsAlreadyExists(err) {
 			return fmt.Errorf("could not set up pipeline imagestream for test: %v", err)
 		}
-		is, _ = imageGetter.ImageStreams(o.jobSpec.Namespace()).Get(steps.PipelineImageStream, meta.GetOptions{})
+		is, _ = imageGetter.ImageStreams(o.jobSpec.Namespace).Get(steps.PipelineImageStream, meta.GetOptions{})
 	}
 	if is != nil {
 		isTrue := true
@@ -716,7 +716,7 @@ func inputHash(inputs api.InputDefinition) string {
 }
 
 // eventJobDescription returns a string representing the pull requests and authors description, to be used in events.
-func eventJobDescription(jobSpec *steps.JobSpec, namespace string) string {
+func eventJobDescription(jobSpec *api.JobSpec, namespace string) string {
 	pulls := []string{}
 	authors := []string{}
 
@@ -734,7 +734,7 @@ func eventJobDescription(jobSpec *steps.JobSpec, namespace string) string {
 }
 
 // jobDescription returns a string representing the job's description.
-func jobDescription(job *steps.JobSpec, config *api.ReleaseBuildConfiguration) string {
+func jobDescription(job *api.JobSpec, config *api.ReleaseBuildConfiguration) string {
 	var links []string
 	for _, pull := range job.Refs.Pulls {
 		links = append(links, fmt.Sprintf("https://github.com/%s/%s/pull/%d - %s", job.Refs.Org, job.Refs.Repo, pull.Number, pull.Author))
@@ -745,7 +745,7 @@ func jobDescription(job *steps.JobSpec, config *api.ReleaseBuildConfiguration) s
 	return fmt.Sprintf("%s on https://github.com/%s/%s ref=%s commit=%s", job.Job, job.Refs.Org, job.Refs.Repo, job.Refs.BaseRef, job.Refs.BaseSHA)
 }
 
-func jobSpecFromGitRef(ref string) (*steps.JobSpec, error) {
+func jobSpecFromGitRef(ref string) (*api.JobSpec, error) {
 	parts := strings.Split(ref, "@")
 	if len(parts) != 2 {
 		return nil, fmt.Errorf("must be ORG/NAME@COMMIT")
@@ -764,7 +764,7 @@ func jobSpecFromGitRef(ref string) (*steps.JobSpec, error) {
 		return nil, fmt.Errorf("ref '%s' does not point to any commit in '%s'", parts[1], parts[0])
 	}
 	log.Printf("Resolved %s to commit %s", ref, sha)
-	return &steps.JobSpec{Type: steps.PeriodicJob, Job: "dev", Refs: steps.Refs{Org: prefix[0], Repo: prefix[1], BaseRef: parts[1], BaseSHA: sha}}, nil
+	return &api.JobSpec{Type: api.PeriodicJob, Job: "dev", Refs: api.Refs{Org: prefix[0], Repo: prefix[1], BaseRef: parts[1], BaseSHA: sha}}, nil
 }
 
 func nodeNames(nodes []*api.StepNode) []string {

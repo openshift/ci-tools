@@ -37,7 +37,7 @@ var (
 	JobSpecAnnotation = fmt.Sprintf("%s/%s", CiAnnotationPrefix, "job-spec")
 )
 
-func sourceDockerfile(fromTag api.PipelineImageStreamTagReference, pathAlias string, job *JobSpec) string {
+func sourceDockerfile(fromTag api.PipelineImageStreamTagReference, pathAlias string, job *api.JobSpec) string {
 	workingDir := fmt.Sprintf("github.com/%s/%s", job.Refs.Org, job.Refs.Repo)
 	if len(pathAlias) > 0 {
 		workingDir = pathAlias
@@ -57,7 +57,7 @@ type sourceStep struct {
 	buildClient        BuildClient
 	imageClient        imageclientset.ImageV1Interface
 	clonerefsSrcClient imageclientset.ImageV1Interface
-	jobSpec            *JobSpec
+	jobSpec            *api.JobSpec
 }
 
 func (s *sourceStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
@@ -114,7 +114,7 @@ func (s *sourceStep) Run(ctx context.Context, dry bool) error {
 	return handleBuild(s.buildClient, build, dry)
 }
 
-func buildFromSource(jobSpec *JobSpec, fromTag, toTag api.PipelineImageStreamTagReference, source buildapi.BuildSource, dockerfilePath string, resources api.ResourceConfiguration) *buildapi.Build {
+func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStreamTagReference, source buildapi.BuildSource, dockerfilePath string, resources api.ResourceConfiguration) *buildapi.Build {
 	log.Printf("Building %s", toTag)
 	buildResources, err := resourcesFor(resources.RequirementsForStep(string(toTag)))
 	if err != nil {
@@ -124,7 +124,7 @@ func buildFromSource(jobSpec *JobSpec, fromTag, toTag api.PipelineImageStreamTag
 	if len(fromTag) > 0 {
 		from = &coreapi.ObjectReference{
 			Kind:      "ImageStreamTag",
-			Namespace: jobSpec.Namespace(),
+			Namespace: jobSpec.Namespace,
 			Name:      fmt.Sprintf("%s:%s", PipelineImageStream, fromTag),
 		}
 	}
@@ -133,7 +133,7 @@ func buildFromSource(jobSpec *JobSpec, fromTag, toTag api.PipelineImageStreamTag
 	build := &buildapi.Build{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      string(toTag),
-			Namespace: jobSpec.Namespace(),
+			Namespace: jobSpec.Namespace,
 			Labels: map[string]string{
 				PersistsLabel:    "false",
 				JobLabel:         jobSpec.Job,
@@ -143,7 +143,7 @@ func buildFromSource(jobSpec *JobSpec, fromTag, toTag api.PipelineImageStreamTag
 				CreatedByCILabel: "true",
 			},
 			Annotations: map[string]string{
-				JobSpecAnnotation: jobSpec.rawSpec,
+				JobSpecAnnotation: jobSpec.RawSpec(),
 			},
 		},
 		Spec: buildapi.BuildSpec{
@@ -165,7 +165,7 @@ func buildFromSource(jobSpec *JobSpec, fromTag, toTag api.PipelineImageStreamTag
 				Output: buildapi.BuildOutput{
 					To: &coreapi.ObjectReference{
 						Kind:      "ImageStreamTag",
-						Namespace: jobSpec.Namespace(),
+						Namespace: jobSpec.Namespace,
 						Name:      fmt.Sprintf("%s:%s", PipelineImageStream, toTag),
 					},
 				},
@@ -362,7 +362,7 @@ func resourcesFor(req api.ResourceRequirements) (coreapi.ResourceRequirements, e
 }
 
 func (s *sourceStep) Done() (bool, error) {
-	return imageStreamTagExists(s.config.To, s.imageClient.ImageStreamTags(s.jobSpec.Namespace()))
+	return imageStreamTagExists(s.config.To, s.imageClient.ImageStreamTags(s.jobSpec.Namespace))
 }
 
 func imageStreamTagExists(reference api.PipelineImageStreamTagReference, istClient imageclientset.ImageStreamTagInterface) (bool, error) {
@@ -393,7 +393,7 @@ func (s *sourceStep) Creates() []api.StepLink {
 func (s *sourceStep) Provides() (api.ParameterMap, api.StepLink) {
 	return api.ParameterMap{
 		"LOCAL_IMAGE_SRC": func() (string, error) {
-			is, err := s.imageClient.ImageStreams(s.jobSpec.Namespace()).Get(PipelineImageStream, meta.GetOptions{})
+			is, err := s.imageClient.ImageStreams(s.jobSpec.Namespace).Get(PipelineImageStream, meta.GetOptions{})
 			if err != nil {
 				return "", fmt.Errorf("could not get output imagestream: %v", err)
 			}
@@ -416,7 +416,7 @@ func (s *sourceStep) Description() string {
 	return fmt.Sprintf("Clone the correct source code into an image and tag it as %s", s.config.To)
 }
 
-func SourceStep(config api.SourceStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, clonerefsSrcClient imageclientset.ImageV1Interface, imageClient imageclientset.ImageV1Interface, jobSpec *JobSpec) api.Step {
+func SourceStep(config api.SourceStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, clonerefsSrcClient imageclientset.ImageV1Interface, imageClient imageclientset.ImageV1Interface, jobSpec *api.JobSpec) api.Step {
 	return &sourceStep{
 		config:             config,
 		resources:          resources,

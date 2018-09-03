@@ -18,7 +18,7 @@ type projectDirectoryImageBuildStep struct {
 	resources   api.ResourceConfiguration
 	buildClient BuildClient
 	istClient   imageclientset.ImageStreamTagsGetter
-	jobSpec     *JobSpec
+	jobSpec     *api.JobSpec
 }
 
 func (s *projectDirectoryImageBuildStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
@@ -32,7 +32,7 @@ func (s *projectDirectoryImageBuildStep) Run(ctx context.Context, dry bool) erro
 	if dry {
 		workingDir = "dry-fake"
 	} else {
-		ist, err := s.istClient.ImageStreamTags(s.jobSpec.Namespace()).Get(source, meta.GetOptions{})
+		ist, err := s.istClient.ImageStreamTags(s.jobSpec.Namespace).Get(source, meta.GetOptions{})
 		if err != nil {
 			return fmt.Errorf("could not fetch source ImageStreamTag: %v", err)
 		}
@@ -70,7 +70,7 @@ func (s *projectDirectoryImageBuildStep) Run(ctx context.Context, dry bool) erro
 }
 
 func (s *projectDirectoryImageBuildStep) Done() (bool, error) {
-	return imageStreamTagExists(s.config.To, s.istClient.ImageStreamTags(s.jobSpec.Namespace()))
+	return imageStreamTagExists(s.config.To, s.istClient.ImageStreamTags(s.jobSpec.Namespace))
 }
 
 func (s *projectDirectoryImageBuildStep) Requires() []api.StepLink {
@@ -100,7 +100,7 @@ func (s *projectDirectoryImageBuildStep) Description() string {
 	return fmt.Sprintf("Build image %s from the repository", s.config.To)
 }
 
-func ProjectDirectoryImageBuildStep(config api.ProjectDirectoryImageBuildStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, istClient imageclientset.ImageStreamTagsGetter, jobSpec *JobSpec) api.Step {
+func ProjectDirectoryImageBuildStep(config api.ProjectDirectoryImageBuildStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, istClient imageclientset.ImageStreamTagsGetter, jobSpec *api.JobSpec) api.Step {
 	return &projectDirectoryImageBuildStep{
 		config:      config,
 		resources:   resources,

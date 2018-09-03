@@ -22,7 +22,7 @@ type testStep struct {
 	podClient   PodClient
 	istClient   imageclientset.ImageStreamTagsGetter
 	artifactDir string
-	jobSpec     *JobSpec
+	jobSpec     *api.JobSpec
 }
 
 func (s *testStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
@@ -48,7 +48,7 @@ func (s *testStep) Run(ctx context.Context, dry bool) error {
 				CreatedByCILabel: "true",
 			},
 			Annotations: map[string]string{
-				JobSpecAnnotation: s.jobSpec.rawSpec,
+				JobSpecAnnotation: s.jobSpec.RawSpec(),
 			},
 		},
 		Spec: coreapi.PodSpec{
@@ -68,7 +68,7 @@ func (s *testStep) Run(ctx context.Context, dry bool) error {
 	// when the test container terminates and artifact directory has been set, grab everything under the directory
 	var notifier ContainerNotifier = NopNotifier
 	if s.gatherArtifacts() {
-		artifacts := NewArtifactWorker(s.podClient, filepath.Join(s.artifactDir, s.config.As), s.jobSpec.Namespace())
+		artifacts := NewArtifactWorker(s.podClient, filepath.Join(s.artifactDir, s.config.As), s.jobSpec.Namespace)
 		pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, coreapi.VolumeMount{
 			Name:      "artifacts",
 			MountPath: s.config.ArtifactDir,
@@ -92,17 +92,17 @@ func (s *testStep) Run(ctx context.Context, dry bool) error {
 		<-ctx.Done()
 		notifier.Cancel()
 		log.Printf("cleanup: Deleting test pod %s", s.config.As)
-		if err := s.podClient.Pods(s.jobSpec.Namespace()).Delete(s.config.As, nil); err != nil && !errors.IsNotFound(err) {
+		if err := s.podClient.Pods(s.jobSpec.Namespace).Delete(s.config.As, nil); err != nil && !errors.IsNotFound(err) {
 			log.Printf("error: Could not delete test pod: %v", err)
 		}
 	}()
 
-	pod, err = createOrRestartPod(s.podClient.Pods(s.jobSpec.Namespace()), pod)
+	pod, err = createOrRestartPod(s.podClient.Pods(s.jobSpec.Namespace), pod)
 	if err != nil {
 		return fmt.Errorf("failed to create or restart test pod: %v", err)
 	}
 
-	if err := waitForPodCompletion(s.podClient.Pods(s.jobSpec.Namespace()), pod.Name, notifier); err != nil {
+	if err := waitForPodCompletion(s.podClient.Pods(s.jobSpec.Namespace), pod.Name, notifier); err != nil {
 		return fmt.Errorf("failed to wait for test pod to complete: %v", err)
 	}
 
@@ -114,7 +114,7 @@ func (s *testStep) gatherArtifacts() bool {
 }
 
 func (s *testStep) Done() (bool, error) {
-	ready, err := isPodCompleted(s.podClient.Pods(s.jobSpec.Namespace()), s.config.As)
+	ready, err := isPodCompleted(s.podClient.Pods(s.jobSpec.Namespace), s.config.As)
 	if err != nil {
 		return false, fmt.Errorf("failed to determine if test pod was completed: %v", err)
 	}
@@ -142,7 +142,7 @@ func (s *testStep) Description() string {
 	return fmt.Sprintf("Run the tests for %s in a pod and wait for success or failure", s.config.As)
 }
 
-func TestStep(config api.TestStepConfiguration, resources api.ResourceConfiguration, podClient PodClient, artifactDir string, jobSpec *JobSpec) api.Step {
+func TestStep(config api.TestStepConfiguration, resources api.ResourceConfiguration, podClient PodClient, artifactDir string, jobSpec *api.JobSpec) api.Step {
 	return &testStep{
 		config:      config,
 		resources:   resources,

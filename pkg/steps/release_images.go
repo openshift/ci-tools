@@ -25,11 +25,11 @@ const (
 
 // stableImagesTagStep is used when no release configuration is necessary
 type stableImagesTagStep struct {
-	jobSpec   *JobSpec
+	jobSpec   *api.JobSpec
 	dstClient imageclientset.ImageV1Interface
 }
 
-func StableImagesTagStep(dstClient imageclientset.ImageV1Interface, jobSpec *JobSpec) api.Step {
+func StableImagesTagStep(dstClient imageclientset.ImageV1Interface, jobSpec *api.JobSpec) api.Step {
 	return &stableImagesTagStep{
 		dstClient: dstClient,
 		jobSpec:   jobSpec,
@@ -52,7 +52,7 @@ func (s *stableImagesTagStep) Run(ctx context.Context, dry bool) error {
 		fmt.Printf("%s\n", istJSON)
 		return nil
 	}
-	_, err := s.dstClient.ImageStreams(s.jobSpec.Namespace()).Create(newIS)
+	_, err := s.dstClient.ImageStreams(s.jobSpec.Namespace).Create(newIS)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		return fmt.Errorf("could not create stable imagestreamtag: %v", err)
 	}
@@ -88,7 +88,7 @@ type releaseImagesTagStep struct {
 	routeClient     routeclientset.RoutesGetter
 	configMapClient coreclientset.ConfigMapsGetter
 	params          *DeferredParameters
-	jobSpec         *JobSpec
+	jobSpec         *api.JobSpec
 }
 
 func findStatusTag(is *imageapi.ImageStream, tag string) (*coreapi.ObjectReference, string) {
@@ -190,7 +190,7 @@ func (s *releaseImagesTagStep) Run(ctx context.Context, dry bool) error {
 			fmt.Printf("%s\n", istJSON)
 			return nil
 		}
-		is, err = s.dstClient.ImageStreams(s.jobSpec.Namespace()).Create(newIS)
+		is, err = s.dstClient.ImageStreams(s.jobSpec.Namespace).Create(newIS)
 		if err != nil && !errors.IsAlreadyExists(err) {
 			return fmt.Errorf("could not copy stable imagestreamtag: %v", err)
 		}
@@ -250,7 +250,7 @@ func (s *releaseImagesTagStep) Run(ctx context.Context, dry bool) error {
 				}
 				ist := &imageapi.ImageStreamTag{
 					ObjectMeta: meta.ObjectMeta{
-						Namespace: s.jobSpec.Namespace(),
+						Namespace: s.jobSpec.Namespace,
 						Name:      fmt.Sprintf("%s:%s", stableImageStream.Name, targetTag),
 					},
 					Tag: &imageapi.TagReference{
@@ -275,7 +275,7 @@ func (s *releaseImagesTagStep) Run(ctx context.Context, dry bool) error {
 					fmt.Printf("%s\n", istJSON)
 					continue
 				}
-				ist, err := s.dstClient.ImageStreamTags(s.jobSpec.Namespace()).Create(ist)
+				ist, err := s.dstClient.ImageStreamTags(s.jobSpec.Namespace).Create(ist)
 				if err != nil && !errors.IsAlreadyExists(err) {
 					return fmt.Errorf("could not copy stable imagestreamtag: %v", err)
 				}
@@ -294,7 +294,7 @@ func (s *releaseImagesTagStep) createReleaseConfigMap(dry bool) error {
 	imageBase := "dry-fake"
 	rpmRepo := "dry-fake"
 	if !dry {
-		originImageStream, err := s.dstClient.ImageStreams(s.jobSpec.Namespace()).Get("origin", meta.GetOptions{})
+		originImageStream, err := s.dstClient.ImageStreams(s.jobSpec.Namespace).Get("origin", meta.GetOptions{})
 		if err != nil {
 			return fmt.Errorf("could not resolve main release ImageStream: %v", err)
 		}
@@ -303,7 +303,7 @@ func (s *releaseImagesTagStep) createReleaseConfigMap(dry bool) error {
 		}
 		imageBase = originImageStream.Status.PublicDockerImageRepository
 
-		rpmRepoServer, err := s.routeClient.Routes(s.jobSpec.Namespace()).Get(RPMRepoName, meta.GetOptions{})
+		rpmRepoServer, err := s.routeClient.Routes(s.jobSpec.Namespace).Get(RPMRepoName, meta.GetOptions{})
 		if !errors.IsNotFound(err) {
 			return fmt.Errorf("could not retrieve RPM repo server route: %v", err)
 		} else {
@@ -318,7 +318,7 @@ func (s *releaseImagesTagStep) createReleaseConfigMap(dry bool) error {
 	cm := &coreapi.ConfigMap{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      ConfigMapName,
-			Namespace: s.jobSpec.Namespace(),
+			Namespace: s.jobSpec.Namespace,
 		},
 		Data: map[string]string{
 			"image-base": imageBase,
@@ -333,7 +333,7 @@ func (s *releaseImagesTagStep) createReleaseConfigMap(dry bool) error {
 		fmt.Printf("%s\n", cmJSON)
 		return nil
 	}
-	if _, err := s.configMapClient.ConfigMaps(s.jobSpec.Namespace()).Create(cm); err != nil && !errors.IsAlreadyExists(err) {
+	if _, err := s.configMapClient.ConfigMaps(s.jobSpec.Namespace).Create(cm); err != nil && !errors.IsAlreadyExists(err) {
 		return fmt.Errorf("could not create release configmap: %v", err)
 	}
 	return nil
@@ -341,7 +341,7 @@ func (s *releaseImagesTagStep) createReleaseConfigMap(dry bool) error {
 
 func (s *releaseImagesTagStep) Done() (bool, error) {
 	log.Printf("Checking for existence of %s ConfigMap", ConfigMapName)
-	if _, err := s.configMapClient.ConfigMaps(s.jobSpec.Namespace()).Get(ConfigMapName, meta.GetOptions{}); err != nil {
+	if _, err := s.configMapClient.ConfigMaps(s.jobSpec.Namespace).Get(ConfigMapName, meta.GetOptions{}); err != nil {
 		if errors.IsNotFound(err) {
 			return false, nil
 		} else {
@@ -374,15 +374,15 @@ func (s *releaseImagesTagStep) imageFormat() (string, error) {
 	registry := strings.SplitN(spec, "/", 2)[0]
 	var format string
 	if len(s.config.Name) > 0 {
-		format = fmt.Sprintf("%s/%s/%s:%s", registry, s.jobSpec.Namespace(), fmt.Sprintf("%s%s", s.config.NamePrefix, StableImageStream), componentFormatReplacement)
+		format = fmt.Sprintf("%s/%s/%s:%s", registry, s.jobSpec.Namespace, fmt.Sprintf("%s%s", s.config.NamePrefix, StableImageStream), componentFormatReplacement)
 	} else {
-		format = fmt.Sprintf("%s/%s/%s:%s", registry, s.jobSpec.Namespace(), fmt.Sprintf("%s%s", s.config.NamePrefix, componentFormatReplacement), s.config.Tag)
+		format = fmt.Sprintf("%s/%s/%s:%s", registry, s.jobSpec.Namespace, fmt.Sprintf("%s%s", s.config.NamePrefix, componentFormatReplacement), s.config.Tag)
 	}
 	return format, nil
 }
 
 func (s *releaseImagesTagStep) repositoryPullSpec() (string, error) {
-	is, err := s.dstClient.ImageStreams(s.jobSpec.Namespace()).Get(PipelineImageStream, meta.GetOptions{})
+	is, err := s.dstClient.ImageStreams(s.jobSpec.Namespace).Get(PipelineImageStream, meta.GetOptions{})
 	if err != nil {
 		return "", err
 	}
@@ -401,7 +401,7 @@ func (s *releaseImagesTagStep) Description() string {
 	return fmt.Sprintf("Find all of the input images from %s and tag them into the output image stream", sourceName(s.config))
 }
 
-func ReleaseImagesTagStep(config api.ReleaseTagConfiguration, srcClient, dstClient imageclientset.ImageV1Interface, routeClient routeclientset.RoutesGetter, configMapClient coreclientset.ConfigMapsGetter, params *DeferredParameters, jobSpec *JobSpec) api.Step {
+func ReleaseImagesTagStep(config api.ReleaseTagConfiguration, srcClient, dstClient imageclientset.ImageV1Interface, routeClient routeclientset.RoutesGetter, configMapClient coreclientset.ConfigMapsGetter, params *DeferredParameters, jobSpec *api.JobSpec) api.Step {
 	// when source and destination client are the same, we don't need to use external imports
 	if srcClient == dstClient {
 		config.Cluster = ""

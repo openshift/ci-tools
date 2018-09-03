@@ -44,7 +44,7 @@ const (
 // all raw steps that the user provided.
 func FromConfig(
 	config *api.ReleaseBuildConfiguration,
-	jobSpec *JobSpec,
+	jobSpec *api.JobSpec,
 	templates []*templateapi.Template,
 	paramFile, artifactDir string,
 	promote bool,
@@ -112,7 +112,7 @@ func FromConfig(
 	params.Add("JOB_NAME", nil, func() (string, error) { return jobSpec.Job, nil })
 	params.Add("JOB_NAME_HASH", nil, func() (string, error) { return fmt.Sprintf("%x", sha256.Sum256([]byte(jobSpec.Job)))[:5], nil })
 	params.Add("JOB_NAME_SAFE", nil, func() (string, error) { return strings.Replace(jobSpec.Job, "_", "-", -1), nil })
-	params.Add("NAMESPACE", nil, func() (string, error) { return jobSpec.Namespace(), nil })
+	params.Add("NAMESPACE", nil, func() (string, error) { return jobSpec.Namespace, nil })
 
 	var imageStepLinks []api.StepLink
 	var hasReleaseConfiguration bool
@@ -253,7 +253,7 @@ func normalizeURL(s string) string {
 	return s
 }
 
-func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec) []api.StepConfiguration {
+func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.JobSpec) []api.StepConfiguration {
 	var buildSteps []api.StepConfiguration
 
 	if config.InputConfiguration.BaseImages == nil {
@@ -288,7 +288,7 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec
 
 	if target := config.InputConfiguration.TestBaseImage; target != nil {
 		if target.Namespace == "" {
-			target.Namespace = jobSpec.baseNamespace
+			target.Namespace = jobSpec.BaseNamespace
 		}
 		if target.Name == "" {
 			target.Name = fmt.Sprintf("%s-test-base", jobSpec.Refs.Repo)

@@ -19,7 +19,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 	var testCases = []struct {
 		name    string
 		input   *api.ReleaseBuildConfiguration
-		jobSpec *JobSpec
+		jobSpec *api.JobSpec
 		output  []api.StepConfiguration
 	}{
 		{
@@ -29,11 +29,11 @@ func TestStepConfigsForBuild(t *testing.T) {
 					TestBaseImage: &api.ImageStreamTagReference{Tag: "manual"},
 				},
 			},
-			jobSpec: &JobSpec{
-				Refs: Refs{
+			jobSpec: &api.JobSpec{
+				Refs: api.Refs{
 					Repo: "repo",
 				},
-				baseNamespace: "base-1",
+				BaseNamespace: "base-1",
 			},
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
@@ -59,11 +59,11 @@ func TestStepConfigsForBuild(t *testing.T) {
 				},
 				BinaryBuildCommands: "hi",
 			},
-			jobSpec: &JobSpec{
-				Refs: Refs{
+			jobSpec: &api.JobSpec{
+				Refs: api.Refs{
 					Repo: "repo",
 				},
-				baseNamespace: "base-1",
+				BaseNamespace: "base-1",
 			},
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
@@ -96,11 +96,11 @@ func TestStepConfigsForBuild(t *testing.T) {
 				BinaryBuildCommands: "hi",
 				RpmBuildCommands:    "hello",
 			},
-			jobSpec: &JobSpec{
-				Refs: Refs{
+			jobSpec: &api.JobSpec{
+				Refs: api.Refs{
 					Repo: "repo",
 				},
-				baseNamespace: "base-1",
+				BaseNamespace: "base-1",
 			},
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
@@ -142,11 +142,11 @@ func TestStepConfigsForBuild(t *testing.T) {
 				},
 				RpmBuildCommands: "hello",
 			},
-			jobSpec: &JobSpec{
-				Refs: Refs{
+			jobSpec: &api.JobSpec{
+				Refs: api.Refs{
 					Repo: "repo",
 				},
-				baseNamespace: "base-1",
+				BaseNamespace: "base-1",
 			},
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
@@ -183,11 +183,11 @@ func TestStepConfigsForBuild(t *testing.T) {
 				RpmBuildLocation: "testing",
 				RpmBuildCommands: "hello",
 			},
-			jobSpec: &JobSpec{
-				Refs: Refs{
+			jobSpec: &api.JobSpec{
+				Refs: api.Refs{
 					Repo: "repo",
 				},
-				baseNamespace: "base-1",
+				BaseNamespace: "base-1",
 			},
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
@@ -229,11 +229,11 @@ func TestStepConfigsForBuild(t *testing.T) {
 					},
 				},
 			},
-			jobSpec: &JobSpec{
-				Refs: Refs{
+			jobSpec: &api.JobSpec{
+				Refs: api.Refs{
 					Repo: "repo",
 				},
-				baseNamespace: "base-1",
+				BaseNamespace: "base-1",
 			},
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
@@ -275,11 +275,11 @@ func TestStepConfigsForBuild(t *testing.T) {
 					},
 				},
 			},
-			jobSpec: &JobSpec{
-				Refs: Refs{
+			jobSpec: &api.JobSpec{
+				Refs: api.Refs{
 					Repo: "repo",
 				},
-				baseNamespace: "base-1",
+				BaseNamespace: "base-1",
 			},
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{

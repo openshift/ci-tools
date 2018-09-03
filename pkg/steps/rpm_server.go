@@ -39,7 +39,7 @@ type rpmServerStep struct {
 	routeClient      routeclientset.RoutesGetter
 	serviceClient    coreclientset.ServicesGetter
 	istClient        imageclientset.ImageStreamTagsGetter
-	jobSpec          *JobSpec
+	jobSpec          *api.JobSpec
 }
 
 func (s *rpmServerStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
@@ -51,7 +51,7 @@ func (s *rpmServerStep) Run(ctx context.Context, dry bool) error {
 	if dry {
 		imageReference = "dry-fake"
 	} else {
-		ist, err := s.istClient.ImageStreamTags(s.jobSpec.Namespace()).Get(fmt.Sprintf("%s:%s", PipelineImageStream, s.config.From), meta.GetOptions{})
+		ist, err := s.istClient.ImageStreamTags(s.jobSpec.Namespace).Get(fmt.Sprintf("%s:%s", PipelineImageStream, s.config.From), meta.GetOptions{})
 		if err != nil {
 			return fmt.Errorf("could not find source ImageStreamTag for RPM repo deployment: %v", err)
 		}
@@ -72,7 +72,7 @@ func (s *rpmServerStep) Run(ctx context.Context, dry bool) error {
 	}
 	commonMeta := meta.ObjectMeta{
 		Name:      RPMRepoName,
-		Namespace: s.jobSpec.Namespace(),
+		Namespace: s.jobSpec.Namespace,
 		Labels:    labelSet,
 	}
 
@@ -173,7 +173,7 @@ python /tmp/serve.py
 		}
 		fmt.Printf("%s\n", deploymentConfigJSON)
 	} else {
-		if _, err := s.deploymentClient.DeploymentConfigs(s.jobSpec.Namespace()).Create(deploymentConfig); err != nil && !kerrors.IsAlreadyExists(err) {
+		if _, err := s.deploymentClient.DeploymentConfigs(s.jobSpec.Namespace).Create(deploymentConfig); err != nil && !kerrors.IsAlreadyExists(err) {
 			return fmt.Errorf("could not create RPM repo server deploymentconfig: %v", err)
 		}
 	}
@@ -199,7 +199,7 @@ python /tmp/serve.py
 			return fmt.Errorf("failed to marshal service: %v", err)
 		}
 		fmt.Printf("%s\n", serviceJSON)
-	} else if _, err := s.serviceClient.Services(s.jobSpec.Namespace()).Create(service); err != nil && !kerrors.IsAlreadyExists(err) {
+	} else if _, err := s.serviceClient.Services(s.jobSpec.Namespace).Create(service); err != nil && !kerrors.IsAlreadyExists(err) {
 		return fmt.Errorf("could not create RPM repo server service: %v", err)
 	}
 	route := &routeapi.Route{
@@ -225,17 +225,17 @@ python /tmp/serve.py
 		fmt.Printf("%s\n", routeJSON)
 		return nil
 	}
-	if _, err := s.routeClient.Routes(s.jobSpec.Namespace()).Create(route); err != nil && !kerrors.IsAlreadyExists(err) {
+	if _, err := s.routeClient.Routes(s.jobSpec.Namespace).Create(route); err != nil && !kerrors.IsAlreadyExists(err) {
 		return fmt.Errorf("could not create RPM repo server route: %v", err)
 	}
-	if err := waitForDeployment(s.deploymentClient.DeploymentConfigs(s.jobSpec.Namespace()), deploymentConfig.Name); err != nil {
+	if err := waitForDeployment(s.deploymentClient.DeploymentConfigs(s.jobSpec.Namespace), deploymentConfig.Name); err != nil {
 		return fmt.Errorf("could not wait for RPM repo server to deploy: %v", err)
 	}
-	return waitForRouteReachable(s.routeClient, s.jobSpec.Namespace(), route.Name, "http")
+	return waitForRouteReachable(s.routeClient, s.jobSpec.Namespace, route.Name, "http")
 }
 
 func (s *rpmServerStep) Done() (bool, error) {
-	return currentDeploymentStatus(s.deploymentClient.DeploymentConfigs(s.jobSpec.Namespace()), RPMRepoName)
+	return currentDeploymentStatus(s.deploymentClient.DeploymentConfigs(s.jobSpec.Namespace), RPMRepoName)
 }
 
 func waitForDeployment(client appsclientset.DeploymentConfigInterface, name string) error {
@@ -371,7 +371,7 @@ func (s *rpmServerStep) Creates() []api.StepLink {
 func (s *rpmServerStep) Provides() (api.ParameterMap, api.StepLink) {
 	return api.ParameterMap{
 		"RPM_REPO": func() (string, error) {
-			host, err := admittedHostForRoute(s.routeClient, s.jobSpec.Namespace(), RPMRepoName, time.Minute)
+			host, err := admittedHostForRoute(s.routeClient, s.jobSpec.Namespace, RPMRepoName, time.Minute)
 			if err != nil {
 				return "", fmt.Errorf("unable to calculate RPM_REPO: %v", err)
 			}
@@ -424,7 +424,7 @@ func RPMServerStep(
 	routeClient routeclientset.RoutesGetter,
 	serviceClient coreclientset.ServicesGetter,
 	istClient imageclientset.ImageStreamTagsGetter,
-	jobSpec *JobSpec) api.Step {
+	jobSpec *api.JobSpec) api.Step {
 	return &rpmServerStep{
 		config:           config,
 		deploymentClient: deploymentClient,

@@ -1,4 +1,4 @@
-package steps
+package api
 
 import (
 	"encoding/json"
@@ -8,8 +8,6 @@ import (
 	"strings"
 
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"github.com/openshift/ci-operator/pkg/api"
 )
 
 // JobSpec is a superset of the upstream spec, but
@@ -27,8 +25,8 @@ type JobSpec struct {
 	rawSpec string
 
 	// these fields allow the job to be targeted at a location
-	namespace     string
-	baseNamespace string
+	Namespace     string
+	BaseNamespace string
 
 	// if set, any new artifacts will be a child of this object
 	owner *meta.OwnerReference
@@ -69,20 +67,12 @@ func (r Refs) String() string {
 	return strings.Join(rs, ",")
 }
 
-func (s *JobSpec) Namespace() string {
-	return s.namespace
+func (s *JobSpec) RawSpec() string {
+	return s.rawSpec
 }
 
 func (s *JobSpec) Owner() *meta.OwnerReference {
 	return s.owner
-}
-
-func (s *JobSpec) SetNamespace(ns string) {
-	s.namespace = ns
-}
-
-func (s *JobSpec) SetBaseNamespace(ns string) {
-	s.baseNamespace = ns
 }
 
 func (s *JobSpec) SetOwner(owner *meta.OwnerReference) {
@@ -91,7 +81,7 @@ func (s *JobSpec) SetOwner(owner *meta.OwnerReference) {
 
 // Inputs returns the definition of the job as an input to
 // the execution graph.
-func (s *JobSpec) Inputs() api.InputDefinition {
+func (s *JobSpec) Inputs() InputDefinition {
 	spec := &JobSpec{
 		Refs: s.Refs,
 	}
@@ -99,7 +89,7 @@ func (s *JobSpec) Inputs() api.InputDefinition {
 	if err != nil {
 		panic(err)
 	}
-	return api.InputDefinition{string(raw)}
+	return InputDefinition{string(raw)}
 }
 
 // ResolveSpecFromEnv will determine the Refs being

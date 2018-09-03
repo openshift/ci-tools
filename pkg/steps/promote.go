@@ -24,7 +24,7 @@ type promotionStep struct {
 	tags      []string
 	srcClient imageclientset.ImageV1Interface
 	dstClient imageclientset.ImageV1Interface
-	jobSpec   *JobSpec
+	jobSpec   *api.JobSpec
 }
 
 func targetName(config api.PromotionConfiguration) string {
@@ -52,7 +52,7 @@ func (s *promotionStep) Run(ctx context.Context, dry bool) error {
 
 	log.Printf("Promoting tags to %s: %s", targetName(s.config), strings.Join(names.List(), ", "))
 
-	pipeline, err := s.srcClient.ImageStreams(s.jobSpec.Namespace()).Get(PipelineImageStream, meta.GetOptions{})
+	pipeline, err := s.srcClient.ImageStreams(s.jobSpec.Namespace).Get(PipelineImageStream, meta.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("could not resolve pipeline imagestream: %v", err)
 	}
@@ -175,7 +175,7 @@ func (s *promotionStep) Description() string {
 
 // PromotionStep copies tags from the pipeline image stream to the destination defined in the promotion config.
 // If the source tag does not exist it is silently skipped.
-func PromotionStep(config api.PromotionConfiguration, tags []string, srcClient, dstClient imageclientset.ImageV1Interface, jobSpec *JobSpec) api.Step {
+func PromotionStep(config api.PromotionConfiguration, tags []string, srcClient, dstClient imageclientset.ImageV1Interface, jobSpec *api.JobSpec) api.Step {
 	return &promotionStep{
 		config:    config,
 		tags:      tags,

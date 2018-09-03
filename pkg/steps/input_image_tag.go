@@ -21,7 +21,7 @@ type inputImageTagStep struct {
 	config    api.InputImageTagStepConfiguration
 	srcClient imageclientset.ImageV1Interface
 	dstClient imageclientset.ImageV1Interface
-	jobSpec   *JobSpec
+	jobSpec   *api.JobSpec
 
 	imageName string
 }
@@ -66,7 +66,7 @@ func (s *inputImageTagStep) Run(ctx context.Context, dry bool) error {
 	ist := &imageapi.ImageStreamTag{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      fmt.Sprintf("%s:%s", PipelineImageStream, s.config.To),
-			Namespace: s.jobSpec.Namespace(),
+			Namespace: s.jobSpec.Namespace,
 		},
 		Tag: &imageapi.TagReference{
 			ReferencePolicy: imageapi.TagReferencePolicy{
@@ -97,7 +97,7 @@ func (s *inputImageTagStep) Run(ctx context.Context, dry bool) error {
 		return nil
 	}
 
-	if _, err := s.dstClient.ImageStreamTags(s.jobSpec.Namespace()).Create(ist); err != nil && !errors.IsAlreadyExists(err) {
+	if _, err := s.dstClient.ImageStreamTags(s.jobSpec.Namespace).Create(ist); err != nil && !errors.IsAlreadyExists(err) {
 		return fmt.Errorf("failed to create imagestreamtag for input image: %v", err)
 	}
 	return nil
@@ -125,7 +125,7 @@ func istObjectReference(client imageclientset.ImageV1Interface, reference api.Im
 
 func (s *inputImageTagStep) Done() (bool, error) {
 	log.Printf("Checking for existence of %s:%s", PipelineImageStream, s.config.To)
-	_, err := s.dstClient.ImageStreamTags(s.jobSpec.Namespace()).Get(
+	_, err := s.dstClient.ImageStreamTags(s.jobSpec.Namespace).Get(
 		fmt.Sprintf("%s:%s", PipelineImageStream, s.config.To),
 		meta.GetOptions{},
 	)
@@ -158,7 +158,7 @@ func (s *inputImageTagStep) Description() string {
 	return fmt.Sprintf("Find the input image %s and tag it into the pipeline", s.config.To)
 }
 
-func InputImageTagStep(config api.InputImageTagStepConfiguration, srcClient, dstClient imageclientset.ImageV1Interface, jobSpec *JobSpec) api.Step {
+func InputImageTagStep(config api.InputImageTagStepConfiguration, srcClient, dstClient imageclientset.ImageV1Interface, jobSpec *api.JobSpec) api.Step {
 	// when source and destination client are the same, we don't need to use external imports
 	if srcClient == dstClient {
 		config.BaseImage.Cluster = ""

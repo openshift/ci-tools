@@ -56,7 +56,7 @@ func (s *testStep) Run(ctx context.Context, dry bool) error {
 			Containers: []coreapi.Container{
 				{
 					Name:                     "test",
-					Image:                    fmt.Sprintf("%s:%s", PipelineImageStream, s.config.From),
+					Image:                    fmt.Sprintf("%s:%s", api.PipelineImageStream, s.config.From),
 					Command:                  []string{"/bin/sh", "-c", "#!/bin/sh\nset -eu\n" + s.config.Commands},
 					Resources:                containerResources,
 					TerminationMessagePolicy: coreapi.TerminationMessageFallbackToLogsOnError,

@@ -48,7 +48,7 @@ ADD ./clonerefs /clonerefs
 RUN umask 0002 && /clonerefs && chmod g+xw -R /go/src
 WORKDIR /go/src/%s/
 RUN git submodule update --init
-`, PipelineImageStream, fromTag, workingDir)
+`, api.PipelineImageStream, fromTag, workingDir)
 }
 
 type sourceStep struct {
@@ -125,7 +125,7 @@ func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStrea
 		from = &coreapi.ObjectReference{
 			Kind:      "ImageStreamTag",
 			Namespace: jobSpec.Namespace,
-			Name:      fmt.Sprintf("%s:%s", PipelineImageStream, fromTag),
+			Name:      fmt.Sprintf("%s:%s", api.PipelineImageStream, fromTag),
 		}
 	}
 
@@ -166,7 +166,7 @@ func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStrea
 					To: &coreapi.ObjectReference{
 						Kind:      "ImageStreamTag",
 						Namespace: jobSpec.Namespace,
-						Name:      fmt.Sprintf("%s:%s", PipelineImageStream, toTag),
+						Name:      fmt.Sprintf("%s:%s", api.PipelineImageStream, toTag),
 					},
 				},
 			},
@@ -198,7 +198,7 @@ func buildInputsFromStep(inputs map[string]api.ImageBuildInputs) []buildapi.Imag
 		refs = append(refs, buildapi.ImageSource{
 			From: coreapi.ObjectReference{
 				Kind: "ImageStreamTag",
-				Name: fmt.Sprintf("%s:%s", PipelineImageStream, name),
+				Name: fmt.Sprintf("%s:%s", api.PipelineImageStream, name),
 			},
 			As:    value.As,
 			Paths: paths,
@@ -366,9 +366,9 @@ func (s *sourceStep) Done() (bool, error) {
 }
 
 func imageStreamTagExists(reference api.PipelineImageStreamTagReference, istClient imageclientset.ImageStreamTagInterface) (bool, error) {
-	log.Printf("Checking for existence of %s:%s", PipelineImageStream, reference)
+	log.Printf("Checking for existence of %s:%s", api.PipelineImageStream, reference)
 	_, err := istClient.Get(
-		fmt.Sprintf("%s:%s", PipelineImageStream, reference),
+		fmt.Sprintf("%s:%s", api.PipelineImageStream, reference),
 		meta.GetOptions{},
 	)
 	if err != nil {
@@ -393,7 +393,7 @@ func (s *sourceStep) Creates() []api.StepLink {
 func (s *sourceStep) Provides() (api.ParameterMap, api.StepLink) {
 	return api.ParameterMap{
 		"LOCAL_IMAGE_SRC": func() (string, error) {
-			is, err := s.imageClient.ImageStreams(s.jobSpec.Namespace).Get(PipelineImageStream, meta.GetOptions{})
+			is, err := s.imageClient.ImageStreams(s.jobSpec.Namespace).Get(api.PipelineImageStream, meta.GetOptions{})
 			if err != nil {
 				return "", fmt.Errorf("could not get output imagestream: %v", err)
 			}

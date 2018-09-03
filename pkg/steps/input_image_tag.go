@@ -53,9 +53,9 @@ func (s *inputImageTagStep) Inputs(ctx context.Context, dry bool) (api.InputDefi
 
 func (s *inputImageTagStep) Run(ctx context.Context, dry bool) error {
 	if len(s.config.BaseImage.Cluster) > 0 {
-		log.Printf("Tagging %s/%s/%s:%s into %s:%s", s.config.BaseImage.Cluster, s.config.BaseImage.Namespace, s.config.BaseImage.Name, s.config.BaseImage.Tag, PipelineImageStream, s.config.To)
+		log.Printf("Tagging %s/%s/%s:%s into %s:%s", s.config.BaseImage.Cluster, s.config.BaseImage.Namespace, s.config.BaseImage.Name, s.config.BaseImage.Tag, api.PipelineImageStream, s.config.To)
 	} else {
-		log.Printf("Tagging %s/%s:%s into %s:%s", s.config.BaseImage.Namespace, s.config.BaseImage.Name, s.config.BaseImage.Tag, PipelineImageStream, s.config.To)
+		log.Printf("Tagging %s/%s:%s into %s:%s", s.config.BaseImage.Namespace, s.config.BaseImage.Name, s.config.BaseImage.Tag, api.PipelineImageStream, s.config.To)
 	}
 
 	_, err := s.Inputs(ctx, dry)
@@ -65,7 +65,7 @@ func (s *inputImageTagStep) Run(ctx context.Context, dry bool) error {
 
 	ist := &imageapi.ImageStreamTag{
 		ObjectMeta: meta.ObjectMeta{
-			Name:      fmt.Sprintf("%s:%s", PipelineImageStream, s.config.To),
+			Name:      fmt.Sprintf("%s:%s", api.PipelineImageStream, s.config.To),
 			Namespace: s.jobSpec.Namespace,
 		},
 		Tag: &imageapi.TagReference{
@@ -124,9 +124,9 @@ func istObjectReference(client imageclientset.ImageV1Interface, reference api.Im
 }
 
 func (s *inputImageTagStep) Done() (bool, error) {
-	log.Printf("Checking for existence of %s:%s", PipelineImageStream, s.config.To)
+	log.Printf("Checking for existence of %s:%s", api.PipelineImageStream, s.config.To)
 	_, err := s.dstClient.ImageStreamTags(s.jobSpec.Namespace).Get(
-		fmt.Sprintf("%s:%s", PipelineImageStream, s.config.To),
+		fmt.Sprintf("%s:%s", api.PipelineImageStream, s.config.To),
 		meta.GetOptions{},
 	)
 	if err != nil {

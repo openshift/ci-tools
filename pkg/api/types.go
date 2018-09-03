@@ -374,3 +374,21 @@ type RPMImageInjectionStepConfiguration struct {
 type RPMServeStepConfiguration struct {
 	From PipelineImageStreamTagReference `json:"from"`
 }
+
+const (
+	// api.PipelineImageStream is the name of the
+	// ImageStream used to hold images built
+	// to cache build steps in the pipeline.
+	PipelineImageStream = "pipeline"
+
+	// DefaultRPMLocation is the default relative
+	// directory for Origin-based projects to put
+	// their built RPMs.
+	DefaultRPMLocation = "_output/local/releases/rpms/"
+
+	// RPMServeLocation is the location from which
+	// we will serve RPMs after they are built.
+	RPMServeLocation = "/srv/repo"
+
+	StableImageStream = "stable"
+)

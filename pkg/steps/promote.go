@@ -52,7 +52,7 @@ func (s *promotionStep) Run(ctx context.Context, dry bool) error {
 
 	log.Printf("Promoting tags to %s: %s", targetName(s.config), strings.Join(names.List(), ", "))
 
-	pipeline, err := s.srcClient.ImageStreams(s.jobSpec.Namespace).Get(PipelineImageStream, meta.GetOptions{})
+	pipeline, err := s.srcClient.ImageStreams(s.jobSpec.Namespace).Get(api.PipelineImageStream, meta.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("could not resolve pipeline imagestream: %v", err)
 	}

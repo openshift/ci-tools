@@ -17,6 +17,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/openshift/ci-operator/pkg/defaults"
+
 	coreapi "k8s.io/api/core/v1"
 	rbacapi "k8s.io/api/rbac/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -385,7 +387,7 @@ func (o *options) Run() error {
 	}()
 
 	// load the graph from the configuration
-	buildSteps, postSteps, err := steps.FromConfig(o.configSpec, o.jobSpec, o.templates, o.writeParams, o.artifactDir, o.promote, o.clusterConfig, o.targets.values)
+	buildSteps, postSteps, err := defaults.FromConfig(o.configSpec, o.jobSpec, o.templates, o.writeParams, o.artifactDir, o.promote, o.clusterConfig, o.targets.values)
 	if err != nil {
 		return fmt.Errorf("failed to generate steps from config: %v", err)
 	}
@@ -634,7 +636,7 @@ func (o *options) initializeNamespace() error {
 	is, err := imageGetter.ImageStreams(o.jobSpec.Namespace).Create(&imageapi.ImageStream{
 		ObjectMeta: meta.ObjectMeta{
 			Namespace: o.jobSpec.Namespace,
-			Name:      steps.PipelineImageStream,
+			Name:      api.PipelineImageStream,
 		},
 		Spec: imageapi.ImageStreamSpec{
 			// pipeline:* will now be directly referenceable
@@ -645,14 +647,14 @@ func (o *options) initializeNamespace() error {
 		if !kerrors.IsAlreadyExists(err) {
 			return fmt.Errorf("could not set up pipeline imagestream for test: %v", err)
 		}
-		is, _ = imageGetter.ImageStreams(o.jobSpec.Namespace).Get(steps.PipelineImageStream, meta.GetOptions{})
+		is, _ = imageGetter.ImageStreams(o.jobSpec.Namespace).Get(api.PipelineImageStream, meta.GetOptions{})
 	}
 	if is != nil {
 		isTrue := true
 		o.jobSpec.SetOwner(&meta.OwnerReference{
 			APIVersion: "image.openshift.io/v1",
 			Kind:       "ImageStream",
-			Name:       steps.PipelineImageStream,
+			Name:       api.PipelineImageStream,
 			UID:        is.UID,
 			Controller: &isTrue,
 		})

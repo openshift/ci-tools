@@ -37,11 +37,11 @@ func StableImagesTagStep(dstClient imageclientset.ImageV1Interface, jobSpec *api
 }
 
 func (s *stableImagesTagStep) Run(ctx context.Context, dry bool) error {
-	log.Printf("Will output images to %s:${component}", StableImageStream)
+	log.Printf("Will output images to %s:${component}", api.StableImageStream)
 
 	newIS := &imageapi.ImageStream{
 		ObjectMeta: meta.ObjectMeta{
-			Name: StableImageStream,
+			Name: api.StableImageStream,
 		},
 	}
 	if dry {
@@ -74,7 +74,7 @@ func (s *stableImagesTagStep) Provides() (api.ParameterMap, api.StepLink) { retu
 func (s *stableImagesTagStep) Name() string { return "[output-images]" }
 
 func (s *stableImagesTagStep) Description() string {
-	return fmt.Sprintf("Create the output image stream %s", StableImageStream)
+	return fmt.Sprintf("Create the output image stream %s", api.StableImageStream)
 }
 
 // releaseImagesTagStep will tag a full release suite
@@ -163,7 +163,7 @@ func (s *releaseImagesTagStep) Run(ctx context.Context, dry bool) error {
 		is.UID = ""
 		newIS := &imageapi.ImageStream{
 			ObjectMeta: meta.ObjectMeta{
-				Name: StableImageStream,
+				Name: api.StableImageStream,
 			},
 		}
 		for _, tag := range is.Spec.Tags {
@@ -374,7 +374,7 @@ func (s *releaseImagesTagStep) imageFormat() (string, error) {
 	registry := strings.SplitN(spec, "/", 2)[0]
 	var format string
 	if len(s.config.Name) > 0 {
-		format = fmt.Sprintf("%s/%s/%s:%s", registry, s.jobSpec.Namespace, fmt.Sprintf("%s%s", s.config.NamePrefix, StableImageStream), componentFormatReplacement)
+		format = fmt.Sprintf("%s/%s/%s:%s", registry, s.jobSpec.Namespace, fmt.Sprintf("%s%s", s.config.NamePrefix, api.StableImageStream), componentFormatReplacement)
 	} else {
 		format = fmt.Sprintf("%s/%s/%s:%s", registry, s.jobSpec.Namespace, fmt.Sprintf("%s%s", s.config.NamePrefix, componentFormatReplacement), s.config.Tag)
 	}
@@ -382,7 +382,7 @@ func (s *releaseImagesTagStep) imageFormat() (string, error) {
 }
 
 func (s *releaseImagesTagStep) repositoryPullSpec() (string, error) {
-	is, err := s.dstClient.ImageStreams(s.jobSpec.Namespace).Get(PipelineImageStream, meta.GetOptions{})
+	is, err := s.dstClient.ImageStreams(s.jobSpec.Namespace).Get(api.PipelineImageStream, meta.GetOptions{})
 	if err != nil {
 		return "", err
 	}
@@ -392,7 +392,7 @@ func (s *releaseImagesTagStep) repositoryPullSpec() (string, error) {
 	if len(is.Status.DockerImageRepository) > 0 {
 		return is.Status.DockerImageRepository, nil
 	}
-	return "", fmt.Errorf("no pull spec available for image stream %s", PipelineImageStream)
+	return "", fmt.Errorf("no pull spec available for image stream %s", api.PipelineImageStream)
 }
 
 func (s *releaseImagesTagStep) Name() string { return "[release-inputs]" }

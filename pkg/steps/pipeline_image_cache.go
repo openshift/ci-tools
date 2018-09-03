@@ -14,7 +14,7 @@ import (
 
 func rawCommandDockerfile(from api.PipelineImageStreamTagReference, commands string) string {
 	return fmt.Sprintf(`FROM %s:%s
-RUN ["/bin/bash", "-c", %s]`, PipelineImageStream, from, strconv.Quote(fmt.Sprintf("set -o errexit; umask 0002; %s", commands)))
+RUN ["/bin/bash", "-c", %s]`, api.PipelineImageStream, from, strconv.Quote(fmt.Sprintf("set -o errexit; umask 0002; %s", commands)))
 }
 
 type pipelineImageCacheStep struct {
@@ -60,7 +60,7 @@ func (s *pipelineImageCacheStep) Provides() (api.ParameterMap, api.StepLink) {
 	}
 	return api.ParameterMap{
 		fmt.Sprintf("LOCAL_IMAGE_%s", strings.ToUpper(strings.Replace(string(s.config.To), "-", "_", -1))): func() (string, error) {
-			is, err := s.imageClient.ImageStreams(s.jobSpec.Namespace).Get(PipelineImageStream, meta.GetOptions{})
+			is, err := s.imageClient.ImageStreams(s.jobSpec.Namespace).Get(api.PipelineImageStream, meta.GetOptions{})
 			if err != nil {
 				return "", fmt.Errorf("could not retrieve output imagestream: %v", err)
 			}

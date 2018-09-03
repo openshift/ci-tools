@@ -51,7 +51,7 @@ func (s *rpmServerStep) Run(ctx context.Context, dry bool) error {
 	if dry {
 		imageReference = "dry-fake"
 	} else {
-		ist, err := s.istClient.ImageStreamTags(s.jobSpec.Namespace).Get(fmt.Sprintf("%s:%s", PipelineImageStream, s.config.From), meta.GetOptions{})
+		ist, err := s.istClient.ImageStreamTags(s.jobSpec.Namespace).Get(fmt.Sprintf("%s:%s", api.PipelineImageStream, s.config.From), meta.GetOptions{})
 		if err != nil {
 			return fmt.Errorf("could not find source ImageStreamTag for RPM repo deployment: %v", err)
 		}
@@ -143,7 +143,7 @@ END
 python /tmp/serve.py
 							`,
 						},
-						WorkingDir: RPMServeLocation,
+						WorkingDir: api.RPMServeLocation,
 						Ports: []coreapi.ContainerPort{{
 							ContainerPort: 8080,
 							Protocol:      coreapi.ProtocolTCP,

@@ -26,7 +26,7 @@ func (s *projectDirectoryImageBuildStep) Inputs(ctx context.Context, dry bool) (
 }
 
 func (s *projectDirectoryImageBuildStep) Run(ctx context.Context, dry bool) error {
-	source := fmt.Sprintf("%s:%s", PipelineImageStream, api.PipelineImageStreamTagReferenceSource)
+	source := fmt.Sprintf("%s:%s", api.PipelineImageStream, api.PipelineImageStreamTagReferenceSource)
 
 	var workingDir string
 	if dry {

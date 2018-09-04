@@ -138,7 +138,7 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 	}
 }
 
-func TestGeneratePostSumitForTest(t *testing.T) {
+func TestGeneratePostSubmitForTest(t *testing.T) {
 	tests := []struct {
 		name           string
 		target         string
@@ -160,8 +160,9 @@ func TestGeneratePostSumitForTest(t *testing.T) {
 			additionalArgs: []string{},
 
 			expected: &prowconfig.Postsubmit{
-				Agent: "kubernetes",
-				Name:  "branch-ci-organization-repository-branch-name",
+				Agent:    "kubernetes",
+				Name:     "branch-ci-organization-repository-branch-name",
+				Brancher: prowconfig.Brancher{Branches: []string{"branch"}},
 				UtilityConfig: prowconfig.UtilityConfig{
 					DecorationConfig: &prowkube.DecorationConfig{SkipCloning: true},
 					Decorate:         true,
@@ -178,8 +179,9 @@ func TestGeneratePostSumitForTest(t *testing.T) {
 			additionalArgs: []string{"--promote", "additionalArg"},
 
 			expected: &prowconfig.Postsubmit{
-				Agent: "kubernetes",
-				Name:  "branch-ci-organization-repository-branch-name",
+				Agent:    "kubernetes",
+				Name:     "branch-ci-organization-repository-branch-name",
+				Brancher: prowconfig.Brancher{Branches: []string{"branch"}},
 				UtilityConfig: prowconfig.UtilityConfig{
 					DecorationConfig: &prowkube.DecorationConfig{SkipCloning: true},
 					Decorate:         true,
@@ -196,9 +198,10 @@ func TestGeneratePostSumitForTest(t *testing.T) {
 			additionalArgs: []string{"--promote", "additionalArg"},
 
 			expected: &prowconfig.Postsubmit{
-				Agent:  "kubernetes",
-				Name:   "branch-ci-Organization-Repository-Branch-Name",
-				Labels: map[string]string{"artifacts": "images"},
+				Agent:    "kubernetes",
+				Name:     "branch-ci-Organization-Repository-Branch-Name",
+				Brancher: prowconfig.Brancher{Branches: []string{"Branch"}},
+				Labels:   map[string]string{"artifacts": "images"},
 				UtilityConfig: prowconfig.UtilityConfig{
 					DecorationConfig: &prowkube.DecorationConfig{SkipCloning: true},
 					Decorate:         true,
@@ -426,6 +429,7 @@ func prune(jobConfig *prowconfig.JobConfig) {
 		for i := range jobConfig.Postsubmits[repo] {
 			jobConfig.Postsubmits[repo][i].Agent = ""
 			jobConfig.Postsubmits[repo][i].Spec = nil
+			jobConfig.Postsubmits[repo][i].Brancher = prowconfig.Brancher{}
 			jobConfig.Postsubmits[repo][i].UtilityConfig = prowconfig.UtilityConfig{}
 		}
 	}
@@ -645,6 +649,8 @@ func TestFromCIOperatorConfigToProwYaml(t *testing.T) {
 			prowExpectedYAML: []byte(`postsubmits:
   super/duper:
   - agent: kubernetes
+    branches:
+    - branch
     decorate: true
     labels:
       artifacts: images
@@ -746,6 +752,8 @@ presubmits:
 			prowOldYAML: []byte(`postsubmits:
   super/duper:
   - agent: kubernetes
+    branches:
+    - branch
     decorate: true
     name: branch-ci-super-duper-branch-do-not-overwrite
     skip_cloning: true
@@ -770,6 +778,8 @@ presubmits:
 			prowExpectedYAML: []byte(`postsubmits:
   super/duper:
   - agent: kubernetes
+    branches:
+    - branch
     decorate: true
     labels:
       artifacts: images
@@ -794,6 +804,8 @@ presubmits:
         resources: {}
       serviceAccountName: ci-operator
   - agent: kubernetes
+    branches:
+    - branch
     decorate: true
     name: branch-ci-super-duper-branch-do-not-overwrite
     skip_cloning: true

@@ -128,10 +128,11 @@ func generatePresubmitForTest(test testDescription, org, repo, branch string) *p
 // Generate a Presubmit job for the given parameters
 func generatePostsubmitForTest(test testDescription, org, repo, branch string, labels map[string]string, additionalArgs ...string) *prowconfig.Postsubmit {
 	return &prowconfig.Postsubmit{
-		Agent:  "kubernetes",
-		Name:   fmt.Sprintf("branch-ci-%s-%s-%s-%s", org, repo, branch, test.Name),
-		Spec:   generatePodSpec(org, repo, branch, test.Target, additionalArgs...),
-		Labels: labels,
+		Agent:    "kubernetes",
+		Brancher: prowconfig.Brancher{Branches: []string{branch}},
+		Name:     fmt.Sprintf("branch-ci-%s-%s-%s-%s", org, repo, branch, test.Name),
+		Spec:     generatePodSpec(org, repo, branch, test.Target, additionalArgs...),
+		Labels:   labels,
 		UtilityConfig: prowconfig.UtilityConfig{
 			DecorationConfig: &prowkube.DecorationConfig{SkipCloning: true},
 			Decorate:         true,

@@ -13,7 +13,7 @@ component?
 
 **Answer:**
 1. Get a working copy of [openshift/release](https://github.com/openshift/release) (we’ll shorten path to it to `$RELEASE`)
-2. Create a [ci-operator configuration file](https://github.com/openshift/ci-operator/blob/master/ONBOARD.md#prepare-configuration-for-component-repo) under `$RELEASE/ci-operator/config`, following the `organization/component/branch.json` convention.
+2. Create a [ci-operator configuration file](https://github.com/openshift/ci-operator/blob/master/ONBOARD.md#prepare-configuration-for-component-repo) under `$RELEASE/ci-operator/config`, following the `organization/component/branch.yaml` convention.
 3. Run `ci-operator-prowgen --from-dir $RELEASE/ci-operator/config/<org>/<component> --to-dir $RELEASE/ci-operator/jobs`
 4. Review Prow job configuration files created in `$RELEASE/ci-operator/jobs/<org>/<component>` 
 5. Commit both ci-operator configuration file and Prow job configuration files and issue a PR to upstream.
@@ -44,12 +44,12 @@ you may run the following (`$REPO is a path to `openshift/release` working
 copy):
 
 ```
-$ ./ci-operator-prowgen --from-file $REPO/ci-operator/config/org/component/branch.json \
+$ ./ci-operator-prowgen --from-file $REPO/ci-operator/config/org/component/branch.yaml \
  --to-dir $REPO/ci-operator/jobs
 ```
 
 This extracts the `org` and `component` from the configuration file path, reads
-the `branch.json` file and generates new Prow job configuration files in the
+the `branch.yaml` file and generates new Prow job configuration files in the
 `(...)/ci-operator/jobs/` directory, creating the necessary directory structure
 and files if needed. If the target files already exist and contain Prow job
 configuration, newly generated jobs will be merged with the old ones (jobs are
@@ -58,7 +58,7 @@ matched by name).
 ### Generate Prow jobs for multiple ci-operator config files
 
 The generator may take a directory as an input. In this case, the generator
-walks the directory structure under the given directory, finds all JSON files
+walks the directory structure under the given directory, finds all YAML files
 there and generates jobs for all of them.
 
 You can generate jobs for a certain component, organization, or everything:

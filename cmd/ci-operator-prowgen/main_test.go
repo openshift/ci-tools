@@ -22,7 +22,7 @@ func TestGeneratePodSpec(t *testing.T) {
 	tests := []struct {
 		org            string
 		repo           string
-		branch         string
+		configFile     string
 		target         string
 		additionalArgs []string
 
@@ -31,7 +31,7 @@ func TestGeneratePodSpec(t *testing.T) {
 		{
 			org:            "organization",
 			repo:           "repo",
-			branch:         "branch",
+			configFile:     "config.json",
 			target:         "target",
 			additionalArgs: []string{},
 
@@ -48,7 +48,7 @@ func TestGeneratePodSpec(t *testing.T) {
 								LocalObjectReference: kubeapi.LocalObjectReference{
 									Name: "ci-operator-organization-repo",
 								},
-								Key: "branch.json",
+								Key: "config.json",
 							},
 						},
 					}},
@@ -58,7 +58,7 @@ func TestGeneratePodSpec(t *testing.T) {
 		{
 			org:            "organization",
 			repo:           "repo",
-			branch:         "branch",
+			configFile:     "config.yml",
 			target:         "target",
 			additionalArgs: []string{"--promote", "something"},
 
@@ -75,7 +75,7 @@ func TestGeneratePodSpec(t *testing.T) {
 								LocalObjectReference: kubeapi.LocalObjectReference{
 									Name: "ci-operator-organization-repo",
 								},
-								Key: "branch.json",
+								Key: "config.yml",
 							},
 						},
 					}},
@@ -87,9 +87,9 @@ func TestGeneratePodSpec(t *testing.T) {
 	for _, tc := range tests {
 		var podSpec *kubeapi.PodSpec
 		if len(tc.additionalArgs) == 0 {
-			podSpec = generatePodSpec(tc.org, tc.repo, tc.branch, tc.target)
+			podSpec = generatePodSpec(tc.org, tc.repo, tc.configFile, tc.target)
 		} else {
-			podSpec = generatePodSpec(tc.org, tc.repo, tc.branch, tc.target, tc.additionalArgs...)
+			podSpec = generatePodSpec(tc.org, tc.repo, tc.configFile, tc.target, tc.additionalArgs...)
 		}
 		if !equality.Semantic.DeepEqual(podSpec, tc.expected) {
 			t.Errorf("expected PodSpec diff:\n%s", diff.ObjectDiff(tc.expected, podSpec))
@@ -101,35 +101,29 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 	tests := []struct {
 		name     string
 		target   string
-		org      string
-		repo     string
-		branch   string
+		repoInfo *configFilePathElements
 		expected *prowconfig.Presubmit
-	}{
-		{
-			name:   "testname",
-			target: "target",
-			org:    "org",
-			repo:   "repo",
-			branch: "branch",
+	}{{
+		name:     "testname",
+		target:   "target",
+		repoInfo: &configFilePathElements{org: "org", repo: "repo", branch: "branch"},
 
-			expected: &prowconfig.Presubmit{
-				Agent:        "kubernetes",
-				AlwaysRun:    true,
-				Brancher:     prowconfig.Brancher{Branches: []string{"branch"}},
-				Context:      "ci/prow/testname",
-				Name:         "pull-ci-org-repo-branch-testname",
-				RerunCommand: "/test testname",
-				Trigger:      `((?m)^/test( all| testname),?(\\s+|$))`,
-				UtilityConfig: prowconfig.UtilityConfig{
-					DecorationConfig: &prowkube.DecorationConfig{SkipCloning: true},
-					Decorate:         true,
-				},
+		expected: &prowconfig.Presubmit{
+			Agent:        "kubernetes",
+			AlwaysRun:    true,
+			Brancher:     prowconfig.Brancher{Branches: []string{"branch"}},
+			Context:      "ci/prow/testname",
+			Name:         "pull-ci-org-repo-branch-testname",
+			RerunCommand: "/test testname",
+			Trigger:      `((?m)^/test( all| testname),?(\\s+|$))`,
+			UtilityConfig: prowconfig.UtilityConfig{
+				DecorationConfig: &prowkube.DecorationConfig{SkipCloning: true},
+				Decorate:         true,
 			},
 		},
-	}
+	}}
 	for _, tc := range tests {
-		presubmit := generatePresubmitForTest(testDescription{tc.name, tc.target}, tc.org, tc.repo, tc.branch)
+		presubmit := generatePresubmitForTest(testDescription{tc.name, tc.target}, tc.repoInfo)
 		presubmit.Spec = nil // tested in generatePodSpec
 
 		if !equality.Semantic.DeepEqual(presubmit, tc.expected) {
@@ -142,20 +136,21 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 	tests := []struct {
 		name           string
 		target         string
-		org            string
-		repo           string
-		branch         string
+		repoInfo       *configFilePathElements
 		labels         map[string]string
 		additionalArgs []string
 
 		expected *prowconfig.Postsubmit
 	}{
 		{
-			name:           "name",
-			target:         "target",
-			org:            "organization",
-			repo:           "repository",
-			branch:         "branch",
+			name:   "name",
+			target: "target",
+			repoInfo: &configFilePathElements{
+				org:            "organization",
+				repo:           "repository",
+				branch:         "branch",
+				configFilename: "branch.yaml",
+			},
 			labels:         map[string]string{},
 			additionalArgs: []string{},
 
@@ -170,11 +165,14 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 			},
 		},
 		{
-			name:           "name",
-			target:         "target",
-			org:            "organization",
-			repo:           "repository",
-			branch:         "branch",
+			name:   "name",
+			target: "target",
+			repoInfo: &configFilePathElements{
+				org:            "organization",
+				repo:           "repository",
+				branch:         "branch",
+				configFilename: "branch.yaml",
+			},
 			labels:         map[string]string{},
 			additionalArgs: []string{"--promote", "additionalArg"},
 
@@ -187,13 +185,15 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 					Decorate:         true,
 				},
 			},
-		},
-		{
-			name:           "Name",
-			target:         "Target",
-			org:            "Organization",
-			repo:           "Repository",
-			branch:         "Branch",
+		}, {
+			name:   "Name",
+			target: "Target",
+			repoInfo: &configFilePathElements{
+				org:            "Organization",
+				repo:           "Repository",
+				branch:         "Branch",
+				configFilename: "config.yaml",
+			},
 			labels:         map[string]string{"artifacts": "images"},
 			additionalArgs: []string{"--promote", "additionalArg"},
 
@@ -213,9 +213,9 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 		var postsubmit *prowconfig.Postsubmit
 
 		if len(tc.additionalArgs) == 0 {
-			postsubmit = generatePostsubmitForTest(testDescription{tc.name, tc.target}, tc.org, tc.repo, tc.branch, tc.labels)
+			postsubmit = generatePostsubmitForTest(testDescription{tc.name, tc.target}, tc.repoInfo, tc.labels)
 		} else {
-			postsubmit = generatePostsubmitForTest(testDescription{tc.name, tc.target}, tc.org, tc.repo, tc.branch, tc.labels, tc.additionalArgs...)
+			postsubmit = generatePostsubmitForTest(testDescription{tc.name, tc.target}, tc.repoInfo, tc.labels, tc.additionalArgs...)
 			// tests that additional args were propagated to the PodSpec
 			if !equality.Semantic.DeepEqual(postsubmit.Spec.Containers[0].Args[2:], tc.additionalArgs) {
 				t.Errorf("additional args not propagated to postsubmit:\n%s", diff.ObjectDiff(tc.additionalArgs, postsubmit.Spec.Containers[0].Args[2:]))
@@ -232,11 +232,9 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 
 func TestGenerateJobs(t *testing.T) {
 	tests := []struct {
-		id     string
-		config *ciop.ReleaseBuildConfiguration
-		org    string
-		repo   string
-		branch string
+		id       string
+		config   *ciop.ReleaseBuildConfiguration
+		repoInfo *configFilePathElements
 
 		expectedPresubmits  map[string][]string
 		expectedPostsubmits map[string][]string
@@ -247,9 +245,12 @@ func TestGenerateJobs(t *testing.T) {
 			config: &ciop.ReleaseBuildConfiguration{
 				Tests: []ciop.TestStepConfiguration{{As: "derTest"}, {As: "leTest"}},
 			},
-			org:    "organization",
-			repo:   "repository",
-			branch: "branch",
+			repoInfo: &configFilePathElements{
+				org:            "organization",
+				repo:           "repository",
+				branch:         "branch",
+				configFilename: "konfig.yaml",
+			},
 			expected: &prowconfig.JobConfig{
 				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
 					{Name: "pull-ci-organization-repository-branch-derTest"},
@@ -263,9 +264,12 @@ func TestGenerateJobs(t *testing.T) {
 				Tests:  []ciop.TestStepConfiguration{{As: "derTest"}, {As: "leTest"}},
 				Images: []ciop.ProjectDirectoryImageBuildStepConfiguration{{}},
 			},
-			org:    "organization",
-			repo:   "repository",
-			branch: "branch",
+			repoInfo: &configFilePathElements{
+				org:            "organization",
+				repo:           "repository",
+				branch:         "branch",
+				configFilename: "konfig.yaml",
+			},
 			expected: &prowconfig.JobConfig{
 				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
 					{Name: "pull-ci-organization-repository-branch-derTest"},
@@ -283,9 +287,12 @@ func TestGenerateJobs(t *testing.T) {
 				Images:                 []ciop.ProjectDirectoryImageBuildStepConfiguration{{}},
 				PromotionConfiguration: &ciop.PromotionConfiguration{Namespace: "openshift"},
 			},
-			org:    "organization",
-			repo:   "repository",
-			branch: "branch",
+			repoInfo: &configFilePathElements{
+				org:            "organization",
+				repo:           "repository",
+				branch:         "branch",
+				configFilename: "konfig.yaml",
+			},
 			expected: &prowconfig.JobConfig{
 				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
 					{Name: "pull-ci-organization-repository-branch-images"},
@@ -302,9 +309,12 @@ func TestGenerateJobs(t *testing.T) {
 				Images:                 []ciop.ProjectDirectoryImageBuildStepConfiguration{{}},
 				PromotionConfiguration: &ciop.PromotionConfiguration{Namespace: "ci"},
 			},
-			org:    "organization",
-			repo:   "repository",
-			branch: "branch",
+			repoInfo: &configFilePathElements{
+				org:            "organization",
+				repo:           "repository",
+				branch:         "branch",
+				configFilename: "konfig.yaml",
+			},
 			expected: &prowconfig.JobConfig{
 				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
 					{Name: "pull-ci-organization-repository-branch-images"},
@@ -322,9 +332,12 @@ func TestGenerateJobs(t *testing.T) {
 					ReleaseTagConfiguration: &ciop.ReleaseTagConfiguration{Namespace: "openshift"},
 				},
 			},
-			org:    "organization",
-			repo:   "repository",
-			branch: "branch",
+			repoInfo: &configFilePathElements{
+				org:            "organization",
+				repo:           "repository",
+				branch:         "branch",
+				configFilename: "konfig.yaml",
+			},
 			expected: &prowconfig.JobConfig{
 				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
 					{Name: "pull-ci-organization-repository-branch-images"},
@@ -343,9 +356,12 @@ func TestGenerateJobs(t *testing.T) {
 					ReleaseTagConfiguration: &ciop.ReleaseTagConfiguration{Namespace: "ci"},
 				},
 			},
-			org:    "organization",
-			repo:   "repository",
-			branch: "branch",
+			repoInfo: &configFilePathElements{
+				org:            "organization",
+				repo:           "repository",
+				branch:         "branch",
+				configFilename: "konfig.yaml",
+			},
 			expected: &prowconfig.JobConfig{
 				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
 					{Name: "pull-ci-organization-repository-branch-images"},
@@ -364,9 +380,12 @@ func TestGenerateJobs(t *testing.T) {
 				},
 				PromotionConfiguration: &ciop.PromotionConfiguration{Namespace: "ci"},
 			},
-			org:    "organization",
-			repo:   "repository",
-			branch: "branch",
+			repoInfo: &configFilePathElements{
+				org:            "organization",
+				repo:           "repository",
+				branch:         "branch",
+				configFilename: "konfig.yaml",
+			},
 			expected: &prowconfig.JobConfig{
 				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
 					{Name: "pull-ci-organization-repository-branch-images"},
@@ -385,9 +404,12 @@ func TestGenerateJobs(t *testing.T) {
 				},
 				PromotionConfiguration: &ciop.PromotionConfiguration{Namespace: "openshift"},
 			},
-			org:    "organization",
-			repo:   "repository",
-			branch: "branch",
+			repoInfo: &configFilePathElements{
+				org:            "organization",
+				repo:           "repository",
+				branch:         "branch",
+				configFilename: "konfig.yaml",
+			},
 			expected: &prowconfig.JobConfig{
 				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
 					{Name: "pull-ci-organization-repository-branch-images"},
@@ -402,7 +424,7 @@ func TestGenerateJobs(t *testing.T) {
 
 	log.SetOutput(ioutil.Discard)
 	for _, tc := range tests {
-		jobConfig := generateJobs(tc.config, tc.org, tc.repo, tc.branch)
+		jobConfig := generateJobs(tc.config, tc.repoInfo)
 
 		prune(jobConfig) // prune the fields that are tested in TestGeneratePre/PostsubmitForTest
 
@@ -437,35 +459,39 @@ func prune(jobConfig *prowconfig.JobConfig) {
 
 func TestExtractRepoElementsFromPath(t *testing.T) {
 	testCases := []struct {
-		path           string
-		expectedOrg    string
-		expectedRepo   string
-		expectedBranch string
-		expectedError  bool
+		path                   string
+		expectedOrg            string
+		expectedRepo           string
+		expectedBranch         string
+		expectedConfigFilename string
+		expectedError          bool
 	}{
-		{"../../ci-operator/openshift/component/master.json", "openshift", "component", "master", false},
-		{"master.json", "", "", "", true},
-		{"dir/master.json", "", "", "", true},
+		{"../../ci-operator/openshift/component/master.yaml", "openshift", "component", "master", "master.yaml", false},
+		{"master.yaml", "", "", "", "", true},
+		{"dir/master.yaml", "", "", "", "", true},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.path, func(t *testing.T) {
-			org, repo, branch, err := extractRepoElementsFromPath(tc.path)
+			repoInfo, err := extractRepoElementsFromPath(tc.path)
 			if !tc.expectedError {
 				if err != nil {
 					t.Errorf("returned unexpected error '%v", err)
 				}
-				if org != tc.expectedOrg {
-					t.Errorf("org extracted incorrectly: got '%s', expected '%s'", org, tc.expectedOrg)
+				if repoInfo.org != tc.expectedOrg {
+					t.Errorf("org extracted incorrectly: got '%s', expected '%s'", repoInfo.org, tc.expectedOrg)
 				}
-				if repo != tc.expectedRepo {
-					t.Errorf("repo extracted incorrectly: got '%s', expected '%s'", repo, tc.expectedRepo)
+				if repoInfo.repo != tc.expectedRepo {
+					t.Errorf("repo extracted incorrectly: got '%s', expected '%s'", repoInfo.repo, tc.expectedRepo)
 				}
-				if branch != tc.expectedBranch {
-					t.Errorf("branch extracted incorrectly: got '%s', expected '%s'", branch, tc.expectedBranch)
+				if repoInfo.branch != tc.expectedBranch {
+					t.Errorf("branch extracted incorrectly: got '%s', expected '%s'", repoInfo.branch, tc.expectedBranch)
+				}
+				if repoInfo.configFilename != tc.expectedConfigFilename {
+					t.Errorf("configFilename extracted incorrectly: got '%s', expected '%s'", repoInfo.configFilename, tc.expectedConfigFilename)
 				}
 			} else { // expected error
 				if err == nil {
-					t.Errorf("expected to return error, got org=%s repo=%s branch=%s instead", org, repo, branch)
+					t.Errorf("expected to return error, got org=%v", repoInfo)
 				}
 			}
 		})
@@ -593,7 +619,7 @@ func TestMergeJobConfig(t *testing.T) {
 	}
 }
 
-func prepareInputs(org, component, branch string, configJSON, prowConfigYAML []byte) (string, string, string, error) {
+func prepareInputs(org, component, branch string, configYAML, prowConfigYAML []byte) (string, string, string, error) {
 	dir, err := ioutil.TempDir("", "prowgen-test")
 	if err != nil {
 		return "", "", "", err
@@ -604,10 +630,10 @@ func prepareInputs(org, component, branch string, configJSON, prowConfigYAML []b
 		return "", "", dir, err
 	}
 
-	fullConfigPath := filepath.Join(workDir, fmt.Sprintf("%s.json", branch))
+	fullConfigPath := filepath.Join(workDir, fmt.Sprintf("%s.yaml", branch))
 	fullProwConfigPath := filepath.Join(workDir, "jobs.yaml")
 
-	if err = ioutil.WriteFile(fullConfigPath, configJSON, 0664); err != nil {
+	if err = ioutil.WriteFile(fullConfigPath, configYAML, 0664); err != nil {
 		return "", "", dir, err
 	}
 	if err = ioutil.WriteFile(fullProwConfigPath, prowConfigYAML, 0664); err != nil {
@@ -619,18 +645,20 @@ func prepareInputs(org, component, branch string, configJSON, prowConfigYAML []b
 
 func TestFromCIOperatorConfigToProwYaml(t *testing.T) {
 	tests := []struct {
+		id               string
 		org              string
 		component        string
 		branch           string
-		configJSON       []byte
+		configYAML       []byte
 		prowOldYAML      []byte
 		prowExpectedYAML []byte
 	}{
 		{
+			id:        "one test and images, no previous jobs. Expect test presubmit + pre/post submit images jobs",
 			org:       "super",
 			component: "duper",
 			branch:    "branch",
-			configJSON: []byte(`{
+			configYAML: []byte(`{
   "tag_specification": {
     "cluster": "https://api.ci.openshift.org", "namespace": "openshift", "name": "origin-v3.11", "tag": ""
   },
@@ -668,7 +696,7 @@ func TestFromCIOperatorConfigToProwYaml(t *testing.T) {
         - name: CONFIG_SPEC
           valueFrom:
             configMapKeyRef:
-              key: branch.json
+              key: branch.yaml
               name: ci-operator-super-duper
         image: ci-operator:latest
         name: ""
@@ -696,7 +724,7 @@ presubmits:
         - name: CONFIG_SPEC
           valueFrom:
             configMapKeyRef:
-              key: branch.json
+              key: branch.yaml
               name: ci-operator-super-duper
         image: ci-operator:latest
         name: ""
@@ -723,7 +751,7 @@ presubmits:
         - name: CONFIG_SPEC
           valueFrom:
             configMapKeyRef:
-              key: branch.json
+              key: branch.yaml
               name: ci-operator-super-duper
         image: ci-operator:latest
         name: ""
@@ -731,10 +759,11 @@ presubmits:
       serviceAccountName: ci-operator
     trigger: ((?m)^/test( all| images),?(\\s+|$))
 `)}, {
+			id:        "One test and images, one existing job. Expect one presubmit, pre/post submit images jobs. Existing job should not be changed.",
 			org:       "super",
 			component: "duper",
 			branch:    "branch",
-			configJSON: []byte(`{
+			configYAML: []byte(`{
   "tag_specification": {
     "cluster": "https://api.ci.openshift.org", "namespace": "openshift", "name": "origin-v3.11", "tag": ""
   },
@@ -768,7 +797,7 @@ presubmits:
         - name: CONFIG_SPEC
           valueFrom:
             configMapKeyRef:
-              key: branch.json
+              key: branch.yaml
               name: ci-operator-super-duper
         image: ci-operator:latest
         name: ""
@@ -797,7 +826,7 @@ presubmits:
         - name: CONFIG_SPEC
           valueFrom:
             configMapKeyRef:
-              key: branch.json
+              key: branch.yaml
               name: ci-operator-super-duper
         image: ci-operator:latest
         name: ""
@@ -820,7 +849,7 @@ presubmits:
         - name: CONFIG_SPEC
           valueFrom:
             configMapKeyRef:
-              key: branch.json
+              key: branch.yaml
               name: ci-operator-super-duper
         image: ci-operator:latest
         name: ""
@@ -848,7 +877,7 @@ presubmits:
         - name: CONFIG_SPEC
           valueFrom:
             configMapKeyRef:
-              key: branch.json
+              key: branch.yaml
               name: ci-operator-super-duper
         image: ci-operator:latest
         name: ""
@@ -875,7 +904,166 @@ presubmits:
         - name: CONFIG_SPEC
           valueFrom:
             configMapKeyRef:
-              key: branch.json
+              key: branch.yaml
+              name: ci-operator-super-duper
+        image: ci-operator:latest
+        name: ""
+        resources: {}
+      serviceAccountName: ci-operator
+    trigger: ((?m)^/test( all| images),?(\\s+|$))
+`),
+		}, {
+			id:        "Input is YAML and it is correctly processed",
+			org:       "super",
+			component: "duper",
+			branch:    "branch",
+			configYAML: []byte(`base_images:
+  base:
+    cluster: https://api.ci.openshift.org
+    name: origin-v3.11
+    namespace: openshift
+    tag: base
+images:
+- from: base
+  to: service-serving-cert-signer
+tag_specification:
+  cluster: https://api.ci.openshift.org
+  name: origin-v3.11
+  namespace: openshift
+  tag: ''
+test_base_image:
+  cluster: https://api.ci.openshift.org
+  name: release
+  namespace: openshift
+  tag: golang-1.10
+tests:
+- as: unit
+  commands: make test-unit
+  from: src
+`),
+			prowOldYAML: []byte(`postsubmits:
+  super/duper:
+  - agent: kubernetes
+    decorate: true
+    name: branch-ci-super-duper-branch-do-not-overwrite
+    skip_cloning: true
+    spec:
+      containers:
+      - args:
+        - --artifact-dir=$(ARTIFACTS)
+        - --target=unit
+        command:
+        - ci-operator
+        env:
+        - name: CONFIG_SPEC
+          valueFrom:
+            configMapKeyRef:
+              key: branch.yaml
+              name: ci-operator-super-duper
+        image: ci-operator:latest
+        name: ""
+        resources: {}
+      serviceAccountName: ci-operator
+`),
+			prowExpectedYAML: []byte(`postsubmits:
+  super/duper:
+  - agent: kubernetes
+    branches:
+    - branch
+    decorate: true
+    labels:
+      artifacts: images
+    name: branch-ci-super-duper-branch-images
+    skip_cloning: true
+    spec:
+      containers:
+      - args:
+        - --artifact-dir=$(ARTIFACTS)
+        - --target=[images]
+        - --promote
+        command:
+        - ci-operator
+        env:
+        - name: CONFIG_SPEC
+          valueFrom:
+            configMapKeyRef:
+              key: branch.yaml
+              name: ci-operator-super-duper
+        image: ci-operator:latest
+        name: ""
+        resources: {}
+      serviceAccountName: ci-operator
+  - agent: kubernetes
+    decorate: true
+    name: branch-ci-super-duper-branch-do-not-overwrite
+    skip_cloning: true
+    spec:
+      containers:
+      - args:
+        - --artifact-dir=$(ARTIFACTS)
+        - --target=unit
+        command:
+        - ci-operator
+        env:
+        - name: CONFIG_SPEC
+          valueFrom:
+            configMapKeyRef:
+              key: branch.yaml
+              name: ci-operator-super-duper
+        image: ci-operator:latest
+        name: ""
+        resources: {}
+      serviceAccountName: ci-operator
+presubmits:
+  super/duper:
+  - agent: kubernetes
+    always_run: true
+    branches:
+    - branch
+    context: ci/prow/unit
+    decorate: true
+    name: pull-ci-super-duper-branch-unit
+    rerun_command: /test unit
+    skip_cloning: true
+    spec:
+      containers:
+      - args:
+        - --artifact-dir=$(ARTIFACTS)
+        - --target=unit
+        command:
+        - ci-operator
+        env:
+        - name: CONFIG_SPEC
+          valueFrom:
+            configMapKeyRef:
+              key: branch.yaml
+              name: ci-operator-super-duper
+        image: ci-operator:latest
+        name: ""
+        resources: {}
+      serviceAccountName: ci-operator
+    trigger: ((?m)^/test( all| unit),?(\\s+|$))
+  - agent: kubernetes
+    always_run: true
+    branches:
+    - branch
+    context: ci/prow/images
+    decorate: true
+    name: pull-ci-super-duper-branch-images
+    rerun_command: /test images
+    skip_cloning: true
+    spec:
+      containers:
+      - args:
+        - --artifact-dir=$(ARTIFACTS)
+        - --target=[images]
+        command:
+        - ci-operator
+        env:
+        - name: CONFIG_SPEC
+          valueFrom:
+            configMapKeyRef:
+              key: branch.yaml
               name: ci-operator-super-duper
         image: ci-operator:latest
         name: ""
@@ -886,7 +1074,7 @@ presubmits:
 		},
 	}
 	for _, tc := range tests {
-		configPath, prowJobsPath, tempDir, err := prepareInputs(tc.org, tc.component, tc.branch, tc.configJSON, tc.prowOldYAML)
+		configPath, prowJobsPath, tempDir, err := prepareInputs(tc.org, tc.component, tc.branch, tc.configYAML, tc.prowOldYAML)
 		if tempDir != "" {
 			defer os.RemoveAll(tempDir)
 		}
@@ -895,7 +1083,7 @@ presubmits:
 			continue
 		}
 
-		jobConfig, _, _, err := generateProwJobsFromConfigFile(configPath)
+		jobConfig, _, err := generateProwJobsFromConfigFile(configPath)
 		if err != nil {
 			t.Errorf("Unexpected error: %v", err)
 			continue

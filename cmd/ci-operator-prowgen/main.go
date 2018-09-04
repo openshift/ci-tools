@@ -280,6 +280,11 @@ func writeJobsIntoComponentDirectory(jobDir, org, repo string, jobConfig *prowco
 	return nil
 }
 
+func isConfigFile(path string, info os.FileInfo) bool {
+	extension := filepath.Ext(path)
+	return !info.IsDir() && (extension == ".yaml" || extension == ".yml" || extension == ".json")
+}
+
 // Iterate over all ci-operator config files under a given path and generate a
 // Prow job configuration files for each one under a different path, mimicking
 // the directory structure.
@@ -289,7 +294,7 @@ func generateJobsFromDirectory(configDir, jobDir, jobFile string) error {
 			fmt.Fprintf(os.Stderr, "Error encontered while generating Prow job config: %v\n", err)
 			return err
 		}
-		if !info.IsDir() && filepath.Ext(path) == ".yaml" {
+		if isConfigFile(path, info) {
 			jobConfig, repoInfo, err := generateProwJobsFromConfigFile(path)
 			if err != nil {
 				return err

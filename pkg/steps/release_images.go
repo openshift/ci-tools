@@ -43,6 +43,11 @@ func (s *stableImagesTagStep) Run(ctx context.Context, dry bool) error {
 		ObjectMeta: meta.ObjectMeta{
 			Name: api.StableImageStream,
 		},
+		Spec: imageapi.ImageStreamSpec{
+			LookupPolicy: imageapi.ImageLookupPolicy{
+				Local: true,
+			},
+		},
 	}
 	if dry {
 		istJSON, err := json.MarshalIndent(newIS, "", "  ")
@@ -164,6 +169,11 @@ func (s *releaseImagesTagStep) Run(ctx context.Context, dry bool) error {
 		newIS := &imageapi.ImageStream{
 			ObjectMeta: meta.ObjectMeta{
 				Name: api.StableImageStream,
+			},
+			Spec: imageapi.ImageStreamSpec{
+				LookupPolicy: imageapi.ImageLookupPolicy{
+					Local: true,
+				},
 			},
 		}
 		for _, tag := range is.Spec.Tags {

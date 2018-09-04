@@ -18,6 +18,7 @@ import (
 
 	"github.com/openshift/ci-operator/pkg/api"
 	"github.com/openshift/ci-operator/pkg/steps"
+	"github.com/openshift/ci-operator/pkg/steps/release"
 )
 
 // FromConfig interprets the human-friendly fields in
@@ -154,7 +155,9 @@ func FromConfig(
 		buildSteps = append(buildSteps, steps.WriteParametersStep(params, paramFile, jobSpec))
 	}
 
-	if !hasReleaseConfiguration {
+	if hasReleaseConfiguration {
+		buildSteps = append(buildSteps, release.AssembleReleaseStep(*config.ReleaseTagConfiguration, podClient, imageClient, artifactDir, jobSpec))
+	} else {
 		buildSteps = append(buildSteps, steps.StableImagesTagStep(imageClient, jobSpec))
 	}
 

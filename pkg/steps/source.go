@@ -432,7 +432,7 @@ func SourceStep(config api.SourceStepConfiguration, resources api.ResourceConfig
 func trimLabels(labels map[string]string) map[string]string {
 	for k, v := range labels {
 		if len(v) > 63 {
-			labels[k] = v[:63]
+			labels[k] = v[:60] + "XXX"
 		}
 	}
 	return labels

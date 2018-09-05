@@ -40,13 +40,13 @@ func (s *testStep) Run(ctx context.Context, dry bool) error {
 	pod := &coreapi.Pod{
 		ObjectMeta: meta.ObjectMeta{
 			Name: s.config.As,
-			Labels: map[string]string{
+			Labels: trimLabels(map[string]string{
 				PersistsLabel:    "false",
 				JobLabel:         s.jobSpec.Job,
 				BuildIdLabel:     s.jobSpec.BuildId,
 				ProwJobIdLabel:   s.jobSpec.ProwJobID,
 				CreatedByCILabel: "true",
-			},
+			}),
 			Annotations: map[string]string{
 				JobSpecAnnotation: s.jobSpec.RawSpec(),
 			},

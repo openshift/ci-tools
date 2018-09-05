@@ -134,14 +134,14 @@ func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStrea
 		ObjectMeta: meta.ObjectMeta{
 			Name:      string(toTag),
 			Namespace: jobSpec.Namespace,
-			Labels: map[string]string{
+			Labels: trimLabels(map[string]string{
 				PersistsLabel:    "false",
 				JobLabel:         jobSpec.Job,
 				BuildIdLabel:     jobSpec.BuildId,
 				ProwJobIdLabel:   jobSpec.ProwJobID,
 				CreatesLabel:     string(toTag),
 				CreatedByCILabel: "true",
-			},
+			}),
 			Annotations: map[string]string{
 				JobSpecAnnotation: jobSpec.RawSpec(),
 			},
@@ -425,4 +425,15 @@ func SourceStep(config api.SourceStepConfiguration, resources api.ResourceConfig
 		clonerefsSrcClient: clonerefsSrcClient,
 		jobSpec:            jobSpec,
 	}
+}
+
+// trimLabels ensures that all label values are less than 64 characters
+// in length and thus valid.
+func trimLabels(labels map[string]string) map[string]string {
+	for k, v := range labels {
+		if len(v) > 63 {
+			labels[k] = v[:63]
+		}
+	}
+	return labels
 }

@@ -58,7 +58,7 @@ func (s *rpmServerStep) Run(ctx context.Context, dry bool) error {
 		imageReference = ist.Image.DockerImageReference
 	}
 
-	labelSet := map[string]string{
+	labelSet := trimLabels(map[string]string{
 		PersistsLabel:    "true",
 		JobLabel:         s.jobSpec.Job,
 		BuildIdLabel:     s.jobSpec.BuildId,
@@ -66,7 +66,7 @@ func (s *rpmServerStep) Run(ctx context.Context, dry bool) error {
 		CreatedByCILabel: "true",
 		AppLabel:         RPMRepoName,
 		TTLIgnoreLabel:   "true",
-	}
+	})
 	selectorSet := map[string]string{
 		AppLabel: RPMRepoName,
 	}

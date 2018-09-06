@@ -16,7 +16,7 @@ to build this test target.
     context: ci/prow/TEST
     rerun_command: /test TEST
     spec: <pod that runs `ci-operator --target=TEST`>
-    trigger: ((?m)^/test( all| TEST),?(\\s+|$))
+    trigger: ((?m)^/test( all| TEST),?(\s+|$))
     ...
 ```
 
@@ -34,7 +34,7 @@ array, generate a presubmit running ci-operator to build the `[images]` target.
     context: ci/prow/images
     rerun_command: /test images
     spec: <pod that runs `ci-operator --target=[images]`>
-    trigger: ((?m)^/test( all| images),?(\\s+|$))
+    trigger: ((?m)^/test( all| images),?(\s+|$))
     ...
 ```
 

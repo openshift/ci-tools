@@ -115,7 +115,7 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 			Context:      "ci/prow/testname",
 			Name:         "pull-ci-org-repo-branch-testname",
 			RerunCommand: "/test testname",
-			Trigger:      `((?m)^/test( all| testname),?(\\s+|$))`,
+			Trigger:      `((?m)^/test( all| testname),?(\s+|$))`,
 			UtilityConfig: prowconfig.UtilityConfig{
 				DecorationConfig: &prowkube.DecorationConfig{SkipCloning: true},
 				Decorate:         true,
@@ -730,7 +730,7 @@ presubmits:
         name: ""
         resources: {}
       serviceAccountName: ci-operator
-    trigger: ((?m)^/test( all| unit),?(\\s+|$))
+    trigger: ((?m)^/test( all| unit),?(\s+|$))
   - agent: kubernetes
     always_run: true
     branches:
@@ -757,7 +757,7 @@ presubmits:
         name: ""
         resources: {}
       serviceAccountName: ci-operator
-    trigger: ((?m)^/test( all| images),?(\\s+|$))
+    trigger: ((?m)^/test( all| images),?(\s+|$))
 `)}, {
 			id:        "One test and images, one existing job. Expect one presubmit, pre/post submit images jobs. Existing job should not be changed.",
 			org:       "super",
@@ -883,7 +883,7 @@ presubmits:
         name: ""
         resources: {}
       serviceAccountName: ci-operator
-    trigger: ((?m)^/test( all| unit),?(\\s+|$))
+    trigger: ((?m)^/test( all| unit),?(\s+|$))
   - agent: kubernetes
     always_run: true
     branches:
@@ -910,7 +910,7 @@ presubmits:
         name: ""
         resources: {}
       serviceAccountName: ci-operator
-    trigger: ((?m)^/test( all| images),?(\\s+|$))
+    trigger: ((?m)^/test( all| images),?(\s+|$))
 `),
 		}, {
 			id:        "Input is YAML and it is correctly processed",
@@ -1042,7 +1042,7 @@ presubmits:
         name: ""
         resources: {}
       serviceAccountName: ci-operator
-    trigger: ((?m)^/test( all| unit),?(\\s+|$))
+    trigger: ((?m)^/test( all| unit),?(\s+|$))
   - agent: kubernetes
     always_run: true
     branches:
@@ -1069,7 +1069,7 @@ presubmits:
         name: ""
         resources: {}
       serviceAccountName: ci-operator
-    trigger: ((?m)^/test( all| images),?(\\s+|$))
+    trigger: ((?m)^/test( all| images),?(\s+|$))
 `),
 		},
 	}

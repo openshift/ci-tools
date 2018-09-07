@@ -45,6 +45,13 @@ func (s *projectDirectoryImageBuildStep) Run(ctx context.Context, dry bool) erro
 		}
 		workingDir = metadata.Config.WorkingDir
 	}
+
+	labels := make(map[string]string)
+	if len(s.jobSpec.Refs.Pulls) == 0 {
+		labels["io.openshift.build.commit.id"] = s.jobSpec.Refs.BaseSHA
+		labels["io.openshift.build.commit.ref"] = s.jobSpec.Refs.BaseRef
+	}
+
 	images := buildInputsFromStep(s.config.Inputs)
 	if _, ok := s.config.Inputs["src"]; !ok {
 		images = append(images, buildapi.ImageSource{
@@ -58,7 +65,7 @@ func (s *projectDirectoryImageBuildStep) Run(ctx context.Context, dry bool) erro
 			}},
 		})
 	}
-	return handleBuild(s.buildClient, buildFromSource(
+	build := buildFromSource(
 		s.jobSpec, s.config.From, s.config.To,
 		buildapi.BuildSource{
 			Type:   buildapi.BuildSourceImage,
@@ -66,7 +73,14 @@ func (s *projectDirectoryImageBuildStep) Run(ctx context.Context, dry bool) erro
 		},
 		s.config.DockerfilePath,
 		s.resources,
-	), dry)
+	)
+	for k, v := range labels {
+		build.Spec.Output.ImageLabels = append(build.Spec.Output.ImageLabels, buildapi.ImageLabel{
+			Name:  k,
+			Value: v,
+		})
+	}
+	return handleBuild(s.buildClient, build, dry)
 }
 
 func (s *projectDirectoryImageBuildStep) Done() (bool, error) {

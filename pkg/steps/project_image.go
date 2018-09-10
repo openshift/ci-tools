@@ -50,6 +50,9 @@ func (s *projectDirectoryImageBuildStep) Run(ctx context.Context, dry bool) erro
 	if len(s.jobSpec.Refs.Pulls) == 0 {
 		labels["io.openshift.build.commit.id"] = s.jobSpec.Refs.BaseSHA
 		labels["io.openshift.build.commit.ref"] = s.jobSpec.Refs.BaseRef
+	} else {
+		labels["io.openshift.build.commit.id"] = ""
+		labels["io.openshift.build.commit.ref"] = ""
 	}
 
 	images := buildInputsFromStep(s.config.Inputs)

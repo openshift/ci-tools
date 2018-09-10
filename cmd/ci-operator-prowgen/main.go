@@ -12,6 +12,7 @@ import (
 
 	cioperatorapi "github.com/openshift/ci-operator/pkg/api"
 	kubeapi "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	prowconfig "k8s.io/test-infra/prow/config"
 	prowkube "k8s.io/test-infra/prow/kube"
 
@@ -93,6 +94,10 @@ func generatePodSpec(org, repo, configFile, target string, additionalArgs ...str
 				Command: []string{"ci-operator"},
 				Args:    append([]string{"--artifact-dir=$(ARTIFACTS)", fmt.Sprintf("--target=%s", target)}, additionalArgs...),
 				Env:     []kubeapi.EnvVar{{Name: "CONFIG_SPEC", ValueFrom: &configMapKeyRef}},
+				Resources: kubeapi.ResourceRequirements{
+					Requests: kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
+					Limits:   kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(500, resource.DecimalSI)},
+				},
 			},
 		},
 	}

@@ -11,6 +11,7 @@ import (
 
 	ciop "github.com/openshift/ci-operator/pkg/api"
 	kubeapi "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	prowconfig "k8s.io/test-infra/prow/config"
 	prowkube "k8s.io/test-infra/prow/kube"
 
@@ -41,6 +42,10 @@ func TestGeneratePodSpec(t *testing.T) {
 					Image:   "ci-operator:latest",
 					Command: []string{"ci-operator"},
 					Args:    []string{"--artifact-dir=$(ARTIFACTS)", "--target=target"},
+					Resources: kubeapi.ResourceRequirements{
+						Requests: kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
+						Limits:   kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(500, resource.DecimalSI)},
+					},
 					Env: []kubeapi.EnvVar{{
 						Name: "CONFIG_SPEC",
 						ValueFrom: &kubeapi.EnvVarSource{
@@ -68,6 +73,10 @@ func TestGeneratePodSpec(t *testing.T) {
 					Image:   "ci-operator:latest",
 					Command: []string{"ci-operator"},
 					Args:    []string{"--artifact-dir=$(ARTIFACTS)", "--target=target", "--promote", "something"},
+					Resources: kubeapi.ResourceRequirements{
+						Requests: kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
+						Limits:   kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(500, resource.DecimalSI)},
+					},
 					Env: []kubeapi.EnvVar{{
 						Name: "CONFIG_SPEC",
 						ValueFrom: &kubeapi.EnvVarSource{
@@ -700,7 +709,11 @@ func TestFromCIOperatorConfigToProwYaml(t *testing.T) {
               name: ci-operator-super-duper
         image: ci-operator:latest
         name: ""
-        resources: {}
+        resources:
+          limits:
+            cpu: 500m
+          requests:
+            cpu: 10m
       serviceAccountName: ci-operator
 presubmits:
   super/duper:
@@ -728,7 +741,11 @@ presubmits:
               name: ci-operator-super-duper
         image: ci-operator:latest
         name: ""
-        resources: {}
+        resources:
+          limits:
+            cpu: 500m
+          requests:
+            cpu: 10m
       serviceAccountName: ci-operator
     trigger: ((?m)^/test( all| unit),?(\s+|$))
   - agent: kubernetes
@@ -755,7 +772,11 @@ presubmits:
               name: ci-operator-super-duper
         image: ci-operator:latest
         name: ""
-        resources: {}
+        resources:
+          limits:
+            cpu: 500m
+          requests:
+            cpu: 10m
       serviceAccountName: ci-operator
     trigger: ((?m)^/test( all| images),?(\s+|$))
 `)}, {
@@ -801,7 +822,11 @@ presubmits:
               name: ci-operator-super-duper
         image: ci-operator:latest
         name: ""
-        resources: {}
+        resources:
+          limits:
+            cpu: 500m
+          requests:
+            cpu: 10m
       serviceAccountName: ci-operator
 `),
 			prowExpectedYAML: []byte(`postsubmits:
@@ -830,7 +855,11 @@ presubmits:
               name: ci-operator-super-duper
         image: ci-operator:latest
         name: ""
-        resources: {}
+        resources:
+          limits:
+            cpu: 500m
+          requests:
+            cpu: 10m
       serviceAccountName: ci-operator
   - agent: kubernetes
     branches:
@@ -853,7 +882,11 @@ presubmits:
               name: ci-operator-super-duper
         image: ci-operator:latest
         name: ""
-        resources: {}
+        resources:
+          limits:
+            cpu: 500m
+          requests:
+            cpu: 10m
       serviceAccountName: ci-operator
 presubmits:
   super/duper:
@@ -881,7 +914,11 @@ presubmits:
               name: ci-operator-super-duper
         image: ci-operator:latest
         name: ""
-        resources: {}
+        resources:
+          limits:
+            cpu: 500m
+          requests:
+            cpu: 10m
       serviceAccountName: ci-operator
     trigger: ((?m)^/test( all| unit),?(\s+|$))
   - agent: kubernetes
@@ -908,7 +945,11 @@ presubmits:
               name: ci-operator-super-duper
         image: ci-operator:latest
         name: ""
-        resources: {}
+        resources:
+          limits:
+            cpu: 500m
+          requests:
+            cpu: 10m
       serviceAccountName: ci-operator
     trigger: ((?m)^/test( all| images),?(\s+|$))
 `),
@@ -962,7 +1003,11 @@ tests:
               name: ci-operator-super-duper
         image: ci-operator:latest
         name: ""
-        resources: {}
+        resources:
+          limits:
+            cpu: 500m
+          requests:
+            cpu: 10m
       serviceAccountName: ci-operator
 `),
 			prowExpectedYAML: []byte(`postsubmits:
@@ -991,7 +1036,11 @@ tests:
               name: ci-operator-super-duper
         image: ci-operator:latest
         name: ""
-        resources: {}
+        resources:
+          limits:
+            cpu: 500m
+          requests:
+            cpu: 10m
       serviceAccountName: ci-operator
   - agent: kubernetes
     decorate: true
@@ -1012,7 +1061,11 @@ tests:
               name: ci-operator-super-duper
         image: ci-operator:latest
         name: ""
-        resources: {}
+        resources:
+          limits:
+            cpu: 500m
+          requests:
+            cpu: 10m
       serviceAccountName: ci-operator
 presubmits:
   super/duper:
@@ -1040,7 +1093,11 @@ presubmits:
               name: ci-operator-super-duper
         image: ci-operator:latest
         name: ""
-        resources: {}
+        resources:
+          limits:
+            cpu: 500m
+          requests:
+            cpu: 10m
       serviceAccountName: ci-operator
     trigger: ((?m)^/test( all| unit),?(\s+|$))
   - agent: kubernetes
@@ -1067,7 +1124,11 @@ presubmits:
               name: ci-operator-super-duper
         image: ci-operator:latest
         name: ""
-        resources: {}
+        resources:
+          limits:
+            cpu: 500m
+          requests:
+            cpu: 10m
       serviceAccountName: ci-operator
     trigger: ((?m)^/test( all| images),?(\s+|$))
 `),

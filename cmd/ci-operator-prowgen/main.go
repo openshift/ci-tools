@@ -113,7 +113,7 @@ func generatePresubmitForTest(test testDescription, repoInfo *configFilePathElem
 		Name:         fmt.Sprintf("pull-ci-%s-%s-%s-%s", repoInfo.org, repoInfo.repo, repoInfo.branch, test.Name),
 		RerunCommand: fmt.Sprintf("/test %s", test.Name),
 		Spec:         generatePodSpec(repoInfo.org, repoInfo.repo, repoInfo.configFilename, test.Target),
-		Trigger:      fmt.Sprintf(`((?m)^/test( all| %s),?(\\s+|$))`, test.Name),
+		Trigger:      fmt.Sprintf(`((?m)^/test( all| %s),?(\s+|$))`, test.Name),
 		UtilityConfig: prowconfig.UtilityConfig{
 			DecorationConfig: &prowkube.DecorationConfig{SkipCloning: true},
 			Decorate:         true,

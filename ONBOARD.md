@@ -119,33 +119,24 @@ for your builds and we make use of the OpenShift `Build` image source mechanism
 to deliver artifacts from one container image to another. In the following example,
 we configure `ci-operator` to run such a build:
 
-```json
-{
-  "base_images": {
-    "release_base": {
-      "name": "release",
-      "tag": "latest"
-    }
-  },
-  "test_base_image": {
-    "name": "tests",
-    "tag": "latest"
-  },
-  "binary_build_commands": "make build",
-  "images": [{
-    "from": "release_base",
-    "to": "product",
-    "context_dir": "images/product",
-    "inputs": {
-      "bin": {
-        "paths": [{
-         "source_path": "path/to/binary",
-         "destination_dir": "/usr/bin/binary"
-       }]
-      }
-    }
-  }]
-}
+```yaml
+base_images:
+  release_base:
+    name: release
+    tag: latest
+binary_build_commands: make build
+images:
+- context_dir: images/product
+  from: release_base
+  inputs:
+    bin:
+      paths:
+      - destination_dir: /usr/bin/binary
+        source_path: path/to/binary
+  to: product
+test_base_image:
+  name: tests
+  tag: latest
 ```
 
 In the example, we build the binaries using `make build` in the `tests` environment

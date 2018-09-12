@@ -578,10 +578,7 @@ func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name st
 		return false, nil
 	}
 	if podJobIsFailed(pod) {
-		return false, errorWithOutput{
-			err:    fmt.Errorf("the pod %s/%s failed after %s (failed containers: %s): %s", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", "), podReason(pod)),
-			output: podMessages(pod),
-		}
+		return false, appendLogToError(fmt.Errorf("the pod %s/%s failed after %s (failed containers: %s): %s", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", "), podReason(pod)), podMessages(pod))
 	}
 
 	watcher, err := podClient.Watch(meta.ListOptions{
@@ -606,19 +603,13 @@ func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name st
 				return false, nil
 			}
 			if podJobIsFailed(pod) {
-				return false, errorWithOutput{
-					err:    fmt.Errorf("the pod %s/%s failed after %s (failed containers: %s): %s", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", "), podReason(pod)),
-					output: podMessages(pod),
-				}
+				return false, appendLogToError(fmt.Errorf("the pod %s/%s failed after %s (failed containers: %s): %s", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", "), podReason(pod)), podMessages(pod))
 			}
 			continue
 		}
 		if event.Type == watch.Deleted {
 			podLogNewFailedContainers(podClient, pod, completed, notifier)
-			return false, errorWithOutput{
-				err:    fmt.Errorf("the pod %s/%s was deleted without completing after %s (failed containers: %s)", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", ")),
-				output: podMessages(pod),
-			}
+			return false, appendLogToError(fmt.Errorf("the pod %s/%s was deleted without completing after %s (failed containers: %s)", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", ")), podMessages(pod))
 		}
 		log.Printf("error: Unrecognized event in watch: %v %#v", event.Type, event.Object)
 	}

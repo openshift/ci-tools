@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"sort"
+	"strings"
 	"time"
 
 	coreapi "k8s.io/api/core/v1"
@@ -259,10 +260,7 @@ func waitForBuildOrTimeout(buildClient BuildClient, namespace, name string) (boo
 	if isFailed(build) {
 		log.Printf("Build %s failed, printing logs:", build.Name)
 		printBuildLogs(buildClient, build.Namespace, build.Name)
-		return false, errorWithOutput{
-			err:    fmt.Errorf("the build %s failed with reason %s: %s", build.Name, build.Status.Reason, build.Status.Message),
-			output: build.Status.LogSnippet,
-		}
+		return false, appendLogToError(fmt.Errorf("the build %s failed with reason %s: %s", build.Name, build.Status.Reason, build.Status.Message), build.Status.LogSnippet)
 	}
 
 	watcher, err := buildClient.Builds(namespace).Watch(meta.ListOptions{
@@ -288,26 +286,18 @@ func waitForBuildOrTimeout(buildClient BuildClient, namespace, name string) (boo
 			if isFailed(build) {
 				log.Printf("Build %s failed, printing logs:", build.Name)
 				printBuildLogs(buildClient, build.Namespace, build.Name)
-				return false, errorWithOutput{
-					err:    fmt.Errorf("the build %s failed after %s with reason %s: %s", build.Name, buildDuration(build).Truncate(time.Second), build.Status.Reason, build.Status.Message),
-					output: build.Status.LogSnippet,
-				}
+				return false, appendLogToError(fmt.Errorf("the build %s failed after %s with reason %s: %s", build.Name, buildDuration(build).Truncate(time.Second), build.Status.Reason, build.Status.Message), build.Status.LogSnippet)
 			}
 		}
 	}
 }
 
-type errorWithOutput struct {
-	err    error
-	output string
-}
-
-func (e errorWithOutput) Error() string {
-	return e.err.Error()
-}
-
-func (e errorWithOutput) ErrorOutput() string {
-	return e.output
+func appendLogToError(err error, log string) error {
+	log = strings.TrimSpace(log)
+	if len(log) == 0 {
+		return err
+	}
+	return fmt.Errorf("%s\n\n%s", err.Error(), log)
 }
 
 func buildDuration(build *buildapi.Build) time.Duration {

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/ghodss/yaml"
+	"github.com/sirupsen/logrus"
 
 	cioperatorapi "github.com/openshift/ci-operator/pkg/api"
 	kubeapi "k8s.io/api/core/v1"
@@ -110,12 +111,16 @@ type testDescription struct {
 
 // Generate a Presubmit job for the given parameters
 func generatePresubmitForTest(test testDescription, repoInfo *configFilePathElements) *prowconfig.Presubmit {
+	name := fmt.Sprintf("pull-ci-%s-%s-%s-%s", repoInfo.org, repoInfo.repo, repoInfo.branch, test.Name)
+	if len(name) > 63 {
+		logrus.WithField("name", name).Warn("Generated job name is longer than 63 characters. This may cause issues when Prow attempts to label resources with job name.")
+	}
 	return &prowconfig.Presubmit{
 		Agent:        "kubernetes",
 		AlwaysRun:    true,
 		Brancher:     prowconfig.Brancher{Branches: []string{repoInfo.branch}},
 		Context:      fmt.Sprintf("ci/prow/%s", test.Name),
-		Name:         fmt.Sprintf("pull-ci-%s-%s-%s-%s", repoInfo.org, repoInfo.repo, repoInfo.branch, test.Name),
+		Name:         name,
 		RerunCommand: fmt.Sprintf("/test %s", test.Name),
 		Spec:         generatePodSpec(repoInfo.org, repoInfo.repo, repoInfo.configFilename, test.Target),
 		Trigger:      fmt.Sprintf(`((?m)^/test( all| %s),?(\s+|$))`, test.Name),
@@ -132,10 +137,14 @@ func generatePostsubmitForTest(
 	repoInfo *configFilePathElements,
 	labels map[string]string,
 	additionalArgs ...string) *prowconfig.Postsubmit {
+	name := fmt.Sprintf("branch-ci-%s-%s-%s-%s", repoInfo.org, repoInfo.repo, repoInfo.branch, test.Name)
+	if len(name) > 63 {
+		logrus.WithField("name", name).Warn("Generated job name is longer than 63 characters. This may cause issues when Prow attempts to label resources with job name.")
+	}
 	return &prowconfig.Postsubmit{
 		Agent:    "kubernetes",
 		Brancher: prowconfig.Brancher{Branches: []string{repoInfo.branch}},
-		Name:     fmt.Sprintf("branch-ci-%s-%s-%s-%s", repoInfo.org, repoInfo.repo, repoInfo.branch, test.Name),
+		Name:     name,
 		Spec:     generatePodSpec(repoInfo.org, repoInfo.repo, repoInfo.configFilename, test.Target, additionalArgs...),
 		Labels:   labels,
 		UtilityConfig: prowconfig.UtilityConfig{
@@ -296,7 +305,7 @@ func isConfigFile(path string, info os.FileInfo) bool {
 func generateJobsFromDirectory(configDir, jobDir, jobFile string) error {
 	err := filepath.Walk(configDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error encontered while generating Prow job config: %v\n", err)
+			logrus.WithError(err).Error("Error encontered while generating Prow job config")
 			return err
 		}
 		if isConfigFile(path, info) {
@@ -318,11 +327,7 @@ func generateJobsFromDirectory(configDir, jobDir, jobFile string) error {
 		return nil
 	})
 
-	if err != nil {
-		return fmt.Errorf("failed to generate all Prow jobs (%v)", err)
-	}
-
-	return nil
+	return err
 }
 
 // Given two JobConfig, merge jobs from the `source` one to to `destination`
@@ -419,31 +424,28 @@ func main() {
 	}
 
 	if err := opt.process(); err != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", err)
+		logrus.WithError(err).Fatal("Failed to process arguments")
 		os.Exit(1)
 	}
 
 	if len(opt.fromFile) > 0 {
 		jobConfig, repoInfo, err := generateProwJobsFromConfigFile(opt.fromFile)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "failed to generate jobs from '%s' (%v)\n", opt.fromFile, err)
-			os.Exit(1)
+			logrus.WithError(err).WithField("source-file", opt.fromFile).Fatal("Failed to generate jobs")
 		}
 		if len(opt.toFile) > 0 { // from file to file
 			if err := mergeJobsIntoFile(opt.toFile, jobConfig); err != nil {
-				fmt.Fprintf(os.Stderr, "failed to write jobs to '%s' (%v)\n", opt.toFile, err)
-				os.Exit(1)
+				logrus.WithError(err).WithField("target-file", opt.toFile).Fatal("Failed to write jobs to file")
 			}
 		} else { // from file to directory
 			if err := writeJobsIntoComponentDirectory(opt.toDir, repoInfo.org, repoInfo.repo, jobConfig); err != nil {
-				fmt.Fprintf(os.Stderr, "failed to write jobs to '%s' (%v)\n", opt.toDir, err)
-				os.Exit(1)
+				logrus.WithError(err).WithField("target-dir", opt.toDir).Fatal("Failed to write jobs to directory")
 			}
 		}
 	} else { // from directory
 		if err := generateJobsFromDirectory(opt.fromDir, opt.toDir, opt.toFile); err != nil {
-			fmt.Fprintf(os.Stderr, "failed to generate jobs from '%s' (%v)\n", opt.fromDir, err)
-			os.Exit(1)
+			fields := logrus.Fields{"target-dir": opt.toDir, "target-file": opt.toFile, "source-dir": opt.fromDir}
+			logrus.WithError(err).WithFields(fields).Fatal("Failed to generate jobs")
 		}
 	}
 }

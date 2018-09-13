@@ -38,17 +38,26 @@ By default, ci-operator builds the `src` target image, expected by later targets
 to contain the source code of the component together with its build
 dependencies. Using [cloneref](https://github.com/kubernetes/test-infra/tree/master/prow/cmd/clonerefs)
 , ci-operator fetches the refs to be tested from the component repository
-and injects the source code into the base image specified by the
-`test_base_image` key.  The base image should contain all build dependencies of
-the tested component, so the it will often be a `openshift/release:<tag>` image.
-
+and injects the source code into the base image specified by the `build_root` key. 
+There are two ways to specify the base image.
+* From an image stream that should contain all build dependencies of the tested component, so the it will often be a `openshift/release:<tag>` image.
 ```yaml
-test_base_image:
-  cluster: https://api.ci.openshift.org
-  name: release
-  namespace: openshift
-  tag: golang-1.10
+build_root:
+  image_stream_tag:
+    cluster: https://api.ci.openshift.org
+    namespace: openshift
+    name: release
+    tag: golang-1.10
 ```
+* From a `Dockerfile` that is in the repository in which the PR is opened. In this case, ci-operator will build the image first and it will get the build from the latest of the target branch.
+```yaml
+build_root:
+  project_image_build:
+    dockerfile_path: Dockerfile
+    context_dir: path/of/dockerfile/
+```
+
+**Note:** Both image_stream_tag and project_image_build should not be defined.
 
 Given your component can be built in the context of the `openshift/release`
 image, you can test building the `src` target:

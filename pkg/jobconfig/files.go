@@ -34,7 +34,7 @@ func WriteToFile(path string, jobConfig *prowconfig.JobConfig) error {
 		return fmt.Errorf("failed to marshal the job config (%v)", err)
 	}
 	if err := ioutil.WriteFile(path, jobConfigAsYaml, 0664); err != nil {
-		return fmt.Errorf("Failed to write job config to '%s' (%v)", path, err)
+		return err
 	}
 
 	return nil

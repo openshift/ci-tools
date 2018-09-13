@@ -1,6 +1,7 @@
 required = [
 	"github.com/ghodss/yaml",
 	"github.com/openshift/ci-operator/pkg/api",
+	"github.com/sirupsen/logrus",
 	"k8s.io/test-infra/prow/config",
 	"k8s.io/test-infra/prow/kube",
 	"k8s.io/api/core/v1",

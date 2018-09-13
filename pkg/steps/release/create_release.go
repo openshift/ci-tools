@@ -152,11 +152,5 @@ func resolvePullSpec(is *imageapi.ImageStream, tag string) (string, bool) {
 		}
 		break
 	}
-	if len(is.Status.PublicDockerImageRepository) > 0 {
-		return fmt.Sprintf("%s:%s", is.Status.PublicDockerImageRepository, tag), true
-	}
-	if len(is.Status.DockerImageRepository) > 0 {
-		return fmt.Sprintf("%s:%s", is.Status.DockerImageRepository, tag), true
-	}
 	return "", false
 }

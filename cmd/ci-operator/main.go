@@ -289,20 +289,19 @@ func (o *options) Complete() error {
 	jobSpec, err := api.ResolveSpecFromEnv()
 	if err != nil {
 		if len(o.gitRef) == 0 {
-			// Failed to read $JOB_SPEC and --git-ref was not passed
-			return fmt.Errorf("failed to resolve job spec: %v", err)
+			return fmt.Errorf("failed to determine job spec: no --git-ref passed and failed to resolve job spec from env: %v", err)
 		}
 		// Failed to read $JOB_SPEC but --git-ref was passed, so try that instead
 		spec, refErr := jobSpecFromGitRef(o.gitRef)
 		if refErr != nil {
-			return fmt.Errorf("failed to resolve --git-ref: %v", refErr)
+			return fmt.Errorf("failed to determine job spec: failed to resolve --git-ref: %v", refErr)
 		}
 		jobSpec = spec
 	} else if len(o.gitRef) > 0 {
 		// Read from $JOB_SPEC but --git-ref was also passed, so merge them
 		spec, err := jobSpecFromGitRef(o.gitRef)
 		if err != nil {
-			return fmt.Errorf("failed to resolve --git-ref: %v", err)
+			return fmt.Errorf("failed to determine job spec: failed to resolve --git-ref: %v", err)
 		}
 		jobSpec.Refs = spec.Refs
 	}

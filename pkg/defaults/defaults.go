@@ -117,7 +117,7 @@ func FromConfig(
 			}
 			step = steps.SourceStep(*rawStep.SourceStepConfiguration, config.Resources, buildClient, srcClient, imageClient, jobSpec)
 		} else if rawStep.ProjectDirectoryImageBuildStepConfiguration != nil {
-			step = steps.ProjectDirectoryImageBuildStep(*rawStep.ProjectDirectoryImageBuildStepConfiguration, config.Resources, buildClient, imageClient, jobSpec)
+			step = steps.ProjectDirectoryImageBuildStep(*rawStep.ProjectDirectoryImageBuildStepConfiguration, config.Resources, buildClient, imageClient, imageClient, jobSpec)
 		} else if rawStep.ProjectDirectoryImageBuildInputs != nil {
 			step = steps.GitSourceStep(*rawStep.ProjectDirectoryImageBuildInputs, config.Resources, buildClient, imageClient, jobSpec)
 		} else if rawStep.RPMImageInjectionStepConfiguration != nil {

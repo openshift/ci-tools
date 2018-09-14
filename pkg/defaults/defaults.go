@@ -6,11 +6,11 @@ import (
 	"net/url"
 	"strings"
 
+	appsclientset "k8s.io/client-go/kubernetes/typed/apps/v1"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
 
 	templateapi "github.com/openshift/api/template/v1"
-	appsclientset "github.com/openshift/client-go/apps/clientset/versioned/typed/apps/v1"
 	buildclientset "github.com/openshift/client-go/build/clientset/versioned/typed/build/v1"
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 	routeclientset "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
@@ -46,7 +46,7 @@ func FromConfig(
 	var buildClient steps.BuildClient
 	var imageClient imageclientset.ImageV1Interface
 	var routeGetter routeclientset.RoutesGetter
-	var deploymentGetter appsclientset.DeploymentConfigsGetter
+	var deploymentGetter appsclientset.DeploymentsGetter
 	var templateClient steps.TemplateClient
 	var configMapGetter coreclientset.ConfigMapsGetter
 	var serviceGetter coreclientset.ServicesGetter

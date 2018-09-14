@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	buildapi "github.com/openshift/api/build/v1"
 	"github.com/openshift/api/image/docker10"
@@ -17,6 +18,7 @@ type projectDirectoryImageBuildStep struct {
 	config      api.ProjectDirectoryImageBuildStepConfiguration
 	resources   api.ResourceConfiguration
 	buildClient BuildClient
+	imageClient imageclientset.ImageStreamsGetter
 	istClient   imageclientset.ImageStreamTagsGetter
 	jobSpec     *api.JobSpec
 }
@@ -108,7 +110,26 @@ func (s *projectDirectoryImageBuildStep) Creates() []api.StepLink {
 }
 
 func (s *projectDirectoryImageBuildStep) Provides() (api.ParameterMap, api.StepLink) {
-	return nil, nil
+	if len(s.config.To) == 0 {
+		return nil, nil
+	}
+	return api.ParameterMap{
+		fmt.Sprintf("LOCAL_IMAGE_%s", strings.ToUpper(strings.Replace(string(s.config.To), "-", "_", -1))): func() (string, error) {
+			is, err := s.imageClient.ImageStreams(s.jobSpec.Namespace).Get(api.PipelineImageStream, meta.GetOptions{})
+			if err != nil {
+				return "", fmt.Errorf("could not retrieve output imagestream: %v", err)
+			}
+			var registry string
+			if len(is.Status.PublicDockerImageRepository) > 0 {
+				registry = is.Status.PublicDockerImageRepository
+			} else if len(is.Status.DockerImageRepository) > 0 {
+				registry = is.Status.DockerImageRepository
+			} else {
+				return "", fmt.Errorf("image stream %s has no accessible image registry value", s.config.To)
+			}
+			return fmt.Sprintf("%s:%s", registry, s.config.To), nil
+		},
+	}, api.InternalImageLink(s.config.To)
 }
 
 func (s *projectDirectoryImageBuildStep) Name() string { return string(s.config.To) }
@@ -117,11 +138,12 @@ func (s *projectDirectoryImageBuildStep) Description() string {
 	return fmt.Sprintf("Build image %s from the repository", s.config.To)
 }
 
-func ProjectDirectoryImageBuildStep(config api.ProjectDirectoryImageBuildStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, istClient imageclientset.ImageStreamTagsGetter, jobSpec *api.JobSpec) api.Step {
+func ProjectDirectoryImageBuildStep(config api.ProjectDirectoryImageBuildStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, imageClient imageclientset.ImageStreamsGetter, istClient imageclientset.ImageStreamTagsGetter, jobSpec *api.JobSpec) api.Step {
 	return &projectDirectoryImageBuildStep{
 		config:      config,
 		resources:   resources,
 		buildClient: buildClient,
+		imageClient: imageClient,
 		istClient:   istClient,
 		jobSpec:     jobSpec,
 	}

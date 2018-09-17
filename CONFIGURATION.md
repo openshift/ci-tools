@@ -49,11 +49,15 @@ tag_specification:
   namespace: ''
   tag: ''
   tag_overrides: {}
-test_base_image:
-  cluster: ''
-  name: ''
-  namespace: ''
-  tag: ''
+build_root:
+  image_stream_tag:
+    cluster: ''
+    name: ''
+    namespace: ''
+    tag: ''
+  project_image_build:
+    dockerfile_path: ''
+    context_dir: ''
 test_binary_build_commands: ''
 tests:
 - artifact_dir: ''
@@ -136,20 +140,46 @@ repository injected into them before the image is used in the builds. The field
 has an identical structure to `base_images`.
 
 # `test_base_image`
-`test_base_image` provides clone-time and build-time dependencies to the builds
-but not to the published images. The field describes the `ImageStreamTag` that
-will have a local `ImageStreamTag` created in to the namespace for the job to
-be used as the build environment for the source code cloning and any downstream
-builds like compilation or unit tests. Commonly, the `openshift/release` image
-is used:
+`test_base_image` is deprecated, use `build_root.image_stream_tag` instead.
+
+# `build_root`
+
+`build_root` provides clone-time and build-time dependencies to the builds
+but not to the published images. The field describes the `ImageStreamTag`is
+created in the namespace for the job to be used as the build environment for the
+source code cloning and any downstream builds like compilation or unit tests.
+
+Commonly, the `openshift/release` image is used:
 
 ```yaml
-test_base_image:
-  cluster: https://api.ci.openshift.org
-  name: release
-  namespace: openshift
-  tag: golang-1.10
+build_root:
+  image_stream_tag:
+    cluster: https://api.ci.openshift.org
+    name: release
+    namespace: openshift
+    tag: golang-1.10
 ```
+
+## `build_root.image_stream_tag`
+`image_stream_tag` configures a remote `ImageStreamTag` to use for the build root.
+
+## `build_root.project_image`
+`project_image` configures a Docker build from the repository under test for use
+as the build root. The project image will be built from the current `HEAD` for
+the branch targeted by the pull request under test.
+
+## `build_root.project_image.context_dir`
+`context_dir` is the relative directory in the repository from which the container
+build will be run. This field is used to populate the `build.spec.source.contextDir`.
+See the [upstream documentation](https://docs.okd.io/latest/rest_api/apis-build.openshift.io/v1.Build.html#object-schema)
+for more detail.
+
+## `build_root.project_image.dockerfile_path`
+`dockerfile_path` is the `Dockerfile` location in the repository which
+the container build will use to run. This field is used to populate the
+`build.spec.strategy.dockerStrategy.dockerfilePath`. See the
+[upstream documentation](https://docs.okd.io/latest/rest_api/apis-build.openshift.io/v1.Build.html#object-schema)
+for more detail.
 
 # `canonical_go_repository`
 `canonical_go_repository` is the path that is used to import the code in a Go

@@ -170,7 +170,6 @@ func (s *stringSlice) Set(value string) error {
 
 type options struct {
 	configSpecPath    string
-	overrideSpecPath  string
 	templatePaths     stringSlice
 	secretDirectories stringSlice
 
@@ -213,7 +212,6 @@ func bindOptions(flag *flag.FlagSet) *options {
 
 	// what we will run
 	flag.StringVar(&opt.configSpecPath, "config", "", "The configuration file. If not specified the CONFIG_SPEC environment variable will be used.")
-	flag.StringVar(&opt.overrideSpecPath, "override", "", "A configuration file that can override fields defined in the input part of the configuration.")
 	flag.Var(&opt.targets, "target", "One or more targets in the configuration to build. Only steps that are required for this target will be run.")
 	flag.BoolVar(&opt.dry, "dry-run", opt.dry, "Print the steps that would be run and the objects that would be created without executing any steps")
 
@@ -263,23 +261,6 @@ func (o *options) Complete() error {
 	}
 	if err := yaml.Unmarshal([]byte(configSpec), &o.configSpec); err != nil {
 		return fmt.Errorf("invalid configuration: %v\nvalue:\n%s", err, string(configSpec))
-	}
-
-	// If the user specifies an input override, apply it after the config spec has been loaded.
-	var overrideSpec []byte
-	if len(o.overrideSpecPath) > 0 {
-		data, err := ioutil.ReadFile(o.overrideSpecPath)
-		if err != nil {
-			return fmt.Errorf("--input error: %v", err)
-		}
-		overrideSpec = data
-	} else {
-		overrideSpec = []byte(os.Getenv("OVERRIDE_SPEC"))
-	}
-	if len(overrideSpec) > 0 {
-		if err := yaml.Unmarshal(overrideSpec, &o.configSpec); err != nil {
-			return fmt.Errorf("invalid configuration: %v\nvalue:\n%s", err, string(overrideSpec))
-		}
 	}
 
 	if err := o.configSpec.Validate(); err != nil {

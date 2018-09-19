@@ -93,19 +93,19 @@ func TestOverlay(t *testing.T) {
 		},
 		{
 			name:    "skips missing key",
-			base:    `{"test_base_image":{}}`,
+			base:    `{"build_root":{}}`,
 			overlay: `{}`,
 			want: &ReleaseBuildConfiguration{
 				InputConfiguration: InputConfiguration{
-					TestBaseImage: &ImageStreamTagReference{},
+					BuildRootImage: &BuildRootImageConfiguration{},
 				},
 			},
 			wantInput: &InputConfiguration{},
 		},
 		{
 			name:    "clears with explicit null",
-			base:    `{"test_base_image":{}}`,
-			overlay: `{"test_base_image":null}`,
+			base:    `{"build_root":{}}`,
+			overlay: `{"build_root":null}`,
 			want: &ReleaseBuildConfiguration{
 				InputConfiguration: InputConfiguration{},
 			},

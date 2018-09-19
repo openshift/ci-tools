@@ -143,9 +143,10 @@ images:
       - destination_dir: /usr/bin/binary
         source_path: path/to/binary
   to: product
-test_base_image:
-  name: tests
-  tag: latest
+build_root:
+  image_stream_tag:
+    name: tests
+    tag: latest
 ```
 
 In the example, we build the binaries using `make build` in the `tests` environment

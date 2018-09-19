@@ -269,10 +269,6 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.Job
 		}
 	}
 
-	if target := config.InputConfiguration.TestBaseImage; target != nil {
-		buildSteps = append(buildSteps, createStepConfigForTagRefImage(*target, jobSpec))
-	}
-
 	buildSteps = append(buildSteps, api.StepConfiguration{SourceStepConfiguration: &api.SourceStepConfiguration{
 		From:      api.PipelineImageStreamTagReferenceRoot,
 		To:        api.PipelineImageStreamTagReferenceSource,

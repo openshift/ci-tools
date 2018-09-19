@@ -5,18 +5,23 @@ import (
 )
 
 func TestValidate(t *testing.T) {
+	dummyInput := InputConfiguration{
+		BuildRootImage: &BuildRootImageConfiguration{
+			ProjectImageBuild: &ProjectDirectoryImageBuildInputs{
+				DockerfilePath: "ignored"}}}
 	var testCases = []struct {
 		id            string
 		config        ReleaseBuildConfiguration
 		expectedValid bool
-		expectedError string
 	}{
 		{
 			id: `ReleaseBuildConfiguration{Tests: {As: "unit"}}`,
 			config: ReleaseBuildConfiguration{
+				InputConfiguration: dummyInput,
 				Tests: []TestStepConfiguration{
 					{
-						As: "unit",
+						As:   "unit",
+						From: "ignored",
 					},
 				},
 			},
@@ -25,14 +30,95 @@ func TestValidate(t *testing.T) {
 		{
 			id: `ReleaseBuildConfiguration{Tests: {As: "images"}}`,
 			config: ReleaseBuildConfiguration{
+				InputConfiguration: dummyInput,
 				Tests: []TestStepConfiguration{
 					{
-						As: "images",
+						As:   "images",
+						From: "ignored",
 					},
 				},
 			},
 			expectedValid: false,
-			expectedError: "test should not be called 'images' because it gets confused with '[images]' target",
+		},
+		{
+			id: "test with `from`",
+			config: ReleaseBuildConfiguration{
+				InputConfiguration: dummyInput,
+				Tests: []TestStepConfiguration{
+					{
+						As:   "test",
+						From: "from",
+					},
+				},
+			},
+			expectedValid: true,
+		},
+		{
+			id: "No test type",
+			config: ReleaseBuildConfiguration{
+				InputConfiguration: dummyInput,
+				Tests: []TestStepConfiguration{
+					{
+						As: "test",
+					},
+				},
+			},
+			expectedValid: false,
+		},
+		{
+			id: "Multiple test types",
+			config: ReleaseBuildConfiguration{
+				InputConfiguration: dummyInput,
+				Tests: []TestStepConfiguration{
+					{
+						As: "test",
+						ContainerTestConfiguration: &ContainerTestConfiguration{},
+						OpenshiftAnsibleClusterTestConfiguration: &OpenshiftAnsibleClusterTestConfiguration{
+							ClusterTestConfiguration{TargetCloud: TargetCloudGCP}},
+					},
+				},
+			},
+			expectedValid: false,
+		},
+		{
+			id: "From + ContainerTestConfiguration",
+			config: ReleaseBuildConfiguration{
+				InputConfiguration: dummyInput,
+				Tests: []TestStepConfiguration{
+					{
+						As:   "test",
+						From: "from",
+						ContainerTestConfiguration: &ContainerTestConfiguration{},
+					},
+				},
+			},
+			expectedValid: false,
+		},
+		{
+			id: "container test without `from`",
+			config: ReleaseBuildConfiguration{
+				InputConfiguration: dummyInput,
+				Tests: []TestStepConfiguration{
+					{
+						As: "test",
+						ContainerTestConfiguration: &ContainerTestConfiguration{},
+					},
+				},
+			},
+			expectedValid: false,
+		},
+		{
+			id: "invalid target cloud",
+			config: ReleaseBuildConfiguration{
+				InputConfiguration: dummyInput,
+				Tests: []TestStepConfiguration{
+					{
+						As: "test",
+						OpenshiftAnsibleClusterTestConfiguration: &OpenshiftAnsibleClusterTestConfiguration{},
+					},
+				},
+			},
+			expectedValid: false,
 		},
 		{
 			id: "both git_source_image and image_stream_tag in build_root defined causes error",
@@ -53,7 +139,6 @@ func TestValidate(t *testing.T) {
 				},
 			},
 			expectedValid: false,
-			expectedError: "both git_source_image and image_stream_tag cannot be set for the build_root",
 		},
 		{
 			id: "build root without any content causes an error",
@@ -63,23 +148,15 @@ func TestValidate(t *testing.T) {
 				},
 			},
 			expectedValid: false,
-			expectedError: "you have to specify either git_source_image or image_stream_tag for the build_root",
 		},
 	}
 
 	for _, tc := range testCases {
 		err := tc.config.Validate()
-		valid := err == nil
-
-		if tc.expectedValid && !valid {
-			t.Errorf("%s expected to be valid, got 'Error(%v)' instead", tc.id, err)
-		}
-		if !tc.expectedValid {
-			if valid {
-				t.Errorf("%s expected to be invalid, Validate() returned valid", tc.id)
-			} else if tc.expectedError != err.Error() {
-				t.Errorf("%s expected to be invalid w/ '%s', got '%s' instead", tc.id, tc.expectedError, err.Error())
-			}
+		if tc.expectedValid && err != nil {
+			t.Errorf("%q expected to be valid, got 'Error(%v)' instead", tc.id, err)
+		} else if !tc.expectedValid && err == nil {
+			t.Errorf("%q expected to be invalid, Validate() returned valid", tc.id)
 		}
 	}
 }

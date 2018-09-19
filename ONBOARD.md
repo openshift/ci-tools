@@ -78,10 +78,12 @@ component repository would need to have these targets for this to work).
 tests:
 - as: unit
   commands: make test-unit
-  from: src
+  container:
+    from: src
 - as: performance
   commands: make test-performance
-  from: src
+  container:
+    from: src
 ```
 
 By default, ci-operator runs all specified test targets, building all their
@@ -110,13 +112,16 @@ test_binary_builds_commands: make instrumented-build
 tests:
 - as: unit
   commands: make test-unit
-  from: test-bin
+  container:
+    from: test-bin
 - as: integration
   commands: make test-integration
-  from: test-bin
+  container:
+    from: test-bin
 - as: performance
   commands: make test-performance
-  from: bin
+  container:
+    from: bin
 ```
 
 ### Using Separate Build Environment and Release Environment Images

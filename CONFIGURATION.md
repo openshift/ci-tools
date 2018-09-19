@@ -139,9 +139,6 @@ in the configuration to refer to this image.
 repository injected into them before the image is used in the builds. The field
 has an identical structure to `base_images`.
 
-# `test_base_image`
-`test_base_image` is deprecated, use `build_root.image_stream_tag` instead.
-
 # `build_root`
 
 `build_root` provides clone-time and build-time dependencies to the builds

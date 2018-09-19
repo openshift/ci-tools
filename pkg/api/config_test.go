@@ -65,25 +65,6 @@ func TestValidate(t *testing.T) {
 			expectedValid: false,
 			expectedError: "you have to specify either git_source_image or image_stream_tag for the build_root",
 		},
-		{
-			id: "build_root and test_base_image defined causes an error",
-			config: ReleaseBuildConfiguration{
-				InputConfiguration: InputConfiguration{
-					BuildRootImage: &BuildRootImageConfiguration{},
-					TestBaseImage:  &ImageStreamTagReference{},
-				},
-			},
-			expectedValid: false,
-			expectedError: "both build_root and test_base_image cannot be set",
-		},
-		{
-			id: "build_root and test_base_image not defined causes an error",
-			config: ReleaseBuildConfiguration{
-				InputConfiguration: InputConfiguration{},
-			},
-			expectedValid: false,
-			expectedError: "no build_root or test_base_image has been set",
-		},
 	}
 
 	for _, tc := range testCases {

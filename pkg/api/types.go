@@ -118,11 +118,6 @@ type InputConfiguration struct {
 	// image builds that require built project RPMs.
 	BaseRPMImages map[string]ImageStreamTagReference `json:"base_rpm_images,omitempty"`
 
-	// TestBaseImage is the image we should base our
-	// pipeline image caches on. It should contain all
-	// build-time dependencies for the project.
-	TestBaseImage *ImageStreamTagReference `json:"test_base_image,omitempty"`
-
 	// BuildRootImage supports two ways to get the image that
 	// the pipeline will caches on. The one way is to take the reference
 	// from an image stream, and the other from a dockerfile.

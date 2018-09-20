@@ -104,6 +104,31 @@ func (l *internalImageLink) Matches(other StepLink) bool {
 	}
 }
 
+func ReleasePayloadImageLink(ref PipelineImageStreamTagReference) StepLink {
+	return &releasePayloadImageLink{image: ref}
+}
+
+type releasePayloadImageLink struct {
+	image PipelineImageStreamTagReference
+}
+
+func (l *releasePayloadImageLink) Same(other StepLink) bool {
+	o, ok := other.(*releasePayloadImageLink)
+	if !ok {
+		return false
+	}
+	return o.image == l.image
+}
+
+func (l *releasePayloadImageLink) Matches(other StepLink) bool {
+	switch link := other.(type) {
+	case *releasePayloadImageLink:
+		return l.image == link.image
+	default:
+		return false
+	}
+}
+
 func ImagesReadyLink() StepLink {
 	return &imagesReadyLink{}
 }

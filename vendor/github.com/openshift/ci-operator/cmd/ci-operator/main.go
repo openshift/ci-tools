@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base32"
-	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"flag"
@@ -18,6 +17,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/openshift/ci-operator/pkg/defaults"
+
 	coreapi "k8s.io/api/core/v1"
 	rbacapi "k8s.io/api/rbac/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -26,7 +27,10 @@ import (
 	rbacclientset "k8s.io/client-go/kubernetes/typed/rbac/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
+
+	"github.com/ghodss/yaml"
 
 	imageapi "github.com/openshift/api/image/v1"
 	projectapi "github.com/openshift/api/project/v1"
@@ -43,7 +47,7 @@ import (
 
 const usage = `Orchestrate multi-stage image-based builds
 
-The ci-operator reads a declarative configuration JSON file and executes a set of build
+The ci-operator reads a declarative configuration YAML file and executes a set of build
 steps on an OpenShift cluster for image-based components. By default, all steps are run,
 but a caller may select one or more targets (image names or test names) to limit to only
 steps that those targets depend on. The build creates a new project to run the builds in
@@ -116,7 +120,7 @@ defined in the config file, such as base images and the release tag configuratio
 
 After a successful build the --promote will tag each built image (in "images")
 to the image stream(s) identified by the "promotion" config, which defaults to
-the same image stream as the release configuration. You may add additional 
+the same image stream as the release configuration. You may add additional
 images to promote and their target names via the "additional_images" map.
 `
 
@@ -166,7 +170,6 @@ func (s *stringSlice) Set(value string) error {
 
 type options struct {
 	configSpecPath    string
-	overrideSpecPath  string
 	templatePaths     stringSlice
 	secretDirectories stringSlice
 
@@ -190,7 +193,7 @@ type options struct {
 	secrets       []*coreapi.Secret
 	templates     []*templateapi.Template
 	configSpec    *api.ReleaseBuildConfiguration
-	jobSpec       *steps.JobSpec
+	jobSpec       *api.JobSpec
 	clusterConfig *rest.Config
 
 	givePrAuthorAccessToNamespace bool
@@ -209,7 +212,6 @@ func bindOptions(flag *flag.FlagSet) *options {
 
 	// what we will run
 	flag.StringVar(&opt.configSpecPath, "config", "", "The configuration file. If not specified the CONFIG_SPEC environment variable will be used.")
-	flag.StringVar(&opt.overrideSpecPath, "override", "", "A configuration file that can override fields defined in the input part of the configuration.")
 	flag.Var(&opt.targets, "target", "One or more targets in the configuration to build. Only steps that are required for this target will be run.")
 	flag.BoolVar(&opt.dry, "dry-run", opt.dry, "Print the steps that would be run and the objects that would be created without executing any steps")
 
@@ -257,55 +259,40 @@ func (o *options) Complete() error {
 			return fmt.Errorf("CONFIG_SPEC environment variable is not set or empty and no --config file was set")
 		}
 	}
-	if err := json.Unmarshal([]byte(configSpec), &o.configSpec); err != nil {
+	if err := yaml.Unmarshal([]byte(configSpec), &o.configSpec); err != nil {
 		return fmt.Errorf("invalid configuration: %v\nvalue:\n%s", err, string(configSpec))
 	}
 
-	// If the user specifies an input override, apply it after the config spec has been loaded.
-	var overrideSpec []byte
-	if len(o.overrideSpecPath) > 0 {
-		data, err := ioutil.ReadFile(o.overrideSpecPath)
-		if err != nil {
-			return fmt.Errorf("--input error: %v", err)
-		}
-		overrideSpec = data
-	} else {
-		overrideSpec = []byte(os.Getenv("OVERRIDE_SPEC"))
-	}
-	if len(overrideSpec) > 0 {
-		if err := json.Unmarshal(overrideSpec, &o.configSpec); err != nil {
-			return fmt.Errorf("invalid configuration: %v\nvalue:\n%s", err, string(overrideSpec))
-		}
+	if err := o.configSpec.Validate(); err != nil {
+		return fmt.Errorf("invalid configuration: %v", err)
 	}
 
-	jobSpec, err := steps.ResolveSpecFromEnv()
+	jobSpec, err := api.ResolveSpecFromEnv()
 	if err != nil {
 		if len(o.gitRef) == 0 {
-			// Failed to read $JOB_SPEC and --git-ref was not passed
-			return fmt.Errorf("failed to resolve job spec: %v", err)
-		} else {
-			// Failed to read $JOB_SPEC but --git-ref was passed, so try that instead
-			spec, refErr := jobSpecFromGitRef(o.gitRef)
-			if refErr != nil {
-				return fmt.Errorf("failed to resolve --git-ref: %v", refErr)
-			}
-			jobSpec = spec
+			return fmt.Errorf("failed to determine job spec: no --git-ref passed and failed to resolve job spec from env: %v", err)
 		}
+		// Failed to read $JOB_SPEC but --git-ref was passed, so try that instead
+		spec, refErr := jobSpecFromGitRef(o.gitRef)
+		if refErr != nil {
+			return fmt.Errorf("failed to determine job spec: failed to resolve --git-ref: %v", refErr)
+		}
+		jobSpec = spec
 	} else if len(o.gitRef) > 0 {
 		// Read from $JOB_SPEC but --git-ref was also passed, so merge them
 		spec, err := jobSpecFromGitRef(o.gitRef)
 		if err != nil {
-			return fmt.Errorf("failed to resolve --git-ref: %v", err)
+			return fmt.Errorf("failed to determine job spec: failed to resolve --git-ref: %v", err)
 		}
 		jobSpec.Refs = spec.Refs
 	}
-	jobSpec.SetBaseNamespace(o.baseNamespace)
+	jobSpec.BaseNamespace = o.baseNamespace
 	o.jobSpec = jobSpec
 
 	if o.dry {
-		config, _ := json.MarshalIndent(o.configSpec, "", "  ")
+		config, _ := yaml.Marshal(o.configSpec)
 		log.Printf("Resolved configuration:\n%s", string(config))
-		job, _ := json.MarshalIndent(o.jobSpec, "", "  ")
+		job, _ := yaml.Marshal(o.jobSpec)
 		log.Printf("Resolved job spec:\n%s", string(job))
 	}
 	refs := o.jobSpec.Refs
@@ -380,7 +367,7 @@ func (o *options) Run() error {
 	}()
 
 	// load the graph from the configuration
-	buildSteps, postSteps, err := steps.FromConfig(o.configSpec, o.jobSpec, o.templates, o.writeParams, o.artifactDir, o.promote, o.clusterConfig, o.targets.values)
+	buildSteps, postSteps, err := defaults.FromConfig(o.configSpec, o.jobSpec, o.templates, o.writeParams, o.artifactDir, o.promote, o.clusterConfig, o.targets.values)
 	if err != nil {
 		return fmt.Errorf("failed to generate steps from config: %v", err)
 	}
@@ -422,17 +409,30 @@ func (o *options) Run() error {
 			return fmt.Errorf("could not initialize namespace: %v", err)
 		}
 
+		client, err := coreclientset.NewForConfig(o.clusterConfig)
+		if err != nil {
+			return fmt.Errorf("could not get core client for cluster config: %v", err)
+		}
+		eventRecorder := eventRecorder(client, o.namespace)
+		runtimeObject := &coreapi.ObjectReference{Namespace: o.namespace}
+
+		eventRecorder.Event(runtimeObject, coreapi.EventTypeNormal, "CiJobStarted", eventJobDescription(o.jobSpec, o.namespace))
 		// execute the graph
 		suites, err := steps.Run(ctx, nodes, o.dry)
 		if err := o.writeJUnit(suites, "operator"); err != nil {
 			log.Printf("warning: Unable to write JUnit result: %v", err)
 		}
 		if err != nil {
+			eventRecorder.Event(runtimeObject, coreapi.EventTypeNormal, "CiJobFailed", eventJobDescription(o.jobSpec, o.namespace))
+			time.Sleep(time.Second)
 			return fmt.Errorf("could not run steps: %v", err)
 		}
 
 		for _, step := range postSteps {
 			if err := step.Run(ctx, o.dry); err != nil {
+				eventRecorder.Event(runtimeObject, coreapi.EventTypeNormal, "PostStepFailed",
+					fmt.Sprintf("Post step %s failed while %s", step.Name(), eventJobDescription(o.jobSpec, o.namespace)))
+				time.Sleep(time.Second)
 				return fmt.Errorf("could not run post step %s: %v", step.Name(), err)
 			}
 		}
@@ -475,7 +475,7 @@ func (o *options) resolveInputs(ctx context.Context, steps []api.Step) error {
 	}
 
 	// a change in the config for the build changes the output
-	configSpec, err := json.Marshal(o.configSpec)
+	configSpec, err := yaml.Marshal(o.configSpec)
 	if err != nil {
 		panic(err)
 	}
@@ -490,7 +490,7 @@ func (o *options) resolveInputs(ctx context.Context, steps []api.Step) error {
 	o.namespace = strings.Replace(o.namespace, "{id}", o.inputHash, -1)
 	// TODO: instead of mutating this here, we should pass the parts of graph execution that are resolved
 	// after the graph is created but before it is run down into the run step.
-	o.jobSpec.SetNamespace(o.namespace)
+	o.jobSpec.Namespace = o.namespace
 	log.Printf("Resolved inputs, targetting namespace %s", o.namespace)
 
 	return nil
@@ -556,7 +556,7 @@ func (o *options) initializeNamespace() error {
 				},
 				Subjects: []rbacapi.Subject{{Kind: "User", Name: pull.Author}},
 				RoleRef: rbacapi.RoleRef{
-					Kind: "Role",
+					Kind: "ClusterRole",
 					Name: "admin",
 				},
 			}); err != nil && !kerrors.IsAlreadyExists(err) {
@@ -596,6 +596,10 @@ func (o *options) initializeNamespace() error {
 			}
 
 			_, updateErr := client.Namespaces().Update(ns)
+			if kerrors.IsForbidden(updateErr) {
+				log.Printf("warning: Could not mark the namespace to be deleted later because you do not have permission to update the namespace (details: %v)", updateErr)
+				return nil
+			}
 			return updateErr
 		}); err != nil {
 			return fmt.Errorf("could not update namespace to add TTLs: %v", err)
@@ -609,10 +613,10 @@ func (o *options) initializeNamespace() error {
 	}
 
 	// create the image stream or read it to get its uid
-	is, err := imageGetter.ImageStreams(o.jobSpec.Namespace()).Create(&imageapi.ImageStream{
+	is, err := imageGetter.ImageStreams(o.jobSpec.Namespace).Create(&imageapi.ImageStream{
 		ObjectMeta: meta.ObjectMeta{
-			Namespace: o.jobSpec.Namespace(),
-			Name:      steps.PipelineImageStream,
+			Namespace: o.jobSpec.Namespace,
+			Name:      api.PipelineImageStream,
 		},
 		Spec: imageapi.ImageStreamSpec{
 			// pipeline:* will now be directly referenceable
@@ -623,14 +627,14 @@ func (o *options) initializeNamespace() error {
 		if !kerrors.IsAlreadyExists(err) {
 			return fmt.Errorf("could not set up pipeline imagestream for test: %v", err)
 		}
-		is, _ = imageGetter.ImageStreams(o.jobSpec.Namespace()).Get(steps.PipelineImageStream, meta.GetOptions{})
+		is, _ = imageGetter.ImageStreams(o.jobSpec.Namespace).Get(api.PipelineImageStream, meta.GetOptions{})
 	}
 	if is != nil {
 		isTrue := true
 		o.jobSpec.SetOwner(&meta.OwnerReference{
 			APIVersion: "image.openshift.io/v1",
 			Kind:       "ImageStream",
-			Name:       steps.PipelineImageStream,
+			Name:       api.PipelineImageStream,
 			UID:        is.UID,
 			Controller: &isTrue,
 		})
@@ -693,8 +697,26 @@ func inputHash(inputs api.InputDefinition) string {
 	return oneWayNameEncoding.EncodeToString(hash.Sum(nil)[:5])
 }
 
+// eventJobDescription returns a string representing the pull requests and authors description, to be used in events.
+func eventJobDescription(jobSpec *api.JobSpec, namespace string) string {
+	pulls := []string{}
+	authors := []string{}
+
+	if len(jobSpec.Refs.Pulls) == 1 {
+		pull := jobSpec.Refs.Pulls[0]
+		return fmt.Sprintf("Running job %s for PR https://github.com/%s/%s/pull/%d in namespace %s from author %s",
+			jobSpec.Job, jobSpec.Refs.Org, jobSpec.Refs.Repo, pull.Number, namespace, pull.Author)
+	}
+	for _, pull := range jobSpec.Refs.Pulls {
+		pulls = append(pulls, fmt.Sprintf("https://github.com/%s/%s/pull/%d", jobSpec.Refs.Org, jobSpec.Refs.Repo, pull.Number))
+		authors = append(authors, pull.Author)
+	}
+	return fmt.Sprintf("Running job %s for PRs (%s) in namespace %s from authors (%s)",
+		jobSpec.Job, strings.Join(pulls, ", "), namespace, strings.Join(authors, ", "))
+}
+
 // jobDescription returns a string representing the job's description.
-func jobDescription(job *steps.JobSpec, config *api.ReleaseBuildConfiguration) string {
+func jobDescription(job *api.JobSpec, config *api.ReleaseBuildConfiguration) string {
 	var links []string
 	for _, pull := range job.Refs.Pulls {
 		links = append(links, fmt.Sprintf("https://github.com/%s/%s/pull/%d - %s", job.Refs.Org, job.Refs.Repo, pull.Number, pull.Author))
@@ -705,7 +727,7 @@ func jobDescription(job *steps.JobSpec, config *api.ReleaseBuildConfiguration) s
 	return fmt.Sprintf("%s on https://github.com/%s/%s ref=%s commit=%s", job.Job, job.Refs.Org, job.Refs.Repo, job.Refs.BaseRef, job.Refs.BaseSHA)
 }
 
-func jobSpecFromGitRef(ref string) (*steps.JobSpec, error) {
+func jobSpecFromGitRef(ref string) (*api.JobSpec, error) {
 	parts := strings.Split(ref, "@")
 	if len(parts) != 2 {
 		return nil, fmt.Errorf("must be ORG/NAME@COMMIT")
@@ -724,7 +746,7 @@ func jobSpecFromGitRef(ref string) (*steps.JobSpec, error) {
 		return nil, fmt.Errorf("ref '%s' does not point to any commit in '%s'", parts[1], parts[0])
 	}
 	log.Printf("Resolved %s to commit %s", ref, sha)
-	return &steps.JobSpec{Type: steps.PeriodicJob, Job: "dev", Refs: steps.Refs{Org: prefix[0], Repo: prefix[1], BaseRef: parts[1], BaseSHA: sha}}, nil
+	return &api.JobSpec{Type: api.PeriodicJob, Job: "dev", Refs: api.Refs{Org: prefix[0], Repo: prefix[1], BaseRef: parts[1], BaseSHA: sha}}, nil
 }
 
 func nodeNames(nodes []*api.StepNode) []string {
@@ -809,4 +831,12 @@ func shorten(value string, l int) string {
 		return value[:l]
 	}
 	return value
+}
+
+func eventRecorder(kubeClient *coreclientset.CoreV1Client, namespace string) record.EventRecorder {
+	eventBroadcaster := record.NewBroadcaster()
+	eventBroadcaster.StartRecordingToSink(&coreclientset.EventSinkImpl{
+		Interface: coreclientset.New(kubeClient.RESTClient()).Events("")})
+	return eventBroadcaster.NewRecorder(
+		templatescheme.Scheme, coreapi.EventSource{Component: namespace})
 }

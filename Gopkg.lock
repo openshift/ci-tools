@@ -122,7 +122,7 @@
   branch = "master"
   name = "github.com/openshift/ci-operator"
   packages = ["pkg/api"]
-  revision = "2f12735f04123c6e772e2f870d35acf22dfcb096"
+  revision = "c5be264ac8a7577263a68a24ec6740acf85f47f1"
 
 [[projects]]
   name = "github.com/prometheus/client_golang"
@@ -432,6 +432,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "8b8d600da6ff717734a6f3bcda5c303c1361ba64ed3ed57d7b064657b4e58637"
+  inputs-digest = "138589e06f11489bcd86de4f18c8281ae26273c6db3b2de139a70b9889bb43c7"
   solver-name = "gps-cdcl"
   solver-version = 1

@@ -10,11 +10,10 @@ import (
 	"path"
 	"time"
 
-	appsapi "github.com/openshift/api/apps/v1"
 	routeapi "github.com/openshift/api/route/v1"
-	appsclientset "github.com/openshift/client-go/apps/clientset/versioned/typed/apps/v1"
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 	routeclientset "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
+	appsapi "k8s.io/api/apps/v1"
 	coreapi "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -22,6 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
+	appsclientset "k8s.io/client-go/kubernetes/typed/apps/v1"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 
 	"github.com/openshift/ci-operator/pkg/api"
@@ -35,11 +35,11 @@ const (
 
 type rpmServerStep struct {
 	config           api.RPMServeStepConfiguration
-	deploymentClient appsclientset.DeploymentConfigsGetter
+	deploymentClient appsclientset.DeploymentsGetter
 	routeClient      routeclientset.RoutesGetter
 	serviceClient    coreclientset.ServicesGetter
 	istClient        imageclientset.ImageStreamTagsGetter
-	jobSpec          *JobSpec
+	jobSpec          *api.JobSpec
 }
 
 func (s *rpmServerStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
@@ -51,14 +51,14 @@ func (s *rpmServerStep) Run(ctx context.Context, dry bool) error {
 	if dry {
 		imageReference = "dry-fake"
 	} else {
-		ist, err := s.istClient.ImageStreamTags(s.jobSpec.Namespace()).Get(fmt.Sprintf("%s:%s", PipelineImageStream, s.config.From), meta.GetOptions{})
+		ist, err := s.istClient.ImageStreamTags(s.jobSpec.Namespace).Get(fmt.Sprintf("%s:%s", api.PipelineImageStream, s.config.From), meta.GetOptions{})
 		if err != nil {
 			return fmt.Errorf("could not find source ImageStreamTag for RPM repo deployment: %v", err)
 		}
 		imageReference = ist.Image.DockerImageReference
 	}
 
-	labelSet := map[string]string{
+	labelSet := trimLabels(map[string]string{
 		PersistsLabel:    "true",
 		JobLabel:         s.jobSpec.Job,
 		BuildIdLabel:     s.jobSpec.BuildId,
@@ -66,13 +66,13 @@ func (s *rpmServerStep) Run(ctx context.Context, dry bool) error {
 		CreatedByCILabel: "true",
 		AppLabel:         RPMRepoName,
 		TTLIgnoreLabel:   "true",
-	}
+	})
 	selectorSet := map[string]string{
 		AppLabel: RPMRepoName,
 	}
 	commonMeta := meta.ObjectMeta{
 		Name:      RPMRepoName,
-		Namespace: s.jobSpec.Namespace(),
+		Namespace: s.jobSpec.Namespace,
 		Labels:    labelSet,
 	}
 
@@ -90,12 +90,15 @@ func (s *rpmServerStep) Run(ctx context.Context, dry bool) error {
 		TimeoutSeconds:      1,
 	}
 	one := int64(1)
-	deploymentConfig := &appsapi.DeploymentConfig{
+	two := int32(2)
+	deployment := &appsapi.Deployment{
 		ObjectMeta: commonMeta,
-		Spec: appsapi.DeploymentConfigSpec{
-			Replicas: 2,
-			Selector: labelSet,
-			Template: &coreapi.PodTemplateSpec{
+		Spec: appsapi.DeploymentSpec{
+			Replicas: &two,
+			Selector: &meta.LabelSelector{
+				MatchLabels: labelSet,
+			},
+			Template: coreapi.PodTemplateSpec{
 				ObjectMeta: meta.ObjectMeta{
 					Labels: labelSet,
 				},
@@ -143,7 +146,7 @@ END
 python /tmp/serve.py
 							`,
 						},
-						WorkingDir: RPMServeLocation,
+						WorkingDir: api.RPMServeLocation,
 						Ports: []coreapi.ContainerPort{{
 							ContainerPort: 8080,
 							Protocol:      coreapi.ProtocolTCP,
@@ -163,18 +166,18 @@ python /tmp/serve.py
 		},
 	}
 	if owner := s.jobSpec.Owner(); owner != nil {
-		deploymentConfig.OwnerReferences = append(deploymentConfig.OwnerReferences, *owner)
+		deployment.OwnerReferences = append(deployment.OwnerReferences, *owner)
 	}
 
 	if dry {
-		deploymentConfigJSON, err := json.MarshalIndent(deploymentConfig, "", "  ")
+		deploymentJSON, err := json.MarshalIndent(deployment, "", "  ")
 		if err != nil {
-			return fmt.Errorf("failed to marshal deploymentconfig: %v", err)
+			return fmt.Errorf("failed to marshal deployment: %v", err)
 		}
-		fmt.Printf("%s\n", deploymentConfigJSON)
+		fmt.Printf("%s\n", deploymentJSON)
 	} else {
-		if _, err := s.deploymentClient.DeploymentConfigs(s.jobSpec.Namespace()).Create(deploymentConfig); err != nil && !kerrors.IsAlreadyExists(err) {
-			return fmt.Errorf("could not create RPM repo server deploymentconfig: %v", err)
+		if _, err := s.deploymentClient.Deployments(s.jobSpec.Namespace).Create(deployment); err != nil && !kerrors.IsAlreadyExists(err) {
+			return fmt.Errorf("could not create RPM repo server deployment: %v", err)
 		}
 	}
 
@@ -199,7 +202,7 @@ python /tmp/serve.py
 			return fmt.Errorf("failed to marshal service: %v", err)
 		}
 		fmt.Printf("%s\n", serviceJSON)
-	} else if _, err := s.serviceClient.Services(s.jobSpec.Namespace()).Create(service); err != nil && !kerrors.IsAlreadyExists(err) {
+	} else if _, err := s.serviceClient.Services(s.jobSpec.Namespace).Create(service); err != nil && !kerrors.IsAlreadyExists(err) {
 		return fmt.Errorf("could not create RPM repo server service: %v", err)
 	}
 	route := &routeapi.Route{
@@ -225,20 +228,20 @@ python /tmp/serve.py
 		fmt.Printf("%s\n", routeJSON)
 		return nil
 	}
-	if _, err := s.routeClient.Routes(s.jobSpec.Namespace()).Create(route); err != nil && !kerrors.IsAlreadyExists(err) {
+	if _, err := s.routeClient.Routes(s.jobSpec.Namespace).Create(route); err != nil && !kerrors.IsAlreadyExists(err) {
 		return fmt.Errorf("could not create RPM repo server route: %v", err)
 	}
-	if err := waitForDeployment(s.deploymentClient.DeploymentConfigs(s.jobSpec.Namespace()), deploymentConfig.Name); err != nil {
+	if err := waitForDeployment(s.deploymentClient.Deployments(s.jobSpec.Namespace), deployment.Name); err != nil {
 		return fmt.Errorf("could not wait for RPM repo server to deploy: %v", err)
 	}
-	return waitForRouteReachable(s.routeClient, s.jobSpec.Namespace(), route.Name, "http")
+	return waitForRouteReachable(s.routeClient, s.jobSpec.Namespace, route.Name, "http")
 }
 
 func (s *rpmServerStep) Done() (bool, error) {
-	return currentDeploymentStatus(s.deploymentClient.DeploymentConfigs(s.jobSpec.Namespace()), RPMRepoName)
+	return currentDeploymentStatus(s.deploymentClient.Deployments(s.jobSpec.Namespace), RPMRepoName)
 }
 
-func waitForDeployment(client appsclientset.DeploymentConfigInterface, name string) error {
+func waitForDeployment(client appsclientset.DeploymentInterface, name string) error {
 	for {
 		retry, err := waitForDeploymentOrTimeout(client, name)
 		if err != nil {
@@ -252,7 +255,7 @@ func waitForDeployment(client appsclientset.DeploymentConfigInterface, name stri
 	return nil
 }
 
-func deploymentOK(b *appsapi.DeploymentConfig) bool {
+func deploymentOK(b *appsapi.Deployment) bool {
 	for _, condition := range b.Status.Conditions {
 		if condition.Type == appsapi.DeploymentAvailable && condition.Status == coreapi.ConditionTrue {
 			return true
@@ -261,7 +264,7 @@ func deploymentOK(b *appsapi.DeploymentConfig) bool {
 	return false
 }
 
-func deploymentFailed(b *appsapi.DeploymentConfig) bool {
+func deploymentFailed(b *appsapi.Deployment) bool {
 	for _, condition := range b.Status.Conditions {
 		if condition.Type == appsapi.DeploymentProgressing && condition.Status == coreapi.ConditionFalse {
 			return true
@@ -270,7 +273,7 @@ func deploymentFailed(b *appsapi.DeploymentConfig) bool {
 	return false
 }
 
-func deploymentReason(b *appsapi.DeploymentConfig) string {
+func deploymentReason(b *appsapi.Deployment) string {
 	for _, condition := range b.Status.Conditions {
 		if condition.Type == appsapi.DeploymentProgressing {
 			return condition.Reason
@@ -279,7 +282,7 @@ func deploymentReason(b *appsapi.DeploymentConfig) string {
 	return ""
 }
 
-func waitForDeploymentOrTimeout(client appsclientset.DeploymentConfigInterface, name string) (bool, error) {
+func waitForDeploymentOrTimeout(client appsclientset.DeploymentInterface, name string) (bool, error) {
 	done, err := currentDeploymentStatus(client, name)
 	if err != nil {
 		return false, fmt.Errorf("could not determine current deployment status: %v", err)
@@ -303,18 +306,18 @@ func waitForDeploymentOrTimeout(client appsclientset.DeploymentConfigInterface, 
 			// restart
 			return true, nil
 		}
-		if deploymentConfig, ok := event.Object.(*appsapi.DeploymentConfig); ok {
-			if deploymentOK(deploymentConfig) {
+		if deployment, ok := event.Object.(*appsapi.Deployment); ok {
+			if deploymentOK(deployment) {
 				return false, nil
 			}
-			if deploymentFailed(deploymentConfig) {
-				return false, fmt.Errorf("the deployment config %s/%s failed with status %q", deploymentConfig.Namespace, deploymentConfig.Name, deploymentReason(deploymentConfig))
+			if deploymentFailed(deployment) {
+				return false, fmt.Errorf("the deployment config %s/%s failed with status %q", deployment.Namespace, deployment.Name, deploymentReason(deployment))
 			}
 		}
 	}
 }
 
-func currentDeploymentStatus(client appsclientset.DeploymentConfigInterface, name string) (bool, error) {
+func currentDeploymentStatus(client appsclientset.DeploymentInterface, name string) (bool, error) {
 	list, err := client.List(meta.ListOptions{FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String()})
 	if err != nil {
 		return false, fmt.Errorf("could not list DeploymentConfigs: %v", err)
@@ -371,7 +374,7 @@ func (s *rpmServerStep) Creates() []api.StepLink {
 func (s *rpmServerStep) Provides() (api.ParameterMap, api.StepLink) {
 	return api.ParameterMap{
 		"RPM_REPO": func() (string, error) {
-			host, err := admittedHostForRoute(s.routeClient, s.jobSpec.Namespace(), RPMRepoName, time.Minute)
+			host, err := admittedHostForRoute(s.routeClient, s.jobSpec.Namespace, RPMRepoName, time.Minute)
 			if err != nil {
 				return "", fmt.Errorf("unable to calculate RPM_REPO: %v", err)
 			}
@@ -420,11 +423,11 @@ func admittedRoute(route *routeapi.Route) (string, bool) {
 
 func RPMServerStep(
 	config api.RPMServeStepConfiguration,
-	deploymentClient appsclientset.DeploymentConfigsGetter,
+	deploymentClient appsclientset.DeploymentsGetter,
 	routeClient routeclientset.RoutesGetter,
 	serviceClient coreclientset.ServicesGetter,
 	istClient imageclientset.ImageStreamTagsGetter,
-	jobSpec *JobSpec) api.Step {
+	jobSpec *api.JobSpec) api.Step {
 	return &rpmServerStep{
 		config:           config,
 		deploymentClient: deploymentClient,

@@ -63,7 +63,7 @@ type ReleaseBuildConfiguration struct {
 	// Resources is a set of resource requests or limits over the
 	// input types. The special name '*' may be used to set default
 	// requests and limits.
-	Resources ResourceConfiguration
+	Resources ResourceConfiguration `json:"resources,omitempty"`
 }
 
 // ResourceConfiguration defines resource overrides for jobs run
@@ -118,14 +118,21 @@ type InputConfiguration struct {
 	// image builds that require built project RPMs.
 	BaseRPMImages map[string]ImageStreamTagReference `json:"base_rpm_images,omitempty"`
 
-	// TestBaseImage is the image we should base our
-	// pipeline image caches on. It should contain all
-	// build-time dependencies for the project.
-	TestBaseImage *ImageStreamTagReference `json:"test_base_image,omitempty"`
+	// BuildRootImage supports two ways to get the image that
+	// the pipeline will caches on. The one way is to take the reference
+	// from an image stream, and the other from a dockerfile.
+	BuildRootImage *BuildRootImageConfiguration `json:"build_root,omitempty"`
 
 	// ReleaseTagConfiguration determines how the
 	// full release is assembled.
 	ReleaseTagConfiguration *ReleaseTagConfiguration `json:"tag_specification,omitempty"`
+}
+
+// BuildRootImageConfiguration holds the two ways of using a base image
+// that the pipeline will caches on.
+type BuildRootImageConfiguration struct {
+	ImageStreamTagReference *ImageStreamTagReference          `json:"image_stream_tag,omitempty"`
+	ProjectImageBuild       *ProjectDirectoryImageBuildInputs `json:"project_image_build,omitempty"`
 }
 
 // ImageStreamTagReference identifies an ImageStreamTag
@@ -224,6 +231,7 @@ type StepConfiguration struct {
 	OutputImageTagStepConfiguration             *OutputImageTagStepConfiguration             `json:"output_image_tag_step,omitempty"`
 	ReleaseImagesTagStepConfiguration           *ReleaseTagConfiguration                     `json:"release_images_tag_step,omitempty"`
 	TestStepConfiguration                       *TestStepConfiguration                       `json:"test_step,omitempty"`
+	ProjectDirectoryImageBuildInputs            *ProjectDirectoryImageBuildInputs            `json:"project_directory_image_build_inputs,omitempty"`
 }
 
 // InputImageTagStepConfiguration describes a step that
@@ -266,6 +274,7 @@ type PipelineImageCacheStepConfiguration struct {
 type TestStepConfiguration struct {
 	// As is the name of the test.
 	As string `json:"as"`
+	// TODO remove when the migration is completed
 	// From is the image stream tag in the pipeline to run this
 	// command in.
 	From PipelineImageStreamTagReference `json:"from"`
@@ -276,6 +285,65 @@ type TestStepConfiguration struct {
 	// artifacts to upload. If unset, this will default under
 	// the repository root to _output/local/artifacts.
 	ArtifactDir string `json:"artifact_dir"`
+
+	// Only one of the following can be not-null.
+	ContainerTestConfiguration                      *ContainerTestConfiguration                      `json:"container,omitempty"`
+	OpenshiftAnsibleClusterTestConfiguration        *OpenshiftAnsibleClusterTestConfiguration        `json:"openshift_ansible,omitempty"`
+	OpenshiftAnsibleSrcClusterTestConfiguration     *OpenshiftAnsibleSrcClusterTestConfiguration     `json:"openshift_ansible_src,omitempty"`
+	OpenshiftInstallerClusterTestConfiguration      *OpenshiftInstallerClusterTestConfiguration      `json:"openshift_installer,omitempty"`
+	OpenshiftInstallerSmokeClusterTestConfiguration *OpenshiftInstallerSmokeClusterTestConfiguration `json:"openshift_installer_smoke,omitempty"`
+}
+
+// ContainerTestConfiguration describes a test that runs a
+// command in one of the previously built images.
+type ContainerTestConfiguration struct {
+	// From is the image stream tag in the pipeline to run this
+	// command in.
+	From PipelineImageStreamTagReference `json:"from"`
+}
+
+// TargetCloud determines which cloud provider should be
+// used to provision the cluster.
+type TargetCloud string
+
+// Types of clusters supported by the provisioners.
+const (
+	TargetCloudAWS TargetCloud = "aws"
+	TargetCloudGCP             = "gcp"
+)
+
+// ClusterTestConfiguration describes a test that provisions
+// a cluster and runs a command in it.
+type ClusterTestConfiguration struct {
+	TargetCloud TargetCloud `json:"target_cloud"`
+}
+
+// OpenshiftAnsibleClusterTestConfiguration describes a test
+// that provisions a cluster using openshift-ansible and runs
+// conformance tests.
+type OpenshiftAnsibleClusterTestConfiguration struct {
+	ClusterTestConfiguration `json:",inline"`
+}
+
+// OpenshiftAnsibleSrcClusterTestConfiguration describes a
+// test that provisions a cluster using openshift-ansible and
+// executes a command in the `src` image.
+type OpenshiftAnsibleSrcClusterTestConfiguration struct {
+	ClusterTestConfiguration `json:",inline"`
+}
+
+// OpenshiftInstallerClusterTestConfiguration describes a test
+// that provisions a cluster using openshift-installer and runs
+// conformance tests.
+type OpenshiftInstallerClusterTestConfiguration struct {
+	ClusterTestConfiguration `json:",inline"`
+}
+
+// OpenshiftInstallerSmokeClusterTestConfiguration describes
+// a test that provisions a cluster using openshift-installer
+// and runs smoke tests.
+type OpenshiftInstallerSmokeClusterTestConfiguration struct {
+	ClusterTestConfiguration `json:",inline"`
 }
 
 // PipelineImageStreamTagReference is a tag on the
@@ -318,6 +386,16 @@ type ProjectDirectoryImageBuildStepConfiguration struct {
 	From PipelineImageStreamTagReference `json:"from"`
 	To   PipelineImageStreamTagReference `json:"to"`
 
+	ProjectDirectoryImageBuildInputs `json:",inline"`
+
+	// Optional means the build step is not built, published, or
+	// promoted unless explicitly targeted. Use for builds which
+	// are invoked only when testing certain parts of the repo.
+	Optional bool `json:"optional"`
+}
+
+// ProjectDirectoryImageBuildInputs holds inputs for an image build from the repo under test
+type ProjectDirectoryImageBuildInputs struct {
 	// ContextDir is the directory in the project
 	// from which this build should be run.
 	ContextDir string `json:"context_dir"`
@@ -330,11 +408,6 @@ type ProjectDirectoryImageBuildStepConfiguration struct {
 	// that will populate the build context for the Dockerfile or
 	// alter the input image for a multi-stage build.
 	Inputs map[string]ImageBuildInputs `json:"inputs"`
-
-	// Optional means the build step is not built, published, or
-	// promoted unless explicitly targeted. Use for builds which
-	// are invoked only when testing certain parts of the repo.
-	Optional bool `json:"optional"`
 }
 
 // ImageBuildInputs is a subset of the v1 OpenShift Build API object
@@ -374,3 +447,21 @@ type RPMImageInjectionStepConfiguration struct {
 type RPMServeStepConfiguration struct {
 	From PipelineImageStreamTagReference `json:"from"`
 }
+
+const (
+	// api.PipelineImageStream is the name of the
+	// ImageStream used to hold images built
+	// to cache build steps in the pipeline.
+	PipelineImageStream = "pipeline"
+
+	// DefaultRPMLocation is the default relative
+	// directory for Origin-based projects to put
+	// their built RPMs.
+	DefaultRPMLocation = "_output/local/releases/rpms/"
+
+	// RPMServeLocation is the location from which
+	// we will serve RPMs after they are built.
+	RPMServeLocation = "/srv/repo"
+
+	StableImageStream = "stable"
+)

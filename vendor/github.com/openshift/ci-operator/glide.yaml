@@ -10,3 +10,5 @@ import:
   version: release-1.9
 - package: k8s.io/client-go
   version: kubernetes-1.9.1
+- package: github.com/ghodss/yaml
+  version: master

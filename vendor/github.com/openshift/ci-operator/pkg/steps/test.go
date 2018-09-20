@@ -16,47 +16,62 @@ import (
 	"github.com/openshift/ci-operator/pkg/api"
 )
 
-type testStep struct {
-	config      api.TestStepConfiguration
+type PodStepConfiguration struct {
+	As                 string
+	From               api.ImageStreamTagReference
+	Commands           string
+	ArtifactDir        string
+	ServiceAccountName string
+}
+
+type podStep struct {
+	name        string
+	config      PodStepConfiguration
 	resources   api.ResourceConfiguration
 	podClient   PodClient
 	istClient   imageclientset.ImageStreamTagsGetter
 	artifactDir string
-	jobSpec     *JobSpec
+	jobSpec     *api.JobSpec
 }
 
-func (s *testStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
+func (s *podStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
 	return nil, nil
 }
 
-func (s *testStep) Run(ctx context.Context, dry bool) error {
-	log.Printf("Executing test %s", s.config.As)
+func (s *podStep) Run(ctx context.Context, dry bool) error {
+	log.Printf("Executing %s %s", s.name, s.config.As)
 
 	containerResources, err := resourcesFor(s.resources.RequirementsForStep(s.config.As))
 	if err != nil {
-		return fmt.Errorf("unable to calculate test pod resources for %s: %s", s.config.As, err)
+		return fmt.Errorf("unable to calculate %s pod resources for %s: %s", s.name, s.config.As, err)
 	}
+
+	if len(s.config.From.Namespace) > 0 {
+		return fmt.Errorf("pod step does not supported an image stream tag reference outside the namespace")
+	}
+	image := fmt.Sprintf("%s:%s", s.config.From.Name, s.config.From.Tag)
 
 	pod := &coreapi.Pod{
 		ObjectMeta: meta.ObjectMeta{
 			Name: s.config.As,
-			Labels: map[string]string{
+			Labels: trimLabels(map[string]string{
 				PersistsLabel:    "false",
 				JobLabel:         s.jobSpec.Job,
 				BuildIdLabel:     s.jobSpec.BuildId,
 				ProwJobIdLabel:   s.jobSpec.ProwJobID,
 				CreatedByCILabel: "true",
-			},
+			}),
 			Annotations: map[string]string{
-				JobSpecAnnotation: s.jobSpec.rawSpec,
+				JobSpecAnnotation: s.jobSpec.RawSpec(),
 			},
 		},
 		Spec: coreapi.PodSpec{
-			RestartPolicy: coreapi.RestartPolicyNever,
+			ServiceAccountName: s.config.ServiceAccountName,
+			RestartPolicy:      coreapi.RestartPolicyNever,
 			Containers: []coreapi.Container{
 				{
-					Name:                     "test",
-					Image:                    fmt.Sprintf("%s:%s", PipelineImageStream, s.config.From),
+					Name:                     s.name,
+					Image:                    image,
 					Command:                  []string{"/bin/sh", "-c", "#!/bin/sh\nset -eu\n" + s.config.Commands},
 					Resources:                containerResources,
 					TerminationMessagePolicy: coreapi.TerminationMessageFallbackToLogsOnError,
@@ -68,13 +83,13 @@ func (s *testStep) Run(ctx context.Context, dry bool) error {
 	// when the test container terminates and artifact directory has been set, grab everything under the directory
 	var notifier ContainerNotifier = NopNotifier
 	if s.gatherArtifacts() {
-		artifacts := NewArtifactWorker(s.podClient, filepath.Join(s.artifactDir, s.config.As), s.jobSpec.Namespace())
+		artifacts := NewArtifactWorker(s.podClient, filepath.Join(s.artifactDir, s.config.As), s.jobSpec.Namespace)
 		pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, coreapi.VolumeMount{
 			Name:      "artifacts",
 			MountPath: s.config.ArtifactDir,
 		})
 		addArtifactsContainer(pod, s.config.ArtifactDir)
-		artifacts.CollectFromPod(pod.Name, []string{"test"}, nil)
+		artifacts.CollectFromPod(pod.Name, []string{s.name}, nil)
 		notifier = artifacts
 	}
 
@@ -91,32 +106,32 @@ func (s *testStep) Run(ctx context.Context, dry bool) error {
 	go func() {
 		<-ctx.Done()
 		notifier.Cancel()
-		log.Printf("cleanup: Deleting test pod %s", s.config.As)
-		if err := s.podClient.Pods(s.jobSpec.Namespace()).Delete(s.config.As, nil); err != nil && !errors.IsNotFound(err) {
-			log.Printf("error: Could not delete test pod: %v", err)
+		log.Printf("cleanup: Deleting %s pod %s", s.name, s.config.As)
+		if err := s.podClient.Pods(s.jobSpec.Namespace).Delete(s.config.As, nil); err != nil && !errors.IsNotFound(err) {
+			log.Printf("error: Could not delete %s pod: %v", s.name, err)
 		}
 	}()
 
-	pod, err = createOrRestartPod(s.podClient.Pods(s.jobSpec.Namespace()), pod)
+	pod, err = createOrRestartPod(s.podClient.Pods(s.jobSpec.Namespace), pod)
 	if err != nil {
-		return fmt.Errorf("failed to create or restart test pod: %v", err)
+		return fmt.Errorf("failed to create or restart %s pod: %v", s.name, err)
 	}
 
-	if err := waitForPodCompletion(s.podClient.Pods(s.jobSpec.Namespace()), pod.Name, notifier); err != nil {
-		return fmt.Errorf("failed to wait for test pod to complete: %v", err)
+	if err := waitForPodCompletion(s.podClient.Pods(s.jobSpec.Namespace), pod.Name, notifier); err != nil {
+		return fmt.Errorf("failed to wait for %s pod to complete: %v", s.name, err)
 	}
 
 	return nil
 }
 
-func (s *testStep) gatherArtifacts() bool {
+func (s *podStep) gatherArtifacts() bool {
 	return len(s.config.ArtifactDir) > 0 && len(s.artifactDir) > 0
 }
 
-func (s *testStep) Done() (bool, error) {
-	ready, err := isPodCompleted(s.podClient.Pods(s.jobSpec.Namespace()), s.config.As)
+func (s *podStep) Done() (bool, error) {
+	ready, err := isPodCompleted(s.podClient.Pods(s.jobSpec.Namespace), s.config.As)
 	if err != nil {
-		return false, fmt.Errorf("failed to determine if test pod was completed: %v", err)
+		return false, fmt.Errorf("failed to determine if %s pod was completed: %v", s.name, err)
 	}
 	if !ready {
 		return false, nil
@@ -124,26 +139,46 @@ func (s *testStep) Done() (bool, error) {
 	return true, nil
 }
 
-func (s *testStep) Requires() []api.StepLink {
-	return []api.StepLink{api.InternalImageLink(s.config.From)}
+func (s *podStep) Requires() []api.StepLink {
+	if s.config.From.Name == api.PipelineImageStream {
+		return []api.StepLink{api.InternalImageLink(api.PipelineImageStreamTagReference(s.config.From.Tag))}
+	}
+	return []api.StepLink{api.ImagesReadyLink()}
 }
 
-func (s *testStep) Creates() []api.StepLink {
+func (s *podStep) Creates() []api.StepLink {
 	return []api.StepLink{}
 }
 
-func (s *testStep) Provides() (api.ParameterMap, api.StepLink) {
+func (s *podStep) Provides() (api.ParameterMap, api.StepLink) {
 	return nil, nil
 }
 
-func (s *testStep) Name() string { return s.config.As }
+func (s *podStep) Name() string { return s.config.As }
 
-func (s *testStep) Description() string {
+func (s *podStep) Description() string {
 	return fmt.Sprintf("Run the tests for %s in a pod and wait for success or failure", s.config.As)
 }
 
-func TestStep(config api.TestStepConfiguration, resources api.ResourceConfiguration, podClient PodClient, artifactDir string, jobSpec *JobSpec) api.Step {
-	return &testStep{
+func TestStep(config api.TestStepConfiguration, resources api.ResourceConfiguration, podClient PodClient, artifactDir string, jobSpec *api.JobSpec) api.Step {
+	return PodStep(
+		"test",
+		PodStepConfiguration{
+			As:          config.As,
+			From:        api.ImageStreamTagReference{Name: api.PipelineImageStream, Tag: string(config.From)},
+			Commands:    config.Commands,
+			ArtifactDir: config.ArtifactDir,
+		},
+		resources,
+		podClient,
+		artifactDir,
+		jobSpec,
+	)
+}
+
+func PodStep(name string, config PodStepConfiguration, resources api.ResourceConfiguration, podClient PodClient, artifactDir string, jobSpec *api.JobSpec) api.Step {
+	return &podStep{
+		name:        name,
 		config:      config,
 		resources:   resources,
 		podClient:   podClient,

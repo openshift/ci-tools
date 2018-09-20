@@ -1,9 +1,10 @@
 package api
 
 import (
-	"encoding/json"
 	"reflect"
 	"testing"
+
+	"github.com/ghodss/yaml"
 )
 
 func TestOverlay(t *testing.T) {
@@ -92,19 +93,19 @@ func TestOverlay(t *testing.T) {
 		},
 		{
 			name:    "skips missing key",
-			base:    `{"test_base_image":{}}`,
+			base:    `{"build_root":{}}`,
 			overlay: `{}`,
 			want: &ReleaseBuildConfiguration{
 				InputConfiguration: InputConfiguration{
-					TestBaseImage: &ImageStreamTagReference{},
+					BuildRootImage: &BuildRootImageConfiguration{},
 				},
 			},
 			wantInput: &InputConfiguration{},
 		},
 		{
 			name:    "clears with explicit null",
-			base:    `{"test_base_image":{}}`,
-			overlay: `{"test_base_image":null}`,
+			base:    `{"build_root":{}}`,
+			overlay: `{"build_root":null}`,
 			want: &ReleaseBuildConfiguration{
 				InputConfiguration: InputConfiguration{},
 			},
@@ -115,13 +116,13 @@ func TestOverlay(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			config := &ReleaseBuildConfiguration{}
 			input := &InputConfiguration{}
-			if err := json.Unmarshal([]byte(tt.base), config); err != nil {
+			if err := yaml.Unmarshal([]byte(tt.base), config); err != nil {
 				t.Fatal(err)
 			}
-			if err := json.Unmarshal([]byte(tt.overlay), config); err != nil {
+			if err := yaml.Unmarshal([]byte(tt.overlay), config); err != nil {
 				t.Fatal(err)
 			}
-			if err := json.Unmarshal([]byte(tt.overlay), input); err != nil {
+			if err := yaml.Unmarshal([]byte(tt.overlay), input); err != nil {
 				t.Fatal(err)
 			}
 			if got := input; !reflect.DeepEqual(got, tt.wantInput) {

@@ -52,11 +52,6 @@ func Run(ctx context.Context, graph []*api.StepNode, dry bool) (*junit.TestSuite
 			suite.NumTests++
 			if out.err != nil {
 				testCase.FailureOutput = &junit.FailureOutput{Output: out.err.Error()}
-				if o, ok := out.err.(withOutput); ok {
-					if out := o.ErrorOutput(); len(out) > 0 {
-						testCase.FailureOutput.Output += "\n\n" + o.ErrorOutput()
-					}
-				}
 				suite.NumFailed++
 				errors = append(errors, out.err)
 			} else {
@@ -85,10 +80,6 @@ func Run(ctx context.Context, graph []*api.StepNode, dry bool) (*junit.TestSuite
 			return suites, aggregateError(errors)
 		}
 	}
-}
-
-type withOutput interface {
-	ErrorOutput() string
 }
 
 func aggregateError(errors []error) error {

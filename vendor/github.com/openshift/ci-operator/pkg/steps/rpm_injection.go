@@ -14,7 +14,7 @@ import (
 
 func rpmInjectionDockerfile(from api.PipelineImageStreamTagReference, repo string) string {
 	return fmt.Sprintf(`FROM %s:%s
-RUN echo $'[built]\nname = Built RPMs\nbaseurl = http://%s\ngpgcheck = 0\nenabled = 0\n\n[origin-local-release]\nname = Built RPMs\nbaseurl = http://%s\ngpgcheck = 0\nenabled = 0' > /etc/yum.repos.d/built.repo`, PipelineImageStream, from, repo, repo)
+RUN echo $'[built]\nname = Built RPMs\nbaseurl = http://%s\ngpgcheck = 0\nenabled = 0\n\n[origin-local-release]\nname = Built RPMs\nbaseurl = http://%s\ngpgcheck = 0\nenabled = 0' > /etc/yum.repos.d/built.repo`, api.PipelineImageStream, from, repo, repo)
 }
 
 type rpmImageInjectionStep struct {
@@ -23,7 +23,7 @@ type rpmImageInjectionStep struct {
 	buildClient BuildClient
 	routeClient routeclientset.RoutesGetter
 	istClient   imageclientset.ImageStreamTagsGetter
-	jobSpec     *JobSpec
+	jobSpec     *api.JobSpec
 }
 
 func (s *rpmImageInjectionStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
@@ -35,7 +35,7 @@ func (s *rpmImageInjectionStep) Run(ctx context.Context, dry bool) error {
 	if dry {
 		host = "dry-fake"
 	} else {
-		route, err := s.routeClient.Routes(s.jobSpec.Namespace()).Get(RPMRepoName, meta.GetOptions{})
+		route, err := s.routeClient.Routes(s.jobSpec.Namespace).Get(RPMRepoName, meta.GetOptions{})
 		if err != nil {
 			return fmt.Errorf("could not get Route for RPM server: %v", err)
 		}
@@ -54,7 +54,7 @@ func (s *rpmImageInjectionStep) Run(ctx context.Context, dry bool) error {
 }
 
 func (s *rpmImageInjectionStep) Done() (bool, error) {
-	return imageStreamTagExists(s.config.To, s.istClient.ImageStreamTags(s.jobSpec.Namespace()))
+	return imageStreamTagExists(s.config.To, s.istClient.ImageStreamTags(s.jobSpec.Namespace))
 }
 
 func (s *rpmImageInjectionStep) Requires() []api.StepLink {
@@ -75,7 +75,7 @@ func (s *rpmImageInjectionStep) Description() string {
 	return "Inject an RPM repository that will point at the RPM server"
 }
 
-func RPMImageInjectionStep(config api.RPMImageInjectionStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, routeClient routeclientset.RoutesGetter, istClient imageclientset.ImageStreamTagsGetter, jobSpec *JobSpec) api.Step {
+func RPMImageInjectionStep(config api.RPMImageInjectionStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, routeClient routeclientset.RoutesGetter, istClient imageclientset.ImageStreamTagsGetter, jobSpec *api.JobSpec) api.Step {
 	return &rpmImageInjectionStep{
 		config:      config,
 		resources:   resources,

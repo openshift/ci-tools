@@ -217,9 +217,6 @@ func promotionDefaults(configSpec *api.ReleaseBuildConfiguration) (*api.Promotio
 	if config == nil {
 		return nil, fmt.Errorf("cannot promote images, no promotion or release tag configuration defined")
 	}
-	if len(config.Name) == 0 && len(config.Tag) == 0 {
-		return nil, fmt.Errorf("no name or tag defined for promotion config")
-	}
 	return config, nil
 }
 

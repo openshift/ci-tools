@@ -15,7 +15,7 @@ import (
 type writeParametersStep struct {
 	params    *DeferredParameters
 	paramFile string
-	jobSpec   *JobSpec
+	jobSpec   *api.JobSpec
 }
 
 var safeEnv = regexp.MustCompile(`^[a-zA-Z0-9_\-\.]*$`)
@@ -70,7 +70,7 @@ func (s *writeParametersStep) Name() string { return "parameters/write" }
 
 func (s *writeParametersStep) Description() string { return "Write the job parameters to disk" }
 
-func WriteParametersStep(params *DeferredParameters, paramFile string, jobSpec *JobSpec) api.Step {
+func WriteParametersStep(params *DeferredParameters, paramFile string, jobSpec *api.JobSpec) api.Step {
 	return &writeParametersStep{
 		params:    params,
 		paramFile: paramFile,

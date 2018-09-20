@@ -1,4 +1,6 @@
 .idea/
 /ci-operator
+/ci-operator-checkconfig
 .vscode/
 cmd/ci-operator/debug
+bin/

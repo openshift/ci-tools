@@ -23,7 +23,7 @@ as expected (you need to be logged in to a cluster, e.g. to
 [api.ci](https://api.ci.openshift.org)):
 
 ```
-./ci-operator --config config.json --git-ref openshift/<repo>@<revision>
+./ci-operator --config config.yaml --git-ref openshift/<repo>@<revision>
 ```
 
 After you make sure everything works, you need to create a subdirectory
@@ -38,26 +38,32 @@ By default, ci-operator builds the `src` target image, expected by later targets
 to contain the source code of the component together with its build
 dependencies. Using [cloneref](https://github.com/kubernetes/test-infra/tree/master/prow/cmd/clonerefs)
 , ci-operator fetches the refs to be tested from the component repository
-and injects the source code into the base image specified by the
-`test_base_image` key.  The base image should contain all build dependencies of
-the tested component, so the it will often be a `openshift/release:<tag>` image.
-
-```json
-{
-  "test_base_image": {
-    "cluster": "https://api.ci.openshift.org",
-    "namespace": "openshift",
-    "name": "release",
-    "tag": "golang-1.10"
-  }
-}
+and injects the source code into the base image specified by the `build_root` key. 
+There are two ways to specify the base image.
+* From an image stream that should contain all build dependencies of the tested component, so the it will often be a `openshift/release:<tag>` image.
+```yaml
+build_root:
+  image_stream_tag:
+    cluster: https://api.ci.openshift.org
+    namespace: openshift
+    name: release
+    tag: golang-1.10
 ```
+* From a `Dockerfile` that is in the repository in which the PR is opened. In this case, ci-operator will build the image first and it will get the build from the latest of the target branch.
+```yaml
+build_root:
+  project_image_build:
+    dockerfile_path: Dockerfile
+    context_dir: path/of/dockerfile/
+```
+
+**Note:** Both image_stream_tag and project_image_build should not be defined.
 
 Given your component can be built in the context of the `openshift/release`
 image, you can test building the `src` target:
 
 ```
-$ ./ci-operator --config example.json --git-ref=openshift/<component>@<revision> --target=src
+$ ./ci-operator --config example.yaml --git-ref=openshift/<component>@<revision> --target=src
 ```
 
 ### Test targets
@@ -68,21 +74,16 @@ example of two test targets, each performing a different test by calling
 different `make` target in a `src` image (of course, a `Makefile` in your
 component repository would need to have these targets for this to work).
 
-```json
-{
-  "tests": [
-    {
-      "as": "unit",
-      "from": "src",
-      "commands": "make test-unit"
-    },
-    {
-      "as": "performance",
-      "from": "src",
-      "commands": "make test-performance"
-    }
-  ]
-}
+```yaml
+tests:
+- as: unit
+  commands: make test-unit
+  container:
+    from: src
+- as: performance
+  commands: make test-performance
+  container:
+    from: src
 ```
 
 By default, ci-operator runs all specified test targets, building all their
@@ -105,29 +106,57 @@ Here, `unit` and `integration` targets will both be built from a `test-bin`
 image, which will be a result of running `make instrumented-build` over a `src`
 image, while `performance` test target will be run from a `bin` image:
 
-```json
-{
-  "binary_build_commands": "make build",
-  "test_binary_builds_commands": "make instrumented-build",
-  "tests": [
-    {
-      "as": "unit",
-      "from": "test-bin",
-      "commands": "make test-unit"
-    },
-    {
-      "as": "integration",
-      "from": "test-bin",
-      "commands": "make test-integration",
-    },
-    {
-      "as": "performance",
-      "from": "bin",
-      "commands": "make test-performance"
-    }
-  ]
-}
+```yaml
+binary_build_commands: make build
+test_binary_builds_commands: make instrumented-build
+tests:
+- as: unit
+  commands: make test-unit
+  container:
+    from: test-bin
+- as: integration
+  commands: make test-integration
+  container:
+    from: test-bin
+- as: performance
+  commands: make test-performance
+  container:
+    from: bin
 ```
+
+### Using Separate Build Environment and Release Environment Images
+
+Often, you will want to run your builds in an environment where all of your build-
+time dependencies exist, but you will not want those to be present in your final
+container image. For this case, `ci-operator` allows you to use a separate image
+for your builds and we make use of the OpenShift `Build` image source mechanism
+to deliver artifacts from one container image to another. In the following example,
+we configure `ci-operator` to run such a build:
+
+```yaml
+base_images:
+  release_base:
+    name: release
+    tag: latest
+binary_build_commands: make build
+images:
+- context_dir: images/product
+  from: release_base
+  inputs:
+    bin:
+      paths:
+      - destination_dir: /usr/bin/binary
+        source_path: path/to/binary
+  to: product
+build_root:
+  image_stream_tag:
+    name: tests
+    tag: latest
+```
+
+In the example, we build the binaries using `make build` in the `tests` environment
+image and commit the result to the `bin` tag. Then, we build the `product` image
+using the `release_base` and copying in the binary from that `bin` tag.
 
 
 ### Submit the configuration file to `openshift/release`
@@ -152,47 +181,14 @@ use cases soon.
 
 ## Add Prow jobs
 
-Once the config file is prepared and commited, you can add a Prow job that will
-run ci-operator to build the selected targets before or after a PR is merged (or
-even periodically). You can find information about how to create Prow jobs in
-[test-infra
+Once the config file is prepared, you can create Prow jobs that will build
+selected targets before or after a PR is merged (or even periodically). Prow
+job configuration files also live in `openshift/release` repository,
+specifically in `ci-operator/jobs/$org/$repo` directories. The easiest way how
+to create them is to use the
+[generator](https://github.com/openshift/ci-operator-prowgen). The generator can
+create a good set of default Prow jobs from your ci-operator configuration
+file. All you need to do is to commit the generated files.
+
+You can find more information about how to create Prow jobs in [test-infra
 documentation](https://github.com/openshift/test-infra/tree/master/prow#how-to-add-new-jobs).
-Long story short, you need to add a new job definition to the [config
-file](https://github.com/openshift/release/blob/master/cluster/ci/config/prow/config.yaml)
-in `openshift/release` repository. You need to add a job definition to the
-appropriate section of either `presubmits`, `postsubmits` or `periodicals` key
-of the config file:
-
-```yaml
-presubmits:
-  openshift/<repo>:
-  - name: <unique-name-of-presubmit-repo>
-    agent: kubernetes
-    context: ci/prow/unit
-    branches:
-    - master
-    rerun_command: "/test unit"
-    always_run: true
-    trigger: "((?m)^/test( all| unit),?(\\s+|$))"
-    decorate: true
-    skip_cloning: true
-    spec:
-      serviceAccountName: ci-operator
-      containers:
-      - name: test
-        image: ci-operator:latest
-        env:
-        - name: CONFIG_SPEC
-          valueFrom:
-            configMapKeyRef:
-              name: ci-operator-openshift-<repo>
-              key: <name of config file in ‘ci-operator/config/openshift/repo>
-        command:
-        - ci-operator
-        args:
-        - --target=unit
-        - <more ci-operator arguments>
-```
-
-Unfortunately, this is a lot of boilerplate in already a huge file. We hope we
-will be able to reduce the necessary amount of configuration soon.

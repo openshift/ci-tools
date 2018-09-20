@@ -40,7 +40,7 @@ func (s *imagesReadyStep) Name() string { return "[images]" }
 
 func (s *imagesReadyStep) Description() string { return "All images are built and tagged into stable" }
 
-func ImagesReadyStep(links []api.StepLink, jobSpec *JobSpec) api.Step {
+func ImagesReadyStep(links []api.StepLink, jobSpec *api.JobSpec) api.Step {
 	return &imagesReadyStep{
 		links: links,
 	}

@@ -1,4 +1,4 @@
-package steps
+package defaults
 
 import (
 	"bytes"
@@ -19,21 +19,23 @@ func TestStepConfigsForBuild(t *testing.T) {
 	var testCases = []struct {
 		name    string
 		input   *api.ReleaseBuildConfiguration
-		jobSpec *JobSpec
+		jobSpec *api.JobSpec
 		output  []api.StepConfiguration
 	}{
 		{
 			name: "minimal information provided",
 			input: &api.ReleaseBuildConfiguration{
 				InputConfiguration: api.InputConfiguration{
-					TestBaseImage: &api.ImageStreamTagReference{Tag: "manual"},
+					BuildRootImage: &api.BuildRootImageConfiguration{
+						ImageStreamTagReference: &api.ImageStreamTagReference{Tag: "manual"},
+					},
 				},
 			},
-			jobSpec: &JobSpec{
-				Refs: Refs{
+			jobSpec: &api.JobSpec{
+				Refs: api.Refs{
 					Repo: "repo",
 				},
-				baseNamespace: "base-1",
+				BaseNamespace: "base-1",
 			},
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
@@ -55,15 +57,17 @@ func TestStepConfigsForBuild(t *testing.T) {
 			name: "binary build requested",
 			input: &api.ReleaseBuildConfiguration{
 				InputConfiguration: api.InputConfiguration{
-					TestBaseImage: &api.ImageStreamTagReference{Tag: "manual"},
+					BuildRootImage: &api.BuildRootImageConfiguration{
+						ImageStreamTagReference: &api.ImageStreamTagReference{Tag: "manual"},
+					},
 				},
 				BinaryBuildCommands: "hi",
 			},
-			jobSpec: &JobSpec{
-				Refs: Refs{
+			jobSpec: &api.JobSpec{
+				Refs: api.Refs{
 					Repo: "repo",
 				},
-				baseNamespace: "base-1",
+				BaseNamespace: "base-1",
 			},
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
@@ -91,16 +95,18 @@ func TestStepConfigsForBuild(t *testing.T) {
 			name: "binary and rpm build requested",
 			input: &api.ReleaseBuildConfiguration{
 				InputConfiguration: api.InputConfiguration{
-					TestBaseImage: &api.ImageStreamTagReference{Tag: "manual"},
+					BuildRootImage: &api.BuildRootImageConfiguration{
+						ImageStreamTagReference: &api.ImageStreamTagReference{Tag: "manual"},
+					},
 				},
 				BinaryBuildCommands: "hi",
 				RpmBuildCommands:    "hello",
 			},
-			jobSpec: &JobSpec{
-				Refs: Refs{
+			jobSpec: &api.JobSpec{
+				Refs: api.Refs{
 					Repo: "repo",
 				},
-				baseNamespace: "base-1",
+				BaseNamespace: "base-1",
 			},
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
@@ -138,15 +144,17 @@ func TestStepConfigsForBuild(t *testing.T) {
 			name: "rpm but not binary build requested",
 			input: &api.ReleaseBuildConfiguration{
 				InputConfiguration: api.InputConfiguration{
-					TestBaseImage: &api.ImageStreamTagReference{Tag: "manual"},
+					BuildRootImage: &api.BuildRootImageConfiguration{
+						ImageStreamTagReference: &api.ImageStreamTagReference{Tag: "manual"},
+					},
 				},
 				RpmBuildCommands: "hello",
 			},
-			jobSpec: &JobSpec{
-				Refs: Refs{
+			jobSpec: &api.JobSpec{
+				Refs: api.Refs{
 					Repo: "repo",
 				},
-				baseNamespace: "base-1",
+				BaseNamespace: "base-1",
 			},
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
@@ -178,16 +186,18 @@ func TestStepConfigsForBuild(t *testing.T) {
 			name: "rpm with custom output but not binary build requested",
 			input: &api.ReleaseBuildConfiguration{
 				InputConfiguration: api.InputConfiguration{
-					TestBaseImage: &api.ImageStreamTagReference{Tag: "manual"},
+					BuildRootImage: &api.BuildRootImageConfiguration{
+						ImageStreamTagReference: &api.ImageStreamTagReference{Tag: "manual"},
+					},
 				},
 				RpmBuildLocation: "testing",
 				RpmBuildCommands: "hello",
 			},
-			jobSpec: &JobSpec{
-				Refs: Refs{
+			jobSpec: &api.JobSpec{
+				Refs: api.Refs{
 					Repo: "repo",
 				},
-				baseNamespace: "base-1",
+				BaseNamespace: "base-1",
 			},
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
@@ -219,7 +229,9 @@ func TestStepConfigsForBuild(t *testing.T) {
 			name: "explicit base image requested",
 			input: &api.ReleaseBuildConfiguration{
 				InputConfiguration: api.InputConfiguration{
-					TestBaseImage: &api.ImageStreamTagReference{Tag: "manual"},
+					BuildRootImage: &api.BuildRootImageConfiguration{
+						ImageStreamTagReference: &api.ImageStreamTagReference{Tag: "manual"},
+					},
 					BaseImages: map[string]api.ImageStreamTagReference{
 						"name": {
 							Namespace: "namespace",
@@ -229,11 +241,11 @@ func TestStepConfigsForBuild(t *testing.T) {
 					},
 				},
 			},
-			jobSpec: &JobSpec{
-				Refs: Refs{
+			jobSpec: &api.JobSpec{
+				Refs: api.Refs{
 					Repo: "repo",
 				},
-				baseNamespace: "base-1",
+				BaseNamespace: "base-1",
 			},
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
@@ -265,7 +277,9 @@ func TestStepConfigsForBuild(t *testing.T) {
 			name: "rpm base image requested",
 			input: &api.ReleaseBuildConfiguration{
 				InputConfiguration: api.InputConfiguration{
-					TestBaseImage: &api.ImageStreamTagReference{Tag: "manual"},
+					BuildRootImage: &api.BuildRootImageConfiguration{
+						ImageStreamTagReference: &api.ImageStreamTagReference{Tag: "manual"},
+					},
 					BaseRPMImages: map[string]api.ImageStreamTagReference{
 						"name": {
 							Namespace: "namespace",
@@ -275,11 +289,11 @@ func TestStepConfigsForBuild(t *testing.T) {
 					},
 				},
 			},
-			jobSpec: &JobSpec{
-				Refs: Refs{
+			jobSpec: &api.JobSpec{
+				Refs: api.Refs{
 					Repo: "repo",
 				},
-				baseNamespace: "base-1",
+				BaseNamespace: "base-1",
 			},
 			output: []api.StepConfiguration{{
 				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{

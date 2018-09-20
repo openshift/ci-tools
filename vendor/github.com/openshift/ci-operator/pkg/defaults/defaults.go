@@ -1,4 +1,4 @@
-package steps
+package defaults
 
 import (
 	"crypto/sha256"
@@ -6,35 +6,19 @@ import (
 	"net/url"
 	"strings"
 
+	appsclientset "k8s.io/client-go/kubernetes/typed/apps/v1"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
 
 	templateapi "github.com/openshift/api/template/v1"
-	appsclientset "github.com/openshift/client-go/apps/clientset/versioned/typed/apps/v1"
 	buildclientset "github.com/openshift/client-go/build/clientset/versioned/typed/build/v1"
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 	routeclientset "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
 	templateclientset "github.com/openshift/client-go/template/clientset/versioned/typed/template/v1"
 
 	"github.com/openshift/ci-operator/pkg/api"
-)
-
-const (
-	// PipelineImageStream is the name of the
-	// ImageStream used to hold images built
-	// to cache build steps in the pipeline.
-	PipelineImageStream = "pipeline"
-
-	// DefaultRPMLocation is the default relative
-	// directory for Origin-based projects to put
-	// their built RPMs.
-	DefaultRPMLocation = "_output/local/releases/rpms/"
-
-	// RPMServeLocation is the location from which
-	// we will serve RPMs after they are built.
-	RPMServeLocation = "/srv/repo"
-
-	StableImageStream = "stable"
+	"github.com/openshift/ci-operator/pkg/steps"
+	"github.com/openshift/ci-operator/pkg/steps/release"
 )
 
 // FromConfig interprets the human-friendly fields in
@@ -44,7 +28,7 @@ const (
 // all raw steps that the user provided.
 func FromConfig(
 	config *api.ReleaseBuildConfiguration,
-	jobSpec *JobSpec,
+	jobSpec *api.JobSpec,
 	templates []*templateapi.Template,
 	paramFile, artifactDir string,
 	promote bool,
@@ -59,21 +43,21 @@ func FromConfig(
 		requiredNames[target] = struct{}{}
 	}
 
-	var buildClient BuildClient
+	var buildClient steps.BuildClient
 	var imageClient imageclientset.ImageV1Interface
 	var routeGetter routeclientset.RoutesGetter
-	var deploymentGetter appsclientset.DeploymentConfigsGetter
-	var templateClient TemplateClient
+	var deploymentGetter appsclientset.DeploymentsGetter
+	var templateClient steps.TemplateClient
 	var configMapGetter coreclientset.ConfigMapsGetter
 	var serviceGetter coreclientset.ServicesGetter
-	var podClient PodClient
+	var podClient steps.PodClient
 
 	if clusterConfig != nil {
 		buildGetter, err := buildclientset.NewForConfig(clusterConfig)
 		if err != nil {
 			return nil, nil, fmt.Errorf("could not get build client for cluster config: %v", err)
 		}
-		buildClient = NewBuildClient(buildGetter, buildGetter.RESTClient())
+		buildClient = steps.NewBuildClient(buildGetter, buildGetter.RESTClient())
 
 		imageGetter, err := imageclientset.NewForConfig(clusterConfig)
 		if err != nil {
@@ -90,7 +74,7 @@ func FromConfig(
 		if err != nil {
 			return nil, nil, fmt.Errorf("could not get template client for cluster config: %v", err)
 		}
-		templateClient = NewTemplateClient(templateGetter, templateGetter.RESTClient())
+		templateClient = steps.NewTemplateClient(templateGetter, templateGetter.RESTClient())
 
 		appsGetter, err := appsclientset.NewForConfig(clusterConfig)
 		if err != nil {
@@ -105,16 +89,17 @@ func FromConfig(
 		serviceGetter = coreGetter
 		configMapGetter = coreGetter
 
-		podClient = NewPodClient(coreGetter, clusterConfig, coreGetter.RESTClient())
+		podClient = steps.NewPodClient(coreGetter, clusterConfig, coreGetter.RESTClient())
 	}
 
-	params := NewDeferredParameters()
+	params := steps.NewDeferredParameters()
 	params.Add("JOB_NAME", nil, func() (string, error) { return jobSpec.Job, nil })
 	params.Add("JOB_NAME_HASH", nil, func() (string, error) { return fmt.Sprintf("%x", sha256.Sum256([]byte(jobSpec.Job)))[:5], nil })
 	params.Add("JOB_NAME_SAFE", nil, func() (string, error) { return strings.Replace(jobSpec.Job, "_", "-", -1), nil })
-	params.Add("NAMESPACE", nil, func() (string, error) { return jobSpec.Namespace(), nil })
+	params.Add("NAMESPACE", nil, func() (string, error) { return jobSpec.Namespace, nil })
 
 	var imageStepLinks []api.StepLink
+	var hasReleaseConfiguration bool
 	for _, rawStep := range stepConfigsForBuild(config, jobSpec) {
 		var step api.Step
 		if rawStep.InputImageTagStepConfiguration != nil {
@@ -122,23 +107,25 @@ func FromConfig(
 			if err != nil {
 				return nil, nil, fmt.Errorf("unable to access image stream tag on remote cluster: %v", err)
 			}
-			step = InputImageTagStep(*rawStep.InputImageTagStepConfiguration, srcClient, imageClient, jobSpec)
+			step = steps.InputImageTagStep(*rawStep.InputImageTagStepConfiguration, srcClient, imageClient, jobSpec)
 		} else if rawStep.PipelineImageCacheStepConfiguration != nil {
-			step = PipelineImageCacheStep(*rawStep.PipelineImageCacheStepConfiguration, config.Resources, buildClient, imageClient, jobSpec)
+			step = steps.PipelineImageCacheStep(*rawStep.PipelineImageCacheStepConfiguration, config.Resources, buildClient, imageClient, jobSpec)
 		} else if rawStep.SourceStepConfiguration != nil {
 			srcClient, err := anonymousClusterImageStreamClient(imageClient, clusterConfig, rawStep.SourceStepConfiguration.ClonerefsImage.Cluster)
 			if err != nil {
 				return nil, nil, fmt.Errorf("unable to access image stream tag on remote cluster: %v", err)
 			}
-			step = SourceStep(*rawStep.SourceStepConfiguration, config.Resources, buildClient, srcClient, imageClient, jobSpec)
+			step = steps.SourceStep(*rawStep.SourceStepConfiguration, config.Resources, buildClient, srcClient, imageClient, jobSpec)
 		} else if rawStep.ProjectDirectoryImageBuildStepConfiguration != nil {
-			step = ProjectDirectoryImageBuildStep(*rawStep.ProjectDirectoryImageBuildStepConfiguration, config.Resources, buildClient, imageClient, jobSpec)
+			step = steps.ProjectDirectoryImageBuildStep(*rawStep.ProjectDirectoryImageBuildStepConfiguration, config.Resources, buildClient, imageClient, imageClient, jobSpec)
+		} else if rawStep.ProjectDirectoryImageBuildInputs != nil {
+			step = steps.GitSourceStep(*rawStep.ProjectDirectoryImageBuildInputs, config.Resources, buildClient, imageClient, jobSpec)
 		} else if rawStep.RPMImageInjectionStepConfiguration != nil {
-			step = RPMImageInjectionStep(*rawStep.RPMImageInjectionStepConfiguration, config.Resources, buildClient, routeGetter, imageClient, jobSpec)
+			step = steps.RPMImageInjectionStep(*rawStep.RPMImageInjectionStepConfiguration, config.Resources, buildClient, routeGetter, imageClient, jobSpec)
 		} else if rawStep.RPMServeStepConfiguration != nil {
-			step = RPMServerStep(*rawStep.RPMServeStepConfiguration, deploymentGetter, routeGetter, serviceGetter, imageClient, jobSpec)
+			step = steps.RPMServerStep(*rawStep.RPMServeStepConfiguration, deploymentGetter, routeGetter, serviceGetter, imageClient, jobSpec)
 		} else if rawStep.OutputImageTagStepConfiguration != nil {
-			step = OutputImageTagStep(*rawStep.OutputImageTagStepConfiguration, imageClient, imageClient, jobSpec)
+			step = steps.OutputImageTagStep(*rawStep.OutputImageTagStepConfiguration, imageClient, imageClient, jobSpec)
 			// all required or non-optional output images are considered part of [images]
 			if _, ok := requiredNames[string(rawStep.OutputImageTagStepConfiguration.From)]; ok || !rawStep.OutputImageTagStepConfiguration.Optional {
 				imageStepLinks = append(imageStepLinks, step.Creates()...)
@@ -148,10 +135,11 @@ func FromConfig(
 			if err != nil {
 				return nil, nil, fmt.Errorf("unable to access release images on remote cluster: %v", err)
 			}
-			step = ReleaseImagesTagStep(*rawStep.ReleaseImagesTagStepConfiguration, srcClient, imageClient, routeGetter, configMapGetter, params, jobSpec)
+			hasReleaseConfiguration = true
+			step = steps.ReleaseImagesTagStep(*rawStep.ReleaseImagesTagStepConfiguration, srcClient, imageClient, routeGetter, configMapGetter, params, jobSpec)
 			imageStepLinks = append(imageStepLinks, step.Creates()...)
 		} else if rawStep.TestStepConfiguration != nil {
-			step = TestStep(*rawStep.TestStepConfiguration, config.Resources, podClient, artifactDir, jobSpec)
+			step = steps.TestStep(*rawStep.TestStepConfiguration, config.Resources, podClient, artifactDir, jobSpec)
 		}
 		provides, link := step.Provides()
 		for name, fn := range provides {
@@ -161,15 +149,21 @@ func FromConfig(
 	}
 
 	for _, template := range templates {
-		step := TemplateExecutionStep(template, params, podClient, templateClient, artifactDir, jobSpec)
+		step := steps.TemplateExecutionStep(template, params, podClient, templateClient, artifactDir, jobSpec)
 		buildSteps = append(buildSteps, step)
 	}
 
 	if len(paramFile) > 0 {
-		buildSteps = append(buildSteps, WriteParametersStep(params, paramFile, jobSpec))
+		buildSteps = append(buildSteps, steps.WriteParametersStep(params, paramFile, jobSpec))
 	}
 
-	buildSteps = append(buildSteps, ImagesReadyStep(imageStepLinks, jobSpec))
+	if hasReleaseConfiguration {
+		buildSteps = append(buildSteps, release.AssembleReleaseStep(*config.ReleaseTagConfiguration, podClient, imageClient, artifactDir, jobSpec))
+	} else {
+		buildSteps = append(buildSteps, steps.StableImagesTagStep(imageClient, jobSpec))
+	}
+
+	buildSteps = append(buildSteps, steps.ImagesReadyStep(imageStepLinks, jobSpec))
 
 	if promote {
 		cfg, err := promotionDefaults(config)
@@ -183,7 +177,7 @@ func FromConfig(
 				tags = append(tags, string(image.To))
 			}
 		}
-		postSteps = append(postSteps, PromotionStep(*cfg, tags, imageClient, imageClient, jobSpec))
+		postSteps = append(postSteps, steps.PromotionStep(*cfg, tags, imageClient, imageClient, jobSpec))
 	}
 
 	return buildSteps, postSteps, nil
@@ -247,7 +241,7 @@ func normalizeURL(s string) string {
 	return s
 }
 
-func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec) []api.StepConfiguration {
+func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.JobSpec) []api.StepConfiguration {
 	var buildSteps []api.StepConfiguration
 
 	if config.InputConfiguration.BaseImages == nil {
@@ -267,6 +261,14 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec
 		config.InputConfiguration.BaseRPMImages[alias] = target
 	}
 
+	if target := config.InputConfiguration.BuildRootImage; target != nil {
+		if isTagRef := target.ImageStreamTagReference; isTagRef != nil {
+			buildSteps = append(buildSteps, createStepConfigForTagRefImage(*isTagRef, jobSpec))
+		} else if gitSourceRef := target.ProjectImageBuild; gitSourceRef != nil {
+			buildSteps = append(buildSteps, createStepConfigForGitSource(*gitSourceRef, jobSpec))
+		}
+	}
+
 	buildSteps = append(buildSteps, api.StepConfiguration{SourceStepConfiguration: &api.SourceStepConfiguration{
 		From:      api.PipelineImageStreamTagReferenceRoot,
 		To:        api.PipelineImageStreamTagReferenceSource,
@@ -279,24 +281,6 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec
 		},
 		ClonerefsPath: "/clonerefs",
 	}})
-
-	if target := config.InputConfiguration.TestBaseImage; target != nil {
-		if target.Namespace == "" {
-			target.Namespace = jobSpec.baseNamespace
-		}
-		if target.Name == "" {
-			target.Name = fmt.Sprintf("%s-test-base", jobSpec.Refs.Repo)
-		}
-		alias := target.As
-		if len(alias) == 0 {
-			alias = target.Tag
-		}
-
-		buildSteps = append(buildSteps, api.StepConfiguration{InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
-			BaseImage: *target,
-			To:        api.PipelineImageStreamTagReferenceRoot,
-		}})
-	}
 
 	if len(config.BinaryBuildCommands) > 0 {
 		buildSteps = append(buildSteps, api.StepConfiguration{PipelineImageCacheStepConfiguration: &api.PipelineImageCacheStepConfiguration{
@@ -326,13 +310,13 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec
 		if config.RpmBuildLocation != "" {
 			out = config.RpmBuildLocation
 		} else {
-			out = DefaultRPMLocation
+			out = api.DefaultRPMLocation
 		}
 
 		buildSteps = append(buildSteps, api.StepConfiguration{PipelineImageCacheStepConfiguration: &api.PipelineImageCacheStepConfiguration{
 			From:     from,
 			To:       api.PipelineImageStreamTagReferenceRPMs,
-			Commands: fmt.Sprintf(`%s; ln -s $( pwd )/%s %s`, config.RpmBuildCommands, out, RPMServeLocation),
+			Commands: fmt.Sprintf(`%s; ln -s $( pwd )/%s %s`, config.RpmBuildCommands, out, api.RPMServeLocation),
 		}})
 
 		buildSteps = append(buildSteps, api.StepConfiguration{RPMServeStepConfiguration: &api.RPMServeStepConfiguration{
@@ -363,21 +347,32 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec
 	for i := range config.Images {
 		image := &config.Images[i]
 		buildSteps = append(buildSteps, api.StepConfiguration{ProjectDirectoryImageBuildStepConfiguration: image})
-		if config.ReleaseTagConfiguration != nil && len(config.ReleaseTagConfiguration.Name) > 0 {
-			buildSteps = append(buildSteps, api.StepConfiguration{OutputImageTagStepConfiguration: &api.OutputImageTagStepConfiguration{
-				From: image.To,
-				To: api.ImageStreamTagReference{
-					Name: fmt.Sprintf("%s%s", config.ReleaseTagConfiguration.NamePrefix, StableImageStream),
-					Tag:  string(image.To),
-				},
-				Optional: image.Optional,
-			}})
+		if config.ReleaseTagConfiguration != nil {
+			if len(config.ReleaseTagConfiguration.Name) > 0 {
+				buildSteps = append(buildSteps, api.StepConfiguration{OutputImageTagStepConfiguration: &api.OutputImageTagStepConfiguration{
+					From: image.To,
+					To: api.ImageStreamTagReference{
+						Name: fmt.Sprintf("%s%s", config.ReleaseTagConfiguration.NamePrefix, api.StableImageStream),
+						Tag:  string(image.To),
+					},
+					Optional: image.Optional,
+				}})
+			} else {
+				buildSteps = append(buildSteps, api.StepConfiguration{OutputImageTagStepConfiguration: &api.OutputImageTagStepConfiguration{
+					From: image.To,
+					To: api.ImageStreamTagReference{
+						Name: string(image.To),
+						Tag:  "ci",
+					},
+					Optional: image.Optional,
+				}})
+			}
 		} else {
 			buildSteps = append(buildSteps, api.StepConfiguration{OutputImageTagStepConfiguration: &api.OutputImageTagStepConfiguration{
 				From: image.To,
 				To: api.ImageStreamTagReference{
-					Name: string(image.To),
-					Tag:  "ci",
+					Name: api.StableImageStream,
+					Tag:  string(image.To),
 				},
 				Optional: image.Optional,
 			}})
@@ -385,7 +380,16 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec
 	}
 
 	for i := range config.Tests {
-		buildSteps = append(buildSteps, api.StepConfiguration{TestStepConfiguration: &config.Tests[i]})
+		test := &config.Tests[i]
+		// TODO remove when the migration is completed
+		if len(test.From) == 0 {
+			if containerTest := test.ContainerTestConfiguration; containerTest != nil {
+				test.From = containerTest.From
+			} else {
+				continue
+			}
+		}
+		buildSteps = append(buildSteps, api.StepConfiguration{TestStepConfiguration: test})
 	}
 
 	if config.ReleaseTagConfiguration != nil {
@@ -395,4 +399,28 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *JobSpec
 	buildSteps = append(buildSteps, config.RawSteps...)
 
 	return buildSteps
+}
+
+func createStepConfigForTagRefImage(target api.ImageStreamTagReference, jobSpec *api.JobSpec) api.StepConfiguration {
+	if target.Namespace == "" {
+		target.Namespace = jobSpec.BaseNamespace
+	}
+	if target.Name == "" {
+		target.Name = fmt.Sprintf("%s-test-base", jobSpec.Refs.Repo)
+	}
+
+	return api.StepConfiguration{
+		InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
+			BaseImage: target,
+			To:        api.PipelineImageStreamTagReferenceRoot,
+		}}
+}
+
+func createStepConfigForGitSource(target api.ProjectDirectoryImageBuildInputs, jobSpec *api.JobSpec) api.StepConfiguration {
+	return api.StepConfiguration{
+		ProjectDirectoryImageBuildInputs: &api.ProjectDirectoryImageBuildInputs{
+			DockerfilePath: target.DockerfilePath,
+			ContextDir:     target.ContextDir,
+		},
+	}
 }

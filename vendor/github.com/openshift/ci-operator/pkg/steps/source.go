@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"sort"
+	"strings"
 	"time"
 
 	coreapi "k8s.io/api/core/v1"
@@ -37,7 +38,7 @@ var (
 	JobSpecAnnotation = fmt.Sprintf("%s/%s", CiAnnotationPrefix, "job-spec")
 )
 
-func sourceDockerfile(fromTag api.PipelineImageStreamTagReference, pathAlias string, job *JobSpec) string {
+func sourceDockerfile(fromTag api.PipelineImageStreamTagReference, pathAlias string, job *api.JobSpec) string {
 	workingDir := fmt.Sprintf("github.com/%s/%s", job.Refs.Org, job.Refs.Repo)
 	if len(pathAlias) > 0 {
 		workingDir = pathAlias
@@ -48,7 +49,7 @@ ADD ./clonerefs /clonerefs
 RUN umask 0002 && /clonerefs && chmod g+xw -R /go/src
 WORKDIR /go/src/%s/
 RUN git submodule update --init
-`, PipelineImageStream, fromTag, workingDir)
+`, api.PipelineImageStream, fromTag, workingDir)
 }
 
 type sourceStep struct {
@@ -57,7 +58,7 @@ type sourceStep struct {
 	buildClient        BuildClient
 	imageClient        imageclientset.ImageV1Interface
 	clonerefsSrcClient imageclientset.ImageV1Interface
-	jobSpec            *JobSpec
+	jobSpec            *api.JobSpec
 }
 
 func (s *sourceStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
@@ -114,7 +115,7 @@ func (s *sourceStep) Run(ctx context.Context, dry bool) error {
 	return handleBuild(s.buildClient, build, dry)
 }
 
-func buildFromSource(jobSpec *JobSpec, fromTag, toTag api.PipelineImageStreamTagReference, source buildapi.BuildSource, dockerfilePath string, resources api.ResourceConfiguration) *buildapi.Build {
+func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStreamTagReference, source buildapi.BuildSource, dockerfilePath string, resources api.ResourceConfiguration) *buildapi.Build {
 	log.Printf("Building %s", toTag)
 	buildResources, err := resourcesFor(resources.RequirementsForStep(string(toTag)))
 	if err != nil {
@@ -124,8 +125,8 @@ func buildFromSource(jobSpec *JobSpec, fromTag, toTag api.PipelineImageStreamTag
 	if len(fromTag) > 0 {
 		from = &coreapi.ObjectReference{
 			Kind:      "ImageStreamTag",
-			Namespace: jobSpec.Namespace(),
-			Name:      fmt.Sprintf("%s:%s", PipelineImageStream, fromTag),
+			Namespace: jobSpec.Namespace,
+			Name:      fmt.Sprintf("%s:%s", api.PipelineImageStream, fromTag),
 		}
 	}
 
@@ -133,17 +134,17 @@ func buildFromSource(jobSpec *JobSpec, fromTag, toTag api.PipelineImageStreamTag
 	build := &buildapi.Build{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      string(toTag),
-			Namespace: jobSpec.Namespace(),
-			Labels: map[string]string{
+			Namespace: jobSpec.Namespace,
+			Labels: trimLabels(map[string]string{
 				PersistsLabel:    "false",
 				JobLabel:         jobSpec.Job,
 				BuildIdLabel:     jobSpec.BuildId,
 				ProwJobIdLabel:   jobSpec.ProwJobID,
 				CreatesLabel:     string(toTag),
 				CreatedByCILabel: "true",
-			},
+			}),
 			Annotations: map[string]string{
-				JobSpecAnnotation: jobSpec.rawSpec,
+				JobSpecAnnotation: jobSpec.RawSpec(),
 			},
 		},
 		Spec: buildapi.BuildSpec{
@@ -154,19 +155,19 @@ func buildFromSource(jobSpec *JobSpec, fromTag, toTag api.PipelineImageStreamTag
 				Strategy: buildapi.BuildStrategy{
 					Type: buildapi.DockerBuildStrategyType,
 					DockerStrategy: &buildapi.DockerBuildStrategy{
-						DockerfilePath:          dockerfilePath,
-						From:                    from,
-						ForcePull:               true,
-						NoCache:                 true,
-						Env:                     []coreapi.EnvVar{},
+						DockerfilePath: dockerfilePath,
+						From:           from,
+						ForcePull:      true,
+						NoCache:        true,
+						Env:            []coreapi.EnvVar{},
 						ImageOptimizationPolicy: &layer,
 					},
 				},
 				Output: buildapi.BuildOutput{
 					To: &coreapi.ObjectReference{
 						Kind:      "ImageStreamTag",
-						Namespace: jobSpec.Namespace(),
-						Name:      fmt.Sprintf("%s:%s", PipelineImageStream, toTag),
+						Namespace: jobSpec.Namespace,
+						Name:      fmt.Sprintf("%s:%s", api.PipelineImageStream, toTag),
 					},
 				},
 			},
@@ -198,7 +199,7 @@ func buildInputsFromStep(inputs map[string]api.ImageBuildInputs) []buildapi.Imag
 		refs = append(refs, buildapi.ImageSource{
 			From: coreapi.ObjectReference{
 				Kind: "ImageStreamTag",
-				Name: fmt.Sprintf("%s:%s", PipelineImageStream, name),
+				Name: fmt.Sprintf("%s:%s", api.PipelineImageStream, name),
 			},
 			As:    value.As,
 			Paths: paths,
@@ -217,7 +218,7 @@ func handleBuild(buildClient BuildClient, build *buildapi.Build, dry bool) error
 		return nil
 	}
 	if _, err := buildClient.Builds(build.Namespace).Create(build); err != nil && !errors.IsAlreadyExists(err) {
-		fmt.Errorf("could not create build %s: %v", build.Name, err)
+		return fmt.Errorf("could not create build %s: %v", build.Name, err)
 	}
 	return waitForBuild(buildClient, build.Namespace, build.Name)
 }
@@ -259,10 +260,7 @@ func waitForBuildOrTimeout(buildClient BuildClient, namespace, name string) (boo
 	if isFailed(build) {
 		log.Printf("Build %s failed, printing logs:", build.Name)
 		printBuildLogs(buildClient, build.Namespace, build.Name)
-		return false, errorWithOutput{
-			err:    fmt.Errorf("the build %s failed with reason %s: %s", build.Name, build.Status.Reason, build.Status.Message),
-			output: build.Status.LogSnippet,
-		}
+		return false, appendLogToError(fmt.Errorf("the build %s failed with reason %s: %s", build.Name, build.Status.Reason, build.Status.Message), build.Status.LogSnippet)
 	}
 
 	watcher, err := buildClient.Builds(namespace).Watch(meta.ListOptions{
@@ -288,26 +286,18 @@ func waitForBuildOrTimeout(buildClient BuildClient, namespace, name string) (boo
 			if isFailed(build) {
 				log.Printf("Build %s failed, printing logs:", build.Name)
 				printBuildLogs(buildClient, build.Namespace, build.Name)
-				return false, errorWithOutput{
-					err:    fmt.Errorf("the build %s failed after %s with reason %s: %s", build.Name, buildDuration(build).Truncate(time.Second), build.Status.Reason, build.Status.Message),
-					output: build.Status.LogSnippet,
-				}
+				return false, appendLogToError(fmt.Errorf("the build %s failed after %s with reason %s: %s", build.Name, buildDuration(build).Truncate(time.Second), build.Status.Reason, build.Status.Message), build.Status.LogSnippet)
 			}
 		}
 	}
 }
 
-type errorWithOutput struct {
-	err    error
-	output string
-}
-
-func (e errorWithOutput) Error() string {
-	return e.err.Error()
-}
-
-func (e errorWithOutput) ErrorOutput() string {
-	return e.output
+func appendLogToError(err error, log string) error {
+	log = strings.TrimSpace(log)
+	if len(log) == 0 {
+		return err
+	}
+	return fmt.Errorf("%s\n\n%s", err.Error(), log)
 }
 
 func buildDuration(build *buildapi.Build) time.Duration {
@@ -362,13 +352,13 @@ func resourcesFor(req api.ResourceRequirements) (coreapi.ResourceRequirements, e
 }
 
 func (s *sourceStep) Done() (bool, error) {
-	return imageStreamTagExists(s.config.To, s.imageClient.ImageStreamTags(s.jobSpec.Namespace()))
+	return imageStreamTagExists(s.config.To, s.imageClient.ImageStreamTags(s.jobSpec.Namespace))
 }
 
 func imageStreamTagExists(reference api.PipelineImageStreamTagReference, istClient imageclientset.ImageStreamTagInterface) (bool, error) {
-	log.Printf("Checking for existence of %s:%s", PipelineImageStream, reference)
+	log.Printf("Checking for existence of %s:%s", api.PipelineImageStream, reference)
 	_, err := istClient.Get(
-		fmt.Sprintf("%s:%s", PipelineImageStream, reference),
+		fmt.Sprintf("%s:%s", api.PipelineImageStream, reference),
 		meta.GetOptions{},
 	)
 	if err != nil {
@@ -393,7 +383,7 @@ func (s *sourceStep) Creates() []api.StepLink {
 func (s *sourceStep) Provides() (api.ParameterMap, api.StepLink) {
 	return api.ParameterMap{
 		"LOCAL_IMAGE_SRC": func() (string, error) {
-			is, err := s.imageClient.ImageStreams(s.jobSpec.Namespace()).Get(PipelineImageStream, meta.GetOptions{})
+			is, err := s.imageClient.ImageStreams(s.jobSpec.Namespace).Get(api.PipelineImageStream, meta.GetOptions{})
 			if err != nil {
 				return "", fmt.Errorf("could not get output imagestream: %v", err)
 			}
@@ -416,7 +406,7 @@ func (s *sourceStep) Description() string {
 	return fmt.Sprintf("Clone the correct source code into an image and tag it as %s", s.config.To)
 }
 
-func SourceStep(config api.SourceStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, clonerefsSrcClient imageclientset.ImageV1Interface, imageClient imageclientset.ImageV1Interface, jobSpec *JobSpec) api.Step {
+func SourceStep(config api.SourceStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, clonerefsSrcClient imageclientset.ImageV1Interface, imageClient imageclientset.ImageV1Interface, jobSpec *api.JobSpec) api.Step {
 	return &sourceStep{
 		config:             config,
 		resources:          resources,
@@ -425,4 +415,15 @@ func SourceStep(config api.SourceStepConfiguration, resources api.ResourceConfig
 		clonerefsSrcClient: clonerefsSrcClient,
 		jobSpec:            jobSpec,
 	}
+}
+
+// trimLabels ensures that all label values are less than 64 characters
+// in length and thus valid.
+func trimLabels(labels map[string]string) map[string]string {
+	for k, v := range labels {
+		if len(v) > 63 {
+			labels[k] = v[:60] + "XXX"
+		}
+	}
+	return labels
 }

@@ -676,8 +676,13 @@ func TestFromCIOperatorConfigToProwYaml(t *testing.T) {
       "cluster": "https://api.ci.openshift.org", "namespace": "openshift", "name": "origin-v3.11", "tag": "base"
     }
   },
-  "test_base_image": {
-    "cluster": "https://api.ci.openshift.org", "namespace": "openshift", "name": "release", "tag": "golang-1.10"
+  "build_root": {
+    "image_stream_tag":{
+      "cluster": "https://api.ci.openshift.org",
+      "namespace": "openshift",
+      "name": "release",
+      "tag": "golang-1.10"
+    }
   },
   "images": [{"from": "base", "to": "service-serving-cert-signer"}],
 
@@ -793,8 +798,13 @@ presubmits:
       "cluster": "https://api.ci.openshift.org", "namespace": "openshift", "name": "origin-v3.11", "tag": "base"
     }
   },
-  "test_base_image": {
-    "cluster": "https://api.ci.openshift.org", "namespace": "openshift", "name": "release", "tag": "golang-1.10"
+  "build_root": {
+    "image_stream_tag":{
+      "cluster": "https://api.ci.openshift.org",
+      "namespace": "openshift",
+      "name": "release",
+      "tag": "golang-1.10"
+    }
   },
   "images": [{"from": "base", "to": "service-serving-cert-signer"}],
 
@@ -972,11 +982,12 @@ tag_specification:
   name: origin-v3.11
   namespace: openshift
   tag: ''
-test_base_image:
-  cluster: https://api.ci.openshift.org
-  name: release
-  namespace: openshift
-  tag: golang-1.10
+build_root:
+  image_stream_tag:
+    cluster: https://api.ci.openshift.org
+    namespace: openshift
+    name: release
+    tag: golang-1.10
 tests:
 - as: unit
   commands: make test-unit

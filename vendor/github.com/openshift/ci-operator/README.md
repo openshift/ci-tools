@@ -24,7 +24,7 @@ Currently, users must download the source and build it themselves:
 ```
 $ git clone https://github.com/openshift/ci-operator.git
 $ cd ci-operator
-$ go build ./cmd/ci-operator
+$ make build
 ```
 
 ## Usage
@@ -33,7 +33,7 @@ ci-operator is mainly intended to be run automatically by the CI system, but
 after you build it, you can also run it locally:
 
 ```
-./ci-operator --config component.json --git-ref=openshift/{repo}@master
+./ci-operator --config component.yaml --git-ref=openshift/{repo}@master
 ```
 
 For more information about ci-operator options, use the `--help` parameter:
@@ -45,7 +45,9 @@ For more information about ci-operator options, use the `--help` parameter:
 ## Onboarding a component to ci-operator and Prow
 
 See [ONBOARD.md](ONBOARD.md#prepare-configuration-for-component-repo) for more
-information about how to write component repository configuration file.
+information about how to write component repository configuration file. See the
+configuration reference at [CONFIGURATION.md](CONFIGURATION.md) for details on
+the configuration file keys.
 
 ## OpenShift components using ci-operator
 

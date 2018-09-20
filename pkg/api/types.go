@@ -132,7 +132,7 @@ type InputConfiguration struct {
 // that the pipeline will caches on.
 type BuildRootImageConfiguration struct {
 	ImageStreamTagReference *ImageStreamTagReference          `json:"image_stream_tag,omitempty"`
-	ProjectImageBuild       *ProjectDirectoryImageBuildInputs `json:"project_image_build,omitempty"`
+	ProjectImageBuild       *ProjectDirectoryImageBuildInputs `json:"project_image,omitempty"`
 }
 
 // ImageStreamTagReference identifies an ImageStreamTag

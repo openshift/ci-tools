@@ -57,9 +57,9 @@ func (config *ReleaseBuildConfiguration) Validate() error {
 	buildRootImage := config.InputConfiguration.BuildRootImage
 	if buildRootImage != nil {
 		if buildRootImage.ProjectImageBuild != nil && buildRootImage.ImageStreamTagReference != nil {
-			errs = append(errs, errors.New("both git_source_image and image_stream_tag cannot be set for the build_root"))
+			errs = append(errs, errors.New("both project_image and image_stream_tag cannot be set for the build_root"))
 		} else if buildRootImage.ProjectImageBuild == nil && buildRootImage.ImageStreamTagReference == nil {
-			errs = append(errs, errors.New("you have to specify either git_source_image or image_stream_tag for the build_root"))
+			errs = append(errs, errors.New("you have to specify either project_image or image_stream_tag for the build_root"))
 		}
 	}
 	return kerrors.NewAggregate(errs)

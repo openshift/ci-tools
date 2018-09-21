@@ -1,5 +1,40 @@
 presubmits:
   super/duper:
+  - agent: kubernetes
+    always_run: false
+    branches:
+    - master
+    context: ci/prow/images
+    decorate: true
+    max_concurrency: 100
+    name: pull-ci-super-duper-master-images
+    optional: true
+    rerun_command: /test images
+    run_if_changed: changes
+    skip_cloning: true
+    skip_report: true
+    spec:
+      containers:
+      - args:
+        - --artifact-dir=$(ARTIFACTS)
+        - --target=[images]
+        command:
+        - ci-operator
+        env:
+        - name: CONFIG_SPEC
+          valueFrom:
+            configMapKeyRef:
+              key: master.yaml
+              name: ci-operator-super-duper
+        image: ci-operator:latest
+        name: ""
+        resources:
+          limits:
+            cpu: 500m
+          requests:
+            cpu: 10m
+      serviceAccountName: ci-operator
+    trigger: ((?m)^/test( all| images),?(\s+|$))
   - agent: jenkins
     branches:
     - master

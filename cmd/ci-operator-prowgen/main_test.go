@@ -726,37 +726,6 @@ presubmits:
     always_run: true
     branches:
     - branch
-    context: ci/prow/unit
-    decorate: true
-    name: pull-ci-super-duper-branch-unit
-    rerun_command: /test unit
-    skip_cloning: true
-    spec:
-      containers:
-      - args:
-        - --artifact-dir=$(ARTIFACTS)
-        - --target=unit
-        command:
-        - ci-operator
-        env:
-        - name: CONFIG_SPEC
-          valueFrom:
-            configMapKeyRef:
-              key: branch.yaml
-              name: ci-operator-super-duper
-        image: ci-operator:latest
-        name: ""
-        resources:
-          limits:
-            cpu: 500m
-          requests:
-            cpu: 10m
-      serviceAccountName: ci-operator
-    trigger: ((?m)^/test( all| unit),?(\s+|$))
-  - agent: kubernetes
-    always_run: true
-    branches:
-    - branch
     context: ci/prow/images
     decorate: true
     name: pull-ci-super-duper-branch-images
@@ -784,6 +753,37 @@ presubmits:
             cpu: 10m
       serviceAccountName: ci-operator
     trigger: ((?m)^/test( all| images),?(\s+|$))
+  - agent: kubernetes
+    always_run: true
+    branches:
+    - branch
+    context: ci/prow/unit
+    decorate: true
+    name: pull-ci-super-duper-branch-unit
+    rerun_command: /test unit
+    skip_cloning: true
+    spec:
+      containers:
+      - args:
+        - --artifact-dir=$(ARTIFACTS)
+        - --target=unit
+        command:
+        - ci-operator
+        env:
+        - name: CONFIG_SPEC
+          valueFrom:
+            configMapKeyRef:
+              key: branch.yaml
+              name: ci-operator-super-duper
+        image: ci-operator:latest
+        name: ""
+        resources:
+          limits:
+            cpu: 500m
+          requests:
+            cpu: 10m
+      serviceAccountName: ci-operator
+    trigger: ((?m)^/test( all| unit),?(\s+|$))
 `)}, {
 			id:        "One test and images, one existing job. Expect one presubmit, pre/post submit images jobs. Existing job should not be changed.",
 			org:       "super",
@@ -845,6 +845,33 @@ presubmits:
     branches:
     - branch
     decorate: true
+    name: branch-ci-super-duper-branch-do-not-overwrite
+    skip_cloning: true
+    spec:
+      containers:
+      - args:
+        - --artifact-dir=$(ARTIFACTS)
+        - --target=unit
+        command:
+        - ci-operator
+        env:
+        - name: CONFIG_SPEC
+          valueFrom:
+            configMapKeyRef:
+              key: branch.yaml
+              name: ci-operator-super-duper
+        image: ci-operator:latest
+        name: ""
+        resources:
+          limits:
+            cpu: 500m
+          requests:
+            cpu: 10m
+      serviceAccountName: ci-operator
+  - agent: kubernetes
+    branches:
+    - branch
+    decorate: true
     labels:
       artifacts: images
     name: branch-ci-super-duper-branch-images
@@ -871,66 +898,8 @@ presubmits:
           requests:
             cpu: 10m
       serviceAccountName: ci-operator
-  - agent: kubernetes
-    branches:
-    - branch
-    decorate: true
-    name: branch-ci-super-duper-branch-do-not-overwrite
-    skip_cloning: true
-    spec:
-      containers:
-      - args:
-        - --artifact-dir=$(ARTIFACTS)
-        - --target=unit
-        command:
-        - ci-operator
-        env:
-        - name: CONFIG_SPEC
-          valueFrom:
-            configMapKeyRef:
-              key: branch.yaml
-              name: ci-operator-super-duper
-        image: ci-operator:latest
-        name: ""
-        resources:
-          limits:
-            cpu: 500m
-          requests:
-            cpu: 10m
-      serviceAccountName: ci-operator
 presubmits:
   super/duper:
-  - agent: kubernetes
-    always_run: true
-    branches:
-    - branch
-    context: ci/prow/unit
-    decorate: true
-    name: pull-ci-super-duper-branch-unit
-    rerun_command: /test unit
-    skip_cloning: true
-    spec:
-      containers:
-      - args:
-        - --artifact-dir=$(ARTIFACTS)
-        - --target=unit
-        command:
-        - ci-operator
-        env:
-        - name: CONFIG_SPEC
-          valueFrom:
-            configMapKeyRef:
-              key: branch.yaml
-              name: ci-operator-super-duper
-        image: ci-operator:latest
-        name: ""
-        resources:
-          limits:
-            cpu: 500m
-          requests:
-            cpu: 10m
-      serviceAccountName: ci-operator
-    trigger: ((?m)^/test( all| unit),?(\s+|$))
   - agent: kubernetes
     always_run: true
     branches:
@@ -962,6 +931,37 @@ presubmits:
             cpu: 10m
       serviceAccountName: ci-operator
     trigger: ((?m)^/test( all| images),?(\s+|$))
+  - agent: kubernetes
+    always_run: true
+    branches:
+    - branch
+    context: ci/prow/unit
+    decorate: true
+    name: pull-ci-super-duper-branch-unit
+    rerun_command: /test unit
+    skip_cloning: true
+    spec:
+      containers:
+      - args:
+        - --artifact-dir=$(ARTIFACTS)
+        - --target=unit
+        command:
+        - ci-operator
+        env:
+        - name: CONFIG_SPEC
+          valueFrom:
+            configMapKeyRef:
+              key: branch.yaml
+              name: ci-operator-super-duper
+        image: ci-operator:latest
+        name: ""
+        resources:
+          limits:
+            cpu: 500m
+          requests:
+            cpu: 10m
+      serviceAccountName: ci-operator
+    trigger: ((?m)^/test( all| unit),?(\s+|$))
 `),
 		}, {
 			id:        "Input is YAML and it is correctly processed",
@@ -1024,6 +1024,31 @@ tests:
 			prowExpectedYAML: []byte(`postsubmits:
   super/duper:
   - agent: kubernetes
+    decorate: true
+    name: branch-ci-super-duper-branch-do-not-overwrite
+    skip_cloning: true
+    spec:
+      containers:
+      - args:
+        - --artifact-dir=$(ARTIFACTS)
+        - --target=unit
+        command:
+        - ci-operator
+        env:
+        - name: CONFIG_SPEC
+          valueFrom:
+            configMapKeyRef:
+              key: branch.yaml
+              name: ci-operator-super-duper
+        image: ci-operator:latest
+        name: ""
+        resources:
+          limits:
+            cpu: 500m
+          requests:
+            cpu: 10m
+      serviceAccountName: ci-operator
+  - agent: kubernetes
     branches:
     - branch
     decorate: true
@@ -1053,64 +1078,8 @@ tests:
           requests:
             cpu: 10m
       serviceAccountName: ci-operator
-  - agent: kubernetes
-    decorate: true
-    name: branch-ci-super-duper-branch-do-not-overwrite
-    skip_cloning: true
-    spec:
-      containers:
-      - args:
-        - --artifact-dir=$(ARTIFACTS)
-        - --target=unit
-        command:
-        - ci-operator
-        env:
-        - name: CONFIG_SPEC
-          valueFrom:
-            configMapKeyRef:
-              key: branch.yaml
-              name: ci-operator-super-duper
-        image: ci-operator:latest
-        name: ""
-        resources:
-          limits:
-            cpu: 500m
-          requests:
-            cpu: 10m
-      serviceAccountName: ci-operator
 presubmits:
   super/duper:
-  - agent: kubernetes
-    always_run: true
-    branches:
-    - branch
-    context: ci/prow/unit
-    decorate: true
-    name: pull-ci-super-duper-branch-unit
-    rerun_command: /test unit
-    skip_cloning: true
-    spec:
-      containers:
-      - args:
-        - --artifact-dir=$(ARTIFACTS)
-        - --target=unit
-        command:
-        - ci-operator
-        env:
-        - name: CONFIG_SPEC
-          valueFrom:
-            configMapKeyRef:
-              key: branch.yaml
-              name: ci-operator-super-duper
-        image: ci-operator:latest
-        name: ""
-        resources:
-          limits:
-            cpu: 500m
-          requests:
-            cpu: 10m
-      serviceAccountName: ci-operator
-    trigger: ((?m)^/test( all| unit),?(\s+|$))
   - agent: kubernetes
     always_run: true
     branches:
@@ -1142,6 +1111,37 @@ presubmits:
             cpu: 10m
       serviceAccountName: ci-operator
     trigger: ((?m)^/test( all| images),?(\s+|$))
+  - agent: kubernetes
+    always_run: true
+    branches:
+    - branch
+    context: ci/prow/unit
+    decorate: true
+    name: pull-ci-super-duper-branch-unit
+    rerun_command: /test unit
+    skip_cloning: true
+    spec:
+      containers:
+      - args:
+        - --artifact-dir=$(ARTIFACTS)
+        - --target=unit
+        command:
+        - ci-operator
+        env:
+        - name: CONFIG_SPEC
+          valueFrom:
+            configMapKeyRef:
+              key: branch.yaml
+              name: ci-operator-super-duper
+        image: ci-operator:latest
+        name: ""
+        resources:
+          limits:
+            cpu: 500m
+          requests:
+            cpu: 10m
+      serviceAccountName: ci-operator
+    trigger: ((?m)^/test( all| unit),?(\s+|$))
 `),
 		},
 	}

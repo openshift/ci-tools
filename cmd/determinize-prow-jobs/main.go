@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 
 	prowconfig "k8s.io/test-infra/prow/config"
 
@@ -38,6 +39,17 @@ func determinizeJobs(prowJobConfigDir string) error {
 			if jobConfig, err = jc.ReadFromFile(path); err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to read Prow job config from '%s' (%v)", path, err)
 				return nil
+			}
+
+			for repo := range jobConfig.Presubmits {
+				sort.Slice(jobConfig.Presubmits[repo], func(i, j int) bool {
+					return jobConfig.Presubmits[repo][i].Name < jobConfig.Presubmits[repo][j].Name
+				})
+			}
+			for repo := range jobConfig.Postsubmits {
+				sort.Slice(jobConfig.Postsubmits[repo], func(i, j int) bool {
+					return jobConfig.Postsubmits[repo][i].Name < jobConfig.Postsubmits[repo][j].Name
+				})
 			}
 			if err := jc.WriteToFile(path, jobConfig); err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to write Prow job config to '%s' (%v)", path, err)

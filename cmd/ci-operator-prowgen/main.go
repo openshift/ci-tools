@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/ghodss/yaml"
@@ -393,6 +394,16 @@ func mergeJobsIntoFile(prowConfigPath string, jobConfig *prowconfig.JobConfig) e
 	}
 
 	mergeJobConfig(existingJobConfig, jobConfig)
+	for repo := range existingJobConfig.Presubmits {
+		sort.Slice(existingJobConfig.Presubmits[repo], func(i, j int) bool {
+			return existingJobConfig.Presubmits[repo][i].Name < existingJobConfig.Presubmits[repo][j].Name
+		})
+	}
+	for repo := range existingJobConfig.Postsubmits {
+		sort.Slice(existingJobConfig.Postsubmits[repo], func(i, j int) bool {
+			return existingJobConfig.Postsubmits[repo][i].Name < existingJobConfig.Postsubmits[repo][j].Name
+		})
+	}
 
 	if err = jc.WriteToFile(prowConfigPath, existingJobConfig); err != nil {
 		return err

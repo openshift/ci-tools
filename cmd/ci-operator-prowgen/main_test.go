@@ -17,6 +17,8 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/util/diff"
+
+	jc "github.com/openshift/ci-operator-prowgen/pkg/jobconfig"
 )
 
 func TestGeneratePodSpec(t *testing.T) {
@@ -509,160 +511,17 @@ func TestExtractRepoElementsFromPath(t *testing.T) {
 	}
 }
 
-func TestMergeJobConfig(t *testing.T) {
-	tests := []struct {
-		destination, source, expected *prowconfig.JobConfig
-	}{
-		{
-			destination: &prowconfig.JobConfig{},
-			source: &prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
-					{Name: "source-job", Context: "ci/prow/source"},
-				}},
-			},
-			expected: &prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
-					{Name: "source-job", Context: "ci/prow/source"},
-				}},
-			},
-		}, {
-			destination: &prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
-					{Name: "another-job", Context: "ci/prow/another"},
-				}},
-			},
-			source: &prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
-					{Name: "source-job", Context: "ci/prow/source"},
-				}},
-			},
-			expected: &prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
-					{Name: "source-job", Context: "ci/prow/source"},
-					{Name: "another-job", Context: "ci/prow/another"},
-				}},
-			},
-		}, {
-			destination: &prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
-					{Name: "same-job", Context: "ci/prow/same"},
-				}},
-			},
-			source: &prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
-					{Name: "same-job", Context: "ci/prow/different"},
-				}},
-			},
-			expected: &prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
-					{Name: "same-job", Context: "ci/prow/different"},
-				}},
-			},
-		}, {
-			destination: &prowconfig.JobConfig{},
-			source: &prowconfig.JobConfig{
-				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {
-					{Name: "source-job", Agent: "ci/prow/source"},
-				}},
-			},
-			expected: &prowconfig.JobConfig{
-				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {
-					{Name: "source-job", Agent: "ci/prow/source"},
-				}},
-			},
-		}, {
-			destination: &prowconfig.JobConfig{
-				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {
-					{Name: "another-job", Agent: "ci/prow/another"},
-				}},
-			},
-			source: &prowconfig.JobConfig{
-				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {
-					{Name: "source-job", Agent: "ci/prow/source"},
-				}},
-			},
-			expected: &prowconfig.JobConfig{
-				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {
-					{Name: "source-job", Agent: "ci/prow/source"},
-					{Name: "another-job", Agent: "ci/prow/another"},
-				}},
-			},
-		}, {
-			destination: &prowconfig.JobConfig{
-				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {
-					{Name: "same-job", Agent: "ci/prow/same"},
-				}},
-			},
-			source: &prowconfig.JobConfig{
-				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {
-					{Name: "same-job", Agent: "ci/prow/different"},
-				}},
-			},
-			expected: &prowconfig.JobConfig{
-				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {
-					{Name: "same-job", Agent: "ci/prow/different"},
-				}},
-			},
-		}, {
-			destination: &prowconfig.JobConfig{
-				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {
-					{Name: "same-job", Agent: "ci/prow/same"},
-				}},
-			},
-			source: &prowconfig.JobConfig{
-				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {
-					{Name: "same-job", Agent: "ci/prow/same"},
-				}},
-			},
-			expected: &prowconfig.JobConfig{
-				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {
-					{Name: "same-job", Agent: "ci/prow/same"},
-				}},
-			},
-		},
-	}
-	for _, tc := range tests {
-		mergeJobConfig(tc.destination, tc.source)
-
-		if !equality.Semantic.DeepEqual(tc.destination, tc.expected) {
-			t.Errorf("expected merged job config diff:\n%s", diff.ObjectDiff(tc.expected, tc.destination))
-		}
-	}
-}
-
-func prepareInputs(org, component, branch string, configYAML, prowConfigYAML []byte) (string, string, string, error) {
-	dir, err := ioutil.TempDir("", "prowgen-test")
-	if err != nil {
-		return "", "", "", err
-	}
-
-	workDir := filepath.Join(dir, org, component)
-	if err = os.MkdirAll(workDir, os.ModePerm); err != nil {
-		return "", "", dir, err
-	}
-
-	fullConfigPath := filepath.Join(workDir, fmt.Sprintf("%s.yaml", branch))
-	fullProwConfigPath := filepath.Join(workDir, "jobs.yaml")
-
-	if err = ioutil.WriteFile(fullConfigPath, configYAML, 0664); err != nil {
-		return "", "", dir, err
-	}
-	if err = ioutil.WriteFile(fullProwConfigPath, prowConfigYAML, 0664); err != nil {
-		return "", "", dir, err
-	}
-
-	return fullConfigPath, fullProwConfigPath, dir, nil
-}
-
 func TestFromCIOperatorConfigToProwYaml(t *testing.T) {
 	tests := []struct {
-		id               string
-		org              string
-		component        string
-		branch           string
-		configYAML       []byte
-		prowOldYAML      []byte
-		prowExpectedYAML []byte
+		id                         string
+		org                        string
+		component                  string
+		branch                     string
+		configYAML                 []byte
+		prowOldPresubmitYAML       []byte
+		prowOldPostsubmitYAML      []byte
+		prowExpectedPresubmitYAML  []byte
+		prowExpectedPostsubmitYAML []byte
 	}{
 		{
 			id:        "one test and images, no previous jobs. Expect test presubmit + pre/post submit images jobs",
@@ -689,8 +548,9 @@ func TestFromCIOperatorConfigToProwYaml(t *testing.T) {
   "images": [{"from": "base", "to": "service-serving-cert-signer"}],
 
   "tests": [{"as": "unit", "from": "src", "commands": "make test-unit"}]}`),
-			prowOldYAML: []byte(""),
-			prowExpectedYAML: []byte(`postsubmits:
+			prowOldPresubmitYAML:  []byte(""),
+			prowOldPostsubmitYAML: []byte(""),
+			prowExpectedPostsubmitYAML: []byte(`postsubmits:
   super/duper:
   - agent: kubernetes
     branches:
@@ -723,7 +583,8 @@ func TestFromCIOperatorConfigToProwYaml(t *testing.T) {
           requests:
             cpu: 10m
       serviceAccountName: ci-operator
-presubmits:
+`),
+			prowExpectedPresubmitYAML: []byte(`presubmits:
   super/duper:
   - agent: kubernetes
     always_run: true
@@ -789,7 +650,8 @@ presubmits:
             cpu: 10m
       serviceAccountName: ci-operator
     trigger: ((?m)^/test( all| unit),?(\s+|$))
-`)}, {
+`),
+		}, {
 			id:        "One test and images, one existing job. Expect one presubmit, pre/post submit images jobs. Existing job should not be changed.",
 			org:       "super",
 			component: "duper",
@@ -814,7 +676,8 @@ presubmits:
   "images": [{"from": "base", "to": "service-serving-cert-signer"}],
 
   "tests": [{"as": "unit", "from": "src", "commands": "make test-unit"}]}`),
-			prowOldYAML: []byte(`postsubmits:
+			prowOldPresubmitYAML: []byte(""),
+			prowOldPostsubmitYAML: []byte(`postsubmits:
   super/duper:
   - agent: kubernetes
     branches:
@@ -845,68 +708,7 @@ presubmits:
             cpu: 10m
       serviceAccountName: ci-operator
 `),
-			prowExpectedYAML: []byte(`postsubmits:
-  super/duper:
-  - agent: kubernetes
-    branches:
-    - branch
-    decorate: true
-    name: branch-ci-super-duper-branch-do-not-overwrite
-    skip_cloning: true
-    spec:
-      containers:
-      - args:
-        - --artifact-dir=$(ARTIFACTS)
-        - --target=unit
-        command:
-        - ci-operator
-        env:
-        - name: CONFIG_SPEC
-          valueFrom:
-            configMapKeyRef:
-              key: branch.yaml
-              name: ci-operator-super-duper
-        image: ci-operator:latest
-        imagePullPolicy: Always
-        name: ""
-        resources:
-          limits:
-            cpu: 500m
-          requests:
-            cpu: 10m
-      serviceAccountName: ci-operator
-  - agent: kubernetes
-    branches:
-    - branch
-    decorate: true
-    labels:
-      artifacts: images
-    name: branch-ci-super-duper-branch-images
-    skip_cloning: true
-    spec:
-      containers:
-      - args:
-        - --artifact-dir=$(ARTIFACTS)
-        - --target=[images]
-        - --promote
-        command:
-        - ci-operator
-        env:
-        - name: CONFIG_SPEC
-          valueFrom:
-            configMapKeyRef:
-              key: branch.yaml
-              name: ci-operator-super-duper
-        image: ci-operator:latest
-        imagePullPolicy: Always
-        name: ""
-        resources:
-          limits:
-            cpu: 500m
-          requests:
-            cpu: 10m
-      serviceAccountName: ci-operator
-presubmits:
+			prowExpectedPresubmitYAML: []byte(`presubmits:
   super/duper:
   - agent: kubernetes
     always_run: true
@@ -972,6 +774,68 @@ presubmits:
             cpu: 10m
       serviceAccountName: ci-operator
     trigger: ((?m)^/test( all| unit),?(\s+|$))
+`),
+			prowExpectedPostsubmitYAML: []byte(`postsubmits:
+  super/duper:
+  - agent: kubernetes
+    branches:
+    - branch
+    decorate: true
+    name: branch-ci-super-duper-branch-do-not-overwrite
+    skip_cloning: true
+    spec:
+      containers:
+      - args:
+        - --artifact-dir=$(ARTIFACTS)
+        - --target=unit
+        command:
+        - ci-operator
+        env:
+        - name: CONFIG_SPEC
+          valueFrom:
+            configMapKeyRef:
+              key: branch.yaml
+              name: ci-operator-super-duper
+        image: ci-operator:latest
+        imagePullPolicy: Always
+        name: ""
+        resources:
+          limits:
+            cpu: 500m
+          requests:
+            cpu: 10m
+      serviceAccountName: ci-operator
+  - agent: kubernetes
+    branches:
+    - branch
+    decorate: true
+    labels:
+      artifacts: images
+    name: branch-ci-super-duper-branch-images
+    skip_cloning: true
+    spec:
+      containers:
+      - args:
+        - --artifact-dir=$(ARTIFACTS)
+        - --target=[images]
+        - --promote
+        command:
+        - ci-operator
+        env:
+        - name: CONFIG_SPEC
+          valueFrom:
+            configMapKeyRef:
+              key: branch.yaml
+              name: ci-operator-super-duper
+        image: ci-operator:latest
+        imagePullPolicy: Always
+        name: ""
+        resources:
+          limits:
+            cpu: 500m
+          requests:
+            cpu: 10m
+      serviceAccountName: ci-operator
 `),
 		}, {
 			id:        "Input is YAML and it is correctly processed",
@@ -1003,7 +867,8 @@ tests:
   commands: make test-unit
   from: src
 `),
-			prowOldYAML: []byte(`postsubmits:
+			prowOldPresubmitYAML: []byte(""),
+			prowOldPostsubmitYAML: []byte(`postsubmits:
   super/duper:
   - agent: kubernetes
     decorate: true
@@ -1032,66 +897,7 @@ tests:
             cpu: 10m
       serviceAccountName: ci-operator
 `),
-			prowExpectedYAML: []byte(`postsubmits:
-  super/duper:
-  - agent: kubernetes
-    decorate: true
-    name: branch-ci-super-duper-branch-do-not-overwrite
-    skip_cloning: true
-    spec:
-      containers:
-      - args:
-        - --artifact-dir=$(ARTIFACTS)
-        - --target=unit
-        command:
-        - ci-operator
-        env:
-        - name: CONFIG_SPEC
-          valueFrom:
-            configMapKeyRef:
-              key: branch.yaml
-              name: ci-operator-super-duper
-        image: ci-operator:latest
-        imagePullPolicy: Always
-        name: ""
-        resources:
-          limits:
-            cpu: 500m
-          requests:
-            cpu: 10m
-      serviceAccountName: ci-operator
-  - agent: kubernetes
-    branches:
-    - branch
-    decorate: true
-    labels:
-      artifacts: images
-    name: branch-ci-super-duper-branch-images
-    skip_cloning: true
-    spec:
-      containers:
-      - args:
-        - --artifact-dir=$(ARTIFACTS)
-        - --target=[images]
-        - --promote
-        command:
-        - ci-operator
-        env:
-        - name: CONFIG_SPEC
-          valueFrom:
-            configMapKeyRef:
-              key: branch.yaml
-              name: ci-operator-super-duper
-        image: ci-operator:latest
-        imagePullPolicy: Always
-        name: ""
-        resources:
-          limits:
-            cpu: 500m
-          requests:
-            cpu: 10m
-      serviceAccountName: ci-operator
-presubmits:
+			prowExpectedPresubmitYAML: []byte(`presubmits:
   super/duper:
   - agent: kubernetes
     always_run: true
@@ -1158,37 +964,126 @@ presubmits:
       serviceAccountName: ci-operator
     trigger: ((?m)^/test( all| unit),?(\s+|$))
 `),
+			prowExpectedPostsubmitYAML: []byte(`postsubmits:
+  super/duper:
+  - agent: kubernetes
+    decorate: true
+    name: branch-ci-super-duper-branch-do-not-overwrite
+    skip_cloning: true
+    spec:
+      containers:
+      - args:
+        - --artifact-dir=$(ARTIFACTS)
+        - --target=unit
+        command:
+        - ci-operator
+        env:
+        - name: CONFIG_SPEC
+          valueFrom:
+            configMapKeyRef:
+              key: branch.yaml
+              name: ci-operator-super-duper
+        image: ci-operator:latest
+        imagePullPolicy: Always
+        name: ""
+        resources:
+          limits:
+            cpu: 500m
+          requests:
+            cpu: 10m
+      serviceAccountName: ci-operator
+  - agent: kubernetes
+    branches:
+    - branch
+    decorate: true
+    labels:
+      artifacts: images
+    name: branch-ci-super-duper-branch-images
+    skip_cloning: true
+    spec:
+      containers:
+      - args:
+        - --artifact-dir=$(ARTIFACTS)
+        - --target=[images]
+        - --promote
+        command:
+        - ci-operator
+        env:
+        - name: CONFIG_SPEC
+          valueFrom:
+            configMapKeyRef:
+              key: branch.yaml
+              name: ci-operator-super-duper
+        image: ci-operator:latest
+        imagePullPolicy: Always
+        name: ""
+        resources:
+          limits:
+            cpu: 500m
+          requests:
+            cpu: 10m
+      serviceAccountName: ci-operator
+`),
 		},
 	}
 	for _, tc := range tests {
-		configPath, prowJobsPath, tempDir, err := prepareInputs(tc.org, tc.component, tc.branch, tc.configYAML, tc.prowOldYAML)
-		if tempDir != "" {
+		t.Run(tc.id, func(t *testing.T) {
+			tempDir, err := ioutil.TempDir("", "prowgen-test")
+			if err != nil {
+				t.Fatalf("Unexpected error creating tmpdir: %v", err)
+			}
 			defer os.RemoveAll(tempDir)
-		}
-		if err != nil {
-			t.Errorf("Unexpected error: %v", err)
-			continue
-		}
 
-		jobConfig, _, err := generateProwJobsFromConfigFile(configPath)
-		if err != nil {
-			t.Errorf("Unexpected error: %v", err)
-			continue
-		}
-		err = mergeJobsIntoFile(prowJobsPath, jobConfig)
-		if err != nil {
-			t.Errorf("Unexpected error: %v", err)
-			continue
-		}
+			configDir := filepath.Join(tempDir, "config", tc.org, tc.component)
+			if err = os.MkdirAll(configDir, os.ModePerm); err != nil {
+				t.Fatalf("Unexpected error config dir: %v", err)
+			}
 
-		data, err := ioutil.ReadFile(prowJobsPath)
-		if err != nil {
-			t.Errorf("Unexpected error: %v", err)
-			continue
-		}
+			fullConfigPath := filepath.Join(configDir, fmt.Sprintf("%s.yaml", tc.branch))
+			if err = ioutil.WriteFile(fullConfigPath, tc.configYAML, 0664); err != nil {
+				t.Fatalf("Unexpected error writing config file: %v", err)
+			}
 
-		if bytes.Compare(data, tc.prowExpectedYAML) != 0 {
-			t.Errorf("Generated Prow YAML differs from expected!\n%s", diff.StringDiff(string(tc.prowExpectedYAML), string(data)))
-		}
+			baseProwConfigDir := filepath.Join(tempDir, "jobs")
+			fullProwConfigDir := filepath.Join(baseProwConfigDir, tc.org, tc.component)
+			if err := os.MkdirAll(fullProwConfigDir, os.ModePerm); err != nil {
+				t.Fatalf("Unexpected error creating jobs dir: %v", err)
+			}
+			presubmitPath := filepath.Join(fullProwConfigDir, fmt.Sprintf("%s-%s-%s-presubmits.yaml", tc.org, tc.component, tc.branch))
+			if err = ioutil.WriteFile(presubmitPath, tc.prowOldPresubmitYAML, 0664); err != nil {
+				t.Fatalf("Unexpected error writing old presubmits: %v", err)
+			}
+			postsubmitPath := filepath.Join(fullProwConfigDir, fmt.Sprintf("%s-%s-%s-postsubmits.yaml", tc.org, tc.component, tc.branch))
+			if err = ioutil.WriteFile(postsubmitPath, tc.prowOldPostsubmitYAML, 0664); err != nil {
+				t.Fatalf("Unexpected error writing old postsubmits: %v", err)
+			}
+
+			jobConfig, _, err := generateProwJobsFromConfigFile(fullConfigPath)
+			if err != nil {
+				t.Fatalf("Unexpected error generating jobs from config: %v", err)
+			}
+			err = jc.WriteToDir(baseProwConfigDir, tc.org, tc.component, jobConfig)
+			if err != nil {
+				t.Fatalf("Unexpected error writing jobs: %v", err)
+			}
+
+			presubmitData, err := ioutil.ReadFile(presubmitPath)
+			if err != nil {
+				t.Fatalf("Unexpected error reading generated presubmits: %v", err)
+			}
+
+			if bytes.Compare(presubmitData, tc.prowExpectedPresubmitYAML) != 0 {
+				t.Errorf("Generated Prow presubmit YAML differs from expected!\n%s", diff.StringDiff(string(tc.prowExpectedPresubmitYAML), string(presubmitData)))
+			}
+
+			postsubmitData, err := ioutil.ReadFile(postsubmitPath)
+			if err != nil {
+				t.Fatalf("Unexpected error reading generated postsubmits: %v", err)
+			}
+
+			if bytes.Compare(postsubmitData, tc.prowExpectedPostsubmitYAML) != 0 {
+				t.Errorf("Generated Prow postsubmit YAML differs from expected!\n%s", diff.StringDiff(string(tc.prowExpectedPostsubmitYAML), string(postsubmitData)))
+			}
+		})
 	}
 }

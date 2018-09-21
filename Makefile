@@ -18,3 +18,7 @@ lint:
 format:
 	gofmt -s -w $(shell go list -f '{{ .Dir }}' ./... )
 .PHONY: format
+
+integration:
+	test/integration/run.sh
+.PHONY: integration

@@ -465,7 +465,6 @@ func loadClusterConfig() (*rest.Config, error) {
 }
 
 func (o *options) resolveInputs(ctx context.Context, steps []api.Step) error {
-	log.Printf("Resolving inputs for the test")
 	var inputs api.InputDefinition
 	for _, step := range steps {
 		definition, err := step.Inputs(ctx, o.dry)
@@ -492,7 +491,7 @@ func (o *options) resolveInputs(ctx context.Context, steps []api.Step) error {
 	// TODO: instead of mutating this here, we should pass the parts of graph execution that are resolved
 	// after the graph is created but before it is run down into the run step.
 	o.jobSpec.Namespace = o.namespace
-	log.Printf("Resolved inputs, targetting namespace %s", o.namespace)
+	log.Printf("Using namespace %s", o.namespace)
 
 	return nil
 }
@@ -731,11 +730,11 @@ func jobDescription(job *api.JobSpec, config *api.ReleaseBuildConfiguration) str
 func jobSpecFromGitRef(ref string) (*api.JobSpec, error) {
 	parts := strings.Split(ref, "@")
 	if len(parts) != 2 {
-		return nil, fmt.Errorf("must be ORG/NAME@COMMIT")
+		return nil, fmt.Errorf("must be ORG/NAME@REF")
 	}
 	prefix := strings.Split(parts[0], "/")
 	if len(prefix) != 2 {
-		return nil, fmt.Errorf("must be ORG/NAME@COMMIT")
+		return nil, fmt.Errorf("must be ORG/NAME@REF")
 	}
 	repo := fmt.Sprintf("https://github.com/%s/%s.git", prefix[0], prefix[1])
 	out, err := exec.Command("git", "ls-remote", repo, parts[1]).Output()

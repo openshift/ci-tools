@@ -103,9 +103,10 @@ of dynamic parameters that are inferred from previous steps. These parameters ar
   JOB_NAME_HASH
     A short hash of the job name for making tasks unique.
 
-  RPM_REPO
+  RPM_REPO_<org>_<repo>
     If the job creates RPMs this will be the public URL that can be used as the
-    baseurl= value of an RPM repository.
+		baseurl= value of an RPM repository. The value of org and repo are uppercased
+		and dashes are replaced with underscores.
 
 Dynamic environment variables are overriden by process environment variables.
 

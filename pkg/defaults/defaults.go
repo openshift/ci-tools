@@ -3,7 +3,9 @@ package defaults
 import (
 	"crypto/sha256"
 	"fmt"
+	"log"
 	"net/url"
+	"os"
 	"strings"
 
 	appsclientset "k8s.io/client-go/kubernetes/typed/apps/v1"
@@ -102,6 +104,7 @@ func FromConfig(
 	var hasReleaseConfiguration bool
 	for _, rawStep := range stepConfigsForBuild(config, jobSpec) {
 		var step api.Step
+		var stepLinks []api.StepLink
 		if rawStep.InputImageTagStepConfiguration != nil {
 			srcClient, err := anonymousClusterImageStreamClient(imageClient, clusterConfig, rawStep.InputImageTagStepConfiguration.BaseImage.Cluster)
 			if err != nil {
@@ -128,7 +131,7 @@ func FromConfig(
 			step = steps.OutputImageTagStep(*rawStep.OutputImageTagStepConfiguration, imageClient, imageClient, jobSpec)
 			// all required or non-optional output images are considered part of [images]
 			if _, ok := requiredNames[string(rawStep.OutputImageTagStepConfiguration.From)]; ok || !rawStep.OutputImageTagStepConfiguration.Optional {
-				imageStepLinks = append(imageStepLinks, step.Creates()...)
+				stepLinks = append(stepLinks, step.Creates()...)
 			}
 		} else if rawStep.ReleaseImagesTagStepConfiguration != nil {
 			srcClient, err := anonymousClusterImageStreamClient(imageClient, clusterConfig, rawStep.ReleaseImagesTagStepConfiguration.Cluster)
@@ -137,15 +140,30 @@ func FromConfig(
 			}
 			hasReleaseConfiguration = true
 			step = steps.ReleaseImagesTagStep(*rawStep.ReleaseImagesTagStepConfiguration, srcClient, imageClient, routeGetter, configMapGetter, params, jobSpec)
-			imageStepLinks = append(imageStepLinks, step.Creates()...)
+			stepLinks = append(stepLinks, step.Creates()...)
 		} else if rawStep.TestStepConfiguration != nil {
 			step = steps.TestStep(*rawStep.TestStepConfiguration, config.Resources, podClient, artifactDir, jobSpec)
 		}
+
 		provides, link := step.Provides()
-		for name, fn := range provides {
-			params.Add(name, link, fn)
+
+		// if all output parameters of this step are part of the environment, replace
+		// the step with a shim that automatically provides those variables
+		if values, ok := envHasAllParameters(provides); ok {
+			log.Printf("Task %s is satisfied by environment variables and will be skipped", step.Name())
+			step = steps.NewInputEnvironmentStep(step.Name(), values, step.Creates())
+			for k, v := range values {
+				params.Set(k, v)
+			}
+		} else {
+			for name, fn := range provides {
+				params.Add(name, link, fn)
+			}
+			imageStepLinks = append(imageStepLinks, stepLinks...)
 		}
+
 		buildSteps = append(buildSteps, step)
+
 	}
 
 	for _, template := range templates {
@@ -423,4 +441,22 @@ func createStepConfigForGitSource(target api.ProjectDirectoryImageBuildInputs, j
 			ContextDir:     target.ContextDir,
 		},
 	}
+}
+
+func envHasAllParameters(params map[string]func() (string, error)) (map[string]string, bool) {
+	if len(params) == 0 {
+		return nil, false
+	}
+	var values map[string]string
+	for k := range params {
+		v, ok := os.LookupEnv(k)
+		if !ok {
+			return nil, false
+		}
+		if values == nil {
+			values = make(map[string]string)
+		}
+		values[k] = v
+	}
+	return values, true
 }

@@ -39,9 +39,10 @@ func TestGeneratePodSpec(t *testing.T) {
 			expected: &kubeapi.PodSpec{
 				ServiceAccountName: "ci-operator",
 				Containers: []kubeapi.Container{{
-					Image:   "ci-operator:latest",
-					Command: []string{"ci-operator"},
-					Args:    []string{"--artifact-dir=$(ARTIFACTS)", "--target=target"},
+					Image:           "ci-operator:latest",
+					ImagePullPolicy: kubeapi.PullAlways,
+					Command:         []string{"ci-operator"},
+					Args:            []string{"--artifact-dir=$(ARTIFACTS)", "--target=target"},
 					Resources: kubeapi.ResourceRequirements{
 						Requests: kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
 						Limits:   kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(500, resource.DecimalSI)},
@@ -70,9 +71,10 @@ func TestGeneratePodSpec(t *testing.T) {
 			expected: &kubeapi.PodSpec{
 				ServiceAccountName: "ci-operator",
 				Containers: []kubeapi.Container{{
-					Image:   "ci-operator:latest",
-					Command: []string{"ci-operator"},
-					Args:    []string{"--artifact-dir=$(ARTIFACTS)", "--target=target", "--promote", "something"},
+					Image:           "ci-operator:latest",
+					ImagePullPolicy: kubeapi.PullAlways,
+					Command:         []string{"ci-operator"},
+					Args:            []string{"--artifact-dir=$(ARTIFACTS)", "--target=target", "--promote", "something"},
 					Resources: kubeapi.ResourceRequirements{
 						Requests: kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
 						Limits:   kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(500, resource.DecimalSI)},
@@ -713,6 +715,7 @@ func TestFromCIOperatorConfigToProwYaml(t *testing.T) {
               key: branch.yaml
               name: ci-operator-super-duper
         image: ci-operator:latest
+        imagePullPolicy: Always
         name: ""
         resources:
           limits:
@@ -745,6 +748,7 @@ presubmits:
               key: branch.yaml
               name: ci-operator-super-duper
         image: ci-operator:latest
+        imagePullPolicy: Always
         name: ""
         resources:
           limits:
@@ -776,6 +780,7 @@ presubmits:
               key: branch.yaml
               name: ci-operator-super-duper
         image: ci-operator:latest
+        imagePullPolicy: Always
         name: ""
         resources:
           limits:
@@ -831,6 +836,7 @@ presubmits:
               key: branch.yaml
               name: ci-operator-super-duper
         image: ci-operator:latest
+        imagePullPolicy: Always
         name: ""
         resources:
           limits:
@@ -861,6 +867,7 @@ presubmits:
               key: branch.yaml
               name: ci-operator-super-duper
         image: ci-operator:latest
+        imagePullPolicy: Always
         name: ""
         resources:
           limits:
@@ -891,6 +898,7 @@ presubmits:
               key: branch.yaml
               name: ci-operator-super-duper
         image: ci-operator:latest
+        imagePullPolicy: Always
         name: ""
         resources:
           limits:
@@ -923,6 +931,7 @@ presubmits:
               key: branch.yaml
               name: ci-operator-super-duper
         image: ci-operator:latest
+        imagePullPolicy: Always
         name: ""
         resources:
           limits:
@@ -954,6 +963,7 @@ presubmits:
               key: branch.yaml
               name: ci-operator-super-duper
         image: ci-operator:latest
+        imagePullPolicy: Always
         name: ""
         resources:
           limits:
@@ -1013,6 +1023,7 @@ tests:
               key: branch.yaml
               name: ci-operator-super-duper
         image: ci-operator:latest
+        imagePullPolicy: Always
         name: ""
         resources:
           limits:
@@ -1041,6 +1052,7 @@ tests:
               key: branch.yaml
               name: ci-operator-super-duper
         image: ci-operator:latest
+        imagePullPolicy: Always
         name: ""
         resources:
           limits:
@@ -1071,6 +1083,7 @@ tests:
               key: branch.yaml
               name: ci-operator-super-duper
         image: ci-operator:latest
+        imagePullPolicy: Always
         name: ""
         resources:
           limits:
@@ -1103,6 +1116,7 @@ presubmits:
               key: branch.yaml
               name: ci-operator-super-duper
         image: ci-operator:latest
+        imagePullPolicy: Always
         name: ""
         resources:
           limits:
@@ -1134,6 +1148,7 @@ presubmits:
               key: branch.yaml
               name: ci-operator-super-duper
         image: ci-operator:latest
+        imagePullPolicy: Always
         name: ""
         resources:
           limits:

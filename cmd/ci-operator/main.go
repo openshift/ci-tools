@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base32"
+	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"flag"
@@ -289,10 +290,10 @@ func (o *options) Complete() error {
 	jobSpec.BaseNamespace = o.baseNamespace
 	o.jobSpec = jobSpec
 
-	if o.dry {
+	if o.dry && o.verbose {
 		config, _ := yaml.Marshal(o.configSpec)
 		log.Printf("Resolved configuration:\n%s", string(config))
-		job, _ := yaml.Marshal(o.jobSpec)
+		job, _ := json.Marshal(o.jobSpec)
 		log.Printf("Resolved job spec:\n%s", string(job))
 	}
 	refs := o.jobSpec.Refs

@@ -1,162 +1,259 @@
 package api
 
 import (
+	"fmt"
 	"testing"
+
+	kerrors "k8s.io/apimachinery/pkg/util/errors"
 )
 
-func TestValidate(t *testing.T) {
-	dummyInput := InputConfiguration{
-		BuildRootImage: &BuildRootImageConfiguration{
-			ProjectImageBuild: &ProjectDirectoryImageBuildInputs{
-				DockerfilePath: "ignored"}}}
-	var testCases = []struct {
+func TestValidateTests(t *testing.T) {
+	var validationErrors []error
+	var testTestsCases = []struct {
 		id            string
-		config        ReleaseBuildConfiguration
+		tests         []TestStepConfiguration
 		expectedValid bool
 	}{
 		{
 			id: `ReleaseBuildConfiguration{Tests: {As: "unit"}}`,
-			config: ReleaseBuildConfiguration{
-				InputConfiguration: dummyInput,
-				Tests: []TestStepConfiguration{
-					{
-						As:   "unit",
-						From: "ignored",
-					},
+			tests: []TestStepConfiguration{
+				{
+					As:       "unit",
+					From:     "ignored",
+					Commands: "commands",
 				},
 			},
 			expectedValid: true,
 		},
 		{
 			id: `ReleaseBuildConfiguration{Tests: {As: "images"}}`,
-			config: ReleaseBuildConfiguration{
-				InputConfiguration: dummyInput,
-				Tests: []TestStepConfiguration{
-					{
-						As:   "images",
-						From: "ignored",
-					},
+			tests: []TestStepConfiguration{
+				{
+					As:       "images",
+					From:     "ignored",
+					Commands: "commands",
 				},
 			},
 			expectedValid: false,
 		},
 		{
 			id: "test with `from`",
-			config: ReleaseBuildConfiguration{
-				InputConfiguration: dummyInput,
-				Tests: []TestStepConfiguration{
-					{
-						As:   "test",
-						From: "from",
-					},
+			tests: []TestStepConfiguration{
+				{
+					As:       "test",
+					From:     "from",
+					Commands: "commands",
 				},
 			},
 			expectedValid: true,
 		},
 		{
 			id: "No test type",
-			config: ReleaseBuildConfiguration{
-				InputConfiguration: dummyInput,
-				Tests: []TestStepConfiguration{
-					{
-						As: "test",
-					},
+			tests: []TestStepConfiguration{
+				{
+					As:       "test",
+					Commands: "commands",
 				},
 			},
 			expectedValid: false,
 		},
 		{
 			id: "Multiple test types",
-			config: ReleaseBuildConfiguration{
-				InputConfiguration: dummyInput,
-				Tests: []TestStepConfiguration{
-					{
-						As: "test",
-						ContainerTestConfiguration: &ContainerTestConfiguration{},
-						OpenshiftAnsibleClusterTestConfiguration: &OpenshiftAnsibleClusterTestConfiguration{
-							ClusterTestConfiguration{TargetCloud: TargetCloudGCP}},
-					},
+			tests: []TestStepConfiguration{
+				{
+					As:                         "test",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &ContainerTestConfiguration{},
+					OpenshiftAnsibleClusterTestConfiguration: &OpenshiftAnsibleClusterTestConfiguration{
+						ClusterTestConfiguration{TargetCloud: TargetCloudGCP}},
 				},
 			},
 			expectedValid: false,
 		},
 		{
 			id: "From + ContainerTestConfiguration",
-			config: ReleaseBuildConfiguration{
-				InputConfiguration: dummyInput,
-				Tests: []TestStepConfiguration{
-					{
-						As:   "test",
-						From: "from",
-						ContainerTestConfiguration: &ContainerTestConfiguration{},
-					},
+			tests: []TestStepConfiguration{
+				{
+					As:       "test",
+					Commands: "commands",
+					From:     "from",
+					ContainerTestConfiguration: &ContainerTestConfiguration{},
 				},
 			},
 			expectedValid: false,
 		},
 		{
 			id: "container test without `from`",
-			config: ReleaseBuildConfiguration{
-				InputConfiguration: dummyInput,
-				Tests: []TestStepConfiguration{
-					{
-						As: "test",
-						ContainerTestConfiguration: &ContainerTestConfiguration{},
-					},
+			tests: []TestStepConfiguration{
+				{
+					As:                         "test",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &ContainerTestConfiguration{},
+				},
+			},
+			expectedValid: false,
+		},
+		{
+			id: "test without `commands`",
+			tests: []TestStepConfiguration{
+				{
+					As:   "test",
+					From: "from",
+				},
+			},
+			expectedValid: false,
+		},
+		{
+			id: "test with duplicated `as`",
+			tests: []TestStepConfiguration{
+				{
+					As:       "test",
+					From:     "from",
+					Commands: "commands",
+				},
+				{
+					As:       "test",
+					From:     "from",
+					Commands: "commands",
+				},
+			},
+			expectedValid: false,
+		},
+		{
+			id: "test without `as`",
+			tests: []TestStepConfiguration{
+				{
+					Commands: "test",
 				},
 			},
 			expectedValid: false,
 		},
 		{
 			id: "invalid target cloud",
-			config: ReleaseBuildConfiguration{
-				InputConfiguration: dummyInput,
-				Tests: []TestStepConfiguration{
-					{
-						As: "test",
-						OpenshiftAnsibleClusterTestConfiguration: &OpenshiftAnsibleClusterTestConfiguration{},
-					},
-				},
-			},
-			expectedValid: false,
-		},
-		{
-			id: "both git_source_image and image_stream_tag in build_root defined causes error",
-			config: ReleaseBuildConfiguration{
-				InputConfiguration: InputConfiguration{
-					BuildRootImage: &BuildRootImageConfiguration{
-						ImageStreamTagReference: &ImageStreamTagReference{
-							Cluster:   "test_cluster",
-							Namespace: "test_namespace",
-							Name:      "test_name",
-							Tag:       "test",
-						},
-						ProjectImageBuild: &ProjectDirectoryImageBuildInputs{
-							ContextDir:     "/",
-							DockerfilePath: "Dockerfile.test",
-						},
-					},
-				},
-			},
-			expectedValid: false,
-		},
-		{
-			id: "build root without any content causes an error",
-			config: ReleaseBuildConfiguration{
-				InputConfiguration: InputConfiguration{
-					BuildRootImage: &BuildRootImageConfiguration{},
+			tests: []TestStepConfiguration{
+				{
+					As: "test",
+					OpenshiftAnsibleClusterTestConfiguration: &OpenshiftAnsibleClusterTestConfiguration{},
 				},
 			},
 			expectedValid: false,
 		},
 	}
 
-	for _, tc := range testCases {
-		err := tc.config.Validate()
-		if tc.expectedValid && err != nil {
-			t.Errorf("%q expected to be valid, got 'Error(%v)' instead", tc.id, err)
+	for _, tc := range testTestsCases {
+		if err := validateTestStepConfiguration("tests", tc.tests); err != nil && tc.expectedValid {
+			validationErrors = append(validationErrors, parseError(tc.id, err))
 		} else if !tc.expectedValid && err == nil {
-			t.Errorf("%q expected to be invalid, Validate() returned valid", tc.id)
+			validationErrors = append(validationErrors, parseValidError(tc.id))
 		}
 	}
+
+	if validationErrors != nil {
+		t.Errorf("Errors: %v", kerrors.NewAggregate(validationErrors))
+	}
+}
+
+func TestValidateBuildRoot(t *testing.T) {
+	var validationErrors []error
+	var testBuildRootCases = []struct {
+		id                   string
+		buildRootImageConfig BuildRootImageConfiguration
+		expectedValid        bool
+	}{
+		{
+			id: "both project_image and image_stream_tag in build_root defined causes error",
+			buildRootImageConfig: BuildRootImageConfiguration{
+				ImageStreamTagReference: &ImageStreamTagReference{
+					Cluster:   "https://test.org",
+					Namespace: "test_namespace",
+					Name:      "test_name",
+					Tag:       "test",
+				},
+				ProjectImageBuild: &ProjectDirectoryImageBuildInputs{
+					ContextDir:     "/",
+					DockerfilePath: "Dockerfile.test",
+				},
+			},
+			expectedValid: false,
+		},
+		{
+			id:                   "build root without any content causes an error",
+			buildRootImageConfig: BuildRootImageConfiguration{},
+			expectedValid:        false,
+		},
+	}
+
+	for _, tc := range testBuildRootCases {
+		if err := validateBuildRootImageConfiguration("build_root", &tc.buildRootImageConfig); err != nil && tc.expectedValid {
+			validationErrors = append(validationErrors, parseError(tc.id, err))
+		} else if !tc.expectedValid && err == nil {
+			validationErrors = append(validationErrors, parseValidError(tc.id))
+		}
+	}
+	if validationErrors != nil {
+		t.Errorf("Errors: %v", kerrors.NewAggregate(validationErrors))
+	}
+}
+
+func TestValidateBaseImages(t *testing.T) {
+	var validationErrors []error
+	var testBaseImagesCases = []struct {
+		id            string
+		baseImages    map[string]ImageStreamTagReference
+		expectedValid bool
+	}{
+		{
+			id: "base images",
+			baseImages: map[string]ImageStreamTagReference{"test": {Cluster: "test"},
+				"test2": {Tag: "test2"}, "test3": {Cluster: "test3"},
+			},
+			expectedValid: false,
+		},
+	}
+	for _, tc := range testBaseImagesCases {
+		if err := validateImageStreamTagReferenceMap("base_images", tc.baseImages); err != nil && tc.expectedValid {
+			validationErrors = append(validationErrors, parseError(tc.id, err))
+		} else if !tc.expectedValid && err == nil {
+			validationErrors = append(validationErrors, parseValidError(tc.id))
+		}
+	}
+	if validationErrors != nil {
+		t.Errorf("Errors: %v", kerrors.NewAggregate(validationErrors))
+	}
+}
+
+func TestValidateBaseRpmImages(t *testing.T) {
+	var validationErrors []error
+	var testBaseRpmImagesCases = []struct {
+		id            string
+		baseRpmImages map[string]ImageStreamTagReference
+		expectedValid bool
+	}{
+		{
+			id: "base rpm images",
+			baseRpmImages: map[string]ImageStreamTagReference{"test": {Cluster: "test"},
+				"test2": {Tag: "test2"}, "test3": {Cluster: "test3"},
+			},
+			expectedValid: false,
+		},
+	}
+
+	for _, tc := range testBaseRpmImagesCases {
+		if err := validateImageStreamTagReferenceMap("base_rpm_images", tc.baseRpmImages); err != nil && tc.expectedValid {
+			validationErrors = append(validationErrors, parseError(tc.id, err))
+		} else if !tc.expectedValid && err == nil {
+			validationErrors = append(validationErrors, parseValidError(tc.id))
+		}
+	}
+	if validationErrors != nil {
+		t.Errorf("Errors: %v", kerrors.NewAggregate(validationErrors))
+	}
+}
+
+func parseError(id string, err error) error {
+	return fmt.Errorf("%q expected to be valid, got 'Error(%v)' instead", id, err)
+}
+
+func parseValidError(id string) error {
+	return fmt.Errorf("%q expected to be invalid, but returned valid", id)
 }

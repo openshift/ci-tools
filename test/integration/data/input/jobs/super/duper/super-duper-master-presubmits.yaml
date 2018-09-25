@@ -1,0 +1,20 @@
+presubmits:
+  super/duper:
+  - agent: jenkins
+    branches:
+    - master
+    name: pull-ci-super-duper-master-legacy
+    always_run: true
+    context: ci/openshift-jenkins/legacy
+    labels:
+      master: ci.openshift.redhat.com
+    rerun_command: /test legacy
+    trigger: ((?m)^/test( all| legacy),?(\s+|$))
+  - agent: jenkins
+    name: pull-ci-super-duper-oldschool
+    always_run: true
+    context: ci/openshift-jenkins/oldschool
+    labels:
+      master: ci.openshift.redhat.com
+    rerun_command: /test oldschool
+    trigger: ((?m)^/test( all| oldschool),?(\s+|$))

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 
 	prowconfig "k8s.io/test-infra/prow/config"
 
@@ -34,31 +33,21 @@ func determinizeJobs(prowJobConfigDir string) error {
 			return nil
 		}
 
-		if !info.IsDir() && filepath.Ext(path) == ".yaml" {
+		if info.IsDir() && filepath.Clean(filepath.Dir(filepath.Dir(path))) == filepath.Clean(prowJobConfigDir) {
 			var jobConfig *prowconfig.JobConfig
-			if jobConfig, err = jc.ReadFromFile(path); err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to read Prow job config from '%s' (%v)", path, err)
-				return nil
+			if jobConfig, err = jc.ReadFromDir(path); err != nil {
+				return fmt.Errorf("failed to read Prow job config from '%s' (%v)", path, err)
 			}
 
-			for repo := range jobConfig.Presubmits {
-				sort.Slice(jobConfig.Presubmits[repo], func(i, j int) bool {
-					return jobConfig.Presubmits[repo][i].Name < jobConfig.Presubmits[repo][j].Name
-				})
-			}
-			for repo := range jobConfig.Postsubmits {
-				sort.Slice(jobConfig.Postsubmits[repo], func(i, j int) bool {
-					return jobConfig.Postsubmits[repo][i].Name < jobConfig.Postsubmits[repo][j].Name
-				})
-			}
-			if err := jc.WriteToFile(path, jobConfig); err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to write Prow job config to '%s' (%v)", path, err)
-				return nil
+			repo := filepath.Base(path)
+			org := filepath.Base(filepath.Dir(path))
+			if err := jc.WriteToDir(prowJobConfigDir, org, repo, jobConfig); err != nil {
+				return fmt.Errorf("failed to write Prow job config to '%s' (%v)", path, err)
 			}
 		}
 		return nil
 	}); err != nil {
-		return fmt.Errorf("Failed to determinize all Prow jobs")
+		return fmt.Errorf("failed to determinize all Prow jobs: %v", err)
 	}
 
 	return nil
@@ -80,7 +69,7 @@ func main() {
 
 		}
 	} else {
-		fmt.Fprintf(os.Stderr, "determinize tool needs the --prow-jobs-dir\n")
+		fmt.Fprintln(os.Stderr, "determinize tool needs the --prow-jobs-dir")
 		os.Exit(1)
 	}
 }

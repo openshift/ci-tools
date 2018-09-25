@@ -1,0 +1,27 @@
+base_images:
+  base:
+    cluster: https://api.ci.openshift.org
+    name: origin-v4.0
+    namespace: openshift
+    tag: base
+images:
+- from: base
+  to: test-image
+tag_specification:
+  cluster: https://api.ci.openshift.org
+  name: origin-v4.0
+  namespace: openshift
+  tag: ''
+build_root:
+  image_stream_tag:
+    cluster: https://api.ci.openshift.org
+    namespace: openshift
+    name: release
+    tag: golang-1.10
+tests:
+- as: unit
+  commands: make test-unit
+  from: src
+- as: lint
+  commands: make test-lint
+  from: src

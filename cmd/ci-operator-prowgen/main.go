@@ -6,7 +6,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/ghodss/yaml"
@@ -26,7 +25,6 @@ type options struct {
 	fromDir         string
 	fromReleaseRepo bool
 
-	toFile        string
 	toDir         string
 	toReleaseRepo bool
 
@@ -40,7 +38,6 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.StringVar(&opt.fromDir, "from-dir", "", "Path to a directory with a directory structure holding ci-operator configuration files for multiple components")
 	flag.BoolVar(&opt.fromReleaseRepo, "from-release-repo", false, "If set, it behaves like --from-dir=$GOPATH/src/github.com/openshift/release/ci-operator/config")
 
-	flag.StringVar(&opt.toFile, "to-file", "", "Path to a Prow job configuration file where new jobs will be added. If the file does not exist, it will be created")
 	flag.StringVar(&opt.toDir, "to-dir", "", "Path to a directory with a directory structure holding Prow job configuration files for multiple components")
 	flag.BoolVar(&opt.toReleaseRepo, "to-release-repo", false, "If set, it behaves like --to-dir=$GOPATH/src/github.com/openshift/release/ci-operator/jobs")
 
@@ -68,8 +65,8 @@ func (o *options) process() error {
 		return fmt.Errorf("ci-operator-prowgen needs exactly one of `--from-{file,dir,release-repo}` options")
 	}
 
-	if (o.toFile == "" && o.toDir == "") || (o.toFile != "" && o.toDir != "") {
-		return fmt.Errorf("ci-operator-prowgen needs exactly one of `--to-{file,dir,release-repo}` options")
+	if o.toDir == "" {
+		return fmt.Errorf("ci-operator-prowgen needs exactly one of `--to-{dir,release-repo}` options")
 	}
 
 	return nil
@@ -241,12 +238,12 @@ func extractRepoElementsFromPath(configFilePath string) (*configFilePathElements
 	configSpecDir := filepath.Dir(configFilePath)
 	repo := filepath.Base(configSpecDir)
 	if repo == "." || repo == "/" {
-		return nil, fmt.Errorf("Could not extract repo from '%s' (expected path like '.../ORG/REPO/BRANCH.yaml", configFilePath)
+		return nil, fmt.Errorf("could not extract repo from '%s' (expected path like '.../ORG/REPO/BRANCH.yaml", configFilePath)
 	}
 
 	org := filepath.Base(filepath.Dir(configSpecDir))
 	if org == "." || org == "/" {
-		return nil, fmt.Errorf("Could not extract org from '%s' (expected path like '.../ORG/REPO/BRANCH.yaml", configFilePath)
+		return nil, fmt.Errorf("could not extract org from '%s' (expected path like '.../ORG/REPO/BRANCH.yaml", configFilePath)
 	}
 
 	fileName := filepath.Base(configFilePath)
@@ -270,32 +267,6 @@ func generateProwJobsFromConfigFile(configFilePath string) (*prowconfig.JobConfi
 	return jobConfig, repoInfo, nil
 }
 
-// Given a JobConfig and a target directory, write the Prow job configuration
-// into files in that directory. Presubmits and postsubmit jobs are written
-// into separate files. If target files already exist and contain Prow job
-// configuration, the jobs will be merged.
-func writeJobsIntoComponentDirectory(jobDir, org, repo string, jobConfig *prowconfig.JobConfig) error {
-	jobDirForComponent := filepath.Join(jobDir, org, repo)
-	os.MkdirAll(jobDirForComponent, os.ModePerm)
-	presubmitPath := filepath.Join(jobDirForComponent, fmt.Sprintf("%s-%s-presubmits.yaml", org, repo))
-	postsubmitPath := filepath.Join(jobDirForComponent, fmt.Sprintf("%s-%s-postsubmits.yaml", org, repo))
-
-	presubmits := *jobConfig
-	presubmits.Postsubmits = nil
-	postsubmits := *jobConfig
-	postsubmits.Presubmits = nil
-
-	if err := mergeJobsIntoFile(presubmitPath, &presubmits); err != nil {
-		return err
-	}
-
-	if err := mergeJobsIntoFile(postsubmitPath, &postsubmits); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func isConfigFile(path string, info os.FileInfo) bool {
 	extension := filepath.Ext(path)
 	return !info.IsDir() && (extension == ".yaml" || extension == ".yml" || extension == ".json")
@@ -304,7 +275,7 @@ func isConfigFile(path string, info os.FileInfo) bool {
 // Iterate over all ci-operator config files under a given path and generate a
 // Prow job configuration files for each one under a different path, mimicking
 // the directory structure.
-func generateJobsFromDirectory(configDir, jobDir, jobFile string) error {
+func generateJobsFromDirectory(configDir, jobDir string) error {
 	err := filepath.Walk(configDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			logrus.WithError(err).Error("Error encontered while generating Prow job config")
@@ -316,101 +287,14 @@ func generateJobsFromDirectory(configDir, jobDir, jobFile string) error {
 				return err
 			}
 
-			if len(jobDir) > 0 {
-				if err = writeJobsIntoComponentDirectory(jobDir, repoInfo.org, repoInfo.repo, jobConfig); err != nil {
-					return err
-				}
-			} else if len(jobFile) > 0 {
-				if err = mergeJobsIntoFile(jobFile, jobConfig); err != nil {
-					return err
-				}
+			if err = jc.WriteToDir(jobDir, repoInfo.org, repoInfo.repo, jobConfig); err != nil {
+				return err
 			}
 		}
 		return nil
 	})
 
 	return err
-}
-
-// Given two JobConfig, merge jobs from the `source` one to to `destination`
-// one. Jobs are matched by name. All jobs from `source` will be present in
-// `destination` - if there were jobs with the same name in `destination`, they
-// will be overwritten. All jobs in `destination` that are not overwritten this
-// way stay untouched.
-func mergeJobConfig(destination, source *prowconfig.JobConfig) {
-	// We do the same thing for both Presubmits and Postsubmits
-	if source.Presubmits != nil {
-		if destination.Presubmits == nil {
-			destination.Presubmits = map[string][]prowconfig.Presubmit{}
-		}
-		for repo, jobs := range source.Presubmits {
-			oldPresubmits, _ := destination.Presubmits[repo]
-			destination.Presubmits[repo] = []prowconfig.Presubmit{}
-			newJobs := map[string]prowconfig.Presubmit{}
-			for _, job := range jobs {
-				newJobs[job.Name] = job
-			}
-			for _, newJob := range source.Presubmits[repo] {
-				destination.Presubmits[repo] = append(destination.Presubmits[repo], newJob)
-			}
-
-			for _, oldJob := range oldPresubmits {
-				if _, hasKey := newJobs[oldJob.Name]; !hasKey {
-					destination.Presubmits[repo] = append(destination.Presubmits[repo], oldJob)
-				}
-			}
-		}
-	}
-	if source.Postsubmits != nil {
-		if destination.Postsubmits == nil {
-			destination.Postsubmits = map[string][]prowconfig.Postsubmit{}
-		}
-		for repo, jobs := range source.Postsubmits {
-			oldPostsubmits, _ := destination.Postsubmits[repo]
-			destination.Postsubmits[repo] = []prowconfig.Postsubmit{}
-			newJobs := map[string]prowconfig.Postsubmit{}
-			for _, job := range jobs {
-				newJobs[job.Name] = job
-			}
-			for _, newJob := range source.Postsubmits[repo] {
-				destination.Postsubmits[repo] = append(destination.Postsubmits[repo], newJob)
-			}
-
-			for _, oldJob := range oldPostsubmits {
-				if _, hasKey := newJobs[oldJob.Name]; !hasKey {
-					destination.Postsubmits[repo] = append(destination.Postsubmits[repo], oldJob)
-				}
-			}
-		}
-	}
-}
-
-// Given a JobConfig and a file path, write YAML representation of the config
-// to the file path. If the file already contains some jobs, new ones will be
-// merged with the existing ones.
-func mergeJobsIntoFile(prowConfigPath string, jobConfig *prowconfig.JobConfig) error {
-	existingJobConfig, err := jc.ReadFromFile(prowConfigPath)
-	if err != nil {
-		existingJobConfig = &prowconfig.JobConfig{}
-	}
-
-	mergeJobConfig(existingJobConfig, jobConfig)
-	for repo := range existingJobConfig.Presubmits {
-		sort.Slice(existingJobConfig.Presubmits[repo], func(i, j int) bool {
-			return existingJobConfig.Presubmits[repo][i].Name < existingJobConfig.Presubmits[repo][j].Name
-		})
-	}
-	for repo := range existingJobConfig.Postsubmits {
-		sort.Slice(existingJobConfig.Postsubmits[repo], func(i, j int) bool {
-			return existingJobConfig.Postsubmits[repo][i].Name < existingJobConfig.Postsubmits[repo][j].Name
-		})
-	}
-
-	if err = jc.WriteToFile(prowConfigPath, existingJobConfig); err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func getReleaseRepoDir(directory string) (string, error) {
@@ -445,18 +329,12 @@ func main() {
 		if err != nil {
 			logrus.WithError(err).WithField("source-file", opt.fromFile).Fatal("Failed to generate jobs")
 		}
-		if len(opt.toFile) > 0 { // from file to file
-			if err := mergeJobsIntoFile(opt.toFile, jobConfig); err != nil {
-				logrus.WithError(err).WithField("target-file", opt.toFile).Fatal("Failed to write jobs to file")
-			}
-		} else { // from file to directory
-			if err := writeJobsIntoComponentDirectory(opt.toDir, repoInfo.org, repoInfo.repo, jobConfig); err != nil {
-				logrus.WithError(err).WithField("target-dir", opt.toDir).Fatal("Failed to write jobs to directory")
-			}
+		if err := jc.WriteToDir(opt.toDir, repoInfo.org, repoInfo.repo, jobConfig); err != nil {
+			logrus.WithError(err).WithField("target-dir", opt.toDir).Fatal("Failed to write jobs to directory")
 		}
 	} else { // from directory
-		if err := generateJobsFromDirectory(opt.fromDir, opt.toDir, opt.toFile); err != nil {
-			fields := logrus.Fields{"target-dir": opt.toDir, "target-file": opt.toFile, "source-dir": opt.fromDir}
+		if err := generateJobsFromDirectory(opt.fromDir, opt.toDir); err != nil {
+			fields := logrus.Fields{"target-dir": opt.toDir, "source-dir": opt.fromDir}
 			logrus.WithError(err).WithFields(fields).Fatal("Failed to generate jobs")
 		}
 	}

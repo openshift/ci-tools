@@ -1,0 +1,39 @@
+postsubmits:
+  super/duper:
+  - agent: kubernetes
+    branches:
+    - release-3.11
+    decorate: true
+    labels:
+      artifacts: images
+    name: branch-ci-super-duper-release-3.11-images
+    skip_cloning: true
+    spec:
+      containers:
+      - args:
+        - --artifact-dir=$(ARTIFACTS)
+        - --target=[images]
+        - --promote
+        command:
+        - ci-operator
+        env:
+        - name: CONFIG_SPEC
+          valueFrom:
+            configMapKeyRef:
+              key: release-3.11.yaml
+              name: ci-operator-super-duper
+        image: ci-operator:latest
+        imagePullPolicy: Always
+        name: ""
+        resources:
+          limits:
+            cpu: 500m
+          requests:
+            cpu: 10m
+      serviceAccountName: ci-operator
+  - agent: jenkins
+    branches:
+    - release-3.11
+    labels:
+      master: ci.openshift.redhat.com
+    name: branch-ci-super-duper-release-3.11-legacy

@@ -1,0 +1,9 @@
+postsubmits:
+  super/duper:
+  - agent: jenkins
+    branches:
+    - master
+    name: branch-ci-super-duper-master-legacy
+    always_run: true
+    labels:
+      master: ci.openshift.redhat.com

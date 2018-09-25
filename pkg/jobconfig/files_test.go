@@ -5,6 +5,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/util/diff"
+	"k8s.io/apimachinery/pkg/util/sets"
 	prowconfig "k8s.io/test-infra/prow/config"
 )
 
@@ -74,9 +75,11 @@ func TestMergeConfigs(t *testing.T) {
 
 func TestMergeJobConfig(t *testing.T) {
 	tests := []struct {
+		allJobs                       sets.String
 		destination, source, expected *prowconfig.JobConfig
 	}{
 		{
+			allJobs:     sets.String{},
 			destination: &prowconfig.JobConfig{},
 			source: &prowconfig.JobConfig{
 				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
@@ -89,6 +92,7 @@ func TestMergeJobConfig(t *testing.T) {
 				}},
 			},
 		}, {
+			allJobs: sets.String{},
 			destination: &prowconfig.JobConfig{
 				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
 					{Name: "another-job", Context: "ci/prow/another"},
@@ -106,6 +110,7 @@ func TestMergeJobConfig(t *testing.T) {
 				}},
 			},
 		}, {
+			allJobs: sets.String{},
 			destination: &prowconfig.JobConfig{
 				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
 					{Name: "same-job", Context: "ci/prow/same"},
@@ -122,6 +127,7 @@ func TestMergeJobConfig(t *testing.T) {
 				}},
 			},
 		}, {
+			allJobs:     sets.String{},
 			destination: &prowconfig.JobConfig{},
 			source: &prowconfig.JobConfig{
 				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {
@@ -134,6 +140,7 @@ func TestMergeJobConfig(t *testing.T) {
 				}},
 			},
 		}, {
+			allJobs: sets.String{},
 			destination: &prowconfig.JobConfig{
 				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {
 					{Name: "another-job", Agent: "ci/prow/another"},
@@ -151,6 +158,7 @@ func TestMergeJobConfig(t *testing.T) {
 				}},
 			},
 		}, {
+			allJobs: sets.String{},
 			destination: &prowconfig.JobConfig{
 				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {
 					{Name: "same-job", Agent: "ci/prow/same"},
@@ -167,6 +175,7 @@ func TestMergeJobConfig(t *testing.T) {
 				}},
 			},
 		}, {
+			allJobs: sets.String{},
 			destination: &prowconfig.JobConfig{
 				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {
 					{Name: "same-job", Agent: "ci/prow/same"},
@@ -180,12 +189,32 @@ func TestMergeJobConfig(t *testing.T) {
 			expected: &prowconfig.JobConfig{
 				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {
 					{Name: "same-job", Agent: "ci/prow/same"},
+				}},
+			},
+		}, {
+			allJobs: sets.NewString("other-job"),
+			destination: &prowconfig.JobConfig{
+				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {
+					{Name: "same-job", Agent: "ci/prow/same"},
+					{Name: "other-job", Agent: "ci/prow/same"},
+					{Name: "old-job", Agent: "ci/prow/same"},
+				}},
+			},
+			source: &prowconfig.JobConfig{
+				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {
+					{Name: "same-job", Agent: "ci/prow/same"},
+				}},
+			},
+			expected: &prowconfig.JobConfig{
+				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {
+					{Name: "same-job", Agent: "ci/prow/same"},
+					{Name: "old-job", Agent: "ci/prow/same"},
 				}},
 			},
 		},
 	}
 	for _, tc := range tests {
-		mergeJobConfig(tc.destination, tc.source)
+		mergeJobConfig(tc.destination, tc.source, tc.allJobs)
 
 		if !equality.Semantic.DeepEqual(tc.destination, tc.expected) {
 			t.Errorf("expected merged job config diff:\n%s", diff.ObjectDiff(tc.expected, tc.destination))

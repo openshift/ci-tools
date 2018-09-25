@@ -9,6 +9,7 @@ import (
 
 	"github.com/ghodss/yaml"
 
+	"k8s.io/apimachinery/pkg/util/sets"
 	prowconfig "k8s.io/test-infra/prow/config"
 )
 
@@ -92,9 +93,11 @@ func readFromFile(path string) (*prowconfig.JobConfig, error) {
 // target files already exist and contain Prow job configuration, the jobs will
 // be merged.
 func WriteToDir(jobDir, org, repo string, jobConfig *prowconfig.JobConfig) error {
+	allJobs := sets.String{}
 	files := map[string]*prowconfig.JobConfig{}
 	key := fmt.Sprintf("%s/%s", org, repo)
 	for _, job := range jobConfig.Presubmits[key] {
+		allJobs.Insert(job.Name)
 		branch := "master"
 		if len(job.Branches) > 0 {
 			branch = job.Branches[0]
@@ -109,6 +112,7 @@ func WriteToDir(jobDir, org, repo string, jobConfig *prowconfig.JobConfig) error
 		}
 	}
 	for _, job := range jobConfig.Postsubmits[key] {
+		allJobs.Insert(job.Name)
 		branch := "master"
 		if len(job.Branches) > 0 {
 			branch = job.Branches[0]
@@ -128,7 +132,7 @@ func WriteToDir(jobDir, org, repo string, jobConfig *prowconfig.JobConfig) error
 		return err
 	}
 	for file := range files {
-		if err := mergeJobsIntoFile(filepath.Join(jobDirForComponent, file), files[file]); err != nil {
+		if err := mergeJobsIntoFile(filepath.Join(jobDirForComponent, file), files[file], allJobs); err != nil {
 			return err
 		}
 	}
@@ -139,13 +143,13 @@ func WriteToDir(jobDir, org, repo string, jobConfig *prowconfig.JobConfig) error
 // Given a JobConfig and a file path, write YAML representation of the config
 // to the file path. If the file already contains some jobs, new ones will be
 // merged with the existing ones.
-func mergeJobsIntoFile(prowConfigPath string, jobConfig *prowconfig.JobConfig) error {
+func mergeJobsIntoFile(prowConfigPath string, jobConfig *prowconfig.JobConfig, allJobs sets.String) error {
 	existingJobConfig, err := readFromFile(prowConfigPath)
 	if err != nil {
 		existingJobConfig = &prowconfig.JobConfig{}
 	}
 
-	mergeJobConfig(existingJobConfig, jobConfig)
+	mergeJobConfig(existingJobConfig, jobConfig, allJobs)
 	for repo := range existingJobConfig.Presubmits {
 		sort.Slice(existingJobConfig.Presubmits[repo], func(i, j int) bool {
 			return existingJobConfig.Presubmits[repo][i].Name < existingJobConfig.Presubmits[repo][j].Name
@@ -164,8 +168,8 @@ func mergeJobsIntoFile(prowConfigPath string, jobConfig *prowconfig.JobConfig) e
 // one. Jobs are matched by name. All jobs from `source` will be present in
 // `destination` - if there were jobs with the same name in `destination`, they
 // will be overwritten. All jobs in `destination` that are not overwritten this
-// way stay untouched.
-func mergeJobConfig(destination, source *prowconfig.JobConfig) {
+// way and are not otherwise in the set of all jobs being written stay untouched.
+func mergeJobConfig(destination, source *prowconfig.JobConfig, allJobs sets.String) {
 	// We do the same thing for both Presubmits and Postsubmits
 	if source.Presubmits != nil {
 		if destination.Presubmits == nil {
@@ -183,7 +187,7 @@ func mergeJobConfig(destination, source *prowconfig.JobConfig) {
 			}
 
 			for _, oldJob := range oldPresubmits {
-				if _, hasKey := newJobs[oldJob.Name]; !hasKey {
+				if _, hasKey := newJobs[oldJob.Name]; !hasKey && !allJobs.Has(oldJob.Name) {
 					destination.Presubmits[repo] = append(destination.Presubmits[repo], oldJob)
 				}
 			}
@@ -205,7 +209,7 @@ func mergeJobConfig(destination, source *prowconfig.JobConfig) {
 			}
 
 			for _, oldJob := range oldPostsubmits {
-				if _, hasKey := newJobs[oldJob.Name]; !hasKey {
+				if _, hasKey := newJobs[oldJob.Name]; !hasKey && !allJobs.Has(oldJob.Name) {
 					destination.Postsubmits[repo] = append(destination.Postsubmits[repo], oldJob)
 				}
 			}

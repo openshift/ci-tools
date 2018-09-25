@@ -23,6 +23,7 @@ presubmits:
               key: master.yaml
               name: ci-operator-super-duper
         image: ci-operator:latest
+        imagePullPolicy: Always
         name: ""
         resources:
           limits:
@@ -35,7 +36,7 @@ presubmits:
     always_run: true
     branches:
     - master
-    context: ci/openshift-jenkins/jegacy
+    context: ci/openshift-jenkins/legacy
     labels:
       master: ci.openshift.redhat.com
     name: pull-ci-super-duper-master-legacy
@@ -64,6 +65,7 @@ presubmits:
               key: master.yaml
               name: ci-operator-super-duper
         image: ci-operator:latest
+        imagePullPolicy: Always
         name: ""
         resources:
           limits:
@@ -95,6 +97,7 @@ presubmits:
               key: master.yaml
               name: ci-operator-super-duper
         image: ci-operator:latest
+        imagePullPolicy: Always
         name: ""
         resources:
           limits:
@@ -103,3 +106,11 @@ presubmits:
             cpu: 10m
       serviceAccountName: ci-operator
     trigger: ((?m)^/test( all| unit),?(\s+|$))
+  - agent: jenkins
+    always_run: true
+    context: ci/openshift-jenkins/oldschool
+    labels:
+      master: ci.openshift.redhat.com
+    name: pull-ci-super-duper-oldschool
+    rerun_command: /test oldschool
+    trigger: ((?m)^/test( all| oldschool),?(\s+|$))

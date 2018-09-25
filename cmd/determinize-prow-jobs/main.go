@@ -33,7 +33,7 @@ func determinizeJobs(prowJobConfigDir string) error {
 			return nil
 		}
 
-		if info.IsDir() && filepath.Dir(filepath.Dir(path)) == prowJobConfigDir {
+		if info.IsDir() && filepath.Clean(filepath.Dir(filepath.Dir(path))) == filepath.Clean(prowJobConfigDir) {
 			var jobConfig *prowconfig.JobConfig
 			if jobConfig, err = jc.ReadFromDir(path); err != nil {
 				return fmt.Errorf("failed to read Prow job config from '%s' (%v)", path, err)

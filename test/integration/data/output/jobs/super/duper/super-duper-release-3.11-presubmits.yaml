@@ -23,6 +23,7 @@ presubmits:
               key: release-3.11.yaml
               name: ci-operator-super-duper
         image: ci-operator:latest
+        imagePullPolicy: Always
         name: ""
         resources:
           limits:
@@ -35,7 +36,7 @@ presubmits:
     always_run: true
     branches:
     - release-3.11
-    context: ci/openshift-jenkins/jegacy
+    context: ci/openshift-jenkins/legacy
     labels:
       master: ci.openshift.redhat.com
     name: pull-ci-super-duper-release-3.11-legacy
@@ -64,6 +65,7 @@ presubmits:
               key: release-3.11.yaml
               name: ci-operator-super-duper
         image: ci-operator:latest
+        imagePullPolicy: Always
         name: ""
         resources:
           limits:
@@ -95,6 +97,7 @@ presubmits:
               key: release-3.11.yaml
               name: ci-operator-super-duper
         image: ci-operator:latest
+        imagePullPolicy: Always
         name: ""
         resources:
           limits:

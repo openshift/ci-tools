@@ -95,7 +95,11 @@ func WriteToDir(jobDir, org, repo string, jobConfig *prowconfig.JobConfig) error
 	files := map[string]*prowconfig.JobConfig{}
 	key := fmt.Sprintf("%s/%s", org, repo)
 	for _, job := range jobConfig.Presubmits[key] {
-		file := fmt.Sprintf("%s-%s-%s-presubmits.yaml", org, repo, job.Branches[0])
+		branch := "master"
+		if len(job.Branches) > 0 {
+			branch = job.Branches[0]
+		}
+		file := fmt.Sprintf("%s-%s-%s-presubmits.yaml", org, repo, branch)
 		if _, ok := files[file]; ok {
 			files[file].Presubmits[key] = append(files[file].Presubmits[key], job)
 		} else {
@@ -105,7 +109,11 @@ func WriteToDir(jobDir, org, repo string, jobConfig *prowconfig.JobConfig) error
 		}
 	}
 	for _, job := range jobConfig.Postsubmits[key] {
-		file := fmt.Sprintf("%s-%s-%s-postsubmits.yaml", org, repo, job.Branches[0])
+		branch := "master"
+		if len(job.Branches) > 0 {
+			branch = job.Branches[0]
+		}
+		file := fmt.Sprintf("%s-%s-%s-postsubmits.yaml", org, repo, branch)
 		if _, ok := files[file]; ok {
 			files[file].Postsubmits[key] = append(files[file].Postsubmits[key], job)
 		} else {

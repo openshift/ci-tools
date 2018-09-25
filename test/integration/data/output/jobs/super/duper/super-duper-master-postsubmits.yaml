@@ -23,6 +23,7 @@ postsubmits:
               key: master.yaml
               name: ci-operator-super-duper
         image: ci-operator:latest
+        imagePullPolicy: Always
         name: ""
         resources:
           limits:

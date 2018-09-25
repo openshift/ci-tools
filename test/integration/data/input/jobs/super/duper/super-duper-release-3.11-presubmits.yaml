@@ -5,7 +5,7 @@ presubmits:
     - release-3.11
     name: pull-ci-super-duper-release-3.11-legacy
     always_run: true
-    context: ci/openshift-jenkins/jegacy
+    context: ci/openshift-jenkins/legacy
     labels:
       master: ci.openshift.redhat.com
     rerun_command: /test legacy

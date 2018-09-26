@@ -44,7 +44,7 @@ func TestGeneratePodSpec(t *testing.T) {
 					Image:           "ci-operator:latest",
 					ImagePullPolicy: kubeapi.PullAlways,
 					Command:         []string{"ci-operator"},
-					Args:            []string{"--artifact-dir=$(ARTIFACTS)", "--target=target"},
+					Args:            []string{"--give-pr-author-access-to-namespace=true", "--artifact-dir=$(ARTIFACTS)", "--target=target"},
 					Resources: kubeapi.ResourceRequirements{
 						Requests: kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
 						Limits:   kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(500, resource.DecimalSI)},
@@ -76,7 +76,7 @@ func TestGeneratePodSpec(t *testing.T) {
 					Image:           "ci-operator:latest",
 					ImagePullPolicy: kubeapi.PullAlways,
 					Command:         []string{"ci-operator"},
-					Args:            []string{"--artifact-dir=$(ARTIFACTS)", "--target=target", "--promote", "something"},
+					Args:            []string{"--give-pr-author-access-to-namespace=true", "--artifact-dir=$(ARTIFACTS)", "--target=target", "--promote", "something"},
 					Resources: kubeapi.ResourceRequirements{
 						Requests: kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
 						Limits:   kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(500, resource.DecimalSI)},
@@ -230,7 +230,7 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 		} else {
 			postsubmit = generatePostsubmitForTest(testDescription{tc.name, tc.target}, tc.repoInfo, tc.labels, tc.additionalArgs...)
 			// tests that additional args were propagated to the PodSpec
-			if !equality.Semantic.DeepEqual(postsubmit.Spec.Containers[0].Args[2:], tc.additionalArgs) {
+			if !equality.Semantic.DeepEqual(postsubmit.Spec.Containers[0].Args[3:], tc.additionalArgs) {
 				t.Errorf("additional args not propagated to postsubmit:\n%s", diff.ObjectDiff(tc.additionalArgs, postsubmit.Spec.Containers[0].Args[2:]))
 			}
 		}
@@ -563,6 +563,7 @@ func TestFromCIOperatorConfigToProwYaml(t *testing.T) {
     spec:
       containers:
       - args:
+        - --give-pr-author-access-to-namespace=true
         - --artifact-dir=$(ARTIFACTS)
         - --target=[images]
         - --promote
@@ -598,6 +599,7 @@ func TestFromCIOperatorConfigToProwYaml(t *testing.T) {
     spec:
       containers:
       - args:
+        - --give-pr-author-access-to-namespace=true
         - --artifact-dir=$(ARTIFACTS)
         - --target=[images]
         command:
@@ -630,6 +632,7 @@ func TestFromCIOperatorConfigToProwYaml(t *testing.T) {
     spec:
       containers:
       - args:
+        - --give-pr-author-access-to-namespace=true
         - --artifact-dir=$(ARTIFACTS)
         - --target=unit
         command:
@@ -688,6 +691,7 @@ func TestFromCIOperatorConfigToProwYaml(t *testing.T) {
     spec:
       containers:
       - args:
+        - --give-pr-author-access-to-namespace=true
         - --artifact-dir=$(ARTIFACTS)
         - --target=unit
         command:
@@ -722,6 +726,7 @@ func TestFromCIOperatorConfigToProwYaml(t *testing.T) {
     spec:
       containers:
       - args:
+        - --give-pr-author-access-to-namespace=true
         - --artifact-dir=$(ARTIFACTS)
         - --target=[images]
         command:
@@ -754,6 +759,7 @@ func TestFromCIOperatorConfigToProwYaml(t *testing.T) {
     spec:
       containers:
       - args:
+        - --give-pr-author-access-to-namespace=true
         - --artifact-dir=$(ARTIFACTS)
         - --target=unit
         command:
@@ -786,6 +792,7 @@ func TestFromCIOperatorConfigToProwYaml(t *testing.T) {
     spec:
       containers:
       - args:
+        - --give-pr-author-access-to-namespace=true
         - --artifact-dir=$(ARTIFACTS)
         - --target=unit
         command:
@@ -816,6 +823,7 @@ func TestFromCIOperatorConfigToProwYaml(t *testing.T) {
     spec:
       containers:
       - args:
+        - --give-pr-author-access-to-namespace=true
         - --artifact-dir=$(ARTIFACTS)
         - --target=[images]
         - --promote
@@ -877,6 +885,7 @@ tests:
     spec:
       containers:
       - args:
+        - --give-pr-author-access-to-namespace=true
         - --artifact-dir=$(ARTIFACTS)
         - --target=unit
         command:
@@ -911,6 +920,7 @@ tests:
     spec:
       containers:
       - args:
+        - --give-pr-author-access-to-namespace=true
         - --artifact-dir=$(ARTIFACTS)
         - --target=[images]
         command:
@@ -943,6 +953,7 @@ tests:
     spec:
       containers:
       - args:
+        - --give-pr-author-access-to-namespace=true
         - --artifact-dir=$(ARTIFACTS)
         - --target=unit
         command:
@@ -973,6 +984,7 @@ tests:
     spec:
       containers:
       - args:
+        - --give-pr-author-access-to-namespace=true
         - --artifact-dir=$(ARTIFACTS)
         - --target=unit
         command:
@@ -1003,6 +1015,7 @@ tests:
     spec:
       containers:
       - args:
+        - --give-pr-author-access-to-namespace=true
         - --artifact-dir=$(ARTIFACTS)
         - --target=[images]
         - --promote

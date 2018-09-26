@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strings"
 	"time"
 
 	routeapi "github.com/openshift/api/route/v1"
@@ -371,15 +372,18 @@ func (s *rpmServerStep) Creates() []api.StepLink {
 	return []api.StepLink{api.RPMRepoLink()}
 }
 
+func (s *rpmServerStep) rpmRepoURL() (string, error) {
+	host, err := admittedHostForRoute(s.routeClient, s.jobSpec.Namespace, RPMRepoName, time.Minute)
+	if err != nil {
+		return "", fmt.Errorf("unable to calculate rpm repo URL: %v", err)
+	}
+	return fmt.Sprintf("http://%s", host), nil
+}
+
 func (s *rpmServerStep) Provides() (api.ParameterMap, api.StepLink) {
+	rpmByOrgAndRepo := strings.Replace(fmt.Sprintf("RPM_REPO_%s_%s", strings.ToUpper(s.jobSpec.Refs.Org), strings.ToUpper(s.jobSpec.Refs.Repo)), "-", "_", -1)
 	return api.ParameterMap{
-		"RPM_REPO": func() (string, error) {
-			host, err := admittedHostForRoute(s.routeClient, s.jobSpec.Namespace, RPMRepoName, time.Minute)
-			if err != nil {
-				return "", fmt.Errorf("unable to calculate RPM_REPO: %v", err)
-			}
-			return fmt.Sprintf("http://%s", host), nil
-		},
+		rpmByOrgAndRepo: s.rpmRepoURL,
 	}, api.RPMRepoLink()
 }
 

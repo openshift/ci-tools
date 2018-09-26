@@ -221,3 +221,242 @@ func TestMergeJobConfig(t *testing.T) {
 		}
 	}
 }
+
+func TestMergePresubmits(t *testing.T) {
+	var testCases = []struct {
+		name     string
+		old, new *prowconfig.Presubmit
+		expected prowconfig.Presubmit
+	}{
+		{
+			name: "identical old and new returns identical",
+			old: &prowconfig.Presubmit{
+				Name:           "pull-ci-super-duper",
+				Labels:         map[string]string{"foo": "bar"},
+				AlwaysRun:      true,
+				RunIfChanged:   "foo",
+				Context:        "context",
+				SkipReport:     true,
+				Optional:       true,
+				Trigger:        "whatever",
+				RerunCommand:   "something",
+				MaxConcurrency: 10,
+				Agent:          "agent",
+				Cluster:        "somewhere",
+			},
+			new: &prowconfig.Presubmit{
+				Name:           "pull-ci-super-duper",
+				Labels:         map[string]string{"foo": "bar"},
+				AlwaysRun:      true,
+				RunIfChanged:   "foo",
+				Context:        "context",
+				SkipReport:     true,
+				Optional:       true,
+				Trigger:        "whatever",
+				RerunCommand:   "something",
+				MaxConcurrency: 10,
+				Agent:          "agent",
+				Cluster:        "somewhere",
+			},
+			expected: prowconfig.Presubmit{
+				Name:           "pull-ci-super-duper",
+				Labels:         map[string]string{"foo": "bar"},
+				AlwaysRun:      true,
+				RunIfChanged:   "foo",
+				Context:        "context",
+				SkipReport:     true,
+				Optional:       true,
+				Trigger:        "whatever",
+				RerunCommand:   "something",
+				MaxConcurrency: 10,
+				Agent:          "agent",
+				Cluster:        "somewhere",
+			},
+		},
+		{
+			name: "new can update fields in the old",
+			old: &prowconfig.Presubmit{
+				Name:           "pull-ci-super-duper",
+				Labels:         map[string]string{"foo": "bar"},
+				AlwaysRun:      true,
+				RunIfChanged:   "foo",
+				Context:        "context",
+				SkipReport:     true,
+				Optional:       true,
+				Trigger:        "whatever",
+				RerunCommand:   "something",
+				MaxConcurrency: 10,
+				Agent:          "agent",
+				Cluster:        "somewhere",
+			},
+			new: &prowconfig.Presubmit{
+				Name:           "pull-ci-super-duper",
+				Labels:         map[string]string{"foo": "baz"},
+				AlwaysRun:      true,
+				RunIfChanged:   "foo",
+				Context:        "contaxt",
+				SkipReport:     true,
+				Optional:       true,
+				Trigger:        "whatever",
+				RerunCommand:   "something",
+				MaxConcurrency: 10,
+				Agent:          "agent",
+				Cluster:        "somewhere",
+			},
+			expected: prowconfig.Presubmit{
+				Name:           "pull-ci-super-duper",
+				Labels:         map[string]string{"foo": "baz"},
+				AlwaysRun:      true,
+				RunIfChanged:   "foo",
+				Context:        "contaxt",
+				SkipReport:     true,
+				Optional:       true,
+				Trigger:        "whatever",
+				RerunCommand:   "something",
+				MaxConcurrency: 10,
+				Agent:          "agent",
+				Cluster:        "somewhere",
+			},
+		},
+		{
+			name: "new cannot update honored fields in old",
+			old: &prowconfig.Presubmit{
+				Name:           "pull-ci-super-duper",
+				Labels:         map[string]string{"foo": "bar"},
+				AlwaysRun:      true,
+				RunIfChanged:   "foo",
+				Context:        "context",
+				SkipReport:     true,
+				Optional:       true,
+				Trigger:        "whatever",
+				RerunCommand:   "something",
+				MaxConcurrency: 10,
+				Agent:          "agent",
+				Cluster:        "somewhere",
+			},
+			new: &prowconfig.Presubmit{
+				Name:           "pull-ci-super-duper",
+				Labels:         map[string]string{"foo": "bar"},
+				AlwaysRun:      false,
+				RunIfChanged:   "whatever",
+				Context:        "context",
+				SkipReport:     false,
+				Optional:       false,
+				Trigger:        "whatever",
+				RerunCommand:   "something",
+				MaxConcurrency: 10000,
+				Agent:          "agent",
+				Cluster:        "somewhere",
+			},
+			expected: prowconfig.Presubmit{
+				Name:           "pull-ci-super-duper",
+				Labels:         map[string]string{"foo": "bar"},
+				AlwaysRun:      true,
+				RunIfChanged:   "foo",
+				Context:        "context",
+				SkipReport:     true,
+				Optional:       true,
+				Trigger:        "whatever",
+				RerunCommand:   "something",
+				MaxConcurrency: 10,
+				Agent:          "agent",
+				Cluster:        "somewhere",
+			},
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if actual, expected := mergePresubmits(testCase.old, testCase.new), testCase.expected; !equality.Semantic.DeepEqual(actual, expected) {
+				t.Errorf("%s: did not get expected merged presubmit config:\n%s", testCase.name, diff.ObjectDiff(actual, expected))
+			}
+		})
+	}
+}
+
+func TestMergePostsubmits(t *testing.T) {
+	var testCases = []struct {
+		name     string
+		old, new *prowconfig.Postsubmit
+		expected prowconfig.Postsubmit
+	}{
+		{
+			name: "identical old and new returns identical",
+			old: &prowconfig.Postsubmit{
+				Name:           "pull-ci-super-duper",
+				Labels:         map[string]string{"foo": "bar"},
+				MaxConcurrency: 10,
+				Agent:          "agent",
+				Cluster:        "somewhere",
+			},
+			new: &prowconfig.Postsubmit{
+				Name:           "pull-ci-super-duper",
+				Labels:         map[string]string{"foo": "bar"},
+				MaxConcurrency: 10,
+				Agent:          "agent",
+				Cluster:        "somewhere",
+			},
+			expected: prowconfig.Postsubmit{
+				Name:           "pull-ci-super-duper",
+				Labels:         map[string]string{"foo": "bar"},
+				MaxConcurrency: 10,
+				Agent:          "agent",
+				Cluster:        "somewhere",
+			},
+		},
+		{
+			name: "new can update fields in the old",
+			old: &prowconfig.Postsubmit{
+				Name:           "pull-ci-super-duper",
+				Labels:         map[string]string{"foo": "bar"},
+				MaxConcurrency: 10,
+				Agent:          "agent",
+				Cluster:        "somewhere",
+			},
+			new: &prowconfig.Postsubmit{
+				Name:           "pull-ci-super-duper",
+				Labels:         map[string]string{"foo": "baz"},
+				MaxConcurrency: 10,
+				Agent:          "agent",
+				Cluster:        "somewhere",
+			},
+			expected: prowconfig.Postsubmit{
+				Name:           "pull-ci-super-duper",
+				Labels:         map[string]string{"foo": "baz"},
+				MaxConcurrency: 10,
+				Agent:          "agent",
+				Cluster:        "somewhere",
+			},
+		},
+		{
+			name: "new cannot update honored fields in old",
+			old: &prowconfig.Postsubmit{
+				Name:           "pull-ci-super-duper",
+				Labels:         map[string]string{"foo": "bar"},
+				MaxConcurrency: 10,
+				Agent:          "agent",
+				Cluster:        "somewhere",
+			},
+			new: &prowconfig.Postsubmit{
+				Name:           "pull-ci-super-duper",
+				Labels:         map[string]string{"foo": "bar"},
+				MaxConcurrency: 10000,
+				Agent:          "agent",
+				Cluster:        "somewhere",
+			},
+			expected: prowconfig.Postsubmit{
+				Name:           "pull-ci-super-duper",
+				Labels:         map[string]string{"foo": "bar"},
+				MaxConcurrency: 10,
+				Agent:          "agent",
+				Cluster:        "somewhere",
+			},
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if actual, expected := mergePostsubmits(testCase.old, testCase.new), testCase.expected; !equality.Semantic.DeepEqual(actual, expected) {
+				t.Errorf("%s: did not get expected merged postsubmit config:\n%s", testCase.name, diff.ObjectDiff(actual, expected))
+			}
+		})
+	}
+}

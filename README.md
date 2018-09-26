@@ -34,7 +34,7 @@ Alternatively, you may obtain a containerized version from the registry on
 $ docker pull registry.svc.ci.openshift.org/ci/ci-operator-prowgen:latest
 ```
 
-### Generate Prow jobs for new ci-operator config file
+### Generate Prow jobs for new ci-operator config
 
 The generator can use the naming conventions and directory structure of the
 [openshift/release](https://github.com/openshift/release) repository. Provided
@@ -44,12 +44,12 @@ you may run the following (`$REPO is a path to `openshift/release` working
 copy):
 
 ```
-$ ./ci-operator-prowgen --from-file $REPO/ci-operator/config/org/component/branch.yaml \
+$ ./ci-operator-prowgen --from-dir $REPO/ci-operator/config/org/component/ \
  --to-dir $REPO/ci-operator/jobs
 ```
 
 This extracts the `org` and `component` from the configuration file path, reads
-the `branch.yaml` file and generates new Prow job configuration files in the
+the configuration files and generates new Prow job configuration files in the
 `(...)/ci-operator/jobs/` directory, creating the necessary directory structure
 and files if needed. If the target files already exist and contain Prow job
 configuration, newly generated jobs will be merged with the old ones (jobs are

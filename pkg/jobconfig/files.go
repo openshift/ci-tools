@@ -167,7 +167,7 @@ func mergeJobsIntoFile(prowConfigPath string, jobConfig *prowconfig.JobConfig, a
 // Given two JobConfig, merge jobs from the `source` one to to `destination`
 // one. Jobs are matched by name. All jobs from `source` will be present in
 // `destination` - if there were jobs with the same name in `destination`, they
-// will be overwritten. All jobs in `destination` that are not overwritten this
+// will be updated. All jobs in `destination` that are not overwritten this
 // way and are not otherwise in the set of all jobs being written stay untouched.
 func mergeJobConfig(destination, source *prowconfig.JobConfig, allJobs sets.String) {
 	// We do the same thing for both Presubmits and Postsubmits
@@ -176,21 +176,30 @@ func mergeJobConfig(destination, source *prowconfig.JobConfig, allJobs sets.Stri
 			destination.Presubmits = map[string][]prowconfig.Presubmit{}
 		}
 		for repo, jobs := range source.Presubmits {
-			oldPresubmits, _ := destination.Presubmits[repo]
-			destination.Presubmits[repo] = []prowconfig.Presubmit{}
+			oldJobs := map[string]prowconfig.Presubmit{}
 			newJobs := map[string]prowconfig.Presubmit{}
+			for _, job := range destination.Presubmits[repo] {
+				oldJobs[job.Name] = job
+			}
 			for _, job := range jobs {
 				newJobs[job.Name] = job
 			}
-			for _, newJob := range source.Presubmits[repo] {
-				destination.Presubmits[repo] = append(destination.Presubmits[repo], newJob)
-			}
 
-			for _, oldJob := range oldPresubmits {
-				if _, hasKey := newJobs[oldJob.Name]; !hasKey && !allJobs.Has(oldJob.Name) {
-					destination.Presubmits[repo] = append(destination.Presubmits[repo], oldJob)
+			var mergedJobs []prowconfig.Presubmit
+			for newJobName := range newJobs {
+				newJob := newJobs[newJobName]
+				if oldJob, existed := oldJobs[newJobName]; existed {
+					mergedJobs = append(mergedJobs, mergePresubmits(&oldJob, &newJob))
+				} else {
+					mergedJobs = append(mergedJobs, newJob)
 				}
 			}
+			for oldJobName := range oldJobs {
+				if _, updated := newJobs[oldJobName]; !updated && !allJobs.Has(oldJobName) {
+					mergedJobs = append(mergedJobs, oldJobs[oldJobName])
+				}
+			}
+			destination.Presubmits[repo] = mergedJobs
 		}
 	}
 	if source.Postsubmits != nil {
@@ -198,23 +207,58 @@ func mergeJobConfig(destination, source *prowconfig.JobConfig, allJobs sets.Stri
 			destination.Postsubmits = map[string][]prowconfig.Postsubmit{}
 		}
 		for repo, jobs := range source.Postsubmits {
-			oldPostsubmits, _ := destination.Postsubmits[repo]
-			destination.Postsubmits[repo] = []prowconfig.Postsubmit{}
+			oldJobs := map[string]prowconfig.Postsubmit{}
 			newJobs := map[string]prowconfig.Postsubmit{}
+			for _, job := range destination.Postsubmits[repo] {
+				oldJobs[job.Name] = job
+			}
 			for _, job := range jobs {
 				newJobs[job.Name] = job
 			}
-			for _, newJob := range source.Postsubmits[repo] {
-				destination.Postsubmits[repo] = append(destination.Postsubmits[repo], newJob)
-			}
 
-			for _, oldJob := range oldPostsubmits {
-				if _, hasKey := newJobs[oldJob.Name]; !hasKey && !allJobs.Has(oldJob.Name) {
-					destination.Postsubmits[repo] = append(destination.Postsubmits[repo], oldJob)
+			var mergedJobs []prowconfig.Postsubmit
+			for newJobName := range newJobs {
+				newJob := newJobs[newJobName]
+				if oldJob, existed := oldJobs[newJobName]; existed {
+					mergedJobs = append(mergedJobs, mergePostsubmits(&oldJob, &newJob))
+				} else {
+					mergedJobs = append(mergedJobs, newJob)
 				}
 			}
+			for oldJobName := range oldJobs {
+				if _, updated := newJobs[oldJobName]; !updated && !allJobs.Has(oldJobName) {
+					mergedJobs = append(mergedJobs, oldJobs[oldJobName])
+				}
+			}
+			destination.Postsubmits[repo] = mergedJobs
 		}
 	}
+}
+
+// mergePresubmits merges the two configurations, preferring fields
+// in the new configuration unless the fields are set in the old
+// configuration and cannot be derived from the ci-operator configuration
+func mergePresubmits(old, new *prowconfig.Presubmit) prowconfig.Presubmit {
+	merged := *new
+
+	merged.AlwaysRun = old.AlwaysRun
+	merged.RunIfChanged = old.RunIfChanged
+	merged.Optional = old.Optional
+	merged.MaxConcurrency = old.MaxConcurrency
+	merged.SkipReport = old.SkipReport
+
+	return merged
+}
+
+// mergePostsubmits merges the two configurations, preferring fields
+// in the new configuration unless the fields are set in the old
+// configuration and cannot be derived from the ci-operator configuration
+func mergePostsubmits(old, new *prowconfig.Postsubmit) prowconfig.Postsubmit {
+	merged := *new
+
+	merged.MaxConcurrency = old.MaxConcurrency
+
+	return merged
 }
 
 // writeToFile writes Prow job config to a YAML file

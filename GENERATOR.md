@@ -38,6 +38,17 @@ array, generate a presubmit running ci-operator to build the `[images]` target.
     ...
 ```
 
+### Hand-Edited Prow Configuration
+
+If the existing Prow job configuration already exists, the generator will update it. The
+following fields will not be overwritten if they are already present:
+
+ - `always_run`
+ - `run_if_changed`
+ - `optional`
+ - `max_concurrency`
+ - `skip_report`
+
 ## Postsubmits
 
 ### Images
@@ -66,3 +77,10 @@ and this namespace is called `openshift`, this postsubmit job will also have `ar
       artifacts: images
     ...
 ```
+
+### Hand-Edited Prow Configuration
+
+If the existing Prow job configuration already exists, the generator will update it. The
+following fields will not be overwritten if they are already present:
+
+ - `max_concurrency`

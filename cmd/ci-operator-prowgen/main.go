@@ -109,7 +109,7 @@ type testDescription struct {
 }
 
 // Generate a Presubmit job for the given parameters
-func generatePresubmitForTest(test testDescription, repoInfo *configFilePathElements) *prowconfig.Presubmit {
+func generatePresubmitForTest(test testDescription, repoInfo *configFilePathElements, additionalArgs ...string) *prowconfig.Presubmit {
 	name := fmt.Sprintf("pull-ci-%s-%s-%s-%s", repoInfo.org, repoInfo.repo, repoInfo.branch, test.Name)
 	if len(name) > 63 {
 		logrus.WithField("name", name).Warn("Generated job name is longer than 63 characters. This may cause issues when Prow attempts to label resources with job name.")
@@ -121,7 +121,7 @@ func generatePresubmitForTest(test testDescription, repoInfo *configFilePathElem
 		Context:      fmt.Sprintf("ci/prow/%s", test.Name),
 		Name:         name,
 		RerunCommand: fmt.Sprintf("/test %s", test.Name),
-		Spec:         generatePodSpec(repoInfo.org, repoInfo.repo, repoInfo.configFilename, test.Target),
+		Spec:         generatePodSpec(repoInfo.org, repoInfo.repo, repoInfo.configFilename, test.Target, additionalArgs...),
 		Trigger:      fmt.Sprintf(`((?m)^/test( all| %s),?(\s+|$))`, test.Name),
 		UtilityConfig: prowconfig.UtilityConfig{
 			DecorationConfig: &prowkube.DecorationConfig{SkipCloning: true},
@@ -166,6 +166,19 @@ func extractPromotionNamespace(configSpec *cioperatorapi.ReleaseBuildConfigurati
 	return ""
 }
 
+func extractPromotionName(configSpec *cioperatorapi.ReleaseBuildConfiguration) string {
+	if configSpec.PromotionConfiguration != nil && configSpec.PromotionConfiguration.Name != "" {
+		return configSpec.PromotionConfiguration.Name
+	}
+
+	if configSpec.InputConfiguration.ReleaseTagConfiguration != nil &&
+		configSpec.InputConfiguration.ReleaseTagConfiguration.Name != "" {
+		return configSpec.InputConfiguration.ReleaseTagConfiguration.Name
+	}
+
+	return ""
+}
+
 // Given a ci-operator configuration file and basic information about what
 // should be tested, generate a following JobConfig:
 //
@@ -187,18 +200,21 @@ func generateJobs(
 	}
 
 	if len(configSpec.Images) > 0 {
-		test := testDescription{Name: "images", Target: "[images]"}
-
-		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(test, repoInfo))
-
-		// If the images are promoted to 'openshift' namespace, we may want to add
-		// 'artifacts: images' label to the [images] postsubmit.
+		// If the images are promoted to 'openshift' namespace, we need to add
+		// 'artifacts: images' label to the [images] postsubmit and also target
+		// --target=[release:latest] for [images] presubmits.
 		labels := map[string]string{}
+		var additionalArgs []string
 		if extractPromotionNamespace(configSpec) == "openshift" {
 			labels["artifacts"] = "images"
+			if extractPromotionName(configSpec) == "origin-v4.0" {
+				additionalArgs = []string{"--target=[release:latest]"}
+			}
 		}
-		imagesPostsubmit := generatePostsubmitForTest(test, repoInfo, labels, "--promote")
-		postsubmits[orgrepo] = append(postsubmits[orgrepo], *imagesPostsubmit)
+
+		test := testDescription{Name: "images", Target: "[images]"}
+		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(test, repoInfo, additionalArgs...))
+		postsubmits[orgrepo] = append(postsubmits[orgrepo], *generatePostsubmitForTest(test, repoInfo, labels, "--promote"))
 	}
 
 	return &prowconfig.JobConfig{

@@ -92,7 +92,7 @@ func generatePodSpec(org, repo, configFile, target string, additionalArgs ...str
 				Image:           "ci-operator:latest",
 				ImagePullPolicy: kubeapi.PullAlways,
 				Command:         []string{"ci-operator"},
-				Args:            append([]string{"--artifact-dir=$(ARTIFACTS)", fmt.Sprintf("--target=%s", target)}, additionalArgs...),
+				Args:            append([]string{"--give-pr-author-access-to-namespace=true", "--artifact-dir=$(ARTIFACTS)", fmt.Sprintf("--target=%s", target)}, additionalArgs...),
 				Env:             []kubeapi.EnvVar{{Name: "CONFIG_SPEC", ValueFrom: &configMapKeyRef}},
 				Resources: kubeapi.ResourceRequirements{
 					Requests: kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},

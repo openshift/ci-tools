@@ -115,20 +115,20 @@ type testDescription struct {
 }
 
 // Generate a Presubmit job for the given parameters
-func generatePresubmitForTest(test testDescription, repoInfo *configFilePathElements, additionalArgs ...string) *prowconfig.Presubmit {
-	name := fmt.Sprintf("pull-ci-%s-%s-%s-%s", repoInfo.org, repoInfo.repo, repoInfo.branch, test.Name)
-	if len(name) > 63 {
-		logrus.WithField("name", name).Warn("Generated job name is longer than 63 characters. This may cause issues when Prow attempts to label resources with job name.")
+func generatePresubmitForTest(name string, repoInfo *configFilePathElements, podSpec *kubeapi.PodSpec) *prowconfig.Presubmit {
+	jobName := fmt.Sprintf("pull-ci-%s-%s-%s-%s", repoInfo.org, repoInfo.repo, repoInfo.branch, name)
+	if len(jobName) > 63 {
+		logrus.WithField("name", jobName).Warn("Generated job name is longer than 63 characters. This may cause issues when Prow attempts to label resources with job name.")
 	}
 	return &prowconfig.Presubmit{
 		Agent:        "kubernetes",
 		AlwaysRun:    true,
 		Brancher:     prowconfig.Brancher{Branches: []string{repoInfo.branch}},
-		Context:      fmt.Sprintf("ci/prow/%s", test.Name),
-		Name:         name,
-		RerunCommand: fmt.Sprintf("/test %s", test.Name),
-		Spec:         generatePodSpec(repoInfo.configFilename, test.Target, additionalArgs...),
-		Trigger:      fmt.Sprintf(`((?m)^/test( all| %s),?(\s+|$))`, test.Name),
+		Context:      fmt.Sprintf("ci/prow/%s", name),
+		Name:         jobName,
+		RerunCommand: fmt.Sprintf("/test %s", name),
+		Spec:         podSpec,
+		Trigger:      fmt.Sprintf(`((?m)^/test( all| %s),?(\s+|$))`, name),
 		UtilityConfig: prowconfig.UtilityConfig{
 			DecorationConfig: &prowkube.DecorationConfig{SkipCloning: true},
 			Decorate:         true,
@@ -138,19 +138,19 @@ func generatePresubmitForTest(test testDescription, repoInfo *configFilePathElem
 
 // Generate a Presubmit job for the given parameters
 func generatePostsubmitForTest(
-	test testDescription,
+	name string,
 	repoInfo *configFilePathElements,
 	labels map[string]string,
-	additionalArgs ...string) *prowconfig.Postsubmit {
-	name := fmt.Sprintf("branch-ci-%s-%s-%s-%s", repoInfo.org, repoInfo.repo, repoInfo.branch, test.Name)
-	if len(name) > 63 {
-		logrus.WithField("name", name).Warn("Generated job name is longer than 63 characters. This may cause issues when Prow attempts to label resources with job name.")
+	podSpec *kubeapi.PodSpec) *prowconfig.Postsubmit {
+	jobName := fmt.Sprintf("branch-ci-%s-%s-%s-%s", repoInfo.org, repoInfo.repo, repoInfo.branch, name)
+	if len(jobName) > 63 {
+		logrus.WithField("name", jobName).Warn("Generated job name is longer than 63 characters. This may cause issues when Prow attempts to label resources with job name.")
 	}
 	return &prowconfig.Postsubmit{
 		Agent:    "kubernetes",
 		Brancher: prowconfig.Brancher{Branches: []string{repoInfo.branch}},
-		Name:     name,
-		Spec:     generatePodSpec(repoInfo.configFilename, test.Target, additionalArgs...),
+		Name:     jobName,
+		Spec:     podSpec,
 		Labels:   labels,
 		UtilityConfig: prowconfig.UtilityConfig{
 			DecorationConfig: &prowkube.DecorationConfig{SkipCloning: true},
@@ -201,8 +201,7 @@ func generateJobs(
 	postsubmits := map[string][]prowconfig.Postsubmit{}
 
 	for _, element := range configSpec.Tests {
-		test := testDescription{Name: element.As, Target: element.As}
-		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(test, repoInfo))
+		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(element.As, repoInfo, generatePodSpec(repoInfo.configFilename, element.As)))
 	}
 
 	if len(configSpec.Images) > 0 {
@@ -225,9 +224,8 @@ func generateJobs(
 			}
 		}
 
-		test := testDescription{Name: "images", Target: "[images]"}
-		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(test, repoInfo, additionalPresubmitArgs...))
-		postsubmits[orgrepo] = append(postsubmits[orgrepo], *generatePostsubmitForTest(test, repoInfo, labels, additionalPostsubmitArgs...))
+		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest("images", repoInfo, generatePodSpec(repoInfo.configFilename, "[images]", additionalPresubmitArgs...)))
+		postsubmits[orgrepo] = append(postsubmits[orgrepo], *generatePostsubmitForTest("images", repoInfo, labels, generatePodSpec(repoInfo.configFilename, "[images]", additionalPostsubmitArgs...)))
 	}
 
 	return &prowconfig.JobConfig{

@@ -107,12 +107,10 @@ func TestGeneratePodSpec(t *testing.T) {
 func TestGeneratePresubmitForTest(t *testing.T) {
 	tests := []struct {
 		name     string
-		target   string
 		repoInfo *configFilePathElements
 		expected *prowconfig.Presubmit
 	}{{
 		name:     "testname",
-		target:   "target",
 		repoInfo: &configFilePathElements{org: "org", repo: "repo", branch: "branch"},
 
 		expected: &prowconfig.Presubmit{
@@ -130,9 +128,7 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 		},
 	}}
 	for _, tc := range tests {
-		presubmit := generatePresubmitForTest(testDescription{tc.name, tc.target}, tc.repoInfo)
-		presubmit.Spec = nil // tested in generatePodSpec
-
+		presubmit := generatePresubmitForTest(tc.name, tc.repoInfo, nil) // podSpec tested in generatePodSpec
 		if !equality.Semantic.DeepEqual(presubmit, tc.expected) {
 			t.Errorf("expected presubmit diff:\n%s", diff.ObjectDiff(tc.expected, presubmit))
 		}
@@ -141,25 +137,21 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 
 func TestGeneratePostSubmitForTest(t *testing.T) {
 	tests := []struct {
-		name           string
-		target         string
-		repoInfo       *configFilePathElements
-		labels         map[string]string
-		additionalArgs []string
+		name     string
+		repoInfo *configFilePathElements
+		labels   map[string]string
 
 		expected *prowconfig.Postsubmit
 	}{
 		{
-			name:   "name",
-			target: "target",
+			name: "name",
 			repoInfo: &configFilePathElements{
 				org:            "organization",
 				repo:           "repository",
 				branch:         "branch",
 				configFilename: "branch.yaml",
 			},
-			labels:         map[string]string{},
-			additionalArgs: []string{},
+			labels: map[string]string{},
 
 			expected: &prowconfig.Postsubmit{
 				Agent:    "kubernetes",
@@ -172,37 +164,14 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 			},
 		},
 		{
-			name:   "name",
-			target: "target",
-			repoInfo: &configFilePathElements{
-				org:            "organization",
-				repo:           "repository",
-				branch:         "branch",
-				configFilename: "branch.yaml",
-			},
-			labels:         map[string]string{},
-			additionalArgs: []string{"--promote", "--additional=Arg"},
-
-			expected: &prowconfig.Postsubmit{
-				Agent:    "kubernetes",
-				Name:     "branch-ci-organization-repository-branch-name",
-				Brancher: prowconfig.Brancher{Branches: []string{"branch"}},
-				UtilityConfig: prowconfig.UtilityConfig{
-					DecorationConfig: &prowkube.DecorationConfig{SkipCloning: true},
-					Decorate:         true,
-				},
-			},
-		}, {
-			name:   "Name",
-			target: "Target",
+			name: "Name",
 			repoInfo: &configFilePathElements{
 				org:            "Organization",
 				repo:           "Repository",
 				branch:         "Branch",
 				configFilename: "config.yaml",
 			},
-			labels:         map[string]string{"artifacts": "images"},
-			additionalArgs: []string{"--promote", "--additional=Arg"},
+			labels: map[string]string{"artifacts": "images"},
 
 			expected: &prowconfig.Postsubmit{
 				Agent:    "kubernetes",
@@ -217,20 +186,7 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 		},
 	}
 	for _, tc := range tests {
-		var postsubmit *prowconfig.Postsubmit
-
-		if len(tc.additionalArgs) == 0 {
-			postsubmit = generatePostsubmitForTest(testDescription{tc.name, tc.target}, tc.repoInfo, tc.labels)
-		} else {
-			postsubmit = generatePostsubmitForTest(testDescription{tc.name, tc.target}, tc.repoInfo, tc.labels, tc.additionalArgs...)
-			// tests that additional args were propagated to the PodSpec
-			if !equality.Semantic.DeepEqual(postsubmit.Spec.Containers[0].Args[3:], tc.additionalArgs) {
-				t.Errorf("additional args not propagated to postsubmit:\n%s", diff.ObjectDiff(tc.additionalArgs, postsubmit.Spec.Containers[0].Args[2:]))
-			}
-		}
-
-		postsubmit.Spec = nil // tested in TestGeneratePodSpec
-
+		postsubmit := generatePostsubmitForTest(tc.name, tc.repoInfo, tc.labels, nil) // podSpec tested in TestGeneratePodSpec
 		if !equality.Semantic.DeepEqual(postsubmit, tc.expected) {
 			t.Errorf("expected postsubmit diff:\n%s", diff.ObjectDiff(tc.expected, postsubmit))
 		}

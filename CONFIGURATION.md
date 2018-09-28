@@ -63,7 +63,16 @@ tests:
 - artifact_dir: ''
   as: ''
   commands: ''
-  from: ''
+  container:
+    from: ''
+  openshift_ansible:
+    target_cloud: ''
+  openshift_ansible_src:
+    target_cloud: ''
+  openshift_installer:
+    target_cloud: ''
+  openshift_installer_smoke:
+    target_cloud: ''
 ```
 
 # `tag_specification`
@@ -272,12 +281,18 @@ tests on the repository. These tests are run in containers on OpenShift and
 can use the images built by the pipeline (`src`, `bin`, `test-bin` and `rpm`) or
 any of the input tagged images or any output images (from `images`).
 
+See the individual fields below for a description of the different test types
+supported. A test type is selected by populating one (and only one) of the
+respective fields in each test. All types except `container` are currently
+ignored by `ci-operator`, but are used by the configuration generator to create
+Prow jobs to execute them.
+
 ## `tests.as`
 `as` is the test name and can be used to run the test with the `--target`
 flag on `ci-operator`. Test names should be unique in a `ci-operator` configuration.
 
 ## `tests.from`
-`from` is the pipeline image tag that this test will be run on.
+`from` is deprecated. Use a [`container`](#testscontainer) test instead.
 
 ## `tests.commands`
 `commands` are the commands that will run in this test. These commands are executed
@@ -287,6 +302,34 @@ in the top-level directory for the repository.
 `artifact_dir` is the absolute directory in the test `Pod` where artifacts will
 be expected. Your test should deposit artifacts here so `ci-operator` can expose
 them after the job has finished.
+
+## `tests.container`
+`container` is a test that runs the test commands inside a container using one
+of the images in the pipeline.
+
+## `tests.container.from`
+`from` is the pipeline image tag that this test will be run on.
+
+## `tests.openshift_ansible`
+`openshift_ansible` is a test that provisions a cluster using openshift-ansible
+and runs conformance tests.
+
+## `tests.openshift_ansible_src`
+`openshift_ansible_src` is a test that provisions a cluster using
+`openshift-ansible` and executes a command in the `src` image.
+
+## `tests.openshift_installer`
+`openshift_installer` is a test that provisions a cluster using
+`openshift-installer` and runs conformance tests.
+
+## `tests.openshift_installer_smoke`
+`openshift_installer_smoke` is a test that provisions a cluster using
+`openshift-installer` and runs smoke tests.
+
+## `tests.*.target_cloud`
+`target_cloud` can be either `aws` or `gcp` and specifies the cloud provider to
+use to provision the cluster for `openshift_ansible`, `openshift_ansible_src`,
+`openshift_installer`, and `openshift_installer_smoke` tests.
 
 # `raw_steps`
 `raw_steps` is intended for advanced use of `ci-operator` to build custom execution

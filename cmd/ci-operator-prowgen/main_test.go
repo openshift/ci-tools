@@ -563,10 +563,10 @@ func TestFromCIOperatorConfigToProwYaml(t *testing.T) {
     spec:
       containers:
       - args:
-        - --give-pr-author-access-to-namespace=true
         - --artifact-dir=$(ARTIFACTS)
-        - --target=[images]
+        - --give-pr-author-access-to-namespace=true
         - --promote
+        - --target=[images]
         command:
         - ci-operator
         env:
@@ -599,8 +599,8 @@ func TestFromCIOperatorConfigToProwYaml(t *testing.T) {
     spec:
       containers:
       - args:
-        - --give-pr-author-access-to-namespace=true
         - --artifact-dir=$(ARTIFACTS)
+        - --give-pr-author-access-to-namespace=true
         - --target=[images]
         command:
         - ci-operator
@@ -632,8 +632,8 @@ func TestFromCIOperatorConfigToProwYaml(t *testing.T) {
     spec:
       containers:
       - args:
-        - --give-pr-author-access-to-namespace=true
         - --artifact-dir=$(ARTIFACTS)
+        - --give-pr-author-access-to-namespace=true
         - --target=unit
         command:
         - ci-operator
@@ -691,8 +691,8 @@ func TestFromCIOperatorConfigToProwYaml(t *testing.T) {
     spec:
       containers:
       - args:
-        - --give-pr-author-access-to-namespace=true
         - --artifact-dir=$(ARTIFACTS)
+        - --give-pr-author-access-to-namespace=true
         - --target=unit
         command:
         - ci-operator
@@ -726,8 +726,8 @@ func TestFromCIOperatorConfigToProwYaml(t *testing.T) {
     spec:
       containers:
       - args:
-        - --give-pr-author-access-to-namespace=true
         - --artifact-dir=$(ARTIFACTS)
+        - --give-pr-author-access-to-namespace=true
         - --target=[images]
         command:
         - ci-operator
@@ -759,8 +759,8 @@ func TestFromCIOperatorConfigToProwYaml(t *testing.T) {
     spec:
       containers:
       - args:
-        - --give-pr-author-access-to-namespace=true
         - --artifact-dir=$(ARTIFACTS)
+        - --give-pr-author-access-to-namespace=true
         - --target=unit
         command:
         - ci-operator
@@ -792,8 +792,8 @@ func TestFromCIOperatorConfigToProwYaml(t *testing.T) {
     spec:
       containers:
       - args:
-        - --give-pr-author-access-to-namespace=true
         - --artifact-dir=$(ARTIFACTS)
+        - --give-pr-author-access-to-namespace=true
         - --target=unit
         command:
         - ci-operator
@@ -823,10 +823,10 @@ func TestFromCIOperatorConfigToProwYaml(t *testing.T) {
     spec:
       containers:
       - args:
-        - --give-pr-author-access-to-namespace=true
         - --artifact-dir=$(ARTIFACTS)
-        - --target=[images]
+        - --give-pr-author-access-to-namespace=true
         - --promote
+        - --target=[images]
         command:
         - ci-operator
         env:
@@ -885,8 +885,8 @@ tests:
     spec:
       containers:
       - args:
-        - --give-pr-author-access-to-namespace=true
         - --artifact-dir=$(ARTIFACTS)
+        - --give-pr-author-access-to-namespace=true
         - --target=unit
         command:
         - ci-operator
@@ -920,8 +920,8 @@ tests:
     spec:
       containers:
       - args:
-        - --give-pr-author-access-to-namespace=true
         - --artifact-dir=$(ARTIFACTS)
+        - --give-pr-author-access-to-namespace=true
         - --target=[images]
         command:
         - ci-operator
@@ -953,8 +953,8 @@ tests:
     spec:
       containers:
       - args:
-        - --give-pr-author-access-to-namespace=true
         - --artifact-dir=$(ARTIFACTS)
+        - --give-pr-author-access-to-namespace=true
         - --target=unit
         command:
         - ci-operator
@@ -984,8 +984,8 @@ tests:
     spec:
       containers:
       - args:
-        - --give-pr-author-access-to-namespace=true
         - --artifact-dir=$(ARTIFACTS)
+        - --give-pr-author-access-to-namespace=true
         - --target=unit
         command:
         - ci-operator
@@ -1015,10 +1015,10 @@ tests:
     spec:
       containers:
       - args:
-        - --give-pr-author-access-to-namespace=true
         - --artifact-dir=$(ARTIFACTS)
-        - --target=[images]
+        - --give-pr-author-access-to-namespace=true
         - --promote
+        - --target=[images]
         command:
         - ci-operator
         env:

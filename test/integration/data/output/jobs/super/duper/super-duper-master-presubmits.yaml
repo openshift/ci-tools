@@ -16,8 +16,8 @@ presubmits:
     spec:
       containers:
       - args:
-        - --give-pr-author-access-to-namespace=true
         - --artifact-dir=$(ARTIFACTS)
+        - --give-pr-author-access-to-namespace=true
         - --target=[images]
         - --target=[release:latest]
         command:
@@ -60,8 +60,8 @@ presubmits:
     spec:
       containers:
       - args:
-        - --give-pr-author-access-to-namespace=true
         - --artifact-dir=$(ARTIFACTS)
+        - --give-pr-author-access-to-namespace=true
         - --target=lint
         command:
         - ci-operator
@@ -93,8 +93,8 @@ presubmits:
     spec:
       containers:
       - args:
-        - --give-pr-author-access-to-namespace=true
         - --artifact-dir=$(ARTIFACTS)
+        - --give-pr-author-access-to-namespace=true
         - --target=unit
         command:
         - ci-operator

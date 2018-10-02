@@ -8,6 +8,7 @@ import (
 	"sort"
 
 	"github.com/ghodss/yaml"
+	"k8s.io/api/core/v1"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowconfig "k8s.io/test-infra/prow/config"
@@ -150,16 +151,7 @@ func mergeJobsIntoFile(prowConfigPath string, jobConfig *prowconfig.JobConfig, a
 	}
 
 	mergeJobConfig(existingJobConfig, jobConfig, allJobs)
-	for repo := range existingJobConfig.Presubmits {
-		sort.Slice(existingJobConfig.Presubmits[repo], func(i, j int) bool {
-			return existingJobConfig.Presubmits[repo][i].Name < existingJobConfig.Presubmits[repo][j].Name
-		})
-	}
-	for repo := range existingJobConfig.Postsubmits {
-		sort.Slice(existingJobConfig.Postsubmits[repo], func(i, j int) bool {
-			return existingJobConfig.Postsubmits[repo][i].Name < existingJobConfig.Postsubmits[repo][j].Name
-		})
-	}
+	sortConfigFields(existingJobConfig)
 
 	return writeToFile(prowConfigPath, existingJobConfig)
 }
@@ -259,6 +251,59 @@ func mergePostsubmits(old, new *prowconfig.Postsubmit) prowconfig.Postsubmit {
 	merged.MaxConcurrency = old.MaxConcurrency
 
 	return merged
+}
+
+// sortConfigFields sorts array fields inside of job configurations so
+// that their serialized form is stable and deterministic
+func sortConfigFields(jobConfig *prowconfig.JobConfig) {
+	for repo := range jobConfig.Presubmits {
+		sort.Slice(jobConfig.Presubmits[repo], func(i, j int) bool {
+			return jobConfig.Presubmits[repo][i].Name < jobConfig.Presubmits[repo][j].Name
+		})
+		for job := range jobConfig.Presubmits[repo] {
+			if jobConfig.Presubmits[repo][job].Spec != nil {
+				sortPodSpec(jobConfig.Presubmits[repo][job].Spec)
+			}
+		}
+	}
+	for repo := range jobConfig.Postsubmits {
+		sort.Slice(jobConfig.Postsubmits[repo], func(i, j int) bool {
+			return jobConfig.Postsubmits[repo][i].Name < jobConfig.Postsubmits[repo][j].Name
+		})
+		for job := range jobConfig.Postsubmits[repo] {
+			if jobConfig.Postsubmits[repo][job].Spec != nil {
+				sortPodSpec(jobConfig.Postsubmits[repo][job].Spec)
+			}
+		}
+	}
+}
+
+func sortPodSpec(spec *v1.PodSpec) {
+	if len(spec.Volumes) > 0 {
+		sort.Slice(spec.Volumes, func(i, j int) bool {
+			return spec.Volumes[i].Name < spec.Volumes[j].Name
+		})
+	}
+	if len(spec.Containers) > 0 {
+		sort.Slice(spec.Containers, func(i, j int) bool {
+			return spec.Containers[i].Name < spec.Containers[j].Name
+		})
+		for container := range spec.Containers {
+			if len(spec.Containers[container].VolumeMounts) > 0 {
+				sort.Slice(spec.Containers[container].VolumeMounts, func(i, j int) bool {
+					return spec.Containers[container].VolumeMounts[i].Name < spec.Containers[container].VolumeMounts[j].Name
+				})
+			}
+			if len(spec.Containers[container].Args) > 0 {
+				sort.Strings(spec.Containers[container].Args)
+			}
+			if len(spec.Containers[container].Env) > 0 {
+				sort.Slice(spec.Containers[container].Env, func(i, j int) bool {
+					return spec.Containers[container].Env[i].Name < spec.Containers[container].Env[j].Name
+				})
+			}
+		}
+	}
 }
 
 // writeToFile writes Prow job config to a YAML file

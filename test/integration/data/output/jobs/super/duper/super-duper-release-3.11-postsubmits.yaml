@@ -22,7 +22,7 @@ postsubmits:
           valueFrom:
             configMapKeyRef:
               key: release-3.11.yaml
-              name: ci-operator-super-duper
+              name: ci-operator-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""

@@ -294,8 +294,10 @@ func sortPodSpec(spec *v1.PodSpec) {
 					return spec.Containers[container].VolumeMounts[i].Name < spec.Containers[container].VolumeMounts[j].Name
 				})
 			}
-			if len(spec.Containers[container].Args) > 0 {
-				sort.Strings(spec.Containers[container].Args)
+			if len(spec.Containers[container].Command) == 1 && spec.Containers[container].Command[0] == "ci-operator" {
+				if len(spec.Containers[container].Args) > 0 {
+					sort.Strings(spec.Containers[container].Args)
+				}
 			}
 			if len(spec.Containers[container].Env) > 0 {
 				sort.Slice(spec.Containers[container].Env, func(i, j int) bool {

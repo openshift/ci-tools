@@ -27,7 +27,7 @@ presubmits:
           valueFrom:
             configMapKeyRef:
               key: master.yaml
-              name: ci-operator-super-duper
+              name: ci-operator-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -70,7 +70,7 @@ presubmits:
           valueFrom:
             configMapKeyRef:
               key: master.yaml
-              name: ci-operator-super-duper
+              name: ci-operator-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -103,7 +103,7 @@ presubmits:
           valueFrom:
             configMapKeyRef:
               key: master.yaml
-              name: ci-operator-super-duper
+              name: ci-operator-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""

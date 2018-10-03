@@ -75,11 +75,11 @@ func (o *options) process() error {
 // Generate a PodSpec that runs `ci-operator`, to be used in Presubmit/Postsubmit
 // Various pieces are derived from `org`, `repo`, `branch` and `target`.
 // `additionalArgs` are passed as additional arguments to `ci-operator`
-func generatePodSpec(org, repo, configFile, target string, additionalArgs ...string) *kubeapi.PodSpec {
+func generatePodSpec(configFile, target string, additionalArgs ...string) *kubeapi.PodSpec {
 	configMapKeyRef := kubeapi.EnvVarSource{
 		ConfigMapKeyRef: &kubeapi.ConfigMapKeySelector{
 			LocalObjectReference: kubeapi.LocalObjectReference{
-				Name: fmt.Sprintf("ci-operator-%s-%s", org, repo),
+				Name: "ci-operator-configs",
 			},
 			Key: configFile,
 		},
@@ -121,7 +121,7 @@ func generatePresubmitForTest(test testDescription, repoInfo *configFilePathElem
 		Context:      fmt.Sprintf("ci/prow/%s", test.Name),
 		Name:         name,
 		RerunCommand: fmt.Sprintf("/test %s", test.Name),
-		Spec:         generatePodSpec(repoInfo.org, repoInfo.repo, repoInfo.configFilename, test.Target, additionalArgs...),
+		Spec:         generatePodSpec(repoInfo.configFilename, test.Target, additionalArgs...),
 		Trigger:      fmt.Sprintf(`((?m)^/test( all| %s),?(\s+|$))`, test.Name),
 		UtilityConfig: prowconfig.UtilityConfig{
 			DecorationConfig: &prowkube.DecorationConfig{SkipCloning: true},
@@ -144,7 +144,7 @@ func generatePostsubmitForTest(
 		Agent:    "kubernetes",
 		Brancher: prowconfig.Brancher{Branches: []string{repoInfo.branch}},
 		Name:     name,
-		Spec:     generatePodSpec(repoInfo.org, repoInfo.repo, repoInfo.configFilename, test.Target, additionalArgs...),
+		Spec:     generatePodSpec(repoInfo.configFilename, test.Target, additionalArgs...),
 		Labels:   labels,
 		UtilityConfig: prowconfig.UtilityConfig{
 			DecorationConfig: &prowkube.DecorationConfig{SkipCloning: true},
@@ -270,7 +270,8 @@ func extractRepoElementsFromPath(configFilePath string) (*configFilePathElements
 	}
 
 	fileName := filepath.Base(configFilePath)
-	branch := strings.TrimSuffix(fileName, filepath.Ext(configFilePath))
+	s := strings.TrimSuffix(fileName, filepath.Ext(configFilePath))
+	branch := strings.TrimPrefix(s, fmt.Sprintf("%s-%s-", org, repo))
 
 	return &configFilePathElements{org, repo, branch, fileName}, nil
 }

@@ -23,8 +23,6 @@ import (
 
 func TestGeneratePodSpec(t *testing.T) {
 	tests := []struct {
-		org            string
-		repo           string
 		configFile     string
 		target         string
 		additionalArgs []string
@@ -32,8 +30,6 @@ func TestGeneratePodSpec(t *testing.T) {
 		expected *kubeapi.PodSpec
 	}{
 		{
-			org:            "organization",
-			repo:           "repo",
 			configFile:     "config.json",
 			target:         "target",
 			additionalArgs: []string{},
@@ -54,7 +50,7 @@ func TestGeneratePodSpec(t *testing.T) {
 						ValueFrom: &kubeapi.EnvVarSource{
 							ConfigMapKeyRef: &kubeapi.ConfigMapKeySelector{
 								LocalObjectReference: kubeapi.LocalObjectReference{
-									Name: "ci-operator-organization-repo",
+									Name: "ci-operator-configs",
 								},
 								Key: "config.json",
 							},
@@ -64,8 +60,6 @@ func TestGeneratePodSpec(t *testing.T) {
 			},
 		},
 		{
-			org:            "organization",
-			repo:           "repo",
 			configFile:     "config.yml",
 			target:         "target",
 			additionalArgs: []string{"--promote", "something"},
@@ -86,7 +80,7 @@ func TestGeneratePodSpec(t *testing.T) {
 						ValueFrom: &kubeapi.EnvVarSource{
 							ConfigMapKeyRef: &kubeapi.ConfigMapKeySelector{
 								LocalObjectReference: kubeapi.LocalObjectReference{
-									Name: "ci-operator-organization-repo",
+									Name: "ci-operator-configs",
 								},
 								Key: "config.yml",
 							},
@@ -100,9 +94,9 @@ func TestGeneratePodSpec(t *testing.T) {
 	for _, tc := range tests {
 		var podSpec *kubeapi.PodSpec
 		if len(tc.additionalArgs) == 0 {
-			podSpec = generatePodSpec(tc.org, tc.repo, tc.configFile, tc.target)
+			podSpec = generatePodSpec(tc.configFile, tc.target)
 		} else {
-			podSpec = generatePodSpec(tc.org, tc.repo, tc.configFile, tc.target, tc.additionalArgs...)
+			podSpec = generatePodSpec(tc.configFile, tc.target, tc.additionalArgs...)
 		}
 		if !equality.Semantic.DeepEqual(podSpec, tc.expected) {
 			t.Errorf("expected PodSpec diff:\n%s", diff.ObjectDiff(tc.expected, podSpec))
@@ -574,7 +568,7 @@ func TestFromCIOperatorConfigToProwYaml(t *testing.T) {
           valueFrom:
             configMapKeyRef:
               key: branch.yaml
-              name: ci-operator-super-duper
+              name: ci-operator-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -609,7 +603,7 @@ func TestFromCIOperatorConfigToProwYaml(t *testing.T) {
           valueFrom:
             configMapKeyRef:
               key: branch.yaml
-              name: ci-operator-super-duper
+              name: ci-operator-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -642,7 +636,7 @@ func TestFromCIOperatorConfigToProwYaml(t *testing.T) {
           valueFrom:
             configMapKeyRef:
               key: branch.yaml
-              name: ci-operator-super-duper
+              name: ci-operator-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -701,7 +695,7 @@ func TestFromCIOperatorConfigToProwYaml(t *testing.T) {
           valueFrom:
             configMapKeyRef:
               key: branch.yaml
-              name: ci-operator-super-duper
+              name: ci-operator-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -736,7 +730,7 @@ func TestFromCIOperatorConfigToProwYaml(t *testing.T) {
           valueFrom:
             configMapKeyRef:
               key: branch.yaml
-              name: ci-operator-super-duper
+              name: ci-operator-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -769,7 +763,7 @@ func TestFromCIOperatorConfigToProwYaml(t *testing.T) {
           valueFrom:
             configMapKeyRef:
               key: branch.yaml
-              name: ci-operator-super-duper
+              name: ci-operator-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -802,7 +796,7 @@ func TestFromCIOperatorConfigToProwYaml(t *testing.T) {
           valueFrom:
             configMapKeyRef:
               key: branch.yaml
-              name: ci-operator-super-duper
+              name: ci-operator-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -834,7 +828,7 @@ func TestFromCIOperatorConfigToProwYaml(t *testing.T) {
           valueFrom:
             configMapKeyRef:
               key: branch.yaml
-              name: ci-operator-super-duper
+              name: ci-operator-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -895,7 +889,7 @@ tests:
           valueFrom:
             configMapKeyRef:
               key: branch.yaml
-              name: ci-operator-super-duper
+              name: ci-operator-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -930,7 +924,7 @@ tests:
           valueFrom:
             configMapKeyRef:
               key: branch.yaml
-              name: ci-operator-super-duper
+              name: ci-operator-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -963,7 +957,7 @@ tests:
           valueFrom:
             configMapKeyRef:
               key: branch.yaml
-              name: ci-operator-super-duper
+              name: ci-operator-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -994,7 +988,7 @@ tests:
           valueFrom:
             configMapKeyRef:
               key: branch.yaml
-              name: ci-operator-super-duper
+              name: ci-operator-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -1026,7 +1020,7 @@ tests:
           valueFrom:
             configMapKeyRef:
               key: branch.yaml
-              name: ci-operator-super-duper
+              name: ci-operator-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""

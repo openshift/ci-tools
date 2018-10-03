@@ -101,7 +101,7 @@ func FromConfig(
 	params.Add("NAMESPACE", nil, func() (string, error) { return jobSpec.Namespace, nil })
 
 	var imageStepLinks []api.StepLink
-	var hasReleaseConfiguration bool
+	var releaseStep api.Step
 	for _, rawStep := range stepConfigsForBuild(config, jobSpec) {
 		var step api.Step
 		var stepLinks []api.StepLink
@@ -138,32 +138,20 @@ func FromConfig(
 			if err != nil {
 				return nil, nil, fmt.Errorf("unable to access release images on remote cluster: %v", err)
 			}
-			hasReleaseConfiguration = true
 			step = steps.ReleaseImagesTagStep(*rawStep.ReleaseImagesTagStepConfiguration, srcClient, imageClient, routeGetter, configMapGetter, params, jobSpec)
 			stepLinks = append(stepLinks, step.Creates()...)
+
+			releaseStep = release.AssembleReleaseStep(*rawStep.ReleaseImagesTagStepConfiguration, podClient, imageClient, artifactDir, jobSpec)
+
 		} else if rawStep.TestStepConfiguration != nil {
 			step = steps.TestStep(*rawStep.TestStepConfiguration, config.Resources, podClient, artifactDir, jobSpec)
 		}
 
-		provides, link := step.Provides()
-
-		// if all output parameters of this step are part of the environment, replace
-		// the step with a shim that automatically provides those variables
-		if values, ok := envHasAllParameters(provides); ok {
-			log.Printf("Task %s is satisfied by environment variables and will be skipped", step.Name())
-			step = steps.NewInputEnvironmentStep(step.Name(), values, step.Creates())
-			for k, v := range values {
-				params.Set(k, v)
-			}
-		} else {
-			for name, fn := range provides {
-				params.Add(name, link, fn)
-			}
+		step, ok := checkForFullyQualifiedStep(step, params)
+		if !ok {
 			imageStepLinks = append(imageStepLinks, stepLinks...)
 		}
-
 		buildSteps = append(buildSteps, step)
-
 	}
 
 	for _, template := range templates {
@@ -175,8 +163,9 @@ func FromConfig(
 		buildSteps = append(buildSteps, steps.WriteParametersStep(params, paramFile, jobSpec))
 	}
 
-	if hasReleaseConfiguration {
-		buildSteps = append(buildSteps, release.AssembleReleaseStep(*config.ReleaseTagConfiguration, podClient, imageClient, artifactDir, jobSpec))
+	if releaseStep != nil {
+		releaseStep, _ = checkForFullyQualifiedStep(releaseStep, params)
+		buildSteps = append(buildSteps, releaseStep)
 	} else {
 		buildSteps = append(buildSteps, steps.StableImagesTagStep(imageClient, jobSpec))
 	}
@@ -199,6 +188,26 @@ func FromConfig(
 	}
 
 	return buildSteps, postSteps, nil
+}
+
+// checkForFullyQualifiedStep if all output parameters of this step are part of the
+// environment, replace the step with a shim that automatically provides those variables.
+// Returns true if the step was replaced.
+func checkForFullyQualifiedStep(step api.Step, params *steps.DeferredParameters) (api.Step, bool) {
+	provides, link := step.Provides()
+
+	if values, ok := envHasAllParameters(provides); ok {
+		log.Printf("Task %s is satisfied by environment variables and will be skipped", step.Name())
+		step = steps.NewInputEnvironmentStep(step.Name(), values, step.Creates())
+		for k, v := range values {
+			params.Set(k, v)
+		}
+		return step, true
+	}
+	for name, fn := range provides {
+		params.Add(name, link, fn)
+	}
+	return step, false
 }
 
 func promotionDefaults(configSpec *api.ReleaseBuildConfiguration) (*api.PromotionConfiguration, error) {

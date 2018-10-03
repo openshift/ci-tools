@@ -10,6 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/client-go/util/retry"
 
 	imageapi "github.com/openshift/api/image/v1"
 	"github.com/openshift/ci-operator/pkg/api"
@@ -58,42 +59,45 @@ func (s *promotionStep) Run(ctx context.Context, dry bool) error {
 	}
 
 	if len(s.config.Name) > 0 {
-		is, err := s.dstClient.ImageStreams(s.config.Namespace).Get(s.config.Name, meta.GetOptions{})
-		if errors.IsNotFound(err) {
-			is, err = s.dstClient.ImageStreams(s.config.Namespace).Create(&imageapi.ImageStream{
-				ObjectMeta: meta.ObjectMeta{
-					Name:      s.config.Name,
-					Namespace: s.config.Namespace,
-				},
-			})
-		}
-		if err != nil {
-			return fmt.Errorf("could not retrieve target imagestream: %v", err)
-		}
-
-		for dst, src := range tags {
-			if valid, _ := findStatusTag(pipeline, src); valid != nil {
-				is.Spec.Tags = append(is.Spec.Tags, imageapi.TagReference{
-					Name: dst,
-					From: valid,
+		return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			is, err := s.dstClient.ImageStreams(s.config.Namespace).Get(s.config.Name, meta.GetOptions{})
+			if errors.IsNotFound(err) {
+				is, err = s.dstClient.ImageStreams(s.config.Namespace).Create(&imageapi.ImageStream{
+					ObjectMeta: meta.ObjectMeta{
+						Name:      s.config.Name,
+						Namespace: s.config.Namespace,
+					},
 				})
 			}
-		}
-
-		if dry {
-			istJSON, err := json.MarshalIndent(is, "", "  ")
 			if err != nil {
-				return fmt.Errorf("failed to marshal image stream: %v", err)
+				return fmt.Errorf("could not retrieve target imagestream: %v", err)
 			}
-			fmt.Printf("%s\n", istJSON)
-			return nil
-		}
-		is, err = s.dstClient.ImageStreams(s.config.Namespace).Update(is)
-		if err != nil && !errors.IsAlreadyExists(err) {
-			return fmt.Errorf("could not promote image streams: %v", err)
-		}
 
-		return nil
+			for dst, src := range tags {
+				if valid, _ := findStatusTag(pipeline, src); valid != nil {
+					is.Spec.Tags = append(is.Spec.Tags, imageapi.TagReference{
+						Name: dst,
+						From: valid,
+					})
+				}
+			}
+
+			if dry {
+				istJSON, err := json.MarshalIndent(is, "", "  ")
+				if err != nil {
+					return fmt.Errorf("failed to marshal image stream: %v", err)
+				}
+				fmt.Printf("%s\n", istJSON)
+				return nil
+			}
+			if _, err := s.dstClient.ImageStreams(s.config.Namespace).Update(is); err != nil {
+				if errors.IsConflict(err) {
+					return err
+				}
+				return fmt.Errorf("could not promote image streams: %v", err)
+			}
+			return nil
+		})
 	}
 
 	client := s.dstClient.ImageStreamTags(s.config.Namespace)
@@ -105,48 +109,55 @@ func (s *promotionStep) Run(ctx context.Context, dry bool) error {
 
 		name := fmt.Sprintf("%s%s", s.config.NamePrefix, dst)
 
-		_, err := s.dstClient.ImageStreams(s.config.Namespace).Get(name, meta.GetOptions{})
-		if errors.IsNotFound(err) {
-			_, err = s.dstClient.ImageStreams(s.config.Namespace).Create(&imageapi.ImageStream{
+		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			_, err := s.dstClient.ImageStreams(s.config.Namespace).Get(name, meta.GetOptions{})
+			if errors.IsNotFound(err) {
+				_, err = s.dstClient.ImageStreams(s.config.Namespace).Create(&imageapi.ImageStream{
+					ObjectMeta: meta.ObjectMeta{
+						Name:      name,
+						Namespace: s.config.Namespace,
+					},
+					Spec: imageapi.ImageStreamSpec{
+						LookupPolicy: imageapi.ImageLookupPolicy{
+							Local: true,
+						},
+					},
+				})
+			}
+			if err != nil {
+				return fmt.Errorf("could not ensure target imagestream: %v", err)
+			}
+
+			ist := &imageapi.ImageStreamTag{
 				ObjectMeta: meta.ObjectMeta{
-					Name:      name,
+					Name:      fmt.Sprintf("%s:%s", name, s.config.Tag),
 					Namespace: s.config.Namespace,
 				},
-				Spec: imageapi.ImageStreamSpec{
-					LookupPolicy: imageapi.ImageLookupPolicy{
-						Local: true,
-					},
+				Tag: &imageapi.TagReference{
+					Name: s.config.Tag,
+					From: valid,
 				},
-			})
-		}
-		if err != nil {
-			return fmt.Errorf("could not ensure target imagestream: %v", err)
-		}
-
-		ist := &imageapi.ImageStreamTag{
-			ObjectMeta: meta.ObjectMeta{
-				Name:      fmt.Sprintf("%s:%s", name, s.config.Tag),
-				Namespace: s.config.Namespace,
-			},
-			Tag: &imageapi.TagReference{
-				Name: s.config.Tag,
-				From: valid,
-			},
-		}
-		if dry {
-			istJSON, err := json.MarshalIndent(ist, "", "  ")
-			if err != nil {
-				return fmt.Errorf("failed to marshal imagestreamtag: %v", err)
 			}
-			fmt.Printf("%s\n", istJSON)
-			continue
-		}
-		_, err = client.Update(ist)
+			if dry {
+				istJSON, err := json.MarshalIndent(ist, "", "  ")
+				if err != nil {
+					return fmt.Errorf("failed to marshal imagestreamtag: %v", err)
+				}
+				fmt.Printf("%s\n", istJSON)
+				return nil
+			}
+			if _, err := client.Update(ist); err != nil {
+				if errors.IsConflict(err) {
+					return err
+				}
+				return fmt.Errorf("could not promote imagestreamtag %s: %v", dst, err)
+			}
+			return nil
+		})
 		if err != nil {
-			return fmt.Errorf("could not promote imagestreamtag %s: %v", dst, err)
+			return err
 		}
 	}
-
 	return nil
 }
 

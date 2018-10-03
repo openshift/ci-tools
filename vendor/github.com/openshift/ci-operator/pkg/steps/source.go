@@ -32,6 +32,8 @@ const (
 	CreatedByCILabel   = "created-by-ci"
 
 	ProwJobIdLabel = "prow.k8s.io/id"
+
+	gopath = "/go"
 )
 
 var (
@@ -46,10 +48,11 @@ func sourceDockerfile(fromTag api.PipelineImageStreamTagReference, pathAlias str
 	return fmt.Sprintf(`
 FROM %s:%s
 ADD ./clonerefs /clonerefs
-RUN umask 0002 && /clonerefs && chmod g+xw -R /go/src
-WORKDIR /go/src/%s/
+RUN umask 0002 && /clonerefs && chmod g+xw -R %s/src
+WORKDIR %s/src/%s/
+ENV GOPATH=%s
 RUN git submodule update --init
-`, api.PipelineImageStream, fromTag, workingDir)
+`, api.PipelineImageStream, fromTag, gopath, gopath, workingDir, gopath)
 }
 
 type sourceStep struct {
@@ -96,7 +99,7 @@ func (s *sourceStep) Run(ctx context.Context, dry bool) error {
 	refs := s.jobSpec.Refs
 	refs.PathAlias = s.config.PathAlias
 	optionsSpec := map[string]interface{}{
-		"src_root":       "/go",
+		"src_root":       gopath,
 		"log":            "/dev/null",
 		"git_user_name":  "ci-robot",
 		"git_user_email": "ci-robot@openshift.io",

@@ -25,3 +25,6 @@ tests:
 - as: lint
   commands: make test-lint
   from: src
+promotion:
+  additional_images:
+    super-duper-src: src

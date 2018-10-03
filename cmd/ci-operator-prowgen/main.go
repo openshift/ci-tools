@@ -204,17 +204,24 @@ func generateJobs(
 		// 'artifacts: images' label to the [images] postsubmit and also target
 		// --target=[release:latest] for [images] presubmits.
 		labels := map[string]string{}
-		var additionalArgs []string
+		var additionalPresubmitArgs []string
 		if extractPromotionNamespace(configSpec) == "openshift" {
 			labels["artifacts"] = "images"
 			if extractPromotionName(configSpec) == "origin-v4.0" {
-				additionalArgs = []string{"--target=[release:latest]"}
+				additionalPresubmitArgs = []string{"--target=[release:latest]"}
+			}
+		}
+
+		additionalPostsubmitArgs := []string{"--promote"}
+		if configSpec.PromotionConfiguration != nil {
+			for additionalImage := range configSpec.PromotionConfiguration.AdditionalImages {
+				additionalPostsubmitArgs = append(additionalPostsubmitArgs, fmt.Sprintf("--target=%s", configSpec.PromotionConfiguration.AdditionalImages[additionalImage]))
 			}
 		}
 
 		test := testDescription{Name: "images", Target: "[images]"}
-		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(test, repoInfo, additionalArgs...))
-		postsubmits[orgrepo] = append(postsubmits[orgrepo], *generatePostsubmitForTest(test, repoInfo, labels, "--promote"))
+		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(test, repoInfo, additionalPresubmitArgs...))
+		postsubmits[orgrepo] = append(postsubmits[orgrepo], *generatePostsubmitForTest(test, repoInfo, labels, additionalPostsubmitArgs...))
 	}
 
 	return &prowconfig.JobConfig{

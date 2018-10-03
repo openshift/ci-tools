@@ -11,6 +11,7 @@ func TestValidateTests(t *testing.T) {
 	var validationErrors []error
 	var testTestsCases = []struct {
 		id            string
+		release       *ReleaseTagConfiguration
 		tests         []TestStepConfiguration
 		expectedValid bool
 	}{
@@ -138,10 +139,49 @@ func TestValidateTests(t *testing.T) {
 			},
 			expectedValid: false,
 		},
+		{
+			id: "release missing",
+			tests: []TestStepConfiguration{
+				{
+					As:       "test",
+					Commands: "commands",
+					OpenshiftAnsibleClusterTestConfiguration: &OpenshiftAnsibleClusterTestConfiguration{
+						ClusterTestConfiguration: ClusterTestConfiguration{TargetCloud: TargetCloudAWS},
+					},
+				},
+			},
+		},
+		{
+			id: "release must be origin",
+			tests: []TestStepConfiguration{
+				{
+					As:       "test",
+					Commands: "commands",
+					OpenshiftAnsibleClusterTestConfiguration: &OpenshiftAnsibleClusterTestConfiguration{
+						ClusterTestConfiguration: ClusterTestConfiguration{TargetCloud: TargetCloudAWS},
+					},
+				},
+			},
+			release: &ReleaseTagConfiguration{},
+		},
+		{
+			id: "with release",
+			tests: []TestStepConfiguration{
+				{
+					As:       "test",
+					Commands: "commands",
+					OpenshiftAnsibleClusterTestConfiguration: &OpenshiftAnsibleClusterTestConfiguration{
+						ClusterTestConfiguration: ClusterTestConfiguration{TargetCloud: TargetCloudAWS},
+					},
+				},
+			},
+			release:       &ReleaseTagConfiguration{Name: "origin-v3.11"},
+			expectedValid: true,
+		},
 	}
 
 	for _, tc := range testTestsCases {
-		if err := validateTestStepConfiguration("tests", tc.tests); err != nil && tc.expectedValid {
+		if err := validateTestStepConfiguration("tests", tc.tests, tc.release); err != nil && tc.expectedValid {
 			validationErrors = append(validationErrors, parseError(tc.id, err))
 		} else if !tc.expectedValid && err == nil {
 			validationErrors = append(validationErrors, parseValidError(tc.id))

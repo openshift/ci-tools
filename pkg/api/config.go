@@ -10,13 +10,15 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 )
 
+var originReleaseTagRegexp = regexp.MustCompile(`^origin-v\d+\.\d+$`)
+
 // Validate validates all the configuration's values.
 func (config *ReleaseBuildConfiguration) Validate() error {
 	var validationErrors []error
 
 	validationErrors = append(validationErrors, validateReleaseBuildConfiguration(config))
 	validationErrors = append(validationErrors, validateBuildRootImageConfiguration("build_root", config.InputConfiguration.BuildRootImage))
-	validationErrors = append(validationErrors, validateTestStepConfiguration("tests", config.Tests))
+	validationErrors = append(validationErrors, validateTestStepConfiguration("tests", config.Tests, config.ReleaseTagConfiguration))
 
 	if config.InputConfiguration.BaseImages != nil {
 		validationErrors = append(validationErrors, validateImageStreamTagReferenceMap("base_images", config.InputConfiguration.BaseImages))
@@ -33,7 +35,7 @@ func (config *ReleaseBuildConfiguration) Validate() error {
 
 	// Validate promotion in case of `tag_specification` exists or not
 	if config.PromotionConfiguration != nil && config.InputConfiguration.ReleaseTagConfiguration != nil {
-		validationErrors = append(validationErrors, validatePromotionWithTagSpec(*config.PromotionConfiguration, *config.InputConfiguration.ReleaseTagConfiguration))
+		validationErrors = append(validationErrors, validatePromotionWithTagSpec(config.PromotionConfiguration, config.InputConfiguration.ReleaseTagConfiguration))
 	} else if config.PromotionConfiguration != nil && config.InputConfiguration.ReleaseTagConfiguration == nil {
 		validationErrors = append(validationErrors, validatePromotionConfiguration("promotion", *config.PromotionConfiguration))
 	}
@@ -41,7 +43,7 @@ func (config *ReleaseBuildConfiguration) Validate() error {
 	return kerrors.NewAggregate(validationErrors)
 }
 
-func validatePromotionWithTagSpec(promotion PromotionConfiguration, tagSpec ReleaseTagConfiguration) error {
+func validatePromotionWithTagSpec(promotion *PromotionConfiguration, tagSpec *ReleaseTagConfiguration) error {
 	var validationErrors []error
 
 	if len(promotion.Namespace) == 0 && len(tagSpec.Namespace) == 0 {
@@ -71,7 +73,7 @@ func validateBuildRootImageConfiguration(fieldRoot string, input *BuildRootImage
 	return nil
 }
 
-func validateTestStepConfiguration(fieldRoot string, input []TestStepConfiguration) error {
+func validateTestStepConfiguration(fieldRoot string, input []TestStepConfiguration, release *ReleaseTagConfiguration) error {
 	var validationErrors []error
 
 	// check for test.As duplicates
@@ -90,7 +92,7 @@ func validateTestStepConfiguration(fieldRoot string, input []TestStepConfigurati
 			validationErrors = append(validationErrors, fmt.Errorf("%s[%d].commands: is required", fieldRoot, num))
 		}
 
-		validationErrors = append(validationErrors, validateTestConfigurationType(fmt.Sprintf("%s[%d]", fieldRoot, num), test))
+		validationErrors = append(validationErrors, validateTestConfigurationType(fmt.Sprintf("%s[%d]", fieldRoot, num), test, release))
 	}
 	return kerrors.NewAggregate(validationErrors)
 }
@@ -174,7 +176,7 @@ func searchForTestDuplicates(tests []TestStepConfiguration) error {
 	return nil
 }
 
-func validateTestConfigurationType(fieldRoot string, test TestStepConfiguration) error {
+func validateTestConfigurationType(fieldRoot string, test TestStepConfiguration, release *ReleaseTagConfiguration) error {
 	var validationErrors []error
 	typeCount := 0
 	if testConfig := test.ContainerTestConfiguration; testConfig != nil {
@@ -184,12 +186,15 @@ func validateTestConfigurationType(fieldRoot string, test TestStepConfiguration)
 			validationErrors = append(validationErrors, fmt.Errorf("%s: `from` is required", fieldRoot))
 		}
 	}
+	var needsReleaseRpms bool
 	if testConfig := test.OpenshiftAnsibleClusterTestConfiguration; testConfig != nil {
 		typeCount++
+		needsReleaseRpms = true
 		validationErrors = append(validationErrors, validateTargetCloud(fmt.Sprintf("%s", fieldRoot), testConfig.TargetCloud))
 	}
 	if testConfig := test.OpenshiftAnsibleSrcClusterTestConfiguration; testConfig != nil {
 		typeCount++
+		needsReleaseRpms = true
 		validationErrors = append(validationErrors, validateTargetCloud(fmt.Sprintf("%s", fieldRoot), testConfig.TargetCloud))
 	}
 	if testConfig := test.OpenshiftInstallerClusterTestConfiguration; testConfig != nil {
@@ -209,6 +214,9 @@ func validateTestConfigurationType(fieldRoot string, test TestStepConfiguration)
 		// TODO remove when the migration is completed
 		if len(test.From) > 0 {
 			validationErrors = append(validationErrors, fmt.Errorf("%s specifies both `From` and a test type", fieldRoot))
+		}
+		if needsReleaseRpms && (release == nil || !originReleaseTagRegexp.MatchString(release.Name)) {
+			validationErrors = append(validationErrors, fmt.Errorf("%s requires an 'origin' release in `tag_specification`", fieldRoot))
 		}
 	} else if typeCount > 1 {
 		validationErrors = append(validationErrors, fmt.Errorf("%s has more than one type", fieldRoot))

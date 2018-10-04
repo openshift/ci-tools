@@ -109,26 +109,106 @@ func generatePodSpec(configFile, target string, additionalArgs ...string) *kubea
 	}
 }
 
+func generatePodSpecTemplate(org, repo, configFile, release string, test *cioperatorapi.TestStepConfiguration, additionalArgs ...string) *kubeapi.PodSpec {
+	var template, targetCloud string
+	var needsReleaseRpms bool
+	if conf := test.OpenshiftAnsibleClusterTestConfiguration; conf != nil {
+		template = "cluster-launch-e2e"
+		targetCloud = string(conf.TargetCloud)
+		needsReleaseRpms = true
+	} else if conf := test.OpenshiftAnsibleSrcClusterTestConfiguration; conf != nil {
+		template = "cluster-launch-src"
+		targetCloud = string(conf.TargetCloud)
+		needsReleaseRpms = true
+	} else if conf := test.OpenshiftInstallerClusterTestConfiguration; conf != nil {
+		template = "cluster-launch-installer-e2e"
+		targetCloud = string(conf.TargetCloud)
+	} else if conf := test.OpenshiftInstallerSmokeClusterTestConfiguration; conf != nil {
+		template = "cluster-launch-installer-e2e-smoke"
+		targetCloud = string(conf.TargetCloud)
+	}
+	clusterProfile := fmt.Sprintf("%s-cluster-profile", test.As)
+	clusterProfilePath := fmt.Sprintf("/usr/local/%s", clusterProfile)
+	templatePath := fmt.Sprintf("/usr/local/%s", test.As)
+	podSpec := generatePodSpec(configFile, test.As, additionalArgs...)
+	podSpec.Volumes = []kubeapi.Volume{
+		{
+			Name: "job-definition",
+			VolumeSource: kubeapi.VolumeSource{
+				ConfigMap: &kubeapi.ConfigMapVolumeSource{
+					LocalObjectReference: kubeapi.LocalObjectReference{
+						Name: fmt.Sprintf("prow-job-%s", template),
+					},
+				},
+			},
+		},
+		{
+			Name: "cluster-profile",
+			VolumeSource: kubeapi.VolumeSource{
+				Projected: &kubeapi.ProjectedVolumeSource{
+					Sources: []kubeapi.VolumeProjection{
+						{
+							Secret: &kubeapi.SecretProjection{
+								LocalObjectReference: kubeapi.LocalObjectReference{
+									Name: fmt.Sprintf("cluster-secrets-%s", targetCloud),
+								},
+							},
+						},
+						{
+							ConfigMap: &kubeapi.ConfigMapProjection{
+								LocalObjectReference: kubeapi.LocalObjectReference{
+									Name: fmt.Sprintf("cluster-profile-%s", targetCloud),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	container := &podSpec.Containers[0]
+	container.Args = append(
+		container.Args,
+		fmt.Sprintf("--secret-dir=%s", clusterProfilePath),
+		fmt.Sprintf("--template=%s", templatePath))
+	container.VolumeMounts = []kubeapi.VolumeMount{
+		{Name: "cluster-profile", MountPath: clusterProfilePath},
+		{Name: "job-definition", MountPath: templatePath, SubPath: fmt.Sprintf("%s.yaml", template)},
+	}
+	container.Env = append(
+		container.Env,
+		kubeapi.EnvVar{Name: "CLUSTER_TYPE", Value: targetCloud},
+		kubeapi.EnvVar{Name: "JOB_NAME_SAFE", Value: strings.Replace(test.As, "_", "-", -1)},
+		kubeapi.EnvVar{Name: "TEST_COMMAND", Value: test.Commands})
+	if needsReleaseRpms && (org != "openshift" || repo != "origin") {
+		container.Env = append(container.Env, kubeapi.EnvVar{
+			Name:  "RPM_REPO_OPENSHIFT_ORIGIN",
+			Value: fmt.Sprintf("https://rpms.svc.ci.openshift.org/openshift-%s/", release),
+		})
+	}
+	return podSpec
+}
+
 type testDescription struct {
 	Name   string
 	Target string
 }
 
 // Generate a Presubmit job for the given parameters
-func generatePresubmitForTest(test testDescription, repoInfo *configFilePathElements, additionalArgs ...string) *prowconfig.Presubmit {
-	name := fmt.Sprintf("pull-ci-%s-%s-%s-%s", repoInfo.org, repoInfo.repo, repoInfo.branch, test.Name)
-	if len(name) > 63 {
-		logrus.WithField("name", name).Warn("Generated job name is longer than 63 characters. This may cause issues when Prow attempts to label resources with job name.")
+func generatePresubmitForTest(name string, repoInfo *configFilePathElements, podSpec *kubeapi.PodSpec) *prowconfig.Presubmit {
+	jobName := fmt.Sprintf("pull-ci-%s-%s-%s-%s", repoInfo.org, repoInfo.repo, repoInfo.branch, name)
+	if len(jobName) > 63 {
+		logrus.WithField("name", jobName).Warn("Generated job name is longer than 63 characters. This may cause issues when Prow attempts to label resources with job name.")
 	}
 	return &prowconfig.Presubmit{
 		Agent:        "kubernetes",
 		AlwaysRun:    true,
 		Brancher:     prowconfig.Brancher{Branches: []string{repoInfo.branch}},
-		Context:      fmt.Sprintf("ci/prow/%s", test.Name),
-		Name:         name,
-		RerunCommand: fmt.Sprintf("/test %s", test.Name),
-		Spec:         generatePodSpec(repoInfo.configFilename, test.Target, additionalArgs...),
-		Trigger:      fmt.Sprintf(`((?m)^/test( all| %s),?(\s+|$))`, test.Name),
+		Context:      fmt.Sprintf("ci/prow/%s", name),
+		Name:         jobName,
+		RerunCommand: fmt.Sprintf("/test %s", name),
+		Spec:         podSpec,
+		Trigger:      fmt.Sprintf(`((?m)^/test( all| %s),?(\s+|$))`, name),
 		UtilityConfig: prowconfig.UtilityConfig{
 			DecorationConfig: &prowkube.DecorationConfig{SkipCloning: true},
 			Decorate:         true,
@@ -138,19 +218,19 @@ func generatePresubmitForTest(test testDescription, repoInfo *configFilePathElem
 
 // Generate a Presubmit job for the given parameters
 func generatePostsubmitForTest(
-	test testDescription,
+	name string,
 	repoInfo *configFilePathElements,
 	labels map[string]string,
-	additionalArgs ...string) *prowconfig.Postsubmit {
-	name := fmt.Sprintf("branch-ci-%s-%s-%s-%s", repoInfo.org, repoInfo.repo, repoInfo.branch, test.Name)
-	if len(name) > 63 {
-		logrus.WithField("name", name).Warn("Generated job name is longer than 63 characters. This may cause issues when Prow attempts to label resources with job name.")
+	podSpec *kubeapi.PodSpec) *prowconfig.Postsubmit {
+	jobName := fmt.Sprintf("branch-ci-%s-%s-%s-%s", repoInfo.org, repoInfo.repo, repoInfo.branch, name)
+	if len(jobName) > 63 {
+		logrus.WithField("name", jobName).Warn("Generated job name is longer than 63 characters. This may cause issues when Prow attempts to label resources with job name.")
 	}
 	return &prowconfig.Postsubmit{
 		Agent:    "kubernetes",
 		Brancher: prowconfig.Brancher{Branches: []string{repoInfo.branch}},
-		Name:     name,
-		Spec:     generatePodSpec(repoInfo.configFilename, test.Target, additionalArgs...),
+		Name:     jobName,
+		Spec:     podSpec,
 		Labels:   labels,
 		UtilityConfig: prowconfig.UtilityConfig{
 			DecorationConfig: &prowkube.DecorationConfig{SkipCloning: true},
@@ -201,8 +281,14 @@ func generateJobs(
 	postsubmits := map[string][]prowconfig.Postsubmit{}
 
 	for _, element := range configSpec.Tests {
-		test := testDescription{Name: element.As, Target: element.As}
-		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(test, repoInfo))
+		var podSpec *kubeapi.PodSpec
+		if len(element.From) != 0 || element.ContainerTestConfiguration != nil {
+			// TODO remove when the migration is completed
+			podSpec = generatePodSpec(repoInfo.configFilename, element.As)
+		} else {
+			podSpec = generatePodSpecTemplate(repoInfo.org, repoInfo.repo, repoInfo.configFilename, configSpec.ReleaseTagConfiguration.Name, &element)
+		}
+		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(element.As, repoInfo, podSpec))
 	}
 
 	if len(configSpec.Images) > 0 {
@@ -225,9 +311,8 @@ func generateJobs(
 			}
 		}
 
-		test := testDescription{Name: "images", Target: "[images]"}
-		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(test, repoInfo, additionalPresubmitArgs...))
-		postsubmits[orgrepo] = append(postsubmits[orgrepo], *generatePostsubmitForTest(test, repoInfo, labels, additionalPostsubmitArgs...))
+		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest("images", repoInfo, generatePodSpec(repoInfo.configFilename, "[images]", additionalPresubmitArgs...)))
+		postsubmits[orgrepo] = append(postsubmits[orgrepo], *generatePostsubmitForTest("images", repoInfo, labels, generatePodSpec(repoInfo.configFilename, "[images]", additionalPostsubmitArgs...)))
 	}
 
 	return &prowconfig.JobConfig{

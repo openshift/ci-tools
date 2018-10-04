@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base32"
+	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"flag"
@@ -102,9 +103,10 @@ of dynamic parameters that are inferred from previous steps. These parameters ar
   JOB_NAME_HASH
     A short hash of the job name for making tasks unique.
 
-  RPM_REPO
+  RPM_REPO_<org>_<repo>
     If the job creates RPMs this will be the public URL that can be used as the
-    baseurl= value of an RPM repository.
+		baseurl= value of an RPM repository. The value of org and repo are uppercased
+		and dashes are replaced with underscores.
 
 Dynamic environment variables are overriden by process environment variables.
 
@@ -289,10 +291,10 @@ func (o *options) Complete() error {
 	jobSpec.BaseNamespace = o.baseNamespace
 	o.jobSpec = jobSpec
 
-	if o.dry {
+	if o.dry && o.verbose {
 		config, _ := yaml.Marshal(o.configSpec)
 		log.Printf("Resolved configuration:\n%s", string(config))
-		job, _ := yaml.Marshal(o.jobSpec)
+		job, _ := json.Marshal(o.jobSpec)
 		log.Printf("Resolved job spec:\n%s", string(job))
 	}
 	refs := o.jobSpec.Refs
@@ -416,25 +418,36 @@ func (o *options) Run() error {
 		eventRecorder := eventRecorder(client, o.namespace)
 		runtimeObject := &coreapi.ObjectReference{Namespace: o.namespace}
 
-		eventRecorder.Event(runtimeObject, coreapi.EventTypeNormal, "CiJobStarted", eventJobDescription(o.jobSpec, o.namespace))
+		if !o.dry {
+			eventRecorder.Event(runtimeObject, coreapi.EventTypeNormal, "CiJobStarted", eventJobDescription(o.jobSpec, o.namespace))
+		}
 		// execute the graph
 		suites, err := steps.Run(ctx, nodes, o.dry)
 		if err := o.writeJUnit(suites, "operator"); err != nil {
 			log.Printf("warning: Unable to write JUnit result: %v", err)
 		}
 		if err != nil {
-			eventRecorder.Event(runtimeObject, coreapi.EventTypeNormal, "CiJobFailed", eventJobDescription(o.jobSpec, o.namespace))
-			time.Sleep(time.Second)
+			if !o.dry {
+				eventRecorder.Event(runtimeObject, coreapi.EventTypeWarning, "CiJobFailed", eventJobDescription(o.jobSpec, o.namespace))
+				time.Sleep(time.Second)
+			}
 			return fmt.Errorf("could not run steps: %v", err)
 		}
 
 		for _, step := range postSteps {
 			if err := step.Run(ctx, o.dry); err != nil {
-				eventRecorder.Event(runtimeObject, coreapi.EventTypeNormal, "PostStepFailed",
-					fmt.Sprintf("Post step %s failed while %s", step.Name(), eventJobDescription(o.jobSpec, o.namespace)))
-				time.Sleep(time.Second)
+				if !o.dry {
+					eventRecorder.Event(runtimeObject, coreapi.EventTypeWarning, "PostStepFailed",
+						fmt.Sprintf("Post step %s failed while %s", step.Name(), eventJobDescription(o.jobSpec, o.namespace)))
+					time.Sleep(time.Second)
+				}
 				return fmt.Errorf("could not run post step %s: %v", step.Name(), err)
 			}
+		}
+
+		if !o.dry {
+			eventRecorder.Event(runtimeObject, coreapi.EventTypeNormal, "CiJobSucceeded", eventJobDescription(o.jobSpec, o.namespace))
+			time.Sleep(time.Second)
 		}
 
 		return nil
@@ -464,7 +477,6 @@ func loadClusterConfig() (*rest.Config, error) {
 }
 
 func (o *options) resolveInputs(ctx context.Context, steps []api.Step) error {
-	log.Printf("Resolving inputs for the test")
 	var inputs api.InputDefinition
 	for _, step := range steps {
 		definition, err := step.Inputs(ctx, o.dry)
@@ -491,7 +503,7 @@ func (o *options) resolveInputs(ctx context.Context, steps []api.Step) error {
 	// TODO: instead of mutating this here, we should pass the parts of graph execution that are resolved
 	// after the graph is created but before it is run down into the run step.
 	o.jobSpec.Namespace = o.namespace
-	log.Printf("Resolved inputs, targetting namespace %s", o.namespace)
+	log.Printf("Using namespace %s", o.namespace)
 
 	return nil
 }
@@ -730,11 +742,11 @@ func jobDescription(job *api.JobSpec, config *api.ReleaseBuildConfiguration) str
 func jobSpecFromGitRef(ref string) (*api.JobSpec, error) {
 	parts := strings.Split(ref, "@")
 	if len(parts) != 2 {
-		return nil, fmt.Errorf("must be ORG/NAME@COMMIT")
+		return nil, fmt.Errorf("must be ORG/NAME@REF")
 	}
 	prefix := strings.Split(parts[0], "/")
 	if len(prefix) != 2 {
-		return nil, fmt.Errorf("must be ORG/NAME@COMMIT")
+		return nil, fmt.Errorf("must be ORG/NAME@REF")
 	}
 	repo := fmt.Sprintf("https://github.com/%s/%s.git", prefix[0], prefix[1])
 	out, err := exec.Command("git", "ls-remote", repo, parts[1]).Output()

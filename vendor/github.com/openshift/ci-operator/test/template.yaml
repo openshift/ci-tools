@@ -1,0 +1,18 @@
+kind: Template
+apiVersion: template.openshift.io/v1
+parameters:
+- name: IMAGE_FORMAT
+  required: true
+- name: RELEASE_IMAGE_LATEST
+  required: true
+- name: IMAGE_TEST
+  required: true
+objects:
+- kind: Pod
+  apiVersion: v1
+  metadata:
+    name: test
+  spec:
+    containers:
+    - name: blah
+      image: ${IMAGE_TEST}

@@ -36,10 +36,11 @@ images are built.
 | Example: | `registry.svc.ci.openshift.org/ci-op-<input-hash>/stable:${component}` |
 | - | - |
 
-#### `RPM_REPO`
+#### `RPM_REPO_<org>_<repo>`
 The RPM repository URL from which your job's RPMs can be installed.
 `Template`s depending on this parameter will be processed only after the
-`rpm` image is built.
+`rpm` image is built. The value of org and repo are uppercased and dashes
+replaced with underscores.
 
 | Example: | `http://rpm-repo-ci-op-<input-hash>.svc.ci.openshift.org` |
 | - | - |

@@ -104,15 +104,122 @@ func TestGeneratePodSpec(t *testing.T) {
 	}
 }
 
+func TestGeneratePodSpecTemplate(t *testing.T) {
+	tests := []struct {
+		org        string
+		repo       string
+		configFile string
+		release    string
+		test       ciop.TestStepConfiguration
+
+		expected *kubeapi.PodSpec
+	}{
+		{
+			org:        "organization",
+			repo:       "repo",
+			configFile: "organization-repo-branch.json",
+			release:    "origin-v4.0",
+			test: ciop.TestStepConfiguration{
+				As:       "test",
+				Commands: "commands",
+				OpenshiftAnsibleClusterTestConfiguration: &ciop.OpenshiftAnsibleClusterTestConfiguration{
+					ClusterTestConfiguration: ciop.ClusterTestConfiguration{TargetCloud: "gcp"},
+				},
+			},
+
+			expected: &kubeapi.PodSpec{
+				ServiceAccountName: "ci-operator",
+				Volumes: []kubeapi.Volume{
+					{
+						Name: "job-definition",
+						VolumeSource: kubeapi.VolumeSource{
+							ConfigMap: &kubeapi.ConfigMapVolumeSource{
+								LocalObjectReference: kubeapi.LocalObjectReference{
+									Name: "prow-job-cluster-launch-e2e",
+								},
+							},
+						},
+					},
+					{
+						Name: "cluster-profile",
+						VolumeSource: kubeapi.VolumeSource{
+							Projected: &kubeapi.ProjectedVolumeSource{
+								Sources: []kubeapi.VolumeProjection{
+									{
+										Secret: &kubeapi.SecretProjection{
+											LocalObjectReference: kubeapi.LocalObjectReference{
+												Name: "cluster-secrets-gcp",
+											},
+										},
+									},
+									{
+										ConfigMap: &kubeapi.ConfigMapProjection{
+											LocalObjectReference: kubeapi.LocalObjectReference{
+												Name: "cluster-profile-gcp",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				Containers: []kubeapi.Container{{
+					Image:           "ci-operator:latest",
+					ImagePullPolicy: kubeapi.PullAlways,
+					Command:         []string{"ci-operator"},
+					Args: []string{
+						"--give-pr-author-access-to-namespace=true",
+						"--artifact-dir=$(ARTIFACTS)",
+						"--target=test",
+						"--secret-dir=/usr/local/test-cluster-profile",
+						"--template=/usr/local/test"},
+					Resources: kubeapi.ResourceRequirements{
+						Requests: kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
+						Limits:   kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(500, resource.DecimalSI)},
+					},
+					Env: []kubeapi.EnvVar{
+						{
+							Name: "CONFIG_SPEC",
+							ValueFrom: &kubeapi.EnvVarSource{
+								ConfigMapKeyRef: &kubeapi.ConfigMapKeySelector{
+									LocalObjectReference: kubeapi.LocalObjectReference{
+										Name: "ci-operator-configs",
+									},
+									Key: "organization-repo-branch.json",
+								},
+							},
+						},
+						{Name: "CLUSTER_TYPE", Value: "gcp"},
+						{Name: "JOB_NAME_SAFE", Value: "test"},
+						{Name: "TEST_COMMAND", Value: "commands"},
+						{Name: "RPM_REPO_OPENSHIFT_ORIGIN", Value: "https://rpms.svc.ci.openshift.org/openshift-origin-v4.0/"},
+					},
+					VolumeMounts: []kubeapi.VolumeMount{
+						{Name: "cluster-profile", MountPath: "/usr/local/test-cluster-profile"},
+						{Name: "job-definition", MountPath: "/usr/local/test", SubPath: "cluster-launch-e2e.yaml"},
+					},
+				}},
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		var podSpec *kubeapi.PodSpec
+		podSpec = generatePodSpecTemplate(tc.org, tc.repo, tc.configFile, tc.release, &tc.test)
+		if !equality.Semantic.DeepEqual(podSpec, tc.expected) {
+			t.Errorf("expected PodSpec diff:\n%s", diff.ObjectDiff(tc.expected, podSpec))
+		}
+	}
+}
+
 func TestGeneratePresubmitForTest(t *testing.T) {
 	tests := []struct {
 		name     string
-		target   string
 		repoInfo *configFilePathElements
 		expected *prowconfig.Presubmit
 	}{{
 		name:     "testname",
-		target:   "target",
 		repoInfo: &configFilePathElements{org: "org", repo: "repo", branch: "branch"},
 
 		expected: &prowconfig.Presubmit{
@@ -130,9 +237,7 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 		},
 	}}
 	for _, tc := range tests {
-		presubmit := generatePresubmitForTest(testDescription{tc.name, tc.target}, tc.repoInfo)
-		presubmit.Spec = nil // tested in generatePodSpec
-
+		presubmit := generatePresubmitForTest(tc.name, tc.repoInfo, nil) // podSpec tested in generatePodSpec
 		if !equality.Semantic.DeepEqual(presubmit, tc.expected) {
 			t.Errorf("expected presubmit diff:\n%s", diff.ObjectDiff(tc.expected, presubmit))
 		}
@@ -141,25 +246,21 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 
 func TestGeneratePostSubmitForTest(t *testing.T) {
 	tests := []struct {
-		name           string
-		target         string
-		repoInfo       *configFilePathElements
-		labels         map[string]string
-		additionalArgs []string
+		name     string
+		repoInfo *configFilePathElements
+		labels   map[string]string
 
 		expected *prowconfig.Postsubmit
 	}{
 		{
-			name:   "name",
-			target: "target",
+			name: "name",
 			repoInfo: &configFilePathElements{
 				org:            "organization",
 				repo:           "repository",
 				branch:         "branch",
 				configFilename: "branch.yaml",
 			},
-			labels:         map[string]string{},
-			additionalArgs: []string{},
+			labels: map[string]string{},
 
 			expected: &prowconfig.Postsubmit{
 				Agent:    "kubernetes",
@@ -172,37 +273,14 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 			},
 		},
 		{
-			name:   "name",
-			target: "target",
-			repoInfo: &configFilePathElements{
-				org:            "organization",
-				repo:           "repository",
-				branch:         "branch",
-				configFilename: "branch.yaml",
-			},
-			labels:         map[string]string{},
-			additionalArgs: []string{"--promote", "--additional=Arg"},
-
-			expected: &prowconfig.Postsubmit{
-				Agent:    "kubernetes",
-				Name:     "branch-ci-organization-repository-branch-name",
-				Brancher: prowconfig.Brancher{Branches: []string{"branch"}},
-				UtilityConfig: prowconfig.UtilityConfig{
-					DecorationConfig: &prowkube.DecorationConfig{SkipCloning: true},
-					Decorate:         true,
-				},
-			},
-		}, {
-			name:   "Name",
-			target: "Target",
+			name: "Name",
 			repoInfo: &configFilePathElements{
 				org:            "Organization",
 				repo:           "Repository",
 				branch:         "Branch",
 				configFilename: "config.yaml",
 			},
-			labels:         map[string]string{"artifacts": "images"},
-			additionalArgs: []string{"--promote", "--additional=Arg"},
+			labels: map[string]string{"artifacts": "images"},
 
 			expected: &prowconfig.Postsubmit{
 				Agent:    "kubernetes",
@@ -217,20 +295,7 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 		},
 	}
 	for _, tc := range tests {
-		var postsubmit *prowconfig.Postsubmit
-
-		if len(tc.additionalArgs) == 0 {
-			postsubmit = generatePostsubmitForTest(testDescription{tc.name, tc.target}, tc.repoInfo, tc.labels)
-		} else {
-			postsubmit = generatePostsubmitForTest(testDescription{tc.name, tc.target}, tc.repoInfo, tc.labels, tc.additionalArgs...)
-			// tests that additional args were propagated to the PodSpec
-			if !equality.Semantic.DeepEqual(postsubmit.Spec.Containers[0].Args[3:], tc.additionalArgs) {
-				t.Errorf("additional args not propagated to postsubmit:\n%s", diff.ObjectDiff(tc.additionalArgs, postsubmit.Spec.Containers[0].Args[2:]))
-			}
-		}
-
-		postsubmit.Spec = nil // tested in TestGeneratePodSpec
-
+		postsubmit := generatePostsubmitForTest(tc.name, tc.repoInfo, tc.labels, nil) // podSpec tested in TestGeneratePodSpec
 		if !equality.Semantic.DeepEqual(postsubmit, tc.expected) {
 			t.Errorf("expected postsubmit diff:\n%s", diff.ObjectDiff(tc.expected, postsubmit))
 		}
@@ -250,7 +315,9 @@ func TestGenerateJobs(t *testing.T) {
 		{
 			id: "two tests and empty Images so only two test presubmits are generated",
 			config: &ciop.ReleaseBuildConfiguration{
-				Tests: []ciop.TestStepConfiguration{{As: "derTest"}, {As: "leTest"}},
+				Tests: []ciop.TestStepConfiguration{
+					{As: "derTest", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "from"}},
+					{As: "leTest", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "from"}}},
 			},
 			repoInfo: &configFilePathElements{
 				org:            "organization",
@@ -268,7 +335,9 @@ func TestGenerateJobs(t *testing.T) {
 		}, {
 			id: "two tests and nonempty Images so two test presubmits and images pre/postsubmits are generated ",
 			config: &ciop.ReleaseBuildConfiguration{
-				Tests:  []ciop.TestStepConfiguration{{As: "derTest"}, {As: "leTest"}},
+				Tests: []ciop.TestStepConfiguration{
+					{As: "derTest", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "from"}},
+					{As: "leTest", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "from"}}},
 				Images: []ciop.ProjectDirectoryImageBuildStepConfiguration{{}},
 			},
 			repoInfo: &configFilePathElements{
@@ -285,6 +354,31 @@ func TestGenerateJobs(t *testing.T) {
 				}},
 				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {
 					{Name: "branch-ci-organization-repository-branch-images"},
+				}},
+			},
+		}, {
+			id: "template test",
+			config: &ciop.ReleaseBuildConfiguration{
+				InputConfiguration: ciop.InputConfiguration{
+					ReleaseTagConfiguration: &ciop.ReleaseTagConfiguration{Name: "origin-v4.0"}},
+				Tests: []ciop.TestStepConfiguration{
+					{
+						As: "oTeste",
+						OpenshiftAnsibleClusterTestConfiguration: &ciop.OpenshiftAnsibleClusterTestConfiguration{
+							ClusterTestConfiguration: ciop.ClusterTestConfiguration{TargetCloud: "gcp"},
+						},
+					},
+				},
+			},
+			repoInfo: &configFilePathElements{
+				org:            "organization",
+				repo:           "repository",
+				branch:         "branch",
+				configFilename: "konfig.yaml",
+			},
+			expected: &prowconfig.JobConfig{
+				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
+					{Name: "pull-ci-organization-repository-branch-oTeste"},
 				}},
 			},
 		}, {

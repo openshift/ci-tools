@@ -76,6 +76,12 @@ func (o *options) process() error {
 // Various pieces are derived from `org`, `repo`, `branch` and `target`.
 // `additionalArgs` are passed as additional arguments to `ci-operator`
 func generatePodSpec(configFile, target string, additionalArgs ...string) *kubeapi.PodSpec {
+	for _, arg := range additionalArgs {
+		if !strings.HasPrefix(arg, "--") {
+			panic(fmt.Sprintf("all args to ci-operator must be in the form --flag=value, not %s", arg))
+		}
+	}
+
 	configMapKeyRef := kubeapi.EnvVarSource{
 		ConfigMapKeyRef: &kubeapi.ConfigMapKeySelector{
 			LocalObjectReference: kubeapi.LocalObjectReference{

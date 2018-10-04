@@ -62,7 +62,7 @@ func TestGeneratePodSpec(t *testing.T) {
 		{
 			configFile:     "config.yml",
 			target:         "target",
-			additionalArgs: []string{"--promote", "something"},
+			additionalArgs: []string{"--promote", "--some=thing"},
 
 			expected: &kubeapi.PodSpec{
 				ServiceAccountName: "ci-operator",
@@ -70,7 +70,7 @@ func TestGeneratePodSpec(t *testing.T) {
 					Image:           "ci-operator:latest",
 					ImagePullPolicy: kubeapi.PullAlways,
 					Command:         []string{"ci-operator"},
-					Args:            []string{"--give-pr-author-access-to-namespace=true", "--artifact-dir=$(ARTIFACTS)", "--target=target", "--promote", "something"},
+					Args:            []string{"--give-pr-author-access-to-namespace=true", "--artifact-dir=$(ARTIFACTS)", "--target=target", "--promote", "--some=thing"},
 					Resources: kubeapi.ResourceRequirements{
 						Requests: kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
 						Limits:   kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(500, resource.DecimalSI)},
@@ -181,7 +181,7 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 				configFilename: "branch.yaml",
 			},
 			labels:         map[string]string{},
-			additionalArgs: []string{"--promote", "additionalArg"},
+			additionalArgs: []string{"--promote", "--additional=Arg"},
 
 			expected: &prowconfig.Postsubmit{
 				Agent:    "kubernetes",
@@ -202,7 +202,7 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 				configFilename: "config.yaml",
 			},
 			labels:         map[string]string{"artifacts": "images"},
-			additionalArgs: []string{"--promote", "additionalArg"},
+			additionalArgs: []string{"--promote", "--additional=Arg"},
 
 			expected: &prowconfig.Postsubmit{
 				Agent:    "kubernetes",

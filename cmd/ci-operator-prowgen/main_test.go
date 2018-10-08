@@ -202,6 +202,86 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 				}},
 			},
 		},
+		{
+			org:        "organization",
+			repo:       "repo",
+			configFile: "organization-repo-branch.json",
+			release:    "origin-v4.0",
+			test: ciop.TestStepConfiguration{
+				As:       "test",
+				Commands: "commands",
+				OpenshiftInstallerClusterTestConfiguration: &ciop.OpenshiftInstallerClusterTestConfiguration{
+					ClusterTestConfiguration: ciop.ClusterTestConfiguration{TargetCloud: "aws"},
+				},
+			},
+
+			expected: &kubeapi.PodSpec{
+				ServiceAccountName: "ci-operator",
+				Volumes: []kubeapi.Volume{
+					{
+						Name: "job-definition",
+						VolumeSource: kubeapi.VolumeSource{
+							ConfigMap: &kubeapi.ConfigMapVolumeSource{
+								LocalObjectReference: kubeapi.LocalObjectReference{
+									Name: "prow-job-cluster-launch-installer-e2e",
+								},
+							},
+						},
+					},
+					{
+						Name: "cluster-profile",
+						VolumeSource: kubeapi.VolumeSource{
+							Projected: &kubeapi.ProjectedVolumeSource{
+								Sources: []kubeapi.VolumeProjection{
+									{
+										Secret: &kubeapi.SecretProjection{
+											LocalObjectReference: kubeapi.LocalObjectReference{
+												Name: "cluster-secrets-aws",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				Containers: []kubeapi.Container{{
+					Image:           "ci-operator:latest",
+					ImagePullPolicy: kubeapi.PullAlways,
+					Command:         []string{"ci-operator"},
+					Args: []string{
+						"--give-pr-author-access-to-namespace=true",
+						"--artifact-dir=$(ARTIFACTS)",
+						"--target=test",
+						"--secret-dir=/usr/local/test-cluster-profile",
+						"--template=/usr/local/test"},
+					Resources: kubeapi.ResourceRequirements{
+						Requests: kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
+						Limits:   kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(500, resource.DecimalSI)},
+					},
+					Env: []kubeapi.EnvVar{
+						{
+							Name: "CONFIG_SPEC",
+							ValueFrom: &kubeapi.EnvVarSource{
+								ConfigMapKeyRef: &kubeapi.ConfigMapKeySelector{
+									LocalObjectReference: kubeapi.LocalObjectReference{
+										Name: "ci-operator-configs",
+									},
+									Key: "organization-repo-branch.json",
+								},
+							},
+						},
+						{Name: "CLUSTER_TYPE", Value: "aws"},
+						{Name: "JOB_NAME_SAFE", Value: "test"},
+						{Name: "TEST_COMMAND", Value: "commands"},
+					},
+					VolumeMounts: []kubeapi.VolumeMount{
+						{Name: "cluster-profile", MountPath: "/usr/local/test-cluster-profile"},
+						{Name: "job-definition", MountPath: "/usr/local/test", SubPath: "cluster-launch-installer-e2e.yaml"},
+					},
+				}},
+			},
+		},
 	}
 
 	for _, tc := range tests {

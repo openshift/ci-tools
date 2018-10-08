@@ -201,10 +201,6 @@ func validateTestConfigurationType(fieldRoot string, test TestStepConfiguration,
 		typeCount++
 		validationErrors = append(validationErrors, validateTargetCloud(fmt.Sprintf("%s", fieldRoot), testConfig.TargetCloud))
 	}
-	if testConfig := test.OpenshiftInstallerSmokeClusterTestConfiguration; testConfig != nil {
-		typeCount++
-		validationErrors = append(validationErrors, validateTargetCloud(fmt.Sprintf("%s", fieldRoot), testConfig.TargetCloud))
-	}
 	if typeCount == 0 {
 		// TODO remove when the migration is completed
 		if len(test.From) == 0 {

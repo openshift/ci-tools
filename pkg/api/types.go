@@ -287,11 +287,10 @@ type TestStepConfiguration struct {
 	ArtifactDir string `json:"artifact_dir"`
 
 	// Only one of the following can be not-null.
-	ContainerTestConfiguration                      *ContainerTestConfiguration                      `json:"container,omitempty"`
-	OpenshiftAnsibleClusterTestConfiguration        *OpenshiftAnsibleClusterTestConfiguration        `json:"openshift_ansible,omitempty"`
-	OpenshiftAnsibleSrcClusterTestConfiguration     *OpenshiftAnsibleSrcClusterTestConfiguration     `json:"openshift_ansible_src,omitempty"`
-	OpenshiftInstallerClusterTestConfiguration      *OpenshiftInstallerClusterTestConfiguration      `json:"openshift_installer,omitempty"`
-	OpenshiftInstallerSmokeClusterTestConfiguration *OpenshiftInstallerSmokeClusterTestConfiguration `json:"openshift_installer_smoke,omitempty"`
+	ContainerTestConfiguration                  *ContainerTestConfiguration                  `json:"container,omitempty"`
+	OpenshiftAnsibleClusterTestConfiguration    *OpenshiftAnsibleClusterTestConfiguration    `json:"openshift_ansible,omitempty"`
+	OpenshiftAnsibleSrcClusterTestConfiguration *OpenshiftAnsibleSrcClusterTestConfiguration `json:"openshift_ansible_src,omitempty"`
+	OpenshiftInstallerClusterTestConfiguration  *OpenshiftInstallerClusterTestConfiguration  `json:"openshift_installer,omitempty"`
 }
 
 // ContainerTestConfiguration describes a test that runs a
@@ -336,13 +335,6 @@ type OpenshiftAnsibleSrcClusterTestConfiguration struct {
 // that provisions a cluster using openshift-installer and runs
 // conformance tests.
 type OpenshiftInstallerClusterTestConfiguration struct {
-	ClusterTestConfiguration `json:",inline"`
-}
-
-// OpenshiftInstallerSmokeClusterTestConfiguration describes
-// a test that provisions a cluster using openshift-installer
-// and runs smoke tests.
-type OpenshiftInstallerSmokeClusterTestConfiguration struct {
 	ClusterTestConfiguration `json:",inline"`
 }
 

@@ -111,15 +111,17 @@ func generatePodSpec(configFile, target string, additionalArgs ...string) *kubea
 
 func generatePodSpecTemplate(org, repo, configFile, release string, test *cioperatorapi.TestStepConfiguration, additionalArgs ...string) *kubeapi.PodSpec {
 	var template, targetCloud string
-	var needsReleaseRpms bool
+	var needsReleaseRpms, hasProfile bool
 	if conf := test.OpenshiftAnsibleClusterTestConfiguration; conf != nil {
 		template = "cluster-launch-e2e"
 		targetCloud = string(conf.TargetCloud)
 		needsReleaseRpms = true
+		hasProfile = true
 	} else if conf := test.OpenshiftAnsibleSrcClusterTestConfiguration; conf != nil {
 		template = "cluster-launch-src"
 		targetCloud = string(conf.TargetCloud)
 		needsReleaseRpms = true
+		hasProfile = true
 	} else if conf := test.OpenshiftInstallerClusterTestConfiguration; conf != nil {
 		template = "cluster-launch-installer-e2e"
 		targetCloud = string(conf.TargetCloud)
@@ -127,10 +129,34 @@ func generatePodSpecTemplate(org, repo, configFile, release string, test *cioper
 		template = "cluster-launch-installer-e2e-smoke"
 		targetCloud = string(conf.TargetCloud)
 	}
-	clusterProfile := fmt.Sprintf("%s-cluster-profile", test.As)
-	clusterProfilePath := fmt.Sprintf("/usr/local/%s", clusterProfile)
+	clusterProfilePath := fmt.Sprintf("/usr/local/%s-cluster-profile", test.As)
 	templatePath := fmt.Sprintf("/usr/local/%s", test.As)
 	podSpec := generatePodSpec(configFile, test.As, additionalArgs...)
+	clusterProfile := kubeapi.Volume{
+		Name: "cluster-profile",
+		VolumeSource: kubeapi.VolumeSource{
+			Projected: &kubeapi.ProjectedVolumeSource{
+				Sources: []kubeapi.VolumeProjection{
+					{
+						Secret: &kubeapi.SecretProjection{
+							LocalObjectReference: kubeapi.LocalObjectReference{
+								Name: fmt.Sprintf("cluster-secrets-%s", targetCloud),
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	if hasProfile {
+		clusterProfile.VolumeSource.Projected.Sources = append(clusterProfile.VolumeSource.Projected.Sources, kubeapi.VolumeProjection{
+			ConfigMap: &kubeapi.ConfigMapProjection{
+				LocalObjectReference: kubeapi.LocalObjectReference{
+					Name: fmt.Sprintf("cluster-profile-%s", targetCloud),
+				},
+			},
+		})
+	}
 	podSpec.Volumes = []kubeapi.Volume{
 		{
 			Name: "job-definition",
@@ -142,29 +168,7 @@ func generatePodSpecTemplate(org, repo, configFile, release string, test *cioper
 				},
 			},
 		},
-		{
-			Name: "cluster-profile",
-			VolumeSource: kubeapi.VolumeSource{
-				Projected: &kubeapi.ProjectedVolumeSource{
-					Sources: []kubeapi.VolumeProjection{
-						{
-							Secret: &kubeapi.SecretProjection{
-								LocalObjectReference: kubeapi.LocalObjectReference{
-									Name: fmt.Sprintf("cluster-secrets-%s", targetCloud),
-								},
-							},
-						},
-						{
-							ConfigMap: &kubeapi.ConfigMapProjection{
-								LocalObjectReference: kubeapi.LocalObjectReference{
-									Name: fmt.Sprintf("cluster-profile-%s", targetCloud),
-								},
-							},
-						},
-					},
-				},
-			},
-		},
+		clusterProfile,
 	}
 	container := &podSpec.Containers[0]
 	container.Args = append(

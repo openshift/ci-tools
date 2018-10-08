@@ -151,11 +151,12 @@ func validateReleaseTagConfiguration(fieldRoot string, input ReleaseTagConfigura
 	return kerrors.NewAggregate(validationErrors)
 }
 
-func validateTargetCloud(fieldRoot string, tc TargetCloud) error {
-	if tc != TargetCloudAWS && tc != TargetCloudGCP {
-		return fmt.Errorf("%q: invalid target cloud %q", fieldRoot, tc)
+func validateClusterProfile(fieldRoot string, p ClusterProfile) error {
+	switch p {
+	case ClusterProfileAWSAtomic, ClusterProfileAWSCentos, ClusterProfileGCP, ClusterProfileGCPHA, ClusterProfileGCPCRIO:
+		return nil
 	}
-	return nil
+	return fmt.Errorf("%q: invalid cluster profile %q", fieldRoot, p)
 }
 
 func searchForTestDuplicates(tests []TestStepConfiguration) error {
@@ -190,16 +191,16 @@ func validateTestConfigurationType(fieldRoot string, test TestStepConfiguration,
 	if testConfig := test.OpenshiftAnsibleClusterTestConfiguration; testConfig != nil {
 		typeCount++
 		needsReleaseRpms = true
-		validationErrors = append(validationErrors, validateTargetCloud(fmt.Sprintf("%s", fieldRoot), testConfig.TargetCloud))
+		validationErrors = append(validationErrors, validateClusterProfile(fmt.Sprintf("%s", fieldRoot), testConfig.ClusterProfile))
 	}
 	if testConfig := test.OpenshiftAnsibleSrcClusterTestConfiguration; testConfig != nil {
 		typeCount++
 		needsReleaseRpms = true
-		validationErrors = append(validationErrors, validateTargetCloud(fmt.Sprintf("%s", fieldRoot), testConfig.TargetCloud))
+		validationErrors = append(validationErrors, validateClusterProfile(fmt.Sprintf("%s", fieldRoot), testConfig.ClusterProfile))
 	}
 	if testConfig := test.OpenshiftInstallerClusterTestConfiguration; testConfig != nil {
 		typeCount++
-		validationErrors = append(validationErrors, validateTargetCloud(fmt.Sprintf("%s", fieldRoot), testConfig.TargetCloud))
+		validationErrors = append(validationErrors, validateClusterProfile(fmt.Sprintf("%s", fieldRoot), testConfig.ClusterProfile))
 	}
 	if typeCount == 0 {
 		// TODO remove when the migration is completed

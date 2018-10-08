@@ -301,20 +301,24 @@ type ContainerTestConfiguration struct {
 	From PipelineImageStreamTagReference `json:"from"`
 }
 
-// TargetCloud determines which cloud provider should be
-// used to provision the cluster.
-type TargetCloud string
+// ClusterProfile is the name of a set of input variables
+// provided to the installer defining the target cloud,
+// cluster topology, etc.
+type ClusterProfile string
 
-// Types of clusters supported by the provisioners.
 const (
-	TargetCloudAWS TargetCloud = "aws"
-	TargetCloudGCP             = "gcp"
+	ClusterProfileAWS       ClusterProfile = "aws"
+	ClusterProfileAWSAtomic                = "aws-atomic"
+	ClusterProfileAWSCentos                = "aws-centos"
+	ClusterProfileGCP                      = "gcp"
+	ClusterProfileGCPHA                    = "gcp-ha"
+	ClusterProfileGCPCRIO                  = "gcp-crio"
 )
 
 // ClusterTestConfiguration describes a test that provisions
 // a cluster and runs a command in it.
 type ClusterTestConfiguration struct {
-	TargetCloud TargetCloud `json:"target_cloud"`
+	ClusterProfile ClusterProfile `json:"cluster_profile"`
 }
 
 // OpenshiftAnsibleClusterTestConfiguration describes a test

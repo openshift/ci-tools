@@ -338,6 +338,10 @@ func readCiOperatorConfig(configFilePath string) (*cioperatorapi.ReleaseBuildCon
 		return nil, fmt.Errorf("failed to load ci-operator config (%v)", err)
 	}
 
+	if err := configSpec.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid ci-operator config: %v", err)
+	}
+
 	return configSpec, nil
 }
 

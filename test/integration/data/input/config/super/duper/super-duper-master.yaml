@@ -18,6 +18,12 @@ build_root:
     namespace: openshift
     name: release
     tag: golang-1.10
+resources:
+  '*':
+    limits:
+      cpu: 500Mi
+    requests:
+      cpu: 10Mi
 tests:
 - as: unit
   commands: make test-unit

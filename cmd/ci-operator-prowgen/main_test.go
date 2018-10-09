@@ -711,6 +711,12 @@ build_root:
 images:
 - from: base
   to: service-serving-cert-signer
+resources:
+  '*':
+    limits:
+      cpu: 500Mi
+    requests:
+      cpu: 10Mi
 tag_specification:
   cluster: https://api.ci.openshift.org
   name: origin-v3.11
@@ -847,6 +853,12 @@ build_root:
 images:
 - from: base
   to: service-serving-cert-signer
+resources:
+  '*':
+    limits:
+      cpu: 500Mi
+    requests:
+      cpu: 10Mi
 tag_specification:
   cluster: https://api.ci.openshift.org
   name: origin-v3.11
@@ -1037,6 +1049,12 @@ tests:
 images:
 - from: base
   to: service-serving-cert-signer
+resources:
+  '*':
+    limits:
+      cpu: 500Mi
+    requests:
+      cpu: 10Mi
 tag_specification:
   cluster: https://api.ci.openshift.org
   name: origin-v3.11

@@ -122,7 +122,7 @@
   branch = "master"
   name = "github.com/openshift/ci-operator"
   packages = ["pkg/api"]
-  revision = "30e02af3206aca2ab2554a495a780abcd4e091f7"
+  revision = "72b2c0089654aad4e07944ba5337d660ff2da510"
 
 [[projects]]
   name = "github.com/prometheus/client_golang"

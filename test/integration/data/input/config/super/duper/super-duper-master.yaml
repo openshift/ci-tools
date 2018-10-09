@@ -29,4 +29,4 @@ tests:
 - as: e2e
   commands: make e2e
   openshift_ansible:
-    target_cloud: aws
+    cluster_profile: gcp

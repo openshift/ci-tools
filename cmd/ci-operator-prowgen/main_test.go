@@ -123,7 +123,7 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 				As:       "test",
 				Commands: "commands",
 				OpenshiftAnsibleClusterTestConfiguration: &ciop.OpenshiftAnsibleClusterTestConfiguration{
-					ClusterTestConfiguration: ciop.ClusterTestConfiguration{TargetCloud: "gcp"},
+					ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: "gcp"},
 				},
 			},
 
@@ -211,7 +211,7 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 				As:       "test",
 				Commands: "commands",
 				OpenshiftInstallerClusterTestConfiguration: &ciop.OpenshiftInstallerClusterTestConfiguration{
-					ClusterTestConfiguration: ciop.ClusterTestConfiguration{TargetCloud: "aws"},
+					ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: "aws"},
 				},
 			},
 
@@ -445,7 +445,7 @@ func TestGenerateJobs(t *testing.T) {
 					{
 						As: "oTeste",
 						OpenshiftAnsibleClusterTestConfiguration: &ciop.OpenshiftAnsibleClusterTestConfiguration{
-							ClusterTestConfiguration: ciop.ClusterTestConfiguration{TargetCloud: "gcp"},
+							ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: "gcp"},
 						},
 					},
 				},

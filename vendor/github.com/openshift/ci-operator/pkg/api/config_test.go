@@ -66,7 +66,7 @@ func TestValidateTests(t *testing.T) {
 					Commands:                   "commands",
 					ContainerTestConfiguration: &ContainerTestConfiguration{},
 					OpenshiftAnsibleClusterTestConfiguration: &OpenshiftAnsibleClusterTestConfiguration{
-						ClusterTestConfiguration{TargetCloud: TargetCloudGCP}},
+						ClusterTestConfiguration{ClusterProfile: ClusterProfileAWSAtomic}},
 				},
 			},
 			expectedValid: false,
@@ -130,7 +130,7 @@ func TestValidateTests(t *testing.T) {
 			expectedValid: false,
 		},
 		{
-			id: "invalid target cloud",
+			id: "invalid cluster profile",
 			tests: []TestStepConfiguration{
 				{
 					As: "test",
@@ -146,7 +146,7 @@ func TestValidateTests(t *testing.T) {
 					As:       "test",
 					Commands: "commands",
 					OpenshiftAnsibleClusterTestConfiguration: &OpenshiftAnsibleClusterTestConfiguration{
-						ClusterTestConfiguration: ClusterTestConfiguration{TargetCloud: TargetCloudAWS},
+						ClusterTestConfiguration: ClusterTestConfiguration{ClusterProfile: ClusterProfileGCP},
 					},
 				},
 			},
@@ -158,7 +158,7 @@ func TestValidateTests(t *testing.T) {
 					As:       "test",
 					Commands: "commands",
 					OpenshiftAnsibleClusterTestConfiguration: &OpenshiftAnsibleClusterTestConfiguration{
-						ClusterTestConfiguration: ClusterTestConfiguration{TargetCloud: TargetCloudAWS},
+						ClusterTestConfiguration: ClusterTestConfiguration{ClusterProfile: ClusterProfileGCP},
 					},
 				},
 			},
@@ -171,7 +171,7 @@ func TestValidateTests(t *testing.T) {
 					As:       "test",
 					Commands: "commands",
 					OpenshiftAnsibleClusterTestConfiguration: &OpenshiftAnsibleClusterTestConfiguration{
-						ClusterTestConfiguration: ClusterTestConfiguration{TargetCloud: TargetCloudAWS},
+						ClusterTestConfiguration: ClusterTestConfiguration{ClusterProfile: ClusterProfileGCP},
 					},
 				},
 			},

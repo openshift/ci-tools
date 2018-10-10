@@ -397,25 +397,32 @@ func isConfigFile(path string, info os.FileInfo) bool {
 // Prow job configuration files for each one under a different path, mimicking
 // the directory structure.
 func generateJobsFromDirectory(configDir, jobDir string) error {
-	err := filepath.Walk(configDir, func(path string, info os.FileInfo, err error) error {
+	ok := true
+	filepath.Walk(configDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			logrus.WithError(err).Error("Error encontered while generating Prow job config")
-			return err
+			ok = false
+			return nil
 		}
 		if isConfigFile(path, info) {
 			jobConfig, repoInfo, err := generateProwJobsFromConfigFile(path)
 			if err != nil {
-				return err
+				logrus.WithField("source-file", path).WithError(err).Error("Failed to generate jobs from config file")
+				ok = false
+				return nil
 			}
-
 			if err = jc.WriteToDir(jobDir, repoInfo.org, repoInfo.repo, jobConfig); err != nil {
-				return err
+				logrus.WithField("source-file", path).WithError(err).Error("Failed to write jobs")
+				ok = false
+				return nil
 			}
 		}
 		return nil
 	})
-
-	return err
+	if !ok {
+		return fmt.Errorf("Failed to generate jobs from directory")
+	}
+	return nil
 }
 
 func getReleaseRepoDir(directory string) (string, error) {

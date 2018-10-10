@@ -307,12 +307,14 @@ type ContainerTestConfiguration struct {
 type ClusterProfile string
 
 const (
-	ClusterProfileAWS       ClusterProfile = "aws"
-	ClusterProfileAWSAtomic                = "aws-atomic"
-	ClusterProfileAWSCentos                = "aws-centos"
-	ClusterProfileGCP                      = "gcp"
-	ClusterProfileGCPHA                    = "gcp-ha"
-	ClusterProfileGCPCRIO                  = "gcp-crio"
+	ClusterProfileAWS        ClusterProfile = "aws"
+	ClusterProfileAWSAtomic                 = "aws-atomic"
+	ClusterProfileAWSCentos                 = "aws-centos"
+	ClusterProfileAWSGluster                = "aws-gluster"
+	ClusterProfileGCP                       = "gcp"
+	ClusterProfileGCPHA                     = "gcp-ha"
+	ClusterProfileGCPCRIO                   = "gcp-crio"
+	ClusterProfileGCPLogging                = "gcp-logging"
 )
 
 // ClusterTestConfiguration describes a test that provisions

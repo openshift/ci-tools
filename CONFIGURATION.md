@@ -71,8 +71,6 @@ tests:
     target_cloud: ''
   openshift_installer:
     target_cloud: ''
-  openshift_installer_smoke:
-    target_cloud: ''
 ```
 
 # `tag_specification`
@@ -321,10 +319,6 @@ and runs conformance tests.
 ## `tests.openshift_installer`
 `openshift_installer` is a test that provisions a cluster using
 `openshift-installer` and runs conformance tests.
-
-## `tests.openshift_installer_smoke`
-`openshift_installer_smoke` is a test that provisions a cluster using
-`openshift-installer` and runs smoke tests.
 
 ## `tests.*.target_cloud`
 `target_cloud` can be either `aws` or `gcp` and specifies the cloud provider to

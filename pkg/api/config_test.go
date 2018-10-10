@@ -19,9 +19,9 @@ func TestValidateTests(t *testing.T) {
 			id: `ReleaseBuildConfiguration{Tests: {As: "unit"}}`,
 			tests: []TestStepConfiguration{
 				{
-					As:       "unit",
-					From:     "ignored",
-					Commands: "commands",
+					As:                         "unit",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &ContainerTestConfiguration{From: "ignored"},
 				},
 			},
 			expectedValid: true,
@@ -30,23 +30,12 @@ func TestValidateTests(t *testing.T) {
 			id: `ReleaseBuildConfiguration{Tests: {As: "images"}}`,
 			tests: []TestStepConfiguration{
 				{
-					As:       "images",
-					From:     "ignored",
-					Commands: "commands",
+					As:                         "images",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &ContainerTestConfiguration{From: "ignored"},
 				},
 			},
 			expectedValid: false,
-		},
-		{
-			id: "test with `from`",
-			tests: []TestStepConfiguration{
-				{
-					As:       "test",
-					From:     "from",
-					Commands: "commands",
-				},
-			},
-			expectedValid: true,
 		},
 		{
 			id: "No test type",
@@ -72,18 +61,6 @@ func TestValidateTests(t *testing.T) {
 			expectedValid: false,
 		},
 		{
-			id: "From + ContainerTestConfiguration",
-			tests: []TestStepConfiguration{
-				{
-					As:       "test",
-					Commands: "commands",
-					From:     "from",
-					ContainerTestConfiguration: &ContainerTestConfiguration{},
-				},
-			},
-			expectedValid: false,
-		},
-		{
 			id: "container test without `from`",
 			tests: []TestStepConfiguration{
 				{
@@ -98,8 +75,8 @@ func TestValidateTests(t *testing.T) {
 			id: "test without `commands`",
 			tests: []TestStepConfiguration{
 				{
-					As:   "test",
-					From: "from",
+					As: "test",
+					ContainerTestConfiguration: &ContainerTestConfiguration{From: "ignored"},
 				},
 			},
 			expectedValid: false,
@@ -108,14 +85,14 @@ func TestValidateTests(t *testing.T) {
 			id: "test with duplicated `as`",
 			tests: []TestStepConfiguration{
 				{
-					As:       "test",
-					From:     "from",
-					Commands: "commands",
+					As:                         "test",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &ContainerTestConfiguration{From: "ignored"},
 				},
 				{
-					As:       "test",
-					From:     "from",
-					Commands: "commands",
+					As:                         "test",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &ContainerTestConfiguration{From: "ignored"},
 				},
 			},
 			expectedValid: false,

@@ -182,8 +182,7 @@ func validateTestConfigurationType(fieldRoot string, test TestStepConfiguration,
 	typeCount := 0
 	if testConfig := test.ContainerTestConfiguration; testConfig != nil {
 		typeCount++
-		// TODO remove when the migration is completed
-		if len(testConfig.From) == 0 && len(test.From) == 0 {
+		if len(testConfig.From) == 0 {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: `from` is required", fieldRoot))
 		}
 	}
@@ -203,15 +202,8 @@ func validateTestConfigurationType(fieldRoot string, test TestStepConfiguration,
 		validationErrors = append(validationErrors, validateClusterProfile(fmt.Sprintf("%s", fieldRoot), testConfig.ClusterProfile))
 	}
 	if typeCount == 0 {
-		// TODO remove when the migration is completed
-		if len(test.From) == 0 {
-			validationErrors = append(validationErrors, fmt.Errorf("%s has no type", fieldRoot))
-		}
+		validationErrors = append(validationErrors, fmt.Errorf("%s has no type", fieldRoot))
 	} else if typeCount == 1 {
-		// TODO remove when the migration is completed
-		if len(test.From) > 0 {
-			validationErrors = append(validationErrors, fmt.Errorf("%s specifies both `From` and a test type", fieldRoot))
-		}
 		if needsReleaseRpms && (release == nil || !originReleaseTagRegexp.MatchString(release.Name)) {
 			validationErrors = append(validationErrors, fmt.Errorf("%s requires an 'origin' release in `tag_specification`", fieldRoot))
 		}

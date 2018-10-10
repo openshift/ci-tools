@@ -127,9 +127,9 @@ func generatePodSpecTemplate(org, repo, configFile, release string, test *cioper
 	}
 	var targetCloud string
 	switch clusterProfile {
-	case cioperatorapi.ClusterProfileAWS, cioperatorapi.ClusterProfileAWSAtomic, cioperatorapi.ClusterProfileAWSCentos:
+	case cioperatorapi.ClusterProfileAWS, cioperatorapi.ClusterProfileAWSAtomic, cioperatorapi.ClusterProfileAWSCentos, cioperatorapi.ClusterProfileAWSGluster:
 		targetCloud = "aws"
-	case cioperatorapi.ClusterProfileGCP, cioperatorapi.ClusterProfileGCPHA, cioperatorapi.ClusterProfileGCPCRIO:
+	case cioperatorapi.ClusterProfileGCP, cioperatorapi.ClusterProfileGCPHA, cioperatorapi.ClusterProfileGCPCRIO, cioperatorapi.ClusterProfileGCPLogging:
 		targetCloud = "gcp"
 	}
 	clusterProfilePath := fmt.Sprintf("/usr/local/%s-cluster-profile", test.As)

@@ -593,6 +593,10 @@ func (o *options) initializeNamespace() error {
 		updates["ci.openshift.io/ttl.hard"] = o.cleanupDuration.String()
 	}
 
+	// This label makes sure that the namespace is active, and the value will be updated
+	// if the namespace will be reused.
+	updates["ci.openshift.io/active"] = time.Now().Format(time.RFC3339)
+
 	if len(updates) > 0 {
 		if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 			ns, err := client.Namespaces().Get(o.namespace, meta.GetOptions{})
@@ -609,12 +613,12 @@ func (o *options) initializeNamespace() error {
 
 			_, updateErr := client.Namespaces().Update(ns)
 			if kerrors.IsForbidden(updateErr) {
-				log.Printf("warning: Could not mark the namespace to be deleted later because you do not have permission to update the namespace (details: %v)", updateErr)
+				log.Printf("warning: Could not add annotations because you do not have permission to update the namespace (details: %v)", updateErr)
 				return nil
 			}
 			return updateErr
 		}); err != nil {
-			return fmt.Errorf("could not update namespace to add TTLs: %v", err)
+			return fmt.Errorf("could not update namespace to add TTLs and active annotations: %v", err)
 		}
 	}
 

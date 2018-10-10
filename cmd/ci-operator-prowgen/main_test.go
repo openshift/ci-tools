@@ -719,7 +719,8 @@ tag_specification:
 tests:
 - as: unit
   commands: make test-unit
-  from: src`),
+  container:
+    from: src`),
 			prowOldPresubmitYAML:  []byte(""),
 			prowOldPostsubmitYAML: []byte(""),
 			prowExpectedPostsubmitYAML: []byte(`postsubmits:
@@ -854,7 +855,8 @@ tag_specification:
 tests:
 - as: unit
   commands: make test-unit
-  from: src`),
+  container:
+    from: src`),
 			prowOldPresubmitYAML: []byte(""),
 			prowOldPostsubmitYAML: []byte(`postsubmits:
   super/duper:
@@ -1049,7 +1051,8 @@ build_root:
 tests:
 - as: unit
   commands: make test-unit
-  from: src
+  container:
+    from: src
 `),
 			prowOldPresubmitYAML: []byte(""),
 			prowOldPostsubmitYAML: []byte(`postsubmits:

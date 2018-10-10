@@ -21,10 +21,12 @@ build_root:
 tests:
 - as: unit
   commands: make test-unit
-  from: src
+  container:
+    from: src
 - as: lint
   commands: make test-lint
-  from: src
+  container:
+    from: src
 promotion:
   additional_images:
     super-duper-src: src

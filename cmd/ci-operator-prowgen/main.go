@@ -289,8 +289,7 @@ func generateJobs(
 
 	for _, element := range configSpec.Tests {
 		var podSpec *kubeapi.PodSpec
-		if len(element.From) != 0 || element.ContainerTestConfiguration != nil {
-			// TODO remove when the migration is completed
+		if element.ContainerTestConfiguration != nil {
 			podSpec = generatePodSpec(repoInfo.configFilename, element.As)
 		} else {
 			podSpec = generatePodSpecTemplate(repoInfo.org, repoInfo.repo, repoInfo.configFilename, configSpec.ReleaseTagConfiguration.Name, &element)

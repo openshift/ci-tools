@@ -287,10 +287,11 @@ type TestStepConfiguration struct {
 	ArtifactDir string `json:"artifact_dir"`
 
 	// Only one of the following can be not-null.
-	ContainerTestConfiguration                  *ContainerTestConfiguration                  `json:"container,omitempty"`
-	OpenshiftAnsibleClusterTestConfiguration    *OpenshiftAnsibleClusterTestConfiguration    `json:"openshift_ansible,omitempty"`
-	OpenshiftAnsibleSrcClusterTestConfiguration *OpenshiftAnsibleSrcClusterTestConfiguration `json:"openshift_ansible_src,omitempty"`
-	OpenshiftInstallerClusterTestConfiguration  *OpenshiftInstallerClusterTestConfiguration  `json:"openshift_installer,omitempty"`
+	ContainerTestConfiguration                      *ContainerTestConfiguration                      `json:"container,omitempty"`
+	OpenshiftAnsibleClusterTestConfiguration        *OpenshiftAnsibleClusterTestConfiguration        `json:"openshift_ansible,omitempty"`
+	OpenshiftAnsibleSrcClusterTestConfiguration     *OpenshiftAnsibleSrcClusterTestConfiguration     `json:"openshift_ansible_src,omitempty"`
+	OpenshiftAnsibleUpgradeClusterTestConfiguration *OpenshiftAnsibleUpgradeClusterTestConfiguration `json:"openshift_ansible_upgrade,omitempty"`
+	OpenshiftInstallerClusterTestConfiguration      *OpenshiftInstallerClusterTestConfiguration      `json:"openshift_installer,omitempty"`
 }
 
 // ContainerTestConfiguration describes a test that runs a
@@ -323,6 +324,14 @@ type ClusterTestConfiguration struct {
 	ClusterProfile ClusterProfile `json:"cluster_profile"`
 }
 
+// ClusterUpgradeTestConfiguration describes a test that provisions
+// a cluster, upgrades it and runs a command in it.
+type ClusterUpgradeTestConfiguration struct {
+	ClusterProfile  ClusterProfile `json:"cluster_profile"`
+	PreviousVersion string         `json:"previous_version"`
+	PreviousRPMDeps string         `json:"previous_rpm_deps"`
+}
+
 // OpenshiftAnsibleClusterTestConfiguration describes a test
 // that provisions a cluster using openshift-ansible and runs
 // conformance tests.
@@ -334,6 +343,13 @@ type OpenshiftAnsibleClusterTestConfiguration struct {
 // test that provisions a cluster using openshift-ansible and
 // executes a command in the `src` image.
 type OpenshiftAnsibleSrcClusterTestConfiguration struct {
+	ClusterTestConfiguration `json:",inline"`
+}
+
+// OpenshiftAnsibleUpgradeClusterTestConfiguration describes a
+// test that provisions a cluster using openshift-ansible,
+// upgrades it to the next version and runs conformance tests.
+type OpenshiftAnsibleUpgradeClusterTestConfiguration struct {
 	ClusterTestConfiguration `json:",inline"`
 }
 

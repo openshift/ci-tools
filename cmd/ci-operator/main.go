@@ -652,7 +652,9 @@ func (o *options) initializeNamespace() error {
 		})
 	}
 
-	log.Printf("Populating secrets for test")
+	if len(o.secrets) > 0 {
+		log.Printf("Populating secrets for test")
+	}
 	for _, secret := range o.secrets {
 		_, err := client.Secrets(o.namespace).Create(secret)
 		if kerrors.IsAlreadyExists(err) {

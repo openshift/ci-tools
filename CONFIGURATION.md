@@ -66,13 +66,11 @@ tests:
   container:
     from: ''
   openshift_ansible:
-    target_cloud: ''
+    cluster_profile: ''
   openshift_ansible_src:
-    target_cloud: ''
+    cluster_profile: ''
   openshift_installer:
-    target_cloud: ''
-  openshift_installer_smoke:
-    target_cloud: ''
+    cluster_profile: ''
 ```
 
 # `tag_specification`
@@ -322,14 +320,20 @@ and runs conformance tests.
 `openshift_installer` is a test that provisions a cluster using
 `openshift-installer` and runs conformance tests.
 
-## `tests.openshift_installer_smoke`
-`openshift_installer_smoke` is a test that provisions a cluster using
-`openshift-installer` and runs smoke tests.
+## `tests.*.cluster_profile`
+`cluster_profile` chooses the profile used as input to the installer. This
+field is only valid in tests that provision a cluster (`openshift_ansible`,
+`openshift_ansible_src`, and `openshift_installer`). Valid values are:
 
-## `tests.*.target_cloud`
-`target_cloud` can be either `aws` or `gcp` and specifies the cloud provider to
-use to provision the cluster for `openshift_ansible`, `openshift_ansible_src`,
-`openshift_installer`, and `openshift_installer_smoke` tests.
+- `aws`
+- `aws-atomic`
+- `aws-centos`
+- `gcp`
+- `gcp-ha`
+- `gcp-crio`
+
+These are a subset of the profiles found in the
+[`release` repository](https://github.com/openshift/release/tree/master/cluster/test-deploy).
 
 # `raw_steps`
 `raw_steps` is intended for advanced use of `ci-operator` to build custom execution

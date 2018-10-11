@@ -476,7 +476,9 @@ func waitForCompletedTemplateInstanceDeletion(templateClient templateclientset.T
 	for _, ref := range instance.Status.Objects {
 		switch {
 		case ref.Ref.Kind == "Pod" && ref.Ref.APIVersion == "v1":
-			waitForPodDeletion(podClient, ref.Ref.Name, ref.Ref.UID)
+			if err := waitForPodDeletion(podClient, ref.Ref.Name, ref.Ref.UID); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -501,7 +503,8 @@ func createOrRestartPod(podClient coreclientset.PodInterface, pod *coreapi.Pod) 
 }
 
 func waitForPodDeletion(podClient coreclientset.PodInterface, name string, uid types.UID) error {
-	for {
+	timeout := 300
+	for i := 0; i < timeout; i += 2 {
 		pod, err := podClient.Get(name, meta.GetOptions{})
 		if errors.IsNotFound(err) {
 			return nil
@@ -512,9 +515,11 @@ func waitForPodDeletion(podClient coreclientset.PodInterface, name string, uid t
 		if pod.UID != uid {
 			return nil
 		}
-		log.Printf("Waiting for pod %s to be deleted ...", name)
+		log.Printf("Waiting for pod %s to be deleted ... (%ds/%d)", name, i, timeout)
 		time.Sleep(2 * time.Second)
 	}
+
+	return fmt.Errorf("waited for pod %s deletion for %ds, was not deleted", name, timeout)
 }
 
 func waitForCompletedPodDeletion(podClient coreclientset.PodInterface, name string) error {

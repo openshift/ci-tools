@@ -283,10 +283,12 @@ type TestStepConfiguration struct {
 	ArtifactDir string `json:"artifact_dir"`
 
 	// Only one of the following can be not-null.
-	ContainerTestConfiguration                  *ContainerTestConfiguration                  `json:"container,omitempty"`
-	OpenshiftAnsibleClusterTestConfiguration    *OpenshiftAnsibleClusterTestConfiguration    `json:"openshift_ansible,omitempty"`
-	OpenshiftAnsibleSrcClusterTestConfiguration *OpenshiftAnsibleSrcClusterTestConfiguration `json:"openshift_ansible_src,omitempty"`
-	OpenshiftInstallerClusterTestConfiguration  *OpenshiftInstallerClusterTestConfiguration  `json:"openshift_installer,omitempty"`
+	ContainerTestConfiguration                      *ContainerTestConfiguration                      `json:"container,omitempty"`
+	OpenshiftAnsibleClusterTestConfiguration        *OpenshiftAnsibleClusterTestConfiguration        `json:"openshift_ansible,omitempty"`
+	OpenshiftAnsibleSrcClusterTestConfiguration     *OpenshiftAnsibleSrcClusterTestConfiguration     `json:"openshift_ansible_src,omitempty"`
+	OpenshiftAnsibleCustomClusterTestConfiguration  *OpenshiftAnsibleCustomClusterTestConfiguration  `json:"openshift_ansible_custom,omitempty"`
+	OpenshiftAnsibleUpgradeClusterTestConfiguration *OpenshiftAnsibleUpgradeClusterTestConfiguration `json:"openshift_ansible_upgrade,omitempty"`
+	OpenshiftInstallerClusterTestConfiguration      *OpenshiftInstallerClusterTestConfiguration      `json:"openshift_installer,omitempty"`
 }
 
 // ContainerTestConfiguration describes a test that runs a
@@ -303,12 +305,14 @@ type ContainerTestConfiguration struct {
 type ClusterProfile string
 
 const (
-	ClusterProfileAWS       ClusterProfile = "aws"
-	ClusterProfileAWSAtomic                = "aws-atomic"
-	ClusterProfileAWSCentos                = "aws-centos"
-	ClusterProfileGCP                      = "gcp"
-	ClusterProfileGCPHA                    = "gcp-ha"
-	ClusterProfileGCPCRIO                  = "gcp-crio"
+	ClusterProfileAWS        ClusterProfile = "aws"
+	ClusterProfileAWSAtomic                 = "aws-atomic"
+	ClusterProfileAWSCentos                 = "aws-centos"
+	ClusterProfileAWSGluster                = "aws-gluster"
+	ClusterProfileGCP                       = "gcp"
+	ClusterProfileGCPHA                     = "gcp-ha"
+	ClusterProfileGCPCRIO                   = "gcp-crio"
+	ClusterProfileGCPLogging                = "gcp-logging"
 )
 
 // ClusterTestConfiguration describes a test that provisions
@@ -329,6 +333,22 @@ type OpenshiftAnsibleClusterTestConfiguration struct {
 // executes a command in the `src` image.
 type OpenshiftAnsibleSrcClusterTestConfiguration struct {
 	ClusterTestConfiguration `json:",inline"`
+}
+
+// OpenshiftAnsibleCustomClusterTestConfiguration describes a
+// test that provisions a cluster using openshift-ansible's
+// custom provisioner, and runs conformance tests.
+type OpenshiftAnsibleCustomClusterTestConfiguration struct {
+	ClusterTestConfiguration `json:",inline"`
+}
+
+// OpenshiftAnsibleUpgradeClusterTestConfiguration describes a
+// test that provisions a cluster using openshift-ansible,
+// upgrades it to the next version and runs conformance tests.
+type OpenshiftAnsibleUpgradeClusterTestConfiguration struct {
+	ClusterTestConfiguration `json:",inline"`
+	PreviousVersion          string `json:"previous_version"`
+	PreviousRPMDeps          string `json:"previous_rpm_deps"`
 }
 
 // OpenshiftInstallerClusterTestConfiguration describes a test

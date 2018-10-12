@@ -274,3 +274,128 @@ func parseError(id string, err error) error {
 func parseValidError(id string) error {
 	return fmt.Errorf("%q expected to be invalid, but returned valid", id)
 }
+
+func TestValidateResources(t *testing.T) {
+	var testCases = []struct {
+		name        string
+		input       ResourceConfiguration
+		expectedErr bool
+	}{
+		{
+			name: "valid configuration makes no error",
+			input: ResourceConfiguration{
+				"*": ResourceRequirements{
+					Limits: ResourceList{
+						"cpu": "100m",
+					},
+					Requests: ResourceList{
+						"cpu": "100m",
+					},
+				},
+			},
+			expectedErr: false,
+		},
+		{
+			name:        "configuration without any entry fails",
+			input:       ResourceConfiguration{},
+			expectedErr: true,
+		},
+		{
+			name: "configuration without a blanket entry fails",
+			input: ResourceConfiguration{
+				"something": ResourceRequirements{
+					Limits: ResourceList{
+						"cpu": "100m",
+					},
+					Requests: ResourceList{
+						"cpu": "100m",
+					},
+				},
+			},
+			expectedErr: true,
+		},
+		{
+			name: "invalid key makes an error",
+			input: ResourceConfiguration{
+				"*": ResourceRequirements{
+					Limits: ResourceList{
+						"cpu":    "100m",
+						"boogie": "value",
+					},
+					Requests: ResourceList{
+						"cpu": "100m",
+					},
+				},
+			},
+			expectedErr: true,
+		},
+		{
+			name: "not having either cpu or memory makes an error",
+			input: ResourceConfiguration{
+				"*": ResourceRequirements{
+					Limits: ResourceList{
+						"boogie": "100m",
+					},
+					Requests: ResourceList{
+						"cpu": "100m",
+					},
+				},
+			},
+			expectedErr: true,
+		},
+		{
+			name: "invalid value makes an error",
+			input: ResourceConfiguration{
+				"*": ResourceRequirements{
+					Limits: ResourceList{
+						"cpu": "donkeys",
+					},
+					Requests: ResourceList{
+						"cpu": "100m",
+					},
+				},
+			},
+			expectedErr: true,
+		},
+		{
+			name: "negative value makes an error",
+			input: ResourceConfiguration{
+				"*": ResourceRequirements{
+					Limits: ResourceList{
+						"cpu": "-110m",
+					},
+					Requests: ResourceList{
+						"cpu": "100m",
+					},
+				},
+			},
+			expectedErr: true,
+		},
+		{
+			name: "zero value makes an error",
+			input: ResourceConfiguration{
+				"*": ResourceRequirements{
+					Limits: ResourceList{
+						"cpu": "0m",
+					},
+					Requests: ResourceList{
+						"cpu": "100m",
+					},
+				},
+			},
+			expectedErr: true,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			err := validateResources("", testCase.input)
+			if err == nil && testCase.expectedErr {
+				t.Errorf("%s: expected an error, but got none", testCase.name)
+			}
+			if err != nil && !testCase.expectedErr {
+				t.Errorf("%s: expected no error, but got one: %v", testCase.name, err)
+			}
+		})
+	}
+}

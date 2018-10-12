@@ -325,14 +325,6 @@ type ClusterTestConfiguration struct {
 	ClusterProfile ClusterProfile `json:"cluster_profile"`
 }
 
-// ClusterUpgradeTestConfiguration describes a test that provisions
-// a cluster, upgrades it and runs a command in it.
-type ClusterUpgradeTestConfiguration struct {
-	ClusterProfile  ClusterProfile `json:"cluster_profile"`
-	PreviousVersion string         `json:"previous_version"`
-	PreviousRPMDeps string         `json:"previous_rpm_deps"`
-}
-
 // OpenshiftAnsibleClusterTestConfiguration describes a test
 // that provisions a cluster using openshift-ansible and runs
 // conformance tests.
@@ -359,6 +351,8 @@ type OpenshiftAnsibleCustomClusterTestConfiguration struct {
 // upgrades it to the next version and runs conformance tests.
 type OpenshiftAnsibleUpgradeClusterTestConfiguration struct {
 	ClusterTestConfiguration `json:",inline"`
+	PreviousVersion          string `json:"previous_version"`
+	PreviousRPMDeps          string `json:"previous_rpm_deps"`
 }
 
 // OpenshiftInstallerClusterTestConfiguration describes a test

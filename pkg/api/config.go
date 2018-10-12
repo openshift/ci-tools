@@ -154,7 +154,7 @@ func validateReleaseTagConfiguration(fieldRoot string, input ReleaseTagConfigura
 
 func validateClusterProfile(fieldRoot string, p ClusterProfile) error {
 	switch p {
-	case ClusterProfileAWS, ClusterProfileAWSAtomic, ClusterProfileAWSCentos, ClusterProfileGCP, ClusterProfileGCPHA, ClusterProfileGCPCRIO:
+	case ClusterProfileAWS, ClusterProfileAWSAtomic, ClusterProfileAWSCentos, ClusterProfileAWSGluster, ClusterProfileGCP, ClusterProfileGCPHA, ClusterProfileGCPCRIO, ClusterProfileGCPLogging:
 		return nil
 	}
 	return fmt.Errorf("%q: invalid cluster profile %q", fieldRoot, p)
@@ -194,6 +194,16 @@ func validateTestConfigurationType(fieldRoot string, test TestStepConfiguration,
 		validationErrors = append(validationErrors, validateClusterProfile(fmt.Sprintf("%s", fieldRoot), testConfig.ClusterProfile))
 	}
 	if testConfig := test.OpenshiftAnsibleSrcClusterTestConfiguration; testConfig != nil {
+		typeCount++
+		needsReleaseRpms = true
+		validationErrors = append(validationErrors, validateClusterProfile(fmt.Sprintf("%s", fieldRoot), testConfig.ClusterProfile))
+	}
+	if testConfig := test.OpenshiftAnsibleCustomClusterTestConfiguration; testConfig != nil {
+		typeCount++
+		needsReleaseRpms = true
+		validationErrors = append(validationErrors, validateClusterProfile(fmt.Sprintf("%s", fieldRoot), testConfig.ClusterProfile))
+	}
+	if testConfig := test.OpenshiftAnsibleUpgradeClusterTestConfiguration; testConfig != nil {
 		typeCount++
 		needsReleaseRpms = true
 		validationErrors = append(validationErrors, validateClusterProfile(fmt.Sprintf("%s", fieldRoot), testConfig.ClusterProfile))

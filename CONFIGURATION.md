@@ -69,6 +69,12 @@ tests:
     cluster_profile: ''
   openshift_ansible_src:
     cluster_profile: ''
+  openshift_ansible_custom:
+    cluster_profile: ''
+  openshift_ansible_upgrade:
+    cluster_profile: ''
+    previous_version: ''
+    previous_rpm_deps: ''
   openshift_installer:
     cluster_profile: ''
 ```
@@ -312,6 +318,14 @@ and runs conformance tests.
 ## `tests.openshift_ansible_src`
 `openshift_ansible_src` is a test that provisions a cluster using
 `openshift-ansible` and executes a command in the `src` image.
+
+## `tests.openshift_ansible_custom`
+`openshift_ansible_upgrade` is a test that provisions a cluster using
+`openshift-ansible`'s custom provisioner, and runs conformance tests.
+
+## `tests.openshift_ansible_upgrade`
+`openshift_ansible_upgrade` is a test that provisions a cluster using
+`openshift-ansible`, upgrades it to the next version and runs conformance tests.
 
 ## `tests.openshift_installer`
 `openshift_installer` is a test that provisions a cluster using

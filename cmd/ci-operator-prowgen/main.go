@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/ghodss/yaml"
@@ -227,15 +228,23 @@ func generatePresubmitForTest(name string, repoInfo *configFilePathElements, pod
 func generatePostsubmitForTest(
 	name string,
 	repoInfo *configFilePathElements,
+	treatBranchesAsExplicit bool,
 	labels map[string]string,
 	podSpec *kubeapi.PodSpec) *prowconfig.Postsubmit {
-	jobName := fmt.Sprintf("branch-ci-%s-%s-%s-%s", repoInfo.org, repoInfo.repo, repoInfo.branch, name)
+	branchName := jc.MakeRegexFilenameLabel(repoInfo.branch)
+	jobName := fmt.Sprintf("branch-ci-%s-%s-%s-%s", repoInfo.org, repoInfo.repo, branchName, name)
 	if len(jobName) > 63 {
 		logrus.WithField("name", jobName).Warn("Generated job name is longer than 63 characters. This may cause issues when Prow attempts to label resources with job name.")
 	}
+
+	branch := repoInfo.branch
+	if treatBranchesAsExplicit {
+		branch = makeBranchExplicit(branch)
+	}
+
 	return &prowconfig.Postsubmit{
 		Agent:    "kubernetes",
-		Brancher: prowconfig.Brancher{Branches: []string{repoInfo.branch}},
+		Brancher: prowconfig.Brancher{Branches: []string{branch}},
 		Name:     jobName,
 		Spec:     podSpec,
 		Labels:   labels,
@@ -318,7 +327,7 @@ func generateJobs(
 		}
 
 		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest("images", repoInfo, generatePodSpec(repoInfo.configFilename, "[images]", additionalPresubmitArgs...)))
-		postsubmits[orgrepo] = append(postsubmits[orgrepo], *generatePostsubmitForTest("images", repoInfo, labels, generatePodSpec(repoInfo.configFilename, "[images]", additionalPostsubmitArgs...)))
+		postsubmits[orgrepo] = append(postsubmits[orgrepo], *generatePostsubmitForTest("images", repoInfo, true, labels, generatePodSpec(repoInfo.configFilename, "[images]", additionalPostsubmitArgs...)))
 	}
 
 	return &prowconfig.JobConfig{
@@ -439,6 +448,21 @@ func getReleaseRepoDir(directory string) (string, error) {
 		return tentative, nil
 	}
 	return "", fmt.Errorf("%s is not an existing directory", tentative)
+}
+
+// simpleBranchRegexp matches a branch name that does not appear to be a regex (lacks wildcard,
+// group, or other modifiers). For instance, `master` is considered simple, `master-.*` would
+// not.
+var simpleBranchRegexp = regexp.MustCompile(`^[\w\-\.]+$`)
+
+// makeBranchExplicit updates the provided branch to prevent wildcard matches to the given branch
+// if the branch value does not appear to contain an explicit regex pattern. I.e. 'master'
+// is turned into '^master$'.
+func makeBranchExplicit(branch string) string {
+	if !simpleBranchRegexp.MatchString(branch) {
+		return branch
+	}
+	return fmt.Sprintf("^%s$", regexp.QuoteMeta(branch))
 }
 
 func main() {

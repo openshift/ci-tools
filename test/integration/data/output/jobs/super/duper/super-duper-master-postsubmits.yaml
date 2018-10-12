@@ -2,7 +2,7 @@ postsubmits:
   super/duper:
   - agent: kubernetes
     branches:
-    - master
+    - ^master$
     decorate: true
     labels:
       artifacts: images

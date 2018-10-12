@@ -696,26 +696,37 @@ func TestFromCIOperatorConfigToProwYaml(t *testing.T) {
 			org:       "super",
 			component: "duper",
 			branch:    "branch",
-			configYAML: []byte(`{
-  "tag_specification": {
-    "cluster": "https://api.ci.openshift.org", "namespace": "openshift", "name": "origin-v3.11", "tag": ""
-  },
-  "base_images": {
-    "base": {
-      "cluster": "https://api.ci.openshift.org", "namespace": "openshift", "name": "origin-v3.11", "tag": "base"
-    }
-  },
-  "build_root": {
-    "image_stream_tag":{
-      "cluster": "https://api.ci.openshift.org",
-      "namespace": "openshift",
-      "name": "release",
-      "tag": "golang-1.10"
-    }
-  },
-  "images": [{"from": "base", "to": "service-serving-cert-signer"}],
-
-  "tests": [{"as": "unit", "from": "src", "commands": "make test-unit"}]}`),
+			configYAML: []byte(`base_images:
+  base:
+    cluster: https://api.ci.openshift.org
+    name: origin-v3.11
+    namespace: openshift
+    tag: base
+build_root:
+  image_stream_tag:
+    cluster: https://api.ci.openshift.org
+    name: release
+    namespace: openshift
+    tag: golang-1.10
+images:
+- from: base
+  to: service-serving-cert-signer
+resources:
+  '*':
+    limits:
+      cpu: 500Mi
+    requests:
+      cpu: 10Mi
+tag_specification:
+  cluster: https://api.ci.openshift.org
+  name: origin-v3.11
+  namespace: openshift
+  tag: ''
+tests:
+- as: unit
+  commands: make test-unit
+  container:
+    from: src`),
 			prowOldPresubmitYAML:  []byte(""),
 			prowOldPostsubmitYAML: []byte(""),
 			prowExpectedPostsubmitYAML: []byte(`postsubmits:
@@ -827,26 +838,37 @@ func TestFromCIOperatorConfigToProwYaml(t *testing.T) {
 			org:       "super",
 			component: "duper",
 			branch:    "branch",
-			configYAML: []byte(`{
-  "tag_specification": {
-    "cluster": "https://api.ci.openshift.org", "namespace": "openshift", "name": "origin-v3.11", "tag": ""
-  },
-  "base_images": {
-    "base": {
-      "cluster": "https://api.ci.openshift.org", "namespace": "openshift", "name": "origin-v3.11", "tag": "base"
-    }
-  },
-  "build_root": {
-    "image_stream_tag":{
-      "cluster": "https://api.ci.openshift.org",
-      "namespace": "openshift",
-      "name": "release",
-      "tag": "golang-1.10"
-    }
-  },
-  "images": [{"from": "base", "to": "service-serving-cert-signer"}],
-
-  "tests": [{"as": "unit", "from": "src", "commands": "make test-unit"}]}`),
+			configYAML: []byte(`base_images:
+  base:
+    cluster: https://api.ci.openshift.org
+    name: origin-v3.11
+    namespace: openshift
+    tag: base
+build_root:
+  image_stream_tag:
+    cluster: https://api.ci.openshift.org
+    name: release
+    namespace: openshift
+    tag: golang-1.10
+images:
+- from: base
+  to: service-serving-cert-signer
+resources:
+  '*':
+    limits:
+      cpu: 500Mi
+    requests:
+      cpu: 10Mi
+tag_specification:
+  cluster: https://api.ci.openshift.org
+  name: origin-v3.11
+  namespace: openshift
+  tag: ''
+tests:
+- as: unit
+  commands: make test-unit
+  container:
+    from: src`),
 			prowOldPresubmitYAML: []byte(""),
 			prowOldPostsubmitYAML: []byte(`postsubmits:
   super/duper:
@@ -1027,6 +1049,12 @@ func TestFromCIOperatorConfigToProwYaml(t *testing.T) {
 images:
 - from: base
   to: service-serving-cert-signer
+resources:
+  '*':
+    limits:
+      cpu: 500Mi
+    requests:
+      cpu: 10Mi
 tag_specification:
   cluster: https://api.ci.openshift.org
   name: origin-v3.11
@@ -1041,7 +1069,8 @@ build_root:
 tests:
 - as: unit
   commands: make test-unit
-  from: src
+  container:
+    from: src
 `),
 			prowOldPresubmitYAML: []byte(""),
 			prowOldPostsubmitYAML: []byte(`postsubmits:

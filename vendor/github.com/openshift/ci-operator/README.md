@@ -13,6 +13,8 @@ ci-operator is mainly intended to be run inside a `Pod` in a cluster, triggered
 by the Prow CI infrastructure, but it is also possible to run it as a CLI tool
 on a developer laptop.
 
+More information on the architecture can be found in the [ARCHITECTURE.md](ARCHITECTURE.md).
+
 Note: ci-operator orchestrates builds and tests, but should not be confused
 with [Kubernetes operator](https://coreos.com/operators/) which make managing
 software on top of Kubernetes easier.

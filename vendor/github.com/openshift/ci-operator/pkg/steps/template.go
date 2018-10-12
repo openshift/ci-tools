@@ -21,6 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 
@@ -475,7 +476,9 @@ func waitForCompletedTemplateInstanceDeletion(templateClient templateclientset.T
 	for _, ref := range instance.Status.Objects {
 		switch {
 		case ref.Ref.Kind == "Pod" && ref.Ref.APIVersion == "v1":
-			waitForPodCompletion(podClient, ref.Ref.Name, nil)
+			if err := waitForPodDeletion(podClient, ref.Ref.Name, ref.Ref.UID); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -499,6 +502,26 @@ func createOrRestartPod(podClient coreclientset.PodInterface, pod *coreapi.Pod) 
 	return created, nil
 }
 
+func waitForPodDeletion(podClient coreclientset.PodInterface, name string, uid types.UID) error {
+	timeout := 300
+	for i := 0; i < timeout; i += 2 {
+		pod, err := podClient.Get(name, meta.GetOptions{})
+		if errors.IsNotFound(err) {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("could not retrieve deleting pod: %v", err)
+		}
+		if pod.UID != uid {
+			return nil
+		}
+		log.Printf("Waiting for pod %s to be deleted ... (%ds/%d)", name, i, timeout)
+		time.Sleep(2 * time.Second)
+	}
+
+	return fmt.Errorf("waited for pod %s deletion for %ds, was not deleted", name, timeout)
+}
+
 func waitForCompletedPodDeletion(podClient coreclientset.PodInterface, name string) error {
 	pod, err := podClient.Get(name, meta.GetOptions{})
 	if errors.IsNotFound(err) {
@@ -519,20 +542,7 @@ func waitForCompletedPodDeletion(podClient coreclientset.PodInterface, name stri
 		return fmt.Errorf("could not delete completed pod: %v", err)
 	}
 
-	for {
-		pod, err := podClient.Get(name, meta.GetOptions{})
-		if errors.IsNotFound(err) {
-			return nil
-		}
-		if err != nil {
-			return fmt.Errorf("could not retrieve deleting pod: %v", err)
-		}
-		if pod.UID != uid {
-			return nil
-		}
-		log.Printf("Waiting for pod %s to be deleted ...", name)
-		time.Sleep(2 * time.Second)
-	}
+	return waitForPodDeletion(podClient, name, uid)
 }
 
 func waitForPodCompletion(podClient coreclientset.PodInterface, name string, notifier ContainerNotifier) error {

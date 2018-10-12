@@ -405,15 +405,9 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.Job
 
 	for i := range config.Tests {
 		test := &config.Tests[i]
-		// TODO remove when the migration is completed
-		if len(test.From) == 0 {
-			if containerTest := test.ContainerTestConfiguration; containerTest != nil {
-				test.From = containerTest.From
-			} else {
-				continue
-			}
+		if test.ContainerTestConfiguration != nil {
+			buildSteps = append(buildSteps, api.StepConfiguration{TestStepConfiguration: test})
 		}
-		buildSteps = append(buildSteps, api.StepConfiguration{TestStepConfiguration: test})
 	}
 
 	if config.ReleaseTagConfiguration != nil {

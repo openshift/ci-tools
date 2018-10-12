@@ -289,9 +289,6 @@ Prow jobs to execute them.
 `as` is the test name and can be used to run the test with the `--target`
 flag on `ci-operator`. Test names should be unique in a `ci-operator` configuration.
 
-## `tests.from`
-`from` is deprecated. Use a [`container`](#testscontainer) test instead.
-
 ## `tests.commands`
 `commands` are the commands that will run in this test. These commands are executed
 in the top-level directory for the repository.

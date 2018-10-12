@@ -165,7 +165,7 @@ func TestStep(config api.TestStepConfiguration, resources api.ResourceConfigurat
 		"test",
 		PodStepConfiguration{
 			As:          config.As,
-			From:        api.ImageStreamTagReference{Name: api.PipelineImageStream, Tag: string(config.From)},
+			From:        api.ImageStreamTagReference{Name: api.PipelineImageStream, Tag: string(config.ContainerTestConfiguration.From)},
 			Commands:    config.Commands,
 			ArtifactDir: config.ArtifactDir,
 		},

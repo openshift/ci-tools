@@ -274,10 +274,6 @@ type PipelineImageCacheStepConfiguration struct {
 type TestStepConfiguration struct {
 	// As is the name of the test.
 	As string `json:"as"`
-	// TODO remove when the migration is completed
-	// From is the image stream tag in the pipeline to run this
-	// command in.
-	From PipelineImageStreamTagReference `json:"from"`
 	// Commands are the shell commands to run in
 	// the repository root to execute tests.
 	Commands string `json:"commands"`

@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 
+	"k8s.io/apimachinery/pkg/api/resource"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 )
 
@@ -229,8 +230,60 @@ func validateReleaseBuildConfiguration(input *ReleaseBuildConfiguration) error {
 		validationErrors = append(validationErrors, errors.New("`base_rpm_images` defined but no `rpm_build_commands` found"))
 	}
 
-	if input.Resources == nil {
-		validationErrors = append(validationErrors, errors.New("`resources` cannot be empty, at least the blanket `*` has to be specified"))
+	validationErrors = append(validationErrors, validateResources("resources", input.Resources))
+	return kerrors.NewAggregate(validationErrors)
+}
+
+func validateResources(fieldRoot string, resources ResourceConfiguration) error {
+	var validationErrors []error
+	if resources == nil {
+		validationErrors = append(validationErrors, fmt.Errorf("`%s` cannot be empty", fieldRoot))
+	} else {
+		if _, exists := resources["*"]; !exists {
+			validationErrors = append(validationErrors, fmt.Errorf("`%s` must specify a blanket policy for `*`", fieldRoot))
+		}
+		for key := range resources {
+			validationErrors = append(validationErrors, validateResourceRequirements(fmt.Sprintf("%s.%s", fieldRoot, key), resources[key]))
+		}
+	}
+
+	return kerrors.NewAggregate(validationErrors)
+}
+
+func validateResourceRequirements(fieldRoot string, requirements ResourceRequirements) error {
+	var validationErrors []error
+
+	validationErrors = append(validationErrors, validateResourceList(fmt.Sprintf("%s.limits", fieldRoot), requirements.Limits))
+	validationErrors = append(validationErrors, validateResourceList(fmt.Sprintf("%s.requests", fieldRoot), requirements.Requests))
+
+	return kerrors.NewAggregate(validationErrors)
+}
+
+func validateResourceList(fieldRoot string, list ResourceList) error {
+	var validationErrors []error
+
+	var numInvalid int
+	for key := range list {
+		switch key {
+		case "cpu", "memory":
+			if quantity, err := resource.ParseQuantity(list[key]); err != nil {
+				validationErrors = append(validationErrors, fmt.Errorf("%s.%s: invalid quantity: %v", fieldRoot, key, err))
+			} else {
+				if quantity.IsZero() {
+					validationErrors = append(validationErrors, fmt.Errorf("%s.%s: quantity cannot be zero", fieldRoot, key))
+				}
+				if quantity.Sign() == -1 {
+					validationErrors = append(validationErrors, fmt.Errorf("%s.%s: quantity cannot be negative", fieldRoot, key))
+				}
+			}
+		default:
+			numInvalid++
+			validationErrors = append(validationErrors, fmt.Errorf("`%s` specifies an invalid key %s", fieldRoot, key))
+		}
+	}
+
+	if len(list)-numInvalid == 0 {
+		validationErrors = append(validationErrors, fmt.Errorf("`%s` must specify cpu or memory requirements, or both", fieldRoot))
 	}
 
 	return kerrors.NewAggregate(validationErrors)

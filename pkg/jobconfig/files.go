@@ -5,7 +5,9 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
+	"strings"
 
 	"github.com/ghodss/yaml"
 	"k8s.io/api/core/v1"
@@ -102,6 +104,8 @@ func WriteToDir(jobDir, org, repo string, jobConfig *prowconfig.JobConfig) error
 		branch := "master"
 		if len(job.Branches) > 0 {
 			branch = job.Branches[0]
+			// branches may be regexps, strip regexp characters and trailing dashes / slashes
+			branch = MakeRegexFilenameLabel(branch)
 		}
 		file := fmt.Sprintf("%s-%s-%s-presubmits.yaml", org, repo, branch)
 		if _, ok := files[file]; ok {
@@ -117,6 +121,8 @@ func WriteToDir(jobDir, org, repo string, jobConfig *prowconfig.JobConfig) error
 		branch := "master"
 		if len(job.Branches) > 0 {
 			branch = job.Branches[0]
+			// branches may be regexps, strip regexp characters and trailing dashes / slashes
+			branch = MakeRegexFilenameLabel(branch)
 		}
 		file := fmt.Sprintf("%s-%s-%s-postsubmits.yaml", org, repo, branch)
 		if _, ok := files[file]; ok {
@@ -319,4 +325,15 @@ func writeToFile(path string, jobConfig *prowconfig.JobConfig) error {
 	}
 
 	return nil
+}
+
+var regexParts = regexp.MustCompile(`[^\w\-\.]+`)
+
+func MakeRegexFilenameLabel(possibleRegex string) string {
+	label := regexParts.ReplaceAllString(possibleRegex, "")
+	label = strings.TrimLeft(strings.TrimRight(label, "-._"), "-._")
+	if len(label) == 0 {
+		label = "master"
+	}
+	return label
 }

@@ -330,6 +330,8 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 		repoInfo *configFilePathElements
 		labels   map[string]string
 
+		treatBranchesAsExplicit bool
+
 		expected *prowconfig.Postsubmit
 	}{
 		{
@@ -373,9 +375,56 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "name",
+			repoInfo: &configFilePathElements{
+				org:            "Organization",
+				repo:           "Repository",
+				branch:         "Branch",
+				configFilename: "config.yaml",
+			},
+			labels: map[string]string{"artifacts": "images"},
+
+			treatBranchesAsExplicit: true,
+
+			expected: &prowconfig.Postsubmit{
+				Agent:    "kubernetes",
+				Name:     "branch-ci-Organization-Repository-Branch-name",
+				Brancher: prowconfig.Brancher{Branches: []string{"^Branch$"}},
+				Labels:   map[string]string{"artifacts": "images"},
+				UtilityConfig: prowconfig.UtilityConfig{
+					DecorationConfig: &prowkube.DecorationConfig{SkipCloning: true},
+					Decorate:         true,
+				},
+			},
+		},
+
+		{
+			name: "name",
+			repoInfo: &configFilePathElements{
+				org:            "Organization",
+				repo:           "Repository",
+				branch:         "Branch-.*",
+				configFilename: "config.yaml",
+			},
+			labels: map[string]string{"artifacts": "images"},
+
+			treatBranchesAsExplicit: true,
+
+			expected: &prowconfig.Postsubmit{
+				Agent:    "kubernetes",
+				Name:     "branch-ci-Organization-Repository-Branch-name",
+				Brancher: prowconfig.Brancher{Branches: []string{"Branch-.*"}},
+				Labels:   map[string]string{"artifacts": "images"},
+				UtilityConfig: prowconfig.UtilityConfig{
+					DecorationConfig: &prowkube.DecorationConfig{SkipCloning: true},
+					Decorate:         true,
+				},
+			},
+		},
 	}
 	for _, tc := range tests {
-		postsubmit := generatePostsubmitForTest(tc.name, tc.repoInfo, tc.labels, nil) // podSpec tested in TestGeneratePodSpec
+		postsubmit := generatePostsubmitForTest(tc.name, tc.repoInfo, tc.treatBranchesAsExplicit, tc.labels, nil) // podSpec tested in TestGeneratePodSpec
 		if !equality.Semantic.DeepEqual(postsubmit, tc.expected) {
 			t.Errorf("expected postsubmit diff:\n%s", diff.ObjectDiff(tc.expected, postsubmit))
 		}
@@ -733,7 +782,7 @@ tests:
   super/duper:
   - agent: kubernetes
     branches:
-    - branch
+    - ^branch$
     decorate: true
     labels:
       artifacts: images
@@ -1004,7 +1053,7 @@ tests:
       serviceAccountName: ci-operator
   - agent: kubernetes
     branches:
-    - branch
+    - ^branch$
     decorate: true
     labels:
       artifacts: images
@@ -1203,7 +1252,7 @@ tests:
       serviceAccountName: ci-operator
   - agent: kubernetes
     branches:
-    - branch
+    - ^branch$
     decorate: true
     labels:
       artifacts: images

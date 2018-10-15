@@ -122,15 +122,23 @@ func generatePodSpecTemplate(org, repo, configFile, release string, test *cioper
 		template = "cluster-launch-src"
 		clusterProfile = conf.ClusterProfile
 		needsReleaseRpms = true
+	} else if conf := test.OpenshiftAnsibleCustomClusterTestConfiguration; conf != nil {
+		template = "cluster-launch-openshift-ansible"
+		clusterProfile = conf.ClusterProfile
+		needsReleaseRpms = true
+	} else if conf := test.OpenshiftAnsibleUpgradeClusterTestConfiguration; conf != nil {
+		template = "cluster-launch-e2e-upgrade"
+		clusterProfile = conf.ClusterProfile
+		needsReleaseRpms = true
 	} else if conf := test.OpenshiftInstallerClusterTestConfiguration; conf != nil {
 		template = "cluster-launch-installer-e2e"
 		clusterProfile = conf.ClusterProfile
 	}
 	var targetCloud string
 	switch clusterProfile {
-	case cioperatorapi.ClusterProfileAWS, cioperatorapi.ClusterProfileAWSAtomic, cioperatorapi.ClusterProfileAWSCentos:
+	case cioperatorapi.ClusterProfileAWS, cioperatorapi.ClusterProfileAWSAtomic, cioperatorapi.ClusterProfileAWSCentos, cioperatorapi.ClusterProfileAWSGluster:
 		targetCloud = "aws"
-	case cioperatorapi.ClusterProfileGCP, cioperatorapi.ClusterProfileGCPHA, cioperatorapi.ClusterProfileGCPCRIO:
+	case cioperatorapi.ClusterProfileGCP, cioperatorapi.ClusterProfileGCPHA, cioperatorapi.ClusterProfileGCPCRIO, cioperatorapi.ClusterProfileGCPLogging:
 		targetCloud = "gcp"
 	}
 	clusterProfilePath := fmt.Sprintf("/usr/local/%s-cluster-profile", test.As)
@@ -193,6 +201,18 @@ func generatePodSpecTemplate(org, repo, configFile, release string, test *cioper
 			Name:  "RPM_REPO_OPENSHIFT_ORIGIN",
 			Value: fmt.Sprintf("https://rpms.svc.ci.openshift.org/openshift-%s/", release),
 		})
+	}
+	if conf := test.OpenshiftAnsibleUpgradeClusterTestConfiguration; conf != nil {
+		container.Env = append(
+			container.Env,
+			kubeapi.EnvVar{Name: "PREVIOUS_ANSIBLE_VERSION",
+				Value: conf.PreviousVersion},
+			kubeapi.EnvVar{Name: "PREVIOUS_IMAGE_ANSIBLE",
+				Value: fmt.Sprintf("docker.io/openshift/origin-ansible:v%s", conf.PreviousVersion)},
+			kubeapi.EnvVar{Name: "PREVIOUS_RPM_DEPENDENCIES_REPO",
+				Value: conf.PreviousRPMDeps},
+			kubeapi.EnvVar{Name: "PREVIOUS_RPM_REPO",
+				Value: fmt.Sprintf("https://rpms.svc.ci.openshift.org/openshift-origin-v%s/", conf.PreviousVersion)})
 	}
 	return podSpec
 }

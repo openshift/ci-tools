@@ -204,9 +204,11 @@ type testDescription struct {
 
 // Generate a Presubmit job for the given parameters
 func generatePresubmitForTest(name string, repoInfo *configFilePathElements, podSpec *kubeapi.PodSpec) *prowconfig.Presubmit {
-	jobName := fmt.Sprintf("pull-ci-%s-%s-%s-%s", repoInfo.org, repoInfo.repo, repoInfo.branch, name)
-	if len(jobName) > 63 {
-		logrus.WithField("name", jobName).Warn("Generated job name is longer than 63 characters. This may cause issues when Prow attempts to label resources with job name.")
+	jobPrefix := fmt.Sprintf("pull-ci-%s-%s-%s-", repoInfo.org, repoInfo.repo, repoInfo.branch)
+	jobName := fmt.Sprintf("%s%s", jobPrefix, name)
+	if len(jobName) > 63 && len(jobPrefix) < 53 {
+		// warn if the prefix gives people enough space to choose names and they've chosen something long
+		logrus.WithField("name", jobName).Warn("Generated job name is longer than 63 characters. This may cause issues when Prow attempts to label resources with job name. Consider a shorter name.")
 	}
 	return &prowconfig.Presubmit{
 		Agent:        "kubernetes",
@@ -232,9 +234,11 @@ func generatePostsubmitForTest(
 	labels map[string]string,
 	podSpec *kubeapi.PodSpec) *prowconfig.Postsubmit {
 	branchName := jc.MakeRegexFilenameLabel(repoInfo.branch)
-	jobName := fmt.Sprintf("branch-ci-%s-%s-%s-%s", repoInfo.org, repoInfo.repo, branchName, name)
-	if len(jobName) > 63 {
-		logrus.WithField("name", jobName).Warn("Generated job name is longer than 63 characters. This may cause issues when Prow attempts to label resources with job name.")
+	jobPrefix := fmt.Sprintf("branch-ci-%s-%s-%s-", repoInfo.org, repoInfo.repo, branchName)
+	jobName := fmt.Sprintf("%s%s", jobPrefix, name)
+	if len(jobName) > 63 && len(jobPrefix) < 53 {
+		// warn if the prefix gives people enough space to choose names and they've chosen something long
+		logrus.WithField("name", jobName).Warn("Generated job name is longer than 63 characters. This may cause issues when Prow attempts to label resources with job name. Consider a shorter name.")
 	}
 
 	branch := repoInfo.branch

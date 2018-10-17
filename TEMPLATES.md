@@ -101,3 +101,13 @@ that exposes a volume named `artifacts`. All files that are added to the volume
 will be uploaded to the appropriate GCS bucket for the job build that executed
 the `Template`. Failures to retrieve or upload artifacts will not impact the
 overall result of the job.
+
+## `Pod`'s annotations
+
+`ci-operator.openshift.io/wait-for-container-artifacts`:
+Will wait for a completion of a container, that has been specified in its value,
+before gathering the artifacts.
+
+`ci-operator.openshift.io/always-show-output`:
+Will output the logs of all the containers in the pod, no matter what the exit code was.
+The value should be `true` to enable this feature.

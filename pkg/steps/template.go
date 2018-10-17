@@ -37,6 +37,10 @@ type templateExecutionStep struct {
 	jobSpec        *api.JobSpec
 }
 
+const (
+	showOutputAnnotation string = "ci-operator.openshift.io/always-show-output"
+)
+
 func (s *templateExecutionStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
 	return nil, nil
 }
@@ -582,7 +586,7 @@ func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name st
 	if pod.Spec.RestartPolicy == coreapi.RestartPolicyAlways {
 		return false, nil
 	}
-	podLogNewFailedContainers(podClient, pod, completed, notifier)
+	podLogNewContainers(podClient, pod, completed, notifier)
 	if podJobIsOK(pod) {
 		log.Printf("Pod %s already succeeded in %s", pod.Name, podDuration(pod).Truncate(time.Second))
 		return false, nil
@@ -607,7 +611,7 @@ func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name st
 			return true, nil
 		}
 		if pod, ok := event.Object.(*coreapi.Pod); ok {
-			podLogNewFailedContainers(podClient, pod, completed, notifier)
+			podLogNewContainers(podClient, pod, completed, notifier)
 			if podJobIsOK(pod) {
 				log.Printf("Pod %s succeeded after %s", pod.Name, podDuration(pod).Truncate(time.Second))
 				return false, nil
@@ -618,7 +622,7 @@ func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name st
 			continue
 		}
 		if event.Type == watch.Deleted {
-			podLogNewFailedContainers(podClient, pod, completed, notifier)
+			podLogNewContainers(podClient, pod, completed, notifier)
 			return false, appendLogToError(fmt.Errorf("the pod %s/%s was deleted without completing after %s (failed containers: %s)", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", ")), podMessages(pod))
 		}
 		log.Printf("error: Unrecognized event in watch: %v %#v", event.Type, event.Object)
@@ -788,7 +792,7 @@ func failedContainerNames(pod *coreapi.Pod) []string {
 	return names
 }
 
-func podLogNewFailedContainers(podClient coreclientset.PodInterface, pod *coreapi.Pod, completed map[string]time.Time, notifier ContainerNotifier) {
+func podLogNewContainers(podClient coreclientset.PodInterface, pod *coreapi.Pod, completed map[string]time.Time, notifier ContainerNotifier) {
 	var statuses []coreapi.ContainerStatus
 	statuses = append(statuses, pod.Status.InitContainerStatuses...)
 	statuses = append(statuses, pod.Status.ContainerStatuses...)
@@ -804,7 +808,7 @@ func podLogNewFailedContainers(podClient coreclientset.PodInterface, pod *coreap
 		completed[status.Name] = s.FinishedAt.Time
 		notifier.Notify(pod, status.Name)
 
-		if s.ExitCode == 0 {
+		if pod.ObjectMeta.Annotations[showOutputAnnotation] != "true" && s.ExitCode == 0 {
 			log.Printf("Container %s in pod %s completed successfully", status.Name, pod.Name)
 			continue
 		}
@@ -820,7 +824,12 @@ func podLogNewFailedContainers(podClient coreclientset.PodInterface, pod *coreap
 			log.Printf("error: Unable to retrieve logs from failed pod container %s: %v", status.Name, err)
 		}
 
-		log.Printf("Container %s in pod %s failed, exit code %d, reason %s", status.Name, pod.Name, status.State.Terminated.ExitCode, status.State.Terminated.Reason)
+		if status.State.Terminated.ExitCode != 0 {
+			log.Printf("Container %s in pod %s failed, exit code %d, reason %s", status.Name, pod.Name, status.State.Terminated.ExitCode, status.State.Terminated.Reason)
+		} else {
+			log.Printf("Container %s in pod %s completed successfully", status.Name, pod.Name)
+		}
+
 	}
 	// if there are no running containers and we're in a terminal state, mark the pod complete
 	if (pod.Status.Phase == coreapi.PodFailed || pod.Status.Phase == coreapi.PodSucceeded) && len(podRunningContainers(pod)) == 0 {

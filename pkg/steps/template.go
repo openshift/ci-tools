@@ -38,7 +38,6 @@ type templateExecutionStep struct {
 }
 
 const (
-	showOutputAnnotation          string = "ci-operator.openshift.io/always-show-output"
 	showContainerOutputAnnotation string = "ci-operator.openshift.io/containers-logged-on-failure"
 )
 
@@ -593,10 +592,8 @@ func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name st
 		return false, nil
 	}
 	if podJobIsFailed(pod) {
-		if pod.ObjectMeta.Annotations[showOutputAnnotation] != "true" {
-			if err := outputAnnotatedContainerLogs(podClient, pod); err != nil {
-				log.Printf("%v", err)
-			}
+		if err := outputAnnotatedContainerLogs(podClient, pod); err != nil {
+			log.Printf("%v", err)
 		}
 		return false, appendLogToError(fmt.Errorf("the pod %s/%s failed after %s (failed containers: %s): %s", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", "), podReason(pod)), podMessages(pod))
 	}
@@ -623,10 +620,8 @@ func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name st
 				return false, nil
 			}
 			if podJobIsFailed(pod) {
-				if pod.ObjectMeta.Annotations[showOutputAnnotation] != "true" {
-					if err := outputAnnotatedContainerLogs(podClient, pod); err != nil {
-						log.Printf("%v", err)
-					}
+				if err := outputAnnotatedContainerLogs(podClient, pod); err != nil {
+					log.Printf("%v", err)
 				}
 				return false, appendLogToError(fmt.Errorf("the pod %s/%s failed after %s (failed containers: %s): %s", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", "), podReason(pod)), podMessages(pod))
 			}
@@ -816,7 +811,7 @@ func podLogNewContainers(podClient coreclientset.PodInterface, pod *coreapi.Pod,
 		completed[status.Name] = s.FinishedAt.Time
 		notifier.Notify(pod, status.Name)
 
-		if pod.ObjectMeta.Annotations[showOutputAnnotation] != "true" && s.ExitCode == 0 {
+		if s.ExitCode == 0 {
 			log.Printf("Container %s in pod %s completed successfully", status.Name, pod.Name)
 			continue
 		}

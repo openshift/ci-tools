@@ -108,10 +108,6 @@ overall result of the job.
 Comma-separated list of container names for which ci-operator will wait until complete,
 to gather the artifacts.
 
-`ci-operator.openshift.io/always-show-output`:
-Will output the logs of all the containers in the pod, no matter what the exit code was.
-The value should be `true` to enable this feature.
-
 `ci-operator.openshift.io/containers-logged-on-failure`:
 Comma-separated list of container names for which ci-operator will collect and log their output if pod fails.
 By default, only the logs from the failed containers will be output.

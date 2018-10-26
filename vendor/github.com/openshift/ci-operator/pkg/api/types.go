@@ -313,6 +313,7 @@ const (
 	ClusterProfileGCPHA                     = "gcp-ha"
 	ClusterProfileGCPCRIO                   = "gcp-crio"
 	ClusterProfileGCPLogging                = "gcp-logging"
+	ClusterProfileOpenStack  ClusterProfile = "openstack"
 )
 
 // ClusterTestConfiguration describes a test that provisions

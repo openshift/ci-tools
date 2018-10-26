@@ -154,7 +154,7 @@ func validateReleaseTagConfiguration(fieldRoot string, input ReleaseTagConfigura
 
 func validateClusterProfile(fieldRoot string, p ClusterProfile) error {
 	switch p {
-	case ClusterProfileAWS, ClusterProfileAWSAtomic, ClusterProfileAWSCentos, ClusterProfileAWSGluster, ClusterProfileGCP, ClusterProfileGCPHA, ClusterProfileGCPCRIO, ClusterProfileGCPLogging:
+	case ClusterProfileAWS, ClusterProfileAWSAtomic, ClusterProfileAWSCentos, ClusterProfileAWSGluster, ClusterProfileGCP, ClusterProfileGCPHA, ClusterProfileGCPCRIO, ClusterProfileGCPLogging, ClusterProfileOpenStack:
 		return nil
 	}
 	return fmt.Errorf("%q: invalid cluster profile %q", fieldRoot, p)

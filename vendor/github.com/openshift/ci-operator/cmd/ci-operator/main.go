@@ -199,6 +199,7 @@ type options struct {
 	clusterConfig *rest.Config
 
 	givePrAuthorAccessToNamespace bool
+	impersonateUser               string
 }
 
 func bindOptions(flag *flag.FlagSet) *options {
@@ -237,6 +238,7 @@ func bindOptions(flag *flag.FlagSet) *options {
 	// experimental flags
 	flag.StringVar(&opt.gitRef, "git-ref", "", "Populate the job spec from this local Git reference. If JOB_SPEC is set, the refs field will be overwritten.")
 	flag.BoolVar(&opt.givePrAuthorAccessToNamespace, "give-pr-author-access-to-namespace", false, "Give view access to the temporarily created namespace to the PR author.")
+	flag.StringVar(&opt.impersonateUser, "as", "", "Username to impersonate")
 
 	return opt
 }
@@ -357,6 +359,11 @@ func (o *options) Complete() error {
 	if err != nil {
 		return fmt.Errorf("failed to load cluster config: %v", err)
 	}
+
+	if len(o.impersonateUser) > 0 {
+		clusterConfig.Impersonate = rest.ImpersonationConfig{UserName: o.impersonateUser}
+	}
+
 	o.clusterConfig = clusterConfig
 
 	return nil

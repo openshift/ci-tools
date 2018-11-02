@@ -110,4 +110,4 @@ to gather the artifacts.
 
 `ci-operator.openshift.io/containers-logged-on-failure`:
 Comma-separated list of container names for which ci-operator will collect and log their output to artifacts if pod fails.
-The artifact name will be generated in the format of `$container_name-out.log`.
+The artifact names will be generated in the format of `$container_name.log` in the `container-logs` directory.

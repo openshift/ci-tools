@@ -569,8 +569,7 @@ func waitForPodCompletion(podClient coreclientset.PodInterface, name string, not
 				podList, err := getPodListByName(podClient, name)
 				if err != nil {
 					log.Printf("could not list pod: %v", err)
-				}
-				if err := artifactsAnnotatedContainerLogs(podClient, &podList.Items[0], artifactDir); err != nil {
+				} else if err := artifactsAnnotatedContainerLogs(podClient, &podList.Items[0], artifactDir); err != nil {
 					log.Printf("%v", err)
 				}
 			}
@@ -861,6 +860,15 @@ func getContainersMap(containers string) map[string]struct{} {
 }
 
 func artifactsAnnotatedContainerLogs(podClient coreclientset.PodInterface, pod *coreapi.Pod, artifactDir string) error {
+	if pod.ObjectMeta.Annotations[showContainerOutputAnnotation] == "" {
+		return nil
+	}
+
+	containerLogsDir := filepath.Join(artifactDir, pod.Name, "container-logs")
+	if err := os.MkdirAll(containerLogsDir, 0750); err != nil {
+		return fmt.Errorf("unable to create artifact directory %s: %v", containerLogsDir, err)
+	}
+
 	var validationErrors []error
 	statuses := gatherContainerStatuses(pod)
 	containersToOutput := getContainersMap(pod.ObjectMeta.Annotations[showContainerOutputAnnotation])
@@ -868,9 +876,10 @@ func artifactsAnnotatedContainerLogs(podClient coreclientset.PodInterface, pod *
 	for _, status := range statuses {
 		if s := status.State.Terminated; s != nil {
 			if _, exists := containersToOutput[status.Name]; exists {
-				file, err := os.Create(fmt.Sprintf("%s/%s/%s-out.log", artifactDir, pod.Name, status.Name))
+				file, err := os.Create(fmt.Sprintf("%s/%s.log", containerLogsDir, status.Name))
 				if err != nil {
 					validationErrors = append(validationErrors, fmt.Errorf("Cannot create file: %v", err))
+					continue
 				}
 				defer file.Close()
 

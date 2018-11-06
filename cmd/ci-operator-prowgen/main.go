@@ -133,6 +133,9 @@ func generatePodSpecTemplate(org, repo, configFile, release string, test *cioper
 	} else if conf := test.OpenshiftInstallerClusterTestConfiguration; conf != nil {
 		template = "cluster-launch-installer-e2e"
 		clusterProfile = conf.ClusterProfile
+	} else if conf := test.OpenshiftInstallerSrcClusterTestConfiguration; conf != nil {
+		template = "cluster-launch-installer-src"
+		clusterProfile = conf.ClusterProfile
 	}
 	var targetCloud string
 	switch clusterProfile {

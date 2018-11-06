@@ -49,12 +49,33 @@ func (s *projectDirectoryImageBuildStep) Run(ctx context.Context, dry bool) erro
 	}
 
 	labels := make(map[string]string)
+	// reset all labels that may be set by a lower level
+	for _, key := range []string{
+		"vcs-type",
+		"vcs-ref",
+		"vcs-url",
+		"io.openshift.build.name",
+		"io.openshift.build.namespace",
+		"io.openshift.build.commit.id",
+		"io.openshift.build.commit.ref",
+		"io.openshift.build.commit.message",
+		"io.openshift.build.commit.author",
+		"io.openshift.build.commit.date",
+		"io.openshift.build.source-location",
+		"io.openshift.build.source-context-dir",
+	} {
+		labels[key] = ""
+	}
 	if len(s.jobSpec.Refs.Pulls) == 0 {
+		labels["vcs-type"] = "git"
+		labels["vcs-ref"] = s.jobSpec.Refs.BaseSHA
 		labels["io.openshift.build.commit.id"] = s.jobSpec.Refs.BaseSHA
 		labels["io.openshift.build.commit.ref"] = s.jobSpec.Refs.BaseRef
-	} else {
-		labels["io.openshift.build.commit.id"] = ""
-		labels["io.openshift.build.commit.ref"] = ""
+		if len(s.jobSpec.Refs.Org) > 0 && len(s.jobSpec.Refs.Repo) > 0 {
+			labels["vcs-url"] = fmt.Sprintf("https://github.com/%s/%s", s.jobSpec.Refs.Org, s.jobSpec.Refs.Repo)
+			labels["io.openshift.build.source-location"] = labels["vcs-url"]
+		}
+		labels["io.openshift.build.source-context-dir"] = s.config.ContextDir
 	}
 
 	images := buildInputsFromStep(s.config.Inputs)

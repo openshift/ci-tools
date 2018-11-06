@@ -77,6 +77,8 @@ tests:
     previous_rpm_deps: ''
   openshift_installer:
     cluster_profile: ''
+  openshift_installer_src:
+    cluster_profile: ''
 ```
 
 # `tag_specification`
@@ -330,6 +332,10 @@ and runs conformance tests.
 ## `tests.openshift_installer`
 `openshift_installer` is a test that provisions a cluster using
 `openshift-installer` and runs conformance tests.
+
+## `tests.openshift_installer_src`
+`openshift_installer_src` is a test that provisions a cluster using
+`openshift-installer` and executes a test in the `src` image.
 
 ## `tests.*.cluster_profile`
 `cluster_profile` chooses the profile used as input to the installer. This

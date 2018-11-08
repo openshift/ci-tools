@@ -52,12 +52,12 @@ build_root:
 * From a `Dockerfile` that is in the repository in which the PR is opened. In this case, ci-operator will build the image first and it will get the build from the latest of the target branch.
 ```yaml
 build_root:
-  project_image_build:
+  project_image:
     dockerfile_path: Dockerfile
     context_dir: path/of/dockerfile/
 ```
 
-**Note:** Both image_stream_tag and project_image_build should not be defined.
+**Note:** Both image_stream_tag and project_image should not be defined.
 
 Given your component can be built in the context of the `openshift/release`
 image, you can test building the `src` target:

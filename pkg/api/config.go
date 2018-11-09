@@ -67,9 +67,9 @@ func validateBuildRootImageConfiguration(fieldRoot string, input *BuildRootImage
 	}
 
 	if input.ProjectImageBuild != nil && input.ImageStreamTagReference != nil {
-		return fmt.Errorf("%s: both image_stream_tag and project_image_build cannot be set", fieldRoot)
+		return fmt.Errorf("%s: both image_stream_tag and project_image cannot be set", fieldRoot)
 	} else if input.ProjectImageBuild == nil && input.ImageStreamTagReference == nil {
-		return fmt.Errorf("%s: you have to specify either image_stream_tag or project_image_build", fieldRoot)
+		return fmt.Errorf("%s: you have to specify either image_stream_tag or project_image", fieldRoot)
 	}
 	return nil
 }

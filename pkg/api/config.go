@@ -138,9 +138,6 @@ func validatePromotionConfiguration(fieldRoot string, input PromotionConfigurati
 
 func validateReleaseTagConfiguration(fieldRoot string, input ReleaseTagConfiguration) error {
 	var validationErrors []error
-	if len(input.Cluster) == 0 {
-		validationErrors = append(validationErrors, fmt.Errorf("%s: no cluster defined", fieldRoot))
-	}
 
 	if len(input.Namespace) == 0 {
 		validationErrors = append(validationErrors, fmt.Errorf("%s: no namespace defined", fieldRoot))

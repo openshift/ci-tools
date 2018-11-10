@@ -238,6 +238,9 @@ type testDescription struct {
 // Generate a Presubmit job for the given parameters
 func generatePresubmitForTest(name string, repoInfo *configFilePathElements, podSpec *kubeapi.PodSpec) *prowconfig.Presubmit {
 	jobPrefix := fmt.Sprintf("pull-ci-%s-%s-%s-", repoInfo.org, repoInfo.repo, repoInfo.branch)
+	if len(repoInfo.variant) > 0 {
+		name = fmt.Sprintf("%s-%s", repoInfo.variant, name)
+	}
 	jobName := fmt.Sprintf("%s%s", jobPrefix, name)
 	if len(jobName) > 63 && len(jobPrefix) < 53 {
 		// warn if the prefix gives people enough space to choose names and they've chosen something long
@@ -268,6 +271,9 @@ func generatePostsubmitForTest(
 	podSpec *kubeapi.PodSpec) *prowconfig.Postsubmit {
 	branchName := jc.MakeRegexFilenameLabel(repoInfo.branch)
 	jobPrefix := fmt.Sprintf("branch-ci-%s-%s-%s-", repoInfo.org, repoInfo.repo, branchName)
+	if len(repoInfo.variant) > 0 {
+		name = fmt.Sprintf("%s-%s", repoInfo.variant, name)
+	}
 	jobName := fmt.Sprintf("%s%s", jobPrefix, name)
 	if len(jobName) > 63 && len(jobPrefix) < 53 {
 		// warn if the prefix gives people enough space to choose names and they've chosen something long
@@ -397,6 +403,7 @@ type configFilePathElements struct {
 	org            string
 	repo           string
 	branch         string
+	variant        string
 	configFilename string
 }
 
@@ -420,7 +427,13 @@ func extractRepoElementsFromPath(configFilePath string) (*configFilePathElements
 	s := strings.TrimSuffix(fileName, filepath.Ext(configFilePath))
 	branch := strings.TrimPrefix(s, fmt.Sprintf("%s-%s-", org, repo))
 
-	return &configFilePathElements{org, repo, branch, fileName}, nil
+	var variant string
+	if i := strings.LastIndex(branch, "__"); i != -1 {
+		variant = branch[i+2:]
+		branch = branch[:i]
+	}
+
+	return &configFilePathElements{org, repo, branch, variant, fileName}, nil
 }
 
 func generateProwJobsFromConfigFile(configFilePath string) (*prowconfig.JobConfig, *configFilePathElements, error) {

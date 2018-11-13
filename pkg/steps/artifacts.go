@@ -520,7 +520,7 @@ func gatherContainerLogsOutput(podClient PodClient, artifactDir, namespace, podN
 	}
 	pod := &list.Items[0]
 
-	if pod.Annotations["ci-operator.openshift.io/containers-logged-on-failure"] == "" {
+	if pod.Annotations["ci-operator.openshift.io/container-logs-as-artifacts"] == "" {
 		return nil
 	}
 
@@ -529,7 +529,7 @@ func gatherContainerLogsOutput(podClient PodClient, artifactDir, namespace, podN
 	}
 
 	var containersToLog []string
-	if names := pod.Annotations["ci-operator.openshift.io/containers-logged-on-failure"]; len(names) > 0 {
+	if names := pod.Annotations["ci-operator.openshift.io/container-logs-as-artifacts"]; len(names) > 0 {
 		containersToLog = strings.Split(names, ",")
 	}
 	containersToOutput := getContainersMap(containersToLog)
@@ -538,21 +538,23 @@ func gatherContainerLogsOutput(podClient PodClient, artifactDir, namespace, podN
 	for _, status := range statuses {
 		if status.State.Terminated != nil {
 			if _, exists := containersToOutput[status.Name]; exists {
-				file, err := os.Create(fmt.Sprintf("%s/%s.log", artifactDir, status.Name))
+				file, err := os.Create(fmt.Sprintf("%s/%s.log.gz", artifactDir, status.Name))
 				if err != nil {
 					validationErrors = append(validationErrors, fmt.Errorf("Cannot create file: %v", err))
 					continue
 				}
 				defer file.Close()
 
+				w := gzip.NewWriter(file)
 				if s, err := podClient.Pods(namespace).GetLogs(podName, &coreapi.PodLogOptions{Container: status.Name}).Stream(); err == nil {
-					if _, err := io.Copy(file, s); err != nil {
+					if _, err := io.Copy(w, s); err != nil {
 						validationErrors = append(validationErrors, fmt.Errorf("error: Unable to copy log output from pod container %s: %v", status.Name, err))
 					}
 					s.Close()
 				} else {
 					validationErrors = append(validationErrors, fmt.Errorf("error: Unable to retrieve logs from pod container %s: %v", status.Name, err))
 				}
+				w.Close()
 			}
 		}
 	}

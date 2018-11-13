@@ -520,7 +520,7 @@ func gatherContainerLogsOutput(podClient PodClient, artifactDir, namespace, podN
 	}
 	pod := &list.Items[0]
 
-	if pod.Annotations["ci-operator.openshift.io/container-logs-as-artifacts"] == "" {
+	if pod.Annotations["ci-operator.openshift.io/save-container-logs"] != "true" {
 		return nil
 	}
 
@@ -528,45 +528,29 @@ func gatherContainerLogsOutput(podClient PodClient, artifactDir, namespace, podN
 		return fmt.Errorf("unable to create directory %s: %v", artifactDir, err)
 	}
 
-	var containersToLog []string
-	if names := pod.Annotations["ci-operator.openshift.io/container-logs-as-artifacts"]; len(names) > 0 {
-		containersToLog = strings.Split(names, ",")
-	}
-	containersToOutput := getContainersMap(containersToLog)
-
 	statuses := getContainerStatuses(pod)
 	for _, status := range statuses {
 		if status.State.Terminated != nil {
-			if _, exists := containersToOutput[status.Name]; exists {
-				file, err := os.Create(fmt.Sprintf("%s/%s.log.gz", artifactDir, status.Name))
-				if err != nil {
-					validationErrors = append(validationErrors, fmt.Errorf("Cannot create file: %v", err))
-					continue
-				}
-				defer file.Close()
-
-				w := gzip.NewWriter(file)
-				if s, err := podClient.Pods(namespace).GetLogs(podName, &coreapi.PodLogOptions{Container: status.Name}).Stream(); err == nil {
-					if _, err := io.Copy(w, s); err != nil {
-						validationErrors = append(validationErrors, fmt.Errorf("error: Unable to copy log output from pod container %s: %v", status.Name, err))
-					}
-					s.Close()
-				} else {
-					validationErrors = append(validationErrors, fmt.Errorf("error: Unable to retrieve logs from pod container %s: %v", status.Name, err))
-				}
-				w.Close()
+			file, err := os.Create(fmt.Sprintf("%s/%s.log.gz", artifactDir, status.Name))
+			if err != nil {
+				validationErrors = append(validationErrors, fmt.Errorf("Cannot create file: %v", err))
+				continue
 			}
+			defer file.Close()
+
+			w := gzip.NewWriter(file)
+			if s, err := podClient.Pods(namespace).GetLogs(podName, &coreapi.PodLogOptions{Container: status.Name}).Stream(); err == nil {
+				if _, err := io.Copy(w, s); err != nil {
+					validationErrors = append(validationErrors, fmt.Errorf("error: Unable to copy log output from pod container %s: %v", status.Name, err))
+				}
+				s.Close()
+			} else {
+				validationErrors = append(validationErrors, fmt.Errorf("error: Unable to retrieve logs from pod container %s: %v", status.Name, err))
+			}
+			w.Close()
 		}
 	}
 	return kerrors.NewAggregate(validationErrors)
-}
-
-func getContainersMap(containers []string) map[string]struct{} {
-	c := make(map[string]struct{}, len(containers))
-	for _, container := range containers {
-		c[strings.TrimSpace(container)] = struct{}{}
-	}
-	return c
 }
 
 func getContainerStatuses(pod *coreapi.Pod) []coreapi.ContainerStatus {

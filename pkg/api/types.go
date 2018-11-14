@@ -287,6 +287,7 @@ type TestStepConfiguration struct {
 	OpenshiftAnsibleClusterTestConfiguration        *OpenshiftAnsibleClusterTestConfiguration        `json:"openshift_ansible,omitempty"`
 	OpenshiftAnsibleSrcClusterTestConfiguration     *OpenshiftAnsibleSrcClusterTestConfiguration     `json:"openshift_ansible_src,omitempty"`
 	OpenshiftAnsibleCustomClusterTestConfiguration  *OpenshiftAnsibleCustomClusterTestConfiguration  `json:"openshift_ansible_custom,omitempty"`
+	OpenshiftAnsible40ClusterTestConfiguration      *OpenshiftAnsible40ClusterTestConfiguration      `json:"openshift_ansible_40,omitempty"`
 	OpenshiftAnsibleUpgradeClusterTestConfiguration *OpenshiftAnsibleUpgradeClusterTestConfiguration `json:"openshift_ansible_upgrade,omitempty"`
 	OpenshiftInstallerClusterTestConfiguration      *OpenshiftInstallerClusterTestConfiguration      `json:"openshift_installer,omitempty"`
 	OpenshiftInstallerSrcClusterTestConfiguration   *OpenshiftInstallerSrcClusterTestConfiguration   `json:"openshift_installer_src,omitempty"`
@@ -343,6 +344,12 @@ type OpenshiftAnsibleSrcClusterTestConfiguration struct {
 // test that provisions a cluster using openshift-ansible's
 // custom provisioner, and runs conformance tests.
 type OpenshiftAnsibleCustomClusterTestConfiguration struct {
+	ClusterTestConfiguration `json:",inline"`
+}
+
+// OpenshiftAnsible40ClusterTestConfiguration describes a
+// test that provisions a cluster using new installer and openshift-ansible
+type OpenshiftAnsible40ClusterTestConfiguration struct {
 	ClusterTestConfiguration `json:",inline"`
 }
 

@@ -200,6 +200,11 @@ func validateTestConfigurationType(fieldRoot string, test TestStepConfiguration,
 		needsReleaseRpms = true
 		validationErrors = append(validationErrors, validateClusterProfile(fmt.Sprintf("%s", fieldRoot), testConfig.ClusterProfile))
 	}
+	if testConfig := test.OpenshiftAnsible40ClusterTestConfiguration; testConfig != nil {
+		typeCount++
+		needsReleaseRpms = true
+		validationErrors = append(validationErrors, validateClusterProfile(fmt.Sprintf("%s", fieldRoot), testConfig.ClusterProfile))
+	}
 	if testConfig := test.OpenshiftAnsibleUpgradeClusterTestConfiguration; testConfig != nil {
 		typeCount++
 		needsReleaseRpms = true

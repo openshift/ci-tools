@@ -55,7 +55,7 @@ build_root:
     name: ''
     namespace: ''
     tag: ''
-  project_image_build:
+  project_image:
     dockerfile_path: ''
     context_dir: ''
 test_binary_build_commands: ''

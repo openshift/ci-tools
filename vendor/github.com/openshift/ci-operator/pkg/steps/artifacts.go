@@ -15,6 +15,9 @@ import (
 
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
+	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/kubernetes/scheme"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
@@ -271,6 +274,9 @@ func (w *ArtifactWorker) downloadArtifacts(podName string) error {
 	if err := os.MkdirAll(w.dir, 0750); err != nil {
 		return fmt.Errorf("unable to create artifact directory %s: %v", w.dir, err)
 	}
+	if err := gatherContainerLogsOutput(w.podClient, filepath.Join(w.dir, "container-logs"), w.namespace, podName); err != nil {
+		log.Printf("error: unable to gather container logs: %v", err)
+	}
 	if err := copyArtifacts(w.podClient, w.dir, w.namespace, podName, "artifacts", []string{"/tmp/artifacts"}); err != nil {
 		return fmt.Errorf("unable to retrieve artifacts from pod %s: %v", podName, err)
 	}
@@ -504,4 +510,52 @@ func allPodContainerNamesWithArtifacts(pod map[string]interface{}) map[string]st
 		}
 	}
 	return names
+}
+
+func gatherContainerLogsOutput(podClient PodClient, artifactDir, namespace, podName string) error {
+	var validationErrors []error
+	list, err := podClient.Pods(namespace).List(meta.ListOptions{FieldSelector: fields.Set{"metadata.name": podName}.AsSelector().String()})
+	if err != nil {
+		return fmt.Errorf("could not list pod: %v", err)
+	}
+	pod := &list.Items[0]
+
+	if pod.Annotations["ci-operator.openshift.io/save-container-logs"] != "true" {
+		return nil
+	}
+
+	if err := os.MkdirAll(artifactDir, 0750); err != nil {
+		return fmt.Errorf("unable to create directory %s: %v", artifactDir, err)
+	}
+
+	statuses := getContainerStatuses(pod)
+	for _, status := range statuses {
+		if status.State.Terminated != nil {
+			file, err := os.Create(fmt.Sprintf("%s/%s.log.gz", artifactDir, status.Name))
+			if err != nil {
+				validationErrors = append(validationErrors, fmt.Errorf("Cannot create file: %v", err))
+				continue
+			}
+			defer file.Close()
+
+			w := gzip.NewWriter(file)
+			if s, err := podClient.Pods(namespace).GetLogs(podName, &coreapi.PodLogOptions{Container: status.Name}).Stream(); err == nil {
+				if _, err := io.Copy(w, s); err != nil {
+					validationErrors = append(validationErrors, fmt.Errorf("error: Unable to copy log output from pod container %s: %v", status.Name, err))
+				}
+				s.Close()
+			} else {
+				validationErrors = append(validationErrors, fmt.Errorf("error: Unable to retrieve logs from pod container %s: %v", status.Name, err))
+			}
+			w.Close()
+		}
+	}
+	return kerrors.NewAggregate(validationErrors)
+}
+
+func getContainerStatuses(pod *coreapi.Pod) []coreapi.ContainerStatus {
+	var statuses []coreapi.ContainerStatus
+	statuses = append(statuses, pod.Status.InitContainerStatuses...)
+	statuses = append(statuses, pod.Status.ContainerStatuses...)
+	return statuses
 }

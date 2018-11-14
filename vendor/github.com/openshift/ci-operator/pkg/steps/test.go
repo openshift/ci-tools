@@ -117,7 +117,7 @@ func (s *podStep) Run(ctx context.Context, dry bool) error {
 		return fmt.Errorf("failed to create or restart %s pod: %v", s.name, err)
 	}
 
-	if err := waitForPodCompletion(s.podClient.Pods(s.jobSpec.Namespace), pod.Name, notifier, s.artifactDir); err != nil {
+	if err := waitForPodCompletion(s.podClient.Pods(s.jobSpec.Namespace), pod.Name, notifier); err != nil {
 		return fmt.Errorf("failed to wait for %s pod to complete: %v", s.name, err)
 	}
 

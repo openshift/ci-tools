@@ -130,6 +130,10 @@ func generatePodSpecTemplate(org, repo, configFile, release string, test *cioper
 		template = "cluster-launch-e2e-upgrade"
 		clusterProfile = conf.ClusterProfile
 		needsReleaseRpms = true
+	} else if conf := test.OpenshiftAnsible40ClusterTestConfiguration; conf != nil {
+		template = "cluster-launch-e2e-40"
+		clusterProfile = conf.ClusterProfile
+		needsReleaseRpms = true
 	} else if conf := test.OpenshiftInstallerClusterTestConfiguration; conf != nil {
 		template = "cluster-launch-installer-e2e"
 		clusterProfile = conf.ClusterProfile
@@ -139,9 +143,9 @@ func generatePodSpecTemplate(org, repo, configFile, release string, test *cioper
 	}
 	var targetCloud string
 	switch clusterProfile {
-	case cioperatorapi.ClusterProfileAWS, cioperatorapi.ClusterProfileAWSAtomic, cioperatorapi.ClusterProfileAWSCentos, cioperatorapi.ClusterProfileAWSGluster:
+	case cioperatorapi.ClusterProfileAWS, cioperatorapi.ClusterProfileAWSAtomic, cioperatorapi.ClusterProfileAWSCentos, cioperatorapi.ClusterProfileAWSCentos40, cioperatorapi.ClusterProfileAWSGluster:
 		targetCloud = "aws"
-	case cioperatorapi.ClusterProfileGCP, cioperatorapi.ClusterProfileGCPHA, cioperatorapi.ClusterProfileGCPCRIO, cioperatorapi.ClusterProfileGCPLogging:
+	case cioperatorapi.ClusterProfileGCP, cioperatorapi.ClusterProfileGCP40, cioperatorapi.ClusterProfileGCPHA, cioperatorapi.ClusterProfileGCPCRIO, cioperatorapi.ClusterProfileGCPLogging:
 		targetCloud = "gcp"
 	case cioperatorapi.ClusterProfileOpenStack:
 		targetCloud = "openstack"

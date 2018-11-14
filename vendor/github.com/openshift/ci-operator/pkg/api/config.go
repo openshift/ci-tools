@@ -67,9 +67,9 @@ func validateBuildRootImageConfiguration(fieldRoot string, input *BuildRootImage
 	}
 
 	if input.ProjectImageBuild != nil && input.ImageStreamTagReference != nil {
-		return fmt.Errorf("%s: both image_stream_tag and project_image_build cannot be set", fieldRoot)
+		return fmt.Errorf("%s: both image_stream_tag and project_image cannot be set", fieldRoot)
 	} else if input.ProjectImageBuild == nil && input.ImageStreamTagReference == nil {
-		return fmt.Errorf("%s: you have to specify either image_stream_tag or project_image_build", fieldRoot)
+		return fmt.Errorf("%s: you have to specify either image_stream_tag or project_image", fieldRoot)
 	}
 	return nil
 }
@@ -138,9 +138,6 @@ func validatePromotionConfiguration(fieldRoot string, input PromotionConfigurati
 
 func validateReleaseTagConfiguration(fieldRoot string, input ReleaseTagConfiguration) error {
 	var validationErrors []error
-	if len(input.Cluster) == 0 {
-		validationErrors = append(validationErrors, fmt.Errorf("%s: no cluster defined", fieldRoot))
-	}
 
 	if len(input.Namespace) == 0 {
 		validationErrors = append(validationErrors, fmt.Errorf("%s: no namespace defined", fieldRoot))
@@ -154,7 +151,7 @@ func validateReleaseTagConfiguration(fieldRoot string, input ReleaseTagConfigura
 
 func validateClusterProfile(fieldRoot string, p ClusterProfile) error {
 	switch p {
-	case ClusterProfileAWS, ClusterProfileAWSAtomic, ClusterProfileAWSCentos, ClusterProfileAWSGluster, ClusterProfileGCP, ClusterProfileGCPHA, ClusterProfileGCPCRIO, ClusterProfileGCPLogging, ClusterProfileOpenStack:
+	case ClusterProfileAWS, ClusterProfileAWSAtomic, ClusterProfileAWSCentos, ClusterProfileAWSCentos40, ClusterProfileAWSGluster, ClusterProfileGCP, ClusterProfileGCP40, ClusterProfileGCPHA, ClusterProfileGCPCRIO, ClusterProfileGCPLogging, ClusterProfileOpenStack:
 		return nil
 	}
 	return fmt.Errorf("%q: invalid cluster profile %q", fieldRoot, p)
@@ -199,6 +196,11 @@ func validateTestConfigurationType(fieldRoot string, test TestStepConfiguration,
 		validationErrors = append(validationErrors, validateClusterProfile(fmt.Sprintf("%s", fieldRoot), testConfig.ClusterProfile))
 	}
 	if testConfig := test.OpenshiftAnsibleCustomClusterTestConfiguration; testConfig != nil {
+		typeCount++
+		needsReleaseRpms = true
+		validationErrors = append(validationErrors, validateClusterProfile(fmt.Sprintf("%s", fieldRoot), testConfig.ClusterProfile))
+	}
+	if testConfig := test.OpenshiftAnsible40ClusterTestConfiguration; testConfig != nil {
 		typeCount++
 		needsReleaseRpms = true
 		validationErrors = append(validationErrors, validateClusterProfile(fmt.Sprintf("%s", fieldRoot), testConfig.ClusterProfile))

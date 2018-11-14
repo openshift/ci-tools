@@ -152,11 +152,11 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:cc55697380c2a5a47cdcd27624e3a6e19fe2514d520b5d1c3fbeffde21f249c6"
+  digest = "1:367812659120a53c8716f5554614dc7913868fe8f38817288ed211b4b2b772b5"
   name = "github.com/openshift/ci-operator"
   packages = ["pkg/api"]
   pruneopts = ""
-  revision = "c1f891389b2431c2c455aa5b7e15a82a67703512"
+  revision = "38b18f326c2b7b202be37a7d83f7fe2d03faeb76"
 
 [[projects]]
   digest = "1:4142d94383572e74b42352273652c62afec5b23f325222ed09198f46009022d1"

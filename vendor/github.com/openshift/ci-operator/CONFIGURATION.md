@@ -329,6 +329,10 @@ and runs conformance tests.
 `openshift_ansible_upgrade` is a test that provisions a cluster using
 `openshift-ansible`, upgrades it to the next version and runs conformance tests.
 
+## `tests.openshift_ansible_40`
+`openshift_ansible_40` is a test that provisions 4.0 cluster using new installer and
+openshift-ansible
+
 ## `tests.openshift_installer`
 `openshift_installer` is a test that provisions a cluster using
 `openshift-installer` and runs conformance tests.

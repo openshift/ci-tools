@@ -60,7 +60,7 @@ const (
 	// user.
 	StatusReasonCancelledBuild StatusReason = "CancelledBuild"
 
-	// StatusReasonDockerBuildFailed indicates that the docker build strategy has
+	// StatusReasonDockerBuildFailed indicates that the container image build strategy has
 	// failed.
 	StatusReasonDockerBuildFailed StatusReason = "DockerBuildFailed"
 
@@ -83,6 +83,9 @@ const (
 	// StatusReasonGenericBuildFailed is the reason associated with a broad
 	// range of build failures.
 	StatusReasonGenericBuildFailed StatusReason = "GenericBuildFailed"
+
+	// StatusReasonOutOfMemoryKilled indicates that the build pod was killed for its memory consumption
+	StatusReasonOutOfMemoryKilled StatusReason = "OutOfMemoryKilled"
 
 	// StatusCannotRetrieveServiceAccount is the reason associated with a failure
 	// to look up the service account associated with the BuildConfig.

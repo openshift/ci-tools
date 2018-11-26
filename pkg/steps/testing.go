@@ -7,9 +7,59 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/openshift/ci-operator/pkg/api"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/diff"
+	"k8s.io/client-go/kubernetes/fake"
+	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
+	fakecorev1 "k8s.io/client-go/kubernetes/typed/core/v1/fake"
+
+	"github.com/openshift/ci-operator/pkg/api"
 )
+
+// Fake Clientset, created so we can override its `Core()` method
+// and return our fake CoreV1 API (=ciopTestingCore)
+
+type ciopTestingClient struct {
+	fake.Clientset
+	t *testing.T
+}
+
+func (c *ciopTestingClient) Core() corev1.CoreV1Interface {
+	fc := c.Clientset.Core().(*fakecorev1.FakeCoreV1)
+	return &ciopTestingCore{*fc, c.t}
+}
+
+// Fake CoreV1, created so we can override its `Pods()` method
+// and return our fake Pods API (=ciopTestingPods)
+
+type ciopTestingCore struct {
+	fakecorev1.FakeCoreV1
+	t *testing.T
+}
+
+func (c *ciopTestingCore) Pods(ns string) corev1.PodInterface {
+	pods := c.FakeCoreV1.Pods(ns).(*fakecorev1.FakePods)
+	return &ciopTestingPods{*pods, c.t}
+}
+
+// Fake Pods API
+
+type ciopTestingPods struct {
+	fakecorev1.FakePods
+	t *testing.T
+}
+
+// Fake Create() provided by the lib creates objects without default values, so
+// they would be created without any sensible Phase, which causes problems in
+// the ci-operator code. Therefore, our fake Create() always creates Pods with
+// a `Pending` phase if it does not carry phase already.
+func (c *ciopTestingPods) Create(pod *v1.Pod) (*v1.Pod, error) {
+	if pod.Status.Phase == "" {
+		pod.Status.Phase = v1.PodPending
+	}
+	c.t.Logf("FakePods.Create(%v)", pod)
+	return c.FakePods.Create(pod)
+}
 
 type doneExpectation struct {
 	value bool
@@ -82,14 +132,17 @@ func examineStep(t *testing.T, step api.Step, expected stepExpectation) {
 	}
 }
 
-func executeStep(t *testing.T, step api.Step, expected executionExpectation) {
+func executeStep(t *testing.T, step api.Step, expected executionExpectation, fakeClusterBehavior func()) {
 	done, err := step.Done()
 	if !reflect.DeepEqual(expected.prerun.value, done) {
 		t.Errorf("step.Done() before Run() returned %t, expected %t)", done, expected.prerun.value)
 	}
-
 	if !reflect.DeepEqual(expected.prerun.err, err) {
 		t.Errorf("step.Done() before Run() returned different error: expected %v, got %v", expected.prerun.err, err)
+	}
+
+	if fakeClusterBehavior != nil {
+		go fakeClusterBehavior()
 	}
 
 	if err := step.Run(context.Background(), false); err != expected.runError {

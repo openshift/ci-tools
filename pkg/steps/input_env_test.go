@@ -39,5 +39,5 @@ func TestInputEnvironmentStep(t *testing.T) {
 	}
 
 	examineStep(t, ies, specification)
-	executeStep(t, ies, execSpecification)
+	executeStep(t, ies, execSpecification, nil)
 }

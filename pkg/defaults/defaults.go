@@ -160,7 +160,7 @@ func FromConfig(
 	}
 
 	if len(paramFile) > 0 {
-		buildSteps = append(buildSteps, steps.WriteParametersStep(params, paramFile, jobSpec))
+		buildSteps = append(buildSteps, steps.WriteParametersStep(params, paramFile))
 	}
 
 	if releaseStep != nil {

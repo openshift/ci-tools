@@ -58,7 +58,8 @@ type SecurityContextConstraints struct {
 	// AllowedFlexVolumes is a whitelist of allowed Flexvolumes.  Empty or nil indicates that all
 	// Flexvolumes may be used.  This parameter is effective only when the usage of the Flexvolumes
 	// is allowed in the "Volumes" field.
-	AllowedFlexVolumes []AllowedFlexVolume `json:"allowedFlexVolumes" protobuf:"bytes,21,rep,name=allowedFlexVolumes"`
+	// +optional
+	AllowedFlexVolumes []AllowedFlexVolume `json:"allowedFlexVolumes,omitempty" protobuf:"bytes,21,rep,name=allowedFlexVolumes"`
 	// AllowHostNetwork determines if the policy allows the use of HostNetwork in the pod spec.
 	AllowHostNetwork bool `json:"allowHostNetwork" protobuf:"varint,9,opt,name=allowHostNetwork"`
 	// AllowHostPorts determines if the policy allows host ports in the containers.
@@ -67,6 +68,14 @@ type SecurityContextConstraints struct {
 	AllowHostPID bool `json:"allowHostPID" protobuf:"varint,11,opt,name=allowHostPID"`
 	// AllowHostIPC determines if the policy allows host ipc in the containers.
 	AllowHostIPC bool `json:"allowHostIPC" protobuf:"varint,12,opt,name=allowHostIPC"`
+	// DefaultAllowPrivilegeEscalation controls the default setting for whether a
+	// process can gain more privileges than its parent process.
+	// +optional
+	DefaultAllowPrivilegeEscalation *bool `json:"defaultAllowPrivilegeEscalation,omitempty" protobuf:"varint,22,rep,name=defaultAllowPrivilegeEscalation"`
+	// AllowPrivilegeEscalation determines if a pod can request to allow
+	// privilege escalation. If unspecified, defaults to true.
+	// +optional
+	AllowPrivilegeEscalation *bool `json:"allowPrivilegeEscalation,omitempty" protobuf:"varint,23,rep,name=allowPrivilegeEscalation"`
 	// SELinuxContext is the strategy that will dictate what labels will be set in the SecurityContext.
 	SELinuxContext SELinuxContextStrategyOptions `json:"seLinuxContext,omitempty" protobuf:"bytes,13,opt,name=seLinuxContext"`
 	// RunAsUser is the strategy that will dictate what RunAsUser is used in the SecurityContext.
@@ -95,6 +104,26 @@ type SecurityContextConstraints struct {
 	// used to generate a value for a pod the first non-wildcard profile will be used as
 	// the default.
 	SeccompProfiles []string `json:"seccompProfiles,omitempty" protobuf:"bytes,20,opt,name=seccompProfiles"`
+
+	// AllowedUnsafeSysctls is a list of explicitly allowed unsafe sysctls, defaults to none.
+	// Each entry is either a plain sysctl name or ends in "*" in which case it is considered
+	// as a prefix of allowed sysctls. Single * means all unsafe sysctls are allowed.
+	// Kubelet has to whitelist all allowed unsafe sysctls explicitly to avoid rejection.
+	//
+	// Examples:
+	// e.g. "foo/*" allows "foo/bar", "foo/baz", etc.
+	// e.g. "foo.*" allows "foo.bar", "foo.baz", etc.
+	// +optional
+	AllowedUnsafeSysctls []string `json:"allowedUnsafeSysctls,omitempty" protobuf:"bytes,24,rep,name=allowedUnsafeSysctls"`
+	// ForbiddenSysctls is a list of explicitly forbidden sysctls, defaults to none.
+	// Each entry is either a plain sysctl name or ends in "*" in which case it is considered
+	// as a prefix of forbidden sysctls. Single * means all sysctls are forbidden.
+	//
+	// Examples:
+	// e.g. "foo/*" forbids "foo/bar", "foo/baz", etc.
+	// e.g. "foo.*" forbids "foo.bar", "foo.baz", etc.
+	// +optional
+	ForbiddenSysctls []string `json:"forbiddenSysctls,omitempty" protobuf:"bytes,25,rep,name=forbiddenSysctls"`
 }
 
 // FS Type gives strong typing to different file systems that are used by volumes.
@@ -135,7 +164,7 @@ var (
 // AllowedFlexVolume represents a single Flexvolume that is allowed to be used.
 type AllowedFlexVolume struct {
 	// Driver is the name of the Flexvolume driver.
-	Driver string `json:"driver,omitempty" protobuf:"bytes,1,opt,name=driver"`
+	Driver string `json:"driver" protobuf:"bytes,1,opt,name=driver"`
 }
 
 // SELinuxContextStrategyOptions defines the strategy type and any options used to create the strategy.

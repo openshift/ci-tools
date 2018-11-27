@@ -63,7 +63,7 @@ func (c *ciopTestingPods) Create(pod *v1.Pod) (*v1.Pod, error) {
 
 type doneExpectation struct {
 	value bool
-	err   error
+	err   bool
 }
 
 type providesExpectation struct {
@@ -73,7 +73,7 @@ type providesExpectation struct {
 
 type inputsExpectation struct {
 	values api.InputDefinition
-	err    error
+	err    bool
 }
 
 type stepExpectation struct {
@@ -86,7 +86,7 @@ type stepExpectation struct {
 
 type executionExpectation struct {
 	prerun   doneExpectation
-	runError error
+	runError bool
 	postrun  doneExpectation
 }
 
@@ -98,6 +98,15 @@ func someStepLink(as string) api.StepLink {
 		Tag:       "tag",
 		As:        as,
 	})
+}
+
+func errorCheck(t *testing.T, message string, expected bool, err error) {
+	if expected && err == nil {
+		t.Errorf("%s: expected to return error, returned nil", message)
+	}
+	if !expected && err != nil {
+		t.Errorf("%s: returned unexpected error: %v", message, err)
+	}
 }
 
 func examineStep(t *testing.T, step api.Step, expected stepExpectation) {
@@ -127,9 +136,7 @@ func examineStep(t *testing.T, step api.Step, expected stepExpectation) {
 	if !reflect.DeepEqual(expected.inputs.values, inputs) {
 		t.Errorf("step.Inputs returned different inputs\n%s", diff.ObjectReflectDiff(expected.inputs.values, inputs))
 	}
-	if !reflect.DeepEqual(expected.inputs.err, err) {
-		t.Errorf("step.Inputs returned different error: expected %v, got %v", expected.inputs.err, err)
-	}
+	errorCheck(t, "step.Inputs", expected.inputs.err, err)
 }
 
 func executeStep(t *testing.T, step api.Step, expected executionExpectation, fakeClusterBehavior func()) {
@@ -137,23 +144,18 @@ func executeStep(t *testing.T, step api.Step, expected executionExpectation, fak
 	if !reflect.DeepEqual(expected.prerun.value, done) {
 		t.Errorf("step.Done() before Run() returned %t, expected %t)", done, expected.prerun.value)
 	}
-	if !reflect.DeepEqual(expected.prerun.err, err) {
-		t.Errorf("step.Done() before Run() returned different error: expected %v, got %v", expected.prerun.err, err)
-	}
+	errorCheck(t, "step.Done() before Run()", expected.prerun.err, err)
 
 	if fakeClusterBehavior != nil {
 		go fakeClusterBehavior()
 	}
 
-	if err := step.Run(context.Background(), false); err != expected.runError {
-		t.Errorf("step.Run returned different error: expected %v, got %v", expected.runError, err)
-	}
+	err = step.Run(context.Background(), false)
+	errorCheck(t, "step.Run()", expected.runError, err)
 
 	done, err = step.Done()
 	if !reflect.DeepEqual(expected.postrun.value, done) {
 		t.Errorf("step.Done() after Run() returned %t, expected %t)", done, expected.postrun.value)
 	}
-	if !reflect.DeepEqual(expected.postrun.err, err) {
-		t.Errorf("step.Done() after Run() returned different error: expecter %v, got %v", expected.postrun.err, err)
-	}
+	errorCheck(t, "step.Done() after Run()", expected.postrun.err, err)
 }

@@ -170,7 +170,7 @@ func FromConfig(
 		buildSteps = append(buildSteps, steps.StableImagesTagStep(imageClient, jobSpec))
 	}
 
-	buildSteps = append(buildSteps, steps.ImagesReadyStep(imageStepLinks, jobSpec))
+	buildSteps = append(buildSteps, steps.ImagesReadyStep(imageStepLinks))
 
 	if promote {
 		cfg, err := promotionDefaults(config)

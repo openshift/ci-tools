@@ -248,6 +248,18 @@ func waitForBuildOrTimeout(buildClient BuildClient, namespace, name string) (boo
 			b.Status.Phase == buildapi.BuildPhaseCancelled ||
 			b.Status.Phase == buildapi.BuildPhaseError
 	}
+
+	// First we set up a watcher to catch all events that happen while we check
+	// the build status
+	watcher, err := buildClient.Builds(namespace).Watch(meta.ListOptions{
+		FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String(),
+		Watch:         true,
+	})
+	if err != nil {
+		return false, fmt.Errorf("could not create watcher for build %s: %v", name, err)
+	}
+	defer watcher.Stop()
+
 	list, err := buildClient.Builds(namespace).List(meta.ListOptions{FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String()})
 	if err != nil {
 		return false, fmt.Errorf("could not list builds: %v", err)
@@ -265,15 +277,6 @@ func waitForBuildOrTimeout(buildClient BuildClient, namespace, name string) (boo
 		printBuildLogs(buildClient, build.Namespace, build.Name)
 		return false, appendLogToError(fmt.Errorf("the build %s failed with reason %s: %s", build.Name, build.Status.Reason, build.Status.Message), build.Status.LogSnippet)
 	}
-
-	watcher, err := buildClient.Builds(namespace).Watch(meta.ListOptions{
-		FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String(),
-		Watch:         true,
-	})
-	if err != nil {
-		return false, fmt.Errorf("could not create watcher for build %s: %v", name, err)
-	}
-	defer watcher.Stop()
 
 	for {
 		event, ok := <-watcher.ResultChan()

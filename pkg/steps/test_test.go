@@ -155,8 +155,10 @@ func TestPodStepExecution(t *testing.T) {
 					if pod, ok := event.Object.(*v1.Pod); ok {
 						t.Logf("Fake cluster: Received event on pod '%s': %s", pod.ObjectMeta.Name, event.Type)
 						t.Logf("Fake cluster: Updating pod '%s' status to '%s' and exiting", pod.ObjectMeta.Name, tc.podStatus)
-						pod.Status.Phase = tc.podStatus
-						if _, err := client.Pods(namespace).UpdateStatus(pod); err != nil {
+						// make a copy to avoid a race
+						newPod := pod.DeepCopy()
+						newPod.Status.Phase = tc.podStatus
+						if _, err := client.Pods(namespace).UpdateStatus(newPod); err != nil {
 							t.Errorf("Fake cluster: UpdateStatus() returned an error: %v", err)
 						}
 						break

@@ -54,10 +54,11 @@ type ciopTestingPods struct {
 // the ci-operator code. Therefore, our fake Create() always creates Pods with
 // a `Pending` phase if it does not carry phase already.
 func (c *ciopTestingPods) Create(pod *v1.Pod) (*v1.Pod, error) {
+	c.t.Logf("FakePods.Create(): ObjectMeta.Name=%s Status.Phase=%s", pod.ObjectMeta.Name, pod.Status.Phase)
 	if pod.Status.Phase == "" {
 		pod.Status.Phase = v1.PodPending
+		c.t.Logf("FakePods.Create(): Setting Status.Phase to '%s'", v1.PodPending)
 	}
-	c.t.Logf("FakePods.Create(%v)", pod)
 	return c.FakePods.Create(pod)
 }
 

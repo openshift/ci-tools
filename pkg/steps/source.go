@@ -47,7 +47,7 @@ func sourceDockerfile(fromTag api.PipelineImageStreamTagReference, pathAlias str
 	}
 	return fmt.Sprintf(`
 FROM %s:%s
-ADD ./clonerefs /clonerefs
+ADD ./app.binary /clonerefs
 RUN umask 0002 && /clonerefs && chmod g+xw -R %s/src
 WORKDIR %s/src/%s/
 ENV GOPATH=%s

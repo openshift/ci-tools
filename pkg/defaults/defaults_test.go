@@ -11,7 +11,7 @@ import (
 
 func addCloneRefs(cfg *api.SourceStepConfiguration) *api.SourceStepConfiguration {
 	cfg.ClonerefsImage = api.ImageStreamTagReference{Cluster: "https://api.ci.openshift.org", Namespace: "ci", Name: "clonerefs", Tag: "latest"}
-	cfg.ClonerefsPath = "/app/prow/cmd/clonerefs/app.binary"
+	cfg.ClonerefsPath = "/app/prow/cmd/clonerefs/app.binary.runfiles/test_infra/prow/cmd/clonerefs/linux_amd64_pure_stripped/app.binary"
 	return cfg
 }
 

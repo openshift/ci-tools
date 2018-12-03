@@ -734,6 +734,7 @@ func TestFromCIOperatorConfigToProwYaml(t *testing.T) {
 		org                        string
 		component                  string
 		branch                     string
+		variant                    string
 		configYAML                 []byte
 		prowOldPresubmitYAML       []byte
 		prowOldPostsubmitYAML      []byte
@@ -887,6 +888,7 @@ tests:
 			org:       "super",
 			component: "duper",
 			branch:    "branch",
+			variant:   "rhel",
 			configYAML: []byte(`base_images:
   base:
     cluster: https://api.ci.openshift.org
@@ -957,10 +959,12 @@ tests:
     always_run: true
     branches:
     - branch
-    context: ci/prow/images
+    context: ci/prow/rhel-images
     decorate: true
-    name: pull-ci-super-duper-branch-images
-    rerun_command: /test images
+    labels:
+      ci-operator.openshift.io/variant: rhel
+    name: pull-ci-super-duper-branch-rhel-images
+    rerun_command: /test rhel-images
     skip_cloning: true
     spec:
       containers:
@@ -974,7 +978,7 @@ tests:
         - name: CONFIG_SPEC
           valueFrom:
             configMapKeyRef:
-              key: branch.yaml
+              key: branch__rhel.yaml
               name: ci-operator-configs
         image: ci-operator:latest
         imagePullPolicy: Always
@@ -985,15 +989,17 @@ tests:
           requests:
             cpu: 10m
       serviceAccountName: ci-operator
-    trigger: ((?m)^/test( all| images),?(\s+|$))
+    trigger: ((?m)^/test( all| rhel-images),?(\s+|$))
   - agent: kubernetes
     always_run: true
     branches:
     - branch
-    context: ci/prow/unit
+    context: ci/prow/rhel-unit
     decorate: true
-    name: pull-ci-super-duper-branch-unit
-    rerun_command: /test unit
+    labels:
+      ci-operator.openshift.io/variant: rhel
+    name: pull-ci-super-duper-branch-rhel-unit
+    rerun_command: /test rhel-unit
     skip_cloning: true
     spec:
       containers:
@@ -1007,7 +1013,7 @@ tests:
         - name: CONFIG_SPEC
           valueFrom:
             configMapKeyRef:
-              key: branch.yaml
+              key: branch__rhel.yaml
               name: ci-operator-configs
         image: ci-operator:latest
         imagePullPolicy: Always
@@ -1018,7 +1024,7 @@ tests:
           requests:
             cpu: 10m
       serviceAccountName: ci-operator
-    trigger: ((?m)^/test( all| unit),?(\s+|$))
+    trigger: ((?m)^/test( all| rhel-unit),?(\s+|$))
 `),
 			prowExpectedPostsubmitYAML: []byte(`postsubmits:
   super/duper:
@@ -1057,7 +1063,8 @@ tests:
     decorate: true
     labels:
       artifacts: images
-    name: branch-ci-super-duper-branch-images
+      ci-operator.openshift.io/variant: rhel
+    name: branch-ci-super-duper-branch-rhel-images
     skip_cloning: true
     spec:
       containers:
@@ -1072,7 +1079,7 @@ tests:
         - name: CONFIG_SPEC
           valueFrom:
             configMapKeyRef:
-              key: branch.yaml
+              key: branch__rhel.yaml
               name: ci-operator-configs
         image: ci-operator:latest
         imagePullPolicy: Always
@@ -1298,7 +1305,12 @@ tests:
 				t.Fatalf("Unexpected error config dir: %v", err)
 			}
 
-			fullConfigPath := filepath.Join(configDir, fmt.Sprintf("%s.yaml", tc.branch))
+			branch := tc.branch
+			if len(tc.variant) > 0 {
+				branch += "__" + tc.variant
+			}
+
+			fullConfigPath := filepath.Join(configDir, fmt.Sprintf("%s.yaml", branch))
 			if err = ioutil.WriteFile(fullConfigPath, tc.configYAML, 0664); err != nil {
 				t.Fatalf("Unexpected error writing config file: %v", err)
 			}

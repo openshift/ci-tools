@@ -21,6 +21,10 @@ import (
 	jc "github.com/openshift/ci-operator-prowgen/pkg/jobconfig"
 )
 
+const (
+	prowJobLabelVariant = "ci-operator.openshift.io/variant"
+)
+
 type options struct {
 	fromFile        string
 	fromDir         string
@@ -237,18 +241,23 @@ type testDescription struct {
 
 // Generate a Presubmit job for the given parameters
 func generatePresubmitForTest(name string, repoInfo *configFilePathElements, podSpec *kubeapi.PodSpec) *prowconfig.Presubmit {
+	labels := make(map[string]string)
+
 	jobPrefix := fmt.Sprintf("pull-ci-%s-%s-%s-", repoInfo.org, repoInfo.repo, repoInfo.branch)
 	if len(repoInfo.variant) > 0 {
 		name = fmt.Sprintf("%s-%s", repoInfo.variant, name)
+		labels[prowJobLabelVariant] = repoInfo.variant
 	}
 	jobName := fmt.Sprintf("%s%s", jobPrefix, name)
 	if len(jobName) > 63 && len(jobPrefix) < 53 {
 		// warn if the prefix gives people enough space to choose names and they've chosen something long
 		logrus.WithField("name", jobName).Warn("Generated job name is longer than 63 characters. This may cause issues when Prow attempts to label resources with job name. Consider a shorter name.")
 	}
+
 	return &prowconfig.Presubmit{
 		Agent:        "kubernetes",
 		AlwaysRun:    true,
+		Labels:       labels,
 		Brancher:     prowconfig.Brancher{Branches: []string{repoInfo.branch}},
 		Context:      fmt.Sprintf("ci/prow/%s", name),
 		Name:         jobName,
@@ -269,10 +278,17 @@ func generatePostsubmitForTest(
 	treatBranchesAsExplicit bool,
 	labels map[string]string,
 	podSpec *kubeapi.PodSpec) *prowconfig.Postsubmit {
+
+	copiedLabels := make(map[string]string)
+	for k, v := range labels {
+		copiedLabels[k] = v
+	}
+
 	branchName := jc.MakeRegexFilenameLabel(repoInfo.branch)
 	jobPrefix := fmt.Sprintf("branch-ci-%s-%s-%s-", repoInfo.org, repoInfo.repo, branchName)
 	if len(repoInfo.variant) > 0 {
 		name = fmt.Sprintf("%s-%s", repoInfo.variant, name)
+		copiedLabels[prowJobLabelVariant] = repoInfo.variant
 	}
 	jobName := fmt.Sprintf("%s%s", jobPrefix, name)
 	if len(jobName) > 63 && len(jobPrefix) < 53 {
@@ -290,7 +306,7 @@ func generatePostsubmitForTest(
 		Brancher: prowconfig.Brancher{Branches: []string{branch}},
 		Name:     jobName,
 		Spec:     podSpec,
-		Labels:   labels,
+		Labels:   copiedLabels,
 		UtilityConfig: prowconfig.UtilityConfig{
 			DecorationConfig: &prowkube.DecorationConfig{SkipCloning: true},
 			Decorate:         true,

@@ -402,6 +402,10 @@ func (o *options) Run() error {
 			return fmt.Errorf("could not resolve inputs: %v", err)
 		}
 
+		if err := o.writeMetadataJSON(); err != nil {
+			return fmt.Errorf("unable to write metadata.json for build: %v", err)
+		}
+
 		// convert the full graph into the subset we must run
 		nodes, err := api.BuildPartialGraph(buildSteps, o.targets.values)
 		if err != nil {
@@ -688,6 +692,60 @@ func (o *options) initializeNamespace() error {
 		log.Printf("Created secret %s", secret.Name)
 	}
 	return nil
+}
+
+// prowResultMetadata is the set of metadata consumed by testgrid and
+// gubernator after a CI run completes. We add work-namespace as our
+// target namespace for the job.
+//
+// Example from k8s:
+//
+// "metadata": {
+// 	"repo-commit": "253f03e0055b6649f8b25e84122748d39a284141",
+// 	"node_os_image": "cos-stable-65-10323-64-0",
+// 	"repos": {
+// 		"k8s.io/kubernetes": "master:1c04caa04325e1f64d9a15714ad61acdd2a81013,71936:353a0b391d6cb0c26e1c0c6b180b300f64039e0e",
+// 		"k8s.io/release": "master"
+// 	},
+// 	"infra-commit": "de7741746",
+// 	"repo": "k8s.io/kubernetes",
+// 	"master_os_image": "cos-stable-65-10323-64-0",
+// 	"job-version": "v1.14.0-alpha.0.1012+253f03e0055b66",
+// 	"pod": "dd8d320f-ff64-11e8-b091-0a580a6c02ef"
+// }
+//
+type prowResultMetadata struct {
+	RepoCommit    string            `json:"repo-commit"`
+	Repo          string            `json:"repo"`
+	Repos         map[string]string `json:"repos"`
+	InfraCommit   string            `json:"infra-commit"`
+	JobVersion    string            `json:"job-version"`
+	Pod           string            `json:"pod"`
+	WorkNamespace string            `json:"work-namespace"`
+}
+
+func (o *options) writeMetadataJSON() error {
+	if len(o.artifactDir) == 0 {
+		return nil
+	}
+
+	m := prowResultMetadata{}
+
+	m.Repo = fmt.Sprintf("%s/%s", o.jobSpec.Refs.Org, o.jobSpec.Refs.Repo)
+	m.Repos = map[string]string{m.Repo: o.jobSpec.Refs.String()}
+
+	m.Pod = o.jobSpec.ProwJobID
+	m.WorkNamespace = o.namespace
+
+	data, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		return err
+	}
+	if o.dry {
+		log.Printf("metadata.json:\n%s", string(data))
+		return nil
+	}
+	return ioutil.WriteFile(filepath.Join(o.artifactDir, "metadata.json"), data, 0640)
 }
 
 func (o *options) writeJUnit(suites *junit.TestSuites, name string) error {

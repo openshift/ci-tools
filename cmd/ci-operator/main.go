@@ -188,6 +188,7 @@ type options struct {
 	gitRef              string
 	namespace           string
 	baseNamespace       string
+	extraInputHash      stringSlice
 	idleCleanupDuration time.Duration
 	cleanupDuration     time.Duration
 
@@ -223,6 +224,7 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.Var(&opt.secretDirectories, "secret-dir", "One or more directories that should converted into secrets in the test namespace.")
 
 	// the target namespace and cleanup behavior
+	flag.Var(&opt.extraInputHash, "input-hash", "Add arbitrary inputs to the build input hash to make the created namespace unique.")
 	flag.StringVar(&opt.namespace, "namespace", "", "Namespace to create builds into, defaults to build_id from JOB_SPEC. If the string '{id}' is in this value it will be replaced with the build input hash.")
 	flag.StringVar(&opt.baseNamespace, "base-namespace", "stable", "Namespace to read builds from, defaults to stable.")
 	flag.DurationVar(&opt.idleCleanupDuration, "delete-when-idle", opt.idleCleanupDuration, "If no pod is running for longer than this interval, delete the namespace. Set to zero to retain the contents. Requires the namespace TTL controller to be deployed.")
@@ -503,6 +505,9 @@ func (o *options) resolveInputs(ctx context.Context, steps []api.Step) error {
 		panic(err)
 	}
 	inputs = append(inputs, string(configSpec))
+	if len(o.extraInputHash.values) > 0 {
+		inputs = append(inputs, o.extraInputHash.values...)
+	}
 
 	o.inputHash = inputHash(inputs)
 

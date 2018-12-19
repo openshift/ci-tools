@@ -273,7 +273,7 @@ func (o *options) Complete() error {
 	}
 
 	if err := o.configSpec.Validate(); err != nil {
-		return fmt.Errorf("invalid configuration: %v", err)
+		return err
 	}
 
 	jobSpec, err := api.ResolveSpecFromEnv()

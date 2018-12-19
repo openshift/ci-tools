@@ -629,24 +629,11 @@ func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name st
 func podReason(pod *coreapi.Pod) string {
 	reason := pod.Status.Reason
 	message := pod.Status.Message
-	if len(message) == 0 {
-		message = "unknown"
-	}
 	if len(reason) == 0 {
-		for _, status := range append(append([]coreapi.ContainerStatus{}, pod.Status.InitContainerStatuses...), pod.Status.ContainerStatuses...) {
-			state := status.State.Terminated
-			if state == nil || state.ExitCode == 0 {
-				continue
-			}
-			if len(reason) == 0 {
-				continue
-			}
-			reason = state.Reason
-			if len(message) == 0 {
-				message = fmt.Sprintf("container failure with exit code %d", state.ExitCode)
-			}
-			break
-		}
+		reason = "ContainerFailed"
+	}
+	if len(message) == 0 {
+		message = "one or more containers exited"
 	}
 	return fmt.Sprintf("%s %s", reason, message)
 }

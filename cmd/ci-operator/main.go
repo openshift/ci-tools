@@ -265,7 +265,10 @@ func (o *options) Complete() error {
 			return fmt.Errorf("CONFIG_SPEC environment variable is not set or empty and no --config file was set")
 		}
 	}
-	if err := yaml.Unmarshal([]byte(configSpec), &o.configSpec); err != nil {
+	if o.configSpec == nil {
+		o.configSpec = &api.ReleaseBuildConfiguration{}
+	}
+	if err := yaml.Unmarshal([]byte(configSpec), o.configSpec); err != nil {
 		return fmt.Errorf("invalid configuration: %v\nvalue:\n%s", err, string(configSpec))
 	}
 

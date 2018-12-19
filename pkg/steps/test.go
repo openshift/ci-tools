@@ -118,7 +118,7 @@ func (s *podStep) Run(ctx context.Context, dry bool) error {
 	}
 
 	if err := waitForPodCompletion(s.podClient.Pods(s.jobSpec.Namespace), pod.Name, notifier); err != nil {
-		return fmt.Errorf("failed to wait for %s pod to complete: %v", s.name, err)
+		return fmt.Errorf("test %q failed: %v", pod.Name, err)
 	}
 
 	return nil

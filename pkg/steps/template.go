@@ -153,7 +153,7 @@ func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 		switch {
 		case ref.Ref.Kind == "Pod" && ref.Ref.APIVersion == "v1":
 			if err := waitForPodCompletion(s.podClient.Pods(s.jobSpec.Namespace), ref.Ref.Name, notifier); err != nil {
-				return fmt.Errorf("could not wait for pod to complete: %v", err)
+				return fmt.Errorf("template pod %q failed: %v", ref.Ref.Name, err)
 			}
 		}
 	}
@@ -560,7 +560,7 @@ func waitForPodCompletion(podClient coreclientset.PodInterface, name string, not
 			continue
 		}
 		if err != nil {
-			return fmt.Errorf("could not wait for pod completion: %v", err)
+			return err
 		}
 		if !retry {
 			break

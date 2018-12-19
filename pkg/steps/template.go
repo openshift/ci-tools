@@ -657,7 +657,7 @@ func podMessages(pod *coreapi.Pod) string {
 	for _, status := range append(append([]coreapi.ContainerStatus{}, pod.Status.InitContainerStatuses...), pod.Status.ContainerStatuses...) {
 		if state := status.State.Terminated; state != nil && state.ExitCode != 0 {
 			messages = append(messages, fmt.Sprintf("Container %s exited with code %d, reason %s", status.Name, state.ExitCode, state.Reason))
-			if msg := state.Message; len(msg) > 0 {
+			if msg := strings.TrimSpace(state.Message); len(msg) > 0 {
 				messages = append(messages, "---", msg, "---")
 			}
 		}

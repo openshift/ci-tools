@@ -158,9 +158,9 @@ func TestValidateTests(t *testing.T) {
 	}
 
 	for _, tc := range testTestsCases {
-		if err := validateTestStepConfiguration("tests", tc.tests, tc.release); err != nil && tc.expectedValid {
-			validationErrors = append(validationErrors, parseError(tc.id, err))
-		} else if !tc.expectedValid && err == nil {
+		if errs := validateTestStepConfiguration("tests", tc.tests, tc.release); len(errs) > 0 && tc.expectedValid {
+			validationErrors = append(validationErrors, fmt.Errorf("%q expected to be valid, got: %v", tc.id, errs))
+		} else if !tc.expectedValid && len(errs) == 0 {
 			validationErrors = append(validationErrors, parseValidError(tc.id))
 		}
 	}
@@ -201,9 +201,9 @@ func TestValidateBuildRoot(t *testing.T) {
 	}
 
 	for _, tc := range testBuildRootCases {
-		if err := validateBuildRootImageConfiguration("build_root", &tc.buildRootImageConfig); err != nil && tc.expectedValid {
-			validationErrors = append(validationErrors, parseError(tc.id, err))
-		} else if !tc.expectedValid && err == nil {
+		if errs := validateBuildRootImageConfiguration("build_root", &tc.buildRootImageConfig); len(errs) > 0 && tc.expectedValid {
+			validationErrors = append(validationErrors, fmt.Errorf("%q expected to be valid, got: %v", tc.id, errs))
+		} else if !tc.expectedValid && len(errs) == 0 {
 			validationErrors = append(validationErrors, parseValidError(tc.id))
 		}
 	}
@@ -228,9 +228,9 @@ func TestValidateBaseImages(t *testing.T) {
 		},
 	}
 	for _, tc := range testBaseImagesCases {
-		if err := validateImageStreamTagReferenceMap("base_images", tc.baseImages); err != nil && tc.expectedValid {
-			validationErrors = append(validationErrors, parseError(tc.id, err))
-		} else if !tc.expectedValid && err == nil {
+		if errs := validateImageStreamTagReferenceMap("base_images", tc.baseImages); len(errs) > 0 && tc.expectedValid {
+			validationErrors = append(validationErrors, fmt.Errorf("%q expected to be valid, got: %v", tc.id, errs))
+		} else if !tc.expectedValid && len(errs) == 0 {
 			validationErrors = append(validationErrors, parseValidError(tc.id))
 		}
 	}
@@ -256,9 +256,9 @@ func TestValidateBaseRpmImages(t *testing.T) {
 	}
 
 	for _, tc := range testBaseRpmImagesCases {
-		if err := validateImageStreamTagReferenceMap("base_rpm_images", tc.baseRpmImages); err != nil && tc.expectedValid {
-			validationErrors = append(validationErrors, parseError(tc.id, err))
-		} else if !tc.expectedValid && err == nil {
+		if errs := validateImageStreamTagReferenceMap("base_rpm_images", tc.baseRpmImages); len(errs) > 0 && tc.expectedValid {
+			validationErrors = append(validationErrors, fmt.Errorf("%q expected to be valid, got: %v", tc.id, errs))
+		} else if !tc.expectedValid && len(errs) == 0 {
 			validationErrors = append(validationErrors, parseValidError(tc.id))
 		}
 	}

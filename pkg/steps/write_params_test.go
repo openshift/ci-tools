@@ -31,24 +31,24 @@ func TestWriteParamsStep(t *testing.T) {
 		},
 		inputs: inputsExpectation{
 			values: nil,
-			err:    nil,
+			err:    false,
 		},
 	}
 
 	execSpecification := executionExpectation{
 		prerun: doneExpectation{
 			value: false,
-			err:   nil,
+			err:   false,
 		},
-		runError: nil,
+		runError: false,
 		postrun: doneExpectation{
 			value: false,
-			err:   nil,
+			err:   false,
 		},
 	}
 
 	examineStep(t, wps, specification)
-	executeStep(t, wps, execSpecification)
+	executeStep(t, wps, execSpecification, nil)
 
 	expectedWrittenParams := "K1=V1\nK2='V:2'\n"
 	written, err := ioutil.ReadFile(paramFile.Name())

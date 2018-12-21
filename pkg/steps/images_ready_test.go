@@ -19,22 +19,22 @@ func TestImagesReadyStep(t *testing.T) {
 		},
 		inputs: inputsExpectation{
 			values: nil,
-			err:    nil,
+			err:    false,
 		},
 	}
 
 	execSpecification := executionExpectation{
 		prerun: doneExpectation{
 			value: true,
-			err:   nil,
+			err:   false,
 		},
-		runError: nil,
+		runError: false,
 		postrun: doneExpectation{
 			value: true,
-			err:   nil,
+			err:   false,
 		},
 	}
 
 	examineStep(t, irs, specification)
-	executeStep(t, irs, execSpecification)
+	executeStep(t, irs, execSpecification, nil)
 }

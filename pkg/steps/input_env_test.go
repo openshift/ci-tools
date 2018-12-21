@@ -22,22 +22,22 @@ func TestInputEnvironmentStep(t *testing.T) {
 		},
 		inputs: inputsExpectation{
 			values: api.InputDefinition{"another value", "value"},
-			err:    nil,
+			err:    false,
 		},
 	}
 
 	execSpecification := executionExpectation{
 		prerun: doneExpectation{
 			value: true,
-			err:   nil,
+			err:   false,
 		},
-		runError: nil,
+		runError: false,
 		postrun: doneExpectation{
 			value: true,
-			err:   nil,
+			err:   false,
 		},
 	}
 
 	examineStep(t, ies, specification)
-	executeStep(t, ies, execSpecification)
+	executeStep(t, ies, execSpecification, nil)
 }

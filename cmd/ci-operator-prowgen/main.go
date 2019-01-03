@@ -340,6 +340,18 @@ func extractPromotionName(configSpec *cioperatorapi.ReleaseBuildConfiguration) s
 	return ""
 }
 
+func shouldBePromoted(branch, namespace, name string) bool {
+	if namespace == "openshift" {
+		if name == "origin-v4.0" {
+			return branch == "master"
+		}
+
+		// TODO: release branches?
+	}
+
+	return true
+}
+
 // Given a ci-operator configuration file and basic information about what
 // should be tested, generate a following JobConfig:
 //
@@ -371,9 +383,11 @@ func generateJobs(
 		// --target=[release:latest] for [images] presubmits.
 		labels := map[string]string{}
 		var additionalPresubmitArgs []string
-		if extractPromotionNamespace(configSpec) == "openshift" {
+		promotionNamespace := extractPromotionNamespace(configSpec)
+		promotionName := extractPromotionName(configSpec)
+		if promotionNamespace == "openshift" {
 			labels["artifacts"] = "images"
-			if extractPromotionName(configSpec) == "origin-v4.0" {
+			if promotionName == "origin-v4.0" {
 				additionalPresubmitArgs = []string{"--target=[release:latest]"}
 			}
 		}
@@ -386,7 +400,11 @@ func generateJobs(
 		}
 
 		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest("images", repoInfo, generatePodSpec(repoInfo.configFilename, "[images]", additionalPresubmitArgs...)))
-		postsubmits[orgrepo] = append(postsubmits[orgrepo], *generatePostsubmitForTest("images", repoInfo, true, labels, generatePodSpec(repoInfo.configFilename, "[images]", additionalPostsubmitArgs...)))
+
+		// If we have and explicit promotion config, let's respect that. Otherwise, validate if the branch matches promotion target
+		if configSpec.PromotionConfiguration != nil || shouldBePromoted(repoInfo.branch, promotionNamespace, promotionName) {
+			postsubmits[orgrepo] = append(postsubmits[orgrepo], *generatePostsubmitForTest("images", repoInfo, true, labels, generatePodSpec(repoInfo.configFilename, "[images]", additionalPostsubmitArgs...)))
+		}
 	}
 
 	return &prowconfig.JobConfig{

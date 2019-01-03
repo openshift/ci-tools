@@ -132,16 +132,14 @@ func (s *inputImageTagStep) Done() (bool, error) {
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return false, nil
-		} else {
-			return false, fmt.Errorf("could not retrieve input imagestreamtag: %v", err)
 		}
-	} else {
-		return true, nil
+		return false, fmt.Errorf("could not retrieve input imagestreamtag: %v", err)
 	}
+	return true, nil
 }
 
 func (s *inputImageTagStep) Requires() []api.StepLink {
-	return nil //[]api.StepLink{api.ExternalImageLink(s.config.BaseImage)}
+	return nil
 }
 
 func (s *inputImageTagStep) Creates() []api.StepLink {

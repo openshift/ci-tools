@@ -11,6 +11,10 @@ import (
 	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
+	"k8s.io/apimachinery/pkg/util/sets"
 	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	pjclientset "k8s.io/test-infra/prow/client/clientset/versioned"
 	pj "k8s.io/test-infra/prow/client/clientset/versioned/typed/prowjobs/v1"
@@ -201,18 +205,61 @@ func ExecuteJobs(toBeRehearsed map[string][]prowconfig.Presubmit, prNumber int, 
 		}
 	}
 
-	if len(rehearsals) > 0 {
-		for _, job := range rehearsals {
-			created, err := submitRehearsal(job, refs, logger, pjclient)
-			if err != nil {
-				logger.WithError(err).Warn("Failed to execute a rehearsal presubmit")
-			} else {
-				logger.WithFields(pjutil.ProwJobFields(created)).Info("Submitted rehearsal prowjob")
+	pjs := make(sets.String, len(rehearsals))
+	for _, job := range rehearsals {
+		created, err := submitRehearsal(job, refs, logger, pjclient)
+		if err != nil {
+			logger.WithError(err).Warn("Failed to execute a rehearsal presubmit")
+			continue
+		}
+		logger.WithFields(pjutil.ProwJobFields(created)).Info("Submitted rehearsal prowjob")
+		pjs.Insert(created.Name)
+	}
+	req, err := labels.NewRequirement(rehearseLabel, selection.Equals, []string{strconv.Itoa(prNumber)})
+	if err != nil {
+		return fmt.Errorf("failed to create label selector: %v", err)
+	}
+	selector := labels.NewSelector().Add(*req).String()
+	success, err := waitForJobs(pjs, selector, pjclient, logger)
+	if err != nil {
+		return fmt.Errorf("error while waiting for jobs: %s", err)
+	}
+	if !success {
+		return fmt.Errorf("not all ProwJobs were successful")
+	}
+	return nil
+}
+
+func waitForJobs(jobs sets.String, selector string, pjclient pj.ProwJobInterface, logger logrus.FieldLogger) (bool, error) {
+	if len(jobs) == 0 {
+		return true, nil
+	}
+	success := true
+	for {
+		w, err := pjclient.Watch(metav1.ListOptions{LabelSelector: selector})
+		if err != nil {
+			return false, fmt.Errorf("failed to create watch for ProwJobs: %v", err)
+		}
+		defer w.Stop()
+		for event := range w.ResultChan() {
+			pj, ok := event.Object.(*pjapi.ProwJob)
+			if !ok {
+				return false, fmt.Errorf("received a %T from watch", event.Object)
+			}
+			logger.WithFields(pjutil.ProwJobFields(pj)).WithField("state", pj.Status.State).Info("processing ProwJob")
+			if !jobs.Has(pj.Name) {
+				continue
+			}
+			switch pj.Status.State {
+			case pjapi.FailureState, pjapi.AbortedState, pjapi.ErrorState:
+				success = false
+				fallthrough
+			case pjapi.SuccessState:
+				jobs.Delete(pj.Name)
+				if jobs.Len() == 0 {
+					return success, nil
+				}
 			}
 		}
-	} else {
-		logger.Warn("No job rehearsals")
 	}
-
-	return nil
 }

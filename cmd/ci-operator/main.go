@@ -739,8 +739,10 @@ func (o *options) writeMetadataJSON() error {
 
 	m := prowResultMetadata{}
 
-	m.Repo = fmt.Sprintf("%s/%s", o.jobSpec.Refs.Org, o.jobSpec.Refs.Repo)
-	m.Repos = map[string]string{m.Repo: o.jobSpec.Refs.String()}
+	if len(o.jobSpec.Refs.Repo) > 0 {
+		m.Repo = fmt.Sprintf("%s/%s", o.jobSpec.Refs.Org, o.jobSpec.Refs.Repo)
+		m.Repos = map[string]string{m.Repo: o.jobSpec.Refs.String()}
+	}
 
 	m.Pod = o.jobSpec.ProwJobID
 	m.WorkNamespace = o.namespace

@@ -88,12 +88,10 @@ func (s *outputImageTagStep) Done() (bool, error) {
 	); err != nil {
 		if errors.IsNotFound(err) {
 			return false, nil
-		} else {
-			return false, fmt.Errorf("could not retrieve output imagestreamtag: %v", err)
 		}
-	} else {
-		return true, nil
+		return false, fmt.Errorf("could not retrieve output imagestreamtag: %v", err)
 	}
+	return true, nil
 }
 
 func (s *outputImageTagStep) Requires() []api.StepLink {

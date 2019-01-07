@@ -77,7 +77,7 @@ type doneExpectation struct {
 }
 
 type providesExpectation struct {
-	params api.ParameterMap
+	params map[string]string
 	link   api.StepLink
 }
 
@@ -135,8 +135,17 @@ func examineStep(t *testing.T, step api.Step, expected stepExpectation) {
 	}
 
 	params, link := step.Provides()
-	if !reflect.DeepEqual(expected.provides.params, params) {
-		t.Errorf("step.Provides returned different params\n%s", diff.ObjectReflectDiff(expected.provides.params, link))
+	for expectedKey, expectedValue := range expected.provides.params {
+		getFunc, ok := params[expectedKey]
+		if !ok {
+			t.Errorf("step.Provides: Parameters do not contain '%s' key (expected to return value '%s')", expectedKey, expectedValue)
+		}
+		value, err := getFunc()
+		if err != nil {
+			t.Errorf("step.Provides: params[%s]() returned error: %v", expectedKey, err)
+		} else if value != expectedValue {
+			t.Errorf("step.Provides: params[%s]() returned '%s', expected to return '%s'", expectedKey, value, expectedValue)
+		}
 	}
 	if !reflect.DeepEqual(expected.provides.link, link) {
 		t.Errorf("step.Provides returned different link\n%s", diff.ObjectReflectDiff(expected.provides.link, link))

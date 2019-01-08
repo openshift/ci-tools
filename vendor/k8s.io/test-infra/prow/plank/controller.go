@@ -19,19 +19,21 @@ package plank
 import (
 	"bytes"
 	"fmt"
+	"net/url"
+	"path"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/bwmarrin/snowflake"
 	"github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
-
 	"k8s.io/test-infra/prow/config"
+	"k8s.io/test-infra/prow/gcsupload"
 	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/kube"
 	"k8s.io/test-infra/prow/pjutil"
 	"k8s.io/test-infra/prow/pod-utils/decorate"
+	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 	reportlib "k8s.io/test-infra/prow/report"
 )
 
@@ -75,7 +77,6 @@ type Controller struct {
 	ghc    GitHubClient
 	log    *logrus.Entry
 	ca     configAgent
-	node   *snowflake.Node
 	totURL string
 	// selector that will be applied on prowjobs and pods.
 	selector string
@@ -88,14 +89,13 @@ type Controller struct {
 	pjLock sync.RWMutex
 	// shared across the controller and a goroutine that gathers metrics.
 	pjs []kube.ProwJob
+
+	// if skip report job results to github
+	skipReport bool
 }
 
 // NewController creates a new Controller from the provided clients.
-func NewController(kc *kube.Client, pkcs map[string]*kube.Client, ghc GitHubClient, logger *logrus.Entry, ca *config.Agent, totURL, selector string) (*Controller, error) {
-	n, err := snowflake.NewNode(1)
-	if err != nil {
-		return nil, err
-	}
+func NewController(kc *kube.Client, pkcs map[string]*kube.Client, ghc GitHubClient, logger *logrus.Entry, ca *config.Agent, totURL, selector string, skipReport bool) (*Controller, error) {
 	if logger == nil {
 		logger = logrus.NewEntry(logrus.StandardLogger())
 	}
@@ -109,10 +109,10 @@ func NewController(kc *kube.Client, pkcs map[string]*kube.Client, ghc GitHubClie
 		ghc:         ghc,
 		log:         logger,
 		ca:          ca,
-		node:        n,
 		pendingJobs: make(map[string]int),
 		totURL:      totURL,
 		selector:    selector,
+		skipReport:  skipReport,
 	}, nil
 }
 
@@ -219,7 +219,7 @@ func (c *Controller) Sync() error {
 	}
 
 	var reportErrs []error
-	if c.ghc != nil {
+	if !c.skipReport {
 		reportTemplate := c.ca.Config().Plank.ReportTemplate
 		for report := range reportCh {
 			if err := reportlib.Report(c.ghc, reportTemplate, report); err != nil {
@@ -353,7 +353,7 @@ func (c *Controller) syncPendingJob(pj kube.ProwJob, pm map[string]kube.Pod, rep
 			c.log.WithFields(pjutil.ProwJobFields(&pj)).Info("Pod is in unknown state, deleting & restarting pod")
 			client, ok := c.pkcs[pj.ClusterAlias()]
 			if !ok {
-				return fmt.Errorf("Unknown cluster alias %q.", pj.ClusterAlias())
+				return fmt.Errorf("unknown cluster alias %q", pj.ClusterAlias())
 			}
 			return client.DeletePod(pj.ObjectMeta.Name)
 
@@ -374,11 +374,20 @@ func (c *Controller) syncPendingJob(pj kube.ProwJob, pm map[string]kube.Pod, rep
 
 		case kube.PodFailed:
 			if pod.Status.Reason == kube.Evicted {
+				// Pod was evicted.
+				if pj.Spec.ErrorOnEviction {
+					// ErrorOnEviction is enabled, complete the PJ and mark it as errored.
+					pj.SetComplete()
+					pj.Status.State = kube.ErrorState
+					pj.Status.Description = "Job pod was evicted by the cluster."
+					break
+				}
+				// ErrorOnEviction is disabled. Delete the pod now and recreate it in
+				// the next resync.
 				c.incrementNumPendingJobs(pj.Spec.Job)
-				// Pod was evicted. We will recreate it in the next resync.
 				client, ok := c.pkcs[pj.ClusterAlias()]
 				if !ok {
-					return fmt.Errorf("Unknown cluster alias %q.", pj.ClusterAlias())
+					return fmt.Errorf("unknown cluster alias %q", pj.ClusterAlias())
 				}
 				return client.DeletePod(pj.ObjectMeta.Name)
 			}
@@ -408,13 +417,10 @@ func (c *Controller) syncPendingJob(pj kube.ProwJob, pm map[string]kube.Pod, rep
 		}
 	}
 
-	var b bytes.Buffer
-	if err := c.ca.Config().Plank.JobURLTemplate.Execute(&b, &pj); err != nil {
-		c.log.WithFields(pjutil.ProwJobFields(&pj)).Errorf("error executing URL template: %v", err)
-	} else {
-		pj.Status.URL = b.String()
-	}
+	pj.Status.URL = jobURL(c.ca.Config().Plank, pj, c.log)
+
 	reports <- pj
+
 	if prevState != pj.Status.State {
 		c.log.WithFields(pjutil.ProwJobFields(&pj)).
 			WithField("from", prevState).
@@ -463,12 +469,7 @@ func (c *Controller) syncTriggeredJob(pj kube.ProwJob, pm map[string]kube.Pod, r
 		pj.Status.State = kube.PendingState
 		pj.Status.PodName = pn
 		pj.Status.Description = "Job triggered."
-		var b bytes.Buffer
-		if err := c.ca.Config().Plank.JobURLTemplate.Execute(&b, &pj); err != nil {
-			c.log.WithFields(pjutil.ProwJobFields(&pj)).Errorf("error executing URL template: %v", err)
-		} else {
-			pj.Status.URL = b.String()
-		}
+		pj.Status.URL = jobURL(c.ca.Config().Plank, pj, c.log)
 	}
 	reports <- pj
 	if prevState != pj.Status.State {
@@ -495,7 +496,7 @@ func (c *Controller) startPod(pj kube.ProwJob) (string, string, error) {
 
 	client, ok := c.pkcs[pj.ClusterAlias()]
 	if !ok {
-		return "", "", fmt.Errorf("Unknown cluster alias %q.", pj.ClusterAlias())
+		return "", "", fmt.Errorf("unknown cluster alias %q", pj.ClusterAlias())
 	}
 	actual, err := client.CreatePod(*pod)
 	if err != nil {
@@ -505,19 +506,16 @@ func (c *Controller) startPod(pj kube.ProwJob) (string, string, error) {
 }
 
 func (c *Controller) getBuildID(name string) (string, error) {
-	if c.totURL == "" {
-		return c.node.Generate().String(), nil
-	}
 	return pjutil.GetBuildID(name, c.totURL)
 }
 
 func getPodBuildID(pod *kube.Pod) string {
 	for _, env := range pod.Spec.Containers[0].Env {
-		if env.Name == "BUILD_NUMBER" {
+		if env.Name == "BUILD_ID" {
 			return env.Value
 		}
 	}
-	logrus.Warningf("BUILD_NUMBER was not found in pod %q: streaming logs from deck will not work", pod.ObjectMeta.Name)
+	logrus.Warningf("BUILD_ID was not found in pod %q: streaming logs from deck will not work", pod.ObjectMeta.Name)
 	return ""
 }
 
@@ -556,4 +554,23 @@ func (c *Controller) RunAfterSuccessCanRun(parent, child *kube.ProwJob, ca confi
 		changes = append(changes, change.Filename)
 	}
 	return ps.RunsAgainstChanges(changes)
+}
+
+func jobURL(plank config.Plank, pj kube.ProwJob, log *logrus.Entry) string {
+	if pj.Spec.DecorationConfig != nil && plank.JobURLPrefix != "" {
+		spec := downwardapi.NewJobSpec(pj.Spec, pj.Status.BuildID, pj.Name)
+		gcsConfig := pj.Spec.DecorationConfig.GCSConfiguration
+		_, gcsPath, _ := gcsupload.PathsForJob(gcsConfig, &spec, "")
+
+		prefix, _ := url.Parse(plank.JobURLPrefix)
+		prefix.Path = path.Join(prefix.Path, gcsConfig.Bucket, gcsPath)
+		return prefix.String()
+	}
+	var b bytes.Buffer
+	if err := plank.JobURLTemplate.Execute(&b, &pj); err != nil {
+		log.WithFields(pjutil.ProwJobFields(&pj)).Errorf("error executing URL template: %v", err)
+	} else {
+		return b.String()
+	}
+	return ""
 }

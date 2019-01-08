@@ -1,18 +1,20 @@
 kind: Template
 apiVersion: template.openshift.io/v1
 parameters:
-- name: IMAGE_FORMAT
-  required: true
-- name: RELEASE_IMAGE_LATEST
-  required: true
-- name: IMAGE_TEST
-  required: true
 objects:
 - kind: Pod
   apiVersion: v1
   metadata:
     name: test
   spec:
+    restartPolicy: Never
     containers:
-    - name: blah
-      image: ${IMAGE_TEST}
+    - name: test
+      image: centos:7
+      terminationMessagePolicy: FallbackToLogsOnError
+      command:
+      - /bin/bash
+      - -c
+      - |
+        cat /etc/resolv.conf
+        exit 1

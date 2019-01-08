@@ -14,9 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package tide contains a controller for managing a tide pool of PRs. The
-// controller will automatically retest PRs in the pool and merge them if they
-// pass tests.
 package tide
 
 import (
@@ -65,6 +62,12 @@ type statusController struct {
 	// cheaper.
 	lastSuccessfulQueryStart time.Time
 
+	// trackedOrgs and trackedRepos are the sets of orgs and repos that are
+	// 'up to date' on, in the sense that we have already processed all open PRs
+	// updated before lastSuccessfulQueryStart for these orgs and repos.
+	trackedOrgs  sets.String
+	trackedRepos sets.String
+
 	sync.Mutex
 	poolPRs map[string]PullRequest
 }
@@ -77,13 +80,14 @@ func (sc *statusController) shutdown() {
 // requirementDiff calculates the diff between a PR and a TideQuery.
 // This diff is defined with a string that describes some subset of the
 // differences and an integer counting the total number of differences.
-// The diff count should always reflect the total number of differences between
+// The diff count should always reflect the scale of the differences between
 // the current state of the PR and the query, but the message returned need not
 // attempt to convey all of that information if some differences are more severe.
 // For instance, we need to convey that a PR is open against a forbidden branch
 // more than we need to detail which status contexts are failed against the PR.
+// To this end, some differences are given a higher diff weight than others.
 // Note: an empty diff can be returned if the reason that the PR does not match
-// the TideQuery is unknown. This can happen happen if this function's logic
+// the TideQuery is unknown. This can happen if this function's logic
 // does not match GitHub's and does not indicate that the PR matches the query.
 func requirementDiff(pr *PullRequest, q *config.TideQuery, cc contextChecker) (string, int) {
 	const maxLabelChars = 50
@@ -102,26 +106,40 @@ func requirementDiff(pr *PullRequest, q *config.TideQuery, cc contextChecker) (s
 		return labels[:i]
 	}
 
+	// Weight incorrect branches with very high diff so that we select the query
+	// for the correct branch.
+	targetBranchBlacklisted := false
 	for _, excludedBranch := range q.ExcludedBranches {
 		if string(pr.BaseRef.Name) == excludedBranch {
-			desc = fmt.Sprintf(" Merging to branch %s is forbidden.", pr.BaseRef.Name)
-			diff = 1
+			targetBranchBlacklisted = true
+			break
 		}
 	}
-
 	// if no whitelist is configured, the target is OK by default
 	targetBranchWhitelisted := len(q.IncludedBranches) == 0
 	for _, includedBranch := range q.IncludedBranches {
 		if string(pr.BaseRef.Name) == includedBranch {
 			targetBranchWhitelisted = true
+			break
+		}
+	}
+	if targetBranchBlacklisted || !targetBranchWhitelisted {
+		diff += 1000
+		if desc == "" {
+			desc = fmt.Sprintf(" Merging to branch %s is forbidden.", pr.BaseRef.Name)
 		}
 	}
 
-	if !targetBranchWhitelisted {
-		desc = fmt.Sprintf(" Merging to branch %s is forbidden.", pr.BaseRef.Name)
-		diff++
+	// Weight incorrect milestone with relatively high diff so that we select the
+	// query for the correct milestone (but choose favor query for correct branch).
+	if q.Milestone != "" && (pr.Milestone == nil || string(pr.Milestone.Title) != q.Milestone) {
+		diff += 100
+		if desc == "" {
+			desc = fmt.Sprintf(" Must be in milestone %s.", q.Milestone)
+		}
 	}
 
+	// Weight incorrect labels and statues with low (normal) diff values.
 	var missingLabels []string
 	for _, l1 := range q.Labels {
 		var found bool
@@ -186,13 +204,6 @@ func requirementDiff(pr *PullRequest, q *config.TideQuery, cc contextChecker) (s
 		}
 	}
 
-	if q.Milestone != "" && (pr.Milestone == nil || string(pr.Milestone.Title) != q.Milestone) {
-		diff++
-		if desc == "" {
-			desc = fmt.Sprintf(" Must be in milestone %s.", q.Milestone)
-		}
-	}
-
 	// TODO(cjwagner): List reviews (states:[APPROVED], first: 1) as part of open
 	// PR query.
 
@@ -204,7 +215,7 @@ func requirementDiff(pr *PullRequest, q *config.TideQuery, cc contextChecker) (s
 // in order to generate a diff for the status description. We choose the query
 // for the repo that the PR is closest to meeting (as determined by the number
 // of unmet/violated requirements).
-func expectedStatus(queryMap config.QueryMap, pr *PullRequest, pool map[string]PullRequest, cc contextChecker) (string, string) {
+func expectedStatus(queryMap *config.QueryMap, pr *PullRequest, pool map[string]PullRequest, cc contextChecker) (string, string) {
 	if _, ok := pool[prKey(pr)]; !ok {
 		minDiffCount := -1
 		var minDiff string
@@ -243,6 +254,8 @@ func targetURL(c *config.Agent, pr *PullRequest, log *logrus.Entry) string {
 }
 
 func (sc *statusController) setStatuses(all []PullRequest, pool map[string]PullRequest) {
+	// queryMap caches which queries match a repo.
+	// Make a new one each sync loop as queries will change.
 	queryMap := sc.ca.Config().Tide.Queries.QueryMap()
 	processed := sets.NewString()
 
@@ -355,18 +368,79 @@ func (sc *statusController) sync(pool map[string]PullRequest) {
 		tideMetrics.statusUpdateDuration.Set(duration.Seconds())
 	}()
 
-	// Query for PRs changed since the last time we successfully queried.
+	sc.setStatuses(sc.search(), pool)
+}
+
+func (sc *statusController) search() []PullRequest {
+	// Note: negative repo matches are ignored for simplicity when tracking orgs.
+	// This means that the addition/removal of a negative repo token on a query
+	// with an existing org token for the parent org won't cause statuses to be
+	// updated until PRs are individually bumped or Tide is restarted.
+	// The actual queries must still consider negative matches in order to avoid
+	// adding statuses to excluded repos.
+	orgExceptions, repos := sc.ca.Config().Tide.Queries.OrgExceptionsAndRepos()
+	orgs := sets.StringKeySet(orgExceptions)
+	freshOrgs, freshRepos := orgs.Difference(sc.trackedOrgs), repos.Difference(sc.trackedRepos)
+	oldOrgs, oldRepos := sc.trackedOrgs.Difference(orgs), sc.trackedRepos.Difference(repos)
+	// Stop tracking orgs and repos that aren't queried this loop.
+	sc.trackedOrgs.Delete(oldOrgs.UnsortedList()...)
+	sc.trackedRepos.Delete(oldRepos.UnsortedList()...)
+	// Determine the query for tracked PRs now before we modify 'trackedOrgs' and 'trackedRepos'.
+	var trackedQuery string
+	if sc.trackedOrgs.Len() > 0 || sc.trackedRepos.Len() > 0 {
+		trackedQuery = openPRsQuery(sc.trackedOrgs.UnsortedList(), sc.trackedRepos.UnsortedList(), orgExceptions)
+	}
+	queryStartTime := time.Now()
+
+	var lock sync.Mutex
+	var wg sync.WaitGroup
+	var allPRs []PullRequest
+	// Query fresh orgs and repos individually and since the beginning of time.
+	// These queries are larger and more likely to fail so we query for targets individually.
+	singleTargetSearch := func(query, target string, tracked sets.String) {
+		defer wg.Done()
+		searcher := newSearchExecutor(context.Background(), sc.ghc, sc.logger, query)
+		prs, err := searcher.search()
+		if err != nil {
+			sc.logger.WithError(err).Errorf("Searching for open PRs in %s.", target)
+			return
+		}
+		func() {
+			lock.Lock()
+			defer lock.Unlock()
+			allPRs = append(allPRs, prs...)
+			tracked.Insert(target)
+		}()
+	}
+
+	wg.Add(freshOrgs.Len() + freshRepos.Len())
+	for _, org := range freshOrgs.UnsortedList() {
+		go singleTargetSearch(openPRsQuery([]string{org}, nil, orgExceptions), org, sc.trackedOrgs)
+	}
+	for _, repo := range freshRepos.UnsortedList() {
+		go singleTargetSearch(openPRsQuery(nil, []string{repo}, nil), repo, sc.trackedRepos)
+	}
+	wg.Wait()
+
+	// Query tracked orgs and repos together and only since the last time we queried.
 	// We offset for 30 seconds of overlap because GitHub sometimes doesn't
 	// include recently changed/new PRs in the query results.
-	sinceTime := sc.lastSuccessfulQueryStart.Add(-30 * time.Second)
-	query := sc.ca.Config().Tide.Queries.AllPRsSince(sinceTime)
-	queryStartTime := time.Now()
-	allPRs, err := search(context.Background(), sc.ghc, sc.logger, query)
-	if err != nil {
-		sc.logger.WithError(err).Errorf("Searching for open PRs.")
-		return
+	if trackedQuery != "" {
+		sinceTime := sc.lastSuccessfulQueryStart.Add(-30 * time.Second)
+		searcher := newSearchExecutor(context.Background(), sc.ghc, sc.logger, trackedQuery)
+		prs, err := searcher.searchSince(sinceTime)
+		if err != nil {
+			sc.logger.WithError(err).Error("Searching for open PRs from 'tracked' orgs and repos.")
+		} else {
+			allPRs = append(allPRs, prs...)
+		}
 	}
+
 	// We were able to find all open PRs so update the last successful query time.
 	sc.lastSuccessfulQueryStart = queryStartTime
-	sc.setStatuses(allPRs, pool)
+	return allPRs
+}
+
+func openPRsQuery(orgs, repos []string, orgExceptions map[string]sets.String) string {
+	return "is:pr state:open " + orgRepoQueryString(orgs, repos, orgExceptions)
 }

@@ -33,6 +33,7 @@ import (
 	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/pluginhelp"
 	"k8s.io/test-infra/prow/plugins"
+	"k8s.io/test-infra/prow/plugins/golint/suggestion"
 )
 
 const (
@@ -70,8 +71,17 @@ type githubClient interface {
 	ListPullRequestComments(org, repo string, number int) ([]github.ReviewComment, error)
 }
 
-func handleGenericComment(pc plugins.PluginClient, e github.GenericCommentEvent) error {
-	return handle(pc.GitHubClient, pc.GitClient, pc.Logger, &e)
+const defaultConfidence = 0.8
+
+func minConfidence(g *plugins.Golint) float64 {
+	if g == nil || g.MinimumConfidence == nil {
+		return defaultConfidence
+	}
+	return *g.MinimumConfidence
+}
+
+func handleGenericComment(pc plugins.Agent, e github.GenericCommentEvent) error {
+	return handle(minConfidence(pc.PluginConfig.Golint), pc.GitHubClient, pc.GitClient, pc.Logger, &e)
 }
 
 // modifiedGoFiles returns a map from filename to patch string for all go files
@@ -155,7 +165,7 @@ func problemsInFiles(r *git.Repo, files map[string]string) (map[string]map[int]l
 	return problems, nil
 }
 
-func handle(ghc githubClient, gc *git.Client, log *logrus.Entry, e *github.GenericCommentEvent) error {
+func handle(minimumConfidence float64, ghc githubClient, gc *git.Client, log *logrus.Entry, e *github.GenericCommentEvent) error {
 	// Only handle open PRs and new requests.
 	if e.IssueState != "open" || !e.IsPR || e.Action != github.GenericCommentActionCreated {
 		return nil
@@ -204,6 +214,14 @@ func handle(ghc githubClient, gc *git.Client, log *logrus.Entry, e *github.Gener
 	if err != nil {
 		return err
 	}
+	// Filter out problems that are below our threshold
+	for file := range problems {
+		for line, problem := range problems[file] {
+			if problem.Confidence < minimumConfidence {
+				delete(problems[file], line)
+			}
+		}
+	}
 	log.WithField("duration", time.Since(finishClone)).Info("Linted.")
 
 	oldComments, err := ghc.ListPullRequestComments(org, repo, e.Number)
@@ -216,12 +234,13 @@ func handle(ghc githubClient, gc *git.Client, log *logrus.Entry, e *github.Gener
 	var comments []github.DraftReviewComment
 	for f, ls := range nps {
 		for l, p := range ls {
+			var suggestion = suggestion.SuggestCodeChange(p)
 			var body string
-			if p.Link == "" {
-				body = fmt.Sprintf("Golint %s: %s. %s", p.Category, p.Text, commentTag)
-			} else {
-				body = fmt.Sprintf("Golint %s: %s. [More info](%s). %s", p.Category, p.Text, p.Link, commentTag)
+			var link string
+			if p.Link != "" {
+				link = fmt.Sprintf("[More info](%s). ", p.Link)
 			}
+			body = fmt.Sprintf("%sGolint %s: %s. %s%s", suggestion, p.Category, p.Text, link, commentTag)
 			comments = append(comments, github.DraftReviewComment{
 				Path:     f,
 				Position: l,
@@ -282,6 +301,10 @@ func AddedLines(patch string) (map[int]int, error) {
 	}
 	lines := strings.Split(patch, "\n")
 	for i := 0; i < len(lines); i++ {
+		// dodge the "\ No newline at end of file" line
+		if lines[i] == "\\ No newline at end of file" {
+			continue
+		}
 		_, oldLen, newLine, newLen, err := parseHunkLine(lines[i])
 		if err != nil {
 			return nil, fmt.Errorf("couldn't parse hunk on line %d in patch %s: %v", i, patch, err)

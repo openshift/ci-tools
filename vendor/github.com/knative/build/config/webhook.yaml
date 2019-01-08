@@ -12,13 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-apiVersion: apps/v1beta1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: build-webhook
   namespace: knative-build
 spec:
   replicas: 1
+  selector:
+    matchLabels:
+      app: build-webhook
   template:
     metadata:
       labels:
@@ -32,10 +35,14 @@ spec:
         # and substituted here.
         image: github.com/knative/build/cmd/webhook
         args: [
-          "-builder", "cluster",
           "-logtostderr",
           "-stderrthreshold", "INFO",
         ]
+        env:
+        - name: SYSTEM_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
         volumeMounts:
         - name: config-logging
           mountPath: /etc/config-logging

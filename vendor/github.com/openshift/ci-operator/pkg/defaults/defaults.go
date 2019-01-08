@@ -160,7 +160,7 @@ func FromConfig(
 	}
 
 	if len(paramFile) > 0 {
-		buildSteps = append(buildSteps, steps.WriteParametersStep(params, paramFile, jobSpec))
+		buildSteps = append(buildSteps, steps.WriteParametersStep(params, paramFile))
 	}
 
 	if releaseStep != nil {
@@ -170,7 +170,7 @@ func FromConfig(
 		buildSteps = append(buildSteps, steps.StableImagesTagStep(imageClient, jobSpec))
 	}
 
-	buildSteps = append(buildSteps, steps.ImagesReadyStep(imageStepLinks, jobSpec))
+	buildSteps = append(buildSteps, steps.ImagesReadyStep(imageStepLinks))
 
 	if promote {
 		cfg, err := promotionDefaults(config)
@@ -303,7 +303,7 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.Job
 			Name:      "clonerefs",
 			Tag:       "latest",
 		},
-		ClonerefsPath: "/clonerefs",
+		ClonerefsPath: "/app/prow/cmd/clonerefs/app.binary.runfiles/test_infra/prow/cmd/clonerefs/linux_amd64_pure_stripped/app.binary",
 	}})
 
 	if len(config.BinaryBuildCommands) > 0 {

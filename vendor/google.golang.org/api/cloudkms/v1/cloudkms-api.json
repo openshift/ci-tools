@@ -12,7 +12,7 @@
   "baseUrl": "https://cloudkms.googleapis.com/",
   "batchPath": "batch",
   "canonicalName": "Cloud KMS",
-  "description": "Manages encryption for your cloud services the same way you do on-premises. You can generate, use, rotate, and destroy AES256 encryption keys.",
+  "description": "Manages keys and performs cryptographic operations in a central cloud service, for direct use by other cloud resources and applications.\n",
   "discoveryVersion": "v1",
   "documentationLink": "https://cloud.google.com/kms/",
   "fullyEncodeReservedExpansion": true,
@@ -358,7 +358,7 @@
                 "cryptoKeys": {
                   "methods": {
                     "create": {
-                      "description": "Create a new CryptoKey within a KeyRing.\n\nCryptoKey.purpose and CryptoKey.version_template.algorithm are\nrequired.",
+                      "description": "Create a new CryptoKey within a KeyRing.\n\nCryptoKey.purpose and\nCryptoKey.version_template.algorithm\nare required.",
                       "flatPath": "v1/projects/{projectsId}/locations/{locationsId}/keyRings/{keyRingsId}/cryptoKeys",
                       "httpMethod": "POST",
                       "id": "cloudkms.projects.locations.keyRings.cryptoKeys.create",
@@ -935,6 +935,91 @@
                       }
                     }
                   }
+                },
+                "importJobs": {
+                  "methods": {
+                    "getIamPolicy": {
+                      "description": "Gets the access control policy for a resource.\nReturns an empty policy if the resource exists and does not have a policy\nset.",
+                      "flatPath": "v1/projects/{projectsId}/locations/{locationsId}/keyRings/{keyRingsId}/importJobs/{importJobsId}:getIamPolicy",
+                      "httpMethod": "GET",
+                      "id": "cloudkms.projects.locations.keyRings.importJobs.getIamPolicy",
+                      "parameterOrder": [
+                        "resource"
+                      ],
+                      "parameters": {
+                        "resource": {
+                          "description": "REQUIRED: The resource for which the policy is being requested.\nSee the operation documentation for the appropriate value for this field.",
+                          "location": "path",
+                          "pattern": "^projects/[^/]+/locations/[^/]+/keyRings/[^/]+/importJobs/[^/]+$",
+                          "required": true,
+                          "type": "string"
+                        }
+                      },
+                      "path": "v1/{+resource}:getIamPolicy",
+                      "response": {
+                        "$ref": "Policy"
+                      },
+                      "scopes": [
+                        "https://www.googleapis.com/auth/cloud-platform"
+                      ]
+                    },
+                    "setIamPolicy": {
+                      "description": "Sets the access control policy on the specified resource. Replaces any\nexisting policy.",
+                      "flatPath": "v1/projects/{projectsId}/locations/{locationsId}/keyRings/{keyRingsId}/importJobs/{importJobsId}:setIamPolicy",
+                      "httpMethod": "POST",
+                      "id": "cloudkms.projects.locations.keyRings.importJobs.setIamPolicy",
+                      "parameterOrder": [
+                        "resource"
+                      ],
+                      "parameters": {
+                        "resource": {
+                          "description": "REQUIRED: The resource for which the policy is being specified.\nSee the operation documentation for the appropriate value for this field.",
+                          "location": "path",
+                          "pattern": "^projects/[^/]+/locations/[^/]+/keyRings/[^/]+/importJobs/[^/]+$",
+                          "required": true,
+                          "type": "string"
+                        }
+                      },
+                      "path": "v1/{+resource}:setIamPolicy",
+                      "request": {
+                        "$ref": "SetIamPolicyRequest"
+                      },
+                      "response": {
+                        "$ref": "Policy"
+                      },
+                      "scopes": [
+                        "https://www.googleapis.com/auth/cloud-platform"
+                      ]
+                    },
+                    "testIamPermissions": {
+                      "description": "Returns permissions that a caller has on the specified resource.\nIf the resource does not exist, this will return an empty set of\npermissions, not a NOT_FOUND error.\n\nNote: This operation is designed to be used for building permission-aware\nUIs and command-line tools, not for authorization checking. This operation\nmay \"fail open\" without warning.",
+                      "flatPath": "v1/projects/{projectsId}/locations/{locationsId}/keyRings/{keyRingsId}/importJobs/{importJobsId}:testIamPermissions",
+                      "httpMethod": "POST",
+                      "id": "cloudkms.projects.locations.keyRings.importJobs.testIamPermissions",
+                      "parameterOrder": [
+                        "resource"
+                      ],
+                      "parameters": {
+                        "resource": {
+                          "description": "REQUIRED: The resource for which the policy detail is being requested.\nSee the operation documentation for the appropriate value for this field.",
+                          "location": "path",
+                          "pattern": "^projects/[^/]+/locations/[^/]+/keyRings/[^/]+/importJobs/[^/]+$",
+                          "required": true,
+                          "type": "string"
+                        }
+                      },
+                      "path": "v1/{+resource}:testIamPermissions",
+                      "request": {
+                        "$ref": "TestIamPermissionsRequest"
+                      },
+                      "response": {
+                        "$ref": "TestIamPermissionsResponse"
+                      },
+                      "scopes": [
+                        "https://www.googleapis.com/auth/cloud-platform"
+                      ]
+                    }
+                  }
                 }
               }
             }
@@ -943,7 +1028,7 @@
       }
     }
   },
-  "revision": "20180804",
+  "revision": "20181210",
   "rootUrl": "https://cloudkms.googleapis.com/",
   "schemas": {
     "AsymmetricDecryptRequest": {
@@ -1084,13 +1169,13 @@
           "type": "string"
         },
         "nextRotationTime": {
-          "description": "At next_rotation_time, the Key Management Service will automatically:\n\n1. Create a new version of this CryptoKey.\n2. Mark the new version as primary.\n\nKey rotations performed manually via\nCreateCryptoKeyVersion and\nUpdateCryptoKeyPrimaryVersion\ndo not affect next_rotation_time.\n\nKeys with purpose\nENCRYPT_DECRYPT support automatic\nrotation. For other keys, this field must be omitted.",
+          "description": "At next_rotation_time, the Key Management Service will automatically:\n\n1. Create a new version of this CryptoKey.\n2. Mark the new version as primary.\n\nKey rotations performed manually via\nCreateCryptoKeyVersion and\nUpdateCryptoKeyPrimaryVersion\ndo not affect next_rotation_time.\n\nKeys with purpose\nENCRYPT_DECRYPT support\nautomatic rotation. For other keys, this field must be omitted.",
           "format": "google-datetime",
           "type": "string"
         },
         "primary": {
           "$ref": "CryptoKeyVersion",
-          "description": "Output only. A copy of the \"primary\" CryptoKeyVersion that will be used\nby Encrypt when this CryptoKey is given\nin EncryptRequest.name.\n\nThe CryptoKey's primary version can be updated via\nUpdateCryptoKeyPrimaryVersion.\n\nAll keys with purpose\nENCRYPT_DECRYPT have a primary. For\nother keys, this field will be omitted."
+          "description": "Output only. A copy of the \"primary\" CryptoKeyVersion that will be used\nby Encrypt when this CryptoKey is given\nin EncryptRequest.name.\n\nThe CryptoKey's primary version can be updated via\nUpdateCryptoKeyPrimaryVersion.\n\nAll keys with purpose\nENCRYPT_DECRYPT have a\nprimary. For other keys, this field will be omitted."
         },
         "purpose": {
           "description": "The immutable purpose of this CryptoKey.",
@@ -1109,7 +1194,7 @@
           "type": "string"
         },
         "rotationPeriod": {
-          "description": "next_rotation_time will be advanced by this period when the service\nautomatically rotates a key. Must be at least one day.\n\nIf rotation_period is set, next_rotation_time must also be set.\n\nKeys with purpose\nENCRYPT_DECRYPT support automatic\nrotation. For other keys, this field must be omitted.",
+          "description": "next_rotation_time will be advanced by this period when the service\nautomatically rotates a key. Must be at least one day.\n\nIf rotation_period is set, next_rotation_time must also be set.\n\nKeys with purpose\nENCRYPT_DECRYPT support\nautomatic rotation. For other keys, this field must be omitted.",
           "format": "google-duration",
           "type": "string"
         },
@@ -1132,11 +1217,15 @@
             "RSA_SIGN_PSS_2048_SHA256",
             "RSA_SIGN_PSS_3072_SHA256",
             "RSA_SIGN_PSS_4096_SHA256",
+            "RSA_SIGN_PSS_4096_SHA512",
             "RSA_SIGN_PKCS1_2048_SHA256",
             "RSA_SIGN_PKCS1_3072_SHA256",
             "RSA_SIGN_PKCS1_4096_SHA256",
+            "RSA_SIGN_PKCS1_4096_SHA512",
             "RSA_DECRYPT_OAEP_2048_SHA256",
             "RSA_DECRYPT_OAEP_3072_SHA256",
+            "RSA_DECRYPT_OAEP_4096_SHA256",
+            "RSA_DECRYPT_OAEP_4096_SHA512",
             "EC_SIGN_P256_SHA256",
             "EC_SIGN_P384_SHA384"
           ],
@@ -1146,11 +1235,15 @@
             "RSASSA-PSS 2048 bit key with a SHA256 digest.",
             "RSASSA-PSS 3072 bit key with a SHA256 digest.",
             "RSASSA-PSS 4096 bit key with a SHA256 digest.",
+            "RSASSA-PSS 4096 bit key with a SHA512 digest.",
             "RSASSA-PKCS1-v1_5 with a 2048 bit key and a SHA256 digest.",
             "RSASSA-PKCS1-v1_5 with a 3072 bit key and a SHA256 digest.",
             "RSASSA-PKCS1-v1_5 with a 4096 bit key and a SHA256 digest.",
+            "RSASSA-PKCS1-v1_5 with a 4096 bit key and a SHA512 digest.",
             "RSAES-OAEP 2048 bit key with a SHA256 digest.",
             "RSAES-OAEP 3072 bit key with a SHA256 digest.",
+            "RSAES-OAEP 4096 bit key with a SHA256 digest.",
+            "RSAES-OAEP 4096 bit key with a SHA512 digest.",
             "ECDSA on the NIST P-256 curve with a SHA256 digest.",
             "ECDSA on the NIST P-384 curve with a SHA384 digest."
           ],
@@ -1233,11 +1326,15 @@
             "RSA_SIGN_PSS_2048_SHA256",
             "RSA_SIGN_PSS_3072_SHA256",
             "RSA_SIGN_PSS_4096_SHA256",
+            "RSA_SIGN_PSS_4096_SHA512",
             "RSA_SIGN_PKCS1_2048_SHA256",
             "RSA_SIGN_PKCS1_3072_SHA256",
             "RSA_SIGN_PKCS1_4096_SHA256",
+            "RSA_SIGN_PKCS1_4096_SHA512",
             "RSA_DECRYPT_OAEP_2048_SHA256",
             "RSA_DECRYPT_OAEP_3072_SHA256",
+            "RSA_DECRYPT_OAEP_4096_SHA256",
+            "RSA_DECRYPT_OAEP_4096_SHA512",
             "EC_SIGN_P256_SHA256",
             "EC_SIGN_P384_SHA384"
           ],
@@ -1247,11 +1344,15 @@
             "RSASSA-PSS 2048 bit key with a SHA256 digest.",
             "RSASSA-PSS 3072 bit key with a SHA256 digest.",
             "RSASSA-PSS 4096 bit key with a SHA256 digest.",
+            "RSASSA-PSS 4096 bit key with a SHA512 digest.",
             "RSASSA-PKCS1-v1_5 with a 2048 bit key and a SHA256 digest.",
             "RSASSA-PKCS1-v1_5 with a 3072 bit key and a SHA256 digest.",
             "RSASSA-PKCS1-v1_5 with a 4096 bit key and a SHA256 digest.",
+            "RSASSA-PKCS1-v1_5 with a 4096 bit key and a SHA512 digest.",
             "RSAES-OAEP 2048 bit key with a SHA256 digest.",
             "RSAES-OAEP 3072 bit key with a SHA256 digest.",
+            "RSAES-OAEP 4096 bit key with a SHA256 digest.",
+            "RSAES-OAEP 4096 bit key with a SHA512 digest.",
             "ECDSA on the NIST P-256 curve with a SHA256 digest.",
             "ECDSA on the NIST P-384 curve with a SHA384 digest."
           ],
@@ -1403,7 +1504,7 @@
             "CAVIUM_V1_COMPRESSED"
           ],
           "enumDescriptions": [
-            "",
+            "Not specified.",
             "Cavium HSM attestation compressed with gzip. Note that this format is\ndefined by Cavium and subject to change at any time."
           ],
           "type": "string"
@@ -1553,7 +1654,7 @@
       "id": "LocationMetadata",
       "properties": {
         "hsmAvailable": {
-          "description": "Indicates that CryptoKeys with\nprotection_level\nHSM can be created in this location.",
+          "description": "Indicates whether CryptoKeys with\nprotection_level\nHSM can be created in this location.",
           "type": "boolean"
         }
       },
@@ -1594,6 +1695,46 @@
       "description": "The public key for a given CryptoKeyVersion. Obtained via\nGetPublicKey.",
       "id": "PublicKey",
       "properties": {
+        "algorithm": {
+          "description": "The Algorithm associated\nwith this key.",
+          "enum": [
+            "CRYPTO_KEY_VERSION_ALGORITHM_UNSPECIFIED",
+            "GOOGLE_SYMMETRIC_ENCRYPTION",
+            "RSA_SIGN_PSS_2048_SHA256",
+            "RSA_SIGN_PSS_3072_SHA256",
+            "RSA_SIGN_PSS_4096_SHA256",
+            "RSA_SIGN_PSS_4096_SHA512",
+            "RSA_SIGN_PKCS1_2048_SHA256",
+            "RSA_SIGN_PKCS1_3072_SHA256",
+            "RSA_SIGN_PKCS1_4096_SHA256",
+            "RSA_SIGN_PKCS1_4096_SHA512",
+            "RSA_DECRYPT_OAEP_2048_SHA256",
+            "RSA_DECRYPT_OAEP_3072_SHA256",
+            "RSA_DECRYPT_OAEP_4096_SHA256",
+            "RSA_DECRYPT_OAEP_4096_SHA512",
+            "EC_SIGN_P256_SHA256",
+            "EC_SIGN_P384_SHA384"
+          ],
+          "enumDescriptions": [
+            "Not specified.",
+            "Creates symmetric encryption keys.",
+            "RSASSA-PSS 2048 bit key with a SHA256 digest.",
+            "RSASSA-PSS 3072 bit key with a SHA256 digest.",
+            "RSASSA-PSS 4096 bit key with a SHA256 digest.",
+            "RSASSA-PSS 4096 bit key with a SHA512 digest.",
+            "RSASSA-PKCS1-v1_5 with a 2048 bit key and a SHA256 digest.",
+            "RSASSA-PKCS1-v1_5 with a 3072 bit key and a SHA256 digest.",
+            "RSASSA-PKCS1-v1_5 with a 4096 bit key and a SHA256 digest.",
+            "RSASSA-PKCS1-v1_5 with a 4096 bit key and a SHA512 digest.",
+            "RSAES-OAEP 2048 bit key with a SHA256 digest.",
+            "RSAES-OAEP 3072 bit key with a SHA256 digest.",
+            "RSAES-OAEP 4096 bit key with a SHA256 digest.",
+            "RSAES-OAEP 4096 bit key with a SHA512 digest.",
+            "ECDSA on the NIST P-256 curve with a SHA256 digest.",
+            "ECDSA on the NIST P-384 curve with a SHA384 digest."
+          ],
+          "type": "string"
+        },
         "pem": {
           "description": "The public key, encoded in PEM format. For more information, see the\n[RFC 7468](https://tools.ietf.org/html/rfc7468) sections for\n[General Considerations](https://tools.ietf.org/html/rfc7468#section-2) and\n[Textual Encoding of Subject Public Key Info]\n(https://tools.ietf.org/html/rfc7468#section-13).",
           "type": "string"

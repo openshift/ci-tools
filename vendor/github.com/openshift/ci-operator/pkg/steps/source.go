@@ -16,6 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/watch"
 
 	buildapi "github.com/openshift/api/build/v1"
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
@@ -47,7 +48,7 @@ func sourceDockerfile(fromTag api.PipelineImageStreamTagReference, pathAlias str
 	}
 	return fmt.Sprintf(`
 FROM %s:%s
-ADD ./clonerefs /clonerefs
+ADD ./app.binary /clonerefs
 RUN umask 0002 && /clonerefs && chmod g+xw -R %s/src
 WORKDIR %s/src/%s/
 ENV GOPATH=%s
@@ -248,6 +249,18 @@ func waitForBuildOrTimeout(buildClient BuildClient, namespace, name string) (boo
 			b.Status.Phase == buildapi.BuildPhaseCancelled ||
 			b.Status.Phase == buildapi.BuildPhaseError
 	}
+
+	// First we set up a watcher to catch all events that happen while we check
+	// the build status
+	watcher, err := buildClient.Builds(namespace).Watch(meta.ListOptions{
+		FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String(),
+		Watch:         true,
+	})
+	if err != nil {
+		return false, fmt.Errorf("could not create watcher for build %s: %v", name, err)
+	}
+	defer watcher.Stop()
+
 	list, err := buildClient.Builds(namespace).List(meta.ListOptions{FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String()})
 	if err != nil {
 		return false, fmt.Errorf("could not list builds: %v", err)
@@ -266,33 +279,53 @@ func waitForBuildOrTimeout(buildClient BuildClient, namespace, name string) (boo
 		return false, appendLogToError(fmt.Errorf("the build %s failed with reason %s: %s", build.Name, build.Status.Reason, build.Status.Message), build.Status.LogSnippet)
 	}
 
-	watcher, err := buildClient.Builds(namespace).Watch(meta.ListOptions{
-		FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String(),
-		Watch:         true,
-	})
-	if err != nil {
-		return false, fmt.Errorf("could not create watcher for build %s: %v", name, err)
-	}
-	defer watcher.Stop()
-
+	ch := watcher.ResultChan()
 	for {
-		event, ok := <-watcher.ResultChan()
+		event, ok := <-ch
 		if !ok {
 			// restart
 			return true, nil
 		}
-		if build, ok := event.Object.(*buildapi.Build); ok {
-			if isOK(build) {
-				log.Printf("Build %s succeeded after %s", build.Name, buildDuration(build).Truncate(time.Second))
-				return false, nil
-			}
-			if isFailed(build) {
-				log.Printf("Build %s failed, printing logs:", build.Name)
-				printBuildLogs(buildClient, build.Namespace, build.Name)
-				return false, appendLogToError(fmt.Errorf("the build %s failed after %s with reason %s: %s", build.Name, buildDuration(build).Truncate(time.Second), build.Status.Reason, build.Status.Message), build.Status.LogSnippet)
-			}
+		build, ok := event.Object.(*buildapi.Build)
+		if !ok {
+			continue
+		}
+
+		if isOK(build) {
+			log.Printf("Build %s succeeded after %s", build.Name, buildDuration(build).Truncate(time.Second))
+			return false, nil
+		}
+		if isFailed(build) {
+			log.Printf("Build %s failed, printing logs:", build.Name)
+			printBuildLogs(buildClient, build.Namespace, build.Name)
+			// BUG: builds report Failed before they set log snippet
+			build = waitForBuildWithSnippet(build, ch)
+			return false, appendLogToError(fmt.Errorf("the build %s failed after %s with reason %s: %s", build.Name, buildDuration(build).Truncate(time.Second), build.Status.Reason, build.Status.Message), build.Status.LogSnippet)
 		}
 	}
+}
+
+func waitForBuildWithSnippet(build *buildapi.Build, ch <-chan watch.Event) *buildapi.Build {
+	timeout := time.After(10 * time.Second)
+	for len(build.Status.LogSnippet) == 0 {
+		select {
+		case <-timeout:
+			return build
+		case event, ok := <-ch:
+			if !ok {
+				return build
+			}
+			nextBuild, ok := event.Object.(*buildapi.Build)
+			if !ok {
+				continue
+			}
+			if nextBuild.Status.Phase != build.Status.Phase {
+				return build
+			}
+			build = nextBuild
+		}
+	}
+	return build
 }
 
 func appendLogToError(err error, log string) error {

@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/kube"
@@ -39,7 +40,7 @@ const (
 )
 
 var (
-	ErrProwjobNotFound = errors.New("Prowjob not found")
+	errProwjobNotFound = errors.New("prowjob not found")
 )
 
 // Job holds information about a job prow is running/has run.
@@ -76,6 +77,7 @@ type serviceClusterClient interface {
 	ListProwJobs(selector string) ([]kube.ProwJob, error)
 }
 
+// PodLogClient is an interface for interacting with the pod logs.
 type PodLogClient interface {
 	// GetContainerLog returns the pod log of the specified container
 	GetContainerLog(pod, container string) ([]byte, error)
@@ -83,11 +85,12 @@ type PodLogClient interface {
 	GetLogTail(pod, container string, n int64) ([]byte, error)
 }
 
+// ConfigAgent is an interface to get the agent Config.
 type ConfigAgent interface {
 	Config() *config.Config
 }
 
-// NewJobAgent is a JobAgent constructor
+// NewJobAgent is a JobAgent constructor.
 func NewJobAgent(kc serviceClusterClient, plClients map[string]PodLogClient, ca ConfigAgent) *JobAgent {
 	return &JobAgent{
 		kc:   kc,
@@ -141,6 +144,9 @@ var jobNameRE = regexp.MustCompile(`^([\w-]+)-(\d+)$`)
 
 // GetProwJob finds the corresponding Prowjob resource from the provided job name and build ID
 func (ja *JobAgent) GetProwJob(job, id string) (kube.ProwJob, error) {
+	if ja == nil {
+		return kube.ProwJob{}, fmt.Errorf("Prow job agent doesn't exist (are you running locally?)")
+	}
 	var j kube.ProwJob
 	ja.mut.Lock()
 	idMap, ok := ja.jobsIDMap[job]
@@ -149,7 +155,7 @@ func (ja *JobAgent) GetProwJob(job, id string) (kube.ProwJob, error) {
 	}
 	ja.mut.Unlock()
 	if !ok {
-		return kube.ProwJob{}, ErrProwjobNotFound
+		return kube.ProwJob{}, errProwjobNotFound
 	}
 	return j, nil
 }

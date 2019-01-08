@@ -11,13 +11,16 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-apiVersion: apps/v1beta1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: build-controller
   namespace: knative-build
 spec:
   replicas: 1
+  selector:
+    matchLabels:
+      app: build-controller
   template:
     metadata:
       labels:
@@ -28,9 +31,21 @@ spec:
       - name: build-controller
         image: github.com/knative/build/cmd/controller
         args: [
-          "-builder", "cluster",
           "-logtostderr",
           "-stderrthreshold", "INFO",
           "-creds-image", "github.com/knative/build/cmd/creds-init",
           "-git-image", "github.com/knative/build/cmd/git-init",
+          "-nop-image", "github.com/knative/build/cmd/nop",
         ]
+        env:
+        - name: SYSTEM_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        volumeMounts:
+        - name: config-logging
+          mountPath: /etc/config-logging
+      volumes:
+        - name: config-logging
+          configMap:
+            name: config-logging

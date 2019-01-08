@@ -18,10 +18,12 @@ limitations under the License.
 package main
 
 import (
+	"encoding/hex"
 	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -30,11 +32,13 @@ import (
 	"sync"
 	"text/template"
 	"time"
+	"unicode"
 
-	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/util/sets"
+	"sigs.k8s.io/yaml"
 
-	"k8s.io/test-infra/prow/config"
+	"k8s.io/test-infra/prow/config/secret"
 	"k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/github"
 )
@@ -62,7 +66,7 @@ type Label struct {
 	// Color is rrggbb or color
 	Color string `json:"color"`
 	// Description is brief text explaining its meaning, who can apply it
-	Description string `json:"description"` // What does this label mean, who can apply it
+	Description string `json:"description"`
 	// Target specifies whether it targets PRs, issues or both
 	Target LabelTarget `json:"target"`
 	// ProwPlugin specifies which prow plugin add/removes this label
@@ -121,6 +125,8 @@ var (
 	skipRepos    = flag.String("skip", "", "Comma separated list of org/repos to skip syncing")
 	token        = flag.String("token", "", "Path to github oauth secret")
 	action       = flag.String("action", "sync", "One of: sync, docs")
+	cssTemplate  = flag.String("css-template", "", "Path to template file for label css")
+	cssOutput    = flag.String("css-output", "", "Path to output file for css")
 	docsTemplate = flag.String("docs-template", "", "Path to template file for label docs")
 	docsOutput   = flag.String("docs-output", "", "Path to output file for docs")
 	tokens       = flag.Int("tokens", defaultTokens, "Throttle hourly token consumption (0 to disable)")
@@ -189,7 +195,7 @@ func validate(labels []Label, parent string, seen map[string]string) (map[string
 		if newSeen, err := validate(l.Previously, path, newSeen); err != nil {
 			return newSeen, err
 		}
-		if len(l.Description) > 99 { // github limits the description field to 100 chars
+		if len(l.Description) > 100 { // github limits the description field to 100 chars
 			return newSeen, fmt.Errorf("description for %s is too long", name)
 		}
 	}
@@ -212,8 +218,39 @@ func stringInSortedSlice(a string, list []string) bool {
 	return false
 }
 
-// Ensures the config does not duplicate label names
+// Labels returns a sorted list of labels unique by name
+func (c Configuration) Labels() []Label {
+	var labelarrays [][]Label
+	labelarrays = append(labelarrays, c.Default.Labels)
+	for _, repo := range c.Repos {
+		labelarrays = append(labelarrays, repo.Labels)
+	}
+
+	labelmap := make(map[string]Label)
+	for _, labels := range labelarrays {
+		for _, l := range labels {
+			name := strings.ToLower(l.Name)
+			if _, ok := labelmap[name]; !ok {
+				labelmap[name] = l
+			}
+		}
+	}
+
+	var labels []Label
+	for _, label := range labelmap {
+		labels = append(labels, label)
+	}
+	sort.Slice(labels, func(i, j int) bool { return labels[i].Name < labels[j].Name })
+	return labels
+}
+
+// TODO(spiffxp): needs to validate labels duped across repos are identical
+// Ensures the config does not duplicate label names between default and repo
 func (c Configuration) validate(orgs string) error {
+	if len(orgs) == 0 {
+		return nil
+	}
+
 	// Generate list of orgs
 	sortedOrgs := strings.Split(orgs, ",")
 	sort.Strings(sortedOrgs)
@@ -228,7 +265,7 @@ func (c Configuration) validate(orgs string) error {
 		if _, err := validate(repoconfig.Labels, repo, seen); err != nil {
 			return fmt.Errorf("invalid config: %v", err)
 		}
-		// Warn if repo isn't under org
+		// Warn if repo isn't under orgs
 		data := strings.Split(repo, "/")
 		if len(data) == 2 {
 			if !stringInSortedSlice(data[0], sortedOrgs) {
@@ -282,25 +319,25 @@ func GetOrg(org string) (string, bool) {
 }
 
 // loadRepos read what (filtered) repos exist under an org
-func loadRepos(org string, gc client, filt filter) (RepoList, error) {
+func loadRepos(org string, gc client) ([]string, error) {
 	org, isUser := GetOrg(org)
 	repos, err := gc.GetRepos(org, isUser)
 	if err != nil {
 		return nil, err
 	}
-	var rl RepoList
+	var rl []string
 	for _, r := range repos {
-		if !filt(org, r.Name) {
+		if r.Archived {
 			continue
 		}
-		rl = append(rl, r)
+		rl = append(rl, r.Name)
 	}
 	return rl, nil
 }
 
 // loadLabels returns what labels exist in github
-func loadLabels(gc client, org string, repos RepoList) (*RepoLabels, error) {
-	repoChan := make(chan github.Repo, len(repos))
+func loadLabels(gc client, org string, repos []string) (*RepoLabels, error) {
+	repoChan := make(chan string, len(repos))
 	for _, repo := range repos {
 		repoChan <- repo
 	}
@@ -311,16 +348,16 @@ func loadLabels(gc client, org string, repos RepoList) (*RepoLabels, error) {
 	labels := make(chan RepoLabels, len(repos))
 	errChan := make(chan error, len(repos))
 	for i := 0; i < maxConcurrentWorkers; i++ {
-		go func(repositories <-chan github.Repo) {
+		go func(repositories <-chan string) {
 			defer wg.Done()
 			for repository := range repositories {
-				logrus.WithField("org", org).WithField("repo", repository.Name).Info("Listing labels for repo")
-				repoLabels, err := gc.GetRepoLabels(org, repository.Name)
+				logrus.WithField("org", org).WithField("repo", repository).Info("Listing labels for repo")
+				repoLabels, err := gc.GetRepoLabels(org, repository)
 				if err != nil {
-					logrus.WithField("org", org).WithField("repo", repository.Name).Error("Failed listing labels for repo")
+					logrus.WithField("org", org).WithField("repo", repository).Error("Failed listing labels for repo")
 					errChan <- err
 				}
-				labels <- RepoLabels{repository.Name: repoLabels}
+				labels <- RepoLabels{repository: repoLabels}
 			}
 		}(repoChan)
 	}
@@ -610,7 +647,7 @@ func newClient(tokenPath string, tokens, tokenBurst int, dryRun bool, hosts ...s
 		return nil, errors.New("--token unset")
 	}
 
-	secretAgent := &config.SecretAgent{}
+	secretAgent := &secret.Agent{}
 	if err := secretAgent.Start([]string{tokenPath}); err != nil {
 		logrus.WithError(err).Fatal("Error starting secrets agent.")
 	}
@@ -647,50 +684,61 @@ func main() {
 		logrus.WithError(err).Fatalf("failed to load --config=%s", *labelsPath)
 	}
 
+	if *onlyRepos != "" && *skipRepos != "" {
+		logrus.Fatalf("--only and --skip cannot both be set")
+	}
+
+	if *onlyRepos != "" && *orgs != "" {
+		logrus.Fatalf("--only and --orgs cannot both be set")
+	}
+
 	switch {
 	case *action == "docs":
-		if err := writeDocs(*docsTemplate, *docsOutput, *config); err != nil {
-			logrus.WithError(err).Fatalf("failed to write docs using docs-template %s to docs-output %s", *docsTemplate, *docsOutput)
-		}
+		writeDocsAndCSS(*docsTemplate, *docsOutput, *cssTemplate, *cssOutput, *config)
 	case *action == "sync":
 		githubClient, err := newClient(*token, *tokens, *tokenBurst, !*confirm, endpoint.Strings()...)
 		if err != nil {
 			logrus.WithError(err).Fatal("failed to create client")
 		}
 
-		var filt filter
-		switch {
-		case *onlyRepos != "":
-			if *skipRepos != "" {
-				logrus.Fatalf("--only and --skip cannot both be set")
+		// there are three ways to configure which repos to sync:
+		//  - a whitelist of org/repo values
+		//  - a list of orgs for which we sync all repos
+		//  - a list of orgs with a blacklist of org/repo values
+		if *onlyRepos != "" {
+			reposToSync, parseError := parseCommaDelimitedList(*onlyRepos)
+			if parseError != nil {
+				logrus.WithError(err).Fatal("invalid value for --only")
 			}
-			only := make(map[string]bool)
-			for _, r := range strings.Split(*onlyRepos, ",") {
-				only[strings.TrimSpace(r)] = true
+			for org := range reposToSync {
+				if err = syncOrg(org, githubClient, *config, reposToSync[org]); err != nil {
+					logrus.WithError(err).Fatalf("failed to update %s", org)
+				}
 			}
-			filt = func(org, repo string) bool {
-				_, ok := only[org+"/"+repo]
-				return ok
+			return
+		}
+
+		skippedRepos := map[string][]string{}
+		if *skipRepos != "" {
+			reposToSkip, parseError := parseCommaDelimitedList(*skipRepos)
+			if parseError != nil {
+				logrus.WithError(err).Fatal("invalid value for --skip")
 			}
-		case *skipRepos != "":
-			skip := make(map[string]bool)
-			for _, r := range strings.Split(*skipRepos, ",") {
-				skip[strings.TrimSpace(r)] = true
-			}
-			filt = func(org, repo string) bool {
-				_, ok := skip[org+"/"+repo]
-				return !ok
-			}
-		default:
-			filt = func(o, r string) bool {
-				return true
-			}
+			skippedRepos = reposToSkip
 		}
 
 		for _, org := range strings.Split(*orgs, ",") {
 			org = strings.TrimSpace(org)
-
-			if err = syncOrg(org, githubClient, *config, filt); err != nil {
+			logger := logrus.WithField("org", org)
+			logger.Info("Reading repos")
+			repos, err := loadRepos(org, githubClient)
+			if err != nil {
+				logger.WithError(err).Fatalf("failed to read repos")
+			}
+			if skipped, exist := skippedRepos[org]; exist {
+				repos = sets.NewString(repos...).Difference(sets.NewString(skipped...)).UnsortedList()
+			}
+			if err = syncOrg(org, githubClient, *config, repos); err != nil {
 				logrus.WithError(err).Fatalf("failed to update %s", org)
 			}
 		}
@@ -699,10 +747,39 @@ func main() {
 	}
 }
 
-type filter func(string, string) bool
+// parseCommaDelimitedList parses values in the format:
+//   org/repo,org2/repo2,org/repo3
+// into a mapping of org to repos, i.e.:
+//   org:  repo, repo3
+//   org2: repo2
+func parseCommaDelimitedList(list string) (map[string][]string, error) {
+	mapping := map[string][]string{}
+	for _, r := range strings.Split(list, ",") {
+		value := strings.TrimSpace(r)
+		if strings.Count(value, "/") != 1 {
+			return nil, fmt.Errorf("invalid org/repo value %q", value)
+		}
+		parts := strings.SplitN(value, "/", 2)
+		if others, exist := mapping[parts[0]]; !exist {
+			mapping[parts[0]] = []string{parts[1]}
+		} else {
+			mapping[parts[0]] = append(others, parts[1])
+		}
+	}
+	return mapping, nil
+}
 
 type labelData struct {
 	Description, Link, Labels interface{}
+}
+
+func writeDocsAndCSS(docTmpl, docOut, cssTmpl, cssOut string, config Configuration) {
+	if err := writeDocs(docTmpl, docOut, config); err != nil {
+		logrus.WithError(err).Fatalf("failed to write docs using docs-template %s to docs-output %s", docTmpl, docOut)
+	}
+	if err := writeCSS(cssTmpl, cssOut, config); err != nil {
+		logrus.WithError(err).Fatalf("failed to write css file using css-template %s to css-output %s", cssTmpl, cssOut)
+	}
 }
 
 func writeDocs(template string, output string, config Configuration) error {
@@ -753,30 +830,25 @@ func linkify(text string) string {
 	return strings.ToLower(link)
 }
 
-func syncOrg(org string, githubClient client, config Configuration, filt filter) error {
-	logrus.WithField("org", org).Info("Reading repos")
-	repos, err := loadRepos(org, githubClient, filt)
-	if err != nil {
-		return err
-	}
-
-	logrus.WithField("org", org).Infof("Found %d repos", len(repos))
+func syncOrg(org string, githubClient client, config Configuration, repos []string) error {
+	logger := logrus.WithField("org", org)
+	logger.Infof("Found %d repos", len(repos))
 	currLabels, err := loadLabels(githubClient, org, repos)
 	if err != nil {
 		return err
 	}
 
-	logrus.WithField("org", org).Infof("Syncing labels for %d repos", len(repos))
+	logger.Infof("Syncing labels for %d repos", len(repos))
 	updates, err := syncLabels(config, org, *currLabels)
 	if err != nil {
 		return err
 	}
 
 	y, _ := yaml.Marshal(updates)
-	logrus.Debug(string(y))
+	logger.Debug(string(y))
 
 	if !*confirm {
-		logrus.Infof("Running without --confirm, no mutations made")
+		logger.Infof("Running without --confirm, no mutations made")
 		return nil
 	}
 
@@ -784,4 +856,69 @@ func syncOrg(org string, githubClient client, config Configuration, filt filter)
 		return err
 	}
 	return nil
+}
+
+type labelCSSData struct {
+	BackgroundColor, Color, Name string
+}
+
+// Returns the CSS escaped label name. Escaped method based on
+// https://www.w3.org/International/questions/qa-escapes#cssescapes
+func cssEscape(s string) (escaped string) {
+	var IsAlpha = regexp.MustCompile(`^[a-zA-Z]+$`).MatchString
+	for i, c := range s {
+		if (i == 0 && unicode.IsDigit(c)) || !(unicode.IsDigit(c) || IsAlpha(string(c))) {
+			escaped += fmt.Sprintf("x%0.6x", c)
+			continue
+		}
+		escaped += string(c)
+	}
+	return
+}
+
+// Returns the text color (whether black or white) given the background color.
+// Details: https://www.w3.org/TR/WCAG20/#contrastratio
+func getTextColor(backgroundColor string) (string, error) {
+	d, err := hex.DecodeString(backgroundColor)
+	if err != nil || len(d) != 3 {
+		return "", errors.New("expect 6-digit color hex of label")
+	}
+
+	// Calculate the relative luminance (L) of a color
+	// L = 0.2126 * R + 0.7152 * G + 0.0722 * B
+	// Formula details at: https://www.w3.org/TR/WCAG20/#relativeluminancedef
+	color := [3]float64{}
+	for i, v := range d {
+		color[i] = float64(v) / 255.0
+		if color[i] <= 0.03928 {
+			color[i] = color[i] / 12.92
+		} else {
+			color[i] = math.Pow((color[i]+0.055)/1.055, 2.4)
+		}
+	}
+	L := 0.2126*color[0] + 0.7152*color[1] + 0.0722*color[2]
+
+	if (L+0.05)/(0.0+0.05) > (1.0+0.05)/(L+0.05) {
+		return "000000", nil
+	} else {
+		return "ffffff", nil
+	}
+}
+
+func writeCSS(tmplPath string, outPath string, config Configuration) error {
+	var labelCSS []labelCSSData
+	for _, l := range config.Labels() {
+		textColor, err := getTextColor(l.Color)
+		if err != nil {
+			return err
+		}
+
+		labelCSS = append(labelCSS, labelCSSData{
+			BackgroundColor: l.Color,
+			Color:           textColor,
+			Name:            cssEscape(l.Name),
+		})
+	}
+
+	return writeTemplate(tmplPath, outPath, labelCSS)
 }

@@ -3,6 +3,7 @@ package graphql_test
 import (
 	"context"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -100,6 +101,58 @@ func TestClient_Query_noDataWithErrorResponse(t *testing.T) {
 	}
 }
 
+func TestClient_Query_errorStatusCode(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/graphql", func(w http.ResponseWriter, req *http.Request) {
+		http.Error(w, "important message", http.StatusInternalServerError)
+	})
+	client := graphql.NewClient("/graphql", &http.Client{Transport: localRoundTripper{handler: mux}})
+
+	var q struct {
+		User struct {
+			Name graphql.String
+		}
+	}
+	err := client.Query(context.Background(), &q, nil)
+	if err == nil {
+		t.Fatal("got error: nil, want: non-nil")
+	}
+	if got, want := err.Error(), `non-200 OK status code: 500 Internal Server Error body: "important message\n"`; got != want {
+		t.Errorf("got error: %v, want: %v", got, want)
+	}
+	if q.User.Name != "" {
+		t.Errorf("got non-empty q.User.Name: %v", q.User.Name)
+	}
+}
+
+// Test that an empty (but non-nil) variables map is
+// handled no differently than a nil variables map.
+func TestClient_Query_emptyVariables(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/graphql", func(w http.ResponseWriter, req *http.Request) {
+		body := mustRead(req.Body)
+		if got, want := body, `{"query":"{user{name}}"}`+"\n"; got != want {
+			t.Errorf("got body: %v, want %v", got, want)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		mustWrite(w, `{"data": {"user": {"name": "Gopher"}}}`)
+	})
+	client := graphql.NewClient("/graphql", &http.Client{Transport: localRoundTripper{handler: mux}})
+
+	var q struct {
+		User struct {
+			Name string
+		}
+	}
+	err := client.Query(context.Background(), &q, map[string]interface{}{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := q.User.Name, "Gopher"; got != want {
+		t.Errorf("got q.User.Name: %q, want: %q", got, want)
+	}
+}
+
 // localRoundTripper is an http.RoundTripper that executes HTTP transactions
 // by using handler directly, instead of going over an HTTP connection.
 type localRoundTripper struct {
@@ -110,6 +163,14 @@ func (l localRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 	w := httptest.NewRecorder()
 	l.handler.ServeHTTP(w, req)
 	return w.Result(), nil
+}
+
+func mustRead(r io.Reader) string {
+	b, err := ioutil.ReadAll(r)
+	if err != nil {
+		panic(err)
+	}
+	return string(b)
 }
 
 func mustWrite(w io.Writer, s string) {

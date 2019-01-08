@@ -18,32 +18,41 @@ package main
 import (
 	"flag"
 	"log"
-	"time"
 
 	"go.uber.org/zap"
-	kubeinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
-	"github.com/golang/glog"
-	"github.com/knative/build/pkg"
-	"github.com/knative/build/pkg/builder"
-	onclusterbuilder "github.com/knative/build/pkg/builder/cluster"
-	gcb "github.com/knative/build/pkg/builder/google"
-	buildclientset "github.com/knative/build/pkg/client/clientset/versioned"
-	"github.com/knative/build/pkg/logging"
-	"github.com/knative/build/pkg/signals"
-	"github.com/knative/build/pkg/webhook"
+	"github.com/knative/pkg/configmap"
+	"github.com/knative/pkg/logging"
+	"github.com/knative/pkg/logging/logkey"
+	"github.com/knative/pkg/signals"
+	"github.com/knative/pkg/webhook"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+
+	"github.com/knative/build/pkg/apis/build/v1alpha1"
+	"github.com/knative/build/pkg/system"
 )
 
-var (
-	builderName = flag.String("builder", "", "The builder implementation to use to execute builds (supports: cluster, google).")
+const (
+	logLevelKey = "webhook"
 )
 
 func main() {
+
 	flag.Parse()
-	logger := logging.NewLoggerFromDefaultConfigMap("loglevel.webhook").Named("webhook")
+	cm, err := configmap.Load("/etc/config-logging")
+	if err != nil {
+		log.Fatalf("Error loading logging configuration %v", err)
+	}
+
+	config, err := logging.NewConfigFromMap(cm)
+	if err != nil {
+		log.Fatalf("Error parsing logging configuration: %v", err)
+	}
+	logger, _ := logging.NewLoggerFromConfig(config, logLevelKey)
 	defer logger.Sync()
+	logger = logger.With(zap.String(logkey.ControllerType, "webhook"))
 
 	logger.Info("Starting the Configuration Webhook")
 
@@ -60,28 +69,25 @@ func main() {
 		logger.Fatal("Failed to get the client set", zap.Error(err))
 	}
 
-	buildClient, err := buildclientset.NewForConfig(cfg)
-	if err != nil {
-		log.Fatalf("Error building Build clientset: %s", err.Error())
+	pkgoptions := webhook.ControllerOptions{
+		ServiceName:    "build-webhook",
+		DeploymentName: "build-webhook",
+		Namespace:      system.Namespace,
+		Port:           443,
+		SecretName:     "build-webhook-certs",
+		WebhookName:    "webhook.build.knative.dev",
 	}
 
-	var bldr builder.Interface
-	switch *builderName {
-	case "cluster":
-		kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeClient, time.Second*30)
-		bldr = onclusterbuilder.NewBuilder(kubeClient, kubeInformerFactory)
-	case "google":
-		bldr = gcb.NewBuilder(nil, "")
-	default:
-		glog.Fatalf("Unrecognized builder: %v (supported: google, cluster)", builderName)
+	pkgcontroller := webhook.AdmissionController{
+		Client:  kubeClient,
+		Options: pkgoptions,
+		Handlers: map[schema.GroupVersionKind]webhook.GenericCRD{
+			v1alpha1.SchemeGroupVersion.WithKind("Build"):                &v1alpha1.Build{},
+			v1alpha1.SchemeGroupVersion.WithKind("ClusterBuildTemplate"): &v1alpha1.ClusterBuildTemplate{},
+			v1alpha1.SchemeGroupVersion.WithKind("BuildTemplate"):        &v1alpha1.BuildTemplate{},
+		},
+		Logger: logger,
 	}
 
-	options := webhook.ControllerOptions{
-		ServiceName:      "build-webhook",
-		ServiceNamespace: pkg.GetBuildSystemNamespace(),
-		Port:             443,
-		SecretName:       "build-webhook-certs",
-		WebhookName:      "webhook.build.knative.dev",
-	}
-	webhook.NewAdmissionController(kubeClient, buildClient, bldr, options, logger).Run(stopCh)
+	pkgcontroller.Run(stopCh)
 }

@@ -20,9 +20,8 @@ import (
 	"reflect"
 	"testing"
 
-	corev1 "k8s.io/api/core/v1"
-
 	"github.com/knative/build/pkg/apis/build/v1alpha1"
+	corev1 "k8s.io/api/core/v1"
 )
 
 func TestApplyTemplate(t *testing.T) {
@@ -31,7 +30,7 @@ func TestApplyTemplate(t *testing.T) {
 	empty := ""
 	for i, c := range []struct {
 		build *v1alpha1.Build
-		tmpl  *v1alpha1.BuildTemplate
+		tmpl  v1alpha1.BuildTemplateInterface
 		want  *v1alpha1.Build // if nil, expect error.
 	}{{
 		// Build's Steps are overwritten. This doesn't pass
@@ -98,8 +97,9 @@ func TestApplyTemplate(t *testing.T) {
 		tmpl: &v1alpha1.BuildTemplate{
 			Spec: v1alpha1.BuildTemplateSpec{
 				Steps: []corev1.Container{{
-					Name: "hello ${FOO}",
-					Args: []string{"hello", "to the ${FOO}"},
+					Name:  "hello ${FOO}",
+					Image: "busybox:${FOO}",
+					Args:  []string{"hello", "to the ${FOO}"},
 					Env: []corev1.EnvVar{{
 						Name:  "FOO",
 						Value: "is ${FOO}",
@@ -120,8 +120,9 @@ func TestApplyTemplate(t *testing.T) {
 		want: &v1alpha1.Build{
 			Spec: v1alpha1.BuildSpec{
 				Steps: []corev1.Container{{
-					Name: "hello world",
-					Args: []string{"hello", "to the world"},
+					Name:  "hello world",
+					Image: "busybox:world",
+					Args:  []string{"hello", "to the world"},
 					Env: []corev1.EnvVar{{
 						Name:  "FOO",
 						Value: "is world",
@@ -245,8 +246,9 @@ func TestApplyTemplate(t *testing.T) {
 		tmpl: &v1alpha1.BuildTemplate{
 			Spec: v1alpha1.BuildTemplateSpec{
 				Steps: []corev1.Container{{
-					Name: "hello ${FOO}",
-					Args: []string{"hello", "to the ${FOO}"},
+					Name:  "hello ${FOO}",
+					Image: "busybox:${FOO}",
+					Args:  []string{"hello", "to the ${FOO}"},
 					Env: []corev1.EnvVar{{
 						Name:  "FOO",
 						Value: "is ${FOO}",
@@ -263,8 +265,9 @@ func TestApplyTemplate(t *testing.T) {
 		want: &v1alpha1.Build{
 			Spec: v1alpha1.BuildSpec{
 				Steps: []corev1.Container{{
-					Name: "hello world",
-					Args: []string{"hello", "to the world"},
+					Name:  "hello world",
+					Image: "busybox:world",
+					Args:  []string{"hello", "to the world"},
 					Env: []corev1.EnvVar{{
 						Name:  "FOO",
 						Value: "is world",
@@ -539,6 +542,58 @@ func TestApplyTemplate(t *testing.T) {
 				},
 			},
 		},
+	}, {
+		// A cluster build template
+		build: &v1alpha1.Build{
+			Spec: v1alpha1.BuildSpec{
+				Template: &v1alpha1.TemplateInstantiationSpec{
+					Kind: v1alpha1.ClusterBuildTemplateKind,
+				},
+			},
+		},
+		tmpl: &v1alpha1.ClusterBuildTemplate{
+			Spec: v1alpha1.BuildTemplateSpec{
+				Steps: []corev1.Container{{
+					Name: "hello",
+				}},
+			},
+		},
+		want: &v1alpha1.Build{
+			Spec: v1alpha1.BuildSpec{
+				Steps: []corev1.Container{{
+					Name: "hello",
+				}},
+				Template: &v1alpha1.TemplateInstantiationSpec{
+					Kind: v1alpha1.ClusterBuildTemplateKind,
+				},
+			},
+		},
+	}, {
+		// A build template with kind BuildTemplate
+		build: &v1alpha1.Build{
+			Spec: v1alpha1.BuildSpec{
+				Template: &v1alpha1.TemplateInstantiationSpec{
+					Kind: v1alpha1.BuildTemplateKind,
+				},
+			},
+		},
+		tmpl: &v1alpha1.BuildTemplate{
+			Spec: v1alpha1.BuildTemplateSpec{
+				Steps: []corev1.Container{{
+					Name: "hello",
+				}},
+			},
+		},
+		want: &v1alpha1.Build{
+			Spec: v1alpha1.BuildSpec{
+				Steps: []corev1.Container{{
+					Name: "hello",
+				}},
+				Template: &v1alpha1.TemplateInstantiationSpec{
+					Kind: v1alpha1.BuildTemplateKind,
+				},
+			},
+		},
 	}} {
 		wantErr := c.want == nil
 		got, err := ApplyTemplate(c.build, c.tmpl)
@@ -549,5 +604,128 @@ func TestApplyTemplate(t *testing.T) {
 		} else if !reflect.DeepEqual(got, c.want) {
 			t.Errorf("ApplyTemplate(%d);\n got %v\nwant %v", i, got, c.want)
 		}
+	}
+}
+
+func TestApplyReplacements(t *testing.T) {
+	type args struct {
+		build        *v1alpha1.Build
+		replacements map[string]string
+	}
+	tests := []struct {
+		name string
+		args args
+		want *v1alpha1.Build
+	}{
+		{
+			name: "no replacements",
+			args: args{
+				build: &v1alpha1.Build{
+					Spec: v1alpha1.BuildSpec{},
+				},
+				replacements: map[string]string{},
+			},
+			want: &v1alpha1.Build{
+				Spec: v1alpha1.BuildSpec{},
+			},
+		},
+		{
+			name: "$ is not replaced",
+			args: args{
+				build: &v1alpha1.Build{
+					Spec: v1alpha1.BuildSpec{
+						Steps: []corev1.Container{
+							{
+								Name:  "$foo",
+								Image: "${foo}",
+							},
+						},
+					},
+				},
+				replacements: map[string]string{
+					"foo": "bar",
+				},
+			},
+			want: &v1alpha1.Build{
+				Spec: v1alpha1.BuildSpec{
+					Steps: []corev1.Container{
+						{
+							Name:  "$foo",
+							Image: "bar",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "replacement in steps",
+			args: args{
+				build: &v1alpha1.Build{
+					Spec: v1alpha1.BuildSpec{
+						Steps: []corev1.Container{
+							{
+								Name:    "${a}-name",
+								Image:   "${b}-img",
+								Args:    []string{"--foo=${foo}"},
+								Command: []string{"cmd", "${command}"},
+								Env: []corev1.EnvVar{
+									{
+										Name:  "key",
+										Value: "${value}",
+									},
+								},
+								VolumeMounts: []corev1.VolumeMount{
+									{
+										Name:      "${volume}",
+										MountPath: "${mountpath}",
+										SubPath:   "${subpath}",
+									},
+								},
+								WorkingDir: "/${workdir}",
+							},
+						},
+					},
+				},
+				replacements: map[string]string{
+					"a":         "1",
+					"b":         "2",
+					"foo":       "bar",
+					"value":     "myvalue",
+					"volume":    "myvolume",
+					"mountpath": "mymountpath",
+					"subpath":   "mysubpath",
+					"workdir":   "myworkdir",
+					"command":   "mycommand",
+				},
+			},
+			want: &v1alpha1.Build{
+				Spec: v1alpha1.BuildSpec{
+					Steps: []corev1.Container{
+						{
+							Name:    "1-name",
+							Image:   "2-img",
+							Args:    []string{"--foo=bar"},
+							Command: []string{"cmd", "mycommand"},
+							Env:     []corev1.EnvVar{{Name: "key", Value: "myvalue"}},
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      "myvolume",
+									MountPath: "mymountpath",
+									SubPath:   "mysubpath",
+								},
+							},
+							WorkingDir: "/myworkdir",
+						},
+					},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ApplyReplacements(tt.args.build, tt.args.replacements); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("ApplyReplacements() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }

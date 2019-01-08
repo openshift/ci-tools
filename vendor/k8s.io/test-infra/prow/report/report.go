@@ -34,6 +34,8 @@ const (
 	commentTag = "<!-- test report -->"
 )
 
+// GithubClient provides a client interface to report job status updates
+// through Github comments.
 type GithubClient interface {
 	BotName() (string, error)
 	CreateStatus(org, repo, ref string, s github.Status) error
@@ -83,6 +85,9 @@ func reportStatus(ghc GithubClient, pj kube.ProwJob, childDescription string) er
 // Report is creating/updating/removing reports in Github based on the state of
 // the provided ProwJob.
 func Report(ghc GithubClient, reportTemplate *template.Template, pj kube.ProwJob) error {
+	if ghc == nil {
+		return fmt.Errorf("trying to report pj %s, but found empty github client", pj.ObjectMeta.Name)
+	}
 	if !pj.Spec.Report {
 		return nil
 	}

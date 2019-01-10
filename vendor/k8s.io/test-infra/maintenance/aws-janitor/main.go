@@ -560,7 +560,7 @@ func (routeTables) MarkAndSweep(sess *session.Session, acct string, region strin
 
 	for _, rt := range resp.RouteTables {
 		// Filter out the RouteTables that have a main
-		// association. Given the documention for the main.association
+		// association. Given the documentation for the main.association
 		// filter, you'd think we could filter on the Describe, but it
 		// doesn't actually work, see e.g.
 		// https://github.com/aws/aws-cli/issues/1810
@@ -634,7 +634,7 @@ func (vpcs) MarkAndSweep(sess *session.Session, acct string, region string, set 
 					DhcpOptionsId: aws.String("default"),
 				})
 				if err != nil {
-					glog.Warning("%v: disassociating DHCP option set %v failed: %v", v.ARN(), vp.DhcpOptionsId, err)
+					glog.Warningf("%v: disassociating DHCP option set %v failed: %v", v.ARN(), vp.DhcpOptionsId, err)
 				}
 			}
 			_, err := svc.DeleteVpc(&ec2.DeleteVpcInput{VpcId: vp.VpcId})

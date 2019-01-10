@@ -112,12 +112,12 @@ func helpProvider(config *plugins.Configuration, enabledRepos []string) (*plugin
 		Description: "Forces a github status context to green (one per line).",
 		Featured:    false,
 		WhoCanUse:   "Repo administrators",
-		Examples:    []string{"/override pull-repo-whatever", "/override continuous-integration/travis\n/override deleted-job"},
+		Examples:    []string{"/override pull-repo-whatever", "/override ci/circleci", "/override deleted-job"},
 	})
 	return pluginHelp, nil
 }
 
-func handleGenericComment(pc plugins.PluginClient, e github.GenericCommentEvent) error {
+func handleGenericComment(pc plugins.Agent, e github.GenericCommentEvent) error {
 	c := client{
 		gc: pc.GitHubClient,
 		jc: pc.Config.JobConfig,

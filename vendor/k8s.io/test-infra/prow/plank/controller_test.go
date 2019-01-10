@@ -26,7 +26,6 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/bwmarrin/snowflake"
 	"github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -49,24 +48,36 @@ const (
 func newFakeConfigAgent(t *testing.T, maxConcurrency int) *fca {
 	presubmits := []config.Presubmit{
 		{
-			Name: "test-bazel-build",
+			JobBase: config.JobBase{
+				Name: "test-bazel-build",
+			},
 			RunAfterSuccess: []config.Presubmit{
 				{
-					Name:         "test-kubeadm-cloud",
-					RunIfChanged: "^(cmd/kubeadm|build/debs).*$",
+					JobBase: config.JobBase{
+						Name: "test-kubeadm-cloud",
+					},
+					RegexpChangeMatcher: config.RegexpChangeMatcher{
+						RunIfChanged: "^(cmd/kubeadm|build/debs).*$",
+					},
 				},
 			},
 		},
 		{
-			Name: "test-e2e",
+			JobBase: config.JobBase{
+				Name: "test-e2e",
+			},
 			RunAfterSuccess: []config.Presubmit{
 				{
-					Name: "push-image",
+					JobBase: config.JobBase{
+						Name: "push-image",
+					},
 				},
 			},
 		},
 		{
-			Name: "test-bazel-test",
+			JobBase: config.JobBase{
+				Name: "test-bazel-test",
+			},
 		},
 	}
 	if err := config.SetPresubmitRegexes(presubmits); err != nil {
@@ -662,7 +673,7 @@ func TestSyncTriggeredJobs(t *testing.T) {
 								{
 									Env: []v1.EnvVar{
 										{
-											Name:  "BUILD_NUMBER",
+											Name:  "BUILD_ID",
 											Value: "0987654321",
 										},
 									},
@@ -790,6 +801,7 @@ func TestSyncPendingJob(t *testing.T) {
 				Spec: kube.ProwJobSpec{
 					Type:    kube.PostsubmitJob,
 					PodSpec: &kube.PodSpec{Containers: []kube.Container{{Name: "test-name", Env: []kube.EnvVar{}}}},
+					Refs:    &kube.Refs{Org: "fejtaverse"},
 				},
 				Status: kube.ProwJobStatus{
 					State:   kube.PendingState,
@@ -842,6 +854,7 @@ func TestSyncPendingJob(t *testing.T) {
 						Type:    kube.PeriodicJob,
 						PodSpec: &kube.PodSpec{Containers: []kube.Container{{Name: "test-name", Env: []kube.EnvVar{}}}},
 					}},
+					Refs: &kube.Refs{Org: "fejtaverse"},
 				},
 				Status: kube.ProwJobStatus{
 					State:   kube.PendingState,
@@ -932,6 +945,38 @@ func TestSyncPendingJob(t *testing.T) {
 			expectedNumPods:  0,
 		},
 		{
+			name: "don't delete evicted pod w/ error_on_eviction, complete PJ instead",
+			pj: kube.ProwJob{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "boop-42",
+				},
+				Spec: kube.ProwJobSpec{
+					ErrorOnEviction: true,
+					PodSpec:         &kube.PodSpec{Containers: []kube.Container{{Name: "test-name", Env: []kube.EnvVar{}}}},
+				},
+				Status: kube.ProwJobStatus{
+					State:   kube.PendingState,
+					PodName: "boop-42",
+				},
+			},
+			pods: []kube.Pod{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "boop-42",
+					},
+					Status: kube.PodStatus{
+						Phase:  kube.PodFailed,
+						Reason: kube.Evicted,
+					},
+				},
+			},
+			expectedComplete: true,
+			expectedState:    kube.ErrorState,
+			expectedNumPods:  1,
+			expectedReport:   true,
+			expectedURL:      "boop-42/error",
+		},
+		{
 			name: "running pod",
 			pj: kube.ProwJob{
 				ObjectMeta: metav1.ObjectMeta{
@@ -1008,6 +1053,7 @@ func TestSyncPendingJob(t *testing.T) {
 					Job:     "boop",
 					Type:    kube.PostsubmitJob,
 					PodSpec: &kube.PodSpec{Containers: []kube.Container{{Name: "test-name", Env: []kube.EnvVar{}}}},
+					Refs:    &kube.Refs{Org: "fejtaverse"},
 				},
 				Status: kube.ProwJobStatus{
 					State: kube.PendingState,
@@ -1118,15 +1164,20 @@ func TestSyncPendingJob(t *testing.T) {
 // TestPeriodic walks through the happy path of a periodic job.
 func TestPeriodic(t *testing.T) {
 	per := config.Periodic{
-		Name:    "ci-periodic-job",
-		Agent:   "kubernetes",
-		Cluster: "trusted",
-		Spec:    &kube.PodSpec{Containers: []kube.Container{{Name: "test-name", Env: []kube.EnvVar{}}}},
+		JobBase: config.JobBase{
+			Name:    "ci-periodic-job",
+			Agent:   "kubernetes",
+			Cluster: "trusted",
+			Spec:    &kube.PodSpec{Containers: []kube.Container{{Name: "test-name", Env: []kube.EnvVar{}}}},
+		},
+
 		RunAfterSuccess: []config.Periodic{
 			{
-				Name:  "ci-periodic-job-2",
-				Agent: "kubernetes",
-				Spec:  &kube.PodSpec{Containers: []kube.Container{{Name: "test-name", Env: []kube.EnvVar{}}}},
+				JobBase: config.JobBase{
+					Name:  "ci-periodic-job-2",
+					Agent: "kubernetes",
+					Spec:  &kube.PodSpec{Containers: []kube.Container{{Name: "test-name", Env: []kube.EnvVar{}}}},
+				},
 			},
 		},
 	}
@@ -1138,6 +1189,7 @@ func TestPeriodic(t *testing.T) {
 	}
 	c := Controller{
 		kc:          fc,
+		ghc:         &fghc{},
 		pkcs:        map[string]kubeClient{kube.DefaultClusterAlias: &fkc{}, "trusted": fc},
 		log:         logrus.NewEntry(logrus.StandardLogger()),
 		ca:          newFakeConfigAgent(t, 0),
@@ -1306,6 +1358,7 @@ func TestMaxConcurrencyWithNewlyTriggeredJobs(t *testing.T) {
 						Type:           kube.PostsubmitJob,
 						MaxConcurrency: 1,
 						PodSpec:        &kube.PodSpec{Containers: []kube.Container{{Name: "test-name", Env: []kube.EnvVar{}}}},
+						Refs:           &kube.Refs{Org: "fejtaverse"},
 					},
 					Status: kube.ProwJobStatus{
 						State: kube.TriggeredState,
@@ -1317,6 +1370,7 @@ func TestMaxConcurrencyWithNewlyTriggeredJobs(t *testing.T) {
 						Type:           kube.PostsubmitJob,
 						MaxConcurrency: 1,
 						PodSpec:        &kube.PodSpec{Containers: []kube.Container{{Name: "test-name", Env: []kube.EnvVar{}}}},
+						Refs:           &kube.Refs{Org: "fejtaverse"},
 					},
 					Status: kube.ProwJobStatus{
 						State: kube.TriggeredState,
@@ -1335,6 +1389,7 @@ func TestMaxConcurrencyWithNewlyTriggeredJobs(t *testing.T) {
 						Type:           kube.PostsubmitJob,
 						MaxConcurrency: 2,
 						PodSpec:        &kube.PodSpec{Containers: []kube.Container{{Name: "test-name", Env: []kube.EnvVar{}}}},
+						Refs:           &kube.Refs{Org: "fejtaverse"},
 					},
 					Status: kube.ProwJobStatus{
 						State: kube.TriggeredState,
@@ -1346,6 +1401,7 @@ func TestMaxConcurrencyWithNewlyTriggeredJobs(t *testing.T) {
 						Type:           kube.PostsubmitJob,
 						MaxConcurrency: 2,
 						PodSpec:        &kube.PodSpec{Containers: []kube.Container{{Name: "test-name", Env: []kube.EnvVar{}}}},
+						Refs:           &kube.Refs{Org: "fejtaverse"},
 					},
 					Status: kube.ProwJobStatus{
 						State: kube.TriggeredState,
@@ -1364,6 +1420,7 @@ func TestMaxConcurrencyWithNewlyTriggeredJobs(t *testing.T) {
 						Type:           kube.PostsubmitJob,
 						MaxConcurrency: 5,
 						PodSpec:        &kube.PodSpec{Containers: []kube.Container{{Name: "test-name", Env: []kube.EnvVar{}}}},
+						Refs:           &kube.Refs{Org: "fejtaverse"},
 					},
 					Status: kube.ProwJobStatus{
 						State: kube.TriggeredState,
@@ -1375,6 +1432,7 @@ func TestMaxConcurrencyWithNewlyTriggeredJobs(t *testing.T) {
 						Type:           kube.PostsubmitJob,
 						MaxConcurrency: 5,
 						PodSpec:        &kube.PodSpec{Containers: []kube.Container{{Name: "test-name", Env: []kube.EnvVar{}}}},
+						Refs:           &kube.Refs{Org: "fejtaverse"},
 					},
 					Status: kube.ProwJobStatus{
 						State: kube.TriggeredState,
@@ -1398,16 +1456,11 @@ func TestMaxConcurrencyWithNewlyTriggeredJobs(t *testing.T) {
 			prowjobs: test.pjs,
 		}
 		fpc := &fkc{}
-		n, err := snowflake.NewNode(1)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
 		c := Controller{
 			kc:          fc,
 			pkcs:        map[string]kubeClient{kube.DefaultClusterAlias: fpc},
 			log:         logrus.NewEntry(logrus.StandardLogger()),
 			ca:          newFakeConfigAgent(t, 0),
-			node:        n,
 			pendingJobs: test.pendingJobs,
 		}
 
@@ -1419,5 +1472,73 @@ func TestMaxConcurrencyWithNewlyTriggeredJobs(t *testing.T) {
 		if len(fpc.pods) != test.expectedPods {
 			t.Errorf("expected pods: %d, got: %d", test.expectedPods, len(fpc.pods))
 		}
+	}
+}
+
+func TestJobURL(t *testing.T) {
+	var testCases = []struct {
+		name     string
+		plank    config.Plank
+		pj       kube.ProwJob
+		expected string
+	}{
+		{
+			name: "non-decorated job uses template",
+			plank: config.Plank{
+				Controller: config.Controller{
+					JobURLTemplate: template.Must(template.New("test").Parse("{{.Spec.Type}}")),
+				},
+			},
+			pj:       kube.ProwJob{Spec: kube.ProwJobSpec{Type: kube.PeriodicJob}},
+			expected: "periodic",
+		},
+		{
+			name: "non-decorated job with broken template gives empty string",
+			plank: config.Plank{
+				Controller: config.Controller{
+					JobURLTemplate: template.Must(template.New("test").Parse("{{.Garbage}}")),
+				},
+			},
+			pj:       kube.ProwJob{},
+			expected: "",
+		},
+		{
+			name: "decorated job without prefix uses template",
+			plank: config.Plank{
+				Controller: config.Controller{
+					JobURLTemplate: template.Must(template.New("test").Parse("{{.Spec.Type}}")),
+				},
+			},
+			pj:       kube.ProwJob{Spec: kube.ProwJobSpec{Type: kube.PeriodicJob}},
+			expected: "periodic",
+		},
+		{
+			name: "decorated job with prefix uses gcslib",
+			plank: config.Plank{
+				JobURLPrefix: "https://gubernator.com/build",
+			},
+			pj: kube.ProwJob{Spec: kube.ProwJobSpec{
+				Type: kube.PresubmitJob,
+				Refs: &kube.Refs{
+					Org:   "org",
+					Repo:  "repo",
+					Pulls: []kube.Pull{{Number: 1}},
+				},
+				DecorationConfig: &kube.DecorationConfig{GCSConfiguration: &kube.GCSConfiguration{
+					Bucket:       "bucket",
+					PathStrategy: kube.PathStrategyExplicit,
+				}},
+			}},
+			expected: "https://gubernator.com/build/bucket/pr-logs/pull/org_repo/1",
+		},
+	}
+
+	logger := logrus.New()
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if actual, expected := jobURL(testCase.plank, testCase.pj, logger.WithField("name", testCase.name)), testCase.expected; actual != expected {
+				t.Errorf("%s: expected URL to be %q but got %q", testCase.name, expected, actual)
+			}
+		})
 	}
 }

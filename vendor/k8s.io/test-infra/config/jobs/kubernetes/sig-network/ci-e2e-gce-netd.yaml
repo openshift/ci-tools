@@ -2,6 +2,9 @@ presets:
 - labels:
     preset-kubernetes-e2e-enable-netd: "true"
   env:
+  - name: KUBE_NON_MASTER_NODE_LABELS
+    value: cloud.google.com/gke-netd-ready=true
+    # remove this after https://github.com/kubernetes/kubernetes/pull/69051
   - name: KUBE_CUSTOM_NETD_YAML
     # we want to keep extra spaces for the yaml file.
     value: |2+
@@ -12,7 +15,7 @@ presets:
           namespace: kube-system
           labels:
             kubernetes.io/cluster-service: "true"
-            addonmanager.kubernetes.io/mode: EnsureExists
+            addonmanager.kubernetes.io/mode: Reconcile
         rules:
         - apiGroups: [""]
           resources: ["nodes"]
@@ -25,7 +28,7 @@ presets:
           namespace: kube-system
           labels:
             kubernetes.io/cluster-service: "true"
-            addonmanager.kubernetes.io/mode: EnsureExists
+            addonmanager.kubernetes.io/mode: Reconcile
         ---
         kind: ClusterRoleBinding
         apiVersion: rbac.authorization.k8s.io/v1
@@ -33,7 +36,7 @@ presets:
           name: netd
           labels:
             kubernetes.io/cluster-service: "true"
-            addonmanager.kubernetes.io/mode: EnsureExists
+            addonmanager.kubernetes.io/mode: Reconcile
         roleRef:
           apiGroup: rbac.authorization.k8s.io
           kind: ClusterRole
@@ -49,11 +52,11 @@ presets:
           name: netd-config
           namespace: kube-system
           labels:
-            addonmanager.kubernetes.io/mode: EnsureExists
+            addonmanager.kubernetes.io/mode: Reconcile
         data:
           cni_spec_template: |-
             {
-              "name": "k8s-pod-network",
+              "name": "gke-pod-network",
               "cniVersion": "0.3.1",
               "plugins": [
                 {
@@ -78,11 +81,12 @@ presets:
                 }
               ]
             }
-          cni_spec_name: "10-k8s-ptp.conflist"
+          cni_spec_name: "10-gke-ptp.conflist"
           enable_policy_routing: "true"
           enable_masquerade: "true"
           enable_calico_network_policy: "false"
           enable_private_ipv6_access: "false"
+          reconcile_interval_seconds: "60s"
         ---
         kind: DaemonSet
         apiVersion: extensions/v1beta1
@@ -91,11 +95,15 @@ presets:
           namespace: kube-system
           labels:
             k8s-app: netd
-            addonmanager.kubernetes.io/mode: EnsureExists
+            addonmanager.kubernetes.io/mode: Reconcile
         spec:
           selector:
             matchLabels:
               k8s-app: netd
+          updateStrategy:
+            type: RollingUpdate
+            rollingUpdate:
+              maxUnavailable: 10%
           template:
             metadata:
               labels:
@@ -105,10 +113,15 @@ presets:
               serviceAccountName: netd
               terminationGracePeriodSeconds: 0
               nodeSelector:
-                beta.kubernetes.io/kube-netd-ready: "true"
+                cloud.google.com/gke-netd-ready: "true"
+              tolerations:
+              - operator: "Exists"
+                effect: "NoExecute"
+              - operator: "Exists"
+                effect: "NoSchedule"
               hostNetwork: true
               initContainers:
-              - image: gcr.io/google-containers/netd-amd64:0.1.5
+              - image: gcr.io/google-containers/netd-amd64:latest
                 name: install-cni
                 command: ["sh", "/install-cni.sh"]
                 env:
@@ -136,7 +149,7 @@ presets:
                 - mountPath: /host/etc/cni/net.d
                   name: cni-net-dir
               containers:
-              - image: gcr.io/google-containers/netd-amd64:0.1.5
+              - image: gcr.io/google-containers/netd-amd64:latest
                 name: netd
                 imagePullPolicy: Always
                 securityContext:
@@ -147,6 +160,7 @@ presets:
                 - --enable-policy-routing=$(ENABLE_POLICY_ROUTING)
                 - --enable-masquerade=$(ENABLE_MASQUERADE)
                 - --logtostderr
+                - --reconcile-interval-seconds=$(RECONCILE_INTERVAL_SECONDS)
                 env:
                   - name: ENABLE_POLICY_ROUTING
                     valueFrom:
@@ -158,6 +172,11 @@ presets:
                       configMapKeyRef:
                         name: netd-config
                         key: enable_masquerade
+                  - name: RECONCILE_INTERVAL_SECONDS
+                    valueFrom:
+                      configMapKeyRef:
+                        name: netd-config
+                        key: reconcile_interval_seconds
               volumes:
               - name: cni-net-dir
                 hostPath:
@@ -172,6 +191,9 @@ presets:
 - labels:
     preset-kubernetes-e2e-enable-netd-calico: "true"
   env:
+  - name: KUBE_NON_MASTER_NODE_LABELS
+    value: cloud.google.com/gke-netd-ready=true
+    # remove this after https://github.com/kubernetes/kubernetes/pull/69051
   - name: KUBE_CUSTOM_NETD_YAML
     # we want to keep extra spaces for the yaml file.
     value: |2+
@@ -182,7 +204,7 @@ presets:
           namespace: kube-system
           labels:
             kubernetes.io/cluster-service: "true"
-            addonmanager.kubernetes.io/mode: EnsureExists
+            addonmanager.kubernetes.io/mode: Reconcile
         rules:
         - apiGroups: [""]
           resources: ["nodes"]
@@ -195,7 +217,7 @@ presets:
           namespace: kube-system
           labels:
             kubernetes.io/cluster-service: "true"
-            addonmanager.kubernetes.io/mode: EnsureExists
+            addonmanager.kubernetes.io/mode: Reconcile
         ---
         kind: ClusterRoleBinding
         apiVersion: rbac.authorization.k8s.io/v1
@@ -203,7 +225,7 @@ presets:
           name: netd
           labels:
             kubernetes.io/cluster-service: "true"
-            addonmanager.kubernetes.io/mode: EnsureExists
+            addonmanager.kubernetes.io/mode: Reconcile
         roleRef:
           apiGroup: rbac.authorization.k8s.io
           kind: ClusterRole
@@ -219,11 +241,11 @@ presets:
           name: netd-config
           namespace: kube-system
           labels:
-            addonmanager.kubernetes.io/mode: EnsureExists
+            addonmanager.kubernetes.io/mode: Reconcile
         data:
           cni_spec_template: |-
             {
-              "name": "k8s-pod-network",
+              "name": "gke-pod-network",
               "cniVersion": "0.3.1",
               "plugins": [
                 {
@@ -248,11 +270,12 @@ presets:
                 }
               ]
             }
-          cni_spec_name: "10-k8s-ptp.conflist"
+          cni_spec_name: "10-gke-ptp.conflist"
           enable_policy_routing: "true"
           enable_masquerade: "true"
-          enable_calico_network_policy: "true"
+          enable_calico_network_policy: "false"
           enable_private_ipv6_access: "false"
+          reconcile_interval_seconds: "60s"
         ---
         kind: DaemonSet
         apiVersion: extensions/v1beta1
@@ -261,11 +284,15 @@ presets:
           namespace: kube-system
           labels:
             k8s-app: netd
-            addonmanager.kubernetes.io/mode: EnsureExists
+            addonmanager.kubernetes.io/mode: Reconcile
         spec:
           selector:
             matchLabels:
               k8s-app: netd
+          updateStrategy:
+            type: RollingUpdate
+            rollingUpdate:
+              maxUnavailable: 10%
           template:
             metadata:
               labels:
@@ -275,10 +302,15 @@ presets:
               serviceAccountName: netd
               terminationGracePeriodSeconds: 0
               nodeSelector:
-                beta.kubernetes.io/kube-netd-ready: "true"
+                cloud.google.com/gke-netd-ready: "true"
+              tolerations:
+              - operator: "Exists"
+                effect: "NoExecute"
+              - operator: "Exists"
+                effect: "NoSchedule"
               hostNetwork: true
               initContainers:
-              - image: gcr.io/google-containers/netd-amd64:0.1.5
+              - image: gcr.io/google-containers/netd-amd64:latest
                 name: install-cni
                 command: ["sh", "/install-cni.sh"]
                 env:
@@ -306,7 +338,7 @@ presets:
                 - mountPath: /host/etc/cni/net.d
                   name: cni-net-dir
               containers:
-              - image: gcr.io/google-containers/netd-amd64:0.1.5
+              - image: gcr.io/google-containers/netd-amd64:latest
                 name: netd
                 imagePullPolicy: Always
                 securityContext:
@@ -317,6 +349,7 @@ presets:
                 - --enable-policy-routing=$(ENABLE_POLICY_ROUTING)
                 - --enable-masquerade=$(ENABLE_MASQUERADE)
                 - --logtostderr
+                - --reconcile-interval-seconds=$(RECONCILE_INTERVAL_SECONDS)
                 env:
                   - name: ENABLE_POLICY_ROUTING
                     valueFrom:
@@ -328,6 +361,11 @@ presets:
                       configMapKeyRef:
                         name: netd-config
                         key: enable_masquerade
+                  - name: RECONCILE_INTERVAL_SECONDS
+                    valueFrom:
+                      configMapKeyRef:
+                        name: netd-config
+                        key: reconcile_interval_seconds
               volumes:
               - name: cni-net-dir
                 hostPath:
@@ -887,7 +925,7 @@ periodics:
   spec:
     containers:
     - args:
-      - "--timeout=340"
+      - "--timeout=180"
       - --root=/go/src
       - "--repo=k8s.io/kubernetes=release-1.11"
       - "--repo=k8s.io/examples=master"
@@ -900,7 +938,7 @@ periodics:
       - --provider=gce
       - --test_args=--ginkgo.focus=\[sig-network\] --ginkgo.skip=\[Slow\]|\[Flaky\]|\[Feature:NetworkPolicy\]|\[Feature:Networking-IPv6\]|\[Disruptive\]|\[Feature:ServiceLoadBalancer\]|\[Feature:PerformanceDNS\] --minStartupPods=8
       - --timeout=120m
-      image: gcr.io/k8s-testimages/kubekins-e2e:v20180730-8b7ab3104-master
+      image: gcr.io/k8s-testimages/kubekins-e2e:v20181218-134e718ec-master
 
 - interval: 2h
   name: ci-kubernetes-e2e-gci-gce-netd-calico
@@ -911,7 +949,7 @@ periodics:
   spec:
     containers:
     - args:
-      - "--timeout=340"
+      - "--timeout=180"
       - --root=/go/src
       - "--repo=k8s.io/examples=master"
       - --scenario=kubernetes_e2e
@@ -923,7 +961,7 @@ periodics:
       - --provider=gce
       - --test_args=--ginkgo.focus=\[sig-network\] --ginkgo.skip=\[Slow\]|\[Flaky\]|\[Feature:Networking-IPv6\]|\[Disruptive\]|\[Feature:ServiceLoadBalancer\]|\[Feature:PerformanceDNS\] --minStartupPods=8
       - --timeout=120m
-      image: gcr.io/k8s-testimages/kubekins-e2e:v20180730-8b7ab3104-master
+      image: gcr.io/k8s-testimages/kubekins-e2e:v20181218-134e718ec-master
       env:
       - name: NETWORK_POLICY_PROVIDER
         value: calico
@@ -937,7 +975,7 @@ periodics:
   spec:
     containers:
     - args:
-      - "--timeout=340"
+      - "--timeout=180"
       - --root=/go/src
       - "--repo=k8s.io/kubernetes=release-1.11"
       - "--repo=k8s.io/examples=master"
@@ -951,7 +989,7 @@ periodics:
       - --provider=gce
       - --test_args=--ginkgo.focus=\[sig-network\] --ginkgo.skip=\[Slow\]|\[Flaky\]|\[Feature:NetworkPolicy\]|\[Feature:Networking-IPv6\]|\[Disruptive\]|\[Feature:ServiceLoadBalancer\]|\[Feature:PerformanceDNS\] --minStartupPods=8
       - --timeout=120m
-      image: gcr.io/k8s-testimages/kubekins-e2e:v20180730-8b7ab3104-master
+      image: gcr.io/k8s-testimages/kubekins-e2e:v20181218-134e718ec-master
 
 - interval: 2h
   name: ci-kubernetes-e2e-ubuntu-gce-netd-calico
@@ -962,7 +1000,7 @@ periodics:
   spec:
     containers:
     - args:
-      - "--timeout=340"
+      - "--timeout=180"
       - --root=/go/src
       - --scenario=kubernetes_e2e
       - "--repo=k8s.io/examples=master"
@@ -975,7 +1013,7 @@ periodics:
       - --provider=gce
       - --test_args=--ginkgo.focus=\[sig-network\] --ginkgo.skip=\[Slow\]|\[Flaky\]|\[Feature:Networking-IPv6\]|\[Disruptive\]|\[Feature:ServiceLoadBalancer\]|\[Feature:PerformanceDNS\] --minStartupPods=8
       - --timeout=120m
-      image: gcr.io/k8s-testimages/kubekins-e2e:v20180730-8b7ab3104-master
+      image: gcr.io/k8s-testimages/kubekins-e2e:v20181218-134e718ec-master
       env:
       - name: NETWORK_POLICY_PROVIDER
         value: calico
@@ -990,7 +1028,7 @@ periodics:
   spec:
     containers:
     - args:
-      - "--timeout=340"
+      - "--timeout=180"
       - --root=/go/src
       - --repo=github.com/containerd/cri=master
       - "--repo=k8s.io/examples=master"
@@ -1007,7 +1045,7 @@ periodics:
       - --provider=gce
       - --test_args=--ginkgo.focus=\[sig-network\] --ginkgo.skip=\[Slow\]|\[Flaky\]|\[Feature:NetworkPolicy\]|\[Feature:Networking-IPv6\]|\[Disruptive\]|\[Feature:ServiceLoadBalancer\]|\[Feature:PerformanceDNS\] --minStartupPods=8
       - --timeout=120m
-      image: gcr.io/k8s-testimages/kubekins-e2e:v20180730-8b7ab3104-master
+      image: gcr.io/k8s-testimages/kubekins-e2e:v20181218-134e718ec-master
 
 - interval: 2h
   name: ci-kubernetes-e2e-containerd-gce-netd-calico
@@ -1019,7 +1057,7 @@ periodics:
   spec:
     containers:
     - args:
-      - "--timeout=340"
+      - "--timeout=180"
       - --root=/go/src
       - --repo=github.com/containerd/cri=master
       - "--repo=k8s.io/examples=master"
@@ -1036,7 +1074,7 @@ periodics:
       - --provider=gce
       - --test_args=--ginkgo.focus=\[sig-network\] --ginkgo.skip=\[Slow\]|\[Flaky\]|\[Feature:Networking-IPv6\]|\[Disruptive\]|\[Feature:ServiceLoadBalancer\]|\[Feature:PerformanceDNS\] --minStartupPods=8
       - --timeout=120m
-      image: gcr.io/k8s-testimages/kubekins-e2e:v20180730-8b7ab3104-master
+      image: gcr.io/k8s-testimages/kubekins-e2e:v20181218-134e718ec-master
       env:
       - name: NETWORK_POLICY_PROVIDER
         value: calico
@@ -1051,7 +1089,7 @@ periodics:
   spec:
     containers:
     - args:
-      - "--timeout=340"
+      - "--timeout=180"
       - --root=/go/src
       - --repo=github.com/containerd/cri=master
       - "--repo=k8s.io/examples=master"
@@ -1068,65 +1106,4 @@ periodics:
       - --provider=gce
       - --test_args=--ginkgo.focus=\[sig-network\] --ginkgo.skip=\[Slow\]|\[Flaky\]|\[Feature:Networking-IPv6\]|\[Disruptive\]|\[Feature:ServiceLoadBalancer\]|\[Feature:PerformanceDNS\] --minStartupPods=8
       - --timeout=120m
-      image: gcr.io/k8s-testimages/kubekins-e2e:v20180730-8b7ab3104-master
-
-- interval: 2h
-  name: ci-kubernetes-e2e-containerd-gce-calico-serial
-  labels:
-    preset-service-account: "true"
-    preset-k8s-ssh: "true"
-    preset-kubernetes-e2e-containerd: "true"
-    preset-kubernetes-e2e-enable-calico: "true"
-  spec:
-    containers:
-    - args:
-      - "--timeout=180"
-      - --root=/go/src
-      - --repo=github.com/containerd/cri=master
-      - "--repo=k8s.io/examples=master"
-      - --scenario=kubernetes_e2e
-      - --
-      - --check-leaked-resources
-      - --env=KUBE_MASTER_EXTRA_METADATA=user-data=/go/src/github.com/containerd/cri/test/e2e/master.yaml,containerd-configure-sh=/go/src/github.com/containerd/cri/cluster/gce/configure.sh,containerd-env=/workspace/test-infra/jobs/e2e_node/containerd/containerd-master/env
-      - --env=KUBE_NODE_EXTRA_METADATA=user-data=/go/src/github.com/containerd/cri/test/e2e/node.yaml,containerd-configure-sh=/go/src/github.com/containerd/cri/cluster/gce/configure.sh,containerd-env=/workspace/test-infra/jobs/e2e_node/containerd/containerd-master/env
-      - --extract=gs://koonwah-repo-pub/devel/v1.11.2-beta.0.20+21777efd99bd59
-      - --gcp-node-image=gci
-      - --gcp-nodes=4
-      - --gcp-zone=asia-southeast1-a
-      - --ginkgo-parallel=1
-      - --provider=gce
-      - --test_args=--ginkgo.focus=\[sig-network\].*\[Disruptive\]|\[sig-network\].*\[Serial\]|\[Feature:PerformanceDNS\] --minStartupPods=8
-      - --timeout=120m
-      image: gcr.io/k8s-testimages/kubekins-e2e:v20180730-8b7ab3104-master
-
-- interval: 2h
-  name: ci-kubernetes-e2e-containerd-gce-netd-calico-serial
-  labels:
-    preset-service-account: "true"
-    preset-k8s-ssh: "true"
-    preset-kubernetes-e2e-containerd: "true"
-    preset-kubernetes-e2e-enable-netd-calico: "true"
-  spec:
-    containers:
-    - args:
-      - "--timeout=180"
-      - --root=/go/src
-      - --repo=github.com/containerd/cri=master
-      - "--repo=k8s.io/examples=master"
-      - --scenario=kubernetes_e2e
-      - --
-      - --check-leaked-resources
-      - --env=KUBE_MASTER_EXTRA_METADATA=user-data=/go/src/github.com/containerd/cri/test/e2e/master.yaml,containerd-configure-sh=/go/src/github.com/containerd/cri/cluster/gce/configure.sh,containerd-env=/workspace/test-infra/jobs/e2e_node/containerd/containerd-master/env
-      - --env=KUBE_NODE_EXTRA_METADATA=user-data=/go/src/github.com/containerd/cri/test/e2e/node.yaml,containerd-configure-sh=/go/src/github.com/containerd/cri/cluster/gce/configure.sh,containerd-env=/workspace/test-infra/jobs/e2e_node/containerd/containerd-master/env
-      - --extract=gs://koonwah-repo-pub/devel/v1.11.2-beta.0.20+21777efd99bd59
-      - --gcp-node-image=gci
-      - --gcp-nodes=4
-      - --gcp-zone=asia-southeast1-a
-      - --ginkgo-parallel=1
-      - --provider=gce
-      - --test_args=--ginkgo.focus=\[sig-network\].*\[Disruptive\]|\[sig-network\].*\[Serial\]|\[Feature:PerformanceDNS\] --minStartupPods=8
-      - --timeout=120m
-      image: gcr.io/k8s-testimages/kubekins-e2e:v20180730-8b7ab3104-master
-      env:
-      - name: NETWORK_POLICY_PROVIDER
-        value: calico
+      image: gcr.io/k8s-testimages/kubekins-e2e:v20181218-134e718ec-master

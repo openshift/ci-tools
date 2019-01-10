@@ -22,7 +22,6 @@ import (
 	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/base64"
 	"encoding/pem"
 	"fmt"
 	"io/ioutil"
@@ -361,10 +360,10 @@ func TestNewClient(t *testing.T) {
 		NotBefore:             time.Now(),
 		NotAfter:              time.Now().Add(time.Hour),
 		BasicConstraintsValid: true,
-		IsCA:        true,
-		KeyUsage:    x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature,
-		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
-		IPAddresses: []net.IP{net.ParseIP("127.0.0.1")},
+		IsCA:                  true,
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
+		IPAddresses:           []net.IP{net.ParseIP("127.0.0.1")},
 	}
 	certDER, err := x509.CreateCertificate(r, tmpl, tmpl, &rootKey.PublicKey, rootKey)
 	if err != nil {
@@ -410,9 +409,9 @@ func TestNewClient(t *testing.T) {
 	certPool.AppendCertsFromPEM(rootCertPEM)
 
 	clus := &Cluster{
-		ClientCertificate:    base64.StdEncoding.EncodeToString(clientCertPEM),
-		ClientKey:            base64.StdEncoding.EncodeToString(clientKeyPEM),
-		ClusterCACertificate: base64.StdEncoding.EncodeToString(rootCertPEM),
+		ClientCertificate:    clientCertPEM,
+		ClientKey:            clientKeyPEM,
+		ClusterCACertificate: rootCertPEM,
 	}
 	s := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("{}")) }))
 	s.TLS = &tls.Config{

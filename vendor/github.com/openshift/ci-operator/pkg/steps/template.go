@@ -153,7 +153,7 @@ func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 		switch {
 		case ref.Ref.Kind == "Pod" && ref.Ref.APIVersion == "v1":
 			if err := waitForPodCompletion(s.podClient.Pods(s.jobSpec.Namespace), ref.Ref.Name, notifier); err != nil {
-				return fmt.Errorf("could not wait for pod to complete: %v", err)
+				return fmt.Errorf("template pod %q failed: %v", ref.Ref.Name, err)
 			}
 		}
 	}
@@ -560,7 +560,7 @@ func waitForPodCompletion(podClient coreclientset.PodInterface, name string, not
 			continue
 		}
 		if err != nil {
-			return fmt.Errorf("could not wait for pod completion: %v", err)
+			return err
 		}
 		if !retry {
 			break
@@ -570,6 +570,15 @@ func waitForPodCompletion(podClient coreclientset.PodInterface, name string, not
 }
 
 func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name string, completed map[string]time.Time, notifier ContainerNotifier) (bool, error) {
+	watcher, err := podClient.Watch(meta.ListOptions{
+		FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String(),
+		Watch:         true,
+	})
+	if err != nil {
+		return false, fmt.Errorf("could not create watcher for pod: %v", err)
+	}
+	defer watcher.Stop()
+
 	list, err := podClient.List(meta.ListOptions{FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String()})
 	if err != nil {
 		return false, fmt.Errorf("could not list pod: %v", err)
@@ -590,15 +599,6 @@ func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name st
 	if podJobIsFailed(pod) {
 		return false, appendLogToError(fmt.Errorf("the pod %s/%s failed after %s (failed containers: %s): %s", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", "), podReason(pod)), podMessages(pod))
 	}
-
-	watcher, err := podClient.Watch(meta.ListOptions{
-		FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String(),
-		Watch:         true,
-	})
-	if err != nil {
-		return false, fmt.Errorf("could not create watcher for pod: %v", err)
-	}
-	defer watcher.Stop()
 
 	for {
 		event, ok := <-watcher.ResultChan()
@@ -629,24 +629,11 @@ func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name st
 func podReason(pod *coreapi.Pod) string {
 	reason := pod.Status.Reason
 	message := pod.Status.Message
-	if len(message) == 0 {
-		message = "unknown"
-	}
 	if len(reason) == 0 {
-		for _, status := range append(append([]coreapi.ContainerStatus{}, pod.Status.InitContainerStatuses...), pod.Status.ContainerStatuses...) {
-			state := status.State.Terminated
-			if state == nil || state.ExitCode == 0 {
-				continue
-			}
-			if len(reason) == 0 {
-				continue
-			}
-			reason = state.Reason
-			if len(message) == 0 {
-				message = fmt.Sprintf("container failure with exit code %d", state.ExitCode)
-			}
-			break
-		}
+		reason = "ContainerFailed"
+	}
+	if len(message) == 0 {
+		message = "one or more containers exited"
 	}
 	return fmt.Sprintf("%s %s", reason, message)
 }
@@ -657,7 +644,7 @@ func podMessages(pod *coreapi.Pod) string {
 	for _, status := range append(append([]coreapi.ContainerStatus{}, pod.Status.InitContainerStatuses...), pod.Status.ContainerStatuses...) {
 		if state := status.State.Terminated; state != nil && state.ExitCode != 0 {
 			messages = append(messages, fmt.Sprintf("Container %s exited with code %d, reason %s", status.Name, state.ExitCode, state.Reason))
-			if msg := state.Message; len(msg) > 0 {
+			if msg := strings.TrimSpace(state.Message); len(msg) > 0 {
 				messages = append(messages, "---", msg, "---")
 			}
 		}

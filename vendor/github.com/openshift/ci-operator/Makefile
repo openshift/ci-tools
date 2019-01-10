@@ -3,7 +3,7 @@ all: check test build
 
 .PHONY: check
 check: ## Lint code
-	gofmt -s -l $(shell go list -f '{{ .Dir }}' ./... ) | grep ".*\.go"; if [ "$$?" = "0" ]; then exit 1; fi
+	gofmt -s -l $(shell go list -f '{{ .Dir }}' ./... ) | grep ".*\.go"; if [ "$$?" = "0" ]; then gofmt -s -d $(shell go list -f '{{ .Dir }}' ./... ); exit 1; fi
 	go vet ./cmd/... ./pkg/...
 
 format:

@@ -294,6 +294,8 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 }
 
 func TestGeneratePresubmitForTest(t *testing.T) {
+	newTrue := true
+
 	tests := []struct {
 		name     string
 		repoInfo *configFilePathElements
@@ -303,17 +305,19 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 		repoInfo: &configFilePathElements{org: "org", repo: "repo", branch: "branch"},
 
 		expected: &prowconfig.Presubmit{
-			Agent:        "kubernetes",
+			JobBase: prowconfig.JobBase{
+				Agent: "kubernetes",
+				Name:  "pull-ci-org-repo-branch-testname",
+				UtilityConfig: prowconfig.UtilityConfig{
+					DecorationConfig: &prowkube.DecorationConfig{SkipCloning: &newTrue},
+					Decorate:         true,
+				},
+			},
 			AlwaysRun:    true,
 			Brancher:     prowconfig.Brancher{Branches: []string{"branch"}},
 			Context:      "ci/prow/testname",
-			Name:         "pull-ci-org-repo-branch-testname",
 			RerunCommand: "/test testname",
 			Trigger:      `((?m)^/test( all| testname),?(\s+|$))`,
-			UtilityConfig: prowconfig.UtilityConfig{
-				DecorationConfig: &prowkube.DecorationConfig{SkipCloning: true},
-				Decorate:         true,
-			},
 		},
 	}}
 	for _, tc := range tests {
@@ -325,6 +329,7 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 }
 
 func TestGeneratePostSubmitForTest(t *testing.T) {
+	newTrue := true
 	tests := []struct {
 		name     string
 		repoInfo *configFilePathElements
@@ -345,13 +350,16 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 			labels: map[string]string{},
 
 			expected: &prowconfig.Postsubmit{
-				Agent:    "kubernetes",
-				Name:     "branch-ci-organization-repository-branch-name",
-				Brancher: prowconfig.Brancher{Branches: []string{"branch"}},
-				UtilityConfig: prowconfig.UtilityConfig{
-					DecorationConfig: &prowkube.DecorationConfig{SkipCloning: true},
-					Decorate:         true,
+				JobBase: prowconfig.JobBase{
+					Agent: "kubernetes",
+					Name:  "branch-ci-organization-repository-branch-name",
+					UtilityConfig: prowconfig.UtilityConfig{
+						DecorationConfig: &prowkube.DecorationConfig{SkipCloning: &newTrue},
+						Decorate:         true,
+					},
 				},
+
+				Brancher: prowconfig.Brancher{Branches: []string{"branch"}},
 			},
 		},
 		{
@@ -365,14 +373,15 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 			labels: map[string]string{"artifacts": "images"},
 
 			expected: &prowconfig.Postsubmit{
-				Agent:    "kubernetes",
-				Name:     "branch-ci-Organization-Repository-Branch-Name",
+				JobBase: prowconfig.JobBase{
+					Agent:  "kubernetes",
+					Name:   "branch-ci-Organization-Repository-Branch-Name",
+					Labels: map[string]string{"artifacts": "images"},
+					UtilityConfig: prowconfig.UtilityConfig{
+						DecorationConfig: &prowkube.DecorationConfig{SkipCloning: &newTrue},
+						Decorate:         true,
+					}},
 				Brancher: prowconfig.Brancher{Branches: []string{"Branch"}},
-				Labels:   map[string]string{"artifacts": "images"},
-				UtilityConfig: prowconfig.UtilityConfig{
-					DecorationConfig: &prowkube.DecorationConfig{SkipCloning: true},
-					Decorate:         true,
-				},
 			},
 		},
 		{
@@ -388,14 +397,15 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 			treatBranchesAsExplicit: true,
 
 			expected: &prowconfig.Postsubmit{
-				Agent:    "kubernetes",
-				Name:     "branch-ci-Organization-Repository-Branch-name",
+				JobBase: prowconfig.JobBase{
+					Agent:  "kubernetes",
+					Name:   "branch-ci-Organization-Repository-Branch-name",
+					Labels: map[string]string{"artifacts": "images"},
+					UtilityConfig: prowconfig.UtilityConfig{
+						DecorationConfig: &prowkube.DecorationConfig{SkipCloning: &newTrue},
+						Decorate:         true,
+					}},
 				Brancher: prowconfig.Brancher{Branches: []string{"^Branch$"}},
-				Labels:   map[string]string{"artifacts": "images"},
-				UtilityConfig: prowconfig.UtilityConfig{
-					DecorationConfig: &prowkube.DecorationConfig{SkipCloning: true},
-					Decorate:         true,
-				},
 			},
 		},
 
@@ -412,14 +422,15 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 			treatBranchesAsExplicit: true,
 
 			expected: &prowconfig.Postsubmit{
-				Agent:    "kubernetes",
-				Name:     "branch-ci-Organization-Repository-Branch-name",
+				JobBase: prowconfig.JobBase{
+					Agent:  "kubernetes",
+					Name:   "branch-ci-Organization-Repository-Branch-name",
+					Labels: map[string]string{"artifacts": "images"},
+					UtilityConfig: prowconfig.UtilityConfig{
+						DecorationConfig: &prowkube.DecorationConfig{SkipCloning: &newTrue},
+						Decorate:         true,
+					}},
 				Brancher: prowconfig.Brancher{Branches: []string{"Branch-.*"}},
-				Labels:   map[string]string{"artifacts": "images"},
-				UtilityConfig: prowconfig.UtilityConfig{
-					DecorationConfig: &prowkube.DecorationConfig{SkipCloning: true},
-					Decorate:         true,
-				},
 			},
 		},
 	}
@@ -456,8 +467,8 @@ func TestGenerateJobs(t *testing.T) {
 			},
 			expected: &prowconfig.JobConfig{
 				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
-					{Name: "pull-ci-organization-repository-branch-derTest"},
-					{Name: "pull-ci-organization-repository-branch-leTest"},
+					{JobBase: prowconfig.JobBase{Name: "pull-ci-organization-repository-branch-derTest"}},
+					{JobBase: prowconfig.JobBase{Name: "pull-ci-organization-repository-branch-leTest"}},
 				}},
 				Postsubmits: map[string][]prowconfig.Postsubmit{},
 			},
@@ -477,12 +488,12 @@ func TestGenerateJobs(t *testing.T) {
 			},
 			expected: &prowconfig.JobConfig{
 				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
-					{Name: "pull-ci-organization-repository-branch-derTest"},
-					{Name: "pull-ci-organization-repository-branch-leTest"},
-					{Name: "pull-ci-organization-repository-branch-images"},
+					{JobBase: prowconfig.JobBase{Name: "pull-ci-organization-repository-branch-derTest"}},
+					{JobBase: prowconfig.JobBase{Name: "pull-ci-organization-repository-branch-leTest"}},
+					{JobBase: prowconfig.JobBase{Name: "pull-ci-organization-repository-branch-images"}},
 				}},
 				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {
-					{Name: "branch-ci-organization-repository-branch-images"},
+					{JobBase: prowconfig.JobBase{Name: "branch-ci-organization-repository-branch-images"}},
 				}},
 			},
 		}, {
@@ -507,7 +518,7 @@ func TestGenerateJobs(t *testing.T) {
 			},
 			expected: &prowconfig.JobConfig{
 				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
-					{Name: "pull-ci-organization-repository-branch-oTeste"},
+					{JobBase: prowconfig.JobBase{Name: "pull-ci-organization-repository-branch-oTeste"}},
 				}},
 			},
 		}, {
@@ -525,11 +536,12 @@ func TestGenerateJobs(t *testing.T) {
 			},
 			expected: &prowconfig.JobConfig{
 				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
-					{Name: "pull-ci-organization-repository-branch-images"},
+					{JobBase: prowconfig.JobBase{Name: "pull-ci-organization-repository-branch-images"}},
 				}},
 				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {{
-					Name:   "branch-ci-organization-repository-branch-images",
-					Labels: map[string]string{"artifacts": "images"},
+					JobBase: prowconfig.JobBase{Name: "branch-ci-organization-repository-branch-images",
+						Labels: map[string]string{"artifacts": "images"},
+					},
 				}}},
 			},
 		}, {
@@ -547,10 +559,10 @@ func TestGenerateJobs(t *testing.T) {
 			},
 			expected: &prowconfig.JobConfig{
 				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
-					{Name: "pull-ci-organization-repository-branch-images"},
+					{JobBase: prowconfig.JobBase{Name: "pull-ci-organization-repository-branch-images"}},
 				}},
 				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {
-					{Name: "branch-ci-organization-repository-branch-images"},
+					{JobBase: prowconfig.JobBase{Name: "branch-ci-organization-repository-branch-images"}},
 				}},
 			},
 		}, {
@@ -570,13 +582,14 @@ func TestGenerateJobs(t *testing.T) {
 			},
 			expected: &prowconfig.JobConfig{
 				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
-					{Name: "pull-ci-organization-repository-branch-images"},
+					{JobBase: prowconfig.JobBase{Name: "pull-ci-organization-repository-branch-images"}},
 				}},
 				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {{
-					Name:   "branch-ci-organization-repository-branch-images",
-					Labels: map[string]string{"artifacts": "images"},
-				}}},
-			},
+					JobBase: prowconfig.JobBase{
+						Name:   "branch-ci-organization-repository-branch-images",
+						Labels: map[string]string{"artifacts": "images"},
+					}}},
+				}},
 		}, {
 			id: "tag_specification.Namespace is not 'openshift' and no Promotion so artifact label is not added",
 			config: &ciop.ReleaseBuildConfiguration{
@@ -594,10 +607,10 @@ func TestGenerateJobs(t *testing.T) {
 			},
 			expected: &prowconfig.JobConfig{
 				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
-					{Name: "pull-ci-organization-repository-branch-images"},
+					{JobBase: prowconfig.JobBase{Name: "pull-ci-organization-repository-branch-images"}},
 				}},
 				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {
-					{Name: "branch-ci-organization-repository-branch-images"},
+					{JobBase: prowconfig.JobBase{Name: "branch-ci-organization-repository-branch-images"}},
 				}},
 			},
 		}, {
@@ -618,10 +631,10 @@ func TestGenerateJobs(t *testing.T) {
 			},
 			expected: &prowconfig.JobConfig{
 				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
-					{Name: "pull-ci-organization-repository-branch-images"},
+					{JobBase: prowconfig.JobBase{Name: "pull-ci-organization-repository-branch-images"}},
 				}},
 				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {
-					{Name: "branch-ci-organization-repository-branch-images"},
+					{JobBase: prowconfig.JobBase{Name: "branch-ci-organization-repository-branch-images"}},
 				}},
 			},
 		}, {
@@ -642,12 +655,13 @@ func TestGenerateJobs(t *testing.T) {
 			},
 			expected: &prowconfig.JobConfig{
 				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
-					{Name: "pull-ci-organization-repository-branch-images"},
+					{JobBase: prowconfig.JobBase{Name: "pull-ci-organization-repository-branch-images"}},
 				}},
 				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {{
-					Name:   "branch-ci-organization-repository-branch-images",
-					Labels: map[string]string{"artifacts": "images"},
-				}}},
+					JobBase: prowconfig.JobBase{
+						Name:   "branch-ci-organization-repository-branch-images",
+						Labels: map[string]string{"artifacts": "images"},
+					}}}},
 			},
 		},
 	}
@@ -785,10 +799,11 @@ tests:
     branches:
     - ^branch$
     decorate: true
+    decoration_config:
+      skip_cloning: true
     labels:
       artifacts: images
     name: branch-ci-super-duper-branch-images
-    skip_cloning: true
     spec:
       containers:
       - args:
@@ -822,9 +837,10 @@ tests:
     - branch
     context: ci/prow/images
     decorate: true
+    decoration_config:
+      skip_cloning: true
     name: pull-ci-super-duper-branch-images
     rerun_command: /test images
-    skip_cloning: true
     spec:
       containers:
       - args:
@@ -855,9 +871,10 @@ tests:
     - branch
     context: ci/prow/unit
     decorate: true
+    decoration_config:
+      skip_cloning: true
     name: pull-ci-super-duper-branch-unit
     rerun_command: /test unit
-    skip_cloning: true
     spec:
       containers:
       - args:
@@ -927,8 +944,9 @@ tests:
     branches:
     - branch
     decorate: true
+    decoration_config:
+      skip_cloning: true
     name: branch-ci-super-duper-branch-do-not-overwrite
-    skip_cloning: true
     spec:
       containers:
       - args:
@@ -961,11 +979,12 @@ tests:
     - branch
     context: ci/prow/rhel-images
     decorate: true
+    decoration_config:
+      skip_cloning: true
     labels:
       ci-operator.openshift.io/variant: rhel
     name: pull-ci-super-duper-branch-rhel-images
     rerun_command: /test rhel-images
-    skip_cloning: true
     spec:
       containers:
       - args:
@@ -996,11 +1015,12 @@ tests:
     - branch
     context: ci/prow/rhel-unit
     decorate: true
+    decoration_config:
+      skip_cloning: true
     labels:
       ci-operator.openshift.io/variant: rhel
     name: pull-ci-super-duper-branch-rhel-unit
     rerun_command: /test rhel-unit
-    skip_cloning: true
     spec:
       containers:
       - args:
@@ -1032,8 +1052,9 @@ tests:
     branches:
     - branch
     decorate: true
+    decoration_config:
+      skip_cloning: true
     name: branch-ci-super-duper-branch-do-not-overwrite
-    skip_cloning: true
     spec:
       containers:
       - args:
@@ -1061,11 +1082,12 @@ tests:
     branches:
     - ^branch$
     decorate: true
+    decoration_config:
+      skip_cloning: true
     labels:
       artifacts: images
       ci-operator.openshift.io/variant: rhel
     name: branch-ci-super-duper-branch-rhel-images
-    skip_cloning: true
     spec:
       containers:
       - args:
@@ -1133,8 +1155,9 @@ tests:
   super/duper:
   - agent: kubernetes
     decorate: true
+    decoration_config:
+      skip_cloning: true
     name: branch-ci-super-duper-branch-do-not-overwrite
-    skip_cloning: true
     spec:
       containers:
       - args:
@@ -1167,9 +1190,10 @@ tests:
     - branch
     context: ci/prow/images
     decorate: true
+    decoration_config:
+      skip_cloning: true
     name: pull-ci-super-duper-branch-images
     rerun_command: /test images
-    skip_cloning: true
     spec:
       containers:
       - args:
@@ -1200,9 +1224,10 @@ tests:
     - branch
     context: ci/prow/unit
     decorate: true
+    decoration_config:
+      skip_cloning: true
     name: pull-ci-super-duper-branch-unit
     rerun_command: /test unit
-    skip_cloning: true
     spec:
       containers:
       - args:
@@ -1232,8 +1257,9 @@ tests:
   super/duper:
   - agent: kubernetes
     decorate: true
+    decoration_config:
+      skip_cloning: true
     name: branch-ci-super-duper-branch-do-not-overwrite
-    skip_cloning: true
     spec:
       containers:
       - args:
@@ -1261,10 +1287,11 @@ tests:
     branches:
     - ^branch$
     decorate: true
+    decoration_config:
+      skip_cloning: true
     labels:
       artifacts: images
     name: branch-ci-super-duper-branch-images
-    skip_cloning: true
     spec:
       containers:
       - args:

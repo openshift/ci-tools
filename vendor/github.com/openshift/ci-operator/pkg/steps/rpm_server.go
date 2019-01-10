@@ -284,14 +284,8 @@ func deploymentReason(b *appsapi.Deployment) string {
 }
 
 func waitForDeploymentOrTimeout(client appsclientset.DeploymentInterface, name string) (bool, error) {
-	done, err := currentDeploymentStatus(client, name)
-	if err != nil {
-		return false, fmt.Errorf("could not determine current deployment status: %v", err)
-	}
-	if done {
-		return false, nil
-	}
-
+	// First we set up a watcher to catch all events that happen while we check
+	// the deployment status
 	watcher, err := client.Watch(meta.ListOptions{
 		FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String(),
 		Watch:         true,
@@ -300,6 +294,14 @@ func waitForDeploymentOrTimeout(client appsclientset.DeploymentInterface, name s
 		return false, fmt.Errorf("could not create watcher for deploymentconfig %s: %v", name, err)
 	}
 	defer watcher.Stop()
+
+	done, err := currentDeploymentStatus(client, name)
+	if err != nil {
+		return false, fmt.Errorf("could not determine current deployment status: %v", err)
+	}
+	if done {
+		return false, nil
+	}
 
 	for {
 		event, ok := <-watcher.ResultChan()

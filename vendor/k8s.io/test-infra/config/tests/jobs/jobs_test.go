@@ -22,15 +22,14 @@ package tests
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
-	"regexp"
+	"path"
 	"strings"
 	"testing"
+	"time"
 
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -39,38 +38,14 @@ import (
 	"k8s.io/test-infra/prow/kube"
 )
 
-// config.json is the worst but contains useful information :-(
-type configJSON map[string]map[string]interface{}
-
 var configPath = flag.String("config", "../../../prow/config.yaml", "Path to prow config")
 var jobConfigPath = flag.String("job-config", "../../jobs", "Path to prow job config")
-var configJSONPath = flag.String("config-json", "../../../jobs/config.json", "Path to prow job config")
-var gubernatorPath = flag.String("gubernator-path", "https://k8s-gubernator.appspot.com", "Path to linked gubernator")
+var gubernatorPath = flag.String("gubernator-path", "https://gubernator.k8s.io", "Path to linked gubernator")
 var bucket = flag.String("bucket", "kubernetes-jenkins", "Gcs bucket for log upload")
-
-func (c configJSON) ScenarioForJob(jobName string) string {
-	if scenario, ok := c[jobName]["scenario"]; ok {
-		return scenario.(string)
-	}
-	return ""
-}
-
-func readConfigJSON(path string) (config configJSON, err error) {
-	raw, err := ioutil.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	config = configJSON{}
-	err = json.Unmarshal(raw, &config)
-	if err != nil {
-		return nil, err
-	}
-	return config, nil
-}
+var k8sProw = flag.Bool("k8s-prow", true, "If the config is for k8s prow cluster")
 
 // Loaded at TestMain.
 var c *cfg.Config
-var cj configJSON
 
 func TestMain(m *testing.M) {
 	flag.Parse()
@@ -85,14 +60,6 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 	c = conf
-
-	if *configJSONPath != "" {
-		cj, err = readConfigJSON(*configJSONPath)
-		if err != nil {
-			fmt.Printf("Could not load jobs config: %v", err)
-			os.Exit(1)
-		}
-	}
 
 	os.Exit(m.Run())
 }
@@ -163,6 +130,7 @@ func TestURLTemplate(t *testing.T) {
 		job     string
 		build   string
 		expect  string
+		k8sOnly bool
 	}{
 		{
 			name:    "k8s presubmit",
@@ -172,6 +140,17 @@ func TestURLTemplate(t *testing.T) {
 			job:     "k8s-pre-1",
 			build:   "1",
 			expect:  *gubernatorPath + "/build/" + *bucket + "/pr-logs/pull/0/k8s-pre-1/1/",
+			k8sOnly: true,
+		},
+		{
+			name:    "k8s-security presubmit",
+			jobType: kube.PresubmitJob,
+			org:     "kubernetes-security",
+			repo:    "kubernetes",
+			job:     "k8s-pre-1",
+			build:   "1",
+			expect:  "https://console.cloud.google.com/storage/browser/kubernetes-security-prow/pr-logs/pull/kubernetes-security_kubernetes/0/k8s-pre-1/1/",
+			k8sOnly: true,
 		},
 		{
 			name:    "k8s/test-infra presubmit",
@@ -181,6 +160,7 @@ func TestURLTemplate(t *testing.T) {
 			job:     "ti-pre-1",
 			build:   "1",
 			expect:  *gubernatorPath + "/build/" + *bucket + "/pr-logs/pull/test-infra/0/ti-pre-1/1/",
+			k8sOnly: true,
 		},
 		{
 			name:    "foo/k8s presubmit",
@@ -231,10 +211,24 @@ func TestURLTemplate(t *testing.T) {
 			job:     "k8s-batch-1",
 			build:   "1",
 			expect:  *gubernatorPath + "/build/" + *bucket + "/pr-logs/pull/batch/k8s-batch-1/1/",
+			k8sOnly: true,
+		},
+		{
+			name:    "foo bar batch",
+			jobType: kube.BatchJob,
+			org:     "foo",
+			repo:    "bar",
+			job:     "k8s-batch-1",
+			build:   "1",
+			expect:  *gubernatorPath + "/build/" + *bucket + "/pr-logs/pull/foo_bar/batch/k8s-batch-1/1/",
 		},
 	}
 
 	for _, tc := range testcases {
+		if !*k8sProw && tc.k8sOnly {
+			continue
+		}
+
 		var pj = kube.ProwJob{
 			ObjectMeta: metav1.ObjectMeta{Name: tc.name},
 			Spec: kube.ProwJobSpec{
@@ -319,11 +313,37 @@ func findRequired(t *testing.T, presubmits []cfg.Presubmit) []string {
 	return required
 }
 
-func TestConfigSecurityJobsMatch(t *testing.T) {
-	kp := c.Presubmits["kubernetes/kubernetes"]
-	sp := c.Presubmits["kubernetes-security/kubernetes"]
-	if len(kp) != len(sp) {
-		t.Fatalf("length of kubernetes/kubernetes presubmits %d does not equal length of kubernetes-security/kubernetes presubmits %d", len(kp), len(sp))
+func TestTrustedJobs(t *testing.T) {
+	// TODO(fejta): allow each config/jobs/kubernetes/foo/foo-trusted.yaml
+	// that uses a foo-trusted cluster
+	const trusted = "test-infra-trusted"
+	trustedPath := path.Join(*jobConfigPath, "kubernetes", "test-infra", "test-infra-trusted.yaml")
+
+	// Presubmits may not use trusted clusters.
+	for _, pre := range c.AllPresubmits(nil) {
+		if pre.Cluster == trusted {
+			t.Errorf("%s: presubmits cannot use trusted clusters", pre.Name)
+		}
+	}
+
+	// Trusted postsubmits must be defined in trustedPath
+	for _, post := range c.AllPostsubmits(nil) {
+		if post.Cluster != trusted {
+			continue
+		}
+		if post.SourcePath != trustedPath {
+			t.Errorf("%s defined in %s may not run in trusted cluster", post.Name, post.SourcePath)
+		}
+	}
+
+	// Trusted periodics must be defined in trustedPath
+	for _, per := range c.AllPeriodics() {
+		if per.Cluster != trusted {
+			continue
+		}
+		if per.SourcePath != trustedPath {
+			t.Errorf("%s defined in %s may not run in trusted cluster", per.Name, per.SourcePath)
+		}
 	}
 }
 
@@ -406,174 +426,6 @@ func TestJobDoesNotHaveDockerSocket(t *testing.T) {
 	}
 }
 
-// Validate any containers using a bazelbuild image, returning which bazelbuild tags are used.
-// In particular ensure that:
-//   * Presubmit, postsubmit jobs specify at least one --repo flag, the first of which uses PULL_REFS and REPO_NAME vars
-//   * Prow injected vars like REPO_NAME, PULL_REFS, etc are only used on non-periodic jobs
-//   * Deprecated --branch, --pull flags are not used
-//   * Required --service-account, --upload, --job, --clean flags are present
-func checkBazelbuildSpec(t *testing.T, name string, spec *v1.PodSpec, periodic bool) map[string]int {
-	img := "gcr.io/k8s-testimages/bazelbuild"
-	tags := map[string]int{}
-	if spec == nil {
-		return tags
-	}
-	// Tags look something like vDATE-SHA or vDATE-SHA-BAZELVERSION.
-	// We want to match only on the date + sha
-	tagRE := regexp.MustCompile(`^([^-]+-[^-]+)(-[^-]+)?$`)
-	for _, c := range spec.Containers {
-		parts := strings.SplitN(c.Image, ":", 2)
-		var i, tag string // image:tag
-		i = parts[0]
-		if i != img {
-			continue
-		}
-		if len(parts) == 1 {
-			tag = "latest"
-		} else {
-			submatches := tagRE.FindStringSubmatch(parts[1])
-			if submatches != nil {
-				tag = submatches[1]
-			} else {
-				t.Errorf("bazelbuild tag '%s' doesn't match expected format", parts[1])
-			}
-		}
-		tags[tag]++
-
-		found := map[string][]string{}
-		for _, a := range c.Args {
-			parts := strings.SplitN(a, "=", 2)
-			k := parts[0]
-			v := "true"
-			if len(parts) == 2 {
-				v = parts[1]
-			}
-			found[k] = append(found[k], v)
-
-			// Require --flag=FOO for easier processing
-			if k == "--repo" && len(parts) == 1 {
-				t.Errorf("%s: use --repo=FOO not --repo foo", name)
-			}
-		}
-
-		if _, ok := found["--pull"]; ok {
-			t.Errorf("%s: uses deprecated --pull arg, use --repo=org/repo=$(PULL_REFS) instead", name)
-		}
-		if _, ok := found["--branch"]; ok {
-			t.Errorf("%s: uses deprecated --branch arg, use --repo=org/repo=$(PULL_REFS) instead", name)
-		}
-
-		for _, f := range []string{
-			"--service-account",
-			"--upload",
-			"--job",
-		} {
-			if _, ok := found[f]; !ok {
-				t.Errorf("%s: missing %s flag", name, f)
-			}
-		}
-
-		if v, ok := found["--repo"]; !ok {
-			t.Errorf("%s: missing %s flag", name, "--repo")
-		} else {
-			firstRepo := true
-			hasRefs := false
-			hasName := false
-			for _, r := range v {
-				hasRefs = hasRefs || strings.Contains(r, "$(PULL_REFS)")
-				hasName = hasName || strings.Contains(r, "$(REPO_NAME)")
-				if !firstRepo {
-					t.Errorf("%s: has too many --repo. REMOVE THIS CHECK BEFORE MERGE", name)
-				}
-				for _, d := range []string{
-					"$(REPO_NAME)",
-					"$(REPO_OWNER)",
-					"$(PULL_BASE_REF)",
-					"$(PULL_BASE_SHA)",
-					"$(PULL_REFS)",
-					"$(PULL_NUMBER)",
-					"$(PULL_PULL_SHA)",
-				} {
-					has := strings.Contains(r, d)
-					if periodic && has {
-						t.Errorf("%s: %s are not available to periodic jobs, please use a static --repo=org/repo=branch", name, d)
-					} else if !firstRepo && has {
-						t.Errorf("%s: %s are only relevant to the first --repo flag, remove from --repo=%s", name, d, r)
-					}
-				}
-				firstRepo = false
-			}
-			if !periodic && !hasRefs {
-				t.Errorf("%s: non-periodic jobs need a --repo=org/branch=$(PULL_REFS) somewhere", name)
-			}
-			if !periodic && !hasName {
-				t.Errorf("%s: non-periodic jobs need a --repo=org/$(REPO_NAME) somewhere", name)
-			}
-		}
-
-		if c.Resources.Requests == nil {
-			t.Errorf("%s: bazel jobs need to place a resource request", name)
-		}
-	}
-	return tags
-}
-
-// Unit test jobs that use a bazelbuild image do so correctly.
-func TestBazelbuildArgs(t *testing.T) {
-	tags := map[string][]string{} // tag -> jobs map
-	for _, p := range c.AllPresubmits(nil) {
-		for t := range checkBazelbuildSpec(t, p.Name, p.Spec, false) {
-			tags[t] = append(tags[t], p.Name)
-		}
-	}
-	for _, p := range c.AllPostsubmits(nil) {
-		for t := range checkBazelbuildSpec(t, p.Name, p.Spec, false) {
-			tags[t] = append(tags[t], p.Name)
-		}
-	}
-	for _, p := range c.AllPeriodics() {
-		for t := range checkBazelbuildSpec(t, p.Name, p.Spec, true) {
-			tags[t] = append(tags[t], p.Name)
-		}
-	}
-	pinnedJobs := map[string]string{
-		//job: reason for pinning
-		// these frequently need to be pinned...
-		//"pull-test-infra-bazel":              "test-infra adopts bazel upgrades first",
-		//"ci-test-infra-bazel":                "test-infra adopts bazel upgrades first",
-		"pull-test-infra-bazel-canary":       "canary testing the latest bazel",
-		"pull-kubernetes-bazel-build-canary": "canary testing the latest bazel",
-		"pull-kubernetes-bazel-test-canary":  "canary testing the latest bazel",
-	}
-	// auto insert pull-security-kubernetes-*
-	for job, reason := range pinnedJobs {
-		if strings.HasPrefix(job, "pull-kubernetes") {
-			pinnedJobs[strings.Replace(job, "pull-kubernetes", "pull-security-kubernetes", 1)] = reason
-		}
-	}
-	maxTag := ""
-	maxN := 0
-	for t, js := range tags {
-		n := len(js)
-		if n > maxN {
-			maxTag = t
-			maxN = n
-		}
-	}
-	for tag, js := range tags {
-		current := tag == maxTag
-		for _, j := range js {
-			if v, pinned := pinnedJobs[j]; !pinned && !current {
-				t.Errorf("%s: please add to the pinnedJobs list or else update tag to %s", j, maxTag)
-			} else if current && pinned {
-				t.Errorf("%s: please remove from the pinnedJobs list", j)
-			} else if !current && v == "" {
-				t.Errorf("%s: pinning to a non-default version requires a non-empty reason for doing so", j)
-			}
-		}
-	}
-}
-
 // checkLatestUsesImagePullPolicy returns an error if an image is a `latest-.*` tag,
 // but doesn't have imagePullPolicy: Always
 func checkLatestUsesImagePullPolicy(spec *v1.PodSpec) error {
@@ -640,8 +492,14 @@ func checkKubekinsPresets(jobName string, spec *v1.PodSpec, labels, validLabels 
 			}
 		}
 
-		configJSONJobName := strings.Replace(jobName, "pull-kubernetes", "pull-security-kubernetes", -1)
-		if cj.ScenarioForJob(configJSONJobName) == "kubenetes_e2e" {
+		scenario := ""
+		for _, arg := range container.Args {
+			if strings.HasPrefix(arg, "--scenario=") {
+				scenario = strings.TrimPrefix(arg, "--scenario=")
+			}
+		}
+
+		if scenario == "kubenetes_e2e" {
 			ssh = false
 			for key, val := range labels {
 				if (key == "preset-k8s-ssh" || key == "preset-aws-ssh") && val == "true" {
@@ -689,6 +547,10 @@ func TestValidPresets(t *testing.T) {
 		}
 	}
 
+	if !*k8sProw {
+		return
+	}
+
 	for _, presubmit := range c.AllPresubmits(nil) {
 		if presubmit.Spec != nil && !presubmit.Decorate {
 			if err := checkKubekinsPresets(presubmit.Name, presubmit.Spec, presubmit.Labels, validLabels); err != nil {
@@ -730,10 +592,7 @@ func checkScenarioArgs(jobName, imageName string, args []string) error {
 	scenario := ""
 	for _, arg := range args {
 		if strings.HasPrefix(arg, "--env-file=") {
-			env := strings.TrimPrefix(arg, "--env-file=")
-			if _, err := os.Stat("../../../" + env); err != nil {
-				return fmt.Errorf("job %s: cannot stat env file %s", jobName, env)
-			}
+			return fmt.Errorf("job %s: --env-file is deprecated, please migrate to presets %s", jobName, arg)
 		}
 
 		if arg == "--" {
@@ -751,11 +610,6 @@ func checkScenarioArgs(jobName, imageName string, args []string) error {
 			entry = strings.Replace(entry, "pull-security-kubernetes", "pull-kubernetes", -1)
 		}
 
-		if _, ok := cj[entry]; ok {
-			// the unit test is handled in jobs/config_test.py
-			return nil
-		}
-
 		if !scenarioArgs {
 			if strings.Contains(imageName, "kubekins-e2e") ||
 				strings.Contains(imageName, "bootstrap") ||
@@ -771,7 +625,7 @@ func checkScenarioArgs(jobName, imageName string, args []string) error {
 		}
 
 		if !scenarioArgs {
-			return fmt.Errorf("job %s: set --scenario and will need scenario args", jobName)
+			return fmt.Errorf("job %s: set --scenario=%s and will need scenario args", jobName, scenario)
 		}
 	}
 
@@ -808,7 +662,7 @@ func checkScenarioArgs(jobName, imageName string, args []string) error {
 		return fmt.Errorf("with --deployment=gke, job %s must use --gcp-node-image", jobName)
 	}
 
-	if hasArg("--env-file=jobs/pull-kubernetes-e2e.env", args) && hasArg("--check-leaked-resources", args) {
+	if hasArg("--stage=gs://kubernetes-release-pull", args) && hasArg("--check-leaked-resources", args) {
 		return fmt.Errorf("presubmit job %s should not check for resource leaks", jobName)
 	}
 
@@ -878,16 +732,45 @@ func checkScenarioArgs(jobName, imageName string, args []string) error {
 	for _, arg := range args {
 		ginkgo_args := ""
 		if strings.HasPrefix(arg, "--test_args=") {
-			splitted := strings.SplitN(arg, "=", 2)
-			ginkgo_args = splitted[1]
+			split := strings.SplitN(arg, "=", 2)
+			ginkgo_args = split[1]
 		} else if strings.HasPrefix(arg, "--upgrade_args=") {
-			splitted := strings.SplitN(arg, "=", 2)
-			ginkgo_args = splitted[1]
+			split := strings.SplitN(arg, "=", 2)
+			ginkgo_args = split[1]
 		}
 
 		if strings.Contains(ginkgo_args, "\\\\") {
 			return fmt.Errorf("jobs %s - double slashes in ginkgo args should be single slash now : arg %s", jobName, arg)
 		}
+	}
+
+	// timeout should be valid
+	bootstrap_timeout := 0 * time.Minute
+	kubetest_timeout := 0 * time.Minute
+	var err error
+	kubetest := false
+	for _, arg := range args {
+		if strings.HasPrefix(arg, "--timeout=") {
+			timeout := strings.SplitN(arg, "=", 2)[1]
+			if kubetest {
+				if kubetest_timeout, err = time.ParseDuration(timeout); err != nil {
+					return fmt.Errorf("jobs %s - invalid kubetest timeout : arg %s", jobName, arg)
+				}
+			} else {
+				if bootstrap_timeout, err = time.ParseDuration(timeout + "m"); err != nil {
+					return fmt.Errorf("jobs %s - invalid bootstrap timeout : arg %s", jobName, arg)
+				}
+			}
+		}
+
+		if arg == "--" {
+			kubetest = true
+		}
+	}
+
+	if bootstrap_timeout.Minutes()-kubetest_timeout.Minutes() < 20.0 {
+		return fmt.Errorf(
+			"jobs %s - kubetest timeout(%v), bootstrap timeout(%v): bootstrap timeout need to be 20min more than kubetest timeout!", jobName, kubetest_timeout, bootstrap_timeout)
 	}
 
 	return nil

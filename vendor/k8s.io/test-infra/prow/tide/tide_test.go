@@ -34,6 +34,7 @@ import (
 	"k8s.io/test-infra/prow/git/localgit"
 	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/kube"
+	"k8s.io/test-infra/prow/tide/history"
 )
 
 func testPullsMatchList(t *testing.T, test string, actual []PullRequest, expected []int) {
@@ -80,10 +81,16 @@ func TestAccumulateBatch(t *testing.T) {
 		},
 		{
 			name:       "batch pending",
-			presubmits: map[int]sets.String{1: jobSet, 2: jobSet},
+			presubmits: map[int]sets.String{1: sets.NewString("foo"), 2: sets.NewString("foo")},
 			pulls:      []pull{{1, "a"}, {2, "b"}},
 			prowJobs:   []prowjob{{job: "foo", state: kube.PendingState, prs: []pull{{1, "a"}}}},
 			pending:    true,
+		},
+		{
+			name:       "pending batch missing presubmits is ignored",
+			presubmits: map[int]sets.String{1: jobSet},
+			pulls:      []pull{{1, "a"}, {2, "b"}},
+			prowJobs:   []prowjob{{job: "foo", state: kube.PendingState, prs: []pull{{1, "a"}}}},
 		},
 		{
 			name:       "batch pending, successful previous run",
@@ -91,11 +98,14 @@ func TestAccumulateBatch(t *testing.T) {
 			pulls:      []pull{{1, "a"}, {2, "b"}},
 			prowJobs: []prowjob{
 				{job: "foo", state: kube.PendingState, prs: []pull{{1, "a"}}},
+				{job: "bar", state: kube.SuccessState, prs: []pull{{1, "a"}}},
+				{job: "baz", state: kube.SuccessState, prs: []pull{{1, "a"}}},
 				{job: "foo", state: kube.SuccessState, prs: []pull{{2, "b"}}},
 				{job: "bar", state: kube.SuccessState, prs: []pull{{2, "b"}}},
 				{job: "baz", state: kube.SuccessState, prs: []pull{{2, "b"}}},
 			},
 			pending: true,
+			merges:  []int{2},
 		},
 		{
 			name:       "successful run",
@@ -170,6 +180,19 @@ func TestAccumulateBatch(t *testing.T) {
 			name:    "no presubmits",
 			pulls:   []pull{{1, "a"}, {2, "b"}},
 			pending: false,
+		},
+		{
+			name:       "pending batch with PR that left pool, successful previous run",
+			presubmits: map[int]sets.String{2: jobSet},
+			pulls:      []pull{{2, "b"}},
+			prowJobs: []prowjob{
+				{job: "foo", state: kube.PendingState, prs: []pull{{1, "a"}}},
+				{job: "foo", state: kube.SuccessState, prs: []pull{{2, "b"}}},
+				{job: "bar", state: kube.SuccessState, prs: []pull{{2, "b"}}},
+				{job: "baz", state: kube.SuccessState, prs: []pull{{2, "b"}}},
+			},
+			pending: false,
+			merges:  []int{2},
 		},
 	}
 	for _, test := range tests {
@@ -937,7 +960,9 @@ func TestTakeAction(t *testing.T) {
 						Context:      "if-changed",
 						Trigger:      "/test if-changed",
 						RerunCommand: "/test if-changed",
-						RunIfChanged: "CHANGED",
+						RegexpChangeMatcher: config.RegexpChangeMatcher{
+							RunIfChanged: "CHANGED",
+						},
 					},
 				},
 			},
@@ -1052,6 +1077,7 @@ func TestServeHTTP(t *testing.T) {
 				Action:     Merge,
 			},
 		},
+		History: history.New(100),
 	}
 	s := httptest.NewServer(c)
 	defer s.Close()
@@ -1285,6 +1311,7 @@ func TestSync(t *testing.T) {
 				ghc:             fgc,
 				nextChangeCache: make(map[changeCacheKey][]string),
 			},
+			History: history.New(100),
 		}
 
 		if err := c.Sync(); err != nil {
@@ -1774,8 +1801,10 @@ func TestPresubmitsByPull(t *testing.T) {
 			name: "no matching presubmits",
 			presubmits: []config.Presubmit{
 				{
-					Context:      "always",
-					RunIfChanged: "foo",
+					Context: "always",
+					RegexpChangeMatcher: config.RegexpChangeMatcher{
+						RunIfChanged: "foo",
+					},
 				},
 				{
 					Context: "never",
@@ -1803,8 +1832,10 @@ func TestPresubmitsByPull(t *testing.T) {
 			name: "no matching presubmits (check cache retention)",
 			presubmits: []config.Presubmit{
 				{
-					Context:      "always",
-					RunIfChanged: "foo",
+					Context: "always",
+					RegexpChangeMatcher: config.RegexpChangeMatcher{
+						RunIfChanged: "foo",
+					},
 				},
 				{
 					Context: "never",
@@ -1867,8 +1898,10 @@ func TestPresubmitsByPull(t *testing.T) {
 			name: "run_if_changed (uncached)",
 			presubmits: []config.Presubmit{
 				{
-					Context:      "presubmit",
-					RunIfChanged: "^CHANGE.$",
+					Context: "presubmit",
+					RegexpChangeMatcher: config.RegexpChangeMatcher{
+						RunIfChanged: "^CHANGE.$",
+					},
 				},
 				{
 					Context:   "always",
@@ -1885,8 +1918,10 @@ func TestPresubmitsByPull(t *testing.T) {
 			name: "run_if_changed (cached)",
 			presubmits: []config.Presubmit{
 				{
-					Context:      "presubmit",
-					RunIfChanged: "^FIL.$",
+					Context: "presubmit",
+					RegexpChangeMatcher: config.RegexpChangeMatcher{
+						RunIfChanged: "^FIL.$",
+					},
 				},
 				{
 					Context:   "always",
@@ -1904,8 +1939,10 @@ func TestPresubmitsByPull(t *testing.T) {
 			name: "run_if_changed (cached) (skippable)",
 			presubmits: []config.Presubmit{
 				{
-					Context:      "presubmit",
-					RunIfChanged: "^CHANGE.$",
+					Context: "presubmit",
+					RegexpChangeMatcher: config.RegexpChangeMatcher{
+						RunIfChanged: "^CHANGE.$",
+					},
 				},
 				{
 					Context:   "always",

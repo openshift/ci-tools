@@ -254,20 +254,24 @@ func generatePresubmitForTest(name string, repoInfo *configFilePathElements, pod
 		logrus.WithField("name", jobName).Warn("Generated job name is longer than 63 characters. This may cause issues when Prow attempts to label resources with job name. Consider a shorter name.")
 	}
 
+	newTrue := true
+
 	return &prowconfig.Presubmit{
-		Agent:        "kubernetes",
+		JobBase: prowconfig.JobBase{
+			Agent:  "kubernetes",
+			Labels: labels,
+			Name:   jobName,
+			Spec:   podSpec,
+			UtilityConfig: prowconfig.UtilityConfig{
+				DecorationConfig: &prowkube.DecorationConfig{SkipCloning: &newTrue},
+				Decorate:         true,
+			},
+		},
 		AlwaysRun:    true,
-		Labels:       labels,
 		Brancher:     prowconfig.Brancher{Branches: []string{repoInfo.branch}},
 		Context:      fmt.Sprintf("ci/prow/%s", name),
-		Name:         jobName,
 		RerunCommand: fmt.Sprintf("/test %s", name),
-		Spec:         podSpec,
 		Trigger:      fmt.Sprintf(`((?m)^/test( all| %s),?(\s+|$))`, name),
-		UtilityConfig: prowconfig.UtilityConfig{
-			DecorationConfig: &prowkube.DecorationConfig{SkipCloning: true},
-			Decorate:         true,
-		},
 	}
 }
 
@@ -301,16 +305,20 @@ func generatePostsubmitForTest(
 		branch = makeBranchExplicit(branch)
 	}
 
+	newTrue := true
+
 	return &prowconfig.Postsubmit{
-		Agent:    "kubernetes",
-		Brancher: prowconfig.Brancher{Branches: []string{branch}},
-		Name:     jobName,
-		Spec:     podSpec,
-		Labels:   copiedLabels,
-		UtilityConfig: prowconfig.UtilityConfig{
-			DecorationConfig: &prowkube.DecorationConfig{SkipCloning: true},
-			Decorate:         true,
+		JobBase: prowconfig.JobBase{
+			Agent:  "kubernetes",
+			Name:   jobName,
+			Spec:   podSpec,
+			Labels: copiedLabels,
+			UtilityConfig: prowconfig.UtilityConfig{
+				DecorationConfig: &prowkube.DecorationConfig{SkipCloning: &newTrue},
+				Decorate:         true,
+			},
 		},
+		Brancher: prowconfig.Brancher{Branches: []string{branch}},
 	}
 }
 

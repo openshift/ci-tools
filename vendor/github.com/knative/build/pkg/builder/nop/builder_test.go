@@ -17,6 +17,8 @@ limitations under the License.
 package nop
 
 import (
+	"errors"
+
 	v1alpha1 "github.com/knative/build/pkg/apis/build/v1alpha1"
 	buildercommon "github.com/knative/build/pkg/builder"
 
@@ -34,22 +36,24 @@ func TestBasicFlow(t *testing.T) {
 		t.Fatalf("Unexpected error executing builder.Build: %v", err)
 	}
 
-	var bs v1alpha1.BuildStatus
-	if err := op.Checkpoint(&bs); err != nil {
+	build := &v1alpha1.Build{
+		Status: v1alpha1.BuildStatus{},
+	}
+	if err := op.Checkpoint(build, &build.Status); err != nil {
 		t.Fatalf("Unexpected error executing op.Checkpoint: %v", err)
 	}
-	if buildercommon.IsDone(&bs) {
-		t.Errorf("IsDone(%v); wanted not done, got done.", bs)
+	if buildercommon.IsDone(&build.Status) {
+		t.Errorf("IsDone(%v); wanted not done, got done.", build.Status)
 	}
-	op, err = builder.OperationFromStatus(&bs)
+	op, err = builder.OperationFromStatus(&build.Status)
 	if err != nil {
 		t.Fatalf("Unexpected error executing OperationFromStatus: %v", err)
 	}
-	if bs.StartTime.IsZero() {
-		t.Errorf("bs.StartTime; want non-zero, got %v", bs.StartTime)
+	if build.Status.StartTime.IsZero() {
+		t.Errorf("build.Status.StartTime; want non-zero, got %v", build.Status.StartTime)
 	}
-	if !bs.CompletionTime.IsZero() {
-		t.Errorf("bs.CompletionTime; want zero, got %v", bs.CompletionTime)
+	if !build.Status.CompletionTime.IsZero() {
+		t.Errorf("build.Status.CompletionTime; want zero, got %v", build.Status.CompletionTime)
 	}
 
 	status, err := op.Wait()
@@ -107,7 +111,7 @@ func TestOperationFromStatus(t *testing.T) {
 	builder := Builder{}
 	op, err := builder.OperationFromStatus(&v1alpha1.BuildStatus{
 		Google: &v1alpha1.GoogleSpec{
-			Operation: OperationName,
+			Operation: operationName,
 		},
 	})
 	if err != nil {
@@ -127,5 +131,22 @@ func TestOperationFromStatus(t *testing.T) {
 	}
 	if msg, failed := buildercommon.ErrorMessage(status); failed {
 		t.Errorf("ErrorMessage(%v); wanted not failed, got %q", status, msg)
+	}
+}
+
+func TestTerminate(t *testing.T) {
+	builder := Builder{
+		OpErr: errors.New("testerr"),
+	}
+	op, err := builder.OperationFromStatus(&v1alpha1.BuildStatus{
+		Google: &v1alpha1.GoogleSpec{
+			Operation: operationName,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Unexpected error waiting for builder.Operation: %v", err)
+	}
+	if op.Terminate() == nil {
+		t.Errorf("Expected error from operation.Terminate")
 	}
 }

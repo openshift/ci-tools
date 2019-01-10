@@ -244,14 +244,17 @@ func (r *Repo) CheckoutNewBranch(branch string) error {
 func (r *Repo) Merge(commitlike string) (bool, error) {
 	r.logger.Infof("Merging %s.", commitlike)
 	co := r.gitCommand("merge", "--no-ff", "--no-stat", "-m merge", commitlike)
-	if b, err := co.CombinedOutput(); err == nil {
+
+	b, err := co.CombinedOutput()
+	if err == nil {
 		return true, nil
-	} else {
-		r.logger.WithError(err).Warningf("Merge failed with output: %s", string(b))
 	}
+	r.logger.WithError(err).Warningf("Merge failed with output: %s", string(b))
+
 	if b, err := r.gitCommand("merge", "--abort").CombinedOutput(); err != nil {
 		return false, fmt.Errorf("error aborting merge for commitlike %s: %v. output: %s", commitlike, err, string(b))
 	}
+
 	return false, nil
 }
 
@@ -320,9 +323,9 @@ func retryCmd(l *logrus.Entry, dir, cmd string, arg ...string) ([]byte, error) {
 	var err error
 	sleepyTime := time.Second
 	for i := 0; i < 3; i++ {
-		cmd := exec.Command(cmd, arg...)
-		cmd.Dir = dir
-		b, err = cmd.CombinedOutput()
+		c := exec.Command(cmd, arg...)
+		c.Dir = dir
+		b, err = c.CombinedOutput()
 		if err != nil {
 			l.Warningf("Running %s %v returned error %v with output %s.", cmd, arg, err, string(b))
 			time.Sleep(sleepyTime)

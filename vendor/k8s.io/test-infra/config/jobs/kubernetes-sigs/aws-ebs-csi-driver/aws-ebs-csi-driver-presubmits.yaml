@@ -1,0 +1,54 @@
+presubmits:
+  kubernetes-sigs/aws-ebs-csi-driver:
+  - name: pull-aws-ebs-disk-csi-driver-verify
+    always_run: true
+    decorate: true
+    labels:
+      preset-service-account: "true"
+    spec:
+      containers:
+      - image: gcr.io/k8s-testimages/kubekins-e2e:v20181218-134e718ec-master
+        command:
+        - runner.sh
+        args:
+        - hack/verify-all.sh
+  - name: pull-aws-ebs-csi-driver-unit
+    always_run: true
+    decorate: true
+    labels:
+      preset-service-account: "true"
+    spec:
+      containers:
+      - image: gcr.io/k8s-testimages/kubekins-e2e:v20181218-134e718ec-master
+        command:
+        - runner.sh
+        args:
+        - make
+        - test
+  - name: pull-aws-ebs-csi-driver-sanity
+    always_run: true
+    decorate: true
+    labels:
+      preset-service-account: "true"
+    spec:
+      containers:
+      - image: gcr.io/k8s-testimages/kubekins-e2e:v20181218-134e718ec-master
+        command:
+        - runner.sh
+        args:
+        - make
+        - test-sanity
+  - name: pull-aws-ebs-csi-driver-integration
+    always_run: true
+    decorate: true
+    labels:
+      preset-service-account: "true"
+      preset-aws-ebs-csi-driver-common: "true"
+    spec:
+      containers:
+      - image: gcr.io/k8s-testimages/kubekins-e2e:v20181218-134e718ec-master
+        command:
+          - runner.sh
+        args:
+          - make
+          - test-integration

@@ -18,6 +18,7 @@ package profiler
 
 import (
 	"bytes"
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -28,7 +29,6 @@ import (
 	"time"
 
 	"cloud.google.com/go/profiler/proftest"
-	"golang.org/x/net/context"
 	"golang.org/x/oauth2/google"
 	compute "google.golang.org/api/compute/v1"
 )
@@ -41,10 +41,14 @@ var (
 const (
 	cloudScope        = "https://www.googleapis.com/auth/cloud-platform"
 	benchFinishString = "busybench finished profiling"
+	errorString       = "failed to set up or run the benchmark"
 )
 
 const startupTemplate = `
 #! /bin/bash
+
+# Signal any unexpected error.
+trap 'echo "{{.ErrorString}}"' ERR
 
 (
 # Shut down the VM in 5 minutes after this script exits
@@ -118,11 +122,13 @@ func (tc *goGCETestCase) initializeStartupScript(template *template.Template) er
 			Service        string
 			GoVersion      string
 			Commit         string
+			ErrorString    string
 			MutexProfiling bool
 		}{
 			Service:        tc.name,
 			GoVersion:      tc.goVersion,
 			Commit:         *commit,
+			ErrorString:    errorString,
 			MutexProfiling: tc.mutexProfiling,
 		})
 	if err != nil {
@@ -178,11 +184,23 @@ func TestAgentIntegration(t *testing.T) {
 			InstanceConfig: proftest.InstanceConfig{
 				ProjectID:   projectID,
 				Zone:        zone,
+				Name:        fmt.Sprintf("profiler-test-go111-%s", runID),
+				MachineType: "n1-standard-1",
+			},
+			name:             fmt.Sprintf("profiler-test-go111-%s-gce", runID),
+			wantProfileTypes: []string{"CPU", "HEAP", "THREADS", "CONTENTION", "HEAP_ALLOC"},
+			goVersion:        "1.11",
+			mutexProfiling:   true,
+		},
+		{
+			InstanceConfig: proftest.InstanceConfig{
+				ProjectID:   projectID,
+				Zone:        zone,
 				Name:        fmt.Sprintf("profiler-test-go110-%s", runID),
 				MachineType: "n1-standard-1",
 			},
 			name:             fmt.Sprintf("profiler-test-go110-%s-gce", runID),
-			wantProfileTypes: []string{"CPU", "HEAP", "THREADS", "CONTENTION"},
+			wantProfileTypes: []string{"CPU", "HEAP", "THREADS", "CONTENTION", "HEAP_ALLOC"},
 			goVersion:        "1.10",
 			mutexProfiling:   true,
 		},
@@ -194,7 +212,7 @@ func TestAgentIntegration(t *testing.T) {
 				MachineType: "n1-standard-1",
 			},
 			name:             fmt.Sprintf("profiler-test-go19-%s-gce", runID),
-			wantProfileTypes: []string{"CPU", "HEAP", "THREADS", "CONTENTION"},
+			wantProfileTypes: []string{"CPU", "HEAP", "THREADS", "CONTENTION", "HEAP_ALLOC"},
 			goVersion:        "1.9",
 			mutexProfiling:   true,
 		},
@@ -206,7 +224,7 @@ func TestAgentIntegration(t *testing.T) {
 				MachineType: "n1-standard-1",
 			},
 			name:             fmt.Sprintf("profiler-test-go18-%s-gce", runID),
-			wantProfileTypes: []string{"CPU", "HEAP", "THREADS", "CONTENTION"},
+			wantProfileTypes: []string{"CPU", "HEAP", "THREADS", "CONTENTION", "HEAP_ALLOC"},
 			goVersion:        "1.8",
 			mutexProfiling:   true,
 		},
@@ -218,7 +236,7 @@ func TestAgentIntegration(t *testing.T) {
 				MachineType: "n1-standard-1",
 			},
 			name:             fmt.Sprintf("profiler-test-go17-%s-gce", runID),
-			wantProfileTypes: []string{"CPU", "HEAP", "THREADS"},
+			wantProfileTypes: []string{"CPU", "HEAP", "THREADS", "HEAP_ALLOC"},
 			goVersion:        "1.7",
 		},
 		{
@@ -229,7 +247,7 @@ func TestAgentIntegration(t *testing.T) {
 				MachineType: "n1-standard-1",
 			},
 			name:             fmt.Sprintf("profiler-test-go16-%s-gce", runID),
-			wantProfileTypes: []string{"CPU", "HEAP", "THREADS"},
+			wantProfileTypes: []string{"CPU", "HEAP", "THREADS", "HEAP_ALLOC"},
 			goVersion:        "1.6",
 		},
 	}
@@ -254,7 +272,7 @@ func TestAgentIntegration(t *testing.T) {
 
 			timeoutCtx, cancel := context.WithTimeout(ctx, time.Minute*25)
 			defer cancel()
-			if err := gceTr.PollForSerialOutput(timeoutCtx, &tc.InstanceConfig, benchFinishString); err != nil {
+			if err := gceTr.PollForSerialOutput(timeoutCtx, &tc.InstanceConfig, benchFinishString, errorString); err != nil {
 				t.Fatalf("PollForSerialOutput() got error: %v", err)
 			}
 

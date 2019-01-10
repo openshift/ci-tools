@@ -17,13 +17,23 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"reflect"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/knative/pkg/apis"
+
 	"github.com/knative/build/pkg/buildtest"
+	"github.com/knative/pkg/apis/duck"
+	duckv1alpha1 "github.com/knative/pkg/apis/duck/v1alpha1"
 )
 
 const bazelYAML = "testdata/cloudbuilders/bazel/cloudbuild.yaml"
+
+func TestBuildImplementsConditions(t *testing.T) {
+	if err := duck.VerifyType(&Build{}, &duckv1alpha1.Conditions{}); err != nil {
+		t.Errorf("Expect Build to implement duck verify type: err %#v", err)
+	}
+}
 
 func TestParsing(t *testing.T) {
 	var bs BuildSpec
@@ -46,45 +56,60 @@ func TestParsing(t *testing.T) {
 }
 
 func TestBuildConditions(t *testing.T) {
-	rev := &Build{}
-	foo := &BuildCondition{
+	b := &Build{}
+	foo := &duckv1alpha1.Condition{
 		Type:   "Foo",
 		Status: "True",
 	}
-	bar := &BuildCondition{
+	bar := &duckv1alpha1.Condition{
 		Type:   "Bar",
 		Status: "True",
 	}
 
+	var ignoreVolatileTime = cmp.Comparer(func(_, _ apis.VolatileTime) bool {
+		return true
+	})
+
 	// Add a new condition.
-	rev.Status.SetCondition(foo)
+	b.Status.SetCondition(foo)
 
-	if len(rev.Status.Conditions) != 1 {
-		t.Fatalf("Unexpected Condition length; want 1, got %d", len(rev.Status.Conditions))
+	want := duckv1alpha1.Conditions([]duckv1alpha1.Condition{*foo})
+	if cmp.Diff(b.Status.GetConditions(), want, ignoreVolatileTime) != "" {
+		t.Errorf("Unexpected build condition type; want %v got %v", want, b.Status.GetConditions())
 	}
 
-	// Remove a non-existent condition.
-	rev.Status.RemoveCondition(bar.Type)
-
-	if len(rev.Status.Conditions) != 1 {
-		t.Fatalf("Unexpected Condition length; want 1, got %d", len(rev.Status.Conditions))
-	}
-
-	if got, want := rev.Status.GetCondition(foo.Type), foo; !reflect.DeepEqual(got, want) {
-		t.Errorf("GetCondition() = %v, want %v", got, want)
+	fooStatus := b.Status.GetCondition(foo.Type)
+	if cmp.Diff(fooStatus, foo, ignoreVolatileTime) != "" {
+		t.Errorf("Unexpected build condition type; want %v got %v", fooStatus, foo)
 	}
 
 	// Add a second condition.
-	rev.Status.SetCondition(bar)
+	b.Status.SetCondition(bar)
 
-	if len(rev.Status.Conditions) != 2 {
-		t.Fatalf("Unexpected Condition length; want 2, got %d", len(rev.Status.Conditions))
+	want = duckv1alpha1.Conditions([]duckv1alpha1.Condition{*bar, *foo})
+
+	if d := cmp.Diff(b.Status.GetConditions(), want, ignoreVolatileTime); d != "" {
+		t.Fatalf("Unexpected build condition type; want %v got %v; diff %s", want, b.Status.GetConditions(), d)
+	}
+}
+
+func TestBuildGeneration(t *testing.T) {
+	b := Build{}
+	if a := b.GetGeneration(); a != 0 {
+		t.Errorf("empty build generation should be 0 but got: %d", a)
 	}
 
-	// Remove an existing condition.
-	rev.Status.RemoveCondition(bar.Type)
+	b.SetGeneration(5)
+	if e, a := int64(5), b.GetGeneration(); e != a {
+		t.Errorf("getgeneration mismatch; expected: %d got: %d", e, a)
+	}
+}
 
-	if len(rev.Status.Conditions) != 1 {
-		t.Fatalf("Unexpected Condition length; want 1, got %d", len(rev.Status.Conditions))
+func TestBuildGroupVersionKind(t *testing.T) {
+	b := Build{}
+
+	expectedKind := "Build"
+	if b.GetGroupVersionKind().Kind != expectedKind {
+		t.Errorf("GetGroupVersionKind mismatch; expected: %v got: %v", expectedKind, b.GetGroupVersionKind().Kind)
 	}
 }

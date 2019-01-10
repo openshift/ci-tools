@@ -34,12 +34,14 @@ your component and put the config file there.
 
 ### Source code image target
 
-By default, ci-operator builds the `src` target image, expected by later targets
-to contain the source code of the component together with its build
-dependencies. Using [cloneref](https://github.com/kubernetes/test-infra/tree/master/prow/cmd/clonerefs)
+By default, ci-operator first builds a `src` target image that contains the source
+code of the component together with its build dependencies. The `src` image
+is used by later targets that perform binary builds, execute tests, etc.
+Using [cloneref](https://github.com/kubernetes/test-infra/tree/master/prow/cmd/clonerefs)
 , ci-operator fetches the refs to be tested from the component repository
 and injects the source code into the base image specified by the `build_root` key. 
-There are two ways to specify the base image.
+There are two ways to specify the base image:
+
 * From an image stream that should contain all build dependencies of the tested component, so the it will often be a `openshift/release:<tag>` image.
 ```yaml
 build_root:

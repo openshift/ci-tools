@@ -19,7 +19,6 @@ package prstatus
 import (
 	"context"
 	"encoding/gob"
-	"golang.org/x/oauth2"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -27,12 +26,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ghodss/yaml"
+	"golang.org/x/oauth2"
+
 	gogithub "github.com/google/go-github/github"
 	"github.com/gorilla/sessions"
 	"github.com/sirupsen/logrus"
+	"sigs.k8s.io/yaml"
 
-	"k8s.io/test-infra/ghclient"
+	"k8s.io/test-infra/pkg/ghclient"
 	"k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/github"
 )
@@ -46,7 +47,7 @@ func (mh *MockQueryHandler) QueryPullRequests(ctx context.Context, ghc githubCli
 	return mh.prs, nil
 }
 
-func (mh *MockQueryHandler) HeadContexts(ghc githubClient, pr PullRequest) ([]Context, error) {
+func (mh *MockQueryHandler) GetHeadContexts(ghc githubClient, pr PullRequest) ([]Context, error) {
 	return mh.contextMap[int(pr.Number)], nil
 }
 
@@ -119,6 +120,43 @@ func TestHandlePrStatusWithoutLogin(t *testing.T) {
 	}
 }
 
+func TestHandlePrStatusWithInvalidToken(t *testing.T) {
+	logrus.SetLevel(logrus.ErrorLevel)
+	repos := []string{"mock/repo", "kubernetes/test-infra", "foo/bar"}
+	mockCookieStore := sessions.NewCookieStore([]byte("secret-key"))
+	mockConfig := &config.GithubOAuthConfig{
+		CookieStore: mockCookieStore,
+	}
+	mockAgent := createMockAgent(repos, mockConfig)
+	mockQueryHandler := newMockQueryHandler([]PullRequest{}, map[int][]Context{})
+
+	rr := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/pr-data.js", nil)
+	request.AddCookie(&http.Cookie{Name: tokenSession, Value: "garbage"})
+	prHandler := mockAgent.HandlePrStatus(mockQueryHandler)
+	prHandler.ServeHTTP(rr, request)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("Bad status code: %d", rr.Code)
+	}
+	response := rr.Result()
+	defer response.Body.Close()
+
+	body, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		t.Fatalf("Error with reading response body: %v", err)
+	}
+
+	var dataReturned UserData
+	if err := yaml.Unmarshal(body, &dataReturned); err != nil {
+		t.Errorf("Error with unmarshaling response: %v", err)
+	}
+
+	expectedData := UserData{Login: false}
+	if !reflect.DeepEqual(dataReturned, expectedData) {
+		t.Fatalf("Invalid user data. Got %v, expected %v.", dataReturned, expectedData)
+	}
+}
+
 func TestHandlePrStatusWithLogin(t *testing.T) {
 	repos := []string{"mock/repo", "kubernetes/test-infra", "foo/bar"}
 	mockCookieStore := sessions.NewCookieStore([]byte("secret-key"))
@@ -184,7 +222,7 @@ func TestHandlePrStatusWithLogin(t *testing.T) {
 			},
 			expectedData: UserData{
 				Login: true,
-				PullRequestsWithContexts: []PullRequestWithContext{
+				PullRequestsWithContexts: []PullRequestWithContexts{
 					{
 						PullRequest: PullRequest{
 							Number: 0,
@@ -268,7 +306,7 @@ func TestHandlePrStatusWithLogin(t *testing.T) {
 	}
 }
 
-func TestHeadContexts(t *testing.T) {
+func TestGetHeadContexts(t *testing.T) {
 	repos := []string{"mock/repo", "kubernetes/test-infra", "foo/bar"}
 	mockCookieStore := sessions.NewCookieStore([]byte("secret-key"))
 	mockConfig := &config.GithubOAuthConfig{
@@ -327,7 +365,7 @@ func TestHeadContexts(t *testing.T) {
 	}
 	for id, testcase := range testCases {
 		t.Logf("Test %d:", id)
-		contexts, err := mockAgent.HeadContexts(&fgc{
+		contexts, err := mockAgent.GetHeadContexts(&fgc{
 			combinedStatus: testcase.combinedStatus,
 		}, testcase.pr)
 		if err != nil {

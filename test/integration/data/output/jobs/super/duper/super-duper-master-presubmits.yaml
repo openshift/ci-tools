@@ -6,9 +6,10 @@ presubmits:
     - master
     context: ci/prow/e2e
     decorate: true
+    decoration_config:
+      skip_cloning: true
     name: pull-ci-super-duper-master-e2e
     rerun_command: /test e2e
-    skip_cloning: true
     spec:
       containers:
       - args:
@@ -66,12 +67,13 @@ presubmits:
     - master
     context: ci/prow/images
     decorate: true
+    decoration_config:
+      skip_cloning: true
     max_concurrency: 100
     name: pull-ci-super-duper-master-images
     optional: true
     rerun_command: /test images
     run_if_changed: changes
-    skip_cloning: true
     skip_report: true
     spec:
       containers:
@@ -114,9 +116,10 @@ presubmits:
     - master
     context: ci/prow/lint
     decorate: true
+    decoration_config:
+      skip_cloning: true
     name: pull-ci-super-duper-master-lint
     rerun_command: /test lint
-    skip_cloning: true
     spec:
       containers:
       - args:
@@ -147,9 +150,10 @@ presubmits:
     - master
     context: ci/prow/unit
     decorate: true
+    decoration_config:
+      skip_cloning: true
     name: pull-ci-super-duper-master-unit
     rerun_command: /test unit
-    skip_cloning: true
     spec:
       containers:
       - args:

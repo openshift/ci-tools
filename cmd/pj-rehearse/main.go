@@ -227,7 +227,7 @@ func main() {
 
 	rehearsalConfigs := rehearse.NewCIOperatorConfigs(cmclient, getPrNumber(jobSpec), o.candidatePath, logger, o.dryRun)
 
-	changedPresubmits, err := diffs.GetChangedPresubmits(o.configPath, o.jobConfigPath, o.candidatePath)
+	changedPresubmits, err := diffs.GetChangedPresubmits(prowConfig, o.candidatePath)
 	if err != nil {
 		logger.WithError(err).Fatal("Failed to determine which jobs should be rehearsed")
 	}
@@ -237,6 +237,5 @@ func main() {
 	}
 }
 
-// TODO: Migrate GetChangedPresubmits to accept full config
 // TODO: Use shared version of loadClusterConfig
 // TODO: Extract job handling to a package

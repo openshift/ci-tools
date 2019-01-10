@@ -12,13 +12,8 @@ const configInRepoPath = "cluster/ci/config/prow/config.yaml"
 const jobConfigInRepoPath = "ci-operator/jobs"
 
 // GetChangedPresubmits returns a mapping of repo to presubmits to execute.
-func GetChangedPresubmits(masterConfigPath, masterJobConfigPath, candidateRepoPath string) (map[string][]prowconfig.Presubmit, error) {
+func GetChangedPresubmits(prowMasterConfig *prowconfig.Config, candidateRepoPath string) (map[string][]prowconfig.Presubmit, error) {
 	ret := make(map[string][]prowconfig.Presubmit)
-
-	prowMasterConfig, err := prowconfig.Load(masterConfigPath, masterJobConfigPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load master's Prow config: %v", err)
-	}
 
 	candidateConfigPath := filepath.Join(candidateRepoPath, configInRepoPath)
 	candidateJobConfigPath := filepath.Join(candidateRepoPath, jobConfigInRepoPath)

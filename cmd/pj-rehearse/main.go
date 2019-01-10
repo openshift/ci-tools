@@ -161,7 +161,7 @@ type options struct {
 	configPath    string
 	jobConfigPath string
 
-	ciopConfigsPath string
+	candidatePath string
 }
 
 func gatherOptions() options {
@@ -170,10 +170,10 @@ func gatherOptions() options {
 
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually submit rehearsal jobs to Prow")
 
-	fs.StringVar(&o.configPath, "config-path", "/etc/config/config.yaml", "Path to Prow config.yaml")
-	fs.StringVar(&o.jobConfigPath, "job-config-path", "", "Path to prow job configs.")
+	fs.StringVar(&o.configPath, "config-path", "/etc/config/config.yaml", "Path to *master* Prow config.yaml")
+	fs.StringVar(&o.jobConfigPath, "job-config-path", "", "Path to *master* Prow Prow job configs.")
 
-	fs.StringVar(&o.ciopConfigsPath, "ci-operator-configs", "", "Path to a directory containing ci-operator configs")
+	fs.StringVar(&o.candidatePath, "candidate-path", "./", "Path to a openshift/release working copy with a revision to be tested")
 
 	fs.Parse(os.Args[1:])
 	return o
@@ -225,9 +225,9 @@ func main() {
 	}
 	cmclient := cmcset.ConfigMaps(prowjobNamespace)
 
-	rehearsalConfigs := rehearse.NewCIOperatorConfigs(cmclient, getPrNumber(jobSpec), o.ciopConfigsPath, logger, o.dryRun)
+	rehearsalConfigs := rehearse.NewCIOperatorConfigs(cmclient, getPrNumber(jobSpec), o.candidatePath, logger, o.dryRun)
 
-	changedPresubmits, err := diffs.GetChangedPresubmits(o.configPath, o.jobConfigPath)
+	changedPresubmits, err := diffs.GetChangedPresubmits(o.configPath, o.jobConfigPath, o.candidatePath)
 	if err != nil {
 		logger.WithError(err).Fatal("Failed to determine which jobs should be rehearsed")
 	}
@@ -237,7 +237,6 @@ func main() {
 	}
 }
 
-// TODO: Validate o.ciopConfigsPath
 // TODO: Migrate GetChangedPresubmits to accept full config
 // TODO: Use shared version of loadClusterConfig
-// TODO: Extract job handling / rehearsal CM stuff to a package
+// TODO: Extract job handling to a package

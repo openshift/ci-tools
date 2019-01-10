@@ -23,7 +23,7 @@ var dryTrue = true
 var testNamespace = "test-namespace"
 var testRepo = "organization/project"
 var testPrNumber = 1234
-var testConfigDir = "ci-operator/configs"
+var testRepoPath = "/path/to/openshift/release"
 
 func createPresubmitWithEnv(env []v1.EnvVar) *prowconfig.Presubmit {
 	return &prowconfig.Presubmit{
@@ -70,9 +70,11 @@ func TestCreate(t *testing.T) {
 		expectedCM:      nil,
 		expectedError:   true,
 	}, {
-		description:     "reference to a good file",
-		neededConfigs:   map[string]string{"config-file": "good-file"},
-		fakeConfigFiles: map[string][]byte{"ci-operator/configs/good-file": []byte("good-file-content")},
+		description:   "reference to a good file",
+		neededConfigs: map[string]string{"config-file": "good-file"},
+		fakeConfigFiles: map[string][]byte{
+			"/path/to/openshift/release/ci-operator/config/good-file": []byte("good-file-content"),
+		},
 		expectedCM: &v1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "test-namespace",
@@ -88,8 +90,8 @@ func TestCreate(t *testing.T) {
 			"second-file": "sf-path",
 		},
 		fakeConfigFiles: map[string][]byte{
-			"ci-operator/configs/ff-path": []byte("first-file-content"),
-			"ci-operator/configs/sf-path": []byte("second-file-content"),
+			"/path/to/openshift/release/ci-operator/config/ff-path": []byte("first-file-content"),
+			"/path/to/openshift/release/ci-operator/config/sf-path": []byte("second-file-content"),
 		},
 		expectedCM: &v1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
@@ -108,7 +110,7 @@ func TestCreate(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
 			fakeclient := fake.NewSimpleClientset().CoreV1().ConfigMaps(testNamespace)
-			configs := NewCIOperatorConfigs(fakeclient, testPrNumber, testConfigDir, testLogger, dryFalse).(*ciOperatorConfigs)
+			configs := NewCIOperatorConfigs(fakeclient, testPrNumber, testRepoPath, testLogger, dryFalse).(*ciOperatorConfigs)
 			configs.reader = &FakeConfigFilesReader{files: tc.fakeConfigFiles}
 			configs.neededConfigs = tc.neededConfigs
 
@@ -186,7 +188,7 @@ func TestFixupJob(t *testing.T) {
 			sourceJob := createPresubmitWithEnv(tc.sourceEnv)
 			expectedJob := createPresubmitWithEnv(tc.expectedEnv)
 
-			configs := NewCIOperatorConfigs(fakeclient, testPrNumber, testConfigDir, testLogger, dryTrue).(*ciOperatorConfigs)
+			configs := NewCIOperatorConfigs(fakeclient, testPrNumber, testRepoPath, testLogger, dryTrue).(*ciOperatorConfigs)
 			configs.FixupJob(sourceJob, testRepo)
 			if !equality.Semantic.DeepEqual(sourceJob, expectedJob) {
 				t.Errorf("Fixed up presubmit differs from expected:\n%s", diff.ObjectDiff(expectedJob, sourceJob))

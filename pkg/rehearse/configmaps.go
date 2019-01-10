@@ -55,13 +55,16 @@ type ciOperatorConfigs struct {
 	neededConfigs map[string]string
 }
 
-func NewCIOperatorConfigs(cmclient corev1.ConfigMapInterface, prNumber int, configDir string, logger logrus.FieldLogger, dry bool) CIOperatorConfigs {
+const ciopConfigsInRepo = "ci-operator/config"
+
+// NewCIOperatorConfigs creates a new CIOperatorConfigs instance
+func NewCIOperatorConfigs(cmclient corev1.ConfigMapInterface, prNumber int, repoDir string, logger logrus.FieldLogger, dry bool) CIOperatorConfigs {
 	name := fmt.Sprintf("rehearsal-ci-operator-configs-%d", prNumber)
 	return &ciOperatorConfigs{
 		reader:        &fileReader{},
 		cmclient:      cmclient,
 		prNumber:      prNumber,
-		configDir:     configDir,
+		configDir:     filepath.Join(repoDir, ciopConfigsInRepo),
 		logger:        logger.WithField("ciop-configs-cm", name),
 		dry:           dry,
 		configMapName: name,

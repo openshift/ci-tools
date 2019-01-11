@@ -9,10 +9,10 @@ required = [
 	"k8s.io/test-infra/prow/client/clientset/versioned",
 	"k8s.io/test-infra/prow/client/clientset/versioned/typed/prowjobs/v1",
 	"k8s.io/test-infra/prow/pod-utils/downwardapi",
-
 	"k8s.io/test-infra/prow/kube",
 	"k8s.io/test-infra/prow/config",
 	"k8s.io/test-infra/prow/pjutil",
+	"k8s.io/test-infra/prow/github",
 
 	"k8s.io/client-go/tools/clientcmd",
 	"k8s.io/client-go/kubernetes/typed/core/v1",

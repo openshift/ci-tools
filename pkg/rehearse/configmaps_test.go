@@ -55,7 +55,6 @@ func (f *FakeConfigFilesReader) Read(path string) (string, error) {
 
 func TestCreate(t *testing.T) {
 	testLogger := logrus.New()
-	testLogger.SetOutput(ioutil.Discard)
 
 	testCases := []struct {
 		description     string

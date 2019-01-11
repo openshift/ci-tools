@@ -7,7 +7,9 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
+	prowgithub "k8s.io/test-infra/prow/github"
 	pjdwapi "k8s.io/test-infra/prow/pod-utils/downwardapi"
 
 	"k8s.io/client-go/rest"
@@ -83,10 +85,10 @@ func main() {
 		logrus.WithError(err).Fatal("could not read JOB_SPEC")
 	}
 
-	prFields := logrus.Fields{"org": jobSpec.Refs.Org, "repo": jobSpec.Refs.Repo}
+	prFields := logrus.Fields{prowgithub.OrgLogField: jobSpec.Refs.Org, prowgithub.RepoLogField: jobSpec.Refs.Repo}
 	logger := logrus.WithFields(prFields)
 
-	if jobSpec.Type != "presubmit" {
+	if jobSpec.Type != v1.PresubmitJob {
 		logger.Info("Not able to rehearse jobs when not run in the context of a presubmit job")
 		// Exiting successfuly will make pj-rehearsal job not fail when run as a
 		// in a batch job. Such failures would be confusing and unactionable
@@ -94,7 +96,7 @@ func main() {
 	}
 
 	prNumber := jobSpec.Refs.Pulls[0].Number
-	logger = logrus.WithField("PR", prNumber)
+	logger = logrus.WithField(prowgithub.PrLogField, prNumber)
 
 	logger.Info("Rehearsing Prow jobs for a configuration PR")
 

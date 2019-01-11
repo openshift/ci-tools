@@ -24,6 +24,7 @@ type prowJobClientWithDry struct {
 	dry bool
 }
 
+// NewProwJobClient creates a ProwJob client with a dry run capability
 func NewProwJobClient(clusterConfig *rest.Config, namespace string, dry bool) (pj.ProwJobInterface, error) {
 	pjcset, err := pjclientset.NewForConfig(clusterConfig)
 	if err != nil {
@@ -92,6 +93,11 @@ func submitRehearsal(job *prowconfig.Presubmit, refs *pjapi.Refs, logger logrus.
 	return pjclient.Create(&pj)
 }
 
+// ExecuteJobs takes configs for a set of jobs which should be "rehearsed", and
+// creates the ProwJobs that perform the actual rehearsal. *Rehearsal* means
+// a "trial" execution of a Prow job configuration when the *job config* config
+// is changed, giving feedback to Prow config authors on how the changes of the
+// config would affect the "production" Prow jobs run on the actual target repos
 func ExecuteJobs(toBeRehearsed map[string][]prowconfig.Presubmit, prNumber int, refs *pjapi.Refs, logger logrus.FieldLogger, rehearsalConfigs CIOperatorConfigs, pjclient pj.ProwJobInterface) error {
 	rehearsals := []*prowconfig.Presubmit{}
 
@@ -116,7 +122,7 @@ func ExecuteJobs(toBeRehearsed map[string][]prowconfig.Presubmit, prNumber int, 
 		for _, job := range rehearsals {
 			created, err := submitRehearsal(job, refs, logger, pjclient)
 			if err != nil {
-				logger.WithError(err).Warn("Failed to execute a rehearsal presubmit presubmit")
+				logger.WithError(err).Warn("Failed to execute a rehearsal presubmit")
 			} else {
 				logger.WithFields(pjutil.ProwJobFields(created)).Info("Submitted rehearsal prowjob")
 			}

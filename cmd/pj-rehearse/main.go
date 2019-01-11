@@ -34,10 +34,6 @@ func getJobSpec() (*pjapi.ProwJobSpec, error) {
 		return nil, err
 	}
 
-	if len(spec.Refs.Pulls) > 1 {
-		return nil, fmt.Errorf("Cannot rehearse in the context of a batch job")
-	}
-
 	return &spec, nil
 }
 
@@ -109,6 +105,14 @@ func main() {
 
 	prFields := logrus.Fields{"org": jobSpec.Refs.Org, "repo": jobSpec.Refs.Repo, "PR": getPrNumber(jobSpec)}
 	logger := logrus.WithFields(prFields)
+
+	if jobSpec.Type != "presubmit" {
+		logger.Info("Not able to rehearse jobs when not run in the context of a presubmit job")
+		// Exiting successfuly will make pj-rehearsal job not fail when run as a
+		// in a batch job. Such failures would be confusing and unactionable
+		os.Exit(0)
+	}
+
 	logger.Info("Rehearsing Prow jobs for a configuration PR")
 
 	prowConfig, err := prowconfig.Load(o.configPath, o.jobConfigPath)

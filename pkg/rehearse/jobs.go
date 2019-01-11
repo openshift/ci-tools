@@ -48,13 +48,13 @@ func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber 
 	return &rehearsal, nil
 }
 
-func submitRehearsal(job *prowconfig.Presubmit, jobSpec *pjapi.ProwJobSpec, logger logrus.FieldLogger, pjclient pj.ProwJobInterface, dry bool) (*pjapi.ProwJob, error) {
+func submitRehearsal(job *prowconfig.Presubmit, refs *pjapi.Refs, logger logrus.FieldLogger, pjclient pj.ProwJobInterface, dry bool) (*pjapi.ProwJob, error) {
 	labels := make(map[string]string)
 	for k, v := range job.Labels {
 		labels[k] = v
 	}
 
-	pj := pjutil.NewProwJob(pjutil.PresubmitSpec(*job, *(jobSpec.Refs)), labels)
+	pj := pjutil.NewProwJob(pjutil.PresubmitSpec(*job, *refs), labels)
 	logger.WithFields(pjutil.ProwJobFields(&pj)).Info("Submitting a new prowjob.")
 
 	if dry {
@@ -69,13 +69,13 @@ func submitRehearsal(job *prowconfig.Presubmit, jobSpec *pjapi.ProwJobSpec, logg
 	return pjclient.Create(&pj)
 }
 
-func ExecuteJobs(toBeRehearsed map[string][]prowconfig.Presubmit, jobSpec *pjapi.ProwJobSpec, logger logrus.FieldLogger, rehearsalConfigs CIOperatorConfigs, pjclient pj.ProwJobInterface, dry bool) error {
+func ExecuteJobs(toBeRehearsed map[string][]prowconfig.Presubmit, prNumber int, refs *pjapi.Refs, logger logrus.FieldLogger, rehearsalConfigs CIOperatorConfigs, pjclient pj.ProwJobInterface, dry bool) error {
 	rehearsals := []*prowconfig.Presubmit{}
 
 	for repo, jobs := range toBeRehearsed {
 		for _, job := range jobs {
 			jobLogger := logger.WithFields(logrus.Fields{"target-repo": repo, "target-job": job.Name})
-			rehearsal, err := makeRehearsalPresubmit(&job, repo, jobSpec.Refs.Pulls[0].Number)
+			rehearsal, err := makeRehearsalPresubmit(&job, repo, prNumber)
 			if err != nil {
 				jobLogger.WithError(err).Warn("Failed to make a rehearsal presubmit")
 			} else {
@@ -91,7 +91,7 @@ func ExecuteJobs(toBeRehearsed map[string][]prowconfig.Presubmit, jobSpec *pjapi
 			return fmt.Errorf("failed to prepare rehearsal ci-operator config ConfigMap: %v", err)
 		}
 		for _, job := range rehearsals {
-			created, err := submitRehearsal(job, jobSpec, logger, pjclient, dry)
+			created, err := submitRehearsal(job, refs, logger, pjclient, dry)
 			if err != nil {
 				logger.WithError(err).Warn("Failed to execute a rehearsal presubmit presubmit")
 			} else {

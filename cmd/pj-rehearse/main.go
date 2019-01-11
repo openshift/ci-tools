@@ -1,16 +1,15 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
 
 	"github.com/sirupsen/logrus"
 
-	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	pjclientset "k8s.io/test-infra/prow/client/clientset/versioned"
 	prowconfig "k8s.io/test-infra/prow/config"
+	pjdwapi "k8s.io/test-infra/prow/pod-utils/downwardapi"
 
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
@@ -19,23 +18,6 @@ import (
 	"github.com/openshift/ci-operator-prowgen/pkg/diffs"
 	"github.com/openshift/ci-operator-prowgen/pkg/rehearse"
 )
-
-func getPrNumber(jobSpec *pjapi.ProwJobSpec) int {
-	return jobSpec.Refs.Pulls[0].Number
-}
-
-func getJobSpec() (*pjapi.ProwJobSpec, error) {
-	specEnv := []byte(os.Getenv("JOB_SPEC"))
-	if len(specEnv) == 0 {
-		return nil, fmt.Errorf("JOB_SPEC not set or set to an empty string")
-	}
-	spec := pjapi.ProwJobSpec{}
-	if err := json.Unmarshal(specEnv, &spec); err != nil {
-		return nil, err
-	}
-
-	return &spec, nil
-}
 
 func loadClusterConfig() (*rest.Config, error) {
 	clusterConfig, err := rest.InClusterConfig()
@@ -98,12 +80,12 @@ func main() {
 		logrus.WithError(err).Fatal("invalid options")
 	}
 
-	jobSpec, err := getJobSpec()
+	jobSpec, err := pjdwapi.ResolveSpecFromEnv()
 	if err != nil {
 		logrus.WithError(err).Fatal("could not read JOB_SPEC")
 	}
 
-	prFields := logrus.Fields{"org": jobSpec.Refs.Org, "repo": jobSpec.Refs.Repo, "PR": getPrNumber(jobSpec)}
+	prFields := logrus.Fields{"org": jobSpec.Refs.Org, "repo": jobSpec.Refs.Repo}
 	logger := logrus.WithFields(prFields)
 
 	if jobSpec.Type != "presubmit" {
@@ -112,6 +94,9 @@ func main() {
 		// in a batch job. Such failures would be confusing and unactionable
 		os.Exit(0)
 	}
+
+	prNumber := jobSpec.Refs.Pulls[0].Number
+	logger = logrus.WithField("PR", prNumber)
 
 	logger.Info("Rehearsing Prow jobs for a configuration PR")
 
@@ -138,14 +123,14 @@ func main() {
 	}
 	cmclient := cmcset.ConfigMaps(prowjobNamespace)
 
-	rehearsalConfigs := rehearse.NewCIOperatorConfigs(cmclient, getPrNumber(jobSpec), o.candidatePath, logger, o.dryRun)
+	rehearsalConfigs := rehearse.NewCIOperatorConfigs(cmclient, prNumber, o.candidatePath, logger, o.dryRun)
 
 	changedPresubmits, err := diffs.GetChangedPresubmits(prowConfig, o.candidatePath)
 	if err != nil {
 		logger.WithError(err).Fatal("Failed to determine which jobs should be rehearsed")
 	}
 
-	if err := rehearse.ExecuteJobs(changedPresubmits, jobSpec, logger, rehearsalConfigs, pjclient, o.dryRun); err != nil {
+	if err := rehearse.ExecuteJobs(changedPresubmits, prNumber, jobSpec.Refs, logger, rehearsalConfigs, pjclient, o.dryRun); err != nil {
 		logger.WithError(err).Fatal("Failed to execute rehearsal jobs")
 	}
 }

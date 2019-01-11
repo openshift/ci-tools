@@ -110,7 +110,7 @@ func TestCreate(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
 			fakeclient := fake.NewSimpleClientset().CoreV1().ConfigMaps(testNamespace)
-			configs := NewCIOperatorConfigs(fakeclient, testPrNumber, testRepoPath, testLogger, dryFalse).(*ciOperatorConfigs)
+			configs := NewCIOperatorConfigs(fakeclient, testPrNumber, testRepoPath, testLogger).(*ciOperatorConfigs)
 			configs.reader = &FakeConfigFilesReader{files: tc.fakeConfigFiles}
 			configs.neededConfigs = tc.neededConfigs
 
@@ -188,7 +188,7 @@ func TestFixupJob(t *testing.T) {
 			sourceJob := createPresubmitWithEnv(tc.sourceEnv)
 			expectedJob := createPresubmitWithEnv(tc.expectedEnv)
 
-			configs := NewCIOperatorConfigs(fakeclient, testPrNumber, testRepoPath, testLogger, dryTrue).(*ciOperatorConfigs)
+			configs := NewCIOperatorConfigs(fakeclient, testPrNumber, testRepoPath, testLogger).(*ciOperatorConfigs)
 			configs.FixupJob(sourceJob, testRepo)
 			if !equality.Semantic.DeepEqual(sourceJob, expectedJob) {
 				t.Errorf("Fixed up presubmit differs from expected:\n%s", diff.ObjectDiff(expectedJob, sourceJob))

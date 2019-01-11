@@ -7,11 +7,9 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	pjclientset "k8s.io/test-infra/prow/client/clientset/versioned"
 	prowconfig "k8s.io/test-infra/prow/config"
 	pjdwapi "k8s.io/test-infra/prow/pod-utils/downwardapi"
 
-	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
@@ -111,26 +109,24 @@ func main() {
 		logger.WithError(err).Fatal("could not load cluster clusterConfig")
 	}
 
-	pjcset, err := pjclientset.NewForConfig(clusterConfig)
+	pjclient, err := rehearse.NewProwJobClient(clusterConfig, prowjobNamespace, o.dryRun)
 	if err != nil {
-		logger.WithError(err).Fatal("could not create a ProwJob clientset")
+		logger.WithError(err).Fatal("could not create a ProwJob client")
 	}
-	pjclient := pjcset.ProwV1().ProwJobs(prowjobNamespace)
 
-	cmcset, err := corev1.NewForConfig(clusterConfig)
+	cmclient, err := rehearse.NewConfigMapClient(clusterConfig, prowjobNamespace, o.dryRun)
 	if err != nil {
-		logger.WithError(err).Fatal("could not create a Core clientset")
+		logger.WithError(err).Fatal("could not create a ConfigMap client")
 	}
-	cmclient := cmcset.ConfigMaps(prowjobNamespace)
 
-	rehearsalConfigs := rehearse.NewCIOperatorConfigs(cmclient, prNumber, o.candidatePath, logger, o.dryRun)
+	rehearsalConfigs := rehearse.NewCIOperatorConfigs(cmclient, prNumber, o.candidatePath, logger)
 
 	changedPresubmits, err := diffs.GetChangedPresubmits(prowConfig, o.candidatePath)
 	if err != nil {
 		logger.WithError(err).Fatal("Failed to determine which jobs should be rehearsed")
 	}
 
-	if err := rehearse.ExecuteJobs(changedPresubmits, prNumber, jobSpec.Refs, logger, rehearsalConfigs, pjclient, o.dryRun); err != nil {
+	if err := rehearse.ExecuteJobs(changedPresubmits, prNumber, jobSpec.Refs, logger, rehearsalConfigs, pjclient); err != nil {
 		logger.WithError(err).Fatal("Failed to execute rehearsal jobs")
 	}
 }

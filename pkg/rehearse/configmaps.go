@@ -9,6 +9,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/rest"
 	prowconfig "k8s.io/test-infra/prow/config"
 
 	v1 "k8s.io/api/core/v1"
@@ -57,8 +58,37 @@ type ciOperatorConfigs struct {
 
 const ciopConfigsInRepo = "ci-operator/config"
 
+type configMapClientWithDry struct {
+	corev1.ConfigMapInterface
+
+	dry bool
+}
+
+func (c *configMapClientWithDry) Create(cm *v1.ConfigMap) (*v1.ConfigMap, error) {
+	if c.dry {
+		cmAsYAML, err := yaml.Marshal(cm)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to marshal ConfigMap to YAML: %v", err)
+		}
+		fmt.Printf("%s\n", cmAsYAML)
+		return cm, nil
+	}
+
+	return c.ConfigMapInterface.Create(cm)
+}
+
+func NewConfigMapClient(clusterConfig *rest.Config, namespace string, dry bool) (corev1.ConfigMapInterface, error) {
+	cmcset, err := corev1.NewForConfig(clusterConfig)
+	if err != nil {
+		return nil, err
+	}
+	cmclient := cmcset.ConfigMaps(namespace)
+
+	return &configMapClientWithDry{cmclient, dry}, nil
+}
+
 // NewCIOperatorConfigs creates a new CIOperatorConfigs instance
-func NewCIOperatorConfigs(cmclient corev1.ConfigMapInterface, prNumber int, repoDir string, logger logrus.FieldLogger, dry bool) CIOperatorConfigs {
+func NewCIOperatorConfigs(cmclient corev1.ConfigMapInterface, prNumber int, repoDir string, logger logrus.FieldLogger) CIOperatorConfigs {
 	name := fmt.Sprintf("rehearsal-ci-operator-configs-%d", prNumber)
 	return &ciOperatorConfigs{
 		reader:        &fileReader{},
@@ -66,7 +96,6 @@ func NewCIOperatorConfigs(cmclient corev1.ConfigMapInterface, prNumber int, repo
 		prNumber:      prNumber,
 		configDir:     filepath.Join(repoDir, ciopConfigsInRepo),
 		logger:        logger.WithField("ciop-configs-cm", name),
-		dry:           dry,
 		configMapName: name,
 		neededConfigs: map[string]string{},
 	}
@@ -115,15 +144,6 @@ func (c *ciOperatorConfigs) Create() error {
 		if err != nil {
 			return fmt.Errorf("failed to read ci-operator config file from %s: %v", fullPath, err)
 		}
-	}
-
-	if c.dry {
-		cmAsYAML, err := yaml.Marshal(cm)
-		if err != nil {
-			return fmt.Errorf("Failed to marshal ConfigMap to YAML: %v", err)
-		}
-		fmt.Printf("%s\n", cmAsYAML)
-		return nil
 	}
 
 	c.logger.Info("Creating rehearsal ConfigMap for ci-operator configs")

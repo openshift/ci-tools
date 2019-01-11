@@ -9,11 +9,43 @@ import (
 	"github.com/sirupsen/logrus"
 
 	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
+	pjclientset "k8s.io/test-infra/prow/client/clientset/versioned"
 	pj "k8s.io/test-infra/prow/client/clientset/versioned/typed/prowjobs/v1"
 
 	prowconfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/pjutil"
+
+	"k8s.io/client-go/rest"
 )
+
+type prowJobClientWithDry struct {
+	pj.ProwJobInterface
+
+	dry bool
+}
+
+func NewProwJobClient(clusterConfig *rest.Config, namespace string, dry bool) (pj.ProwJobInterface, error) {
+	pjcset, err := pjclientset.NewForConfig(clusterConfig)
+	if err != nil {
+		return nil, err
+	}
+	pjclient := pjcset.ProwV1().ProwJobs(namespace)
+
+	return &prowJobClientWithDry{pjclient, dry}, nil
+}
+
+func (c *prowJobClientWithDry) Create(pj *pjapi.ProwJob) (*pjapi.ProwJob, error) {
+	if c.dry {
+		jobAsYAML, err := yaml.Marshal(pj)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to marshal job to YAML: %v", err)
+		}
+		fmt.Printf("%s\n", jobAsYAML)
+		return pj, nil
+	}
+
+	return c.ProwJobInterface.Create(pj)
+}
 
 func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber int) (*prowconfig.Presubmit, error) {
 	var rehearsal prowconfig.Presubmit
@@ -48,7 +80,7 @@ func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber 
 	return &rehearsal, nil
 }
 
-func submitRehearsal(job *prowconfig.Presubmit, refs *pjapi.Refs, logger logrus.FieldLogger, pjclient pj.ProwJobInterface, dry bool) (*pjapi.ProwJob, error) {
+func submitRehearsal(job *prowconfig.Presubmit, refs *pjapi.Refs, logger logrus.FieldLogger, pjclient pj.ProwJobInterface) (*pjapi.ProwJob, error) {
 	labels := make(map[string]string)
 	for k, v := range job.Labels {
 		labels[k] = v
@@ -57,19 +89,10 @@ func submitRehearsal(job *prowconfig.Presubmit, refs *pjapi.Refs, logger logrus.
 	pj := pjutil.NewProwJob(pjutil.PresubmitSpec(*job, *refs), labels)
 	logger.WithFields(pjutil.ProwJobFields(&pj)).Info("Submitting a new prowjob.")
 
-	if dry {
-		jobAsYAML, err := yaml.Marshal(pj)
-		if err != nil {
-			return nil, fmt.Errorf("Failed to marshal job to YAML: %v", err)
-		}
-		fmt.Printf("%s\n", jobAsYAML)
-		return &pj, nil
-	}
-
 	return pjclient.Create(&pj)
 }
 
-func ExecuteJobs(toBeRehearsed map[string][]prowconfig.Presubmit, prNumber int, refs *pjapi.Refs, logger logrus.FieldLogger, rehearsalConfigs CIOperatorConfigs, pjclient pj.ProwJobInterface, dry bool) error {
+func ExecuteJobs(toBeRehearsed map[string][]prowconfig.Presubmit, prNumber int, refs *pjapi.Refs, logger logrus.FieldLogger, rehearsalConfigs CIOperatorConfigs, pjclient pj.ProwJobInterface) error {
 	rehearsals := []*prowconfig.Presubmit{}
 
 	for repo, jobs := range toBeRehearsed {
@@ -91,7 +114,7 @@ func ExecuteJobs(toBeRehearsed map[string][]prowconfig.Presubmit, prNumber int, 
 			return fmt.Errorf("failed to prepare rehearsal ci-operator config ConfigMap: %v", err)
 		}
 		for _, job := range rehearsals {
-			created, err := submitRehearsal(job, refs, logger, pjclient, dry)
+			created, err := submitRehearsal(job, refs, logger, pjclient)
 			if err != nil {
 				logger.WithError(err).Warn("Failed to execute a rehearsal presubmit presubmit")
 			} else {

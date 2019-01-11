@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/getlantern/deepcopy"
@@ -18,6 +19,10 @@ import (
 	"k8s.io/test-infra/prow/pjutil"
 
 	"k8s.io/client-go/rest"
+)
+
+const (
+	rehearseLabel = "ci.openshift.org/rehearse"
 )
 
 type prowJobClientWithDry struct {
@@ -56,6 +61,10 @@ func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber 
 
 	rehearsal.Name = fmt.Sprintf("rehearse-%d-%s", prNumber, source.Name)
 	rehearsal.Context = fmt.Sprintf("ci/rehearse/%s/%s", repo, strings.TrimPrefix(source.Context, "ci/prow/"))
+	if rehearsal.Labels == nil {
+		rehearsal.Labels = make(map[string]string, 1)
+	}
+	rehearsal.Labels[rehearseLabel] = strconv.Itoa(prNumber)
 
 	if len(source.Spec.Containers) != 1 {
 		return nil, fmt.Errorf("cannot rehearse jobs with more than 1 container in Spec")

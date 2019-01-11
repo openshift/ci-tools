@@ -128,7 +128,8 @@ func TestInlineCiopConfig(t *testing.T) {
 func makeTestingPresubmit(name, context string, ciopArgs []string) *prowconfig.Presubmit {
 	return &prowconfig.Presubmit{
 		JobBase: prowconfig.JobBase{
-			Name: name,
+			Name:   name,
+			Labels: map[string]string{rehearseLabel: "123"},
 			Spec: &v1.PodSpec{
 				Containers: []v1.Container{{
 					Command: []string{"ci-operator"},
@@ -228,6 +229,7 @@ func makeTestingProwJob(name, namespace, jobName, context string, refs *pjapi.Re
 				"prow.k8s.io/refs.repo": refs.Repo,
 				"prow.k8s.io/type":      "presubmit",
 				"prow.k8s.io/refs.pull": strconv.Itoa(refs.Pulls[0].Number),
+				rehearseLabel:           strconv.Itoa(refs.Pulls[0].Number),
 			},
 			Annotations: map[string]string{"prow.k8s.io/job": jobName},
 		},

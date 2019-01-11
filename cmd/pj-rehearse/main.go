@@ -77,7 +77,7 @@ func gatherOptions() options {
 	fs.StringVar(&o.configPath, "config-path", "/etc/config/config.yaml", "Path to *master* Prow config.yaml")
 	fs.StringVar(&o.jobConfigPath, "job-config-path", "", "Path to *master* Prow Prow job configs.")
 
-	fs.StringVar(&o.candidatePath, "candidate-path", "./", "Path to a openshift/release working copy with a revision to be tested")
+	fs.StringVar(&o.candidatePath, "candidate-path", "", "Path to a openshift/release working copy with a revision to be tested")
 
 	fs.Parse(os.Args[1:])
 	return o
@@ -85,8 +85,13 @@ func gatherOptions() options {
 
 func validateOptions(o options) error {
 	if len(o.jobConfigPath) == 0 {
-		return fmt.Errorf("empty --job-config-path")
+		return fmt.Errorf("--job-config-path was not provided")
 	}
+
+	if len(o.candidatePath) == 0 {
+		return fmt.Errorf("--candidate-path was not provided")
+	}
+
 	return nil
 }
 

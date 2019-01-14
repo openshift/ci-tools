@@ -116,19 +116,12 @@ func main() {
 		logger.WithError(err).Fatal("could not create a ProwJob client")
 	}
 
-	cmclient, err := rehearse.NewConfigMapClient(clusterConfig, prowjobNamespace, o.dryRun)
-	if err != nil {
-		logger.WithError(err).Fatal("could not create a ConfigMap client")
-	}
-
-	rehearsalConfigs := rehearse.NewCIOperatorConfigs(cmclient, prNumber, o.candidatePath, logger)
-
 	changedPresubmits, err := diffs.GetChangedPresubmits(prowConfig, o.candidatePath)
 	if err != nil {
 		logger.WithError(err).Fatal("Failed to determine which jobs should be rehearsed")
 	}
 
-	if err := rehearse.ExecuteJobs(changedPresubmits, prNumber, jobSpec.Refs, logger, rehearsalConfigs, pjclient); err != nil {
+	if err := rehearse.ExecuteJobs(changedPresubmits, prNumber, o.candidatePath, jobSpec.Refs, logger, pjclient); err != nil {
 		logger.WithError(err).Fatal("Failed to execute rehearsal jobs")
 	}
 }

@@ -2,6 +2,8 @@ package rehearse
 
 import (
 	"fmt"
+	"io/ioutil"
+	"path/filepath"
 	"strings"
 
 	"github.com/getlantern/deepcopy"
@@ -17,6 +19,8 @@ import (
 
 	"k8s.io/client-go/rest"
 )
+
+const LogRehearsalJob = "rehearsal-job"
 
 type prowJobClientWithDry struct {
 	pj.ProwJobInterface
@@ -98,7 +102,7 @@ func submitRehearsal(job *prowconfig.Presubmit, refs *pjapi.Refs, logger logrus.
 // a "trial" execution of a Prow job configuration when the *job config* config
 // is changed, giving feedback to Prow config authors on how the changes of the
 // config would affect the "production" Prow jobs run on the actual target repos
-func ExecuteJobs(toBeRehearsed map[string][]prowconfig.Presubmit, prNumber int, refs *pjapi.Refs, logger logrus.FieldLogger, rehearsalConfigs CIOperatorConfigs, pjclient pj.ProwJobInterface) error {
+func ExecuteJobs(toBeRehearsed map[string][]prowconfig.Presubmit, prNumber int, prRepo string, refs *pjapi.Refs, logger logrus.FieldLogger, pjclient pj.ProwJobInterface) error {
 	rehearsals := []*prowconfig.Presubmit{}
 
 	for repo, jobs := range toBeRehearsed {
@@ -107,18 +111,21 @@ func ExecuteJobs(toBeRehearsed map[string][]prowconfig.Presubmit, prNumber int, 
 			rehearsal, err := makeRehearsalPresubmit(&job, repo, prNumber)
 			if err != nil {
 				jobLogger.WithError(err).Warn("Failed to make a rehearsal presubmit")
-			} else {
-				jobLogger.WithField("rehearsal-job", rehearsal.Name).Info("Created a rehearsal job to be submitted")
-				rehearsalConfigs.FixupJob(rehearsal, repo)
-				rehearsals = append(rehearsals, rehearsal)
+				continue
 			}
+
+			rehearsal, err = inlineCiOpConfig(rehearsal, repo, prRepo, jobLogger)
+			if err != nil {
+				jobLogger.WithError(err).Warn("Failed to inline ci-operator-config into rehearsal job")
+				continue
+			}
+
+			jobLogger.WithField(LogRehearsalJob, rehearsal.Name).Info("Created a rehearsal job to be submitted")
+			rehearsals = append(rehearsals, rehearsal)
 		}
 	}
 
 	if len(rehearsals) > 0 {
-		if err := rehearsalConfigs.Create(); err != nil {
-			return fmt.Errorf("failed to prepare rehearsal ci-operator config ConfigMap: %v", err)
-		}
 		for _, job := range rehearsals {
 			created, err := submitRehearsal(job, refs, logger, pjclient)
 			if err != nil {
@@ -132,4 +139,54 @@ func ExecuteJobs(toBeRehearsed map[string][]prowconfig.Presubmit, prNumber int, 
 	}
 
 	return nil
+}
+
+// Rehearsed Prow jobs may depend on ConfigMaps with content also modified by
+// the tested PR. All ci-operator-based jobs use the `ci-operator-configs`
+// ConfigMap that contains ci-operator configuration files. Rehearsed jobs
+// need to have the PR-version of these files available. The following code
+// takes care of creating a short-lived, rehearsal ConfigMap. The keys needed
+// to be present are extracted from the rehearsal jobs and the rehearsal jobs
+// are modified to use this ConfigMap instead of the "production" one.
+
+const ciOperatorConfigsCMName = "ci-operator-configs"
+const ciopConfigsInRepo = "ci-operator/config"
+
+const LogCiopConfigFile = "ciop-config-file"
+const LogCiopConfigRepo = "ciop-config-repo"
+
+// If a job uses the `ci-operator-config` ConfigMap
+func inlineCiOpConfig(job *prowconfig.Presubmit, targetRepo, prRepo string, logger logrus.FieldLogger) (*prowconfig.Presubmit, error) {
+	var rehearsal prowconfig.Presubmit
+	deepcopy.Copy(&rehearsal, job)
+	for _, container := range rehearsal.Spec.Containers {
+		for index := range container.Env {
+			env := &(container.Env[index])
+			if env.ValueFrom == nil {
+				continue
+			}
+			if env.ValueFrom.ConfigMapKeyRef == nil {
+				continue
+			}
+			if env.ValueFrom.ConfigMapKeyRef.Name == ciOperatorConfigsCMName {
+				filename := env.ValueFrom.ConfigMapKeyRef.Key
+				fullPath := filepath.Join(prRepo, ciopConfigsInRepo, targetRepo, filename)
+
+				logFields := logrus.Fields{LogCiopConfigFile: filename, LogCiopConfigRepo: targetRepo, LogRehearsalJob: job.Name}
+				logger.WithFields(logFields).Info("Rehearsal job uses ci-operator config ConfigMap, needed content will be inlined")
+
+				ciOpConfigContent, err := ioutil.ReadFile(fullPath)
+
+				if err != nil {
+					logger.WithError(err).Warn("Failed to read ci-operator config file")
+					return nil, err
+				}
+
+				env.Value = string(ciOpConfigContent)
+				env.ValueFrom = nil
+			}
+		}
+	}
+
+	return &rehearsal, nil
 }

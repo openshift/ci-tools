@@ -39,6 +39,7 @@ func loadClusterConfig() (*rest.Config, error) {
 
 type options struct {
 	dryRun bool
+	noFail bool
 
 	configPath    string
 	jobConfigPath string
@@ -51,6 +52,7 @@ func gatherOptions() options {
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually submit rehearsal jobs to Prow")
+	fs.BoolVar(&o.noFail, "no-fail", true, "Whether to actually end unsuccessfuly when something breaks")
 
 	fs.StringVar(&o.configPath, "config-path", "/etc/config/config.yaml", "Path to *master* Prow config.yaml")
 	fs.StringVar(&o.jobConfigPath, "job-config-path", "", "Path to *master* Prow Prow job configs.")
@@ -73,6 +75,14 @@ func validateOptions(o options) error {
 	return nil
 }
 
+func gracefulExit(suppressFailures bool) {
+	if suppressFailures {
+		os.Exit(0)
+	}
+
+	os.Exit(1)
+}
+
 func main() {
 	o := gatherOptions()
 	err := validateOptions(o)
@@ -82,7 +92,8 @@ func main() {
 
 	jobSpec, err := pjdwapi.ResolveSpecFromEnv()
 	if err != nil {
-		logrus.WithError(err).Fatal("could not read JOB_SPEC")
+		logrus.WithError(err).Error("could not read JOB_SPEC")
+		gracefulExit(o.noFail)
 	}
 
 	prFields := logrus.Fields{prowgithub.OrgLogField: jobSpec.Refs.Org, prowgithub.RepoLogField: jobSpec.Refs.Repo}
@@ -102,26 +113,31 @@ func main() {
 
 	prowConfig, err := prowconfig.Load(o.configPath, o.jobConfigPath)
 	if err != nil {
-		logger.WithError(err).Fatal("Failed to load Prow config")
+		logger.WithError(err).Error("Failed to load Prow config")
+		gracefulExit(o.noFail)
 	}
 	prowjobNamespace := prowConfig.ProwJobNamespace
 
 	clusterConfig, err := loadClusterConfig()
 	if err != nil {
-		logger.WithError(err).Fatal("could not load cluster clusterConfig")
+		logger.WithError(err).Error("could not load cluster clusterConfig")
+		gracefulExit(o.noFail)
 	}
 
 	pjclient, err := rehearse.NewProwJobClient(clusterConfig, prowjobNamespace, o.dryRun)
 	if err != nil {
-		logger.WithError(err).Fatal("could not create a ProwJob client")
+		logger.WithError(err).Error("could not create a ProwJob client")
+		gracefulExit(o.noFail)
 	}
 
 	changedPresubmits, err := diffs.GetChangedPresubmits(prowConfig, o.candidatePath)
 	if err != nil {
-		logger.WithError(err).Fatal("Failed to determine which jobs should be rehearsed")
+		logger.WithError(err).Error("Failed to determine which jobs should be rehearsed")
+		gracefulExit(o.noFail)
 	}
 
 	if err := rehearse.ExecuteJobs(changedPresubmits, prNumber, o.candidatePath, jobSpec.Refs, logger, pjclient); err != nil {
-		logger.WithError(err).Fatal("Failed to execute rehearsal jobs")
+		logger.WithError(err).Error("Failed to execute rehearsal jobs")
+		gracefulExit(o.noFail)
 	}
 }

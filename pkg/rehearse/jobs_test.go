@@ -166,6 +166,55 @@ func TestMakeRehearsalPresubmit(t *testing.T) {
 	}
 }
 
+func TestMakeRehearsalPresubmitNegative(t *testing.T) {
+	testName := "pull-ci-organization-repo-master-test"
+	testContext := "ci/prow/test"
+	testArgs := []string{"arg"}
+	testRepo := "organization/repo"
+	testPrNumber := 321
+
+	testCases := []struct {
+		description string
+		crippleFunc func(*prowconfig.Presubmit)
+	}{{
+		description: "job with multiple containers",
+		crippleFunc: func(j *prowconfig.Presubmit) {
+			j.Spec.Containers = append(j.Spec.Containers, v1.Container{})
+		},
+	}, {
+		description: "job where command is not `ci-operator`",
+		crippleFunc: func(j *prowconfig.Presubmit) {
+			j.Spec.Containers[0].Command[0] = "not-ci-operator"
+		},
+	}, {
+		description: "ci-operator job already using --git-ref",
+		crippleFunc: func(j *prowconfig.Presubmit) {
+			j.Spec.Containers[0].Args = append(j.Spec.Containers[0].Args, "--git-ref=organization/repo@master")
+		},
+	}, {
+		description: "jobs running over multiple branches",
+		crippleFunc: func(j *prowconfig.Presubmit) {
+			j.Brancher.Branches = append(j.Brancher.Branches, "^feature-branch$")
+		},
+	}, {
+		description: "jobs that need additional volumes mounted",
+		crippleFunc: func(j *prowconfig.Presubmit) {
+			j.Spec.Volumes = []v1.Volume{{Name: "volume"}}
+		},
+	},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			job := makeTestingPresubmit(testName, testContext, testArgs)
+			tc.crippleFunc(job)
+			_, err := makeRehearsalPresubmit(job, testRepo, testPrNumber)
+			if err == nil {
+				t.Errorf("Expected makeRehearsalPresubmit to return error")
+			}
+		})
+	}
+}
+
 func makeTestingProwJob(name, namespace, jobName, context string, refs *pjapi.Refs, ciopArgs []string) *pjapi.ProwJob {
 	return &pjapi.ProwJob{
 		TypeMeta: metav1.TypeMeta{Kind: "ProwJob", APIVersion: "prow.k8s.io/v1"},

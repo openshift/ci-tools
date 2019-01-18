@@ -80,6 +80,10 @@ func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber 
 	gitrefArg := fmt.Sprintf("--git-ref=%s@%s", repo, branch)
 	rehearsal.Spec.Containers[0].Args = append(source.Spec.Containers[0].Args, gitrefArg)
 
+	if len(source.Spec.Volumes) > 0 {
+		return nil, fmt.Errorf("cannot rehearse jobs that need additional volumes mounted")
+	}
+
 	return &rehearsal, nil
 }
 

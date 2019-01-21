@@ -815,7 +815,7 @@ func jobDescription(job *api.JobSpec, config *api.ReleaseBuildConfiguration) str
 		links = append(links, fmt.Sprintf("https://github.com/%s/%s/pull/%d - %s", job.Refs.Org, job.Refs.Repo, pull.Number, pull.Author))
 	}
 	if len(links) > 0 {
-		return fmt.Sprintf("%s on https://github.com/%s/%s\n\n%s", job.Job, job.Refs.Org, job.Refs.Repo, strings.Join(links, "\n"))
+		return fmt.Sprintf("%s\n\n%s on https://github.com/%s/%s", strings.Join(links, "\n"), job.Job, job.Refs.Org, job.Refs.Repo)
 	}
 	return fmt.Sprintf("%s on https://github.com/%s/%s ref=%s commit=%s", job.Job, job.Refs.Org, job.Refs.Repo, job.Refs.BaseRef, job.Refs.BaseSHA)
 }

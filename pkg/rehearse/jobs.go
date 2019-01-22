@@ -175,7 +175,7 @@ const LogRehearsalJob = "rehearsal-job"
 // a "trial" execution of a Prow job configuration when the *job config* config
 // is changed, giving feedback to Prow config authors on how the changes of the
 // config would affect the "production" Prow jobs run on the actual target repos
-func ExecuteJobs(toBeRehearsed map[string][]prowconfig.Presubmit, prNumber int, prRepo string, refs *pjapi.Refs, logger logrus.FieldLogger, pjclient pj.ProwJobInterface) error {
+func ExecuteJobs(toBeRehearsed map[string][]prowconfig.Presubmit, prNumber int, prRepo string, refs *pjapi.Refs, follow bool, logger logrus.FieldLogger, pjclient pj.ProwJobInterface) error {
 	rehearsals := []*prowconfig.Presubmit{}
 
 	ciopConfigs := &ciOperatorConfigLoader{filepath.Join(prRepo, ciopConfigsInRepo)}
@@ -209,6 +209,9 @@ func ExecuteJobs(toBeRehearsed map[string][]prowconfig.Presubmit, prNumber int, 
 		}
 		logger.WithFields(pjutil.ProwJobFields(created)).Info("Submitted rehearsal prowjob")
 		pjs.Insert(created.Name)
+	}
+	if !follow {
+		return nil
 	}
 	req, err := labels.NewRequirement(rehearseLabel, selection.Equals, []string{strconv.Itoa(prNumber)})
 	if err != nil {

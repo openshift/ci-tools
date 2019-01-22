@@ -348,7 +348,7 @@ func TestExecuteJobs(t *testing.T) {
 				}
 				return true, ret, nil
 			})
-			err = ExecuteJobs(tc.jobs, testPrNumber, testRepo, testRefs, testLogger, fakeclient)
+			err = ExecuteJobs(tc.jobs, testPrNumber, testRepo, testRefs, true, testLogger, fakeclient)
 
 			if tc.expectedError && err == nil {
 				t.Errorf("Expected ExecuteJobs() to return error")

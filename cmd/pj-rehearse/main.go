@@ -139,7 +139,7 @@ func main() {
 		gracefulExit(o.noFail)
 	}
 
-	if err := rehearse.ExecuteJobs(changedPresubmits, prNumber, o.candidatePath, jobSpec.Refs, logger, pjclient); err != nil {
+	if err := rehearse.ExecuteJobs(changedPresubmits, prNumber, o.candidatePath, jobSpec.Refs, !o.dryRun, logger, pjclient); err != nil {
 		logger.WithError(err).Error("Failed to execute rehearsal jobs")
 		gracefulExit(o.noFail)
 	}

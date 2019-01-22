@@ -13,10 +13,13 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/client-go/testing"
 	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	pjclientset "k8s.io/test-infra/prow/client/clientset/versioned"
+	pjclientsetfake "k8s.io/test-infra/prow/client/clientset/versioned/fake"
 	pj "k8s.io/test-infra/prow/client/clientset/versioned/typed/prowjobs/v1"
 
 	prowconfig "k8s.io/test-infra/prow/config"
@@ -29,34 +32,26 @@ const (
 	rehearseLabel = "ci.openshift.org/rehearse"
 )
 
-type prowJobClientWithDry struct {
-	pj.ProwJobInterface
-
-	dry bool
-}
-
 // NewProwJobClient creates a ProwJob client with a dry run capability
 func NewProwJobClient(clusterConfig *rest.Config, namespace string, dry bool) (pj.ProwJobInterface, error) {
+	if dry {
+		pjcset := pjclientsetfake.NewSimpleClientset()
+		pjcset.Fake.PrependReactor("create", "prowjobs", func(action testing.Action) (bool, runtime.Object, error) {
+			pj := action.(testing.CreateAction).GetObject().(*pjapi.ProwJob)
+			jobAsYAML, err := yaml.Marshal(pj)
+			if err != nil {
+				return true, nil, fmt.Errorf("failed to marshal job to YAML: %v", err)
+			}
+			fmt.Printf("%s\n", jobAsYAML)
+			return false, nil, nil
+		})
+		return pjcset.ProwV1().ProwJobs(namespace), nil
+	}
 	pjcset, err := pjclientset.NewForConfig(clusterConfig)
 	if err != nil {
 		return nil, err
 	}
-	pjclient := pjcset.ProwV1().ProwJobs(namespace)
-
-	return &prowJobClientWithDry{pjclient, dry}, nil
-}
-
-func (c *prowJobClientWithDry) Create(pj *pjapi.ProwJob) (*pjapi.ProwJob, error) {
-	if c.dry {
-		jobAsYAML, err := yaml.Marshal(pj)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal job to YAML: %v", err)
-		}
-		fmt.Printf("%s\n", jobAsYAML)
-		return pj, nil
-	}
-
-	return c.ProwJobInterface.Create(pj)
+	return pjcset.ProwV1().ProwJobs(namespace), nil
 }
 
 func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber int) (*prowconfig.Presubmit, error) {

@@ -118,10 +118,13 @@ func main() {
 	}
 	prowjobNamespace := prowConfig.ProwJobNamespace
 
-	clusterConfig, err := loadClusterConfig()
-	if err != nil {
-		logger.WithError(err).Error("could not load cluster clusterConfig")
-		gracefulExit(o.noFail)
+	var clusterConfig *rest.Config
+	if !o.dryRun {
+		clusterConfig, err = loadClusterConfig()
+		if err != nil {
+			logger.WithError(err).Error("could not load cluster clusterConfig")
+			gracefulExit(o.noFail)
+		}
 	}
 
 	pjclient, err := rehearse.NewProwJobClient(clusterConfig, prowjobNamespace, o.dryRun)

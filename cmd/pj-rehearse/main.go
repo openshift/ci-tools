@@ -118,10 +118,13 @@ func main() {
 	}
 	prowjobNamespace := prowConfig.ProwJobNamespace
 
-	clusterConfig, err := loadClusterConfig()
-	if err != nil {
-		logger.WithError(err).Error("could not load cluster clusterConfig")
-		gracefulExit(o.noFail)
+	var clusterConfig *rest.Config
+	if !o.dryRun {
+		clusterConfig, err = loadClusterConfig()
+		if err != nil {
+			logger.WithError(err).Error("could not load cluster clusterConfig")
+			gracefulExit(o.noFail)
+		}
 	}
 
 	pjclient, err := rehearse.NewProwJobClient(clusterConfig, prowjobNamespace, o.dryRun)
@@ -136,7 +139,7 @@ func main() {
 		gracefulExit(o.noFail)
 	}
 
-	if err := rehearse.ExecuteJobs(changedPresubmits, prNumber, o.candidatePath, jobSpec.Refs, logger, pjclient); err != nil {
+	if err := rehearse.ExecuteJobs(changedPresubmits, prNumber, o.candidatePath, jobSpec.Refs, !o.dryRun, logger, pjclient); err != nil {
 		logger.WithError(err).Error("Failed to execute rehearsal jobs")
 		gracefulExit(o.noFail)
 	}

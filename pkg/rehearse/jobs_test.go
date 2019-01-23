@@ -18,6 +18,9 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/diff"
+	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/watch"
+	clientgo_testing "k8s.io/client-go/testing"
 )
 
 func makeTestingPresubmitForEnv(env []v1.EnvVar) *prowconfig.Presubmit {
@@ -128,7 +131,8 @@ func TestInlineCiopConfig(t *testing.T) {
 func makeTestingPresubmit(name, context string, ciopArgs []string) *prowconfig.Presubmit {
 	return &prowconfig.Presubmit{
 		JobBase: prowconfig.JobBase{
-			Name: name,
+			Name:   name,
+			Labels: map[string]string{rehearseLabel: "123"},
 			Spec: &v1.PodSpec{
 				Containers: []v1.Container{{
 					Command: []string{"ci-operator"},
@@ -228,6 +232,7 @@ func makeTestingProwJob(name, namespace, jobName, context string, refs *pjapi.Re
 				"prow.k8s.io/refs.repo": refs.Repo,
 				"prow.k8s.io/type":      "presubmit",
 				"prow.k8s.io/refs.pull": strconv.Itoa(refs.Pulls[0].Number),
+				rehearseLabel:           strconv.Itoa(refs.Pulls[0].Number),
 			},
 			Annotations: map[string]string{"prow.k8s.io/job": jobName},
 		},
@@ -323,8 +328,27 @@ func TestExecuteJobs(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
-			fakeclient := fake.NewSimpleClientset().ProwV1().ProwJobs(testNamespace)
-			err := ExecuteJobs(tc.jobs, testPrNumber, testRepo, testRefs, testLogger, fakeclient)
+			fakecs := fake.NewSimpleClientset()
+			fakeclient := fakecs.ProwV1().ProwJobs(testNamespace)
+			watcher, err := fakeclient.Watch(metav1.ListOptions{})
+			if err != nil {
+				t.Fatalf("Failed to setup watch: %v", err)
+			}
+			fakecs.Fake.PrependWatchReactor("prowjobs", func(clientgo_testing.Action) (bool, watch.Interface, error) {
+				watcher.Stop()
+				n := 0
+				for _, jobs := range tc.jobs {
+					n += len(jobs)
+				}
+				ret := watch.NewFakeWithChanSize(n, true)
+				for event := range watcher.ResultChan() {
+					pj := event.Object.(*pjapi.ProwJob).DeepCopy()
+					pj.Status.State = pjapi.SuccessState
+					ret.Modify(pj)
+				}
+				return true, ret, nil
+			})
+			err = ExecuteJobs(tc.jobs, testPrNumber, testRepo, testRefs, true, testLogger, fakeclient)
 
 			if tc.expectedError && err == nil {
 				t.Errorf("Expected ExecuteJobs() to return error")
@@ -358,5 +382,125 @@ func TestExecuteJobs(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestWaitForJobs(t *testing.T) {
+	pjSuccess0 := pjapi.ProwJob{
+		ObjectMeta: metav1.ObjectMeta{Name: "success0"},
+		Status:     pjapi.ProwJobStatus{State: pjapi.SuccessState},
+	}
+	pjSuccess1 := pjapi.ProwJob{
+		ObjectMeta: metav1.ObjectMeta{Name: "success1"},
+		Status:     pjapi.ProwJobStatus{State: pjapi.SuccessState},
+	}
+	pjFailure := pjapi.ProwJob{
+		ObjectMeta: metav1.ObjectMeta{Name: "failure"},
+		Status:     pjapi.ProwJobStatus{State: pjapi.FailureState},
+	}
+	pjPending := pjapi.ProwJob{
+		ObjectMeta: metav1.ObjectMeta{Name: "pending"},
+		Status:     pjapi.ProwJobStatus{State: pjapi.PendingState},
+	}
+	pjAborted := pjapi.ProwJob{
+		ObjectMeta: metav1.ObjectMeta{Name: "aborted"},
+		Status:     pjapi.ProwJobStatus{State: pjapi.AbortedState},
+	}
+	pjTriggered := pjapi.ProwJob{
+		ObjectMeta: metav1.ObjectMeta{Name: "triggered"},
+		Status:     pjapi.ProwJobStatus{State: pjapi.TriggeredState},
+	}
+	pjError := pjapi.ProwJob{
+		ObjectMeta: metav1.ObjectMeta{Name: "error"},
+		Status:     pjapi.ProwJobStatus{State: pjapi.ErrorState},
+	}
+	testCases := []struct {
+		id      string
+		pjs     sets.String
+		events  []*pjapi.ProwJob
+		success bool
+		err     error
+	}{{
+		id:      "empty",
+		success: true,
+	}, {
+		id:      "one successful job",
+		success: true,
+		pjs:     sets.NewString("success0"),
+		events:  []*pjapi.ProwJob{&pjSuccess0},
+	}, {
+		id:  "mixed states",
+		pjs: sets.NewString("failure", "success0", "aborted", "error"),
+		events: []*pjapi.ProwJob{
+			&pjFailure, &pjPending, &pjSuccess0,
+			&pjTriggered, &pjAborted, &pjError,
+		},
+	}, {
+		id:      "ignored states",
+		success: true,
+		pjs:     sets.NewString("success0"),
+		events:  []*pjapi.ProwJob{&pjPending, &pjSuccess0, &pjTriggered},
+	}, {
+		id:      "repeated events",
+		success: true,
+		pjs:     sets.NewString("success0", "success1"),
+		events:  []*pjapi.ProwJob{&pjSuccess0, &pjSuccess0, &pjSuccess1},
+	}, {
+		id:  "repeated events with failure",
+		pjs: sets.NewString("success0", "success1", "failure"),
+		events: []*pjapi.ProwJob{
+			&pjSuccess0, &pjSuccess0,
+			&pjSuccess1, &pjFailure,
+		},
+	}, {
+		id:      "not watched",
+		success: true,
+		pjs:     sets.NewString("success1"),
+		events:  []*pjapi.ProwJob{&pjSuccess0, &pjFailure, &pjSuccess1},
+	}, {
+		id:     "not watched failure",
+		pjs:    sets.NewString("failure"),
+		events: []*pjapi.ProwJob{&pjSuccess0, &pjFailure},
+	}}
+	for _, tc := range testCases {
+		t.Run(tc.id, func(t *testing.T) {
+			w := watch.NewFakeWithChanSize(len(tc.events), true)
+			for _, j := range tc.events {
+				w.Modify(j)
+			}
+			cs := fake.NewSimpleClientset()
+			cs.Fake.PrependWatchReactor("prowjobs", func(clientgo_testing.Action) (bool, watch.Interface, error) {
+				return true, w, nil
+			})
+			success, err := waitForJobs(tc.pjs, "", cs.ProwV1().ProwJobs("test"), logrus.New())
+			if err != tc.err {
+				t.Fatalf("want `err` == %v, got %v", tc.err, err)
+			}
+			if success != tc.success {
+				t.Fatalf("want `success` == %v, got %v", tc.success, success)
+			}
+		})
+	}
+}
+
+func TestWaitForJobsRetries(t *testing.T) {
+	empty := watch.NewEmptyWatch()
+	mod := watch.NewFakeWithChanSize(1, true)
+	mod.Modify(&pjapi.ProwJob{
+		ObjectMeta: metav1.ObjectMeta{Name: "j"},
+		Status:     pjapi.ProwJobStatus{State: pjapi.SuccessState},
+	})
+	ws := []watch.Interface{empty, mod}
+	cs := fake.NewSimpleClientset()
+	cs.Fake.PrependWatchReactor("prowjobs", func(clientgo_testing.Action) (_ bool, ret watch.Interface, _ error) {
+		ret, ws = ws[0], ws[1:]
+		return true, ret, nil
+	})
+	success, err := waitForJobs(sets.String{"j": {}}, "", cs.ProwV1().ProwJobs("test"), logrus.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !success {
+		t.Fail()
 	}
 }

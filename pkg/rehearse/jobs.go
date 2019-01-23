@@ -72,6 +72,10 @@ func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber 
 		}
 	}
 
+	if len(source.Branches) == 0 {
+		return nil, fmt.Errorf("cannot rehearse jobs with no branches")
+	}
+
 	if len(source.Branches) != 1 {
 		return nil, fmt.Errorf("cannot rehearse jobs that run over multiple branches")
 	}

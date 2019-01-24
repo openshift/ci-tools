@@ -142,7 +142,7 @@ func inlineCiOpConfig(job *prowconfig.Presubmit, targetRepo string, ciopConfigs 
 				filename := env.ValueFrom.ConfigMapKeyRef.Key
 
 				logFields := logrus.Fields{LogCiopConfigFile: filename, LogCiopConfigRepo: targetRepo, LogRehearsalJob: job.Name}
-				logger.WithFields(logFields).Info("Rehearsal job uses ci-operator config ConfigMap, needed content will be inlined")
+				logger.WithFields(logFields).Debug("Rehearsal job uses ci-operator config ConfigMap, needed content will be inlined")
 
 				ciOpConfigContent, err := ciopConfigs.Load(targetRepo, filename)
 
@@ -248,19 +248,24 @@ func waitForJobs(jobs sets.String, selector string, pjclient pj.ProwJobInterface
 			if !ok {
 				return false, fmt.Errorf("received a %T from watch", event.Object)
 			}
-			logger.WithFields(pjutil.ProwJobFields(pj)).WithField("state", pj.Status.State).Info("processing ProwJob")
+			fields := pjutil.ProwJobFields(pj)
+			fields["state"] = pj.Status.State
+			logger.WithFields(fields).Debug("Processing ProwJob")
 			if !jobs.Has(pj.Name) {
 				continue
 			}
 			switch pj.Status.State {
 			case pjapi.FailureState, pjapi.AbortedState, pjapi.ErrorState:
+				logger.WithFields(fields).Error("Job failed")
 				success = false
-				fallthrough
 			case pjapi.SuccessState:
-				jobs.Delete(pj.Name)
-				if jobs.Len() == 0 {
-					return success, nil
-				}
+				logger.WithFields(fields).Info("Job succeeded")
+			default:
+				continue
+			}
+			jobs.Delete(pj.Name)
+			if jobs.Len() == 0 {
+				return success, nil
 			}
 		}
 	}

@@ -350,10 +350,10 @@ func extractPromotionName(configSpec *cioperatorapi.ReleaseBuildConfiguration) s
 
 func shouldBePromoted(branch, namespace, name string) bool {
 	if namespace == "openshift" {
-		if name == "origin-v4.0" {
-			return branch == "master"
+		switch name {
+		case "origin-v4.0":
+			return branch == "master" || branch == "openshift-4.0"
 		}
-
 		// TODO: release branches?
 	}
 

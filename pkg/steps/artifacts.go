@@ -219,9 +219,10 @@ type ArtifactWorker struct {
 
 	podsToDownload chan string
 
-	lock      sync.Mutex
-	remaining podContainersMap
-	required  podContainersMap
+	lock         sync.Mutex
+	remaining    podContainersMap
+	required     podContainersMap
+	hasArtifacts map[string]struct{}
 }
 
 func NewArtifactWorker(podClient PodClient, artifactDir, namespace string) *ArtifactWorker {
@@ -231,8 +232,9 @@ func NewArtifactWorker(podClient PodClient, artifactDir, namespace string) *Arti
 		namespace: namespace,
 		dir:       artifactDir,
 
-		remaining: make(podContainersMap),
-		required:  make(podContainersMap),
+		remaining:    make(podContainersMap),
+		required:     make(podContainersMap),
+		hasArtifacts: make(map[string]struct{}),
 
 		podsToDownload: make(chan string, 4),
 	}
@@ -242,7 +244,8 @@ func NewArtifactWorker(podClient PodClient, artifactDir, namespace string) *Arti
 
 func (w *ArtifactWorker) run() {
 	for podName := range w.podsToDownload {
-		if err := w.downloadArtifacts(podName); err != nil {
+		_, hasArtifacts := w.hasArtifacts[podName]
+		if err := w.downloadArtifacts(podName, hasArtifacts); err != nil {
 			log.Printf("error: %v", err)
 		}
 		// indicate we are done with this pod by removing the map entry
@@ -252,7 +255,19 @@ func (w *ArtifactWorker) run() {
 	}
 }
 
-func (w *ArtifactWorker) downloadArtifacts(podName string) error {
+func (w *ArtifactWorker) downloadArtifacts(podName string, hasArtifacts bool) error {
+	if err := os.MkdirAll(w.dir, 0750); err != nil {
+		return fmt.Errorf("unable to create artifact directory %s: %v", w.dir, err)
+	}
+	if err := gatherContainerLogsOutput(w.podClient, filepath.Join(w.dir, "container-logs"), w.namespace, podName); err != nil {
+		log.Printf("error: unable to gather container logs: %v", err)
+	}
+
+	// only pods with an artifacts container should be gathered
+	if !hasArtifacts {
+		return nil
+	}
+
 	defer func() {
 		// signal to artifacts container to gracefully shut don
 		err := removeFile(w.podClient, w.namespace, podName, "artifacts", []string{"/tmp/done"})
@@ -271,12 +286,6 @@ func (w *ArtifactWorker) downloadArtifacts(podName string) error {
 		// give up, expect another process to clean up the pods
 	}()
 
-	if err := os.MkdirAll(w.dir, 0750); err != nil {
-		return fmt.Errorf("unable to create artifact directory %s: %v", w.dir, err)
-	}
-	if err := gatherContainerLogsOutput(w.podClient, filepath.Join(w.dir, "container-logs"), w.namespace, podName); err != nil {
-		log.Printf("error: unable to gather container logs: %v", err)
-	}
 	if err := copyArtifacts(w.podClient, w.dir, w.namespace, podName, "artifacts", []string{"/tmp/artifacts"}); err != nil {
 		return fmt.Errorf("unable to retrieve artifacts from pod %s: %v", podName, err)
 	}
@@ -301,6 +310,7 @@ func (w *ArtifactWorker) CollectFromPod(podName string, hasArtifacts []string, w
 
 	for _, name := range hasArtifacts {
 		if name == "artifacts" {
+			w.hasArtifacts[podName] = struct{}{}
 			continue
 		}
 		if _, ok := m[name]; !ok {
@@ -310,6 +320,7 @@ func (w *ArtifactWorker) CollectFromPod(podName string, hasArtifacts []string, w
 
 	for _, name := range waitForContainers {
 		if name == "artifacts" {
+			w.hasArtifacts[podName] = struct{}{}
 			continue
 		}
 		if _, ok := m[name]; !ok {

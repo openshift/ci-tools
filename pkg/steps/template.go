@@ -549,11 +549,13 @@ func waitForPodCompletion(podClient coreclientset.PodInterface, name string, not
 	if notifier == nil {
 		notifier = NopNotifier
 	}
+	skipLogs := false
 	completed := make(map[string]time.Time)
 	for {
-		retry, err := waitForPodCompletionOrTimeout(podClient, name, completed, notifier)
+		retry, err := waitForPodCompletionOrTimeout(podClient, name, completed, notifier, skipLogs)
 		// continue waiting if the container notifier is not yet complete for the given pod
 		if !notifier.Done(name) {
+			skipLogs = true
 			if !retry || err == nil {
 				time.Sleep(5 * time.Second)
 			}
@@ -569,7 +571,7 @@ func waitForPodCompletion(podClient coreclientset.PodInterface, name string, not
 	return nil
 }
 
-func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name string, completed map[string]time.Time, notifier ContainerNotifier) (bool, error) {
+func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name string, completed map[string]time.Time, notifier ContainerNotifier, skipLogs bool) (bool, error) {
 	watcher, err := podClient.Watch(meta.ListOptions{
 		FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String(),
 		Watch:         true,
@@ -593,7 +595,9 @@ func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name st
 	}
 	podLogNewFailedContainers(podClient, pod, completed, notifier)
 	if podJobIsOK(pod) {
-		log.Printf("Pod %s already succeeded in %s", pod.Name, podDuration(pod).Truncate(time.Second))
+		if !skipLogs {
+			log.Printf("Pod %s already succeeded in %s", pod.Name, podDuration(pod).Truncate(time.Second))
+		}
 		return false, nil
 	}
 	if podJobIsFailed(pod) {

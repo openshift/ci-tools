@@ -26,6 +26,7 @@ import (
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 
 	"github.com/openshift/ci-operator/pkg/api"
+	"github.com/openshift/ci-operator/pkg/junit"
 )
 
 type templateExecutionStep struct {
@@ -35,6 +36,8 @@ type templateExecutionStep struct {
 	podClient      PodClient
 	artifactDir    string
 	jobSpec        *api.JobSpec
+
+	subTests []*junit.TestCase
 }
 
 func (s *templateExecutionStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
@@ -149,15 +152,23 @@ func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 			log.Printf("Running pod %s", ref.Ref.Name)
 		}
 	}
+
+	testCaseNotifier := NewTestCaseNotifier(notifier)
 	for _, ref := range instance.Status.Objects {
 		switch {
 		case ref.Ref.Kind == "Pod" && ref.Ref.APIVersion == "v1":
-			if err := waitForPodCompletion(s.podClient.Pods(s.jobSpec.Namespace), ref.Ref.Name, notifier); err != nil {
+			err := waitForPodCompletion(s.podClient.Pods(s.jobSpec.Namespace), ref.Ref.Name, testCaseNotifier)
+			s.subTests = append(s.subTests, testCaseNotifier.SubTests(fmt.Sprintf("%s - %s ", s.Description(), ref.Ref.Name))...)
+			if err != nil {
 				return fmt.Errorf("template pod %q failed: %v", ref.Ref.Name, err)
 			}
 		}
 	}
 	return nil
+}
+
+func (s *templateExecutionStep) SubTests() []*junit.TestCase {
+	return s.subTests
 }
 
 func (s *templateExecutionStep) Done() (bool, error) {
@@ -216,7 +227,7 @@ func (s *templateExecutionStep) Provides() (api.ParameterMap, api.StepLink) {
 func (s *templateExecutionStep) Name() string { return s.template.Name }
 
 func (s *templateExecutionStep) Description() string {
-	return fmt.Sprintf("Instantiate the template %s into the operator namespace and wait for any pods to complete", s.template.Name)
+	return fmt.Sprintf("Run template %s", s.template.Name)
 }
 
 func TemplateExecutionStep(template *templateapi.Template, params *DeferredParameters, podClient PodClient, templateClient TemplateClient, artifactDir string, jobSpec *api.JobSpec) api.Step {

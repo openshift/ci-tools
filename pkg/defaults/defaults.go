@@ -303,7 +303,7 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.Job
 			Name:      "clonerefs",
 			Tag:       "latest",
 		},
-		ClonerefsPath: "/app/prow/cmd/clonerefs/app.binary.runfiles/test_infra/prow/cmd/clonerefs/linux_amd64_pure_stripped/app.binary",
+		ClonerefsPath: "/app/prow/cmd/clonerefs/app.binary.runfiles/io_k8s_test_infra/prow/cmd/clonerefs/linux_amd64_pure_stripped/app.binary",
 	}})
 
 	if len(config.BinaryBuildCommands) > 0 {

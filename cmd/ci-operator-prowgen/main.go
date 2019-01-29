@@ -234,11 +234,6 @@ func generatePodSpecTemplate(org, repo, configFile, release string, test *cioper
 	return podSpec
 }
 
-type testDescription struct {
-	Name   string
-	Target string
-}
-
 // Generate a Presubmit job for the given parameters
 func generatePresubmitForTest(name string, repoInfo *configFilePathElements, podSpec *kubeapi.PodSpec) *prowconfig.Presubmit {
 	labels := make(map[string]string)

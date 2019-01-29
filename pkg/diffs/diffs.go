@@ -1,9 +1,6 @@
 package diffs
 
 import (
-	"fmt"
-	"path/filepath"
-
 	"k8s.io/apimachinery/pkg/api/equality"
 	prowconfig "k8s.io/test-infra/prow/config"
 )
@@ -12,15 +9,8 @@ const ConfigInRepoPath = "cluster/ci/config/prow/config.yaml"
 const JobConfigInRepoPath = "ci-operator/jobs"
 
 // GetChangedPresubmits returns a mapping of repo to presubmits to execute.
-func GetChangedPresubmits(prowMasterConfig *prowconfig.Config, candidateRepoPath string) (map[string][]prowconfig.Presubmit, error) {
+func GetChangedPresubmits(prowMasterConfig, prowPRConfig *prowconfig.Config) (map[string][]prowconfig.Presubmit, error) {
 	ret := make(map[string][]prowconfig.Presubmit)
-
-	candidateConfigPath := filepath.Join(candidateRepoPath, ConfigInRepoPath)
-	candidateJobConfigPath := filepath.Join(candidateRepoPath, JobConfigInRepoPath)
-	prowPRConfig, err := prowconfig.Load(candidateConfigPath, candidateJobConfigPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load PR's Prow config: %v", err)
-	}
 
 	masterJobs := getJobsByRepoAndName(prowMasterConfig.JobConfig.Presubmits)
 	for repo, jobs := range prowPRConfig.JobConfig.Presubmits {

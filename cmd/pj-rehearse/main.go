@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path"
+	"path/filepath"
 
 	"github.com/sirupsen/logrus"
 
@@ -105,13 +105,21 @@ func main() {
 
 	logger.Info("Rehearsing Prow jobs for a configuration PR")
 
-	masterWorktree, err := createMasterWorktree(o.candidatePath, jobSpec.Refs.BaseSHA)
+	candidateConfigPath := filepath.Join(o.candidatePath, diffs.ConfigInRepoPath)
+	candidateJobConfigPath := filepath.Join(o.candidatePath, diffs.JobConfigInRepoPath)
+
+	prowPRConfig, err := prowconfig.Load(candidateConfigPath, candidateJobConfigPath)
 	if err != nil {
-		logger.WithError(err).Error("could not create master worktree")
+		logger.WithError(err).Error("Failed to load PR's Prow config")
 		gracefulExit(o.noFail)
 	}
 
-	prowConfig, err := prowconfig.Load(path.Join(masterWorktree, diffs.ConfigInRepoPath), path.Join(masterWorktree, diffs.JobConfigInRepoPath))
+	if err := gitCheckout(o.candidatePath, jobSpec.Refs.BaseSHA); err != nil {
+		logger.WithError(err).Error("could not checkout worktree")
+		gracefulExit(o.noFail)
+	}
+
+	prowConfig, err := prowconfig.Load(candidateConfigPath, candidateJobConfigPath)
 	if err != nil {
 		logger.WithError(err).Error("Failed to load Prow config")
 		gracefulExit(o.noFail)
@@ -130,7 +138,7 @@ func main() {
 		gracefulExit(o.noFail)
 	}
 
-	changedPresubmits, err := diffs.GetChangedPresubmits(prowConfig, o.candidatePath)
+	changedPresubmits, err := diffs.GetChangedPresubmits(prowConfig, prowPRConfig)
 	if err != nil {
 		logger.WithError(err).Error("Failed to determine which jobs should be rehearsed")
 		gracefulExit(o.noFail)
@@ -142,11 +150,12 @@ func main() {
 	}
 }
 
-func createMasterWorktree(candidatePath, baseSHA string) (string, error) {
-	cmd := exec.Command("git", "-C", candidatePath, "worktree", "add", "master", baseSHA)
+func gitCheckout(candidatePath, baseSHA string) error {
+	cmd := exec.Command("git", "checkout", baseSHA)
+	cmd.Dir = candidatePath
 	stdoutStderr, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("'%s' failed with out: %s and error %v", cmd.Args, stdoutStderr, err)
+		return fmt.Errorf("'%s' failed with out: %s and error %v", cmd.Args, stdoutStderr, err)
 	}
-	return path.Join(candidatePath, "master"), nil
+	return nil
 }

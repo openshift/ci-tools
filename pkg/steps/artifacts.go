@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 
+	"k8s.io/apimachinery/pkg/util/sets"
+
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -24,6 +26,17 @@ import (
 	"k8s.io/client-go/tools/remotecommand"
 
 	templateapi "github.com/openshift/api/template/v1"
+
+	"github.com/openshift/ci-operator/pkg/junit"
+)
+
+const (
+	// A comma-delimited list of containers to wait for artifacts from within a pod. If not
+	// specify, only 'artifacts' is waited for.
+	annotationWaitForContainerArtifacts = "ci-operator.openshift.io/wait-for-container-artifacts"
+	// A comma-delimited list of container names that will be returned as individual JUnit
+	// test results.
+	annotationContainersForSubTestResults = "ci-operator.openshift.io/container-sub-tests"
 )
 
 // ContainerNotifier receives updates about the status of a poll action on a pod. The caller
@@ -50,6 +63,79 @@ func (nopNotifier) Notify(_ *coreapi.Pod, _ string) {}
 func (nopNotifier) Complete(_ string)               {}
 func (nopNotifier) Done(_ string) bool              { return true }
 func (nopNotifier) Cancel()                         {}
+
+// TestCaseNotifier allows a caller to generate per container JUnit test
+// reports that provide better granularity for debugging problems when
+// running tests in multi-container pods. It intercepts notifications and
+// remembers the last pod retrieved which SubTests() will read.
+//
+// TestCaseNotifier must be called from a single thread.
+type TestCaseNotifier struct {
+	nested  ContainerNotifier
+	lastPod *coreapi.Pod
+}
+
+// NewTestCaseNotifier wraps the provided ContainerNotifier and will
+// create JUnit TestCase records for each container in the most recent
+// pod to have completed.
+func NewTestCaseNotifier(nested ContainerNotifier) *TestCaseNotifier {
+	return &TestCaseNotifier{nested: nested}
+}
+
+func (n *TestCaseNotifier) Notify(pod *coreapi.Pod, containerName string) {
+	n.nested.Notify(pod, containerName)
+	n.lastPod = pod
+}
+
+func (n *TestCaseNotifier) Complete(podName string)  { n.nested.Complete(podName) }
+func (n *TestCaseNotifier) Done(podName string) bool { return n.nested.Done(podName) }
+func (n *TestCaseNotifier) Cancel()                  { n.nested.Cancel() }
+
+// SubTests returns one junit test for each terminated container with a name
+// in the annotation 'ci-operator.openshift.io/container-sub-tests' in the pod.
+// Invoking SubTests clears the last pod, so subsequent calls will return no
+// tests unless Notify() has been called in the meantime.
+func (n *TestCaseNotifier) SubTests(prefix string) []*junit.TestCase {
+	if n.lastPod == nil {
+		return nil
+	}
+	pod := n.lastPod
+	n.lastPod = nil
+
+	names := sets.NewString(strings.Split(pod.Annotations[annotationContainersForSubTestResults], ",")...)
+	names.Delete("")
+	if len(names) == 0 {
+		return nil
+	}
+	var tests []*junit.TestCase
+	for _, status := range pod.Status.ContainerStatuses {
+		if names.Has(status.Name) {
+			if t := status.State.Terminated; t != nil {
+				test := &junit.TestCase{
+					Name:     fmt.Sprintf("%scontainer %s", prefix, status.Name),
+					Duration: t.FinishedAt.Sub(t.StartedAt.Time).Seconds(),
+				}
+				if t.ExitCode != 0 {
+					test.FailureOutput = &junit.FailureOutput{
+						Output: t.Message,
+					}
+				}
+				tests = append(tests, test)
+				continue
+			}
+		}
+	}
+	return tests
+}
+
+func stringInSlice(arr []string, s string) bool {
+	for _, item := range arr {
+		if item == s {
+			return true
+		}
+	}
+	return false
+}
 
 type podClient struct {
 	coreclientset.PodsGetter
@@ -212,6 +298,11 @@ done
 
 type podContainersMap map[string]map[string]struct{}
 
+// ArtifactWorker tracks pods that have completed and have an 'artifacts' container
+// in them and will extract files from the container to a local directory. It also
+// gathers container logs on all pods.
+//
+// This worker is thread safe and may be invoked in parallel.
 type ArtifactWorker struct {
 	dir       string
 	podClient PodClient
@@ -219,9 +310,10 @@ type ArtifactWorker struct {
 
 	podsToDownload chan string
 
-	lock      sync.Mutex
-	remaining podContainersMap
-	required  podContainersMap
+	lock         sync.Mutex
+	remaining    podContainersMap
+	required     podContainersMap
+	hasArtifacts sets.String
 }
 
 func NewArtifactWorker(podClient PodClient, artifactDir, namespace string) *ArtifactWorker {
@@ -231,8 +323,9 @@ func NewArtifactWorker(podClient PodClient, artifactDir, namespace string) *Arti
 		namespace: namespace,
 		dir:       artifactDir,
 
-		remaining: make(podContainersMap),
-		required:  make(podContainersMap),
+		remaining:    make(podContainersMap),
+		required:     make(podContainersMap),
+		hasArtifacts: sets.NewString(),
 
 		podsToDownload: make(chan string, 4),
 	}
@@ -242,7 +335,7 @@ func NewArtifactWorker(podClient PodClient, artifactDir, namespace string) *Arti
 
 func (w *ArtifactWorker) run() {
 	for podName := range w.podsToDownload {
-		if err := w.downloadArtifacts(podName); err != nil {
+		if err := w.downloadArtifacts(podName, w.hasArtifacts.Has(podName)); err != nil {
 			log.Printf("error: %v", err)
 		}
 		// indicate we are done with this pod by removing the map entry
@@ -252,7 +345,19 @@ func (w *ArtifactWorker) run() {
 	}
 }
 
-func (w *ArtifactWorker) downloadArtifacts(podName string) error {
+func (w *ArtifactWorker) downloadArtifacts(podName string, hasArtifacts bool) error {
+	if err := os.MkdirAll(w.dir, 0750); err != nil {
+		return fmt.Errorf("unable to create artifact directory %s: %v", w.dir, err)
+	}
+	if err := gatherContainerLogsOutput(w.podClient, filepath.Join(w.dir, "container-logs"), w.namespace, podName); err != nil {
+		log.Printf("error: unable to gather container logs: %v", err)
+	}
+
+	// only pods with an artifacts container should be gathered
+	if !hasArtifacts {
+		return nil
+	}
+
 	defer func() {
 		// signal to artifacts container to gracefully shut don
 		err := removeFile(w.podClient, w.namespace, podName, "artifacts", []string{"/tmp/done"})
@@ -271,12 +376,6 @@ func (w *ArtifactWorker) downloadArtifacts(podName string) error {
 		// give up, expect another process to clean up the pods
 	}()
 
-	if err := os.MkdirAll(w.dir, 0750); err != nil {
-		return fmt.Errorf("unable to create artifact directory %s: %v", w.dir, err)
-	}
-	if err := gatherContainerLogsOutput(w.podClient, filepath.Join(w.dir, "container-logs"), w.namespace, podName); err != nil {
-		log.Printf("error: unable to gather container logs: %v", err)
-	}
 	if err := copyArtifacts(w.podClient, w.dir, w.namespace, podName, "artifacts", []string{"/tmp/artifacts"}); err != nil {
 		return fmt.Errorf("unable to retrieve artifacts from pod %s: %v", podName, err)
 	}
@@ -301,6 +400,7 @@ func (w *ArtifactWorker) CollectFromPod(podName string, hasArtifacts []string, w
 
 	for _, name := range hasArtifacts {
 		if name == "artifacts" {
+			w.hasArtifacts.Insert(podName)
 			continue
 		}
 		if _, ok := m[name]; !ok {
@@ -310,6 +410,7 @@ func (w *ArtifactWorker) CollectFromPod(podName string, hasArtifacts []string, w
 
 	for _, name := range waitForContainers {
 		if name == "artifacts" {
+			w.hasArtifacts[podName] = struct{}{}
 			continue
 		}
 		if _, ok := m[name]; !ok {
@@ -404,7 +505,7 @@ func addArtifactContainersFromPod(pod *coreapi.Pod, worker *ArtifactWorker) {
 		containers = append(containers, container.Name)
 	}
 	var waitForContainers []string
-	if names := pod.Annotations["ci-operator.openshift.io/wait-for-container-artifacts"]; len(names) > 0 {
+	if names := pod.Annotations[annotationWaitForContainerArtifacts]; len(names) > 0 {
 		waitForContainers = strings.Split(names, ",")
 	}
 	worker.CollectFromPod(pod.Name, containers, waitForContainers)

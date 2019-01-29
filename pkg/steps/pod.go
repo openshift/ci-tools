@@ -14,6 +14,7 @@ import (
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 
 	"github.com/openshift/ci-operator/pkg/api"
+	"github.com/openshift/ci-operator/pkg/junit"
 )
 
 type PodStepConfiguration struct {
@@ -32,6 +33,8 @@ type podStep struct {
 	istClient   imageclientset.ImageStreamTagsGetter
 	artifactDir string
 	jobSpec     *api.JobSpec
+
+	subTests []*junit.TestCase
 }
 
 func (s *podStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
@@ -92,6 +95,7 @@ func (s *podStep) Run(ctx context.Context, dry bool) error {
 		artifacts.CollectFromPod(pod.Name, []string{s.name}, nil)
 		notifier = artifacts
 	}
+	testCaseNotifier := NewTestCaseNotifier(notifier)
 
 	if owner := s.jobSpec.Owner(); owner != nil {
 		pod.OwnerReferences = append(pod.OwnerReferences, *owner)
@@ -117,11 +121,18 @@ func (s *podStep) Run(ctx context.Context, dry bool) error {
 		return fmt.Errorf("failed to create or restart %s pod: %v", s.name, err)
 	}
 
-	if err := waitForPodCompletion(s.podClient.Pods(s.jobSpec.Namespace), pod.Name, notifier); err != nil {
+	defer func() {
+		s.subTests = testCaseNotifier.SubTests(s.Description() + " - ")
+	}()
+
+	if err := waitForPodCompletion(s.podClient.Pods(s.jobSpec.Namespace), pod.Name, testCaseNotifier); err != nil {
 		return fmt.Errorf("test %q failed: %v", pod.Name, err)
 	}
-
 	return nil
+}
+
+func (s *podStep) SubTests() []*junit.TestCase {
+	return s.subTests
 }
 
 func (s *podStep) gatherArtifacts() bool {
@@ -157,7 +168,7 @@ func (s *podStep) Provides() (api.ParameterMap, api.StepLink) {
 func (s *podStep) Name() string { return s.config.As }
 
 func (s *podStep) Description() string {
-	return fmt.Sprintf("Run the tests for %s in a pod and wait for success or failure", s.config.As)
+	return fmt.Sprintf("Run test %s", s.config.As)
 }
 
 func TestStep(config api.TestStepConfiguration, resources api.ResourceConfiguration, podClient PodClient, artifactDir string, jobSpec *api.JobSpec) api.Step {

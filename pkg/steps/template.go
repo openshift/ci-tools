@@ -26,6 +26,7 @@ import (
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 
 	"github.com/openshift/ci-operator/pkg/api"
+	"github.com/openshift/ci-operator/pkg/junit"
 )
 
 type templateExecutionStep struct {
@@ -35,6 +36,8 @@ type templateExecutionStep struct {
 	podClient      PodClient
 	artifactDir    string
 	jobSpec        *api.JobSpec
+
+	subTests []*junit.TestCase
 }
 
 func (s *templateExecutionStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
@@ -149,15 +152,23 @@ func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 			log.Printf("Running pod %s", ref.Ref.Name)
 		}
 	}
+
+	testCaseNotifier := NewTestCaseNotifier(notifier)
 	for _, ref := range instance.Status.Objects {
 		switch {
 		case ref.Ref.Kind == "Pod" && ref.Ref.APIVersion == "v1":
-			if err := waitForPodCompletion(s.podClient.Pods(s.jobSpec.Namespace), ref.Ref.Name, notifier); err != nil {
+			err := waitForPodCompletion(s.podClient.Pods(s.jobSpec.Namespace), ref.Ref.Name, testCaseNotifier)
+			s.subTests = append(s.subTests, testCaseNotifier.SubTests(fmt.Sprintf("%s - %s ", s.Description(), ref.Ref.Name))...)
+			if err != nil {
 				return fmt.Errorf("template pod %q failed: %v", ref.Ref.Name, err)
 			}
 		}
 	}
 	return nil
+}
+
+func (s *templateExecutionStep) SubTests() []*junit.TestCase {
+	return s.subTests
 }
 
 func (s *templateExecutionStep) Done() (bool, error) {
@@ -216,7 +227,7 @@ func (s *templateExecutionStep) Provides() (api.ParameterMap, api.StepLink) {
 func (s *templateExecutionStep) Name() string { return s.template.Name }
 
 func (s *templateExecutionStep) Description() string {
-	return fmt.Sprintf("Instantiate the template %s into the operator namespace and wait for any pods to complete", s.template.Name)
+	return fmt.Sprintf("Run template %s", s.template.Name)
 }
 
 func TemplateExecutionStep(template *templateapi.Template, params *DeferredParameters, podClient PodClient, templateClient TemplateClient, artifactDir string, jobSpec *api.JobSpec) api.Step {
@@ -549,11 +560,13 @@ func waitForPodCompletion(podClient coreclientset.PodInterface, name string, not
 	if notifier == nil {
 		notifier = NopNotifier
 	}
+	skipLogs := false
 	completed := make(map[string]time.Time)
 	for {
-		retry, err := waitForPodCompletionOrTimeout(podClient, name, completed, notifier)
+		retry, err := waitForPodCompletionOrTimeout(podClient, name, completed, notifier, skipLogs)
 		// continue waiting if the container notifier is not yet complete for the given pod
 		if !notifier.Done(name) {
+			skipLogs = true
 			if !retry || err == nil {
 				time.Sleep(5 * time.Second)
 			}
@@ -569,7 +582,7 @@ func waitForPodCompletion(podClient coreclientset.PodInterface, name string, not
 	return nil
 }
 
-func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name string, completed map[string]time.Time, notifier ContainerNotifier) (bool, error) {
+func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name string, completed map[string]time.Time, notifier ContainerNotifier, skipLogs bool) (bool, error) {
 	watcher, err := podClient.Watch(meta.ListOptions{
 		FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String(),
 		Watch:         true,
@@ -593,7 +606,9 @@ func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name st
 	}
 	podLogNewFailedContainers(podClient, pod, completed, notifier)
 	if podJobIsOK(pod) {
-		log.Printf("Pod %s already succeeded in %s", pod.Name, podDuration(pod).Truncate(time.Second))
+		if !skipLogs {
+			log.Printf("Pod %s already succeeded in %s", pod.Name, podDuration(pod).Truncate(time.Second))
+		}
 		return false, nil
 	}
 	if podJobIsFailed(pod) {

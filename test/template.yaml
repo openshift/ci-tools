@@ -6,6 +6,8 @@ objects:
   apiVersion: v1
   metadata:
     name: test
+    annotations:
+      ci-operator.openshift.io/container-sub-tests: test
   spec:
     restartPolicy: Never
     containers:

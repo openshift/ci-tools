@@ -65,7 +65,8 @@ func (s *podStep) Run(ctx context.Context, dry bool) error {
 				CreatedByCILabel: "true",
 			}),
 			Annotations: map[string]string{
-				JobSpecAnnotation: s.jobSpec.RawSpec(),
+				JobSpecAnnotation:                     s.jobSpec.RawSpec(),
+				annotationContainersForSubTestResults: s.name,
 			},
 		},
 		Spec: coreapi.PodSpec{

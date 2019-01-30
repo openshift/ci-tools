@@ -24,10 +24,11 @@ import (
 	"path/filepath"
 
 	"github.com/sirupsen/logrus"
-
+	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp" // support gcp users in .kube/config
 	"k8s.io/test-infra/prow/config"
 	prowflagutil "k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/github"
+	_ "k8s.io/test-infra/prow/hook"
 	"k8s.io/test-infra/prow/logrusutil"
 	"k8s.io/test-infra/prow/plugins"
 	"k8s.io/test-infra/prow/plugins/updateconfig"
@@ -93,9 +94,9 @@ func main() {
 		logrus.WithError(err).Fatal("Error starting plugin configuration agent.")
 	}
 
-	kubeClient, err := o.kubernetes.Client(configAgent.Config().ProwJobNamespace, o.dryRun)
+	_, defaultContext, kubernetesClients, err := o.kubernetes.Client(configAgent.Config().ProwJobNamespace, o.dryRun)
 	if err != nil {
-		logrus.WithError(err).Fatal("Error getting kube client.")
+		logrus.WithError(err).Fatal("Error getting Kubernetes client.")
 	}
 
 	// act like the whole repo just got committed
@@ -109,7 +110,7 @@ func main() {
 		// this error as we can be certain it won't occur
 		if relPath, err := filepath.Rel(o.sourcePath, path); err == nil {
 			changes = append(changes, github.PullRequestChange{
-				Filename: filepath.Join(relPath, info.Name()),
+				Filename: relPath,
 				Status:   github.PullRequestFileAdded,
 			})
 		} else {
@@ -119,8 +120,11 @@ func main() {
 	})
 
 	for cm, data := range updateconfig.FilterChanges(pluginAgent.Config().ConfigUpdater.Maps, changes, logrus.NewEntry(logrus.StandardLogger())) {
+		if cm.Namespace == "" {
+			cm.Namespace = configAgent.Config().ProwJobNamespace
+		}
 		logger := logrus.WithFields(logrus.Fields{"configmap": map[string]string{"name": cm.Name, "namespace": cm.Namespace}})
-		if err := updateconfig.Update(&osFileGetter{root: o.sourcePath}, kubeClient, cm.Name, cm.Namespace, data); err != nil {
+		if err := updateconfig.Update(&osFileGetter{root: o.sourcePath}, kubernetesClients[defaultContext].CoreV1().ConfigMaps(cm.Namespace), cm.Name, cm.Namespace, data, logger); err != nil {
 			logger.WithError(err).Error("failed to update config on cluster")
 		}
 	}

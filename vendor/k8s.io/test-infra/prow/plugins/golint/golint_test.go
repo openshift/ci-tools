@@ -329,6 +329,46 @@ func TestLintCodeSuggestion(t *testing.T) {
 			},
 			comment: "",
 		},
+		{
+			name:       "Check variable declaration: should drop type",
+			codeChange: "@@ -0,0 +1,9 @@\n+/*\n+Package bar comment\n+*/\n+package bar\n+\n+func f() {\n+var myInt int = 7\n+}\n+",
+			pullFiles: map[string][]byte{
+				"qux.go": []byte("/*\nPackage bar comment\n*/\npackage bar\n\nfunc f() {\nvar myInt int = 7\n}\n"),
+			},
+			comment: "```suggestion\nvar myInt = 7\n```\nGolint type-inference: should omit type int from declaration of var myInt; it will be inferred from the right-hand side. <!-- golint -->",
+		},
+		{
+			name:       "Check variable declaration: should drop value (int)",
+			codeChange: "@@ -0,0 +1,9 @@\n+/*\n+Package bar comment\n+*/\n+package bar\n+\n+func f() {\n+var myZeroInt int = 0\n+}\n+",
+			pullFiles: map[string][]byte{
+				"qux.go": []byte("/*\nPackage bar comment\n*/\npackage bar\n\nfunc f() {\nvar myZeroInt int = 0\n}\n"),
+			},
+			comment: "```suggestion\nvar myZeroInt int\n```\nGolint zero-value: should drop = 0 from declaration of var myZeroInt; it is the zero value. <!-- golint -->",
+		},
+		{
+			name:       "Check variable declaration: should drop value (float32)",
+			codeChange: "@@ -0,0 +1,9 @@\n+/*\n+Package bar comment\n+*/\n+package bar\n+\n+func f() {\n+var myZeroFlt float32 = 0.\n+}\n+",
+			pullFiles: map[string][]byte{
+				"qux.go": []byte("/*\nPackage bar comment\n*/\npackage bar\n\nfunc f() {\nvar myZeroFlt float32 = 0.\n}\n"),
+			},
+			comment: "```suggestion\nvar myZeroFlt float32\n```\nGolint zero-value: should drop = 0. from declaration of var myZeroFlt; it is the zero value. <!-- golint -->",
+		},
+		{
+			name:       "Check variable declaration: no value suggestion",
+			codeChange: "@@ -0,0 +1,9 @@\n+/*\n+Package bar comment\n+*/\n+package bar\n+\n+func f() {\n+var myZeroRune2 rune\n+}\n+",
+			pullFiles: map[string][]byte{
+				"qux.go": []byte("/*\nPackage bar comment\n*/\npackage bar\n\nfunc f() {\nvar myZeroRune2 rune\n}\n"),
+			},
+			comment: "",
+		},
+		{
+			name:       "Check variable declaration: no type suggestion",
+			codeChange: "@@ -0,0 +1,9 @@\n+/*\n+Package bar comment\n+*/\n+package bar\n+\n+func f() {\n+var myInt = 7\n+}\n+",
+			pullFiles: map[string][]byte{
+				"qux.go": []byte("/*\nPackage bar comment\n*/\npackage bar\n\nfunc f() {\nvar myInt = 7\n}\n"),
+			},
+			comment: "",
+		},
 	}
 
 	lg, c, err := localgit.New()
@@ -380,6 +420,158 @@ func TestLintCodeSuggestion(t *testing.T) {
 			}
 			if test.comment != gh.comment.Comments[0].Body {
 				t.Fatalf("Expected\n" + test.comment + "\n but got\n" + gh.comment.Comments[0].Body)
+			}
+		}
+	}
+}
+
+func TestLintError(t *testing.T) {
+	var testcases = []struct {
+		name       string
+		codeChange string
+		pullFiles  map[string][]byte
+		comments   []github.DraftReviewComment
+	}{
+		{
+			name: "Golint error",
+			codeChange: "@@ -0,0 +1,15 @@\n+" +
+				"/*\n+" +
+				"Package bar comment\n+" +
+				"*/\n+" +
+				"package bar\n+" +
+				"\n+" +
+				"func f(m []string) {\n+" +
+				"      for _ = range m {\n+" +
+				"      }\n+" +
+				"}\n+" +
+				"\n+" +
+				"for b() error {\n+" +
+				"return nil\n+" +
+				"}\n+",
+			pullFiles: map[string][]byte{
+				"qux.go": []byte("/*\n" +
+					"Package bar comment\n" +
+					"*/\n" +
+					"package bar\n" +
+					"\n" +
+					"func f(m []string) {\n" +
+					"      for _ = range m {\n" +
+					"      }\n" +
+					"}\n" +
+					"\n" +
+					"for b() error {\n" +
+					"return nil\n" +
+					"}\n"),
+			},
+			comments: []github.DraftReviewComment{
+				{
+					Body:     "expected declaration, found 'for'",
+					Position: 11,
+					Path:     "qux.go",
+				},
+				{
+					Body: "computing added lines in qux.go: invalid patch: " +
+						"@@ -0,0 +1,15 @@\n+" +
+						"/*\n+" +
+						"Package bar comment\n+" +
+						"*/\n+" +
+						"package bar\n+" +
+						"\n+" +
+						"func f(m []string) {\n+" +
+						"      for _ = range m {\n+" +
+						"      }\n+" +
+						"}\n+" +
+						"\n+" +
+						"for b() error {\n+" +
+						"return nil\n+" +
+						"}\n+",
+					Position: 0,
+					Path:     "qux.go",
+				},
+			},
+		},
+		{
+			name: "No golint error",
+			codeChange: "@@ -0,0 +1,9 @@\n+" +
+				"/*\n+" +
+				"Package bar comment\n+" +
+				"*/\n+" +
+				"package bar\n+" +
+				"\n+" +
+				"func f() {\n+" +
+				"      var myZeroFlt float32 = 0.\n+" +
+				"}\n+",
+			pullFiles: map[string][]byte{
+				"qux.go": []byte("/*\n" +
+					"Package bar comment\n" +
+					"*/\n" +
+					"package bar\n" +
+					"\n" +
+					"func b() error {\n" +
+					"return nil\n" +
+					"}\n"),
+			},
+			comments: nil,
+		},
+	}
+
+	lg, c, err := localgit.New()
+	if err != nil {
+		t.Fatalf("Making localgit: %v", err)
+	}
+	defer func() {
+		if err := lg.Clean(); err != nil {
+			t.Errorf("Cleaning up localgit: %v", err)
+		}
+		if err := c.Clean(); err != nil {
+			t.Errorf("Cleaning up client: %v", err)
+		}
+	}()
+	if err := lg.MakeFakeRepo("foo", "bar"); err != nil {
+		t.Fatalf("Making fake repo: %v", err)
+	}
+	if err := lg.AddCommit("foo", "bar", initialFiles); err != nil {
+		t.Fatalf("Adding initial commit: %v", err)
+	}
+	if err := lg.CheckoutNewBranch("foo", "bar", "pull/42/head"); err != nil {
+		t.Fatalf("Checking out pull branch: %v", err)
+	}
+
+	for _, test := range testcases {
+		t.Logf("Running test case %q...", test.name)
+		if err := lg.AddCommit("foo", "bar", test.pullFiles); err != nil {
+			t.Fatalf("Adding PR commit: %v", err)
+		}
+		gh := &ghc{
+			changes: []github.PullRequestChange{
+				{
+					Filename: "qux.go",
+					Patch:    test.codeChange,
+				},
+			},
+		}
+		if err := handle(0, gh, c, logrus.NewEntry(logrus.New()), e); err != nil {
+			t.Fatalf("Got error from handle: %v", err)
+		}
+
+		if test.comments == nil {
+			if len(gh.comment.Comments) > 0 {
+				t.Fatalf("Expected no comment, got %d: %v.", len(gh.comment.Comments), gh.comment.Comments)
+			}
+		} else {
+			if len(gh.comment.Comments) != len(test.comments) {
+				t.Fatalf("Expected one comments, got %d: %v.", len(gh.comment.Comments), gh.comment.Comments)
+			}
+			for _, testComment := range test.comments {
+				exists := false
+				for _, actualComment := range gh.comment.Comments {
+					if actualComment == testComment {
+						exists = true
+					}
+				}
+				if !exists {
+					t.Fatalf("Did not get back expected comment %v, actual comments are %v", testComment, gh.comment.Comments)
+				}
 			}
 		}
 	}

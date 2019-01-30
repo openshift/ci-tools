@@ -715,7 +715,8 @@
     "util/homedir",
     "util/integer",
     "util/jsonpath",
-    "util/retry"
+    "util/retry",
+    "util/workqueue"
   ]
   revision = "2cefa64ff137e128daeddbd1775cd775708a05bf"
   version = "kubernetes-1.11.3"
@@ -755,7 +756,7 @@
     "prow/sidecar",
     "testgrid/util/gcs"
   ]
-  revision = "af2b6643335a4342a2e61083ad0a95cd4fcd2ef9"
+  revision = "fa5c18c02d2076a384bf01cb79f799a47a977044"
 
 [[projects]]
   name = "sigs.k8s.io/yaml"

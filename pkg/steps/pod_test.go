@@ -81,7 +81,8 @@ func makeExpectedPod(step *podStep, phaseAfterRun v1.PodPhase) *v1.Pod {
 				"prow.k8s.io/id":          step.jobSpec.ProwJobID,
 			},
 			Annotations: map[string]string{
-				"ci.openshift.io/job-spec": "",
+				"ci.openshift.io/job-spec":                     "",
+				"ci-operator.openshift.io/container-sub-tests": step.name,
 			},
 		},
 		Spec: v1.PodSpec{

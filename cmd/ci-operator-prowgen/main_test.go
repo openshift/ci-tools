@@ -522,6 +522,27 @@ func TestGenerateJobs(t *testing.T) {
 				}},
 			},
 		}, {
+			id: "template test which doesn't require `tag_specification`",
+			config: &ciop.ReleaseBuildConfiguration{
+				Tests: []ciop.TestStepConfiguration{{
+					As: "oTeste",
+					OpenshiftInstallerClusterTestConfiguration: &ciop.OpenshiftInstallerClusterTestConfiguration{
+						ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: "gcp"},
+					},
+				}},
+			},
+			repoInfo: &configFilePathElements{
+				org:            "organization",
+				repo:           "repository",
+				branch:         "branch",
+				configFilename: "konfig.yaml",
+			},
+			expected: &prowconfig.JobConfig{
+				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
+					{JobBase: prowconfig.JobBase{Name: "pull-ci-organization-repository-branch-oTeste"}},
+				}},
+			},
+		}, {
 			id: "Promotion.Namespace is 'openshift' so artifact label is added",
 			config: &ciop.ReleaseBuildConfiguration{
 				Tests:                  []ciop.TestStepConfiguration{},

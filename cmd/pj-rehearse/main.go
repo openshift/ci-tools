@@ -4,6 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
 
 	"github.com/sirupsen/logrus"
 
@@ -54,9 +56,6 @@ func gatherOptions() options {
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually submit rehearsal jobs to Prow")
 	fs.BoolVar(&o.noFail, "no-fail", true, "Whether to actually end unsuccessfuly when something breaks")
 
-	fs.StringVar(&o.configPath, "config-path", "/etc/config/config.yaml", "Path to *master* Prow config.yaml")
-	fs.StringVar(&o.jobConfigPath, "job-config-path", "", "Path to *master* Prow Prow job configs.")
-
 	fs.StringVar(&o.candidatePath, "candidate-path", "", "Path to a openshift/release working copy with a revision to be tested")
 
 	fs.Parse(os.Args[1:])
@@ -64,14 +63,9 @@ func gatherOptions() options {
 }
 
 func validateOptions(o options) error {
-	if len(o.jobConfigPath) == 0 {
-		return fmt.Errorf("--job-config-path was not provided")
-	}
-
 	if len(o.candidatePath) == 0 {
 		return fmt.Errorf("--candidate-path was not provided")
 	}
-
 	return nil
 }
 
@@ -111,7 +105,21 @@ func main() {
 
 	logger.Info("Rehearsing Prow jobs for a configuration PR")
 
-	prowConfig, err := prowconfig.Load(o.configPath, o.jobConfigPath)
+	candidateConfigPath := filepath.Join(o.candidatePath, diffs.ConfigInRepoPath)
+	candidateJobConfigPath := filepath.Join(o.candidatePath, diffs.JobConfigInRepoPath)
+
+	prowPRConfig, err := prowconfig.Load(candidateConfigPath, candidateJobConfigPath)
+	if err != nil {
+		logger.WithError(err).Error("Failed to load PR's Prow config")
+		gracefulExit(o.noFail)
+	}
+
+	if err := gitCheckout(o.candidatePath, jobSpec.Refs.BaseSHA); err != nil {
+		logger.WithError(err).Error("could not checkout worktree")
+		gracefulExit(o.noFail)
+	}
+
+	prowConfig, err := prowconfig.Load(candidateConfigPath, candidateJobConfigPath)
 	if err != nil {
 		logger.WithError(err).Error("Failed to load Prow config")
 		gracefulExit(o.noFail)
@@ -133,7 +141,7 @@ func main() {
 		gracefulExit(o.noFail)
 	}
 
-	changedPresubmits, err := diffs.GetChangedPresubmits(prowConfig, o.candidatePath)
+	changedPresubmits, err := diffs.GetChangedPresubmits(prowConfig, prowPRConfig)
 	if err != nil {
 		logger.WithError(err).Error("Failed to determine which jobs should be rehearsed")
 		gracefulExit(o.noFail)
@@ -143,4 +151,14 @@ func main() {
 		logger.WithError(err).Error("Failed to execute rehearsal jobs")
 		gracefulExit(o.noFail)
 	}
+}
+
+func gitCheckout(candidatePath, baseSHA string) error {
+	cmd := exec.Command("git", "checkout", baseSHA)
+	cmd.Dir = candidatePath
+	stdoutStderr, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("'%s' failed with out: %s and error %v", cmd.Args, stdoutStderr, err)
+	}
+	return nil
 }

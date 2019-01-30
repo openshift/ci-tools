@@ -819,6 +819,7 @@ tests:
   - agent: kubernetes
     branches:
     - ^branch$
+    context: ""
     decorate: true
     decoration_config:
       skip_cloning: true
@@ -1072,6 +1073,7 @@ tests:
   - agent: kubernetes
     branches:
     - branch
+    context: ""
     decorate: true
     decoration_config:
       skip_cloning: true
@@ -1102,6 +1104,7 @@ tests:
   - agent: kubernetes
     branches:
     - ^branch$
+    context: ""
     decorate: true
     decoration_config:
       skip_cloning: true
@@ -1277,6 +1280,7 @@ tests:
 			prowExpectedPostsubmitYAML: []byte(`postsubmits:
   super/duper:
   - agent: kubernetes
+    context: ""
     decorate: true
     decoration_config:
       skip_cloning: true
@@ -1307,6 +1311,7 @@ tests:
   - agent: kubernetes
     branches:
     - ^branch$
+    context: ""
     decorate: true
     decoration_config:
       skip_cloning: true

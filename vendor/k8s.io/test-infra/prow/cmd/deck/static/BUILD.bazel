@@ -13,7 +13,7 @@ ts_library(
     srcs = glob(["common/*.ts"]),
     deps = [
         ":api",
-        "@npm//:moment",
+        "@npm//moment",
     ],
 )
 
@@ -23,6 +23,7 @@ ts_library(
     deps = [
         ":api",
         ":common",
+        "@npm//moment",
     ],
 )
 
@@ -31,7 +32,7 @@ rollup_bundle(
     entry_point = "prow/cmd/deck/static/prow/prow",
     deps = [
         ":prow",
-        "@npm//:moment",
+        "@npm//moment",
     ],
 )
 
@@ -48,7 +49,7 @@ rollup_bundle(
     entry_point = "prow/cmd/deck/static/plugin-help/plugin-help",
     deps = [
         ":plugin_help",
-        "@npm//:dialog-polyfill",
+        "@npm//dialog-polyfill",
     ],
 )
 
@@ -65,7 +66,7 @@ rollup_bundle(
     entry_point = "prow/cmd/deck/static/pr/pr",
     deps = [
         ":pr",
-        "@npm//:dialog-polyfill",
+        "@npm//dialog-polyfill",
     ],
 )
 
@@ -83,7 +84,7 @@ rollup_bundle(
     entry_point = "prow/cmd/deck/static/tide/tide",
     deps = [
         ":tide",
-        "@npm//:moment",
+        "@npm//moment",
     ],
 )
 
@@ -93,6 +94,7 @@ ts_library(
     deps = [
         ":api",
         ":common",
+        "@npm//moment",
     ],
 )
 
@@ -101,7 +103,7 @@ rollup_bundle(
     entry_point = "prow/cmd/deck/static/tide-history/tide-history",
     deps = [
         ":tide_history",
-        "@npm//:moment",
+        "@npm//moment",
     ],
 )
 
@@ -118,7 +120,7 @@ rollup_bundle(
     entry_point = "prow/cmd/deck/static/command-help/command-help",
     deps = [
         ":command_help",
-        "@npm//:dialog-polyfill",
+        "@npm//dialog-polyfill",
     ],
 )
 
@@ -161,12 +163,25 @@ rollup_bundle(
     ],
 )
 
+genrule(
+    name = "labels_css",
+    srcs = [
+        "//label_sync:labels.css.tmpl",
+        "//label_sync:labels.yaml",
+    ],
+    outs = ["labels.css"],
+    cmd = "$(location //label_sync) --action=css --css-template=$(location //label_sync:labels.css.tmpl) --config=$(location //label_sync:labels.yaml) --css-output=$@",
+    tools = [
+        "//label_sync",
+    ],
+)
+
 filegroup(
     name = "resources",
     srcs = glob(
         ["**/*"],
         exclude = ["**/*.js"],
-    ) + glob(["extensions/*.js"]),
+    ) + glob(["extensions/*.js"]) + [":labels_css"],
 )
 
 filegroup(

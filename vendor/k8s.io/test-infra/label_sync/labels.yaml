@@ -8,6 +8,11 @@
 ---
 default:
   labels:
+    - color: 0052cc
+      description: Issues or PRs related to Kubernetes licensing
+      name: area/licensing
+      target: both
+      addedBy: label
     - color: 0ffa16
       description: Indicates a PR has been approved by an approver from all required OWNERS files.
       name: approved
@@ -70,6 +75,12 @@ default:
     - color: c0ff4a
       description: Denotes an issue or PR intended to be handled by the steering committee.
       name: committee/steering
+      target: both
+      prowPlugin: label
+      addedBy: anyone
+    - color: c0ff4a
+      description: Denotes an issue or PR intended to be handled by the product security committee.
+      name: committee/product-security
       target: both
       prowPlugin: label
       addedBy: anyone
@@ -394,6 +405,7 @@ default:
       target: both
       prowPlugin: label
       addedBy: anyone
+      deleteAfter: 2019-01-26T13:00:00Z
     - color: d2b48c
       description: Categorizes an issue or PR as relevant to sig-contributor-experience.
       name: sig/contributor-experience
@@ -542,6 +554,12 @@ default:
       prowPlugin: label
       addedBy: anyone
     - color: d2b48c
+      description: Categorizes an issue or PR as relevant to wg-k8s-infra.
+      name: wg/k8s-infra
+      target: both
+      prowPlugin: label
+      addedBy: anyone
+    - color: d2b48c
       description: Categorizes an issue or PR as relevant to wg-kubeadm-adoption.
       name: wg/kubeadm-adoption
       target: both
@@ -574,6 +592,12 @@ default:
     - color: d2b48c
       description: Categorizes an issue or PR as relevant to wg-security-audit.
       name: wg/security-audit
+      target: both
+      prowPlugin: label
+      addedBy: anyone
+    - color: d2b48c
+      description: Categorizes an issue or PR as relevant to wg-component-standard.
+      name: wg/component-standard
       target: both
       prowPlugin: label
       addedBy: anyone
@@ -633,18 +657,44 @@ repos:
         target: both
         addedBy: label
       - color: 0052cc
+        description: Issues or PRs related to the contributor guide
+        name: area/contributor-guide
+        target: both
+        addedBy: label
+      - color: 0052cc
+        description: Issues or PRs related to contributor summit events
+        name: area/contributor-summit
+        target: both
+        addedBy: label
+      - color: 0052cc
         description: Issues or PRs related to deflaking kubernetes tests
         name: area/deflake
         target: both
         addedBy: label
-      - color: cc99ff
-        description: Categorizes issues related to KEPs and PRs modifying the KEP directory
-        name: kind/kep
+      - color: 0052cc
+        description: Issues or PRs related to the developer guide
+        name: area/developer-guide
         target: both
-        prowPlugin: label
-        addedBy: anyone
+        addedBy: label
+      - color: 0052cc
+        description: Issues or PRs related to the devstats subproject
+        name: area/devstats
+        target: both
+        addedBy: label
+      - color: 0052cc
+        description: Issues or PRs related to the release-team subproject
+        name: area/release-team
+        target: both
+        addedBy: label
   kubernetes/enhancements:
     labels:
+      - color: 0052cc
+        description: Issues or PRs related to the Release Engineering subproject
+        name: area/release-eng
+        previously:
+          - name: area/release-infra
+        target: both
+        addedBy: label
       - color: cc99ff
         description: Categorizes KEP tracking issues and PRs modifying the KEP directory
         name: kind/kep
@@ -673,6 +723,18 @@ repos:
         name: area/deflake
         target: both
         addedBy: label
+      - color: 0052cc
+        description: Issues or PRs related to the hyperkube subproject
+        name: area/hyperkube
+        target: both
+        addedBy: label
+      - color: 0052cc
+        description: Issues or PRs related to the Release Engineering subproject
+        name: area/release-eng
+        previously:
+          - name: area/release-infra
+        target: both
+        addedBy: label
       - color: ededed
         description: Indicates a PR lacks a `priority/foo` label and requires one.
         name: needs-priority
@@ -695,6 +757,29 @@ repos:
         description: Creating, migrating or deleting a Kubernetes GitHub Repository
         name: area/github-repo
         target: issues
+        addedBy: label
+  kubernetes/release:
+    labels:
+      - color: 0052cc
+        description: Issues or PRs related to the Release Engineering subproject
+        name: area/release-eng
+        previously:
+          - name: area/release-infra
+        target: both
+        addedBy: label
+  kubernetes/sig-release:
+    labels:
+      - color: 0052cc
+        description: Issues or PRs related to the Release Engineering subproject
+        name: area/release-eng
+        previously:
+          - name: area/release-infra
+        target: both
+        addedBy: label
+      - color: 0052cc
+        description: Issues or PRs related to the release-team subproject
+        name: area/release-team
+        target: both
         addedBy: label
   kubernetes/test-infra:
     labels:
@@ -789,11 +874,6 @@ repos:
         target: both
         addedBy: label
       - color: 0052cc
-        description: Issues or PRs related to prow's spyglass UI
-        name: area/prow/spyglass
-        target: both
-        addedBy: label
-      - color: 0052cc
         description: Issues or PRs related to prow's entrypoint component
         name: area/prow/entrypoint
         target: both
@@ -826,6 +906,11 @@ repos:
       - color: 0052cc
         description: Issues or PRs related to prow's jenkins-operator component
         name: area/prow/jenkins-operator
+        target: both
+        addedBy: label
+      - color: 0052cc
+        description: Issues or PRs related to prow's knative-build controller component
+        name: area/prow/knative-build
         target: both
         addedBy: label
       - color: 0052cc
@@ -879,6 +964,11 @@ repos:
         target: both
         addedBy: label
       - color: 0052cc
+        description: Issues or PRs related to prow's spyglass UI
+        name: area/prow/spyglass
+        target: both
+        addedBy: label
+      - color: 0052cc
         description: Issues or PRs related to prow's tide component
         name: area/prow/tide
         target: both
@@ -891,6 +981,13 @@ repos:
       - color: 0052cc
         description: Issues or PRs related to prow's pod-utilities component
         name: area/prow/pod-utilities
+        target: both
+        addedBy: label
+      - color: 0052cc
+        description: Issues or PRs related to the Release Engineering subproject
+        name: area/release-eng
+        previously:
+          - name: area/release-infra
         target: both
         addedBy: label
   kubernetes/website:

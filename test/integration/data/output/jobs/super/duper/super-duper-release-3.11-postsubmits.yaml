@@ -3,6 +3,7 @@ postsubmits:
   - agent: kubernetes
     branches:
     - ^release-3\.11$
+    context: ""
     decorate: true
     decoration_config:
       skip_cloning: true
@@ -37,6 +38,7 @@ postsubmits:
   - agent: jenkins
     branches:
     - release-3.11
+    context: ci/openshift-jenkins/legacy
     labels:
       master: ci.openshift.redhat.com
     name: branch-ci-super-duper-release-3.11-legacy

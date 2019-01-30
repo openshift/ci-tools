@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/sirupsen/logrus"
+	logrustest "github.com/sirupsen/logrus/hooks/test"
 
 	"k8s.io/api/core/v1"
 
@@ -503,4 +504,37 @@ func TestWaitForJobsRetries(t *testing.T) {
 	if !success {
 		t.Fail()
 	}
+}
+
+func TestWaitForJobsLog(t *testing.T) {
+	logger, hook := logrustest.NewNullLogger()
+	logger.SetLevel(logrus.DebugLevel)
+	w := watch.NewFakeWithChanSize(2, true)
+	w.Modify(&pjapi.ProwJob{
+		ObjectMeta: metav1.ObjectMeta{Name: "success"},
+		Status:     pjapi.ProwJobStatus{State: pjapi.SuccessState}})
+	w.Modify(&pjapi.ProwJob{
+		ObjectMeta: metav1.ObjectMeta{Name: "failure"},
+		Status:     pjapi.ProwJobStatus{State: pjapi.FailureState}})
+	cs := fake.NewSimpleClientset()
+	cs.Fake.PrependWatchReactor("prowjobs", func(clientgo_testing.Action) (bool, watch.Interface, error) {
+		return true, w, nil
+	})
+	_, err := waitForJobs(sets.NewString("success", "failure"), "", cs.ProwV1().ProwJobs("test"), logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	check := func(name string, level logrus.Level, state *pjapi.ProwJobState) {
+		for _, entry := range hook.Entries {
+			if entry.Level == level && entry.Data["name"] == name && (state == nil || entry.Data["state"].(pjapi.ProwJobState) == *state) {
+				return
+			}
+		}
+		t.Errorf("no log entry with name == %q, level == %q, and state == %q found", name, level, *state)
+	}
+	successState, failureState := pjapi.SuccessState, pjapi.FailureState
+	check("success", logrus.DebugLevel, nil)
+	check("success", logrus.InfoLevel, &successState)
+	check("failure", logrus.DebugLevel, nil)
+	check("failure", logrus.ErrorLevel, &failureState)
 }

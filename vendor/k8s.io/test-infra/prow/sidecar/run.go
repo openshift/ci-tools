@@ -18,34 +18,56 @@ package sidecar
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"os/signal"
-	"path/filepath"
-	"strconv"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
-	"github.com/fsnotify/fsnotify"
 	"github.com/sirupsen/logrus"
 
+	"k8s.io/test-infra/prow/entrypoint"
 	"k8s.io/test-infra/prow/kube"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 	"k8s.io/test-infra/prow/pod-utils/gcs"
+	"k8s.io/test-infra/prow/pod-utils/wrapper"
 )
+
+func nameEntry(idx int, opt wrapper.Options) string {
+	return fmt.Sprintf("entry %d: %s", idx, strings.Join(opt.Args, " "))
+}
+
+func wait(ctx context.Context, entries []wrapper.Options) (bool, bool, int) {
+	passed := true
+	aborted := false
+	var failures int
+
+	for _, opt := range entries {
+		returnCode, err := wrapper.WaitForMarker(ctx, opt.MarkerFile)
+		passed = passed && err == nil && returnCode == 0
+		aborted = aborted || returnCode == entrypoint.AbortedErrorCode
+		if returnCode != 0 && returnCode != entrypoint.PreviousErrorCode {
+			failures++
+		}
+	}
+	return passed, aborted, failures
+}
 
 // Run will watch for the process being wrapped to exit
 // and then post the status of that process and any artifacts
 // to cloud storage.
-func (o Options) Run() error {
+func (o Options) Run(ctx context.Context) (int, error) {
 	spec, err := downwardapi.ResolveSpecFromEnv()
 	if err != nil {
-		return fmt.Errorf("could not resolve job spec: %v", err)
+		return 0, fmt.Errorf("could not resolve job spec: %v", err)
 	}
+
+	ctx, cancel := context.WithCancel(ctx)
 
 	// If we are being asked to terminate by the kubelet but we have
 	// NOT seen the test process exit cleanly, we need a to start
@@ -58,91 +80,91 @@ func (o Options) Run() error {
 	go func() {
 		select {
 		case s := <-interrupt:
-			logrus.Errorf("Received an interrupt: %s", s)
-			o.doUpload(spec, false, true, nil)
+			logrus.Errorf("Received an interrupt: %s, cancelling...", s)
+			cancel()
+		case <-ctx.Done():
 		}
 	}()
 
-	// Only start watching file events if the file doesn't exist
-	// If the file exists, it means the main process already completed.
-	if _, err := os.Stat(o.WrapperOptions.MarkerFile); os.IsNotExist(err) {
-		watcher, err := fsnotify.NewWatcher()
-		if err != nil {
-			return fmt.Errorf("could not begin fsnotify watch: %v", err)
-		}
-		defer watcher.Close()
-
-		ticker := time.NewTicker(30 * time.Second)
-		group := sync.WaitGroup{}
-		group.Add(1)
-		go func() {
-			defer group.Done()
-			for {
-				select {
-				case event := <-watcher.Events:
-					if event.Name == o.WrapperOptions.MarkerFile && event.Op&fsnotify.Create == fsnotify.Create {
-						return
-					}
-				case err := <-watcher.Errors:
-					logrus.WithError(err).Info("Encountered an error during fsnotify watch")
-				case <-ticker.C:
-					if _, err := os.Stat(o.WrapperOptions.MarkerFile); err == nil {
-						return
-					}
-				}
-			}
-		}()
-
-		dir := filepath.Dir(o.WrapperOptions.MarkerFile)
-		if err := watcher.Add(dir); err != nil {
-			return fmt.Errorf("could not add to fsnotify watch: %v", err)
-		}
-		group.Wait()
-		ticker.Stop()
+	if o.DeprecatedWrapperOptions != nil {
+		// This only fires if the prowjob controller and sidecar are at different commits
+		logrus.Warnf("Using deprecated wrapper_options instead of entries. Please update prow/pod-utils/decorate before June 2019")
 	}
+	entries := o.entries()
+	passed, aborted, failures := wait(ctx, entries)
 
+	cancel()
 	// If we are being asked to terminate by the kubelet but we have
 	// seen the test process exit cleanly, we need a chance to upload
 	// artifacts to GCS. The only valid way for this program to exit
-	// after a SIGINT or SIGTERM in this situation is to finish]
+	// after a SIGINT or SIGTERM in this situation is to finish
 	// uploading, so we ignore the signals.
 	signal.Ignore(os.Interrupt, syscall.SIGTERM)
 
-	passed := false
-	aborted := false
-	returnCodeData, err := ioutil.ReadFile(o.WrapperOptions.MarkerFile)
-	if err != nil {
-		logrus.WithError(err).Warn("Could not read return code from marker file")
-	} else {
-		returnCode, err := strconv.Atoi(strings.TrimSpace(string(returnCodeData)))
+	buildLog := logReader(entries)
+	metadata := combineMetadata(entries)
+	return failures, o.doUpload(spec, passed, aborted, metadata, buildLog)
+}
+
+const errorKey = "sidecar-errors"
+
+func start(part string) string {
+	return fmt.Sprintf("\n==== start of %s log ====\n", part)
+}
+
+func logReader(entries []wrapper.Options) io.Reader {
+	var readers []io.Reader
+	for i, opt := range entries {
+		ent := nameEntry(i, opt)
+		if len(entries) > 1 {
+			readers = append(readers, strings.NewReader(start(ent)))
+		}
+		log, err := os.Open(opt.ProcessLog)
 		if err != nil {
-			logrus.WithError(err).Warn("Failed to parse process return code")
+			logrus.WithError(err).Errorf("Failed to open %s", opt.ProcessLog)
+			readers = append(readers, strings.NewReader(fmt.Sprintf("Failed to open %s: %v\n", opt.ProcessLog, err)))
+		} else {
+			readers = append(readers, log)
 		}
-		passed = returnCode == 0 && err == nil
-		aborted = returnCode == 130
 	}
+	return io.MultiReader(readers...)
+}
 
-	metadataFile := o.WrapperOptions.MetadataFile
-	if _, err := os.Stat(metadataFile); err != nil {
-		if !os.IsNotExist(err) {
-			logrus.WithError(err).Errorf("Failed to stat %s", metadataFile)
-		}
-		return o.doUpload(spec, passed, aborted, nil)
-	}
-
-	metadataRaw, err := ioutil.ReadFile(metadataFile)
-	if err != nil {
-		logrus.WithError(err).Errorf("cannot read %s", metadataFile)
-		return o.doUpload(spec, passed, aborted, nil)
-	}
-
+func combineMetadata(entries []wrapper.Options) map[string]interface{} {
+	errors := map[string]error{}
 	metadata := map[string]interface{}{}
-	if err := json.Unmarshal(metadataRaw, &metadata); err != nil {
-		logrus.WithError(err).Errorf("Failed to unmarshal %s", metadataFile)
-		return o.doUpload(spec, passed, aborted, nil)
-	}
+	for i, opt := range entries {
+		ent := nameEntry(i, opt)
+		metadataFile := opt.MetadataFile
+		if _, err := os.Stat(metadataFile); err != nil {
+			if !os.IsNotExist(err) {
+				logrus.WithError(err).Errorf("Failed to stat %s", metadataFile)
+				errors[ent] = err
+			}
+			continue
+		}
+		metadataRaw, err := ioutil.ReadFile(metadataFile)
+		if err != nil {
+			logrus.WithError(err).Errorf("cannot read %s", metadataFile)
+			errors[ent] = err
+			continue
+		}
 
-	return o.doUpload(spec, passed, aborted, metadata)
+		piece := map[string]interface{}{}
+		if err := json.Unmarshal(metadataRaw, &piece); err != nil {
+			logrus.WithError(err).Errorf("Failed to unmarshal %s", metadataFile)
+			errors[ent] = err
+			continue
+		}
+
+		for k, v := range piece {
+			metadata[k] = v // TODO(fejta): consider deeper merge
+		}
+	}
+	if len(errors) > 0 {
+		metadata[errorKey] = errors
+	}
+	return metadata
 }
 
 func getRevisionFromRef(refs *kube.Refs) string {
@@ -157,9 +179,9 @@ func getRevisionFromRef(refs *kube.Refs) string {
 	return refs.BaseRef
 }
 
-func (o Options) doUpload(spec *downwardapi.JobSpec, passed, aborted bool, metadata map[string]interface{}) error {
+func (o Options) doUpload(spec *downwardapi.JobSpec, passed, aborted bool, metadata map[string]interface{}, logReader io.Reader) error {
 	uploadTargets := map[string]gcs.UploadFunc{
-		"build-log.txt": gcs.FileUpload(o.WrapperOptions.ProcessLog),
+		"build-log.txt": gcs.DataUpload(logReader),
 	}
 
 	var result string
@@ -172,14 +194,7 @@ func (o Options) doUpload(spec *downwardapi.JobSpec, passed, aborted bool, metad
 		result = "FAILURE"
 	}
 
-	// TODO(krzyzacy): Unify with downstream spyglass definition
-	finished := struct {
-		Timestamp int64                  `json:"timestamp"`
-		Passed    bool                   `json:"passed"`
-		Result    string                 `json:"result"`
-		Metadata  map[string]interface{} `json:"metadata,omitempty"`
-		Revision  string                 `json:"revision,omitempty"`
-	}{
+	finished := gcs.Finished{
 		Timestamp: time.Now().Unix(),
 		Passed:    passed,
 		Result:    result,

@@ -7,10 +7,10 @@ plank:
     timeout: 7200000000000 # 2h
     grace_period: 15000000000 # 15s
     utility_images:
-      clonerefs: "gcr.io/k8s-prow/clonerefs:v20190105-5475440"
-      initupload: "gcr.io/k8s-prow/initupload:v20190105-5475440"
-      entrypoint: "gcr.io/k8s-prow/entrypoint:v20190105-5475440"
-      sidecar: "gcr.io/k8s-prow/sidecar:v20190105-5475440"
+      clonerefs: "gcr.io/k8s-prow/clonerefs:v20190125-2aca69d"
+      initupload: "gcr.io/k8s-prow/initupload:v20190125-2aca69d"
+      entrypoint: "gcr.io/k8s-prow/entrypoint:v20190125-2aca69d"
+      sidecar: "gcr.io/k8s-prow/sidecar:v20190125-2aca69d"
     gcs_configuration:
       bucket: "kubernetes-jenkins"
       path_strategy: "legacy"
@@ -100,7 +100,15 @@ branch-protection:
             users: []
             teams:
             - stage-bots
+        csi-translation-lib:
+          restrictions:
+            users: []
+            teams:
+            - stage-bots
         dashboard:
+          required_status_checks:
+            contexts:
+            - continuous-integration/travis-ci/pr
           required_pull_request_reviews:
             required_approving_review_count: 1
         dns:
@@ -348,6 +356,7 @@ tide:
     - kubernetes/cloud-provider-azure
     - kubernetes/cloud-provider-gcp
     - kubernetes/cloud-provider-openstack
+    - kubernetes/cloud-provider-sample
     - kubernetes/cloud-provider-vsphere
     - kubernetes/cluster-registry
     - kubernetes/community
@@ -364,7 +373,7 @@ tide:
     - kubernetes/ingress-nginx
     - kubernetes/k8s.io
     - kubernetes/klog
-    - kubernetes/komposer
+    - kubernetes/kompose
     - kubernetes/kops
     - kubernetes/kube-deploy
     - kubernetes/kube-openapi
@@ -433,12 +442,13 @@ tide:
     kubernetes-client/csharp: squash
     kubernetes-client/gen: squash
     kubernetes-incubator/service-catalog: squash
+    kubernetes-sigs/cluster-api: squash
     kubernetes-sigs/cluster-api-provider-aws: squash
+    kubernetes-sigs/cluster-api-provider-azure: squash
     kubernetes-sigs/cluster-api-provider-digitalocean: squash
     kubernetes-sigs/cluster-api-provider-gcp: squash
     kubernetes-sigs/cluster-api-provider-openstack: squash
     kubernetes-sigs/cluster-api-provider-vsphere: squash
-    kubernetes-sigs/cluster-api: squash
     kubernetes-sigs/kubespray: squash
     kubernetes/dashboard: squash
     kubernetes/kube-deploy: squash
@@ -449,6 +459,12 @@ tide:
   context_options:
     optional-contexts:
     - "Submit Queue"
+    orgs:
+     kubernetes:
+      repos:
+        dashboard:
+          skip-unknown-contexts: true
+          from-branch-protection: true
 
 push_gateway:
   endpoint: pushgateway
@@ -530,9 +546,9 @@ presets:
   env:
   - name: USER
     value: prow
-  - name: JENKINS_AWS_SSH_PRIVATE_KEY_FILE
+  - name: AWS_SSH_PRIVATE_KEY_FILE
     value: /etc/aws-ssh/aws-ssh-private
-  - name: JENKINS_AWS_SSH_PUBLIC_KEY_FILE
+  - name: AWS_SSH_PUBLIC_KEY_FILE
     value: /etc/aws-ssh/aws-ssh-public
   volumes:
   - name: aws-ssh
@@ -542,20 +558,6 @@ presets:
   volumeMounts:
   - name: aws-ssh
     mountPath: /etc/aws-ssh
-    readOnly: true
-- labels:
-    preset-aws-credential: "true"
-  env:
-  - name: JENKINS_AWS_CREDENTIALS_FILE
-    value: /etc/aws-cred/credentials
-  volumes:
-  - name: aws-cred
-    secret:
-      defaultMode: 0400
-      secretName: aws-cred-new
-  volumeMounts:
-  - name: aws-cred
-    mountPath: /etc/aws-cred
     readOnly: true
 # storage / caching presets
 - labels:

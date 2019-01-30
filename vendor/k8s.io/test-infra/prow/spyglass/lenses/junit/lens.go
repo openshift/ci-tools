@@ -19,6 +19,7 @@ package junit
 
 import (
 	"bytes"
+	"sort"
 
 	junit "github.com/joshdk/go-junit"
 	"github.com/sirupsen/logrus"
@@ -84,64 +85,81 @@ type TestResult struct {
 
 // Body renders the <body> for JUnit tests
 func (lens Lens) Body(artifacts []lenses.Artifact, resourceDir string, data string) string {
-	type JunitViewData struct {
+	type testResults struct {
+		junit []junit.Test
+		link  string
+		path  string
+		err   error
+	}
+	resultChan := make(chan testResults)
+	for _, artifact := range artifacts {
+		go func(artifact lenses.Artifact) {
+			result := testResults{
+				link: artifact.CanonicalLink(),
+				path: artifact.JobPath(),
+			}
+			var contents []byte
+			contents, result.err = artifact.ReadAll()
+			if result.err != nil {
+				logrus.WithError(result.err).Error("Error reading artifact")
+				resultChan <- result
+				return
+			}
+			var suites []junit.Suite
+			suites, result.err = junit.Ingest(contents)
+			if result.err != nil {
+				logrus.WithError(result.err).Error("Error parsing junit file.")
+				resultChan <- result
+				return
+			}
+			for _, suite := range suites {
+				for _, test := range suite.Tests {
+					result.junit = append(result.junit, test)
+				}
+			}
+			resultChan <- result
+		}(artifact)
+	}
+	results := make([]testResults, 0, len(artifacts))
+	for range artifacts {
+		results = append(results, <-resultChan)
+	}
+	sort.Slice(results, func(i, j int) bool { return results[i].path < results[j].path })
+
+	jvd := struct {
 		NumTests int
 		Passed   []TestResult
 		Failed   []TestResult
 		Skipped  []TestResult
-	}
-
-	jvd := JunitViewData{
-		Passed:   []TestResult{},
-		Failed:   []TestResult{},
-		Skipped:  []TestResult{},
-		NumTests: 0,
-	}
-
-	var err error
-	for _, a := range artifacts {
-		contents, err := a.ReadAll()
-		if err != nil {
-			logrus.WithError(err).Error("Error reading artifact")
+	}{}
+	for _, result := range results {
+		if result.err != nil {
 			continue
 		}
-		suites, err := junit.Ingest(contents)
-		if err != nil {
-			logrus.WithError(err).Error("Error parsing junit file.")
-			continue
-		}
-		for _, suite := range suites {
-			for _, test := range suite.Tests {
-				if test.Status == "failed" {
-					jvd.Failed = append(jvd.Failed, TestResult{
-						Junit: test,
-						Link:  a.CanonicalLink(),
-					})
-				} else if test.Status == "skipped" {
-					jvd.Skipped = append(jvd.Skipped, TestResult{
-						Junit: test,
-						Link:  a.CanonicalLink(),
-					})
-				} else if test.Status == "passed" {
-					jvd.Passed = append(jvd.Passed, TestResult{
-						Junit: test,
-						Link:  a.CanonicalLink(),
-					})
-				} else {
-					err = fmt.Errorf("Invalid test status string: %s", test.Status)
-					logrus.Error(err)
-				}
+		for _, test := range result.junit {
+			if test.Status == "failed" {
+				jvd.Failed = append(jvd.Failed, TestResult{
+					Junit: test,
+					Link:  result.link,
+				})
+			} else if test.Status == "skipped" {
+				jvd.Skipped = append(jvd.Skipped, TestResult{
+					Junit: test,
+					Link:  result.link,
+				})
+			} else if test.Status == "passed" {
+				jvd.Passed = append(jvd.Passed, TestResult{
+					Junit: test,
+					Link:  result.link,
+				})
+			} else {
+				logrus.WithField("status", test.Status).Error("invalid JUnit test status string")
 			}
 		}
-		jvd.NumTests = len(jvd.Passed) + len(jvd.Failed) + len(jvd.Skipped)
-
 	}
 
-	if jvd.NumTests == 0 {
-		if err != nil {
-			return fmt.Sprintf("Failed to parse JUnit test results: %v", err)
-		}
-		return "Found no JUnit tests"
+	if jvd.NumTests = len(jvd.Passed) + len(jvd.Failed) + len(jvd.Skipped); jvd.NumTests == 0 {
+		return "Found no valid JUnit test results"
 	}
 
 	junitTemplate, err := template.ParseFiles(filepath.Join(resourceDir, "template.html"))

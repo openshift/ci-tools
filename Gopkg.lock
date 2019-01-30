@@ -331,7 +331,10 @@
 
 [[projects]]
   name = "github.com/sirupsen/logrus"
-  packages = ["."]
+  packages = [
+    ".",
+    "hooks/test"
+  ]
   revision = "e1e72e9de974bd926e5c56f83753fba2df402ce5"
   version = "v1.3.0"
 
@@ -715,7 +718,8 @@
     "util/homedir",
     "util/integer",
     "util/jsonpath",
-    "util/retry"
+    "util/retry",
+    "util/workqueue"
   ]
   revision = "2cefa64ff137e128daeddbd1775cd775708a05bf"
   version = "kubernetes-1.11.3"
@@ -733,8 +737,10 @@
     "prow/apis/prowjobs",
     "prow/apis/prowjobs/v1",
     "prow/client/clientset/versioned",
+    "prow/client/clientset/versioned/fake",
     "prow/client/clientset/versioned/scheme",
     "prow/client/clientset/versioned/typed/prowjobs/v1",
+    "prow/client/clientset/versioned/typed/prowjobs/v1/fake",
     "prow/clonerefs",
     "prow/config",
     "prow/config/org",
@@ -753,7 +759,7 @@
     "prow/sidecar",
     "testgrid/util/gcs"
   ]
-  revision = "af2b6643335a4342a2e61083ad0a95cd4fcd2ef9"
+  revision = "fa5c18c02d2076a384bf01cb79f799a47a977044"
 
 [[projects]]
   name = "sigs.k8s.io/yaml"
@@ -764,6 +770,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "d861a3ec0a409f2fd36248d50ee258620c86ba5ef4897444773eb8b66b4c22c2"
+  inputs-digest = "e8185b25c709d6541d568e20dcaa4fac1ca4393cc5e6116aad635a6871fcbccb"
   solver-name = "gps-cdcl"
   solver-version = 1

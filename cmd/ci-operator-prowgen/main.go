@@ -375,7 +375,11 @@ func generateJobs(
 		if element.ContainerTestConfiguration != nil {
 			podSpec = generatePodSpec(repoInfo.configFilename, element.As)
 		} else {
-			podSpec = generatePodSpecTemplate(repoInfo.org, repoInfo.repo, repoInfo.configFilename, configSpec.ReleaseTagConfiguration.Name, &element)
+			var release string
+			if c := configSpec.ReleaseTagConfiguration; c != nil {
+				release = c.Name
+			}
+			podSpec = generatePodSpecTemplate(repoInfo.org, repoInfo.repo, repoInfo.configFilename, release, &element)
 		}
 		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(element.As, repoInfo, podSpec))
 	}

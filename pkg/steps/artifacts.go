@@ -382,9 +382,11 @@ func (w *ArtifactWorker) downloadArtifacts(podName string, hasArtifacts bool) er
 	return nil
 }
 
-func (w *ArtifactWorker) CollectFromPod(podName string, hasArtifacts []string, waitForContainers []string) {
+func (w *ArtifactWorker) CollectFromPod(podName string, hasArtifactsContainer bool, hasArtifacts []string, waitForContainers []string) {
 	w.lock.Lock()
 	defer w.lock.Unlock()
+
+	w.hasArtifacts.Insert(podName)
 
 	m := w.remaining[podName]
 	if m == nil {
@@ -400,7 +402,6 @@ func (w *ArtifactWorker) CollectFromPod(podName string, hasArtifacts []string, w
 
 	for _, name := range hasArtifacts {
 		if name == "artifacts" {
-			w.hasArtifacts.Insert(podName)
 			continue
 		}
 		if _, ok := m[name]; !ok {
@@ -410,7 +411,6 @@ func (w *ArtifactWorker) CollectFromPod(podName string, hasArtifacts []string, w
 
 	for _, name := range waitForContainers {
 		if name == "artifacts" {
-			w.hasArtifacts[podName] = struct{}{}
 			continue
 		}
 		if _, ok := m[name]; !ok {
@@ -443,6 +443,9 @@ func (w *ArtifactWorker) Cancel() {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 	for podName := range w.remaining {
+		if !w.hasArtifacts.Has(podName) {
+			continue
+		}
 		go func(podName string) {
 			removeFile(w.podClient, w.namespace, podName, "artifacts", []string{"/tmp/done"})
 		}(podName)
@@ -498,7 +501,11 @@ func (w *ArtifactWorker) Done(podName string) bool {
 
 func addArtifactContainersFromPod(pod *coreapi.Pod, worker *ArtifactWorker) {
 	var containers []string
+	var hasArtifactsContainer bool
 	for _, container := range append(append([]coreapi.Container{}, pod.Spec.InitContainers...), pod.Spec.Containers...) {
+		if container.Name == "artifacts" {
+			hasArtifactsContainer = true
+		}
 		if !containerHasVolumeName(container, "artifacts") {
 			continue
 		}
@@ -508,7 +515,7 @@ func addArtifactContainersFromPod(pod *coreapi.Pod, worker *ArtifactWorker) {
 	if names := pod.Annotations[annotationWaitForContainerArtifacts]; len(names) > 0 {
 		waitForContainers = strings.Split(names, ",")
 	}
-	worker.CollectFromPod(pod.Name, containers, waitForContainers)
+	worker.CollectFromPod(pod.Name, hasArtifactsContainer, containers, waitForContainers)
 }
 
 func containerHasVolumeName(container coreapi.Container, name string) bool {

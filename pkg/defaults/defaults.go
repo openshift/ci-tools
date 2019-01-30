@@ -141,7 +141,7 @@ func FromConfig(
 			step = steps.ReleaseImagesTagStep(*rawStep.ReleaseImagesTagStepConfiguration, srcClient, imageClient, routeGetter, configMapGetter, params, jobSpec)
 			stepLinks = append(stepLinks, step.Creates()...)
 
-			releaseStep = release.AssembleReleaseStep(*rawStep.ReleaseImagesTagStepConfiguration, podClient, imageClient, artifactDir, jobSpec)
+			releaseStep = release.AssembleReleaseStep(*rawStep.ReleaseImagesTagStepConfiguration, config.Resources, podClient, imageClient, artifactDir, jobSpec)
 
 		} else if rawStep.TestStepConfiguration != nil {
 			step = steps.TestStep(*rawStep.TestStepConfiguration, config.Resources, podClient, artifactDir, jobSpec)

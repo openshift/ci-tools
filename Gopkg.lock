@@ -733,8 +733,10 @@
     "prow/apis/prowjobs",
     "prow/apis/prowjobs/v1",
     "prow/client/clientset/versioned",
+    "prow/client/clientset/versioned/fake",
     "prow/client/clientset/versioned/scheme",
     "prow/client/clientset/versioned/typed/prowjobs/v1",
+    "prow/client/clientset/versioned/typed/prowjobs/v1/fake",
     "prow/clonerefs",
     "prow/config",
     "prow/config/org",
@@ -764,6 +766,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "d861a3ec0a409f2fd36248d50ee258620c86ba5ef4897444773eb8b66b4c22c2"
+  inputs-digest = "84b4f4c5931d581851fe0a79910470f8e5f8154ad912284afbadf56a59a6f90c"
   solver-name = "gps-cdcl"
   solver-version = 1

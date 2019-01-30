@@ -282,6 +282,10 @@ type TestStepConfiguration struct {
 	// the repository root to _output/local/artifacts.
 	ArtifactDir string `json:"artifact_dir"`
 
+	// Secret is an optional secret object which
+	// will be mounted inside the test container.
+	Secret Secret `json:"secret,omitempty"`
+
 	// Only one of the following can be not-null.
 	ContainerTestConfiguration                      *ContainerTestConfiguration                      `json:"container,omitempty"`
 	OpenshiftAnsibleClusterTestConfiguration        *OpenshiftAnsibleClusterTestConfiguration        `json:"openshift_ansible,omitempty"`
@@ -291,6 +295,15 @@ type TestStepConfiguration struct {
 	OpenshiftAnsibleUpgradeClusterTestConfiguration *OpenshiftAnsibleUpgradeClusterTestConfiguration `json:"openshift_ansible_upgrade,omitempty"`
 	OpenshiftInstallerClusterTestConfiguration      *OpenshiftInstallerClusterTestConfiguration      `json:"openshift_installer,omitempty"`
 	OpenshiftInstallerSrcClusterTestConfiguration   *OpenshiftInstallerSrcClusterTestConfiguration   `json:"openshift_installer_src,omitempty"`
+}
+
+// Secret describes a secret to be mounted inside a test
+// container.
+type Secret struct {
+	// Secret name, used inside test containers
+	Name string `json:"name"`
+	// Secret mount path. Defaults to /usr/test-secret
+	MountPath string `json:"mount_path"`
 }
 
 // ContainerTestConfiguration describes a test that runs a

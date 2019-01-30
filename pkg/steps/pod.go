@@ -17,12 +17,16 @@ import (
 	"github.com/openshift/ci-operator/pkg/junit"
 )
 
+const testSecretName = "test-secret"
+const testSecretDefaultPath = "/usr/test-secrets"
+
 type PodStepConfiguration struct {
 	As                 string
 	From               api.ImageStreamTagReference
 	Commands           string
 	ArtifactDir        string
 	ServiceAccountName string
+	Secret             api.Secret
 }
 
 type podStep struct {
@@ -54,35 +58,7 @@ func (s *podStep) Run(ctx context.Context, dry bool) error {
 	}
 	image := fmt.Sprintf("%s:%s", s.config.From.Name, s.config.From.Tag)
 
-	pod := &coreapi.Pod{
-		ObjectMeta: meta.ObjectMeta{
-			Name: s.config.As,
-			Labels: trimLabels(map[string]string{
-				PersistsLabel:    "false",
-				JobLabel:         s.jobSpec.Job,
-				BuildIdLabel:     s.jobSpec.BuildId,
-				ProwJobIdLabel:   s.jobSpec.ProwJobID,
-				CreatedByCILabel: "true",
-			}),
-			Annotations: map[string]string{
-				JobSpecAnnotation:                     s.jobSpec.RawSpec(),
-				annotationContainersForSubTestResults: s.name,
-			},
-		},
-		Spec: coreapi.PodSpec{
-			ServiceAccountName: s.config.ServiceAccountName,
-			RestartPolicy:      coreapi.RestartPolicyNever,
-			Containers: []coreapi.Container{
-				{
-					Name:                     s.name,
-					Image:                    image,
-					Command:                  []string{"/bin/sh", "-c", "#!/bin/sh\nset -eu\n" + s.config.Commands},
-					Resources:                containerResources,
-					TerminationMessagePolicy: coreapi.TerminationMessageFallbackToLogsOnError,
-				},
-			},
-		},
-	}
+	pod := s.generatePodForStep(image, containerResources)
 
 	// when the test container terminates and artifact directory has been set, grab everything under the directory
 	var notifier ContainerNotifier = NopNotifier
@@ -180,6 +156,7 @@ func TestStep(config api.TestStepConfiguration, resources api.ResourceConfigurat
 			From:        api.ImageStreamTagReference{Name: api.PipelineImageStream, Tag: string(config.ContainerTestConfiguration.From)},
 			Commands:    config.Commands,
 			ArtifactDir: config.ArtifactDir,
+			Secret:      config.Secret,
 		},
 		resources,
 		podClient,
@@ -196,5 +173,69 @@ func PodStep(name string, config PodStepConfiguration, resources api.ResourceCon
 		podClient:   podClient,
 		artifactDir: artifactDir,
 		jobSpec:     jobSpec,
+	}
+}
+
+func (s *podStep) generatePodForStep(image string, containerResources coreapi.ResourceRequirements) *coreapi.Pod {
+	pod := &coreapi.Pod{
+		ObjectMeta: meta.ObjectMeta{
+			Name: s.config.As,
+			Labels: trimLabels(map[string]string{
+				PersistsLabel:    "false",
+				JobLabel:         s.jobSpec.Job,
+				BuildIdLabel:     s.jobSpec.BuildId,
+				ProwJobIdLabel:   s.jobSpec.ProwJobID,
+				CreatedByCILabel: "true",
+			}),
+			Annotations: map[string]string{
+				JobSpecAnnotation:                     s.jobSpec.RawSpec(),
+				annotationContainersForSubTestResults: s.name,
+			},
+		},
+		Spec: coreapi.PodSpec{
+			ServiceAccountName: s.config.ServiceAccountName,
+			RestartPolicy:      coreapi.RestartPolicyNever,
+			Containers: []coreapi.Container{
+				{
+					Image:                    image,
+					Name:                     s.name,
+					Command:                  []string{"/bin/sh", "-c", "#!/bin/sh\nset -eu\n" + s.config.Commands},
+					Resources:                containerResources,
+					TerminationMessagePolicy: coreapi.TerminationMessageFallbackToLogsOnError,
+				},
+			},
+		},
+	}
+
+	if s.config.Secret.Name != "" {
+		pod.Spec.Containers[0].VolumeMounts = getSecretVolumeMountFromSecret(s.config.Secret.MountPath)
+		pod.Spec.Volumes = getVolumeFromSecret(s.config.Secret.Name)
+	}
+	return pod
+}
+
+func getVolumeFromSecret(secretName string) []coreapi.Volume {
+	return []coreapi.Volume{
+		{
+			Name: testSecretName,
+			VolumeSource: coreapi.VolumeSource{
+				Secret: &coreapi.SecretVolumeSource{
+					SecretName: secretName,
+				},
+			},
+		},
+	}
+}
+
+func getSecretVolumeMountFromSecret(secretMountPath string) []coreapi.VolumeMount {
+	if secretMountPath == "" {
+		secretMountPath = testSecretDefaultPath
+	}
+	return []coreapi.VolumeMount{
+		{
+			Name:      testSecretName,
+			ReadOnly:  true,
+			MountPath: secretMountPath,
+		},
 	}
 }

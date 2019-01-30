@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -104,6 +105,20 @@ func validateTestStepConfiguration(fieldRoot string, input []TestStepConfigurati
 
 		if len(test.Commands) == 0 {
 			validationErrors = append(validationErrors, fmt.Errorf("%s[%d].commands: is required", fieldRoot, num))
+		}
+
+		if len(test.Secret.Name) > 0 {
+			// TODO: Move to upstream validation when vendoring is fixed
+			// currently checking against DNS RFC 1123 regexp
+			if ok := regexp.MustCompile("^[a-z0-9]([-a-z0-9]*[a-z0-9])?$").MatchString(test.Secret.Name); !ok {
+				validationErrors = append(validationErrors, fmt.Errorf("%s[%d].name: '%s' secret name is not valid value, should be [a-z0-9]([-a-z0-9]*[a-z0-9]", fieldRoot, num, test.Secret.Name))
+			}
+			// validate path only if name is passed
+			if test.Secret.MountPath != "" {
+				if ok := filepath.IsAbs(test.Secret.MountPath); !ok {
+					validationErrors = append(validationErrors, fmt.Errorf("%s[%d].path: '%s' secret mount path is not valid value, should be ^((\\/*)\\w+)+", fieldRoot, num, test.Secret.MountPath))
+				}
+			}
 		}
 
 		validationErrors = append(validationErrors, validateTestConfigurationType(fmt.Sprintf("%s[%d]", fieldRoot, num), test, release)...)

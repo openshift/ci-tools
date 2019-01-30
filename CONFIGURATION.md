@@ -65,6 +65,9 @@ tests:
   commands: ''
   container:
     from: ''
+  secret:
+    name: ''
+    mount_path: ''
   openshift_ansible:
     cluster_profile: ''
   openshift_ansible_src:
@@ -312,6 +315,18 @@ of the images in the pipeline.
 
 ## `tests.container.from`
 `from` is the pipeline image tag that this test will be run on.
+
+# `tests.secret` 
+
+`Secret` field enables users to mount a secret inside test container.
+It is users responsibility to make sure secret is available in the temporary namespace.
+This can be done by providing flag `--secret-dir` to ci-operator in prow configuration.
+
+## `tests.secret.name`
+`secret.name` is the name of the secret to be mounted inside a test container.
+
+## `tests.secret.path`
+`secret.path` is the path at which to mount the secret. Optional, defaults to `/usr/test-secret`
 
 ## `tests.openshift_ansible`
 `openshift_ansible` is a test that provisions a cluster using openshift-ansible

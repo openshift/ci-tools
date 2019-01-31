@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 
@@ -47,6 +48,28 @@ type options struct {
 	jobConfigPath string
 
 	candidatePath string
+}
+
+func getMasterProwConfig(repoPath, sha, configPath, jobConfigPath string) (*prowconfig.Config, error) {
+	currentSHA, err := getCurrentSHA(repoPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get SHA of current HEAD: %v", err)
+	}
+
+	if err := gitCheckout(repoPath, sha); err != nil {
+		return nil, fmt.Errorf("failed to check out baseline revision: %v", err)
+	}
+
+	masterProwConfig, err := prowconfig.Load(configPath, jobConfigPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load baseline Prow config: %v", err)
+	}
+
+	if err := gitCheckout(repoPath, currentSHA); err != nil {
+		return nil, fmt.Errorf("failed to check out tested revision back: %v", err)
+	}
+
+	return masterProwConfig, nil
 }
 
 func gatherOptions() options {
@@ -105,26 +128,22 @@ func main() {
 
 	logger.Info("Rehearsing Prow jobs for a configuration PR")
 
-	candidateConfigPath := filepath.Join(o.candidatePath, diffs.ConfigInRepoPath)
-	candidateJobConfigPath := filepath.Join(o.candidatePath, diffs.JobConfigInRepoPath)
+	configPath := filepath.Join(o.candidatePath, diffs.ConfigInRepoPath)
+	jobConfigPath := filepath.Join(o.candidatePath, diffs.JobConfigInRepoPath)
 
-	prowPRConfig, err := prowconfig.Load(candidateConfigPath, candidateJobConfigPath)
+	prowPRConfig, err := prowconfig.Load(configPath, jobConfigPath)
 	if err != nil {
 		logger.WithError(err).Error("Failed to load PR's Prow config")
 		gracefulExit(o.noFail)
 	}
 
-	if err := gitCheckout(o.candidatePath, jobSpec.Refs.BaseSHA); err != nil {
-		logger.WithError(err).Error("could not checkout worktree")
+	masterProwConfig, err := getMasterProwConfig(o.candidatePath, jobSpec.Refs.BaseSHA, configPath, jobConfigPath)
+	if err != nil {
+		logger.WithError(err).Error("Failed to load master Prow config")
 		gracefulExit(o.noFail)
 	}
 
-	prowConfig, err := prowconfig.Load(candidateConfigPath, candidateJobConfigPath)
-	if err != nil {
-		logger.WithError(err).Error("Failed to load Prow config")
-		gracefulExit(o.noFail)
-	}
-	prowjobNamespace := prowConfig.ProwJobNamespace
+	prowjobNamespace := masterProwConfig.ProwJobNamespace
 
 	var clusterConfig *rest.Config
 	if !o.dryRun {
@@ -141,7 +160,7 @@ func main() {
 		gracefulExit(o.noFail)
 	}
 
-	changedPresubmits, err := diffs.GetChangedPresubmits(prowConfig, prowPRConfig)
+	changedPresubmits, err := diffs.GetChangedPresubmits(masterProwConfig, prowPRConfig)
 	if err != nil {
 		logger.WithError(err).Error("Failed to determine which jobs should be rehearsed")
 		gracefulExit(o.noFail)
@@ -151,6 +170,17 @@ func main() {
 		logger.WithError(err).Error("Failed to execute rehearsal jobs")
 		gracefulExit(o.noFail)
 	}
+}
+
+func getCurrentSHA(repoPath string) (string, error) {
+	cmd := exec.Command("git", "rev-parse", "HEAD")
+	cmd.Dir = repoPath
+	sha, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("'%s' failed with error=%v", cmd.Args, err)
+	}
+
+	return strings.TrimSpace(string(sha)), nil
 }
 
 func gitCheckout(candidatePath, baseSHA string) error {

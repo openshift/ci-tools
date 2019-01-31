@@ -28,6 +28,8 @@ images:
 promotion:
   additional_images:
     <name>: ''
+  excluded_images:
+  - <name>
   name: ''
   name_prefix: ''
   namespace: ''
@@ -390,6 +392,11 @@ using one tag but many `ImageStream`s.
 Pipeline images are not considered for promotion by default, but you can use this
 field to promote those intermediary images like compiled tests that are not part
 of the normal release for the component but may be useful for other repositories.
+
+## `promotion.excluded_images`
+`excluded_images` is an array of image names that should never be promoted. This
+exclusion is performed on images that were built, but does not prevent images
+specified in `additional_images` from being promoted.
 
 # `resources`
 `resources` configures the resource requests and limits set on build and test

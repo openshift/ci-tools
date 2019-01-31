@@ -211,6 +211,12 @@ type PromotionConfiguration struct {
 	// if specified.
 	NamePrefix string `json:"name_prefix"`
 
+	// ExcludedImages are image names that will not be promoted.
+	// Exclusions are made before additional_images are included.
+	// Use exclusions when you want to build images for testing
+	// but not promote them afterwards.
+	ExcludedImages []string `json:"excluded_images"`
+
 	// AdditionalImages is a mapping of images to promote. The
 	// images will be taken from the pipeline image stream. The
 	// key is the name to promote as and the value is the source

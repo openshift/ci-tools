@@ -46,6 +46,10 @@ func (s *promotionStep) Run(ctx context.Context, dry bool) error {
 		tags[tag] = tag
 		names.Insert(tag)
 	}
+	for _, tag := range s.config.ExcludedImages {
+		delete(tags, tag)
+		names.Delete(tag)
+	}
 	for dst, src := range s.config.AdditionalImages {
 		tags[dst] = src
 		names.Insert(dst)

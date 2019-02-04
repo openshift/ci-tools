@@ -1,22 +1,57 @@
 package diffs
 
 import (
+	"fmt"
+	"strings"
+
+	"github.com/sirupsen/logrus"
+
 	"k8s.io/apimachinery/pkg/api/equality"
+	utildiff "k8s.io/apimachinery/pkg/util/diff"
+	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
 )
 
-const ConfigInRepoPath = "cluster/ci/config/prow/config.yaml"
-const JobConfigInRepoPath = "ci-operator/jobs"
+const (
+	// ConfigInRepoPath is the prow config path from release repo
+	ConfigInRepoPath = "cluster/ci/config/prow/config.yaml"
+	// JobConfigInRepoPath is the prowjobs path from release repo
+	JobConfigInRepoPath = "ci-operator/jobs"
+
+	logRepo    = "repo"
+	logJobName = "job-name"
+	logDiffs   = "diffs"
+
+	objectSpec  = ".Spec"
+	objectAgent = ".Agent"
+
+	chosenJob = "Job has been chosen for rehearsal"
+)
 
 // GetChangedPresubmits returns a mapping of repo to presubmits to execute.
-func GetChangedPresubmits(prowMasterConfig, prowPRConfig *prowconfig.Config) (map[string][]prowconfig.Presubmit, error) {
+func GetChangedPresubmits(prowMasterConfig, prowPRConfig *prowconfig.Config, logger *logrus.Entry) (map[string][]prowconfig.Presubmit, error) {
 	ret := make(map[string][]prowconfig.Presubmit)
 
 	masterJobs := getJobsByRepoAndName(prowMasterConfig.JobConfig.Presubmits)
 	for repo, jobs := range prowPRConfig.JobConfig.Presubmits {
 		for _, job := range jobs {
-			if !equality.Semantic.DeepEqual(masterJobs[repo][job.Name].Spec, job.Spec) {
-				ret[repo] = append(ret[repo], job)
+			masterJob := masterJobs[repo][job.Name]
+			logFields := logrus.Fields{logRepo: repo, logJobName: job.Name}
+
+			if job.Agent == string(pjapi.KubernetesAgent) {
+				// If the agent was changed and is a kubernetes agent, just choose the job for rehearse.
+				if masterJob.Agent != job.Agent {
+					logFields[logDiffs] = convertToReadableDiff(masterJob.Agent, job.Agent, objectAgent)
+					logger.WithFields(logFields).Info(chosenJob)
+					ret[repo] = append(ret[repo], job)
+					continue
+				}
+
+				if !equality.Semantic.DeepEqual(masterJob.Spec, job.Spec) {
+					logFields[logDiffs] = convertToReadableDiff(masterJob.Spec, job.Spec, objectSpec)
+					logger.WithFields(logFields).Info(chosenJob)
+					ret[repo] = append(ret[repo], job)
+				}
 			}
 		}
 	}
@@ -38,4 +73,24 @@ func getJobsByRepoAndName(presubmits map[string][]prowconfig.Presubmit) map[stri
 		jobsByRepo[repo] = pm
 	}
 	return jobsByRepo
+}
+
+// Converts the multiline diff string, to one line human readable that
+// includes information about the object.
+// Example:
+//
+// object[0].Args[0]:
+//   a: "--artifact-dir=$(ARTIFACTS)"
+//   b: "--artifact-dir=$(TEST_ARTIFACTS)"
+//
+// 	converted to:
+//
+//  .Spec.Containers[0].Args[0]:   a: '--artifact-dir=$(ARTIFACTS)'   b: '--artifact-dir=$(TEST_ARTIFACTS)'
+//
+func convertToReadableDiff(a, b interface{}, objName string) string {
+	d := utildiff.ObjectReflectDiff(a, b)
+	d = strings.Replace(d, "\nobject", fmt.Sprintf(" %s", objName), -1)
+	d = strings.Replace(d, "\n", " ", -1)
+	d = strings.Replace(d, "\"", "'", -1)
+	return d
 }

@@ -27,7 +27,8 @@ import (
 func makeTestingPresubmitForEnv(env []v1.EnvVar) *prowconfig.Presubmit {
 	return &prowconfig.Presubmit{
 		JobBase: prowconfig.JobBase{
-			Name: "test-job-name",
+			Agent: "kubernetes",
+			Name:  "test-job-name",
 			Spec: &v1.PodSpec{
 				Containers: []v1.Container{
 					{Env: env},
@@ -132,6 +133,7 @@ func TestInlineCiopConfig(t *testing.T) {
 func makeTestingPresubmit(name, context string, ciopArgs []string) *prowconfig.Presubmit {
 	return &prowconfig.Presubmit{
 		JobBase: prowconfig.JobBase{
+			Agent:  "kubernetes",
 			Name:   name,
 			Labels: map[string]string{rehearseLabel: "123"},
 			Spec: &v1.PodSpec{
@@ -182,11 +184,6 @@ func TestMakeRehearsalPresubmitNegative(t *testing.T) {
 		description string
 		crippleFunc func(*prowconfig.Presubmit)
 	}{{
-		description: "job with multiple containers",
-		crippleFunc: func(j *prowconfig.Presubmit) {
-			j.Spec.Containers = append(j.Spec.Containers, v1.Container{})
-		},
-	}, {
 		description: "job where command is not `ci-operator`",
 		crippleFunc: func(j *prowconfig.Presubmit) {
 			j.Spec.Containers[0].Command[0] = "not-ci-operator"
@@ -238,6 +235,7 @@ func makeTestingProwJob(name, namespace, jobName, context string, refs *pjapi.Re
 			Annotations: map[string]string{"prow.k8s.io/job": jobName},
 		},
 		Spec: pjapi.ProwJobSpec{
+			Agent:   "kubernetes",
 			Type:    pjapi.PresubmitJob,
 			Job:     jobName,
 			Refs:    refs,

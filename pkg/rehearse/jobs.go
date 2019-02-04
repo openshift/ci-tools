@@ -16,16 +16,16 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/util/sets"
+
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/testing"
+
 	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	pjclientset "k8s.io/test-infra/prow/client/clientset/versioned"
 	pjclientsetfake "k8s.io/test-infra/prow/client/clientset/versioned/fake"
 	pj "k8s.io/test-infra/prow/client/clientset/versioned/typed/prowjobs/v1"
-
 	prowconfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/pjutil"
-
-	"k8s.io/client-go/rest"
 )
 
 const (
@@ -55,6 +55,10 @@ func NewProwJobClient(clusterConfig *rest.Config, namespace string, dry bool) (p
 }
 
 func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber int) (*prowconfig.Presubmit, error) {
+	if err := filterJob(source); err != nil {
+		return nil, err
+	}
+
 	var rehearsal prowconfig.Presubmit
 	deepcopy.Copy(&rehearsal, source)
 
@@ -65,38 +69,38 @@ func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber 
 	}
 	rehearsal.Labels[rehearseLabel] = strconv.Itoa(prNumber)
 
-	if len(source.Spec.Containers) != 1 {
-		return nil, fmt.Errorf("cannot rehearse jobs with more than 1 container in Spec")
-	}
+	branch := strings.TrimPrefix(strings.TrimSuffix(source.Branches[0], "$"), "^")
+	gitrefArg := fmt.Sprintf("--git-ref=%s@%s", repo, branch)
+	rehearsal.Spec.Containers[0].Args = append(source.Spec.Containers[0].Args, gitrefArg)
+
+	return &rehearsal, nil
+}
+
+func filterJob(source *prowconfig.Presubmit) error {
+	// there will always be exactly one container.
 	container := source.Spec.Containers[0]
 
 	if len(container.Command) != 1 || container.Command[0] != "ci-operator" {
-		return nil, fmt.Errorf("cannot rehearse jobs that have Command different from simple 'ci-operator'")
+		return fmt.Errorf("cannot rehearse jobs that have Command different from simple 'ci-operator'")
 	}
 
 	for _, arg := range container.Args {
 		if strings.HasPrefix(arg, "--git-ref") || strings.HasPrefix(arg, "-git-ref") {
-			return nil, fmt.Errorf("cannot rehearse jobs that call ci-operator with '--git-ref' arg")
+			return fmt.Errorf("cannot rehearse jobs that call ci-operator with '--git-ref' arg")
 		}
+	}
+	if len(source.Spec.Volumes) > 0 {
+		return fmt.Errorf("cannot rehearse jobs that need additional volumes mounted")
 	}
 
 	if len(source.Branches) == 0 {
-		return nil, fmt.Errorf("cannot rehearse jobs with no branches")
+		return fmt.Errorf("cannot rehearse jobs with no branches")
 	}
 
 	if len(source.Branches) != 1 {
-		return nil, fmt.Errorf("cannot rehearse jobs that run over multiple branches")
+		return fmt.Errorf("cannot rehearse jobs that run over multiple branches")
 	}
-	branch := strings.TrimPrefix(strings.TrimSuffix(source.Branches[0], "$"), "^")
-
-	gitrefArg := fmt.Sprintf("--git-ref=%s@%s", repo, branch)
-	rehearsal.Spec.Containers[0].Args = append(source.Spec.Containers[0].Args, gitrefArg)
-
-	if len(source.Spec.Volumes) > 0 {
-		return nil, fmt.Errorf("cannot rehearse jobs that need additional volumes mounted")
-	}
-
-	return &rehearsal, nil
+	return nil
 }
 
 type ciOperatorConfigs interface {

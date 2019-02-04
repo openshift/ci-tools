@@ -70,7 +70,25 @@ func validateOptions(o options) error {
 	return nil
 }
 
-func gracefulExit(suppressFailures bool) {
+const (
+	misconfigurationOutput = `[ERROR] pj-rehearse: misconfiguration
+
+pj-rehearse could not process its necessary inputs properly. No rehearsal
+jobs were run. This is likely a pj-rehearse job configuration problem.`
+	rehearseFailureOutput = `[ERROR] pj-rehearse: rehearsal tool failure
+
+pj-rehearse attempted to submit jobs for rehearsal, but it failed to either
+submit them or to fetch their results. This is either a pj-rehearse bug or
+an infrastructure issue.`
+	jobsFailureOutput = `[ERROR] pj-rehearse: rehearsed jobs failure
+
+pj-rehearse rehearsed jobs and at least one of them failed. This means that
+job would fail when executed against the current HEAD of the target branch.`
+)
+
+func gracefulExit(suppressFailures bool, message string) {
+	fmt.Fprintln(os.Stderr, message)
+
 	if suppressFailures {
 		os.Exit(0)
 	}
@@ -82,12 +100,13 @@ func main() {
 	err := validateOptions(o)
 	if err != nil {
 		logrus.WithError(err).Fatal("invalid options")
+		gracefulExit(o.noFail, misconfigurationOutput)
 	}
 
 	jobSpec, err := pjdwapi.ResolveSpecFromEnv()
 	if err != nil {
 		logrus.WithError(err).Error("could not read JOB_SPEC")
-		gracefulExit(o.noFail)
+		gracefulExit(o.noFail, misconfigurationOutput)
 	}
 
 	prFields := logrus.Fields{prowgithub.OrgLogField: jobSpec.Refs.Org, prowgithub.RepoLogField: jobSpec.Refs.Repo}
@@ -97,7 +116,7 @@ func main() {
 		logger.Info("Not able to rehearse jobs when not run in the context of a presubmit job")
 		// Exiting successfuly will make pj-rehearsal job not fail when run as a
 		// in a batch job. Such failures would be confusing and unactionable
-		os.Exit(0)
+		gracefulExit(true, misconfigurationOutput)
 	}
 
 	prNumber := jobSpec.Refs.Pulls[0].Number
@@ -109,32 +128,34 @@ func main() {
 		clusterConfig, err = loadClusterConfig()
 		if err != nil {
 			logger.WithError(err).Error("could not load cluster clusterConfig")
-			gracefulExit(o.noFail)
+			gracefulExit(o.noFail, misconfigurationOutput)
 		}
 	}
 
 	prowConfig, prowPRConfig, err := getProwConfigs(o.candidatePath, jobSpec.Refs.BaseSHA)
 	if err != nil {
 		logger.WithError(err).Error("could not load prow configs")
-		gracefulExit(o.noFail)
+		gracefulExit(o.noFail, misconfigurationOutput)
 	}
 
 	pjclient, err := rehearse.NewProwJobClient(clusterConfig, prowConfig.ProwJobNamespace, o.dryRun)
 	if err != nil {
 		logger.WithError(err).Error("could not create a ProwJob client")
-		gracefulExit(o.noFail)
+		gracefulExit(o.noFail, misconfigurationOutput)
 	}
 
-	changedPresubmits, err := diffs.GetChangedPresubmits(prowConfig, prowPRConfig, logger)
+	changedPresubmits := diffs.GetChangedPresubmits(prowConfig, prowPRConfig, logger)
+
+	success, err := rehearse.ExecuteJobs(changedPresubmits, prNumber, o.candidatePath, jobSpec.Refs, !o.dryRun, logger, pjclient)
 	if err != nil {
-		logger.WithError(err).Error("Failed to determine which jobs should be rehearsed")
-		gracefulExit(o.noFail)
+		logger.WithError(err).Error("Failed to rehearse jobs")
+		gracefulExit(o.noFail, rehearseFailureOutput)
 	}
-
-	if err := rehearse.ExecuteJobs(changedPresubmits, prNumber, o.candidatePath, jobSpec.Refs, !o.dryRun, logger, pjclient); err != nil {
-		logger.WithError(err).Error("Failed to execute rehearsal jobs")
-		gracefulExit(o.noFail)
+	if !success {
+		logger.WithError(err).Error("Some jobs failed their rehearsal runs")
+		gracefulExit(o.noFail, jobsFailureOutput)
 	}
+	logger.Info("All jobs were rehearsed successfuly")
 }
 
 func getCurrentSHA(repoPath string) (string, error) {

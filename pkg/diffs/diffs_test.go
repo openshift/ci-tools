@@ -133,10 +133,7 @@ func TestGetChangedPresubmits(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			before, after := testCase.configGenerator()
-			p, err := GetChangedPresubmits(before, after, logrus.NewEntry(logrus.New()))
-			if err != nil {
-				t.Fatalf("GetChangedPresubmits returned error: %v", err)
-			}
+			p := GetChangedPresubmits(before, after, logrus.NewEntry(logrus.New()))
 			if !equality.Semantic.DeepEqual(p, testCase.expected) {
 				t.Fatalf("Name:%s\nExpected %#v\nFound:%#v\n", testCase.name, testCase.expected["org/repo"], p["org/repo"])
 			}

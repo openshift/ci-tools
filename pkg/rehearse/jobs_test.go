@@ -274,16 +274,18 @@ func TestExecuteJobs(t *testing.T) {
 	anotherTargetRepo := "anotherOrg/anotherRepo"
 
 	testCases := []struct {
-		description   string
-		jobs          map[string][]prowconfig.Presubmit
-		expectedError bool
-		expectedJobs  []pjapi.ProwJob
+		description     string
+		jobs            map[string][]prowconfig.Presubmit
+		expectedSuccess bool
+		expectedError   bool
+		expectedJobs    []pjapi.ProwJob
 	}{{
 		description: "two jobs in a single repo",
 		jobs: map[string][]prowconfig.Presubmit{targetRepo: {
 			*makeTestingPresubmit("job1", "ci/prow/job1", []string{"arg1"}),
 			*makeTestingPresubmit("job2", "ci/prow/job2", []string{"arg1"}),
 		}},
+		expectedSuccess: true,
 		expectedJobs: []pjapi.ProwJob{
 			*makeTestingProwJob(generatedName,
 				testNamespace,
@@ -306,6 +308,7 @@ func TestExecuteJobs(t *testing.T) {
 				targetRepo:        {*makeTestingPresubmit("job1", "ci/prow/job1", []string{"arg1"})},
 				anotherTargetRepo: {*makeTestingPresubmit("job2", "ci/prow/job2", []string{"arg1"})},
 			},
+			expectedSuccess: true,
 			expectedJobs: []pjapi.ProwJob{
 				*makeTestingProwJob(generatedName,
 					testNamespace,
@@ -347,7 +350,7 @@ func TestExecuteJobs(t *testing.T) {
 				}
 				return true, ret, nil
 			})
-			err = ExecuteJobs(tc.jobs, testPrNumber, testRepo, testRefs, true, testLogger, fakeclient)
+			success, err := ExecuteJobs(tc.jobs, testPrNumber, testRepo, testRefs, true, testLogger, fakeclient)
 
 			if tc.expectedError && err == nil {
 				t.Errorf("Expected ExecuteJobs() to return error")
@@ -358,6 +361,10 @@ func TestExecuteJobs(t *testing.T) {
 				if err != nil {
 					t.Errorf("Expected ExecuteJobs() to not return error, returned %v", err)
 					return
+				}
+
+				if tc.expectedSuccess != success {
+					t.Errorf("Expected ExecuteJobs() to return success=%t, got %t", tc.expectedSuccess, success)
 				}
 
 				createdJobs, err := fakeclient.List(metav1.ListOptions{})

@@ -29,7 +29,7 @@ const (
 )
 
 // GetChangedPresubmits returns a mapping of repo to presubmits to execute.
-func GetChangedPresubmits(prowMasterConfig, prowPRConfig *prowconfig.Config, logger *logrus.Entry) (map[string][]prowconfig.Presubmit, error) {
+func GetChangedPresubmits(prowMasterConfig, prowPRConfig *prowconfig.Config, logger *logrus.Entry) map[string][]prowconfig.Presubmit {
 	ret := make(map[string][]prowconfig.Presubmit)
 
 	masterJobs := getJobsByRepoAndName(prowMasterConfig.JobConfig.Presubmits)
@@ -55,7 +55,7 @@ func GetChangedPresubmits(prowMasterConfig, prowPRConfig *prowconfig.Config, log
 			}
 		}
 	}
-	return ret, nil
+	return ret
 }
 
 // To compare two maps of slices, instead of iterating through the slice

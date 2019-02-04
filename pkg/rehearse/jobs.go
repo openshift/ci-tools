@@ -32,6 +32,10 @@ const (
 	rehearseLabel = "ci.openshift.org/rehearse"
 )
 
+type Loggers struct {
+	Job, Debug logrus.FieldLogger
+}
+
 // NewProwJobClient creates a ProwJob client with a dry run capability
 func NewProwJobClient(clusterConfig *rest.Config, namespace string, dry bool) (pj.ProwJobInterface, error) {
 	if dry {
@@ -130,7 +134,7 @@ const LogCiopConfigRepo = "ciop-config-repo"
 // of the needed config file passed to the job as a direct value. This needs
 // to happen because the rehearsed Prow jobs may depend on these config files
 // being also changed by the tested PR.
-func inlineCiOpConfig(job *prowconfig.Presubmit, targetRepo string, ciopConfigs ciOperatorConfigs, logger logrus.FieldLogger) (*prowconfig.Presubmit, error) {
+func inlineCiOpConfig(job *prowconfig.Presubmit, targetRepo string, ciopConfigs ciOperatorConfigs, loggers Loggers) (*prowconfig.Presubmit, error) {
 	var rehearsal prowconfig.Presubmit
 	deepcopy.Copy(&rehearsal, job)
 	for _, container := range rehearsal.Spec.Containers {
@@ -146,12 +150,12 @@ func inlineCiOpConfig(job *prowconfig.Presubmit, targetRepo string, ciopConfigs 
 				filename := env.ValueFrom.ConfigMapKeyRef.Key
 
 				logFields := logrus.Fields{LogCiopConfigFile: filename, LogCiopConfigRepo: targetRepo, LogRehearsalJob: job.Name}
-				logger.WithFields(logFields).Debug("Rehearsal job uses ci-operator config ConfigMap, needed content will be inlined")
+				loggers.Debug.WithFields(logFields).Debug("Rehearsal job uses ci-operator config ConfigMap, needed content will be inlined")
 
 				ciOpConfigContent, err := ciopConfigs.Load(targetRepo, filename)
 
 				if err != nil {
-					logger.WithError(err).Warn("Failed to read ci-operator config file")
+					loggers.Job.WithError(err).Warn("Failed to read ci-operator config file")
 					return nil, err
 				}
 
@@ -164,14 +168,14 @@ func inlineCiOpConfig(job *prowconfig.Presubmit, targetRepo string, ciopConfigs 
 	return &rehearsal, nil
 }
 
-func submitRehearsal(job *prowconfig.Presubmit, refs *pjapi.Refs, logger logrus.FieldLogger, pjclient pj.ProwJobInterface) (*pjapi.ProwJob, error) {
+func submitRehearsal(job *prowconfig.Presubmit, refs *pjapi.Refs, loggers Loggers, pjclient pj.ProwJobInterface) (*pjapi.ProwJob, error) {
 	labels := make(map[string]string)
 	for k, v := range job.Labels {
 		labels[k] = v
 	}
 
 	prowJob := pjutil.NewProwJob(pjutil.PresubmitSpec(*job, *refs), labels)
-	logger.WithFields(pjutil.ProwJobFields(&prowJob)).Info("Submitting a new prowjob.")
+	loggers.Job.WithFields(pjutil.ProwJobFields(&prowJob)).Info("Submitting a new prowjob.")
 
 	return pjclient.Create(&prowJob)
 }
@@ -183,27 +187,28 @@ const LogRehearsalJob = "rehearsal-job"
 // a "trial" execution of a Prow job configuration when the *job config* config
 // is changed, giving feedback to Prow config authors on how the changes of the
 // config would affect the "production" Prow jobs run on the actual target repos
-func ExecuteJobs(toBeRehearsed map[string][]prowconfig.Presubmit, prNumber int, prRepo string, refs *pjapi.Refs, follow bool, logger logrus.FieldLogger, pjclient pj.ProwJobInterface) (bool, error) {
+func ExecuteJobs(toBeRehearsed map[string][]prowconfig.Presubmit, prNumber int, prRepo string, refs *pjapi.Refs, follow bool, loggers Loggers, pjclient pj.ProwJobInterface) (bool, error) {
 	rehearsals := []*prowconfig.Presubmit{}
 
 	ciopConfigs := &ciOperatorConfigLoader{filepath.Join(prRepo, ciopConfigsInRepo)}
 
 	for repo, jobs := range toBeRehearsed {
 		for _, job := range jobs {
-			jobLogger := logger.WithFields(logrus.Fields{"target-repo": repo, "target-job": job.Name})
+			fields := logrus.Fields{"target-repo": repo, "target-job": job.Name}
+			jobLogger := Loggers{loggers.Job.WithFields(fields), loggers.Debug.WithFields(fields)}
 			rehearsal, err := makeRehearsalPresubmit(&job, repo, prNumber)
 			if err != nil {
-				jobLogger.WithError(err).Warn("Failed to make a rehearsal presubmit")
+				jobLogger.Job.WithError(err).Warn("Failed to make a rehearsal presubmit")
 				continue
 			}
 
 			rehearsal, err = inlineCiOpConfig(rehearsal, repo, ciopConfigs, jobLogger)
 			if err != nil {
-				jobLogger.WithError(err).Warn("Failed to inline ci-operator-config into rehearsal job")
+				jobLogger.Job.WithError(err).Warn("Failed to inline ci-operator-config into rehearsal job")
 				continue
 			}
 
-			jobLogger.WithField(LogRehearsalJob, rehearsal.Name).Info("Created a rehearsal job to be submitted")
+			jobLogger.Job.WithField(LogRehearsalJob, rehearsal.Name).Info("Created a rehearsal job to be submitted")
 			rehearsals = append(rehearsals, rehearsal)
 		}
 	}
@@ -211,13 +216,13 @@ func ExecuteJobs(toBeRehearsed map[string][]prowconfig.Presubmit, prNumber int, 
 	success := true
 	pjs := make(sets.String, len(rehearsals))
 	for _, job := range rehearsals {
-		created, err := submitRehearsal(job, refs, logger, pjclient)
+		created, err := submitRehearsal(job, refs, loggers, pjclient)
 		if err != nil {
-			logger.WithError(err).Warn("Failed to execute a rehearsal presubmit")
+			loggers.Job.WithError(err).Warn("Failed to execute a rehearsal presubmit")
 			success = false
 			continue
 		}
-		logger.WithFields(pjutil.ProwJobFields(created)).Info("Submitted rehearsal prowjob")
+		loggers.Job.WithFields(pjutil.ProwJobFields(created)).Info("Submitted rehearsal prowjob")
 		pjs.Insert(created.Name)
 	}
 	if !follow {
@@ -228,10 +233,10 @@ func ExecuteJobs(toBeRehearsed map[string][]prowconfig.Presubmit, prNumber int, 
 		return false, fmt.Errorf("failed to create label selector: %v", err)
 	}
 	selector := labels.NewSelector().Add(*req).String()
-	return waitForJobs(pjs, selector, pjclient, logger)
+	return waitForJobs(pjs, selector, pjclient, loggers)
 }
 
-func waitForJobs(jobs sets.String, selector string, pjclient pj.ProwJobInterface, logger logrus.FieldLogger) (bool, error) {
+func waitForJobs(jobs sets.String, selector string, pjclient pj.ProwJobInterface, loggers Loggers) (bool, error) {
 	if len(jobs) == 0 {
 		return true, nil
 	}
@@ -249,16 +254,16 @@ func waitForJobs(jobs sets.String, selector string, pjclient pj.ProwJobInterface
 			}
 			fields := pjutil.ProwJobFields(pj)
 			fields["state"] = pj.Status.State
-			logger.WithFields(fields).Debug("Processing ProwJob")
+			loggers.Debug.WithFields(fields).Debug("Processing ProwJob")
 			if !jobs.Has(pj.Name) {
 				continue
 			}
 			switch pj.Status.State {
 			case pjapi.FailureState, pjapi.AbortedState, pjapi.ErrorState:
-				logger.WithFields(fields).Error("Job failed")
+				loggers.Job.WithFields(fields).Error("Job failed")
 				success = false
 			case pjapi.SuccessState:
-				logger.WithFields(fields).Info("Job succeeded")
+				loggers.Job.WithFields(fields).Info("Job succeeded")
 			default:
 				continue
 			}

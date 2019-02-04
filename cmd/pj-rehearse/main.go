@@ -41,8 +41,9 @@ func loadClusterConfig() (*rest.Config, error) {
 }
 
 type options struct {
-	dryRun bool
-	noFail bool
+	dryRun       bool
+	noFail       bool
+	debugLogPath string
 
 	configPath    string
 	jobConfigPath string
@@ -56,6 +57,7 @@ func gatherOptions() options {
 
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually submit rehearsal jobs to Prow")
 	fs.BoolVar(&o.noFail, "no-fail", true, "Whether to actually end unsuccessfuly when something breaks")
+	fs.StringVar(&o.debugLogPath, "debug-log", "", "Alternate file for debug output, defaults to stderr")
 
 	fs.StringVar(&o.candidatePath, "candidate-path", "", "Path to a openshift/release working copy with a revision to be tested")
 
@@ -87,7 +89,9 @@ job would fail when executed against the current HEAD of the target branch.`
 )
 
 func gracefulExit(suppressFailures bool, message string) {
-	fmt.Fprintln(os.Stderr, message)
+	if message != "" {
+		fmt.Fprintln(os.Stderr, message)
+	}
 
 	if suppressFailures {
 		os.Exit(0)
@@ -146,7 +150,19 @@ func main() {
 
 	changedPresubmits := diffs.GetChangedPresubmits(prowConfig, prowPRConfig, logger)
 
-	success, err := rehearse.ExecuteJobs(changedPresubmits, prNumber, o.candidatePath, jobSpec.Refs, !o.dryRun, logger, pjclient)
+	debugLogger := logrus.New()
+	debugLogger.Level = logrus.DebugLevel
+	if o.debugLogPath != "" {
+		if f, err := os.OpenFile(o.debugLogPath, os.O_APPEND|os.O_WRONLY|os.O_CREATE, os.ModePerm); err == nil {
+			defer f.Close()
+			debugLogger.Out = f
+		} else {
+			logger.WithError(err).Error("could not open debug log file")
+			gracefulExit(o.noFail, "")
+		}
+	}
+	loggers := rehearse.Loggers{Job: logger, Debug: debugLogger.WithField(prowgithub.PrLogField, prNumber)}
+	success, err := rehearse.ExecuteJobs(changedPresubmits, prNumber, o.candidatePath, jobSpec.Refs, !o.dryRun, loggers, pjclient)
 	if err != nil {
 		logger.WithError(err).Error("Failed to rehearse jobs")
 		gracefulExit(o.noFail, rehearseFailureOutput)

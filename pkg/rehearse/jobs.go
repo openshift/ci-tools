@@ -213,27 +213,35 @@ func ExecuteJobs(toBeRehearsed map[string][]prowconfig.Presubmit, prNumber int, 
 		}
 	}
 
-	success := true
+	submitSuccess := true
 	pjs := make(sets.String, len(rehearsals))
 	for _, job := range rehearsals {
 		created, err := submitRehearsal(job, refs, loggers, pjclient)
 		if err != nil {
 			loggers.Job.WithError(err).Warn("Failed to execute a rehearsal presubmit")
-			success = false
+			submitSuccess = false
 			continue
 		}
 		loggers.Job.WithFields(pjutil.ProwJobFields(created)).Info("Submitted rehearsal prowjob")
 		pjs.Insert(created.Name)
 	}
 	if !follow {
-		return success, nil
+		if submitSuccess {
+			return true, nil
+		}
+		return true, fmt.Errorf("failed to submit all rehearsal jobs")
 	}
 	req, err := labels.NewRequirement(rehearseLabel, selection.Equals, []string{strconv.Itoa(prNumber)})
 	if err != nil {
 		return false, fmt.Errorf("failed to create label selector: %v", err)
 	}
 	selector := labels.NewSelector().Add(*req).String()
-	return waitForJobs(pjs, selector, pjclient, loggers)
+	waitSuccess, err := waitForJobs(pjs, selector, pjclient, loggers)
+
+	if !submitSuccess {
+		return waitSuccess, fmt.Errorf("failed to submit all rehearsal jobs")
+	}
+	return waitSuccess, err
 }
 
 func waitForJobs(jobs sets.String, selector string, pjclient pj.ProwJobInterface, loggers Loggers) (bool, error) {

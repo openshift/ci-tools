@@ -2,7 +2,6 @@ package rehearse
 
 import (
 	"fmt"
-
 	"path/filepath"
 	"sort"
 	"strconv"

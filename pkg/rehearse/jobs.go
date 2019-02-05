@@ -183,7 +183,7 @@ const LogRehearsalJob = "rehearsal-job"
 // a "trial" execution of a Prow job configuration when the *job config* config
 // is changed, giving feedback to Prow config authors on how the changes of the
 // config would affect the "production" Prow jobs run on the actual target repos
-func ExecuteJobs(toBeRehearsed map[string][]prowconfig.Presubmit, prNumber int, prRepo string, refs *pjapi.Refs, follow bool, logger logrus.FieldLogger, pjclient pj.ProwJobInterface) error {
+func ExecuteJobs(toBeRehearsed map[string][]prowconfig.Presubmit, prNumber int, prRepo string, refs *pjapi.Refs, follow bool, logger logrus.FieldLogger, pjclient pj.ProwJobInterface) (bool, error) {
 	rehearsals := []*prowconfig.Presubmit{}
 
 	ciopConfigs := &ciOperatorConfigLoader{filepath.Join(prRepo, ciopConfigsInRepo)}
@@ -208,32 +208,27 @@ func ExecuteJobs(toBeRehearsed map[string][]prowconfig.Presubmit, prNumber int, 
 		}
 	}
 
+	success := true
 	pjs := make(sets.String, len(rehearsals))
 	for _, job := range rehearsals {
 		created, err := submitRehearsal(job, refs, logger, pjclient)
 		if err != nil {
 			logger.WithError(err).Warn("Failed to execute a rehearsal presubmit")
+			success = false
 			continue
 		}
 		logger.WithFields(pjutil.ProwJobFields(created)).Info("Submitted rehearsal prowjob")
 		pjs.Insert(created.Name)
 	}
 	if !follow {
-		return nil
+		return success, nil
 	}
 	req, err := labels.NewRequirement(rehearseLabel, selection.Equals, []string{strconv.Itoa(prNumber)})
 	if err != nil {
-		return fmt.Errorf("failed to create label selector: %v", err)
+		return false, fmt.Errorf("failed to create label selector: %v", err)
 	}
 	selector := labels.NewSelector().Add(*req).String()
-	success, err := waitForJobs(pjs, selector, pjclient, logger)
-	if err != nil {
-		return fmt.Errorf("error while waiting for jobs: %s", err)
-	}
-	if !success {
-		return fmt.Errorf("not all ProwJobs were successful")
-	}
-	return nil
+	return waitForJobs(pjs, selector, pjclient, logger)
 }
 
 func waitForJobs(jobs sets.String, selector string, pjclient pj.ProwJobInterface, logger logrus.FieldLogger) (bool, error) {

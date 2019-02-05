@@ -66,7 +66,6 @@ func makeCMReference(cmName, key string) *v1.EnvVarSource {
 
 func TestInlineCiopConfig(t *testing.T) {
 	testTargetRepo := "org/repo"
-	testLoggers := Loggers{logrus.New(), logrus.New()}
 
 	testCases := []struct {
 		description   string
@@ -107,6 +106,7 @@ func TestInlineCiopConfig(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
+			testLoggers := Loggers{logrus.New(), logrus.New()}
 			job := makeTestingPresubmitForEnv(tc.sourceEnv)
 			expectedJob := makeTestingPresubmitForEnv(tc.expectedEnv)
 
@@ -131,7 +131,7 @@ func TestInlineCiopConfig(t *testing.T) {
 	}
 }
 
-func makeTestingPresubmit(name, context string, ciopArgs []string) *prowconfig.Presubmit {
+func makeTestingPresubmit(name, context string, ciopArgs []string, branch string) *prowconfig.Presubmit {
 	return &prowconfig.Presubmit{
 		JobBase: prowconfig.JobBase{
 			Agent:  "kubernetes",
@@ -144,33 +144,43 @@ func makeTestingPresubmit(name, context string, ciopArgs []string) *prowconfig.P
 				}},
 			},
 		},
-		Context:  context,
-		Brancher: prowconfig.Brancher{Branches: []string{"^master$"}},
+		Context: context,
+		Brancher: prowconfig.Brancher{Branches: []string{
+			fmt.Sprintf("^%s$", branch),
+		}},
 	}
 }
 
 func TestMakeRehearsalPresubmit(t *testing.T) {
+	testPrNumber := 123
 	testCases := []struct {
-		source   *prowconfig.Presubmit
-		pr       int
-		expected *prowconfig.Presubmit
+		description string
+		source      *prowconfig.Presubmit
+		expected    *prowconfig.Presubmit
 	}{{
-		source: makeTestingPresubmit("pull-ci-openshift-ci-operator-master-build", "ci/prow/build", []string{"arg", "arg"}),
-		pr:     123,
+		description: "sanity test",
+		source: makeTestingPresubmit(
+			"pull-ci-openshift-ci-operator-master-build",
+			"ci/prow/build",
+			[]string{"arg", "arg"},
+			"master"),
 		expected: makeTestingPresubmit(
 			"rehearse-123-pull-ci-openshift-ci-operator-master-build",
-			"ci/rehearse/openshift/ci-operator/build",
-			[]string{"arg", "arg", "--git-ref=openshift/ci-operator@master"}),
+			"ci/rehearse/openshift/ci-operator/master/build",
+			append([]string{"arg", "arg", "--git-ref=openshift/ci-operator@master"}),
+			"master"),
 	},
 	}
 	for _, tc := range testCases {
-		rehearsal, err := makeRehearsalPresubmit(tc.source, "openshift/ci-operator", tc.pr)
-		if err != nil {
-			t.Errorf("Unexpected error in makeRehearsalPresubmit: %v", err)
-		}
-		if !equality.Semantic.DeepEqual(tc.expected, rehearsal) {
-			t.Errorf("Expected rehearsal Presubmit differs:\n%s", diff.ObjectDiff(tc.expected, rehearsal))
-		}
+		t.Run(tc.description, func(t *testing.T) {
+			rehearsal, err := makeRehearsalPresubmit(tc.source, "openshift/ci-operator", testPrNumber)
+			if err != nil {
+				t.Errorf("Unexpected error in makeRehearsalPresubmit: %v", err)
+			}
+			if !equality.Semantic.DeepEqual(tc.expected, rehearsal) {
+				t.Errorf("Expected rehearsal Presubmit differs:\n%s", diff.ObjectDiff(tc.expected, rehearsal))
+			}
+		})
 	}
 }
 
@@ -180,6 +190,7 @@ func TestMakeRehearsalPresubmitNegative(t *testing.T) {
 	testArgs := []string{"arg"}
 	testRepo := "organization/repo"
 	testPrNumber := 321
+	testBranch := "master"
 
 	testCases := []struct {
 		description string
@@ -208,7 +219,7 @@ func TestMakeRehearsalPresubmitNegative(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
-			job := makeTestingPresubmit(testName, testContext, testArgs)
+			job := makeTestingPresubmit(testName, testContext, testArgs, testBranch)
 			tc.crippleFunc(job)
 			_, err := makeRehearsalPresubmit(job, testRepo, testPrNumber)
 			if err == nil {
@@ -298,14 +309,14 @@ func TestExecuteJobsErrors(t *testing.T) {
 	}{{
 		description: "fail to Create a prowjob",
 		jobs: map[string][]prowconfig.Presubmit{targetRepo: {
-			*makeTestingPresubmit("job1", "ci/prow/job1", []string{"arg1"}),
+			*makeTestingPresubmit("job1", "ci/prow/job1", []string{"arg1"}, "master"),
 		}},
 		failToCreate: sets.NewString("rehearse-123-job1"),
 	}, {
 		description: "fail to Create one of two prowjobs",
 		jobs: map[string][]prowconfig.Presubmit{targetRepo: {
-			*makeTestingPresubmit("job1", "ci/prow/job1", []string{"arg1"}),
-			*makeTestingPresubmit("job2", "ci/prow/job2", []string{"arg2"}),
+			*makeTestingPresubmit("job1", "ci/prow/job1", []string{"arg1"}, "master"),
+			*makeTestingPresubmit("job2", "ci/prow/job2", []string{"arg2"}, "master"),
 		}},
 		failToCreate: sets.NewString("rehearse-123-job2"),
 	}}
@@ -349,20 +360,20 @@ func TestExecuteJobsUnsuccessful(t *testing.T) {
 	}{{
 		description: "single job that fails",
 		jobs: map[string][]prowconfig.Presubmit{targetRepo: {
-			*makeTestingPresubmit("job1", "ci/prow/job1", []string{"arg1"}),
+			*makeTestingPresubmit("job1", "ci/prow/job1", []string{"arg1"}, "master"),
 		}},
 		results: map[string]pjapi.ProwJobState{"rehearse-123-job1": pjapi.FailureState},
 	}, {
 		description: "single job that aborts",
 		jobs: map[string][]prowconfig.Presubmit{targetRepo: {
-			*makeTestingPresubmit("job1", "ci/prow/job1", []string{"arg1"}),
+			*makeTestingPresubmit("job1", "ci/prow/job1", []string{"arg1"}, "master"),
 		}},
 		results: map[string]pjapi.ProwJobState{"rehearse-123-job1": pjapi.AbortedState},
 	}, {
 		description: "one job succeeds, one fails",
 		jobs: map[string][]prowconfig.Presubmit{targetRepo: {
-			*makeTestingPresubmit("job1", "ci/prow/job1", []string{"arg1"}),
-			*makeTestingPresubmit("job2", "ci/prow/job2", []string{"arg2"}),
+			*makeTestingPresubmit("job1", "ci/prow/job1", []string{"arg1"}, "master"),
+			*makeTestingPresubmit("job2", "ci/prow/job2", []string{"arg2"}, "master"),
 		}},
 		results: map[string]pjapi.ProwJobState{
 			"rehearse-123-job1": pjapi.SuccessState,
@@ -405,7 +416,7 @@ func TestExecuteJobsUnsuccessful(t *testing.T) {
 
 func TestExecuteJobsPositive(t *testing.T) {
 	testPrNumber, testNamespace, testRepoPath, testRefs := makeTestData()
-	rehearseJobContextTemplate := "ci/rehearse/%s/%s"
+	rehearseJobContextTemplate := "ci/rehearse/%s/%s/%s"
 	targetRepo := "targetOrg/targetRepo"
 	anotherTargetRepo := "anotherOrg/anotherRepo"
 
@@ -416,39 +427,58 @@ func TestExecuteJobsPositive(t *testing.T) {
 	}{{
 		description: "two jobs in a single repo",
 		jobs: map[string][]prowconfig.Presubmit{targetRepo: {
-			*makeTestingPresubmit("job1", "ci/prow/job1", []string{"arg1"}),
-			*makeTestingPresubmit("job2", "ci/prow/job2", []string{"arg1"}),
+			*makeTestingPresubmit("job1", "ci/prow/job1", []string{"arg1"}, "master"),
+			*makeTestingPresubmit("job2", "ci/prow/job2", []string{"arg1"}, "master"),
 		}},
 		expectedJobs: []pjapi.ProwJobSpec{
 			makeTestingProwJob(testNamespace,
 				"rehearse-123-job1",
-				fmt.Sprintf(rehearseJobContextTemplate, targetRepo, "job1"),
+				fmt.Sprintf(rehearseJobContextTemplate, targetRepo, "master", "job1"),
 				testRefs,
 				[]string{"arg1", fmt.Sprintf("--git-ref=%s@master", targetRepo)},
 			).Spec,
 			makeTestingProwJob(testNamespace,
 				"rehearse-123-job2",
-				fmt.Sprintf(rehearseJobContextTemplate, targetRepo, "job2"),
+				fmt.Sprintf(rehearseJobContextTemplate, targetRepo, "master", "job2"),
 				testRefs,
 				[]string{"arg1", fmt.Sprintf("--git-ref=%s@master", targetRepo)},
+			).Spec,
+		}}, {
+		description: "two jobs in a single repo, same context but different branch",
+		jobs: map[string][]prowconfig.Presubmit{targetRepo: {
+			*makeTestingPresubmit("job1", "ci/prow/job1", []string{"arg1"}, "master"),
+			*makeTestingPresubmit("job2", "ci/prow/job2", []string{"arg1"}, "not-master"),
+		}},
+		expectedJobs: []pjapi.ProwJobSpec{
+			makeTestingProwJob(testNamespace,
+				"rehearse-123-job1",
+				fmt.Sprintf(rehearseJobContextTemplate, targetRepo, "master", "job1"),
+				testRefs,
+				[]string{"arg1", fmt.Sprintf("--git-ref=%s@master", targetRepo)},
+			).Spec,
+			makeTestingProwJob(testNamespace,
+				"rehearse-123-job2",
+				fmt.Sprintf(rehearseJobContextTemplate, targetRepo, "not-master", "job2"),
+				testRefs,
+				[]string{"arg1", fmt.Sprintf("--git-ref=%s@not-master", targetRepo)},
 			).Spec,
 		}},
 		{
 			description: "two jobs in a separate repos",
 			jobs: map[string][]prowconfig.Presubmit{
-				targetRepo:        {*makeTestingPresubmit("job1", "ci/prow/job1", []string{"arg1"})},
-				anotherTargetRepo: {*makeTestingPresubmit("job2", "ci/prow/job2", []string{"arg1"})},
+				targetRepo:        {*makeTestingPresubmit("job1", "ci/prow/job1", []string{"arg1"}, "master")},
+				anotherTargetRepo: {*makeTestingPresubmit("job2", "ci/prow/job2", []string{"arg1"}, "master")},
 			},
 			expectedJobs: []pjapi.ProwJobSpec{
 				makeTestingProwJob(testNamespace,
 					"rehearse-123-job1",
-					fmt.Sprintf(rehearseJobContextTemplate, targetRepo, "job1"),
+					fmt.Sprintf(rehearseJobContextTemplate, targetRepo, "master", "job1"),
 					testRefs,
 					[]string{"arg1", fmt.Sprintf("--git-ref=%s@master", targetRepo)},
 				).Spec,
 				makeTestingProwJob(testNamespace,
 					"rehearse-123-job2",
-					fmt.Sprintf(rehearseJobContextTemplate, anotherTargetRepo, "job2"),
+					fmt.Sprintf(rehearseJobContextTemplate, anotherTargetRepo, "master", "job2"),
 					testRefs,
 					[]string{"arg1", fmt.Sprintf("--git-ref=%s@master", anotherTargetRepo)},
 				).Spec,
@@ -460,7 +490,7 @@ func TestExecuteJobsPositive(t *testing.T) {
 		}, {
 			description: "no rehearsable jobs",
 			jobs: map[string][]prowconfig.Presubmit{
-				targetRepo: {*makeTestingPresubmit("job1", "ci/prow/job1", []string{"--git-ref"})},
+				targetRepo: {*makeTestingPresubmit("job1", "ci/prow/job1", []string{"--git-ref"}, "master")},
 			},
 			expectedJobs: []pjapi.ProwJobSpec{},
 		},

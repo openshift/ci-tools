@@ -65,7 +65,7 @@ func makeCMReference(cmName, key string) *v1.EnvVarSource {
 
 func TestInlineCiopConfig(t *testing.T) {
 	testTargetRepo := "org/repo"
-	testLogger := logrus.New()
+	testLoggers := Loggers{logrus.New(), logrus.New()}
 
 	testCases := []struct {
 		description   string
@@ -109,7 +109,7 @@ func TestInlineCiopConfig(t *testing.T) {
 			job := makeTestingPresubmitForEnv(tc.sourceEnv)
 			expectedJob := makeTestingPresubmitForEnv(tc.expectedEnv)
 
-			newJob, err := inlineCiOpConfig(job, testTargetRepo, tc.configs, testLogger)
+			newJob, err := inlineCiOpConfig(job, testTargetRepo, tc.configs, testLoggers)
 
 			if tc.expectedError && err == nil {
 				t.Errorf("Expected inlineCiopConfig() to return an error, none returned")
@@ -255,7 +255,7 @@ func makeTestingProwJob(name, namespace, jobName, context string, refs *pjapi.Re
 }
 
 func TestExecuteJobs(t *testing.T) {
-	testLogger := logrus.New()
+	testLoggers := Loggers{logrus.New(), logrus.New()}
 	testPrNumber := 123
 	testNamespace := "test-namespace"
 	testRepo := "testRepo"
@@ -350,7 +350,7 @@ func TestExecuteJobs(t *testing.T) {
 				}
 				return true, ret, nil
 			})
-			success, err := ExecuteJobs(tc.jobs, testPrNumber, testRepo, testRefs, true, testLogger, fakeclient)
+			success, err := ExecuteJobs(tc.jobs, testPrNumber, testRepo, testRefs, true, testLoggers, fakeclient)
 
 			if tc.expectedError && err == nil {
 				t.Errorf("Expected ExecuteJobs() to return error")
@@ -392,6 +392,7 @@ func TestExecuteJobs(t *testing.T) {
 }
 
 func TestWaitForJobs(t *testing.T) {
+	loggers := Loggers{logrus.New(), logrus.New()}
 	pjSuccess0 := pjapi.ProwJob{
 		ObjectMeta: metav1.ObjectMeta{Name: "success0"},
 		Status:     pjapi.ProwJobStatus{State: pjapi.SuccessState},
@@ -478,7 +479,7 @@ func TestWaitForJobs(t *testing.T) {
 			cs.Fake.PrependWatchReactor("prowjobs", func(clientgo_testing.Action) (bool, watch.Interface, error) {
 				return true, w, nil
 			})
-			success, err := waitForJobs(tc.pjs, "", cs.ProwV1().ProwJobs("test"), logrus.New())
+			success, err := waitForJobs(tc.pjs, "", cs.ProwV1().ProwJobs("test"), loggers)
 			if err != tc.err {
 				t.Fatalf("want `err` == %v, got %v", tc.err, err)
 			}
@@ -502,7 +503,7 @@ func TestWaitForJobsRetries(t *testing.T) {
 		ret, ws = ws[0], ws[1:]
 		return true, ret, nil
 	})
-	success, err := waitForJobs(sets.String{"j": {}}, "", cs.ProwV1().ProwJobs("test"), logrus.New())
+	success, err := waitForJobs(sets.String{"j": {}}, "", cs.ProwV1().ProwJobs("test"), Loggers{logrus.New(), logrus.New()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -512,8 +513,9 @@ func TestWaitForJobsRetries(t *testing.T) {
 }
 
 func TestWaitForJobsLog(t *testing.T) {
-	logger, hook := logrustest.NewNullLogger()
-	logger.SetLevel(logrus.DebugLevel)
+	jobLogger, jobHook := logrustest.NewNullLogger()
+	dbgLogger, dbgHook := logrustest.NewNullLogger()
+	dbgLogger.SetLevel(logrus.DebugLevel)
 	w := watch.NewFakeWithChanSize(2, true)
 	w.Modify(&pjapi.ProwJob{
 		ObjectMeta: metav1.ObjectMeta{Name: "success"},
@@ -525,21 +527,26 @@ func TestWaitForJobsLog(t *testing.T) {
 	cs.Fake.PrependWatchReactor("prowjobs", func(clientgo_testing.Action) (bool, watch.Interface, error) {
 		return true, w, nil
 	})
-	_, err := waitForJobs(sets.NewString("success", "failure"), "", cs.ProwV1().ProwJobs("test"), logger)
+	loggers := Loggers{jobLogger, dbgLogger}
+	_, err := waitForJobs(sets.NewString("success", "failure"), "", cs.ProwV1().ProwJobs("test"), loggers)
 	if err != nil {
 		t.Fatal(err)
 	}
-	check := func(name string, level logrus.Level, state *pjapi.ProwJobState) {
+	check := func(hook *logrustest.Hook, name string, level logrus.Level, state *pjapi.ProwJobState) {
 		for _, entry := range hook.Entries {
 			if entry.Level == level && entry.Data["name"] == name && (state == nil || entry.Data["state"].(pjapi.ProwJobState) == *state) {
 				return
 			}
 		}
-		t.Errorf("no log entry with name == %q, level == %q, and state == %q found", name, level, *state)
+		if state == nil {
+			t.Errorf("no log entry with name == %q, level == %q found", name, level)
+		} else {
+			t.Errorf("no log entry with name == %q, level == %q, and state == %q found", name, level, *state)
+		}
 	}
 	successState, failureState := pjapi.SuccessState, pjapi.FailureState
-	check("success", logrus.DebugLevel, nil)
-	check("success", logrus.InfoLevel, &successState)
-	check("failure", logrus.DebugLevel, nil)
-	check("failure", logrus.ErrorLevel, &failureState)
+	check(jobHook, "success", logrus.InfoLevel, &successState)
+	check(jobHook, "failure", logrus.ErrorLevel, &failureState)
+	check(dbgHook, "success", logrus.DebugLevel, nil)
+	check(dbgHook, "failure", logrus.DebugLevel, nil)
 }

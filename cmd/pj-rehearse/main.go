@@ -152,7 +152,7 @@ func main() {
 		gracefulExit(o.noFail, rehearseFailureOutput)
 	}
 	if !success {
-		logger.WithError(err).Error("Some jobs failed their rehearsal runs")
+		logger.Error("Some jobs failed their rehearsal runs")
 		gracefulExit(o.noFail, jobsFailureOutput)
 	}
 	logger.Info("All jobs were rehearsed successfuly")

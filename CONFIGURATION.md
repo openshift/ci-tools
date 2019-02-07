@@ -358,6 +358,10 @@ field is only valid in tests that provision a cluster (`openshift_ansible`,
 These are a subset of the profiles found in the
 [`release` repository](https://github.com/openshift/release/tree/master/cluster/test-deploy).
 
+## `tests.*.optional`
+`optional` indicates the test should only be run if the user requests the job
+be executed via a `/test` command.
+
 # `raw_steps`
 `raw_steps` is intended for advanced use of `ci-operator` to build custom execution
 graphs. Contact a CI administrator if a workflow is complex enough to warrant use

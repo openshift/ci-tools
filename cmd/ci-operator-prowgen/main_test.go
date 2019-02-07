@@ -317,7 +317,7 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 			Brancher:     prowconfig.Brancher{Branches: []string{"branch"}},
 			Context:      "ci/prow/testname",
 			RerunCommand: "/test testname",
-			Trigger:      `((?m)^/test( all| testname),?(\s+|$))`,
+			Trigger:      "(?m)^/test (?:.*? )?testname(?: .*?)?$",
 		},
 	}}
 	for _, tc := range tests {
@@ -886,7 +886,7 @@ tests:
           requests:
             cpu: 10m
       serviceAccountName: ci-operator
-    trigger: ((?m)^/test( all| images),?(\s+|$))
+    trigger: '(?m)^/test (?:.*? )?images(?: .*?)?$'
   - agent: kubernetes
     always_run: true
     branches:
@@ -920,7 +920,7 @@ tests:
           requests:
             cpu: 10m
       serviceAccountName: ci-operator
-    trigger: ((?m)^/test( all| unit),?(\s+|$))
+    trigger: '(?m)^/test (?:.*? )?unit(?: .*?)?$'
 `),
 		}, {
 			id:        "One test and images, one existing job. Expect one presubmit, pre/post submit images jobs. Existing job should not be changed.",
@@ -1030,7 +1030,7 @@ tests:
           requests:
             cpu: 10m
       serviceAccountName: ci-operator
-    trigger: ((?m)^/test( all| rhel-images),?(\s+|$))
+    trigger: '(?m)^/test (?:.*? )?rhel-images(?: .*?)?$'
   - agent: kubernetes
     always_run: true
     branches:
@@ -1066,7 +1066,7 @@ tests:
           requests:
             cpu: 10m
       serviceAccountName: ci-operator
-    trigger: ((?m)^/test( all| rhel-unit),?(\s+|$))
+    trigger: '(?m)^/test (?:.*? )?rhel-unit(?: .*?)?$'
 `),
 			prowExpectedPostsubmitYAML: []byte(`postsubmits:
   super/duper:
@@ -1241,7 +1241,7 @@ tests:
           requests:
             cpu: 10m
       serviceAccountName: ci-operator
-    trigger: ((?m)^/test( all| images),?(\s+|$))
+    trigger: '(?m)^/test (?:.*? )?images(?: .*?)?$'
   - agent: kubernetes
     always_run: true
     branches:
@@ -1275,7 +1275,7 @@ tests:
           requests:
             cpu: 10m
       serviceAccountName: ci-operator
-    trigger: ((?m)^/test( all| unit),?(\s+|$))
+    trigger: '(?m)^/test (?:.*? )?unit(?: .*?)?$'
 `),
 			prowExpectedPostsubmitYAML: []byte(`postsubmits:
   super/duper:

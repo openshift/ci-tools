@@ -10,7 +10,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"k8s.io/test-infra/prow/apis/prowjobs/v1"
+	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
 	prowgithub "k8s.io/test-infra/prow/github"
 	pjdwapi "k8s.io/test-infra/prow/pod-utils/downwardapi"
@@ -116,7 +116,7 @@ func main() {
 	prFields := logrus.Fields{prowgithub.OrgLogField: jobSpec.Refs.Org, prowgithub.RepoLogField: jobSpec.Refs.Repo}
 	logger := logrus.WithFields(prFields)
 
-	if jobSpec.Type != v1.PresubmitJob {
+	if jobSpec.Type != pjapi.PresubmitJob {
 		logger.Info("Not able to rehearse jobs when not run in the context of a presubmit job")
 		// Exiting successfuly will make pj-rehearsal job not fail when run as a
 		// in a batch job. Such failures would be confusing and unactionable
@@ -161,17 +161,32 @@ func main() {
 			gracefulExit(o.noFail, "")
 		}
 	}
+
 	loggers := rehearse.Loggers{Job: logger, Debug: debugLogger.WithField(prowgithub.PrLogField, prNumber)}
-	success, err := rehearse.ExecuteJobs(changedPresubmits, prNumber, o.candidatePath, jobSpec.Refs, !o.dryRun, loggers, pjclient)
-	if err != nil {
-		logger.WithError(err).Error("Failed to rehearse jobs")
-		gracefulExit(o.noFail, rehearseFailureOutput)
+
+	resultChan := make(chan rehearse.Result)
+	errorChan := make(chan error)
+	quit := make(chan struct{})
+
+	executor := rehearse.NewExecutor(changedPresubmits, prNumber, o.candidatePath,
+		jobSpec.Refs, loggers, pjclient, o.dryRun, resultChan, errorChan, quit)
+
+	go executor.ExecuteJobs()
+
+	results := make(map[string]pjapi.ProwJobStatus)
+	for {
+		select {
+		case result := <-resultChan:
+			results[result.Name] = result.Status
+		case err := <-errorChan:
+			loggers.Job.WithError(err).Error("Error has occurred")
+		case <-quit:
+			// DO REPORT HERE
+			// Since we have the pjapi.ProwJobStatus, we are able
+			// to create a detailed report for all the jobs.
+			gracefulExit(o.noFail, "")
+		}
 	}
-	if !success {
-		logger.Error("Some jobs failed their rehearsal runs")
-		gracefulExit(o.noFail, jobsFailureOutput)
-	}
-	logger.Info("All jobs were rehearsed successfuly")
 }
 
 func getCurrentSHA(repoPath string) (string, error) {

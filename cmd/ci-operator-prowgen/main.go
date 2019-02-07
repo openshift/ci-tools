@@ -266,7 +266,7 @@ func generatePresubmitForTest(name string, repoInfo *configFilePathElements, pod
 		Brancher:     prowconfig.Brancher{Branches: []string{repoInfo.branch}},
 		Context:      fmt.Sprintf("ci/prow/%s", name),
 		RerunCommand: fmt.Sprintf("/test %s", name),
-		Trigger:      fmt.Sprintf(`((?m)^/test( all| %s),?(\s+|$))`, name),
+		Trigger:      fmt.Sprintf(`(?m)^/test (?:.*? )?%s(?: .*?)?$`, name),
 	}
 }
 

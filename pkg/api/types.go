@@ -332,11 +332,6 @@ const (
 // ClusterTestConfiguration describes a test that provisions
 // a cluster and runs a command in it.
 type ClusterTestConfiguration struct {
-	// Optional jobs are not run when unless the user requests
-	// them.
-	Optional bool `json:"optional"`
-	// ClusterProfile identifies the configuration for the job
-	// type.
 	ClusterProfile ClusterProfile `json:"cluster_profile"`
 }
 

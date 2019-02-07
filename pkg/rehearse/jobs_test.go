@@ -18,6 +18,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
@@ -217,11 +218,11 @@ func TestMakeRehearsalPresubmitNegative(t *testing.T) {
 	}
 }
 
-func makeTestingProwJob(name, namespace, jobName, context string, refs *pjapi.Refs, ciopArgs []string) *pjapi.ProwJob {
+func makeTestingProwJob(namespace, jobName, context string, refs *pjapi.Refs, ciopArgs []string) *pjapi.ProwJob {
 	return &pjapi.ProwJob{
 		TypeMeta: metav1.TypeMeta{Kind: "ProwJob", APIVersion: "prow.k8s.io/v1"},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
+			Name:      "generatedTestName",
 			Namespace: namespace,
 			Labels: map[string]string{
 				"created-by-prow":       "true",
@@ -254,82 +255,125 @@ func makeTestingProwJob(name, namespace, jobName, context string, refs *pjapi.Re
 	}
 }
 
-func TestExecuteJobs(t *testing.T) {
-	testLoggers := Loggers{logrus.New(), logrus.New()}
+func makeTestData() (int, string, string, *pjapi.Refs) {
 	testPrNumber := 123
 	testNamespace := "test-namespace"
-	testRepo := "testRepo"
-	testOrg := "testOrg"
 	testRefs := &pjapi.Refs{
-		Org:     testOrg,
-		Repo:    testRepo,
+		Org:     "testRepo",
+		Repo:    "testOrg",
 		BaseRef: "testBaseRef",
 		BaseSHA: "testBaseSHA",
 		Pulls:   []pjapi.Pull{{Number: testPrNumber, Author: "testAuthor", SHA: "testPrSHA"}},
 	}
-	generatedName := "generatedName"
-	rehearseJobContextTemplate := "ci/rehearse/%s/%s"
+	testReleasePath := "path/to/openshift/release"
 
+	return testPrNumber, testNamespace, testReleasePath, testRefs
+}
+
+func makeSuccessfulFinishReactor(watcher watch.Interface, jobs map[string][]prowconfig.Presubmit) func(clientgo_testing.Action) (bool, watch.Interface, error) {
+	return func(clientgo_testing.Action) (bool, watch.Interface, error) {
+		watcher.Stop()
+		n := 0
+		for _, jobs := range jobs {
+			n += len(jobs)
+		}
+		ret := watch.NewFakeWithChanSize(n, true)
+		for event := range watcher.ResultChan() {
+			pj := event.Object.(*pjapi.ProwJob).DeepCopy()
+			pj.Status.State = pjapi.SuccessState
+			ret.Modify(pj)
+		}
+		return true, ret, nil
+	}
+}
+
+func TestExecuteJobsErrors(t *testing.T) {
+	testPrNumber, testNamespace, testRepoPath, testRefs := makeTestData()
 	targetRepo := "targetOrg/targetRepo"
-	anotherTargetRepo := "anotherOrg/anotherRepo"
 
 	testCases := []struct {
-		description     string
-		jobs            map[string][]prowconfig.Presubmit
-		expectedSuccess bool
-		expectedError   bool
-		expectedJobs    []pjapi.ProwJob
+		description  string
+		jobs         map[string][]prowconfig.Presubmit
+		failToCreate sets.String
 	}{{
-		description: "two jobs in a single repo",
+		description: "fail to Create a prowjob",
 		jobs: map[string][]prowconfig.Presubmit{targetRepo: {
 			*makeTestingPresubmit("job1", "ci/prow/job1", []string{"arg1"}),
-			*makeTestingPresubmit("job2", "ci/prow/job2", []string{"arg1"}),
 		}},
-		expectedSuccess: true,
-		expectedJobs: []pjapi.ProwJob{
-			*makeTestingProwJob(generatedName,
-				testNamespace,
-				"rehearse-123-job1",
-				fmt.Sprintf(rehearseJobContextTemplate, targetRepo, "job1"),
-				testRefs,
-				[]string{"arg1", fmt.Sprintf("--git-ref=%s@master", targetRepo)},
-			),
-			*makeTestingProwJob(generatedName,
-				testNamespace,
-				"rehearse-123-job2",
-				fmt.Sprintf(rehearseJobContextTemplate, targetRepo, "job2"),
-				testRefs,
-				[]string{"arg1", fmt.Sprintf("--git-ref=%s@master", targetRepo)},
-			),
+		failToCreate: sets.NewString("rehearse-123-job1"),
+	}, {
+		description: "fail to Create one of two prowjobs",
+		jobs: map[string][]prowconfig.Presubmit{targetRepo: {
+			*makeTestingPresubmit("job1", "ci/prow/job1", []string{"arg1"}),
+			*makeTestingPresubmit("job2", "ci/prow/job2", []string{"arg2"}),
 		}},
-		{
-			description: "two jobs in a separate repos",
-			jobs: map[string][]prowconfig.Presubmit{
-				targetRepo:        {*makeTestingPresubmit("job1", "ci/prow/job1", []string{"arg1"})},
-				anotherTargetRepo: {*makeTestingPresubmit("job2", "ci/prow/job2", []string{"arg1"})},
-			},
-			expectedSuccess: true,
-			expectedJobs: []pjapi.ProwJob{
-				*makeTestingProwJob(generatedName,
-					testNamespace,
-					"rehearse-123-job1",
-					fmt.Sprintf(rehearseJobContextTemplate, targetRepo, "job1"),
-					testRefs,
-					[]string{"arg1", fmt.Sprintf("--git-ref=%s@master", targetRepo)},
-				),
-				*makeTestingProwJob(generatedName,
-					testNamespace,
-					"rehearse-123-job2",
-					fmt.Sprintf(rehearseJobContextTemplate, anotherTargetRepo, "job2"),
-					testRefs,
-					[]string{"arg1", fmt.Sprintf("--git-ref=%s@master", anotherTargetRepo)},
-				),
-			},
+		failToCreate: sets.NewString("rehearse-123-job2"),
+	}}
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			testLoggers := Loggers{logrus.New(), logrus.New()}
+			fakecs := fake.NewSimpleClientset()
+			fakeclient := fakecs.ProwV1().ProwJobs(testNamespace)
+			watcher, err := fakeclient.Watch(metav1.ListOptions{})
+			if err != nil {
+				t.Fatalf("Failed to setup watch: %v", err)
+			}
+			fakecs.Fake.PrependWatchReactor("prowjobs", makeSuccessfulFinishReactor(watcher, tc.jobs))
+			fakecs.Fake.PrependReactor("create", "prowjobs", func(action clientgo_testing.Action) (bool, runtime.Object, error) {
+				createAction := action.(clientgo_testing.CreateAction)
+				pj := createAction.GetObject().(*pjapi.ProwJob)
+				if tc.failToCreate.Has(pj.Spec.Job) {
+					return true, nil, fmt.Errorf("Fail")
+				}
+				return false, nil, nil
+			})
+
+			_, err = ExecuteJobs(tc.jobs, testPrNumber, testRepoPath, testRefs, true, testLoggers, fakeclient)
+
+			if err == nil {
+				t.Errorf("Expected to return error, got nil")
+			}
+		})
+	}
+}
+
+func TestExecuteJobsUnsuccessful(t *testing.T) {
+	testPrNumber, testNamespace, testRepoPath, testRefs := makeTestData()
+	targetRepo := "targetOrg/targetRepo"
+
+	testCases := []struct {
+		description string
+		jobs        map[string][]prowconfig.Presubmit
+		results     map[string]pjapi.ProwJobState
+	}{{
+		description: "single job that fails",
+		jobs: map[string][]prowconfig.Presubmit{targetRepo: {
+			*makeTestingPresubmit("job1", "ci/prow/job1", []string{"arg1"}),
+		}},
+		results: map[string]pjapi.ProwJobState{"rehearse-123-job1": pjapi.FailureState},
+	}, {
+		description: "single job that aborts",
+		jobs: map[string][]prowconfig.Presubmit{targetRepo: {
+			*makeTestingPresubmit("job1", "ci/prow/job1", []string{"arg1"}),
+		}},
+		results: map[string]pjapi.ProwJobState{"rehearse-123-job1": pjapi.AbortedState},
+	}, {
+		description: "one job succeeds, one fails",
+		jobs: map[string][]prowconfig.Presubmit{targetRepo: {
+			*makeTestingPresubmit("job1", "ci/prow/job1", []string{"arg1"}),
+			*makeTestingPresubmit("job2", "ci/prow/job2", []string{"arg2"}),
+		}},
+		results: map[string]pjapi.ProwJobState{
+			"rehearse-123-job1": pjapi.SuccessState,
+			"rehearse-123-job2": pjapi.FailureState,
 		},
+	},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
+			testLoggers := Loggers{logrus.New(), logrus.New()}
 			fakecs := fake.NewSimpleClientset()
 			fakeclient := fakecs.ProwV1().ProwJobs(testNamespace)
 			watcher, err := fakeclient.Watch(metav1.ListOptions{})
@@ -345,47 +389,121 @@ func TestExecuteJobs(t *testing.T) {
 				ret := watch.NewFakeWithChanSize(n, true)
 				for event := range watcher.ResultChan() {
 					pj := event.Object.(*pjapi.ProwJob).DeepCopy()
-					pj.Status.State = pjapi.SuccessState
+					pj.Status.State = tc.results[pj.Spec.Job]
 					ret.Modify(pj)
 				}
 				return true, ret, nil
 			})
-			success, err := ExecuteJobs(tc.jobs, testPrNumber, testRepo, testRefs, true, testLoggers, fakeclient)
+			success, _ := ExecuteJobs(tc.jobs, testPrNumber, testRepoPath, testRefs, true, testLoggers, fakeclient)
 
-			if tc.expectedError && err == nil {
-				t.Errorf("Expected ExecuteJobs() to return error")
+			if success {
+				t.Errorf("Expected to return success=false, got true")
+			}
+		})
+	}
+}
+
+func TestExecuteJobsPositive(t *testing.T) {
+	testPrNumber, testNamespace, testRepoPath, testRefs := makeTestData()
+	rehearseJobContextTemplate := "ci/rehearse/%s/%s"
+	targetRepo := "targetOrg/targetRepo"
+	anotherTargetRepo := "anotherOrg/anotherRepo"
+
+	testCases := []struct {
+		description  string
+		jobs         map[string][]prowconfig.Presubmit
+		expectedJobs []pjapi.ProwJobSpec
+	}{{
+		description: "two jobs in a single repo",
+		jobs: map[string][]prowconfig.Presubmit{targetRepo: {
+			*makeTestingPresubmit("job1", "ci/prow/job1", []string{"arg1"}),
+			*makeTestingPresubmit("job2", "ci/prow/job2", []string{"arg1"}),
+		}},
+		expectedJobs: []pjapi.ProwJobSpec{
+			makeTestingProwJob(testNamespace,
+				"rehearse-123-job1",
+				fmt.Sprintf(rehearseJobContextTemplate, targetRepo, "job1"),
+				testRefs,
+				[]string{"arg1", fmt.Sprintf("--git-ref=%s@master", targetRepo)},
+			).Spec,
+			makeTestingProwJob(testNamespace,
+				"rehearse-123-job2",
+				fmt.Sprintf(rehearseJobContextTemplate, targetRepo, "job2"),
+				testRefs,
+				[]string{"arg1", fmt.Sprintf("--git-ref=%s@master", targetRepo)},
+			).Spec,
+		}},
+		{
+			description: "two jobs in a separate repos",
+			jobs: map[string][]prowconfig.Presubmit{
+				targetRepo:        {*makeTestingPresubmit("job1", "ci/prow/job1", []string{"arg1"})},
+				anotherTargetRepo: {*makeTestingPresubmit("job2", "ci/prow/job2", []string{"arg1"})},
+			},
+			expectedJobs: []pjapi.ProwJobSpec{
+				makeTestingProwJob(testNamespace,
+					"rehearse-123-job1",
+					fmt.Sprintf(rehearseJobContextTemplate, targetRepo, "job1"),
+					testRefs,
+					[]string{"arg1", fmt.Sprintf("--git-ref=%s@master", targetRepo)},
+				).Spec,
+				makeTestingProwJob(testNamespace,
+					"rehearse-123-job2",
+					fmt.Sprintf(rehearseJobContextTemplate, anotherTargetRepo, "job2"),
+					testRefs,
+					[]string{"arg1", fmt.Sprintf("--git-ref=%s@master", anotherTargetRepo)},
+				).Spec,
+			},
+		}, {
+			description:  "no jobs",
+			jobs:         map[string][]prowconfig.Presubmit{},
+			expectedJobs: []pjapi.ProwJobSpec{},
+		}, {
+			description: "no rehearsable jobs",
+			jobs: map[string][]prowconfig.Presubmit{
+				targetRepo: {*makeTestingPresubmit("job1", "ci/prow/job1", []string{"--git-ref"})},
+			},
+			expectedJobs: []pjapi.ProwJobSpec{},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			testLoggers := Loggers{logrus.New(), logrus.New()}
+			fakecs := fake.NewSimpleClientset()
+			fakeclient := fakecs.ProwV1().ProwJobs(testNamespace)
+			watcher, err := fakeclient.Watch(metav1.ListOptions{})
+			if err != nil {
+				t.Fatalf("Failed to setup watch: %v", err)
+			}
+			fakecs.Fake.PrependWatchReactor("prowjobs", makeSuccessfulFinishReactor(watcher, tc.jobs))
+			success, err := ExecuteJobs(tc.jobs, testPrNumber, testRepoPath, testRefs, true, testLoggers, fakeclient)
+
+			if err != nil {
+				t.Errorf("Expected ExecuteJobs() to not return error, returned %v", err)
 				return
 			}
 
-			if !tc.expectedError {
-				if err != nil {
-					t.Errorf("Expected ExecuteJobs() to not return error, returned %v", err)
-					return
-				}
+			if !success {
+				t.Errorf("Expected ExecuteJobs() to return success=true, got false")
+			}
 
-				if tc.expectedSuccess != success {
-					t.Errorf("Expected ExecuteJobs() to return success=%t, got %t", tc.expectedSuccess, success)
-				}
+			createdJobs, err := fakeclient.List(metav1.ListOptions{})
+			if err != nil {
+				t.Errorf("Failed to get expected ProwJobs from fake client")
+				return
+			}
 
-				createdJobs, err := fakeclient.List(metav1.ListOptions{})
-				if err != nil {
-					t.Errorf("Failed to get expected ProwJobs from fake client")
-					return
-				}
+			createdJobSpecs := []pjapi.ProwJobSpec{}
+			for _, job := range createdJobs.Items {
+				createdJobSpecs = append(createdJobSpecs, job.Spec)
+			}
 
-				// Overwrite dynamic struct members to allow comparison
-				for i := range createdJobs.Items {
-					createdJobs.Items[i].Name = generatedName
-					createdJobs.Items[i].Status.StartTime.Reset()
-				}
+			// Sort to allow comparison
+			sort.Slice(tc.expectedJobs, func(a, b int) bool { return tc.expectedJobs[a].Job < tc.expectedJobs[b].Job })
+			sort.Slice(createdJobSpecs, func(a, b int) bool { return createdJobSpecs[a].Job < createdJobSpecs[b].Job })
 
-				// Sort to allow comparison
-				sort.Slice(tc.expectedJobs, func(a, b int) bool { return tc.expectedJobs[a].Spec.Job < tc.expectedJobs[b].Spec.Job })
-				sort.Slice(createdJobs.Items, func(a, b int) bool { return createdJobs.Items[a].Spec.Job < createdJobs.Items[b].Spec.Job })
-
-				if !equality.Semantic.DeepEqual(tc.expectedJobs, createdJobs.Items) {
-					t.Errorf("Created ProwJobs differ from expected:\n%s", diff.ObjectDiff(tc.expectedJobs, createdJobs.Items))
-				}
+			if !equality.Semantic.DeepEqual(tc.expectedJobs, createdJobSpecs) {
+				t.Errorf("Created ProwJobs differ from expected:\n%s", diff.ObjectDiff(tc.expectedJobs, createdJobSpecs))
 			}
 		})
 	}

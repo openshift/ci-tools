@@ -67,15 +67,18 @@ func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber 
 	deepcopy.Copy(&rehearsal, source)
 
 	rehearsal.Name = fmt.Sprintf("rehearse-%d-%s", prNumber, source.Name)
-	rehearsal.Context = fmt.Sprintf("ci/rehearse/%s/%s", repo, strings.TrimPrefix(source.Context, "ci/prow/"))
+
+	branch := strings.TrimPrefix(strings.TrimSuffix(source.Branches[0], "$"), "^")
+	shortName := strings.TrimPrefix(source.Context, "ci/prow/")
+	rehearsal.Context = fmt.Sprintf("ci/rehearse/%s/%s/%s", repo, branch, shortName)
+
+	gitrefArg := fmt.Sprintf("--git-ref=%s@%s", repo, branch)
+	rehearsal.Spec.Containers[0].Args = append(source.Spec.Containers[0].Args, gitrefArg)
+
 	if rehearsal.Labels == nil {
 		rehearsal.Labels = make(map[string]string, 1)
 	}
 	rehearsal.Labels[rehearseLabel] = strconv.Itoa(prNumber)
-
-	branch := strings.TrimPrefix(strings.TrimSuffix(source.Branches[0], "$"), "^")
-	gitrefArg := fmt.Sprintf("--git-ref=%s@%s", repo, branch)
-	rehearsal.Spec.Containers[0].Args = append(source.Spec.Containers[0].Args, gitrefArg)
 
 	return &rehearsal, nil
 }

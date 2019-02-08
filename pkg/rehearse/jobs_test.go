@@ -396,7 +396,7 @@ func TestExecuteJobsUnsuccessful(t *testing.T) {
 				return true, ret, nil
 			})
 
-			executor := NewExecutor(tc.jobs, testPrNumber, testRepoPath, testRefs, true, testLoggers, fakeclient)
+			executor := NewExecutor(tc.jobs, testPrNumber, testRepoPath, testRefs, false, testLoggers, fakeclient)
 			success, _ := executor.ExecuteJobs()
 
 			if success {

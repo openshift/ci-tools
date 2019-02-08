@@ -164,7 +164,7 @@ func main() {
 
 	loggers := rehearse.Loggers{Job: logger, Debug: debugLogger.WithField(prowgithub.PrLogField, prNumber)}
 
-	executor := rehearse.NewExecutor(changedPresubmits, prNumber, o.candidatePath, jobSpec.Refs, !o.dryRun, loggers, pjclient)
+	executor := rehearse.NewExecutor(changedPresubmits, prNumber, o.candidatePath, jobSpec.Refs, o.dryRun, loggers, pjclient)
 	success, err := executor.ExecuteJobs()
 	if err != nil {
 		logger.WithError(err).Error("Failed to rehearse jobs")

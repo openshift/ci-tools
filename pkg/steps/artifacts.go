@@ -10,8 +10,10 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 
@@ -107,24 +109,47 @@ func (n *TestCaseNotifier) SubTests(prefix string) []*junit.TestCase {
 	if len(names) == 0 {
 		return nil
 	}
+	statuses := make([]coreapi.ContainerStatus, len(pod.Status.ContainerStatuses))
+	copy(statuses, pod.Status.ContainerStatuses)
+	sort.Slice(statuses, func(i, j int) bool {
+		aT, bT := statuses[i].State.Terminated, statuses[j].State.Terminated
+		if (aT == nil) == (bT == nil) {
+			if aT == nil {
+				return statuses[i].Name < statuses[j].Name
+			}
+			return aT.FinishedAt.Time.Before(bT.FinishedAt.Time)
+		}
+		if aT != nil {
+			return false
+		}
+		return true
+	})
+
+	var lastFinished time.Time
 	var tests []*junit.TestCase
-	for _, status := range pod.Status.ContainerStatuses {
-		if names.Has(status.Name) {
-			if t := status.State.Terminated; t != nil {
-				test := &junit.TestCase{
-					Name:     fmt.Sprintf("%scontainer %s", prefix, status.Name),
-					Duration: t.FinishedAt.Sub(t.StartedAt.Time).Seconds(),
-				}
-				if t.ExitCode != 0 {
-					test.FailureOutput = &junit.FailureOutput{
-						Output: t.Message,
-					}
-				}
-				tests = append(tests, test)
-				continue
+	for _, status := range statuses {
+		t := status.State.Terminated
+		if t == nil || !names.Has(status.Name) {
+			continue
+		}
+		if lastFinished.Before(t.StartedAt.Time) {
+			lastFinished = t.StartedAt.Time
+		}
+		test := &junit.TestCase{
+			Name:     fmt.Sprintf("%scontainer %s", prefix, status.Name),
+			Duration: t.FinishedAt.Sub(lastFinished).Seconds(),
+		}
+		lastFinished = t.FinishedAt.Time
+		if t.ExitCode != 0 {
+			test.FailureOutput = &junit.FailureOutput{
+				Output: t.Message,
 			}
 		}
+		tests = append(tests, test)
 	}
+	sort.Slice(tests, func(i, j int) bool {
+		return tests[i].Name < tests[j].Name
+	})
 	return tests
 }
 

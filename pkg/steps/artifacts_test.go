@@ -3,6 +3,7 @@ package steps
 import (
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/openshift/ci-operator/pkg/junit"
 	coreapi "k8s.io/api/core/v1"
@@ -106,6 +107,22 @@ func TestTestCaseNotifier_SubTests(t *testing.T) {
 			},
 		},
 		{
+			name: "no completed containers",
+			pod: &coreapi.Pod{
+				ObjectMeta: meta.ObjectMeta{
+					Annotations: map[string]string{
+						annotationContainersForSubTestResults: "test",
+					},
+				},
+				Status: coreapi.PodStatus{
+					ContainerStatuses: []coreapi.ContainerStatus{
+						{Name: "test"},
+						{Name: "other"},
+					},
+				},
+			},
+		},
+		{
 			name: "single failed container",
 			pod: &coreapi.Pod{
 				ObjectMeta: meta.ObjectMeta{
@@ -115,6 +132,9 @@ func TestTestCaseNotifier_SubTests(t *testing.T) {
 				},
 				Status: coreapi.PodStatus{
 					ContainerStatuses: []coreapi.ContainerStatus{
+						{
+							Name: "other",
+						},
 						{
 							Name: "test",
 							State: coreapi.ContainerState{
@@ -128,12 +148,7 @@ func TestTestCaseNotifier_SubTests(t *testing.T) {
 				},
 			},
 			wantTests: []*junit.TestCase{
-				{
-					Name: "container test",
-					FailureOutput: &junit.FailureOutput{
-						Output: "exit message",
-					},
-				},
+				{Name: "container test", FailureOutput: &junit.FailureOutput{Output: "exit message"}},
 			},
 		},
 		{
@@ -168,18 +183,8 @@ func TestTestCaseNotifier_SubTests(t *testing.T) {
 				},
 			},
 			wantTests: []*junit.TestCase{
-				{
-					Name: "container test",
-					FailureOutput: &junit.FailureOutput{
-						Output: "exit message",
-					},
-				},
-				{
-					Name: "container other",
-					FailureOutput: &junit.FailureOutput{
-						Output: "exit message",
-					},
-				},
+				{Name: "container other", FailureOutput: &junit.FailureOutput{Output: "exit message"}},
+				{Name: "container test", FailureOutput: &junit.FailureOutput{Output: "exit message"}},
 			},
 		},
 		{
@@ -214,15 +219,8 @@ func TestTestCaseNotifier_SubTests(t *testing.T) {
 				},
 			},
 			wantTests: []*junit.TestCase{
-				{
-					Name: "container test",
-					FailureOutput: &junit.FailureOutput{
-						Output: "exit message",
-					},
-				},
-				{
-					Name: "container other",
-				},
+				{Name: "container other"},
+				{Name: "container test", FailureOutput: &junit.FailureOutput{Output: "exit message"}},
 			},
 		},
 		{
@@ -252,12 +250,187 @@ func TestTestCaseNotifier_SubTests(t *testing.T) {
 				},
 			},
 			wantTests: []*junit.TestCase{
-				{
-					Name: "container test",
-					FailureOutput: &junit.FailureOutput{
-						Output: "exit message",
+				{Name: "container test", FailureOutput: &junit.FailureOutput{Output: "exit message"}},
+			},
+		},
+		{
+			name: "sets duration to non-overlapping timelines",
+			pod: &coreapi.Pod{
+				ObjectMeta: meta.ObjectMeta{Annotations: map[string]string{annotationContainersForSubTestResults: "other,test"}},
+				Status: coreapi.PodStatus{
+					ContainerStatuses: []coreapi.ContainerStatus{
+						{
+							Name: "test",
+							State: coreapi.ContainerState{
+								Terminated: &coreapi.ContainerStateTerminated{
+									ExitCode:   1,
+									Message:    "exit message",
+									StartedAt:  meta.Time{Time: time.Unix(1000, 0)},
+									FinishedAt: meta.Time{Time: time.Unix(1100, 0)},
+								},
+							},
+						},
+						{
+							Name: "other",
+							State: coreapi.ContainerState{
+								Terminated: &coreapi.ContainerStateTerminated{
+									ExitCode:   0,
+									Message:    "success",
+									StartedAt:  meta.Time{Time: time.Unix(1050, 0)},
+									FinishedAt: meta.Time{Time: time.Unix(1150, 0)},
+								},
+							},
+						},
 					},
 				},
+			},
+			wantTests: []*junit.TestCase{
+				{Name: "container other", Duration: 50},
+				{Name: "container test", FailureOutput: &junit.FailureOutput{Output: "exit message"}, Duration: 100},
+			},
+		},
+		{
+			name: "sets duration to non-overlapping timelines - reverse order",
+			pod: &coreapi.Pod{
+				ObjectMeta: meta.ObjectMeta{Annotations: map[string]string{annotationContainersForSubTestResults: "other,test"}},
+				Status: coreapi.PodStatus{
+					ContainerStatuses: []coreapi.ContainerStatus{
+						{
+							Name: "other",
+							State: coreapi.ContainerState{
+								Terminated: &coreapi.ContainerStateTerminated{
+									ExitCode:   0,
+									Message:    "success",
+									StartedAt:  meta.Time{Time: time.Unix(1050, 0)},
+									FinishedAt: meta.Time{Time: time.Unix(1150, 0)},
+								},
+							},
+						},
+						{
+							Name: "test",
+							State: coreapi.ContainerState{
+								Terminated: &coreapi.ContainerStateTerminated{
+									ExitCode:   1,
+									Message:    "exit message",
+									StartedAt:  meta.Time{Time: time.Unix(1000, 0)},
+									FinishedAt: meta.Time{Time: time.Unix(1100, 0)},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantTests: []*junit.TestCase{
+				{Name: "container other", Duration: 50},
+				{Name: "container test", FailureOutput: &junit.FailureOutput{Output: "exit message"}, Duration: 100},
+			},
+		},
+		{
+			name: "handles non-overlapping container lifecycles",
+			pod: &coreapi.Pod{
+				ObjectMeta: meta.ObjectMeta{Annotations: map[string]string{annotationContainersForSubTestResults: "other,test"}},
+				Status: coreapi.PodStatus{
+					ContainerStatuses: []coreapi.ContainerStatus{
+						{
+							Name: "other",
+							State: coreapi.ContainerState{
+								Terminated: &coreapi.ContainerStateTerminated{
+									ExitCode:   0,
+									Message:    "success",
+									StartedAt:  meta.Time{Time: time.Unix(1050, 0)},
+									FinishedAt: meta.Time{Time: time.Unix(1150, 0)},
+								},
+							},
+						},
+						{
+							Name: "test",
+							State: coreapi.ContainerState{
+								Terminated: &coreapi.ContainerStateTerminated{
+									ExitCode:   1,
+									Message:    "exit message",
+									StartedAt:  meta.Time{Time: time.Unix(1200, 0)},
+									FinishedAt: meta.Time{Time: time.Unix(1250, 0)},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantTests: []*junit.TestCase{
+				{Name: "container other", Duration: 100},
+				{Name: "container test", FailureOutput: &junit.FailureOutput{Output: "exit message"}, Duration: 50},
+			},
+		},
+		{
+			name: "handles fully overlapping times",
+			pod: &coreapi.Pod{
+				ObjectMeta: meta.ObjectMeta{Annotations: map[string]string{annotationContainersForSubTestResults: "other,test"}},
+				Status: coreapi.PodStatus{
+					ContainerStatuses: []coreapi.ContainerStatus{
+						{
+							Name: "other",
+							State: coreapi.ContainerState{
+								Terminated: &coreapi.ContainerStateTerminated{
+									ExitCode:   0,
+									Message:    "success",
+									StartedAt:  meta.Time{Time: time.Unix(1050, 0)},
+									FinishedAt: meta.Time{Time: time.Unix(1150, 0)},
+								},
+							},
+						},
+						{
+							Name: "test",
+							State: coreapi.ContainerState{
+								Terminated: &coreapi.ContainerStateTerminated{
+									ExitCode:   1,
+									Message:    "exit message",
+									StartedAt:  meta.Time{Time: time.Unix(1100, 0)},
+									FinishedAt: meta.Time{Time: time.Unix(1150, 0)},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantTests: []*junit.TestCase{
+				{Name: "container other", Duration: 100},
+				{Name: "container test", FailureOutput: &junit.FailureOutput{Output: "exit message"}, Duration: 0},
+			},
+		},
+		{
+			name: "handles fully overlapping identical ",
+			pod: &coreapi.Pod{
+				ObjectMeta: meta.ObjectMeta{Annotations: map[string]string{annotationContainersForSubTestResults: "other,test"}},
+				Status: coreapi.PodStatus{
+					ContainerStatuses: []coreapi.ContainerStatus{
+						{
+							Name: "other",
+							State: coreapi.ContainerState{
+								Terminated: &coreapi.ContainerStateTerminated{
+									ExitCode:   0,
+									Message:    "success",
+									StartedAt:  meta.Time{Time: time.Unix(1000, 0)},
+									FinishedAt: meta.Time{Time: time.Unix(1100, 0)},
+								},
+							},
+						},
+						{
+							Name: "test",
+							State: coreapi.ContainerState{
+								Terminated: &coreapi.ContainerStateTerminated{
+									ExitCode:   1,
+									Message:    "exit message",
+									StartedAt:  meta.Time{Time: time.Unix(1100, 0)},
+									FinishedAt: meta.Time{Time: time.Unix(1100, 0)},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantTests: []*junit.TestCase{
+				{Name: "container other", Duration: 100},
+				{Name: "container test", FailureOutput: &junit.FailureOutput{Output: "exit message"}, Duration: 0},
 			},
 		},
 	}

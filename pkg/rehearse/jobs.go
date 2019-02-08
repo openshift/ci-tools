@@ -30,7 +30,8 @@ import (
 )
 
 const (
-	rehearseLabel = "ci.openshift.org/rehearse"
+	rehearseLabel                = "ci.openshift.org/rehearse"
+	defaultRehearsalRerunCommand = "/test pj-rehearse"
 )
 
 type Loggers struct {
@@ -72,6 +73,7 @@ func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber 
 	branch := strings.TrimPrefix(strings.TrimSuffix(source.Branches[0], "$"), "^")
 	shortName := strings.TrimPrefix(source.Context, "ci/prow/")
 	rehearsal.Context = fmt.Sprintf("ci/rehearse/%s/%s/%s", repo, branch, shortName)
+	rehearsal.RerunCommand = defaultRehearsalRerunCommand
 
 	gitrefArg := fmt.Sprintf("--git-ref=%s@%s", repo, branch)
 	rehearsal.Spec.Containers[0].Args = append(source.Spec.Containers[0].Args, gitrefArg)

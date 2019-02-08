@@ -25,3 +25,7 @@ format:
 integration:
 	test/integration/run.sh
 .PHONY: integration
+
+integration-pj-rehearse:
+	test/pj-rehearse-integration/run.sh
+.PHONY: integration-pj-rehearse

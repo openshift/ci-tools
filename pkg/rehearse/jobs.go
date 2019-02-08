@@ -14,14 +14,11 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/selection"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/testing"
-
 	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	pjclientset "k8s.io/test-infra/prow/client/clientset/versioned"
 	pjclientsetfake "k8s.io/test-infra/prow/client/clientset/versioned/fake"
@@ -44,9 +41,6 @@ type Loggers struct {
 func NewProwJobClient(clusterConfig *rest.Config, namespace string, dry bool) (pj.ProwJobInterface, error) {
 	if dry {
 		pjcset := pjclientsetfake.NewSimpleClientset()
-		pjcset.Fake.PrependReactor("create", "prowjobs", func(action testing.Action) (bool, runtime.Object, error) {
-			return false, nil, nil
-		})
 		return pjcset.ProwV1().ProwJobs(namespace), nil
 	}
 	pjcset, err := pjclientset.NewForConfig(clusterConfig)
@@ -242,7 +236,7 @@ func printAsYaml(pjs []*pjapi.ProwJob) error {
 // config would affect the "production" Prow jobs run on the actual target repos
 func (e *Executor) ExecuteJobs() (bool, error) {
 	submitSuccess := true
-	names, pjs, err := e.submitRehearsals()
+	pjs, err := e.submitRehearsals()
 	if err != nil {
 		submitSuccess = false
 	}
@@ -262,6 +256,10 @@ func (e *Executor) ExecuteJobs() (bool, error) {
 	}
 	selector := labels.NewSelector().Add(*req).String()
 
+	names := sets.NewString()
+	for _, job := range pjs {
+		names.Insert(job.Name)
+	}
 	waitSuccess, err := e.waitForJobs(names, selector)
 	if !submitSuccess {
 		return waitSuccess, fmt.Errorf("failed to submit all rehearsal jobs")
@@ -308,9 +306,8 @@ func (e *Executor) waitForJobs(jobs sets.String, selector string) (bool, error) 
 	}
 }
 
-func (e *Executor) submitRehearsals() (sets.String, []*pjapi.ProwJob, error) {
+func (e *Executor) submitRehearsals() ([]*pjapi.ProwJob, error) {
 	var errors []error
-	pj_names := make(sets.String, len(e.rehearsals))
 	pjs := []*pjapi.ProwJob{}
 
 	for _, job := range e.rehearsals {
@@ -321,10 +318,9 @@ func (e *Executor) submitRehearsals() (sets.String, []*pjapi.ProwJob, error) {
 			continue
 		}
 		e.loggers.Job.WithFields(pjutil.ProwJobFields(created)).Info("Submitted rehearsal prowjob")
-		pj_names.Insert(created.Name)
 		pjs = append(pjs, created)
 	}
-	return pj_names, pjs, kerrors.NewAggregate(errors)
+	return pjs, kerrors.NewAggregate(errors)
 }
 
 func (e *Executor) submitRehearsal(job *prowconfig.Presubmit) (*pjapi.ProwJob, error) {

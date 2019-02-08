@@ -22,9 +22,12 @@ format:
 	gofmt -s -w $(shell go list -f '{{ .Dir }}' ./... )
 .PHONY: format
 
-integration:
-	test/integration/run.sh
+integration: integration-prowgen integration-pj-rehearse
 .PHONY: integration
+
+integration-prowgen:
+	test/prowgen-integration/run.sh
+.PHONY: integration-prowgen
 
 integration-pj-rehearse:
 	test/pj-rehearse-integration/run.sh

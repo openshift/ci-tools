@@ -329,7 +329,8 @@ func TestExecuteJobsErrors(t *testing.T) {
 				return false, nil, nil
 			})
 
-			_, err = ExecuteJobs(tc.jobs, testPrNumber, testRepoPath, testRefs, true, testLoggers, fakeclient)
+			executor := NewExecutor(tc.jobs, testPrNumber, testRepoPath, testRefs, true, testLoggers, fakeclient)
+			_, err = executor.ExecuteJobs()
 
 			if err == nil {
 				t.Errorf("Expected to return error, got nil")
@@ -394,7 +395,9 @@ func TestExecuteJobsUnsuccessful(t *testing.T) {
 				}
 				return true, ret, nil
 			})
-			success, _ := ExecuteJobs(tc.jobs, testPrNumber, testRepoPath, testRefs, true, testLoggers, fakeclient)
+
+			executor := NewExecutor(tc.jobs, testPrNumber, testRepoPath, testRefs, true, testLoggers, fakeclient)
+			success, _ := executor.ExecuteJobs()
 
 			if success {
 				t.Errorf("Expected to return success=false, got true")
@@ -476,7 +479,9 @@ func TestExecuteJobsPositive(t *testing.T) {
 				t.Fatalf("Failed to setup watch: %v", err)
 			}
 			fakecs.Fake.PrependWatchReactor("prowjobs", makeSuccessfulFinishReactor(watcher, tc.jobs))
-			success, err := ExecuteJobs(tc.jobs, testPrNumber, testRepoPath, testRefs, true, testLoggers, fakeclient)
+
+			executor := NewExecutor(tc.jobs, testPrNumber, testRepoPath, testRefs, true, testLoggers, fakeclient)
+			success, err := executor.ExecuteJobs()
 
 			if err != nil {
 				t.Errorf("Expected ExecuteJobs() to not return error, returned %v", err)
@@ -597,7 +602,9 @@ func TestWaitForJobs(t *testing.T) {
 			cs.Fake.PrependWatchReactor("prowjobs", func(clientgo_testing.Action) (bool, watch.Interface, error) {
 				return true, w, nil
 			})
-			success, err := waitForJobs(tc.pjs, "", cs.ProwV1().ProwJobs("test"), loggers)
+
+			executor := NewExecutor(nil, 0, "", &pjapi.Refs{}, true, loggers, cs.ProwV1().ProwJobs("test"))
+			success, err := executor.waitForJobs(tc.pjs, "")
 			if err != tc.err {
 				t.Fatalf("want `err` == %v, got %v", tc.err, err)
 			}
@@ -621,7 +628,9 @@ func TestWaitForJobsRetries(t *testing.T) {
 		ret, ws = ws[0], ws[1:]
 		return true, ret, nil
 	})
-	success, err := waitForJobs(sets.String{"j": {}}, "", cs.ProwV1().ProwJobs("test"), Loggers{logrus.New(), logrus.New()})
+
+	executor := NewExecutor(nil, 0, "", &pjapi.Refs{}, true, Loggers{logrus.New(), logrus.New()}, cs.ProwV1().ProwJobs("test"))
+	success, err := executor.waitForJobs(sets.String{"j": {}}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -646,7 +655,9 @@ func TestWaitForJobsLog(t *testing.T) {
 		return true, w, nil
 	})
 	loggers := Loggers{jobLogger, dbgLogger}
-	_, err := waitForJobs(sets.NewString("success", "failure"), "", cs.ProwV1().ProwJobs("test"), loggers)
+
+	executor := NewExecutor(nil, 0, "", &pjapi.Refs{}, true, loggers, cs.ProwV1().ProwJobs("test"))
+	_, err := executor.waitForJobs(sets.NewString("success", "failure"), "")
 	if err != nil {
 		t.Fatal(err)
 	}

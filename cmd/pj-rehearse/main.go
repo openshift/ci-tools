@@ -164,29 +164,17 @@ func main() {
 
 	loggers := rehearse.Loggers{Job: logger, Debug: debugLogger.WithField(prowgithub.PrLogField, prNumber)}
 
-	resultChan := make(chan rehearse.Result)
-	errorChan := make(chan error)
-	quit := make(chan struct{})
-
-	executor := rehearse.NewExecutor(changedPresubmits, prNumber, o.candidatePath,
-		jobSpec.Refs, loggers, pjclient, o.dryRun, resultChan, errorChan, quit)
-
-	go executor.ExecuteJobs()
-
-	results := make(map[string]pjapi.ProwJobStatus)
-	for {
-		select {
-		case result := <-resultChan:
-			results[result.Name] = result.Status
-		case err := <-errorChan:
-			loggers.Job.WithError(err).Error("Error has occurred")
-		case <-quit:
-			// DO REPORT HERE
-			// Since we have the pjapi.ProwJobStatus, we are able
-			// to create a detailed report for all the jobs.
-			gracefulExit(o.noFail, "")
-		}
+	executor := rehearse.NewExecutor(changedPresubmits, prNumber, o.candidatePath, jobSpec.Refs, !o.dryRun, loggers, pjclient)
+	success, err := executor.ExecuteJobs()
+	if err != nil {
+		logger.WithError(err).Error("Failed to rehearse jobs")
+		gracefulExit(o.noFail, rehearseFailureOutput)
 	}
+	if !success {
+		logger.Error("Some jobs failed their rehearsal runs")
+		gracefulExit(o.noFail, jobsFailureOutput)
+	}
+	logger.Info("All jobs were rehearsed successfuly")
 }
 
 func getCurrentSHA(repoPath string) (string, error) {

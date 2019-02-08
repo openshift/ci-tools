@@ -15,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/selection"
+	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"k8s.io/client-go/rest"
@@ -171,89 +172,98 @@ func inlineCiOpConfig(job *prowconfig.Presubmit, targetRepo string, ciopConfigs 
 	return &rehearsal, nil
 }
 
-func submitRehearsal(job *prowconfig.Presubmit, refs *pjapi.Refs, loggers Loggers, pjclient pj.ProwJobInterface) (*pjapi.ProwJob, error) {
-	labels := make(map[string]string)
-	for k, v := range job.Labels {
-		labels[k] = v
+const LogRehearsalJob = "rehearsal-job"
+
+func configureRehearsalJobs(toBeRehearsed map[string][]prowconfig.Presubmit, prRepo string, prNumber int, loggers Loggers) []*prowconfig.Presubmit {
+	rehearsals := []*prowconfig.Presubmit{}
+	ciopConfigs := &ciOperatorConfigLoader{filepath.Join(prRepo, ciopConfigsInRepo)}
+
+	for repo, jobs := range toBeRehearsed {
+		for _, job := range jobs {
+			jobLogger := loggers.Job.WithFields(logrus.Fields{"target-repo": repo, "target-job": job.Name})
+			rehearsal, err := makeRehearsalPresubmit(&job, repo, prNumber)
+			if err != nil {
+				jobLogger.WithError(err).Warn("Failed to make a rehearsal presubmit")
+				continue
+			}
+
+			rehearsal, err = inlineCiOpConfig(rehearsal, repo, ciopConfigs, loggers)
+			if err != nil {
+				jobLogger.WithError(err).Warn("Failed to inline ci-operator-config into rehearsal job")
+				continue
+			}
+
+			jobLogger.WithField(LogRehearsalJob, rehearsal.Name).Info("Created a rehearsal job to be submitted")
+			rehearsals = append(rehearsals, rehearsal)
+		}
 	}
 
-	prowJob := pjutil.NewProwJob(pjutil.PresubmitSpec(*job, *refs), labels)
-	loggers.Job.WithFields(pjutil.ProwJobFields(&prowJob)).Info("Submitting a new prowjob.")
-
-	return pjclient.Create(&prowJob)
+	return rehearsals
 }
 
-const LogRehearsalJob = "rehearsal-job"
+type Executor struct {
+	dryRun     bool
+	rehearsals []*prowconfig.Presubmit
+	prNumber   int
+	prRepo     string
+	refs       *pjapi.Refs
+	loggers    Loggers
+	pjclient   pj.ProwJobInterface
+}
+
+func NewExecutor(toBeRehearsed map[string][]prowconfig.Presubmit, prNumber int, prRepo string, refs *pjapi.Refs,
+	dryRun bool, loggers Loggers, pjclient pj.ProwJobInterface) *Executor {
+	rehearsals := configureRehearsalJobs(toBeRehearsed, prRepo, prNumber, loggers)
+	return &Executor{
+		dryRun:     dryRun,
+		rehearsals: rehearsals,
+		prNumber:   prNumber,
+		prRepo:     prRepo,
+		refs:       refs,
+		loggers:    loggers,
+		pjclient:   pjclient,
+	}
+}
 
 // ExecuteJobs takes configs for a set of jobs which should be "rehearsed", and
 // creates the ProwJobs that perform the actual rehearsal. *Rehearsal* means
 // a "trial" execution of a Prow job configuration when the *job config* config
 // is changed, giving feedback to Prow config authors on how the changes of the
 // config would affect the "production" Prow jobs run on the actual target repos
-func ExecuteJobs(toBeRehearsed map[string][]prowconfig.Presubmit, prNumber int, prRepo string, refs *pjapi.Refs, follow bool, loggers Loggers, pjclient pj.ProwJobInterface) (bool, error) {
-	rehearsals := []*prowconfig.Presubmit{}
-
-	ciopConfigs := &ciOperatorConfigLoader{filepath.Join(prRepo, ciopConfigsInRepo)}
-
-	for repo, jobs := range toBeRehearsed {
-		for _, job := range jobs {
-			fields := logrus.Fields{"target-repo": repo, "target-job": job.Name}
-			jobLogger := Loggers{loggers.Job.WithFields(fields), loggers.Debug.WithFields(fields)}
-			rehearsal, err := makeRehearsalPresubmit(&job, repo, prNumber)
-			if err != nil {
-				jobLogger.Job.WithError(err).Warn("Failed to make a rehearsal presubmit")
-				continue
-			}
-
-			rehearsal, err = inlineCiOpConfig(rehearsal, repo, ciopConfigs, jobLogger)
-			if err != nil {
-				jobLogger.Job.WithError(err).Warn("Failed to inline ci-operator-config into rehearsal job")
-				continue
-			}
-
-			jobLogger.Job.WithField(LogRehearsalJob, rehearsal.Name).Info("Created a rehearsal job to be submitted")
-			rehearsals = append(rehearsals, rehearsal)
-		}
-	}
-
+func (e *Executor) ExecuteJobs() (bool, error) {
 	submitSuccess := true
-	pjs := make(sets.String, len(rehearsals))
-	for _, job := range rehearsals {
-		created, err := submitRehearsal(job, refs, loggers, pjclient)
-		if err != nil {
-			loggers.Job.WithError(err).Warn("Failed to execute a rehearsal presubmit")
-			submitSuccess = false
-			continue
-		}
-		loggers.Job.WithFields(pjutil.ProwJobFields(created)).Info("Submitted rehearsal prowjob")
-		pjs.Insert(created.Name)
+	pjs, err := e.submitRehearsals()
+	if err != nil {
+		submitSuccess = false
 	}
-	if !follow {
+
+	if e.dryRun {
 		if submitSuccess {
 			return true, nil
 		}
 		return true, fmt.Errorf("failed to submit all rehearsal jobs")
 	}
-	req, err := labels.NewRequirement(rehearseLabel, selection.Equals, []string{strconv.Itoa(prNumber)})
+
+	req, err := labels.NewRequirement(rehearseLabel, selection.Equals, []string{strconv.Itoa(e.prNumber)})
 	if err != nil {
 		return false, fmt.Errorf("failed to create label selector: %v", err)
 	}
 	selector := labels.NewSelector().Add(*req).String()
-	waitSuccess, err := waitForJobs(pjs, selector, pjclient, loggers)
 
+	waitSuccess, err := e.waitForJobs(pjs, selector)
 	if !submitSuccess {
 		return waitSuccess, fmt.Errorf("failed to submit all rehearsal jobs")
 	}
 	return waitSuccess, err
 }
 
-func waitForJobs(jobs sets.String, selector string, pjclient pj.ProwJobInterface, loggers Loggers) (bool, error) {
+func (e *Executor) waitForJobs(jobs sets.String, selector string) (bool, error) {
 	if len(jobs) == 0 {
 		return true, nil
 	}
 	success := true
 	for {
-		w, err := pjclient.Watch(metav1.ListOptions{LabelSelector: selector})
+		w, err := e.pjclient.Watch(metav1.ListOptions{LabelSelector: selector})
 		if err != nil {
 			return false, fmt.Errorf("failed to create watch for ProwJobs: %v", err)
 		}
@@ -265,16 +275,16 @@ func waitForJobs(jobs sets.String, selector string, pjclient pj.ProwJobInterface
 			}
 			fields := pjutil.ProwJobFields(pj)
 			fields["state"] = pj.Status.State
-			loggers.Debug.WithFields(fields).Debug("Processing ProwJob")
+			e.loggers.Debug.WithFields(fields).Debug("Processing ProwJob")
 			if !jobs.Has(pj.Name) {
 				continue
 			}
 			switch pj.Status.State {
 			case pjapi.FailureState, pjapi.AbortedState, pjapi.ErrorState:
-				loggers.Job.WithFields(fields).Error("Job failed")
+				e.loggers.Job.WithFields(fields).Error("Job failed")
 				success = false
 			case pjapi.SuccessState:
-				loggers.Job.WithFields(fields).Info("Job succeeded")
+				e.loggers.Job.WithFields(fields).Info("Job succeeded")
 			default:
 				continue
 			}
@@ -284,4 +294,32 @@ func waitForJobs(jobs sets.String, selector string, pjclient pj.ProwJobInterface
 			}
 		}
 	}
+}
+
+func (e *Executor) submitRehearsals() (sets.String, error) {
+	var errors []error
+	pjs := make(sets.String, len(e.rehearsals))
+	for _, job := range e.rehearsals {
+		created, err := e.submitRehearsal(job)
+		if err != nil {
+			e.loggers.Job.WithError(err).Warn("Failed to execute a rehearsal presubmit")
+			errors = append(errors, err)
+			continue
+		}
+		e.loggers.Job.WithFields(pjutil.ProwJobFields(created)).Info("Submitted rehearsal prowjob")
+		pjs.Insert(created.Name)
+	}
+	return pjs, kerrors.NewAggregate(errors)
+}
+
+func (e *Executor) submitRehearsal(job *prowconfig.Presubmit) (*pjapi.ProwJob, error) {
+	labels := make(map[string]string)
+	for k, v := range job.Labels {
+		labels[k] = v
+	}
+
+	prowJob := pjutil.NewProwJob(pjutil.PresubmitSpec(*job, *e.refs), labels)
+	e.loggers.Job.WithFields(pjutil.ProwJobFields(&prowJob)).Info("Submitting a new prowjob.")
+
+	return e.pjclient.Create(&prowJob)
 }

@@ -66,16 +66,18 @@ func (s *projectDirectoryImageBuildStep) Run(ctx context.Context, dry bool) erro
 	} {
 		labels[key] = ""
 	}
-	if len(s.jobSpec.Refs.Pulls) == 0 {
-		labels["vcs-type"] = "git"
-		labels["vcs-ref"] = s.jobSpec.Refs.BaseSHA
-		labels["io.openshift.build.commit.id"] = s.jobSpec.Refs.BaseSHA
-		labels["io.openshift.build.commit.ref"] = s.jobSpec.Refs.BaseRef
-		if len(s.jobSpec.Refs.Org) > 0 && len(s.jobSpec.Refs.Repo) > 0 {
-			labels["vcs-url"] = fmt.Sprintf("https://github.com/%s/%s", s.jobSpec.Refs.Org, s.jobSpec.Refs.Repo)
+	if refs := s.jobSpec.Refs; refs != nil {
+		if len(refs.Pulls) == 0 {
+			labels["vcs-type"] = "git"
+			labels["vcs-ref"] = refs.BaseSHA
+			labels["io.openshift.build.commit.id"] = refs.BaseSHA
+			labels["io.openshift.build.commit.ref"] = refs.BaseRef
+			labels["vcs-url"] = fmt.Sprintf("https://github.com/%s/%s", refs.Org, refs.Repo)
 			labels["io.openshift.build.source-location"] = labels["vcs-url"]
+			labels["io.openshift.build.source-context-dir"] = s.config.ContextDir
 		}
-		labels["io.openshift.build.source-context-dir"] = s.config.ContextDir
+		// TODO: we should consider setting enough info for a caller to reconstruct pulls to support
+		// oc adm release info tooling
 	}
 
 	images := buildInputsFromStep(s.config.Inputs)

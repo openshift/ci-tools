@@ -32,7 +32,8 @@ func TestStepConfigsForBuild(t *testing.T) {
 				},
 			},
 			jobSpec: &api.JobSpec{
-				Refs: api.Refs{
+				Refs: &api.Refs{
+					Org:  "org",
 					Repo: "repo",
 				},
 				BaseNamespace: "base-1",
@@ -64,7 +65,8 @@ func TestStepConfigsForBuild(t *testing.T) {
 				BinaryBuildCommands: "hi",
 			},
 			jobSpec: &api.JobSpec{
-				Refs: api.Refs{
+				Refs: &api.Refs{
+					Org:  "org",
 					Repo: "repo",
 				},
 				BaseNamespace: "base-1",
@@ -103,7 +105,8 @@ func TestStepConfigsForBuild(t *testing.T) {
 				RpmBuildCommands:    "hello",
 			},
 			jobSpec: &api.JobSpec{
-				Refs: api.Refs{
+				Refs: &api.Refs{
+					Org:  "org",
 					Repo: "repo",
 				},
 				BaseNamespace: "base-1",
@@ -151,7 +154,8 @@ func TestStepConfigsForBuild(t *testing.T) {
 				RpmBuildCommands: "hello",
 			},
 			jobSpec: &api.JobSpec{
-				Refs: api.Refs{
+				Refs: &api.Refs{
+					Org:  "org",
 					Repo: "repo",
 				},
 				BaseNamespace: "base-1",
@@ -194,7 +198,8 @@ func TestStepConfigsForBuild(t *testing.T) {
 				RpmBuildCommands: "hello",
 			},
 			jobSpec: &api.JobSpec{
-				Refs: api.Refs{
+				Refs: &api.Refs{
+					Org:  "org",
 					Repo: "repo",
 				},
 				BaseNamespace: "base-1",
@@ -242,7 +247,8 @@ func TestStepConfigsForBuild(t *testing.T) {
 				},
 			},
 			jobSpec: &api.JobSpec{
-				Refs: api.Refs{
+				Refs: &api.Refs{
+					Org:  "org",
 					Repo: "repo",
 				},
 				BaseNamespace: "base-1",
@@ -290,7 +296,8 @@ func TestStepConfigsForBuild(t *testing.T) {
 				},
 			},
 			jobSpec: &api.JobSpec{
-				Refs: api.Refs{
+				Refs: &api.Refs{
+					Org:  "org",
 					Repo: "repo",
 				},
 				BaseNamespace: "base-1",

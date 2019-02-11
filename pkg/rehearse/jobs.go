@@ -33,6 +33,7 @@ const (
 	rehearseLabel = "ci.openshift.org/rehearse"
 )
 
+// Loggers holds the two loggers that will be used for normal and debug logging respectively.
 type Loggers struct {
 	Job, Debug logrus.FieldLogger
 }
@@ -129,8 +130,8 @@ func (c *ciOperatorConfigLoader) Load(repo, configFile string) (string, error) {
 
 const ciOperatorConfigsCMName = "ci-operator-configs"
 
-const LogCiopConfigFile = "ciop-config-file"
-const LogCiopConfigRepo = "ciop-config-repo"
+const logCiopConfigFile = "ciop-config-file"
+const logCiopConfigRepo = "ciop-config-repo"
 
 // inlineCiOpConfig detects whether a job needs a ci-operator config file
 // provided by a `ci-operator-configs` ConfigMap and if yes, returns a copy
@@ -153,7 +154,7 @@ func inlineCiOpConfig(job *prowconfig.Presubmit, targetRepo string, ciopConfigs 
 			if env.ValueFrom.ConfigMapKeyRef.Name == ciOperatorConfigsCMName {
 				filename := env.ValueFrom.ConfigMapKeyRef.Key
 
-				logFields := logrus.Fields{LogCiopConfigFile: filename, LogCiopConfigRepo: targetRepo, LogRehearsalJob: job.Name}
+				logFields := logrus.Fields{logCiopConfigFile: filename, logCiopConfigRepo: targetRepo, logRehearsalJob: job.Name}
 				loggers.Debug.WithFields(logFields).Debug("Rehearsal job uses ci-operator config ConfigMap, needed content will be inlined")
 
 				ciOpConfigContent, err := ciopConfigs.Load(targetRepo, filename)
@@ -172,7 +173,7 @@ func inlineCiOpConfig(job *prowconfig.Presubmit, targetRepo string, ciopConfigs 
 	return &rehearsal, nil
 }
 
-const LogRehearsalJob = "rehearsal-job"
+const logRehearsalJob = "rehearsal-job"
 
 func configureRehearsalJobs(toBeRehearsed map[string][]prowconfig.Presubmit, prRepo string, prNumber int, loggers Loggers) []*prowconfig.Presubmit {
 	rehearsals := []*prowconfig.Presubmit{}
@@ -193,7 +194,7 @@ func configureRehearsalJobs(toBeRehearsed map[string][]prowconfig.Presubmit, prR
 				continue
 			}
 
-			jobLogger.WithField(LogRehearsalJob, rehearsal.Name).Info("Created a rehearsal job to be submitted")
+			jobLogger.WithField(logRehearsalJob, rehearsal.Name).Info("Created a rehearsal job to be submitted")
 			rehearsals = append(rehearsals, rehearsal)
 		}
 	}
@@ -201,6 +202,7 @@ func configureRehearsalJobs(toBeRehearsed map[string][]prowconfig.Presubmit, prR
 	return rehearsals
 }
 
+// Executor holds all the information needed for the jobs to be executed.
 type Executor struct {
 	dryRun     bool
 	rehearsals []*prowconfig.Presubmit
@@ -211,6 +213,7 @@ type Executor struct {
 	pjclient   pj.ProwJobInterface
 }
 
+// NewExecutor creates an executor. It also confgures the rehearsal jobs as a list of presubmits.
 func NewExecutor(toBeRehearsed map[string][]prowconfig.Presubmit, prNumber int, prRepo string, refs *pjapi.Refs,
 	dryRun bool, loggers Loggers, pjclient pj.ProwJobInterface) *Executor {
 	rehearsals := configureRehearsalJobs(toBeRehearsed, prRepo, prNumber, loggers)

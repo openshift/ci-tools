@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/getlantern/deepcopy"
 	"github.com/sirupsen/logrus"
 	logrustest "github.com/sirupsen/logrus/hooks/test"
 
@@ -144,7 +145,8 @@ func makeTestingPresubmit(name, context string, ciopArgs []string, branch string
 				}},
 			},
 		},
-		Context: context,
+		RerunCommand: "/test pj-rehearse",
+		Context:      context,
 		Brancher: prowconfig.Brancher{Branches: []string{
 			fmt.Sprintf("^%s$", branch),
 		}},
@@ -153,34 +155,37 @@ func makeTestingPresubmit(name, context string, ciopArgs []string, branch string
 
 func TestMakeRehearsalPresubmit(t *testing.T) {
 	testPrNumber := 123
-	testCases := []struct {
-		description string
-		source      *prowconfig.Presubmit
-		expected    *prowconfig.Presubmit
-	}{{
-		description: "sanity test",
-		source: makeTestingPresubmit(
-			"pull-ci-openshift-ci-operator-master-build",
-			"ci/prow/build",
-			[]string{"arg", "arg"},
-			"master"),
-		expected: makeTestingPresubmit(
-			"rehearse-123-pull-ci-openshift-ci-operator-master-build",
-			"ci/rehearse/openshift/ci-operator/master/build",
-			append([]string{"arg", "arg", "--git-ref=openshift/ci-operator@master"}),
-			"master"),
-	},
+	testRepo := "org/repo"
+	sourcePresubmit := &prowconfig.Presubmit{
+		JobBase: prowconfig.JobBase{
+			Agent: "kubernetes",
+			Name:  "pull-ci-org-repo-branch-test",
+			Spec: &v1.PodSpec{
+				Containers: []v1.Container{{
+					Command: []string{"ci-operator"},
+					Args:    []string{"arg1", "arg2"},
+				}},
+			},
+		},
+		RerunCommand: "/test test",
+		Context:      "ci/prow/test",
+		Brancher:     prowconfig.Brancher{Branches: []string{"^branch$"}},
 	}
-	for _, tc := range testCases {
-		t.Run(tc.description, func(t *testing.T) {
-			rehearsal, err := makeRehearsalPresubmit(tc.source, "openshift/ci-operator", testPrNumber)
-			if err != nil {
-				t.Errorf("Unexpected error in makeRehearsalPresubmit: %v", err)
-			}
-			if !equality.Semantic.DeepEqual(tc.expected, rehearsal) {
-				t.Errorf("Expected rehearsal Presubmit differs:\n%s", diff.ObjectDiff(tc.expected, rehearsal))
-			}
-		})
+	expectedPresubmit := &prowconfig.Presubmit{}
+	deepcopy.Copy(expectedPresubmit, sourcePresubmit)
+
+	expectedPresubmit.Name = "rehearse-123-pull-ci-org-repo-branch-test"
+	expectedPresubmit.Labels = map[string]string{rehearseLabel: "123"}
+	expectedPresubmit.Spec.Containers[0].Args = []string{"arg1", "arg2", "--git-ref=org/repo@branch"}
+	expectedPresubmit.RerunCommand = "/test pj-rehearse"
+	expectedPresubmit.Context = "ci/rehearse/org/repo/branch/test"
+
+	rehearsal, err := makeRehearsalPresubmit(sourcePresubmit, testRepo, testPrNumber)
+	if err != nil {
+		t.Errorf("Unexpected error in makeRehearsalPresubmit: %v", err)
+	}
+	if !equality.Semantic.DeepEqual(expectedPresubmit, rehearsal) {
+		t.Errorf("Expected rehearsal Presubmit differs:\n%s", diff.ObjectDiff(expectedPresubmit, rehearsal))
 	}
 }
 
@@ -247,12 +252,13 @@ func makeTestingProwJob(namespace, jobName, context string, refs *pjapi.Refs, ci
 			Annotations: map[string]string{"prow.k8s.io/job": jobName},
 		},
 		Spec: pjapi.ProwJobSpec{
-			Agent:   "kubernetes",
-			Type:    pjapi.PresubmitJob,
-			Job:     jobName,
-			Refs:    refs,
-			Report:  true,
-			Context: context,
+			Agent:        "kubernetes",
+			Type:         pjapi.PresubmitJob,
+			Job:          jobName,
+			Refs:         refs,
+			Report:       true,
+			Context:      context,
+			RerunCommand: "/test pj-rehearse",
 			PodSpec: &v1.PodSpec{
 				Containers: []v1.Container{{
 					Command: []string{"ci-operator"},

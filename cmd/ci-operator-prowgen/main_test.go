@@ -43,7 +43,6 @@ func TestGeneratePodSpec(t *testing.T) {
 					Args:            []string{"--give-pr-author-access-to-namespace=true", "--artifact-dir=$(ARTIFACTS)", "--target=target"},
 					Resources: kubeapi.ResourceRequirements{
 						Requests: kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
-						Limits:   kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(500, resource.DecimalSI)},
 					},
 					Env: []kubeapi.EnvVar{{
 						Name: "CONFIG_SPEC",
@@ -73,7 +72,6 @@ func TestGeneratePodSpec(t *testing.T) {
 					Args:            []string{"--give-pr-author-access-to-namespace=true", "--artifact-dir=$(ARTIFACTS)", "--target=target", "--promote", "--some=thing"},
 					Resources: kubeapi.ResourceRequirements{
 						Requests: kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
-						Limits:   kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(500, resource.DecimalSI)},
 					},
 					Env: []kubeapi.EnvVar{{
 						Name: "CONFIG_SPEC",
@@ -176,7 +174,6 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						"--template=/usr/local/test"},
 					Resources: kubeapi.ResourceRequirements{
 						Requests: kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
-						Limits:   kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(500, resource.DecimalSI)},
 					},
 					Env: []kubeapi.EnvVar{
 						{
@@ -257,7 +254,6 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						"--template=/usr/local/test"},
 					Resources: kubeapi.ResourceRequirements{
 						Requests: kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
-						Limits:   kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(500, resource.DecimalSI)},
 					},
 					Env: []kubeapi.EnvVar{
 						{
@@ -845,8 +841,6 @@ tests:
         imagePullPolicy: Always
         name: ""
         resources:
-          limits:
-            cpu: 500m
           requests:
             cpu: 10m
       serviceAccountName: ci-operator
@@ -881,8 +875,6 @@ tests:
         imagePullPolicy: Always
         name: ""
         resources:
-          limits:
-            cpu: 500m
           requests:
             cpu: 10m
       serviceAccountName: ci-operator
@@ -915,8 +907,6 @@ tests:
         imagePullPolicy: Always
         name: ""
         resources:
-          limits:
-            cpu: 500m
           requests:
             cpu: 10m
       serviceAccountName: ci-operator
@@ -987,8 +977,6 @@ tests:
         imagePullPolicy: Always
         name: ""
         resources:
-          limits:
-            cpu: 500m
           requests:
             cpu: 10m
       serviceAccountName: ci-operator
@@ -1025,8 +1013,6 @@ tests:
         imagePullPolicy: Always
         name: ""
         resources:
-          limits:
-            cpu: 500m
           requests:
             cpu: 10m
       serviceAccountName: ci-operator
@@ -1061,8 +1047,6 @@ tests:
         imagePullPolicy: Always
         name: ""
         resources:
-          limits:
-            cpu: 500m
           requests:
             cpu: 10m
       serviceAccountName: ci-operator
@@ -1096,8 +1080,6 @@ tests:
         imagePullPolicy: Always
         name: ""
         resources:
-          limits:
-            cpu: 500m
           requests:
             cpu: 10m
       serviceAccountName: ci-operator
@@ -1131,8 +1113,6 @@ tests:
         imagePullPolicy: Always
         name: ""
         resources:
-          limits:
-            cpu: 500m
           requests:
             cpu: 10m
       serviceAccountName: ci-operator
@@ -1200,8 +1180,6 @@ tests:
         imagePullPolicy: Always
         name: ""
         resources:
-          limits:
-            cpu: 500m
           requests:
             cpu: 10m
       serviceAccountName: ci-operator
@@ -1236,8 +1214,6 @@ tests:
         imagePullPolicy: Always
         name: ""
         resources:
-          limits:
-            cpu: 500m
           requests:
             cpu: 10m
       serviceAccountName: ci-operator
@@ -1270,8 +1246,6 @@ tests:
         imagePullPolicy: Always
         name: ""
         resources:
-          limits:
-            cpu: 500m
           requests:
             cpu: 10m
       serviceAccountName: ci-operator
@@ -1303,8 +1277,6 @@ tests:
         imagePullPolicy: Always
         name: ""
         resources:
-          limits:
-            cpu: 500m
           requests:
             cpu: 10m
       serviceAccountName: ci-operator
@@ -1337,8 +1309,6 @@ tests:
         imagePullPolicy: Always
         name: ""
         resources:
-          limits:
-            cpu: 500m
           requests:
             cpu: 10m
       serviceAccountName: ci-operator

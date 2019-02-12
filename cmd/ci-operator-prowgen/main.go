@@ -107,7 +107,6 @@ func generatePodSpec(configFile, target string, additionalArgs ...string) *kubea
 				Env:             []kubeapi.EnvVar{{Name: "CONFIG_SPEC", ValueFrom: &configMapKeyRef}},
 				Resources: kubeapi.ResourceRequirements{
 					Requests: kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
-					Limits:   kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(500, resource.DecimalSI)},
 				},
 			},
 		},

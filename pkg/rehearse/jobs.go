@@ -206,6 +206,8 @@ func configureRehearsalJobs(toBeRehearsed map[string][]prowconfig.Presubmit, prR
 
 // Executor holds all the information needed for the jobs to be executed.
 type Executor struct {
+	RehearsalJobCount int
+
 	dryRun     bool
 	rehearsals []*prowconfig.Presubmit
 	prNumber   int
@@ -220,6 +222,8 @@ func NewExecutor(toBeRehearsed map[string][]prowconfig.Presubmit, prNumber int, 
 	dryRun bool, loggers Loggers, pjclient pj.ProwJobInterface) *Executor {
 	rehearsals := configureRehearsalJobs(toBeRehearsed, prRepo, prNumber, loggers)
 	return &Executor{
+		RehearsalJobCount: len(rehearsals),
+
 		dryRun:     dryRun,
 		rehearsals: rehearsals,
 		prNumber:   prNumber,

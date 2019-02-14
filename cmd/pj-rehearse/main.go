@@ -45,10 +45,8 @@ type options struct {
 	noFail       bool
 	debugLogPath string
 
-	configPath    string
-	jobConfigPath string
-
-	candidatePath string
+	candidatePath  string
+	rehearsalLimit int
 }
 
 func gatherOptions() options {
@@ -60,6 +58,7 @@ func gatherOptions() options {
 	fs.StringVar(&o.debugLogPath, "debug-log", "", "Alternate file for debug output, defaults to stderr")
 
 	fs.StringVar(&o.candidatePath, "candidate-path", "", "Path to a openshift/release working copy with a revision to be tested")
+	fs.IntVar(&o.rehearsalLimit, "rehearsal-limit", 15, "Upper limit of jobs attempted to rehearse (if more jobs would be rehearsed, none will)")
 
 	fs.Parse(os.Args[1:])
 	return o
@@ -165,6 +164,16 @@ func main() {
 	loggers := rehearse.Loggers{Job: logger, Debug: debugLogger.WithField(prowgithub.PrLogField, prNumber)}
 
 	executor := rehearse.NewExecutor(changedPresubmits, prNumber, o.candidatePath, jobSpec.Refs, o.dryRun, loggers, pjclient)
+
+	if executor.RehearsalJobCount > o.rehearsalLimit {
+		jobCountFields := logrus.Fields{
+			"rehearsal-threshold": o.rehearsalLimit,
+			"rehearsal-jobs":      executor.RehearsalJobCount,
+		}
+		logger.WithFields(jobCountFields).Info("Would rehearse too many jobs, will not proceed")
+		os.Exit(0)
+	}
+
 	success, err := executor.ExecuteJobs()
 	if err != nil {
 		logger.WithError(err).Error("Failed to rehearse jobs")

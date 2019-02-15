@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -13,14 +14,11 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/selection"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/testing"
-
 	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	pjclientset "k8s.io/test-infra/prow/client/clientset/versioned"
 	pjclientsetfake "k8s.io/test-infra/prow/client/clientset/versioned/fake"
@@ -43,15 +41,6 @@ type Loggers struct {
 func NewProwJobClient(clusterConfig *rest.Config, namespace string, dry bool) (pj.ProwJobInterface, error) {
 	if dry {
 		pjcset := pjclientsetfake.NewSimpleClientset()
-		pjcset.Fake.PrependReactor("create", "prowjobs", func(action testing.Action) (bool, runtime.Object, error) {
-			pj := action.(testing.CreateAction).GetObject().(*pjapi.ProwJob)
-			jobAsYAML, err := yaml.Marshal(pj)
-			if err != nil {
-				return true, nil, fmt.Errorf("failed to marshal job to YAML: %v", err)
-			}
-			fmt.Printf("%s\n", jobAsYAML)
-			return false, nil, nil
-		})
 		return pjcset.ProwV1().ProwJobs(namespace), nil
 	}
 	pjcset, err := pjclientset.NewForConfig(clusterConfig)
@@ -234,6 +223,16 @@ func NewExecutor(toBeRehearsed map[string][]prowconfig.Presubmit, prNumber int, 
 	}
 }
 
+func printAsYaml(pjs []*pjapi.ProwJob) error {
+	sort.Slice(pjs, func(a, b int) bool { return pjs[a].Spec.Job < pjs[b].Spec.Job })
+	jobAsYAML, err := yaml.Marshal(pjs)
+	if err == nil {
+		fmt.Printf("%s\n", jobAsYAML)
+	}
+
+	return err
+}
+
 // ExecuteJobs takes configs for a set of jobs which should be "rehearsed", and
 // creates the ProwJobs that perform the actual rehearsal. *Rehearsal* means
 // a "trial" execution of a Prow job configuration when the *job config* config
@@ -247,6 +246,8 @@ func (e *Executor) ExecuteJobs() (bool, error) {
 	}
 
 	if e.dryRun {
+		printAsYaml(pjs)
+
 		if submitSuccess {
 			return true, nil
 		}
@@ -259,7 +260,11 @@ func (e *Executor) ExecuteJobs() (bool, error) {
 	}
 	selector := labels.NewSelector().Add(*req).String()
 
-	waitSuccess, err := e.waitForJobs(pjs, selector)
+	names := sets.NewString()
+	for _, job := range pjs {
+		names.Insert(job.Name)
+	}
+	waitSuccess, err := e.waitForJobs(names, selector)
 	if !submitSuccess {
 		return waitSuccess, fmt.Errorf("failed to submit all rehearsal jobs")
 	}
@@ -305,9 +310,10 @@ func (e *Executor) waitForJobs(jobs sets.String, selector string) (bool, error) 
 	}
 }
 
-func (e *Executor) submitRehearsals() (sets.String, error) {
+func (e *Executor) submitRehearsals() ([]*pjapi.ProwJob, error) {
 	var errors []error
-	pjs := make(sets.String, len(e.rehearsals))
+	pjs := []*pjapi.ProwJob{}
+
 	for _, job := range e.rehearsals {
 		created, err := e.submitRehearsal(job)
 		if err != nil {
@@ -316,7 +322,7 @@ func (e *Executor) submitRehearsals() (sets.String, error) {
 			continue
 		}
 		e.loggers.Job.WithFields(pjutil.ProwJobFields(created)).Info("Submitted rehearsal prowjob")
-		pjs.Insert(created.Name)
+		pjs = append(pjs, created)
 	}
 	return pjs, kerrors.NewAggregate(errors)
 }

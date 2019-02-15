@@ -78,6 +78,7 @@ func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber 
 
 	gitrefArg := fmt.Sprintf("--git-ref=%s@%s", repo, branch)
 	rehearsal.Spec.Containers[0].Args = append(source.Spec.Containers[0].Args, gitrefArg)
+	rehearsal.Optional = true
 
 	if rehearsal.Labels == nil {
 		rehearsal.Labels = make(map[string]string, 1)

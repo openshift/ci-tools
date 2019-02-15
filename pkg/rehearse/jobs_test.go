@@ -179,6 +179,7 @@ func TestMakeRehearsalPresubmit(t *testing.T) {
 	expectedPresubmit.Spec.Containers[0].Args = []string{"arg1", "arg2", "--git-ref=org/repo@branch"}
 	expectedPresubmit.RerunCommand = "/test pj-rehearse"
 	expectedPresubmit.Context = "ci/rehearse/org/repo/branch/test"
+	expectedPresubmit.Optional = true
 
 	rehearsal, err := makeRehearsalPresubmit(sourcePresubmit, testRepo, testPrNumber)
 	if err != nil {

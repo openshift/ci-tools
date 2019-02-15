@@ -318,6 +318,14 @@ of the images in the pipeline.
 ## `tests.container.from`
 `from` is the pipeline image tag that this test will be run on.
 
+## `tests.container.memory_backed_volume`
+`memory_backed_volume` if specified mounts a tmpfs (filesystem in RAM) at
+`/tmp/volume` with the specified size (required).
+
+## `tests.container.memory_backed_volume.size`
+`size` is the required quantity of the volume to create in bytes. Use Kubernetes
+resource quantity semantics (e.g. `1Gi` or `500M`).
+
 # `tests.secret` 
 
 `Secret` field enables users to mount a secret inside test container.

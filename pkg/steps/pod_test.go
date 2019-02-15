@@ -5,6 +5,7 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
+	"k8s.io/apimachinery/pkg/api/resource"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/client-go/kubernetes/fake"
@@ -184,6 +185,7 @@ func TestPodStepExecution(t *testing.T) {
 }
 
 func TestGetPodObjectMounts(t *testing.T) {
+	oneGi := resource.MustParse("1Gi")
 	testCases := []struct {
 		name                 string
 		podStep              func(*podStep)
@@ -268,6 +270,37 @@ func TestGetPodObjectMounts(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "with memory backed volume gets a volume",
+			podStep: func(expectedPodStepTemplate *podStep) {
+				expectedPodStepTemplate.config.MemoryBackedVolume = &api.MemoryBackedVolume{Size: "1Gi"}
+			},
+			expectedVolumeConfig: &v1.Pod{
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							VolumeMounts: []v1.VolumeMount{
+								{
+									Name:      "memory-backed",
+									MountPath: "/tmp/volume",
+								},
+							},
+						},
+					},
+					Volumes: []v1.Volume{
+						{
+							Name: "memory-backed",
+							VolumeSource: v1.VolumeSource{
+								EmptyDir: &v1.EmptyDirVolumeSource{
+									Medium:    v1.StorageMediumMemory,
+									SizeLimit: &oneGi,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -275,7 +308,10 @@ func TestGetPodObjectMounts(t *testing.T) {
 			podStepTemplate := expectedPodStepTemplate()
 			tc.podStep(podStepTemplate)
 
-			pod := podStepTemplate.generatePodForStep("", v1.ResourceRequirements{})
+			pod, err := podStepTemplate.generatePodForStep("", v1.ResourceRequirements{})
+			if err != nil {
+				t.Fatalf("unexpected err: %v", err)
+			}
 
 			if !equality.Semantic.DeepEqual(pod.Spec.Volumes, tc.expectedVolumeConfig.Spec.Volumes) {
 				t.Errorf("test %s failed. generated pod.Spec.Volumes was not as expected", tc.name)

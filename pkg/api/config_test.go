@@ -82,6 +82,38 @@ func TestValidateTests(t *testing.T) {
 			expectedValid: false,
 		},
 		{
+			id: "test valid memory backed volume",
+			tests: []TestStepConfiguration{
+				{
+					As:       "test",
+					Commands: "commands",
+					ContainerTestConfiguration: &ContainerTestConfiguration{
+						From: "ignored",
+						MemoryBackedVolume: &MemoryBackedVolume{
+							Size: "1Gi",
+						},
+					},
+				},
+			},
+			expectedValid: true,
+		},
+		{
+			id: "test invalid memory backed volume",
+			tests: []TestStepConfiguration{
+				{
+					As:       "test",
+					Commands: "commands",
+					ContainerTestConfiguration: &ContainerTestConfiguration{
+						From: "ignored",
+						MemoryBackedVolume: &MemoryBackedVolume{
+							Size: "1GG", // not valid
+						},
+					},
+				},
+			},
+			expectedValid: false,
+		},
+		{
 			id: "test with duplicated `as`",
 			tests: []TestStepConfiguration{
 				{

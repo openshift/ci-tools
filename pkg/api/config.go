@@ -208,6 +208,11 @@ func validateTestConfigurationType(fieldRoot string, test TestStepConfiguration,
 	typeCount := 0
 	if testConfig := test.ContainerTestConfiguration; testConfig != nil {
 		typeCount++
+		if testConfig.MemoryBackedVolume != nil {
+			if _, err := resource.ParseQuantity(testConfig.MemoryBackedVolume.Size); err != nil {
+				validationErrors = append(validationErrors, fmt.Errorf("%s.memory_backed_volume: 'size' must be a Kubernetes quantity: %v", fieldRoot, err))
+			}
+		}
 		if len(testConfig.From) == 0 {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: 'from' is required", fieldRoot))
 		}

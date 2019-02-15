@@ -9,6 +9,7 @@ import (
 
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
@@ -27,6 +28,7 @@ type PodStepConfiguration struct {
 	ArtifactDir        string
 	ServiceAccountName string
 	Secret             api.Secret
+	MemoryBackedVolume *api.MemoryBackedVolume
 }
 
 type podStep struct {
@@ -58,7 +60,10 @@ func (s *podStep) Run(ctx context.Context, dry bool) error {
 	}
 	image := fmt.Sprintf("%s:%s", s.config.From.Name, s.config.From.Tag)
 
-	pod := s.generatePodForStep(image, containerResources)
+	pod, err := s.generatePodForStep(image, containerResources)
+	if err != nil {
+		return fmt.Errorf("pod step was invalid: %v", err)
+	}
 
 	// when the test container terminates and artifact directory has been set, grab everything under the directory
 	var notifier ContainerNotifier = NopNotifier
@@ -152,11 +157,12 @@ func TestStep(config api.TestStepConfiguration, resources api.ResourceConfigurat
 	return PodStep(
 		"test",
 		PodStepConfiguration{
-			As:          config.As,
-			From:        api.ImageStreamTagReference{Name: api.PipelineImageStream, Tag: string(config.ContainerTestConfiguration.From)},
-			Commands:    config.Commands,
-			ArtifactDir: config.ArtifactDir,
-			Secret:      config.Secret,
+			As:                 config.As,
+			From:               api.ImageStreamTagReference{Name: api.PipelineImageStream, Tag: string(config.ContainerTestConfiguration.From)},
+			Commands:           config.Commands,
+			ArtifactDir:        config.ArtifactDir,
+			Secret:             config.Secret,
+			MemoryBackedVolume: config.ContainerTestConfiguration.MemoryBackedVolume,
 		},
 		resources,
 		podClient,
@@ -176,7 +182,7 @@ func PodStep(name string, config PodStepConfiguration, resources api.ResourceCon
 	}
 }
 
-func (s *podStep) generatePodForStep(image string, containerResources coreapi.ResourceRequirements) *coreapi.Pod {
+func (s *podStep) generatePodForStep(image string, containerResources coreapi.ResourceRequirements) (*coreapi.Pod, error) {
 	pod := &coreapi.Pod{
 		ObjectMeta: meta.ObjectMeta{
 			Name: s.config.As,
@@ -211,7 +217,29 @@ func (s *podStep) generatePodForStep(image string, containerResources coreapi.Re
 		pod.Spec.Containers[0].VolumeMounts = getSecretVolumeMountFromSecret(s.config.Secret.MountPath)
 		pod.Spec.Volumes = getVolumeFromSecret(s.config.Secret.Name)
 	}
-	return pod
+
+	if v := s.config.MemoryBackedVolume; v != nil {
+		size, err := resource.ParseQuantity(v.Size)
+		if err != nil {
+			// validation should prevent this
+			return nil, fmt.Errorf("invalid size for volume test %s: %v", s.config.As, v.Size)
+		}
+		pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, coreapi.VolumeMount{
+			Name:      "memory-backed",
+			MountPath: "/tmp/volume",
+		})
+		pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{
+			Name: "memory-backed",
+			VolumeSource: coreapi.VolumeSource{
+				EmptyDir: &coreapi.EmptyDirVolumeSource{
+					Medium:    coreapi.StorageMediumMemory,
+					SizeLimit: &size,
+				},
+			},
+		})
+	}
+
+	return pod, nil
 }
 
 func getVolumeFromSecret(secretName string) []coreapi.Volume {

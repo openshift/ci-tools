@@ -312,12 +312,25 @@ type Secret struct {
 	MountPath string `json:"mount_path"`
 }
 
+// MemoryBackedVolume describes a tmpfs (memory backed volume)
+// that will be mounted into a test container at /tmp/volume.
+// Use with tests that need extremely fast disk, such as those
+// that run an etcd server or other IO-intensive workload.
+type MemoryBackedVolume struct {
+	// Size is the requested size of the volume as a Kubernetes
+	// quantity, i.e. "1Gi" or "500M"
+	Size string `json:"size"`
+}
+
 // ContainerTestConfiguration describes a test that runs a
 // command in one of the previously built images.
 type ContainerTestConfiguration struct {
 	// From is the image stream tag in the pipeline to run this
 	// command in.
 	From PipelineImageStreamTagReference `json:"from"`
+	// MemoryBackedVolume mounts a volume of the specified size into
+	// the container at /tmp/volume.
+	MemoryBackedVolume *MemoryBackedVolume `json:"memory_backed_volume"`
 }
 
 // ClusterProfile is the name of a set of input variables

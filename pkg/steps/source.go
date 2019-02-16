@@ -49,7 +49,7 @@ func sourceDockerfile(fromTag api.PipelineImageStreamTagReference, pathAlias str
 	return fmt.Sprintf(`
 FROM %s:%s
 ADD ./app.binary /clonerefs
-RUN umask 0002 && /clonerefs && chmod g+xw -R %s/src
+RUN umask 0002 && /clonerefs && find %s/src -type d -not -perm -0775 | xargs chmod g+xw
 WORKDIR %s/src/%s/
 ENV GOPATH=%s
 RUN git submodule update --init

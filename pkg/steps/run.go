@@ -45,6 +45,7 @@ func Run(ctx context.Context, graph []*api.StepNode, dry bool) (*junit.TestSuite
 	for {
 		select {
 		case <-ctxDone:
+			errors = append(errors, fmt.Errorf("execution cancelled"))
 			suite.Duration = time.Now().Sub(start).Seconds()
 			return suites, aggregateError(errors)
 		case out := <-results:

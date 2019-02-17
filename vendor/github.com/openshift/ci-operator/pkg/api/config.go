@@ -4,13 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"path/filepath"
 	"regexp"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/api/resource"
 )
-
-var originReleaseTagRegexp = regexp.MustCompile(`^origin-v\d+\.\d+$`)
 
 // Validate validates all the configuration's values.
 func (config *ReleaseBuildConfiguration) Validate() error {
@@ -106,6 +105,20 @@ func validateTestStepConfiguration(fieldRoot string, input []TestStepConfigurati
 			validationErrors = append(validationErrors, fmt.Errorf("%s[%d].commands: is required", fieldRoot, num))
 		}
 
+		if len(test.Secret.Name) > 0 {
+			// TODO: Move to upstream validation when vendoring is fixed
+			// currently checking against DNS RFC 1123 regexp
+			if ok := regexp.MustCompile("^[a-z0-9]([-a-z0-9]*[a-z0-9])?$").MatchString(test.Secret.Name); !ok {
+				validationErrors = append(validationErrors, fmt.Errorf("%s[%d].name: '%s' secret name is not valid value, should be [a-z0-9]([-a-z0-9]*[a-z0-9]", fieldRoot, num, test.Secret.Name))
+			}
+			// validate path only if name is passed
+			if test.Secret.MountPath != "" {
+				if ok := filepath.IsAbs(test.Secret.MountPath); !ok {
+					validationErrors = append(validationErrors, fmt.Errorf("%s[%d].path: '%s' secret mount path is not valid value, should be ^((\\/*)\\w+)+", fieldRoot, num, test.Secret.MountPath))
+				}
+			}
+		}
+
 		validationErrors = append(validationErrors, validateTestConfigurationType(fmt.Sprintf("%s[%d]", fieldRoot, num), test, release)...)
 	}
 	return validationErrors
@@ -193,6 +206,11 @@ func validateTestConfigurationType(fieldRoot string, test TestStepConfiguration,
 	typeCount := 0
 	if testConfig := test.ContainerTestConfiguration; testConfig != nil {
 		typeCount++
+		if testConfig.MemoryBackedVolume != nil {
+			if _, err := resource.ParseQuantity(testConfig.MemoryBackedVolume.Size); err != nil {
+				validationErrors = append(validationErrors, fmt.Errorf("%s.memory_backed_volume: 'size' must be a Kubernetes quantity: %v", fieldRoot, err))
+			}
+		}
 		if len(testConfig.From) == 0 {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: 'from' is required", fieldRoot))
 		}
@@ -234,8 +252,8 @@ func validateTestConfigurationType(fieldRoot string, test TestStepConfiguration,
 	if typeCount == 0 {
 		validationErrors = append(validationErrors, fmt.Errorf("%s has no type, you may want to specify 'container' for a container based test", fieldRoot))
 	} else if typeCount == 1 {
-		if needsReleaseRpms && (release == nil || !originReleaseTagRegexp.MatchString(release.Name)) {
-			validationErrors = append(validationErrors, fmt.Errorf("%s requires an 'origin' release in 'tag_specification'", fieldRoot))
+		if needsReleaseRpms && release == nil {
+			validationErrors = append(validationErrors, fmt.Errorf("%s requires a release in 'tag_specification'", fieldRoot))
 		}
 	} else if typeCount > 1 {
 		validationErrors = append(validationErrors, fmt.Errorf("%s has more than one type", fieldRoot))

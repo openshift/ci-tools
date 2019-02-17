@@ -28,6 +28,8 @@ images:
 promotion:
   additional_images:
     <name>: ''
+  excluded_images:
+  - <name>
   name: ''
   name_prefix: ''
   namespace: ''
@@ -65,6 +67,9 @@ tests:
   commands: ''
   container:
     from: ''
+  secret:
+    name: ''
+    mount_path: ''
   openshift_ansible:
     cluster_profile: ''
   openshift_ansible_src:
@@ -313,6 +318,26 @@ of the images in the pipeline.
 ## `tests.container.from`
 `from` is the pipeline image tag that this test will be run on.
 
+## `tests.container.memory_backed_volume`
+`memory_backed_volume` if specified mounts a tmpfs (filesystem in RAM) at
+`/tmp/volume` with the specified size (required).
+
+## `tests.container.memory_backed_volume.size`
+`size` is the required quantity of the volume to create in bytes. Use Kubernetes
+resource quantity semantics (e.g. `1Gi` or `500M`).
+
+# `tests.secret` 
+
+`Secret` field enables users to mount a secret inside test container.
+It is users responsibility to make sure secret is available in the temporary namespace.
+This can be done by providing flag `--secret-dir` to ci-operator in prow configuration.
+
+## `tests.secret.name`
+`secret.name` is the name of the secret to be mounted inside a test container.
+
+## `tests.secret.path`
+`secret.path` is the path at which to mount the secret. Optional, defaults to `/usr/test-secret`
+
 ## `tests.openshift_ansible`
 `openshift_ansible` is a test that provisions a cluster using openshift-ansible
 and runs conformance tests.
@@ -390,6 +415,11 @@ using one tag but many `ImageStream`s.
 Pipeline images are not considered for promotion by default, but you can use this
 field to promote those intermediary images like compiled tests that are not part
 of the normal release for the component but may be useful for other repositories.
+
+## `promotion.excluded_images`
+`excluded_images` is an array of image names that should never be promoted. This
+exclusion is performed on images that were built, but does not prevent images
+specified in `additional_images` from being promoted.
 
 # `resources`
 `resources` configures the resource requests and limits set on build and test

@@ -12,9 +12,10 @@ import (
 )
 
 type message struct {
-	node     *api.StepNode
-	duration time.Duration
-	err      error
+	node            *api.StepNode
+	duration        time.Duration
+	err             error
+	additionalTests []*junit.TestCase
 }
 
 func Run(ctx context.Context, graph []*api.StepNode, dry bool) (*junit.TestSuites, error) {
@@ -48,16 +49,12 @@ func Run(ctx context.Context, graph []*api.StepNode, dry bool) (*junit.TestSuite
 			return suites, aggregateError(errors)
 		case out := <-results:
 			testCase := &junit.TestCase{Name: out.node.Step.Description(), Duration: out.duration.Seconds()}
-			suite.TestCases = append(suite.TestCases, testCase)
-			suite.NumTests++
 			if out.err != nil {
 				testCase.FailureOutput = &junit.FailureOutput{Output: out.err.Error()}
-				suite.NumFailed++
 				errors = append(errors, out.err)
 			} else {
 				if dry {
 					testCase.SkipMessage = &junit.SkipMessage{Message: "Dry run"}
-					suite.NumSkipped++
 				}
 				seen = append(seen, out.node.Step.Creates()...)
 				for _, child := range out.node.Children {
@@ -72,6 +69,25 @@ func Run(ctx context.Context, graph []*api.StepNode, dry bool) (*junit.TestSuite
 					}
 				}
 			}
+
+			// append all reported tests cases
+			var testCases []*junit.TestCase
+			if len(out.additionalTests) > 0 {
+				testCases = out.additionalTests
+			} else {
+				testCases = []*junit.TestCase{testCase}
+			}
+			for _, test := range testCases {
+				switch {
+				case test.FailureOutput != nil:
+					suite.NumFailed++
+				case test.SkipMessage != nil:
+					suite.NumSkipped++
+				}
+				suite.NumTests++
+				suite.TestCases = append(suite.TestCases, test)
+			}
+
 			wg.Done()
 		case <-done:
 			close(results)
@@ -100,13 +116,24 @@ func aggregateError(errors []error) error {
 	return aggregateErr
 }
 
+// subtestReporter may be implemented by steps that can return an optional set of
+// additional JUnit tests to report to the cluster.
+type subtestReporter interface {
+	SubTests() []*junit.TestCase
+}
+
 func runStep(ctx context.Context, node *api.StepNode, out chan<- message, dry bool) {
 	start := time.Now()
 	err := node.Step.Run(ctx, dry)
+	var additionalTests []*junit.TestCase
+	if reporter, ok := node.Step.(subtestReporter); ok {
+		additionalTests = reporter.SubTests()
+	}
 	duration := time.Now().Sub(start)
 	out <- message{
-		node:     node,
-		duration: duration,
-		err:      err,
+		node:            node,
+		duration:        duration,
+		err:             err,
+		additionalTests: additionalTests,
 	}
 }

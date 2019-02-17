@@ -141,7 +141,7 @@ func FromConfig(
 			step = steps.ReleaseImagesTagStep(*rawStep.ReleaseImagesTagStepConfiguration, srcClient, imageClient, routeGetter, configMapGetter, params, jobSpec)
 			stepLinks = append(stepLinks, step.Creates()...)
 
-			releaseStep = release.AssembleReleaseStep(*rawStep.ReleaseImagesTagStepConfiguration, podClient, imageClient, artifactDir, jobSpec)
+			releaseStep = release.AssembleReleaseStep(*rawStep.ReleaseImagesTagStepConfiguration, config.Resources, podClient, imageClient, artifactDir, jobSpec)
 
 		} else if rawStep.TestStepConfiguration != nil {
 			step = steps.TestStep(*rawStep.TestStepConfiguration, config.Resources, podClient, artifactDir, jobSpec)
@@ -303,7 +303,7 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.Job
 			Name:      "clonerefs",
 			Tag:       "latest",
 		},
-		ClonerefsPath: "/app/prow/cmd/clonerefs/app.binary.runfiles/test_infra/prow/cmd/clonerefs/linux_amd64_pure_stripped/app.binary",
+		ClonerefsPath: "/app/prow/cmd/clonerefs/app.binary.runfiles/io_k8s_test_infra/prow/cmd/clonerefs/linux_amd64_pure_stripped/app.binary",
 	}})
 
 	if len(config.BinaryBuildCommands) > 0 {

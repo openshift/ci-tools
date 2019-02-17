@@ -211,6 +211,12 @@ type PromotionConfiguration struct {
 	// if specified.
 	NamePrefix string `json:"name_prefix"`
 
+	// ExcludedImages are image names that will not be promoted.
+	// Exclusions are made before additional_images are included.
+	// Use exclusions when you want to build images for testing
+	// but not promote them afterwards.
+	ExcludedImages []string `json:"excluded_images"`
+
 	// AdditionalImages is a mapping of images to promote. The
 	// images will be taken from the pipeline image stream. The
 	// key is the name to promote as and the value is the source
@@ -282,6 +288,10 @@ type TestStepConfiguration struct {
 	// the repository root to _output/local/artifacts.
 	ArtifactDir string `json:"artifact_dir"`
 
+	// Secret is an optional secret object which
+	// will be mounted inside the test container.
+	Secret Secret `json:"secret,omitempty"`
+
 	// Only one of the following can be not-null.
 	ContainerTestConfiguration                      *ContainerTestConfiguration                      `json:"container,omitempty"`
 	OpenshiftAnsibleClusterTestConfiguration        *OpenshiftAnsibleClusterTestConfiguration        `json:"openshift_ansible,omitempty"`
@@ -293,12 +303,34 @@ type TestStepConfiguration struct {
 	OpenshiftInstallerSrcClusterTestConfiguration   *OpenshiftInstallerSrcClusterTestConfiguration   `json:"openshift_installer_src,omitempty"`
 }
 
+// Secret describes a secret to be mounted inside a test
+// container.
+type Secret struct {
+	// Secret name, used inside test containers
+	Name string `json:"name"`
+	// Secret mount path. Defaults to /usr/test-secret
+	MountPath string `json:"mount_path"`
+}
+
+// MemoryBackedVolume describes a tmpfs (memory backed volume)
+// that will be mounted into a test container at /tmp/volume.
+// Use with tests that need extremely fast disk, such as those
+// that run an etcd server or other IO-intensive workload.
+type MemoryBackedVolume struct {
+	// Size is the requested size of the volume as a Kubernetes
+	// quantity, i.e. "1Gi" or "500M"
+	Size string `json:"size"`
+}
+
 // ContainerTestConfiguration describes a test that runs a
 // command in one of the previously built images.
 type ContainerTestConfiguration struct {
 	// From is the image stream tag in the pipeline to run this
 	// command in.
 	From PipelineImageStreamTagReference `json:"from"`
+	// MemoryBackedVolume mounts a volume of the specified size into
+	// the container at /tmp/volume.
+	MemoryBackedVolume *MemoryBackedVolume `json:"memory_backed_volume"`
 }
 
 // ClusterProfile is the name of a set of input variables

@@ -5,6 +5,7 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
+	"k8s.io/apimachinery/pkg/api/resource"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/client-go/kubernetes/fake"
@@ -81,7 +82,8 @@ func makeExpectedPod(step *podStep, phaseAfterRun v1.PodPhase) *v1.Pod {
 				"prow.k8s.io/id":          step.jobSpec.ProwJobID,
 			},
 			Annotations: map[string]string{
-				"ci.openshift.io/job-spec": "",
+				"ci.openshift.io/job-spec":                     "",
+				"ci-operator.openshift.io/container-sub-tests": step.name,
 			},
 		},
 		Spec: v1.PodSpec{
@@ -179,5 +181,168 @@ func TestPodStepExecution(t *testing.T) {
 				t.Errorf("Could not Get() expected Pod, err=%v", err)
 			}
 		})
+	}
+}
+
+func TestGetPodObjectMounts(t *testing.T) {
+	oneGi := resource.MustParse("1Gi")
+	testCases := []struct {
+		name                 string
+		podStep              func(*podStep)
+		expectedVolumeConfig *v1.Pod
+	}{
+		{
+			name: "no secret name results in no mounted secrets",
+			podStep: func(expectedPodStepTemplate *podStep) {
+				expectedPodStepTemplate.config.Secret.Name = ""
+			},
+			expectedVolumeConfig: &v1.Pod{
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							VolumeMounts: []v1.VolumeMount{},
+						},
+					},
+					Volumes: []v1.Volume{},
+				},
+			},
+		},
+		{
+			name: "with secret name results in secret mounted with default path",
+			podStep: func(expectedPodStepTemplate *podStep) {
+				expectedPodStepTemplate.config.Secret.Name = testSecretName
+			},
+			expectedVolumeConfig: &v1.Pod{
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							VolumeMounts: []v1.VolumeMount{
+								{
+									Name:      testSecretName,
+									MountPath: testSecretDefaultPath,
+									ReadOnly:  true,
+								},
+							},
+						},
+					},
+					Volumes: []v1.Volume{
+						{
+							Name: testSecretName,
+							VolumeSource: v1.VolumeSource{
+								Secret: &v1.SecretVolumeSource{
+									SecretName: testSecretName,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "with secret name and path results in mounted secret with custom path",
+			podStep: func(expectedPodStepTemplate *podStep) {
+				expectedPodStepTemplate.config.Secret.Name = testSecretName
+				expectedPodStepTemplate.config.Secret.MountPath = "/usr/local/secrets"
+			},
+			expectedVolumeConfig: &v1.Pod{
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							VolumeMounts: []v1.VolumeMount{
+								{
+									Name:      testSecretName,
+									MountPath: "/usr/local/secrets",
+									ReadOnly:  true,
+								},
+							},
+						},
+					},
+					Volumes: []v1.Volume{
+						{
+							Name: testSecretName,
+							VolumeSource: v1.VolumeSource{
+								Secret: &v1.SecretVolumeSource{
+									SecretName: testSecretName,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "with memory backed volume gets a volume",
+			podStep: func(expectedPodStepTemplate *podStep) {
+				expectedPodStepTemplate.config.MemoryBackedVolume = &api.MemoryBackedVolume{Size: "1Gi"}
+			},
+			expectedVolumeConfig: &v1.Pod{
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							VolumeMounts: []v1.VolumeMount{
+								{
+									Name:      "memory-backed",
+									MountPath: "/tmp/volume",
+								},
+							},
+						},
+					},
+					Volumes: []v1.Volume{
+						{
+							Name: "memory-backed",
+							VolumeSource: v1.VolumeSource{
+								EmptyDir: &v1.EmptyDirVolumeSource{
+									Medium:    v1.StorageMediumMemory,
+									SizeLimit: &oneGi,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			podStepTemplate := expectedPodStepTemplate()
+			tc.podStep(podStepTemplate)
+
+			pod, err := podStepTemplate.generatePodForStep("", v1.ResourceRequirements{})
+			if err != nil {
+				t.Fatalf("unexpected err: %v", err)
+			}
+
+			if !equality.Semantic.DeepEqual(pod.Spec.Volumes, tc.expectedVolumeConfig.Spec.Volumes) {
+				t.Errorf("test %s failed. generated pod.Spec.Volumes was not as expected", tc.name)
+				t.Error(diff.ObjectReflectDiff(pod.Spec.Volumes, tc.expectedVolumeConfig.Spec.Volumes))
+			}
+			if !equality.Semantic.DeepEqual(pod.Spec.Containers[0].VolumeMounts, tc.expectedVolumeConfig.Spec.Containers[0].VolumeMounts) {
+				t.Errorf("test %s failed. generated pod.Spec.Container[0].VolumeMounts was not as expected", tc.name)
+				t.Error(diff.ObjectReflectDiff(pod.Spec.Containers[0].VolumeMounts, tc.expectedVolumeConfig.Spec.Containers[0].VolumeMounts))
+			}
+
+		})
+	}
+
+}
+
+func expectedPodStepTemplate() *podStep {
+	return &podStep{
+		jobSpec: &api.JobSpec{
+			Job:       "podStep.jobSpec.Job",
+			BuildId:   "podStep.jobSpec.BuildId",
+			ProwJobID: "podStep.jobSpec.ProwJobID",
+		},
+		name: "podStep.name",
+		config: PodStepConfiguration{
+			ServiceAccountName: "podStep.config.PodStepConfiguration.ServiceAccountName",
+			Commands:           "podStep.config.Command",
+			As:                 "podStep.config.As",
+			From: api.ImageStreamTagReference{
+				Name: "podStep.config.From.Name",
+				Tag:  "podStep.config.From.Tag",
+			},
+		},
 	}
 }

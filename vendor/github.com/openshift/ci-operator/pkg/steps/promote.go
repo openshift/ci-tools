@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/retry"
 
 	imageapi "github.com/openshift/api/image/v1"
@@ -39,12 +41,23 @@ func (s *promotionStep) Inputs(ctx context.Context, dry bool) (api.InputDefiniti
 	return nil, nil
 }
 
+var promotionRetry = wait.Backoff{
+	Steps:    20,
+	Duration: 10 * time.Millisecond,
+	Factor:   1.2,
+	Jitter:   0.1,
+}
+
 func (s *promotionStep) Run(ctx context.Context, dry bool) error {
 	tags := make(map[string]string)
 	names := sets.NewString()
 	for _, tag := range s.tags {
 		tags[tag] = tag
 		names.Insert(tag)
+	}
+	for _, tag := range s.config.ExcludedImages {
+		delete(tags, tag)
+		names.Delete(tag)
 	}
 	for dst, src := range s.config.AdditionalImages {
 		tags[dst] = src
@@ -59,7 +72,7 @@ func (s *promotionStep) Run(ctx context.Context, dry bool) error {
 	}
 
 	if len(s.config.Name) > 0 {
-		return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		return retry.RetryOnConflict(promotionRetry, func() error {
 			is, err := s.dstClient.ImageStreams(s.config.Namespace).Get(s.config.Name, meta.GetOptions{})
 			if errors.IsNotFound(err) {
 				is, err = s.dstClient.ImageStreams(s.config.Namespace).Create(&imageapi.ImageStream{
@@ -109,7 +122,7 @@ func (s *promotionStep) Run(ctx context.Context, dry bool) error {
 
 		name := fmt.Sprintf("%s%s", s.config.NamePrefix, dst)
 
-		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		err := retry.RetryOnConflict(promotionRetry, func() error {
 			_, err := s.dstClient.ImageStreams(s.config.Namespace).Get(name, meta.GetOptions{})
 			if errors.IsNotFound(err) {
 				_, err = s.dstClient.ImageStreams(s.config.Namespace).Create(&imageapi.ImageStream{

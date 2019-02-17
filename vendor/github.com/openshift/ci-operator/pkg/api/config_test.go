@@ -82,6 +82,38 @@ func TestValidateTests(t *testing.T) {
 			expectedValid: false,
 		},
 		{
+			id: "test valid memory backed volume",
+			tests: []TestStepConfiguration{
+				{
+					As:       "test",
+					Commands: "commands",
+					ContainerTestConfiguration: &ContainerTestConfiguration{
+						From: "ignored",
+						MemoryBackedVolume: &MemoryBackedVolume{
+							Size: "1Gi",
+						},
+					},
+				},
+			},
+			expectedValid: true,
+		},
+		{
+			id: "test invalid memory backed volume",
+			tests: []TestStepConfiguration{
+				{
+					As:       "test",
+					Commands: "commands",
+					ContainerTestConfiguration: &ContainerTestConfiguration{
+						From: "ignored",
+						MemoryBackedVolume: &MemoryBackedVolume{
+							Size: "1GG", // not valid
+						},
+					},
+				},
+			},
+			expectedValid: false,
+		},
+		{
 			id: "test with duplicated `as`",
 			tests: []TestStepConfiguration{
 				{
@@ -139,7 +171,8 @@ func TestValidateTests(t *testing.T) {
 					},
 				},
 			},
-			release: &ReleaseTagConfiguration{},
+			release:       &ReleaseTagConfiguration{},
+			expectedValid: true,
 		},
 		{
 			id: "with release",
@@ -154,6 +187,78 @@ func TestValidateTests(t *testing.T) {
 			},
 			release:       &ReleaseTagConfiguration{Name: "origin-v3.11"},
 			expectedValid: true,
+		},
+		{
+			id: "invalid secret mountPath",
+			tests: []TestStepConfiguration{
+				{
+					As: "test",
+					OpenshiftAnsibleClusterTestConfiguration: &OpenshiftAnsibleClusterTestConfiguration{},
+					Secret: Secret{
+						Name:      "secret",
+						MountPath: "/path/to/secret:exec",
+					},
+				},
+			},
+			expectedValid: false,
+		},
+		{
+			id: "invalid secret name",
+			tests: []TestStepConfiguration{
+				{
+					As: "test",
+					OpenshiftAnsibleClusterTestConfiguration: &OpenshiftAnsibleClusterTestConfiguration{},
+					Secret: Secret{
+						Name:      "secret_test",
+						MountPath: "/path/to/secret:exec",
+					},
+				},
+			},
+			expectedValid: false,
+		},
+		{
+			id: "valid secret",
+			tests: []TestStepConfiguration{
+				{
+					As:                         "unit",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &ContainerTestConfiguration{From: "ignored"},
+					Secret: Secret{
+						Name: "secret",
+					},
+				},
+			},
+			expectedValid: true,
+		},
+		{
+			id: "valid secret with path",
+			tests: []TestStepConfiguration{
+				{
+					As:                         "unit",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &ContainerTestConfiguration{From: "ignored"},
+					Secret: Secret{
+						Name:      "secret",
+						MountPath: "/path/to/secret",
+					},
+				},
+			},
+			expectedValid: true,
+		},
+		{
+			id: "valid secret with invalid path",
+			tests: []TestStepConfiguration{
+				{
+					As:                         "unit",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &ContainerTestConfiguration{From: "ignored"},
+					Secret: Secret{
+						Name:      "secret",
+						MountPath: "path/to/secret",
+					},
+				},
+			},
+			expectedValid: false,
 		},
 	}
 

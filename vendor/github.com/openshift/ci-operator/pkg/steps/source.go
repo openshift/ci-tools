@@ -49,7 +49,7 @@ func sourceDockerfile(fromTag api.PipelineImageStreamTagReference, pathAlias str
 	return fmt.Sprintf(`
 FROM %s:%s
 ADD ./app.binary /clonerefs
-RUN umask 0002 && /clonerefs && chmod g+xw -R %s/src
+RUN umask 0002 && /clonerefs && find %s/src -type d -not -perm -0775 | xargs -r chmod g+xw
 WORKDIR %s/src/%s/
 ENV GOPATH=%s
 RUN git submodule update --init
@@ -221,8 +221,25 @@ func handleBuild(buildClient BuildClient, build *buildapi.Build, dry bool) error
 		fmt.Printf("%s\n", buildJSON)
 		return nil
 	}
-	if _, err := buildClient.Builds(build.Namespace).Create(build); err != nil && !errors.IsAlreadyExists(err) {
-		return fmt.Errorf("could not create build %s: %v", build.Name, err)
+
+	if _, err := buildClient.Builds(build.Namespace).Create(build); err != nil {
+		if errors.IsAlreadyExists(err) {
+			b, err := buildClient.Builds(build.Namespace).Get(build.Name, meta.GetOptions{})
+			if err != nil {
+				return fmt.Errorf("could not get build %s: %v", build.Name, err)
+			}
+
+			if b.Status.Reason == buildapi.StatusReasonOutOfMemoryKilled {
+				if err := buildClient.Builds(build.Namespace).Delete(build.Name, nil); err != nil && !errors.IsNotFound(err) {
+					return fmt.Errorf("could not delete build %s: %v", build.Name, err)
+				}
+				if _, err := buildClient.Builds(build.Namespace).Create(build); err != nil && !errors.IsAlreadyExists(err) {
+					return fmt.Errorf("could not recreate build %s: %v", build.Name, err)
+				}
+			}
+		} else {
+			return fmt.Errorf("could not create build %s: %v", build.Name, err)
+		}
 	}
 	return waitForBuild(buildClient, build.Namespace, build.Name)
 }

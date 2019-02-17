@@ -20,6 +20,7 @@ import (
 // created, then invoking the admin command for building a new release.
 type assembleReleaseStep struct {
 	config      api.ReleaseTagConfiguration
+	resources   api.ResourceConfiguration
 	imageClient imageclientset.ImageV1Interface
 	podClient   steps.PodClient
 	rbacClient  rbacclientset.RbacV1Interface
@@ -78,7 +79,20 @@ oc adm release new --max-per-registry=32 -n %q --from-image-stream %q --to-image
 oc adm release extract --from=%q --to=/tmp/artifacts/release-payload
 `, s.jobSpec.Namespace, api.StableImageStream, cvo, destination, destination),
 	}
-	step := steps.PodStep("release", podConfig, api.ResourceConfiguration{}, s.podClient, s.artifactDir, s.jobSpec)
+
+	// set an explicit default for release-latest resources, but allow customization if necessary
+	resources := s.resources
+	if _, ok := resources[podConfig.As]; !ok {
+		copied := make(api.ResourceConfiguration)
+		for k, v := range resources {
+			copied[k] = v
+		}
+		// max cpu observed at 0.1 core, most memory ~ 420M
+		copied[podConfig.As] = api.ResourceRequirements{Requests: api.ResourceList{"cpu": "50m", "memory": "400Mi"}}
+		resources = copied
+	}
+
+	step := steps.PodStep("release", podConfig, resources, s.podClient, s.artifactDir, s.jobSpec)
 
 	return step.Run(ctx, dry)
 }
@@ -124,9 +138,10 @@ func (s *assembleReleaseStep) Description() string {
 
 // AssembleReleaseStep builds a new update payload image based on the cluster version operator
 // and the operators defined in the release configuration.
-func AssembleReleaseStep(config api.ReleaseTagConfiguration, podClient steps.PodClient, imageClient imageclientset.ImageV1Interface, artifactDir string, jobSpec *api.JobSpec) api.Step {
+func AssembleReleaseStep(config api.ReleaseTagConfiguration, resources api.ResourceConfiguration, podClient steps.PodClient, imageClient imageclientset.ImageV1Interface, artifactDir string, jobSpec *api.JobSpec) api.Step {
 	return &assembleReleaseStep{
 		config:      config,
+		resources:   resources,
 		podClient:   podClient,
 		imageClient: imageClient,
 		artifactDir: artifactDir,

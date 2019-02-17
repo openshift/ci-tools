@@ -65,19 +65,6 @@ promote the component images built by this postsubmit.
     ...
 ```
 
-If the configuration file specifies a promotion namespace, either in
-[promotion.namespace](https://github.com/openshift/ci-operator/blob/master/CONFIGURATION.md#promotionnamespace)
-or in
-[tag_specification.namespace](https://github.com/openshift/ci-operator/blob/master/CONFIGURATION.md#tag_specificationnamespace),
-and this namespace is called `openshift`, this postsubmit job will also have `artifacts: images` label:
-
-```yaml
-  - name: branch-ci-ORG-REPO-BRANCH-images
-    labels:
-      artifacts: images
-    ...
-```
-
 ### Hand-Edited Prow Configuration
 
 If the existing Prow job configuration already exists, the generator will update it. The

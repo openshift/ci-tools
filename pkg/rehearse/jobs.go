@@ -30,6 +30,11 @@ import (
 const (
 	rehearseLabel                = "ci.openshift.org/rehearse"
 	defaultRehearsalRerunCommand = "/test pj-rehearse"
+	ciOperatorConfigsCMName      = "ci-operator-configs"
+	ciopConfigsInRepo            = "ci-operator/config"
+	logRehearsalJob              = "rehearsal-job"
+	logCiopConfigFile            = "ciop-config-file"
+	logCiopConfigRepo            = "ciop-config-repo"
 )
 
 // Loggers holds the two loggers that will be used for normal and debug logging respectively.
@@ -108,8 +113,6 @@ type ciOperatorConfigs interface {
 	Load(repo, configFile string) (string, error)
 }
 
-const ciopConfigsInRepo = "ci-operator/config"
-
 type ciOperatorConfigLoader struct {
 	base string
 }
@@ -119,11 +122,6 @@ func (c *ciOperatorConfigLoader) Load(repo, configFile string) (string, error) {
 	content, err := ioutil.ReadFile(fullPath)
 	return string(content), err
 }
-
-const ciOperatorConfigsCMName = "ci-operator-configs"
-
-const logCiopConfigFile = "ciop-config-file"
-const logCiopConfigRepo = "ciop-config-repo"
 
 // inlineCiOpConfig detects whether a job needs a ci-operator config file
 // provided by a `ci-operator-configs` ConfigMap and if yes, returns a copy
@@ -164,8 +162,6 @@ func inlineCiOpConfig(job *prowconfig.Presubmit, targetRepo string, ciopConfigs 
 
 	return &rehearsal, nil
 }
-
-const logRehearsalJob = "rehearsal-job"
 
 func configureRehearsalJobs(toBeRehearsed map[string][]prowconfig.Presubmit, prRepo string, prNumber int, loggers Loggers) []*prowconfig.Presubmit {
 	rehearsals := []*prowconfig.Presubmit{}

@@ -556,9 +556,7 @@ func TestGenerateJobs(t *testing.T) {
 					{JobBase: prowconfig.JobBase{Name: "pull-ci-organization-repository-branch-images"}},
 				}},
 				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {{
-					JobBase: prowconfig.JobBase{Name: "branch-ci-organization-repository-branch-images",
-						Labels: map[string]string{"artifacts": "images"},
-					},
+					JobBase: prowconfig.JobBase{Name: "branch-ci-organization-repository-branch-images"},
 				}}},
 			},
 		}, {
@@ -603,8 +601,7 @@ func TestGenerateJobs(t *testing.T) {
 				}},
 				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {{
 					JobBase: prowconfig.JobBase{
-						Name:   "branch-ci-organization-repository-branch-images",
-						Labels: map[string]string{"artifacts": "images"},
+						Name: "branch-ci-organization-repository-branch-images",
 					}}},
 				}},
 		}, {
@@ -676,8 +673,7 @@ func TestGenerateJobs(t *testing.T) {
 				}},
 				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {{
 					JobBase: prowconfig.JobBase{
-						Name:   "branch-ci-organization-repository-branch-images",
-						Labels: map[string]string{"artifacts": "images"},
+						Name: "branch-ci-organization-repository-branch-images",
 					}}}},
 			},
 		},
@@ -819,8 +815,6 @@ tests:
     decorate: true
     decoration_config:
       skip_cloning: true
-    labels:
-      artifacts: images
     name: branch-ci-super-duper-branch-images
     spec:
       containers:
@@ -1091,7 +1085,6 @@ tests:
     decoration_config:
       skip_cloning: true
     labels:
-      artifacts: images
       ci-operator.openshift.io/variant: rhel
     name: branch-ci-super-duper-branch-rhel-images
     spec:
@@ -1287,8 +1280,6 @@ tests:
     decorate: true
     decoration_config:
       skip_cloning: true
-    labels:
-      artifacts: images
     name: branch-ci-super-duper-branch-images
     spec:
       containers:

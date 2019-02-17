@@ -346,11 +346,9 @@ func shouldBePromoted(branch, namespace, name string) bool {
 	if namespace == "openshift" {
 		switch name {
 		case "origin-v4.0":
-			return branch == "master" || branch == "openshift-4.0"
+			return branch == "master" || branch == "openshift-4.0" || branch == "release-4.0"
 		}
-		// TODO: release branches?
 	}
-
 	return true
 }
 
@@ -384,18 +382,20 @@ func generateJobs(
 	}
 
 	if len(configSpec.Images) > 0 {
-		// If the images are promoted to 'openshift' namespace, we need to add
-		// 'artifacts: images' label to the [images] postsubmit and also target
-		// --target=[release:latest] for [images] presubmits.
-		labels := map[string]string{}
-		var additionalPresubmitArgs []string
+		// Images that have explicit promotion config or follow the legacy defaulting rules for promotion
+		// should get a postsubmit promotion job.
 		promotionNamespace := extractPromotionNamespace(configSpec)
 		promotionName := extractPromotionName(configSpec)
-		if promotionNamespace == "openshift" {
-			labels["artifacts"] = "images"
-			if promotionName == "origin-v4.0" {
-				additionalPresubmitArgs = []string{"--target=[release:latest]"}
-			}
+		promote := configSpec.PromotionConfiguration != nil || shouldBePromoted(repoInfo.branch, promotionNamespace, promotionName)
+
+		// TODO: we should populate labels based on ci-operator characteristics
+		labels := map[string]string{}
+
+		// Identify which jobs need a to have a release payload explicitly requested
+		// TODO: this should be based on something in the ci-operator config
+		var additionalPresubmitArgs []string
+		if (promotionNamespace == "openshift" && promotionName == "origin-v4.0") || (promotionNamespace == "ocp") {
+			additionalPresubmitArgs = []string{"--target=[release:latest]"}
 		}
 
 		additionalPostsubmitArgs := []string{"--promote"}
@@ -407,8 +407,7 @@ func generateJobs(
 
 		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest("images", repoInfo, generatePodSpec(repoInfo.configFilename, "[images]", additionalPresubmitArgs...)))
 
-		// If we have and explicit promotion config, let's respect that. Otherwise, validate if the branch matches promotion target
-		if configSpec.PromotionConfiguration != nil || shouldBePromoted(repoInfo.branch, promotionNamespace, promotionName) {
+		if promote {
 			postsubmits[orgrepo] = append(postsubmits[orgrepo], *generatePostsubmitForTest("images", repoInfo, true, labels, generatePodSpec(repoInfo.configFilename, "[images]", additionalPostsubmitArgs...)))
 		}
 	}

@@ -11,8 +11,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 )
 
-var originReleaseTagRegexp = regexp.MustCompile(`^origin-v\d+\.\d+$`)
-
 // Validate validates all the configuration's values.
 func (config *ReleaseBuildConfiguration) Validate() error {
 	var validationErrors []error
@@ -254,8 +252,8 @@ func validateTestConfigurationType(fieldRoot string, test TestStepConfiguration,
 	if typeCount == 0 {
 		validationErrors = append(validationErrors, fmt.Errorf("%s has no type, you may want to specify 'container' for a container based test", fieldRoot))
 	} else if typeCount == 1 {
-		if needsReleaseRpms && (release == nil || !originReleaseTagRegexp.MatchString(release.Name)) {
-			validationErrors = append(validationErrors, fmt.Errorf("%s requires an 'origin' release in 'tag_specification'", fieldRoot))
+		if needsReleaseRpms && release == nil {
+			validationErrors = append(validationErrors, fmt.Errorf("%s requires a release in 'tag_specification'", fieldRoot))
 		}
 	} else if typeCount > 1 {
 		validationErrors = append(validationErrors, fmt.Errorf("%s has more than one type", fieldRoot))

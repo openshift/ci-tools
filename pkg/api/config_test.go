@@ -171,7 +171,8 @@ func TestValidateTests(t *testing.T) {
 					},
 				},
 			},
-			release: &ReleaseTagConfiguration{},
+			release:       &ReleaseTagConfiguration{},
+			expectedValid: true,
 		},
 		{
 			id: "with release",

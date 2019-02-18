@@ -121,9 +121,9 @@ development workflow would use. The --override file will override fields
 defined in the config file, such as base images and the release tag configuration.
 
 After a successful build the --promote will tag each built image (in "images")
-to the image stream(s) identified by the "promotion" config, which defaults to
-the same image stream as the release configuration. You may add additional
-images to promote and their target names via the "additional_images" map.
+to the image stream(s) identified by the "promotion" config. You may add
+additional images to promote and their target names via the "additional_images"
+map.
 `
 
 func main() {

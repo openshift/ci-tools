@@ -213,17 +213,6 @@ func checkForFullyQualifiedStep(step api.Step, params *steps.DeferredParameters)
 func promotionDefaults(configSpec *api.ReleaseBuildConfiguration) (*api.PromotionConfiguration, error) {
 	config := configSpec.PromotionConfiguration
 	if config == nil {
-		config = &api.PromotionConfiguration{}
-	}
-	if len(config.Tag) == 0 && len(config.Name) == 0 {
-		if input := configSpec.ReleaseTagConfiguration; input != nil {
-			config.Namespace = input.Namespace
-			config.Name = input.Name
-			config.NamePrefix = input.NamePrefix
-			config.Tag = input.Tag
-		}
-	}
-	if config == nil {
 		return nil, fmt.Errorf("cannot promote images, no promotion or release tag configuration defined")
 	}
 	return config, nil

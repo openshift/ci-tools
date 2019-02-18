@@ -382,11 +382,10 @@ func generateJobs(
 	}
 
 	if len(configSpec.Images) > 0 {
-		// Images that have explicit promotion config or follow the legacy defaulting rules for promotion
-		// should get a postsubmit promotion job.
+		// Images that have explicit promotion config should get promoted
 		promotionNamespace := extractPromotionNamespace(configSpec)
 		promotionName := extractPromotionName(configSpec)
-		promote := configSpec.PromotionConfiguration != nil || shouldBePromoted(repoInfo.branch, promotionNamespace, promotionName)
+		promote := configSpec.PromotionConfiguration != nil
 
 		// TODO: we should populate labels based on ci-operator characteristics
 		labels := map[string]string{}

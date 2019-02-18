@@ -148,6 +148,10 @@ func main() {
 	}
 
 	changedPresubmits := diffs.GetChangedPresubmits(prowConfig, prowPRConfig, logger)
+	if len(changedPresubmits) == 0 {
+		logger.Info("no jobs to rehearse have been found")
+		os.Exit(0)
+	}
 
 	debugLogger := logrus.New()
 	debugLogger.Level = logrus.DebugLevel

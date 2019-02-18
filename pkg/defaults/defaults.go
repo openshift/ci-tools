@@ -339,7 +339,7 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.Job
 
 	for alias, baseImage := range config.BaseImages {
 		buildSteps = append(buildSteps, api.StepConfiguration{InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
-			BaseImage: baseImage,
+			BaseImage: defaultImageFromReleaseTag(baseImage, config.ReleaseTagConfiguration),
 			To:        api.PipelineImageStreamTagReference(alias),
 		}})
 	}
@@ -347,7 +347,7 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.Job
 	for alias, target := range config.InputConfiguration.BaseRPMImages {
 		intermediateTag := api.PipelineImageStreamTagReference(fmt.Sprintf("%s-without-rpms", alias))
 		buildSteps = append(buildSteps, api.StepConfiguration{InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
-			BaseImage: target,
+			BaseImage: defaultImageFromReleaseTag(target, config.ReleaseTagConfiguration),
 			To:        intermediateTag,
 		}})
 
@@ -452,4 +452,17 @@ func envHasAllParameters(params map[string]func() (string, error)) (map[string]s
 		values[k] = v
 	}
 	return values, true
+}
+
+func defaultImageFromReleaseTag(base api.ImageStreamTagReference, release *api.ReleaseTagConfiguration) api.ImageStreamTagReference {
+	if release == nil {
+		return base
+	}
+	if len(base.Tag) == 0 || len(base.Cluster) > 0 || len(base.Name) > 0 || len(base.Namespace) > 0 {
+		return base
+	}
+	base.Cluster = release.Cluster
+	base.Name = release.Name
+	base.Namespace = release.Namespace
+	return base
 }

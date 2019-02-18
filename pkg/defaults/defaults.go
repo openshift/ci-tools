@@ -413,7 +413,11 @@ func createStepConfigForTagRefImage(target api.ImageStreamTagReference, jobSpec 
 		target.Namespace = jobSpec.BaseNamespace
 	}
 	if target.Name == "" {
-		target.Name = fmt.Sprintf("%s-test-base", jobSpec.Refs.Repo)
+		if jobSpec.Refs != nil {
+			target.Name = fmt.Sprintf("%s-test-base", jobSpec.Refs.Repo)
+		} else {
+			target.Name = "test-base"
+		}
 	}
 
 	return api.StepConfiguration{

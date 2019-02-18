@@ -97,14 +97,22 @@ func (s *sourceStep) Run(ctx context.Context, dry bool) error {
 		s.resources,
 	)
 
-	refs := s.jobSpec.Refs
-	refs.PathAlias = s.config.PathAlias
+	var refs []interface{}
+	// periodic jobs may have no refs to clone
+	if s.jobSpec.Refs != nil {
+		ref := s.jobSpec.Refs
+		ref.PathAlias = s.config.PathAlias
+		refs = append(refs, ref)
+	}
+	for _, ref := range s.jobSpec.ExtraRefs {
+		refs = append(refs, ref)
+	}
 	optionsSpec := map[string]interface{}{
 		"src_root":       gopath,
 		"log":            "/dev/null",
 		"git_user_name":  "ci-robot",
 		"git_user_email": "ci-robot@openshift.io",
-		"refs":           []interface{}{refs},
+		"refs":           refs,
 	}
 	optionsJSON, err := json.Marshal(optionsSpec)
 	if err != nil {

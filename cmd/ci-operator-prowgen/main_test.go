@@ -474,7 +474,8 @@ func TestGenerateJobs(t *testing.T) {
 				Tests: []ciop.TestStepConfiguration{
 					{As: "derTest", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "from"}},
 					{As: "leTest", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "from"}}},
-				Images: []ciop.ProjectDirectoryImageBuildStepConfiguration{{}},
+				Images:                 []ciop.ProjectDirectoryImageBuildStepConfiguration{{}},
+				PromotionConfiguration: &ciop.PromotionConfiguration{},
 			},
 			repoInfo: &configFilePathElements{
 				org:            "organization",
@@ -539,28 +540,7 @@ func TestGenerateJobs(t *testing.T) {
 				}},
 			},
 		}, {
-			id: "Promotion.Namespace is 'openshift' so artifact label is added",
-			config: &ciop.ReleaseBuildConfiguration{
-				Tests:                  []ciop.TestStepConfiguration{},
-				Images:                 []ciop.ProjectDirectoryImageBuildStepConfiguration{{}},
-				PromotionConfiguration: &ciop.PromotionConfiguration{Namespace: "openshift"},
-			},
-			repoInfo: &configFilePathElements{
-				org:            "organization",
-				repo:           "repository",
-				branch:         "branch",
-				configFilename: "konfig.yaml",
-			},
-			expected: &prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
-					{JobBase: prowconfig.JobBase{Name: "pull-ci-organization-repository-branch-images"}},
-				}},
-				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {{
-					JobBase: prowconfig.JobBase{Name: "branch-ci-organization-repository-branch-images"},
-				}}},
-			},
-		}, {
-			id: "Promotion.Namespace is not 'openshift' so no artifact label is added",
+			id: "Promotion configuration causes --promote job",
 			config: &ciop.ReleaseBuildConfiguration{
 				Tests:                  []ciop.TestStepConfiguration{},
 				Images:                 []ciop.ProjectDirectoryImageBuildStepConfiguration{{}},
@@ -581,7 +561,7 @@ func TestGenerateJobs(t *testing.T) {
 				}},
 			},
 		}, {
-			id: "no Promotion but tag_specification.Namespace is 'openshift' so artifact label is added",
+			id: "no Promotion configuration has no branch job",
 			config: &ciop.ReleaseBuildConfiguration{
 				Tests:  []ciop.TestStepConfiguration{},
 				Images: []ciop.ProjectDirectoryImageBuildStepConfiguration{{}},
@@ -599,82 +579,6 @@ func TestGenerateJobs(t *testing.T) {
 				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
 					{JobBase: prowconfig.JobBase{Name: "pull-ci-organization-repository-branch-images"}},
 				}},
-				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {{
-					JobBase: prowconfig.JobBase{
-						Name: "branch-ci-organization-repository-branch-images",
-					}}},
-				}},
-		}, {
-			id: "tag_specification.Namespace is not 'openshift' and no Promotion so artifact label is not added",
-			config: &ciop.ReleaseBuildConfiguration{
-				Tests:  []ciop.TestStepConfiguration{},
-				Images: []ciop.ProjectDirectoryImageBuildStepConfiguration{{}},
-				InputConfiguration: ciop.InputConfiguration{
-					ReleaseTagConfiguration: &ciop.ReleaseTagConfiguration{Namespace: "ci"},
-				},
-			},
-			repoInfo: &configFilePathElements{
-				org:            "organization",
-				repo:           "repository",
-				branch:         "branch",
-				configFilename: "konfig.yaml",
-			},
-			expected: &prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
-					{JobBase: prowconfig.JobBase{Name: "pull-ci-organization-repository-branch-images"}},
-				}},
-				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {
-					{JobBase: prowconfig.JobBase{Name: "branch-ci-organization-repository-branch-images"}},
-				}},
-			},
-		}, {
-			id: "tag_specification.Namespace is 'openshift' and Promotion.Namespace is 'ci' so artifact label is not added",
-			config: &ciop.ReleaseBuildConfiguration{
-				Tests:  []ciop.TestStepConfiguration{},
-				Images: []ciop.ProjectDirectoryImageBuildStepConfiguration{{}},
-				InputConfiguration: ciop.InputConfiguration{
-					ReleaseTagConfiguration: &ciop.ReleaseTagConfiguration{Namespace: "openshift"},
-				},
-				PromotionConfiguration: &ciop.PromotionConfiguration{Namespace: "ci"},
-			},
-			repoInfo: &configFilePathElements{
-				org:            "organization",
-				repo:           "repository",
-				branch:         "branch",
-				configFilename: "konfig.yaml",
-			},
-			expected: &prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
-					{JobBase: prowconfig.JobBase{Name: "pull-ci-organization-repository-branch-images"}},
-				}},
-				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {
-					{JobBase: prowconfig.JobBase{Name: "branch-ci-organization-repository-branch-images"}},
-				}},
-			},
-		}, {
-			id: "tag_specification.Namespace is 'ci' and Promotion.Namespace is 'openshift' so artifact label is added",
-			config: &ciop.ReleaseBuildConfiguration{
-				Tests:  []ciop.TestStepConfiguration{},
-				Images: []ciop.ProjectDirectoryImageBuildStepConfiguration{{}},
-				InputConfiguration: ciop.InputConfiguration{
-					ReleaseTagConfiguration: &ciop.ReleaseTagConfiguration{Namespace: "ci"},
-				},
-				PromotionConfiguration: &ciop.PromotionConfiguration{Namespace: "openshift"},
-			},
-			repoInfo: &configFilePathElements{
-				org:            "organization",
-				repo:           "repository",
-				branch:         "branch",
-				configFilename: "konfig.yaml",
-			},
-			expected: &prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
-					{JobBase: prowconfig.JobBase{Name: "pull-ci-organization-repository-branch-images"}},
-				}},
-				Postsubmits: map[string][]prowconfig.Postsubmit{"organization/repository": {{
-					JobBase: prowconfig.JobBase{
-						Name: "branch-ci-organization-repository-branch-images",
-					}}}},
 			},
 		},
 	}
@@ -799,6 +703,9 @@ tag_specification:
   name: origin-v3.11
   namespace: openshift
   tag: ''
+promotion:
+  namespace: ci
+  name: other
 tests:
 - as: unit
   commands: make test-unit
@@ -938,6 +845,9 @@ tag_specification:
   name: origin-v3.11
   namespace: openshift
   tag: ''
+promotion:
+  name: test
+  namespace: ci
 tests:
 - as: unit
   commands: make test-unit
@@ -1135,6 +1045,9 @@ tag_specification:
   name: origin-v3.11
   namespace: openshift
   tag: ''
+promotion:
+  name: test
+  namespace: ci
 build_root:
   image_stream_tag:
     cluster: https://api.ci.openshift.org

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/openshift/ci-operator/pkg/api"
+	"k8s.io/apimachinery/pkg/util/diff"
 )
 
 func addCloneRefs(cfg *api.SourceStepConfiguration) *api.SourceStepConfiguration {
@@ -280,6 +281,67 @@ func TestStepConfigsForBuild(t *testing.T) {
 			}},
 		},
 		{
+			name: "implicit base image from release configuration",
+			input: &api.ReleaseBuildConfiguration{
+				InputConfiguration: api.InputConfiguration{
+					BuildRootImage: &api.BuildRootImageConfiguration{
+						ImageStreamTagReference: &api.ImageStreamTagReference{Tag: "manual"},
+					},
+					ReleaseTagConfiguration: &api.ReleaseTagConfiguration{
+						Namespace: "test",
+						Name:      "other",
+					},
+					BaseImages: map[string]api.ImageStreamTagReference{
+						"name": {
+							Tag: "tag",
+						},
+					},
+				},
+			},
+			jobSpec: &api.JobSpec{
+				Refs: &api.Refs{
+					Org:  "org",
+					Repo: "repo",
+				},
+				BaseNamespace: "base-1",
+			},
+			output: []api.StepConfiguration{
+				{
+					InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
+						BaseImage: api.ImageStreamTagReference{
+							Namespace: "base-1",
+							Name:      "repo-test-base",
+							Tag:       "manual",
+						},
+						To: api.PipelineImageStreamTagReferenceRoot,
+					},
+				},
+				{
+					SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
+						From: api.PipelineImageStreamTagReferenceRoot,
+						To:   api.PipelineImageStreamTagReferenceSource,
+					}),
+				},
+				{
+					InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
+						BaseImage: api.ImageStreamTagReference{
+							Namespace: "test",
+							Name:      "other",
+							Tag:       "tag",
+							As:        "name",
+						},
+						To: api.PipelineImageStreamTagReference("name"),
+					},
+				},
+				{
+					ReleaseImagesTagStepConfiguration: &api.ReleaseTagConfiguration{
+						Namespace: "test",
+						Name:      "other",
+					},
+				},
+			},
+		},
+		{
 			name: "rpm base image requested",
 			input: &api.ReleaseBuildConfiguration{
 				InputConfiguration: api.InputConfiguration{
@@ -338,6 +400,7 @@ func TestStepConfigsForBuild(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			if configs := stepConfigsForBuild(testCase.input, testCase.jobSpec); !stepListsEqual(configs, testCase.output) {
+				t.Logf("%s", diff.ObjectReflectDiff(testCase.output, configs))
 				t.Errorf("incorrect defaulted step configurations,\n\tgot:\n%s\n\texpected:\n%s", formatSteps(configs), formatSteps(testCase.output))
 			}
 		})

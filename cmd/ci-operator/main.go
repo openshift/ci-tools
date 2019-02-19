@@ -581,20 +581,22 @@ func (o *options) initializeNamespace() error {
 		if err != nil {
 			return fmt.Errorf("could not get RBAC client for cluster config: %v", err)
 		}
-		for _, pull := range o.jobSpec.Refs.Pulls {
-			log.Printf("Creating rolebinding for user %s in namespace %s", pull.Author, o.namespace)
-			if _, err := rbacClient.RoleBindings(o.namespace).Create(&rbacapi.RoleBinding{
-				ObjectMeta: meta.ObjectMeta{
-					Name:      "ci-op-author-access",
-					Namespace: o.namespace,
-				},
-				Subjects: []rbacapi.Subject{{Kind: "User", Name: pull.Author}},
-				RoleRef: rbacapi.RoleRef{
-					Kind: "ClusterRole",
-					Name: "admin",
-				},
-			}); err != nil && !kerrors.IsAlreadyExists(err) {
-				return fmt.Errorf("could not create role binding for: %v", err)
+		if refs := o.jobSpec.Refs; refs != nil {
+			for _, pull := range refs.Pulls {
+				log.Printf("Creating rolebinding for user %s in namespace %s", pull.Author, o.namespace)
+				if _, err := rbacClient.RoleBindings(o.namespace).Create(&rbacapi.RoleBinding{
+					ObjectMeta: meta.ObjectMeta{
+						Name:      "ci-op-author-access",
+						Namespace: o.namespace,
+					},
+					Subjects: []rbacapi.Subject{{Kind: "User", Name: pull.Author}},
+					RoleRef: rbacapi.RoleRef{
+						Kind: "ClusterRole",
+						Name: "admin",
+					},
+				}); err != nil && !kerrors.IsAlreadyExists(err) {
+					return fmt.Errorf("could not create role binding for: %v", err)
+				}
 			}
 		}
 	}

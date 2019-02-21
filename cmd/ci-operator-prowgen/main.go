@@ -450,7 +450,7 @@ func generateProwJobsFromConfigFile(configFilePath string) (*prowconfig.JobConfi
 
 func isConfigFile(path string, info os.FileInfo) bool {
 	extension := filepath.Ext(path)
-	return !info.IsDir() && (extension == ".yaml" || extension == ".yml" || extension == ".json")
+	return !info.IsDir() && (extension == ".yaml" || extension == ".yml")
 }
 
 // Iterate over all ci-operator config files under a given path and generate a

@@ -3,13 +3,11 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 
-	"github.com/ghodss/yaml"
 	"github.com/openshift/ci-operator-prowgen/pkg/promotion"
 	"github.com/sirupsen/logrus"
 
@@ -19,6 +17,7 @@ import (
 	prowconfig "k8s.io/test-infra/prow/config"
 	prowkube "k8s.io/test-infra/prow/kube"
 
+	"github.com/openshift/ci-operator-prowgen/pkg/config"
 	jc "github.com/openshift/ci-operator-prowgen/pkg/jobconfig"
 )
 
@@ -235,13 +234,13 @@ func generatePodSpecTemplate(org, repo, configFile, release string, test *cioper
 }
 
 // Generate a Presubmit job for the given parameters
-func generatePresubmitForTest(name string, repoInfo *configFilePathElements, podSpec *kubeapi.PodSpec) *prowconfig.Presubmit {
+func generatePresubmitForTest(name string, repoInfo *config.FilePathElements, podSpec *kubeapi.PodSpec) *prowconfig.Presubmit {
 	labels := make(map[string]string)
 
-	jobPrefix := fmt.Sprintf("pull-ci-%s-%s-%s-", repoInfo.org, repoInfo.repo, repoInfo.branch)
-	if len(repoInfo.variant) > 0 {
-		name = fmt.Sprintf("%s-%s", repoInfo.variant, name)
-		labels[prowJobLabelVariant] = repoInfo.variant
+	jobPrefix := fmt.Sprintf("pull-ci-%s-%s-%s-", repoInfo.Org, repoInfo.Repo, repoInfo.Branch)
+	if len(repoInfo.Variant) > 0 {
+		name = fmt.Sprintf("%s-%s", repoInfo.Variant, name)
+		labels[prowJobLabelVariant] = repoInfo.Variant
 	}
 	jobName := fmt.Sprintf("%s%s", jobPrefix, name)
 	if len(jobName) > 63 && len(jobPrefix) < 53 {
@@ -263,7 +262,7 @@ func generatePresubmitForTest(name string, repoInfo *configFilePathElements, pod
 			},
 		},
 		AlwaysRun:    true,
-		Brancher:     prowconfig.Brancher{Branches: []string{repoInfo.branch}},
+		Brancher:     prowconfig.Brancher{Branches: []string{repoInfo.Branch}},
 		Context:      fmt.Sprintf("ci/prow/%s", name),
 		RerunCommand: fmt.Sprintf("/test %s", name),
 		Trigger:      fmt.Sprintf(`(?m)^/test (?:.*? )?%s(?: .*?)?$`, name),
@@ -273,7 +272,7 @@ func generatePresubmitForTest(name string, repoInfo *configFilePathElements, pod
 // Generate a Presubmit job for the given parameters
 func generatePostsubmitForTest(
 	name string,
-	repoInfo *configFilePathElements,
+	repoInfo *config.FilePathElements,
 	treatBranchesAsExplicit bool,
 	labels map[string]string,
 	podSpec *kubeapi.PodSpec) *prowconfig.Postsubmit {
@@ -283,11 +282,11 @@ func generatePostsubmitForTest(
 		copiedLabels[k] = v
 	}
 
-	branchName := jc.MakeRegexFilenameLabel(repoInfo.branch)
-	jobPrefix := fmt.Sprintf("branch-ci-%s-%s-%s-", repoInfo.org, repoInfo.repo, branchName)
-	if len(repoInfo.variant) > 0 {
-		name = fmt.Sprintf("%s-%s", repoInfo.variant, name)
-		copiedLabels[prowJobLabelVariant] = repoInfo.variant
+	branchName := jc.MakeRegexFilenameLabel(repoInfo.Branch)
+	jobPrefix := fmt.Sprintf("branch-ci-%s-%s-%s-", repoInfo.Org, repoInfo.Repo, branchName)
+	if len(repoInfo.Variant) > 0 {
+		name = fmt.Sprintf("%s-%s", repoInfo.Variant, name)
+		copiedLabels[prowJobLabelVariant] = repoInfo.Variant
 	}
 	jobName := fmt.Sprintf("%s%s", jobPrefix, name)
 	if len(jobName) > 63 && len(jobPrefix) < 53 {
@@ -295,7 +294,7 @@ func generatePostsubmitForTest(
 		logrus.WithField("name", jobName).Warn("Generated job name is longer than 63 characters. This may cause issues when Prow attempts to label resources with job name. Consider a shorter name.")
 	}
 
-	branch := repoInfo.branch
+	branch := repoInfo.Branch
 	if treatBranchesAsExplicit {
 		branch = makeBranchExplicit(branch)
 	}
@@ -325,23 +324,23 @@ func generatePostsubmitForTest(
 //   presubmit and postsubmit that has `--target=[images]`. This postsubmit
 //   will additionally pass `--promote` to ci-operator
 func generateJobs(
-	configSpec *cioperatorapi.ReleaseBuildConfiguration, repoInfo *configFilePathElements,
+	configSpec *cioperatorapi.ReleaseBuildConfiguration, repoInfo *config.FilePathElements,
 ) *prowconfig.JobConfig {
 
-	orgrepo := fmt.Sprintf("%s/%s", repoInfo.org, repoInfo.repo)
+	orgrepo := fmt.Sprintf("%s/%s", repoInfo.Org, repoInfo.Repo)
 	presubmits := map[string][]prowconfig.Presubmit{}
 	postsubmits := map[string][]prowconfig.Postsubmit{}
 
 	for _, element := range configSpec.Tests {
 		var podSpec *kubeapi.PodSpec
 		if element.ContainerTestConfiguration != nil {
-			podSpec = generatePodSpec(repoInfo.configFilename, element.As)
+			podSpec = generatePodSpec(repoInfo.Filename, element.As)
 		} else {
 			var release string
 			if c := configSpec.ReleaseTagConfiguration; c != nil {
 				release = c.Name
 			}
-			podSpec = generatePodSpecTemplate(repoInfo.org, repoInfo.repo, repoInfo.configFilename, release, &element)
+			podSpec = generatePodSpecTemplate(repoInfo.Org, repoInfo.Repo, repoInfo.Filename, release, &element)
 		}
 		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(element.As, repoInfo, podSpec))
 	}
@@ -363,10 +362,10 @@ func generateJobs(
 			}
 		}
 
-		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest("images", repoInfo, generatePodSpec(repoInfo.configFilename, "[images]", additionalPresubmitArgs...)))
+		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest("images", repoInfo, generatePodSpec(repoInfo.Filename, "[images]", additionalPresubmitArgs...)))
 
 		if configSpec.PromotionConfiguration != nil {
-			postsubmits[orgrepo] = append(postsubmits[orgrepo], *generatePostsubmitForTest("images", repoInfo, true, labels, generatePodSpec(repoInfo.configFilename, "[images]", additionalPostsubmitArgs...)))
+			postsubmits[orgrepo] = append(postsubmits[orgrepo], *generatePostsubmitForTest("images", repoInfo, true, labels, generatePodSpec(repoInfo.Filename, "[images]", additionalPostsubmitArgs...)))
 		}
 	}
 
@@ -376,113 +375,12 @@ func generateJobs(
 	}
 }
 
-func readCiOperatorConfig(configFilePath string) (*cioperatorapi.ReleaseBuildConfiguration, error) {
-	data, err := ioutil.ReadFile(configFilePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read ci-operator config (%v)", err)
+// generateJobsToDir returns a callback that knows how to generate prow job configuration
+// into the dir provided by consuming ci-operator configuration
+func generateJobsToDir(dir string) func(configSpec *cioperatorapi.ReleaseBuildConfiguration, repoInfo *config.FilePathElements) error {
+	return func(configSpec *cioperatorapi.ReleaseBuildConfiguration, repoInfo *config.FilePathElements) error {
+		return jc.WriteToDir(dir, repoInfo.Org, repoInfo.Repo, generateJobs(configSpec, repoInfo))
 	}
-
-	var configSpec *cioperatorapi.ReleaseBuildConfiguration
-	if err := yaml.Unmarshal(data, &configSpec); err != nil {
-		return nil, fmt.Errorf("failed to load ci-operator config (%v)", err)
-	}
-
-	if err := configSpec.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid ci-operator config: %v", err)
-	}
-
-	return configSpec, nil
-}
-
-// path to ci-operator configuration file encodes information about tested code
-// .../$ORGANIZATION/$REPOSITORY/$BRANCH.$EXT
-type configFilePathElements struct {
-	org            string
-	repo           string
-	branch         string
-	variant        string
-	configFilename string
-}
-
-// We use the directory/file naming convention to encode useful information
-// about component repository information.
-// The convention for ci-operator config files in this repo:
-// ci-operator/config/ORGANIZATION/COMPONENT/BRANCH.yaml
-func extractRepoElementsFromPath(configFilePath string) (*configFilePathElements, error) {
-	configSpecDir := filepath.Dir(configFilePath)
-	repo := filepath.Base(configSpecDir)
-	if repo == "." || repo == "/" {
-		return nil, fmt.Errorf("could not extract repo from '%s' (expected path like '.../ORG/REPO/BRANCH.yaml", configFilePath)
-	}
-
-	org := filepath.Base(filepath.Dir(configSpecDir))
-	if org == "." || org == "/" {
-		return nil, fmt.Errorf("could not extract org from '%s' (expected path like '.../ORG/REPO/BRANCH.yaml", configFilePath)
-	}
-
-	fileName := filepath.Base(configFilePath)
-	s := strings.TrimSuffix(fileName, filepath.Ext(configFilePath))
-	branch := strings.TrimPrefix(s, fmt.Sprintf("%s-%s-", org, repo))
-
-	var variant string
-	if i := strings.LastIndex(branch, "__"); i != -1 {
-		variant = branch[i+2:]
-		branch = branch[:i]
-	}
-
-	return &configFilePathElements{org, repo, branch, variant, fileName}, nil
-}
-
-func generateProwJobsFromConfigFile(configFilePath string) (*prowconfig.JobConfig, *configFilePathElements, error) {
-	configSpec, err := readCiOperatorConfig(configFilePath)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	repoInfo, err := extractRepoElementsFromPath(configFilePath)
-	if err != nil {
-		return nil, nil, err
-	}
-	jobConfig := generateJobs(configSpec, repoInfo)
-
-	return jobConfig, repoInfo, nil
-}
-
-func isConfigFile(path string, info os.FileInfo) bool {
-	extension := filepath.Ext(path)
-	return !info.IsDir() && (extension == ".yaml" || extension == ".yml")
-}
-
-// Iterate over all ci-operator config files under a given path and generate a
-// Prow job configuration files for each one under a different path, mimicking
-// the directory structure.
-func generateJobsFromDirectory(configDir, jobDir string) error {
-	ok := true
-	filepath.Walk(configDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			logrus.WithError(err).Error("Error encontered while generating Prow job config")
-			ok = false
-			return nil
-		}
-		if isConfigFile(path, info) {
-			jobConfig, repoInfo, err := generateProwJobsFromConfigFile(path)
-			if err != nil {
-				logrus.WithField("source-file", path).WithError(err).Error("Failed to generate jobs from config file")
-				ok = false
-				return nil
-			}
-			if err = jc.WriteToDir(jobDir, repoInfo.org, repoInfo.repo, jobConfig); err != nil {
-				logrus.WithField("source-file", path).WithError(err).Error("Failed to write jobs")
-				ok = false
-				return nil
-			}
-		}
-		return nil
-	})
-	if !ok {
-		return fmt.Errorf("Failed to generate jobs from directory")
-	}
-	return nil
 }
 
 func getReleaseRepoDir(directory string) (string, error) {
@@ -528,15 +426,11 @@ func main() {
 	}
 
 	if len(opt.fromFile) > 0 {
-		jobConfig, repoInfo, err := generateProwJobsFromConfigFile(opt.fromFile)
-		if err != nil {
+		if err := config.OperateOnCIOperatorConfig(opt.fromFile, generateJobsToDir(opt.toDir)); err != nil {
 			logrus.WithError(err).WithField("source-file", opt.fromFile).Fatal("Failed to generate jobs")
 		}
-		if err := jc.WriteToDir(opt.toDir, repoInfo.org, repoInfo.repo, jobConfig); err != nil {
-			logrus.WithError(err).WithField("target-dir", opt.toDir).Fatal("Failed to write jobs to directory")
-		}
 	} else { // from directory
-		if err := generateJobsFromDirectory(opt.fromDir, opt.toDir); err != nil {
+		if err := config.OperateOnCIOperatorConfigDir(opt.fromDir, generateJobsToDir(opt.toDir)); err != nil {
 			fields := logrus.Fields{"target-dir": opt.toDir, "source-dir": opt.fromDir}
 			logrus.WithError(err).WithFields(fields).Fatal("Failed to generate jobs")
 		}

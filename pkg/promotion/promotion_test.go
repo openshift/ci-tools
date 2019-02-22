@@ -33,7 +33,7 @@ func TestPromotesOfficialImages(t *testing.T) {
 			configSpec: &cioperatorapi.ReleaseBuildConfiguration{
 				PromotionConfiguration: &cioperatorapi.PromotionConfiguration{
 					Namespace: "openshift",
-					Name: "origin-v4.0",
+					Name:      "origin-v4.0",
 				},
 			},
 			expected: true,
@@ -43,7 +43,7 @@ func TestPromotesOfficialImages(t *testing.T) {
 			configSpec: &cioperatorapi.ReleaseBuildConfiguration{
 				PromotionConfiguration: &cioperatorapi.PromotionConfiguration{
 					Namespace: "openshift",
-					Name: "random",
+					Name:      "random",
 				},
 			},
 			expected: false,

@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/openshift/ci-operator/pkg/defaults"
+	"github.com/openshift/ci-operator/pkg/load"
 
 	coreapi "k8s.io/api/core/v1"
 	rbacapi "k8s.io/api/rbac/v1"
@@ -250,27 +251,11 @@ func (o *options) Validate() error {
 }
 
 func (o *options) Complete() error {
-	// Load the standard configuration from the path or env
-	var configSpec string
-	if len(o.configSpecPath) > 0 {
-		data, err := ioutil.ReadFile(o.configSpecPath)
-		if err != nil {
-			return fmt.Errorf("--config error: %v", err)
-		}
-		configSpec = string(data)
-	} else {
-		var ok bool
-		configSpec, ok = os.LookupEnv("CONFIG_SPEC")
-		if !ok || len(configSpec) == 0 {
-			return fmt.Errorf("CONFIG_SPEC environment variable is not set or empty and no --config file was set")
-		}
+	config, err := load.Config(o.configSpecPath)
+	if err != nil {
+		return fmt.Errorf("failed to load configuration: %v", err)
 	}
-	if o.configSpec == nil {
-		o.configSpec = &api.ReleaseBuildConfiguration{}
-	}
-	if err := yaml.Unmarshal([]byte(configSpec), o.configSpec); err != nil {
-		return fmt.Errorf("invalid configuration: %v\nvalue:\n%s", err, string(configSpec))
-	}
+	o.configSpec = config
 
 	if err := o.configSpec.Validate(); err != nil {
 		return err

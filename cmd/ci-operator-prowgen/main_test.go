@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/openshift/ci-operator-prowgen/pkg/config"
 	ciop "github.com/openshift/ci-operator/pkg/api"
 	kubeapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -17,8 +18,6 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/util/diff"
-
-	jc "github.com/openshift/ci-operator-prowgen/pkg/jobconfig"
 )
 
 func TestGeneratePodSpec(t *testing.T) {
@@ -294,11 +293,11 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		repoInfo *configFilePathElements
+		repoInfo *config.FilePathElements
 		expected *prowconfig.Presubmit
 	}{{
 		name:     "testname",
-		repoInfo: &configFilePathElements{org: "org", repo: "repo", branch: "branch"},
+		repoInfo: &config.FilePathElements{Org: "org", Repo: "repo", Branch: "branch"},
 
 		expected: &prowconfig.Presubmit{
 			JobBase: prowconfig.JobBase{
@@ -328,7 +327,7 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 	newTrue := true
 	tests := []struct {
 		name     string
-		repoInfo *configFilePathElements
+		repoInfo *config.FilePathElements
 		labels   map[string]string
 
 		treatBranchesAsExplicit bool
@@ -337,11 +336,11 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 	}{
 		{
 			name: "name",
-			repoInfo: &configFilePathElements{
-				org:            "organization",
-				repo:           "repository",
-				branch:         "branch",
-				configFilename: "branch.yaml",
+			repoInfo: &config.FilePathElements{
+				Org:      "organization",
+				Repo:     "repository",
+				Branch:   "branch",
+				Filename: "branch.yaml",
 			},
 			labels: map[string]string{},
 
@@ -360,11 +359,11 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 		},
 		{
 			name: "Name",
-			repoInfo: &configFilePathElements{
-				org:            "Organization",
-				repo:           "Repository",
-				branch:         "Branch",
-				configFilename: "config.yaml",
+			repoInfo: &config.FilePathElements{
+				Org:      "Organization",
+				Repo:     "Repository",
+				Branch:   "Branch",
+				Filename: "config.yaml",
 			},
 			labels: map[string]string{"artifacts": "images"},
 
@@ -382,11 +381,11 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 		},
 		{
 			name: "name",
-			repoInfo: &configFilePathElements{
-				org:            "Organization",
-				repo:           "Repository",
-				branch:         "Branch",
-				configFilename: "config.yaml",
+			repoInfo: &config.FilePathElements{
+				Org:      "Organization",
+				Repo:     "Repository",
+				Branch:   "Branch",
+				Filename: "config.yaml",
 			},
 			labels: map[string]string{"artifacts": "images"},
 
@@ -407,11 +406,11 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 
 		{
 			name: "name",
-			repoInfo: &configFilePathElements{
-				org:            "Organization",
-				repo:           "Repository",
-				branch:         "Branch-.*",
-				configFilename: "config.yaml",
+			repoInfo: &config.FilePathElements{
+				Org:      "Organization",
+				Repo:     "Repository",
+				Branch:   "Branch-.*",
+				Filename: "config.yaml",
 			},
 			labels: map[string]string{"artifacts": "images"},
 
@@ -442,7 +441,7 @@ func TestGenerateJobs(t *testing.T) {
 	tests := []struct {
 		id       string
 		config   *ciop.ReleaseBuildConfiguration
-		repoInfo *configFilePathElements
+		repoInfo *config.FilePathElements
 
 		expectedPresubmits  map[string][]string
 		expectedPostsubmits map[string][]string
@@ -455,11 +454,11 @@ func TestGenerateJobs(t *testing.T) {
 					{As: "derTest", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "from"}},
 					{As: "leTest", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "from"}}},
 			},
-			repoInfo: &configFilePathElements{
-				org:            "organization",
-				repo:           "repository",
-				branch:         "branch",
-				configFilename: "konfig.yaml",
+			repoInfo: &config.FilePathElements{
+				Org:      "organization",
+				Repo:     "repository",
+				Branch:   "branch",
+				Filename: "konfig.yaml",
 			},
 			expected: &prowconfig.JobConfig{
 				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
@@ -477,11 +476,11 @@ func TestGenerateJobs(t *testing.T) {
 				Images:                 []ciop.ProjectDirectoryImageBuildStepConfiguration{{}},
 				PromotionConfiguration: &ciop.PromotionConfiguration{},
 			},
-			repoInfo: &configFilePathElements{
-				org:            "organization",
-				repo:           "repository",
-				branch:         "branch",
-				configFilename: "konfig.yaml",
+			repoInfo: &config.FilePathElements{
+				Org:      "organization",
+				Repo:     "repository",
+				Branch:   "branch",
+				Filename: "konfig.yaml",
 			},
 			expected: &prowconfig.JobConfig{
 				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
@@ -507,11 +506,11 @@ func TestGenerateJobs(t *testing.T) {
 					},
 				},
 			},
-			repoInfo: &configFilePathElements{
-				org:            "organization",
-				repo:           "repository",
-				branch:         "branch",
-				configFilename: "konfig.yaml",
+			repoInfo: &config.FilePathElements{
+				Org:      "organization",
+				Repo:     "repository",
+				Branch:   "branch",
+				Filename: "konfig.yaml",
 			},
 			expected: &prowconfig.JobConfig{
 				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
@@ -528,11 +527,11 @@ func TestGenerateJobs(t *testing.T) {
 					},
 				}},
 			},
-			repoInfo: &configFilePathElements{
-				org:            "organization",
-				repo:           "repository",
-				branch:         "branch",
-				configFilename: "konfig.yaml",
+			repoInfo: &config.FilePathElements{
+				Org:      "organization",
+				Repo:     "repository",
+				Branch:   "branch",
+				Filename: "konfig.yaml",
 			},
 			expected: &prowconfig.JobConfig{
 				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
@@ -546,11 +545,11 @@ func TestGenerateJobs(t *testing.T) {
 				Images:                 []ciop.ProjectDirectoryImageBuildStepConfiguration{{}},
 				PromotionConfiguration: &ciop.PromotionConfiguration{Namespace: "ci"},
 			},
-			repoInfo: &configFilePathElements{
-				org:            "organization",
-				repo:           "repository",
-				branch:         "branch",
-				configFilename: "konfig.yaml",
+			repoInfo: &config.FilePathElements{
+				Org:      "organization",
+				Repo:     "repository",
+				Branch:   "branch",
+				Filename: "konfig.yaml",
 			},
 			expected: &prowconfig.JobConfig{
 				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
@@ -569,11 +568,11 @@ func TestGenerateJobs(t *testing.T) {
 					ReleaseTagConfiguration: &ciop.ReleaseTagConfiguration{Namespace: "openshift"},
 				},
 			},
-			repoInfo: &configFilePathElements{
-				org:            "organization",
-				repo:           "repository",
-				branch:         "branch",
-				configFilename: "konfig.yaml",
+			repoInfo: &config.FilePathElements{
+				Org:      "organization",
+				Repo:     "repository",
+				Branch:   "branch",
+				Filename: "konfig.yaml",
 			},
 			expected: &prowconfig.JobConfig{
 				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
@@ -615,47 +614,6 @@ func prune(jobConfig *prowconfig.JobConfig) {
 			jobConfig.Postsubmits[repo][i].Brancher = prowconfig.Brancher{}
 			jobConfig.Postsubmits[repo][i].UtilityConfig = prowconfig.UtilityConfig{}
 		}
-	}
-}
-
-func TestExtractRepoElementsFromPath(t *testing.T) {
-	testCases := []struct {
-		path                   string
-		expectedOrg            string
-		expectedRepo           string
-		expectedBranch         string
-		expectedConfigFilename string
-		expectedError          bool
-	}{
-		{"../../ci-operator/openshift/component/master.yaml", "openshift", "component", "master", "master.yaml", false},
-		{"master.yaml", "", "", "", "", true},
-		{"dir/master.yaml", "", "", "", "", true},
-	}
-	for _, tc := range testCases {
-		t.Run(tc.path, func(t *testing.T) {
-			repoInfo, err := extractRepoElementsFromPath(tc.path)
-			if !tc.expectedError {
-				if err != nil {
-					t.Errorf("returned unexpected error '%v", err)
-				}
-				if repoInfo.org != tc.expectedOrg {
-					t.Errorf("org extracted incorrectly: got '%s', expected '%s'", repoInfo.org, tc.expectedOrg)
-				}
-				if repoInfo.repo != tc.expectedRepo {
-					t.Errorf("repo extracted incorrectly: got '%s', expected '%s'", repoInfo.repo, tc.expectedRepo)
-				}
-				if repoInfo.branch != tc.expectedBranch {
-					t.Errorf("branch extracted incorrectly: got '%s', expected '%s'", repoInfo.branch, tc.expectedBranch)
-				}
-				if repoInfo.configFilename != tc.expectedConfigFilename {
-					t.Errorf("configFilename extracted incorrectly: got '%s', expected '%s'", repoInfo.configFilename, tc.expectedConfigFilename)
-				}
-			} else { // expected error
-				if err == nil {
-					t.Errorf("expected to return error, got org=%v", repoInfo)
-				}
-			}
-		})
 	}
 }
 
@@ -1256,13 +1214,8 @@ tests:
 				t.Fatalf("Unexpected error writing old postsubmits: %v", err)
 			}
 
-			jobConfig, _, err := generateProwJobsFromConfigFile(fullConfigPath)
-			if err != nil {
+			if err := config.OperateOnCIOperatorConfig(fullConfigPath, generateJobsToDir(baseProwConfigDir)); err != nil {
 				t.Fatalf("Unexpected error generating jobs from config: %v", err)
-			}
-			err = jc.WriteToDir(baseProwConfigDir, tc.org, tc.component, jobConfig)
-			if err != nil {
-				t.Fatalf("Unexpected error writing jobs: %v", err)
 			}
 
 			presubmitData, err := ioutil.ReadFile(presubmitPath)

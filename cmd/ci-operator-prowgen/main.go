@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/ghodss/yaml"
+	"github.com/openshift/ci-operator-prowgen/pkg/promotion"
 	"github.com/sirupsen/logrus"
 
 	cioperatorapi "github.com/openshift/ci-operator/pkg/api"
@@ -316,42 +317,6 @@ func generatePostsubmitForTest(
 	}
 }
 
-func extractPromotionNamespace(configSpec *cioperatorapi.ReleaseBuildConfiguration) string {
-	if configSpec.PromotionConfiguration != nil && configSpec.PromotionConfiguration.Namespace != "" {
-		return configSpec.PromotionConfiguration.Namespace
-	}
-
-	if configSpec.InputConfiguration.ReleaseTagConfiguration != nil &&
-		configSpec.InputConfiguration.ReleaseTagConfiguration.Namespace != "" {
-		return configSpec.InputConfiguration.ReleaseTagConfiguration.Namespace
-	}
-
-	return ""
-}
-
-func extractPromotionName(configSpec *cioperatorapi.ReleaseBuildConfiguration) string {
-	if configSpec.PromotionConfiguration != nil && configSpec.PromotionConfiguration.Name != "" {
-		return configSpec.PromotionConfiguration.Name
-	}
-
-	if configSpec.InputConfiguration.ReleaseTagConfiguration != nil &&
-		configSpec.InputConfiguration.ReleaseTagConfiguration.Name != "" {
-		return configSpec.InputConfiguration.ReleaseTagConfiguration.Name
-	}
-
-	return ""
-}
-
-func shouldBePromoted(branch, namespace, name string) bool {
-	if namespace == "openshift" {
-		switch name {
-		case "origin-v4.0":
-			return branch == "master" || branch == "openshift-4.0" || branch == "release-4.0"
-		}
-	}
-	return true
-}
-
 // Given a ci-operator configuration file and basic information about what
 // should be tested, generate a following JobConfig:
 //
@@ -382,18 +347,12 @@ func generateJobs(
 	}
 
 	if len(configSpec.Images) > 0 {
-		// Images that have explicit promotion config should get promoted
-		promotionNamespace := extractPromotionNamespace(configSpec)
-		promotionName := extractPromotionName(configSpec)
-		promote := configSpec.PromotionConfiguration != nil
-
 		// TODO: we should populate labels based on ci-operator characteristics
 		labels := map[string]string{}
 
 		// Identify which jobs need a to have a release payload explicitly requested
-		// TODO: this should be based on something in the ci-operator config
 		var additionalPresubmitArgs []string
-		if (promotionNamespace == "openshift" && promotionName == "origin-v4.0") || (promotionNamespace == "ocp") {
+		if promotion.PromotesOfficialImages(configSpec) {
 			additionalPresubmitArgs = []string{"--target=[release:latest]"}
 		}
 
@@ -406,7 +365,7 @@ func generateJobs(
 
 		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest("images", repoInfo, generatePodSpec(repoInfo.configFilename, "[images]", additionalPresubmitArgs...)))
 
-		if promote {
+		if configSpec.PromotionConfiguration != nil {
 			postsubmits[orgrepo] = append(postsubmits[orgrepo], *generatePostsubmitForTest("images", repoInfo, true, labels, generatePodSpec(repoInfo.configFilename, "[images]", additionalPostsubmitArgs...)))
 		}
 	}

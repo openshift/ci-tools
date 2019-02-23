@@ -43,6 +43,7 @@ func loadClusterConfig() (*rest.Config, error) {
 type options struct {
 	dryRun       bool
 	noFail       bool
+	allowVolumes bool
 	debugLogPath string
 
 	candidatePath  string
@@ -55,9 +56,11 @@ func gatherOptions() options {
 
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually submit rehearsal jobs to Prow")
 	fs.BoolVar(&o.noFail, "no-fail", true, "Whether to actually end unsuccessfuly when something breaks")
-	fs.StringVar(&o.debugLogPath, "debug-log", "", "Alternate file for debug output, defaults to stderr")
+	fs.BoolVar(&o.allowVolumes, "allow-volumes", false, "Allows jobs with extra volumes to be rehearsed")
 
+	fs.StringVar(&o.debugLogPath, "debug-log", "", "Alternate file for debug output, defaults to stderr")
 	fs.StringVar(&o.candidatePath, "candidate-path", "", "Path to a openshift/release working copy with a revision to be tested")
+
 	fs.IntVar(&o.rehearsalLimit, "rehearsal-limit", 15, "Upper limit of jobs attempted to rehearse (if more jobs would be rehearsed, none will)")
 
 	fs.Parse(os.Args[1:])
@@ -147,12 +150,6 @@ func main() {
 		gracefulExit(o.noFail, misconfigurationOutput)
 	}
 
-	changedPresubmits := diffs.GetChangedPresubmits(prowConfig, prowPRConfig, logger)
-	if len(changedPresubmits) == 0 {
-		logger.Info("no jobs to rehearse have been found")
-		os.Exit(0)
-	}
-
 	debugLogger := logrus.New()
 	debugLogger.Level = logrus.DebugLevel
 	if o.debugLogPath != "" {
@@ -164,20 +161,23 @@ func main() {
 			gracefulExit(o.noFail, "")
 		}
 	}
-
 	loggers := rehearse.Loggers{Job: logger, Debug: debugLogger.WithField(prowgithub.PrLogField, prNumber)}
 
-	executor := rehearse.NewExecutor(changedPresubmits, prNumber, o.candidatePath, jobSpec.Refs, o.dryRun, loggers, pjclient)
-
-	if executor.RehearsalJobCount > o.rehearsalLimit {
+	changedPresubmits := diffs.GetChangedPresubmits(prowConfig, prowPRConfig, logger)
+	rehearsals := rehearse.ConfigureRehearsalJobs(changedPresubmits, o.candidatePath, prNumber, loggers, o.allowVolumes)
+	if len(rehearsals) == 0 {
+		logger.Info("no jobs to rehearse have been found")
+		os.Exit(0)
+	} else if len(rehearsals) > o.rehearsalLimit {
 		jobCountFields := logrus.Fields{
 			"rehearsal-threshold": o.rehearsalLimit,
-			"rehearsal-jobs":      executor.RehearsalJobCount,
+			"rehearsal-jobs":      len(rehearsals),
 		}
 		logger.WithFields(jobCountFields).Info("Would rehearse too many jobs, will not proceed")
 		os.Exit(0)
 	}
 
+	executor := rehearse.NewExecutor(rehearsals, prNumber, o.candidatePath, jobSpec.Refs, o.dryRun, loggers, pjclient)
 	success, err := executor.ExecuteJobs()
 	if err != nil {
 		logger.WithError(err).Error("Failed to rehearse jobs")

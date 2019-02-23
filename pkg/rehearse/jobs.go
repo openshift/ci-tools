@@ -56,10 +56,6 @@ func NewProwJobClient(clusterConfig *rest.Config, namespace string, dry bool) (p
 }
 
 func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber int) (*prowconfig.Presubmit, error) {
-	if err := filterJob(source); err != nil {
-		return nil, err
-	}
-
 	var rehearsal prowconfig.Presubmit
 	deepcopy.Copy(&rehearsal, source)
 
@@ -82,7 +78,22 @@ func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber 
 	return &rehearsal, nil
 }
 
-func filterJob(source *prowconfig.Presubmit) error {
+func filterJobs(changedPresubmits map[string][]prowconfig.Presubmit, allowVolumes bool, logger logrus.FieldLogger) map[string][]prowconfig.Presubmit {
+	ret := make(map[string][]prowconfig.Presubmit)
+	for repo, jobs := range changedPresubmits {
+		for _, job := range jobs {
+			jobLogger := logger.WithFields(logrus.Fields{"repo": repo, "job": job.Name})
+			if err := filterJob(&job, allowVolumes); err != nil {
+				jobLogger.WithError(err).Warn("could not rehearse job")
+				continue
+			}
+			ret[repo] = append(ret[repo], job)
+		}
+	}
+	return ret
+}
+
+func filterJob(source *prowconfig.Presubmit, allowVolumes bool) error {
 	// there will always be exactly one container.
 	container := source.Spec.Containers[0]
 
@@ -95,8 +106,8 @@ func filterJob(source *prowconfig.Presubmit) error {
 			return fmt.Errorf("cannot rehearse jobs that call ci-operator with '--git-ref' arg")
 		}
 	}
-	if len(source.Spec.Volumes) > 0 {
-		return fmt.Errorf("cannot rehearse jobs that need additional volumes mounted")
+	if len(source.Spec.Volumes) > 0 && !allowVolumes {
+		return fmt.Errorf("jobs that need additional volumes mounted are not allowed")
 	}
 
 	if len(source.Branches) == 0 {
@@ -163,11 +174,14 @@ func inlineCiOpConfig(job *prowconfig.Presubmit, targetRepo string, ciopConfigs 
 	return &rehearsal, nil
 }
 
-func configureRehearsalJobs(toBeRehearsed map[string][]prowconfig.Presubmit, prRepo string, prNumber int, loggers Loggers) []*prowconfig.Presubmit {
+// ConfigureRehearsalJobs filters the jobs that should be rehearsed, then return a list of them re-configured with the
+// ci-operator's configuration inlined.
+func ConfigureRehearsalJobs(toBeRehearsed map[string][]prowconfig.Presubmit, prRepo string, prNumber int, loggers Loggers, allowVolumes bool) []*prowconfig.Presubmit {
 	rehearsals := []*prowconfig.Presubmit{}
 	ciopConfigs := &ciOperatorConfigLoader{filepath.Join(prRepo, ciopConfigsInRepo)}
 
-	for repo, jobs := range toBeRehearsed {
+	rehearsalsFiltered := filterJobs(toBeRehearsed, allowVolumes, loggers.Job)
+	for repo, jobs := range rehearsalsFiltered {
 		for _, job := range jobs {
 			jobLogger := loggers.Job.WithFields(logrus.Fields{"target-repo": repo, "target-job": job.Name})
 			rehearsal, err := makeRehearsalPresubmit(&job, repo, prNumber)
@@ -192,8 +206,6 @@ func configureRehearsalJobs(toBeRehearsed map[string][]prowconfig.Presubmit, prR
 
 // Executor holds all the information needed for the jobs to be executed.
 type Executor struct {
-	RehearsalJobCount int
-
 	dryRun     bool
 	rehearsals []*prowconfig.Presubmit
 	prNumber   int
@@ -204,12 +216,9 @@ type Executor struct {
 }
 
 // NewExecutor creates an executor. It also confgures the rehearsal jobs as a list of presubmits.
-func NewExecutor(toBeRehearsed map[string][]prowconfig.Presubmit, prNumber int, prRepo string, refs *pjapi.Refs,
+func NewExecutor(rehearsals []*prowconfig.Presubmit, prNumber int, prRepo string, refs *pjapi.Refs,
 	dryRun bool, loggers Loggers, pjclient pj.ProwJobInterface) *Executor {
-	rehearsals := configureRehearsalJobs(toBeRehearsed, prRepo, prNumber, loggers)
 	return &Executor{
-		RehearsalJobCount: len(rehearsals),
-
 		dryRun:     dryRun,
 		rehearsals: rehearsals,
 		prNumber:   prNumber,

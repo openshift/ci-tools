@@ -11,17 +11,16 @@ import (
 
 func TestGenerateBranchedConfigs(t *testing.T) {
 	var testCases = []struct {
-		name    string
-		options options
-		input   configInfo
-		output  []configInfo
+		name           string
+		currentRelease string
+		futureRelease  string
+		input          configInfo
+		output         []configInfo
 	}{
 		{
-			name: "config that doesn't promote anywhere is ignored",
-			options: options{
-				targetImageStream: "current-release",
-				futureImageStream: "future-release",
-			},
+			name:           "config that doesn't promote anywhere is ignored",
+			currentRelease: "current-release",
+			futureRelease:  "future-release",
 			input: configInfo{
 				configuration: api.ReleaseBuildConfiguration{
 					PromotionConfiguration: nil,
@@ -33,11 +32,9 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 			output: nil,
 		},
 		{
-			name: "config that doesn't promote to official streams is ignored",
-			options: options{
-				targetImageStream: "current-release",
-				futureImageStream: "future-release",
-			},
+			name:           "config that doesn't promote to official streams is ignored",
+			currentRelease: "current-release",
+			futureRelease:  "future-release",
 			input: configInfo{
 				configuration: api.ReleaseBuildConfiguration{
 					PromotionConfiguration: &api.PromotionConfiguration{
@@ -52,11 +49,9 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 			output: nil,
 		},
 		{
-			name: "config that doesn't promote to release payload is ignored",
-			options: options{
-				targetImageStream: "current-release",
-				futureImageStream: "future-release",
-			},
+			name:           "config that doesn't promote to release payload is ignored",
+			currentRelease: "current-release",
+			futureRelease:  "future-release",
 			input: configInfo{
 				configuration: api.ReleaseBuildConfiguration{
 					PromotionConfiguration: &api.PromotionConfiguration{
@@ -71,11 +66,9 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 			output: nil,
 		},
 		{
-			name: "config that promotes to the current release from master gets a branched config for the current release",
-			options: options{
-				targetImageStream: "current-release",
-				futureImageStream: "future-release",
-			},
+			name:           "config that promotes to the current release from master gets a branched config for the current release",
+			currentRelease: "current-release",
+			futureRelease:  "future-release",
 			input: configInfo{
 				configuration: api.ReleaseBuildConfiguration{
 					PromotionConfiguration: &api.PromotionConfiguration{
@@ -140,11 +133,9 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 			},
 		},
 		{
-			name: "config that promotes to the current release from an openshift branch gets a branched config for the new release",
-			options: options{
-				targetImageStream: "current-release",
-				futureImageStream: "future-release",
-			},
+			name:           "config that promotes to the current release from an openshift branch gets a branched config for the new release",
+			currentRelease: "current-release",
+			futureRelease:  "future-release",
 			input: configInfo{
 				configuration: api.ReleaseBuildConfiguration{
 					PromotionConfiguration: &api.PromotionConfiguration{
@@ -211,7 +202,7 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			actual, expected := testCase.options.generateBranchedConfigs(testCase.input), testCase.output
+			actual, expected := generateBranchedConfigs(testCase.currentRelease, testCase.futureRelease, testCase.input), testCase.output
 			if len(actual) != len(expected) {
 				t.Fatalf("%s: did not generate correct amount of output configs, needed %d got %d", testCase.name, len(expected), len(actual))
 			}

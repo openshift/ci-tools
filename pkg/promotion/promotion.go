@@ -1,6 +1,10 @@
 package promotion
 
 import (
+	"errors"
+	"flag"
+	"fmt"
+
 	cioperatorapi "github.com/openshift/ci-operator/pkg/api"
 )
 
@@ -33,4 +37,53 @@ func extractPromotionName(configSpec *cioperatorapi.ReleaseBuildConfiguration) s
 	}
 
 	return ""
+}
+
+// DetermineReleaseBranches determines the branch that will be used to continue promoting
+// to the current release as well as the branch that will promote to the future release,
+// based on the branch that is currently promoting to the current release.
+func DetermineReleaseBranches(currentRelease, futureRelease, currentBranch string) (string, string, error) {
+	// futureBranchForCurrentRelease is the branch that will promote to the current imagestream once we branch configs
+	var futureBranchForCurrentRelease string
+	// futureBranchForFutureRelease is the branch that will promote to the future imagestream once we branch configs
+	var futureBranchForFutureRelease string
+	if currentBranch == "master" {
+		futureBranchForCurrentRelease = fmt.Sprintf("release-%s", currentRelease)
+		futureBranchForFutureRelease = currentBranch
+	} else if currentBranch == fmt.Sprintf("openshift-%s", currentRelease) {
+		futureBranchForCurrentRelease = currentBranch
+		futureBranchForFutureRelease = fmt.Sprintf("openshift-%s", futureRelease)
+	} else {
+		return "", "", fmt.Errorf("invalid branch %q promoting to current relesae", currentBranch)
+	}
+	return futureBranchForCurrentRelease, futureBranchForFutureRelease, nil
+}
+
+type Options struct {
+	ConfigDir      string
+	CurrentRelease string
+	FutureRelease  string
+	Confirm        bool
+}
+
+func (o *Options) Validate() error {
+	if o.ConfigDir == "" {
+		return errors.New("required flag --config-dir was unset")
+	}
+
+	if o.CurrentRelease == "" {
+		return errors.New("required flag --current-release was unset")
+	}
+
+	if o.FutureRelease == "" {
+		return errors.New("required flag --future-release was unset")
+	}
+	return nil
+}
+
+func (o *Options) Bind(fs *flag.FlagSet) {
+	fs.StringVar(&o.ConfigDir, "config-dir", "", "Path to CI Operator configuration directory.")
+	fs.StringVar(&o.CurrentRelease, "current-release", "", "Configurations targeting this release will get branched.")
+	fs.StringVar(&o.FutureRelease, "future-release", "", "Configurations will get branched to target this release.")
+	fs.BoolVar(&o.Confirm, "confirm", false, "Create the branched configuration files.")
 }

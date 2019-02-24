@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -16,35 +15,10 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-type options struct {
-	ciOperatorConfigDir string
-	targetImageStream   string
-	futureImageStream   string
-	confirm             bool
-}
-
-func (o *options) Validate() error {
-	if o.ciOperatorConfigDir == "" {
-		return errors.New("required flag --ci-operator-config-dir was unset")
-	}
-
-	if o.targetImageStream == "" {
-		return errors.New("required flag --target-imagestream was unset")
-	}
-
-	if o.futureImageStream == "" {
-		return errors.New("required flag --future-imagestream was unset")
-	}
-	return nil
-}
-
-func gatherOptions() options {
-	o := options{}
+func gatherOptions() promotion.Options {
+	o := promotion.Options{}
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
-	fs.StringVar(&o.ciOperatorConfigDir, "ci-operator-config-dir", "", "Path to CI Operator configuration directory.")
-	fs.StringVar(&o.targetImageStream, "target-imagestream", "", "Configurations targeting this ImageStream will get branched.")
-	fs.StringVar(&o.futureImageStream, "future-imagestream", "", "Configurations will get branched to target this ImageStream.")
-	fs.BoolVar(&o.confirm, "confirm", false, "Create the branched configuration files.")
+	o.Bind(fs)
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("could not parse input")
 	}
@@ -58,9 +32,9 @@ func main() {
 	}
 
 	var toCommit []configInfo
-	if err := config.OperateOnCIOperatorConfigDir(o.ciOperatorConfigDir, func(configuration *api.ReleaseBuildConfiguration, repoInfo *config.FilePathElements) error {
-		for _, output := range o.generateBranchedConfigs(configInfo{configuration: *configuration, repoInfo: *repoInfo}) {
-			if !o.confirm {
+	if err := config.OperateOnCIOperatorConfigDir(o.ConfigDir, func(configuration *api.ReleaseBuildConfiguration, repoInfo *config.FilePathElements) error {
+		for _, output := range generateBranchedConfigs(o.CurrentRelease, o.FutureRelease, configInfo{configuration: *configuration, repoInfo: *repoInfo}) {
+			if !o.Confirm {
 				output.logger().Info("Would commit new file.")
 				continue
 			}
@@ -75,7 +49,7 @@ func main() {
 	}
 
 	for _, output := range toCommit {
-		output.commitTo(o.ciOperatorConfigDir)
+		output.commitTo(o.ConfigDir)
 	}
 }
 
@@ -85,12 +59,7 @@ type configInfo struct {
 }
 
 func (i *configInfo) logger() *logrus.Entry {
-	return logrus.WithFields(logrus.Fields{
-		"org":         i.repoInfo.Org,
-		"repo":        i.repoInfo.Repo,
-		"branch":      i.repoInfo.Branch,
-		"source-file": i.repoInfo.Filename,
-	})
+	return config.LoggerForInfo(i.repoInfo)
 }
 
 func (i *configInfo) commitTo(dir string) {
@@ -108,8 +77,8 @@ func (i *configInfo) commitTo(dir string) {
 	}
 }
 
-func (o *options) generateBranchedConfigs(input configInfo) []configInfo {
-	if !(promotion.PromotesOfficialImages(&input.configuration) && input.configuration.PromotionConfiguration.Name == o.targetImageStream) {
+func generateBranchedConfigs(currentRelease, futureRelease string, input configInfo) []configInfo {
+	if !(promotion.PromotesOfficialImages(&input.configuration) && input.configuration.PromotionConfiguration.Name == currentRelease) {
 		return nil
 	}
 	input.logger().Info("Branching configuration.")
@@ -127,20 +96,11 @@ func (o *options) generateBranchedConfigs(input configInfo) []configInfo {
 
 	// in order to branch this, we need to update where we're promoting
 	// to and from where we're building a release payload
-	futureConfig.PromotionConfiguration.Name = o.futureImageStream
-	futureConfig.ReleaseTagConfiguration.Name = o.futureImageStream
+	futureConfig.PromotionConfiguration.Name = futureRelease
+	futureConfig.ReleaseTagConfiguration.Name = futureRelease
 
-	// futureBranchForCurrentPromotion is the branch that will promote to the current imagestream once we branch configs
-	var futureBranchForCurrentPromotion string
-	// futureBranchForFuturePromotion is the branch that will promote to the future imagestream once we branch configs
-	var futureBranchForFuturePromotion string
-	if input.repoInfo.Branch == "master" {
-		futureBranchForCurrentPromotion = fmt.Sprintf("release-%s", o.targetImageStream)
-		futureBranchForFuturePromotion = input.repoInfo.Branch
-	} else if input.repoInfo.Branch == fmt.Sprintf("openshift-%s", o.targetImageStream) {
-		futureBranchForCurrentPromotion = input.repoInfo.Branch
-		futureBranchForFuturePromotion = fmt.Sprintf("openshift-%s", o.futureImageStream)
-	} else {
+	futureBranchForCurrentPromotion, futureBranchForFuturePromotion, err := promotion.DetermineReleaseBranches(currentRelease, futureRelease, input.repoInfo.Branch)
+	if err != nil {
 		input.logger().WithError(err).Error("could not determine future branch that would promote to current imagestream")
 		return nil
 	}

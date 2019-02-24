@@ -113,6 +113,15 @@ func OperateOnCIOperatorConfigDir(configDir string, callback func(*cioperatorapi
 	})
 }
 
+func LoggerForInfo(repoInfo FilePathElements) *logrus.Entry {
+	return logrus.WithFields(logrus.Fields{
+		"org":         repoInfo.Org,
+		"repo":        repoInfo.Repo,
+		"branch":      repoInfo.Branch,
+		"source-file": repoInfo.Filename,
+	})
+}
+
 type CompoundCiopConfig map[string]*cioperatorapi.ReleaseBuildConfiguration
 
 func (compound CompoundCiopConfig) add(handledConfig *cioperatorapi.ReleaseBuildConfiguration, handledElements *FilePathElements) error {
@@ -128,3 +137,4 @@ func CompoundLoad(path string) (CompoundCiopConfig, error) {
 
 	return config, nil
 }
+

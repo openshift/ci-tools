@@ -20,9 +20,13 @@ import (
 
 type options struct {
 	promotion.Options
-	gitDir   string
-	username string
-	password string
+	gitDir      string
+	username    string
+	password    string
+	fastForward bool
+	logLevel    string
+	org         string
+	repo        string
 }
 
 func (o *options) Validate() error {
@@ -37,6 +41,12 @@ func (o *options) Validate() error {
 			return errors.New("--password is required with --confirm")
 		}
 	}
+
+	level, err := logrus.ParseLevel(o.logLevel)
+	if err != nil {
+		return fmt.Errorf("invalid --log-level: %v", err)
+	}
+	logrus.SetLevel(level)
 	return nil
 }
 
@@ -46,6 +56,10 @@ func gatherOptions() options {
 	fs.StringVar(&o.gitDir, "git-dir", "", "Optional dir to do git operations in. If unset, temp dir will be used.")
 	fs.StringVar(&o.username, "username", "", "Username to use when pushing to GitHub.")
 	fs.StringVar(&o.password, "password", "", "Password to use when pushing to GitHub.")
+	fs.BoolVar(&o.fastForward, "fast-forward", false, "Attempt to fast-forward future branches if they already exist.")
+	fs.StringVar(&o.logLevel, "log-level", "info", "Level at which to log output.")
+	fs.StringVar(&o.org, "org", "", "Limit repos affected to those in this org.")
+	fs.StringVar(&o.repo, "repo", "", "Limit repos affected to this repo.")
 	o.Bind(fs)
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("could not parse input")
@@ -75,6 +89,12 @@ func main() {
 
 	if err := config.OperateOnCIOperatorConfigDir(o.ConfigDir, func(configuration *api.ReleaseBuildConfiguration, repoInfo *config.FilePathElements) error {
 		logger := config.LoggerForInfo(*repoInfo)
+		if o.org != "" && o.org != repoInfo.Org {
+			return nil
+		}
+		if o.repo != "" && o.repo != repoInfo.Repo {
+			return nil
+		}
 		if !(promotion.PromotesOfficialImages(configuration) && configuration.PromotionConfiguration.Name == o.CurrentRelease) {
 			return nil
 		}
@@ -98,11 +118,17 @@ func main() {
 		if o.Confirm {
 			remote.User = url.UserPassword(o.username, o.password)
 		}
-		if err := execute([]string{"init"}, repoDir, logger); err != nil {
-			os.Exit(1)
-		}
-		if err := execute([]string{"fetch", "--depth", "1", remote.String(), repoInfo.Branch}, repoDir, logger); err != nil {
-			os.Exit(1)
+		for _, command := range [][]string{{"init"}, {"fetch", "--depth", "10", remote.String(), repoInfo.Branch}} {
+			cmdLogger := logger.WithFields(logrus.Fields{"commands": fmt.Sprintf("git %s", strings.Join(command, " "))})
+			cmd := exec.Command("git", command...)
+			cmd.Dir = repoDir
+			cmdLogger.Debug("Running command.")
+			if out, err := cmd.CombinedOutput(); err != nil {
+				cmdLogger.WithError(err).WithFields(logrus.Fields{"output": string(out)}).Error("Failed to execute command.")
+				return nil
+			} else {
+				cmdLogger.WithFields(logrus.Fields{"output": string(out)}).Debug("Executed command.")
+			}
 		}
 
 		// when we're initializing the branch, we just want to make sure
@@ -112,32 +138,45 @@ func main() {
 				continue
 			}
 			branchLogger := logger.WithField("future-branch", futureBranch)
-			if err := execute([]string{"ls-remote", remote.String(), fmt.Sprintf("refs/heads/%s", futureBranch)}, repoDir, logger); err == nil {
-				branchLogger.Info("Remote already has branch, skipping.")
+			command := []string{"ls-remote", remote.String(), fmt.Sprintf("refs/heads/%s", futureBranch)}
+			cmdLogger := branchLogger.WithFields(logrus.Fields{"commands": fmt.Sprintf("git %s", strings.Join(command, " "))})
+			cmd := exec.Command("git", command...)
+			cmd.Dir = repoDir
+			cmdLogger.Debug("Running command.")
+			if out, err := cmd.CombinedOutput(); err != nil {
+				cmdLogger.WithError(err).WithFields(logrus.Fields{"output": string(out)}).Error("Failed to execute command.")
 				continue
+			} else {
+				cmdLogger.WithFields(logrus.Fields{"output": string(out)}).Debug("Executed command.")
+				if string(out) == "" && !o.fastForward {
+					branchLogger.Info("Remote already has branch, skipping.")
+					continue
+				}
 			}
+
 			if !o.Confirm {
 				branchLogger.Info("Would create new branch.")
 				continue
 			}
-			if err := execute([]string{"push", remote.String(), fmt.Sprintf("FETCH_HEAD:refs/heads/%s", futureBranch)}, repoDir, logger); err != nil {
-				os.Exit(1)
+
+			command = []string{"push", remote.String(), fmt.Sprintf("FETCH_HEAD:refs/heads/%s", futureBranch)}
+			cmdLogger = branchLogger.WithFields(logrus.Fields{"commands": fmt.Sprintf("git %s", strings.Join(command, " "))})
+			cmd = exec.Command("git", command...)
+			cmd.Dir = repoDir
+			cmdLogger.Debug("Running command.")
+			if out, err := cmd.CombinedOutput(); err != nil {
+				fastForwardErr := strings.Contains(err.Error(), "Updates were rejected because a pushed branch tip is behind its remote")
+				if !fastForwardErr || (fastForwardErr && !o.fastForward) {
+					cmdLogger.WithError(err).WithFields(logrus.Fields{"output": string(out)}).Error("Failed to execute command.")
+					return nil
+				}
+			} else {
+				cmdLogger.WithFields(logrus.Fields{"output": string(out)}).Debug("Executed command.")
+				branchLogger.Info("Pushed new branch.")
 			}
 		}
 		return nil
 	}); err != nil {
 		logrus.WithError(err).Fatal("Could not branch configurations.")
 	}
-}
-
-func execute(command []string, dir string, logger *logrus.Entry) error {
-	cmdLogger := logger.WithFields(logrus.Fields{"commands": fmt.Sprintf("git %s", strings.Join(command, " "))})
-	cmd := exec.Command("git", command...)
-	cmd.Dir = dir
-	cmdLogger.Debug("Running command.")
-	if out, err := cmd.CombinedOutput(); err != nil {
-		cmdLogger.WithError(err).WithFields(logrus.Fields{"output": string(out)}).Error("Failed to execute command.")
-		return err
-	}
-	return nil
 }

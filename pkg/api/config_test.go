@@ -194,7 +194,7 @@ func TestValidateTests(t *testing.T) {
 				{
 					As:                                       "test",
 					OpenshiftAnsibleClusterTestConfiguration: &OpenshiftAnsibleClusterTestConfiguration{},
-					Secret: Secret{
+					Secret: &Secret{
 						Name:      "secret",
 						MountPath: "/path/to/secret:exec",
 					},
@@ -208,7 +208,7 @@ func TestValidateTests(t *testing.T) {
 				{
 					As:                                       "test",
 					OpenshiftAnsibleClusterTestConfiguration: &OpenshiftAnsibleClusterTestConfiguration{},
-					Secret: Secret{
+					Secret: &Secret{
 						Name:      "secret_test",
 						MountPath: "/path/to/secret:exec",
 					},
@@ -223,7 +223,7 @@ func TestValidateTests(t *testing.T) {
 					As:                         "unit",
 					Commands:                   "commands",
 					ContainerTestConfiguration: &ContainerTestConfiguration{From: "ignored"},
-					Secret: Secret{
+					Secret: &Secret{
 						Name: "secret",
 					},
 				},
@@ -237,7 +237,7 @@ func TestValidateTests(t *testing.T) {
 					As:                         "unit",
 					Commands:                   "commands",
 					ContainerTestConfiguration: &ContainerTestConfiguration{From: "ignored"},
-					Secret: Secret{
+					Secret: &Secret{
 						Name:      "secret",
 						MountPath: "/path/to/secret",
 					},
@@ -252,7 +252,7 @@ func TestValidateTests(t *testing.T) {
 					As:                         "unit",
 					Commands:                   "commands",
 					ContainerTestConfiguration: &ContainerTestConfiguration{From: "ignored"},
-					Secret: Secret{
+					Secret: &Secret{
 						Name:      "secret",
 						MountPath: "path/to/secret",
 					},

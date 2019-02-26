@@ -142,13 +142,13 @@ type ImageStreamTagReference struct {
 	// referenced cluster must support anonymous access to retrieve
 	// image streams, image stream tags, and image stream images in
 	// the provided namespace.
-	Cluster   string `json:"cluster"`
+	Cluster   string `json:"cluster,omitempty"`
 	Namespace string `json:"namespace"`
 	Name      string `json:"name"`
 	Tag       string `json:"tag"`
 
 	// As is an optional string to use as the intermediate name for this reference.
-	As string `json:"as"`
+	As string `json:"as,omitempty"`
 }
 
 // ReleaseTagConfiguration describes how a release is
@@ -163,7 +163,7 @@ type ReleaseTagConfiguration struct {
 	// referenced cluster must support anonymous access to retrieve
 	// image streams, image stream tags, and image stream images in
 	// the provided namespace.
-	Cluster string `json:"cluster"`
+	Cluster string `json:"cluster,omitempty"`
 
 	// Namespace identifies the namespace from which
 	// all release artifacts not built in the current
@@ -177,17 +177,17 @@ type ReleaseTagConfiguration struct {
 
 	// Tag is the ImageStreamTag tagged in for each
 	// ImageStream in the above Namespace.
-	Tag string `json:"tag"`
+	Tag string `json:"tag,omitempty"`
 
 	// NamePrefix is prepended to the final output image name
 	// if specified.
-	NamePrefix string `json:"name_prefix"`
+	NamePrefix string `json:"name_prefix,omitempty"`
 
 	// TagOverrides is map of ImageStream name to
 	// tag, allowing for specific components in the
 	// above namespace to be tagged in at a different
 	// level than the rest.
-	TagOverrides map[string]string `json:"tag_overrides"`
+	TagOverrides map[string]string `json:"tag_overrides,omitempty"`
 }
 
 // PromotionConfiguration describes where images created by this
@@ -205,24 +205,24 @@ type PromotionConfiguration struct {
 
 	// Tag is the ImageStreamTag tagged in for each
 	// build image's ImageStream.
-	Tag string `json:"tag"`
+	Tag string `json:"tag,omitempty"`
 
 	// NamePrefix is prepended to the final output image name
 	// if specified.
-	NamePrefix string `json:"name_prefix"`
+	NamePrefix string `json:"name_prefix,omitempty"`
 
 	// ExcludedImages are image names that will not be promoted.
 	// Exclusions are made before additional_images are included.
 	// Use exclusions when you want to build images for testing
 	// but not promote them afterwards.
-	ExcludedImages []string `json:"excluded_images"`
+	ExcludedImages []string `json:"excluded_images,omitempty"`
 
 	// AdditionalImages is a mapping of images to promote. The
 	// images will be taken from the pipeline image stream. The
 	// key is the name to promote as and the value is the source
 	// name. If you specify a tag that does not exist as the source
 	// the destination tag will not be created.
-	AdditionalImages map[string]string `json:"additional_images"`
+	AdditionalImages map[string]string `json:"additional_images,omitempty"`
 }
 
 // StepConfiguration holds one step configuration.
@@ -286,11 +286,11 @@ type TestStepConfiguration struct {
 	// ArtifactDir is an optional directory that contains the
 	// artifacts to upload. If unset, this will default under
 	// the repository root to _output/local/artifacts.
-	ArtifactDir string `json:"artifact_dir"`
+	ArtifactDir string `json:"artifact_dir,omitempty"`
 
 	// Secret is an optional secret object which
 	// will be mounted inside the test container.
-	Secret Secret `json:"secret,omitempty"`
+	Secret *Secret `json:"secret,omitempty"`
 
 	// Only one of the following can be not-null.
 	ContainerTestConfiguration                      *ContainerTestConfiguration                      `json:"container,omitempty"`
@@ -330,7 +330,7 @@ type ContainerTestConfiguration struct {
 	From PipelineImageStreamTagReference `json:"from"`
 	// MemoryBackedVolume mounts a volume of the specified size into
 	// the container at /tmp/volume.
-	MemoryBackedVolume *MemoryBackedVolume `json:"memory_backed_volume"`
+	MemoryBackedVolume *MemoryBackedVolume `json:"memory_backed_volume,omitempty"`
 }
 
 // ClusterProfile is the name of a set of input variables
@@ -456,23 +456,23 @@ type ProjectDirectoryImageBuildStepConfiguration struct {
 	// Optional means the build step is not built, published, or
 	// promoted unless explicitly targeted. Use for builds which
 	// are invoked only when testing certain parts of the repo.
-	Optional bool `json:"optional"`
+	Optional bool `json:"optional,omitempty"`
 }
 
 // ProjectDirectoryImageBuildInputs holds inputs for an image build from the repo under test
 type ProjectDirectoryImageBuildInputs struct {
 	// ContextDir is the directory in the project
 	// from which this build should be run.
-	ContextDir string `json:"context_dir"`
+	ContextDir string `json:"context_dir,omitempty"`
 
 	// DockerfilePath is the path to a Dockerfile in the
 	// project to run relative to the context_dir.
-	DockerfilePath string `json:"dockerfile_path"`
+	DockerfilePath string `json:"dockerfile_path,omitempty"`
 
 	// Inputs is a map of tag reference name to image input changes
 	// that will populate the build context for the Dockerfile or
 	// alter the input image for a multi-stage build.
-	Inputs map[string]ImageBuildInputs `json:"inputs"`
+	Inputs map[string]ImageBuildInputs `json:"inputs,omitempty"`
 }
 
 // ImageBuildInputs is a subset of the v1 OpenShift Build API object
@@ -486,7 +486,7 @@ type ImageBuildInputs struct {
 	// if the Dockerfile defines FROM nginx:latest AS base, specifying
 	// either "nginx:latest" or "base" in this array will replace that
 	// image with the pipeline input.
-	As []string `json:"as"`
+	As []string `json:"as,omitempty"`
 }
 
 // ImageSourcePath maps a path in the source image into a destination

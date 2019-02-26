@@ -24,9 +24,6 @@ type options struct {
 	username    string
 	password    string
 	fastForward bool
-	logLevel    string
-	org         string
-	repo        string
 }
 
 func (o *options) Validate() error {
@@ -41,12 +38,6 @@ func (o *options) Validate() error {
 			return errors.New("--password is required with --confirm")
 		}
 	}
-
-	level, err := logrus.ParseLevel(o.logLevel)
-	if err != nil {
-		return fmt.Errorf("invalid --log-level: %v", err)
-	}
-	logrus.SetLevel(level)
 	return nil
 }
 
@@ -57,9 +48,6 @@ func gatherOptions() options {
 	fs.StringVar(&o.username, "username", "", "Username to use when pushing to GitHub.")
 	fs.StringVar(&o.password, "password", "", "Password to use when pushing to GitHub.")
 	fs.BoolVar(&o.fastForward, "fast-forward", false, "Attempt to fast-forward future branches if they already exist.")
-	fs.StringVar(&o.logLevel, "log-level", "info", "Level at which to log output.")
-	fs.StringVar(&o.org, "org", "", "Limit repos affected to those in this org.")
-	fs.StringVar(&o.repo, "repo", "", "Limit repos affected to this repo.")
 	o.Bind(fs)
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("could not parse input")
@@ -89,10 +77,7 @@ func main() {
 
 	if err := config.OperateOnCIOperatorConfigDir(o.ConfigDir, func(configuration *api.ReleaseBuildConfiguration, repoInfo *config.FilePathElements) error {
 		logger := config.LoggerForInfo(*repoInfo)
-		if o.org != "" && o.org != repoInfo.Org {
-			return nil
-		}
-		if o.repo != "" && o.repo != repoInfo.Repo {
+		if (o.Org != "" && o.Org != repoInfo.Org) || (o.Repo != "" && o.Repo != repoInfo.Repo) {
 			return nil
 		}
 		if !(promotion.PromotesOfficialImages(configuration) && configuration.PromotionConfiguration.Name == o.CurrentRelease) {

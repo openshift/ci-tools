@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	cioperatorapi "github.com/openshift/ci-operator/pkg/api"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -64,6 +65,10 @@ type Options struct {
 	CurrentRelease string
 	FutureRelease  string
 	Confirm        bool
+	Org            string
+	Repo           string
+
+	logLevel string
 }
 
 func (o *Options) Validate() error {
@@ -78,6 +83,11 @@ func (o *Options) Validate() error {
 	if o.FutureRelease == "" {
 		return errors.New("required flag --future-release was unset")
 	}
+	level, err := logrus.ParseLevel(o.logLevel)
+	if err != nil {
+		return fmt.Errorf("invalid --log-level: %v", err)
+	}
+	logrus.SetLevel(level)
 	return nil
 }
 
@@ -86,4 +96,7 @@ func (o *Options) Bind(fs *flag.FlagSet) {
 	fs.StringVar(&o.CurrentRelease, "current-release", "", "Configurations targeting this release will get branched.")
 	fs.StringVar(&o.FutureRelease, "future-release", "", "Configurations will get branched to target this release.")
 	fs.BoolVar(&o.Confirm, "confirm", false, "Create the branched configuration files.")
+	fs.StringVar(&o.logLevel, "log-level", "info", "Level at which to log output.")
+	fs.StringVar(&o.Org, "org", "", "Limit repos affected to those in this org.")
+	fs.StringVar(&o.Repo, "repo", "", "Limit repos affected to this repo.")
 }

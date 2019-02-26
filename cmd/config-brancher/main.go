@@ -33,6 +33,9 @@ func main() {
 
 	var toCommit []configInfo
 	if err := config.OperateOnCIOperatorConfigDir(o.ConfigDir, func(configuration *api.ReleaseBuildConfiguration, repoInfo *config.FilePathElements) error {
+		if (o.Org != "" && o.Org != repoInfo.Org) || (o.Repo != "" && o.Repo != repoInfo.Repo) {
+			return nil
+		}
 		for _, output := range generateBranchedConfigs(o.CurrentRelease, o.FutureRelease, configInfo{configuration: *configuration, repoInfo: *repoInfo}) {
 			if !o.Confirm {
 				output.logger().Info("Would commit new file.")

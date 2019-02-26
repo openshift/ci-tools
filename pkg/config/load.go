@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -122,6 +123,31 @@ func LoggerForInfo(repoInfo FilePathElements) *logrus.Entry {
 	})
 }
 
+
+type Info struct {
+	Configuration cioperatorapi.ReleaseBuildConfiguration
+	RepoInfo      FilePathElements
+}
+
+func (i *Info) Logger() *logrus.Entry {
+	return LoggerForInfo(i.RepoInfo)
+}
+
+func (i *Info) CommitTo(dir string) {
+	raw, err := yaml.Marshal(i.Configuration)
+	if err != nil {
+		i.Logger().WithError(err).Error("failed to marshal output CI Operator configuration")
+		return
+	}
+	outputFile := path.Join(
+		dir, i.RepoInfo.Org, i.RepoInfo.Repo,
+		fmt.Sprintf("%s-%s-%s.yaml", i.RepoInfo.Org, i.RepoInfo.Repo, i.RepoInfo.Branch),
+	)
+	if err := ioutil.WriteFile(outputFile, raw, 0664); err != nil {
+		i.Logger().WithError(err).Error("failed to write new CI Operator configuration")
+	}
+}
+
 type CompoundCiopConfig map[string]*cioperatorapi.ReleaseBuildConfiguration
 
 func (compound CompoundCiopConfig) add(handledConfig *cioperatorapi.ReleaseBuildConfiguration, handledElements *FilePathElements) error {
@@ -137,4 +163,3 @@ func CompoundLoad(path string) (CompoundCiopConfig, error) {
 
 	return config, nil
 }
-

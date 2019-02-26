@@ -2,17 +2,15 @@ package main
 
 import (
 	"flag"
-	"fmt"
-	"io/ioutil"
 	"os"
-	"path"
 	"strings"
+
+	"github.com/ghodss/yaml"
+	"github.com/sirupsen/logrus"
 
 	"github.com/openshift/ci-operator-prowgen/pkg/config"
 	"github.com/openshift/ci-operator-prowgen/pkg/promotion"
 	"github.com/openshift/ci-operator/pkg/api"
-	"github.com/sirupsen/logrus"
-	"gopkg.in/yaml.v2"
 )
 
 func gatherOptions() promotion.Options {
@@ -31,14 +29,14 @@ func main() {
 		logrus.Fatalf("Invalid options: %v", err)
 	}
 
-	var toCommit []configInfo
+	var toCommit []config.Info
 	if err := config.OperateOnCIOperatorConfigDir(o.ConfigDir, func(configuration *api.ReleaseBuildConfiguration, repoInfo *config.FilePathElements) error {
 		if (o.Org != "" && o.Org != repoInfo.Org) || (o.Repo != "" && o.Repo != repoInfo.Repo) {
 			return nil
 		}
-		for _, output := range generateBranchedConfigs(o.CurrentRelease, o.FutureRelease, configInfo{configuration: *configuration, repoInfo: *repoInfo}) {
+		for _, output := range generateBranchedConfigs(o.CurrentRelease, o.FutureRelease, config.Info{Configuration: *configuration, RepoInfo: *repoInfo}) {
 			if !o.Confirm {
-				output.logger().Info("Would commit new file.")
+				output.Logger().Info("Would commit new file.")
 				continue
 			}
 
@@ -52,48 +50,24 @@ func main() {
 	}
 
 	for _, output := range toCommit {
-		output.commitTo(o.ConfigDir)
+		output.CommitTo(o.ConfigDir)
 	}
 }
 
-type configInfo struct {
-	configuration api.ReleaseBuildConfiguration
-	repoInfo      config.FilePathElements
-}
-
-func (i *configInfo) logger() *logrus.Entry {
-	return config.LoggerForInfo(i.repoInfo)
-}
-
-func (i *configInfo) commitTo(dir string) {
-	raw, err := yaml.Marshal(i.configuration)
-	if err != nil {
-		i.logger().WithError(err).Error("failed to marshal output CI Operator configuration")
-		return
-	}
-	outputFile := path.Join(
-		dir, i.repoInfo.Org, i.repoInfo.Repo,
-		fmt.Sprintf("%s-%s-%s.yaml", i.repoInfo.Org, i.repoInfo.Repo, i.repoInfo.Branch),
-	)
-	if err := ioutil.WriteFile(outputFile, raw, 0664); err != nil {
-		i.logger().WithError(err).Error("failed to write new CI Operator configuration")
-	}
-}
-
-func generateBranchedConfigs(currentRelease, futureRelease string, input configInfo) []configInfo {
-	if !(promotion.PromotesOfficialImages(&input.configuration) && input.configuration.PromotionConfiguration.Name == currentRelease) {
+func generateBranchedConfigs(currentRelease, futureRelease string, input config.Info) []config.Info {
+	if !(promotion.PromotesOfficialImages(&input.Configuration) && input.Configuration.PromotionConfiguration.Name == currentRelease) {
 		return nil
 	}
-	input.logger().Info("Branching configuration.")
+	input.Logger().Info("Branching configuration.")
 	// we need a deep copy and this is a simple albeit expensive hack to get there
-	raw, err := yaml.Marshal(input.configuration)
+	raw, err := yaml.Marshal(input.Configuration)
 	if err != nil {
-		input.logger().WithError(err).Error("failed to marshal input CI Operator configuration")
+		input.Logger().WithError(err).Error("failed to marshal input CI Operator configuration")
 		return nil
 	}
 	var futureConfig api.ReleaseBuildConfiguration
 	if err := yaml.Unmarshal(raw, &futureConfig); err != nil {
-		input.logger().WithError(err).Error("failed to unmarshal input CI Operator configuration")
+		input.Logger().WithError(err).Error("failed to unmarshal input CI Operator configuration")
 		return nil
 	}
 
@@ -102,17 +76,17 @@ func generateBranchedConfigs(currentRelease, futureRelease string, input configI
 	futureConfig.PromotionConfiguration.Name = futureRelease
 	futureConfig.ReleaseTagConfiguration.Name = futureRelease
 
-	futureBranchForCurrentPromotion, futureBranchForFuturePromotion, err := promotion.DetermineReleaseBranches(currentRelease, futureRelease, input.repoInfo.Branch)
+	futureBranchForCurrentPromotion, futureBranchForFuturePromotion, err := promotion.DetermineReleaseBranches(currentRelease, futureRelease, input.RepoInfo.Branch)
 	if err != nil {
-		input.logger().WithError(err).Error("could not determine future branch that would promote to current imagestream")
+		input.Logger().WithError(err).Error("could not determine future branch that would promote to current imagestream")
 		return nil
 	}
 
-	return []configInfo{
+	return []config.Info{
 		// this config keeps the current promotion but runs on a new branch
-		{configuration: input.configuration, repoInfo: copyInfoSwappingBranches(input.repoInfo, futureBranchForCurrentPromotion)},
+		{Configuration: input.Configuration, RepoInfo: copyInfoSwappingBranches(input.RepoInfo, futureBranchForCurrentPromotion)},
 		// this config is the future promotion on the future branch
-		{configuration: futureConfig, repoInfo: copyInfoSwappingBranches(input.repoInfo, futureBranchForFuturePromotion)},
+		{Configuration: futureConfig, RepoInfo: copyInfoSwappingBranches(input.RepoInfo, futureBranchForFuturePromotion)},
 	}
 }
 

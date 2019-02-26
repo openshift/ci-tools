@@ -355,7 +355,7 @@ var parsedConfig = &api.ReleaseBuildConfiguration{
 				"machine-os-content-base": {As: []string{"registry.svc.ci.openshift.org/openshift/origin-v4.0:machine-os-content"}},
 			},
 		},
-	},},
+	}},
 	RawSteps: []api.StepConfiguration{{
 		PipelineImageCacheStepConfiguration: &api.PipelineImageCacheStepConfiguration{
 			From:     "bin",
@@ -490,7 +490,7 @@ var parsedConfig = &api.ReleaseBuildConfiguration{
 		OpenshiftInstallerClusterTestConfiguration: &api.OpenshiftInstallerClusterTestConfiguration{
 			ClusterTestConfiguration: api.ClusterTestConfiguration{ClusterProfile: "aws"},
 		},
-	},},
+	}},
 }
 
 func TestConfig(t *testing.T) {
@@ -509,13 +509,13 @@ func TestConfig(t *testing.T) {
 		},
 		{
 			name:          "loading config from env works",
-			asEnv:        true,
+			asEnv:         true,
 			expected:      parsedConfig,
 			expectedError: false,
 		},
 		{
 			name:          "no file or env fails to load config",
-			asEnv:        true,
+			asEnv:         true,
 			expected:      parsedConfig,
 			expectedError: false,
 		},

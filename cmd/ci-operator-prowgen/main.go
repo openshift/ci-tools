@@ -213,9 +213,13 @@ func generatePodSpecTemplate(org, repo, configFile, release string, test *cioper
 		kubeapi.EnvVar{Name: "JOB_NAME_SAFE", Value: strings.Replace(test.As, "_", "-", -1)},
 		kubeapi.EnvVar{Name: "TEST_COMMAND", Value: test.Commands})
 	if needsReleaseRpms && (org != "openshift" || repo != "origin") {
+		var repoPath string = fmt.Sprintf("https://rpms.svc.ci.openshift.org/openshift-origin-v%s/", release)
+		if strings.HasPrefix(release, "origin-v") {
+			repoPath = fmt.Sprintf("https://rpms.svc.ci.openshift.org/openshift-%s/", release)
+		}
 		container.Env = append(container.Env, kubeapi.EnvVar{
 			Name:  "RPM_REPO_OPENSHIFT_ORIGIN",
-			Value: fmt.Sprintf("https://rpms.svc.ci.openshift.org/openshift-%s/", release),
+			Value: repoPath,
 		})
 	}
 	if conf := test.OpenshiftAnsibleUpgradeClusterTestConfiguration; conf != nil {

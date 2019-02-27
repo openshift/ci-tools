@@ -105,7 +105,7 @@ func validateTestStepConfiguration(fieldRoot string, input []TestStepConfigurati
 			validationErrors = append(validationErrors, fmt.Errorf("%s[%d].commands: is required", fieldRoot, num))
 		}
 
-		if len(test.Secret.Name) > 0 {
+		if test.Secret != nil {
 			// TODO: Move to upstream validation when vendoring is fixed
 			// currently checking against DNS RFC 1123 regexp
 			if ok := regexp.MustCompile("^[a-z0-9]([-a-z0-9]*[a-z0-9])?$").MatchString(test.Secret.Name); !ok {

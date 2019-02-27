@@ -10,6 +10,8 @@ import (
 	utildiff "k8s.io/apimachinery/pkg/util/diff"
 	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
+
+	templateapi "github.com/openshift/api/template/v1"
 )
 
 const (
@@ -17,6 +19,8 @@ const (
 	ConfigInRepoPath = "cluster/ci/config/prow/config.yaml"
 	// JobConfigInRepoPath is the prowjobs path from release repo
 	JobConfigInRepoPath = "ci-operator/jobs"
+	// TemplatesPath is the path of the templates from release repo
+	TemplatesPath = "ci-operator/templates"
 
 	logRepo    = "repo"
 	logJobName = "job-name"
@@ -93,4 +97,26 @@ func convertToReadableDiff(a, b interface{}, objName string) string {
 	d = strings.Replace(d, "\n", " ", -1)
 	d = strings.Replace(d, "\"", "'", -1)
 	return d
+}
+
+// GetChangedTemplates returns a mapping of the changed templates to be rehearsed.
+func GetChangedTemplates(masterTemplates, prTemplates map[string]*templateapi.Template, logger *logrus.Entry) map[string]*templateapi.Template {
+	changedTemplates := make(map[string]*templateapi.Template)
+
+	for name, template := range prTemplates {
+		logFields := logrus.Fields{"template-name": name}
+
+		// new template
+		if _, ok := masterTemplates[name]; !ok {
+			changedTemplates[name] = template
+			logger.WithFields(logFields).Info("new template detected")
+			continue
+		}
+
+		if !equality.Semantic.DeepEqual(masterTemplates[name], prTemplates[name]) {
+			logger.WithFields(logFields).Info("changed template detected")
+			changedTemplates[name] = template
+		}
+	}
+	return changedTemplates
 }

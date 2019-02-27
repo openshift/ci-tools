@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,6 +18,9 @@ import (
 
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+
+	templateapi "github.com/openshift/api/template/v1"
+	templatescheme "github.com/openshift/client-go/template/clientset/versioned/scheme"
 
 	"github.com/openshift/ci-operator-prowgen/pkg/diffs"
 	"github.com/openshift/ci-operator-prowgen/pkg/rehearse"
@@ -177,6 +181,16 @@ func main() {
 		os.Exit(0)
 	}
 
+	masterTemplates, prTemplates, err := getTemplates(o.candidatePath, jobSpec.Refs.BaseSHA)
+	if err != nil {
+		logger.WithError(err).Error("could not load templates")
+	}
+
+	changedTemplates := diffs.GetChangedTemplates(masterTemplates, prTemplates, logger)
+	for name := range changedTemplates {
+		logger.WithField("template-name", name).Info("Changed template")
+	}
+
 	executor := rehearse.NewExecutor(rehearsals, prNumber, o.candidatePath, jobSpec.Refs, o.dryRun, loggers, pjclient)
 	success, err := executor.ExecuteJobs()
 	if err != nil {
@@ -239,4 +253,66 @@ func getProwConfigs(candidatePath, baseSHA string) (*prowconfig.Config, *prowcon
 	}
 
 	return masterProwConfig, prowPRConfig, nil
+}
+
+func getTemplates(candidatePath string, baseSHA string) (map[string]*templateapi.Template, map[string]*templateapi.Template, error) {
+	templatesPath := filepath.Join(candidatePath, diffs.TemplatesPath)
+	currentSHA, err := getCurrentSHA(candidatePath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get SHA of current HEAD: %v", err)
+	}
+
+	prTemplates, err := parseTemplates(templatesPath)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if err := gitCheckout(candidatePath, baseSHA); err != nil {
+		return nil, nil, fmt.Errorf("could not checkout worktree: %v", err)
+	}
+	masterTemplates, err := parseTemplates(templatesPath)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if err := gitCheckout(candidatePath, currentSHA); err != nil {
+		return nil, nil, fmt.Errorf("failed to check out tested revision back: %v", err)
+	}
+
+	return masterTemplates, prTemplates, nil
+}
+
+func parseTemplates(templatePath string) (map[string]*templateapi.Template, error) {
+	templates := make(map[string]*templateapi.Template)
+	err := filepath.Walk(templatePath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return fmt.Errorf("prevent panic by handling failure accessing a path %q: %v", path, err)
+		}
+
+		if isYAML(path, info) {
+			contents, err := ioutil.ReadFile(path)
+			if err != nil {
+				return fmt.Errorf("could not read file %s for template: %v", path, err)
+			}
+
+			if obj, _, err := templatescheme.Codecs.UniversalDeserializer().Decode(contents, nil, nil); err == nil {
+				if template, ok := obj.(*templateapi.Template); ok {
+					if len(template.Name) == 0 {
+						template.Name = filepath.Base(path)
+						template.Name = strings.TrimSuffix(template.Name, filepath.Ext(template.Name))
+					}
+					templates[template.Name] = template
+				}
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error walking the path %q: %v", templatePath, err)
+	}
+	return templates, nil
+}
+
+func isYAML(file string, info os.FileInfo) bool {
+	return !info.IsDir() && (filepath.Ext(file) == ".yaml" || filepath.Ext(file) == ".yml")
 }

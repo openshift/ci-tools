@@ -8,10 +8,13 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/equality"
 	utildiff "k8s.io/apimachinery/pkg/util/diff"
+
 	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
 
 	templateapi "github.com/openshift/api/template/v1"
+
+	"github.com/openshift/ci-operator-prowgen/pkg/config"
 )
 
 const (
@@ -21,16 +24,43 @@ const (
 	JobConfigInRepoPath = "ci-operator/jobs"
 	// TemplatesPath is the path of the templates from release repo
 	TemplatesPath = "ci-operator/templates"
+	// CiopConfigInRepoPath is the ci-operator config path from release repo
+	CiopConfigInRepoPath = "ci-operator/config"
 
-	logRepo    = "repo"
-	logJobName = "job-name"
-	logDiffs   = "diffs"
+	logRepo       = "repo"
+	logJobName    = "job-name"
+	logDiffs      = "diffs"
+	logCiopConfig = "ciop-config"
 
 	objectSpec  = ".Spec"
 	objectAgent = ".Agent"
 
-	chosenJob = "Job has been chosen for rehearsal"
+	chosenJob            = "Job has been chosen for rehearsal"
+	newCiopConfigMsg     = "New ci-operator config file"
+	changedCiopConfigMsg = "ci-operator config file changed"
 )
+
+func GetChangedCiopConfigs(masterConfig, prConfig config.CompoundCiopConfig, logger *logrus.Entry) config.CompoundCiopConfig {
+	ret := config.CompoundCiopConfig{}
+
+	for filename, newConfig := range prConfig {
+		oldConfig, ok := masterConfig[filename]
+
+		// new ciop config
+		if !ok {
+			ret[filename] = newConfig
+			logger.WithField(logCiopConfig, filename).Info(newCiopConfigMsg)
+			continue
+		}
+
+		if !equality.Semantic.DeepEqual(oldConfig, newConfig) {
+			logger.WithField(logCiopConfig, filename).Info(changedCiopConfigMsg)
+			ret[filename] = newConfig
+		}
+	}
+
+	return ret
+}
 
 // GetChangedPresubmits returns a mapping of repo to presubmits to execute.
 func GetChangedPresubmits(prowMasterConfig, prowPRConfig *prowconfig.Config, logger *logrus.Entry) map[string][]prowconfig.Presubmit {

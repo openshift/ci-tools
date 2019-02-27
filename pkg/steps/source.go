@@ -42,9 +42,12 @@ var (
 )
 
 func sourceDockerfile(fromTag api.PipelineImageStreamTagReference, pathAlias string, job *api.JobSpec) string {
-	workingDir := fmt.Sprintf("github.com/%s/%s", job.Refs.Org, job.Refs.Repo)
-	if len(pathAlias) > 0 {
-		workingDir = pathAlias
+	workingDir := pathAlias
+	if len(workingDir) == 0 && job.Refs != nil {
+		workingDir = fmt.Sprintf("github.com/%s/%s", job.Refs.Org, job.Refs.Repo)
+	}
+	if len(workingDir) == 0 && len(job.ExtraRefs) > 0 {
+		workingDir = fmt.Sprintf("github.com/%s/%s", job.ExtraRefs[0].Org, job.ExtraRefs[0].Repo)
 	}
 	return fmt.Sprintf(`
 FROM %s:%s
@@ -167,11 +170,11 @@ func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStrea
 				Strategy: buildapi.BuildStrategy{
 					Type: buildapi.DockerBuildStrategyType,
 					DockerStrategy: &buildapi.DockerBuildStrategy{
-						DockerfilePath: dockerfilePath,
-						From:           from,
-						ForcePull:      true,
-						NoCache:        true,
-						Env:            []coreapi.EnvVar{},
+						DockerfilePath:          dockerfilePath,
+						From:                    from,
+						ForcePull:               true,
+						NoCache:                 true,
+						Env:                     []coreapi.EnvVar{},
 						ImageOptimizationPolicy: &layer,
 					},
 				},

@@ -97,11 +97,11 @@ func TestIntegration(t *testing.T) {
 		t.Fatalf("Failed to execute rehearsal jobs: %v", err)
 	}
 
-	if missing := rehearsed.Difference(toBeRehearsed); missing.Len() > 0 {
-		t.Fatalf("did not rehearse expected prowJobs: %v", missing.List())
-	}
-	if extra := toBeRehearsed.Difference(rehearsed); extra.Len() > 0 {
+	if extra := rehearsed.Difference(toBeRehearsed); extra.Len() > 0 {
 		t.Fatalf("found unexpectedly rehearsed prowJobs: %v", extra.List())
+	}
+	if missing := toBeRehearsed.Difference(rehearsed); missing.Len() > 0 {
+		t.Fatalf("did not rehearse expected prowJobs: %v", missing.List())
 	}
 }
 

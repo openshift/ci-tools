@@ -1,6 +1,7 @@
 package diffs
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/getlantern/deepcopy"
@@ -82,7 +83,7 @@ func TestGetChangedCiopConfigs(t *testing.T) {
 			actual := GetChangedCiopConfigs(before, after, logrus.NewEntry(logrus.New()))
 			expected := tc.expected()
 
-			if !equality.Semantic.DeepEqual(expected, actual) {
+			if !reflect.DeepEqual(expected, actual) {
 				t.Errorf("Detected changed ci-operator config changes differ from expected:\n%s", diff.ObjectDiff(expected, actual))
 			}
 		})

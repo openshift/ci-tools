@@ -115,8 +115,8 @@ func OperateOnCIOperatorConfigDir(configDir string, callback func(*cioperatorapi
 
 type CompoundCiopConfig map[string]*cioperatorapi.ReleaseBuildConfiguration
 
-func (compound *CompoundCiopConfig) add(handledConfig *cioperatorapi.ReleaseBuildConfiguration, handledElements *FilePathElements) error {
-	(*compound)[handledElements.Filename] = handledConfig
+func (compound CompoundCiopConfig) add(handledConfig *cioperatorapi.ReleaseBuildConfiguration, handledElements *FilePathElements) error {
+	compound[handledElements.Filename] = handledConfig
 	return nil
 }
 

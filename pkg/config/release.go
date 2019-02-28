@@ -29,8 +29,8 @@ type ReleaseRepoConfig struct {
 	Templates  CiTemplates
 }
 
-func getCurrentSHA(repoPath string) (string, error) {
-	cmd := exec.Command("git", "rev-parse", "HEAD")
+func revParse(repoPath string, args ...string) (string, error) {
+	cmd := exec.Command("git", append([]string{"rev-parse"}, args...)...)
 	cmd.Dir = repoPath
 	sha, err := cmd.Output()
 	if err != nil {
@@ -85,7 +85,7 @@ func GetAllConfigs(releaseRepoPath string, logger *logrus.Entry) *ReleaseRepoCon
 // manipulations are propagated in the error return value. Errors occurred during the actual config loading are not
 // propagated, but the returned struct field will have a nil value in the appropriate field. The error is only logged.
 func GetAllConfigsFromSHA(releaseRepoPath, sha string, logger *logrus.Entry) (*ReleaseRepoConfig, error) {
-	currentSHA, err := getCurrentSHA(releaseRepoPath)
+	currentSHA, err := revParse(releaseRepoPath, "HEAD")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get SHA of current HEAD: %v", err)
 	}

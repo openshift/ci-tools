@@ -75,7 +75,7 @@ func TestValidateTests(t *testing.T) {
 			id: "test without `commands`",
 			tests: []TestStepConfiguration{
 				{
-					As: "test",
+					As:                         "test",
 					ContainerTestConfiguration: &ContainerTestConfiguration{From: "ignored"},
 				},
 			},
@@ -142,7 +142,7 @@ func TestValidateTests(t *testing.T) {
 			id: "invalid cluster profile",
 			tests: []TestStepConfiguration{
 				{
-					As: "test",
+					As:                                       "test",
 					OpenshiftAnsibleClusterTestConfiguration: &OpenshiftAnsibleClusterTestConfiguration{},
 				},
 			},
@@ -192,9 +192,9 @@ func TestValidateTests(t *testing.T) {
 			id: "invalid secret mountPath",
 			tests: []TestStepConfiguration{
 				{
-					As: "test",
+					As:                                       "test",
 					OpenshiftAnsibleClusterTestConfiguration: &OpenshiftAnsibleClusterTestConfiguration{},
-					Secret: Secret{
+					Secret: &Secret{
 						Name:      "secret",
 						MountPath: "/path/to/secret:exec",
 					},
@@ -206,9 +206,9 @@ func TestValidateTests(t *testing.T) {
 			id: "invalid secret name",
 			tests: []TestStepConfiguration{
 				{
-					As: "test",
+					As:                                       "test",
 					OpenshiftAnsibleClusterTestConfiguration: &OpenshiftAnsibleClusterTestConfiguration{},
-					Secret: Secret{
+					Secret: &Secret{
 						Name:      "secret_test",
 						MountPath: "/path/to/secret:exec",
 					},
@@ -223,7 +223,7 @@ func TestValidateTests(t *testing.T) {
 					As:                         "unit",
 					Commands:                   "commands",
 					ContainerTestConfiguration: &ContainerTestConfiguration{From: "ignored"},
-					Secret: Secret{
+					Secret: &Secret{
 						Name: "secret",
 					},
 				},
@@ -237,7 +237,7 @@ func TestValidateTests(t *testing.T) {
 					As:                         "unit",
 					Commands:                   "commands",
 					ContainerTestConfiguration: &ContainerTestConfiguration{From: "ignored"},
-					Secret: Secret{
+					Secret: &Secret{
 						Name:      "secret",
 						MountPath: "/path/to/secret",
 					},
@@ -252,7 +252,7 @@ func TestValidateTests(t *testing.T) {
 					As:                         "unit",
 					Commands:                   "commands",
 					ContainerTestConfiguration: &ContainerTestConfiguration{From: "ignored"},
-					Secret: Secret{
+					Secret: &Secret{
 						Name:      "secret",
 						MountPath: "path/to/secret",
 					},

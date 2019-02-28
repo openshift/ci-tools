@@ -53,26 +53,26 @@
                 name: origin-v4.0
                 namespace: openshift
                 tag: base
-            images:
-            - from: base
-              to: test-image
-            tag_specification:
-              cluster: https://api.ci.openshift.org
-              name: origin-v4.0
-              namespace: openshift
-              tag: ''
             build_root:
               image_stream_tag:
                 cluster: https://api.ci.openshift.org
-                namespace: openshift
                 name: release
+                namespace: openshift
                 tag: golang-1.10
+            canonical_go_repository: ""
+            images:
+            - from: base
+              to: test-image
             resources:
               '*':
                 limits:
                   cpu: 500Mi
                 requests:
                   cpu: 10Mi
+            tag_specification:
+              cluster: https://api.ci.openshift.org
+              name: origin-v4.0
+              namespace: openshift
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -152,26 +152,26 @@
                 name: origin-v4.0
                 namespace: openshift
                 tag: base
-            images:
-            - from: base
-              to: test-image
-            tag_specification:
-              cluster: https://api.ci.openshift.org
-              name: origin-v4.0
-              namespace: openshift
-              tag: ''
             build_root:
               image_stream_tag:
                 cluster: https://api.ci.openshift.org
-                namespace: openshift
                 name: release
+                namespace: openshift
                 tag: golang-1.10
+            canonical_go_repository: ""
+            images:
+            - from: base
+              to: test-image
             resources:
               '*':
                 limits:
                   cpu: 500Mi
                 requests:
                   cpu: 10Mi
+            tag_specification:
+              cluster: https://api.ci.openshift.org
+              name: origin-v4.0
+              namespace: openshift
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -251,26 +251,26 @@
                 name: origin-v4.0
                 namespace: openshift
                 tag: base
-            images:
-            - from: base
-              to: test-image
-            tag_specification:
-              cluster: https://api.ci.openshift.org
-              name: origin-v4.0
-              namespace: openshift
-              tag: ''
             build_root:
               image_stream_tag:
                 cluster: https://api.ci.openshift.org
-                namespace: openshift
                 name: release
+                namespace: openshift
                 tag: golang-1.10
+            canonical_go_repository: ""
+            images:
+            - from: base
+              to: test-image
             resources:
               '*':
                 limits:
                   cpu: 500Mi
                 requests:
                   cpu: 10Mi
+            tag_specification:
+              cluster: https://api.ci.openshift.org
+              name: origin-v4.0
+              namespace: openshift
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -351,26 +351,26 @@
                 name: origin-v4.0
                 namespace: openshift
                 tag: base
-            images:
-            - from: base
-              to: test-image
-            tag_specification:
-              cluster: https://api.ci.openshift.org
-              name: origin-v4.0
-              namespace: openshift
-              tag: ''
             build_root:
               image_stream_tag:
                 cluster: https://api.ci.openshift.org
-                namespace: openshift
                 name: release
+                namespace: openshift
                 tag: golang-1.10
+            canonical_go_repository: ""
+            images:
+            - from: base
+              to: test-image
             resources:
               '*':
                 limits:
                   cpu: 500Mi
                 requests:
                   cpu: 10Mi
+            tag_specification:
+              cluster: https://api.ci.openshift.org
+              name: origin-v4.0
+              namespace: openshift
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""

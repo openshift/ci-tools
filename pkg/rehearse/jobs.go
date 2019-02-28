@@ -2,8 +2,6 @@ package rehearse
 
 import (
 	"fmt"
-	"io/ioutil"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -25,6 +23,8 @@ import (
 	pj "k8s.io/test-infra/prow/client/clientset/versioned/typed/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/pjutil"
+
+	"github.com/openshift/ci-operator-prowgen/pkg/config"
 )
 
 const (
@@ -120,27 +120,13 @@ func filterJob(source *prowconfig.Presubmit, allowVolumes bool) error {
 	return nil
 }
 
-type ciOperatorConfigs interface {
-	Load(repo, configFile string) (string, error)
-}
-
-type ciOperatorConfigLoader struct {
-	base string
-}
-
-func (c *ciOperatorConfigLoader) Load(repo, configFile string) (string, error) {
-	fullPath := filepath.Join(c.base, repo, configFile)
-	content, err := ioutil.ReadFile(fullPath)
-	return string(content), err
-}
-
 // inlineCiOpConfig detects whether a job needs a ci-operator config file
 // provided by a `ci-operator-configs` ConfigMap and if yes, returns a copy
 // of the job where a reference to this ConfigMap is replaced by the content
 // of the needed config file passed to the job as a direct value. This needs
 // to happen because the rehearsed Prow jobs may depend on these config files
 // being also changed by the tested PR.
-func inlineCiOpConfig(job *prowconfig.Presubmit, targetRepo string, ciopConfigs ciOperatorConfigs, loggers Loggers) (*prowconfig.Presubmit, error) {
+func inlineCiOpConfig(job *prowconfig.Presubmit, targetRepo string, ciopConfigs config.CompoundCiopConfig, loggers Loggers) (*prowconfig.Presubmit, error) {
 	var rehearsal prowconfig.Presubmit
 	deepcopy.Copy(&rehearsal, job)
 	for _, container := range rehearsal.Spec.Containers {
@@ -158,14 +144,18 @@ func inlineCiOpConfig(job *prowconfig.Presubmit, targetRepo string, ciopConfigs 
 				logFields := logrus.Fields{logCiopConfigFile: filename, logCiopConfigRepo: targetRepo, logRehearsalJob: job.Name}
 				loggers.Debug.WithFields(logFields).Debug("Rehearsal job uses ci-operator config ConfigMap, needed content will be inlined")
 
-				ciOpConfigContent, err := ciopConfigs.Load(targetRepo, filename)
+				ciopConfig, ok := ciopConfigs[filename]
+				if !ok {
+					return nil, fmt.Errorf("ci-operator config file %s was not found", filename)
+				}
 
+				ciOpConfigContent, err := yaml.Marshal(ciopConfig)
 				if err != nil {
-					loggers.Job.WithError(err).Warn("Failed to read ci-operator config file")
+					loggers.Job.WithError(err).Error("Failed to marshal ci-operator config file")
 					return nil, err
 				}
 
-				env.Value = ciOpConfigContent
+				env.Value = string(ciOpConfigContent)
 				env.ValueFrom = nil
 			}
 		}
@@ -176,9 +166,8 @@ func inlineCiOpConfig(job *prowconfig.Presubmit, targetRepo string, ciopConfigs 
 
 // ConfigureRehearsalJobs filters the jobs that should be rehearsed, then return a list of them re-configured with the
 // ci-operator's configuration inlined.
-func ConfigureRehearsalJobs(toBeRehearsed map[string][]prowconfig.Presubmit, prRepo string, prNumber int, loggers Loggers, allowVolumes bool) []*prowconfig.Presubmit {
+func ConfigureRehearsalJobs(toBeRehearsed map[string][]prowconfig.Presubmit, ciopConfigs config.CompoundCiopConfig, prNumber int, loggers Loggers, allowVolumes bool) []*prowconfig.Presubmit {
 	rehearsals := []*prowconfig.Presubmit{}
-	ciopConfigs := &ciOperatorConfigLoader{filepath.Join(prRepo, ciopConfigsInRepo)}
 
 	rehearsalsFiltered := filterJobs(toBeRehearsed, allowVolumes, loggers.Job)
 	for repo, jobs := range rehearsalsFiltered {

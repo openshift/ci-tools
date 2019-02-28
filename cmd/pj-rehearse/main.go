@@ -180,7 +180,7 @@ func main() {
 	loggers := rehearse.Loggers{Job: logger, Debug: debugLogger.WithField(prowgithub.PrLogField, prNumber)}
 
 	changedPresubmits := diffs.GetChangedPresubmits(prowConfig, prowPRConfig, logger)
-	rehearsals := rehearse.ConfigureRehearsalJobs(changedPresubmits, o.candidatePath, prNumber, loggers, o.allowVolumes)
+	rehearsals := rehearse.ConfigureRehearsalJobs(changedPresubmits, ciopPRConfig, prNumber, loggers, o.allowVolumes)
 	if len(rehearsals) == 0 {
 		logger.Info("no jobs to rehearse have been found")
 		os.Exit(0)

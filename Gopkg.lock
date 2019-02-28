@@ -269,7 +269,7 @@
   branch = "master"
   name = "github.com/openshift/ci-operator"
   packages = ["pkg/api"]
-  revision = "1f0ee46080593c7955640a9385c1a1d00238306b"
+  revision = "3ae51bc3f5d8874342611325573ec77adee8835f"
 
 [[projects]]
   name = "github.com/openshift/client-go"

@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/openshift/ci-operator/pkg/defaults"
+	"github.com/openshift/ci-operator/pkg/load"
 
 	coreapi "k8s.io/api/core/v1"
 	rbacapi "k8s.io/api/rbac/v1"
@@ -121,9 +122,9 @@ development workflow would use. The --override file will override fields
 defined in the config file, such as base images and the release tag configuration.
 
 After a successful build the --promote will tag each built image (in "images")
-to the image stream(s) identified by the "promotion" config, which defaults to
-the same image stream as the release configuration. You may add additional
-images to promote and their target names via the "additional_images" map.
+to the image stream(s) identified by the "promotion" config. You may add
+additional images to promote and their target names via the "additional_images"
+map.
 `
 
 func main() {
@@ -250,27 +251,11 @@ func (o *options) Validate() error {
 }
 
 func (o *options) Complete() error {
-	// Load the standard configuration from the path or env
-	var configSpec string
-	if len(o.configSpecPath) > 0 {
-		data, err := ioutil.ReadFile(o.configSpecPath)
-		if err != nil {
-			return fmt.Errorf("--config error: %v", err)
-		}
-		configSpec = string(data)
-	} else {
-		var ok bool
-		configSpec, ok = os.LookupEnv("CONFIG_SPEC")
-		if !ok || len(configSpec) == 0 {
-			return fmt.Errorf("CONFIG_SPEC environment variable is not set or empty and no --config file was set")
-		}
+	config, err := load.Config(o.configSpecPath)
+	if err != nil {
+		return fmt.Errorf("failed to load configuration: %v", err)
 	}
-	if o.configSpec == nil {
-		o.configSpec = &api.ReleaseBuildConfiguration{}
-	}
-	if err := yaml.Unmarshal([]byte(configSpec), o.configSpec); err != nil {
-		return fmt.Errorf("invalid configuration: %v\nvalue:\n%s", err, string(configSpec))
-	}
+	o.configSpec = config
 
 	if err := o.configSpec.Validate(); err != nil {
 		return err
@@ -304,15 +289,18 @@ func (o *options) Complete() error {
 		job, _ := json.Marshal(o.jobSpec)
 		log.Printf("Resolved job spec:\n%s", string(job))
 	}
-	refs := o.jobSpec.Refs
-	if len(refs.Pulls) > 0 {
-		var pulls []string
-		for _, pull := range refs.Pulls {
-			pulls = append(pulls, fmt.Sprintf("#%d %s @%s", pull.Number, shorten(pull.SHA, 8), pull.Author))
-		}
-		log.Printf("Resolved source https://github.com/%s/%s to %s@%s, merging: %s", refs.Org, refs.Repo, refs.BaseRef, shorten(refs.BaseSHA, 8), strings.Join(pulls, ", "))
-	} else {
-		log.Printf("Resolved source https://github.com/%s/%s to %s@%s", refs.Org, refs.Repo, refs.BaseRef, shorten(refs.BaseSHA, 8))
+
+	var refs []api.Refs
+	if o.jobSpec.Refs != nil {
+		refs = append(refs, *o.jobSpec.Refs)
+	}
+	refs = append(refs, o.jobSpec.ExtraRefs...)
+
+	if len(refs) == 0 {
+		log.Printf("No source defined")
+	}
+	for _, ref := range refs {
+		log.Printf(summarizeRef(ref))
 	}
 
 	for _, path := range o.secretDirectories.values {
@@ -578,20 +566,22 @@ func (o *options) initializeNamespace() error {
 		if err != nil {
 			return fmt.Errorf("could not get RBAC client for cluster config: %v", err)
 		}
-		for _, pull := range o.jobSpec.Refs.Pulls {
-			log.Printf("Creating rolebinding for user %s in namespace %s", pull.Author, o.namespace)
-			if _, err := rbacClient.RoleBindings(o.namespace).Create(&rbacapi.RoleBinding{
-				ObjectMeta: meta.ObjectMeta{
-					Name:      "ci-op-author-access",
-					Namespace: o.namespace,
-				},
-				Subjects: []rbacapi.Subject{{Kind: "User", Name: pull.Author}},
-				RoleRef: rbacapi.RoleRef{
-					Kind: "ClusterRole",
-					Name: "admin",
-				},
-			}); err != nil && !kerrors.IsAlreadyExists(err) {
-				return fmt.Errorf("could not create role binding for: %v", err)
+		if refs := o.jobSpec.Refs; refs != nil {
+			for _, pull := range refs.Pulls {
+				log.Printf("Creating rolebinding for user %s in namespace %s", pull.Author, o.namespace)
+				if _, err := rbacClient.RoleBindings(o.namespace).Create(&rbacapi.RoleBinding{
+					ObjectMeta: meta.ObjectMeta{
+						Name:      "ci-op-author-access",
+						Namespace: o.namespace,
+					},
+					Subjects: []rbacapi.Subject{{Kind: "User", Name: pull.Author}},
+					RoleRef: rbacapi.RoleRef{
+						Kind: "ClusterRole",
+						Name: "admin",
+					},
+				}); err != nil && !kerrors.IsAlreadyExists(err) {
+					return fmt.Errorf("could not create role binding for: %v", err)
+				}
 			}
 		}
 	}
@@ -739,9 +729,21 @@ func (o *options) writeMetadataJSON() error {
 
 	m := prowResultMetadata{}
 
-	if len(o.jobSpec.Refs.Repo) > 0 {
+	if o.jobSpec.Refs != nil {
 		m.Repo = fmt.Sprintf("%s/%s", o.jobSpec.Refs.Org, o.jobSpec.Refs.Repo)
 		m.Repos = map[string]string{m.Repo: o.jobSpec.Refs.String()}
+	}
+	if len(o.jobSpec.ExtraRefs) > 0 {
+		if m.Repos == nil {
+			m.Repos = make(map[string]string)
+		}
+		for _, ref := range o.jobSpec.ExtraRefs {
+			repo := fmt.Sprintf("%s/%s", ref.Org, ref.Repo)
+			if _, ok := m.Repos[repo]; ok {
+				continue
+			}
+			m.Repos[repo] = ref.String()
+		}
 	}
 
 	m.Pod = o.jobSpec.ProwJobID
@@ -795,6 +797,9 @@ func eventJobDescription(jobSpec *api.JobSpec, namespace string) string {
 	pulls := []string{}
 	authors := []string{}
 
+	if jobSpec.Refs == nil {
+		return fmt.Sprintf("Running job %s in namespace %s", jobSpec.Job, namespace)
+	}
 	if len(jobSpec.Refs.Pulls) == 1 {
 		pull := jobSpec.Refs.Pulls[0]
 		return fmt.Sprintf("Running job %s for PR https://github.com/%s/%s/pull/%d in namespace %s from author %s",
@@ -810,6 +815,9 @@ func eventJobDescription(jobSpec *api.JobSpec, namespace string) string {
 
 // jobDescription returns a string representing the job's description.
 func jobDescription(job *api.JobSpec, config *api.ReleaseBuildConfiguration) string {
+	if job.Refs == nil {
+		return fmt.Sprintf("%s", job.Job)
+	}
 	var links []string
 	for _, pull := range job.Refs.Pulls {
 		links = append(links, fmt.Sprintf("https://github.com/%s/%s/pull/%d - %s", job.Refs.Org, job.Refs.Repo, pull.Number, pull.Author))
@@ -839,7 +847,7 @@ func jobSpecFromGitRef(ref string) (*api.JobSpec, error) {
 		return nil, fmt.Errorf("ref '%s' does not point to any commit in '%s'", parts[1], parts[0])
 	}
 	log.Printf("Resolved %s to commit %s", ref, sha)
-	return &api.JobSpec{Type: api.PeriodicJob, Job: "dev", Refs: api.Refs{Org: prefix[0], Repo: prefix[1], BaseRef: parts[1], BaseSHA: sha}}, nil
+	return &api.JobSpec{Type: api.PeriodicJob, Job: "dev", Refs: &api.Refs{Org: prefix[0], Repo: prefix[1], BaseRef: parts[1], BaseSHA: sha}}, nil
 }
 
 func nodeNames(nodes []*api.StepNode) []string {
@@ -924,6 +932,17 @@ func shorten(value string, l int) string {
 		return value[:l]
 	}
 	return value
+}
+
+func summarizeRef(refs api.Refs) string {
+	if len(refs.Pulls) > 0 {
+		var pulls []string
+		for _, pull := range refs.Pulls {
+			pulls = append(pulls, fmt.Sprintf("#%d %s @%s", pull.Number, shorten(pull.SHA, 8), pull.Author))
+		}
+		return fmt.Sprintf("Resolved source https://github.com/%s/%s to %s@%s, merging: %s", refs.Org, refs.Repo, refs.BaseRef, shorten(refs.BaseSHA, 8), strings.Join(pulls, ", "))
+	}
+	return fmt.Sprintf("Resolved source https://github.com/%s/%s to %s@%s", refs.Org, refs.Repo, refs.BaseRef, shorten(refs.BaseSHA, 8))
 }
 
 func eventRecorder(kubeClient *coreclientset.CoreV1Client, namespace string) record.EventRecorder {

@@ -152,7 +152,9 @@ base_images:
 ```
 
 The key in this mapping is the name that can be used in `"from"` fields elsewhere
-in the configuration to refer to this image.
+in the configuration to refer to this image. If `tag_specification` is set, you
+may omit `cluster`, `namespace`, and `name` and they will be defaulted from the
+`tag_specification`.
 
 # `base_rpm_images`
 `base_rpm_images` are images that will have the RPMs that are built from the

@@ -383,10 +383,13 @@ func (s *rpmServerStep) rpmRepoURL() (string, error) {
 }
 
 func (s *rpmServerStep) Provides() (api.ParameterMap, api.StepLink) {
-	rpmByOrgAndRepo := strings.Replace(fmt.Sprintf("RPM_REPO_%s_%s", strings.ToUpper(s.jobSpec.Refs.Org), strings.ToUpper(s.jobSpec.Refs.Repo)), "-", "_", -1)
-	return api.ParameterMap{
-		rpmByOrgAndRepo: s.rpmRepoURL,
-	}, api.RPMRepoLink()
+	if s.jobSpec.Refs != nil {
+		rpmByOrgAndRepo := strings.Replace(fmt.Sprintf("RPM_REPO_%s_%s", strings.ToUpper(s.jobSpec.Refs.Org), strings.ToUpper(s.jobSpec.Refs.Repo)), "-", "_", -1)
+		return api.ParameterMap{
+			rpmByOrgAndRepo: s.rpmRepoURL,
+		}, api.RPMRepoLink()
+	}
+	return nil, nil
 }
 
 func (s *rpmServerStep) Name() string { return "[serve:rpms]" }

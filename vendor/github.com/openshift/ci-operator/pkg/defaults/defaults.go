@@ -213,17 +213,6 @@ func checkForFullyQualifiedStep(step api.Step, params *steps.DeferredParameters)
 func promotionDefaults(configSpec *api.ReleaseBuildConfiguration) (*api.PromotionConfiguration, error) {
 	config := configSpec.PromotionConfiguration
 	if config == nil {
-		config = &api.PromotionConfiguration{}
-	}
-	if len(config.Tag) == 0 && len(config.Name) == 0 {
-		if input := configSpec.ReleaseTagConfiguration; input != nil {
-			config.Namespace = input.Namespace
-			config.Name = input.Name
-			config.NamePrefix = input.NamePrefix
-			config.Tag = input.Tag
-		}
-	}
-	if config == nil {
 		return nil, fmt.Errorf("cannot promote images, no promotion or release tag configuration defined")
 	}
 	return config, nil
@@ -350,7 +339,7 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.Job
 
 	for alias, baseImage := range config.BaseImages {
 		buildSteps = append(buildSteps, api.StepConfiguration{InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
-			BaseImage: baseImage,
+			BaseImage: defaultImageFromReleaseTag(baseImage, config.ReleaseTagConfiguration),
 			To:        api.PipelineImageStreamTagReference(alias),
 		}})
 	}
@@ -358,7 +347,7 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.Job
 	for alias, target := range config.InputConfiguration.BaseRPMImages {
 		intermediateTag := api.PipelineImageStreamTagReference(fmt.Sprintf("%s-without-rpms", alias))
 		buildSteps = append(buildSteps, api.StepConfiguration{InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
-			BaseImage: target,
+			BaseImage: defaultImageFromReleaseTag(target, config.ReleaseTagConfiguration),
 			To:        intermediateTag,
 		}})
 
@@ -424,7 +413,11 @@ func createStepConfigForTagRefImage(target api.ImageStreamTagReference, jobSpec 
 		target.Namespace = jobSpec.BaseNamespace
 	}
 	if target.Name == "" {
-		target.Name = fmt.Sprintf("%s-test-base", jobSpec.Refs.Repo)
+		if jobSpec.Refs != nil {
+			target.Name = fmt.Sprintf("%s-test-base", jobSpec.Refs.Repo)
+		} else {
+			target.Name = "test-base"
+		}
 	}
 
 	return api.StepConfiguration{
@@ -459,4 +452,17 @@ func envHasAllParameters(params map[string]func() (string, error)) (map[string]s
 		values[k] = v
 	}
 	return values, true
+}
+
+func defaultImageFromReleaseTag(base api.ImageStreamTagReference, release *api.ReleaseTagConfiguration) api.ImageStreamTagReference {
+	if release == nil {
+		return base
+	}
+	if len(base.Tag) == 0 || len(base.Cluster) > 0 || len(base.Name) > 0 || len(base.Namespace) > 0 {
+		return base
+	}
+	base.Cluster = release.Cluster
+	base.Name = release.Name
+	base.Namespace = release.Namespace
+	return base
 }

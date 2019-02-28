@@ -27,7 +27,7 @@ type PodStepConfiguration struct {
 	Commands           string
 	ArtifactDir        string
 	ServiceAccountName string
-	Secret             api.Secret
+	Secret             *api.Secret
 	MemoryBackedVolume *api.MemoryBackedVolume
 }
 
@@ -213,7 +213,7 @@ func (s *podStep) generatePodForStep(image string, containerResources coreapi.Re
 		},
 	}
 
-	if s.config.Secret.Name != "" {
+	if s.config.Secret != nil {
 		pod.Spec.Containers[0].VolumeMounts = getSecretVolumeMountFromSecret(s.config.Secret.MountPath)
 		pod.Spec.Volumes = getVolumeFromSecret(s.config.Secret.Name)
 	}

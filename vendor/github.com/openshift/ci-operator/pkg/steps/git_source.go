@@ -3,6 +3,7 @@ package steps
 import (
 	"context"
 	"fmt"
+	"log"
 
 	buildapi "github.com/openshift/api/build/v1"
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
@@ -23,6 +24,10 @@ func (s *gitSourceStep) Inputs(ctx context.Context, dry bool) (api.InputDefiniti
 }
 
 func (s *gitSourceStep) Run(ctx context.Context, dry bool) error {
+	if s.jobSpec.Refs == nil {
+		log.Printf("Nothing to build source image from, no refs")
+		return nil
+	}
 	return handleBuild(s.buildClient, buildFromSource(s.jobSpec, "", api.PipelineImageStreamTagReferenceRoot, buildapi.BuildSource{
 		Type:       buildapi.BuildSourceGit,
 		ContextDir: s.config.ContextDir,

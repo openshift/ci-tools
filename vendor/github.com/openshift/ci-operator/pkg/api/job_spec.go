@@ -19,7 +19,8 @@ type JobSpec struct {
 	BuildId   string      `json:"buildid,omitempty"`
 	ProwJobID string      `json:"prowjobid,omitempty"`
 
-	Refs Refs `json:"refs,omitempty"`
+	Refs      *Refs  `json:"refs,omitempty"`
+	ExtraRefs []Refs `json:"extra_refs,omitempty"`
 
 	// rawSpec is the serialized form of the Spec
 	rawSpec string

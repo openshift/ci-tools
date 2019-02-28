@@ -36,7 +36,7 @@ type ReleaseBuildConfiguration struct {
 	// the desired location of the contents of this repository in
 	// Go. If specified the location of the repository we are
 	// cloning from is ignored.
-	CanonicalGoRepository string `json:"canonical_go_repository"`
+	CanonicalGoRepository string `json:"canonical_go_repository,omitempty"`
 
 	// Images describes the images that are built
 	// baseImage the project as part of the release

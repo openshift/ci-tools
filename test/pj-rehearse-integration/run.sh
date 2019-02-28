@@ -24,6 +24,8 @@ make_testing_repository() {
   mkdir "${FAKE_OPENSHIFT_RELEASE}"
   pushd "${FAKE_OPENSHIFT_RELEASE}" >/dev/null
   git init --quiet
+  git config --local user.name test
+  git config --local user.email test
   cp -R "${master_data}"/* .
   git add ci-operator cluster
   git commit -m "Master version of openshift/release" --quiet

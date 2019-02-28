@@ -112,3 +112,19 @@ func OperateOnCIOperatorConfigDir(configDir string, callback func(*cioperatorapi
 		return nil
 	})
 }
+
+type CompoundCiopConfig map[string]*cioperatorapi.ReleaseBuildConfiguration
+
+func (compound CompoundCiopConfig) add(handledConfig *cioperatorapi.ReleaseBuildConfiguration, handledElements *FilePathElements) error {
+	compound[handledElements.Filename] = handledConfig
+	return nil
+}
+
+func CompoundLoad(path string) (CompoundCiopConfig, error) {
+	config := CompoundCiopConfig{}
+	if err := OperateOnCIOperatorConfigDir(path, config.add); err != nil {
+		return nil, err
+	}
+
+	return config, nil
+}

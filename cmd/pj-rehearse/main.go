@@ -22,6 +22,7 @@ import (
 	templateapi "github.com/openshift/api/template/v1"
 	templatescheme "github.com/openshift/client-go/template/clientset/versioned/scheme"
 
+	"github.com/openshift/ci-operator-prowgen/pkg/config"
 	"github.com/openshift/ci-operator-prowgen/pkg/diffs"
 	"github.com/openshift/ci-operator-prowgen/pkg/rehearse"
 )
@@ -148,10 +149,21 @@ func main() {
 		gracefulExit(o.noFail, misconfigurationOutput)
 	}
 
+	ciopConfig, ciopPRConfig, err := getCiopConfigs(o.candidatePath, jobSpec.Refs.BaseSHA)
+	if err != nil {
+		logger.WithError(err).Error("could not load ci-operator configs")
+		gracefulExit(o.noFail, misconfigurationOutput)
+	}
+
 	pjclient, err := rehearse.NewProwJobClient(clusterConfig, prowConfig.ProwJobNamespace, o.dryRun)
 	if err != nil {
 		logger.WithError(err).Error("could not create a ProwJob client")
 		gracefulExit(o.noFail, misconfigurationOutput)
+	}
+
+	changedCiopConfigs := diffs.GetChangedCiopConfigs(ciopConfig, ciopPRConfig, logger)
+	for name := range changedCiopConfigs {
+		logger.WithField("ciop-config", name).Info("Changed ci-operator config")
 	}
 
 	debugLogger := logrus.New()
@@ -223,6 +235,35 @@ func gitCheckout(candidatePath, baseSHA string) error {
 		return fmt.Errorf("'%s' failed with out: %s and error %v", cmd.Args, stdoutStderr, err)
 	}
 	return nil
+}
+
+func getCiopConfigs(candidatePath, baseSHA string) (config.CompoundCiopConfig, config.CompoundCiopConfig, error) {
+	currentSHA, err := getCurrentSHA(candidatePath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get SHA of current HEAD: %v", err)
+	}
+
+	candidateConfigPath := filepath.Join(candidatePath, diffs.CiopConfigInRepoPath)
+
+	prCiopConfig, err := config.CompoundLoad(candidateConfigPath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to load PR's ci-operator configs")
+	}
+
+	if err := gitCheckout(candidatePath, baseSHA); err != nil {
+		return nil, nil, fmt.Errorf("failed to checkout worktree: %v", err)
+	}
+
+	masterCiopConfig, err := config.CompoundLoad(candidateConfigPath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to load base ci-operator configs")
+	}
+
+	if err := gitCheckout(candidatePath, currentSHA); err != nil {
+		return nil, nil, fmt.Errorf("failed to check out tested revision back: %v", err)
+	}
+
+	return masterCiopConfig, prCiopConfig, nil
 }
 
 func getProwConfigs(candidatePath, baseSHA string) (*prowconfig.Config, *prowconfig.Config, error) {

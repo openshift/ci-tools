@@ -1,6 +1,7 @@
 package diffs
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/getlantern/deepcopy"
@@ -11,11 +12,83 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/diff"
 
 	prowconfig "k8s.io/test-infra/prow/config"
 
 	templateapi "github.com/openshift/api/template/v1"
+
+	cioperatorapi "github.com/openshift/ci-operator/pkg/api"
+
+	"github.com/openshift/ci-operator-prowgen/pkg/config"
 )
+
+func TestGetChangedCiopConfigs(t *testing.T) {
+	baseCiopConfig := cioperatorapi.ReleaseBuildConfiguration{
+		InputConfiguration: cioperatorapi.InputConfiguration{
+			ReleaseTagConfiguration: &cioperatorapi.ReleaseTagConfiguration{
+				Cluster:   "kluster",
+				Namespace: "namespace",
+				Tag:       "tag",
+			},
+		},
+	}
+
+	testCases := []struct {
+		name            string
+		configGenerator func() (before, after config.CompoundCiopConfig)
+		expected        func() config.CompoundCiopConfig
+	}{{
+		name: "no changes",
+		configGenerator: func() (config.CompoundCiopConfig, config.CompoundCiopConfig) {
+			before := config.CompoundCiopConfig{"org-repo-branch.yaml": &baseCiopConfig}
+			after := config.CompoundCiopConfig{"org-repo-branch.yaml": &baseCiopConfig}
+			return before, after
+		},
+		expected: func() config.CompoundCiopConfig { return config.CompoundCiopConfig{} },
+	}, {
+		name: "new config",
+		configGenerator: func() (config.CompoundCiopConfig, config.CompoundCiopConfig) {
+			before := config.CompoundCiopConfig{"org-repo-branch.yaml": &baseCiopConfig}
+			after := config.CompoundCiopConfig{
+				"org-repo-branch.yaml":         &baseCiopConfig,
+				"org-repo-another-branch.yaml": &baseCiopConfig,
+			}
+			return before, after
+		},
+		expected: func() config.CompoundCiopConfig {
+			return config.CompoundCiopConfig{"org-repo-another-branch.yaml": &baseCiopConfig}
+		},
+	}, {
+		name: "changed config",
+		configGenerator: func() (config.CompoundCiopConfig, config.CompoundCiopConfig) {
+			before := config.CompoundCiopConfig{"org-repo-branch.yaml": &baseCiopConfig}
+			afterConfig := cioperatorapi.ReleaseBuildConfiguration{}
+			deepcopy.Copy(&afterConfig, baseCiopConfig)
+			afterConfig.InputConfiguration.ReleaseTagConfiguration.Tag = "another-tag"
+			after := config.CompoundCiopConfig{"org-repo-branch.yaml": &afterConfig}
+			return before, after
+		},
+		expected: func() config.CompoundCiopConfig {
+			expected := cioperatorapi.ReleaseBuildConfiguration{}
+			deepcopy.Copy(&expected, baseCiopConfig)
+			expected.InputConfiguration.ReleaseTagConfiguration.Tag = "another-tag"
+			return config.CompoundCiopConfig{"org-repo-branch.yaml": &expected}
+		},
+	}}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			before, after := tc.configGenerator()
+			actual := GetChangedCiopConfigs(before, after, logrus.NewEntry(logrus.New()))
+			expected := tc.expected()
+
+			if !reflect.DeepEqual(expected, actual) {
+				t.Errorf("Detected changed ci-operator config changes differ from expected:\n%s", diff.ObjectDiff(expected, actual))
+			}
+		})
+	}
+}
 
 func TestGetChangedPresubmits(t *testing.T) {
 	basePresubmit := []prowconfig.Presubmit{

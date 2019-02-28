@@ -2,12 +2,12 @@ package rehearse
 
 import (
 	"fmt"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"testing"
 
 	"github.com/getlantern/deepcopy"
+	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
 	logrustest "github.com/sirupsen/logrus/hooks/test"
 
@@ -24,6 +24,10 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
 	clientgo_testing "k8s.io/client-go/testing"
+
+	"github.com/openshift/ci-operator/pkg/api"
+
+	"github.com/openshift/ci-operator-prowgen/pkg/config"
 )
 
 func makeTestingPresubmitForEnv(env []v1.EnvVar) *prowconfig.Presubmit {
@@ -40,20 +44,6 @@ func makeTestingPresubmitForEnv(env []v1.EnvVar) *prowconfig.Presubmit {
 	}
 }
 
-type fakeCiopConfig struct {
-	fakeFiles map[string]string
-}
-
-func (c *fakeCiopConfig) Load(repo, configFile string) (string, error) {
-	fullPath := filepath.Join(repo, configFile)
-	content, ok := c.fakeFiles[fullPath]
-	if ok {
-		return content, nil
-	}
-
-	return "", fmt.Errorf("no such fake file")
-}
-
 func makeCMReference(cmName, key string) *v1.EnvVarSource {
 	return &v1.EnvVarSource{
 		ConfigMapKeyRef: &v1.ConfigMapKeySelector{
@@ -67,40 +57,45 @@ func makeCMReference(cmName, key string) *v1.EnvVarSource {
 
 func TestInlineCiopConfig(t *testing.T) {
 	testTargetRepo := "org/repo"
+	testCiopConfig := &api.ReleaseBuildConfiguration{}
+	testCiopCongigContent, err := yaml.Marshal(testCiopConfig)
+	if err != nil {
+		t.Fatal("Failed to marshal ci-operator config")
+	}
 
 	testCases := []struct {
 		description   string
 		sourceEnv     []v1.EnvVar
-		configs       *fakeCiopConfig
+		configs       config.CompoundCiopConfig
 		expectedEnv   []v1.EnvVar
 		expectedError bool
 	}{{
 		description: "empty env -> no changes",
-		configs:     &fakeCiopConfig{},
+		configs:     config.CompoundCiopConfig{},
 	}, {
 		description: "no Env.ValueFrom -> no changes",
 		sourceEnv:   []v1.EnvVar{{Name: "T", Value: "V"}},
-		configs:     &fakeCiopConfig{},
+		configs:     config.CompoundCiopConfig{},
 		expectedEnv: []v1.EnvVar{{Name: "T", Value: "V"}},
 	}, {
 		description: "no Env.ValueFrom.ConfigMapKeyRef -> no changes",
 		sourceEnv:   []v1.EnvVar{{Name: "T", ValueFrom: &v1.EnvVarSource{ResourceFieldRef: &v1.ResourceFieldSelector{}}}},
-		configs:     &fakeCiopConfig{},
+		configs:     config.CompoundCiopConfig{},
 		expectedEnv: []v1.EnvVar{{Name: "T", ValueFrom: &v1.EnvVarSource{ResourceFieldRef: &v1.ResourceFieldSelector{}}}},
 	}, {
 		description: "CM reference but not ci-operator-configs -> no changes",
 		sourceEnv:   []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference("test-cm", "key")}},
-		configs:     &fakeCiopConfig{},
+		configs:     config.CompoundCiopConfig{},
 		expectedEnv: []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference("test-cm", "key")}},
 	}, {
 		description: "CM reference to ci-operator-configs -> cm content inlined",
 		sourceEnv:   []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference(ciOperatorConfigsCMName, "filename")}},
-		configs:     &fakeCiopConfig{fakeFiles: map[string]string{"org/repo/filename": "ciopConfigContent"}},
-		expectedEnv: []v1.EnvVar{{Name: "T", Value: "ciopConfigContent"}},
+		configs:     config.CompoundCiopConfig{"filename": testCiopConfig},
+		expectedEnv: []v1.EnvVar{{Name: "T", Value: string(testCiopCongigContent)}},
 	}, {
 		description:   "bad CM key is handled",
 		sourceEnv:     []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference(ciOperatorConfigsCMName, "filename")}},
-		configs:       &fakeCiopConfig{fakeFiles: map[string]string{}},
+		configs:       config.CompoundCiopConfig{},
 		expectedError: true,
 	},
 	}
@@ -263,6 +258,7 @@ func makeSuccessfulFinishReactor(watcher watch.Interface, jobs map[string][]prow
 func TestExecuteJobsErrors(t *testing.T) {
 	testPrNumber, testNamespace, testRepoPath, testRefs := makeTestData()
 	targetRepo := "targetOrg/targetRepo"
+	testCiopConfigs := config.CompoundCiopConfig{}
 
 	testCases := []struct {
 		description  string
@@ -302,7 +298,7 @@ func TestExecuteJobsErrors(t *testing.T) {
 				return false, nil, nil
 			})
 
-			rehearsals := ConfigureRehearsalJobs(tc.jobs, testRepoPath, testPrNumber, testLoggers, true)
+			rehearsals := ConfigureRehearsalJobs(tc.jobs, testCiopConfigs, testPrNumber, testLoggers, true)
 			executor := NewExecutor(rehearsals, testPrNumber, testRepoPath, testRefs, true, testLoggers, fakeclient)
 			_, err = executor.ExecuteJobs()
 
@@ -316,6 +312,7 @@ func TestExecuteJobsErrors(t *testing.T) {
 func TestExecuteJobsUnsuccessful(t *testing.T) {
 	testPrNumber, testNamespace, testRepoPath, testRefs := makeTestData()
 	targetRepo := "targetOrg/targetRepo"
+	testCiopConfigs := config.CompoundCiopConfig{}
 
 	testCases := []struct {
 		description string
@@ -370,7 +367,7 @@ func TestExecuteJobsUnsuccessful(t *testing.T) {
 				return true, ret, nil
 			})
 
-			rehearsals := ConfigureRehearsalJobs(tc.jobs, testRepoPath, testPrNumber, testLoggers, true)
+			rehearsals := ConfigureRehearsalJobs(tc.jobs, testCiopConfigs, testPrNumber, testLoggers, true)
 			executor := NewExecutor(rehearsals, testPrNumber, testRepoPath, testRefs, false, testLoggers, fakeclient)
 			success, _ := executor.ExecuteJobs()
 
@@ -386,6 +383,7 @@ func TestExecuteJobsPositive(t *testing.T) {
 	rehearseJobContextTemplate := "ci/rehearse/%s/%s/%s"
 	targetRepo := "targetOrg/targetRepo"
 	anotherTargetRepo := "anotherOrg/anotherRepo"
+	testCiopConfigs := config.CompoundCiopConfig{}
 
 	testCases := []struct {
 		description  string
@@ -474,7 +472,7 @@ func TestExecuteJobsPositive(t *testing.T) {
 			}
 			fakecs.Fake.PrependWatchReactor("prowjobs", makeSuccessfulFinishReactor(watcher, tc.jobs))
 
-			rehearsals := ConfigureRehearsalJobs(tc.jobs, testRepoPath, testPrNumber, testLoggers, true)
+			rehearsals := ConfigureRehearsalJobs(tc.jobs, testCiopConfigs, testPrNumber, testLoggers, true)
 			executor := NewExecutor(rehearsals, testPrNumber, testRepoPath, testRefs, true, testLoggers, fakeclient)
 			success, err := executor.ExecuteJobs()
 

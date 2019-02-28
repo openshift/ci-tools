@@ -22,6 +22,7 @@ import (
 	"k8s.io/test-infra/prow/kube"
 	pjdwapi "k8s.io/test-infra/prow/pod-utils/downwardapi"
 
+	"github.com/openshift/ci-operator-prowgen/pkg/config"
 	"github.com/openshift/ci-operator-prowgen/pkg/diffs"
 	"github.com/openshift/ci-operator-prowgen/pkg/rehearse"
 )
@@ -129,6 +130,7 @@ func getExpectedProwJobs(t *testing.T) sets.String {
 func getRehersalsHelper(logger *logrus.Entry, prNumber int) ([]*prowconfig.Presubmit, error) {
 	candidateConfigPath := filepath.Join(candidatePath, diffs.ConfigInRepoPath)
 	candidateJobConfigPath := filepath.Join(candidatePath, diffs.JobConfigInRepoPath)
+	candidateCiopConfigPath := filepath.Join(candidatePath, diffs.CiopConfigInRepoPath)
 	masterConfigPath := filepath.Join(masterPath, diffs.ConfigInRepoPath)
 	masterJobConfigPath := filepath.Join(masterPath, diffs.JobConfigInRepoPath)
 
@@ -140,12 +142,16 @@ func getRehersalsHelper(logger *logrus.Entry, prNumber int) ([]*prowconfig.Presu
 	if err != nil {
 		return nil, fmt.Errorf("failed to load Prow config: %v", err)
 	}
+	ciopPrConfig, err := config.CompoundLoad(candidateCiopConfigPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load ci-operator config: %v", err)
+	}
 
 	changedPresubmits := diffs.GetChangedPresubmits(prowConfig, prowPRConfig, logger)
 	if len(changedPresubmits) == 0 {
 		return nil, fmt.Errorf("Empty changedPresubmits was not expected")
 	}
 
-	rehearsals := rehearse.ConfigureRehearsalJobs(changedPresubmits, candidatePath, prNumber, rehearse.Loggers{Job: logger, Debug: logger}, false)
+	rehearsals := rehearse.ConfigureRehearsalJobs(changedPresubmits, ciopPrConfig, prNumber, rehearse.Loggers{Job: logger, Debug: logger}, false)
 	return rehearsals, nil
 }

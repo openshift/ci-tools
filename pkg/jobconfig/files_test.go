@@ -491,3 +491,63 @@ func TestMergePostsubmits(t *testing.T) {
 		})
 	}
 }
+
+func TestExtractRepoElementsFromPath(t *testing.T) {
+	var testCases = []struct {
+		name          string
+		path          string
+		expected      *Info
+		expectedError bool
+	}{
+		{
+			name: "simple path parses fine",
+			path: "./org/repo/org-repo-branch-presubmits.yaml",
+			expected: &Info{
+				Org:      "org",
+				Repo:     "repo",
+				Branch:   "branch",
+				Type:     "presubmits",
+				Filename: "./org/repo/org-repo-branch-presubmits.yaml",
+			},
+			expectedError: false,
+		},
+		{
+			name:          "empty path fails to parse",
+			path:          "",
+			expected:      nil,
+			expectedError: true,
+		},
+		{
+			name: "prefix to a valid path parses fine",
+			path: "./something/crazy/org/repo/org-repo-branch-presubmits.yaml",
+			expected: &Info{
+				Org:      "org",
+				Repo:     "repo",
+				Branch:   "branch",
+				Type:     "presubmits",
+				Filename: "./something/crazy/org/repo/org-repo-branch-presubmits.yaml",
+			},
+			expectedError: false,
+		},
+		{
+			name:          "too few nested directories fails to parse",
+			path:          "./repo/org-repo-branch-presubmits.yaml",
+			expected:      nil,
+			expectedError: true,
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			elements, err := extractInfoFromPath(testCase.path)
+			if err == nil && testCase.expectedError {
+				t.Errorf("%s: expected an error, but got none", testCase.name)
+			}
+			if err != nil && !testCase.expectedError {
+				t.Errorf("%s: expected no error, but got one: %v", testCase.name, err)
+			}
+			if actual, expected := elements, testCase.expected; !equality.Semantic.DeepEqual(actual, expected) {
+				t.Errorf("%s: did not get expected repo info from path:\n%s", testCase.name, diff.ObjectDiff(actual, expected))
+			}
+		})
+	}
+}

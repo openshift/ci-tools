@@ -11,18 +11,18 @@ func TestExtractRepoElementsFromPath(t *testing.T) {
 	testCases := []struct {
 		name          string
 		path          string
-		expected      *FilePathElements
+		expected      *Info
 		expectedError bool
 	}{
 		{
 			name: "simple path parses fine",
 			path: "./org/repo/org-repo-branch.yaml",
-			expected: &FilePathElements{
+			expected: &Info{
 				Org:      "org",
 				Repo:     "repo",
 				Branch:   "branch",
 				Variant:  "",
-				Filename: "org-repo-branch.yaml",
+				Filename: "./org/repo/org-repo-branch.yaml",
 			},
 			expectedError: false,
 		},
@@ -35,12 +35,12 @@ func TestExtractRepoElementsFromPath(t *testing.T) {
 		{
 			name: "prefix to a valid path parses fine",
 			path: "./something/crazy/org/repo/org-repo-branch.yaml",
-			expected: &FilePathElements{
+			expected: &Info{
 				Org:      "org",
 				Repo:     "repo",
 				Branch:   "branch",
 				Variant:  "",
-				Filename: "org-repo-branch.yaml",
+				Filename: "./something/crazy/org/repo/org-repo-branch.yaml",
 			},
 			expectedError: false,
 		},
@@ -53,12 +53,12 @@ func TestExtractRepoElementsFromPath(t *testing.T) {
 		{
 			name: "path with variant parses fine",
 			path: "./org/repo/org-repo-branch__variant.yaml",
-			expected: &FilePathElements{
+			expected: &Info{
 				Org:      "org",
 				Repo:     "repo",
 				Branch:   "branch",
 				Variant:  "variant",
-				Filename: "org-repo-branch__variant.yaml",
+				Filename: "./org/repo/org-repo-branch__variant.yaml",
 			},
 			expectedError: false,
 		},

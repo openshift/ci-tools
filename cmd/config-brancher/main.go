@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"os"
-	"strings"
 
 	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
@@ -29,12 +28,12 @@ func main() {
 		logrus.Fatalf("Invalid options: %v", err)
 	}
 
-	var toCommit []config.Info
-	if err := config.OperateOnCIOperatorConfigDir(o.ConfigDir, func(configuration *api.ReleaseBuildConfiguration, repoInfo *config.FilePathElements) error {
-		if (o.Org != "" && o.Org != repoInfo.Org) || (o.Repo != "" && o.Repo != repoInfo.Repo) {
+	var toCommit []config.DataWithInfo
+	if err := config.OperateOnCIOperatorConfigDir(o.ConfigDir, func(configuration *api.ReleaseBuildConfiguration, info *config.Info) error {
+		if (o.Org != "" && o.Org != info.Org) || (o.Repo != "" && o.Repo != info.Repo) {
 			return nil
 		}
-		for _, output := range generateBranchedConfigs(o.CurrentRelease, o.FutureRelease, config.Info{Configuration: *configuration, RepoInfo: *repoInfo}) {
+		for _, output := range generateBranchedConfigs(o.CurrentRelease, o.FutureRelease, config.DataWithInfo{Configuration: *configuration, Info: *info}) {
 			if !o.Confirm {
 				output.Logger().Info("Would commit new file.")
 				continue
@@ -54,7 +53,7 @@ func main() {
 	}
 }
 
-func generateBranchedConfigs(currentRelease, futureRelease string, input config.Info) []config.Info {
+func generateBranchedConfigs(currentRelease, futureRelease string, input config.DataWithInfo) []config.DataWithInfo {
 	if !(promotion.PromotesOfficialImages(&input.Configuration) && input.Configuration.PromotionConfiguration.Name == currentRelease) {
 		return nil
 	}
@@ -76,24 +75,23 @@ func generateBranchedConfigs(currentRelease, futureRelease string, input config.
 	futureConfig.PromotionConfiguration.Name = futureRelease
 	futureConfig.ReleaseTagConfiguration.Name = futureRelease
 
-	futureBranchForCurrentPromotion, futureBranchForFuturePromotion, err := promotion.DetermineReleaseBranches(currentRelease, futureRelease, input.RepoInfo.Branch)
+	futureBranchForCurrentPromotion, futureBranchForFuturePromotion, err := promotion.DetermineReleaseBranches(currentRelease, futureRelease, input.Info.Branch)
 	if err != nil {
 		input.Logger().WithError(err).Error("could not determine future branch that would promote to current imagestream")
 		return nil
 	}
 
-	return []config.Info{
+	return []config.DataWithInfo{
 		// this config keeps the current promotion but runs on a new branch
-		{Configuration: input.Configuration, RepoInfo: copyInfoSwappingBranches(input.RepoInfo, futureBranchForCurrentPromotion)},
+		{Configuration: input.Configuration, Info: copyInfoSwappingBranches(input.Info, futureBranchForCurrentPromotion)},
 		// this config is the future promotion on the future branch
-		{Configuration: futureConfig, RepoInfo: copyInfoSwappingBranches(input.RepoInfo, futureBranchForFuturePromotion)},
+		{Configuration: futureConfig, Info: copyInfoSwappingBranches(input.Info, futureBranchForFuturePromotion)},
 	}
 }
 
-func copyInfoSwappingBranches(input config.FilePathElements, newBranch string) config.FilePathElements {
+func copyInfoSwappingBranches(input config.Info, newBranch string) config.Info {
 	intermediate := &input
 	output := *intermediate
 	output.Branch = newBranch
-	output.Filename = strings.Replace(output.Filename, input.Branch, newBranch, -1)
 	return output
 }

@@ -32,21 +32,31 @@ func readCiOperatorConfig(configFilePath string) (*cioperatorapi.ReleaseBuildCon
 	return configSpec, nil
 }
 
-// path to ci-operator configuration file encodes information about tested code
-// .../$ORGANIZATION/$REPOSITORY/$ORGANIZATION-$COMPONENT-$BRANCH.$EXT
-type FilePathElements struct {
-	Org      string
-	Repo     string
-	Branch   string
-	Variant  string
+// DataWithInfo describes the metadata for a CI Operator configuration file
+type Info struct {
+	Org    string
+	Repo   string
+	Branch string
+	// Variant allows for parallel configuration files for one (org,repo,branch)
+	Variant string
+	// Filename is the full path to the file on disk
 	Filename string
+}
+
+// Basename returns the unique name for this file in the config
+func (e *Info) Basename() string {
+	basename := strings.Join([]string{e.Org, e.Repo, e.Branch}, "-")
+	if e.Variant != "" {
+		basename = fmt.Sprintf("%s__%s", basename, e.Variant)
+	}
+	return fmt.Sprintf("%s.yaml", basename)
 }
 
 // We use the directory/file naming convention to encode useful information
 // about component repository information.
 // The convention for ci-operator config files in this repo:
 // ci-operator/config/ORGANIZATION/COMPONENT/ORGANIZATION-COMPONENT-BRANCH.yaml
-func extractRepoElementsFromPath(configFilePath string) (*FilePathElements, error) {
+func extractRepoElementsFromPath(configFilePath string) (*Info, error) {
 	configSpecDir := filepath.Dir(configFilePath)
 	repo := filepath.Base(configSpecDir)
 	if repo == "." || repo == "/" {
@@ -68,7 +78,13 @@ func extractRepoElementsFromPath(configFilePath string) (*FilePathElements, erro
 		branch = branch[:i]
 	}
 
-	return &FilePathElements{org, repo, branch, variant, fileName}, nil
+	return &Info{
+		Org:      org,
+		Repo:     repo,
+		Branch:   branch,
+		Variant:  variant,
+		Filename: configFilePath,
+	}, nil
 }
 
 func isConfigFile(path string, info os.FileInfo) bool {
@@ -78,19 +94,19 @@ func isConfigFile(path string, info os.FileInfo) bool {
 
 // OperateOnCIOperatorConfig runs the callback on the parsed data from
 // the CI Operator configuration file provided
-func OperateOnCIOperatorConfig(path string, callback func(*cioperatorapi.ReleaseBuildConfiguration, *FilePathElements) error) error {
+func OperateOnCIOperatorConfig(path string, callback func(*cioperatorapi.ReleaseBuildConfiguration, *Info) error) error {
 	jobConfig, err := readCiOperatorConfig(path)
 	if err != nil {
 		logrus.WithField("source-file", path).WithError(err).Error("Failed to load CI Operator configuration")
 		return err
 	}
 
-	repoInfo, err := extractRepoElementsFromPath(path)
+	info, err := extractRepoElementsFromPath(path)
 	if err != nil {
 		logrus.WithField("source-file", path).WithError(err).Error("Failed to load CI Operator configuration")
 		return err
 	}
-	if err = callback(jobConfig, repoInfo); err != nil {
+	if err = callback(jobConfig, info); err != nil {
 		logrus.WithField("source-file", path).WithError(err).Error("Failed to execute callback")
 		return err
 	}
@@ -99,7 +115,7 @@ func OperateOnCIOperatorConfig(path string, callback func(*cioperatorapi.Release
 
 // OperateOnCIOperatorConfigDir runs the callback on all CI Operator
 // configuration files found while walking the directory provided
-func OperateOnCIOperatorConfigDir(configDir string, callback func(*cioperatorapi.ReleaseBuildConfiguration, *FilePathElements) error) error {
+func OperateOnCIOperatorConfigDir(configDir string, callback func(*cioperatorapi.ReleaseBuildConfiguration, *Info) error) error {
 	return filepath.Walk(configDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			logrus.WithField("source-file", path).WithError(err).Error("Failed to walk CI Operator configuration dir")
@@ -114,35 +130,32 @@ func OperateOnCIOperatorConfigDir(configDir string, callback func(*cioperatorapi
 	})
 }
 
-func LoggerForInfo(repoInfo FilePathElements) *logrus.Entry {
+func LoggerForInfo(info Info) *logrus.Entry {
 	return logrus.WithFields(logrus.Fields{
-		"org":         repoInfo.Org,
-		"repo":        repoInfo.Repo,
-		"branch":      repoInfo.Branch,
-		"source-file": repoInfo.Filename,
+		"org":         info.Org,
+		"repo":        info.Repo,
+		"branch":      info.Branch,
+		"source-file": info.Basename(),
 	})
 }
 
-
-type Info struct {
+// DataWithInfo wraps a CI Operator configuration and metadata for it
+type DataWithInfo struct {
 	Configuration cioperatorapi.ReleaseBuildConfiguration
-	RepoInfo      FilePathElements
+	Info          Info
 }
 
-func (i *Info) Logger() *logrus.Entry {
-	return LoggerForInfo(i.RepoInfo)
+func (i *DataWithInfo) Logger() *logrus.Entry {
+	return LoggerForInfo(i.Info)
 }
 
-func (i *Info) CommitTo(dir string) {
+func (i *DataWithInfo) CommitTo(dir string) {
 	raw, err := yaml.Marshal(i.Configuration)
 	if err != nil {
 		i.Logger().WithError(err).Error("failed to marshal output CI Operator configuration")
 		return
 	}
-	outputFile := path.Join(
-		dir, i.RepoInfo.Org, i.RepoInfo.Repo,
-		fmt.Sprintf("%s-%s-%s.yaml", i.RepoInfo.Org, i.RepoInfo.Repo, i.RepoInfo.Branch),
-	)
+	outputFile := path.Join(dir, i.Info.Org, i.Info.Repo, i.Info.Basename())
 	if err := ioutil.WriteFile(outputFile, raw, 0664); err != nil {
 		i.Logger().WithError(err).Error("failed to write new CI Operator configuration")
 	}

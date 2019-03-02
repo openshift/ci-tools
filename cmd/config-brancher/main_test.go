@@ -14,19 +14,19 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 		name           string
 		currentRelease string
 		futureRelease  string
-		input          config.Info
-		output         []config.Info
+		input          config.DataWithInfo
+		output         []config.DataWithInfo
 	}{
 		{
 			name:           "config that doesn't promote anywhere is ignored",
 			currentRelease: "current-release",
 			futureRelease:  "future-release",
-			input: config.Info{
+			input: config.DataWithInfo{
 				Configuration: api.ReleaseBuildConfiguration{
 					PromotionConfiguration: nil,
 				},
-				RepoInfo: config.FilePathElements{
-					Org: "org", Repo: "repo", Branch: "branch", Filename: "org-repo-branch.yaml",
+				Info: config.Info{
+					Org: "org", Repo: "repo", Branch: "branch",
 				},
 			},
 			output: nil,
@@ -35,15 +35,15 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 			name:           "config that doesn't promote to official streams is ignored",
 			currentRelease: "current-release",
 			futureRelease:  "future-release",
-			input: config.Info{
+			input: config.DataWithInfo{
 				Configuration: api.ReleaseBuildConfiguration{
 					PromotionConfiguration: &api.PromotionConfiguration{
 						Name:      "custom",
 						Namespace: "custom",
 					},
 				},
-				RepoInfo: config.FilePathElements{
-					Org: "org", Repo: "repo", Branch: "branch", Filename: "org-repo-branch.yaml",
+				Info: config.Info{
+					Org: "org", Repo: "repo", Branch: "branch",
 				},
 			},
 			output: nil,
@@ -52,15 +52,15 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 			name:           "config that doesn't promote to release payload is ignored",
 			currentRelease: "current-release",
 			futureRelease:  "future-release",
-			input: config.Info{
+			input: config.DataWithInfo{
 				Configuration: api.ReleaseBuildConfiguration{
 					PromotionConfiguration: &api.PromotionConfiguration{
 						Name:      "4.123",
 						Namespace: "ocp",
 					},
 				},
-				RepoInfo: config.FilePathElements{
-					Org: "org", Repo: "repo", Branch: "branch", Filename: "org-repo-branch.yaml",
+				Info: config.Info{
+					Org: "org", Repo: "repo", Branch: "branch",
 				},
 			},
 			output: nil,
@@ -69,7 +69,7 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 			name:           "config that promotes to the current release from master gets a branched config for the current release",
 			currentRelease: "current-release",
 			futureRelease:  "future-release",
-			input: config.Info{
+			input: config.DataWithInfo{
 				Configuration: api.ReleaseBuildConfiguration{
 					PromotionConfiguration: &api.PromotionConfiguration{
 						Name:      "current-release",
@@ -82,11 +82,11 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 						},
 					},
 				},
-				RepoInfo: config.FilePathElements{
-					Org: "org", Repo: "repo", Branch: "master", Filename: "org-repo-master.yaml",
+				Info: config.Info{
+					Org: "org", Repo: "repo", Branch: "master",
 				},
 			},
-			output: []config.Info{
+			output: []config.DataWithInfo{
 				{
 					Configuration: api.ReleaseBuildConfiguration{
 						PromotionConfiguration: &api.PromotionConfiguration{
@@ -100,8 +100,8 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 							},
 						},
 					},
-					RepoInfo: config.FilePathElements{
-						Org: "org", Repo: "repo", Branch: "release-current-release", Filename: "org-repo-release-current-release.yaml",
+					Info: config.Info{
+						Org: "org", Repo: "repo", Branch: "release-current-release",
 					},
 				},
 				{
@@ -117,8 +117,8 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 							},
 						},
 					},
-					RepoInfo: config.FilePathElements{
-						Org: "org", Repo: "repo", Branch: "master", Filename: "org-repo-master.yaml",
+					Info: config.Info{
+						Org: "org", Repo: "repo", Branch: "master",
 					},
 				},
 			},
@@ -127,7 +127,7 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 			name:           "config that promotes to the current release from an openshift branch gets a branched config for the new release",
 			currentRelease: "current-release",
 			futureRelease:  "future-release",
-			input: config.Info{
+			input: config.DataWithInfo{
 				Configuration: api.ReleaseBuildConfiguration{
 					PromotionConfiguration: &api.PromotionConfiguration{
 						Name:      "current-release",
@@ -140,11 +140,11 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 						},
 					},
 				},
-				RepoInfo: config.FilePathElements{
-					Org: "org", Repo: "repo", Branch: "openshift-current-release", Filename: "org-repo-openshift-current-release.yaml",
+				Info: config.Info{
+					Org: "org", Repo: "repo", Branch: "openshift-current-release",
 				},
 			},
-			output: []config.Info{
+			output: []config.DataWithInfo{
 				{
 					Configuration: api.ReleaseBuildConfiguration{
 						PromotionConfiguration: &api.PromotionConfiguration{
@@ -158,8 +158,8 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 							},
 						},
 					},
-					RepoInfo: config.FilePathElements{
-						Org: "org", Repo: "repo", Branch: "openshift-current-release", Filename: "org-repo-openshift-current-release.yaml",
+					Info: config.Info{
+						Org: "org", Repo: "repo", Branch: "openshift-current-release",
 					},
 				},
 				{
@@ -175,8 +175,8 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 							},
 						},
 					},
-					RepoInfo: config.FilePathElements{
-						Org: "org", Repo: "repo", Branch: "openshift-future-release", Filename: "org-repo-openshift-future-release.yaml",
+					Info: config.Info{
+						Org: "org", Repo: "repo", Branch: "openshift-future-release",
 					},
 				},
 			},
@@ -189,8 +189,8 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 				t.Fatalf("%s: did not generate correct amount of output configs, needed %d got %d", testCase.name, len(expected), len(actual))
 			}
 			for i := range expected {
-				if !reflect.DeepEqual(actual[i].RepoInfo, expected[i].RepoInfo) {
-					t.Errorf("%s: got incorrect path elements: %v", testCase.name, diff.ObjectReflectDiff(actual[i].RepoInfo, expected[i].RepoInfo))
+				if !reflect.DeepEqual(actual[i].Info, expected[i].Info) {
+					t.Errorf("%s: got incorrect path elements: %v", testCase.name, diff.ObjectReflectDiff(actual[i].Info, expected[i].Info))
 				}
 				if !reflect.DeepEqual(actual[i].Configuration.PromotionConfiguration, expected[i].Configuration.PromotionConfiguration) {
 					t.Errorf("%s: got incorrect promotion config: %v", testCase.name, diff.ObjectReflectDiff(actual[i].Configuration.PromotionConfiguration, expected[i].Configuration.PromotionConfiguration))

@@ -27,15 +27,15 @@ func main() {
 		logrus.Fatalf("Invalid options: %v", err)
 	}
 
-	var toCommit []config.Info
-	if err := config.OperateOnCIOperatorConfigDir(o.ConfigDir, func(configuration *api.ReleaseBuildConfiguration, repoInfo *config.FilePathElements) error {
-		if (o.Org != "" && o.Org != repoInfo.Org) || (o.Repo != "" && o.Repo != repoInfo.Repo) {
+	var toCommit []config.DataWithInfo
+	if err := config.OperateOnCIOperatorConfigDir(o.ConfigDir, func(configuration *api.ReleaseBuildConfiguration, info *config.Info) error {
+		if (o.Org != "" && o.Org != info.Org) || (o.Repo != "" && o.Repo != info.Repo) {
 			return nil
 		}
 		if !(promotion.PromotesOfficialImages(configuration) && configuration.PromotionConfiguration.Name == o.CurrentRelease) {
 			return nil
 		}
-		output := config.Info{Configuration: *configuration, RepoInfo: *repoInfo}
+		output := config.DataWithInfo{Configuration: *configuration, Info: *info}
 		if !o.Confirm {
 			output.Logger().Info("Would re-format file.")
 			return nil

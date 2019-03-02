@@ -44,3 +44,7 @@ required = [
 [[constraint]]
   name = "github.com/openshift/client-go"
   version = "3.9.0"
+
+[[constraint]]
+  name = "github.com/mattn/go-zglob"
+  version = "0.0.1"

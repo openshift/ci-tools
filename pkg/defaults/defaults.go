@@ -94,7 +94,7 @@ func FromConfig(
 		podClient = steps.NewPodClient(coreGetter, clusterConfig, coreGetter.RESTClient())
 	}
 
-	params := steps.NewDeferredParameters()
+	params := api.NewDeferredParameters()
 	params.Add("JOB_NAME", nil, func() (string, error) { return jobSpec.Job, nil })
 	params.Add("JOB_NAME_HASH", nil, func() (string, error) { return fmt.Sprintf("%x", sha256.Sum256([]byte(jobSpec.Job)))[:5], nil })
 	params.Add("JOB_NAME_SAFE", nil, func() (string, error) { return strings.Replace(jobSpec.Job, "_", "-", -1), nil })
@@ -138,7 +138,7 @@ func FromConfig(
 			if err != nil {
 				return nil, nil, fmt.Errorf("unable to access release images on remote cluster: %v", err)
 			}
-			step = steps.ReleaseImagesTagStep(*rawStep.ReleaseImagesTagStepConfiguration, srcClient, imageClient, routeGetter, configMapGetter, params, jobSpec)
+			step = release.ReleaseImagesTagStep(*rawStep.ReleaseImagesTagStepConfiguration, srcClient, imageClient, routeGetter, configMapGetter, params, jobSpec)
 			stepLinks = append(stepLinks, step.Creates()...)
 
 			releaseStep = release.AssembleReleaseStep(*rawStep.ReleaseImagesTagStepConfiguration, config.Resources, podClient, imageClient, artifactDir, jobSpec)
@@ -167,7 +167,7 @@ func FromConfig(
 		releaseStep, _ = checkForFullyQualifiedStep(releaseStep, params)
 		buildSteps = append(buildSteps, releaseStep)
 	} else {
-		buildSteps = append(buildSteps, steps.StableImagesTagStep(imageClient, jobSpec))
+		buildSteps = append(buildSteps, release.StableImagesTagStep(imageClient, jobSpec))
 	}
 
 	buildSteps = append(buildSteps, steps.ImagesReadyStep(imageStepLinks))
@@ -184,7 +184,7 @@ func FromConfig(
 				tags = append(tags, string(image.To))
 			}
 		}
-		postSteps = append(postSteps, steps.PromotionStep(*cfg, tags, imageClient, imageClient, jobSpec))
+		postSteps = append(postSteps, release.PromotionStep(*cfg, tags, imageClient, imageClient, jobSpec))
 	}
 
 	return buildSteps, postSteps, nil
@@ -193,7 +193,7 @@ func FromConfig(
 // checkForFullyQualifiedStep if all output parameters of this step are part of the
 // environment, replace the step with a shim that automatically provides those variables.
 // Returns true if the step was replaced.
-func checkForFullyQualifiedStep(step api.Step, params *steps.DeferredParameters) (api.Step, bool) {
+func checkForFullyQualifiedStep(step api.Step, params *api.DeferredParameters) (api.Step, bool) {
 	provides, link := step.Provides()
 
 	if values, ok := envHasAllParameters(provides); ok {

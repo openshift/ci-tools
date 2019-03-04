@@ -152,11 +152,9 @@ type ImageStreamTagReference struct {
 }
 
 // ReleaseTagConfiguration describes how a release is
-// assembled from release artifacts. There are two primary modes,
-// single stream, multiple tags (openshift/origin-v3.9:control-plane)
-// on one stream, or multiple streams with one tag
-// (openshift/origin-control-plane:v3.9). The former works well for
-// central control, the latter for distributed control.
+// assembled from release artifacts. A release image stream is a
+// single stream with multiple tags (openshift/origin-v3.9:control-plane),
+// each tag being a unique and well defined name for a component.
 type ReleaseTagConfiguration struct {
 	// Cluster is an optional cluster string (host, host:port, or
 	// scheme://host:port) to connect to for this image stream. The
@@ -170,14 +168,9 @@ type ReleaseTagConfiguration struct {
 	// job are tagged from.
 	Namespace string `json:"namespace"`
 
-	// Name is an optional image stream name to use that
-	// contains all component tags. If specified, tag is
-	// ignored.
+	// Name is the image stream name to use that contains all
+	// component tags.
 	Name string `json:"name"`
-
-	// Tag is the ImageStreamTag tagged in for each
-	// ImageStream in the above Namespace.
-	Tag string `json:"tag,omitempty"`
 
 	// NamePrefix is prepended to the final output image name
 	// if specified.
@@ -198,14 +191,9 @@ type PromotionConfiguration struct {
 	// artifacts will be published to.
 	Namespace string `json:"namespace"`
 
-	// Name is an optional image stream name to use that
-	// contains all component tags. If specified, tag is
-	// ignored.
+	// Name is the image stream name to use that
+	// contains all component tags.
 	Name string `json:"name"`
-
-	// Tag is the ImageStreamTag tagged in for each
-	// build image's ImageStream.
-	Tag string `json:"tag,omitempty"`
 
 	// NamePrefix is prepended to the final output image name
 	// if specified.

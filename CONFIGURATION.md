@@ -97,22 +97,12 @@ tag_specification:
   cluster: https://api.ci.openshift.org
   name: origin-v3.11
   namespace: openshift
-  tag: ''
   tag_overrides: {}
 ```
 
-There are two primary modes for assembling a release:
- - single `ImageStream`, multiple tags (`openshift/origin-v3.9:control-plane`)
- - multiple `ImageStream`s, one tag (`openshift/origin-control-plane:v3.9`)
-
-The former works well for central control, the latter for distributed control:
-when many disparate processes are publishing images at their own cadences, each
-process can own its own `ImageStream` and coordination between processes can be
-through coordination in `ImageStreamTag`s. When one process marshalls a release,
-the process can push to one `ImageStream` under multiple `ImageStreamTags`. In
-practice, the OpenShift releases are assembled using the former approach, while
-non-release images like infrastructure tooling, _etc_, are assembled using the
-latter.
+The release tag specification points to an image stream containing multiple tags,
+each of which references a single component by a well known name, e.g.
+`openshift/origin-v3.9:control-plane`.
 
 ## `tag_specification.cluster`
 `cluster` is an optional cluster string (`host`, `host:port`, or `scheme://host:port`)
@@ -120,16 +110,12 @@ to connect to for the `ImageStream`. The referenced OpenShift cluster must suppo
 anonymous access to retrieve `ImageStream`s, `ImageStreamTag`s, and
 `ImageStreamImage`s in the provided namespace.
 
-## `tag_specification.tag`
-`tag` is used to specify the single tag when multiple `ImageStreams` but one tag
-are used to assemble a release.
-
 ## `tag_specification.namespace`
 `namespace` determines the `Namespace` on the target cluster where release
 `ImageStreams` are located.
 
 ## `tag_specification.name`
-`name` is the `ImageStream` name when a single `ImageStream` but multiple
+`name` is the `ImageStream` name where a single `ImageStream` and multiple
 tags are used to assemble a release.
 
 ## `tag_specification.tag_overrides`

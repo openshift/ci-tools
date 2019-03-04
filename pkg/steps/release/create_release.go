@@ -37,12 +37,12 @@ func (s *assembleReleaseStep) Run(ctx context.Context, dry bool) error {
 	if err != nil {
 		return fmt.Errorf("could not resolve stable imagestream: %v", err)
 	}
-	cvo, ok := resolvePullSpec(stable, "cluster-version-operator")
+	cvo, ok := resolvePullSpec(stable, "cluster-version-operator", true)
 	if !ok {
 		log.Printf("No release image necessary, stable image stream does not include a cluster-version-operator image")
 		return nil
 	}
-	if _, ok := resolvePullSpec(stable, "cli"); !ok {
+	if _, ok := resolvePullSpec(stable, "cli", true); !ok {
 		return fmt.Errorf("no 'cli' image was tagged into the stable stream, that image is required for building a release")
 	}
 
@@ -147,25 +147,4 @@ func AssembleReleaseStep(config api.ReleaseTagConfiguration, resources api.Resou
 		artifactDir: artifactDir,
 		jobSpec:     jobSpec,
 	}
-}
-
-func resolvePullSpec(is *imageapi.ImageStream, tag string) (string, bool) {
-	for _, tags := range is.Status.Tags {
-		if tags.Tag != tag {
-			continue
-		}
-		if len(tags.Items) == 0 {
-			break
-		}
-		if image := tags.Items[0].Image; len(image) > 0 {
-			if len(is.Status.PublicDockerImageRepository) > 0 {
-				return fmt.Sprintf("%s@%s", is.Status.PublicDockerImageRepository, image), true
-			}
-			if len(is.Status.DockerImageRepository) > 0 {
-				return fmt.Sprintf("%s@%s", is.Status.DockerImageRepository, image), true
-			}
-		}
-		break
-	}
-	return "", false
 }

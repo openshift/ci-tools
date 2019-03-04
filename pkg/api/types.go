@@ -529,4 +529,6 @@ const (
 	RPMServeLocation = "/srv/repo"
 
 	StableImageStream = "stable"
+
+	ComponentFormatReplacement = "${component}"
 )

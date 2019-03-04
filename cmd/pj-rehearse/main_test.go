@@ -128,11 +128,11 @@ func getExpectedProwJobs(t *testing.T) sets.String {
 }
 
 func getRehersalsHelper(logger *logrus.Entry, prNumber int) ([]*prowconfig.Presubmit, error) {
-	candidateConfigPath := filepath.Join(candidatePath, diffs.ConfigInRepoPath)
-	candidateJobConfigPath := filepath.Join(candidatePath, diffs.JobConfigInRepoPath)
-	candidateCiopConfigPath := filepath.Join(candidatePath, diffs.CiopConfigInRepoPath)
-	masterConfigPath := filepath.Join(masterPath, diffs.ConfigInRepoPath)
-	masterJobConfigPath := filepath.Join(masterPath, diffs.JobConfigInRepoPath)
+	candidateConfigPath := filepath.Join(candidatePath, config.ConfigInRepoPath)
+	candidateJobConfigPath := filepath.Join(candidatePath, config.JobConfigInRepoPath)
+	candidateCiopConfigPath := filepath.Join(candidatePath, config.CiopConfigInRepoPath)
+	masterConfigPath := filepath.Join(masterPath, config.ConfigInRepoPath)
+	masterJobConfigPath := filepath.Join(masterPath, config.JobConfigInRepoPath)
 
 	prowConfig, err := prowconfig.Load(masterConfigPath, masterJobConfigPath)
 	if err != nil {

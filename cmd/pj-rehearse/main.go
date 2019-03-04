@@ -3,24 +3,16 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
-	"os/exec"
-	"path/filepath"
-	"strings"
 
 	"github.com/sirupsen/logrus"
 
 	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
-	prowconfig "k8s.io/test-infra/prow/config"
 	prowgithub "k8s.io/test-infra/prow/github"
 	pjdwapi "k8s.io/test-infra/prow/pod-utils/downwardapi"
 
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-
-	templateapi "github.com/openshift/api/template/v1"
-	templatescheme "github.com/openshift/client-go/template/clientset/versioned/scheme"
 
 	"github.com/openshift/ci-operator-prowgen/pkg/config"
 	"github.com/openshift/ci-operator-prowgen/pkg/diffs"
@@ -51,8 +43,8 @@ type options struct {
 	allowVolumes bool
 	debugLogPath string
 
-	candidatePath  string
-	rehearsalLimit int
+	releaseRepoPath string
+	rehearsalLimit  int
 }
 
 func gatherOptions() options {
@@ -64,7 +56,7 @@ func gatherOptions() options {
 	fs.BoolVar(&o.allowVolumes, "allow-volumes", false, "Allows jobs with extra volumes to be rehearsed")
 
 	fs.StringVar(&o.debugLogPath, "debug-log", "", "Alternate file for debug output, defaults to stderr")
-	fs.StringVar(&o.candidatePath, "candidate-path", "", "Path to a openshift/release working copy with a revision to be tested")
+	fs.StringVar(&o.releaseRepoPath, "candidate-path", "", "Path to a openshift/release working copy with a revision to be tested")
 
 	fs.IntVar(&o.rehearsalLimit, "rehearsal-limit", 15, "Upper limit of jobs attempted to rehearse (if more jobs would be rehearsed, none will)")
 
@@ -73,7 +65,7 @@ func gatherOptions() options {
 }
 
 func validateOptions(o options) error {
-	if len(o.candidatePath) == 0 {
+	if len(o.releaseRepoPath) == 0 {
 		return fmt.Errorf("--candidate-path was not provided")
 	}
 	return nil
@@ -143,27 +135,44 @@ func main() {
 		}
 	}
 
-	prowConfig, prowPRConfig, err := getProwConfigs(o.candidatePath, jobSpec.Refs.BaseSHA)
+	prConfig := config.GetAllConfigs(o.releaseRepoPath, logger)
+	masterConfig, err := config.GetAllConfigsFromSHA(o.releaseRepoPath, jobSpec.Refs.BaseSHA, logger)
 	if err != nil {
-		logger.WithError(err).Error("could not load prow configs")
+		logger.WithError(err).Error("could not load configuration from base revision of release repo")
 		gracefulExit(o.noFail, misconfigurationOutput)
 	}
 
-	ciopConfig, ciopPRConfig, err := getCiopConfigs(o.candidatePath, jobSpec.Refs.BaseSHA)
-	if err != nil {
-		logger.WithError(err).Error("could not load ci-operator configs")
+	// We always need both Prow config versions, otherwise we cannot compare them
+	if masterConfig.Prow == nil || prConfig.Prow == nil {
+		logger.WithError(err).Error("could not load Prow configs from base or tested revision of release repo")
+		gracefulExit(o.noFail, misconfigurationOutput)
+	}
+	// We always need PR versions of templates and ciop config, otherwise we cannot provide them to rehearsed jobs
+	if prConfig.Templates == nil || prConfig.CiOperator == nil {
+		logger.WithError(err).Error("could not load template/ci-operator configs from tested revision of release repo")
 		gracefulExit(o.noFail, misconfigurationOutput)
 	}
 
-	pjclient, err := rehearse.NewProwJobClient(clusterConfig, prowConfig.ProwJobNamespace, o.dryRun)
+	// We can only detect changes if we managed to load both ci-operator config versions
+	if masterConfig.CiOperator != nil && prConfig.CiOperator != nil {
+		changedCiopConfigs := diffs.GetChangedCiopConfigs(masterConfig.CiOperator, prConfig.CiOperator, logger)
+		for name := range changedCiopConfigs {
+			logger.WithField("ciop-config", name).Info("Changed ci-operator config")
+		}
+	}
+
+	// We can only detect changes if we managed to load both CI template versions
+	if masterConfig.Templates != nil && prConfig.Templates != nil {
+		changedTemplates := diffs.GetChangedTemplates(masterConfig.Templates, prConfig.Templates, logger)
+		for name := range changedTemplates {
+			logger.WithField("template-name", name).Info("Changed template")
+		}
+	}
+
+	pjclient, err := rehearse.NewProwJobClient(clusterConfig, masterConfig.Prow.ProwJobNamespace, o.dryRun)
 	if err != nil {
 		logger.WithError(err).Error("could not create a ProwJob client")
 		gracefulExit(o.noFail, misconfigurationOutput)
-	}
-
-	changedCiopConfigs := diffs.GetChangedCiopConfigs(ciopConfig, ciopPRConfig, logger)
-	for name := range changedCiopConfigs {
-		logger.WithField("ciop-config", name).Info("Changed ci-operator config")
 	}
 
 	debugLogger := logrus.New()
@@ -179,8 +188,8 @@ func main() {
 	}
 	loggers := rehearse.Loggers{Job: logger, Debug: debugLogger.WithField(prowgithub.PrLogField, prNumber)}
 
-	changedPresubmits := diffs.GetChangedPresubmits(prowConfig, prowPRConfig, logger)
-	rehearsals := rehearse.ConfigureRehearsalJobs(changedPresubmits, ciopPRConfig, prNumber, loggers, o.allowVolumes)
+	changedPresubmits := diffs.GetChangedPresubmits(masterConfig.Prow, prConfig.Prow, logger)
+	rehearsals := rehearse.ConfigureRehearsalJobs(changedPresubmits, prConfig.CiOperator, prNumber, loggers, o.allowVolumes)
 	if len(rehearsals) == 0 {
 		logger.Info("no jobs to rehearse have been found")
 		os.Exit(0)
@@ -193,17 +202,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	masterTemplates, prTemplates, err := getTemplates(o.candidatePath, jobSpec.Refs.BaseSHA)
-	if err != nil {
-		logger.WithError(err).Error("could not load templates")
-	}
-
-	changedTemplates := diffs.GetChangedTemplates(masterTemplates, prTemplates, logger)
-	for name := range changedTemplates {
-		logger.WithField("template-name", name).Info("Changed template")
-	}
-
-	executor := rehearse.NewExecutor(rehearsals, prNumber, o.candidatePath, jobSpec.Refs, o.dryRun, loggers, pjclient)
+	executor := rehearse.NewExecutor(rehearsals, prNumber, o.releaseRepoPath, jobSpec.Refs, o.dryRun, loggers, pjclient)
 	success, err := executor.ExecuteJobs()
 	if err != nil {
 		logger.WithError(err).Error("Failed to rehearse jobs")
@@ -213,147 +212,5 @@ func main() {
 		logger.Error("Some jobs failed their rehearsal runs")
 		gracefulExit(o.noFail, jobsFailureOutput)
 	}
-	logger.Info("All jobs were rehearsed successfuly")
-}
-
-func getCurrentSHA(repoPath string) (string, error) {
-	cmd := exec.Command("git", "rev-parse", "HEAD")
-	cmd.Dir = repoPath
-	sha, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("'%s' failed with error=%v", cmd.Args, err)
-	}
-
-	return strings.TrimSpace(string(sha)), nil
-}
-
-func gitCheckout(candidatePath, baseSHA string) error {
-	cmd := exec.Command("git", "checkout", baseSHA)
-	cmd.Dir = candidatePath
-	stdoutStderr, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("'%s' failed with out: %s and error %v", cmd.Args, stdoutStderr, err)
-	}
-	return nil
-}
-
-func getCiopConfigs(candidatePath, baseSHA string) (config.CompoundCiopConfig, config.CompoundCiopConfig, error) {
-	currentSHA, err := getCurrentSHA(candidatePath)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get SHA of current HEAD: %v", err)
-	}
-
-	candidateConfigPath := filepath.Join(candidatePath, diffs.CiopConfigInRepoPath)
-
-	prCiopConfig, err := config.CompoundLoad(candidateConfigPath)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to load PR's ci-operator configs")
-	}
-
-	if err := gitCheckout(candidatePath, baseSHA); err != nil {
-		return nil, nil, fmt.Errorf("failed to checkout worktree: %v", err)
-	}
-
-	masterCiopConfig, err := config.CompoundLoad(candidateConfigPath)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to load base ci-operator configs")
-	}
-
-	if err := gitCheckout(candidatePath, currentSHA); err != nil {
-		return nil, nil, fmt.Errorf("failed to check out tested revision back: %v", err)
-	}
-
-	return masterCiopConfig, prCiopConfig, nil
-}
-
-func getProwConfigs(candidatePath, baseSHA string) (*prowconfig.Config, *prowconfig.Config, error) {
-	currentSHA, err := getCurrentSHA(candidatePath)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get SHA of current HEAD: %v", err)
-	}
-
-	candidateConfigPath := filepath.Join(candidatePath, diffs.ConfigInRepoPath)
-	candidateJobConfigPath := filepath.Join(candidatePath, diffs.JobConfigInRepoPath)
-
-	prowPRConfig, err := prowconfig.Load(candidateConfigPath, candidateJobConfigPath)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to load PR's Prow config: %v", err)
-	}
-
-	if err := gitCheckout(candidatePath, baseSHA); err != nil {
-		return nil, nil, fmt.Errorf("could not checkout worktree: %v", err)
-	}
-
-	masterProwConfig, err := prowconfig.Load(candidateConfigPath, candidateJobConfigPath)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to load master's Prow config: %v", err)
-	}
-
-	if err := gitCheckout(candidatePath, currentSHA); err != nil {
-		return nil, nil, fmt.Errorf("failed to check out tested revision back: %v", err)
-	}
-
-	return masterProwConfig, prowPRConfig, nil
-}
-
-func getTemplates(candidatePath string, baseSHA string) (map[string]*templateapi.Template, map[string]*templateapi.Template, error) {
-	templatesPath := filepath.Join(candidatePath, diffs.TemplatesPath)
-	currentSHA, err := getCurrentSHA(candidatePath)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get SHA of current HEAD: %v", err)
-	}
-
-	prTemplates, err := parseTemplates(templatesPath)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	if err := gitCheckout(candidatePath, baseSHA); err != nil {
-		return nil, nil, fmt.Errorf("could not checkout worktree: %v", err)
-	}
-	masterTemplates, err := parseTemplates(templatesPath)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	if err := gitCheckout(candidatePath, currentSHA); err != nil {
-		return nil, nil, fmt.Errorf("failed to check out tested revision back: %v", err)
-	}
-
-	return masterTemplates, prTemplates, nil
-}
-
-func parseTemplates(templatePath string) (map[string]*templateapi.Template, error) {
-	templates := make(map[string]*templateapi.Template)
-	err := filepath.Walk(templatePath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return fmt.Errorf("prevent panic by handling failure accessing a path %q: %v", path, err)
-		}
-
-		if isYAML(path, info) {
-			contents, err := ioutil.ReadFile(path)
-			if err != nil {
-				return fmt.Errorf("could not read file %s for template: %v", path, err)
-			}
-
-			if obj, _, err := templatescheme.Codecs.UniversalDeserializer().Decode(contents, nil, nil); err == nil {
-				if template, ok := obj.(*templateapi.Template); ok {
-					if len(template.Name) == 0 {
-						template.Name = filepath.Base(path)
-						template.Name = strings.TrimSuffix(template.Name, filepath.Ext(template.Name))
-					}
-					templates[template.Name] = template
-				}
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, fmt.Errorf("error walking the path %q: %v", templatePath, err)
-	}
-	return templates, nil
-}
-
-func isYAML(file string, info os.FileInfo) bool {
-	return !info.IsDir() && (filepath.Ext(file) == ".yaml" || filepath.Ext(file) == ".yml")
+	logger.Info("All jobs were rehearsed successfully")
 }

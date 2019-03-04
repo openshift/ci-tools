@@ -62,11 +62,11 @@ func validatePromotionWithTagSpec(promotion *PromotionConfiguration, tagSpec *Re
 	if len(promotion.Namespace) == 0 && len(tagSpec.Namespace) == 0 {
 		validationErrors = append(validationErrors, fmt.Errorf("promotion: no namespace defined"))
 	}
-	if len(promotion.Name) == 0 {
-		if len(tagSpec.Name) != 0 {
+	if len(promotion.Name) == 0 && len(promotion.Tag) == 0 {
+		if len(tagSpec.Name) != 0 || len(tagSpec.Tag) != 0 {
 			// will get defaulted, is ok
 		} else {
-			validationErrors = append(validationErrors, errors.New("promotion: no name provided and could not derive defaults from tag_specification"))
+			validationErrors = append(validationErrors, errors.New("promotion: no name or tag provided and could not derive defaults from tag_specification"))
 		}
 	}
 
@@ -156,8 +156,8 @@ func validatePromotionConfiguration(fieldRoot string, input PromotionConfigurati
 		validationErrors = append(validationErrors, fmt.Errorf("%s: no namespace defined", fieldRoot))
 	}
 
-	if len(input.Name) == 0 {
-		validationErrors = append(validationErrors, fmt.Errorf("%s: no name defined", fieldRoot))
+	if len(input.Name) == 0 && len(input.Tag) == 0 {
+		validationErrors = append(validationErrors, fmt.Errorf("%s: no name or tag defined", fieldRoot))
 	}
 	return validationErrors
 }
@@ -169,8 +169,8 @@ func validateReleaseTagConfiguration(fieldRoot string, input ReleaseTagConfigura
 		validationErrors = append(validationErrors, fmt.Errorf("%s: no namespace defined", fieldRoot))
 	}
 
-	if len(input.Name) == 0 {
-		validationErrors = append(validationErrors, fmt.Errorf("%s: no name defined", fieldRoot))
+	if len(input.Name) == 0 && len(input.Tag) == 0 {
+		validationErrors = append(validationErrors, fmt.Errorf("%s: no name or tag defined", fieldRoot))
 	}
 	return validationErrors
 }

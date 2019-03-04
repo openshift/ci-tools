@@ -35,7 +35,7 @@ func StableImagesTagStep(dstClient imageclientset.ImageV1Interface, jobSpec *api
 }
 
 func (s *stableImagesTagStep) Run(ctx context.Context, dry bool) error {
-	log.Printf("Will output images to %s:%s", api.StableImageStream, api.ComponentFormatReplacement)
+	log.Printf("Will output images to %s:${component}", api.StableImageStream)
 
 	newIS := &imageapi.ImageStream{
 		ObjectMeta: meta.ObjectMeta{
@@ -122,7 +122,10 @@ func (s *releaseImagesTagStep) Inputs(ctx context.Context, dry bool) (api.InputD
 }
 
 func sourceName(config api.ReleaseTagConfiguration) string {
-	return fmt.Sprintf("%s/%s:%s", config.Namespace, config.Name, api.ComponentFormatReplacement)
+	if len(config.Name) > 0 {
+		return fmt.Sprintf("%s/%s:${component}", config.Namespace, config.Name)
+	}
+	return fmt.Sprintf("%s/${component}:%s", config.Namespace, config.Tag)
 }
 
 func (s *releaseImagesTagStep) Run(ctx context.Context, dry bool) error {
@@ -136,75 +139,160 @@ func (s *releaseImagesTagStep) Run(ctx context.Context, dry bool) error {
 		}
 	}
 
-	is, err := s.srcClient.ImageStreams(s.config.Namespace).Get(s.config.Name, meta.GetOptions{})
-	if err != nil {
-		return fmt.Errorf("could not resolve stable imagestream: %v", err)
-	}
-
-	// check to see if the src and dst are the same cluster, in which case we can use a more efficient tagging path
-	if len(s.config.Cluster) > 0 {
-		if dstIs, err := s.dstClient.ImageStreams(is.Namespace).Get(is.Name, meta.GetOptions{}); err == nil && dstIs.UID == is.UID {
-			s.config.Cluster = ""
-		}
-	}
-
-	var repo string
-	if len(s.config.Cluster) > 0 {
-		if len(is.Status.PublicDockerImageRepository) > 0 {
-			repo = is.Status.PublicDockerImageRepository
-		} else if len(is.Status.DockerImageRepository) > 0 {
-			repo = is.Status.DockerImageRepository
-		} else {
-			return fmt.Errorf("remote image stream %s has no accessible image registry value", s.config.Name)
-		}
-	}
-
-	is.UID = ""
-	newIS := &imageapi.ImageStream{
-		ObjectMeta: meta.ObjectMeta{
-			Name: api.StableImageStream,
-		},
-		Spec: imageapi.ImageStreamSpec{
-			LookupPolicy: imageapi.ImageLookupPolicy{
-				Local: true,
-			},
-		},
-	}
-	for _, tag := range is.Spec.Tags {
-		if valid, image := findStatusTag(is, tag.Name); valid != nil {
-			if len(s.config.Cluster) > 0 {
-				if len(image) > 0 {
-					valid = &coreapi.ObjectReference{Kind: "DockerImage", Name: fmt.Sprintf("%s@%s", repo, image)}
-				} else {
-					valid = &coreapi.ObjectReference{Kind: "DockerImage", Name: fmt.Sprintf("%s:%s", repo, tag.Name)}
-				}
-			}
-			newIS.Spec.Tags = append(newIS.Spec.Tags, imageapi.TagReference{
-				Name: tag.Name,
-				From: valid,
-			})
-		}
-	}
-
-	if dry {
-		istJSON, err := json.MarshalIndent(newIS, "", "  ")
+	if len(s.config.Name) > 0 {
+		is, err := s.srcClient.ImageStreams(s.config.Namespace).Get(s.config.Name, meta.GetOptions{})
 		if err != nil {
-			return fmt.Errorf("failed to marshal image stream: %v", err)
+			return fmt.Errorf("could not resolve stable imagestream: %v", err)
 		}
-		fmt.Printf("%s\n", istJSON)
+
+		// check to see if the src and dst are the same cluster, in which case we can use a more efficient tagging path
+		if len(s.config.Cluster) > 0 {
+			if dstIs, err := s.dstClient.ImageStreams(is.Namespace).Get(is.Name, meta.GetOptions{}); err == nil && dstIs.UID == is.UID {
+				s.config.Cluster = ""
+			}
+		}
+
+		var repo string
+		if len(s.config.Cluster) > 0 {
+			if len(is.Status.PublicDockerImageRepository) > 0 {
+				repo = is.Status.PublicDockerImageRepository
+			} else if len(is.Status.DockerImageRepository) > 0 {
+				repo = is.Status.DockerImageRepository
+			} else {
+				return fmt.Errorf("remote image stream %s has no accessible image registry value", s.config.Name)
+			}
+		}
+
+		is.UID = ""
+		newIS := &imageapi.ImageStream{
+			ObjectMeta: meta.ObjectMeta{
+				Name: api.StableImageStream,
+			},
+			Spec: imageapi.ImageStreamSpec{
+				LookupPolicy: imageapi.ImageLookupPolicy{
+					Local: true,
+				},
+			},
+		}
+		for _, tag := range is.Spec.Tags {
+			if valid, image := findStatusTag(is, tag.Name); valid != nil {
+				if len(s.config.Cluster) > 0 {
+					if len(image) > 0 {
+						valid = &coreapi.ObjectReference{Kind: "DockerImage", Name: fmt.Sprintf("%s@%s", repo, image)}
+					} else {
+						valid = &coreapi.ObjectReference{Kind: "DockerImage", Name: fmt.Sprintf("%s:%s", repo, tag.Name)}
+					}
+				}
+				newIS.Spec.Tags = append(newIS.Spec.Tags, imageapi.TagReference{
+					Name: tag.Name,
+					From: valid,
+				})
+			}
+		}
+
+		if dry {
+			istJSON, err := json.MarshalIndent(newIS, "", "  ")
+			if err != nil {
+				return fmt.Errorf("failed to marshal image stream: %v", err)
+			}
+			fmt.Printf("%s\n", istJSON)
+			return nil
+		}
+		is, err = s.dstClient.ImageStreams(s.jobSpec.Namespace).Create(newIS)
+		if err != nil && !errors.IsAlreadyExists(err) {
+			return fmt.Errorf("could not copy stable imagestreamtag: %v", err)
+		}
+
+		for _, tag := range is.Spec.Tags {
+			spec, ok := resolvePullSpec(is, tag.Name, false)
+			if !ok {
+				continue
+			}
+			s.params.Set(componentToParamName(tag.Name), spec)
+		}
+
 		return nil
 	}
-	is, err = s.dstClient.ImageStreams(s.jobSpec.Namespace).Create(newIS)
-	if err != nil && !errors.IsAlreadyExists(err) {
-		return fmt.Errorf("could not copy stable imagestreamtag: %v", err)
+
+	stableImageStreams, err := s.srcClient.ImageStreams(s.config.Namespace).List(meta.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("could not resolve stable imagestreams: %v", err)
 	}
 
-	for _, tag := range is.Spec.Tags {
-		spec, ok := resolvePullSpec(is, tag.Name, false)
-		if !ok {
-			continue
+	for i, stableImageStream := range stableImageStreams.Items {
+		log.Printf("Considering stable image stream %s", stableImageStream.Name)
+		targetTag := s.config.Tag
+		if override, ok := s.config.TagOverrides[stableImageStream.Name]; ok {
+			targetTag = override
 		}
-		s.params.Set(componentToParamName(tag.Name), spec)
+
+		// check exactly once to see if the src and dst are the same cluster, in which case we can use a more efficient tagging path
+		if i == 0 && len(s.config.Cluster) > 0 {
+			if dstIs, err := s.dstClient.ImageStreams(stableImageStream.Namespace).Get(stableImageStream.Name, meta.GetOptions{}); err == nil && dstIs.UID == stableImageStream.UID {
+				s.config.Cluster = ""
+			}
+		}
+
+		var repo string
+		if len(s.config.Cluster) > 0 {
+			if len(stableImageStream.Status.PublicDockerImageRepository) > 0 {
+				repo = stableImageStream.Status.PublicDockerImageRepository
+			} else if len(stableImageStream.Status.DockerImageRepository) > 0 {
+				repo = stableImageStream.Status.DockerImageRepository
+			} else {
+				return fmt.Errorf("remote image stream %s has no accessible image registry value", s.config.Name)
+			}
+		}
+
+		for _, tag := range stableImageStream.Spec.Tags {
+			if tag.Name == targetTag {
+				log.Printf("Cross-tagging %s:%s from %s/%s:%s", stableImageStream.Name, targetTag, stableImageStream.Namespace, stableImageStream.Name, targetTag)
+				var id string
+				for _, tagStatus := range stableImageStream.Status.Tags {
+					if tagStatus.Tag == targetTag {
+						id = tagStatus.Items[0].Image
+					}
+				}
+				if len(id) == 0 {
+					return fmt.Errorf("no image found backing %s/%s:%s", stableImageStream.Namespace, stableImageStream.Name, targetTag)
+				}
+				ist := &imageapi.ImageStreamTag{
+					ObjectMeta: meta.ObjectMeta{
+						Namespace: s.jobSpec.Namespace,
+						Name:      fmt.Sprintf("%s:%s", stableImageStream.Name, targetTag),
+					},
+					Tag: &imageapi.TagReference{
+						Name: targetTag,
+						From: &coreapi.ObjectReference{
+							Kind:      "ImageStreamImage",
+							Name:      fmt.Sprintf("%s@%s", stableImageStream.Name, id),
+							Namespace: s.config.Namespace,
+						},
+					},
+				}
+
+				if len(s.config.Cluster) > 0 {
+					ist.Tag.From = &coreapi.ObjectReference{Kind: "DockerImage", Name: fmt.Sprintf("%s@%s", repo, id)}
+				}
+
+				if dry {
+					istJSON, err := json.MarshalIndent(ist, "", "  ")
+					if err != nil {
+						return fmt.Errorf("failed to marshal imagestreamtag: %v", err)
+					}
+					fmt.Printf("%s\n", istJSON)
+					continue
+				}
+				ist, err := s.dstClient.ImageStreamTags(s.jobSpec.Namespace).Create(ist)
+				if err != nil && !errors.IsAlreadyExists(err) {
+					return fmt.Errorf("could not copy stable imagestreamtag: %v", err)
+				}
+
+				if spec, ok := resolvePullSpec(&stableImageStream, tag.Name, false); ok {
+					s.params.Set(componentToParamName(tag.Name), spec)
+				}
+			}
+		}
 	}
 
 	return nil
@@ -234,7 +322,12 @@ func (s *releaseImagesTagStep) imageFormat() (string, error) {
 		return "REGISTRY", err
 	}
 	registry := strings.SplitN(spec, "/", 2)[0]
-	format := fmt.Sprintf("%s/%s/%s:%s", registry, s.jobSpec.Namespace, fmt.Sprintf("%s%s", s.config.NamePrefix, api.StableImageStream), api.ComponentFormatReplacement)
+	var format string
+	if len(s.config.Name) > 0 {
+		format = fmt.Sprintf("%s/%s/%s:%s", registry, s.jobSpec.Namespace, fmt.Sprintf("%s%s", s.config.NamePrefix, api.StableImageStream), api.ComponentFormatReplacement)
+	} else {
+		format = fmt.Sprintf("%s/%s/%s:%s", registry, s.jobSpec.Namespace, fmt.Sprintf("%s%s", s.config.NamePrefix, api.ComponentFormatReplacement), s.config.Tag)
+	}
 	return format, nil
 }
 

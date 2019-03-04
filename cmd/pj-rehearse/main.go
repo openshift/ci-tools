@@ -51,8 +51,8 @@ type options struct {
 	allowVolumes bool
 	debugLogPath string
 
-	candidatePath  string
-	rehearsalLimit int
+	releaseRepoPath string
+	rehearsalLimit  int
 }
 
 func gatherOptions() options {
@@ -64,7 +64,7 @@ func gatherOptions() options {
 	fs.BoolVar(&o.allowVolumes, "allow-volumes", false, "Allows jobs with extra volumes to be rehearsed")
 
 	fs.StringVar(&o.debugLogPath, "debug-log", "", "Alternate file for debug output, defaults to stderr")
-	fs.StringVar(&o.candidatePath, "candidate-path", "", "Path to a openshift/release working copy with a revision to be tested")
+	fs.StringVar(&o.releaseRepoPath, "candidate-path", "", "Path to a openshift/release working copy with a revision to be tested")
 
 	fs.IntVar(&o.rehearsalLimit, "rehearsal-limit", 15, "Upper limit of jobs attempted to rehearse (if more jobs would be rehearsed, none will)")
 
@@ -73,7 +73,7 @@ func gatherOptions() options {
 }
 
 func validateOptions(o options) error {
-	if len(o.candidatePath) == 0 {
+	if len(o.releaseRepoPath) == 0 {
 		return fmt.Errorf("--candidate-path was not provided")
 	}
 	return nil
@@ -143,13 +143,13 @@ func main() {
 		}
 	}
 
-	prowConfig, prowPRConfig, err := getProwConfigs(o.candidatePath, jobSpec.Refs.BaseSHA)
+	prowConfig, prowPRConfig, err := getProwConfigs(o.releaseRepoPath, jobSpec.Refs.BaseSHA)
 	if err != nil {
 		logger.WithError(err).Error("could not load prow configs")
 		gracefulExit(o.noFail, misconfigurationOutput)
 	}
 
-	ciopConfig, ciopPRConfig, err := getCiopConfigs(o.candidatePath, jobSpec.Refs.BaseSHA)
+	ciopConfig, ciopPRConfig, err := getCiopConfigs(o.releaseRepoPath, jobSpec.Refs.BaseSHA)
 	if err != nil {
 		logger.WithError(err).Error("could not load ci-operator configs")
 		gracefulExit(o.noFail, misconfigurationOutput)
@@ -193,7 +193,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	masterTemplates, prTemplates, err := getTemplates(o.candidatePath, jobSpec.Refs.BaseSHA)
+	masterTemplates, prTemplates, err := getTemplates(o.releaseRepoPath, jobSpec.Refs.BaseSHA)
 	if err != nil {
 		logger.WithError(err).Error("could not load templates")
 	}
@@ -203,7 +203,7 @@ func main() {
 		logger.WithField("template-name", name).Info("Changed template")
 	}
 
-	executor := rehearse.NewExecutor(rehearsals, prNumber, o.candidatePath, jobSpec.Refs, o.dryRun, loggers, pjclient)
+	executor := rehearse.NewExecutor(rehearsals, prNumber, o.releaseRepoPath, jobSpec.Refs, o.dryRun, loggers, pjclient)
 	success, err := executor.ExecuteJobs()
 	if err != nil {
 		logger.WithError(err).Error("Failed to rehearse jobs")

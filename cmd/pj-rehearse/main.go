@@ -296,7 +296,9 @@ func getProwConfigs(candidatePath, baseSHA string) (*prowconfig.Config, *prowcon
 	return masterProwConfig, prowPRConfig, nil
 }
 
-func getTemplates(candidatePath string, baseSHA string) (map[string]*templateapi.Template, map[string]*templateapi.Template, error) {
+type CiTemplates map[string]*templateapi.Template
+
+func getTemplates(candidatePath string, baseSHA string) (CiTemplates, CiTemplates, error) {
 	templatesPath := filepath.Join(candidatePath, diffs.TemplatesPath)
 	currentSHA, err := getCurrentSHA(candidatePath)
 	if err != nil {

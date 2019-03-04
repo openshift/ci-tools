@@ -156,7 +156,7 @@ func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 	for _, ref := range instance.Status.Objects {
 		switch {
 		case ref.Ref.Kind == "Pod" && ref.Ref.APIVersion == "v1":
-			err := waitForPodCompletion(s.podClient.Pods(s.jobSpec.Namespace), ref.Ref.Name, testCaseNotifier)
+			err := waitForPodCompletion(s.podClient.Pods(s.jobSpec.Namespace), ref.Ref.Name, testCaseNotifier, false)
 			s.subTests = append(s.subTests, testCaseNotifier.SubTests(fmt.Sprintf("%s - %s ", s.Description(), ref.Ref.Name))...)
 			if err != nil {
 				return fmt.Errorf("template pod %q failed: %v", ref.Ref.Name, err)
@@ -446,11 +446,10 @@ func waitForCompletedPodDeletion(podClient coreclientset.PodInterface, name stri
 	return waitForPodDeletion(podClient, name, uid)
 }
 
-func waitForPodCompletion(podClient coreclientset.PodInterface, name string, notifier ContainerNotifier) error {
+func waitForPodCompletion(podClient coreclientset.PodInterface, name string, notifier ContainerNotifier, skipLogs bool) error {
 	if notifier == nil {
 		notifier = NopNotifier
 	}
-	skipLogs := false
 	completed := make(map[string]time.Time)
 	for {
 		retry, err := waitForPodCompletionOrTimeout(podClient, name, completed, notifier, skipLogs)
@@ -494,7 +493,7 @@ func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name st
 	if pod.Spec.RestartPolicy == coreapi.RestartPolicyAlways {
 		return false, nil
 	}
-	podLogNewFailedContainers(podClient, pod, completed, notifier)
+	podLogNewFailedContainers(podClient, pod, completed, notifier, skipLogs)
 	if podJobIsOK(pod) {
 		if !skipLogs {
 			log.Printf("Pod %s already succeeded in %s", pod.Name, podDuration(pod).Truncate(time.Second))
@@ -512,9 +511,11 @@ func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name st
 			return true, nil
 		}
 		if pod, ok := event.Object.(*coreapi.Pod); ok {
-			podLogNewFailedContainers(podClient, pod, completed, notifier)
+			podLogNewFailedContainers(podClient, pod, completed, notifier, skipLogs)
 			if podJobIsOK(pod) {
-				log.Printf("Pod %s succeeded after %s", pod.Name, podDuration(pod).Truncate(time.Second))
+				if !skipLogs {
+					log.Printf("Pod %s succeeded after %s", pod.Name, podDuration(pod).Truncate(time.Second))
+				}
 				return false, nil
 			}
 			if podJobIsFailed(pod) {
@@ -523,7 +524,7 @@ func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name st
 			continue
 		}
 		if event.Type == watch.Deleted {
-			podLogNewFailedContainers(podClient, pod, completed, notifier)
+			podLogNewFailedContainers(podClient, pod, completed, notifier, skipLogs)
 			return false, appendLogToError(fmt.Errorf("the pod %s/%s was deleted without completing after %s (failed containers: %s)", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", ")), podMessages(pod))
 		}
 		log.Printf("error: Unrecognized event in watch: %v %#v", event.Type, event.Object)
@@ -680,7 +681,7 @@ func failedContainerNames(pod *coreapi.Pod) []string {
 	return names
 }
 
-func podLogNewFailedContainers(podClient coreclientset.PodInterface, pod *coreapi.Pod, completed map[string]time.Time, notifier ContainerNotifier) {
+func podLogNewFailedContainers(podClient coreclientset.PodInterface, pod *coreapi.Pod, completed map[string]time.Time, notifier ContainerNotifier, skipLogs bool) {
 	var statuses []coreapi.ContainerStatus
 	statuses = append(statuses, pod.Status.InitContainerStatuses...)
 	statuses = append(statuses, pod.Status.ContainerStatuses...)
@@ -697,7 +698,9 @@ func podLogNewFailedContainers(podClient coreclientset.PodInterface, pod *coreap
 		notifier.Notify(pod, status.Name)
 
 		if s.ExitCode == 0 {
-			log.Printf("Container %s in pod %s completed successfully", status.Name, pod.Name)
+			if !skipLogs {
+				log.Printf("Container %s in pod %s completed successfully", status.Name, pod.Name)
+			}
 			continue
 		}
 

@@ -194,9 +194,18 @@ func (s *releaseImagesTagStep) Run(ctx context.Context, dry bool) error {
 		fmt.Printf("%s\n", istJSON)
 		return nil
 	}
+
+	initialIS := newIS.DeepCopy()
+	initialIS.Name = fmt.Sprintf("%s-initial", api.StableImageStream)
+
 	is, err = s.dstClient.ImageStreams(s.jobSpec.Namespace).Create(newIS)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		return fmt.Errorf("could not copy stable imagestreamtag: %v", err)
+	}
+
+	is, err = s.dstClient.ImageStreams(s.jobSpec.Namespace).Create(initialIS)
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return fmt.Errorf("could not copy stable-initial imagestreamtag: %v", err)
 	}
 
 	for _, tag := range is.Spec.Tags {

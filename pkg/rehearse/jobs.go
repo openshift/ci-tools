@@ -25,6 +25,9 @@ import (
 	"k8s.io/test-infra/prow/pjutil"
 
 	"github.com/openshift/ci-operator-prowgen/pkg/config"
+
+	"k8s.io/client-go/kubernetes/fake"
+	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 )
 
 const (
@@ -51,6 +54,21 @@ func NewProwJobClient(clusterConfig *rest.Config, namespace string, dry bool) (p
 		return nil, err
 	}
 	return pjcset.ProwV1().ProwJobs(namespace), nil
+}
+
+// NewCMClient creates a configMap client with a dry run capability
+func NewCMClient(clusterConfig *rest.Config, namespace string, dry bool) (coreclientset.ConfigMapInterface, error) {
+	if dry {
+		c := fake.NewSimpleClientset()
+		return c.CoreV1().ConfigMaps(namespace), nil
+	}
+
+	cmClient, err := coreclientset.NewForConfig(clusterConfig)
+	if err != nil {
+		fmt.Errorf("could not get core client for cluster config: %v", err)
+	}
+
+	return cmClient.ConfigMaps(namespace), nil
 }
 
 func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber int) (*prowconfig.Presubmit, error) {

@@ -104,15 +104,15 @@ func TestGeneratePodSpec(t *testing.T) {
 
 func TestGeneratePodSpecTemplate(t *testing.T) {
 	tests := []struct {
-		info *config.Info
-		release    string
-		test       ciop.TestStepConfiguration
+		info    *config.Info
+		release string
+		test    ciop.TestStepConfiguration
 
 		expected *kubeapi.PodSpec
 	}{
 		{
-			info: &config.Info{Org: "organization", Repo: "repo", Branch: "branch"},
-			release:    "origin-v4.0",
+			info:    &config.Info{Org: "organization", Repo: "repo", Branch: "branch"},
+			release: "origin-v4.0",
 			test: ciop.TestStepConfiguration{
 				As:       "test",
 				Commands: "commands",
@@ -196,8 +196,8 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 			},
 		},
 		{
-			info: &config.Info{Org: "organization", Repo: "repo", Branch: "branch"},
-			release:    "origin-v4.0",
+			info:    &config.Info{Org: "organization", Repo: "repo", Branch: "branch"},
+			release: "origin-v4.0",
 			test: ciop.TestStepConfiguration{
 				As:       "test",
 				Commands: "commands",

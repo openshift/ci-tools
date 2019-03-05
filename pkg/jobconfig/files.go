@@ -68,7 +68,7 @@ func extractInfoFromPath(configFilePath string) (*Info, error) {
 	basename := filepath.Base(configFilePath)
 	basenameWithoutSuffix := strings.TrimSuffix(basename, filepath.Ext(configFilePath))
 	orgRepo := fmt.Sprintf("%s-%s-", org, repo)
-	if ! strings.HasPrefix(basenameWithoutSuffix, orgRepo) {
+	if !strings.HasPrefix(basenameWithoutSuffix, orgRepo) {
 		return nil, fmt.Errorf("file name was not prefixed with %q: %q", orgRepo, basenameWithoutSuffix)
 	}
 	branchType := strings.TrimPrefix(basenameWithoutSuffix, orgRepo)

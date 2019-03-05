@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
 
+	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	clienttesting "k8s.io/client-go/testing"
 
 	"k8s.io/test-infra/prow/apis/prowjobs/v1"
@@ -160,6 +161,8 @@ func getRehersalsHelper(logger *logrus.Entry, prNumber int) ([]*prowconfig.Presu
 	changedCiopConfigs := diffs.GetChangedCiopConfigs(ciopMasterConfig, ciopPrConfig, logger)
 	changedPresubmits.AddAll(diffs.GetPresubmitsForCiopConfigs(prowPRConfig, changedCiopConfigs, logger))
 
-	rehearsals := rehearse.ConfigureRehearsalJobs(changedPresubmits, ciopPrConfig, prNumber, rehearse.Loggers{Job: logger, Debug: logger}, false)
+	var cmClient coreclientset.ConfigMapInterface
+	rehearsals := rehearse.ConfigureRehearsalJobs(changedPresubmits, ciopPrConfig, prNumber, rehearse.Loggers{Job: logger, Debug: logger}, false, cmClient, nil, true)
+
 	return rehearsals, nil
 }

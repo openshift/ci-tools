@@ -67,7 +67,7 @@ func NewCMClient(clusterConfig *rest.Config, namespace string, dry bool) (corecl
 
 	cmClient, err := coreclientset.NewForConfig(clusterConfig)
 	if err != nil {
-		fmt.Errorf("could not get core client for cluster config: %v", err)
+		return nil, fmt.Errorf("could not get core client for cluster config: %v", err)
 	}
 
 	return cmClient.ConfigMaps(namespace), nil

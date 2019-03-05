@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"regexp"
 
-	cioperatorapi "github.com/openshift/ci-operator/pkg/api"
 	"github.com/sirupsen/logrus"
+
+	cioperatorapi "github.com/openshift/ci-operator/pkg/api"
 )
 
 const (
@@ -56,7 +57,7 @@ func DetermineReleaseBranches(currentRelease, futureRelease, currentBranch strin
 		futureBranchForCurrentRelease = currentBranch
 		futureBranchForFutureRelease = fmt.Sprintf("openshift-%s", futureRelease)
 	} else {
-		return "", "", fmt.Errorf("invalid branch %q promoting to current relesae", currentBranch)
+		return "", "", fmt.Errorf("invalid branch %q promoting to current release", currentBranch)
 	}
 	return futureBranchForCurrentRelease, futureBranchForFutureRelease, nil
 }

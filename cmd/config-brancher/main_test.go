@@ -4,9 +4,11 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/openshift/ci-operator-prowgen/pkg/config"
-	"github.com/openshift/ci-operator/pkg/api"
 	"k8s.io/apimachinery/pkg/util/diff"
+
+	"github.com/openshift/ci-operator/pkg/api"
+
+	"github.com/openshift/ci-operator-prowgen/pkg/config"
 )
 
 func TestGenerateBranchedConfigs(t *testing.T) {

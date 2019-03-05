@@ -77,7 +77,7 @@ func main() {
 		pathsToCheck = append(pathsToCheck, pathWithConfig{path: relPath, configMap: info.ConfigMapName()})
 		return nil
 	}); err != nil {
-		logrus.WithError(err).Fatal("Could not check CI Operator configurations.")
+		logrus.WithError(err).Fatal("Could not load CI Operator configurations.")
 	}
 
 	if err := jobconfig.OperateOnJobConfigDir(path.Join(o.releaseRepoDir, diffs.JobConfigInRepoPath), func(jobConfig *prowconfig.JobConfig, info *jobconfig.Info) error {
@@ -86,7 +86,7 @@ func main() {
 		pathsToCheck = append(pathsToCheck, pathWithConfig{path: relPath, configMap: info.ConfigMapName()})
 		return nil
 	}); err != nil {
-		logrus.WithError(err).Fatal("Could not check Prow job configurations.")
+		logrus.WithError(err).Fatal("Could not load Prow job configurations.")
 	}
 
 	var foundFailures bool

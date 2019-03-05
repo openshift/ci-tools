@@ -6,9 +6,10 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/openshift/ci-operator/pkg/api"
+
 	"github.com/openshift/ci-operator-prowgen/pkg/config"
 	"github.com/openshift/ci-operator-prowgen/pkg/promotion"
-	"github.com/openshift/ci-operator/pkg/api"
 )
 
 func gatherOptions() promotion.Options {

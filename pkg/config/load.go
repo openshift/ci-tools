@@ -155,16 +155,18 @@ func (i *DataWithInfo) Logger() *logrus.Entry {
 	return LoggerForInfo(i.Info)
 }
 
-func (i *DataWithInfo) CommitTo(dir string) {
+func (i *DataWithInfo) CommitTo(dir string) error {
 	raw, err := yaml.Marshal(i.Configuration)
 	if err != nil {
 		i.Logger().WithError(err).Error("failed to marshal output CI Operator configuration")
-		return
+		return err
 	}
 	outputFile := path.Join(dir, i.Info.Org, i.Info.Repo, i.Info.Basename())
 	if err := ioutil.WriteFile(outputFile, raw, 0664); err != nil {
 		i.Logger().WithError(err).Error("failed to write new CI Operator configuration")
+		return err
 	}
+	return nil
 }
 
 type CompoundCiopConfig map[string]*cioperatorapi.ReleaseBuildConfiguration

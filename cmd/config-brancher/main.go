@@ -7,9 +7,10 @@ import (
 	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
 
+	"github.com/openshift/ci-operator/pkg/api"
+
 	"github.com/openshift/ci-operator-prowgen/pkg/config"
 	"github.com/openshift/ci-operator-prowgen/pkg/promotion"
-	"github.com/openshift/ci-operator/pkg/api"
 )
 
 func gatherOptions() promotion.Options {
@@ -48,8 +49,14 @@ func main() {
 		logrus.WithError(err).Fatal("Could not branch configurations.")
 	}
 
+	var failed bool
 	for _, output := range toCommit {
-		output.CommitTo(o.ConfigDir)
+		if err := output.CommitTo(o.ConfigDir); err != nil {
+			failed = true
+		}
+	}
+	if failed {
+		logrus.Fatal("Failed to commit configuration to disk.")
 	}
 }
 

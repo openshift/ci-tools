@@ -80,7 +80,7 @@ func (o *options) process() error {
 // Generate a PodSpec that runs `ci-operator`, to be used in Presubmit/Postsubmit
 // Various pieces are derived from `org`, `repo`, `branch` and `target`.
 // `additionalArgs` are passed as additional arguments to `ci-operator`
-func generatePodSpec(configFile, target string, additionalArgs ...string) *kubeapi.PodSpec {
+func generatePodSpec(info *config.Info, target string, additionalArgs ...string) *kubeapi.PodSpec {
 	for _, arg := range additionalArgs {
 		if !strings.HasPrefix(arg, "--") {
 			panic(fmt.Sprintf("all args to ci-operator must be in the form --flag=value, not %s", arg))
@@ -90,9 +90,9 @@ func generatePodSpec(configFile, target string, additionalArgs ...string) *kubea
 	configMapKeyRef := kubeapi.EnvVarSource{
 		ConfigMapKeyRef: &kubeapi.ConfigMapKeySelector{
 			LocalObjectReference: kubeapi.LocalObjectReference{
-				Name: "ci-operator-configs",
+				Name: info.ConfigMapName(),
 			},
-			Key: configFile,
+			Key: info.Basename(),
 		},
 	}
 
@@ -113,7 +113,7 @@ func generatePodSpec(configFile, target string, additionalArgs ...string) *kubea
 	}
 }
 
-func generatePodSpecTemplate(org, repo, configFile, release string, test *cioperatorapi.TestStepConfiguration, additionalArgs ...string) *kubeapi.PodSpec {
+func generatePodSpecTemplate(info *config.Info, release string, test *cioperatorapi.TestStepConfiguration, additionalArgs ...string) *kubeapi.PodSpec {
 	var template string
 	var clusterProfile cioperatorapi.ClusterProfile
 	var needsReleaseRpms bool
@@ -157,7 +157,7 @@ func generatePodSpecTemplate(org, repo, configFile, release string, test *cioper
 	}
 	clusterProfilePath := fmt.Sprintf("/usr/local/%s-cluster-profile", test.As)
 	templatePath := fmt.Sprintf("/usr/local/%s", test.As)
-	podSpec := generatePodSpec(configFile, test.As, additionalArgs...)
+	podSpec := generatePodSpec(info, test.As, additionalArgs...)
 	clusterProfileVolume := kubeapi.Volume{
 		Name: "cluster-profile",
 		VolumeSource: kubeapi.VolumeSource{
@@ -212,7 +212,7 @@ func generatePodSpecTemplate(org, repo, configFile, release string, test *cioper
 		kubeapi.EnvVar{Name: "CLUSTER_TYPE", Value: targetCloud},
 		kubeapi.EnvVar{Name: "JOB_NAME_SAFE", Value: strings.Replace(test.As, "_", "-", -1)},
 		kubeapi.EnvVar{Name: "TEST_COMMAND", Value: test.Commands})
-	if needsReleaseRpms && (org != "openshift" || repo != "origin") {
+	if needsReleaseRpms && (info.Org != "openshift" || info.Repo != "origin") {
 		var repoPath string = fmt.Sprintf("https://rpms.svc.ci.openshift.org/openshift-origin-v%s/", release)
 		if strings.HasPrefix(release, "origin-v") {
 			repoPath = fmt.Sprintf("https://rpms.svc.ci.openshift.org/openshift-%s/", release)
@@ -238,13 +238,13 @@ func generatePodSpecTemplate(org, repo, configFile, release string, test *cioper
 }
 
 // Generate a Presubmit job for the given parameters
-func generatePresubmitForTest(name string, repoInfo *config.FilePathElements, podSpec *kubeapi.PodSpec) *prowconfig.Presubmit {
+func generatePresubmitForTest(name string, info *config.Info, podSpec *kubeapi.PodSpec) *prowconfig.Presubmit {
 	labels := make(map[string]string)
 
-	jobPrefix := fmt.Sprintf("pull-ci-%s-%s-%s-", repoInfo.Org, repoInfo.Repo, repoInfo.Branch)
-	if len(repoInfo.Variant) > 0 {
-		name = fmt.Sprintf("%s-%s", repoInfo.Variant, name)
-		labels[prowJobLabelVariant] = repoInfo.Variant
+	jobPrefix := fmt.Sprintf("pull-ci-%s-%s-%s-", info.Org, info.Repo, info.Branch)
+	if len(info.Variant) > 0 {
+		name = fmt.Sprintf("%s-%s", info.Variant, name)
+		labels[prowJobLabelVariant] = info.Variant
 	}
 	jobName := fmt.Sprintf("%s%s", jobPrefix, name)
 	if len(jobName) > 63 && len(jobPrefix) < 53 {
@@ -266,7 +266,7 @@ func generatePresubmitForTest(name string, repoInfo *config.FilePathElements, po
 			},
 		},
 		AlwaysRun:    true,
-		Brancher:     prowconfig.Brancher{Branches: []string{repoInfo.Branch}},
+		Brancher:     prowconfig.Brancher{Branches: []string{info.Branch}},
 		Context:      fmt.Sprintf("ci/prow/%s", name),
 		RerunCommand: fmt.Sprintf("/test %s", name),
 		Trigger:      fmt.Sprintf(`(?m)^/test (?:.*? )?%s(?: .*?)?$`, name),
@@ -276,7 +276,7 @@ func generatePresubmitForTest(name string, repoInfo *config.FilePathElements, po
 // Generate a Presubmit job for the given parameters
 func generatePostsubmitForTest(
 	name string,
-	repoInfo *config.FilePathElements,
+	info *config.Info,
 	treatBranchesAsExplicit bool,
 	labels map[string]string,
 	podSpec *kubeapi.PodSpec) *prowconfig.Postsubmit {
@@ -286,11 +286,11 @@ func generatePostsubmitForTest(
 		copiedLabels[k] = v
 	}
 
-	branchName := jc.MakeRegexFilenameLabel(repoInfo.Branch)
-	jobPrefix := fmt.Sprintf("branch-ci-%s-%s-%s-", repoInfo.Org, repoInfo.Repo, branchName)
-	if len(repoInfo.Variant) > 0 {
-		name = fmt.Sprintf("%s-%s", repoInfo.Variant, name)
-		copiedLabels[prowJobLabelVariant] = repoInfo.Variant
+	branchName := jc.MakeRegexFilenameLabel(info.Branch)
+	jobPrefix := fmt.Sprintf("branch-ci-%s-%s-%s-", info.Org, info.Repo, branchName)
+	if len(info.Variant) > 0 {
+		name = fmt.Sprintf("%s-%s", info.Variant, name)
+		copiedLabels[prowJobLabelVariant] = info.Variant
 	}
 	jobName := fmt.Sprintf("%s%s", jobPrefix, name)
 	if len(jobName) > 63 && len(jobPrefix) < 53 {
@@ -298,7 +298,7 @@ func generatePostsubmitForTest(
 		logrus.WithField("name", jobName).Warn("Generated job name is longer than 63 characters. This may cause issues when Prow attempts to label resources with job name. Consider a shorter name.")
 	}
 
-	branch := repoInfo.Branch
+	branch := info.Branch
 	if treatBranchesAsExplicit {
 		branch = makeBranchExplicit(branch)
 	}
@@ -328,25 +328,25 @@ func generatePostsubmitForTest(
 //   presubmit and postsubmit that has `--target=[images]`. This postsubmit
 //   will additionally pass `--promote` to ci-operator
 func generateJobs(
-	configSpec *cioperatorapi.ReleaseBuildConfiguration, repoInfo *config.FilePathElements,
+	configSpec *cioperatorapi.ReleaseBuildConfiguration, info *config.Info,
 ) *prowconfig.JobConfig {
 
-	orgrepo := fmt.Sprintf("%s/%s", repoInfo.Org, repoInfo.Repo)
+	orgrepo := fmt.Sprintf("%s/%s", info.Org, info.Repo)
 	presubmits := map[string][]prowconfig.Presubmit{}
 	postsubmits := map[string][]prowconfig.Postsubmit{}
 
 	for _, element := range configSpec.Tests {
 		var podSpec *kubeapi.PodSpec
 		if element.ContainerTestConfiguration != nil {
-			podSpec = generatePodSpec(repoInfo.Filename, element.As)
+			podSpec = generatePodSpec(info, element.As)
 		} else {
 			var release string
 			if c := configSpec.ReleaseTagConfiguration; c != nil {
 				release = c.Name
 			}
-			podSpec = generatePodSpecTemplate(repoInfo.Org, repoInfo.Repo, repoInfo.Filename, release, &element)
+			podSpec = generatePodSpecTemplate(info, release, &element)
 		}
-		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(element.As, repoInfo, podSpec))
+		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(element.As, info, podSpec))
 	}
 
 	if len(configSpec.Images) > 0 {
@@ -366,10 +366,10 @@ func generateJobs(
 			}
 		}
 
-		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest("images", repoInfo, generatePodSpec(repoInfo.Filename, "[images]", additionalPresubmitArgs...)))
+		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest("images", info, generatePodSpec(info, "[images]", additionalPresubmitArgs...)))
 
 		if configSpec.PromotionConfiguration != nil {
-			postsubmits[orgrepo] = append(postsubmits[orgrepo], *generatePostsubmitForTest("images", repoInfo, true, labels, generatePodSpec(repoInfo.Filename, "[images]", additionalPostsubmitArgs...)))
+			postsubmits[orgrepo] = append(postsubmits[orgrepo], *generatePostsubmitForTest("images", info, true, labels, generatePodSpec(info, "[images]", additionalPostsubmitArgs...)))
 		}
 	}
 
@@ -381,9 +381,9 @@ func generateJobs(
 
 // generateJobsToDir returns a callback that knows how to generate prow job configuration
 // into the dir provided by consuming ci-operator configuration
-func generateJobsToDir(dir string) func(configSpec *cioperatorapi.ReleaseBuildConfiguration, repoInfo *config.FilePathElements) error {
-	return func(configSpec *cioperatorapi.ReleaseBuildConfiguration, repoInfo *config.FilePathElements) error {
-		return jc.WriteToDir(dir, repoInfo.Org, repoInfo.Repo, generateJobs(configSpec, repoInfo))
+func generateJobsToDir(dir string) func(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *config.Info) error {
+	return func(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *config.Info) error {
+		return jc.WriteToDir(dir, info.Org, info.Repo, generateJobs(configSpec, info))
 	}
 }
 

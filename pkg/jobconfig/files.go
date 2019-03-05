@@ -10,11 +10,119 @@ import (
 	"strings"
 
 	"github.com/ghodss/yaml"
+	"github.com/openshift/ci-operator-prowgen/pkg/promotion"
+	"github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowconfig "k8s.io/test-infra/prow/config"
 )
+
+// DataWithInfo describes the metadata for a Prow job configuration file
+type Info struct {
+	Org    string
+	Repo   string
+	Branch string
+	// Type is the type of ProwJob contained in this file
+	Type string
+	// Filename is the full path to the file on disk
+	Filename string
+}
+
+// Basename returns the unique name for this file in the config
+func (i *Info) Basename() string {
+	parts := []string{i.Org, i.Repo, i.Branch, i.Type}
+	if i.Type == "periodics" && i.Branch == "" {
+		parts = []string{i.Org, i.Repo, i.Type}
+	}
+	return fmt.Sprintf("%s.yaml", strings.Join(parts, "-"))
+}
+
+// ConfigMapName returns the configmap in which we expect this file to be uploaded
+func (i *Info) ConfigMapName() string {
+	return fmt.Sprintf("job-config-%s", promotion.FlavorForBranch(i.Branch))
+}
+
+// We use the directory/file naming convention to encode useful information
+// about component repository information.
+// The convention for prow job config files in this repo:
+// ci-operator/jobs/ORGANIZATION/COMPONENT/ORGANIZATION-COMPONENT-BRANCH-JOBTYPE.yaml
+func extractInfoFromPath(configFilePath string) (*Info, error) {
+	configSpecDir := filepath.Dir(configFilePath)
+	repo := filepath.Base(configSpecDir)
+	if repo == "." || repo == "/" {
+		return nil, fmt.Errorf("could not extract repo from '%s'", configFilePath)
+	}
+
+	org := filepath.Base(filepath.Dir(configSpecDir))
+	if org == "." || org == "/" {
+		return nil, fmt.Errorf("could not extract org from '%s'", configFilePath)
+	}
+
+	// take org/repo/org-repo-branch-type.yaml and:
+	// consider only the base name, then
+	// remove .yaml extension, then
+	// strip the "org-repo-" prefix, then
+	// isolate the "-type" suffix, then
+	// extract the branch
+	basename := filepath.Base(configFilePath)
+	basenameWithoutSuffix := strings.TrimSuffix(basename, filepath.Ext(configFilePath))
+	orgRepo := fmt.Sprintf("%s-%s-", org, repo)
+	if !strings.HasPrefix(basenameWithoutSuffix, orgRepo) {
+		return nil, fmt.Errorf("file name was not prefixed with %q: %q", orgRepo, basenameWithoutSuffix)
+	}
+	branchType := strings.TrimPrefix(basenameWithoutSuffix, orgRepo)
+	typeIndex := strings.LastIndex(branchType, "-")
+	var branch, jobType string
+	if typeIndex == -1 {
+		if branchType != "periodics" {
+			return nil, fmt.Errorf("file name does not contain job type: %q", basenameWithoutSuffix)
+		}
+		branch = ""
+		jobType = "periodics"
+	} else {
+		branch = branchType[:typeIndex]
+		jobType = branchType[typeIndex+1:]
+	}
+
+	return &Info{
+		Org:      org,
+		Repo:     repo,
+		Branch:   branch,
+		Type:     jobType,
+		Filename: configFilePath,
+	}, nil
+}
+
+func OperateOnJobConfigDir(configDir string, callback func(*prowconfig.JobConfig, *Info) error) error {
+	if err := filepath.Walk(configDir, func(path string, info os.FileInfo, err error) error {
+		logger := logrus.WithField("source-file", path)
+		if err != nil {
+			logger.WithError(err).Error("Failed to walk file/directory")
+			return nil
+		}
+
+		if !info.IsDir() && filepath.Ext(path) == ".yaml" {
+			var configPart *prowconfig.JobConfig
+			if configPart, err = readFromFile(path); err != nil {
+				logger.WithError(err).Error("Failed to read Prow job config")
+				return nil
+			}
+
+			info, err := extractInfoFromPath(path)
+			if err != nil {
+				logger.WithError(err).Warn("Failed to determine info for prow job config")
+				return nil
+			}
+
+			return callback(configPart, info)
+		}
+		return nil
+	}); err != nil {
+		return fmt.Errorf("failed to operator on Prow job configs: %v", err)
+	}
+	return nil
+}
 
 // ReadFromDir reads Prow job config from a directory and merges into one config
 func ReadFromDir(dir string) (*prowconfig.JobConfig, error) {
@@ -22,24 +130,11 @@ func ReadFromDir(dir string) (*prowconfig.JobConfig, error) {
 		Presubmits:  map[string][]prowconfig.Presubmit{},
 		Postsubmits: map[string][]prowconfig.Postsubmit{},
 	}
-	if err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to walk file/directory '%s'", path)
-			return nil
-		}
-
-		if !info.IsDir() && filepath.Ext(path) == ".yaml" {
-			var configPart *prowconfig.JobConfig
-			if configPart, err = readFromFile(path); err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to read Prow job config from '%s' (%v)", path, err)
-				return nil
-			}
-
-			mergeConfigs(jobConfig, configPart)
-		}
+	if err := OperateOnJobConfigDir(dir, func(config *prowconfig.JobConfig, elements *Info) error {
+		mergeConfigs(jobConfig, config)
 		return nil
 	}); err != nil {
-		return nil, fmt.Errorf("failed to determinize all Prow jobs: %v", err)
+		return nil, fmt.Errorf("failed to load all Prow jobs: %v", err)
 	}
 
 	return jobConfig, nil

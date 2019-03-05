@@ -27,7 +27,7 @@ presubmits:
           valueFrom:
             configMapKeyRef:
               key: super-duper-master.yaml
-              name: ci-operator-configs
+              name: ci-operator-master-configs
         - name: JOB_NAME_SAFE
           value: e2e
         - name: RPM_REPO_OPENSHIFT_ORIGIN
@@ -87,7 +87,7 @@ presubmits:
           valueFrom:
             configMapKeyRef:
               key: super-duper-master.yaml
-              name: ci-operator-configs
+              name: ci-operator-master-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -129,7 +129,7 @@ presubmits:
           valueFrom:
             configMapKeyRef:
               key: super-duper-master.yaml
-              name: ci-operator-configs
+              name: ci-operator-master-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -161,7 +161,7 @@ presubmits:
           valueFrom:
             configMapKeyRef:
               key: super-duper-master.yaml
-              name: ci-operator-configs
+              name: ci-operator-master-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""

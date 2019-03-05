@@ -171,8 +171,8 @@ func (i *DataWithInfo) CommitTo(dir string) error {
 
 type CompoundCiopConfig map[string]*cioperatorapi.ReleaseBuildConfiguration
 
-func (compound CompoundCiopConfig) add(handledConfig *cioperatorapi.ReleaseBuildConfiguration, handledElements *FilePathElements) error {
-	compound[handledElements.Filename] = handledConfig
+func (compound CompoundCiopConfig) add(handledConfig *cioperatorapi.ReleaseBuildConfiguration, handledElements *Info) error {
+	compound[handledElements.Basename()] = handledConfig
 	return nil
 }
 

@@ -1,0 +1,44 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_binary(
+    name = "buildifier",
+    embed = [":go_default_library"],
+    visibility = ["//visibility:public"],
+    x_defs = {
+        "main.buildVersion": "{STABLE_buildVersion}",
+        "main.buildScmRevision": "{STABLE_buildScmRevision}",
+    },
+)
+
+# Test that the buildifier binary works
+sh_test(
+    name = "buildifier_integration_test",
+    size = "small",
+    srcs = ["integration_test.sh"],
+    args = [
+        "$(location :buildifier)",
+        "$(location //buildifier2)",
+    ],
+    data = [
+        ":buildifier",
+        "//buildifier2",
+    ],
+)
+
+go_library(
+    name = "go_default_library",
+    srcs = ["buildifier.go"],
+    importpath = "github.com/bazelbuild/buildtools/buildifier",
+    visibility = ["//visibility:private"],
+    deps = [
+        "//build:go_default_library",
+        "//differ:go_default_library",
+        "//tables:go_default_library",
+        "//warn:go_default_library",
+    ],
+)
+
+exports_files(
+    ["runner.bash.template"],
+    visibility = ["//visibility:public"],
+)

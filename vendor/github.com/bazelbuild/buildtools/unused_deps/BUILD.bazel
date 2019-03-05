@@ -1,0 +1,42 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "jar_manifest.go",
+        "unused_deps.go",
+    ],
+    importpath = "github.com/bazelbuild/buildtools/unused_deps",
+    visibility = ["//visibility:private"],
+    deps = [
+        "//build:go_default_library",
+        "//config:go_default_library",
+        "//deps_proto:go_default_library",
+        "//edit:go_default_library",
+        "//extra_actions_base_proto:go_default_library",
+        "@com_github_golang_protobuf//proto:go_default_library",
+    ],
+)
+
+go_binary(
+    name = "unused_deps",
+    embed = [":go_default_library"],
+    visibility = ["//visibility:public"],
+    x_defs = {
+        "main.buildVersion": "{STABLE_buildVersion}",
+        "main.buildScmRevision": "{STABLE_buildScmRevision}",
+    },
+)
+
+go_test(
+    name = "jar_manifest_test",
+    size = "small",
+    srcs = ["jar_manifest_test.go"],
+    embed = [":go_default_library"],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["jar_manifest_test.go"],
+    embed = [":go_default_library"],
+)

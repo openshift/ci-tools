@@ -1,0 +1,89 @@
+def f():
+  if foo:
+     return bar
+
+ # these comments
+# belong to the next statement
+def f():
+  if foo:
+     return bar
+
+ # these comments
+# belong to the top level
+
+def f():
+  if foo:
+     return bar
+ # these comments
+# belong to the top level
+
+def f():
+  if foo:
+     return bar
+        # this comment belongs to the return statement
+    # these comments are aligned
+       # with the if-statement as after-comments
+
+    # this should have the same indentation level as above
+ # but this line belongs to the top level
+
+ # and this belongs to the following for-loop
+for a in b:
+  if foo:
+    pass
+# this comment is aligned with pass
+
+# this comment is aligned with pass
+
+# this comment is aligned with pass
+    pass
+  elif bar:
+    pass
+
+     # this comment is aligned with pass
+    # this comment is aligned with pass
+   # this comment is aligned with elif
+  # this comment is aligned with elif
+ # this comment is aligned with for
+# this comment is aligned with for
+
+for a in b:
+  if foo:
+    pass
+  elif bar:
+    pass
+
+# all
+ # of
+  # these
+   # comments
+    # are
+     # not
+      # indented
+
+for a in b:
+  if foo:
+    pass
+  elif bar:
+    pass
+  else:
+    pass # This comment stays here
+
+  # all
+   # of
+    # these
+     # comments
+
+      # are
+       # aligned
+        # with
+         # else
+
+def foo():
+  return # This comment stays here
+   # this comment belongs to the return statement
+
+   # this comment belongs to the function
+ # but these belong
+
+# to the top level

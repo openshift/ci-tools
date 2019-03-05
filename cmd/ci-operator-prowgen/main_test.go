@@ -23,14 +23,14 @@ import (
 
 func TestGeneratePodSpec(t *testing.T) {
 	tests := []struct {
-		configFile     string
+		info           *config.Info
 		target         string
 		additionalArgs []string
 
 		expected *kubeapi.PodSpec
 	}{
 		{
-			configFile:     "config.json",
+			info:           &config.Info{Org: "org", Repo: "repo", Branch: "branch"},
 			target:         "target",
 			additionalArgs: []string{},
 
@@ -49,9 +49,9 @@ func TestGeneratePodSpec(t *testing.T) {
 						ValueFrom: &kubeapi.EnvVarSource{
 							ConfigMapKeyRef: &kubeapi.ConfigMapKeySelector{
 								LocalObjectReference: kubeapi.LocalObjectReference{
-									Name: "ci-operator-configs",
+									Name: "ci-operator-misc-configs",
 								},
-								Key: "config.json",
+								Key: "org-repo-branch.yaml",
 							},
 						},
 					}},
@@ -59,7 +59,7 @@ func TestGeneratePodSpec(t *testing.T) {
 			},
 		},
 		{
-			configFile:     "config.yml",
+			info:           &config.Info{Org: "org", Repo: "repo", Branch: "branch"},
 			target:         "target",
 			additionalArgs: []string{"--promote", "--some=thing"},
 
@@ -78,9 +78,9 @@ func TestGeneratePodSpec(t *testing.T) {
 						ValueFrom: &kubeapi.EnvVarSource{
 							ConfigMapKeyRef: &kubeapi.ConfigMapKeySelector{
 								LocalObjectReference: kubeapi.LocalObjectReference{
-									Name: "ci-operator-configs",
+									Name: "ci-operator-misc-configs",
 								},
-								Key: "config.yml",
+								Key: "org-repo-branch.yaml",
 							},
 						},
 					}},
@@ -92,9 +92,9 @@ func TestGeneratePodSpec(t *testing.T) {
 	for _, tc := range tests {
 		var podSpec *kubeapi.PodSpec
 		if len(tc.additionalArgs) == 0 {
-			podSpec = generatePodSpec(tc.configFile, tc.target)
+			podSpec = generatePodSpec(tc.info, tc.target)
 		} else {
-			podSpec = generatePodSpec(tc.configFile, tc.target, tc.additionalArgs...)
+			podSpec = generatePodSpec(tc.info, tc.target, tc.additionalArgs...)
 		}
 		if !equality.Semantic.DeepEqual(podSpec, tc.expected) {
 			t.Errorf("expected PodSpec diff:\n%s", diff.ObjectDiff(tc.expected, podSpec))
@@ -104,18 +104,14 @@ func TestGeneratePodSpec(t *testing.T) {
 
 func TestGeneratePodSpecTemplate(t *testing.T) {
 	tests := []struct {
-		org        string
-		repo       string
-		configFile string
+		info *config.Info
 		release    string
 		test       ciop.TestStepConfiguration
 
 		expected *kubeapi.PodSpec
 	}{
 		{
-			org:        "organization",
-			repo:       "repo",
-			configFile: "organization-repo-branch.json",
+			info: &config.Info{Org: "organization", Repo: "repo", Branch: "branch"},
 			release:    "origin-v4.0",
 			test: ciop.TestStepConfiguration{
 				As:       "test",
@@ -181,9 +177,9 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 							ValueFrom: &kubeapi.EnvVarSource{
 								ConfigMapKeyRef: &kubeapi.ConfigMapKeySelector{
 									LocalObjectReference: kubeapi.LocalObjectReference{
-										Name: "ci-operator-configs",
+										Name: "ci-operator-misc-configs",
 									},
-									Key: "organization-repo-branch.json",
+									Key: "organization-repo-branch.yaml",
 								},
 							},
 						},
@@ -200,9 +196,7 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 			},
 		},
 		{
-			org:        "organization",
-			repo:       "repo",
-			configFile: "organization-repo-branch.json",
+			info: &config.Info{Org: "organization", Repo: "repo", Branch: "branch"},
 			release:    "origin-v4.0",
 			test: ciop.TestStepConfiguration{
 				As:       "test",
@@ -261,9 +255,9 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 							ValueFrom: &kubeapi.EnvVarSource{
 								ConfigMapKeyRef: &kubeapi.ConfigMapKeySelector{
 									LocalObjectReference: kubeapi.LocalObjectReference{
-										Name: "ci-operator-configs",
+										Name: "ci-operator-misc-configs",
 									},
-									Key: "organization-repo-branch.json",
+									Key: "organization-repo-branch.yaml",
 								},
 							},
 						},
@@ -282,7 +276,7 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 
 	for _, tc := range tests {
 		var podSpec *kubeapi.PodSpec
-		podSpec = generatePodSpecTemplate(tc.org, tc.repo, tc.configFile, tc.release, &tc.test)
+		podSpec = generatePodSpecTemplate(tc.info, tc.release, &tc.test)
 		if !equality.Semantic.DeepEqual(podSpec, tc.expected) {
 			t.Errorf("expected PodSpec diff:\n%s", diff.ObjectDiff(tc.expected, podSpec))
 		}
@@ -686,7 +680,7 @@ tests:
           valueFrom:
             configMapKeyRef:
               key: super-duper-branch.yaml
-              name: ci-operator-configs
+              name: ci-operator-misc-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -720,7 +714,7 @@ tests:
           valueFrom:
             configMapKeyRef:
               key: super-duper-branch.yaml
-              name: ci-operator-configs
+              name: ci-operator-misc-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -752,7 +746,7 @@ tests:
           valueFrom:
             configMapKeyRef:
               key: super-duper-branch.yaml
-              name: ci-operator-configs
+              name: ci-operator-misc-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -825,7 +819,7 @@ tests:
           valueFrom:
             configMapKeyRef:
               key: super-duper-branch__rhel.yaml
-              name: ci-operator-configs
+              name: ci-operator-misc-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -861,7 +855,7 @@ tests:
           valueFrom:
             configMapKeyRef:
               key: super-duper-branch__rhel.yaml
-              name: ci-operator-configs
+              name: ci-operator-misc-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -895,7 +889,7 @@ tests:
           valueFrom:
             configMapKeyRef:
               key: super-duper-branch__rhel.yaml
-              name: ci-operator-configs
+              name: ci-operator-misc-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -928,7 +922,7 @@ tests:
           valueFrom:
             configMapKeyRef:
               key: super-duper-branch__rhel.yaml
-              name: ci-operator-configs
+              name: ci-operator-misc-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -960,7 +954,7 @@ tests:
           valueFrom:
             configMapKeyRef:
               key: super-duper-branch__rhel.yaml
-              name: ci-operator-configs
+              name: ci-operator-misc-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -1030,7 +1024,7 @@ tests:
           valueFrom:
             configMapKeyRef:
               key: super-duper-branch.yaml
-              name: ci-operator-configs
+              name: ci-operator-misc-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -1064,7 +1058,7 @@ tests:
           valueFrom:
             configMapKeyRef:
               key: super-duper-branch.yaml
-              name: ci-operator-configs
+              name: ci-operator-misc-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -1096,7 +1090,7 @@ tests:
           valueFrom:
             configMapKeyRef:
               key: super-duper-branch.yaml
-              name: ci-operator-configs
+              name: ci-operator-misc-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -1127,7 +1121,7 @@ tests:
           valueFrom:
             configMapKeyRef:
               key: super-duper-branch.yaml
-              name: ci-operator-configs
+              name: ci-operator-misc-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -1157,7 +1151,7 @@ tests:
           valueFrom:
             configMapKeyRef:
               key: super-duper-branch.yaml
-              name: ci-operator-configs
+              name: ci-operator-misc-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""

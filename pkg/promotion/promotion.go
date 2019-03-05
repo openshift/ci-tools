@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"regexp"
 
 	cioperatorapi "github.com/openshift/ci-operator/pkg/api"
 	"github.com/sirupsen/logrus"
@@ -99,4 +100,22 @@ func (o *Options) Bind(fs *flag.FlagSet) {
 	fs.StringVar(&o.logLevel, "log-level", "info", "Level at which to log output.")
 	fs.StringVar(&o.Org, "org", "", "Limit repos affected to those in this org.")
 	fs.StringVar(&o.Repo, "repo", "", "Limit repos affected to this repo.")
+}
+
+var threeXBranches = regexp.MustCompile(`^(release|enterprise|openshift)-3\.[0-9]+$`)
+var fourXBranches = regexp.MustCompile(`^(release|enterprise|openshift)-(4\.[0-9]+)$`)
+
+func FlavorForBranch(branch string) string {
+	var flavor string
+	if branch == "master" {
+		flavor = "master"
+	} else if threeXBranches.MatchString(branch) {
+		flavor = "3.x"
+	} else if fourXBranches.MatchString(branch) {
+		matches := fourXBranches.FindStringSubmatch(branch)
+		flavor = matches[2] // the 4.x release string
+	} else {
+		flavor = "misc"
+	}
+	return flavor
 }

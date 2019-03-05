@@ -1,6 +1,7 @@
 package jobconfig
 
 import (
+	"reflect"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -547,6 +548,124 @@ func TestExtractRepoElementsFromPath(t *testing.T) {
 			}
 			if actual, expected := elements, testCase.expected; !equality.Semantic.DeepEqual(actual, expected) {
 				t.Errorf("%s: did not get expected repo info from path:\n%s", testCase.name, diff.ObjectDiff(actual, expected))
+			}
+		})
+	}
+}
+
+func TestInfo_Basename(t *testing.T) {
+	testCases := []struct {
+		name     string
+		info     *Info
+		expected string
+	}{
+		{
+			name: "simple path creates simple basename",
+			info: &Info{
+				Org:    "org",
+				Repo:   "repo",
+				Branch: "branch",
+				Type:   "presubmits",
+			},
+			expected: "org-repo-branch-presubmits.yaml",
+		},
+		{
+			name: "path for periodics without branch creates complex basename",
+			info: &Info{
+				Org:    "org",
+				Repo:   "repo",
+				Branch: "",
+				Type:   "periodics",
+			},
+			expected: "org-repo-periodics.yaml",
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.expected, func(t *testing.T) {
+			if actual, expected := testCase.info.Basename(), testCase.expected; !reflect.DeepEqual(actual, expected) {
+				t.Errorf("%s: didn't get correct basename: %v", testCase.name, diff.ObjectReflectDiff(actual, expected))
+			}
+		})
+	}
+}
+
+func TestInfo_ConfigMapName(t *testing.T) {
+	testCases := []struct {
+		name     string
+		branch   string
+		expected string
+	}{
+		{
+			name:     "master branch goes to master configmap",
+			branch:   "master",
+			expected: "job-config-master",
+		},
+		{
+			name:     "enterprise 3.6 branch goes to 3.x configmap",
+			branch:   "enterprise-3.6",
+			expected: "job-config-3.x",
+		},
+		{
+			name:     "openshift 3.6 branch goes to 3.x configmap",
+			branch:   "openshift-3.6",
+			expected: "job-config-3.x",
+		},
+		{
+			name:     "release 3.11 branch goes to 3.x configmap",
+			branch:   "release-3.11",
+			expected: "job-config-3.x",
+		},
+		{
+			name:     "enterprise 3.11 branch goes to 3.x configmap",
+			branch:   "enterprise-3.11",
+			expected: "job-config-3.x",
+		},
+		{
+			name:     "openshift 3.11 branch goes to 3.x configmap",
+			branch:   "openshift-3.11",
+			expected: "job-config-3.x",
+		},
+		{
+			name:     "release 3.11 branch goes to 3.x configmap",
+			branch:   "release-3.11",
+			expected: "job-config-3.x",
+		},
+		{
+			name:     "knative release branch goes to misc configmap",
+			branch:   "release-0.2",
+			expected: "job-config-misc",
+		},
+		{
+			name:     "azure release branch goes to misc configmap",
+			branch:   "release-v1",
+			expected: "job-config-misc",
+		},
+		{
+			name:     "ansible dev branch goes to misc configmap",
+			branch:   "devel-40",
+			expected: "job-config-misc",
+		},
+		{
+			name:     "release 4.0 branch goes to 4.0 configmap",
+			branch:   "release-4.0",
+			expected: "job-config-4.0",
+		},
+		{
+			name:     "release 4.1 branch goes to 4.1 configmap",
+			branch:   "release-4.1",
+			expected: "job-config-4.1",
+		},
+		{
+			name:     "release 4.2 branch goes to 4.2 configmap",
+			branch:   "release-4.2",
+			expected: "job-config-4.2",
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.expected, func(t *testing.T) {
+			info := Info{Branch: testCase.branch}
+			if actual, expected := info.ConfigMapName(), testCase.expected; !reflect.DeepEqual(actual, expected) {
+				t.Errorf("%s: didn't get correct basename: %v", testCase.name, diff.ObjectReflectDiff(actual, expected))
 			}
 		})
 	}

@@ -12,7 +12,6 @@ import (
 	"github.com/openshift/ci-operator-prowgen/pkg/diffs"
 	"github.com/openshift/ci-operator-prowgen/pkg/jobconfig"
 	"github.com/sirupsen/logrus"
-	"k8s.io/apimachinery/pkg/util/sets"
 	prowconfig "k8s.io/test-infra/prow/config"
 	_ "k8s.io/test-infra/prow/hook"
 	"k8s.io/test-infra/prow/plugins"
@@ -55,6 +54,10 @@ func gatherOptions() options {
 	return o
 }
 
+type pathWithConfig struct {
+	path, configMap string
+}
+
 func main() {
 	o := gatherOptions()
 	if err := o.Validate(); err != nil {
@@ -67,36 +70,40 @@ func main() {
 	}
 	pcfg := pluginAgent.Config()
 
-	pathsToCheck := sets.NewString()
-	if err := config.OperateOnCIOperatorConfigDir(path.Join(o.releaseRepoDir, diffs.CIOperatorConfigInRepoPath), func(configuration *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {
+	var pathsToCheck []pathWithConfig
+	if err := config.OperateOnCIOperatorConfigDir(path.Join(o.releaseRepoDir, diffs.CIOperatorConfigInRepoPath), func(configuration *api.ReleaseBuildConfiguration, info *config.Info) error {
 		// we know the path is relative, but there is no API to declare that
-		relPath, _ := filepath.Rel(o.releaseRepoDir, repoInfo.Filename)
-		pathsToCheck.Insert(relPath)
+		relPath, _ := filepath.Rel(o.releaseRepoDir, info.Filename)
+		pathsToCheck = append(pathsToCheck, pathWithConfig{path: relPath, configMap: info.ConfigMapName()})
 		return nil
 	}); err != nil {
 		logrus.WithError(err).Fatal("Could not check CI Operator configurations.")
 	}
 
-	if err := jobconfig.OperateOnJobConfigDir(path.Join(o.releaseRepoDir, diffs.JobConfigInRepoPath), func(jobConfig *prowconfig.JobConfig, repoInfo *jobconfig.Info) error {
+	if err := jobconfig.OperateOnJobConfigDir(path.Join(o.releaseRepoDir, diffs.JobConfigInRepoPath), func(jobConfig *prowconfig.JobConfig, info *jobconfig.Info) error {
 		// we know the path is relative, but there is no API to declare that
-		relPath, _ := filepath.Rel(o.releaseRepoDir, repoInfo.Filename)
-		pathsToCheck.Insert(relPath)
+		relPath, _ := filepath.Rel(o.releaseRepoDir, info.Filename)
+		pathsToCheck = append(pathsToCheck, pathWithConfig{path: relPath, configMap: info.ConfigMapName()})
 		return nil
 	}); err != nil {
 		logrus.WithError(err).Fatal("Could not check Prow job configurations.")
 	}
 
 	var foundFailures bool
-	for _, pathToCheck := range pathsToCheck.List() {
+	for _, pathToCheck := range pathsToCheck {
 		var matchesAny bool
-		logger := logrus.WithField("source-file", pathToCheck)
-		for glob := range pcfg.ConfigUpdater.Maps {
+		logger := logrus.WithField("source-file", pathToCheck.path)
+		for glob, updateConfig := range pcfg.ConfigUpdater.Maps {
 			globLogger := logger.WithField("glob", glob)
-			matches, matchErr := zglob.Match(glob, pathToCheck)
+			matches, matchErr := zglob.Match(glob, pathToCheck.path)
 			if matchErr != nil {
 				globLogger.WithError(matchErr).Warn("Failed to check glob match.")
 			}
 			if matches {
+				if updateConfig.Name != pathToCheck.configMap {
+					globLogger.Error("File matches glob from unexpected ConfigMap.")
+					foundFailures = true
+				}
 				matchesAny = true
 				break
 			}
@@ -108,6 +115,6 @@ func main() {
 	}
 
 	if foundFailures {
-		logrus.Fatal("Found configurations that do not belong to any auto-updating config")
+		logrus.Fatal("Found configurations that do not belong to the correct auto-updating config")
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/ghodss/yaml"
+	"github.com/openshift/ci-operator-prowgen/pkg/promotion"
 	"github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
 
@@ -29,8 +30,17 @@ type Info struct {
 }
 
 // Basename returns the unique name for this file in the config
-func (e *Info) Basename() string {
-	return fmt.Sprintf("%s.yaml", strings.Join([]string{e.Org, e.Repo, e.Branch, e.Type}, "-"))
+func (i *Info) Basename() string {
+	parts := []string{i.Org, i.Repo, i.Branch, i.Type}
+	if i.Type == "periodics" && i.Branch == "" {
+		parts = []string{i.Org, i.Repo, i.Type}
+	}
+	return fmt.Sprintf("%s.yaml", strings.Join(parts, "-"))
+}
+
+// ConfigMapName returns the configmap in which we expect this file to be uploaded
+func (i *Info) ConfigMapName() string {
+	return fmt.Sprintf("job-config-%s", promotion.FlavorForBranch(i.Branch))
 }
 
 // We use the directory/file naming convention to encode useful information

@@ -80,7 +80,7 @@ func (o *options) process() error {
 // Generate a PodSpec that runs `ci-operator`, to be used in Presubmit/Postsubmit
 // Various pieces are derived from `org`, `repo`, `branch` and `target`.
 // `additionalArgs` are passed as additional arguments to `ci-operator`
-func generatePodSpec(configFile, target string, additionalArgs ...string) *kubeapi.PodSpec {
+func generatePodSpec(info *config.Info, target string, additionalArgs ...string) *kubeapi.PodSpec {
 	for _, arg := range additionalArgs {
 		if !strings.HasPrefix(arg, "--") {
 			panic(fmt.Sprintf("all args to ci-operator must be in the form --flag=value, not %s", arg))
@@ -90,9 +90,9 @@ func generatePodSpec(configFile, target string, additionalArgs ...string) *kubea
 	configMapKeyRef := kubeapi.EnvVarSource{
 		ConfigMapKeyRef: &kubeapi.ConfigMapKeySelector{
 			LocalObjectReference: kubeapi.LocalObjectReference{
-				Name: "ci-operator-configs",
+				Name: info.ConfigMapName(),
 			},
-			Key: configFile,
+			Key: info.Basename(),
 		},
 	}
 
@@ -113,7 +113,7 @@ func generatePodSpec(configFile, target string, additionalArgs ...string) *kubea
 	}
 }
 
-func generatePodSpecTemplate(org, repo, configFile, release string, test *cioperatorapi.TestStepConfiguration, additionalArgs ...string) *kubeapi.PodSpec {
+func generatePodSpecTemplate(info *config.Info, release string, test *cioperatorapi.TestStepConfiguration, additionalArgs ...string) *kubeapi.PodSpec {
 	var template string
 	var clusterProfile cioperatorapi.ClusterProfile
 	var needsReleaseRpms bool
@@ -157,7 +157,7 @@ func generatePodSpecTemplate(org, repo, configFile, release string, test *cioper
 	}
 	clusterProfilePath := fmt.Sprintf("/usr/local/%s-cluster-profile", test.As)
 	templatePath := fmt.Sprintf("/usr/local/%s", test.As)
-	podSpec := generatePodSpec(configFile, test.As, additionalArgs...)
+	podSpec := generatePodSpec(info, test.As, additionalArgs...)
 	clusterProfileVolume := kubeapi.Volume{
 		Name: "cluster-profile",
 		VolumeSource: kubeapi.VolumeSource{
@@ -212,7 +212,7 @@ func generatePodSpecTemplate(org, repo, configFile, release string, test *cioper
 		kubeapi.EnvVar{Name: "CLUSTER_TYPE", Value: targetCloud},
 		kubeapi.EnvVar{Name: "JOB_NAME_SAFE", Value: strings.Replace(test.As, "_", "-", -1)},
 		kubeapi.EnvVar{Name: "TEST_COMMAND", Value: test.Commands})
-	if needsReleaseRpms && (org != "openshift" || repo != "origin") {
+	if needsReleaseRpms && (info.Org != "openshift" || info.Repo != "origin") {
 		var repoPath string = fmt.Sprintf("https://rpms.svc.ci.openshift.org/openshift-origin-v%s/", release)
 		if strings.HasPrefix(release, "origin-v") {
 			repoPath = fmt.Sprintf("https://rpms.svc.ci.openshift.org/openshift-%s/", release)
@@ -338,13 +338,13 @@ func generateJobs(
 	for _, element := range configSpec.Tests {
 		var podSpec *kubeapi.PodSpec
 		if element.ContainerTestConfiguration != nil {
-			podSpec = generatePodSpec(info.Basename(), element.As)
+			podSpec = generatePodSpec(info, element.As)
 		} else {
 			var release string
 			if c := configSpec.ReleaseTagConfiguration; c != nil {
 				release = c.Name
 			}
-			podSpec = generatePodSpecTemplate(info.Org, info.Repo, info.Basename(), release, &element)
+			podSpec = generatePodSpecTemplate(info, release, &element)
 		}
 		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(element.As, info, podSpec))
 	}
@@ -366,10 +366,10 @@ func generateJobs(
 			}
 		}
 
-		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest("images", info, generatePodSpec(info.Basename(), "[images]", additionalPresubmitArgs...)))
+		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest("images", info, generatePodSpec(info, "[images]", additionalPresubmitArgs...)))
 
 		if configSpec.PromotionConfiguration != nil {
-			postsubmits[orgrepo] = append(postsubmits[orgrepo], *generatePostsubmitForTest("images", info, true, labels, generatePodSpec(info.Basename(), "[images]", additionalPostsubmitArgs...)))
+			postsubmits[orgrepo] = append(postsubmits[orgrepo], *generatePostsubmitForTest("images", info, true, labels, generatePodSpec(info, "[images]", additionalPostsubmitArgs...)))
 		}
 	}
 

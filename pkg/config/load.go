@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/ghodss/yaml"
+	"github.com/openshift/ci-operator-prowgen/pkg/promotion"
 	"github.com/sirupsen/logrus"
 
 	cioperatorapi "github.com/openshift/ci-operator/pkg/api"
@@ -44,12 +45,17 @@ type Info struct {
 }
 
 // Basename returns the unique name for this file in the config
-func (e *Info) Basename() string {
-	basename := strings.Join([]string{e.Org, e.Repo, e.Branch}, "-")
-	if e.Variant != "" {
-		basename = fmt.Sprintf("%s__%s", basename, e.Variant)
+func (i *Info) Basename() string {
+	basename := strings.Join([]string{i.Org, i.Repo, i.Branch}, "-")
+	if i.Variant != "" {
+		basename = fmt.Sprintf("%s__%s", basename, i.Variant)
 	}
 	return fmt.Sprintf("%s.yaml", basename)
+}
+
+// ConfigMapName returns the configmap in which we expect this file to be uploaded
+func (i *Info) ConfigMapName() string {
+	return fmt.Sprintf("ci-operator-%s-configs", promotion.FlavorForBranch(i.Branch))
 }
 
 // We use the directory/file naming convention to encode useful information

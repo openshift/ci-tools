@@ -23,7 +23,7 @@ presubmits:
           valueFrom:
             configMapKeyRef:
               key: super-duper-release-3.11.yaml
-              name: ci-operator-configs
+              name: ci-operator-3.x-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -65,7 +65,7 @@ presubmits:
           valueFrom:
             configMapKeyRef:
               key: super-duper-release-3.11.yaml
-              name: ci-operator-configs
+              name: ci-operator-3.x-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -97,7 +97,7 @@ presubmits:
           valueFrom:
             configMapKeyRef:
               key: super-duper-release-3.11.yaml
-              name: ci-operator-configs
+              name: ci-operator-3.x-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""

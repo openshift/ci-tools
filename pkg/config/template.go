@@ -32,7 +32,7 @@ func getTemplates(templatePath string) (CiTemplates, error) {
 						template.Name = filepath.Base(path)
 						template.Name = strings.TrimSuffix(template.Name, filepath.Ext(template.Name))
 					}
-					templates[template.Name] = template
+					templates[filepath.Base(path)] = template
 				}
 			}
 		}

@@ -181,6 +181,19 @@ func main() {
 	if o.local {
 		namespace = "ci-stg"
 	}
+
+	cmClient, err := rehearse.NewCMClient(clusterConfig, namespace, o.dryRun)
+	if err != nil {
+		logger.WithError(err).Error("could not create a configMap client")
+		gracefulExit(o.noFail, misconfigurationOutput)
+	}
+
+	cmManager := config.NewTemplateCMManager(cmClient, prNumber, logger, changedTemplates)
+	if err := cmManager.CreateCMTemplates(); err != nil {
+		logger.WithError(err).Error("couldn't create template configMap")
+		gracefulExit(o.noFail, "")
+	}
+
 	pjclient, err := rehearse.NewProwJobClient(clusterConfig, namespace, o.dryRun)
 	if err != nil {
 		logger.WithError(err).Error("could not create a ProwJob client")
@@ -206,14 +219,14 @@ func main() {
 	rehearsals := rehearse.ConfigureRehearsalJobs(toRehearse, prConfig.CiOperator, prNumber, loggers, o.allowVolumes, changedTemplates)
 	if len(rehearsals) == 0 {
 		logger.Info("no jobs to rehearse have been found")
-		os.Exit(0)
+		gracefulExit(true, "")
 	} else if len(rehearsals) > o.rehearsalLimit {
 		jobCountFields := logrus.Fields{
 			"rehearsal-threshold": o.rehearsalLimit,
 			"rehearsal-jobs":      len(rehearsals),
 		}
 		logger.WithFields(jobCountFields).Info("Would rehearse too many jobs, will not proceed")
-		os.Exit(0)
+		gracefulExit(true, "")
 	}
 
 	executor := rehearse.NewExecutor(rehearsals, prNumber, o.releaseRepoPath, jobSpec.Refs, o.dryRun, loggers, pjclient)

@@ -2,7 +2,6 @@ package steps
 
 import (
 	"context"
-	"log"
 
 	"github.com/openshift/ci-operator/pkg/api"
 )
@@ -16,7 +15,6 @@ func (s *imagesReadyStep) Inputs(ctx context.Context, dry bool) (api.InputDefini
 }
 
 func (s *imagesReadyStep) Run(ctx context.Context, dry bool) error {
-	log.Printf("All images ready")
 	return nil
 }
 

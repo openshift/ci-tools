@@ -94,6 +94,16 @@ type releaseImagesTagStep struct {
 	jobSpec         *api.JobSpec
 }
 
+func findSpecTag(is *imageapi.ImageStream, tag string) *coreapi.ObjectReference {
+	for _, t := range is.Spec.Tags {
+		if t.Name != tag {
+			continue
+		}
+		return t.From
+	}
+	return nil
+}
+
 func findStatusTag(is *imageapi.ImageStream, tag string) (*coreapi.ObjectReference, string) {
 	for _, t := range is.Status.Tags {
 		if t.Tag != tag {
@@ -213,7 +223,7 @@ func (s *releaseImagesTagStep) Run(ctx context.Context, dry bool) error {
 		if !ok {
 			continue
 		}
-		s.params.Set(componentToParamName(tag.Name), spec)
+		s.params.Set("IMAGE_"+componentToParamName(tag.Name), spec)
 	}
 
 	return nil

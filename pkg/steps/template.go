@@ -14,8 +14,6 @@ import (
 
 	"k8s.io/client-go/rest"
 
-	templateapi "github.com/openshift/api/template/v1"
-	templateclientset "github.com/openshift/client-go/template/clientset/versioned/typed/template/v1"
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -24,13 +22,16 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 
+	templateapi "github.com/openshift/api/template/v1"
+	templateclientset "github.com/openshift/client-go/template/clientset/versioned/typed/template/v1"
+
 	"github.com/openshift/ci-operator/pkg/api"
 	"github.com/openshift/ci-operator/pkg/junit"
 )
 
 type templateExecutionStep struct {
 	template       *templateapi.Template
-	params         *api.DeferredParameters
+	params         api.Parameters
 	templateClient TemplateClient
 	podClient      PodClient
 	artifactDir    string
@@ -81,7 +82,9 @@ func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 		}
 	}
 
-	addArtifactsToTemplate(s.template)
+	if len(s.artifactDir) > 0 {
+		addArtifactsToTemplate(s.template)
+	}
 
 	if dry {
 		j, _ := json.MarshalIndent(s.template, "", "  ")
@@ -204,7 +207,8 @@ func (s *templateExecutionStep) Requires() []api.StepLink {
 	var links []api.StepLink
 	for _, p := range s.template.Parameters {
 		if s.params.Has(p.Name) {
-			links = append(links, s.params.Links(p.Name)...)
+			paramLinks := s.params.Links(p.Name)
+			links = append(links, paramLinks...)
 			continue
 		}
 		if strings.HasPrefix(p.Name, "IMAGE_") {
@@ -229,7 +233,7 @@ func (s *templateExecutionStep) Description() string {
 	return fmt.Sprintf("Run template %s", s.template.Name)
 }
 
-func TemplateExecutionStep(template *templateapi.Template, params *api.DeferredParameters, podClient PodClient, templateClient TemplateClient, artifactDir string, jobSpec *api.JobSpec) api.Step {
+func TemplateExecutionStep(template *templateapi.Template, params api.Parameters, podClient PodClient, templateClient TemplateClient, artifactDir string, jobSpec *api.JobSpec) api.Step {
 	return &templateExecutionStep{
 		template:       template,
 		params:         params,

@@ -10,13 +10,18 @@ import (
 	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
 
+	"k8s.io/api/core/v1"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	"k8s.io/client-go/kubernetes/fake"
+	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
+
 	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	pjclientset "k8s.io/test-infra/prow/client/clientset/versioned"
 	pjclientsetfake "k8s.io/test-infra/prow/client/clientset/versioned/fake"
@@ -25,9 +30,6 @@ import (
 	"k8s.io/test-infra/prow/pjutil"
 
 	"github.com/openshift/ci-operator-prowgen/pkg/config"
-
-	"k8s.io/client-go/kubernetes/fake"
-	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 )
 
 const (
@@ -182,7 +184,7 @@ func inlineCiOpConfig(job *prowconfig.Presubmit, targetRepo string, ciopConfigs 
 
 // ConfigureRehearsalJobs filters the jobs that should be rehearsed, then return a list of them re-configured with the
 // ci-operator's configuration inlined.
-func ConfigureRehearsalJobs(toBeRehearsed config.Presubmits, ciopConfigs config.CompoundCiopConfig, prNumber int, loggers Loggers, allowVolumes bool) []*prowconfig.Presubmit {
+func ConfigureRehearsalJobs(toBeRehearsed config.Presubmits, ciopConfigs config.CompoundCiopConfig, prNumber int, loggers Loggers, allowVolumes bool, templates config.CiTemplates) []*prowconfig.Presubmit {
 	rehearsals := []*prowconfig.Presubmit{}
 
 	rehearsalsFiltered := filterJobs(toBeRehearsed, allowVolumes, loggers.Job)
@@ -201,12 +203,45 @@ func ConfigureRehearsalJobs(toBeRehearsed config.Presubmits, ciopConfigs config.
 				continue
 			}
 
+			changedTemplates := getListOfKeys(templates)
+			exists, index, volumeName := hasChangedTemplateVolume(rehearsal.Spec.Containers[0].VolumeMounts, rehearsal.Spec.Volumes, changedTemplates)
+
+			if exists {
+				rehearsal.Spec.Volumes[index].VolumeSource.ConfigMap.Name = config.GetTempCMName(prNumber, volumeName)
+			}
+
 			jobLogger.WithField(logRehearsalJob, rehearsal.Name).Info("Created a rehearsal job to be submitted")
 			rehearsals = append(rehearsals, rehearsal)
 		}
 	}
 
 	return rehearsals
+}
+
+func hasChangedTemplateVolume(volumeMounts []v1.VolumeMount, volumes []v1.Volume, changedTemplates sets.String) (bool, int, string) {
+	var volumeName string
+	for _, volumeMount := range volumeMounts {
+		if changedTemplates.Has(volumeMount.SubPath) {
+			volumeName = volumeMount.Name
+			break
+		}
+	}
+
+	for index, volume := range volumes {
+		if volume.Name == volumeName {
+			return true, index, volumeName
+		}
+	}
+
+	return false, 0, ""
+}
+
+func getListOfKeys(ret config.CiTemplates) sets.String {
+	keys := sets.NewString()
+	for k := range ret {
+		keys.Insert(k)
+	}
+	return keys
 }
 
 // Executor holds all the information needed for the jobs to be executed.

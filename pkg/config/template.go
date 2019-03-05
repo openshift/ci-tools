@@ -100,7 +100,7 @@ func (c *TemplateCMManager) CreateCMTemplates() error {
 			errors = append(errors, err)
 		}
 
-		cmName := getTempCMName(c.prNumber, template.Name)
+		cmName := GetTempCMName(c.prNumber, template.Name)
 		cm := &v1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: cmName,
@@ -139,6 +139,6 @@ func (c *TemplateCMManager) CleanupCMTemplates() error {
 	return nil
 }
 
-func getTempCMName(prNumber int, templateName string) string {
+func GetTempCMName(prNumber int, templateName string) string {
 	return fmt.Sprintf("rehearse-%d-%s", prNumber, templateName)
 }

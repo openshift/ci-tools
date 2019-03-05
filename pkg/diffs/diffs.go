@@ -12,8 +12,6 @@ import (
 	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
 
-	templateapi "github.com/openshift/api/template/v1"
-
 	"github.com/openshift/ci-operator-prowgen/pkg/config"
 )
 
@@ -130,8 +128,8 @@ func convertToReadableDiff(a, b interface{}, objName string) string {
 }
 
 // GetChangedTemplates returns a mapping of the changed templates to be rehearsed.
-func GetChangedTemplates(masterTemplates, prTemplates map[string]*templateapi.Template, logger *logrus.Entry) map[string]*templateapi.Template {
-	changedTemplates := make(map[string]*templateapi.Template)
+func GetChangedTemplates(masterTemplates, prTemplates config.CiTemplates, logger *logrus.Entry) config.CiTemplates {
+	changedTemplates := make(config.CiTemplates)
 
 	for name, template := range prTemplates {
 		logFields := logrus.Fields{"template-name": name}

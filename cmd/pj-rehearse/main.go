@@ -168,9 +168,10 @@ func main() {
 		changedCiopConfigs = diffs.GetChangedCiopConfigs(masterConfig.CiOperator, prConfig.CiOperator, logger)
 	}
 
+	var changedTemplates config.CiTemplates
 	// We can only detect changes if we managed to load both CI template versions
 	if masterConfig.Templates != nil && prConfig.Templates != nil {
-		changedTemplates := diffs.GetChangedTemplates(masterConfig.Templates, prConfig.Templates, logger)
+		changedTemplates = diffs.GetChangedTemplates(masterConfig.Templates, prConfig.Templates, logger)
 		for name := range changedTemplates {
 			logger.WithField("template-name", name).Info("Changed template")
 		}
@@ -202,7 +203,7 @@ func main() {
 	toRehearse := diffs.GetChangedPresubmits(masterConfig.Prow, prConfig.Prow, logger)
 	toRehearse.AddAll(diffs.GetPresubmitsForCiopConfigs(prConfig.Prow, changedCiopConfigs, logger))
 
-	rehearsals := rehearse.ConfigureRehearsalJobs(toRehearse, prConfig.CiOperator, prNumber, loggers, o.allowVolumes)
+	rehearsals := rehearse.ConfigureRehearsalJobs(toRehearse, prConfig.CiOperator, prNumber, loggers, o.allowVolumes, changedTemplates)
 	if len(rehearsals) == 0 {
 		logger.Info("no jobs to rehearse have been found")
 		os.Exit(0)

@@ -101,7 +101,7 @@ func FromConfig(
 	params.Add("NAMESPACE", nil, func() (string, error) { return jobSpec.Namespace, nil })
 
 	var imageStepLinks []api.StepLink
-	var releaseStep api.Step
+	var releaseStep, initialReleaseStep api.Step
 	for _, rawStep := range stepConfigsForBuild(config, jobSpec) {
 		var step api.Step
 		var stepLinks []api.StepLink
@@ -141,7 +141,13 @@ func FromConfig(
 			step = release.ReleaseImagesTagStep(*rawStep.ReleaseImagesTagStepConfiguration, srcClient, imageClient, routeGetter, configMapGetter, params, jobSpec)
 			stepLinks = append(stepLinks, step.Creates()...)
 
-			releaseStep = release.AssembleReleaseStep(*rawStep.ReleaseImagesTagStepConfiguration, config.Resources, podClient, imageClient, artifactDir, jobSpec)
+			releaseStep = release.AssembleReleaseStep(true, *rawStep.ReleaseImagesTagStepConfiguration, config.Resources, podClient, imageClient, artifactDir, jobSpec)
+			checkForFullyQualifiedStep(releaseStep, params)
+
+			initialReleaseStep = release.AssembleReleaseStep(false, *rawStep.ReleaseImagesTagStepConfiguration, config.Resources, podClient, imageClient, artifactDir, jobSpec)
+			checkForFullyQualifiedStep(initialReleaseStep, params)
+			// initial release is always added
+			buildSteps = append(buildSteps, initialReleaseStep)
 
 		} else if rawStep.TestStepConfiguration != nil {
 			step = steps.TestStep(*rawStep.TestStepConfiguration, config.Resources, podClient, artifactDir, jobSpec)
@@ -164,7 +170,6 @@ func FromConfig(
 	}
 
 	if releaseStep != nil {
-		releaseStep, _ = checkForFullyQualifiedStep(releaseStep, params)
 		buildSteps = append(buildSteps, releaseStep)
 	} else {
 		buildSteps = append(buildSteps, release.StableImagesTagStep(imageClient, jobSpec))

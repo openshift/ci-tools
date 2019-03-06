@@ -131,6 +131,7 @@ func getRehersalsHelper(logger *logrus.Entry, prNumber int) ([]*prowconfig.Presu
 	candidateConfigPath := filepath.Join(candidatePath, config.ConfigInRepoPath)
 	candidateJobConfigPath := filepath.Join(candidatePath, config.JobConfigInRepoPath)
 	candidateCiopConfigPath := filepath.Join(candidatePath, config.CiopConfigInRepoPath)
+	masterCiopConfigPath := filepath.Join(masterPath, config.CiopConfigInRepoPath)
 	masterConfigPath := filepath.Join(masterPath, config.ConfigInRepoPath)
 	masterJobConfigPath := filepath.Join(masterPath, config.JobConfigInRepoPath)
 
@@ -146,11 +147,18 @@ func getRehersalsHelper(logger *logrus.Entry, prNumber int) ([]*prowconfig.Presu
 	if err != nil {
 		return nil, fmt.Errorf("failed to load ci-operator config: %v", err)
 	}
+	ciopMasterConfig, err := config.CompoundLoad(masterCiopConfigPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load ci-operator config: %v", err)
+	}
 
 	changedPresubmits := diffs.GetChangedPresubmits(prowConfig, prowPRConfig, logger)
 	if len(changedPresubmits) == 0 {
 		return nil, fmt.Errorf("Empty changedPresubmits was not expected")
 	}
+
+	changedCiopConfigs := diffs.GetChangedCiopConfigs(ciopMasterConfig, ciopPrConfig, logger)
+	changedPresubmits.AddAll(diffs.GetPresubmitsForCiopConfigs(prowPRConfig, changedCiopConfigs, logger))
 
 	rehearsals := rehearse.ConfigureRehearsalJobs(changedPresubmits, ciopPrConfig, prNumber, rehearse.Loggers{Job: logger, Debug: logger}, false)
 	return rehearsals, nil

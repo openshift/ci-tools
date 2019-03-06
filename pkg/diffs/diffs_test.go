@@ -14,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/diff"
 
+	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
 
 	templateapi "github.com/openshift/api/template/v1"
@@ -394,5 +395,107 @@ func makeBaseTemplates(baseParameters []templateapi.Parameter, baseObjects []run
 			Parameters: baseParameters,
 			Objects:    baseObjects,
 		},
+	}
+}
+
+func TestGetPresubmitsForCiopConfigs(t *testing.T) {
+	basePresubmitWithCiop := prowconfig.Presubmit{
+		JobBase: prowconfig.JobBase{
+			Agent: string(pjapi.KubernetesAgent),
+			Spec: &v1.PodSpec{
+				Containers: []v1.Container{{
+					Env: []v1.EnvVar{{
+						ValueFrom: &v1.EnvVarSource{
+							ConfigMapKeyRef: &v1.ConfigMapKeySelector{
+								LocalObjectReference: v1.LocalObjectReference{
+									Name: config.CiOperatorConfigsCMName,
+								},
+							},
+						},
+					}},
+				}},
+			},
+		},
+	}
+
+	testCases := []struct {
+		description string
+		prow        *prowconfig.Config
+		ciop        config.CompoundCiopConfig
+		expected    config.Presubmits
+	}{{
+		description: "return a presubmit using one of the input ciop configs",
+		prow: &prowconfig.Config{
+			JobConfig: prowconfig.JobConfig{
+				Presubmits: map[string][]prowconfig.Presubmit{
+					"org/repo": {
+						func() prowconfig.Presubmit {
+							ret := prowconfig.Presubmit{}
+							deepcopy.Copy(&ret, &basePresubmitWithCiop)
+							ret.Name = "job-for-org-repo"
+							ret.Spec.Containers[0].Env[0].ValueFrom.ConfigMapKeyRef.Key = "org-repo-branch.yaml"
+							return ret
+						}(),
+					}},
+			},
+		},
+		ciop: config.CompoundCiopConfig{"org-repo-branch.yaml": &cioperatorapi.ReleaseBuildConfiguration{}},
+		expected: config.Presubmits{"org/repo": {
+			func() prowconfig.Presubmit {
+				ret := prowconfig.Presubmit{}
+				deepcopy.Copy(&ret, &basePresubmitWithCiop)
+				ret.Name = "job-for-org-repo"
+				ret.Spec.Containers[0].Env[0].ValueFrom.ConfigMapKeyRef.Key = "org-repo-branch.yaml"
+				return ret
+			}(),
+		}},
+	}, {
+		description: "do not return a presubmit using a ciop config not present in input",
+		prow: &prowconfig.Config{
+			JobConfig: prowconfig.JobConfig{
+				Presubmits: map[string][]prowconfig.Presubmit{
+					"org/repo": {
+						func() prowconfig.Presubmit {
+							ret := prowconfig.Presubmit{}
+							deepcopy.Copy(&ret, &basePresubmitWithCiop)
+							ret.Name = "job-for-org-repo"
+							ret.Spec.Containers[0].Env[0].ValueFrom.ConfigMapKeyRef.Key = "org-repo-branch.yaml"
+							return ret
+						}(),
+					}},
+			},
+		},
+		ciop:     config.CompoundCiopConfig{},
+		expected: config.Presubmits{},
+	}, {
+		description: "handle jenkins presubmits",
+		prow: &prowconfig.Config{
+			JobConfig: prowconfig.JobConfig{
+				Presubmits: map[string][]prowconfig.Presubmit{
+					"org/repo": {
+						func() prowconfig.Presubmit {
+							ret := prowconfig.Presubmit{}
+							deepcopy.Copy(&ret, &basePresubmitWithCiop)
+							ret.Name = "job-for-org-repo"
+							ret.Agent = string(pjapi.JenkinsAgent)
+							ret.Spec.Containers[0].Env = []v1.EnvVar{}
+							return ret
+						}(),
+					}},
+			},
+		},
+		ciop:     config.CompoundCiopConfig{},
+		expected: config.Presubmits{},
+	},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			presubmits := GetPresubmitsForCiopConfigs(tc.prow, tc.ciop, logrus.NewEntry(logrus.New()))
+
+			if !reflect.DeepEqual(tc.expected, presubmits) {
+				t.Errorf("Returned presubmits differ from expected:\n%s", diff.ObjectDiff(tc.expected, presubmits))
+			}
+		})
 	}
 }

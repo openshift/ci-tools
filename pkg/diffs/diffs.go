@@ -150,3 +150,30 @@ func GetChangedTemplates(masterTemplates, prTemplates map[string]*templateapi.Te
 	}
 	return changedTemplates
 }
+
+func GetPresubmitsForCiopConfigs(prowConfig *prowconfig.Config, ciopConfigs config.CompoundCiopConfig, logger *logrus.Entry) config.Presubmits {
+	ret := config.Presubmits{}
+
+	for repo, jobs := range prowConfig.JobConfig.Presubmits {
+		for _, job := range jobs {
+			if job.Agent != string(pjapi.KubernetesAgent) {
+				continue
+			}
+			for _, env := range job.Spec.Containers[0].Env {
+				if env.ValueFrom == nil {
+					continue
+				}
+				if env.ValueFrom.ConfigMapKeyRef == nil {
+					continue
+				}
+				if env.ValueFrom.ConfigMapKeyRef.Name == config.CiOperatorConfigsCMName {
+					if _, ok := ciopConfigs[env.ValueFrom.ConfigMapKeyRef.Key]; ok {
+						ret.Add(repo, job)
+					}
+				}
+			}
+		}
+	}
+
+	return ret
+}

@@ -30,8 +30,6 @@ import (
 const (
 	rehearseLabel                = "ci.openshift.org/rehearse"
 	defaultRehearsalRerunCommand = "/test pj-rehearse"
-	ciOperatorConfigsCMName      = "ci-operator-configs"
-	ciopConfigsInRepo            = "ci-operator/config"
 	logRehearsalJob              = "rehearsal-job"
 	logCiopConfigFile            = "ciop-config-file"
 	logCiopConfigRepo            = "ciop-config-repo"
@@ -138,7 +136,7 @@ func inlineCiOpConfig(job *prowconfig.Presubmit, targetRepo string, ciopConfigs 
 			if env.ValueFrom.ConfigMapKeyRef == nil {
 				continue
 			}
-			if env.ValueFrom.ConfigMapKeyRef.Name == ciOperatorConfigsCMName {
+			if env.ValueFrom.ConfigMapKeyRef.Name == config.CiOperatorConfigsCMName {
 				filename := env.ValueFrom.ConfigMapKeyRef.Key
 
 				logFields := logrus.Fields{logCiopConfigFile: filename, logCiopConfigRepo: targetRepo, logRehearsalJob: job.Name}

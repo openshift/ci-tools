@@ -89,12 +89,12 @@ func TestInlineCiopConfig(t *testing.T) {
 		expectedEnv: []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference("test-cm", "key")}},
 	}, {
 		description: "CM reference to ci-operator-configs -> cm content inlined",
-		sourceEnv:   []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference(ciOperatorConfigsCMName, "filename")}},
+		sourceEnv:   []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference(config.CiOperatorConfigsCMName, "filename")}},
 		configs:     config.CompoundCiopConfig{"filename": testCiopConfig},
 		expectedEnv: []v1.EnvVar{{Name: "T", Value: string(testCiopCongigContent)}},
 	}, {
 		description:   "bad CM key is handled",
-		sourceEnv:     []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference(ciOperatorConfigsCMName, "filename")}},
+		sourceEnv:     []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference(config.CiOperatorConfigsCMName, "filename")}},
 		configs:       config.CompoundCiopConfig{},
 		expectedError: true,
 	},

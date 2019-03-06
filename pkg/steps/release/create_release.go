@@ -68,18 +68,29 @@ func (s *assembleReleaseStep) Run(ctx context.Context, dry bool) error {
 	tag := s.tag()
 	streamName := s.streamName()
 
-	// if we receive an input, we tag it in instead of generating it
-	if providedImage := os.Getenv(s.envVar()); len(providedImage) > 0 {
+	// if the user specified an input env var, we tag it in instead of generating it
+	providedImage, ok := os.LookupEnv(s.envVar())
+	if ok {
+		if len(providedImage) == 0 {
+			log.Printf("No %s release image necessary", tag)
+			return nil
+		}
 		return s.importFromReleaseImage(ctx, dry, providedImage)
 	}
 
 	stable, err := s.imageClient.ImageStreams(s.jobSpec.Namespace).Get(streamName, meta.GetOptions{})
 	if err != nil {
+		if errors.IsNotFound(err) {
+			// if a user sets IMAGE_FORMAT=... we skip importing the image stream contents, which prevents us from
+			// generating a release image.
+			log.Printf("No %s release image can be generated when the %s image stream was skipped", tag, streamName)
+			return nil
+		}
 		return fmt.Errorf("could not resolve imagestream %s: %v", streamName, err)
 	}
 	cvo, ok := resolvePullSpec(stable, "cluster-version-operator", true)
 	if !ok {
-		log.Printf("No release image necessary, stable image stream does not include a cluster-version-operator image")
+		log.Printf("No %s release image necessary, %s image stream does not include a cluster-version-operator image", tag, streamName)
 		return nil
 	}
 	if _, ok := resolvePullSpec(stable, "cli", true); !ok {

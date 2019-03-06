@@ -15,13 +15,14 @@ import (
 	"sync"
 	"time"
 
-	"k8s.io/apimachinery/pkg/util/sets"
+	"github.com/golang/glog"
 
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/scheme"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
@@ -182,7 +183,7 @@ type PodClient interface {
 }
 
 func copyArtifacts(podClient PodClient, into, ns, name, containerName string, paths []string) error {
-	log.Printf("Copying artifacts from %s into %s", name, into)
+	glog.V(4).Infof("Copying artifacts from %s into %s", name, into)
 	var args []string
 	for _, s := range paths {
 		args = append(args, "-C", s, ".")
@@ -253,7 +254,10 @@ func copyArtifacts(podClient PodClient, into, ns, name, containerName string, pa
 		size += h.Size
 	}
 
-	if size > 0 {
+	// If we're updating a substantial amount of artifacts, let the user know as a way to
+	// indicate why the step took a long amount of time. Conversely, if we just got a small
+	// number of files this is just noise and can be omitted to not distract from other steps.
+	if size > 1*1000*1000 {
 		log.Printf("Copied %0.2fMi of artifacts from %s to %s", float64(size)/1000000, name, into)
 	}
 
@@ -650,6 +654,9 @@ func gatherContainerLogsOutput(podClient PodClient, artifactDir, namespace, podN
 	list, err := podClient.Pods(namespace).List(meta.ListOptions{FieldSelector: fields.Set{"metadata.name": podName}.AsSelector().String()})
 	if err != nil {
 		return fmt.Errorf("could not list pod: %v", err)
+	}
+	if len(list.Items) == 0 {
+		return nil
 	}
 	pod := &list.Items[0]
 

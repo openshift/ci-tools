@@ -162,7 +162,7 @@ func getRehersalsHelper(logger *logrus.Entry, prNumber int) ([]*prowconfig.Presu
 	changedPresubmits.AddAll(diffs.GetPresubmitsForCiopConfigs(prowPRConfig, changedCiopConfigs, logger))
 
 	var cmClient coreclientset.ConfigMapInterface
-	rehearsals := rehearse.ConfigureRehearsalJobs(changedPresubmits, ciopPrConfig, prNumber, rehearse.Loggers{Job: logger, Debug: logger}, false, cmClient, nil, true)
+	rehearsals := rehearse.ConfigureRehearsalJobs(changedPresubmits, ciopPrConfig, prNumber, rehearse.Loggers{Job: logger, Debug: logger}, false, cmClient, nil)
 
 	return rehearsals, nil
 }

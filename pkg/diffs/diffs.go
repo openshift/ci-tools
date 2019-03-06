@@ -63,8 +63,8 @@ func GetChangedCiopConfigs(masterConfig, prConfig config.CompoundCiopConfig, log
 }
 
 // GetChangedPresubmits returns a mapping of repo to presubmits to execute.
-func GetChangedPresubmits(prowMasterConfig, prowPRConfig *prowconfig.Config, logger *logrus.Entry) map[string][]prowconfig.Presubmit {
-	ret := make(map[string][]prowconfig.Presubmit)
+func GetChangedPresubmits(prowMasterConfig, prowPRConfig *prowconfig.Config, logger *logrus.Entry) config.Presubmits {
+	ret := config.Presubmits{}
 
 	masterJobs := getJobsByRepoAndName(prowMasterConfig.JobConfig.Presubmits)
 	for repo, jobs := range prowPRConfig.JobConfig.Presubmits {
@@ -77,14 +77,14 @@ func GetChangedPresubmits(prowMasterConfig, prowPRConfig *prowconfig.Config, log
 				if masterJob.Agent != job.Agent {
 					logFields[logDiffs] = convertToReadableDiff(masterJob.Agent, job.Agent, objectAgent)
 					logger.WithFields(logFields).Info(chosenJob)
-					ret[repo] = append(ret[repo], job)
+					ret.Add(repo, job)
 					continue
 				}
 
 				if !equality.Semantic.DeepEqual(masterJob.Spec, job.Spec) {
 					logFields[logDiffs] = convertToReadableDiff(masterJob.Spec, job.Spec, objectSpec)
 					logger.WithFields(logFields).Info(chosenJob)
-					ret[repo] = append(ret[repo], job)
+					ret.Add(repo, job)
 				}
 			}
 		}
@@ -96,7 +96,7 @@ func GetChangedPresubmits(prowMasterConfig, prowPRConfig *prowconfig.Config, log
 // and compare the same key and index of the other map of slices,
 // we convert them as `repo-> jobName-> Presubmit` to be able to
 // access any specific elements of the Presubmits without the need to iterate in slices.
-func getJobsByRepoAndName(presubmits map[string][]prowconfig.Presubmit) map[string]map[string]prowconfig.Presubmit {
+func getJobsByRepoAndName(presubmits config.Presubmits) map[string]map[string]prowconfig.Presubmit {
 	jobsByRepo := make(map[string]map[string]prowconfig.Presubmit)
 
 	for repo, preSubmitList := range presubmits {

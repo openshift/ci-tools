@@ -111,14 +111,14 @@ func TestGetChangedPresubmits(t *testing.T) {
 	testCases := []struct {
 		name            string
 		configGenerator func() (before, after *prowconfig.Config)
-		expected        map[string][]prowconfig.Presubmit
+		expected        config.Presubmits
 	}{
 		{
 			name: "no differences mean nothing is identified as a diff",
 			configGenerator: func() (*prowconfig.Config, *prowconfig.Config) {
 				return makeConfig(basePresubmit), makeConfig(basePresubmit)
 			},
-			expected: map[string][]prowconfig.Presubmit{},
+			expected: config.Presubmits{},
 		},
 		{
 			name: "new job added",
@@ -134,7 +134,7 @@ func TestGetChangedPresubmits(t *testing.T) {
 				return makeConfig(basePresubmit), makeConfig(p)
 
 			},
-			expected: map[string][]prowconfig.Presubmit{
+			expected: config.Presubmits{
 				"org/repo": func() []prowconfig.Presubmit {
 					var p []prowconfig.Presubmit
 					var pNew prowconfig.Presubmit
@@ -155,7 +155,7 @@ func TestGetChangedPresubmits(t *testing.T) {
 				return makeConfig(p), makeConfig(basePresubmit)
 
 			},
-			expected: map[string][]prowconfig.Presubmit{
+			expected: config.Presubmits{
 				"org/repo": basePresubmit,
 			},
 		},
@@ -168,7 +168,7 @@ func TestGetChangedPresubmits(t *testing.T) {
 				return makeConfig(basePresubmit), makeConfig(p)
 
 			},
-			expected: map[string][]prowconfig.Presubmit{
+			expected: config.Presubmits{
 				"org/repo": func() []prowconfig.Presubmit {
 					var p []prowconfig.Presubmit
 					deepcopy.Copy(&p, basePresubmit)
@@ -192,7 +192,7 @@ func TestGetChangedPresubmits(t *testing.T) {
 				}
 				return makeConfig(basePresubmit), makeConfig(p)
 			},
-			expected: map[string][]prowconfig.Presubmit{
+			expected: config.Presubmits{
 				"org/repo": func() []prowconfig.Presubmit {
 					var p []prowconfig.Presubmit
 					deepcopy.Copy(&p, basePresubmit)
@@ -223,7 +223,7 @@ func TestGetChangedPresubmits(t *testing.T) {
 func makeConfig(p []prowconfig.Presubmit) *prowconfig.Config {
 	return &prowconfig.Config{
 		JobConfig: prowconfig.JobConfig{
-			Presubmits: map[string][]prowconfig.Presubmit{"org/repo": p},
+			Presubmits: config.Presubmits{"org/repo": p},
 		},
 	}
 }

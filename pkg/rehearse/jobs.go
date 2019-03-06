@@ -78,8 +78,8 @@ func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber 
 	return &rehearsal, nil
 }
 
-func filterJobs(changedPresubmits map[string][]prowconfig.Presubmit, allowVolumes bool, logger logrus.FieldLogger) map[string][]prowconfig.Presubmit {
-	ret := make(map[string][]prowconfig.Presubmit)
+func filterJobs(changedPresubmits map[string][]prowconfig.Presubmit, allowVolumes bool, logger logrus.FieldLogger) config.Presubmits {
+	ret := config.Presubmits{}
 	for repo, jobs := range changedPresubmits {
 		for _, job := range jobs {
 			jobLogger := logger.WithFields(logrus.Fields{"repo": repo, "job": job.Name})
@@ -87,7 +87,7 @@ func filterJobs(changedPresubmits map[string][]prowconfig.Presubmit, allowVolume
 				jobLogger.WithError(err).Warn("could not rehearse job")
 				continue
 			}
-			ret[repo] = append(ret[repo], job)
+			ret.Add(repo, job)
 		}
 	}
 	return ret
@@ -166,7 +166,7 @@ func inlineCiOpConfig(job *prowconfig.Presubmit, targetRepo string, ciopConfigs 
 
 // ConfigureRehearsalJobs filters the jobs that should be rehearsed, then return a list of them re-configured with the
 // ci-operator's configuration inlined.
-func ConfigureRehearsalJobs(toBeRehearsed map[string][]prowconfig.Presubmit, ciopConfigs config.CompoundCiopConfig, prNumber int, loggers Loggers, allowVolumes bool) []*prowconfig.Presubmit {
+func ConfigureRehearsalJobs(toBeRehearsed config.Presubmits, ciopConfigs config.CompoundCiopConfig, prNumber int, loggers Loggers, allowVolumes bool) []*prowconfig.Presubmit {
 	rehearsals := []*prowconfig.Presubmit{}
 
 	rehearsalsFiltered := filterJobs(toBeRehearsed, allowVolumes, loggers.Job)

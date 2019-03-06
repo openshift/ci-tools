@@ -168,7 +168,7 @@ func main() {
 		changedCiopConfigs = diffs.GetChangedCiopConfigs(masterConfig.CiOperator, prConfig.CiOperator, logger)
 	}
 
-	var changedTemplates config.CiTemplates
+	changedTemplates := make(config.CiTemplates)
 	// We can only detect changes if we managed to load both CI template versions
 	if masterConfig.Templates != nil && prConfig.Templates != nil {
 		changedTemplates = diffs.GetChangedTemplates(masterConfig.Templates, prConfig.Templates, logger)

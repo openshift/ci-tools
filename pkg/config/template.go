@@ -139,6 +139,7 @@ func (c *TemplateCMManager) CleanupCMTemplates() error {
 	return nil
 }
 
+// GetTempCMName converts a template name to a temporary name including the pr number.
 func GetTempCMName(prNumber int, templateName string) string {
 	return fmt.Sprintf("rehearse-%d-%s", prNumber, templateName)
 }

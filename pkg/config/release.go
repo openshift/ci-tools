@@ -8,7 +8,9 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
+	pjdwapi "k8s.io/test-infra/prow/pod-utils/downwardapi"
 )
 
 const (
@@ -29,8 +31,8 @@ type ReleaseRepoConfig struct {
 	Templates  CiTemplates
 }
 
-func getCurrentSHA(repoPath string) (string, error) {
-	cmd := exec.Command("git", "rev-parse", "HEAD")
+func revParse(repoPath string, args ...string) (string, error) {
+	cmd := exec.Command("git", append([]string{"rev-parse"}, args...)...)
 	cmd.Dir = repoPath
 	sha, err := cmd.Output()
 	if err != nil {
@@ -48,6 +50,31 @@ func gitCheckout(candidatePath, baseSHA string) error {
 		return fmt.Errorf("'%s' failed with out: %s and error %v", cmd.Args, stdoutStderr, err)
 	}
 	return nil
+}
+
+// NewLocalJobSpec creates a fake JobSpec based on information extracted from
+// the local git repository to simulate a CI job.
+func NewLocalJobSpec(path string) (*pjdwapi.JobSpec, error) {
+	refs := pjapi.Refs{
+		Org:   "openshift",
+		Repo:  "release",
+		Pulls: []pjapi.Pull{{}},
+	}
+	var err error
+	if refs.Pulls[0].Ref, err = revParse(path, "--abbrev-ref", "HEAD"); err != nil {
+		return nil, fmt.Errorf("could not get current branch: %v", err)
+	}
+	if refs.BaseRef, err = revParse(path, "--abbrev-ref", refs.Pulls[0].Ref+"@{upstream}"); err != nil {
+		logrus.WithError(err).Info("current branch has no upstream, using `master`")
+		refs.BaseRef = "master"
+	}
+	if refs.BaseSHA, err = revParse(path, refs.BaseRef); err != nil {
+		return nil, fmt.Errorf("could not parse base revision: %v", err)
+	}
+	if refs.Pulls[0].SHA, err = revParse(path, refs.Pulls[0].Ref); err != nil {
+		return nil, fmt.Errorf("could not parse pull revision: %v", err)
+	}
+	return &pjdwapi.JobSpec{Type: pjapi.PresubmitJob, Refs: &refs}, nil
 }
 
 // GetAllConfigs loads all configuration from the working copy of the release repo (usually openshift/release).
@@ -85,18 +112,24 @@ func GetAllConfigs(releaseRepoPath string, logger *logrus.Entry) *ReleaseRepoCon
 // manipulations are propagated in the error return value. Errors occurred during the actual config loading are not
 // propagated, but the returned struct field will have a nil value in the appropriate field. The error is only logged.
 func GetAllConfigsFromSHA(releaseRepoPath, sha string, logger *logrus.Entry) (*ReleaseRepoConfig, error) {
-	currentSHA, err := getCurrentSHA(releaseRepoPath)
+	currentSHA, err := revParse(releaseRepoPath, "HEAD")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get SHA of current HEAD: %v", err)
 	}
-
+	restoreRev, err := revParse(releaseRepoPath, "--abbrev-ref", "HEAD")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get current branch: %v", err)
+	}
+	if restoreRev == "HEAD" {
+		restoreRev = currentSHA
+	}
 	if err := gitCheckout(releaseRepoPath, sha); err != nil {
 		return nil, fmt.Errorf("could not checkout worktree: %v", err)
 	}
 
 	config := GetAllConfigs(releaseRepoPath, logger)
 
-	if err := gitCheckout(releaseRepoPath, currentSHA); err != nil {
+	if err := gitCheckout(releaseRepoPath, restoreRev); err != nil {
 		return config, fmt.Errorf("failed to check out tested revision back: %v", err)
 	}
 

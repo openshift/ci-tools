@@ -40,6 +40,7 @@ func loadClusterConfig() (*rest.Config, error) {
 type options struct {
 	dryRun       bool
 	noFail       bool
+	local        bool
 	allowVolumes bool
 	debugLogPath string
 
@@ -53,6 +54,7 @@ func gatherOptions() options {
 
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually submit rehearsal jobs to Prow")
 	fs.BoolVar(&o.noFail, "no-fail", true, "Whether to actually end unsuccessfuly when something breaks")
+	fs.BoolVar(&o.local, "local", false, "Whether this is a local execution or part of a CI job")
 	fs.BoolVar(&o.allowVolumes, "allow-volumes", false, "Allows jobs with extra volumes to be rehearsed")
 
 	fs.StringVar(&o.debugLogPath, "debug-log", "", "Alternate file for debug output, defaults to stderr")
@@ -106,10 +108,17 @@ func main() {
 		gracefulExit(o.noFail, misconfigurationOutput)
 	}
 
-	jobSpec, err := pjdwapi.ResolveSpecFromEnv()
-	if err != nil {
-		logrus.WithError(err).Error("could not read JOB_SPEC")
-		gracefulExit(o.noFail, misconfigurationOutput)
+	var jobSpec *pjdwapi.JobSpec
+	if o.local {
+		if jobSpec, err = config.NewLocalJobSpec(o.releaseRepoPath); err != nil {
+			logrus.WithError(err).Error("could not create local JobSpec")
+			gracefulExit(o.noFail, misconfigurationOutput)
+		}
+	} else {
+		if jobSpec, err = pjdwapi.ResolveSpecFromEnv(); err != nil {
+			logrus.WithError(err).Error("could not read JOB_SPEC")
+			gracefulExit(o.noFail, misconfigurationOutput)
+		}
 	}
 
 	prFields := logrus.Fields{prowgithub.OrgLogField: jobSpec.Refs.Org, prowgithub.RepoLogField: jobSpec.Refs.Repo}
@@ -169,7 +178,11 @@ func main() {
 		}
 	}
 
-	pjclient, err := rehearse.NewProwJobClient(clusterConfig, masterConfig.Prow.ProwJobNamespace, o.dryRun)
+	namespace := prConfig.Prow.ProwJobNamespace
+	if o.local {
+		namespace = "ci-stg"
+	}
+	pjclient, err := rehearse.NewProwJobClient(clusterConfig, namespace, o.dryRun)
 	if err != nil {
 		logger.WithError(err).Error("could not create a ProwJob client")
 		gracefulExit(o.noFail, misconfigurationOutput)

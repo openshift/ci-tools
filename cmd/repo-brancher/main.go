@@ -23,7 +23,7 @@ type options struct {
 	promotion.Options
 	gitDir      string
 	username    string
-	password    string
+	tokenPath   string
 	fastForward bool
 }
 
@@ -35,8 +35,8 @@ func (o *options) Validate() error {
 		if o.username == "" {
 			return errors.New("--username is required with --confirm")
 		}
-		if o.password == "" {
-			return errors.New("--password is required with --confirm")
+		if o.tokenPath == "" {
+			return errors.New("--token-path is required with --confirm")
 		}
 	}
 	return nil
@@ -47,7 +47,7 @@ func gatherOptions() options {
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	fs.StringVar(&o.gitDir, "git-dir", "", "Optional dir to do git operations in. If unset, temp dir will be used.")
 	fs.StringVar(&o.username, "username", "", "Username to use when pushing to GitHub.")
-	fs.StringVar(&o.password, "password", "", "Password to use when pushing to GitHub.")
+	fs.StringVar(&o.tokenPath, "token-path", "", "Path to token to use when pushing to GitHub.")
 	fs.BoolVar(&o.fastForward, "fast-forward", false, "Attempt to fast-forward future branches if they already exist.")
 	o.Bind(fs)
 	if err := fs.Parse(os.Args[1:]); err != nil {
@@ -76,6 +76,15 @@ func main() {
 		gitDir = tempDir
 	}
 
+	var token string
+	if o.Confirm {
+		if rawToken, err := ioutil.ReadFile(o.tokenPath); err != nil {
+			logrus.WithError(err).Fatal("Could not read token.")
+		} else {
+			token = string(rawToken)
+		}
+	}
+
 	if err := config.OperateOnCIOperatorConfigDir(o.ConfigDir, func(configuration *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {
 		logger := config.LoggerForInfo(*repoInfo)
 		if (o.Org != "" && o.Org != repoInfo.Org) || (o.Repo != "" && o.Repo != repoInfo.Repo) {
@@ -102,7 +111,7 @@ func main() {
 			logger.WithError(err).Fatal("Could not construct remote URL.")
 		}
 		if o.Confirm {
-			remote.User = url.UserPassword(o.username, o.password)
+			remote.User = url.UserPassword(o.username, token)
 		}
 		for _, command := range [][]string{{"init"}, {"fetch", "--depth", "10", remote.String(), repoInfo.Branch}} {
 			cmdLogger := logger.WithFields(logrus.Fields{"commands": fmt.Sprintf("git %s", strings.Join(command, " "))})

@@ -13,7 +13,7 @@ import (
 )
 
 type writeParametersStep struct {
-	params    *DeferredParameters
+	params    *api.DeferredParameters
 	paramFile string
 }
 
@@ -69,7 +69,7 @@ func (s *writeParametersStep) Name() string { return "parameters/write" }
 
 func (s *writeParametersStep) Description() string { return "Write the job parameters to disk" }
 
-func WriteParametersStep(params *DeferredParameters, paramFile string) api.Step {
+func WriteParametersStep(params *api.DeferredParameters, paramFile string) api.Step {
 	return &writeParametersStep{
 		params:    params,
 		paramFile: paramFile,

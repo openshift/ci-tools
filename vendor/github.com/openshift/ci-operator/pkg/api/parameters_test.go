@@ -1,13 +1,21 @@
-package steps
+package api
 
 import (
 	"reflect"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/util/diff"
-
-	"github.com/openshift/ci-operator/pkg/api"
 )
+
+func someStepLink(as string) StepLink {
+	return ExternalImageLink(ImageStreamTagReference{
+		Cluster:   "cluster.com",
+		Namespace: "namespace",
+		Name:      "name",
+		Tag:       "tag",
+		As:        as,
+	})
+}
 
 func TestDeferredParametersAllLinks(t *testing.T) {
 	var testCases = []struct {
@@ -17,7 +25,7 @@ func TestDeferredParametersAllLinks(t *testing.T) {
 	}{{
 		purpose: "AllLinks should return a slice with all links for all names",
 		dp: &DeferredParameters{
-			links: map[string][]api.StepLink{
+			links: map[string][]StepLink{
 				"K1": {someStepLink("ONE"), someStepLink("TWO")},
 				"K2": {someStepLink("THREE")},
 			},
@@ -93,11 +101,11 @@ func TestDeferredParametersAddHasLinksGet(t *testing.T) {
 		dp      *DeferredParameters
 		callAdd bool
 		name    string
-		link    api.StepLink
+		link    StepLink
 		fn      func() (string, error)
 
 		expectedHas   bool
-		expectedLinks []api.StepLink
+		expectedLinks []StepLink
 		expectedGet   string
 	}{{
 		purpose: "After `Add(key, link, f)`: Has(key)->true, Links(key)->{link}, Get(key)->f()",
@@ -108,7 +116,7 @@ func TestDeferredParametersAddHasLinksGet(t *testing.T) {
 		fn:      func() (string, error) { return "value", nil },
 
 		expectedHas:   true,
-		expectedLinks: []api.StepLink{someStepLink("name")},
+		expectedLinks: []StepLink{someStepLink("name")},
 		expectedGet:   "value",
 	}, {
 		purpose: "Without Add(): Has(key)->false and Links(key)->nil",
@@ -124,9 +132,9 @@ func TestDeferredParametersAddHasLinksGet(t *testing.T) {
 	}, {
 		purpose: "After `Add(key, new-link)` when `key` already present: Has(key)->true and Links(key)->{new-link}",
 		dp: &DeferredParameters{
-			fns:    api.ParameterMap{"key": func() (string, error) { return "old", nil }},
+			fns:    ParameterMap{"key": func() (string, error) { return "old", nil }},
 			values: map[string]string{},
-			links:  map[string][]api.StepLink{"key": {someStepLink("old-link")}},
+			links:  map[string][]StepLink{"key": {someStepLink("old-link")}},
 		},
 		callAdd: true,
 		name:    "key",
@@ -134,7 +142,7 @@ func TestDeferredParametersAddHasLinksGet(t *testing.T) {
 		fn:      func() (string, error) { return "new", nil },
 
 		expectedHas:   true,
-		expectedLinks: []api.StepLink{someStepLink("new-link")},
+		expectedLinks: []StepLink{someStepLink("new-link")},
 		expectedGet:   "new",
 	}}
 	for _, tc := range testCases {
@@ -175,9 +183,9 @@ func TestDeferredParametersGetSet(t *testing.T) {
 	}, {
 		purpose: "Existing key is not overwritten",
 		dp: &DeferredParameters{
-			fns:    make(api.ParameterMap),
+			fns:    make(ParameterMap),
 			values: map[string]string{"key": "oldValue"},
-			links:  map[string][]api.StepLink{},
+			links:  map[string][]StepLink{},
 		},
 		name:     "key",
 		callSet:  true,
@@ -192,7 +200,7 @@ func TestDeferredParametersGetSet(t *testing.T) {
 				"key": func() (string, error) { return "lazyValue", nil },
 			},
 			values: map[string]string{},
-			links:  map[string][]api.StepLink{},
+			links:  map[string][]StepLink{},
 		},
 		name:     "key",
 		callSet:  true,

@@ -2,24 +2,53 @@ package release
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	coreapi "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/wait"
+	rbacclientset "k8s.io/client-go/kubernetes/typed/rbac/v1"
+	"k8s.io/client-go/util/retry"
 
 	imageapi "github.com/openshift/api/image/v1"
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
-	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
-	rbacclientset "k8s.io/client-go/kubernetes/typed/rbac/v1"
 
 	"github.com/openshift/ci-operator/pkg/api"
 	"github.com/openshift/ci-operator/pkg/steps"
 )
 
-// assembleReleaseStep knows how to build an update payload image for
-// an OpenShift release by waiting for the full release image set to be
-// created, then invoking the admin command for building a new release.
+// assembleReleaseStep is responsible for creating release images from
+// the stable or stable-initial image streams for use with tests that need
+// to install or upgrade a cluster. It uses the `cli` image within the
+// image stream to create the image and pushes it to a `release` image stream
+// at the `latest` or `initial` tags. As output it provides the environment
+// variables RELEASE_IMAGE_(LATEST|INITIAL) which can be used by templates
+// that invoke the installer.
+//
+// Since release images describe a set of images, when a user provides
+// RELEASE_IMAGE_INITIAL or RELEASE_IMAGE_LATEST as inputs to the ci-operator
+// job we treat those as inputs we must expand into the `stable-initial` or
+// `stable` image streams. This is because our test scenarios need access not
+// just to the release image, but also to the images in that release image
+// like installer, cli, or tests. To make it easy for a CI job to install from
+// an older release image, we need to extract the 'installer' image into the
+// same location that we would expect if it came from a tag_specification.
+// The images inside of a release image override any images built or imported
+// into the job, which allows you to have an empty tag_specification and
+// inject the images from a known historic release for the purposes of building
+// branches of those releases.
 type assembleReleaseStep struct {
 	config      api.ReleaseTagConfiguration
+	latest      bool
 	resources   api.ResourceConfiguration
 	imageClient imageclientset.ImageV1Interface
 	podClient   steps.PodClient
@@ -29,21 +58,43 @@ type assembleReleaseStep struct {
 }
 
 func (s *assembleReleaseStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
+	if val := os.Getenv(s.envVar()); len(val) > 0 {
+		return api.InputDefinition{val}, nil
+	}
 	return nil, nil
 }
 
 func (s *assembleReleaseStep) Run(ctx context.Context, dry bool) error {
-	stable, err := s.imageClient.ImageStreams(s.jobSpec.Namespace).Get(api.StableImageStream, meta.GetOptions{})
-	if err != nil {
-		return fmt.Errorf("could not resolve stable imagestream: %v", err)
+	tag := s.tag()
+	streamName := s.streamName()
+
+	// if the user specified an input env var, we tag it in instead of generating it
+	providedImage, ok := os.LookupEnv(s.envVar())
+	if ok {
+		if len(providedImage) == 0 {
+			log.Printf("No %s release image necessary", tag)
+			return nil
+		}
+		return s.importFromReleaseImage(ctx, dry, providedImage)
 	}
-	cvo, ok := resolvePullSpec(stable, "cluster-version-operator")
+
+	stable, err := s.imageClient.ImageStreams(s.jobSpec.Namespace).Get(streamName, meta.GetOptions{})
+	if err != nil {
+		if errors.IsNotFound(err) {
+			// if a user sets IMAGE_FORMAT=... we skip importing the image stream contents, which prevents us from
+			// generating a release image.
+			log.Printf("No %s release image can be generated when the %s image stream was skipped", tag, streamName)
+			return nil
+		}
+		return fmt.Errorf("could not resolve imagestream %s: %v", streamName, err)
+	}
+	cvo, ok := resolvePullSpec(stable, "cluster-version-operator", true)
 	if !ok {
-		log.Printf("No release image necessary, stable image stream does not include a cluster-version-operator image")
+		log.Printf("No %s release image necessary, %s image stream does not include a cluster-version-operator image", tag, streamName)
 		return nil
 	}
-	if _, ok := resolvePullSpec(stable, "cli"); !ok {
-		return fmt.Errorf("no 'cli' image was tagged into the stable stream, that image is required for building a release")
+	if _, ok := resolvePullSpec(stable, "cli", true); !ok {
+		return fmt.Errorf("no 'cli' image was tagged into the %s stream, that image is required for building a release", streamName)
 	}
 
 	release, err := s.imageClient.ImageStreams(s.jobSpec.Namespace).Create(&imageapi.ImageStream{
@@ -61,10 +112,10 @@ func (s *assembleReleaseStep) Run(ctx context.Context, dry bool) error {
 		}
 	}
 
-	destination := fmt.Sprintf("%s:%s", release.Status.PublicDockerImageRepository, "latest")
-	log.Printf("Create a new update payload image %s", destination)
+	destination := fmt.Sprintf("%s:%s", release.Status.PublicDockerImageRepository, tag)
+	log.Printf("Create release image %s", destination)
 	podConfig := steps.PodStepConfiguration{
-		As: "release-latest",
+		As: fmt.Sprintf("release-%s", tag),
 		From: api.ImageStreamTagReference{
 			Name: api.StableImageStream,
 			Tag:  "cli",
@@ -76,8 +127,8 @@ set -euo pipefail
 export HOME=/tmp
 oc registry login
 oc adm release new --max-per-registry=32 -n %q --from-image-stream %q --to-image-base %q --to-image %q
-oc adm release extract --from=%q --to=/tmp/artifacts/release-payload
-`, s.jobSpec.Namespace, api.StableImageStream, cvo, destination, destination),
+oc adm release extract --from=%q --to=/tmp/artifacts/release-payload-%s
+`, s.jobSpec.Namespace, api.StableImageStream, cvo, destination, destination, tag),
 	}
 
 	// set an explicit default for release-latest resources, but allow customization if necessary
@@ -97,22 +148,249 @@ oc adm release extract --from=%q --to=/tmp/artifacts/release-payload
 	return step.Run(ctx, dry)
 }
 
+// importFromReleaseImage uses the provided release image and updates the stable / release streams as
+// appropriate with the contents of the payload so that downstream components are using the correct images.
+// The most common case is to use the correct installer image, tests, and cli commands.
+func (s *assembleReleaseStep) importFromReleaseImage(ctx context.Context, dry bool, providedImage string) error {
+	tag := s.tag()
+	streamName := s.streamName()
+
+	if dry {
+		return nil
+	}
+
+	start := time.Now()
+
+	// create the stable image stream with lookup policy
+	_, err := s.imageClient.ImageStreams(s.jobSpec.Namespace).Create(&imageapi.ImageStream{
+		ObjectMeta: meta.ObjectMeta{
+			Name: streamName,
+		},
+		Spec: imageapi.ImageStreamSpec{
+			LookupPolicy: imageapi.ImageLookupPolicy{
+				Local: true,
+			},
+		},
+	})
+	if err != nil && !errors.IsAlreadyExists(err) {
+		return fmt.Errorf("could not create stable imagestreamtag: %v", err)
+	}
+	// tag the release image in and let it import
+	if _, err := s.imageClient.ImageStreamTags(s.jobSpec.Namespace).Update(&imageapi.ImageStreamTag{
+		ObjectMeta: meta.ObjectMeta{
+			Name: fmt.Sprintf("release:%s", tag),
+		},
+		Tag: &imageapi.TagReference{
+			From: &coreapi.ObjectReference{
+				Kind: "DockerImage",
+				Name: providedImage,
+			},
+		},
+	}); err != nil {
+		return err
+	}
+	// wait for the release image to be available
+	var pullSpec string
+	if err := wait.PollImmediate(time.Second, time.Minute, func() (bool, error) {
+		is, err := s.imageClient.ImageStreams(s.jobSpec.Namespace).Get("release", meta.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+		ref, _ := findStatusTag(is, tag)
+		if ref == nil {
+			return false, nil
+		}
+		var registry string
+		if len(is.Status.PublicDockerImageRepository) > 0 {
+			registry = is.Status.PublicDockerImageRepository
+		} else if len(is.Status.DockerImageRepository) > 0 {
+			registry = is.Status.DockerImageRepository
+		} else {
+			return false, fmt.Errorf("image stream %s has no accessible image registry value", is.Name)
+		}
+		pullSpec = fmt.Sprintf("%s:%s", registry, tag)
+		return true, nil
+	}); err != nil {
+		return fmt.Errorf("unable to import %s release image: %v", tag, err)
+	}
+
+	// override anything in stable with the contents of the release image
+	// TODO: should we allow underride for things we built in pipeline?
+	artifactDir := s.artifactDir
+	if len(artifactDir) == 0 {
+		var err error
+		artifactDir, err = ioutil.TempDir("", "payload-images")
+		if err != nil {
+			return fmt.Errorf("unable to create temporary artifact dir for payload extraction")
+		}
+	}
+
+	// get the CLI image from the payload (since we need it to run oc adm release extract)
+	target := fmt.Sprintf("release-images-%s", tag)
+	targetCLI := fmt.Sprintf("%s-cli", target)
+	if err := steps.RunPod(s.podClient, &coreapi.Pod{
+		ObjectMeta: meta.ObjectMeta{
+			Name:      targetCLI,
+			Namespace: s.jobSpec.Namespace,
+		},
+		Spec: coreapi.PodSpec{
+			RestartPolicy: coreapi.RestartPolicyNever,
+			Containers: []coreapi.Container{
+				{
+					Name:    "release",
+					Image:   pullSpec,
+					Command: []string{"/bin/sh", "-c", "cluster-version-operator image cli > /dev/termination-log"},
+				},
+			},
+		},
+	}); err != nil {
+		return fmt.Errorf("unable to find the 'cli' image in the provided release image: %v", err)
+	}
+	pod, err := s.podClient.Pods(s.jobSpec.Namespace).Get(targetCLI, meta.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("unable to extract the 'cli' image from the release image: %v", err)
+	}
+	if len(pod.Status.ContainerStatuses) == 0 || pod.Status.ContainerStatuses[0].State.Terminated == nil {
+		return fmt.Errorf("unable to extract the 'cli' image from the release image: %v", err)
+	}
+	cliImage := pod.Status.ContainerStatuses[0].State.Terminated.Message
+
+	// tag the cli image into stable so we use the correct pull secrets from the namespace
+	if _, err := s.imageClient.ImageStreamTags(s.jobSpec.Namespace).Update(&imageapi.ImageStreamTag{
+		ObjectMeta: meta.ObjectMeta{
+			Name: fmt.Sprintf("%s:cli", streamName),
+		},
+		Tag: &imageapi.TagReference{
+			From: &coreapi.ObjectReference{
+				Kind: "DockerImage",
+				Name: cliImage,
+			},
+		},
+	}); err != nil {
+		return err
+	}
+
+	// run adm release extract and grab the raw image-references from the payload
+	podConfig := steps.PodStepConfiguration{
+		SkipLogs: true,
+		As:       target,
+		From: api.ImageStreamTagReference{
+			Name: api.StableImageStream,
+			Tag:  "cli",
+		},
+		ServiceAccountName: "builder",
+		ArtifactDir:        "/tmp/artifacts",
+		Commands: fmt.Sprintf(`
+set -euo pipefail
+export HOME=/tmp
+oc registry login
+oc adm release extract --from=%q --file=image-references > /tmp/artifacts/%s
+`, pullSpec, target),
+	}
+
+	// set an explicit default for release-latest resources, but allow customization if necessary
+	resources := s.resources
+	if _, ok := resources[podConfig.As]; !ok {
+		copied := make(api.ResourceConfiguration)
+		for k, v := range resources {
+			copied[k] = v
+		}
+		// max cpu observed at 0.1 core, most memory ~ 420M
+		copied[podConfig.As] = api.ResourceRequirements{Requests: api.ResourceList{"cpu": "50m", "memory": "400Mi"}}
+		resources = copied
+	}
+	step := steps.PodStep("release", podConfig, resources, s.podClient, artifactDir, s.jobSpec)
+	if err := step.Run(ctx, false); err != nil {
+		return err
+	}
+
+	// read the contents from the artifacts directory
+	isContents, err := ioutil.ReadFile(filepath.Join(artifactDir, podConfig.As, target))
+	if err != nil {
+		return fmt.Errorf("unable to read release image stream: %v", err)
+	}
+	var releaseIS imageapi.ImageStream
+	if err := json.Unmarshal(isContents, &releaseIS); err != nil {
+		return fmt.Errorf("unable to decode release image stream: %v", err)
+	}
+	if releaseIS.Kind != "ImageStream" || releaseIS.APIVersion != "image.openshift.io/v1" {
+		return fmt.Errorf("unexpected image stream contents: %v", err)
+	}
+
+	// update the stable image stream to have all of the tags from the payload
+	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		stable, err := s.imageClient.ImageStreams(s.jobSpec.Namespace).Get(streamName, meta.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("could not resolve imagestream %s: %v", streamName, err)
+		}
+
+		existing := sets.NewString()
+		tags := make([]imageapi.TagReference, 0, len(releaseIS.Spec.Tags)+len(stable.Spec.Tags))
+		for _, tag := range releaseIS.Spec.Tags {
+			existing.Insert(tag.Name)
+			tags = append(tags, tag)
+		}
+		for _, tag := range stable.Spec.Tags {
+			if existing.Has(tag.Name) {
+				continue
+			}
+			existing.Insert(tag.Name)
+			tags = append(tags, tag)
+		}
+		stable.Spec.Tags = tags
+
+		_, err = s.imageClient.ImageStreams(s.jobSpec.Namespace).Update(stable)
+		return err
+	}); err != nil {
+		return fmt.Errorf("unable to update stable image stream with release tags: %v", err)
+	}
+
+	log.Printf("Imported %s to release:%s and updated %s images in %s", providedImage, tag, streamName, time.Now().Sub(start).Truncate(time.Second))
+	return nil
+}
+
 func (s *assembleReleaseStep) Done() (bool, error) {
 	// TODO: define done
 	return true, nil
 }
 
 func (s *assembleReleaseStep) Requires() []api.StepLink {
-	return []api.StepLink{api.ImagesReadyLink()}
+	// if our prereq is provided, we don't need any prereqs
+	if len(os.Getenv(s.envVar())) > 0 {
+		return nil
+	}
+	if s.latest {
+		return []api.StepLink{api.ImagesReadyLink()}
+	}
+	return []api.StepLink{api.ReleaseImagesLink()}
 }
 
 func (s *assembleReleaseStep) Creates() []api.StepLink {
-	return []api.StepLink{api.ReleasePayloadImageLink(api.PipelineImageStreamTagReference("latest"))}
+	return []api.StepLink{api.ReleasePayloadImageLink(api.PipelineImageStreamTagReference(s.tag()))}
+}
+
+func (s *assembleReleaseStep) tag() string {
+	if s.latest {
+		return "latest"
+	}
+	return "initial"
+}
+
+func (s *assembleReleaseStep) streamName() string {
+	if s.latest {
+		return api.StableImageStream
+	}
+	return fmt.Sprintf("%s-initial", api.StableImageStream)
+}
+
+func (s *assembleReleaseStep) envVar() string {
+	return fmt.Sprintf("RELEASE_IMAGE_%s", strings.ToUpper(s.tag()))
 }
 
 func (s *assembleReleaseStep) Provides() (api.ParameterMap, api.StepLink) {
+	tag := s.tag()
 	return api.ParameterMap{
-		"RELEASE_IMAGE_LATEST": func() (string, error) {
+		s.envVar(): func() (string, error) {
 			is, err := s.imageClient.ImageStreams(s.jobSpec.Namespace).Get("release", meta.GetOptions{})
 			if err != nil {
 				return "", fmt.Errorf("could not retrieve output imagestream: %v", err)
@@ -125,47 +403,32 @@ func (s *assembleReleaseStep) Provides() (api.ParameterMap, api.StepLink) {
 			} else {
 				return "", fmt.Errorf("image stream %s has no accessible image registry value", "release")
 			}
-			return fmt.Sprintf("%s:%s", registry, "latest"), nil
+			return fmt.Sprintf("%s:%s", registry, tag), nil
 		},
-	}, api.ReleasePayloadImageLink(api.PipelineImageStreamTagReference("latest"))
+	}, api.ReleasePayloadImageLink(api.PipelineImageStreamTagReference(tag))
 }
 
-func (s *assembleReleaseStep) Name() string { return "[release:latest]" }
+func (s *assembleReleaseStep) Name() string {
+	return fmt.Sprintf("[release:%s]", s.tag())
+}
 
 func (s *assembleReleaseStep) Description() string {
-	return fmt.Sprintf("Create a release image in the release image stream")
+	if s.latest {
+		return "Create the release image containing all images built by this job"
+	}
+	return "Create initial release image from the images that were in the input tag_specification"
 }
 
 // AssembleReleaseStep builds a new update payload image based on the cluster version operator
 // and the operators defined in the release configuration.
-func AssembleReleaseStep(config api.ReleaseTagConfiguration, resources api.ResourceConfiguration, podClient steps.PodClient, imageClient imageclientset.ImageV1Interface, artifactDir string, jobSpec *api.JobSpec) api.Step {
+func AssembleReleaseStep(latest bool, config api.ReleaseTagConfiguration, resources api.ResourceConfiguration, podClient steps.PodClient, imageClient imageclientset.ImageV1Interface, artifactDir string, jobSpec *api.JobSpec) api.Step {
 	return &assembleReleaseStep{
 		config:      config,
+		latest:      latest,
 		resources:   resources,
 		podClient:   podClient,
 		imageClient: imageClient,
 		artifactDir: artifactDir,
 		jobSpec:     jobSpec,
 	}
-}
-
-func resolvePullSpec(is *imageapi.ImageStream, tag string) (string, bool) {
-	for _, tags := range is.Status.Tags {
-		if tags.Tag != tag {
-			continue
-		}
-		if len(tags.Items) == 0 {
-			break
-		}
-		if image := tags.Items[0].Image; len(image) > 0 {
-			if len(is.Status.PublicDockerImageRepository) > 0 {
-				return fmt.Sprintf("%s@%s", is.Status.PublicDockerImageRepository, image), true
-			}
-			if len(is.Status.DockerImageRepository) > 0 {
-				return fmt.Sprintf("%s@%s", is.Status.DockerImageRepository, image), true
-			}
-		}
-		break
-	}
-	return "", false
 }

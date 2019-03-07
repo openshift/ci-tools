@@ -10,7 +10,7 @@ import (
 )
 
 func TestWriteParamsStep(t *testing.T) {
-	params := NewDeferredParameters()
+	params := api.NewDeferredParameters()
 	params.Add("K1", someStepLink("another-step"), func() (string, error) { return "V1", nil })
 	params.Add("K2", someStepLink("another-step"), func() (string, error) { return "V:2", nil })
 	paramFile, err := ioutil.TempFile("", "")

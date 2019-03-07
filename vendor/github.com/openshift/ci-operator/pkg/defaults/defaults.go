@@ -94,14 +94,14 @@ func FromConfig(
 		podClient = steps.NewPodClient(coreGetter, clusterConfig, coreGetter.RESTClient())
 	}
 
-	params := steps.NewDeferredParameters()
+	params := api.NewDeferredParameters()
 	params.Add("JOB_NAME", nil, func() (string, error) { return jobSpec.Job, nil })
 	params.Add("JOB_NAME_HASH", nil, func() (string, error) { return fmt.Sprintf("%x", sha256.Sum256([]byte(jobSpec.Job)))[:5], nil })
 	params.Add("JOB_NAME_SAFE", nil, func() (string, error) { return strings.Replace(jobSpec.Job, "_", "-", -1), nil })
 	params.Add("NAMESPACE", nil, func() (string, error) { return jobSpec.Namespace, nil })
 
 	var imageStepLinks []api.StepLink
-	var releaseStep api.Step
+	var releaseStep, initialReleaseStep api.Step
 	for _, rawStep := range stepConfigsForBuild(config, jobSpec) {
 		var step api.Step
 		var stepLinks []api.StepLink
@@ -138,10 +138,16 @@ func FromConfig(
 			if err != nil {
 				return nil, nil, fmt.Errorf("unable to access release images on remote cluster: %v", err)
 			}
-			step = steps.ReleaseImagesTagStep(*rawStep.ReleaseImagesTagStepConfiguration, srcClient, imageClient, routeGetter, configMapGetter, params, jobSpec)
+			step = release.ReleaseImagesTagStep(*rawStep.ReleaseImagesTagStepConfiguration, srcClient, imageClient, routeGetter, configMapGetter, params, jobSpec)
 			stepLinks = append(stepLinks, step.Creates()...)
 
-			releaseStep = release.AssembleReleaseStep(*rawStep.ReleaseImagesTagStepConfiguration, config.Resources, podClient, imageClient, artifactDir, jobSpec)
+			releaseStep = release.AssembleReleaseStep(true, *rawStep.ReleaseImagesTagStepConfiguration, config.Resources, podClient, imageClient, artifactDir, jobSpec)
+			checkForFullyQualifiedStep(releaseStep, params)
+
+			initialReleaseStep = release.AssembleReleaseStep(false, *rawStep.ReleaseImagesTagStepConfiguration, config.Resources, podClient, imageClient, artifactDir, jobSpec)
+			checkForFullyQualifiedStep(initialReleaseStep, params)
+			// initial release is always added
+			buildSteps = append(buildSteps, initialReleaseStep)
 
 		} else if rawStep.TestStepConfiguration != nil {
 			step = steps.TestStep(*rawStep.TestStepConfiguration, config.Resources, podClient, artifactDir, jobSpec)
@@ -164,10 +170,9 @@ func FromConfig(
 	}
 
 	if releaseStep != nil {
-		releaseStep, _ = checkForFullyQualifiedStep(releaseStep, params)
 		buildSteps = append(buildSteps, releaseStep)
 	} else {
-		buildSteps = append(buildSteps, steps.StableImagesTagStep(imageClient, jobSpec))
+		buildSteps = append(buildSteps, release.StableImagesTagStep(imageClient, jobSpec))
 	}
 
 	buildSteps = append(buildSteps, steps.ImagesReadyStep(imageStepLinks))
@@ -184,7 +189,7 @@ func FromConfig(
 				tags = append(tags, string(image.To))
 			}
 		}
-		postSteps = append(postSteps, steps.PromotionStep(*cfg, tags, imageClient, imageClient, jobSpec))
+		postSteps = append(postSteps, release.PromotionStep(*cfg, tags, imageClient, imageClient, jobSpec))
 	}
 
 	return buildSteps, postSteps, nil
@@ -193,7 +198,7 @@ func FromConfig(
 // checkForFullyQualifiedStep if all output parameters of this step are part of the
 // environment, replace the step with a shim that automatically provides those variables.
 // Returns true if the step was replaced.
-func checkForFullyQualifiedStep(step api.Step, params *steps.DeferredParameters) (api.Step, bool) {
+func checkForFullyQualifiedStep(step api.Step, params *api.DeferredParameters) (api.Step, bool) {
 	provides, link := step.Provides()
 
 	if values, ok := envHasAllParameters(provides); ok {
@@ -361,25 +366,14 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.Job
 		image := &config.Images[i]
 		buildSteps = append(buildSteps, api.StepConfiguration{ProjectDirectoryImageBuildStepConfiguration: image})
 		if config.ReleaseTagConfiguration != nil {
-			if len(config.ReleaseTagConfiguration.Name) > 0 {
-				buildSteps = append(buildSteps, api.StepConfiguration{OutputImageTagStepConfiguration: &api.OutputImageTagStepConfiguration{
-					From: image.To,
-					To: api.ImageStreamTagReference{
-						Name: fmt.Sprintf("%s%s", config.ReleaseTagConfiguration.NamePrefix, api.StableImageStream),
-						Tag:  string(image.To),
-					},
-					Optional: image.Optional,
-				}})
-			} else {
-				buildSteps = append(buildSteps, api.StepConfiguration{OutputImageTagStepConfiguration: &api.OutputImageTagStepConfiguration{
-					From: image.To,
-					To: api.ImageStreamTagReference{
-						Name: string(image.To),
-						Tag:  "ci",
-					},
-					Optional: image.Optional,
-				}})
-			}
+			buildSteps = append(buildSteps, api.StepConfiguration{OutputImageTagStepConfiguration: &api.OutputImageTagStepConfiguration{
+				From: image.To,
+				To: api.ImageStreamTagReference{
+					Name: fmt.Sprintf("%s%s", config.ReleaseTagConfiguration.NamePrefix, api.StableImageStream),
+					Tag:  string(image.To),
+				},
+				Optional: image.Optional,
+			}})
 		} else {
 			buildSteps = append(buildSteps, api.StepConfiguration{OutputImageTagStepConfiguration: &api.OutputImageTagStepConfiguration{
 				From: image.To,

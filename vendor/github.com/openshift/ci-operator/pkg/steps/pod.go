@@ -21,7 +21,15 @@ import (
 const testSecretName = "test-secret"
 const testSecretDefaultPath = "/usr/test-secrets"
 
+// PodStepConfiguration allows other steps to reuse the pod launching and monitoring
+// behavior without reimplementing function. It also enforces conventions like naming,
+// directory structure, and input image format. More sophisticated reuse of launching
+// pods should use RunPod which is more limited.
 type PodStepConfiguration struct {
+	// SkipLogs instructs the step to omit informational logs, such as when the pod is
+	// part of a larger step like release creation where displaying pod specific info
+	// is confusing to an end user. Failure logs are still printed.
+	SkipLogs           bool
 	As                 string
 	From               api.ImageStreamTagReference
 	Commands           string
@@ -48,8 +56,9 @@ func (s *podStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, er
 }
 
 func (s *podStep) Run(ctx context.Context, dry bool) error {
-	log.Printf("Executing %s %s", s.name, s.config.As)
-
+	if !s.config.SkipLogs {
+		log.Printf("Executing %s %s", s.name, s.config.As)
+	}
 	containerResources, err := resourcesFor(s.resources.RequirementsForStep(s.config.As))
 	if err != nil {
 		return fmt.Errorf("unable to calculate %s pod resources for %s: %s", s.name, s.config.As, err)
@@ -107,8 +116,8 @@ func (s *podStep) Run(ctx context.Context, dry bool) error {
 		s.subTests = testCaseNotifier.SubTests(s.Description() + " - ")
 	}()
 
-	if err := waitForPodCompletion(s.podClient.Pods(s.jobSpec.Namespace), pod.Name, testCaseNotifier); err != nil {
-		return fmt.Errorf("test %q failed: %v", pod.Name, err)
+	if err := waitForPodCompletion(s.podClient.Pods(s.jobSpec.Namespace), pod.Name, testCaseNotifier, s.config.SkipLogs); err != nil {
+		return fmt.Errorf("%s %q failed: %v", s.name, pod.Name, err)
 	}
 	return nil
 }
@@ -266,4 +275,16 @@ func getSecretVolumeMountFromSecret(secretMountPath string) []coreapi.VolumeMoun
 			MountPath: secretMountPath,
 		},
 	}
+}
+
+// RunPod may be used to run a pod to completion. Provides a simpler interface than
+// PodStep and is intended for other steps that may need to run transient actions.
+// This pod will not be able to gather artifacts, nor will it report log messages
+// unless it fails.
+func RunPod(podClient PodClient, pod *coreapi.Pod) error {
+	pod, err := createOrRestartPod(podClient.Pods(pod.Namespace), pod)
+	if err != nil {
+		return err
+	}
+	return waitForPodCompletion(podClient.Pods(pod.Namespace), pod.Name, nil, true)
 }

@@ -41,7 +41,6 @@
         - --artifact-dir=$(ARTIFACTS)
         - --give-pr-author-access-to-namespace=true
         - --target=[images]
-        - --target=[release:latest]
         - --git-ref=super/duper@ciop-cfg-change
         command:
         - ci-operator
@@ -435,7 +434,6 @@
         - --artifact-dir=$(ARTIFACTS)
         - --give-pr-author-access-to-namespace=true
         - --target=[images]
-        - --target=[release:latest]
         - --git-ref=super/trooper@master
         command:
         - ci-operator
@@ -471,10 +469,8 @@
         imagePullPolicy: Always
         name: ""
         resources:
-          limits:
-            cpu: 1500m
           requests:
-            cpu: 10m
+            cpu: 10M
       serviceAccountName: ci-operator
     refs:
       base_ref: master

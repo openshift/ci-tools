@@ -842,9 +842,18 @@ func jobSpecFromGitRef(ref string) (*api.JobSpec, error) {
 	if err != nil {
 		return nil, fmt.Errorf("'git ls-remote %s %s' failed with '%s'", repo, parts[1], err)
 	}
-	sha := strings.Split(strings.Split(string(out), "\n")[0], "\t")[0]
+	resolved := strings.Split(strings.Split(string(out), "\n")[0], "\t")
+	sha := resolved[0]
 	if len(sha) == 0 {
 		return nil, fmt.Errorf("ref '%s' does not point to any commit in '%s'", parts[1], parts[0])
+	}
+	// sanity check that regular refs are fully determined
+	if strings.HasPrefix(resolved[1], "refs/heads/") && !strings.HasPrefix(parts[1], "refs/heads/") {
+		if resolved[1] != ("refs/heads/" + parts[1]) {
+			trimmed := resolved[1][len("refs/heads/"):]
+			// we could fix this for the user, but better to require them to be explicit
+			return nil, fmt.Errorf("ref '%s' does not point to any commit in '%s' (did you mean '%s'?)", parts[1], parts[0], trimmed)
+		}
 	}
 	log.Printf("Resolved %s to commit %s", ref, sha)
 	return &api.JobSpec{Type: api.PeriodicJob, Job: "dev", Refs: &api.Refs{Org: prefix[0], Repo: prefix[1], BaseRef: parts[1], BaseSHA: sha}}, nil

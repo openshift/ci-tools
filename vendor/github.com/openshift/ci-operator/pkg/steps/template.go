@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"k8s.io/client-go/rest"
@@ -31,7 +30,7 @@ import (
 
 type templateExecutionStep struct {
 	template       *templateapi.Template
-	params         *DeferredParameters
+	params         *api.DeferredParameters
 	templateClient TemplateClient
 	podClient      PodClient
 	artifactDir    string
@@ -77,7 +76,7 @@ func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 				if err != nil {
 					return fmt.Errorf("could not resolve image format: %v", err)
 				}
-				s.template.Parameters[i].Value = strings.Replace(format, componentFormatReplacement, component, -1)
+				s.template.Parameters[i].Value = strings.Replace(format, api.ComponentFormatReplacement, component, -1)
 			}
 		}
 	}
@@ -157,7 +156,7 @@ func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 	for _, ref := range instance.Status.Objects {
 		switch {
 		case ref.Ref.Kind == "Pod" && ref.Ref.APIVersion == "v1":
-			err := waitForPodCompletion(s.podClient.Pods(s.jobSpec.Namespace), ref.Ref.Name, testCaseNotifier)
+			err := waitForPodCompletion(s.podClient.Pods(s.jobSpec.Namespace), ref.Ref.Name, testCaseNotifier, false)
 			s.subTests = append(s.subTests, testCaseNotifier.SubTests(fmt.Sprintf("%s - %s ", s.Description(), ref.Ref.Name))...)
 			if err != nil {
 				return fmt.Errorf("template pod %q failed: %v", ref.Ref.Name, err)
@@ -230,7 +229,7 @@ func (s *templateExecutionStep) Description() string {
 	return fmt.Sprintf("Run template %s", s.template.Name)
 }
 
-func TemplateExecutionStep(template *templateapi.Template, params *DeferredParameters, podClient PodClient, templateClient TemplateClient, artifactDir string, jobSpec *api.JobSpec) api.Step {
+func TemplateExecutionStep(template *templateapi.Template, params *api.DeferredParameters, podClient PodClient, templateClient TemplateClient, artifactDir string, jobSpec *api.JobSpec) api.Step {
 	return &templateExecutionStep{
 		template:       template,
 		params:         params,
@@ -239,115 +238,6 @@ func TemplateExecutionStep(template *templateapi.Template, params *DeferredParam
 		artifactDir:    artifactDir,
 		jobSpec:        jobSpec,
 	}
-}
-
-type DeferredParameters struct {
-	lock   sync.Mutex
-	fns    api.ParameterMap
-	values map[string]string
-	links  map[string][]api.StepLink
-}
-
-func NewDeferredParameters() *DeferredParameters {
-	return &DeferredParameters{
-		fns:    make(api.ParameterMap),
-		values: make(map[string]string),
-		links:  make(map[string][]api.StepLink),
-	}
-}
-
-func (p *DeferredParameters) Map() (map[string]string, error) {
-	p.lock.Lock()
-	defer p.lock.Unlock()
-	m := make(map[string]string)
-	for k, fn := range p.fns {
-		if v, ok := p.values[k]; ok {
-			m[k] = v
-			continue
-		}
-		v, err := fn()
-		if err != nil {
-			return nil, fmt.Errorf("could not lazily evaluate deferred parameter: %v", err)
-		}
-		p.values[k] = v
-		m[k] = v
-	}
-	return m, nil
-}
-
-func (p *DeferredParameters) Set(name, value string) {
-	p.lock.Lock()
-	defer p.lock.Unlock()
-	if _, ok := p.fns[name]; ok {
-		return
-	}
-	if _, ok := p.values[name]; ok {
-		return
-	}
-	p.values[name] = value
-}
-
-func (p *DeferredParameters) Add(name string, link api.StepLink, fn func() (string, error)) {
-	p.lock.Lock()
-	defer p.lock.Unlock()
-	p.fns[name] = fn
-	if link != nil {
-		p.links[name] = []api.StepLink{link}
-	}
-}
-
-func (p *DeferredParameters) Has(name string) bool {
-	p.lock.Lock()
-	defer p.lock.Unlock()
-	_, ok := p.fns[name]
-	if ok {
-		return true
-	}
-	_, ok = os.LookupEnv(name)
-	return ok
-}
-
-func (p *DeferredParameters) Links(name string) []api.StepLink {
-	p.lock.Lock()
-	defer p.lock.Unlock()
-	if _, ok := os.LookupEnv(name); ok {
-		return nil
-	}
-	return p.links[name]
-}
-
-func (p *DeferredParameters) AllLinks() []api.StepLink {
-	p.lock.Lock()
-	defer p.lock.Unlock()
-	var links []api.StepLink
-	for name, v := range p.links {
-		if _, ok := os.LookupEnv(name); ok {
-			continue
-		}
-		links = append(links, v...)
-	}
-	return links
-}
-
-func (p *DeferredParameters) Get(name string) (string, error) {
-	p.lock.Lock()
-	defer p.lock.Unlock()
-	if value, ok := p.values[name]; ok {
-		return value, nil
-	}
-	if value, ok := os.LookupEnv(name); ok {
-		p.values[name] = value
-		return value, nil
-	}
-	if fn, ok := p.fns[name]; ok {
-		value, err := fn()
-		if err != nil {
-			return "", fmt.Errorf("could not lazily evaluate deferred parameter: %v", err)
-		}
-		p.values[name] = value
-		return value, nil
-	}
-	return "", nil
 }
 
 type TemplateClient interface {
@@ -556,11 +446,10 @@ func waitForCompletedPodDeletion(podClient coreclientset.PodInterface, name stri
 	return waitForPodDeletion(podClient, name, uid)
 }
 
-func waitForPodCompletion(podClient coreclientset.PodInterface, name string, notifier ContainerNotifier) error {
+func waitForPodCompletion(podClient coreclientset.PodInterface, name string, notifier ContainerNotifier, skipLogs bool) error {
 	if notifier == nil {
 		notifier = NopNotifier
 	}
-	skipLogs := false
 	completed := make(map[string]time.Time)
 	for {
 		retry, err := waitForPodCompletionOrTimeout(podClient, name, completed, notifier, skipLogs)
@@ -604,7 +493,7 @@ func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name st
 	if pod.Spec.RestartPolicy == coreapi.RestartPolicyAlways {
 		return false, nil
 	}
-	podLogNewFailedContainers(podClient, pod, completed, notifier)
+	podLogNewFailedContainers(podClient, pod, completed, notifier, skipLogs)
 	if podJobIsOK(pod) {
 		if !skipLogs {
 			log.Printf("Pod %s already succeeded in %s", pod.Name, podDuration(pod).Truncate(time.Second))
@@ -622,9 +511,11 @@ func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name st
 			return true, nil
 		}
 		if pod, ok := event.Object.(*coreapi.Pod); ok {
-			podLogNewFailedContainers(podClient, pod, completed, notifier)
+			podLogNewFailedContainers(podClient, pod, completed, notifier, skipLogs)
 			if podJobIsOK(pod) {
-				log.Printf("Pod %s succeeded after %s", pod.Name, podDuration(pod).Truncate(time.Second))
+				if !skipLogs {
+					log.Printf("Pod %s succeeded after %s", pod.Name, podDuration(pod).Truncate(time.Second))
+				}
 				return false, nil
 			}
 			if podJobIsFailed(pod) {
@@ -633,7 +524,7 @@ func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name st
 			continue
 		}
 		if event.Type == watch.Deleted {
-			podLogNewFailedContainers(podClient, pod, completed, notifier)
+			podLogNewFailedContainers(podClient, pod, completed, notifier, skipLogs)
 			return false, appendLogToError(fmt.Errorf("the pod %s/%s was deleted without completing after %s (failed containers: %s)", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", ")), podMessages(pod))
 		}
 		log.Printf("error: Unrecognized event in watch: %v %#v", event.Type, event.Object)
@@ -790,7 +681,7 @@ func failedContainerNames(pod *coreapi.Pod) []string {
 	return names
 }
 
-func podLogNewFailedContainers(podClient coreclientset.PodInterface, pod *coreapi.Pod, completed map[string]time.Time, notifier ContainerNotifier) {
+func podLogNewFailedContainers(podClient coreclientset.PodInterface, pod *coreapi.Pod, completed map[string]time.Time, notifier ContainerNotifier, skipLogs bool) {
 	var statuses []coreapi.ContainerStatus
 	statuses = append(statuses, pod.Status.InitContainerStatuses...)
 	statuses = append(statuses, pod.Status.ContainerStatuses...)
@@ -807,7 +698,9 @@ func podLogNewFailedContainers(podClient coreclientset.PodInterface, pod *coreap
 		notifier.Notify(pod, status.Name)
 
 		if s.ExitCode == 0 {
-			log.Printf("Container %s in pod %s completed successfully", status.Name, pod.Name)
+			if !skipLogs {
+				log.Printf("Container %s in pod %s completed successfully", status.Name, pod.Name)
+			}
 			continue
 		}
 

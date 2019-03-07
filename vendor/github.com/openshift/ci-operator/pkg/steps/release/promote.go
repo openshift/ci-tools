@@ -1,4 +1,4 @@
-package steps
+package release
 
 import (
 	"context"

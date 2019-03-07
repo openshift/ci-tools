@@ -7,7 +7,7 @@ import (
 	"github.com/getlantern/deepcopy"
 	"github.com/sirupsen/logrus"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,7 +29,7 @@ func TestGetChangedCiopConfigs(t *testing.T) {
 			ReleaseTagConfiguration: &cioperatorapi.ReleaseTagConfiguration{
 				Cluster:   "kluster",
 				Namespace: "namespace",
-				Tag:       "tag",
+				Name:      "name",
 			},
 		},
 	}
@@ -65,14 +65,14 @@ func TestGetChangedCiopConfigs(t *testing.T) {
 			before := config.CompoundCiopConfig{"org-repo-branch.yaml": &baseCiopConfig}
 			afterConfig := cioperatorapi.ReleaseBuildConfiguration{}
 			deepcopy.Copy(&afterConfig, baseCiopConfig)
-			afterConfig.InputConfiguration.ReleaseTagConfiguration.Tag = "another-tag"
+			afterConfig.InputConfiguration.ReleaseTagConfiguration.Name = "another-name"
 			after := config.CompoundCiopConfig{"org-repo-branch.yaml": &afterConfig}
 			return before, after
 		},
 		expected: func() config.CompoundCiopConfig {
 			expected := cioperatorapi.ReleaseBuildConfiguration{}
 			deepcopy.Copy(&expected, baseCiopConfig)
-			expected.InputConfiguration.ReleaseTagConfiguration.Tag = "another-tag"
+			expected.InputConfiguration.ReleaseTagConfiguration.Name = "another-name"
 			return config.CompoundCiopConfig{"org-repo-branch.yaml": &expected}
 		},
 	}}

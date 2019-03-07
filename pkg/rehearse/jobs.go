@@ -203,11 +203,9 @@ func ConfigureRehearsalJobs(toBeRehearsed config.Presubmits, ciopConfigs config.
 				continue
 			}
 
-			changedTemplates := getListOfKeys(templates)
-			exists, index, volumeName := hasChangedTemplateVolume(rehearsal.Spec.Containers[0].VolumeMounts, rehearsal.Spec.Volumes, changedTemplates)
-
+			exists, index, templateName := hasChangedTemplateVolume(rehearsal.Spec.Containers[0].VolumeMounts, rehearsal.Spec.Volumes, templates)
 			if exists {
-				rehearsal.Spec.Volumes[index].VolumeSource.ConfigMap.Name = config.GetTempCMName(prNumber, volumeName)
+				rehearsal.Spec.Volumes[index].VolumeSource.ConfigMap.Name = config.GetTempCMName(prNumber, templateName)
 			}
 
 			jobLogger.WithField(logRehearsalJob, rehearsal.Name).Info("Created a rehearsal job to be submitted")
@@ -218,30 +216,24 @@ func ConfigureRehearsalJobs(toBeRehearsed config.Presubmits, ciopConfigs config.
 	return rehearsals
 }
 
-func hasChangedTemplateVolume(volumeMounts []v1.VolumeMount, volumes []v1.Volume, changedTemplates sets.String) (bool, int, string) {
+func hasChangedTemplateVolume(volumeMounts []v1.VolumeMount, volumes []v1.Volume, templates config.CiTemplates) (bool, int, string) {
+	var templateName string
 	var volumeName string
+
 	for _, volumeMount := range volumeMounts {
-		if changedTemplates.Has(volumeMount.SubPath) {
+		if _, ok := templates[volumeMount.SubPath]; ok {
+			templateName = templates[volumeMount.SubPath].Name
 			volumeName = volumeMount.Name
-			break
 		}
 	}
 
 	for index, volume := range volumes {
 		if volume.Name == volumeName {
-			return true, index, volumeName
+			return true, index, templateName
 		}
 	}
 
 	return false, 0, ""
-}
-
-func getListOfKeys(ret config.CiTemplates) sets.String {
-	keys := sets.NewString()
-	for k := range ret {
-		keys.Insert(k)
-	}
-	return keys
 }
 
 // Executor holds all the information needed for the jobs to be executed.

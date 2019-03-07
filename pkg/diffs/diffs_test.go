@@ -292,7 +292,7 @@ func TestGetChangedTemplates(t *testing.T) {
 	testCases := []struct {
 		name         string
 		getTemplates func() (map[string]*templateapi.Template, map[string]*templateapi.Template)
-		expected     map[string]*templateapi.Template
+		expected     config.CiTemplates
 	}{
 		{
 			name: "no changes",
@@ -300,7 +300,7 @@ func TestGetChangedTemplates(t *testing.T) {
 				templates := makeBaseTemplates(baseParameters, baseObjects)
 				return templates, templates
 			},
-			expected: map[string]*templateapi.Template{},
+			expected: config.CiTemplates{},
 		},
 		{
 			name: "add new template",
@@ -344,7 +344,7 @@ func TestGetChangedTemplates(t *testing.T) {
 					})
 				return makeBaseTemplates(baseParameters, baseObjects), prTemplates
 			},
-			expected: map[string]*templateapi.Template{
+			expected: config.CiTemplates{
 				"template1": {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "template1",

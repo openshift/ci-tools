@@ -60,7 +60,6 @@
                 name: release
                 namespace: openshift
                 tag: golang-1.10
-            canonical_go_repository: ""
             images:
             - from: base
               to: test-image

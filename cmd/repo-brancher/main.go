@@ -56,6 +56,22 @@ func gatherOptions() options {
 	return o
 }
 
+type censoringFormatter struct {
+	secret   string
+	delegate logrus.Formatter
+}
+
+func (f *censoringFormatter) Format(entry *logrus.Entry) ([]byte, error) {
+	for key, value := range entry.Data {
+		if valueString, ok := value.(string); ok {
+			if strings.Contains(valueString, f.secret) {
+				entry.Data[key] = strings.Replace(valueString, f.secret, "xxx", -1)
+			}
+		}
+	}
+	return f.delegate.Format(entry)
+}
+
 func main() {
 	o := gatherOptions()
 	if err := o.Validate(); err != nil {
@@ -82,6 +98,7 @@ func main() {
 			logrus.WithError(err).Fatal("Could not read token.")
 		} else {
 			token = string(rawToken)
+			logrus.SetFormatter(&censoringFormatter{delegate: new(logrus.TextFormatter), secret: token})
 		}
 	}
 

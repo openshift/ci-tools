@@ -84,7 +84,7 @@ func TestGetChangedCiopConfigs(t *testing.T) {
 			expected := tc.expected()
 
 			if !reflect.DeepEqual(expected, actual) {
-				t.Errorf("Detected changed ci-operator config changes differ from expected:\n%s", diff.ObjectDiff(expected, actual))
+				t.Errorf("Detected changed ci-operator config changes differ from expected:\n%s", diff.ObjectReflectDiff(expected, actual))
 			}
 		})
 	}

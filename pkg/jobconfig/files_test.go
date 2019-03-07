@@ -218,7 +218,7 @@ func TestMergeJobConfig(t *testing.T) {
 		mergeJobConfig(tc.destination, tc.source, tc.allJobs)
 
 		if !equality.Semantic.DeepEqual(tc.destination, tc.expected) {
-			t.Errorf("expected merged job config diff:\n%s", diff.ObjectDiff(tc.expected, tc.destination))
+			t.Errorf("expected merged job config diff:\n%s", diff.ObjectReflectDiff(tc.expected, tc.destination))
 		}
 	}
 }
@@ -386,7 +386,7 @@ func TestMergePresubmits(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			if actual, expected := mergePresubmits(testCase.old, testCase.new), testCase.expected; !equality.Semantic.DeepEqual(actual, expected) {
-				t.Errorf("%s: did not get expected merged presubmit config:\n%s", testCase.name, diff.ObjectDiff(actual, expected))
+				t.Errorf("%s: did not get expected merged presubmit config:\n%s", testCase.name, diff.ObjectReflectDiff(actual, expected))
 			}
 		})
 	}
@@ -487,7 +487,7 @@ func TestMergePostsubmits(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			if actual, expected := mergePostsubmits(testCase.old, testCase.new), testCase.expected; !equality.Semantic.DeepEqual(actual, expected) {
-				t.Errorf("%s: did not get expected merged postsubmit config:\n%s", testCase.name, diff.ObjectDiff(actual, expected))
+				t.Errorf("%s: did not get expected merged postsubmit config:\n%s", testCase.name, diff.ObjectReflectDiff(actual, expected))
 			}
 		})
 	}
@@ -547,7 +547,7 @@ func TestExtractRepoElementsFromPath(t *testing.T) {
 				t.Errorf("%s: expected no error, but got one: %v", testCase.name, err)
 			}
 			if actual, expected := elements, testCase.expected; !equality.Semantic.DeepEqual(actual, expected) {
-				t.Errorf("%s: did not get expected repo info from path:\n%s", testCase.name, diff.ObjectDiff(actual, expected))
+				t.Errorf("%s: did not get expected repo info from path:\n%s", testCase.name, diff.ObjectReflectDiff(actual, expected))
 			}
 		})
 	}

@@ -138,7 +138,9 @@ func generatePodSpecTemplate(info *config.Info, release string, test *cioperator
 		clusterProfile = conf.ClusterProfile
 		needsReleaseRpms = true
 	} else if conf := test.OpenshiftInstallerClusterTestConfiguration; conf != nil {
-		template = "cluster-launch-installer-e2e"
+		if !conf.Upgrade {
+			template = "cluster-launch-installer-e2e"
+		}
 		clusterProfile = conf.ClusterProfile
 	} else if conf := test.OpenshiftInstallerSrcClusterTestConfiguration; conf != nil {
 		template = "cluster-launch-installer-src"
@@ -185,8 +187,8 @@ func generatePodSpecTemplate(info *config.Info, release string, test *cioperator
 			},
 		})
 	}
-	podSpec.Volumes = []kubeapi.Volume{
-		{
+	if len(template) > 0 {
+		podSpec.Volumes = append(podSpec.Volumes, kubeapi.Volume{
 			Name: "job-definition",
 			VolumeSource: kubeapi.VolumeSource{
 				ConfigMap: &kubeapi.ConfigMapVolumeSource{
@@ -195,25 +197,25 @@ func generatePodSpecTemplate(info *config.Info, release string, test *cioperator
 					},
 				},
 			},
-		},
-		clusterProfileVolume,
+		})
 	}
+	podSpec.Volumes = append(podSpec.Volumes, clusterProfileVolume)
 	container := &podSpec.Containers[0]
-	container.Args = append(
-		container.Args,
-		fmt.Sprintf("--secret-dir=%s", clusterProfilePath),
-		fmt.Sprintf("--template=%s", templatePath))
-	container.VolumeMounts = []kubeapi.VolumeMount{
-		{Name: "cluster-profile", MountPath: clusterProfilePath},
-		{Name: "job-definition", MountPath: templatePath, SubPath: fmt.Sprintf("%s.yaml", template)},
+	container.Args = append(container.Args, fmt.Sprintf("--secret-dir=%s", clusterProfilePath))
+	if len(template) > 0 {
+		container.Args = append(container.Args, fmt.Sprintf("--template=%s", templatePath))
 	}
-	container.Env = append(
-		container.Env,
-		kubeapi.EnvVar{Name: "CLUSTER_TYPE", Value: targetCloud},
-		kubeapi.EnvVar{Name: "JOB_NAME_SAFE", Value: strings.Replace(test.As, "_", "-", -1)},
-		kubeapi.EnvVar{Name: "TEST_COMMAND", Value: test.Commands})
+	container.VolumeMounts = append(container.VolumeMounts, kubeapi.VolumeMount{Name: "cluster-profile", MountPath: clusterProfilePath})
+	if len(template) > 0 {
+		container.VolumeMounts = append(container.VolumeMounts, kubeapi.VolumeMount{Name: "job-definition", MountPath: templatePath, SubPath: fmt.Sprintf("%s.yaml", template)})
+		container.Env = append(
+			container.Env,
+			kubeapi.EnvVar{Name: "CLUSTER_TYPE", Value: targetCloud},
+			kubeapi.EnvVar{Name: "JOB_NAME_SAFE", Value: strings.Replace(test.As, "_", "-", -1)},
+			kubeapi.EnvVar{Name: "TEST_COMMAND", Value: test.Commands})
+	}
 	if needsReleaseRpms && (info.Org != "openshift" || info.Repo != "origin") {
-		var repoPath string = fmt.Sprintf("https://rpms.svc.ci.openshift.org/openshift-origin-v%s/", release)
+		var repoPath = fmt.Sprintf("https://rpms.svc.ci.openshift.org/openshift-origin-v%s/", release)
 		if strings.HasPrefix(release, "origin-v") {
 			repoPath = fmt.Sprintf("https://rpms.svc.ci.openshift.org/openshift-%s/", release)
 		}

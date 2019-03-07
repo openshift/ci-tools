@@ -57,6 +57,11 @@ func makeCMReference(cmName, key string) *v1.EnvVarSource {
 
 func TestInlineCiopConfig(t *testing.T) {
 	testTargetRepo := "org/repo"
+	testCiopConfigInfo := config.Info{
+		Org:    "org",
+		Repo:   "repo",
+		Branch: "master",
+	}
 	testCiopConfig := &api.ReleaseBuildConfiguration{}
 	testCiopCongigContent, err := yaml.Marshal(testCiopConfig)
 	if err != nil {
@@ -89,12 +94,12 @@ func TestInlineCiopConfig(t *testing.T) {
 		expectedEnv: []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference("test-cm", "key")}},
 	}, {
 		description: "CM reference to ci-operator-configs -> cm content inlined",
-		sourceEnv:   []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference(config.CiOperatorConfigsCMName, "filename")}},
+		sourceEnv:   []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference(testCiopConfigInfo.ConfigMapName(), "filename")}},
 		configs:     config.CompoundCiopConfig{"filename": testCiopConfig},
 		expectedEnv: []v1.EnvVar{{Name: "T", Value: string(testCiopCongigContent)}},
 	}, {
 		description:   "bad CM key is handled",
-		sourceEnv:     []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference(config.CiOperatorConfigsCMName, "filename")}},
+		sourceEnv:     []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference(testCiopConfigInfo.ConfigMapName(), "filename")}},
 		configs:       config.CompoundCiopConfig{},
 		expectedError: true,
 	},

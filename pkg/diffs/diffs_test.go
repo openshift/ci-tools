@@ -399,6 +399,13 @@ func makeBaseTemplates(baseParameters []templateapi.Parameter, baseObjects []run
 }
 
 func TestGetPresubmitsForCiopConfigs(t *testing.T) {
+	baseCiopConfig := config.Info{
+		Org:      "org",
+		Repo:     "repo",
+		Branch:   "branch",
+		Filename: "org-repo-branch.yaml",
+	}
+
 	basePresubmitWithCiop := prowconfig.Presubmit{
 		JobBase: prowconfig.JobBase{
 			Agent: string(pjapi.KubernetesAgent),
@@ -408,7 +415,7 @@ func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 						ValueFrom: &v1.EnvVarSource{
 							ConfigMapKeyRef: &v1.ConfigMapKeySelector{
 								LocalObjectReference: v1.LocalObjectReference{
-									Name: config.CiOperatorConfigsCMName,
+									Name: baseCiopConfig.ConfigMapName(),
 								},
 							},
 						},
@@ -433,19 +440,19 @@ func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 							ret := prowconfig.Presubmit{}
 							deepcopy.Copy(&ret, &basePresubmitWithCiop)
 							ret.Name = "job-for-org-repo"
-							ret.Spec.Containers[0].Env[0].ValueFrom.ConfigMapKeyRef.Key = "org-repo-branch.yaml"
+							ret.Spec.Containers[0].Env[0].ValueFrom.ConfigMapKeyRef.Key = baseCiopConfig.Filename
 							return ret
 						}(),
 					}},
 			},
 		},
-		ciop: config.CompoundCiopConfig{"org-repo-branch.yaml": &cioperatorapi.ReleaseBuildConfiguration{}},
+		ciop: config.CompoundCiopConfig{baseCiopConfig.Filename: &cioperatorapi.ReleaseBuildConfiguration{}},
 		expected: config.Presubmits{"org/repo": {
 			func() prowconfig.Presubmit {
 				ret := prowconfig.Presubmit{}
 				deepcopy.Copy(&ret, &basePresubmitWithCiop)
 				ret.Name = "job-for-org-repo"
-				ret.Spec.Containers[0].Env[0].ValueFrom.ConfigMapKeyRef.Key = "org-repo-branch.yaml"
+				ret.Spec.Containers[0].Env[0].ValueFrom.ConfigMapKeyRef.Key = baseCiopConfig.Filename
 				return ret
 			}(),
 		}},
@@ -459,7 +466,7 @@ func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 							ret := prowconfig.Presubmit{}
 							deepcopy.Copy(&ret, &basePresubmitWithCiop)
 							ret.Name = "job-for-org-repo"
-							ret.Spec.Containers[0].Env[0].ValueFrom.ConfigMapKeyRef.Key = "org-repo-branch.yaml"
+							ret.Spec.Containers[0].Env[0].ValueFrom.ConfigMapKeyRef.Key = baseCiopConfig.Filename
 							return ret
 						}(),
 					}},

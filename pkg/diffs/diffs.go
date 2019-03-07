@@ -166,7 +166,7 @@ func GetPresubmitsForCiopConfigs(prowConfig *prowconfig.Config, ciopConfigs conf
 				if env.ValueFrom.ConfigMapKeyRef == nil {
 					continue
 				}
-				if env.ValueFrom.ConfigMapKeyRef.Name == config.CiOperatorConfigsCMName {
+				if config.IsCiopConfigCM(env.ValueFrom.ConfigMapKeyRef.Name) {
 					if _, ok := ciopConfigs[env.ValueFrom.ConfigMapKeyRef.Key]; ok {
 						ret.Add(repo, job)
 					}

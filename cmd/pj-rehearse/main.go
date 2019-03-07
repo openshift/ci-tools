@@ -163,11 +163,9 @@ func main() {
 	}
 
 	// We can only detect changes if we managed to load both ci-operator config versions
+	changedCiopConfigs := config.CompoundCiopConfig{}
 	if masterConfig.CiOperator != nil && prConfig.CiOperator != nil {
-		changedCiopConfigs := diffs.GetChangedCiopConfigs(masterConfig.CiOperator, prConfig.CiOperator, logger)
-		for name := range changedCiopConfigs {
-			logger.WithField("ciop-config", name).Info("Changed ci-operator config")
-		}
+		changedCiopConfigs = diffs.GetChangedCiopConfigs(masterConfig.CiOperator, prConfig.CiOperator, logger)
 	}
 
 	// We can only detect changes if we managed to load both CI template versions
@@ -201,8 +199,10 @@ func main() {
 	}
 	loggers := rehearse.Loggers{Job: logger, Debug: debugLogger.WithField(prowgithub.PrLogField, prNumber)}
 
-	changedPresubmits := diffs.GetChangedPresubmits(masterConfig.Prow, prConfig.Prow, logger)
-	rehearsals := rehearse.ConfigureRehearsalJobs(changedPresubmits, prConfig.CiOperator, prNumber, loggers, o.allowVolumes)
+	toRehearse := diffs.GetChangedPresubmits(masterConfig.Prow, prConfig.Prow, logger)
+	toRehearse.AddAll(diffs.GetPresubmitsForCiopConfigs(prConfig.Prow, changedCiopConfigs, logger))
+
+	rehearsals := rehearse.ConfigureRehearsalJobs(toRehearse, prConfig.CiOperator, prNumber, loggers, o.allowVolumes)
 	if len(rehearsals) == 0 {
 		logger.Info("no jobs to rehearse have been found")
 		os.Exit(0)

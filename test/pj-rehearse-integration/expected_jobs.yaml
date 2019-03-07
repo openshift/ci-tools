@@ -2,6 +2,106 @@
   kind: ProwJob
   metadata:
     annotations:
+      prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-ciop-cfg-change-images
+    creationTimestamp: null
+    labels:
+      ci.openshift.org/rehearse: "1234"
+      created-by-prow: "true"
+      prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-ciop-cfg-change-images
+      prow.k8s.io/refs.org: openshift
+      prow.k8s.io/refs.pull: "1234"
+      prow.k8s.io/refs.repo: release
+      prow.k8s.io/type: presubmit
+    name: 9bdfbae2-405b-11e9-ac33-74d435fb2dc0
+    namespace: test-namespace
+  spec:
+    agent: kubernetes
+    cluster: default
+    context: ci/rehearse/super/duper/ciop-cfg-change/images
+    decoration_config:
+      gcs_configuration:
+        bucket: origin-ci-test
+        default_org: openshift
+        default_repo: origin
+        path_strategy: single
+      gcs_credentials_secret: gce-sa-credentials-gcs-publisher
+      grace_period: 15000000000
+      skip_cloning: true
+      timeout: 14400000000000
+      utility_images:
+        clonerefs: gcr.io/k8s-prow/clonerefs:v20190129-0a3c54c
+        entrypoint: gcr.io/k8s-prow/entrypoint:v20190129-0a3c54c
+        initupload: gcr.io/k8s-prow/initupload:v20190129-0a3c54c
+        sidecar: gcr.io/k8s-prow/sidecar:v20190129-0a3c54c
+    job: rehearse-1234-pull-ci-super-duper-ciop-cfg-change-images
+    namespace: test-namespace
+    pod_spec:
+      containers:
+      - args:
+        - --artifact-dir=$(ARTIFACTS)
+        - --give-pr-author-access-to-namespace=true
+        - --target=[images]
+        - --target=[release:latest]
+        - --git-ref=super/duper@ciop-cfg-change
+        command:
+        - ci-operator
+        env:
+        - name: CONFIG_SPEC
+          value: |
+            base_images:
+              base:
+                cluster: https://api.ci.openshift.org
+                name: origin-v4.0
+                namespace: openshift
+                tag: base
+            build_root:
+              image_stream_tag:
+                cluster: https://api.ci.openshift.org
+                name: release
+                namespace: openshift
+                tag: golang-1.10
+            canonical_go_repository: ""
+            images:
+            - from: base
+              to: test-image
+            - from: base
+              to: change-should-cause-rehearsal-of-all-jobs-that-use-this-cfg
+            resources:
+              '*':
+                limits:
+                  cpu: 500Mi
+                requests:
+                  cpu: 10Mi
+            tag_specification:
+              cluster: https://api.ci.openshift.org
+              name: origin-v4.0
+              namespace: openshift
+        image: ci-operator:latest
+        imagePullPolicy: Always
+        name: ""
+        resources:
+          requests:
+            cpu: 10m
+      serviceAccountName: ci-operator
+    refs:
+      base_ref: master
+      base_sha: 328cef7c6235073b55754d503b98c9233eaa9955
+      org: openshift
+      pulls:
+      - author: petr-muller
+        number: 1234
+        sha: 2a4d89d759b611ad3f423378c7d78f3af15d78e2
+      repo: release
+    report: true
+    rerun_command: /test pj-rehearse
+    type: presubmit
+  status:
+    startTime: "2019-03-06T22:03:01Z"
+    state: triggered
+- apiVersion: prow.k8s.io/v1
+  kind: ProwJob
+  metadata:
+    annotations:
       prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-master-cmd
     creationTimestamp: null
     labels:

@@ -395,6 +395,11 @@ type OpenshiftAnsibleUpgradeClusterTestConfiguration struct {
 // conformance tests.
 type OpenshiftInstallerClusterTestConfiguration struct {
 	ClusterTestConfiguration `json:",inline"`
+	// If upgrade is true, RELEASE_IMAGE_INITIAL will be used as
+	// the initial payload and the installer image from that
+	// will be upgraded. The `run-upgrade-tests` function will be
+	// available for the commands.
+	Upgrade bool `json:"upgrade"`
 }
 
 // OpenshiftInstallerSrcClusterTestConfiguration describes a

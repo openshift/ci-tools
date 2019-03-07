@@ -120,7 +120,7 @@ func TestInlineCiopConfig(t *testing.T) {
 				}
 
 				if !equality.Semantic.DeepEqual(expectedJob, newJob) {
-					t.Errorf("Returned job differs from expected:\n%s", diff.ObjectDiff(expectedJob, newJob))
+					t.Errorf("Returned job differs from expected:\n%s", diff.ObjectReflectDiff(expectedJob, newJob))
 				}
 			}
 		})
@@ -181,7 +181,7 @@ func TestMakeRehearsalPresubmit(t *testing.T) {
 		t.Errorf("Unexpected error in makeRehearsalPresubmit: %v", err)
 	}
 	if !equality.Semantic.DeepEqual(expectedPresubmit, rehearsal) {
-		t.Errorf("Expected rehearsal Presubmit differs:\n%s", diff.ObjectDiff(expectedPresubmit, rehearsal))
+		t.Errorf("Expected rehearsal Presubmit differs:\n%s", diff.ObjectReflectDiff(expectedPresubmit, rehearsal))
 	}
 }
 
@@ -501,7 +501,7 @@ func TestExecuteJobsPositive(t *testing.T) {
 			sort.Slice(createdJobSpecs, func(a, b int) bool { return createdJobSpecs[a].Job < createdJobSpecs[b].Job })
 
 			if !equality.Semantic.DeepEqual(tc.expectedJobs, createdJobSpecs) {
-				t.Errorf("Created ProwJobs differ from expected:\n%s", diff.ObjectDiff(tc.expectedJobs, createdJobSpecs))
+				t.Errorf("Created ProwJobs differ from expected:\n%s", diff.ObjectReflectDiff(tc.expectedJobs, createdJobSpecs))
 			}
 		})
 	}

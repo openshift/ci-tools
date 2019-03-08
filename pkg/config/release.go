@@ -22,8 +22,6 @@ const (
 	CiopConfigInRepoPath = "ci-operator/config"
 	// TemplatesPath is the path of the templates from release repo
 	TemplatesPath = "ci-operator/templates"
-	// Name of the configmap that stores all ci-operator configs
-	CiOperatorConfigsCMName = "ci-operator-configs"
 )
 
 // ReleaseRepoConfig contains all configuration present in release repo (usually openshift/release)

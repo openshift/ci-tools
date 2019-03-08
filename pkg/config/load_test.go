@@ -190,8 +190,13 @@ func TestInfo_ConfigMapName(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.expected, func(t *testing.T) {
 			info := Info{Branch: testCase.branch}
-			if actual, expected := info.ConfigMapName(), testCase.expected; !reflect.DeepEqual(actual, expected) {
+			actual, expected := info.ConfigMapName(), testCase.expected
+			if !reflect.DeepEqual(actual, expected) {
 				t.Errorf("%s: didn't get correct basename: %v", testCase.name, diff.ObjectReflectDiff(actual, expected))
+			}
+			// test that ConfigMapName() stays in sync with IsCiopConfigCM()
+			if !IsCiopConfigCM(actual) {
+				t.Errorf("%s: IsCiopConfigCM() returned false for %s", testCase.name, actual)
 			}
 		})
 	}

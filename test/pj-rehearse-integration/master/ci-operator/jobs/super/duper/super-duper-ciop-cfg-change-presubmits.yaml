@@ -16,7 +16,6 @@ presubmits:
         - --artifact-dir=$(ARTIFACTS)
         - --give-pr-author-access-to-namespace=true
         - --target=[images]
-        - --target=[release:latest]
         command:
         - ci-operator
         env:
@@ -24,7 +23,7 @@ presubmits:
           valueFrom:
             configMapKeyRef:
               key: super-duper-ciop-cfg-change.yaml
-              name: ci-operator-configs
+              name: ci-operator-misc-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""

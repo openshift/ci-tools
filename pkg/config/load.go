@@ -6,6 +6,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/ghodss/yaml"
@@ -56,6 +57,11 @@ func (i *Info) Basename() string {
 // ConfigMapName returns the configmap in which we expect this file to be uploaded
 func (i *Info) ConfigMapName() string {
 	return fmt.Sprintf("ci-operator-%s-configs", promotion.FlavorForBranch(i.Branch))
+}
+
+// IsCiopConfigCM returns true if a given name is a valid ci-operator config ConfigMap
+func IsCiopConfigCM(name string) bool {
+	return regexp.MustCompile(`^ci-operator-.+-configs$`).MatchString(name)
 }
 
 // We use the directory/file naming convention to encode useful information

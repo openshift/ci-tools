@@ -136,7 +136,7 @@ func inlineCiOpConfig(job *prowconfig.Presubmit, targetRepo string, ciopConfigs 
 			if env.ValueFrom.ConfigMapKeyRef == nil {
 				continue
 			}
-			if env.ValueFrom.ConfigMapKeyRef.Name == config.CiOperatorConfigsCMName {
+			if config.IsCiopConfigCM(env.ValueFrom.ConfigMapKeyRef.Name) {
 				filename := env.ValueFrom.ConfigMapKeyRef.Key
 
 				logFields := logrus.Fields{logCiopConfigFile: filename, logCiopConfigRepo: targetRepo, logRehearsalJob: job.Name}

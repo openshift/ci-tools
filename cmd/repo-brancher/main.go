@@ -85,7 +85,7 @@ func main() {
 			logrus.WithError(err).Fatal("Could not create temp dir for git operations")
 		}
 		defer func() {
-			if err := os.Remove(tempDir); err != nil {
+			if err := os.RemoveAll(tempDir); err != nil {
 				logrus.WithError(err).Fatal("Could not clean up temp dir for git operations")
 			}
 		}()

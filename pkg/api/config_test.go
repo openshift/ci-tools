@@ -279,12 +279,13 @@ func TestValidateBuildRoot(t *testing.T) {
 	var validationErrors []error
 	var testBuildRootCases = []struct {
 		id                   string
-		buildRootImageConfig BuildRootImageConfiguration
+		buildRootImageConfig *BuildRootImageConfiguration
+		hasImages            bool
 		expectedValid        bool
 	}{
 		{
 			id: "both project_image and image_stream_tag in build_root defined causes error",
-			buildRootImageConfig: BuildRootImageConfiguration{
+			buildRootImageConfig: &BuildRootImageConfiguration{
 				ImageStreamTagReference: &ImageStreamTagReference{
 					Cluster:   "https://test.org",
 					Namespace: "test_namespace",
@@ -300,13 +301,25 @@ func TestValidateBuildRoot(t *testing.T) {
 		},
 		{
 			id:                   "build root without any content causes an error",
-			buildRootImageConfig: BuildRootImageConfiguration{},
+			buildRootImageConfig: &BuildRootImageConfiguration{},
+			expectedValid:        false,
+		},
+		{
+			id:                   "nil build root is allowed when no images",
+			buildRootImageConfig: nil,
+			hasImages:            false,
+			expectedValid:        true,
+		},
+		{
+			id:                   "nil build root is not allowed when images defined",
+			buildRootImageConfig: nil,
+			hasImages:            true,
 			expectedValid:        false,
 		},
 	}
 
 	for _, tc := range testBuildRootCases {
-		if errs := validateBuildRootImageConfiguration("build_root", &tc.buildRootImageConfig); len(errs) > 0 && tc.expectedValid {
+		if errs := validateBuildRootImageConfiguration("build_root", tc.buildRootImageConfig, tc.hasImages); len(errs) > 0 && tc.expectedValid {
 			validationErrors = append(validationErrors, fmt.Errorf("%q expected to be valid, got: %v", tc.id, errs))
 		} else if !tc.expectedValid && len(errs) == 0 {
 			validationErrors = append(validationErrors, parseValidError(tc.id))

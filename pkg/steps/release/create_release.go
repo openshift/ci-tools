@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -49,6 +48,8 @@ import (
 type assembleReleaseStep struct {
 	config      api.ReleaseTagConfiguration
 	latest      bool
+	params      api.Parameters
+	releaseSpec string
 	resources   api.ResourceConfiguration
 	imageClient imageclientset.ImageV1Interface
 	podClient   steps.PodClient
@@ -58,22 +59,78 @@ type assembleReleaseStep struct {
 }
 
 func (s *assembleReleaseStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
-	if val := os.Getenv(s.envVar()); len(val) > 0 {
-		return api.InputDefinition{val}, nil
+	if val, _ := s.params.Get(s.envVar()); len(val) > 0 {
+		result, err := s.imageClient.ImageStreamImports(s.config.Namespace).Create(&imageapi.ImageStreamImport{
+			ObjectMeta: meta.ObjectMeta{
+				Name: "release-import",
+			},
+			Spec: imageapi.ImageStreamImportSpec{
+				Images: []imageapi.ImageImportSpec{
+					{
+						From: coreapi.ObjectReference{
+							Kind: "DockerImage",
+							Name: val,
+						},
+					},
+				},
+			},
+		})
+		if err != nil {
+			if errors.IsForbidden(err) {
+				// the ci-operator expects to have POST /imagestreamimports in the namespace of the tag spec
+				log.Printf("warning: Unable to lock %s to an image digest pull spec, you don't have permission to access the necessary API.", s.envVar())
+				return api.InputDefinition{val}, nil
+			}
+			return nil, err
+		}
+		image := result.Status.Images[0]
+		if image.Image == nil {
+			log.Printf("warning: Unable to lock %s to an image digest pull spec due to an import error (%s): %s.", s.envVar(), image.Status.Reason, image.Status.Message)
+			return api.InputDefinition{val}, nil
+		}
+		log.Printf("Resolved release:%s %s", s.tag(), image.Image.DockerImageReference)
+		s.releaseSpec = image.Image.DockerImageReference
+		return api.InputDefinition{image.Image.Name}, nil
 	}
 	return nil, nil
 }
 
 func (s *assembleReleaseStep) Run(ctx context.Context, dry bool) error {
+	if dry {
+		return nil
+	}
+
 	tag := s.tag()
 	streamName := s.streamName()
 
+	// ensure the image stream exists
+	release, err := s.imageClient.ImageStreams(s.jobSpec.Namespace).Create(&imageapi.ImageStream{
+		ObjectMeta: meta.ObjectMeta{
+			Name: "release",
+		},
+	})
+	if err != nil {
+		if !errors.IsAlreadyExists(err) {
+			return err
+		}
+		release, err = s.imageClient.ImageStreams(s.jobSpec.Namespace).Get("release", meta.GetOptions{})
+		if err != nil {
+			return err
+		}
+	}
+
 	// if the user specified an input env var, we tag it in instead of generating it
-	providedImage, ok := os.LookupEnv(s.envVar())
-	if ok {
+	if s.params.HasInput(s.envVar()) {
+		providedImage, err := s.params.Get(s.envVar())
+		if err != nil {
+			return fmt.Errorf("cannot retrieve %s: %v", s.envVar(), err)
+		}
 		if len(providedImage) == 0 {
-			log.Printf("No %s release image necessary", tag)
+			log.Printf("No %s release image necessary because empty input variable provided", tag)
 			return nil
+		}
+		if len(s.releaseSpec) > 0 {
+			providedImage = s.releaseSpec
 		}
 		return s.importFromReleaseImage(ctx, dry, providedImage)
 	}
@@ -97,25 +154,11 @@ func (s *assembleReleaseStep) Run(ctx context.Context, dry bool) error {
 		return fmt.Errorf("no 'cli' image was tagged into the %s stream, that image is required for building a release", streamName)
 	}
 
-	release, err := s.imageClient.ImageStreams(s.jobSpec.Namespace).Create(&imageapi.ImageStream{
-		ObjectMeta: meta.ObjectMeta{
-			Name: "release",
-		},
-	})
-	if err != nil {
-		if !errors.IsAlreadyExists(err) {
-			return err
-		}
-		release, err = s.imageClient.ImageStreams(s.jobSpec.Namespace).Get("release", meta.GetOptions{})
-		if err != nil {
-			return err
-		}
-	}
-
 	destination := fmt.Sprintf("%s:%s", release.Status.PublicDockerImageRepository, tag)
 	log.Printf("Create release image %s", destination)
 	podConfig := steps.PodStepConfiguration{
-		As: fmt.Sprintf("release-%s", tag),
+		SkipLogs: true,
+		As:       fmt.Sprintf("release-%s", tag),
 		From: api.ImageStreamTagReference{
 			Name: api.StableImageStream,
 			Tag:  "cli",
@@ -159,9 +202,11 @@ func (s *assembleReleaseStep) importFromReleaseImage(ctx context.Context, dry bo
 		return nil
 	}
 
+	log.Printf("Importing release image %s", tag)
+
 	start := time.Now()
 
-	// create the stable image stream with lookup policy
+	// create the stable image stream with lookup policy so we have a place to put our imported images
 	_, err := s.imageClient.ImageStreams(s.jobSpec.Namespace).Create(&imageapi.ImageStream{
 		ObjectMeta: meta.ObjectMeta{
 			Name: streamName,
@@ -345,19 +390,19 @@ oc adm release extract --from=%q --file=image-references > /tmp/artifacts/%s
 		return fmt.Errorf("unable to update stable image stream with release tags: %v", err)
 	}
 
-	log.Printf("Imported %s to release:%s and updated %s images in %s", providedImage, tag, streamName, time.Now().Sub(start).Truncate(time.Second))
+	log.Printf("Imported %s to release:%s in %s", providedImage, tag, time.Now().Sub(start).Truncate(time.Second))
 	return nil
 }
 
 func (s *assembleReleaseStep) Done() (bool, error) {
-	// TODO: define done
-	return true, nil
+	return false, nil
 }
 
 func (s *assembleReleaseStep) Requires() []api.StepLink {
-	// if our prereq is provided, we don't need any prereqs
-	if len(os.Getenv(s.envVar())) > 0 {
-		return nil
+	// if our prereq is provided, we only depend on the stable and stable-initial
+	// image streams to be populated
+	if s.params.HasInput(s.envVar()) {
+		return []api.StepLink{api.ReleaseImagesLink()}
 	}
 	if s.latest {
 		return []api.StepLink{api.ImagesReadyLink()}
@@ -403,6 +448,13 @@ func (s *assembleReleaseStep) Provides() (api.ParameterMap, api.StepLink) {
 			} else {
 				return "", fmt.Errorf("image stream %s has no accessible image registry value", "release")
 			}
+			ref, image := findStatusTag(is, tag)
+			if len(image) > 0 {
+				return fmt.Sprintf("%s@%s", registry, image), nil
+			}
+			if ref == nil && findSpecTag(is, tag) == nil {
+				return "", nil
+			}
 			return fmt.Sprintf("%s:%s", registry, tag), nil
 		},
 	}, api.ReleasePayloadImageLink(api.PipelineImageStreamTagReference(tag))
@@ -421,10 +473,11 @@ func (s *assembleReleaseStep) Description() string {
 
 // AssembleReleaseStep builds a new update payload image based on the cluster version operator
 // and the operators defined in the release configuration.
-func AssembleReleaseStep(latest bool, config api.ReleaseTagConfiguration, resources api.ResourceConfiguration, podClient steps.PodClient, imageClient imageclientset.ImageV1Interface, artifactDir string, jobSpec *api.JobSpec) api.Step {
+func AssembleReleaseStep(latest bool, config api.ReleaseTagConfiguration, params api.Parameters, resources api.ResourceConfiguration, podClient steps.PodClient, imageClient imageclientset.ImageV1Interface, artifactDir string, jobSpec *api.JobSpec) api.Step {
 	return &assembleReleaseStep{
 		config:      config,
 		latest:      latest,
+		params:      params,
 		resources:   resources,
 		podClient:   podClient,
 		imageClient: imageClient,

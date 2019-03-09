@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"log"
 	"net/url"
-	"os"
 	"strings"
+
+	"github.com/openshift/ci-operator/pkg/steps/clusterinstall"
 
 	appsclientset "k8s.io/client-go/kubernetes/typed/apps/v1"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -52,6 +53,7 @@ func FromConfig(
 	var templateClient steps.TemplateClient
 	var configMapGetter coreclientset.ConfigMapsGetter
 	var serviceGetter coreclientset.ServicesGetter
+	var secretGetter coreclientset.SecretsGetter
 	var podClient steps.PodClient
 
 	if clusterConfig != nil {
@@ -90,6 +92,7 @@ func FromConfig(
 		}
 		serviceGetter = coreGetter
 		configMapGetter = coreGetter
+		secretGetter = coreGetter
 
 		podClient = steps.NewPodClient(coreGetter, clusterConfig, coreGetter.RESTClient())
 	}
@@ -101,7 +104,7 @@ func FromConfig(
 	params.Add("NAMESPACE", nil, func() (string, error) { return jobSpec.Namespace, nil })
 
 	var imageStepLinks []api.StepLink
-	var releaseStep, initialReleaseStep api.Step
+	var hasReleaseStep bool
 	for _, rawStep := range stepConfigsForBuild(config, jobSpec) {
 		var step api.Step
 		var stepLinks []api.StepLink
@@ -141,20 +144,31 @@ func FromConfig(
 			step = release.ReleaseImagesTagStep(*rawStep.ReleaseImagesTagStepConfiguration, srcClient, imageClient, routeGetter, configMapGetter, params, jobSpec)
 			stepLinks = append(stepLinks, step.Creates()...)
 
-			releaseStep = release.AssembleReleaseStep(true, *rawStep.ReleaseImagesTagStepConfiguration, config.Resources, podClient, imageClient, artifactDir, jobSpec)
-			checkForFullyQualifiedStep(releaseStep, params)
+			hasReleaseStep = true
 
-			initialReleaseStep = release.AssembleReleaseStep(false, *rawStep.ReleaseImagesTagStepConfiguration, config.Resources, podClient, imageClient, artifactDir, jobSpec)
-			checkForFullyQualifiedStep(initialReleaseStep, params)
-			// initial release is always added
+			releaseStep := release.AssembleReleaseStep(true, *rawStep.ReleaseImagesTagStepConfiguration, params, config.Resources, podClient, imageClient, artifactDir, jobSpec)
+			addProvidesForStep(releaseStep, params)
+			buildSteps = append(buildSteps, releaseStep)
+
+			initialReleaseStep := release.AssembleReleaseStep(false, *rawStep.ReleaseImagesTagStepConfiguration, params, config.Resources, podClient, imageClient, artifactDir, jobSpec)
+			addProvidesForStep(initialReleaseStep, params)
 			buildSteps = append(buildSteps, initialReleaseStep)
+
+		} else if rawStep.TestStepConfiguration != nil && rawStep.TestStepConfiguration.OpenshiftInstallerClusterTestConfiguration != nil && rawStep.TestStepConfiguration.OpenshiftInstallerClusterTestConfiguration.Upgrade {
+			var err error
+			step, err = clusterinstall.E2ETestStep(*rawStep.TestStepConfiguration.OpenshiftInstallerClusterTestConfiguration, *rawStep.TestStepConfiguration, params, podClient, templateClient, secretGetter, artifactDir, jobSpec)
+			if err != nil {
+				return nil, nil, fmt.Errorf("unable to create end to end test step: %v", err)
+			}
 
 		} else if rawStep.TestStepConfiguration != nil {
 			step = steps.TestStep(*rawStep.TestStepConfiguration, config.Resources, podClient, artifactDir, jobSpec)
 		}
 
 		step, ok := checkForFullyQualifiedStep(step, params)
-		if !ok {
+		if ok {
+			log.Printf("Task %s is satisfied by environment variables and will be skipped", step.Name())
+		} else {
 			imageStepLinks = append(imageStepLinks, stepLinks...)
 		}
 		buildSteps = append(buildSteps, step)
@@ -169,9 +183,7 @@ func FromConfig(
 		buildSteps = append(buildSteps, steps.WriteParametersStep(params, paramFile))
 	}
 
-	if releaseStep != nil {
-		buildSteps = append(buildSteps, releaseStep)
-	} else {
+	if !hasReleaseStep {
 		buildSteps = append(buildSteps, release.StableImagesTagStep(imageClient, jobSpec))
 	}
 
@@ -195,14 +207,23 @@ func FromConfig(
 	return buildSteps, postSteps, nil
 }
 
+// addProvidesForStep adds any required parameters to the deferred parameters map.
+// Use this when a step may still need to run even if all parameters are provided
+// by the caller as environment variables.
+func addProvidesForStep(step api.Step, params *api.DeferredParameters) {
+	provides, link := step.Provides()
+	for name, fn := range provides {
+		params.Add(name, link, fn)
+	}
+}
+
 // checkForFullyQualifiedStep if all output parameters of this step are part of the
 // environment, replace the step with a shim that automatically provides those variables.
 // Returns true if the step was replaced.
 func checkForFullyQualifiedStep(step api.Step, params *api.DeferredParameters) (api.Step, bool) {
 	provides, link := step.Provides()
 
-	if values, ok := envHasAllParameters(provides); ok {
-		log.Printf("Task %s is satisfied by environment variables and will be skipped", step.Name())
+	if values, ok := paramsHasAllParametersAsInput(params, provides); ok {
 		step = steps.NewInputEnvironmentStep(step.Name(), values, step.Creates())
 		for k, v := range values {
 			params.Set(k, v)
@@ -388,7 +409,10 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.Job
 
 	for i := range config.Tests {
 		test := &config.Tests[i]
-		if test.ContainerTestConfiguration != nil {
+		switch {
+		case test.ContainerTestConfiguration != nil:
+			buildSteps = append(buildSteps, api.StepConfiguration{TestStepConfiguration: test})
+		case test.OpenshiftInstallerClusterTestConfiguration != nil && test.OpenshiftInstallerClusterTestConfiguration.Upgrade:
 			buildSteps = append(buildSteps, api.StepConfiguration{TestStepConfiguration: test})
 		}
 	}
@@ -430,18 +454,21 @@ func createStepConfigForGitSource(target api.ProjectDirectoryImageBuildInputs, j
 	}
 }
 
-func envHasAllParameters(params map[string]func() (string, error)) (map[string]string, bool) {
+func paramsHasAllParametersAsInput(p api.Parameters, params map[string]func() (string, error)) (map[string]string, bool) {
 	if len(params) == 0 {
 		return nil, false
 	}
 	var values map[string]string
 	for k := range params {
-		v, ok := os.LookupEnv(k)
-		if !ok {
+		if !p.HasInput(k) {
 			return nil, false
 		}
 		if values == nil {
 			values = make(map[string]string)
+		}
+		v, err := p.Get(k)
+		if err != nil {
+			return nil, false
 		}
 		values[k] = v
 	}

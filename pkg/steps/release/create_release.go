@@ -246,6 +246,9 @@ func (s *assembleReleaseStep) importFromReleaseImage(ctx context.Context, dry bo
 			},
 		})
 		if err != nil {
+			if errors.IsConflict(err) {
+				return false, nil
+			}
 			if errors.IsForbidden(err) {
 				// the ci-operator expects to have POST /imagestreamimports in the namespace of the tag spec
 				log.Printf("warning: Unable to lock %s to an image digest pull spec, you don't have permission to access the necessary API.", s.envVar())

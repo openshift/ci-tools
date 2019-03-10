@@ -308,18 +308,20 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.Job
 		}
 	}
 
-	buildSteps = append(buildSteps, api.StepConfiguration{SourceStepConfiguration: &api.SourceStepConfiguration{
-		From:      api.PipelineImageStreamTagReferenceRoot,
-		To:        api.PipelineImageStreamTagReferenceSource,
-		PathAlias: config.CanonicalGoRepository,
-		ClonerefsImage: api.ImageStreamTagReference{
-			Cluster:   "https://api.ci.openshift.org",
-			Namespace: "ci",
-			Name:      "clonerefs",
-			Tag:       "latest",
-		},
-		ClonerefsPath: "/app/prow/cmd/clonerefs/app.binary.runfiles/io_k8s_test_infra/prow/cmd/clonerefs/linux_amd64_pure_stripped/app.binary",
-	}})
+	if jobSpec.Refs != nil || len(jobSpec.ExtraRefs) > 0 {
+		buildSteps = append(buildSteps, api.StepConfiguration{SourceStepConfiguration: &api.SourceStepConfiguration{
+			From:      api.PipelineImageStreamTagReferenceRoot,
+			To:        api.PipelineImageStreamTagReferenceSource,
+			PathAlias: config.CanonicalGoRepository,
+			ClonerefsImage: api.ImageStreamTagReference{
+				Cluster:   "https://api.ci.openshift.org",
+				Namespace: "ci",
+				Name:      "clonerefs",
+				Tag:       "latest",
+			},
+			ClonerefsPath: "/app/prow/cmd/clonerefs/app.binary.runfiles/io_k8s_test_infra/prow/cmd/clonerefs/linux_amd64_pure_stripped/app.binary",
+		}})
+	}
 
 	if len(config.BinaryBuildCommands) > 0 {
 		buildSteps = append(buildSteps, api.StepConfiguration{PipelineImageCacheStepConfiguration: &api.PipelineImageCacheStepConfiguration{

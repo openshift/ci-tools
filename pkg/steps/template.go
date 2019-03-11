@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/apimachinery/pkg/util/wait"
+
 	"k8s.io/client-go/rest"
 
 	coreapi "k8s.io/api/core/v1"
@@ -393,16 +395,28 @@ func createOrRestartPod(podClient coreclientset.PodInterface, pod *coreapi.Pod) 
 	if err := waitForCompletedPodDeletion(podClient, pod.Name); err != nil {
 		return nil, fmt.Errorf("unable to delete completed pod: %v", err)
 	}
-	created, err := podClient.Create(pod)
-	if err != nil && !errors.IsAlreadyExists(err) {
-		return nil, fmt.Errorf("unable to create pod: %v", err)
-	}
-	if err != nil {
-		created, err = podClient.Get(pod.Name, meta.GetOptions{})
+	var created *coreapi.Pod
+	// creating a pod in close proximity to namespace creation can result in forbidden errors due to
+	// initializing secrets or policy - use a short backoff to mitigate flakes
+	if err := wait.ExponentialBackoff(wait.Backoff{Steps: 4, Factor: 2, Duration: time.Second}, func() (bool, error) {
+		newPod, err := podClient.Create(pod)
 		if err != nil {
-			return nil, fmt.Errorf("unable to retrieve pod: %v", err)
+			if errors.IsForbidden(err) {
+				log.Printf("Unable to create pod %s, may be temporary: %v", pod.Name, err)
+				return false, nil
+			}
+			if !errors.IsAlreadyExists(err) {
+				return false, err
+			}
+			newPod, err = podClient.Get(pod.Name, meta.GetOptions{})
+			if err != nil {
+				return false, err
+			}
 		}
-		log.Printf("Waiting for running pod %s to finish", pod.Name)
+		created = newPod
+		return true, nil
+	}); err != nil {
+		return nil, fmt.Errorf("unable to create pod: %v", err)
 	}
 	return created, nil
 }

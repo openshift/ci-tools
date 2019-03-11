@@ -221,39 +221,46 @@ func (s *assembleReleaseStep) importFromReleaseImage(ctx context.Context, dry bo
 		return fmt.Errorf("could not create stable imagestreamtag: %v", err)
 	}
 	// tag the release image in and let it import
-	if _, err := s.imageClient.ImageStreamTags(s.jobSpec.Namespace).Update(&imageapi.ImageStreamTag{
-		ObjectMeta: meta.ObjectMeta{
-			Name: fmt.Sprintf("release:%s", tag),
-		},
-		Tag: &imageapi.TagReference{
-			From: &coreapi.ObjectReference{
-				Kind: "DockerImage",
-				Name: providedImage,
-			},
-		},
-	}); err != nil {
-		return err
-	}
-	// wait for the release image to be available
 	var pullSpec string
-	if err := wait.PollImmediate(time.Second, time.Minute, func() (bool, error) {
-		is, err := s.imageClient.ImageStreams(s.jobSpec.Namespace).Get("release", meta.GetOptions{})
+
+	// retry importing the image a few times because we might race against establishing credentials/roles
+	// and be unable to import images on the same cluster
+	if err := wait.ExponentialBackoff(wait.Backoff{Steps: 4, Duration: 1 * time.Second, Factor: 2}, func() (bool, error) {
+		result, err := s.imageClient.ImageStreamImports(s.config.Namespace).Create(&imageapi.ImageStreamImport{
+			ObjectMeta: meta.ObjectMeta{
+				Name: "release",
+			},
+			Spec: imageapi.ImageStreamImportSpec{
+				Import: true,
+				Images: []imageapi.ImageImportSpec{
+					{
+						To: &coreapi.LocalObjectReference{
+							Name: tag,
+						},
+						From: coreapi.ObjectReference{
+							Kind: "DockerImage",
+							Name: providedImage,
+						},
+					},
+				},
+			},
+		})
 		if err != nil {
+			if errors.IsConflict(err) {
+				return false, nil
+			}
+			if errors.IsForbidden(err) {
+				// the ci-operator expects to have POST /imagestreamimports in the namespace of the tag spec
+				log.Printf("warning: Unable to lock %s to an image digest pull spec, you don't have permission to access the necessary API.", s.envVar())
+				return false, nil
+			}
 			return false, err
 		}
-		ref, _ := findStatusTag(is, tag)
-		if ref == nil {
+		image := result.Status.Images[0]
+		if image.Image == nil {
 			return false, nil
 		}
-		var registry string
-		if len(is.Status.PublicDockerImageRepository) > 0 {
-			registry = is.Status.PublicDockerImageRepository
-		} else if len(is.Status.DockerImageRepository) > 0 {
-			registry = is.Status.DockerImageRepository
-		} else {
-			return false, fmt.Errorf("image stream %s has no accessible image registry value", is.Name)
-		}
-		pullSpec = fmt.Sprintf("%s:%s", registry, tag)
+		pullSpec = result.Status.Images[0].Image.DockerImageReference
 		return true, nil
 	}); err != nil {
 		return fmt.Errorf("unable to import %s release image: %v", tag, err)

@@ -45,7 +45,7 @@ func E2ETestStep(
 ) (api.Step, error) {
 	var template *templateapi.Template
 	if err := yaml.Unmarshal([]byte(installTemplateE2E), &template); err != nil {
-		panic(fmt.Errorf("the embedded template is invalid: %v", err))
+		return nil, fmt.Errorf("the embedded template is invalid: %v", err)
 	}
 
 	template.Name = testConfig.As

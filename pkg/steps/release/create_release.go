@@ -160,7 +160,7 @@ func (s *assembleReleaseStep) Run(ctx context.Context, dry bool) error {
 		SkipLogs: true,
 		As:       fmt.Sprintf("release-%s", tag),
 		From: api.ImageStreamTagReference{
-			Name: api.StableImageStream,
+			Name: streamName,
 			Tag:  "cli",
 		},
 		ServiceAccountName: "builder",
@@ -171,7 +171,7 @@ export HOME=/tmp
 oc registry login
 oc adm release new --max-per-registry=32 -n %q --from-image-stream %q --to-image-base %q --to-image %q
 oc adm release extract --from=%q --to=/tmp/artifacts/release-payload-%s
-`, s.jobSpec.Namespace, api.StableImageStream, cvo, destination, destination, tag),
+`, s.jobSpec.Namespace, streamName, cvo, destination, destination, tag),
 	}
 
 	// set an explicit default for release-latest resources, but allow customization if necessary
@@ -327,7 +327,7 @@ func (s *assembleReleaseStep) importFromReleaseImage(ctx context.Context, dry bo
 		SkipLogs: true,
 		As:       target,
 		From: api.ImageStreamTagReference{
-			Name: api.StableImageStream,
+			Name: streamName,
 			Tag:  "cli",
 		},
 		ServiceAccountName: "builder",

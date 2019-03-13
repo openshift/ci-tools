@@ -240,7 +240,8 @@ func handleBuild(buildClient BuildClient, build *buildapi.Build, dry bool) error
 				return fmt.Errorf("could not get build %s: %v", build.Name, err)
 			}
 
-			if b.Status.Reason == buildapi.StatusReasonOutOfMemoryKilled {
+			if isInfraReason(b.Status.Reason) {
+				log.Printf("Build %s previously failed from an infrastructure error (%s), retrying...\n", b.Name, b.Status.Reason)
 				if err := buildClient.Builds(build.Namespace).Delete(build.Name, nil); err != nil && !errors.IsNotFound(err) {
 					return fmt.Errorf("could not delete build %s: %v", build.Name, err)
 				}
@@ -253,6 +254,28 @@ func handleBuild(buildClient BuildClient, build *buildapi.Build, dry bool) error
 		}
 	}
 	return waitForBuild(buildClient, build.Namespace, build.Name)
+}
+
+func isInfraReason(reason buildapi.StatusReason) bool {
+	infraReasons := []buildapi.StatusReason{
+		buildapi.StatusReasonCannotCreateBuildPod,
+		buildapi.StatusReasonBuildPodDeleted,
+		buildapi.StatusReasonExceededRetryTimeout,
+		buildapi.StatusReasonPushImageToRegistryFailed,
+		buildapi.StatusReasonPullBuilderImageFailed,
+		buildapi.StatusReasonFetchSourceFailed,
+		buildapi.StatusReasonBuildPodExists,
+		buildapi.StatusReasonNoBuildContainerStatus,
+		buildapi.StatusReasonFailedContainer,
+		buildapi.StatusReasonOutOfMemoryKilled,
+		buildapi.StatusReasonCannotRetrieveServiceAccount,
+	}
+	for _, option := range infraReasons {
+		if reason == option {
+			return true
+		}
+	}
+	return false
 }
 
 func waitForBuild(buildClient BuildClient, namespace, name string) error {

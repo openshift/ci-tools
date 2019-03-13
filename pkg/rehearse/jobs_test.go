@@ -777,9 +777,9 @@ func TestHasChangedTemplateVolume(t *testing.T) {
 	}
 
 	type expectedToFind struct {
-		exists       bool
-		index        int
-		templateName string
+		exists      bool
+		index       int
+		templateKey string
 	}
 
 	testCases := []struct {
@@ -809,9 +809,9 @@ func TestHasChangedTemplateVolume(t *testing.T) {
 			},
 			jobVolumes: createVolumesHelper("job-definition", "test-template.yaml"),
 			expectedToFind: expectedToFind{
-				exists:       true,
-				index:        2,
-				templateName: "test-template",
+				exists:      true,
+				index:       2,
+				templateKey: "test-template.yaml",
 			},
 		},
 		{
@@ -829,9 +829,9 @@ func TestHasChangedTemplateVolume(t *testing.T) {
 			},
 			jobVolumes: append(createVolumesHelper("job-definition", "test-template.yaml"), createVolumesHelper("job-definition2", "test-template2.yaml")...),
 			expectedToFind: expectedToFind{
-				exists:       true,
-				index:        2,
-				templateName: "test-template",
+				exists:      true,
+				index:       2,
+				templateKey: "test-template.yaml",
 			},
 		},
 		{
@@ -854,11 +854,11 @@ func TestHasChangedTemplateVolume(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.description, func(t *testing.T) {
-			exists, index, templateName := hasChangedTemplateVolume(testCase.jobVolumeMounts, testCase.jobVolumes, templates)
+			exists, index, templateKey := hasChangedTemplateVolume(testCase.jobVolumeMounts, testCase.jobVolumes, templates)
 			found := expectedToFind{
-				exists:       exists,
-				index:        index,
-				templateName: templateName,
+				exists:      exists,
+				index:       index,
+				templateKey: templateKey,
 			}
 			if !reflect.DeepEqual(testCase.expectedToFind, found) {
 				t.Fatalf("Expected:%v\nFound:%v", testCase.expectedToFind, found)

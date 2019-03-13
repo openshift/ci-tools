@@ -17,6 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/util/diff"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/fake"
 	coretesting "k8s.io/client-go/testing"
 )
@@ -33,7 +34,18 @@ func TestGetTemplates(t *testing.T) {
 }
 
 func TestCreateCleanupCMTemplates(t *testing.T) {
-	expectedCmName := "rehearse-1234-test-template"
+	expectedCmNames := sets.NewString()
+	ciTemplates := getBaseCiTemplates(t)
+
+	for key, template := range ciTemplates {
+
+		templateData, err := GetTemplateData(template)
+		if err != nil {
+			t.Fatalf("couldn't get data from template %s: %v", template.Name, err)
+		}
+		expectedCmNames.Insert(GetTempCMName(template.Name, key, templateData))
+	}
+
 	expectedCmLabels := map[string]string{
 		createByRehearse:  "true",
 		rehearseLabelPull: "1234",
@@ -56,12 +68,12 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 	}
 
 	cs := fake.NewSimpleClientset()
-	cs.Fake.AddReactor("create", "configmaps", func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {
+	cs.Fake.PrependReactor("create", "configmaps", func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {
 		createAction := action.(coretesting.CreateAction)
 		cm := createAction.GetObject().(*v1.ConfigMap)
 
-		if cm.ObjectMeta.Name != expectedCmName {
-			t.Fatalf("Configmap name:\nExpected: %s\nFound: %s", expectedCmName, cm.ObjectMeta.Name)
+		if !expectedCmNames.Has(cm.ObjectMeta.Name) {
+			t.Fatalf("Configmap name:\nExpected one of: %v\nFound: %s", expectedCmNames, cm.ObjectMeta.Name)
 		}
 
 		if !reflect.DeepEqual(cm.ObjectMeta.Labels, expectedCmLabels) {
@@ -70,7 +82,7 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 
 		return true, nil, nil
 	})
-	cs.Fake.AddReactor("delete-collection", "configmaps", func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {
+	cs.Fake.PrependReactor("delete-collection", "configmaps", func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {
 		deleteAction := action.(coretesting.DeleteCollectionAction)
 		listRestricitons := deleteAction.GetListRestrictions()
 
@@ -81,7 +93,6 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 		return true, nil, nil
 	})
 
-	ciTemplates := getBaseCiTemplates(t)
 	cmManager := NewTemplateCMManager(cs.CoreV1().ConfigMaps("test-namespace"), 1234, logrus.NewEntry(logrus.New()), ciTemplates)
 
 	if err := cmManager.CreateCMTemplates(); err != nil {

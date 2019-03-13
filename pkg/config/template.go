@@ -2,6 +2,8 @@ package config
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/base32"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -90,17 +92,13 @@ func NewTemplateCMManager(cmclient corev1.ConfigMapInterface, prNumber int, logg
 // CreateCMTemplates creates configMaps for all the changed templates.
 func (c *TemplateCMManager) CreateCMTemplates() error {
 	var errors []error
-	s := json.NewYAMLSerializer(json.DefaultMetaFactory, scheme.Scheme, scheme.Scheme)
-
 	for filename, template := range c.templates {
-		buf := new(bytes.Buffer)
-
-		err := s.Encode(template, buf)
+		templateData, err := GetTemplateData(template)
 		if err != nil {
 			errors = append(errors, err)
 		}
 
-		cmName := GetTempCMName(c.prNumber, template.Name)
+		cmName := GetTempCMName(template.Name, filename, templateData)
 		cm := &v1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: cmName,
@@ -109,7 +107,7 @@ func (c *TemplateCMManager) CreateCMTemplates() error {
 					rehearseLabelPull: strconv.Itoa(c.prNumber),
 				},
 			},
-			Data: map[string]string{filename: buf.String()},
+			Data: map[string]string{filename: templateData},
 		}
 
 		c.logger.WithFields(logrus.Fields{"template-name": template.Name, "cm-name": cmName}).Info("creating rehearsal configMap for template")
@@ -139,7 +137,39 @@ func (c *TemplateCMManager) CleanupCMTemplates() error {
 	return nil
 }
 
-// GetTempCMName converts a template name to a temporary name including the pr number.
-func GetTempCMName(prNumber int, templateName string) string {
-	return fmt.Sprintf("rehearse-%d-%s", prNumber, templateName)
+func GetTempCMName(templateName, filename, templateData string) string {
+	inputs := []string{filename, templateData}
+	return fmt.Sprintf("rehearse-%s-%s", inputHash(inputs), templateName)
+}
+
+func GetTemplateData(template *templateapi.Template) (string, error) {
+	s := json.NewYAMLSerializer(json.DefaultMetaFactory, scheme.Scheme, scheme.Scheme)
+	buf := new(bytes.Buffer)
+
+	err := s.Encode(template, buf)
+	if err != nil {
+		return "", err
+	}
+
+	return buf.String(), nil
+}
+
+// oneWayEncoding can be used to encode hex to a 62-character set (0 and 1 are duplicates) for use in
+// short display names that are safe for use in kubernetes as resource names.
+var oneWayNameEncoding = base32.NewEncoding("bcdfghijklmnpqrstvwxyz0123456789").WithPadding(base32.NoPadding)
+
+// inputHash returns a string that hashes the unique parts of the input to avoid collisions.
+func inputHash(inputs []string) string {
+	hash := sha256.New()
+
+	// the inputs form a part of the hash
+	for _, s := range inputs {
+		hash.Write([]byte(s))
+	}
+
+	// Object names can't be too long so we truncate
+	// the hash. This increases chances of collision
+	// but we can tolerate it as our input space is
+	// tiny.
+	return oneWayNameEncoding.EncodeToString(hash.Sum(nil)[:5])
 }

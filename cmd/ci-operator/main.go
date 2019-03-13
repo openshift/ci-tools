@@ -19,6 +19,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/golang/glog"
+
 	"github.com/openshift/ci-operator/pkg/defaults"
 	"github.com/openshift/ci-operator/pkg/load"
 
@@ -508,6 +510,13 @@ func (o *options) resolveInputs(ctx context.Context, steps []api.Step) error {
 	inputs = append(inputs, string(configSpec))
 	if len(o.extraInputHash.values) > 0 {
 		inputs = append(inputs, o.extraInputHash.values...)
+	}
+
+	// add the binary modification time and size (in lieu of a content hash)
+	if stat, err := os.Stat(os.Args[0]); err == nil {
+		inputs = append(inputs, fmt.Sprintf("%d-%d", stat.ModTime().UTC().Unix(), stat.Size()))
+	} else {
+		glog.V(4).Infof("Could not calculate info from current binary to add to input hash: %v", err)
 	}
 
 	o.inputHash = inputHash(inputs)

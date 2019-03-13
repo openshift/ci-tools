@@ -242,7 +242,8 @@ func handleBuild(buildClient BuildClient, build *buildapi.Build, dry bool) error
 
 			if isInfraReason(b.Status.Reason) {
 				log.Printf("Build %s previously failed from an infrastructure error (%s), retrying...\n", b.Name, b.Status.Reason)
-				if err := buildClient.Builds(build.Namespace).Delete(build.Name, nil); err != nil && !errors.IsNotFound(err) {
+				opts := &meta.DeleteOptions{Preconditions: &meta.Preconditions{UID: &b.UID}}
+				if err := buildClient.Builds(build.Namespace).Delete(build.Name, opts); err != nil && !errors.IsNotFound(err) && !errors.IsConflict(err) {
 					return fmt.Errorf("could not delete build %s: %v", build.Name, err)
 				}
 				if _, err := buildClient.Builds(build.Namespace).Create(build); err != nil && !errors.IsAlreadyExists(err) {

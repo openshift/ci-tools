@@ -68,7 +68,7 @@ func IsCiopConfigCM(name string) bool {
 // about component repository information.
 // The convention for ci-operator config files in this repo:
 // ci-operator/config/ORGANIZATION/COMPONENT/ORGANIZATION-COMPONENT-BRANCH.yaml
-func extractRepoElementsFromPath(configFilePath string) (*Info, error) {
+func InfoFromPath(configFilePath string) (*Info, error) {
 	configSpecDir := filepath.Dir(configFilePath)
 	repo := filepath.Base(configSpecDir)
 	if repo == "." || repo == "/" {
@@ -113,7 +113,7 @@ func OperateOnCIOperatorConfig(path string, callback func(*cioperatorapi.Release
 		return err
 	}
 
-	info, err := extractRepoElementsFromPath(path)
+	info, err := InfoFromPath(path)
 	if err != nil {
 		logrus.WithField("source-file", path).WithError(err).Error("Failed to load CI Operator configuration")
 		return err

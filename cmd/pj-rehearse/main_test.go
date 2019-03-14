@@ -160,6 +160,7 @@ func getRehersalsHelper(logger *logrus.Entry, prNumber int) ([]*prowconfig.Presu
 	changedCiopConfigs := diffs.GetChangedCiopConfigs(ciopMasterConfig, ciopPrConfig, logger)
 	changedPresubmits.AddAll(diffs.GetPresubmitsForCiopConfigs(prowPRConfig, changedCiopConfigs, logger))
 
-	rehearsals := rehearse.ConfigureRehearsalJobs(changedPresubmits, ciopPrConfig, prNumber, rehearse.Loggers{Job: logger, Debug: logger}, false)
+	rehearsals := rehearse.ConfigureRehearsalJobs(changedPresubmits, ciopPrConfig, prNumber, rehearse.Loggers{Job: logger, Debug: logger}, false, nil)
+
 	return rehearsals, nil
 }

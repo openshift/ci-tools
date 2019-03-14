@@ -2,6 +2,7 @@ package rehearse
 
 import (
 	"fmt"
+	"reflect"
 	"sort"
 	"strconv"
 	"testing"
@@ -23,11 +24,12 @@ import (
 	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
+
 	clientgo_testing "k8s.io/client-go/testing"
 
-	"github.com/openshift/ci-operator/pkg/api"
-
+	templateapi "github.com/openshift/api/template/v1"
 	"github.com/openshift/ci-operator-prowgen/pkg/config"
+	"github.com/openshift/ci-operator/pkg/api"
 )
 
 func makeTestingPresubmitForEnv(env []v1.EnvVar) *prowconfig.Presubmit {
@@ -303,7 +305,7 @@ func TestExecuteJobsErrors(t *testing.T) {
 				return false, nil, nil
 			})
 
-			rehearsals := ConfigureRehearsalJobs(tc.jobs, testCiopConfigs, testPrNumber, testLoggers, true)
+			rehearsals := ConfigureRehearsalJobs(tc.jobs, testCiopConfigs, testPrNumber, testLoggers, true, nil)
 			executor := NewExecutor(rehearsals, testPrNumber, testRepoPath, testRefs, true, testLoggers, fakeclient)
 			_, err = executor.ExecuteJobs()
 
@@ -372,7 +374,7 @@ func TestExecuteJobsUnsuccessful(t *testing.T) {
 				return true, ret, nil
 			})
 
-			rehearsals := ConfigureRehearsalJobs(tc.jobs, testCiopConfigs, testPrNumber, testLoggers, true)
+			rehearsals := ConfigureRehearsalJobs(tc.jobs, testCiopConfigs, testPrNumber, testLoggers, true, nil)
 			executor := NewExecutor(rehearsals, testPrNumber, testRepoPath, testRefs, false, testLoggers, fakeclient)
 			success, _ := executor.ExecuteJobs()
 
@@ -477,7 +479,7 @@ func TestExecuteJobsPositive(t *testing.T) {
 			}
 			fakecs.Fake.PrependWatchReactor("prowjobs", makeSuccessfulFinishReactor(watcher, tc.jobs))
 
-			rehearsals := ConfigureRehearsalJobs(tc.jobs, testCiopConfigs, testPrNumber, testLoggers, true)
+			rehearsals := ConfigureRehearsalJobs(tc.jobs, testCiopConfigs, testPrNumber, testLoggers, true, nil)
 			executor := NewExecutor(rehearsals, testPrNumber, testRepoPath, testRefs, true, testLoggers, fakeclient)
 			success, err := executor.ExecuteJobs()
 
@@ -753,4 +755,153 @@ func makeBasePresubmit() *prowconfig.Presubmit {
 		Context:      "ci/prow/test",
 		Brancher:     prowconfig.Brancher{Branches: []string{"^master$"}},
 	}
+}
+
+func TestHasChangedTemplateVolume(t *testing.T) {
+	templates := config.CiTemplates{
+		"test-template.yaml": &templateapi.Template{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-template",
+			},
+		},
+		"test-template2.yaml": &templateapi.Template{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-template2",
+			},
+		},
+		"test-template3.yaml": &templateapi.Template{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-template3",
+			},
+		},
+	}
+
+	type expectedToFind struct {
+		exists      bool
+		index       int
+		templateKey string
+	}
+
+	testCases := []struct {
+		description     string
+		jobVolumeMounts []v1.VolumeMount
+		jobVolumes      []v1.Volume
+		expectedToFind  expectedToFind
+	}{
+		{
+			description:     "no volumes",
+			jobVolumeMounts: []v1.VolumeMount{},
+			jobVolumes:      []v1.Volume{},
+			expectedToFind:  expectedToFind{},
+		},
+		{
+			description: "find one in multiple volumes",
+			jobVolumeMounts: []v1.VolumeMount{
+				{
+					Name:      "non-template",
+					MountPath: "/tmp/test",
+				},
+				{
+					Name:      "job-definition",
+					MountPath: "/tmp/test",
+					SubPath:   "test-template.yaml",
+				},
+			},
+			jobVolumes: createVolumesHelper("job-definition", "test-template.yaml"),
+			expectedToFind: expectedToFind{
+				exists:      true,
+				index:       2,
+				templateKey: "test-template.yaml",
+			},
+		},
+		{
+			description: "find one in multiple volumes that for some reason use two templates",
+			jobVolumeMounts: []v1.VolumeMount{
+				{
+					Name:      "non-template",
+					MountPath: "/tmp/test",
+				},
+				{
+					Name:      "job-definition",
+					MountPath: "/tmp/test",
+					SubPath:   "test-template.yaml",
+				},
+			},
+			jobVolumes: append(createVolumesHelper("job-definition", "test-template.yaml"), createVolumesHelper("job-definition2", "test-template2.yaml")...),
+			expectedToFind: expectedToFind{
+				exists:      true,
+				index:       2,
+				templateKey: "test-template.yaml",
+			},
+		},
+		{
+			description: "find nothing in multiple volumes that use a template that is not changed",
+			jobVolumeMounts: []v1.VolumeMount{
+				{
+					Name:      "non-template",
+					MountPath: "/tmp/test",
+				},
+				{
+					Name:      "job-definition",
+					MountPath: "/tmp/test",
+					SubPath:   "test-template5.yaml",
+				},
+			},
+			jobVolumes:     createVolumesHelper("job-definition", "test-template5.yaml"),
+			expectedToFind: expectedToFind{},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.description, func(t *testing.T) {
+			exists, index, templateKey := hasChangedTemplateVolume(testCase.jobVolumeMounts, testCase.jobVolumes, templates)
+			found := expectedToFind{
+				exists:      exists,
+				index:       index,
+				templateKey: templateKey,
+			}
+			if !reflect.DeepEqual(testCase.expectedToFind, found) {
+				t.Fatalf("Expected:%v\nFound:%v", testCase.expectedToFind, found)
+			}
+		})
+	}
+}
+
+func createVolumesHelper(name, key string) []v1.Volume {
+	volumes := []v1.Volume{
+		{
+			Name: "test-volume",
+			VolumeSource: v1.VolumeSource{
+				Projected: &v1.ProjectedVolumeSource{
+					Sources: []v1.VolumeProjection{
+						{
+							Secret: &v1.SecretProjection{
+								LocalObjectReference: v1.LocalObjectReference{Name: "test-secret"},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			Name: "test-volume2",
+			VolumeSource: v1.VolumeSource{
+				EmptyDir: &v1.EmptyDirVolumeSource{},
+			},
+		},
+	}
+
+	volumes = append(volumes, v1.Volume{
+		Name: name,
+		VolumeSource: v1.VolumeSource{
+			ConfigMap: &v1.ConfigMapVolumeSource{
+				LocalObjectReference: v1.LocalObjectReference{Name: "cluster-e2e-test-template"},
+				Items: []v1.KeyToPath{
+					{Key: key},
+				},
+			},
+		},
+	})
+
+	return volumes
 }

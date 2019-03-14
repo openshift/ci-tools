@@ -100,6 +100,15 @@ func gracefulExit(suppressFailures bool, message string) {
 	os.Exit(1)
 }
 
+func gracefulExitWithConfigMapCleanup(suppressFailures bool, message string, cmManager *config.TemplateCMManager) {
+	if cmManager != nil {
+		if err := cmManager.CleanupCMTemplates(); err != nil {
+			fmt.Fprintln(os.Stderr, "Failed to cleanup temporary configmaps")
+		}
+	}
+	gracefulExit(suppressFailures, message)
+}
+
 func main() {
 	o := gatherOptions()
 	err := validateOptions(o)
@@ -168,9 +177,10 @@ func main() {
 		changedCiopConfigs = diffs.GetChangedCiopConfigs(masterConfig.CiOperator, prConfig.CiOperator, logger)
 	}
 
+	changedTemplates := make(config.CiTemplates)
 	// We can only detect changes if we managed to load both CI template versions
 	if masterConfig.Templates != nil && prConfig.Templates != nil {
-		changedTemplates := diffs.GetChangedTemplates(masterConfig.Templates, prConfig.Templates, logger)
+		changedTemplates = diffs.GetChangedTemplates(masterConfig.Templates, prConfig.Templates, logger)
 		for name := range changedTemplates {
 			logger.WithField("template-name", name).Info("Changed template")
 		}
@@ -180,10 +190,23 @@ func main() {
 	if o.local {
 		namespace = "ci-stg"
 	}
+
+	cmClient, err := rehearse.NewCMClient(clusterConfig, namespace, o.dryRun)
+	if err != nil {
+		logger.WithError(err).Error("could not create a configMap client")
+		gracefulExit(o.noFail, misconfigurationOutput)
+	}
+
+	cmManager := config.NewTemplateCMManager(cmClient, prNumber, logger, changedTemplates)
+	if err := cmManager.CreateCMTemplates(); err != nil {
+		logger.WithError(err).Error("couldn't create template configMap")
+		gracefulExitWithConfigMapCleanup(o.noFail, "", cmManager)
+	}
+
 	pjclient, err := rehearse.NewProwJobClient(clusterConfig, namespace, o.dryRun)
 	if err != nil {
 		logger.WithError(err).Error("could not create a ProwJob client")
-		gracefulExit(o.noFail, misconfigurationOutput)
+		gracefulExitWithConfigMapCleanup(o.noFail, misconfigurationOutput, cmManager)
 	}
 
 	debugLogger := logrus.New()
@@ -194,7 +217,7 @@ func main() {
 			debugLogger.Out = f
 		} else {
 			logger.WithError(err).Error("could not open debug log file")
-			gracefulExit(o.noFail, "")
+			gracefulExitWithConfigMapCleanup(o.noFail, "", cmManager)
 		}
 	}
 	loggers := rehearse.Loggers{Job: logger, Debug: debugLogger.WithField(prowgithub.PrLogField, prNumber)}
@@ -202,28 +225,32 @@ func main() {
 	toRehearse := diffs.GetChangedPresubmits(masterConfig.Prow, prConfig.Prow, logger)
 	toRehearse.AddAll(diffs.GetPresubmitsForCiopConfigs(prConfig.Prow, changedCiopConfigs, logger))
 
-	rehearsals := rehearse.ConfigureRehearsalJobs(toRehearse, prConfig.CiOperator, prNumber, loggers, o.allowVolumes)
+	rehearsals := rehearse.ConfigureRehearsalJobs(toRehearse, prConfig.CiOperator, prNumber, loggers, o.allowVolumes, changedTemplates)
 	if len(rehearsals) == 0 {
 		logger.Info("no jobs to rehearse have been found")
-		os.Exit(0)
+		gracefulExitWithConfigMapCleanup(true, "", cmManager)
 	} else if len(rehearsals) > o.rehearsalLimit {
 		jobCountFields := logrus.Fields{
 			"rehearsal-threshold": o.rehearsalLimit,
 			"rehearsal-jobs":      len(rehearsals),
 		}
 		logger.WithFields(jobCountFields).Info("Would rehearse too many jobs, will not proceed")
-		os.Exit(0)
+		gracefulExitWithConfigMapCleanup(true, "", cmManager)
 	}
 
 	executor := rehearse.NewExecutor(rehearsals, prNumber, o.releaseRepoPath, jobSpec.Refs, o.dryRun, loggers, pjclient)
 	success, err := executor.ExecuteJobs()
 	if err != nil {
 		logger.WithError(err).Error("Failed to rehearse jobs")
-		gracefulExit(o.noFail, rehearseFailureOutput)
+		gracefulExitWithConfigMapCleanup(o.noFail, rehearseFailureOutput, cmManager)
 	}
 	if !success {
 		logger.Error("Some jobs failed their rehearsal runs")
-		gracefulExit(o.noFail, jobsFailureOutput)
+		gracefulExitWithConfigMapCleanup(o.noFail, jobsFailureOutput, cmManager)
 	}
 	logger.Info("All jobs were rehearsed successfully")
+
+	if err := cmManager.CleanupCMTemplates(); err != nil {
+		logger.WithError(err).Error("Failed to cleanup temporary configmaps")
+	}
 }

@@ -200,7 +200,7 @@ func rehearseMain() int {
 	}()
 	if err := cmManager.CreateCMTemplates(); err != nil {
 		logger.WithError(err).Error("couldn't create template configMap")
-		return gracefulExit(false, failedSetupOutput)
+		return gracefulExit(o.noFail, failedSetupOutput)
 	}
 
 	pjclient, err := rehearse.NewProwJobClient(clusterConfig, namespace, o.dryRun)

@@ -513,7 +513,12 @@ func (o *options) resolveInputs(ctx context.Context, steps []api.Step) error {
 	}
 
 	// add the binary modification time and size (in lieu of a content hash)
-	if stat, err := os.Stat(os.Args[0]); err == nil {
+	path, _ := exec.LookPath(os.Args[0])
+	if len(path) == 0 {
+		path = os.Args[0]
+	}
+	if stat, err := os.Stat(path); err == nil {
+		glog.V(4).Infof("Using binary as hash: %s %d %d", path, stat.ModTime().UTC().Unix(), stat.Size())
 		inputs = append(inputs, fmt.Sprintf("%d-%d", stat.ModTime().UTC().Unix(), stat.Size()))
 	} else {
 		glog.V(4).Infof("Could not calculate info from current binary to add to input hash: %v", err)

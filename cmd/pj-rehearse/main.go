@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/sirupsen/logrus"
 
@@ -136,6 +137,9 @@ func rehearseMain() int {
 	}
 
 	prNumber := jobSpec.Refs.Pulls[0].Number
+	if o.local {
+		prNumber = int(time.Now().Unix())
+	}
 	logger = logrus.WithField(prowgithub.PrLogField, prNumber)
 	logger.Info("Rehearsing Prow jobs for a configuration PR")
 

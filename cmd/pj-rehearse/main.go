@@ -87,34 +87,29 @@ an infrastructure issue.`
 
 pj-rehearse rehearsed jobs and at least one of them failed. This means that
 job would fail when executed against the current HEAD of the target branch.`
+	failedSetupOutput = `[ERROR] pj-rehearse: setup failure
+
+pj-rehearse failed to finish all setup necessary to perform job rehearsals.
+This is either a pj-rehearse bug or an infrastructure failure.`
 )
 
-func gracefulExit(suppressFailures bool, message string) {
+func gracefulExit(suppressFailures bool, message string) int {
 	if message != "" {
 		fmt.Fprintln(os.Stderr, message)
 	}
 
 	if suppressFailures {
-		os.Exit(0)
+		return 0
 	}
-	os.Exit(1)
+	return 1
 }
 
-func gracefulExitWithConfigMapCleanup(suppressFailures bool, message string, cmManager *config.TemplateCMManager) {
-	if cmManager != nil {
-		if err := cmManager.CleanupCMTemplates(); err != nil {
-			fmt.Fprintln(os.Stderr, "Failed to cleanup temporary configmaps")
-		}
-	}
-	gracefulExit(suppressFailures, message)
-}
-
-func main() {
+func rehearseMain() int {
 	o := gatherOptions()
 	err := validateOptions(o)
 	if err != nil {
 		logrus.WithError(err).Fatal("invalid options")
-		gracefulExit(o.noFail, misconfigurationOutput)
+		return gracefulExit(o.noFail, misconfigurationOutput)
 	}
 
 	var jobSpec *pjdwapi.JobSpec
@@ -126,7 +121,7 @@ func main() {
 	} else {
 		if jobSpec, err = pjdwapi.ResolveSpecFromEnv(); err != nil {
 			logrus.WithError(err).Error("could not read JOB_SPEC")
-			gracefulExit(o.noFail, misconfigurationOutput)
+			return gracefulExit(o.noFail, misconfigurationOutput)
 		}
 	}
 
@@ -137,7 +132,7 @@ func main() {
 		logger.Info("Not able to rehearse jobs when not run in the context of a presubmit job")
 		// Exiting successfuly will make pj-rehearsal job not fail when run as a
 		// in a batch job. Such failures would be confusing and unactionable
-		gracefulExit(true, misconfigurationOutput)
+		return 0
 	}
 
 	prNumber := jobSpec.Refs.Pulls[0].Number
@@ -149,7 +144,7 @@ func main() {
 		clusterConfig, err = loadClusterConfig()
 		if err != nil {
 			logger.WithError(err).Error("could not load cluster clusterConfig")
-			gracefulExit(o.noFail, misconfigurationOutput)
+			return gracefulExit(o.noFail, misconfigurationOutput)
 		}
 	}
 
@@ -157,18 +152,18 @@ func main() {
 	masterConfig, err := config.GetAllConfigsFromSHA(o.releaseRepoPath, jobSpec.Refs.BaseSHA, logger)
 	if err != nil {
 		logger.WithError(err).Error("could not load configuration from base revision of release repo")
-		gracefulExit(o.noFail, misconfigurationOutput)
+		return gracefulExit(o.noFail, misconfigurationOutput)
 	}
 
 	// We always need both Prow config versions, otherwise we cannot compare them
 	if masterConfig.Prow == nil || prConfig.Prow == nil {
 		logger.WithError(err).Error("could not load Prow configs from base or tested revision of release repo")
-		gracefulExit(o.noFail, misconfigurationOutput)
+		return gracefulExit(o.noFail, misconfigurationOutput)
 	}
 	// We always need PR versions of templates and ciop config, otherwise we cannot provide them to rehearsed jobs
 	if prConfig.Templates == nil || prConfig.CiOperator == nil {
 		logger.WithError(err).Error("could not load template/ci-operator configs from tested revision of release repo")
-		gracefulExit(o.noFail, misconfigurationOutput)
+		return gracefulExit(o.noFail, misconfigurationOutput)
 	}
 
 	// We can only detect changes if we managed to load both ci-operator config versions
@@ -194,19 +189,24 @@ func main() {
 	cmClient, err := rehearse.NewCMClient(clusterConfig, namespace, o.dryRun)
 	if err != nil {
 		logger.WithError(err).Error("could not create a configMap client")
-		gracefulExit(o.noFail, misconfigurationOutput)
+		return gracefulExit(o.noFail, misconfigurationOutput)
 	}
 
 	cmManager := config.NewTemplateCMManager(cmClient, prNumber, logger, changedTemplates)
+	defer func() {
+		if err := cmManager.CleanupCMTemplates(); err != nil {
+			logger.WithError(err).Error("failed to clean up temporary template CM")
+		}
+	}()
 	if err := cmManager.CreateCMTemplates(); err != nil {
 		logger.WithError(err).Error("couldn't create template configMap")
-		gracefulExitWithConfigMapCleanup(o.noFail, "", cmManager)
+		return gracefulExit(o.noFail, failedSetupOutput)
 	}
 
 	pjclient, err := rehearse.NewProwJobClient(clusterConfig, namespace, o.dryRun)
 	if err != nil {
 		logger.WithError(err).Error("could not create a ProwJob client")
-		gracefulExitWithConfigMapCleanup(o.noFail, misconfigurationOutput, cmManager)
+		return gracefulExit(o.noFail, failedSetupOutput)
 	}
 
 	debugLogger := logrus.New()
@@ -217,7 +217,7 @@ func main() {
 			debugLogger.Out = f
 		} else {
 			logger.WithError(err).Error("could not open debug log file")
-			gracefulExitWithConfigMapCleanup(o.noFail, "", cmManager)
+			return gracefulExit(o.noFail, failedSetupOutput)
 		}
 	}
 	loggers := rehearse.Loggers{Job: logger, Debug: debugLogger.WithField(prowgithub.PrLogField, prNumber)}
@@ -228,29 +228,30 @@ func main() {
 	rehearsals := rehearse.ConfigureRehearsalJobs(toRehearse, prConfig.CiOperator, prNumber, loggers, o.allowVolumes, changedTemplates)
 	if len(rehearsals) == 0 {
 		logger.Info("no jobs to rehearse have been found")
-		gracefulExitWithConfigMapCleanup(true, "", cmManager)
+		return 0
 	} else if len(rehearsals) > o.rehearsalLimit {
 		jobCountFields := logrus.Fields{
 			"rehearsal-threshold": o.rehearsalLimit,
 			"rehearsal-jobs":      len(rehearsals),
 		}
 		logger.WithFields(jobCountFields).Info("Would rehearse too many jobs, will not proceed")
-		gracefulExitWithConfigMapCleanup(true, "", cmManager)
+		return 0
 	}
 
 	executor := rehearse.NewExecutor(rehearsals, prNumber, o.releaseRepoPath, jobSpec.Refs, o.dryRun, loggers, pjclient)
 	success, err := executor.ExecuteJobs()
 	if err != nil {
 		logger.WithError(err).Error("Failed to rehearse jobs")
-		gracefulExitWithConfigMapCleanup(o.noFail, rehearseFailureOutput, cmManager)
+		return gracefulExit(o.noFail, rehearseFailureOutput)
 	}
 	if !success {
 		logger.Error("Some jobs failed their rehearsal runs")
-		gracefulExitWithConfigMapCleanup(o.noFail, jobsFailureOutput, cmManager)
+		return gracefulExit(o.noFail, jobsFailureOutput)
 	}
 	logger.Info("All jobs were rehearsed successfully")
+	return 0
+}
 
-	if err := cmManager.CleanupCMTemplates(); err != nil {
-		logger.WithError(err).Error("Failed to cleanup temporary configmaps")
-	}
+func main() {
+	os.Exit(rehearseMain())
 }

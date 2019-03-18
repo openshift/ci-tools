@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 
@@ -93,7 +94,8 @@ func (c *TemplateCMManager) CreateCMTemplates() error {
 			errors = append(errors, err)
 		}
 
-		cmName := GetTempCMName(template.Name, filename, templateData)
+		templateName := GetTemplateName(filename)
+		cmName := GetTempCMName(templateName, filename, templateData)
 		cm := &v1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: cmName,
@@ -105,7 +107,7 @@ func (c *TemplateCMManager) CreateCMTemplates() error {
 			Data: map[string]string{filename: templateData},
 		}
 
-		c.logger.WithFields(logrus.Fields{"template-name": template.Name, "cm-name": cmName}).Info("creating rehearsal configMap for template")
+		c.logger.WithFields(logrus.Fields{"template-name": templateName, "cm-name": cmName}).Info("creating rehearsal configMap for template")
 		if _, err := c.cmclient.Create(cm); err != nil {
 			if kerrors.IsAlreadyExists(err) {
 				if _, err := c.cmclient.Update(cm); err != nil {
@@ -167,4 +169,10 @@ func inputHash(inputs []string) string {
 	// but we can tolerate it as our input space is
 	// tiny.
 	return oneWayNameEncoding.EncodeToString(hash.Sum(nil)[:5])
+}
+
+// GetTemplateName generates a name for the template based of the filename.
+func GetTemplateName(filename string) string {
+	templateName := filepath.Base(filename)
+	return strings.TrimSuffix(templateName, filepath.Ext(templateName))
 }

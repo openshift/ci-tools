@@ -209,7 +209,8 @@ func ConfigureRehearsalJobs(toBeRehearsed config.Presubmits, ciopConfigs config.
 					jobLogger.WithError(err).WithField("template-name", templates[templateKey].Name).Warn("couldn't get template's data. Job won't be rehearsed")
 					continue
 				} else {
-					rehearsal.Spec.Volumes[index].VolumeSource.ConfigMap.Name = config.GetTempCMName(templates[templateKey].Name, templateKey, templateData)
+					templateName := config.GetTemplateName(templateKey)
+					rehearsal.Spec.Volumes[index].VolumeSource.ConfigMap.Name = config.GetTempCMName(templateName, templateKey, templateData)
 				}
 			}
 

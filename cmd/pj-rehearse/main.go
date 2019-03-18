@@ -44,6 +44,7 @@ type options struct {
 	local        bool
 	allowVolumes bool
 	debugLogPath string
+	metricsPath  string
 
 	releaseRepoPath string
 	rehearsalLimit  int
@@ -60,6 +61,7 @@ func gatherOptions() options {
 
 	fs.StringVar(&o.debugLogPath, "debug-log", "", "Alternate file for debug output, defaults to stderr")
 	fs.StringVar(&o.releaseRepoPath, "candidate-path", "", "Path to a openshift/release working copy with a revision to be tested")
+	fs.StringVar(&o.metricsPath, "metrics-output", "", "Path to a file where JSON metrics will be dumped after rehearsal")
 
 	fs.IntVar(&o.rehearsalLimit, "rehearsal-limit", 15, "Upper limit of jobs attempted to rehearse (if more jobs would be rehearsed, none will)")
 
@@ -113,6 +115,9 @@ func rehearseMain() int {
 		return gracefulExit(o.noFail, misconfigurationOutput)
 	}
 
+	metrics := rehearse.NewMetrics(o.metricsPath)
+	defer metrics.Dump()
+
 	var jobSpec *pjdwapi.JobSpec
 	if o.local {
 		if jobSpec, err = config.NewLocalJobSpec(o.releaseRepoPath); err != nil {
@@ -127,11 +132,13 @@ func rehearseMain() int {
 	}
 
 	prFields := logrus.Fields{prowgithub.OrgLogField: jobSpec.Refs.Org, prowgithub.RepoLogField: jobSpec.Refs.Repo}
+	metrics.Org = jobSpec.Refs.Org
+	metrics.Repo = jobSpec.Refs.Repo
 	logger := logrus.WithFields(prFields)
 
 	if jobSpec.Type != pjapi.PresubmitJob {
 		logger.Info("Not able to rehearse jobs when not run in the context of a presubmit job")
-		// Exiting successfuly will make pj-rehearsal job not fail when run as a
+		// Exiting successfully will make pj-rehearsal job not fail when run as a
 		// in a batch job. Such failures would be confusing and unactionable
 		return 0
 	}
@@ -140,6 +147,7 @@ func rehearseMain() int {
 	if o.local {
 		prNumber = int(time.Now().Unix())
 	}
+	metrics.Pr = prNumber
 	logger = logrus.WithField(prowgithub.PrLogField, prNumber)
 	logger.Info("Rehearsing Prow jobs for a configuration PR")
 
@@ -174,12 +182,14 @@ func rehearseMain() int {
 	changedCiopConfigs := config.CompoundCiopConfig{}
 	if masterConfig.CiOperator != nil && prConfig.CiOperator != nil {
 		changedCiopConfigs = diffs.GetChangedCiopConfigs(masterConfig.CiOperator, prConfig.CiOperator, logger)
+		metrics.RecordChangedCiopConfigs(changedCiopConfigs)
 	}
 
 	changedTemplates := make(config.CiTemplates)
 	// We can only detect changes if we managed to load both CI template versions
 	if masterConfig.Templates != nil && prConfig.Templates != nil {
 		changedTemplates = diffs.GetChangedTemplates(masterConfig.Templates, prConfig.Templates, logger)
+		metrics.RecordChangedTemplates(changedTemplates)
 	}
 
 	namespace := prConfig.Prow.ProwJobNamespace
@@ -224,9 +234,15 @@ func rehearseMain() int {
 	loggers := rehearse.Loggers{Job: logger, Debug: debugLogger.WithField(prowgithub.PrLogField, prNumber)}
 
 	toRehearse := diffs.GetChangedPresubmits(masterConfig.Prow, prConfig.Prow, logger)
-	toRehearse.AddAll(diffs.GetPresubmitsForCiopConfigs(prConfig.Prow, changedCiopConfigs, logger))
+	metrics.RecordChangedPresubmits(toRehearse)
+	metrics.RecordOpportunity(toRehearse, "direct-change")
+
+	presubmitsWitchChangedCiopConfigs := diffs.GetPresubmitsForCiopConfigs(prConfig.Prow, changedCiopConfigs, logger)
+	metrics.RecordOpportunity(presubmitsWitchChangedCiopConfigs, "ci-operator-config-change")
+	toRehearse.AddAll(presubmitsWitchChangedCiopConfigs)
 
 	rehearsals := rehearse.ConfigureRehearsalJobs(toRehearse, prConfig.CiOperator, prNumber, loggers, o.allowVolumes, changedTemplates)
+	metrics.RecordActual(rehearsals)
 	if len(rehearsals) == 0 {
 		logger.Info("no jobs to rehearse have been found")
 		return 0
@@ -241,6 +257,7 @@ func rehearseMain() int {
 
 	executor := rehearse.NewExecutor(rehearsals, prNumber, o.releaseRepoPath, jobSpec.Refs, o.dryRun, loggers, pjclient)
 	success, err := executor.ExecuteJobs()
+	metrics.Execution = executor.Metrics
 	if err != nil {
 		logger.WithError(err).Error("Failed to rehearse jobs")
 		return gracefulExit(o.noFail, rehearseFailureOutput)

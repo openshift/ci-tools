@@ -244,6 +244,8 @@ func hasChangedTemplateVolume(volumeMounts []v1.VolumeMount, volumes []v1.Volume
 
 // Executor holds all the information needed for the jobs to be executed.
 type Executor struct {
+	Metrics *ExecutionMetrics
+
 	dryRun     bool
 	rehearsals []*prowconfig.Presubmit
 	prNumber   int
@@ -257,6 +259,8 @@ type Executor struct {
 func NewExecutor(rehearsals []*prowconfig.Presubmit, prNumber int, prRepo string, refs *pjapi.Refs,
 	dryRun bool, loggers Loggers, pjclient pj.ProwJobInterface) *Executor {
 	return &Executor{
+		Metrics: &ExecutionMetrics{},
+
 		dryRun:     dryRun,
 		rehearsals: rehearsals,
 		prNumber:   prNumber,
@@ -340,9 +344,11 @@ func (e *Executor) waitForJobs(jobs sets.String, selector string) (bool, error) 
 			switch pj.Status.State {
 			case pjapi.FailureState, pjapi.AbortedState, pjapi.ErrorState:
 				e.loggers.Job.WithFields(fields).Error("Job failed")
+				e.Metrics.FailedRehearsals = append(e.Metrics.FailedRehearsals, pj.Spec.Job)
 				success = false
 			case pjapi.SuccessState:
 				e.loggers.Job.WithFields(fields).Info("Job succeeded")
+				e.Metrics.PassedRehearsals = append(e.Metrics.FailedRehearsals, pj.Spec.Job)
 			default:
 				continue
 			}
@@ -365,6 +371,7 @@ func (e *Executor) submitRehearsals() ([]*pjapi.ProwJob, error) {
 			errors = append(errors, err)
 			continue
 		}
+		e.Metrics.SubmittedRehearsals = append(e.Metrics.SubmittedRehearsals, created.Spec.Job)
 		e.loggers.Job.WithFields(pjutil.ProwJobFields(created)).Info("Submitted rehearsal prowjob")
 		pjs = append(pjs, created)
 	}

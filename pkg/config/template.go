@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 
 	"github.com/sirupsen/logrus"
 
@@ -51,10 +50,6 @@ func getTemplates(templatePath string) (CiTemplates, error) {
 
 			if obj, _, err := templatescheme.Codecs.UniversalDeserializer().Decode(contents, nil, nil); err == nil {
 				if template, ok := obj.(*templateapi.Template); ok {
-					if len(template.Name) == 0 {
-						template.Name = filepath.Base(path)
-						template.Name = strings.TrimSuffix(template.Name, filepath.Ext(template.Name))
-					}
 					templates[filepath.Base(path)] = template
 				}
 			}

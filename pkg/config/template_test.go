@@ -39,10 +39,12 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 	for key, template := range ciTemplates {
 
 		templateData, err := GetTemplateData(template)
+
+		templateName := GetTemplateName(key)
 		if err != nil {
-			t.Fatalf("couldn't get data from template %s: %v", template.Name, err)
+			t.Fatalf("couldn't get data from template %s: %v", templateName, err)
 		}
-		expectedCmNames.Insert(GetTempCMName(template.Name, key, templateData))
+		expectedCmNames.Insert(GetTempCMName(templateName, key, templateData))
 	}
 
 	expectedCmLabels := map[string]string{

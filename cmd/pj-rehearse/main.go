@@ -180,9 +180,6 @@ func rehearseMain() int {
 	// We can only detect changes if we managed to load both CI template versions
 	if masterConfig.Templates != nil && prConfig.Templates != nil {
 		changedTemplates = diffs.GetChangedTemplates(masterConfig.Templates, prConfig.Templates, logger)
-		for name := range changedTemplates {
-			logger.WithField("template-name", name).Info("Changed template")
-		}
 	}
 
 	namespace := prConfig.Prow.ProwJobNamespace

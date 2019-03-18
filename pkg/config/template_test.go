@@ -4,7 +4,6 @@ import (
 	"io/ioutil"
 	"path/filepath"
 	"reflect"
-	"strings"
 	"testing"
 
 	templateapi "github.com/openshift/api/template/v1"
@@ -115,10 +114,6 @@ func getBaseCiTemplates(t *testing.T) CiTemplates {
 	var expectedTemplate *templateapi.Template
 	if obj, _, err := templatescheme.Codecs.UniversalDeserializer().Decode(contents, nil, nil); err == nil {
 		if template, ok := obj.(*templateapi.Template); ok {
-			if len(template.Name) == 0 {
-				template.Name = filepath.Base(testTemplatePath)
-				template.Name = strings.TrimSuffix(template.Name, filepath.Ext(template.Name))
-			}
 			expectedTemplate = template
 		}
 	}

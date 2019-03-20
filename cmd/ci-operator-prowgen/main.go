@@ -239,9 +239,8 @@ func generatePodSpecTemplate(info *config.Info, release string, test *cioperator
 	return podSpec
 }
 
-// Generate a Presubmit job for the given parameters
 func generatePresubmitForTest(name string, info *config.Info, podSpec *kubeapi.PodSpec) *prowconfig.Presubmit {
-	labels := make(map[string]string)
+	labels := map[string]string{jc.ProwJobLabelGenerated: jc.Generated}
 
 	jobPrefix := fmt.Sprintf("pull-ci-%s-%s-%s-", info.Org, info.Repo, info.Branch)
 	if len(info.Variant) > 0 {
@@ -275,7 +274,6 @@ func generatePresubmitForTest(name string, info *config.Info, podSpec *kubeapi.P
 	}
 }
 
-// Generate a Presubmit job for the given parameters
 func generatePostsubmitForTest(
 	name string,
 	info *config.Info,
@@ -287,6 +285,7 @@ func generatePostsubmitForTest(
 	for k, v := range labels {
 		copiedLabels[k] = v
 	}
+	copiedLabels[jc.ProwJobLabelGenerated] = jc.Generated
 
 	branchName := jc.MakeRegexFilenameLabel(info.Branch)
 	jobPrefix := fmt.Sprintf("branch-ci-%s-%s-%s-", info.Org, info.Repo, branchName)

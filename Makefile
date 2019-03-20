@@ -32,3 +32,7 @@ integration-prowgen:
 integration-pj-rehearse:
 	test/pj-rehearse-integration/run.sh
 .PHONY: integration-pj-rehearse
+
+check-breaking-changes:
+	test/validate-prowgen-breaking-changes.sh
+.PHONY: check-breaking-changes

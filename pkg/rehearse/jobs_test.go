@@ -32,6 +32,76 @@ import (
 	"github.com/openshift/ci-operator/pkg/api"
 )
 
+func TestConfigureRehearsalJobs(t *testing.T) {
+	makeVoume := func(name string) v1.Volume {
+		return v1.Volume{
+			Name: "cluster-profile",
+			VolumeSource: v1.VolumeSource{
+				Projected: &v1.ProjectedVolumeSource{
+					Sources: []v1.VolumeProjection{{
+						ConfigMap: &v1.ConfigMapProjection{
+							LocalObjectReference: v1.LocalObjectReference{
+								Name: name,
+							},
+						},
+					}},
+				},
+			},
+		}
+	}
+	makePresubmit := func(name string, spec v1.PodSpec) prowconfig.Presubmit {
+		spec.Containers[0].Command = []string{"ci-operator"}
+		return prowconfig.Presubmit{
+			Brancher: prowconfig.Brancher{
+				Branches: []string{"test"},
+			},
+			JobBase: prowconfig.JobBase{
+				Name:  name,
+				Agent: string(pjapi.KubernetesAgent),
+				Spec:  &spec,
+			},
+		}
+	}
+	jobs := config.Presubmits{
+		"org/repo": []prowconfig.Presubmit{
+			makePresubmit("no-profile", v1.PodSpec{Containers: []v1.Container{{}}}),
+			makePresubmit("unchanged-profile", v1.PodSpec{
+				Containers: []v1.Container{{}},
+				Volumes:    []v1.Volume{makeVoume("cluster-profile-unchanged")},
+			}),
+			makePresubmit("changed-profile0", v1.PodSpec{
+				Containers: []v1.Container{{}},
+				Volumes:    []v1.Volume{makeVoume("cluster-profile-changed-profile0")},
+			}),
+			makePresubmit("changed-profile1", v1.PodSpec{
+				Containers: []v1.Container{{}},
+				Volumes:    []v1.Volume{makeVoume("cluster-profile-changed-profile1")},
+			}),
+		},
+	}
+	profiles := []config.ClusterProfile{
+		{Name: "changed-profile0", TreeHash: "47f520ef9c2662fc9a2675f1dd4f02d5082b2776"},
+		{Name: "changed-profile1", TreeHash: "85c627078710b8beee65d06d0cf157094fc46b03"},
+	}
+	ret := ConfigureRehearsalJobs(jobs, config.CompoundCiopConfig{}, 1234, Loggers{logrus.New(), logrus.New()}, true, config.CiTemplates{}, profiles)
+	var names []string
+	for _, j := range ret {
+		if vs := j.Spec.Volumes; len(vs) == 0 {
+			names = append(names, "")
+		} else {
+			names = append(names, vs[0].VolumeSource.Projected.Sources[0].ConfigMap.Name)
+		}
+	}
+	expected := []string{
+		"", "cluster-profile-unchanged",
+		"rehearse-cluster-profile-changed-profile0-47f52",
+		"rehearse-cluster-profile-changed-profile1-85c62",
+	}
+	if !reflect.DeepEqual(expected, names) {
+		t.Fatalf("want %s, got %s", expected, names)
+	}
+}
+
 func makeTestingPresubmitForEnv(env []v1.EnvVar) *prowconfig.Presubmit {
 	return &prowconfig.Presubmit{
 		JobBase: prowconfig.JobBase{
@@ -305,7 +375,7 @@ func TestExecuteJobsErrors(t *testing.T) {
 				return false, nil, nil
 			})
 
-			rehearsals := ConfigureRehearsalJobs(tc.jobs, testCiopConfigs, testPrNumber, testLoggers, true, nil)
+			rehearsals := ConfigureRehearsalJobs(tc.jobs, testCiopConfigs, testPrNumber, testLoggers, true, nil, []config.ClusterProfile{})
 			executor := NewExecutor(rehearsals, testPrNumber, testRepoPath, testRefs, true, testLoggers, fakeclient)
 			_, err = executor.ExecuteJobs()
 
@@ -374,7 +444,7 @@ func TestExecuteJobsUnsuccessful(t *testing.T) {
 				return true, ret, nil
 			})
 
-			rehearsals := ConfigureRehearsalJobs(tc.jobs, testCiopConfigs, testPrNumber, testLoggers, true, nil)
+			rehearsals := ConfigureRehearsalJobs(tc.jobs, testCiopConfigs, testPrNumber, testLoggers, true, nil, []config.ClusterProfile{})
 			executor := NewExecutor(rehearsals, testPrNumber, testRepoPath, testRefs, false, testLoggers, fakeclient)
 			success, _ := executor.ExecuteJobs()
 
@@ -479,7 +549,7 @@ func TestExecuteJobsPositive(t *testing.T) {
 			}
 			fakecs.Fake.PrependWatchReactor("prowjobs", makeSuccessfulFinishReactor(watcher, tc.jobs))
 
-			rehearsals := ConfigureRehearsalJobs(tc.jobs, testCiopConfigs, testPrNumber, testLoggers, true, nil)
+			rehearsals := ConfigureRehearsalJobs(tc.jobs, testCiopConfigs, testPrNumber, testLoggers, true, nil, []config.ClusterProfile{})
 			executor := NewExecutor(rehearsals, testPrNumber, testRepoPath, testRefs, true, testLoggers, fakeclient)
 			success, err := executor.ExecuteJobs()
 

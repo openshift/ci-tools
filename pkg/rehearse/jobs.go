@@ -184,7 +184,7 @@ func inlineCiOpConfig(job *prowconfig.Presubmit, targetRepo string, ciopConfigs 
 
 // ConfigureRehearsalJobs filters the jobs that should be rehearsed, then return a list of them re-configured with the
 // ci-operator's configuration inlined.
-func ConfigureRehearsalJobs(toBeRehearsed config.Presubmits, ciopConfigs config.CompoundCiopConfig, prNumber int, loggers Loggers, allowVolumes bool, templates config.CiTemplates) []*prowconfig.Presubmit {
+func ConfigureRehearsalJobs(toBeRehearsed config.Presubmits, ciopConfigs config.CompoundCiopConfig, prNumber int, loggers Loggers, allowVolumes bool, templates config.CiTemplates, profiles []config.ClusterProfile) []*prowconfig.Presubmit {
 	rehearsals := []*prowconfig.Presubmit{}
 
 	rehearsalsFiltered := filterJobs(toBeRehearsed, allowVolumes, loggers.Job)
@@ -213,6 +213,7 @@ func ConfigureRehearsalJobs(toBeRehearsed config.Presubmits, ciopConfigs config.
 					rehearsal.Spec.Volumes[index].VolumeSource.ConfigMap.Name = config.GetTempCMName(templateName, templateKey, templateData)
 				}
 			}
+			replaceClusterProfiles(rehearsal.Spec.Volumes, profiles, loggers.Debug.WithField("name", job.Name))
 
 			jobLogger.WithField(logRehearsalJob, rehearsal.Name).Info("Created a rehearsal job to be submitted")
 			rehearsals = append(rehearsals, rehearsal)
@@ -240,6 +241,33 @@ func hasChangedTemplateVolume(volumeMounts []v1.VolumeMount, volumes []v1.Volume
 	}
 
 	return false, 0, ""
+}
+
+func replaceClusterProfiles(volumes []v1.Volume, profiles []config.ClusterProfile, logger *logrus.Entry) {
+	replace := func(s *v1.VolumeProjection) {
+		if s.ConfigMap == nil {
+			return
+		}
+		n := strings.TrimPrefix(s.ConfigMap.Name, "cluster-profile-")
+		for _, p := range profiles {
+			if n != p.Name {
+				continue
+			}
+			tmp := config.GetClusterProfileName(&p)
+			fields := logrus.Fields{"profile": n, "tmp": tmp}
+			logger.WithFields(fields).Debug("Rehearsal job uses cluster profile, will be replaced by temporary")
+			s.ConfigMap.Name = tmp
+			return
+		}
+	}
+	for _, v := range volumes {
+		if v.Name != "cluster-profile" || v.Projected == nil {
+			continue
+		}
+		for _, s := range v.Projected.Sources {
+			replace(&s)
+		}
+	}
 }
 
 // Executor holds all the information needed for the jobs to be executed.

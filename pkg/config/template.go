@@ -30,6 +30,9 @@ import (
 
 // CiTemplates is a map of all the changed templates
 type CiTemplates map[string]*templateapi.Template
+type ClusterProfile struct {
+	Name, TreeHash string
+}
 
 const (
 	createByRehearse  = "created-by-pj-rehearse"
@@ -119,6 +122,50 @@ func (c *TemplateCMManager) CreateCMTemplates() error {
 		}
 	}
 	return kutilerrors.NewAggregate(errors)
+}
+
+func (c *TemplateCMManager) CreateClusterProfiles(dir string, profiles []ClusterProfile) error {
+	var errs []error
+	for _, p := range profiles {
+		cm, err := genClusterProfileCM(dir, p)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		c.logger.WithFields(logrus.Fields{"cluster-profile": cm.ObjectMeta.Name}).Info("creating rehearsal cluster profile ConfigMap")
+		if err := c.createCM(cm); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return kutilerrors.NewAggregate(errs)
+}
+
+func genClusterProfileCM(dir string, profile ClusterProfile) (*v1.ConfigMap, error) {
+	ret := &v1.ConfigMap{}
+	ret.ObjectMeta = metav1.ObjectMeta{
+		Name: GetClusterProfileName(&profile),
+	}
+	ret.Data = map[string]string{}
+	profilePath := filepath.Join(dir, profile.Name)
+	err := filepath.Walk(profilePath, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return err
+		}
+		b, err := ioutil.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		ret.Data[filepath.Base(path)] = string(b)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return ret, nil
+}
+
+func GetClusterProfileName(p *ClusterProfile) string {
+	return fmt.Sprintf("rehearse-cluster-profile-%s-%s", p.Name, p.TreeHash[:5])
 }
 
 // CleanupCMTemplates deletes all the configMaps that have been created for the changed templates.

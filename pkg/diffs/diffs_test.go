@@ -582,3 +582,108 @@ func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 		})
 	}
 }
+
+func TestGetPresubmitsForClusterProfiles(t *testing.T) {
+	makePresubmit := func(name string, agent pjapi.ProwJobAgent, profiles []string) prowconfig.Presubmit {
+		ret := prowconfig.Presubmit{
+			JobBase: prowconfig.JobBase{
+				Name:  name,
+				Agent: string(agent),
+				Spec:  &v1.PodSpec{}},
+		}
+		for _, p := range profiles {
+			ret.Spec.Volumes = append(ret.Spec.Volumes, v1.Volume{
+				Name: "cluster-profile",
+				VolumeSource: v1.VolumeSource{
+					Projected: &v1.ProjectedVolumeSource{
+						Sources: []v1.VolumeProjection{{
+							ConfigMap: &v1.ConfigMapProjection{
+								LocalObjectReference: v1.LocalObjectReference{
+									Name: "cluster-profile-" + p,
+								},
+							},
+						}},
+					},
+				},
+			})
+		}
+		return ret
+	}
+	logger := logrus.NewEntry(logrus.New())
+	for _, tc := range []struct {
+		id       string
+		cfg      *prowconfig.Config
+		profiles []config.ClusterProfile
+		expected []string
+	}{{
+		id:       "empty",
+		cfg:      &prowconfig.Config{},
+		profiles: []config.ClusterProfile{{Name: "test-profile"}},
+	}, {
+		id: "not a kubernetes job",
+		cfg: &prowconfig.Config{
+			JobConfig: prowconfig.JobConfig{
+				Presubmits: map[string][]prowconfig.Presubmit{
+					"org/repo": {
+						makePresubmit("not-a-kubernetes-job", pjapi.JenkinsAgent, []string{}),
+					},
+				},
+			},
+		},
+		profiles: []config.ClusterProfile{{Name: "test-profile"}},
+	}, {
+		id: "job doesn't use cluster profiles",
+		cfg: &prowconfig.Config{
+			JobConfig: prowconfig.JobConfig{
+				Presubmits: map[string][]prowconfig.Presubmit{
+					"org/repo": {
+						makePresubmit("no-cluster-profile", pjapi.KubernetesAgent, []string{}),
+					},
+				},
+			},
+		},
+		profiles: []config.ClusterProfile{{Name: "test-profile"}},
+	}, {
+		id: "job doesn't use the cluster profile",
+		cfg: &prowconfig.Config{
+			JobConfig: prowconfig.JobConfig{
+				Presubmits: map[string][]prowconfig.Presubmit{
+					"org/repo": {
+						makePresubmit("doesnt-use-cluster-profile", pjapi.KubernetesAgent, []string{"another-profile"}),
+					},
+				},
+			},
+		},
+		profiles: []config.ClusterProfile{{Name: "test-profile"}},
+	}, {
+		id: "multiple jobs, one uses cluster the profile",
+		cfg: &prowconfig.Config{
+			JobConfig: prowconfig.JobConfig{
+				Presubmits: map[string][]prowconfig.Presubmit{
+					"org/repo": {
+						makePresubmit("no-cluster-profile", pjapi.KubernetesAgent, []string{}),
+					},
+					"some/other-repo": {
+						makePresubmit("uses-cluster-profile", pjapi.KubernetesAgent, []string{"test-profile"}),
+						makePresubmit("uses-another-profile", pjapi.KubernetesAgent, []string{"another-profile"}),
+					},
+				},
+			},
+		},
+		profiles: []config.ClusterProfile{{Name: "test-profile"}},
+		expected: []string{"uses-cluster-profile"},
+	}} {
+		t.Run(tc.id, func(t *testing.T) {
+			ret := GetPresubmitsForClusterProfiles(tc.cfg, tc.profiles, logger)
+			var names []string
+			for _, jobs := range ret {
+				for _, j := range jobs {
+					names = append(names, j.Name)
+				}
+			}
+			if !reflect.DeepEqual(names, tc.expected) {
+				t.Fatalf("want %s, got %s", tc.expected, names)
+			}
+		})
+	}
+}

@@ -8,6 +8,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"k8s.io/apimachinery/pkg/util/sets"
 	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowgithub "k8s.io/test-infra/prow/github"
 	pjdwapi "k8s.io/test-infra/prow/pod-utils/downwardapi"
@@ -180,8 +181,9 @@ func rehearseMain() int {
 
 	// We can only detect changes if we managed to load both ci-operator config versions
 	changedCiopConfigs := config.CompoundCiopConfig{}
+	affectedJobs := make(map[string]sets.String)
 	if masterConfig.CiOperator != nil && prConfig.CiOperator != nil {
-		changedCiopConfigs = diffs.GetChangedCiopConfigs(masterConfig.CiOperator, prConfig.CiOperator, logger)
+		changedCiopConfigs, affectedJobs = diffs.GetChangedCiopConfigs(masterConfig.CiOperator, prConfig.CiOperator, logger)
 		metrics.RecordChangedCiopConfigs(changedCiopConfigs)
 	}
 
@@ -237,7 +239,7 @@ func rehearseMain() int {
 	metrics.RecordChangedPresubmits(toRehearse)
 	metrics.RecordOpportunity(toRehearse, "direct-change")
 
-	presubmitsWitchChangedCiopConfigs := diffs.GetPresubmitsForCiopConfigs(prConfig.Prow, changedCiopConfigs, logger)
+	presubmitsWitchChangedCiopConfigs := diffs.GetPresubmitsForCiopConfigs(prConfig.Prow, changedCiopConfigs, logger, affectedJobs)
 	metrics.RecordOpportunity(presubmitsWitchChangedCiopConfigs, "ci-operator-config-change")
 	toRehearse.AddAll(presubmitsWitchChangedCiopConfigs)
 

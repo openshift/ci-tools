@@ -81,7 +81,7 @@ func TestGetChangedCiopConfigs(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			before, after := tc.configGenerator()
-			actual := GetChangedCiopConfigs(before, after, logrus.NewEntry(logrus.New()))
+			actual, _ := GetChangedCiopConfigs(before, after, logrus.NewEntry(logrus.New()))
 			expected := tc.expected()
 
 			if !reflect.DeepEqual(expected, actual) {
@@ -498,7 +498,7 @@ func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
-			presubmits := GetPresubmitsForCiopConfigs(tc.prow, tc.ciop, logrus.NewEntry(logrus.New()))
+			presubmits := GetPresubmitsForCiopConfigs(tc.prow, tc.ciop, logrus.NewEntry(logrus.New()), nil)
 
 			if !reflect.DeepEqual(tc.expected, presubmits) {
 				t.Errorf("Returned presubmits differ from expected:\n%s", diff.ObjectDiff(tc.expected, presubmits))

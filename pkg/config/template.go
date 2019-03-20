@@ -85,6 +85,18 @@ func NewTemplateCMManager(cmclient corev1.ConfigMapInterface, prNumber int, logg
 	}
 }
 
+func (c *TemplateCMManager) createCM(cm *v1.ConfigMap) error {
+	if cm.ObjectMeta.Labels == nil {
+		cm.ObjectMeta.Labels = map[string]string{}
+	}
+	cm.ObjectMeta.Labels[createByRehearse] = "true"
+	cm.ObjectMeta.Labels[rehearseLabelPull] = strconv.Itoa(c.prNumber)
+	if _, err := c.cmclient.Create(cm); err != nil && !kerrors.IsAlreadyExists(err) {
+		return err
+	}
+	return nil
+}
+
 // CreateCMTemplates creates configMaps for all the changed templates.
 func (c *TemplateCMManager) CreateCMTemplates() error {
 	var errors []error
@@ -97,18 +109,12 @@ func (c *TemplateCMManager) CreateCMTemplates() error {
 		templateName := GetTemplateName(filename)
 		cmName := GetTempCMName(templateName, filename, templateData)
 		cm := &v1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: cmName,
-				Labels: map[string]string{
-					createByRehearse:  "true",
-					rehearseLabelPull: strconv.Itoa(c.prNumber),
-				},
-			},
-			Data: map[string]string{filename: templateData},
+			ObjectMeta: metav1.ObjectMeta{Name: cmName},
+			Data:       map[string]string{filename: templateData},
 		}
 
 		c.logger.WithFields(logrus.Fields{"template-name": templateName, "cm-name": cmName}).Info("creating rehearsal configMap for template")
-		if _, err := c.cmclient.Create(cm); err != nil && !kerrors.IsAlreadyExists(err) {
+		if err := c.createCM(cm); err != nil {
 			errors = append(errors, err)
 		}
 	}

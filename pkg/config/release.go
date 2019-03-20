@@ -31,15 +31,22 @@ type ReleaseRepoConfig struct {
 	Templates  CiTemplates
 }
 
-func revParse(repoPath string, args ...string) (string, error) {
-	cmd := exec.Command("git", append([]string{"rev-parse"}, args...)...)
+func git(repoPath string, args ...string) (string, error) {
+	cmd := exec.Command("git", args...)
 	cmd.Dir = repoPath
-	sha, err := cmd.Output()
+	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("'%s' failed with error=%v", cmd.Args, err)
+		return "", fmt.Errorf("'%s' failed with error=%v, output:\n%s", cmd.Args, err, out)
 	}
+	return string(out), nil
+}
 
-	return strings.TrimSpace(string(sha)), nil
+func revParse(repoPath string, args ...string) (string, error) {
+	out, err := git(repoPath, append([]string{"rev-parse"}, args...)...)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(out), nil
 }
 
 func gitCheckout(candidatePath, baseSHA string) error {

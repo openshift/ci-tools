@@ -19,6 +19,8 @@ if [ -n "$(git status --porcelain)" ]; then
   echo "[ERROR] Running Prowgen in openshift/release results in changes ^^^"
   echo "[ERROR] To avoid breaking openshift/release for everyone you should regenerate"
   echo "[ERROR] the jobs there and merge the changes ASAP after this change to Prowgen"
+  popd
+  exit 1
 else
   echo "Running Prowgen in openshift/release does not result in changes, no followups needed"
 fi

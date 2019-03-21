@@ -191,9 +191,9 @@ func GetPresubmitsForCiopConfigs(prowConfig *prowconfig.Config, ciopConfigs conf
 				}
 				if config.IsCiopConfigCM(env.ValueFrom.ConfigMapKeyRef.Name) {
 					if _, ok := ciopConfigs[env.ValueFrom.ConfigMapKeyRef.Key]; ok {
-
-						s := strings.Split(job.Name, "-")
-						testName := s[len(s)-1]
+						testName := strings.TrimPrefix(job.Name, "pull-ci-")
+						orgRepo := strings.Replace(repo, "/", "-", -1)
+						testName = strings.TrimPrefix(testName, fmt.Sprintf("%s-%s-", orgRepo, job.Brancher.Branches[0]))
 
 						affectedJob, ok := affectedJobs[env.ValueFrom.ConfigMapKeyRef.Key]
 						if ok && !affectedJob.Has(testName) {

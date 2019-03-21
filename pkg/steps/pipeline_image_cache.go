@@ -22,6 +22,7 @@ type pipelineImageCacheStep struct {
 	resources   api.ResourceConfiguration
 	buildClient BuildClient
 	imageClient imageclientset.ImageV1Interface
+	artifactDir string
 	jobSpec     *api.JobSpec
 }
 
@@ -39,7 +40,7 @@ func (s *pipelineImageCacheStep) Run(ctx context.Context, dry bool) error {
 		},
 		"",
 		s.resources,
-	), dry)
+	), dry, s.artifactDir)
 }
 
 func (s *pipelineImageCacheStep) Done() (bool, error) {
@@ -83,12 +84,13 @@ func (s *pipelineImageCacheStep) Description() string {
 	return fmt.Sprintf("Store build results into a layer on top of %s and save as %s", s.config.From, s.config.To)
 }
 
-func PipelineImageCacheStep(config api.PipelineImageCacheStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, imageClient imageclientset.ImageV1Interface, jobSpec *api.JobSpec) api.Step {
+func PipelineImageCacheStep(config api.PipelineImageCacheStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, imageClient imageclientset.ImageV1Interface, artifactDir string, jobSpec *api.JobSpec) api.Step {
 	return &pipelineImageCacheStep{
 		config:      config,
 		resources:   resources,
 		buildClient: buildClient,
 		imageClient: imageClient,
+		artifactDir: artifactDir,
 		jobSpec:     jobSpec,
 	}
 }

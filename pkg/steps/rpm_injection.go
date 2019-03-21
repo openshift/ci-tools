@@ -23,6 +23,7 @@ type rpmImageInjectionStep struct {
 	buildClient BuildClient
 	routeClient routeclientset.RoutesGetter
 	istClient   imageclientset.ImageStreamTagsGetter
+	artifactDir string
 	jobSpec     *api.JobSpec
 }
 
@@ -50,7 +51,7 @@ func (s *rpmImageInjectionStep) Run(ctx context.Context, dry bool) error {
 		},
 		"",
 		s.resources,
-	), dry)
+	), dry, s.artifactDir)
 }
 
 func (s *rpmImageInjectionStep) Done() (bool, error) {
@@ -75,13 +76,14 @@ func (s *rpmImageInjectionStep) Description() string {
 	return "Inject an RPM repository that will point at the RPM server"
 }
 
-func RPMImageInjectionStep(config api.RPMImageInjectionStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, routeClient routeclientset.RoutesGetter, istClient imageclientset.ImageStreamTagsGetter, jobSpec *api.JobSpec) api.Step {
+func RPMImageInjectionStep(config api.RPMImageInjectionStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, routeClient routeclientset.RoutesGetter, istClient imageclientset.ImageStreamTagsGetter, artifactDir string, jobSpec *api.JobSpec) api.Step {
 	return &rpmImageInjectionStep{
 		config:      config,
 		resources:   resources,
 		buildClient: buildClient,
 		routeClient: routeClient,
 		istClient:   istClient,
+		artifactDir: artifactDir,
 		jobSpec:     jobSpec,
 	}
 }

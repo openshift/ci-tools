@@ -65,7 +65,7 @@ func TestExtractRepoElementsFromPath(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.path, func(t *testing.T) {
-			repoInfo, err := extractRepoElementsFromPath(testCase.path)
+			repoInfo, err := InfoFromPath(testCase.path)
 			if err == nil && testCase.expectedError {
 				t.Errorf("%s: expected an error, but got none", testCase.name)
 			}

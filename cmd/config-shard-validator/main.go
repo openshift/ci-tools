@@ -169,7 +169,7 @@ func checkSpec(spec *v1.PodSpec, relPath, name string, configInfos map[string]*c
 					logger.WithFields(logrus.Fields{
 						"got":      env.ValueFrom.ConfigMapKeyRef.Name,
 						"expected": configInfo.ConfigMapName(),
-					}).Error("Invalid config map map shard for injected CI-Operator config key.")
+					}).Error("Invalid config map shard for injected CI-Operator config key.")
 					foundFailures = true
 				}
 			}

@@ -8,9 +8,12 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/equality"
 	utildiff "k8s.io/apimachinery/pkg/util/diff"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
+
+	cioperatorapi "github.com/openshift/ci-operator/pkg/api"
 
 	"github.com/openshift/ci-operator-prowgen/pkg/config"
 )
@@ -38,11 +41,13 @@ const (
 	changedCiopConfigMsg = "ci-operator config file changed"
 )
 
-func GetChangedCiopConfigs(masterConfig, prConfig config.CompoundCiopConfig, logger *logrus.Entry) config.CompoundCiopConfig {
+func GetChangedCiopConfigs(masterConfig, prConfig config.CompoundCiopConfig, logger *logrus.Entry) (config.CompoundCiopConfig, map[string]sets.String) {
 	ret := config.CompoundCiopConfig{}
+	affectedJobs := map[string]sets.String{}
 
 	for filename, newConfig := range prConfig {
 		oldConfig, ok := masterConfig[filename]
+		jobs := sets.NewString()
 
 		// new ciop config
 		if !ok {
@@ -51,13 +56,33 @@ func GetChangedCiopConfigs(masterConfig, prConfig config.CompoundCiopConfig, log
 			continue
 		}
 
-		if !equality.Semantic.DeepEqual(oldConfig, newConfig) {
+		withoutTestsOldConfig := *masterConfig[filename]
+		withoutTestsOldConfig.Tests = nil
+		withoutTestsNewConfig := *prConfig[filename]
+		withoutTestsNewConfig.Tests = nil
+
+		if !equality.Semantic.DeepEqual(withoutTestsOldConfig, withoutTestsNewConfig) {
 			logger.WithField(logCiopConfig, filename).Info(changedCiopConfigMsg)
 			ret[filename] = newConfig
+			continue
+		}
+
+		oldTests := getTestsByName(oldConfig.Tests)
+		newTests := getTestsByName(newConfig.Tests)
+
+		for as, test := range newTests {
+			if !equality.Semantic.DeepEqual(oldTests[as], test) {
+				logger.WithField(logCiopConfig, filename).Info(changedCiopConfigMsg)
+				ret[filename] = newConfig
+				jobs.Insert(as)
+			}
+		}
+
+		if len(jobs) > 0 {
+			affectedJobs[filename] = jobs
 		}
 	}
-
-	return ret
+	return ret, affectedJobs
 }
 
 // GetChangedPresubmits returns a mapping of repo to presubmits to execute.
@@ -149,7 +174,7 @@ func GetChangedTemplates(masterTemplates, prTemplates config.CiTemplates, logger
 	return changedTemplates
 }
 
-func GetPresubmitsForCiopConfigs(prowConfig *prowconfig.Config, ciopConfigs config.CompoundCiopConfig, logger *logrus.Entry) config.Presubmits {
+func GetPresubmitsForCiopConfigs(prowConfig *prowconfig.Config, ciopConfigs config.CompoundCiopConfig, logger *logrus.Entry, affectedJobs map[string]sets.String) config.Presubmits {
 	ret := config.Presubmits{}
 
 	for repo, jobs := range prowConfig.JobConfig.Presubmits {
@@ -166,6 +191,15 @@ func GetPresubmitsForCiopConfigs(prowConfig *prowconfig.Config, ciopConfigs conf
 				}
 				if config.IsCiopConfigCM(env.ValueFrom.ConfigMapKeyRef.Name) {
 					if _, ok := ciopConfigs[env.ValueFrom.ConfigMapKeyRef.Key]; ok {
+						testName := strings.TrimPrefix(job.Name, "pull-ci-")
+						orgRepo := strings.Replace(repo, "/", "-", -1)
+						testName = strings.TrimPrefix(testName, fmt.Sprintf("%s-%s-", orgRepo, job.Brancher.Branches[0]))
+
+						affectedJob, ok := affectedJobs[env.ValueFrom.ConfigMapKeyRef.Key]
+						if ok && !affectedJob.Has(testName) {
+							continue
+						}
+
 						ret.Add(repo, job)
 					}
 				}
@@ -173,5 +207,13 @@ func GetPresubmitsForCiopConfigs(prowConfig *prowconfig.Config, ciopConfigs conf
 		}
 	}
 
+	return ret
+}
+
+func getTestsByName(tests []cioperatorapi.TestStepConfiguration) map[string]cioperatorapi.TestStepConfiguration {
+	ret := make(map[string]cioperatorapi.TestStepConfiguration)
+	for _, test := range tests {
+		ret[test.As] = test
+	}
 	return ret
 }

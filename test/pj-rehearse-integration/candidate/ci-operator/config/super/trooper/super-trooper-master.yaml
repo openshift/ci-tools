@@ -24,3 +24,8 @@ resources:
       cpu: 500Mi
     requests:
       cpu: 10Mi
+tests:
+- as: unit
+  commands: make unit CHANGED
+  container:
+    from: src

@@ -13,6 +13,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/diff"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
@@ -33,12 +34,27 @@ func TestGetChangedCiopConfigs(t *testing.T) {
 				Name:      "name",
 			},
 		},
+		Tests: []cioperatorapi.TestStepConfiguration{
+			{
+				As:       "unit",
+				Commands: "make unit",
+			},
+			{
+				As:       "e2e",
+				Commands: "make e2e",
+			},
+			{
+				As:       "verify",
+				Commands: "make verify",
+			},
+		},
 	}
 
 	testCases := []struct {
-		name            string
-		configGenerator func() (before, after config.CompoundCiopConfig)
-		expected        func() config.CompoundCiopConfig
+		name                 string
+		configGenerator      func() (before, after config.CompoundCiopConfig)
+		expected             func() config.CompoundCiopConfig
+		expectedAffectedJobs map[string]sets.String
 	}{{
 		name: "no changes",
 		configGenerator: func() (config.CompoundCiopConfig, config.CompoundCiopConfig) {
@@ -46,7 +62,8 @@ func TestGetChangedCiopConfigs(t *testing.T) {
 			after := config.CompoundCiopConfig{"org-repo-branch.yaml": &baseCiopConfig}
 			return before, after
 		},
-		expected: func() config.CompoundCiopConfig { return config.CompoundCiopConfig{} },
+		expected:             func() config.CompoundCiopConfig { return config.CompoundCiopConfig{} },
+		expectedAffectedJobs: map[string]sets.String{},
 	}, {
 		name: "new config",
 		configGenerator: func() (config.CompoundCiopConfig, config.CompoundCiopConfig) {
@@ -60,6 +77,7 @@ func TestGetChangedCiopConfigs(t *testing.T) {
 		expected: func() config.CompoundCiopConfig {
 			return config.CompoundCiopConfig{"org-repo-another-branch.yaml": &baseCiopConfig}
 		},
+		expectedAffectedJobs: map[string]sets.String{},
 	}, {
 		name: "changed config",
 		configGenerator: func() (config.CompoundCiopConfig, config.CompoundCiopConfig) {
@@ -76,16 +94,65 @@ func TestGetChangedCiopConfigs(t *testing.T) {
 			expected.InputConfiguration.ReleaseTagConfiguration.Name = "another-name"
 			return config.CompoundCiopConfig{"org-repo-branch.yaml": &expected}
 		},
-	}}
+		expectedAffectedJobs: map[string]sets.String{},
+	},
+		{
+			name: "changed tests",
+			configGenerator: func() (config.CompoundCiopConfig, config.CompoundCiopConfig) {
+				before := config.CompoundCiopConfig{"org-repo-branch.yaml": &baseCiopConfig}
+				afterConfig := cioperatorapi.ReleaseBuildConfiguration{}
+				deepcopy.Copy(&afterConfig, baseCiopConfig)
+				afterConfig.Tests[0].Commands = "changed commands"
+				after := config.CompoundCiopConfig{"org-repo-branch.yaml": &afterConfig}
+				return before, after
+			},
+			expected: func() config.CompoundCiopConfig {
+				expected := cioperatorapi.ReleaseBuildConfiguration{}
+				deepcopy.Copy(&expected, baseCiopConfig)
+				expected.Tests[0].Commands = "changed commands"
+				return config.CompoundCiopConfig{"org-repo-branch.yaml": &expected}
+			},
+			expectedAffectedJobs: map[string]sets.String{"org-repo-branch.yaml": {"unit": sets.Empty{}}},
+		},
+		{
+			name: "changed multiple tests",
+			configGenerator: func() (config.CompoundCiopConfig, config.CompoundCiopConfig) {
+				before := config.CompoundCiopConfig{"org-repo-branch.yaml": &baseCiopConfig}
+				afterConfig := cioperatorapi.ReleaseBuildConfiguration{}
+				deepcopy.Copy(&afterConfig, baseCiopConfig)
+				afterConfig.Tests[0].Commands = "changed commands"
+				afterConfig.Tests[1].Commands = "changed commands"
+				after := config.CompoundCiopConfig{"org-repo-branch.yaml": &afterConfig}
+				return before, after
+			},
+			expected: func() config.CompoundCiopConfig {
+				expected := cioperatorapi.ReleaseBuildConfiguration{}
+				deepcopy.Copy(&expected, baseCiopConfig)
+				expected.Tests[0].Commands = "changed commands"
+				expected.Tests[1].Commands = "changed commands"
+				return config.CompoundCiopConfig{"org-repo-branch.yaml": &expected}
+			},
+			expectedAffectedJobs: map[string]sets.String{
+				"org-repo-branch.yaml": {
+					"unit": sets.Empty{},
+					"e2e":  sets.Empty{},
+				},
+			},
+		},
+	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			before, after := tc.configGenerator()
-			actual := GetChangedCiopConfigs(before, after, logrus.NewEntry(logrus.New()))
+			actual, affectedJobs := GetChangedCiopConfigs(before, after, logrus.NewEntry(logrus.New()))
 			expected := tc.expected()
 
 			if !reflect.DeepEqual(expected, actual) {
 				t.Errorf("Detected changed ci-operator config changes differ from expected:\n%s", diff.ObjectReflectDiff(expected, actual))
+			}
+
+			if !reflect.DeepEqual(tc.expectedAffectedJobs, affectedJobs) {
+				t.Errorf("Affected jobs differ from expected:\n%s", diff.ObjectReflectDiff(tc.expectedAffectedJobs, affectedJobs))
 			}
 		})
 	}
@@ -407,6 +474,9 @@ func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 	}
 
 	basePresubmitWithCiop := prowconfig.Presubmit{
+		Brancher: prowconfig.Brancher{
+			Branches: []string{baseCiopConfig.Branch},
+		},
 		JobBase: prowconfig.JobBase{
 			Agent: string(pjapi.KubernetesAgent),
 			Spec: &v1.PodSpec{
@@ -425,6 +495,12 @@ func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 		},
 	}
 
+	affectedJobs := map[string]sets.String{
+		"org-repo-branch.yaml": {
+			"testjob": sets.Empty{},
+		},
+	}
+
 	testCases := []struct {
 		description string
 		prow        *prowconfig.Config
@@ -439,7 +515,7 @@ func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 						func() prowconfig.Presubmit {
 							ret := prowconfig.Presubmit{}
 							deepcopy.Copy(&ret, &basePresubmitWithCiop)
-							ret.Name = "job-for-org-repo"
+							ret.Name = "org-repo-branch-testjob"
 							ret.Spec.Containers[0].Env[0].ValueFrom.ConfigMapKeyRef.Key = baseCiopConfig.Filename
 							return ret
 						}(),
@@ -451,7 +527,7 @@ func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 			func() prowconfig.Presubmit {
 				ret := prowconfig.Presubmit{}
 				deepcopy.Copy(&ret, &basePresubmitWithCiop)
-				ret.Name = "job-for-org-repo"
+				ret.Name = "org-repo-branch-testjob"
 				ret.Spec.Containers[0].Env[0].ValueFrom.ConfigMapKeyRef.Key = baseCiopConfig.Filename
 				return ret
 			}(),
@@ -465,7 +541,7 @@ func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 						func() prowconfig.Presubmit {
 							ret := prowconfig.Presubmit{}
 							deepcopy.Copy(&ret, &basePresubmitWithCiop)
-							ret.Name = "job-for-org-repo"
+							ret.Name = "org-repo-branch-testjob"
 							ret.Spec.Containers[0].Env[0].ValueFrom.ConfigMapKeyRef.Key = baseCiopConfig.Filename
 							return ret
 						}(),
@@ -483,7 +559,7 @@ func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 						func() prowconfig.Presubmit {
 							ret := prowconfig.Presubmit{}
 							deepcopy.Copy(&ret, &basePresubmitWithCiop)
-							ret.Name = "job-for-org-repo"
+							ret.Name = "org-repo-branch-testjob"
 							ret.Agent = string(pjapi.JenkinsAgent)
 							ret.Spec.Containers[0].Env = []v1.EnvVar{}
 							return ret
@@ -498,7 +574,7 @@ func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
-			presubmits := GetPresubmitsForCiopConfigs(tc.prow, tc.ciop, logrus.NewEntry(logrus.New()))
+			presubmits := GetPresubmitsForCiopConfigs(tc.prow, tc.ciop, logrus.NewEntry(logrus.New()), affectedJobs)
 
 			if !reflect.DeepEqual(tc.expected, presubmits) {
 				t.Errorf("Returned presubmits differ from expected:\n%s", diff.ObjectDiff(tc.expected, presubmits))

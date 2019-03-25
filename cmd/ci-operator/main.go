@@ -147,16 +147,19 @@ func main() {
 
 	if err := opt.Validate(); err != nil {
 		fmt.Printf("error: %v\n", err)
+		opt.writeFailingJUnit(err)
 		os.Exit(1)
 	}
 
 	if err := opt.Complete(); err != nil {
 		fmt.Printf("error: %v\n", err)
+		opt.writeFailingJUnit(err)
 		os.Exit(1)
 	}
 
 	if err := opt.Run(); err != nil {
 		fmt.Printf("error: %v\n", err)
+		opt.writeFailingJUnit(err)
 		os.Exit(1)
 	}
 }
@@ -455,7 +458,7 @@ func (o *options) Run() error {
 				eventRecorder.Event(runtimeObject, coreapi.EventTypeWarning, "CiJobFailed", eventJobDescription(o.jobSpec, o.namespace))
 				time.Sleep(time.Second)
 			}
-			return fmt.Errorf("could not run steps: %v", err)
+			return errWroteJUnit{fmt.Errorf("could not run steps: %v", err)}
 		}
 
 		for _, step := range postSteps {
@@ -787,6 +790,39 @@ func (o *options) writeMetadataJSON() error {
 		return nil
 	}
 	return ioutil.WriteFile(filepath.Join(o.artifactDir, "metadata.json"), data, 0640)
+}
+
+// errWroteJUnit indicates that this error is covered by existing JUnit output and writing
+// another JUnit file is not necessary (in writeFailingJUnit)
+type errWroteJUnit struct {
+	error
+}
+
+// writeFailingJUnit attempts to write a JUnit artifact when the graph could not be
+// initialized in order to capture the result for higher level automation.
+func (o *options) writeFailingJUnit(err error) {
+	if _, ok := err.(errWroteJUnit); ok {
+		return
+	}
+	suites := &junit.TestSuites{
+		Suites: []*junit.TestSuite{
+			{
+				NumTests:  1,
+				NumFailed: 1,
+				TestCases: []*junit.TestCase{
+					{
+						Name: "initialize",
+						FailureOutput: &junit.FailureOutput{
+							Output: err.Error(),
+						},
+					},
+				},
+			},
+		},
+	}
+	if err := o.writeJUnit(suites, "job"); err != nil {
+		glog.V(4).Infof("Unable to write top level failing JUnit artifact")
+	}
 }
 
 func (o *options) writeJUnit(suites *junit.TestSuites, name string) error {

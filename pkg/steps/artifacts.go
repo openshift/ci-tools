@@ -701,7 +701,7 @@ func gatherContainerLogsOutput(podClient PodClient, artifactDir, namespace, podN
 // around download/copy from the artifacts container's volume mount and multiple pods are avoided.
 func gatherSuccessfulBuildLog(buildClient BuildClient, artifactDir, namespace, buildName string) error {
 	// adding a subdir to the artifactDir path similar to downloadArtifacts adding the container-logs subdir
-	dir := filepath.Join(artifactDir, "openshift-docker-build-strategy-logs")
+	dir := filepath.Join(artifactDir, "build-logs")
 	if err := os.MkdirAll(dir, 0750); err != nil {
 		return fmt.Errorf("unable to create directory %s: %v", dir, err)
 	}

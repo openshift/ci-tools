@@ -21,6 +21,7 @@ type projectDirectoryImageBuildStep struct {
 	imageClient imageclientset.ImageStreamsGetter
 	istClient   imageclientset.ImageStreamTagsGetter
 	jobSpec     *api.JobSpec
+	artifactDir string
 }
 
 func (s *projectDirectoryImageBuildStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
@@ -108,7 +109,7 @@ func (s *projectDirectoryImageBuildStep) Run(ctx context.Context, dry bool) erro
 			Value: v,
 		})
 	}
-	return handleBuild(s.buildClient, build, dry)
+	return handleBuild(s.buildClient, build, dry, s.artifactDir)
 }
 
 func (s *projectDirectoryImageBuildStep) Done() (bool, error) {
@@ -161,13 +162,14 @@ func (s *projectDirectoryImageBuildStep) Description() string {
 	return fmt.Sprintf("Build image %s from the repository", s.config.To)
 }
 
-func ProjectDirectoryImageBuildStep(config api.ProjectDirectoryImageBuildStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, imageClient imageclientset.ImageStreamsGetter, istClient imageclientset.ImageStreamTagsGetter, jobSpec *api.JobSpec) api.Step {
+func ProjectDirectoryImageBuildStep(config api.ProjectDirectoryImageBuildStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, imageClient imageclientset.ImageStreamsGetter, istClient imageclientset.ImageStreamTagsGetter, artifactDir string, jobSpec *api.JobSpec) api.Step {
 	return &projectDirectoryImageBuildStep{
 		config:      config,
 		resources:   resources,
 		buildClient: buildClient,
 		imageClient: imageClient,
 		istClient:   istClient,
+		artifactDir: artifactDir,
 		jobSpec:     jobSpec,
 	}
 }

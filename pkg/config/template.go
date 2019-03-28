@@ -108,14 +108,8 @@ func (c *TemplateCMManager) CreateCMTemplates() error {
 		}
 
 		c.logger.WithFields(logrus.Fields{"template-name": templateName, "cm-name": cmName}).Info("creating rehearsal configMap for template")
-		if _, err := c.cmclient.Create(cm); err != nil {
-			if kerrors.IsAlreadyExists(err) {
-				if _, err := c.cmclient.Update(cm); err != nil {
-					errors = append(errors, fmt.Errorf("could not update existing configmap: %v", err))
-				}
-			} else {
-				errors = append(errors, err)
-			}
+		if _, err := c.cmclient.Create(cm); err != nil && !kerrors.IsAlreadyExists(err) {
+			errors = append(errors, err)
 		}
 	}
 	return kutilerrors.NewAggregate(errors)

@@ -38,6 +38,8 @@ const (
 	logRehearsalJob              = "rehearsal-job"
 	logCiopConfigFile            = "ciop-config-file"
 	logCiopConfigRepo            = "ciop-config-repo"
+
+	clusterTypeEnvName = "CLUSTER_TYPE"
 )
 
 // Loggers holds the two loggers that will be used for normal and debug logging respectively.
@@ -203,17 +205,14 @@ func ConfigureRehearsalJobs(toBeRehearsed config.Presubmits, ciopConfigs config.
 				continue
 			}
 
-			exists, index, templateKey := hasChangedTemplateVolume(rehearsal.Spec.Containers[0].VolumeMounts, rehearsal.Spec.Volumes, templates)
-			if exists {
-				if templateData, err := config.GetTemplateData(templates[templateKey]); err != nil {
-					jobLogger.WithError(err).WithField("template-name", templates[templateKey].Name).Warn("couldn't get template's data. Job won't be rehearsed")
+			if allowVolumes {
+				if err := replaceCMTemplateName(rehearsal.Spec.Containers[0].VolumeMounts, rehearsal.Spec.Volumes, templates); err != nil {
+					jobLogger.WithError(err).Warn("Failed to replace the configmap name to the temporary one")
 					continue
-				} else {
-					templateName := config.GetTemplateName(templateKey)
-					rehearsal.Spec.Volumes[index].VolumeSource.ConfigMap.Name = config.GetTempCMName(templateName, templateKey, templateData)
 				}
+
+				replaceClusterProfiles(rehearsal.Spec.Volumes, profiles, loggers.Debug.WithField("name", job.Name))
 			}
-			replaceClusterProfiles(rehearsal.Spec.Volumes, profiles, loggers.Debug.WithField("name", job.Name))
 
 			jobLogger.WithField(logRehearsalJob, rehearsal.Name).Info("Created a rehearsal job to be submitted")
 			rehearsals = append(rehearsals, rehearsal)
@@ -223,24 +222,93 @@ func ConfigureRehearsalJobs(toBeRehearsed config.Presubmits, ciopConfigs config.
 	return rehearsals
 }
 
-func hasChangedTemplateVolume(volumeMounts []v1.VolumeMount, volumes []v1.Volume, templates config.CiTemplates) (bool, int, string) {
-	var templateKey string
-	var volumeName string
+// AddRandomJobsForChangedTemplates finds jobs from the PR config that are using a specific template with a specific cluster type.
+// The job selection is done by iterating in an unspecified order, which avoids picking the same job
+// So if a template will be changed, find the jobs that are using a template in combination with the `aws`,`openstack`,`gcs` and `libvirt` cluster types.
+func AddRandomJobsForChangedTemplates(templates config.CiTemplates, prConfigPresubmits map[string][]prowconfig.Presubmit, loggers Loggers, prNumber int) config.Presubmits {
+	rehearsals := make(config.Presubmits)
 
+	for templateFile := range templates {
+		for _, clusterType := range []string{"aws", "gcs", "openstack", "libvirt"} {
+			if repo, job := pickTemplateJob(prConfigPresubmits, templateFile, clusterType); job != nil {
+				jobLogger := loggers.Job.WithFields(logrus.Fields{"target-repo": repo, "target-job": job.Name})
+				jobLogger.Info("Picking job to rehearse the template changes")
+				rehearsals[repo] = append(rehearsals[repo], *job)
+			}
+		}
+	}
+	return rehearsals
+}
+
+func replaceCMTemplateName(volumeMounts []v1.VolumeMount, volumes []v1.Volume, templates config.CiTemplates) error {
+	replace := func(v *v1.Volume) error {
+		volumeName, templateKey := hasChangedTemplateVolume(volumeMounts, *v, templates)
+		if len(volumeName) == 0 || len(templateKey) == 0 || volumeName != v.Name {
+			return nil
+		}
+
+		templateData, err := config.GetTemplateData(templates[templateKey])
+		if err != nil {
+			return fmt.Errorf("couldn't get template's data: %s: %v", templates[templateKey], err)
+		}
+
+		name := config.GetTempCMName(config.GetTemplateName(templateKey), templateKey, templateData)
+		v.VolumeSource.ConfigMap.Name = name
+
+		return nil
+	}
+
+	for _, volume := range volumes {
+		if err := replace(&volume); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func hasChangedTemplateVolume(volumeMounts []v1.VolumeMount, volume v1.Volume, templates config.CiTemplates) (string, string) {
 	for _, volumeMount := range volumeMounts {
 		if _, ok := templates[volumeMount.SubPath]; ok {
-			templateKey = volumeMount.SubPath
-			volumeName = volumeMount.Name
+			return volumeMount.Name, volumeMount.SubPath
 		}
 	}
+	return "", ""
+}
 
-	for index, volume := range volumes {
-		if volume.Name == volumeName {
-			return true, index, templateKey
+func pickTemplateJob(presubmits map[string][]prowconfig.Presubmit, templateFile, clusterType string) (string, *prowconfig.Presubmit) {
+	for repo, jobs := range presubmits {
+		for _, job := range jobs {
+			if job.Agent != string(pjapi.KubernetesAgent) {
+				continue
+			}
+
+			if hasClusterType(job, clusterType) && hasTemplateFile(job, templateFile) {
+				return repo, &job
+			}
 		}
 	}
+	return "", nil
+}
 
-	return false, 0, ""
+func hasClusterType(job prowconfig.Presubmit, clusterType string) bool {
+	for _, env := range job.Spec.Containers[0].Env {
+		if env.Name == clusterTypeEnvName && env.Value == clusterType {
+			return true
+		}
+	}
+	return false
+}
+
+func hasTemplateFile(job prowconfig.Presubmit, templateFile string) bool {
+	if job.Spec.Containers[0].VolumeMounts != nil {
+		for _, volumeMount := range job.Spec.Containers[0].VolumeMounts {
+			if volumeMount.SubPath == templateFile {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func replaceClusterProfiles(volumes []v1.Volume, profiles []config.ClusterProfile, logger *logrus.Entry) {

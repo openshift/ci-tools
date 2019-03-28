@@ -22,6 +22,8 @@ const (
 	CiopConfigInRepoPath = "ci-operator/config"
 	// TemplatesPath is the path of the templates from release repo
 	TemplatesPath = "ci-operator/templates"
+	// ClusterProfilesPath is where profiles are stored in the release repo
+	ClusterProfilesPath = "cluster/test-deploy"
 )
 
 // ReleaseRepoConfig contains all configuration present in release repo (usually openshift/release)
@@ -31,15 +33,22 @@ type ReleaseRepoConfig struct {
 	Templates  CiTemplates
 }
 
-func revParse(repoPath string, args ...string) (string, error) {
-	cmd := exec.Command("git", append([]string{"rev-parse"}, args...)...)
+func git(repoPath string, args ...string) (string, error) {
+	cmd := exec.Command("git", args...)
 	cmd.Dir = repoPath
-	sha, err := cmd.Output()
+	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("'%s' failed with error=%v", cmd.Args, err)
+		return "", fmt.Errorf("'%s' failed with error=%v, output:\n%s", cmd.Args, err, out)
 	}
+	return string(out), nil
+}
 
-	return strings.TrimSpace(string(sha)), nil
+func revParse(repoPath string, args ...string) (string, error) {
+	out, err := git(repoPath, append([]string{"rev-parse"}, args...)...)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(out), nil
 }
 
 func gitCheckout(candidatePath, baseSHA string) error {
@@ -134,4 +143,18 @@ func GetAllConfigsFromSHA(releaseRepoPath, sha string, logger *logrus.Entry) (*R
 	}
 
 	return config, nil
+}
+
+// GetChangedClusterProfiles returns the name and a hash of the contents of all
+// cluster profiles that changed since the revision `baseRev`.
+func GetChangedClusterProfiles(path, baseRev string) (ret []ClusterProfile, err error) {
+	// Sample output (with abbreviated hashes) from git-diff-tree(1):
+	// :100644 100644 bcd1234 0123456 M file0
+	cmd := []string{"diff-tree", "--diff-filter=ABCMRTUX", baseRev + ":" + ClusterProfilesPath, "HEAD:" + ClusterProfilesPath}
+	if diff, err := git(path, cmd...); err == nil && diff != "" {
+		for _, l := range strings.Split(strings.TrimSpace(diff), "\n") {
+			ret = append(ret, ClusterProfile{Name: l[99:], TreeHash: l[56:96]})
+		}
+	}
+	return
 }

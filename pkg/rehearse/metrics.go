@@ -21,9 +21,10 @@ type Metrics struct {
 	Repo string `json:"repo"`
 	Pr   int    `json:"pr"`
 
-	ChangedCiopConfigs []string `json:"changed_ciop_configs"`
-	ChangedPresubmits  []string `json:"changed_presubmits"`
-	ChangedTemplates   []string `json:"changed_templates"`
+	ChangedCiopConfigs     []string `json:"changed_ciop_configs"`
+	ChangedPresubmits      []string `json:"changed_presubmits"`
+	ChangedTemplates       []string `json:"changed_templates"`
+	ChangedClusterProfiles []string `json:"changed_cluster_profiles"`
 
 	// map a job name to a list of reasons why we want to rehearse it
 	Opportunities map[string][]string `json:"opportunities"`
@@ -57,6 +58,12 @@ func (m *Metrics) RecordChangedCiopConfigs(configs config.CompoundCiopConfig) {
 func (m *Metrics) RecordChangedTemplates(templates config.CiTemplates) {
 	for templateName := range templates {
 		m.ChangedTemplates = append(m.ChangedTemplates, templateName)
+	}
+}
+
+func (m *Metrics) RecordChangedClusterProfiles(ps []config.ClusterProfile) {
+	for _, p := range ps {
+		m.ChangedClusterProfiles = append(m.ChangedClusterProfiles, p.Name)
 	}
 }
 

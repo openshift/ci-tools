@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -193,6 +194,15 @@ func rehearseMain() int {
 		changedTemplates = diffs.GetChangedTemplates(masterConfig.Templates, prConfig.Templates, logger)
 		metrics.RecordChangedTemplates(changedTemplates)
 	}
+	changedClusterProfiles, err := config.GetChangedClusterProfiles(o.releaseRepoPath, jobSpec.Refs.BaseSHA)
+	if err != nil {
+		logger.WithError(err).Error("could not get cluster profile differences")
+		return gracefulExit(o.noFail, misconfigurationOutput)
+	}
+	if len(changedClusterProfiles) != 0 {
+		logger.WithField("profiles", changedClusterProfiles).Info("cluster profiles changed")
+		metrics.RecordChangedClusterProfiles(changedClusterProfiles)
+	}
 
 	namespace := prConfig.Prow.ProwJobNamespace
 	if o.local {
@@ -213,6 +223,10 @@ func rehearseMain() int {
 	}()
 	if err := cmManager.CreateCMTemplates(); err != nil {
 		logger.WithError(err).Error("couldn't create template configMap")
+		return gracefulExit(o.noFail, failedSetupOutput)
+	}
+	if err := cmManager.CreateClusterProfiles(filepath.Join(o.releaseRepoPath, config.ClusterProfilesPath), changedClusterProfiles); err != nil {
+		logger.WithError(err).Error("couldn't create cluster profile ConfigMaps")
 		return gracefulExit(o.noFail, failedSetupOutput)
 	}
 
@@ -242,8 +256,11 @@ func rehearseMain() int {
 	presubmitsWitchChangedCiopConfigs := diffs.GetPresubmitsForCiopConfigs(prConfig.Prow, changedCiopConfigs, logger, affectedJobs)
 	metrics.RecordOpportunity(presubmitsWitchChangedCiopConfigs, "ci-operator-config-change")
 	toRehearse.AddAll(presubmitsWitchChangedCiopConfigs)
+	toRehearseClusterProfiles := diffs.GetPresubmitsForClusterProfiles(prConfig.Prow, changedClusterProfiles, logger)
+	metrics.RecordOpportunity(toRehearseClusterProfiles, "cluster-profile-change")
+	toRehearse.AddAll(toRehearseClusterProfiles)
 
-	rehearsals := rehearse.ConfigureRehearsalJobs(toRehearse, prConfig.CiOperator, prNumber, loggers, o.allowVolumes, changedTemplates)
+	rehearsals := rehearse.ConfigureRehearsalJobs(toRehearse, prConfig.CiOperator, prNumber, loggers, o.allowVolumes, changedTemplates, changedClusterProfiles)
 	metrics.RecordActual(rehearsals)
 	if len(rehearsals) == 0 {
 		logger.Info("no jobs to rehearse have been found")

@@ -2,17 +2,12 @@ package steps
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"strconv"
 
-	imageapi "github.com/openshift/api/image/v1"
 	"github.com/openshift/ci-operator/pkg/api"
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
-	coreapi "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
-	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // PrePublishOutputImageTagStep will ensure that a tag exists
@@ -37,83 +32,12 @@ func (s *prePublishOutputImageTagStep) Inputs(ctx context.Context, dry bool) (ap
 func (s *prePublishOutputImageTagStep) Run(ctx context.Context, dry bool) error {
 	log.Printf("Tagging %s into %s/%s:%s", s.config.From, s.config.To.Namespace, s.config.To.Name, s.tag)
 
-	fromImage := "dry-fake"
-	if !dry {
-		from, err := s.istClient.ImageStreamTags(s.jobSpec.Namespace).Get(fmt.Sprintf("%s:%s", api.PipelineImageStream, s.config.From), meta.GetOptions{})
-		if err != nil {
-			return fmt.Errorf("could not resolve base image: %v", err)
-		}
-		fromImage = from.Image.Name
-	}
-
-	is := &imageapi.ImageStream{
-		ObjectMeta: meta.ObjectMeta{
-			Name:      s.config.To.Name,
-			Namespace: s.config.To.Namespace,
-		},
-	}
-
-	ist := &imageapi.ImageStreamTag{
-		ObjectMeta: meta.ObjectMeta{
-			Name:      fmt.Sprintf("%s:%s", s.config.To.Name, s.tag),
-			Namespace: s.config.To.Namespace,
-		},
-		Tag: &imageapi.TagReference{
-			ReferencePolicy: imageapi.TagReferencePolicy{
-				Type: imageapi.LocalTagReferencePolicy,
-			},
-			From: &coreapi.ObjectReference{
-				Kind:      "ImageStreamImage",
-				Name:      fmt.Sprintf("%s@%s", api.PipelineImageStream, fromImage),
-				Namespace: s.jobSpec.Namespace,
-			},
-		},
-	}
-
-	if dry {
-		isJSON, err := json.MarshalIndent(is, "", "  ")
-		if err != nil {
-			return fmt.Errorf("failed to marshal imagestream: %v", err)
-		}
-		fmt.Printf("%s\n", isJSON)
-
-		istJSON, err := json.MarshalIndent(ist, "", "  ")
-		if err != nil {
-			return fmt.Errorf("failed to marshal imagestreamtag: %v", err)
-		}
-		fmt.Printf("%s\n", istJSON)
-		return nil
-	}
-
-	_, err := s.isClient.ImageStreams(is.Namespace).Get(is.Name, meta.GetOptions{})
-	if errors.IsNotFound(err) {
-		_, err = s.isClient.ImageStreams(is.Namespace).Create(is)
-	}
-	if err != nil {
-		return fmt.Errorf("could not retrieve target imagestream: %v", err)
-	}
-
-	if err = s.istClient.ImageStreamTags(ist.Namespace).Delete(ist.Name, nil); err != nil && !errors.IsNotFound(err) {
-		return fmt.Errorf("could not remove output imagestreamtag: %v", err)
-	}
-	_, err = s.istClient.ImageStreamTags(ist.Namespace).Create(ist)
-	if err != nil {
-		return fmt.Errorf("could not create output imagestreamtag: %v", err)
-	}
-
-	return nil
+	return createImageStreamWithTag(s.isClient, s.istClient, s.jobSpec.Namespace, string(api.PipelineImageStream), string(s.config.From), s.config.To.Namespace, s.config.To.Name, s.tag, dry)
 }
 
 func (s *prePublishOutputImageTagStep) Done() (bool, error) {
 	log.Printf("Checking for existence of %s/%s:%s", s.config.To.Namespace, s.config.To.Name, s.tag)
-	name := fmt.Sprintf("%s:%s", s.config.To.Name, s.tag)
-	if _, err := s.istClient.ImageStreamTags(s.config.To.Namespace).Get(name, meta.GetOptions{}); err != nil {
-		if errors.IsNotFound(err) {
-			return false, nil
-		}
-		return false, fmt.Errorf("could not retrieve output imagestreamtag %s: %v", name, err)
-	}
-	return true, nil
+	return imagesStreamTagExists(s.istClient, s.config.To.Namespace, s.config.To.Name, s.tag)
 }
 
 func (s *prePublishOutputImageTagStep) Requires() []api.StepLink {

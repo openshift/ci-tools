@@ -65,6 +65,7 @@ type sourceStep struct {
 	buildClient        BuildClient
 	imageClient        imageclientset.ImageV1Interface
 	clonerefsSrcClient imageclientset.ImageV1Interface
+	artifactDir        string
 	jobSpec            *api.JobSpec
 }
 
@@ -127,7 +128,7 @@ func (s *sourceStep) Run(ctx context.Context, dry bool) error {
 		coreapi.EnvVar{Name: "CLONEREFS_OPTIONS", Value: string(optionsJSON)},
 	)
 
-	return handleBuild(s.buildClient, build, dry)
+	return handleBuild(s.buildClient, build, dry, s.artifactDir)
 }
 
 func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStreamTagReference, source buildapi.BuildSource, dockerfilePath string, resources api.ResourceConfiguration) *buildapi.Build {
@@ -223,7 +224,7 @@ func buildInputsFromStep(inputs map[string]api.ImageBuildInputs) []buildapi.Imag
 	return refs
 }
 
-func handleBuild(buildClient BuildClient, build *buildapi.Build, dry bool) error {
+func handleBuild(buildClient BuildClient, build *buildapi.Build, dry bool, artifactDir string) error {
 	if dry {
 		buildJSON, err := json.MarshalIndent(build, "", "  ")
 		if err != nil {
@@ -240,8 +241,10 @@ func handleBuild(buildClient BuildClient, build *buildapi.Build, dry bool) error
 				return fmt.Errorf("could not get build %s: %v", build.Name, err)
 			}
 
-			if b.Status.Reason == buildapi.StatusReasonOutOfMemoryKilled {
-				if err := buildClient.Builds(build.Namespace).Delete(build.Name, nil); err != nil && !errors.IsNotFound(err) {
+			if isInfraReason(b.Status.Reason) {
+				log.Printf("Build %s previously failed from an infrastructure error (%s), retrying...\n", b.Name, b.Status.Reason)
+				opts := &meta.DeleteOptions{Preconditions: &meta.Preconditions{UID: &b.UID}}
+				if err := buildClient.Builds(build.Namespace).Delete(build.Name, opts); err != nil && !errors.IsNotFound(err) && !errors.IsConflict(err) {
 					return fmt.Errorf("could not delete build %s: %v", build.Name, err)
 				}
 				if _, err := buildClient.Builds(build.Namespace).Create(build); err != nil && !errors.IsAlreadyExists(err) {
@@ -252,7 +255,38 @@ func handleBuild(buildClient BuildClient, build *buildapi.Build, dry bool) error
 			return fmt.Errorf("could not create build %s: %v", build.Name, err)
 		}
 	}
-	return waitForBuild(buildClient, build.Namespace, build.Name)
+	err := waitForBuild(buildClient, build.Namespace, build.Name)
+	if err == nil && len(artifactDir) > 0 {
+		if err := gatherSuccessfulBuildLog(buildClient, artifactDir, build.Namespace, build.Name); err != nil {
+			// log error but do not fail successful build
+			log.Printf("problem gathering successful build %s logs into artifacts: %v", build.Name, err)
+		}
+	}
+	// this will still be the err from waitForBuild
+	return err
+
+}
+
+func isInfraReason(reason buildapi.StatusReason) bool {
+	infraReasons := []buildapi.StatusReason{
+		buildapi.StatusReasonCannotCreateBuildPod,
+		buildapi.StatusReasonBuildPodDeleted,
+		buildapi.StatusReasonExceededRetryTimeout,
+		buildapi.StatusReasonPushImageToRegistryFailed,
+		buildapi.StatusReasonPullBuilderImageFailed,
+		buildapi.StatusReasonFetchSourceFailed,
+		buildapi.StatusReasonBuildPodExists,
+		buildapi.StatusReasonNoBuildContainerStatus,
+		buildapi.StatusReasonFailedContainer,
+		buildapi.StatusReasonOutOfMemoryKilled,
+		buildapi.StatusReasonCannotRetrieveServiceAccount,
+	}
+	for _, option := range infraReasons {
+		if reason == option {
+			return true
+		}
+	}
+	return false
 }
 
 func waitForBuild(buildClient BuildClient, namespace, name string) error {
@@ -470,13 +504,14 @@ func (s *sourceStep) Description() string {
 	return fmt.Sprintf("Clone the correct source code into an image and tag it as %s", s.config.To)
 }
 
-func SourceStep(config api.SourceStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, clonerefsSrcClient imageclientset.ImageV1Interface, imageClient imageclientset.ImageV1Interface, jobSpec *api.JobSpec) api.Step {
+func SourceStep(config api.SourceStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, clonerefsSrcClient imageclientset.ImageV1Interface, imageClient imageclientset.ImageV1Interface, artifactDir string, jobSpec *api.JobSpec) api.Step {
 	return &sourceStep{
 		config:             config,
 		resources:          resources,
 		buildClient:        buildClient,
 		imageClient:        imageClient,
 		clonerefsSrcClient: clonerefsSrcClient,
+		artifactDir:        artifactDir,
 		jobSpec:            jobSpec,
 	}
 }

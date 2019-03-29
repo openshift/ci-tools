@@ -242,7 +242,9 @@ func BuildPartialGraph(steps []Step, names []string) ([]*StepNode, error) {
 
 	var required []StepLink
 	candidates := make([]bool, len(steps))
+	var allNames []string
 	for i, step := range steps {
+		allNames = append(allNames, step.Name())
 		for j, name := range names {
 			if name != step.Name() {
 				continue
@@ -254,7 +256,7 @@ func BuildPartialGraph(steps []Step, names []string) ([]*StepNode, error) {
 		}
 	}
 	if len(names) > 0 {
-		return nil, fmt.Errorf("the following names were not found in the config or were duplicates: %s", strings.Join(names, ", "))
+		return nil, fmt.Errorf("the following names were not found in the config or were duplicates: %s (from %s)", strings.Join(names, ", "), strings.Join(allNames, ", "))
 	}
 
 	// identify all other steps that provide any links required by the current set

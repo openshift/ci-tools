@@ -133,12 +133,7 @@ output, with parallel execution of steps leading to interwoven log output:
 2018/10/08 05:29:15 Building machine-config-operator
 2018/10/08 05:29:15 Building machine-config-controller
 2018/10/08 05:31:47 Build machine-config-server succeeded after 2m28s
-2018/10/08 05:31:47 Tagging machine-config-server into stable
 2018/10/08 05:31:56 Build machine-config-operator succeeded after 2m37s
-2018/10/08 05:31:56 Tagging machine-config-operator into stable
 2018/10/08 05:31:56 Build machine-config-daemon succeeded after 2m37s
-2018/10/08 05:31:56 Tagging machine-config-daemon into stable
 2018/10/08 05:32:00 Build machine-config-controller succeeded after 2m41s
-2018/10/08 05:32:00 Tagging machine-config-controller into stable
-2018/10/08 05:32:00 All images ready
 ```

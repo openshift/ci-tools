@@ -365,11 +365,11 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:7829a61c97cb22bedf5858a94c04e17d94f79293743879a78df746b594c692b6"
+  digest = "1:b4f6b7b10232f632ca6f33c285919897c52fdb3ab36d254f3bf0b4b75e798f5b"
   name = "github.com/openshift/ci-operator"
   packages = ["pkg/api"]
   pruneopts = ""
-  revision = "03fd080a27afe9918509a42ee3f797c4e1b1cb31"
+  revision = "cf39dd09238979bf2146b16befccb72be0d479dc"
 
 [[projects]]
   digest = "1:7da30d36edabf50fb5bc07f759991589c5ca72e75b3dd50fa58c57d94e96fd15"
@@ -1024,16 +1024,20 @@
     "github.com/sirupsen/logrus/hooks/test",
     "k8s.io/api/core/v1",
     "k8s.io/apimachinery/pkg/api/equality",
+    "k8s.io/apimachinery/pkg/api/errors",
     "k8s.io/apimachinery/pkg/api/resource",
     "k8s.io/apimachinery/pkg/apis/meta/v1",
+    "k8s.io/apimachinery/pkg/fields",
     "k8s.io/apimachinery/pkg/labels",
     "k8s.io/apimachinery/pkg/runtime",
+    "k8s.io/apimachinery/pkg/runtime/serializer/json",
     "k8s.io/apimachinery/pkg/selection",
     "k8s.io/apimachinery/pkg/util/diff",
     "k8s.io/apimachinery/pkg/util/errors",
     "k8s.io/apimachinery/pkg/util/sets",
     "k8s.io/apimachinery/pkg/watch",
     "k8s.io/client-go/kubernetes/fake",
+    "k8s.io/client-go/kubernetes/scheme",
     "k8s.io/client-go/kubernetes/typed/core/v1",
     "k8s.io/client-go/rest",
     "k8s.io/client-go/testing",

@@ -145,6 +145,9 @@ func generatePodSpecTemplate(info *config.Info, release string, test *cioperator
 	} else if conf := test.OpenshiftInstallerSrcClusterTestConfiguration; conf != nil {
 		template = "cluster-launch-installer-src"
 		clusterProfile = conf.ClusterProfile
+	} else if conf := test.OpenshiftInstallerUPIClusterTestConfiguration; conf != nil {
+		template = "cluster-launch-installer-upi-e2e"
+		clusterProfile = conf.ClusterProfile
 	}
 	var targetCloud string
 	switch clusterProfile {
@@ -156,6 +159,8 @@ func generatePodSpecTemplate(info *config.Info, release string, test *cioperator
 		targetCloud = "gcp"
 	case cioperatorapi.ClusterProfileOpenStack:
 		targetCloud = "openstack"
+	case cioperatorapi.ClusterProfileVSphere:
+		targetCloud = "vsphere"
 	}
 	clusterProfilePath := fmt.Sprintf("/usr/local/%s-cluster-profile", test.As)
 	templatePath := fmt.Sprintf("/usr/local/%s", test.As)
@@ -177,7 +182,7 @@ func generatePodSpecTemplate(info *config.Info, release string, test *cioperator
 		},
 	}
 	switch clusterProfile {
-	case cioperatorapi.ClusterProfileAWS, cioperatorapi.ClusterProfileOpenStack:
+	case cioperatorapi.ClusterProfileAWS, cioperatorapi.ClusterProfileOpenStack, cioperatorapi.ClusterProfileVSphere:
 	default:
 		clusterProfileVolume.VolumeSource.Projected.Sources = append(clusterProfileVolume.VolumeSource.Projected.Sources, kubeapi.VolumeProjection{
 			ConfigMap: &kubeapi.ConfigMapProjection{

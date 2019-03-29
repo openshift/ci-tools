@@ -354,6 +354,10 @@ openshift-ansible
 `openshift_installer_src` is a test that provisions a cluster using
 `openshift-installer` and executes a test in the `src` image.
 
+## `tests.openshift_installer_upi`
+`openshift_installer_upi` is a test that provisions machines using `installer-upi` image
+and installs the cluster using UPI flow.
+
 ## `tests.*.cluster_profile`
 `cluster_profile` chooses the profile used as input to the installer. This
 field is only valid in tests that provision a cluster (`openshift_ansible`,

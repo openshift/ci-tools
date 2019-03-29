@@ -249,6 +249,10 @@ tests:
   commands: sleep 7200 & wait
   openshift_installer:
     cluster_profile: aws
+- as: e2e-upi-aws
+  commands: TEST_SUITE=openshift/conformance/serial run-tests
+  openshift_installer_upi:
+    cluster_profile: aws
 `
 
 var parsedConfig = &api.ReleaseBuildConfiguration{
@@ -488,6 +492,12 @@ var parsedConfig = &api.ReleaseBuildConfiguration{
 		As:       "launch-aws",
 		Commands: `sleep 7200 & wait`,
 		OpenshiftInstallerClusterTestConfiguration: &api.OpenshiftInstallerClusterTestConfiguration{
+			ClusterTestConfiguration: api.ClusterTestConfiguration{ClusterProfile: "aws"},
+		},
+	}, {
+		As:       "e2e-upi-aws",
+		Commands: `TEST_SUITE=openshift/conformance/serial run-tests`,
+		OpenshiftInstallerUPIClusterTestConfiguration: &api.OpenshiftInstallerUPIClusterTestConfiguration{
 			ClusterTestConfiguration: api.ClusterTestConfiguration{ClusterProfile: "aws"},
 		},
 	}},

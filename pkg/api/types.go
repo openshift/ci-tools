@@ -345,7 +345,8 @@ const (
 	ClusterProfileGCPLoggingJournald                = "gcp-logging-journald"
 	ClusterProfileGCPLoggingJSONFile                = "gcp-logging-json-file"
 	ClusterProfileGCPLoggingCRIO                    = "gcp-logging-crio"
-	ClusterProfileOpenStack          ClusterProfile = "openstack"
+	ClusterProfileOpenStack                         = "openstack"
+	ClusterProfileVSphere                           = "vsphere"
 )
 
 // ClusterTestConfiguration describes a test that provisions

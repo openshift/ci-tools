@@ -369,6 +369,7 @@ field is only valid in tests that provision a cluster (`openshift_ansible`,
 - `gcp`
 - `gcp-ha`
 - `gcp-crio`
+- `vsphere`
 
 These are a subset of the profiles found in the
 [`release` repository](https://github.com/openshift/release/tree/master/cluster/test-deploy).

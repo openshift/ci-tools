@@ -16,7 +16,7 @@ func (config *ReleaseBuildConfiguration) Validate() error {
 	var validationErrors []error
 
 	validationErrors = append(validationErrors, validateReleaseBuildConfiguration(config)...)
-	validationErrors = append(validationErrors, validateBuildRootImageConfiguration("build_root", config.InputConfiguration.BuildRootImage)...)
+	validationErrors = append(validationErrors, validateBuildRootImageConfiguration("build_root", config.InputConfiguration.BuildRootImage, len(config.Images) > 0)...)
 	validationErrors = append(validationErrors, validateTestStepConfiguration("tests", config.Tests, config.ReleaseTagConfiguration)...)
 
 	if config.InputConfiguration.BaseImages != nil {
@@ -73,9 +73,12 @@ func validatePromotionWithTagSpec(promotion *PromotionConfiguration, tagSpec *Re
 	return validationErrors
 }
 
-func validateBuildRootImageConfiguration(fieldRoot string, input *BuildRootImageConfiguration) []error {
+func validateBuildRootImageConfiguration(fieldRoot string, input *BuildRootImageConfiguration, hasImages bool) []error {
 	if input == nil {
-		return []error{errors.New("'build_root' is required and must have image_stream_tag or project_image")}
+		if hasImages {
+			return []error{errors.New("when 'images' are specified 'build_root' is required and must have image_stream_tag or project_image")}
+		}
+		return nil
 	}
 
 	if input.ProjectImageBuild != nil && input.ImageStreamTagReference != nil {
@@ -246,6 +249,10 @@ func validateTestConfigurationType(fieldRoot string, test TestStepConfiguration,
 		validationErrors = append(validationErrors, validateClusterProfile(fmt.Sprintf("%s", fieldRoot), testConfig.ClusterProfile)...)
 	}
 	if testConfig := test.OpenshiftInstallerSrcClusterTestConfiguration; testConfig != nil {
+		typeCount++
+		validationErrors = append(validationErrors, validateClusterProfile(fmt.Sprintf("%s", fieldRoot), testConfig.ClusterProfile)...)
+	}
+	if testConfig := test.OpenshiftInstallerUPIClusterTestConfiguration; testConfig != nil {
 		typeCount++
 		validationErrors = append(validationErrors, validateClusterProfile(fmt.Sprintf("%s", fieldRoot), testConfig.ClusterProfile)...)
 	}

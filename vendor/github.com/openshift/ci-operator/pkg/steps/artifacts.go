@@ -28,6 +28,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
 
+	buildapi "github.com/openshift/api/build/v1"
 	templateapi "github.com/openshift/api/template/v1"
 
 	"github.com/openshift/ci-operator/pkg/junit"
@@ -691,6 +692,35 @@ func gatherContainerLogsOutput(podClient PodClient, artifactDir, namespace, podN
 		}
 	}
 	return kerrors.NewAggregate(validationErrors)
+}
+
+// for gathering successful build logs to the artifacts, there is no way to augment the pod spec
+// created by the build controller to add the artifacts container; this method cherry picks elements
+// from downloadArtifacts and gatherContainerLogsOutput and munges them in conjunction with the build
+// api logging capabilities; also, without needing to inject an artifacts container, some of the complexities
+// around download/copy from the artifacts container's volume mount and multiple pods are avoided.
+func gatherSuccessfulBuildLog(buildClient BuildClient, artifactDir, namespace, buildName string) error {
+	// adding a subdir to the artifactDir path similar to downloadArtifacts adding the container-logs subdir
+	dir := filepath.Join(artifactDir, "build-logs")
+	if err := os.MkdirAll(dir, 0750); err != nil {
+		return fmt.Errorf("unable to create directory %s: %v", dir, err)
+	}
+	file, err := os.Create(fmt.Sprintf("%s/%s.log.gz", dir, buildName))
+	if err != nil {
+		return fmt.Errorf("Cannot create file: %v", err)
+	}
+	defer file.Close()
+	w := gzip.NewWriter(file)
+	defer w.Close()
+	if rc, err := buildClient.Logs(namespace, buildName, &buildapi.BuildLogOptions{}); err == nil {
+		defer rc.Close()
+		if _, err := io.Copy(w, rc); err != nil {
+			return fmt.Errorf("error: Unable to copy log output from pod container %s: %v", buildName, err)
+		}
+	} else {
+		return fmt.Errorf("error: Unable to retrieve logs for build %s: %v", buildName, err)
+	}
+	return nil
 }
 
 func getContainerStatuses(pod *coreapi.Pod) []coreapi.ContainerStatus {

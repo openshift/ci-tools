@@ -16,6 +16,7 @@ type gitSourceStep struct {
 	resources   api.ResourceConfiguration
 	imageClient imageclientset.ImageV1Interface
 	buildClient BuildClient
+	artifactDir string
 	jobSpec     *api.JobSpec
 }
 
@@ -35,7 +36,7 @@ func (s *gitSourceStep) Run(ctx context.Context, dry bool) error {
 			URI: fmt.Sprintf("https://github.com/%s/%s.git", s.jobSpec.Refs.Org, s.jobSpec.Refs.Repo),
 			Ref: s.jobSpec.Refs.BaseRef,
 		},
-	}, s.config.DockerfilePath, s.resources), dry)
+	}, s.config.DockerfilePath, s.resources), dry, s.artifactDir)
 }
 
 func (s *gitSourceStep) Done() (bool, error) {
@@ -59,12 +60,13 @@ func (s *gitSourceStep) Provides() (api.ParameterMap, api.StepLink) {
 }
 
 // GitSourceStep returns gitSourceStep that holds all the required information to create a build from a git source.
-func GitSourceStep(config api.ProjectDirectoryImageBuildInputs, resources api.ResourceConfiguration, buildClient BuildClient, imageClient imageclientset.ImageV1Interface, jobSpec *api.JobSpec) api.Step {
+func GitSourceStep(config api.ProjectDirectoryImageBuildInputs, resources api.ResourceConfiguration, buildClient BuildClient, imageClient imageclientset.ImageV1Interface, artifactDir string, jobSpec *api.JobSpec) api.Step {
 	return &gitSourceStep{
 		config:      config,
 		resources:   resources,
 		buildClient: buildClient,
 		imageClient: imageClient,
+		artifactDir: artifactDir,
 		jobSpec:     jobSpec,
 	}
 }

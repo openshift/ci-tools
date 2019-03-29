@@ -294,6 +294,7 @@ type TestStepConfiguration struct {
 	OpenshiftAnsibleUpgradeClusterTestConfiguration *OpenshiftAnsibleUpgradeClusterTestConfiguration `json:"openshift_ansible_upgrade,omitempty"`
 	OpenshiftInstallerClusterTestConfiguration      *OpenshiftInstallerClusterTestConfiguration      `json:"openshift_installer,omitempty"`
 	OpenshiftInstallerSrcClusterTestConfiguration   *OpenshiftInstallerSrcClusterTestConfiguration   `json:"openshift_installer_src,omitempty"`
+	OpenshiftInstallerUPIClusterTestConfiguration   *OpenshiftInstallerUPIClusterTestConfiguration   `json:"openshift_installer_upi,omitempty"`
 }
 
 // Secret describes a secret to be mounted inside a test
@@ -406,6 +407,13 @@ type OpenshiftInstallerClusterTestConfiguration struct {
 // test that provisions a cluster using openshift-installer and
 // executes a command in the `src` image.
 type OpenshiftInstallerSrcClusterTestConfiguration struct {
+	ClusterTestConfiguration `json:",inline"`
+}
+
+// OpenshiftInstallerUPIClusterTestConfiguration describes a
+// test that provisions machines using installer-upi image and
+// installs the cluster using UPI flow.
+type OpenshiftInstallerUPIClusterTestConfiguration struct {
 	ClusterTestConfiguration `json:",inline"`
 }
 

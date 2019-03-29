@@ -136,6 +136,14 @@ func FromConfig(
 			if _, ok := requiredNames[string(rawStep.OutputImageTagStepConfiguration.From)]; ok || !rawStep.OutputImageTagStepConfiguration.Optional {
 				stepLinks = append(stepLinks, step.Creates()...)
 			}
+		} else if rawStep.PrePublishOutputImageTagStepConfiguration != nil {
+			if len(jobSpec.Refs.Pulls) == 1 {
+				step = steps.PrePublishOutputImageTagStep(*rawStep.PrePublishOutputImageTagStepConfiguration, imageClient, imageClient, jobSpec)
+			} else if len(jobSpec.Refs.Pulls) > 1 {
+				log.Printf("pre_publish_output_images_step configured, but job has more than 1 pull-request, skipping")
+			} else {
+				log.Printf("pre_publish_output_images_step configured, but job has no pull-requests, skipping")
+			}
 		} else if rawStep.ReleaseImagesTagStepConfiguration != nil {
 			srcClient, err := anonymousClusterImageStreamClient(imageClient, clusterConfig, rawStep.ReleaseImagesTagStepConfiguration.Cluster)
 			if err != nil {
@@ -163,6 +171,12 @@ func FromConfig(
 
 		} else if rawStep.TestStepConfiguration != nil {
 			step = steps.TestStep(*rawStep.TestStepConfiguration, config.Resources, podClient, artifactDir, jobSpec)
+		} else {
+			return nil, nil, fmt.Errorf("unhandled rawStep %#v", rawStep)
+		}
+
+		if step == nil {
+			continue
 		}
 
 		step, ok := checkForFullyQualifiedStep(step, params)

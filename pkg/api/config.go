@@ -39,6 +39,12 @@ func (config *ReleaseBuildConfiguration) Validate() error {
 		validationErrors = append(validationErrors, validatePromotionConfiguration("promotion", *config.PromotionConfiguration)...)
 	}
 
+	for i, rawStep := range config.RawSteps {
+		if rawStep.PrePublishOutputImageTagStepConfiguration != nil {
+			validationErrors = append(validationErrors, validatePrepublishConfiguration(fmt.Sprintf("raw_steps[%d]", i), rawStep.PrePublishOutputImageTagStepConfiguration)...)
+		}
+	}
+
 	var lines []string
 	for _, err := range validationErrors {
 		if err == nil {
@@ -285,6 +291,23 @@ func validateReleaseBuildConfiguration(input *ReleaseBuildConfiguration) []error
 	}
 
 	validationErrors = append(validationErrors, validateResources("resources", input.Resources)...)
+	return validationErrors
+}
+
+func validatePrepublishConfiguration(fieldRoot string, input *PrePublishOutputImageTagStepConfiguration) []error {
+	var validationErrors []error
+
+	if len(input.From) == 0 {
+		validationErrors = append(validationErrors, fmt.Errorf("%s.from: no from image defined", fieldRoot))
+	}
+
+	if len(input.To.Namespace) == 0 {
+		validationErrors = append(validationErrors, fmt.Errorf("%s.to: no namespace defined", fieldRoot))
+	}
+
+	if len(input.To.Name) == 0 {
+		validationErrors = append(validationErrors, fmt.Errorf("%s.to: no name defined", fieldRoot))
+	}
 	return validationErrors
 }
 

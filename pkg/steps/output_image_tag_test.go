@@ -43,6 +43,33 @@ func TestOutputImageStep(t *testing.T) {
 		inputs: inputsExpectation{values: nil, err: false},
 	}
 
+	pipelineRoot := &imagev1.ImageStreamTag{
+		ObjectMeta: meta.ObjectMeta{Name: "pipeline:root", Namespace: jobspec.Namespace},
+		Image:      imagev1.Image{ObjectMeta: meta.ObjectMeta{Name: "fromImageName"}},
+	}
+
+	outputImageStream := &imagev1.ImageStream{
+		ObjectMeta: meta.ObjectMeta{Name: config.To.Name, Namespace: config.To.Namespace},
+		Status:     imagev1.ImageStreamStatus{PublicDockerImageRepository: "uri://somewhere"},
+	}
+	outputImageStreamTag := &imagev1.ImageStreamTag{
+		ObjectMeta: meta.ObjectMeta{
+			Name:      "configToName:configToTag",
+			Namespace: "configToNamespace",
+		},
+		Tag: &imagev1.TagReference{
+			From: &corev1.ObjectReference{
+				Kind:      "ImageStreamImage",
+				Namespace: "job-namespace",
+				Name:      "pipeline@fromImageName",
+			},
+			ReferencePolicy: imagev1.TagReferencePolicy{Type: imagev1.LocalTagReferencePolicy},
+		},
+	}
+
+	outputImageStreamTag2 := outputImageStreamTag.DeepCopy()
+	outputImageStreamTag2.Tag.From.Name = "pipeline@incorrect-output-name"
+
 	tests := []struct {
 		name            string
 		execSpec        executionExpectation
@@ -55,32 +82,53 @@ func TestOutputImageStep(t *testing.T) {
 		{
 			name: "image stream exists and creates new image stream",
 			imageStreams: []*imagev1.ImageStream{
-				&imagev1.ImageStream{
-					ObjectMeta: meta.ObjectMeta{Name: config.To.Name, Namespace: config.To.Namespace},
-					Status:     imagev1.ImageStreamStatus{PublicDockerImageRepository: "uri://somewhere"},
-				},
+				outputImageStream,
 			},
 			imageStreamTags: []*imagev1.ImageStreamTag{
-				&imagev1.ImageStreamTag{
-					ObjectMeta: meta.ObjectMeta{Name: "pipeline:root", Namespace: jobspec.Namespace},
-					Image:      imagev1.Image{ObjectMeta: meta.ObjectMeta{Name: "fromImageName"}},
-				},
+				pipelineRoot,
 			},
-			expectedImageStreamTag: &imagev1.ImageStreamTag{
-				ObjectMeta: meta.ObjectMeta{
-					Name:      "configToName:configToTag",
-					Namespace: "configToNamespace",
-				},
-				Tag: &imagev1.TagReference{
-					From: &corev1.ObjectReference{
-						Kind:      "ImageStreamImage",
-						Namespace: "job-namespace",
-						Name:      "pipeline@fromImageName",
-					},
-					ReferencePolicy: imagev1.TagReferencePolicy{Type: imagev1.LocalTagReferencePolicy},
-				},
-			},
+			expectedImageStreamTag: outputImageStreamTag,
 			execSpecification: executionExpectation{
+				prerun:   doneExpectation{value: false, err: false},
+				runError: false,
+				postrun:  doneExpectation{value: true, err: false},
+			},
+		},
+		{
+			name: "image stream and desired image stream tag exists",
+			imageStreams: []*imagev1.ImageStream{
+				outputImageStream,
+			},
+			imageStreamTags: []*imagev1.ImageStreamTag{
+				pipelineRoot,
+				outputImageStreamTag,
+			},
+			expectedImageStreamTag: outputImageStreamTag,
+			execSpecification: executionExpectation{
+				// done is true prerun because the imageStreamTag is already
+				// created in this test case, and it matches the desired output
+				prerun:   doneExpectation{value: true, err: false},
+				runError: false,
+				postrun:  doneExpectation{value: true, err: false},
+			},
+		},
+		{
+			name: "image stream and image stream tag already exist but image stream tag is replaced to desired state",
+			imageStreams: []*imagev1.ImageStream{
+				outputImageStream,
+			},
+			imageStreamTags: []*imagev1.ImageStreamTag{
+				pipelineRoot,
+				// a tag already exists with the name we intend to create, so
+				// this should get deleted and recreated with the expected
+				// output tag
+				outputImageStreamTag2,
+			},
+			expectedImageStreamTag: outputImageStreamTag,
+			execSpecification: executionExpectation{
+				// prerun done should be false because a tag with the name of
+				// our output exist, but it doesn't match what our desired tag
+				// should look like
 				prerun:   doneExpectation{value: false, err: false},
 				runError: false,
 				postrun:  doneExpectation{value: true, err: false},

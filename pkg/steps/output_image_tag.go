@@ -55,12 +55,23 @@ func (s *outputImageTagStep) Run(ctx context.Context, dry bool) error {
 		return nil
 	}
 
-	if err := s.istClient.ImageStreamTags(toNamespace).Delete(ist.Name, nil); err != nil && !errors.IsNotFound(err) {
-		return fmt.Errorf("could not remove output imagestreamtag: %v", err)
-	}
-	_, err := s.istClient.ImageStreamTags(toNamespace).Create(ist)
-	if err != nil && !errors.IsAlreadyExists(err) {
-		return fmt.Errorf("could not create output imagestreamtag: %v", err)
+	// Create if not exists, update if it does
+	if _, err := s.istClient.ImageStreamTags(toNamespace).Create(ist); err != nil {
+		if errors.IsAlreadyExists(err) {
+			existingIst, err := s.istClient.ImageStreamTags(ist.Namespace).Get(ist.Name, meta.GetOptions{})
+			if err != nil {
+				return fmt.Errorf("could not get existing output imagestreamtag for update: %v", err)
+			}
+			// We don't care about the existing imagestreamtag's state, we just
+			// want it to look like the new one, so we only copy the
+			// ResourceVersion so we can update it.
+			ist.ResourceVersion = existingIst.ResourceVersion
+			if _, err = s.istClient.ImageStreamTags(toNamespace).Update(ist); err != nil {
+				return fmt.Errorf("could not update output imagestreamtag: %v", err)
+			}
+		} else {
+			return fmt.Errorf("could not create output imagestreamtag: %v", err)
+		}
 	}
 	return nil
 }

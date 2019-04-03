@@ -14,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/util/retry"
 )
 
 // outputImageTagStep will ensure that a tag exists
@@ -58,15 +59,21 @@ func (s *outputImageTagStep) Run(ctx context.Context, dry bool) error {
 	// Create if not exists, update if it does
 	if _, err := s.istClient.ImageStreamTags(toNamespace).Create(ist); err != nil {
 		if errors.IsAlreadyExists(err) {
-			existingIst, err := s.istClient.ImageStreamTags(ist.Namespace).Get(ist.Name, meta.GetOptions{})
+			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				existingIst, err := s.istClient.ImageStreamTags(ist.Namespace).Get(ist.Name, meta.GetOptions{})
+				if err != nil {
+					return err
+				}
+				// We don't care about the existing imagestreamtag's state, we just
+				// want it to look like the new one, so we only copy the
+				// ResourceVersion so we can update it.
+				ist.ResourceVersion = existingIst.ResourceVersion
+				if _, err = s.istClient.ImageStreamTags(toNamespace).Update(ist); err != nil {
+					return err
+				}
+				return nil
+			})
 			if err != nil {
-				return fmt.Errorf("could not get existing output imagestreamtag for update: %v", err)
-			}
-			// We don't care about the existing imagestreamtag's state, we just
-			// want it to look like the new one, so we only copy the
-			// ResourceVersion so we can update it.
-			ist.ResourceVersion = existingIst.ResourceVersion
-			if _, err = s.istClient.ImageStreamTags(toNamespace).Update(ist); err != nil {
 				return fmt.Errorf("could not update output imagestreamtag: %v", err)
 			}
 		} else {

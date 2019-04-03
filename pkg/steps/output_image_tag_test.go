@@ -25,38 +25,8 @@ func TestOutputImageStep(t *testing.T) {
 			Tag:       "configToTag",
 		},
 	}
-
-	fakecs := ciopTestingClient{
-		kubecs:  nil,
-		imagecs: fakeimageclientset.NewSimpleClientset(),
-		t:       t,
-	}
-
-	client := fakecs.imagecs.ImageV1()
-
-	is := &imagev1.ImageStream{
-		ObjectMeta: meta.ObjectMeta{Name: config.To.Name},
-		Status:     imagev1.ImageStreamStatus{PublicDockerImageRepository: "uri://somewhere"},
-	}
-
-	if _, err := client.ImageStreams(config.To.Namespace).Create(is); err != nil {
-		t.Errorf("Could not set up testing ImageStream: %v", err)
-	}
-
 	jobspec := &api.JobSpec{Namespace: "job-namespace"}
-
-	ist := &imagev1.ImageStreamTag{
-		ObjectMeta: meta.ObjectMeta{Name: "pipeline:root"},
-		Image:      imagev1.Image{ObjectMeta: meta.ObjectMeta{Name: "fromImageName"}},
-	}
-
-	if _, err := client.ImageStreamTags(jobspec.Namespace).Create(ist); err != nil {
-		t.Errorf("Could not set up testing ImageStreamTag: %v", err)
-	}
-
-	oits := OutputImageTagStep(config, client, client, jobspec)
-
-	specification := stepExpectation{
+	stepSpec := stepExpectation{
 		name: "configToAs",
 		requires: []api.StepLink{
 			api.InternalImageLink(config.From),
@@ -73,16 +43,16 @@ func TestOutputImageStep(t *testing.T) {
 		inputs: inputsExpectation{values: nil, err: false},
 	}
 
-	execSpecification := executionExpectation{
-		prerun:   doneExpectation{value: false, err: false},
-		runError: false,
-		postrun:  doneExpectation{value: true, err: false},
+	pipelineRoot := &imagev1.ImageStreamTag{
+		ObjectMeta: meta.ObjectMeta{Name: "pipeline:root", Namespace: jobspec.Namespace},
+		Image:      imagev1.Image{ObjectMeta: meta.ObjectMeta{Name: "fromImageName"}},
 	}
 
-	examineStep(t, oits, specification)
-	executeStep(t, oits, execSpecification, nil)
-
-	expectedImageStreamTag := &imagev1.ImageStreamTag{
+	outputImageStream := &imagev1.ImageStream{
+		ObjectMeta: meta.ObjectMeta{Name: config.To.Name, Namespace: config.To.Namespace},
+		Status:     imagev1.ImageStreamStatus{PublicDockerImageRepository: "uri://somewhere"},
+	}
+	outputImageStreamTag := &imagev1.ImageStreamTag{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      "configToName:configToTag",
 			Namespace: "configToNamespace",
@@ -97,12 +67,111 @@ func TestOutputImageStep(t *testing.T) {
 		},
 	}
 
-	targetImageStreamTag, err := client.ImageStreamTags("configToNamespace").Get("configToName:configToTag", meta.GetOptions{})
-	if err != nil {
-		t.Errorf("Failed to get ImageStreamTag 'configToName:configToTag' after step execution: %v", err)
+	outputImageStreamTag2 := outputImageStreamTag.DeepCopy()
+	outputImageStreamTag2.Tag.From.Name = "pipeline@incorrect-output-name"
+
+	tests := []struct {
+		name            string
+		execSpec        executionExpectation
+		imageStreams    []*imagev1.ImageStream
+		imageStreamTags []*imagev1.ImageStreamTag
+
+		execSpecification      executionExpectation
+		expectedImageStreamTag *imagev1.ImageStreamTag
+	}{
+		{
+			name: "image stream exists and creates new image stream",
+			imageStreams: []*imagev1.ImageStream{
+				outputImageStream,
+			},
+			imageStreamTags: []*imagev1.ImageStreamTag{
+				pipelineRoot,
+			},
+			expectedImageStreamTag: outputImageStreamTag,
+			execSpecification: executionExpectation{
+				prerun:   doneExpectation{value: false, err: false},
+				runError: false,
+				postrun:  doneExpectation{value: true, err: false},
+			},
+		},
+		{
+			name: "image stream and desired image stream tag exists",
+			imageStreams: []*imagev1.ImageStream{
+				outputImageStream,
+			},
+			imageStreamTags: []*imagev1.ImageStreamTag{
+				pipelineRoot,
+				outputImageStreamTag,
+			},
+			expectedImageStreamTag: outputImageStreamTag,
+			execSpecification: executionExpectation{
+				// done is true prerun because the imageStreamTag is already
+				// created in this test case, and it matches the desired output
+				prerun:   doneExpectation{value: true, err: false},
+				runError: false,
+				postrun:  doneExpectation{value: true, err: false},
+			},
+		},
+		{
+			name: "image stream and image stream tag already exist but image stream tag is replaced to desired state",
+			imageStreams: []*imagev1.ImageStream{
+				outputImageStream,
+			},
+			imageStreamTags: []*imagev1.ImageStreamTag{
+				pipelineRoot,
+				// a tag already exists with the name we intend to create, so
+				// this should get deleted and recreated with the expected
+				// output tag
+				outputImageStreamTag2,
+			},
+			expectedImageStreamTag: outputImageStreamTag,
+			execSpecification: executionExpectation{
+				// prerun done should be false because a tag with the name of
+				// our output exist, but it doesn't match what our desired tag
+				// should look like
+				prerun:   doneExpectation{value: false, err: false},
+				runError: false,
+				postrun:  doneExpectation{value: true, err: false},
+			},
+		},
 	}
 
-	if !equality.Semantic.DeepEqual(expectedImageStreamTag, targetImageStreamTag) {
-		t.Errorf("Different ImageStreamTag 'pipeline:TO' after step execution:\n%s", diff.ObjectReflectDiff(expectedImageStreamTag, targetImageStreamTag))
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			fakecs := ciopTestingClient{
+				kubecs:  nil,
+				imagecs: fakeimageclientset.NewSimpleClientset(),
+				t:       t,
+			}
+
+			client := fakecs.imagecs.ImageV1()
+
+			for _, is := range tt.imageStreams {
+				if _, err := client.ImageStreams(is.Namespace).Create(is); err != nil {
+					t.Errorf("Could not set up testing ImageStream: %v", err)
+				}
+			}
+
+			for _, ist := range tt.imageStreamTags {
+				if _, err := client.ImageStreamTags(ist.Namespace).Create(ist); err != nil {
+					t.Errorf("Could not set up testing ImageStreamTag: %v", err)
+				}
+			}
+
+			oits := OutputImageTagStep(config, client, client, jobspec)
+
+			examineStep(t, oits, stepSpec)
+			executeStep(t, oits, tt.execSpecification, nil)
+
+			targetImageStreamTag, err := client.ImageStreamTags(tt.expectedImageStreamTag.Namespace).Get(tt.expectedImageStreamTag.Name, meta.GetOptions{})
+			if err != nil {
+				t.Errorf("Failed to get ImageStreamTag '%s/%s' after step execution: %v", tt.expectedImageStreamTag.Namespace, tt.expectedImageStreamTag, err)
+			}
+
+			if !equality.Semantic.DeepEqual(tt.expectedImageStreamTag, targetImageStreamTag) {
+				t.Errorf("Different ImageStreamTag 'pipeline:TO' after step execution:\n%s", diff.ObjectReflectDiff(tt.expectedImageStreamTag, targetImageStreamTag))
+			}
+		})
 	}
 }

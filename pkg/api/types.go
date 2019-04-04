@@ -216,6 +216,13 @@ type PromotionConfiguration struct {
 	// name. If you specify a tag that does not exist as the source
 	// the destination tag will not be created.
 	AdditionalImages map[string]string `json:"additional_images,omitempty"`
+
+	// Disabled will no-op succeed instead of running the actual
+	// promotion step. This is useful when two branches need to
+	// promote to the same output imagestream on a cut-over but
+	// never concurrently, and you want to have promotion config
+	// in the ci-operator configuration files all the time.
+	Disabled bool `json:"disabled,omitempty"`
 }
 
 // StepConfiguration holds one step configuration.

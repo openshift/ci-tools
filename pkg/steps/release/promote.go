@@ -49,6 +49,11 @@ var promotionRetry = wait.Backoff{
 }
 
 func (s *promotionStep) Run(ctx context.Context, dry bool) error {
+	if s.config.Disabled {
+		log.Println("Promotion is disabled, skipping...")
+		return nil
+	}
+
 	tags := make(map[string]string)
 	names := sets.NewString()
 	for _, tag := range s.tags {

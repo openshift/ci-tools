@@ -1,0 +1,5 @@
+config_updater:
+  maps:
+    cluster/test-deploy/test-profile/*.yaml:
+      name: cluster-profile-test-profile
+      namespace: test-namespace

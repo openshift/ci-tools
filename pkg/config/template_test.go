@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strconv"
 	"testing"
 
@@ -19,6 +20,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/client-go/kubernetes/fake"
 	coretesting "k8s.io/client-go/testing"
+
+	prowplugins "k8s.io/test-infra/prow/plugins"
 )
 
 const templatesPath = "../../test/pj-rehearse-integration/master/ci-operator/templates"
@@ -63,7 +66,7 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 		return true, nil, nil
 	})
 	client := cs.CoreV1().ConfigMaps(ns)
-	cmManager := NewTemplateCMManager(client, 1234, logrus.NewEntry(logrus.New()))
+	cmManager := NewTemplateCMManager(client, prowplugins.ConfigUpdater{}, 1234, "not_used", logrus.NewEntry(logrus.New()))
 	if err := cmManager.CreateCMTemplates(ciTemplates); err != nil {
 		t.Fatalf("CreateCMTemplates() returned error: %v", err)
 	}
@@ -101,45 +104,6 @@ func getBaseCiTemplates(t *testing.T) CiTemplates {
 	return CiTemplates{"test-template.yaml": contents}
 }
 
-func TestGenClusterProfileCM(t *testing.T) {
-	dir, err := ioutil.TempDir("", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
-	profile := ClusterProfile{
-		Name:     "test-profile",
-		TreeHash: "abcdef0123456789abcdef0123456789abcdef01",
-	}
-	profilePath := filepath.Join(dir, profile.Name)
-	if err := os.Mkdir(profilePath, 0775); err != nil {
-		t.Fatal(err)
-	}
-	files := []string{"vars.yaml", "vars-origin.yaml"}
-	for _, f := range files {
-		if err := ioutil.WriteFile(filepath.Join(profilePath, f), []byte(f+" content"), 0664); err != nil {
-			t.Fatal(err)
-		}
-	}
-	cm, err := genClusterProfileCM(dir, profile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	name := "rehearse-cluster-profile-test-profile-abcde"
-	if n := cm.ObjectMeta.Name; n != name {
-		t.Errorf("unexpected name: want %q, got %q", name, n)
-	}
-	for _, f := range files {
-		e, d := f+" content", cm.Data[f]
-		if d != e {
-			t.Errorf("unexpected value for key %q: want %q, got %q", f, e, d)
-		}
-	}
-	if t.Failed() {
-		t.Logf("full CM content: %s", cm.Data)
-	}
-}
-
 func TestCreateClusterProfiles(t *testing.T) {
 	dir, err := ioutil.TempDir("", "")
 	if err != nil {
@@ -152,40 +116,68 @@ func TestCreateClusterProfiles(t *testing.T) {
 		{Name: "unchanged", TreeHash: "8012ff51a005eaa8ed8f4c08ccdce580f462fff6"},
 	}
 	for _, p := range profiles {
-		if err := os.Mkdir(filepath.Join(dir, p.Name), 0775); err != nil {
+		path := filepath.Join(dir, ClusterProfilesPath, p.Name)
+		if err := os.MkdirAll(path, 0775); err != nil {
+			t.Fatal(err)
+		}
+		if err := ioutil.WriteFile(filepath.Join(path, "file"), []byte(p.Name+" content"), 0664); err != nil {
 			t.Fatal(err)
 		}
 	}
 	profiles = profiles[:2]
 	ns := "test"
 	pr := 1234
+	configUpdaterCfg := prowplugins.ConfigUpdater{
+		Maps: map[string]prowplugins.ConfigMapSpec{
+			filepath.Join(ClusterProfilesPath, "profile0", "file"): {
+				Name:       "cluster-profile-profile0",
+				Namespaces: []string{ns},
+			},
+			filepath.Join(ClusterProfilesPath, "profile1", "file"): {
+				Name:       "cluster-profile-profile1",
+				Namespaces: []string{ns},
+			},
+			filepath.Join(ClusterProfilesPath, "unchanged", "file"): {
+				Name:       "cluster-profile-unchanged",
+				Namespaces: []string{ns},
+			},
+		},
+	}
 	cs := fake.NewSimpleClientset()
 	client := cs.CoreV1().ConfigMaps(ns)
-	m := NewTemplateCMManager(client, pr, logrus.NewEntry(logrus.New()))
-	if err := m.CreateClusterProfiles(dir, profiles); err != nil {
+	m := NewTemplateCMManager(client, configUpdaterCfg, pr, dir, logrus.NewEntry(logrus.New()))
+	if err := m.CreateClusterProfiles(profiles); err != nil {
 		t.Fatal(err)
 	}
 	cms, err := client.List(metav1.ListOptions{})
+	sort.Slice(cms.Items, func(i, j int) bool {
+		return cms.Items[i].Name < cms.Items[j].Name
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	var names []string
-	for _, p := range cms.Items {
-		names = append(names, p.Name)
-	}
-	expected := []string{
-		"rehearse-cluster-profile-profile0-e92d4",
-		"rehearse-cluster-profile-profile1-a8c99",
-	}
-	if !reflect.DeepEqual(expected, names) {
-		t.Fatal(diff.ObjectDiff(expected, names))
-	}
-	for _, cm := range cms.Items {
-		if cm.Labels[createByRehearse] != "true" {
-			t.Fatalf("%q doesn't have label %s=true", cm.Name, createByRehearse)
-		}
-		if cm.Labels[rehearseLabelPull] != strconv.Itoa(pr) {
-			t.Fatalf("%q doesn't have label %s=%d", cm.Name, rehearseLabelPull, pr)
-		}
+	expected := []v1.ConfigMap{{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "rehearse-cluster-profile-profile0-e92d4",
+			Namespace: ns,
+			Labels: map[string]string{
+				createByRehearse:  "true",
+				rehearseLabelPull: strconv.Itoa(pr),
+			},
+		},
+		Data: map[string]string{"file": "profile0 content"},
+	}, {
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "rehearse-cluster-profile-profile1-a8c99",
+			Namespace: ns,
+			Labels: map[string]string{
+				createByRehearse:  "true",
+				rehearseLabelPull: strconv.Itoa(pr),
+			},
+		},
+		Data: map[string]string{"file": "profile1 content"},
+	}}
+	if !equality.Semantic.DeepEqual(expected, cms.Items) {
+		t.Fatal(diff.ObjectDiff(expected, cms.Items))
 	}
 }

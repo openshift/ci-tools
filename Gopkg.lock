@@ -365,11 +365,11 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:b4f6b7b10232f632ca6f33c285919897c52fdb3ab36d254f3bf0b4b75e798f5b"
+  digest = "1:334deadc0e3569d00920be459aa7072288635ed728b70e8f2584e86a1c1dee81"
   name = "github.com/openshift/ci-operator"
   packages = ["pkg/api"]
   pruneopts = ""
-  revision = "cf39dd09238979bf2146b16befccb72be0d479dc"
+  revision = "ccb6f432a6b149c1544c09038868b9a34b7434f7"
 
 [[projects]]
   digest = "1:7da30d36edabf50fb5bc07f759991589c5ca72e75b3dd50fa58c57d94e96fd15"

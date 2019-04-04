@@ -111,6 +111,7 @@ func someStepLink(as string) api.StepLink {
 }
 
 func errorCheck(t *testing.T, message string, expected bool, err error) {
+	t.Helper()
 	if expected && err == nil {
 		t.Errorf("%s: expected to return error, returned nil", message)
 	}
@@ -120,6 +121,7 @@ func errorCheck(t *testing.T, message string, expected bool, err error) {
 }
 
 func examineStep(t *testing.T, step api.Step, expected stepExpectation) {
+	t.Helper()
 	// Test the "informative" methods
 	if name := step.Name(); name != expected.name {
 		t.Errorf("step.Name() mismatch: expected '%s', got '%s'", expected.name, name)
@@ -159,6 +161,7 @@ func examineStep(t *testing.T, step api.Step, expected stepExpectation) {
 }
 
 func executeStep(t *testing.T, step api.Step, expected executionExpectation, fakeClusterBehavior func()) {
+	t.Helper()
 	done, err := step.Done()
 	if !reflect.DeepEqual(expected.prerun.value, done) {
 		t.Errorf("step.Done() before Run() returned %t, expected %t)", done, expected.prerun.value)
@@ -173,8 +176,8 @@ func executeStep(t *testing.T, step api.Step, expected executionExpectation, fak
 	errorCheck(t, "step.Run()", expected.runError, err)
 
 	done, err = step.Done()
+	errorCheck(t, "step.Done() after Run()", expected.postrun.err, err)
 	if !reflect.DeepEqual(expected.postrun.value, done) {
 		t.Errorf("step.Done() after Run() returned %t, expected %t)", done, expected.postrun.value)
 	}
-	errorCheck(t, "step.Done() after Run()", expected.postrun.err, err)
 }

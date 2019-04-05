@@ -16,6 +16,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -535,6 +536,7 @@ func (o *options) resolveInputs(ctx context.Context, steps []api.Step) error {
 		glog.V(4).Infof("Could not calculate info from current binary to add to input hash: %v", err)
 	}
 
+	sort.Strings(inputs)
 	o.inputHash = inputHash(inputs)
 
 	// input hash is unique for a given job definition and input refs

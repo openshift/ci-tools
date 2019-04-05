@@ -16,6 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
 
 	buildapi "github.com/openshift/api/build/v1"
@@ -243,10 +244,31 @@ func handleBuild(buildClient BuildClient, build *buildapi.Build, dry bool, artif
 
 			if isInfraReason(b.Status.Reason) {
 				log.Printf("Build %s previously failed from an infrastructure error (%s), retrying...\n", b.Name, b.Status.Reason)
-				opts := &meta.DeleteOptions{Preconditions: &meta.Preconditions{UID: &b.UID}}
+				zero := int64(0)
+				foreground := meta.DeletePropagationForeground
+				opts := &meta.DeleteOptions{
+					GracePeriodSeconds: &zero,
+					Preconditions:      &meta.Preconditions{UID: &b.UID},
+					PropagationPolicy:  &foreground,
+				}
 				if err := buildClient.Builds(build.Namespace).Delete(build.Name, opts); err != nil && !errors.IsNotFound(err) && !errors.IsConflict(err) {
 					return fmt.Errorf("could not delete build %s: %v", build.Name, err)
 				}
+
+				if err := wait.ExponentialBackoff(wait.Backoff{
+					Duration: 10 * time.Millisecond, Factor: 2, Steps: 10,
+				}, func() (done bool, err error) {
+					if _, err := buildClient.Builds(build.Namespace).Get(build.Namespace, meta.GetOptions{}); err != nil {
+						if errors.IsNotFound(err) {
+							return true, nil
+						}
+						return false, err
+					}
+					return false, nil
+				}); err != nil {
+					return fmt.Errorf("could not wait for build %s to be deleted: %v", build.Name, err)
+				}
+
 				if _, err := buildClient.Builds(build.Namespace).Create(build); err != nil && !errors.IsAlreadyExists(err) {
 					return fmt.Errorf("could not recreate build %s: %v", build.Name, err)
 				}

@@ -192,7 +192,128 @@
     rerun_command: /test pj-rehearse
     type: presubmit
   status:
-    startTime: "2019-02-11T17:02:53Z"
+    startTime: "2019-03-06T22:03:01Z"
+    state: triggered
+- apiVersion: prow.k8s.io/v1
+  kind: ProwJob
+  metadata:
+    annotations:
+      prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-master-e2e-aws
+    creationTimestamp: null
+    labels:
+      ci.openshift.org/rehearse: "1234"
+      created-by-prow: "true"
+      prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-master-e2e-aws
+      prow.k8s.io/refs.org: openshift
+      prow.k8s.io/refs.pull: "1234"
+      prow.k8s.io/refs.repo: release
+      prow.k8s.io/type: presubmit
+    name: 44acebef-4fc4-11e9-b82b-54e1ad07d68a
+    namespace: test-namespace
+  spec:
+    agent: kubernetes
+    cluster: default
+    context: ci/rehearse/super/duper/master/e2e-aws
+    decoration_config:
+      gcs_configuration:
+        bucket: origin-ci-test
+        default_org: openshift
+        default_repo: origin
+        path_strategy: single
+      gcs_credentials_secret: gce-sa-credentials-gcs-publisher
+      grace_period: 15000000000
+      skip_cloning: true
+      timeout: 14400000000000
+      utility_images:
+        clonerefs: gcr.io/k8s-prow/clonerefs:v20190129-0a3c54c
+        entrypoint: gcr.io/k8s-prow/entrypoint:v20190129-0a3c54c
+        initupload: gcr.io/k8s-prow/initupload:v20190129-0a3c54c
+        sidecar: gcr.io/k8s-prow/sidecar:v20190129-0a3c54c
+    job: rehearse-1234-pull-ci-super-duper-master-e2e-aws
+    namespace: test-namespace
+    pod_spec:
+      containers:
+      - args:
+        - --artifact-dir=$(ARTIFACTS)
+        - --give-pr-author-access-to-namespace=true
+        - --secret-dir=/usr/local/e2e-aws-cluster-profile
+        - --target=e2e-aws
+        - --template=/usr/local/e2e-aws
+        - --git-ref=super/duper@master
+        command:
+        - ci-operator
+        env:
+        - name: CLUSTER_TYPE
+          value: aws
+        - name: CONFIG_SPEC
+          value: |
+            base_images:
+              base:
+                cluster: https://api.ci.openshift.org
+                name: origin-v4.0
+                namespace: openshift
+                tag: base
+            build_root:
+              image_stream_tag:
+                cluster: https://api.ci.openshift.org
+                name: release
+                namespace: openshift
+                tag: golang-1.10
+            images:
+            - from: base
+              to: test-image
+            resources:
+              '*':
+                limits:
+                  cpu: 500Mi
+                requests:
+                  cpu: 10Mi
+            tag_specification:
+              cluster: https://api.ci.openshift.org
+              name: origin-v4.0
+              namespace: openshift
+        - name: JOB_NAME_SAFE
+          value: e2e-aws
+        - name: TEST_COMMAND
+          value: changed command
+        image: ci-operator:latest
+        imagePullPolicy: Always
+        name: ""
+        resources:
+          limits:
+            cpu: 500m
+          requests:
+            cpu: 10m
+        volumeMounts:
+        - mountPath: /usr/local/e2e-aws-cluster-profile
+          name: cluster-profile
+        - mountPath: /usr/local/e2e-aws
+          name: job-definition
+          subPath: cluster-launch-installer-e2e.yaml
+      serviceAccountName: ci-operator
+      volumes:
+      - name: cluster-profile
+        projected:
+          sources:
+          - secret:
+              name: cluster-secrets-aws
+      - configMap:
+          name: prow-job-cluster-launch-installer-e2e
+        name: job-definition
+    refs:
+      base_ref: master
+      base_sha: 7effc9d6d41c9038e853dc54814eaace10f0bbfa
+      org: openshift
+      pulls:
+      - author: petr-muller
+        number: 1234
+        sha: bb928f30f5790ce48231cb1b2601a135869da8cc
+      repo: release
+    report: true
+    rerun_command: /test pj-rehearse
+    type: presubmit
+  status:
+    startTime: "2019-03-06T22:03:01Z"
     state: triggered
 - apiVersion: prow.k8s.io/v1
   kind: ProwJob
@@ -296,6 +417,248 @@
   kind: ProwJob
   metadata:
     annotations:
+      prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-master-test-template-e2e-aws
+    creationTimestamp: null
+    labels:
+      ci.openshift.org/rehearse: "1234"
+      created-by-prow: "true"
+      prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-master-test-template-e2e-aws
+      prow.k8s.io/refs.org: openshift
+      prow.k8s.io/refs.pull: "1234"
+      prow.k8s.io/refs.repo: release
+      prow.k8s.io/type: presubmit
+    name: ab89c04c-4fc2-11e9-96b2-54e1ad07d68a
+    namespace: test-namespace
+  spec:
+    agent: kubernetes
+    cluster: default
+    context: ci/rehearse/super/duper/master/test-template-e2e-aws
+    decoration_config:
+      gcs_configuration:
+        bucket: origin-ci-test
+        default_org: openshift
+        default_repo: origin
+        path_strategy: single
+      gcs_credentials_secret: gce-sa-credentials-gcs-publisher
+      grace_period: 15000000000
+      skip_cloning: true
+      timeout: 14400000000000
+      utility_images:
+        clonerefs: gcr.io/k8s-prow/clonerefs:v20190129-0a3c54c
+        entrypoint: gcr.io/k8s-prow/entrypoint:v20190129-0a3c54c
+        initupload: gcr.io/k8s-prow/initupload:v20190129-0a3c54c
+        sidecar: gcr.io/k8s-prow/sidecar:v20190129-0a3c54c
+    job: rehearse-1234-pull-ci-super-duper-master-test-template-e2e-aws
+    namespace: test-namespace
+    pod_spec:
+      containers:
+      - args:
+        - --artifact-dir=$(ARTIFACTS)
+        - --give-pr-author-access-to-namespace=true
+        - --secret-dir=/usr/local/e2e-aws-cluster-profile
+        - --target=e2e-aws
+        - --template=/usr/local/e2e-aws
+        - --git-ref=super/duper@master
+        command:
+        - ci-operator
+        env:
+        - name: CLUSTER_TYPE
+          value: aws
+        - name: CONFIG_SPEC
+          value: |
+            base_images:
+              base:
+                cluster: https://api.ci.openshift.org
+                name: origin-v4.0
+                namespace: openshift
+                tag: base
+            build_root:
+              image_stream_tag:
+                cluster: https://api.ci.openshift.org
+                name: release
+                namespace: openshift
+                tag: golang-1.10
+            images:
+            - from: base
+              to: test-image
+            resources:
+              '*':
+                limits:
+                  cpu: 500Mi
+                requests:
+                  cpu: 10Mi
+            tag_specification:
+              cluster: https://api.ci.openshift.org
+              name: origin-v4.0
+              namespace: openshift
+        - name: JOB_NAME_SAFE
+          value: e2e-aws
+        - name: TEST_COMMAND
+          value: TEST_SUITE=openshift/conformance/parallel run-tests
+        image: ci-operator:latest
+        imagePullPolicy: Always
+        name: ""
+        resources:
+          limits:
+            cpu: 500m
+          requests:
+            cpu: 10m
+        volumeMounts:
+        - mountPath: /usr/local/e2e-aws-cluster-profile
+          name: cluster-profile
+        - mountPath: /usr/local/e2e-aws
+          name: job-definition
+          subPath: test-template.yaml
+      serviceAccountName: ci-operator
+      volumes:
+      - name: cluster-profile
+        projected:
+          sources:
+          - secret:
+              name: cluster-secrets-aws
+      - configMap:
+          name: rehearse-bv4qjcyg-test-template
+        name: job-definition
+    refs:
+      base_ref: master
+      base_sha: bfd4c4d0fe97177b4278dfef1691c7ef8dca1af0
+      org: openshift
+      pulls:
+      - author: petr-muller
+        number: 1234
+        sha: 4fe34c7d9b223067e30397a98a64bc0915d602e2
+      repo: release
+    report: true
+    rerun_command: /test pj-rehearse
+    type: presubmit
+  status:
+    startTime: "2019-03-26T12:28:33Z"
+    state: triggered
+- apiVersion: prow.k8s.io/v1
+  kind: ProwJob
+  metadata:
+    annotations:
+      prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-master-test-template-e2e-openstack
+    creationTimestamp: null
+    labels:
+      ci.openshift.org/rehearse: "1234"
+      created-by-prow: "true"
+      prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-master-test-template-e2e-open
+      prow.k8s.io/refs.org: openshift
+      prow.k8s.io/refs.pull: "1234"
+      prow.k8s.io/refs.repo: release
+      prow.k8s.io/type: presubmit
+    name: ab89c26f-4fc2-11e9-96b2-54e1ad07d68a
+    namespace: test-namespace
+  spec:
+    agent: kubernetes
+    cluster: default
+    context: ci/rehearse/super/duper/master/test-template-e2e-openstack
+    decoration_config:
+      gcs_configuration:
+        bucket: origin-ci-test
+        default_org: openshift
+        default_repo: origin
+        path_strategy: single
+      gcs_credentials_secret: gce-sa-credentials-gcs-publisher
+      grace_period: 15000000000
+      skip_cloning: true
+      timeout: 14400000000000
+      utility_images:
+        clonerefs: gcr.io/k8s-prow/clonerefs:v20190129-0a3c54c
+        entrypoint: gcr.io/k8s-prow/entrypoint:v20190129-0a3c54c
+        initupload: gcr.io/k8s-prow/initupload:v20190129-0a3c54c
+        sidecar: gcr.io/k8s-prow/sidecar:v20190129-0a3c54c
+    job: rehearse-1234-pull-ci-super-duper-master-test-template-e2e-openstack
+    namespace: test-namespace
+    pod_spec:
+      containers:
+      - args:
+        - --artifact-dir=$(ARTIFACTS)
+        - --give-pr-author-access-to-namespace=true
+        - --secret-dir=/usr/local/e2e-aws-cluster-profile
+        - --target=e2e-aws
+        - --template=/usr/local/e2e-aws-openstack
+        - --git-ref=super/duper@master
+        command:
+        - ci-operator
+        env:
+        - name: CLUSTER_TYPE
+          value: openstack
+        - name: CONFIG_SPEC
+          value: |
+            base_images:
+              base:
+                cluster: https://api.ci.openshift.org
+                name: origin-v4.0
+                namespace: openshift
+                tag: base
+            build_root:
+              image_stream_tag:
+                cluster: https://api.ci.openshift.org
+                name: release
+                namespace: openshift
+                tag: golang-1.10
+            images:
+            - from: base
+              to: test-image
+            resources:
+              '*':
+                limits:
+                  cpu: 500Mi
+                requests:
+                  cpu: 10Mi
+            tag_specification:
+              cluster: https://api.ci.openshift.org
+              name: origin-v4.0
+              namespace: openshift
+        - name: JOB_NAME_SAFE
+          value: e2e-aws
+        - name: TEST_COMMAND
+          value: TEST_SUITE=openshift/conformance/parallel run-tests
+        image: ci-operator:latest
+        imagePullPolicy: Always
+        name: ""
+        resources:
+          limits:
+            cpu: 500m
+          requests:
+            cpu: 10m
+        volumeMounts:
+        - mountPath: /usr/local/e2e-openstack-cluster-profile
+          name: cluster-profile
+        - mountPath: /usr/local/e2e-openstack
+          name: job-definition
+          subPath: test-template.yaml
+      serviceAccountName: ci-operator
+      volumes:
+      - name: cluster-profile
+        projected:
+          sources:
+          - secret:
+              name: cluster-secrets-openstack
+      - configMap:
+          name: rehearse-bv4qjcyg-test-template
+        name: job-definition
+    refs:
+      base_ref: master
+      base_sha: bfd4c4d0fe97177b4278dfef1691c7ef8dca1af0
+      org: openshift
+      pulls:
+      - author: petr-muller
+        number: 1234
+        sha: 4fe34c7d9b223067e30397a98a64bc0915d602e2
+      repo: release
+    report: true
+    rerun_command: /test pj-rehearse
+    type: presubmit
+  status:
+    startTime: "2019-03-26T12:28:33Z"
+    state: triggered
+- apiVersion: prow.k8s.io/v1
+  kind: ProwJob
+  metadata:
+    annotations:
       prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-cmd
     creationTimestamp: null
     labels:
@@ -387,7 +750,133 @@
       pulls:
       - author: petr-muller
         number: 1234
-        sha: 7c0b9788f819121ac637fa3f8a319d0bc2cda73e
+        sha: bb928f30f5790ce48231cb1b2601a135869da8cc
+      repo: release
+    report: true
+    rerun_command: /test pj-rehearse
+    type: presubmit
+  status:
+    startTime: "2019-03-06T22:03:01Z"
+    state: triggered
+- apiVersion: prow.k8s.io/v1
+  kind: ProwJob
+  metadata:
+    annotations:
+      prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-e2e-aws
+    creationTimestamp: null
+    labels:
+      ci.openshift.org/rehearse: "1234"
+      created-by-prow: "true"
+      prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-e2e-aws
+      prow.k8s.io/refs.org: openshift
+      prow.k8s.io/refs.pull: "1234"
+      prow.k8s.io/refs.repo: release
+      prow.k8s.io/type: presubmit
+    name: 44acf399-4fc4-11e9-b82b-54e1ad07d68a
+    namespace: test-namespace
+  spec:
+    agent: kubernetes
+    cluster: default
+    context: ci/rehearse/super/trooper/master/e2e-aws
+    decoration_config:
+      gcs_configuration:
+        bucket: origin-ci-test
+        default_org: openshift
+        default_repo: origin
+        path_strategy: single
+      gcs_credentials_secret: gce-sa-credentials-gcs-publisher
+      grace_period: 15000000000
+      skip_cloning: true
+      timeout: 14400000000000
+      utility_images:
+        clonerefs: gcr.io/k8s-prow/clonerefs:v20190129-0a3c54c
+        entrypoint: gcr.io/k8s-prow/entrypoint:v20190129-0a3c54c
+        initupload: gcr.io/k8s-prow/initupload:v20190129-0a3c54c
+        sidecar: gcr.io/k8s-prow/sidecar:v20190129-0a3c54c
+    job: rehearse-1234-pull-ci-super-trooper-master-e2e-aws
+    namespace: test-namespace
+    pod_spec:
+      containers:
+      - args:
+        - --artifact-dir=$(ARTIFACTS)
+        - --give-pr-author-access-to-namespace=true
+        - --secret-dir=/usr/local/e2e-aws-cluster-profile
+        - --target=e2e-aws
+        - --template=/usr/local/e2e-aws
+        - --git-ref=super/trooper@master
+        command:
+        - ci-operator
+        env:
+        - name: CLUSTER_TYPE
+          value: aws
+        - name: CONFIG_SPEC
+          value: |
+            base_images:
+              base:
+                cluster: https://api.ci.openshift.org
+                name: origin-v4.0
+                namespace: openshift
+                tag: base
+            build_root:
+              image_stream_tag:
+                cluster: https://api.ci.openshift.org
+                name: release
+                namespace: openshift
+                tag: golang-1.10
+            images:
+            - from: base
+              to: test-image
+            resources:
+              '*':
+                limits:
+                  cpu: 500Mi
+                requests:
+                  cpu: 10Mi
+            tag_specification:
+              cluster: https://api.ci.openshift.org
+              name: origin-v4.0
+              namespace: openshift
+            tests:
+            - as: unit
+              commands: make unit CHANGED
+              container:
+                from: src
+        - name: JOB_NAME_SAFE
+          value: e2e-aws
+        - name: TEST_COMMAND
+          value: changed command
+        image: ci-operator:latest
+        imagePullPolicy: Always
+        name: ""
+        resources:
+          limits:
+            cpu: 500m
+          requests:
+            cpu: 10m
+        volumeMounts:
+        - mountPath: /usr/local/e2e-aws-cluster-profile
+          name: cluster-profile
+        - mountPath: /usr/local/e2e-aws
+          name: job-definition
+          subPath: cluster-launch-installer-e2e.yaml
+      serviceAccountName: ci-operator
+      volumes:
+      - name: cluster-profile
+        projected:
+          sources:
+          - secret:
+              name: cluster-secrets-aws
+      - configMap:
+          name: prow-job-cluster-launch-installer-e2e
+        name: job-definition
+    refs:
+      base_ref: master
+      base_sha: 7effc9d6d41c9038e853dc54814eaace10f0bbfa
+      org: openshift
+      pulls:
+      - author: petr-muller
+        number: 1234
+        sha: bb928f30f5790ce48231cb1b2601a135869da8cc
       repo: release
     report: true
     rerun_command: /test pj-rehearse

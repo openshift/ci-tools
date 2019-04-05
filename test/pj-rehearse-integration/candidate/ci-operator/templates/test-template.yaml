@@ -83,6 +83,7 @@ objects:
       command:
       - echo
       - test
+      - CHANGED
 
     # Runs an install
     - name: setup

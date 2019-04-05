@@ -827,7 +827,9 @@ func makeBasePresubmit() *prowconfig.Presubmit {
 	}
 }
 
-func TestHasChangedTemplateVolume(t *testing.T) {
+func TestReplaceCMTemplateName(t *testing.T) {
+	const tempCMName = "rehearse-pv8j80dg-test-template"
+
 	templates := config.CiTemplates{
 		"test-template.yaml": &templateapi.Template{
 			ObjectMeta: metav1.ObjectMeta{
@@ -846,23 +848,17 @@ func TestHasChangedTemplateVolume(t *testing.T) {
 		},
 	}
 
-	type expectedToFind struct {
-		exists      bool
-		index       int
-		templateKey string
-	}
-
 	testCases := []struct {
 		description     string
 		jobVolumeMounts []v1.VolumeMount
 		jobVolumes      []v1.Volume
-		expectedToFind  expectedToFind
+		expectedToFind  func() []v1.Volume
 	}{
 		{
 			description:     "no volumes",
 			jobVolumeMounts: []v1.VolumeMount{},
 			jobVolumes:      []v1.Volume{},
-			expectedToFind:  expectedToFind{},
+			expectedToFind:  func() []v1.Volume { return []v1.Volume{} },
 		},
 		{
 			description: "find one in multiple volumes",
@@ -878,10 +874,14 @@ func TestHasChangedTemplateVolume(t *testing.T) {
 				},
 			},
 			jobVolumes: createVolumesHelper("job-definition", "test-template.yaml"),
-			expectedToFind: expectedToFind{
-				exists:      true,
-				index:       2,
-				templateKey: "test-template.yaml",
+			expectedToFind: func() []v1.Volume {
+				volumes := createVolumesHelper("job-definition", "test-template.yaml")
+				for _, volume := range volumes {
+					if volume.Name == "job-definition" {
+						volume.VolumeSource.ConfigMap.Name = tempCMName
+					}
+				}
+				return volumes
 			},
 		},
 		{
@@ -898,10 +898,10 @@ func TestHasChangedTemplateVolume(t *testing.T) {
 				},
 			},
 			jobVolumes: append(createVolumesHelper("job-definition", "test-template.yaml"), createVolumesHelper("job-definition2", "test-template2.yaml")...),
-			expectedToFind: expectedToFind{
-				exists:      true,
-				index:       2,
-				templateKey: "test-template.yaml",
+			expectedToFind: func() []v1.Volume {
+				volumes := append(createVolumesHelper("job-definition", "test-template.yaml"), createVolumesHelper("job-definition2", "test-template2.yaml")...)
+				volumes[2].VolumeSource.ConfigMap.Name = tempCMName
+				return volumes
 			},
 		},
 		{
@@ -917,21 +917,22 @@ func TestHasChangedTemplateVolume(t *testing.T) {
 					SubPath:   "test-template5.yaml",
 				},
 			},
-			jobVolumes:     createVolumesHelper("job-definition", "test-template5.yaml"),
-			expectedToFind: expectedToFind{},
+			jobVolumes: createVolumesHelper("job-definition", "test-template5.yaml"),
+			expectedToFind: func() []v1.Volume {
+				return createVolumesHelper("job-definition", "test-template5.yaml")
+			},
 		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.description, func(t *testing.T) {
-			exists, index, templateKey := hasChangedTemplateVolume(testCase.jobVolumeMounts, testCase.jobVolumes, templates)
-			found := expectedToFind{
-				exists:      exists,
-				index:       index,
-				templateKey: templateKey,
+			if err := replaceCMTemplateName(testCase.jobVolumeMounts, testCase.jobVolumes, templates); err != nil {
+				t.Fatal()
 			}
-			if !reflect.DeepEqual(testCase.expectedToFind, found) {
-				t.Fatalf("Expected:%v\nFound:%v", testCase.expectedToFind, found)
+
+			expected := testCase.expectedToFind()
+			if !reflect.DeepEqual(expected, testCase.jobVolumes) {
+				t.Fatalf("Diff found %v", diff.ObjectReflectDiff(expected, testCase.jobVolumes))
 			}
 		})
 	}
@@ -960,7 +961,6 @@ func createVolumesHelper(name, key string) []v1.Volume {
 			},
 		},
 	}
-
 	volumes = append(volumes, v1.Volume{
 		Name: name,
 		VolumeSource: v1.VolumeSource{

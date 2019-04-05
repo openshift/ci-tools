@@ -21,6 +21,16 @@ const (
 // being promoted. This is a proxy for determining if a configuration contributes to
 // the release payload.
 func PromotesOfficialImages(configSpec *cioperatorapi.ReleaseBuildConfiguration) bool {
+	return !isDisabled(configSpec) && BuildsOfficialImages(configSpec)
+}
+
+func isDisabled(configSpec *cioperatorapi.ReleaseBuildConfiguration) bool {
+	return configSpec.PromotionConfiguration != nil && configSpec.PromotionConfiguration.Disabled
+}
+
+// BuildsOfficialImages determines if a configuration will result in official images
+// being built.
+func BuildsOfficialImages(configSpec *cioperatorapi.ReleaseBuildConfiguration) bool {
 	promotionNamespace := extractPromotionNamespace(configSpec)
 	promotionName := extractPromotionName(configSpec)
 	return (promotionNamespace == okdPromotionNamespace && promotionName == okd40Imagestream) || promotionNamespace == ocpPromotionNamespace
@@ -66,6 +76,8 @@ type Options struct {
 	ConfigDir      string
 	CurrentRelease string
 	FutureRelease  string
+	Mirror         bool
+	Unmirror       bool
 	Confirm        bool
 	Org            string
 	Repo           string
@@ -97,6 +109,7 @@ func (o *Options) Bind(fs *flag.FlagSet) {
 	fs.StringVar(&o.ConfigDir, "config-dir", "", "Path to CI Operator configuration directory.")
 	fs.StringVar(&o.CurrentRelease, "current-release", "", "Configurations targeting this release will get branched.")
 	fs.StringVar(&o.FutureRelease, "future-release", "", "Configurations will get branched to target this release.")
+	fs.BoolVar(&o.Mirror, "mirror", false, "Mirror the promotion config, but disable it in the target.")
 	fs.BoolVar(&o.Confirm, "confirm", false, "Create the branched configuration files.")
 	fs.StringVar(&o.logLevel, "log-level", "info", "Level at which to log output.")
 	fs.StringVar(&o.Org, "org", "", "Limit repos affected to those in this org.")

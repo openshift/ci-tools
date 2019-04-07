@@ -4,7 +4,7 @@ import (
 	"flag"
 	"os"
 
-	"github.com/ghodss/yaml"
+	"github.com/getlantern/deepcopy"
 	"github.com/sirupsen/logrus"
 
 	"github.com/openshift/ci-operator/pkg/api"
@@ -34,7 +34,13 @@ func main() {
 		if (o.Org != "" && o.Org != info.Org) || (o.Repo != "" && o.Repo != info.Repo) {
 			return nil
 		}
-		for _, output := range generateBranchedConfigs(o.CurrentRelease, o.FutureRelease, config.DataWithInfo{Configuration: *configuration, Info: *info}) {
+		var outputs []config.DataWithInfo
+		if o.Unmirror {
+			outputs = generateUnmirroredConfigs(o.CurrentRelease, o.FutureRelease, config.DataWithInfo{Configuration: *configuration, Info: *info})
+		} else {
+			outputs = generateBranchedConfigs(o.CurrentRelease, o.FutureRelease, config.DataWithInfo{Configuration: *configuration, Info: *info}, o.Mirror)
+		}
+		for _, output := range outputs {
 			if !o.Confirm {
 				output.Logger().Info("Would commit new file.")
 				continue
@@ -60,27 +66,28 @@ func main() {
 	}
 }
 
-func generateBranchedConfigs(currentRelease, futureRelease string, input config.DataWithInfo) []config.DataWithInfo {
+func generateBranchedConfigs(currentRelease, futureRelease string, input config.DataWithInfo, mirror bool) []config.DataWithInfo {
 	if !(promotion.PromotesOfficialImages(&input.Configuration) && input.Configuration.PromotionConfiguration.Name == currentRelease) {
 		return nil
 	}
 	input.Logger().Info("Branching configuration.")
-	// we need a deep copy and this is a simple albeit expensive hack to get there
-	raw, err := yaml.Marshal(input.Configuration)
-	if err != nil {
-		input.Logger().WithError(err).Error("failed to marshal input CI Operator configuration")
-		return nil
-	}
-	var futureConfig api.ReleaseBuildConfiguration
-	if err := yaml.Unmarshal(raw, &futureConfig); err != nil {
-		input.Logger().WithError(err).Error("failed to unmarshal input CI Operator configuration")
+	var currentConfig, futureConfig api.ReleaseBuildConfiguration
+	currentConfig = input.Configuration
+	if err := deepcopy.Copy(&futureConfig, &currentConfig); err != nil {
+		input.Logger().WithError(err).Error("failed to copy input CI Operator configuration")
 		return nil
 	}
 
-	// in order to branch this, we need to update where we're promoting
-	// to and from where we're building a release payload
-	futureConfig.PromotionConfiguration.Name = futureRelease
-	futureConfig.ReleaseTagConfiguration.Name = futureRelease
+	if mirror {
+		// in order to mirror this, we need to keep the promotion the same
+		// but disable it on the current config
+		currentConfig.PromotionConfiguration.Disabled = true
+	} else {
+		// in order to branch this, we need to update where we're promoting
+		// to and from where we're building a release payload
+		futureConfig.PromotionConfiguration.Name = futureRelease
+		futureConfig.ReleaseTagConfiguration.Name = futureRelease
+	}
 
 	futureBranchForCurrentPromotion, futureBranchForFuturePromotion, err := promotion.DetermineReleaseBranches(currentRelease, futureRelease, input.Info.Branch)
 	if err != nil {
@@ -101,4 +108,22 @@ func copyInfoSwappingBranches(input config.Info, newBranch string) config.Info {
 	output := *intermediate
 	output.Branch = newBranch
 	return output
+}
+
+func generateUnmirroredConfigs(currentRelease, futureRelease string, input config.DataWithInfo) []config.DataWithInfo {
+	if !(promotion.BuildsOfficialImages(&input.Configuration) && input.Configuration.PromotionConfiguration.Name == currentRelease) {
+		return nil
+	}
+	input.Logger().Info("Unmirroring configuration.")
+	if input.Configuration.PromotionConfiguration.Disabled {
+		// this will become the official branch to promote, so we just
+		// need to enable promotion
+		input.Configuration.PromotionConfiguration.Disabled = false
+	} else {
+		// this is the current promotion/dev branch, so it needs to be
+		// bumped
+		input.Configuration.PromotionConfiguration.Name = futureRelease
+		input.Configuration.ReleaseTagConfiguration.Name = futureRelease
+	}
+	return []config.DataWithInfo{input}
 }

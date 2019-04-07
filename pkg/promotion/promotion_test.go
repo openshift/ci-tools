@@ -31,6 +31,16 @@ func TestPromotesOfficialImages(t *testing.T) {
 			expected: true,
 		},
 		{
+			name: "config with disabled explicit promotion to ocp namespace does not produce official images",
+			configSpec: &cioperatorapi.ReleaseBuildConfiguration{
+				PromotionConfiguration: &cioperatorapi.PromotionConfiguration{
+					Namespace: "ocp",
+					Disabled:  true,
+				},
+			},
+			expected: false,
+		},
+		{
 			name: "config explicitly promoting to okd release imagestream in okd namespace produces official images",
 			configSpec: &cioperatorapi.ReleaseBuildConfiguration{
 				PromotionConfiguration: &cioperatorapi.PromotionConfiguration{

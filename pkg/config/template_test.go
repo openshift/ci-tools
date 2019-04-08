@@ -63,8 +63,8 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 		return true, nil, nil
 	})
 	client := cs.CoreV1().ConfigMaps(ns)
-	cmManager := NewTemplateCMManager(client, 1234, logrus.NewEntry(logrus.New()), ciTemplates)
-	if err := cmManager.CreateCMTemplates(); err != nil {
+	cmManager := NewTemplateCMManager(client, 1234, logrus.NewEntry(logrus.New()))
+	if err := cmManager.CreateCMTemplates(ciTemplates); err != nil {
 		t.Fatalf("CreateCMTemplates() returned error: %v", err)
 	}
 	cms, err := client.List(metav1.ListOptions{})
@@ -161,7 +161,7 @@ func TestCreateClusterProfiles(t *testing.T) {
 	pr := 1234
 	cs := fake.NewSimpleClientset()
 	client := cs.CoreV1().ConfigMaps(ns)
-	m := NewTemplateCMManager(client, pr, logrus.NewEntry(logrus.New()), CiTemplates{})
+	m := NewTemplateCMManager(client, pr, logrus.NewEntry(logrus.New()))
 	if err := m.CreateClusterProfiles(dir, profiles); err != nil {
 		t.Fatal(err)
 	}

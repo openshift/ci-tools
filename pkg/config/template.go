@@ -58,19 +58,17 @@ func getTemplates(templatePath string) (CiTemplates, error) {
 
 // TemplateCMManager holds the details needed for the configmap controller
 type TemplateCMManager struct {
-	cmclient  corev1.ConfigMapInterface
-	prNumber  int
-	logger    *logrus.Entry
-	templates CiTemplates
+	cmclient corev1.ConfigMapInterface
+	prNumber int
+	logger   *logrus.Entry
 }
 
 // NewTemplateCMManager creates a new TemplateCMManager
-func NewTemplateCMManager(cmclient corev1.ConfigMapInterface, prNumber int, logger *logrus.Entry, templates CiTemplates) *TemplateCMManager {
+func NewTemplateCMManager(cmclient corev1.ConfigMapInterface, prNumber int, logger *logrus.Entry) *TemplateCMManager {
 	return &TemplateCMManager{
-		cmclient:  cmclient,
-		prNumber:  prNumber,
-		logger:    logger,
-		templates: templates,
+		cmclient: cmclient,
+		prNumber: prNumber,
+		logger:   logger,
 	}
 }
 
@@ -87,9 +85,9 @@ func (c *TemplateCMManager) createCM(cm *v1.ConfigMap) error {
 }
 
 // CreateCMTemplates creates configMaps for all the changed templates.
-func (c *TemplateCMManager) CreateCMTemplates() error {
+func (c *TemplateCMManager) CreateCMTemplates(templates CiTemplates) error {
 	var errors []error
-	for filename, template := range c.templates {
+	for filename, template := range templates {
 		templateName := GetTemplateName(filename)
 		cmName := GetTempCMName(templateName, filename, template)
 		cm := &v1.ConfigMap{

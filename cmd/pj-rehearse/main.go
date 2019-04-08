@@ -215,13 +215,13 @@ func rehearseMain() int {
 		return gracefulExit(o.noFail, misconfigurationOutput)
 	}
 
-	cmManager := config.NewTemplateCMManager(cmClient, prNumber, logger, changedTemplates)
+	cmManager := config.NewTemplateCMManager(cmClient, prNumber, logger)
 	defer func() {
 		if err := cmManager.CleanupCMTemplates(); err != nil {
 			logger.WithError(err).Error("failed to clean up temporary template CM")
 		}
 	}()
-	if err := cmManager.CreateCMTemplates(); err != nil {
+	if err := cmManager.CreateCMTemplates(changedTemplates); err != nil {
 		logger.WithError(err).Error("couldn't create template configMap")
 		return gracefulExit(o.noFail, failedSetupOutput)
 	}

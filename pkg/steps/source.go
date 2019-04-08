@@ -172,11 +172,14 @@ func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStrea
 				Strategy: buildapi.BuildStrategy{
 					Type: buildapi.DockerBuildStrategyType,
 					DockerStrategy: &buildapi.DockerBuildStrategy{
-						DockerfilePath:          dockerfilePath,
-						From:                    from,
-						ForcePull:               true,
-						NoCache:                 true,
-						Env:                     []coreapi.EnvVar{},
+						DockerfilePath: dockerfilePath,
+						From:           from,
+						ForcePull:      true,
+						NoCache:        true,
+						Env: []coreapi.EnvVar{{
+							Name:  "BUILD_LOGLEVEL",
+							Value: "5",
+						}},
 						ImageOptimizationPolicy: &layer,
 					},
 				},

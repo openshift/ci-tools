@@ -23,6 +23,23 @@ func gatherOptions() promotion.Options {
 	return o
 }
 
+// This tool is intended to make the process of branching and duplicating configuration for
+// the CI Operator easy across many repositories.
+//
+// We select a set of repositories to operate on by looking at which are actively promoting
+// images into a specific OpenShift release, provided by `--current-release`. Branches of
+// repos that actively promote to this release are considered to be our dev branches.
+//
+// Once we've chosen a set of configurations to operate on, we can do one of two actions:
+//  - mirror configuration out, copying the development branch config to all branches for
+//    the provided `--future-release` values, not changing the configuration for the dev
+//    branch and making sure that the release branch for the version that matches that in
+//    the dev branch has a disabled promotion stanza to ensure only one branch feeds a
+//    release ImageStream
+//  - bump configuration files, moving the development branch to promote to the version in
+//    the `--bump` flag, enabling the promotion in the release branch that used to match
+//    the dev branch version and disabling promotion in the release branch that now matches
+//    the dev branch version.
 func main() {
 	o := gatherOptions()
 	if err := o.Validate(); err != nil {
@@ -34,13 +51,7 @@ func main() {
 		if (o.Org != "" && o.Org != info.Org) || (o.Repo != "" && o.Repo != info.Repo) {
 			return nil
 		}
-		var outputs []config.DataWithInfo
-		if o.Unmirror {
-			outputs = generateUnmirroredConfigs(o.CurrentRelease, o.FutureRelease, config.DataWithInfo{Configuration: *configuration, Info: *info})
-		} else {
-			outputs = generateBranchedConfigs(o.CurrentRelease, o.FutureRelease, config.DataWithInfo{Configuration: *configuration, Info: *info}, o.Mirror)
-		}
-		for _, output := range outputs {
+		for _, output := range generateBranchedConfigs(o.CurrentRelease, o.BumpRelease, o.FutureReleases.Strings(), config.DataWithInfo{Configuration: *configuration, Info: *info}) {
 			if !o.Confirm {
 				output.Logger().Info("Would commit new file.")
 				continue
@@ -66,41 +77,59 @@ func main() {
 	}
 }
 
-func generateBranchedConfigs(currentRelease, futureRelease string, input config.DataWithInfo, mirror bool) []config.DataWithInfo {
+func generateBranchedConfigs(currentRelease, bumpRelease string, futureReleases []string, input config.DataWithInfo) []config.DataWithInfo {
 	if !(promotion.PromotesOfficialImages(&input.Configuration) && input.Configuration.PromotionConfiguration.Name == currentRelease) {
 		return nil
 	}
+
+	var output []config.DataWithInfo
 	input.Logger().Info("Branching configuration.")
-	var currentConfig, futureConfig api.ReleaseBuildConfiguration
-	currentConfig = input.Configuration
-	if err := deepcopy.Copy(&futureConfig, &currentConfig); err != nil {
-		input.Logger().WithError(err).Error("failed to copy input CI Operator configuration")
-		return nil
+	currentConfig := input.Configuration
+
+	// if we are asked to bump, we need to update the config for the dev branch
+	devRelease := currentRelease
+	if bumpRelease != "" {
+		devRelease = bumpRelease
+		updateRelease(&currentConfig, bumpRelease)
+		// this config will continue to run for the dev branch but will be bumped
+		output = append(output, config.DataWithInfo{Configuration: currentConfig, Info: input.Info})
 	}
 
-	if mirror {
-		// in order to mirror this, we need to keep the promotion the same
-		// but disable it on the current config
-		currentConfig.PromotionConfiguration.Disabled = true
-	} else {
-		// in order to branch this, we need to update where we're promoting
-		// to and from where we're building a release payload
-		futureConfig.PromotionConfiguration.Name = futureRelease
-		futureConfig.ReleaseTagConfiguration.Name = futureRelease
-	}
+	for _, futureRelease := range append(futureReleases) {
+		futureBranch, err := promotion.DetermineReleaseBranch(currentRelease, futureRelease, input.Info.Branch)
+		if err != nil {
+			input.Logger().WithError(err).Error("could not determine future branch that would promote to current imagestream")
+			return nil
+		}
+		if futureBranch == input.Info.Branch {
+			// some repos release on their dev branch, so we don't need
+			// to make any changes for this one
+			continue
+		}
 
-	futureBranchForCurrentPromotion, futureBranchForFuturePromotion, err := promotion.DetermineReleaseBranches(currentRelease, futureRelease, input.Info.Branch)
-	if err != nil {
-		input.Logger().WithError(err).Error("could not determine future branch that would promote to current imagestream")
-		return nil
-	}
+		var futureConfig api.ReleaseBuildConfiguration
+		if err := deepcopy.Copy(&futureConfig, &currentConfig); err != nil {
+			input.Logger().WithError(err).Error("failed to copy input CI Operator configuration")
+			return nil
+		}
 
-	return []config.DataWithInfo{
-		// this config keeps the current promotion but runs on a new branch
-		{Configuration: input.Configuration, Info: copyInfoSwappingBranches(input.Info, futureBranchForCurrentPromotion)},
-		// this config is the future promotion on the future branch
-		{Configuration: futureConfig, Info: copyInfoSwappingBranches(input.Info, futureBranchForFuturePromotion)},
+		// the new config will point to the future release
+		updateRelease(&futureConfig, futureRelease)
+		// we cannot have two configs promoting to the same output, so
+		// we need to make sure the release branch config is disabled
+		futureConfig.PromotionConfiguration.Disabled = futureRelease == devRelease
+
+		// this config will promote to the new location on the release branch
+		output = append(output, config.DataWithInfo{Configuration: futureConfig, Info: copyInfoSwappingBranches(input.Info, futureBranch)})
 	}
+	return output
+}
+
+// updateRelease copies the configuration but updates the release that is promoted
+// to and that which is used to source the release payload for testing
+func updateRelease(config *api.ReleaseBuildConfiguration, futureRelease string) {
+	config.PromotionConfiguration.Name = futureRelease
+	config.ReleaseTagConfiguration.Name = futureRelease
 }
 
 func copyInfoSwappingBranches(input config.Info, newBranch string) config.Info {
@@ -108,22 +137,4 @@ func copyInfoSwappingBranches(input config.Info, newBranch string) config.Info {
 	output := *intermediate
 	output.Branch = newBranch
 	return output
-}
-
-func generateUnmirroredConfigs(currentRelease, futureRelease string, input config.DataWithInfo) []config.DataWithInfo {
-	if !(promotion.BuildsOfficialImages(&input.Configuration) && input.Configuration.PromotionConfiguration.Name == currentRelease) {
-		return nil
-	}
-	input.Logger().Info("Unmirroring configuration.")
-	if input.Configuration.PromotionConfiguration.Disabled {
-		// this will become the official branch to promote, so we just
-		// need to enable promotion
-		input.Configuration.PromotionConfiguration.Disabled = false
-	} else {
-		// this is the current promotion/dev branch, so it needs to be
-		// bumped
-		input.Configuration.PromotionConfiguration.Name = futureRelease
-		input.Configuration.ReleaseTagConfiguration.Name = futureRelease
-	}
-	return []config.DataWithInfo{input}
 }

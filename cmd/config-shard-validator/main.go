@@ -130,7 +130,7 @@ func main() {
 			}
 			if matches {
 				if updateConfig.Name != pathToCheck.configMap {
-					globLogger.Error("File matches glob from unexpected ConfigMap.")
+					globLogger.Errorf("File matches glob from unexpected ConfigMap %s instead of %s.", updateConfig.Name, pathToCheck.configMap)
 					foundFailures = true
 				}
 				matchesAny = true

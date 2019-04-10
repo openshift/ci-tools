@@ -46,6 +46,10 @@ func (i *Info) Basename() string {
 
 // ConfigMapName returns the configmap in which we expect this file to be uploaded
 func (i *Info) ConfigMapName() string {
+	// put periodics in the misc job since they are not directly correlated to code
+	if i.Type == "periodics" {
+		return fmt.Sprintf("job-config-%s", promotion.FlavorForBranch(""))
+	}
 	return fmt.Sprintf("job-config-%s", promotion.FlavorForBranch(i.Branch))
 }
 

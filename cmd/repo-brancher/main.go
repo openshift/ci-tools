@@ -117,12 +117,6 @@ func main() {
 			return nil
 		}
 
-		futureBranchForCurrentPromotion, futureBranchForFuturePromotion, err := promotion.DetermineReleaseBranches(o.CurrentRelease, o.FutureRelease, repoInfo.Branch)
-		if err != nil {
-			logger.WithError(err).Error("could not determine future branch that would promote to current imagestream")
-			return nil
-		}
-
 		remote, err := url.Parse(fmt.Sprintf("https://github.com/%s/%s", repoInfo.Org, repoInfo.Repo))
 		if err != nil {
 			logger.WithError(err).Fatal("Could not construct remote URL.")
@@ -143,12 +137,18 @@ func main() {
 			}
 		}
 
-		// when we're initializing the branch, we just want to make sure
-		// it is in sync with the current branch that is promoting
-		for _, futureBranch := range []string{futureBranchForCurrentPromotion, futureBranchForFuturePromotion} {
+		for _, futureRelease := range o.FutureReleases.Strings() {
+			futureBranch, err := promotion.DetermineReleaseBranch(o.CurrentRelease, futureRelease, repoInfo.Branch)
+			if err != nil {
+				logger.WithError(err).Error("could not determine release branch")
+				return nil
+			}
 			if futureBranch == repoInfo.Branch {
 				continue
 			}
+
+			// when we're initializing the branch, we just want to make sure
+			// it is in sync with the current branch that is promoting
 			branchLogger := logger.WithField("future-branch", futureBranch)
 			command := []string{"ls-remote", remote.String(), fmt.Sprintf("refs/heads/%s", futureBranch)}
 			cmdLogger := branchLogger.WithFields(logrus.Fields{"commands": fmt.Sprintf("git %s", strings.Join(command, " "))})

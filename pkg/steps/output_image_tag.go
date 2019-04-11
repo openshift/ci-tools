@@ -11,10 +11,8 @@ import (
 	"github.com/openshift/ci-operator/pkg/api"
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 	coreapi "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/util/retry"
 )
 
 // outputImageTagStep will ensure that a tag exists
@@ -56,29 +54,9 @@ func (s *outputImageTagStep) Run(ctx context.Context, dry bool) error {
 		return nil
 	}
 
-	// Create if not exists, update if it does
-	if _, err := s.istClient.ImageStreamTags(toNamespace).Create(ist); err != nil {
-		if errors.IsAlreadyExists(err) {
-			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				existingIst, err := s.istClient.ImageStreamTags(ist.Namespace).Get(ist.Name, meta.GetOptions{})
-				if err != nil {
-					return err
-				}
-				// We don't care about the existing imagestreamtag's state, we just
-				// want it to look like the new one, so we only copy the
-				// ResourceVersion so we can update it.
-				ist.ResourceVersion = existingIst.ResourceVersion
-				if _, err = s.istClient.ImageStreamTags(toNamespace).Update(ist); err != nil {
-					return err
-				}
-				return nil
-			})
-			if err != nil {
-				return fmt.Errorf("could not update output imagestreamtag: %v", err)
-			}
-		} else {
-			return fmt.Errorf("could not create output imagestreamtag: %v", err)
-		}
+	// Create if not exists, if it already exists, then we have nothing to do.
+	if _, err := s.istClient.ImageStreamTags(toNamespace).Create(ist); err != nil && !errors.IsAlreadyExists(err) {
+		return fmt.Errorf("could not create output imagestreamtag: %v", err)
 	}
 	return nil
 }
@@ -86,25 +64,16 @@ func (s *outputImageTagStep) Run(ctx context.Context, dry bool) error {
 func (s *outputImageTagStep) Done() (bool, error) {
 	toNamespace := s.namespace()
 	log.Printf("Checking for existence of %s/%s:%s", toNamespace, s.config.To.Name, s.config.To.Tag)
-	ist, err := s.istClient.ImageStreamTags(toNamespace).Get(fmt.Sprintf("%s:%s", s.config.To.Name, s.config.To.Tag), meta.GetOptions{})
-	if err != nil {
+	if _, err := s.istClient.ImageStreamTags(toNamespace).Get(
+		fmt.Sprintf("%s:%s", s.config.To.Name, s.config.To.Tag),
+		meta.GetOptions{},
+	); err != nil {
 		if errors.IsNotFound(err) {
 			return false, nil
 		}
 		return false, fmt.Errorf("could not retrieve output imagestreamtag: %v", err)
 	}
-
-	// TODO(chance): this doesn't handle dry run since Done() doesn't have
-	// information about if it's a dry-run
-	from, err := s.istClient.ImageStreamTags(s.jobSpec.Namespace).Get(fmt.Sprintf("%s:%s", api.PipelineImageStream, s.config.From), meta.GetOptions{})
-	if err != nil {
-		return false, fmt.Errorf("could not resolve base image: %v", err)
-	}
-
-	desiredIst := s.imageStreamTag(from.Image.Name)
-	// if a tag already exists but doesn't match what we're looking for we're
-	// not done
-	return equality.Semantic.DeepEqual(ist.Tag, desiredIst.Tag), nil
+	return true, nil
 }
 
 func (s *outputImageTagStep) Requires() []api.StepLink {

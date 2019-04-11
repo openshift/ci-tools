@@ -14,6 +14,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/selection"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -21,6 +22,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
+	coretesting "k8s.io/client-go/testing"
 
 	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	pjclientset "k8s.io/test-infra/prow/client/clientset/versioned"
@@ -64,6 +66,15 @@ func NewProwJobClient(clusterConfig *rest.Config, namespace string, dry bool) (p
 func NewCMClient(clusterConfig *rest.Config, namespace string, dry bool) (coreclientset.ConfigMapInterface, error) {
 	if dry {
 		c := fake.NewSimpleClientset()
+		c.PrependReactor("create", "configmaps", func(action coretesting.Action) (bool, runtime.Object, error) {
+			cm := action.(coretesting.CreateAction).GetObject().(*v1.ConfigMap)
+			y, err := yaml.Marshal([]*v1.ConfigMap{cm})
+			if err != nil {
+				return true, nil, fmt.Errorf("failed to convert ConfigMap to YAML: %v", err)
+			}
+			fmt.Printf("%s", y)
+			return false, nil, nil
+		})
 		return c.CoreV1().ConfigMaps(namespace), nil
 	}
 

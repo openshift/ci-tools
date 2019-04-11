@@ -136,6 +136,15 @@ func FromConfig(
 			if _, ok := requiredNames[string(rawStep.OutputImageTagStepConfiguration.From)]; ok || !rawStep.OutputImageTagStepConfiguration.Optional {
 				stepLinks = append(stepLinks, step.Creates()...)
 			}
+		} else if rawStep.PrePublishOutputImageTagStepConfiguration != nil {
+			if len(jobSpec.Refs.Pulls) == 1 {
+				step = steps.PrePublishOutputImageTagStep(*rawStep.PrePublishOutputImageTagStepConfiguration, imageClient, imageClient, jobSpec)
+				stepLinks = append(stepLinks, step.Creates()...)
+			} else if len(jobSpec.Refs.Pulls) > 1 {
+				log.Printf("pre_publish_output_images_step configured, but job has more than 1 pull-request, skipping")
+			} else {
+				log.Printf("pre_publish_output_images_step configured, but job has no pull-requests, skipping")
+			}
 		} else if rawStep.ReleaseImagesTagStepConfiguration != nil {
 			srcClient, err := anonymousClusterImageStreamClient(imageClient, clusterConfig, rawStep.ReleaseImagesTagStepConfiguration.Cluster)
 			if err != nil {
@@ -163,6 +172,12 @@ func FromConfig(
 
 		} else if rawStep.TestStepConfiguration != nil {
 			step = steps.TestStep(*rawStep.TestStepConfiguration, config.Resources, podClient, artifactDir, jobSpec)
+		} else {
+			return nil, nil, fmt.Errorf("unhandled rawStep %#v", rawStep)
+		}
+
+		if step == nil {
+			continue
 		}
 
 		step, ok := checkForFullyQualifiedStep(step, params)
@@ -188,6 +203,7 @@ func FromConfig(
 	}
 
 	buildSteps = append(buildSteps, steps.ImagesReadyStep(imageStepLinks))
+	buildSteps = append(buildSteps, steps.PrepublishImagesReadyStep(imageStepLinks))
 
 	if promote {
 		cfg, err := promotionDefaults(config)
@@ -388,25 +404,38 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.Job
 	for i := range config.Images {
 		image := &config.Images[i]
 		buildSteps = append(buildSteps, api.StepConfiguration{ProjectDirectoryImageBuildStepConfiguration: image})
+		var outputImageStep *api.OutputImageTagStepConfiguration
 		if config.ReleaseTagConfiguration != nil {
-			buildSteps = append(buildSteps, api.StepConfiguration{OutputImageTagStepConfiguration: &api.OutputImageTagStepConfiguration{
+			outputImageStep = &api.OutputImageTagStepConfiguration{
 				From: image.To,
 				To: api.ImageStreamTagReference{
 					Name: fmt.Sprintf("%s%s", config.ReleaseTagConfiguration.NamePrefix, api.StableImageStream),
 					Tag:  string(image.To),
 				},
 				Optional: image.Optional,
-			}})
+			}
 		} else {
-			buildSteps = append(buildSteps, api.StepConfiguration{OutputImageTagStepConfiguration: &api.OutputImageTagStepConfiguration{
+			outputImageStep = &api.OutputImageTagStepConfiguration{
 				From: image.To,
 				To: api.ImageStreamTagReference{
 					Name: api.StableImageStream,
 					Tag:  string(image.To),
 				},
 				Optional: image.Optional,
+			}
+		}
+		buildSteps = append(buildSteps, api.StepConfiguration{OutputImageTagStepConfiguration: outputImageStep})
+
+		if config.PrepublishConfiguration != nil {
+			buildSteps = append(buildSteps, api.StepConfiguration{PrePublishOutputImageTagStepConfiguration: &api.PrePublishOutputImageTagStepConfiguration{
+				From: image.To,
+				To: api.PrePublishImageTagConfiguration{
+					Namespace: config.PrepublishConfiguration.Namespace,
+					Name:      string(image.To),
+				},
 			}})
 		}
+
 	}
 
 	for i := range config.Tests {

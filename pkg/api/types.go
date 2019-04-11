@@ -60,6 +60,10 @@ type ReleaseBuildConfiguration struct {
 	// If no promotion is defined, it is defaulted from the ReleaseTagConfiguration.
 	PromotionConfiguration *PromotionConfiguration `json:"promotion,omitempty"`
 
+	// PrepublishConfiguration determines if images are pushed for each build
+	// to a namespace besides the build namespace.
+	PrepublishConfiguration *PrepublishConfiguration `json:"prepublish,omitempty"`
+
 	// Resources is a set of resource requests or limits over the
 	// input types. The special name '*' may be used to set default
 	// requests and limits.
@@ -225,6 +229,22 @@ type PromotionConfiguration struct {
 	Disabled bool `json:"disabled,omitempty"`
 }
 
+type PrepublishConfiguration struct {
+	// Namespace identifies the namespace to which the built
+	// artifacts will be published to.
+	Namespace string `json:"namespace"`
+}
+
+type PrePublishImageTagConfiguration struct {
+	// Namespace identifies the namespace to which the built
+	// artifacts will be published to.
+	Namespace string `json:"namespace"`
+
+	// Name is an optional image stream name to use that
+	// contains all component tags.
+	Name string `json:"name"`
+}
+
 // StepConfiguration holds one step configuration.
 // Only one of the fields in this can be non-null.
 type StepConfiguration struct {
@@ -232,6 +252,7 @@ type StepConfiguration struct {
 	PipelineImageCacheStepConfiguration         *PipelineImageCacheStepConfiguration         `json:"pipeline_image_cache_step,omitempty"`
 	SourceStepConfiguration                     *SourceStepConfiguration                     `json:"source_step,omitempty"`
 	ProjectDirectoryImageBuildStepConfiguration *ProjectDirectoryImageBuildStepConfiguration `json:"project_directory_image_build_step,omitempty"`
+	PrePublishOutputImageTagStepConfiguration   *PrePublishOutputImageTagStepConfiguration   `json:"pre_publish_output_images_step,omitempty"`
 	RPMImageInjectionStepConfiguration          *RPMImageInjectionStepConfiguration          `json:"rpm_image_injection_step,omitempty"`
 	RPMServeStepConfiguration                   *RPMServeStepConfiguration                   `json:"rpm_serve_step,omitempty"`
 	OutputImageTagStepConfiguration             *OutputImageTagStepConfiguration             `json:"output_image_tag_step,omitempty"`
@@ -259,6 +280,13 @@ type OutputImageTagStepConfiguration struct {
 	// promoted unless explicitly targeted. Use for builds which
 	// are invoked only when testing certain parts of the repo.
 	Optional bool `json:"optional"`
+}
+
+// PrePublishOutputImageTagStepConfiguration  describes a step that
+// tags a pipeline image out from the build pipeline per pull-request build.
+type PrePublishOutputImageTagStepConfiguration struct {
+	From PipelineImageStreamTagReference `json:"from"`
+	To   PrePublishImageTagConfiguration `json:"to"`
 }
 
 // PipelineImageCacheStepConfiguration describes a

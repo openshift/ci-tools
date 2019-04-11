@@ -6,54 +6,40 @@ import (
 	"github.com/openshift/ci-operator/pkg/api"
 )
 
-type imagesReadyLinkStep struct {
-	requires, creates []api.StepLink
-	name, description string
+type imagesReadyStep struct {
+	links []api.StepLink
 }
 
-func (s *imagesReadyLinkStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
+func (s *imagesReadyStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
 	return nil, nil
 }
 
-func (s *imagesReadyLinkStep) Run(ctx context.Context, dry bool) error {
+func (s *imagesReadyStep) Run(ctx context.Context, dry bool) error {
 	return nil
 }
 
-func (s *imagesReadyLinkStep) Done() (bool, error) {
+func (s *imagesReadyStep) Done() (bool, error) {
 	return true, nil
 }
 
-func (s *imagesReadyLinkStep) Requires() []api.StepLink {
-	return s.requires
+func (s *imagesReadyStep) Requires() []api.StepLink {
+	return s.links
 }
 
-func (s *imagesReadyLinkStep) Creates() []api.StepLink {
-	return s.creates
+func (s *imagesReadyStep) Creates() []api.StepLink {
+	return []api.StepLink{api.ImagesReadyLink()}
 }
 
-func (s *imagesReadyLinkStep) Provides() (api.ParameterMap, api.StepLink) {
+func (s *imagesReadyStep) Provides() (api.ParameterMap, api.StepLink) {
 	return nil, nil
 }
 
-func (s *imagesReadyLinkStep) Name() string { return s.name }
+func (s *imagesReadyStep) Name() string { return "[images]" }
 
-func (s *imagesReadyLinkStep) Description() string {
-	return s.description
-}
+func (s *imagesReadyStep) Description() string { return "All images are built and tagged into stable" }
 
-func ImagesReadyStep(requires []api.StepLink) api.Step {
-	return newImagesReadyLinkStep(requires, []api.StepLink{api.ImagesReadyLink()}, "[images]", "All images are built and tagged into stable")
-}
-
-func PrepublishImagesReadyStep(requires []api.StepLink) api.Step {
-	return newImagesReadyLinkStep(requires, nil, "[prepublish]", "All images are built and tagged into the prepublish namespace")
-}
-
-func newImagesReadyLinkStep(requires, creates []api.StepLink, name, description string) api.Step {
-	return &imagesReadyLinkStep{
-		requires:    requires,
-		name:        name,
-		creates:     creates,
-		description: description,
+func ImagesReadyStep(links []api.StepLink) api.Step {
+	return &imagesReadyStep{
+		links: links,
 	}
 }

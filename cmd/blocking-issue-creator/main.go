@@ -1,0 +1,247 @@
+package main
+
+import (
+	"context"
+	"errors"
+	"flag"
+	"fmt"
+	"io/ioutil"
+	"os"
+	"strings"
+
+	"github.com/openshift/ci-operator/pkg/api"
+	githubql "github.com/shurcooL/githubv4"
+	"github.com/sirupsen/logrus"
+	"golang.org/x/oauth2"
+
+	"github.com/openshift/ci-operator-prowgen/pkg/config"
+	"github.com/openshift/ci-operator-prowgen/pkg/promotion"
+)
+
+type options struct {
+	promotion.Options
+	username  string
+	tokenPath string
+}
+
+func (o *options) Validate() error {
+	if err := o.Options.Validate(); err != nil {
+		return err
+	}
+	if o.username == "" {
+		return errors.New("--username is required")
+	}
+	if o.tokenPath == "" {
+		return errors.New("--token-path is required")
+	}
+	return nil
+}
+
+func gatherOptions() options {
+	o := options{}
+	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+	fs.StringVar(&o.username, "username", "", "Username to use when communicating with GitHub.")
+	fs.StringVar(&o.tokenPath, "token-path", "", "Path to token to use when communicating with GitHub.")
+	o.Bind(fs)
+	if err := fs.Parse(os.Args[1:]); err != nil {
+		logrus.WithError(err).Fatal("could not parse input")
+	}
+	return o
+}
+
+func main() {
+	o := gatherOptions()
+	if err := o.Validate(); err != nil {
+		logrus.Fatalf("Invalid options: %v", err)
+	}
+
+	rawToken, err := ioutil.ReadFile(o.tokenPath)
+	if err != nil {
+		logrus.WithError(err).Fatal("Could not read token.")
+	}
+	client := githubql.NewClient(oauth2.NewClient(context.Background(), oauth2.StaticTokenSource(&oauth2.Token{AccessToken: string(rawToken)})))
+
+	failed := false
+	if err := config.OperateOnCIOperatorConfigDir(o.ConfigDir, func(configuration *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {
+		logger := config.LoggerForInfo(*repoInfo)
+		if (o.Org != "" && o.Org != repoInfo.Org) || (o.Repo != "" && o.Repo != repoInfo.Repo) {
+			return nil
+		}
+		if !(promotion.PromotesOfficialImages(configuration) && configuration.PromotionConfiguration.Name == o.CurrentRelease) {
+			return nil
+		}
+
+		var branches []string
+		for _, futureRelease := range o.FutureReleases.Strings() {
+			futureBranch, err := promotion.DetermineReleaseBranch(o.CurrentRelease, futureRelease, repoInfo.Branch)
+			if err != nil {
+				logger.WithError(err).Error("could not determine release branch")
+				failed = true
+				return nil
+			}
+			if futureBranch == repoInfo.Branch {
+				continue
+			}
+
+			branches = append(branches, futureBranch)
+		}
+
+		if len(branches) == 0 {
+			return nil
+		}
+
+		var branchTokens []string
+		for _, branch := range branches {
+			branchTokens = append(branchTokens, fmt.Sprintf("branch:%s", branch))
+		}
+		title := fmt.Sprintf("Future Release Branches Frozen For Merging | %s", strings.Join(branchTokens, " "))
+		body := fmt.Sprintf("The following branches are being fast-forwarded from the current development branch (%s) as placeholders for future releases. No merging is allowed into these release branches until they are unfrozen for production release.\n\n", repoInfo.Branch)
+		for _, branch := range branches {
+			body += fmt.Sprintf(" - `%s`\n", branch)
+		}
+		body += "\nContact the [Test Platform](https://coreos.slack.com/messages/CBN38N3MW) or [Automated Release](https://coreos.slack.com/messages/CB95J6R4N) teams for more information."
+
+		// check to see if there's a blocker issue we already created so we can just edit it
+		var blockerQuery struct {
+			Search struct {
+				Nodes []struct {
+					Issue Issue `graphql:"... on Issue"`
+				}
+			} `graphql:"search(type: ISSUE, first: 1, query: $query)"`
+		}
+		vars := map[string]interface{}{
+			"query": githubql.String(fmt.Sprintf("is:issue state:open label:\"tide/merge-blocker\" org:%s repo:%s author:%s", repoInfo.Org, repoInfo.Repo, o.username)),
+		}
+		if err := client.Query(context.Background(), &blockerQuery, vars); err != nil {
+			logrus.WithError(err).Error("Failed to search for open issues.")
+			failed = true
+		}
+		var issues []Issue
+		var numbers []int
+		for _, node := range blockerQuery.Search.Nodes {
+			issues = append(issues, node.Issue)
+			numbers = append(numbers, int(node.Issue.Number))
+		}
+		if len(numbers) > 1 {
+			logger.Warnf("Found more than one merge blocking issue by the bot: %v", numbers)
+			failed = true
+			return nil
+		}
+
+		// we have an existing issue that needs to be up to date
+		if len(numbers) == 1 {
+			logger = logger.WithField("merge-blocker", numbers[0])
+			existing := issues[0]
+			needsUpdate := string(existing.Title) != title || string(existing.Body) != body
+
+			if !needsUpdate {
+				logger.Info("Current merge-blocker issue is up to date, no update necessary.")
+				return nil
+			}
+
+			// we need to update the issue
+			var updateIssue struct {
+				UpdateIssue struct {
+					Issue struct {
+						Number githubql.Int
+					}
+				} `graphql:"updateIssue(input: $input)"`
+			}
+			// this needs to be a named type for the library
+			type UpdateIssueInput struct {
+				ID    githubql.ID     `json:"id"`
+				Title githubql.String `json:"title"`
+				Body  githubql.String `json:"body"`
+			}
+			input := UpdateIssueInput{
+				ID:    issues[0].ID,
+				Title: githubql.String(title),
+				Body:  githubql.String(body),
+			}
+			if !o.Confirm {
+				logrus.Info("Would update issue.")
+				return nil
+			}
+			if err := client.Mutate(context.Background(), &updateIssue, input, nil); err != nil {
+				logger.WithError(err).Error("Failed to update issue.")
+				failed = true
+				return nil
+			}
+
+			logger.Infof("Updated issue %d", updateIssue.UpdateIssue.Issue.Number)
+		} else {
+			// we need to create a new issue
+
+			// what is the ID of the blocker label?
+			var labelQuery struct {
+				Repository struct {
+					ID    githubql.ID
+					Label struct {
+						ID githubql.ID
+					} `graphql:"label(name:\"tide/merge-blocker\")"`
+				} `graphql:"repository(owner: $owner, name: $name)"`
+			}
+			vars = map[string]interface{}{
+				"owner": githubql.String(repoInfo.Org),
+				"name":  githubql.String(repoInfo.Repo),
+			}
+			if err := client.Query(context.Background(), &labelQuery, vars); err != nil {
+				logger.WithError(err).Error("Failed to search for merge blocker labels.")
+				failed = true
+				return nil
+			}
+
+			var createIssue struct {
+				CreateIssue struct {
+					Issue struct {
+						Number githubql.Int
+					}
+				} `graphql:"createIssue(input: $input)"`
+			}
+			// this needs to be a named type for the library
+			type CreateIssueInput struct {
+				RepositoryID githubql.ID     `json:"repositoryId"`
+				Title        githubql.String `json:"title"`
+				Body         githubql.String `json:"body"`
+				LabelIDs     []githubql.ID   `json:"labelIds"`
+			}
+			input := CreateIssueInput{
+				RepositoryID: labelQuery.Repository.ID,
+				Title:        githubql.String(title),
+				Body:         githubql.String(body),
+				LabelIDs:     []githubql.ID{labelQuery.Repository.Label.ID},
+			}
+
+			if !o.Confirm {
+				logrus.Info("Would create issue.")
+				return nil
+			}
+
+			if err := client.Mutate(context.Background(), &createIssue, input, nil); err != nil {
+				logger.WithError(err).Error("Failed to create merge blocker issue.")
+				failed = true
+				return nil
+			}
+
+			logger.Infof("Created issue %d", createIssue.CreateIssue.Issue.Number)
+		}
+
+		return nil
+	}); err != nil || failed {
+		logrus.WithError(err).Fatal("Could not publish merge blocking issues.")
+	}
+}
+
+// Issue holds graphql response data about issues
+type Issue struct {
+	ID         githubql.ID
+	Number     githubql.Int
+	Title      githubql.String
+	Body       githubql.String
+	Repository struct {
+		Name  githubql.String
+		Owner struct {
+			Login githubql.String
+		}
+	}
+}

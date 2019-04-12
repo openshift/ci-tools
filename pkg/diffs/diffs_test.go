@@ -10,15 +10,11 @@ import (
 	v1 "k8s.io/api/core/v1"
 
 	"k8s.io/apimachinery/pkg/api/equality"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
-
-	templateapi "github.com/openshift/api/template/v1"
 
 	cioperatorapi "github.com/openshift/ci-operator/pkg/api"
 
@@ -297,171 +293,55 @@ func makeConfig(p []prowconfig.Presubmit) *prowconfig.Config {
 }
 
 func TestGetChangedTemplates(t *testing.T) {
-	baseParameters := []templateapi.Parameter{
-		{
-			Name:     "JOB_NAME_SAFE",
-			Required: true,
-		},
-		{
-			Name:     "JOB_NAME_HASH",
-			Required: true,
-		},
-		{
-			Name:     "NAMESPACE",
-			Required: true,
-		},
-		{
-			Name:     "IMAGE_FORMAT",
-			Required: true,
-		},
-		{
-			Name:     "CLUSTER_TYPE",
-			Required: true,
-		},
-		{
-			Name:     "TEST_COMMAND",
-			Required: true,
-		},
-	}
-
-	baseObjects := []runtime.RawExtension{
-		{
-			Object: &v1.Pod{
-				Spec: v1.PodSpec{
-					Containers: []v1.Container{
-						{
-							Name:    "setup",
-							Image:   "setup-image",
-							Command: []string{"bash-script"},
-						},
-						{
-							Name:    "test",
-							Image:   "test-image",
-							Command: []string{"bash-script"},
-						},
-						{
-							Image:   "teardown-image",
-							Name:    "teardown",
-							Command: []string{"bash-script"},
-						},
-					},
-					Volumes: []v1.Volume{
-						{
-							Name: "test-volume",
-							VolumeSource: v1.VolumeSource{
-								EmptyDir: &v1.EmptyDirVolumeSource{}},
-						},
-					},
-				},
-			},
-		},
+	makeBaseTemplates := func() config.CiTemplates {
+		return config.CiTemplates{
+			"template1.yaml": []byte("template1's content"),
+			"template2.yaml": []byte("template2's content"),
+		}
 	}
 	testCases := []struct {
 		name         string
-		getTemplates func() (map[string]*templateapi.Template, map[string]*templateapi.Template)
-		expected     config.CiTemplates
+		getTemplates func() (config.CiTemplates, config.CiTemplates)
+		expected     []string
 	}{
 		{
 			name: "no changes",
-			getTemplates: func() (map[string]*templateapi.Template, map[string]*templateapi.Template) {
-				templates := makeBaseTemplates(baseParameters, baseObjects)
+			getTemplates: func() (config.CiTemplates, config.CiTemplates) {
+				templates := makeBaseTemplates()
 				return templates, templates
 			},
-			expected: config.CiTemplates{},
 		},
 		{
 			name: "add new template",
-			getTemplates: func() (map[string]*templateapi.Template, map[string]*templateapi.Template) {
-				prTemplates := makeBaseTemplates(baseParameters, baseObjects)
-
-				prTemplates["templateNEW"] = &templateapi.Template{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "templateNEW",
-						Annotations: map[string]string{
-							"description": "description",
-						},
-					},
-					Parameters: baseParameters,
-					Objects:    baseObjects,
-				}
-				return makeBaseTemplates(baseParameters, baseObjects), prTemplates
+			getTemplates: func() (config.CiTemplates, config.CiTemplates) {
+				prTemplates := makeBaseTemplates()
+				prTemplates["templateNEW.yaml"] = []byte("templateNEW's content")
+				return makeBaseTemplates(), prTemplates
 			},
-			expected: map[string]*templateapi.Template{
-				"templateNEW": {
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "templateNEW",
-						Annotations: map[string]string{
-							"description": "description",
-						},
-					},
-					Parameters: baseParameters,
-					Objects:    baseObjects,
-				},
-			},
+			expected: []string{"templateNEW.yaml"},
 		},
 		{
 			name: "change existing template",
-			getTemplates: func() (map[string]*templateapi.Template, map[string]*templateapi.Template) {
-				prTemplates := makeBaseTemplates(baseParameters, baseObjects)
-
-				prTemplates["template1"].Parameters = append(prTemplates["template1"].Parameters,
-					templateapi.Parameter{
-						Name:  "NEW_PARAM",
-						Value: "TEST_VALUE",
-					})
-				return makeBaseTemplates(baseParameters, baseObjects), prTemplates
+			getTemplates: func() (config.CiTemplates, config.CiTemplates) {
+				prTemplates := makeBaseTemplates()
+				prTemplates["template1.yaml"] = []byte("template1's new content")
+				return makeBaseTemplates(), prTemplates
 			},
-			expected: config.CiTemplates{
-				"template1": {
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "template1",
-						Annotations: map[string]string{
-							"description": "description",
-						},
-					},
-					Parameters: append(baseParameters, templateapi.Parameter{
-						Name:  "NEW_PARAM",
-						Value: "TEST_VALUE",
-					}),
-					Objects: baseObjects,
-				},
-			},
+			expected: []string{"template1.yaml"},
 		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			before, after := testCase.getTemplates()
-			changedTemplates := GetChangedTemplates(before, after, logrus.WithField("testcase", testCase.name))
-			if !equality.Semantic.DeepEqual(changedTemplates, testCase.expected) {
-				t.Fatalf("Name:%s\nExpected %#v\nFound:%#v\n", testCase.name, testCase.expected, changedTemplates)
+			var filenames []string
+			for f := range GetChangedTemplates(before, after, logrus.WithField("testcase", testCase.name)) {
+				filenames = append(filenames, f)
+			}
+			if !equality.Semantic.DeepEqual(testCase.expected, filenames) {
+				t.Fatalf("%s", diff.ObjectDiff(testCase.expected, filenames))
 			}
 		})
-	}
-}
-
-func makeBaseTemplates(baseParameters []templateapi.Parameter, baseObjects []runtime.RawExtension) map[string]*templateapi.Template {
-	return map[string]*templateapi.Template{
-		"template1": {
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "template1",
-				Annotations: map[string]string{
-					"description": "description",
-				},
-			},
-			Parameters: baseParameters,
-			Objects:    baseObjects,
-		},
-		"template2": {
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "template2",
-				Annotations: map[string]string{
-					"description": "description",
-				},
-			},
-			Parameters: baseParameters,
-			Objects:    baseObjects,
-		},
 	}
 }
 

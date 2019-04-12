@@ -27,7 +27,6 @@ import (
 
 	clientgo_testing "k8s.io/client-go/testing"
 
-	templateapi "github.com/openshift/api/template/v1"
 	"github.com/openshift/ci-operator-prowgen/pkg/config"
 	"github.com/openshift/ci-operator/pkg/api"
 )
@@ -828,24 +827,12 @@ func makeBasePresubmit() *prowconfig.Presubmit {
 }
 
 func TestReplaceCMTemplateName(t *testing.T) {
-	const tempCMName = "rehearse-pv8j80dg-test-template"
+	const tempCMName = "rehearse-i0k3r9fp-test-template"
 
 	templates := config.CiTemplates{
-		"test-template.yaml": &templateapi.Template{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "test-template",
-			},
-		},
-		"test-template2.yaml": &templateapi.Template{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "test-template2",
-			},
-		},
-		"test-template3.yaml": &templateapi.Template{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "test-template3",
-			},
-		},
+		"test-template.yaml":  []byte("test-template's content"),
+		"test-template2.yaml": []byte("test-template2's content"),
+		"test-template3.yaml": []byte("test-template3's content"),
 	}
 
 	testCases := []struct {
@@ -926,10 +913,7 @@ func TestReplaceCMTemplateName(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.description, func(t *testing.T) {
-			if err := replaceCMTemplateName(testCase.jobVolumeMounts, testCase.jobVolumes, templates); err != nil {
-				t.Fatal()
-			}
-
+			replaceCMTemplateName(testCase.jobVolumeMounts, testCase.jobVolumes, templates)
 			expected := testCase.expectedToFind()
 			if !reflect.DeepEqual(expected, testCase.jobVolumes) {
 				t.Fatalf("Diff found %v", diff.ObjectReflectDiff(expected, testCase.jobVolumes))

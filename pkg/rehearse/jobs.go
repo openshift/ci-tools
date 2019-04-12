@@ -217,11 +217,7 @@ func ConfigureRehearsalJobs(toBeRehearsed config.Presubmits, ciopConfigs config.
 			}
 
 			if allowVolumes {
-				if err := replaceCMTemplateName(rehearsal.Spec.Containers[0].VolumeMounts, rehearsal.Spec.Volumes, templates); err != nil {
-					jobLogger.WithError(err).Warn("Failed to replace the configmap name to the temporary one")
-					continue
-				}
-
+				replaceCMTemplateName(rehearsal.Spec.Containers[0].VolumeMounts, rehearsal.Spec.Volumes, templates)
 				replaceClusterProfiles(rehearsal.Spec.Volumes, profiles, loggers.Debug.WithField("name", job.Name))
 			}
 
@@ -251,40 +247,15 @@ func AddRandomJobsForChangedTemplates(templates config.CiTemplates, prConfigPres
 	return rehearsals
 }
 
-func replaceCMTemplateName(volumeMounts []v1.VolumeMount, volumes []v1.Volume, templates config.CiTemplates) error {
-	replace := func(v *v1.Volume) error {
-		volumeName, templateKey := hasChangedTemplateVolume(volumeMounts, *v, templates)
-		if len(volumeName) == 0 || len(templateKey) == 0 || volumeName != v.Name {
-			return nil
-		}
-
-		templateData, err := config.GetTemplateData(templates[templateKey])
-		if err != nil {
-			return fmt.Errorf("couldn't get template's data: %s: %v", templates[templateKey], err)
-		}
-
-		name := config.GetTempCMName(config.GetTemplateName(templateKey), templateKey, templateData)
-		v.VolumeSource.ConfigMap.Name = name
-
-		return nil
-	}
-
+func replaceCMTemplateName(volumeMounts []v1.VolumeMount, volumes []v1.Volume, templates config.CiTemplates) {
 	for _, volume := range volumes {
-		if err := replace(&volume); err != nil {
-			return err
+		for _, volumeMount := range volumeMounts {
+			filename := volumeMount.SubPath
+			if t, ok := templates[filename]; ok && volumeMount.Name == volume.Name {
+				volume.VolumeSource.ConfigMap.Name = config.GetTempCMName(config.GetTemplateName(filename), filename, t)
+			}
 		}
 	}
-
-	return nil
-}
-
-func hasChangedTemplateVolume(volumeMounts []v1.VolumeMount, volume v1.Volume, templates config.CiTemplates) (string, string) {
-	for _, volumeMount := range volumeMounts {
-		if _, ok := templates[volumeMount.SubPath]; ok {
-			return volumeMount.Name, volumeMount.SubPath
-		}
-	}
-	return "", ""
 }
 
 func pickTemplateJob(presubmits map[string][]prowconfig.Presubmit, templateFile, clusterType string) (string, *prowconfig.Presubmit) {

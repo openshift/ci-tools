@@ -5,7 +5,6 @@ import (
 	"sort"
 	"testing"
 
-	templateapi "github.com/openshift/api/template/v1"
 	"github.com/openshift/ci-operator/pkg/api"
 	"k8s.io/apimachinery/pkg/util/diff"
 	prowconfig "k8s.io/test-infra/prow/config"
@@ -66,7 +65,7 @@ func TestRecordChangedTemplates(t *testing.T) {
 			metrics := NewMetrics(testFilename)
 			testTemplates := config.CiTemplates{}
 			for _, ciopConfig := range tc.templates {
-				testTemplates[ciopConfig] = &templateapi.Template{}
+				testTemplates[ciopConfig] = []byte{}
 			}
 			metrics.RecordChangedTemplates(testTemplates)
 			sort.Strings(metrics.ChangedTemplates)

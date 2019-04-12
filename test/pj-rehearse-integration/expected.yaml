@@ -1,102 +1,8 @@
 - data:
     test-template.yaml: |
-      apiVersion: template.openshift.io/v1
       kind: Template
-      metadata:
-        creationTimestamp: null
-      objects:
-      - apiVersion: authorization.openshift.io/v1
-        kind: RoleBinding
-        metadata:
-          name: ${JOB_NAME_SAFE}-image-puller
-          namespace: ${NAMESPACE}
-        roleRef:
-          name: system:image-puller
-        subjects:
-        - kind: SystemGroup
-          name: system:unauthenticated
-        - kind: SystemGroup
-          name: system:authenticated
-      - apiVersion: v1
-        kind: Pod
-        metadata:
-          annotations:
-            ci-operator.openshift.io/save-container-logs: "true"
-            ci-operator.openshift.io/wait-for-container-artifacts: teardown
-          name: ${JOB_NAME_SAFE}
-          namespace: ${NAMESPACE}
-        spec:
-          activeDeadlineSeconds: 14400
-          containers:
-          - command:
-            - echo
-            - test
-            - CHANGED
-            env:
-            - name: HOME
-              value: /tmp/home
-            - name: KUBECONFIG
-              value: /tmp/admin.kubeconfig
-            image: ${IMAGE_TESTS}
-            name: test
-            resources:
-              limits:
-                memory: 4Gi
-              requests:
-                cpu: 1
-                memory: 300Mi
-            terminationMessagePolicy: FallbackToLogsOnError
-            volumeMounts:
-            - mountPath: /tmp/shared
-              name: shared-tmp
-            - mountPath: /tmp/cluster
-              name: cluster-profile
-            - mountPath: /tmp/artifacts
-              name: artifacts
-          - command:
-            - echo
-            - setup
-            env:
-            - name: INSTANCE_PREFIX
-              value: ${NAMESPACE}-${JOB_NAME_HASH}
-            - name: TYPE
-              value: ${CLUSTER_TYPE}
-            image: ${IMAGE_ANSIBLE}
-            name: setup
-            terminationMessagePolicy: FallbackToLogsOnError
-            volumeMounts:
-            - mountPath: /tmp
-              name: shared-tmp
-            - mountPath: /usr/share/ansible/openshift-ansible/inventory/dynamic/injected
-              name: cluster-profile
-          - command:
-            - echo
-            - teardown
-            env:
-            - name: INSTANCE_PREFIX
-              value: ${NAMESPACE}-${JOB_NAME_HASH}
-            - name: TYPE
-              value: ${CLUSTER_TYPE}
-            image: ${IMAGE_ANSIBLE}
-            name: teardown
-            terminationMessagePolicy: FallbackToLogsOnError
-            volumeMounts:
-            - mountPath: /tmp/shared
-              name: shared-tmp
-            - mountPath: /usr/share/ansible/openshift-ansible/inventory/dynamic/injected
-              name: cluster-profile
-            - mountPath: /tmp/artifacts
-              name: artifacts
-          restartPolicy: Never
-          terminationGracePeriodSeconds: 600
-          volumes:
-          - emptyDir: {}
-            name: artifacts
-          - emptyDir: {}
-            name: shared-tmp
-          - name: cluster-profile
-            secret:
-              secretName: ${JOB_NAME_SAFE}-cluster-profile
+      apiVersion: template.openshift.io/v1
+
       parameters:
       - name: JOB_NAME_SAFE
         required: true
@@ -112,12 +18,118 @@
         required: true
       - name: TEST_COMMAND
         required: true
+
+      objects:
+
+      # We want the cluster to be able to access these images
+      - kind: RoleBinding
+        apiVersion: authorization.openshift.io/v1
+        metadata:
+          name: ${JOB_NAME_SAFE}-image-puller
+          namespace: ${NAMESPACE}
+        roleRef:
+          name: system:image-puller
+        subjects:
+        - kind: SystemGroup
+          name: system:unauthenticated
+        - kind: SystemGroup
+          name: system:authenticated
+
+      # The e2e pod spins up a cluster, runs e2e tests, and then cleans up the cluster.
+      - kind: Pod
+        apiVersion: v1
+        metadata:
+          name: ${JOB_NAME_SAFE}
+          namespace: ${NAMESPACE}
+          annotations:
+            # we want to gather the teardown logs no matter what
+            ci-operator.openshift.io/wait-for-container-artifacts: teardown
+            ci-operator.openshift.io/save-container-logs: "true"
+        spec:
+          restartPolicy: Never
+          activeDeadlineSeconds: 14400
+          terminationGracePeriodSeconds: 600
+          volumes:
+          - name: artifacts
+            emptyDir: {}
+          - name: shared-tmp
+            emptyDir: {}
+          - name: cluster-profile
+            secret:
+              secretName: ${JOB_NAME_SAFE}-cluster-profile
+
+          containers:
+
+          # Once admin.kubeconfig exists, executes shared tests
+          - name: test
+            image: ${IMAGE_TESTS}
+            terminationMessagePolicy: FallbackToLogsOnError
+            resources:
+              requests:
+                cpu: 1
+                memory: 300Mi
+              limits:
+                memory: 4Gi
+            volumeMounts:
+            - name: shared-tmp
+              mountPath: /tmp/shared
+            - name: cluster-profile
+              mountPath: /tmp/cluster
+            - name: artifacts
+              mountPath: /tmp/artifacts
+            env:
+            - name: HOME
+              value: /tmp/home
+            - name: KUBECONFIG
+              value: /tmp/admin.kubeconfig
+            command:
+            - echo
+            - test
+            - CHANGED
+
+          # Runs an install
+          - name: setup
+            image: ${IMAGE_ANSIBLE}
+            terminationMessagePolicy: FallbackToLogsOnError
+            volumeMounts:
+            - name: shared-tmp
+              mountPath: /tmp
+            - name: cluster-profile
+              mountPath: /usr/share/ansible/openshift-ansible/inventory/dynamic/injected
+            env:
+            - name: INSTANCE_PREFIX
+              value: ${NAMESPACE}-${JOB_NAME_HASH}
+            - name: TYPE
+              value: ${CLUSTER_TYPE}
+            command:
+            - echo
+            - setup
+
+          # Performs cleanup of all created resources
+          - name: teardown
+            image: ${IMAGE_ANSIBLE}
+            terminationMessagePolicy: FallbackToLogsOnError
+            volumeMounts:
+            - name: shared-tmp
+              mountPath: /tmp/shared
+            - name: cluster-profile
+              mountPath: /usr/share/ansible/openshift-ansible/inventory/dynamic/injected
+            - name: artifacts
+              mountPath: /tmp/artifacts
+            env:
+            - name: INSTANCE_PREFIX
+              value: ${NAMESPACE}-${JOB_NAME_HASH}
+            - name: TYPE
+              value: ${CLUSTER_TYPE}
+            command:
+            - echo
+            - teardown
   metadata:
     creationTimestamp: null
     labels:
       ci.openshift.org/rehearse-pull: "1234"
       created-by-pj-rehearse: "true"
-    name: rehearse-bv4qjcyg-test-template
+    name: rehearse-hnq8xb9r-test-template
 - apiVersion: prow.k8s.io/v1
   kind: ProwJob
   metadata:
@@ -637,7 +649,7 @@
           - secret:
               name: cluster-secrets-aws
       - configMap:
-          name: rehearse-bv4qjcyg-test-template
+          name: rehearse-hnq8xb9r-test-template
         name: job-definition
     refs:
       base_ref: master
@@ -758,7 +770,7 @@
           - secret:
               name: cluster-secrets-openstack
       - configMap:
-          name: rehearse-bv4qjcyg-test-template
+          name: rehearse-hnq8xb9r-test-template
         name: job-definition
     refs:
       base_ref: master

@@ -67,9 +67,6 @@ func TestOutputImageStep(t *testing.T) {
 		},
 	}
 
-	outputImageStreamTag2 := outputImageStreamTag.DeepCopy()
-	outputImageStreamTag2.Tag.From.Name = "pipeline@incorrect-output-name"
-
 	tests := []struct {
 		name            string
 		execSpec        executionExpectation
@@ -108,28 +105,6 @@ func TestOutputImageStep(t *testing.T) {
 				// done is true prerun because the imageStreamTag is already
 				// created in this test case, and it matches the desired output
 				prerun:   doneExpectation{value: true, err: false},
-				runError: false,
-				postrun:  doneExpectation{value: true, err: false},
-			},
-		},
-		{
-			name: "image stream and image stream tag already exist but image stream tag is replaced to desired state",
-			imageStreams: []*imagev1.ImageStream{
-				outputImageStream,
-			},
-			imageStreamTags: []*imagev1.ImageStreamTag{
-				pipelineRoot,
-				// a tag already exists with the name we intend to create, so
-				// this should get deleted and recreated with the expected
-				// output tag
-				outputImageStreamTag2,
-			},
-			expectedImageStreamTag: outputImageStreamTag,
-			execSpecification: executionExpectation{
-				// prerun done should be false because a tag with the name of
-				// our output exist, but it doesn't match what our desired tag
-				// should look like
-				prerun:   doneExpectation{value: false, err: false},
 				runError: false,
 				postrun:  doneExpectation{value: true, err: false},
 			},

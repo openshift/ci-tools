@@ -54,6 +54,13 @@ func (s *outputImageTagStep) Run(ctx context.Context, dry bool) error {
 		return nil
 	}
 
+	// TODO: this step is "force update" today, but that behavior should be optional in the future
+	//   since other steps are "idempotent". However, the override case supports promotion of machine-os-content
+	//   and will be fixed as part of that.
+	if err := s.istClient.ImageStreamTags(toNamespace).Delete(ist.Name, nil); err != nil && !errors.IsNotFound(err) {
+		return fmt.Errorf("could not remove output imagestreamtag: %v", err)
+	}
+
 	// Create if not exists, if it already exists, then we have nothing to do.
 	if _, err := s.istClient.ImageStreamTags(toNamespace).Create(ist); err != nil && !errors.IsAlreadyExists(err) {
 		return fmt.Errorf("could not create output imagestreamtag: %v", err)

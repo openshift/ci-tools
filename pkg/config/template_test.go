@@ -8,8 +8,6 @@ import (
 	"strconv"
 	"testing"
 
-	templateapi "github.com/openshift/api/template/v1"
-	templatescheme "github.com/openshift/client-go/template/clientset/versioned/scheme"
 	"github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -40,14 +38,8 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 	ciTemplates := getBaseCiTemplates(t)
 
 	for key, template := range ciTemplates {
-
-		templateData, err := GetTemplateData(template)
-
 		templateName := GetTemplateName(key)
-		if err != nil {
-			t.Fatalf("couldn't get data from template %s: %v", templateName, err)
-		}
-		expectedCmNames.Insert(GetTempCMName(templateName, key, templateData))
+		expectedCmNames.Insert(GetTempCMName(templateName, key, template))
 	}
 
 	expectedCmLabels := map[string]string{
@@ -115,17 +107,7 @@ func getBaseCiTemplates(t *testing.T) CiTemplates {
 	if err != nil {
 		t.Fatalf("could not read file %s for template: %v", testTemplatePath, err)
 	}
-
-	var expectedTemplate *templateapi.Template
-	if obj, _, err := templatescheme.Codecs.UniversalDeserializer().Decode(contents, nil, nil); err == nil {
-		if template, ok := obj.(*templateapi.Template); ok {
-			expectedTemplate = template
-		}
-	}
-
-	return CiTemplates{
-		"test-template.yaml": expectedTemplate,
-	}
+	return CiTemplates{"test-template.yaml": contents}
 }
 
 func TestGenClusterProfileCM(t *testing.T) {

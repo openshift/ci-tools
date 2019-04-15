@@ -38,13 +38,5 @@ required = [
   revision = "bca49d5b51a50dc5bb17bbf6204c711c6dbded06"
 
 [[constraint]]
-  name = "github.com/openshift/api"
-  version = "3.9.0"
-
-[[constraint]]
-  name = "github.com/openshift/client-go"
-  version = "3.9.0"
-
-[[constraint]]
   name = "github.com/mattn/go-zglob"
   version = "0.0.1"

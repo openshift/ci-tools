@@ -17,7 +17,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/util/diff"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/fake"
 	coretesting "k8s.io/client-go/testing"
 )
@@ -34,19 +33,8 @@ func TestGetTemplates(t *testing.T) {
 }
 
 func TestCreateCleanupCMTemplates(t *testing.T) {
-	expectedCmNames := sets.NewString()
+	ns := "test-namespace"
 	ciTemplates := getBaseCiTemplates(t)
-
-	for key, template := range ciTemplates {
-		templateName := GetTemplateName(key)
-		expectedCmNames.Insert(GetTempCMName(templateName, key, template))
-	}
-
-	expectedCmLabels := map[string]string{
-		createByRehearse:  "true",
-		rehearseLabelPull: "1234",
-	}
-
 	createByRehearseReq, err := labels.NewRequirement(createByRehearse, selection.Equals, []string{"true"})
 	if err != nil {
 		t.Fatal(err)
@@ -64,20 +52,6 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 	}
 
 	cs := fake.NewSimpleClientset()
-	cs.Fake.PrependReactor("create", "configmaps", func(action coretesting.Action) (bool, runtime.Object, error) {
-		createAction := action.(coretesting.CreateAction)
-		cm := createAction.GetObject().(*v1.ConfigMap)
-
-		if !expectedCmNames.Has(cm.ObjectMeta.Name) {
-			t.Fatalf("Configmap name:\nExpected one of: %v\nFound: %s", expectedCmNames, cm.ObjectMeta.Name)
-		}
-
-		if !reflect.DeepEqual(cm.ObjectMeta.Labels, expectedCmLabels) {
-			t.Fatalf("Configmap labels\nExpected: %#v\nFound: %#v", expectedCmLabels, cm.ObjectMeta.Labels)
-		}
-
-		return false, nil, nil
-	})
 	cs.Fake.PrependReactor("delete-collection", "configmaps", func(action coretesting.Action) (bool, runtime.Object, error) {
 		deleteAction := action.(coretesting.DeleteCollectionAction)
 		listRestricitons := deleteAction.GetListRestrictions()
@@ -88,17 +62,34 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 
 		return true, nil, nil
 	})
-
-	cmManager := NewTemplateCMManager(cs.CoreV1().ConfigMaps("test-namespace"), 1234, logrus.NewEntry(logrus.New()), ciTemplates)
-
+	client := cs.CoreV1().ConfigMaps(ns)
+	cmManager := NewTemplateCMManager(client, 1234, logrus.NewEntry(logrus.New()), ciTemplates)
 	if err := cmManager.CreateCMTemplates(); err != nil {
 		t.Fatalf("CreateCMTemplates() returned error: %v", err)
 	}
-
+	cms, err := client.List(metav1.ListOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := []v1.ConfigMap{{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "rehearse-hd9sxk61-test-template",
+			Namespace: ns,
+			Labels: map[string]string{
+				createByRehearse:  "true",
+				rehearseLabelPull: "1234",
+			},
+		},
+		Data: map[string]string{
+			"test-template.yaml": string(ciTemplates["test-template.yaml"]),
+		},
+	}}
+	if !equality.Semantic.DeepEqual(expected, cms.Items) {
+		t.Fatal(diff.ObjectDiff(expected, cms.Items))
+	}
 	if err := cmManager.CleanupCMTemplates(); err != nil {
 		t.Fatalf("CleanupCMTemplates() returned error: %v", err)
 	}
-
 }
 
 func getBaseCiTemplates(t *testing.T) CiTemplates {

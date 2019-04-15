@@ -72,7 +72,7 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 	}
 
 	cs := fake.NewSimpleClientset()
-	cs.Fake.PrependReactor("create", "configmaps", func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {
+	cs.Fake.PrependReactor("create", "configmaps", func(action coretesting.Action) (bool, runtime.Object, error) {
 		createAction := action.(coretesting.CreateAction)
 		cm := createAction.GetObject().(*v1.ConfigMap)
 
@@ -84,9 +84,9 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 			t.Fatalf("Configmap labels\nExpected: %#v\nFound: %#v", expectedCmLabels, cm.ObjectMeta.Labels)
 		}
 
-		return true, nil, nil
+		return false, nil, nil
 	})
-	cs.Fake.PrependReactor("delete-collection", "configmaps", func(action coretesting.Action) (handled bool, ret runtime.Object, err error) {
+	cs.Fake.PrependReactor("delete-collection", "configmaps", func(action coretesting.Action) (bool, runtime.Object, error) {
 		deleteAction := action.(coretesting.DeleteCollectionAction)
 		listRestricitons := deleteAction.GetListRestrictions()
 

@@ -40,7 +40,7 @@ make_testing_repository() {
 }
 
 compare_to_expected() {
-  local expected="${TEST_ROOT}/expected_jobs.yaml"
+  local expected="${TEST_ROOT}/expected.yaml"
   local rehearsed="$1"
   diff -u "$expected" "$rehearsed"  \
     --ignore-matching-lines 'startTime' \

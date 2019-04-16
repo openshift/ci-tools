@@ -14,6 +14,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/semaphore"
 	"google.golang.org/api/iterator"
+
+	"github.com/openshift/ci-operator-prowgen/pkg/rehearse"
 )
 
 const (
@@ -230,8 +232,36 @@ func run() error {
 		counter++
 		fmt.Printf("Scraped PR %s (processed %d PRs)\r", done, counter)
 	}
-
 	fmt.Printf("\n")
+
+	overLimit := rehearse.NewMetricsCounter("PRs hitting the limit of rehearsed jobs", func(m *rehearse.Metrics) bool {
+		return len(m.Actual) > 0 && m.Execution == nil
+	})
+
+	if err := filepath.Walk(o.cacheDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+
+		metrics, err := rehearse.LoadMetrics(path)
+		if err != nil {
+			return err
+		}
+		if metrics.JobSpec.BuildID == "" {
+			metrics.JobSpec.BuildID = filepath.Base(path)
+		}
+
+		overLimit.Process(metrics)
+
+		return nil
+	}); err != nil {
+		return fmt.Errorf("failed to iterate over scraped metrics: %v", err)
+	}
+
+	fmt.Printf("%s", overLimit.Report())
 
 	return nil
 }

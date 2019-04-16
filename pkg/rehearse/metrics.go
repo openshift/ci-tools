@@ -110,3 +110,17 @@ func (m *Metrics) Dump() {
 		}
 	}
 }
+
+func LoadMetrics(path string) (*Metrics, error) {
+	data, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	metrics := Metrics{}
+	if err = json.Unmarshal(data, &metrics); err != nil {
+		return nil, err
+	}
+
+	return &metrics, nil
+}

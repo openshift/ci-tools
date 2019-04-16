@@ -24,11 +24,13 @@ import (
 	prowplugins "k8s.io/test-infra/prow/plugins"
 )
 
-const templatesPath = "../../test/pj-rehearse-integration/master/ci-operator/templates"
+const testRepoPath = "../../test/pj-rehearse-integration/master"
+
+var testTemplatePath = filepath.Join(TemplatesPath, "subdir/test-template.yaml")
 
 func TestGetTemplates(t *testing.T) {
 	expectCiTemplates := getBaseCiTemplates(t)
-	if templates, err := getTemplates(templatesPath); err != nil {
+	if templates, err := getTemplates(testRepoPath); err != nil {
 		t.Fatalf("getTemplates() returned error: %v", err)
 	} else if !equality.Semantic.DeepEqual(templates, expectCiTemplates) {
 		t.Fatalf("Diff found %s", diff.ObjectReflectDiff(expectCiTemplates, templates))
@@ -38,6 +40,14 @@ func TestGetTemplates(t *testing.T) {
 func TestCreateCleanupCMTemplates(t *testing.T) {
 	ns := "test-namespace"
 	ciTemplates := getBaseCiTemplates(t)
+	configUpdaterCfg := prowplugins.ConfigUpdater{
+		Maps: map[string]prowplugins.ConfigMapSpec{
+			testTemplatePath: {
+				Name:       "prow-job-test-template",
+				Namespaces: []string{ns},
+			},
+		},
+	}
 	createByRehearseReq, err := labels.NewRequirement(createByRehearse, selection.Equals, []string{"true"})
 	if err != nil {
 		t.Fatal(err)
@@ -66,7 +76,7 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 		return true, nil, nil
 	})
 	client := cs.CoreV1().ConfigMaps(ns)
-	cmManager := NewTemplateCMManager(ns, client, prowplugins.ConfigUpdater{}, 1234, "not_used", logrus.NewEntry(logrus.New()))
+	cmManager := NewTemplateCMManager(ns, client, configUpdaterCfg, 1234, testRepoPath, logrus.NewEntry(logrus.New()))
 	if err := cmManager.CreateCMTemplates(ciTemplates); err != nil {
 		t.Fatalf("CreateCMTemplates() returned error: %v", err)
 	}
@@ -76,7 +86,7 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 	}
 	expected := []v1.ConfigMap{{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "rehearse-hd9sxk61-test-template",
+			Name:      "rehearse-9nltqkt2-test-template",
 			Namespace: ns,
 			Labels: map[string]string{
 				createByRehearse:  "true",
@@ -84,7 +94,7 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 			},
 		},
 		Data: map[string]string{
-			"test-template.yaml": string(ciTemplates["test-template.yaml"]),
+			"test-template.yaml": string(ciTemplates[testTemplatePath]),
 		},
 	}}
 	if !equality.Semantic.DeepEqual(expected, cms.Items) {
@@ -96,12 +106,12 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 }
 
 func getBaseCiTemplates(t *testing.T) CiTemplates {
-	testTemplatePath := filepath.Join(templatesPath, "subdir/test-template.yaml")
-	contents, err := ioutil.ReadFile(testTemplatePath)
+	path := filepath.Join(testRepoPath, testTemplatePath)
+	contents, err := ioutil.ReadFile(path)
 	if err != nil {
-		t.Fatalf("could not read file %s for template: %v", testTemplatePath, err)
+		t.Fatalf("could not read file %s for template: %v", path, err)
 	}
-	return CiTemplates{"test-template.yaml": contents}
+	return CiTemplates{testTemplatePath: contents}
 }
 
 func TestCreateClusterProfiles(t *testing.T) {

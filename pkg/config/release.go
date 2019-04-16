@@ -24,6 +24,8 @@ const (
 	CiopConfigInRepoPath = "ci-operator/config"
 	// TemplatesPath is the path of the templates from release repo
 	TemplatesPath = "ci-operator/templates"
+	// TemplatePrefix is the prefix added to ConfigMap names
+	TemplatePrefix = "prow-job-"
 	// ClusterProfilesPath is where profiles are stored in the release repo
 	ClusterProfilesPath = "cluster/test-deploy"
 	// ClusterProfilePrefix is the prefix added to ConfigMap names
@@ -96,10 +98,7 @@ func NewLocalJobSpec(path string) (*pjdwapi.JobSpec, error) {
 func GetAllConfigs(releaseRepoPath string, logger *logrus.Entry) *ReleaseRepoConfig {
 	config := &ReleaseRepoConfig{}
 	var err error
-
-	templatePath := filepath.Join(releaseRepoPath, TemplatesPath)
-	config.Templates, err = getTemplates(templatePath)
-	if err != nil {
+	if config.Templates, err = getTemplates(releaseRepoPath); err != nil {
 		logger.WithError(err).Warn("failed to load templates from release repo")
 	}
 

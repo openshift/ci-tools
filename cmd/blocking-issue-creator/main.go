@@ -80,6 +80,7 @@ func main() {
 				return nil
 			}
 			if futureBranch == repoInfo.Branch {
+				logger.Debugf("Skipping branch %s as it is the current development branch.", futureBranch)
 				continue
 			}
 
@@ -110,8 +111,9 @@ func main() {
 			} `graphql:"search(type: ISSUE, first: 1, query: $query)"`
 		}
 		vars := map[string]interface{}{
-			"query": githubql.String(fmt.Sprintf("is:issue state:open label:\"tide/merge-blocker\" org:%s repo:%s author:%s", repoInfo.Org, repoInfo.Repo, o.username)),
+			"query": githubql.String(fmt.Sprintf("is:issue state:open label:\"tide/merge-blocker\" repo:%s/%s author:%s", repoInfo.Org, repoInfo.Repo, o.username)),
 		}
+		logger.WithField("query", vars["query"]).Debug("Issuing query.")
 		if err := client.Query(context.Background(), &blockerQuery, vars); err != nil {
 			logrus.WithError(err).Error("Failed to search for open issues.")
 			failed = true
@@ -187,6 +189,11 @@ func main() {
 			}
 			if err := client.Query(context.Background(), &labelQuery, vars); err != nil {
 				logger.WithError(err).Error("Failed to search for merge blocker labels.")
+				failed = true
+				return nil
+			}
+			if labelQuery.Repository.Label.ID == nil {
+				logger.Error("Could not find a merge blocker label.")
 				failed = true
 				return nil
 			}

@@ -3,6 +3,10 @@ required = [
 	"github.com/ghodss/yaml",
 	"github.com/sirupsen/logrus",
 
+	"cloud.google.com/go/storage",
+
+	"golang.org/x/sync/semaphore",
+
 	"github.com/openshift/ci-operator/pkg/api",
 
 	"k8s.io/test-infra/prow/apis/prowjobs/v1",

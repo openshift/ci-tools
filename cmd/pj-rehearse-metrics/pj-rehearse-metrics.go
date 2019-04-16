@@ -142,19 +142,19 @@ func gatherOptions() options {
 	return o
 }
 
-func main() {
+func run() error {
 	o := gatherOptions()
 
 	ctx := context.Background()
 	client, err := storage.NewClient(ctx)
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create client")
+		return fmt.Errorf("failed to create client: %v", err)
 	}
 
 	if o.cacheDir == "" {
 		o.cacheDir, err = ioutil.TempDir("", "")
 		if err != nil {
-			logrus.WithError(err).Fatal("Failed to create a temporary directory")
+			return fmt.Errorf("failed to create a temporary directory: %v", err)
 		}
 		defer func() {
 			if err := os.RemoveAll(o.cacheDir); err != nil {
@@ -232,4 +232,12 @@ func main() {
 	}
 
 	fmt.Printf("\n")
+
+	return nil
+}
+
+func main() {
+	if err := run(); err != nil {
+		logrus.WithError(err).Fatal("Failed to compute rehearsal metrics")
+	}
 }

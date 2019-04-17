@@ -6,6 +6,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	prowconfig "k8s.io/test-infra/prow/config"
+	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 
 	"github.com/openshift/ci-operator-prowgen/pkg/config"
 )
@@ -17,9 +18,7 @@ type ExecutionMetrics struct {
 }
 
 type Metrics struct {
-	Org  string `json:"org"`
-	Repo string `json:"repo"`
-	Pr   int    `json:"pr"`
+	JobSpec *downwardapi.JobSpec `json:"spec"`
 
 	ChangedCiopConfigs     []string `json:"changed_ciop_configs"`
 	ChangedPresubmits      []string `json:"changed_presubmits"`
@@ -34,6 +33,11 @@ type Metrics struct {
 
 	logger logrus.Entry
 	file   string
+
+	// DEPRECATED (we need to keep these to read old artifacts)
+	Org  string `json:"org"`
+	Repo string `json:"repo"`
+	Pr   int    `json:"pr"`
 }
 
 func NewMetrics(file string) *Metrics {

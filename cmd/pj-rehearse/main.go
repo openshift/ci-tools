@@ -132,10 +132,9 @@ func rehearseMain() int {
 			return gracefulExit(o.noFail, misconfigurationOutput)
 		}
 	}
+	metrics.JobSpec = jobSpec
 
 	prFields := logrus.Fields{prowgithub.OrgLogField: jobSpec.Refs.Org, prowgithub.RepoLogField: jobSpec.Refs.Repo}
-	metrics.Org = jobSpec.Refs.Org
-	metrics.Repo = jobSpec.Refs.Repo
 	logger := logrus.WithFields(prFields)
 
 	if jobSpec.Type != pjapi.PresubmitJob {
@@ -149,7 +148,7 @@ func rehearseMain() int {
 	if o.local {
 		prNumber = int(time.Now().Unix())
 	}
-	metrics.Pr = prNumber
+
 	logger = logrus.WithField(prowgithub.PrLogField, prNumber)
 	logger.Info("Rehearsing Prow jobs for a configuration PR")
 

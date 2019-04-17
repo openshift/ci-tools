@@ -108,14 +108,14 @@ func main() {
 				Nodes []struct {
 					Issue Issue `graphql:"... on Issue"`
 				}
-			} `graphql:"search(type: ISSUE, first: 1, query: $query)"`
+			} `graphql:"search(type: ISSUE, first: 10, query: $query)"`
 		}
 		vars := map[string]interface{}{
 			"query": githubql.String(fmt.Sprintf("is:issue state:open label:\"tide/merge-blocker\" repo:%s/%s author:%s", repoInfo.Org, repoInfo.Repo, o.username)),
 		}
 		logger.WithField("query", vars["query"]).Debug("Issuing query.")
 		if err := client.Query(context.Background(), &blockerQuery, vars); err != nil {
-			logrus.WithError(err).Error("Failed to search for open issues.")
+			logger.WithError(err).Error("Failed to search for open issues.")
 			failed = true
 		}
 		var issues []Issue
@@ -126,12 +126,37 @@ func main() {
 		}
 		if len(numbers) > 1 {
 			logger.Warnf("Found more than one merge blocking issue by the bot: %v", numbers)
-			failed = true
-			return nil
+			for _, issue := range issues[1:] {
+				// we need to close this extra issue
+				var closeIssue struct {
+					CloseIssue struct {
+						Issue struct {
+							Number githubql.Int
+						}
+					} `graphql:"closeIssue(input: $input)"`
+				}
+				// this needs to be a named type for the library
+				type CloseIssueInput struct {
+					IssueID githubql.ID `json:"issueId"`
+				}
+				input := CloseIssueInput{
+					IssueID: issue.ID,
+				}
+				if !o.Confirm {
+					logger.Infof("Would close issue %d.", issue.Number)
+					return nil
+				}
+				if err := client.Mutate(context.Background(), &closeIssue, input, nil); err != nil {
+					logger.WithError(err).Error("Failed to close issue.")
+					failed = true
+					return nil
+				}
+				logger.Infof("Closed extra issue %d.", issue.Number)
+			}
 		}
 
 		// we have an existing issue that needs to be up to date
-		if len(numbers) == 1 {
+		if len(issues) != 0 && issues[0].ID != nil {
 			logger = logger.WithField("merge-blocker", numbers[0])
 			existing := issues[0]
 			needsUpdate := string(existing.Title) != title || string(existing.Body) != body
@@ -161,7 +186,7 @@ func main() {
 				Body:  githubql.String(body),
 			}
 			if !o.Confirm {
-				logrus.Info("Would update issue.")
+				logger.Info("Would update issue.")
 				return nil
 			}
 			if err := client.Mutate(context.Background(), &updateIssue, input, nil); err != nil {
@@ -220,7 +245,7 @@ func main() {
 			}
 
 			if !o.Confirm {
-				logrus.Info("Would create issue.")
+				logger.Info("Would create issue.")
 				return nil
 			}
 

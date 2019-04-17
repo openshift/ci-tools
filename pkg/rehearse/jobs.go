@@ -303,7 +303,7 @@ func replaceClusterProfiles(volumes []v1.Volume, profiles []config.ClusterProfil
 			if n != p.Name {
 				continue
 			}
-			tmp := config.GetClusterProfileName(&p)
+			tmp := p.CMName()
 			fields := logrus.Fields{"profile": n, "tmp": tmp}
 			logger.WithFields(fields).Debug("Rehearsal job uses cluster profile, will be replaced by temporary")
 			s.ConfigMap.Name = tmp

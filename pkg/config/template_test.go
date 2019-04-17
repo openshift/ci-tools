@@ -17,7 +17,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/util/diff"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/fake"
 	coretesting "k8s.io/client-go/testing"
 )
@@ -34,19 +33,8 @@ func TestGetTemplates(t *testing.T) {
 }
 
 func TestCreateCleanupCMTemplates(t *testing.T) {
-	expectedCmNames := sets.NewString()
+	ns := "test-namespace"
 	ciTemplates := getBaseCiTemplates(t)
-
-	for key, template := range ciTemplates {
-		templateName := GetTemplateName(key)
-		expectedCmNames.Insert(GetTempCMName(templateName, key, template))
-	}
-
-	expectedCmLabels := map[string]string{
-		createByRehearse:  "true",
-		rehearseLabelPull: "1234",
-	}
-
 	createByRehearseReq, err := labels.NewRequirement(createByRehearse, selection.Equals, []string{"true"})
 	if err != nil {
 		t.Fatal(err)
@@ -64,20 +52,6 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 	}
 
 	cs := fake.NewSimpleClientset()
-	cs.Fake.PrependReactor("create", "configmaps", func(action coretesting.Action) (bool, runtime.Object, error) {
-		createAction := action.(coretesting.CreateAction)
-		cm := createAction.GetObject().(*v1.ConfigMap)
-
-		if !expectedCmNames.Has(cm.ObjectMeta.Name) {
-			t.Fatalf("Configmap name:\nExpected one of: %v\nFound: %s", expectedCmNames, cm.ObjectMeta.Name)
-		}
-
-		if !reflect.DeepEqual(cm.ObjectMeta.Labels, expectedCmLabels) {
-			t.Fatalf("Configmap labels\nExpected: %#v\nFound: %#v", expectedCmLabels, cm.ObjectMeta.Labels)
-		}
-
-		return false, nil, nil
-	})
 	cs.Fake.PrependReactor("delete-collection", "configmaps", func(action coretesting.Action) (bool, runtime.Object, error) {
 		deleteAction := action.(coretesting.DeleteCollectionAction)
 		listRestricitons := deleteAction.GetListRestrictions()
@@ -88,17 +62,34 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 
 		return true, nil, nil
 	})
-
-	cmManager := NewTemplateCMManager(cs.CoreV1().ConfigMaps("test-namespace"), 1234, logrus.NewEntry(logrus.New()), ciTemplates)
-
-	if err := cmManager.CreateCMTemplates(); err != nil {
+	client := cs.CoreV1().ConfigMaps(ns)
+	cmManager := NewTemplateCMManager(client, 1234, logrus.NewEntry(logrus.New()))
+	if err := cmManager.CreateCMTemplates(ciTemplates); err != nil {
 		t.Fatalf("CreateCMTemplates() returned error: %v", err)
 	}
-
+	cms, err := client.List(metav1.ListOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := []v1.ConfigMap{{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "rehearse-hd9sxk61-test-template",
+			Namespace: ns,
+			Labels: map[string]string{
+				createByRehearse:  "true",
+				rehearseLabelPull: "1234",
+			},
+		},
+		Data: map[string]string{
+			"test-template.yaml": string(ciTemplates["test-template.yaml"]),
+		},
+	}}
+	if !equality.Semantic.DeepEqual(expected, cms.Items) {
+		t.Fatal(diff.ObjectDiff(expected, cms.Items))
+	}
 	if err := cmManager.CleanupCMTemplates(); err != nil {
 		t.Fatalf("CleanupCMTemplates() returned error: %v", err)
 	}
-
 }
 
 func getBaseCiTemplates(t *testing.T) CiTemplates {
@@ -158,16 +149,19 @@ func TestCreateClusterProfiles(t *testing.T) {
 	profiles := []ClusterProfile{
 		{Name: "profile0", TreeHash: "e92d4a5996a8a977bd7916b65488371331681f9d"},
 		{Name: "profile1", TreeHash: "a8c99ffc996128417ef1062f9783730a8c864586"},
+		{Name: "unchanged", TreeHash: "8012ff51a005eaa8ed8f4c08ccdce580f462fff6"},
 	}
 	for _, p := range profiles {
 		if err := os.Mkdir(filepath.Join(dir, p.Name), 0775); err != nil {
 			t.Fatal(err)
 		}
 	}
+	profiles = profiles[:2]
+	ns := "test"
 	pr := 1234
 	cs := fake.NewSimpleClientset()
-	client := cs.CoreV1().ConfigMaps("test")
-	m := NewTemplateCMManager(client, pr, logrus.NewEntry(logrus.New()), CiTemplates{})
+	client := cs.CoreV1().ConfigMaps(ns)
+	m := NewTemplateCMManager(client, pr, logrus.NewEntry(logrus.New()))
 	if err := m.CreateClusterProfiles(dir, profiles); err != nil {
 		t.Fatal(err)
 	}
@@ -184,7 +178,7 @@ func TestCreateClusterProfiles(t *testing.T) {
 		"rehearse-cluster-profile-profile1-a8c99",
 	}
 	if !reflect.DeepEqual(expected, names) {
-		t.Fatalf("want %s, got %s", expected, names)
+		t.Fatal(diff.ObjectDiff(expected, names))
 	}
 	for _, cm := range cms.Items {
 		if cm.Labels[createByRehearse] != "true" {

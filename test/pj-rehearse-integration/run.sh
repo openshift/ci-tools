@@ -60,9 +60,9 @@ fi
 
 echo "[INFO] Validating created rehearsals"
 if ! output="$(compare_to_expected "${REHEARSED_JOBS}")"; then
+  cat "${WORKDIR}/pj-rehearse-stderr.log"
   output="$( printf -- "${output}" | sed 's/^/[ERROR] /' )"
   printf "[ERROR] pj-rehearse output differs from expected:\n\n$output\n"
-
   exit 1
 fi
 

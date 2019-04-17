@@ -14,6 +14,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/semaphore"
 	"google.golang.org/api/iterator"
+
+	"github.com/openshift/ci-operator-prowgen/pkg/rehearse"
 )
 
 const (
@@ -142,19 +144,19 @@ func gatherOptions() options {
 	return o
 }
 
-func main() {
+func run() error {
 	o := gatherOptions()
 
 	ctx := context.Background()
 	client, err := storage.NewClient(ctx)
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create client")
+		return fmt.Errorf("failed to create client: %v", err)
 	}
 
 	if o.cacheDir == "" {
 		o.cacheDir, err = ioutil.TempDir("", "")
 		if err != nil {
-			logrus.WithError(err).Fatal("Failed to create a temporary directory")
+			return fmt.Errorf("failed to create a temporary directory: %v", err)
 		}
 		defer func() {
 			if err := os.RemoveAll(o.cacheDir); err != nil {
@@ -230,6 +232,42 @@ func main() {
 		counter++
 		fmt.Printf("Scraped PR %s (processed %d PRs)\r", done, counter)
 	}
-
 	fmt.Printf("\n")
+
+	overLimit := rehearse.NewMetricsCounter("PRs hitting the limit of rehearsed jobs", func(m *rehearse.Metrics) bool {
+		return len(m.Actual) > 0 && m.Execution == nil
+	})
+
+	if err := filepath.Walk(o.cacheDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+
+		metrics, err := rehearse.LoadMetrics(path)
+		if err != nil {
+			return err
+		}
+		if metrics.JobSpec.BuildID == "" {
+			metrics.JobSpec.BuildID = filepath.Base(path)
+		}
+
+		overLimit.Process(metrics)
+
+		return nil
+	}); err != nil {
+		return fmt.Errorf("failed to iterate over scraped metrics: %v", err)
+	}
+
+	fmt.Printf("%s", overLimit.Report())
+
+	return nil
+}
+
+func main() {
+	if err := run(); err != nil {
+		logrus.WithError(err).Fatal("Failed to compute rehearsal metrics")
+	}
 }

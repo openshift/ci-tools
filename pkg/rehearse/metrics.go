@@ -2,9 +2,13 @@ package rehearse
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
+	"strings"
 
 	"github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 
@@ -109,4 +113,89 @@ func (m *Metrics) Dump() {
 			m.logger.Warn("Failed to dump metrics")
 		}
 	}
+}
+
+func LoadMetrics(path string) (*Metrics, error) {
+	data, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	metrics := Metrics{}
+	if err = json.Unmarshal(data, &metrics); err != nil {
+		return nil, err
+	}
+
+	if metrics.JobSpec == nil {
+		// old metrics artifact: partially reconstruct refs from the info we saved at the time
+		metrics.JobSpec = &downwardapi.JobSpec{
+			Refs: &v1.Refs{Org: metrics.Org, Repo: metrics.Repo, Pulls: []v1.Pull{{Number: metrics.Pr}}},
+		}
+	}
+
+	return &metrics, nil
+}
+
+type MetricsCounter interface {
+	Process(metrics *Metrics)
+	Report() string
+}
+
+type metricsCounter struct {
+	purpose        string
+	filter         func(metrics *Metrics) bool
+	seenPrs        sets.Int
+	totalBuilds    int
+	matchingBuilds int
+	matching       map[int][]*Metrics
+}
+
+func NewMetricsCounter(purpose string, filter func(metrics *Metrics) bool) MetricsCounter {
+	return &metricsCounter{
+		purpose:        purpose,
+		filter:         filter,
+		seenPrs:        sets.NewInt(),
+		totalBuilds:    0,
+		matchingBuilds: 0,
+		matching:       map[int][]*Metrics{},
+	}
+}
+
+func (m *metricsCounter) Process(metrics *Metrics) {
+	m.totalBuilds++
+	pr := metrics.JobSpec.Refs.Pulls[0].Number
+	m.seenPrs.Insert(pr)
+	if m.filter(metrics) {
+		m.matchingBuilds++
+		if m.matching[pr] == nil {
+			m.matching[pr] = []*Metrics{metrics}
+		} else {
+			m.matching[pr] = append(m.matching[pr], metrics)
+		}
+	}
+}
+
+func (m *metricsCounter) Report() string {
+	template := `# %s
+
+PR statistics:    %d/%d (%.f%%)
+Build statistics: %d/%d (%.f%%)
+
+PR links:
+%s
+`
+	prCount := len(m.matching)
+	links := []string{}
+	for pr, runs := range m.matching {
+		runNumbers := []string{}
+		for _, run := range runs {
+			runNumbers = append(runNumbers, run.JobSpec.BuildID)
+		}
+		line := fmt.Sprintf("- https://github.com/openshift/release/pull/%d (runs: %s)", pr, strings.Join(runNumbers, ", "))
+		links = append(links, line)
+	}
+
+	pctPrs := float64(prCount) / float64(len(m.seenPrs)) * 100.0
+	pctBuilds := float64(m.matchingBuilds) / float64(m.totalBuilds) * 100.0
+	return fmt.Sprintf(template, m.purpose, prCount, len(m.seenPrs), pctPrs, m.matchingBuilds, m.totalBuilds, pctBuilds, strings.Join(links, "\n"))
 }

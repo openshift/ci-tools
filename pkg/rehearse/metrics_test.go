@@ -1,13 +1,16 @@
 package rehearse
 
 import (
+	"fmt"
 	"reflect"
 	"sort"
 	"testing"
 
 	"github.com/openshift/ci-operator/pkg/api"
 	"k8s.io/apimachinery/pkg/util/diff"
+	"k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
+	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 
 	"github.com/openshift/ci-operator-prowgen/pkg/config"
 )
@@ -212,5 +215,36 @@ func TestRecordActual(t *testing.T) {
 				t.Errorf("Recorded rehearsals differ from expected:\n%s", diff.ObjectReflectDiff(tc.expected, metrics.Actual))
 			}
 		})
+	}
+}
+
+func TestMetricsCounter(t *testing.T) {
+	counter := NewMetricsCounter("Testing counter counting only PRs above 99", func(metrics *Metrics) bool {
+		return metrics.JobSpec.Refs.Pulls[0].Number > 99
+	})
+
+	for i := 1; i <= 100; i++ {
+		counter.Process(&Metrics{JobSpec: &downwardapi.JobSpec{
+			BuildID: fmt.Sprintf("x%d", i),
+			Refs:    &v1.Refs{Pulls: []v1.Pull{{Number: i}}},
+		}})
+		counter.Process(&Metrics{JobSpec: &downwardapi.JobSpec{
+			BuildID: fmt.Sprintf("y%d", i),
+			Refs:    &v1.Refs{Pulls: []v1.Pull{{Number: i}}},
+		}})
+	}
+
+	expected := `# Testing counter counting only PRs above 99
+
+PR statistics:    1/100 (1%)
+Build statistics: 2/200 (1%)
+
+PR links:
+- https://github.com/openshift/release/pull/100 (runs: x100, y100)
+`
+
+	actual := counter.Report()
+	if actual != expected {
+		t.Errorf("Report differs from expected:\n%s", diff.StringDiff(expected, actual))
 	}
 }

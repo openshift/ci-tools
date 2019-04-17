@@ -191,7 +191,7 @@ PR links:
 		for _, run := range runs {
 			runNumbers = append(runNumbers, run.JobSpec.BuildID)
 		}
-		line := fmt.Sprintf("- https://github.com/openshift/release/pull/%d (runs: %s)", pr, strings.Join(runNumbers, ","))
+		line := fmt.Sprintf("- https://github.com/openshift/release/pull/%d (runs: %s)", pr, strings.Join(runNumbers, ", "))
 		links = append(links, line)
 	}
 

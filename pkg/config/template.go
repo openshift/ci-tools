@@ -28,6 +28,10 @@ type ClusterProfile struct {
 	Name, TreeHash string
 }
 
+func (p ClusterProfile) CMName() string {
+	return fmt.Sprintf("rehearse-cluster-profile-%s-%s", p.Name, p.TreeHash[:5])
+}
+
 const (
 	createByRehearse  = "created-by-pj-rehearse"
 	rehearseLabelPull = "ci.openshift.org/rehearse-pull"
@@ -118,11 +122,10 @@ func (c *TemplateCMManager) CreateClusterProfiles(dir string, profiles []Cluster
 }
 
 func genClusterProfileCM(dir string, profile ClusterProfile) (*v1.ConfigMap, error) {
-	ret := &v1.ConfigMap{}
-	ret.ObjectMeta = metav1.ObjectMeta{
-		Name: GetClusterProfileName(&profile),
+	ret := &v1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{Name: profile.CMName()},
+		Data:       map[string]string{},
 	}
-	ret.Data = map[string]string{}
 	profilePath := filepath.Join(dir, profile.Name)
 	err := filepath.Walk(profilePath, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
@@ -139,10 +142,6 @@ func genClusterProfileCM(dir string, profile ClusterProfile) (*v1.ConfigMap, err
 		return nil, err
 	}
 	return ret, nil
-}
-
-func GetClusterProfileName(p *ClusterProfile) string {
-	return fmt.Sprintf("rehearse-cluster-profile-%s-%s", p.Name, p.TreeHash[:5])
 }
 
 // CleanupCMTemplates deletes all the configMaps that have been created for the changed templates.

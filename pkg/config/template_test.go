@@ -158,15 +158,18 @@ func TestCreateClusterProfiles(t *testing.T) {
 	profiles := []ClusterProfile{
 		{Name: "profile0", TreeHash: "e92d4a5996a8a977bd7916b65488371331681f9d"},
 		{Name: "profile1", TreeHash: "a8c99ffc996128417ef1062f9783730a8c864586"},
+		{Name: "unchanged", TreeHash: "8012ff51a005eaa8ed8f4c08ccdce580f462fff6"},
 	}
 	for _, p := range profiles {
 		if err := os.Mkdir(filepath.Join(dir, p.Name), 0775); err != nil {
 			t.Fatal(err)
 		}
 	}
+	profiles = profiles[:2]
+	ns := "test"
 	pr := 1234
 	cs := fake.NewSimpleClientset()
-	client := cs.CoreV1().ConfigMaps("test")
+	client := cs.CoreV1().ConfigMaps(ns)
 	m := NewTemplateCMManager(client, pr, logrus.NewEntry(logrus.New()), CiTemplates{})
 	if err := m.CreateClusterProfiles(dir, profiles); err != nil {
 		t.Fatal(err)
@@ -184,7 +187,7 @@ func TestCreateClusterProfiles(t *testing.T) {
 		"rehearse-cluster-profile-profile1-a8c99",
 	}
 	if !reflect.DeepEqual(expected, names) {
-		t.Fatalf("want %s, got %s", expected, names)
+		t.Fatal(diff.ObjectDiff(expected, names))
 	}
 	for _, cm := range cms.Items {
 		if cm.Labels[createByRehearse] != "true" {

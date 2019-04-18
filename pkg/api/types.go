@@ -293,15 +293,16 @@ type TestStepConfiguration struct {
 	Secret *Secret `json:"secret,omitempty"`
 
 	// Only one of the following can be not-null.
-	ContainerTestConfiguration                      *ContainerTestConfiguration                      `json:"container,omitempty"`
-	OpenshiftAnsibleClusterTestConfiguration        *OpenshiftAnsibleClusterTestConfiguration        `json:"openshift_ansible,omitempty"`
-	OpenshiftAnsibleSrcClusterTestConfiguration     *OpenshiftAnsibleSrcClusterTestConfiguration     `json:"openshift_ansible_src,omitempty"`
-	OpenshiftAnsibleCustomClusterTestConfiguration  *OpenshiftAnsibleCustomClusterTestConfiguration  `json:"openshift_ansible_custom,omitempty"`
-	OpenshiftAnsible40ClusterTestConfiguration      *OpenshiftAnsible40ClusterTestConfiguration      `json:"openshift_ansible_40,omitempty"`
-	OpenshiftAnsibleUpgradeClusterTestConfiguration *OpenshiftAnsibleUpgradeClusterTestConfiguration `json:"openshift_ansible_upgrade,omitempty"`
-	OpenshiftInstallerClusterTestConfiguration      *OpenshiftInstallerClusterTestConfiguration      `json:"openshift_installer,omitempty"`
-	OpenshiftInstallerSrcClusterTestConfiguration   *OpenshiftInstallerSrcClusterTestConfiguration   `json:"openshift_installer_src,omitempty"`
-	OpenshiftInstallerUPIClusterTestConfiguration   *OpenshiftInstallerUPIClusterTestConfiguration   `json:"openshift_installer_upi,omitempty"`
+	ContainerTestConfiguration                        *ContainerTestConfiguration                        `json:"container,omitempty"`
+	OpenshiftAnsibleClusterTestConfiguration          *OpenshiftAnsibleClusterTestConfiguration          `json:"openshift_ansible,omitempty"`
+	OpenshiftAnsibleSrcClusterTestConfiguration       *OpenshiftAnsibleSrcClusterTestConfiguration       `json:"openshift_ansible_src,omitempty"`
+	OpenshiftAnsibleCustomClusterTestConfiguration    *OpenshiftAnsibleCustomClusterTestConfiguration    `json:"openshift_ansible_custom,omitempty"`
+	OpenshiftAnsible40ClusterTestConfiguration        *OpenshiftAnsible40ClusterTestConfiguration        `json:"openshift_ansible_40,omitempty"`
+	OpenshiftAnsibleUpgradeClusterTestConfiguration   *OpenshiftAnsibleUpgradeClusterTestConfiguration   `json:"openshift_ansible_upgrade,omitempty"`
+	OpenshiftInstallerClusterTestConfiguration        *OpenshiftInstallerClusterTestConfiguration        `json:"openshift_installer,omitempty"`
+	OpenshiftInstallerSrcClusterTestConfiguration     *OpenshiftInstallerSrcClusterTestConfiguration     `json:"openshift_installer_src,omitempty"`
+	OpenshiftInstallerUPIClusterTestConfiguration     *OpenshiftInstallerUPIClusterTestConfiguration     `json:"openshift_installer_upi,omitempty"`
+	OpenshiftInstallerConsoleClusterTestConfiguration *OpenshiftInstallerConsoleClusterTestConfiguration `json:"openshift_installer_console,omitempty"`
 }
 
 // Secret describes a secret to be mounted inside a test
@@ -415,6 +416,13 @@ type OpenshiftInstallerClusterTestConfiguration struct {
 // test that provisions a cluster using openshift-installer and
 // executes a command in the `src` image.
 type OpenshiftInstallerSrcClusterTestConfiguration struct {
+	ClusterTestConfiguration `json:",inline"`
+}
+
+// OpenshiftInstallerConsoleClusterTestConfiguration describes a
+// test that provisions a cluster using openshift-installer and
+// executes a command in the `console-test` image.
+type OpenshiftInstallerConsoleClusterTestConfiguration struct {
 	ClusterTestConfiguration `json:",inline"`
 }
 

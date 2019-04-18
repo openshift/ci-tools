@@ -259,8 +259,13 @@ func replaceCMTemplateName(volumeMounts []v1.VolumeMount, volumes []v1.Volume, t
 }
 
 func pickTemplateJob(presubmits map[string][]prowconfig.Presubmit, templateFile, clusterType string) (string, *prowconfig.Presubmit) {
-	for repo, jobs := range presubmits {
-		for _, job := range jobs {
+	var keys []string
+	for k := range presubmits {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, repo := range keys {
+		for _, job := range presubmits[repo] {
 			if job.Agent != string(pjapi.KubernetesAgent) {
 				continue
 			}

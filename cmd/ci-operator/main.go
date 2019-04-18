@@ -41,9 +41,11 @@ import (
 	imageapi "github.com/openshift/api/image/v1"
 	projectapi "github.com/openshift/api/project/v1"
 	templateapi "github.com/openshift/api/template/v1"
+	buildclientset "github.com/openshift/client-go/build/clientset/versioned/typed/build/v1"
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
-	"github.com/openshift/client-go/project/clientset/versioned"
+	projectclientset "github.com/openshift/client-go/project/clientset/versioned"
 	templatescheme "github.com/openshift/client-go/template/clientset/versioned/scheme"
+	templateclientset "github.com/openshift/client-go/template/clientset/versioned/typed/template/v1"
 
 	"github.com/openshift/ci-operator/pkg/api"
 	"github.com/openshift/ci-operator/pkg/interrupt"
@@ -404,13 +406,13 @@ func (o *options) Run() error {
 		if o.dry {
 			os.Exit(0)
 		}
-		log.Printf("error: Process interrupted with signal %s, exiting in 2s ...", s)
+		log.Printf("error: Process interrupted with signal %s, exiting in 10s ...", s)
 		cancel()
-		time.Sleep(2 * time.Second)
+		time.Sleep(10 * time.Second)
 		os.Exit(1)
 	}
 
-	return interrupt.New(handler).Run(func() error {
+	return interrupt.New(handler, o.saveNamespaceArtifacts).Run(func() error {
 		// Before we create the namespace, we need to ensure all inputs to the graph
 		// have been resolved. We must run this step before we resolve the partial
 		// graph or otherwise two jobs with different targets would create different
@@ -563,7 +565,7 @@ func (o *options) initializeNamespace() error {
 	if o.dry {
 		return nil
 	}
-	projectGetter, err := versioned.NewForConfig(o.clusterConfig)
+	projectGetter, err := projectclientset.NewForConfig(o.clusterConfig)
 	if err != nil {
 		return fmt.Errorf("could not get project client for cluster config: %v", err)
 	}
@@ -862,6 +864,50 @@ func inputHash(inputs api.InputDefinition) string {
 	// but we can tolerate it as our input space is
 	// tiny.
 	return oneWayNameEncoding.EncodeToString(hash.Sum(nil)[:5])
+}
+
+// saveNamespaceArtifacts is a best effort attempt to save ci-operator namespace artifacts to disk
+// for review later.
+func (o *options) saveNamespaceArtifacts() {
+	if len(o.artifactDir) == 0 {
+		return
+	}
+
+	namespaceDir := filepath.Join(o.artifactDir, "build-resources")
+	if err := os.Mkdir(namespaceDir, 0777); err != nil {
+		log.Printf("Unable to create build-resources directory: %v", err)
+		return
+	}
+
+	if kubeClient, err := coreclientset.NewForConfig(o.clusterConfig); err == nil {
+		pods, _ := kubeClient.Pods(o.namespace).List(meta.ListOptions{})
+		data, _ := json.MarshalIndent(pods, "", "  ")
+		ioutil.WriteFile(filepath.Join(namespaceDir, "pods.json"), data, 0644)
+		events, _ := kubeClient.Events(o.namespace).List(meta.ListOptions{})
+		data, _ = json.MarshalIndent(events, "", "  ")
+		ioutil.WriteFile(filepath.Join(namespaceDir, "events.json"), data, 0644)
+	}
+
+	if buildClient, err := buildclientset.NewForConfig(o.clusterConfig); err == nil {
+		builds, _ := buildClient.Builds(o.namespace).List(meta.ListOptions{})
+		data, _ := json.MarshalIndent(builds, "", "  ")
+		ioutil.WriteFile(filepath.Join(namespaceDir, "builds.json"), data, 0644)
+	}
+
+	if imageClient, err := imageclientset.NewForConfig(o.clusterConfig); err == nil {
+		if err != nil {
+			return
+		}
+		imagestreams, _ := imageClient.ImageStreams(o.namespace).List(meta.ListOptions{})
+		data, _ := json.MarshalIndent(imagestreams, "", "  ")
+		ioutil.WriteFile(filepath.Join(namespaceDir, "imagestreams.json"), data, 0644)
+	}
+
+	if templateClient, err := templateclientset.NewForConfig(o.clusterConfig); err == nil {
+		templateInstances, _ := templateClient.TemplateInstances(o.namespace).List(meta.ListOptions{})
+		data, _ := json.MarshalIndent(templateInstances, "", "  ")
+		ioutil.WriteFile(filepath.Join(namespaceDir, "templateinstances.json"), data, 0644)
+	}
 }
 
 // eventJobDescription returns a string representing the pull requests and authors description, to be used in events.

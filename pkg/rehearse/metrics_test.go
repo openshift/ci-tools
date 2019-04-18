@@ -248,3 +248,65 @@ PR links:
 		t.Errorf("Report differs from expected:\n%s", diff.StringDiff(expected, actual))
 	}
 }
+
+func TestStaleStatusCounter(t *testing.T) {
+	makeTestBuild := func(pr int, id, sha string, jobs []string) *Metrics {
+		opps := map[string][]string{}
+		for _, job := range jobs {
+			opps[job] = []string{"some reason to rehearse"}
+		}
+		return &Metrics{
+			JobSpec: &downwardapi.JobSpec{
+				BuildID: id,
+				Refs: &v1.Refs{
+					Pulls: []v1.Pull{{Number: pr, SHA: sha}},
+				},
+			},
+			Opportunities: opps,
+		}
+	}
+	testCases := []struct {
+		description string
+		builds      []*Metrics
+		expected    *staleStatusStats
+	}{{
+		description: "job rehearsed in two subsequent builds over same sha is not stale",
+		builds: []*Metrics{
+			makeTestBuild(1, "build-1", "SHA", []string{"rehearsed-job"}),
+			makeTestBuild(1, "build-2", "SHA", []string{"rehearsed-job"}),
+		},
+		expected: &staleStatusStats{prHit: 0, prTotal: 1, prPct: 0, buildsHit: 0, buildsTotal: 2, buildsPct: 0},
+	}, {
+		description: "job rehearsed in old build but not in new one is not stale when SHA differs",
+		builds: []*Metrics{
+			makeTestBuild(1, "build-1", "SHA", []string{"rehearsed-job"}),
+			makeTestBuild(1, "build-2", "D11FFE2E47SHA", []string{"another-rehearsed-job"}),
+		},
+		expected: &staleStatusStats{prHit: 0, prTotal: 1, prPct: 0, buildsHit: 0, buildsTotal: 2, buildsPct: 0},
+	}, {
+		description: "job rehearsed in old build but not in new one over same SHA is stale",
+		builds: []*Metrics{
+			makeTestBuild(1, "build-1", "SHA", []string{"stale-job", "rehearsed-job"}),
+			makeTestBuild(1, "build-2", "SHA", []string{"rehearsed-job"}),
+		},
+		expected: &staleStatusStats{
+			prHit: 1, prTotal: 1, prPct: 100, buildsHit: 1, buildsTotal: 2, buildsPct: 50,
+			occurrences: []staleStatusOcc{{pr: 1, sha: "SHA", oldBuild: "build-1", newBuild: "build-2", jobs: []string{"stale-job"}}},
+		},
+	},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			allBuilds := AllBuilds{Pulls: map[int][]*Metrics{}}
+			counter := StaleStatusCounter{&allBuilds}
+			for _, build := range tc.builds {
+				counter.Process(build)
+			}
+			stats := counter.computeStats()
+			if !reflect.DeepEqual(tc.expected, stats) {
+				t.Errorf("Stats differ from expected:\n%s", diff.ObjectReflectDiff(tc.expected, stats))
+			}
+		})
+	}
+}

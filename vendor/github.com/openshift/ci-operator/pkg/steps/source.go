@@ -225,6 +225,16 @@ func buildInputsFromStep(inputs map[string]api.ImageBuildInputs) []buildapi.Imag
 	return refs
 }
 
+func isBuildPhaseTerminated(phase buildapi.BuildPhase) bool {
+	switch phase {
+	case buildapi.BuildPhaseNew,
+		buildapi.BuildPhasePending,
+		buildapi.BuildPhaseRunning:
+		return false
+	}
+	return true
+}
+
 func handleBuild(buildClient BuildClient, build *buildapi.Build, dry bool, artifactDir string) error {
 	if dry {
 		buildJSON, err := json.MarshalIndent(build, "", "  ")
@@ -242,7 +252,8 @@ func handleBuild(buildClient BuildClient, build *buildapi.Build, dry bool, artif
 				return fmt.Errorf("could not get build %s: %v", build.Name, err)
 			}
 
-			if isInfraReason(b.Status.Reason) {
+			if isBuildPhaseTerminated(b.Status.Phase) &&
+				(isInfraReason(b.Status.Reason) || hintsAtInfraReason(b.Status.LogSnippet)) {
 				log.Printf("Build %s previously failed from an infrastructure error (%s), retrying...\n", b.Name, b.Status.Reason)
 				zero := int64(0)
 				foreground := meta.DeletePropagationForeground
@@ -309,6 +320,10 @@ func isInfraReason(reason buildapi.StatusReason) bool {
 		}
 	}
 	return false
+}
+
+func hintsAtInfraReason(logSnippet string) bool {
+	return strings.Contains(logSnippet, "error: build error: no such image")
 }
 
 func waitForBuild(buildClient BuildClient, namespace, name string) error {

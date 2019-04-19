@@ -52,7 +52,7 @@ func Run(ctx context.Context, graph []*api.StepNode, dry bool) (*junit.TestSuite
 			testCase := &junit.TestCase{Name: out.node.Step.Description(), Duration: out.duration.Seconds()}
 			if out.err != nil {
 				testCase.FailureOutput = &junit.FailureOutput{Output: out.err.Error()}
-				errors = append(errors, out.err)
+				errors = append(errors, fmt.Errorf("step %s failed: %v", out.node.Step.Name(), out.err))
 			} else {
 				if dry {
 					testCase.SkipMessage = &junit.SkipMessage{Message: "Dry run"}

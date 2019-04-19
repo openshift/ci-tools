@@ -84,6 +84,8 @@ tests:
     cluster_profile: ''
   openshift_installer_src:
     cluster_profile: ''
+  openshift_installer_console:
+    cluster_profile: ''
 ```
 
 # `tag_specification`
@@ -353,6 +355,11 @@ openshift-ansible
 ## `tests.openshift_installer_src`
 `openshift_installer_src` is a test that provisions a cluster using
 `openshift-installer` and executes a test in the `src` image.
+
+## `tests.openshift_installer_console`
+`openshift_installer_src` is a test that provisions a cluster using
+`openshift-installer` and executes a test in the `console_test` image. This allows a 
+component to run a portion of the latest UI tests on changes.
 
 ## `tests.openshift_installer_upi`
 `openshift_installer_upi` is a test that provisions machines using `installer-upi` image

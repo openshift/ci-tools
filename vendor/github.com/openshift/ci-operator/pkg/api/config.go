@@ -256,6 +256,10 @@ func validateTestConfigurationType(fieldRoot string, test TestStepConfiguration,
 		typeCount++
 		validationErrors = append(validationErrors, validateClusterProfile(fmt.Sprintf("%s", fieldRoot), testConfig.ClusterProfile)...)
 	}
+	if testConfig := test.OpenshiftInstallerConsoleClusterTestConfiguration; testConfig != nil {
+		typeCount++
+		validationErrors = append(validationErrors, validateClusterProfile(fmt.Sprintf("%s", fieldRoot), testConfig.ClusterProfile)...)
+	}
 	if typeCount == 0 {
 		validationErrors = append(validationErrors, fmt.Errorf("%s has no type, you may want to specify 'container' for a container based test", fieldRoot))
 	} else if typeCount == 1 {

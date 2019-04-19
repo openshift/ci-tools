@@ -308,18 +308,21 @@ func (s *assembleReleaseStep) importFromReleaseImage(ctx context.Context, dry bo
 	cliImage := pod.Status.ContainerStatuses[0].State.Terminated.Message
 
 	// tag the cli image into stable so we use the correct pull secrets from the namespace
-	if _, err := s.imageClient.ImageStreamTags(s.jobSpec.Namespace).Update(&imageapi.ImageStreamTag{
-		ObjectMeta: meta.ObjectMeta{
-			Name: fmt.Sprintf("%s:cli", streamName),
-		},
-		Tag: &imageapi.TagReference{
-			From: &coreapi.ObjectReference{
-				Kind: "DockerImage",
-				Name: cliImage,
+	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		_, err := s.imageClient.ImageStreamTags(s.jobSpec.Namespace).Update(&imageapi.ImageStreamTag{
+			ObjectMeta: meta.ObjectMeta{
+				Name: fmt.Sprintf("%s:cli", streamName),
 			},
-		},
-	}); err != nil {
+			Tag: &imageapi.TagReference{
+				From: &coreapi.ObjectReference{
+					Kind: "DockerImage",
+					Name: cliImage,
+				},
+			},
+		})
 		return err
+	}); err != nil {
+		return fmt.Errorf("unable to tag the 'cli' image into the stable stream: %v", err)
 	}
 
 	// run adm release extract and grab the raw image-references from the payload

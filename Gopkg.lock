@@ -354,11 +354,11 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:334deadc0e3569d00920be459aa7072288635ed728b70e8f2584e86a1c1dee81"
+  digest = "1:84390ceb47c5b59ad06852ac6bdd6142b68617cd4610392ed802ea7d786237a9"
   name = "github.com/openshift/ci-operator"
   packages = ["pkg/api"]
   pruneopts = ""
-  revision = "ccb6f432a6b149c1544c09038868b9a34b7434f7"
+  revision = "cb1c3450ce476e71076802245dbc3fc9b61a4c9d"
 
 [[projects]]
   branch = "master"
@@ -1015,6 +1015,7 @@
     "github.com/sirupsen/logrus/hooks/test",
     "golang.org/x/oauth2",
     "golang.org/x/sync/semaphore",
+    "google.golang.org/api/iterator",
     "k8s.io/api/core/v1",
     "k8s.io/apimachinery/pkg/api/equality",
     "k8s.io/apimachinery/pkg/api/errors",

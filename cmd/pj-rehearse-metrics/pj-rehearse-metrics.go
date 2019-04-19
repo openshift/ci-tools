@@ -237,6 +237,10 @@ func run() error {
 	overLimit := rehearse.NewMetricsCounter("PRs hitting the limit of rehearsed jobs", func(m *rehearse.Metrics) bool {
 		return len(m.Actual) > 0 && m.Execution == nil
 	})
+	allBuilds := rehearse.AllBuilds{Pulls: map[int][]*rehearse.Metrics{}}
+	staleJobs := &rehearse.StaleStatusCounter{Builds: &allBuilds}
+
+	counters := []rehearse.MetricsCounter{overLimit, staleJobs}
 
 	if err := filepath.Walk(o.cacheDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -254,14 +258,18 @@ func run() error {
 			metrics.JobSpec.BuildID = filepath.Base(path)
 		}
 
-		overLimit.Process(metrics)
+		for _, counter := range counters {
+			counter.Process(metrics)
+		}
 
 		return nil
 	}); err != nil {
 		return fmt.Errorf("failed to iterate over scraped metrics: %v", err)
 	}
 
-	fmt.Printf("%s", overLimit.Report())
+	for _, counter := range counters {
+		fmt.Printf("\n%s", counter.Report())
+	}
 
 	return nil
 }

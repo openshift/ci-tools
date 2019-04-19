@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"sort"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -198,4 +199,137 @@ PR links:
 	pctPrs := float64(prCount) / float64(len(m.seenPrs)) * 100.0
 	pctBuilds := float64(m.matchingBuilds) / float64(m.totalBuilds) * 100.0
 	return fmt.Sprintf(template, m.purpose, prCount, len(m.seenPrs), pctPrs, m.matchingBuilds, m.totalBuilds, pctBuilds, strings.Join(links, "\n"))
+}
+
+type AllBuilds struct {
+	Pulls map[int][]*Metrics
+}
+
+func (b *AllBuilds) Process(build *Metrics) {
+	pr := build.JobSpec.Refs.Pulls[0].Number
+	if len(b.Pulls[pr]) == 0 {
+		b.Pulls[pr] = []*Metrics{}
+	}
+	b.Pulls[pr] = append(b.Pulls[pr], build)
+}
+
+func (b *AllBuilds) Sort() {
+	for pr := range b.Pulls {
+		sort.Slice(b.Pulls[pr], func(i, j int) bool {
+			return b.Pulls[pr][i].JobSpec.BuildID < b.Pulls[pr][j].JobSpec.BuildID
+		})
+	}
+}
+
+func (b *AllBuilds) PrTotal() int {
+	return len(b.Pulls)
+}
+
+func (b *AllBuilds) BuildsTotal() int {
+	total := 0
+	for _, builds := range b.Pulls {
+		total += len(builds)
+	}
+
+	return total
+}
+
+type staleStatusOcc struct {
+	pr                      int
+	sha, oldBuild, newBuild string
+	jobs                    []string
+}
+
+func (s *staleStatusOcc) message() string {
+	template := "- https://github.com/openshift/release/pull/%d got stale statuses on SHA %s (old build=%s new build=%s):\n  - %s"
+	return fmt.Sprintf(template, s.pr, s.sha, s.oldBuild, s.newBuild, strings.Join(s.jobs, "\n  - "))
+}
+
+type staleStatusStats struct {
+	prHit, prTotal, prPct             int
+	buildsHit, buildsTotal, buildsPct int
+	occurrences                       []staleStatusOcc
+}
+
+func (s *staleStatusStats) messages() string {
+	if s.buildsHit > 0 {
+		messages := make([]string, 0, len(s.occurrences))
+		for _, occ := range s.occurrences {
+			messages = append(messages, occ.message())
+		}
+		return strings.Join(messages, "\n")
+	}
+
+	return "No occurrences"
+}
+
+func (s *staleStatusStats) createReport() string {
+	template := `# Stale job statuses in PRs
+
+PR statistics:    %d/%d (%d%%)
+Build statistics: %d/%d (%d%%)
+
+PR links:
+%s
+`
+	return fmt.Sprintf(template, s.prHit, s.prTotal, s.prPct, s.buildsHit, s.buildsTotal, s.buildsPct, s.messages())
+}
+
+type StaleStatusCounter struct {
+	Builds *AllBuilds
+}
+
+func (s *StaleStatusCounter) Process(build *Metrics) {
+	s.Builds.Process(build)
+}
+
+func (s *StaleStatusCounter) computeStats() *staleStatusStats {
+	s.Builds.Sort()
+
+	stats := &staleStatusStats{}
+
+	for pr, builds := range s.Builds.Pulls {
+		prWasHit := false
+		for i := 1; i < len(builds); i++ {
+			old := builds[i-1]
+			oldSHA := old.JobSpec.Refs.Pulls[0].SHA
+			new := builds[i]
+			newSHA := new.JobSpec.Refs.Pulls[0].SHA
+			if newSHA == "" || oldSHA != newSHA {
+				continue
+			}
+			staleJobs := []string{}
+			for job := range old.Opportunities {
+				if _, hasJob := new.Opportunities[job]; !hasJob {
+					staleJobs = append(staleJobs, job)
+				}
+			}
+			if len(staleJobs) > 0 {
+				prWasHit = true
+				stats.buildsHit += len(staleJobs)
+				occurrence := staleStatusOcc{
+					pr:       pr,
+					sha:      newSHA,
+					oldBuild: old.JobSpec.BuildID,
+					newBuild: new.JobSpec.BuildID,
+					jobs:     staleJobs,
+				}
+				stats.occurrences = append(stats.occurrences, occurrence)
+			}
+		}
+		if prWasHit {
+			stats.prHit++
+		}
+	}
+
+	stats.prTotal = s.Builds.PrTotal()
+	stats.buildsTotal = s.Builds.BuildsTotal()
+	stats.prPct = int(float64(stats.prHit) / float64(stats.prTotal) * 100.0)
+	stats.buildsPct = int(float64(stats.buildsHit) / float64(stats.buildsTotal) * 100.0)
+
+	return stats
+}
+
+func (s *StaleStatusCounter) Report() string {
+	return s.computeStats().createReport()
 }

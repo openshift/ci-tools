@@ -357,8 +357,8 @@ openshift-ansible
 `openshift-installer` and executes a test in the `src` image.
 
 ## `tests.openshift_installer_console`
-`openshift_installer_src` is a test that provisions a cluster using
-`openshift-installer` and executes a test in the `console_test` image. This allows a 
+`openshift_installer_console` is a test that provisions a cluster using
+`openshift-installer` and executes a test in the `console_test` image. This allows a
 component to run a portion of the latest UI tests on changes.
 
 ## `tests.openshift_installer_upi`

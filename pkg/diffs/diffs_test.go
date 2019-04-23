@@ -443,12 +443,12 @@ func TestGetPresubmitsForClusterProfiles(t *testing.T) {
 	for _, tc := range []struct {
 		id       string
 		cfg      *prowconfig.Config
-		profiles []config.ClusterProfile
+		profiles []config.ConfigMapSource
 		expected []string
 	}{{
 		id:  "empty",
 		cfg: &prowconfig.Config{},
-		profiles: []config.ClusterProfile{{
+		profiles: []config.ConfigMapSource{{
 			Filename: filepath.Join(config.ClusterProfilesPath, "test-profile"),
 		}},
 	}, {
@@ -462,7 +462,7 @@ func TestGetPresubmitsForClusterProfiles(t *testing.T) {
 				},
 			},
 		},
-		profiles: []config.ClusterProfile{{
+		profiles: []config.ConfigMapSource{{
 			Filename: filepath.Join(config.ClusterProfilesPath, "test-profile"),
 		}},
 	}, {
@@ -476,7 +476,7 @@ func TestGetPresubmitsForClusterProfiles(t *testing.T) {
 				},
 			},
 		},
-		profiles: []config.ClusterProfile{{
+		profiles: []config.ConfigMapSource{{
 			Filename: filepath.Join(config.ClusterProfilesPath, "test-profile"),
 		}},
 	}, {
@@ -490,7 +490,7 @@ func TestGetPresubmitsForClusterProfiles(t *testing.T) {
 				},
 			},
 		},
-		profiles: []config.ClusterProfile{{
+		profiles: []config.ConfigMapSource{{
 			Filename: filepath.Join(config.ClusterProfilesPath, "test-profile"),
 		}},
 	}, {
@@ -508,7 +508,7 @@ func TestGetPresubmitsForClusterProfiles(t *testing.T) {
 				},
 			},
 		},
-		profiles: []config.ClusterProfile{{
+		profiles: []config.ConfigMapSource{{
 			Filename: filepath.Join(config.ClusterProfilesPath, "test-profile"),
 		}},
 		expected: []string{"uses-cluster-profile"},

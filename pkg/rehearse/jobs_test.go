@@ -79,11 +79,11 @@ func TestConfigureRehearsalJobs(t *testing.T) {
 			}),
 		},
 	}
-	profiles := []config.ClusterProfile{{
-		TreeHash: "47f520ef9c2662fc9a2675f1dd4f02d5082b2776",
+	profiles := []config.ConfigMapSource{{
+		SHA:      "47f520ef9c2662fc9a2675f1dd4f02d5082b2776",
 		Filename: filepath.Join(config.ClusterProfilesPath, "changed-profile0"),
 	}, {
-		TreeHash: "85c627078710b8beee65d06d0cf157094fc46b03",
+		SHA:      "85c627078710b8beee65d06d0cf157094fc46b03",
 		Filename: filepath.Join(config.ClusterProfilesPath, "changed-profile1"),
 	}}
 	ret := ConfigureRehearsalJobs(jobs, config.CompoundCiopConfig{}, 1234, Loggers{logrus.New(), logrus.New()}, true, nil, profiles)
@@ -378,7 +378,7 @@ func TestExecuteJobsErrors(t *testing.T) {
 				return false, nil, nil
 			})
 
-			rehearsals := ConfigureRehearsalJobs(tc.jobs, testCiopConfigs, testPrNumber, testLoggers, true, nil, []config.ClusterProfile{})
+			rehearsals := ConfigureRehearsalJobs(tc.jobs, testCiopConfigs, testPrNumber, testLoggers, true, nil, nil)
 			executor := NewExecutor(rehearsals, testPrNumber, testRepoPath, testRefs, true, testLoggers, fakeclient)
 			_, err = executor.ExecuteJobs()
 
@@ -447,7 +447,7 @@ func TestExecuteJobsUnsuccessful(t *testing.T) {
 				return true, ret, nil
 			})
 
-			rehearsals := ConfigureRehearsalJobs(tc.jobs, testCiopConfigs, testPrNumber, testLoggers, true, nil, []config.ClusterProfile{})
+			rehearsals := ConfigureRehearsalJobs(tc.jobs, testCiopConfigs, testPrNumber, testLoggers, true, nil, nil)
 			executor := NewExecutor(rehearsals, testPrNumber, testRepoPath, testRefs, false, testLoggers, fakeclient)
 			success, _ := executor.ExecuteJobs()
 
@@ -552,7 +552,7 @@ func TestExecuteJobsPositive(t *testing.T) {
 			}
 			fakecs.Fake.PrependWatchReactor("prowjobs", makeSuccessfulFinishReactor(watcher, tc.jobs))
 
-			rehearsals := ConfigureRehearsalJobs(tc.jobs, testCiopConfigs, testPrNumber, testLoggers, true, nil, []config.ClusterProfile{})
+			rehearsals := ConfigureRehearsalJobs(tc.jobs, testCiopConfigs, testPrNumber, testLoggers, true, nil, nil)
 			executor := NewExecutor(rehearsals, testPrNumber, testRepoPath, testRefs, true, testLoggers, fakeclient)
 			success, err := executor.ExecuteJobs()
 
@@ -831,12 +831,10 @@ func makeBasePresubmit() *prowconfig.Presubmit {
 }
 
 func TestReplaceCMTemplateName(t *testing.T) {
-	const tempCMName = "rehearse-i0k3r9fp-test-template"
-
 	templates := map[string]string{
-		"test-template.yaml":  tempCMName,
-		"test-template2.yaml": "template2",
-		"test-template3.yaml": "template3",
+		"test-template.yaml":  "rehearse-template-test-template-00000000",
+		"test-template2.yaml": "rehearse-template-test-template-11111111",
+		"test-template3.yaml": "rehearse-template-test-template-22222222",
 	}
 
 	testCases := []struct {
@@ -869,7 +867,7 @@ func TestReplaceCMTemplateName(t *testing.T) {
 				volumes := createVolumesHelper("job-definition", "test-template.yaml")
 				for _, volume := range volumes {
 					if volume.Name == "job-definition" {
-						volume.VolumeSource.ConfigMap.Name = tempCMName
+						volume.VolumeSource.ConfigMap.Name = "rehearse-template-test-template-00000000"
 					}
 				}
 				return volumes
@@ -891,7 +889,7 @@ func TestReplaceCMTemplateName(t *testing.T) {
 			jobVolumes: append(createVolumesHelper("job-definition", "test-template.yaml"), createVolumesHelper("job-definition2", "test-template2.yaml")...),
 			expectedToFind: func() []v1.Volume {
 				volumes := append(createVolumesHelper("job-definition", "test-template.yaml"), createVolumesHelper("job-definition2", "test-template2.yaml")...)
-				volumes[2].VolumeSource.ConfigMap.Name = tempCMName
+				volumes[2].VolumeSource.ConfigMap.Name = "rehearse-template-test-template-00000000"
 				return volumes
 			},
 		},

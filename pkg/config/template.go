@@ -25,22 +25,23 @@ import (
 	"k8s.io/test-infra/prow/plugins/updateconfig"
 )
 
-// CiTemplates is a map of all the changed templates
-type CiTemplates map[string]string
-type ClusterProfile struct {
-	Filename, TreeHash string
+type ConfigMapSource struct {
+	Filename, SHA string
 }
 
-func (p ClusterProfile) Name() string {
-	return filepath.Base(p.Filename)
+func (s ConfigMapSource) Name() string {
+	base := filepath.Base(s.Filename)
+	return strings.TrimSuffix(base, filepath.Ext(base))
 }
 
-func (p ClusterProfile) CMName() string {
-	return ClusterProfilePrefix + p.Name()
+func (p ConfigMapSource) CMName(prefix string) string {
+	return prefix + p.Name()
 }
 
-func (p ClusterProfile) TempCMName() string {
-	return fmt.Sprintf("rehearse-cluster-profile-%s-%s", p.Name(), p.TreeHash[:8])
+func (s ConfigMapSource) TempCMName(prefix string) string {
+	// Object names can't be too long so we truncate the hash. This increases
+	// chances of collision but we can tolerate it as our input space is tiny.
+	return fmt.Sprintf("rehearse-%s-%s-%s", prefix, s.Name(), s.SHA[:8])
 }
 
 const (
@@ -104,24 +105,29 @@ func (c *TemplateCMManager) createCM(name string, data []updateconfig.ConfigMapU
 	return nil
 }
 
-func genChanges(root, dir string) ([]prowgithub.PullRequestChange, error) {
+func genChanges(root string, sources []ConfigMapSource) ([]prowgithub.PullRequestChange, error) {
 	var ret []prowgithub.PullRequestChange
-	err := filepath.Walk(filepath.Join(root, dir), func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
-			return err
-		}
-		// Failure is impossible per filepath.Walk's API.
-		path, err = filepath.Rel(root, path)
-		if err != nil {
-			return err
-		}
-		ret = append(ret, prowgithub.PullRequestChange{
-			Filename: path,
-			Status:   string(prowgithub.PullRequestFileModified),
+	for _, f := range sources {
+		err := filepath.Walk(filepath.Join(root, f.Filename), func(path string, info os.FileInfo, err error) error {
+			if err != nil || info.IsDir() {
+				return err
+			}
+			// Failure is impossible per filepath.Walk's API.
+			path, err = filepath.Rel(root, path)
+			if err != nil {
+				return err
+			}
+			ret = append(ret, prowgithub.PullRequestChange{
+				Filename: path,
+				Status:   string(prowgithub.PullRequestFileModified),
+			})
+			return nil
 		})
-		return nil
-	})
-	return ret, err
+		if err != nil {
+			return nil, err
+		}
+	}
+	return ret, nil
 }
 
 func replaceSpecNames(namespace string, cfg prowplugins.ConfigUpdater, mapping map[string]string) (ret prowplugins.ConfigUpdater) {
@@ -140,14 +146,10 @@ func replaceSpecNames(namespace string, cfg prowplugins.ConfigUpdater, mapping m
 	return
 }
 
-func (c *TemplateCMManager) createCMs(filenames []string, mapping map[string]string) error {
-	var changes []prowgithub.PullRequestChange
-	for _, f := range filenames {
-		c, err := genChanges(c.releaseRepoPath, f)
-		if err != nil {
-			return err
-		}
-		changes = append(changes, c...)
+func (c *TemplateCMManager) createCMs(sources []ConfigMapSource, mapping map[string]string) error {
+	changes, err := genChanges(c.releaseRepoPath, sources)
+	if err != nil {
+		return err
 	}
 	var errs []error
 	for cm, data := range updateconfig.FilterChanges(replaceSpecNames(c.namespace, c.configUpdaterCfg, mapping), changes, c.logger) {
@@ -160,25 +162,20 @@ func (c *TemplateCMManager) createCMs(filenames []string, mapping map[string]str
 }
 
 // CreateCMTemplates creates configMaps for all the changed templates.
-func (c *TemplateCMManager) CreateCMTemplates(templates CiTemplates) error {
-	filenames := make([]string, 0, len(templates))
+func (c *TemplateCMManager) CreateCMTemplates(templates []ConfigMapSource) error {
 	nameMap := make(map[string]string, len(templates))
-	for filename, template := range templates {
-		filenames = append(filenames, filename)
-		name := GetTemplateName(filename)
-		nameMap[GetTemplateCMName(name)] = GetTempCMName(name, template)
+	for _, t := range templates {
+		nameMap[t.CMName(TemplatePrefix)] = t.TempCMName("template")
 	}
-	return c.createCMs(filenames, nameMap)
+	return c.createCMs(templates, nameMap)
 }
 
-func (c *TemplateCMManager) CreateClusterProfiles(profiles []ClusterProfile) error {
-	filenames := make([]string, 0, len(profiles))
+func (c *TemplateCMManager) CreateClusterProfiles(profiles []ConfigMapSource) error {
 	nameMap := make(map[string]string, len(profiles))
 	for _, p := range profiles {
-		filenames = append(filenames, p.Filename)
-		nameMap[p.CMName()] = p.TempCMName()
+		nameMap[p.CMName(ClusterProfilePrefix)] = p.TempCMName("cluster-profile")
 	}
-	return c.createCMs(filenames, nameMap)
+	return c.createCMs(profiles, nameMap)
 }
 
 // CleanupCMTemplates deletes all the configMaps that have been created for the changed templates.
@@ -192,18 +189,4 @@ func (c *TemplateCMManager) CleanupCMTemplates() error {
 		return err
 	}
 	return nil
-}
-
-func GetTemplateCMName(name string) string {
-	return TemplatePrefix + name
-}
-
-func GetTempCMName(templateName, hash string) string {
-	return fmt.Sprintf("rehearse-%s-%s", hash[:8], templateName)
-}
-
-// GetTemplateName generates a name for the template based of the filename.
-func GetTemplateName(filename string) string {
-	templateName := filepath.Base(filename)
-	return strings.TrimSuffix(templateName, filepath.Ext(templateName))
 }

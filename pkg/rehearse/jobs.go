@@ -198,12 +198,12 @@ func inlineCiOpConfig(job *prowconfig.Presubmit, targetRepo string, ciopConfigs 
 
 // ConfigureRehearsalJobs filters the jobs that should be rehearsed, then return a list of them re-configured with the
 // ci-operator's configuration inlined.
-func ConfigureRehearsalJobs(toBeRehearsed config.Presubmits, ciopConfigs config.CompoundCiopConfig, prNumber int, loggers Loggers, allowVolumes bool, templates config.CiTemplates, profiles []config.ClusterProfile) []*prowconfig.Presubmit {
+func ConfigureRehearsalJobs(toBeRehearsed config.Presubmits, ciopConfigs config.CompoundCiopConfig, prNumber int, loggers Loggers, allowVolumes bool, templates []config.ConfigMapSource, profiles []config.ConfigMapSource) []*prowconfig.Presubmit {
 	var templateMap map[string]string
 	if allowVolumes {
 		templateMap = make(map[string]string, len(templates))
-		for f, t := range templates {
-			templateMap[filepath.Base(f)] = config.GetTempCMName(config.GetTemplateName(f), t)
+		for _, t := range templates {
+			templateMap[filepath.Base(t.Filename)] = t.TempCMName("template")
 		}
 	}
 	rehearsals := []*prowconfig.Presubmit{}
@@ -240,13 +240,12 @@ func ConfigureRehearsalJobs(toBeRehearsed config.Presubmits, ciopConfigs config.
 // AddRandomJobsForChangedTemplates finds jobs from the PR config that are using a specific template with a specific cluster type.
 // The job selection is done by iterating in an unspecified order, which avoids picking the same job
 // So if a template will be changed, find the jobs that are using a template in combination with the `aws`,`openstack`,`gcs` and `libvirt` cluster types.
-func AddRandomJobsForChangedTemplates(templates config.CiTemplates, prConfigPresubmits map[string][]prowconfig.Presubmit, loggers Loggers, prNumber int) config.Presubmits {
+func AddRandomJobsForChangedTemplates(templates []config.ConfigMapSource, prConfigPresubmits map[string][]prowconfig.Presubmit, loggers Loggers, prNumber int) config.Presubmits {
 	rehearsals := make(config.Presubmits)
 
-	for templateFile := range templates {
-		templateFile = filepath.Base(templateFile)
+	for _, template := range templates {
 		for _, clusterType := range []string{"aws", "gcs", "openstack", "libvirt", "vsphere", "gcp"} {
-			if repo, job := pickTemplateJob(prConfigPresubmits, templateFile, clusterType); job != nil {
+			if repo, job := pickTemplateJob(prConfigPresubmits, filepath.Base(template.Filename), clusterType); job != nil {
 				jobLogger := loggers.Job.WithFields(logrus.Fields{"target-repo": repo, "target-job": job.Name})
 				jobLogger.Info("Picking job to rehearse the template changes")
 				rehearsals[repo] = append(rehearsals[repo], *job)
@@ -259,9 +258,8 @@ func AddRandomJobsForChangedTemplates(templates config.CiTemplates, prConfigPres
 func replaceCMTemplateName(volumeMounts []v1.VolumeMount, volumes []v1.Volume, mapping map[string]string) {
 	for _, volume := range volumes {
 		for _, volumeMount := range volumeMounts {
-			filename := volumeMount.SubPath
-			if t, ok := mapping[filename]; ok && volumeMount.Name == volume.Name {
-				volume.VolumeSource.ConfigMap.Name = t
+			if name, ok := mapping[volumeMount.SubPath]; ok && volumeMount.Name == volume.Name {
+				volume.VolumeSource.ConfigMap.Name = name
 			}
 		}
 	}
@@ -307,10 +305,10 @@ func hasTemplateFile(job prowconfig.Presubmit, templateFile string) bool {
 	return false
 }
 
-func replaceClusterProfiles(volumes []v1.Volume, profiles []config.ClusterProfile, logger *logrus.Entry) {
+func replaceClusterProfiles(volumes []v1.Volume, profiles []config.ConfigMapSource, logger *logrus.Entry) {
 	nameMap := make(map[string]string, len(profiles))
 	for _, p := range profiles {
-		nameMap[p.CMName()] = p.TempCMName()
+		nameMap[p.CMName(config.ClusterProfilePrefix)] = p.TempCMName("cluster-profile")
 	}
 	replace := func(s *v1.VolumeProjection) {
 		if s.ConfigMap == nil {

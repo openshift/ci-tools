@@ -39,8 +39,9 @@ const (
 type Configuration struct {
 	// Plugins is a map of repositories (eg "k/k") to lists of
 	// plugin names.
-	// TODO: Link to the list of supported plugins.
-	// https://github.com/kubernetes/test-infra/issues/3476
+	// You can find a comprehensive list of the default avaulable plugins here
+	// https://github.com/kubernetes/test-infra/tree/master/prow/plugins
+	// note that you're also able to add external plugins.
 	Plugins map[string][]string `json:"plugins,omitempty"`
 
 	// ExternalPlugins is a map of repositories (eg "k/k") to lists of
@@ -59,16 +60,17 @@ type Configuration struct {
 	Cat                        Cat                    `json:"cat,omitempty"`
 	CherryPickUnapproved       CherryPickUnapproved   `json:"cherry_pick_unapproved,omitempty"`
 	ConfigUpdater              ConfigUpdater          `json:"config_updater,omitempty"`
-	Golint                     *Golint                `json:"golint,omitempty"`
+	Golint                     Golint                 `json:"golint"`
 	Heart                      Heart                  `json:"heart,omitempty"`
-	Label                      *Label                 `json:"label,omitempty"`
+	Label                      Label                  `json:"label"`
 	Lgtm                       []Lgtm                 `json:"lgtm,omitempty"`
 	RepoMilestone              map[string]Milestone   `json:"repo_milestone,omitempty"`
+	Project                    ProjectConfig          `json:"project_config,omitempty"`
 	RequireMatchingLabel       []RequireMatchingLabel `json:"require_matching_label,omitempty"`
 	RequireSIG                 RequireSIG             `json:"requiresig,omitempty"`
 	Slack                      Slack                  `json:"slack,omitempty"`
 	SigMention                 SigMention             `json:"sigmention,omitempty"`
-	Size                       *Size                  `json:"size,omitempty"`
+	Size                       Size                   `json:"size"`
 	Triggers                   []Trigger              `json:"triggers,omitempty"`
 	Welcome                    []Welcome              `json:"welcome,omitempty"`
 }
@@ -299,7 +301,7 @@ func (a Approve) ConsiderReviewState() bool {
 type Lgtm struct {
 	// Repos is either of the form org/repos or just org.
 	Repos []string `json:"repos,omitempty"`
-	// ReviewActsAsLgtm indicates that a Github review of "approve" or "request changes"
+	// ReviewActsAsLgtm indicates that a GitHub review of "approve" or "request changes"
 	// acts as adding or removing the lgtm label
 	ReviewActsAsLgtm bool `json:"review_acts_as_lgtm,omitempty"`
 	// StoreTreeHash indicates if tree_hash should be stored inside a comment to detect
@@ -308,7 +310,7 @@ type Lgtm struct {
 	// WARNING: This disables the security mechanism that prevents a malicious member (or
 	// compromised GitHub account) from merging arbitrary code. Use with caution.
 	//
-	// StickyLgtmTeam specifies the Github team whose members are trusted with sticky LGTM,
+	// StickyLgtmTeam specifies the GitHub team whose members are trusted with sticky LGTM,
 	// which eliminates the need to re-lgtm minor fixes/updates.
 	StickyLgtmTeam string `json:"trusted_team_for_sticky_lgtm,omitempty"`
 }
@@ -337,7 +339,7 @@ type Trigger struct {
 	TrustedOrg string `json:"trusted_org,omitempty"`
 	// JoinOrgURL is a link that redirects users to a location where they
 	// should be able to read more about joining the organization in order
-	// to become trusted members. Defaults to the Github link of TrustedOrg.
+	// to become trusted members. Defaults to the GitHub link of TrustedOrg.
 	JoinOrgURL string `json:"join_org_url,omitempty"`
 	// OnlyOrgMembers requires PRs and/or /ok-to-test comments to come from org members.
 	// By default, trigger also include repo collaborators.
@@ -345,6 +347,9 @@ type Trigger struct {
 	// IgnoreOkToTest makes trigger ignore /ok-to-test comments.
 	// This is a security mitigation to only allow testing from trusted users.
 	IgnoreOkToTest bool `json:"ignore_ok_to_test,omitempty"`
+	// ElideSkippedContexts makes trigger not post "Skipped" contexts for jobs
+	// that could run but do not run.
+	ElideSkippedContexts bool `json:"elide_skipped_contexts,omitempty"`
 }
 
 // Heart contains the configuration for the heart plugin.
@@ -393,7 +398,10 @@ type ConfigMapSpec struct {
 	// Namespaces in which the configMap needs to be deployed, in addition to the above
 	// namespace provided, or the default if it is not set.
 	AdditionalNamespaces []string `json:"additional_namespaces,omitempty"`
-
+	// GZIP toggles whether the key's data should be GZIP'd before being stored
+	// If set to false and the global GZIP option is enabled, this file will
+	// will not be GZIP'd.
+	GZIP *bool `json:"gzip,omitempty"`
 	// Namespaces is the fully resolved list of Namespaces to deploy the ConfigMap in
 	Namespaces []string `json:"-"`
 }
@@ -417,6 +425,36 @@ type ConfigUpdater struct {
 	// github.com/kubernetes/test-infra/prow/plugins.yaml assuming the config-updater
 	// plugin is enabled for kubernetes/test-infra. Defaults to "prow/plugins.yaml".
 	PluginFile string `json:"plugin_file,omitempty"`
+	// If GZIP is true then files will be gzipped before insertion into
+	// their corresponding configmap
+	GZIP bool `json:"gzip"`
+}
+
+// ProjectConfig contains the configuration options for the project plugin
+type ProjectConfig struct {
+	// Org level configs for github projects; key is org name
+	Orgs map[string]ProjectOrgConfig `json:"project_org_configs,omitempty"`
+}
+
+// ProjectOrgConfig holds the github project config for an entire org.
+// This can be overridden by ProjectRepoConfig.
+type ProjectOrgConfig struct {
+	// ID of the github project maintainer team for a give project or org
+	MaintainerTeamID int `json:"org_maintainers_team_id,omitempty"`
+	// A map of project name to default column; an issue/PR will be added
+	// to the default column if column name is not provided in the command
+	ProjectColumnMap map[string]string `json:"org_default_column_map,omitempty"`
+	// Repo level configs for github projects; key is repo name
+	Repos map[string]ProjectRepoConfig `json:"project_repo_configs,omitempty"`
+}
+
+// ProjectRepoConfig holds the github project config for a github project.
+type ProjectRepoConfig struct {
+	// ID of the github project maintainer team for a give project or org
+	MaintainerTeamID int `json:"repo_maintainers_team_id,omitempty"`
+	// A map of project name to default column; an issue/PR will be added
+	// to the default column if column name is not provided in the command
+	ProjectColumnMap map[string]string `json:"repo_default_column_map,omitempty"`
 }
 
 // MergeWarning is a config for the slackevents plugin's manual merge warnings.
@@ -563,15 +601,15 @@ func (r RequireMatchingLabel) Describe() string {
 // TriggerFor finds the Trigger for a repo, if one exists
 // a trigger can be listed for the repo itself or for the
 // owning organization
-func (c *Configuration) TriggerFor(org, repo string) *Trigger {
+func (c *Configuration) TriggerFor(org, repo string) Trigger {
 	for _, tr := range c.Triggers {
 		for _, r := range tr.Repos {
 			if r == org || r == fmt.Sprintf("%s/%s", org, repo) {
-				return &tr
+				return tr
 			}
 		}
 	}
-	return nil
+	return Trigger{}
 }
 
 // EnabledReposForPlugin returns the orgs and repos that have enabled the passed plugin.
@@ -724,11 +762,7 @@ func validatePlugins(plugins map[string][]string) error {
 	return nil
 }
 
-func validateSizes(size *Size) error {
-	if size == nil {
-		return nil
-	}
-
+func validateSizes(size Size) error {
 	if size.S > size.M || size.M > size.L || size.L > size.Xl || size.Xl > size.Xxl {
 		return errors.New("invalid size plugin configuration - one of the smaller sizes is bigger than a larger one")
 	}
@@ -895,5 +929,43 @@ func (c *Configuration) Validate() error {
 		return err
 	}
 
+	return nil
+}
+
+func (pluginConfig *ProjectConfig) GetMaintainerTeam(org string, repo string) int {
+	for orgName, orgConfig := range pluginConfig.Orgs {
+		if org == orgName {
+			// look for repo level configs first because repo level config overrides org level configs
+			for repoName, repoConfig := range orgConfig.Repos {
+				if repo == repoName {
+					return repoConfig.MaintainerTeamID
+				}
+			}
+			return orgConfig.MaintainerTeamID
+		}
+	}
+	return -1
+}
+
+func (pluginConfig *ProjectConfig) GetColumnMap(org string, repo string) map[string]string {
+	for orgName, orgConfig := range pluginConfig.Orgs {
+		if org == orgName {
+			for repoName, repoConfig := range orgConfig.Repos {
+				if repo == repoName {
+					return repoConfig.ProjectColumnMap
+				}
+			}
+			return orgConfig.ProjectColumnMap
+		}
+	}
+	return nil
+}
+
+func (pluginConfig *ProjectConfig) GetOrgColumnMap(org string) map[string]string {
+	for orgName, orgConfig := range pluginConfig.Orgs {
+		if org == orgName {
+			return orgConfig.ProjectColumnMap
+		}
+	}
 	return nil
 }

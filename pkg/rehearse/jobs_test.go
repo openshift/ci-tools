@@ -217,7 +217,7 @@ func makeTestingPresubmit(name, context string, ciopArgs []string, branch string
 			},
 		},
 		RerunCommand: "/test pj-rehearse",
-		Context:      context,
+		Reporter:     prowconfig.Reporter{Context: context},
 		Brancher: prowconfig.Brancher{Branches: []string{
 			fmt.Sprintf("^%s$", branch),
 		}},
@@ -239,7 +239,7 @@ func TestMakeRehearsalPresubmit(t *testing.T) {
 			},
 		},
 		RerunCommand: "/test test",
-		Context:      "ci/prow/test",
+		Reporter:     prowconfig.Reporter{Context: "ci/prow/test"},
 		Brancher:     prowconfig.Brancher{Branches: []string{"^branch$"}},
 	}
 	expectedPresubmit := &prowconfig.Presubmit{}
@@ -821,7 +821,7 @@ func makeBasePresubmit() *prowconfig.Presubmit {
 			},
 		},
 		RerunCommand: "/test pj-rehearse",
-		Context:      "ci/prow/test",
+		Reporter:     prowconfig.Reporter{Context: "ci/prow/test"},
 		Brancher:     prowconfig.Brancher{Branches: []string{"^master$"}},
 	}
 }

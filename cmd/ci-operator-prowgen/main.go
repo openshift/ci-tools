@@ -10,15 +10,14 @@ import (
 
 	"github.com/openshift/ci-operator-prowgen/pkg/promotion"
 	"github.com/sirupsen/logrus"
+	"k8s.io/test-infra/prow/apis/prowjobs/v1"
 
+	"github.com/openshift/ci-operator-prowgen/pkg/config"
+	jc "github.com/openshift/ci-operator-prowgen/pkg/jobconfig"
 	cioperatorapi "github.com/openshift/ci-operator/pkg/api"
 	kubeapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	prowconfig "k8s.io/test-infra/prow/config"
-	prowkube "k8s.io/test-infra/prow/kube"
-
-	"github.com/openshift/ci-operator-prowgen/pkg/config"
-	jc "github.com/openshift/ci-operator-prowgen/pkg/jobconfig"
 )
 
 const (
@@ -270,13 +269,15 @@ func generatePresubmitForTest(name string, info *config.Info, podSpec *kubeapi.P
 			Name:   jobName,
 			Spec:   podSpec,
 			UtilityConfig: prowconfig.UtilityConfig{
-				DecorationConfig: &prowkube.DecorationConfig{SkipCloning: &newTrue},
+				DecorationConfig: &v1.DecorationConfig{SkipCloning: &newTrue},
 				Decorate:         true,
 			},
 		},
-		AlwaysRun:    true,
-		Brancher:     prowconfig.Brancher{Branches: []string{info.Branch}},
-		Context:      fmt.Sprintf("ci/prow/%s", name),
+		AlwaysRun: true,
+		Brancher:  prowconfig.Brancher{Branches: []string{info.Branch}},
+		Reporter: prowconfig.Reporter{
+			Context: fmt.Sprintf("ci/prow/%s", name),
+		},
 		RerunCommand: fmt.Sprintf("/test %s", name),
 		Trigger:      fmt.Sprintf(`(?m)^/test (?:.*? )?%s(?: .*?)?$`, name),
 	}
@@ -321,7 +322,7 @@ func generatePostsubmitForTest(
 			Spec:   podSpec,
 			Labels: copiedLabels,
 			UtilityConfig: prowconfig.UtilityConfig{
-				DecorationConfig: &prowkube.DecorationConfig{SkipCloning: &newTrue},
+				DecorationConfig: &v1.DecorationConfig{SkipCloning: &newTrue},
 				Decorate:         true,
 			},
 		},

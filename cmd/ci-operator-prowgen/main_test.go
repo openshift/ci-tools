@@ -11,12 +11,11 @@ import (
 	"testing"
 
 	kubeapi "k8s.io/api/core/v1"
-	prowconfig "k8s.io/test-infra/prow/config"
-	prowkube "k8s.io/test-infra/prow/kube"
-
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/util/diff"
+	"k8s.io/test-infra/prow/apis/prowjobs/v1"
+	prowconfig "k8s.io/test-infra/prow/config"
 
 	ciop "github.com/openshift/ci-operator/pkg/api"
 
@@ -303,13 +302,15 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 				Labels: standardJobLabels,
 				Name:   "pull-ci-org-repo-branch-testname",
 				UtilityConfig: prowconfig.UtilityConfig{
-					DecorationConfig: &prowkube.DecorationConfig{SkipCloning: &newTrue},
+					DecorationConfig: &v1.DecorationConfig{SkipCloning: &newTrue},
 					Decorate:         true,
 				},
 			},
-			AlwaysRun:    true,
-			Brancher:     prowconfig.Brancher{Branches: []string{"branch"}},
-			Context:      "ci/prow/testname",
+			AlwaysRun: true,
+			Brancher:  prowconfig.Brancher{Branches: []string{"branch"}},
+			Reporter: prowconfig.Reporter{
+				Context: "ci/prow/testname",
+			},
 			RerunCommand: "/test testname",
 			Trigger:      "(?m)^/test (?:.*? )?testname(?: .*?)?$",
 		},
@@ -349,7 +350,7 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 					Labels: standardJobLabels,
 					Name:   "branch-ci-organization-repository-branch-name",
 					UtilityConfig: prowconfig.UtilityConfig{
-						DecorationConfig: &prowkube.DecorationConfig{SkipCloning: &newTrue},
+						DecorationConfig: &v1.DecorationConfig{SkipCloning: &newTrue},
 						Decorate:         true,
 					},
 				},
@@ -372,7 +373,7 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 					Name:   "branch-ci-Organization-Repository-Branch-Name",
 					Labels: map[string]string{"artifacts": "images", "ci-operator.openshift.io/prowgen-controlled": "true"},
 					UtilityConfig: prowconfig.UtilityConfig{
-						DecorationConfig: &prowkube.DecorationConfig{SkipCloning: &newTrue},
+						DecorationConfig: &v1.DecorationConfig{SkipCloning: &newTrue},
 						Decorate:         true,
 					}},
 				Brancher: prowconfig.Brancher{Branches: []string{"Branch"}},
@@ -395,7 +396,7 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 					Name:   "branch-ci-Organization-Repository-Branch-name",
 					Labels: map[string]string{"artifacts": "images", "ci-operator.openshift.io/prowgen-controlled": "true"},
 					UtilityConfig: prowconfig.UtilityConfig{
-						DecorationConfig: &prowkube.DecorationConfig{SkipCloning: &newTrue},
+						DecorationConfig: &v1.DecorationConfig{SkipCloning: &newTrue},
 						Decorate:         true,
 					}},
 				Brancher: prowconfig.Brancher{Branches: []string{"^Branch$"}},
@@ -419,7 +420,7 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 					Name:   "branch-ci-Organization-Repository-Branch-name",
 					Labels: map[string]string{"artifacts": "images", "ci-operator.openshift.io/prowgen-controlled": "true"},
 					UtilityConfig: prowconfig.UtilityConfig{
-						DecorationConfig: &prowkube.DecorationConfig{SkipCloning: &newTrue},
+						DecorationConfig: &v1.DecorationConfig{SkipCloning: &newTrue},
 						Decorate:         true,
 					}},
 				Brancher: prowconfig.Brancher{Branches: []string{"Branch-.*"}},

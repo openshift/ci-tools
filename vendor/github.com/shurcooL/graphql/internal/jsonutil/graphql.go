@@ -102,7 +102,7 @@ func (d *decoder) decode() error {
 				d.vs[i] = append(d.vs[i], f)
 			}
 			if !someFieldExist {
-				return fmt.Errorf("struct field for %q doesn't exist in any of %v places to unmarshal", key, len(d.vs))
+				return fmt.Errorf("struct field for %s doesn't exist in any of %v places to unmarshal", key, len(d.vs))
 			}
 
 			// We've just consumed the current token, which was the key.
@@ -252,14 +252,10 @@ func (d *decoder) popAllVs() {
 	d.vs = nonEmpty
 }
 
-// fieldByGraphQLName returns an exported struct field of struct v
-// that matches GraphQL name, or invalid reflect.Value if none found.
+// fieldByGraphQLName returns a struct field of struct v that matches GraphQL name,
+// or invalid reflect.Value if none found.
 func fieldByGraphQLName(v reflect.Value, name string) reflect.Value {
 	for i := 0; i < v.NumField(); i++ {
-		if v.Type().Field(i).PkgPath != "" {
-			// Skip unexported field.
-			continue
-		}
 		if hasGraphQLName(v.Type().Field(i), name) {
 			return v.Field(i)
 		}
@@ -300,12 +296,13 @@ func isGraphQLFragment(f reflect.StructField) bool {
 }
 
 // unmarshalValue unmarshals JSON value into v.
-// v must be addressable and not obtained by the use of unexported
-// struct fields, otherwise unmarshalValue will panic.
 func unmarshalValue(value json.Token, v reflect.Value) error {
 	b, err := json.Marshal(value) // TODO: Short-circuit (if profiling says it's worth it).
 	if err != nil {
 		return err
+	}
+	if !v.CanAddr() {
+		return fmt.Errorf("value %v is not addressable", v)
 	}
 	return json.Unmarshal(b, v.Addr().Interface())
 }

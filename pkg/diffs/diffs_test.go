@@ -7,7 +7,7 @@ import (
 	"github.com/getlantern/deepcopy"
 	"github.com/sirupsen/logrus"
 
-	v1 "k8s.io/api/core/v1"
+	"k8s.io/api/core/v1"
 
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/util/diff"
@@ -167,7 +167,9 @@ func TestGetChangedPresubmits(t *testing.T) {
 					}},
 				},
 			},
-			Context:  "test-base-presubmit",
+			Reporter: prowconfig.Reporter{
+				Context: "test-base-presubmit",
+			},
 			Brancher: prowconfig.Brancher{Branches: []string{"^master$"}},
 		},
 	}

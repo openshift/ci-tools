@@ -1,8 +1,0 @@
-approvers:
-  - yutongz
-  - sebastienvas
-reviewers:
-  - yutongz
-  - sebastienvas
-labels:
- - area/prow/pubsub

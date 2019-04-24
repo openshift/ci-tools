@@ -32,7 +32,6 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/test-infra/prow/entrypoint"
-	"k8s.io/test-infra/prow/kube"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 	"k8s.io/test-infra/prow/pod-utils/gcs"
 	"k8s.io/test-infra/prow/pod-utils/wrapper"
@@ -44,7 +43,7 @@ func nameEntry(idx int, opt wrapper.Options) string {
 
 func wait(ctx context.Context, entries []wrapper.Options) (bool, bool, int) {
 	passed := true
-	aborted := false
+	var aborted bool
 	var failures int
 
 	for _, opt := range entries {
@@ -167,18 +166,6 @@ func combineMetadata(entries []wrapper.Options) map[string]interface{} {
 	return metadata
 }
 
-func getRevisionFromRef(refs *kube.Refs) string {
-	if len(refs.Pulls) > 0 {
-		return refs.Pulls[0].SHA
-	}
-
-	if refs.BaseSHA != "" {
-		return refs.BaseSHA
-	}
-
-	return refs.BaseRef
-}
-
 func (o Options) doUpload(spec *downwardapi.JobSpec, passed, aborted bool, metadata map[string]interface{}, logReader io.Reader) error {
 	uploadTargets := map[string]gcs.UploadFunc{
 		"build-log.txt": gcs.DataUpload(logReader),
@@ -194,18 +181,17 @@ func (o Options) doUpload(spec *downwardapi.JobSpec, passed, aborted bool, metad
 		result = "FAILURE"
 	}
 
+	now := time.Now().Unix()
 	finished := gcs.Finished{
-		Timestamp: time.Now().Unix(),
-		Passed:    passed,
+		Timestamp: &now,
+		Passed:    &passed,
 		Result:    result,
 		Metadata:  metadata,
+		// TODO(fejta): JobVersion,
 	}
 
-	if spec.Refs != nil {
-		finished.Revision = getRevisionFromRef(spec.Refs)
-	} else if len(spec.ExtraRefs) > 0 {
-		finished.Revision = getRevisionFromRef(&spec.ExtraRefs[0])
-	}
+	// TODO(fejta): move to initupload and Started.Repos, RepoVersion
+	finished.Revision = downwardapi.GetRevisionFromSpec(spec)
 
 	finishedData, err := json.Marshal(&finished)
 	if err != nil {

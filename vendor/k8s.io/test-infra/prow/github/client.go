@@ -37,7 +37,7 @@ import (
 	githubql "github.com/shurcooL/githubv4"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/oauth2"
-
+	"k8s.io/test-infra/ghproxy/ghcache"
 	"k8s.io/test-infra/prow/errorutil"
 )
 
@@ -146,13 +146,39 @@ func (t *throttler) Wait() {
 	}
 }
 
+func (t *throttler) Refund() {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+	select {
+	case t.throttle <- time.Now():
+	default:
+	}
+}
+
 func (t *throttler) Do(req *http.Request) (*http.Response, error) {
 	t.Wait()
-	return t.http.Do(req)
+	resp, err := t.http.Do(req)
+	if err == nil {
+		cacheMode := ghcache.CacheResponseMode(resp.Header.Get(ghcache.CacheModeHeader))
+		if ghcache.CacheModeIsFree(cacheMode) {
+			// This request was fulfilled by ghcache without using an API token.
+			// Refund the throttling token we preemptively consumed.
+			log := logrus.WithFields(logrus.Fields{
+				"client":     "github",
+				"throttled":  true,
+				"cache-mode": string(cacheMode),
+			})
+			log.Debug("Throttler refunding token for free response from ghcache.")
+			t.Refund()
+		}
+	}
+	return resp, err
 }
 
 func (t *throttler) Query(ctx context.Context, q interface{}, vars map[string]interface{}) error {
 	t.Wait()
+	t.lock.Lock()
+	defer t.lock.Unlock()
 	return t.graph.Query(ctx, q, vars)
 }
 
@@ -197,24 +223,57 @@ func (c *Client) Throttle(hourlyTokens, burst int) {
 	c.throttle.throttle = throttle
 }
 
-// NewClient creates a new fully operational GitHub client.
+// NewClientWithFields creates a new fully operational GitHub client. With
+// added logging fields.
 // 'getToken' is a generator for the GitHub access token to use.
 // 'bases' is a variadic slice of endpoints to use in order of preference.
 //   An endpoint is used when all preceding endpoints have returned a conn err.
 //   This should be used when using the ghproxy GitHub proxy cache to allow
 //   this client to bypass the cache if it is temporarily unavailable.
-func NewClient(getToken func() []byte, bases ...string) *Client {
+func NewClientWithFields(fields logrus.Fields, getToken func() []byte, graphqlEndpoint string, bases ...string) *Client {
 	return &Client{
-		logger: logrus.WithField("client", "github"),
+		logger: logrus.WithFields(fields).WithField("client", "github"),
 		time:   &standardTime{},
-		gqlc: githubql.NewClient(&http.Client{
-			Timeout:   maxRequestTime,
-			Transport: &oauth2.Transport{Source: newReloadingTokenSource(getToken)},
-		}),
+		gqlc: githubql.NewEnterpriseClient(
+			graphqlEndpoint,
+			&http.Client{
+				Timeout:   maxRequestTime,
+				Transport: &oauth2.Transport{Source: newReloadingTokenSource(getToken)},
+			}),
 		client:   &http.Client{Timeout: maxRequestTime},
 		bases:    bases,
 		getToken: getToken,
 		dry:      false,
+	}
+}
+
+// NewClient creates a new fully operational GitHub client.
+func NewClient(getToken func() []byte, graphqlEndpoint string, bases ...string) *Client {
+	return NewClientWithFields(logrus.Fields{}, getToken, graphqlEndpoint, bases...)
+}
+
+// NewDryRunClientWithFields creates a new client that will not perform mutating actions
+// such as setting statuses or commenting, but it will still query GitHub and
+// use up API tokens. Additional fields are added to the logger.
+// 'getToken' is a generator the GitHub access token to use.
+// 'bases' is a variadic slice of endpoints to use in order of preference.
+//   An endpoint is used when all preceding endpoints have returned a conn err.
+//   This should be used when using the ghproxy GitHub proxy cache to allow
+//   this client to bypass the cache if it is temporarily unavailable.
+func NewDryRunClientWithFields(fields logrus.Fields, getToken func() []byte, graphqlEndpoint string, bases ...string) *Client {
+	return &Client{
+		logger: logrus.WithFields(fields).WithField("client", "github"),
+		time:   &standardTime{},
+		gqlc: githubql.NewEnterpriseClient(
+			graphqlEndpoint,
+			&http.Client{
+				Timeout:   maxRequestTime,
+				Transport: &oauth2.Transport{Source: newReloadingTokenSource(getToken)},
+			}),
+		client:   &http.Client{Timeout: maxRequestTime},
+		bases:    bases,
+		getToken: getToken,
+		dry:      true,
 	}
 }
 
@@ -226,19 +285,8 @@ func NewClient(getToken func() []byte, bases ...string) *Client {
 //   An endpoint is used when all preceding endpoints have returned a conn err.
 //   This should be used when using the ghproxy GitHub proxy cache to allow
 //   this client to bypass the cache if it is temporarily unavailable.
-func NewDryRunClient(getToken func() []byte, bases ...string) *Client {
-	return &Client{
-		logger: logrus.WithField("client", "github"),
-		time:   &standardTime{},
-		gqlc: githubql.NewClient(&http.Client{
-			Timeout:   maxRequestTime,
-			Transport: &oauth2.Transport{Source: newReloadingTokenSource(getToken)},
-		}),
-		client:   &http.Client{Timeout: maxRequestTime},
-		bases:    bases,
-		getToken: getToken,
-		dry:      true,
-	}
+func NewDryRunClient(getToken func() []byte, graphqlEndpoint string, bases ...string) *Client {
+	return NewDryRunClientWithFields(logrus.Fields{}, getToken, graphqlEndpoint, bases...)
 }
 
 // NewFakeClient creates a new client that will not perform any actions at all.
@@ -407,7 +455,11 @@ func (c *Client) requestRetry(method, path, accept string, body interface{}) (*h
 						break
 					}
 				} else if oauthScopes := resp.Header.Get("X-Accepted-OAuth-Scopes"); len(oauthScopes) > 0 {
-					err = fmt.Errorf("is the account using at least one of the following oauth scopes?: %s", oauthScopes)
+					authorizedScopes := resp.Header.Get("X-OAuth-Scopes")
+					if authorizedScopes == "" {
+						authorizedScopes = "no"
+					}
+					err = fmt.Errorf("the account is using %s oauth scopes, please make sure you are using at least one of the following oauth scopes: %s", authorizedScopes, oauthScopes)
 					resp.Body.Close()
 					break
 				}
@@ -442,7 +494,9 @@ func (c *Client) doRequest(method, path, accept string, body interface{}) (*http
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Token "+string(c.getToken()))
+	if token := c.getToken(); len(token) > 0 {
+		req.Header.Set("Authorization", "Token "+string(token))
+	}
 	if accept == acceptNone {
 		req.Header.Add("Accept", "application/vnd.github.v3+json")
 	} else {
@@ -458,6 +512,7 @@ func (c *Client) doRequest(method, path, accept string, body interface{}) (*http
 
 // Not thread-safe - callers need to hold c.mut.
 func (c *Client) getUserData() error {
+	c.log("User")
 	var u User
 	_, err := c.request(&request{
 		method:    http.MethodGet,
@@ -1005,7 +1060,10 @@ func (c *Client) GetPullRequests(org, repo string) ([]PullRequest, error) {
 	path := fmt.Sprintf("/repos/%s/%s/pulls", org, repo)
 	err := c.readPaginatedResults(
 		path,
-		"application/vnd.github.symmetra-preview+json", // allow the description field -- https://developer.github.com/changes/2018-02-22-label-description-search-preview/
+		// allow the description and draft fields
+		// https://developer.github.com/changes/2018-02-22-label-description-search-preview/
+		// https://developer.github.com/changes/2019-02-14-draft-pull-requests/
+		"application/vnd.github.symmetra-preview+json, application/vnd.github.shadow-cat-preview",
 		func() interface{} {
 			return &[]PullRequest{}
 		},
@@ -1026,6 +1084,10 @@ func (c *Client) GetPullRequest(org, repo string, number int) (*PullRequest, err
 	c.log("GetPullRequest", org, repo, number)
 	var pr PullRequest
 	_, err := c.request(&request{
+		// allow the description and draft fields
+		// https://developer.github.com/changes/2018-02-22-label-description-search-preview/
+		// https://developer.github.com/changes/2019-02-14-draft-pull-requests/
+		accept:    "application/vnd.github.symmetra-preview+json, application/vnd.github.shadow-cat-preview",
 		method:    http.MethodGet,
 		path:      fmt.Sprintf("/repos/%s/%s/pulls/%d", org, repo, number),
 		exitCodes: []int{200},
@@ -1073,6 +1135,10 @@ func (c *Client) CreatePullRequest(org, repo, title, body, head, base string, ca
 		Num int `json:"number"`
 	}
 	_, err := c.request(&request{
+		// allow the description and draft fields
+		// https://developer.github.com/changes/2018-02-22-label-description-search-preview/
+		// https://developer.github.com/changes/2019-02-14-draft-pull-requests/
+		accept:      "application/vnd.github.symmetra-preview+json, application/vnd.github.shadow-cat-preview",
 		method:      http.MethodPost,
 		path:        fmt.Sprintf("/repos/%s/%s/pulls", org, repo),
 		requestBody: &data,
@@ -1109,6 +1175,10 @@ func (c *Client) UpdatePullRequest(org, repo string, number int, title, body *st
 		data.State = &cl
 	}
 	_, err := c.request(&request{
+		// allow the description and draft fields
+		// https://developer.github.com/changes/2018-02-22-label-description-search-preview/
+		// https://developer.github.com/changes/2019-02-14-draft-pull-requests/
+		accept:      "application/vnd.github.symmetra-preview+json, application/vnd.github.shadow-cat-preview",
 		method:      http.MethodPatch,
 		path:        fmt.Sprintf("/repos/%s/%s/pulls/%d", org, repo, number),
 		requestBody: &data,
@@ -1218,12 +1288,18 @@ func (c *Client) CreateStatus(org, repo, SHA string, s Status) error {
 // See https://developer.github.com/v3/repos/statuses/#list-statuses-for-a-specific-ref
 func (c *Client) ListStatuses(org, repo, ref string) ([]Status, error) {
 	c.log("ListStatuses", org, repo, ref)
+	path := fmt.Sprintf("/repos/%s/%s/statuses/%s", org, repo, ref)
 	var statuses []Status
-	_, err := c.request(&request{
-		method:    http.MethodGet,
-		path:      fmt.Sprintf("/repos/%s/%s/statuses/%s", org, repo, ref),
-		exitCodes: []int{200},
-	}, &statuses)
+	err := c.readPaginatedResults(
+		path,
+		acceptNone,
+		func() interface{} {
+			return &[]Status{}
+		},
+		func(obj interface{}) {
+			statuses = append(statuses, *(obj.(*[]Status))...)
+		},
+	)
 	return statuses, err
 }
 
@@ -2119,6 +2195,78 @@ func (c *Client) ListTeamMembers(id int, role string) ([]TeamMember, error) {
 	return teamMembers, nil
 }
 
+// ListTeamRepos gets a list of team repos for the given team id
+//
+// https://developer.github.com/v3/teams/#list-team-repos
+func (c *Client) ListTeamRepos(id int) ([]Repo, error) {
+	c.log("ListTeamRepos", id)
+	if c.fake {
+		return nil, nil
+	}
+	path := fmt.Sprintf("/teams/%d/repos", id)
+	var repos []Repo
+	err := c.readPaginatedResultsWithValues(
+		path,
+		url.Values{
+			"per_page": []string{"100"},
+		},
+		// This accept header enables the nested teams preview.
+		// https://developer.github.com/changes/2017-08-30-preview-nested-teams/
+		"application/vnd.github.hellcat-preview+json",
+		func() interface{} {
+			return &[]Repo{}
+		},
+		func(obj interface{}) {
+			repos = append(repos, *(obj.(*[]Repo))...)
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	return repos, nil
+}
+
+// UpdateTeamRepo adds the repo to the team with the provided role.
+//
+// https://developer.github.com/v3/teams/#add-or-update-team-repository
+func (c *Client) UpdateTeamRepo(id int, org, repo string, permission RepoPermissionLevel) error {
+	c.log("UpdateTeamRepo", id, org, repo, permission)
+	if c.fake || c.dry {
+		return nil
+	}
+
+	data := struct {
+		Permission string `json:"permission"`
+	}{
+		Permission: string(permission),
+	}
+
+	_, err := c.request(&request{
+		method:      http.MethodPut,
+		path:        fmt.Sprintf("/teams/%d/repos/%s/%s", id, org, repo),
+		requestBody: &data,
+		exitCodes:   []int{204},
+	}, nil)
+	return err
+}
+
+// RemoveTeamRepo removes the team from the repo.
+//
+// https://developer.github.com/v3/teams/#add-or-update-team-repository
+func (c *Client) RemoveTeamRepo(id int, org, repo string) error {
+	c.log("RemoveTeamRepo", id, org, repo)
+	if c.fake || c.dry {
+		return nil
+	}
+
+	_, err := c.request(&request{
+		method:    http.MethodDelete,
+		path:      fmt.Sprintf("/teams/%d/repos/%s/%s", id, org, repo),
+		exitCodes: []int{204},
+	}, nil)
+	return err
+}
+
 // ListTeamInvitations gets a list of team members with pending invitations for the
 // given team id
 //
@@ -2284,7 +2432,7 @@ func (c *Client) ListCollaborators(org, repo string) ([]User, error) {
 
 // CreateFork creates a fork for the authenticated user. Forking a repository
 // happens asynchronously. Therefore, we may have to wait a short period before
-// accessing the git objects. If this takes longer than 5 minutes, Github
+// accessing the git objects. If this takes longer than 5 minutes, GitHub
 // recommends contacting their support.
 //
 // See https://developer.github.com/v3/repos/forks/#create-a-fork
@@ -2456,4 +2604,171 @@ func (s *reloadingTokenSource) Token() (*oauth2.Token, error) {
 	return &oauth2.Token{
 		AccessToken: string(s.getToken()),
 	}, nil
+}
+
+// GetRepoProjects returns the list of projects in this repo.
+//
+// See https://developer.github.com/v3/projects/#list-repository-projects
+func (c *Client) GetRepoProjects(owner, repo string) ([]Project, error) {
+	c.log("GetOrgProjects", owner, repo)
+	path := (fmt.Sprintf("/repos/%s/%s/projects", owner, repo))
+	var projects []Project
+	err := c.readPaginatedResults(
+		path,
+		"application/vnd.github.inertia-preview+json",
+		func() interface{} {
+			return &[]Project{}
+		},
+		func(obj interface{}) {
+			projects = append(projects, *(obj.(*[]Project))...)
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	return projects, nil
+}
+
+// GetOrgProjects returns the list of projects in this org.
+//
+// See https://developer.github.com/v3/projects/#list-organization-projects
+func (c *Client) GetOrgProjects(org string) ([]Project, error) {
+	c.log("GetOrgProjects", org)
+	path := (fmt.Sprintf("/orgs/%s/projects", org))
+	var projects []Project
+	err := c.readPaginatedResults(
+		path,
+		"application/vnd.github.inertia-preview+json",
+		func() interface{} {
+			return &[]Project{}
+		},
+		func(obj interface{}) {
+			projects = append(projects, *(obj.(*[]Project))...)
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	return projects, nil
+}
+
+// GetProjectColumns returns the list of columns in a project.
+//
+// See https://developer.github.com/v3/projects/columns/#list-project-columns
+func (c *Client) GetProjectColumns(projectID int) ([]ProjectColumn, error) {
+	c.log("GetProjectColumns", projectID)
+	path := (fmt.Sprintf("/projects/%d/columns", projectID))
+	var projectColumns []ProjectColumn
+	err := c.readPaginatedResults(
+		path,
+		"application/vnd.github.inertia-preview+json",
+		func() interface{} {
+			return &[]ProjectColumn{}
+		},
+		func(obj interface{}) {
+			projectColumns = append(projectColumns, *(obj.(*[]ProjectColumn))...)
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	return projectColumns, nil
+}
+
+// CreateProjectCard adds a project card to the specified project column.
+//
+// See https://developer.github.com/v3/projects/cards/#create-a-project-card
+func (c *Client) CreateProjectCard(columnID int, projectCard ProjectCard) (*ProjectCard, error) {
+	c.log("CreateProjectCard", columnID, projectCard)
+	if (projectCard.ContentType != "Issue") && (projectCard.ContentType != "PullRequest") {
+		return nil, errors.New("projectCard.ContentType must be either Issue or PullRequest")
+	}
+	if c.dry {
+		return &projectCard, nil
+	}
+	path := fmt.Sprintf("/projects/columns/%d/cards", columnID)
+	var retProjectCard ProjectCard
+	_, err := c.request(&request{
+		method:      http.MethodPost,
+		path:        path,
+		accept:      "application/vnd.github.inertia-preview+json",
+		requestBody: &projectCard,
+		exitCodes:   []int{200},
+	}, &retProjectCard)
+	return &retProjectCard, err
+}
+
+// GetColumnProjectCard of a specific issue or PR for a specific column in a board/project
+//
+// See https://developer.github.com/v3/projects/cards/#list-project-cards
+func (c *Client) GetColumnProjectCard(columnID int, cardNumber int) (*ProjectCard, error) {
+	c.log("GetColumnProjectCard", columnID, cardNumber)
+	if c.fake {
+		return nil, nil
+	}
+	path := fmt.Sprintf("/projects/columns/:%d/cards", columnID)
+	var cards []ProjectCard
+	err := c.readPaginatedResults(
+		path,
+		acceptNone,
+		func() interface{} {
+			return &[]ProjectCard{}
+		},
+		func(obj interface{}) {
+			cards = append(cards, *(obj.(*[]ProjectCard))...)
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	for _, card := range cards {
+		if card.ContentID == cardNumber {
+			return &card, nil
+		}
+	}
+	return nil, nil
+}
+
+// MoveProjectCard moves a specific project card to a specified column in the same project
+//
+// See https://developer.github.com/v3/projects/cards/#move-a-project-card
+func (c *Client) MoveProjectCard(projectCardID int, newColumnID int) error {
+	c.log("MoveProjectCard", projectCardID, newColumnID)
+	_, err := c.request(&request{
+		method:      http.MethodPost,
+		path:        fmt.Sprintf("/projects/columns/cards/:%d/moves", projectCardID),
+		accept:      "application/vnd.github.symmetra-preview+json", // allow the description field -- https://developer.github.com/changes/2018-02-22-label-description-search-preview/
+		requestBody: fmt.Sprintf("{column_id: %d}", newColumnID),
+		exitCodes:   []int{201},
+	}, nil)
+	return err
+}
+
+// DeleteProjectCard deletes the project card of a specific issue or PR
+//
+// See https://developer.github.com/v3/projects/cards/#delete-a-project-card
+func (c *Client) DeleteProjectCard(projectCardID int) error {
+	c.log("DeleteProjectCard", projectCardID)
+	_, err := c.request(&request{
+		method:    http.MethodDelete,
+		accept:    "application/vnd.github.symmetra-preview+json", // allow the description field -- https://developer.github.com/changes/2018-02-22-label-description-search-preview/
+		path:      fmt.Sprintf("/projects/columns/cards/:%d", projectCardID),
+		exitCodes: []int{204},
+	}, nil)
+	return err
+}
+
+// TeamHasMember checks if a user belongs to a team
+func (c *Client) TeamHasMember(teamID int, memberLogin string) (bool, error) {
+	c.log("TeamHasMember", teamID, memberLogin)
+	projectMaintainers, err := c.ListTeamMembers(teamID, RoleAll)
+	if err != nil {
+		return false, err
+	}
+	for _, person := range projectMaintainers {
+		if NormLogin(person.Login) == NormLogin(memberLogin) {
+			return true, nil
+		}
+	}
+	return false, nil
 }

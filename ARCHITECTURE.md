@@ -90,7 +90,7 @@ Namespace initialization follows input resolution in the `ci-operator` output:
 2018/10/08 05:28:47 Setting up pipeline imagestream for the test
 2018/10/08 05:28:47 Tagging openshift/release:golang-1.10 into pipeline:root
 2018/10/08 05:28:47 Tagging openshift/origin-v4.0:base into pipeline:base
-2018/10/08 05:28:47 Tagged release images from openshift/origin-v4.0:${component}, images will be pullable from registry.svc.ci.openshift.org/ci-op-31xmgx1s/stable:${component}
+2018/10/08 05:28:47 Tagged shared images from openshift/origin-v4.0:${component}, images will be pullable from registry.svc.ci.openshift.org/ci-op-31xmgx1s/stable:${component}
 ```
 
 ## Build Graph Traversal

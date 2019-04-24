@@ -1,8 +1,0 @@
-labels:
-- area/prow/knative-build
-
-approvers: # thank you for your reviews!
-- cjwagner
-- fejta
-- krzyzacy
-- stevekuznetsov

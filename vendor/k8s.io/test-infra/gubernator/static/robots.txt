@@ -1,4 +1,0 @@
-User-Agent: *
-Disallow: /*/nodelog
-Disallow: /*?log
-Disallow: /*?before=

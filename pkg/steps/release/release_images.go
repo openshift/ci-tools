@@ -137,12 +137,12 @@ func sourceName(config api.ReleaseTagConfiguration) string {
 
 func (s *releaseImagesTagStep) Run(ctx context.Context, dry bool) error {
 	if dry {
-		log.Printf("Tagging release images from %s", sourceName(s.config))
+		log.Printf("Tagging shared images from %s", sourceName(s.config))
 	} else {
 		if format, err := s.imageFormat(); err == nil {
-			log.Printf("Tagged release images from %s, images will be pullable from %s", sourceName(s.config), format)
+			log.Printf("Tagged shared images from %s, images will be pullable from %s", sourceName(s.config), format)
 		} else {
-			log.Printf("Tagged release images from %s", sourceName(s.config))
+			log.Printf("Tagged shared images from %s", sourceName(s.config))
 		}
 	}
 

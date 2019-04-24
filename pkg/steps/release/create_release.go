@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"log"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -204,8 +205,6 @@ func (s *assembleReleaseStep) importFromReleaseImage(ctx context.Context, dry bo
 
 	log.Printf("Importing release image %s", tag)
 
-	start := time.Now()
-
 	// create the stable image stream with lookup policy so we have a place to put our imported images
 	_, err := s.imageClient.ImageStreams(s.jobSpec.Namespace).Create(&imageapi.ImageStream{
 		ObjectMeta: meta.ObjectMeta{
@@ -314,6 +313,9 @@ func (s *assembleReleaseStep) importFromReleaseImage(ctx context.Context, dry bo
 				Name: fmt.Sprintf("%s:cli", streamName),
 			},
 			Tag: &imageapi.TagReference{
+				ReferencePolicy: imageapi.TagReferencePolicy{
+					Type: imageapi.LocalTagReferencePolicy,
+				},
 				From: &coreapi.ObjectReference{
 					Kind: "DockerImage",
 					Name: cliImage,
@@ -383,6 +385,7 @@ oc adm release extract --from=%q --file=image-references > /tmp/artifacts/%s
 		tags := make([]imageapi.TagReference, 0, len(releaseIS.Spec.Tags)+len(stable.Spec.Tags))
 		for _, tag := range releaseIS.Spec.Tags {
 			existing.Insert(tag.Name)
+			tag.ReferencePolicy.Type = imageapi.LocalTagReferencePolicy
 			tags = append(tags, tag)
 		}
 		for _, tag := range stable.Spec.Tags {
@@ -390,6 +393,7 @@ oc adm release extract --from=%q --file=image-references > /tmp/artifacts/%s
 				continue
 			}
 			existing.Insert(tag.Name)
+			tag.ReferencePolicy.Type = imageapi.LocalTagReferencePolicy
 			tags = append(tags, tag)
 		}
 		stable.Spec.Tags = tags
@@ -400,8 +404,82 @@ oc adm release extract --from=%q --file=image-references > /tmp/artifacts/%s
 		return fmt.Errorf("unable to update stable image stream with release tags: %v", err)
 	}
 
-	log.Printf("Imported %s to release:%s in %s", providedImage, tag, time.Now().Sub(start).Truncate(time.Second))
+	// loop until we observe all images have successfully imported, kicking import if a particular
+	// tag fails
+	var waiting map[string]int64
+	if err := wait.Poll(3*time.Second, 2*time.Minute, func() (bool, error) {
+		stable, err := s.imageClient.ImageStreams(s.jobSpec.Namespace).Get(streamName, meta.GetOptions{})
+		if err != nil {
+			return false, fmt.Errorf("could not resolve imagestream %s: %v", streamName, err)
+		}
+		generations := make(map[string]int64)
+		for _, tag := range stable.Spec.Tags {
+			if tag.Generation == nil || *tag.Generation == 0 {
+				continue
+			}
+			generations[tag.Name] = *tag.Generation
+		}
+		updates := false
+		for _, event := range stable.Status.Tags {
+			gen, ok := generations[event.Tag]
+			if !ok {
+				continue
+			}
+			if len(event.Items) > 0 && event.Items[0].Generation >= gen {
+				delete(generations, event.Tag)
+				continue
+			}
+			if hasFailedImportCondition(event.Conditions, gen) {
+				zero := int64(0)
+				findSpecTagReference(stable, event.Tag).Generation = &zero
+				updates = true
+			}
+		}
+		if updates {
+			_, err = s.imageClient.ImageStreams(s.jobSpec.Namespace).Update(stable)
+			if err != nil {
+				log.Printf("error requesting re-import of failed release image stream: %v", err)
+			}
+			return false, nil
+		}
+		if len(generations) == 0 {
+			return true, nil
+		}
+		waiting = generations
+		return false, nil
+	}); err != nil {
+		if len(waiting) == 0 || err != wait.ErrWaitTimeout {
+			return fmt.Errorf("unable to import image stream %s: %v", streamName, err)
+		}
+		var tags []string
+		for tag := range waiting {
+			tags = append(tags, tag)
+		}
+		sort.Strings(tags)
+		return fmt.Errorf("the following tags from the release could not be imported to %s: %s", streamName, strings.Join(tags, ", "))
+	}
+
+	log.Printf("Imported release %s created at %s with %d images to tag release:%s", releaseIS.Name, releaseIS.CreationTimestamp, len(releaseIS.Spec.Tags), tag)
 	return nil
+}
+
+func findSpecTagReference(is *imageapi.ImageStream, tag string) *imageapi.TagReference {
+	for i, t := range is.Spec.Tags {
+		if t.Name != tag {
+			continue
+		}
+		return &is.Spec.Tags[i]
+	}
+	return nil
+}
+
+func hasFailedImportCondition(conditions []imageapi.TagEventCondition, generation int64) bool {
+	for _, condition := range conditions {
+		if condition.Generation >= generation && condition.Type == imageapi.ImportSuccess && condition.Status == coreapi.ConditionFalse {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *assembleReleaseStep) Done() (bool, error) {

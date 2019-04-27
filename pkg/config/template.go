@@ -20,6 +20,11 @@ import (
 	kutilerrors "k8s.io/apimachinery/pkg/util/errors"
 
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
+
+	prowgithub "k8s.io/test-infra/prow/github"
+	_ "k8s.io/test-infra/prow/hook"
+	prowplugins "k8s.io/test-infra/prow/plugins"
+	"k8s.io/test-infra/prow/plugins/updateconfig"
 )
 
 // CiTemplates is a map of all the changed templates
@@ -58,17 +63,27 @@ func getTemplates(templatePath string) (CiTemplates, error) {
 
 // TemplateCMManager holds the details needed for the configmap controller
 type TemplateCMManager struct {
-	cmclient corev1.ConfigMapInterface
-	prNumber int
-	logger   *logrus.Entry
+	cmclient         corev1.ConfigMapInterface
+	configUpdaterCfg prowplugins.ConfigUpdater
+	prNumber         int
+	releaseRepoPath  string
+	logger           *logrus.Entry
 }
 
 // NewTemplateCMManager creates a new TemplateCMManager
-func NewTemplateCMManager(cmclient corev1.ConfigMapInterface, prNumber int, logger *logrus.Entry) *TemplateCMManager {
+func NewTemplateCMManager(
+	cmclient corev1.ConfigMapInterface,
+	configUpdaterCfg prowplugins.ConfigUpdater,
+	prNumber int,
+	releaseRepoPath string,
+	logger *logrus.Entry,
+) *TemplateCMManager {
 	return &TemplateCMManager{
-		cmclient: cmclient,
-		prNumber: prNumber,
-		logger:   logger,
+		cmclient:         cmclient,
+		configUpdaterCfg: configUpdaterCfg,
+		prNumber:         prNumber,
+		releaseRepoPath:  releaseRepoPath,
+		logger:           logger,
 	}
 }
 
@@ -103,43 +118,54 @@ func (c *TemplateCMManager) CreateCMTemplates(templates CiTemplates) error {
 	return kutilerrors.NewAggregate(errors)
 }
 
-func (c *TemplateCMManager) CreateClusterProfiles(dir string, profiles []ClusterProfile) error {
-	var errs []error
-	for _, p := range profiles {
-		cm, err := genClusterProfileCM(dir, p)
+type osFileGetter struct {
+	root string
+}
+
+func (g osFileGetter) GetFile(filename string) ([]byte, error) {
+	return ioutil.ReadFile(filepath.Join(g.root, filename))
+}
+
+func (c *TemplateCMManager) CreateClusterProfiles(profiles []ClusterProfile) error {
+	changes := []prowgithub.PullRequestChange{}
+	for _, profile := range profiles {
+		err := filepath.Walk(filepath.Join(c.releaseRepoPath, ClusterProfilesPath, profile.Name), func(path string, info os.FileInfo, err error) error {
+			if err != nil || info.IsDir() {
+				return err
+			}
+			// Failure is impossible per filepath.Walk's API.
+			if path, err = filepath.Rel(c.releaseRepoPath, path); err == nil {
+				changes = append(changes, prowgithub.PullRequestChange{
+					Filename: path,
+					Status:   string(prowgithub.PullRequestFileModified),
+				})
+			}
+			return err
+		})
 		if err != nil {
-			errs = append(errs, err)
-			continue
+			return err
 		}
-		c.logger.WithFields(logrus.Fields{"cluster-profile": cm.ObjectMeta.Name}).Info("creating rehearsal cluster profile ConfigMap")
-		if err := c.createCM(cm); err != nil {
+	}
+	var errs []error
+	for cm, data := range updateconfig.FilterChanges(c.configUpdaterCfg, changes, c.logger) {
+		profile := strings.TrimPrefix(cm.Name, "cluster-profile-")
+		for _, p := range profiles {
+			if p.Name == profile {
+				profile = p.CMName()
+				break
+			}
+		}
+		err := c.createCM(&v1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{Name: profile},
+			Data:       map[string]string{},
+		})
+		if err != nil && !kerrors.IsAlreadyExists(err) {
+			errs = append(errs, err)
+		} else if err := updateconfig.Update(osFileGetter{root: c.releaseRepoPath}, c.cmclient, profile, cm.Namespace, data, c.logger); err != nil {
 			errs = append(errs, err)
 		}
 	}
 	return kutilerrors.NewAggregate(errs)
-}
-
-func genClusterProfileCM(dir string, profile ClusterProfile) (*v1.ConfigMap, error) {
-	ret := &v1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{Name: profile.CMName()},
-		Data:       map[string]string{},
-	}
-	profilePath := filepath.Join(dir, profile.Name)
-	err := filepath.Walk(profilePath, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
-			return err
-		}
-		b, err := ioutil.ReadFile(path)
-		if err != nil {
-			return err
-		}
-		ret.Data[filepath.Base(path)] = string(b)
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return ret, nil
 }
 
 // CleanupCMTemplates deletes all the configMaps that have been created for the changed templates.

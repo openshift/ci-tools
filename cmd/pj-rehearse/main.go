@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowgithub "k8s.io/test-infra/prow/github"
+	prowplugins "k8s.io/test-infra/prow/plugins"
 	pjdwapi "k8s.io/test-infra/prow/pod-utils/downwardapi"
 
 	"k8s.io/client-go/rest"
@@ -109,6 +110,14 @@ func gracefulExit(suppressFailures bool, message string) int {
 	return 1
 }
 
+func loadPluginConfig(releaseRepoPath string) (ret prowplugins.ConfigUpdater, err error) {
+	agent := prowplugins.ConfigAgent{}
+	if err = agent.Load(filepath.Join(releaseRepoPath, config.PluginConfigInRepoPath)); err == nil {
+		ret = agent.Config().ConfigUpdater
+	}
+	return
+}
+
 func rehearseMain() int {
 	o := gatherOptions()
 	err := validateOptions(o)
@@ -162,6 +171,11 @@ func rehearseMain() int {
 	}
 
 	prConfig := config.GetAllConfigs(o.releaseRepoPath, logger)
+	pluginConfig, err := loadPluginConfig(o.releaseRepoPath)
+	if err != nil {
+		logger.WithError(err).Error("could not load plugin configuration from tested revision of release repo")
+		return gracefulExit(o.noFail, misconfigurationOutput)
+	}
 	masterConfig, err := config.GetAllConfigsFromSHA(o.releaseRepoPath, jobSpec.Refs.BaseSHA, logger)
 	if err != nil {
 		logger.WithError(err).Error("could not load configuration from base revision of release repo")
@@ -214,7 +228,7 @@ func rehearseMain() int {
 		return gracefulExit(o.noFail, misconfigurationOutput)
 	}
 
-	cmManager := config.NewTemplateCMManager(cmClient, prNumber, logger)
+	cmManager := config.NewTemplateCMManager(cmClient, pluginConfig, prNumber, o.releaseRepoPath, logger)
 	defer func() {
 		if err := cmManager.CleanupCMTemplates(); err != nil {
 			logger.WithError(err).Error("failed to clean up temporary template CM")
@@ -224,7 +238,7 @@ func rehearseMain() int {
 		logger.WithError(err).Error("couldn't create template configMap")
 		return gracefulExit(o.noFail, failedSetupOutput)
 	}
-	if err := cmManager.CreateClusterProfiles(filepath.Join(o.releaseRepoPath, config.ClusterProfilesPath), changedClusterProfiles); err != nil {
+	if err := cmManager.CreateClusterProfiles(changedClusterProfiles); err != nil {
 		logger.WithError(err).Error("couldn't create cluster profile ConfigMaps")
 		return gracefulExit(o.noFail, failedSetupOutput)
 	}

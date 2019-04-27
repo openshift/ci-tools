@@ -72,7 +72,16 @@ func NewCMClient(clusterConfig *rest.Config, namespace string, dry bool) (corecl
 			if err != nil {
 				return true, nil, fmt.Errorf("failed to convert ConfigMap to YAML: %v", err)
 			}
-			fmt.Printf("%s", y)
+			fmt.Print(string(y))
+			return false, nil, nil
+		})
+		c.PrependReactor("update", "configmaps", func(action coretesting.Action) (bool, runtime.Object, error) {
+			cm := action.(coretesting.UpdateAction).GetObject().(*v1.ConfigMap)
+			y, err := yaml.Marshal([]*v1.ConfigMap{cm})
+			if err != nil {
+				return true, nil, fmt.Errorf("failed to convert ConfigMap to YAML: %v", err)
+			}
+			fmt.Print(string(y))
 			return false, nil, nil
 		})
 		return c.CoreV1().ConfigMaps(namespace), nil

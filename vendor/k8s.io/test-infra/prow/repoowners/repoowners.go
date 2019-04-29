@@ -42,7 +42,7 @@ const (
 	baseDirConvention = ""
 )
 
-var commonDirBlacklist = sets.NewString(".git", "_output")
+var commonDirBlacklist = []string{"^\\.git$", "^_output$"}
 
 type dirOptions struct {
 	NoParentOwners bool `json:"no_parent_owners,omitempty"`
@@ -165,7 +165,7 @@ type RepoOwners struct {
 
 	baseDir      string
 	enableMDYAML bool
-	dirBlacklist sets.String
+	dirBlacklist []*regexp.Regexp
 
 	log *logrus.Entry
 }
@@ -257,7 +257,16 @@ func (c *Client) LoadRepoOwners(org, repo, base string) (RepoOwner, error) {
 				entry.aliases = loadAliasesFrom(gitRepo.Dir, log)
 			}
 
-			dirBlacklist := commonDirBlacklist.Union(sets.NewString(c.ownersDirBlacklist().DirBlacklist(org, repo)...))
+			dirBlacklistPatterns := append(c.ownersDirBlacklist().DirBlacklist(org, repo), commonDirBlacklist...)
+			var dirBlacklist []*regexp.Regexp
+			for _, pattern := range dirBlacklistPatterns {
+				re, err := regexp.Compile(pattern)
+				if err != nil {
+					log.WithError(err).Errorf("Invalid OWNERS dir blacklist regexp %q.", pattern)
+					continue
+				}
+				dirBlacklist = append(dirBlacklist, re)
+			}
 
 			entry.owners, err = loadOwnersFrom(gitRepo.Dir, mdYaml, entry.aliases, dirBlacklist, log)
 			if err != nil {
@@ -310,6 +319,20 @@ func (a RepoAliases) ExpandAliases(logins sets.String) sets.String {
 	return logins
 }
 
+// ExpandAllAliases returns members of all aliases mentioned, duplicates are pruned
+func (a RepoAliases) ExpandAllAliases() sets.String {
+	if a == nil {
+		return nil
+	}
+
+	var result, users sets.String
+	for alias := range a {
+		users = a.ExpandAlias(alias)
+		result = result.Union(users)
+	}
+	return result
+}
+
 func loadAliasesFrom(baseDir string, log *logrus.Entry) RepoAliases {
 	path := filepath.Join(baseDir, aliasesFileName)
 	b, err := ioutil.ReadFile(path)
@@ -336,7 +359,7 @@ func loadAliasesFrom(baseDir string, log *logrus.Entry) RepoAliases {
 	return result
 }
 
-func loadOwnersFrom(baseDir string, mdYaml bool, aliases RepoAliases, dirBlacklist sets.String, log *logrus.Entry) (*RepoOwners, error) {
+func loadOwnersFrom(baseDir string, mdYaml bool, aliases RepoAliases, dirBlacklist []*regexp.Regexp, log *logrus.Entry) (*RepoOwners, error) {
 	o := &RepoOwners{
 		RepoAliases:  aliases,
 		baseDir:      baseDir,
@@ -372,9 +395,19 @@ func (o *RepoOwners) walkFunc(path string, info os.FileInfo, err error) error {
 		return nil
 	}
 	filename := filepath.Base(path)
+	relPath, err := filepath.Rel(o.baseDir, path)
+	if err != nil {
+		log.WithError(err).Errorf("Unable to find relative path between baseDir: %q and path.", o.baseDir)
+		return err
+	}
+	relPathDir := canonicalize(filepath.Dir(relPath))
 
-	if info.Mode().IsDir() && o.dirBlacklist.Has(filename) {
-		return filepath.SkipDir
+	if info.Mode().IsDir() {
+		for _, re := range o.dirBlacklist {
+			if re.MatchString(relPath) {
+				return filepath.SkipDir
+			}
+		}
 	}
 	if !info.Mode().IsRegular() {
 		return nil
@@ -391,11 +424,6 @@ func (o *RepoOwners) walkFunc(path string, info os.FileInfo, err error) error {
 		}
 
 		// Set owners for this file (not the directory) using the relative path if they were found
-		relPath, err := filepath.Rel(o.baseDir, path)
-		if err != nil {
-			log.WithError(err).Errorf("Unable to find relative path between baseDir: %q and path.", o.baseDir)
-			return err
-		}
 		o.applyConfigToPath(relPath, nil, &simple.Config)
 		o.applyOptionsToPath(relPath, simple.Options)
 		return nil
@@ -410,13 +438,6 @@ func (o *RepoOwners) walkFunc(path string, info os.FileInfo, err error) error {
 		log.WithError(err).Errorf("Failed to read the OWNERS file.")
 		return nil
 	}
-
-	relPath, err := filepath.Rel(o.baseDir, path)
-	if err != nil {
-		log.WithError(err).Errorf("Unable to find relative path between baseDir: %q and path.", o.baseDir)
-		return err
-	}
-	relPathDir := canonicalize(filepath.Dir(relPath))
 
 	simple, err := ParseSimpleConfig(b)
 	if err != nil || simple.Empty() {
@@ -459,6 +480,24 @@ func ParseSimpleConfig(b []byte) (SimpleConfig, error) {
 	simple := new(SimpleConfig)
 	err := yaml.Unmarshal(b, simple)
 	return *simple, err
+}
+
+// ParseAliasesConfig will unmarshal an OWNERS_ALIASES file's content into RepoAliases.
+// Returns an error if the content cannot be unmarshalled.
+func ParseAliasesConfig(b []byte) (RepoAliases, error) {
+	result := make(RepoAliases)
+
+	config := &struct {
+		Data map[string][]string `json:"aliases,omitempty"`
+	}{}
+	if err := yaml.Unmarshal(b, config); err != nil {
+		return result, err
+	}
+
+	for alias, expanded := range config.Data {
+		result[github.NormLogin(alias)] = normLogins(expanded)
+	}
+	return result, nil
 }
 
 var mdStructuredHeaderRegex = regexp.MustCompile("^---\n(.|\n)*\n---")

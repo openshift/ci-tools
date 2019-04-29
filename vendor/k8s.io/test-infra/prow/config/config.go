@@ -41,7 +41,6 @@ import (
 
 	buildapi "github.com/knative/build/pkg/apis/build/v1alpha1"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
-	"k8s.io/test-infra/prow/config/org"
 	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/kube"
 	"k8s.io/test-infra/prow/pod-utils/decorate"
@@ -73,14 +72,13 @@ type JobConfig struct {
 
 // ProwConfig is config for all prow controllers
 type ProwConfig struct {
-	Tide             Tide                  `json:"tide,omitempty"`
-	Plank            Plank                 `json:"plank,omitempty"`
-	Sinker           Sinker                `json:"sinker,omitempty"`
-	Deck             Deck                  `json:"deck,omitempty"`
-	BranchProtection BranchProtection      `json:"branch-protection,omitempty"`
-	Orgs             map[string]org.Config `json:"orgs,omitempty"`
-	Gerrit           Gerrit                `json:"gerrit,omitempty"`
-	GitHubReporter   GitHubReporter        `json:"github_reporter,omitempty"`
+	Tide             Tide             `json:"tide,omitempty"`
+	Plank            Plank            `json:"plank,omitempty"`
+	Sinker           Sinker           `json:"sinker,omitempty"`
+	Deck             Deck             `json:"deck,omitempty"`
+	BranchProtection BranchProtection `json:"branch-protection,omitempty"`
+	Gerrit           Gerrit           `json:"gerrit,omitempty"`
+	GitHubReporter   GitHubReporter   `json:"github_reporter,omitempty"`
 
 	// TODO: Move this out of the main config.
 	JenkinsOperators []JenkinsOperator `json:"jenkins_operators,omitempty"`
@@ -109,8 +107,8 @@ type ProwConfig struct {
 	// PushGateway is a prometheus push gateway.
 	PushGateway PushGateway `json:"push_gateway,omitempty"`
 
-	// OwnersDirBlacklist is used to configure which directories to ignore when
-	// searching for OWNERS{,_ALIAS} files in a repo.
+	// OwnersDirBlacklist is used to configure regular expressions matching directories
+	// to ignore when searching for OWNERS{,_ALIAS} files in a repo.
 	OwnersDirBlacklist OwnersDirBlacklist `json:"owners_dir_blacklist,omitempty"`
 
 	// Pub/Sub Subscriptions that we want to listen to
@@ -129,8 +127,8 @@ type ProwConfig struct {
 	DefaultJobTimeout time.Duration `json:"default_job_timeout,omitempty"`
 }
 
-// OwnersDirBlacklist is used to configure which directories to ignore when
-// searching for OWNERS{,_ALIAS} files in a repo.
+// OwnersDirBlacklist is used to configure regular expressions matching directories
+// to ignore when searching for OWNERS{,_ALIAS} files in a repo.
 type OwnersDirBlacklist struct {
 	// Repos configures a directory blacklist per repo (or org)
 	Repos map[string][]string `json:"repos"`
@@ -139,7 +137,7 @@ type OwnersDirBlacklist struct {
 	Default []string `json:"default"`
 }
 
-// DirBlacklist returns directories which are used to ignore when
+// DirBlacklist returns regular expressions matching directories to ignore when
 // searching for OWNERS{,_ALIAS} files in a repo.
 func (ownersDirBlacklist OwnersDirBlacklist) DirBlacklist(org, repo string) (blacklist []string) {
 	blacklist = append(blacklist, ownersDirBlacklist.Default...)
@@ -822,7 +820,7 @@ func (c *Config) validateJobConfig() error {
 const DefaultConfigPath = "/etc/config/config.yaml"
 
 // ConfigPath returns the value for the component's configPath if provided
-// explicityly or default otherwise.
+// explicitly or default otherwise.
 func ConfigPath(value string) string {
 
 	if value != "" {

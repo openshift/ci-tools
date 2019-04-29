@@ -7,7 +7,9 @@ presubmits:
     context: ci/prow/e2e
     decorate: true
     decoration_config:
+      grace_period: 0s
       skip_cloning: true
+      timeout: 0s
     labels:
       ci-operator.openshift.io/prowgen-controlled: "true"
     name: pull-ci-super-duper-master-e2e
@@ -68,7 +70,9 @@ presubmits:
     context: ci/prow/images
     decorate: true
     decoration_config:
+      grace_period: 0s
       skip_cloning: true
+      timeout: 0s
     labels:
       ci-operator.openshift.io/prowgen-controlled: "true"
     max_concurrency: 100
@@ -117,7 +121,9 @@ presubmits:
     context: ci/prow/lint
     decorate: true
     decoration_config:
+      grace_period: 0s
       skip_cloning: true
+      timeout: 0s
     labels:
       ci-operator.openshift.io/prowgen-controlled: "true"
     name: pull-ci-super-duper-master-lint
@@ -151,7 +157,9 @@ presubmits:
     context: ci/prow/unit
     decorate: true
     decoration_config:
+      grace_period: 0s
       skip_cloning: true
+      timeout: 0s
     labels:
       ci-operator.openshift.io/prowgen-controlled: "true"
     name: pull-ci-super-duper-master-unit

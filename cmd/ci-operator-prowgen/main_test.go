@@ -705,7 +705,9 @@ tests:
     context: ""
     decorate: true
     decoration_config:
+      grace_period: 0s
       skip_cloning: true
+      timeout: 0s
     labels:
       ci-operator.openshift.io/prowgen-controlled: "true"
     name: branch-ci-super-duper-branch-images
@@ -741,7 +743,9 @@ tests:
     context: ci/prow/images
     decorate: true
     decoration_config:
+      grace_period: 0s
       skip_cloning: true
+      timeout: 0s
     labels:
       ci-operator.openshift.io/prowgen-controlled: "true"
     name: pull-ci-super-duper-branch-images
@@ -775,7 +779,9 @@ tests:
     context: ci/prow/unit
     decorate: true
     decoration_config:
+      grace_period: 0s
       skip_cloning: true
+      timeout: 0s
     labels:
       ci-operator.openshift.io/prowgen-controlled: "true"
     name: pull-ci-super-duper-branch-unit
@@ -851,7 +857,9 @@ tests:
     - branch
     decorate: true
     decoration_config:
+      grace_period: 0s
       skip_cloning: true
+      timeout: 0s
     name: branch-ci-super-duper-branch-do-not-overwrite
     spec:
       containers:
@@ -884,7 +892,9 @@ tests:
     context: ci/prow/rhel-images
     decorate: true
     decoration_config:
+      grace_period: 0s
       skip_cloning: true
+      timeout: 0s
     labels:
       ci-operator.openshift.io/prowgen-controlled: "true"
       ci-operator.openshift.io/variant: rhel
@@ -919,7 +929,9 @@ tests:
     context: ci/prow/rhel-unit
     decorate: true
     decoration_config:
+      grace_period: 0s
       skip_cloning: true
+      timeout: 0s
     labels:
       ci-operator.openshift.io/prowgen-controlled: "true"
       ci-operator.openshift.io/variant: rhel
@@ -956,7 +968,9 @@ tests:
     context: ""
     decorate: true
     decoration_config:
+      grace_period: 0s
       skip_cloning: true
+      timeout: 0s
     name: branch-ci-super-duper-branch-do-not-overwrite
     spec:
       containers:
@@ -985,7 +999,9 @@ tests:
     context: ""
     decorate: true
     decoration_config:
+      grace_period: 0s
       skip_cloning: true
+      timeout: 0s
     labels:
       ci-operator.openshift.io/prowgen-controlled: "true"
       ci-operator.openshift.io/variant: rhel
@@ -1059,7 +1075,9 @@ tests:
   - agent: kubernetes
     decorate: true
     decoration_config:
+      grace_period: 0s
       skip_cloning: true
+      timeout: 0s
     name: branch-ci-super-duper-branch-do-not-overwrite
     spec:
       containers:
@@ -1092,7 +1110,9 @@ tests:
     context: ci/prow/images
     decorate: true
     decoration_config:
+      grace_period: 0s
       skip_cloning: true
+      timeout: 0s
     labels:
       ci-operator.openshift.io/prowgen-controlled: "true"
     name: pull-ci-super-duper-branch-images
@@ -1126,7 +1146,9 @@ tests:
     context: ci/prow/unit
     decorate: true
     decoration_config:
+      grace_period: 0s
       skip_cloning: true
+      timeout: 0s
     labels:
       ci-operator.openshift.io/prowgen-controlled: "true"
     name: pull-ci-super-duper-branch-unit
@@ -1160,7 +1182,9 @@ tests:
     context: ""
     decorate: true
     decoration_config:
+      grace_period: 0s
       skip_cloning: true
+      timeout: 0s
     name: branch-ci-super-duper-branch-do-not-overwrite
     spec:
       containers:
@@ -1189,7 +1213,9 @@ tests:
     context: ""
     decorate: true
     decoration_config:
+      grace_period: 0s
       skip_cloning: true
+      timeout: 0s
     labels:
       ci-operator.openshift.io/prowgen-controlled: "true"
     name: branch-ci-super-duper-branch-images

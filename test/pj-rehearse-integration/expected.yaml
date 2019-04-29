@@ -175,9 +175,9 @@
         default_repo: origin
         path_strategy: single
       gcs_credentials_secret: gce-sa-credentials-gcs-publisher
-      grace_period: 15000000000
+      grace_period: 15s
       skip_cloning: true
-      timeout: 14400000000000
+      timeout: 4h0m0s
       utility_images:
         clonerefs: gcr.io/k8s-prow/clonerefs:v20190129-0a3c54c
         entrypoint: gcr.io/k8s-prow/entrypoint:v20190129-0a3c54c
@@ -273,9 +273,9 @@
         default_repo: origin
         path_strategy: single
       gcs_credentials_secret: gce-sa-credentials-gcs-publisher
-      grace_period: 15000000000
+      grace_period: 15s
       skip_cloning: true
-      timeout: 14400000000000
+      timeout: 4h0m0s
       utility_images:
         clonerefs: gcr.io/k8s-prow/clonerefs:v20190129-0a3c54c
         entrypoint: gcr.io/k8s-prow/entrypoint:v20190129-0a3c54c
@@ -372,9 +372,9 @@
         default_repo: origin
         path_strategy: single
       gcs_credentials_secret: gce-sa-credentials-gcs-publisher
-      grace_period: 15000000000
+      grace_period: 15s
       skip_cloning: true
-      timeout: 14400000000000
+      timeout: 4h0m0s
       utility_images:
         clonerefs: gcr.io/k8s-prow/clonerefs:v20190129-0a3c54c
         entrypoint: gcr.io/k8s-prow/entrypoint:v20190129-0a3c54c
@@ -470,9 +470,9 @@
         default_repo: origin
         path_strategy: single
       gcs_credentials_secret: gce-sa-credentials-gcs-publisher
-      grace_period: 15000000000
+      grace_period: 15s
       skip_cloning: true
-      timeout: 14400000000000
+      timeout: 4h0m0s
       utility_images:
         clonerefs: gcr.io/k8s-prow/clonerefs:v20190129-0a3c54c
         entrypoint: gcr.io/k8s-prow/entrypoint:v20190129-0a3c54c
@@ -591,9 +591,9 @@
         default_repo: origin
         path_strategy: single
       gcs_credentials_secret: gce-sa-credentials-gcs-publisher
-      grace_period: 15000000000
+      grace_period: 15s
       skip_cloning: true
-      timeout: 14400000000000
+      timeout: 4h0m0s
       utility_images:
         clonerefs: gcr.io/k8s-prow/clonerefs:v20190129-0a3c54c
         entrypoint: gcr.io/k8s-prow/entrypoint:v20190129-0a3c54c
@@ -689,9 +689,9 @@
         default_repo: origin
         path_strategy: single
       gcs_credentials_secret: gce-sa-credentials-gcs-publisher
-      grace_period: 15000000000
+      grace_period: 15s
       skip_cloning: true
-      timeout: 14400000000000
+      timeout: 4h0m0s
       utility_images:
         clonerefs: gcr.io/k8s-prow/clonerefs:v20190129-0a3c54c
         entrypoint: gcr.io/k8s-prow/entrypoint:v20190129-0a3c54c
@@ -810,9 +810,9 @@
         default_repo: origin
         path_strategy: single
       gcs_credentials_secret: gce-sa-credentials-gcs-publisher
-      grace_period: 15000000000
+      grace_period: 15s
       skip_cloning: true
-      timeout: 14400000000000
+      timeout: 4h0m0s
       utility_images:
         clonerefs: gcr.io/k8s-prow/clonerefs:v20190129-0a3c54c
         entrypoint: gcr.io/k8s-prow/entrypoint:v20190129-0a3c54c
@@ -931,9 +931,9 @@
         default_repo: origin
         path_strategy: single
       gcs_credentials_secret: gce-sa-credentials-gcs-publisher
-      grace_period: 15000000000
+      grace_period: 15s
       skip_cloning: true
-      timeout: 14400000000000
+      timeout: 4h0m0s
       utility_images:
         clonerefs: gcr.io/k8s-prow/clonerefs:v20190129-0a3c54c
         entrypoint: gcr.io/k8s-prow/entrypoint:v20190129-0a3c54c
@@ -1034,9 +1034,9 @@
         default_repo: origin
         path_strategy: single
       gcs_credentials_secret: gce-sa-credentials-gcs-publisher
-      grace_period: 15000000000
+      grace_period: 15s
       skip_cloning: true
-      timeout: 14400000000000
+      timeout: 4h0m0s
       utility_images:
         clonerefs: gcr.io/k8s-prow/clonerefs:v20190129-0a3c54c
         entrypoint: gcr.io/k8s-prow/entrypoint:v20190129-0a3c54c
@@ -1160,9 +1160,9 @@
         default_repo: origin
         path_strategy: single
       gcs_credentials_secret: gce-sa-credentials-gcs-publisher
-      grace_period: 15000000000
+      grace_period: 15s
       skip_cloning: true
-      timeout: 14400000000000
+      timeout: 4h0m0s
       utility_images:
         clonerefs: gcr.io/k8s-prow/clonerefs:v20190129-0a3c54c
         entrypoint: gcr.io/k8s-prow/entrypoint:v20190129-0a3c54c
@@ -1261,9 +1261,9 @@
         default_repo: origin
         path_strategy: single
       gcs_credentials_secret: gce-sa-credentials-gcs-publisher
-      grace_period: 15000000000
+      grace_period: 15s
       skip_cloning: true
-      timeout: 14400000000000
+      timeout: 4h0m0s
       utility_images:
         clonerefs: gcr.io/k8s-prow/clonerefs:v20190129-0a3c54c
         entrypoint: gcr.io/k8s-prow/entrypoint:v20190129-0a3c54c

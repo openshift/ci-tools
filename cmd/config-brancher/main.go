@@ -88,14 +88,15 @@ func generateBranchedConfigs(currentRelease, bumpRelease string, futureReleases 
 
 	// if we are asked to bump, we need to update the config for the dev branch
 	devRelease := currentRelease
-	if bumpRelease != "" {
+	if bumpRelease != "" && promotion.IsBumpable(input.Info.Branch, currentRelease) {
 		devRelease = bumpRelease
 		updateRelease(&currentConfig, bumpRelease)
+		updateImages(&currentConfig, currentRelease, bumpRelease)
 		// this config will continue to run for the dev branch but will be bumped
 		output = append(output, config.DataWithInfo{Configuration: currentConfig, Info: input.Info})
 	}
 
-	for _, futureRelease := range append(futureReleases) {
+	for _, futureRelease := range futureReleases {
 		futureBranch, err := promotion.DetermineReleaseBranch(currentRelease, futureRelease, input.Info.Branch)
 		if err != nil {
 			input.Logger().WithError(err).Error("could not determine future branch that would promote to current imagestream")
@@ -118,6 +119,9 @@ func generateBranchedConfigs(currentRelease, bumpRelease string, futureReleases 
 		// we cannot have two configs promoting to the same output, so
 		// we need to make sure the release branch config is disabled
 		futureConfig.PromotionConfiguration.Disabled = futureRelease == devRelease
+		// users can reference the release streams via build roots or
+		// input images, so we need to update those, too
+		updateImages(&futureConfig, currentRelease, futureRelease)
 
 		// this config will promote to the new location on the release branch
 		output = append(output, config.DataWithInfo{Configuration: futureConfig, Info: copyInfoSwappingBranches(input.Info, futureBranch)})
@@ -125,11 +129,39 @@ func generateBranchedConfigs(currentRelease, bumpRelease string, futureReleases 
 	return output
 }
 
-// updateRelease copies the configuration but updates the release that is promoted
-// to and that which is used to source the release payload for testing
+// updateRelease updates the release that is promoted to and that
+// which is used to source the release payload for testing
 func updateRelease(config *api.ReleaseBuildConfiguration, futureRelease string) {
 	config.PromotionConfiguration.Name = futureRelease
 	config.ReleaseTagConfiguration.Name = futureRelease
+}
+
+// updateImages updates the release that is used for input images
+// if it matches the release we are updating from
+func updateImages(config *api.ReleaseBuildConfiguration, currentRelease, futureRelease string) {
+	for name := range config.InputConfiguration.BaseImages {
+		image := config.InputConfiguration.BaseImages[name]
+		if promotion.RefersToOfficialImage(image.Name, image.Namespace) && image.Name == currentRelease {
+			image.Name = futureRelease
+		}
+		config.InputConfiguration.BaseImages[name] = image
+	}
+
+	for i := range config.InputConfiguration.BaseRPMImages {
+		image := config.InputConfiguration.BaseRPMImages[i]
+		if promotion.RefersToOfficialImage(image.Name, image.Namespace) && image.Name == currentRelease {
+			image.Name = futureRelease
+		}
+		config.InputConfiguration.BaseRPMImages[i] = image
+	}
+
+	if config.InputConfiguration.BuildRootImage != nil {
+		image := config.InputConfiguration.BuildRootImage.ImageStreamTagReference
+		if image != nil && promotion.RefersToOfficialImage(image.Name, image.Namespace) && image.Name == currentRelease {
+			image.Name = futureRelease
+		}
+		config.InputConfiguration.BuildRootImage.ImageStreamTagReference = image
+	}
 }
 
 func copyInfoSwappingBranches(input config.Info, newBranch string) config.Info {

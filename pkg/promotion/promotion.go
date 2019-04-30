@@ -4,12 +4,11 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"regexp"
-
 	cioperatorapi "github.com/openshift/ci-operator/pkg/api"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/prow/flagutil"
+	"regexp"
 )
 
 const (
@@ -34,7 +33,12 @@ func isDisabled(configSpec *cioperatorapi.ReleaseBuildConfiguration) bool {
 func buildOfficialImages(configSpec *cioperatorapi.ReleaseBuildConfiguration) bool {
 	promotionNamespace := extractPromotionNamespace(configSpec)
 	promotionName := extractPromotionName(configSpec)
-	return (promotionNamespace == okdPromotionNamespace && promotionName == okd40Imagestream) || promotionNamespace == ocpPromotionNamespace
+	return RefersToOfficialImage(promotionName, promotionNamespace)
+}
+
+// RefersToOfficialImage determines if an image is official
+func RefersToOfficialImage(name, namespace string) bool {
+	return (namespace == okdPromotionNamespace && name == okd40Imagestream) || namespace == ocpPromotionNamespace
 }
 
 func extractPromotionNamespace(configSpec *cioperatorapi.ReleaseBuildConfiguration) string {
@@ -51,6 +55,11 @@ func extractPromotionName(configSpec *cioperatorapi.ReleaseBuildConfiguration) s
 	}
 
 	return ""
+}
+
+// IsBumpable determines if the dev branch should be bumped or not
+func IsBumpable(branch, currentRelease string) bool {
+	return branch != fmt.Sprintf("openshift-%s", currentRelease)
 }
 
 // DetermineReleaseBranch determines the branch that will be used to the future release,

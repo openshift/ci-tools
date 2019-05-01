@@ -3,3 +3,6 @@ config_updater:
     cluster/test-deploy/test-profile/*.yaml:
       name: cluster-profile-test-profile
       namespace: test-namespace
+    ci-operator/templates/test-template.yaml:
+      name: cluster-launch-test-template
+      namespace: test-namespace

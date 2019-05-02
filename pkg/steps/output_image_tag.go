@@ -7,6 +7,8 @@ import (
 	"log"
 	"strings"
 
+	"k8s.io/client-go/util/retry"
+
 	imageapi "github.com/openshift/api/image/v1"
 	"github.com/openshift/ci-operator/pkg/api"
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
@@ -54,16 +56,16 @@ func (s *outputImageTagStep) Run(ctx context.Context, dry bool) error {
 		return nil
 	}
 
-	// TODO: this step is "force update" today, but that behavior should be optional in the future
-	//   since other steps are "idempotent". However, the override case supports promotion of machine-os-content
-	//   and will be fixed as part of that.
-	if err := s.istClient.ImageStreamTags(toNamespace).Delete(ist.Name, nil); err != nil && !errors.IsNotFound(err) {
-		return fmt.Errorf("could not remove output imagestreamtag: %v", err)
-	}
-
-	// Create if not exists, if it already exists, then we have nothing to do.
-	if _, err := s.istClient.ImageStreamTags(toNamespace).Create(ist); err != nil && !errors.IsAlreadyExists(err) {
-		return fmt.Errorf("could not create output imagestreamtag: %v", err)
+	// ensure that the image stream tag points to the correct input, retry
+	// on conflict, and do nothing if another user creates before us
+	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		_, err := s.istClient.ImageStreamTags(toNamespace).Update(ist)
+		if errors.IsNotFound(err) {
+			_, err = s.istClient.ImageStreamTags(toNamespace).Create(ist)
+		}
+		return err
+	}); err != nil && !errors.IsAlreadyExists(err) {
+		return fmt.Errorf("could not update output imagestreamtag: %v", err)
 	}
 	return nil
 }

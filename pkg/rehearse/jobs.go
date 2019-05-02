@@ -66,6 +66,15 @@ func NewProwJobClient(clusterConfig *rest.Config, namespace string, dry bool) (p
 func NewCMClient(clusterConfig *rest.Config, namespace string, dry bool) (coreclientset.ConfigMapInterface, error) {
 	if dry {
 		c := fake.NewSimpleClientset()
+		c.PrependReactor("create", "configmaps", func(action coretesting.Action) (bool, runtime.Object, error) {
+			cm := action.(coretesting.CreateAction).GetObject().(*v1.ConfigMap)
+			y, err := yaml.Marshal([]*v1.ConfigMap{cm})
+			if err != nil {
+				return true, nil, fmt.Errorf("failed to convert ConfigMap to YAML: %v", err)
+			}
+			fmt.Print(string(y))
+			return false, nil, nil
+		})
 		c.PrependReactor("update", "configmaps", func(action coretesting.Action) (bool, runtime.Object, error) {
 			cm := action.(coretesting.UpdateAction).GetObject().(*v1.ConfigMap)
 			y, err := yaml.Marshal([]*v1.ConfigMap{cm})

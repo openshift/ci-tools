@@ -21,6 +21,9 @@ parameters:
   required: true
 - name: RELEASE_IMAGE_LATEST
   required: true
+- name: BASE_DOMAIN
+  value: origin-ci-int-aws.dev.rhcloud.com
+  required: true
 
 objects:
 
@@ -197,7 +200,7 @@ objects:
       - name: CLUSTER_NAME
         value: ${NAMESPACE}-${JOB_NAME_HASH}
       - name: BASE_DOMAIN
-        value: origin-ci-int-aws.dev.rhcloud.com
+        value: ${BASE_DOMAIN}
       - name: SSH_PUB_KEY_PATH
         value: /etc/openshift-installer/ssh-publickey
       - name: PULL_SECRET_PATH
@@ -207,9 +210,11 @@ objects:
       - name: OPENSTACK_IMAGE
         value: rhcos
       - name: OPENSTACK_REGION
-        value: RegionOne
+        value: moc-kzn
+      - name: OPENSTACK_FLAVOR
+        value: m1.s2.xlarge
       - name: OPENSTACK_EXTERNAL_NETWORK
-        value: public
+        value: external
       - name: OS_CLOUD
         value: openstack-cloud
       - name: OS_CLIENT_CONFIG_FILE
@@ -239,24 +244,41 @@ objects:
         fi
 
         export EXPIRATION_DATE=$(date -d '4 hours' --iso=minutes --utc)
-        export CLUSTER_ID=$(uuidgen --random)
         export SSH_PUB_KEY=$(cat "${SSH_PUB_KEY_PATH}")
         export PULL_SECRET=$(cat "${PULL_SECRET_PATH}")
 
         if [[ "${CLUSTER_TYPE}" == "aws" ]]; then
             cat > /tmp/artifacts/installer/install-config.yaml << EOF
-        apiVersion: v1beta3
+        apiVersion: v1beta4
         baseDomain: ${BASE_DOMAIN}
-        clusterID:  ${CLUSTER_ID}
         metadata:
           name: ${CLUSTER_NAME}
+        controlPlane:
+          name: master
+          replicas: 3
+          platform:
+            aws:
+              zones:
+              - us-east-1a
+              - us-east-1b
+              - us-east-1c
+        compute:
+        - name: worker
+          replicas: 3
+          platform:
+            aws:
+              zones:
+              - us-east-1a
+              - us-east-1b
+              - us-east-1c
         networking:
-          clusterNetworks:
-          - cidr:             10.128.0.0/14
-            hostSubnetLength: 9
+          clusterNetwork:
+          - cidr: 10.128.0.0/14
+            hostPrefix: 23
           machineCIDR: 10.0.0.0/16
-          serviceCIDR: 172.30.0.0/16
-          type:        OpenShiftSDN
+          serviceNetwork:
+          - 172.30.0.0/16
+          networkType: OpenShiftSDN
         platform:
           aws:
             region:       ${AWS_REGION}
@@ -267,11 +289,16 @@ objects:
         sshKey: |
           ${SSH_PUB_KEY}
         EOF
-        elif [[ "${CLUSTER_TYPE}" == "openstack" ]]; then
-            cat > /tmp/artifacts/installer/install-config.yaml << EOF
-        apiVersion: v1beta3
+        elif [[ "${CLUSTER_TYPE}" == "openshift" ]]; then
+          # create a new floating ip tagged with CLUSTER_NAME so it can be deleted later
+          LB_FIP=$(openstack floating ip create --description $CLUSTER_NAME $OPENSTACK_EXTERNAL_NETWORK --format value -c 'floating_ip_address')
+
+          # create A record for the api
+          curl -v -X POST $CI_DNS_IP:8080 -d '{"name": "'api.$CLUSTER_NAME'", "ip": "'$LB_FIP'"}'
+
+          cat > /tmp/artifacts/installer/install-config.yaml << EOF
+        apiVersion: v1beta4
         baseDomain: ${BASE_DOMAIN}
-        clusterID:  ${CLUSTER_ID}
         metadata:
           name: ${CLUSTER_NAME}
         networking:
@@ -286,7 +313,9 @@ objects:
             baseImage:        ${OPENSTACK_IMAGE}
             cloud:            ${OS_CLOUD}
             externalNetwork:  ${OPENSTACK_EXTERNAL_NETWORK}
+            computeFlavor:    ${OPENSTACK_FLAVOR}
             region:           ${OPENSTACK_REGION}
+            lbFloatingIP:     ${LB_FIP}
         pullSecret: >
           ${PULL_SECRET}
         sshKey: |
@@ -370,6 +399,15 @@ objects:
                         --key /tmp/artifacts/installer/tls/journal-gatewayd.key \
                         --url "https://${bootstrap_ip}:19531/entries?_SYSTEMD_UNIT=${service}.service"
                 done
+                if ! whoami &> /dev/null; then
+                  if [ -w /etc/passwd ]; then
+                    echo "${USER_NAME:-default}:x:$(id -u):0:${USER_NAME:-default} user:${HOME}:/sbin/nologin" >> /etc/passwd
+                  fi
+                fi
+                eval $(ssh-agent)
+                ssh-add /etc/openshift-installer/ssh-privatekey
+                ssh -A -o PreferredAuthentications=publickey -o StrictHostKeyChecking=false -o UserKnownHostsFile=/dev/null core@${bootstrap_ip} /bin/bash -x /usr/local/bin/installer-gather.sh
+                scp -o PreferredAuthentications=publickey -o StrictHostKeyChecking=false -o UserKnownHostsFile=/dev/null core@${bootstrap_ip}:log-bundle.tar.gz /tmp/artifacts/installer/bootstrap-logs.tar.gz
               fi
           else
               echo "No terraform statefile found. Skipping collection of bootstrap logs."
@@ -379,14 +417,16 @@ objects:
           oc --insecure-skip-tls-verify --request-timeout=5s get pods --all-namespaces --template '{{ range .items }}{{ $name := .metadata.name }}{{ $ns := .metadata.namespace }}{{ range .spec.containers }}-n {{ $ns }} {{ $name }} -c {{ .name }}{{ "\n" }}{{ end }}{{ range .spec.initContainers }}-n {{ $ns }} {{ $name }} -c {{ .name }}{{ "\n" }}{{ end }}{{ end }}' > /tmp/containers
           oc --insecure-skip-tls-verify --request-timeout=5s get pods -l openshift.io/component=api --all-namespaces --template '{{ range .items }}-n {{ .metadata.namespace }} {{ .metadata.name }}{{ "\n" }}{{ end }}' > /tmp/pods-api
 
+          queue /tmp/artifacts/config-resources.json oc --insecure-skip-tls-verify --request-timeout=5s get apiserver.config.openshift.io authentication.config.openshift.io build.config.openshift.io console.config.openshift.io dns.config.openshift.io featuregate.config.openshift.io image.config.openshift.io infrastructure.config.openshift.io ingress.config.openshift.io network.config.openshift.io oauth.config.openshift.io project.config.openshift.io scheduler.config.openshift.io -o json
           queue /tmp/artifacts/apiservices.json oc --insecure-skip-tls-verify --request-timeout=5s get apiservices -o json
           queue /tmp/artifacts/clusteroperators.json oc --insecure-skip-tls-verify --request-timeout=5s get clusteroperators -o json
           queue /tmp/artifacts/clusterversion.json oc --insecure-skip-tls-verify --request-timeout=5s get clusterversion -o json
           queue /tmp/artifacts/configmaps.json oc --insecure-skip-tls-verify --request-timeout=5s get configmaps --all-namespaces -o json
+          queue /tmp/artifacts/credentialsrequests.json oc --insecure-skip-tls-verify --request-timeout=5s get credentialsrequests --all-namespaces -o json
           queue /tmp/artifacts/csr.json oc --insecure-skip-tls-verify --request-timeout=5s get csr -o json
           queue /tmp/artifacts/endpoints.json oc --insecure-skip-tls-verify --request-timeout=5s get endpoints --all-namespaces -o json
-          queue /tmp/artifacts/deployments.json.gz oc --insecure-skip-tls-verify --request-timeout=5s get deployments --all-namespaces -o json
-          queue /tmp/artifacts/daemonsets.json.gz oc --insecure-skip-tls-verify --request-timeout=5s get daemonsets --all-namespaces -o json
+          FILTER=gzip queue /tmp/artifacts/deployments.json.gz oc --insecure-skip-tls-verify --request-timeout=5s get deployments --all-namespaces -o json
+          FILTER=gzip queue /tmp/artifacts/daemonsets.json.gz oc --insecure-skip-tls-verify --request-timeout=5s get daemonsets --all-namespaces -o json
           queue /tmp/artifacts/events.json oc --insecure-skip-tls-verify --request-timeout=5s get events --all-namespaces -o json
           queue /tmp/artifacts/kubeapiserver.json oc --insecure-skip-tls-verify --request-timeout=5s get kubeapiserver -o json
           queue /tmp/artifacts/kubecontrollermanager.json oc --insecure-skip-tls-verify --request-timeout=5s get kubecontrollermanager -o json
@@ -396,11 +436,13 @@ objects:
           queue /tmp/artifacts/nodes.json oc --insecure-skip-tls-verify --request-timeout=5s get nodes -o json
           queue /tmp/artifacts/openshiftapiserver.json oc --insecure-skip-tls-verify --request-timeout=5s get openshiftapiserver -o json
           queue /tmp/artifacts/pods.json oc --insecure-skip-tls-verify --request-timeout=5s get pods --all-namespaces -o json
-          queue /tmp/artifacts/replicasets.json.gz oc --insecure-skip-tls-verify --request-timeout=5s get replicasets --all-namespaces -o json
+          queue /tmp/artifacts/persistentvolumes.json oc --insecure-skip-tls-verify --request-timeout=5s get persistentvolumes --all-namespaces -o json
+          queue /tmp/artifacts/persistentvolumeclaims.json oc --insecure-skip-tls-verify --request-timeout=5s get persistentvolumeclaims --all-namespaces -o json
+          FILTER=gzip queue /tmp/artifacts/replicasets.json.gz oc --insecure-skip-tls-verify --request-timeout=5s get replicasets --all-namespaces -o json
           queue /tmp/artifacts/rolebindings.json oc --insecure-skip-tls-verify --request-timeout=5s get rolebindings --all-namespaces -o json
           queue /tmp/artifacts/roles.json oc --insecure-skip-tls-verify --request-timeout=5s get roles --all-namespaces -o json
           queue /tmp/artifacts/services.json oc --insecure-skip-tls-verify --request-timeout=5s get services --all-namespaces -o json
-          queue /tmp/artifacts/statefulsets.json.gz oc --insecure-skip-tls-verify --request-timeout=5s get statefulsets --all-namespaces -o json
+          FILTER=gzip queue /tmp/artifacts/statefulsets.json.gz oc --insecure-skip-tls-verify --request-timeout=5s get statefulsets --all-namespaces -o json
 
           FILTER=gzip queue /tmp/artifacts/openapi.json.gz oc --insecure-skip-tls-verify --request-timeout=5s get --raw /openapi/v2
 
@@ -460,6 +502,10 @@ objects:
 
           echo "Snapshotting prometheus (may take 15s) ..."
           queue /tmp/artifacts/metrics/prometheus.tar.gz oc --insecure-skip-tls-verify exec -n openshift-monitoring prometheus-k8s-0 -- tar cvzf - -C /prometheus .
+
+          echo "Running must-gather..."
+          mkdir -p /tmp/artifacts/must-gather
+          queue /tmp/artifacts/must-gather/must-gather.log oc --insecure-skip-tls-verify adm must-gather --dest-dir /tmp/artifacts/must-gather
 
           echo "Waiting for logs ..."
           wait

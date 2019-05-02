@@ -96,7 +96,7 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 }
 
 func getBaseCiTemplates(t *testing.T) CiTemplates {
-	testTemplatePath := filepath.Join(templatesPath, "test-template.yaml")
+	testTemplatePath := filepath.Join(templatesPath, "subdir/test-template.yaml")
 	contents, err := ioutil.ReadFile(testTemplatePath)
 	if err != nil {
 		t.Fatalf("could not read file %s for template: %v", testTemplatePath, err)

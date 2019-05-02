@@ -83,6 +83,27 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 							Name:      "current-release",
 							Namespace: "ocp",
 						},
+						BaseImages: map[string]api.ImageStreamTagReference{
+							"first": {
+								Name:      "current-release",
+								Namespace: "ocp",
+								Tag:       "first",
+							},
+						},
+						BaseRPMImages: map[string]api.ImageStreamTagReference{
+							"second": {
+								Name:      "current-release",
+								Namespace: "ocp",
+								Tag:       "second",
+							},
+						},
+						BuildRootImage: &api.BuildRootImageConfiguration{
+							ImageStreamTagReference: &api.ImageStreamTagReference{
+								Name:      "current-release",
+								Namespace: "ocp",
+								Tag:       "third",
+							},
+						},
 					},
 				},
 				Info: config.Info{
@@ -101,6 +122,27 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 							ReleaseTagConfiguration: &api.ReleaseTagConfiguration{
 								Name:      "current-release",
 								Namespace: "ocp",
+							},
+							BaseImages: map[string]api.ImageStreamTagReference{
+								"first": {
+									Name:      "current-release",
+									Namespace: "ocp",
+									Tag:       "first",
+								},
+							},
+							BaseRPMImages: map[string]api.ImageStreamTagReference{
+								"second": {
+									Name:      "current-release",
+									Namespace: "ocp",
+									Tag:       "second",
+								},
+							},
+							BuildRootImage: &api.BuildRootImageConfiguration{
+								ImageStreamTagReference: &api.ImageStreamTagReference{
+									Name:      "current-release",
+									Namespace: "ocp",
+									Tag:       "third",
+								},
 							},
 						},
 					},
@@ -148,6 +190,27 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 							Name:      "current-release",
 							Namespace: "ocp",
 						},
+						BaseImages: map[string]api.ImageStreamTagReference{
+							"first": {
+								Name:      "current-release",
+								Namespace: "ocp",
+								Tag:       "first",
+							},
+						},
+						BaseRPMImages: map[string]api.ImageStreamTagReference{
+							"second": {
+								Name:      "current-release",
+								Namespace: "ocp",
+								Tag:       "second",
+							},
+						},
+						BuildRootImage: &api.BuildRootImageConfiguration{
+							ImageStreamTagReference: &api.ImageStreamTagReference{
+								Name:      "current-release",
+								Namespace: "ocp",
+								Tag:       "third",
+							},
+						},
 					},
 				},
 				Info: config.Info{
@@ -167,6 +230,27 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 								Name:      "current-release",
 								Namespace: "ocp",
 							},
+							BaseImages: map[string]api.ImageStreamTagReference{
+								"first": {
+									Name:      "current-release",
+									Namespace: "ocp",
+									Tag:       "first",
+								},
+							},
+							BaseRPMImages: map[string]api.ImageStreamTagReference{
+								"second": {
+									Name:      "current-release",
+									Namespace: "ocp",
+									Tag:       "second",
+								},
+							},
+							BuildRootImage: &api.BuildRootImageConfiguration{
+								ImageStreamTagReference: &api.ImageStreamTagReference{
+									Name:      "current-release",
+									Namespace: "ocp",
+									Tag:       "third",
+								},
+							},
 						},
 					},
 					Info: config.Info{
@@ -184,6 +268,27 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 								Name:      "future-release-1",
 								Namespace: "ocp",
 							},
+							BaseImages: map[string]api.ImageStreamTagReference{
+								"first": {
+									Name:      "future-release-1",
+									Namespace: "ocp",
+									Tag:       "first",
+								},
+							},
+							BaseRPMImages: map[string]api.ImageStreamTagReference{
+								"second": {
+									Name:      "future-release-1",
+									Namespace: "ocp",
+									Tag:       "second",
+								},
+							},
+							BuildRootImage: &api.BuildRootImageConfiguration{
+								ImageStreamTagReference: &api.ImageStreamTagReference{
+									Name:      "future-release-1",
+									Namespace: "ocp",
+									Tag:       "third",
+								},
+							},
 						},
 					},
 					Info: config.Info{
@@ -200,6 +305,27 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 							ReleaseTagConfiguration: &api.ReleaseTagConfiguration{
 								Name:      "future-release-2",
 								Namespace: "ocp",
+							},
+							BaseImages: map[string]api.ImageStreamTagReference{
+								"first": {
+									Name:      "future-release-2",
+									Namespace: "ocp",
+									Tag:       "first",
+								},
+							},
+							BaseRPMImages: map[string]api.ImageStreamTagReference{
+								"second": {
+									Name:      "future-release-2",
+									Namespace: "ocp",
+									Tag:       "second",
+								},
+							},
+							BuildRootImage: &api.BuildRootImageConfiguration{
+								ImageStreamTagReference: &api.ImageStreamTagReference{
+									Name:      "future-release-2",
+									Namespace: "ocp",
+									Tag:       "third",
+								},
 							},
 						},
 					},

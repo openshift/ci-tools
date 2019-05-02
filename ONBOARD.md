@@ -175,11 +175,12 @@ should be in the `master` branch of the `openshift/release` repository).
 ### Images targets, end-to-end tests and more
 
 Building the source code and running unit tests is basic use case for
-ci-operator. In addition to that, ci-operator is able to build component images,
-provision test clusters using them and run end-to-end tests on them. These use
-cases would use more features in both configuration file and Prow job and would
-not fit into this document. We will provide more documentation describing other
-use cases soon.
+ci-operator. In addition to that, ci-operator is able to build component
+images, provision test clusters using them and [run end-to-end
+tests](https://github.com/openshift/release/tree/master/ci-operator#end-to-end-tests)
+on them. These use cases would use more features in both configuration file and
+Prow job and would not fit into this document. We will provide more
+documentation describing other use cases soon.
 
 ## Add Prow jobs
 
@@ -193,4 +194,4 @@ create a good set of default Prow jobs from your ci-operator configuration
 file. All you need to do is to commit the generated files.
 
 You can find more information about how to create Prow jobs in [test-infra
-documentation](https://github.com/openshift/test-infra/tree/master/prow#how-to-add-new-jobs).
+documentation](https://github.com/openshift/test-infra/tree/master/prow/jobs.md#How-to-configure-new-jobs).

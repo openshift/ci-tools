@@ -130,7 +130,12 @@
       ci.openshift.org/rehearse-pull: "1234"
       created-by-pj-rehearse: "true"
     name: rehearse-hnq8xb9r-test-template
-    namespace: test-namespace
+- metadata:
+    creationTimestamp: null
+    labels:
+      ci.openshift.org/rehearse-pull: "1234"
+      created-by-pj-rehearse: "true"
+    name: rehearse-cluster-profile-test-profile-47224
 - data:
     vars-origin.yaml: |
       vars-origin.yaml

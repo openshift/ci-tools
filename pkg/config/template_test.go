@@ -24,9 +24,7 @@ import (
 	prowplugins "k8s.io/test-infra/prow/plugins"
 )
 
-const testRepoPath = "../../test/pj-rehearse-integration/master"
-
-var templatesPath = filepath.Join(testRepoPath, "/ci-operator/templates")
+const templatesPath = "../../test/pj-rehearse-integration/master/ci-operator/templates"
 
 func TestGetTemplates(t *testing.T) {
 	expectCiTemplates := getBaseCiTemplates(t)
@@ -40,14 +38,6 @@ func TestGetTemplates(t *testing.T) {
 func TestCreateCleanupCMTemplates(t *testing.T) {
 	ns := "test-namespace"
 	ciTemplates := getBaseCiTemplates(t)
-	configUpdaterCfg := prowplugins.ConfigUpdater{
-		Maps: map[string]prowplugins.ConfigMapSpec{
-			"ci-operator/templates/test-template.yaml": {
-				Name:       "cluster-launch-test-template",
-				Namespaces: []string{ns},
-			},
-		},
-	}
 	createByRehearseReq, err := labels.NewRequirement(createByRehearse, selection.Equals, []string{"true"})
 	if err != nil {
 		t.Fatal(err)
@@ -76,7 +66,7 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 		return true, nil, nil
 	})
 	client := cs.CoreV1().ConfigMaps(ns)
-	cmManager := NewTemplateCMManager(client, configUpdaterCfg, 1234, testRepoPath, logrus.NewEntry(logrus.New()))
+	cmManager := NewTemplateCMManager(client, prowplugins.ConfigUpdater{}, 1234, "not_used", logrus.NewEntry(logrus.New()))
 	if err := cmManager.CreateCMTemplates(ciTemplates); err != nil {
 		t.Fatalf("CreateCMTemplates() returned error: %v", err)
 	}

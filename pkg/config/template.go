@@ -34,7 +34,7 @@ type ClusterProfile struct {
 }
 
 func (p ClusterProfile) CMName() string {
-	return fmt.Sprintf("rehearse-cluster-profile-%s-%s", p.Name, p.TreeHash[:5])
+	return fmt.Sprintf("rehearse-cluster-profile-%s-%s", p.Name, p.TreeHash[:8])
 }
 
 const (

@@ -158,7 +158,7 @@ func TestCreateClusterProfiles(t *testing.T) {
 	}
 	expected := []v1.ConfigMap{{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "rehearse-cluster-profile-profile0-e92d4",
+			Name:      "rehearse-cluster-profile-profile0-e92d4a59",
 			Namespace: ns,
 			Labels: map[string]string{
 				createByRehearse:  "true",
@@ -168,7 +168,7 @@ func TestCreateClusterProfiles(t *testing.T) {
 		Data: map[string]string{"file": "profile0 content"},
 	}, {
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "rehearse-cluster-profile-profile1-a8c99",
+			Name:      "rehearse-cluster-profile-profile1-a8c99ffc",
 			Namespace: ns,
 			Labels: map[string]string{
 				createByRehearse:  "true",

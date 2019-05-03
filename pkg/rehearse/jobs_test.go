@@ -93,8 +93,8 @@ func TestConfigureRehearsalJobs(t *testing.T) {
 	}
 	expected := []string{
 		"", "cluster-profile-unchanged",
-		"rehearse-cluster-profile-changed-profile0-47f52",
-		"rehearse-cluster-profile-changed-profile1-85c62",
+		"rehearse-cluster-profile-changed-profile0-47f520ef",
+		"rehearse-cluster-profile-changed-profile1-85c62707",
 	}
 	if !reflect.DeepEqual(expected, names) {
 		t.Fatalf("want %s, got %s", expected, names)

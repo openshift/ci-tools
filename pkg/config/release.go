@@ -26,6 +26,8 @@ const (
 	TemplatesPath = "ci-operator/templates"
 	// ClusterProfilesPath is where profiles are stored in the release repo
 	ClusterProfilesPath = "cluster/test-deploy"
+	// ClusterProfilePrefix is the prefix added to ConfigMap names
+	ClusterProfilePrefix = "cluster-profile-"
 )
 
 // ReleaseRepoConfig contains all configuration present in release repo (usually openshift/release)

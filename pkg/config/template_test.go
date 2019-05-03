@@ -130,15 +130,15 @@ func TestCreateClusterProfiles(t *testing.T) {
 	configUpdaterCfg := prowplugins.ConfigUpdater{
 		Maps: map[string]prowplugins.ConfigMapSpec{
 			filepath.Join(ClusterProfilesPath, "profile0", "file"): {
-				Name:       "cluster-profile-profile0",
+				Name:       ClusterProfilePrefix + "profile0",
 				Namespaces: []string{ns},
 			},
 			filepath.Join(ClusterProfilesPath, "profile1", "file"): {
-				Name:       "cluster-profile-profile1",
+				Name:       ClusterProfilePrefix + "profile1",
 				Namespaces: []string{ns},
 			},
 			filepath.Join(ClusterProfilesPath, "unchanged", "file"): {
-				Name:       "cluster-profile-unchanged",
+				Name:       ClusterProfilePrefix + "unchanged",
 				Namespaces: []string{ns},
 			},
 		},

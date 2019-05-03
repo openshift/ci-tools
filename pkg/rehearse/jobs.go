@@ -308,21 +308,21 @@ func hasTemplateFile(job prowconfig.Presubmit, templateFile string) bool {
 }
 
 func replaceClusterProfiles(volumes []v1.Volume, profiles []config.ClusterProfile, logger *logrus.Entry) {
+	nameMap := make(map[string]string, len(profiles))
+	for _, p := range profiles {
+		nameMap[p.CMName()] = p.TempCMName()
+	}
 	replace := func(s *v1.VolumeProjection) {
 		if s.ConfigMap == nil {
 			return
 		}
-		n := strings.TrimPrefix(s.ConfigMap.Name, "cluster-profile-")
-		for _, p := range profiles {
-			if n != p.Name {
-				continue
-			}
-			tmp := p.CMName()
-			fields := logrus.Fields{"profile": n, "tmp": tmp}
-			logger.WithFields(fields).Debug("Rehearsal job uses cluster profile, will be replaced by temporary")
-			s.ConfigMap.Name = tmp
+		tmp, ok := nameMap[s.ConfigMap.Name]
+		if !ok {
 			return
 		}
+		fields := logrus.Fields{"profile": s.ConfigMap.Name, "tmp": tmp}
+		logger.WithFields(fields).Debug("Rehearsal job uses cluster profile, will be replaced by temporary")
+		s.ConfigMap.Name = tmp
 	}
 	for _, v := range volumes {
 		if v.Name != "cluster-profile" || v.Projected == nil {

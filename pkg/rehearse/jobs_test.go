@@ -66,15 +66,15 @@ func TestConfigureRehearsalJobs(t *testing.T) {
 			makePresubmit("no-profile", v1.PodSpec{Containers: []v1.Container{{}}}),
 			makePresubmit("unchanged-profile", v1.PodSpec{
 				Containers: []v1.Container{{}},
-				Volumes:    []v1.Volume{makeVoume("cluster-profile-unchanged")},
+				Volumes:    []v1.Volume{makeVoume(config.ClusterProfilePrefix + "unchanged")},
 			}),
 			makePresubmit("changed-profile0", v1.PodSpec{
 				Containers: []v1.Container{{}},
-				Volumes:    []v1.Volume{makeVoume("cluster-profile-changed-profile0")},
+				Volumes:    []v1.Volume{makeVoume(config.ClusterProfilePrefix + "changed-profile0")},
 			}),
 			makePresubmit("changed-profile1", v1.PodSpec{
 				Containers: []v1.Container{{}},
-				Volumes:    []v1.Volume{makeVoume("cluster-profile-changed-profile1")},
+				Volumes:    []v1.Volume{makeVoume(config.ClusterProfilePrefix + "changed-profile1")},
 			}),
 		},
 	}
@@ -92,7 +92,7 @@ func TestConfigureRehearsalJobs(t *testing.T) {
 		}
 	}
 	expected := []string{
-		"", "cluster-profile-unchanged",
+		"", config.ClusterProfilePrefix + "unchanged",
 		"rehearse-cluster-profile-changed-profile0-47f520ef",
 		"rehearse-cluster-profile-changed-profile1-85c62707",
 	}

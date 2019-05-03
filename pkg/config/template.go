@@ -34,6 +34,10 @@ type ClusterProfile struct {
 }
 
 func (p ClusterProfile) CMName() string {
+	return ClusterProfilePrefix + p.Name
+}
+
+func (p ClusterProfile) TempCMName() string {
 	return fmt.Sprintf("rehearse-cluster-profile-%s-%s", p.Name, p.TreeHash[:8])
 }
 
@@ -141,7 +145,7 @@ func replaceSpecNames(cfg prowplugins.ConfigUpdater, mapping map[string]string) 
 func (c *TemplateCMManager) CreateClusterProfiles(profiles []ClusterProfile) error {
 	nameMap := make(map[string]string, len(profiles))
 	for _, p := range profiles {
-		nameMap["cluster-profile-"+p.Name] = p.CMName()
+		nameMap[p.CMName()] = p.TempCMName()
 	}
 	changes := []prowgithub.PullRequestChange{}
 	for _, profile := range profiles {

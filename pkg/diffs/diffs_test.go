@@ -481,7 +481,7 @@ func TestGetPresubmitsForClusterProfiles(t *testing.T) {
 						Sources: []v1.VolumeProjection{{
 							ConfigMap: &v1.ConfigMapProjection{
 								LocalObjectReference: v1.LocalObjectReference{
-									Name: "cluster-profile-" + p,
+									Name: config.ClusterProfilePrefix + p,
 								},
 							},
 						}},

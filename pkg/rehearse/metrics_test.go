@@ -68,7 +68,7 @@ func TestRecordChangedTemplates(t *testing.T) {
 			metrics := NewMetrics(testFilename)
 			testTemplates := config.CiTemplates{}
 			for _, ciopConfig := range tc.templates {
-				testTemplates[ciopConfig] = []byte{}
+				testTemplates[ciopConfig] = ""
 			}
 			metrics.RecordChangedTemplates(testTemplates)
 			sort.Strings(metrics.ChangedTemplates)

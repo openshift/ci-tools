@@ -152,28 +152,6 @@ func convertToReadableDiff(a, b interface{}, objName string) string {
 	return d
 }
 
-// GetChangedTemplates returns a mapping of the changed templates to be rehearsed.
-func GetChangedTemplates(masterTemplates, prTemplates config.CiTemplates, logger *logrus.Entry) config.CiTemplates {
-	changedTemplates := make(config.CiTemplates)
-
-	for name, template := range prTemplates {
-		logFields := logrus.Fields{"template-name": name}
-
-		// new template
-		if _, ok := masterTemplates[name]; !ok {
-			changedTemplates[name] = template
-			logger.WithFields(logFields).Info("new template detected")
-			continue
-		}
-
-		if !equality.Semantic.DeepEqual(masterTemplates[name], prTemplates[name]) {
-			logger.WithFields(logFields).Info("changed template detected")
-			changedTemplates[name] = template
-		}
-	}
-	return changedTemplates
-}
-
 func GetPresubmitsForCiopConfigs(prowConfig *prowconfig.Config, ciopConfigs config.CompoundCiopConfig, logger *logrus.Entry, affectedJobs map[string]sets.String) config.Presubmits {
 	ret := config.Presubmits{}
 

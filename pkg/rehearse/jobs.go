@@ -203,7 +203,7 @@ func ConfigureRehearsalJobs(toBeRehearsed config.Presubmits, ciopConfigs config.
 	if allowVolumes {
 		templateMap = make(map[string]string, len(templates))
 		for f, t := range templates {
-			templateMap[filepath.Base(f)] = config.GetTempCMName(config.GetTemplateName(f), f, t)
+			templateMap[filepath.Base(f)] = config.GetTempCMName(config.GetTemplateName(f), t)
 		}
 	}
 	rehearsals := []*prowconfig.Presubmit{}

@@ -187,9 +187,9 @@ func rehearseMain() int {
 		logger.WithError(err).Error("could not load Prow configs from base or tested revision of release repo")
 		return gracefulExit(o.noFail, misconfigurationOutput)
 	}
-	// We always need PR versions of templates and ciop config, otherwise we cannot provide them to rehearsed jobs
-	if prConfig.Templates == nil || prConfig.CiOperator == nil {
-		logger.WithError(err).Error("could not load template/ci-operator configs from tested revision of release repo")
+	// We always need PR versions of ciop config, otherwise we cannot provide them to rehearsed jobs
+	if prConfig.CiOperator == nil {
+		logger.WithError(err).Error("could not load ci-operator configs from tested revision of release repo")
 		return gracefulExit(o.noFail, misconfigurationOutput)
 	}
 
@@ -201,10 +201,13 @@ func rehearseMain() int {
 		metrics.RecordChangedCiopConfigs(changedCiopConfigs)
 	}
 
-	changedTemplates := make(config.CiTemplates)
-	// We can only detect changes if we managed to load both CI template versions
-	if masterConfig.Templates != nil && prConfig.Templates != nil {
-		changedTemplates = diffs.GetChangedTemplates(masterConfig.Templates, prConfig.Templates, logger)
+	changedTemplates, err := config.GetChangedTemplates(o.releaseRepoPath, jobSpec.Refs.BaseSHA)
+	if err != nil {
+		logger.WithError(err).Error("could not get template differences")
+		return gracefulExit(o.noFail, misconfigurationOutput)
+	}
+	if len(changedTemplates) != 0 {
+		logger.WithField("templates", changedTemplates).Info("templates changed")
 		metrics.RecordChangedTemplates(changedTemplates)
 	}
 	changedClusterProfiles, err := config.GetChangedClusterProfiles(o.releaseRepoPath, jobSpec.Refs.BaseSHA)

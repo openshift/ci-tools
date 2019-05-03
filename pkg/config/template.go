@@ -1,8 +1,6 @@
 package config
 
 import (
-	"crypto/sha256"
-	"encoding/base32"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -28,7 +26,7 @@ import (
 )
 
 // CiTemplates is a map of all the changed templates
-type CiTemplates map[string][]byte
+type CiTemplates map[string]string
 type ClusterProfile struct {
 	Filename, TreeHash string
 }
@@ -49,31 +47,6 @@ const (
 	createByRehearse  = "created-by-pj-rehearse"
 	rehearseLabelPull = "ci.openshift.org/rehearse-pull"
 )
-
-func getTemplates(releaseRepoPath string) (CiTemplates, error) {
-	templates := make(CiTemplates)
-	path := filepath.Join(releaseRepoPath, TemplatesPath)
-	err := filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() || !(strings.HasSuffix(path, ".yaml") || strings.HasSuffix(path, ".yml")) {
-			return err
-		}
-		contents, err := ioutil.ReadFile(path)
-		if err != nil {
-			return fmt.Errorf("could not read template %q: %v", path, err)
-		}
-		// Failure is impossible per filepath.Walk's API.
-		filename, err := filepath.Rel(releaseRepoPath, path)
-		if err != nil {
-			return err
-		}
-		templates[filename] = contents
-		return nil
-	})
-	if err != nil {
-		return nil, fmt.Errorf("error walking the path %q: %v", path, err)
-	}
-	return templates, nil
-}
 
 // TemplateCMManager holds the details needed for the configmap controller
 type TemplateCMManager struct {
@@ -193,7 +166,7 @@ func (c *TemplateCMManager) CreateCMTemplates(templates CiTemplates) error {
 	for filename, template := range templates {
 		filenames = append(filenames, filename)
 		name := GetTemplateName(filename)
-		nameMap[GetTemplateCMName(name)] = GetTempCMName(name, filename, template)
+		nameMap[GetTemplateCMName(name)] = GetTempCMName(name, template)
 	}
 	return c.createCMs(filenames, nameMap)
 }
@@ -225,28 +198,8 @@ func GetTemplateCMName(name string) string {
 	return TemplatePrefix + name
 }
 
-func GetTempCMName(templateName, filename string, templateData []byte) string {
-	return fmt.Sprintf("rehearse-%s-%s", inputHash([]byte(filename), templateData), templateName)
-}
-
-// oneWayEncoding can be used to encode hex to a 62-character set (0 and 1 are duplicates) for use in
-// short display names that are safe for use in kubernetes as resource names.
-var oneWayNameEncoding = base32.NewEncoding("bcdfghijklmnpqrstvwxyz0123456789").WithPadding(base32.NoPadding)
-
-// inputHash returns a string that hashes the unique parts of the input to avoid collisions.
-func inputHash(inputs ...[]byte) string {
-	hash := sha256.New()
-
-	// the inputs form a part of the hash
-	for _, s := range inputs {
-		hash.Write(s)
-	}
-
-	// Object names can't be too long so we truncate
-	// the hash. This increases chances of collision
-	// but we can tolerate it as our input space is
-	// tiny.
-	return oneWayNameEncoding.EncodeToString(hash.Sum(nil)[:5])
+func GetTempCMName(templateName, hash string) string {
+	return fmt.Sprintf("rehearse-%s-%s", hash[:8], templateName)
 }
 
 // GetTemplateName generates a name for the template based of the filename.

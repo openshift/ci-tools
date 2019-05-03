@@ -36,7 +36,6 @@ const (
 type ReleaseRepoConfig struct {
 	Prow       *prowconfig.Config
 	CiOperator CompoundCiopConfig
-	Templates  CiTemplates
 }
 
 func git(repoPath string, args ...string) (string, error) {
@@ -98,10 +97,6 @@ func NewLocalJobSpec(path string) (*pjdwapi.JobSpec, error) {
 func GetAllConfigs(releaseRepoPath string, logger *logrus.Entry) *ReleaseRepoConfig {
 	config := &ReleaseRepoConfig{}
 	var err error
-	if config.Templates, err = getTemplates(releaseRepoPath); err != nil {
-		logger.WithError(err).Warn("failed to load templates from release repo")
-	}
-
 	ciopConfigPath := filepath.Join(releaseRepoPath, CiopConfigInRepoPath)
 	config.CiOperator, err = CompoundLoad(ciopConfigPath)
 	if err != nil {
@@ -148,21 +143,55 @@ func GetAllConfigsFromSHA(releaseRepoPath, sha string, logger *logrus.Entry) (*R
 	return config, nil
 }
 
-// GetChangedClusterProfiles returns the path and a hash of the contents of all
-// cluster profiles that changed since the revision `baseRev`.
+func GetChangedTemplates(path, baseRev string) (CiTemplates, error) {
+	changes, err := getRevChanges(path, TemplatesPath, baseRev, true)
+	if err != nil {
+		return nil, err
+	}
+	ret := CiTemplates{}
+	for _, c := range changes {
+		if filepath.Ext(c.Filename) == ".yaml" {
+			ret[c.Filename] = c.SHA
+		}
+	}
+	return ret, nil
+}
+
 func GetChangedClusterProfiles(path, baseRev string) ([]ClusterProfile, error) {
+	changes, err := getRevChanges(path, ClusterProfilesPath, baseRev, false)
+	if err != nil {
+		return nil, err
+	}
+	ret := make([]ClusterProfile, 0, len(changes))
+	for _, c := range changes {
+		ret = append(ret, ClusterProfile{Filename: c.Filename, TreeHash: c.SHA})
+	}
+	return ret, nil
+}
+
+type configMapSource struct {
+	Filename, SHA string
+}
+
+// getRevChanges returns the name and a hash of the contents of files under
+// `path` that were added/modified since revision `base` in the repository at
+// `root`.  Paths are relative to `root`.
+func getRevChanges(root, path, base string, rec bool) ([]configMapSource, error) {
 	// Sample output (with abbreviated hashes) from git-diff-tree(1):
 	// :100644 100644 bcd1234 0123456 M file0
-	cmd := []string{"diff-tree", "--diff-filter=ABCMRTUX", baseRev + ":" + ClusterProfilesPath, "HEAD:" + ClusterProfilesPath}
-	diff, err := git(path, cmd...)
+	cmd := []string{"diff-tree", "--diff-filter=ABCMRTUX", base + ":" + path, "HEAD:" + path}
+	if rec {
+		cmd = append(cmd, "-r")
+	}
+	diff, err := git(root, cmd...)
 	if err != nil || diff == "" {
 		return nil, err
 	}
-	var ret []ClusterProfile
+	var ret []configMapSource
 	for _, l := range strings.Split(strings.TrimSpace(diff), "\n") {
-		ret = append(ret, ClusterProfile{
-			Filename: filepath.Join(ClusterProfilesPath, l[99:]),
-			TreeHash: l[56:96],
+		ret = append(ret, configMapSource{
+			Filename: filepath.Join(path, l[99:]),
+			SHA:      l[56:96],
 		})
 	}
 	return ret, nil

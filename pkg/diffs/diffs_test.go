@@ -295,59 +295,6 @@ func makeConfig(p []prowconfig.Presubmit) *prowconfig.Config {
 	}
 }
 
-func TestGetChangedTemplates(t *testing.T) {
-	makeBaseTemplates := func() config.CiTemplates {
-		return config.CiTemplates{
-			"template1.yaml": []byte("template1's content"),
-			"template2.yaml": []byte("template2's content"),
-		}
-	}
-	testCases := []struct {
-		name         string
-		getTemplates func() (config.CiTemplates, config.CiTemplates)
-		expected     []string
-	}{
-		{
-			name: "no changes",
-			getTemplates: func() (config.CiTemplates, config.CiTemplates) {
-				templates := makeBaseTemplates()
-				return templates, templates
-			},
-		},
-		{
-			name: "add new template",
-			getTemplates: func() (config.CiTemplates, config.CiTemplates) {
-				prTemplates := makeBaseTemplates()
-				prTemplates["templateNEW.yaml"] = []byte("templateNEW's content")
-				return makeBaseTemplates(), prTemplates
-			},
-			expected: []string{"templateNEW.yaml"},
-		},
-		{
-			name: "change existing template",
-			getTemplates: func() (config.CiTemplates, config.CiTemplates) {
-				prTemplates := makeBaseTemplates()
-				prTemplates["template1.yaml"] = []byte("template1's new content")
-				return makeBaseTemplates(), prTemplates
-			},
-			expected: []string{"template1.yaml"},
-		},
-	}
-
-	for _, testCase := range testCases {
-		t.Run(testCase.name, func(t *testing.T) {
-			before, after := testCase.getTemplates()
-			var filenames []string
-			for f := range GetChangedTemplates(before, after, logrus.WithField("testcase", testCase.name)) {
-				filenames = append(filenames, f)
-			}
-			if !equality.Semantic.DeepEqual(testCase.expected, filenames) {
-				t.Fatalf("%s", diff.ObjectDiff(testCase.expected, filenames))
-			}
-		})
-	}
-}
-
 func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 	baseCiopConfig := config.Info{
 		Org:      "org",

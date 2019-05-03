@@ -110,17 +110,23 @@ func TestCreateClusterProfiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(dir)
-	profiles := []ClusterProfile{
-		{Name: "profile0", TreeHash: "e92d4a5996a8a977bd7916b65488371331681f9d"},
-		{Name: "profile1", TreeHash: "a8c99ffc996128417ef1062f9783730a8c864586"},
-		{Name: "unchanged", TreeHash: "8012ff51a005eaa8ed8f4c08ccdce580f462fff6"},
-	}
+	profiles := []ClusterProfile{{
+		TreeHash: "e92d4a5996a8a977bd7916b65488371331681f9d",
+		Filename: filepath.Join(ClusterProfilesPath, "profile0"),
+	}, {
+		TreeHash: "a8c99ffc996128417ef1062f9783730a8c864586",
+		Filename: filepath.Join(ClusterProfilesPath, "profile1"),
+	}, {
+		TreeHash: "8012ff51a005eaa8ed8f4c08ccdce580f462fff6",
+		Filename: filepath.Join(ClusterProfilesPath, "unchanged"),
+	}}
 	for _, p := range profiles {
-		path := filepath.Join(dir, ClusterProfilesPath, p.Name)
+		path := filepath.Join(dir, p.Filename)
 		if err := os.MkdirAll(path, 0775); err != nil {
 			t.Fatal(err)
 		}
-		if err := ioutil.WriteFile(filepath.Join(path, "file"), []byte(p.Name+" content"), 0664); err != nil {
+		content := []byte(filepath.Base(p.Filename) + " content")
+		if err := ioutil.WriteFile(filepath.Join(path, "file"), content, 0664); err != nil {
 			t.Fatal(err)
 		}
 	}

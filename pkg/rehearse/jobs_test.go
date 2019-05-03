@@ -2,6 +2,7 @@ package rehearse
 
 import (
 	"fmt"
+	"path/filepath"
 	"reflect"
 	"sort"
 	"strconv"
@@ -78,11 +79,14 @@ func TestConfigureRehearsalJobs(t *testing.T) {
 			}),
 		},
 	}
-	profiles := []config.ClusterProfile{
-		{Name: "changed-profile0", TreeHash: "47f520ef9c2662fc9a2675f1dd4f02d5082b2776"},
-		{Name: "changed-profile1", TreeHash: "85c627078710b8beee65d06d0cf157094fc46b03"},
-	}
-	ret := ConfigureRehearsalJobs(jobs, config.CompoundCiopConfig{}, 1234, Loggers{logrus.New(), logrus.New()}, true, config.CiTemplates{}, profiles)
+	profiles := []config.ClusterProfile{{
+		TreeHash: "47f520ef9c2662fc9a2675f1dd4f02d5082b2776",
+		Filename: filepath.Join(config.ClusterProfilesPath, "changed-profile0"),
+	}, {
+		TreeHash: "85c627078710b8beee65d06d0cf157094fc46b03",
+		Filename: filepath.Join(config.ClusterProfilesPath, "changed-profile1"),
+	}}
+	ret := ConfigureRehearsalJobs(jobs, config.CompoundCiopConfig{}, 1234, Loggers{logrus.New(), logrus.New()}, true, nil, profiles)
 	var names []string
 	for _, j := range ret {
 		if vs := j.Spec.Volumes; len(vs) == 0 {
@@ -97,7 +101,7 @@ func TestConfigureRehearsalJobs(t *testing.T) {
 		"rehearse-cluster-profile-changed-profile1-85c62707",
 	}
 	if !reflect.DeepEqual(expected, names) {
-		t.Fatalf("want %s, got %s", expected, names)
+		t.Fatal(diff.ObjectDiff(expected, names))
 	}
 }
 

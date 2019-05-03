@@ -149,7 +149,7 @@ func GetAllConfigsFromSHA(releaseRepoPath, sha string, logger *logrus.Entry) (*R
 	return config, nil
 }
 
-// GetChangedClusterProfiles returns the name and a hash of the contents of all
+// GetChangedClusterProfiles returns the path and a hash of the contents of all
 // cluster profiles that changed since the revision `baseRev`.
 func GetChangedClusterProfiles(path, baseRev string) ([]ClusterProfile, error) {
 	// Sample output (with abbreviated hashes) from git-diff-tree(1):
@@ -161,7 +161,10 @@ func GetChangedClusterProfiles(path, baseRev string) ([]ClusterProfile, error) {
 	}
 	var ret []ClusterProfile
 	for _, l := range strings.Split(strings.TrimSpace(diff), "\n") {
-		ret = append(ret, ClusterProfile{Name: l[99:], TreeHash: l[56:96]})
+		ret = append(ret, ClusterProfile{
+			Filename: filepath.Join(ClusterProfilesPath, l[99:]),
+			TreeHash: l[56:96],
+		})
 	}
 	return ret, nil
 }

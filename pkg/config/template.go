@@ -30,15 +30,19 @@ import (
 // CiTemplates is a map of all the changed templates
 type CiTemplates map[string][]byte
 type ClusterProfile struct {
-	Name, TreeHash string
+	Filename, TreeHash string
+}
+
+func (p ClusterProfile) Name() string {
+	return filepath.Base(p.Filename)
 }
 
 func (p ClusterProfile) CMName() string {
-	return ClusterProfilePrefix + p.Name
+	return ClusterProfilePrefix + p.Name()
 }
 
 func (p ClusterProfile) TempCMName() string {
-	return fmt.Sprintf("rehearse-cluster-profile-%s-%s", p.Name, p.TreeHash[:8])
+	return fmt.Sprintf("rehearse-cluster-profile-%s-%s", p.Name(), p.TreeHash[:8])
 }
 
 const (
@@ -149,7 +153,7 @@ func (c *TemplateCMManager) CreateClusterProfiles(profiles []ClusterProfile) err
 	}
 	changes := []prowgithub.PullRequestChange{}
 	for _, profile := range profiles {
-		err := filepath.Walk(filepath.Join(c.releaseRepoPath, ClusterProfilesPath, profile.Name), func(path string, info os.FileInfo, err error) error {
+		err := filepath.Walk(filepath.Join(c.releaseRepoPath, profile.Filename), func(path string, info os.FileInfo, err error) error {
 			if err != nil || info.IsDir() {
 				return err
 			}

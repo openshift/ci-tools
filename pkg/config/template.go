@@ -30,11 +30,19 @@ import (
 // CiTemplates is a map of all the changed templates
 type CiTemplates map[string][]byte
 type ClusterProfile struct {
-	Name, TreeHash string
+	Filename, TreeHash string
+}
+
+func (p ClusterProfile) Name() string {
+	return filepath.Base(p.Filename)
 }
 
 func (p ClusterProfile) CMName() string {
-	return fmt.Sprintf("rehearse-cluster-profile-%s-%s", p.Name, p.TreeHash[:5])
+	return ClusterProfilePrefix + p.Name()
+}
+
+func (p ClusterProfile) TempCMName() string {
+	return fmt.Sprintf("rehearse-cluster-profile-%s-%s", p.Name(), p.TreeHash[:8])
 }
 
 const (
@@ -126,10 +134,26 @@ func (g osFileGetter) GetFile(filename string) ([]byte, error) {
 	return ioutil.ReadFile(filepath.Join(g.root, filename))
 }
 
+func replaceSpecNames(cfg prowplugins.ConfigUpdater, mapping map[string]string) (ret prowplugins.ConfigUpdater) {
+	ret = cfg
+	ret.Maps = make(map[string]prowplugins.ConfigMapSpec, len(cfg.Maps))
+	for k, v := range cfg.Maps {
+		if name, ok := mapping[v.Name]; ok {
+			v.Name = name
+		}
+		ret.Maps[k] = v
+	}
+	return
+}
+
 func (c *TemplateCMManager) CreateClusterProfiles(profiles []ClusterProfile) error {
+	nameMap := make(map[string]string, len(profiles))
+	for _, p := range profiles {
+		nameMap[p.CMName()] = p.TempCMName()
+	}
 	changes := []prowgithub.PullRequestChange{}
 	for _, profile := range profiles {
-		err := filepath.Walk(filepath.Join(c.releaseRepoPath, ClusterProfilesPath, profile.Name), func(path string, info os.FileInfo, err error) error {
+		err := filepath.Walk(filepath.Join(c.releaseRepoPath, profile.Filename), func(path string, info os.FileInfo, err error) error {
 			if err != nil || info.IsDir() {
 				return err
 			}
@@ -147,21 +171,14 @@ func (c *TemplateCMManager) CreateClusterProfiles(profiles []ClusterProfile) err
 		}
 	}
 	var errs []error
-	for cm, data := range updateconfig.FilterChanges(c.configUpdaterCfg, changes, c.logger) {
-		profile := strings.TrimPrefix(cm.Name, "cluster-profile-")
-		for _, p := range profiles {
-			if p.Name == profile {
-				profile = p.CMName()
-				break
-			}
-		}
+	for cm, data := range updateconfig.FilterChanges(replaceSpecNames(c.configUpdaterCfg, nameMap), changes, c.logger) {
 		err := c.createCM(&v1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{Name: profile},
+			ObjectMeta: metav1.ObjectMeta{Name: cm.Name},
 			Data:       map[string]string{},
 		})
 		if err != nil && !kerrors.IsAlreadyExists(err) {
 			errs = append(errs, err)
-		} else if err := updateconfig.Update(osFileGetter{root: c.releaseRepoPath}, c.cmclient, profile, cm.Namespace, data, c.logger); err != nil {
+		} else if err := updateconfig.Update(osFileGetter{root: c.releaseRepoPath}, c.cmclient, cm.Name, cm.Namespace, data, c.logger); err != nil {
 			errs = append(errs, err)
 		}
 	}

@@ -1,6 +1,7 @@
 package diffs
 
 import (
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -481,7 +482,7 @@ func TestGetPresubmitsForClusterProfiles(t *testing.T) {
 						Sources: []v1.VolumeProjection{{
 							ConfigMap: &v1.ConfigMapProjection{
 								LocalObjectReference: v1.LocalObjectReference{
-									Name: "cluster-profile-" + p,
+									Name: config.ClusterProfilePrefix + p,
 								},
 							},
 						}},
@@ -498,9 +499,11 @@ func TestGetPresubmitsForClusterProfiles(t *testing.T) {
 		profiles []config.ClusterProfile
 		expected []string
 	}{{
-		id:       "empty",
-		cfg:      &prowconfig.Config{},
-		profiles: []config.ClusterProfile{{Name: "test-profile"}},
+		id:  "empty",
+		cfg: &prowconfig.Config{},
+		profiles: []config.ClusterProfile{{
+			Filename: filepath.Join(config.ClusterProfilesPath, "test-profile"),
+		}},
 	}, {
 		id: "not a kubernetes job",
 		cfg: &prowconfig.Config{
@@ -512,7 +515,9 @@ func TestGetPresubmitsForClusterProfiles(t *testing.T) {
 				},
 			},
 		},
-		profiles: []config.ClusterProfile{{Name: "test-profile"}},
+		profiles: []config.ClusterProfile{{
+			Filename: filepath.Join(config.ClusterProfilesPath, "test-profile"),
+		}},
 	}, {
 		id: "job doesn't use cluster profiles",
 		cfg: &prowconfig.Config{
@@ -524,7 +529,9 @@ func TestGetPresubmitsForClusterProfiles(t *testing.T) {
 				},
 			},
 		},
-		profiles: []config.ClusterProfile{{Name: "test-profile"}},
+		profiles: []config.ClusterProfile{{
+			Filename: filepath.Join(config.ClusterProfilesPath, "test-profile"),
+		}},
 	}, {
 		id: "job doesn't use the cluster profile",
 		cfg: &prowconfig.Config{
@@ -536,7 +543,9 @@ func TestGetPresubmitsForClusterProfiles(t *testing.T) {
 				},
 			},
 		},
-		profiles: []config.ClusterProfile{{Name: "test-profile"}},
+		profiles: []config.ClusterProfile{{
+			Filename: filepath.Join(config.ClusterProfilesPath, "test-profile"),
+		}},
 	}, {
 		id: "multiple jobs, one uses cluster the profile",
 		cfg: &prowconfig.Config{
@@ -552,7 +561,9 @@ func TestGetPresubmitsForClusterProfiles(t *testing.T) {
 				},
 			},
 		},
-		profiles: []config.ClusterProfile{{Name: "test-profile"}},
+		profiles: []config.ClusterProfile{{
+			Filename: filepath.Join(config.ClusterProfilesPath, "test-profile"),
+		}},
 		expected: []string{"uses-cluster-profile"},
 	}} {
 		t.Run(tc.id, func(t *testing.T) {

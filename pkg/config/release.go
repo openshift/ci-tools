@@ -26,6 +26,8 @@ const (
 	TemplatesPath = "ci-operator/templates"
 	// ClusterProfilesPath is where profiles are stored in the release repo
 	ClusterProfilesPath = "cluster/test-deploy"
+	// ClusterProfilePrefix is the prefix added to ConfigMap names
+	ClusterProfilePrefix = "cluster-profile-"
 )
 
 // ReleaseRepoConfig contains all configuration present in release repo (usually openshift/release)
@@ -147,16 +149,22 @@ func GetAllConfigsFromSHA(releaseRepoPath, sha string, logger *logrus.Entry) (*R
 	return config, nil
 }
 
-// GetChangedClusterProfiles returns the name and a hash of the contents of all
+// GetChangedClusterProfiles returns the path and a hash of the contents of all
 // cluster profiles that changed since the revision `baseRev`.
-func GetChangedClusterProfiles(path, baseRev string) (ret []ClusterProfile, err error) {
+func GetChangedClusterProfiles(path, baseRev string) ([]ClusterProfile, error) {
 	// Sample output (with abbreviated hashes) from git-diff-tree(1):
 	// :100644 100644 bcd1234 0123456 M file0
 	cmd := []string{"diff-tree", "--diff-filter=ABCMRTUX", baseRev + ":" + ClusterProfilesPath, "HEAD:" + ClusterProfilesPath}
-	if diff, err := git(path, cmd...); err == nil && diff != "" {
-		for _, l := range strings.Split(strings.TrimSpace(diff), "\n") {
-			ret = append(ret, ClusterProfile{Name: l[99:], TreeHash: l[56:96]})
-		}
+	diff, err := git(path, cmd...)
+	if err != nil || diff == "" {
+		return nil, err
 	}
-	return
+	var ret []ClusterProfile
+	for _, l := range strings.Split(strings.TrimSpace(diff), "\n") {
+		ret = append(ret, ClusterProfile{
+			Filename: filepath.Join(ClusterProfilesPath, l[99:]),
+			TreeHash: l[56:96],
+		})
+	}
+	return ret, nil
 }

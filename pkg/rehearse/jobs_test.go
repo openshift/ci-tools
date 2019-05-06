@@ -2,6 +2,7 @@ package rehearse
 
 import (
 	"fmt"
+	"path/filepath"
 	"reflect"
 	"sort"
 	"strconv"
@@ -66,23 +67,26 @@ func TestConfigureRehearsalJobs(t *testing.T) {
 			makePresubmit("no-profile", v1.PodSpec{Containers: []v1.Container{{}}}),
 			makePresubmit("unchanged-profile", v1.PodSpec{
 				Containers: []v1.Container{{}},
-				Volumes:    []v1.Volume{makeVoume("cluster-profile-unchanged")},
+				Volumes:    []v1.Volume{makeVoume(config.ClusterProfilePrefix + "unchanged")},
 			}),
 			makePresubmit("changed-profile0", v1.PodSpec{
 				Containers: []v1.Container{{}},
-				Volumes:    []v1.Volume{makeVoume("cluster-profile-changed-profile0")},
+				Volumes:    []v1.Volume{makeVoume(config.ClusterProfilePrefix + "changed-profile0")},
 			}),
 			makePresubmit("changed-profile1", v1.PodSpec{
 				Containers: []v1.Container{{}},
-				Volumes:    []v1.Volume{makeVoume("cluster-profile-changed-profile1")},
+				Volumes:    []v1.Volume{makeVoume(config.ClusterProfilePrefix + "changed-profile1")},
 			}),
 		},
 	}
-	profiles := []config.ClusterProfile{
-		{Name: "changed-profile0", TreeHash: "47f520ef9c2662fc9a2675f1dd4f02d5082b2776"},
-		{Name: "changed-profile1", TreeHash: "85c627078710b8beee65d06d0cf157094fc46b03"},
-	}
-	ret := ConfigureRehearsalJobs(jobs, config.CompoundCiopConfig{}, 1234, Loggers{logrus.New(), logrus.New()}, true, config.CiTemplates{}, profiles)
+	profiles := []config.ClusterProfile{{
+		TreeHash: "47f520ef9c2662fc9a2675f1dd4f02d5082b2776",
+		Filename: filepath.Join(config.ClusterProfilesPath, "changed-profile0"),
+	}, {
+		TreeHash: "85c627078710b8beee65d06d0cf157094fc46b03",
+		Filename: filepath.Join(config.ClusterProfilesPath, "changed-profile1"),
+	}}
+	ret := ConfigureRehearsalJobs(jobs, config.CompoundCiopConfig{}, 1234, Loggers{logrus.New(), logrus.New()}, true, nil, profiles)
 	var names []string
 	for _, j := range ret {
 		if vs := j.Spec.Volumes; len(vs) == 0 {
@@ -92,12 +96,12 @@ func TestConfigureRehearsalJobs(t *testing.T) {
 		}
 	}
 	expected := []string{
-		"", "cluster-profile-unchanged",
-		"rehearse-cluster-profile-changed-profile0-47f52",
-		"rehearse-cluster-profile-changed-profile1-85c62",
+		"", config.ClusterProfilePrefix + "unchanged",
+		"rehearse-cluster-profile-changed-profile0-47f520ef",
+		"rehearse-cluster-profile-changed-profile1-85c62707",
 	}
 	if !reflect.DeepEqual(expected, names) {
-		t.Fatalf("want %s, got %s", expected, names)
+		t.Fatal(diff.ObjectDiff(expected, names))
 	}
 }
 

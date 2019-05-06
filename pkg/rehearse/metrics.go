@@ -72,7 +72,7 @@ func (m *Metrics) RecordChangedTemplates(templates config.CiTemplates) {
 
 func (m *Metrics) RecordChangedClusterProfiles(ps []config.ClusterProfile) {
 	for _, p := range ps {
-		m.ChangedClusterProfiles = append(m.ChangedClusterProfiles, p.Name)
+		m.ChangedClusterProfiles = append(m.ChangedClusterProfiles, p.Name())
 	}
 }
 

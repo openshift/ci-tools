@@ -96,7 +96,7 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 }
 
 func getBaseCiTemplates(t *testing.T) CiTemplates {
-	testTemplatePath := filepath.Join(templatesPath, "test-template.yaml")
+	testTemplatePath := filepath.Join(templatesPath, "subdir/test-template.yaml")
 	contents, err := ioutil.ReadFile(testTemplatePath)
 	if err != nil {
 		t.Fatalf("could not read file %s for template: %v", testTemplatePath, err)
@@ -110,17 +110,23 @@ func TestCreateClusterProfiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(dir)
-	profiles := []ClusterProfile{
-		{Name: "profile0", TreeHash: "e92d4a5996a8a977bd7916b65488371331681f9d"},
-		{Name: "profile1", TreeHash: "a8c99ffc996128417ef1062f9783730a8c864586"},
-		{Name: "unchanged", TreeHash: "8012ff51a005eaa8ed8f4c08ccdce580f462fff6"},
-	}
+	profiles := []ClusterProfile{{
+		TreeHash: "e92d4a5996a8a977bd7916b65488371331681f9d",
+		Filename: filepath.Join(ClusterProfilesPath, "profile0"),
+	}, {
+		TreeHash: "a8c99ffc996128417ef1062f9783730a8c864586",
+		Filename: filepath.Join(ClusterProfilesPath, "profile1"),
+	}, {
+		TreeHash: "8012ff51a005eaa8ed8f4c08ccdce580f462fff6",
+		Filename: filepath.Join(ClusterProfilesPath, "unchanged"),
+	}}
 	for _, p := range profiles {
-		path := filepath.Join(dir, ClusterProfilesPath, p.Name)
+		path := filepath.Join(dir, p.Filename)
 		if err := os.MkdirAll(path, 0775); err != nil {
 			t.Fatal(err)
 		}
-		if err := ioutil.WriteFile(filepath.Join(path, "file"), []byte(p.Name+" content"), 0664); err != nil {
+		content := []byte(filepath.Base(p.Filename) + " content")
+		if err := ioutil.WriteFile(filepath.Join(path, "file"), content, 0664); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -130,15 +136,15 @@ func TestCreateClusterProfiles(t *testing.T) {
 	configUpdaterCfg := prowplugins.ConfigUpdater{
 		Maps: map[string]prowplugins.ConfigMapSpec{
 			filepath.Join(ClusterProfilesPath, "profile0", "file"): {
-				Name:       "cluster-profile-profile0",
+				Name:       ClusterProfilePrefix + "profile0",
 				Namespaces: []string{ns},
 			},
 			filepath.Join(ClusterProfilesPath, "profile1", "file"): {
-				Name:       "cluster-profile-profile1",
+				Name:       ClusterProfilePrefix + "profile1",
 				Namespaces: []string{ns},
 			},
 			filepath.Join(ClusterProfilesPath, "unchanged", "file"): {
-				Name:       "cluster-profile-unchanged",
+				Name:       ClusterProfilePrefix + "unchanged",
 				Namespaces: []string{ns},
 			},
 		},
@@ -158,7 +164,7 @@ func TestCreateClusterProfiles(t *testing.T) {
 	}
 	expected := []v1.ConfigMap{{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "rehearse-cluster-profile-profile0-e92d4",
+			Name:      "rehearse-cluster-profile-profile0-e92d4a59",
 			Namespace: ns,
 			Labels: map[string]string{
 				createByRehearse:  "true",
@@ -168,7 +174,7 @@ func TestCreateClusterProfiles(t *testing.T) {
 		Data: map[string]string{"file": "profile0 content"},
 	}, {
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "rehearse-cluster-profile-profile1-a8c99",
+			Name:      "rehearse-cluster-profile-profile1-a8c99ffc",
 			Namespace: ns,
 			Labels: map[string]string{
 				createByRehearse:  "true",

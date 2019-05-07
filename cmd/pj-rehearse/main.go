@@ -228,7 +228,7 @@ func rehearseMain() int {
 		return gracefulExit(o.noFail, misconfigurationOutput)
 	}
 
-	cmManager := config.NewTemplateCMManager(cmClient, pluginConfig, prNumber, o.releaseRepoPath, logger)
+	cmManager := config.NewTemplateCMManager(namespace, cmClient, pluginConfig, prNumber, o.releaseRepoPath, logger)
 	defer func() {
 		if err := cmManager.CleanupCMTemplates(); err != nil {
 			logger.WithError(err).Error("failed to clean up temporary template CM")

@@ -71,6 +71,7 @@ func getTemplates(templatePath string) (CiTemplates, error) {
 
 // TemplateCMManager holds the details needed for the configmap controller
 type TemplateCMManager struct {
+	namespace        string
 	cmclient         corev1.ConfigMapInterface
 	configUpdaterCfg prowplugins.ConfigUpdater
 	prNumber         int
@@ -80,6 +81,7 @@ type TemplateCMManager struct {
 
 // NewTemplateCMManager creates a new TemplateCMManager
 func NewTemplateCMManager(
+	namespace string,
 	cmclient corev1.ConfigMapInterface,
 	configUpdaterCfg prowplugins.ConfigUpdater,
 	prNumber int,
@@ -87,6 +89,7 @@ func NewTemplateCMManager(
 	logger *logrus.Entry,
 ) *TemplateCMManager {
 	return &TemplateCMManager{
+		namespace:        namespace,
 		cmclient:         cmclient,
 		configUpdaterCfg: configUpdaterCfg,
 		prNumber:         prNumber,
@@ -134,13 +137,17 @@ func (g osFileGetter) GetFile(filename string) ([]byte, error) {
 	return ioutil.ReadFile(filepath.Join(g.root, filename))
 }
 
-func replaceSpecNames(cfg prowplugins.ConfigUpdater, mapping map[string]string) (ret prowplugins.ConfigUpdater) {
+func replaceSpecNames(namespace string, cfg prowplugins.ConfigUpdater, mapping map[string]string) (ret prowplugins.ConfigUpdater) {
 	ret = cfg
 	ret.Maps = make(map[string]prowplugins.ConfigMapSpec, len(cfg.Maps))
 	for k, v := range cfg.Maps {
+		if v.Namespaces[0] != "" && v.Namespaces[0] != namespace {
+			continue
+		}
 		if name, ok := mapping[v.Name]; ok {
 			v.Name = name
 		}
+		v.Namespaces = []string{""}
 		ret.Maps[k] = v
 	}
 	return
@@ -171,7 +178,7 @@ func (c *TemplateCMManager) CreateClusterProfiles(profiles []ClusterProfile) err
 		}
 	}
 	var errs []error
-	for cm, data := range updateconfig.FilterChanges(replaceSpecNames(c.configUpdaterCfg, nameMap), changes, c.logger) {
+	for cm, data := range updateconfig.FilterChanges(replaceSpecNames(c.namespace, c.configUpdaterCfg, nameMap), changes, c.logger) {
 		err := c.createCM(&v1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{Name: cm.Name},
 			Data:       map[string]string{},

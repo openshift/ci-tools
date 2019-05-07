@@ -137,6 +137,26 @@ func (g osFileGetter) GetFile(filename string) ([]byte, error) {
 	return ioutil.ReadFile(filepath.Join(g.root, filename))
 }
 
+func genChanges(root, dir string) ([]prowgithub.PullRequestChange, error) {
+	var ret []prowgithub.PullRequestChange
+	err := filepath.Walk(filepath.Join(root, dir), func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return err
+		}
+		// Failure is impossible per filepath.Walk's API.
+		path, err = filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		ret = append(ret, prowgithub.PullRequestChange{
+			Filename: path,
+			Status:   string(prowgithub.PullRequestFileModified),
+		})
+		return nil
+	})
+	return ret, err
+}
+
 func replaceSpecNames(namespace string, cfg prowplugins.ConfigUpdater, mapping map[string]string) (ret prowplugins.ConfigUpdater) {
 	ret = cfg
 	ret.Maps = make(map[string]prowplugins.ConfigMapSpec, len(cfg.Maps))
@@ -154,28 +174,15 @@ func replaceSpecNames(namespace string, cfg prowplugins.ConfigUpdater, mapping m
 }
 
 func (c *TemplateCMManager) CreateClusterProfiles(profiles []ClusterProfile) error {
+	var changes []prowgithub.PullRequestChange
 	nameMap := make(map[string]string, len(profiles))
 	for _, p := range profiles {
-		nameMap[p.CMName()] = p.TempCMName()
-	}
-	changes := []prowgithub.PullRequestChange{}
-	for _, profile := range profiles {
-		err := filepath.Walk(filepath.Join(c.releaseRepoPath, profile.Filename), func(path string, info os.FileInfo, err error) error {
-			if err != nil || info.IsDir() {
-				return err
-			}
-			// Failure is impossible per filepath.Walk's API.
-			if path, err = filepath.Rel(c.releaseRepoPath, path); err == nil {
-				changes = append(changes, prowgithub.PullRequestChange{
-					Filename: path,
-					Status:   string(prowgithub.PullRequestFileModified),
-				})
-			}
-			return err
-		})
+		c, err := genChanges(c.releaseRepoPath, p.Filename)
 		if err != nil {
 			return err
 		}
+		changes = append(changes, c...)
+		nameMap[p.CMName()] = p.TempCMName()
 	}
 	var errs []error
 	for cm, data := range updateconfig.FilterChanges(replaceSpecNames(c.namespace, c.configUpdaterCfg, nameMap), changes, c.logger) {

@@ -540,6 +540,8 @@ k8s.io/test-infra v0.0.0-20190419141755-2128cd49ec49 h1:PQA4pBitfxlRosLsKLHvsWqi
 k8s.io/test-infra v0.0.0-20190419141755-2128cd49ec49/go.mod h1:efXtKqqgOwqGIGXp/07+8yYqU6gLruGy1ZCsJP92WIY=
 k8s.io/test-infra v0.0.0-20190427170421-2228dd155e83 h1:ejcxndaP8JPFnLe0iBJnxAh9c0bZasVCBqQ7AdnoINw=
 k8s.io/test-infra v0.0.0-20190427170421-2228dd155e83/go.mod h1:au9sNJng6j7WArFJTbSQUPgxpFnSCwJkOyPc4lyBHuI=
+k8s.io/test-infra v0.0.0-20190507120946-f699675303ae h1:ZQT2WAlw3rQ4ZvirLbc+yT6KdYU9H+Cr/7PCq6iIZB4=
+k8s.io/test-infra v0.0.0-20190507120946-f699675303ae/go.mod h1:2wpqH1meBDeotw8vmDrRw9FLbmDb/PZNwsW/5GxI0Jc=
 k8s.io/utils v0.0.0-20181019225348-5e321f9a457c/go.mod h1:8k8uAuAQ0rXslZKaEWd0c3oVhZz7sSzSiPnVZayjIX0=
 mvdan.cc/xurls/v2 v2.0.0/go.mod h1:2/webFPYOXN9jp/lzuj0zuAVlF+9g4KPFJANH1oJhRU=
 sigs.k8s.io/yaml v1.1.0 h1:4A07+ZFc2wgJwo8YNlQpr1rVlgUDlxXHhPJciaPY5gs=

@@ -442,7 +442,7 @@ k8s.io/client-go/util/jsonpath
 k8s.io/client-go/third_party/forked/golang/template
 # k8s.io/kube-openapi v0.0.0-20180711000925-0cf8f7e6ed1d
 k8s.io/kube-openapi/pkg/util/proto
-# k8s.io/test-infra v0.0.0-20190427170421-2228dd155e83
+# k8s.io/test-infra v0.0.0-20190507120946-f699675303ae
 k8s.io/test-infra/prow/apis/prowjobs/v1
 k8s.io/test-infra/prow/config
 k8s.io/test-infra/prow/hook

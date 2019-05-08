@@ -24,11 +24,10 @@ require (
 	golang.org/x/build v0.0.0-20190314133821-5284462c4bec // indirect
 	golang.org/x/oauth2 v0.0.0-20190226205417-e64efc72b421
 	golang.org/x/sync v0.0.0-20190227155943-e225da77a7e6
-	golang.org/x/text v0.3.2 // indirect
 	google.golang.org/api v0.3.2
 	gopkg.in/cheggaaa/pb.v1 v1.0.28 // indirect
 	k8s.io/api v0.0.0-20181128191700-6db15a15d2d3
 	k8s.io/apimachinery v0.0.0-20181128191346-49ce2735e507
 	k8s.io/client-go v9.0.0+incompatible
-	k8s.io/test-infra v0.0.0-20190427170421-2228dd155e83
+	k8s.io/test-infra v0.0.0-20190507120946-f699675303ae
 )

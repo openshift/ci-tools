@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -915,6 +916,39 @@ func (o *options) saveNamespaceArtifacts() {
 	}
 }
 
+func sentryOptionsFromJobSpec(jobSpec *api.JobSpec) []sentry.Option {
+	tags := map[string]string{
+		"prowjob-type": string(jobSpec.Type),
+		"job":          jobSpec.Job,
+		"build-id":     jobSpec.BuildId,
+		"prowjob-id":   jobSpec.ProwJobID,
+	}
+
+	userInfo := sentry.UserInfo{ID: "ci-operator", Username: "ci-operator"}
+
+	if jobSpec.Refs != nil {
+		tags["org"] = jobSpec.Refs.Org
+		tags["repo"] = jobSpec.Refs.Repo
+		tags["base-ref"] = jobSpec.Refs.BaseRef
+		tags["base-sha"] = jobSpec.Refs.BaseSHA
+
+		if len(jobSpec.Refs.Pulls) == 1 {
+			tags["pull-request"] = strconv.Itoa(jobSpec.Refs.Pulls[0].Number)
+			tags["pull-request-sha"] = jobSpec.Refs.Pulls[0].SHA
+			userInfo.Username = jobSpec.Refs.Pulls[0].Author
+			userInfo.ID = jobSpec.Refs.Pulls[0].Author
+		} else if len(jobSpec.Refs.Pulls) > 1 {
+			var prs []string
+			for _, pull := range jobSpec.Refs.Pulls {
+				prs = append(prs, strconv.Itoa(pull.Number))
+			}
+			tags["pull-requests"] = strings.Join(prs, ",")
+		}
+	}
+
+	return []sentry.Option{sentry.Tags(tags), sentry.User(&userInfo)}
+}
+
 func (o *options) reportToSentry(toReport error) {
 	if o.sentryDSNPath == "" || toReport == nil {
 		return
@@ -927,7 +961,10 @@ func (o *options) reportToSentry(toReport error) {
 	}
 	dsn := strings.TrimSpace(string(rawDsn))
 	sc := sentry.NewClient(sentry.DSN(dsn))
-	qEvent := sc.Capture(sentry.Message(toReport.Error()))
+
+	sentryOpts := sentryOptionsFromJobSpec(o.jobSpec)
+	sentryOpts = append(sentryOpts, sentry.Message(toReport.Error()))
+	qEvent := sc.Capture(sentryOpts...)
 
 	select {
 	case err := <-qEvent.WaitChannel():

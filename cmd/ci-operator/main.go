@@ -36,7 +36,7 @@ import (
 
 	"github.com/ghodss/yaml"
 
-	"gopkg.in/SierraSoftworks/sentry-go.v1"
+	"github.com/SierraSoftworks/sentry-go"
 
 	imageapi "github.com/openshift/api/image/v1"
 	projectapi "github.com/openshift/api/project/v1"

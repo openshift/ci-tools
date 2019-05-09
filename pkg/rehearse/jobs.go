@@ -245,7 +245,7 @@ func AddRandomJobsForChangedTemplates(templates config.CiTemplates, prConfigPres
 	rehearsals := make(config.Presubmits)
 
 	for templateFile := range templates {
-		for _, clusterType := range []string{"aws", "gcs", "openstack", "libvirt", "vsphere"} {
+		for _, clusterType := range []string{"aws", "gcs", "openstack", "libvirt", "vsphere", "gcp"} {
 			if repo, job := pickTemplateJob(prConfigPresubmits, templateFile, clusterType); job != nil {
 				jobLogger := loggers.Job.WithFields(logrus.Fields{"target-repo": repo, "target-job": job.Name})
 				jobLogger.Info("Picking job to rehearse the template changes")

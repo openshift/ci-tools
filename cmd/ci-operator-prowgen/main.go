@@ -22,6 +22,11 @@ import (
 
 const (
 	prowJobLabelVariant = "ci-operator.openshift.io/variant"
+
+	sentryDsnMountName  = "sentry-dsn"
+	sentryDsnSecretName = "sentry-dsn"
+	sentryDsnMountPath  = "/etc/sentry-dsn"
+	sentryDsnSecretPath = "/etc/sentry-dsn/ci-operator"
 )
 
 type options struct {
@@ -102,13 +107,29 @@ func generatePodSpec(info *config.Info, target string, additionalArgs ...string)
 				Image:           "ci-operator:latest",
 				ImagePullPolicy: kubeapi.PullAlways,
 				Command:         []string{"ci-operator"},
-				Args:            append([]string{"--give-pr-author-access-to-namespace=true", "--artifact-dir=$(ARTIFACTS)", fmt.Sprintf("--target=%s", target)}, additionalArgs...),
-				Env:             []kubeapi.EnvVar{{Name: "CONFIG_SPEC", ValueFrom: &configMapKeyRef}},
+				Args: append([]string{
+					"--give-pr-author-access-to-namespace=true",
+					"--artifact-dir=$(ARTIFACTS)",
+					fmt.Sprintf("--target=%s", target),
+					fmt.Sprintf("--sentry-dsn-path=%s", sentryDsnSecretPath),
+				}, additionalArgs...),
+				Env: []kubeapi.EnvVar{{Name: "CONFIG_SPEC", ValueFrom: &configMapKeyRef}},
 				Resources: kubeapi.ResourceRequirements{
 					Requests: kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
 				},
+				VolumeMounts: []kubeapi.VolumeMount{{
+					Name:      sentryDsnMountName,
+					MountPath: sentryDsnMountPath,
+					ReadOnly:  true,
+				}},
 			},
 		},
+		Volumes: []kubeapi.Volume{{
+			Name: sentryDsnMountName,
+			VolumeSource: kubeapi.VolumeSource{
+				Secret: &kubeapi.SecretVolumeSource{SecretName: sentryDsnSecretName},
+			},
+		}},
 	}
 }
 

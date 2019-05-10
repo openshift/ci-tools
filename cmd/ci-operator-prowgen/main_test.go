@@ -41,7 +41,12 @@ func TestGeneratePodSpec(t *testing.T) {
 					Image:           "ci-operator:latest",
 					ImagePullPolicy: kubeapi.PullAlways,
 					Command:         []string{"ci-operator"},
-					Args:            []string{"--give-pr-author-access-to-namespace=true", "--artifact-dir=$(ARTIFACTS)", "--target=target"},
+					Args: []string{
+						"--give-pr-author-access-to-namespace=true",
+						"--artifact-dir=$(ARTIFACTS)",
+						"--target=target",
+						"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
+					},
 					Resources: kubeapi.ResourceRequirements{
 						Requests: kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
 					},
@@ -56,6 +61,13 @@ func TestGeneratePodSpec(t *testing.T) {
 							},
 						},
 					}},
+					VolumeMounts: []kubeapi.VolumeMount{{Name: "sentry-dsn", MountPath: "/etc/sentry-dsn", ReadOnly: true}},
+				}},
+				Volumes: []kubeapi.Volume{{
+					Name: "sentry-dsn",
+					VolumeSource: kubeapi.VolumeSource{
+						Secret: &kubeapi.SecretVolumeSource{SecretName: "sentry-dsn"},
+					},
 				}},
 			},
 		},
@@ -70,7 +82,14 @@ func TestGeneratePodSpec(t *testing.T) {
 					Image:           "ci-operator:latest",
 					ImagePullPolicy: kubeapi.PullAlways,
 					Command:         []string{"ci-operator"},
-					Args:            []string{"--give-pr-author-access-to-namespace=true", "--artifact-dir=$(ARTIFACTS)", "--target=target", "--promote", "--some=thing"},
+					Args: []string{
+						"--give-pr-author-access-to-namespace=true",
+						"--artifact-dir=$(ARTIFACTS)",
+						"--target=target",
+						"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
+						"--promote",
+						"--some=thing",
+					},
 					Resources: kubeapi.ResourceRequirements{
 						Requests: kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
 					},
@@ -85,6 +104,13 @@ func TestGeneratePodSpec(t *testing.T) {
 							},
 						},
 					}},
+					VolumeMounts: []kubeapi.VolumeMount{{Name: "sentry-dsn", MountPath: "/etc/sentry-dsn", ReadOnly: true}},
+				}},
+				Volumes: []kubeapi.Volume{{
+					Name: "sentry-dsn",
+					VolumeSource: kubeapi.VolumeSource{
+						Secret: &kubeapi.SecretVolumeSource{SecretName: "sentry-dsn"},
+					},
 				}},
 			},
 		},
@@ -125,6 +151,12 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 			expected: &kubeapi.PodSpec{
 				ServiceAccountName: "ci-operator",
 				Volumes: []kubeapi.Volume{
+					{
+						Name: "sentry-dsn",
+						VolumeSource: kubeapi.VolumeSource{
+							Secret: &kubeapi.SecretVolumeSource{SecretName: "sentry-dsn"},
+						},
+					},
 					{
 						Name: "job-definition",
 						VolumeSource: kubeapi.VolumeSource{
@@ -167,6 +199,7 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						"--give-pr-author-access-to-namespace=true",
 						"--artifact-dir=$(ARTIFACTS)",
 						"--target=test",
+						"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
 						"--secret-dir=/usr/local/test-cluster-profile",
 						"--template=/usr/local/test"},
 					Resources: kubeapi.ResourceRequirements{
@@ -190,6 +223,7 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						{Name: "RPM_REPO_OPENSHIFT_ORIGIN", Value: "https://rpms.svc.ci.openshift.org/openshift-origin-v4.0/"},
 					},
 					VolumeMounts: []kubeapi.VolumeMount{
+						{Name: "sentry-dsn", MountPath: "/etc/sentry-dsn", ReadOnly: true},
 						{Name: "cluster-profile", MountPath: "/usr/local/test-cluster-profile"},
 						{Name: "job-definition", MountPath: "/usr/local/test", SubPath: "cluster-launch-e2e.yaml"},
 					},
@@ -210,6 +244,12 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 			expected: &kubeapi.PodSpec{
 				ServiceAccountName: "ci-operator",
 				Volumes: []kubeapi.Volume{
+					{
+						Name: "sentry-dsn",
+						VolumeSource: kubeapi.VolumeSource{
+							Secret: &kubeapi.SecretVolumeSource{SecretName: "sentry-dsn"},
+						},
+					},
 					{
 						Name: "job-definition",
 						VolumeSource: kubeapi.VolumeSource{
@@ -245,6 +285,7 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						"--give-pr-author-access-to-namespace=true",
 						"--artifact-dir=$(ARTIFACTS)",
 						"--target=test",
+						"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
 						"--secret-dir=/usr/local/test-cluster-profile",
 						"--template=/usr/local/test"},
 					Resources: kubeapi.ResourceRequirements{
@@ -267,6 +308,7 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						{Name: "TEST_COMMAND", Value: "commands"},
 					},
 					VolumeMounts: []kubeapi.VolumeMount{
+						{Name: "sentry-dsn", MountPath: "/etc/sentry-dsn", ReadOnly: true},
 						{Name: "cluster-profile", MountPath: "/usr/local/test-cluster-profile"},
 						{Name: "job-definition", MountPath: "/usr/local/test", SubPath: "cluster-launch-installer-e2e.yaml"},
 					},
@@ -714,6 +756,7 @@ tests:
         - --artifact-dir=$(ARTIFACTS)
         - --give-pr-author-access-to-namespace=true
         - --promote
+        - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=[images]
         command:
         - ci-operator
@@ -729,7 +772,15 @@ tests:
         resources:
           requests:
             cpu: 10m
+        volumeMounts:
+        - mountPath: /etc/sentry-dsn
+          name: sentry-dsn
+          readOnly: true
       serviceAccountName: ci-operator
+      volumes:
+      - name: sentry-dsn
+        secret:
+          secretName: sentry-dsn
 `),
 			prowExpectedPresubmitYAML: []byte(`presubmits:
   super/duper:
@@ -750,6 +801,7 @@ tests:
       - args:
         - --artifact-dir=$(ARTIFACTS)
         - --give-pr-author-access-to-namespace=true
+        - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=[images]
         command:
         - ci-operator
@@ -765,7 +817,15 @@ tests:
         resources:
           requests:
             cpu: 10m
+        volumeMounts:
+        - mountPath: /etc/sentry-dsn
+          name: sentry-dsn
+          readOnly: true
       serviceAccountName: ci-operator
+      volumes:
+      - name: sentry-dsn
+        secret:
+          secretName: sentry-dsn
     trigger: '(?m)^/test (?:.*? )?images(?: .*?)?$'
   - agent: kubernetes
     always_run: true
@@ -784,6 +844,7 @@ tests:
       - args:
         - --artifact-dir=$(ARTIFACTS)
         - --give-pr-author-access-to-namespace=true
+        - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=unit
         command:
         - ci-operator
@@ -799,7 +860,15 @@ tests:
         resources:
           requests:
             cpu: 10m
+        volumeMounts:
+        - mountPath: /etc/sentry-dsn
+          name: sentry-dsn
+          readOnly: true
       serviceAccountName: ci-operator
+      volumes:
+      - name: sentry-dsn
+        secret:
+          secretName: sentry-dsn
     trigger: '(?m)^/test (?:.*? )?unit(?: .*?)?$'
 `),
 		}, {
@@ -894,6 +963,7 @@ tests:
       - args:
         - --artifact-dir=$(ARTIFACTS)
         - --give-pr-author-access-to-namespace=true
+        - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=[images]
         command:
         - ci-operator
@@ -909,7 +979,15 @@ tests:
         resources:
           requests:
             cpu: 10m
+        volumeMounts:
+        - mountPath: /etc/sentry-dsn
+          name: sentry-dsn
+          readOnly: true
       serviceAccountName: ci-operator
+      volumes:
+      - name: sentry-dsn
+        secret:
+          secretName: sentry-dsn
     trigger: '(?m)^/test (?:.*? )?rhel-images(?: .*?)?$'
   - agent: kubernetes
     always_run: true
@@ -929,6 +1007,7 @@ tests:
       - args:
         - --artifact-dir=$(ARTIFACTS)
         - --give-pr-author-access-to-namespace=true
+        - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=unit
         command:
         - ci-operator
@@ -944,7 +1023,15 @@ tests:
         resources:
           requests:
             cpu: 10m
+        volumeMounts:
+        - mountPath: /etc/sentry-dsn
+          name: sentry-dsn
+          readOnly: true
       serviceAccountName: ci-operator
+      volumes:
+      - name: sentry-dsn
+        secret:
+          secretName: sentry-dsn
     trigger: '(?m)^/test (?:.*? )?rhel-unit(?: .*?)?$'
 `),
 			prowExpectedPostsubmitYAML: []byte(`postsubmits:
@@ -993,6 +1080,7 @@ tests:
         - --artifact-dir=$(ARTIFACTS)
         - --give-pr-author-access-to-namespace=true
         - --promote
+        - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=[images]
         command:
         - ci-operator
@@ -1008,7 +1096,15 @@ tests:
         resources:
           requests:
             cpu: 10m
+        volumeMounts:
+        - mountPath: /etc/sentry-dsn
+          name: sentry-dsn
+          readOnly: true
       serviceAccountName: ci-operator
+      volumes:
+      - name: sentry-dsn
+        secret:
+          secretName: sentry-dsn
 `),
 		}, {
 			id:        "Input is YAML and it is correctly processed",
@@ -1099,6 +1195,7 @@ tests:
       - args:
         - --artifact-dir=$(ARTIFACTS)
         - --give-pr-author-access-to-namespace=true
+        - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=[images]
         command:
         - ci-operator
@@ -1114,7 +1211,15 @@ tests:
         resources:
           requests:
             cpu: 10m
+        volumeMounts:
+        - mountPath: /etc/sentry-dsn
+          name: sentry-dsn
+          readOnly: true
       serviceAccountName: ci-operator
+      volumes:
+      - name: sentry-dsn
+        secret:
+          secretName: sentry-dsn
     trigger: '(?m)^/test (?:.*? )?images(?: .*?)?$'
   - agent: kubernetes
     always_run: true
@@ -1133,6 +1238,7 @@ tests:
       - args:
         - --artifact-dir=$(ARTIFACTS)
         - --give-pr-author-access-to-namespace=true
+        - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=unit
         command:
         - ci-operator
@@ -1148,7 +1254,15 @@ tests:
         resources:
           requests:
             cpu: 10m
+        volumeMounts:
+        - mountPath: /etc/sentry-dsn
+          name: sentry-dsn
+          readOnly: true
       serviceAccountName: ci-operator
+      volumes:
+      - name: sentry-dsn
+        secret:
+          secretName: sentry-dsn
     trigger: '(?m)^/test (?:.*? )?unit(?: .*?)?$'
 `),
 			prowExpectedPostsubmitYAML: []byte(`postsubmits:
@@ -1194,6 +1308,7 @@ tests:
         - --artifact-dir=$(ARTIFACTS)
         - --give-pr-author-access-to-namespace=true
         - --promote
+        - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=[images]
         command:
         - ci-operator
@@ -1209,7 +1324,15 @@ tests:
         resources:
           requests:
             cpu: 10m
+        volumeMounts:
+        - mountPath: /etc/sentry-dsn
+          name: sentry-dsn
+          readOnly: true
       serviceAccountName: ci-operator
+      volumes:
+      - name: sentry-dsn
+        secret:
+          secretName: sentry-dsn
 `),
 		},
 	}

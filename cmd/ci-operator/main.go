@@ -17,13 +17,11 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/golang/glog"
-
-	"github.com/openshift/ci-operator/pkg/defaults"
-	"github.com/openshift/ci-operator/pkg/load"
 
 	coreapi "k8s.io/api/core/v1"
 	rbacapi "k8s.io/api/rbac/v1"
@@ -38,6 +36,8 @@ import (
 
 	"github.com/ghodss/yaml"
 
+	"github.com/SierraSoftworks/sentry-go"
+
 	imageapi "github.com/openshift/api/image/v1"
 	projectapi "github.com/openshift/api/project/v1"
 	templateapi "github.com/openshift/api/template/v1"
@@ -48,8 +48,10 @@ import (
 	templateclientset "github.com/openshift/client-go/template/clientset/versioned/typed/template/v1"
 
 	"github.com/openshift/ci-operator/pkg/api"
+	"github.com/openshift/ci-operator/pkg/defaults"
 	"github.com/openshift/ci-operator/pkg/interrupt"
 	"github.com/openshift/ci-operator/pkg/junit"
+	"github.com/openshift/ci-operator/pkg/load"
 	"github.com/openshift/ci-operator/pkg/steps"
 )
 
@@ -213,6 +215,8 @@ type options struct {
 	givePrAuthorAccessToNamespace bool
 	impersonateUser               string
 	authors                       []string
+
+	sentryDSNPath string
 }
 
 func bindOptions(flag *flag.FlagSet) *options {
@@ -254,6 +258,7 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.StringVar(&opt.gitRef, "git-ref", "", "Populate the job spec from this local Git reference. If JOB_SPEC is set, the refs field will be overwritten.")
 	flag.BoolVar(&opt.givePrAuthorAccessToNamespace, "give-pr-author-access-to-namespace", false, "Give view access to the temporarily created namespace to the PR author.")
 	flag.StringVar(&opt.impersonateUser, "as", "", "Username to impersonate")
+	flag.StringVar(&opt.sentryDSNPath, "sentry-dsn-path", "", "Path to a file containing Sentry DSN. Enables reporting errors to Sentry")
 
 	return opt
 }
@@ -465,6 +470,7 @@ func (o *options) Run() error {
 		}
 		if err != nil {
 			if !o.dry {
+				o.reportToSentry(err)
 				eventRecorder.Event(runtimeObject, coreapi.EventTypeWarning, "CiJobFailed", eventJobDescription(o.jobSpec, o.namespace))
 				time.Sleep(time.Second)
 			}
@@ -907,6 +913,68 @@ func (o *options) saveNamespaceArtifacts() {
 		templateInstances, _ := templateClient.TemplateInstances(o.namespace).List(meta.ListOptions{})
 		data, _ := json.MarshalIndent(templateInstances, "", "  ")
 		ioutil.WriteFile(filepath.Join(namespaceDir, "templateinstances.json"), data, 0644)
+	}
+}
+
+func sentryOptionsFromJobSpec(jobSpec *api.JobSpec) []sentry.Option {
+	tags := map[string]string{
+		"prowjob-type": string(jobSpec.Type),
+		"job":          jobSpec.Job,
+		"build-id":     jobSpec.BuildId,
+		"prowjob-id":   jobSpec.ProwJobID,
+	}
+
+	userInfo := sentry.UserInfo{ID: "ci-operator", Username: "ci-operator"}
+
+	if jobSpec.Refs != nil {
+		tags["org"] = jobSpec.Refs.Org
+		tags["repo"] = jobSpec.Refs.Repo
+		tags["base-ref"] = jobSpec.Refs.BaseRef
+		tags["base-sha"] = jobSpec.Refs.BaseSHA
+
+		if len(jobSpec.Refs.Pulls) == 1 {
+			tags["pull-request"] = strconv.Itoa(jobSpec.Refs.Pulls[0].Number)
+			tags["pull-request-sha"] = jobSpec.Refs.Pulls[0].SHA
+			userInfo.Username = jobSpec.Refs.Pulls[0].Author
+			userInfo.ID = jobSpec.Refs.Pulls[0].Author
+		} else if len(jobSpec.Refs.Pulls) > 1 {
+			var prs []string
+			for _, pull := range jobSpec.Refs.Pulls {
+				prs = append(prs, strconv.Itoa(pull.Number))
+			}
+			tags["pull-requests"] = strings.Join(prs, ",")
+		}
+	}
+
+	return []sentry.Option{sentry.Tags(tags), sentry.User(&userInfo)}
+}
+
+func (o *options) reportToSentry(toReport error) {
+	if o.sentryDSNPath == "" || toReport == nil {
+		return
+	}
+
+	rawDsn, err := ioutil.ReadFile(o.sentryDSNPath)
+	if err != nil {
+		log.Printf("Failed to read Sentry DSN from %s: %v", o.sentryDSNPath, err)
+		return
+	}
+	dsn := strings.TrimSpace(string(rawDsn))
+	sc := sentry.NewClient(sentry.DSN(dsn))
+
+	sentryOpts := sentryOptionsFromJobSpec(o.jobSpec)
+	sentryOpts = append(sentryOpts, sentry.Message(toReport.Error()))
+	qEvent := sc.Capture(sentryOpts...)
+
+	select {
+	case err := <-qEvent.WaitChannel():
+		if err != nil {
+			log.Printf("Failed to submit failure event to Sentry: %v", err)
+		} else {
+			log.Printf("Submitted failure event to sentry (id=%s)", qEvent.EventID())
+		}
+	case <-time.After(5 * time.Second):
+		log.Printf("Failed to submit failure event to Sentry before 5s timeout")
 	}
 }
 

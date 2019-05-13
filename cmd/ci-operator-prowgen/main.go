@@ -135,6 +135,7 @@ func generatePodSpecTemplate(info *config.Info, release string, test *cioperator
 	} else if conf := test.OpenshiftAnsible40ClusterTestConfiguration; conf != nil {
 		template = "cluster-scaleup-e2e-40"
 		clusterProfile = conf.ClusterProfile
+		needsReleaseRpms = true
 	} else if conf := test.OpenshiftInstallerClusterTestConfiguration; conf != nil {
 		if !conf.Upgrade {
 			template = "cluster-launch-installer-e2e"

@@ -2,6 +2,7 @@ package rehearse
 
 import (
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -66,15 +67,6 @@ func NewProwJobClient(clusterConfig *rest.Config, namespace string, dry bool) (p
 func NewCMClient(clusterConfig *rest.Config, namespace string, dry bool) (coreclientset.ConfigMapInterface, error) {
 	if dry {
 		c := fake.NewSimpleClientset()
-		c.PrependReactor("create", "configmaps", func(action coretesting.Action) (bool, runtime.Object, error) {
-			cm := action.(coretesting.CreateAction).GetObject().(*v1.ConfigMap)
-			y, err := yaml.Marshal([]*v1.ConfigMap{cm})
-			if err != nil {
-				return true, nil, fmt.Errorf("failed to convert ConfigMap to YAML: %v", err)
-			}
-			fmt.Print(string(y))
-			return false, nil, nil
-		})
 		c.PrependReactor("update", "configmaps", func(action coretesting.Action) (bool, runtime.Object, error) {
 			cm := action.(coretesting.UpdateAction).GetObject().(*v1.ConfigMap)
 			y, err := yaml.Marshal([]*v1.ConfigMap{cm})
@@ -207,6 +199,13 @@ func inlineCiOpConfig(job *prowconfig.Presubmit, targetRepo string, ciopConfigs 
 // ConfigureRehearsalJobs filters the jobs that should be rehearsed, then return a list of them re-configured with the
 // ci-operator's configuration inlined.
 func ConfigureRehearsalJobs(toBeRehearsed config.Presubmits, ciopConfigs config.CompoundCiopConfig, prNumber int, loggers Loggers, allowVolumes bool, templates config.CiTemplates, profiles []config.ClusterProfile) []*prowconfig.Presubmit {
+	var templateMap map[string]string
+	if allowVolumes {
+		templateMap = make(map[string]string, len(templates))
+		for f, t := range templates {
+			templateMap[filepath.Base(f)] = config.GetTempCMName(config.GetTemplateName(f), f, t)
+		}
+	}
 	rehearsals := []*prowconfig.Presubmit{}
 
 	rehearsalsFiltered := filterJobs(toBeRehearsed, allowVolumes, loggers.Job)
@@ -226,7 +225,7 @@ func ConfigureRehearsalJobs(toBeRehearsed config.Presubmits, ciopConfigs config.
 			}
 
 			if allowVolumes {
-				replaceCMTemplateName(rehearsal.Spec.Containers[0].VolumeMounts, rehearsal.Spec.Volumes, templates)
+				replaceCMTemplateName(rehearsal.Spec.Containers[0].VolumeMounts, rehearsal.Spec.Volumes, templateMap)
 				replaceClusterProfiles(rehearsal.Spec.Volumes, profiles, loggers.Debug.WithField("name", job.Name))
 			}
 
@@ -245,6 +244,7 @@ func AddRandomJobsForChangedTemplates(templates config.CiTemplates, prConfigPres
 	rehearsals := make(config.Presubmits)
 
 	for templateFile := range templates {
+		templateFile = filepath.Base(templateFile)
 		for _, clusterType := range []string{"aws", "gcs", "openstack", "libvirt", "vsphere", "gcp"} {
 			if repo, job := pickTemplateJob(prConfigPresubmits, templateFile, clusterType); job != nil {
 				jobLogger := loggers.Job.WithFields(logrus.Fields{"target-repo": repo, "target-job": job.Name})
@@ -256,12 +256,12 @@ func AddRandomJobsForChangedTemplates(templates config.CiTemplates, prConfigPres
 	return rehearsals
 }
 
-func replaceCMTemplateName(volumeMounts []v1.VolumeMount, volumes []v1.Volume, templates config.CiTemplates) {
+func replaceCMTemplateName(volumeMounts []v1.VolumeMount, volumes []v1.Volume, mapping map[string]string) {
 	for _, volume := range volumes {
 		for _, volumeMount := range volumeMounts {
 			filename := volumeMount.SubPath
-			if t, ok := templates[filename]; ok && volumeMount.Name == volume.Name {
-				volume.VolumeSource.ConfigMap.Name = config.GetTempCMName(config.GetTemplateName(filename), filename, t)
+			if t, ok := mapping[filename]; ok && volumeMount.Name == volume.Name {
+				volume.VolumeSource.ConfigMap.Name = t
 			}
 		}
 	}

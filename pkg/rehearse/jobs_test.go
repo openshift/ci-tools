@@ -833,10 +833,10 @@ func makeBasePresubmit() *prowconfig.Presubmit {
 func TestReplaceCMTemplateName(t *testing.T) {
 	const tempCMName = "rehearse-i0k3r9fp-test-template"
 
-	templates := config.CiTemplates{
-		"test-template.yaml":  []byte("test-template's content"),
-		"test-template2.yaml": []byte("test-template2's content"),
-		"test-template3.yaml": []byte("test-template3's content"),
+	templates := map[string]string{
+		"test-template.yaml":  tempCMName,
+		"test-template2.yaml": "template2",
+		"test-template3.yaml": "template3",
 	}
 
 	testCases := []struct {

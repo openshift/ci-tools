@@ -121,7 +121,7 @@ func generateBranchedConfigs(currentRelease, bumpRelease string, futureReleases 
 		futureConfig.PromotionConfiguration.Disabled = futureRelease == devRelease
 		// users can reference the release streams via build roots or
 		// input images, so we need to update those, too
-		updateImages(&futureConfig, currentRelease, futureRelease)
+		updateImages(&futureConfig, devRelease, futureRelease)
 
 		// this config will promote to the new location on the release branch
 		output = append(output, config.DataWithInfo{Configuration: futureConfig, Info: copyInfoSwappingBranches(input.Info, futureBranch)})

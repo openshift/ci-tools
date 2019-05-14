@@ -163,6 +163,9 @@ func main() {
 	}
 
 	if err := opt.Run(); err != nil {
+		if !opt.dry {
+			opt.reportToSentry(err)
+		}
 		fmt.Printf("error: %v\n", err)
 		opt.writeFailingJUnit(err)
 		os.Exit(1)
@@ -470,7 +473,6 @@ func (o *options) Run() error {
 		}
 		if err != nil {
 			if !o.dry {
-				o.reportToSentry(err)
 				eventRecorder.Event(runtimeObject, coreapi.EventTypeWarning, "CiJobFailed", eventJobDescription(o.jobSpec, o.namespace))
 				time.Sleep(time.Second)
 			}

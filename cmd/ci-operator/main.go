@@ -150,12 +150,6 @@ func main() {
 		os.Exit(0)
 	}
 
-	if err := opt.Validate(); err != nil {
-		fmt.Printf("error: %v\n", err)
-		opt.writeFailingJUnit(err)
-		os.Exit(1)
-	}
-
 	if err := opt.Complete(); err != nil {
 		fmt.Printf("error: %v\n", err)
 		opt.writeFailingJUnit(err)
@@ -264,10 +258,6 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.StringVar(&opt.sentryDSNPath, "sentry-dsn-path", "", "Path to a file containing Sentry DSN. Enables reporting errors to Sentry")
 
 	return opt
-}
-
-func (o *options) Validate() error {
-	return nil
 }
 
 func (o *options) Complete() error {

@@ -24,22 +24,17 @@ import (
 	prowplugins "k8s.io/test-infra/prow/plugins"
 )
 
-const testRepoPath = "../../test/pj-rehearse-integration/master"
-
-var testTemplatePath = filepath.Join(TemplatesPath, "subdir/test-template.yaml")
-
-func TestGetTemplates(t *testing.T) {
-	expectCiTemplates := getBaseCiTemplates(t)
-	if templates, err := getTemplates(testRepoPath); err != nil {
-		t.Fatalf("getTemplates() returned error: %v", err)
-	} else if !equality.Semantic.DeepEqual(templates, expectCiTemplates) {
-		t.Fatalf("Diff found %s", diff.ObjectReflectDiff(expectCiTemplates, templates))
-	}
-}
-
 func TestCreateCleanupCMTemplates(t *testing.T) {
+	testRepoPath := "../../test/pj-rehearse-integration/master"
+	testTemplatePath := filepath.Join(TemplatesPath, "subdir/test-template.yaml")
 	ns := "test-namespace"
-	ciTemplates := getBaseCiTemplates(t)
+	ciTemplates := CiTemplates{
+		testTemplatePath: "hd9sxk615lkcwx2kj226g3r3lvwkftyjif2pczm5dq3l0h13p35t",
+	}
+	contents, err := ioutil.ReadFile(filepath.Join(testRepoPath, testTemplatePath))
+	if err != nil {
+		t.Fatal(err)
+	}
 	configUpdaterCfg := prowplugins.ConfigUpdater{
 		Maps: map[string]prowplugins.ConfigMapSpec{
 			testTemplatePath: {
@@ -86,7 +81,7 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 	}
 	expected := []v1.ConfigMap{{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "rehearse-9nltqkt2-test-template",
+			Name:      "rehearse-hd9sxk61-test-template",
 			Namespace: ns,
 			Labels: map[string]string{
 				createByRehearse:  "true",
@@ -94,7 +89,7 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 			},
 		},
 		Data: map[string]string{
-			"test-template.yaml": string(ciTemplates[testTemplatePath]),
+			"test-template.yaml": string(contents),
 		},
 	}}
 	if !equality.Semantic.DeepEqual(expected, cms.Items) {
@@ -103,15 +98,6 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 	if err := cmManager.CleanupCMTemplates(); err != nil {
 		t.Fatalf("CleanupCMTemplates() returned error: %v", err)
 	}
-}
-
-func getBaseCiTemplates(t *testing.T) CiTemplates {
-	path := filepath.Join(testRepoPath, testTemplatePath)
-	contents, err := ioutil.ReadFile(path)
-	if err != nil {
-		t.Fatalf("could not read file %s for template: %v", path, err)
-	}
-	return CiTemplates{testTemplatePath: contents}
 }
 
 func TestCreateClusterProfiles(t *testing.T) {

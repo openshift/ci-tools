@@ -316,7 +316,9 @@ touch /tmp/done
 echo "Waiting for artifacts to be extracted"
 while true; do
 	if [[ ! -f /tmp/done ]]; then
-		echo "Artifacts extracted"
+		echo "Artifacts extracted, will terminate after 30s"
+		sleep 30
+		echo "Exiting"
 		exit 0
 	fi
 	sleep 5 & wait

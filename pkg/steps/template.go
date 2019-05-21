@@ -505,7 +505,9 @@ func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name st
 	}
 	if len(list.Items) != 1 {
 		notifier.Complete(name)
-		return false, fmt.Errorf("pod %s was already deleted", name)
+		log.Printf("error: could not wait for pod '%s': it is no longer present on the cluster"+
+			" (usually a result of a race or resource pressure. re-running the job should help)", name)
+		return false, fmt.Errorf("pod was deleted while ci-operator step was waiting for it")
 	}
 	pod := &list.Items[0]
 	if pod.Spec.RestartPolicy == coreapi.RestartPolicyAlways {

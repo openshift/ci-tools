@@ -346,6 +346,7 @@ const (
 	ClusterProfileAWSCentos                         = "aws-centos"
 	ClusterProfileAWSCentos40                       = "aws-centos-40"
 	ClusterProfileAWSGluster                        = "aws-gluster"
+	ClusterProfileAzure4                            = "azure4"
 	ClusterProfileGCP                               = "gcp"
 	ClusterProfileGCP40                             = "gcp-40"
 	ClusterProfileGCPHA                             = "gcp-ha"

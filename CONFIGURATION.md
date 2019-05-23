@@ -373,6 +373,7 @@ field is only valid in tests that provision a cluster (`openshift_ansible`,
 - `aws`
 - `aws-atomic`
 - `aws-centos`
+- `azure4`
 - `gcp`
 - `gcp-ha`
 - `gcp-crio`

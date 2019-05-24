@@ -254,6 +254,14 @@ func generatePodSpecTemplate(info *config.Info, release string, test *cioperator
 			Value: repoPath,
 		})
 	}
+	if conf := test.OpenshiftAnsible40ClusterTestConfiguration; conf != nil {
+		container.Env = append(
+			container.Env,
+			kubeapi.EnvVar{
+				Name:  "RPM_REPO_CRIO_DIR",
+				Value: fmt.Sprintf("%s-rhel-7", release)},
+		)
+	}
 	if conf := test.OpenshiftAnsibleUpgradeClusterTestConfiguration; conf != nil {
 		container.Env = append(
 			container.Env,

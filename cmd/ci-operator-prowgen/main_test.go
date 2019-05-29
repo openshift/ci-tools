@@ -354,7 +354,7 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 				Context: "ci/prow/testname",
 			},
 			RerunCommand: "/test testname",
-			Trigger:      "(?m)^/test (?:.*? )?testname(?: .*?)?$",
+			Trigger:      `(?m)^/test( | .* )testname,?($|\s.*)`,
 		},
 	}}
 	for _, tc := range tests {
@@ -826,7 +826,7 @@ tests:
       - name: sentry-dsn
         secret:
           secretName: sentry-dsn
-    trigger: '(?m)^/test (?:.*? )?images(?: .*?)?$'
+    trigger: (?m)^/test( | .* )images,?($|\s.*)
   - agent: kubernetes
     always_run: true
     branches:
@@ -869,7 +869,7 @@ tests:
       - name: sentry-dsn
         secret:
           secretName: sentry-dsn
-    trigger: '(?m)^/test (?:.*? )?unit(?: .*?)?$'
+    trigger: (?m)^/test( | .* )unit,?($|\s.*)
 `),
 		}, {
 			id:        "Using a variant config, one test and images, one existing job. Expect one presubmit, pre/post submit images jobs. Existing job should not be changed.",
@@ -988,7 +988,7 @@ tests:
       - name: sentry-dsn
         secret:
           secretName: sentry-dsn
-    trigger: '(?m)^/test (?:.*? )?rhel-images(?: .*?)?$'
+    trigger: (?m)^/test( | .* )rhel-images,?($|\s.*)
   - agent: kubernetes
     always_run: true
     branches:
@@ -1032,7 +1032,7 @@ tests:
       - name: sentry-dsn
         secret:
           secretName: sentry-dsn
-    trigger: '(?m)^/test (?:.*? )?rhel-unit(?: .*?)?$'
+    trigger: (?m)^/test( | .* )rhel-unit,?($|\s.*)
 `),
 			prowExpectedPostsubmitYAML: []byte(`postsubmits:
   super/duper:
@@ -1220,7 +1220,7 @@ tests:
       - name: sentry-dsn
         secret:
           secretName: sentry-dsn
-    trigger: '(?m)^/test (?:.*? )?images(?: .*?)?$'
+    trigger: (?m)^/test( | .* )images,?($|\s.*)
   - agent: kubernetes
     always_run: true
     branches:
@@ -1263,7 +1263,7 @@ tests:
       - name: sentry-dsn
         secret:
           secretName: sentry-dsn
-    trigger: '(?m)^/test (?:.*? )?unit(?: .*?)?$'
+    trigger: (?m)^/test( | .* )unit,?($|\s.*)
 `),
 			prowExpectedPostsubmitYAML: []byte(`postsubmits:
   super/duper:

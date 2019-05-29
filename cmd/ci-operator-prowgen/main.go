@@ -310,7 +310,7 @@ func generatePresubmitForTest(name string, info *config.Info, podSpec *kubeapi.P
 			Context: fmt.Sprintf("ci/prow/%s", name),
 		},
 		RerunCommand: fmt.Sprintf("/test %s", name),
-		Trigger:      fmt.Sprintf(`(?m)^/test (?:.*? )?%s(?: .*?)?$`, name),
+		Trigger:      prowconfig.DefaultTriggerFor(name),
 	}
 }
 

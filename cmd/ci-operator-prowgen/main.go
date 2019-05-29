@@ -309,7 +309,7 @@ func generatePresubmitForTest(name string, info *config.Info, podSpec *kubeapi.P
 		Reporter: prowconfig.Reporter{
 			Context: fmt.Sprintf("ci/prow/%s", name),
 		},
-		RerunCommand: fmt.Sprintf("/test %s", name),
+		RerunCommand: prowconfig.DefaultRerunCommandFor(name),
 		Trigger:      prowconfig.DefaultTriggerFor(name),
 	}
 }

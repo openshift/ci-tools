@@ -1003,6 +1003,10 @@ func sanitizeMessage(message string) string {
 		"<ISO-DATETIME>",
 		`[0-9]{4}-[0-9]{2}-[0-9]{2}(T[0-9]{2}:[0-9]{2}:[0-9]{2}Z)?`, // 2019-05-21T10:12:14Z | 2019-05-21
 	)
+	uuids := newCleanup(
+		"<UUID>",
+		`[[:alnum:]]{8}-([[:alnum:]]{4}-){3}[[:alnum:]]{12}`, // 8f4e0db5-86a8-11e9-8c0a-12bbdc8a555a
+	)
 	// Few notes about why this is so complex:
 	// 1. We sometimes want to remove generic items like '4s' (four seconds) that
 	//    can occur also as a word substring (e.g. in hashes). So we rectify this
@@ -1019,7 +1023,7 @@ func sanitizeMessage(message string) string {
 		`(?P<prefix>[[:^alpha:]])([\d]+\.)?[\d]+s(?P<suffix>[[:^alpha:]])`,        // 0.24s | 234s
 	)
 
-	for _, rule := range []*cleanup{podNames, isoTimes, durations} {
+	for _, rule := range []*cleanup{podNames, isoTimes, uuids, durations} {
 		message = rule.apply(message)
 	}
 

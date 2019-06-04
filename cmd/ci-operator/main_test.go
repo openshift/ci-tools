@@ -47,6 +47,10 @@ func TestSanitizeMessage(t *testing.T) {
 		name:     "ISO DATE",
 		message:  "...date=\"2019-05-21\"...",
 		expected: "...date=\"<ISO-DATETIME>\"...",
+	}, {
+		name:     "UUID",
+		message:  "...UUID:\"8f4e0db5-86a8-11e9-8c0a-12bbdc8a555a\"...",
+		expected: "...UUID:\"<UUID>\"...",
 	},
 	}
 	for _, tc := range tests {

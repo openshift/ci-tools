@@ -64,13 +64,13 @@ func (m *Metrics) RecordChangedCiopConfigs(configs config.CompoundCiopConfig) {
 	}
 }
 
-func (m *Metrics) RecordChangedTemplates(templates config.CiTemplates) {
-	for templateName := range templates {
-		m.ChangedTemplates = append(m.ChangedTemplates, templateName)
+func (m *Metrics) RecordChangedTemplates(ts []config.ConfigMapSource) {
+	for _, t := range ts {
+		m.ChangedTemplates = append(m.ChangedTemplates, t.Filename)
 	}
 }
 
-func (m *Metrics) RecordChangedClusterProfiles(ps []config.ClusterProfile) {
+func (m *Metrics) RecordChangedClusterProfiles(ps []config.ConfigMapSource) {
 	for _, p := range ps {
 		m.ChangedClusterProfiles = append(m.ChangedClusterProfiles, p.Name())
 	}

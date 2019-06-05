@@ -52,25 +52,24 @@ func TestRecordChangedTemplates(t *testing.T) {
 
 	testCases := []struct {
 		description string
-		templates   []string
+		templates   []config.ConfigMapSource
 		expected    []string
 	}{{
 		description: "no changed templates",
 		expected:    []string{},
 	}, {
 		description: "changed templates",
-		templates:   []string{"awesome-openshift-installer.yaml", "old-ugly-ansible-installer.yaml"},
-		expected:    []string{"awesome-openshift-installer.yaml", "old-ugly-ansible-installer.yaml"},
+		templates: []config.ConfigMapSource{
+			{Filename: "awesome-openshift-installer.yaml"},
+			{Filename: "old-ugly-ansible-installer.yaml"},
+		},
+		expected: []string{"awesome-openshift-installer.yaml", "old-ugly-ansible-installer.yaml"},
 	}}
 
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
 			metrics := NewMetrics(testFilename)
-			testTemplates := config.CiTemplates{}
-			for _, ciopConfig := range tc.templates {
-				testTemplates[ciopConfig] = ""
-			}
-			metrics.RecordChangedTemplates(testTemplates)
+			metrics.RecordChangedTemplates(tc.templates)
 			sort.Strings(metrics.ChangedTemplates)
 			if !reflect.DeepEqual(tc.expected, metrics.ChangedTemplates) {
 				t.Errorf("Recorded changed templates differ from expected:\n%s", diff.ObjectReflectDiff(tc.expected, metrics.ChangedTemplates))

@@ -28,9 +28,10 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 	testRepoPath := "../../test/pj-rehearse-integration/master"
 	testTemplatePath := filepath.Join(TemplatesPath, "subdir/test-template.yaml")
 	ns := "test-namespace"
-	ciTemplates := CiTemplates{
-		testTemplatePath: "hd9sxk615lkcwx2kj226g3r3lvwkftyjif2pczm5dq3l0h13p35t",
-	}
+	ciTemplates := []ConfigMapSource{{
+		Filename: testTemplatePath,
+		SHA:      "hd9sxk615lkcwx2kj226g3r3lvwkftyjif2pczm5dq3l0h13p35t",
+	}}
 	contents, err := ioutil.ReadFile(filepath.Join(testRepoPath, testTemplatePath))
 	if err != nil {
 		t.Fatal(err)
@@ -81,7 +82,7 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 	}
 	expected := []v1.ConfigMap{{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "rehearse-hd9sxk61-test-template",
+			Name:      "rehearse-template-test-template-hd9sxk61",
 			Namespace: ns,
 			Labels: map[string]string{
 				createByRehearse:  "true",
@@ -106,14 +107,14 @@ func TestCreateClusterProfiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(dir)
-	profiles := []ClusterProfile{{
-		TreeHash: "e92d4a5996a8a977bd7916b65488371331681f9d",
+	profiles := []ConfigMapSource{{
+		SHA:      "e92d4a5996a8a977bd7916b65488371331681f9d",
 		Filename: filepath.Join(ClusterProfilesPath, "profile0"),
 	}, {
-		TreeHash: "a8c99ffc996128417ef1062f9783730a8c864586",
+		SHA:      "a8c99ffc996128417ef1062f9783730a8c864586",
 		Filename: filepath.Join(ClusterProfilesPath, "profile1"),
 	}, {
-		TreeHash: "8012ff51a005eaa8ed8f4c08ccdce580f462fff6",
+		SHA:      "8012ff51a005eaa8ed8f4c08ccdce580f462fff6",
 		Filename: filepath.Join(ClusterProfilesPath, "unchanged"),
 	}}
 	for _, p := range profiles {

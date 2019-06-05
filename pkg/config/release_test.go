@@ -18,7 +18,8 @@ func compareChanges(
 	path string,
 	files []string,
 	cmd string,
-	f func(string, string),
+	f func(string, string) ([]ConfigMapSource, error),
+	expected []ConfigMapSource,
 ) {
 	t.Helper()
 	tmp, err := ioutil.TempDir("", "")
@@ -52,7 +53,13 @@ git rev-parse HEAD^
 	if err != nil {
 		t.Fatalf("%q failed, output:\n%s", p.Args, out)
 	}
-	f(tmp, strings.TrimSpace(string(out)))
+	changed, err := f(dir, strings.TrimSpace(string(out)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(expected, changed) {
+		t.Fatal(diff.ObjectDiff(expected, changed))
+	}
 }
 
 func TestGetChangedTemplates(t *testing.T) {
@@ -66,20 +73,14 @@ func TestGetChangedTemplates(t *testing.T) {
 > org/repo/OWNERS
 > org/repo/README.md
 `
-	expected := CiTemplates{
-		filepath.Join(TemplatesPath, "cluster-launch-top-level.yaml"):       "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
-		filepath.Join(TemplatesPath, "org/repo/cluster-launch-subdir.yaml"): "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
-	}
-	cmp := func(path, rev string) {
-		changed, err := GetChangedTemplates(path, rev)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !reflect.DeepEqual(expected, changed) {
-			t.Fatal(diff.ObjectDiff(expected, changed))
-		}
-	}
-	compareChanges(t, TemplatesPath, files, cmd, cmp)
+	expected := []ConfigMapSource{{
+		SHA:      "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+		Filename: filepath.Join(TemplatesPath, "cluster-launch-top-level.yaml"),
+	}, {
+		SHA:      "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+		Filename: filepath.Join(TemplatesPath, "org/repo/cluster-launch-subdir.yaml"),
+	}}
+	compareChanges(t, TemplatesPath, files, cmd, GetChangedTemplates, expected)
 }
 
 func TestGetChangedClusterProfiles(t *testing.T) {
@@ -97,30 +98,21 @@ git mv moveme/file moveme/moved
 git mv renameme/file renamed/file
 > dir/dir/file
 `
-	expected := []ClusterProfile{{
-		TreeHash: "df2b8fc99e1c1d4dbc0a854d9f72157f1d6ea078",
+	expected := []ConfigMapSource{{
+		SHA:      "df2b8fc99e1c1d4dbc0a854d9f72157f1d6ea078",
 		Filename: filepath.Join(ClusterProfilesPath, "changeme"),
 	}, {
-		TreeHash: "b4c3cc91598b6469bf7036502b8ca2bd563b0d0a",
+		SHA:      "b4c3cc91598b6469bf7036502b8ca2bd563b0d0a",
 		Filename: filepath.Join(ClusterProfilesPath, "dir"),
 	}, {
-		TreeHash: "03b9d461447abb84264053a440b4c715842566bb",
+		SHA:      "03b9d461447abb84264053a440b4c715842566bb",
 		Filename: filepath.Join(ClusterProfilesPath, "moveme"),
 	}, {
-		TreeHash: "df2b8fc99e1c1d4dbc0a854d9f72157f1d6ea078",
+		SHA:      "df2b8fc99e1c1d4dbc0a854d9f72157f1d6ea078",
 		Filename: filepath.Join(ClusterProfilesPath, "new"),
 	}, {
-		TreeHash: "9bbab5dcf83793f9edc258136426678cccce940e",
+		SHA:      "9bbab5dcf83793f9edc258136426678cccce940e",
 		Filename: filepath.Join(ClusterProfilesPath, "renamed"),
 	}}
-	cmp := func(path, rev string) {
-		changed, err := GetChangedClusterProfiles(path, rev)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !reflect.DeepEqual(expected, changed) {
-			t.Fatal(diff.ObjectDiff(expected, changed))
-		}
-	}
-	compareChanges(t, ClusterProfilesPath, files, cmd, cmp)
+	compareChanges(t, ClusterProfilesPath, files, cmd, GetChangedClusterProfiles, expected)
 }

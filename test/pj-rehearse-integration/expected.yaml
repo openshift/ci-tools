@@ -129,7 +129,7 @@
     labels:
       ci.openshift.org/rehearse-pull: "1234"
       created-by-pj-rehearse: "true"
-    name: rehearse-4b355dc3-test-template
+    name: rehearse-template-test-template-4b355dc3
     namespace: test-namespace
 - data:
     vars-origin.yaml: |
@@ -323,7 +323,7 @@
           - configMap:
               name: rehearse-cluster-profile-test-profile-47224c86
       - configMap:
-          name: rehearse-4b355dc3-test-template
+          name: rehearse-template-test-template-4b355dc3
         name: job-definition
     refs:
       base_ref: master
@@ -761,7 +761,7 @@
           - secret:
               name: cluster-secrets-aws
       - configMap:
-          name: rehearse-4b355dc3-test-template
+          name: rehearse-template-test-template-4b355dc3
         name: job-definition
     refs:
       base_ref: master
@@ -882,7 +882,7 @@
           - secret:
               name: cluster-secrets-openstack
       - configMap:
-          name: rehearse-4b355dc3-test-template
+          name: rehearse-template-test-template-4b355dc3
         name: job-definition
     refs:
       base_ref: master

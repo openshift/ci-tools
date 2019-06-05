@@ -143,40 +143,28 @@ func GetAllConfigsFromSHA(releaseRepoPath, sha string, logger *logrus.Entry) (*R
 	return config, nil
 }
 
-func GetChangedTemplates(path, baseRev string) (CiTemplates, error) {
+func GetChangedTemplates(path, baseRev string) ([]ConfigMapSource, error) {
 	changes, err := getRevChanges(path, TemplatesPath, baseRev, true)
 	if err != nil {
 		return nil, err
 	}
-	ret := CiTemplates{}
+	var ret []ConfigMapSource
 	for _, c := range changes {
 		if filepath.Ext(c.Filename) == ".yaml" {
-			ret[c.Filename] = c.SHA
+			ret = append(ret, c)
 		}
 	}
 	return ret, nil
 }
 
-func GetChangedClusterProfiles(path, baseRev string) ([]ClusterProfile, error) {
-	changes, err := getRevChanges(path, ClusterProfilesPath, baseRev, false)
-	if err != nil {
-		return nil, err
-	}
-	ret := make([]ClusterProfile, 0, len(changes))
-	for _, c := range changes {
-		ret = append(ret, ClusterProfile{Filename: c.Filename, TreeHash: c.SHA})
-	}
-	return ret, nil
-}
-
-type configMapSource struct {
-	Filename, SHA string
+func GetChangedClusterProfiles(path, baseRev string) ([]ConfigMapSource, error) {
+	return getRevChanges(path, ClusterProfilesPath, baseRev, false)
 }
 
 // getRevChanges returns the name and a hash of the contents of files under
 // `path` that were added/modified since revision `base` in the repository at
 // `root`.  Paths are relative to `root`.
-func getRevChanges(root, path, base string, rec bool) ([]configMapSource, error) {
+func getRevChanges(root, path, base string, rec bool) ([]ConfigMapSource, error) {
 	// Sample output (with abbreviated hashes) from git-diff-tree(1):
 	// :100644 100644 bcd1234 0123456 M file0
 	cmd := []string{"diff-tree", "--diff-filter=ABCMRTUX", base + ":" + path, "HEAD:" + path}
@@ -187,9 +175,9 @@ func getRevChanges(root, path, base string, rec bool) ([]configMapSource, error)
 	if err != nil || diff == "" {
 		return nil, err
 	}
-	var ret []configMapSource
+	var ret []ConfigMapSource
 	for _, l := range strings.Split(strings.TrimSpace(diff), "\n") {
-		ret = append(ret, configMapSource{
+		ret = append(ret, ConfigMapSource{
 			Filename: filepath.Join(path, l[99:]),
 			SHA:      l[56:96],
 		})

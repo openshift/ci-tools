@@ -21,6 +21,7 @@ import (
 	"regexp"
 	"strings"
 
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/pluginhelp"
 	"k8s.io/test-infra/prow/plugins"
@@ -131,28 +132,34 @@ func notifyOnSlackIfManualMerge(pc client, pe github.PushEvent) error {
 }
 
 func isWhiteListed(mw *plugins.MergeWarning, pe github.PushEvent) bool {
-	bwl := mw.BranchWhiteList[pe.Branch()]
-	inWhiteList := stringInArray(pe.Pusher.Name, mw.WhiteList) || stringInArray(pe.Sender.Login, mw.WhiteList)
-	inBranchWhiteList := stringInArray(pe.Pusher.Name, bwl) || stringInArray(pe.Sender.Login, bwl)
-	return inWhiteList || inBranchWhiteList
+	whitelistedLogins := sets.String{}
+	for _, login := range append(mw.WhiteList, mw.BranchWhiteList[pe.Branch()]...) {
+		whitelistedLogins.Insert(github.NormLogin(login))
+	}
+
+	return whitelistedLogins.HasAny(github.NormLogin(pe.Pusher.Name), github.NormLogin(pe.Sender.Login))
 }
 
 func getMergeWarning(mergeWarnings []plugins.MergeWarning, org, repo string) *plugins.MergeWarning {
-	for _, mw := range mergeWarnings {
-		if stringInArray(org, mw.Repos) || stringInArray(fmt.Sprintf("%s/%s", org, repo), mw.Repos) {
-			return &mw
-		}
-	}
-	return nil
-}
+	fullName := fmt.Sprintf("%s/%s", org, repo)
 
-func stringInArray(str string, list []string) bool {
-	for _, v := range list {
-		if v == str {
-			return true
+	// First search for repo config
+	for _, mw := range mergeWarnings {
+		if !sets.NewString(mw.Repos...).Has(fullName) {
+			continue
 		}
+		return &mw
 	}
-	return false
+
+	// If you don't find anything, loop again looking for an org config
+	for _, mw := range mergeWarnings {
+		if !sets.NewString(mw.Repos...).Has(org) {
+			continue
+		}
+		return &mw
+	}
+
+	return nil
 }
 
 func echoToSlack(pc client, e github.GenericCommentEvent) error {

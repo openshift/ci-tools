@@ -172,8 +172,9 @@ func specFromJobBase(jb config.JobBase) prowapi.ProwJobSpec {
 		ExtraRefs:        jb.ExtraRefs,
 		DecorationConfig: jb.DecorationConfig,
 
-		PodSpec:   jb.Spec,
-		BuildSpec: jb.BuildSpec,
+		PodSpec:         jb.Spec,
+		BuildSpec:       jb.BuildSpec,
+		PipelineRunSpec: jb.PipelineRunSpec,
 	}
 }
 
@@ -185,6 +186,7 @@ func completePrimaryRefs(refs prowapi.Refs, jb config.JobBase) *prowapi.Refs {
 		refs.CloneURI = jb.CloneURI
 	}
 	refs.SkipSubmodules = jb.SkipSubmodules
+	refs.CloneDepth = jb.CloneDepth
 	return &refs
 }
 

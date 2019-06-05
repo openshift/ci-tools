@@ -25,6 +25,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/test-infra/prow/bugzilla"
 	prowv1 "k8s.io/test-infra/prow/client/clientset/versioned/typed/prowjobs/v1"
 	"sigs.k8s.io/yaml"
 
@@ -132,11 +133,12 @@ func RegisterGenericCommentHandler(name string, fn GenericCommentHandler, help H
 
 // Agent may be used concurrently, so each entry must be thread-safe.
 type Agent struct {
-	GitHubClient     *github.Client
+	GitHubClient     github.Client
 	ProwJobClient    prowv1.ProwJobInterface
 	KubernetesClient kubernetes.Interface
 	GitClient        *git.Client
 	SlackClient      *slack.Client
+	BugzillaClient   bugzilla.Client
 
 	OwnersClient *repoowners.Client
 
@@ -163,6 +165,7 @@ func NewAgent(configAgent *config.Agent, pluginConfigAgent *ConfigAgent, clientA
 		GitClient:        clientAgent.GitClient,
 		SlackClient:      clientAgent.SlackClient,
 		OwnersClient:     clientAgent.OwnersClient,
+		BugzillaClient:   clientAgent.BugzillaClient,
 		Config:           prowConfig,
 		PluginConfig:     pluginConfig,
 		Logger:           logger,
@@ -189,12 +192,13 @@ func (a *Agent) CommentPruner() (*commentpruner.EventClient, error) {
 
 // ClientAgent contains the various clients that are attached to the Agent.
 type ClientAgent struct {
-	GitHubClient     *github.Client
+	GitHubClient     github.Client
 	ProwJobClient    prowv1.ProwJobInterface
 	KubernetesClient kubernetes.Interface
 	GitClient        *git.Client
 	SlackClient      *slack.Client
 	OwnersClient     *repoowners.Client
+	BugzillaClient   bugzilla.Client
 }
 
 // ConfigAgent contains the agent mutex and the Agent configuration.

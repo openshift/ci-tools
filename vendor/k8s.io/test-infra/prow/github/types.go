@@ -148,6 +148,7 @@ type Status struct {
 type CombinedStatus struct {
 	SHA      string   `json:"sha"`
 	Statuses []Status `json:"statuses"`
+	State    string   `json:"state"`
 }
 
 // User is a GitHub user account.
@@ -213,6 +214,7 @@ type PullRequestEvent struct {
 
 // PullRequest contains information about a PullRequest.
 type PullRequest struct {
+	ID                 int               `json:"id"`
 	Number             int               `json:"number"`
 	HTMLURL            string            `json:"html_url"`
 	User               User              `json:"user"`
@@ -353,6 +355,22 @@ type Branch struct {
 	Name      string `json:"name"`
 	Protected bool   `json:"protected"` // only included for ?protection=true requests
 	// TODO(fejta): consider including undocumented protection key
+}
+
+// BranchProtection represents protections
+// in place for a branch
+// See also: https://developer.github.com/v3/repos/branches/#get-branch-protection
+type BranchProtection struct {
+	RequiredStatusChecks       *RequiredStatusChecks       `json:"required_status_checks"`
+	EnforceAdmins              EnforceAdmins               `json:"enforce_admins"`
+	RequiredPullRequestReviews *RequiredPullRequestReviews `json:"required_pull_request_reviews"`
+	Restrictions               *Restrictions               `json:"restrictions"`
+}
+
+// EnforceAdmins specifies whether to enforce the
+// configured branch restrictions for administrators.
+type EnforceAdmins struct {
+	Enabled bool `json:"enabled"`
 }
 
 // BranchProtectionRequest represents
@@ -509,6 +527,7 @@ type IssueCommentEvent struct {
 
 // Issue represents general info about an issue.
 type Issue struct {
+	ID        int       `json:"id"`
 	User      User      `json:"user"`
 	Number    int       `json:"number"`
 	Title     string    `json:"title"`
@@ -860,6 +879,7 @@ const (
 // Issue and PR "closed" events are not coerced to the "deleted" Action and do not trigger
 // a GenericCommentEvent because these events don't actually remove the comment content from GH.
 type GenericCommentEvent struct {
+	ID           int `json:"id"`
 	IsPR         bool
 	Action       GenericCommentEventAction
 	Body         string
@@ -915,6 +935,8 @@ type ProjectColumn struct {
 
 // ProjectCard is a github project card
 type ProjectCard struct {
+	ID          int    `json:"id"`
 	ContentID   int    `json:"content_id"`
 	ContentType string `json:"content_type"`
+	ContentURL  string `json:"content_url"`
 }

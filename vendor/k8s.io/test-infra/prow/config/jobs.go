@@ -22,11 +22,12 @@ import (
 	"time"
 
 	buildv1alpha1 "github.com/knative/build/pkg/apis/build/v1alpha1"
-	"k8s.io/test-infra/prow/github"
+	pipelinev1alpha1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1alpha1"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
+	"k8s.io/test-infra/prow/github"
 )
 
 // Preset is intended to match the k8s' PodPreset feature, and may be removed
@@ -104,6 +105,8 @@ type JobBase struct {
 	Spec *v1.PodSpec `json:"spec,omitempty"`
 	// BuildSpec is the Knative build spec used if Agent is knative-build.
 	BuildSpec *buildv1alpha1.BuildSpec `json:"build_spec,omitempty"`
+	// PipelineRunSpec is the tekton pipeline spec used if Agent is tekton-pipeline.
+	PipelineRunSpec *pipelinev1alpha1.PipelineRunSpec `json:"pipeline_run_spec,omitempty"`
 	// Annotations are unused by prow itself, but provide a space to configure other automation.
 	Annotations map[string]string `json:"annotations,omitempty"`
 
@@ -412,6 +415,9 @@ type UtilityConfig struct {
 	// SkipSubmodules determines if submodules should be
 	// cloned when the job is run. Defaults to true.
 	SkipSubmodules bool `json:"skip_submodules,omitempty"`
+	// CloneDepth is the depth of the clone that will be used.
+	// A depth of zero will do a full clone.
+	CloneDepth int `json:"clone_depth,omitempty"`
 
 	// ExtraRefs are auxiliary repositories that
 	// need to be cloned, determined from config

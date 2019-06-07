@@ -99,7 +99,7 @@ func main() {
 		if rawToken, err := ioutil.ReadFile(o.tokenPath); err != nil {
 			logrus.WithError(err).Fatal("Could not read token.")
 		} else {
-			token = string(rawToken)
+			token = strings.TrimSpace(string(rawToken))
 			logrus.SetFormatter(&censoringFormatter{delegate: new(logrus.TextFormatter), secret: token})
 		}
 	}

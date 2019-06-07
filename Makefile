@@ -1,4 +1,4 @@
-all: check lint test build
+all: lint test build
 .PHONY: all
 
 build:
@@ -13,10 +13,10 @@ test:
 	go test ./...
 .PHONY: test
 
-check lint:
+lint:
 	gofmt -s -l $(shell go list -f '{{ .Dir }}' ./... ) | grep ".*\.go"; if [ "$$?" = "0" ]; then gofmt -s -d $(shell go list -f '{{ .Dir }}' ./... ); exit 1; fi
 	go vet ./...
-.PHONY: check lint
+.PHONY: lint
 
 format:
 	gofmt -s -w $(shell go list -f '{{ .Dir }}' ./... )

@@ -17,5 +17,5 @@ require (
 	k8s.io/api v0.0.0-20181128191700-6db15a15d2d3
 	k8s.io/apimachinery v0.0.0-20181128191346-49ce2735e507
 	k8s.io/client-go v9.0.0+incompatible
-	k8s.io/test-infra v0.0.0-20190605204812-45f60c377626
+	k8s.io/test-infra v0.0.0-20190610154516-e6c6e17e9827
 )

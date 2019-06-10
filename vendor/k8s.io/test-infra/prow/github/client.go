@@ -98,12 +98,15 @@ type IssueClient interface {
 	CloseIssue(org, repo string, number int) error
 	ReopenIssue(org, repo string, number int) error
 	FindIssues(query, sort string, asc bool) ([]Issue, error)
+	GetIssue(org, repo string, number int) (*Issue, error)
+	EditIssue(org, repo string, number int, issue *Issue) (*Issue, error)
 }
 
 // PullRequestClient interface for pull request related API actions
 type PullRequestClient interface {
 	GetPullRequests(org, repo string) ([]PullRequest, error)
 	GetPullRequest(org, repo string, number int) (*PullRequest, error)
+	EditPullRequest(org, repo string, number int, pr *PullRequest) (*PullRequest, error)
 	GetPullRequestPatch(org, repo string, number int) ([]byte, error)
 	CreatePullRequest(org, repo, title, body, head, base string, canModify bool) (int, error)
 	UpdatePullRequest(org, repo string, number int, title, body *string, open *bool, branch *string, canModify *bool) error
@@ -135,7 +138,6 @@ type RepositoryClient interface {
 	GetRepo(owner, name string) (Repo, error)
 	GetRepos(org string, isUser bool) ([]Repo, error)
 	GetBranches(org, repo string, onlyProtected bool) ([]Branch, error)
-	GetBranchProtection(org, repo, branch string) (*BranchProtection, error)
 	RemoveBranchProtection(org, repo, branch string) error
 	UpdateBranchProtection(org, repo, branch string, config BranchProtectionRequest) error
 	AddRepoLabel(org, repo, label, description, color string) error
@@ -1266,6 +1268,65 @@ func (c *client) GetPullRequest(org, repo string, number int) (*PullRequest, err
 	return &pr, err
 }
 
+// EditPullRequest will update the pull request.
+//
+// See https://developer.github.com/v3/pulls/#update-a-pull-request
+func (c *client) EditPullRequest(org, repo string, number int, pr *PullRequest) (*PullRequest, error) {
+	c.log("EditPullRequest", org, repo, number)
+	if c.dry {
+		return pr, nil
+	}
+	var ret PullRequest
+	_, err := c.request(&request{
+		method:      http.MethodPatch,
+		path:        fmt.Sprintf("/repos/%s/%s/pulls/%d", org, repo, number),
+		exitCodes:   []int{200},
+		requestBody: &pr,
+	}, &ret)
+	if err != nil {
+		return nil, err
+	}
+	return &ret, nil
+}
+
+// GetIssue gets an issue.
+//
+// See https://developer.github.com/v3/issues/#get-a-single-issue
+func (c *client) GetIssue(org, repo string, number int) (*Issue, error) {
+	c.log("GetIssue", org, repo, number)
+	var i Issue
+	_, err := c.request(&request{
+		// allow emoji
+		// https://developer.github.com/changes/2018-02-22-label-description-search-preview/
+		accept:    "application/vnd.github.symmetra-preview+json",
+		method:    http.MethodGet,
+		path:      fmt.Sprintf("/repos/%s/%s/issues/%d", org, repo, number),
+		exitCodes: []int{200},
+	}, &i)
+	return &i, err
+}
+
+// EditIssue will update the issue.
+//
+// See https://developer.github.com/v3/issues/#edit-an-issue
+func (c *client) EditIssue(org, repo string, number int, issue *Issue) (*Issue, error) {
+	c.log("EditIssue", org, repo, number)
+	if c.dry {
+		return issue, nil
+	}
+	var ret Issue
+	_, err := c.request(&request{
+		method:      http.MethodPatch,
+		path:        fmt.Sprintf("/repos/%s/%s/issues/%d", org, repo, number),
+		exitCodes:   []int{200},
+		requestBody: &issue,
+	}, &ret)
+	if err != nil {
+		return nil, err
+	}
+	return &ret, nil
+}
+
 // GetPullRequestPatch gets the patch version of a pull request.
 //
 // See https://developer.github.com/v3/media/#commits-commit-comparison-and-pull-requests
@@ -1567,51 +1628,6 @@ func (c *client) GetBranches(org, repo string, onlyProtected bool) ([]Branch, er
 		return nil, err
 	}
 	return branches, nil
-}
-
-// GetBranchProtection returns current protection object for the branch
-//
-// See https://developer.github.com/v3/repos/branches/#get-branch-protection
-func (c *client) GetBranchProtection(org, repo, branch string) (*BranchProtection, error) {
-	c.log("GetBranchProtection", org, repo, branch)
-	code, body, err := c.requestRaw(&request{
-		method: http.MethodGet,
-		path:   fmt.Sprintf("/repos/%s/%s/branches/%s/protection", org, repo, branch),
-		// GitHub returns 404 for this call if either:
-		// - The branch is not protected
-		// - The access token used does not have sufficient privileges
-		// We therefore need to introspect the response body.
-		exitCodes: []int{200, 404},
-	})
-
-	switch {
-	case err != nil:
-		return nil, err
-	case code == 200:
-		var bp BranchProtection
-		if err := json.Unmarshal(body, &bp); err != nil {
-			return nil, err
-		}
-		return &bp, nil
-	case code == 404:
-		// continue
-	default:
-		return nil, fmt.Errorf("unexpected status code: %v", code)
-	}
-
-	var ge githubError
-	if err := json.Unmarshal(body, &ge); err != nil {
-		return nil, err
-	}
-
-	// If the error was because the branch is not protected, we return a
-	// nil pointer to indicate this.
-	if ge.Message == "Branch not protected" {
-		return nil, nil
-	}
-
-	// Otherwise we got some other 404 error.
-	return nil, fmt.Errorf("getting branch protection 404: %s", ge.Message)
 }
 
 // RemoveBranchProtection unprotects org/repo=branch.

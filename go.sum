@@ -514,6 +514,8 @@ k8s.io/test-infra v0.0.0-20190507120946-f699675303ae h1:ZQT2WAlw3rQ4ZvirLbc+yT6K
 k8s.io/test-infra v0.0.0-20190507120946-f699675303ae/go.mod h1:2wpqH1meBDeotw8vmDrRw9FLbmDb/PZNwsW/5GxI0Jc=
 k8s.io/test-infra v0.0.0-20190605204812-45f60c377626 h1:G9/dpWbDAEFdXBbkMqGER2loqDesXWsbXnqJ9B89+vo=
 k8s.io/test-infra v0.0.0-20190605204812-45f60c377626/go.mod h1:3Q48K7abLE1lRTzXAaW0GVf7zFfbYbxAk2y/515bim8=
+k8s.io/test-infra v0.0.0-20190610154516-e6c6e17e9827 h1:i444zagv8gTupZQCoNONbEfF/HtyAoWRNvFbs8iJD74=
+k8s.io/test-infra v0.0.0-20190610154516-e6c6e17e9827/go.mod h1:3Q48K7abLE1lRTzXAaW0GVf7zFfbYbxAk2y/515bim8=
 k8s.io/utils v0.0.0-20181019225348-5e321f9a457c/go.mod h1:8k8uAuAQ0rXslZKaEWd0c3oVhZz7sSzSiPnVZayjIX0=
 mvdan.cc/xurls/v2 v2.0.0/go.mod h1:2/webFPYOXN9jp/lzuj0zuAVlF+9g4KPFJANH1oJhRU=
 sigs.k8s.io/yaml v1.1.0 h1:4A07+ZFc2wgJwo8YNlQpr1rVlgUDlxXHhPJciaPY5gs=

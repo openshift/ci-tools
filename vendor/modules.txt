@@ -443,7 +443,7 @@ k8s.io/client-go/util/jsonpath
 k8s.io/client-go/third_party/forked/golang/template
 # k8s.io/kube-openapi v0.0.0-20180711000925-0cf8f7e6ed1d
 k8s.io/kube-openapi/pkg/util/proto
-# k8s.io/test-infra v0.0.0-20190605204812-45f60c377626
+# k8s.io/test-infra v0.0.0-20190610154516-e6c6e17e9827
 k8s.io/test-infra/prow/apis/prowjobs/v1
 k8s.io/test-infra/prow/config
 k8s.io/test-infra/prow/hook
@@ -490,6 +490,7 @@ k8s.io/test-infra/prow/plugins/project
 k8s.io/test-infra/prow/plugins/releasenote
 k8s.io/test-infra/prow/plugins/require-matching-label
 k8s.io/test-infra/prow/plugins/requiresig
+k8s.io/test-infra/prow/plugins/retitle
 k8s.io/test-infra/prow/plugins/shrug
 k8s.io/test-infra/prow/plugins/sigmention
 k8s.io/test-infra/prow/plugins/size

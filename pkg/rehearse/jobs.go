@@ -240,12 +240,18 @@ func ConfigureRehearsalJobs(toBeRehearsed config.Presubmits, ciopConfigs config.
 // AddRandomJobsForChangedTemplates finds jobs from the PR config that are using a specific template with a specific cluster type.
 // The job selection is done by iterating in an unspecified order, which avoids picking the same job
 // So if a template will be changed, find the jobs that are using a template in combination with the `aws`,`openstack`,`gcs` and `libvirt` cluster types.
-func AddRandomJobsForChangedTemplates(templates []config.ConfigMapSource, prConfigPresubmits map[string][]prowconfig.Presubmit, loggers Loggers, prNumber int) config.Presubmits {
+func AddRandomJobsForChangedTemplates(templates []config.ConfigMapSource, toBeRehearsed config.Presubmits, prConfigPresubmits map[string][]prowconfig.Presubmit, loggers Loggers, prNumber int) config.Presubmits {
 	rehearsals := make(config.Presubmits)
 
 	for _, template := range templates {
+		templateFile := filepath.Base(template.Filename)
 		for _, clusterType := range []string{"aws", "gcs", "openstack", "libvirt", "vsphere", "gcp"} {
-			if repo, job := pickTemplateJob(prConfigPresubmits, filepath.Base(template.Filename), clusterType); job != nil {
+
+			if isAlreadyRehearsed(toBeRehearsed, clusterType, templateFile) {
+				continue
+			}
+
+			if repo, job := pickTemplateJob(prConfigPresubmits, templateFile, clusterType); job != nil {
 				jobLogger := loggers.Job.WithFields(logrus.Fields{"target-repo": repo, "target-job": job.Name})
 				jobLogger.Info("Picking job to rehearse the template changes")
 				rehearsals[repo] = append(rehearsals[repo], *job)
@@ -253,6 +259,17 @@ func AddRandomJobsForChangedTemplates(templates []config.ConfigMapSource, prConf
 		}
 	}
 	return rehearsals
+}
+
+func isAlreadyRehearsed(toBeRehearsed config.Presubmits, clusterType, templateFile string) bool {
+	for _, jobs := range toBeRehearsed {
+		for _, job := range jobs {
+			if hasClusterType(job, clusterType) && hasTemplateFile(job, templateFile) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func replaceCMTemplateName(volumeMounts []v1.VolumeMount, volumes []v1.Volume, mapping map[string]string) {

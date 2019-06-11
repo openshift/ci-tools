@@ -273,7 +273,7 @@ func rehearseMain() int {
 	metrics.RecordOpportunity(presubmitsWithChangedCiopConfigs, "ci-operator-config-change")
 	toRehearse.AddAll(presubmitsWithChangedCiopConfigs)
 
-	presubmitsWithChangedTemplates := rehearse.AddRandomJobsForChangedTemplates(changedTemplates, prConfig.Prow.JobConfig.Presubmits, loggers, prNumber)
+	presubmitsWithChangedTemplates := rehearse.AddRandomJobsForChangedTemplates(changedTemplates, toRehearse, prConfig.Prow.JobConfig.Presubmits, loggers, prNumber)
 	metrics.RecordOpportunity(presubmitsWithChangedTemplates, "templates-change")
 	toRehearse.AddAll(presubmitsWithChangedTemplates)
 

@@ -422,7 +422,7 @@ func createOrRestartPod(podClient coreclientset.PodInterface, pod *coreapi.Pod) 
 }
 
 func waitForPodDeletion(podClient coreclientset.PodInterface, name string, uid types.UID) error {
-	timeout := 300
+	timeout := 600
 	for i := 0; i < timeout; i += 2 {
 		pod, err := podClient.Get(name, meta.GetOptions{})
 		if errors.IsNotFound(err) {

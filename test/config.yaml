@@ -1,0 +1,15 @@
+resources:
+  '*':
+    requests:
+      cpu: 1
+build_root:
+  image_stream_tag:
+    namespace: openshift
+    name: release
+    tag: golang-1.10
+    as: root
+tests:
+- as: blah
+  commands: make
+  container:
+    from: root

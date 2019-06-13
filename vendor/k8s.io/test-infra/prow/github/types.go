@@ -148,6 +148,7 @@ type Status struct {
 type CombinedStatus struct {
 	SHA      string   `json:"sha"`
 	Statuses []Status `json:"statuses"`
+	State    string   `json:"state"`
 }
 
 // User is a GitHub user account.
@@ -213,6 +214,7 @@ type PullRequestEvent struct {
 
 // PullRequest contains information about a PullRequest.
 type PullRequest struct {
+	ID                 int               `json:"id"`
 	Number             int               `json:"number"`
 	HTMLURL            string            `json:"html_url"`
 	User               User              `json:"user"`
@@ -509,6 +511,7 @@ type IssueCommentEvent struct {
 
 // Issue represents general info about an issue.
 type Issue struct {
+	ID        int       `json:"id"`
 	User      User      `json:"user"`
 	Number    int       `json:"number"`
 	Title     string    `json:"title"`
@@ -860,6 +863,7 @@ const (
 // Issue and PR "closed" events are not coerced to the "deleted" Action and do not trigger
 // a GenericCommentEvent because these events don't actually remove the comment content from GH.
 type GenericCommentEvent struct {
+	ID           int `json:"id"`
 	IsPR         bool
 	Action       GenericCommentEventAction
 	Body         string
@@ -915,6 +919,8 @@ type ProjectColumn struct {
 
 // ProjectCard is a github project card
 type ProjectCard struct {
+	ID          int    `json:"id"`
 	ContentID   int    `json:"content_id"`
 	ContentType string `json:"content_type"`
+	ContentURL  string `json:"content_url"`
 }

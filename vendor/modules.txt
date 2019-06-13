@@ -18,7 +18,7 @@ github.com/SierraSoftworks/sentry-go
 # github.com/bazelbuild/buildtools v0.0.0-20190404153937-93253d6efaa9
 github.com/bazelbuild/buildtools/build
 github.com/bazelbuild/buildtools/tables
-# github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973
+# github.com/beorn7/perks v1.0.0
 github.com/beorn7/perks/quantile
 # github.com/bwmarrin/snowflake v0.0.0
 github.com/bwmarrin/snowflake
@@ -31,7 +31,7 @@ github.com/dgrijalva/jwt-go
 # github.com/docker/spdystream v0.0.0-20181023171402-6480d4af844c
 github.com/docker/spdystream
 github.com/docker/spdystream/spdy
-# github.com/evanphx/json-patch v4.1.0+incompatible
+# github.com/evanphx/json-patch v4.2.0+incompatible
 github.com/evanphx/json-patch
 # github.com/fsnotify/fsnotify v1.4.7
 github.com/fsnotify/fsnotify
@@ -53,6 +53,8 @@ github.com/golang/protobuf/ptypes
 github.com/golang/protobuf/protoc-gen-go/descriptor
 github.com/golang/protobuf/ptypes/duration
 github.com/golang/protobuf/ptypes/timestamp
+# github.com/gomodule/redigo v1.7.0
+github.com/gomodule/redigo/redis
 # github.com/google/btree v0.0.0-20180813153112-4030bb1f1f0c
 github.com/google/btree
 # github.com/google/go-cmp v0.2.0
@@ -82,9 +84,10 @@ github.com/gorilla/context
 github.com/gorilla/securecookie
 # github.com/gorilla/sessions v1.1.3
 github.com/gorilla/sessions
-# github.com/gregjones/httpcache v0.0.0-20180305231024-9cad4c3443a7
+# github.com/gregjones/httpcache v0.0.0-20190212212710-3befbb6ad0cc
 github.com/gregjones/httpcache
 github.com/gregjones/httpcache/diskcache
+github.com/gregjones/httpcache/redis
 # github.com/hashicorp/golang-lru v0.5.1
 github.com/hashicorp/golang-lru/simplelru
 github.com/hashicorp/golang-lru
@@ -144,20 +147,18 @@ github.com/openshift/client-go/project/clientset/versioned/scheme
 github.com/peterbourgon/diskv
 # github.com/pkg/errors v0.8.1
 github.com/pkg/errors
-# github.com/prometheus/client_golang v0.9.3-0.20190127221311-3c4408c8b829
+# github.com/prometheus/client_golang v0.9.3
 github.com/prometheus/client_golang/prometheus
 github.com/prometheus/client_golang/prometheus/internal
-# github.com/prometheus/client_model v0.0.0-20190115171406-56726106282f
+# github.com/prometheus/client_model v0.0.0-20190129233127-fd36f4220a90
 github.com/prometheus/client_model/go
-# github.com/prometheus/common v0.2.0
+# github.com/prometheus/common v0.4.1
 github.com/prometheus/common/expfmt
 github.com/prometheus/common/model
 github.com/prometheus/common/internal/bitbucket.org/ww/goautoneg
-# github.com/prometheus/procfs v0.0.0-20190117184657-bf6a532e95b1
+# github.com/prometheus/procfs v0.0.1
 github.com/prometheus/procfs
-github.com/prometheus/procfs/nfs
-github.com/prometheus/procfs/xfs
-github.com/prometheus/procfs/internal/util
+github.com/prometheus/procfs/internal/fs
 # github.com/satori/go.uuid v0.0.0-20160713180306-0aa62d5ddceb
 github.com/satori/go.uuid
 # github.com/shurcooL/githubv4 v0.0.0-20180925043049-51d7b505e2e9
@@ -168,7 +169,7 @@ github.com/shurcooL/go/ctxhttp
 github.com/shurcooL/graphql
 github.com/shurcooL/graphql/ident
 github.com/shurcooL/graphql/internal/jsonutil
-# github.com/sirupsen/logrus v1.3.0
+# github.com/sirupsen/logrus v1.4.2
 github.com/sirupsen/logrus
 github.com/sirupsen/logrus/hooks/test
 # github.com/spf13/pflag v1.0.3
@@ -217,7 +218,7 @@ golang.org/x/oauth2/jws
 golang.org/x/oauth2/jwt
 # golang.org/x/sync v0.0.0-20190227155943-e225da77a7e6
 golang.org/x/sync/semaphore
-# golang.org/x/sys v0.0.0-20190403152447-81d4e9dc473e
+# golang.org/x/sys v0.0.0-20190422165155-953cdadca894
 golang.org/x/sys/unix
 golang.org/x/sys/windows
 # golang.org/x/text v0.3.2
@@ -478,7 +479,7 @@ k8s.io/client-go/util/jsonpath
 k8s.io/client-go/third_party/forked/golang/template
 # k8s.io/kube-openapi v0.0.0-20180711000925-0cf8f7e6ed1d
 k8s.io/kube-openapi/pkg/util/proto
-# k8s.io/test-infra v0.0.0-20190507120946-f699675303ae
+# k8s.io/test-infra v0.0.0-20190610154516-e6c6e17e9827
 k8s.io/test-infra/prow/apis/prowjobs/v1
 k8s.io/test-infra/prow/config
 k8s.io/test-infra/prow/hook
@@ -499,6 +500,7 @@ k8s.io/test-infra/prow/plugins/assign
 k8s.io/test-infra/prow/plugins/blockade
 k8s.io/test-infra/prow/plugins/blunderbuss
 k8s.io/test-infra/prow/plugins/branchcleaner
+k8s.io/test-infra/prow/plugins/bugzilla
 k8s.io/test-infra/prow/plugins/buildifier
 k8s.io/test-infra/prow/plugins/cat
 k8s.io/test-infra/prow/plugins/cherrypickunapproved
@@ -514,6 +516,7 @@ k8s.io/test-infra/prow/plugins/invalidcommitmsg
 k8s.io/test-infra/prow/plugins/label
 k8s.io/test-infra/prow/plugins/lgtm
 k8s.io/test-infra/prow/plugins/lifecycle
+k8s.io/test-infra/prow/plugins/mergecommitblocker
 k8s.io/test-infra/prow/plugins/milestone
 k8s.io/test-infra/prow/plugins/milestonestatus
 k8s.io/test-infra/prow/plugins/override
@@ -523,6 +526,7 @@ k8s.io/test-infra/prow/plugins/project
 k8s.io/test-infra/prow/plugins/releasenote
 k8s.io/test-infra/prow/plugins/require-matching-label
 k8s.io/test-infra/prow/plugins/requiresig
+k8s.io/test-infra/prow/plugins/retitle
 k8s.io/test-infra/prow/plugins/shrug
 k8s.io/test-infra/prow/plugins/sigmention
 k8s.io/test-infra/prow/plugins/size
@@ -534,6 +538,7 @@ k8s.io/test-infra/prow/plugins/verify-owners
 k8s.io/test-infra/prow/plugins/welcome
 k8s.io/test-infra/prow/plugins/wip
 k8s.io/test-infra/prow/plugins/yuks
+k8s.io/test-infra/prow/bugzilla
 k8s.io/test-infra/prow/commentpruner
 k8s.io/test-infra/prow/git
 k8s.io/test-infra/prow/labels

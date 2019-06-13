@@ -19,12 +19,12 @@ require (
 	github.com/openshift/api v3.9.1-0.20190322043348-8741ff068a47+incompatible
 	github.com/openshift/client-go v0.0.0-20180830153425-431ec9a26e50
 	github.com/shurcooL/githubv4 v0.0.0-20180925043049-51d7b505e2e9
-	github.com/sirupsen/logrus v1.3.0
+	github.com/sirupsen/logrus v1.4.2
 	golang.org/x/oauth2 v0.0.0-20190226205417-e64efc72b421
 	golang.org/x/sync v0.0.0-20190227155943-e225da77a7e6
 	google.golang.org/api v0.3.2
 	k8s.io/api v0.0.0-20181128191700-6db15a15d2d3
 	k8s.io/apimachinery v0.0.0-20181128191346-49ce2735e507
 	k8s.io/client-go v9.0.0+incompatible
-	k8s.io/test-infra v0.0.0-20190507120946-f699675303ae
+	k8s.io/test-infra v0.0.0-20190610154516-e6c6e17e9827
 )

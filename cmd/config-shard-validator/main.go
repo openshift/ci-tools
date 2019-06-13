@@ -121,6 +121,7 @@ func main() {
 
 	for _, pathToCheck := range pathsToCheck {
 		var matchesAny bool
+		var matchedMap string
 		logger := logrus.WithField("source-file", pathToCheck.path)
 		for glob, updateConfig := range pcfg.ConfigUpdater.Maps {
 			globLogger := logger.WithField("glob", glob)
@@ -129,12 +130,16 @@ func main() {
 				globLogger.WithError(matchErr).Warn("Failed to check glob match.")
 			}
 			if matches {
+				if matchesAny {
+					globLogger.Errorf("File matches glob from more than one ConfigMap: %s, %s.", matchedMap, pathToCheck.configMap)
+					foundFailures = true
+				}
 				if updateConfig.Name != pathToCheck.configMap {
 					globLogger.Errorf("File matches glob from unexpected ConfigMap %s instead of %s.", updateConfig.Name, pathToCheck.configMap)
 					foundFailures = true
 				}
 				matchesAny = true
-				break
+				matchedMap = pathToCheck.configMap
 			}
 		}
 		if !matchesAny {

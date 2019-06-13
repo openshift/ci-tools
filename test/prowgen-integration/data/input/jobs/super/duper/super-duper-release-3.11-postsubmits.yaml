@@ -1,0 +1,10 @@
+postsubmits:
+  super/duper:
+  - agent: jenkins
+    branches:
+    - release-3.11
+    name: branch-ci-super-duper-release-3.11-legacy
+    always_run: true
+    context: ci/openshift-jenkins/legacy
+    labels:
+      master: ci.openshift.redhat.com

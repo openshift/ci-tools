@@ -1,0 +1,88 @@
+presubmits:
+  super/duper:
+  - agent: kubernetes
+    always_run: false
+    branches:
+    - master
+    context: ci/prow/images
+    decorate: true
+    max_concurrency: 100
+    name: pull-ci-super-duper-master-images
+    optional: true
+    rerun_command: /test images
+    run_if_changed: changes
+    skip_cloning: true
+    skip_report: true
+    spec:
+      containers:
+      - args:
+        - --artifact-dir=$(ARTIFACTS)
+        - --target=[images]
+        command:
+        - ci-operator
+        env:
+        - name: CONFIG_SPEC
+          valueFrom:
+            configMapKeyRef:
+              key: super-duper-master.yaml
+              name: ci-operator-master-configs
+        image: ci-operator:latest
+        name: ""
+        resources:
+          requests:
+            cpu: 10m
+      serviceAccountName: ci-operator
+    trigger: '(?m)^/test (?:.*? )?images(?: .*?)?$'
+  - agent: jenkins
+    branches:
+    - master
+    name: pull-ci-super-duper-master-legacy
+    always_run: true
+    context: ci/openshift-jenkins/legacy
+    labels:
+      master: ci.openshift.redhat.com
+    rerun_command: /test legacy
+    trigger: ((?m)^/test( all| legacy),?(\s+|$))
+  - agent: jenkins
+    name: pull-ci-super-duper-oldschool
+    always_run: true
+    context: ci/openshift-jenkins/oldschool
+    labels:
+      master: ci.openshift.redhat.com
+    rerun_command: /test oldschool
+    trigger: ((?m)^/test( all| oldschool),?(\s+|$))
+  - agent: kubernetes
+    always_run: false
+    branches:
+      - master
+    context: ci/prow/images
+    decorate: true
+    labels:
+      ci-operator.openshift.io/prowgen-controlled: "true"
+    max_concurrency: 100
+    name: pull-ci-super-duper-master-should-be-removed
+    optional: true
+    rerun_command: /test images
+    run_if_changed: changes
+    skip_cloning: true
+    skip_report: true
+    spec:
+      containers:
+      - args:
+          - --artifact-dir=$(ARTIFACTS)
+          - --target=[images]
+        command:
+          - ci-operator
+        env:
+          - name: CONFIG_SPEC
+            valueFrom:
+              configMapKeyRef:
+                key: super-duper-master.yaml
+                name: ci-operator-master-configs
+        image: ci-operator:latest
+        name: ""
+        resources:
+          requests:
+            cpu: 10m
+      serviceAccountName: ci-operator
+    trigger: '(?m)^/test (?:.*? )?images(?: .*?)?$'

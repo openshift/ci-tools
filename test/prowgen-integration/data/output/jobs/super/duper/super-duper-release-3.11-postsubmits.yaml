@@ -1,0 +1,50 @@
+postsubmits:
+  super/duper:
+  - agent: kubernetes
+    branches:
+    - ^release-3\.11$
+    decorate: true
+    decoration_config:
+      skip_cloning: true
+    labels:
+      ci-operator.openshift.io/prowgen-controlled: "true"
+    name: branch-ci-super-duper-release-3.11-images
+    spec:
+      containers:
+      - args:
+        - --artifact-dir=$(ARTIFACTS)
+        - --give-pr-author-access-to-namespace=true
+        - --promote
+        - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
+        - --target=[images]
+        - --target=src
+        command:
+        - ci-operator
+        env:
+        - name: CONFIG_SPEC
+          valueFrom:
+            configMapKeyRef:
+              key: super-duper-release-3.11.yaml
+              name: ci-operator-3.x-configs
+        image: ci-operator:latest
+        imagePullPolicy: Always
+        name: ""
+        resources:
+          requests:
+            cpu: 10m
+        volumeMounts:
+        - mountPath: /etc/sentry-dsn
+          name: sentry-dsn
+          readOnly: true
+      serviceAccountName: ci-operator
+      volumes:
+      - name: sentry-dsn
+        secret:
+          secretName: sentry-dsn
+  - agent: jenkins
+    branches:
+    - release-3.11
+    context: ci/openshift-jenkins/legacy
+    labels:
+      master: ci.openshift.redhat.com
+    name: branch-ci-super-duper-release-3.11-legacy

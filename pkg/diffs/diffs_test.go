@@ -527,3 +527,121 @@ func TestGetPresubmitsForClusterProfiles(t *testing.T) {
 		})
 	}
 }
+
+func TestGetChangedPeriodics(t *testing.T) {
+	basePeriodic := []prowconfig.Periodic{
+		{
+			JobBase: prowconfig.JobBase{
+				Agent: "kubernetes",
+				Name:  "test-base-periodic",
+				Spec: &v1.PodSpec{
+					Containers: []v1.Container{{
+						Command: []string{"ci-operator"},
+						Args:    []string{"--artifact-dir=$(ARTIFACTS)", "--target=images"},
+					}},
+				},
+			},
+		},
+	}
+
+	testCases := []struct {
+		name            string
+		configGenerator func() (before, after *prowconfig.Config)
+		expected        []prowconfig.Periodic
+	}{
+		{
+			name: "no differences mean nothing is identified as a diff",
+			configGenerator: func() (*prowconfig.Config, *prowconfig.Config) {
+				return makeConfigWithPeriodics(basePeriodic), makeConfigWithPeriodics(basePeriodic)
+			},
+			expected: nil,
+		},
+		{
+			name: "new job added",
+			configGenerator: func() (*prowconfig.Config, *prowconfig.Config) {
+				var p []prowconfig.Periodic
+				var pNew prowconfig.Periodic
+				deepcopy.Copy(&p, basePeriodic)
+
+				pNew = p[0]
+				pNew.Name = "test-base-periodic-new"
+				p = append(p, pNew)
+
+				return makeConfigWithPeriodics(basePeriodic), makeConfigWithPeriodics(p)
+
+			},
+			expected: func() []prowconfig.Periodic {
+				var p []prowconfig.Periodic
+				var pNew prowconfig.Periodic
+				deepcopy.Copy(&p, basePeriodic)
+				pNew = p[0]
+				pNew.Name = "test-base-periodic-new"
+
+				return append([]prowconfig.Periodic{}, pNew)
+			}(),
+		},
+		{
+			name: "different spec is identified as a diff - single change",
+			configGenerator: func() (*prowconfig.Config, *prowconfig.Config) {
+				var p []prowconfig.Periodic
+				deepcopy.Copy(&p, basePeriodic)
+				p[0].Spec.Containers[0].Command = []string{"test-command"}
+				return makeConfigWithPeriodics(basePeriodic), makeConfigWithPeriodics(p)
+
+			},
+			expected: func() []prowconfig.Periodic {
+				var p []prowconfig.Periodic
+				deepcopy.Copy(&p, basePeriodic)
+				p[0].Spec.Containers[0].Command = []string{"test-command"}
+				return p
+			}(),
+		},
+		{
+			name: "different spec is identified as a diff - massive changes",
+			configGenerator: func() (*prowconfig.Config, *prowconfig.Config) {
+				var p []prowconfig.Periodic
+				deepcopy.Copy(&p, basePeriodic)
+				p[0].Spec.Containers[0].Command = []string{"test-command"}
+				p[0].Spec.Containers[0].Args = []string{"testarg", "testarg", "testarg"}
+				p[0].Spec.Volumes = []v1.Volume{{
+					Name: "test-volume",
+					VolumeSource: v1.VolumeSource{
+						EmptyDir: &v1.EmptyDirVolumeSource{},
+					}},
+				}
+				return makeConfigWithPeriodics(basePeriodic), makeConfigWithPeriodics(p)
+			},
+			expected: func() []prowconfig.Periodic {
+				var p []prowconfig.Periodic
+				deepcopy.Copy(&p, basePeriodic)
+				p[0].Spec.Containers[0].Command = []string{"test-command"}
+				p[0].Spec.Containers[0].Args = []string{"testarg", "testarg", "testarg"}
+				p[0].Spec.Volumes = []v1.Volume{{
+					Name: "test-volume",
+					VolumeSource: v1.VolumeSource{
+						EmptyDir: &v1.EmptyDirVolumeSource{},
+					}},
+				}
+				return p
+			}(),
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			before, after := testCase.configGenerator()
+			p := GetChangedPeriodics(before, after, logrus.NewEntry(logrus.New()))
+			if !reflect.DeepEqual(testCase.expected, p) {
+				t.Fatalf("Name:%s\nExpected %#v\nFound:%#v\n", testCase.name, testCase.expected, p)
+			}
+		})
+	}
+}
+
+func makeConfigWithPeriodics(p []prowconfig.Periodic) *prowconfig.Config {
+	return &prowconfig.Config{
+		JobConfig: prowconfig.JobConfig{
+			Periodics: p,
+		},
+	}
+}

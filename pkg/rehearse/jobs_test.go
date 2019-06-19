@@ -961,3 +961,51 @@ func createVolumesHelper(name, key string) []v1.Volume {
 
 	return volumes
 }
+
+func TestGetClusterTypes(t *testing.T) {
+	makeJob := func(clusterType string) prowconfig.Presubmit {
+		ret := prowconfig.Presubmit{
+			JobBase: prowconfig.JobBase{
+				Agent: string(pjapi.KubernetesAgent),
+			},
+		}
+		if clusterType != "" {
+			ret.Spec = &v1.PodSpec{
+				Containers: []v1.Container{{
+					Env: []v1.EnvVar{{
+						Name:  clusterTypeEnvName,
+						Value: clusterType,
+					}},
+				}},
+			}
+		}
+		return ret
+	}
+	type Jobs map[string][]prowconfig.Presubmit
+	for _, tc := range []struct {
+		id   string
+		jobs Jobs
+		want []string
+	}{{
+		id:   "no types",
+		jobs: Jobs{"org/repo": {makeJob("")}},
+	}, {
+		id:   "one type",
+		jobs: Jobs{"org/repo": {makeJob(""), makeJob("aws")}},
+		want: []string{"aws"},
+	}, {
+		id: "multiple types",
+		jobs: Jobs{
+			"org/repo":   {makeJob(""), makeJob("aws")},
+			"org/sitory": {makeJob("azure"), makeJob("vsphere")},
+		},
+		want: []string{"aws", "azure", "vsphere"},
+	}} {
+		t.Run(tc.id, func(t *testing.T) {
+			ret := getClusterTypes(tc.jobs)
+			if !reflect.DeepEqual(tc.want, ret) {
+				t.Fatal(diff.ObjectDiff(tc.want, ret))
+			}
+		})
+	}
+}

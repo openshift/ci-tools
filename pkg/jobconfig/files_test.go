@@ -611,12 +611,20 @@ func TestInfo_ConfigMapName(t *testing.T) {
 	testCases := []struct {
 		name     string
 		branch   string
+		jobType  string
 		expected string
 	}{
 		{
-			name:     "master branch goes to master configmap",
+			name:     "master branch goes to master configmap further sharded by type: presubmits",
 			branch:   "master",
-			expected: "job-config-master",
+			jobType:  "presubmits",
+			expected: "job-config-master-presubmits",
+		},
+		{
+			name:     "master branch goes to master configmap further sharded by type: postsubmits",
+			branch:   "master",
+			jobType:  "postsubmits",
+			expected: "job-config-master-postsubmits",
 		},
 		{
 			name:     "enterprise 3.6 branch goes to 3.x configmap",
@@ -681,7 +689,7 @@ func TestInfo_ConfigMapName(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.expected, func(t *testing.T) {
-			info := Info{Branch: testCase.branch}
+			info := Info{Branch: testCase.branch, Type: testCase.jobType}
 			if actual, expected := info.ConfigMapName(), testCase.expected; !reflect.DeepEqual(actual, expected) {
 				t.Errorf("%s: didn't get correct basename: %v", testCase.name, diff.ObjectReflectDiff(actual, expected))
 			}

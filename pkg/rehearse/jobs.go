@@ -241,12 +241,12 @@ func ConfigureRehearsalJobs(toBeRehearsed config.Presubmits, ciopConfigs config.
 // The job selection is done by iterating in an unspecified order, which avoids picking the same job
 // So if a template will be changed, find the jobs that are using a template in combination with the `aws`,`openstack`,`gcs` and `libvirt` cluster types.
 func AddRandomJobsForChangedTemplates(templates []config.ConfigMapSource, toBeRehearsed config.Presubmits, prConfigPresubmits map[string][]prowconfig.Presubmit, loggers Loggers, prNumber int) config.Presubmits {
+	clusterTypes := getClusterTypes(prConfigPresubmits)
 	rehearsals := make(config.Presubmits)
 
 	for _, template := range templates {
 		templateFile := filepath.Base(template.Filename)
-		for _, clusterType := range []string{"aws", "gcs", "openstack", "libvirt", "vsphere", "gcp"} {
-
+		for _, clusterType := range clusterTypes {
 			if isAlreadyRehearsed(toBeRehearsed, clusterType, templateFile) {
 				continue
 			}
@@ -259,6 +259,27 @@ func AddRandomJobsForChangedTemplates(templates []config.ConfigMapSource, toBeRe
 		}
 	}
 	return rehearsals
+}
+
+func getClusterTypes(jobs map[string][]prowconfig.Presubmit) []string {
+	ret := sets.NewString()
+	for _, jobs := range jobs {
+		for _, j := range jobs {
+			if j.Spec != nil && j.Spec.Containers != nil {
+				for _, c := range j.Spec.Containers {
+					for _, e := range c.Env {
+						if e.Name == clusterTypeEnvName {
+							ret.Insert(e.Value)
+						}
+					}
+				}
+			}
+		}
+	}
+	if len(ret) == 0 {
+		return nil
+	}
+	return ret.List()
 }
 
 func isAlreadyRehearsed(toBeRehearsed config.Presubmits, clusterType, templateFile string) bool {

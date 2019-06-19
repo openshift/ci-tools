@@ -245,7 +245,7 @@ func AddRandomJobsForChangedTemplates(templates []config.ConfigMapSource, toBeRe
 
 	for _, template := range templates {
 		templateFile := filepath.Base(template.Filename)
-		for _, clusterType := range []string{"aws", "gcs", "openstack", "libvirt", "vsphere", "gcp"} {
+		for _, clusterType := range []string{"aws", "gcs", "openstack", "libvirt", "vsphere", "gcp", "azure4"} {
 
 			if isAlreadyRehearsed(toBeRehearsed, clusterType, templateFile) {
 				continue

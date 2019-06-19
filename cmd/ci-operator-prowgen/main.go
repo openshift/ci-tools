@@ -84,13 +84,7 @@ func (o *options) process() error {
 // Generate a PodSpec that runs `ci-operator`, to be used in Presubmit/Postsubmit
 // Various pieces are derived from `org`, `repo`, `branch` and `target`.
 // `additionalArgs` are passed as additional arguments to `ci-operator`
-func generatePodSpec(info *config.Info, target string, additionalArgs ...string) *kubeapi.PodSpec {
-	for _, arg := range additionalArgs {
-		if !strings.HasPrefix(arg, "--") {
-			panic(fmt.Sprintf("all args to ci-operator must be in the form --flag=value, not %s", arg))
-		}
-	}
-
+func generatePodSpec(info *config.Info, target string) *kubeapi.PodSpec {
 	configMapKeyRef := kubeapi.EnvVarSource{
 		ConfigMapKeyRef: &kubeapi.ConfigMapKeySelector{
 			LocalObjectReference: kubeapi.LocalObjectReference{
@@ -99,21 +93,13 @@ func generatePodSpec(info *config.Info, target string, additionalArgs ...string)
 			Key: info.Basename(),
 		},
 	}
-
 	return &kubeapi.PodSpec{
 		ServiceAccountName: "ci-operator",
 		Containers: []kubeapi.Container{
 			{
 				Image:           "ci-operator:latest",
 				ImagePullPolicy: kubeapi.PullAlways,
-				Command:         []string{"ci-operator"},
-				Args: append([]string{
-					"--give-pr-author-access-to-namespace=true",
-					"--artifact-dir=$(ARTIFACTS)",
-					fmt.Sprintf("--target=%s", target),
-					fmt.Sprintf("--sentry-dsn-path=%s", sentryDsnSecretPath),
-				}, additionalArgs...),
-				Env: []kubeapi.EnvVar{{Name: "CONFIG_SPEC", ValueFrom: &configMapKeyRef}},
+				Env:             []kubeapi.EnvVar{{Name: "CONFIG_SPEC", ValueFrom: &configMapKeyRef}},
 				Resources: kubeapi.ResourceRequirements{
 					Requests: kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
 				},
@@ -133,7 +119,25 @@ func generatePodSpec(info *config.Info, target string, additionalArgs ...string)
 	}
 }
 
-func generatePodSpecTemplate(info *config.Info, release string, test *cioperatorapi.TestStepConfiguration, additionalArgs ...string) *kubeapi.PodSpec {
+func generateCiOperatorPodSpec(info *config.Info, target string, additionalArgs ...string) *kubeapi.PodSpec {
+	for _, arg := range additionalArgs {
+		if !strings.HasPrefix(arg, "--") {
+			panic(fmt.Sprintf("all args to ci-operator must be in the form --flag=value, not %s", arg))
+		}
+	}
+
+	ret := generatePodSpec(info, target)
+	ret.Containers[0].Command = []string{"ci-operator"}
+	ret.Containers[0].Args = append([]string{
+		"--give-pr-author-access-to-namespace=true",
+		"--artifact-dir=$(ARTIFACTS)",
+		fmt.Sprintf("--target=%s", target),
+		fmt.Sprintf("--sentry-dsn-path=%s", sentryDsnSecretPath),
+	}, additionalArgs...)
+	return ret
+}
+
+func generatePodSpecTemplate(info *config.Info, release string, test *cioperatorapi.TestStepConfiguration) *kubeapi.PodSpec {
 	var template string
 	var clusterProfile cioperatorapi.ClusterProfile
 	var needsReleaseRpms bool
@@ -189,7 +193,7 @@ func generatePodSpecTemplate(info *config.Info, release string, test *cioperator
 	}
 	clusterProfilePath := fmt.Sprintf("/usr/local/%s-cluster-profile", test.As)
 	templatePath := fmt.Sprintf("/usr/local/%s", test.As)
-	podSpec := generatePodSpec(info, test.As, additionalArgs...)
+	podSpec := generateCiOperatorPodSpec(info, test.As)
 	clusterProfileVolume := kubeapi.Volume{
 		Name: "cluster-profile",
 		VolumeSource: kubeapi.VolumeSource{
@@ -379,7 +383,7 @@ func generateJobs(
 	for _, element := range configSpec.Tests {
 		var podSpec *kubeapi.PodSpec
 		if element.ContainerTestConfiguration != nil {
-			podSpec = generatePodSpec(info, element.As)
+			podSpec = generateCiOperatorPodSpec(info, element.As)
 		} else {
 			var release string
 			if c := configSpec.ReleaseTagConfiguration; c != nil {
@@ -407,10 +411,10 @@ func generateJobs(
 			}
 		}
 
-		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest("images", info, generatePodSpec(info, "[images]", additionalPresubmitArgs...)))
+		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest("images", info, generateCiOperatorPodSpec(info, "[images]", additionalPresubmitArgs...)))
 
 		if configSpec.PromotionConfiguration != nil {
-			postsubmits[orgrepo] = append(postsubmits[orgrepo], *generatePostsubmitForTest("images", info, true, labels, generatePodSpec(info, "[images]", additionalPostsubmitArgs...)))
+			postsubmits[orgrepo] = append(postsubmits[orgrepo], *generatePostsubmitForTest("images", info, true, labels, generateCiOperatorPodSpec(info, "[images]", additionalPostsubmitArgs...)))
 		}
 	}
 

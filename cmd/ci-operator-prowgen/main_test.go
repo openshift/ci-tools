@@ -119,9 +119,9 @@ func TestGeneratePodSpec(t *testing.T) {
 	for _, tc := range tests {
 		var podSpec *kubeapi.PodSpec
 		if len(tc.additionalArgs) == 0 {
-			podSpec = generatePodSpec(tc.info, tc.target)
+			podSpec = generateCiOperatorPodSpec(tc.info, tc.target)
 		} else {
-			podSpec = generatePodSpec(tc.info, tc.target, tc.additionalArgs...)
+			podSpec = generateCiOperatorPodSpec(tc.info, tc.target, tc.additionalArgs...)
 		}
 		if !equality.Semantic.DeepEqual(podSpec, tc.expected) {
 			t.Errorf("expected PodSpec diff:\n%s", diff.ObjectDiff(tc.expected, podSpec))

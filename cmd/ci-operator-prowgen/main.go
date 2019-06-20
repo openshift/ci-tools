@@ -27,6 +27,37 @@ const (
 	sentryDsnSecretName = "sentry-dsn"
 	sentryDsnMountPath  = "/etc/sentry-dsn"
 	sentryDsnSecretPath = "/etc/sentry-dsn/ci-operator"
+
+	openshiftInstallerRandomCmd = `set -eux
+target=$(awk < /usr/local/e2e-targets \
+    --assign "r=$RANDOM" \
+    'BEGIN { r /= 32767 } (r -= $1) <= 0 { print $2; exit }')
+case "$target" in
+    aws) template=e2e; CLUSTER_TYPE=aws;;
+    azure) template=e2e; CLUSTER_TYPE=azure4;;
+    aws-upi) template=upi-e2e; CLUSTER_TYPE=aws;;
+    vsphere) template=upi-e2e; CLUSTER_TYPE=vsphere;;
+    *) echo >&2 "invalid target $target"; exit 1 ;;
+esac
+ln -s "/usr/local/job-definition/cluster-launch-installer-$template.yaml" /tmp/%[1]s
+ln -s "/usr/local/cluster-profiles/$CLUSTER_TYPE" /tmp/%[1]s-cluster-profile
+export CLUSTER_TYPE
+exec ci-operator \
+    --artifact-dir=$(ARTIFACTS) \
+    --give-pr-author-access-to-namespace=true \
+    --secret-dir=/tmp/%[1]s-cluster-profile \
+    --sentry-dsn-path=/etc/sentry-dsn/ci-operator \
+    --target=%[1]s \
+    --template=/tmp/%[1]s
+`
+)
+
+var (
+	openshiftInstallerRandomProfiles = []cioperatorapi.ClusterProfile{
+		cioperatorapi.ClusterProfileAWS,
+		cioperatorapi.ClusterProfileAzure4,
+		cioperatorapi.ClusterProfileVSphere,
+	}
 )
 
 type options struct {
@@ -281,6 +312,78 @@ func generatePodSpecTemplate(info *config.Info, release string, test *cioperator
 	return podSpec
 }
 
+func generatePodSpecRandom(info *config.Info, test *cioperatorapi.TestStepConfiguration) *kubeapi.PodSpec {
+	podSpec := generatePodSpec(info, test.As)
+	for _, profile := range openshiftInstallerRandomProfiles {
+		podSpec.Volumes = append(podSpec.Volumes, kubeapi.Volume{
+			Name: "cluster-profile-" + string(profile),
+			VolumeSource: kubeapi.VolumeSource{
+				Projected: &kubeapi.ProjectedVolumeSource{
+					Sources: []kubeapi.VolumeProjection{{
+						Secret: &kubeapi.SecretProjection{
+							LocalObjectReference: kubeapi.LocalObjectReference{
+								Name: "cluster-secrets-" + string(profile),
+							},
+						},
+					}},
+				},
+			},
+		})
+	}
+	podSpec.Volumes = append(podSpec.Volumes, kubeapi.Volume{
+		Name: "job-definition",
+		VolumeSource: kubeapi.VolumeSource{
+			Projected: &kubeapi.ProjectedVolumeSource{
+				Sources: []kubeapi.VolumeProjection{{
+					ConfigMap: &kubeapi.ConfigMapProjection{
+						LocalObjectReference: kubeapi.LocalObjectReference{
+							Name: "prow-job-cluster-launch-installer-e2e",
+						},
+					},
+				}, {
+					ConfigMap: &kubeapi.ConfigMapProjection{
+						LocalObjectReference: kubeapi.LocalObjectReference{
+							Name: "prow-job-cluster-launch-installer-upi-e2e",
+						},
+					},
+				}},
+			},
+		},
+	})
+	podSpec.Volumes = append(podSpec.Volumes, kubeapi.Volume{
+		Name: "e2e-targets",
+		VolumeSource: kubeapi.VolumeSource{
+			ConfigMap: &kubeapi.ConfigMapVolumeSource{
+				LocalObjectReference: kubeapi.LocalObjectReference{
+					Name: "e2e-targets",
+				},
+			},
+		},
+	})
+	container := &podSpec.Containers[0]
+	container.Command = []string{"bash"}
+	container.Args = []string{"-c", fmt.Sprintf(openshiftInstallerRandomCmd, test.As)}
+	container.Env = append(container.Env, []kubeapi.EnvVar{
+		{Name: "JOB_NAME_SAFE", Value: strings.Replace(test.As, "_", "-", -1)},
+		{Name: "TEST_COMMAND", Value: test.Commands},
+	}...)
+	for _, p := range openshiftInstallerRandomProfiles {
+		container.VolumeMounts = append(container.VolumeMounts, kubeapi.VolumeMount{
+			Name:      "cluster-profile-" + string(p),
+			MountPath: "/usr/local/cluster-profiles/" + string(p),
+		})
+	}
+	container.VolumeMounts = append(container.VolumeMounts, []kubeapi.VolumeMount{{
+		Name:      "e2e-targets",
+		MountPath: "/usr/local/e2e-targets",
+		SubPath:   "e2e-targets",
+	}, {
+		Name:      "job-definition",
+		MountPath: "/usr/local/job-definition"},
+	}...)
+	return podSpec
+}
+
 func generatePresubmitForTest(name string, info *config.Info, podSpec *kubeapi.PodSpec) *prowconfig.Presubmit {
 	labels := map[string]string{jc.ProwJobLabelGenerated: jc.Generated}
 
@@ -389,7 +492,11 @@ func generateJobs(
 			if c := configSpec.ReleaseTagConfiguration; c != nil {
 				release = c.Name
 			}
-			podSpec = generatePodSpecTemplate(info, release, &element)
+			if conf := element.OpenshiftInstallerRandomClusterTestConfiguration; conf != nil {
+				podSpec = generatePodSpecRandom(info, &element)
+			} else {
+				podSpec = generatePodSpecTemplate(info, release, &element)
+			}
 		}
 		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(element.As, info, podSpec))
 	}

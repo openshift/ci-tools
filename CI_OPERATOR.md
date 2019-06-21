@@ -24,9 +24,9 @@ software on top of Kubernetes easier.
 Currently, users must download the source and build it themselves:
 
 ```
-$ git clone https://github.com/openshift/ci-operator.git
-$ cd ci-operator
-$ make build
+$ git clone https://github.com/openshift/ci-tools.git
+$ cd ci-tools
+$ go build ./cmd/ci-operator
 ```
 
 ## Usage

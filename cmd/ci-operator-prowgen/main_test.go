@@ -119,9 +119,9 @@ func TestGeneratePodSpec(t *testing.T) {
 	for _, tc := range tests {
 		var podSpec *kubeapi.PodSpec
 		if len(tc.additionalArgs) == 0 {
-			podSpec = generatePodSpec(tc.info, tc.target)
+			podSpec = generateCiOperatorPodSpec(tc.info, tc.target)
 		} else {
-			podSpec = generatePodSpec(tc.info, tc.target, tc.additionalArgs...)
+			podSpec = generateCiOperatorPodSpec(tc.info, tc.target, tc.additionalArgs...)
 		}
 		if !equality.Semantic.DeepEqual(podSpec, tc.expected) {
 			t.Errorf("expected PodSpec diff:\n%s", diff.ObjectDiff(tc.expected, podSpec))
@@ -323,6 +323,139 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 		if !equality.Semantic.DeepEqual(podSpec, tc.expected) {
 			t.Errorf("expected PodSpec diff:\n%s", diff.ObjectDiff(tc.expected, podSpec))
 		}
+	}
+}
+
+func TestGeneratePodSpecRandom(t *testing.T) {
+	info := config.Info{Org: "org", Repo: "repo", Branch: "branch"}
+	test := ciop.TestStepConfiguration{
+		As:       "e2e",
+		Commands: "commands",
+		OpenshiftInstallerRandomClusterTestConfiguration: &ciop.OpenshiftInstallerRandomClusterTestConfiguration{},
+	}
+	expected := &kubeapi.PodSpec{
+		ServiceAccountName: "ci-operator",
+		Containers: []kubeapi.Container{{
+			Image:           "ci-operator:latest",
+			ImagePullPolicy: kubeapi.PullAlways,
+			Command:         []string{"bash"},
+			Args:            []string{"-c", fmt.Sprintf(openshiftInstallerRandomCmd, "e2e")},
+			Env: []kubeapi.EnvVar{{
+				Name: "CONFIG_SPEC",
+				ValueFrom: &kubeapi.EnvVarSource{
+					ConfigMapKeyRef: &kubeapi.ConfigMapKeySelector{
+						LocalObjectReference: kubeapi.LocalObjectReference{
+							Name: "ci-operator-misc-configs",
+						},
+						Key: "org-repo-branch.yaml",
+					},
+				},
+			},
+				{Name: "JOB_NAME_SAFE", Value: "e2e"},
+				{Name: "TEST_COMMAND", Value: "commands"},
+			},
+			Resources: kubeapi.ResourceRequirements{
+				Requests: kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
+			},
+			VolumeMounts: []kubeapi.VolumeMount{{
+				Name:      "sentry-dsn",
+				MountPath: "/etc/sentry-dsn",
+				ReadOnly:  true,
+			}, {
+				Name:      "cluster-profile-aws",
+				MountPath: "/usr/local/cluster-profiles/aws",
+			}, {
+				Name:      "cluster-profile-azure4",
+				MountPath: "/usr/local/cluster-profiles/azure4",
+			}, {
+				Name:      "cluster-profile-vsphere",
+				MountPath: "/usr/local/cluster-profiles/vsphere",
+			}, {
+				Name:      "e2e-targets",
+				MountPath: "/usr/local/e2e-targets",
+				SubPath:   "e2e-targets",
+			}, {
+				Name:      "job-definition",
+				MountPath: "/usr/local/job-definition",
+			}},
+		}},
+		Volumes: []kubeapi.Volume{{
+			Name: "sentry-dsn",
+			VolumeSource: kubeapi.VolumeSource{
+				Secret: &kubeapi.SecretVolumeSource{SecretName: "sentry-dsn"},
+			},
+		}, {
+			Name: "cluster-profile-aws",
+			VolumeSource: kubeapi.VolumeSource{
+				Projected: &kubeapi.ProjectedVolumeSource{
+					Sources: []kubeapi.VolumeProjection{{
+						Secret: &kubeapi.SecretProjection{
+							LocalObjectReference: kubeapi.LocalObjectReference{
+								Name: "cluster-secrets-aws",
+							},
+						},
+					}},
+				},
+			},
+		}, {
+			Name: "cluster-profile-azure4",
+			VolumeSource: kubeapi.VolumeSource{
+				Projected: &kubeapi.ProjectedVolumeSource{
+					Sources: []kubeapi.VolumeProjection{{
+						Secret: &kubeapi.SecretProjection{
+							LocalObjectReference: kubeapi.LocalObjectReference{
+								Name: "cluster-secrets-azure4",
+							},
+						},
+					}},
+				},
+			},
+		}, {
+			Name: "cluster-profile-vsphere",
+			VolumeSource: kubeapi.VolumeSource{
+				Projected: &kubeapi.ProjectedVolumeSource{
+					Sources: []kubeapi.VolumeProjection{{
+						Secret: &kubeapi.SecretProjection{
+							LocalObjectReference: kubeapi.LocalObjectReference{
+								Name: "cluster-secrets-vsphere",
+							},
+						},
+					}},
+				},
+			},
+		}, {
+			Name: "job-definition",
+			VolumeSource: kubeapi.VolumeSource{
+				Projected: &kubeapi.ProjectedVolumeSource{
+					Sources: []kubeapi.VolumeProjection{{
+						ConfigMap: &kubeapi.ConfigMapProjection{
+							LocalObjectReference: kubeapi.LocalObjectReference{
+								Name: "prow-job-cluster-launch-installer-e2e",
+							},
+						},
+					}, {
+						ConfigMap: &kubeapi.ConfigMapProjection{
+							LocalObjectReference: kubeapi.LocalObjectReference{
+								Name: "prow-job-cluster-launch-installer-upi-e2e",
+							},
+						},
+					}},
+				},
+			},
+		}, {
+			Name: "e2e-targets",
+			VolumeSource: kubeapi.VolumeSource{
+				ConfigMap: &kubeapi.ConfigMapVolumeSource{
+					LocalObjectReference: kubeapi.LocalObjectReference{
+						Name: "e2e-targets",
+					},
+				},
+			},
+		}},
+	}
+	podSpec := generatePodSpecRandom(&info, &test)
+	if !equality.Semantic.DeepEqual(expected, podSpec) {
+		t.Fatal(diff.ObjectDiff(expected, podSpec))
 	}
 }
 

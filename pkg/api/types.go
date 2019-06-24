@@ -303,6 +303,7 @@ type TestStepConfiguration struct {
 	OpenshiftInstallerSrcClusterTestConfiguration     *OpenshiftInstallerSrcClusterTestConfiguration     `json:"openshift_installer_src,omitempty"`
 	OpenshiftInstallerUPIClusterTestConfiguration     *OpenshiftInstallerUPIClusterTestConfiguration     `json:"openshift_installer_upi,omitempty"`
 	OpenshiftInstallerConsoleClusterTestConfiguration *OpenshiftInstallerConsoleClusterTestConfiguration `json:"openshift_installer_console,omitempty"`
+	OpenshiftInstallerRandomClusterTestConfiguration  *OpenshiftInstallerRandomClusterTestConfiguration  `json:"openshift_installer_random,omitempty"`
 }
 
 // Secret describes a secret to be mounted inside a test
@@ -433,6 +434,11 @@ type OpenshiftInstallerConsoleClusterTestConfiguration struct {
 type OpenshiftInstallerUPIClusterTestConfiguration struct {
 	ClusterTestConfiguration `json:",inline"`
 }
+
+// OpenshiftInstallerRandomClusterTestConfiguration describes a
+// that provisions a cluster using openshift-installer in a provider
+// chosen randomly and runs conformance tests.
+type OpenshiftInstallerRandomClusterTestConfiguration struct{}
 
 // PipelineImageStreamTagReference is a tag on the
 // ImageStream corresponding to the code under test.

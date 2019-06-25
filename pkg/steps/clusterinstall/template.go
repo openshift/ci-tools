@@ -11,6 +11,7 @@ parameters:
   required: true
 - name: NAMESPACE
   required: true
+- name: IMAGE_FORMAT
 - name: IMAGE_INSTALLER
   required: true
 - name: IMAGE_TESTS
@@ -22,8 +23,6 @@ parameters:
 - name: RELEASE_IMAGE_LATEST
   required: true
 - name: BASE_DOMAIN
-  value: origin-ci-int-aws.dev.rhcloud.com
-  required: true
 
 objects:
 
@@ -100,10 +99,14 @@ objects:
       env:
       - name: AWS_SHARED_CREDENTIALS_FILE
         value: /tmp/cluster/.awscred
+      - name: AZURE_AUTH_LOCATION
+        value: /tmp/cluster/osServicePrincipal.json
       - name: ARTIFACT_DIR
         value: /tmp/artifacts
       - name: HOME
         value: /tmp/home
+      - name: IMAGE_FORMAT
+        value: ${IMAGE_FORMAT}
       - name: KUBECONFIG
         value: /tmp/artifacts/installer/auth/kubeconfig
       command:
@@ -136,9 +139,11 @@ objects:
           break
         done
 
-        until oc --insecure-skip-tls-verify wait clusterversion/version --for condition=available 2>/dev/null; do
-          sleep 10 & wait
-        done
+        # if the cluster profile included an insights secret, install it to the cluster to
+        # report support data from the support-operator
+        if [[ -f /tmp/cluster/insights-live.yaml ]]; then
+          oc create -f /tmp/cluster/insights-live.yaml || true
+        fi
 
         # set up cloud-provider-specific env vars
         export KUBE_SSH_BASTION="$( oc --insecure-skip-tls-verify get node -l node-role.kubernetes.io/master -o 'jsonpath={.items[0].status.addresses[?(@.type=="ExternalIP")].address}' ):22"
@@ -157,9 +162,8 @@ objects:
           # TODO: make openshift-tests auto-discover this from cluster config
           export TEST_PROVIDER='{"type":"aws","region":"us-east-1","zone":"us-east-1a","multizone":true,"multimaster":true}'
           export KUBE_SSH_USER=core
-        elif [[ "${CLUSTER_TYPE}" == "openstack" ]]; then
-          mkdir -p ~/.ssh
-          cp /tmp/cluster/ssh-privatekey ~/.ssh/kube_openstack_rsa || true
+        elif [[ "${CLUSTER_TYPE}" == "azure4" ]]; then
+          export TEST_PROVIDER='azure'
         fi
 
         mkdir -p /tmp/output
@@ -198,28 +202,22 @@ objects:
         value: /etc/openshift-installer/.awscred
       - name: AWS_REGION
         value: us-east-1
+      - name: AZURE_AUTH_LOCATION
+        value: /etc/openshift-installer/osServicePrincipal.json
+      - name: AZURE_REGION
+        value: centralus
       - name: CLUSTER_NAME
         value: ${NAMESPACE}-${JOB_NAME_HASH}
       - name: BASE_DOMAIN
         value: ${BASE_DOMAIN}
+      - name: SSH_PRIV_KEY_PATH
+        value: /etc/openshift-installer/ssh-privatekey
       - name: SSH_PUB_KEY_PATH
         value: /etc/openshift-installer/ssh-publickey
       - name: PULL_SECRET_PATH
         value: /etc/openshift-installer/pull-secret
       - name: OPENSHIFT_INSTALL_RELEASE_IMAGE_OVERRIDE
         value: ${RELEASE_IMAGE_LATEST}
-      - name: OPENSTACK_IMAGE
-        value: rhcos
-      - name: OPENSTACK_REGION
-        value: moc-kzn
-      - name: OPENSTACK_FLAVOR
-        value: m1.s2.xlarge
-      - name: OPENSTACK_EXTERNAL_NETWORK
-        value: external
-      - name: OS_CLOUD
-        value: openstack-cloud
-      - name: OS_CLIENT_CONFIG_FILE
-        value: /etc/openshift-installer/clouds.yaml
       - name: USER
         value: test
       - name: HOME
@@ -248,10 +246,14 @@ objects:
         export SSH_PUB_KEY=$(cat "${SSH_PUB_KEY_PATH}")
         export PULL_SECRET=$(cat "${PULL_SECRET_PATH}")
 
+        ## move private key to ~/.ssh/ so that installer can use it to gather logs on bootstrap failure
+        mkdir -p ~/.ssh
+        cp "${SSH_PRIV_KEY_PATH}" ~/.ssh/
+
         if [[ "${CLUSTER_TYPE}" == "aws" ]]; then
             cat > /tmp/artifacts/installer/install-config.yaml << EOF
-        apiVersion: v1beta4
-        baseDomain: ${BASE_DOMAIN}
+        apiVersion: v1
+        baseDomain: ${BASE_DOMAIN:-origin-ci-int-aws.dev.rhcloud.com}
         metadata:
           name: ${CLUSTER_NAME}
         controlPlane:
@@ -272,14 +274,6 @@ objects:
               - us-east-1a
               - us-east-1b
               - us-east-1c
-        networking:
-          clusterNetwork:
-          - cidr: 10.128.0.0/14
-            hostPrefix: 23
-          machineCIDR: 10.0.0.0/16
-          serviceNetwork:
-          - 172.30.0.0/16
-          networkType: OpenShiftSDN
         platform:
           aws:
             region:       ${AWS_REGION}
@@ -290,40 +284,29 @@ objects:
         sshKey: |
           ${SSH_PUB_KEY}
         EOF
-        elif [[ "${CLUSTER_TYPE}" == "openshift" ]]; then
-          # create a new floating ip tagged with CLUSTER_NAME so it can be deleted later
-          LB_FIP=$(openstack floating ip create --description $CLUSTER_NAME $OPENSTACK_EXTERNAL_NETWORK --format value -c 'floating_ip_address')
-
-          # create A record for the api
-          curl -v -X POST $CI_DNS_IP:8080 -d '{"name": "'api.$CLUSTER_NAME'", "ip": "'$LB_FIP'"}'
-
-          cat > /tmp/artifacts/installer/install-config.yaml << EOF
-        apiVersion: v1beta4
-        baseDomain: ${BASE_DOMAIN}
+        elif [[ "${CLUSTER_TYPE}" == "azure4" ]]; then
+            cat > /tmp/artifacts/installer/install-config.yaml << EOF
+        apiVersion: v1
+        baseDomain: ${BASE_DOMAIN:-ci.azure.devcluster.openshift.com}
         metadata:
           name: ${CLUSTER_NAME}
-        networking:
-          clusterNetworks:
-          - cidr:             10.128.0.0/14
-            hostSubnetLength: 9
-          machineCIDR: 10.0.0.0/16
-          serviceCIDR: 172.30.0.0/16
-          type:        OpenShiftSDN
+        controlPlane:
+          name: master
+          replicas: 3
+        compute:
+        - name: worker
+          replicas: 3
         platform:
-          openstack:
-            baseImage:        ${OPENSTACK_IMAGE}
-            cloud:            ${OS_CLOUD}
-            externalNetwork:  ${OPENSTACK_EXTERNAL_NETWORK}
-            computeFlavor:    ${OPENSTACK_FLAVOR}
-            region:           ${OPENSTACK_REGION}
-            lbFloatingIP:     ${LB_FIP}
+          azure:
+            baseDomainResourceGroupName: os4-common
+            region: ${AZURE_REGION}
         pullSecret: >
           ${PULL_SECRET}
         sshKey: |
           ${SSH_PUB_KEY}
         EOF
         else
-            echo "Unsupported cluster type '${CLUSTER_NAME}'"
+            echo "Unsupported cluster type '${CLUSTER_TYPE}'"
             exit 1
         fi
 
@@ -346,6 +329,14 @@ objects:
         value: ${NAMESPACE}-${JOB_NAME_HASH}
       - name: TYPE
         value: ${CLUSTER_TYPE}
+      - name: AWS_SHARED_CREDENTIALS_FILE
+        value: /etc/openshift-installer/.awscred
+      - name: AWS_REGION
+        value: us-east-1
+      - name: AZURE_AUTH_LOCATION
+        value: /etc/openshift-installer/osServicePrincipal.json
+      - name: AZURE_REGION
+        value: centralus
       - name: KUBECONFIG
         value: /tmp/artifacts/installer/auth/kubeconfig
       command:
@@ -453,21 +444,8 @@ objects:
             queue /tmp/artifacts/nodes/$i/heap oc --insecure-skip-tls-verify get --request-timeout=20s --raw /api/v1/nodes/$i/proxy/debug/pprof/heap
           done < /tmp/nodes
 
-          if oc --insecure-skip-tls-verify adm node-logs -h &>/dev/null; then
-            # starting in 4.0 we can query node logs directly
-            FILTER=gzip queue /tmp/artifacts/nodes/masters-journal.gz oc --insecure-skip-tls-verify adm node-logs --role=master --unify=false
-            FILTER=gzip queue /tmp/artifacts/nodes/workers-journal.gz oc --insecure-skip-tls-verify adm node-logs --role=worker --unify=false
-          else
-            while IFS= read -r i; do
-              FILTER=gzip queue /tmp/artifacts/nodes/$i/messages.gz oc --insecure-skip-tls-verify get --request-timeout=20s --raw /api/v1/nodes/$i/proxy/logs/messages
-              oc --insecure-skip-tls-verify get --request-timeout=20s --raw /api/v1/nodes/$i/proxy/logs/journal | sed -e 's|.*href="\(.*\)".*|\1|;t;d' > /tmp/journals
-              while IFS= read -r j; do
-                FILTER=gzip queue /tmp/artifacts/nodes/$i/journal.gz oc --insecure-skip-tls-verify get --request-timeout=20s --raw /api/v1/nodes/$i/proxy/logs/journal/${j}system.journal
-              done < /tmp/journals
-              FILTER=gzip queue /tmp/artifacts/nodes/$i/secure.gz oc --insecure-skip-tls-verify get --request-timeout=20s --raw /api/v1/nodes/$i/proxy/logs/secure
-              FILTER=gzip queue /tmp/artifacts/nodes/$i/audit.gz oc --insecure-skip-tls-verify get --request-timeout=20s --raw /api/v1/nodes/$i/proxy/logs/audit
-            done < /tmp/nodes
-          fi
+          FILTER=gzip queue /tmp/artifacts/nodes/masters-journal.gz oc --insecure-skip-tls-verify adm node-logs --role=master --unify=false
+          FILTER=gzip queue /tmp/artifacts/nodes/workers-journal.gz oc --insecure-skip-tls-verify adm node-logs --role=worker --unify=false
 
           # Snapshot iptables-save on each node for debugging possible kube-proxy issues
           oc --insecure-skip-tls-verify get --request-timeout=20s -n openshift-sdn -l app=sdn pods --template '{{ range .items }}{{ .metadata.name }}{{ "\n" }}{{ end }}' > /tmp/sdn-pods
@@ -487,20 +465,6 @@ objects:
             FILTER=gzip queue /tmp/artifacts/pods/${file}_previous.log.gz oc --insecure-skip-tls-verify logs --request-timeout=20s -p $i
           done < /tmp/containers
 
-          echo "Gathering kube-apiserver audit.log ..."
-          oc --insecure-skip-tls-verify adm node-logs --role=master --path=kube-apiserver/ > /tmp/kube-audit-logs
-          while IFS=$'\n' read -r line; do
-            IFS=' ' read -ra log <<< "${line}"
-            FILTER=gzip queue /tmp/artifacts/nodes/"${log[0]}"-"${log[1]}".gz oc --insecure-skip-tls-verify adm node-logs "${log[0]}" --path=kube-apiserver/"${log[1]}"
-          done < /tmp/kube-audit-logs
-
-          echo "Gathering openshift-apiserver audit.log ..."
-          oc --insecure-skip-tls-verify adm node-logs --role=master --path=openshift-apiserver/ > /tmp/openshift-audit-logs
-          while IFS=$'\n' read -r line; do
-            IFS=' ' read -ra log <<< "${line}"
-            FILTER=gzip queue /tmp/artifacts/nodes/"${log[0]}"-"${log[1]}".gz oc --insecure-skip-tls-verify adm node-logs "${log[0]}" --path=openshift-apiserver/"${log[1]}"
-          done < /tmp/openshift-audit-logs
-
           echo "Snapshotting prometheus (may take 15s) ..."
           queue /tmp/artifacts/metrics/prometheus.tar.gz oc --insecure-skip-tls-verify exec -n openshift-monitoring prometheus-k8s-0 -- tar cvzf - -C /prometheus .
 
@@ -512,7 +476,6 @@ objects:
           wait
 
           echo "Deprovisioning cluster ..."
-          export AWS_SHARED_CREDENTIALS_FILE=/etc/openshift-installer/.awscred
           openshift-install --dir /tmp/artifacts/installer destroy cluster
         }
 

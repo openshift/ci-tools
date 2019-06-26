@@ -53,7 +53,7 @@ make_testing_repository
 readonly REHEARSED_JOBS="${WORKDIR}/rehearsals.yaml"
 echo "[INFO] Running pj-rehearse in dry-mode..."
 if ! pj-rehearse --dry-run=true --no-fail=false --allow-volumes=true --candidate-path "${FAKE_OPENSHIFT_RELEASE}" > "${REHEARSED_JOBS}" 2> "${WORKDIR}/pj-rehearse-stderr.log"; then
-  echo "[ERROR] pj-rehearse failed:"
+  echo "ERROR: pj-rehearse failed:"
   cat "${WORKDIR}/pj-rehearse-stderr.log"
   exit 1
 fi
@@ -61,8 +61,8 @@ fi
 echo "[INFO] Validating created rehearsals"
 if ! output="$(compare_to_expected "${REHEARSED_JOBS}")"; then
   cat "${WORKDIR}/pj-rehearse-stderr.log"
-  output="$( printf -- "${output}" | sed 's/^/[ERROR] /' )"
-  printf "[ERROR] pj-rehearse output differs from expected:\n\n$output\n"
+  output="$( printf -- "${output}" | sed 's/^/ERROR: /' )"
+  printf "ERROR: pj-rehearse output differs from expected:\n\n$output\n"
   exit 1
 fi
 

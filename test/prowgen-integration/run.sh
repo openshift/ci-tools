@@ -25,8 +25,8 @@ ci-operator-prowgen --from-dir "${input_config_dir}" --to-dir "${generated_outpu
 echo "[INFO] Validating generated Prow jobs..."
 if ! diff -Naupr "${expected_output_jobs_dir}" "${generated_output_jobs_dir}"> "${workdir}/diff"; then
   cat << EOF
-[ERROR] Incorrect Prow jobs were generated!
-[ERROR] The following errors were found:
+ERROR: Incorrect Prow jobs were generated!
+ERROR: The following errors were found:
 
 EOF
   cat "${workdir}/diff"
@@ -43,8 +43,8 @@ determinize-prow-jobs --prow-jobs-dir "${determinized_output_jobs_dir}"
 echo "[INFO] Validating determinized Prow jobs..."
 if ! diff -Naupr "${determinized_output_jobs_dir}" "${generated_output_jobs_dir}"> "${workdir}/diff"; then
   cat << EOF
-[ERROR] Prow job generator did not output determinized jobs!
-[ERROR] The following errors were found:
+ERROR: Prow job generator did not output determinized jobs!
+ERROR: The following errors were found:
 
 EOF
   cat "${workdir}/diff"

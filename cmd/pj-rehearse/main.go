@@ -80,20 +80,20 @@ func validateOptions(o options) error {
 }
 
 const (
-	misconfigurationOutput = `[ERROR] pj-rehearse: misconfiguration
+	misconfigurationOutput = `ERROR: pj-rehearse: misconfiguration
 
 pj-rehearse could not process its necessary inputs properly. No rehearsal
 jobs were run. This is likely a pj-rehearse job configuration problem.`
-	rehearseFailureOutput = `[ERROR] pj-rehearse: rehearsal tool failure
+	rehearseFailureOutput = `ERROR: pj-rehearse: rehearsal tool failure
 
 pj-rehearse attempted to submit jobs for rehearsal, but it failed to either
 submit them or to fetch their results. This is either a pj-rehearse bug or
 an infrastructure issue.`
-	jobsFailureOutput = `[ERROR] pj-rehearse: rehearsed jobs failure
+	jobsFailureOutput = `ERROR: pj-rehearse: rehearsed jobs failure
 
 pj-rehearse rehearsed jobs and at least one of them failed. This means that
 job would fail when executed against the current HEAD of the target branch.`
-	failedSetupOutput = `[ERROR] pj-rehearse: setup failure
+	failedSetupOutput = `ERROR: pj-rehearse: setup failure
 
 pj-rehearse failed to finish all setup necessary to perform job rehearsals.
 This is either a pj-rehearse bug or an infrastructure failure.`

@@ -25,7 +25,12 @@ func (s *gitSourceStep) Inputs(ctx context.Context, dry bool) (api.InputDefiniti
 }
 
 func (s *gitSourceStep) Run(ctx context.Context, dry bool) error {
-	if s.jobSpec.Refs == nil {
+	var refs *api.Refs
+	if s.jobSpec.Refs != nil {
+		refs = s.jobSpec.Refs
+	} else if len(s.jobSpec.ExtraRefs) != 0 {
+		refs = &s.jobSpec.ExtraRefs[0]
+	} else {
 		log.Printf("Nothing to build source image from, no refs")
 		return nil
 	}
@@ -33,8 +38,8 @@ func (s *gitSourceStep) Run(ctx context.Context, dry bool) error {
 		Type:       buildapi.BuildSourceGit,
 		ContextDir: s.config.ContextDir,
 		Git: &buildapi.GitBuildSource{
-			URI: fmt.Sprintf("https://github.com/%s/%s.git", s.jobSpec.Refs.Org, s.jobSpec.Refs.Repo),
-			Ref: s.jobSpec.Refs.BaseRef,
+			URI: fmt.Sprintf("https://github.com/%s/%s.git", refs.Org, refs.Repo),
+			Ref: refs.BaseRef,
 		},
 	}, s.config.DockerfilePath, s.resources), dry, s.artifactDir)
 }

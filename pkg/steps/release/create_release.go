@@ -407,7 +407,7 @@ oc adm release extract --from=%q --file=image-references > /tmp/artifacts/%s
 	// loop until we observe all images have successfully imported, kicking import if a particular
 	// tag fails
 	var waiting map[string]int64
-	if err := wait.Poll(3*time.Second, 2*time.Minute, func() (bool, error) {
+	if err := wait.Poll(3*time.Second, 5*time.Minute, func() (bool, error) {
 		stable, err := s.imageClient.ImageStreams(s.jobSpec.Namespace).Get(streamName, meta.GetOptions{})
 		if err != nil {
 			return false, fmt.Errorf("could not resolve imagestream %s: %v", streamName, err)
@@ -456,7 +456,7 @@ oc adm release extract --from=%q --file=image-references > /tmp/artifacts/%s
 			tags = append(tags, tag)
 		}
 		sort.Strings(tags)
-		return fmt.Errorf("the following tags from the release could not be imported to %s: %s", streamName, strings.Join(tags, ", "))
+		return fmt.Errorf("the following tags from the release could not be imported to %s after five minutes: %s", streamName, strings.Join(tags, ", "))
 	}
 
 	log.Printf("Imported release %s created at %s with %d images to tag release:%s", releaseIS.Name, releaseIS.CreationTimestamp, len(releaseIS.Spec.Tags), tag)

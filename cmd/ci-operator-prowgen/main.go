@@ -115,7 +115,7 @@ func (o *options) process() error {
 // Generate a PodSpec that runs `ci-operator`, to be used in Presubmit/Postsubmit
 // Various pieces are derived from `org`, `repo`, `branch` and `target`.
 // `additionalArgs` are passed as additional arguments to `ci-operator`
-func generatePodSpec(info *config.Info, target string) *kubeapi.PodSpec {
+func generatePodSpec(info *config.Info) *kubeapi.PodSpec {
 	configMapKeyRef := kubeapi.EnvVarSource{
 		ConfigMapKeyRef: &kubeapi.ConfigMapKeySelector{
 			LocalObjectReference: kubeapi.LocalObjectReference{
@@ -157,7 +157,7 @@ func generateCiOperatorPodSpec(info *config.Info, target string, additionalArgs 
 		}
 	}
 
-	ret := generatePodSpec(info, target)
+	ret := generatePodSpec(info)
 	ret.Containers[0].Command = []string{"ci-operator"}
 	ret.Containers[0].Args = append([]string{
 		"--give-pr-author-access-to-namespace=true",
@@ -313,7 +313,7 @@ func generatePodSpecTemplate(info *config.Info, release string, test *cioperator
 }
 
 func generatePodSpecRandom(info *config.Info, test *cioperatorapi.TestStepConfiguration) *kubeapi.PodSpec {
-	podSpec := generatePodSpec(info, test.As)
+	podSpec := generatePodSpec(info)
 	for _, profile := range openshiftInstallerRandomProfiles {
 		podSpec.Volumes = append(podSpec.Volumes, kubeapi.Volume{
 			Name: "cluster-profile-" + string(profile),
@@ -425,20 +425,16 @@ func generatePostsubmitForTest(
 	name string,
 	info *config.Info,
 	treatBranchesAsExplicit bool,
-	labels map[string]string,
 	podSpec *kubeapi.PodSpec) *prowconfig.Postsubmit {
 
-	copiedLabels := make(map[string]string)
-	for k, v := range labels {
-		copiedLabels[k] = v
-	}
-	copiedLabels[jc.ProwJobLabelGenerated] = jc.Generated
+	labels := make(map[string]string)
+	labels[jc.ProwJobLabelGenerated] = jc.Generated
 
 	branchName := jc.MakeRegexFilenameLabel(info.Branch)
 	jobPrefix := fmt.Sprintf("branch-ci-%s-%s-%s-", info.Org, info.Repo, branchName)
 	if len(info.Variant) > 0 {
 		name = fmt.Sprintf("%s-%s", info.Variant, name)
-		copiedLabels[prowJobLabelVariant] = info.Variant
+		labels[prowJobLabelVariant] = info.Variant
 	}
 	jobName := fmt.Sprintf("%s%s", jobPrefix, name)
 	if len(jobName) > 63 && len(jobPrefix) < 53 {
@@ -458,7 +454,7 @@ func generatePostsubmitForTest(
 			Agent:  "kubernetes",
 			Name:   jobName,
 			Spec:   podSpec,
-			Labels: copiedLabels,
+			Labels: labels,
 			UtilityConfig: prowconfig.UtilityConfig{
 				DecorationConfig: &v1.DecorationConfig{SkipCloning: &newTrue},
 				Decorate:         true,
@@ -472,7 +468,7 @@ func generatePostsubmitForTest(
 // should be tested, generate a following JobConfig:
 //
 // - one presubmit for each test defined in config file
-// - if the config file has non-empty `images` section, generate an additinal
+// - if the config file has non-empty `images` section, generate an additional
 //   presubmit and postsubmit that has `--target=[images]`. This postsubmit
 //   will additionally pass `--promote` to ci-operator
 func generateJobs(
@@ -502,9 +498,6 @@ func generateJobs(
 	}
 
 	if len(configSpec.Images) > 0 {
-		// TODO: we should populate labels based on ci-operator characteristics
-		labels := map[string]string{}
-
 		// Identify which jobs need a to have a release payload explicitly requested
 		var additionalPresubmitArgs []string
 		if promotion.PromotesOfficialImages(configSpec) {
@@ -521,7 +514,7 @@ func generateJobs(
 		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest("images", info, generateCiOperatorPodSpec(info, "[images]", additionalPresubmitArgs...)))
 
 		if configSpec.PromotionConfiguration != nil {
-			postsubmits[orgrepo] = append(postsubmits[orgrepo], *generatePostsubmitForTest("images", info, true, labels, generateCiOperatorPodSpec(info, "[images]", additionalPostsubmitArgs...)))
+			postsubmits[orgrepo] = append(postsubmits[orgrepo], *generatePostsubmitForTest("images", info, true, generateCiOperatorPodSpec(info, "[images]", additionalPostsubmitArgs...)))
 		}
 	}
 
@@ -554,7 +547,7 @@ func getReleaseRepoDir(directory string) (string, error) {
 // simpleBranchRegexp matches a branch name that does not appear to be a regex (lacks wildcard,
 // group, or other modifiers). For instance, `master` is considered simple, `master-.*` would
 // not.
-var simpleBranchRegexp = regexp.MustCompile(`^[\w\-\.]+$`)
+var simpleBranchRegexp = regexp.MustCompile(`^[\w\-.]+$`)
 
 // makeBranchExplicit updates the provided branch to prevent wildcard matches to the given branch
 // if the branch value does not appear to contain an explicit regex pattern. I.e. 'master'

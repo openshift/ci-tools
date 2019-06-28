@@ -504,7 +504,6 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 	tests := []struct {
 		name     string
 		repoInfo *config.Info
-		labels   map[string]string
 
 		treatBranchesAsExplicit bool
 
@@ -517,7 +516,6 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 				Repo:   "repository",
 				Branch: "branch",
 			},
-			labels: map[string]string{},
 
 			expected: &prowconfig.Postsubmit{
 				JobBase: prowconfig.JobBase{
@@ -540,13 +538,12 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 				Repo:   "Repository",
 				Branch: "Branch",
 			},
-			labels: map[string]string{"artifacts": "images"},
 
 			expected: &prowconfig.Postsubmit{
 				JobBase: prowconfig.JobBase{
 					Agent:  "kubernetes",
 					Name:   "branch-ci-Organization-Repository-Branch-Name",
-					Labels: map[string]string{"artifacts": "images", "ci-operator.openshift.io/prowgen-controlled": "true"},
+					Labels: map[string]string{"ci-operator.openshift.io/prowgen-controlled": "true"},
 					UtilityConfig: prowconfig.UtilityConfig{
 						DecorationConfig: &v1.DecorationConfig{SkipCloning: &newTrue},
 						Decorate:         true,
@@ -561,7 +558,6 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 				Repo:   "Repository",
 				Branch: "Branch",
 			},
-			labels: map[string]string{"artifacts": "images"},
 
 			treatBranchesAsExplicit: true,
 
@@ -569,7 +565,7 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 				JobBase: prowconfig.JobBase{
 					Agent:  "kubernetes",
 					Name:   "branch-ci-Organization-Repository-Branch-name",
-					Labels: map[string]string{"artifacts": "images", "ci-operator.openshift.io/prowgen-controlled": "true"},
+					Labels: map[string]string{"ci-operator.openshift.io/prowgen-controlled": "true"},
 					UtilityConfig: prowconfig.UtilityConfig{
 						DecorationConfig: &v1.DecorationConfig{SkipCloning: &newTrue},
 						Decorate:         true,
@@ -585,7 +581,6 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 				Repo:   "Repository",
 				Branch: "Branch-.*",
 			},
-			labels: map[string]string{"artifacts": "images"},
 
 			treatBranchesAsExplicit: true,
 
@@ -593,7 +588,7 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 				JobBase: prowconfig.JobBase{
 					Agent:  "kubernetes",
 					Name:   "branch-ci-Organization-Repository-Branch-name",
-					Labels: map[string]string{"artifacts": "images", "ci-operator.openshift.io/prowgen-controlled": "true"},
+					Labels: map[string]string{"ci-operator.openshift.io/prowgen-controlled": "true"},
 					UtilityConfig: prowconfig.UtilityConfig{
 						DecorationConfig: &v1.DecorationConfig{SkipCloning: &newTrue},
 						Decorate:         true,
@@ -603,7 +598,7 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 		},
 	}
 	for _, tc := range tests {
-		postsubmit := generatePostsubmitForTest(tc.name, tc.repoInfo, tc.treatBranchesAsExplicit, tc.labels, nil) // podSpec tested in TestGeneratePodSpec
+		postsubmit := generatePostsubmitForTest(tc.name, tc.repoInfo, tc.treatBranchesAsExplicit, nil) // podSpec tested in TestGeneratePodSpec
 		if !equality.Semantic.DeepEqual(postsubmit, tc.expected) {
 			t.Errorf("expected postsubmit diff:\n%s", diff.ObjectDiff(tc.expected, postsubmit))
 		}

@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -20,6 +21,7 @@ import (
 	ciop "github.com/openshift/ci-tools/pkg/api"
 
 	"github.com/openshift/ci-tools/pkg/config"
+	"github.com/openshift/ci-tools/pkg/jobconfig"
 )
 
 func TestGeneratePodSpec(t *testing.T) {
@@ -491,7 +493,7 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 		},
 	}}
 	for _, tc := range tests {
-		presubmit := generatePresubmitForTest(tc.name, tc.repoInfo, nil) // podSpec tested in generatePodSpec
+		presubmit := generatePresubmitForTest(tc.name, tc.repoInfo, jobconfig.Generated, nil) // podSpec tested in generatePodSpec
 		if !equality.Semantic.DeepEqual(presubmit, tc.expected) {
 			t.Errorf("expected presubmit diff:\n%s", diff.ObjectDiff(tc.expected, presubmit))
 		}
@@ -571,7 +573,7 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 		},
 	}
 	for _, tc := range tests {
-		postsubmit := generatePostsubmitForTest(tc.name, tc.repoInfo, nil) // podSpec tested in TestGeneratePodSpec
+		postsubmit := generatePostsubmitForTest(tc.name, tc.repoInfo, jobconfig.Generated, nil) // podSpec tested in TestGeneratePodSpec
 		if !equality.Semantic.DeepEqual(postsubmit, tc.expected) {
 			t.Errorf("expected postsubmit diff:\n%s", diff.ObjectDiff(tc.expected, postsubmit))
 		}
@@ -753,9 +755,9 @@ func TestGenerateJobs(t *testing.T) {
 
 	log.SetOutput(ioutil.Discard)
 	for _, tc := range tests {
-		jobConfig := generateJobs(tc.config, tc.repoInfo)
+		jobConfig := generateJobs(tc.config, tc.repoInfo, jobconfig.Generated)
 
-		prune(jobConfig) // prune the fields that are tested in TestGeneratePre/PostsubmitForTest
+		pruneForTests(jobConfig) // prune the fields that are tested in TestGeneratePre/PostsubmitForTest
 
 		if !equality.Semantic.DeepEqual(jobConfig, tc.expected) {
 			t.Errorf("testcase: %s\nexpected job config diff:\n%s", tc.id, diff.ObjectDiff(tc.expected, jobConfig))
@@ -763,7 +765,7 @@ func TestGenerateJobs(t *testing.T) {
 	}
 }
 
-func prune(jobConfig *prowconfig.JobConfig) {
+func pruneForTests(jobConfig *prowconfig.JobConfig) {
 	for repo := range jobConfig.Presubmits {
 		for i := range jobConfig.Presubmits[repo] {
 			jobConfig.Presubmits[repo][i].AlwaysRun = false
@@ -1474,7 +1476,7 @@ tests:
 				t.Fatalf("Unexpected error writing old postsubmits: %v", err)
 			}
 
-			if err := config.OperateOnCIOperatorConfig(fullConfigPath, generateJobsToDir(baseProwConfigDir)); err != nil {
+			if err := config.OperateOnCIOperatorConfig(fullConfigPath, generateJobsToDir(baseProwConfigDir, jobconfig.Generated)); err != nil {
 				t.Fatalf("Unexpected error generating jobs from config: %v", err)
 			}
 
@@ -1494,6 +1496,90 @@ tests:
 
 			if bytes.Compare(postsubmitData, tc.prowExpectedPostsubmitYAML) != 0 {
 				t.Errorf("Generated Prow postsubmit YAML differs from expected!\n%s", diff.StringDiff(string(tc.prowExpectedPostsubmitYAML), string(postsubmitData)))
+			}
+		})
+	}
+}
+
+func TestPruneStaleJobs(t *testing.T) {
+	testCases := []struct {
+		name           string
+		jobconfig      *prowconfig.JobConfig
+		expectedPruned bool
+	}{
+		{
+			name: "stale generated presubmit is pruned",
+			jobconfig: &prowconfig.JobConfig{
+				Presubmits: map[string][]prowconfig.Presubmit{
+					"repo": {{JobBase: prowconfig.JobBase{Labels: map[string]string{jobconfig.ProwJobLabelGenerated: string(jobconfig.Generated)}}}},
+				},
+			},
+			expectedPruned: true,
+		},
+		{
+			name: "stale generated postsubmit is pruned",
+			jobconfig: &prowconfig.JobConfig{
+				Postsubmits: map[string][]prowconfig.Postsubmit{
+					"repo": {{JobBase: prowconfig.JobBase{Labels: map[string]string{jobconfig.ProwJobLabelGenerated: string(jobconfig.Generated)}}}},
+				},
+			},
+			expectedPruned: true,
+		},
+		{
+			name: "not stale generated presubmit is kept",
+			jobconfig: &prowconfig.JobConfig{
+				Presubmits: map[string][]prowconfig.Presubmit{
+					"repo": {{JobBase: prowconfig.JobBase{Labels: map[string]string{jobconfig.ProwJobLabelGenerated: string(jobconfig.New)}}}},
+				},
+			},
+			expectedPruned: false,
+		},
+		{
+			name: "not stale generated postsubmit is kept",
+			jobconfig: &prowconfig.JobConfig{
+				Postsubmits: map[string][]prowconfig.Postsubmit{
+					"repo": {{JobBase: prowconfig.JobBase{Labels: map[string]string{jobconfig.ProwJobLabelGenerated: string(jobconfig.New)}}}},
+				},
+			},
+			expectedPruned: false,
+		},
+		{
+			name: "not generated presubmit is kept",
+			jobconfig: &prowconfig.JobConfig{
+				Presubmits: map[string][]prowconfig.Presubmit{
+					"repo": {{JobBase: prowconfig.JobBase{Name: "job"}}},
+				},
+			},
+			expectedPruned: false,
+		},
+		{
+			name: "not generated postsubmit is kept",
+			jobconfig: &prowconfig.JobConfig{
+				Postsubmits: map[string][]prowconfig.Postsubmit{
+					"repo": {{JobBase: prowconfig.JobBase{Name: "job"}}},
+				},
+			},
+			expectedPruned: false,
+		},
+		{
+			name: "periodics are kept",
+			jobconfig: &prowconfig.JobConfig{
+				Periodics: []prowconfig.Periodic{{JobBase: prowconfig.JobBase{Name: "job"}}},
+			},
+			expectedPruned: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Expect either unchanged or empty JobConfig
+			expected := tc.jobconfig
+			if tc.expectedPruned {
+				expected = &prowconfig.JobConfig{}
+			}
+
+			if pruned := prune(tc.jobconfig); !reflect.DeepEqual(pruned, expected) {
+				t.Errorf("Pruned config differs:\n%s", diff.ObjectReflectDiff(expected, pruned))
 			}
 		})
 	}

@@ -18,10 +18,12 @@ import (
 	prowconfig "k8s.io/test-infra/prow/config"
 )
 
+type ProwgenLabel string
+
 const (
-	ProwJobLabelGenerated = "ci-operator.openshift.io/prowgen-controlled"
-	GeneratedStale        = "stale"
-	Generated             = "true"
+	ProwJobLabelGenerated              = "ci-operator.openshift.io/prowgen-controlled"
+	Generated             ProwgenLabel = "true"
+	New                   ProwgenLabel = "newly-generated"
 )
 
 // DataWithInfo describes the metadata for a Prow job configuration file
@@ -273,29 +275,6 @@ func labelGeneratedJobs(jobConfig *prowconfig.JobConfig, label string) {
 	}
 }
 
-func pruneStaleGeneratedJobs(jobConfig *prowconfig.JobConfig, staleLabel string) {
-	for repo, jobs := range jobConfig.Presubmits {
-		i := 0
-		for _, job := range jobs {
-			if label, isGenerated := job.Labels[ProwJobLabelGenerated]; !isGenerated || label != staleLabel {
-				jobs[i] = job
-				i++
-			}
-		}
-		jobConfig.Presubmits[repo] = jobs[:i]
-	}
-	for repo, jobs := range jobConfig.Postsubmits {
-		i := 0
-		for _, job := range jobs {
-			if label, isGenerated := job.Labels[ProwJobLabelGenerated]; !isGenerated || label != staleLabel {
-				jobs[i] = job
-				i++
-			}
-		}
-		jobConfig.Postsubmits[repo] = jobs[:i]
-	}
-}
-
 // Given a JobConfig and a file path, write YAML representation of the config
 // to the file path. If the file already contains some jobs, new ones will be
 // merged with the existing ones. The resulting job config file will contain
@@ -314,14 +293,10 @@ func mergeJobsIntoFile(prowConfigPath string, jobConfig *prowconfig.JobConfig, a
 		existingJobConfig = &prowconfig.JobConfig{}
 	}
 
-	labelGeneratedJobs(existingJobConfig, GeneratedStale)
-	labelGeneratedJobs(jobConfig, Generated)
 	mergeJobConfig(existingJobConfig, jobConfig, allJobs)
-	pruneStaleGeneratedJobs(existingJobConfig, GeneratedStale)
-
 	sortConfigFields(existingJobConfig)
 
-	return writeToFile(prowConfigPath, existingJobConfig)
+	return WriteToFile(prowConfigPath, existingJobConfig)
 }
 
 // Given two JobConfig, merge jobs from the `source` one to to `destination`
@@ -476,8 +451,8 @@ func sortPodSpec(spec *v1.PodSpec) {
 	}
 }
 
-// writeToFile writes Prow job config to a YAML file
-func writeToFile(path string, jobConfig *prowconfig.JobConfig) error {
+// WriteToFile writes Prow job config to a YAML file
+func WriteToFile(path string, jobConfig *prowconfig.JobConfig) error {
 	jobConfigAsYaml, err := yaml.Marshal(*jobConfig)
 	if err != nil {
 		return fmt.Errorf("failed to marshal the job config (%v)", err)

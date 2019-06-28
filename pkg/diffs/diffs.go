@@ -229,3 +229,29 @@ func GetPresubmitsForClusterProfiles(prowConfig *prowconfig.Config, profiles []c
 	}
 	return ret
 }
+
+// GetChangedPeriodics compares the periodic jobs from two prow configs and returns a list the changed periodics.
+func GetChangedPeriodics(prowMasterConfig, prowPRConfig *prowconfig.Config, logger *logrus.Entry) []prowconfig.Periodic {
+	var changedPeriodics []prowconfig.Periodic
+	masterPeriodicsPerName := getPeriodicsPerName(prowMasterConfig.JobConfig.AllPeriodics())
+
+	for name, job := range getPeriodicsPerName(prowPRConfig.JobConfig.AllPeriodics()) {
+		if job.Agent == string(pjapi.KubernetesAgent) {
+			masterPeriodics := masterPeriodicsPerName[name]
+			if !equality.Semantic.DeepEqual(masterPeriodics.Spec, job.Spec) {
+				logger.WithFields(logrus.Fields{logJobName: job.Name, logDiffs: convertToReadableDiff(masterPeriodics.Spec, job.Spec, objectSpec)}).Info(chosenJob)
+				changedPeriodics = append(changedPeriodics, job)
+			}
+		}
+	}
+
+	return changedPeriodics
+}
+
+func getPeriodicsPerName(periodics []prowconfig.Periodic) map[string]prowconfig.Periodic {
+	ret := make(map[string]prowconfig.Periodic, len(periodics))
+	for _, periodic := range periodics {
+		ret[periodic.Name] = periodic
+	}
+	return ret
+}

@@ -28,6 +28,9 @@ const (
 	sentryDsnMountPath  = "/etc/sentry-dsn"
 	sentryDsnSecretPath = "/etc/sentry-dsn/ci-operator"
 
+	presubmitPrefix  = "pull"
+	postsubmitPrefix = "branch"
+
 	openshiftInstallerRandomCmd = `set -eux
 target=$(awk < /usr/local/e2e-targets \
     --assign "r=$RANDOM" \
@@ -384,12 +387,11 @@ func generatePodSpecRandom(info *config.Info, test *cioperatorapi.TestStepConfig
 	return podSpec
 }
 
-func generatePresubmitForTest(name string, info *config.Info, podSpec *kubeapi.PodSpec) *prowconfig.Presubmit {
+func generateJobBase(name, prefix string, info *config.Info, podSpec *kubeapi.PodSpec) prowconfig.JobBase {
 	labels := map[string]string{jc.ProwJobLabelGenerated: jc.Generated}
 
-	jobPrefix := fmt.Sprintf("pull-ci-%s-%s-%s-", info.Org, info.Repo, info.Branch)
+	jobPrefix := fmt.Sprintf("%s-ci-%s-%s-%s-", prefix, info.Org, info.Repo, info.Branch)
 	if len(info.Variant) > 0 {
-		name = fmt.Sprintf("%s-%s", info.Variant, name)
 		labels[prowJobLabelVariant] = info.Variant
 	}
 	jobName := fmt.Sprintf("%s%s", jobPrefix, name)
@@ -399,18 +401,25 @@ func generatePresubmitForTest(name string, info *config.Info, podSpec *kubeapi.P
 	}
 
 	newTrue := true
-
-	return &prowconfig.Presubmit{
-		JobBase: prowconfig.JobBase{
-			Agent:  "kubernetes",
-			Labels: labels,
-			Name:   jobName,
-			Spec:   podSpec,
-			UtilityConfig: prowconfig.UtilityConfig{
-				DecorationConfig: &v1.DecorationConfig{SkipCloning: &newTrue},
-				Decorate:         true,
-			},
+	return prowconfig.JobBase{
+		Agent:  "kubernetes",
+		Labels: labels,
+		Name:   jobName,
+		Spec:   podSpec,
+		UtilityConfig: prowconfig.UtilityConfig{
+			DecorationConfig: &v1.DecorationConfig{SkipCloning: &newTrue},
+			Decorate:         true,
 		},
+	}
+}
+
+func generatePresubmitForTest(name string, info *config.Info, podSpec *kubeapi.PodSpec) *prowconfig.Presubmit {
+	if len(info.Variant) > 0 {
+		name = fmt.Sprintf("%s-%s", info.Variant, name)
+	}
+	base := generateJobBase(name, presubmitPrefix, info, podSpec)
+	return &prowconfig.Presubmit{
+		JobBase:   base,
 		AlwaysRun: true,
 		Brancher:  prowconfig.Brancher{Branches: []string{info.Branch}},
 		Reporter: prowconfig.Reporter{
@@ -421,46 +430,14 @@ func generatePresubmitForTest(name string, info *config.Info, podSpec *kubeapi.P
 	}
 }
 
-func generatePostsubmitForTest(
-	name string,
-	info *config.Info,
-	treatBranchesAsExplicit bool,
-	podSpec *kubeapi.PodSpec) *prowconfig.Postsubmit {
-
-	labels := make(map[string]string)
-	labels[jc.ProwJobLabelGenerated] = jc.Generated
-
-	branchName := jc.MakeRegexFilenameLabel(info.Branch)
-	jobPrefix := fmt.Sprintf("branch-ci-%s-%s-%s-", info.Org, info.Repo, branchName)
+func generatePostsubmitForTest(name string, info *config.Info, podSpec *kubeapi.PodSpec) *prowconfig.Postsubmit {
 	if len(info.Variant) > 0 {
 		name = fmt.Sprintf("%s-%s", info.Variant, name)
-		labels[prowJobLabelVariant] = info.Variant
 	}
-	jobName := fmt.Sprintf("%s%s", jobPrefix, name)
-	if len(jobName) > 63 && len(jobPrefix) < 53 {
-		// warn if the prefix gives people enough space to choose names and they've chosen something long
-		logrus.WithField("name", jobName).Warn("Generated job name is longer than 63 characters. This may cause issues when Prow attempts to label resources with job name. Consider a shorter name.")
-	}
-
-	branch := info.Branch
-	if treatBranchesAsExplicit {
-		branch = makeBranchExplicit(branch)
-	}
-
-	newTrue := true
-
+	base := generateJobBase(name, postsubmitPrefix, info, podSpec)
 	return &prowconfig.Postsubmit{
-		JobBase: prowconfig.JobBase{
-			Agent:  "kubernetes",
-			Name:   jobName,
-			Spec:   podSpec,
-			Labels: labels,
-			UtilityConfig: prowconfig.UtilityConfig{
-				DecorationConfig: &v1.DecorationConfig{SkipCloning: &newTrue},
-				Decorate:         true,
-			},
-		},
-		Brancher: prowconfig.Brancher{Branches: []string{branch}},
+		JobBase:  base,
+		Brancher: prowconfig.Brancher{Branches: []string{makeBranchExplicit(info.Branch)}},
 	}
 }
 
@@ -494,6 +471,7 @@ func generateJobs(
 				podSpec = generatePodSpecTemplate(info, release, &element)
 			}
 		}
+
 		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(element.As, info, podSpec))
 	}
 
@@ -503,18 +481,14 @@ func generateJobs(
 		if promotion.PromotesOfficialImages(configSpec) {
 			additionalPresubmitArgs = []string{"--target=[release:latest]"}
 		}
-
-		additionalPostsubmitArgs := []string{"--promote"}
-		if configSpec.PromotionConfiguration != nil {
-			for additionalImage := range configSpec.PromotionConfiguration.AdditionalImages {
-				additionalPostsubmitArgs = append(additionalPostsubmitArgs, fmt.Sprintf("--target=%s", configSpec.PromotionConfiguration.AdditionalImages[additionalImage]))
-			}
-		}
-
 		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest("images", info, generateCiOperatorPodSpec(info, "[images]", additionalPresubmitArgs...)))
 
 		if configSpec.PromotionConfiguration != nil {
-			postsubmits[orgrepo] = append(postsubmits[orgrepo], *generatePostsubmitForTest("images", info, true, generateCiOperatorPodSpec(info, "[images]", additionalPostsubmitArgs...)))
+			additionalPostsubmitArgs := []string{"--promote"}
+			for additionalImage := range configSpec.PromotionConfiguration.AdditionalImages {
+				additionalPostsubmitArgs = append(additionalPostsubmitArgs, fmt.Sprintf("--target=%s", configSpec.PromotionConfiguration.AdditionalImages[additionalImage]))
+			}
+			postsubmits[orgrepo] = append(postsubmits[orgrepo], *generatePostsubmitForTest("images", info, generateCiOperatorPodSpec(info, "[images]", additionalPostsubmitArgs...)))
 		}
 	}
 

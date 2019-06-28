@@ -505,8 +505,6 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 		name     string
 		repoInfo *config.Info
 
-		treatBranchesAsExplicit bool
-
 		expected *prowconfig.Postsubmit
 	}{
 		{
@@ -528,7 +526,7 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 					},
 				},
 
-				Brancher: prowconfig.Brancher{Branches: []string{"branch"}},
+				Brancher: prowconfig.Brancher{Branches: []string{"^branch$"}},
 			},
 		},
 		{
@@ -548,7 +546,7 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 						DecorationConfig: &v1.DecorationConfig{SkipCloning: &newTrue},
 						Decorate:         true,
 					}},
-				Brancher: prowconfig.Brancher{Branches: []string{"Branch"}},
+				Brancher: prowconfig.Brancher{Branches: []string{"^Branch$"}},
 			},
 		},
 		{
@@ -558,8 +556,6 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 				Repo:   "Repository",
 				Branch: "Branch",
 			},
-
-			treatBranchesAsExplicit: true,
 
 			expected: &prowconfig.Postsubmit{
 				JobBase: prowconfig.JobBase{
@@ -573,32 +569,9 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 				Brancher: prowconfig.Brancher{Branches: []string{"^Branch$"}},
 			},
 		},
-
-		{
-			name: "name",
-			repoInfo: &config.Info{
-				Org:    "Organization",
-				Repo:   "Repository",
-				Branch: "Branch-.*",
-			},
-
-			treatBranchesAsExplicit: true,
-
-			expected: &prowconfig.Postsubmit{
-				JobBase: prowconfig.JobBase{
-					Agent:  "kubernetes",
-					Name:   "branch-ci-Organization-Repository-Branch-name",
-					Labels: map[string]string{"ci-operator.openshift.io/prowgen-controlled": "true"},
-					UtilityConfig: prowconfig.UtilityConfig{
-						DecorationConfig: &v1.DecorationConfig{SkipCloning: &newTrue},
-						Decorate:         true,
-					}},
-				Brancher: prowconfig.Brancher{Branches: []string{"Branch-.*"}},
-			},
-		},
 	}
 	for _, tc := range tests {
-		postsubmit := generatePostsubmitForTest(tc.name, tc.repoInfo, tc.treatBranchesAsExplicit, nil) // podSpec tested in TestGeneratePodSpec
+		postsubmit := generatePostsubmitForTest(tc.name, tc.repoInfo, nil) // podSpec tested in TestGeneratePodSpec
 		if !equality.Semantic.DeepEqual(postsubmit, tc.expected) {
 			t.Errorf("expected postsubmit diff:\n%s", diff.ObjectDiff(tc.expected, postsubmit))
 		}

@@ -489,7 +489,7 @@ func writeToFile(path string, jobConfig *prowconfig.JobConfig) error {
 	return nil
 }
 
-var regexParts = regexp.MustCompile(`[^\w\-\.]+`)
+var regexParts = regexp.MustCompile(`[^\w\-.]+`)
 
 func MakeRegexFilenameLabel(possibleRegex string) string {
 	label := regexParts.ReplaceAllString(possibleRegex, "")

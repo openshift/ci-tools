@@ -8,16 +8,16 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/openshift/ci-tools/pkg/promotion"
 	"github.com/sirupsen/logrus"
+	kubeapi "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/test-infra/prow/apis/prowjobs/v1"
+	prowconfig "k8s.io/test-infra/prow/config"
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
 	jc "github.com/openshift/ci-tools/pkg/jobconfig"
-	kubeapi "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
-	prowconfig "k8s.io/test-infra/prow/config"
+	"github.com/openshift/ci-tools/pkg/promotion"
 )
 
 const (
@@ -110,6 +110,11 @@ func (o *options) process() error {
 
 	if (o.fromFile == "" && o.fromDir == "") || (o.fromFile != "" && o.fromDir != "") {
 		return fmt.Errorf("ci-operator-prowgen needs exactly one of `--from-{file,dir,release-repo}` options")
+	}
+
+	if o.fromFile != "" {
+		logrus.Info("--from-file implies --prune=false to avoid clobbering jobs")
+		o.prune = false
 	}
 
 	if o.toDir == "" {

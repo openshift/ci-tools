@@ -27,6 +27,7 @@ integration: integration-prowgen integration-pj-rehearse
 
 integration-prowgen:
 	test/prowgen-integration/run.sh
+	test/prowgen-integration/run.sh subdir
 .PHONY: integration-prowgen
 
 integration-pj-rehearse:

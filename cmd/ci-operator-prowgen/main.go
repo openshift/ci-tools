@@ -566,8 +566,8 @@ func prune(jobConfig *prowconfig.JobConfig) *prowconfig.JobConfig {
 	return &pruned
 }
 
-func pruneStaleJobs(jobDir string) error {
-	if err := jc.OperateOnJobConfigDir(jobDir, func(jobConfig *prowconfig.JobConfig, info *jc.Info) error {
+func pruneStaleJobs(jobDir, subDir string) error {
+	if err := jc.OperateOnJobConfigSubdir(jobDir, subDir, func(jobConfig *prowconfig.JobConfig, info *jc.Info) error {
 		if info.Type == "periodics" {
 			return nil
 		}
@@ -606,11 +606,19 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := config.OperateOnCIOperatorConfigDir(opt.fromDir, generateJobsToDir(opt.toDir, jc.New)); err != nil {
-		fields := logrus.Fields{"target": opt.toDir, "source": opt.fromDir}
-		logrus.WithError(err).WithFields(fields).Fatal("Failed to generate jobs")
+	args := flagSet.Args()
+	if len(args) == 0 {
+		args = append(args, "")
 	}
-	if err := pruneStaleJobs(opt.toDir); err != nil {
-		logrus.WithError(err).Fatal("Failed to prune stale generated jobs")
+	genJobs := generateJobsToDir(opt.toDir, jc.New)
+	for _, subDir := range args {
+		if err := config.OperateOnCIOperatorConfigSubdir(opt.fromDir, subDir, genJobs); err != nil {
+			fields := logrus.Fields{"target": opt.toDir, "source": opt.fromDir, "subdir": subDir}
+			logrus.WithError(err).WithFields(fields).Fatal("Failed to generate jobs")
+		}
+		if err := pruneStaleJobs(opt.toDir, subDir); err != nil {
+			fields := logrus.Fields{"target": opt.toDir, "source": opt.fromDir, "subdir": subDir}
+			logrus.WithError(err).WithFields(fields).Fatal("Failed to prune stale generated jobs")
+		}
 	}
 }

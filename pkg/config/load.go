@@ -128,7 +128,11 @@ func OperateOnCIOperatorConfig(path string, callback func(*cioperatorapi.Release
 // OperateOnCIOperatorConfigDir runs the callback on all CI Operator
 // configuration files found while walking the directory provided
 func OperateOnCIOperatorConfigDir(configDir string, callback func(*cioperatorapi.ReleaseBuildConfiguration, *Info) error) error {
-	return filepath.Walk(configDir, func(path string, info os.FileInfo, err error) error {
+	return OperateOnCIOperatorConfigSubdir(configDir, "", callback)
+}
+
+func OperateOnCIOperatorConfigSubdir(configDir, subDir string, callback func(*cioperatorapi.ReleaseBuildConfiguration, *Info) error) error {
+	return filepath.Walk(filepath.Join(configDir, subDir), func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			logrus.WithField("source-file", path).WithError(err).Error("Failed to walk CI Operator configuration dir")
 			return err

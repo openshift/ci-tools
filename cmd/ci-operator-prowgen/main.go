@@ -65,7 +65,6 @@ var (
 )
 
 type options struct {
-	fromFile        string
 	fromDir         string
 	fromReleaseRepo bool
 
@@ -80,7 +79,6 @@ type options struct {
 func bindOptions(flag *flag.FlagSet) *options {
 	opt := &options{}
 
-	flag.StringVar(&opt.fromFile, "from-file", "", "Path to a ci-operator configuration file")
 	flag.StringVar(&opt.fromDir, "from-dir", "", "Path to a directory with a directory structure holding ci-operator configuration files for multiple components")
 	flag.BoolVar(&opt.fromReleaseRepo, "from-release-repo", false, "If set, it behaves like --from-dir=$GOPATH/src/github.com/openshift/release/ci-operator/config")
 
@@ -109,8 +107,8 @@ func (o *options) process() error {
 		}
 	}
 
-	if (o.fromFile == "" && o.fromDir == "") || (o.fromFile != "" && o.fromDir != "") {
-		return fmt.Errorf("ci-operator-prowgen needs exactly one of `--from-{file,dir,release-repo}` options")
+	if o.fromDir == "" {
+		return fmt.Errorf("ci-operator-prowgen needs exactly one of `--from-{dir,release-repo}` options")
 	}
 
 	if o.toDir == "" {
@@ -617,15 +615,9 @@ func main() {
 		label = jc.Generated
 	}
 
-	if len(opt.fromFile) > 0 {
-		if err := config.OperateOnCIOperatorConfig(opt.fromFile, generateJobsToDir(opt.toDir, label)); err != nil {
-			logrus.WithError(err).WithField("source-file", opt.fromFile).Fatal("Failed to generate jobs")
-		}
-	} else { // from directory
-		if err := config.OperateOnCIOperatorConfigDir(opt.fromDir, generateJobsToDir(opt.toDir, label)); err != nil {
-			fields := logrus.Fields{"target-dir": opt.toDir, "source-dir": opt.fromDir}
-			logrus.WithError(err).WithFields(fields).Fatal("Failed to generate jobs")
-		}
+	if err := config.OperateOnCIOperatorConfigDir(opt.fromDir, generateJobsToDir(opt.toDir, label)); err != nil {
+		fields := logrus.Fields{"target": opt.toDir, "source": opt.fromDir}
+		logrus.WithError(err).WithFields(fields).Fatal("Failed to generate jobs")
 	}
 	if opt.prune {
 		if err := pruneStaleJobs(opt.toDir); err != nil {

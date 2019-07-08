@@ -32,7 +32,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/config"
 )
 
-func TestConfigureRehearsalJobs(t *testing.T) {
+func TestConfigurePresubmitRehearsals(t *testing.T) {
 	makeVoume := func(name string) v1.Volume {
 		return v1.Volume{
 			Name: "cluster-profile",
@@ -86,7 +86,9 @@ func TestConfigureRehearsalJobs(t *testing.T) {
 		SHA:      "85c627078710b8beee65d06d0cf157094fc46b03",
 		Filename: filepath.Join(config.ClusterProfilesPath, "changed-profile1"),
 	}}
-	ret := ConfigureRehearsalJobs(jobs, config.CompoundCiopConfig{}, 1234, Loggers{logrus.New(), logrus.New()}, true, nil, profiles)
+
+	jc := NewJobConfigurer(config.CompoundCiopConfig{}, 1234, Loggers{logrus.New(), logrus.New()}, true, nil, profiles, nil)
+	ret := jc.ConfigurePresubmitRehearsals(jobs)
 	var names []string
 	for _, j := range ret {
 		if vs := j.Spec.Volumes; len(vs) == 0 {
@@ -131,7 +133,6 @@ func makeCMReference(cmName, key string) *v1.EnvVarSource {
 }
 
 func TestInlineCiopConfig(t *testing.T) {
-	testTargetRepo := "org/repo"
 	testCiopConfigInfo := config.Info{
 		Org:    "org",
 		Repo:   "repo",
@@ -186,7 +187,7 @@ func TestInlineCiopConfig(t *testing.T) {
 			job := makeTestingPresubmitForEnv(tc.sourceEnv)
 			expectedJob := makeTestingPresubmitForEnv(tc.expectedEnv)
 
-			newJob, err := inlineCiOpConfig(job, testTargetRepo, tc.configs, testLoggers)
+			err := inlineCiOpConfig(job.Spec.Containers[0], tc.configs, testLoggers)
 
 			if tc.expectedError && err == nil {
 				t.Errorf("Expected inlineCiopConfig() to return an error, none returned")
@@ -199,8 +200,8 @@ func TestInlineCiopConfig(t *testing.T) {
 					return
 				}
 
-				if !equality.Semantic.DeepEqual(expectedJob, newJob) {
-					t.Errorf("Returned job differs from expected:\n%s", diff.ObjectReflectDiff(expectedJob, newJob))
+				if !equality.Semantic.DeepEqual(expectedJob, job) {
+					t.Errorf("Returned job differs from expected:\n%s", diff.ObjectReflectDiff(expectedJob, job))
 				}
 			}
 		})
@@ -378,7 +379,8 @@ func TestExecuteJobsErrors(t *testing.T) {
 				return false, nil, nil
 			})
 
-			rehearsals := ConfigureRehearsalJobs(tc.jobs, testCiopConfigs, testPrNumber, testLoggers, true, nil, nil)
+			jc := NewJobConfigurer(testCiopConfigs, testPrNumber, testLoggers, true, nil, nil, nil)
+			rehearsals := jc.ConfigurePresubmitRehearsals(tc.jobs)
 			executor := NewExecutor(rehearsals, testPrNumber, testRepoPath, testRefs, true, testLoggers, fakeclient)
 			_, err = executor.ExecuteJobs()
 
@@ -447,7 +449,8 @@ func TestExecuteJobsUnsuccessful(t *testing.T) {
 				return true, ret, nil
 			})
 
-			rehearsals := ConfigureRehearsalJobs(tc.jobs, testCiopConfigs, testPrNumber, testLoggers, true, nil, nil)
+			jc := NewJobConfigurer(testCiopConfigs, testPrNumber, testLoggers, true, nil, nil, nil)
+			rehearsals := jc.ConfigurePresubmitRehearsals(tc.jobs)
 			executor := NewExecutor(rehearsals, testPrNumber, testRepoPath, testRefs, false, testLoggers, fakeclient)
 			success, _ := executor.ExecuteJobs()
 
@@ -552,7 +555,8 @@ func TestExecuteJobsPositive(t *testing.T) {
 			}
 			fakecs.Fake.PrependWatchReactor("prowjobs", makeSuccessfulFinishReactor(watcher, tc.jobs))
 
-			rehearsals := ConfigureRehearsalJobs(tc.jobs, testCiopConfigs, testPrNumber, testLoggers, true, nil, nil)
+			jc := NewJobConfigurer(testCiopConfigs, testPrNumber, testLoggers, true, nil, nil, nil)
+			rehearsals := jc.ConfigurePresubmitRehearsals(tc.jobs)
 			executor := NewExecutor(rehearsals, testPrNumber, testRepoPath, testRefs, true, testLoggers, fakeclient)
 			success, err := executor.ExecuteJobs()
 
@@ -753,48 +757,54 @@ func TestWaitForJobsLog(t *testing.T) {
 	check(dbgHook, "failure", logrus.DebugLevel, nil)
 }
 
-func TestFilterJob(t *testing.T) {
+func TestFilterPresubmits(t *testing.T) {
 	testCases := []struct {
 		description    string
 		volumesAllowed bool
-		valid          bool
-		crippleFunc    func(*prowconfig.Presubmit) *prowconfig.Presubmit
+		crippleFunc    func(*prowconfig.Presubmit) map[string][]prowconfig.Presubmit
+		expected       func(*prowconfig.Presubmit) config.Presubmits
 	}{
 		{
 			description: "job where command is not `ci-operator`",
-			crippleFunc: func(j *prowconfig.Presubmit) *prowconfig.Presubmit {
+			crippleFunc: func(j *prowconfig.Presubmit) map[string][]prowconfig.Presubmit {
 				j.Spec.Containers[0].Command[0] = "not-ci-operator"
-				return j
+				return map[string][]prowconfig.Presubmit{"org/repo": {*j}}
+			},
+			expected: func(j *prowconfig.Presubmit) config.Presubmits {
+				return config.Presubmits{}
 			},
 		},
 		{
 			description: "ci-operator job already using --git-ref",
-			crippleFunc: func(j *prowconfig.Presubmit) *prowconfig.Presubmit {
+			crippleFunc: func(j *prowconfig.Presubmit) map[string][]prowconfig.Presubmit {
 				j.Spec.Containers[0].Args = append(j.Spec.Containers[0].Args, "--git-ref=organization/repo@master")
-				return j
+				return map[string][]prowconfig.Presubmit{"org/repo": {*j}}
+
 			},
-		},
-		{
-			description: "jobs running over multiple branches",
-			crippleFunc: func(j *prowconfig.Presubmit) *prowconfig.Presubmit {
-				j.Brancher.Branches = append(j.Brancher.Branches, "^feature-branch$")
-				return j
+			expected: func(j *prowconfig.Presubmit) config.Presubmits {
+				return config.Presubmits{}
 			},
 		},
 		{
 			description: "jobs that need additional volumes mounted, not allowed",
-			crippleFunc: func(j *prowconfig.Presubmit) *prowconfig.Presubmit {
+			crippleFunc: func(j *prowconfig.Presubmit) map[string][]prowconfig.Presubmit {
 				j.Spec.Volumes = []v1.Volume{{Name: "volume"}}
-				return j
+				return map[string][]prowconfig.Presubmit{"org/repo": {*j}}
+			},
+			expected: func(j *prowconfig.Presubmit) config.Presubmits {
+				return config.Presubmits{}
 			},
 		},
 		{
 			description:    "jobs that need additional volumes mounted, allowed",
 			volumesAllowed: true,
-			valid:          true,
-			crippleFunc: func(j *prowconfig.Presubmit) *prowconfig.Presubmit {
+			crippleFunc: func(j *prowconfig.Presubmit) map[string][]prowconfig.Presubmit {
 				j.Spec.Volumes = []v1.Volume{{Name: "volume"}}
-				return j
+				return map[string][]prowconfig.Presubmit{"org/repo": {*j}}
+			},
+			expected: func(j *prowconfig.Presubmit) config.Presubmits {
+				j.Spec.Volumes = []v1.Volume{{Name: "volume"}}
+				return config.Presubmits{"org/repo": {*j}}
 			},
 		},
 	}
@@ -802,9 +812,11 @@ func TestFilterJob(t *testing.T) {
 		t.Run(tc.description, func(t *testing.T) {
 			basePresubmit := makeBasePresubmit()
 			tc.crippleFunc(basePresubmit)
-			err := filterJob(basePresubmit, tc.volumesAllowed)
-			if err == nil && !tc.valid {
-				t.Errorf("Expected filterJob() to return error")
+			p := filterPresubmits(map[string][]prowconfig.Presubmit{"org/repo": {*basePresubmit}}, tc.volumesAllowed, logrus.New())
+
+			expected := tc.expected(basePresubmit)
+			if !equality.Semantic.DeepEqual(expected, p) {
+				t.Fatalf("Found: %#v\nExpected: %#v", p, expected)
 			}
 		})
 

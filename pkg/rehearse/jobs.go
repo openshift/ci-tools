@@ -110,24 +110,34 @@ func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber 
 	return &rehearsal, nil
 }
 
-func filterJobs(changedPresubmits map[string][]prowconfig.Presubmit, allowVolumes bool, logger logrus.FieldLogger) config.Presubmits {
-	ret := config.Presubmits{}
+func filterPresubmits(changedPresubmits map[string][]prowconfig.Presubmit, allowVolumes bool, logger logrus.FieldLogger) config.Presubmits {
+	presubmits := config.Presubmits{}
 	for repo, jobs := range changedPresubmits {
 		for _, job := range jobs {
 			jobLogger := logger.WithFields(logrus.Fields{"repo": repo, "job": job.Name})
-			if err := filterJob(&job, allowVolumes); err != nil {
+			if len(job.Branches) == 0 {
+				jobLogger.Warn("cannot rehearse jobs with no branches")
+				continue
+			}
+
+			if len(job.Branches) != 1 {
+				jobLogger.Warn("cannot rehearse jobs that run over multiple branches")
+				continue
+			}
+
+			if err := filterJobSpec(job.Spec, allowVolumes); err != nil {
 				jobLogger.WithError(err).Warn("could not rehearse job")
 				continue
 			}
-			ret.Add(repo, job)
+			presubmits.Add(repo, job)
 		}
 	}
-	return ret
+	return presubmits
 }
 
-func filterJob(source *prowconfig.Presubmit, allowVolumes bool) error {
+func filterJobSpec(spec *v1.PodSpec, allowVolumes bool) error {
 	// there will always be exactly one container.
-	container := source.Spec.Containers[0]
+	container := spec.Containers[0]
 
 	if len(container.Command) != 1 || container.Command[0] != "ci-operator" {
 		return fmt.Errorf("cannot rehearse jobs that have Command different from simple 'ci-operator'")
@@ -137,18 +147,14 @@ func filterJob(source *prowconfig.Presubmit, allowVolumes bool) error {
 		if strings.HasPrefix(arg, "--git-ref") || strings.HasPrefix(arg, "-git-ref") {
 			return fmt.Errorf("cannot rehearse jobs that call ci-operator with '--git-ref' arg")
 		}
+		if arg == "--promote" {
+			return fmt.Errorf("cannot rehearse jobs that call ci-operator with '--promote' arg")
+		}
 	}
-	if len(source.Spec.Volumes) > 0 && !allowVolumes {
+	if len(spec.Volumes) > 0 && !allowVolumes {
 		return fmt.Errorf("jobs that need additional volumes mounted are not allowed")
 	}
 
-	if len(source.Branches) == 0 {
-		return fmt.Errorf("cannot rehearse jobs with no branches")
-	}
-
-	if len(source.Branches) != 1 {
-		return fmt.Errorf("cannot rehearse jobs that run over multiple branches")
-	}
 	return nil
 }
 
@@ -158,83 +164,106 @@ func filterJob(source *prowconfig.Presubmit, allowVolumes bool) error {
 // of the needed config file passed to the job as a direct value. This needs
 // to happen because the rehearsed Prow jobs may depend on these config files
 // being also changed by the tested PR.
-func inlineCiOpConfig(job *prowconfig.Presubmit, targetRepo string, ciopConfigs config.CompoundCiopConfig, loggers Loggers) (*prowconfig.Presubmit, error) {
-	var rehearsal prowconfig.Presubmit
-	deepcopy.Copy(&rehearsal, job)
-	for _, container := range rehearsal.Spec.Containers {
-		for index := range container.Env {
-			env := &(container.Env[index])
-			if env.ValueFrom == nil {
-				continue
+func inlineCiOpConfig(container v1.Container, ciopConfigs config.CompoundCiopConfig, loggers Loggers) error {
+	for index := range container.Env {
+		env := &(container.Env[index])
+		if env.ValueFrom == nil {
+			continue
+		}
+		if env.ValueFrom.ConfigMapKeyRef == nil {
+			continue
+		}
+		if config.IsCiopConfigCM(env.ValueFrom.ConfigMapKeyRef.Name) {
+			filename := env.ValueFrom.ConfigMapKeyRef.Key
+
+			loggers.Debug.WithField(logCiopConfigFile, filename).Debug("Rehearsal job uses ci-operator config ConfigMap, needed content will be inlined")
+			ciopConfig, ok := ciopConfigs[filename]
+			if !ok {
+				return fmt.Errorf("ci-operator config file %s was not found", filename)
 			}
-			if env.ValueFrom.ConfigMapKeyRef == nil {
-				continue
+
+			ciOpConfigContent, err := yaml.Marshal(ciopConfig)
+			if err != nil {
+				loggers.Job.WithError(err).Error("Failed to marshal ci-operator config file")
+				return err
 			}
-			if config.IsCiopConfigCM(env.ValueFrom.ConfigMapKeyRef.Name) {
-				filename := env.ValueFrom.ConfigMapKeyRef.Key
 
-				logFields := logrus.Fields{logCiopConfigFile: filename, logCiopConfigRepo: targetRepo, logRehearsalJob: job.Name}
-				loggers.Debug.WithFields(logFields).Debug("Rehearsal job uses ci-operator config ConfigMap, needed content will be inlined")
-
-				ciopConfig, ok := ciopConfigs[filename]
-				if !ok {
-					return nil, fmt.Errorf("ci-operator config file %s was not found", filename)
-				}
-
-				ciOpConfigContent, err := yaml.Marshal(ciopConfig)
-				if err != nil {
-					loggers.Job.WithError(err).Error("Failed to marshal ci-operator config file")
-					return nil, err
-				}
-
-				env.Value = string(ciOpConfigContent)
-				env.ValueFrom = nil
-			}
+			env.Value = string(ciOpConfigContent)
+			env.ValueFrom = nil
 		}
 	}
-
-	return &rehearsal, nil
+	return nil
 }
 
-// ConfigureRehearsalJobs filters the jobs that should be rehearsed, then return a list of them re-configured with the
-// ci-operator's configuration inlined.
-func ConfigureRehearsalJobs(toBeRehearsed config.Presubmits, ciopConfigs config.CompoundCiopConfig, prNumber int, loggers Loggers, allowVolumes bool, templates []config.ConfigMapSource, profiles []config.ConfigMapSource) []*prowconfig.Presubmit {
-	var templateMap map[string]string
-	if allowVolumes {
-		templateMap = make(map[string]string, len(templates))
-		for _, t := range templates {
-			templateMap[filepath.Base(t.Filename)] = t.TempCMName("template")
-		}
-	}
-	rehearsals := []*prowconfig.Presubmit{}
+// JobConfigurer holds all the information that is needed for the configuration of the jobs.
+type JobConfigurer struct {
+	ciopConfigs config.CompoundCiopConfig
+	profiles    []config.ConfigMapSource
 
-	rehearsalsFiltered := filterJobs(toBeRehearsed, allowVolumes, loggers.Job)
-	for repo, jobs := range rehearsalsFiltered {
+	prNumber     int
+	refs         *pjapi.Refs
+	loggers      Loggers
+	allowVolumes bool
+	templateMap  map[string]string
+}
+
+// NewJobConfigurer filters the jobs and returns a new JobConfigurer.
+func NewJobConfigurer(ciopConfigs config.CompoundCiopConfig, prNumber int, loggers Loggers, allowVolumes bool, templates []config.ConfigMapSource, profiles []config.ConfigMapSource, refs *pjapi.Refs) *JobConfigurer {
+	return &JobConfigurer{
+		ciopConfigs:  ciopConfigs,
+		profiles:     profiles,
+		prNumber:     prNumber,
+		refs:         refs,
+		loggers:      loggers,
+		allowVolumes: allowVolumes,
+		templateMap:  fillTemplateMap(templates),
+	}
+}
+
+func fillTemplateMap(templates []config.ConfigMapSource) map[string]string {
+	templateMap := make(map[string]string, len(templates))
+	for _, t := range templates {
+		templateMap[filepath.Base(t.Filename)] = t.TempCMName("template")
+	}
+	return templateMap
+}
+
+// ConfigurePresubmitRehearsals adds the required configuration for the presubmits to be rehearsed.
+func (jc *JobConfigurer) ConfigurePresubmitRehearsals(presubmits config.Presubmits) []*prowconfig.Presubmit {
+	var rehearsals []*prowconfig.Presubmit
+
+	presubmitsFiltered := filterPresubmits(presubmits, jc.allowVolumes, jc.loggers.Job)
+	for repo, jobs := range presubmitsFiltered {
 		for _, job := range jobs {
-			jobLogger := loggers.Job.WithFields(logrus.Fields{"target-repo": repo, "target-job": job.Name})
-			rehearsal, err := makeRehearsalPresubmit(&job, repo, prNumber)
+			jobLogger := jc.loggers.Job.WithFields(logrus.Fields{"target-repo": repo, "target-job": job.Name})
+			rehearsal, err := makeRehearsalPresubmit(&job, repo, jc.prNumber)
 			if err != nil {
 				jobLogger.WithError(err).Warn("Failed to make a rehearsal presubmit")
 				continue
 			}
 
-			rehearsal, err = inlineCiOpConfig(rehearsal, repo, ciopConfigs, loggers)
-			if err != nil {
-				jobLogger.WithError(err).Warn("Failed to inline ci-operator-config into rehearsal job")
+			if err := jc.configureJobSpec(rehearsal.Spec, jc.loggers.Debug.WithField("name", job.Name)); err != nil {
+				jobLogger.WithError(err).Warn("Failed to inline ci-operator-config into rehearsal presubmit job")
 				continue
-			}
-
-			if allowVolumes {
-				replaceCMTemplateName(rehearsal.Spec.Containers[0].VolumeMounts, rehearsal.Spec.Volumes, templateMap)
-				replaceClusterProfiles(rehearsal.Spec.Volumes, profiles, loggers.Debug.WithField("name", job.Name))
 			}
 
 			jobLogger.WithField(logRehearsalJob, rehearsal.Name).Info("Created a rehearsal job to be submitted")
 			rehearsals = append(rehearsals, rehearsal)
 		}
 	}
-
 	return rehearsals
+}
+
+func (jc *JobConfigurer) configureJobSpec(spec *v1.PodSpec, logger *logrus.Entry) error {
+	if err := inlineCiOpConfig(spec.Containers[0], jc.ciopConfigs, jc.loggers); err != nil {
+		return err
+	}
+
+	if jc.allowVolumes {
+		replaceCMTemplateName(spec.Containers[0].VolumeMounts, spec.Volumes, jc.templateMap)
+		replaceClusterProfiles(spec.Volumes, jc.profiles, logger)
+	}
+	return nil
 }
 
 // AddRandomJobsForChangedTemplates finds jobs from the PR config that are using a specific template with a specific cluster type.

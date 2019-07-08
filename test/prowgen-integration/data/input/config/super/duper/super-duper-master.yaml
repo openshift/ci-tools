@@ -43,3 +43,6 @@ tests:
 - as: e2e-random
   commands: make e2e
   openshift_installer_random: {}
+- as: e2e-random-src
+  commands: make e2e
+  openshift_installer_src_random: {}

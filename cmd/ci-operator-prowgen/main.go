@@ -36,22 +36,22 @@ target=$(awk < /usr/local/e2e-targets \
     --assign "r=$RANDOM" \
     'BEGIN { r /= 32767 } (r -= $1) <= 0 { print $2; exit }')
 case "$target" in
-    aws) template=e2e; CLUSTER_TYPE=aws;;
-    azure) template=e2e; CLUSTER_TYPE=azure4;;
-    aws-upi) template=upi-e2e; CLUSTER_TYPE=aws;;
-    vsphere) template=upi-e2e; CLUSTER_TYPE=vsphere;;
+    aws) template=%[1]s; CLUSTER_TYPE=aws;;
+    azure) template=%[1]s; CLUSTER_TYPE=azure4;;
+    aws-upi) template=upi-%[1]s; CLUSTER_TYPE=aws;;
+    vsphere) template=upi-%[1]s; CLUSTER_TYPE=vsphere;;
     *) echo >&2 "invalid target $target"; exit 1 ;;
 esac
-ln -s "/usr/local/job-definition/cluster-launch-installer-$template.yaml" /tmp/%[1]s
-ln -s "/usr/local/cluster-profiles/$CLUSTER_TYPE" /tmp/%[1]s-cluster-profile
+ln -s "/usr/local/job-definition/cluster-launch-installer-$template.yaml" /tmp/%[2]s
+ln -s "/usr/local/cluster-profiles/$CLUSTER_TYPE" /tmp/%[2]s-cluster-profile
 export CLUSTER_TYPE
 exec ci-operator \
     --artifact-dir=$(ARTIFACTS) \
     --give-pr-author-access-to-namespace=true \
-    --secret-dir=/tmp/%[1]s-cluster-profile \
+    --secret-dir=/tmp/%[2]s-cluster-profile \
     --sentry-dsn-path=/etc/sentry-dsn/ci-operator \
-    --target=%[1]s \
-    --template=/tmp/%[1]s
+    --target=%[2]s \
+    --template=/tmp/%[2]s
 `
 )
 
@@ -300,11 +300,17 @@ func generatePodSpecRandom(info *config.Info, test *cioperatorapi.TestStepConfig
 	for _, p := range openshiftInstallerRandomProfiles {
 		podSpec.Volumes = append(podSpec.Volumes, generateClusterProfileVolume("cluster-profile-"+string(p), "cluster-secrets-"+string(p)))
 	}
-	podSpec.Volumes = append(podSpec.Volumes, generateConfigMapVolume("job-definition", []string{"prow-job-cluster-launch-installer-e2e", "prow-job-cluster-launch-installer-upi-e2e"}))
+	var template string
+	if test.OpenshiftInstallerRandomClusterTestConfiguration != nil {
+		template = "e2e"
+	} else if test.OpenshiftInstallerSrcRandomClusterTestConfiguration != nil {
+		template = "src"
+	}
+	podSpec.Volumes = append(podSpec.Volumes, generateConfigMapVolume("job-definition", []string{"prow-job-cluster-launch-installer-" + template, "prow-job-cluster-launch-installer-upi-" + template}))
 	podSpec.Volumes = append(podSpec.Volumes, generateConfigMapVolume("e2e-targets", []string{"e2e-targets"}))
 	container := &podSpec.Containers[0]
 	container.Command = []string{"bash"}
-	container.Args = []string{"-c", fmt.Sprintf(openshiftInstallerRandomCmd, test.As)}
+	container.Args = []string{"-c", fmt.Sprintf(openshiftInstallerRandomCmd, template, test.As)}
 	container.Env = append(container.Env, []kubeapi.EnvVar{
 		{Name: "JOB_NAME_SAFE", Value: strings.Replace(test.As, "_", "-", -1)},
 		{Name: "TEST_COMMAND", Value: test.Commands},
@@ -451,7 +457,9 @@ func generateJobs(
 			if c := configSpec.ReleaseTagConfiguration; c != nil {
 				release = c.Name
 			}
-			if conf := element.OpenshiftInstallerRandomClusterTestConfiguration; conf != nil {
+			if element.OpenshiftInstallerRandomClusterTestConfiguration != nil {
+				podSpec = generatePodSpecRandom(info, &element)
+			} else if element.OpenshiftInstallerSrcRandomClusterTestConfiguration != nil {
 				podSpec = generatePodSpecRandom(info, &element)
 			} else {
 				podSpec = generatePodSpecTemplate(info, release, &element)

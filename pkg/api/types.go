@@ -293,17 +293,18 @@ type TestStepConfiguration struct {
 	Secret *Secret `json:"secret,omitempty"`
 
 	// Only one of the following can be not-null.
-	ContainerTestConfiguration                        *ContainerTestConfiguration                        `json:"container,omitempty"`
-	OpenshiftAnsibleClusterTestConfiguration          *OpenshiftAnsibleClusterTestConfiguration          `json:"openshift_ansible,omitempty"`
-	OpenshiftAnsibleSrcClusterTestConfiguration       *OpenshiftAnsibleSrcClusterTestConfiguration       `json:"openshift_ansible_src,omitempty"`
-	OpenshiftAnsibleCustomClusterTestConfiguration    *OpenshiftAnsibleCustomClusterTestConfiguration    `json:"openshift_ansible_custom,omitempty"`
-	OpenshiftAnsible40ClusterTestConfiguration        *OpenshiftAnsible40ClusterTestConfiguration        `json:"openshift_ansible_40,omitempty"`
-	OpenshiftAnsibleUpgradeClusterTestConfiguration   *OpenshiftAnsibleUpgradeClusterTestConfiguration   `json:"openshift_ansible_upgrade,omitempty"`
-	OpenshiftInstallerClusterTestConfiguration        *OpenshiftInstallerClusterTestConfiguration        `json:"openshift_installer,omitempty"`
-	OpenshiftInstallerSrcClusterTestConfiguration     *OpenshiftInstallerSrcClusterTestConfiguration     `json:"openshift_installer_src,omitempty"`
-	OpenshiftInstallerUPIClusterTestConfiguration     *OpenshiftInstallerUPIClusterTestConfiguration     `json:"openshift_installer_upi,omitempty"`
-	OpenshiftInstallerConsoleClusterTestConfiguration *OpenshiftInstallerConsoleClusterTestConfiguration `json:"openshift_installer_console,omitempty"`
-	OpenshiftInstallerRandomClusterTestConfiguration  *OpenshiftInstallerRandomClusterTestConfiguration  `json:"openshift_installer_random,omitempty"`
+	ContainerTestConfiguration                          *ContainerTestConfiguration                          `json:"container,omitempty"`
+	OpenshiftAnsibleClusterTestConfiguration            *OpenshiftAnsibleClusterTestConfiguration            `json:"openshift_ansible,omitempty"`
+	OpenshiftAnsibleSrcClusterTestConfiguration         *OpenshiftAnsibleSrcClusterTestConfiguration         `json:"openshift_ansible_src,omitempty"`
+	OpenshiftAnsibleCustomClusterTestConfiguration      *OpenshiftAnsibleCustomClusterTestConfiguration      `json:"openshift_ansible_custom,omitempty"`
+	OpenshiftAnsible40ClusterTestConfiguration          *OpenshiftAnsible40ClusterTestConfiguration          `json:"openshift_ansible_40,omitempty"`
+	OpenshiftAnsibleUpgradeClusterTestConfiguration     *OpenshiftAnsibleUpgradeClusterTestConfiguration     `json:"openshift_ansible_upgrade,omitempty"`
+	OpenshiftInstallerClusterTestConfiguration          *OpenshiftInstallerClusterTestConfiguration          `json:"openshift_installer,omitempty"`
+	OpenshiftInstallerSrcClusterTestConfiguration       *OpenshiftInstallerSrcClusterTestConfiguration       `json:"openshift_installer_src,omitempty"`
+	OpenshiftInstallerUPIClusterTestConfiguration       *OpenshiftInstallerUPIClusterTestConfiguration       `json:"openshift_installer_upi,omitempty"`
+	OpenshiftInstallerConsoleClusterTestConfiguration   *OpenshiftInstallerConsoleClusterTestConfiguration   `json:"openshift_installer_console,omitempty"`
+	OpenshiftInstallerRandomClusterTestConfiguration    *OpenshiftInstallerRandomClusterTestConfiguration    `json:"openshift_installer_random,omitempty"`
+	OpenshiftInstallerSrcRandomClusterTestConfiguration *OpenshiftInstallerSrcRandomClusterTestConfiguration `json:"openshift_installer_src_random,omitempty"`
 }
 
 // Secret describes a secret to be mounted inside a test
@@ -439,6 +440,11 @@ type OpenshiftInstallerUPIClusterTestConfiguration struct {
 // that provisions a cluster using openshift-installer in a provider
 // chosen randomly and runs conformance tests.
 type OpenshiftInstallerRandomClusterTestConfiguration struct{}
+
+// OpenshiftInstallerSrcRandomClusterTestConfiguration describes a
+// that provisions a cluster using openshift-installer in a provider
+// chosen randomly and executes a command in the `src` image.
+type OpenshiftInstallerSrcRandomClusterTestConfiguration struct{}
 
 // PipelineImageStreamTagReference is a tag on the
 // ImageStream corresponding to the code under test.

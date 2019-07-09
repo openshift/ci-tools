@@ -232,22 +232,7 @@ func generatePodSpecTemplate(info *config.Info, release string, test *cioperator
 	clusterProfilePath := fmt.Sprintf("/usr/local/%s-cluster-profile", test.As)
 	templatePath := fmt.Sprintf("/usr/local/%s", test.As)
 	podSpec := generateCiOperatorPodSpec(info, test.As)
-	clusterProfileVolume := kubeapi.Volume{
-		Name: "cluster-profile",
-		VolumeSource: kubeapi.VolumeSource{
-			Projected: &kubeapi.ProjectedVolumeSource{
-				Sources: []kubeapi.VolumeProjection{
-					{
-						Secret: &kubeapi.SecretProjection{
-							LocalObjectReference: kubeapi.LocalObjectReference{
-								Name: fmt.Sprintf("cluster-secrets-%s", targetCloud),
-							},
-						},
-					},
-				},
-			},
-		},
-	}
+	clusterProfileVolume := generateClusterProfileVolume("cluster-profile", fmt.Sprintf("cluster-secrets-%s", targetCloud))
 	switch clusterProfile {
 	case cioperatorapi.ClusterProfileAWS, cioperatorapi.ClusterProfileAzure4, cioperatorapi.ClusterProfileOpenStack, cioperatorapi.ClusterProfileVSphere:
 	default:
@@ -260,16 +245,7 @@ func generatePodSpecTemplate(info *config.Info, release string, test *cioperator
 		})
 	}
 	if len(template) > 0 {
-		podSpec.Volumes = append(podSpec.Volumes, kubeapi.Volume{
-			Name: "job-definition",
-			VolumeSource: kubeapi.VolumeSource{
-				ConfigMap: &kubeapi.ConfigMapVolumeSource{
-					LocalObjectReference: kubeapi.LocalObjectReference{
-						Name: fmt.Sprintf("prow-job-%s", template),
-					},
-				},
-			},
-		})
+		podSpec.Volumes = append(podSpec.Volumes, generateConfigMapVolume("job-definition", []string{fmt.Sprintf("prow-job-%s", template)}))
 	}
 	podSpec.Volumes = append(podSpec.Volumes, clusterProfileVolume)
 	container := &podSpec.Containers[0]
@@ -321,52 +297,11 @@ func generatePodSpecTemplate(info *config.Info, release string, test *cioperator
 
 func generatePodSpecRandom(info *config.Info, test *cioperatorapi.TestStepConfiguration) *kubeapi.PodSpec {
 	podSpec := generatePodSpec(info)
-	for _, profile := range openshiftInstallerRandomProfiles {
-		podSpec.Volumes = append(podSpec.Volumes, kubeapi.Volume{
-			Name: "cluster-profile-" + string(profile),
-			VolumeSource: kubeapi.VolumeSource{
-				Projected: &kubeapi.ProjectedVolumeSource{
-					Sources: []kubeapi.VolumeProjection{{
-						Secret: &kubeapi.SecretProjection{
-							LocalObjectReference: kubeapi.LocalObjectReference{
-								Name: "cluster-secrets-" + string(profile),
-							},
-						},
-					}},
-				},
-			},
-		})
+	for _, p := range openshiftInstallerRandomProfiles {
+		podSpec.Volumes = append(podSpec.Volumes, generateClusterProfileVolume("cluster-profile-"+string(p), "cluster-secrets-"+string(p)))
 	}
-	podSpec.Volumes = append(podSpec.Volumes, kubeapi.Volume{
-		Name: "job-definition",
-		VolumeSource: kubeapi.VolumeSource{
-			Projected: &kubeapi.ProjectedVolumeSource{
-				Sources: []kubeapi.VolumeProjection{{
-					ConfigMap: &kubeapi.ConfigMapProjection{
-						LocalObjectReference: kubeapi.LocalObjectReference{
-							Name: "prow-job-cluster-launch-installer-e2e",
-						},
-					},
-				}, {
-					ConfigMap: &kubeapi.ConfigMapProjection{
-						LocalObjectReference: kubeapi.LocalObjectReference{
-							Name: "prow-job-cluster-launch-installer-upi-e2e",
-						},
-					},
-				}},
-			},
-		},
-	})
-	podSpec.Volumes = append(podSpec.Volumes, kubeapi.Volume{
-		Name: "e2e-targets",
-		VolumeSource: kubeapi.VolumeSource{
-			ConfigMap: &kubeapi.ConfigMapVolumeSource{
-				LocalObjectReference: kubeapi.LocalObjectReference{
-					Name: "e2e-targets",
-				},
-			},
-		},
-	})
+	podSpec.Volumes = append(podSpec.Volumes, generateConfigMapVolume("job-definition", []string{"prow-job-cluster-launch-installer-e2e", "prow-job-cluster-launch-installer-upi-e2e"}))
+	podSpec.Volumes = append(podSpec.Volumes, generateConfigMapVolume("e2e-targets", []string{"e2e-targets"}))
 	container := &podSpec.Containers[0]
 	container.Command = []string{"bash"}
 	container.Args = []string{"-c", fmt.Sprintf(openshiftInstallerRandomCmd, test.As)}
@@ -389,6 +324,53 @@ func generatePodSpecRandom(info *config.Info, test *cioperatorapi.TestStepConfig
 		MountPath: "/usr/local/job-definition"},
 	}...)
 	return podSpec
+}
+
+func generateClusterProfileVolume(name, profile string) kubeapi.Volume {
+	return kubeapi.Volume{
+		Name: name,
+		VolumeSource: kubeapi.VolumeSource{
+			Projected: &kubeapi.ProjectedVolumeSource{
+				Sources: []kubeapi.VolumeProjection{{
+					Secret: &kubeapi.SecretProjection{
+						LocalObjectReference: kubeapi.LocalObjectReference{
+							Name: profile,
+						},
+					}},
+				},
+			},
+		},
+	}
+}
+
+func generateConfigMapVolume(name string, templates []string) kubeapi.Volume {
+	ret := kubeapi.Volume{Name: name}
+	switch len(templates) {
+	case 0:
+	case 1:
+		ret.VolumeSource = kubeapi.VolumeSource{
+			ConfigMap: &kubeapi.ConfigMapVolumeSource{
+				LocalObjectReference: kubeapi.LocalObjectReference{
+					Name: templates[0],
+				},
+			},
+		}
+	default:
+		ret.VolumeSource = kubeapi.VolumeSource{
+			Projected: &kubeapi.ProjectedVolumeSource{},
+		}
+		s := &ret.VolumeSource.Projected.Sources
+		for _, t := range templates {
+			*s = append(*s, kubeapi.VolumeProjection{
+				ConfigMap: &kubeapi.ConfigMapProjection{
+					LocalObjectReference: kubeapi.LocalObjectReference{
+						Name: t,
+					},
+				},
+			})
+		}
+	}
+	return ret
 }
 
 func generateJobBase(name, prefix string, info *config.Info, label jc.ProwgenLabel, podSpec *kubeapi.PodSpec) prowconfig.JobBase {

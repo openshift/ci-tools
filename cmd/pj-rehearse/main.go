@@ -281,21 +281,24 @@ func rehearseMain() int {
 	metrics.RecordOpportunity(toRehearseClusterProfiles, "cluster-profile-change")
 	toRehearse.AddAll(toRehearseClusterProfiles)
 
-	rehearsals := rehearse.ConfigureRehearsalJobs(toRehearse, prConfig.CiOperator, prNumber, loggers, o.allowVolumes, changedTemplates, changedClusterProfiles)
-	metrics.RecordActual(rehearsals)
-	if len(rehearsals) == 0 {
+	jobConfigurer := rehearse.NewJobConfigurer(prConfig.CiOperator, prNumber, loggers, o.allowVolumes, changedTemplates, changedClusterProfiles, jobSpec.Refs)
+
+	presubmitsToRehearse := jobConfigurer.ConfigurePresubmitRehearsals(toRehearse)
+	metrics.RecordActual(presubmitsToRehearse)
+
+	if len(presubmitsToRehearse) == 0 {
 		logger.Info("no jobs to rehearse have been found")
 		return 0
-	} else if len(rehearsals) > o.rehearsalLimit {
+	} else if len(presubmitsToRehearse) > o.rehearsalLimit {
 		jobCountFields := logrus.Fields{
 			"rehearsal-threshold": o.rehearsalLimit,
-			"rehearsal-jobs":      len(rehearsals),
+			"rehearsal-jobs":      len(presubmitsToRehearse),
 		}
 		logger.WithFields(jobCountFields).Info("Would rehearse too many jobs, will not proceed")
 		return 0
 	}
 
-	executor := rehearse.NewExecutor(rehearsals, prNumber, o.releaseRepoPath, jobSpec.Refs, o.dryRun, loggers, pjclient)
+	executor := rehearse.NewExecutor(presubmitsToRehearse, prNumber, o.releaseRepoPath, jobSpec.Refs, o.dryRun, loggers, pjclient)
 	success, err := executor.ExecuteJobs()
 	metrics.Execution = executor.Metrics
 	if err != nil {

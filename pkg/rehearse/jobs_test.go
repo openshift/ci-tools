@@ -32,8 +32,8 @@ import (
 	"github.com/openshift/ci-tools/pkg/config"
 )
 
-func TestConfigurePresubmitRehearsals(t *testing.T) {
-	makeVoume := func(name string) v1.Volume {
+func TestReplaceClusterProfiles(t *testing.T) {
+	makeVolume := func(name string) v1.Volume {
 		return v1.Volume{
 			Name: "cluster-profile",
 			VolumeSource: v1.VolumeSource{
@@ -49,36 +49,58 @@ func TestConfigurePresubmitRehearsals(t *testing.T) {
 			},
 		}
 	}
-	makePresubmit := func(name string, spec v1.PodSpec) prowconfig.Presubmit {
-		spec.Containers[0].Command = []string{"ci-operator"}
-		return prowconfig.Presubmit{
-			Brancher: prowconfig.Brancher{
-				Branches: []string{"test"},
+	testCases := []struct {
+		id       string
+		spec     v1.PodSpec
+		expected []string
+	}{
+		{
+			id:   "no-profile",
+			spec: v1.PodSpec{Containers: []v1.Container{{}}},
+		},
+		{
+			id: "unchanged-profile",
+			spec: v1.PodSpec{
+				Containers: []v1.Container{{}},
+				Volumes:    []v1.Volume{makeVolume(config.ClusterProfilePrefix + "unchanged")},
 			},
-			JobBase: prowconfig.JobBase{
-				Name:  name,
-				Agent: string(pjapi.KubernetesAgent),
-				Spec:  &spec,
+			expected: []string{config.ClusterProfilePrefix + "unchanged"},
+		},
+		{
+			id: "changed-profile0",
+			spec: v1.PodSpec{
+				Containers: []v1.Container{{}},
+				Volumes:    []v1.Volume{makeVolume(config.ClusterProfilePrefix + "changed-profile0")},
 			},
-		}
-	}
-	jobs := config.Presubmits{
-		"org/repo": []prowconfig.Presubmit{
-			makePresubmit("no-profile", v1.PodSpec{Containers: []v1.Container{{}}}),
-			makePresubmit("unchanged-profile", v1.PodSpec{
+			expected: []string{"rehearse-cluster-profile-changed-profile0-47f520ef"},
+		},
+		{
+			id: "changed-profile1",
+			spec: v1.PodSpec{
 				Containers: []v1.Container{{}},
-				Volumes:    []v1.Volume{makeVoume(config.ClusterProfilePrefix + "unchanged")},
-			}),
-			makePresubmit("changed-profile0", v1.PodSpec{
+				Volumes:    []v1.Volume{makeVolume(config.ClusterProfilePrefix + "changed-profile1")},
+			},
+			expected: []string{"rehearse-cluster-profile-changed-profile1-85c62707"},
+		},
+		{
+			id: "changed-profiles in multiple volumes",
+			spec: v1.PodSpec{
 				Containers: []v1.Container{{}},
-				Volumes:    []v1.Volume{makeVoume(config.ClusterProfilePrefix + "changed-profile0")},
-			}),
-			makePresubmit("changed-profile1", v1.PodSpec{
-				Containers: []v1.Container{{}},
-				Volumes:    []v1.Volume{makeVoume(config.ClusterProfilePrefix + "changed-profile1")},
-			}),
+				Volumes: []v1.Volume{
+					makeVolume(config.ClusterProfilePrefix + "unchanged"),
+					makeVolume(config.ClusterProfilePrefix + "changed-profile0"),
+					makeVolume(config.ClusterProfilePrefix + "changed-profile1"),
+					makeVolume(config.ClusterProfilePrefix + "unchanged"),
+				},
+			},
+			expected: []string{
+				"cluster-profile-unchanged",
+				"rehearse-cluster-profile-changed-profile0-47f520ef",
+				"rehearse-cluster-profile-changed-profile1-85c62707",
+				"cluster-profile-unchanged"},
 		},
 	}
+
 	profiles := []config.ConfigMapSource{{
 		SHA:      "47f520ef9c2662fc9a2675f1dd4f02d5082b2776",
 		Filename: filepath.Join(config.ClusterProfilesPath, "changed-profile0"),
@@ -87,23 +109,23 @@ func TestConfigurePresubmitRehearsals(t *testing.T) {
 		Filename: filepath.Join(config.ClusterProfilesPath, "changed-profile1"),
 	}}
 
-	jc := NewJobConfigurer(config.CompoundCiopConfig{}, 1234, Loggers{logrus.New(), logrus.New()}, true, nil, profiles, nil)
-	ret := jc.ConfigurePresubmitRehearsals(jobs)
-	var names []string
-	for _, j := range ret {
-		if vs := j.Spec.Volumes; len(vs) == 0 {
-			names = append(names, "")
-		} else {
-			names = append(names, vs[0].VolumeSource.Projected.Sources[0].ConfigMap.Name)
-		}
-	}
-	expected := []string{
-		"", config.ClusterProfilePrefix + "unchanged",
-		"rehearse-cluster-profile-changed-profile0-47f520ef",
-		"rehearse-cluster-profile-changed-profile1-85c62707",
-	}
-	if !reflect.DeepEqual(expected, names) {
-		t.Fatal(diff.ObjectDiff(expected, names))
+	for _, tc := range testCases {
+		t.Run(tc.id, func(t *testing.T) {
+
+			logger := logrus.WithField("testId", tc.id)
+			replaceClusterProfiles(tc.spec.Volumes, profiles, logger)
+
+			var names []string
+			if len(tc.spec.Volumes) > 0 {
+				for _, volume := range tc.spec.Volumes {
+					names = append(names, volume.VolumeSource.Projected.Sources[0].ConfigMap.Name)
+				}
+			}
+
+			if !reflect.DeepEqual(tc.expected, names) {
+				t.Fatal(diff.ObjectDiff(tc.expected, names))
+			}
+		})
 	}
 }
 
@@ -266,6 +288,39 @@ func TestMakeRehearsalPresubmit(t *testing.T) {
 	}
 }
 
+func TestMakeRehearsalPeriodic(t *testing.T) {
+	testPrNumber := 123
+	sourcePeriodic := &prowconfig.Periodic{
+		JobBase: prowconfig.JobBase{
+			Agent: "kubernetes",
+			Name:  "pull-ci-org-repo-branch-test",
+
+			UtilityConfig: prowconfig.UtilityConfig{ExtraRefs: makeBaseExtraRefs()},
+			Spec: &v1.PodSpec{
+				Containers: []v1.Container{{
+					Command: []string{"ci-operator"},
+					Args:    []string{"arg1", "arg2"},
+				}},
+			},
+		},
+	}
+	expectedPeriodic := &prowconfig.Periodic{}
+	deepcopy.Copy(expectedPeriodic, sourcePeriodic)
+
+	expectedPeriodic.Name = "rehearse-123-pull-ci-org-repo-branch-test"
+	expectedPeriodic.Labels = map[string]string{rehearseLabel: "123"}
+	expectedPeriodic.Spec.Containers[0].Args = append(expectedPeriodic.Spec.Containers[0].Args, fmt.Sprintf("--git-ref=%s/%s@%s", expectedPeriodic.ExtraRefs[0].Org, expectedPeriodic.ExtraRefs[0].Repo, expectedPeriodic.ExtraRefs[0].BaseRef))
+	expectedPeriodic.ExtraRefs[0] = *makeBaseRefs()
+
+	rehearsal, err := makeRehearsalPeriodic(sourcePeriodic, testPrNumber, makeBaseRefs())
+	if err != nil {
+		t.Errorf("Unexpected error in makeRehearsalPresubmit: %v", err)
+	}
+	if !reflect.DeepEqual(*expectedPeriodic, rehearsal) {
+		t.Errorf("Expected rehearsal Periodic differs:\n%s", diff.ObjectDiff(expectedPeriodic, rehearsal))
+	}
+}
+
 func makeTestingProwJob(namespace, jobName, context string, refs *pjapi.Refs, ciopArgs []string) *pjapi.ProwJob {
 	return &pjapi.ProwJob{
 		TypeMeta: metav1.TypeMeta{Kind: "ProwJob", APIVersion: "prow.k8s.io/v1"},
@@ -379,9 +434,10 @@ func TestExecuteJobsErrors(t *testing.T) {
 				return false, nil, nil
 			})
 
-			jc := NewJobConfigurer(testCiopConfigs, testPrNumber, testLoggers, true, nil, nil, nil)
-			rehearsals := jc.ConfigurePresubmitRehearsals(tc.jobs)
-			executor := NewExecutor(rehearsals, testPrNumber, testRepoPath, testRefs, true, testLoggers, fakeclient)
+			jc := NewJobConfigurer(testCiopConfigs, testPrNumber, testLoggers, true, nil, nil, makeBaseRefs())
+
+			presubmits := jc.ConfigurePresubmitRehearsals(tc.jobs)
+			executor := NewExecutor(presubmits, nil, testPrNumber, testRepoPath, testRefs, true, testLoggers, fakeclient)
 			_, err = executor.ExecuteJobs()
 
 			if err == nil {
@@ -449,9 +505,9 @@ func TestExecuteJobsUnsuccessful(t *testing.T) {
 				return true, ret, nil
 			})
 
-			jc := NewJobConfigurer(testCiopConfigs, testPrNumber, testLoggers, true, nil, nil, nil)
-			rehearsals := jc.ConfigurePresubmitRehearsals(tc.jobs)
-			executor := NewExecutor(rehearsals, testPrNumber, testRepoPath, testRefs, false, testLoggers, fakeclient)
+			jc := NewJobConfigurer(testCiopConfigs, testPrNumber, testLoggers, true, nil, nil, makeBaseRefs())
+			presubmits := jc.ConfigurePresubmitRehearsals(tc.jobs)
+			executor := NewExecutor(presubmits, nil, testPrNumber, testRepoPath, testRefs, false, testLoggers, fakeclient)
 			success, _ := executor.ExecuteJobs()
 
 			if success {
@@ -555,9 +611,9 @@ func TestExecuteJobsPositive(t *testing.T) {
 			}
 			fakecs.Fake.PrependWatchReactor("prowjobs", makeSuccessfulFinishReactor(watcher, tc.jobs))
 
-			jc := NewJobConfigurer(testCiopConfigs, testPrNumber, testLoggers, true, nil, nil, nil)
-			rehearsals := jc.ConfigurePresubmitRehearsals(tc.jobs)
-			executor := NewExecutor(rehearsals, testPrNumber, testRepoPath, testRefs, true, testLoggers, fakeclient)
+			jc := NewJobConfigurer(testCiopConfigs, testPrNumber, testLoggers, true, nil, nil, makeBaseRefs())
+			presubmits := jc.ConfigurePresubmitRehearsals(tc.jobs)
+			executor := NewExecutor(presubmits, nil, testPrNumber, testRepoPath, testRefs, true, testLoggers, fakeclient)
 			success, err := executor.ExecuteJobs()
 
 			if err != nil {
@@ -680,7 +736,7 @@ func TestWaitForJobs(t *testing.T) {
 				return true, w, nil
 			})
 
-			executor := NewExecutor(nil, 0, "", &pjapi.Refs{}, true, loggers, cs.ProwV1().ProwJobs("test"))
+			executor := NewExecutor(nil, nil, 0, "", &pjapi.Refs{}, true, loggers, cs.ProwV1().ProwJobs("test"))
 			success, err := executor.waitForJobs(tc.pjs, "")
 			if err != tc.err {
 				t.Fatalf("want `err` == %v, got %v", tc.err, err)
@@ -706,7 +762,7 @@ func TestWaitForJobsRetries(t *testing.T) {
 		return true, ret, nil
 	})
 
-	executor := NewExecutor(nil, 0, "", &pjapi.Refs{}, true, Loggers{logrus.New(), logrus.New()}, cs.ProwV1().ProwJobs("test"))
+	executor := NewExecutor(nil, nil, 0, "", &pjapi.Refs{}, true, Loggers{logrus.New(), logrus.New()}, cs.ProwV1().ProwJobs("test"))
 	success, err := executor.waitForJobs(sets.String{"j": {}}, "")
 	if err != nil {
 		t.Fatal(err)
@@ -733,7 +789,7 @@ func TestWaitForJobsLog(t *testing.T) {
 	})
 	loggers := Loggers{jobLogger, dbgLogger}
 
-	executor := NewExecutor(nil, 0, "", &pjapi.Refs{}, true, loggers, cs.ProwV1().ProwJobs("test"))
+	executor := NewExecutor(nil, nil, 0, "", &pjapi.Refs{}, true, loggers, cs.ProwV1().ProwJobs("test"))
 	_, err := executor.waitForJobs(sets.NewString("success", "failure"), "")
 	if err != nil {
 		t.Fatal(err)
@@ -1019,5 +1075,32 @@ func TestGetClusterTypes(t *testing.T) {
 				t.Fatal(diff.ObjectDiff(tc.want, ret))
 			}
 		})
+	}
+}
+func makeBaseExtraRefs() []pjapi.Refs {
+	return []pjapi.Refs{
+		{
+			Org:     "openshift",
+			Repo:    "test-repo",
+			BaseRef: "master",
+		},
+	}
+}
+
+func makeBaseRefs() *pjapi.Refs {
+	return &pjapi.Refs{
+		Org:      "openshift",
+		Repo:     "release",
+		RepoLink: "https://github.com/openshift/release",
+		BaseRef:  "master",
+		BaseSHA:  "80af9fee7a9f63a79e01da0c74d9dd323118daf0",
+		BaseLink: "",
+		Pulls: []pjapi.Pull{
+			{
+				Number: 39612,
+				Author: "droslean",
+				SHA:    "bc825725cfe0acebb06a7e0b11c8228f5a3b89c0",
+			},
+		},
 	}
 }

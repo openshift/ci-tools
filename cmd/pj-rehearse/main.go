@@ -265,6 +265,8 @@ func rehearseMain() int {
 	}
 	loggers := rehearse.Loggers{Job: logger, Debug: debugLogger.WithField(prowgithub.PrLogField, prNumber)}
 
+	changedPeriodics := diffs.GetChangedPeriodics(masterConfig.Prow, prConfig.Prow, logger)
+
 	toRehearse := diffs.GetChangedPresubmits(masterConfig.Prow, prConfig.Prow, logger)
 	metrics.RecordChangedPresubmits(toRehearse)
 	metrics.RecordOpportunity(toRehearse, "direct-change")
@@ -286,19 +288,22 @@ func rehearseMain() int {
 	presubmitsToRehearse := jobConfigurer.ConfigurePresubmitRehearsals(toRehearse)
 	metrics.RecordActual(presubmitsToRehearse)
 
-	if len(presubmitsToRehearse) == 0 {
+	periodicsToRehearse := jobConfigurer.ConfigurePeriodicRehearsals(changedPeriodics)
+
+	rehearsals := len(presubmitsToRehearse) + len(periodicsToRehearse)
+	if rehearsals == 0 {
 		logger.Info("no jobs to rehearse have been found")
 		return 0
-	} else if len(presubmitsToRehearse) > o.rehearsalLimit {
+	} else if rehearsals > o.rehearsalLimit {
 		jobCountFields := logrus.Fields{
 			"rehearsal-threshold": o.rehearsalLimit,
-			"rehearsal-jobs":      len(presubmitsToRehearse),
+			"rehearsal-jobs":      rehearsals,
 		}
 		logger.WithFields(jobCountFields).Info("Would rehearse too many jobs, will not proceed")
 		return 0
 	}
 
-	executor := rehearse.NewExecutor(presubmitsToRehearse, prNumber, o.releaseRepoPath, jobSpec.Refs, o.dryRun, loggers, pjclient)
+	executor := rehearse.NewExecutor(presubmitsToRehearse, periodicsToRehearse, prNumber, o.releaseRepoPath, jobSpec.Refs, o.dryRun, loggers, pjclient)
 	success, err := executor.ExecuteJobs()
 	metrics.Execution = executor.Metrics
 	if err != nil {

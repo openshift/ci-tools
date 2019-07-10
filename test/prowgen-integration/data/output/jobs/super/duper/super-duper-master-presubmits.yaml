@@ -261,13 +261,9 @@ presubmits:
       - configMap:
           name: e2e-targets
         name: e2e-targets
-      - name: job-definition
-        projected:
-          sources:
-          - configMap:
-              name: prow-job-cluster-launch-installer-src
-          - configMap:
-              name: prow-job-cluster-launch-installer-upi-src
+      - configMap:
+          name: prow-job-cluster-launch-installer-src
+        name: job-definition
       - name: sentry-dsn
         secret:
           secretName: sentry-dsn

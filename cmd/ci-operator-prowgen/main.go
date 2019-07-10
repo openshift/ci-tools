@@ -303,10 +303,11 @@ func generatePodSpecRandom(info *config.Info, test *cioperatorapi.TestStepConfig
 	var template string
 	if test.OpenshiftInstallerRandomClusterTestConfiguration != nil {
 		template = "e2e"
+		podSpec.Volumes = append(podSpec.Volumes, generateConfigMapVolume("job-definition", []string{"prow-job-cluster-launch-installer-e2e", "prow-job-cluster-launch-installer-upi-e2e"}))
 	} else if test.OpenshiftInstallerSrcRandomClusterTestConfiguration != nil {
 		template = "src"
+		podSpec.Volumes = append(podSpec.Volumes, generateConfigMapVolume("job-definition", []string{"prow-job-cluster-launch-installer-src"}))
 	}
-	podSpec.Volumes = append(podSpec.Volumes, generateConfigMapVolume("job-definition", []string{"prow-job-cluster-launch-installer-" + template, "prow-job-cluster-launch-installer-upi-" + template}))
 	podSpec.Volumes = append(podSpec.Volumes, generateConfigMapVolume("e2e-targets", []string{"e2e-targets"}))
 	container := &podSpec.Containers[0]
 	container.Command = []string{"bash"}

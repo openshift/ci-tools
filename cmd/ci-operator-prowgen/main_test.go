@@ -465,7 +465,13 @@ func TestGeneratePodSpecRandom(t *testing.T) {
 		Commands: "commands",
 		OpenshiftInstallerSrcRandomClusterTestConfiguration: &ciop.OpenshiftInstallerSrcRandomClusterTestConfiguration{},
 	})
-	if expected := makePodSpec("src"); !equality.Semantic.DeepEqual(expected, *podSpec) {
+	expected := makePodSpec("src")
+	p := &expected.Volumes[4].VolumeSource
+	p.ConfigMap = &kubeapi.ConfigMapVolumeSource{
+		LocalObjectReference: p.Projected.Sources[0].ConfigMap.LocalObjectReference,
+	}
+	p.Projected = nil
+	if !equality.Semantic.DeepEqual(expected, *podSpec) {
 		t.Fatal(diff.ObjectDiff(expected, podSpec))
 	}
 }

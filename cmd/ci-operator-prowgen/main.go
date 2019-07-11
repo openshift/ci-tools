@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"go/build"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -495,11 +496,7 @@ func generateJobsToDir(dir string, label jc.ProwgenLabel) func(configSpec *ciope
 }
 
 func getReleaseRepoDir(directory string) (string, error) {
-	var gopath string
-	if gopath = os.Getenv("GOPATH"); len(gopath) == 0 {
-		return "", fmt.Errorf("GOPATH not set, cannot infer openshift/release repo location")
-	}
-	tentative := filepath.Join(gopath, "src/github.com/openshift/release", directory)
+	tentative := filepath.Join(build.Default.GOPATH, "src/github.com/openshift/release", directory)
 	if stat, err := os.Stat(tentative); err == nil && stat.IsDir() {
 		return tentative, nil
 	}

@@ -111,7 +111,11 @@ func extractInfoFromPath(configFilePath string) (*Info, error) {
 }
 
 func OperateOnJobConfigDir(configDir string, callback func(*prowconfig.JobConfig, *Info) error) error {
-	if err := filepath.Walk(configDir, func(path string, info os.FileInfo, err error) error {
+	return OperateOnJobConfigSubdir(configDir, "", callback)
+}
+
+func OperateOnJobConfigSubdir(configDir, subDir string, callback func(*prowconfig.JobConfig, *Info) error) error {
+	if err := filepath.Walk(filepath.Join(configDir, subDir), func(path string, info os.FileInfo, err error) error {
 		logger := logrus.WithField("source-file", path)
 		if err != nil {
 			logger.WithError(err).Error("Failed to walk file/directory")

@@ -121,7 +121,7 @@ func TestRecordChangedPresubmits(t *testing.T) {
 	}
 }
 
-func TestRecordOpportunity(t *testing.T) {
+func TestRecordPresubmitsOpportunity(t *testing.T) {
 	testFilename := ""
 
 	var testCases = []struct {
@@ -178,7 +178,7 @@ func TestRecordOpportunity(t *testing.T) {
 
 			}
 			metrics.Opportunities = tc.existing
-			metrics.RecordOpportunity(testPresubmits, tc.reason)
+			metrics.RecordPresubmitsOpportunity(testPresubmits, tc.reason)
 			if !reflect.DeepEqual(tc.expected, metrics.Opportunities) {
 				t.Errorf("Recorded rehearsal opportunities differ from expected:\n%s", diff.ObjectReflectDiff(tc.expected, metrics.Opportunities))
 			}
@@ -208,7 +208,7 @@ func TestRecordActual(t *testing.T) {
 			for _, name := range tc.jobs {
 				presubmits = append(presubmits, &prowconfig.Presubmit{JobBase: prowconfig.JobBase{Name: name}})
 			}
-			metrics.RecordActual(presubmits)
+			metrics.RecordActual(presubmits, nil)
 			sort.Strings(metrics.Actual)
 			if !reflect.DeepEqual(tc.expected, metrics.Actual) {
 				t.Errorf("Recorded rehearsals differ from expected:\n%s", diff.ObjectReflectDiff(tc.expected, metrics.Actual))

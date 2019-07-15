@@ -27,6 +27,7 @@ type Metrics struct {
 
 	ChangedCiopConfigs     []string `json:"changed_ciop_configs"`
 	ChangedPresubmits      []string `json:"changed_presubmits"`
+	ChangedPeriodics       []string `json:"changed_periodics"`
 	ChangedTemplates       []string `json:"changed_templates"`
 	ChangedClusterProfiles []string `json:"changed_cluster_profiles"`
 
@@ -49,6 +50,7 @@ func NewMetrics(file string) *Metrics {
 	return &Metrics{
 		ChangedCiopConfigs: []string{},
 		ChangedPresubmits:  []string{},
+		ChangedPeriodics:   []string{},
 		ChangedTemplates:   []string{},
 
 		Opportunities: map[string][]string{},
@@ -84,8 +86,14 @@ func (m *Metrics) RecordChangedPresubmits(presubmits config.Presubmits) {
 	}
 }
 
-func (m *Metrics) RecordOpportunity(toRehearse config.Presubmits, reason string) {
-	for _, jobs := range toRehearse {
+func (m *Metrics) RecordChangedPeriodics(periodics []prowconfig.Periodic) {
+	for _, job := range periodics {
+		m.ChangedPeriodics = append(m.ChangedPeriodics, job.Name)
+	}
+}
+
+func (m *Metrics) RecordPresubmitsOpportunity(presubmits config.Presubmits, reason string) {
+	for _, jobs := range presubmits {
 		for _, job := range jobs {
 			if _, ok := m.Opportunities[job.Name]; !ok {
 				m.Opportunities[job.Name] = []string{reason}
@@ -96,8 +104,18 @@ func (m *Metrics) RecordOpportunity(toRehearse config.Presubmits, reason string)
 	}
 }
 
-func (m *Metrics) RecordActual(rehearsals []*prowconfig.Presubmit) {
-	for _, job := range rehearsals {
+func (m *Metrics) RecordPeriodicsOpportunity(periodics []prowconfig.Periodic, reason string) {
+	for _, job := range periodics {
+		m.Opportunities[job.Name] = append(m.Opportunities[job.Name], reason)
+	}
+}
+
+func (m *Metrics) RecordActual(presubmits []*prowconfig.Presubmit, periodics []prowconfig.Periodic) {
+	for _, job := range presubmits {
+		m.Actual = append(m.Actual, job.Name)
+	}
+
+	for _, job := range periodics {
 		m.Actual = append(m.Actual, job.Name)
 	}
 }

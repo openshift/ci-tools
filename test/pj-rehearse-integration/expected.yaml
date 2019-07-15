@@ -147,6 +147,123 @@
   kind: ProwJob
   metadata:
     annotations:
+      prow.k8s.io/job: rehearse-1234-periodic-ci-super-duper-e2e
+    creationTimestamp: null
+    labels:
+      ci.openshift.org/rehearse: "1234"
+      created-by-prow: "true"
+      prow.k8s.io/job: rehearse-1234-periodic-ci-super-duper-e2e
+      prow.k8s.io/type: periodic
+    name: aeed2bfa-91ab-11e9-ae38-54e1ad07d68a
+    namespace: test-namespace
+  spec:
+    agent: kubernetes
+    cluster: default
+    decoration_config:
+      gcs_configuration:
+        bucket: origin-ci-test
+        default_org: openshift
+        default_repo: origin
+        path_strategy: single
+      gcs_credentials_secret: gce-sa-credentials-gcs-publisher
+      grace_period: 15s
+      timeout: 4h0m0s
+      utility_images:
+        clonerefs: gcr.io/k8s-prow/clonerefs:v20190129-0a3c54c
+        entrypoint: gcr.io/k8s-prow/entrypoint:v20190129-0a3c54c
+        initupload: gcr.io/k8s-prow/initupload:v20190129-0a3c54c
+        sidecar: gcr.io/k8s-prow/sidecar:v20190129-0a3c54c
+    extra_refs:
+    - base_ref: master
+      base_sha: dd5da2efc6582980ae671362e119d884e4c1cd6c
+      org: openshift
+      pulls:
+      - author: petr-muller
+        number: 1234
+        sha: 4e01b0829216b589d4e2a5a3d91b08fb0443bf62
+      repo: release
+    job: rehearse-1234-periodic-ci-super-duper-e2e
+    namespace: test-namespace
+    pod_spec:
+      containers:
+      - args:
+        - --artifact-dir=$(ARTIFACTS)
+        - --secret-dir=/usr/local/e2e-cluster-profile
+        - --target=CHANGED
+        - --template=/usr/local/e2e
+        - --git-ref=super/duper@master
+        command:
+        - ci-operator
+        env:
+        - name: CLUSTER_TYPE
+          value: gcp
+        - name: CONFIG_SPEC
+          value: |
+            base_images:
+              base:
+                cluster: https://api.ci.openshift.org
+                name: origin-v4.0
+                namespace: openshift
+                tag: base
+            build_root:
+              image_stream_tag:
+                cluster: https://api.ci.openshift.org
+                name: release
+                namespace: openshift
+                tag: golang-1.10
+            images:
+            - from: base
+              to: test-image
+            - from: base
+              to: change-should-cause-rehearsal-of-all-jobs-that-use-this-cfg
+            resources:
+              '*':
+                limits:
+                  cpu: 500Mi
+                requests:
+                  cpu: 10Mi
+            tag_specification:
+              cluster: https://api.ci.openshift.org
+              name: origin-v4.0
+              namespace: openshift
+        - name: JOB_NAME_SAFE
+          value: e2e
+        - name: RPM_REPO_OPENSHIFT_ORIGIN
+          value: https://rpms.svc.ci.openshift.org/openshift-origin-v3.11/
+        - name: TEST_COMMAND
+          value: make test-e2e
+        image: ci-operator:latest
+        imagePullPolicy: Always
+        name: ""
+        resources:
+          requests:
+            cpu: 10m
+        volumeMounts:
+        - mountPath: /usr/local/e2e-cluster-profile
+          name: cluster-profile
+        - mountPath: /usr/local/e2e
+          name: job-definition
+          subPath: cluster-launch-src.yaml
+      serviceAccountName: ci-operator
+      volumes:
+      - name: cluster-profile
+        projected:
+          sources:
+          - secret:
+              name: cluster-secrets-gcp
+          - configMap:
+              name: cluster-profile-gcp
+      - configMap:
+          name: prow-job-cluster-launch-src
+        name: job-definition
+    type: periodic
+  status:
+    startTime: "2019-06-18T09:30:17Z"
+    state: triggered
+- apiVersion: prow.k8s.io/v1
+  kind: ProwJob
+  metadata:
+    annotations:
       prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-ciop-cfg-change-images
     creationTimestamp: null
     labels:

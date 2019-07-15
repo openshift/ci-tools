@@ -265,40 +265,46 @@ func rehearseMain() int {
 	}
 	loggers := rehearse.Loggers{Job: logger, Debug: debugLogger.WithField(prowgithub.PrLogField, prNumber)}
 
+	changedPeriodics := diffs.GetChangedPeriodics(masterConfig.Prow, prConfig.Prow, logger)
+	metrics.RecordChangedPeriodics(changedPeriodics)
+	metrics.RecordPeriodicsOpportunity(changedPeriodics, "changed-periodic")
+
 	toRehearse := diffs.GetChangedPresubmits(masterConfig.Prow, prConfig.Prow, logger)
 	metrics.RecordChangedPresubmits(toRehearse)
-	metrics.RecordOpportunity(toRehearse, "direct-change")
+	metrics.RecordPresubmitsOpportunity(toRehearse, "direct-change")
 
 	presubmitsWithChangedCiopConfigs := diffs.GetPresubmitsForCiopConfigs(prConfig.Prow, changedCiopConfigs, logger, affectedJobs)
-	metrics.RecordOpportunity(presubmitsWithChangedCiopConfigs, "ci-operator-config-change")
+	metrics.RecordPresubmitsOpportunity(presubmitsWithChangedCiopConfigs, "ci-operator-config-change")
 	toRehearse.AddAll(presubmitsWithChangedCiopConfigs)
 
 	presubmitsWithChangedTemplates := rehearse.AddRandomJobsForChangedTemplates(changedTemplates, toRehearse, prConfig.Prow.JobConfig.Presubmits, loggers, prNumber)
-	metrics.RecordOpportunity(presubmitsWithChangedTemplates, "templates-change")
+	metrics.RecordPresubmitsOpportunity(presubmitsWithChangedTemplates, "templates-change")
 	toRehearse.AddAll(presubmitsWithChangedTemplates)
 
 	toRehearseClusterProfiles := diffs.GetPresubmitsForClusterProfiles(prConfig.Prow, changedClusterProfiles, logger)
-	metrics.RecordOpportunity(toRehearseClusterProfiles, "cluster-profile-change")
+	metrics.RecordPresubmitsOpportunity(toRehearseClusterProfiles, "cluster-profile-change")
 	toRehearse.AddAll(toRehearseClusterProfiles)
 
 	jobConfigurer := rehearse.NewJobConfigurer(prConfig.CiOperator, prNumber, loggers, o.allowVolumes, changedTemplates, changedClusterProfiles, jobSpec.Refs)
 
 	presubmitsToRehearse := jobConfigurer.ConfigurePresubmitRehearsals(toRehearse)
-	metrics.RecordActual(presubmitsToRehearse)
+	periodicsToRehearse := jobConfigurer.ConfigurePeriodicRehearsals(changedPeriodics)
+	metrics.RecordActual(presubmitsToRehearse, periodicsToRehearse)
 
-	if len(presubmitsToRehearse) == 0 {
+	rehearsals := len(presubmitsToRehearse) + len(periodicsToRehearse)
+	if rehearsals == 0 {
 		logger.Info("no jobs to rehearse have been found")
 		return 0
-	} else if len(presubmitsToRehearse) > o.rehearsalLimit {
+	} else if rehearsals > o.rehearsalLimit {
 		jobCountFields := logrus.Fields{
 			"rehearsal-threshold": o.rehearsalLimit,
-			"rehearsal-jobs":      len(presubmitsToRehearse),
+			"rehearsal-jobs":      rehearsals,
 		}
 		logger.WithFields(jobCountFields).Info("Would rehearse too many jobs, will not proceed")
 		return 0
 	}
 
-	executor := rehearse.NewExecutor(presubmitsToRehearse, prNumber, o.releaseRepoPath, jobSpec.Refs, o.dryRun, loggers, pjclient)
+	executor := rehearse.NewExecutor(presubmitsToRehearse, periodicsToRehearse, prNumber, o.releaseRepoPath, jobSpec.Refs, o.dryRun, loggers, pjclient)
 	success, err := executor.ExecuteJobs()
 	metrics.Execution = executor.Metrics
 	if err != nil {

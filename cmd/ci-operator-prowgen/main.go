@@ -171,7 +171,7 @@ func generateCiOperatorPodSpec(info *config.Info, target string, additionalArgs 
 }
 
 func generatePodSpecTemplate(info *config.Info, release string, test *cioperatorapi.TestStepConfiguration) *kubeapi.PodSpec {
-	var template string
+	var testImageStreamTag, template string
 	var clusterProfile cioperatorapi.ClusterProfile
 	var needsReleaseRpms bool
 	if conf := test.OpenshiftAnsibleClusterTestConfiguration; conf != nil {
@@ -208,6 +208,10 @@ func generatePodSpecTemplate(info *config.Info, release string, test *cioperator
 	} else if conf := test.OpenshiftInstallerConsoleClusterTestConfiguration; conf != nil {
 		template = "cluster-launch-installer-console"
 		clusterProfile = conf.ClusterProfile
+	} else if conf := test.OpenshiftInstallerCustomTestImageClusterTestConfiguration; conf != nil {
+		template = "cluster-launch-installer-custom-test-image"
+		clusterProfile = conf.ClusterProfile
+		testImageStreamTag = conf.From
 	}
 	var targetCloud string
 	switch clusterProfile {
@@ -256,6 +260,10 @@ func generatePodSpecTemplate(info *config.Info, release string, test *cioperator
 			kubeapi.EnvVar{Name: "CLUSTER_TYPE", Value: targetCloud},
 			kubeapi.EnvVar{Name: "JOB_NAME_SAFE", Value: strings.Replace(test.As, "_", "-", -1)},
 			kubeapi.EnvVar{Name: "TEST_COMMAND", Value: test.Commands})
+		if len(testImageStreamTag) > 0 {
+			container.Env = append(container.Env,
+				kubeapi.EnvVar{Name: "TEST_IMAGESTREAM_TAG", Value: testImageStreamTag})
+		}
 	}
 	if needsReleaseRpms && (info.Org != "openshift" || info.Repo != "origin") {
 		var repoPath = fmt.Sprintf("https://rpms.svc.ci.openshift.org/openshift-origin-v%s/", release)

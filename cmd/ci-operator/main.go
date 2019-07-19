@@ -272,12 +272,6 @@ func (o *options) Complete() error {
 	}
 
 	jobSpec, err := api.ResolveSpecFromEnv()
-	if err == nil && jobSpec.Refs != nil {
-		for _, pull := range jobSpec.Refs.Pulls {
-			o.authors = append(o.authors, pull.Author)
-		}
-	}
-
 	if err != nil {
 		if len(o.gitRef) == 0 {
 			return fmt.Errorf("failed to determine job spec: no --git-ref passed and failed to resolve job spec from env: %v", err)
@@ -317,6 +311,10 @@ func (o *options) Complete() error {
 	}
 	for _, ref := range refs {
 		log.Printf(summarizeRef(ref))
+
+		for _, pull := range ref.Pulls {
+			o.authors = append(o.authors, pull.Author)
+		}
 	}
 
 	for _, path := range o.secretDirectories.values {

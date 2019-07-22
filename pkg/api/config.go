@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 // ValidateAtRuntime validates all the configuration's values without knowledge of config
@@ -284,6 +285,28 @@ func validateTestConfigurationType(fieldRoot string, test TestStepConfiguration,
 	}
 
 	return validationErrors
+}
+
+func validateTestSteps(fieldRoot string, steps []TestStep) (ret []error) {
+	seen := sets.NewString()
+	for i, s := range steps {
+		fieldRootI := fmt.Sprintf("%s[%d]", fieldRoot, i)
+		if len(s.Name) == 0 {
+			ret = append(ret, fmt.Errorf("%s: `name` is required", fieldRootI))
+		} else if seen.Has(s.Name) {
+			ret = append(ret, fmt.Errorf("%s: duplicated name %q", fieldRootI, s.Name))
+		} else {
+			seen.Insert(s.Name)
+		}
+		if len(s.Image) == 0 {
+			ret = append(ret, fmt.Errorf("%s: `image` is required", fieldRootI))
+		}
+		if len(s.Commands) == 0 {
+			ret = append(ret, fmt.Errorf("%s: `commands` is required", fieldRootI))
+		}
+		ret = append(ret, validateResourceRequirements(fieldRootI+".resources", s.Resources)...)
+	}
+	return
 }
 
 func validateReleaseBuildConfiguration(input *ReleaseBuildConfiguration, org, repo string) []error {

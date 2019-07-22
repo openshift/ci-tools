@@ -1,9 +1,12 @@
 package api
 
 import (
+	"errors"
 	"fmt"
+	"reflect"
 	"testing"
 
+	"k8s.io/apimachinery/pkg/util/diff"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 )
 
@@ -382,6 +385,108 @@ func TestValidateBaseRpmImages(t *testing.T) {
 	}
 	if validationErrors != nil {
 		t.Errorf("Errors: %v", kerrors.NewAggregate(validationErrors))
+	}
+}
+
+func TestValidateTestSteps(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		steps []TestStep
+		errs  []error
+	}{{
+		name: "valid step",
+		steps: []TestStep{{
+			Name:     "name",
+			Image:    "image",
+			Commands: "commands",
+			Resources: ResourceRequirements{
+				Requests: ResourceList{"cpu": "1"},
+				Limits:   ResourceList{"memory": "1m"},
+			},
+		}},
+	}, {
+		name: "no name",
+		steps: []TestStep{{
+			Image:    "image",
+			Commands: "commands",
+			Resources: ResourceRequirements{
+				Requests: ResourceList{"cpu": "1"},
+				Limits:   ResourceList{"memory": "1m"},
+			},
+		}},
+		errs: []error{errors.New("test[0]: `name` is required")},
+	}, {
+		name: "duplicated names",
+		steps: []TestStep{{
+			Name:     "s0",
+			Image:    "image",
+			Commands: "commands",
+			Resources: ResourceRequirements{
+				Requests: ResourceList{"cpu": "1"},
+				Limits:   ResourceList{"memory": "1m"},
+			},
+		}, {
+			Name:     "s1",
+			Image:    "image",
+			Commands: "commands",
+			Resources: ResourceRequirements{
+				Requests: ResourceList{"cpu": "1"},
+				Limits:   ResourceList{"memory": "1m"},
+			},
+		}, {
+			Name:     "s0",
+			Image:    "image",
+			Commands: "commands",
+			Resources: ResourceRequirements{
+				Requests: ResourceList{"cpu": "1"},
+				Limits:   ResourceList{"memory": "1m"},
+			},
+		}},
+		errs: []error{errors.New(`test[2]: duplicated name "s0"`)},
+	}, {
+		name: "no image",
+		steps: []TestStep{{
+			Name:     "no_image",
+			Commands: "commands",
+			Resources: ResourceRequirements{
+				Requests: ResourceList{"cpu": "1"},
+				Limits:   ResourceList{"memory": "1m"},
+			},
+		}},
+		errs: []error{errors.New("test[0]: `image` is required")},
+	}, {
+		name: "no commands",
+		steps: []TestStep{{
+			Name:  "no_commands",
+			Image: "image",
+			Resources: ResourceRequirements{
+				Requests: ResourceList{"cpu": "1"},
+				Limits:   ResourceList{"memory": "1m"},
+			},
+		}},
+		errs: []error{errors.New("test[0]: `commands` is required")},
+	}, {
+		name: "invalid resources",
+		steps: []TestStep{{
+			Name:     "bad_resources",
+			Image:    "image",
+			Commands: "commands",
+			Resources: ResourceRequirements{
+				Requests: ResourceList{"cpu": "yes"},
+				Limits:   ResourceList{"piña_colada": "10dL"},
+			},
+		}},
+		errs: []error{
+			errors.New("'test[0].resources.limits' specifies an invalid key piña_colada"),
+			errors.New("test[0].resources.requests.cpu: invalid quantity: quantities must match the regular expression '^([+-]?[0-9.]+)([eEinumkKMGTP]*[-+]?[0-9]*)$'"),
+		},
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			ret := validateTestSteps("test", tc.steps)
+			if !reflect.DeepEqual(ret, tc.errs) {
+				t.Fatal(diff.ObjectReflectDiff(ret, tc.errs))
+			}
+		})
 	}
 }
 

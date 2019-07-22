@@ -307,6 +307,14 @@ type TestStepConfiguration struct {
 	OpenshiftInstallerCustomTestImageClusterTestConfiguration *OpenshiftInstallerCustomTestImageClusterTestConfiguration `json:"openshift_installer_custom_test_image,omitempty"`
 }
 
+type TestStep struct {
+	Name        string               `json:"name,omitempty"`
+	Image       string               `json:"image,omitempty"`
+	Commands    string               `json:"commands,omitempty"`
+	ArtifactDir string               `json:"artifact_dir,omitempty"`
+	Resources   ResourceRequirements `json:"resources,omitempty"`
+}
+
 // Secret describes a secret to be mounted inside a test
 // container.
 type Secret struct {

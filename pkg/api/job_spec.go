@@ -54,6 +54,7 @@ type Refs struct {
 
 	BaseRef string `json:"base_ref,omitempty"`
 	BaseSHA string `json:"base_sha,omitempty"`
+	WorkDir bool   `json:"workdir,omitempty"`
 
 	Pulls []Pull `json:"pulls,omitempty"`
 

@@ -1,5 +1,7 @@
 #!/bin/sh
 
+if [ -z "${AWS_SHARED_CREDENTIALS_FILE}" ]; then echo "ENV VAR AWS_SHARED_CREDENTIALS_FILE is not set"; exit 1; fi
+
 ### expirationDate is always with timezone +00:00, eg, "2019-07-23T22:35+0000"
 MY_DATE=$(TZ=":Africa/Abidjan" date '+%Y-%m-%d')
 declare -a regions=("us-east-1" "us-east-2" "us-west-1")

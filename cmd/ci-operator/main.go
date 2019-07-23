@@ -1109,15 +1109,6 @@ func nodeNames(nodes []*api.StepNode) []string {
 	return names
 }
 
-func linkNames(links []api.StepLink) []string {
-	var names []string
-	for _, link := range links {
-		name := fmt.Sprintf("<%#v>", link)
-		names = append(names, name)
-	}
-	return names
-}
-
 func topologicalSort(nodes []*api.StepNode) ([]*api.StepNode, error) {
 	var sortedNodes []*api.StepNode
 	var satisfied []api.StepLink
@@ -1145,13 +1136,13 @@ func topologicalSort(nodes []*api.StepNode) ([]*api.StepNode, error) {
 		}
 		if !changed && len(waiting) > 0 {
 			for _, node := range waiting {
-				var missing []api.StepLink
+				var missing []string
 				for _, link := range node.Step.Requires() {
 					if !api.HasAllLinks([]api.StepLink{link}, satisfied) {
-						missing = append(missing, link)
+						missing = append(missing, fmt.Sprintf("<%#v>", link))
 					}
-					log.Printf("step <%T> is missing dependencies: %s", node.Step, strings.Join(linkNames(missing), ", "))
 				}
+				log.Printf("step <%T> is missing dependencies: %s", node.Step, strings.Join(missing, ", "))
 			}
 			return nil, errors.New("steps are missing dependencies")
 		}

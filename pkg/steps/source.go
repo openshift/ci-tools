@@ -42,14 +42,28 @@ var (
 	JobSpecAnnotation = fmt.Sprintf("%s/%s", CiAnnotationPrefix, "job-spec")
 )
 
+func determineWorkDir(refs *api.Refs, extraRefs []api.Refs) string {
+	var totalRefs []api.Refs
+	if refs != nil {
+		totalRefs = append(totalRefs, *refs)
+	}
+	totalRefs = append(totalRefs, extraRefs...)
+
+	for _, ref := range totalRefs {
+		if ref.WorkDir {
+			return fmt.Sprintf("github.com/%s/%s", ref.Org, ref.Repo)
+		}
+	}
+	return fmt.Sprintf("github.com/%s/%s", totalRefs[0].Org, totalRefs[0].Repo)
+}
+
 func sourceDockerfile(fromTag api.PipelineImageStreamTagReference, pathAlias string, job *api.JobSpec) string {
 	workingDir := pathAlias
-	if len(workingDir) == 0 && job.Refs != nil {
-		workingDir = fmt.Sprintf("github.com/%s/%s", job.Refs.Org, job.Refs.Repo)
+
+	if len(workingDir) == 0 {
+		workingDir = determineWorkDir(job.Refs, job.ExtraRefs)
 	}
-	if len(workingDir) == 0 && len(job.ExtraRefs) > 0 {
-		workingDir = fmt.Sprintf("github.com/%s/%s", job.ExtraRefs[0].Org, job.ExtraRefs[0].Repo)
-	}
+
 	return fmt.Sprintf(`
 FROM %s:%s
 ADD ./app.binary /clonerefs

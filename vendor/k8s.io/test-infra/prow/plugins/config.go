@@ -733,9 +733,9 @@ func (c *Configuration) setDefaults() {
 	if c.CherryPickUnapproved.Comment == "" {
 		c.CherryPickUnapproved.Comment = `This PR is not for the master branch but does not have the ` + "`cherry-pick-approved`" + `  label. Adding the ` + "`do-not-merge/cherry-pick-not-approved`" + `  label.
 
-To approve the cherry-pick, please assign the patch release manager for the release branch by writing ` + "`/assign @username`" + ` in a comment when ready.
+To approve the cherry-pick, please ping the *kubernetes/patch-release-team* in a comment when ready.
 
-The list of patch release managers for each release can be found [here](https://git.k8s.io/sig-release/release-managers.md).`
+See also [Kubernetes Patch Releases](https://github.com/kubernetes/sig-release/blob/master/releases/patch-releases.md)`
 	}
 
 	for i, rml := range c.RequireMatchingLabel {
@@ -1011,16 +1011,50 @@ type BugzillaRepoOptions struct {
 
 // BugzillaBranchOptions describes how to check if a Bugzilla bug is valid or not.
 type BugzillaBranchOptions struct {
-	IsOpen        *bool   `json:"is_open,omitempty"`
+	// ValidateByDefault determines whether a validation check is run for all pull
+	// requests by default
+	ValidateByDefault *bool `json:"validate_by_default,omitempty"`
+
+	// IsOpen determines whether a bug needs to be open to be valid
+	IsOpen *bool `json:"is_open,omitempty"`
+	// TargetRelease determines which release a bug needs to target to be valid
 	TargetRelease *string `json:"target_release,omitempty"`
+	// Statuses determine which statuses a bug may have to be valid
+	Statuses *[]string `json:"statuses,omitempty"`
+	// DependentBugStatuses determine which statuses a bug's dependent bugs may have
+	// to deem the child bug valid
+	DependentBugStatuses *[]string `json:"dependent_bug_statuses,omitempty"`
+
+	// StatusAfterValidation is the status which the bug will be moved to after being
+	// deemed valid and linked to a PR. Will implicitly be considered a part of `statuses`
+	// if others are set.
+	StatusAfterValidation *string `json:"status_after_validation,omitempty"`
+	// AddExternalLink determines whether the pull request will be added to the Bugzilla
+	// bug using the ExternalBug tracker API after being validated
+	AddExternalLink *bool `json:"add_external_link,omitempty"`
+	// StatusAfterMerge is the status which the bug will be moved to after all pull requests
+	// in the external bug tracker have been merged.
+	StatusAfterMerge *string `json:"status_after_merge,omitempty"`
 }
 
 func (o BugzillaBranchOptions) matches(other BugzillaBranchOptions) bool {
+	validateByDefaultMatch := o.ValidateByDefault == nil && other.ValidateByDefault == nil ||
+		(o.ValidateByDefault != nil && other.ValidateByDefault != nil && *o.ValidateByDefault == *other.ValidateByDefault)
 	isOpenMatch := o.IsOpen == nil && other.IsOpen == nil ||
 		(o.IsOpen != nil && other.IsOpen != nil && *o.IsOpen == *other.IsOpen)
 	targetReleaseMatch := o.TargetRelease == nil && other.TargetRelease == nil ||
 		(o.TargetRelease != nil && other.TargetRelease != nil && *o.TargetRelease == *other.TargetRelease)
-	return isOpenMatch && targetReleaseMatch
+	statusesMatch := o.Statuses == nil && other.Statuses == nil ||
+		(o.Statuses != nil && other.Statuses != nil && sets.NewString(*o.Statuses...).Equal(sets.NewString(*other.Statuses...)))
+	dependentBugStatusesMatch := o.DependentBugStatuses == nil && other.DependentBugStatuses == nil ||
+		(o.DependentBugStatuses != nil && other.DependentBugStatuses != nil && sets.NewString(*o.DependentBugStatuses...).Equal(sets.NewString(*other.DependentBugStatuses...)))
+	statusesAfterValidationMatch := o.StatusAfterValidation == nil && other.StatusAfterValidation == nil ||
+		(o.StatusAfterValidation != nil && other.StatusAfterValidation != nil && *o.StatusAfterValidation == *other.StatusAfterValidation)
+	addExternalLinkMatch := o.AddExternalLink == nil && other.AddExternalLink == nil ||
+		(o.AddExternalLink != nil && other.AddExternalLink != nil && *o.AddExternalLink == *other.AddExternalLink)
+	statusAfterMergeMatch := o.StatusAfterMerge == nil && other.StatusAfterMerge == nil ||
+		(o.StatusAfterMerge != nil && other.StatusAfterMerge != nil && *o.StatusAfterMerge == *other.StatusAfterMerge)
+	return validateByDefaultMatch && isOpenMatch && targetReleaseMatch && statusesMatch && dependentBugStatusesMatch && statusesAfterValidationMatch && addExternalLinkMatch && statusAfterMergeMatch
 }
 
 const BugzillaOptionsWildcard = `*`
@@ -1038,19 +1072,55 @@ func ResolveBugzillaOptions(parent, child BugzillaBranchOptions) BugzillaBranchO
 	output := BugzillaBranchOptions{}
 
 	// populate with the parent
+	if parent.ValidateByDefault != nil {
+		output.ValidateByDefault = parent.ValidateByDefault
+	}
 	if parent.IsOpen != nil {
 		output.IsOpen = parent.IsOpen
 	}
 	if parent.TargetRelease != nil {
 		output.TargetRelease = parent.TargetRelease
 	}
+	if parent.Statuses != nil {
+		output.Statuses = parent.Statuses
+	}
+	if parent.DependentBugStatuses != nil {
+		output.DependentBugStatuses = parent.DependentBugStatuses
+	}
+	if parent.StatusAfterValidation != nil {
+		output.StatusAfterValidation = parent.StatusAfterValidation
+	}
+	if parent.AddExternalLink != nil {
+		output.AddExternalLink = parent.AddExternalLink
+	}
+	if parent.StatusAfterMerge != nil {
+		output.StatusAfterMerge = parent.StatusAfterMerge
+	}
 
 	//override with the child
+	if child.ValidateByDefault != nil {
+		output.ValidateByDefault = child.ValidateByDefault
+	}
 	if child.IsOpen != nil {
 		output.IsOpen = child.IsOpen
 	}
 	if child.TargetRelease != nil {
 		output.TargetRelease = child.TargetRelease
+	}
+	if child.Statuses != nil {
+		output.Statuses = child.Statuses
+	}
+	if child.DependentBugStatuses != nil {
+		output.DependentBugStatuses = child.DependentBugStatuses
+	}
+	if child.StatusAfterValidation != nil {
+		output.StatusAfterValidation = child.StatusAfterValidation
+	}
+	if child.AddExternalLink != nil {
+		output.AddExternalLink = child.AddExternalLink
+	}
+	if child.StatusAfterMerge != nil {
+		output.StatusAfterMerge = child.StatusAfterMerge
 	}
 
 	return output

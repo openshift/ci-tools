@@ -98,6 +98,7 @@ type IssueClient interface {
 	CloseIssue(org, repo string, number int) error
 	ReopenIssue(org, repo string, number int) error
 	FindIssues(query, sort string, asc bool) ([]Issue, error)
+	ListOpenIssues(org, repo string) ([]Issue, error)
 	GetIssue(org, repo string, number int) (*Issue, error)
 	EditIssue(org, repo string, number int, issue *Issue) (*Issue, error)
 }
@@ -138,6 +139,7 @@ type RepositoryClient interface {
 	GetRepo(owner, name string) (Repo, error)
 	GetRepos(org string, isUser bool) ([]Repo, error)
 	GetBranches(org, repo string, onlyProtected bool) ([]Branch, error)
+	GetBranchProtection(org, repo, branch string) (*BranchProtection, error)
 	RemoveBranchProtection(org, repo, branch string) error
 	UpdateBranchProtection(org, repo, branch string, config BranchProtectionRequest) error
 	AddRepoLabel(org, repo, label, description, color string) error
@@ -208,13 +210,20 @@ type Client interface {
 
 	Throttle(hourlyTokens, burst int)
 	Query(ctx context.Context, q interface{}, vars map[string]interface{}) error
+
+	WithFields(fields logrus.Fields) Client
 }
 
 // client interacts with the github api.
 type client struct {
 	// If logger is non-nil, log all method calls with it.
 	logger *logrus.Entry
-	time   timeClient
+	*delegate
+}
+
+// delegate actually does the work to talk to GitHub
+type delegate struct {
+	time timeClient
 
 	gqlc     gqlClient
 	client   httpClient
@@ -227,6 +236,15 @@ type client struct {
 	mut     sync.Mutex // protects botName and email
 	botName string
 	email   string
+}
+
+// WithFields clones the client, keeping the underlying delegate the same but adding
+// fields to the logging context
+func (c *client) WithFields(fields logrus.Fields) Client {
+	return &client{
+		logger:   c.logger.WithFields(fields),
+		delegate: c.delegate,
+	}
 }
 
 var (
@@ -388,17 +406,19 @@ func (c *client) Throttle(hourlyTokens, burst int) {
 func NewClientWithFields(fields logrus.Fields, getToken func() []byte, graphqlEndpoint string, bases ...string) Client {
 	return &client{
 		logger: logrus.WithFields(fields).WithField("client", "github"),
-		time:   &standardTime{},
-		gqlc: githubql.NewEnterpriseClient(
-			graphqlEndpoint,
-			&http.Client{
-				Timeout:   maxRequestTime,
-				Transport: &oauth2.Transport{Source: newReloadingTokenSource(getToken)},
-			}),
-		client:   &http.Client{Timeout: maxRequestTime},
-		bases:    bases,
-		getToken: getToken,
-		dry:      false,
+		delegate: &delegate{
+			time: &standardTime{},
+			gqlc: githubql.NewEnterpriseClient(
+				graphqlEndpoint,
+				&http.Client{
+					Timeout:   maxRequestTime,
+					Transport: &oauth2.Transport{Source: newReloadingTokenSource(getToken)},
+				}),
+			client:   &http.Client{Timeout: maxRequestTime},
+			bases:    bases,
+			getToken: getToken,
+			dry:      false,
+		},
 	}
 }
 
@@ -418,17 +438,19 @@ func NewClient(getToken func() []byte, graphqlEndpoint string, bases ...string) 
 func NewDryRunClientWithFields(fields logrus.Fields, getToken func() []byte, graphqlEndpoint string, bases ...string) Client {
 	return &client{
 		logger: logrus.WithFields(fields).WithField("client", "github"),
-		time:   &standardTime{},
-		gqlc: githubql.NewEnterpriseClient(
-			graphqlEndpoint,
-			&http.Client{
-				Timeout:   maxRequestTime,
-				Transport: &oauth2.Transport{Source: newReloadingTokenSource(getToken)},
-			}),
-		client:   &http.Client{Timeout: maxRequestTime},
-		bases:    bases,
-		getToken: getToken,
-		dry:      true,
+		delegate: &delegate{
+			time: &standardTime{},
+			gqlc: githubql.NewEnterpriseClient(
+				graphqlEndpoint,
+				&http.Client{
+					Timeout:   maxRequestTime,
+					Transport: &oauth2.Transport{Source: newReloadingTokenSource(getToken)},
+				}),
+			client:   &http.Client{Timeout: maxRequestTime},
+			bases:    bases,
+			getToken: getToken,
+			dry:      true,
+		},
 	}
 }
 
@@ -448,9 +470,11 @@ func NewDryRunClient(getToken func() []byte, graphqlEndpoint string, bases ...st
 func NewFakeClient() Client {
 	return &client{
 		logger: logrus.WithField("client", "github"),
-		time:   &standardTime{},
-		fake:   true,
-		dry:    true,
+		delegate: &delegate{
+			time: &standardTime{},
+			fake: true,
+			dry:  true,
+		},
 	}
 }
 
@@ -1221,6 +1245,34 @@ func (c *client) ListIssueComments(org, repo string, number int) ([]IssueComment
 	return comments, nil
 }
 
+// ListOpenIssues returns all open issues, including pull requests
+//
+// Each page of results consumes one API token.
+//
+// See https://developer.github.com/v3/issues/#list-issues-for-a-repository
+func (c *client) ListOpenIssues(org, repo string) ([]Issue, error) {
+	c.log("ListOpenIssues", org, repo)
+	if c.fake {
+		return nil, nil
+	}
+	path := fmt.Sprintf("/repos/%s/%s/issues", org, repo)
+	var issues []Issue
+	err := c.readPaginatedResults(
+		path,
+		acceptNone,
+		func() interface{} {
+			return &[]Issue{}
+		},
+		func(obj interface{}) {
+			issues = append(issues, *(obj.(*[]Issue))...)
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	return issues, nil
+}
+
 // GetPullRequests get all open pull requests for a repo.
 //
 // See https://developer.github.com/v3/pulls/#list-pull-requests
@@ -1276,12 +1328,21 @@ func (c *client) EditPullRequest(org, repo string, number int, pr *PullRequest) 
 	if c.dry {
 		return pr, nil
 	}
+	edit := struct {
+		Title string `json:"title,omitempty"`
+		Body  string `json:"body,omitempty"`
+		State string `json:"state,omitempty"`
+	}{
+		Title: pr.Title,
+		Body:  pr.Body,
+		State: pr.State,
+	}
 	var ret PullRequest
 	_, err := c.request(&request{
 		method:      http.MethodPatch,
 		path:        fmt.Sprintf("/repos/%s/%s/pulls/%d", org, repo, number),
 		exitCodes:   []int{200},
-		requestBody: &pr,
+		requestBody: &edit,
 	}, &ret)
 	if err != nil {
 		return nil, err
@@ -1314,12 +1375,21 @@ func (c *client) EditIssue(org, repo string, number int, issue *Issue) (*Issue, 
 	if c.dry {
 		return issue, nil
 	}
+	edit := struct {
+		Title string `json:"title,omitempty"`
+		Body  string `json:"body,omitempty"`
+		State string `json:"state,omitempty"`
+	}{
+		Title: issue.Title,
+		Body:  issue.Body,
+		State: issue.State,
+	}
 	var ret Issue
 	_, err := c.request(&request{
 		method:      http.MethodPatch,
 		path:        fmt.Sprintf("/repos/%s/%s/issues/%d", org, repo, number),
 		exitCodes:   []int{200},
-		requestBody: &issue,
+		requestBody: &edit,
 	}, &ret)
 	if err != nil {
 		return nil, err
@@ -1628,6 +1698,51 @@ func (c *client) GetBranches(org, repo string, onlyProtected bool) ([]Branch, er
 		return nil, err
 	}
 	return branches, nil
+}
+
+// GetBranchProtection returns current protection object for the branch
+//
+// See https://developer.github.com/v3/repos/branches/#get-branch-protection
+func (c *client) GetBranchProtection(org, repo, branch string) (*BranchProtection, error) {
+	c.log("GetBranchProtection", org, repo, branch)
+	code, body, err := c.requestRaw(&request{
+		method: http.MethodGet,
+		path:   fmt.Sprintf("/repos/%s/%s/branches/%s/protection", org, repo, branch),
+		// GitHub returns 404 for this call if either:
+		// - The branch is not protected
+		// - The access token used does not have sufficient privileges
+		// We therefore need to introspect the response body.
+		exitCodes: []int{200, 404},
+	})
+
+	switch {
+	case err != nil:
+		return nil, err
+	case code == 200:
+		var bp BranchProtection
+		if err := json.Unmarshal(body, &bp); err != nil {
+			return nil, err
+		}
+		return &bp, nil
+	case code == 404:
+		// continue
+	default:
+		return nil, fmt.Errorf("unexpected status code: %v", code)
+	}
+
+	var ge githubError
+	if err := json.Unmarshal(body, &ge); err != nil {
+		return nil, err
+	}
+
+	// If the error was because the branch is not protected, we return a
+	// nil pointer to indicate this.
+	if ge.Message == "Branch not protected" {
+		return nil, nil
+	}
+
+	// Otherwise we got some other 404 error.
+	return nil, fmt.Errorf("getting branch protection 404: %s", ge.Message)
 }
 
 // RemoveBranchProtection unprotects org/repo=branch.

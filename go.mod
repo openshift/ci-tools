@@ -1,10 +1,10 @@
 module github.com/openshift/ci-tools
 
-replace github.com/golang/lint => golang.org/x/lint v0.0.0-20190301231843-5614ed5bae6f
-
-replace k8s.io/apimachinery => k8s.io/apimachinery v0.0.0-20180621070125-103fd098999d
-
-replace k8s.io/client-go => k8s.io/client-go v0.0.0-20180718001006-59698c7d9724
+replace (
+	github.com/golang/lint => golang.org/x/lint v0.0.0-20190301231843-5614ed5bae6f
+	k8s.io/apimachinery => k8s.io/apimachinery v0.0.0-20190404173353-6a84e37a896d
+	k8s.io/client-go => k8s.io/client-go v0.0.0-20190409021438-1a26190bd76a
+)
 
 require (
 	cloud.google.com/go v0.37.4
@@ -21,10 +21,10 @@ require (
 	github.com/shurcooL/githubv4 v0.0.0-20180925043049-51d7b505e2e9
 	github.com/sirupsen/logrus v1.4.2
 	golang.org/x/oauth2 v0.0.0-20190226205417-e64efc72b421
-	golang.org/x/sync v0.0.0-20190227155943-e225da77a7e6
+	golang.org/x/sync v0.0.0-20190423024810-112230192c58
 	google.golang.org/api v0.3.2
-	k8s.io/api v0.0.0-20181128191700-6db15a15d2d3
-	k8s.io/apimachinery v0.0.0-20181128191346-49ce2735e507
-	k8s.io/client-go v9.0.0+incompatible
-	k8s.io/test-infra v0.0.0-20190610154516-e6c6e17e9827
+	k8s.io/api v0.0.0-20190409021203-6e4e0e4f393b
+	k8s.io/apimachinery v0.0.0-20190404173353-6a84e37a896d
+	k8s.io/client-go v11.0.1-0.20190409021438-1a26190bd76a+incompatible
+	k8s.io/test-infra v0.0.0-20190724123615-0c63ed72976e
 )

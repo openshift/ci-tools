@@ -162,11 +162,6 @@ func filterPeriodics(changedPeriodics []prowconfig.Periodic, allowVolumes bool, 
 	for _, periodic := range changedPeriodics {
 		jobLogger := logger.WithField("job", periodic.Name)
 
-		if len(periodic.ExtraRefs) == 0 {
-			jobLogger.Warn("could not rehearse periodic job with no extra_refs")
-			continue
-		}
-
 		if err := filterJobSpec(periodic.Spec, allowVolumes); err != nil {
 			jobLogger.WithError(err).Warn("could not rehearse job")
 			continue

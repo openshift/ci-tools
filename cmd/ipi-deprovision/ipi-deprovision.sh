@@ -23,9 +23,11 @@ handle_cluster () {
   cluster_name=$1
   local expirationDateValue
   expirationDateValue=$2
+  local region
+  region=$3
   echo "handling cluster: ${cluster_name} with expirationDate: ${expirationDateValue}"
   ### TODO: will test hiveutil later
-  #./bin/hiveutil aws-tag-deprovision "${cluster_name}=owned"
+  #./bin/hiveutil aws-tag-deprovision "${cluster_name}=owned" --region "${region}"
 }
 
 
@@ -37,6 +39,6 @@ do
   for cluster in $(echo ${json_output} | jq --arg date "${cluster_age_cutoff}" -r -S '.Vpcs[] | select (.Tags[]? | (.Key == "expirationDate" and .Value < $date)) | .Tags[] | select (.Value == "owned") | .Key')
   do
     expirationDateValue=$(echo ${json_output} | jq --arg cl "${cluster}" -r -S '.Vpcs[] | select (.Tags[]? | (.Key == $cl and .Value == "owned")) | .Tags[] | select (.Key == "expirationDate") | .Value')
-    handle_cluster "${cluster}" "${expirationDateValue}"
+    handle_cluster "${cluster}" "${expirationDateValue}" "${r}"
   done
 done

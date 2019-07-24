@@ -99,7 +99,7 @@ func (c *TemplateCMManager) createCM(name string, data []updateconfig.ConfigMapU
 	}
 	if _, err := c.cmclient.Create(cm); err != nil && !kerrors.IsAlreadyExists(err) {
 		return err
-	} else if err := updateconfig.Update(osFileGetter{root: c.releaseRepoPath}, c.cmclient, cm.Name, "", data, c.logger); err != nil {
+	} else if err := updateconfig.Update(osFileGetter{root: c.releaseRepoPath}, c.cmclient, cm.Name, "", data, nil, c.logger); err != nil {
 		return err
 	}
 	return nil

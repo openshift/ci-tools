@@ -617,13 +617,13 @@ func (e *Executor) submitRehearsals() ([]*pjapi.ProwJob, error) {
 }
 
 func (e *Executor) submitPresubmit(job *prowconfig.Presubmit) (*pjapi.ProwJob, error) {
-	prowJob := pjutil.NewProwJob(pjutil.PresubmitSpec(*job, *e.refs), job.Labels)
+	prowJob := pjutil.NewProwJob(pjutil.PresubmitSpec(*job, *e.refs), job.Labels, job.Annotations)
 	e.loggers.Job.WithFields(pjutil.ProwJobFields(&prowJob)).Info("Submitting a new prowjob.")
 	return e.pjclient.Create(&prowJob)
 }
 
 func (e *Executor) submitPeriodic(job prowconfig.Periodic) (*pjapi.ProwJob, error) {
-	prowJob := pjutil.NewProwJob(pjutil.PeriodicSpec(job), job.Labels)
+	prowJob := pjutil.NewProwJob(pjutil.PeriodicSpec(job), job.Labels, job.Annotations)
 	e.loggers.Job.WithFields(pjutil.ProwJobFields(&prowJob)).Info("Submitting a new prowjob.")
 	return e.pjclient.Create(&prowJob)
 }

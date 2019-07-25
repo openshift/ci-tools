@@ -25,9 +25,8 @@ handle_cluster () {
   expirationDateValue=$2
   local region
   region=$3
-  echo "handling cluster: ${cluster_name} with expirationDate: ${expirationDateValue}"
-  ### TODO: will test hiveutil later
-  #./bin/hiveutil aws-tag-deprovision "${cluster_name}=owned" --region "${region}"
+  echo "handling cluster: ${cluster_name} in region ${region} with expirationDate: ${expirationDateValue}"
+  ./bin/hiveutil aws-tag-deprovision "${cluster_name}=owned" --region "${region}"
 }
 
 

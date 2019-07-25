@@ -67,7 +67,7 @@ func (s *podStep) Run(ctx context.Context, dry bool) error {
 	}
 
 	if len(s.config.From.Namespace) > 0 {
-		return fmt.Errorf("pod step does not supported an image stream tag reference outside the namespace")
+		return fmt.Errorf("pod step does not support an image stream tag reference outside the namespace")
 	}
 	image := fmt.Sprintf("%s:%s", s.config.From.Name, s.config.From.Tag)
 

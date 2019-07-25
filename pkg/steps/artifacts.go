@@ -391,7 +391,7 @@ func (w *ArtifactWorker) downloadArtifacts(podName string, hasArtifacts bool) er
 	}
 
 	defer func() {
-		// signal to artifacts container to gracefully shut don
+		// signal to artifacts container to gracefully shut down
 		err := removeFile(w.podClient, w.namespace, podName, "artifacts", []string{"/tmp/done"})
 		if err == nil {
 			return

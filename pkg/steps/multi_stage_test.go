@@ -2,6 +2,9 @@ package steps
 
 import (
 	"context"
+	"io/ioutil"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -294,5 +297,59 @@ func TestRun(t *testing.T) {
 				t.Errorf("did not execute correct pods: %s", diff.ObjectReflectDiff(names, tc.expected))
 			}
 		})
+	}
+}
+
+func TestArtifacts(t *testing.T) {
+	tmp, err := ioutil.TempDir("", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmp)
+	ns := "namespace"
+	step := multiStageTestStep{
+		name:        "test",
+		artifactDir: tmp,
+		config:      &api.ReleaseBuildConfiguration{},
+		jobSpec: &api.JobSpec{
+			Namespace: ns,
+			JobSpec: prowdapi.JobSpec{
+				Job:       "job",
+				BuildID:   "build_id",
+				ProwJobID: "prow_job_id",
+				Type:      prowapi.PeriodicJob,
+			},
+		},
+		test: []api.TestStep{{
+			LiteralTestStep: &api.LiteralTestStep{
+				As:          "test0",
+				ArtifactDir: "/path/to/artifacts",
+			}},
+		},
+	}
+	var pods []*coreapi.Pod
+	fakecs := fake.NewSimpleClientset()
+	fakecs.PrependReactor("create", "pods", func(action clientgoTesting.Action) (bool, runtime.Object, error) {
+		pod := action.(clientgoTesting.CreateAction).GetObject().(*coreapi.Pod)
+		pod.Status.Phase = coreapi.PodSucceeded
+		pods = append(pods, pod)
+		return false, nil, nil
+	})
+	fakecs.PrependReactor("list", "pods", func(action clientgoTesting.Action) (bool, runtime.Object, error) {
+		fieldRestrictions := action.(clientgoTesting.ListAction).GetListRestrictions().Fields
+		for _, pods := range pods {
+			if fieldRestrictions.Matches(fields.Set{"metadata.name": pods.Name}) {
+				return true, &coreapi.PodList{Items: []coreapi.Pod{*pods}}, nil
+			}
+		}
+		return false, nil, nil
+	})
+	client := fakePodClient{PodsGetter: fakecs.CoreV1()}
+	step.podClient = &client
+	if err := step.Run(context.Background(), false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(tmp, "test0")); err != nil {
+		t.Fatalf("error verifying output directory exists: %v", err)
 	}
 }

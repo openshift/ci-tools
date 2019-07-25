@@ -175,13 +175,8 @@
         sidecar: gcr.io/k8s-prow/sidecar:v20190129-0a3c54c
     extra_refs:
     - base_ref: master
-      base_sha: dd5da2efc6582980ae671362e119d884e4c1cd6c
-      org: openshift
-      pulls:
-      - author: petr-muller
-        number: 1234
-        sha: 4e01b0829216b589d4e2a5a3d91b08fb0443bf62
-      repo: release
+      org: super
+      repo: duper
     job: rehearse-1234-periodic-ci-super-duper-e2e
     namespace: test-namespace
     pod_spec:
@@ -191,7 +186,6 @@
         - --secret-dir=/usr/local/e2e-cluster-profile
         - --target=CHANGED
         - --template=/usr/local/e2e
-        - --git-ref=super/duper@master
         command:
         - ci-operator
         env:

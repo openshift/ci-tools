@@ -20,6 +20,7 @@ package config
 import (
 	"bytes"
 	"compress/gzip"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -27,6 +28,8 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
+	"strconv"
 	"strings"
 	"text/template"
 	"time"
@@ -41,7 +44,9 @@ import (
 	"sigs.k8s.io/yaml"
 
 	buildapi "github.com/knative/build/pkg/apis/build/v1alpha1"
+	pipelinev1alpha1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1alpha1"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
+	"k8s.io/test-infra/prow/git"
 	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/kube"
 	"k8s.io/test-infra/prow/pod-utils/decorate"
@@ -51,6 +56,8 @@ import (
 const (
 	// DefaultJobTimeout represents the default deadline for a prow job.
 	DefaultJobTimeout = 24 * time.Hour
+
+	ProwImplicitGitResource = "PROW_IMPLICIT_GIT_REF"
 )
 
 // Config is a read-only snapshot of the config.
@@ -129,14 +136,45 @@ type ProwConfig struct {
 	DefaultJobTimeout *metav1.Duration `json:"default_job_timeout,omitempty"`
 }
 
+// PresubmitsStatic returns the presubmits in Prows main config.
+// **Warning:** This does not return dynamic Presubmits configured
+// inside the code repo, hence giving an incomplete view. Use
+// `GetPresubmits` instead if possible.
+func (c *Config) PresubmitsStatic() map[string][]Presubmit {
+	return c.Presubmits
+}
+
+// GetPresubmits will return all presumits for the given identifier.
+// Once https://github.com/kubernetes/test-infra/issues/13370 is resolved, it will
+// also return Presubmits that are versioned inside the tested repo, if that feature
+// is enabled.
+func (c *Config) GetPresubmits(gc *git.Client, identifier, baseSHA string, headRefs ...string) ([]Presubmit, error) {
+	if gc == nil {
+		return nil, errors.New("gitClient is nil")
+	}
+	if identifier == "" {
+		return nil, errors.New("no identifier for repo given")
+	}
+	if baseSHA == "" {
+		return nil, errors.New("baseSHA is empty")
+	}
+	return c.Presubmits[identifier], nil
+}
+
 // OwnersDirBlacklist is used to configure regular expressions matching directories
 // to ignore when searching for OWNERS{,_ALIAS} files in a repo.
 type OwnersDirBlacklist struct {
 	// Repos configures a directory blacklist per repo (or org)
 	Repos map[string][]string `json:"repos"`
-	// Default configures a default blacklist for repos (or orgs) not
-	// specifically configured
+	// Default configures a default blacklist for all repos (or orgs).
+	// Some directories like ".git", "_output" and "vendor/.*/OWNERS"
+	// are already preconfigured to be blacklisted, and need not be included here.
 	Default []string `json:"default"`
+	// By default, some directories like ".git", "_output" and "vendor/.*/OWNERS"
+	// are preconfigured to be blacklisted.
+	// If set, IgnorePreconfiguredDefaults will not add these preconfigured directories
+	// to the blacklist.
+	IgnorePreconfiguredDefaults bool `json:"ignore_preconfigured_defaults,omitempty"`
 }
 
 // DirBlacklist returns regular expressions matching directories to ignore when
@@ -149,6 +187,11 @@ func (ownersDirBlacklist OwnersDirBlacklist) DirBlacklist(org, repo string) (bla
 	if bl, ok := ownersDirBlacklist.Repos[org+"/"+repo]; ok {
 		blacklist = append(blacklist, bl...)
 	}
+
+	preconfiguredDefaults := []string{"\\.git$", "_output$", "vendor/.*/.*"}
+	if !ownersDirBlacklist.IgnorePreconfiguredDefaults {
+		blacklist = append(blacklist, preconfiguredDefaults...)
+	}
 	return
 }
 
@@ -160,6 +203,8 @@ type PushGateway struct {
 	// Interval specifies how often prow will push metrics
 	// to the pushgateway. Defaults to 1m.
 	Interval *metav1.Duration `json:"interval,omitempty"`
+	// ServeMetrics tells if or not the components serve metrics
+	ServeMetrics bool `json:"serve_metrics"`
 }
 
 // Controller holds configuration applicable to all agent-specific
@@ -258,8 +303,7 @@ type GitHubReporter struct {
 	// JobTypesToReport is used to determine which type of prowjob
 	// should be reported to github
 	//
-	// defaults to presubmit job only.
-	// Will default to both presubmit and postsubmit jobs by April.1st.2019
+	// defaults to both presubmit and postsubmit jobs.
 	JobTypesToReport []prowapi.ProwJobType `json:"job_types_to_report,omitempty"`
 }
 
@@ -276,13 +320,40 @@ type Sinker struct {
 	MaxPodAge *metav1.Duration `json:"max_pod_age,omitempty"`
 }
 
+// LensConfig names a specific lens, and optionally provides some configuration for it.
+type LensConfig struct {
+	// Name is the name of the lens.
+	Name string `json:"name"`
+	// Config is some lens-specific configuration. Interpreting it is the responsibility of the
+	// lens in question.
+	Config json.RawMessage `json:"config"`
+}
+
+// LensFileConfig is a single entry under Lenses, describing how to configure a lens
+// to read a given set of files.
+type LensFileConfig struct {
+	// RequiredFiles is a list of regexes of file paths that must all be present for a lens to appear.
+	// The list entries are ANDed together, i.e. all of them are required. You can achieve an OR
+	// by using a pipe in a regex.
+	RequiredFiles []string `json:"required_files"`
+	// OptionalFiles is a list of regexes of file paths that will be provided to the lens if they are
+	// present, but will not preclude the lens being rendered by their absence.
+	// The list entries are ORed together, so if only one of them is present it will be provided to
+	// the lens even if the others are not.
+	OptionalFiles []string `json:"optional_files,omitempty"`
+	// Lens is the lens to use, alongside any lens-specific configuration.
+	Lens LensConfig `json:"lens"`
+}
+
 // Spyglass holds config for Spyglass
 type Spyglass struct {
-	// Viewers is a map of Regexp strings to viewer names that defines which sets
-	// of artifacts need to be consumed by which viewers. The keys are compiled
-	// and stored in RegexCache at load time.
+	// Lenses is a list of lens configurations.
+	Lenses []LensFileConfig `json:"lenses,omitempty"`
+	// Viewers is deprecated, prefer Lenses instead.
+	// Viewers was a map of Regexp strings to viewer names that defines which sets
+	// of artifacts need to be consumed by which viewers. It is copied in to Lenses at load time.
 	Viewers map[string][]string `json:"viewers,omitempty"`
-	// RegexCache is a map of viewer regexp strings to their compiled equivalents.
+	// RegexCache is a map of lens regexp strings to their compiled equivalents.
 	RegexCache map[string]*regexp.Regexp `json:"-"`
 	// SizeLimit is the max size artifact in bytes that Spyglass will attempt to
 	// read in entirety. This will only affect viewers attempting to use
@@ -307,6 +378,16 @@ type Spyglass struct {
 	TestGridRoot string `json:"testgrid_root,omitempty"`
 }
 
+// RerunAuthConfig holds information about who can trigger job reruns when we allow this feature.
+type RerunAuthConfig struct {
+	// AllowAnyone, if true, allows anyone to rerun any job. If false, only users listed in
+	// AuthorizedUsers can rerun any job.
+	AllowAnyone bool `json:"allow_anyone,omitempty"`
+	// AuthorizedUsers is a list of GitHub users who can rerun any job. If AllowAnyone is true,
+	// AuthorizedUsers should be empty.
+	AuthorizedUsers []string `json:"authorized_users,omitempty"`
+}
+
 // Deck holds config for deck.
 type Deck struct {
 	// Spyglass specifies which viewers will be used for which artifacts when viewing a job in Deck
@@ -322,6 +403,9 @@ type Deck struct {
 	Branding *Branding `json:"branding,omitempty"`
 	// GoogleAnalytics, if specified, include a Google Analytics tracking code on each page.
 	GoogleAnalytics string `json:"google_analytics,omitempty"`
+	// RerunAuthConfig specifies who will be able to trigger job reruns when we allow this feature.
+	// Currently, this does nothing.
+	RerunAuthConfig RerunAuthConfig `json:"rerun_auth_config,omitempty"`
 }
 
 // ExternalAgentLog ensures an external agent like Jenkins can expose
@@ -371,7 +455,8 @@ type GitHubOptions struct {
 	LinkURL *url.URL
 }
 
-// SlackReporter represents the config for the Slack reporter
+// SlackReporter represents the config for the Slack reporter. The channel can be overridden
+// on the job via the .reporter_config.slack.channel property
 type SlackReporter struct {
 	JobTypesToReport  []prowapi.ProwJobType  `json:"job_types_to_report"`
 	JobStatesToReport []prowapi.ProwJobState `json:"job_states_to_report"`
@@ -779,11 +864,17 @@ func validateJobBase(v JobBase, jobType prowapi.ProwJobType, podNamespace string
 	if err := validatePodSpec(jobType, v.Spec); err != nil {
 		return err
 	}
+	if err := ValidatePipelineRunSpec(jobType, v.ExtraRefs, v.PipelineRunSpec); err != nil {
+		return err
+	}
 	if err := validateLabels(v.Labels); err != nil {
 		return err
 	}
 	if v.Spec == nil || len(v.Spec.Containers) == 0 {
 		return nil // knative-build and jenkins jobs have no spec
+	}
+	if v.RerunPermissions != nil && v.RerunPermissions.AllowAnyone && (len(v.RerunPermissions.GitHubUsers) > 0 || len(v.RerunPermissions.GitHubTeams) > 0) {
+		return errors.New("allow anyone is set to true and permitted users or groups are specified")
 	}
 	return validateDecoration(v.Spec.Containers[0], v.DecorationConfig)
 }
@@ -911,8 +1002,7 @@ func parseProwConfig(c *Config) error {
 	}
 
 	if len(c.GitHubReporter.JobTypesToReport) == 0 {
-		// TODO(krzyzacy): The default will be changed to presubmit + postsubmit by April.
-		c.GitHubReporter.JobTypesToReport = append(c.GitHubReporter.JobTypesToReport, prowapi.PresubmitJob)
+		c.GitHubReporter.JobTypesToReport = append(c.GitHubReporter.JobTypesToReport, prowapi.PresubmitJob, prowapi.PostsubmitJob)
 	}
 
 	// validate entries are valid job types
@@ -966,13 +1056,43 @@ func parseProwConfig(c *Config) error {
 		return fmt.Errorf("invalid value for deck.spyglass.size_limit, must be >=0")
 	}
 
-	c.Deck.Spyglass.RegexCache = make(map[string]*regexp.Regexp)
-	for k := range c.Deck.Spyglass.Viewers {
-		r, err := regexp.Compile(k)
-		if err != nil {
-			return fmt.Errorf("cannot compile regexp %s, err: %v", k, err)
+	// If a whitelist is specified, the user probably does not intend for anyone to be able
+	// to rerun any job.
+	if c.Deck.RerunAuthConfig.AllowAnyone && c.Deck.RerunAuthConfig.AuthorizedUsers != nil {
+		return fmt.Errorf("allow_anyone is set to true and whitelist is specified.")
+	}
+
+	// Migrate the old `viewers` format to the new `lenses` format.
+	var oldLenses []LensFileConfig
+	for regex, viewers := range c.Deck.Spyglass.Viewers {
+		for _, viewer := range viewers {
+			lfc := LensFileConfig{
+				RequiredFiles: []string{regex},
+				Lens: LensConfig{
+					Name: viewer,
+				},
+			}
+			oldLenses = append(oldLenses, lfc)
 		}
-		c.Deck.Spyglass.RegexCache[k] = r
+	}
+	// Ensure the ordering is stable, because these are referenced by index elsewhere.
+	sort.Slice(oldLenses, func(i, j int) bool { return oldLenses[i].Lens.Name < oldLenses[j].Lens.Name })
+	c.Deck.Spyglass.Lenses = append(c.Deck.Spyglass.Lenses, oldLenses...)
+
+	// Parse and cache all our regexes upfront
+	c.Deck.Spyglass.RegexCache = make(map[string]*regexp.Regexp)
+	for _, lens := range c.Deck.Spyglass.Lenses {
+		toCompile := append(lens.OptionalFiles, lens.RequiredFiles...)
+		for _, v := range toCompile {
+			if _, ok := c.Deck.Spyglass.RegexCache[v]; ok {
+				continue
+			}
+			r, err := regexp.Compile(v)
+			if err != nil {
+				return fmt.Errorf("cannot compile regexp %q, err: %v", v, err)
+			}
+			c.Deck.Spyglass.RegexCache[v] = r
+		}
 	}
 
 	// Map old viewer names to the new ones for backwards compatibility.
@@ -1160,7 +1280,8 @@ func validateAgent(v JobBase, podNamespace string) error {
 	agent := v.Agent
 	switch {
 	case !agents.Has(agent):
-		return fmt.Errorf("agent must be one of %s (found %q)", strings.Join(agents.List(), ", "), agent)
+		logrus.Warningf("agent %s is unknown and cannot be validated: use at your own risk", agent)
+		return nil
 	case v.Spec != nil && agent != k:
 		return fmt.Errorf("job specs require agent: %s (found %q)", k, agent)
 	case agent == k && v.Spec == nil:
@@ -1221,6 +1342,52 @@ func resolvePresets(name string, labels map[string]string, spec *v1.PodSpec, bui
 	return nil
 }
 
+var ReProwExtraRef = regexp.MustCompile(`PROW_EXTRA_GIT_REF_(\d+)`)
+
+func ValidatePipelineRunSpec(jobType prowapi.ProwJobType, extraRefs []prowapi.Refs, spec *pipelinev1alpha1.PipelineRunSpec) error {
+	if spec == nil {
+		return nil
+	}
+	// Validate that that the refs match what is requested by the job.
+	// The implicit git ref is optional to use, but any extra refs specified must
+	// be used or removed. (Specifying an unused extra ref must always be
+	// unintentional so we want to warn the user.)
+	extraIndexes := sets.NewInt()
+	for _, resource := range spec.Resources {
+		// Validate that periodic jobs don't request an implicit git ref
+		if jobType == prowapi.PeriodicJob && resource.ResourceRef.Name == ProwImplicitGitResource {
+			return fmt.Errorf("periodic jobs do not have an implicit git ref to replace %s", ProwImplicitGitResource)
+		}
+
+		match := ReProwExtraRef.FindStringSubmatch(resource.ResourceRef.Name)
+		if len(match) != 2 {
+			continue
+		}
+		if len(match[1]) > 1 && match[1][0] == '0' {
+			return fmt.Errorf("resource %q: leading zeros are not allowed in PROW_EXTRA_GIT_REF_* indexes", resource.Name)
+		}
+		i, _ := strconv.Atoi(match[1]) // This can't error based on the regexp.
+		extraIndexes.Insert(i)
+	}
+	for i := range extraRefs {
+		if !extraIndexes.Has(i) {
+			return fmt.Errorf("extra_refs[%d] is not used; some resource must reference PROW_EXTRA_GIT_REF_%d", i, i)
+		}
+	}
+	if len(extraRefs) != extraIndexes.Len() {
+		strs := make([]string, 0, extraIndexes.Len())
+		for i := range extraIndexes {
+			strs = append(strs, strconv.Itoa(i))
+		}
+		return fmt.Errorf(
+			"%d extra_refs are specified, but the following PROW_EXTRA_GIT_REF_* indexes are used: %s.",
+			len(extraRefs),
+			strings.Join(strs, ", "),
+		)
+	}
+	return nil
+}
+
 func validatePodSpec(jobType prowapi.ProwJobType, spec *v1.PodSpec) error {
 	if spec == nil {
 		return nil
@@ -1274,6 +1441,10 @@ func validateTriggering(job Presubmit) error {
 
 	if !job.SkipReport && job.Context == "" {
 		return fmt.Errorf("job %s is set to report but has no context configured", job.Name)
+	}
+
+	if (job.Trigger != "" && job.RerunCommand == "") || (job.Trigger == "" && job.RerunCommand != "") {
+		return fmt.Errorf("Either both of job.Trigger and job.RerunCommand must be set, wasnt the case for job %q", job.Name)
 	}
 
 	return nil

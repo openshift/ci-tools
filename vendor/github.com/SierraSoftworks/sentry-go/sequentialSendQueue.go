@@ -6,6 +6,9 @@ import (
 	"github.com/pkg/errors"
 )
 
+// NewSequentialSendQueue creates a new sequential send queue instance with
+// a  given buffer size which can be used as a replacement for the default
+// send queue.
 func NewSequentialSendQueue(buffer int) SendQueue {
 	b := make(chan QueuedEventInternal, buffer)
 	q := &sequentialSendQueue{

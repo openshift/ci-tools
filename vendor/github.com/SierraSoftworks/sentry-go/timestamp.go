@@ -26,5 +26,5 @@ func (o *timestampOption) Class() string {
 }
 
 func (o *timestampOption) MarshalJSON() ([]byte, error) {
-	return json.Marshal(o.timestamp.Format("2006-01-02T15:04:05"))
+	return json.Marshal(o.timestamp.UTC().Format("2006-01-02T15:04:05"))
 }

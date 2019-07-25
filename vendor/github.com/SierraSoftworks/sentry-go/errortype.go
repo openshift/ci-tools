@@ -2,6 +2,7 @@ package sentry
 
 import "strings"
 
+// ErrType represents errors which can be thrown by the sentry client.
 type ErrType string
 
 // IsInstance will tell you whether a given error is an instance

@@ -41,3 +41,5 @@ do
     handle_cluster "${cluster}" "${expirationDateValue}" "${r}"
   done
 done
+
+echo "Deprovision finished successfully"

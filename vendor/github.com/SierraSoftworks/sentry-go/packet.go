@@ -68,7 +68,9 @@ func (p packet) setOption(option Option) {
 		finalizable.Finalize()
 	}
 
-	if existing, ok := p[option.Class()]; ok {
+	if advanced, ok := option.(AdvancedOption); ok {
+		advanced.Apply(p)
+	} else if existing, ok := p[option.Class()]; ok {
 		if mergable, ok := option.(MergeableOption); ok {
 			p[option.Class()] = mergable.Merge(existing)
 		} else {

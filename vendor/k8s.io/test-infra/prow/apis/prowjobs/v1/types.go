@@ -158,6 +158,29 @@ type ProwJobSpec struct {
 	// DecorationConfig holds configuration options for
 	// decorating PodSpecs that users provide
 	DecorationConfig *DecorationConfig `json:"decoration_config,omitempty"`
+
+	// ReporterConfig holds reporter-specific configuration
+	ReporterConfig *ReporterConfig `json:"reporter_config,omitempty"`
+
+	// RerunPermissions holds information about which users can rerun the job
+	RerunPermissions *RerunPermissions `json:"rerun_permissions,omitempty"`
+}
+
+type RerunPermissions struct {
+	// If AllowAnyone is set to true, any user can rerun the job
+	AllowAnyone bool `json:"allow_anyone,omitempty"`
+	// GitHubTeams contains IDs of GitHub teams of users who can rerun the job
+	GitHubTeams []int `json:"github_teams,omitempty"`
+	// GitHubUsers contains names of individual users who can rerun the job
+	GitHubUsers []string `json:"github_users,omitempty"`
+}
+
+type ReporterConfig struct {
+	Slack *SlackReporterConfig `json:"slack,omitempty"`
+}
+
+type SlackReporterConfig struct {
+	Channel string `json:"channel"`
 }
 
 // Duration is a wrapper around time.Duration that parses times in either
@@ -535,6 +558,12 @@ type Refs struct {
 	// set, <root-dir>/src/github.com/org/repo will be
 	// used as the default.
 	PathAlias string `json:"path_alias,omitempty"`
+
+	// WorkDir defines if the location of the cloned
+	// repository will be used as the default working
+	// directory.
+	WorkDir bool `json:"workdir,omitempty"`
+
 	// CloneURI is the URI that is used to clone the
 	// repository. If unset, will default to
 	// `https://github.com/org/repo.git`.

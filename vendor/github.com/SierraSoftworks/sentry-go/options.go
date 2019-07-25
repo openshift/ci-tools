@@ -31,6 +31,13 @@ type FinalizableOption interface {
 	Finalize()
 }
 
+// An AdvancedOption has the ability to directly manipulate the packet
+// prior to it being sent. It should be used with caution as you may
+// cause the packet to become invalid.
+type AdvancedOption interface {
+	Apply(packet map[string]Option)
+}
+
 // These defaultOptionProviders are used to populate a packet before it is
 // configured by user provided options. Due to the need to generate some
 // options dynamically, these are exposed as callbacks.

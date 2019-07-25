@@ -138,3 +138,54 @@ type Flag struct {
 	// The login name of the user this flag has been requested to be granted or denied. Note, this field is only returned if a requestee is set.
 	Requestee string `json:"requestee,omitempty"`
 }
+
+// BugUpdate contains fields to update on a Bug. See API documentation at:
+// https://bugzilla.readthedocs.io/en/latest/api/core/v1/bug.html#update-bug
+type BugUpdate struct {
+	// Status is the current status of the bug.
+	Status string `json:"status,omitempty"`
+}
+
+// ExternalBug contains details about an external bug linked to a Bugzilla bug.
+// See API documentation at:
+// https://bugzilla.redhat.com/docs/en/html/integrating/api/Bugzilla/Extension/ExternalBugs/WebService.html
+type ExternalBug struct {
+	// Type holds more metadata for the external bug tracker
+	Type ExternalBugType `json:"type"`
+	// BugzillaBugID is the ID of the Bugzilla bug this external bug is linked to
+	BugzillaBugID int `json:"bug_id"`
+	// ExternalBugID is a unique identifier for the bug under the tracker
+	ExternalBugID string `json:"ext_bz_bug_id"`
+	// The following fields are parsed from the external bug identifier
+	Org, Repo string
+	Num       int
+}
+
+// ExternalBugType holds identifying metadata for a tracker
+type ExternalBugType struct {
+	// URL is the identifying URL for this tracker
+	URL string `json:"url"`
+}
+
+// AddExternalBugParameters are the parameters required to add an external
+// tracker bug to a Bugtzilla bug
+type AddExternalBugParameters struct {
+	// APIKey is the API key to use when authenticating with Bugzilla
+	APIKey string `json:"api_key"`
+	// BugIDs are the IDs of Bugzilla bugs to update
+	BugIDs []int `json:"bug_ids"`
+	// ExternalBugs are the external bugs to add
+	ExternalBugs []NewExternalBugIdentifier `json:"external_bugs"`
+}
+
+// NewExternalBugIdentifier holds fields used to identify new external bugs when
+// adding them using the JSONRPC API
+type NewExternalBugIdentifier struct {
+	// Type is the URL prefix that identifies the external bug tracker type.
+	// For GitHub, this is commonly https://github.com/
+	Type string `json:"ext_type_url"`
+	// ID is the identifier of the external bug within the bug tracker type.
+	// For GitHub issues and pull requests, this ID is commonly the path
+	// like `org/repo/pull/number` or `org/repo/issue/number`.
+	ID string `json:"ext_bz_bug_id"`
+}

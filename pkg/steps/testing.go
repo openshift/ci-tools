@@ -30,7 +30,7 @@ type ciopTestingClient struct {
 }
 
 func (c *ciopTestingClient) Core() corev1.CoreV1Interface {
-	fc := c.kubecs.Core().(*fakecorev1.FakeCoreV1)
+	fc := c.kubecs.CoreV1().(*fakecorev1.FakeCoreV1)
 	return &ciopTestingCore{*fc, c.t}
 }
 

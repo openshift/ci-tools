@@ -120,7 +120,7 @@ github.com/matttproud/golang_protobuf_extensions/pbutil
 github.com/modern-go/concurrent
 # github.com/modern-go/reflect2 v1.0.1
 github.com/modern-go/reflect2
-# github.com/openshift/api v3.9.0+incompatible
+# github.com/openshift/api v3.9.1-0.20190725193935-b7d4eb0fa1e0+incompatible
 github.com/openshift/api/image/v1
 github.com/openshift/api/project/v1
 github.com/openshift/api/template/v1
@@ -129,7 +129,7 @@ github.com/openshift/api/image/docker10
 github.com/openshift/api/route/v1
 github.com/openshift/api/image/dockerpre012
 github.com/openshift/api/pkg/serialization
-# github.com/openshift/client-go v3.9.0+incompatible
+# github.com/openshift/client-go v0.0.0-20190721020503-a85ea6a6b3a5
 github.com/openshift/client-go/build/clientset/versioned/typed/build/v1
 github.com/openshift/client-go/image/clientset/versioned/typed/image/v1
 github.com/openshift/client-go/project/clientset/versioned
@@ -356,9 +356,9 @@ k8s.io/apimachinery/pkg/watch
 k8s.io/apimachinery/pkg/runtime/schema
 k8s.io/apimachinery/pkg/apis/meta/v1/unstructured
 k8s.io/apimachinery/pkg/runtime/serializer
+k8s.io/apimachinery/pkg/util/runtime
 k8s.io/apimachinery/pkg/util/validation/field
 k8s.io/apimachinery/pkg/conversion
-k8s.io/apimachinery/pkg/util/runtime
 k8s.io/apimachinery/pkg/util/net
 k8s.io/apimachinery/pkg/runtime/serializer/streaming
 k8s.io/apimachinery/pkg/util/validation

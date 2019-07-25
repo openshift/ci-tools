@@ -71,10 +71,16 @@ func TestGeneratePods(t *testing.T) {
 		Tests: []api.TestStepConfiguration{{
 			As: "test",
 			MultiStageTestConfiguration: &api.MultiStageTestConfiguration{
-				Test: []api.TestStep{
-					{LiteralTestStep: &api.LiteralTestStep{As: "step0", From: "image0", Commands: "command0"}},
-					{LiteralTestStep: &api.LiteralTestStep{As: "step1", From: "image1", Commands: "command1"}},
-				},
+				Test: []api.TestStep{{
+					LiteralTestStep: &api.LiteralTestStep{As: "step0", From: "image0", Commands: "command0"},
+				}, {
+					LiteralTestStep: &api.LiteralTestStep{
+						As:          "step1",
+						From:        "image1",
+						Commands:    "command1",
+						ArtifactDir: "/artifact/dir",
+					},
+				}},
 			},
 		}},
 	}
@@ -118,7 +124,7 @@ func TestGeneratePods(t *testing.T) {
 		},
 		Namespace: "namespace",
 	}
-	step := newMultiStageTestStep(config.Tests[0], &config, nil, &jobSpec)
+	step := newMultiStageTestStep(config.Tests[0], &config, nil, "artifact_dir", &jobSpec)
 	ret, err := step.generatePods(config.Tests[0].MultiStageTestConfiguration.Test)
 	if err != nil {
 		t.Fatal(err)
@@ -161,6 +167,40 @@ func TestGeneratePods(t *testing.T) {
 				Env:                      env,
 				Resources:                coreapi.ResourceRequirements{},
 				TerminationMessagePolicy: "FallbackToLogsOnError",
+				VolumeMounts: []coreapi.VolumeMount{{
+					Name:      "artifacts",
+					MountPath: "/artifact/dir",
+				}},
+			}, {
+				Name:  "artifacts",
+				Image: "busybox",
+				Command: []string{
+					"/bin/sh", "-c", `#!/bin/sh
+set -euo pipefail
+trap 'kill $(jobs -p); exit 0' TERM
+
+touch /tmp/done
+echo "Waiting for artifacts to be extracted"
+while true; do
+	if [[ ! -f /tmp/done ]]; then
+		echo "Artifacts extracted, will terminate after 30s"
+		sleep 30
+		echo "Exiting"
+		exit 0
+	fi
+	sleep 5 & wait
+done
+`},
+				VolumeMounts: []coreapi.VolumeMount{{
+					Name:      "artifacts",
+					MountPath: "/tmp/artifacts",
+				}},
+			}},
+			Volumes: []coreapi.Volume{{
+				Name: "artifacts",
+				VolumeSource: coreapi.VolumeSource{
+					EmptyDir: &coreapi.EmptyDirVolumeSource{},
+				},
 			}},
 		},
 	}}

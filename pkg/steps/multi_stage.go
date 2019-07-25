@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"path/filepath"
 	"strings"
 
 	coreapi "k8s.io/api/core/v1"
@@ -28,33 +29,41 @@ type multiStageTestStep struct {
 	name            string
 	config          *api.ReleaseBuildConfiguration
 	podClient       PodClient
+	artifactDir     string
 	jobSpec         *api.JobSpec
 	pre, test, post []api.TestStep
+	subTests        []*junit.TestCase
 }
 
 func MultiStageTestStep(
 	testConfig api.TestStepConfiguration,
 	config *api.ReleaseBuildConfiguration,
 	podClient PodClient,
+	artifactDir string,
 	jobSpec *api.JobSpec,
 ) api.Step {
-	return newMultiStageTestStep(testConfig, config, podClient, jobSpec)
+	return newMultiStageTestStep(testConfig, config, podClient, artifactDir, jobSpec)
 }
 
 func newMultiStageTestStep(
 	testConfig api.TestStepConfiguration,
 	config *api.ReleaseBuildConfiguration,
 	podClient PodClient,
+	artifactDir string,
 	jobSpec *api.JobSpec,
 ) *multiStageTestStep {
+	if artifactDir != "" {
+		artifactDir = filepath.Join(artifactDir, testConfig.As)
+	}
 	return &multiStageTestStep{
-		name:      testConfig.As,
-		config:    config,
-		podClient: podClient,
-		jobSpec:   jobSpec,
-		pre:       testConfig.MultiStageTestConfiguration.Pre,
-		test:      testConfig.MultiStageTestConfiguration.Test,
-		post:      testConfig.MultiStageTestConfiguration.Post,
+		name:        testConfig.As,
+		config:      config,
+		podClient:   podClient,
+		artifactDir: artifactDir,
+		jobSpec:     jobSpec,
+		pre:         testConfig.MultiStageTestConfiguration.Pre,
+		test:        testConfig.MultiStageTestConfiguration.Test,
+		post:        testConfig.MultiStageTestConfiguration.Post,
 	}
 }
 
@@ -106,7 +115,7 @@ func (s *multiStageTestStep) Creates() []api.StepLink { return nil }
 func (s *multiStageTestStep) Provides() (api.ParameterMap, api.StepLink) {
 	return nil, nil
 }
-func (s *multiStageTestStep) SubTests() []*junit.TestCase { return nil }
+func (s *multiStageTestStep) SubTests() []*junit.TestCase { return s.subTests }
 
 func (s *multiStageTestStep) runSteps(ctx context.Context, steps []api.TestStep, shortCircuit bool) error {
 	pods, err := s.generatePods(steps)
@@ -145,6 +154,13 @@ func (s *multiStageTestStep) generatePods(steps []api.TestStep) ([]coreapi.Pod, 
 		if owner := s.jobSpec.Owner(); owner != nil {
 			pod.OwnerReferences = append(pod.OwnerReferences, *owner)
 		}
+		if s.artifactDir != "" && step.ArtifactDir != "" {
+			pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, coreapi.VolumeMount{
+				Name:      "artifacts",
+				MountPath: step.ArtifactDir,
+			})
+			addArtifactsContainer(pod)
+		}
 		ret = append(ret, *pod)
 	}
 	return ret, utilerrors.NewAggregate(errs)
@@ -163,7 +179,17 @@ func (s *multiStageTestStep) runPods(ctx context.Context, pods []coreapi.Pod, sh
 	var errs []error
 	for _, pod := range pods {
 		log.Printf("Executing %q", pod.Name)
-		if err := s.runPod(ctx, &pod); err != nil {
+		var notifier ContainerNotifier = NopNotifier
+		for _, c := range pod.Spec.Containers {
+			if c.Name == "artifacts" {
+				container := pod.Spec.Containers[0].Name
+				artifacts := NewArtifactWorker(s.podClient, filepath.Join(s.artifactDir, container), s.jobSpec.Namespace)
+				artifacts.CollectFromPod(pod.Name, true, []string{container}, nil)
+				notifier = artifacts
+				break
+			}
+		}
+		if err := s.runPod(ctx, &pod, NewTestCaseNotifier(notifier)); err != nil {
 			errs = append(errs, err)
 			if shortCircuit {
 				break
@@ -173,16 +199,21 @@ func (s *multiStageTestStep) runPods(ctx context.Context, pods []coreapi.Pod, sh
 	return utilerrors.NewAggregate(errs)
 }
 
-func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod) error {
+func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notifier *TestCaseNotifier) error {
 	if s.dry {
 		return dumpObject(pod)
 	}
+	go func() {
+		<-ctx.Done()
+		notifier.Cancel()
+	}()
 	if _, err := createOrRestartPod(s.podClient.Pods(s.jobSpec.Namespace), pod); err != nil {
 		return fmt.Errorf("failed to create or restart %q pod: %v", pod.Name, err)
 	}
-	if err := waitForPodCompletion(s.podClient.Pods(s.jobSpec.Namespace), pod.Name, nil, false); err != nil {
+	if err := waitForPodCompletion(s.podClient.Pods(s.jobSpec.Namespace), pod.Name, notifier, false); err != nil {
 		return fmt.Errorf("%q pod %q failed: %v", s.name, pod.Name, err)
 	}
+	s.subTests = append(s.subTests, notifier.SubTests(fmt.Sprintf("%s - %s ", s.Description(), pod.Name))...)
 	return nil
 }
 

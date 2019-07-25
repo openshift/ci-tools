@@ -92,15 +92,6 @@ func makeRehearsalPeriodic(source *prowconfig.Periodic, prNumber int, refs *pjap
 	deepcopy.Copy(&rehearsal, source)
 
 	rehearsal.Name = fmt.Sprintf("rehearse-%d-%s", prNumber, source.Name)
-
-	org := source.ExtraRefs[0].Org
-	repo := source.ExtraRefs[0].Repo
-	branch := source.ExtraRefs[0].BaseRef
-
-	gitrefArg := fmt.Sprintf("--git-ref=%s/%s@%s", org, repo, branch)
-	rehearsal.Spec.Containers[0].Args = append(source.Spec.Containers[0].Args, gitrefArg)
-
-	rehearsal.ExtraRefs[0] = *refs
 	if rehearsal.Labels == nil {
 		rehearsal.Labels = make(map[string]string, 1)
 	}

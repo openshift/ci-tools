@@ -309,8 +309,6 @@ func TestMakeRehearsalPeriodic(t *testing.T) {
 
 	expectedPeriodic.Name = "rehearse-123-pull-ci-org-repo-branch-test"
 	expectedPeriodic.Labels = map[string]string{rehearseLabel: "123"}
-	expectedPeriodic.Spec.Containers[0].Args = append(expectedPeriodic.Spec.Containers[0].Args, fmt.Sprintf("--git-ref=%s/%s@%s", expectedPeriodic.ExtraRefs[0].Org, expectedPeriodic.ExtraRefs[0].Repo, expectedPeriodic.ExtraRefs[0].BaseRef))
-	expectedPeriodic.ExtraRefs[0] = *makeBaseRefs()
 
 	rehearsal, err := makeRehearsalPeriodic(sourcePeriodic, testPrNumber, makeBaseRefs())
 	if err != nil {

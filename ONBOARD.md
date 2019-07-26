@@ -147,7 +147,7 @@ images:
   inputs:
     bin:
       paths:
-      - destination_dir: /usr/bin/binary
+      - destination_dir: usr/bin/binary
         source_path: path/to/binary
   to: product
 build_root:

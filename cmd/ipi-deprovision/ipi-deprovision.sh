@@ -44,9 +44,8 @@ collect_metadata () {
   ###eg, the value of env var CLUSTER_NAME: ci-op-724qy8fn-55c01
   for pod_name in $(echo "${cache_json}" | jq --arg cn "${cluster_name_in_pod}" -r '.items[] | . as $pod | $pod.spec.containers[] | select(.name == "setup") | .env[]? | select(.name == "CLUSTER_NAME" and (.value == $cn )) | $pod.metadata.name')
   do
-    set -o xtrace
-    oc describe pod -n ${ns} "${pod_name}"
-    set +o xtrace
+    echo "collecting metadata from pod/${pod_name} in namespace ${ns}"
+    oc describe pod -n "${ns}" "${pod_name}"
   done
 }
 

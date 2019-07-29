@@ -3,6 +3,8 @@ LABEL maintainer="hongkliu@redhat.com"
 
 ARG JQ_VERSION=1.6
 
+COPY usr/bin/oc /usr/bin/oc
+
 COPY cmd/ipi-deprovision/ipi-deprovision.sh  /usr/bin/ipi-deprovision.sh
 
 # Install awscli

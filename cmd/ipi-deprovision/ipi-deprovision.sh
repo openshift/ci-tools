@@ -29,7 +29,26 @@ handle_cluster () {
   ./bin/hiveutil aws-tag-deprovision "${cluster_name}=owned" --region "${region}"
 }
 
-
+collect_metadata () {
+  local cluster_name
+  cluster_name=$1
+  ###eg cluster_name=kubernetes.io/cluster/ci-op-724qy8fn-55c01-s5c8w
+  local ns
+  ns=${cluster_name:22:14}
+  echo "cluster is used by namespace ${ns}"
+  oc get ns "${ns}" || (echo "namespace ${ns} does not exist any more" && return)
+  local cluster_name_in_pod
+  cluster_name_in_pod=${cluster_name:22:20}
+  local cache_json
+  cache_json=$(oc get pods -n "${ns}" -o json)
+  ###eg, the value of env var CLUSTER_NAME: ci-op-724qy8fn-55c01
+  for pod_name in $(echo "${cache_json}" | jq --arg cn "${cluster_name_in_pod}" -r '.items[] | . as $pod | $pod.spec.containers[] | select(.name == "setup") | .env[]? | select(.name == "CLUSTER_NAME" and (.value == $cn )) | $pod.metadata.name')
+  do
+    set -o xtrace
+    oc describe pod -n ${ns} "${pod_name}"
+    set +o xtrace
+  done
+}
 
 for r in "${regions[@]}"
 do
@@ -39,6 +58,7 @@ do
   do
     expirationDateValue=$(echo ${json_output} | jq --arg cl "${cluster}" -r -S '.Vpcs[] | select (.Tags[]? | (.Key == $cl and .Value == "owned")) | .Tags[] | select (.Key == "expirationDate") | .Value')
     handle_cluster "${cluster}" "${expirationDateValue}" "${r}"
+    collect_metadata "${cluster}"
   done
 done
 

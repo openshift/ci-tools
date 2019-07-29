@@ -1,11 +1,9 @@
-FROM registry.svc.ci.openshift.org/ocp/4.2:cli AS cli
-
 FROM registry.svc.ci.openshift.org/openshift/hive-v4.0:hive
 LABEL maintainer="hongkliu@redhat.com"
 
 ARG JQ_VERSION=1.6
 
-COPY --from=cli /usr/bin/oc /usr/bin/oc
+COPY usr/bin/oc /usr/bin/oc
 
 COPY cmd/ipi-deprovision/ipi-deprovision.sh  /usr/bin/ipi-deprovision.sh
 

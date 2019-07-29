@@ -36,7 +36,10 @@ collect_metadata () {
   local ns
   ns=${cluster_name:22:14}
   echo "cluster is used by namespace ${ns}"
-  oc get ns "${ns}" || (echo "namespace ${ns} does not exist any more" && return)
+  if ! oc get ns "${ns}" >/dev/null 2>&1; then
+    echo "namespace ${ns} does not exist any more"
+    return
+  fi
   local cluster_name_in_pod
   cluster_name_in_pod=${cluster_name:22:20}
   local cache_json

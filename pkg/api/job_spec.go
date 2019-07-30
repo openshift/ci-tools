@@ -1,6 +1,7 @@
 package api
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 
@@ -48,6 +49,10 @@ func (s *JobSpec) Inputs() InputDefinition {
 		panic(err)
 	}
 	return InputDefinition{string(raw)}
+}
+
+func (s JobSpec) JobNameHash() string {
+	return fmt.Sprintf("%x", sha256.Sum256([]byte(s.Job)))[:5]
 }
 
 // ResolveSpecFromEnv will determine the Refs being

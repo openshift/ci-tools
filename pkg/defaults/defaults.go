@@ -1,7 +1,6 @@
 package defaults
 
 import (
-	"crypto/sha256"
 	"fmt"
 	"log"
 	"net/url"
@@ -99,7 +98,7 @@ func FromConfig(
 
 	params := api.NewDeferredParameters()
 	params.Add("JOB_NAME", nil, func() (string, error) { return jobSpec.Job, nil })
-	params.Add("JOB_NAME_HASH", nil, func() (string, error) { return fmt.Sprintf("%x", sha256.Sum256([]byte(jobSpec.Job)))[:5], nil })
+	params.Add("JOB_NAME_HASH", nil, func() (string, error) { return jobSpec.JobNameHash(), nil })
 	params.Add("JOB_NAME_SAFE", nil, func() (string, error) { return strings.Replace(jobSpec.Job, "_", "-", -1), nil })
 	params.Add("NAMESPACE", nil, func() (string, error) { return jobSpec.Namespace, nil })
 
@@ -155,7 +154,9 @@ func FromConfig(
 			buildSteps = append(buildSteps, initialReleaseStep)
 
 		} else if testStep := rawStep.TestStepConfiguration; testStep != nil {
-			if testStep.OpenshiftInstallerClusterTestConfiguration != nil {
+			if testStep.MultiStageTestConfiguration != nil {
+				step = steps.MultiStageTestStep(*testStep, config, podClient, jobSpec)
+			} else if testStep.OpenshiftInstallerClusterTestConfiguration != nil {
 				if testStep.OpenshiftInstallerClusterTestConfiguration.Upgrade {
 					var err error
 					step, err = clusterinstall.E2ETestStep(*testStep.OpenshiftInstallerClusterTestConfiguration, *testStep, params, podClient, templateClient, secretGetter, artifactDir, jobSpec)
@@ -413,10 +414,7 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.Job
 
 	for i := range config.Tests {
 		test := &config.Tests[i]
-		switch {
-		case test.ContainerTestConfiguration != nil:
-			buildSteps = append(buildSteps, api.StepConfiguration{TestStepConfiguration: test})
-		case test.OpenshiftInstallerClusterTestConfiguration != nil && test.OpenshiftInstallerClusterTestConfiguration.Upgrade:
+		if test.ContainerTestConfiguration != nil || test.MultiStageTestConfiguration != nil || (test.OpenshiftInstallerClusterTestConfiguration != nil && test.OpenshiftInstallerClusterTestConfiguration.Upgrade) {
 			buildSteps = append(buildSteps, api.StepConfiguration{TestStepConfiguration: test})
 		}
 	}

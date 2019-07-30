@@ -288,7 +288,7 @@ func removeFile(podClient PodClient, ns, name, containerName string, paths []str
 	return nil
 }
 
-func addArtifactsContainer(pod *coreapi.Pod, artifactDir string) {
+func addArtifactsContainer(pod *coreapi.Pod) {
 	pod.Spec.Containers = append(pod.Spec.Containers, artifactsContainer())
 	pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{
 		Name: "artifacts",

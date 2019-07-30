@@ -84,7 +84,7 @@ func (s *podStep) Run(ctx context.Context, dry bool) error {
 			Name:      "artifacts",
 			MountPath: s.config.ArtifactDir,
 		})
-		addArtifactsContainer(pod, s.config.ArtifactDir)
+		addArtifactsContainer(pod)
 		artifacts.CollectFromPod(pod.Name, true, []string{s.name}, nil)
 		notifier = artifacts
 	}

@@ -11,7 +11,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/promotion"
 	"github.com/sirupsen/logrus"
-	"k8s.io/test-infra/prow/apis/prowjobs/v1"
+	v1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
@@ -117,7 +117,7 @@ func (o *options) process() error {
 // Generate a PodSpec that runs `ci-operator`, to be used in Presubmit/Postsubmit
 // Various pieces are derived from `org`, `repo`, `branch` and `target`.
 // `additionalArgs` are passed as additional arguments to `ci-operator`
-func generatePodSpec(info *config.Info) *kubeapi.PodSpec {
+func generatePodSpec(info *config.Info, secret *cioperatorapi.Secret) *kubeapi.PodSpec {
 	configMapKeyRef := kubeapi.EnvVarSource{
 		ConfigMapKeyRef: &kubeapi.ConfigMapKeySelector{
 			LocalObjectReference: kubeapi.LocalObjectReference{
@@ -126,6 +126,34 @@ func generatePodSpec(info *config.Info) *kubeapi.PodSpec {
 			Key: info.Basename(),
 		},
 	}
+	volumeMounts := []kubeapi.VolumeMount{{
+		Name:      sentryDsnMountName,
+		MountPath: sentryDsnMountPath,
+		ReadOnly:  true,
+	}}
+
+	volumes := []kubeapi.Volume{{
+		Name: sentryDsnMountName,
+		VolumeSource: kubeapi.VolumeSource{
+			Secret: &kubeapi.SecretVolumeSource{SecretName: sentryDsnSecretName},
+		},
+	}}
+
+	if secret != nil {
+		volumeMounts = append(volumeMounts, kubeapi.VolumeMount{
+			Name:      secret.Name,
+			MountPath: secret.MountPath,
+			ReadOnly:  true,
+		})
+
+		volumes = append(volumes, kubeapi.Volume{
+			Name: secret.Name,
+			VolumeSource: kubeapi.VolumeSource{
+				Secret: &kubeapi.SecretVolumeSource{SecretName: secret.Name},
+			},
+		})
+	}
+
 	return &kubeapi.PodSpec{
 		ServiceAccountName: "ci-operator",
 		Containers: []kubeapi.Container{
@@ -136,30 +164,21 @@ func generatePodSpec(info *config.Info) *kubeapi.PodSpec {
 				Resources: kubeapi.ResourceRequirements{
 					Requests: kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
 				},
-				VolumeMounts: []kubeapi.VolumeMount{{
-					Name:      sentryDsnMountName,
-					MountPath: sentryDsnMountPath,
-					ReadOnly:  true,
-				}},
+				VolumeMounts: volumeMounts,
 			},
 		},
-		Volumes: []kubeapi.Volume{{
-			Name: sentryDsnMountName,
-			VolumeSource: kubeapi.VolumeSource{
-				Secret: &kubeapi.SecretVolumeSource{SecretName: sentryDsnSecretName},
-			},
-		}},
+		Volumes: volumes,
 	}
 }
 
-func generateCiOperatorPodSpec(info *config.Info, target string, additionalArgs ...string) *kubeapi.PodSpec {
+func generateCiOperatorPodSpec(info *config.Info, secret *cioperatorapi.Secret, target string, additionalArgs ...string) *kubeapi.PodSpec {
 	for _, arg := range additionalArgs {
 		if !strings.HasPrefix(arg, "--") {
 			panic(fmt.Sprintf("all args to ci-operator must be in the form --flag=value, not %s", arg))
 		}
 	}
 
-	ret := generatePodSpec(info)
+	ret := generatePodSpec(info, secret)
 	ret.Containers[0].Command = []string{"ci-operator"}
 	ret.Containers[0].Args = append([]string{
 		"--give-pr-author-access-to-namespace=true",
@@ -167,10 +186,13 @@ func generateCiOperatorPodSpec(info *config.Info, target string, additionalArgs 
 		fmt.Sprintf("--target=%s", target),
 		fmt.Sprintf("--sentry-dsn-path=%s", sentryDsnSecretPath),
 	}, additionalArgs...)
+	if secret != nil {
+		ret.Containers[0].Args = append(ret.Containers[0].Args, fmt.Sprintf("--secret-dir=%s", secret.MountPath))
+	}
 	return ret
 }
 
-func generatePodSpecTemplate(info *config.Info, release string, test *cioperatorapi.TestStepConfiguration) *kubeapi.PodSpec {
+func generatePodSpecTemplate(info *config.Info, secret *cioperatorapi.Secret, release string, test *cioperatorapi.TestStepConfiguration) *kubeapi.PodSpec {
 	var testImageStreamTag, template string
 	var clusterProfile cioperatorapi.ClusterProfile
 	var needsReleaseRpms bool
@@ -230,7 +252,7 @@ func generatePodSpecTemplate(info *config.Info, release string, test *cioperator
 	}
 	clusterProfilePath := fmt.Sprintf("/usr/local/%s-cluster-profile", test.As)
 	templatePath := fmt.Sprintf("/usr/local/%s", test.As)
-	podSpec := generateCiOperatorPodSpec(info, test.As)
+	podSpec := generateCiOperatorPodSpec(info, secret, test.As)
 	clusterProfileVolume := generateClusterProfileVolume("cluster-profile", fmt.Sprintf("cluster-secrets-%s", targetCloud))
 	switch clusterProfile {
 	case cioperatorapi.ClusterProfileAWS, cioperatorapi.ClusterProfileAzure4, cioperatorapi.ClusterProfileOpenStack, cioperatorapi.ClusterProfileVSphere:
@@ -299,7 +321,7 @@ func generatePodSpecTemplate(info *config.Info, release string, test *cioperator
 }
 
 func generatePodSpecRandom(info *config.Info, test *cioperatorapi.TestStepConfiguration) *kubeapi.PodSpec {
-	podSpec := generatePodSpec(info)
+	podSpec := generatePodSpec(info, test.Secret)
 	for _, p := range openshiftInstallerRandomProfiles {
 		podSpec.Volumes = append(podSpec.Volumes, generateClusterProfileVolume("cluster-profile-"+string(p), "cluster-secrets-"+string(p)))
 	}
@@ -448,7 +470,7 @@ func generateJobs(
 	for _, element := range configSpec.Tests {
 		var podSpec *kubeapi.PodSpec
 		if element.ContainerTestConfiguration != nil {
-			podSpec = generateCiOperatorPodSpec(info, element.As)
+			podSpec = generateCiOperatorPodSpec(info, element.Secret, element.As)
 		} else {
 			var release string
 			if c := configSpec.ReleaseTagConfiguration; c != nil {
@@ -457,7 +479,7 @@ func generateJobs(
 			if conf := element.OpenshiftInstallerRandomClusterTestConfiguration; conf != nil {
 				podSpec = generatePodSpecRandom(info, &element)
 			} else {
-				podSpec = generatePodSpecTemplate(info, release, &element)
+				podSpec = generatePodSpecTemplate(info, element.Secret, release, &element)
 			}
 		}
 
@@ -470,7 +492,7 @@ func generateJobs(
 		if promotion.PromotesOfficialImages(configSpec) {
 			additionalPresubmitArgs = []string{"--target=[release:latest]"}
 		}
-		podSpec := generateCiOperatorPodSpec(info, "[images]", additionalPresubmitArgs...)
+		podSpec := generateCiOperatorPodSpec(info, nil, "[images]", additionalPresubmitArgs...)
 		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest("images", info, label, podSpec))
 
 		if configSpec.PromotionConfiguration != nil {
@@ -478,7 +500,7 @@ func generateJobs(
 			for additionalImage := range configSpec.PromotionConfiguration.AdditionalImages {
 				additionalPostsubmitArgs = append(additionalPostsubmitArgs, fmt.Sprintf("--target=%s", configSpec.PromotionConfiguration.AdditionalImages[additionalImage]))
 			}
-			podSpec := generateCiOperatorPodSpec(info, "[images]", additionalPostsubmitArgs...)
+			podSpec := generateCiOperatorPodSpec(info, nil, "[images]", additionalPostsubmitArgs...)
 			postsubmits[orgrepo] = append(postsubmits[orgrepo], *generatePostsubmitForTest("images", info, label, podSpec))
 		}
 	}

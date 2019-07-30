@@ -15,7 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/util/diff"
-	"k8s.io/test-infra/prow/apis/prowjobs/v1"
+	v1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
 
 	ciop "github.com/openshift/ci-tools/pkg/api"
@@ -25,8 +25,10 @@ import (
 )
 
 func TestGeneratePodSpec(t *testing.T) {
+	testSecret := &ciop.Secret{Name: "test-secret", MountPath: "/usr/local/test-secret"}
 	tests := []struct {
 		info           *config.Info
+		secret         *ciop.Secret
 		target         string
 		additionalArgs []string
 
@@ -34,6 +36,7 @@ func TestGeneratePodSpec(t *testing.T) {
 	}{
 		{
 			info:           &config.Info{Org: "org", Repo: "repo", Branch: "branch"},
+			secret:         nil,
 			target:         "target",
 			additionalArgs: []string{},
 
@@ -75,6 +78,7 @@ func TestGeneratePodSpec(t *testing.T) {
 		},
 		{
 			info:           &config.Info{Org: "org", Repo: "repo", Branch: "branch"},
+			secret:         nil,
 			target:         "target",
 			additionalArgs: []string{"--promote", "--some=thing"},
 
@@ -116,14 +120,70 @@ func TestGeneratePodSpec(t *testing.T) {
 				}},
 			},
 		},
+		{
+			info:           &config.Info{Org: "org", Repo: "repo", Branch: "branch"},
+			secret:         testSecret,
+			target:         "target",
+			additionalArgs: []string{"--promote", "--some=thing"},
+
+			expected: &kubeapi.PodSpec{
+				ServiceAccountName: "ci-operator",
+				Containers: []kubeapi.Container{{
+					Image:           "ci-operator:latest",
+					ImagePullPolicy: kubeapi.PullAlways,
+					Command:         []string{"ci-operator"},
+					Args: []string{
+						"--give-pr-author-access-to-namespace=true",
+						"--artifact-dir=$(ARTIFACTS)",
+						"--target=target",
+						"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
+						"--promote",
+						"--some=thing",
+						fmt.Sprintf("--secret-dir=%s", testSecret.MountPath),
+					},
+					Resources: kubeapi.ResourceRequirements{
+						Requests: kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
+					},
+					Env: []kubeapi.EnvVar{{
+						Name: "CONFIG_SPEC",
+						ValueFrom: &kubeapi.EnvVarSource{
+							ConfigMapKeyRef: &kubeapi.ConfigMapKeySelector{
+								LocalObjectReference: kubeapi.LocalObjectReference{
+									Name: "ci-operator-misc-configs",
+								},
+								Key: "org-repo-branch.yaml",
+							},
+						},
+					}},
+					VolumeMounts: []kubeapi.VolumeMount{
+						{Name: "sentry-dsn", MountPath: "/etc/sentry-dsn", ReadOnly: true},
+						{Name: testSecret.Name, MountPath: testSecret.MountPath, ReadOnly: true},
+					},
+				}},
+				Volumes: []kubeapi.Volume{
+					{
+						Name: "sentry-dsn",
+						VolumeSource: kubeapi.VolumeSource{
+							Secret: &kubeapi.SecretVolumeSource{SecretName: "sentry-dsn"},
+						},
+					},
+					{
+						Name: testSecret.Name,
+						VolumeSource: kubeapi.VolumeSource{
+							Secret: &kubeapi.SecretVolumeSource{SecretName: testSecret.Name},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tc := range tests {
 		var podSpec *kubeapi.PodSpec
 		if len(tc.additionalArgs) == 0 {
-			podSpec = generateCiOperatorPodSpec(tc.info, tc.target)
+			podSpec = generateCiOperatorPodSpec(tc.info, tc.secret, tc.target)
 		} else {
-			podSpec = generateCiOperatorPodSpec(tc.info, tc.target, tc.additionalArgs...)
+			podSpec = generateCiOperatorPodSpec(tc.info, tc.secret, tc.target, tc.additionalArgs...)
 		}
 		if !equality.Semantic.DeepEqual(podSpec, tc.expected) {
 			t.Errorf("expected PodSpec diff:\n%s", diff.ObjectDiff(tc.expected, podSpec))
@@ -321,7 +381,7 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 
 	for _, tc := range tests {
 		var podSpec *kubeapi.PodSpec
-		podSpec = generatePodSpecTemplate(tc.info, tc.release, &tc.test)
+		podSpec = generatePodSpecTemplate(tc.info, nil, tc.release, &tc.test)
 		if !equality.Semantic.DeepEqual(podSpec, tc.expected) {
 			t.Errorf("expected PodSpec diff:\n%s", diff.ObjectDiff(tc.expected, podSpec))
 		}

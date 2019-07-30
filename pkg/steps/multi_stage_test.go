@@ -126,7 +126,7 @@ func TestGeneratePods(t *testing.T) {
 		},
 		Namespace: "namespace",
 	}
-	step := newMultiStageTestStep(config.Tests[0], &config, nil, "artifact_dir", &jobSpec, nil)
+	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, "artifact_dir", &jobSpec, nil)
 	ret, err := step.generatePods(config.Tests[0].MultiStageTestConfiguration.Test)
 	if err != nil {
 		t.Fatal(err)
@@ -149,6 +149,18 @@ func TestGeneratePods(t *testing.T) {
 				Env:                      env,
 				Resources:                coreapi.ResourceRequirements{},
 				TerminationMessagePolicy: "FallbackToLogsOnError",
+				VolumeMounts: []coreapi.VolumeMount{{
+					Name:      "test",
+					MountPath: "/var/run/secrets/ci.openshift.io/multi-stage",
+				}},
+			}},
+			Volumes: []coreapi.Volume{{
+				Name: "test",
+				VolumeSource: coreapi.VolumeSource{
+					Secret: &coreapi.SecretVolumeSource{
+						SecretName: "test",
+					},
+				},
 			}},
 		},
 	}, {
@@ -172,6 +184,9 @@ func TestGeneratePods(t *testing.T) {
 				VolumeMounts: []coreapi.VolumeMount{{
 					Name:      "artifacts",
 					MountPath: "/artifact/dir",
+				}, {
+					Name:      "test",
+					MountPath: "/var/run/secrets/ci.openshift.io/multi-stage",
 				}},
 			}, {
 				Name:  "artifacts",
@@ -202,6 +217,13 @@ done
 				Name: "artifacts",
 				VolumeSource: coreapi.VolumeSource{
 					EmptyDir: &coreapi.EmptyDirVolumeSource{},
+				},
+			}, {
+				Name: "test",
+				VolumeSource: coreapi.VolumeSource{
+					Secret: &coreapi.SecretVolumeSource{
+						SecretName: "test",
+					},
 				},
 			}},
 		},
@@ -285,9 +307,18 @@ func TestRun(t *testing.T) {
 				return false, nil, nil
 			})
 			step.podClient = NewPodClient(fakecs.CoreV1(), nil, nil)
+			step.secretClient = fakecs.CoreV1()
 			if err := step.Run(context.Background(), false); tc.failures == nil && err != nil {
 				t.Error(err)
 				return
+			}
+			secrets, err := step.secretClient.Secrets(step.jobSpec.Namespace).List(meta.ListOptions{})
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			if l := secrets.Items; len(l) != 1 || l[0].ObjectMeta.Name != step.name {
+				t.Errorf("unexpected secrets: %#v", l)
 			}
 			var names []string
 			for _, pods := range pods {
@@ -344,8 +375,10 @@ func TestArtifacts(t *testing.T) {
 		}
 		return false, nil, nil
 	})
-	client := fakePodClient{PodsGetter: fakecs.CoreV1()}
-	step.podClient = &client
+	client := fakecs.CoreV1()
+	podClient := fakePodClient{PodsGetter: client}
+	step.podClient = &podClient
+	step.secretClient = client
 	if err := step.Run(context.Background(), false); err != nil {
 		t.Fatal(err)
 	}

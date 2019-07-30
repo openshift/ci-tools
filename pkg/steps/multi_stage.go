@@ -20,6 +20,7 @@ import (
 
 const (
 	multiStageTestLabel = "ci.openshift.io/multi-stage-test"
+	secretMountPath     = "/var/run/secrets/ci.openshift.io/multi-stage"
 )
 
 type multiStageTestStep struct {
@@ -28,6 +29,7 @@ type multiStageTestStep struct {
 	name            string
 	config          *api.ReleaseBuildConfiguration
 	podClient       PodClient
+	secretClient    coreclientset.SecretsGetter
 	artifactDir     string
 	jobSpec         *api.JobSpec
 	pre, test, post []api.TestStep
@@ -38,17 +40,19 @@ func MultiStageTestStep(
 	testConfig api.TestStepConfiguration,
 	config *api.ReleaseBuildConfiguration,
 	podClient PodClient,
+	secretClient coreclientset.SecretsGetter,
 	artifactDir string,
 	jobSpec *api.JobSpec,
 	logger *DryLogger,
 ) api.Step {
-	return newMultiStageTestStep(testConfig, config, podClient, artifactDir, jobSpec, logger)
+	return newMultiStageTestStep(testConfig, config, podClient, secretClient, artifactDir, jobSpec, logger)
 }
 
 func newMultiStageTestStep(
 	testConfig api.TestStepConfiguration,
 	config *api.ReleaseBuildConfiguration,
 	podClient PodClient,
+	secretClient coreclientset.SecretsGetter,
 	artifactDir string,
 	jobSpec *api.JobSpec,
 	logger *DryLogger,
@@ -57,15 +61,16 @@ func newMultiStageTestStep(
 		artifactDir = filepath.Join(artifactDir, testConfig.As)
 	}
 	return &multiStageTestStep{
-		logger:      logger,
-		name:        testConfig.As,
-		config:      config,
-		podClient:   podClient,
-		artifactDir: artifactDir,
-		jobSpec:     jobSpec,
-		pre:         testConfig.MultiStageTestConfiguration.Pre,
-		test:        testConfig.MultiStageTestConfiguration.Test,
-		post:        testConfig.MultiStageTestConfiguration.Post,
+		logger:       logger,
+		name:         testConfig.As,
+		config:       config,
+		podClient:    podClient,
+		secretClient: secretClient,
+		artifactDir:  artifactDir,
+		jobSpec:      jobSpec,
+		pre:          testConfig.MultiStageTestConfiguration.Pre,
+		test:         testConfig.MultiStageTestConfiguration.Test,
+		post:         testConfig.MultiStageTestConfiguration.Post,
 	}
 }
 
@@ -75,6 +80,9 @@ func (s *multiStageTestStep) Inputs(ctx context.Context, dry bool) (api.InputDef
 
 func (s *multiStageTestStep) Run(ctx context.Context, dry bool) error {
 	s.dry = dry
+	if err := s.createSecret(); err != nil {
+		return fmt.Errorf("failed to create secret: %v", err)
+	}
 	var errs []error
 	if err := s.runSteps(ctx, s.pre, true); err != nil {
 		errs = append(errs, fmt.Errorf("%q pre steps failed: %v", s.name, err))
@@ -118,6 +126,21 @@ func (s *multiStageTestStep) Provides() (api.ParameterMap, api.StepLink) {
 	return nil, nil
 }
 func (s *multiStageTestStep) SubTests() []*junit.TestCase { return s.subTests }
+
+func (s *multiStageTestStep) createSecret() error {
+	log.Printf("Creating multi-stage test secret %q", s.name)
+	secret := coreapi.Secret{ObjectMeta: meta.ObjectMeta{Name: s.name}}
+	if s.dry {
+		s.logger.AddObject(secret.DeepCopyObject())
+		return nil
+	}
+	client := s.secretClient.Secrets(s.jobSpec.Namespace)
+	if err := client.Delete(s.name, &meta.DeleteOptions{}); err != nil && !errors.IsNotFound(err) {
+		return fmt.Errorf("cannot delete secret %q: %v", s.name, err)
+	}
+	_, err := client.Create(&secret)
+	return err
+}
 
 func (s *multiStageTestStep) runSteps(ctx context.Context, steps []api.TestStep, shortCircuit bool) error {
 	pods, err := s.generatePods(steps)
@@ -163,9 +186,23 @@ func (s *multiStageTestStep) generatePods(steps []api.TestStep) ([]coreapi.Pod, 
 			})
 			addArtifactsContainer(pod)
 		}
+		addSecret(s.name, pod)
 		ret = append(ret, *pod)
 	}
 	return ret, utilerrors.NewAggregate(errs)
+}
+
+func addSecret(secret string, pod *coreapi.Pod) {
+	pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{
+		Name: secret,
+		VolumeSource: coreapi.VolumeSource{
+			Secret: &coreapi.SecretVolumeSource{SecretName: secret},
+		},
+	})
+	pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, coreapi.VolumeMount{
+		Name:      secret,
+		MountPath: secretMountPath,
+	})
 }
 
 func (s *multiStageTestStep) runPods(ctx context.Context, pods []coreapi.Pod, shortCircuit bool) error {

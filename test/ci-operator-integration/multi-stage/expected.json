@@ -531,10 +531,24 @@
               "memory": "6"
             }
           },
-          "terminationMessagePolicy": "FallbackToLogsOnError"
+          "terminationMessagePolicy": "FallbackToLogsOnError",
+          "volumeMounts": [
+            {
+              "mountPath": "/var/run/secrets/ci.openshift.io/multi-stage",
+              "name": "multi-stage"
+            }
+          ]
         }
       ],
-      "restartPolicy": "Never"
+      "restartPolicy": "Never",
+      "volumes": [
+        {
+          "name": "multi-stage",
+          "secret": {
+            "secretName": "multi-stage"
+          }
+        }
+      ]
     },
     "status": {}
   },
@@ -639,10 +653,24 @@
               "memory": "7"
             }
           },
-          "terminationMessagePolicy": "FallbackToLogsOnError"
+          "terminationMessagePolicy": "FallbackToLogsOnError",
+          "volumeMounts": [
+            {
+              "mountPath": "/var/run/secrets/ci.openshift.io/multi-stage",
+              "name": "multi-stage"
+            }
+          ]
         }
       ],
-      "restartPolicy": "Never"
+      "restartPolicy": "Never",
+      "volumes": [
+        {
+          "name": "multi-stage",
+          "secret": {
+            "secretName": "multi-stage"
+          }
+        }
+      ]
     },
     "status": {}
   },
@@ -747,10 +775,24 @@
               "memory": "1"
             }
           },
-          "terminationMessagePolicy": "FallbackToLogsOnError"
+          "terminationMessagePolicy": "FallbackToLogsOnError",
+          "volumeMounts": [
+            {
+              "mountPath": "/var/run/secrets/ci.openshift.io/multi-stage",
+              "name": "multi-stage"
+            }
+          ]
         }
       ],
-      "restartPolicy": "Never"
+      "restartPolicy": "Never",
+      "volumes": [
+        {
+          "name": "multi-stage",
+          "secret": {
+            "secretName": "multi-stage"
+          }
+        }
+      ]
     },
     "status": {}
   },
@@ -855,10 +897,24 @@
               "memory": "2"
             }
           },
-          "terminationMessagePolicy": "FallbackToLogsOnError"
+          "terminationMessagePolicy": "FallbackToLogsOnError",
+          "volumeMounts": [
+            {
+              "mountPath": "/var/run/secrets/ci.openshift.io/multi-stage",
+              "name": "multi-stage"
+            }
+          ]
         }
       ],
-      "restartPolicy": "Never"
+      "restartPolicy": "Never",
+      "volumes": [
+        {
+          "name": "multi-stage",
+          "secret": {
+            "secretName": "multi-stage"
+          }
+        }
+      ]
     },
     "status": {}
   },
@@ -963,10 +1019,24 @@
               "memory": "3"
             }
           },
-          "terminationMessagePolicy": "FallbackToLogsOnError"
+          "terminationMessagePolicy": "FallbackToLogsOnError",
+          "volumeMounts": [
+            {
+              "mountPath": "/var/run/secrets/ci.openshift.io/multi-stage",
+              "name": "multi-stage"
+            }
+          ]
         }
       ],
-      "restartPolicy": "Never"
+      "restartPolicy": "Never",
+      "volumes": [
+        {
+          "name": "multi-stage",
+          "secret": {
+            "secretName": "multi-stage"
+          }
+        }
+      ]
     },
     "status": {}
   },
@@ -1071,10 +1141,24 @@
               "memory": "4"
             }
           },
-          "terminationMessagePolicy": "FallbackToLogsOnError"
+          "terminationMessagePolicy": "FallbackToLogsOnError",
+          "volumeMounts": [
+            {
+              "mountPath": "/var/run/secrets/ci.openshift.io/multi-stage",
+              "name": "multi-stage"
+            }
+          ]
         }
       ],
-      "restartPolicy": "Never"
+      "restartPolicy": "Never",
+      "volumes": [
+        {
+          "name": "multi-stage",
+          "secret": {
+            "secretName": "multi-stage"
+          }
+        }
+      ]
     },
     "status": {}
   },
@@ -1179,11 +1263,33 @@
               "memory": "5"
             }
           },
-          "terminationMessagePolicy": "FallbackToLogsOnError"
+          "terminationMessagePolicy": "FallbackToLogsOnError",
+          "volumeMounts": [
+            {
+              "mountPath": "/var/run/secrets/ci.openshift.io/multi-stage",
+              "name": "multi-stage"
+            }
+          ]
         }
       ],
-      "restartPolicy": "Never"
+      "restartPolicy": "Never",
+      "volumes": [
+        {
+          "name": "multi-stage",
+          "secret": {
+            "secretName": "multi-stage"
+          }
+        }
+      ]
     },
     "status": {}
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Secret",
+    "metadata": {
+      "creationTimestamp": null,
+      "name": "multi-stage"
+    }
   }
 ]

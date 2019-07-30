@@ -111,14 +111,8 @@ func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber 
 	rehearsal.Context = fmt.Sprintf("ci/rehearse/%s/%s/%s", repo, branch, shortName)
 	rehearsal.RerunCommand = defaultRehearsalRerunCommand
 
-	orgRepo := strings.Split(repo, "/")
-	rehearsal.ExtraRefs = append(rehearsal.ExtraRefs, pjapi.Refs{
-		Org:     orgRepo[0],
-		Repo:    orgRepo[1],
-		BaseRef: branch,
-		WorkDir: true,
-	})
-
+	gitrefArg := fmt.Sprintf("--git-ref=%s@%s", repo, branch)
+	rehearsal.Spec.Containers[0].Args = append(source.Spec.Containers[0].Args, gitrefArg)
 	rehearsal.Optional = true
 
 	if rehearsal.Labels == nil {

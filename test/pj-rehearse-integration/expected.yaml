@@ -289,6 +289,11 @@
         entrypoint: gcr.io/k8s-prow/entrypoint:v20190129-0a3c54c
         initupload: gcr.io/k8s-prow/initupload:v20190129-0a3c54c
         sidecar: gcr.io/k8s-prow/sidecar:v20190129-0a3c54c
+    extra_refs:
+    - base_ref: ciop-cfg-change
+      org: super
+      repo: duper
+      workdir: true
     job: rehearse-1234-pull-ci-super-duper-ciop-cfg-change-images
     namespace: test-namespace
     pod_spec:
@@ -297,7 +302,6 @@
         - --artifact-dir=$(ARTIFACTS)
         - --give-pr-author-access-to-namespace=true
         - --target=[images]
-        - --git-ref=super/duper@ciop-cfg-change
         command:
         - ci-operator
         env:
@@ -387,6 +391,11 @@
         entrypoint: gcr.io/k8s-prow/entrypoint:v20190129-0a3c54c
         initupload: gcr.io/k8s-prow/initupload:v20190129-0a3c54c
         sidecar: gcr.io/k8s-prow/sidecar:v20190129-0a3c54c
+    extra_refs:
+    - base_ref: cluster-profile
+      org: openshift
+      repo: origin
+      workdir: true
     job: rehearse-1234-pull-ci-super-duper-cluster-profile-test-profile
     namespace: test-namespace
     pod_spec:
@@ -397,7 +406,6 @@
         - --secret-dir=/usr/local/test-profile-cluster-profile
         - --target=test-profile
         - --template=/usr/local/test-profile
-        - --git-ref=openshift/origin@cluster-profile
         command:
         - ci-operator
         env:
@@ -486,6 +494,11 @@
         entrypoint: gcr.io/k8s-prow/entrypoint:v20190129-0a3c54c
         initupload: gcr.io/k8s-prow/initupload:v20190129-0a3c54c
         sidecar: gcr.io/k8s-prow/sidecar:v20190129-0a3c54c
+    extra_refs:
+    - base_ref: master
+      org: super
+      repo: duper
+      workdir: true
     job: rehearse-1234-pull-ci-super-duper-master-cmd
     namespace: test-namespace
     pod_spec:
@@ -494,7 +507,6 @@
         - --artifact-dir=$(CHANGED)
         - --give-pr-author-access-to-namespace=true
         - --target=cmd
-        - --git-ref=super/duper@master
         command:
         - ci-operator
         env:
@@ -584,6 +596,11 @@
         entrypoint: gcr.io/k8s-prow/entrypoint:v20190129-0a3c54c
         initupload: gcr.io/k8s-prow/initupload:v20190129-0a3c54c
         sidecar: gcr.io/k8s-prow/sidecar:v20190129-0a3c54c
+    extra_refs:
+    - base_ref: master
+      org: super
+      repo: duper
+      workdir: true
     job: rehearse-1234-pull-ci-super-duper-master-e2e-aws
     namespace: test-namespace
     pod_spec:
@@ -594,7 +611,6 @@
         - --secret-dir=/usr/local/e2e-aws-cluster-profile
         - --target=e2e-aws
         - --template=/usr/local/e2e-aws
-        - --git-ref=super/duper@master
         command:
         - ci-operator
         env:
@@ -705,6 +721,11 @@
         entrypoint: gcr.io/k8s-prow/entrypoint:v20190129-0a3c54c
         initupload: gcr.io/k8s-prow/initupload:v20190129-0a3c54c
         sidecar: gcr.io/k8s-prow/sidecar:v20190129-0a3c54c
+    extra_refs:
+    - base_ref: master
+      org: super
+      repo: duper
+      workdir: true
     job: rehearse-1234-pull-ci-super-duper-master-integration
     namespace: test-namespace
     pod_spec:
@@ -713,7 +734,6 @@
         - --artifact-dir=$(changed)
         - --give-pr-author-access-to-namespace=true
         - --target=integration
-        - --git-ref=super/duper@master
         command:
         - ci-operator
         env:
@@ -803,6 +823,11 @@
         entrypoint: gcr.io/k8s-prow/entrypoint:v20190129-0a3c54c
         initupload: gcr.io/k8s-prow/initupload:v20190129-0a3c54c
         sidecar: gcr.io/k8s-prow/sidecar:v20190129-0a3c54c
+    extra_refs:
+    - base_ref: master
+      org: super
+      repo: duper
+      workdir: true
     job: rehearse-1234-pull-ci-super-duper-master-test-template-e2e-aws
     namespace: test-namespace
     pod_spec:
@@ -813,7 +838,6 @@
         - --secret-dir=/usr/local/e2e-aws-cluster-profile
         - --target=e2e-aws
         - --template=/usr/local/e2e-aws
-        - --git-ref=super/duper@master
         command:
         - ci-operator
         env:
@@ -924,6 +948,11 @@
         entrypoint: gcr.io/k8s-prow/entrypoint:v20190129-0a3c54c
         initupload: gcr.io/k8s-prow/initupload:v20190129-0a3c54c
         sidecar: gcr.io/k8s-prow/sidecar:v20190129-0a3c54c
+    extra_refs:
+    - base_ref: master
+      org: super
+      repo: duper
+      workdir: true
     job: rehearse-1234-pull-ci-super-duper-master-test-template-e2e-openstack
     namespace: test-namespace
     pod_spec:
@@ -934,7 +963,6 @@
         - --secret-dir=/usr/local/e2e-aws-cluster-profile
         - --target=e2e-aws
         - --template=/usr/local/e2e-aws-openstack
-        - --git-ref=super/duper@master
         command:
         - ci-operator
         env:
@@ -1045,6 +1073,11 @@
         entrypoint: gcr.io/k8s-prow/entrypoint:v20190129-0a3c54c
         initupload: gcr.io/k8s-prow/initupload:v20190129-0a3c54c
         sidecar: gcr.io/k8s-prow/sidecar:v20190129-0a3c54c
+    extra_refs:
+    - base_ref: master
+      org: super
+      repo: trooper
+      workdir: true
     job: rehearse-1234-pull-ci-super-trooper-master-cmd
     namespace: test-namespace
     pod_spec:
@@ -1053,7 +1086,6 @@
         - --artifact-dir=$(changed)
         - --give-pr-author-access-to-namespace=true
         - --target=cmd
-        - --git-ref=super/trooper@master
         command:
         - ci-operator
         env:
@@ -1148,6 +1180,11 @@
         entrypoint: gcr.io/k8s-prow/entrypoint:v20190129-0a3c54c
         initupload: gcr.io/k8s-prow/initupload:v20190129-0a3c54c
         sidecar: gcr.io/k8s-prow/sidecar:v20190129-0a3c54c
+    extra_refs:
+    - base_ref: master
+      org: super
+      repo: trooper
+      workdir: true
     job: rehearse-1234-pull-ci-super-trooper-master-e2e-aws
     namespace: test-namespace
     pod_spec:
@@ -1158,7 +1195,6 @@
         - --secret-dir=/usr/local/e2e-aws-cluster-profile
         - --target=e2e-aws
         - --template=/usr/local/e2e-aws
-        - --git-ref=super/trooper@master
         command:
         - ci-operator
         env:
@@ -1274,6 +1310,11 @@
         entrypoint: gcr.io/k8s-prow/entrypoint:v20190129-0a3c54c
         initupload: gcr.io/k8s-prow/initupload:v20190129-0a3c54c
         sidecar: gcr.io/k8s-prow/sidecar:v20190129-0a3c54c
+    extra_refs:
+    - base_ref: master
+      org: super
+      repo: trooper
+      workdir: true
     job: rehearse-1234-pull-ci-super-trooper-master-images
     namespace: test-namespace
     pod_spec:
@@ -1282,7 +1323,6 @@
         - --artifact-dir=$(ARTIFACTS)
         - --give-pr-author-access-to-namespace=true
         - --target=[images]
-        - --git-ref=super/trooper@master
         command:
         - ci-operator
         env:
@@ -1375,6 +1415,11 @@
         entrypoint: gcr.io/k8s-prow/entrypoint:v20190129-0a3c54c
         initupload: gcr.io/k8s-prow/initupload:v20190129-0a3c54c
         sidecar: gcr.io/k8s-prow/sidecar:v20190129-0a3c54c
+    extra_refs:
+    - base_ref: master
+      org: super
+      repo: trooper
+      workdir: true
     job: rehearse-1234-pull-ci-super-trooper-master-unit
     namespace: test-namespace
     pod_spec:
@@ -1383,7 +1428,6 @@
         - --artifact-dir=$(ARTIFACTS)
         - --give-pr-author-access-to-namespace=true
         - --target=unit
-        - --git-ref=super/trooper@master
         command:
         - ci-operator
         env:

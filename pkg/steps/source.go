@@ -116,22 +116,12 @@ func (s *sourceStep) Run(ctx context.Context, dry bool) error {
 		s.resources,
 	)
 
-	var refs []interface{}
-	// periodic jobs may have no refs to clone
-	if s.jobSpec.Refs != nil {
-		ref := s.jobSpec.Refs
-		ref.PathAlias = s.config.PathAlias
-		refs = append(refs, ref)
-	}
-	for _, ref := range s.jobSpec.ExtraRefs {
-		refs = append(refs, ref)
-	}
 	optionsSpec := map[string]interface{}{
 		"src_root":       gopath,
 		"log":            "/dev/null",
 		"git_user_name":  "ci-robot",
 		"git_user_email": "ci-robot@openshift.io",
-		"refs":           refs,
+		"refs":           injectPathAlias(s.jobSpec, s.config.PathAlias),
 	}
 	optionsJSON, err := json.Marshal(optionsSpec)
 	if err != nil {
@@ -144,6 +134,29 @@ func (s *sourceStep) Run(ctx context.Context, dry bool) error {
 	)
 
 	return handleBuild(s.buildClient, build, dry, s.artifactDir)
+}
+
+func injectPathAlias(jobSpec *api.JobSpec, pathAlias string) interface{} {
+	var refs []interface{}
+	var found bool
+
+	for _, ref := range jobSpec.ExtraRefs {
+		if ref.WorkDir {
+			ref.PathAlias = pathAlias
+			found = true
+		}
+		refs = append(refs, ref)
+	}
+
+	if jobSpec.Refs != nil {
+		ref := jobSpec.Refs
+		if !found {
+			ref.PathAlias = pathAlias
+		}
+		refs = append(refs, jobSpec.Refs)
+	}
+
+	return refs
 }
 
 func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStreamTagReference, source buildapi.BuildSource, dockerfilePath string, resources api.ResourceConfiguration) *buildapi.Build {

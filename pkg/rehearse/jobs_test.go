@@ -295,37 +295,6 @@ func TestMakeRehearsalPresubmit(t *testing.T) {
 	}
 }
 
-func TestMakeRehearsalPeriodic(t *testing.T) {
-	testPrNumber := 123
-	sourcePeriodic := &prowconfig.Periodic{
-		JobBase: prowconfig.JobBase{
-			Agent: "kubernetes",
-			Name:  "pull-ci-org-repo-branch-test",
-
-			UtilityConfig: prowconfig.UtilityConfig{ExtraRefs: makeBaseExtraRefs()},
-			Spec: &v1.PodSpec{
-				Containers: []v1.Container{{
-					Command: []string{"ci-operator"},
-					Args:    []string{"arg1", "arg2"},
-				}},
-			},
-		},
-	}
-	expectedPeriodic := &prowconfig.Periodic{}
-	deepcopy.Copy(expectedPeriodic, sourcePeriodic)
-
-	expectedPeriodic.Name = "rehearse-123-pull-ci-org-repo-branch-test"
-	expectedPeriodic.Labels = map[string]string{rehearseLabel: "123"}
-
-	rehearsal, err := makeRehearsalPeriodic(sourcePeriodic, testPrNumber, makeBaseRefs())
-	if err != nil {
-		t.Errorf("Unexpected error in makeRehearsalPresubmit: %v", err)
-	}
-	if !reflect.DeepEqual(*expectedPeriodic, rehearsal) {
-		t.Errorf("Expected rehearsal Periodic differs:\n%s", diff.ObjectDiff(expectedPeriodic, rehearsal))
-	}
-}
-
 func makeTestingProwJob(namespace, jobName, context string, refs *pjapi.Refs, org, repo, branch string) *pjapi.ProwJob {
 	return &pjapi.ProwJob{
 		TypeMeta: metav1.TypeMeta{Kind: "ProwJob", APIVersion: "prow.k8s.io/v1"},
@@ -451,7 +420,7 @@ func TestExecuteJobsErrors(t *testing.T) {
 			jc := NewJobConfigurer(testCiopConfigs, testPrNumber, testLoggers, true, nil, nil, makeBaseRefs())
 
 			presubmits := jc.ConfigurePresubmitRehearsals(tc.jobs)
-			executor := NewExecutor(presubmits, nil, testPrNumber, testRepoPath, testRefs, true, testLoggers, fakeclient)
+			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, true, testLoggers, fakeclient)
 			_, err = executor.ExecuteJobs()
 
 			if err == nil {
@@ -523,7 +492,7 @@ func TestExecuteJobsUnsuccessful(t *testing.T) {
 
 			jc := NewJobConfigurer(testCiopConfigs, testPrNumber, testLoggers, true, nil, nil, makeBaseRefs())
 			presubmits := jc.ConfigurePresubmitRehearsals(tc.jobs)
-			executor := NewExecutor(presubmits, nil, testPrNumber, testRepoPath, testRefs, false, testLoggers, fakeclient)
+			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, false, testLoggers, fakeclient)
 			success, _ := executor.ExecuteJobs()
 
 			if success {
@@ -615,7 +584,7 @@ func TestExecuteJobsPositive(t *testing.T) {
 
 			jc := NewJobConfigurer(testCiopConfigs, testPrNumber, testLoggers, true, nil, nil, makeBaseRefs())
 			presubmits := jc.ConfigurePresubmitRehearsals(tc.jobs)
-			executor := NewExecutor(presubmits, nil, testPrNumber, testRepoPath, testRefs, true, testLoggers, fakeclient)
+			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, true, testLoggers, fakeclient)
 			success, err := executor.ExecuteJobs()
 
 			if err != nil {
@@ -738,7 +707,7 @@ func TestWaitForJobs(t *testing.T) {
 				return true, w, nil
 			})
 
-			executor := NewExecutor(nil, nil, 0, "", &pjapi.Refs{}, true, loggers, cs.ProwV1().ProwJobs("test"))
+			executor := NewExecutor(nil, 0, "", &pjapi.Refs{}, true, loggers, cs.ProwV1().ProwJobs("test"))
 			success, err := executor.waitForJobs(tc.pjs, "")
 			if err != tc.err {
 				t.Fatalf("want `err` == %v, got %v", tc.err, err)
@@ -764,7 +733,7 @@ func TestWaitForJobsRetries(t *testing.T) {
 		return true, ret, nil
 	})
 
-	executor := NewExecutor(nil, nil, 0, "", &pjapi.Refs{}, true, Loggers{logrus.New(), logrus.New()}, cs.ProwV1().ProwJobs("test"))
+	executor := NewExecutor(nil, 0, "", &pjapi.Refs{}, true, Loggers{logrus.New(), logrus.New()}, cs.ProwV1().ProwJobs("test"))
 	success, err := executor.waitForJobs(sets.String{"j": {}}, "")
 	if err != nil {
 		t.Fatal(err)
@@ -791,7 +760,7 @@ func TestWaitForJobsLog(t *testing.T) {
 	})
 	loggers := Loggers{jobLogger, dbgLogger}
 
-	executor := NewExecutor(nil, nil, 0, "", &pjapi.Refs{}, true, loggers, cs.ProwV1().ProwJobs("test"))
+	executor := NewExecutor(nil, 0, "", &pjapi.Refs{}, true, loggers, cs.ProwV1().ProwJobs("test"))
 	_, err := executor.waitForJobs(sets.NewString("success", "failure"), "")
 	if err != nil {
 		t.Fatal(err)

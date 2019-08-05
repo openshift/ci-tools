@@ -823,16 +823,6 @@ func TestFilterPresubmits(t *testing.T) {
 		expected       func(*prowconfig.Presubmit) config.Presubmits
 	}{
 		{
-			description: "job where command is not `ci-operator`",
-			crippleFunc: func(j *prowconfig.Presubmit) map[string][]prowconfig.Presubmit {
-				j.Spec.Containers[0].Command[0] = "not-ci-operator"
-				return map[string][]prowconfig.Presubmit{"org/repo": {*j}}
-			},
-			expected: func(j *prowconfig.Presubmit) config.Presubmits {
-				return config.Presubmits{}
-			},
-		},
-		{
 			description: "ci-operator job already using --git-ref",
 			crippleFunc: func(j *prowconfig.Presubmit) map[string][]prowconfig.Presubmit {
 				j.Spec.Containers[0].Args = append(j.Spec.Containers[0].Args, "--git-ref=organization/repo@master")

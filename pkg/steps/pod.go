@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 
@@ -191,6 +192,18 @@ func PodStep(name string, config PodStepConfiguration, resources api.ResourceCon
 	}
 }
 
+func getEnv(s *podStep) []coreapi.EnvVar {
+	var env []coreapi.EnvVar
+	envMap, err := downwardapi.EnvForSpec(s.jobSpec.JobSpec)
+	if err != nil {
+		return env
+	}
+	for k, v := range envMap {
+		env = append(env, coreapi.EnvVar{Name: k, Value: v})
+	}
+	return env
+}
+
 func (s *podStep) generatePodForStep(image string, containerResources coreapi.ResourceRequirements) (*coreapi.Pod, error) {
 	pod := &coreapi.Pod{
 		ObjectMeta: meta.ObjectMeta{
@@ -213,6 +226,7 @@ func (s *podStep) generatePodForStep(image string, containerResources coreapi.Re
 			Containers: []coreapi.Container{
 				{
 					Image:                    image,
+					Env:                      getEnv(s),
 					Name:                     s.name,
 					Command:                  []string{"/bin/sh", "-c", "#!/bin/sh\nset -eu\n" + s.config.Commands},
 					Resources:                containerResources,

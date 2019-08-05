@@ -1,6 +1,8 @@
 package steps
 
 import (
+	"os"
+	"reflect"
 	"testing"
 
 	"k8s.io/api/core/v1"
@@ -349,5 +351,38 @@ func expectedPodStepTemplate() *podStep {
 				Tag:  "podStep.config.From.Tag",
 			},
 		},
+	}
+}
+
+const (
+	JobSpecValue = `{"type":"periodic","job":"periodic-ci-azure-e2e-applysecurityupdates","buildid":"21","prowjobid":"ec28bec2-b7a4-11e9-af8e-0a58ac108dbc","extra_refs":[{"org":"openshift","repo":"openshift-azure","base_ref":"master"}]}`
+)
+
+func TestGetEnv(t *testing.T) {
+	err := os.Setenv("JOB_SPEC", JobSpecValue)
+	if err != nil {
+		t.Errorf("Failed to set up env. var.: JOB_SPEC")
+	}
+	jobSpec, err := api.ResolveSpecFromEnv()
+
+	var name string
+	var config PodStepConfiguration
+	var resources api.ResourceConfiguration
+	var podClient PodClient
+	var artifactDir string
+
+	podStep := podStep{name: name, config: config, resources: resources, podClient: podClient, artifactDir: artifactDir, jobSpec: jobSpec}
+	result := getEnv(&podStep)
+
+	expected := []v1.EnvVar{
+		{Name: "JOB_NAME", Value: "periodic-ci-azure-e2e-applysecurityupdates"},
+		{Name: "BUILD_ID", Value: "21"},
+		{Name: "PROW_JOB_ID", Value: "ec28bec2-b7a4-11e9-af8e-0a58ac108dbc"},
+		{Name: "JOB_TYPE", Value: "periodic"},
+		{Name: "JOB_SPEC", Value: JobSpecValue},
+	}
+
+	if !reflect.DeepEqual(expected, result) {
+		t.Errorf("Unexpected mis-match: %s", diff.ObjectReflectDiff(expected, result))
 	}
 }

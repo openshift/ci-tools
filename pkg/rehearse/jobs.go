@@ -475,7 +475,6 @@ type Executor struct {
 
 	dryRun     bool
 	presubmits []*prowconfig.Presubmit
-	periodics  []prowconfig.Periodic
 	prNumber   int
 	prRepo     string
 	refs       *pjapi.Refs
@@ -484,14 +483,13 @@ type Executor struct {
 }
 
 // NewExecutor creates an executor. It also confgures the rehearsal jobs as a list of presubmits.
-func NewExecutor(presubmits []*prowconfig.Presubmit, periodics []prowconfig.Periodic, prNumber int, prRepo string, refs *pjapi.Refs,
+func NewExecutor(presubmits []*prowconfig.Presubmit, prNumber int, prRepo string, refs *pjapi.Refs,
 	dryRun bool, loggers Loggers, pjclient pj.ProwJobInterface) *Executor {
 	return &Executor{
 		Metrics: &ExecutionMetrics{},
 
 		dryRun:     dryRun,
 		presubmits: presubmits,
-		periodics:  periodics,
 		prNumber:   prNumber,
 		prRepo:     prRepo,
 		refs:       refs,
@@ -605,29 +603,11 @@ func (e *Executor) submitRehearsals() ([]*pjapi.ProwJob, error) {
 		pjs = append(pjs, created)
 	}
 
-	for _, job := range e.periodics {
-		created, err := e.submitPeriodic(job)
-		if err != nil {
-			e.loggers.Job.WithError(err).Warn("Failed to execute a rehearsal periodic")
-			errors = append(errors, err)
-			continue
-		}
-		e.Metrics.SubmittedRehearsals = append(e.Metrics.SubmittedRehearsals, created.Spec.Job)
-		e.loggers.Job.WithFields(pjutil.ProwJobFields(created)).Info("Submitted rehearsal prowjob")
-		pjs = append(pjs, created)
-	}
-
 	return pjs, kerrors.NewAggregate(errors)
 }
 
 func (e *Executor) submitPresubmit(job *prowconfig.Presubmit) (*pjapi.ProwJob, error) {
 	prowJob := pjutil.NewProwJob(pjutil.PresubmitSpec(*job, *e.refs), job.Labels, job.Annotations)
-	e.loggers.Job.WithFields(pjutil.ProwJobFields(&prowJob)).Info("Submitting a new prowjob.")
-	return e.pjclient.Create(&prowJob)
-}
-
-func (e *Executor) submitPeriodic(job prowconfig.Periodic) (*pjapi.ProwJob, error) {
-	prowJob := pjutil.NewProwJob(pjutil.PeriodicSpec(job), job.Labels, job.Annotations)
 	e.loggers.Job.WithFields(pjutil.ProwJobFields(&prowJob)).Info("Submitting a new prowjob.")
 	return e.pjclient.Create(&prowJob)
 }

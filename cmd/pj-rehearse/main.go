@@ -304,7 +304,8 @@ func rehearseMain() int {
 		return 0
 	}
 
-	executor := rehearse.NewExecutor(presubmitsToRehearse, periodicsToRehearse, prNumber, o.releaseRepoPath, jobSpec.Refs, o.dryRun, loggers, pjclient)
+	presubmitsToRehearse = append(presubmitsToRehearse, jobConfigurer.ConvertPeriodicsToPresubmits(periodicsToRehearse)...)
+	executor := rehearse.NewExecutor(presubmitsToRehearse, prNumber, o.releaseRepoPath, jobSpec.Refs, o.dryRun, loggers, pjclient)
 	success, err := executor.ExecuteJobs()
 	metrics.Execution = executor.Metrics
 	if err != nil {

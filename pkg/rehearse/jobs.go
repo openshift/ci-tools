@@ -42,7 +42,8 @@ const (
 	logCiopConfigFile            = "ciop-config-file"
 	logCiopConfigRepo            = "ciop-config-repo"
 
-	clusterTypeEnvName = "CLUSTER_TYPE"
+	clusterTypeEnvName  = "CLUSTER_TYPE"
+	CanBeRehearsedLabel = "pj-rehearse.openshift.io/can-be-rehearsed"
 )
 
 // Loggers holds the two loggers that will be used for normal and debug logging respectively.
@@ -134,6 +135,12 @@ func filterPresubmits(changedPresubmits map[string][]prowconfig.Presubmit, allow
 	for repo, jobs := range changedPresubmits {
 		for _, job := range jobs {
 			jobLogger := logger.WithFields(logrus.Fields{"repo": repo, "job": job.Name})
+
+			if !hasRehearsableLabel(job.Labels) {
+				jobLogger.Warnf("job is not allowed to be rehearsed. Label %s is required", CanBeRehearsedLabel)
+				continue
+			}
+
 			if len(job.Branches) == 0 {
 				jobLogger.Warn("cannot rehearse jobs with no branches")
 				continue
@@ -159,6 +166,11 @@ func filterPeriodics(changedPeriodics []prowconfig.Periodic, allowVolumes bool, 
 	for _, periodic := range changedPeriodics {
 		jobLogger := logger.WithField("job", periodic.Name)
 
+		if !hasRehearsableLabel(periodic.Labels) {
+			jobLogger.Warnf("job is not allowed to be rehearsed. Label %s is required", CanBeRehearsedLabel)
+			continue
+		}
+
 		if err := filterJobSpec(periodic.Spec, allowVolumes); err != nil {
 			jobLogger.WithError(err).Warn("could not rehearse job")
 			continue
@@ -166,6 +178,13 @@ func filterPeriodics(changedPeriodics []prowconfig.Periodic, allowVolumes bool, 
 		periodics = append(periodics, periodic)
 	}
 	return periodics
+}
+
+func hasRehearsableLabel(labels map[string]string) bool {
+	if value, ok := labels[CanBeRehearsedLabel]; !ok || value != "true" {
+		return false
+	}
+	return true
 }
 
 func filterJobSpec(spec *v1.PodSpec, allowVolumes bool) error {

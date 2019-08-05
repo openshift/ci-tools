@@ -87,40 +87,40 @@ func NewCMClient(clusterConfig *rest.Config, namespace string, dry bool) (corecl
 	return cmClient.ConfigMaps(namespace), nil
 }
 
-func makeRehearsalPeriodic(source *prowconfig.Periodic, prNumber int, refs *pjapi.Refs) (prowconfig.Periodic, error) {
-	var rehearsal prowconfig.Periodic
-	deepcopy.Copy(&rehearsal, source)
-
-	rehearsal.Name = fmt.Sprintf("rehearse-%d-%s", prNumber, source.Name)
-	if rehearsal.Labels == nil {
-		rehearsal.Labels = make(map[string]string, 1)
-	}
-	rehearsal.Labels[rehearseLabel] = strconv.Itoa(prNumber)
-
-	return rehearsal, nil
-}
-
 func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber int) (*prowconfig.Presubmit, error) {
 	var rehearsal prowconfig.Presubmit
 	deepcopy.Copy(&rehearsal, source)
 
 	rehearsal.Name = fmt.Sprintf("rehearse-%d-%s", prNumber, source.Name)
 
-	branch := strings.TrimPrefix(strings.TrimSuffix(source.Branches[0], "$"), "^")
+	var branch string
+	var context string
+
+	if len(source.Branches) > 0 {
+		branch = strings.TrimPrefix(strings.TrimSuffix(source.Branches[0], "$"), "^")
+		if len(repo) > 0 {
+			orgRepo := strings.Split(repo, "/")
+			rehearsal.ExtraRefs = append(rehearsal.ExtraRefs, pjapi.Refs{
+				Org:     orgRepo[0],
+				Repo:    orgRepo[1],
+				BaseRef: branch,
+				WorkDir: true,
+			})
+			context += repo + "/"
+		}
+		context += branch + "/"
+	}
+
 	shortName := strings.TrimPrefix(source.Context, "ci/prow/")
-	rehearsal.Context = fmt.Sprintf("ci/rehearse/%s/%s/%s", repo, branch, shortName)
+	if len(shortName) > 0 {
+		context += shortName
+	} else {
+		context += source.Name
+	}
+	rehearsal.Context = fmt.Sprintf("ci/rehearse/%s", context)
+
 	rehearsal.RerunCommand = defaultRehearsalRerunCommand
-
-	orgRepo := strings.Split(repo, "/")
-	rehearsal.ExtraRefs = append(rehearsal.ExtraRefs, pjapi.Refs{
-		Org:     orgRepo[0],
-		Repo:    orgRepo[1],
-		BaseRef: branch,
-		WorkDir: true,
-	})
-
 	rehearsal.Optional = true
-
 	if rehearsal.Labels == nil {
 		rehearsal.Labels = make(map[string]string, 1)
 	}
@@ -268,19 +268,13 @@ func (jc *JobConfigurer) ConfigurePeriodicRehearsals(periodics []prowconfig.Peri
 	filteredPeriodics := filterPeriodics(periodics, jc.allowVolumes, jc.loggers.Job)
 	for _, job := range filteredPeriodics {
 		jobLogger := jc.loggers.Job.WithField("target-job", job.Name)
-		rehearsal, err := makeRehearsalPeriodic(&job, jc.prNumber, jc.refs)
-		if err != nil {
-			jobLogger.WithError(err).Warn("Failed to make a rehearsal periodic")
-			continue
-		}
-
-		if err := jc.configureJobSpec(rehearsal.Spec, jc.loggers.Debug.WithField("name", job.Name)); err != nil {
+		if err := jc.configureJobSpec(job.Spec, jc.loggers.Debug.WithField("name", job.Name)); err != nil {
 			jobLogger.WithError(err).Warn("Failed to inline ci-operator-config into rehearsal periodic job")
 			continue
 		}
 
-		jobLogger.WithField(logRehearsalJob, rehearsal.Name).Info("Created a rehearsal job to be submitted")
-		rehearsals = append(rehearsals, rehearsal)
+		jobLogger.WithField(logRehearsalJob, job.Name).Info("Created a rehearsal job to be submitted")
+		rehearsals = append(rehearsals, job)
 	}
 
 	return rehearsals
@@ -322,6 +316,24 @@ func (jc *JobConfigurer) configureJobSpec(spec *v1.PodSpec, logger *logrus.Entry
 		replaceClusterProfiles(spec.Volumes, jc.profiles, logger)
 	}
 	return nil
+}
+
+// ConvertPeriodicsToPresubmits converts periodic jobs to presubmits by using the same JobBase and filling up
+// the rest of the presubmit's required fields.
+func (jc *JobConfigurer) ConvertPeriodicsToPresubmits(periodics []prowconfig.Periodic) []*prowconfig.Presubmit {
+	var presubmits []*prowconfig.Presubmit
+
+	for _, periodic := range periodics {
+		jobLogger := jc.loggers.Job.WithField("target-job", periodic.Name)
+		p, err := makeRehearsalPresubmit(&prowconfig.Presubmit{JobBase: periodic.JobBase}, "", jc.prNumber)
+		if err != nil {
+			jobLogger.WithError(err).Warn("Failed to make a rehearsal presubmit")
+			continue
+		}
+
+		presubmits = append(presubmits, p)
+	}
+	return presubmits
 }
 
 // AddRandomJobsForChangedTemplates finds jobs from the PR config that are using a specific template with a specific cluster type.

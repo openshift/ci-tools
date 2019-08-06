@@ -18,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
+	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 
 	buildapi "github.com/openshift/api/build/v1"
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
@@ -42,8 +43,8 @@ var (
 	JobSpecAnnotation = fmt.Sprintf("%s/%s", CiAnnotationPrefix, "job-spec")
 )
 
-func determineWorkDir(refs *api.Refs, extraRefs []api.Refs) string {
-	var totalRefs []api.Refs
+func determineWorkDir(refs *prowapi.Refs, extraRefs []prowapi.Refs) string {
+	var totalRefs []prowapi.Refs
 	if refs != nil {
 		totalRefs = append(totalRefs, *refs)
 	}
@@ -182,7 +183,7 @@ func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStrea
 			Labels: trimLabels(map[string]string{
 				PersistsLabel:    "false",
 				JobLabel:         jobSpec.Job,
-				BuildIdLabel:     jobSpec.BuildId,
+				BuildIdLabel:     jobSpec.BuildID,
 				ProwJobIdLabel:   jobSpec.ProwJobID,
 				CreatesLabel:     string(toTag),
 				CreatedByCILabel: "true",

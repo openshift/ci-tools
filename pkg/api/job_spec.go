@@ -2,25 +2,17 @@ package api
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
-	"os"
-	"strings"
 
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 )
 
 // JobSpec is a superset of the upstream spec, but
 // we do not import it as importing test-infra is a
 // massive hassle.
 type JobSpec struct {
-	Type      ProwJobType `json:"type,omitempty"`
-	Job       string      `json:"job,omitempty"`
-	BuildId   string      `json:"buildid,omitempty"`
-	ProwJobID string      `json:"prowjobid,omitempty"`
-
-	Refs      *Refs  `json:"refs,omitempty"`
-	ExtraRefs []Refs `json:"extra_refs,omitempty"`
+	downwardapi.JobSpec `json:",inline"`
 
 	// rawSpec is the serialized form of the Spec
 	rawSpec string
@@ -31,42 +23,6 @@ type JobSpec struct {
 
 	// if set, any new artifacts will be a child of this object
 	owner *meta.OwnerReference
-}
-
-type ProwJobType string
-
-const (
-	PresubmitJob  ProwJobType = "presubmit"
-	PostsubmitJob             = "postsubmit"
-	PeriodicJob               = "periodic"
-	BatchJob                  = "batch"
-)
-
-type Pull struct {
-	Number int    `json:"number,omitempty"`
-	Author string `json:"author,omitempty"`
-	SHA    string `json:"sha,omitempty"`
-}
-
-type Refs struct {
-	Org  string `json:"org,omitempty"`
-	Repo string `json:"repo,omitempty"`
-
-	BaseRef string `json:"base_ref,omitempty"`
-	BaseSHA string `json:"base_sha,omitempty"`
-	WorkDir bool   `json:"workdir,omitempty"`
-
-	Pulls []Pull `json:"pulls,omitempty"`
-
-	PathAlias string `json:"path_alias,omitempty"`
-}
-
-func (r Refs) String() string {
-	rs := []string{fmt.Sprintf("%s:%s", r.BaseRef, r.BaseSHA)}
-	for _, pull := range r.Pulls {
-		rs = append(rs, fmt.Sprintf("%d:%s", pull.Number, pull.SHA))
-	}
-	return strings.Join(rs, ",")
 }
 
 func (s *JobSpec) RawSpec() string {
@@ -85,7 +41,9 @@ func (s *JobSpec) SetOwner(owner *meta.OwnerReference) {
 // the execution graph.
 func (s *JobSpec) Inputs() InputDefinition {
 	spec := &JobSpec{
-		Refs: s.Refs,
+		JobSpec: downwardapi.JobSpec{
+			Refs: s.Refs,
+		},
 	}
 	raw, err := json.Marshal(spec)
 	if err != nil {
@@ -97,17 +55,16 @@ func (s *JobSpec) Inputs() InputDefinition {
 // ResolveSpecFromEnv will determine the Refs being
 // tested in by parsing Prow environment variable contents
 func ResolveSpecFromEnv() (*JobSpec, error) {
-	specEnv, ok := os.LookupEnv("JOB_SPEC")
-	if !ok {
-		return nil, errors.New("$JOB_SPEC unset")
-	}
-
-	spec := &JobSpec{}
-	if err := json.Unmarshal([]byte(specEnv), spec); err != nil {
+	apiSpec, err := downwardapi.ResolveSpecFromEnv()
+	if err != nil {
 		return nil, fmt.Errorf("malformed $JOB_SPEC: %v", err)
 	}
-
-	spec.rawSpec = specEnv
-
-	return spec, nil
+	raw, err := json.Marshal(apiSpec)
+	if err != nil {
+		panic(err)
+	}
+	return &JobSpec{
+		JobSpec: *apiSpec,
+		rawSpec: string(raw),
+	}, nil
 }

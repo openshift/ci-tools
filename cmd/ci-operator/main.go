@@ -33,6 +33,8 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
+	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
+	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 
 	"github.com/ghodss/yaml"
 
@@ -300,7 +302,7 @@ func (o *options) Complete() error {
 		log.Printf("Resolved job spec:\n%s", string(job))
 	}
 
-	var refs []api.Refs
+	var refs []prowapi.Refs
 	if o.jobSpec.Refs != nil {
 		refs = append(refs, *o.jobSpec.Refs)
 	}
@@ -910,7 +912,7 @@ func sentryOptionsFromJobSpec(jobSpec *api.JobSpec) []sentry.Option {
 	tags := map[string]string{
 		"prowjob-type": string(jobSpec.Type),
 		"job":          jobSpec.Job,
-		"build-id":     jobSpec.BuildId,
+		"build-id":     jobSpec.BuildID,
 		"prowjob-id":   jobSpec.ProwJobID,
 	}
 
@@ -1092,7 +1094,17 @@ func jobSpecFromGitRef(ref string) (*api.JobSpec, error) {
 		}
 	}
 	log.Printf("Resolved %s to commit %s", ref, sha)
-	return &api.JobSpec{Type: api.PeriodicJob, Job: "dev", Refs: &api.Refs{Org: prefix[0], Repo: prefix[1], BaseRef: parts[1], BaseSHA: sha}}, nil
+	return &api.JobSpec{
+		JobSpec: downwardapi.JobSpec{
+			Type: prowapi.PeriodicJob,
+			Job:  "dev",
+			Refs: &prowapi.Refs{
+				Org:     prefix[0],
+				Repo:    prefix[1],
+				BaseRef: parts[1],
+				BaseSHA: sha,
+			},
+		}}, nil
 }
 
 func nodeNames(nodes []*api.StepNode) []string {
@@ -1186,7 +1198,7 @@ func shorten(value string, l int) string {
 	return value
 }
 
-func summarizeRef(refs api.Refs) string {
+func summarizeRef(refs prowapi.Refs) string {
 	if len(refs.Pulls) > 0 {
 		var pulls []string
 		for _, pull := range refs.Pulls {

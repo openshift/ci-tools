@@ -6,8 +6,11 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/openshift/ci-tools/pkg/api"
 	"k8s.io/apimachinery/pkg/util/diff"
+	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
+	"k8s.io/test-infra/prow/pod-utils/downwardapi"
+
+	"github.com/openshift/ci-tools/pkg/api"
 )
 
 func addCloneRefs(cfg *api.SourceStepConfiguration) *api.SourceStepConfiguration {
@@ -33,9 +36,11 @@ func TestStepConfigsForBuild(t *testing.T) {
 				},
 			},
 			jobSpec: &api.JobSpec{
-				Refs: &api.Refs{
-					Org:  "org",
-					Repo: "repo",
+				JobSpec: downwardapi.JobSpec{
+					Refs: &prowapi.Refs{
+						Org:  "org",
+						Repo: "repo",
+					},
 				},
 				BaseNamespace: "base-1",
 			},
@@ -66,9 +71,11 @@ func TestStepConfigsForBuild(t *testing.T) {
 				BinaryBuildCommands: "hi",
 			},
 			jobSpec: &api.JobSpec{
-				Refs: &api.Refs{
-					Org:  "org",
-					Repo: "repo",
+				JobSpec: downwardapi.JobSpec{
+					Refs: &prowapi.Refs{
+						Org:  "org",
+						Repo: "repo",
+					},
 				},
 				BaseNamespace: "base-1",
 			},
@@ -106,9 +113,11 @@ func TestStepConfigsForBuild(t *testing.T) {
 				RpmBuildCommands:    "hello",
 			},
 			jobSpec: &api.JobSpec{
-				Refs: &api.Refs{
-					Org:  "org",
-					Repo: "repo",
+				JobSpec: downwardapi.JobSpec{
+					Refs: &prowapi.Refs{
+						Org:  "org",
+						Repo: "repo",
+					},
 				},
 				BaseNamespace: "base-1",
 			},
@@ -155,9 +164,11 @@ func TestStepConfigsForBuild(t *testing.T) {
 				RpmBuildCommands: "hello",
 			},
 			jobSpec: &api.JobSpec{
-				Refs: &api.Refs{
-					Org:  "org",
-					Repo: "repo",
+				JobSpec: downwardapi.JobSpec{
+					Refs: &prowapi.Refs{
+						Org:  "org",
+						Repo: "repo",
+					},
 				},
 				BaseNamespace: "base-1",
 			},
@@ -199,9 +210,11 @@ func TestStepConfigsForBuild(t *testing.T) {
 				RpmBuildCommands: "hello",
 			},
 			jobSpec: &api.JobSpec{
-				Refs: &api.Refs{
-					Org:  "org",
-					Repo: "repo",
+				JobSpec: downwardapi.JobSpec{
+					Refs: &prowapi.Refs{
+						Org:  "org",
+						Repo: "repo",
+					},
 				},
 				BaseNamespace: "base-1",
 			},
@@ -248,9 +261,11 @@ func TestStepConfigsForBuild(t *testing.T) {
 				},
 			},
 			jobSpec: &api.JobSpec{
-				Refs: &api.Refs{
-					Org:  "org",
-					Repo: "repo",
+				JobSpec: downwardapi.JobSpec{
+					Refs: &prowapi.Refs{
+						Org:  "org",
+						Repo: "repo",
+					},
 				},
 				BaseNamespace: "base-1",
 			},
@@ -299,9 +314,11 @@ func TestStepConfigsForBuild(t *testing.T) {
 				},
 			},
 			jobSpec: &api.JobSpec{
-				Refs: &api.Refs{
-					Org:  "org",
-					Repo: "repo",
+				JobSpec: downwardapi.JobSpec{
+					Refs: &prowapi.Refs{
+						Org:  "org",
+						Repo: "repo",
+					},
 				},
 				BaseNamespace: "base-1",
 			},
@@ -358,9 +375,11 @@ func TestStepConfigsForBuild(t *testing.T) {
 				},
 			},
 			jobSpec: &api.JobSpec{
-				Refs: &api.Refs{
-					Org:  "org",
-					Repo: "repo",
+				JobSpec: downwardapi.JobSpec{
+					Refs: &prowapi.Refs{
+						Org:  "org",
+						Repo: "repo",
+					},
 				},
 				BaseNamespace: "base-1",
 			},

@@ -62,7 +62,7 @@ func (s *rpmServerStep) Run(ctx context.Context, dry bool) error {
 	labelSet := trimLabels(map[string]string{
 		PersistsLabel:    "true",
 		JobLabel:         s.jobSpec.Job,
-		BuildIdLabel:     s.jobSpec.BuildId,
+		BuildIdLabel:     s.jobSpec.BuildID,
 		ProwJobIdLabel:   s.jobSpec.ProwJobID,
 		CreatedByCILabel: "true",
 		AppLabel:         RPMRepoName,

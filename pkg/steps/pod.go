@@ -198,7 +198,7 @@ func (s *podStep) generatePodForStep(image string, containerResources coreapi.Re
 			Labels: trimLabels(map[string]string{
 				PersistsLabel:    "false",
 				JobLabel:         s.jobSpec.Job,
-				BuildIdLabel:     s.jobSpec.BuildId,
+				BuildIdLabel:     s.jobSpec.BuildID,
 				ProwJobIdLabel:   s.jobSpec.ProwJobID,
 				CreatedByCILabel: "true",
 			}),

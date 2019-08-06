@@ -9,6 +9,7 @@ import (
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 
 	"github.com/openshift/ci-tools/pkg/api"
 )
@@ -36,9 +37,11 @@ func preparePodStep(t *testing.T, namespace string) (*podStep, stepExpectation, 
 	jobName := "very-cool-prow-job"
 	pjID := "prow-job-id"
 	jobSpec := &api.JobSpec{
-		Job:       jobName,
-		BuildId:   buildID,
-		ProwJobID: pjID,
+		JobSpec: downwardapi.JobSpec{
+			Job:       jobName,
+			BuildID:   buildID,
+			ProwJobID: pjID,
+		},
 		Namespace: namespace,
 	}
 
@@ -74,7 +77,7 @@ func makeExpectedPod(step *podStep, phaseAfterRun v1.PodPhase) *v1.Pod {
 			Name:      step.config.As,
 			Namespace: step.jobSpec.Namespace,
 			Labels: map[string]string{
-				"build-id":      step.jobSpec.BuildId,
+				"build-id":      step.jobSpec.BuildID,
 				"created-by-ci": "true",
 				"job":           step.jobSpec.Job,
 
@@ -330,9 +333,11 @@ func TestGetPodObjectMounts(t *testing.T) {
 func expectedPodStepTemplate() *podStep {
 	return &podStep{
 		jobSpec: &api.JobSpec{
-			Job:       "podStep.jobSpec.Job",
-			BuildId:   "podStep.jobSpec.BuildId",
-			ProwJobID: "podStep.jobSpec.ProwJobID",
+			JobSpec: downwardapi.JobSpec{
+				Job:       "podStep.jobSpec.Job",
+				BuildID:   "podStep.jobSpec.BuildId",
+				ProwJobID: "podStep.jobSpec.ProwJobID",
+			},
 		},
 		name: "podStep.name",
 		config: PodStepConfiguration{

@@ -153,12 +153,16 @@
       ci.openshift.org/rehearse: "1234"
       created-by-prow: "true"
       prow.k8s.io/job: rehearse-1234-periodic-ci-super-duper-e2e
-      prow.k8s.io/type: periodic
-    name: aeed2bfa-91ab-11e9-ae38-54e1ad07d68a
+      prow.k8s.io/refs.org: openshift
+      prow.k8s.io/refs.pull: "1234"
+      prow.k8s.io/refs.repo: release
+      prow.k8s.io/type: presubmit
+    name: 1e57006d-b7c8-11e9-a628-54e1ad07d68a
     namespace: test-namespace
   spec:
     agent: kubernetes
     cluster: default
+    context: ci/rehearse/periodic-ci-super-duper-e2e
     decoration_config:
       gcs_configuration:
         bucket: origin-ci-test
@@ -250,7 +254,18 @@
       - configMap:
           name: prow-job-cluster-launch-src
         name: job-definition
-    type: periodic
+    refs:
+      base_ref: master
+      base_sha: 362ea74ab530befb4201e0d447d7a19174edb8d3
+      org: openshift
+      pulls:
+      - author: petr-muller
+        number: 1234
+        sha: 2a2c6326002a2df6099cb3cadf145f338ad3e137
+      repo: release
+    report: true
+    rerun_command: /test pj-rehearse
+    type: presubmit
   status:
     startTime: "2019-06-18T09:30:17Z"
     state: triggered

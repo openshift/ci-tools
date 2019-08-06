@@ -87,40 +87,40 @@ func NewCMClient(clusterConfig *rest.Config, namespace string, dry bool) (corecl
 	return cmClient.ConfigMaps(namespace), nil
 }
 
-func makeRehearsalPeriodic(source *prowconfig.Periodic, prNumber int, refs *pjapi.Refs) (prowconfig.Periodic, error) {
-	var rehearsal prowconfig.Periodic
-	deepcopy.Copy(&rehearsal, source)
-
-	rehearsal.Name = fmt.Sprintf("rehearse-%d-%s", prNumber, source.Name)
-	if rehearsal.Labels == nil {
-		rehearsal.Labels = make(map[string]string, 1)
-	}
-	rehearsal.Labels[rehearseLabel] = strconv.Itoa(prNumber)
-
-	return rehearsal, nil
-}
-
 func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber int) (*prowconfig.Presubmit, error) {
 	var rehearsal prowconfig.Presubmit
 	deepcopy.Copy(&rehearsal, source)
 
 	rehearsal.Name = fmt.Sprintf("rehearse-%d-%s", prNumber, source.Name)
 
-	branch := strings.TrimPrefix(strings.TrimSuffix(source.Branches[0], "$"), "^")
+	var branch string
+	var context string
+
+	if len(source.Branches) > 0 {
+		branch = strings.TrimPrefix(strings.TrimSuffix(source.Branches[0], "$"), "^")
+		if len(repo) > 0 {
+			orgRepo := strings.Split(repo, "/")
+			rehearsal.ExtraRefs = append(rehearsal.ExtraRefs, pjapi.Refs{
+				Org:     orgRepo[0],
+				Repo:    orgRepo[1],
+				BaseRef: branch,
+				WorkDir: true,
+			})
+			context += repo + "/"
+		}
+		context += branch + "/"
+	}
+
 	shortName := strings.TrimPrefix(source.Context, "ci/prow/")
-	rehearsal.Context = fmt.Sprintf("ci/rehearse/%s/%s/%s", repo, branch, shortName)
+	if len(shortName) > 0 {
+		context += shortName
+	} else {
+		context += source.Name
+	}
+	rehearsal.Context = fmt.Sprintf("ci/rehearse/%s", context)
+
 	rehearsal.RerunCommand = defaultRehearsalRerunCommand
-
-	orgRepo := strings.Split(repo, "/")
-	rehearsal.ExtraRefs = append(rehearsal.ExtraRefs, pjapi.Refs{
-		Org:     orgRepo[0],
-		Repo:    orgRepo[1],
-		BaseRef: branch,
-		WorkDir: true,
-	})
-
 	rehearsal.Optional = true
-
 	if rehearsal.Labels == nil {
 		rehearsal.Labels = make(map[string]string, 1)
 	}
@@ -268,19 +268,13 @@ func (jc *JobConfigurer) ConfigurePeriodicRehearsals(periodics []prowconfig.Peri
 	filteredPeriodics := filterPeriodics(periodics, jc.allowVolumes, jc.loggers.Job)
 	for _, job := range filteredPeriodics {
 		jobLogger := jc.loggers.Job.WithField("target-job", job.Name)
-		rehearsal, err := makeRehearsalPeriodic(&job, jc.prNumber, jc.refs)
-		if err != nil {
-			jobLogger.WithError(err).Warn("Failed to make a rehearsal periodic")
-			continue
-		}
-
-		if err := jc.configureJobSpec(rehearsal.Spec, jc.loggers.Debug.WithField("name", job.Name)); err != nil {
+		if err := jc.configureJobSpec(job.Spec, jc.loggers.Debug.WithField("name", job.Name)); err != nil {
 			jobLogger.WithError(err).Warn("Failed to inline ci-operator-config into rehearsal periodic job")
 			continue
 		}
 
-		jobLogger.WithField(logRehearsalJob, rehearsal.Name).Info("Created a rehearsal job to be submitted")
-		rehearsals = append(rehearsals, rehearsal)
+		jobLogger.WithField(logRehearsalJob, job.Name).Info("Created a rehearsal job to be submitted")
+		rehearsals = append(rehearsals, job)
 	}
 
 	return rehearsals
@@ -322,6 +316,24 @@ func (jc *JobConfigurer) configureJobSpec(spec *v1.PodSpec, logger *logrus.Entry
 		replaceClusterProfiles(spec.Volumes, jc.profiles, logger)
 	}
 	return nil
+}
+
+// ConvertPeriodicsToPresubmits converts periodic jobs to presubmits by using the same JobBase and filling up
+// the rest of the presubmit's required fields.
+func (jc *JobConfigurer) ConvertPeriodicsToPresubmits(periodics []prowconfig.Periodic) []*prowconfig.Presubmit {
+	var presubmits []*prowconfig.Presubmit
+
+	for _, periodic := range periodics {
+		jobLogger := jc.loggers.Job.WithField("target-job", periodic.Name)
+		p, err := makeRehearsalPresubmit(&prowconfig.Presubmit{JobBase: periodic.JobBase}, "", jc.prNumber)
+		if err != nil {
+			jobLogger.WithError(err).Warn("Failed to make a rehearsal presubmit")
+			continue
+		}
+
+		presubmits = append(presubmits, p)
+	}
+	return presubmits
 }
 
 // AddRandomJobsForChangedTemplates finds jobs from the PR config that are using a specific template with a specific cluster type.
@@ -463,7 +475,6 @@ type Executor struct {
 
 	dryRun     bool
 	presubmits []*prowconfig.Presubmit
-	periodics  []prowconfig.Periodic
 	prNumber   int
 	prRepo     string
 	refs       *pjapi.Refs
@@ -472,14 +483,13 @@ type Executor struct {
 }
 
 // NewExecutor creates an executor. It also confgures the rehearsal jobs as a list of presubmits.
-func NewExecutor(presubmits []*prowconfig.Presubmit, periodics []prowconfig.Periodic, prNumber int, prRepo string, refs *pjapi.Refs,
+func NewExecutor(presubmits []*prowconfig.Presubmit, prNumber int, prRepo string, refs *pjapi.Refs,
 	dryRun bool, loggers Loggers, pjclient pj.ProwJobInterface) *Executor {
 	return &Executor{
 		Metrics: &ExecutionMetrics{},
 
 		dryRun:     dryRun,
 		presubmits: presubmits,
-		periodics:  periodics,
 		prNumber:   prNumber,
 		prRepo:     prRepo,
 		refs:       refs,
@@ -593,29 +603,11 @@ func (e *Executor) submitRehearsals() ([]*pjapi.ProwJob, error) {
 		pjs = append(pjs, created)
 	}
 
-	for _, job := range e.periodics {
-		created, err := e.submitPeriodic(job)
-		if err != nil {
-			e.loggers.Job.WithError(err).Warn("Failed to execute a rehearsal periodic")
-			errors = append(errors, err)
-			continue
-		}
-		e.Metrics.SubmittedRehearsals = append(e.Metrics.SubmittedRehearsals, created.Spec.Job)
-		e.loggers.Job.WithFields(pjutil.ProwJobFields(created)).Info("Submitted rehearsal prowjob")
-		pjs = append(pjs, created)
-	}
-
 	return pjs, kerrors.NewAggregate(errors)
 }
 
 func (e *Executor) submitPresubmit(job *prowconfig.Presubmit) (*pjapi.ProwJob, error) {
 	prowJob := pjutil.NewProwJob(pjutil.PresubmitSpec(*job, *e.refs), job.Labels, job.Annotations)
-	e.loggers.Job.WithFields(pjutil.ProwJobFields(&prowJob)).Info("Submitting a new prowjob.")
-	return e.pjclient.Create(&prowJob)
-}
-
-func (e *Executor) submitPeriodic(job prowconfig.Periodic) (*pjapi.ProwJob, error) {
-	prowJob := pjutil.NewProwJob(pjutil.PeriodicSpec(job), job.Labels, job.Annotations)
 	e.loggers.Job.WithFields(pjutil.ProwJobFields(&prowJob)).Info("Submitting a new prowjob.")
 	return e.pjclient.Create(&prowJob)
 }

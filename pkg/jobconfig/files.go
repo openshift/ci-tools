@@ -22,6 +22,7 @@ type ProwgenLabel string
 
 const (
 	ProwJobLabelGenerated              = "ci-operator.openshift.io/prowgen-controlled"
+	CanBeRehearsedLabel                = "pj-rehearse.openshift.io/can-be-rehearsed"
 	Generated             ProwgenLabel = "true"
 	New                   ProwgenLabel = "newly-generated"
 )

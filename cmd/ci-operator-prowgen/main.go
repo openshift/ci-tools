@@ -398,8 +398,12 @@ func generateConfigMapVolume(name string, templates []string) kubeapi.Volume {
 	return ret
 }
 
-func generateJobBase(name, prefix string, info *config.Info, label jc.ProwgenLabel, podSpec *kubeapi.PodSpec) prowconfig.JobBase {
+func generateJobBase(name, prefix string, info *config.Info, label jc.ProwgenLabel, podSpec *kubeapi.PodSpec, rehearsable bool) prowconfig.JobBase {
 	labels := map[string]string{jc.ProwJobLabelGenerated: string(label)}
+
+	if rehearsable {
+		labels[jc.CanBeRehearsedLabel] = string(jc.Generated)
+	}
 
 	jobPrefix := fmt.Sprintf("%s-ci-%s-%s-%s-", prefix, info.Org, info.Repo, info.Branch)
 	if len(info.Variant) > 0 {
@@ -424,11 +428,11 @@ func generateJobBase(name, prefix string, info *config.Info, label jc.ProwgenLab
 	}
 }
 
-func generatePresubmitForTest(name string, info *config.Info, label jc.ProwgenLabel, podSpec *kubeapi.PodSpec) *prowconfig.Presubmit {
+func generatePresubmitForTest(name string, info *config.Info, label jc.ProwgenLabel, podSpec *kubeapi.PodSpec, rehearsable bool) *prowconfig.Presubmit {
 	if len(info.Variant) > 0 {
 		name = fmt.Sprintf("%s-%s", info.Variant, name)
 	}
-	base := generateJobBase(name, presubmitPrefix, info, label, podSpec)
+	base := generateJobBase(name, presubmitPrefix, info, label, podSpec, rehearsable)
 	return &prowconfig.Presubmit{
 		JobBase:   base,
 		AlwaysRun: true,
@@ -445,7 +449,7 @@ func generatePostsubmitForTest(name string, info *config.Info, label jc.ProwgenL
 	if len(info.Variant) > 0 {
 		name = fmt.Sprintf("%s-%s", info.Variant, name)
 	}
-	base := generateJobBase(name, postsubmitPrefix, info, label, podSpec)
+	base := generateJobBase(name, postsubmitPrefix, info, label, podSpec, false)
 	return &prowconfig.Postsubmit{
 		JobBase:  base,
 		Brancher: prowconfig.Brancher{Branches: []string{makeBranchExplicit(info.Branch)}},
@@ -483,7 +487,7 @@ func generateJobs(
 			}
 		}
 
-		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(element.As, info, label, podSpec))
+		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(element.As, info, label, podSpec, true))
 	}
 
 	if len(configSpec.Images) > 0 {
@@ -493,7 +497,7 @@ func generateJobs(
 			additionalPresubmitArgs = []string{"--target=[release:latest]"}
 		}
 		podSpec := generateCiOperatorPodSpec(info, nil, "[images]", additionalPresubmitArgs...)
-		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest("images", info, label, podSpec))
+		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest("images", info, label, podSpec, true))
 
 		if configSpec.PromotionConfiguration != nil {
 			additionalPostsubmitArgs := []string{"--promote"}

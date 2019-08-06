@@ -188,21 +188,6 @@ func hasRehearsableLabel(labels map[string]string) bool {
 }
 
 func filterJobSpec(spec *v1.PodSpec, allowVolumes bool) error {
-	// there will always be exactly one container.
-	container := spec.Containers[0]
-
-	if len(container.Command) != 1 || container.Command[0] != "ci-operator" {
-		return fmt.Errorf("cannot rehearse jobs that have Command different from simple 'ci-operator'")
-	}
-
-	for _, arg := range container.Args {
-		if strings.HasPrefix(arg, "--git-ref") || strings.HasPrefix(arg, "-git-ref") {
-			return fmt.Errorf("cannot rehearse jobs that call ci-operator with '--git-ref' arg")
-		}
-		if arg == "--promote" {
-			return fmt.Errorf("cannot rehearse jobs that call ci-operator with '--promote' arg")
-		}
-	}
 	if len(spec.Volumes) > 0 && !allowVolumes {
 		return fmt.Errorf("jobs that need additional volumes mounted are not allowed")
 	}

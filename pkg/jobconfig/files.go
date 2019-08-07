@@ -49,8 +49,8 @@ func (i *Info) Basename() string {
 
 // ConfigMapName returns the configmap in which we expect this file to be uploaded
 func (i *Info) ConfigMapName() string {
-	// put periodics in the misc job since they are not directly correlated to code
-	if i.Type == "periodics" {
+	// put periodics not directly correlated to code in the misc job
+	if i.Type == "periodics" && i.Branch == "" {
 		return fmt.Sprintf("job-config-%s", promotion.FlavorForBranch(""))
 	}
 	// job-config shards for master are already too big, shard them further by type
@@ -150,6 +150,7 @@ func ReadFromDir(dir string) (*prowconfig.JobConfig, error) {
 	jobConfig := &prowconfig.JobConfig{
 		Presubmits:  map[string][]prowconfig.Presubmit{},
 		Postsubmits: map[string][]prowconfig.Postsubmit{},
+		Periodics:   []prowconfig.Periodic{},
 	}
 	if err := OperateOnJobConfigDir(dir, func(config *prowconfig.JobConfig, elements *Info) error {
 		mergeConfigs(jobConfig, config)
@@ -187,6 +188,7 @@ func mergeConfigs(dest, part *prowconfig.JobConfig) {
 			}
 		}
 	}
+	dest.Periodics = append(dest.Periodics, part.Periodics...)
 }
 
 // readFromFile reads Prow job config from a YAML file
@@ -249,6 +251,22 @@ func WriteToDir(jobDir, org, repo string, jobConfig *prowconfig.JobConfig) error
 			}}
 		}
 	}
+	for _, job := range jobConfig.Periodics {
+		if len(job.ExtraRefs) == 0 {
+			continue
+		}
+		if job.ExtraRefs[0].Org != org || job.ExtraRefs[0].Repo != repo {
+			continue
+		}
+		allJobs.Insert(job.Name)
+		branch := MakeRegexFilenameLabel(job.ExtraRefs[0].BaseRef)
+		file := fmt.Sprintf("%s-%s-%s-periodics.yaml", org, repo, branch)
+		if _, ok := files[file]; ok {
+			files[file].Periodics = append(files[file].Periodics, job)
+		} else {
+			files[file] = &prowconfig.JobConfig{Periodics: []prowconfig.Periodic{job}}
+		}
+	}
 
 	jobDirForComponent := filepath.Join(jobDir, org, repo)
 	if err := os.MkdirAll(jobDirForComponent, os.ModePerm); err != nil {
@@ -293,7 +311,7 @@ func mergeJobsIntoFile(prowConfigPath string, jobConfig *prowconfig.JobConfig, a
 // will be updated. All jobs in `destination` that are not overwritten this
 // way and are not otherwise in the set of all jobs being written stay untouched.
 func mergeJobConfig(destination, source *prowconfig.JobConfig, allJobs sets.String) {
-	// We do the same thing for both Presubmits and Postsubmits
+	// We do the same thing for all jobs
 	if source.Presubmits != nil {
 		if destination.Presubmits == nil {
 			destination.Presubmits = map[string][]prowconfig.Presubmit{}
@@ -356,6 +374,35 @@ func mergeJobConfig(destination, source *prowconfig.JobConfig, allJobs sets.Stri
 			destination.Postsubmits[repo] = mergedJobs
 		}
 	}
+	if len(source.Periodics) != 0 {
+		if len(destination.Periodics) == 0 {
+			destination.Periodics = []prowconfig.Periodic{}
+		}
+		oldJobs := map[string]prowconfig.Periodic{}
+		newJobs := map[string]prowconfig.Periodic{}
+		for _, job := range source.Periodics {
+			newJobs[job.Name] = job
+		}
+		for _, job := range destination.Periodics {
+			oldJobs[job.Name] = job
+		}
+
+		var mergedJobs []prowconfig.Periodic
+		for newJobName := range newJobs {
+			newJob := newJobs[newJobName]
+			if oldJob, existed := oldJobs[newJobName]; existed {
+				mergedJobs = append(mergedJobs, mergePeriodics(&oldJob, &newJob))
+			} else {
+				mergedJobs = append(mergedJobs, newJob)
+			}
+		}
+		for oldJobName := range oldJobs {
+			if _, updated := newJobs[oldJobName]; !updated && !allJobs.Has(oldJobName) {
+				mergedJobs = append(mergedJobs, oldJobs[oldJobName])
+			}
+		}
+		destination.Periodics = mergedJobs
+	}
 }
 
 // mergePresubmits merges the two configurations, preferring fields
@@ -377,6 +424,17 @@ func mergePresubmits(old, new *prowconfig.Presubmit) prowconfig.Presubmit {
 // in the new configuration unless the fields are set in the old
 // configuration and cannot be derived from the ci-operator configuration
 func mergePostsubmits(old, new *prowconfig.Postsubmit) prowconfig.Postsubmit {
+	merged := *new
+
+	merged.MaxConcurrency = old.MaxConcurrency
+
+	return merged
+}
+
+// mergePeriodics merges the two configurations, preferring fields
+// in the new configuration unless the fields are set in the old
+// configuration and cannot be derived from the ci-operator configuration
+func mergePeriodics(old, new *prowconfig.Periodic) prowconfig.Periodic {
 	merged := *new
 
 	merged.MaxConcurrency = old.MaxConcurrency

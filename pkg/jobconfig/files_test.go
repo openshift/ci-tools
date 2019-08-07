@@ -29,10 +29,12 @@ func TestMergeConfigs(t *testing.T) {
 			part: &prowconfig.JobConfig{
 				Presubmits:  map[string][]prowconfig.Presubmit{"super/duper": {{JobBase: prowconfig.JobBase{Name: "test"}}}},
 				Postsubmits: map[string][]prowconfig.Postsubmit{"super/duper": {{JobBase: prowconfig.JobBase{Name: "post-test"}}}},
+				Periodics:   []prowconfig.Periodic{{JobBase: prowconfig.JobBase{Name: "periodic-test"}}},
 			},
 			expected: &prowconfig.JobConfig{
 				Presubmits:  map[string][]prowconfig.Presubmit{"super/duper": {{JobBase: prowconfig.JobBase{Name: "test"}}}},
 				Postsubmits: map[string][]prowconfig.Postsubmit{"super/duper": {{JobBase: prowconfig.JobBase{Name: "post-test"}}}},
+				Periodics:   []prowconfig.Periodic{{JobBase: prowconfig.JobBase{Name: "periodic-test"}}},
 			},
 		},
 		{
@@ -40,11 +42,13 @@ func TestMergeConfigs(t *testing.T) {
 			dest: &prowconfig.JobConfig{
 				Presubmits:  map[string][]prowconfig.Presubmit{"super/duper": {{JobBase: prowconfig.JobBase{Name: "test"}}}},
 				Postsubmits: map[string][]prowconfig.Postsubmit{"super/duper": {{JobBase: prowconfig.JobBase{Name: "post-test"}}}},
+				Periodics:   []prowconfig.Periodic{{JobBase: prowconfig.JobBase{Name: "periodic-test"}}},
 			},
 			part: &prowconfig.JobConfig{},
 			expected: &prowconfig.JobConfig{
 				Presubmits:  map[string][]prowconfig.Presubmit{"super/duper": {{JobBase: prowconfig.JobBase{Name: "test"}}}},
 				Postsubmits: map[string][]prowconfig.Postsubmit{"super/duper": {{JobBase: prowconfig.JobBase{Name: "post-test"}}}},
+				Periodics:   []prowconfig.Periodic{{JobBase: prowconfig.JobBase{Name: "periodic-test"}}},
 			},
 		},
 		{
@@ -52,14 +56,17 @@ func TestMergeConfigs(t *testing.T) {
 			dest: &prowconfig.JobConfig{
 				Presubmits:  map[string][]prowconfig.Presubmit{"super/duper": {{JobBase: prowconfig.JobBase{Name: "test"}}}},
 				Postsubmits: map[string][]prowconfig.Postsubmit{"super/duper": {{JobBase: prowconfig.JobBase{Name: "post-test"}}}},
+				Periodics:   []prowconfig.Periodic{{JobBase: prowconfig.JobBase{Name: "periodic-test"}}},
 			},
 			part: &prowconfig.JobConfig{
 				Presubmits:  map[string][]prowconfig.Presubmit{"super/duper": {{JobBase: prowconfig.JobBase{Name: "test-2"}}}},
 				Postsubmits: map[string][]prowconfig.Postsubmit{"super/duper": {{JobBase: prowconfig.JobBase{Name: "post-test-2"}}}},
+				Periodics:   []prowconfig.Periodic{{JobBase: prowconfig.JobBase{Name: "periodic-test-2"}}},
 			},
 			expected: &prowconfig.JobConfig{
 				Presubmits:  map[string][]prowconfig.Presubmit{"super/duper": {{JobBase: prowconfig.JobBase{Name: "test"}}, {JobBase: prowconfig.JobBase{Name: "test-2"}}}},
 				Postsubmits: map[string][]prowconfig.Postsubmit{"super/duper": {{JobBase: prowconfig.JobBase{Name: "post-test"}}, {JobBase: prowconfig.JobBase{Name: "post-test-2"}}}},
+				Periodics:   []prowconfig.Periodic{{JobBase: prowconfig.JobBase{Name: "periodic-test"}}, {JobBase: prowconfig.JobBase{Name: "periodic-test-2"}}},
 			},
 		},
 	}
@@ -67,7 +74,7 @@ func TestMergeConfigs(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			mergeConfigs(testCase.dest, testCase.part)
-			if actual, expected := testCase.dest, testCase.expected; !equality.Semantic.DeepEqual(actual, expected) {
+			if actual, expected := testCase.dest, testCase.expected; !reflect.DeepEqual(actual, expected) {
 				t.Errorf("%s: wanted to get %v, got %v", testCase.name, expected, actual)
 			}
 		})
@@ -217,7 +224,7 @@ func TestMergeJobConfig(t *testing.T) {
 	for _, tc := range tests {
 		mergeJobConfig(tc.destination, tc.source, tc.allJobs)
 
-		if !equality.Semantic.DeepEqual(tc.destination, tc.expected) {
+		if !reflect.DeepEqual(tc.destination, tc.expected) {
 			t.Errorf("expected merged job config diff:\n%s", diff.ObjectReflectDiff(tc.expected, tc.destination))
 		}
 	}
@@ -531,6 +538,18 @@ func TestExtractRepoElementsFromPath(t *testing.T) {
 			expectedError: false,
 		},
 		{
+			name: "simple periodic path parses fine",
+			path: "./org/repo/org-repo-branch-periodics.yaml",
+			expected: &Info{
+				Org:      "org",
+				Repo:     "repo",
+				Branch:   "branch",
+				Type:     "periodics",
+				Filename: "./org/repo/org-repo-branch-periodics.yaml",
+			},
+			expectedError: false,
+		},
+		{
 			name:          "empty path fails to parse",
 			path:          "",
 			expected:      nil,
@@ -597,6 +616,16 @@ func TestInfo_Basename(t *testing.T) {
 			},
 			expected: "org-repo-periodics.yaml",
 		},
+		{
+			name: "path for periodics with branch creates simple basename",
+			info: &Info{
+				Org:    "org",
+				Repo:   "repo",
+				Branch: "branch",
+				Type:   "periodics",
+			},
+			expected: "org-repo-branch-periodics.yaml",
+		},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.expected, func(t *testing.T) {
@@ -625,6 +654,24 @@ func TestInfo_ConfigMapName(t *testing.T) {
 			branch:   "master",
 			jobType:  "postsubmits",
 			expected: "job-config-master-postsubmits",
+		},
+		{
+			name:     "periodic without relationship to a repo goes to misc",
+			branch:   "",
+			jobType:  "periodics",
+			expected: "job-config-misc",
+		},
+		{
+			name:     "periodic with relationship to a repo master branch goes to type shard",
+			branch:   "master",
+			jobType:  "periodics",
+			expected: "job-config-master-periodics",
+		},
+		{
+			name:     "periodic with relationship to a repo branch goes to branch shard",
+			branch:   "release-3.11",
+			jobType:  "periodics",
+			expected: "job-config-3.x",
 		},
 		{
 			name:     "enterprise 3.6 branch goes to 3.x configmap",

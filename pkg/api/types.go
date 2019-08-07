@@ -325,6 +325,11 @@ type TestStepConfiguration struct {
 	// will be mounted inside the test container.
 	Secret *Secret `json:"secret,omitempty"`
 
+	// Cron is how often the test is expected to run outside
+	// of pull request workflows. Setting this field will
+	// create a periodic job instead of a presubmit
+	Cron *string `json:"cron,omitempty"`
+
 	// Only one of the following can be not-null.
 	ContainerTestConfiguration                                *ContainerTestConfiguration                                `json:"container,omitempty"`
 	MultiStageTestConfiguration                               *MultiStageTestConfiguration                               `json:"steps,omitempty"`

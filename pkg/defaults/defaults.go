@@ -309,10 +309,9 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.Job
 	}
 
 	if jobSpec.Refs != nil || len(jobSpec.ExtraRefs) > 0 {
-		buildSteps = append(buildSteps, api.StepConfiguration{SourceStepConfiguration: &api.SourceStepConfiguration{
-			From:      api.PipelineImageStreamTagReferenceRoot,
-			To:        api.PipelineImageStreamTagReferenceSource,
-			PathAlias: config.CanonicalGoRepository,
+		step := api.StepConfiguration{SourceStepConfiguration: &api.SourceStepConfiguration{
+			From: api.PipelineImageStreamTagReferenceRoot,
+			To:   api.PipelineImageStreamTagReferenceSource,
 			ClonerefsImage: api.ImageStreamTagReference{
 				Cluster:   "https://api.ci.openshift.org",
 				Namespace: "ci",
@@ -320,7 +319,11 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.Job
 				Tag:       "latest",
 			},
 			ClonerefsPath: "/app/prow/cmd/clonerefs/app.binary.runfiles/io_k8s_test_infra/prow/cmd/clonerefs/linux_amd64_pure_stripped/app.binary",
-		}})
+		}}
+		if config.CanonicalGoRepository != nil {
+			step.SourceStepConfiguration.PathAlias = *config.CanonicalGoRepository
+		}
+		buildSteps = append(buildSteps, step)
 	}
 
 	if len(config.BinaryBuildCommands) > 0 {

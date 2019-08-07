@@ -255,6 +255,10 @@ tests:
     cluster_profile: aws
 `
 
+func strP(str string) *string {
+	return &str
+}
+
 var parsedConfig = &api.ReleaseBuildConfiguration{
 	InputConfiguration: api.InputConfiguration{
 		BaseImages: map[string]api.ImageStreamTagReference{
@@ -292,7 +296,7 @@ var parsedConfig = &api.ReleaseBuildConfiguration{
 	TestBinaryBuildCommands: "",
 	RpmBuildCommands:        "make build-rpms",
 	RpmBuildLocation:        "",
-	CanonicalGoRepository:   "github.com/openshift/origin",
+	CanonicalGoRepository:   strP("github.com/openshift/origin"),
 	Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
 		From: "base",
 		To:   "template-service-broker",

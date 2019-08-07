@@ -506,13 +506,13 @@ k8s.io/client-go/third_party/forked/golang/template
 k8s.io/klog
 # k8s.io/kube-openapi v0.0.0-20180731170545-e3762e86a74c
 k8s.io/kube-openapi/pkg/util/proto
-# k8s.io/test-infra v0.0.0-20190725202746-eda4ec4bf5c9
+# k8s.io/test-infra v0.0.0-20190806224052-84f7d47e97f3
 k8s.io/test-infra/prow/apis/prowjobs/v1
+k8s.io/test-infra/prow/pod-utils/downwardapi
 k8s.io/test-infra/prow/config
 k8s.io/test-infra/prow/hook
 k8s.io/test-infra/prow/plugins
 k8s.io/test-infra/prow/github
-k8s.io/test-infra/prow/pod-utils/downwardapi
 k8s.io/test-infra/prow/plugins/updateconfig
 k8s.io/test-infra/prow/flagutil
 k8s.io/test-infra/prow/client/clientset/versioned

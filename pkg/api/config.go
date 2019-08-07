@@ -11,11 +11,17 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 )
 
+// ValidateAtRuntime validates all the configuration's values without knowledge of config
+// repo structure
+func (config *ReleaseBuildConfiguration) ValidateAtRuntime() error {
+	return config.Validate("", "")
+}
+
 // Validate validates all the configuration's values.
-func (config *ReleaseBuildConfiguration) Validate() error {
+func (config *ReleaseBuildConfiguration) Validate(org, repo string) error {
 	var validationErrors []error
 
-	validationErrors = append(validationErrors, validateReleaseBuildConfiguration(config)...)
+	validationErrors = append(validationErrors, validateReleaseBuildConfiguration(config, org, repo)...)
 	validationErrors = append(validationErrors, validateBuildRootImageConfiguration("build_root", config.InputConfiguration.BuildRootImage, len(config.Images) > 0)...)
 	validationErrors = append(validationErrors, validateTestStepConfiguration("tests", config.Tests, config.ReleaseTagConfiguration)...)
 
@@ -280,7 +286,7 @@ func validateTestConfigurationType(fieldRoot string, test TestStepConfiguration,
 	return validationErrors
 }
 
-func validateReleaseBuildConfiguration(input *ReleaseBuildConfiguration) []error {
+func validateReleaseBuildConfiguration(input *ReleaseBuildConfiguration, org, repo string) []error {
 	var validationErrors []error
 
 	if len(input.Tests) == 0 && len(input.Images) == 0 {
@@ -293,6 +299,12 @@ func validateReleaseBuildConfiguration(input *ReleaseBuildConfiguration) []error
 
 	if input.BaseRPMImages != nil && len(input.RpmBuildCommands) == 0 {
 		validationErrors = append(validationErrors, errors.New("'base_rpm_images' defined but no 'rpm_build_commands' found"))
+	}
+
+	if org != "" && repo != "" {
+		if input.CanonicalGoRepository != nil && *input.CanonicalGoRepository == fmt.Sprintf("github.com/%s/%s", org, repo) {
+			validationErrors = append(validationErrors, errors.New("'canonical_go_repository' provides the default location, so is unnecessary"))
+		}
 	}
 
 	validationErrors = append(validationErrors, validateResources("resources", input.Resources)...)

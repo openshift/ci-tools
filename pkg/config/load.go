@@ -16,7 +16,7 @@ import (
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 )
 
-func readCiOperatorConfig(configFilePath string) (*cioperatorapi.ReleaseBuildConfiguration, error) {
+func readCiOperatorConfig(configFilePath string, info Info) (*cioperatorapi.ReleaseBuildConfiguration, error) {
 	data, err := ioutil.ReadFile(configFilePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read ci-operator config (%v)", err)
@@ -27,7 +27,7 @@ func readCiOperatorConfig(configFilePath string) (*cioperatorapi.ReleaseBuildCon
 		return nil, fmt.Errorf("failed to load ci-operator config (%v)", err)
 	}
 
-	if err := configSpec.Validate(); err != nil {
+	if err := configSpec.Validate(info.Org, info.Repo); err != nil {
 		return nil, fmt.Errorf("invalid ci-operator config: %v", err)
 	}
 
@@ -107,13 +107,12 @@ func isConfigFile(path string, info os.FileInfo) bool {
 // OperateOnCIOperatorConfig runs the callback on the parsed data from
 // the CI Operator configuration file provided
 func OperateOnCIOperatorConfig(path string, callback func(*cioperatorapi.ReleaseBuildConfiguration, *Info) error) error {
-	jobConfig, err := readCiOperatorConfig(path)
+	info, err := InfoFromPath(path)
 	if err != nil {
-		logrus.WithField("source-file", path).WithError(err).Error("Failed to load CI Operator configuration")
+		logrus.WithField("source-file", path).WithError(err).Error("Failed to resolve info from CI Operator configuration path")
 		return err
 	}
-
-	info, err := InfoFromPath(path)
+	jobConfig, err := readCiOperatorConfig(path, *info)
 	if err != nil {
 		logrus.WithField("source-file", path).WithError(err).Error("Failed to load CI Operator configuration")
 		return err

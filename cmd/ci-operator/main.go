@@ -269,7 +269,7 @@ func (o *options) Complete() error {
 	}
 	o.configSpec = config
 
-	if err := o.configSpec.Validate(); err != nil {
+	if err := o.configSpec.ValidateAtRuntime(); err != nil {
 		return err
 	}
 

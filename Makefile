@@ -5,6 +5,12 @@ build:
 	go build ./cmd/...
 .PHONY: build
 
+build_folder := ./_output
+
+build-bin:
+	go list ./cmd/... | while read pkg; do go build -o $(build_folder)/$$(basename $${pkg}) $${pkg}; done
+.PHONY: build-bin
+
 install:
 	go install ./cmd/...
 .PHONY: install

@@ -15,7 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/util/diff"
-	v1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
+	"k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
 
 	ciop "github.com/openshift/ci-tools/pkg/api"
@@ -1652,6 +1652,83 @@ func TestPruneStaleJobs(t *testing.T) {
 
 			if pruned := prune(tc.jobconfig); !reflect.DeepEqual(pruned, expected) {
 				t.Errorf("Pruned config differs:\n%s", diff.ObjectReflectDiff(expected, pruned))
+			}
+		})
+	}
+}
+
+func TestGenerateJobBase(t *testing.T) {
+	yes := true
+	var testCases = []struct {
+		testName    string
+		name        string
+		prefix      string
+		info        *config.Info
+		label       jobconfig.ProwgenLabel
+		podSpec     *kubeapi.PodSpec
+		rehearsable bool
+		expected    prowconfig.JobBase
+	}{
+		{
+			testName: "no special options",
+			name:     "test",
+			prefix:   "pull",
+			info:     &config.Info{Org: "org", Repo: "repo", Branch: "branch"},
+			label:    jobconfig.Generated,
+			podSpec:  &kubeapi.PodSpec{Containers: []kubeapi.Container{{Name: "test"}}},
+			expected: prowconfig.JobBase{
+				Name:  "pull-ci-org-repo-branch-test",
+				Agent: "kubernetes",
+				Labels: map[string]string{
+					"ci-operator.openshift.io/prowgen-controlled": "true",
+				},
+				Spec:          &kubeapi.PodSpec{Containers: []kubeapi.Container{{Name: "test"}}},
+				UtilityConfig: prowconfig.UtilityConfig{Decorate: true, DecorationConfig: &v1.DecorationConfig{SkipCloning: &yes}},
+			},
+		},
+		{
+			testName:    "rehearsable",
+			name:        "test",
+			prefix:      "pull",
+			info:        &config.Info{Org: "org", Repo: "repo", Branch: "branch"},
+			label:       jobconfig.Generated,
+			podSpec:     &kubeapi.PodSpec{Containers: []kubeapi.Container{{Name: "test"}}},
+			rehearsable: true,
+			expected: prowconfig.JobBase{
+				Name:  "pull-ci-org-repo-branch-test",
+				Agent: "kubernetes",
+				Labels: map[string]string{
+					"ci-operator.openshift.io/prowgen-controlled": "true",
+					"pj-rehearse.openshift.io/can-be-rehearsed":   "true",
+				},
+				Spec:          &kubeapi.PodSpec{Containers: []kubeapi.Container{{Name: "test"}}},
+				UtilityConfig: prowconfig.UtilityConfig{Decorate: true, DecorationConfig: &v1.DecorationConfig{SkipCloning: &yes}},
+			},
+		},
+		{
+			testName: "config variant",
+			name:     "test",
+			prefix:   "pull",
+			info:     &config.Info{Org: "org", Repo: "repo", Branch: "branch", Variant: "whatever"},
+			label:    jobconfig.Generated,
+			podSpec:  &kubeapi.PodSpec{Containers: []kubeapi.Container{{Name: "test"}}},
+			expected: prowconfig.JobBase{
+				Name:  "pull-ci-org-repo-branch-test",
+				Agent: "kubernetes",
+				Labels: map[string]string{
+					"ci-operator.openshift.io/prowgen-controlled": "true",
+					"ci-operator.openshift.io/variant":            "whatever",
+				},
+				Spec:          &kubeapi.PodSpec{Containers: []kubeapi.Container{{Name: "test"}}},
+				UtilityConfig: prowconfig.UtilityConfig{Decorate: true, DecorationConfig: &v1.DecorationConfig{SkipCloning: &yes}},
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.testName, func(t *testing.T) {
+			if actual, expected := generateJobBase(testCase.name, testCase.prefix, testCase.info, testCase.label, testCase.podSpec, testCase.rehearsable), testCase.expected; !reflect.DeepEqual(actual, expected) {
+				t.Errorf("%s: got incorrect job base: %v", testCase.testName, diff.ObjectReflectDiff(actual, expected))
 			}
 		})
 	}

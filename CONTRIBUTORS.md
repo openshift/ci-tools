@@ -15,10 +15,10 @@ To obtain sources and build the binaries provided by this repo, run the followin
 ```
 $ go get github.com/openshift/ci-tools
 $ cd ${GOPATH}/src/github.com/openshift/ci-tools
-$ make build-bin
+$ make install
 ```
 
-The binaries are in `./_output/` folder.
+The binaries are in `${GOPATH}/bin` folder.
 
 ## Test
 
@@ -42,16 +42,4 @@ Eg, upgrade the version of `k8s.io/test-infra` to the latest of it master branch
 $ GO111MODULE=on go get k8s.io/test-infra
 $ GO111MODULE=on go mod vendor
 ```
-
-TODO: Figure out the error when
-
-```
-###From `go help get`
-###The -u flag instructs get to use the network to update the named packages
-###and their dependencies. By default, get uses the network to check out
-###missing packages but does not use it to look for updates to existing packages.
-$ GO111MODULE=on go get -u k8s.io/test-infra
-...
-go get: error loading module requirements
-
-```
+****

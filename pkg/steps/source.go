@@ -43,7 +43,7 @@ var (
 	JobSpecAnnotation = fmt.Sprintf("%s/%s", CiAnnotationPrefix, "job-spec")
 )
 
-func determineWorkDir(refs *prowapi.Refs, extraRefs []prowapi.Refs) string {
+func determineWorkDir(refs *prowapi.Refs, extraRefs []prowapi.Refs) (*prowapi.Refs, error) {
 	var totalRefs []prowapi.Refs
 	if refs != nil {
 		totalRefs = append(totalRefs, *refs)
@@ -52,17 +52,26 @@ func determineWorkDir(refs *prowapi.Refs, extraRefs []prowapi.Refs) string {
 
 	for _, ref := range totalRefs {
 		if ref.WorkDir {
-			return fmt.Sprintf("github.com/%s/%s", ref.Org, ref.Repo)
+			return &ref, nil
 		}
 	}
-	return fmt.Sprintf("github.com/%s/%s", totalRefs[0].Org, totalRefs[0].Repo)
+
+	if len(totalRefs) == 0 {
+		return nil, fmt.Errorf("no refs or extraRefs found in jobspec")
+	}
+
+	return &totalRefs[0], nil
 }
 
 func sourceDockerfile(fromTag api.PipelineImageStreamTagReference, pathAlias string, job *api.JobSpec) string {
 	workingDir := pathAlias
 
 	if len(workingDir) == 0 {
-		workingDir = determineWorkDir(job.Refs, job.ExtraRefs)
+		if ref, err := determineWorkDir(job.Refs, job.ExtraRefs); err != nil {
+			log.Printf("%v", err)
+		} else {
+			workingDir = fmt.Sprintf("github.com/%s/%s", ref.Org, ref.Repo)
+		}
 	}
 
 	return fmt.Sprintf(`

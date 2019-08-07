@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"log"
 
-	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
-
 	buildapi "github.com/openshift/api/build/v1"
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 
@@ -27,15 +25,12 @@ func (s *gitSourceStep) Inputs(ctx context.Context, dry bool) (api.InputDefiniti
 }
 
 func (s *gitSourceStep) Run(ctx context.Context, dry bool) error {
-	var refs *prowapi.Refs
-	if s.jobSpec.Refs != nil {
-		refs = s.jobSpec.Refs
-	} else if len(s.jobSpec.ExtraRefs) != 0 {
-		refs = &s.jobSpec.ExtraRefs[0]
-	} else {
+	refs, err := determineWorkDir(s.jobSpec.Refs, s.jobSpec.ExtraRefs)
+	if err != nil {
 		log.Printf("Nothing to build source image from, no refs")
 		return nil
 	}
+
 	return handleBuild(s.buildClient, buildFromSource(s.jobSpec, "", api.PipelineImageStreamTagReferenceRoot, buildapi.BuildSource{
 		Type:       buildapi.BuildSourceGit,
 		ContextDir: s.config.ContextDir,

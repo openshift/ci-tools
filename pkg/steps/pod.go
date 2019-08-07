@@ -11,6 +11,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/test-infra/prow/pod-utils/decorate"
+	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 
@@ -192,6 +194,10 @@ func PodStep(name string, config PodStepConfiguration, resources api.ResourceCon
 }
 
 func (s *podStep) generatePodForStep(image string, containerResources coreapi.ResourceRequirements) (*coreapi.Pod, error) {
+	envMap, err := downwardapi.EnvForSpec(s.jobSpec.JobSpec)
+	if err != nil {
+		return nil, err
+	}
 	pod := &coreapi.Pod{
 		ObjectMeta: meta.ObjectMeta{
 			Name: s.config.As,
@@ -213,6 +219,7 @@ func (s *podStep) generatePodForStep(image string, containerResources coreapi.Re
 			Containers: []coreapi.Container{
 				{
 					Image:                    image,
+					Env:                      decorate.KubeEnv(envMap),
 					Name:                     s.name,
 					Command:                  []string{"/bin/sh", "-c", "#!/bin/sh\nset -eu\n" + s.config.Commands},
 					Resources:                containerResources,

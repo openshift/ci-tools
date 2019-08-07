@@ -8,9 +8,7 @@ import (
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 )
 
-// JobSpec is a superset of the upstream spec, but
-// we do not import it as importing test-infra is a
-// massive hassle.
+// JobSpec is a superset of the upstream spec.
 type JobSpec struct {
 	downwardapi.JobSpec `json:",inline"`
 

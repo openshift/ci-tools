@@ -9,6 +9,8 @@ import (
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/client-go/kubernetes/fake"
+	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
+	"k8s.io/test-infra/prow/pod-utils/decorate"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -41,6 +43,14 @@ func preparePodStep(t *testing.T, namespace string) (*podStep, stepExpectation, 
 			Job:       jobName,
 			BuildID:   buildID,
 			ProwJobID: pjID,
+			Type:      prowapi.PresubmitJob,
+			Refs: &prowapi.Refs{
+				Org:     "org",
+				Repo:    "repo",
+				Pulls:   []prowapi.Pull{{Number: 123, SHA: "72532003f9e01e89f455187dd92c275204bc9781"}},
+				BaseRef: "base-ref",
+				BaseSHA: "base-sha",
+			},
 		},
 		Namespace: namespace,
 	}
@@ -96,6 +106,20 @@ func makeExpectedPod(step *podStep, phaseAfterRun v1.PodPhase) *v1.Pod {
 					Image:                    "somename:sometag",
 					Command:                  []string{"/bin/sh", "-c", "#!/bin/sh\nset -eu\nlaunch-tests"},
 					TerminationMessagePolicy: v1.TerminationMessageFallbackToLogsOnError,
+					Env: decorate.KubeEnv(map[string]string{
+						"BUILD_ID":      "test-build-id",
+						"JOB_NAME":      "very-cool-prow-job",
+						"JOB_SPEC":      `{"type":"presubmit","job":"very-cool-prow-job","buildid":"test-build-id","prowjobid":"prow-job-id","refs":{"org":"org","repo":"repo","base_ref":"base-ref","base_sha":"base-sha","pulls":[{"number":123,"author":"","sha":"72532003f9e01e89f455187dd92c275204bc9781"}]}}`,
+						"JOB_TYPE":      string(prowapi.PresubmitJob),
+						"PROW_JOB_ID":   "prow-job-id",
+						"PULL_BASE_REF": "base-ref",
+						"PULL_BASE_SHA": "base-sha",
+						"PULL_NUMBER":   "123",
+						"PULL_PULL_SHA": "72532003f9e01e89f455187dd92c275204bc9781",
+						"PULL_REFS":     step.jobSpec.JobSpec.Refs.String(),
+						"REPO_NAME":     "repo",
+						"REPO_OWNER":    "org",
+					}),
 				},
 			},
 			RestartPolicy: v1.RestartPolicyNever,
@@ -337,6 +361,7 @@ func expectedPodStepTemplate() *podStep {
 				Job:       "podStep.jobSpec.Job",
 				BuildID:   "podStep.jobSpec.BuildId",
 				ProwJobID: "podStep.jobSpec.ProwJobID",
+				Type:      "periodic",
 			},
 		},
 		name: "podStep.name",

@@ -555,7 +555,7 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 		},
 	}}
 	for _, tc := range tests {
-		presubmit := generatePresubmitForTest(tc.name, tc.repoInfo, jobconfig.Generated, nil, true) // podSpec tested in generatePodSpec
+		presubmit := generatePresubmitForTest(tc.name, tc.repoInfo, jobconfig.Generated, nil, true, nil) // podSpec tested in generatePodSpec
 		if !equality.Semantic.DeepEqual(presubmit, tc.expected) {
 			t.Errorf("expected presubmit diff:\n%s", diff.ObjectDiff(tc.expected, presubmit))
 		}
@@ -635,7 +635,7 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 		},
 	}
 	for _, tc := range tests {
-		postsubmit := generatePostsubmitForTest(tc.name, tc.repoInfo, jobconfig.Generated, nil) // podSpec tested in TestGeneratePodSpec
+		postsubmit := generatePostsubmitForTest(tc.name, tc.repoInfo, jobconfig.Generated, nil, nil) // podSpec tested in TestGeneratePodSpec
 		if !equality.Semantic.DeepEqual(postsubmit, tc.expected) {
 			t.Errorf("expected postsubmit diff:\n%s", diff.ObjectDiff(tc.expected, postsubmit))
 		}
@@ -1659,6 +1659,7 @@ func TestPruneStaleJobs(t *testing.T) {
 
 func TestGenerateJobBase(t *testing.T) {
 	yes := true
+	path := "/some/where"
 	var testCases = []struct {
 		testName    string
 		name        string
@@ -1667,6 +1668,7 @@ func TestGenerateJobBase(t *testing.T) {
 		label       jobconfig.ProwgenLabel
 		podSpec     *kubeapi.PodSpec
 		rehearsable bool
+		pathAlias   *string
 		expected    prowconfig.JobBase
 	}{
 		{
@@ -1723,11 +1725,30 @@ func TestGenerateJobBase(t *testing.T) {
 				UtilityConfig: prowconfig.UtilityConfig{Decorate: true, DecorationConfig: &v1.DecorationConfig{SkipCloning: &yes}},
 			},
 		},
+		{
+			testName:  "path alias",
+			name:      "test",
+			prefix:    "pull",
+			info:      &config.Info{Org: "org", Repo: "repo", Branch: "branch", Variant: "whatever"},
+			label:     jobconfig.Generated,
+			podSpec:   &kubeapi.PodSpec{Containers: []kubeapi.Container{{Name: "test"}}},
+			pathAlias: &path,
+			expected: prowconfig.JobBase{
+				Name:  "pull-ci-org-repo-branch-test",
+				Agent: "kubernetes",
+				Labels: map[string]string{
+					"ci-operator.openshift.io/prowgen-controlled": "true",
+					"ci-operator.openshift.io/variant":            "whatever",
+				},
+				Spec:          &kubeapi.PodSpec{Containers: []kubeapi.Container{{Name: "test"}}},
+				UtilityConfig: prowconfig.UtilityConfig{Decorate: true, DecorationConfig: &v1.DecorationConfig{SkipCloning: &yes}, PathAlias: "/some/where"},
+			},
+		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.testName, func(t *testing.T) {
-			if actual, expected := generateJobBase(testCase.name, testCase.prefix, testCase.info, testCase.label, testCase.podSpec, testCase.rehearsable), testCase.expected; !reflect.DeepEqual(actual, expected) {
+			if actual, expected := generateJobBase(testCase.name, testCase.prefix, testCase.info, testCase.label, testCase.podSpec, testCase.rehearsable, testCase.pathAlias), testCase.expected; !reflect.DeepEqual(actual, expected) {
 				t.Errorf("%s: got incorrect job base: %v", testCase.testName, diff.ObjectReflectDiff(actual, expected))
 			}
 		})

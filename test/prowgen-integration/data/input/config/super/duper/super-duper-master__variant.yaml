@@ -32,3 +32,4 @@ tests:
   commands: make test-unit
   container:
     from: src
+canonical_go_repository: whoa.com/super/duper

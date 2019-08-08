@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"k8s.io/test-infra/prow/clonerefs"
+	"k8s.io/test-infra/prow/pod-utils/decorate"
 	"log"
 	"os"
 	"sort"
@@ -43,36 +45,15 @@ var (
 	JobSpecAnnotation = fmt.Sprintf("%s/%s", CiAnnotationPrefix, "job-spec")
 )
 
-func determineWorkDir(refs *prowapi.Refs, extraRefs []prowapi.Refs) string {
-	var totalRefs []prowapi.Refs
-	if refs != nil {
-		totalRefs = append(totalRefs, *refs)
-	}
-	totalRefs = append(totalRefs, extraRefs...)
-
-	for _, ref := range totalRefs {
-		if ref.WorkDir {
-			return fmt.Sprintf("github.com/%s/%s", ref.Org, ref.Repo)
-		}
-	}
-	return fmt.Sprintf("github.com/%s/%s", totalRefs[0].Org, totalRefs[0].Repo)
-}
-
-func sourceDockerfile(fromTag api.PipelineImageStreamTagReference, pathAlias string, job *api.JobSpec) string {
-	workingDir := pathAlias
-
-	if len(workingDir) == 0 {
-		workingDir = determineWorkDir(job.Refs, job.ExtraRefs)
-	}
-
+func sourceDockerfile(fromTag api.PipelineImageStreamTagReference, workingDir string) string {
 	return fmt.Sprintf(`
 FROM %s:%s
 ADD ./app.binary /clonerefs
 RUN umask 0002 && /clonerefs && find %s/src -type d -not -perm -0775 | xargs -r chmod g+xw
-WORKDIR %s/src/%s/
+WORKDIR %s/
 ENV GOPATH=%s
 RUN git submodule update --init
-`, api.PipelineImageStream, fromTag, gopath, gopath, workingDir, gopath)
+`, api.PipelineImageStream, fromTag, gopath, workingDir, gopath)
 }
 
 type sourceStep struct {
@@ -99,7 +80,15 @@ func (s *sourceStep) Run(ctx context.Context, dry bool) error {
 }
 
 func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clonerefsRef coreapi.ObjectReference, resources api.ResourceConfiguration) *buildapi.Build {
-	dockerfile := sourceDockerfile(config.From, config.PathAlias, jobSpec)
+	var refs []prowapi.Refs
+	if jobSpec.Refs != nil {
+		refs = append(refs, *jobSpec.Refs)
+	}
+	for _, r := range jobSpec.ExtraRefs {
+		refs = append(refs, r)
+	}
+
+	dockerfile := sourceDockerfile(config.From, decorate.DetermineWorkDir(gopath, refs))
 
 	build := buildFromSource(
 		jobSpec, config.From, config.To,
@@ -122,47 +111,24 @@ func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clone
 		resources,
 	)
 
-	optionsSpec := map[string]interface{}{
-		"src_root":       gopath,
-		"log":            "/dev/null",
-		"git_user_name":  "ci-robot",
-		"git_user_email": "ci-robot@openshift.io",
-		"refs":           injectPathAlias(jobSpec, config.PathAlias),
+	optionsSpec := clonerefs.Options{
+		SrcRoot:      gopath,
+		Log:          "/dev/null",
+		GitUserName:  "ci-robot",
+		GitUserEmail: "ci-robot@openshift.io",
+		GitRefs:      refs,
 	}
-	optionsJSON, err := json.Marshal(optionsSpec)
+	optionsJSON, err := clonerefs.Encode(optionsSpec)
 	if err != nil {
 		panic(fmt.Errorf("couldn't create JSON spec for clonerefs: %v", err))
 	}
 
 	build.Spec.CommonSpec.Strategy.DockerStrategy.Env = append(
 		build.Spec.CommonSpec.Strategy.DockerStrategy.Env,
-		coreapi.EnvVar{Name: "CLONEREFS_OPTIONS", Value: string(optionsJSON)},
+		coreapi.EnvVar{Name: clonerefs.JSONConfigEnvVar, Value: optionsJSON},
 	)
 
 	return build
-}
-
-func injectPathAlias(jobSpec *api.JobSpec, pathAlias string) interface{} {
-	var refs []interface{}
-	var found bool
-
-	for _, ref := range jobSpec.ExtraRefs {
-		if ref.WorkDir {
-			ref.PathAlias = pathAlias
-			found = true
-		}
-		refs = append(refs, ref)
-	}
-
-	if jobSpec.Refs != nil {
-		ref := jobSpec.Refs
-		if !found {
-			ref.PathAlias = pathAlias
-		}
-		refs = append(refs, jobSpec.Refs)
-	}
-
-	return refs
 }
 
 func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStreamTagReference, source buildapi.BuildSource, dockerfilePath string, resources api.ResourceConfiguration) *buildapi.Build {

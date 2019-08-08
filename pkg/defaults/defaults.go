@@ -320,9 +320,6 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.Job
 			},
 			ClonerefsPath: "/app/prow/cmd/clonerefs/app.binary.runfiles/io_k8s_test_infra/prow/cmd/clonerefs/linux_amd64_pure_stripped/app.binary",
 		}}
-		if config.CanonicalGoRepository != nil {
-			step.SourceStepConfiguration.PathAlias = *config.CanonicalGoRepository
-		}
 		buildSteps = append(buildSteps, step)
 	}
 

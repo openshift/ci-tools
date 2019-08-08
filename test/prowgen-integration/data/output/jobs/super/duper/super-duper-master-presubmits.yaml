@@ -332,6 +332,7 @@ presubmits:
       ci-operator.openshift.io/variant: variant
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
     name: pull-ci-super-duper-master-variant-images
+    path_alias: whoa.com/super/duper
     rerun_command: /test variant-images
     spec:
       containers:
@@ -378,6 +379,7 @@ presubmits:
       ci-operator.openshift.io/variant: variant
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
     name: pull-ci-super-duper-master-variant-unit
+    path_alias: whoa.com/super/duper
     rerun_command: /test variant-unit
     spec:
       containers:

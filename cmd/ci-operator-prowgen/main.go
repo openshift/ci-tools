@@ -11,7 +11,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/promotion"
 	"github.com/sirupsen/logrus"
-	v1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
+	"k8s.io/test-infra/prow/apis/prowjobs/v1"
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
@@ -398,7 +398,7 @@ func generateConfigMapVolume(name string, templates []string) kubeapi.Volume {
 	return ret
 }
 
-func generateJobBase(name, prefix string, info *config.Info, label jc.ProwgenLabel, podSpec *kubeapi.PodSpec, rehearsable bool) prowconfig.JobBase {
+func generateJobBase(name, prefix string, info *config.Info, label jc.ProwgenLabel, podSpec *kubeapi.PodSpec, rehearsable bool, pathAlias *string) prowconfig.JobBase {
 	labels := map[string]string{jc.ProwJobLabelGenerated: string(label)}
 
 	if rehearsable {
@@ -416,8 +416,8 @@ func generateJobBase(name, prefix string, info *config.Info, label jc.ProwgenLab
 	}
 
 	newTrue := true
-	return prowconfig.JobBase{
-		Agent:  "kubernetes",
+	base := prowconfig.JobBase{
+		Agent:  string(v1.KubernetesAgent),
 		Labels: labels,
 		Name:   jobName,
 		Spec:   podSpec,
@@ -426,13 +426,17 @@ func generateJobBase(name, prefix string, info *config.Info, label jc.ProwgenLab
 			Decorate:         true,
 		},
 	}
+	if pathAlias != nil {
+		base.PathAlias = *pathAlias
+	}
+	return base
 }
 
-func generatePresubmitForTest(name string, info *config.Info, label jc.ProwgenLabel, podSpec *kubeapi.PodSpec, rehearsable bool) *prowconfig.Presubmit {
+func generatePresubmitForTest(name string, info *config.Info, label jc.ProwgenLabel, podSpec *kubeapi.PodSpec, rehearsable bool, pathAlias *string) *prowconfig.Presubmit {
 	if len(info.Variant) > 0 {
 		name = fmt.Sprintf("%s-%s", info.Variant, name)
 	}
-	base := generateJobBase(name, presubmitPrefix, info, label, podSpec, rehearsable)
+	base := generateJobBase(name, presubmitPrefix, info, label, podSpec, rehearsable, pathAlias)
 	return &prowconfig.Presubmit{
 		JobBase:   base,
 		AlwaysRun: true,
@@ -445,11 +449,11 @@ func generatePresubmitForTest(name string, info *config.Info, label jc.ProwgenLa
 	}
 }
 
-func generatePostsubmitForTest(name string, info *config.Info, label jc.ProwgenLabel, podSpec *kubeapi.PodSpec) *prowconfig.Postsubmit {
+func generatePostsubmitForTest(name string, info *config.Info, label jc.ProwgenLabel, podSpec *kubeapi.PodSpec, pathAlias *string) *prowconfig.Postsubmit {
 	if len(info.Variant) > 0 {
 		name = fmt.Sprintf("%s-%s", info.Variant, name)
 	}
-	base := generateJobBase(name, postsubmitPrefix, info, label, podSpec, false)
+	base := generateJobBase(name, postsubmitPrefix, info, label, podSpec, false, pathAlias)
 	return &prowconfig.Postsubmit{
 		JobBase:  base,
 		Brancher: prowconfig.Brancher{Branches: []string{makeBranchExplicit(info.Branch)}},
@@ -487,7 +491,7 @@ func generateJobs(
 			}
 		}
 
-		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(element.As, info, label, podSpec, true))
+		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(element.As, info, label, podSpec, true, configSpec.CanonicalGoRepository))
 	}
 
 	if len(configSpec.Images) > 0 {
@@ -497,7 +501,7 @@ func generateJobs(
 			additionalPresubmitArgs = []string{"--target=[release:latest]"}
 		}
 		podSpec := generateCiOperatorPodSpec(info, nil, "[images]", additionalPresubmitArgs...)
-		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest("images", info, label, podSpec, true))
+		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest("images", info, label, podSpec, true, configSpec.CanonicalGoRepository))
 
 		if configSpec.PromotionConfiguration != nil {
 			additionalPostsubmitArgs := []string{"--promote"}
@@ -505,7 +509,7 @@ func generateJobs(
 				additionalPostsubmitArgs = append(additionalPostsubmitArgs, fmt.Sprintf("--target=%s", configSpec.PromotionConfiguration.AdditionalImages[additionalImage]))
 			}
 			podSpec := generateCiOperatorPodSpec(info, nil, "[images]", additionalPostsubmitArgs...)
-			postsubmits[orgrepo] = append(postsubmits[orgrepo], *generatePostsubmitForTest("images", info, label, podSpec))
+			postsubmits[orgrepo] = append(postsubmits[orgrepo], *generatePostsubmitForTest("images", info, label, podSpec, configSpec.CanonicalGoRepository))
 		}
 	}
 

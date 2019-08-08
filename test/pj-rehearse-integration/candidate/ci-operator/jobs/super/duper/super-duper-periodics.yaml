@@ -5,6 +5,8 @@ periodics:
   interval: 24h
   name: periodic-ci-super-duper-e2e
   skip_cloning: true
+  labels:
+    pj-rehearse.openshift.io/can-be-rehearsed: "true"
   extra_refs:
   - org: super
     repo: duper
@@ -62,6 +64,8 @@ periodics:
   interval: 24h
   name: periodic-ci-super-duper-no-ciop
   skip_cloning: true
+  labels:
+    pj-rehearse.openshift.io/can-be-rehearsed: "true"
   extra_refs:
   - org: super
     repo: duper

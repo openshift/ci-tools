@@ -90,14 +90,19 @@ func (s *sourceStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition,
 }
 
 func (s *sourceStep) Run(ctx context.Context, dry bool) error {
-	dockerfile := sourceDockerfile(s.config.From, s.config.PathAlias, s.jobSpec)
-
 	clonerefsRef, err := istObjectReference(s.clonerefsSrcClient, s.config.ClonerefsImage)
 	if err != nil {
 		return fmt.Errorf("could not resolve clonerefs source: %v", err)
 	}
+
+	return handleBuild(s.buildClient, createBuild(s.config, s.jobSpec, clonerefsRef, s.resources), dry, s.artifactDir)
+}
+
+func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clonerefsRef coreapi.ObjectReference, resources api.ResourceConfiguration) *buildapi.Build {
+	dockerfile := sourceDockerfile(config.From, config.PathAlias, jobSpec)
+
 	build := buildFromSource(
-		s.jobSpec, s.config.From, s.config.To,
+		jobSpec, config.From, config.To,
 		buildapi.BuildSource{
 			Type:       buildapi.BuildSourceDockerfile,
 			Dockerfile: &dockerfile,
@@ -106,7 +111,7 @@ func (s *sourceStep) Run(ctx context.Context, dry bool) error {
 					From: clonerefsRef,
 					Paths: []buildapi.ImageSourcePath{
 						{
-							SourcePath:     s.config.ClonerefsPath,
+							SourcePath:     config.ClonerefsPath,
 							DestinationDir: ".",
 						},
 					},
@@ -114,7 +119,7 @@ func (s *sourceStep) Run(ctx context.Context, dry bool) error {
 			},
 		},
 		"",
-		s.resources,
+		resources,
 	)
 
 	optionsSpec := map[string]interface{}{
@@ -122,7 +127,7 @@ func (s *sourceStep) Run(ctx context.Context, dry bool) error {
 		"log":            "/dev/null",
 		"git_user_name":  "ci-robot",
 		"git_user_email": "ci-robot@openshift.io",
-		"refs":           injectPathAlias(s.jobSpec, s.config.PathAlias),
+		"refs":           injectPathAlias(jobSpec, config.PathAlias),
 	}
 	optionsJSON, err := json.Marshal(optionsSpec)
 	if err != nil {
@@ -134,7 +139,7 @@ func (s *sourceStep) Run(ctx context.Context, dry bool) error {
 		coreapi.EnvVar{Name: "CLONEREFS_OPTIONS", Value: string(optionsJSON)},
 	)
 
-	return handleBuild(s.buildClient, build, dry, s.artifactDir)
+	return build
 }
 
 func injectPathAlias(jobSpec *api.JobSpec, pathAlias string) interface{} {

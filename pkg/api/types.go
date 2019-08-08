@@ -412,7 +412,7 @@ type OpenshiftInstallerClusterTestConfiguration struct {
 	// the initial payload and the installer image from that
 	// will be upgraded. The `run-upgrade-tests` function will be
 	// available for the commands.
-	Upgrade bool `json:"upgrade"`
+	Upgrade bool `json:"upgrade,omitempty"`
 }
 
 // OpenshiftInstallerSrcClusterTestConfiguration describes a

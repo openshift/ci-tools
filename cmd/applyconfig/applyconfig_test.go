@@ -1,8 +1,12 @@
 package main
 
 import (
+	"os/exec"
 	"reflect"
+	"strings"
 	"testing"
+
+	"k8s.io/apimachinery/pkg/util/diff"
 )
 
 func TestIsAdminConfig(t *testing.T) {
@@ -64,7 +68,7 @@ func TestIsStandardConfig(t *testing.T) {
 	}
 }
 
-func TestMakeOcArgs(t *testing.T) {
+func TestOcApply(t *testing.T) {
 	testCases := []struct {
 		name string
 
@@ -72,39 +76,115 @@ func TestMakeOcArgs(t *testing.T) {
 		user string
 		dry  bool
 
-		expected []string
+		expected string
 	}{
 		{
 			name:     "no user, not dry",
 			path:     "/path/to/file",
-			expected: []string{"apply", "-f", "/path/to/file"},
+			expected: "oc apply -f /path/to/file",
 		},
 		{
 			name:     "no user, dry",
 			path:     "/path/to/different/file",
 			dry:      true,
-			expected: []string{"apply", "-f", "/path/to/different/file", "--dry-run"},
+			expected: "oc apply -f /path/to/different/file --dry-run",
 		},
 		{
 			name:     "user, dry",
 			path:     "/path/to/file",
 			dry:      true,
 			user:     "joe",
-			expected: []string{"apply", "-f", "/path/to/file", "--dry-run", "--as", "joe"},
+			expected: "oc apply -f /path/to/file --dry-run --as joe",
 		},
 		{
 			name:     "user, not dry",
 			path:     "/path/to/file",
 			user:     "joe",
-			expected: []string{"apply", "-f", "/path/to/file", "--as", "joe"},
+			expected: "oc apply -f /path/to/file --as joe",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			args := makeOcArgs(tc.path, tc.user, tc.dry)
-			if !reflect.DeepEqual(args, tc.expected) {
-				t.Errorf("Expected '%v', got '%v'", tc.expected, args)
+			cmd := makeOcApply(tc.path, tc.user, tc.dry)
+			command := strings.Join(cmd.Args, " ")
+			if !reflect.DeepEqual(command, tc.expected) {
+				t.Errorf("Expected '%v', got '%v'", tc.expected, command)
+			}
+		})
+	}
+}
+
+type mockExecutor struct {
+	t *testing.T
+
+	calls     []*exec.Cmd
+	responses []error
+}
+
+func (m *mockExecutor) runAndCheck(cmd *exec.Cmd, _ string) ([]byte, error) {
+	responseIdx := len(m.calls)
+	m.calls = append(m.calls, cmd)
+
+	if len(m.responses) < responseIdx+1 {
+		m.t.Fatalf("mockExecutor received unexpected call: %v", cmd.Args)
+	}
+	return []byte("MOCK OUTPUT"), m.responses[responseIdx]
+}
+
+func (m *mockExecutor) getCalls() []string {
+	var calls []string
+	for _, call := range m.calls {
+		calls = append(calls, strings.Join(call.Args, " "))
+	}
+
+	return calls
+}
+
+func TestAsGenericManifest(t *testing.T) {
+	testCases := []struct {
+		description string
+		applier     *configApplier
+		executions  []error
+
+		expectedCalls []string
+		expectedError bool
+	}{
+		{
+			description:   "success: oc apply -f path",
+			applier:       &configApplier{path: "path"},
+			executions:    []error{nil}, // expect a single successful call
+			expectedCalls: []string{"oc apply -f path"},
+		},
+		{
+			description:   "success: oc apply -f path --dry-run",
+			applier:       &configApplier{path: "path", dry: true},
+			executions:    []error{nil}, // expect a single successful call
+			expectedCalls: []string{"oc apply -f path --dry-run"},
+		},
+		{
+			description:   "success: oc apply -f path --dry-run --as user",
+			applier:       &configApplier{path: "path", user: "user", dry: true},
+			executions:    []error{nil}, // expect a single successful call
+			expectedCalls: []string{"oc apply -f path --dry-run --as user"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			executor := &mockExecutor{t: t, responses: tc.executions}
+			tc.applier.executor = executor
+			err := tc.applier.asGenericManifest()
+			if err != nil && !tc.expectedError {
+				t.Errorf("returned unexpected error: %v", err)
+			}
+			if err == nil && tc.expectedError {
+				t.Error("expected error, was not returned")
+			}
+
+			calls := executor.getCalls()
+			if !reflect.DeepEqual(tc.expectedCalls, calls) {
+				t.Errorf("calls differ from expected:\n%s", diff.ObjectReflectDiff(tc.expectedCalls, calls))
 			}
 		})
 	}

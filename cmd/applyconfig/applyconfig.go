@@ -74,7 +74,7 @@ func isStandardConfig(filename string) bool {
 		!isAdminConfig(filename)
 }
 
-func makeOcArgs(path, user string, dry bool) []string {
+func makeOcApply(path, user string, dry bool) *exec.Cmd {
 	args := []string{"apply", "-f", path}
 	if dry {
 		args = append(args, "--dry-run")
@@ -84,24 +84,50 @@ func makeOcArgs(path, user string, dry bool) []string {
 		args = append(args, "--as", user)
 	}
 
-	return args
+	return exec.Command("oc", args...)
+}
+
+type executor interface {
+	runAndCheck(cmd *exec.Cmd, action string) ([]byte, error)
+}
+
+type commandExecutor struct{}
+
+func (c commandExecutor) runAndCheck(cmd *exec.Cmd, action string) ([]byte, error) {
+	var output []byte
+	var err error
+	pretty := strings.Join(cmd.Args, " ")
+
+	if output, err = cmd.Output(); err != nil {
+		if exitError, ok := err.(*exec.ExitError); ok {
+			fmt.Printf("ERROR: %s: failed to %s\n%s\n", pretty, action, exitError.Stderr)
+		} else {
+			fmt.Printf("ERROR: %s: failed to execute: %v\n", pretty, err)
+		}
+		return nil, fmt.Errorf("failed to %s config", action)
+	}
+
+	fmt.Printf("%s: OK\n", pretty)
+	return output, nil
+}
+
+type configApplier struct {
+	executor
+
+	path string
+	user string
+	dry  bool
+}
+
+func (c *configApplier) asGenericManifest() error {
+	cmd := makeOcApply(c.path, c.user, c.dry)
+	_, err := c.runAndCheck(cmd, "apply")
+	return err
 }
 
 func apply(path, user string, dry bool) error {
-	args := makeOcArgs(path, user, dry)
-
-	cmd := exec.Command("oc", args...)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		if _, ok := err.(*exec.ExitError); ok {
-			fmt.Printf("ERROR: oc %s: failed to apply\n%s\n", strings.Join(args, " "), string(output))
-		} else {
-			fmt.Printf("ERROR: oc %s: failed to execute: %v\n", strings.Join(args, " "), err)
-		}
-		return fmt.Errorf("failed to apply config")
-	}
-
-	fmt.Printf("oc %s: OK\n", strings.Join(args, " "))
-	return nil
+	do := configApplier{path: path, user: user, dry: dry, executor: &commandExecutor{}}
+	return do.asGenericManifest()
 }
 
 type processFn func(name, path string) error

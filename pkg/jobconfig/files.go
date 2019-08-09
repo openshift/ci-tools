@@ -263,23 +263,6 @@ func WriteToDir(jobDir, org, repo string, jobConfig *prowconfig.JobConfig) error
 	return nil
 }
 
-func labelGeneratedJobs(jobConfig *prowconfig.JobConfig, label string) {
-	for _, jobs := range jobConfig.Presubmits {
-		for _, job := range jobs {
-			if _, isGenerated := job.Labels[ProwJobLabelGenerated]; isGenerated {
-				job.Labels[ProwJobLabelGenerated] = label
-			}
-		}
-	}
-	for _, jobs := range jobConfig.Postsubmits {
-		for _, job := range jobs {
-			if _, isGenerated := job.Labels[ProwJobLabelGenerated]; isGenerated {
-				job.Labels[ProwJobLabelGenerated] = label
-			}
-		}
-	}
-}
-
 // Given a JobConfig and a file path, write YAML representation of the config
 // to the file path. If the file already contains some jobs, new ones will be
 // merged with the existing ones. The resulting job config file will contain

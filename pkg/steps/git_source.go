@@ -3,7 +3,6 @@ package steps
 import (
 	"context"
 	"fmt"
-	"log"
 
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 
@@ -27,23 +26,18 @@ func (s *gitSourceStep) Inputs(ctx context.Context, dry bool) (api.InputDefiniti
 }
 
 func (s *gitSourceStep) Run(ctx context.Context, dry bool) error {
-	var refs *prowapi.Refs
-	if s.jobSpec.Refs != nil {
-		refs = s.jobSpec.Refs
-	} else if len(s.jobSpec.ExtraRefs) != 0 {
-		refs = &s.jobSpec.ExtraRefs[0]
-	} else {
-		log.Printf("Nothing to build source image from, no refs")
-		return nil
+	if refs := determineRefsWorkdir(s.jobSpec.Refs, s.jobSpec.ExtraRefs); refs != nil {
+		return handleBuild(s.buildClient, buildFromSource(s.jobSpec, "", api.PipelineImageStreamTagReferenceRoot, buildapi.BuildSource{
+			Type:       buildapi.BuildSourceGit,
+			ContextDir: s.config.ContextDir,
+			Git: &buildapi.GitBuildSource{
+				URI: fmt.Sprintf("https://github.com/%s/%s.git", refs.Org, refs.Repo),
+				Ref: refs.BaseRef,
+			},
+		}, s.config.DockerfilePath, s.resources), dry, s.artifactDir)
 	}
-	return handleBuild(s.buildClient, buildFromSource(s.jobSpec, "", api.PipelineImageStreamTagReferenceRoot, buildapi.BuildSource{
-		Type:       buildapi.BuildSourceGit,
-		ContextDir: s.config.ContextDir,
-		Git: &buildapi.GitBuildSource{
-			URI: fmt.Sprintf("https://github.com/%s/%s.git", refs.Org, refs.Repo),
-			Ref: refs.BaseRef,
-		},
-	}, s.config.DockerfilePath, s.resources), dry, s.artifactDir)
+
+	return fmt.Errorf("Nothing to build source image from, no refs")
 }
 
 func (s *gitSourceStep) Done() (bool, error) {
@@ -64,6 +58,27 @@ func (s *gitSourceStep) Creates() []api.StepLink {
 
 func (s *gitSourceStep) Provides() (api.ParameterMap, api.StepLink) {
 	return nil, nil
+}
+
+func determineRefsWorkdir(refs *prowapi.Refs, extraRefs []prowapi.Refs) *prowapi.Refs {
+	var totalRefs []prowapi.Refs
+
+	if refs != nil {
+		totalRefs = append(totalRefs, *refs)
+	}
+	totalRefs = append(totalRefs, extraRefs...)
+
+	if len(totalRefs) == 0 {
+		return nil
+	}
+
+	for _, ref := range totalRefs {
+		if ref.WorkDir {
+			return &ref
+		}
+	}
+
+	return &totalRefs[0]
 }
 
 // GitSourceStep returns gitSourceStep that holds all the required information to create a build from a git source.

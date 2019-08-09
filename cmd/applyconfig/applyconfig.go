@@ -1,16 +1,22 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	templateapi "github.com/openshift/api/template/v1"
+	templatescheme "github.com/openshift/client-go/template/clientset/versioned/scheme"
 )
 
 type level string
+type command string
 
 type options struct {
 	confirm   bool
@@ -23,6 +29,9 @@ const (
 	standardLevel level = "standard"
 	adminLevel    level = "admin"
 	allLevel      level = "all"
+
+	ocApply   command = "apply"
+	ocProcess command = "process"
 )
 
 const defaultAdminUser = "system:admin"
@@ -74,11 +83,8 @@ func isStandardConfig(filename string) bool {
 		!isAdminConfig(filename)
 }
 
-func makeOcApply(path, user string, dry bool) *exec.Cmd {
-	args := []string{"apply", "-f", path}
-	if dry {
-		args = append(args, "--dry-run")
-	}
+func makeOcCommand(cmd command, path, user string) *exec.Cmd {
+	args := []string{string(cmd), "-f", path}
 
 	if user != "" {
 		args = append(args, "--as", user)
@@ -119,14 +125,65 @@ type configApplier struct {
 	dry  bool
 }
 
+func makeOcApply(path, user string, dry bool) *exec.Cmd {
+	cmd := makeOcCommand(ocApply, path, user)
+	if dry {
+		cmd.Args = append(cmd.Args, "--dry-run")
+	}
+	return cmd
+}
+
 func (c *configApplier) asGenericManifest() error {
 	cmd := makeOcApply(c.path, c.user, c.dry)
 	_, err := c.runAndCheck(cmd, "apply")
 	return err
 }
 
+func (c configApplier) asTemplate() error {
+	ocProcessCmd := makeOcCommand(ocProcess, c.path, c.user)
+
+	var processed []byte
+	var err error
+	if processed, err = c.runAndCheck(ocProcessCmd, "process"); err != nil {
+		return err
+	}
+
+	ocApplyCmd := makeOcApply("-", c.user, c.dry)
+	ocApplyCmd.Stdin = bytes.NewBuffer(processed)
+	_, err = c.runAndCheck(ocApplyCmd, "apply")
+	return err
+}
+
+// isTemplate return true when the content of the stream is an OpenShift template,
+// and returns false in all other cases (including when an error occurs while
+// reading from input).
+func isTemplate(input io.Reader) bool {
+	var contents bytes.Buffer
+	if _, err := io.Copy(&contents, input); err != nil {
+		return false
+	}
+
+	obj, _, err := templatescheme.Codecs.UniversalDeserializer().Decode(contents.Bytes(), nil, nil)
+	if err != nil {
+		return false
+	}
+	_, ok := obj.(*templateapi.Template)
+
+	return ok
+}
+
 func apply(path, user string, dry bool) error {
 	do := configApplier{path: path, user: user, dry: dry, executor: &commandExecutor{}}
+
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	if isTemplate(file) {
+		return do.asTemplate()
+	}
 	return do.asGenericManifest()
 }
 

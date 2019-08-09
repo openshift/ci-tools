@@ -152,6 +152,7 @@
     labels:
       ci.openshift.org/rehearse: "1234"
       created-by-prow: "true"
+      pj-rehearse.openshift.io/can-be-rehearsed: "true"
       prow.k8s.io/job: rehearse-1234-periodic-ci-super-duper-e2e
       prow.k8s.io/refs.org: openshift
       prow.k8s.io/refs.pull: "1234"
@@ -274,11 +275,113 @@
   kind: ProwJob
   metadata:
     annotations:
+      prow.k8s.io/job: rehearse-1234-periodic-ci-super-duper-no-ciop
+    creationTimestamp: null
+    labels:
+      ci.openshift.org/rehearse: "1234"
+      created-by-prow: "true"
+      pj-rehearse.openshift.io/can-be-rehearsed: "true"
+      prow.k8s.io/job: rehearse-1234-periodic-ci-super-duper-no-ciop
+      prow.k8s.io/refs.org: openshift
+      prow.k8s.io/refs.pull: "1234"
+      prow.k8s.io/refs.repo: release
+      prow.k8s.io/type: presubmit
+    name: 1d97c3ab-b9f3-11e9-ae13-54e1ad07d68a
+    namespace: test-namespace
+  spec:
+    agent: kubernetes
+    cluster: default
+    context: ci/rehearse/periodic-ci-super-duper-no-ciop
+    decoration_config:
+      gcs_configuration:
+        bucket: origin-ci-test
+        default_org: openshift
+        default_repo: origin
+        path_strategy: single
+      gcs_credentials_secret: gce-sa-credentials-gcs-publisher
+      grace_period: 15s
+      timeout: 4h0m0s
+      utility_images:
+        clonerefs: gcr.io/k8s-prow/clonerefs:v20190129-0a3c54c
+        entrypoint: gcr.io/k8s-prow/entrypoint:v20190129-0a3c54c
+        initupload: gcr.io/k8s-prow/initupload:v20190129-0a3c54c
+        sidecar: gcr.io/k8s-prow/sidecar:v20190129-0a3c54c
+    extra_refs:
+    - base_ref: master
+      org: super
+      repo: duper
+    job: rehearse-1234-periodic-ci-super-duper-no-ciop
+    namespace: test-namespace
+    pod_spec:
+      containers:
+      - args:
+        - --no-ci-op-args
+        - --CHANGED
+        command:
+        - no-ci-op
+        env:
+        - name: CONFIG_SPEC
+          value: |
+            base_images:
+              base:
+                cluster: https://api.ci.openshift.org
+                name: origin-v4.0
+                namespace: openshift
+                tag: base
+            build_root:
+              image_stream_tag:
+                cluster: https://api.ci.openshift.org
+                name: release
+                namespace: openshift
+                tag: golang-1.10
+            images:
+            - from: base
+              to: test-image
+            - from: base
+              to: change-should-cause-rehearsal-of-all-jobs-that-use-this-cfg
+            resources:
+              '*':
+                limits:
+                  cpu: 500Mi
+                requests:
+                  cpu: 10Mi
+            tag_specification:
+              cluster: https://api.ci.openshift.org
+              name: origin-v4.0
+              namespace: openshift
+        image: ci-operator:latest
+        imagePullPolicy: Always
+        name: ""
+        resources:
+          requests:
+            cpu: 10m
+      serviceAccountName: ci-operator
+    refs:
+      base_ref: master
+      base_sha: af9ec8fe29f22367f34ba1176cfdbf624fe77cab
+      org: openshift
+      pulls:
+      - author: petr-muller
+        number: 1234
+        sha: 783e2532831a60e2ea50eb7fea52bcba2ecb6107
+      repo: release
+    report: true
+    rerun_auth_config: {}
+    rerun_command: /test pj-rehearse
+    type: presubmit
+  status:
+    startTime: "2019-08-08T15:42:23Z"
+    state: triggered
+- apiVersion: prow.k8s.io/v1
+  kind: ProwJob
+  metadata:
+    annotations:
       prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-ciop-cfg-change-images
     creationTimestamp: null
     labels:
       ci.openshift.org/rehearse: "1234"
       created-by-prow: "true"
+      pj-rehearse.openshift.io/can-be-rehearsed: "true"
       prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-ciop-cfg-change-images
       prow.k8s.io/refs.org: openshift
       prow.k8s.io/refs.pull: "1234"
@@ -382,6 +485,7 @@
     labels:
       ci.openshift.org/rehearse: "1234"
       created-by-prow: "true"
+      pj-rehearse.openshift.io/can-be-rehearsed: "true"
       prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-cluster-profile-test-profile
       prow.k8s.io/refs.org: openshift
       prow.k8s.io/refs.pull: "1234"
@@ -486,6 +590,7 @@
     labels:
       ci.openshift.org/rehearse: "1234"
       created-by-prow: "true"
+      pj-rehearse.openshift.io/can-be-rehearsed: "true"
       prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-master-cmd
       prow.k8s.io/refs.org: openshift
       prow.k8s.io/refs.pull: "1234"
@@ -589,6 +694,7 @@
     labels:
       ci.openshift.org/rehearse: "1234"
       created-by-prow: "true"
+      pj-rehearse.openshift.io/can-be-rehearsed: "true"
       prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-master-e2e-aws
       prow.k8s.io/refs.org: openshift
       prow.k8s.io/refs.pull: "1234"
@@ -715,6 +821,7 @@
     labels:
       ci.openshift.org/rehearse: "1234"
       created-by-prow: "true"
+      pj-rehearse.openshift.io/can-be-rehearsed: "true"
       prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-master-integration
       prow.k8s.io/refs.org: openshift
       prow.k8s.io/refs.pull: "1234"
@@ -818,6 +925,7 @@
     labels:
       ci.openshift.org/rehearse: "1234"
       created-by-prow: "true"
+      pj-rehearse.openshift.io/can-be-rehearsed: "true"
       prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-master-test-template-e2e-aws
       prow.k8s.io/refs.org: openshift
       prow.k8s.io/refs.pull: "1234"
@@ -944,6 +1052,7 @@
     labels:
       ci.openshift.org/rehearse: "1234"
       created-by-prow: "true"
+      pj-rehearse.openshift.io/can-be-rehearsed: "true"
       prow.k8s.io/job: rehearse-1234-pull-ci-super-duper-master-test-template-e2e-open
       prow.k8s.io/refs.org: openshift
       prow.k8s.io/refs.pull: "1234"
@@ -1070,6 +1179,7 @@
     labels:
       ci.openshift.org/rehearse: "1234"
       created-by-prow: "true"
+      pj-rehearse.openshift.io/can-be-rehearsed: "true"
       prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-cmd
       prow.k8s.io/refs.org: openshift
       prow.k8s.io/refs.pull: "1234"
@@ -1178,6 +1288,7 @@
     labels:
       ci.openshift.org/rehearse: "1234"
       created-by-prow: "true"
+      pj-rehearse.openshift.io/can-be-rehearsed: "true"
       prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-e2e-aws
       prow.k8s.io/refs.org: openshift
       prow.k8s.io/refs.pull: "1234"
@@ -1309,6 +1420,7 @@
     labels:
       ci.openshift.org/rehearse: "1234"
       created-by-prow: "true"
+      pj-rehearse.openshift.io/can-be-rehearsed: "true"
       prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-images
       prow.k8s.io/refs.org: openshift
       prow.k8s.io/refs.pull: "1234"
@@ -1415,6 +1527,7 @@
     labels:
       ci.openshift.org/rehearse: "1234"
       created-by-prow: "true"
+      pj-rehearse.openshift.io/can-be-rehearsed: "true"
       prow.k8s.io/job: rehearse-1234-pull-ci-super-trooper-master-unit
       prow.k8s.io/refs.org: openshift
       prow.k8s.io/refs.pull: "1234"

@@ -42,7 +42,8 @@ const (
 	logCiopConfigFile            = "ciop-config-file"
 	logCiopConfigRepo            = "ciop-config-repo"
 
-	clusterTypeEnvName = "CLUSTER_TYPE"
+	clusterTypeEnvName  = "CLUSTER_TYPE"
+	CanBeRehearsedLabel = "pj-rehearse.openshift.io/can-be-rehearsed"
 )
 
 // Loggers holds the two loggers that will be used for normal and debug logging respectively.
@@ -134,6 +135,12 @@ func filterPresubmits(changedPresubmits map[string][]prowconfig.Presubmit, allow
 	for repo, jobs := range changedPresubmits {
 		for _, job := range jobs {
 			jobLogger := logger.WithFields(logrus.Fields{"repo": repo, "job": job.Name})
+
+			if !hasRehearsableLabel(job.Labels) {
+				jobLogger.Warnf("job is not allowed to be rehearsed. Label %s is required", CanBeRehearsedLabel)
+				continue
+			}
+
 			if len(job.Branches) == 0 {
 				jobLogger.Warn("cannot rehearse jobs with no branches")
 				continue
@@ -159,6 +166,11 @@ func filterPeriodics(changedPeriodics []prowconfig.Periodic, allowVolumes bool, 
 	for _, periodic := range changedPeriodics {
 		jobLogger := logger.WithField("job", periodic.Name)
 
+		if !hasRehearsableLabel(periodic.Labels) {
+			jobLogger.Warnf("job is not allowed to be rehearsed. Label %s is required", CanBeRehearsedLabel)
+			continue
+		}
+
 		if err := filterJobSpec(periodic.Spec, allowVolumes); err != nil {
 			jobLogger.WithError(err).Warn("could not rehearse job")
 			continue
@@ -168,22 +180,14 @@ func filterPeriodics(changedPeriodics []prowconfig.Periodic, allowVolumes bool, 
 	return periodics
 }
 
+func hasRehearsableLabel(labels map[string]string) bool {
+	if value, ok := labels[CanBeRehearsedLabel]; !ok || value != "true" {
+		return false
+	}
+	return true
+}
+
 func filterJobSpec(spec *v1.PodSpec, allowVolumes bool) error {
-	// there will always be exactly one container.
-	container := spec.Containers[0]
-
-	if len(container.Command) != 1 || container.Command[0] != "ci-operator" {
-		return fmt.Errorf("cannot rehearse jobs that have Command different from simple 'ci-operator'")
-	}
-
-	for _, arg := range container.Args {
-		if strings.HasPrefix(arg, "--git-ref") || strings.HasPrefix(arg, "-git-ref") {
-			return fmt.Errorf("cannot rehearse jobs that call ci-operator with '--git-ref' arg")
-		}
-		if arg == "--promote" {
-			return fmt.Errorf("cannot rehearse jobs that call ci-operator with '--promote' arg")
-		}
-	}
 	if len(spec.Volumes) > 0 && !allowVolumes {
 		return fmt.Errorf("jobs that need additional volumes mounted are not allowed")
 	}

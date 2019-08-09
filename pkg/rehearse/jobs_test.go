@@ -132,8 +132,9 @@ func TestReplaceClusterProfiles(t *testing.T) {
 func makeTestingPresubmitForEnv(env []v1.EnvVar) *prowconfig.Presubmit {
 	return &prowconfig.Presubmit{
 		JobBase: prowconfig.JobBase{
-			Agent: "kubernetes",
-			Name:  "test-job-name",
+			Agent:  "kubernetes",
+			Name:   "test-job-name",
+			Labels: map[string]string{"pj-rehearse.openshift.io/can-be-rehearsed": "true"},
 			Spec: &v1.PodSpec{
 				Containers: []v1.Container{
 					{Env: env},
@@ -235,7 +236,7 @@ func makeTestingPresubmit(name, context string, org, repo, branch string) *prowc
 		JobBase: prowconfig.JobBase{
 			Agent:  "kubernetes",
 			Name:   name,
-			Labels: map[string]string{rehearseLabel: "123"},
+			Labels: map[string]string{rehearseLabel: "123", "pj-rehearse.openshift.io/can-be-rehearsed": "true"},
 			Spec: &v1.PodSpec{
 				Containers: []v1.Container{{
 					Command: []string{"ci-operator"},
@@ -785,33 +786,14 @@ func TestWaitForJobsLog(t *testing.T) {
 }
 
 func TestFilterPresubmits(t *testing.T) {
+	labels := map[string]string{"pj-rehearse.openshift.io/can-be-rehearsed": "true"}
+
 	testCases := []struct {
 		description    string
 		volumesAllowed bool
 		crippleFunc    func(*prowconfig.Presubmit) map[string][]prowconfig.Presubmit
 		expected       func(*prowconfig.Presubmit) config.Presubmits
 	}{
-		{
-			description: "job where command is not `ci-operator`",
-			crippleFunc: func(j *prowconfig.Presubmit) map[string][]prowconfig.Presubmit {
-				j.Spec.Containers[0].Command[0] = "not-ci-operator"
-				return map[string][]prowconfig.Presubmit{"org/repo": {*j}}
-			},
-			expected: func(j *prowconfig.Presubmit) config.Presubmits {
-				return config.Presubmits{}
-			},
-		},
-		{
-			description: "ci-operator job already using --git-ref",
-			crippleFunc: func(j *prowconfig.Presubmit) map[string][]prowconfig.Presubmit {
-				j.Spec.Containers[0].Args = append(j.Spec.Containers[0].Args, "--git-ref=organization/repo@master")
-				return map[string][]prowconfig.Presubmit{"org/repo": {*j}}
-
-			},
-			expected: func(j *prowconfig.Presubmit) config.Presubmits {
-				return config.Presubmits{}
-			},
-		},
 		{
 			description: "jobs that need additional volumes mounted, not allowed",
 			crippleFunc: func(j *prowconfig.Presubmit) map[string][]prowconfig.Presubmit {
@@ -827,6 +809,7 @@ func TestFilterPresubmits(t *testing.T) {
 			volumesAllowed: true,
 			crippleFunc: func(j *prowconfig.Presubmit) map[string][]prowconfig.Presubmit {
 				j.Spec.Volumes = []v1.Volume{{Name: "volume"}}
+				j.Labels = labels
 				return map[string][]prowconfig.Presubmit{"org/repo": {*j}}
 			},
 			expected: func(j *prowconfig.Presubmit) config.Presubmits {
@@ -853,9 +836,10 @@ func TestFilterPresubmits(t *testing.T) {
 func makeBasePresubmit() *prowconfig.Presubmit {
 	return &prowconfig.Presubmit{
 		JobBase: prowconfig.JobBase{
-			Agent:  "kubernetes",
-			Name:   "pull-ci-organization-repo-master-test",
-			Labels: map[string]string{"ci.openshift.org/rehearse": "123"},
+			Agent: "kubernetes",
+			Name:  "pull-ci-organization-repo-master-test",
+			Labels: map[string]string{"ci.openshift.org/rehearse": "123",
+				"pj-rehearse.openshift.io/can-be-rehearsed": "true"},
 			Spec: &v1.PodSpec{
 				Containers: []v1.Container{{
 					Command: []string{"ci-operator"},

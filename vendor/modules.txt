@@ -519,6 +519,7 @@ k8s.io/test-infra/prow/client/clientset/versioned
 k8s.io/test-infra/prow/client/clientset/versioned/fake
 k8s.io/test-infra/prow/client/clientset/versioned/typed/prowjobs/v1
 k8s.io/test-infra/prow/pjutil
+k8s.io/test-infra/prow/clonerefs
 k8s.io/test-infra/prow/pod-utils/decorate
 k8s.io/test-infra/prow/apis/prowjobs
 k8s.io/test-infra/prow/git
@@ -580,10 +581,9 @@ k8s.io/test-infra/prow/client/clientset/versioned/typed/prowjobs/v1/fake
 k8s.io/test-infra/prow/client/clientset/versioned/scheme
 k8s.io/test-infra/prow/gcsupload
 k8s.io/test-infra/prow/github/reporter
-k8s.io/test-infra/prow/clonerefs
+k8s.io/test-infra/prow/pod-utils/clone
 k8s.io/test-infra/prow/entrypoint
 k8s.io/test-infra/prow/initupload
-k8s.io/test-infra/prow/pod-utils/clone
 k8s.io/test-infra/prow/pod-utils/wrapper
 k8s.io/test-infra/prow/sidecar
 k8s.io/test-infra/prow/plugins/approve/approvers

@@ -31,6 +31,11 @@ import (
 	"github.com/openshift/ci-tools/pkg/junit"
 )
 
+const (
+	RefsOrgLabel  = "ci.openshift.io/refs.org"
+	RefsRepoLabel = "ci.openshift.io/refs.repo"
+)
+
 type templateExecutionStep struct {
 	template       *templateapi.Template
 	params         api.Parameters
@@ -82,6 +87,14 @@ func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 				s.template.Parameters[i].Value = strings.Replace(format, api.ComponentFormatReplacement, component, -1)
 			}
 		}
+	}
+
+	if refs := s.jobSpec.JobSpec.Refs; refs != nil {
+		if s.template.ObjectLabels == nil {
+			s.template.ObjectLabels = make(map[string]string)
+		}
+		s.template.ObjectLabels[RefsOrgLabel] = refs.Org
+		s.template.ObjectLabels[RefsRepoLabel] = refs.Repo
 	}
 
 	if len(s.artifactDir) > 0 {

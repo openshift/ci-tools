@@ -1,5 +1,3 @@
-SHELL=/usr/bin/env bash -o pipefail
-
 all: lint test build
 .PHONY: all
 
@@ -14,13 +12,6 @@ install:
 test:
 	go test ./...
 .PHONY: test
-
-validate-vendor:
-	GO111MODULE=on GOPROXY=https://proxy.golang.org go mod tidy
-	GO111MODULE=on GOPROXY=https://proxy.golang.org go mod vendor
-	git status -s ./vendor/ go.mod go.sum
-	test -z "$$(git status -s ./vendor/ go.mod go.sum)"
-.PHONY: validate-vendor
 
 lint:
 	gofmt -s -l $(shell go list -f '{{ .Dir }}' ./... ) | grep ".*\.go"; if [ "$$?" = "0" ]; then gofmt -s -d $(shell go list -f '{{ .Dir }}' ./... ); exit 1; fi

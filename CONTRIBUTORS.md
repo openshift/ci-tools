@@ -10,36 +10,24 @@ Additionally, the PR needs to be approved by one of the core project members
 
 ## Build
 
-To obtain sources and build the binaries provided by this repo, run the following commands:
+To obtain sources and build the `ci-operator` binary, use `go get` and `go build`:
 
 ```
 $ go get github.com/openshift/ci-tools
 $ cd ${GOPATH}/src/github.com/openshift/ci-tools
-$ make install
+$ go build ./cmd/ci-operator
 ```
-
-The binaries are in `${GOPATH}/bin` folder.
 
 ## Test
 
-Run unit tests with `make test`:
+At the moment, ci-operator only has unit tests. You can run them with `go test`:
 
 ```
-$ make test
-go test ./...
-ok      github.com/openshift/ci-tools/cmd/applyconfig   (cached)
-...
+$ go test ./...
+?   	github.com/openshift/ci-tools	[no test files]
+ok  	github.com/openshift/ci-tools/cmd/ci-operator	0.036s
+ok  	github.com/openshift/ci-tools/pkg/api	0.029s
+?   	github.com/openshift/ci-tools/pkg/interrupt	[no test files]
+?   	github.com/openshift/ci-tools/pkg/junit	[no test files]
+ok  	github.com/openshift/ci-tools/pkg/steps	0.044s
 ```
-
-## Upgrade dependencies
-
-`ci-tools` uses [`go-mod`](https://github.com/golang/go/wiki/Modules)
-to manage dependencies and generates the binaries [with vendor](https://github.com/golang/go/wiki/Modules#how-do-i-use-vendoring-with-modules-is-vendoring-going-away).
-
-Eg, upgrade the version of `k8s.io/test-infra` to the latest of it master branch.
-
-```
-$ GO111MODULE=on go get k8s.io/test-infra
-$ GO111MODULE=on go mod vendor
-```
-****

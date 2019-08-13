@@ -442,7 +442,8 @@ objects:
           mkdir -p /tmp/artifacts/pods /tmp/artifacts/nodes /tmp/artifacts/metrics /tmp/artifacts/bootstrap /tmp/artifacts/network
 
 
-          if [ -f /tmp/artifacts/installer/terraform.tfstate ]
+          # NOTE: OpenShift 4.2 and greater have native 'gather bootstrap' support
+          if [ -f /tmp/artifacts/installer/terraform.tfstate ] && openshift-install version | grep v4.1 &>/dev/null
           then
               # we don't have jq, so the python equivalent of
               # jq '.modules[].resources."aws_instance.bootstrap".primary.attributes."public_ip" | select(.)'

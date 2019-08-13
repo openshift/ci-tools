@@ -288,7 +288,7 @@ func removeFile(podClient PodClient, ns, name, containerName string, paths []str
 	return nil
 }
 
-func addArtifactsContainer(pod *coreapi.Pod, artifactDir string) {
+func addArtifactsContainer(pod *coreapi.Pod) {
 	pod.Spec.Containers = append(pod.Spec.Containers, artifactsContainer())
 	pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{
 		Name: "artifacts",
@@ -391,7 +391,7 @@ func (w *ArtifactWorker) downloadArtifacts(podName string, hasArtifacts bool) er
 	}
 
 	defer func() {
-		// signal to artifacts container to gracefully shut don
+		// signal to artifacts container to gracefully shut down
 		err := removeFile(w.podClient, w.namespace, podName, "artifacts", []string{"/tmp/done"})
 		if err == nil {
 			return

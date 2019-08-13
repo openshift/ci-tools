@@ -714,6 +714,9 @@ func (o *options) initializeNamespace() error {
 			if err != nil {
 				return fmt.Errorf("could not retrieve secret %s: %v", secret.Name, err)
 			}
+			if l := len(secret.Data); l != 0 && existing.Data == nil {
+				existing.Data = make(map[string][]byte, l)
+			}
 			for k, v := range secret.Data {
 				existing.Data[k] = v
 			}

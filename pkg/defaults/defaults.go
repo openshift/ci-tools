@@ -154,17 +154,19 @@ func FromConfig(
 			addProvidesForStep(initialReleaseStep, params)
 			buildSteps = append(buildSteps, initialReleaseStep)
 
-		} else if rawStep.TestStepConfiguration != nil && rawStep.TestStepConfiguration.OpenshiftInstallerClusterTestConfiguration != nil && rawStep.TestStepConfiguration.OpenshiftInstallerClusterTestConfiguration.Upgrade {
-			var err error
-			step, err = clusterinstall.E2ETestStep(*rawStep.TestStepConfiguration.OpenshiftInstallerClusterTestConfiguration, *rawStep.TestStepConfiguration, params, podClient, templateClient, secretGetter, artifactDir, jobSpec)
-			if err != nil {
-				return nil, nil, fmt.Errorf("unable to create end to end test step: %v", err)
+		} else if testStep := rawStep.TestStepConfiguration; testStep != nil {
+			if testStep.OpenshiftInstallerClusterTestConfiguration != nil {
+				if testStep.OpenshiftInstallerClusterTestConfiguration.Upgrade {
+					var err error
+					step, err = clusterinstall.E2ETestStep(*testStep.OpenshiftInstallerClusterTestConfiguration, *testStep, params, podClient, templateClient, secretGetter, artifactDir, jobSpec)
+					if err != nil {
+						return nil, nil, fmt.Errorf("unable to create end to end test step: %v", err)
+					}
+				}
+			} else {
+				step = steps.TestStep(*testStep, config.Resources, podClient, artifactDir, jobSpec)
 			}
-
-		} else if rawStep.TestStepConfiguration != nil {
-			step = steps.TestStep(*rawStep.TestStepConfiguration, config.Resources, podClient, artifactDir, jobSpec)
 		}
-
 		step, ok := checkForFullyQualifiedStep(step, params)
 		if ok {
 			log.Printf("Task %s is satisfied by environment variables and will be skipped", step.Name())

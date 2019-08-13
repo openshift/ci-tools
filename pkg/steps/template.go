@@ -32,8 +32,9 @@ import (
 )
 
 const (
-	RefsOrgLabel  = "ci.openshift.io/refs.org"
-	RefsRepoLabel = "ci.openshift.io/refs.repo"
+	RefsOrgLabel    = "ci.openshift.io/refs.org"
+	RefsRepoLabel   = "ci.openshift.io/refs.repo"
+	RefsBranchLabel = "ci.openshift.io/refs.branch"
 )
 
 type templateExecutionStep struct {
@@ -95,6 +96,7 @@ func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 		}
 		s.template.ObjectLabels[RefsOrgLabel] = refs.Org
 		s.template.ObjectLabels[RefsRepoLabel] = refs.Repo
+		s.template.ObjectLabels[RefsBranchLabel] = refs.BaseRef
 	}
 
 	if len(s.artifactDir) > 0 {

@@ -323,7 +323,9 @@ func isInfraReason(reason buildapi.StatusReason) bool {
 }
 
 func hintsAtInfraReason(logSnippet string) bool {
-	return strings.Contains(logSnippet, "error: build error: no such image")
+	return strings.Contains(logSnippet, "error: build error: no such image") ||
+		strings.Contains(logSnippet, "[Errno 256] No more mirrors to try.") ||
+		strings.Contains(logSnippet, "Error: Failed to synchronize cache for repo")
 }
 
 func waitForBuild(buildClient BuildClient, namespace, name string) error {

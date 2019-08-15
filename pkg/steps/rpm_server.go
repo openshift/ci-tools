@@ -60,7 +60,6 @@ func (s *rpmServerStep) Run(ctx context.Context, dry bool) error {
 	}
 
 	labelSet := defaultPodLabels(s.jobSpec)
-	labelSet[PersistsLabel] = "true"
 	labelSet[AppLabel] = RPMRepoName
 	labelSet[TTLIgnoreLabel] = "true"
 	selectorSet := map[string]string{

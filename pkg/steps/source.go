@@ -30,7 +30,6 @@ import (
 
 const (
 	CiAnnotationPrefix = "ci.openshift.io"
-	PersistsLabel      = "persists-between-builds"
 	JobLabel           = "job"
 	BuildIdLabel       = "build-id"
 	CreatesLabel       = "creates"
@@ -58,7 +57,6 @@ RUN git submodule update --init
 
 func defaultPodLabels(jobSpec *api.JobSpec) map[string]string {
 	return trimLabels(map[string]string{
-		PersistsLabel:    "false",
 		JobLabel:         jobSpec.Job,
 		BuildIdLabel:     jobSpec.BuildID,
 		ProwJobIdLabel:   jobSpec.ProwJobID,

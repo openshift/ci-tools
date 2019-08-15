@@ -56,6 +56,16 @@ RUN git submodule update --init
 `, api.PipelineImageStream, fromTag, gopath, workingDir, gopath)
 }
 
+func defaultPodLabels(jobSpec *api.JobSpec) map[string]string {
+	return trimLabels(map[string]string{
+		PersistsLabel:    "false",
+		JobLabel:         jobSpec.Job,
+		BuildIdLabel:     jobSpec.BuildID,
+		ProwJobIdLabel:   jobSpec.ProwJobID,
+		CreatedByCILabel: "true",
+	})
+}
+
 type sourceStep struct {
 	config             api.SourceStepConfiguration
 	resources          api.ResourceConfiguration
@@ -147,18 +157,13 @@ func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStrea
 	}
 
 	layer := buildapi.ImageOptimizationSkipLayers
+	labels := defaultPodLabels(jobSpec)
+	labels[CreatesLabel] = string(toTag)
 	build := &buildapi.Build{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      string(toTag),
 			Namespace: jobSpec.Namespace,
-			Labels: trimLabels(map[string]string{
-				PersistsLabel:    "false",
-				JobLabel:         jobSpec.Job,
-				BuildIdLabel:     jobSpec.BuildID,
-				ProwJobIdLabel:   jobSpec.ProwJobID,
-				CreatesLabel:     string(toTag),
-				CreatedByCILabel: "true",
-			}),
+			Labels:    labels,
 			Annotations: map[string]string{
 				JobSpecAnnotation: jobSpec.RawSpec(),
 			},

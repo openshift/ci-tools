@@ -104,7 +104,7 @@ func makeExpectedPod(step *podStep, phaseAfterRun v1.PodPhase) *v1.Pod {
 				{
 					Name:                     step.name,
 					Image:                    "somename:sometag",
-					Command:                  []string{"/bin/sh", "-c", "#!/bin/sh\nset -eu\nlaunch-tests"},
+					Command:                  []string{"/bin/bash", "-c", "#!/bin/bash\nset -eu\nlaunch-tests"},
 					TerminationMessagePolicy: v1.TerminationMessageFallbackToLogsOnError,
 					Env: decorate.KubeEnv(map[string]string{
 						"BUILD_ID":      "test-build-id",

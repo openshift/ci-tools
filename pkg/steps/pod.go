@@ -221,7 +221,7 @@ func (s *podStep) generatePodForStep(image string, containerResources coreapi.Re
 					Image:                    image,
 					Env:                      decorate.KubeEnv(envMap),
 					Name:                     s.name,
-					Command:                  []string{"/bin/sh", "-c", "#!/bin/sh\nset -eu\n" + s.config.Commands},
+					Command:                  []string{"/bin/bash", "-c", "#!/bin/bash\nset -eu\n" + s.config.Commands},
 					Resources:                containerResources,
 					TerminationMessagePolicy: coreapi.TerminationMessageFallbackToLogsOnError,
 				},

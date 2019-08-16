@@ -59,15 +59,9 @@ func (s *rpmServerStep) Run(ctx context.Context, dry bool) error {
 		imageReference = ist.Image.DockerImageReference
 	}
 
-	labelSet := trimLabels(map[string]string{
-		PersistsLabel:    "true",
-		JobLabel:         s.jobSpec.Job,
-		BuildIdLabel:     s.jobSpec.BuildID,
-		ProwJobIdLabel:   s.jobSpec.ProwJobID,
-		CreatedByCILabel: "true",
-		AppLabel:         RPMRepoName,
-		TTLIgnoreLabel:   "true",
-	})
+	labelSet := defaultPodLabels(s.jobSpec)
+	labelSet[AppLabel] = RPMRepoName
+	labelSet[TTLIgnoreLabel] = "true"
 	selectorSet := map[string]string{
 		AppLabel: RPMRepoName,
 	}

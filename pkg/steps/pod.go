@@ -193,44 +193,51 @@ func PodStep(name string, config PodStepConfiguration, resources api.ResourceCon
 	}
 }
 
-func (s *podStep) generatePodForStep(image string, containerResources coreapi.ResourceRequirements) (*coreapi.Pod, error) {
-	envMap, err := downwardapi.EnvForSpec(s.jobSpec.JobSpec)
+func generateBasePod(
+	jobSpec *api.JobSpec,
+	podName, containerName string,
+	command []string,
+	image string,
+	containerResources coreapi.ResourceRequirements,
+) (*coreapi.Pod, error) {
+	envMap, err := downwardapi.EnvForSpec(jobSpec.JobSpec)
 	if err != nil {
 		return nil, err
 	}
-	pod := &coreapi.Pod{
+	return &coreapi.Pod{
 		ObjectMeta: meta.ObjectMeta{
-			Name: s.config.As,
-			Labels: trimLabels(map[string]string{
-				PersistsLabel:    "false",
-				JobLabel:         s.jobSpec.Job,
-				BuildIdLabel:     s.jobSpec.BuildID,
-				ProwJobIdLabel:   s.jobSpec.ProwJobID,
-				CreatedByCILabel: "true",
-			}),
+			Name:   podName,
+			Labels: defaultPodLabels(jobSpec),
 			Annotations: map[string]string{
-				JobSpecAnnotation:                     s.jobSpec.RawSpec(),
-				annotationContainersForSubTestResults: s.name,
+				JobSpecAnnotation:                     jobSpec.RawSpec(),
+				annotationContainersForSubTestResults: containerName,
 			},
 		},
 		Spec: coreapi.PodSpec{
-			ServiceAccountName: s.config.ServiceAccountName,
-			RestartPolicy:      coreapi.RestartPolicyNever,
+			RestartPolicy: coreapi.RestartPolicyNever,
 			Containers: []coreapi.Container{
 				{
 					Image:                    image,
 					Env:                      decorate.KubeEnv(envMap),
-					Name:                     s.name,
-					Command:                  []string{"/bin/sh", "-c", "#!/bin/sh\nset -eu\n" + s.config.Commands},
+					Name:                     containerName,
+					Command:                  command,
 					Resources:                containerResources,
 					TerminationMessagePolicy: coreapi.TerminationMessageFallbackToLogsOnError,
 				},
 			},
 		},
-	}
+	}, nil
+}
 
+func (s *podStep) generatePodForStep(image string, containerResources coreapi.ResourceRequirements) (*coreapi.Pod, error) {
+	pod, err := generateBasePod(s.jobSpec, s.config.As, s.name, []string{"/bin/bash", "-c", "#!/bin/bash\nset -eu\n" + s.config.Commands}, image, containerResources)
+	if err != nil {
+		return nil, err
+	}
+	pod.Spec.ServiceAccountName = s.config.ServiceAccountName
+	container := &pod.Spec.Containers[0]
 	if s.config.Secret != nil {
-		pod.Spec.Containers[0].VolumeMounts = getSecretVolumeMountFromSecret(s.config.Secret.MountPath)
+		container.VolumeMounts = getSecretVolumeMountFromSecret(s.config.Secret.MountPath)
 		pod.Spec.Volumes = getVolumeFromSecret(s.config.Secret.Name)
 	}
 
@@ -240,7 +247,7 @@ func (s *podStep) generatePodForStep(image string, containerResources coreapi.Re
 			// validation should prevent this
 			return nil, fmt.Errorf("invalid size for volume test %s: %v", s.config.As, v.Size)
 		}
-		pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, coreapi.VolumeMount{
+		container.VolumeMounts = append(container.VolumeMounts, coreapi.VolumeMount{
 			Name:      "memory-backed",
 			MountPath: "/tmp/volume",
 		})

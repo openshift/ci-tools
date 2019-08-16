@@ -30,7 +30,6 @@ import (
 
 const (
 	CiAnnotationPrefix = "ci.openshift.io"
-	PersistsLabel      = "persists-between-builds"
 	JobLabel           = "job"
 	BuildIdLabel       = "build-id"
 	CreatesLabel       = "creates"
@@ -54,6 +53,15 @@ WORKDIR %s/
 ENV GOPATH=%s
 RUN git submodule update --init
 `, api.PipelineImageStream, fromTag, gopath, workingDir, gopath)
+}
+
+func defaultPodLabels(jobSpec *api.JobSpec) map[string]string {
+	return trimLabels(map[string]string{
+		JobLabel:         jobSpec.Job,
+		BuildIdLabel:     jobSpec.BuildID,
+		ProwJobIdLabel:   jobSpec.ProwJobID,
+		CreatedByCILabel: "true",
+	})
 }
 
 type sourceStep struct {
@@ -147,18 +155,13 @@ func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStrea
 	}
 
 	layer := buildapi.ImageOptimizationSkipLayers
+	labels := defaultPodLabels(jobSpec)
+	labels[CreatesLabel] = string(toTag)
 	build := &buildapi.Build{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      string(toTag),
 			Namespace: jobSpec.Namespace,
-			Labels: trimLabels(map[string]string{
-				PersistsLabel:    "false",
-				JobLabel:         jobSpec.Job,
-				BuildIdLabel:     jobSpec.BuildID,
-				ProwJobIdLabel:   jobSpec.ProwJobID,
-				CreatesLabel:     string(toTag),
-				CreatedByCILabel: "true",
-			}),
+			Labels:    labels,
 			Annotations: map[string]string{
 				JobSpecAnnotation: jobSpec.RawSpec(),
 			},

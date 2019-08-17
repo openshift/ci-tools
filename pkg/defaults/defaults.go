@@ -177,7 +177,7 @@ func FromConfig(
 	}
 
 	for _, template := range templates {
-		step := steps.TemplateExecutionStep(template, params, podClient, templateClient, artifactDir, jobSpec)
+		step := steps.TemplateExecutionStep(template, params, podClient, templateClient, artifactDir, jobSpec, config.Resources)
 		buildSteps = append(buildSteps, step)
 	}
 

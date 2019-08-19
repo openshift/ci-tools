@@ -42,6 +42,7 @@ func E2ETestStep(
 	secretClient coreclientset.SecretsGetter,
 	artifactDir string,
 	jobSpec *api.JobSpec,
+	resources api.ResourceConfiguration,
 ) (api.Step, error) {
 	var template *templateapi.Template
 	if err := yaml.Unmarshal([]byte(installTemplateE2E), &template); err != nil {
@@ -94,7 +95,7 @@ func E2ETestStep(
 		params = api.NewOverrideParameters(params, overrides)
 	}
 
-	step := steps.TemplateExecutionStep(template, params, podClient, templateClient, artifactDir, jobSpec, nil)
+	step := steps.TemplateExecutionStep(template, params, podClient, templateClient, artifactDir, jobSpec, resources)
 	subTests, ok := step.(nestedSubTests)
 	if !ok {
 		return nil, fmt.Errorf("unexpected %T", step)

@@ -158,7 +158,7 @@ func FromConfig(
 			if testStep.OpenshiftInstallerClusterTestConfiguration != nil {
 				if testStep.OpenshiftInstallerClusterTestConfiguration.Upgrade {
 					var err error
-					step, err = clusterinstall.E2ETestStep(*testStep.OpenshiftInstallerClusterTestConfiguration, *testStep, params, podClient, templateClient, secretGetter, artifactDir, jobSpec)
+					step, err = clusterinstall.E2ETestStep(*testStep.OpenshiftInstallerClusterTestConfiguration, *testStep, params, podClient, templateClient, secretGetter, artifactDir, jobSpec, config.Resources)
 					if err != nil {
 						return nil, nil, fmt.Errorf("unable to create end to end test step: %v", err)
 					}

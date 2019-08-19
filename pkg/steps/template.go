@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ghodss/yaml"
+
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	"k8s.io/client-go/rest"
@@ -20,8 +22,12 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/watch"
+
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 
 	templateapi "github.com/openshift/api/template/v1"
@@ -35,10 +41,13 @@ const (
 	RefsOrgLabel    = "ci.openshift.io/refs.org"
 	RefsRepoLabel   = "ci.openshift.io/refs.repo"
 	RefsBranchLabel = "ci.openshift.io/refs.branch"
+
+	TestContainerName = "test"
 )
 
 type templateExecutionStep struct {
 	template       *templateapi.Template
+	resources      api.ResourceConfiguration
 	params         api.Parameters
 	templateClient TemplateClient
 	podClient      PodClient
@@ -46,6 +55,52 @@ type templateExecutionStep struct {
 	jobSpec        *api.JobSpec
 
 	subTests []*junit.TestCase
+}
+
+func injectResourcesToTemplatePods(template *templateapi.Template, resources api.ResourceConfiguration) error {
+	if resources != nil {
+		containerResources, err := resourcesFor(resources.RequirementsForStep(template.Name))
+		if err != nil {
+			return fmt.Errorf("unable to calculate resources for %s: %s", template.Name, err)
+		}
+
+		corev1Scheme := runtime.NewScheme()
+		utilruntime.Must(coreapi.AddToScheme(corev1Scheme))
+		corev1Codec := serializer.NewCodecFactory(corev1Scheme).LegacyCodec(coreapi.SchemeGroupVersion)
+
+		for i, object := range template.Objects {
+			var pod *coreapi.Pod
+			if err := yaml.Unmarshal(object.Raw, &pod); err != nil {
+				return fmt.Errorf("couldn't unmashal pod %s: %v", pod.Name, err)
+			}
+
+			if pod != nil {
+				for index, container := range pod.Spec.Containers {
+					if container.Name == TestContainerName {
+						pod.Spec.Containers[index].Resources = containerResources
+						break
+					}
+				}
+
+				template.Objects[i] = runtime.RawExtension{
+					Raw:    []byte(runtime.EncodeOrDie(corev1Codec, pod)),
+					Object: pod.DeepCopyObject(),
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func injectLabelsToTemplate(jobSpec *api.JobSpec, template *templateapi.Template) {
+	if refs := jobSpec.JobSpec.Refs; refs != nil {
+		if template.ObjectLabels == nil {
+			template.ObjectLabels = make(map[string]string)
+		}
+		template.ObjectLabels[RefsOrgLabel] = refs.Org
+		template.ObjectLabels[RefsRepoLabel] = refs.Repo
+		template.ObjectLabels[RefsBranchLabel] = refs.BaseRef
+	}
 }
 
 func (s *templateExecutionStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
@@ -57,6 +112,10 @@ func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 
 	if len(s.template.Objects) == 0 {
 		return fmt.Errorf("template %s has no objects", s.template.Name)
+	}
+
+	if err := injectResourcesToTemplatePods(s.template, s.resources); err != nil {
+		log.Printf("couldn't inject resources to template's pod: %v", err)
 	}
 
 	for i, p := range s.template.Parameters {
@@ -90,14 +149,7 @@ func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 		}
 	}
 
-	if refs := s.jobSpec.JobSpec.Refs; refs != nil {
-		if s.template.ObjectLabels == nil {
-			s.template.ObjectLabels = make(map[string]string)
-		}
-		s.template.ObjectLabels[RefsOrgLabel] = refs.Org
-		s.template.ObjectLabels[RefsRepoLabel] = refs.Repo
-		s.template.ObjectLabels[RefsBranchLabel] = refs.BaseRef
-	}
+	injectLabelsToTemplate(s.jobSpec, s.template)
 
 	if len(s.artifactDir) > 0 {
 		addArtifactsToTemplate(s.template)
@@ -250,9 +302,10 @@ func (s *templateExecutionStep) Description() string {
 	return fmt.Sprintf("Run template %s", s.template.Name)
 }
 
-func TemplateExecutionStep(template *templateapi.Template, params api.Parameters, podClient PodClient, templateClient TemplateClient, artifactDir string, jobSpec *api.JobSpec) api.Step {
+func TemplateExecutionStep(template *templateapi.Template, params api.Parameters, podClient PodClient, templateClient TemplateClient, artifactDir string, jobSpec *api.JobSpec, resources api.ResourceConfiguration) api.Step {
 	return &templateExecutionStep{
 		template:       template,
+		resources:      resources,
 		params:         params,
 		podClient:      podClient,
 		templateClient: templateClient,

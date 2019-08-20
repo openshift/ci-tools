@@ -87,10 +87,13 @@ func makeExpectedPod(step *podStep, phaseAfterRun v1.PodPhase) *v1.Pod {
 			Name:      step.config.As,
 			Namespace: step.jobSpec.Namespace,
 			Labels: map[string]string{
-				"build-id":       step.jobSpec.BuildID,
-				"created-by-ci":  "true",
-				"job":            step.jobSpec.Job,
-				"prow.k8s.io/id": step.jobSpec.ProwJobID,
+				"build-id":                    step.jobSpec.BuildID,
+				"created-by-ci":               "true",
+				"job":                         step.jobSpec.Job,
+				"prow.k8s.io/id":              step.jobSpec.ProwJobID,
+				"ci.openshift.io/refs.org":    step.jobSpec.JobSpec.Refs.Org,
+				"ci.openshift.io/refs.repo":   step.jobSpec.JobSpec.Refs.Repo,
+				"ci.openshift.io/refs.branch": step.jobSpec.JobSpec.Refs.BaseRef,
 			},
 			Annotations: map[string]string{
 				"ci.openshift.io/job-spec":                     "",

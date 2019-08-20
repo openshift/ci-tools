@@ -1,10 +1,11 @@
 package steps
 
 import (
+	"testing"
+
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
-	"testing"
 
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -69,11 +70,14 @@ func TestCreateBuild(t *testing.T) {
 					Name:      "src",
 					Namespace: "namespace",
 					Labels: map[string]string{
-						"job":            "job",
-						"build-id":       "buildId",
-						"prow.k8s.io/id": "prowJobId",
-						"creates":        "src",
-						"created-by-ci":  "true",
+						"job":                         "job",
+						"build-id":                    "buildId",
+						"prow.k8s.io/id":              "prowJobId",
+						"creates":                     "src",
+						"created-by-ci":               "true",
+						"ci.openshift.io/refs.org":    "org",
+						"ci.openshift.io/refs.repo":   "repo",
+						"ci.openshift.io/refs.branch": "master",
 					},
 					Annotations: map[string]string{
 						"ci.openshift.io/job-spec": ``, // set via unexported fields so will be empty
@@ -167,11 +171,14 @@ RUN git submodule update --init
 					Name:      "src",
 					Namespace: "namespace",
 					Labels: map[string]string{
-						"job":            "job",
-						"build-id":       "buildId",
-						"prow.k8s.io/id": "prowJobId",
-						"creates":        "src",
-						"created-by-ci":  "true",
+						"job":                         "job",
+						"build-id":                    "buildId",
+						"prow.k8s.io/id":              "prowJobId",
+						"creates":                     "src",
+						"created-by-ci":               "true",
+						"ci.openshift.io/refs.org":    "org",
+						"ci.openshift.io/refs.repo":   "repo",
+						"ci.openshift.io/refs.branch": "master",
 					},
 					Annotations: map[string]string{
 						"ci.openshift.io/job-spec": ``, // set via unexported fields so will be empty
@@ -270,11 +277,14 @@ RUN git submodule update --init
 					Name:      "src",
 					Namespace: "namespace",
 					Labels: map[string]string{
-						"job":            "job",
-						"build-id":       "buildId",
-						"prow.k8s.io/id": "prowJobId",
-						"creates":        "src",
-						"created-by-ci":  "true",
+						"job":                         "job",
+						"build-id":                    "buildId",
+						"prow.k8s.io/id":              "prowJobId",
+						"creates":                     "src",
+						"created-by-ci":               "true",
+						"ci.openshift.io/refs.org":    "org",
+						"ci.openshift.io/refs.repo":   "repo",
+						"ci.openshift.io/refs.branch": "master",
 					},
 					Annotations: map[string]string{
 						"ci.openshift.io/job-spec": ``, // set via unexported fields so will be empty
@@ -375,11 +385,14 @@ RUN git submodule update --init
 					Name:      "src",
 					Namespace: "namespace",
 					Labels: map[string]string{
-						"job":            "job",
-						"build-id":       "buildId",
-						"prow.k8s.io/id": "prowJobId",
-						"creates":        "src",
-						"created-by-ci":  "true",
+						"job":                         "job",
+						"build-id":                    "buildId",
+						"prow.k8s.io/id":              "prowJobId",
+						"creates":                     "src",
+						"created-by-ci":               "true",
+						"ci.openshift.io/refs.org":    "org",
+						"ci.openshift.io/refs.repo":   "repo",
+						"ci.openshift.io/refs.branch": "master",
 					},
 					Annotations: map[string]string{
 						"ci.openshift.io/job-spec": ``, // set via unexported fields so will be empty

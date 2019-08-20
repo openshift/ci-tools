@@ -69,11 +69,19 @@ func injectResourcesToTemplatePods(template *templateapi.Template, resources api
 		corev1Codec := serializer.NewCodecFactory(corev1Scheme).LegacyCodec(coreapi.SchemeGroupVersion)
 
 		for i, object := range template.Objects {
-			var pod *coreapi.Pod
-			if err := yaml.Unmarshal(object.Raw, &pod); err != nil {
-				return fmt.Errorf("couldn't unmashal pod %s: %v", pod.Name, err)
+			var o map[string]interface{}
+			if err := yaml.Unmarshal(object.Raw, &o); err != nil {
+				continue
 			}
 
+			if jsonString(o, "kind") != "Pod" || jsonString(o, "apiVersion") != "v1" {
+				continue
+			}
+
+			var pod *coreapi.Pod
+			if err := yaml.Unmarshal(object.Raw, &pod); err != nil {
+				continue
+			}
 			if pod != nil {
 				for index, container := range pod.Spec.Containers {
 					if container.Name == TestContainerName {

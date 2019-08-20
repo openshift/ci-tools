@@ -57,47 +57,59 @@ type templateExecutionStep struct {
 	subTests []*junit.TestCase
 }
 
-func injectResourcesToTemplatePods(template *templateapi.Template, resources api.ResourceConfiguration) error {
-	if resources != nil {
-		containerResources, err := resourcesFor(resources.RequirementsForStep(template.Name))
-		if err != nil {
-			return fmt.Errorf("unable to calculate resources for %s: %s", template.Name, err)
-		}
+func updateResourcesToTemplatePod(raw []byte, resources api.ResourceConfiguration, templateName string) (*runtime.RawExtension, error) {
+	containerResources, err := resourcesFor(resources.RequirementsForStep(templateName))
+	if err != nil {
+		return nil, fmt.Errorf("unable to calculate resources for %s: %s", templateName, err)
+	}
 
-		corev1Scheme := runtime.NewScheme()
-		utilruntime.Must(coreapi.AddToScheme(corev1Scheme))
-		corev1Codec := serializer.NewCodecFactory(corev1Scheme).LegacyCodec(coreapi.SchemeGroupVersion)
+	corev1Scheme := runtime.NewScheme()
+	utilruntime.Must(coreapi.AddToScheme(corev1Scheme))
+	corev1Codec := serializer.NewCodecFactory(corev1Scheme).LegacyCodec(coreapi.SchemeGroupVersion)
 
-		for i, object := range template.Objects {
-			var o map[string]interface{}
-			if err := yaml.Unmarshal(object.Raw, &o); err != nil {
-				continue
-			}
+	var pod *coreapi.Pod
+	if err := yaml.Unmarshal(raw, &pod); err != nil {
+		return nil, fmt.Errorf("error unmarshal object to pod: %v", err)
+	}
 
-			if jsonString(o, "kind") != "Pod" || jsonString(o, "apiVersion") != "v1" {
-				continue
-			}
-
-			var pod *coreapi.Pod
-			if err := yaml.Unmarshal(object.Raw, &pod); err != nil {
-				continue
-			}
-			if pod != nil {
-				for index, container := range pod.Spec.Containers {
-					if container.Name == TestContainerName {
-						pod.Spec.Containers[index].Resources = containerResources
-						break
-					}
-				}
-
-				template.Objects[i] = runtime.RawExtension{
-					Raw:    []byte(runtime.EncodeOrDie(corev1Codec, pod)),
-					Object: pod.DeepCopyObject(),
-				}
-			}
+	for index, container := range pod.Spec.Containers {
+		if container.Name == TestContainerName {
+			pod.Spec.Containers[index].Resources = containerResources
+			break
 		}
 	}
-	return nil
+
+	return &runtime.RawExtension{
+		Raw:    []byte(runtime.EncodeOrDie(corev1Codec, pod)),
+		Object: pod.DeepCopyObject(),
+	}, nil
+}
+
+func operateOnTemplatePods(template *templateapi.Template, resources api.ResourceConfiguration, artifactDir string) {
+	for i, object := range template.Objects {
+		var o map[string]interface{}
+		if err := json.Unmarshal(object.Raw, &o); err != nil {
+			continue
+		}
+
+		if !isObjectPod(o) {
+			continue
+		}
+
+		if len(artifactDir) > 0 {
+			if rawExt := addArtifactsToTemplate(o); rawExt != nil {
+				template.Objects[i] = *rawExt
+			}
+		}
+
+		if resources != nil {
+			rawExt, err := updateResourcesToTemplatePod(object.Raw, resources, template.Name)
+			if err != nil {
+				continue
+			}
+			template.Objects[i] = *rawExt
+		}
+	}
 }
 
 func injectLabelsToTemplate(jobSpec *api.JobSpec, template *templateapi.Template) {
@@ -120,10 +132,6 @@ func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 
 	if len(s.template.Objects) == 0 {
 		return fmt.Errorf("template %s has no objects", s.template.Name)
-	}
-
-	if err := injectResourcesToTemplatePods(s.template, s.resources); err != nil {
-		log.Printf("couldn't inject resources to template's pod: %v", err)
 	}
 
 	for i, p := range s.template.Parameters {
@@ -158,10 +166,7 @@ func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 	}
 
 	injectLabelsToTemplate(s.jobSpec, s.template)
-
-	if len(s.artifactDir) > 0 {
-		addArtifactsToTemplate(s.template)
-	}
+	operateOnTemplatePods(s.template, s.resources, s.artifactDir)
 
 	if dry {
 		j, _ := json.MarshalIndent(s.template, "", "  ")

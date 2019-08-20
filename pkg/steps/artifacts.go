@@ -21,6 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/runtime"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -29,7 +30,6 @@ import (
 	"k8s.io/client-go/tools/remotecommand"
 
 	buildapi "github.com/openshift/api/build/v1"
-	templateapi "github.com/openshift/api/template/v1"
 
 	"github.com/openshift/ci-tools/pkg/junit"
 )
@@ -559,41 +559,29 @@ func containerHasVolumeName(container coreapi.Container, name string) bool {
 	return true
 }
 
-func addArtifactsToTemplate(template *templateapi.Template) {
-	for i := range template.Objects {
-		t := &template.Objects[i]
-		var pod map[string]interface{}
-		if err := json.Unmarshal(t.Raw, &pod); err != nil {
-			log.Printf("error: object can't be unmarshalled: %v", err)
-			continue
-		}
-		if jsonString(pod, "kind") != "Pod" || jsonString(pod, "apiVersion") != "v1" {
-			continue
-		}
-		if !arrayHasObjectString(jsonArray(pod, "spec", "volumes"), "name", "artifacts") {
-			continue
-		}
-		names := allPodContainerNamesWithArtifacts(pod)
-		if len(names) == 0 {
-			continue
-		}
-		data, err := json.Marshal(artifactsContainer())
-		if err != nil {
-			panic(err)
-		}
-		var container map[string]interface{}
-		if err := json.Unmarshal(data, &container); err != nil {
-			panic(err)
-		}
-		containers := append(jsonArray(pod, "spec", "containers"), container)
-		jsonMap(pod, "spec")["containers"] = containers
-		data, err = json.Marshal(pod)
-		if err != nil {
-			panic(err)
-		}
-		t.Object = nil
-		t.Raw = data
+func addArtifactsToTemplate(pod map[string]interface{}) *runtime.RawExtension {
+	if !arrayHasObjectString(jsonArray(pod, "spec", "volumes"), "name", "artifacts") {
+		return nil
 	}
+	names := allPodContainerNamesWithArtifacts(pod)
+	if len(names) == 0 {
+		return nil
+	}
+	data, err := json.Marshal(artifactsContainer())
+	if err != nil {
+		panic(err)
+	}
+	var container map[string]interface{}
+	if err := json.Unmarshal(data, &container); err != nil {
+		panic(err)
+	}
+	containers := append(jsonArray(pod, "spec", "containers"), container)
+	jsonMap(pod, "spec")["containers"] = containers
+	data, err = json.Marshal(pod)
+	if err != nil {
+		panic(err)
+	}
+	return &runtime.RawExtension{Raw: data}
 }
 
 func jsonMap(obj map[string]interface{}, keys ...string) map[string]interface{} {
@@ -730,4 +718,11 @@ func getContainerStatuses(pod *coreapi.Pod) []coreapi.ContainerStatus {
 	statuses = append(statuses, pod.Status.InitContainerStatuses...)
 	statuses = append(statuses, pod.Status.ContainerStatuses...)
 	return statuses
+}
+
+func isObjectPod(obj map[string]interface{}) bool {
+	if jsonString(obj, "kind") != "Pod" || jsonString(obj, "apiVersion") != "v1" {
+		return false
+	}
+	return true
 }

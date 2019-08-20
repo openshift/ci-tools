@@ -333,7 +333,7 @@ func TestInjectResourcesToPod(t *testing.T) {
 			template := tc.template
 			expectedTemplate := tc.expected
 
-			injectResourcesToTemplatePods(template, tc.resources)
+			operateOnTemplatePods(template, tc.resources, "")
 			if !equality.Semantic.DeepEqual(expectedTemplate, template) {
 				t.Fatal(diff.ObjectDiff(expectedTemplate, template))
 			}

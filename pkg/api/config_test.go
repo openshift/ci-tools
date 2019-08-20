@@ -385,10 +385,6 @@ func TestValidateBaseRpmImages(t *testing.T) {
 	}
 }
 
-func parseError(id string, err error) error {
-	return fmt.Errorf("%q expected to be valid, got 'Error(%v)' instead", id, err)
-}
-
 func parseValidError(id string) error {
 	return fmt.Errorf("%q expected to be invalid, but returned valid", id)
 }

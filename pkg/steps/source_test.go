@@ -1,10 +1,12 @@
 package steps
 
 import (
+	"reflect"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/test-infra/prow/apis/prowjobs/v1"
+	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 
 	coreapi "k8s.io/api/core/v1"
@@ -452,6 +454,111 @@ RUN git submodule update --init
 		t.Run(testCase.name, func(t *testing.T) {
 			if actual, expected := createBuild(testCase.config, testCase.jobSpec, testCase.clonerefsRef, testCase.resources), testCase.expected; !equality.Semantic.DeepEqual(actual, expected) {
 				t.Errorf("%s: got incorrect build: %v", testCase.name, diff.ObjectReflectDiff(actual, expected))
+			}
+		})
+	}
+}
+
+func TestDefaultPodLabels(t *testing.T) {
+	testCases := []struct {
+		id             string
+		jobSpec        *api.JobSpec
+		expectedLabels map[string]string
+	}{
+		{
+			id: "Refs defined, expected labels with org/repo/branch information",
+			jobSpec: &api.JobSpec{
+				JobSpec: downwardapi.JobSpec{
+					Refs: &prowapi.Refs{
+						Org:     "org",
+						Repo:    "repo",
+						BaseRef: "master",
+					},
+				},
+			},
+			expectedLabels: map[string]string{
+				"created-by-ci":               "true",
+				"prow.k8s.io/id":              "",
+				"build-id":                    "",
+				"job":                         "",
+				"ci.openshift.io/refs.org":    "org",
+				"ci.openshift.io/refs.repo":   "repo",
+				"ci.openshift.io/refs.branch": "master",
+			},
+		},
+		{
+			id: "nil Refs, expected labels without org/repo/branch information",
+			jobSpec: &api.JobSpec{
+				JobSpec: downwardapi.JobSpec{
+					Refs: nil,
+				},
+			},
+			expectedLabels: map[string]string{
+				"created-by-ci":  "true",
+				"prow.k8s.io/id": "",
+				"build-id":       "",
+				"job":            "",
+			},
+		},
+		{
+			id: "nil Refs but ExtraRefs is > 0, expected labels with extraref[0] org/repo/branch information",
+			jobSpec: &api.JobSpec{
+				JobSpec: downwardapi.JobSpec{
+					Refs: nil,
+					ExtraRefs: []prowapi.Refs{
+						{
+							Org:     "extraorg",
+							Repo:    "extrarepo",
+							BaseRef: "master",
+						},
+					},
+				},
+			},
+			expectedLabels: map[string]string{
+				"created-by-ci":               "true",
+				"prow.k8s.io/id":              "",
+				"build-id":                    "",
+				"job":                         "",
+				"ci.openshift.io/refs.org":    "extraorg",
+				"ci.openshift.io/refs.repo":   "extrarepo",
+				"ci.openshift.io/refs.branch": "master",
+			},
+		},
+		{
+			id: "non-nil Refs and ExtraRefs is > 0, expected labels with refs org/repo/branch information",
+			jobSpec: &api.JobSpec{
+				JobSpec: downwardapi.JobSpec{
+					Refs: &prowapi.Refs{
+						Org:     "org",
+						Repo:    "repo",
+						BaseRef: "master",
+					},
+					ExtraRefs: []prowapi.Refs{
+						{
+							Org:     "extraorg",
+							Repo:    "extrarepo",
+							BaseRef: "master",
+						},
+					},
+				},
+			},
+			expectedLabels: map[string]string{
+				"created-by-ci":               "true",
+				"prow.k8s.io/id":              "",
+				"build-id":                    "",
+				"job":                         "",
+				"ci.openshift.io/refs.org":    "org",
+				"ci.openshift.io/refs.repo":   "repo",
+				"ci.openshift.io/refs.branch": "master",
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.id, func(t *testing.T) {
+			labels := defaultPodLabels(tc.jobSpec)
+			if !reflect.DeepEqual(labels, tc.expectedLabels) {
+				t.Fatal(diff.ObjectReflectDiff(labels, tc.expectedLabels))
 			}
 		})
 	}

@@ -42,7 +42,7 @@ var (
 
 const (
 	PluginName = "bugzilla"
-	bugLink    = `[Bugzilla bug](%s/show_bug.cgi?id=%d)`
+	bugLink    = `[Bugzilla bug %d](%s/show_bug.cgi?id=%d)`
 )
 
 func init() {
@@ -340,14 +340,11 @@ To reference a bug, add 'Bug XXX:' to the title of this pull request and request
 		}
 
 		var dependents []bugzilla.Bug
-		if options.DependentBugStatuses != nil {
+		if options.DependentBugStatuses != nil || options.DependentBugTargetRelease != nil {
 			for _, id := range bug.DependsOn {
 				dependent, err := bc.GetBug(id)
 				if err != nil {
-					return comment(fmt.Sprintf(`An error was encountered searching the Bugzilla server at %s for dependent bug %d:
-> %v
-Please contact an administrator to resolve this issue, then request a bug refresh with <code>/bugzilla refresh</code>.`,
-						bc.Endpoint(), id, err))
+					return comment(formatError(fmt.Sprintf("searching for dependent bug %d", id), bc.Endpoint(), e.bugId, err))
 				}
 				dependents = append(dependents, *dependent)
 			}
@@ -357,15 +354,12 @@ Please contact an administrator to resolve this issue, then request a bug refres
 		needsValidLabel, needsInvalidLabel = valid, !valid
 		if valid {
 			log.Debug("Valid bug found.")
-			response = fmt.Sprintf(`This pull request references a valid `+bugLink+`.`, bc.Endpoint(), e.bugId)
+			response = fmt.Sprintf(`This pull request references `+bugLink+`, which is valid.`, e.bugId, bc.Endpoint(), e.bugId)
 			// if configured, move the bug to the new state
 			if options.StatusAfterValidation != nil && bug.Status != *options.StatusAfterValidation {
 				if err := bc.UpdateBug(e.bugId, bugzilla.BugUpdate{Status: *options.StatusAfterValidation}); err != nil {
 					log.WithError(err).Warn("Unexpected error updating Bugzilla bug.")
-					return comment(fmt.Sprintf(`An error was encountered updating the bug to the %s state on the Bugzilla server at %s for bug %d:
-> %v
-Please contact an administrator to resolve this issue, then request a bug refresh with <code>/bugzilla refresh</code>.`,
-						*options.StatusAfterValidation, bc.Endpoint(), e.bugId, err))
+					return comment(formatError(fmt.Sprintf("updating to the %s state", *options.StatusAfterValidation), bc.Endpoint(), e.bugId, err))
 				}
 				response += fmt.Sprintf(" The bug has been moved to the %s state.", *options.StatusAfterValidation)
 			}
@@ -373,10 +367,7 @@ Please contact an administrator to resolve this issue, then request a bug refres
 				changed, err := bc.AddPullRequestAsExternalBug(e.bugId, e.org, e.repo, e.number)
 				if err != nil {
 					log.WithError(err).Warn("Unexpected error adding external tracker bug to Bugzilla bug.")
-					return comment(fmt.Sprintf(`An error was encountered adding this pull request to the external tracker bugs on the Bugzilla server at %s for bug %d:
-> %v
-Please contact an administrator to resolve this issue, then request a bug refresh with <code>/bugzilla refresh</code>.`,
-						bc.Endpoint(), e.bugId, err))
+					return comment(formatError("adding this pull request to the external tracker bugs", bc.Endpoint(), e.bugId, err))
 				}
 				if changed {
 					response += " The bug has been updated to refer to the pull request using the external bug tracker."
@@ -388,9 +379,9 @@ Please contact an administrator to resolve this issue, then request a bug refres
 			for _, reason := range why {
 				formattedReasons += fmt.Sprintf(" - %s\n", reason)
 			}
-			response = fmt.Sprintf(`This pull request references an invalid `+bugLink+`:
+			response = fmt.Sprintf(`This pull request references `+bugLink+`, which is invalid:
 %s
-Comment <code>/bugzilla refresh</code> to re-evaluate validity if changes to the Bugzilla bug are made, or edit the title of this pull request to link to a different bug.`, bc.Endpoint(), e.bugId, formattedReasons)
+Comment <code>/bugzilla refresh</code> to re-evaluate validity if changes to the Bugzilla bug are made, or edit the title of this pull request to link to a different bug.`, e.bugId, bc.Endpoint(), e.bugId, formattedReasons)
 		}
 	}
 
@@ -478,7 +469,22 @@ func validateBug(bug bugzilla.Bug, dependents []bugzilla.Bug, options plugins.Bu
 		for _, bug := range dependents {
 			if !validStatuses.Has(bug.Status) {
 				valid = false
-				errors = append(errors, fmt.Sprintf("expected dependent "+bugLink+" to be in one of the following states: %s, but it is %s instead", endpoint, bug.ID, strings.Join(*options.DependentBugStatuses, ", "), bug.Status))
+				errors = append(errors, fmt.Sprintf("expected dependent "+bugLink+" to be in one of the following states: %s, but it is %s instead", bug.ID, endpoint, bug.ID, strings.Join(*options.DependentBugStatuses, ", "), bug.Status))
+			}
+		}
+	}
+
+	if options.DependentBugTargetRelease != nil {
+		for _, bug := range dependents {
+			if len(bug.TargetRelease) == 0 {
+				valid = false
+				errors = append(errors, fmt.Sprintf("expected dependent "+bugLink+" to target the %q release, but no target release was set", bug.ID, endpoint, bug.ID, *options.DependentBugTargetRelease))
+			} else if *options.DependentBugTargetRelease != bug.TargetRelease[0] {
+				// the BugZilla web UI shows one option for target release, but returns the
+				// field as a list in the REST API. We only care for the first item and it's
+				// not even clear if the list can have more than one item in the response
+				valid = false
+				errors = append(errors, fmt.Sprintf("expected dependent "+bugLink+" to target the %q release, but it targets %q instead", bug.ID, endpoint, bug.ID, *options.DependentBugTargetRelease, bug.TargetRelease[0]))
 			}
 		}
 	}
@@ -513,17 +519,14 @@ func handleMerge(e event, gc githubClient, bc bugzilla.Client, options plugins.B
 			validStatuses.Insert(*options.StatusAfterValidation)
 		}
 		if !validStatuses.Has(bug.Status) {
-			return comment(fmt.Sprintf("The "+bugLink+" is in an unrecognized state (%s) and will not be moved to the %s state.", bc.Endpoint(), e.bugId, bug.Status, *options.StatusAfterMerge))
+			return comment(fmt.Sprintf(bugLink+" is in an unrecognized state (%s) and will not be moved to the %s state.", e.bugId, bc.Endpoint(), e.bugId, bug.Status, *options.StatusAfterMerge))
 		}
 	}
 
 	prs, err := bc.GetExternalBugPRsOnBug(e.bugId)
 	if err != nil {
 		log.WithError(err).Warn("Unexpected error listing external tracker bugs for Bugzilla bug.")
-		return comment(fmt.Sprintf(`An error was encountered searching the Bugzilla server at %s for external trackers on bug %d:
-> %v
-Please contact an administrator to resolve this issue, then request a bug refresh with <code>/bugzilla refresh</code>.`,
-			bc.Endpoint(), e.bugId, err))
+		return comment(formatError("searching for external tracker bugs", bc.Endpoint(), e.bugId, err))
 	}
 	shouldMigrate := true
 	for _, item := range prs {
@@ -534,10 +537,7 @@ Please contact an administrator to resolve this issue, then request a bug refres
 			pr, err := gc.GetPullRequest(item.Org, item.Repo, item.Num)
 			if err != nil {
 				log.WithError(err).Warn("Unexpected error checking merge state of related pull request.")
-				return comment(fmt.Sprintf(`An error was encountered checking the state of a related pull request at https://github.com/%s/%s/pull/%d for bug %d:
-> %v
-Please contact an administrator to resolve this issue, then request a bug refresh with <code>/bugzilla refresh</code>.`,
-					item.Org, item.Repo, item.Num, e.bugId, err))
+				return comment(formatError(fmt.Sprintf("checking the state of a related pull request at https://github.com/%s/%s/pull/%d", item.Org, item.Repo, item.Num), bc.Endpoint(), e.bugId, err))
 			}
 			merged = pr.Merged
 		}
@@ -551,12 +551,9 @@ Please contact an administrator to resolve this issue, then request a bug refres
 	if shouldMigrate {
 		if err := bc.UpdateBug(e.bugId, bugzilla.BugUpdate{Status: *options.StatusAfterMerge}); err != nil {
 			log.WithError(err).Warn("Unexpected error updating Bugzilla bug.")
-			return comment(fmt.Sprintf(`An error was encountered updating the bug to the %s state on the Bugzilla server at %s for bug %d:
-> %v
-Please contact an administrator to resolve this issue, then request a bug refresh with <code>/bugzilla refresh</code>.`,
-				*options.StatusAfterMerge, bc.Endpoint(), e.bugId, err))
+			return comment(formatError(fmt.Sprintf("updating to the %s state", *options.StatusAfterMerge), bc.Endpoint(), e.bugId, err))
 		}
-		return comment(fmt.Sprintf("All pull requests linked via external trackers have merged. The "+bugLink+" has been moved to the %s state.", bc.Endpoint(), e.bugId, *options.StatusAfterMerge))
+		return comment(fmt.Sprintf("All pull requests linked via external trackers have merged. "+bugLink+" has been moved to the %s state.", e.bugId, bc.Endpoint(), e.bugId, *options.StatusAfterMerge))
 	}
 	return nil
 }
@@ -565,10 +562,7 @@ func getBug(bc bugzilla.Client, bugId int, log *logrus.Entry, comment func(strin
 	bug, err := bc.GetBug(bugId)
 	if err != nil && !bugzilla.IsNotFound(err) {
 		log.WithError(err).Warn("Unexpected error searching for Bugzilla bug.")
-		return nil, comment(fmt.Sprintf(`An error was encountered searching the Bugzilla server at %s for bug %d:
-> %v
-Please contact an administrator to resolve this issue, then request a bug refresh with <code>/bugzilla refresh</code>.`,
-			bc.Endpoint(), bugId, err))
+		return nil, comment(formatError("searching", bc.Endpoint(), bugId, err))
 	}
 	if bugzilla.IsNotFound(err) || bug == nil {
 		log.Debug("No bug found.")
@@ -577,4 +571,11 @@ Once a valid bug is referenced in the title of this pull request, request a bug 
 			bugId, bc.Endpoint()))
 	}
 	return bug, nil
+}
+
+func formatError(action, endpoint string, bugId int, err error) string {
+	return fmt.Sprintf(`An error was encountered %s for bug %d on the Bugzilla server at %s:
+> %v
+Please contact an administrator to resolve this issue, then request a bug refresh with <code>/bugzilla refresh</code>.`,
+		action, bugId, endpoint, err)
 }

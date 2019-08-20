@@ -71,6 +71,7 @@ type Configuration struct {
 	Project                    ProjectConfig                `json:"project_config,omitempty"`
 	RequireMatchingLabel       []RequireMatchingLabel       `json:"require_matching_label,omitempty"`
 	RequireSIG                 RequireSIG                   `json:"requiresig,omitempty"`
+	Retitle                    Retitle                      `json:"retitle,omitempty"`
 	Slack                      Slack                        `json:"slack,omitempty"`
 	SigMention                 SigMention                   `json:"sigmention,omitempty"`
 	Size                       Size                         `json:"size"`
@@ -182,6 +183,12 @@ func (c *Configuration) SkipCollaborators(org, repo string) bool {
 type RequireSIG struct {
 	// GroupListURL is the URL where a list of the available SIGs can be found.
 	GroupListURL string `json:"group_list_url,omitempty"`
+}
+
+// Retitle specifies configuration for the retitle plugin.
+type Retitle struct {
+	// AllowClosedIssues allows retitling closed/merged issues and PRs.
+	AllowClosedIssues bool `json:"allow_closed_issues,omitempty"`
 }
 
 // SigMention specifies configuration for the sigmention plugin.
@@ -1054,9 +1061,12 @@ type BugzillaBranchOptions struct {
 	TargetRelease *string `json:"target_release,omitempty"`
 	// Statuses determine which statuses a bug may have to be valid
 	Statuses *[]string `json:"statuses,omitempty"`
+
 	// DependentBugStatuses determine which statuses a bug's dependent bugs may have
 	// to deem the child bug valid
 	DependentBugStatuses *[]string `json:"dependent_bug_statuses,omitempty"`
+	// DependentBugTargetRelease determines which release a bug's dependent bugs need to target to be valid
+	DependentBugTargetRelease *string `json:"dependent_bug_target_release,omitempty"`
 
 	// StatusAfterValidation is the status which the bug will be moved to after being
 	// deemed valid and linked to a PR. Will implicitly be considered a part of `statuses`

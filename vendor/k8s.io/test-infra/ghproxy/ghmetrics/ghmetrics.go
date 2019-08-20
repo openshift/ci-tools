@@ -46,14 +46,15 @@ var ghTokenUsageGaugeVec = prometheus.NewGaugeVec(
 	[]string{"token_hash", "api_version"},
 )
 
-// ghRequestsGauge provides the 'github_requests' gauge that keeps track
-// of the number of GitHub requests by API path.
-var ghRequestsGauge = prometheus.NewGaugeVec(
-	prometheus.GaugeOpts{
-		Name: "github_requests",
-		Help: "GitHub requests by API path.",
+// ghRequestDurationHistVec provides the 'github_request_duration' histogram that keeps track
+// of the duration of GitHub requests by API path.
+var ghRequestDurationHistVec = prometheus.NewHistogramVec(
+	prometheus.HistogramOpts{
+		Name:    "github_request_duration",
+		Help:    "GitHub request duration by API path.",
+		Buckets: []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10},
 	},
-	[]string{"token_hash", "path", "status", "duration"},
+	[]string{"token_hash", "path", "status"},
 )
 
 var muxTokenUsage, muxRequestMetrics sync.Mutex
@@ -62,7 +63,7 @@ var lastGitHubResponse time.Time
 func init() {
 	prometheus.MustRegister(ghTokenUntilResetGaugeVec)
 	prometheus.MustRegister(ghTokenUsageGaugeVec)
-	prometheus.MustRegister(ghRequestsGauge)
+	prometheus.MustRegister(ghRequestDurationHistVec)
 }
 
 // CollectGitHubTokenMetrics publishes the rate limits of the github api to
@@ -93,8 +94,8 @@ func CollectGitHubTokenMetrics(tokenHash, apiVersion string, headers http.Header
 
 // CollectGitHubRequestMetrics publishes the number of requests by API path to
 // `github_requests` on prometheus.
-func CollectGitHubRequestMetrics(tokenHash, path, statusCode, roundTripTime string) {
-	ghRequestsGauge.With(prometheus.Labels{"token_hash": tokenHash, "path": GetSimplifiedPath(path), "status": statusCode, "duration": roundTripTime}).Inc()
+func CollectGitHubRequestMetrics(tokenHash, path, statusCode string, roundTripTime float64) {
+	ghRequestDurationHistVec.With(prometheus.Labels{"token_hash": tokenHash, "path": GetSimplifiedPath(path), "status": statusCode}).Observe(roundTripTime)
 }
 
 // timestampStringToTime takes a unix timestamp and returns a `time.Time`

@@ -31,6 +31,7 @@ import (
 	"fmt"
 	"net/http"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -191,11 +192,12 @@ func (u upstreamTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 
 	apiVersion := "v3"
 	if strings.HasPrefix(req.URL.Path, "graphql") || strings.HasPrefix(req.URL.Path, "/graphql") {
+		resp.Header.Set("Cache-Control", "no-store")
 		apiVersion = "v4"
 	}
 
 	ghmetrics.CollectGitHubTokenMetrics(authHeaderHash, apiVersion, resp.Header, reqStartTime, responseTime)
-	ghmetrics.CollectGitHubRequestMetrics(authHeaderHash, req.URL.Path, string(resp.StatusCode), roundTripTime.String())
+	ghmetrics.CollectGitHubRequestMetrics(authHeaderHash, req.URL.Path, strconv.Itoa(resp.StatusCode), roundTripTime.Seconds())
 
 	return resp, nil
 }

@@ -507,10 +507,9 @@ k8s.io/klog
 # k8s.io/kube-openapi v0.0.0-20180731170545-e3762e86a74c
 k8s.io/kube-openapi/pkg/util/proto
 # k8s.io/test-infra v0.0.0-20190903192658-86fbc418c31d
-k8s.io/test-infra/experiment/image-bumper/bumper
+k8s.io/test-infra/experiment/autobumper/bumper
 k8s.io/test-infra/prow/config/secret
 k8s.io/test-infra/prow/github
-k8s.io/test-infra/robots/pr-creator/updater
 k8s.io/test-infra/prow/apis/prowjobs/v1
 k8s.io/test-infra/prow/pod-utils/downwardapi
 k8s.io/test-infra/prow/config
@@ -524,6 +523,8 @@ k8s.io/test-infra/prow/client/clientset/versioned/typed/prowjobs/v1
 k8s.io/test-infra/prow/pjutil
 k8s.io/test-infra/prow/clonerefs
 k8s.io/test-infra/prow/pod-utils/decorate
+k8s.io/test-infra/experiment/image-bumper/bumper
+k8s.io/test-infra/robots/pr-creator/updater
 k8s.io/test-infra/ghproxy/ghcache
 k8s.io/test-infra/prow/errorutil
 k8s.io/test-infra/prow/apis/prowjobs

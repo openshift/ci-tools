@@ -71,7 +71,7 @@ func injectResourcesToTemplatePods(template *templateapi.Template, resources api
 		for i, object := range template.Objects {
 			var pod *coreapi.Pod
 			if err := yaml.Unmarshal(object.Raw, &pod); err != nil {
-				return fmt.Errorf("couldn't unmashal pod %s: %v", pod.Name, err)
+				continue
 			}
 
 			if pod != nil {

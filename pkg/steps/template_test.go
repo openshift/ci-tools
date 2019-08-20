@@ -17,6 +17,7 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 
 	templateapi "github.com/openshift/api/template/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 )
@@ -25,6 +26,9 @@ func TestInjectResourcesToPod(t *testing.T) {
 	corev1Scheme := runtime.NewScheme()
 	utilruntime.Must(coreapi.AddToScheme(corev1Scheme))
 	corev1Codec := serializer.NewCodecFactory(corev1Scheme).LegacyCodec(coreapi.SchemeGroupVersion)
+
+	utilruntime.Must(rbacv1.AddToScheme(corev1Scheme))
+	rbacv1Codec := serializer.NewCodecFactory(corev1Scheme).LegacyCodec(rbacv1.SchemeGroupVersion)
 
 	testCases := []struct {
 		testID    string
@@ -230,6 +234,93 @@ func TestInjectResourcesToPod(t *testing.T) {
 						return runtime.RawExtension{
 							Raw:    []byte(runtime.EncodeOrDie(corev1Codec, pod)),
 							Object: pod.DeepCopyObject(),
+						}
+					}(),
+				},
+			},
+		},
+		{
+			testID: "resource requests are defined, template contains no-pod objects, pod with container named 'test' exist and changed",
+			resources: api.ResourceConfiguration{
+				"test-template": {
+					Requests: api.ResourceList{"cpu": "3", "memory": "8Gi"},
+					Limits:   api.ResourceList{"memory": "10Gi"},
+				},
+			},
+			template: &templateapi.Template{
+				TypeMeta:   meta.TypeMeta{Kind: "Template", APIVersion: "template.openshift.io/v1"},
+				ObjectMeta: meta.ObjectMeta{Name: "test-template"},
+				Objects: []runtime.RawExtension{
+					func() runtime.RawExtension {
+						pod := &coreapi.Pod{
+							TypeMeta:   meta.TypeMeta{Kind: "Pod", APIVersion: "v1"},
+							ObjectMeta: meta.ObjectMeta{Name: "test-pod"},
+							Spec: coreapi.PodSpec{
+								Containers: []coreapi.Container{{
+									Name: "test",
+									Resources: coreapi.ResourceRequirements{
+										Requests: coreapi.ResourceList{
+											"cpu":    *resource.NewQuantity(2, resource.DecimalSI),
+											"memory": *resource.NewQuantity(4*1024*1024*1024, resource.BinarySI)},
+										Limits: coreapi.ResourceList{"memory": *resource.NewQuantity(5*1024*1024*1024, resource.BinarySI)},
+									}}},
+							},
+						}
+						return runtime.RawExtension{
+							Raw:    []byte(runtime.EncodeOrDie(corev1Codec, pod)),
+							Object: pod.DeepCopyObject(),
+						}
+					}(),
+					func() runtime.RawExtension {
+						rolebinding := &rbacv1.RoleBinding{
+							ObjectMeta: meta.ObjectMeta{
+								Name:      "image-puller",
+								Namespace: "test-namespace",
+							},
+						}
+
+						return runtime.RawExtension{
+							Raw:    []byte(runtime.EncodeOrDie(rbacv1Codec, rolebinding)),
+							Object: rolebinding.DeepCopyObject(),
+						}
+					}(),
+				},
+			},
+			expected: &templateapi.Template{
+				TypeMeta:   meta.TypeMeta{Kind: "Template", APIVersion: "template.openshift.io/v1"},
+				ObjectMeta: meta.ObjectMeta{Name: "test-template"},
+				Objects: []runtime.RawExtension{
+					func() runtime.RawExtension {
+						pod := &coreapi.Pod{
+							TypeMeta:   meta.TypeMeta{Kind: "Pod", APIVersion: "v1"},
+							ObjectMeta: meta.ObjectMeta{Name: "test-pod"},
+							Spec: coreapi.PodSpec{
+								Containers: []coreapi.Container{{
+									Name: "test",
+									Resources: coreapi.ResourceRequirements{
+										Requests: coreapi.ResourceList{
+											"cpu":    *resource.NewQuantity(3, resource.DecimalSI),
+											"memory": *resource.NewQuantity(8*1024*1024*1024, resource.BinarySI)},
+										Limits: coreapi.ResourceList{"memory": *resource.NewQuantity(10*1024*1024*1024, resource.BinarySI)},
+									}}},
+							},
+						}
+						return runtime.RawExtension{
+							Raw:    []byte(runtime.EncodeOrDie(corev1Codec, pod)),
+							Object: pod.DeepCopyObject(),
+						}
+					}(),
+					func() runtime.RawExtension {
+						rolebinding := &rbacv1.RoleBinding{
+							ObjectMeta: meta.ObjectMeta{
+								Name:      "image-puller",
+								Namespace: "test-namespace",
+							},
+						}
+
+						return runtime.RawExtension{
+							Raw:    []byte(runtime.EncodeOrDie(rbacv1Codec, rolebinding)),
+							Object: rolebinding.DeepCopyObject(),
 						}
 					}(),
 				},

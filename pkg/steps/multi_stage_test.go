@@ -113,6 +113,8 @@ func TestGeneratePods(t *testing.T) {
 		{Name: "JOB_NAME_HASH", Value: "5e8c9"},
 		{Name: "CLUSTER_TYPE", Value: "aws"},
 		{Name: "KUBECONFIG", Value: "/var/run/secrets/ci.openshift.io/multi-stage/kubeconfig"},
+		{Name: "RELEASE_IMAGE_INITIAL", Value: "release:initial"},
+		{Name: "RELEASE_IMAGE_LATEST", Value: "release:latest"},
 	}
 	jobSpec := api.JobSpec{
 		JobSpec: prowdapi.JobSpec{
@@ -129,7 +131,9 @@ func TestGeneratePods(t *testing.T) {
 		},
 		Namespace: "namespace",
 	}
-	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, "artifact_dir", &jobSpec, nil)
+	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, nil, "artifact_dir", &jobSpec, nil)
+	step.releaseInitial = "release:initial"
+	step.releaseLatest = "release:latest"
 	ret, err := step.generatePods(config.Tests[0].MultiStageTestConfiguration.Test)
 	if err != nil {
 		t.Fatal(err)

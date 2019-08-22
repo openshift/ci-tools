@@ -33,9 +33,10 @@ const (
 	// CIOperatorConfigInRepoPath is the ci-operator config path from release repo
 	CIOperatorConfigInRepoPath = "ci-operator/config"
 
-	objectSpec     = ".Spec"
-	objectAgent    = ".Agent"
-	objectOptional = ".Optional"
+	objectSpec      = ".Spec"
+	objectAgent     = ".Agent"
+	objectOptional  = ".Optional"
+	objectAlwaysRun = ".AlwaysRun"
 
 	chosenJob            = "Job has been chosen for rehearsal"
 	newCiopConfigMsg     = "New ci-operator config file"
@@ -102,18 +103,16 @@ func GetChangedPresubmits(prowMasterConfig, prowPRConfig *prowconfig.Config, log
 					logFields[logDiffs] = convertToReadableDiff(masterJob.Agent, job.Agent, objectAgent)
 					logger.WithFields(logFields).Info(chosenJob)
 					ret.Add(repo, job)
-					continue
-				}
-
-				if !equality.Semantic.DeepEqual(masterJob.Spec, job.Spec) {
+				} else if !equality.Semantic.DeepEqual(masterJob.Spec, job.Spec) {
 					logFields[logDiffs] = convertToReadableDiff(masterJob.Spec, job.Spec, objectSpec)
 					logger.WithFields(logFields).Info(chosenJob)
 					ret.Add(repo, job)
-					continue
-				}
-
-				if masterJob.Optional && !job.Optional {
+				} else if masterJob.Optional && !job.Optional {
 					logFields[logDiffs] = convertToReadableDiff(masterJob.Optional, job.Optional, objectOptional)
+					logger.WithFields(logFields).Info(chosenJob)
+					ret.Add(repo, job)
+				} else if !masterJob.AlwaysRun && job.AlwaysRun {
+					logFields[logDiffs] = convertToReadableDiff(masterJob.AlwaysRun, job.AlwaysRun, objectAlwaysRun)
 					logger.WithFields(logFields).Info(chosenJob)
 					ret.Add(repo, job)
 				}

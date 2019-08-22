@@ -227,6 +227,43 @@ func TestGetChangedPresubmits(t *testing.T) {
 			},
 		},
 		{
+			name: "different optional field is identified as a diff (from true to false)",
+			configGenerator: func() (*prowconfig.Config, *prowconfig.Config) {
+				var p, base []prowconfig.Presubmit
+				deepcopy.Copy(&p, basePresubmit)
+				deepcopy.Copy(&base, basePresubmit)
+
+				base[0].Optional = true
+				p[0].Optional = false
+				return makeConfig(base), makeConfig(p)
+
+			},
+			expected: config.Presubmits{
+				"org/repo": basePresubmit,
+			},
+		},
+		{
+			name: "different always_run field is identified as a diff (from false to true)",
+			configGenerator: func() (*prowconfig.Config, *prowconfig.Config) {
+				var p, base []prowconfig.Presubmit
+				deepcopy.Copy(&p, basePresubmit)
+				deepcopy.Copy(&base, basePresubmit)
+
+				base[0].AlwaysRun = false
+				p[0].AlwaysRun = true
+				return makeConfig(base), makeConfig(p)
+
+			},
+			expected: config.Presubmits{
+				"org/repo": func() []prowconfig.Presubmit {
+					var p []prowconfig.Presubmit
+					deepcopy.Copy(&p, basePresubmit)
+					p[0].AlwaysRun = true
+					return p
+				}(),
+			},
+		},
+		{
 			name: "different spec is identified as a diff - single change",
 			configGenerator: func() (*prowconfig.Config, *prowconfig.Config) {
 				var p []prowconfig.Presubmit
@@ -281,7 +318,7 @@ func TestGetChangedPresubmits(t *testing.T) {
 			before, after := testCase.configGenerator()
 			p := GetChangedPresubmits(before, after, logrus.NewEntry(logrus.New()))
 			if !equality.Semantic.DeepEqual(p, testCase.expected) {
-				t.Fatalf("Name:%s\nExpected %#v\nFound:%#v\n", testCase.name, testCase.expected["org/repo"], p["org/repo"])
+				t.Fatalf(diff.ObjectDiff(testCase.expected["org/repo"], p["org/repo"]))
 			}
 		})
 	}

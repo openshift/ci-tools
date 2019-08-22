@@ -271,6 +271,12 @@ func validateTestConfigurationType(fieldRoot string, test TestStepConfiguration,
 		typeCount++
 		validationErrors = append(validationErrors, validateClusterProfile(fmt.Sprintf("%s", fieldRoot), testConfig.ClusterProfile)...)
 	}
+	if testConfig := test.MultiStageTestConfiguration; testConfig != nil {
+		typeCount++
+		if testConfig.ClusterProfile != "" {
+			validationErrors = append(validationErrors, validateClusterProfile(fmt.Sprintf("%s", fieldRoot), testConfig.ClusterProfile)...)
+		}
+	}
 	if test.OpenshiftInstallerRandomClusterTestConfiguration != nil {
 		typeCount++
 	}

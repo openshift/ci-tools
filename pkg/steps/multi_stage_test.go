@@ -73,6 +73,7 @@ func TestGeneratePods(t *testing.T) {
 		Tests: []api.TestStepConfiguration{{
 			As: "test",
 			MultiStageTestConfiguration: &api.MultiStageTestConfiguration{
+				ClusterProfile: api.ClusterProfileAWS,
 				Test: []api.TestStep{{
 					LiteralTestStep: &api.LiteralTestStep{As: "step0", From: "image0", Commands: "command0"},
 				}, {
@@ -110,6 +111,8 @@ func TestGeneratePods(t *testing.T) {
 		{Name: "NAMESPACE", Value: "namespace"},
 		{Name: "JOB_NAME_SAFE", Value: "test"},
 		{Name: "JOB_NAME_HASH", Value: "5e8c9"},
+		{Name: "CLUSTER_TYPE", Value: "aws"},
+		{Name: "KUBECONFIG", Value: "/var/run/secrets/ci.openshift.io/multi-stage/kubeconfig"},
 	}
 	jobSpec := api.JobSpec{
 		JobSpec: prowdapi.JobSpec{
@@ -150,11 +153,21 @@ func TestGeneratePods(t *testing.T) {
 				Resources:                coreapi.ResourceRequirements{},
 				TerminationMessagePolicy: "FallbackToLogsOnError",
 				VolumeMounts: []coreapi.VolumeMount{{
+					Name:      "cluster-profile",
+					MountPath: "/var/run/secrets/ci.openshift.io/cluster-profile",
+				}, {
 					Name:      "test",
 					MountPath: "/var/run/secrets/ci.openshift.io/multi-stage",
 				}},
 			}},
 			Volumes: []coreapi.Volume{{
+				Name: "cluster-profile",
+				VolumeSource: coreapi.VolumeSource{
+					Secret: &coreapi.SecretVolumeSource{
+						SecretName: "test-cluster-profile",
+					},
+				},
+			}, {
 				Name: "test",
 				VolumeSource: coreapi.VolumeSource{
 					Secret: &coreapi.SecretVolumeSource{
@@ -182,6 +195,9 @@ func TestGeneratePods(t *testing.T) {
 				Resources:                coreapi.ResourceRequirements{},
 				TerminationMessagePolicy: "FallbackToLogsOnError",
 				VolumeMounts: []coreapi.VolumeMount{{
+					Name:      "cluster-profile",
+					MountPath: "/var/run/secrets/ci.openshift.io/cluster-profile",
+				}, {
 					Name:      "artifacts",
 					MountPath: "/artifact/dir",
 				}, {
@@ -214,6 +230,13 @@ done
 				}},
 			}},
 			Volumes: []coreapi.Volume{{
+				Name: "cluster-profile",
+				VolumeSource: coreapi.VolumeSource{
+					Secret: &coreapi.SecretVolumeSource{
+						SecretName: "test-cluster-profile",
+					},
+				},
+			}, {
 				Name: "artifacts",
 				VolumeSource: coreapi.VolumeSource{
 					EmptyDir: &coreapi.EmptyDirVolumeSource{},

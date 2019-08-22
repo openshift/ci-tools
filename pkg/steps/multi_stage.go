@@ -29,8 +29,11 @@ const (
 type multiStageTestStep struct {
 	dry             bool
 	name            string
+	releaseInitial  string
+	releaseLatest   string
 	profile         api.ClusterProfile
 	config          *api.ReleaseBuildConfiguration
+	params          api.Parameters
 	podClient       PodClient
 	secretClient    coreclientset.SecretsGetter
 	artifactDir     string
@@ -42,17 +45,19 @@ type multiStageTestStep struct {
 func MultiStageTestStep(
 	testConfig api.TestStepConfiguration,
 	config *api.ReleaseBuildConfiguration,
+	params api.Parameters,
 	podClient PodClient,
 	secretClient coreclientset.SecretsGetter,
 	artifactDir string,
 	jobSpec *api.JobSpec,
 ) api.Step {
-	return newMultiStageTestStep(testConfig, config, podClient, secretClient, artifactDir, jobSpec)
+	return newMultiStageTestStep(testConfig, config, params, podClient, secretClient, artifactDir, jobSpec)
 }
 
 func newMultiStageTestStep(
 	testConfig api.TestStepConfiguration,
 	config *api.ReleaseBuildConfiguration,
+	params api.Parameters,
 	podClient PodClient,
 	secretClient coreclientset.SecretsGetter,
 	artifactDir string,
@@ -65,6 +70,7 @@ func newMultiStageTestStep(
 		name:         testConfig.As,
 		profile:      testConfig.MultiStageTestConfiguration.ClusterProfile,
 		config:       config,
+		params:       params,
 		podClient:    podClient,
 		secretClient: secretClient,
 		artifactDir:  artifactDir,
@@ -87,6 +93,13 @@ func (s *multiStageTestStep) Run(ctx context.Context, dry bool) error {
 			if _, err := s.secretClient.Secrets(s.jobSpec.Namespace).Get(profileSecret, meta.GetOptions{}); err != nil {
 				return fmt.Errorf("could not find secret %q: %v", profileSecret, err)
 			}
+		}
+		var err error
+		if s.releaseInitial, err = s.params.Get("RELEASE_IMAGE_INITIAL"); err != nil {
+			return err
+		}
+		if s.releaseLatest, err = s.params.Get("RELEASE_IMAGE_LATEST"); err != nil {
+			return err
 		}
 	}
 	if err := createSecret(s.secretClient.Secrets(s.jobSpec.Namespace), s.name, s.dry); err != nil {
@@ -126,6 +139,10 @@ func (s *multiStageTestStep) Requires() (ret []api.StepLink) {
 	}
 	if needsRelease {
 		ret = append(ret, api.ReleaseImagesLink())
+	}
+	if s.profile != "" {
+		ret = append(ret, s.params.Links("RELEASE_IMAGE_INITIAL")...)
+		ret = append(ret, s.params.Links("RELEASE_IMAGE_LATEST")...)
 	}
 	return
 }
@@ -175,10 +192,11 @@ func (s *multiStageTestStep) generatePods(steps []api.TestStep) ([]coreapi.Pod, 
 		}
 		if s.profile != "" {
 			addProfile(s.name, s.profile, pod)
-			container.Env = append(container.Env, coreapi.EnvVar{
-				Name:  "KUBECONFIG",
-				Value: filepath.Join(secretMountPath, "kubeconfig"),
-			})
+			container.Env = append(container.Env, []coreapi.EnvVar{
+				{Name: "KUBECONFIG", Value: filepath.Join(secretMountPath, "kubeconfig")},
+				{Name: "RELEASE_IMAGE_INITIAL", Value: s.releaseInitial},
+				{Name: "RELEASE_IMAGE_LATEST", Value: s.releaseLatest},
+			}...)
 		}
 		if s.artifactDir != "" && step.ArtifactDir != "" {
 			container.VolumeMounts = append(container.VolumeMounts, coreapi.VolumeMount{

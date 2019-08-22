@@ -155,7 +155,7 @@ func FromConfig(
 
 		} else if testStep := rawStep.TestStepConfiguration; testStep != nil {
 			if testStep.MultiStageTestConfiguration != nil {
-				step = steps.MultiStageTestStep(*testStep, config, podClient, secretGetter, artifactDir, jobSpec)
+				step = steps.MultiStageTestStep(*testStep, config, params, podClient, secretGetter, artifactDir, jobSpec)
 			} else if testStep.OpenshiftInstallerClusterTestConfiguration != nil {
 				if testStep.OpenshiftInstallerClusterTestConfiguration.Upgrade {
 					var err error

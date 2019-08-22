@@ -33,8 +33,9 @@ const (
 	// CIOperatorConfigInRepoPath is the ci-operator config path from release repo
 	CIOperatorConfigInRepoPath = "ci-operator/config"
 
-	objectSpec  = ".Spec"
-	objectAgent = ".Agent"
+	objectSpec     = ".Spec"
+	objectAgent    = ".Agent"
+	objectOptional = ".Optional"
 
 	chosenJob            = "Job has been chosen for rehearsal"
 	newCiopConfigMsg     = "New ci-operator config file"
@@ -106,6 +107,13 @@ func GetChangedPresubmits(prowMasterConfig, prowPRConfig *prowconfig.Config, log
 
 				if !equality.Semantic.DeepEqual(masterJob.Spec, job.Spec) {
 					logFields[logDiffs] = convertToReadableDiff(masterJob.Spec, job.Spec, objectSpec)
+					logger.WithFields(logFields).Info(chosenJob)
+					ret.Add(repo, job)
+					continue
+				}
+
+				if masterJob.Optional && !job.Optional {
+					logFields[logDiffs] = convertToReadableDiff(masterJob.Optional, job.Optional, objectOptional)
 					logger.WithFields(logFields).Info(chosenJob)
 					ret.Add(repo, job)
 				}

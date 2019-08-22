@@ -19,14 +19,16 @@ import (
 )
 
 const (
-	multiStageTestLabel = "ci.openshift.io/multi-stage-test"
-	secretMountPath     = "/var/run/secrets/ci.openshift.io/multi-stage"
+	multiStageTestLabel     = "ci.openshift.io/multi-stage-test"
+	clusterProfileMountPath = "/var/run/secrets/ci.openshift.io/cluster-profile"
+	secretMountPath         = "/var/run/secrets/ci.openshift.io/multi-stage"
 )
 
 type multiStageTestStep struct {
 	dry             bool
 	logger          *DryLogger
 	name            string
+	profile         api.ClusterProfile
 	config          *api.ReleaseBuildConfiguration
 	podClient       PodClient
 	secretClient    coreclientset.SecretsGetter
@@ -63,6 +65,7 @@ func newMultiStageTestStep(
 	return &multiStageTestStep{
 		logger:       logger,
 		name:         testConfig.As,
+		profile:      testConfig.MultiStageTestConfiguration.ClusterProfile,
 		config:       config,
 		podClient:    podClient,
 		secretClient: secretClient,
@@ -74,12 +77,22 @@ func newMultiStageTestStep(
 	}
 }
 
+func (s *multiStageTestStep) profileSecretName() string {
+	return s.name + "-cluster-profile"
+}
+
 func (s *multiStageTestStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
 	return nil, nil
 }
 
 func (s *multiStageTestStep) Run(ctx context.Context, dry bool) error {
 	s.dry = dry
+	if s.profile != "" {
+		secret := s.profileSecretName()
+		if _, err := s.secretClient.Secrets(s.jobSpec.Namespace).Get(secret, meta.GetOptions{}); err != nil {
+			return fmt.Errorf("could not find secret %q: %v", secret, err)
+		}
+	}
 	if err := s.createSecret(); err != nil {
 		return fmt.Errorf("failed to create secret: %v", err)
 	}
@@ -180,8 +193,15 @@ func (s *multiStageTestStep) generatePods(steps []api.TestStep) ([]coreapi.Pod, 
 		if owner := s.jobSpec.Owner(); owner != nil {
 			pod.OwnerReferences = append(pod.OwnerReferences, *owner)
 		}
+		if s.profile != "" {
+			addProfile(s.profileSecretName(), s.profile, pod)
+			container.Env = append(container.Env, coreapi.EnvVar{
+				Name:  "KUBECONFIG",
+				Value: filepath.Join(secretMountPath, "kubeconfig"),
+			})
+		}
 		if s.artifactDir != "" && step.ArtifactDir != "" {
-			pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, coreapi.VolumeMount{
+			container.VolumeMounts = append(container.VolumeMounts, coreapi.VolumeMount{
 				Name:      "artifacts",
 				MountPath: step.ArtifactDir,
 			})
@@ -228,6 +248,27 @@ func addSecret(secret string, pod *coreapi.Pod) {
 	pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, coreapi.VolumeMount{
 		Name:      secret,
 		MountPath: secretMountPath,
+	})
+}
+
+func addProfile(name string, profile api.ClusterProfile, pod *coreapi.Pod) {
+	volumeName := "cluster-profile"
+	pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{
+		Name: volumeName,
+		VolumeSource: coreapi.VolumeSource{
+			Secret: &coreapi.SecretVolumeSource{
+				SecretName: name,
+			},
+		},
+	})
+	container := &pod.Spec.Containers[0]
+	container.VolumeMounts = append(container.VolumeMounts, coreapi.VolumeMount{
+		Name:      volumeName,
+		MountPath: clusterProfileMountPath,
+	})
+	container.Env = append(container.Env, coreapi.EnvVar{
+		Name:  "CLUSTER_TYPE",
+		Value: strings.Split(string(profile), "-")[0],
 	})
 }
 

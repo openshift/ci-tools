@@ -102,10 +102,11 @@ func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber 
 		if len(repo) > 0 {
 			orgRepo := strings.Split(repo, "/")
 			rehearsal.ExtraRefs = append(rehearsal.ExtraRefs, pjapi.Refs{
-				Org:     orgRepo[0],
-				Repo:    orgRepo[1],
-				BaseRef: branch,
-				WorkDir: true,
+				Org:       orgRepo[0],
+				Repo:      orgRepo[1],
+				BaseRef:   branch,
+				WorkDir:   true,
+				PathAlias: rehearsal.PathAlias,
 			})
 			context += repo + "/"
 		}

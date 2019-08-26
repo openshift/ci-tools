@@ -256,8 +256,9 @@ func TestMakeRehearsalPresubmit(t *testing.T) {
 	testRepo := "org/repo"
 	sourcePresubmit := &prowconfig.Presubmit{
 		JobBase: prowconfig.JobBase{
-			Agent: "kubernetes",
-			Name:  "pull-ci-org-repo-branch-test",
+			Agent:         "kubernetes",
+			Name:          "pull-ci-org-repo-branch-test",
+			UtilityConfig: prowconfig.UtilityConfig{PathAlias: "test/path.io"},
 			Spec: &v1.PodSpec{
 				Containers: []v1.Container{{
 					Command: []string{"ci-operator"},
@@ -280,10 +281,11 @@ func TestMakeRehearsalPresubmit(t *testing.T) {
 	expectedPresubmit.Optional = true
 	expectedPresubmit.ExtraRefs = []pjapi.Refs{
 		{
-			Org:     "org",
-			Repo:    "repo",
-			BaseRef: "branch",
-			WorkDir: true,
+			Org:       "org",
+			Repo:      "repo",
+			BaseRef:   "branch",
+			PathAlias: "test/path.io",
+			WorkDir:   true,
 		},
 	}
 

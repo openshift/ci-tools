@@ -396,8 +396,8 @@ func TestValidateTestSteps(t *testing.T) {
 	}{{
 		name: "valid step",
 		steps: []TestStep{{
-			Name:     "name",
-			Image:    "image",
+			As:       "as",
+			From:     "from",
 			Commands: "commands",
 			Resources: ResourceRequirements{
 				Requests: ResourceList{"cpu": "1"},
@@ -407,35 +407,35 @@ func TestValidateTestSteps(t *testing.T) {
 	}, {
 		name: "no name",
 		steps: []TestStep{{
-			Image:    "image",
+			From:     "from",
 			Commands: "commands",
 			Resources: ResourceRequirements{
 				Requests: ResourceList{"cpu": "1"},
 				Limits:   ResourceList{"memory": "1m"},
 			},
 		}},
-		errs: []error{errors.New("test[0]: `name` is required")},
+		errs: []error{errors.New("test[0]: `as` is required")},
 	}, {
 		name: "duplicated names",
 		steps: []TestStep{{
-			Name:     "s0",
-			Image:    "image",
+			As:       "s0",
+			From:     "from",
 			Commands: "commands",
 			Resources: ResourceRequirements{
 				Requests: ResourceList{"cpu": "1"},
 				Limits:   ResourceList{"memory": "1m"},
 			},
 		}, {
-			Name:     "s1",
-			Image:    "image",
+			As:       "s1",
+			From:     "from",
 			Commands: "commands",
 			Resources: ResourceRequirements{
 				Requests: ResourceList{"cpu": "1"},
 				Limits:   ResourceList{"memory": "1m"},
 			},
 		}, {
-			Name:     "s0",
-			Image:    "image",
+			As:       "s0",
+			From:     "from",
 			Commands: "commands",
 			Resources: ResourceRequirements{
 				Requests: ResourceList{"cpu": "1"},
@@ -446,19 +446,19 @@ func TestValidateTestSteps(t *testing.T) {
 	}, {
 		name: "no image",
 		steps: []TestStep{{
-			Name:     "no_image",
+			As:       "no_image",
 			Commands: "commands",
 			Resources: ResourceRequirements{
 				Requests: ResourceList{"cpu": "1"},
 				Limits:   ResourceList{"memory": "1m"},
 			},
 		}},
-		errs: []error{errors.New("test[0]: `image` is required")},
+		errs: []error{errors.New("test[0]: `from` is required")},
 	}, {
 		name: "no commands",
 		steps: []TestStep{{
-			Name:  "no_commands",
-			Image: "image",
+			As:   "no_commands",
+			From: "from",
 			Resources: ResourceRequirements{
 				Requests: ResourceList{"cpu": "1"},
 				Limits:   ResourceList{"memory": "1m"},
@@ -468,8 +468,8 @@ func TestValidateTestSteps(t *testing.T) {
 	}, {
 		name: "invalid resources",
 		steps: []TestStep{{
-			Name:     "bad_resources",
-			Image:    "image",
+			As:       "bad_resources",
+			From:     "from",
 			Commands: "commands",
 			Resources: ResourceRequirements{
 				Requests: ResourceList{"cpu": "yes"},

@@ -6,8 +6,8 @@ import (
 
 // TestStep contains a full definition of a test step from a MultiStageTestConfiguration
 type TestStep struct {
-	Name        string
-	Image       string
+	As          string
+	From        string
 	Commands    string
 	ArtifactDir string
 	Resources   api.ResourceRequirements

@@ -21,8 +21,8 @@ func TestResolve(t *testing.T) {
 		config: api.MultiStageTestConfiguration{
 			ClusterProfile: api.ClusterProfileAWS,
 			Pre: []api.TestStep{{
-				Name:     "ipi-install",
-				Image:    "installer",
+				As:       "ipi-install",
+				From:     "installer",
 				Commands: "openshift-cluster install",
 				Resources: api.ResourceRequirements{
 					Requests: api.ResourceList{"cpu": "1000m"},
@@ -30,8 +30,8 @@ func TestResolve(t *testing.T) {
 				},
 			}},
 			Test: []api.TestStep{{
-				Name:     "e2e",
-				Image:    "my-image",
+				As:       "e2e",
+				From:     "my-image",
 				Commands: "make custom-e2e",
 				Resources: api.ResourceRequirements{
 					Requests: api.ResourceList{"cpu": "1000m"},
@@ -39,8 +39,8 @@ func TestResolve(t *testing.T) {
 				},
 			}},
 			Post: []api.TestStep{{
-				Name:     "ipi-teardown",
-				Image:    "installer",
+				As:       "ipi-teardown",
+				From:     "installer",
 				Commands: "openshift-cluster destroy",
 				Resources: api.ResourceRequirements{
 					Requests: api.ResourceList{"cpu": "1000m"},
@@ -51,8 +51,8 @@ func TestResolve(t *testing.T) {
 		expectedRes: types.TestFlow{
 			ClusterProfile: api.ClusterProfileAWS,
 			Pre: []types.TestStep{{
-				Name:     "ipi-install",
-				Image:    "installer",
+				As:       "ipi-install",
+				From:     "installer",
 				Commands: "openshift-cluster install",
 				Resources: api.ResourceRequirements{
 					Requests: api.ResourceList{"cpu": "1000m"},
@@ -60,8 +60,8 @@ func TestResolve(t *testing.T) {
 				},
 			}},
 			Test: []types.TestStep{{
-				Name:     "e2e",
-				Image:    "my-image",
+				As:       "e2e",
+				From:     "my-image",
 				Commands: "make custom-e2e",
 				Resources: api.ResourceRequirements{
 					Requests: api.ResourceList{"cpu": "1000m"},
@@ -69,8 +69,8 @@ func TestResolve(t *testing.T) {
 				},
 			}},
 			Post: []types.TestStep{{
-				Name:     "ipi-teardown",
-				Image:    "installer",
+				As:       "ipi-teardown",
+				From:     "installer",
 				Commands: "openshift-cluster destroy",
 				Resources: api.ResourceRequirements{
 					Requests: api.ResourceList{"cpu": "1000m"},

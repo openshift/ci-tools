@@ -312,9 +312,9 @@ type TestStepConfiguration struct {
 // write less verbose test configs. It gets converted to an internal TestStep
 // struct that represents the full configuration that ci-operator can use.
 type TestStep struct {
-	Name          string               `json:"name,omitempty"`
+	As            string               `json:"as,omitempty"`
 	Documentation string               `json:"documentation,omitempty"`
-	Image         string               `json:"image,omitempty"`
+	From          string               `json:"from,omitempty"`
 	Commands      string               `json:"commands,omitempty"`
 	ArtifactDir   string               `json:"artifact_dir,omitempty"`
 	Resources     ResourceRequirements `json:"resources,omitempty"`

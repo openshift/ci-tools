@@ -46,8 +46,8 @@ func (r *registry) Resolve(config api.MultiStageTestConfiguration) (types.TestFl
 
 func toInternal(input api.TestStep) types.TestStep {
 	return types.TestStep{
-		Name:        input.Name,
-		Image:       input.Image,
+		As:          input.As,
+		From:        input.From,
 		Commands:    input.Commands,
 		ArtifactDir: input.ArtifactDir,
 		Resources:   input.Resources,

@@ -5,13 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"k8s.io/test-infra/prow/clonerefs"
-	"k8s.io/test-infra/prow/pod-utils/decorate"
 	"log"
 	"os"
 	"sort"
 	"strings"
 	"time"
+
+	"k8s.io/test-infra/prow/clonerefs"
+	"k8s.io/test-infra/prow/pod-utils/decorate"
 
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -56,6 +57,30 @@ RUN git submodule update --init
 }
 
 func defaultPodLabels(jobSpec *api.JobSpec) map[string]string {
+	if refs := jobSpec.JobSpec.Refs; refs != nil {
+		return trimLabels(map[string]string{
+			JobLabel:         jobSpec.Job,
+			BuildIdLabel:     jobSpec.BuildID,
+			ProwJobIdLabel:   jobSpec.ProwJobID,
+			CreatedByCILabel: "true",
+			RefsOrgLabel:     refs.Org,
+			RefsRepoLabel:    refs.Repo,
+			RefsBranchLabel:  refs.BaseRef,
+		})
+	}
+
+	if extraRefs := jobSpec.JobSpec.ExtraRefs; len(extraRefs) > 0 {
+		return trimLabels(map[string]string{
+			JobLabel:         jobSpec.Job,
+			BuildIdLabel:     jobSpec.BuildID,
+			ProwJobIdLabel:   jobSpec.ProwJobID,
+			CreatedByCILabel: "true",
+			RefsOrgLabel:     extraRefs[0].Org,
+			RefsRepoLabel:    extraRefs[0].Repo,
+			RefsBranchLabel:  extraRefs[0].BaseRef,
+		})
+	}
+
 	return trimLabels(map[string]string{
 		JobLabel:         jobSpec.Job,
 		BuildIdLabel:     jobSpec.BuildID,

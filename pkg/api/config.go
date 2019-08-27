@@ -297,15 +297,15 @@ func validateTestSteps(fieldRoot string, steps []TestStep) (ret []error) {
 	seen := sets.NewString()
 	for i, s := range steps {
 		fieldRootI := fmt.Sprintf("%s[%d]", fieldRoot, i)
-		if len(s.Name) == 0 {
-			ret = append(ret, fmt.Errorf("%s: `name` is required", fieldRootI))
-		} else if seen.Has(s.Name) {
-			ret = append(ret, fmt.Errorf("%s: duplicated name %q", fieldRootI, s.Name))
+		if len(s.As) == 0 {
+			ret = append(ret, fmt.Errorf("%s: `as` is required", fieldRootI))
+		} else if seen.Has(s.As) {
+			ret = append(ret, fmt.Errorf("%s: duplicated name %q", fieldRootI, s.As))
 		} else {
-			seen.Insert(s.Name)
+			seen.Insert(s.As)
 		}
-		if len(s.Image) == 0 {
-			ret = append(ret, fmt.Errorf("%s: `image` is required", fieldRootI))
+		if len(s.From) == 0 {
+			ret = append(ret, fmt.Errorf("%s: `from` is required", fieldRootI))
 		}
 		if len(s.Commands) == 0 {
 			ret = append(ret, fmt.Errorf("%s: `commands` is required", fieldRootI))

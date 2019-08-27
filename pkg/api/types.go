@@ -294,6 +294,7 @@ type TestStepConfiguration struct {
 
 	// Only one of the following can be not-null.
 	ContainerTestConfiguration                                *ContainerTestConfiguration                                `json:"container,omitempty"`
+	MultiStageTestConfiguration                               *MultiStageTestConfiguration                               `json:"steps,omitempty"`
 	OpenshiftAnsibleClusterTestConfiguration                  *OpenshiftAnsibleClusterTestConfiguration                  `json:"openshift_ansible,omitempty"`
 	OpenshiftAnsibleSrcClusterTestConfiguration               *OpenshiftAnsibleSrcClusterTestConfiguration               `json:"openshift_ansible_src,omitempty"`
 	OpenshiftAnsibleCustomClusterTestConfiguration            *OpenshiftAnsibleCustomClusterTestConfiguration            `json:"openshift_ansible_custom,omitempty"`
@@ -307,12 +308,25 @@ type TestStepConfiguration struct {
 	OpenshiftInstallerCustomTestImageClusterTestConfiguration *OpenshiftInstallerCustomTestImageClusterTestConfiguration `json:"openshift_installer_custom_test_image,omitempty"`
 }
 
+// TestStep is the external representation of a test step that allows users to
+// write less verbose test configs. It gets converted to an internal TestStep
+// struct that represents the full configuration that ci-operator can use.
 type TestStep struct {
-	Name        string               `json:"name,omitempty"`
-	Image       string               `json:"image,omitempty"`
-	Commands    string               `json:"commands,omitempty"`
-	ArtifactDir string               `json:"artifact_dir,omitempty"`
-	Resources   ResourceRequirements `json:"resources,omitempty"`
+	Name          string               `json:"name,omitempty"`
+	Documentation string               `json:"documentation,omitempty"`
+	Image         string               `json:"image,omitempty"`
+	Commands      string               `json:"commands,omitempty"`
+	ArtifactDir   string               `json:"artifact_dir,omitempty"`
+	Resources     ResourceRequirements `json:"resources,omitempty"`
+}
+
+// MultiStageTestConfiguration is a flexible configuration mode that allows tighter control over
+// the multiple stages of end to end tests
+type MultiStageTestConfiguration struct {
+	ClusterProfile ClusterProfile `json:"cluster_profile"`
+	Pre            []TestStep     `json:"pre,omitempty"`
+	Test           []TestStep     `json:"test,omitempty"`
+	Post           []TestStep     `json:"post,omitempty"`
 }
 
 // Secret describes a secret to be mounted inside a test

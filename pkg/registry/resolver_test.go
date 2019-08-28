@@ -10,9 +10,11 @@ import (
 )
 
 func TestResolve(t *testing.T) {
+	reference1 := "generic-unit-test"
 	for _, testCase := range []struct {
 		name        string
 		config      api.MultiStageTestConfiguration
+		stepMap     map[string]api.LiteralTestStep
 		expectedRes types.TestFlow
 		expectErr   bool
 	}{{
@@ -21,31 +23,34 @@ func TestResolve(t *testing.T) {
 		config: api.MultiStageTestConfiguration{
 			ClusterProfile: api.ClusterProfileAWS,
 			Pre: []api.TestStep{{
-				As:       "ipi-install",
-				From:     "installer",
-				Commands: "openshift-cluster install",
-				Resources: api.ResourceRequirements{
-					Requests: api.ResourceList{"cpu": "1000m"},
-					Limits:   api.ResourceList{"memory": "2Gi"},
-				},
+				LiteralTestStep: &api.LiteralTestStep{
+					As:       "ipi-install",
+					From:     "installer",
+					Commands: "openshift-cluster install",
+					Resources: api.ResourceRequirements{
+						Requests: api.ResourceList{"cpu": "1000m"},
+						Limits:   api.ResourceList{"memory": "2Gi"},
+					}},
 			}},
 			Test: []api.TestStep{{
-				As:       "e2e",
-				From:     "my-image",
-				Commands: "make custom-e2e",
-				Resources: api.ResourceRequirements{
-					Requests: api.ResourceList{"cpu": "1000m"},
-					Limits:   api.ResourceList{"memory": "2Gi"},
-				},
+				LiteralTestStep: &api.LiteralTestStep{
+					As:       "e2e",
+					From:     "my-image",
+					Commands: "make custom-e2e",
+					Resources: api.ResourceRequirements{
+						Requests: api.ResourceList{"cpu": "1000m"},
+						Limits:   api.ResourceList{"memory": "2Gi"},
+					}},
 			}},
 			Post: []api.TestStep{{
-				As:       "ipi-teardown",
-				From:     "installer",
-				Commands: "openshift-cluster destroy",
-				Resources: api.ResourceRequirements{
-					Requests: api.ResourceList{"cpu": "1000m"},
-					Limits:   api.ResourceList{"memory": "2Gi"},
-				},
+				LiteralTestStep: &api.LiteralTestStep{
+					As:       "ipi-teardown",
+					From:     "installer",
+					Commands: "openshift-cluster destroy",
+					Resources: api.ResourceRequirements{
+						Requests: api.ResourceList{"cpu": "1000m"},
+						Limits:   api.ResourceList{"memory": "2Gi"},
+					}},
 			}},
 		},
 		expectedRes: types.TestFlow{
@@ -79,9 +84,62 @@ func TestResolve(t *testing.T) {
 			}},
 		},
 		expectErr: false,
-	}, {}} {
+	}, {
+		name: "Test with reference",
+		config: api.MultiStageTestConfiguration{
+			ClusterProfile: api.ClusterProfileAWS,
+			Test: []api.TestStep{{
+				Reference: &reference1,
+			}},
+		},
+		stepMap: map[string]api.LiteralTestStep{
+			"generic-unit-test": {
+				As:       "generic-unit-test",
+				From:     "my-image",
+				Commands: "make test/unit",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				},
+			},
+		},
+		expectedRes: types.TestFlow{
+			ClusterProfile: api.ClusterProfileAWS,
+			Test: []types.TestStep{{
+				As:       "generic-unit-test",
+				From:     "my-image",
+				Commands: "make test/unit",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				},
+			}},
+		},
+		expectErr: false,
+	}, {
+		name: "Test with broken reference",
+		config: api.MultiStageTestConfiguration{
+			ClusterProfile: api.ClusterProfileAWS,
+			Test: []api.TestStep{{
+				Reference: &reference1,
+			}},
+		},
+		stepMap: map[string]api.LiteralTestStep{
+			"generic-unit-test-2": {
+				As:       "generic-unit-test-2",
+				From:     "my-image",
+				Commands: "make test/unit",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				},
+			},
+		},
+		expectedRes: types.TestFlow{},
+		expectErr:   true,
+	}} {
 		t.Run(testCase.name, func(t *testing.T) {
-			ret, err := NewResolver().Resolve(testCase.config)
+			ret, err := NewResolver(testCase.stepMap).Resolve(testCase.config)
 			if !testCase.expectErr && err != nil {
 				t.Errorf("%s: expected no error but got: %s", testCase.name, err)
 			}
@@ -89,7 +147,7 @@ func TestResolve(t *testing.T) {
 				t.Errorf("%s: expected error but got none", testCase.name)
 			}
 			if !reflect.DeepEqual(ret, testCase.expectedRes) {
-				t.Errorf("%s: fo incorrect output: %s", testCase.name, diff.ObjectReflectDiff(ret, testCase.expectedRes))
+				t.Errorf("%s: got incorrect output: %s", testCase.name, diff.ObjectReflectDiff(ret, testCase.expectedRes))
 			}
 		})
 	}

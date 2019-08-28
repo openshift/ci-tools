@@ -341,16 +341,24 @@ type TestStepConfiguration struct {
 	OpenshiftInstallerCustomTestImageClusterTestConfiguration *OpenshiftInstallerCustomTestImageClusterTestConfiguration `json:"openshift_installer_custom_test_image,omitempty"`
 }
 
-// TestStep is the external representation of a test step that allows users to
-// write less verbose test configs. It gets converted to an internal TestStep
+// LiteralTestStep is the external representation of a test step allowing users
+// to define new test steps. It gets converted to an internal LiteralTestStep
 // struct that represents the full configuration that ci-operator can use.
-type TestStep struct {
+type LiteralTestStep struct {
 	As            string               `json:"as,omitempty"`
 	Documentation string               `json:"documentation,omitempty"`
 	From          string               `json:"from,omitempty"`
 	Commands      string               `json:"commands,omitempty"`
 	ArtifactDir   string               `json:"artifact_dir,omitempty"`
 	Resources     ResourceRequirements `json:"resources,omitempty"`
+}
+
+// TestStep is the struct that a user's configuration gets unmarshalled into.
+// It can contain either a LiteralTestStep or a Reference. If both are filled in an
+// the same time, config validation will fail.
+type TestStep struct {
+	*LiteralTestStep `json:",inline,omitempty"`
+	Reference        *string `json:"ref,omitempty"`
 }
 
 // MultiStageTestConfiguration is a flexible configuration mode that allows tighter control over

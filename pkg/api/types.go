@@ -27,8 +27,8 @@ type ReleaseBuildConfiguration struct {
 	// command. The created RPMs will then be served via HTTP to the "base" image
 	// via an injected rpm.repo in the standard location at /etc/yum.repos.d.
 	RpmBuildCommands string `json:"rpm_build_commands,omitempty"`
-	// RpmBuildLocation is where RPms are deposited/ after being built. If
-	// unset, this will default/ under the repository root to
+	// RpmBuildLocation is where RPms are deposited after being built. If
+	// unset, this will default under the repository root to
 	// _output/local/releases/rpms/.
 	RpmBuildLocation string `json:"rpm_build_location,omitempty"`
 
@@ -64,6 +64,39 @@ type ReleaseBuildConfiguration struct {
 	// input types. The special name '*' may be used to set default
 	// requests and limits.
 	Resources ResourceConfiguration `json:"resources,omitempty"`
+}
+
+// BuildsImage checks if an image is built by the release configuration.
+func (c ReleaseBuildConfiguration) BuildsImage(name string) bool {
+	for _, i := range c.Images {
+		if string(i.To) == name {
+			return true
+		}
+	}
+	return false
+}
+
+// IsPipelineImage checks if `name` will be a tag in the pipeline image stream.
+func (c ReleaseBuildConfiguration) IsPipelineImage(name string) bool {
+	for i := range c.BaseImages {
+		if i == name {
+			return true
+		}
+	}
+	for i := range c.BaseRPMImages {
+		if i == name {
+			return true
+		}
+	}
+	switch name {
+	case string(PipelineImageStreamTagReferenceRoot),
+		string(PipelineImageStreamTagReferenceSource),
+		string(PipelineImageStreamTagReferenceBinaries),
+		string(PipelineImageStreamTagReferenceTestBinaries),
+		string(PipelineImageStreamTagReferenceRPMs):
+		return true
+	}
+	return false
 }
 
 // ResourceConfiguration defines resource overrides for jobs run

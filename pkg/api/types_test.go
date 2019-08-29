@@ -134,3 +134,65 @@ func TestOverlay(t *testing.T) {
 		})
 	}
 }
+
+func TestBuildsImage(t *testing.T) {
+	conf := ReleaseBuildConfiguration{
+		Images: []ProjectDirectoryImageBuildStepConfiguration{
+			{To: "this-image-is-in-the-images-field"},
+		},
+	}
+	for _, tc := range []struct {
+		name  string
+		image string
+		want  bool
+	}{{
+		name:  "not in `images`",
+		image: "this-image-is-not-in-the-images-field",
+	}, {
+		name:  "in `images`",
+		image: "this-image-is-in-the-images-field",
+		want:  true,
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			if ret := conf.BuildsImage(tc.image); ret != tc.want {
+				t.Errorf("got %v, want %v", ret, tc.want)
+			}
+		})
+	}
+}
+
+func TestIsPipelineImage(t *testing.T) {
+	conf := ReleaseBuildConfiguration{
+		InputConfiguration: InputConfiguration{
+			BaseImages: map[string]ImageStreamTagReference{
+				"base-img": {},
+			},
+			BaseRPMImages: map[string]ImageStreamTagReference{
+				"base-rpm-img": {},
+			},
+		},
+		BinaryBuildCommands:     "make",
+		TestBinaryBuildCommands: "make test-bin",
+		RpmBuildCommands:        "make rpms",
+		Images:                  []ProjectDirectoryImageBuildStepConfiguration{{To: "img"}},
+	}
+	for _, tc := range []struct {
+		name string
+		want bool
+	}{
+		{name: "base-img", want: true},
+		{name: "base-rpm-img", want: true},
+		{name: "root", want: true},
+		{name: "bin", want: true},
+		{name: "test-bin", want: true},
+		{name: "rpms", want: true},
+		{name: "img"},
+		{name: "404"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if ret := conf.IsPipelineImage(tc.name); ret != tc.want {
+				t.Errorf("want %v, got %v", tc.want, ret)
+			}
+		})
+	}
+}

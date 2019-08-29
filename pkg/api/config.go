@@ -103,33 +103,39 @@ func validateTestStepConfiguration(fieldRoot string, input []TestStepConfigurati
 	validationErrors = append(validationErrors, searchForTestDuplicates(input)...)
 
 	for num, test := range input {
+		fieldRootN := fmt.Sprintf("%s[%d]", fieldRoot, num)
 		if len(test.As) == 0 {
-			validationErrors = append(validationErrors, fmt.Errorf("%s[%d].as: is required", fieldRoot, num))
+			validationErrors = append(validationErrors, fmt.Errorf("%s.as: is required", fieldRootN))
 		} else if test.As == "images" {
-			validationErrors = append(validationErrors, fmt.Errorf("%s[%d].as: should not be called 'images' because it gets confused with '[images]' target", fieldRoot, num))
+			validationErrors = append(validationErrors, fmt.Errorf("%s.as: should not be called 'images' because it gets confused with '[images]' target", fieldRootN))
 		} else if ok := regexp.MustCompile("^[a-zA-Z0-9_.-]*$").MatchString(test.As); !ok {
-			validationErrors = append(validationErrors, fmt.Errorf("%s[%d].as: '%s' is not valid value, should be [a-zA-Z0-9_.-]", fieldRoot, num, test.As))
+			validationErrors = append(validationErrors, fmt.Errorf("%s.as: '%s' is not valid value, should be [a-zA-Z0-9_.-]", fieldRootN, test.As))
 		}
-
-		if len(test.Commands) == 0 {
-			validationErrors = append(validationErrors, fmt.Errorf("%s[%d].commands: is required", fieldRoot, num))
+		if hasCommands, hasSteps := len(test.Commands) != 0, test.MultiStageTestConfiguration != nil; !hasCommands && !hasSteps {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: either `commands` or `steps` should be set", fieldRootN))
+		} else if hasCommands && hasSteps {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: `commands` and `steps` are mutually exclusive", fieldRootN))
+		} else if hasSteps {
+			validationErrors = append(validationErrors, validateTestSteps(fieldRootN+".steps.pre", test.MultiStageTestConfiguration.Pre)...)
+			validationErrors = append(validationErrors, validateTestSteps(fieldRootN+".steps.test", test.MultiStageTestConfiguration.Test)...)
+			validationErrors = append(validationErrors, validateTestSteps(fieldRootN+".steps.post", test.MultiStageTestConfiguration.Post)...)
 		}
 
 		if test.Secret != nil {
 			// TODO: Move to upstream validation when vendoring is fixed
 			// currently checking against DNS RFC 1123 regexp
 			if ok := regexp.MustCompile("^[a-z0-9]([-a-z0-9]*[a-z0-9])?$").MatchString(test.Secret.Name); !ok {
-				validationErrors = append(validationErrors, fmt.Errorf("%s[%d].name: '%s' secret name is not valid value, should be [a-z0-9]([-a-z0-9]*[a-z0-9]", fieldRoot, num, test.Secret.Name))
+				validationErrors = append(validationErrors, fmt.Errorf("%s.name: '%s' secret name is not valid value, should be [a-z0-9]([-a-z0-9]*[a-z0-9]", fieldRootN, test.Secret.Name))
 			}
 			// validate path only if name is passed
 			if test.Secret.MountPath != "" {
 				if ok := filepath.IsAbs(test.Secret.MountPath); !ok {
-					validationErrors = append(validationErrors, fmt.Errorf("%s[%d].path: '%s' secret mount path is not valid value, should be ^((\\/*)\\w+)+", fieldRoot, num, test.Secret.MountPath))
+					validationErrors = append(validationErrors, fmt.Errorf("%s.path: '%s' secret mount path is not valid value, should be ^((\\/*)\\w+)+", fieldRootN, test.Secret.MountPath))
 				}
 			}
 		}
 
-		validationErrors = append(validationErrors, validateTestConfigurationType(fmt.Sprintf("%s[%d]", fieldRoot, num), test, release)...)
+		validationErrors = append(validationErrors, validateTestConfigurationType(fieldRootN, test, release)...)
 	}
 	return validationErrors
 }

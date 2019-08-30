@@ -2,6 +2,7 @@ package steps
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/runtime"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 
@@ -22,6 +24,7 @@ const (
 )
 
 type multiStageTestStep struct {
+	dry             bool
 	name            string
 	config          *api.ReleaseBuildConfiguration
 	podClient       PodClient
@@ -60,9 +63,7 @@ func (s *multiStageTestStep) Inputs(ctx context.Context, dry bool) (api.InputDef
 }
 
 func (s *multiStageTestStep) Run(ctx context.Context, dry bool) error {
-	if dry {
-		return nil
-	}
+	s.dry = dry
 	var errs []error
 	if err := s.runSteps(ctx, s.pre, true); err != nil {
 		errs = append(errs, fmt.Errorf("%q pre steps failed: %v", s.name, err))
@@ -153,13 +154,21 @@ func (s *multiStageTestStep) runPods(ctx context.Context, pods []coreapi.Pod, sh
 	go func() {
 		<-ctx.Done()
 		log.Printf("cleanup: Deleting pods with label %s=%s", multiStageTestLabel, s.name)
-		if err := deletePods(s.podClient.Pods(s.jobSpec.Namespace), s.name); err != nil {
-			log.Printf("failed to delete pods with label %s=%s: %v", multiStageTestLabel, s.name, err)
+		if !s.dry {
+			if err := deletePods(s.podClient.Pods(s.jobSpec.Namespace), s.name); err != nil {
+				log.Printf("failed to delete pods with label %s=%s: %v", multiStageTestLabel, s.name, err)
+			}
 		}
 	}()
 	var errs []error
 	for _, pod := range pods {
 		log.Printf("Executing %q", pod.Name)
+		if s.dry {
+			if err := dumpObject(&pod); err != nil {
+				errs = append(errs, err)
+			}
+			continue
+		}
 		if _, err := createOrRestartPod(s.podClient.Pods(s.jobSpec.Namespace), &pod); err != nil {
 			errs = append(errs, fmt.Errorf("failed to create or restart %q pod: %v", pod.Name, err))
 			if shortCircuit {
@@ -188,5 +197,14 @@ func deletePods(client coreclientset.PodInterface, test string) error {
 	if err != nil && !errors.IsNotFound(err) {
 		return err
 	}
+	return nil
+}
+
+func dumpObject(obj runtime.Object) error {
+	j, err := json.MarshalIndent(obj, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to convert object to JSON: %v", err)
+	}
+	log.Print(string(j))
 	return nil
 }

@@ -11,10 +11,15 @@ import (
 
 func TestResolve(t *testing.T) {
 	reference1 := "generic-unit-test"
+	teardownRef := "teardown"
+	fipsPreChain := "install-fips"
+	nestedChains := "nested-chains"
+	chainInstall := "install-chain"
 	for _, testCase := range []struct {
 		name        string
 		config      api.MultiStageTestConfiguration
 		stepMap     map[string]api.LiteralTestStep
+		chainMap    map[string][]api.TestStep
 		expectedRes types.TestFlow
 		expectErr   bool
 	}{{
@@ -93,7 +98,7 @@ func TestResolve(t *testing.T) {
 			}},
 		},
 		stepMap: map[string]api.LiteralTestStep{
-			"generic-unit-test": {
+			reference1: {
 				As:       "generic-unit-test",
 				From:     "my-image",
 				Commands: "make test/unit",
@@ -137,9 +142,235 @@ func TestResolve(t *testing.T) {
 		},
 		expectedRes: types.TestFlow{},
 		expectErr:   true,
+	}, {
+		name: "Test with chain and reference",
+		config: api.MultiStageTestConfiguration{
+			ClusterProfile: api.ClusterProfileAWS,
+			Pre: []api.TestStep{{
+				Chain: &fipsPreChain,
+			}},
+			Test: []api.TestStep{{
+				LiteralTestStep: &api.LiteralTestStep{
+					As:       "e2e",
+					From:     "my-image",
+					Commands: "make custom-e2e",
+					Resources: api.ResourceRequirements{
+						Requests: api.ResourceList{"cpu": "1000m"},
+						Limits:   api.ResourceList{"memory": "2Gi"},
+					}},
+			}},
+			Post: []api.TestStep{{
+				Reference: &teardownRef,
+			}},
+		},
+		chainMap: map[string][]api.TestStep{
+			fipsPreChain: {{
+				LiteralTestStep: &api.LiteralTestStep{
+					As:       "ipi-install",
+					From:     "installer",
+					Commands: "openshift-cluster install",
+					Resources: api.ResourceRequirements{
+						Requests: api.ResourceList{"cpu": "1000m"},
+						Limits:   api.ResourceList{"memory": "2Gi"},
+					}},
+			}, {
+				LiteralTestStep: &api.LiteralTestStep{
+					As:       "enable-fips",
+					From:     "fips-enabler",
+					Commands: "enable_fips",
+					Resources: api.ResourceRequirements{
+						Requests: api.ResourceList{"cpu": "1000m"},
+						Limits:   api.ResourceList{"memory": "2Gi"},
+					}},
+			}},
+		},
+		stepMap: map[string]api.LiteralTestStep{
+			teardownRef: {
+				As:       "ipi-teardown",
+				From:     "installer",
+				Commands: "openshift-cluster destroy",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				}},
+		},
+		expectedRes: types.TestFlow{
+			ClusterProfile: api.ClusterProfileAWS,
+			Pre: []types.TestStep{{
+				As:       "ipi-install",
+				From:     "installer",
+				Commands: "openshift-cluster install",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				},
+			}, {
+				As:       "enable-fips",
+				From:     "fips-enabler",
+				Commands: "enable_fips",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				},
+			}},
+			Test: []types.TestStep{{
+				As:       "e2e",
+				From:     "my-image",
+				Commands: "make custom-e2e",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				},
+			}},
+			Post: []types.TestStep{{
+				As:       "ipi-teardown",
+				From:     "installer",
+				Commands: "openshift-cluster destroy",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				},
+			}},
+		},
+		expectErr: false,
+	}, {
+		name: "Test with broken chain",
+		config: api.MultiStageTestConfiguration{
+			ClusterProfile: api.ClusterProfileAWS,
+			Test: []api.TestStep{{
+				Reference: &fipsPreChain,
+			}},
+		},
+		chainMap: map[string][]api.TestStep{
+			"broken": {{
+				LiteralTestStep: &api.LiteralTestStep{
+					As:       "generic-unit-test-2",
+					From:     "my-image",
+					Commands: "make test/unit",
+					Resources: api.ResourceRequirements{
+						Requests: api.ResourceList{"cpu": "1000m"},
+						Limits:   api.ResourceList{"memory": "2Gi"},
+					}},
+			}},
+		},
+		expectedRes: types.TestFlow{},
+		expectErr:   true,
+	}, {
+		name: "Test with nested chains",
+		config: api.MultiStageTestConfiguration{
+			ClusterProfile: api.ClusterProfileAWS,
+			Pre: []api.TestStep{{
+				Chain: &nestedChains,
+			}},
+		},
+		chainMap: map[string][]api.TestStep{
+			nestedChains: {{
+				Chain: &chainInstall,
+			}, {
+				LiteralTestStep: &api.LiteralTestStep{
+					As:       "enable-fips",
+					From:     "fips-enabler",
+					Commands: "enable_fips",
+					Resources: api.ResourceRequirements{
+						Requests: api.ResourceList{"cpu": "1000m"},
+						Limits:   api.ResourceList{"memory": "2Gi"},
+					}},
+			}},
+			chainInstall: {{
+				LiteralTestStep: &api.LiteralTestStep{
+					As:       "ipi-lease",
+					From:     "installer",
+					Commands: "lease",
+					Resources: api.ResourceRequirements{
+						Requests: api.ResourceList{"cpu": "1000m"},
+						Limits:   api.ResourceList{"memory": "2Gi"},
+					}},
+			}, {
+				LiteralTestStep: &api.LiteralTestStep{
+					As:       "ipi-setup",
+					From:     "installer",
+					Commands: "openshift-cluster install",
+					Resources: api.ResourceRequirements{
+						Requests: api.ResourceList{"cpu": "1000m"},
+						Limits:   api.ResourceList{"memory": "2Gi"},
+					}},
+			}},
+		},
+		expectedRes: types.TestFlow{
+			ClusterProfile: api.ClusterProfileAWS,
+			Pre: []types.TestStep{{
+				As:       "ipi-lease",
+				From:     "installer",
+				Commands: "lease",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				},
+			}, {
+				As:       "ipi-setup",
+				From:     "installer",
+				Commands: "openshift-cluster install",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				},
+			}, {
+				As:       "enable-fips",
+				From:     "fips-enabler",
+				Commands: "enable_fips",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				}},
+			},
+		},
+		expectErr: false,
+	}, {
+		name: "Test with duplicate names after unrolling chains",
+		config: api.MultiStageTestConfiguration{
+			ClusterProfile: api.ClusterProfileAWS,
+			Pre: []api.TestStep{{
+				Chain: &nestedChains,
+			}},
+		},
+		chainMap: map[string][]api.TestStep{
+			nestedChains: {{
+				Chain: &chainInstall,
+			}, {
+				LiteralTestStep: &api.LiteralTestStep{
+					As:       "ipi-setup",
+					From:     "installer",
+					Commands: "openshift-cluster install",
+					Resources: api.ResourceRequirements{
+						Requests: api.ResourceList{"cpu": "1000m"},
+						Limits:   api.ResourceList{"memory": "2Gi"},
+					}},
+			}},
+			chainInstall: {{
+				LiteralTestStep: &api.LiteralTestStep{
+					As:       "ipi-lease",
+					From:     "installer",
+					Commands: "lease",
+					Resources: api.ResourceRequirements{
+						Requests: api.ResourceList{"cpu": "1000m"},
+						Limits:   api.ResourceList{"memory": "2Gi"},
+					}},
+			}, {
+				LiteralTestStep: &api.LiteralTestStep{
+					As:       "ipi-setup",
+					From:     "installer",
+					Commands: "openshift-cluster install",
+					Resources: api.ResourceRequirements{
+						Requests: api.ResourceList{"cpu": "1000m"},
+						Limits:   api.ResourceList{"memory": "2Gi"},
+					}},
+			}},
+		},
+		expectedRes: types.TestFlow{},
+		expectErr:   true,
 	}} {
 		t.Run(testCase.name, func(t *testing.T) {
-			ret, err := NewResolver(testCase.stepMap).Resolve(testCase.config)
+			ret, err := NewResolver(testCase.stepMap, testCase.chainMap).Resolve(testCase.config)
 			if !testCase.expectErr && err != nil {
 				t.Errorf("%s: expected no error but got: %s", testCase.name, err)
 			}

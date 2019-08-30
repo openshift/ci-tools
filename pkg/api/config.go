@@ -306,12 +306,14 @@ func validateTestSteps(fieldRoot string, steps []TestStep) (ret []error) {
 	seen := sets.NewString()
 	for i, s := range steps {
 		fieldRootI := fmt.Sprintf("%s[%d]", fieldRoot, i)
-		if s.LiteralTestStep != nil && s.Reference != nil {
-			ret = append(ret, fmt.Errorf("%s: `ref` cannot be set along with other test step fields", fieldRootI))
+		if (s.LiteralTestStep != nil && s.Reference != nil) ||
+			(s.LiteralTestStep != nil && s.Chain != nil) ||
+			(s.Reference != nil && s.Chain != nil) {
+			ret = append(ret, fmt.Errorf("%s: only one of `ref`, `chain`, or a literal test step can be set", fieldRootI))
 			continue
 		}
-		if s.LiteralTestStep == nil && s.Reference == nil {
-			ret = append(ret, fmt.Errorf("%s: a reference or literal test step is required", fieldRootI))
+		if s.LiteralTestStep == nil && s.Reference == nil && s.Chain == nil {
+			ret = append(ret, fmt.Errorf("%s: a reference, chain, or literal test step is required", fieldRootI))
 			continue
 		}
 		if s.Reference != nil {
@@ -321,6 +323,15 @@ func validateTestSteps(fieldRoot string, steps []TestStep) (ret []error) {
 				ret = append(ret, fmt.Errorf("%s.ref: duplicated name %q", fieldRootI, *s.Reference))
 			} else {
 				seen.Insert(*s.Reference)
+			}
+		}
+		if s.Chain != nil {
+			if len(*s.Chain) == 0 {
+				ret = append(ret, fmt.Errorf("%s.chain: length cannot be 0", fieldRootI))
+			} else if seen.Has(*s.Chain) {
+				ret = append(ret, fmt.Errorf("%s.chain: duplicated name %q", fieldRootI, *s.Chain))
+			} else {
+				seen.Insert(*s.Chain)
 			}
 		}
 		if s.LiteralTestStep != nil {

@@ -26,7 +26,7 @@ func TestRequires(t *testing.T) {
 		req    []api.StepLink
 	}{{
 		name:  "step needs release images, should have ReleaseImagesLink",
-		steps: []api.TestStep{{From: "from-release"}},
+		steps: []api.TestStep{{LiteralTestStep: &api.LiteralTestStep{From: "from-release"}}},
 		req:   []api.StepLink{api.ReleaseImagesLink()},
 	}, {
 		name: "step needs images, should have ImagesReadyLink",
@@ -35,11 +35,11 @@ func TestRequires(t *testing.T) {
 				{To: "from-images"},
 			},
 		},
-		steps: []api.TestStep{{From: "from-images"}},
+		steps: []api.TestStep{{LiteralTestStep: &api.LiteralTestStep{From: "from-images"}}},
 		req:   []api.StepLink{api.ImagesReadyLink()},
 	}, {
 		name:  "step needs pipeline image, should have InternalImageLink",
-		steps: []api.TestStep{{From: "src"}},
+		steps: []api.TestStep{{LiteralTestStep: &api.LiteralTestStep{From: "src"}}},
 		req: []api.StepLink{
 			api.InternalImageLink(
 				api.PipelineImageStreamTagReference(
@@ -72,8 +72,8 @@ func TestGeneratePods(t *testing.T) {
 			As: "test",
 			MultiStageTestConfiguration: &api.MultiStageTestConfiguration{
 				Test: []api.TestStep{
-					{As: "step0", From: "image0", Commands: "command0"},
-					{As: "step1", From: "image1", Commands: "command1"},
+					{LiteralTestStep: &api.LiteralTestStep{As: "step0", From: "image0", Commands: "command0"}},
+					{LiteralTestStep: &api.LiteralTestStep{As: "step1", From: "image1", Commands: "command1"}},
 				},
 			},
 		}},
@@ -181,9 +181,9 @@ func TestRun(t *testing.T) {
 				Type:      prowapi.PeriodicJob,
 			},
 		},
-		pre:  []api.TestStep{{As: "pre0"}, {As: "pre1"}},
-		test: []api.TestStep{{As: "test0"}, {As: "test1"}},
-		post: []api.TestStep{{As: "post0"}, {As: "post1"}},
+		pre:  []api.TestStep{{LiteralTestStep: &api.LiteralTestStep{As: "pre0"}}, {LiteralTestStep: &api.LiteralTestStep{As: "pre1"}}},
+		test: []api.TestStep{{LiteralTestStep: &api.LiteralTestStep{As: "test0"}}, {LiteralTestStep: &api.LiteralTestStep{As: "test1"}}},
+		post: []api.TestStep{{LiteralTestStep: &api.LiteralTestStep{As: "post0"}}, {LiteralTestStep: &api.LiteralTestStep{As: "post1"}}},
 	}
 	for _, tc := range []struct {
 		name     string

@@ -7,18 +7,36 @@ import (
 	"reflect"
 	"testing"
 
-	fakeimageclientset "github.com/openshift/client-go/image/clientset/versioned/fake"
-	imagev1 "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
-	fakeimagev1 "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1/fake"
-
 	v1 "k8s.io/api/core/v1"
+
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/diff"
+
 	"k8s.io/client-go/kubernetes/fake"
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	fakecorev1 "k8s.io/client-go/kubernetes/typed/core/v1/fake"
 
+	fakeimageclientset "github.com/openshift/client-go/image/clientset/versioned/fake"
+	imagev1 "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
+	fakeimagev1 "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1/fake"
+
 	"github.com/openshift/ci-tools/pkg/api"
 )
+
+// DryLogger holds the information of all objects that have been created from a dry run.
+type DryLogger struct {
+	objects []runtime.Object
+}
+
+// AddObject is adding an object to the list.
+func (dl *DryLogger) AddObject(o runtime.Object) {
+	dl.objects = append(dl.objects, o)
+}
+
+// GetObjects returns the list of objects.
+func (dl *DryLogger) GetObjects() []runtime.Object {
+	return dl.objects
+}
 
 // Fake Clientset, created so we can override its `Core()` method
 // and return our fake CoreV1 API (=ciopTestingCore)

@@ -115,10 +115,6 @@ func validateTestStepConfiguration(fieldRoot string, input []TestStepConfigurati
 			validationErrors = append(validationErrors, fmt.Errorf("%s: either `commands` or `steps` should be set", fieldRootN))
 		} else if hasCommands && hasSteps {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: `commands` and `steps` are mutually exclusive", fieldRootN))
-		} else if hasSteps {
-			validationErrors = append(validationErrors, validateTestSteps(fieldRootN+".steps.pre", test.MultiStageTestConfiguration.Pre)...)
-			validationErrors = append(validationErrors, validateTestSteps(fieldRootN+".steps.test", test.MultiStageTestConfiguration.Test)...)
-			validationErrors = append(validationErrors, validateTestSteps(fieldRootN+".steps.post", test.MultiStageTestConfiguration.Post)...)
 		}
 
 		if test.Secret != nil {

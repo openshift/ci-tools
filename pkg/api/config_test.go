@@ -64,6 +64,17 @@ func TestValidateTests(t *testing.T) {
 			expectedValid: false,
 		},
 		{
+			id: "`commands` and `steps`",
+			tests: []TestStepConfiguration{
+				{
+					As:                          "test",
+					Commands:                    "commands",
+					MultiStageTestConfiguration: &MultiStageTestConfiguration{},
+				},
+			},
+			expectedValid: false,
+		},
+		{
 			id: "container test without `from`",
 			tests: []TestStepConfiguration{
 				{

@@ -136,7 +136,8 @@ func TestValidateTests(t *testing.T) {
 			id: "test without `as`",
 			tests: []TestStepConfiguration{
 				{
-					Commands: "test",
+					Commands:                   "test",
+					ContainerTestConfiguration: &ContainerTestConfiguration{From: "ignored"},
 				},
 			},
 			expectedValid: false,
@@ -266,11 +267,13 @@ func TestValidateTests(t *testing.T) {
 	}
 
 	for _, tc := range testTestsCases {
-		if errs := validateTestStepConfiguration("tests", tc.tests, tc.release); len(errs) > 0 && tc.expectedValid {
-			validationErrors = append(validationErrors, fmt.Errorf("%q expected to be valid, got: %v", tc.id, errs))
-		} else if !tc.expectedValid && len(errs) == 0 {
-			validationErrors = append(validationErrors, parseValidError(tc.id))
-		}
+		t.Run(tc.id, func(t *testing.T) {
+			if errs := validateTestStepConfiguration("tests", tc.tests, tc.release); len(errs) > 0 && tc.expectedValid {
+				validationErrors = append(validationErrors, fmt.Errorf("expected to be valid, got: %v", errs))
+			} else if !tc.expectedValid && len(errs) == 0 {
+				validationErrors = append(validationErrors, parseValidError(tc.id))
+			}
+		})
 	}
 
 	if validationErrors != nil {

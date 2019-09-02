@@ -201,13 +201,13 @@ func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 }
 
 func operateOnTemplatePods(template *templateapi.Template, artifactDir string) {
-	for _, object := range template.Objects {
+	for index, object := range template.Objects {
 		if pod := getPodFromObject(object); pod != nil {
 			if len(artifactDir) > 0 {
 				addArtifactsToPod(pod)
 			}
-			object.Raw = []byte(runtime.EncodeOrDie(corev1Codec, pod))
-			object.Object = pod.DeepCopyObject()
+			template.Objects[index].Raw = []byte(runtime.EncodeOrDie(corev1Codec, pod))
+			template.Objects[index].Object = pod.DeepCopyObject()
 		}
 	}
 }

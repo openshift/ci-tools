@@ -19,6 +19,7 @@ type gitSourceStep struct {
 	buildClient BuildClient
 	artifactDir string
 	jobSpec     *api.JobSpec
+	dryLogger   *DryLogger
 }
 
 func (s *gitSourceStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
@@ -34,7 +35,7 @@ func (s *gitSourceStep) Run(ctx context.Context, dry bool) error {
 				URI: fmt.Sprintf("https://github.com/%s/%s.git", refs.Org, refs.Repo),
 				Ref: refs.BaseRef,
 			},
-		}, s.config.DockerfilePath, s.resources), dry, s.artifactDir)
+		}, s.config.DockerfilePath, s.resources), dry, s.artifactDir, s.dryLogger)
 	}
 
 	return fmt.Errorf("Nothing to build source image from, no refs")
@@ -82,7 +83,7 @@ func determineRefsWorkdir(refs *prowapi.Refs, extraRefs []prowapi.Refs) *prowapi
 }
 
 // GitSourceStep returns gitSourceStep that holds all the required information to create a build from a git source.
-func GitSourceStep(config api.ProjectDirectoryImageBuildInputs, resources api.ResourceConfiguration, buildClient BuildClient, imageClient imageclientset.ImageV1Interface, artifactDir string, jobSpec *api.JobSpec) api.Step {
+func GitSourceStep(config api.ProjectDirectoryImageBuildInputs, resources api.ResourceConfiguration, buildClient BuildClient, imageClient imageclientset.ImageV1Interface, artifactDir string, jobSpec *api.JobSpec, dryLogger *DryLogger) api.Step {
 	return &gitSourceStep{
 		config:      config,
 		resources:   resources,
@@ -90,5 +91,6 @@ func GitSourceStep(config api.ProjectDirectoryImageBuildInputs, resources api.Re
 		imageClient: imageClient,
 		artifactDir: artifactDir,
 		jobSpec:     jobSpec,
+		dryLogger:   dryLogger,
 	}
 }

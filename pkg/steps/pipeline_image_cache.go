@@ -24,6 +24,7 @@ type pipelineImageCacheStep struct {
 	imageClient imageclientset.ImageV1Interface
 	artifactDir string
 	jobSpec     *api.JobSpec
+	dryLogger   *DryLogger
 }
 
 func (s *pipelineImageCacheStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
@@ -40,7 +41,7 @@ func (s *pipelineImageCacheStep) Run(ctx context.Context, dry bool) error {
 		},
 		"",
 		s.resources,
-	), dry, s.artifactDir)
+	), dry, s.artifactDir, s.dryLogger)
 }
 
 func (s *pipelineImageCacheStep) Done() (bool, error) {
@@ -84,7 +85,7 @@ func (s *pipelineImageCacheStep) Description() string {
 	return fmt.Sprintf("Store build results into a layer on top of %s and save as %s", s.config.From, s.config.To)
 }
 
-func PipelineImageCacheStep(config api.PipelineImageCacheStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, imageClient imageclientset.ImageV1Interface, artifactDir string, jobSpec *api.JobSpec) api.Step {
+func PipelineImageCacheStep(config api.PipelineImageCacheStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, imageClient imageclientset.ImageV1Interface, artifactDir string, jobSpec *api.JobSpec, dryLogger *DryLogger) api.Step {
 	return &pipelineImageCacheStep{
 		config:      config,
 		resources:   resources,
@@ -92,5 +93,6 @@ func PipelineImageCacheStep(config api.PipelineImageCacheStepConfiguration, reso
 		imageClient: imageClient,
 		artifactDir: artifactDir,
 		jobSpec:     jobSpec,
+		dryLogger:   dryLogger,
 	}
 }

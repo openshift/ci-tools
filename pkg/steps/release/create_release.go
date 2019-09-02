@@ -57,6 +57,7 @@ type assembleReleaseStep struct {
 	rbacClient  rbacclientset.RbacV1Interface
 	artifactDir string
 	jobSpec     *api.JobSpec
+	dryLogger   *steps.DryLogger
 }
 
 func (s *assembleReleaseStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
@@ -187,7 +188,7 @@ oc adm release extract --from=%q --to=/tmp/artifacts/release-payload-%s
 		resources = copied
 	}
 
-	step := steps.PodStep("release", podConfig, resources, s.podClient, s.artifactDir, s.jobSpec)
+	step := steps.PodStep("release", podConfig, resources, s.podClient, s.artifactDir, s.jobSpec, s.dryLogger)
 
 	return step.Run(ctx, dry)
 }
@@ -356,7 +357,7 @@ oc adm release extract --from=%q --file=image-references > /tmp/artifacts/%s
 		copied[podConfig.As] = api.ResourceRequirements{Requests: api.ResourceList{"cpu": "50m", "memory": "400Mi"}}
 		resources = copied
 	}
-	step := steps.PodStep("release", podConfig, resources, s.podClient, artifactDir, s.jobSpec)
+	step := steps.PodStep("release", podConfig, resources, s.podClient, artifactDir, s.jobSpec, s.dryLogger)
 	if err := step.Run(ctx, false); err != nil {
 		return err
 	}
@@ -561,7 +562,7 @@ func (s *assembleReleaseStep) Description() string {
 
 // AssembleReleaseStep builds a new update payload image based on the cluster version operator
 // and the operators defined in the release configuration.
-func AssembleReleaseStep(latest bool, config api.ReleaseTagConfiguration, params api.Parameters, resources api.ResourceConfiguration, podClient steps.PodClient, imageClient imageclientset.ImageV1Interface, artifactDir string, jobSpec *api.JobSpec) api.Step {
+func AssembleReleaseStep(latest bool, config api.ReleaseTagConfiguration, params api.Parameters, resources api.ResourceConfiguration, podClient steps.PodClient, imageClient imageclientset.ImageV1Interface, artifactDir string, jobSpec *api.JobSpec, dryLogger *steps.DryLogger) api.Step {
 	return &assembleReleaseStep{
 		config:      config,
 		latest:      latest,
@@ -571,5 +572,6 @@ func AssembleReleaseStep(latest bool, config api.ReleaseTagConfiguration, params
 		imageClient: imageClient,
 		artifactDir: artifactDir,
 		jobSpec:     jobSpec,
+		dryLogger:   dryLogger,
 	}
 }

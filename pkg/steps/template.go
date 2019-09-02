@@ -60,6 +60,7 @@ type templateExecutionStep struct {
 	podClient      PodClient
 	artifactDir    string
 	jobSpec        *api.JobSpec
+	dryLogger      *DryLogger
 
 	subTests []*junit.TestCase
 }
@@ -118,8 +119,7 @@ func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 	}
 
 	if dry {
-		j, _ := json.MarshalIndent(s.template, "", "  ")
-		log.Printf("template:\n%s", j)
+		s.dryLogger.AddObject(s.template.DeepCopyObject())
 		return nil
 	}
 
@@ -276,7 +276,7 @@ func (s *templateExecutionStep) Description() string {
 	return fmt.Sprintf("Run template %s", s.template.Name)
 }
 
-func TemplateExecutionStep(template *templateapi.Template, params api.Parameters, podClient PodClient, templateClient TemplateClient, artifactDir string, jobSpec *api.JobSpec) api.Step {
+func TemplateExecutionStep(template *templateapi.Template, params api.Parameters, podClient PodClient, templateClient TemplateClient, artifactDir string, jobSpec *api.JobSpec, dryLogger *DryLogger) api.Step {
 	return &templateExecutionStep{
 		template:       template,
 		params:         params,
@@ -284,6 +284,7 @@ func TemplateExecutionStep(template *templateapi.Template, params api.Parameters
 		templateClient: templateClient,
 		artifactDir:    artifactDir,
 		jobSpec:        jobSpec,
+		dryLogger:      dryLogger,
 	}
 }
 

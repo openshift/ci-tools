@@ -2,7 +2,6 @@ package steps
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"path/filepath"
@@ -49,6 +48,7 @@ type podStep struct {
 	istClient   imageclientset.ImageStreamTagsGetter
 	artifactDir string
 	jobSpec     *api.JobSpec
+	dryLogger   *DryLogger
 
 	subTests []*junit.TestCase
 }
@@ -95,8 +95,7 @@ func (s *podStep) Run(ctx context.Context, dry bool) error {
 	}
 
 	if dry {
-		j, _ := json.MarshalIndent(pod, "", "  ")
-		log.Printf("pod:\n%s", j)
+		s.dryLogger.AddObject(pod.DeepCopyObject())
 		return nil
 	}
 
@@ -164,7 +163,7 @@ func (s *podStep) Description() string {
 	return fmt.Sprintf("Run test %s", s.config.As)
 }
 
-func TestStep(config api.TestStepConfiguration, resources api.ResourceConfiguration, podClient PodClient, artifactDir string, jobSpec *api.JobSpec) api.Step {
+func TestStep(config api.TestStepConfiguration, resources api.ResourceConfiguration, podClient PodClient, artifactDir string, jobSpec *api.JobSpec, dryLogger *DryLogger) api.Step {
 	return PodStep(
 		"test",
 		PodStepConfiguration{
@@ -179,10 +178,11 @@ func TestStep(config api.TestStepConfiguration, resources api.ResourceConfigurat
 		podClient,
 		artifactDir,
 		jobSpec,
+		dryLogger,
 	)
 }
 
-func PodStep(name string, config PodStepConfiguration, resources api.ResourceConfiguration, podClient PodClient, artifactDir string, jobSpec *api.JobSpec) api.Step {
+func PodStep(name string, config PodStepConfiguration, resources api.ResourceConfiguration, podClient PodClient, artifactDir string, jobSpec *api.JobSpec, dryLogger *DryLogger) api.Step {
 	return &podStep{
 		name:        name,
 		config:      config,
@@ -190,6 +190,7 @@ func PodStep(name string, config PodStepConfiguration, resources api.ResourceCon
 		podClient:   podClient,
 		artifactDir: artifactDir,
 		jobSpec:     jobSpec,
+		dryLogger:   dryLogger,
 	}
 }
 

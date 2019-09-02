@@ -25,6 +25,7 @@ type rpmImageInjectionStep struct {
 	istClient   imageclientset.ImageStreamTagsGetter
 	artifactDir string
 	jobSpec     *api.JobSpec
+	dryLogger   *DryLogger
 }
 
 func (s *rpmImageInjectionStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
@@ -51,7 +52,7 @@ func (s *rpmImageInjectionStep) Run(ctx context.Context, dry bool) error {
 		},
 		"",
 		s.resources,
-	), dry, s.artifactDir)
+	), dry, s.artifactDir, s.dryLogger)
 }
 
 func (s *rpmImageInjectionStep) Done() (bool, error) {
@@ -76,7 +77,7 @@ func (s *rpmImageInjectionStep) Description() string {
 	return "Inject an RPM repository that will point at the RPM server"
 }
 
-func RPMImageInjectionStep(config api.RPMImageInjectionStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, routeClient routeclientset.RoutesGetter, istClient imageclientset.ImageStreamTagsGetter, artifactDir string, jobSpec *api.JobSpec) api.Step {
+func RPMImageInjectionStep(config api.RPMImageInjectionStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, routeClient routeclientset.RoutesGetter, istClient imageclientset.ImageStreamTagsGetter, artifactDir string, jobSpec *api.JobSpec, dryLogger *DryLogger) api.Step {
 	return &rpmImageInjectionStep{
 		config:      config,
 		resources:   resources,
@@ -85,5 +86,6 @@ func RPMImageInjectionStep(config api.RPMImageInjectionStepConfiguration, resour
 		istClient:   istClient,
 		artifactDir: artifactDir,
 		jobSpec:     jobSpec,
+		dryLogger:   dryLogger,
 	}
 }

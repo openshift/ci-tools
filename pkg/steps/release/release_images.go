@@ -2,19 +2,24 @@ package release
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
 
-	imageapi "github.com/openshift/api/image/v1"
-	"github.com/openshift/ci-tools/pkg/api"
-	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
-	routeclientset "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
 	coreapi "k8s.io/api/core/v1"
+
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
+
+	imageapi "github.com/openshift/api/image/v1"
+
+	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
+	routeclientset "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
+
+	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/steps"
 )
 
 const (
@@ -25,12 +30,14 @@ const (
 type stableImagesTagStep struct {
 	jobSpec   *api.JobSpec
 	dstClient imageclientset.ImageV1Interface
+	dryLogger *steps.DryLogger
 }
 
-func StableImagesTagStep(dstClient imageclientset.ImageV1Interface, jobSpec *api.JobSpec) api.Step {
+func StableImagesTagStep(dstClient imageclientset.ImageV1Interface, jobSpec *api.JobSpec, dryLogger *steps.DryLogger) api.Step {
 	return &stableImagesTagStep{
 		dstClient: dstClient,
 		jobSpec:   jobSpec,
+		dryLogger: dryLogger,
 	}
 }
 
@@ -48,11 +55,7 @@ func (s *stableImagesTagStep) Run(ctx context.Context, dry bool) error {
 		},
 	}
 	if dry {
-		istJSON, err := json.MarshalIndent(newIS, "", "  ")
-		if err != nil {
-			return fmt.Errorf("failed to marshal image stream: %v", err)
-		}
-		fmt.Printf("%s\n", istJSON)
+		s.dryLogger.AddObject(newIS.DeepCopyObject())
 		return nil
 	}
 	_, err := s.dstClient.ImageStreams(s.jobSpec.Namespace).Create(newIS)
@@ -92,6 +95,7 @@ type releaseImagesTagStep struct {
 	configMapClient coreclientset.ConfigMapsGetter
 	params          *api.DeferredParameters
 	jobSpec         *api.JobSpec
+	dryLogger       *steps.DryLogger
 }
 
 func findSpecTag(is *imageapi.ImageStream, tag string) *coreapi.ObjectReference {
@@ -197,11 +201,7 @@ func (s *releaseImagesTagStep) Run(ctx context.Context, dry bool) error {
 	}
 
 	if dry {
-		istJSON, err := json.MarshalIndent(newIS, "", "  ")
-		if err != nil {
-			return fmt.Errorf("failed to marshal image stream: %v", err)
-		}
-		fmt.Printf("%s\n", istJSON)
+		s.dryLogger.AddObject(newIS.DeepCopyObject())
 		return nil
 	}
 
@@ -277,7 +277,7 @@ func (s *releaseImagesTagStep) Description() string {
 	return fmt.Sprintf("Find all of the input images from %s and tag them into the output image stream", sourceName(s.config))
 }
 
-func ReleaseImagesTagStep(config api.ReleaseTagConfiguration, srcClient, dstClient imageclientset.ImageV1Interface, routeClient routeclientset.RoutesGetter, configMapClient coreclientset.ConfigMapsGetter, params *api.DeferredParameters, jobSpec *api.JobSpec) api.Step {
+func ReleaseImagesTagStep(config api.ReleaseTagConfiguration, srcClient, dstClient imageclientset.ImageV1Interface, routeClient routeclientset.RoutesGetter, configMapClient coreclientset.ConfigMapsGetter, params *api.DeferredParameters, jobSpec *api.JobSpec, dryLogger *steps.DryLogger) api.Step {
 	// when source and destination client are the same, we don't need to use external imports
 	if srcClient == dstClient {
 		config.Cluster = ""
@@ -290,6 +290,7 @@ func ReleaseImagesTagStep(config api.ReleaseTagConfiguration, srcClient, dstClie
 		configMapClient: configMapClient,
 		params:          params,
 		jobSpec:         jobSpec,
+		dryLogger:       dryLogger,
 	}
 }
 

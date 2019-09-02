@@ -3,7 +3,6 @@ package steps
 import (
 	"archive/tar"
 	"compress/gzip"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -18,18 +17,19 @@ import (
 	"github.com/golang/glog"
 
 	coreapi "k8s.io/api/core/v1"
+
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
+
 	"k8s.io/client-go/kubernetes/scheme"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
 
 	buildapi "github.com/openshift/api/build/v1"
-	templateapi "github.com/openshift/api/template/v1"
 
 	"github.com/openshift/ci-tools/pkg/junit"
 )
@@ -559,97 +559,39 @@ func containerHasVolumeName(container coreapi.Container, name string) bool {
 	return true
 }
 
-func addArtifactsToTemplate(template *templateapi.Template) {
-	for i := range template.Objects {
-		t := &template.Objects[i]
-		var pod map[string]interface{}
-		if err := json.Unmarshal(t.Raw, &pod); err != nil {
-			log.Printf("error: object can't be unmarshalled: %v", err)
-			continue
-		}
-		if jsonString(pod, "kind") != "Pod" || jsonString(pod, "apiVersion") != "v1" {
-			continue
-		}
-		if !arrayHasObjectString(jsonArray(pod, "spec", "volumes"), "name", "artifacts") {
-			continue
-		}
-		names := allPodContainerNamesWithArtifacts(pod)
-		if len(names) == 0 {
-			continue
-		}
-		data, err := json.Marshal(artifactsContainer())
-		if err != nil {
-			panic(err)
-		}
-		var container map[string]interface{}
-		if err := json.Unmarshal(data, &container); err != nil {
-			panic(err)
-		}
-		containers := append(jsonArray(pod, "spec", "containers"), container)
-		jsonMap(pod, "spec")["containers"] = containers
-		data, err = json.Marshal(pod)
-		if err != nil {
-			panic(err)
-		}
-		t.Object = nil
-		t.Raw = data
+func addArtifactsToPod(pod *coreapi.Pod) {
+	if hasArtifactsVolume(pod) && hasMountsArtifactsVolume(pod) {
+		pod.Spec.Containers = append(pod.Spec.Containers, artifactsContainer())
 	}
 }
 
-func jsonMap(obj map[string]interface{}, keys ...string) map[string]interface{} {
-	if len(keys) == 0 {
-		return obj
-	}
-	for _, key := range keys[:len(keys)-1] {
-		v, ok := obj[key]
-		if !ok {
-			return nil
-		}
-		m, ok := v.(map[string]interface{})
-		if !ok {
-			return nil
-		}
-		obj = m
-	}
-	m, _ := obj[keys[len(keys)-1]].(map[string]interface{})
-	return m
-}
-
-func jsonArray(obj map[string]interface{}, keys ...string) []interface{} {
-	if len(keys) < 1 {
-		return nil
-	}
-	s, _ := jsonMap(obj, keys[:len(keys)-1]...)[keys[len(keys)-1]].([]interface{})
-	return s
-}
-
-func jsonString(obj map[string]interface{}, keys ...string) string {
-	if len(keys) < 1 {
-		return ""
-	}
-	s, _ := jsonMap(obj, keys[:len(keys)-1]...)[keys[len(keys)-1]].(string)
-	return s
-}
-
-func arrayHasObjectString(arr []interface{}, key, name string) bool {
-	for _, obj := range arr {
-		o, _ := obj.(map[string]interface{})
-		if jsonString(o, key) == name {
+func hasArtifactsVolume(pod *coreapi.Pod) bool {
+	for _, volume := range pod.Spec.Volumes {
+		if volume.Name == "artifacts" {
 			return true
 		}
 	}
 	return false
 }
 
-func allPodContainerNamesWithArtifacts(pod map[string]interface{}) map[string]struct{} {
-	names := make(map[string]struct{})
-	for _, obj := range append(append([]interface{}(nil), jsonArray(pod, "spec", "initContainers")...), jsonArray(pod, "spec", "containers")...) {
-		o, _ := obj.(map[string]interface{})
-		if arrayHasObjectString(jsonArray(o, "volumeMounts"), "name", "artifacts") {
-			names[jsonString(o, "name")] = struct{}{}
+func hasMountsArtifactsVolume(pod *coreapi.Pod) bool {
+	for _, initContainer := range pod.Spec.InitContainers {
+		for _, volumeMount := range initContainer.VolumeMounts {
+			if volumeMount.Name == "artifacts" {
+				return true
+			}
 		}
 	}
-	return names
+
+	for _, container := range pod.Spec.Containers {
+		for _, volumeMount := range container.VolumeMounts {
+			if volumeMount.Name == "artifacts" {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 func gatherContainerLogsOutput(podClient PodClient, artifactDir, namespace, podName string) error {

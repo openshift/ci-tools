@@ -12,21 +12,17 @@ import (
 	"strings"
 	"time"
 
-	coreapi "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 
+	"k8s.io/client-go/rest"
+
+	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/types"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
-
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
-	"k8s.io/client-go/rest"
 
 	templateapi "github.com/openshift/api/template/v1"
 	templateclientset "github.com/openshift/client-go/template/clientset/versioned/typed/template/v1"
@@ -40,18 +36,6 @@ const (
 	RefsRepoLabel   = "ci.openshift.io/refs.repo"
 	RefsBranchLabel = "ci.openshift.io/refs.branch"
 )
-
-var (
-	coreScheme   = runtime.NewScheme()
-	codecFactory = serializer.NewCodecFactory(coreScheme)
-	corev1Codec  = codecFactory.LegacyCodec(coreapi.SchemeGroupVersion)
-	rbacv1Codec  = codecFactory.LegacyCodec(rbacv1.SchemeGroupVersion)
-)
-
-func init() {
-	utilruntime.Must(coreapi.AddToScheme(coreScheme))
-	utilruntime.Must(rbacv1.AddToScheme(coreScheme))
-}
 
 type templateExecutionStep struct {
 	template       *templateapi.Template
@@ -106,8 +90,6 @@ func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 		}
 	}
 
-	operateOnTemplatePods(s.template, s.artifactDir)
-
 	if refs := s.jobSpec.JobSpec.Refs; refs != nil {
 		if s.template.ObjectLabels == nil {
 			s.template.ObjectLabels = make(map[string]string)
@@ -115,6 +97,10 @@ func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 		s.template.ObjectLabels[RefsOrgLabel] = refs.Org
 		s.template.ObjectLabels[RefsRepoLabel] = refs.Repo
 		s.template.ObjectLabels[RefsBranchLabel] = refs.BaseRef
+	}
+
+	if len(s.artifactDir) > 0 {
+		addArtifactsToTemplate(s.template)
 	}
 
 	if dry {
@@ -198,18 +184,6 @@ func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 		}
 	}
 	return nil
-}
-
-func operateOnTemplatePods(template *templateapi.Template, artifactDir string) {
-	for _, object := range template.Objects {
-		if pod := getPodFromObject(object); pod != nil {
-			if len(artifactDir) > 0 {
-				addArtifactsToPod(pod)
-			}
-			object.Raw = []byte(runtime.EncodeOrDie(corev1Codec, pod))
-			object.Object = pod.DeepCopyObject()
-		}
-	}
 }
 
 func (s *templateExecutionStep) SubTests() []*junit.TestCase {
@@ -782,14 +756,4 @@ func podLogNewFailedContainers(podClient coreclientset.PodInterface, pod *coreap
 	if (pod.Status.Phase == coreapi.PodFailed || pod.Status.Phase == coreapi.PodSucceeded) && len(podRunningContainers(pod)) == 0 {
 		notifier.Complete(pod.Name)
 	}
-}
-
-func getPodFromObject(object runtime.RawExtension) *coreapi.Pod {
-	// We don't care for errors, because we accept that this func() will check also a non-pod objects.
-	requiredObj, _ := runtime.Decode(codecFactory.UniversalDecoder(coreapi.SchemeGroupVersion), object.Raw)
-	if pod, ok := requiredObj.(*coreapi.Pod); ok {
-		return pod
-	}
-
-	return nil
 }

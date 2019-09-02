@@ -8,15 +8,14 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/steps/clusterinstall"
 
-	appsclientset "k8s.io/client-go/kubernetes/typed/apps/v1"
-	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
-	"k8s.io/client-go/rest"
-
 	templateapi "github.com/openshift/api/template/v1"
 	buildclientset "github.com/openshift/client-go/build/clientset/versioned/typed/build/v1"
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 	routeclientset "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
 	templateclientset "github.com/openshift/client-go/template/clientset/versioned/typed/template/v1"
+	appsclientset "k8s.io/client-go/kubernetes/typed/apps/v1"
+	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/rest"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/steps"
@@ -36,6 +35,7 @@ func FromConfig(
 	promote bool,
 	clusterConfig *rest.Config,
 	requiredTargets []string,
+	dryLogger *steps.DryLogger,
 ) ([]api.Step, []api.Step, error) {
 	var buildSteps []api.Step
 	var postSteps []api.Step
@@ -112,25 +112,25 @@ func FromConfig(
 			if err != nil {
 				return nil, nil, fmt.Errorf("unable to access image stream tag on remote cluster: %v", err)
 			}
-			step = steps.InputImageTagStep(*rawStep.InputImageTagStepConfiguration, srcClient, imageClient, jobSpec)
+			step = steps.InputImageTagStep(*rawStep.InputImageTagStepConfiguration, srcClient, imageClient, jobSpec, dryLogger)
 		} else if rawStep.PipelineImageCacheStepConfiguration != nil {
-			step = steps.PipelineImageCacheStep(*rawStep.PipelineImageCacheStepConfiguration, config.Resources, buildClient, imageClient, artifactDir, jobSpec)
+			step = steps.PipelineImageCacheStep(*rawStep.PipelineImageCacheStepConfiguration, config.Resources, buildClient, imageClient, artifactDir, jobSpec, dryLogger)
 		} else if rawStep.SourceStepConfiguration != nil {
 			srcClient, err := anonymousClusterImageStreamClient(imageClient, clusterConfig, rawStep.SourceStepConfiguration.ClonerefsImage.Cluster)
 			if err != nil {
 				return nil, nil, fmt.Errorf("unable to access image stream tag on remote cluster: %v", err)
 			}
-			step = steps.SourceStep(*rawStep.SourceStepConfiguration, config.Resources, buildClient, srcClient, imageClient, artifactDir, jobSpec)
+			step = steps.SourceStep(*rawStep.SourceStepConfiguration, config.Resources, buildClient, srcClient, imageClient, artifactDir, jobSpec, dryLogger)
 		} else if rawStep.ProjectDirectoryImageBuildStepConfiguration != nil {
-			step = steps.ProjectDirectoryImageBuildStep(*rawStep.ProjectDirectoryImageBuildStepConfiguration, config.Resources, buildClient, imageClient, imageClient, artifactDir, jobSpec)
+			step = steps.ProjectDirectoryImageBuildStep(*rawStep.ProjectDirectoryImageBuildStepConfiguration, config.Resources, buildClient, imageClient, imageClient, artifactDir, jobSpec, dryLogger)
 		} else if rawStep.ProjectDirectoryImageBuildInputs != nil {
-			step = steps.GitSourceStep(*rawStep.ProjectDirectoryImageBuildInputs, config.Resources, buildClient, imageClient, artifactDir, jobSpec)
+			step = steps.GitSourceStep(*rawStep.ProjectDirectoryImageBuildInputs, config.Resources, buildClient, imageClient, artifactDir, jobSpec, dryLogger)
 		} else if rawStep.RPMImageInjectionStepConfiguration != nil {
-			step = steps.RPMImageInjectionStep(*rawStep.RPMImageInjectionStepConfiguration, config.Resources, buildClient, routeGetter, imageClient, artifactDir, jobSpec)
+			step = steps.RPMImageInjectionStep(*rawStep.RPMImageInjectionStepConfiguration, config.Resources, buildClient, routeGetter, imageClient, artifactDir, jobSpec, dryLogger)
 		} else if rawStep.RPMServeStepConfiguration != nil {
-			step = steps.RPMServerStep(*rawStep.RPMServeStepConfiguration, deploymentGetter, routeGetter, serviceGetter, imageClient, jobSpec)
+			step = steps.RPMServerStep(*rawStep.RPMServeStepConfiguration, deploymentGetter, routeGetter, serviceGetter, imageClient, jobSpec, dryLogger)
 		} else if rawStep.OutputImageTagStepConfiguration != nil {
-			step = steps.OutputImageTagStep(*rawStep.OutputImageTagStepConfiguration, imageClient, imageClient, jobSpec)
+			step = steps.OutputImageTagStep(*rawStep.OutputImageTagStepConfiguration, imageClient, imageClient, jobSpec, dryLogger)
 			// all required or non-optional output images are considered part of [images]
 			if _, ok := requiredNames[string(rawStep.OutputImageTagStepConfiguration.From)]; ok || !rawStep.OutputImageTagStepConfiguration.Optional {
 				stepLinks = append(stepLinks, step.Creates()...)
@@ -140,16 +140,16 @@ func FromConfig(
 			if err != nil {
 				return nil, nil, fmt.Errorf("unable to access release images on remote cluster: %v", err)
 			}
-			step = release.ReleaseImagesTagStep(*rawStep.ReleaseImagesTagStepConfiguration, srcClient, imageClient, routeGetter, configMapGetter, params, jobSpec)
+			step = release.ReleaseImagesTagStep(*rawStep.ReleaseImagesTagStepConfiguration, srcClient, imageClient, routeGetter, configMapGetter, params, jobSpec, dryLogger)
 			stepLinks = append(stepLinks, step.Creates()...)
 
 			hasReleaseStep = true
 
-			releaseStep := release.AssembleReleaseStep(true, *rawStep.ReleaseImagesTagStepConfiguration, params, config.Resources, podClient, imageClient, artifactDir, jobSpec)
+			releaseStep := release.AssembleReleaseStep(true, *rawStep.ReleaseImagesTagStepConfiguration, params, config.Resources, podClient, imageClient, artifactDir, jobSpec, dryLogger)
 			addProvidesForStep(releaseStep, params)
 			buildSteps = append(buildSteps, releaseStep)
 
-			initialReleaseStep := release.AssembleReleaseStep(false, *rawStep.ReleaseImagesTagStepConfiguration, params, config.Resources, podClient, imageClient, artifactDir, jobSpec)
+			initialReleaseStep := release.AssembleReleaseStep(false, *rawStep.ReleaseImagesTagStepConfiguration, params, config.Resources, podClient, imageClient, artifactDir, jobSpec, dryLogger)
 			addProvidesForStep(initialReleaseStep, params)
 			buildSteps = append(buildSteps, initialReleaseStep)
 
@@ -159,13 +159,13 @@ func FromConfig(
 			} else if testStep.OpenshiftInstallerClusterTestConfiguration != nil {
 				if testStep.OpenshiftInstallerClusterTestConfiguration.Upgrade {
 					var err error
-					step, err = clusterinstall.E2ETestStep(*testStep.OpenshiftInstallerClusterTestConfiguration, *testStep, params, podClient, templateClient, secretGetter, artifactDir, jobSpec)
+					step, err = clusterinstall.E2ETestStep(*testStep.OpenshiftInstallerClusterTestConfiguration, *testStep, params, podClient, templateClient, secretGetter, artifactDir, jobSpec, dryLogger)
 					if err != nil {
 						return nil, nil, fmt.Errorf("unable to create end to end test step: %v", err)
 					}
 				}
 			} else {
-				step = steps.TestStep(*testStep, config.Resources, podClient, artifactDir, jobSpec)
+				step = steps.TestStep(*testStep, config.Resources, podClient, artifactDir, jobSpec, dryLogger)
 			}
 		}
 		step, ok := checkForFullyQualifiedStep(step, params)
@@ -178,7 +178,7 @@ func FromConfig(
 	}
 
 	for _, template := range templates {
-		step := steps.TemplateExecutionStep(template, params, podClient, templateClient, artifactDir, jobSpec)
+		step := steps.TemplateExecutionStep(template, params, podClient, templateClient, artifactDir, jobSpec, dryLogger)
 		buildSteps = append(buildSteps, step)
 	}
 
@@ -187,7 +187,7 @@ func FromConfig(
 	}
 
 	if !hasReleaseStep {
-		buildSteps = append(buildSteps, release.StableImagesTagStep(imageClient, jobSpec))
+		buildSteps = append(buildSteps, release.StableImagesTagStep(imageClient, jobSpec, dryLogger))
 	}
 
 	buildSteps = append(buildSteps, steps.ImagesReadyStep(imageStepLinks))
@@ -204,7 +204,7 @@ func FromConfig(
 				tags = append(tags, string(image.To))
 			}
 		}
-		postSteps = append(postSteps, release.PromotionStep(*cfg, tags, imageClient, imageClient, jobSpec))
+		postSteps = append(postSteps, release.PromotionStep(*cfg, tags, imageClient, imageClient, jobSpec, dryLogger))
 	}
 
 	return buildSteps, postSteps, nil

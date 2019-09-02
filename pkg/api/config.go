@@ -278,9 +278,10 @@ func validateTestConfigurationType(fieldRoot string, test TestStepConfiguration,
 		if testConfig.ClusterProfile != "" {
 			validationErrors = append(validationErrors, validateClusterProfile(fmt.Sprintf("%s", fieldRoot), testConfig.ClusterProfile)...)
 		}
-		validationErrors = append(validationErrors, validateTestSteps(fmt.Sprintf("%s.Pre", fieldRoot), testConfig.Pre)...)
-		validationErrors = append(validationErrors, validateTestSteps(fmt.Sprintf("%s.Test", fieldRoot), testConfig.Test)...)
-		validationErrors = append(validationErrors, validateTestSteps(fmt.Sprintf("%s.Post", fieldRoot), testConfig.Post)...)
+		seen := sets.NewString()
+		validationErrors = append(validationErrors, validateTestSteps(fmt.Sprintf("%s.Pre", fieldRoot), testConfig.Pre, seen)...)
+		validationErrors = append(validationErrors, validateTestSteps(fmt.Sprintf("%s.Test", fieldRoot), testConfig.Test, seen)...)
+		validationErrors = append(validationErrors, validateTestSteps(fmt.Sprintf("%s.Post", fieldRoot), testConfig.Post, seen)...)
 	}
 	if test.OpenshiftInstallerRandomClusterTestConfiguration != nil {
 		typeCount++
@@ -298,8 +299,7 @@ func validateTestConfigurationType(fieldRoot string, test TestStepConfiguration,
 	return validationErrors
 }
 
-func validateTestSteps(fieldRoot string, steps []TestStep) (ret []error) {
-	seen := sets.NewString()
+func validateTestSteps(fieldRoot string, steps []TestStep, seen sets.String) (ret []error) {
 	for i, s := range steps {
 		fieldRootI := fmt.Sprintf("%s[%d]", fieldRoot, i)
 		if s.LiteralTestStep != nil && s.Reference != nil {

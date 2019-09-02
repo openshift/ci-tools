@@ -8,6 +8,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/diff"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 func TestValidateTests(t *testing.T) {
@@ -409,6 +410,7 @@ func TestValidateTestSteps(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
 		steps []TestStep
+		seen  sets.String
 		errs  []error
 	}{{
 		name: "valid step",
@@ -465,6 +467,21 @@ func TestValidateTestSteps(t *testing.T) {
 				}},
 		}},
 		errs: []error{errors.New(`test[2]: duplicated name "s0"`)},
+	}, {
+		name: "duplicated name from other stage",
+		seen: sets.NewString("s0"),
+		steps: []TestStep{{
+			LiteralTestStep: &LiteralTestStep{
+				As:       "s0",
+				From:     "from",
+				Commands: "commands",
+				Resources: ResourceRequirements{
+					Requests: ResourceList{"cpu": "1"},
+					Limits:   ResourceList{"memory": "1m"},
+				}},
+		},
+		},
+		errs: []error{errors.New(`test[0]: duplicated name "s0"`)},
 	}, {
 		name: "no image",
 		steps: []TestStep{{
@@ -540,7 +557,11 @@ func TestValidateTestSteps(t *testing.T) {
 		},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			ret := validateTestSteps("test", tc.steps)
+			seen := tc.seen
+			if seen == nil {
+				seen = sets.NewString()
+			}
+			ret := validateTestSteps("test", tc.steps, seen)
 			if !reflect.DeepEqual(ret, tc.errs) {
 				t.Fatal(diff.ObjectReflectDiff(ret, tc.errs))
 			}

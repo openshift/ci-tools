@@ -27,6 +27,7 @@ import (
 	rbacapi "k8s.io/api/rbac/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	rbacclientset "k8s.io/client-go/kubernetes/typed/rbac/v1"
 	"k8s.io/client-go/rest"
@@ -392,8 +393,9 @@ func (o *options) Run() error {
 		log.Printf("Ran for %s", time.Now().Sub(start).Truncate(time.Second))
 	}()
 
+	dryLogger := &steps.DryLogger{}
 	// load the graph from the configuration
-	buildSteps, postSteps, err := defaults.FromConfig(o.configSpec, o.jobSpec, o.templates, o.writeParams, o.artifactDir, o.promote, o.clusterConfig, o.targets.values)
+	buildSteps, postSteps, err := defaults.FromConfig(o.configSpec, o.jobSpec, o.templates, o.writeParams, o.artifactDir, o.promote, o.clusterConfig, o.targets.values, dryLogger)
 	if err != nil {
 		return fmt.Errorf("failed to generate steps from config: %v", err)
 	}
@@ -483,6 +485,11 @@ func (o *options) Run() error {
 		if !o.dry {
 			eventRecorder.Event(runtimeObject, coreapi.EventTypeNormal, "CiJobSucceeded", eventJobDescription(o.jobSpec, o.namespace))
 			time.Sleep(time.Second)
+		}
+
+		if o.dry {
+			objects, _ := json.MarshalIndent(dryLogger.GetObjects(), "", "  ")
+			fmt.Printf("%s\n", objects)
 		}
 
 		return nil

@@ -2,7 +2,6 @@ package steps
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -41,6 +40,7 @@ type rpmServerStep struct {
 	serviceClient    coreclientset.ServicesGetter
 	istClient        imageclientset.ImageStreamTagsGetter
 	jobSpec          *api.JobSpec
+	dryLogger        *DryLogger
 }
 
 func (s *rpmServerStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
@@ -165,11 +165,7 @@ python /tmp/serve.py
 	}
 
 	if dry {
-		deploymentJSON, err := json.MarshalIndent(deployment, "", "  ")
-		if err != nil {
-			return fmt.Errorf("failed to marshal deployment: %v", err)
-		}
-		fmt.Printf("%s\n", deploymentJSON)
+		s.dryLogger.AddObject(deployment.DeepCopyObject())
 	} else {
 		if _, err := s.deploymentClient.Deployments(s.jobSpec.Namespace).Create(deployment); err != nil && !kerrors.IsAlreadyExists(err) {
 			return fmt.Errorf("could not create RPM repo server deployment: %v", err)
@@ -192,11 +188,7 @@ python /tmp/serve.py
 	}
 
 	if dry {
-		serviceJSON, err := json.MarshalIndent(service, "", "  ")
-		if err != nil {
-			return fmt.Errorf("failed to marshal service: %v", err)
-		}
-		fmt.Printf("%s\n", serviceJSON)
+		s.dryLogger.AddObject(service.DeepCopyObject())
 	} else if _, err := s.serviceClient.Services(s.jobSpec.Namespace).Create(service); err != nil && !kerrors.IsAlreadyExists(err) {
 		return fmt.Errorf("could not create RPM repo server service: %v", err)
 	}
@@ -216,11 +208,7 @@ python /tmp/serve.py
 	}
 
 	if dry {
-		routeJSON, err := json.MarshalIndent(route, "", "  ")
-		if err != nil {
-			return fmt.Errorf("failed to marshal route: %v", err)
-		}
-		fmt.Printf("%s\n", routeJSON)
+		s.dryLogger.AddObject(route.DeepCopyObject())
 		return nil
 	}
 	if _, err := s.routeClient.Routes(s.jobSpec.Namespace).Create(route); err != nil && !kerrors.IsAlreadyExists(err) {
@@ -430,7 +418,7 @@ func RPMServerStep(
 	routeClient routeclientset.RoutesGetter,
 	serviceClient coreclientset.ServicesGetter,
 	istClient imageclientset.ImageStreamTagsGetter,
-	jobSpec *api.JobSpec) api.Step {
+	jobSpec *api.JobSpec, dryLogger *DryLogger) api.Step {
 	return &rpmServerStep{
 		config:           config,
 		deploymentClient: deploymentClient,
@@ -438,5 +426,6 @@ func RPMServerStep(
 		serviceClient:    serviceClient,
 		istClient:        istClient,
 		jobSpec:          jobSpec,
+		dryLogger:        dryLogger,
 	}
 }

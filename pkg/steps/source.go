@@ -2,7 +2,6 @@ package steps
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -97,6 +96,7 @@ type sourceStep struct {
 	clonerefsSrcClient imageclientset.ImageV1Interface
 	artifactDir        string
 	jobSpec            *api.JobSpec
+	dryLogger          *DryLogger
 }
 
 func (s *sourceStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
@@ -109,7 +109,7 @@ func (s *sourceStep) Run(ctx context.Context, dry bool) error {
 		return fmt.Errorf("could not resolve clonerefs source: %v", err)
 	}
 
-	return handleBuild(s.buildClient, createBuild(s.config, s.jobSpec, clonerefsRef, s.resources), dry, s.artifactDir)
+	return handleBuild(s.buildClient, createBuild(s.config, s.jobSpec, clonerefsRef, s.resources), dry, s.artifactDir, s.dryLogger)
 }
 
 func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clonerefsRef coreapi.ObjectReference, resources api.ResourceConfiguration) *buildapi.Build {
@@ -262,13 +262,9 @@ func isBuildPhaseTerminated(phase buildapi.BuildPhase) bool {
 	return true
 }
 
-func handleBuild(buildClient BuildClient, build *buildapi.Build, dry bool, artifactDir string) error {
+func handleBuild(buildClient BuildClient, build *buildapi.Build, dry bool, artifactDir string, dryLogger *DryLogger) error {
 	if dry {
-		buildJSON, err := json.MarshalIndent(build, "", "  ")
-		if err != nil {
-			return fmt.Errorf("failed to marshal build: %v", err)
-		}
-		fmt.Printf("%s\n", buildJSON)
+		dryLogger.AddObject(build)
 		return nil
 	}
 
@@ -571,7 +567,7 @@ func (s *sourceStep) Description() string {
 	return fmt.Sprintf("Clone the correct source code into an image and tag it as %s", s.config.To)
 }
 
-func SourceStep(config api.SourceStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, clonerefsSrcClient imageclientset.ImageV1Interface, imageClient imageclientset.ImageV1Interface, artifactDir string, jobSpec *api.JobSpec) api.Step {
+func SourceStep(config api.SourceStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, clonerefsSrcClient imageclientset.ImageV1Interface, imageClient imageclientset.ImageV1Interface, artifactDir string, jobSpec *api.JobSpec, dryLogger *DryLogger) api.Step {
 	return &sourceStep{
 		config:             config,
 		resources:          resources,
@@ -580,6 +576,7 @@ func SourceStep(config api.SourceStepConfiguration, resources api.ResourceConfig
 		clonerefsSrcClient: clonerefsSrcClient,
 		artifactDir:        artifactDir,
 		jobSpec:            jobSpec,
+		dryLogger:          dryLogger,
 	}
 }
 

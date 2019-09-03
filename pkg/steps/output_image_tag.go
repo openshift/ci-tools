@@ -2,7 +2,6 @@ package steps
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
@@ -25,6 +24,7 @@ type outputImageTagStep struct {
 	istClient imageclientset.ImageStreamTagsGetter
 	isClient  imageclientset.ImageStreamsGetter
 	jobSpec   *api.JobSpec
+	dryLogger *DryLogger
 }
 
 func (s *outputImageTagStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
@@ -48,11 +48,7 @@ func (s *outputImageTagStep) Run(ctx context.Context, dry bool) error {
 	}
 	ist := s.imageStreamTag(fromImage)
 	if dry {
-		istJSON, err := json.MarshalIndent(ist, "", "  ")
-		if err != nil {
-			return fmt.Errorf("failed to marshal imagestreamtag: %v", err)
-		}
-		fmt.Printf("%s\n", istJSON)
+		s.dryLogger.AddObject(ist.DeepCopyObject())
 		return nil
 	}
 
@@ -159,11 +155,12 @@ func (s *outputImageTagStep) imageStreamTag(fromImage string) *imageapi.ImageStr
 	}
 }
 
-func OutputImageTagStep(config api.OutputImageTagStepConfiguration, istClient imageclientset.ImageStreamTagsGetter, isClient imageclientset.ImageStreamsGetter, jobSpec *api.JobSpec) api.Step {
+func OutputImageTagStep(config api.OutputImageTagStepConfiguration, istClient imageclientset.ImageStreamTagsGetter, isClient imageclientset.ImageStreamsGetter, jobSpec *api.JobSpec, dryLogger *DryLogger) api.Step {
 	return &outputImageTagStep{
 		config:    config,
 		istClient: istClient,
 		isClient:  isClient,
 		jobSpec:   jobSpec,
+		dryLogger: dryLogger,
 	}
 }

@@ -2,7 +2,6 @@ package release
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
@@ -15,8 +14,10 @@ import (
 	"k8s.io/client-go/util/retry"
 
 	imageapi "github.com/openshift/api/image/v1"
-	"github.com/openshift/ci-tools/pkg/api"
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
+
+	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/steps"
 )
 
 // promotionStep will tag a full release suite
@@ -28,6 +29,7 @@ type promotionStep struct {
 	srcClient imageclientset.ImageV1Interface
 	dstClient imageclientset.ImageV1Interface
 	jobSpec   *api.JobSpec
+	dryLogger *steps.DryLogger
 }
 
 func targetName(config api.PromotionConfiguration) string {
@@ -101,11 +103,7 @@ func (s *promotionStep) Run(ctx context.Context, dry bool) error {
 			}
 
 			if dry {
-				istJSON, err := json.MarshalIndent(is, "", "  ")
-				if err != nil {
-					return fmt.Errorf("failed to marshal image stream: %v", err)
-				}
-				fmt.Printf("%s\n", istJSON)
+				s.dryLogger.AddObject(is.DeepCopyObject())
 				return nil
 			}
 			if _, err := s.dstClient.ImageStreams(s.config.Namespace).Update(is); err != nil {
@@ -157,11 +155,7 @@ func (s *promotionStep) Run(ctx context.Context, dry bool) error {
 				},
 			}
 			if dry {
-				istJSON, err := json.MarshalIndent(ist, "", "  ")
-				if err != nil {
-					return fmt.Errorf("failed to marshal imagestreamtag: %v", err)
-				}
-				fmt.Printf("%s\n", istJSON)
+				s.dryLogger.AddObject(ist.DeepCopyObject())
 				return nil
 			}
 			if _, err := client.Update(ist); err != nil {
@@ -204,12 +198,13 @@ func (s *promotionStep) Description() string {
 
 // PromotionStep copies tags from the pipeline image stream to the destination defined in the promotion config.
 // If the source tag does not exist it is silently skipped.
-func PromotionStep(config api.PromotionConfiguration, tags []string, srcClient, dstClient imageclientset.ImageV1Interface, jobSpec *api.JobSpec) api.Step {
+func PromotionStep(config api.PromotionConfiguration, tags []string, srcClient, dstClient imageclientset.ImageV1Interface, jobSpec *api.JobSpec, dryLogger *steps.DryLogger) api.Step {
 	return &promotionStep{
 		config:    config,
 		tags:      tags,
 		srcClient: srcClient,
 		dstClient: dstClient,
 		jobSpec:   jobSpec,
+		dryLogger: dryLogger,
 	}
 }

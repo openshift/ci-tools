@@ -51,7 +51,8 @@ func TestInputImageTagStep(t *testing.T) {
 
 	// Make a step instance
 	jobspec := &api.JobSpec{Namespace: "target-namespace"}
-	iits := InputImageTagStep(config, srcClient, dstClient, jobspec)
+	dryLogger := &DryLogger{}
+	iits := InputImageTagStep(config, srcClient, dstClient, jobspec, dryLogger)
 
 	// Set up expectations for the step methods
 	specification := stepExpectation{

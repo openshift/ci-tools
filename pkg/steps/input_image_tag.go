@@ -2,7 +2,6 @@ package steps
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 
@@ -22,6 +21,7 @@ type inputImageTagStep struct {
 	srcClient imageclientset.ImageV1Interface
 	dstClient imageclientset.ImageV1Interface
 	jobSpec   *api.JobSpec
+	dryLogger *DryLogger
 
 	imageName string
 }
@@ -89,11 +89,7 @@ func (s *inputImageTagStep) Run(ctx context.Context, dry bool) error {
 	}
 
 	if dry {
-		istJSON, err := json.MarshalIndent(ist, "", "  ")
-		if err != nil {
-			return fmt.Errorf("failed to marshal imagestreamtag: %v", err)
-		}
-		fmt.Printf("%s\n", istJSON)
+		s.dryLogger.AddObject(ist.DeepCopyObject())
 		return nil
 	}
 
@@ -156,7 +152,7 @@ func (s *inputImageTagStep) Description() string {
 	return fmt.Sprintf("Find the input image %s and tag it into the pipeline", s.config.To)
 }
 
-func InputImageTagStep(config api.InputImageTagStepConfiguration, srcClient, dstClient imageclientset.ImageV1Interface, jobSpec *api.JobSpec) api.Step {
+func InputImageTagStep(config api.InputImageTagStepConfiguration, srcClient, dstClient imageclientset.ImageV1Interface, jobSpec *api.JobSpec, dryLogger *DryLogger) api.Step {
 	// when source and destination client are the same, we don't need to use external imports
 	if srcClient == dstClient {
 		config.BaseImage.Cluster = ""
@@ -166,5 +162,6 @@ func InputImageTagStep(config api.InputImageTagStepConfiguration, srcClient, dst
 		srcClient: srcClient,
 		dstClient: dstClient,
 		jobSpec:   jobSpec,
+		dryLogger: dryLogger,
 	}
 }

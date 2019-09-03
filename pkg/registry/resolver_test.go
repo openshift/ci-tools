@@ -15,11 +15,13 @@ func TestResolve(t *testing.T) {
 	fipsPreChain := "install-fips"
 	nestedChains := "nested-chains"
 	chainInstall := "install-chain"
+	awsWorkflow := "ipi-aws"
 	for _, testCase := range []struct {
 		name        string
 		config      api.MultiStageTestConfiguration
 		stepMap     map[string]api.LiteralTestStep
 		chainMap    map[string][]api.TestStep
+		workflowMap map[string]api.MultiStageTestConfiguration
 		expectedRes types.TestFlow
 		expectErr   bool
 	}{{
@@ -368,9 +370,186 @@ func TestResolve(t *testing.T) {
 		},
 		expectedRes: types.TestFlow{},
 		expectErr:   true,
+	}, {
+		name: "Full AWS Workflow",
+		config: api.MultiStageTestConfiguration{
+			Workflow: &awsWorkflow,
+		},
+		chainMap: map[string][]api.TestStep{
+			fipsPreChain: {{
+				LiteralTestStep: &api.LiteralTestStep{
+					As:       "ipi-install",
+					From:     "installer",
+					Commands: "openshift-cluster install",
+					Resources: api.ResourceRequirements{
+						Requests: api.ResourceList{"cpu": "1000m"},
+						Limits:   api.ResourceList{"memory": "2Gi"},
+					}},
+			}, {
+				LiteralTestStep: &api.LiteralTestStep{
+					As:       "enable-fips",
+					From:     "fips-enabler",
+					Commands: "enable_fips",
+					Resources: api.ResourceRequirements{
+						Requests: api.ResourceList{"cpu": "1000m"},
+						Limits:   api.ResourceList{"memory": "2Gi"},
+					}},
+			}},
+		},
+		stepMap: map[string]api.LiteralTestStep{
+			teardownRef: {
+				As:       "ipi-teardown",
+				From:     "installer",
+				Commands: "openshift-cluster destroy",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				}},
+		},
+		workflowMap: map[string]api.MultiStageTestConfiguration{
+			awsWorkflow: {
+				ClusterProfile: api.ClusterProfileAWS,
+				Pre: []api.TestStep{{
+					Chain: &fipsPreChain,
+				}},
+				Test: []api.TestStep{{
+					LiteralTestStep: &api.LiteralTestStep{
+						As:       "e2e",
+						From:     "my-image",
+						Commands: "make custom-e2e",
+						Resources: api.ResourceRequirements{
+							Requests: api.ResourceList{"cpu": "1000m"},
+							Limits:   api.ResourceList{"memory": "2Gi"},
+						}},
+				}},
+				Post: []api.TestStep{{
+					Reference: &teardownRef,
+				}},
+			},
+		},
+		expectedRes: types.TestFlow{
+			ClusterProfile: api.ClusterProfileAWS,
+			Pre: []types.TestStep{{
+				As:       "ipi-install",
+				From:     "installer",
+				Commands: "openshift-cluster install",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				}}, {
+				As:       "enable-fips",
+				From:     "fips-enabler",
+				Commands: "enable_fips",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				}},
+			},
+			Test: []types.TestStep{{
+				As:       "e2e",
+				From:     "my-image",
+				Commands: "make custom-e2e",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				},
+			}},
+			Post: []types.TestStep{{
+				As:       "ipi-teardown",
+				From:     "installer",
+				Commands: "openshift-cluster destroy",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				},
+			}},
+		},
+		expectErr: false,
+	}, {
+		name: "Workflow with Test and ClusterProfile overridden",
+		config: api.MultiStageTestConfiguration{
+			Workflow:       &awsWorkflow,
+			ClusterProfile: api.ClusterProfileAzure4,
+			Test: []api.TestStep{{
+				LiteralTestStep: &api.LiteralTestStep{
+					As:       "custom-e2e",
+					From:     "test-image",
+					Commands: "make custom-e2e-2",
+					Resources: api.ResourceRequirements{
+						Requests: api.ResourceList{"cpu": "1000m"},
+						Limits:   api.ResourceList{"memory": "2Gi"},
+					}},
+			}},
+		},
+		workflowMap: map[string]api.MultiStageTestConfiguration{
+			awsWorkflow: {
+				ClusterProfile: api.ClusterProfileAWS,
+				Pre: []api.TestStep{{
+					LiteralTestStep: &api.LiteralTestStep{
+						As:       "ipi-install",
+						From:     "installer",
+						Commands: "openshift-cluster install",
+						Resources: api.ResourceRequirements{
+							Requests: api.ResourceList{"cpu": "1000m"},
+							Limits:   api.ResourceList{"memory": "2Gi"},
+						}},
+				}},
+				Test: []api.TestStep{{
+					LiteralTestStep: &api.LiteralTestStep{
+						As:       "e2e",
+						From:     "my-image",
+						Commands: "make custom-e2e",
+						Resources: api.ResourceRequirements{
+							Requests: api.ResourceList{"cpu": "1000m"},
+							Limits:   api.ResourceList{"memory": "2Gi"},
+						}},
+				}},
+				Post: []api.TestStep{{
+					LiteralTestStep: &api.LiteralTestStep{
+						As:       "ipi-teardown",
+						From:     "installer",
+						Commands: "openshift-cluster destroy",
+						Resources: api.ResourceRequirements{
+							Requests: api.ResourceList{"cpu": "1000m"},
+							Limits:   api.ResourceList{"memory": "2Gi"},
+						}},
+				}},
+			},
+		},
+		expectedRes: types.TestFlow{
+			ClusterProfile: api.ClusterProfileAzure4,
+			Pre: []types.TestStep{{
+				As:       "ipi-install",
+				From:     "installer",
+				Commands: "openshift-cluster install",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				},
+			}},
+			Test: []types.TestStep{{
+				As:       "custom-e2e",
+				From:     "test-image",
+				Commands: "make custom-e2e-2",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				},
+			}},
+			Post: []types.TestStep{{
+				As:       "ipi-teardown",
+				From:     "installer",
+				Commands: "openshift-cluster destroy",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				},
+			}},
+		},
+		expectErr: false,
 	}} {
 		t.Run(testCase.name, func(t *testing.T) {
-			ret, err := NewResolver(testCase.stepMap, testCase.chainMap).Resolve(testCase.config)
+			ret, err := NewResolver(testCase.stepMap, testCase.chainMap, testCase.workflowMap).Resolve(testCase.config)
 			if !testCase.expectErr && err != nil {
 				t.Errorf("%s: expected no error but got: %s", testCase.name, err)
 			}

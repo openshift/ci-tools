@@ -5,6 +5,7 @@ package steps
 import (
 	"context"
 	"reflect"
+	"sync"
 	"testing"
 
 	v1 "k8s.io/api/core/v1"
@@ -25,16 +26,21 @@ import (
 
 // DryLogger holds the information of all objects that have been created from a dry run.
 type DryLogger struct {
+	sync.RWMutex
 	objects []runtime.Object
 }
 
 // AddObject is adding an object to the list.
 func (dl *DryLogger) AddObject(o runtime.Object) {
+	dl.Lock()
+	defer dl.Unlock()
 	dl.objects = append(dl.objects, o)
 }
 
 // GetObjects returns the list of objects.
 func (dl *DryLogger) GetObjects() []runtime.Object {
+	dl.RLock()
+	defer dl.RUnlock()
 	return dl.objects
 }
 

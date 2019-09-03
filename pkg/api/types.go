@@ -359,6 +359,7 @@ type LiteralTestStep struct {
 type TestStep struct {
 	*LiteralTestStep `json:",inline,omitempty"`
 	Reference        *string `json:"ref,omitempty"`
+	Chain            *string `json:"chain,omitempty"`
 }
 
 // MultiStageTestConfiguration is a flexible configuration mode that allows tighter control over

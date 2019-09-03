@@ -16,12 +16,14 @@ type Resolver interface {
 // user provided configs referencing the registry and the internal, complete
 // representation
 type registry struct {
-	stepsByName map[string]api.LiteralTestStep
+	stepsByName  map[string]api.LiteralTestStep
+	chainsByName map[string][]api.TestStep
 }
 
-func NewResolver(stepsByName map[string]api.LiteralTestStep) Resolver {
+func NewResolver(stepsByName map[string]api.LiteralTestStep, chainsByName map[string][]api.TestStep) Resolver {
 	return &registry{
-		stepsByName: stepsByName,
+		stepsByName:  stepsByName,
+		chainsByName: chainsByName,
 	}
 }
 
@@ -49,7 +51,14 @@ func (r *registry) Resolve(config api.MultiStageTestConfiguration) (types.TestFl
 }
 
 func (r *registry) process(steps []api.TestStep) (internalSteps []types.TestStep, errs []error) {
-	for _, external := range steps {
+	// unroll chains
+	var unrolledSteps []api.TestStep
+	unrolledSteps, err := r.unrollChains(steps)
+	if err != nil {
+		errs = append(errs, err...)
+	}
+	// process steps
+	for _, external := range unrolledSteps {
 		var step api.LiteralTestStep
 		if external.Reference != nil {
 			var err error
@@ -65,6 +74,29 @@ func (r *registry) process(steps []api.TestStep) (internalSteps []types.TestStep
 		}
 		internalStep := toInternal(step)
 		internalSteps = append(internalSteps, internalStep)
+	}
+	if err := checkForDuplicates(internalSteps); err != nil {
+		errs = append(errs, err...)
+	}
+	return
+}
+
+func (r *registry) unrollChains(input []api.TestStep) (unrolledSteps []api.TestStep, errs []error) {
+	for _, step := range input {
+		if step.Chain != nil {
+			chain, ok := r.chainsByName[*step.Chain]
+			if !ok {
+				return []api.TestStep{}, []error{fmt.Errorf("unknown step chain: %s", *step.Chain)}
+			}
+			// handle nested chains
+			chain, err := r.unrollChains(chain)
+			if err != nil {
+				errs = append(errs, err...)
+			}
+			unrolledSteps = append(unrolledSteps, chain...)
+			continue
+		}
+		unrolledSteps = append(unrolledSteps, step)
 	}
 	return
 }
@@ -85,4 +117,16 @@ func toInternal(input api.LiteralTestStep) types.TestStep {
 		ArtifactDir: input.ArtifactDir,
 		Resources:   input.Resources,
 	}
+}
+
+func checkForDuplicates(input []types.TestStep) (errs []error) {
+	seen := make(map[string]bool)
+	for _, step := range input {
+		_, ok := seen[step.As]
+		if ok {
+			errs = append(errs, fmt.Errorf("duplicate name: %s", step.As))
+		}
+		seen[step.As] = true
+	}
+	return
 }

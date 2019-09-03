@@ -505,7 +505,7 @@ func TestValidateTestSteps(t *testing.T) {
 			Reference: &myReference,
 		}},
 		errs: []error{
-			errors.New("test[0]: `ref` cannot be set along with other test step fields"),
+			errors.New("test[0]: only one of `ref`, `chain`, or a literal test step can be set"),
 		},
 	}, {
 		name: "Step with same name as reference",

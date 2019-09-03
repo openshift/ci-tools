@@ -163,26 +163,27 @@ func (s *multiStageTestStep) runPods(ctx context.Context, pods []coreapi.Pod, sh
 	var errs []error
 	for _, pod := range pods {
 		log.Printf("Executing %q", pod.Name)
-		if s.dry {
-			if err := dumpObject(&pod); err != nil {
-				errs = append(errs, err)
-			}
-			continue
-		}
-		if _, err := createOrRestartPod(s.podClient.Pods(s.jobSpec.Namespace), &pod); err != nil {
-			errs = append(errs, fmt.Errorf("failed to create or restart %q pod: %v", pod.Name, err))
-			if shortCircuit {
-				break
-			}
-		}
-		if err := waitForPodCompletion(s.podClient.Pods(s.jobSpec.Namespace), pod.Name, nil, false); err != nil {
-			errs = append(errs, fmt.Errorf("%q pod %q failed: %v", s.name, pod.Name, err))
+		if err := s.runPod(ctx, &pod); err != nil {
+			errs = append(errs, err)
 			if shortCircuit {
 				break
 			}
 		}
 	}
 	return utilerrors.NewAggregate(errs)
+}
+
+func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod) error {
+	if s.dry {
+		return dumpObject(pod)
+	}
+	if _, err := createOrRestartPod(s.podClient.Pods(s.jobSpec.Namespace), pod); err != nil {
+		return fmt.Errorf("failed to create or restart %q pod: %v", pod.Name, err)
+	}
+	if err := waitForPodCompletion(s.podClient.Pods(s.jobSpec.Namespace), pod.Name, nil, false); err != nil {
+		return fmt.Errorf("%q pod %q failed: %v", s.name, pod.Name, err)
+	}
+	return nil
 }
 
 func deletePods(client coreclientset.PodInterface, test string) error {

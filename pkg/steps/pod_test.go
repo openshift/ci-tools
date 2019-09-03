@@ -3,7 +3,7 @@ package steps
 import (
 	"testing"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/resource"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -61,8 +61,8 @@ func preparePodStep(t *testing.T, namespace string) (*podStep, stepExpectation, 
 		t:       t,
 	}
 	client := NewPodClient(fakecs.Core(), nil, nil)
-
-	ps := PodStep(stepName, config, resources, client, artifactDir, jobSpec)
+	dryLogger := &DryLogger{}
+	ps := PodStep(stepName, config, resources, client, artifactDir, jobSpec, dryLogger)
 
 	specification := stepExpectation{
 		name:     podName,

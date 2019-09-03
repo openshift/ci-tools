@@ -134,7 +134,8 @@ func TestOutputImageStep(t *testing.T) {
 				}
 			}
 
-			oits := OutputImageTagStep(config, client, client, jobspec)
+			dryLogger := &DryLogger{}
+			oits := OutputImageTagStep(config, client, client, jobspec, dryLogger)
 
 			examineStep(t, oits, stepSpec)
 			executeStep(t, oits, tt.execSpecification, nil)

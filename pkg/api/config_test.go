@@ -8,6 +8,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/diff"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 func TestValidateTests(t *testing.T) {
@@ -59,6 +60,17 @@ func TestValidateTests(t *testing.T) {
 					ContainerTestConfiguration: &ContainerTestConfiguration{},
 					OpenshiftAnsibleClusterTestConfiguration: &OpenshiftAnsibleClusterTestConfiguration{
 						ClusterTestConfiguration{ClusterProfile: ClusterProfileAWSAtomic}},
+				},
+			},
+			expectedValid: false,
+		},
+		{
+			id: "`commands` and `steps`",
+			tests: []TestStepConfiguration{
+				{
+					As:                          "test",
+					Commands:                    "commands",
+					MultiStageTestConfiguration: &MultiStageTestConfiguration{},
 				},
 			},
 			expectedValid: false,
@@ -136,7 +148,8 @@ func TestValidateTests(t *testing.T) {
 			id: "test without `as`",
 			tests: []TestStepConfiguration{
 				{
-					Commands: "test",
+					Commands:                   "test",
+					ContainerTestConfiguration: &ContainerTestConfiguration{From: "ignored"},
 				},
 			},
 			expectedValid: false,
@@ -266,11 +279,13 @@ func TestValidateTests(t *testing.T) {
 	}
 
 	for _, tc := range testTestsCases {
-		if errs := validateTestStepConfiguration("tests", tc.tests, tc.release); len(errs) > 0 && tc.expectedValid {
-			validationErrors = append(validationErrors, fmt.Errorf("%q expected to be valid, got: %v", tc.id, errs))
-		} else if !tc.expectedValid && len(errs) == 0 {
-			validationErrors = append(validationErrors, parseValidError(tc.id))
-		}
+		t.Run(tc.id, func(t *testing.T) {
+			if errs := validateTestStepConfiguration("tests", tc.tests, tc.release); len(errs) > 0 && tc.expectedValid {
+				validationErrors = append(validationErrors, fmt.Errorf("expected to be valid, got: %v", errs))
+			} else if !tc.expectedValid && len(errs) == 0 {
+				validationErrors = append(validationErrors, parseValidError(tc.id))
+			}
+		})
 	}
 
 	if validationErrors != nil {
@@ -395,6 +410,7 @@ func TestValidateTestSteps(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
 		steps []TestStep
+		seen  sets.String
 		errs  []error
 	}{{
 		name: "valid step",
@@ -451,6 +467,21 @@ func TestValidateTestSteps(t *testing.T) {
 				}},
 		}},
 		errs: []error{errors.New(`test[2]: duplicated name "s0"`)},
+	}, {
+		name: "duplicated name from other stage",
+		seen: sets.NewString("s0"),
+		steps: []TestStep{{
+			LiteralTestStep: &LiteralTestStep{
+				As:       "s0",
+				From:     "from",
+				Commands: "commands",
+				Resources: ResourceRequirements{
+					Requests: ResourceList{"cpu": "1"},
+					Limits:   ResourceList{"memory": "1m"},
+				}},
+		},
+		},
+		errs: []error{errors.New(`test[0]: duplicated name "s0"`)},
 	}, {
 		name: "no image",
 		steps: []TestStep{{
@@ -526,7 +557,11 @@ func TestValidateTestSteps(t *testing.T) {
 		},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			ret := validateTestSteps("test", tc.steps)
+			seen := tc.seen
+			if seen == nil {
+				seen = sets.NewString()
+			}
+			ret := validateTestSteps("test", tc.steps, seen)
 			if !reflect.DeepEqual(ret, tc.errs) {
 				t.Fatal(diff.ObjectReflectDiff(ret, tc.errs))
 			}

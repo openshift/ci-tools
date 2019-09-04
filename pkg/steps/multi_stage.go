@@ -184,7 +184,7 @@ func (s *multiStageTestStep) runPods(ctx context.Context, pods []coreapi.Pod, sh
 			if c.Name == "artifacts" {
 				container := pod.Spec.Containers[0].Name
 				artifacts := NewArtifactWorker(s.podClient, filepath.Join(s.artifactDir, container), s.jobSpec.Namespace)
-				artifacts.CollectFromPod(pod.Name, true, []string{container}, nil)
+				artifacts.CollectFromPod(pod.Name, []string{container}, nil)
 				notifier = artifacts
 				break
 			}

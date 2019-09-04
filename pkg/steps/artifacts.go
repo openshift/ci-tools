@@ -422,7 +422,7 @@ func (w *ArtifactWorker) downloadArtifacts(podName string, hasArtifacts bool) er
 	return nil
 }
 
-func (w *ArtifactWorker) CollectFromPod(podName string, hasArtifactsContainer bool, hasArtifacts []string, waitForContainers []string) {
+func (w *ArtifactWorker) CollectFromPod(podName string, hasArtifacts []string, waitForContainers []string) {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
@@ -541,11 +541,7 @@ func (w *ArtifactWorker) Done(podName string) bool {
 
 func addArtifactContainersFromPod(pod *coreapi.Pod, worker *ArtifactWorker) {
 	var containers []string
-	var hasArtifactsContainer bool
 	for _, container := range append(append([]coreapi.Container{}, pod.Spec.InitContainers...), pod.Spec.Containers...) {
-		if container.Name == "artifacts" {
-			hasArtifactsContainer = true
-		}
 		if !containerHasVolumeName(container, "artifacts") {
 			continue
 		}
@@ -555,7 +551,7 @@ func addArtifactContainersFromPod(pod *coreapi.Pod, worker *ArtifactWorker) {
 	if names := pod.Annotations[annotationWaitForContainerArtifacts]; len(names) > 0 {
 		waitForContainers = strings.Split(names, ",")
 	}
-	worker.CollectFromPod(pod.Name, hasArtifactsContainer, containers, waitForContainers)
+	worker.CollectFromPod(pod.Name, containers, waitForContainers)
 }
 
 func containerHasVolumeName(container coreapi.Container, name string) bool {

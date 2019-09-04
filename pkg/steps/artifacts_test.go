@@ -509,7 +509,7 @@ func TestArtifactWorker(t *testing.T) {
 		name:       pod,
 	}
 	w := NewArtifactWorker(podClient, tmp, podClient.namespace)
-	w.CollectFromPod(pod, true, []string{"container"}, nil)
+	w.CollectFromPod(pod, []string{"container"}, nil)
 	w.Complete(pod)
 	for !w.Done(pod) {
 	}

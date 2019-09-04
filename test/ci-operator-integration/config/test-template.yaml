@@ -1,0 +1,228 @@
+kind: Template
+apiVersion: template.openshift.io/v1
+
+parameters:
+- name: JOB_NAME_SAFE
+  required: true
+- name: JOB_NAME_HASH
+  required: true
+- name: NAMESPACE
+  required: true
+- name: IMAGE_FORMAT
+  required: true
+- name: IMAGE_INSTALLER
+  required: true
+- name: LOCAL_IMAGE_SRC
+  required: true
+- name: IMAGE_CLI
+  required: true
+- name: IMAGE_TESTS
+  required: true
+- name: CLUSTER_TYPE
+  required: true
+# Ensures the release image is created and tested
+- name: TEST_COMMAND
+  required: true
+- name: RELEASE_IMAGE_LATEST
+  required: true
+- name: BASE_DOMAIN
+- name: BUILD_ID
+  required: false
+
+objects:
+
+# We want the cluster to be able to access these images
+- kind: RoleBinding
+  apiVersion: authorization.openshift.io/v1
+  metadata:
+    name: ${JOB_NAME_SAFE}-image-puller
+    namespace: ${NAMESPACE}
+  roleRef:
+    name: system:image-puller
+  subjects:
+  - kind: SystemGroup
+    name: system:unauthenticated
+  - kind: SystemGroup
+    name: system:authenticated
+
+# The e2e pod spins up a cluster, runs e2e tests, and then cleans up the cluster.
+- kind: Pod
+  apiVersion: v1
+  metadata:
+    name: ${JOB_NAME_SAFE}
+    namespace: ${NAMESPACE}
+    annotations:
+      # we want to gather the teardown logs no matter what
+      ci-operator.openshift.io/wait-for-container-artifacts: teardown
+      ci-operator.openshift.io/save-container-logs: "true"
+      ci-operator.openshift.io/container-sub-tests: "lease,setup,test,teardown"
+  spec:
+    restartPolicy: Never
+    activeDeadlineSeconds: 14400
+    terminationGracePeriodSeconds: 900
+    volumes:
+    - name: artifacts
+      emptyDir: {}
+    - name: shared-tmp
+      emptyDir: {}
+    - name: cluster-profile
+      secret:
+        secretName: ${JOB_NAME_SAFE}-cluster-profile
+    initContainers:
+    - name: cli
+      image: ${IMAGE_CLI}
+      volumeMounts:
+      - name: shared-tmp
+        mountPath: /tmp/shared
+      command:
+      - cp
+      - /usr/bin/oc
+      - /tmp/shared/oc
+
+    containers:
+
+
+    - name: lease
+      image: registry.svc.ci.openshift.org/ci/boskoscli:latest
+      terminationMessagePolicy: FallbackToLogsOnError
+      resources:
+        requests:
+          cpu: 10m
+          memory: 10Mi
+        limits:
+          memory: 200Mi
+      volumeMounts:
+      - name: shared-tmp
+        mountPath: /tmp/shared
+      - name: cluster-profile
+        mountPath: /tmp/cluster
+      - name: artifacts
+        mountPath: /tmp/artifacts
+      env:
+      - name: CLUSTER_TYPE
+        value: ${CLUSTER_TYPE}
+      - name: CLUSTER_NAME
+        value: ${NAMESPACE}-${JOB_NAME_HASH}
+      command:
+      - echo TEST
+
+    # Once the cluster is up, executes shared tests
+    - name: test
+      image: ${LOCAL_IMAGE_SRC}
+      terminationMessagePolicy: FallbackToLogsOnError
+      volumeMounts:
+      - name: shared-tmp
+        mountPath: /tmp/shared
+      - name: cluster-profile
+        mountPath: /tmp/cluster
+      - name: artifacts
+        mountPath: /tmp/artifacts
+      env:
+      - name: AWS_SHARED_CREDENTIALS_FILE
+        value: /tmp/cluster/.awscred
+      - name: AZURE_AUTH_LOCATION
+        value: /tmp/cluster/osServicePrincipal.json
+      - name: GCP_SHARED_CREDENTIALS_FILE
+        value: /tmp/cluster/gce.json
+      - name: ARTIFACT_DIR
+        value: /tmp/artifacts
+      - name: HOME
+        value: /tmp/home
+      - name: IMAGE_FORMAT
+        value: ${IMAGE_FORMAT}
+      - name: KUBECONFIG
+        value: /tmp/artifacts/installer/auth/kubeconfig
+      command:
+      - echo TEST
+
+    # Runs an install
+    - name: setup
+      image: ${IMAGE_INSTALLER}
+      terminationMessagePolicy: FallbackToLogsOnError
+      volumeMounts:
+      - name: shared-tmp
+        mountPath: /tmp
+      - name: cluster-profile
+        mountPath: /etc/openshift-installer
+      - name: artifacts
+        mountPath: /tmp/artifacts
+      env:
+      - name: TYPE
+        value: ${CLUSTER_TYPE}
+      - name: AWS_SHARED_CREDENTIALS_FILE
+        value: /etc/openshift-installer/.awscred
+      - name: AWS_REGION
+        value: us-east-1
+      - name: AZURE_AUTH_LOCATION
+        value: /etc/openshift-installer/osServicePrincipal.json
+      - name: AZURE_REGION
+        value: centralus
+      - name: GCP_REGION
+        value: us-east1
+      - name: GCP_PROJECT
+        value: openshift-gce-devel-ci
+      - name: GOOGLE_CLOUD_KEYFILE_JSON
+        value: /etc/openshift-installer/gce.json
+      - name: CLUSTER_NAME
+        value: ${NAMESPACE}-${JOB_NAME_HASH}
+      - name: BASE_DOMAIN
+        value: ${BASE_DOMAIN}
+      - name: SSH_PRIV_KEY_PATH
+        value: /etc/openshift-installer/ssh-privatekey
+      - name: SSH_PUB_KEY_PATH
+        value: /etc/openshift-installer/ssh-publickey
+      - name: PULL_SECRET_PATH
+        value: /etc/openshift-installer/pull-secret
+      - name: OPENSHIFT_INSTALL_RELEASE_IMAGE_OVERRIDE
+        value: ${RELEASE_IMAGE_LATEST}
+      - name: OPENSHIFT_INSTALL_INVOKER
+        value: openshift-internal-ci/${JOB_NAME_SAFE}/${BUILD_ID}
+      - name: OPENSTACK_IMAGE
+        value: rhcos
+      - name: OPENSTACK_REGION
+        value: moc-kzn
+      - name: OPENSTACK_FLAVOR
+        value: m1.medium
+      - name: OPENSTACK_EXTERNAL_NETWORK
+        value: external
+      - name: OS_CLOUD
+        value: openstack-cloud
+      - name: OS_CLIENT_CONFIG_FILE
+        value: /etc/openshift-installer/clouds.yaml
+      - name: USER
+        value: test
+      - name: HOME
+        value: /tmp
+      command:
+      - echo TEST
+
+    # Performs cleanup of all created resources
+    - name: teardown
+      image: ${IMAGE_TESTS}
+      terminationMessagePolicy: FallbackToLogsOnError
+      volumeMounts:
+      - name: shared-tmp
+        mountPath: /tmp/shared
+      - name: cluster-profile
+        mountPath: /etc/openshift-installer
+      - name: artifacts
+        mountPath: /tmp/artifacts
+      env:
+      - name: INSTANCE_PREFIX
+        value: ${NAMESPACE}-${JOB_NAME_HASH}
+      - name: TYPE
+        value: ${CLUSTER_TYPE}
+      - name: AWS_SHARED_CREDENTIALS_FILE
+        value: /etc/openshift-installer/.awscred
+      - name: AWS_REGION
+        value: us-east-1
+      - name: AZURE_AUTH_LOCATION
+        value: /etc/openshift-installer/osServicePrincipal.json
+      - name: AZURE_REGION
+        value: centralus
+      - name: GOOGLE_CLOUD_KEYFILE_JSON
+        value: /etc/openshift-installer/gce.json
+      - name: KUBECONFIG
+        value: /tmp/artifacts/installer/auth/kubeconfig
+      command:
+      - echo TEST

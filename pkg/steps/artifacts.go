@@ -155,6 +155,10 @@ func (n *TestCaseNotifier) SubTests(prefix string) []*junit.TestCase {
 	return tests
 }
 
+type podCmdExecutor interface {
+	Exec(namespace, pod string, opts *coreapi.PodExecOptions) (remotecommand.Executor, error)
+}
+
 type podClient struct {
 	coreclientset.PodsGetter
 	config *rest.Config
@@ -165,13 +169,18 @@ func NewPodClient(podsClient coreclientset.PodsGetter, config *rest.Config, clie
 	return &podClient{PodsGetter: podsClient, config: config, client: client}
 }
 
-func (c *podClient) RESTConfig() *rest.Config   { return c.config }
-func (c *podClient) RESTClient() rest.Interface { return c.client }
+func (c podClient) Exec(namespace, pod string, opts *coreapi.PodExecOptions) (remotecommand.Executor, error) {
+	u := c.client.Post().Resource("pods").Namespace(namespace).Name(pod).SubResource("exec").VersionedParams(opts, scheme.ParameterCodec).URL()
+	e, err := remotecommand.NewSPDYExecutor(c.config, "POST", u)
+	if err != nil {
+		return nil, fmt.Errorf("could not initialize a new SPDY executor: %v", err)
+	}
+	return e, nil
+}
 
 type PodClient interface {
 	coreclientset.PodsGetter
-	RESTConfig() *rest.Config
-	RESTClient() rest.Interface
+	podCmdExecutor
 }
 
 func copyArtifacts(podClient PodClient, into, ns, name, containerName string, paths []string) error {
@@ -181,16 +190,14 @@ func copyArtifacts(podClient PodClient, into, ns, name, containerName string, pa
 		args = append(args, "-C", s, ".")
 	}
 
-	u := podClient.RESTClient().Post().Resource("pods").Namespace(ns).Name(name).SubResource("exec").VersionedParams(&coreapi.PodExecOptions{
+	e, err := podClient.Exec(ns, name, &coreapi.PodExecOptions{
 		Container: containerName,
 		Stdout:    true,
 		Stderr:    true,
 		Command:   append([]string{"tar", "czf", "-"}, args...),
-	}, scheme.ParameterCodec).URL()
-
-	e, err := remotecommand.NewSPDYExecutor(podClient.RESTConfig(), "POST", u)
+	})
 	if err != nil {
-		return fmt.Errorf("could not initialize a new SPDY executor: %v", err)
+		return err
 	}
 	r, w := io.Pipe()
 	defer w.CloseWithError(fmt.Errorf("cancelled"))
@@ -257,16 +264,14 @@ func copyArtifacts(podClient PodClient, into, ns, name, containerName string, pa
 }
 
 func removeFile(podClient PodClient, ns, name, containerName string, paths []string) error {
-	u := podClient.RESTClient().Post().Resource("pods").Namespace(ns).Name(name).SubResource("exec").VersionedParams(&coreapi.PodExecOptions{
+	e, err := podClient.Exec(ns, name, &coreapi.PodExecOptions{
 		Container: containerName,
 		Stdout:    true,
 		Stderr:    true,
 		Command:   append([]string{"rm", "-f"}, paths...),
-	}, scheme.ParameterCodec).URL()
-
-	e, err := remotecommand.NewSPDYExecutor(podClient.RESTConfig(), "POST", u)
+	})
 	if err != nil {
-		return fmt.Errorf("could not initialize a new SPDY executor: %v", err)
+		return err
 	}
 	if err := e.Stream(remotecommand.StreamOptions{
 		Stdout: os.Stderr,

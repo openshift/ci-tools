@@ -573,3 +573,191 @@ func TestConfig(t *testing.T) {
 		})
 	}
 }
+
+func TestRegistry(t *testing.T) {
+	var (
+		expectedReferences = map[string]api.LiteralTestStep{
+			"ipi-deprovision-deprovision": {
+				As:       "ipi-deprovision-deprovision",
+				From:     "installer",
+				Commands: "openshift-cluster destroy\n",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m", "mem": "2Gi"},
+				},
+			},
+			"ipi-deprovision-must-gather": {
+				As:       "ipi-deprovision-must-gather",
+				From:     "installer",
+				Commands: "gather\n",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m", "mem": "2Gi"},
+				},
+			},
+			"ipi-install-install": {
+				As:       "ipi-install-install",
+				From:     "installer",
+				Commands: "openshift-cluster install\n",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m", "mem": "2Gi"},
+				},
+			},
+			"ipi-install-rbac": {
+				As:       "ipi-install-rbac",
+				From:     "installer",
+				Commands: "setup-rbac\n",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m", "mem": "2Gi"},
+				},
+			},
+		}
+
+		deprovisionRef       = `ipi-deprovision-deprovision`
+		deprovisionGatherRef = `ipi-deprovision-must-gather`
+		installRef           = `ipi-install-install`
+		installRBACRef       = `ipi-install-rbac`
+
+		expectedChains = map[string][]api.TestStep{
+			"ipi-install": {
+				{
+					Reference: &installRBACRef,
+				}, {
+					Reference: &installRef,
+				},
+			},
+			"ipi-deprovision": {
+				{
+					Reference: &deprovisionGatherRef,
+				}, {
+					Reference: &deprovisionRef,
+				},
+			},
+		}
+
+		installChain     = `ipi-install`
+		deprovisionChain = `ipi-deprovision`
+
+		expectedWorkflows = map[string]api.MultiStageTestConfiguration{
+			"ipi": {
+				Pre: []api.TestStep{{
+					Chain: &installChain,
+				}},
+				Post: []api.TestStep{{
+					Chain: &deprovisionChain,
+				}},
+			},
+		}
+
+		testCase = struct {
+			name          string
+			references    map[string]api.LiteralTestStep
+			chains        map[string][]api.TestStep
+			workflows     map[string]api.MultiStageTestConfiguration
+			expectedError bool
+		}{
+			name:          "Read registry",
+			references:    expectedReferences,
+			chains:        expectedChains,
+			workflows:     expectedWorkflows,
+			expectedError: false,
+		}
+	)
+
+	references, chains, workflows, err := Registry("../../test/multistage-registry")
+	if err == nil && testCase.expectedError == true {
+		t.Errorf("%s: got no error when error was expected", testCase.name)
+	}
+	if err != nil && testCase.expectedError == false {
+		t.Errorf("%s: got error when error wasn't expected: %v", testCase.name, err)
+	}
+	if !reflect.DeepEqual(references, testCase.references) {
+		t.Errorf("%s: output references different from expected: %s", testCase.name, diff.ObjectReflectDiff(references, testCase.references))
+	}
+	if !chainMapEquals(chains, testCase.chains) {
+		t.Errorf("%s: output chains different from expected: %s", testCase.name, diff.ObjectReflectDiff(chains, testCase.chains))
+	}
+	if !workflowMapEquals(workflows, testCase.workflows) {
+		t.Errorf("%s: output workflows different from expected: %s", testCase.name, diff.ObjectReflectDiff(workflows, testCase.workflows))
+	}
+}
+
+// Equality functions needed due to use of pointers in structs
+
+func testStepsEqual(steps1, steps2 []api.TestStep) bool {
+	if len(steps1) != len(steps2) {
+		return false
+	}
+	for idx := range steps1 {
+		if !testStepEquals(steps1[idx], steps2[idx]) {
+			return false
+		}
+	}
+	return true
+}
+func testStepEquals(step1, step2 api.TestStep) bool {
+	if step1.LiteralTestStep != nil && step2.LiteralTestStep != nil {
+		if !reflect.DeepEqual(*step1.LiteralTestStep, *step2.LiteralTestStep) {
+			return false
+		}
+	} else if !(step1.LiteralTestStep == nil && step2.LiteralTestStep == nil) {
+		return false
+	}
+	if step1.Reference != nil && step2.Reference != nil {
+		if !(*step1.Reference == *step2.Reference) {
+			return false
+		}
+	} else if !(step1.Reference == nil && step2.Reference == nil) {
+		return false
+	}
+	if step1.Chain != nil && step2.Chain != nil {
+		if !(*step1.Chain == *step2.Chain) {
+			return false
+		}
+	} else if !(step1.Chain == nil && step2.Chain == nil) {
+		return false
+	}
+	return true
+}
+func workflowEquals(flow1, flow2 api.MultiStageTestConfiguration) bool {
+	if !(flow1.ClusterProfile == flow2.ClusterProfile) {
+		return false
+	}
+	if !testStepsEqual(flow1.Pre, flow2.Pre) {
+		return false
+	}
+	if !testStepsEqual(flow1.Test, flow2.Test) {
+		return false
+	}
+	if !testStepsEqual(flow1.Post, flow2.Post) {
+		return false
+	}
+	if flow1.Workflow != nil && flow2.Workflow != nil {
+		if !(*flow1.Workflow == *flow2.Workflow) {
+			return false
+		}
+	} else if !(flow1.Workflow == nil && flow2.Workflow == nil) {
+		return false
+	}
+	return true
+}
+func chainMapEquals(chain1, chain2 map[string][]api.TestStep) bool {
+	if len(chain1) != len(chain2) {
+		return false
+	}
+	for key := range chain1 {
+		if !testStepsEqual(chain1[key], chain2[key]) {
+			return false
+		}
+	}
+	return true
+}
+func workflowMapEquals(workflow1, workflow2 map[string]api.MultiStageTestConfiguration) bool {
+	if len(workflow1) != len(workflow2) {
+		return false
+	}
+	for key := range workflow1 {
+		if !workflowEquals(workflow1[key], workflow2[key]) {
+			return false
+		}
+	}
+	return true
+}

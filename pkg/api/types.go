@@ -341,35 +341,95 @@ type TestStepConfiguration struct {
 	OpenshiftInstallerCustomTestImageClusterTestConfiguration *OpenshiftInstallerCustomTestImageClusterTestConfiguration `json:"openshift_installer_custom_test_image,omitempty"`
 }
 
+// RegistryReferenceConfig is the struct that step references are unmarshalled into.
+type RegistryReferenceConfig struct {
+	// Reference is the top level field of a reference config.
+	Reference RegistryReference `json:"ref,omitempty"`
+}
+
+// RegistryReference contains the LiteralTestStep of a reference as well as the documentation for the step.
+type RegistryReference struct {
+	// LiteralTestStep defines the full test step that can be run by the ci-operator.
+	LiteralTestStep `json:",inline"`
+	// Documentation describes what the step being referenced does.
+	Documentation string `json:"documentation,omitempty"`
+}
+
+// RegistryChainConfig is the struct that chain references are unmarshalled into.
+type RegistryChainConfig struct {
+	// Chain is the top level field of a chain config.
+	Chain RegistryChain `json:"chain,omitempty"`
+}
+
+// RegistryChain contains the array of steps, name, and documentation for a step chain.
+type RegistryChain struct {
+	// As defines the name of the chain. This is how the chain will be referenced from a job's config.
+	As string `json:"as,omitempty"`
+	// Steps contains the list of steps that comprise the chain. Steps will be run in the order they are defined.
+	Steps []TestStep `json:"steps"`
+	// Documentation describes what the chain does.
+	Documentation string `json:"documentation,omitempty"`
+}
+
+// RegistryWorkflowConfig is the struct that workflow references are unmarshalled into.
+type RegistryWorkflowConfig struct {
+	// Workflow is the top level field of a workflow config.
+	Workflow RegistryWorkflow `json:"workflow,omitempty"`
+}
+
+// RegistryWorkflow contains the MultiStageTestConfiguration, name, and documentation for a workflow.
+type RegistryWorkflow struct {
+	// As defines the name of the workflow. This is how the workflow will be referenced from a job's config.
+	As string `json:"as,omitempty"`
+	// Steps contains the MultiStageTestConfiguration that the workflow defines.
+	Steps MultiStageTestConfiguration `json:"steps,omitempty"`
+	// Documentation decribes what the workflow does.
+	Documentation string `json:"documentation,omitempty"`
+}
+
 // LiteralTestStep is the external representation of a test step allowing users
 // to define new test steps. It gets converted to an internal LiteralTestStep
 // struct that represents the full configuration that ci-operator can use.
 type LiteralTestStep struct {
-	As            string               `json:"as,omitempty"`
-	Documentation string               `json:"documentation,omitempty"`
-	From          string               `json:"from,omitempty"`
-	Commands      string               `json:"commands,omitempty"`
-	ArtifactDir   string               `json:"artifact_dir,omitempty"`
-	Resources     ResourceRequirements `json:"resources,omitempty"`
+	// As is the name of the LiteralTestStep.
+	As string `json:"as,omitempty"`
+	// From is the container image that will be used for this step.
+	From string `json:"from,omitempty"`
+	// Commands is the command(s) that will be run inside the image.
+	Commands string `json:"commands,omitempty"`
+	// ArtifactDir is the directory from which artifacts will be extracted when the command finishes.
+	ArtifactDir string `json:"artifact_dir,omitempty"`
+	// Resources defines the resource requirements for the step.
+	Resources ResourceRequirements `json:"resources,omitempty"`
 }
 
 // TestStep is the struct that a user's configuration gets unmarshalled into.
-// It can contain either a LiteralTestStep or a Reference. If both are filled in an
+// It can contain either a LiteralTestStep, Reference, or Chain. If more than one is filled in an
 // the same time, config validation will fail.
 type TestStep struct {
+	// LiteralTestStep is a full test step definition.
 	*LiteralTestStep `json:",inline,omitempty"`
-	Reference        *string `json:"ref,omitempty"`
-	Chain            *string `json:"chain,omitempty"`
+	// Reference is the name of a step reference.
+	Reference *string `json:"ref,omitempty"`
+	// Chain is the name of a step chain reference.
+	Chain *string `json:"chain,omitempty"`
 }
 
 // MultiStageTestConfiguration is a flexible configuration mode that allows tighter control over
-// the multiple stages of end to end tests
+// the multiple stages of end to end tests.
 type MultiStageTestConfiguration struct {
+	// ClusterProfile defines the profile/cloud provider for end-to-end test steps.
 	ClusterProfile ClusterProfile `json:"cluster_profile"`
-	Pre            []TestStep     `json:"pre,omitempty"`
-	Test           []TestStep     `json:"test,omitempty"`
-	Post           []TestStep     `json:"post,omitempty"`
-	Workflow       *string        `json:"workflow,omitempty"`
+	// Pre is the array of test steps run to set up the environment for the test.
+	Pre []TestStep `json:"pre,omitempty"`
+	// Test is the array of test steps that define the actual test.
+	Test []TestStep `json:"test,omitempty"`
+	// Post is the array of test steps run after the tests finish and teardown/deprovision resources.
+	// Post steps always run, even if previous steps fail.
+	Post []TestStep `json:"post,omitempty"`
+	// Workflow is the name of the workflow to be used for this configuration. For fields defined in both
+	// the config and the workflow, the fields from the config will override what is set in Workflow.
+	Workflow *string `json:"workflow,omitempty"`
 }
 
 // Secret describes a secret to be mounted inside a test

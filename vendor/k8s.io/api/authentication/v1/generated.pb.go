@@ -36,18 +36,23 @@ limitations under the License.
 */
 package v1
 
-import proto "github.com/gogo/protobuf/proto"
-import fmt "fmt"
-import math "math"
+import (
+	fmt "fmt"
 
-import k8s_io_apimachinery_pkg_types "k8s.io/apimachinery/pkg/types"
+	proto "github.com/gogo/protobuf/proto"
 
-import sortkeys "github.com/gogo/protobuf/sortkeys"
+	math "math"
 
-import strings "strings"
-import reflect "reflect"
+	k8s_io_apimachinery_pkg_types "k8s.io/apimachinery/pkg/types"
 
-import io "io"
+	github_com_gogo_protobuf_sortkeys "github.com/gogo/protobuf/sortkeys"
+
+	strings "strings"
+
+	reflect "reflect"
+
+	io "io"
+)
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -469,7 +474,7 @@ func (m *UserInfo) MarshalTo(dAtA []byte) (int, error) {
 		for k := range m.Extra {
 			keysForExtra = append(keysForExtra, string(k))
 		}
-		sortkeys.Strings(keysForExtra)
+		github_com_gogo_protobuf_sortkeys.Strings(keysForExtra)
 		for _, k := range keysForExtra {
 			dAtA[i] = 0x22
 			i++
@@ -747,7 +752,7 @@ func (this *UserInfo) String() string {
 	for k := range this.Extra {
 		keysForExtra = append(keysForExtra, k)
 	}
-	sortkeys.Strings(keysForExtra)
+	github_com_gogo_protobuf_sortkeys.Strings(keysForExtra)
 	mapStringForExtra := "map[string]ExtraValue{"
 	for _, k := range keysForExtra {
 		mapStringForExtra += fmt.Sprintf("%v: %v,", k, this.Extra[k])

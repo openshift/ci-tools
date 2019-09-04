@@ -48,21 +48,27 @@ limitations under the License.
 */
 package v1beta1
 
-import proto "github.com/gogo/protobuf/proto"
-import fmt "fmt"
-import math "math"
+import (
+	fmt "fmt"
 
-import k8s_io_api_core_v1 "k8s.io/api/core/v1"
-import k8s_io_apimachinery_pkg_apis_meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	proto "github.com/gogo/protobuf/proto"
 
-import k8s_io_apimachinery_pkg_util_intstr "k8s.io/apimachinery/pkg/util/intstr"
+	math "math"
 
-import sortkeys "github.com/gogo/protobuf/sortkeys"
+	k8s_io_api_core_v1 "k8s.io/api/core/v1"
 
-import strings "strings"
-import reflect "reflect"
+	k8s_io_apimachinery_pkg_apis_meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-import io "io"
+	k8s_io_apimachinery_pkg_util_intstr "k8s.io/apimachinery/pkg/util/intstr"
+
+	github_com_gogo_protobuf_sortkeys "github.com/gogo/protobuf/sortkeys"
+
+	strings "strings"
+
+	reflect "reflect"
+
+	io "io"
+)
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -417,7 +423,7 @@ func (m *DeploymentRollback) MarshalTo(dAtA []byte) (int, error) {
 		for k := range m.UpdatedAnnotations {
 			keysForUpdatedAnnotations = append(keysForUpdatedAnnotations, string(k))
 		}
-		sortkeys.Strings(keysForUpdatedAnnotations)
+		github_com_gogo_protobuf_sortkeys.Strings(keysForUpdatedAnnotations)
 		for _, k := range keysForUpdatedAnnotations {
 			dAtA[i] = 0x12
 			i++
@@ -778,7 +784,7 @@ func (m *ScaleStatus) MarshalTo(dAtA []byte) (int, error) {
 		for k := range m.Selector {
 			keysForSelector = append(keysForSelector, string(k))
 		}
-		sortkeys.Strings(keysForSelector)
+		github_com_gogo_protobuf_sortkeys.Strings(keysForSelector)
 		for _, k := range keysForSelector {
 			dAtA[i] = 0x12
 			i++
@@ -1506,7 +1512,7 @@ func (this *DeploymentRollback) String() string {
 	for k := range this.UpdatedAnnotations {
 		keysForUpdatedAnnotations = append(keysForUpdatedAnnotations, k)
 	}
-	sortkeys.Strings(keysForUpdatedAnnotations)
+	github_com_gogo_protobuf_sortkeys.Strings(keysForUpdatedAnnotations)
 	mapStringForUpdatedAnnotations := "map[string]string{"
 	for _, k := range keysForUpdatedAnnotations {
 		mapStringForUpdatedAnnotations += fmt.Sprintf("%v: %v,", k, this.UpdatedAnnotations[k])
@@ -1627,7 +1633,7 @@ func (this *ScaleStatus) String() string {
 	for k := range this.Selector {
 		keysForSelector = append(keysForSelector, k)
 	}
-	sortkeys.Strings(keysForSelector)
+	github_com_gogo_protobuf_sortkeys.Strings(keysForSelector)
 	mapStringForSelector := "map[string]string{"
 	for _, k := range keysForSelector {
 		mapStringForSelector += fmt.Sprintf("%v: %v,", k, this.Selector[k])

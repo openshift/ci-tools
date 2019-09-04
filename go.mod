@@ -27,8 +27,8 @@ require (
 	golang.org/x/oauth2 v0.0.0-20190604053449-0f29369cfe45
 	golang.org/x/sync v0.0.0-20190423024810-112230192c58
 	google.golang.org/api v0.7.0
-	k8s.io/api v0.0.0-20190725062911-6607c48751ae
-	k8s.io/apimachinery v0.0.0-20190719140911-bfcf53abc9f8
-	k8s.io/client-go v11.0.1-0.20190409021438-1a26190bd76a+incompatible
-	k8s.io/test-infra v0.0.0-20190820045932-3c673e64253c
+	k8s.io/api v0.0.0-20190816222004-e3a6b8045b0b
+	k8s.io/apimachinery v0.0.0-20190816221834-a9f1d8a9c101
+	k8s.io/client-go v11.0.1-0.20190805182717-6502b5e7b1b5+incompatible
+	k8s.io/test-infra v0.0.0-20190903192658-86fbc418c31d
 )

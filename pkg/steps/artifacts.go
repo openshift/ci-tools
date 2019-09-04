@@ -159,10 +159,22 @@ type podCmdExecutor interface {
 	Exec(namespace, pod string, opts *coreapi.PodExecOptions) (remotecommand.Executor, error)
 }
 
+type fakePodExec struct{}
+
+func (fakePodExec) Stream(remotecommand.StreamOptions) error { return nil }
+
 type podClient struct {
 	coreclientset.PodsGetter
 	config *rest.Config
 	client rest.Interface
+}
+
+type fakePodClient struct {
+	coreclientset.PodsGetter
+}
+
+func (c *fakePodClient) Exec(namespace, name string, opts *coreapi.PodExecOptions) (remotecommand.Executor, error) {
+	return &fakePodExec{}, nil
 }
 
 func NewPodClient(podsClient coreclientset.PodsGetter, config *rest.Config, client rest.Interface) PodClient {

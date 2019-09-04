@@ -1,6 +1,10 @@
 package steps
 
 import (
+	"encoding/base64"
+	"fmt"
+	"io/ioutil"
+	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -9,6 +13,9 @@ import (
 	coreapi "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/diff"
+	"k8s.io/client-go/kubernetes/fake"
+	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/tools/remotecommand"
 )
 
 func TestTestCaseNotifier_SubTests(t *testing.T) {
@@ -445,5 +452,76 @@ func TestTestCaseNotifier_SubTests(t *testing.T) {
 				t.Fatalf("unexpected: %s", diff.ObjectReflectDiff(tt.wantTests, tests))
 			}
 		})
+	}
+}
+
+type testPodClient struct {
+	coreclientset.PodsGetter
+	namespace, name string
+}
+
+func (c testPodClient) Exec(namespace, name string, opts *coreapi.PodExecOptions) (remotecommand.Executor, error) {
+	if namespace != c.namespace {
+		return nil, fmt.Errorf("unexpected namespace: %q", namespace)
+	}
+	if name != c.name {
+		return nil, fmt.Errorf("unexpected name: %q", name)
+	}
+	return &testExecutor{command: opts.Command}, nil
+}
+
+type testExecutor struct {
+	command []string
+}
+
+func (e testExecutor) Stream(opts remotecommand.StreamOptions) error {
+	if reflect.DeepEqual(e.command, []string{"tar", "czf", "-", "-C", "/tmp/artifacts", "."}) {
+		var tar []byte
+		tar, err := base64.StdEncoding.DecodeString(`
+H4sIAMq1b10AA+3RPQrDMAyGYc09hU8QrCpOzuOAKR2y2Ar0+HX/tnboEErhfRbxoW8QyEvzwS8uO4r
+dNI63qXOK96yP/JRELZnNdpySSlTrBQlxz6Netua5hiDLctrOa665tA+9Ut9v/pr3/x9+fQQAAAAAAA
+AAAAAAAAAA4GtXigWTnQAoAAA=`)
+		if err != nil {
+			return err
+		}
+		_, err = opts.Stdout.Write(tar)
+		return err
+	} else if reflect.DeepEqual(e.command, []string{"rm", "-f", "/tmp/done"}) {
+		return nil
+	}
+	return fmt.Errorf("unexpected command: %v", e.command)
+}
+
+func TestArtifactWorker(t *testing.T) {
+	tmp, err := ioutil.TempDir("", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.RemoveAll(tmp); err != nil {
+			t.Errorf("couldn't clean up tmpdir: %v", err)
+		}
+	}()
+	pod := "pod"
+	podClient := testPodClient{
+		PodsGetter: fake.NewSimpleClientset().CoreV1(),
+		namespace:  "namespace",
+		name:       pod,
+	}
+	w := NewArtifactWorker(podClient, tmp, podClient.namespace)
+	w.CollectFromPod(pod, true, []string{"container"}, nil)
+	w.Complete(pod)
+	for !w.Done(pod) {
+	}
+	files, err := ioutil.ReadDir(tmp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, f := range files {
+		names = append(names, f.Name())
+	}
+	if !reflect.DeepEqual(names, []string{"test.txt"}) {
+		t.Fatalf("unexpected content in the artifact directory: %v", names)
 	}
 }

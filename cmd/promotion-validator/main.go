@@ -86,6 +86,7 @@ func main() {
 		logrus.Fatalf("Release configured in OCP build data (%s) does not match that in CI (%s)", expected, actual)
 	}
 
+	// walk through ocp-build-data and generated a map called "imageConfigByName"
 	imageConfigByName := map[string]imageConfig{}
 	if err := filepath.Walk(filepath.Join(o.ocpBuildDataRepoDir, "images"), func(path string, info os.FileInfo, err error) error {
 		if info.IsDir() {
@@ -112,13 +113,13 @@ func main() {
 		logrus.WithError(err).Fatal("Could walk OCP build data configuration directory.")
 	}
 
+	//walk through openshift/release by using "OperateOnCIOperatorConfigDir"
 	var foundFailures bool
 	if err := config.OperateOnCIOperatorConfigDir(path.Join(o.releaseRepoDir, diffs.CIOperatorConfigInRepoPath), func(configuration *cioperatorapi.ReleaseBuildConfiguration, info *config.Info) error {
 		if !(promotion.PromotesOfficialImages(configuration) && configuration.PromotionConfiguration.Name == o.currentRelease) {
 			return nil
 		}
 		logger := config.LoggerForInfo(*info)
-
 		for _, image := range configuration.Images {
 			if image.Optional {
 				continue
@@ -131,7 +132,22 @@ func main() {
 				logger.Errorf("Promotion found in CI for image %s, but no configuration for %s found in OCP build data.", image.To, productImageName)
 				continue
 			}
-			logger = logger.WithField("ocp-build-data-path", productConfig.path)
+
+			buildRoot := configuration.InputConfiguration.BuildRootImage
+			if buildRoot != nil && buildRoot.ImageStreamTagReference != nil {
+				if strings.Contains(buildRoot.ImageStreamTagReference.Tag, "golang") {
+					match := false
+					for _, s := range productConfig.From.Builder {
+						if buildRoot.ImageStreamTagReference.Tag == s.Stream {
+							match = true
+						}
+					}
+					if !match {
+						logger.Errorf("Image %s BuildRoot builder does not match: (ocp-build-data  %v vs release %s).\n", productImageName, productConfig.From.Builder, buildRoot.ImageStreamTagReference.Tag)
+					}
+					logger = logger.WithField("ocp-build-data-path", productConfig.path)
+				}
+			}
 
 			resolvedBranch := strings.Replace(productConfig.Content.Source.Git.Branch.Target, "{MAJOR}.{MINOR}", targetRelease, -1)
 			if actual, expected := info.Branch, resolvedBranch; actual != expected {
@@ -183,9 +199,17 @@ type vars struct {
 type imageConfig struct {
 	Content content `yaml:"content"`
 	Name    string  `yaml:"name"`
-
+	From    from    `yaml:"from"`
 	// added by us
 	path string
+}
+
+type from struct {
+	Builder []builder
+}
+
+type builder struct {
+	Stream string `yaml:"stream"`
 }
 
 type content struct {

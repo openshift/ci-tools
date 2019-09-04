@@ -1,5 +1,7 @@
 # Populating `OWNERS` and `OWNERS_ALIASES`
 
+[comment]: <> (TODO: hongkliu: update this file)
+
 This utility updates the OWNERS files from remote Openshift repositories.
 
 Usage:

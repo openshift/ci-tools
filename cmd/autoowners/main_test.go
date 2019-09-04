@@ -3,7 +3,6 @@ package main
 import (
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -154,120 +153,6 @@ func TestGetDirectories(t *testing.T) {
 	}
 }
 
-func TestExtractOwners(t *testing.T) {
-	dir, err := ioutil.TempDir("", "populate-owners-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
-
-	err = ioutil.WriteFile(filepath.Join(dir, "README"), []byte("Hello, World!\n"), 0666)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	for _, args := range [][]string{
-		{"git", "init"},
-		{"git", "config", "user.name", "Test"},
-		{"git", "config", "user.email", "test@test.org"},
-		{"git", "add", "README"},
-		{"git", "commit", "-m", "Begin versioning"},
-	} {
-		cmd := exec.Command(args[0], args[1:]...)
-		cmd.Dir = dir
-		cmd.Env = []string{ // for stable commit hashes
-			"GIT_COMMITTER_DATE=1112911993 -0700",
-			"GIT_AUTHOR_DATE=1112911993 -0700",
-		}
-		stdoutStderr, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Log(string(stdoutStderr))
-			t.Fatal(err)
-		}
-	}
-
-	for _, test := range []struct {
-		name     string
-		setup    string
-		expected *orgRepo
-		error    *regexp.Regexp
-	}{
-		{
-			name: "no OWNERS",
-			expected: &orgRepo{
-				Commit: "3e7341c55330a127038bfc8d7a396d4951049b85",
-			},
-			error: regexp.MustCompile("^open .*/populate-owners-[0-9]*/OWNERS: no such file or directory"),
-		},
-		{
-			name:  "only OWNERS",
-			setup: "OWNERS",
-			expected: &orgRepo{
-				Owners: &owners{Approvers: []string{"alice", "bob"}},
-				Commit: "3e7341c55330a127038bfc8d7a396d4951049b85",
-			},
-			error: regexp.MustCompile("^open .*/populate-owners-[0-9]*/OWNERS_ALIASES: no such file or directory"),
-		},
-		{
-			name:  "OWNERS and OWNERS_ALIASES",
-			setup: "OWNERS_ALIASES",
-			expected: &orgRepo{
-				Owners:  &owners{Approvers: []string{"sig-alias"}},
-				Aliases: &aliases{Aliases: map[string][]string{"sig-alias": {"alice", "bob"}}},
-				Commit:  "3e7341c55330a127038bfc8d7a396d4951049b85",
-			},
-		},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			switch test.setup {
-			case "": // nothing to do
-			case "OWNERS":
-				err = ioutil.WriteFile(
-					filepath.Join(dir, "OWNERS"),
-					[]byte("approvers:\n- alice\n- bob\n"),
-					0666,
-				)
-				if err != nil {
-					t.Fatal(err)
-				}
-			case "OWNERS_ALIASES":
-				err = ioutil.WriteFile(
-					filepath.Join(dir, "OWNERS"),
-					[]byte("approvers:\n- sig-alias\n"),
-					0666,
-				)
-				if err != nil {
-					t.Fatal(err)
-				}
-				err = ioutil.WriteFile(
-					filepath.Join(dir, "OWNERS_ALIASES"),
-					[]byte("aliases:\n  sig-alias:\n  - alice\n  - bob\n"),
-					0666,
-				)
-				if err != nil {
-					t.Fatal(err)
-				}
-			default:
-				t.Fatalf("unrecognized setup: %q", test.setup)
-			}
-
-			orgrepo := &orgRepo{}
-			err := orgrepo.extractOwners(dir)
-			if test.error == nil {
-				if err != nil {
-					t.Fatal(err)
-				}
-			} else if !test.error.MatchString(err.Error()) {
-				t.Fatalf("unexpected error: %v does not match %v", err, test.error)
-			}
-
-			// Need to override the newly created commit to avoid test failure
-			orgrepo.Commit = test.expected.Commit
-			assertEqual(t, orgrepo, test.expected)
-		})
-	}
-}
-
 func TestInsertSlice(t *testing.T) {
 	// test replacing two elements of a slice
 	given := []string{"alice", "bob", "carol", "david", "emily"}
@@ -382,5 +267,29 @@ aliases:
 				t.Fatalf("unexpected result:\n---\n%s\n--- != ---\n%s\n---\n", string(data), test.expected)
 			}
 		})
+	}
+}
+
+func TestGetTitle(t *testing.T) {
+	expect := "Sync OWNERS files by autoowners job at Thu, 12 Sep 2019 14:56:10 EDT"
+	result := getTitle("Sync OWNERS files", "Thu, 12 Sep 2019 14:56:10 EDT")
+
+	if expect != result {
+		t.Errorf("title '%s' differs from expected '%s'", result, expect)
+	}
+}
+
+func TestGetBody(t *testing.T) {
+	expect := `The OWNERS file has been synced for the following repo(s):
+
+* openshift/origin
+* org/repo
+
+/cc @openshift/openshift-team-developer-productivity-test-platform
+`
+	result := getBody([]string{"openshift/origin", "org/repo"}, githubTeam)
+
+	if expect != result {
+		t.Errorf("body '%s' differs from expected '%s'", result, expect)
 	}
 }

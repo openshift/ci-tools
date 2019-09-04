@@ -3,31 +3,34 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
-	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
+	"time"
 
-	"gopkg.in/yaml.v2"
+	"github.com/ghodss/yaml"
+	"github.com/sirupsen/logrus"
+
+	"k8s.io/test-infra/experiment/autobumper/bumper"
+	"k8s.io/test-infra/prow/config/secret"
+	"k8s.io/test-infra/prow/flagutil"
+	"k8s.io/test-infra/prow/github"
+	"k8s.io/test-infra/prow/repoowners"
 )
 
 const (
-	doNotEdit            = "# DO NOT EDIT; this file is auto-generated using tools/populate-owners.\n"
-	ownersComment        = "# See the OWNERS docs: https://git.k8s.io/community/contributors/guide/owners.md\n"
-	ownersAliasesComment = "# See the OWNERS_ALIASES docs: https://git.k8s.io/community/contributors/guide/owners.md#owners_aliases\n"
+	doNotEdit     = "# DO NOT EDIT; this file is auto-generated using tools/populate-owners.\n"
+	ownersComment = "# See the OWNERS docs: https://git.k8s.io/community/contributors/guide/owners.md\n"
+	//ownersAliasesComment = "# See the OWNERS_ALIASES docs: https://git.k8s.io/community/contributors/guide/owners.md#owners_aliases\n"
+
+	githubOrg   = "openshift"
+	githubRepo  = "release"
+	githubLogin = "openshift-bot"
+	githubTeam  = "openshift/openshift-team-developer-productivity-test-platform"
 )
 
-// owners is copied from k8s.io/test-infra/prow/repoowners's Config
-type owners struct {
-	Approvers         []string `json:"approvers,omitempty" yaml:"approvers,omitempty"`
-	Reviewers         []string `json:"reviewers,omitempty" yaml:"reviewers,omitempty"`
-	RequiredReviewers []string `json:"required_reviewers,omitempty" yaml:"required_reviewers,omitempty"`
-	Labels            []string `json:"labels,omitempty" yaml:"labels,omitempty"`
-}
+type owners = repoowners.Config
 
 type aliases struct {
 	Aliases map[string][]string `json:"aliases,omitempty" yaml:"aliases,omitempty"`
@@ -118,35 +121,22 @@ func (orgRepo *orgRepo) getDirectories(dirs ...string) (err error) {
 	return nil
 }
 
-func (orgRepo *orgRepo) getOwners() (err error) {
-	err = orgRepo.getOwnersHTTP()
-	if err == nil {
-		return nil
-	}
-	fmt.Fprintf(os.Stderr, "%v\n", err)
-
-	return orgRepo.getOwnersGit()
-}
-
 // getOwnersHTTP is fast (just the two files we need), but only works
 // on public repos unless you have an auth token.
 func (orgRepo *orgRepo) getOwnersHTTP() (err error) {
-	commitURI := fmt.Sprintf("https://api.github.com/repos/%s/%s/commits/HEAD", orgRepo.Organization, orgRepo.Repository)
-	commitAccept := "application/vnd.github.VERSION.sha"
-	data, _, err := get(commitURI, commitAccept)
+	sc, err := gc.GetSingleCommit(orgRepo.Organization, orgRepo.Repository, "HEAD")
 	if err != nil {
 		return err
 	}
-	initialCommit := string(data)
 
 	for _, filename := range []string{"OWNERS", "OWNERS_ALIASES"} {
-		uri := fmt.Sprintf("https://raw.githubusercontent.com/%s/%s/HEAD/%s", orgRepo.Organization, orgRepo.Repository, filename)
-		data, status, err := get(uri, "")
+		data, err := gc.GetFile(orgRepo.Organization, orgRepo.Repository, filename, "HEAD")
 		if err != nil {
-			if status == 404 {
+			if _, nf := err.(*github.FileNotFound); nf {
 				continue
+			} else {
+				return err
 			}
-			return err
 		}
 
 		var target interface{}
@@ -160,7 +150,11 @@ func (orgRepo *orgRepo) getOwnersHTTP() (err error) {
 		}
 		err = yaml.Unmarshal(data, target)
 		if err != nil {
-			return fmt.Errorf("failed to parse %s: %v", uri, err)
+			logrus.WithField("data", string(data)).WithField("filename", filename).
+				WithField("orgRepo.Organization", orgRepo.Organization).
+				WithField("orgRepo.Repository", orgRepo.Repository).
+				WithError(err).Error("Unable to parse data.")
+			return err
 		}
 	}
 
@@ -168,126 +162,22 @@ func (orgRepo *orgRepo) getOwnersHTTP() (err error) {
 		return nil
 	}
 
-	data, _, err = get(commitURI, commitAccept)
-	if err != nil {
-		return err
-	}
-	finalCommit := string(data)
-	if initialCommit == finalCommit {
-		orgRepo.Commit = initialCommit
-		return nil
-	}
-
-	fmt.Fprintf(
-		os.Stderr,
-		"%s changed from %s to %s, trying again",
-		orgRepo.String(),
-		initialCommit,
-		finalCommit,
-	)
-	return orgRepo.getOwnersHTTP()
-}
-
-func get(uri, accept string) (data []byte, status int, err error) {
-	request, err := http.NewRequest("GET", uri, nil)
-	if err != nil {
-		return data, 0, err
-	}
-
-	if accept != "" {
-		request.Header.Add("Accept", accept)
-	}
-
-	response, err := http.DefaultClient.Do(request)
-	if err != nil {
-		return data, 0, err
-	}
-	defer response.Body.Close()
-
-	if response.StatusCode != 200 {
-		return data, response.StatusCode, fmt.Errorf("failed to fetch %s: %v %s", uri, response.StatusCode, response.Status)
-	}
-
-	data, err = ioutil.ReadAll(response.Body)
-	if err != nil {
-		return data, response.StatusCode, fmt.Errorf("failed to read %s: %v", uri, err)
-	}
-
-	return data, response.StatusCode, nil
-}
-
-// getOwnersGit is slow (the full HEAD tree), but it works for any
-// private repository you have access to, assuming you've told GitHub
-// about your SSH key(s).
-func (orgRepo *orgRepo) getOwnersGit() (err error) {
-	dir, err := ioutil.TempDir("", "populate-owners-")
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(dir)
-
-	gitURL := fmt.Sprintf("ssh://git@github.com/%s/%s.git", orgRepo.Organization, orgRepo.Repository)
-	cmd := exec.Command("git", "clone", "--depth=1", "--single-branch", gitURL, dir)
-	cmd.Stderr = os.Stderr
-	err = cmd.Run()
-	if err != nil {
-		return err
-	}
-
-	return orgRepo.extractOwners(dir)
-}
-
-func (orgRepo *orgRepo) extractOwners(repoRoot string) (err error) {
-	cmd := exec.Command("git", "rev-parse", "HEAD")
-	cmd.Stderr = os.Stderr
-	cmd.Dir = repoRoot
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return err
-	}
-	err = cmd.Start()
-	if err != nil {
-		return err
-	}
-	hash, err := ioutil.ReadAll(stdout)
-	if err != nil {
-		return err
-	}
-	err = cmd.Wait()
-	if err != nil {
-		return err
-	}
-	orgRepo.Commit = strings.TrimSuffix(string(hash), "\n")
-
-	data, err := ioutil.ReadFile(filepath.Join(repoRoot, "OWNERS"))
-	if err != nil {
-		return err
-	}
-
-	err = yaml.Unmarshal(data, &orgRepo.Owners)
-	if err != nil {
-		return err
-	}
-
-	data, err = ioutil.ReadFile(filepath.Join(repoRoot, "OWNERS_ALIASES"))
-	if err != nil {
-		return err
-	}
-
-	err = yaml.Unmarshal(data, &orgRepo.Aliases)
-	if err != nil {
-		return err
-	}
-
+	orgRepo.Commit = sc.Commit.Tree.SHA
 	return nil
+
 }
 
-func writeYAML(path string, data interface{}, prefix []string) (err error) {
+func writeYAML(path string, data interface{}, prefix []string) (rerr error) {
 	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() {
+		err := file.Close()
+		if err != nil {
+			rerr = err
+		}
+	}()
 
 	for _, line := range prefix {
 		_, err := file.Write([]byte(line))
@@ -296,8 +186,14 @@ func writeYAML(path string, data interface{}, prefix []string) (err error) {
 		}
 	}
 
-	encoder := yaml.NewEncoder(file)
-	return encoder.Encode(data)
+	// https://github.com/ghodss/yaml
+	// respects the tags for json
+	bytes, err := yaml.Marshal(data)
+	if err != nil {
+		return err
+	}
+	_, err = file.Write(bytes)
+	return err
 }
 
 // insertStringSlice inserts a string slice into another string slice
@@ -342,21 +238,25 @@ func (orgRepo *orgRepo) resolveOwnerAliases() *owners {
 	}
 
 	return &owners{
-		resolveAliases(orgRepo.Aliases, orgRepo.Owners.Approvers),
-		resolveAliases(orgRepo.Aliases, orgRepo.Owners.Reviewers),
-		orgRepo.Owners.RequiredReviewers,
-		orgRepo.Owners.Labels,
+		Approvers:         resolveAliases(orgRepo.Aliases, orgRepo.Owners.Approvers),
+		Reviewers:         resolveAliases(orgRepo.Aliases, orgRepo.Owners.Reviewers),
+		RequiredReviewers: orgRepo.Owners.RequiredReviewers,
+		Labels:            orgRepo.Owners.Labels,
 	}
 }
 
-func (orgRepo *orgRepo) writeOwners() (err error) {
+func (orgRepo *orgRepo) writeOwners(whitelist []string) (err error) {
 	for _, directory := range orgRepo.Directories {
+		if inWhitelist(directory, whitelist) {
+			logrus.WithField("directory", directory).Info("Ignoring the directory in the white list.")
+			continue
+		}
 		path := filepath.Join(directory, "OWNERS")
+		err := os.Remove(path)
+		if err != nil && !os.IsNotExist(err) {
+			return err
+		}
 		if orgRepo.Owners == nil {
-			err := os.Remove(path)
-			if err != nil && !os.IsNotExist(err) {
-				return err
-			}
 			continue
 		}
 
@@ -379,43 +279,43 @@ func (orgRepo *orgRepo) writeOwners() (err error) {
 	return nil
 }
 
-func pullOwners(directory string, pattern string) (err error) {
+func pullOwners(directory string, whitelist []string) ([]string, error) {
+	var repos []string
 	repoRoot, err := getRepoRoot(directory)
 	if err != nil {
-		return err
+		return repos, err
 	}
 
 	operatorRoot := filepath.Join(repoRoot, "ci-operator")
 	orgRepos, err := orgRepos(filepath.Join(operatorRoot, "jobs"))
 	if err != nil {
-		return err
+		return repos, err
 	}
 
 	config := filepath.Join(operatorRoot, "config")
 	templates := filepath.Join(operatorRoot, "templates")
 	for _, orgRepo := range orgRepos {
-		matched, _ := regexp.MatchString(pattern, orgRepo.Repository)
-		if !matched {
-			continue
-		}
+		logrus.WithField("orgRepo", fmt.Sprintf("%+v", *orgRepo)).Info("handling repo ...")
 		err = orgRepo.getDirectories(config, templates)
 		if err != nil && !os.IsNotExist(err) {
-			return err
+			return repos, err
 		}
 
-		err = orgRepo.getOwners()
+		err = orgRepo.getOwnersHTTP()
 		if err != nil && !os.IsNotExist(err) {
-			return err
+			return repos, err
 		}
 
-		err = orgRepo.writeOwners()
+		err = orgRepo.writeOwners(whitelist)
 		if err != nil {
-			return err
+			return repos, err
 		}
-		fmt.Fprintf(os.Stderr, "updated owners for %s\n", orgRepo.String())
+		repoStr := orgRepo.String()
+		repos = append(repos, repoStr)
+		fmt.Fprintf(os.Stderr, "updated owners for %s\n", repoStr)
 	}
 
-	return nil
+	return repos, err
 }
 
 const (
@@ -430,16 +330,110 @@ Args:
 `
 )
 
-func main() {
-	flag.Usage = func() {
-		fmt.Fprintf(flag.CommandLine.Output(), usage, "populate-owners")
-	}
-	flag.Parse()
-	repoPattern := flag.Arg(0)
+var (
+	gc github.Client
+)
 
-	err := pullOwners(".", repoPattern)
+type options struct {
+	githubLogin string
+	githubToken string
+	gitName     string
+	gitEmail    string
+	assign      string
+	targetDir   string
+	whitelist   flagutil.Strings
+}
+
+func parseOptions() options {
+	var o options
+	flag.StringVar(&o.githubLogin, "github-login", githubLogin, "The GitHub username to use.")
+	flag.StringVar(&o.githubToken, "github-token", "", "The path to the GitHub token file.")
+	flag.StringVar(&o.gitName, "git-name", "", "The name to use on the git commit. Requires --git-email. If not specified, uses the system default.")
+	flag.StringVar(&o.gitEmail, "git-email", "", "The email to use on the git commit. Requires --git-name. If not specified, uses the system default.")
+	flag.StringVar(&o.assign, "assign", githubTeam, "The github username or group name to assign the created pull request to.")
+	flag.StringVar(&o.targetDir, "target-dir", "", "The directory containing the target repo.")
+	flag.Var(&o.whitelist, "ignore-repo", "The repo that syncing OWNERS file is disabled.")
+	flag.Parse()
+	return o
+}
+
+func validateOptions(o options) error {
+	if o.githubLogin == "" {
+		return fmt.Errorf("--github-login is mandatory")
+	}
+	if o.githubToken == "" {
+		return fmt.Errorf("--github-token is mandatory")
+	}
+	if (o.gitEmail == "") != (o.gitName == "") {
+		return fmt.Errorf("--git-name and --git-email must be specified together")
+	}
+	if o.assign == "" {
+		return fmt.Errorf("--assign is mandatory")
+	}
+	if o.targetDir == "" {
+		return fmt.Errorf("--target-dir is mandatory")
+	}
+	return nil
+}
+
+func inWhitelist(path string, whitelist []string) bool {
+	for _, e := range whitelist {
+		if strings.HasSuffix(path, e) {
+			return true
+		}
+	}
+	return false
+}
+
+func getBody(repos []string, assign string) string {
+	body := "The OWNERS file has been synced for the following repo(s):\n\n"
+	for _, r := range repos {
+		body = fmt.Sprintf("%s* %s\n", body, r)
+	}
+	body = fmt.Sprintf("%s\n%s\n", body, "/cc @"+assign)
+	return body
+}
+
+func getTitle(matchTitle, datetime string) string {
+	return fmt.Sprintf("%s by autoowners job at %s", matchTitle, datetime)
+}
+
+func main() {
+	o := parseOptions()
+	if err := validateOptions(o); err != nil {
+		logrus.WithError(err).Fatal("Invalid arguments.")
+	}
+
+	secretAgent := &secret.Agent{}
+	if err := secretAgent.Start([]string{o.githubToken}); err != nil {
+		logrus.WithError(err).Fatalf("Error starting secrets agent.")
+	}
+	gc = github.NewClient(secretAgent.GetTokenGenerator(o.githubToken), secretAgent.Censor, github.DefaultGraphQLEndpoint, github.DefaultAPIEndpoint)
+
+	repos, err := pullOwners(o.targetDir, o.whitelist.Strings())
+
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err.Error())
-		os.Exit(1)
+		logrus.WithError(err).Fatal("Error occurred when walking through the target dir.")
+	}
+
+	if len(repos) == 0 {
+		logrus.Info("No OWNERS file to update, exiting ...")
+		return
+	}
+
+	stdout := bumper.HideSecretsWriter{Delegate: os.Stdout, Censor: secretAgent}
+	stderr := bumper.HideSecretsWriter{Delegate: os.Stderr, Censor: secretAgent}
+
+	remoteBranch := "autoowners"
+	if err := bumper.GitCommitAndPush(fmt.Sprintf("https://%s:%s@github.com/%s/%s.git", o.githubLogin,
+		string(secretAgent.GetTokenGenerator(o.githubToken)()), o.githubLogin, githubRepo),
+		remoteBranch, o.gitName, o.gitEmail, "", stdout, stderr); err != nil {
+		logrus.WithError(err).Fatal("Failed to push changes.")
+	}
+
+	matchTitle := "Sync OWNERS files"
+	if err := bumper.UpdatePullRequest(gc, githubOrg, githubRepo, getTitle(matchTitle, time.Now().Format(time.RFC1123)),
+		getBody(repos, o.assign), matchTitle, o.githubLogin+":"+remoteBranch, "master"); err != nil {
+		logrus.WithError(err).Fatal("PR creation failed.")
 	}
 }

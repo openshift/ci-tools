@@ -10,6 +10,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/validation"
 )
 
 // ValidateAtRuntime validates all the configuration's values without knowledge of config
@@ -118,10 +119,9 @@ func validateTestStepConfiguration(fieldRoot string, input []TestStepConfigurati
 		}
 
 		if test.Secret != nil {
-			// TODO: Move to upstream validation when vendoring is fixed
-			// currently checking against DNS RFC 1123 regexp
-			if ok := regexp.MustCompile("^[a-z0-9]([-a-z0-9]*[a-z0-9])?$").MatchString(test.Secret.Name); !ok {
-				validationErrors = append(validationErrors, fmt.Errorf("%s.name: '%s' secret name is not valid value, should be [a-z0-9]([-a-z0-9]*[a-z0-9]", fieldRootN, test.Secret.Name))
+			// K8s object names must be valid DNS 1123 subdomains.
+			if len(validation.IsDNS1123Subdomain(test.Secret.Name)) != 0 {
+				validationErrors = append(validationErrors, fmt.Errorf("%s.name: '%s' secret name is not valid value, should be [a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*", fieldRootN, test.Secret.Name))
 			}
 			// validate path only if name is passed
 			if test.Secret.MountPath != "" {

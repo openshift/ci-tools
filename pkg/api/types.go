@@ -369,6 +369,7 @@ type MultiStageTestConfiguration struct {
 	Pre            []TestStep     `json:"pre,omitempty"`
 	Test           []TestStep     `json:"test,omitempty"`
 	Post           []TestStep     `json:"post,omitempty"`
+	Workflow       *string        `json:"workflow,omitempty"`
 }
 
 // Secret describes a secret to be mounted inside a test

@@ -16,19 +16,41 @@ type Resolver interface {
 // user provided configs referencing the registry and the internal, complete
 // representation
 type registry struct {
-	stepsByName  map[string]api.LiteralTestStep
-	chainsByName map[string][]api.TestStep
+	stepsByName     map[string]api.LiteralTestStep
+	chainsByName    map[string][]api.TestStep
+	workflowsByName map[string]api.MultiStageTestConfiguration
 }
 
-func NewResolver(stepsByName map[string]api.LiteralTestStep, chainsByName map[string][]api.TestStep) Resolver {
+func NewResolver(stepsByName map[string]api.LiteralTestStep, chainsByName map[string][]api.TestStep, workflowsByName map[string]api.MultiStageTestConfiguration) Resolver {
 	return &registry{
-		stepsByName:  stepsByName,
-		chainsByName: chainsByName,
+		stepsByName:     stepsByName,
+		chainsByName:    chainsByName,
+		workflowsByName: workflowsByName,
 	}
 }
 
 func (r *registry) Resolve(config api.MultiStageTestConfiguration) (types.TestFlow, error) {
 	var resolveErrors []error
+	if config.Workflow != nil {
+		workflow, ok := r.workflowsByName[*config.Workflow]
+		if !ok {
+			return types.TestFlow{}, fmt.Errorf("no workflow named %s", *config.Workflow)
+		}
+		// is "" a valid cluster profile (for instance, can a user specify this for a random profile)?
+		// if yes, we should change ClusterProfile to a pointer
+		if config.ClusterProfile == "" {
+			config.ClusterProfile = workflow.ClusterProfile
+		}
+		if config.Pre == nil {
+			config.Pre = workflow.Pre
+		}
+		if config.Test == nil {
+			config.Test = workflow.Test
+		}
+		if config.Post == nil {
+			config.Post = workflow.Post
+		}
+	}
 	expandedFlow := types.TestFlow{
 		ClusterProfile: config.ClusterProfile,
 	}

@@ -275,7 +275,7 @@ func validateTestConfigurationType(fieldRoot string, test TestStepConfiguration,
 	}
 	if testConfig := test.MultiStageTestConfiguration; testConfig != nil {
 		typeCount++
-		if testConfig.ClusterProfile != "" {
+		if testConfig.ClusterProfile != "" && testConfig.Workflow == nil {
 			validationErrors = append(validationErrors, validateClusterProfile(fmt.Sprintf("%s", fieldRoot), testConfig.ClusterProfile)...)
 		}
 		seen := sets.NewString()

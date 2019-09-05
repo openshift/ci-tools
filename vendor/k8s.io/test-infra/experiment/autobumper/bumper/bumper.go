@@ -51,21 +51,16 @@ func Call(cmd string, args ...string) error {
 // "images" contains the tag replacements that have been made which is returned from "UpdateReferences([]string{"."}, extraFiles)"
 // "images" and "extraLineInPRBody" are used to generate commit summary and body of the PR
 func UpdatePR(gc github.Client, org, repo string, images map[string]string, extraLineInPRBody string, matchTitle, source, branch string) error {
-	return updatePR(gc, org, repo, makeCommitSummary(images), generatePRBody(images, extraLineInPRBody), matchTitle, source, branch)
+	return UpdatePullRequest(gc, org, repo, makeCommitSummary(images), generatePRBody(images, extraLineInPRBody), matchTitle, source, branch)
 }
 
-func updatePR(gc github.Client, org, repo, title, body, matchTitle, source, branch string) error {
-	logrus.Info("Creating PR...")
-	n, err := updater.UpdatePR(org, repo, title, body, matchTitle, gc)
+// UpdatePullRequest updates with github client "gc" the PR of github repo org/repo
+// with "title" and "body" of PR matching "matchTitle" from "source" to "branch"
+func UpdatePullRequest(gc github.Client, org, repo, title, body, matchTitle, source, branch string) error {
+	logrus.Info("Creating or updating PR...")
+	n, err := updater.EnsurePR(org, repo, title, body, source, branch, matchTitle, gc)
 	if err != nil {
-		return fmt.Errorf("failed to update %d: %v", n, err)
-	}
-	if n == nil {
-		pr, err := gc.CreatePullRequest(org, repo, title, body, source, branch, true)
-		if err != nil {
-			return fmt.Errorf("failed to create PR: %v", err)
-		}
-		n = &pr
+		return fmt.Errorf("failed to ensure PR exists: %v", err)
 	}
 
 	logrus.Infof("PR %s/%s#%d will merge %s into %s: %s", org, repo, *n, source, branch, title)
@@ -115,11 +110,17 @@ func makeCommitSummary(images map[string]string) string {
 // "images" contains the tag replacements that have been made which is returned from "UpdateReferences([]string{"."}, extraFiles)"
 // "images" is used to generate commit message
 func MakeGitCommit(remote, remoteBranch, name, email string, images map[string]string) error {
+	return GitCommitAndPush(remote, remoteBranch, name, email, makeCommitSummary(images))
+}
+
+// GitCommitAndPush runs a sequence of git commands to
+// commit and push the changes the "remote" on "remoteBranch"
+// "name", "email", and "message" are used for git-commit command
+func GitCommitAndPush(remote, remoteBranch, name, email, message string) error {
 	logrus.Info("Making git commit...")
 	if err := Call("git", "add", "-A"); err != nil {
 		return fmt.Errorf("failed to git add: %v", err)
 	}
-	message := makeCommitSummary(images)
 	commitArgs := []string{"commit", "-m", message}
 	if name != "" && email != "" {
 		commitArgs = append(commitArgs, "--author", fmt.Sprintf("%s <%s>", name, email))

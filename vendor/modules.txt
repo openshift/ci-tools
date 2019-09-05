@@ -506,7 +506,7 @@ k8s.io/client-go/third_party/forked/golang/template
 k8s.io/klog
 # k8s.io/kube-openapi v0.0.0-20180731170545-e3762e86a74c
 k8s.io/kube-openapi/pkg/util/proto
-# k8s.io/test-infra v0.0.0-20190903192658-86fbc418c31d
+# k8s.io/test-infra v0.0.0-20190908161317-466f8ffd615d
 k8s.io/test-infra/experiment/autobumper/bumper
 k8s.io/test-infra/prow/config/secret
 k8s.io/test-infra/prow/github

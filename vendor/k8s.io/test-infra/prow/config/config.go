@@ -77,6 +77,10 @@ type JobConfig struct {
 
 	// Periodics are not associated with any repo.
 	Periodics []Periodic `json:"periodics,omitempty"`
+
+	// AllRepos contains all Repos that have one or more jobs configured or
+	// for which a tide query is configured.
+	AllRepos sets.String `json:"-"`
 }
 
 // ProwConfig is config for all prow controllers
@@ -248,9 +252,6 @@ func (rg *RefGetterForGitHubPullRequest) BaseSHA() (string, error) {
 // also need the result of that GitHub call just keep a pointer to its result, bust must
 // nilcheck that pointer before accessing it.
 func (c *Config) GetPresubmits(gc *git.Client, identifier string, baseSHAGetter RefGetter, headSHAGetters ...RefGetter) ([]Presubmit, error) {
-	if gc == nil {
-		return nil, errors.New("gitClient is nil")
-	}
 	if identifier == "" {
 		return nil, errors.New("no identifier for repo given")
 	}
@@ -258,6 +259,9 @@ func (c *Config) GetPresubmits(gc *git.Client, identifier string, baseSHAGetter 
 		return c.Presubmits[identifier], nil
 	}
 
+	if gc == nil {
+		return nil, errors.New("gitClient is nil")
+	}
 	baseSHA, err := baseSHAGetter()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get baseSHA: %v", err)
@@ -373,11 +377,6 @@ type Plank struct {
 	// DefaultDecorationConfig are defaults for shared fields for ProwJobs
 	// that request to have their PodSpecs decorated
 	DefaultDecorationConfig *prowapi.DecorationConfig `json:"default_decoration_config,omitempty"`
-	// Deprecated, use JobURLPrefixConfig instead
-	// JobURLPrefix is the host and path prefix under
-	// which job details will be viewable
-	// TODO @alvaroaleman: Remove in September 2019
-	JobURLPrefix string `json:"job_url_prefix,omitempty"`
 	// JobURLPrefixConfig is the host and path prefix under which job details
 	// will be viewable. Use `org/repo`, `org` or `*`as key and an url as value
 	JobURLPrefixConfig map[string]string `json:"job_url_prefix_config,omitempty"`
@@ -709,6 +708,12 @@ func loadConfig(prowConfig, jobConfig string) (*Config, error) {
 		return nil, err
 	}
 
+	nc.AllRepos = sets.String{}
+	for _, query := range nc.Tide.Queries {
+		for _, repo := range query.Repos {
+			nc.AllRepos.Insert(repo)
+		}
+	}
 	// TODO(krzyzacy): temporary allow empty jobconfig
 	//                 also temporary allow job config in prow config
 	if jobConfig == "" {
@@ -889,16 +894,18 @@ func (c *Config) finalizeJobConfig() error {
 			return errors.New("no default GCS credentials secret provided for plank")
 		}
 
-		for _, vs := range c.Presubmits {
+		for repo, vs := range c.Presubmits {
 			for i := range vs {
 				setPresubmitDecorationDefaults(c, &vs[i])
 			}
+			c.AllRepos.Insert(repo)
 		}
 
-		for _, js := range c.Postsubmits {
+		for repo, js := range c.Postsubmits {
 			for i := range js {
 				setPostsubmitDecorationDefaults(c, &js[i])
 			}
+			c.AllRepos.Insert(repo)
 		}
 
 		for i := range c.Periodics {
@@ -945,9 +952,6 @@ func (c *Config) finalizeJobConfig() error {
 
 // validateComponentConfig validates the infrastructure component configuration
 func (c *Config) validateComponentConfig() error {
-	if c.Plank.JobURLPrefix != "" && c.Plank.JobURLPrefixConfig["*"] != "" {
-		return errors.New(`Planks job_url_prefix must be unset when job_url_prefix_config["*"] is set. The former is deprecated, use the latter`)
-	}
 	for k, v := range c.Plank.JobURLPrefixConfig {
 		if _, err := url.Parse(v); err != nil {
 			return fmt.Errorf(`Invalid value for Planks job_url_prefix_config["%s"]: %v`, k, err)
@@ -1303,13 +1307,6 @@ func parseProwConfig(c *Config) error {
 
 	if c.Plank.JobURLPrefixConfig == nil {
 		c.Plank.JobURLPrefixConfig = map[string]string{}
-	}
-	if c.Plank.JobURLPrefix != "" && c.Plank.JobURLPrefixConfig["*"] == "" {
-		c.Plank.JobURLPrefixConfig["*"] = c.Plank.JobURLPrefix
-		// Set JobURLPrefix to an empty string to indicate we've moved
-		// it to JobURLPrefixConfig["*"] without overwriting the latter
-		// so validation succeeds
-		c.Plank.JobURLPrefix = ""
 	}
 
 	if c.GitHubOptions.LinkURLFromConfig == "" {

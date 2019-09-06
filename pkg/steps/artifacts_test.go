@@ -9,14 +9,46 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openshift/ci-tools/pkg/junit"
 	coreapi "k8s.io/api/core/v1"
+
+	"k8s.io/apimachinery/pkg/api/equality"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/diff"
+
 	"k8s.io/client-go/kubernetes/fake"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/tools/remotecommand"
+
+	"github.com/openshift/ci-tools/pkg/junit"
 )
+
+var testArtifactsContainer = coreapi.Container{
+	Name:  "artifacts",
+	Image: "busybox",
+	VolumeMounts: []coreapi.VolumeMount{
+		{Name: "artifacts", MountPath: "/tmp/artifacts"},
+	},
+	Command: []string{
+		"/bin/sh",
+		"-c",
+		`#!/bin/sh
+set -euo pipefail
+trap 'kill $(jobs -p); exit 0' TERM
+
+touch /tmp/done
+echo "Waiting for artifacts to be extracted"
+while true; do
+	if [[ ! -f /tmp/done ]]; then
+		echo "Artifacts extracted, will terminate after 30s"
+		sleep 30
+		echo "Exiting"
+		exit 0
+	fi
+	sleep 5 & wait
+done
+`,
+	},
+}
 
 func TestTestCaseNotifier_SubTests(t *testing.T) {
 	tests := []struct {
@@ -526,5 +558,96 @@ func TestArtifactWorker(t *testing.T) {
 	}
 	if !reflect.DeepEqual(names, []string{"test.txt"}) {
 		t.Fatalf("unexpected content in the artifact directory: %v", names)
+	}
+}
+func TestAddArtifactsToPod(t *testing.T) {
+	testCases := []struct {
+		testID   string
+		pod      *coreapi.Pod
+		expected *coreapi.Pod
+	}{
+		{
+			testID: "pod object has no artifacts volumes/volumeMounts, artifacts container injection is not expected",
+			pod: &coreapi.Pod{
+				TypeMeta:   meta.TypeMeta{Kind: "Pod", APIVersion: "v1"},
+				ObjectMeta: meta.ObjectMeta{Name: "test-pod"},
+				Spec: coreapi.PodSpec{
+					Containers: []coreapi.Container{{Name: "test"}},
+				},
+			},
+			expected: &coreapi.Pod{
+				TypeMeta:   meta.TypeMeta{Kind: "Pod", APIVersion: "v1"},
+				ObjectMeta: meta.ObjectMeta{Name: "test-pod"},
+				Spec: coreapi.PodSpec{
+					Containers: []coreapi.Container{{Name: "test"}},
+				},
+			},
+		},
+		{
+			testID: "pod object has only volumes but no container is using it, injection is not expected",
+			pod: &coreapi.Pod{
+				TypeMeta:   meta.TypeMeta{Kind: "Pod", APIVersion: "v1"},
+				ObjectMeta: meta.ObjectMeta{Name: "test-pod"},
+				Spec: coreapi.PodSpec{
+					Volumes:    []coreapi.Volume{{Name: "artifacts"}},
+					Containers: []coreapi.Container{{Name: "test"}},
+				},
+			},
+			expected: &coreapi.Pod{
+				TypeMeta:   meta.TypeMeta{Kind: "Pod", APIVersion: "v1"},
+				ObjectMeta: meta.ObjectMeta{Name: "test-pod"},
+				Spec: coreapi.PodSpec{
+					Volumes:    []coreapi.Volume{{Name: "artifacts"}},
+					Containers: []coreapi.Container{{Name: "test"}},
+				},
+			},
+		},
+		{
+			testID: "pod object has artifacts volumes/volumeMounts, artifacts container injection expected",
+			pod: &coreapi.Pod{
+				TypeMeta:   meta.TypeMeta{Kind: "Pod", APIVersion: "v1"},
+				ObjectMeta: meta.ObjectMeta{Name: "test-pod"},
+				Spec: coreapi.PodSpec{
+					Volumes: []coreapi.Volume{{Name: "artifacts"}},
+					Containers: []coreapi.Container{
+						{
+							Name:         "test",
+							VolumeMounts: []coreapi.VolumeMount{{Name: "artifacts"}},
+						},
+					},
+				},
+			},
+			expected: &coreapi.Pod{
+				TypeMeta:   meta.TypeMeta{Kind: "Pod", APIVersion: "v1"},
+				ObjectMeta: meta.ObjectMeta{Name: "test-pod"},
+				Spec: coreapi.PodSpec{
+					Volumes: []coreapi.Volume{{Name: "artifacts"}},
+					Containers: []coreapi.Container{
+						{
+							Name:         "test",
+							VolumeMounts: []coreapi.VolumeMount{{Name: "artifacts"}},
+						},
+						testArtifactsContainer,
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.testID, func(t *testing.T) {
+			addArtifactsToPod(tc.pod)
+			if !equality.Semantic.DeepEqual(tc.pod, tc.expected) {
+				t.Fatal(diff.ObjectReflectDiff(tc.pod, tc.expected))
+			}
+
+		})
+	}
+}
+
+func TestArtifactsContainer(t *testing.T) {
+	artifacts := artifactsContainer()
+	if !reflect.DeepEqual(artifacts, testArtifactsContainer) {
+		t.Fatal(diff.ObjectReflectDiff(artifacts, testArtifactsContainer))
 	}
 }

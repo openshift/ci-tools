@@ -80,7 +80,8 @@ func main() {
 	}
 
 	remoteBranch := "autobump"
-	if err := bumper.MakeGitCommit(fmt.Sprintf("git@github.com:%s/%s.git", o.githubLogin, githubRepo), remoteBranch, o.gitName, o.gitEmail, images); err != nil {
+	if err := bumper.MakeGitCommit(fmt.Sprintf("https://%s:%s@github.com:%s/%s.git", o.githubLogin,
+		string(sa.GetTokenGenerator(o.githubToken)()), o.githubLogin, githubRepo), remoteBranch, o.gitName, o.gitEmail, images); err != nil {
 		logrus.WithError(err).Fatal("Failed to push changes.")
 	}
 

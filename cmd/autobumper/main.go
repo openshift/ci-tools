@@ -15,7 +15,7 @@ import (
 const (
 	githubOrg   = "openshift"
 	githubRepo  = "release"
-	githubLogin = "openshift-merge-robot"
+	githubLogin = "openshift-bot"
 )
 
 var extraFiles = map[string]bool{

@@ -34,8 +34,8 @@ func (s ConfigMapSource) Name() string {
 	return strings.TrimSuffix(base, filepath.Ext(base))
 }
 
-func (p ConfigMapSource) CMName(prefix string) string {
-	return prefix + p.Name()
+func (s ConfigMapSource) CMName(prefix string) string {
+	return prefix + s.Name()
 }
 
 func (s ConfigMapSource) TempCMName(prefix string) string {

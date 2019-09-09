@@ -204,9 +204,9 @@ PR links:
 %s
 `
 	prCount := len(m.matching)
-	links := []string{}
+	var links []string
 	for pr, runs := range m.matching {
-		runNumbers := []string{}
+		var runNumbers []string
 		for _, run := range runs {
 			runNumbers = append(runNumbers, run.JobSpec.BuildID)
 		}
@@ -316,7 +316,7 @@ func (s *StaleStatusCounter) computeStats() *staleStatusStats {
 			if newSHA == "" || oldSHA != newSHA {
 				continue
 			}
-			staleJobs := []string{}
+			var staleJobs []string
 			for job := range old.Opportunities {
 				if _, hasJob := new.Opportunities[job]; !hasJob {
 					staleJobs = append(staleJobs, job)

@@ -204,7 +204,7 @@ func TestRecordActual(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
 			metrics := NewMetrics(testFilename)
-			presubmits := []*prowconfig.Presubmit{}
+			var presubmits []*prowconfig.Presubmit
 			for _, name := range tc.jobs {
 				presubmits = append(presubmits, &prowconfig.Presubmit{JobBase: prowconfig.JobBase{Name: name}})
 			}

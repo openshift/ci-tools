@@ -603,7 +603,7 @@ func TestExecuteJobsPositive(t *testing.T) {
 				return
 			}
 
-			createdJobSpecs := []pjapi.ProwJobSpec{}
+			var createdJobSpecs []pjapi.ProwJobSpec
 			for _, job := range createdJobs.Items {
 				createdJobSpecs = append(createdJobSpecs, job.Spec)
 			}

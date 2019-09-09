@@ -593,7 +593,7 @@ func (e *Executor) waitForJobs(jobs sets.String, selector string) (bool, error) 
 
 func (e *Executor) submitRehearsals() ([]*pjapi.ProwJob, error) {
 	var errors []error
-	pjs := []*pjapi.ProwJob{}
+	var pjs []*pjapi.ProwJob
 
 	for _, job := range e.presubmits {
 		created, err := e.submitPresubmit(job)

@@ -155,15 +155,6 @@ func (n *TestCaseNotifier) SubTests(prefix string) []*junit.TestCase {
 	return tests
 }
 
-func stringInSlice(arr []string, s string) bool {
-	for _, item := range arr {
-		if item == s {
-			return true
-		}
-	}
-	return false
-}
-
 type podClient struct {
 	coreclientset.PodsGetter
 	config *rest.Config

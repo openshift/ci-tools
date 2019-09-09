@@ -1032,15 +1032,6 @@ func TestGetClusterTypes(t *testing.T) {
 		})
 	}
 }
-func makeBaseExtraRefs() []pjapi.Refs {
-	return []pjapi.Refs{
-		{
-			Org:     "openshift",
-			Repo:    "test-repo",
-			BaseRef: "master",
-		},
-	}
-}
 
 func makeBaseRefs() *pjapi.Refs {
 	return &pjapi.Refs{

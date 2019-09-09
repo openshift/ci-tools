@@ -22,6 +22,7 @@ require (
 	github.com/onsi/gomega v1.4.3 // indirect
 	github.com/openshift/api v3.9.1-0.20190725193935-b7d4eb0fa1e0+incompatible
 	github.com/openshift/client-go v0.0.0-20190721020503-a85ea6a6b3a5
+	github.com/pkg/errors v0.8.1
 	github.com/shurcooL/githubv4 v0.0.0-20190718010115-4ba037080260
 	github.com/sirupsen/logrus v1.4.2
 	golang.org/x/oauth2 v0.0.0-20190604053449-0f29369cfe45

@@ -502,6 +502,138 @@ func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 	}
 }
 
+func podSpecReferencing(info config.Info) *v1.PodSpec {
+	return &v1.PodSpec{
+		Containers: []v1.Container{{
+			Env: []v1.EnvVar{{
+				ValueFrom: &v1.EnvVarSource{
+					ConfigMapKeyRef: &v1.ConfigMapKeySelector{
+						LocalObjectReference: v1.LocalObjectReference{
+							Name: info.ConfigMapName(),
+						},
+						Key: info.Basename(),
+					},
+				},
+			}},
+		}},
+	}
+}
+
+func TestGetImagesPostsubmitsForCiopConfigs(t *testing.T) {
+	var testCases = []struct {
+		name        string
+		prowConfig  *prowconfig.Config
+		ciopConfigs config.ByFilename
+		expected    []PostsubmitInContext
+	}{
+		{
+			name: "no changed ci-op configs means no changed postsubmits",
+			prowConfig: &prowconfig.Config{
+				JobConfig: prowconfig.JobConfig{
+					Postsubmits: map[string][]prowconfig.Postsubmit{
+						"org/repo": {{
+							JobBase: prowconfig.JobBase{
+								Name:  "branch-ci-org-repo-branch-images",
+								Agent: "kubernetes",
+								Spec:  podSpecReferencing(config.Info{Org: "org", Repo: "repo", Branch: "branch"}),
+							},
+						}},
+					},
+				},
+			},
+			ciopConfigs: map[string]config.DataWithInfo{},
+		},
+		{
+			name: "changed ci-op configs but no images job means no changed postsubmits",
+			prowConfig: &prowconfig.Config{
+				JobConfig: prowconfig.JobConfig{
+					Postsubmits: map[string][]prowconfig.Postsubmit{
+						"org/repo": {},
+					},
+				},
+			},
+			ciopConfigs: map[string]config.DataWithInfo{
+				"org-repo-branch.yaml": {Info: config.Info{Org: "org", Repo: "repo", Branch: "branch"}},
+			},
+		},
+		{
+			name: "changed ci-op configs means changed postsubmits",
+			prowConfig: &prowconfig.Config{
+				JobConfig: prowconfig.JobConfig{
+					Postsubmits: map[string][]prowconfig.Postsubmit{
+						"org/repo": {{
+							JobBase: prowconfig.JobBase{
+								Name:  "branch-ci-org-repo-branch-images",
+								Agent: "kubernetes",
+								Spec:  podSpecReferencing(config.Info{Org: "org", Repo: "repo", Branch: "branch"}),
+							},
+						}},
+					},
+				},
+			},
+			ciopConfigs: map[string]config.DataWithInfo{
+				"org-repo-branch.yaml": {Info: config.Info{Org: "org", Repo: "repo", Branch: "branch"}},
+			},
+			expected: []PostsubmitInContext{{
+				Info: config.Info{Org: "org", Repo: "repo", Branch: "branch"},
+				Job: prowconfig.Postsubmit{
+					JobBase: prowconfig.JobBase{
+						Name:  "branch-ci-org-repo-branch-images",
+						Agent: "kubernetes",
+						Spec:  podSpecReferencing(config.Info{Org: "org", Repo: "repo", Branch: "branch"}),
+					},
+				},
+			}},
+		},
+		{
+			name: "changed ci-op configs but images job referencing a different file means no changed postsubmits",
+			prowConfig: &prowconfig.Config{
+				JobConfig: prowconfig.JobConfig{
+					Postsubmits: map[string][]prowconfig.Postsubmit{
+						"org/repo": {{
+							JobBase: prowconfig.JobBase{
+								Name:  "branch-ci-org-repo-branch-images",
+								Agent: "kubernetes",
+								Spec:  podSpecReferencing(config.Info{Org: "org", Repo: "repo", Branch: "BRANCH"}),
+							},
+						}},
+					},
+				},
+			},
+			ciopConfigs: map[string]config.DataWithInfo{
+				"org-repo-branch.yaml": {Info: config.Info{Org: "org", Repo: "repo", Branch: "branch"}},
+			},
+		},
+		{
+			name: "changed ci-op configs but only non-images job means no changed postsubmits",
+			prowConfig: &prowconfig.Config{
+				JobConfig: prowconfig.JobConfig{
+					Postsubmits: map[string][]prowconfig.Postsubmit{
+						"org/repo": {{
+							JobBase: prowconfig.JobBase{
+								Name:  "branch-ci-org-repo-branch-othertest",
+								Agent: "kubernetes",
+								Spec:  podSpecReferencing(config.Info{Org: "org", Repo: "repo", Branch: "branch"}),
+							},
+						}},
+					},
+				},
+			},
+			ciopConfigs: map[string]config.DataWithInfo{
+				"org-repo-branch.yaml": {Info: config.Info{Org: "org", Repo: "repo", Branch: "branch"}},
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if actual, expected := GetImagesPostsubmitsForCiopConfigs(testCase.prowConfig, testCase.ciopConfigs), testCase.expected; !reflect.DeepEqual(actual, expected) {
+				t.Errorf("%s: got incorrect images postsubmits: %v", testCase.name, diff.ObjectReflectDiff(actual, expected))
+			}
+		})
+	}
+}
+
 func TestGetPresubmitsForClusterProfiles(t *testing.T) {
 	makePresubmit := func(name string, agent pjapi.ProwJobAgent, profiles []string) prowconfig.Presubmit {
 		ret := prowconfig.Presubmit{

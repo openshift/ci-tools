@@ -224,7 +224,7 @@ func rehearseMain() int {
 
 	namespace := prConfig.Prow.ProwJobNamespace
 	if o.local {
-		namespace = "ci-stg"
+		namespace = config.StagingNamespace
 	}
 
 	cmClient, err := rehearse.NewCMClient(clusterConfig, namespace, o.dryRun)

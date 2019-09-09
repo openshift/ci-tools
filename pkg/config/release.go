@@ -30,6 +30,8 @@ const (
 	ClusterProfilesPath = "cluster/test-deploy"
 	// ClusterProfilePrefix is the prefix added to ConfigMap names
 	ClusterProfilePrefix = "cluster-profile-"
+	// StagingNamespace is the staging namespace in api.ci
+	StagingNamespace = "ci-stg"
 )
 
 // ReleaseRepoConfig contains all configuration present in release repo (usually openshift/release)

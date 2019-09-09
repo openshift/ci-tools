@@ -309,16 +309,16 @@ func (s *StaleStatusCounter) computeStats() *staleStatusStats {
 	for pr, builds := range s.Builds.Pulls {
 		prWasHit := false
 		for i := 1; i < len(builds); i++ {
-			old := builds[i-1]
-			oldSHA := old.JobSpec.Refs.Pulls[0].SHA
-			new := builds[i]
-			newSHA := new.JobSpec.Refs.Pulls[0].SHA
+			oldBuild := builds[i-1]
+			oldSHA := oldBuild.JobSpec.Refs.Pulls[0].SHA
+			newBuild := builds[i]
+			newSHA := newBuild.JobSpec.Refs.Pulls[0].SHA
 			if newSHA == "" || oldSHA != newSHA {
 				continue
 			}
 			var staleJobs []string
-			for job := range old.Opportunities {
-				if _, hasJob := new.Opportunities[job]; !hasJob {
+			for job := range oldBuild.Opportunities {
+				if _, hasJob := newBuild.Opportunities[job]; !hasJob {
 					staleJobs = append(staleJobs, job)
 				}
 			}
@@ -328,8 +328,8 @@ func (s *StaleStatusCounter) computeStats() *staleStatusStats {
 				occurrence := staleStatusOcc{
 					pr:       pr,
 					sha:      newSHA,
-					oldBuild: old.JobSpec.BuildID,
-					newBuild: new.JobSpec.BuildID,
+					oldBuild: oldBuild.JobSpec.BuildID,
+					newBuild: newBuild.JobSpec.BuildID,
 					jobs:     staleJobs,
 				}
 				stats.occurrences = append(stats.occurrences, occurrence)

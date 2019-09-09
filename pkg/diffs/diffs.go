@@ -2,6 +2,7 @@ package diffs
 
 import (
 	"fmt"
+	"github.com/getlantern/deepcopy"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -41,8 +42,10 @@ const (
 	changedCiopConfigMsg = "ci-operator config file changed"
 )
 
-func GetChangedCiopConfigs(masterConfig, prConfig config.CompoundCiopConfig, logger *logrus.Entry) (config.CompoundCiopConfig, map[string]sets.String) {
-	ret := config.CompoundCiopConfig{}
+// GetChangedCiopConfigs identifies CI Operator configurations that are new or have changed and
+// determines for each which jobs are impacted if job-specific changes were made
+func GetChangedCiopConfigs(masterConfig, prConfig config.ByFilename, logger *logrus.Entry) (config.ByFilename, map[string]sets.String) {
+	ret := config.ByFilename{}
 	affectedJobs := map[string]sets.String{}
 
 	for filename, newConfig := range prConfig {
@@ -56,19 +59,24 @@ func GetChangedCiopConfigs(masterConfig, prConfig config.CompoundCiopConfig, log
 			continue
 		}
 
-		withoutTestsOldConfig := *masterConfig[filename]
-		withoutTestsOldConfig.Tests = nil
-		withoutTestsNewConfig := *prConfig[filename]
-		withoutTestsNewConfig.Tests = nil
+		withoutTests := func(in cioperatorapi.ReleaseBuildConfiguration) cioperatorapi.ReleaseBuildConfiguration {
+			var out cioperatorapi.ReleaseBuildConfiguration
+			if err := deepcopy.Copy(&out, &in); err != nil {
+				logrus.WithError(err).Warn("Could not deep copy configuration.") // this is a programming error
+				return out
+			}
+			out.Tests = nil
+			return out
+		}
 
-		if !equality.Semantic.DeepEqual(withoutTestsOldConfig, withoutTestsNewConfig) {
+		if !equality.Semantic.DeepEqual(withoutTests(oldConfig.Configuration), withoutTests(newConfig.Configuration)) {
 			logger.WithField(logCiopConfig, filename).Info(changedCiopConfigMsg)
 			ret[filename] = newConfig
 			continue
 		}
 
-		oldTests := getTestsByName(oldConfig.Tests)
-		newTests := getTestsByName(newConfig.Tests)
+		oldTests := getTestsByName(oldConfig.Configuration.Tests)
+		newTests := getTestsByName(newConfig.Configuration.Tests)
 
 		for as, test := range newTests {
 			if !equality.Semantic.DeepEqual(oldTests[as], test) {

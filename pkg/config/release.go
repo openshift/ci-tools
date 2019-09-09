@@ -35,7 +35,7 @@ const (
 // ReleaseRepoConfig contains all configuration present in release repo (usually openshift/release)
 type ReleaseRepoConfig struct {
 	Prow       *prowconfig.Config
-	CiOperator CompoundCiopConfig
+	CiOperator ByFilename
 }
 
 func git(repoPath string, args ...string) (string, error) {
@@ -98,7 +98,7 @@ func GetAllConfigs(releaseRepoPath string, logger *logrus.Entry) *ReleaseRepoCon
 	config := &ReleaseRepoConfig{}
 	var err error
 	ciopConfigPath := filepath.Join(releaseRepoPath, CiopConfigInRepoPath)
-	config.CiOperator, err = CompoundLoad(ciopConfigPath)
+	config.CiOperator, err = LoadConfigByFilename(ciopConfigPath)
 	if err != nil {
 		logger.WithError(err).Warn("failed to load ci-operator configuration from release repo")
 	}

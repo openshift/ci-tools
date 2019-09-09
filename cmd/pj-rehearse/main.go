@@ -197,7 +197,9 @@ func rehearseMain() int {
 	changedCiopConfigs := config.CompoundCiopConfig{}
 	affectedJobs := make(map[string]sets.String)
 	if masterConfig.CiOperator != nil && prConfig.CiOperator != nil {
-		changedCiopConfigs, affectedJobs = diffs.GetChangedCiopConfigs(masterConfig.CiOperator, prConfig.CiOperator, logger)
+		data, jobs := diffs.GetChangedCiopConfigs(masterConfig.CiOperator, prConfig.CiOperator, logger)
+		changedCiopConfigs = config.CompoundFrom(data)
+		affectedJobs = jobs
 		metrics.RecordChangedCiopConfigs(changedCiopConfigs)
 	}
 
@@ -285,7 +287,7 @@ func rehearseMain() int {
 	metrics.RecordPresubmitsOpportunity(toRehearseClusterProfiles, "cluster-profile-change")
 	toRehearse.AddAll(toRehearseClusterProfiles)
 
-	jobConfigurer := rehearse.NewJobConfigurer(prConfig.CiOperator, prNumber, loggers, o.allowVolumes, changedTemplates, changedClusterProfiles, jobSpec.Refs)
+	jobConfigurer := rehearse.NewJobConfigurer(config.CompoundFrom(prConfig.CiOperator), prNumber, loggers, o.allowVolumes, changedTemplates, changedClusterProfiles, jobSpec.Refs)
 
 	presubmitsToRehearse := jobConfigurer.ConfigurePresubmitRehearsals(toRehearse)
 	periodicsToRehearse := jobConfigurer.ConfigurePeriodicRehearsals(changedPeriodics)

@@ -16,6 +16,7 @@ test:
 .PHONY: test
 
 validate-vendor:
+	go version
 	GO111MODULE=on GOPROXY=https://proxy.golang.org go mod tidy
 	GO111MODULE=on GOPROXY=https://proxy.golang.org go mod vendor
 	git status -s ./vendor/ go.mod go.sum

@@ -221,8 +221,8 @@ type options struct {
 
 func bindOptions(flag *flag.FlagSet) *options {
 	opt := &options{
-		idleCleanupDuration: time.Duration(1 * time.Hour),
-		cleanupDuration:     time.Duration(12 * time.Hour),
+		idleCleanupDuration: 1 * time.Hour,
+		cleanupDuration:     12 * time.Hour,
 	}
 
 	// command specific options

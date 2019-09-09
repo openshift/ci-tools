@@ -90,10 +90,10 @@ func (c ReleaseBuildConfiguration) IsPipelineImage(name string) bool {
 	}
 	switch name {
 	case string(PipelineImageStreamTagReferenceRoot),
-		string(PipelineImageStreamTagReferenceSource),
-		string(PipelineImageStreamTagReferenceBinaries),
-		string(PipelineImageStreamTagReferenceTestBinaries),
-		string(PipelineImageStreamTagReferenceRPMs):
+		PipelineImageStreamTagReferenceSource,
+		PipelineImageStreamTagReferenceBinaries,
+		PipelineImageStreamTagReferenceTestBinaries,
+		PipelineImageStreamTagReferenceRPMs:
 		return true
 	}
 	return false

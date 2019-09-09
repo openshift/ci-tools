@@ -42,8 +42,7 @@ func TestRequires(t *testing.T) {
 		steps: []api.TestStep{{LiteralTestStep: &api.LiteralTestStep{From: "src"}}},
 		req: []api.StepLink{
 			api.InternalImageLink(
-				api.PipelineImageStreamTagReference(
-					api.PipelineImageStreamTagReferenceSource)),
+				api.PipelineImageStreamTagReferenceSource),
 		},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {

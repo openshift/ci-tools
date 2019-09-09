@@ -138,7 +138,7 @@ func (s *e2eTestStep) Done() (bool, error) {
 func (s *e2eTestStep) Requires() []api.StepLink {
 	links := s.step.Requires()
 	if s.config.Upgrade {
-		links = append([]api.StepLink{api.ReleasePayloadImageLink(api.PipelineImageStreamTagReference("initial"))}, links...)
+		links = append([]api.StepLink{api.ReleasePayloadImageLink("initial")}, links...)
 	}
 	return links
 }

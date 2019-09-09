@@ -48,7 +48,7 @@ func TestRunNormalCase(t *testing.T) {
 		name:      "other",
 		shouldRun: true,
 		requires:  []api.StepLink{api.ExternalImageLink(api.ImageStreamTagReference{Namespace: "ns", Name: "base", Tag: "other"})},
-		creates:   []api.StepLink{api.InternalImageLink(api.PipelineImageStreamTagReference("other"))},
+		creates:   []api.StepLink{api.InternalImageLink("other")},
 	}
 	src := &fakeStep{
 		name:      "src",
@@ -77,14 +77,14 @@ func TestRunNormalCase(t *testing.T) {
 	unrelated := &fakeStep{
 		name:      "unrelated",
 		shouldRun: true,
-		requires:  []api.StepLink{api.InternalImageLink(api.PipelineImageStreamTagReference("other")), api.InternalImageLink(api.PipelineImageStreamTagReferenceRPMs)},
-		creates:   []api.StepLink{api.InternalImageLink(api.PipelineImageStreamTagReference("unrelated"))},
+		requires:  []api.StepLink{api.InternalImageLink("other"), api.InternalImageLink(api.PipelineImageStreamTagReferenceRPMs)},
+		creates:   []api.StepLink{api.InternalImageLink("unrelated")},
 	}
 	final := &fakeStep{
 		name:      "final",
 		shouldRun: true,
-		requires:  []api.StepLink{api.InternalImageLink(api.PipelineImageStreamTagReference("unrelated"))},
-		creates:   []api.StepLink{api.InternalImageLink(api.PipelineImageStreamTagReference("final"))},
+		requires:  []api.StepLink{api.InternalImageLink("unrelated")},
+		creates:   []api.StepLink{api.InternalImageLink("final")},
 	}
 
 	if _, err := Run(context.Background(), api.BuildGraph([]api.Step{root, other, src, bin, testBin, rpm, unrelated, final}), false); err != nil {
@@ -112,7 +112,7 @@ func TestRunFailureCase(t *testing.T) {
 		name:      "other",
 		shouldRun: true,
 		requires:  []api.StepLink{api.ExternalImageLink(api.ImageStreamTagReference{Namespace: "ns", Name: "base", Tag: "other"})},
-		creates:   []api.StepLink{api.InternalImageLink(api.PipelineImageStreamTagReference("other"))},
+		creates:   []api.StepLink{api.InternalImageLink("other")},
 	}
 	src := &fakeStep{
 		name:      "src",
@@ -142,14 +142,14 @@ func TestRunFailureCase(t *testing.T) {
 	unrelated := &fakeStep{
 		name:      "unrelated",
 		shouldRun: false,
-		requires:  []api.StepLink{api.InternalImageLink(api.PipelineImageStreamTagReference("other")), api.InternalImageLink(api.PipelineImageStreamTagReferenceRPMs)},
-		creates:   []api.StepLink{api.InternalImageLink(api.PipelineImageStreamTagReference("unrelated"))},
+		requires:  []api.StepLink{api.InternalImageLink("other"), api.InternalImageLink(api.PipelineImageStreamTagReferenceRPMs)},
+		creates:   []api.StepLink{api.InternalImageLink("unrelated")},
 	}
 	final := &fakeStep{
 		name:      "final",
 		shouldRun: false,
-		requires:  []api.StepLink{api.InternalImageLink(api.PipelineImageStreamTagReference("unrelated"))},
-		creates:   []api.StepLink{api.InternalImageLink(api.PipelineImageStreamTagReference("final"))},
+		requires:  []api.StepLink{api.InternalImageLink("unrelated")},
+		creates:   []api.StepLink{api.InternalImageLink("final")},
 	}
 
 	suites, err := Run(context.Background(), api.BuildGraph([]api.Step{root, other, src, bin, testBin, rpm, unrelated, final}), false)

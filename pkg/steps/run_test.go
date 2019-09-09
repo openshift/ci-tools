@@ -156,7 +156,7 @@ func TestRunFailureCase(t *testing.T) {
 	if err == nil {
 		t.Error("got no error but expected one")
 	}
-	if len(suites.Suites) != 1 || len(suites.Suites[0].TestCases) != 6 || suites.Suites[0].NumTests != 6 || suites.Suites[0].NumFailed != 1 {
+	if suites.Suites != nil && len(suites.Suites) != 1 || len(suites.Suites[0].TestCases) != 6 || suites.Suites[0].NumTests != 6 || suites.Suites[0].NumFailed != 1 {
 		t.Errorf("unexpected junit output: %#v", suites.Suites[0])
 	}
 

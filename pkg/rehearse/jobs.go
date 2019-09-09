@@ -40,7 +40,6 @@ const (
 	defaultRehearsalRerunCommand = "/test pj-rehearse"
 	logRehearsalJob              = "rehearsal-job"
 	logCiopConfigFile            = "ciop-config-file"
-	logCiopConfigRepo            = "ciop-config-repo"
 
 	clusterTypeEnvName  = "CLUSTER_TYPE"
 	CanBeRehearsedLabel = "pj-rehearse.openshift.io/can-be-rehearsed"

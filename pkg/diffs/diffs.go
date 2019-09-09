@@ -24,8 +24,6 @@ const (
 	logDiffs      = "diffs"
 	logCiopConfig = "ciop-config"
 
-	// ConfigInRepoPath is the prow config path from release repo
-	ConfigInRepoPath = "cluster/ci/config/prow/config.yaml"
 	// PluginsInRepoPath is the prow plugins config path from release repo
 	PluginsInRepoPath = "cluster/ci/config/prow/plugins.yaml"
 	// JobConfigInRepoPath is the prowjobs path from release repo

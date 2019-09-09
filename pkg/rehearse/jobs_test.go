@@ -413,7 +413,7 @@ func TestExecuteJobsErrors(t *testing.T) {
 				createAction := action.(clientgo_testing.CreateAction)
 				pj := createAction.GetObject().(*pjapi.ProwJob)
 				if tc.failToCreate.Has(pj.Spec.Job) {
-					return true, nil, fmt.Errorf("Fail")
+					return true, nil, fmt.Errorf("fail")
 				}
 				return false, nil, nil
 			})

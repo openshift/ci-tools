@@ -91,7 +91,7 @@ func (r *registry) process(steps []api.TestStep) (internalSteps []types.TestStep
 		} else if external.LiteralTestStep != nil {
 			step = *external.LiteralTestStep
 		} else {
-			errs = append(errs, fmt.Errorf("Encountered TestStep where both `Reference` and `LiteralTestStep` are nil"))
+			errs = append(errs, fmt.Errorf("encountered TestStep where both `Reference` and `LiteralTestStep` are nil"))
 			continue
 		}
 		internalStep := toInternal(step)

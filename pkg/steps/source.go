@@ -150,6 +150,7 @@ func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clone
 		GitUserName:  "ci-robot",
 		GitUserEmail: "ci-robot@openshift.io",
 		GitRefs:      refs,
+		Fail:         true,
 	}
 	optionsJSON, err := clonerefs.Encode(optionsSpec)
 	if err != nil {

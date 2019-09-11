@@ -48,7 +48,7 @@ func (s *outputImageTagStep) Run(ctx context.Context, dry bool) error {
 	}
 	ist := s.imageStreamTag(fromImage)
 	if dry {
-		s.dryLogger.AddObject(ist.DeepCopyObject())
+		s.dryLogger.AddImageStreamTag(ist)
 		return nil
 	}
 

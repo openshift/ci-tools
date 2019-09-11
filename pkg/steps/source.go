@@ -265,7 +265,7 @@ func isBuildPhaseTerminated(phase buildapi.BuildPhase) bool {
 
 func handleBuild(buildClient BuildClient, build *buildapi.Build, dry bool, artifactDir string, dryLogger *DryLogger) error {
 	if dry {
-		dryLogger.AddObject(build)
+		dryLogger.AddBuild(build)
 		return nil
 	}
 

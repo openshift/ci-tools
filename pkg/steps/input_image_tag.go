@@ -89,7 +89,7 @@ func (s *inputImageTagStep) Run(ctx context.Context, dry bool) error {
 	}
 
 	if dry {
-		s.dryLogger.AddObject(ist.DeepCopyObject())
+		s.dryLogger.AddImageStreamTag(ist)
 		return nil
 	}
 

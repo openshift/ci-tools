@@ -96,7 +96,7 @@ execution to build just one or more targets using the `--target` option.
 
 Two test targets in the previous example assume their `make` targets take care
 of full build from source till the actual test. This is often the case, but it
-is ineffient because each test target performs the build separately. CI
+is inefficient because each test target performs the build separately. CI
 operator can create `bin` and `test-bin` targets for the test targets to share
 by providing `binary_build_commands` and `test_binary_build_commands`
 respectively. Note that ci-operator allows separate `bin` and `test-bin`

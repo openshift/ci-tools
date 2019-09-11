@@ -79,9 +79,12 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to update references.")
 	}
 
+	stdout := bumper.HideSecretsWriter{Delegate: os.Stdout, Censor: sa}
+	stderr := bumper.HideSecretsWriter{Delegate: os.Stderr, Censor: sa}
+
 	remoteBranch := "autobump"
 	if err := bumper.MakeGitCommit(fmt.Sprintf("https://%s:%s@github.com/%s/%s.git", o.githubLogin,
-		string(sa.GetTokenGenerator(o.githubToken)()), o.githubLogin, githubRepo), remoteBranch, o.gitName, o.gitEmail, images); err != nil {
+		string(sa.GetTokenGenerator(o.githubToken)()), o.githubLogin, githubRepo), remoteBranch, o.gitName, o.gitEmail, images, stdout, stderr); err != nil {
 		logrus.WithError(err).Fatal("Failed to push changes.")
 	}
 

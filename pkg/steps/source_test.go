@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"k8s.io/apimachinery/pkg/api/resource"
-	"k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 
@@ -51,12 +50,12 @@ func TestCreateBuild(t *testing.T) {
 					Job:       "job",
 					BuildID:   "buildId",
 					ProwJobID: "prowJobId",
-					Refs: &v1.Refs{
+					Refs: &prowapi.Refs{
 						Org:     "org",
 						Repo:    "repo",
 						BaseRef: "master",
 						BaseSHA: "masterSHA",
-						Pulls: []v1.Pull{{
+						Pulls: []prowapi.Pull{{
 							Number: 1,
 							SHA:    "pullSHA",
 						}},
@@ -118,7 +117,7 @@ RUN git submodule update --init
 								From:                    &coreapi.ObjectReference{Kind: "ImageStreamTag", Namespace: "namespace", Name: "pipeline:root"},
 								ForcePull:               true,
 								NoCache:                 true,
-								Env:                     []coreapi.EnvVar{{Name: "CLONEREFS_OPTIONS", Value: `{"src_root":"/go","log":"/dev/null","git_user_name":"ci-robot","git_user_email":"ci-robot@openshift.io","refs":[{"org":"org","repo":"repo","base_ref":"master","base_sha":"masterSHA","pulls":[{"number":1,"author":"","sha":"pullSHA"}]}]}`}},
+								Env:                     []coreapi.EnvVar{{Name: "CLONEREFS_OPTIONS", Value: `{"src_root":"/go","log":"/dev/null","git_user_name":"ci-robot","git_user_email":"ci-robot@openshift.io","refs":[{"org":"org","repo":"repo","base_ref":"master","base_sha":"masterSHA","pulls":[{"number":1,"author":"","sha":"pullSHA"}]}],"fail":true}`}},
 								ImageOptimizationPolicy: &layer,
 							},
 						},
@@ -151,13 +150,13 @@ RUN git submodule update --init
 					Job:       "job",
 					BuildID:   "buildId",
 					ProwJobID: "prowJobId",
-					Refs: &v1.Refs{
+					Refs: &prowapi.Refs{
 						Org:       "org",
 						Repo:      "repo",
 						BaseRef:   "master",
 						BaseSHA:   "masterSHA",
 						PathAlias: "somewhere/else",
-						Pulls: []v1.Pull{{
+						Pulls: []prowapi.Pull{{
 							Number: 1,
 							SHA:    "pullSHA",
 						}},
@@ -219,7 +218,7 @@ RUN git submodule update --init
 								From:                    &coreapi.ObjectReference{Kind: "ImageStreamTag", Namespace: "namespace", Name: "pipeline:root"},
 								ForcePull:               true,
 								NoCache:                 true,
-								Env:                     []coreapi.EnvVar{{Name: "CLONEREFS_OPTIONS", Value: `{"src_root":"/go","log":"/dev/null","git_user_name":"ci-robot","git_user_email":"ci-robot@openshift.io","refs":[{"org":"org","repo":"repo","base_ref":"master","base_sha":"masterSHA","pulls":[{"number":1,"author":"","sha":"pullSHA"}],"path_alias":"somewhere/else"}]}`}},
+								Env:                     []coreapi.EnvVar{{Name: "CLONEREFS_OPTIONS", Value: `{"src_root":"/go","log":"/dev/null","git_user_name":"ci-robot","git_user_email":"ci-robot@openshift.io","refs":[{"org":"org","repo":"repo","base_ref":"master","base_sha":"masterSHA","pulls":[{"number":1,"author":"","sha":"pullSHA"}],"path_alias":"somewhere/else"}],"fail":true}`}},
 								ImageOptimizationPolicy: &layer,
 							},
 						},
@@ -252,17 +251,17 @@ RUN git submodule update --init
 					Job:       "job",
 					BuildID:   "buildId",
 					ProwJobID: "prowJobId",
-					Refs: &v1.Refs{
+					Refs: &prowapi.Refs{
 						Org:     "org",
 						Repo:    "repo",
 						BaseRef: "master",
 						BaseSHA: "masterSHA",
-						Pulls: []v1.Pull{{
+						Pulls: []prowapi.Pull{{
 							Number: 1,
 							SHA:    "pullSHA",
 						}},
 					},
-					ExtraRefs: []v1.Refs{{
+					ExtraRefs: []prowapi.Refs{{
 						Org:     "org",
 						Repo:    "other",
 						BaseRef: "master",
@@ -325,7 +324,7 @@ RUN git submodule update --init
 								From:                    &coreapi.ObjectReference{Kind: "ImageStreamTag", Namespace: "namespace", Name: "pipeline:root"},
 								ForcePull:               true,
 								NoCache:                 true,
-								Env:                     []coreapi.EnvVar{{Name: "CLONEREFS_OPTIONS", Value: `{"src_root":"/go","log":"/dev/null","git_user_name":"ci-robot","git_user_email":"ci-robot@openshift.io","refs":[{"org":"org","repo":"repo","base_ref":"master","base_sha":"masterSHA","pulls":[{"number":1,"author":"","sha":"pullSHA"}]},{"org":"org","repo":"other","base_ref":"master","base_sha":"masterSHA"}]}`}},
+								Env:                     []coreapi.EnvVar{{Name: "CLONEREFS_OPTIONS", Value: `{"src_root":"/go","log":"/dev/null","git_user_name":"ci-robot","git_user_email":"ci-robot@openshift.io","refs":[{"org":"org","repo":"repo","base_ref":"master","base_sha":"masterSHA","pulls":[{"number":1,"author":"","sha":"pullSHA"}]},{"org":"org","repo":"other","base_ref":"master","base_sha":"masterSHA"}],"fail":true}`}},
 								ImageOptimizationPolicy: &layer,
 							},
 						},
@@ -358,17 +357,17 @@ RUN git submodule update --init
 					Job:       "job",
 					BuildID:   "buildId",
 					ProwJobID: "prowJobId",
-					Refs: &v1.Refs{
+					Refs: &prowapi.Refs{
 						Org:     "org",
 						Repo:    "repo",
 						BaseRef: "master",
 						BaseSHA: "masterSHA",
-						Pulls: []v1.Pull{{
+						Pulls: []prowapi.Pull{{
 							Number: 1,
 							SHA:    "pullSHA",
 						}},
 					},
-					ExtraRefs: []v1.Refs{{
+					ExtraRefs: []prowapi.Refs{{
 						Org:       "org",
 						Repo:      "other",
 						BaseRef:   "master",
@@ -433,7 +432,7 @@ RUN git submodule update --init
 								From:                    &coreapi.ObjectReference{Kind: "ImageStreamTag", Namespace: "namespace", Name: "pipeline:root"},
 								ForcePull:               true,
 								NoCache:                 true,
-								Env:                     []coreapi.EnvVar{{Name: "CLONEREFS_OPTIONS", Value: `{"src_root":"/go","log":"/dev/null","git_user_name":"ci-robot","git_user_email":"ci-robot@openshift.io","refs":[{"org":"org","repo":"repo","base_ref":"master","base_sha":"masterSHA","pulls":[{"number":1,"author":"","sha":"pullSHA"}]},{"org":"org","repo":"other","base_ref":"master","base_sha":"masterSHA","path_alias":"this/is/nuts","workdir":true}]}`}},
+								Env:                     []coreapi.EnvVar{{Name: "CLONEREFS_OPTIONS", Value: `{"src_root":"/go","log":"/dev/null","git_user_name":"ci-robot","git_user_email":"ci-robot@openshift.io","refs":[{"org":"org","repo":"repo","base_ref":"master","base_sha":"masterSHA","pulls":[{"number":1,"author":"","sha":"pullSHA"}]},{"org":"org","repo":"other","base_ref":"master","base_sha":"masterSHA","path_alias":"this/is/nuts","workdir":true}],"fail":true}`}},
 								ImageOptimizationPolicy: &layer,
 							},
 						},

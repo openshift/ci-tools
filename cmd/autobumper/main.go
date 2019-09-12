@@ -16,6 +16,7 @@ const (
 	githubOrg   = "openshift"
 	githubRepo  = "release"
 	githubLogin = "openshift-bot"
+	githubTeam  = "openshift/openshift-team-developer-productivity-test-platform"
 )
 
 var extraFiles = map[string]bool{
@@ -28,6 +29,7 @@ type options struct {
 	gitName     string
 	gitEmail    string
 	targetDir   string
+	assign      string
 }
 
 func parseOptions() options {
@@ -37,6 +39,7 @@ func parseOptions() options {
 	flag.StringVar(&o.gitName, "git-name", "", "The name to use on the git commit. Requires --git-email. If not specified, uses the system default.")
 	flag.StringVar(&o.gitEmail, "git-email", "", "The email to use on the git commit. Requires --git-name. If not specified, uses the system default.")
 	flag.StringVar(&o.targetDir, "target-dir", "", "The directory containing the target repo.")
+	flag.StringVar(&o.assign, "assign", githubTeam, "The github username or group name to assign the created pull request to.")
 	flag.Parse()
 	return o
 }
@@ -53,6 +56,9 @@ func validateOptions(o options) error {
 	}
 	if o.targetDir == "" {
 		return fmt.Errorf("--target-dir is mandatory")
+	}
+	if o.assign == "" {
+		return fmt.Errorf("--assign is mandatory")
 	}
 	return nil
 }
@@ -88,7 +94,7 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to push changes.")
 	}
 
-	if err := bumper.UpdatePR(gc, githubOrg, githubRepo, images, "", "Update prow to", o.githubLogin+":"+remoteBranch, "master"); err != nil {
+	if err := bumper.UpdatePR(gc, githubOrg, githubRepo, images, "/cc @"+o.assign, "Update prow to", o.githubLogin+":"+remoteBranch, "master"); err != nil {
 		logrus.WithError(err).Fatal("PR creation failed.")
 	}
 }

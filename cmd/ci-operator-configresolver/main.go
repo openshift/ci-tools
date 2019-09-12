@@ -9,11 +9,13 @@ import (
 	"path/filepath"
 
 	"github.com/fsnotify/fsnotify"
+	log "github.com/sirupsen/logrus"
+
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/load"
 	"github.com/openshift/ci-tools/pkg/registry"
 	types "github.com/openshift/ci-tools/pkg/steps/types"
-	log "github.com/sirupsen/logrus"
 )
 
 var (
@@ -28,41 +30,48 @@ func resolveConfig(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(http.StatusText(http.StatusNotImplemented)))
 		return
 	}
-	query := r.URL.Query()
-	org, ok := query["org"]
-	if !ok || len(org) != 1 {
+	org := r.URL.Query().Get("org")
+	if org == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte("org query missing or incorrect"))
 		return
 	}
-	repo, ok := query["repo"]
-	if !ok || len(repo) != 1 {
+	repo := r.URL.Query().Get("repo")
+	if repo == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte("repo query missing or incorrect"))
 		return
 	}
-	branch, ok := query["branch"]
-	if !ok || len(branch) != 1 {
+	branch := r.URL.Query().Get("branch")
+	if branch == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte("branch query missing or incorrect"))
 		return
 	}
-	path := filepath.Join(configPath, branch[0], fmt.Sprintf("%s-%s-%s.yaml", org[0], repo[0], branch[0]))
-	config, err := load.Config(path)
+	variant := r.URL.Query().Get("variant")
+	info := config.Info{
+		Org:     org,
+		Repo:    repo,
+		Branch:  branch,
+		Variant: variant,
+	}
+	info.Filename = filepath.Join(configPath, branch, info.Basename())
+
+	config, err := load.Config(info.Filename)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(fmt.Sprintf("could not load config: %v", err)))
+		fmt.Fprintf(w, "could not load config: %v", err)
 		return
 	}
-	if err := config.Validate(org[0], repo[0]); err != nil {
+	if err := config.Validate(info.Org, info.Repo); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(fmt.Sprintf("config validation failed: %v", err)))
+		fmt.Fprintf(w, "config validation failed: %v", err)
 		return
 	}
 	config.Tests, err = resolveConfigExternal(config.Tests)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(fmt.Sprintf("config resolution failed: %v", err)))
+		fmt.Fprintf(w, "config resolution failed: %v", err)
 		return
 	}
 	jsonConfig, err := json.Marshal(config)
@@ -141,8 +150,8 @@ func populateWatcher(watcher *fsnotify.Watcher, root string) error {
 }
 
 func main() {
-	flag.StringVar(&regPath, "registry", "/registry", "Path to step registry")
-	flag.StringVar(&configPath, "config", "/config", "Path to config dirs")
+	flag.StringVar(&regPath, "registry", "", "Path to step registry")
+	flag.StringVar(&configPath, "config", "", "Path to config dirs")
 	flag.Parse()
 	reloadRegistry(regPath)
 
@@ -173,5 +182,5 @@ func main() {
 	populateWatcher(watcher, regPath)
 
 	http.HandleFunc("/config", resolveConfig)
-	http.ListenAndServe(":80", nil)
+	http.ListenAndServe(":8080", nil)
 }

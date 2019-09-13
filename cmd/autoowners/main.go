@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -279,17 +281,16 @@ func (orgRepo *orgRepo) writeOwners(whitelist []string) (err error) {
 	return nil
 }
 
-func pullOwners(directory string, whitelist []string) ([]string, error) {
-	var repos []string
+func pullOwners(directory string, whitelist []string) error {
 	repoRoot, err := getRepoRoot(directory)
 	if err != nil {
-		return repos, err
+		return err
 	}
 
 	operatorRoot := filepath.Join(repoRoot, "ci-operator")
 	orgRepos, err := orgRepos(filepath.Join(operatorRoot, "jobs"))
 	if err != nil {
-		return repos, err
+		return err
 	}
 
 	config := filepath.Join(operatorRoot, "config")
@@ -298,24 +299,22 @@ func pullOwners(directory string, whitelist []string) ([]string, error) {
 		logrus.WithField("orgRepo", fmt.Sprintf("%+v", *orgRepo)).Info("handling repo ...")
 		err = orgRepo.getDirectories(config, templates)
 		if err != nil && !os.IsNotExist(err) {
-			return repos, err
+			return err
 		}
 
 		err = orgRepo.getOwnersHTTP()
 		if err != nil && !os.IsNotExist(err) {
-			return repos, err
+			return err
 		}
 
 		err = orgRepo.writeOwners(whitelist)
 		if err != nil {
-			return repos, err
+			return err
 		}
-		repoStr := orgRepo.String()
-		repos = append(repos, repoStr)
-		fmt.Fprintf(os.Stderr, "updated owners for %s\n", repoStr)
+		logrus.WithField("orgRepo", fmt.Sprintf("%+v", *orgRepo)).Info("handled repo ...")
 	}
 
-	return repos, err
+	return err
 }
 
 const (
@@ -387,10 +386,10 @@ func inWhitelist(path string, whitelist []string) bool {
 	return false
 }
 
-func getBody(repos []string, assign string) string {
+func getBody(directories []string, assign string) string {
 	body := "The OWNERS file has been synced for the following repo(s):\n\n"
-	for _, r := range repos {
-		body = fmt.Sprintf("%s* %s\n", body, r)
+	for _, d := range directories {
+		body = fmt.Sprintf("%s* %s\n", body, d)
 	}
 	body = fmt.Sprintf("%s\n%s\n", body, "/cc @"+assign)
 	return body
@@ -398,6 +397,40 @@ func getBody(repos []string, assign string) string {
 
 func getTitle(matchTitle, datetime string) string {
 	return fmt.Sprintf("%s by autoowners job at %s", matchTitle, datetime)
+}
+
+type OutputWriter struct {
+	output []byte
+}
+
+func (w *OutputWriter) Write(content []byte) (n int, err error) {
+	w.output = append(w.output, content...)
+	return len(content), nil
+}
+
+func listUpdatedDirectories() ([]string, error) {
+	w := &OutputWriter{}
+	if err := bumper.Call(w, os.Stderr, "git", []string{"status", "-s"}...); err != nil {
+		return nil, err
+	}
+	return listUpdatedDirectoriesFromGitStatusOutput(string(w.output))
+}
+
+func listUpdatedDirectoriesFromGitStatusOutput(s string) ([]string, error) {
+	var directories []string
+	scanner := bufio.NewScanner(strings.NewReader(s))
+	for scanner.Scan() {
+		line := scanner.Text()
+		file := line[strings.LastIndex(line, " "):]
+		if !strings.HasSuffix(file, "OWNERS") {
+			return directories, fmt.Errorf("should not have modified the file: %s", file)
+		}
+		repo := path.Dir(file)
+		org := path.Dir(repo)
+		t := path.Dir(org)
+		directories = append(directories, fmt.Sprintf("%s/%s/%s", t, org, repo))
+	}
+	return directories, nil
 }
 
 func main() {
@@ -412,14 +445,18 @@ func main() {
 	}
 	gc = github.NewClient(secretAgent.GetTokenGenerator(o.githubToken), secretAgent.Censor, github.DefaultGraphQLEndpoint, github.DefaultAPIEndpoint)
 
-	repos, err := pullOwners(o.targetDir, o.whitelist.Strings())
+	err := pullOwners(o.targetDir, o.whitelist.Strings())
 
 	if err != nil {
 		logrus.WithError(err).Fatal("Error occurred when walking through the target dir.")
 	}
 
-	if len(repos) == 0 {
-		logrus.Info("No OWNERS file to update, exiting ...")
+	directories, err := listUpdatedDirectories()
+	if err != nil {
+		logrus.WithError(err).Fatal("Error occurred when listing updated directories.")
+	}
+	if len(directories) == 0 {
+		logrus.Info("No OWNERS files got updated, exiting ...")
 		return
 	}
 
@@ -436,7 +473,7 @@ func main() {
 	}
 
 	if err := bumper.UpdatePullRequest(gc, githubOrg, githubRepo, title,
-		getBody(repos, o.assign), matchTitle, o.githubLogin+":"+remoteBranch, "master"); err != nil {
+		getBody(directories, o.assign), matchTitle, o.githubLogin+":"+remoteBranch, "master"); err != nil {
 		logrus.WithError(err).Fatal("PR creation failed.")
 	}
 }

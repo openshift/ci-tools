@@ -282,12 +282,12 @@ func TestGetTitle(t *testing.T) {
 func TestGetBody(t *testing.T) {
 	expect := `The OWNERS file has been synced for the following repo(s):
 
-* openshift/origin
-* org/repo
+* config/openshift/origin
+* jobs/org/repo
 
 /cc @openshift/openshift-team-developer-productivity-test-platform
 `
-	result := getBody([]string{"openshift/origin", "org/repo"}, githubTeam)
+	result := getBody([]string{"config/openshift/origin", "jobs/org/repo"}, githubTeam)
 
 	if expect != result {
 		t.Errorf("body '%s' differs from expected '%s'", result, expect)

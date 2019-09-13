@@ -427,14 +427,15 @@ func main() {
 	stderr := bumper.HideSecretsWriter{Delegate: os.Stderr, Censor: secretAgent}
 
 	remoteBranch := "autoowners"
+	matchTitle := "Sync OWNERS files"
+	title := getTitle(matchTitle, time.Now().Format(time.RFC1123))
 	if err := bumper.GitCommitAndPush(fmt.Sprintf("https://%s:%s@github.com/%s/%s.git", o.githubLogin,
 		string(secretAgent.GetTokenGenerator(o.githubToken)()), o.githubLogin, githubRepo),
-		remoteBranch, o.gitName, o.gitEmail, "", stdout, stderr); err != nil {
+		remoteBranch, o.gitName, o.gitEmail, title, stdout, stderr); err != nil {
 		logrus.WithError(err).Fatal("Failed to push changes.")
 	}
 
-	matchTitle := "Sync OWNERS files"
-	if err := bumper.UpdatePullRequest(gc, githubOrg, githubRepo, getTitle(matchTitle, time.Now().Format(time.RFC1123)),
+	if err := bumper.UpdatePullRequest(gc, githubOrg, githubRepo, title,
 		getBody(repos, o.assign), matchTitle, o.githubLogin+":"+remoteBranch, "master"); err != nil {
 		logrus.WithError(err).Fatal("PR creation failed.")
 	}

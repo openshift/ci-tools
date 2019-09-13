@@ -15,6 +15,8 @@ Usage of ./autoowners:
         The GitHub username to use. (default "openshift-bot")
   -github-token string
         The path to the GitHub token file.
+  -ignore-repo value
+        The repo for which syncing OWNERS file is disabled.
   -target-dir string
         The directory containing the target repo.
 

@@ -354,7 +354,7 @@ func parseOptions() options {
 	flag.StringVar(&o.gitEmail, "git-email", "", "The email to use on the git commit. Requires --git-name. If not specified, uses the system default.")
 	flag.StringVar(&o.assign, "assign", githubTeam, "The github username or group name to assign the created pull request to.")
 	flag.StringVar(&o.targetDir, "target-dir", "", "The directory containing the target repo.")
-	flag.Var(&o.whitelist, "ignore-repo", "The repo that syncing OWNERS file is disabled.")
+	flag.Var(&o.whitelist, "ignore-repo", "The repo for which syncing OWNERS file is disabled.")
 	flag.Parse()
 	return o
 }

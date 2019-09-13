@@ -1,20 +1,24 @@
 # Populating `OWNERS` and `OWNERS_ALIASES`
 
-[comment]: <> (TODO: hongkliu: update this file)
-
 This utility updates the OWNERS files from remote Openshift repositories.
 
-Usage:
-  populate-owners [repo-name-regex]
-
-Args:
-  [repo-name-regex]    A go regex which which matches the repos to update, by default all repos are selected
-
-```console
-$ go run main.go [repo-name-regex]
 ```
+$ ./autoowners -h
+Usage of ./autoowners:
+  -assign string
+        The github username or group name to assign the created pull request to. (default "openshift/openshift-team-developer-productivity-test-platform")
+  -git-email string
+        The email to use on the git commit. Requires --git-name. If not specified, uses the system default.
+  -git-name string
+        The name to use on the git commit. Requires --git-email. If not specified, uses the system default.
+  -github-login string
+        The GitHub username to use. (default "openshift-bot")
+  -github-token string
+        The path to the GitHub token file.
+  -target-dir string
+        The directory containing the target repo.
 
-Or, equivalently, execute [`populate-owners.sh`](../../ci-operator/populate-owners.sh) from anywhere in this repository.
+```
 
 Upstream repositories are calculated from `ci-operator/jobs/{organization}/{repository}`.
 For example, the presence of [`ci-operator/jobs/openshift/origin`](../../ci-operator/jobs/openshift/origin) inserts [openshift/origin][] as an upstream repository.
@@ -28,6 +32,3 @@ upstream alias names coming from  different repos.
 
 The utility also iterates through the `ci-operator/{type}/{organization}/{repository}` for `{type}` in `config`, `jobs`, and `templates`, writing `OWNERS` to reflect the upstream configuration.
 If the upstream did not have an `OWNERS` file, the utility removes the associated `ci-operator/*/{organization}/{repository}/OWNERS`.
-
-[openshift/origin]: https://github.com/openshift/origin
-[openshift/installer]: https://github.com/openshift/installer

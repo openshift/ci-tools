@@ -346,6 +346,8 @@ type options struct {
 
 func parseOptions() options {
 	var o options
+	//To avoid flag from dependencies such as https://github.com/openshift/ci-tools/blob/5b5410293f7cd318540d1fb333c68b93ddab2b60/vendor/github.com/tektoncd/pipeline/pkg/apis/pipeline/v1alpha1/artifact_pvc.go#L30
+	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	flag.StringVar(&o.githubLogin, "github-login", githubLogin, "The GitHub username to use.")
 	flag.StringVar(&o.githubToken, "github-token", "", "The path to the GitHub token file.")
 	flag.StringVar(&o.gitName, "git-name", "", "The name to use on the git commit. Requires --git-email. If not specified, uses the system default.")

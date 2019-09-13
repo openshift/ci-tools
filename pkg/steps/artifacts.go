@@ -52,8 +52,8 @@ type ContainerNotifier interface {
 	// Complete indicates the specified pod has completed execution, been deleted, or that no further
 	// Notify() calls can be made.
 	Complete(podName string)
-	// Done returns true if the specified pod name has already completed any work it had pending.
-	Done(podName string) bool
+	// Done returns a channel that can be used to wait for the specified pod name to complete the work it has pending.
+	Done(podName string) <-chan struct{}
 	// Cancel indicates that any actions the notifier is taking should be aborted immediately.
 	Cancel()
 }
@@ -65,8 +65,12 @@ type nopNotifier struct{}
 
 func (nopNotifier) Notify(_ *coreapi.Pod, _ string) {}
 func (nopNotifier) Complete(_ string)               {}
-func (nopNotifier) Done(_ string) bool              { return true }
-func (nopNotifier) Cancel()                         {}
+func (nopNotifier) Done(string) <-chan struct{} {
+	ret := make(chan struct{})
+	close(ret)
+	return ret
+}
+func (nopNotifier) Cancel() {}
 
 // TestCaseNotifier allows a caller to generate per container JUnit test
 // reports that provide better granularity for debugging problems when
@@ -91,9 +95,9 @@ func (n *TestCaseNotifier) Notify(pod *coreapi.Pod, containerName string) {
 	n.lastPod = pod
 }
 
-func (n *TestCaseNotifier) Complete(podName string)  { n.nested.Complete(podName) }
-func (n *TestCaseNotifier) Done(podName string) bool { return n.nested.Done(podName) }
-func (n *TestCaseNotifier) Cancel()                  { n.nested.Cancel() }
+func (n *TestCaseNotifier) Complete(podName string)             { n.nested.Complete(podName) }
+func (n *TestCaseNotifier) Done(podName string) <-chan struct{} { return n.nested.Done(podName) }
+func (n *TestCaseNotifier) Cancel()                             { n.nested.Cancel() }
 
 // SubTests returns one junit test for each terminated container with a name
 // in the annotation 'ci-operator.openshift.io/container-sub-tests' in the pod.
@@ -336,6 +340,10 @@ done
 	}
 }
 
+type podWaitRecord map[string]struct {
+	containers sets.String
+	done       chan struct{}
+}
 type podContainersMap map[string]sets.String
 
 // ArtifactWorker tracks pods that have completed and have an 'artifacts' container
@@ -351,7 +359,7 @@ type ArtifactWorker struct {
 	podsToDownload chan string
 
 	lock         sync.Mutex
-	remaining    podContainersMap
+	remaining    podWaitRecord
 	required     podContainersMap
 	hasArtifacts sets.String
 }
@@ -363,7 +371,7 @@ func NewArtifactWorker(podClient PodClient, artifactDir, namespace string) *Arti
 		namespace: namespace,
 		dir:       artifactDir,
 
-		remaining:    make(podContainersMap),
+		remaining:    make(podWaitRecord),
 		required:     make(podContainersMap),
 		hasArtifacts: sets.NewString(),
 
@@ -380,6 +388,7 @@ func (w *ArtifactWorker) run() {
 		}
 		// indicate we are done with this pod by removing the map entry
 		w.lock.Lock()
+		close(w.remaining[podName].done)
 		delete(w.remaining, podName)
 		w.lock.Unlock()
 	}
@@ -428,9 +437,10 @@ func (w *ArtifactWorker) CollectFromPod(podName string, hasArtifacts []string, w
 
 	w.hasArtifacts.Insert(podName)
 
-	m := w.remaining[podName]
-	if m == nil {
-		m = sets.NewString()
+	m, ok := w.remaining[podName]
+	if !ok {
+		m.containers = sets.NewString()
+		m.done = make(chan struct{})
 		w.remaining[podName] = m
 	}
 
@@ -444,11 +454,11 @@ func (w *ArtifactWorker) CollectFromPod(podName string, hasArtifacts []string, w
 		if name == "artifacts" {
 			continue
 		}
-		m.Insert(name)
+		m.containers.Insert(name)
 	}
 
 	for _, name := range waitForContainers {
-		if name == "artifacts" || !m.Has(name) {
+		if name == "artifacts" || !m.containers.Has(name) {
 			continue
 		}
 		r.Insert(name)
@@ -463,7 +473,7 @@ func (w *ArtifactWorker) Complete(podName string) {
 	if !ok {
 		return
 	}
-	if artifactContainers.Len() > 0 {
+	if artifactContainers.containers.Len() > 0 {
 		// when all containers in a given pod that output artifacts have completed, exit
 		w.podsToDownload <- podName
 	}
@@ -498,24 +508,24 @@ func (w *ArtifactWorker) Notify(pod *coreapi.Pod, containerName string) {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 	artifactContainers := w.remaining[pod.Name]
-	if !artifactContainers.Has(containerName) {
+	if !artifactContainers.containers.Has(containerName) {
 		return
 	}
 	requiredContainers := w.required[pod.Name]
 
-	artifactContainers.Delete(containerName)
+	artifactContainers.containers.Delete(containerName)
 	requiredContainers.Delete(containerName)
 
 	// if at least one container has failed, and there are no longer any
 	// remaining required containers, we don't have to wait for other artifact containers
 	// to exit
 	if hasFailedContainers(pod) && requiredContainers.Len() == 0 {
-		for k := range artifactContainers {
-			artifactContainers.Delete(k)
+		for k := range artifactContainers.containers {
+			artifactContainers.containers.Delete(k)
 		}
 	}
 	// no more artifact containers, we can start grabbing artifacts
-	if artifactContainers.Len() == 0 {
+	if artifactContainers.containers.Len() == 0 {
 		w.podsToDownload <- pod.Name
 	}
 	// no more pods, we can shutdown the worker gracefully
@@ -524,12 +534,10 @@ func (w *ArtifactWorker) Notify(pod *coreapi.Pod, containerName string) {
 	}
 }
 
-func (w *ArtifactWorker) Done(podName string) bool {
+func (w *ArtifactWorker) Done(podName string) <-chan struct{} {
 	w.lock.Lock()
 	defer w.lock.Unlock()
-	// log.Printf("DEBUG: remaining containers for pod %s %v", podName, w.remaining[podName])
-	_, ok := w.remaining[podName]
-	return !ok
+	return w.remaining[podName].done
 }
 
 func addArtifactContainersFromPod(pod *coreapi.Pod, worker *ArtifactWorker) {

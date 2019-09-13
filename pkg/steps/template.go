@@ -484,14 +484,20 @@ func waitForPodCompletion(podClient coreclientset.PodInterface, name string, not
 	if notifier == nil {
 		notifier = NopNotifier
 	}
+	done := notifier.Done(name)
 	completed := make(map[string]time.Time)
 	for {
 		retry, err := waitForPodCompletionOrTimeout(podClient, name, completed, notifier, skipLogs)
 		// continue waiting if the container notifier is not yet complete for the given pod
-		if !notifier.Done(name) {
+		select {
+		case <-done:
+		default:
 			skipLogs = true
 			if !retry || err == nil {
-				time.Sleep(5 * time.Second)
+				select {
+				case <-done:
+				case <-time.After(5 * time.Second):
+				}
 			}
 			continue
 		}

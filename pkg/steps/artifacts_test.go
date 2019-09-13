@@ -511,7 +511,10 @@ func TestArtifactWorker(t *testing.T) {
 	w := NewArtifactWorker(podClient, tmp, podClient.namespace)
 	w.CollectFromPod(pod, []string{"container"}, nil)
 	w.Complete(pod)
-	for !w.Done(pod) {
+	select {
+	case <-w.Done(pod):
+	case <-time.After(time.Second):
+		t.Fatal("timeout waiting for artifact worker to finish")
 	}
 	files, err := ioutil.ReadDir(tmp)
 	if err != nil {

@@ -15,9 +15,9 @@ import (
 
 const (
 	// ConfigInRepoPath is the prow config path from release repo
-	ConfigInRepoPath = "cluster/ci/config/prow/config.yaml"
+	ConfigInRepoPath = "core-services/prow/02_config/_config.yaml"
 	// PluginConfigInRepoPath is the prow plugin config path from release repo
-	PluginConfigInRepoPath = "cluster/ci/config/prow/plugins.yaml"
+	PluginConfigInRepoPath = "core-services/prow/02_config/_plugins.yaml"
 	// JobConfigInRepoPath is the prowjobs path from release repo
 	JobConfigInRepoPath = "ci-operator/jobs"
 	// CiopConfigInRepoPath is the ci-operator config path from release repo

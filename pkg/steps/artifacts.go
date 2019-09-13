@@ -336,7 +336,7 @@ done
 	}
 }
 
-type podContainersMap map[string]map[string]struct{}
+type podContainersMap map[string]sets.String
 
 // ArtifactWorker tracks pods that have completed and have an 'artifacts' container
 // in them and will extract files from the container to a local directory. It also
@@ -430,13 +430,13 @@ func (w *ArtifactWorker) CollectFromPod(podName string, hasArtifacts []string, w
 
 	m := w.remaining[podName]
 	if m == nil {
-		m = make(map[string]struct{})
+		m = sets.NewString()
 		w.remaining[podName] = m
 	}
 
 	r := w.required[podName]
 	if r == nil {
-		r = make(map[string]struct{})
+		r = sets.NewString()
 		w.required[podName] = r
 	}
 
@@ -444,21 +444,14 @@ func (w *ArtifactWorker) CollectFromPod(podName string, hasArtifacts []string, w
 		if name == "artifacts" {
 			continue
 		}
-		if _, ok := m[name]; !ok {
-			m[name] = struct{}{}
-		}
+		m.Insert(name)
 	}
 
 	for _, name := range waitForContainers {
-		if name == "artifacts" {
+		if name == "artifacts" || !m.Has(name) {
 			continue
 		}
-		if _, ok := m[name]; !ok {
-			continue
-		}
-		if _, ok := r[name]; !ok {
-			r[name] = struct{}{}
-		}
+		r.Insert(name)
 	}
 }
 
@@ -470,7 +463,7 @@ func (w *ArtifactWorker) Complete(podName string) {
 	if !ok {
 		return
 	}
-	if len(artifactContainers) > 0 {
+	if artifactContainers.Len() > 0 {
 		// when all containers in a given pod that output artifacts have completed, exit
 		w.podsToDownload <- podName
 	}
@@ -505,24 +498,24 @@ func (w *ArtifactWorker) Notify(pod *coreapi.Pod, containerName string) {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 	artifactContainers := w.remaining[pod.Name]
-	if _, ok := artifactContainers[containerName]; !ok {
+	if !artifactContainers.Has(containerName) {
 		return
 	}
 	requiredContainers := w.required[pod.Name]
 
-	delete(artifactContainers, containerName)
-	delete(requiredContainers, containerName)
+	artifactContainers.Delete(containerName)
+	requiredContainers.Delete(containerName)
 
 	// if at least one container has failed, and there are no longer any
 	// remaining required containers, we don't have to wait for other artifact containers
 	// to exit
-	if hasFailedContainers(pod) && len(requiredContainers) == 0 {
+	if hasFailedContainers(pod) && requiredContainers.Len() == 0 {
 		for k := range artifactContainers {
-			delete(artifactContainers, k)
+			artifactContainers.Delete(k)
 		}
 	}
 	// no more artifact containers, we can start grabbing artifacts
-	if len(artifactContainers) == 0 {
+	if artifactContainers.Len() == 0 {
 		w.podsToDownload <- pod.Name
 	}
 	// no more pods, we can shutdown the worker gracefully

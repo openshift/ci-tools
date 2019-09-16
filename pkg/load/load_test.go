@@ -672,92 +672,10 @@ func TestRegistry(t *testing.T) {
 	if !reflect.DeepEqual(references, testCase.references) {
 		t.Errorf("%s: output references different from expected: %s", testCase.name, diff.ObjectReflectDiff(references, testCase.references))
 	}
-	if !chainMapEquals(chains, testCase.chains) {
+	if !reflect.DeepEqual(chains, testCase.chains) {
 		t.Errorf("%s: output chains different from expected: %s", testCase.name, diff.ObjectReflectDiff(chains, testCase.chains))
 	}
-	if !workflowMapEquals(workflows, testCase.workflows) {
+	if !reflect.DeepEqual(workflows, testCase.workflows) {
 		t.Errorf("%s: output workflows different from expected: %s", testCase.name, diff.ObjectReflectDiff(workflows, testCase.workflows))
 	}
-}
-
-// Equality functions needed due to use of pointers in structs
-
-func testStepsEqual(steps1, steps2 []api.TestStep) bool {
-	if len(steps1) != len(steps2) {
-		return false
-	}
-	for idx := range steps1 {
-		if !testStepEquals(steps1[idx], steps2[idx]) {
-			return false
-		}
-	}
-	return true
-}
-func testStepEquals(step1, step2 api.TestStep) bool {
-	if step1.LiteralTestStep != nil && step2.LiteralTestStep != nil {
-		if !reflect.DeepEqual(*step1.LiteralTestStep, *step2.LiteralTestStep) {
-			return false
-		}
-	} else if !(step1.LiteralTestStep == nil && step2.LiteralTestStep == nil) {
-		return false
-	}
-	if step1.Reference != nil && step2.Reference != nil {
-		if !(*step1.Reference == *step2.Reference) {
-			return false
-		}
-	} else if !(step1.Reference == nil && step2.Reference == nil) {
-		return false
-	}
-	if step1.Chain != nil && step2.Chain != nil {
-		if !(*step1.Chain == *step2.Chain) {
-			return false
-		}
-	} else if !(step1.Chain == nil && step2.Chain == nil) {
-		return false
-	}
-	return true
-}
-func workflowEquals(flow1, flow2 api.MultiStageTestConfiguration) bool {
-	if !(flow1.ClusterProfile == flow2.ClusterProfile) {
-		return false
-	}
-	if !testStepsEqual(flow1.Pre, flow2.Pre) {
-		return false
-	}
-	if !testStepsEqual(flow1.Test, flow2.Test) {
-		return false
-	}
-	if !testStepsEqual(flow1.Post, flow2.Post) {
-		return false
-	}
-	if flow1.Workflow != nil && flow2.Workflow != nil {
-		if !(*flow1.Workflow == *flow2.Workflow) {
-			return false
-		}
-	} else if !(flow1.Workflow == nil && flow2.Workflow == nil) {
-		return false
-	}
-	return true
-}
-func chainMapEquals(chain1, chain2 map[string][]api.TestStep) bool {
-	if len(chain1) != len(chain2) {
-		return false
-	}
-	for key := range chain1 {
-		if !testStepsEqual(chain1[key], chain2[key]) {
-			return false
-		}
-	}
-	return true
-}
-func workflowMapEquals(workflow1, workflow2 map[string]api.MultiStageTestConfiguration) bool {
-	if len(workflow1) != len(workflow2) {
-		return false
-	}
-	for key := range workflow1 {
-		if !workflowEquals(workflow1[key], workflow2[key]) {
-			return false
-		}
-	}
-	return true
 }

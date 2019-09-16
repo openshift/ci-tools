@@ -662,7 +662,7 @@ func TestRegistry(t *testing.T) {
 		}
 	)
 
-	references, chains, workflows, err := Registry("../../test/multistage-registry")
+	references, chains, workflows, err := Registry("../../test/ci-op-configresolver-integration/registry")
 	if err == nil && testCase.expectedError == true {
 		t.Errorf("%s: got no error when error was expected", testCase.name)
 	}

@@ -152,9 +152,9 @@ objects:
       resources:
         requests:
           cpu: 3
-          memory: 300Mi
+          memory: 600Mi
         limits:
-          memory: 3Gi
+          memory: 4Gi
       volumeMounts:
       - name: shared-tmp
         mountPath: /tmp/shared
@@ -612,25 +612,25 @@ objects:
         function run-dr-snapshot-tests() {
           openshift-tests run-dr restore-snapshot "${TEST_SUITE}" \
             --provider "${TEST_PROVIDER:-}" -o /tmp/artifacts/e2e.log --junit-dir /tmp/artifacts/junit
-          exit 0
+          return 0
         }
 
         function run-dr-quorum-tests() {
           openshift-tests run-dr quorum-restore "${TEST_SUITE}" \
             --provider "${TEST_PROVIDER:-}" -o /tmp/artifacts/e2e.log --junit-dir /tmp/artifacts/junit
-          exit 0
+          return 0
         }
 
         function run-upgrade-tests() {
           openshift-tests run-upgrade "${TEST_SUITE}" --to-image "${RELEASE_IMAGE_LATEST}" \
             --provider "${TEST_PROVIDER:-}" -o /tmp/artifacts/e2e.log --junit-dir /tmp/artifacts/junit
-          exit 0
+          return 0
         }
 
         function run-tests() {
           openshift-tests run "${TEST_SUITE}" \
             --provider "${TEST_PROVIDER:-}" -o /tmp/artifacts/e2e.log --junit-dir /tmp/artifacts/junit
-          exit 0
+          return 0
         }
 
         if [[ "${CLUSTER_TYPE}" == "gcp" ]]; then
@@ -811,8 +811,8 @@ objects:
         if [[ "${ENABLE_PROXY}" == "true" ]]; then
           cat >> /tmp/artifacts/installer/install-config.yaml << EOF
         proxy:
-          httpsProxy: https://admin:admin@35.231.5.161:3128/
-          httpProxy: http://admin:admin@35.196.128.173:3128/
+          httpsProxy: https://ewolinet:5f6ccbbbafc66013d012839921ada773@35.231.5.161:3128/
+          httpProxy: http://ewolinet:5f6ccbbbafc66013d012839921ada773@35.196.128.173:3128/
         additionalTrustBundle: |
           -----BEGIN CERTIFICATE-----
           MIIC6jCCAdKgAwIBAgIBATANBgkqhkiG9w0BAQsFADAmMSQwIgYDVQQDDBtvcGVu

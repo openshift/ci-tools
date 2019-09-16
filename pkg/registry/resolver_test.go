@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	api "github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/api"
 	types "github.com/openshift/ci-tools/pkg/steps/types"
 	"k8s.io/apimachinery/pkg/util/diff"
 )

@@ -38,7 +38,7 @@ func (s *gitSourceStep) Run(ctx context.Context, dry bool) error {
 		}, s.config.DockerfilePath, s.resources), dry, s.artifactDir, s.dryLogger)
 	}
 
-	return fmt.Errorf("Nothing to build source image from, no refs")
+	return fmt.Errorf("nothing to build source image from, no refs")
 }
 
 func (s *gitSourceStep) Done() (bool, error) {

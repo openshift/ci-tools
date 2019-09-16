@@ -11,7 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/client-go/kubernetes/fake"
-	clientgo_testing "k8s.io/client-go/testing"
+	clientgoTesting "k8s.io/client-go/testing"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowdapi "k8s.io/test-infra/prow/pod-utils/downwardapi"
 
@@ -42,8 +42,7 @@ func TestRequires(t *testing.T) {
 		steps: []api.TestStep{{LiteralTestStep: &api.LiteralTestStep{From: "src"}}},
 		req: []api.StepLink{
 			api.InternalImageLink(
-				api.PipelineImageStreamTagReference(
-					api.PipelineImageStreamTagReferenceSource)),
+				api.PipelineImageStreamTagReferenceSource),
 		},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -263,8 +262,8 @@ func TestRun(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			fakecs := fake.NewSimpleClientset()
 			var pods []*coreapi.Pod
-			fakecs.PrependReactor("create", "pods", func(action clientgo_testing.Action) (bool, runtime.Object, error) {
-				pod := action.(clientgo_testing.CreateAction).GetObject().(*coreapi.Pod)
+			fakecs.PrependReactor("create", "pods", func(action clientgoTesting.Action) (bool, runtime.Object, error) {
+				pod := action.(clientgoTesting.CreateAction).GetObject().(*coreapi.Pod)
 				for _, failure := range tc.failures {
 					if pod.Name == failure {
 						pod.Status.Phase = coreapi.PodFailed
@@ -273,8 +272,8 @@ func TestRun(t *testing.T) {
 				pods = append(pods, pod)
 				return false, nil, nil
 			})
-			fakecs.PrependReactor("list", "pods", func(action clientgo_testing.Action) (bool, runtime.Object, error) {
-				fieldRestrictions := action.(clientgo_testing.ListAction).GetListRestrictions().Fields
+			fakecs.PrependReactor("list", "pods", func(action clientgoTesting.Action) (bool, runtime.Object, error) {
+				fieldRestrictions := action.(clientgoTesting.ListAction).GetListRestrictions().Fields
 				for _, pods := range pods {
 					if fieldRestrictions.Matches(fields.Set{"metadata.name": pods.Name}) {
 						return true, &coreapi.PodList{Items: []coreapi.Pod{*pods}}, nil

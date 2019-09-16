@@ -221,8 +221,8 @@ type options struct {
 
 func bindOptions(flag *flag.FlagSet) *options {
 	opt := &options{
-		idleCleanupDuration: time.Duration(1 * time.Hour),
-		cleanupDuration:     time.Duration(12 * time.Hour),
+		idleCleanupDuration: 1 * time.Hour,
+		cleanupDuration:     12 * time.Hour,
 	}
 
 	// command specific options
@@ -1042,8 +1042,8 @@ func sanitizeMessage(message string) string {
 
 // eventJobDescription returns a string representing the pull requests and authors description, to be used in events.
 func eventJobDescription(jobSpec *api.JobSpec, namespace string) string {
-	pulls := []string{}
-	authors := []string{}
+	var pulls []string
+	var authors []string
 
 	if jobSpec.Refs == nil {
 		return fmt.Sprintf("Running job %s in namespace %s", jobSpec.Job, namespace)

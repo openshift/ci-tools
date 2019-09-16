@@ -123,7 +123,7 @@ func TestBuildGraph(t *testing.T) {
 	}
 	other := &fakeStep{
 		requires: []StepLink{ExternalImageLink(ImageStreamTagReference{Namespace: "ns", Name: "base", Tag: "other"})},
-		creates:  []StepLink{InternalImageLink(PipelineImageStreamTagReference("other"))},
+		creates:  []StepLink{InternalImageLink("other")},
 	}
 	src := &fakeStep{
 		requires: []StepLink{InternalImageLink(PipelineImageStreamTagReferenceRoot)},
@@ -142,12 +142,12 @@ func TestBuildGraph(t *testing.T) {
 		creates:  []StepLink{InternalImageLink(PipelineImageStreamTagReferenceRPMs)},
 	}
 	unrelated := &fakeStep{
-		requires: []StepLink{InternalImageLink(PipelineImageStreamTagReference("other")), InternalImageLink(PipelineImageStreamTagReferenceRPMs)},
-		creates:  []StepLink{InternalImageLink(PipelineImageStreamTagReference("unrelated"))},
+		requires: []StepLink{InternalImageLink("other"), InternalImageLink(PipelineImageStreamTagReferenceRPMs)},
+		creates:  []StepLink{InternalImageLink("unrelated")},
 	}
 	final := &fakeStep{
-		requires: []StepLink{InternalImageLink(PipelineImageStreamTagReference("unrelated"))},
-		creates:  []StepLink{InternalImageLink(PipelineImageStreamTagReference("final"))},
+		requires: []StepLink{InternalImageLink("unrelated")},
+		creates:  []StepLink{InternalImageLink("final")},
 	}
 
 	duplicateRoot := &fakeStep{
@@ -159,7 +159,7 @@ func TestBuildGraph(t *testing.T) {
 			InternalImageLink(PipelineImageStreamTagReferenceRoot),
 			InternalImageLink(PipelineImageStreamTagReferenceRoot),
 		},
-		creates: []StepLink{InternalImageLink(PipelineImageStreamTagReference("other"))},
+		creates: []StepLink{InternalImageLink("other")},
 	}
 
 	var testCases = []struct {

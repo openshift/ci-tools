@@ -1,7 +1,7 @@
 package steptypes
 
 import (
-	api "github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/api"
 )
 
 // TestStep contains a full definition of a test step from a MultiStageTestConfiguration

@@ -30,7 +30,7 @@ func Config(path string) (*api.ReleaseBuildConfiguration, error) {
 	}
 	configSpec := &api.ReleaseBuildConfiguration{}
 	if err := yaml.Unmarshal([]byte(raw), configSpec); err != nil {
-		return nil, fmt.Errorf("invalid configuration: %v\nvalue:\n%s", err, string(raw))
+		return nil, fmt.Errorf("invalid configuration: %v\nvalue:\n%s", err, raw)
 	}
 	return configSpec, nil
 }

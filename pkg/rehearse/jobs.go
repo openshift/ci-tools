@@ -40,7 +40,6 @@ const (
 	defaultRehearsalRerunCommand = "/test pj-rehearse"
 	logRehearsalJob              = "rehearsal-job"
 	logCiopConfigFile            = "ciop-config-file"
-	logCiopConfigRepo            = "ciop-config-repo"
 
 	clusterTypeEnvName  = "CLUSTER_TYPE"
 	CanBeRehearsedLabel = "pj-rehearse.openshift.io/can-be-rehearsed"
@@ -562,28 +561,28 @@ func (e *Executor) waitForJobs(jobs sets.String, selector string) (bool, error) 
 		}
 		defer w.Stop()
 		for event := range w.ResultChan() {
-			pj, ok := event.Object.(*pjapi.ProwJob)
+			prowJob, ok := event.Object.(*pjapi.ProwJob)
 			if !ok {
 				return false, fmt.Errorf("received a %T from watch", event.Object)
 			}
-			fields := pjutil.ProwJobFields(pj)
-			fields["state"] = pj.Status.State
+			fields := pjutil.ProwJobFields(prowJob)
+			fields["state"] = prowJob.Status.State
 			e.loggers.Debug.WithFields(fields).Debug("Processing ProwJob")
-			if !jobs.Has(pj.Name) {
+			if !jobs.Has(prowJob.Name) {
 				continue
 			}
-			switch pj.Status.State {
+			switch prowJob.Status.State {
 			case pjapi.FailureState, pjapi.AbortedState, pjapi.ErrorState:
 				e.loggers.Job.WithFields(fields).Error("Job failed")
-				e.Metrics.FailedRehearsals = append(e.Metrics.FailedRehearsals, pj.Spec.Job)
+				e.Metrics.FailedRehearsals = append(e.Metrics.FailedRehearsals, prowJob.Spec.Job)
 				success = false
 			case pjapi.SuccessState:
 				e.loggers.Job.WithFields(fields).Info("Job succeeded")
-				e.Metrics.PassedRehearsals = append(e.Metrics.FailedRehearsals, pj.Spec.Job)
+				e.Metrics.PassedRehearsals = append(e.Metrics.FailedRehearsals, prowJob.Spec.Job)
 			default:
 				continue
 			}
-			jobs.Delete(pj.Name)
+			jobs.Delete(prowJob.Name)
 			if jobs.Len() == 0 {
 				return success, nil
 			}
@@ -593,7 +592,7 @@ func (e *Executor) waitForJobs(jobs sets.String, selector string) (bool, error) 
 
 func (e *Executor) submitRehearsals() ([]*pjapi.ProwJob, error) {
 	var errors []error
-	pjs := []*pjapi.ProwJob{}
+	var pjs []*pjapi.ProwJob
 
 	for _, job := range e.presubmits {
 		created, err := e.submitPresubmit(job)

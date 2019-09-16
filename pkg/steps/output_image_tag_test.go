@@ -34,7 +34,7 @@ func TestOutputImageStep(t *testing.T) {
 		},
 		creates: []api.StepLink{
 			api.ExternalImageLink(config.To),
-			api.InternalImageLink(api.PipelineImageStreamTagReference("configToAs")),
+			api.InternalImageLink("configToAs"),
 		},
 		provides: providesExpectation{
 			params: map[string]string{"IMAGE_CONFIGTOAS": "uri://somewhere:configToTag"},

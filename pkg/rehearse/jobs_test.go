@@ -26,7 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
 
-	clientgo_testing "k8s.io/client-go/testing"
+	clientgoTesting "k8s.io/client-go/testing"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
@@ -356,8 +356,8 @@ func makeTestData() (int, string, string, *pjapi.Refs) {
 	return testPrNumber, testNamespace, testReleasePath, testRefs
 }
 
-func makeSuccessfulFinishReactor(watcher watch.Interface, jobs map[string][]prowconfig.Presubmit) func(clientgo_testing.Action) (bool, watch.Interface, error) {
-	return func(clientgo_testing.Action) (bool, watch.Interface, error) {
+func makeSuccessfulFinishReactor(watcher watch.Interface, jobs map[string][]prowconfig.Presubmit) func(clientgoTesting.Action) (bool, watch.Interface, error) {
+	return func(clientgoTesting.Action) (bool, watch.Interface, error) {
 		watcher.Stop()
 		n := 0
 		for _, jobs := range jobs {
@@ -409,11 +409,11 @@ func TestExecuteJobsErrors(t *testing.T) {
 				t.Fatalf("Failed to setup watch: %v", err)
 			}
 			fakecs.Fake.PrependWatchReactor("prowjobs", makeSuccessfulFinishReactor(watcher, tc.jobs))
-			fakecs.Fake.PrependReactor("create", "prowjobs", func(action clientgo_testing.Action) (bool, runtime.Object, error) {
-				createAction := action.(clientgo_testing.CreateAction)
+			fakecs.Fake.PrependReactor("create", "prowjobs", func(action clientgoTesting.Action) (bool, runtime.Object, error) {
+				createAction := action.(clientgoTesting.CreateAction)
 				pj := createAction.GetObject().(*pjapi.ProwJob)
 				if tc.failToCreate.Has(pj.Spec.Job) {
-					return true, nil, fmt.Errorf("Fail")
+					return true, nil, fmt.Errorf("fail")
 				}
 				return false, nil, nil
 			})
@@ -476,7 +476,7 @@ func TestExecuteJobsUnsuccessful(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to setup watch: %v", err)
 			}
-			fakecs.Fake.PrependWatchReactor("prowjobs", func(clientgo_testing.Action) (bool, watch.Interface, error) {
+			fakecs.Fake.PrependWatchReactor("prowjobs", func(clientgoTesting.Action) (bool, watch.Interface, error) {
 				watcher.Stop()
 				n := 0
 				for _, jobs := range tc.jobs {
@@ -603,7 +603,7 @@ func TestExecuteJobsPositive(t *testing.T) {
 				return
 			}
 
-			createdJobSpecs := []pjapi.ProwJobSpec{}
+			var createdJobSpecs []pjapi.ProwJobSpec
 			for _, job := range createdJobs.Items {
 				createdJobSpecs = append(createdJobSpecs, job.Spec)
 			}
@@ -704,7 +704,7 @@ func TestWaitForJobs(t *testing.T) {
 				w.Modify(j)
 			}
 			cs := fake.NewSimpleClientset()
-			cs.Fake.PrependWatchReactor("prowjobs", func(clientgo_testing.Action) (bool, watch.Interface, error) {
+			cs.Fake.PrependWatchReactor("prowjobs", func(clientgoTesting.Action) (bool, watch.Interface, error) {
 				return true, w, nil
 			})
 
@@ -729,7 +729,7 @@ func TestWaitForJobsRetries(t *testing.T) {
 	})
 	ws := []watch.Interface{empty, mod}
 	cs := fake.NewSimpleClientset()
-	cs.Fake.PrependWatchReactor("prowjobs", func(clientgo_testing.Action) (_ bool, ret watch.Interface, _ error) {
+	cs.Fake.PrependWatchReactor("prowjobs", func(clientgoTesting.Action) (_ bool, ret watch.Interface, _ error) {
 		ret, ws = ws[0], ws[1:]
 		return true, ret, nil
 	})
@@ -756,7 +756,7 @@ func TestWaitForJobsLog(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "failure"},
 		Status:     pjapi.ProwJobStatus{State: pjapi.FailureState}})
 	cs := fake.NewSimpleClientset()
-	cs.Fake.PrependWatchReactor("prowjobs", func(clientgo_testing.Action) (bool, watch.Interface, error) {
+	cs.Fake.PrependWatchReactor("prowjobs", func(clientgoTesting.Action) (bool, watch.Interface, error) {
 		return true, w, nil
 	})
 	loggers := Loggers{jobLogger, dbgLogger}
@@ -1030,15 +1030,6 @@ func TestGetClusterTypes(t *testing.T) {
 				t.Fatal(diff.ObjectDiff(tc.want, ret))
 			}
 		})
-	}
-}
-func makeBaseExtraRefs() []pjapi.Refs {
-	return []pjapi.Refs{
-		{
-			Org:     "openshift",
-			Repo:    "test-repo",
-			BaseRef: "master",
-		},
 	}
 }
 

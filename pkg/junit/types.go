@@ -102,9 +102,3 @@ type FailureOutput struct {
 
 // TestResult is the result of a test case
 type TestResult string
-
-const (
-	TestResultPass TestResult = "pass"
-	TestResultSkip TestResult = "skip"
-	TestResultFail TestResult = "fail"
-)

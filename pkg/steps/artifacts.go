@@ -155,15 +155,6 @@ func (n *TestCaseNotifier) SubTests(prefix string) []*junit.TestCase {
 	return tests
 }
 
-func stringInSlice(arr []string, s string) bool {
-	for _, item := range arr {
-		if item == s {
-			return true
-		}
-	}
-	return false
-}
-
 type podClient struct {
 	coreclientset.PodsGetter
 	config *rest.Config
@@ -676,7 +667,7 @@ func gatherContainerLogsOutput(podClient PodClient, artifactDir, namespace, podN
 		if status.State.Terminated != nil {
 			file, err := os.Create(fmt.Sprintf("%s/%s.log.gz", artifactDir, status.Name))
 			if err != nil {
-				validationErrors = append(validationErrors, fmt.Errorf("Cannot create file: %v", err))
+				validationErrors = append(validationErrors, fmt.Errorf("cannot create file: %v", err))
 				continue
 			}
 			defer file.Close()
@@ -709,7 +700,7 @@ func gatherSuccessfulBuildLog(buildClient BuildClient, artifactDir, namespace, b
 	}
 	file, err := os.Create(fmt.Sprintf("%s/%s.log.gz", dir, buildName))
 	if err != nil {
-		return fmt.Errorf("Cannot create file: %v", err)
+		return fmt.Errorf("cannot create file: %v", err)
 	}
 	defer file.Close()
 	w := gzip.NewWriter(file)

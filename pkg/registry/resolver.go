@@ -3,7 +3,7 @@ package registry
 import (
 	"fmt"
 
-	api "github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/api"
 	types "github.com/openshift/ci-tools/pkg/steps/types"
 	"k8s.io/apimachinery/pkg/util/errors"
 )
@@ -91,7 +91,7 @@ func (r *registry) process(steps []api.TestStep) (internalSteps []types.TestStep
 		} else if external.LiteralTestStep != nil {
 			step = *external.LiteralTestStep
 		} else {
-			errs = append(errs, fmt.Errorf("Encountered TestStep where both `Reference` and `LiteralTestStep` are nil"))
+			errs = append(errs, fmt.Errorf("encountered TestStep where both `Reference` and `LiteralTestStep` are nil"))
 			continue
 		}
 		internalStep := toInternal(step)

@@ -22,10 +22,6 @@ import (
 	"github.com/openshift/ci-tools/pkg/steps"
 )
 
-const (
-	ConfigMapName = "release"
-)
-
 // stableImagesTagStep is used when no release configuration is necessary
 type stableImagesTagStep struct {
 	jobSpec   *api.JobSpec

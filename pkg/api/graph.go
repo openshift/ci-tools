@@ -296,27 +296,6 @@ func addToNode(parent, child *StepNode) bool {
 	return true
 }
 
-func Reduce(steps []StepLink) []StepLink {
-	top := 0
-	for i := 1; i < len(steps); i++ {
-		if Same(steps[:top], steps[i]) {
-			continue
-		}
-		steps[top] = steps[i]
-		top++
-	}
-	return steps[:top]
-}
-
-func Same(steps []StepLink, step StepLink) bool {
-	for _, other := range steps {
-		if step.Same(other) {
-			return true
-		}
-	}
-	return false
-}
-
 func HasAnyLinks(steps, candidates []StepLink) bool {
 	for _, candidate := range candidates {
 		for _, step := range steps {

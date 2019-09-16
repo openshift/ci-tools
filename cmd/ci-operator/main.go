@@ -213,6 +213,7 @@ type options struct {
 	clusterConfig *rest.Config
 
 	givePrAuthorAccessToNamespace bool
+	determinizeOutput             bool
 	impersonateUser               string
 	authors                       []string
 
@@ -259,6 +260,7 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.BoolVar(&opt.givePrAuthorAccessToNamespace, "give-pr-author-access-to-namespace", false, "Give view access to the temporarily created namespace to the PR author.")
 	flag.StringVar(&opt.impersonateUser, "as", "", "Username to impersonate")
 	flag.StringVar(&opt.sentryDSNPath, "sentry-dsn-path", "", "Path to a file containing Sentry DSN. Enables reporting errors to Sentry")
+	flag.BoolVar(&opt.determinizeOutput, "determinize-output", false, "Determinize dry run's output by ordering the created objects.")
 
 	return opt
 }
@@ -393,7 +395,7 @@ func (o *options) Run() error {
 		log.Printf("Ran for %s", time.Now().Sub(start).Truncate(time.Second))
 	}()
 
-	dryLogger := &steps.DryLogger{}
+	dryLogger := steps.NewDryLogger(o.determinizeOutput)
 	// load the graph from the configuration
 	buildSteps, postSteps, err := defaults.FromConfig(o.configSpec, o.jobSpec, o.templates, o.writeParams, o.artifactDir, o.promote, o.clusterConfig, o.targets.values, dryLogger)
 	if err != nil {
@@ -488,8 +490,9 @@ func (o *options) Run() error {
 		}
 
 		if o.dry {
-			objects, _ := json.MarshalIndent(dryLogger.GetObjects(), "", "  ")
-			fmt.Printf("%s\n", objects)
+			if err := dryLogger.Log(); err != nil {
+				fmt.Println(err)
+			}
 		}
 
 		return nil

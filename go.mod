@@ -18,6 +18,8 @@ require (
 	github.com/ghodss/yaml v1.0.0
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 	github.com/mattn/go-zglob v0.0.1
+	github.com/onsi/ginkgo v1.7.0 // indirect
+	github.com/onsi/gomega v1.4.3 // indirect
 	github.com/openshift/api v3.9.1-0.20190725193935-b7d4eb0fa1e0+incompatible
 	github.com/openshift/client-go v0.0.0-20190721020503-a85ea6a6b3a5
 	github.com/shurcooL/githubv4 v0.0.0-20190718010115-4ba037080260

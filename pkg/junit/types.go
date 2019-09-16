@@ -102,4 +102,3 @@ type FailureOutput struct {
 
 // TestResult is the result of a test case
 type TestResult string
-

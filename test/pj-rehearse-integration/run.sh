@@ -27,11 +27,11 @@ make_testing_repository() {
   git config --local user.name test
   git config --local user.email test
   cp -R "${master_data}"/* .
-  git add ci-operator cluster
+  git add ci-operator core-services cluster
   git commit -m "Master version of openshift/release" --quiet
   base_sha="$(git rev-parse HEAD)"
   cp -R "${candidate_data}"/* .
-  git add ci-operator cluster
+  git add ci-operator core-services cluster
   git commit -m "Candidate version of openshift/release" --quiet
   candidate_sha="$(git rev-parse HEAD)"
   popd >/dev/null

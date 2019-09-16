@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/fsnotify/fsnotify"
 	log "github.com/sirupsen/logrus"
@@ -140,8 +141,8 @@ func populateWatcher(watcher *fsnotify.Watcher, root string) error {
 	return filepath.Walk(root, func(path string, file os.FileInfo, err error) error {
 		// We only need to watch directories as creation, deletion, and writes
 		// for files in a directory trigger events for the directory
-		if file.IsDir() {
-			log.Infof("Adding %s to watch list", path)
+		if file != nil && file.IsDir() {
+			log.Debugf("Adding %s to watch list", path)
 			err = watcher.Add(path)
 			if err != nil {
 				return fmt.Errorf("Failed to add watch on directory %s: %v", path, err)
@@ -155,8 +156,12 @@ func main() {
 	opts := options{}
 	flag.StringVar(&opts.regPath, "registry", "", "Path to step registry")
 	flag.StringVar(&opts.configPath, "config", "", "Path to config dirs")
+	verbose := flag.Bool("verbose", false, "Enable debug logging messages")
 	flag.Parse()
 	reloadRegistry(&opts)
+	if *verbose {
+		log.SetLevel(log.DebugLevel)
+	}
 
 	// watch for changes in config directories
 	watcher, err := fsnotify.NewWatcher()
@@ -164,21 +169,36 @@ func main() {
 		log.Fatalf("Failed to create new watcher: %v", err)
 	}
 	defer watcher.Close()
+	reloadSet := false
 	go func() {
 		for {
 			select {
-			case _ = <-watcher.Events:
-				log.Info("Reloading registry")
-				if err := reloadRegistry(&opts); err != nil {
-					log.Fatalf("Failed to reload registry: %v", err)
+			case event := <-watcher.Events:
+				log.Debugf("Received %v event for %s", event.Op, event.Name)
+				if event.Op == fsnotify.Remove {
+					log.Debugf("Removing %s from watches", event.Name)
+					watcher.Remove(event.Name)
 				}
-				log.Info("Registry successfully reloaded")
+				if !reloadSet {
+					reloadSet = true
+					// use separate go routine to allow other events to run while the reloader waits
+					go func() {
+						time.Sleep(time.Second)
+						// unset reloadSet before running reload function in case a change occurs during the reload
+						reloadSet = false
+						log.Info("Reloading registry")
+						if err := reloadRegistry(&opts); err != nil {
+							log.Fatalf("Failed to reload registry: %v", err)
+						}
+						log.Info("Registry successfully reloaded")
+					}()
+				}
 				// add new files to be watched
 				if err := populateWatcher(watcher, opts.regPath); err != nil {
 					log.Fatalf("Failed to update fsnotify watchlist: %v", err)
 				}
 			case err := <-watcher.Errors:
-				log.Println("error:", err)
+				log.Errorf("error: %v", err)
 			}
 		}
 	}()

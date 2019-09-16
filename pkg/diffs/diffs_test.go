@@ -49,12 +49,12 @@ func TestGetChangedCiopConfigs(t *testing.T) {
 
 	testCases := []struct {
 		name                 string
-		configGenerator      func() (before, after config.CompoundCiopConfig)
+		configGenerator      func(*testing.T) (before, after config.CompoundCiopConfig)
 		expected             func() config.CompoundCiopConfig
 		expectedAffectedJobs map[string]sets.String
 	}{{
 		name: "no changes",
-		configGenerator: func() (config.CompoundCiopConfig, config.CompoundCiopConfig) {
+		configGenerator: func(t *testing.T) (config.CompoundCiopConfig, config.CompoundCiopConfig) {
 			before := config.CompoundCiopConfig{"org-repo-branch.yaml": &baseCiopConfig}
 			after := config.CompoundCiopConfig{"org-repo-branch.yaml": &baseCiopConfig}
 			return before, after
@@ -63,7 +63,7 @@ func TestGetChangedCiopConfigs(t *testing.T) {
 		expectedAffectedJobs: map[string]sets.String{},
 	}, {
 		name: "new config",
-		configGenerator: func() (config.CompoundCiopConfig, config.CompoundCiopConfig) {
+		configGenerator: func(t *testing.T) (config.CompoundCiopConfig, config.CompoundCiopConfig) {
 			before := config.CompoundCiopConfig{"org-repo-branch.yaml": &baseCiopConfig}
 			after := config.CompoundCiopConfig{
 				"org-repo-branch.yaml":         &baseCiopConfig,
@@ -77,17 +77,21 @@ func TestGetChangedCiopConfigs(t *testing.T) {
 		expectedAffectedJobs: map[string]sets.String{},
 	}, {
 		name: "changed config",
-		configGenerator: func() (config.CompoundCiopConfig, config.CompoundCiopConfig) {
+		configGenerator: func(t *testing.T) (config.CompoundCiopConfig, config.CompoundCiopConfig) {
 			before := config.CompoundCiopConfig{"org-repo-branch.yaml": &baseCiopConfig}
 			afterConfig := cioperatorapi.ReleaseBuildConfiguration{}
-			deepcopy.Copy(&afterConfig, baseCiopConfig)
+			if err := deepcopy.Copy(&afterConfig, baseCiopConfig); err != nil {
+				t.Fatal(err)
+			}
 			afterConfig.InputConfiguration.ReleaseTagConfiguration.Name = "another-name"
 			after := config.CompoundCiopConfig{"org-repo-branch.yaml": &afterConfig}
 			return before, after
 		},
 		expected: func() config.CompoundCiopConfig {
 			expected := cioperatorapi.ReleaseBuildConfiguration{}
-			deepcopy.Copy(&expected, baseCiopConfig)
+			if err := deepcopy.Copy(&expected, baseCiopConfig); err != nil {
+				t.Fatal(err)
+			}
 			expected.InputConfiguration.ReleaseTagConfiguration.Name = "another-name"
 			return config.CompoundCiopConfig{"org-repo-branch.yaml": &expected}
 		},
@@ -95,17 +99,21 @@ func TestGetChangedCiopConfigs(t *testing.T) {
 	},
 		{
 			name: "changed tests",
-			configGenerator: func() (config.CompoundCiopConfig, config.CompoundCiopConfig) {
+			configGenerator: func(t *testing.T) (config.CompoundCiopConfig, config.CompoundCiopConfig) {
 				before := config.CompoundCiopConfig{"org-repo-branch.yaml": &baseCiopConfig}
 				afterConfig := cioperatorapi.ReleaseBuildConfiguration{}
-				deepcopy.Copy(&afterConfig, baseCiopConfig)
+				if err := deepcopy.Copy(&afterConfig, baseCiopConfig); err != nil {
+					t.Fatal(err)
+				}
 				afterConfig.Tests[0].Commands = "changed commands"
 				after := config.CompoundCiopConfig{"org-repo-branch.yaml": &afterConfig}
 				return before, after
 			},
 			expected: func() config.CompoundCiopConfig {
 				expected := cioperatorapi.ReleaseBuildConfiguration{}
-				deepcopy.Copy(&expected, baseCiopConfig)
+				if err := deepcopy.Copy(&expected, baseCiopConfig); err != nil {
+					t.Fatal(err)
+				}
 				expected.Tests[0].Commands = "changed commands"
 				return config.CompoundCiopConfig{"org-repo-branch.yaml": &expected}
 			},
@@ -113,10 +121,12 @@ func TestGetChangedCiopConfigs(t *testing.T) {
 		},
 		{
 			name: "changed multiple tests",
-			configGenerator: func() (config.CompoundCiopConfig, config.CompoundCiopConfig) {
+			configGenerator: func(t *testing.T) (config.CompoundCiopConfig, config.CompoundCiopConfig) {
 				before := config.CompoundCiopConfig{"org-repo-branch.yaml": &baseCiopConfig}
 				afterConfig := cioperatorapi.ReleaseBuildConfiguration{}
-				deepcopy.Copy(&afterConfig, baseCiopConfig)
+				if err := deepcopy.Copy(&afterConfig, baseCiopConfig); err != nil {
+					t.Fatal(err)
+				}
 				afterConfig.Tests[0].Commands = "changed commands"
 				afterConfig.Tests[1].Commands = "changed commands"
 				after := config.CompoundCiopConfig{"org-repo-branch.yaml": &afterConfig}
@@ -124,7 +134,9 @@ func TestGetChangedCiopConfigs(t *testing.T) {
 			},
 			expected: func() config.CompoundCiopConfig {
 				expected := cioperatorapi.ReleaseBuildConfiguration{}
-				deepcopy.Copy(&expected, baseCiopConfig)
+				if err := deepcopy.Copy(&expected, baseCiopConfig); err != nil {
+					t.Fatal(err)
+				}
 				expected.Tests[0].Commands = "changed commands"
 				expected.Tests[1].Commands = "changed commands"
 				return config.CompoundCiopConfig{"org-repo-branch.yaml": &expected}
@@ -140,7 +152,7 @@ func TestGetChangedCiopConfigs(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			before, after := tc.configGenerator()
+			before, after := tc.configGenerator(t)
 			actual, affectedJobs := GetChangedCiopConfigs(before, after, logrus.NewEntry(logrus.New()))
 			expected := tc.expected()
 
@@ -177,22 +189,24 @@ func TestGetChangedPresubmits(t *testing.T) {
 
 	testCases := []struct {
 		name            string
-		configGenerator func() (before, after *prowconfig.Config)
+		configGenerator func(*testing.T) (before, after *prowconfig.Config)
 		expected        config.Presubmits
 	}{
 		{
 			name: "no differences mean nothing is identified as a diff",
-			configGenerator: func() (*prowconfig.Config, *prowconfig.Config) {
+			configGenerator: func(t *testing.T) (*prowconfig.Config, *prowconfig.Config) {
 				return makeConfig(basePresubmit), makeConfig(basePresubmit)
 			},
 			expected: config.Presubmits{},
 		},
 		{
 			name: "new job added",
-			configGenerator: func() (*prowconfig.Config, *prowconfig.Config) {
+			configGenerator: func(t *testing.T) (*prowconfig.Config, *prowconfig.Config) {
 				var p []prowconfig.Presubmit
 				var pNew prowconfig.Presubmit
-				deepcopy.Copy(&p, basePresubmit)
+				if err := deepcopy.Copy(&p, basePresubmit); err != nil {
+					t.Fatal(err)
+				}
 
 				pNew = p[0]
 				pNew.Name = "test-base-presubmit-new"
@@ -205,7 +219,9 @@ func TestGetChangedPresubmits(t *testing.T) {
 				"org/repo": func() []prowconfig.Presubmit {
 					var p []prowconfig.Presubmit
 					var pNew prowconfig.Presubmit
-					deepcopy.Copy(&p, basePresubmit)
+					if err := deepcopy.Copy(&p, basePresubmit); err != nil {
+						t.Fatal(err)
+					}
 					pNew = p[0]
 					pNew.Name = "test-base-presubmit-new"
 
@@ -215,9 +231,11 @@ func TestGetChangedPresubmits(t *testing.T) {
 		},
 		{
 			name: "different agent is identified as a diff (from jenkins to kubernetes)",
-			configGenerator: func() (*prowconfig.Config, *prowconfig.Config) {
+			configGenerator: func(t *testing.T) (*prowconfig.Config, *prowconfig.Config) {
 				var p []prowconfig.Presubmit
-				deepcopy.Copy(&p, basePresubmit)
+				if err := deepcopy.Copy(&p, basePresubmit); err != nil {
+					t.Fatal(err)
+				}
 				p[0].Agent = "jenkins"
 				return makeConfig(p), makeConfig(basePresubmit)
 
@@ -228,10 +246,14 @@ func TestGetChangedPresubmits(t *testing.T) {
 		},
 		{
 			name: "different optional field is identified as a diff (from true to false)",
-			configGenerator: func() (*prowconfig.Config, *prowconfig.Config) {
+			configGenerator: func(t *testing.T) (*prowconfig.Config, *prowconfig.Config) {
 				var p, base []prowconfig.Presubmit
-				deepcopy.Copy(&p, basePresubmit)
-				deepcopy.Copy(&base, basePresubmit)
+				if err := deepcopy.Copy(&p, basePresubmit); err != nil {
+					t.Fatal(err)
+				}
+				if err := deepcopy.Copy(&base, basePresubmit); err != nil {
+					t.Fatal(err)
+				}
 
 				base[0].Optional = true
 				p[0].Optional = false
@@ -244,10 +266,14 @@ func TestGetChangedPresubmits(t *testing.T) {
 		},
 		{
 			name: "different always_run field is identified as a diff (from false to true)",
-			configGenerator: func() (*prowconfig.Config, *prowconfig.Config) {
+			configGenerator: func(t *testing.T) (*prowconfig.Config, *prowconfig.Config) {
 				var p, base []prowconfig.Presubmit
-				deepcopy.Copy(&p, basePresubmit)
-				deepcopy.Copy(&base, basePresubmit)
+				if err := deepcopy.Copy(&p, basePresubmit); err != nil {
+					t.Fatal(err)
+				}
+				if err := deepcopy.Copy(&base, basePresubmit); err != nil {
+					t.Fatal(err)
+				}
 
 				base[0].AlwaysRun = false
 				p[0].AlwaysRun = true
@@ -257,7 +283,9 @@ func TestGetChangedPresubmits(t *testing.T) {
 			expected: config.Presubmits{
 				"org/repo": func() []prowconfig.Presubmit {
 					var p []prowconfig.Presubmit
-					deepcopy.Copy(&p, basePresubmit)
+					if err := deepcopy.Copy(&p, basePresubmit); err != nil {
+						t.Fatal(err)
+					}
 					p[0].AlwaysRun = true
 					return p
 				}(),
@@ -265,9 +293,11 @@ func TestGetChangedPresubmits(t *testing.T) {
 		},
 		{
 			name: "different spec is identified as a diff - single change",
-			configGenerator: func() (*prowconfig.Config, *prowconfig.Config) {
+			configGenerator: func(t *testing.T) (*prowconfig.Config, *prowconfig.Config) {
 				var p []prowconfig.Presubmit
-				deepcopy.Copy(&p, basePresubmit)
+				if err := deepcopy.Copy(&p, basePresubmit); err != nil {
+					t.Fatal(err)
+				}
 				p[0].Spec.Containers[0].Command = []string{"test-command"}
 				return makeConfig(basePresubmit), makeConfig(p)
 
@@ -275,7 +305,9 @@ func TestGetChangedPresubmits(t *testing.T) {
 			expected: config.Presubmits{
 				"org/repo": func() []prowconfig.Presubmit {
 					var p []prowconfig.Presubmit
-					deepcopy.Copy(&p, basePresubmit)
+					if err := deepcopy.Copy(&p, basePresubmit); err != nil {
+						t.Fatal(err)
+					}
 					p[0].Spec.Containers[0].Command = []string{"test-command"}
 					return p
 				}(),
@@ -283,9 +315,11 @@ func TestGetChangedPresubmits(t *testing.T) {
 		},
 		{
 			name: "different spec is identified as a diff - massive changes",
-			configGenerator: func() (*prowconfig.Config, *prowconfig.Config) {
+			configGenerator: func(t *testing.T) (*prowconfig.Config, *prowconfig.Config) {
 				var p []prowconfig.Presubmit
-				deepcopy.Copy(&p, basePresubmit)
+				if err := deepcopy.Copy(&p, basePresubmit); err != nil {
+					t.Fatal(err)
+				}
 				p[0].Spec.Containers[0].Command = []string{"test-command"}
 				p[0].Spec.Containers[0].Args = []string{"testarg", "testarg", "testarg"}
 				p[0].Spec.Volumes = []v1.Volume{{
@@ -299,7 +333,9 @@ func TestGetChangedPresubmits(t *testing.T) {
 			expected: config.Presubmits{
 				"org/repo": func() []prowconfig.Presubmit {
 					var p []prowconfig.Presubmit
-					deepcopy.Copy(&p, basePresubmit)
+					if err := deepcopy.Copy(&p, basePresubmit); err != nil {
+						t.Fatal(err)
+					}
 					p[0].Spec.Containers[0].Command = []string{"test-command"}
 					p[0].Spec.Containers[0].Args = []string{"testarg", "testarg", "testarg"}
 					p[0].Spec.Volumes = []v1.Volume{{
@@ -315,7 +351,7 @@ func TestGetChangedPresubmits(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			before, after := testCase.configGenerator()
+			before, after := testCase.configGenerator(t)
 			p := GetChangedPresubmits(before, after, logrus.NewEntry(logrus.New()))
 			if !equality.Semantic.DeepEqual(p, testCase.expected) {
 				t.Fatalf(diff.ObjectDiff(testCase.expected["org/repo"], p["org/repo"]))
@@ -381,7 +417,9 @@ func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 					"org/repo": {
 						func() prowconfig.Presubmit {
 							ret := prowconfig.Presubmit{}
-							deepcopy.Copy(&ret, &basePresubmitWithCiop)
+							if err := deepcopy.Copy(&ret, &basePresubmitWithCiop); err != nil {
+								t.Fatal(err)
+							}
 							ret.Name = "org-repo-branch-testjob"
 							ret.Spec.Containers[0].Env[0].ValueFrom.ConfigMapKeyRef.Key = baseCiopConfig.Filename
 							return ret
@@ -393,7 +431,9 @@ func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 		expected: config.Presubmits{"org/repo": {
 			func() prowconfig.Presubmit {
 				ret := prowconfig.Presubmit{}
-				deepcopy.Copy(&ret, &basePresubmitWithCiop)
+				if err := deepcopy.Copy(&ret, &basePresubmitWithCiop); err != nil {
+					t.Fatal(err)
+				}
 				ret.Name = "org-repo-branch-testjob"
 				ret.Spec.Containers[0].Env[0].ValueFrom.ConfigMapKeyRef.Key = baseCiopConfig.Filename
 				return ret
@@ -407,7 +447,9 @@ func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 					"org/repo": {
 						func() prowconfig.Presubmit {
 							ret := prowconfig.Presubmit{}
-							deepcopy.Copy(&ret, &basePresubmitWithCiop)
+							if err := deepcopy.Copy(&ret, &basePresubmitWithCiop); err != nil {
+								t.Fatal(err)
+							}
 							ret.Name = "org-repo-branch-testjob"
 							ret.Spec.Containers[0].Env[0].ValueFrom.ConfigMapKeyRef.Key = baseCiopConfig.Filename
 							return ret
@@ -425,7 +467,9 @@ func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 					"org/repo": {
 						func() prowconfig.Presubmit {
 							ret := prowconfig.Presubmit{}
-							deepcopy.Copy(&ret, &basePresubmitWithCiop)
+							if err := deepcopy.Copy(&ret, &basePresubmitWithCiop); err != nil {
+								t.Fatal(err)
+							}
 							ret.Name = "org-repo-branch-testjob"
 							ret.Agent = string(pjapi.JenkinsAgent)
 							ret.Spec.Containers[0].Env = []v1.EnvVar{}
@@ -583,22 +627,24 @@ func TestGetChangedPeriodics(t *testing.T) {
 
 	testCases := []struct {
 		name            string
-		configGenerator func() (before, after *prowconfig.Config)
+		configGenerator func(*testing.T) (before, after *prowconfig.Config)
 		expected        []prowconfig.Periodic
 	}{
 		{
 			name: "no differences mean nothing is identified as a diff",
-			configGenerator: func() (*prowconfig.Config, *prowconfig.Config) {
+			configGenerator: func(t *testing.T) (*prowconfig.Config, *prowconfig.Config) {
 				return makeConfigWithPeriodics(basePeriodic), makeConfigWithPeriodics(basePeriodic)
 			},
 			expected: nil,
 		},
 		{
 			name: "new job added",
-			configGenerator: func() (*prowconfig.Config, *prowconfig.Config) {
+			configGenerator: func(t *testing.T) (*prowconfig.Config, *prowconfig.Config) {
 				var p []prowconfig.Periodic
 				var pNew prowconfig.Periodic
-				deepcopy.Copy(&p, basePeriodic)
+				if err := deepcopy.Copy(&p, basePeriodic); err != nil {
+					t.Fatal(err)
+				}
 
 				pNew = p[0]
 				pNew.Name = "test-base-periodic-new"
@@ -610,7 +656,9 @@ func TestGetChangedPeriodics(t *testing.T) {
 			expected: func() []prowconfig.Periodic {
 				var p []prowconfig.Periodic
 				var pNew prowconfig.Periodic
-				deepcopy.Copy(&p, basePeriodic)
+				if err := deepcopy.Copy(&p, basePeriodic); err != nil {
+					t.Fatal(err)
+				}
 				pNew = p[0]
 				pNew.Name = "test-base-periodic-new"
 
@@ -619,25 +667,31 @@ func TestGetChangedPeriodics(t *testing.T) {
 		},
 		{
 			name: "different spec is identified as a diff - single change",
-			configGenerator: func() (*prowconfig.Config, *prowconfig.Config) {
+			configGenerator: func(t *testing.T) (*prowconfig.Config, *prowconfig.Config) {
 				var p []prowconfig.Periodic
-				deepcopy.Copy(&p, basePeriodic)
+				if err := deepcopy.Copy(&p, basePeriodic); err != nil {
+					t.Fatal(err)
+				}
 				p[0].Spec.Containers[0].Command = []string{"test-command"}
 				return makeConfigWithPeriodics(basePeriodic), makeConfigWithPeriodics(p)
 
 			},
 			expected: func() []prowconfig.Periodic {
 				var p []prowconfig.Periodic
-				deepcopy.Copy(&p, basePeriodic)
+				if err := deepcopy.Copy(&p, basePeriodic); err != nil {
+					t.Fatal(err)
+				}
 				p[0].Spec.Containers[0].Command = []string{"test-command"}
 				return p
 			}(),
 		},
 		{
 			name: "different spec is identified as a diff - massive changes",
-			configGenerator: func() (*prowconfig.Config, *prowconfig.Config) {
+			configGenerator: func(t *testing.T) (*prowconfig.Config, *prowconfig.Config) {
 				var p []prowconfig.Periodic
-				deepcopy.Copy(&p, basePeriodic)
+				if err := deepcopy.Copy(&p, basePeriodic); err != nil {
+					t.Fatal(err)
+				}
 				p[0].Spec.Containers[0].Command = []string{"test-command"}
 				p[0].Spec.Containers[0].Args = []string{"testarg", "testarg", "testarg"}
 				p[0].Spec.Volumes = []v1.Volume{{
@@ -650,7 +704,9 @@ func TestGetChangedPeriodics(t *testing.T) {
 			},
 			expected: func() []prowconfig.Periodic {
 				var p []prowconfig.Periodic
-				deepcopy.Copy(&p, basePeriodic)
+				if err := deepcopy.Copy(&p, basePeriodic); err != nil {
+					t.Fatal(err)
+				}
 				p[0].Spec.Containers[0].Command = []string{"test-command"}
 				p[0].Spec.Containers[0].Args = []string{"testarg", "testarg", "testarg"}
 				p[0].Spec.Volumes = []v1.Volume{{
@@ -666,7 +722,7 @@ func TestGetChangedPeriodics(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			before, after := testCase.configGenerator()
+			before, after := testCase.configGenerator(t)
 			p := GetChangedPeriodics(before, after, logrus.NewEntry(logrus.New()))
 			if !reflect.DeepEqual(testCase.expected, p) {
 				t.Fatalf("Name:%s\nExpected %#v\nFound:%#v\n", testCase.name, testCase.expected, p)

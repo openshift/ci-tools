@@ -132,8 +132,12 @@ func generateBranchedConfigs(currentRelease, bumpRelease string, futureReleases 
 // updateRelease updates the release that is promoted to and that
 // which is used to source the release payload for testing
 func updateRelease(config *api.ReleaseBuildConfiguration, futureRelease string) {
-	config.PromotionConfiguration.Name = futureRelease
-	config.ReleaseTagConfiguration.Name = futureRelease
+	if config.PromotionConfiguration != nil {
+		config.PromotionConfiguration.Name = futureRelease
+	}
+	if config.ReleaseTagConfiguration != nil {
+		config.ReleaseTagConfiguration.Name = futureRelease
+	}
 }
 
 // updateImages updates the release that is used for input images

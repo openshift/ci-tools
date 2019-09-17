@@ -13,7 +13,7 @@ import (
 	"github.com/sirupsen/logrus"
 	logrustest "github.com/sirupsen/logrus/hooks/test"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 
 	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/client/clientset/versioned/fake"
@@ -254,6 +254,7 @@ func makeTestingPresubmit(name, context string, org, repo, branch string) *prowc
 func TestMakeRehearsalPresubmit(t *testing.T) {
 	testPrNumber := 123
 	testRepo := "org/repo"
+
 	sourcePresubmit := &prowconfig.Presubmit{
 		JobBase: prowconfig.JobBase{
 			Agent: "kubernetes",
@@ -269,30 +270,89 @@ func TestMakeRehearsalPresubmit(t *testing.T) {
 		Reporter:     prowconfig.Reporter{Context: "ci/prow/test"},
 		Brancher:     prowconfig.Brancher{Branches: []string{"^branch$"}},
 	}
-	expectedPresubmit := &prowconfig.Presubmit{}
-	deepcopy.Copy(expectedPresubmit, sourcePresubmit)
 
-	expectedPresubmit.Name = "rehearse-123-pull-ci-org-repo-branch-test"
-	expectedPresubmit.Labels = map[string]string{rehearseLabel: "123"}
-	expectedPresubmit.Spec.Containers[0].Args = []string{"arg1", "arg2"}
-	expectedPresubmit.RerunCommand = "/test pj-rehearse"
-	expectedPresubmit.Context = "ci/rehearse/org/repo/branch/test"
-	expectedPresubmit.Optional = true
-	expectedPresubmit.ExtraRefs = []pjapi.Refs{
+	testCases := []struct {
+		testID            string
+		refs              *pjapi.Refs
+		expectedPresubmit *prowconfig.Presubmit
+	}{
 		{
-			Org:     "org",
-			Repo:    "repo",
-			BaseRef: "branch",
-			WorkDir: true,
+			testID: "job that belong to different org/repo than refs",
+			refs:   &pjapi.Refs{Org: "anotherOrg", Repo: "anotherRepo"},
+			expectedPresubmit: func() *prowconfig.Presubmit {
+				p := &prowconfig.Presubmit{}
+				deepcopy.Copy(p, sourcePresubmit)
+
+				p.Name = "rehearse-123-pull-ci-org-repo-branch-test"
+				p.Labels = map[string]string{rehearseLabel: "123"}
+				p.Spec.Containers[0].Args = []string{"arg1", "arg2"}
+				p.RerunCommand = "/test pj-rehearse"
+				p.Context = "ci/rehearse/org/repo/branch/test"
+				p.Optional = true
+				p.ExtraRefs = []pjapi.Refs{
+					{
+						Org:     "org",
+						Repo:    "repo",
+						BaseRef: "branch",
+						WorkDir: true,
+					},
+				}
+				return p
+			}(),
+		},
+		{
+			testID: "job that belong to the same org/repo with refs.",
+			refs:   &pjapi.Refs{Org: "org", Repo: "repo"},
+			expectedPresubmit: func() *prowconfig.Presubmit {
+				p := &prowconfig.Presubmit{}
+				deepcopy.Copy(p, sourcePresubmit)
+
+				p.Name = "rehearse-123-pull-ci-org-repo-branch-test"
+				p.Labels = map[string]string{rehearseLabel: "123"}
+				p.Spec.Containers[0].Args = []string{"arg1", "arg2"}
+				p.RerunCommand = "/test pj-rehearse"
+				p.Context = "ci/rehearse/org/repo/branch/test"
+				p.Optional = true
+				return p
+			}(),
+		},
+		{
+			testID: "job that belong to the same org but different repo than refs.",
+			refs:   &pjapi.Refs{Org: "org", Repo: "anotherRepo"},
+			expectedPresubmit: func() *prowconfig.Presubmit {
+				p := &prowconfig.Presubmit{}
+				deepcopy.Copy(p, sourcePresubmit)
+
+				p.Name = "rehearse-123-pull-ci-org-repo-branch-test"
+				p.Labels = map[string]string{rehearseLabel: "123"}
+				p.Spec.Containers[0].Args = []string{"arg1", "arg2"}
+				p.RerunCommand = "/test pj-rehearse"
+				p.Context = "ci/rehearse/org/repo/branch/test"
+				p.Optional = true
+				p.ExtraRefs = []pjapi.Refs{
+					{
+						Org:     "org",
+						Repo:    "repo",
+						BaseRef: "branch",
+						WorkDir: true,
+					},
+				}
+				return p
+			}(),
 		},
 	}
 
-	rehearsal, err := makeRehearsalPresubmit(sourcePresubmit, testRepo, testPrNumber)
-	if err != nil {
-		t.Errorf("Unexpected error in makeRehearsalPresubmit: %v", err)
-	}
-	if !equality.Semantic.DeepEqual(expectedPresubmit, rehearsal) {
-		t.Errorf("Expected rehearsal Presubmit differs:\n%s", diff.ObjectReflectDiff(expectedPresubmit, rehearsal))
+	for _, tc := range testCases {
+		t.Run(tc.testID, func(t *testing.T) {
+			rehearsal, err := makeRehearsalPresubmit(sourcePresubmit, testRepo, testPrNumber, tc.refs)
+			if err != nil {
+				t.Errorf("Unexpected error in makeRehearsalPresubmit: %v", err)
+			}
+			if !equality.Semantic.DeepEqual(tc.expectedPresubmit, rehearsal) {
+				t.Errorf("Expected rehearsal Presubmit differs:\n%s", diff.ObjectDiff(tc.expectedPresubmit, rehearsal))
+			}
+
+		})
 	}
 }
 

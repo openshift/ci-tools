@@ -11,7 +11,7 @@ import (
 	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -87,7 +87,7 @@ func NewCMClient(clusterConfig *rest.Config, namespace string, dry bool) (corecl
 	return cmClient.ConfigMaps(namespace), nil
 }
 
-func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber int) (*prowconfig.Presubmit, error) {
+func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber int, refs *pjapi.Refs) (*prowconfig.Presubmit, error) {
 	var rehearsal prowconfig.Presubmit
 	deepcopy.Copy(&rehearsal, source)
 
@@ -100,12 +100,19 @@ func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber 
 		branch = strings.TrimPrefix(strings.TrimSuffix(source.Branches[0], "$"), "^")
 		if len(repo) > 0 {
 			orgRepo := strings.Split(repo, "/")
-			rehearsal.ExtraRefs = append(rehearsal.ExtraRefs, pjapi.Refs{
-				Org:     orgRepo[0],
-				Repo:    orgRepo[1],
-				BaseRef: branch,
-				WorkDir: true,
-			})
+			jobOrg := orgRepo[0]
+			jobRepo := orgRepo[1]
+
+			if refs != nil {
+				if refs.Org != jobOrg || refs.Repo != jobRepo {
+					rehearsal.ExtraRefs = append(rehearsal.ExtraRefs, pjapi.Refs{
+						Org:     jobOrg,
+						Repo:    jobRepo,
+						BaseRef: branch,
+						WorkDir: true,
+					})
+				}
+			}
 			context += repo + "/"
 		}
 		context += branch + "/"
@@ -291,7 +298,7 @@ func (jc *JobConfigurer) ConfigurePresubmitRehearsals(presubmits config.Presubmi
 	for repo, jobs := range presubmitsFiltered {
 		for _, job := range jobs {
 			jobLogger := jc.loggers.Job.WithFields(logrus.Fields{"target-repo": repo, "target-job": job.Name})
-			rehearsal, err := makeRehearsalPresubmit(&job, repo, jc.prNumber)
+			rehearsal, err := makeRehearsalPresubmit(&job, repo, jc.prNumber, jc.refs)
 			if err != nil {
 				jobLogger.WithError(err).Warn("Failed to make a rehearsal presubmit")
 				continue
@@ -328,7 +335,7 @@ func (jc *JobConfigurer) ConvertPeriodicsToPresubmits(periodics []prowconfig.Per
 
 	for _, periodic := range periodics {
 		jobLogger := jc.loggers.Job.WithField("target-job", periodic.Name)
-		p, err := makeRehearsalPresubmit(&prowconfig.Presubmit{JobBase: periodic.JobBase}, "", jc.prNumber)
+		p, err := makeRehearsalPresubmit(&prowconfig.Presubmit{JobBase: periodic.JobBase}, "", jc.prNumber, jc.refs)
 		if err != nil {
 			jobLogger.WithError(err).Warn("Failed to make a rehearsal presubmit")
 			continue

@@ -80,7 +80,10 @@ func loadRepos(dir string, blacklist sets.String) ([]orgRepo, error) {
 			var dirs []string
 			for _, d := range []string{filepath.Join(jobs, org, repo), filepath.Join(config, org, repo), filepath.Join(templates, org, repo)} {
 				fileInfo, err := os.Stat(d)
+				logrus.WithField("err", err).Debug("os.Stat(d): checking error ...")
 				if !os.IsNotExist(err) && fileInfo.IsDir() {
+					logrus.WithField("d", d).WithField("blacklist", blacklist.List()).
+						Debug("trying to determine if the directory is in the blacklist")
 					if blacklist.Has(d) {
 						logrus.WithField("directory", d).Info("Ignoring the directory in the blacklist.")
 						continue

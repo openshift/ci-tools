@@ -52,8 +52,8 @@ type ContainerNotifier interface {
 	// Complete indicates the specified pod has completed execution, been deleted, or that no further
 	// Notify() calls can be made.
 	Complete(podName string)
-	// Done returns true if the specified pod name has already completed any work it had pending.
-	Done(podName string) bool
+	// Done returns a channel that can be used to wait for the specified pod name to complete the work it has pending.
+	Done(podName string) <-chan struct{}
 	// Cancel indicates that any actions the notifier is taking should be aborted immediately.
 	Cancel()
 }
@@ -65,8 +65,12 @@ type nopNotifier struct{}
 
 func (nopNotifier) Notify(_ *coreapi.Pod, _ string) {}
 func (nopNotifier) Complete(_ string)               {}
-func (nopNotifier) Done(_ string) bool              { return true }
-func (nopNotifier) Cancel()                         {}
+func (nopNotifier) Done(string) <-chan struct{} {
+	ret := make(chan struct{})
+	close(ret)
+	return ret
+}
+func (nopNotifier) Cancel() {}
 
 // TestCaseNotifier allows a caller to generate per container JUnit test
 // reports that provide better granularity for debugging problems when
@@ -91,9 +95,9 @@ func (n *TestCaseNotifier) Notify(pod *coreapi.Pod, containerName string) {
 	n.lastPod = pod
 }
 
-func (n *TestCaseNotifier) Complete(podName string)  { n.nested.Complete(podName) }
-func (n *TestCaseNotifier) Done(podName string) bool { return n.nested.Done(podName) }
-func (n *TestCaseNotifier) Cancel()                  { n.nested.Cancel() }
+func (n *TestCaseNotifier) Complete(podName string)             { n.nested.Complete(podName) }
+func (n *TestCaseNotifier) Done(podName string) <-chan struct{} { return n.nested.Done(podName) }
+func (n *TestCaseNotifier) Cancel()                             { n.nested.Cancel() }
 
 // SubTests returns one junit test for each terminated container with a name
 // in the annotation 'ci-operator.openshift.io/container-sub-tests' in the pod.
@@ -155,23 +159,44 @@ func (n *TestCaseNotifier) SubTests(prefix string) []*junit.TestCase {
 	return tests
 }
 
+type podCmdExecutor interface {
+	Exec(namespace, pod string, opts *coreapi.PodExecOptions) (remotecommand.Executor, error)
+}
+
+type fakePodExec struct{}
+
+func (fakePodExec) Stream(remotecommand.StreamOptions) error { return nil }
+
 type podClient struct {
 	coreclientset.PodsGetter
 	config *rest.Config
 	client rest.Interface
 }
 
+type fakePodClient struct {
+	coreclientset.PodsGetter
+}
+
+func (c *fakePodClient) Exec(namespace, name string, opts *coreapi.PodExecOptions) (remotecommand.Executor, error) {
+	return &fakePodExec{}, nil
+}
+
 func NewPodClient(podsClient coreclientset.PodsGetter, config *rest.Config, client rest.Interface) PodClient {
 	return &podClient{PodsGetter: podsClient, config: config, client: client}
 }
 
-func (c *podClient) RESTConfig() *rest.Config   { return c.config }
-func (c *podClient) RESTClient() rest.Interface { return c.client }
+func (c podClient) Exec(namespace, pod string, opts *coreapi.PodExecOptions) (remotecommand.Executor, error) {
+	u := c.client.Post().Resource("pods").Namespace(namespace).Name(pod).SubResource("exec").VersionedParams(opts, scheme.ParameterCodec).URL()
+	e, err := remotecommand.NewSPDYExecutor(c.config, "POST", u)
+	if err != nil {
+		return nil, fmt.Errorf("could not initialize a new SPDY executor: %v", err)
+	}
+	return e, nil
+}
 
 type PodClient interface {
 	coreclientset.PodsGetter
-	RESTConfig() *rest.Config
-	RESTClient() rest.Interface
+	podCmdExecutor
 }
 
 func copyArtifacts(podClient PodClient, into, ns, name, containerName string, paths []string) error {
@@ -181,16 +206,14 @@ func copyArtifacts(podClient PodClient, into, ns, name, containerName string, pa
 		args = append(args, "-C", s, ".")
 	}
 
-	u := podClient.RESTClient().Post().Resource("pods").Namespace(ns).Name(name).SubResource("exec").VersionedParams(&coreapi.PodExecOptions{
+	e, err := podClient.Exec(ns, name, &coreapi.PodExecOptions{
 		Container: containerName,
 		Stdout:    true,
 		Stderr:    true,
 		Command:   append([]string{"tar", "czf", "-"}, args...),
-	}, scheme.ParameterCodec).URL()
-
-	e, err := remotecommand.NewSPDYExecutor(podClient.RESTConfig(), "POST", u)
+	})
 	if err != nil {
-		return fmt.Errorf("could not initialize a new SPDY executor: %v", err)
+		return err
 	}
 	r, w := io.Pipe()
 	defer w.CloseWithError(fmt.Errorf("cancelled"))
@@ -257,16 +280,14 @@ func copyArtifacts(podClient PodClient, into, ns, name, containerName string, pa
 }
 
 func removeFile(podClient PodClient, ns, name, containerName string, paths []string) error {
-	u := podClient.RESTClient().Post().Resource("pods").Namespace(ns).Name(name).SubResource("exec").VersionedParams(&coreapi.PodExecOptions{
+	e, err := podClient.Exec(ns, name, &coreapi.PodExecOptions{
 		Container: containerName,
 		Stdout:    true,
 		Stderr:    true,
 		Command:   append([]string{"rm", "-f"}, paths...),
-	}, scheme.ParameterCodec).URL()
-
-	e, err := remotecommand.NewSPDYExecutor(podClient.RESTConfig(), "POST", u)
+	})
 	if err != nil {
-		return fmt.Errorf("could not initialize a new SPDY executor: %v", err)
+		return err
 	}
 	if err := e.Stream(remotecommand.StreamOptions{
 		Stdout: os.Stderr,
@@ -319,7 +340,11 @@ done
 	}
 }
 
-type podContainersMap map[string]map[string]struct{}
+type podWaitRecord map[string]struct {
+	containers sets.String
+	done       chan struct{}
+}
+type podContainersMap map[string]sets.String
 
 // ArtifactWorker tracks pods that have completed and have an 'artifacts' container
 // in them and will extract files from the container to a local directory. It also
@@ -334,7 +359,7 @@ type ArtifactWorker struct {
 	podsToDownload chan string
 
 	lock         sync.Mutex
-	remaining    podContainersMap
+	remaining    podWaitRecord
 	required     podContainersMap
 	hasArtifacts sets.String
 }
@@ -346,7 +371,7 @@ func NewArtifactWorker(podClient PodClient, artifactDir, namespace string) *Arti
 		namespace: namespace,
 		dir:       artifactDir,
 
-		remaining:    make(podContainersMap),
+		remaining:    make(podWaitRecord),
 		required:     make(podContainersMap),
 		hasArtifacts: sets.NewString(),
 
@@ -363,6 +388,7 @@ func (w *ArtifactWorker) run() {
 		}
 		// indicate we are done with this pod by removing the map entry
 		w.lock.Lock()
+		close(w.remaining[podName].done)
 		delete(w.remaining, podName)
 		w.lock.Unlock()
 	}
@@ -405,21 +431,22 @@ func (w *ArtifactWorker) downloadArtifacts(podName string, hasArtifacts bool) er
 	return nil
 }
 
-func (w *ArtifactWorker) CollectFromPod(podName string, hasArtifactsContainer bool, hasArtifacts []string, waitForContainers []string) {
+func (w *ArtifactWorker) CollectFromPod(podName string, hasArtifacts []string, waitForContainers []string) {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
 	w.hasArtifacts.Insert(podName)
 
-	m := w.remaining[podName]
-	if m == nil {
-		m = make(map[string]struct{})
+	m, ok := w.remaining[podName]
+	if !ok {
+		m.containers = sets.NewString()
+		m.done = make(chan struct{})
 		w.remaining[podName] = m
 	}
 
 	r := w.required[podName]
 	if r == nil {
-		r = make(map[string]struct{})
+		r = sets.NewString()
 		w.required[podName] = r
 	}
 
@@ -427,21 +454,14 @@ func (w *ArtifactWorker) CollectFromPod(podName string, hasArtifactsContainer bo
 		if name == "artifacts" {
 			continue
 		}
-		if _, ok := m[name]; !ok {
-			m[name] = struct{}{}
-		}
+		m.containers.Insert(name)
 	}
 
 	for _, name := range waitForContainers {
-		if name == "artifacts" {
+		if name == "artifacts" || !m.containers.Has(name) {
 			continue
 		}
-		if _, ok := m[name]; !ok {
-			continue
-		}
-		if _, ok := r[name]; !ok {
-			r[name] = struct{}{}
-		}
+		r.Insert(name)
 	}
 }
 
@@ -453,7 +473,7 @@ func (w *ArtifactWorker) Complete(podName string) {
 	if !ok {
 		return
 	}
-	if len(artifactContainers) > 0 {
+	if artifactContainers.containers.Len() > 0 {
 		// when all containers in a given pod that output artifacts have completed, exit
 		w.podsToDownload <- podName
 	}
@@ -488,24 +508,24 @@ func (w *ArtifactWorker) Notify(pod *coreapi.Pod, containerName string) {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 	artifactContainers := w.remaining[pod.Name]
-	if _, ok := artifactContainers[containerName]; !ok {
+	if !artifactContainers.containers.Has(containerName) {
 		return
 	}
 	requiredContainers := w.required[pod.Name]
 
-	delete(artifactContainers, containerName)
-	delete(requiredContainers, containerName)
+	artifactContainers.containers.Delete(containerName)
+	requiredContainers.Delete(containerName)
 
 	// if at least one container has failed, and there are no longer any
 	// remaining required containers, we don't have to wait for other artifact containers
 	// to exit
-	if hasFailedContainers(pod) && len(requiredContainers) == 0 {
-		for k := range artifactContainers {
-			delete(artifactContainers, k)
+	if hasFailedContainers(pod) && requiredContainers.Len() == 0 {
+		for k := range artifactContainers.containers {
+			artifactContainers.containers.Delete(k)
 		}
 	}
 	// no more artifact containers, we can start grabbing artifacts
-	if len(artifactContainers) == 0 {
+	if artifactContainers.containers.Len() == 0 {
 		w.podsToDownload <- pod.Name
 	}
 	// no more pods, we can shutdown the worker gracefully
@@ -514,21 +534,15 @@ func (w *ArtifactWorker) Notify(pod *coreapi.Pod, containerName string) {
 	}
 }
 
-func (w *ArtifactWorker) Done(podName string) bool {
+func (w *ArtifactWorker) Done(podName string) <-chan struct{} {
 	w.lock.Lock()
 	defer w.lock.Unlock()
-	// log.Printf("DEBUG: remaining containers for pod %s %v", podName, w.remaining[podName])
-	_, ok := w.remaining[podName]
-	return !ok
+	return w.remaining[podName].done
 }
 
 func addArtifactContainersFromPod(pod *coreapi.Pod, worker *ArtifactWorker) {
 	var containers []string
-	var hasArtifactsContainer bool
 	for _, container := range append(append([]coreapi.Container{}, pod.Spec.InitContainers...), pod.Spec.Containers...) {
-		if container.Name == "artifacts" {
-			hasArtifactsContainer = true
-		}
 		if !containerHasVolumeName(container, "artifacts") {
 			continue
 		}
@@ -538,7 +552,7 @@ func addArtifactContainersFromPod(pod *coreapi.Pod, worker *ArtifactWorker) {
 	if names := pod.Annotations[annotationWaitForContainerArtifacts]; len(names) > 0 {
 		waitForContainers = strings.Split(names, ",")
 	}
-	worker.CollectFromPod(pod.Name, hasArtifactsContainer, containers, waitForContainers)
+	worker.CollectFromPod(pod.Name, containers, waitForContainers)
 }
 
 func containerHasVolumeName(container coreapi.Container, name string) bool {

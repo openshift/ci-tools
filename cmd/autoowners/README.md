@@ -33,4 +33,4 @@ Any aliases present in the upstream `OWNERS` file will be resolved to the set of
 upstream alias names coming from  different repos.
 
 The utility also iterates through the `ci-operator/{type}/{organization}/{repository}` for `{type}` in `config`, `jobs`, and `templates`, writing `OWNERS` to reflect the upstream configuration.
-If the upstream did not have an `OWNERS` file, the utility removes the associated `ci-operator/*/{organization}/{repository}/OWNERS`.
+If the upstream does not have an `OWNERS` file, the utility will ignore syncing it for those paths.

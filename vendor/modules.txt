@@ -339,10 +339,10 @@ k8s.io/api/storage/v1
 k8s.io/api/storage/v1alpha1
 k8s.io/api/storage/v1beta1
 # k8s.io/apimachinery v0.0.0-20190816221834-a9f1d8a9c101 => k8s.io/apimachinery v0.0.0-20190313205120-d7deff9243b1
+k8s.io/apimachinery/pkg/util/sets
 k8s.io/apimachinery/pkg/api/errors
 k8s.io/apimachinery/pkg/apis/meta/v1
 k8s.io/apimachinery/pkg/api/resource
-k8s.io/apimachinery/pkg/util/sets
 k8s.io/apimachinery/pkg/util/validation
 k8s.io/apimachinery/pkg/fields
 k8s.io/apimachinery/pkg/util/errors

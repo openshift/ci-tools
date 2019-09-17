@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -23,6 +24,56 @@ type options struct {
 	resolver   registry.Resolver
 	configPath string
 	regPath    string
+}
+
+type coalescer struct {
+	sync.Mutex
+	loading bool
+	loader  *sync.Cond
+	latest  *registry.Resolver
+}
+
+func (c *coalescer) reload(o options) {
+	c.Lock()
+	if c.loading {
+		// someone else is loading it, so we wait
+		log.Debug("Registry already being reloaded; waiting")
+		c.loader.L.Lock()
+		c.Unlock()
+		c.loader.Wait()
+		c.loader.L.Unlock()
+		log.Debug("Registry reloaded by separate goroutine, returning")
+		return
+	}
+	// nobody else is loading
+	c.loading = true
+	c.Unlock()
+	log.Debug("Reloading registry")
+
+	// wait 1 second to allow all fsnotify events to be processed; this
+	// reduces the amount of times we reload the registry due to new events
+	time.Sleep(time.Second)
+
+	// reload the registry
+	references, chain, workflows, err := load.Registry(o.regPath)
+	if err != nil {
+		log.Errorf("Failed to load updated registry")
+		c.loader.L.Lock()
+		c.loader.Broadcast()
+		c.loader.L.Unlock()
+		return
+	}
+	resolver := registry.NewResolver(references, chain, workflows)
+	c.Lock()
+	c.latest = &resolver
+	c.Unlock()
+	log.Info("Registry reloaded")
+
+	// inform the waiters that we are done
+	c.loader.L.Lock()
+	c.loading = false
+	c.loader.Broadcast()
+	c.loader.L.Unlock()
 }
 
 func resolveConfig(o *options) http.HandlerFunc {
@@ -142,7 +193,7 @@ func populateWatcher(watcher *fsnotify.Watcher, root string) error {
 		// We only need to watch directories as creation, deletion, and writes
 		// for files in a directory trigger events for the directory
 		if file != nil && file.IsDir() {
-			log.Debugf("Adding %s to watch list", path)
+			//log.Debugf("Adding %s to watch list", path)
 			err = watcher.Add(path)
 			if err != nil {
 				return fmt.Errorf("Failed to add watch on directory %s: %v", path, err)
@@ -156,12 +207,16 @@ func main() {
 	opts := options{}
 	flag.StringVar(&opts.regPath, "registry", "", "Path to step registry")
 	flag.StringVar(&opts.configPath, "config", "", "Path to config dirs")
-	verbose := flag.Bool("verbose", false, "Enable debug logging messages")
+	logLevel := flag.String("log-level", "info", "Level at which to log output.")
 	flag.Parse()
-	reloadRegistry(&opts)
-	if *verbose {
-		log.SetLevel(log.DebugLevel)
+	level, err := log.ParseLevel(*logLevel)
+	if err != nil {
+		log.Fatalf("invalid --log-level: %v", err)
 	}
+	log.SetLevel(level)
+
+	c := coalescer{loader: sync.NewCond(&sync.Mutex{})}
+	c.reload(opts)
 
 	// watch for changes in config directories
 	watcher, err := fsnotify.NewWatcher()
@@ -169,33 +224,20 @@ func main() {
 		log.Fatalf("Failed to create new watcher: %v", err)
 	}
 	defer watcher.Close()
-	reloadSet := false
 	go func() {
 		for {
 			select {
 			case event := <-watcher.Events:
-				log.Debugf("Received %v event for %s", event.Op, event.Name)
+				//log.Debugf("Received %v event for %s", event.Op, event.Name)
 				if event.Op == fsnotify.Remove {
-					log.Debugf("Removing %s from watches", event.Name)
+					//log.Debugf("Removing %s from watches", event.Name)
 					watcher.Remove(event.Name)
 				}
-				if !reloadSet {
-					reloadSet = true
-					// use separate go routine to allow other events to run while the reloader waits
-					go func() {
-						time.Sleep(time.Second)
-						// unset reloadSet before running reload function in case a change occurs during the reload
-						reloadSet = false
-						log.Info("Reloading registry")
-						if err := reloadRegistry(&opts); err != nil {
-							log.Fatalf("Failed to reload registry: %v", err)
-						}
-						log.Info("Registry successfully reloaded")
-					}()
-				}
+				// reload registry
+				go c.reload(opts)
 				// add new files to be watched
 				if err := populateWatcher(watcher, opts.regPath); err != nil {
-					log.Fatalf("Failed to update fsnotify watchlist: %v", err)
+					log.Errorf("Failed to update fsnotify watchlist: %v", err)
 				}
 			case err := <-watcher.Errors:
 				log.Errorf("error: %v", err)

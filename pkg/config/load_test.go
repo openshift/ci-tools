@@ -1,6 +1,7 @@
 package config
 
 import (
+	"github.com/openshift/ci-tools/pkg/api"
 	"reflect"
 	"testing"
 
@@ -197,6 +198,171 @@ func TestInfo_ConfigMapName(t *testing.T) {
 			// test that ConfigMapName() stays in sync with IsCiopConfigCM()
 			if !IsCiopConfigCM(actual) {
 				t.Errorf("%s: IsCiopConfigCM() returned false for %s", testCase.name, actual)
+			}
+		})
+	}
+}
+
+func TestCompoundFrom(t *testing.T) {
+	var testCases = []struct {
+		name string
+		in   ByFilename
+		out  CompoundCiopConfig
+	}{
+		{
+			name: "no input, no output",
+			in:   ByFilename{},
+			out:  CompoundCiopConfig{},
+		},
+		{
+			name: "input is faithfully copied",
+			in: ByFilename{
+				"foo": {
+					Configuration: api.ReleaseBuildConfiguration{
+						PromotionConfiguration: &api.PromotionConfiguration{
+							Name:      "foo",
+							Namespace: "ocp",
+						},
+						InputConfiguration: api.InputConfiguration{
+							ReleaseTagConfiguration: &api.ReleaseTagConfiguration{
+								Name:      "foo",
+								Namespace: "ocp",
+							},
+							BaseImages: map[string]api.ImageStreamTagReference{
+								"first": {
+									Name:      "foo",
+									Namespace: "ocp",
+									Tag:       "first",
+								},
+							},
+							BaseRPMImages: map[string]api.ImageStreamTagReference{
+								"second": {
+									Name:      "foo",
+									Namespace: "ocp",
+									Tag:       "second",
+								},
+							},
+							BuildRootImage: &api.BuildRootImageConfiguration{
+								ImageStreamTagReference: &api.ImageStreamTagReference{
+									Name:      "foo",
+									Namespace: "ocp",
+									Tag:       "third",
+								},
+							},
+						},
+					},
+				},
+				"bar": {
+					Configuration: api.ReleaseBuildConfiguration{
+						PromotionConfiguration: &api.PromotionConfiguration{
+							Name:      "bar",
+							Namespace: "ocp",
+						},
+						InputConfiguration: api.InputConfiguration{
+							ReleaseTagConfiguration: &api.ReleaseTagConfiguration{
+								Name:      "bar",
+								Namespace: "ocp",
+							},
+							BaseImages: map[string]api.ImageStreamTagReference{
+								"first": {
+									Name:      "bar",
+									Namespace: "ocp",
+									Tag:       "first",
+								},
+							},
+							BaseRPMImages: map[string]api.ImageStreamTagReference{
+								"second": {
+									Name:      "bar",
+									Namespace: "ocp",
+									Tag:       "second",
+								},
+							},
+							BuildRootImage: &api.BuildRootImageConfiguration{
+								ImageStreamTagReference: &api.ImageStreamTagReference{
+									Name:      "bar",
+									Namespace: "ocp",
+									Tag:       "third",
+								},
+							},
+						},
+					},
+				},
+			},
+			out: CompoundCiopConfig{
+				"foo": &api.ReleaseBuildConfiguration{
+					PromotionConfiguration: &api.PromotionConfiguration{
+						Name:      "foo",
+						Namespace: "ocp",
+					},
+					InputConfiguration: api.InputConfiguration{
+						ReleaseTagConfiguration: &api.ReleaseTagConfiguration{
+							Name:      "foo",
+							Namespace: "ocp",
+						},
+						BaseImages: map[string]api.ImageStreamTagReference{
+							"first": {
+								Name:      "foo",
+								Namespace: "ocp",
+								Tag:       "first",
+							},
+						},
+						BaseRPMImages: map[string]api.ImageStreamTagReference{
+							"second": {
+								Name:      "foo",
+								Namespace: "ocp",
+								Tag:       "second",
+							},
+						},
+						BuildRootImage: &api.BuildRootImageConfiguration{
+							ImageStreamTagReference: &api.ImageStreamTagReference{
+								Name:      "foo",
+								Namespace: "ocp",
+								Tag:       "third",
+							},
+						},
+					},
+				},
+				"bar": &api.ReleaseBuildConfiguration{
+					PromotionConfiguration: &api.PromotionConfiguration{
+						Name:      "bar",
+						Namespace: "ocp",
+					},
+					InputConfiguration: api.InputConfiguration{
+						ReleaseTagConfiguration: &api.ReleaseTagConfiguration{
+							Name:      "bar",
+							Namespace: "ocp",
+						},
+						BaseImages: map[string]api.ImageStreamTagReference{
+							"first": {
+								Name:      "bar",
+								Namespace: "ocp",
+								Tag:       "first",
+							},
+						},
+						BaseRPMImages: map[string]api.ImageStreamTagReference{
+							"second": {
+								Name:      "bar",
+								Namespace: "ocp",
+								Tag:       "second",
+							},
+						},
+						BuildRootImage: &api.BuildRootImageConfiguration{
+							ImageStreamTagReference: &api.ImageStreamTagReference{
+								Name:      "bar",
+								Namespace: "ocp",
+								Tag:       "third",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if actual, expected := CompoundFrom(testCase.in), testCase.out; !reflect.DeepEqual(actual, expected) {
+				t.Errorf("%s: got incorrect output: %v", testCase.name, diff.ObjectReflectDiff(actual, expected))
 			}
 		})
 	}

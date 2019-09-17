@@ -23,123 +23,131 @@ import (
 )
 
 func TestGetChangedCiopConfigs(t *testing.T) {
-	baseCiopConfig := cioperatorapi.ReleaseBuildConfiguration{
-		InputConfiguration: cioperatorapi.InputConfiguration{
-			ReleaseTagConfiguration: &cioperatorapi.ReleaseTagConfiguration{
-				Cluster:   "kluster",
-				Namespace: "namespace",
-				Name:      "name",
+	baseCiopConfig := config.DataWithInfo{
+		Configuration: cioperatorapi.ReleaseBuildConfiguration{
+			InputConfiguration: cioperatorapi.InputConfiguration{
+				ReleaseTagConfiguration: &cioperatorapi.ReleaseTagConfiguration{
+					Cluster:   "kluster",
+					Namespace: "namespace",
+					Name:      "name",
+				},
+			},
+			Tests: []cioperatorapi.TestStepConfiguration{
+				{
+					As:       "unit",
+					Commands: "make unit",
+				},
+				{
+					As:       "e2e",
+					Commands: "make e2e",
+				},
+				{
+					As:       "verify",
+					Commands: "make verify",
+				},
 			},
 		},
-		Tests: []cioperatorapi.TestStepConfiguration{
-			{
-				As:       "unit",
-				Commands: "make unit",
-			},
-			{
-				As:       "e2e",
-				Commands: "make e2e",
-			},
-			{
-				As:       "verify",
-				Commands: "make verify",
-			},
+		Info: config.Info{
+			Org:      "org",
+			Repo:     "repo",
+			Branch:   "branch",
+			Filename: "org-repo-branch.yaml",
 		},
 	}
 
 	testCases := []struct {
 		name                 string
-		configGenerator      func(*testing.T) (before, after config.CompoundCiopConfig)
-		expected             func() config.CompoundCiopConfig
+		configGenerator      func(*testing.T) (before, after config.ByFilename)
+		expected             func() config.ByFilename
 		expectedAffectedJobs map[string]sets.String
 	}{{
 		name: "no changes",
-		configGenerator: func(t *testing.T) (config.CompoundCiopConfig, config.CompoundCiopConfig) {
-			before := config.CompoundCiopConfig{"org-repo-branch.yaml": &baseCiopConfig}
-			after := config.CompoundCiopConfig{"org-repo-branch.yaml": &baseCiopConfig}
+		configGenerator: func(t *testing.T) (config.ByFilename, config.ByFilename) {
+			before := config.ByFilename{"org-repo-branch.yaml": baseCiopConfig}
+			after := config.ByFilename{"org-repo-branch.yaml": baseCiopConfig}
 			return before, after
 		},
-		expected:             func() config.CompoundCiopConfig { return config.CompoundCiopConfig{} },
+		expected:             func() config.ByFilename { return config.ByFilename{} },
 		expectedAffectedJobs: map[string]sets.String{},
 	}, {
 		name: "new config",
-		configGenerator: func(t *testing.T) (config.CompoundCiopConfig, config.CompoundCiopConfig) {
-			before := config.CompoundCiopConfig{"org-repo-branch.yaml": &baseCiopConfig}
-			after := config.CompoundCiopConfig{
-				"org-repo-branch.yaml":         &baseCiopConfig,
-				"org-repo-another-branch.yaml": &baseCiopConfig,
+		configGenerator: func(t *testing.T) (config.ByFilename, config.ByFilename) {
+			before := config.ByFilename{"org-repo-branch.yaml": baseCiopConfig}
+			after := config.ByFilename{
+				"org-repo-branch.yaml":         baseCiopConfig,
+				"org-repo-another-branch.yaml": baseCiopConfig,
 			}
 			return before, after
 		},
-		expected: func() config.CompoundCiopConfig {
-			return config.CompoundCiopConfig{"org-repo-another-branch.yaml": &baseCiopConfig}
+		expected: func() config.ByFilename {
+			return config.ByFilename{"org-repo-another-branch.yaml": baseCiopConfig}
 		},
 		expectedAffectedJobs: map[string]sets.String{},
 	}, {
 		name: "changed config",
-		configGenerator: func(t *testing.T) (config.CompoundCiopConfig, config.CompoundCiopConfig) {
-			before := config.CompoundCiopConfig{"org-repo-branch.yaml": &baseCiopConfig}
-			afterConfig := cioperatorapi.ReleaseBuildConfiguration{}
-			if err := deepcopy.Copy(&afterConfig, baseCiopConfig); err != nil {
+		configGenerator: func(t *testing.T) (config.ByFilename, config.ByFilename) {
+			before := config.ByFilename{"org-repo-branch.yaml": baseCiopConfig}
+			afterConfig := config.DataWithInfo{}
+			if err := deepcopy.Copy(&afterConfig, &baseCiopConfig); err != nil {
 				t.Fatal(err)
 			}
-			afterConfig.InputConfiguration.ReleaseTagConfiguration.Name = "another-name"
-			after := config.CompoundCiopConfig{"org-repo-branch.yaml": &afterConfig}
+			afterConfig.Configuration.InputConfiguration.ReleaseTagConfiguration.Name = "another-name"
+			after := config.ByFilename{"org-repo-branch.yaml": afterConfig}
 			return before, after
 		},
-		expected: func() config.CompoundCiopConfig {
-			expected := cioperatorapi.ReleaseBuildConfiguration{}
-			if err := deepcopy.Copy(&expected, baseCiopConfig); err != nil {
+		expected: func() config.ByFilename {
+			expected := config.DataWithInfo{}
+			if err := deepcopy.Copy(&expected, &baseCiopConfig); err != nil {
 				t.Fatal(err)
 			}
-			expected.InputConfiguration.ReleaseTagConfiguration.Name = "another-name"
-			return config.CompoundCiopConfig{"org-repo-branch.yaml": &expected}
+			expected.Configuration.InputConfiguration.ReleaseTagConfiguration.Name = "another-name"
+			return config.ByFilename{"org-repo-branch.yaml": expected}
 		},
 		expectedAffectedJobs: map[string]sets.String{},
 	},
 		{
 			name: "changed tests",
-			configGenerator: func(t *testing.T) (config.CompoundCiopConfig, config.CompoundCiopConfig) {
-				before := config.CompoundCiopConfig{"org-repo-branch.yaml": &baseCiopConfig}
-				afterConfig := cioperatorapi.ReleaseBuildConfiguration{}
-				if err := deepcopy.Copy(&afterConfig, baseCiopConfig); err != nil {
+			configGenerator: func(t *testing.T) (config.ByFilename, config.ByFilename) {
+				before := config.ByFilename{"org-repo-branch.yaml": baseCiopConfig}
+				afterConfig := config.DataWithInfo{}
+				if err := deepcopy.Copy(&afterConfig, &baseCiopConfig); err != nil {
 					t.Fatal(err)
 				}
-				afterConfig.Tests[0].Commands = "changed commands"
-				after := config.CompoundCiopConfig{"org-repo-branch.yaml": &afterConfig}
+				afterConfig.Configuration.Tests[0].Commands = "changed commands"
+				after := config.ByFilename{"org-repo-branch.yaml": afterConfig}
 				return before, after
 			},
-			expected: func() config.CompoundCiopConfig {
-				expected := cioperatorapi.ReleaseBuildConfiguration{}
-				if err := deepcopy.Copy(&expected, baseCiopConfig); err != nil {
+			expected: func() config.ByFilename {
+				expected := config.DataWithInfo{}
+				if err := deepcopy.Copy(&expected, &baseCiopConfig); err != nil {
 					t.Fatal(err)
 				}
-				expected.Tests[0].Commands = "changed commands"
-				return config.CompoundCiopConfig{"org-repo-branch.yaml": &expected}
+				expected.Configuration.Tests[0].Commands = "changed commands"
+				return config.ByFilename{"org-repo-branch.yaml": expected}
 			},
 			expectedAffectedJobs: map[string]sets.String{"org-repo-branch.yaml": {"unit": sets.Empty{}}},
 		},
 		{
 			name: "changed multiple tests",
-			configGenerator: func(t *testing.T) (config.CompoundCiopConfig, config.CompoundCiopConfig) {
-				before := config.CompoundCiopConfig{"org-repo-branch.yaml": &baseCiopConfig}
-				afterConfig := cioperatorapi.ReleaseBuildConfiguration{}
-				if err := deepcopy.Copy(&afterConfig, baseCiopConfig); err != nil {
+			configGenerator: func(t *testing.T) (config.ByFilename, config.ByFilename) {
+				before := config.ByFilename{"org-repo-branch.yaml": baseCiopConfig}
+				afterConfig := config.DataWithInfo{}
+				if err := deepcopy.Copy(&afterConfig, &baseCiopConfig); err != nil {
 					t.Fatal(err)
 				}
-				afterConfig.Tests[0].Commands = "changed commands"
-				afterConfig.Tests[1].Commands = "changed commands"
-				after := config.CompoundCiopConfig{"org-repo-branch.yaml": &afterConfig}
+				afterConfig.Configuration.Tests[0].Commands = "changed commands"
+				afterConfig.Configuration.Tests[1].Commands = "changed commands"
+				after := config.ByFilename{"org-repo-branch.yaml": afterConfig}
 				return before, after
 			},
-			expected: func() config.CompoundCiopConfig {
-				expected := cioperatorapi.ReleaseBuildConfiguration{}
-				if err := deepcopy.Copy(&expected, baseCiopConfig); err != nil {
+			expected: func() config.ByFilename {
+				expected := config.DataWithInfo{}
+				if err := deepcopy.Copy(&expected, &baseCiopConfig); err != nil {
 					t.Fatal(err)
 				}
-				expected.Tests[0].Commands = "changed commands"
-				expected.Tests[1].Commands = "changed commands"
-				return config.CompoundCiopConfig{"org-repo-branch.yaml": &expected}
+				expected.Configuration.Tests[0].Commands = "changed commands"
+				expected.Configuration.Tests[1].Commands = "changed commands"
+				return config.ByFilename{"org-repo-branch.yaml": expected}
 			},
 			expectedAffectedJobs: map[string]sets.String{
 				"org-repo-branch.yaml": {

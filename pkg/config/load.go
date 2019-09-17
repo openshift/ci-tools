@@ -178,18 +178,37 @@ func (i *DataWithInfo) CommitTo(dir string) error {
 	return nil
 }
 
-type CompoundCiopConfig map[string]*cioperatorapi.ReleaseBuildConfiguration
+// ByFilename stores CI Operator configurations with their metadata by filename
+type ByFilename map[string]DataWithInfo
 
-func (compound CompoundCiopConfig) add(handledConfig *cioperatorapi.ReleaseBuildConfiguration, handledElements *Info) error {
-	compound[handledElements.Basename()] = handledConfig
+func (all ByFilename) add(handledConfig *cioperatorapi.ReleaseBuildConfiguration, handledElements *Info) error {
+	all[handledElements.Basename()] = DataWithInfo{
+		Configuration: *handledConfig,
+		Info:          *handledElements,
+	}
 	return nil
 }
 
-func CompoundLoad(path string) (CompoundCiopConfig, error) {
-	config := CompoundCiopConfig{}
+func LoadConfigByFilename(path string) (ByFilename, error) {
+	config := ByFilename{}
 	if err := OperateOnCIOperatorConfigDir(path, config.add); err != nil {
 		return nil, err
 	}
 
 	return config, nil
+}
+
+type CompoundCiopConfig map[string]*cioperatorapi.ReleaseBuildConfiguration
+
+// CompoundFrom is an adapter from the superset type to the subset type while we migrate
+func CompoundFrom(all ByFilename) CompoundCiopConfig {
+	out := CompoundCiopConfig{}
+	for file, data := range all {
+		out[file] = configRefFor(data)
+	}
+	return out
+}
+
+func configRefFor(data DataWithInfo) *cioperatorapi.ReleaseBuildConfiguration {
+	return &data.Configuration
 }

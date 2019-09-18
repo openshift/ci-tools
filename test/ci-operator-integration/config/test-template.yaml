@@ -110,6 +110,12 @@ objects:
     - name: test
       image: ${LOCAL_IMAGE_SRC}
       terminationMessagePolicy: FallbackToLogsOnError
+      resources:
+        requests:
+          cpu: 10m
+          memory: 10Mi
+        limits:
+          memory: 200Mi      
       volumeMounts:
       - name: shared-tmp
         mountPath: /tmp/shared
@@ -139,6 +145,12 @@ objects:
     - name: setup
       image: ${IMAGE_INSTALLER}
       terminationMessagePolicy: FallbackToLogsOnError
+      resources:
+        requests:
+          cpu: 10m
+          memory: 10Mi
+        limits:
+          memory: 200Mi      
       volumeMounts:
       - name: shared-tmp
         mountPath: /tmp
@@ -200,6 +212,12 @@ objects:
     - name: teardown
       image: ${IMAGE_TESTS}
       terminationMessagePolicy: FallbackToLogsOnError
+      resources:
+        requests:
+          cpu: 10m
+          memory: 10Mi
+        limits:
+          memory: 200Mi      
       volumeMounts:
       - name: shared-tmp
         mountPath: /tmp/shared

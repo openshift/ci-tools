@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	v1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -42,25 +43,28 @@ import (
 )
 
 var (
+	coreScheme   = runtime.NewScheme()
+	codecFactory = serializer.NewCodecFactory(coreScheme)
+	corev1Codec  = codecFactory.LegacyCodec(coreapi.SchemeGroupVersion)
+	rbacv1Codec  = codecFactory.LegacyCodec(rbacv1.SchemeGroupVersion)
+
 	encoder runtime.Encoder
 	decoder runtime.Decoder
 )
 
 func init() {
-	scheme := runtime.NewScheme()
-	codecs := serializer.NewCodecFactory(scheme)
+	utilruntime.Must(imageapi.AddToScheme(coreScheme))
+	utilruntime.Must(templateapi.AddToScheme(coreScheme))
+	utilruntime.Must(coreapi.AddToScheme(coreScheme))
+	utilruntime.Must(buildapi.AddToScheme(coreScheme))
+	utilruntime.Must(appsapi.AddToScheme(coreScheme))
+	utilruntime.Must(routeapi.AddToScheme(coreScheme))
+	utilruntime.Must(rbacv1.AddToScheme(coreScheme))
 
-	utilruntime.Must(imageapi.AddToScheme(scheme))
-	utilruntime.Must(templateapi.AddToScheme(scheme))
-	utilruntime.Must(coreapi.AddToScheme(scheme))
-	utilruntime.Must(buildapi.AddToScheme(scheme))
-	utilruntime.Must(appsapi.AddToScheme(scheme))
-	utilruntime.Must(routeapi.AddToScheme(scheme))
-
-	encoder = codecs.LegacyCodec(imageapi.SchemeGroupVersion, templateapi.SchemeGroupVersion,
-		coreapi.SchemeGroupVersion, buildapi.SchemeGroupVersion, appsapi.SchemeGroupVersion, routeapi.SchemeGroupVersion)
-	decoder = codecs.UniversalDecoder(imageapi.SchemeGroupVersion, templateapi.SchemeGroupVersion,
-		coreapi.SchemeGroupVersion, buildapi.SchemeGroupVersion, appsapi.SchemeGroupVersion, routeapi.SchemeGroupVersion)
+	encoder = codecFactory.LegacyCodec(imageapi.SchemeGroupVersion, templateapi.SchemeGroupVersion,
+		coreapi.SchemeGroupVersion, buildapi.SchemeGroupVersion, appsapi.SchemeGroupVersion, routeapi.SchemeGroupVersion, rbacv1.SchemeGroupVersion)
+	decoder = codecFactory.UniversalDecoder(imageapi.SchemeGroupVersion, templateapi.SchemeGroupVersion,
+		coreapi.SchemeGroupVersion, buildapi.SchemeGroupVersion, appsapi.SchemeGroupVersion, routeapi.SchemeGroupVersion, rbacv1.SchemeGroupVersion)
 }
 
 // DryLogger holds the information of all objects that have been created from a dry run.

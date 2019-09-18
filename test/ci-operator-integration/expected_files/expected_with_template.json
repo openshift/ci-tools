@@ -1164,6 +1164,7 @@
             "ci-operator.openshift.io/save-container-logs": "true",
             "ci-operator.openshift.io/wait-for-container-artifacts": "teardown"
           },
+          "creationTimestamp": null,
           "name": "${JOB_NAME_SAFE}",
           "namespace": "${NAMESPACE}"
         },
@@ -1247,6 +1248,15 @@
               ],
               "image": "${LOCAL_IMAGE_SRC}",
               "name": "test",
+              "resources": {
+                "limits": {
+                  "memory": "200Mi"
+                },
+                "requests": {
+                  "cpu": "10m",
+                  "memory": "10Mi"
+                }
+              },
               "terminationMessagePolicy": "FallbackToLogsOnError",
               "volumeMounts": [
                 {
@@ -1363,6 +1373,15 @@
               ],
               "image": "${IMAGE_INSTALLER}",
               "name": "setup",
+              "resources": {
+                "limits": {
+                  "memory": "200Mi"
+                },
+                "requests": {
+                  "cpu": "10m",
+                  "memory": "10Mi"
+                }
+              },
               "terminationMessagePolicy": "FallbackToLogsOnError",
               "volumeMounts": [
                 {
@@ -1419,6 +1438,15 @@
               ],
               "image": "${IMAGE_TESTS}",
               "name": "teardown",
+              "resources": {
+                "limits": {
+                  "memory": "200Mi"
+                },
+                "requests": {
+                  "cpu": "10m",
+                  "memory": "10Mi"
+                }
+              },
               "terminationMessagePolicy": "FallbackToLogsOnError",
               "volumeMounts": [
                 {
@@ -1461,6 +1489,7 @@
               ],
               "image": "${IMAGE_CLI}",
               "name": "cli",
+              "resources": {},
               "volumeMounts": [
                 {
                   "mountPath": "/tmp/shared",
@@ -1487,7 +1516,8 @@
               }
             }
           ]
-        }
+        },
+        "status": {}
       }
     ],
     "parameters": [

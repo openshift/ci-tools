@@ -43,7 +43,7 @@ if ! ci-operator --dry-run --determinize-output --namespace "${TEST_NAMESPACE}" 
     exit 1
 fi
 
-if ! diff "${EXPECTED_WITH_TEMPLATE}" "${DRY_RUN_WITH_TEMPLATE_JSON}"; then
+if ! diff <(cat "${EXPECTED_WITH_TEMPLATE}" | jq --sort-keys) <(cat "${DRY_RUN_WITH_TEMPLATE_JSON}" | jq --sort-keys); then
     echo "ERROR: differences have been found"
     exit 1
 fi

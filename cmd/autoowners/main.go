@@ -22,9 +22,8 @@ import (
 )
 
 const (
-	doNotEdit     = "# DO NOT EDIT; this file is auto-generated using tools/populate-owners."
+	doNotEdit     = "# DO NOT EDIT; this file is auto-generated using https://github.com/openshift/ci-tools."
 	ownersComment = "# See the OWNERS docs: https://git.k8s.io/community/contributors/guide/owners.md"
-	//ownersAliasesComment = "# See the OWNERS_ALIASES docs: https://git.k8s.io/community/contributors/guide/owners.md#owners_aliases\n"
 
 	githubOrg   = "openshift"
 	githubRepo  = "release"
@@ -105,7 +104,6 @@ type httpResult struct {
 	simpleConfig     SimpleConfig
 	fullConfig       FullConfig
 	repoAliases      RepoAliases
-	commit           string
 	ownersFileExists bool
 }
 
@@ -140,11 +138,6 @@ func (r httpResult) resolveOwnerAliases() interface{} {
 
 func getOwnersHTTP(orgRepo orgRepo) (httpResult, error) {
 	var httpResult httpResult
-	sha, err := gc.GetRef(orgRepo.Organization, orgRepo.Repository, "heads/master")
-	if err != nil {
-		return httpResult, err
-	}
-	httpResult.commit = sha
 
 	for _, filename := range []string{"OWNERS", "OWNERS_ALIASES"} {
 		data, err := gc.GetFile(orgRepo.Organization, orgRepo.Repository, filename, "")
@@ -223,12 +216,7 @@ func writeOwners(orgRepo orgRepo, httpResult httpResult) error {
 			logrus.WithError(err).Error("error occurred when saving config")
 			return err
 		}
-		err = addHeader(path, fmt.Sprintf("%s\n# from https://github.com/%s/%s/blob/%s/OWNERS\n%s\n\n",
-			doNotEdit,
-			orgRepo.Organization,
-			orgRepo.Repository,
-			httpResult.commit,
-			ownersComment))
+		err = addHeader(path, strings.Join([]string{doNotEdit, ownersComment, "", ""}, "\n"))
 		if err != nil {
 			return err
 		}
@@ -261,18 +249,6 @@ func pullOwners(directory string, blacklist sets.String) error {
 
 	return nil
 }
-
-const (
-	usage = `Update the OWNERS files from remote repositories.
-
-Usage:
-  %s [repo-name-regex]
-
-Args:
-  [repo-name-regex]    A go regex which which matches the repos to update, by default all repos are selected
-
-`
-)
 
 var (
 	gc github.Client

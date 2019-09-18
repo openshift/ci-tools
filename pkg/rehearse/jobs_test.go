@@ -161,8 +161,8 @@ func TestInlineCiopConfig(t *testing.T) {
 		Repo:   "repo",
 		Branch: "master",
 	}
-	testCiopConfig := &api.ReleaseBuildConfiguration{}
-	testCiopCongigContent, err := yaml.Marshal(testCiopConfig)
+	testCiopConfig := api.ReleaseBuildConfiguration{}
+	testCiopCongigContent, err := yaml.Marshal(&testCiopConfig)
 	if err != nil {
 		t.Fatal("Failed to marshal ci-operator config")
 	}
@@ -170,36 +170,36 @@ func TestInlineCiopConfig(t *testing.T) {
 	testCases := []struct {
 		description   string
 		sourceEnv     []v1.EnvVar
-		configs       config.CompoundCiopConfig
+		configs       config.ByFilename
 		expectedEnv   []v1.EnvVar
 		expectedError bool
 	}{{
 		description: "empty env -> no changes",
-		configs:     config.CompoundCiopConfig{},
+		configs:     config.ByFilename{},
 	}, {
 		description: "no Env.ValueFrom -> no changes",
 		sourceEnv:   []v1.EnvVar{{Name: "T", Value: "V"}},
-		configs:     config.CompoundCiopConfig{},
+		configs:     config.ByFilename{},
 		expectedEnv: []v1.EnvVar{{Name: "T", Value: "V"}},
 	}, {
 		description: "no Env.ValueFrom.ConfigMapKeyRef -> no changes",
 		sourceEnv:   []v1.EnvVar{{Name: "T", ValueFrom: &v1.EnvVarSource{ResourceFieldRef: &v1.ResourceFieldSelector{}}}},
-		configs:     config.CompoundCiopConfig{},
+		configs:     config.ByFilename{},
 		expectedEnv: []v1.EnvVar{{Name: "T", ValueFrom: &v1.EnvVarSource{ResourceFieldRef: &v1.ResourceFieldSelector{}}}},
 	}, {
 		description: "CM reference but not ci-operator-configs -> no changes",
 		sourceEnv:   []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference("test-cm", "key")}},
-		configs:     config.CompoundCiopConfig{},
+		configs:     config.ByFilename{},
 		expectedEnv: []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference("test-cm", "key")}},
 	}, {
 		description: "CM reference to ci-operator-configs -> cm content inlined",
 		sourceEnv:   []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference(testCiopConfigInfo.ConfigMapName(), "filename")}},
-		configs:     config.CompoundCiopConfig{"filename": testCiopConfig},
+		configs:     config.ByFilename{"filename": {Info: testCiopConfigInfo, Configuration: testCiopConfig}},
 		expectedEnv: []v1.EnvVar{{Name: "T", Value: string(testCiopCongigContent)}},
 	}, {
 		description:   "bad CM key is handled",
 		sourceEnv:     []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference(testCiopConfigInfo.ConfigMapName(), "filename")}},
-		configs:       config.CompoundCiopConfig{},
+		configs:       config.ByFilename{},
 		expectedError: true,
 	},
 	}
@@ -438,7 +438,7 @@ func TestExecuteJobsErrors(t *testing.T) {
 	targetOrgRepo := "targetOrg/targetRepo"
 	targetOrg := "targetOrg"
 	targetRepo := "targetRepo"
-	testCiopConfigs := config.CompoundCiopConfig{}
+	testCiopConfigs := config.ByFilename{}
 
 	testCases := []struct {
 		description  string
@@ -496,7 +496,7 @@ func TestExecuteJobsUnsuccessful(t *testing.T) {
 	targetOrg := "targetOrg"
 	targetRepo := "targetRepo"
 	targetOrgRepo := "targetOrg/targetRepo"
-	testCiopConfigs := config.CompoundCiopConfig{}
+	testCiopConfigs := config.ByFilename{}
 
 	testCases := []struct {
 		description string
@@ -572,7 +572,7 @@ func TestExecuteJobsPositive(t *testing.T) {
 	targetRepo := "targetRepo"
 	anotherTargetOrg := "anotherOrg"
 	anotherTargetRepo := "anotherRepo"
-	testCiopConfigs := config.CompoundCiopConfig{}
+	testCiopConfigs := config.ByFilename{}
 
 	testCases := []struct {
 		description  string

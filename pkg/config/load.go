@@ -197,18 +197,3 @@ func LoadConfigByFilename(path string) (ByFilename, error) {
 
 	return config, nil
 }
-
-type CompoundCiopConfig map[string]*cioperatorapi.ReleaseBuildConfiguration
-
-// CompoundFrom is an adapter from the superset type to the subset type while we migrate
-func CompoundFrom(all ByFilename) CompoundCiopConfig {
-	out := CompoundCiopConfig{}
-	for file, data := range all {
-		out[file] = configRefFor(data)
-	}
-	return out
-}
-
-func configRefFor(data DataWithInfo) *cioperatorapi.ReleaseBuildConfiguration {
-	return &data.Configuration
-}

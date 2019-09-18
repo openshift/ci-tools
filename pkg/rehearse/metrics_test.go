@@ -6,7 +6,6 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/openshift/ci-tools/pkg/api"
 	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
@@ -34,9 +33,9 @@ func TestRecordChangedCiopConfigs(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
 			metrics := NewMetrics(testFilename)
-			testCiopConfig := config.CompoundCiopConfig{}
+			testCiopConfig := config.ByFilename{}
 			for _, ciopConfig := range tc.configs {
-				testCiopConfig[ciopConfig] = &api.ReleaseBuildConfiguration{}
+				testCiopConfig[ciopConfig] = config.DataWithInfo{}
 			}
 			metrics.RecordChangedCiopConfigs(testCiopConfig)
 			sort.Strings(metrics.ChangedCiopConfigs)

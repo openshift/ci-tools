@@ -195,9 +195,11 @@ func rehearseMain() int {
 
 	// We can only detect changes if we managed to load both ci-operator config versions
 	changedCiopConfigs := config.CompoundCiopConfig{}
+	changedCiopConfigData := config.ByFilename{}
 	affectedJobs := make(map[string]sets.String)
 	if masterConfig.CiOperator != nil && prConfig.CiOperator != nil {
 		data, jobs := diffs.GetChangedCiopConfigs(masterConfig.CiOperator, prConfig.CiOperator, logger)
+		changedCiopConfigData = data
 		changedCiopConfigs = config.CompoundFrom(data)
 		affectedJobs = jobs
 		metrics.RecordChangedCiopConfigs(changedCiopConfigs)
@@ -275,7 +277,7 @@ func rehearseMain() int {
 	metrics.RecordChangedPresubmits(toRehearse)
 	metrics.RecordPresubmitsOpportunity(toRehearse, "direct-change")
 
-	presubmitsWithChangedCiopConfigs := diffs.GetPresubmitsForCiopConfigs(prConfig.Prow, changedCiopConfigs, logger, affectedJobs)
+	presubmitsWithChangedCiopConfigs := diffs.GetPresubmitsForCiopConfigs(prConfig.Prow, changedCiopConfigData, logger, affectedJobs)
 	metrics.RecordPresubmitsOpportunity(presubmitsWithChangedCiopConfigs, "ci-operator-config-change")
 	toRehearse.AddAll(presubmitsWithChangedCiopConfigs)
 

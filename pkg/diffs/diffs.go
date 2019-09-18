@@ -165,11 +165,12 @@ func convertToReadableDiff(a, b interface{}, objName string) string {
 	return d
 }
 
-func GetPresubmitsForCiopConfigs(prowConfig *prowconfig.Config, ciopConfigs config.CompoundCiopConfig, logger *logrus.Entry, affectedJobs map[string]sets.String) config.Presubmits {
+func GetPresubmitsForCiopConfigs(prowConfig *prowconfig.Config, ciopConfigs config.ByFilename, logger *logrus.Entry, affectedJobs map[string]sets.String) config.Presubmits {
 	ret := config.Presubmits{}
 
-	for repo, jobs := range prowConfig.JobConfig.Presubmits {
-		for _, job := range jobs {
+	for filename, data := range ciopConfigs {
+		orgRepo := fmt.Sprintf("%s/%s", data.Info.Org, data.Info.Repo)
+		for _, job := range prowConfig.JobConfig.Presubmits[orgRepo] {
 			if job.Agent != string(pjapi.KubernetesAgent) {
 				continue
 			}
@@ -181,17 +182,16 @@ func GetPresubmitsForCiopConfigs(prowConfig *prowconfig.Config, ciopConfigs conf
 					continue
 				}
 				if config.IsCiopConfigCM(env.ValueFrom.ConfigMapKeyRef.Name) {
-					if _, ok := ciopConfigs[env.ValueFrom.ConfigMapKeyRef.Key]; ok {
+					if env.ValueFrom.ConfigMapKeyRef.Key == filename {
 						testName := strings.TrimPrefix(job.Name, "pull-ci-")
-						orgRepo := strings.Replace(repo, "/", "-", -1)
-						testName = strings.TrimPrefix(testName, fmt.Sprintf("%s-%s-", orgRepo, job.Brancher.Branches[0]))
+						testName = strings.TrimPrefix(testName, fmt.Sprintf("%s-%s-%s-", data.Info.Org, data.Info.Repo, data.Info.Branch))
 
 						affectedJob, ok := affectedJobs[env.ValueFrom.ConfigMapKeyRef.Key]
 						if ok && !affectedJob.Has(testName) {
 							continue
 						}
 
-						ret.Add(repo, job)
+						ret.Add(orgRepo, job)
 					}
 				}
 			}

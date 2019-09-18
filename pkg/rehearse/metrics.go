@@ -60,7 +60,7 @@ func NewMetrics(file string) *Metrics {
 	}
 }
 
-func (m *Metrics) RecordChangedCiopConfigs(configs config.CompoundCiopConfig) {
+func (m *Metrics) RecordChangedCiopConfigs(configs config.ByFilename) {
 	for configName := range configs {
 		m.ChangedCiopConfigs = append(m.ChangedCiopConfigs, configName)
 	}

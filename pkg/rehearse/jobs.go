@@ -207,7 +207,7 @@ func filterJobSpec(spec *v1.PodSpec, allowVolumes bool) error {
 // of the needed config file passed to the job as a direct value. This needs
 // to happen because the rehearsed Prow jobs may depend on these config files
 // being also changed by the tested PR.
-func inlineCiOpConfig(container v1.Container, ciopConfigs config.CompoundCiopConfig, loggers Loggers) error {
+func inlineCiOpConfig(container v1.Container, ciopConfigs config.ByFilename, loggers Loggers) error {
 	for index := range container.Env {
 		env := &(container.Env[index])
 		if env.ValueFrom == nil {
@@ -225,7 +225,7 @@ func inlineCiOpConfig(container v1.Container, ciopConfigs config.CompoundCiopCon
 				return fmt.Errorf("ci-operator config file %s was not found", filename)
 			}
 
-			ciOpConfigContent, err := yaml.Marshal(ciopConfig)
+			ciOpConfigContent, err := yaml.Marshal(ciopConfig.Configuration)
 			if err != nil {
 				loggers.Job.WithError(err).Error("Failed to marshal ci-operator config file")
 				return err
@@ -240,7 +240,7 @@ func inlineCiOpConfig(container v1.Container, ciopConfigs config.CompoundCiopCon
 
 // JobConfigurer holds all the information that is needed for the configuration of the jobs.
 type JobConfigurer struct {
-	ciopConfigs config.CompoundCiopConfig
+	ciopConfigs config.ByFilename
 	profiles    []config.ConfigMapSource
 
 	prNumber     int
@@ -251,7 +251,7 @@ type JobConfigurer struct {
 }
 
 // NewJobConfigurer filters the jobs and returns a new JobConfigurer.
-func NewJobConfigurer(ciopConfigs config.CompoundCiopConfig, prNumber int, loggers Loggers, allowVolumes bool, templates []config.ConfigMapSource, profiles []config.ConfigMapSource, refs *pjapi.Refs) *JobConfigurer {
+func NewJobConfigurer(ciopConfigs config.ByFilename, prNumber int, loggers Loggers, allowVolumes bool, templates []config.ConfigMapSource, profiles []config.ConfigMapSource, refs *pjapi.Refs) *JobConfigurer {
 	return &JobConfigurer{
 		ciopConfigs:  ciopConfigs,
 		profiles:     profiles,

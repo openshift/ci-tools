@@ -194,15 +194,13 @@ func rehearseMain() int {
 	}
 
 	// We can only detect changes if we managed to load both ci-operator config versions
-	changedCiopConfigs := config.CompoundCiopConfig{}
 	changedCiopConfigData := config.ByFilename{}
 	affectedJobs := make(map[string]sets.String)
 	if masterConfig.CiOperator != nil && prConfig.CiOperator != nil {
 		data, jobs := diffs.GetChangedCiopConfigs(masterConfig.CiOperator, prConfig.CiOperator, logger)
 		changedCiopConfigData = data
-		changedCiopConfigs = config.CompoundFrom(data)
 		affectedJobs = jobs
-		metrics.RecordChangedCiopConfigs(changedCiopConfigs)
+		metrics.RecordChangedCiopConfigs(changedCiopConfigData)
 	}
 
 	changedTemplates, err := config.GetChangedTemplates(o.releaseRepoPath, jobSpec.Refs.BaseSHA)
@@ -289,7 +287,7 @@ func rehearseMain() int {
 	metrics.RecordPresubmitsOpportunity(toRehearseClusterProfiles, "cluster-profile-change")
 	toRehearse.AddAll(toRehearseClusterProfiles)
 
-	jobConfigurer := rehearse.NewJobConfigurer(config.CompoundFrom(prConfig.CiOperator), prNumber, loggers, o.allowVolumes, changedTemplates, changedClusterProfiles, jobSpec.Refs)
+	jobConfigurer := rehearse.NewJobConfigurer(prConfig.CiOperator, prNumber, loggers, o.allowVolumes, changedTemplates, changedClusterProfiles, jobSpec.Refs)
 
 	presubmitsToRehearse := jobConfigurer.ConfigurePresubmitRehearsals(toRehearse)
 	periodicsToRehearse := jobConfigurer.ConfigurePeriodicRehearsals(changedPeriodics)

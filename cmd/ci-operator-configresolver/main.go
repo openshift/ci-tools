@@ -69,12 +69,12 @@ func (c *coalescer) coalesce(o *options) {
 	log.Infof("Reloaded %s", c.name)
 
 	// inform the waiters that we are done
-	c.loader.L.Lock()
 	c.Lock()
 	c.loading = false
-	c.Unlock()
+	c.loader.L.Lock()
 	c.loader.Broadcast()
 	c.loader.L.Unlock()
+	c.Unlock()
 }
 
 func resolveConfig(o *options) http.HandlerFunc {

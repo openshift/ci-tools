@@ -389,7 +389,7 @@ func main() {
 	}
 	gc = github.NewClient(secretAgent.GetTokenGenerator(o.githubToken), secretAgent.Censor, github.DefaultGraphQLEndpoint, github.DefaultAPIEndpoint)
 
-	logrus.Infof("Changing working directory to %s...", o.targetDir)
+	logrus.Infof("Changing working directory to '%s' ...", o.targetDir)
 	if err := os.Chdir(o.targetDir); err != nil {
 		logrus.WithError(err).Fatal("Failed to change to root dir")
 	}

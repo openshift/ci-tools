@@ -343,9 +343,10 @@ func (w *OutputWriter) Write(content []byte) (n int, err error) {
 	return len(content), nil
 }
 
-func listUpdatedDirectories() ([]string, error) {
+func listUpdatedDirectories(sa *secret.Agent) ([]string, error) {
 	w := &OutputWriter{}
-	if err := bumper.Call(w, os.Stderr, "git", []string{"status", "--porcelain"}...); err != nil {
+	e := bumper.HideSecretsWriter{Delegate: os.Stderr, Censor: sa}
+	if err := bumper.Call(w, e, "git", []string{"status", "--porcelain"}...); err != nil {
 		return nil, err
 	}
 	return listUpdatedDirectoriesFromGitStatusOutput(string(w.output))
@@ -389,7 +390,7 @@ func main() {
 		logrus.WithError(err).Fatal("Error occurred when walking through the target dir.")
 	}
 
-	directories, err := listUpdatedDirectories()
+	directories, err := listUpdatedDirectories(secretAgent)
 	if err != nil {
 		logrus.WithError(err).Fatal("Error occurred when listing updated directories.")
 	}

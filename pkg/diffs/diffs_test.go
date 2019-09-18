@@ -415,7 +415,7 @@ func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 	testCases := []struct {
 		description string
 		prow        *prowconfig.Config
-		ciop        config.CompoundCiopConfig
+		ciop        config.ByFilename
 		expected    config.Presubmits
 	}{{
 		description: "return a presubmit using one of the input ciop configs",
@@ -435,7 +435,7 @@ func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 					}},
 			},
 		},
-		ciop: config.CompoundCiopConfig{baseCiopConfig.Filename: &cioperatorapi.ReleaseBuildConfiguration{}},
+		ciop: config.ByFilename{baseCiopConfig.Filename: {Info: baseCiopConfig}},
 		expected: config.Presubmits{"org/repo": {
 			func() prowconfig.Presubmit {
 				ret := prowconfig.Presubmit{}
@@ -465,7 +465,7 @@ func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 					}},
 			},
 		},
-		ciop:     config.CompoundCiopConfig{},
+		ciop:     config.ByFilename{},
 		expected: config.Presubmits{},
 	}, {
 		description: "handle jenkins presubmits",
@@ -486,7 +486,7 @@ func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 					}},
 			},
 		},
-		ciop:     config.CompoundCiopConfig{},
+		ciop:     config.ByFilename{},
 		expected: config.Presubmits{},
 	},
 	}

@@ -277,7 +277,7 @@ func rehearseMain() int {
 	metrics.RecordChangedPresubmits(toRehearse)
 	metrics.RecordPresubmitsOpportunity(toRehearse, "direct-change")
 
-	presubmitsWithChangedCiopConfigs := diffs.GetPresubmitsForCiopConfigs(prConfig.Prow, changedCiopConfigData, logger, affectedJobs)
+	presubmitsWithChangedCiopConfigs := diffs.GetPresubmitsForCiopConfigs(prConfig.Prow, changedCiopConfigData, affectedJobs)
 	metrics.RecordPresubmitsOpportunity(presubmitsWithChangedCiopConfigs, "ci-operator-config-change")
 	toRehearse.AddAll(presubmitsWithChangedCiopConfigs)
 
@@ -285,7 +285,7 @@ func rehearseMain() int {
 	metrics.RecordPresubmitsOpportunity(presubmitsWithChangedTemplates, "templates-change")
 	toRehearse.AddAll(presubmitsWithChangedTemplates)
 
-	toRehearseClusterProfiles := diffs.GetPresubmitsForClusterProfiles(prConfig.Prow, changedClusterProfiles, logger)
+	toRehearseClusterProfiles := diffs.GetPresubmitsForClusterProfiles(prConfig.Prow, changedClusterProfiles)
 	metrics.RecordPresubmitsOpportunity(toRehearseClusterProfiles, "cluster-profile-change")
 	toRehearse.AddAll(toRehearseClusterProfiles)
 

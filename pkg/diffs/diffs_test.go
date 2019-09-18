@@ -493,7 +493,7 @@ func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
-			presubmits := GetPresubmitsForCiopConfigs(tc.prow, tc.ciop, logrus.NewEntry(logrus.New()), affectedJobs)
+			presubmits := GetPresubmitsForCiopConfigs(tc.prow, tc.ciop, affectedJobs)
 
 			if !reflect.DeepEqual(tc.expected, presubmits) {
 				t.Errorf("Returned presubmits differ from expected:\n%s", diff.ObjectDiff(tc.expected, presubmits))
@@ -528,7 +528,6 @@ func TestGetPresubmitsForClusterProfiles(t *testing.T) {
 		}
 		return ret
 	}
-	logger := logrus.NewEntry(logrus.New())
 	for _, tc := range []struct {
 		id       string
 		cfg      *prowconfig.Config
@@ -603,7 +602,7 @@ func TestGetPresubmitsForClusterProfiles(t *testing.T) {
 		expected: []string{"uses-cluster-profile"},
 	}} {
 		t.Run(tc.id, func(t *testing.T) {
-			ret := GetPresubmitsForClusterProfiles(tc.cfg, tc.profiles, logger)
+			ret := GetPresubmitsForClusterProfiles(tc.cfg, tc.profiles)
 			var names []string
 			for _, jobs := range ret {
 				for _, j := range jobs {

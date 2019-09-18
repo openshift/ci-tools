@@ -165,7 +165,7 @@ func convertToReadableDiff(a, b interface{}, objName string) string {
 	return d
 }
 
-func GetPresubmitsForCiopConfigs(prowConfig *prowconfig.Config, ciopConfigs config.ByFilename, logger *logrus.Entry, affectedJobs map[string]sets.String) config.Presubmits {
+func GetPresubmitsForCiopConfigs(prowConfig *prowconfig.Config, ciopConfigs config.ByFilename, affectedJobs map[string]sets.String) config.Presubmits {
 	ret := config.Presubmits{}
 
 	for filename, data := range ciopConfigs {
@@ -211,7 +211,7 @@ func getTestsByName(tests []cioperatorapi.TestStepConfiguration) map[string]ciop
 
 // GetPresubmitsForClusterProfiles returns a filtered list of jobs from the
 // Prow configuration, with only presubmits that use certain cluster profiles.
-func GetPresubmitsForClusterProfiles(prowConfig *prowconfig.Config, profiles []config.ConfigMapSource, logger *logrus.Entry) config.Presubmits {
+func GetPresubmitsForClusterProfiles(prowConfig *prowconfig.Config, profiles []config.ConfigMapSource) config.Presubmits {
 	names := make(sets.String, len(profiles))
 	for _, p := range profiles {
 		names.Insert(p.CMName(config.ClusterProfilePrefix))

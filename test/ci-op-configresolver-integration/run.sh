@@ -40,16 +40,17 @@ set -o pipefail
 
 ROOTDIR=$(pwd)
 WORKDIR="$( mktemp -d )"
-trap_add 'rm -rf "${WORKDIR}"' EXIT
+trap_add "rm -rf ${WORKDIR}" EXIT
 
 pushd $WORKDIR
 go build -o resolver $ROOTDIR/cmd/ci-operator-configresolver
 go build -o tester $ROOTDIR/test/ci-op-configresolver-integration/main.go
 # copy registry to tmpdir to allow tester to modify registry
 cp -a $ROOTDIR/test/ci-op-configresolver-integration/ tests
-./resolver -config tests/configs -registry tests/registry &
+./resolver -config tests/configs -registry tests/registry -cycle 2m -log-level debug &
 PID=$!
-trap_add 'kill "${PID}"' EXIT
+disown
+trap_add "kill -9 ${PID} || true" EXIT
 # wait for registry to be resolved
 sleep 1
 ./tester -serverAddress "http://127.0.0.1:8080"

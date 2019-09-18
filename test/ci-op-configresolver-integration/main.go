@@ -5,10 +5,10 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"reflect"
 
+	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/util/diff"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -135,9 +135,10 @@ func main() {
 	var config api.ReleaseBuildConfiguration
 	err = json.Unmarshal(body, &config)
 	if err != nil {
-		log.Fatalf("Failed to unmarshal: %v", err)
+		log.Fatalf("Failed to unmarshal: %v; (%s)", err, string(body))
 	}
 	if !reflect.DeepEqual(installerConfigBase, config) {
 		log.Fatalf("Got incorrect output: %s", diff.ObjectReflectDiff(installerConfigBase, config))
 	}
+	log.Printf("Tests passed successfully")
 }

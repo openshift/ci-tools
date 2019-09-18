@@ -70,7 +70,9 @@ func (c *coalescer) coalesce(o *options) {
 
 	// inform the waiters that we are done
 	c.loader.L.Lock()
+	c.Lock()
 	c.loading = false
+	c.Unlock()
 	c.loader.Broadcast()
 	c.loader.L.Unlock()
 }

@@ -1,10 +1,11 @@
 [
   {
-    "kind": "Build",
     "apiVersion": "build.openshift.io/v1",
+    "kind": "Build",
     "metadata": {
-      "name": "base-machine-with-rpms",
-      "namespace": "testns",
+      "annotations": {
+        "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+      },
       "creationTimestamp": null,
       "labels": {
         "build-id": "0",
@@ -16,36 +17,19 @@
         "job": "pull-ci-openshift-release-master-ci-operator-integration",
         "prow.k8s.io/id": "uuid"
       },
-      "annotations": {
-        "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
-      }
+      "name": "base-machine-with-rpms",
+      "namespace": "testns"
     },
     "spec": {
-      "serviceAccount": "builder",
-      "source": {
-        "type": "Dockerfile",
-        "dockerfile": "FROM pipeline:base-machine\nRUN echo $'[built]\\nname = Built RPMs\\nbaseurl = http://dry-fake/\\ngpgcheck = 0\\nenabled = 0\\n\\n[origin-local-release]\\nname = Built RPMs\\nbaseurl = http://dry-fake/\\ngpgcheck = 0\\nenabled = 0' \u003e /etc/yum.repos.d/built.repo"
-      },
-      "strategy": {
-        "type": "Docker",
-        "dockerStrategy": {
-          "from": {
-            "kind": "ImageStreamTag",
-            "namespace": "testns",
-            "name": "pipeline:base-machine"
-          },
-          "noCache": true,
-          "forcePull": true,
-          "imageOptimizationPolicy": "SkipLayers"
-        }
-      },
+      "nodeSelector": null,
       "output": {
         "to": {
           "kind": "ImageStreamTag",
-          "namespace": "testns",
-          "name": "pipeline:base-machine-with-rpms"
+          "name": "pipeline:base-machine-with-rpms",
+          "namespace": "testns"
         }
       },
+      "postCommit": {},
       "resources": {
         "limits": {
           "memory": "8Gi"
@@ -55,21 +39,38 @@
           "memory": "4Gi"
         }
       },
-      "postCommit": {},
-      "nodeSelector": null,
+      "serviceAccount": "builder",
+      "source": {
+        "dockerfile": "FROM pipeline:base-machine\nRUN echo $'[built]\\nname = Built RPMs\\nbaseurl = http://dry-fake/\\ngpgcheck = 0\\nenabled = 0\\n\\n[origin-local-release]\\nname = Built RPMs\\nbaseurl = http://dry-fake/\\ngpgcheck = 0\\nenabled = 0' > /etc/yum.repos.d/built.repo",
+        "type": "Dockerfile"
+      },
+      "strategy": {
+        "dockerStrategy": {
+          "forcePull": true,
+          "from": {
+            "kind": "ImageStreamTag",
+            "name": "pipeline:base-machine",
+            "namespace": "testns"
+          },
+          "imageOptimizationPolicy": "SkipLayers",
+          "noCache": true
+        },
+        "type": "Docker"
+      },
       "triggeredBy": null
     },
     "status": {
-      "phase": "",
-      "output": {}
+      "output": {},
+      "phase": ""
     }
   },
   {
-    "kind": "Build",
     "apiVersion": "build.openshift.io/v1",
+    "kind": "Build",
     "metadata": {
-      "name": "bin",
-      "namespace": "testns",
+      "annotations": {
+        "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+      },
       "creationTimestamp": null,
       "labels": {
         "build-id": "0",
@@ -81,36 +82,19 @@
         "job": "pull-ci-openshift-release-master-ci-operator-integration",
         "prow.k8s.io/id": "uuid"
       },
-      "annotations": {
-        "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
-      }
+      "name": "bin",
+      "namespace": "testns"
     },
     "spec": {
-      "serviceAccount": "builder",
-      "source": {
-        "type": "Dockerfile",
-        "dockerfile": "FROM pipeline:src\nRUN [\"/bin/bash\", \"-c\", \"set -o errexit; umask 0002; make build WHAT='vendor/k8s.io/kubernetes/cmd/hyperkube'\"]"
-      },
-      "strategy": {
-        "type": "Docker",
-        "dockerStrategy": {
-          "from": {
-            "kind": "ImageStreamTag",
-            "namespace": "testns",
-            "name": "pipeline:src"
-          },
-          "noCache": true,
-          "forcePull": true,
-          "imageOptimizationPolicy": "SkipLayers"
-        }
-      },
+      "nodeSelector": null,
       "output": {
         "to": {
           "kind": "ImageStreamTag",
-          "namespace": "testns",
-          "name": "pipeline:bin"
+          "name": "pipeline:bin",
+          "namespace": "testns"
         }
       },
+      "postCommit": {},
       "resources": {
         "limits": {
           "memory": "12Gi"
@@ -120,21 +104,38 @@
           "memory": "7Gi"
         }
       },
-      "postCommit": {},
-      "nodeSelector": null,
+      "serviceAccount": "builder",
+      "source": {
+        "dockerfile": "FROM pipeline:src\nRUN [\"/bin/bash\", \"-c\", \"set -o errexit; umask 0002; make build WHAT='vendor/k8s.io/kubernetes/cmd/hyperkube'\"]",
+        "type": "Dockerfile"
+      },
+      "strategy": {
+        "dockerStrategy": {
+          "forcePull": true,
+          "from": {
+            "kind": "ImageStreamTag",
+            "name": "pipeline:src",
+            "namespace": "testns"
+          },
+          "imageOptimizationPolicy": "SkipLayers",
+          "noCache": true
+        },
+        "type": "Docker"
+      },
       "triggeredBy": null
     },
     "status": {
-      "phase": "",
-      "output": {}
+      "output": {},
+      "phase": ""
     }
   },
   {
-    "kind": "Build",
     "apiVersion": "build.openshift.io/v1",
+    "kind": "Build",
     "metadata": {
-      "name": "hyperkube",
-      "namespace": "testns",
+      "annotations": {
+        "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+      },
       "creationTimestamp": null,
       "labels": {
         "build-id": "0",
@@ -146,60 +147,12 @@
         "job": "pull-ci-openshift-release-master-ci-operator-integration",
         "prow.k8s.io/id": "uuid"
       },
-      "annotations": {
-        "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
-      }
+      "name": "hyperkube",
+      "namespace": "testns"
     },
     "spec": {
-      "serviceAccount": "builder",
-      "source": {
-        "type": "Image",
-        "images": [
-          {
-            "from": {
-              "kind": "ImageStreamTag",
-              "name": "pipeline:bin"
-            },
-            "as": [
-              "registry.svc.ci.openshift.org/ocp/builder:golang-1.12"
-            ],
-            "paths": null
-          },
-          {
-            "from": {
-              "kind": "ImageStreamTag",
-              "name": "pipeline:src"
-            },
-            "as": null,
-            "paths": [
-              {
-                "sourcePath": "dry-fake//.",
-                "destinationDir": "."
-              }
-            ]
-          }
-        ]
-      },
-      "strategy": {
-        "type": "Docker",
-        "dockerStrategy": {
-          "from": {
-            "kind": "ImageStreamTag",
-            "namespace": "testns",
-            "name": "pipeline:base"
-          },
-          "noCache": true,
-          "forcePull": true,
-          "dockerfilePath": "images/hyperkube/Dockerfile.rhel",
-          "imageOptimizationPolicy": "SkipLayers"
-        }
-      },
+      "nodeSelector": null,
       "output": {
-        "to": {
-          "kind": "ImageStreamTag",
-          "namespace": "testns",
-          "name": "pipeline:hyperkube"
-        },
         "imageLabels": [
           {
             "name": "io.openshift.build.commit.author"
@@ -237,8 +190,14 @@
           {
             "name": "vcs-url"
           }
-        ]
+        ],
+        "to": {
+          "kind": "ImageStreamTag",
+          "name": "pipeline:hyperkube",
+          "namespace": "testns"
+        }
       },
+      "postCommit": {},
       "resources": {
         "limits": {
           "memory": "12Gi"
@@ -248,21 +207,63 @@
           "memory": "7Gi"
         }
       },
-      "postCommit": {},
-      "nodeSelector": null,
+      "serviceAccount": "builder",
+      "source": {
+        "images": [
+          {
+            "as": [
+              "registry.svc.ci.openshift.org/ocp/builder:golang-1.12"
+            ],
+            "from": {
+              "kind": "ImageStreamTag",
+              "name": "pipeline:bin"
+            },
+            "paths": null
+          },
+          {
+            "as": null,
+            "from": {
+              "kind": "ImageStreamTag",
+              "name": "pipeline:src"
+            },
+            "paths": [
+              {
+                "destinationDir": ".",
+                "sourcePath": "dry-fake//."
+              }
+            ]
+          }
+        ],
+        "type": "Image"
+      },
+      "strategy": {
+        "dockerStrategy": {
+          "dockerfilePath": "images/hyperkube/Dockerfile.rhel",
+          "forcePull": true,
+          "from": {
+            "kind": "ImageStreamTag",
+            "name": "pipeline:base",
+            "namespace": "testns"
+          },
+          "imageOptimizationPolicy": "SkipLayers",
+          "noCache": true
+        },
+        "type": "Docker"
+      },
       "triggeredBy": null
     },
     "status": {
-      "phase": "",
-      "output": {}
+      "output": {},
+      "phase": ""
     }
   },
   {
-    "kind": "Build",
     "apiVersion": "build.openshift.io/v1",
+    "kind": "Build",
     "metadata": {
-      "name": "machine-os-content",
-      "namespace": "testns",
+      "annotations": {
+        "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+      },
       "creationTimestamp": null,
       "labels": {
         "build-id": "0",
@@ -274,69 +275,12 @@
         "job": "pull-ci-openshift-release-master-ci-operator-integration",
         "prow.k8s.io/id": "uuid"
       },
-      "annotations": {
-        "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
-      }
+      "name": "machine-os-content",
+      "namespace": "testns"
     },
     "spec": {
-      "serviceAccount": "builder",
-      "source": {
-        "type": "Image",
-        "images": [
-          {
-            "from": {
-              "kind": "ImageStreamTag",
-              "name": "pipeline:base-machine-with-rpms"
-            },
-            "as": [
-              "fedora:29"
-            ],
-            "paths": null
-          },
-          {
-            "from": {
-              "kind": "ImageStreamTag",
-              "name": "pipeline:machine-os-content-base"
-            },
-            "as": [
-              "registry.svc.ci.openshift.org/openshift/origin-v4.0:machine-os-content"
-            ],
-            "paths": null
-          },
-          {
-            "from": {
-              "kind": "ImageStreamTag",
-              "name": "pipeline:src"
-            },
-            "as": null,
-            "paths": [
-              {
-                "sourcePath": "dry-fake/images/os//.",
-                "destinationDir": "."
-              }
-            ]
-          }
-        ]
-      },
-      "strategy": {
-        "type": "Docker",
-        "dockerStrategy": {
-          "from": {
-            "kind": "ImageStreamTag",
-            "namespace": "testns",
-            "name": "pipeline:base"
-          },
-          "noCache": true,
-          "forcePull": true,
-          "imageOptimizationPolicy": "SkipLayers"
-        }
-      },
+      "nodeSelector": null,
       "output": {
-        "to": {
-          "kind": "ImageStreamTag",
-          "namespace": "testns",
-          "name": "pipeline:machine-os-content"
-        },
         "imageLabels": [
           {
             "name": "io.openshift.build.commit.author"
@@ -374,8 +318,14 @@
           {
             "name": "vcs-url"
           }
-        ]
+        ],
+        "to": {
+          "kind": "ImageStreamTag",
+          "name": "pipeline:machine-os-content",
+          "namespace": "testns"
+        }
       },
+      "postCommit": {},
       "resources": {
         "limits": {
           "memory": "8Gi"
@@ -385,21 +335,72 @@
           "memory": "4Gi"
         }
       },
-      "postCommit": {},
-      "nodeSelector": null,
+      "serviceAccount": "builder",
+      "source": {
+        "images": [
+          {
+            "as": [
+              "fedora:29"
+            ],
+            "from": {
+              "kind": "ImageStreamTag",
+              "name": "pipeline:base-machine-with-rpms"
+            },
+            "paths": null
+          },
+          {
+            "as": [
+              "registry.svc.ci.openshift.org/openshift/origin-v4.0:machine-os-content"
+            ],
+            "from": {
+              "kind": "ImageStreamTag",
+              "name": "pipeline:machine-os-content-base"
+            },
+            "paths": null
+          },
+          {
+            "as": null,
+            "from": {
+              "kind": "ImageStreamTag",
+              "name": "pipeline:src"
+            },
+            "paths": [
+              {
+                "destinationDir": ".",
+                "sourcePath": "dry-fake/images/os//."
+              }
+            ]
+          }
+        ],
+        "type": "Image"
+      },
+      "strategy": {
+        "dockerStrategy": {
+          "forcePull": true,
+          "from": {
+            "kind": "ImageStreamTag",
+            "name": "pipeline:base",
+            "namespace": "testns"
+          },
+          "imageOptimizationPolicy": "SkipLayers",
+          "noCache": true
+        },
+        "type": "Docker"
+      },
       "triggeredBy": null
     },
     "status": {
-      "phase": "",
-      "output": {}
+      "output": {},
+      "phase": ""
     }
   },
   {
-    "kind": "Build",
     "apiVersion": "build.openshift.io/v1",
+    "kind": "Build",
     "metadata": {
-      "name": "rpms",
-      "namespace": "testns",
+      "annotations": {
+        "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+      },
       "creationTimestamp": null,
       "labels": {
         "build-id": "0",
@@ -411,36 +412,19 @@
         "job": "pull-ci-openshift-release-master-ci-operator-integration",
         "prow.k8s.io/id": "uuid"
       },
-      "annotations": {
-        "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
-      }
+      "name": "rpms",
+      "namespace": "testns"
     },
     "spec": {
-      "serviceAccount": "builder",
-      "source": {
-        "type": "Dockerfile",
-        "dockerfile": "FROM pipeline:bin\nRUN [\"/bin/bash\", \"-c\", \"set -o errexit; umask 0002; make build-rpms; ln -s $( pwd )/_output/local/releases/rpms/ /srv/repo\"]"
-      },
-      "strategy": {
-        "type": "Docker",
-        "dockerStrategy": {
-          "from": {
-            "kind": "ImageStreamTag",
-            "namespace": "testns",
-            "name": "pipeline:bin"
-          },
-          "noCache": true,
-          "forcePull": true,
-          "imageOptimizationPolicy": "SkipLayers"
-        }
-      },
+      "nodeSelector": null,
       "output": {
         "to": {
           "kind": "ImageStreamTag",
-          "namespace": "testns",
-          "name": "pipeline:rpms"
+          "name": "pipeline:rpms",
+          "namespace": "testns"
         }
       },
+      "postCommit": {},
       "resources": {
         "limits": {
           "memory": "10Gi"
@@ -450,21 +434,38 @@
           "memory": "8Gi"
         }
       },
-      "postCommit": {},
-      "nodeSelector": null,
+      "serviceAccount": "builder",
+      "source": {
+        "dockerfile": "FROM pipeline:bin\nRUN [\"/bin/bash\", \"-c\", \"set -o errexit; umask 0002; make build-rpms; ln -s $( pwd )/_output/local/releases/rpms/ /srv/repo\"]",
+        "type": "Dockerfile"
+      },
+      "strategy": {
+        "dockerStrategy": {
+          "forcePull": true,
+          "from": {
+            "kind": "ImageStreamTag",
+            "name": "pipeline:bin",
+            "namespace": "testns"
+          },
+          "imageOptimizationPolicy": "SkipLayers",
+          "noCache": true
+        },
+        "type": "Docker"
+      },
       "triggeredBy": null
     },
     "status": {
-      "phase": "",
-      "output": {}
+      "output": {},
+      "phase": ""
     }
   },
   {
-    "kind": "Build",
     "apiVersion": "build.openshift.io/v1",
+    "kind": "Build",
     "metadata": {
-      "name": "src",
-      "namespace": "testns",
+      "annotations": {
+        "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+      },
       "creationTimestamp": null,
       "labels": {
         "build-id": "0",
@@ -476,57 +477,19 @@
         "job": "pull-ci-openshift-release-master-ci-operator-integration",
         "prow.k8s.io/id": "uuid"
       },
-      "annotations": {
-        "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
-      }
+      "name": "src",
+      "namespace": "testns"
     },
     "spec": {
-      "serviceAccount": "builder",
-      "source": {
-        "type": "Dockerfile",
-        "dockerfile": "\nFROM pipeline:root\nADD ./app.binary /clonerefs\nRUN umask 0002 \u0026\u0026 /clonerefs \u0026\u0026 find /go/src -type d -not -perm -0775 | xargs -r chmod g+xw\nWORKDIR /go/src/github.com/openshift/ci-tools/\nENV GOPATH=/go\nRUN git submodule update --init\n",
-        "images": [
-          {
-            "from": {
-              "kind": "DockerImage",
-              "name": "registry.svc.ci.openshift.org/ci/clonerefs@sha256:SHA"
-            },
-            "as": null,
-            "paths": [
-              {
-                "sourcePath": "/app/prow/cmd/clonerefs/app.binary.runfiles/io_k8s_test_infra/prow/cmd/clonerefs/linux_amd64_pure_stripped/app.binary",
-                "destinationDir": "."
-              }
-            ]
-          }
-        ]
-      },
-      "strategy": {
-        "type": "Docker",
-        "dockerStrategy": {
-          "from": {
-            "kind": "ImageStreamTag",
-            "namespace": "testns",
-            "name": "pipeline:root"
-          },
-          "noCache": true,
-          "env": [
-            {
-              "name": "CLONEREFS_OPTIONS",
-              "value": "{\"src_root\":\"/go\",\"log\":\"/dev/null\",\"git_user_name\":\"ci-robot\",\"git_user_email\":\"ci-robot@openshift.io\",\"refs\":[{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}],\"fail\":true}"
-            }
-          ],
-          "forcePull": true,
-          "imageOptimizationPolicy": "SkipLayers"
-        }
-      },
+      "nodeSelector": null,
       "output": {
         "to": {
           "kind": "ImageStreamTag",
-          "namespace": "testns",
-          "name": "pipeline:src"
+          "name": "pipeline:src",
+          "namespace": "testns"
         }
       },
+      "postCommit": {},
       "resources": {
         "limits": {
           "memory": "8Gi"
@@ -536,21 +499,59 @@
           "memory": "4Gi"
         }
       },
-      "postCommit": {},
-      "nodeSelector": null,
+      "serviceAccount": "builder",
+      "source": {
+        "dockerfile": "\nFROM pipeline:root\nADD ./app.binary /clonerefs\nRUN umask 0002 && /clonerefs && find /go/src -type d -not -perm -0775 | xargs -r chmod g+xw\nWORKDIR /go/src/github.com/openshift/ci-tools/\nENV GOPATH=/go\nRUN git submodule update --init\n",
+        "images": [
+          {
+            "as": null,
+            "from": {
+              "kind": "DockerImage",
+              "name": "registry.svc.ci.openshift.org/ci/clonerefs@sha256:SHA"
+            },
+            "paths": [
+              {
+                "destinationDir": ".",
+                "sourcePath": "/app/prow/cmd/clonerefs/app.binary.runfiles/io_k8s_test_infra/prow/cmd/clonerefs/linux_amd64_pure_stripped/app.binary"
+              }
+            ]
+          }
+        ],
+        "type": "Dockerfile"
+      },
+      "strategy": {
+        "dockerStrategy": {
+          "env": [
+            {
+              "name": "CLONEREFS_OPTIONS",
+              "value": "{\"src_root\":\"/go\",\"log\":\"/dev/null\",\"git_user_name\":\"ci-robot\",\"git_user_email\":\"ci-robot@openshift.io\",\"refs\":[{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}],\"fail\":true}"
+            }
+          ],
+          "forcePull": true,
+          "from": {
+            "kind": "ImageStreamTag",
+            "name": "pipeline:root",
+            "namespace": "testns"
+          },
+          "imageOptimizationPolicy": "SkipLayers",
+          "noCache": true
+        },
+        "type": "Docker"
+      },
       "triggeredBy": null
     },
     "status": {
-      "phase": "",
-      "output": {}
+      "output": {},
+      "phase": ""
     }
   },
   {
-    "kind": "Build",
     "apiVersion": "build.openshift.io/v1",
+    "kind": "Build",
     "metadata": {
-      "name": "tests",
-      "namespace": "testns",
+      "annotations": {
+        "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+      },
       "creationTimestamp": null,
       "labels": {
         "build-id": "0",
@@ -562,60 +563,12 @@
         "job": "pull-ci-openshift-release-master-ci-operator-integration",
         "prow.k8s.io/id": "uuid"
       },
-      "annotations": {
-        "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
-      }
+      "name": "tests",
+      "namespace": "testns"
     },
     "spec": {
-      "serviceAccount": "builder",
-      "source": {
-        "type": "Image",
-        "images": [
-          {
-            "from": {
-              "kind": "ImageStreamTag",
-              "name": "pipeline:bin"
-            },
-            "as": [
-              "registry.svc.ci.openshift.org/ocp/builder:golang-1.12"
-            ],
-            "paths": null
-          },
-          {
-            "from": {
-              "kind": "ImageStreamTag",
-              "name": "pipeline:src"
-            },
-            "as": null,
-            "paths": [
-              {
-                "sourcePath": "dry-fake//.",
-                "destinationDir": "."
-              }
-            ]
-          }
-        ]
-      },
-      "strategy": {
-        "type": "Docker",
-        "dockerStrategy": {
-          "from": {
-            "kind": "ImageStreamTag",
-            "namespace": "testns",
-            "name": "pipeline:cli"
-          },
-          "noCache": true,
-          "forcePull": true,
-          "dockerfilePath": "images/tests/Dockerfile.rhel",
-          "imageOptimizationPolicy": "SkipLayers"
-        }
-      },
+      "nodeSelector": null,
       "output": {
-        "to": {
-          "kind": "ImageStreamTag",
-          "namespace": "testns",
-          "name": "pipeline:tests"
-        },
         "imageLabels": [
           {
             "name": "io.openshift.build.commit.author"
@@ -653,8 +606,14 @@
           {
             "name": "vcs-url"
           }
-        ]
+        ],
+        "to": {
+          "kind": "ImageStreamTag",
+          "name": "pipeline:tests",
+          "namespace": "testns"
+        }
       },
+      "postCommit": {},
       "resources": {
         "limits": {
           "memory": "12Gi"
@@ -664,21 +623,60 @@
           "memory": "7Gi"
         }
       },
-      "postCommit": {},
-      "nodeSelector": null,
+      "serviceAccount": "builder",
+      "source": {
+        "images": [
+          {
+            "as": [
+              "registry.svc.ci.openshift.org/ocp/builder:golang-1.12"
+            ],
+            "from": {
+              "kind": "ImageStreamTag",
+              "name": "pipeline:bin"
+            },
+            "paths": null
+          },
+          {
+            "as": null,
+            "from": {
+              "kind": "ImageStreamTag",
+              "name": "pipeline:src"
+            },
+            "paths": [
+              {
+                "destinationDir": ".",
+                "sourcePath": "dry-fake//."
+              }
+            ]
+          }
+        ],
+        "type": "Image"
+      },
+      "strategy": {
+        "dockerStrategy": {
+          "dockerfilePath": "images/tests/Dockerfile.rhel",
+          "forcePull": true,
+          "from": {
+            "kind": "ImageStreamTag",
+            "name": "pipeline:cli",
+            "namespace": "testns"
+          },
+          "imageOptimizationPolicy": "SkipLayers",
+          "noCache": true
+        },
+        "type": "Docker"
+      },
       "triggeredBy": null
     },
     "status": {
-      "phase": "",
-      "output": {}
+      "output": {},
+      "phase": ""
     }
   },
   {
-    "kind": "Deployment",
     "apiVersion": "apps/v1",
+    "kind": "Deployment",
     "metadata": {
-      "name": "rpm-repo",
-      "namespace": "testns",
       "creationTimestamp": null,
       "labels": {
         "app": "rpm-repo",
@@ -690,7 +688,9 @@
         "created-by-ci": "true",
         "job": "pull-ci-openshift-release-master-ci-operator-integration",
         "prow.k8s.io/id": "uuid"
-      }
+      },
+      "name": "rpm-repo",
+      "namespace": "testns"
     },
     "spec": {
       "replicas": 2,
@@ -707,6 +707,7 @@
           "prow.k8s.io/id": "uuid"
         }
       },
+      "strategy": {},
       "template": {
         "metadata": {
           "creationTimestamp": null,
@@ -725,28 +726,15 @@
         "spec": {
           "containers": [
             {
-              "name": "rpm-repo",
-              "image": "dry-fake",
+              "args": [
+                "\n#!/bin/bash\ncat <<END >>/tmp/serve.py\nimport time, threading, socket, SocketServer, BaseHTTPServer, SimpleHTTPServer\n\n# Create socket\naddr = ('', 8080)\nsock = socket.socket (socket.AF_INET, socket.SOCK_STREAM)\nsock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)\nsock.bind(addr)\nsock.listen(5)\n\n# Launch multiple listeners as threads\nclass Thread(threading.Thread):\n\tdef __init__(self, i):\n\t\tthreading.Thread.__init__(self)\n\t\tself.i = i\n\t\tself.daemon = True\n\t\tself.start()\n\tdef run(self):\n\t\thttpd = BaseHTTPServer.HTTPServer(addr, SimpleHTTPServer.SimpleHTTPRequestHandler, False)\n\n\t\t# Prevent the HTTP server from re-binding every handler.\n\t\t# https://stackoverflow.com/questions/46210672/\n\t\thttpd.socket = sock\n\t\thttpd.server_bind = self.server_close = lambda self: None\n\n\t\thttpd.serve_forever()\n[Thread(i) for i in range(100)]\ntime.sleep(9e9)\nEND\npython /tmp/serve.py\n\t\t\t\t\t\t\t"
+              ],
               "command": [
                 "/bin/bash",
                 "-c"
               ],
-              "args": [
-                "\n#!/bin/bash\ncat \u003c\u003cEND \u003e\u003e/tmp/serve.py\nimport time, threading, socket, SocketServer, BaseHTTPServer, SimpleHTTPServer\n\n# Create socket\naddr = ('', 8080)\nsock = socket.socket (socket.AF_INET, socket.SOCK_STREAM)\nsock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)\nsock.bind(addr)\nsock.listen(5)\n\n# Launch multiple listeners as threads\nclass Thread(threading.Thread):\n\tdef __init__(self, i):\n\t\tthreading.Thread.__init__(self)\n\t\tself.i = i\n\t\tself.daemon = True\n\t\tself.start()\n\tdef run(self):\n\t\thttpd = BaseHTTPServer.HTTPServer(addr, SimpleHTTPServer.SimpleHTTPRequestHandler, False)\n\n\t\t# Prevent the HTTP server from re-binding every handler.\n\t\t# https://stackoverflow.com/questions/46210672/\n\t\thttpd.socket = sock\n\t\thttpd.server_bind = self.server_close = lambda self: None\n\n\t\thttpd.serve_forever()\n[Thread(i) for i in range(100)]\ntime.sleep(9e9)\nEND\npython /tmp/serve.py\n\t\t\t\t\t\t\t"
-              ],
-              "workingDir": "/srv/repo",
-              "ports": [
-                {
-                  "containerPort": 8080,
-                  "protocol": "TCP"
-                }
-              ],
-              "resources": {
-                "requests": {
-                  "cpu": "50m",
-                  "memory": "50Mi"
-                }
-              },
+              "image": "dry-fake",
+              "imagePullPolicy": "Always",
               "livenessProbe": {
                 "httpGet": {
                   "path": "/",
@@ -754,10 +742,17 @@
                   "scheme": "HTTP"
                 },
                 "initialDelaySeconds": 1,
-                "timeoutSeconds": 1,
                 "periodSeconds": 10,
-                "successThreshold": 1
+                "successThreshold": 1,
+                "timeoutSeconds": 1
               },
+              "name": "rpm-repo",
+              "ports": [
+                {
+                  "containerPort": 8080,
+                  "protocol": "TCP"
+                }
+              ],
               "readinessProbe": {
                 "httpGet": {
                   "path": "/",
@@ -765,298 +760,301 @@
                   "scheme": "HTTP"
                 },
                 "initialDelaySeconds": 1,
-                "timeoutSeconds": 1,
                 "periodSeconds": 10,
-                "successThreshold": 1
+                "successThreshold": 1,
+                "timeoutSeconds": 1
               },
-              "imagePullPolicy": "Always"
+              "resources": {
+                "requests": {
+                  "cpu": "50m",
+                  "memory": "50Mi"
+                }
+              },
+              "workingDir": "/srv/repo"
             }
           ],
           "terminationGracePeriodSeconds": 1
         }
-      },
-      "strategy": {}
+      }
     },
     "status": {}
   },
   {
-    "kind": "ImageStreamTag",
     "apiVersion": "image.openshift.io/v1",
+    "generation": 0,
+    "image": {
+      "dockerImageLayers": null,
+      "dockerImageMetadata": null,
+      "metadata": {
+        "creationTimestamp": null
+      }
+    },
+    "kind": "ImageStreamTag",
+    "lookupPolicy": {
+      "local": false
+    },
     "metadata": {
+      "creationTimestamp": null,
       "name": "pipeline:base",
-      "namespace": "testns",
-      "creationTimestamp": null
+      "namespace": "testns"
     },
     "tag": {
-      "name": "",
       "annotations": null,
       "from": {
         "kind": "ImageStreamImage",
-        "namespace": "ocp",
-        "name": "4.3@sha256:SHA"
+        "name": "4.3@sha256:SHA",
+        "namespace": "ocp"
       },
       "generation": null,
       "importPolicy": {},
+      "name": "",
       "referencePolicy": {
         "type": "Local"
       }
-    },
-    "generation": 0,
-    "lookupPolicy": {
-      "local": false
-    },
-    "image": {
-      "metadata": {
-        "creationTimestamp": null
-      },
-      "dockerImageMetadata": null,
-      "dockerImageLayers": null
     }
   },
   {
-    "kind": "ImageStreamTag",
     "apiVersion": "image.openshift.io/v1",
+    "generation": 0,
+    "image": {
+      "dockerImageLayers": null,
+      "dockerImageMetadata": null,
+      "metadata": {
+        "creationTimestamp": null
+      }
+    },
+    "kind": "ImageStreamTag",
+    "lookupPolicy": {
+      "local": false
+    },
     "metadata": {
+      "creationTimestamp": null,
       "name": "pipeline:base-machine",
-      "namespace": "testns",
-      "creationTimestamp": null
+      "namespace": "testns"
     },
     "tag": {
-      "name": "",
       "annotations": null,
       "from": {
         "kind": "ImageStreamImage",
-        "namespace": "openshift",
-        "name": "fedora@sha256:SHA"
+        "name": "fedora@sha256:SHA",
+        "namespace": "openshift"
       },
       "generation": null,
       "importPolicy": {},
+      "name": "",
       "referencePolicy": {
         "type": "Local"
       }
-    },
-    "generation": 0,
-    "lookupPolicy": {
-      "local": false
-    },
-    "image": {
-      "metadata": {
-        "creationTimestamp": null
-      },
-      "dockerImageMetadata": null,
-      "dockerImageLayers": null
     }
   },
   {
-    "kind": "ImageStreamTag",
     "apiVersion": "image.openshift.io/v1",
+    "generation": 0,
+    "image": {
+      "dockerImageLayers": null,
+      "dockerImageMetadata": null,
+      "metadata": {
+        "creationTimestamp": null
+      }
+    },
+    "kind": "ImageStreamTag",
+    "lookupPolicy": {
+      "local": false
+    },
     "metadata": {
+      "creationTimestamp": null,
       "name": "pipeline:cli",
-      "namespace": "testns",
-      "creationTimestamp": null
+      "namespace": "testns"
     },
     "tag": {
-      "name": "",
       "annotations": null,
       "from": {
         "kind": "ImageStreamImage",
-        "namespace": "ocp",
-        "name": "4.3@sha256:SHA"
+        "name": "4.3@sha256:SHA",
+        "namespace": "ocp"
       },
       "generation": null,
       "importPolicy": {},
+      "name": "",
       "referencePolicy": {
         "type": "Local"
       }
-    },
-    "generation": 0,
-    "lookupPolicy": {
-      "local": false
-    },
-    "image": {
-      "metadata": {
-        "creationTimestamp": null
-      },
-      "dockerImageMetadata": null,
-      "dockerImageLayers": null
     }
   },
   {
-    "kind": "ImageStreamTag",
     "apiVersion": "image.openshift.io/v1",
+    "generation": 0,
+    "image": {
+      "dockerImageLayers": null,
+      "dockerImageMetadata": null,
+      "metadata": {
+        "creationTimestamp": null
+      }
+    },
+    "kind": "ImageStreamTag",
+    "lookupPolicy": {
+      "local": false
+    },
     "metadata": {
+      "creationTimestamp": null,
       "name": "pipeline:machine-os-content-base",
-      "namespace": "testns",
-      "creationTimestamp": null
+      "namespace": "testns"
     },
     "tag": {
-      "name": "",
       "annotations": null,
       "from": {
         "kind": "ImageStreamImage",
-        "namespace": "ocp",
-        "name": "4.3@sha256:SHA"
+        "name": "4.3@sha256:SHA",
+        "namespace": "ocp"
       },
       "generation": null,
       "importPolicy": {},
+      "name": "",
       "referencePolicy": {
         "type": "Local"
       }
-    },
-    "generation": 0,
-    "lookupPolicy": {
-      "local": false
-    },
-    "image": {
-      "metadata": {
-        "creationTimestamp": null
-      },
-      "dockerImageMetadata": null,
-      "dockerImageLayers": null
     }
   },
   {
-    "kind": "ImageStreamTag",
     "apiVersion": "image.openshift.io/v1",
+    "generation": 0,
+    "image": {
+      "dockerImageLayers": null,
+      "dockerImageMetadata": null,
+      "metadata": {
+        "creationTimestamp": null
+      }
+    },
+    "kind": "ImageStreamTag",
+    "lookupPolicy": {
+      "local": false
+    },
     "metadata": {
+      "creationTimestamp": null,
       "name": "pipeline:root",
-      "namespace": "testns",
-      "creationTimestamp": null
+      "namespace": "testns"
     },
     "tag": {
-      "name": "",
       "annotations": null,
       "from": {
         "kind": "ImageStreamImage",
-        "namespace": "ci",
-        "name": "src-cache-origin@sha256:SHA"
+        "name": "src-cache-origin@sha256:SHA",
+        "namespace": "ci"
       },
       "generation": null,
       "importPolicy": {},
+      "name": "",
       "referencePolicy": {
         "type": "Local"
       }
-    },
-    "generation": 0,
-    "lookupPolicy": {
-      "local": false
-    },
-    "image": {
-      "metadata": {
-        "creationTimestamp": null
-      },
-      "dockerImageMetadata": null,
-      "dockerImageLayers": null
     }
   },
   {
-    "kind": "ImageStreamTag",
     "apiVersion": "image.openshift.io/v1",
+    "generation": 0,
+    "image": {
+      "dockerImageLayers": null,
+      "dockerImageMetadata": null,
+      "metadata": {
+        "creationTimestamp": null
+      }
+    },
+    "kind": "ImageStreamTag",
+    "lookupPolicy": {
+      "local": false
+    },
     "metadata": {
+      "creationTimestamp": null,
       "name": "stable:hyperkube",
-      "namespace": "testns",
-      "creationTimestamp": null
+      "namespace": "testns"
     },
     "tag": {
-      "name": "",
       "annotations": null,
       "from": {
         "kind": "ImageStreamImage",
-        "namespace": "testns",
-        "name": "pipeline@dry-fake"
+        "name": "pipeline@dry-fake",
+        "namespace": "testns"
       },
       "generation": null,
       "importPolicy": {},
+      "name": "",
       "referencePolicy": {
         "type": "Local"
       }
-    },
-    "generation": 0,
-    "lookupPolicy": {
-      "local": false
-    },
-    "image": {
-      "metadata": {
-        "creationTimestamp": null
-      },
-      "dockerImageMetadata": null,
-      "dockerImageLayers": null
     }
   },
   {
-    "kind": "ImageStreamTag",
     "apiVersion": "image.openshift.io/v1",
+    "generation": 0,
+    "image": {
+      "dockerImageLayers": null,
+      "dockerImageMetadata": null,
+      "metadata": {
+        "creationTimestamp": null
+      }
+    },
+    "kind": "ImageStreamTag",
+    "lookupPolicy": {
+      "local": false
+    },
     "metadata": {
+      "creationTimestamp": null,
       "name": "stable:machine-os-content",
-      "namespace": "testns",
-      "creationTimestamp": null
+      "namespace": "testns"
     },
     "tag": {
-      "name": "",
       "annotations": null,
       "from": {
         "kind": "ImageStreamImage",
-        "namespace": "testns",
-        "name": "pipeline@dry-fake"
+        "name": "pipeline@dry-fake",
+        "namespace": "testns"
       },
       "generation": null,
       "importPolicy": {},
+      "name": "",
       "referencePolicy": {
         "type": "Local"
       }
-    },
-    "generation": 0,
-    "lookupPolicy": {
-      "local": false
-    },
-    "image": {
-      "metadata": {
-        "creationTimestamp": null
-      },
-      "dockerImageMetadata": null,
-      "dockerImageLayers": null
     }
   },
   {
-    "kind": "ImageStreamTag",
     "apiVersion": "image.openshift.io/v1",
-    "metadata": {
-      "name": "stable:tests",
-      "namespace": "testns",
-      "creationTimestamp": null
-    },
-    "tag": {
-      "name": "",
-      "annotations": null,
-      "from": {
-        "kind": "ImageStreamImage",
-        "namespace": "testns",
-        "name": "pipeline@dry-fake"
-      },
-      "generation": null,
-      "importPolicy": {},
-      "referencePolicy": {
-        "type": "Local"
+    "generation": 0,
+    "image": {
+      "dockerImageLayers": null,
+      "dockerImageMetadata": null,
+      "metadata": {
+        "creationTimestamp": null
       }
     },
-    "generation": 0,
+    "kind": "ImageStreamTag",
     "lookupPolicy": {
       "local": false
     },
-    "image": {
-      "metadata": {
-        "creationTimestamp": null
+    "metadata": {
+      "creationTimestamp": null,
+      "name": "stable:tests",
+      "namespace": "testns"
+    },
+    "tag": {
+      "annotations": null,
+      "from": {
+        "kind": "ImageStreamImage",
+        "name": "pipeline@dry-fake",
+        "namespace": "testns"
       },
-      "dockerImageMetadata": null,
-      "dockerImageLayers": null
+      "generation": null,
+      "importPolicy": {},
+      "name": "",
+      "referencePolicy": {
+        "type": "Local"
+      }
     }
   },
   {
-    "kind": "Route",
     "apiVersion": "route.openshift.io/v1",
+    "kind": "Route",
     "metadata": {
-      "name": "rpm-repo",
-      "namespace": "testns",
       "creationTimestamp": null,
       "labels": {
         "app": "rpm-repo",
@@ -1068,18 +1066,20 @@
         "created-by-ci": "true",
         "job": "pull-ci-openshift-release-master-ci-operator-integration",
         "prow.k8s.io/id": "uuid"
-      }
+      },
+      "name": "rpm-repo",
+      "namespace": "testns"
     },
     "spec": {
       "host": "",
+      "port": {
+        "targetPort": 8080
+      },
       "subdomain": "",
       "to": {
         "kind": "",
         "name": "rpm-repo",
         "weight": null
-      },
-      "port": {
-        "targetPort": 8080
       }
     },
     "status": {
@@ -1087,11 +1087,9 @@
     }
   },
   {
-    "kind": "Service",
     "apiVersion": "v1",
+    "kind": "Service",
     "metadata": {
-      "name": "rpm-repo",
-      "namespace": "testns",
       "creationTimestamp": null,
       "labels": {
         "app": "rpm-repo",
@@ -1103,13 +1101,15 @@
         "created-by-ci": "true",
         "job": "pull-ci-openshift-release-master-ci-operator-integration",
         "prow.k8s.io/id": "uuid"
-      }
+      },
+      "name": "rpm-repo",
+      "namespace": "testns"
     },
     "spec": {
       "ports": [
         {
-          "protocol": "TCP",
           "port": 8080,
+          "protocol": "TCP",
           "targetPort": 8080
         }
       ],
@@ -1122,11 +1122,16 @@
     }
   },
   {
-    "kind": "Template",
     "apiVersion": "template.openshift.io/v1",
+    "kind": "Template",
+    "labels": {
+      "ci.openshift.io/refs.branch": "master",
+      "ci.openshift.io/refs.org": "openshift",
+      "ci.openshift.io/refs.repo": "ci-tools"
+    },
     "metadata": {
-      "name": "test-template",
-      "creationTimestamp": null
+      "creationTimestamp": null,
+      "name": "test-template"
     },
     "objects": [
       {
@@ -1434,7 +1439,7 @@
               "command": [
                 "/bin/sh",
                 "-c",
-                "#!/bin/sh\nset -euo pipefail\ntrap 'kill $(jobs -p); exit 0' TERM\n\ntouch /tmp/done\necho \"Waiting for artifacts to be extracted\"\nwhile true; do\n\tif [[ ! -f /tmp/done ]]; then\n\t\techo \"Artifacts extracted, will terminate after 30s\"\n\t\tsleep 30\n\t\techo \"Exiting\"\n\t\texit 0\n\tfi\n\tsleep 5 \u0026 wait\ndone\n"
+                "#!/bin/sh\nset -euo pipefail\ntrap 'kill $(jobs -p); exit 0' TERM\n\ntouch /tmp/done\necho \"Waiting for artifacts to be extracted\"\nwhile true; do\n\tif [[ ! -f /tmp/done ]]; then\n\t\techo \"Artifacts extracted, will terminate after 30s\"\n\t\tsleep 30\n\t\techo \"Exiting\"\n\t\texit 0\n\tfi\n\tsleep 5 & wait\ndone\n"
               ],
               "image": "busybox",
               "name": "artifacts",
@@ -1488,28 +1493,28 @@
     "parameters": [
       {
         "name": "JOB_NAME_SAFE",
-        "value": "pull-ci-openshift-release-master-ci-operator-integration",
-        "required": true
+        "required": true,
+        "value": "pull-ci-openshift-release-master-ci-operator-integration"
       },
       {
         "name": "JOB_NAME_HASH",
-        "value": "41093",
-        "required": true
+        "required": true,
+        "value": "41093"
       },
       {
         "name": "NAMESPACE",
-        "value": "testns",
-        "required": true
+        "required": true,
+        "value": "testns"
       },
       {
         "name": "IMAGE_FORMAT",
-        "value": "test",
-        "required": true
+        "required": true,
+        "value": "test"
       },
       {
         "name": "IMAGE_INSTALLER",
-        "value": "test",
-        "required": true
+        "required": true,
+        "value": "test"
       },
       {
         "name": "LOCAL_IMAGE_SRC",
@@ -1517,23 +1522,23 @@
       },
       {
         "name": "IMAGE_CLI",
-        "value": "test",
-        "required": true
+        "required": true,
+        "value": "test"
       },
       {
         "name": "IMAGE_TESTS",
-        "value": "test",
-        "required": true
+        "required": true,
+        "value": "test"
       },
       {
         "name": "CLUSTER_TYPE",
-        "value": "aws",
-        "required": true
+        "required": true,
+        "value": "aws"
       },
       {
         "name": "TEST_COMMAND",
-        "value": "test command",
-        "required": true
+        "required": true,
+        "value": "test command"
       },
       {
         "name": "RELEASE_IMAGE_LATEST",
@@ -1545,11 +1550,6 @@
       {
         "name": "BUILD_ID"
       }
-    ],
-    "labels": {
-      "ci.openshift.io/refs.branch": "master",
-      "ci.openshift.io/refs.org": "openshift",
-      "ci.openshift.io/refs.repo": "ci-tools"
-    }
+    ]
   }
 ]

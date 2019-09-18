@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -euo pipefail
+
 WORKDIR="$( mktemp -d )"
 trap 'rm -rf "${WORKDIR}"' EXIT
 
@@ -20,7 +22,7 @@ export JOB_SPEC='{"type":"presubmit","job":"pull-ci-openshift-release-master-ci-
 unset BUILD_ID
 
 echo "[INFO] Running ci-operator in dry-mode..."
-if ! ci-operator --dry-run --determinize-output --namespace "${TEST_NAMESPACE}" --config "${TEST_CONFIG}" > "${DRY_RUN_JSON}" 2> "${WORKDIR}/ci-op-stderr.log"; then
+if ! ci-operator --dry-run --determinize-output --namespace "${TEST_NAMESPACE}" --config "${TEST_CONFIG}" 2> "${WORKDIR}/ci-op-stderr.log" | jq -S . > "${DRY_RUN_JSON}"; then
     echo "ERROR: ci-operator failed."
     cat "${WORKDIR}/ci-op-stderr.log"
     exit 1
@@ -37,13 +39,13 @@ export IMAGE_FORMAT="test"
 export CLUSTER_TYPE="aws"
 export TEST_COMMAND="test command"
 
-if ! ci-operator --dry-run --determinize-output --namespace "${TEST_NAMESPACE}" --config "${TEST_CONFIG}" --template "${TEST_TEMPLATE}" --target test-template --artifact-dir "${ARTIFACT_DIR}" > "${DRY_RUN_WITH_TEMPLATE_JSON}" 2> "${WORKDIR}/ci-op-stderr.log"; then
+if ! ci-operator --dry-run --determinize-output --namespace "${TEST_NAMESPACE}" --config "${TEST_CONFIG}" --template "${TEST_TEMPLATE}" --target test-template --artifact-dir "${ARTIFACT_DIR}" 2> "${WORKDIR}/ci-op-stderr.log" | jq -S . > "${DRY_RUN_WITH_TEMPLATE_JSON}"; then
     echo "ERROR: ci-operator failed."
     cat "${WORKDIR}/ci-op-stderr.log"
     exit 1
 fi
 
-if ! diff <(cat "${EXPECTED_WITH_TEMPLATE}" | jq -S) <(cat "${DRY_RUN_WITH_TEMPLATE_JSON}" | jq -S); then
+if ! diff "${EXPECTED_WITH_TEMPLATE}" "${DRY_RUN_WITH_TEMPLATE_JSON}"; then
     echo "ERROR: differences have been found"
     exit 1
 fi

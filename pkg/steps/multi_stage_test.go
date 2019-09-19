@@ -126,7 +126,7 @@ func TestGeneratePods(t *testing.T) {
 		},
 		Namespace: "namespace",
 	}
-	step := newMultiStageTestStep(config.Tests[0], &config, nil, "artifact_dir", &jobSpec)
+	step := newMultiStageTestStep(config.Tests[0], &config, nil, "artifact_dir", &jobSpec, nil)
 	ret, err := step.generatePods(config.Tests[0].MultiStageTestConfiguration.Test)
 	if err != nil {
 		t.Fatal(err)

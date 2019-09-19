@@ -2,7 +2,6 @@ package steps
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"path/filepath"
@@ -12,7 +11,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
-	"k8s.io/apimachinery/pkg/runtime"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 
@@ -26,6 +24,7 @@ const (
 
 type multiStageTestStep struct {
 	dry             bool
+	logger          *DryLogger
 	name            string
 	config          *api.ReleaseBuildConfiguration
 	podClient       PodClient
@@ -41,8 +40,9 @@ func MultiStageTestStep(
 	podClient PodClient,
 	artifactDir string,
 	jobSpec *api.JobSpec,
+	logger *DryLogger,
 ) api.Step {
-	return newMultiStageTestStep(testConfig, config, podClient, artifactDir, jobSpec)
+	return newMultiStageTestStep(testConfig, config, podClient, artifactDir, jobSpec, logger)
 }
 
 func newMultiStageTestStep(
@@ -51,11 +51,13 @@ func newMultiStageTestStep(
 	podClient PodClient,
 	artifactDir string,
 	jobSpec *api.JobSpec,
+	logger *DryLogger,
 ) *multiStageTestStep {
 	if artifactDir != "" {
 		artifactDir = filepath.Join(artifactDir, testConfig.As)
 	}
 	return &multiStageTestStep{
+		logger:      logger,
 		name:        testConfig.As,
 		config:      config,
 		podClient:   podClient,
@@ -201,7 +203,8 @@ func (s *multiStageTestStep) runPods(ctx context.Context, pods []coreapi.Pod, sh
 
 func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notifier *TestCaseNotifier) error {
 	if s.dry {
-		return dumpObject(pod)
+		s.logger.AddObject(pod.DeepCopyObject())
+		return nil
 	}
 	go func() {
 		<-ctx.Done()
@@ -229,14 +232,5 @@ func deletePods(client coreclientset.PodInterface, test string) error {
 	if err != nil && !errors.IsNotFound(err) {
 		return err
 	}
-	return nil
-}
-
-func dumpObject(obj runtime.Object) error {
-	j, err := json.MarshalIndent(obj, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to convert object to JSON: %v", err)
-	}
-	log.Print(string(j))
 	return nil
 }

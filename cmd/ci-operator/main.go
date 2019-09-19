@@ -154,7 +154,7 @@ func main() {
 	}
 
 	if err := opt.Complete(); err != nil {
-		fmt.Printf("error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		opt.writeFailingJUnit(err)
 		os.Exit(1)
 	}
@@ -163,7 +163,7 @@ func main() {
 		if !opt.dry {
 			opt.reportToSentry(err)
 		}
-		fmt.Printf("error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		opt.writeFailingJUnit(err)
 		os.Exit(1)
 	}

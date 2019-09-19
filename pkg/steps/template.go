@@ -36,10 +36,13 @@ const (
 	RefsOrgLabel    = "ci.openshift.io/refs.org"
 	RefsRepoLabel   = "ci.openshift.io/refs.repo"
 	RefsBranchLabel = "ci.openshift.io/refs.branch"
+
+	TestContainerName = "test"
 )
 
 type templateExecutionStep struct {
 	template       *templateapi.Template
+	resources      api.ResourceConfiguration
 	params         api.Parameters
 	templateClient TemplateClient
 	podClient      PodClient
@@ -92,7 +95,7 @@ func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 		}
 	}
 
-	operateOnTemplatePods(s.template, s.artifactDir)
+	operateOnTemplatePods(s.template, s.artifactDir, s.resources)
 	injectLabelsToTemplate(s.jobSpec, s.template)
 
 	if dry {
@@ -188,12 +191,49 @@ func injectLabelsToTemplate(jobSpec *api.JobSpec, template *templateapi.Template
 	}
 }
 
-func operateOnTemplatePods(template *templateapi.Template, artifactDir string) {
+func hasTestContainerWithResources(pod *coreapi.Pod) bool {
+	for _, container := range pod.Spec.Containers {
+		if container.Name == TestContainerName && hasContainerResources(container) {
+			return true
+		}
+	}
+	return false
+}
+
+func hasContainerResources(container coreapi.Container) bool {
+	resources := container.Resources
+	return len(resources.Limits) > 0 || len(resources.Requests) > 0
+}
+
+func injectResourcesToPod(pod *coreapi.Pod, templateName string, resources api.ResourceConfiguration) error {
+	containerResources, err := resourcesFor(resources.RequirementsForStep(templateName))
+	if err != nil {
+		return fmt.Errorf("unable to calculate resources for %s: %s", pod.Name, err)
+	}
+
+	for index, container := range pod.Spec.Containers {
+		if container.Name == TestContainerName {
+			pod.Spec.Containers[index].Resources = containerResources
+			break
+		}
+	}
+
+	return nil
+}
+
+func operateOnTemplatePods(template *templateapi.Template, artifactDir string, resources api.ResourceConfiguration) {
 	for index, object := range template.Objects {
 		if pod := getPodFromObject(object); pod != nil {
 			if len(artifactDir) > 0 {
 				addArtifactsToPod(pod)
 			}
+
+			if resources != nil && !hasTestContainerWithResources(pod) {
+				if err := injectResourcesToPod(pod, template.Name, resources); err != nil {
+					log.Printf("couldn't inject resources to pod: %v", err)
+				}
+			}
+
 			template.Objects[index].Raw = []byte(runtime.EncodeOrDie(corev1Codec, pod))
 			template.Objects[index].Object = pod.DeepCopyObject()
 		}
@@ -264,9 +304,10 @@ func (s *templateExecutionStep) Description() string {
 	return fmt.Sprintf("Run template %s", s.template.Name)
 }
 
-func TemplateExecutionStep(template *templateapi.Template, params api.Parameters, podClient PodClient, templateClient TemplateClient, artifactDir string, jobSpec *api.JobSpec, dryLogger *DryLogger) api.Step {
+func TemplateExecutionStep(template *templateapi.Template, params api.Parameters, podClient PodClient, templateClient TemplateClient, artifactDir string, jobSpec *api.JobSpec, dryLogger *DryLogger, resources api.ResourceConfiguration) api.Step {
 	return &templateExecutionStep{
 		template:       template,
+		resources:      resources,
 		params:         params,
 		podClient:      podClient,
 		templateClient: templateClient,

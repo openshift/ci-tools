@@ -6,12 +6,16 @@ import (
 	coreapi "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 
+	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
+	"k8s.io/test-infra/prow/pod-utils/downwardapi"
+
 	"k8s.io/apimachinery/pkg/api/equality"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/diff"
 
 	templateapi "github.com/openshift/api/template/v1"
+	"github.com/openshift/ci-tools/pkg/api"
 )
 
 func TestGetPodFromObject(t *testing.T) {
@@ -235,6 +239,67 @@ func TestOperateOnTemplatePods(t *testing.T) {
 				t.Fatal(diff.ObjectReflectDiff(tc.template, tc.expected))
 			}
 
+		})
+	}
+}
+
+func TestInjectLabelsToTemplate(t *testing.T) {
+	testCases := []struct {
+		testID   string
+		jobSpec  *api.JobSpec
+		template *templateapi.Template
+		expected *templateapi.Template
+	}{
+		{
+			testID: "nil refs in jobspec, no injection expected",
+			jobSpec: &api.JobSpec{
+				JobSpec: downwardapi.JobSpec{
+					Refs: nil,
+				},
+			},
+			template: &templateapi.Template{
+				TypeMeta:   meta.TypeMeta{Kind: "Template", APIVersion: "template.openshift.io/v1"},
+				ObjectMeta: meta.ObjectMeta{Name: "test-template"},
+			},
+			expected: &templateapi.Template{
+				TypeMeta:   meta.TypeMeta{Kind: "Template", APIVersion: "template.openshift.io/v1"},
+				ObjectMeta: meta.ObjectMeta{Name: "test-template"},
+			},
+		},
+
+		{
+			testID: "jobspec with refs, label injection expected",
+			jobSpec: &api.JobSpec{
+				JobSpec: downwardapi.JobSpec{
+					Refs: &prowapi.Refs{
+						Org:     "test-org",
+						Repo:    "test-repo",
+						BaseRef: "test-branch",
+					},
+				},
+			},
+			template: &templateapi.Template{
+				TypeMeta:   meta.TypeMeta{Kind: "Template", APIVersion: "template.openshift.io/v1"},
+				ObjectMeta: meta.ObjectMeta{Name: "test-template"},
+			},
+			expected: &templateapi.Template{
+				TypeMeta:   meta.TypeMeta{Kind: "Template", APIVersion: "template.openshift.io/v1"},
+				ObjectMeta: meta.ObjectMeta{Name: "test-template"},
+				ObjectLabels: map[string]string{
+					"ci.openshift.io/refs.org":    "test-org",
+					"ci.openshift.io/refs.repo":   "test-repo",
+					"ci.openshift.io/refs.branch": "test-branch",
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.testID, func(t *testing.T) {
+			injectLabelsToTemplate(tc.jobSpec, tc.template)
+			if !equality.Semantic.DeepEqual(tc.expected, tc.template) {
+				t.Fatal(diff.ObjectDiff(tc.expected, tc.template))
+			}
 		})
 	}
 }

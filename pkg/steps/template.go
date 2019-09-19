@@ -93,15 +93,7 @@ func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 	}
 
 	operateOnTemplatePods(s.template, s.artifactDir)
-
-	if refs := s.jobSpec.JobSpec.Refs; refs != nil {
-		if s.template.ObjectLabels == nil {
-			s.template.ObjectLabels = make(map[string]string)
-		}
-		s.template.ObjectLabels[RefsOrgLabel] = refs.Org
-		s.template.ObjectLabels[RefsRepoLabel] = refs.Repo
-		s.template.ObjectLabels[RefsBranchLabel] = refs.BaseRef
-	}
+	injectLabelsToTemplate(s.jobSpec, s.template)
 
 	if dry {
 		s.dryLogger.AddObject(s.template.DeepCopyObject())
@@ -183,6 +175,17 @@ func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 		}
 	}
 	return nil
+}
+
+func injectLabelsToTemplate(jobSpec *api.JobSpec, template *templateapi.Template) {
+	if refs := jobSpec.JobSpec.Refs; refs != nil {
+		if template.ObjectLabels == nil {
+			template.ObjectLabels = make(map[string]string)
+		}
+		template.ObjectLabels[RefsOrgLabel] = refs.Org
+		template.ObjectLabels[RefsRepoLabel] = refs.Repo
+		template.ObjectLabels[RefsBranchLabel] = refs.BaseRef
+	}
 }
 
 func operateOnTemplatePods(template *templateapi.Template, artifactDir string) {

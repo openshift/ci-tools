@@ -9,6 +9,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/openshift/ci-tools/pkg/util"
 	"io"
 	"io/ioutil"
 	"log"
@@ -31,7 +32,6 @@ import (
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	rbacclientset "k8s.io/client-go/kubernetes/typed/rbac/v1"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
@@ -375,7 +375,7 @@ func (o *options) Complete() error {
 		o.templates = append(o.templates, template)
 	}
 
-	clusterConfig, err := loadClusterConfig()
+	clusterConfig, err := util.LoadClusterConfig()
 	if err != nil {
 		return fmt.Errorf("failed to load cluster config: %v", err)
 	}
@@ -497,28 +497,6 @@ func (o *options) Run() error {
 
 		return nil
 	})
-}
-
-// loadClusterConfig loads connection configuration
-// for the cluster we're deploying to. We prefer to
-// use in-cluster configuration if possible, but will
-// fall back to using default rules otherwise.
-func loadClusterConfig() (*rest.Config, error) {
-	clusterConfig, err := rest.InClusterConfig()
-	if err == nil {
-		return clusterConfig, nil
-	}
-
-	credentials, err := clientcmd.NewDefaultClientConfigLoadingRules().Load()
-	if err != nil {
-		return nil, fmt.Errorf("could not load credentials from config: %v", err)
-	}
-
-	clusterConfig, err = clientcmd.NewDefaultClientConfig(*credentials, &clientcmd.ConfigOverrides{}).ClientConfig()
-	if err != nil {
-		return nil, fmt.Errorf("could not load client configuration: %v", err)
-	}
-	return clusterConfig, nil
 }
 
 func (o *options) resolveInputs(ctx context.Context, steps []api.Step) error {

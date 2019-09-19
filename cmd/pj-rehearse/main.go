@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/openshift/ci-tools/pkg/util"
 	"os"
 	"path/filepath"
 	"time"
@@ -15,31 +16,11 @@ import (
 	prowplugins "k8s.io/test-infra/prow/plugins"
 	pjdwapi "k8s.io/test-infra/prow/pod-utils/downwardapi"
 
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
-
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/diffs"
 	"github.com/openshift/ci-tools/pkg/rehearse"
+	"k8s.io/client-go/rest"
 )
-
-func loadClusterConfig() (*rest.Config, error) {
-	clusterConfig, err := rest.InClusterConfig()
-	if err == nil {
-		return clusterConfig, nil
-	}
-
-	credentials, err := clientcmd.NewDefaultClientConfigLoadingRules().Load()
-	if err != nil {
-		return nil, fmt.Errorf("could not load credentials from config: %v", err)
-	}
-
-	clusterConfig, err = clientcmd.NewDefaultClientConfig(*credentials, &clientcmd.ConfigOverrides{}).ClientConfig()
-	if err != nil {
-		return nil, fmt.Errorf("could not load client configuration: %v", err)
-	}
-	return clusterConfig, nil
-}
 
 type options struct {
 	dryRun       bool
@@ -163,7 +144,7 @@ func rehearseMain() int {
 
 	var clusterConfig *rest.Config
 	if !o.dryRun {
-		clusterConfig, err = loadClusterConfig()
+		clusterConfig, err = util.LoadClusterConfig()
 		if err != nil {
 			logger.WithError(err).Error("could not load cluster clusterConfig")
 			return gracefulExit(o.noFail, misconfigurationOutput)

@@ -46,6 +46,7 @@ integration-pj-rehearse:
 
 integration-ci-operator:
 	test/ci-operator-integration/base/run.sh
+	test/ci-operator-integration/multi-stage/run.sh
 .PHONY: integration-ci-operator
 
 check-breaking-changes:

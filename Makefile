@@ -45,7 +45,7 @@ integration-pj-rehearse:
 .PHONY: integration-pj-rehearse
 
 integration-ci-operator:
-	test/ci-operator-integration/run.sh
+	test/ci-operator-integration/base/run.sh
 .PHONY: integration-ci-operator
 
 check-breaking-changes:

@@ -33,9 +33,6 @@ func main() {
 		if (o.Org != "" && o.Org != info.Org) || (o.Repo != "" && o.Repo != info.Repo) {
 			return nil
 		}
-		if !(promotion.PromotesOfficialImages(configuration) && configuration.PromotionConfiguration.Name == o.CurrentRelease) {
-			return nil
-		}
 		output := config.DataWithInfo{Configuration: *configuration, Info: *info}
 		if !o.Confirm {
 			output.Logger().Info("Would re-format file.")

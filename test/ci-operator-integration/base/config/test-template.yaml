@@ -110,12 +110,6 @@ objects:
     - name: test
       image: ${LOCAL_IMAGE_SRC}
       terminationMessagePolicy: FallbackToLogsOnError
-      resources:
-        requests:
-          cpu: 10m
-          memory: 10Mi
-        limits:
-          memory: 200Mi      
       volumeMounts:
       - name: shared-tmp
         mountPath: /tmp/shared

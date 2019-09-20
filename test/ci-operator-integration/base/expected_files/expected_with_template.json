@@ -1250,11 +1250,11 @@
               "name": "test",
               "resources": {
                 "limits": {
-                  "memory": "200Mi"
+                  "memory": "20Gi"
                 },
                 "requests": {
-                  "cpu": "10m",
-                  "memory": "10Mi"
+                  "cpu": "10",
+                  "memory": "30Gi"
                 }
               },
               "terminationMessagePolicy": "FallbackToLogsOnError",

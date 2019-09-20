@@ -1,0 +1,44 @@
+{
+  "base_images": {
+    "base": {
+      "namespace": "ocp",
+      "name": "4.2",
+      "tag": "base"
+    }
+  },
+  "build_root": {
+    "image_stream_tag": {
+      "cluster": "https://api.ci.openshift.org",
+      "namespace": "openshift",
+      "name": "release",
+      "tag": "golang-1.10"
+    }
+  },
+  "tests": [
+    {
+      "as": "unit",
+      "commands": "go test ./pkg/...",
+      "container": {
+        "from": "src"
+      }
+    },
+    {
+      "as": "e2e-aws",
+      "commands": "TEST_SUITE=openshift/conformance/parallel run-tests",
+      "openshift_installer": {
+        "cluster_profile": "aws"
+      }
+    }
+  ],
+  "resources": {
+    "*": {
+      "requests": {
+        "cpu": "100m",
+        "memory": "200Mi"
+      },
+      "limits": {
+        "memory": "4Gi"
+      }
+    }
+  }
+}

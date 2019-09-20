@@ -515,6 +515,7 @@ k8s.io/test-infra/prow/flagutil
 k8s.io/test-infra/prow/repoowners
 k8s.io/test-infra/prow/apis/prowjobs/v1
 k8s.io/test-infra/prow/pod-utils/downwardapi
+k8s.io/test-infra/prow/interrupts
 k8s.io/test-infra/prow/config
 k8s.io/test-infra/prow/errorutil
 k8s.io/test-infra/prow/pjutil
@@ -535,7 +536,6 @@ k8s.io/test-infra/prow/kube
 k8s.io/test-infra/prow/apis/prowjobs
 k8s.io/test-infra/prow/gcsupload
 k8s.io/test-infra/prow/github/reporter
-k8s.io/test-infra/prow/interrupts
 k8s.io/test-infra/prow/plugins/approve
 k8s.io/test-infra/prow/plugins/assign
 k8s.io/test-infra/prow/plugins/blockade

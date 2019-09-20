@@ -164,6 +164,12 @@ resources:
     requests:
       cpu: "3"
       memory: 8Gi
+  test-template:
+    limits:
+      memory: 20Gi
+    requests:
+      cpu: "10"
+      memory: 30Gi
 rpm_build_commands: make build-rpms
 tag_specification:
   name: "ci-operator-test"

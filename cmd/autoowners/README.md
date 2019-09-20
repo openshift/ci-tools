@@ -7,14 +7,24 @@ $ ./autoowners -h
 Usage of ./autoowners:
   -assign string
         The github username or group name to assign the created pull request to. (default "openshift/openshift-team-developer-productivity-test-platform")
+  -debug-mode
+        Enable the DEBUG level of logs if true.
+  -dry-run
+        Whether to actually create the pull request with github client (default true)
   -git-email string
         The email to use on the git commit. Requires --git-name. If not specified, uses the system default.
   -git-name string
         The name to use on the git commit. Requires --git-email. If not specified, uses the system default.
+  -github-endpoint value
+        GitHub's API endpoint (may differ for enterprise). (default https://api.github.com)
+  -github-graphql-endpoint string
+        GitHub GraphQL API endpoint (may differ for enterprise). (default "https://api.github.com/graphql")
   -github-login string
         The GitHub username to use. (default "openshift-bot")
-  -github-token string
-        The path to the GitHub token file.
+  -github-token-file string
+        DEPRECATED: use -github-token-path instead.  -github-token-file may be removed anytime after 2019-01-01.
+  -github-token-path string
+        Path to the file containing the GitHub OAuth secret.
   -ignore-repo value
         The repo for which syncing OWNERS file is disabled.
   -target-dir string

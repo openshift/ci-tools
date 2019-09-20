@@ -254,38 +254,39 @@ func pullOwners(gc github.Client, directory string, blacklist sets.String) error
 }
 
 type options struct {
+	dryRun      bool
 	githubLogin string
-	githubToken string
 	gitName     string
 	gitEmail    string
 	assign      string
 	targetDir   string
 	blacklist   flagutil.Strings
 	debugMode   bool
+	flagutil.GitHubOptions
 }
 
 func parseOptions() options {
 	var o options
 	//To avoid flag from dependencies such as https://github.com/openshift/ci-tools/blob/5b5410293f7cd318540d1fb333c68b93ddab2b60/vendor/github.com/tektoncd/pipeline/pkg/apis/pipeline/v1alpha1/artifact_pvc.go#L30
-	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
-	flag.StringVar(&o.githubLogin, "github-login", githubLogin, "The GitHub username to use.")
-	flag.StringVar(&o.githubToken, "github-token", "", "The path to the GitHub token file.")
-	flag.StringVar(&o.gitName, "git-name", "", "The name to use on the git commit. Requires --git-email. If not specified, uses the system default.")
-	flag.StringVar(&o.gitEmail, "git-email", "", "The email to use on the git commit. Requires --git-name. If not specified, uses the system default.")
-	flag.StringVar(&o.assign, "assign", githubTeam, "The github username or group name to assign the created pull request to.")
-	flag.StringVar(&o.targetDir, "target-dir", "", "The directory containing the target repo.")
-	flag.Var(&o.blacklist, "ignore-repo", "The repo for which syncing OWNERS file is disabled.")
-	flag.BoolVar(&o.debugMode, "debug-mode", false, "Enable the DEBUG level of logs if true.")
-	flag.Parse()
+	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually create the pull request with github client")
+	fs.StringVar(&o.githubLogin, "github-login", githubLogin, "The GitHub username to use.")
+	fs.StringVar(&o.gitName, "git-name", "", "The name to use on the git commit. Requires --git-email. If not specified, uses the system default.")
+	fs.StringVar(&o.gitEmail, "git-email", "", "The email to use on the git commit. Requires --git-name. If not specified, uses the system default.")
+	fs.StringVar(&o.assign, "assign", githubTeam, "The github username or group name to assign the created pull request to.")
+	fs.StringVar(&o.targetDir, "target-dir", "", "The directory containing the target repo.")
+	fs.Var(&o.blacklist, "ignore-repo", "The repo for which syncing OWNERS file is disabled.")
+	fs.BoolVar(&o.debugMode, "debug-mode", false, "Enable the DEBUG level of logs if true.")
+	o.AddFlagsWithoutDefaultGitHubTokenPath(fs)
+	if err := fs.Parse(os.Args[1:]); err != nil {
+		logrus.WithError(err).Errorf("cannot parse args: '%s'", os.Args[1:])
+	}
 	return o
 }
 
 func validateOptions(o options) error {
 	if o.githubLogin == "" {
 		return fmt.Errorf("--github-login is mandatory")
-	}
-	if o.githubToken == "" {
-		return fmt.Errorf("--github-token is mandatory")
 	}
 	if (o.gitEmail == "") != (o.gitName == "") {
 		return fmt.Errorf("--git-name and --git-email must be specified together")
@@ -296,7 +297,7 @@ func validateOptions(o options) error {
 	if o.targetDir == "" {
 		return fmt.Errorf("--target-dir is mandatory")
 	}
-	return nil
+	return o.GitHubOptions.Validate(o.dryRun)
 }
 
 func getBody(directories []string, assign string) string {
@@ -359,10 +360,14 @@ func main() {
 	}
 
 	secretAgent := &secret.Agent{}
-	if err := secretAgent.Start([]string{o.githubToken}); err != nil {
+	if err := secretAgent.Start([]string{o.GitHubOptions.TokenPath}); err != nil {
 		logrus.WithError(err).Fatalf("Error starting secrets agent.")
 	}
-	gc := github.NewClient(secretAgent.GetTokenGenerator(o.githubToken), secretAgent.Censor, github.DefaultGraphQLEndpoint, github.DefaultAPIEndpoint)
+
+	gc, err := o.GitHubOptions.GitHubClient(secretAgent, o.dryRun)
+	if err != nil {
+		logrus.WithError(err).Fatal("error getting GitHub client")
+	}
 
 	logrus.Infof("Changing working directory to '%s' ...", o.targetDir)
 	if err := os.Chdir(o.targetDir); err != nil {
@@ -389,7 +394,7 @@ func main() {
 	matchTitle := "Sync OWNERS files"
 	title := getTitle(matchTitle, time.Now().Format(time.RFC1123))
 	if err := bumper.GitCommitAndPush(fmt.Sprintf("https://%s:%s@github.com/%s/%s.git", o.githubLogin,
-		string(secretAgent.GetTokenGenerator(o.githubToken)()), o.githubLogin, githubRepo),
+		string(secretAgent.GetTokenGenerator(o.GitHubOptions.TokenPath)()), o.githubLogin, githubRepo),
 		remoteBranch, o.gitName, o.gitEmail, title, stdout, stderr); err != nil {
 		logrus.WithError(err).Fatal("Failed to push changes.")
 	}

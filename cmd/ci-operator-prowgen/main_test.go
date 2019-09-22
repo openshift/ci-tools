@@ -15,7 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/util/diff"
-	"k8s.io/test-infra/prow/apis/prowjobs/v1"
+	v1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
 
 	ciop "github.com/openshift/ci-tools/pkg/api"
@@ -380,8 +380,7 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		var podSpec *kubeapi.PodSpec
-		podSpec = generatePodSpecTemplate(tc.info, nil, tc.release, &tc.test)
+		podSpec := generatePodSpecTemplate(tc.info, nil, tc.release, &tc.test)
 		if !equality.Semantic.DeepEqual(podSpec, tc.expected) {
 			t.Errorf("expected PodSpec diff:\n%s", diff.ObjectDiff(tc.expected, podSpec))
 		}
@@ -652,10 +651,7 @@ func TestGenerateJobs(t *testing.T) {
 		id       string
 		config   *ciop.ReleaseBuildConfiguration
 		repoInfo *config.Info
-
-		expectedPresubmits  map[string][]string
-		expectedPostsubmits map[string][]string
-		expected            *prowconfig.JobConfig
+		expected *prowconfig.JobConfig
 	}{
 		{
 			id: "two tests and empty Images so only two test presubmits are generated",
@@ -1557,7 +1553,7 @@ tests:
 				t.Fatalf("Unexpected error reading generated presubmits: %v", err)
 			}
 
-			if bytes.Compare(presubmitData, tc.prowExpectedPresubmitYAML) != 0 {
+			if !bytes.Equal(presubmitData, tc.prowExpectedPresubmitYAML) {
 				t.Errorf("Generated Prow presubmit YAML differs from expected!\n%s", diff.StringDiff(string(tc.prowExpectedPresubmitYAML), string(presubmitData)))
 			}
 
@@ -1566,7 +1562,7 @@ tests:
 				t.Fatalf("Unexpected error reading generated postsubmits: %v", err)
 			}
 
-			if bytes.Compare(postsubmitData, tc.prowExpectedPostsubmitYAML) != 0 {
+			if !bytes.Equal(postsubmitData, tc.prowExpectedPostsubmitYAML) {
 				t.Errorf("Generated Prow postsubmit YAML differs from expected!\n%s", diff.StringDiff(string(tc.prowExpectedPostsubmitYAML), string(postsubmitData)))
 			}
 		})

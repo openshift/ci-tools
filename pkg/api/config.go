@@ -231,52 +231,52 @@ func validateTestConfigurationType(fieldRoot string, test TestStepConfiguration,
 	if testConfig := test.OpenshiftAnsibleClusterTestConfiguration; testConfig != nil {
 		typeCount++
 		needsReleaseRpms = true
-		validationErrors = append(validationErrors, validateClusterProfile(fmt.Sprintf("%s", fieldRoot), testConfig.ClusterProfile)...)
+		validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 	}
 	if testConfig := test.OpenshiftAnsibleSrcClusterTestConfiguration; testConfig != nil {
 		typeCount++
 		needsReleaseRpms = true
-		validationErrors = append(validationErrors, validateClusterProfile(fmt.Sprintf("%s", fieldRoot), testConfig.ClusterProfile)...)
+		validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 	}
 	if testConfig := test.OpenshiftAnsibleCustomClusterTestConfiguration; testConfig != nil {
 		typeCount++
 		needsReleaseRpms = true
-		validationErrors = append(validationErrors, validateClusterProfile(fmt.Sprintf("%s", fieldRoot), testConfig.ClusterProfile)...)
+		validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 	}
 	if testConfig := test.OpenshiftAnsible40ClusterTestConfiguration; testConfig != nil {
 		typeCount++
 		needsReleaseRpms = true
-		validationErrors = append(validationErrors, validateClusterProfile(fmt.Sprintf("%s", fieldRoot), testConfig.ClusterProfile)...)
+		validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 	}
 	if testConfig := test.OpenshiftAnsibleUpgradeClusterTestConfiguration; testConfig != nil {
 		typeCount++
 		needsReleaseRpms = true
-		validationErrors = append(validationErrors, validateClusterProfile(fmt.Sprintf("%s", fieldRoot), testConfig.ClusterProfile)...)
+		validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 	}
 	if testConfig := test.OpenshiftInstallerClusterTestConfiguration; testConfig != nil {
 		typeCount++
-		validationErrors = append(validationErrors, validateClusterProfile(fmt.Sprintf("%s", fieldRoot), testConfig.ClusterProfile)...)
+		validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 	}
 	if testConfig := test.OpenshiftInstallerSrcClusterTestConfiguration; testConfig != nil {
 		typeCount++
-		validationErrors = append(validationErrors, validateClusterProfile(fmt.Sprintf("%s", fieldRoot), testConfig.ClusterProfile)...)
+		validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 	}
 	if testConfig := test.OpenshiftInstallerUPIClusterTestConfiguration; testConfig != nil {
 		typeCount++
-		validationErrors = append(validationErrors, validateClusterProfile(fmt.Sprintf("%s", fieldRoot), testConfig.ClusterProfile)...)
+		validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 	}
 	if testConfig := test.OpenshiftInstallerConsoleClusterTestConfiguration; testConfig != nil {
 		typeCount++
-		validationErrors = append(validationErrors, validateClusterProfile(fmt.Sprintf("%s", fieldRoot), testConfig.ClusterProfile)...)
+		validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 	}
 	if testConfig := test.OpenshiftInstallerCustomTestImageClusterTestConfiguration; testConfig != nil {
 		typeCount++
-		validationErrors = append(validationErrors, validateClusterProfile(fmt.Sprintf("%s", fieldRoot), testConfig.ClusterProfile)...)
+		validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 	}
 	if testConfig := test.MultiStageTestConfiguration; testConfig != nil {
 		typeCount++
 		if testConfig.ClusterProfile != "" && testConfig.Workflow == nil {
-			validationErrors = append(validationErrors, validateClusterProfile(fmt.Sprintf("%s", fieldRoot), testConfig.ClusterProfile)...)
+			validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 		}
 		seen := sets.NewString()
 		validationErrors = append(validationErrors, validateTestSteps(fmt.Sprintf("%s.Pre", fieldRoot), testConfig.Pre, seen)...)

@@ -117,9 +117,7 @@ func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clone
 	if jobSpec.Refs != nil {
 		refs = append(refs, *jobSpec.Refs)
 	}
-	for _, r := range jobSpec.ExtraRefs {
-		refs = append(refs, r)
-	}
+	refs = append(refs, jobSpec.ExtraRefs...)
 
 	dockerfile := sourceDockerfile(config.From, decorate.DetermineWorkDir(gopath, refs))
 

@@ -9,7 +9,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/openshift/ci-tools/pkg/util"
 	"io"
 	"io/ioutil"
 	"log"
@@ -56,6 +55,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/junit"
 	"github.com/openshift/ci-tools/pkg/load"
 	"github.com/openshift/ci-tools/pkg/steps"
+	"github.com/openshift/ci-tools/pkg/util"
 )
 
 const usage = `Orchestrate multi-stage image-based builds
@@ -120,7 +120,7 @@ of dynamic parameters that are inferred from previous steps. These parameters ar
 		baseurl= value of an RPM repository. The value of org and repo are uppercased
 		and dashes are replaced with underscores.
 
-Dynamic environment variables are overriden by process environment variables.
+Dynamic environment variables are overridden by process environment variables.
 
 Both test and template jobs can gather artifacts created by pods. Set
 --artifact-dir to define the top level artifact directory, and any test task

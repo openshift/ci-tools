@@ -7,7 +7,7 @@ set -o pipefail
 ### cluster_age_cutoff is going to be used as argument in the aws command below
 ### to filter out the expired clusters with the tags of the key expirationDate
 ### which is always with timezone +00:00, eg, "2019-07-23T22:35+0000".
-### CLUSTER_TTL controlls the relative time to the running time of this script.
+### CLUSTER_TTL controls the relative time to the running time of this script.
 ### eg, export CLUSTER_TTL="22 hours ago"
 echo "Searching for clusters with a TTL of ${CLUSTER_TTL}"
 cluster_age_cutoff="$(TZ=":Africa/Abidjan" date --date="${CLUSTER_TTL}" '+%Y-%m-%dT%H:%M+0000')"

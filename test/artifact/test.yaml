@@ -5,7 +5,7 @@ metadata:
 
 parameters:
 - name: NAMESPACE
-  requried: true
+  required: true
 - name: IMAGE_TESTS
   required: true
 objects:

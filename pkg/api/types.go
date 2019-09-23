@@ -383,7 +383,7 @@ type RegistryWorkflow struct {
 	As string `json:"as,omitempty"`
 	// Steps contains the MultiStageTestConfiguration that the workflow defines.
 	Steps MultiStageTestConfiguration `json:"steps,omitempty"`
-	// Documentation decribes what the workflow does.
+	// Documentation describes what the workflow does.
 	Documentation string `json:"documentation,omitempty"`
 }
 

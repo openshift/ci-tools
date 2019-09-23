@@ -1,11 +1,13 @@
 package main
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/repoowners"
 )
 
@@ -157,5 +159,183 @@ func TestListUpdatedDirectoriesFromGitStatusOutput(t *testing.T) {
 	}
 	if !reflect.DeepEqual(actual, expected) {
 		t.Errorf("actual differs from expected:\n%s", diff.ObjectReflectDiff(expected, actual))
+	}
+}
+
+type fakeFileGetter struct {
+	owners    []byte
+	aliases   []byte
+	someError error
+	notFound  error
+}
+
+func (fg fakeFileGetter) GetFile(org, repo, filepath, commit string) ([]byte, error) {
+	if org == "org1" && repo == "repo1" {
+		if filepath == "OWNERS" {
+			return fg.owners, nil
+		}
+		if filepath == "OWNERS_ALIASES" {
+			return fg.aliases, nil
+		}
+	}
+	if org == "org2" && repo == "repo2" {
+		if filepath == "OWNERS" {
+			return fg.owners, nil
+		}
+		if filepath == "OWNERS_ALIASES" {
+			return nil, fg.notFound
+		}
+	}
+	if org == "org3" && repo == "repo3" {
+		if filepath == "OWNERS" {
+			return nil, fg.notFound
+		}
+		if filepath == "OWNERS_ALIASES" {
+			return nil, fg.notFound
+		}
+	}
+	if org == "org4" && repo == "repo4" {
+		if filepath == "OWNERS" {
+			return nil, fg.notFound
+		}
+		if filepath == "OWNERS_ALIASES" {
+			return fg.aliases, nil
+		}
+	}
+	if org == "org5" && repo == "repo5" {
+		if filepath == "OWNERS" {
+			return nil, fg.someError
+		}
+		if filepath == "OWNERS_ALIASES" {
+			return fg.aliases, nil
+		}
+	}
+	if org == "org6" && repo == "repo6" {
+		if filepath == "OWNERS" {
+			return fg.owners, nil
+		}
+		if filepath == "OWNERS_ALIASES" {
+			return nil, fg.someError
+		}
+	}
+	return nil, nil
+}
+
+func TestGetOwnersHTTP(t *testing.T) {
+	fakeOwners := []byte(`---
+approvers:
+- abc
+- team-a
+`)
+	fakeOwnersAliases := []byte(`---
+aliases:
+  team-a:
+  - aaa1
+  - aaa2
+`)
+	someError := fmt.Errorf("some error")
+	notFound := &github.FileNotFound{}
+
+	ra := RepoAliases{}
+	ra["team-a"] = sets.NewString("aaa1", "aaa2")
+
+	fakeFileGetter := fakeFileGetter{
+		owners:    fakeOwners,
+		aliases:   fakeOwnersAliases,
+		someError: someError,
+		notFound:  notFound,
+	}
+	testCases := []struct {
+		description        string
+		given              orgRepo
+		expectedHTTPResult httpResult
+		expectedError      error
+	}{
+		{
+			description: "both owner and alias exit",
+			given: orgRepo{
+				Organization: "org1",
+				Repository:   "repo1",
+			},
+			expectedHTTPResult: httpResult{
+				simpleConfig: SimpleConfig{
+					Config: repoowners.Config{
+						Approvers: []string{"abc", "team-a"},
+					},
+				},
+				repoAliases:      ra,
+				ownersFileExists: true,
+			},
+			expectedError: nil,
+		},
+		{
+			description: "owner exists and alias not",
+			given: orgRepo{
+				Organization: "org2",
+				Repository:   "repo2",
+			},
+			expectedHTTPResult: httpResult{
+				simpleConfig: SimpleConfig{
+					Config: repoowners.Config{
+						Approvers: []string{"abc", "team-a"},
+					},
+				},
+				ownersFileExists: true,
+			},
+			expectedError: nil,
+		},
+		{
+			description: "neither owner nor alias exists",
+			given: orgRepo{
+				Organization: "org3",
+				Repository:   "repo3",
+			},
+			expectedHTTPResult: httpResult{},
+			expectedError:      nil,
+		},
+		{
+			description: "owner does not exist and alias does",
+			given: orgRepo{
+				Organization: "org4",
+				Repository:   "repo4",
+			},
+			expectedHTTPResult: httpResult{
+				repoAliases: ra,
+			},
+			expectedError: nil,
+		},
+		{
+			description: "owner is with normal error",
+			given: orgRepo{
+				Organization: "org5",
+				Repository:   "repo5",
+			},
+			expectedHTTPResult: httpResult{},
+			expectedError:      someError,
+		},
+		{
+			description: "alias is with normal error",
+			given: orgRepo{
+				Organization: "org6",
+				Repository:   "repo6",
+			},
+			expectedHTTPResult: httpResult{
+				simpleConfig: SimpleConfig{
+					Config: repoowners.Config{
+						Approvers: []string{"abc", "team-a"},
+					},
+				},
+				ownersFileExists: true,
+			},
+			expectedError: someError,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			actual, err := getOwnersHTTP(fakeFileGetter, tc.given)
+			assertEqual(t, actual, tc.expectedHTTPResult)
+			assertEqual(t, err, tc.expectedError)
+		})
 	}
 }

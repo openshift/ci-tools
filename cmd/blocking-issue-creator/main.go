@@ -59,7 +59,7 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("Could not read token.")
 	}
-	client := githubql.NewClient(oauth2.NewClient(context.Background(), oauth2.StaticTokenSource(&oauth2.Token{AccessToken: string(rawToken)})))
+	client := githubql.NewClient(oauth2.NewClient(context.Background(), oauth2.StaticTokenSource(&oauth2.Token{AccessToken: strings.TrimSpace(string(rawToken))})))
 
 	failed := false
 	if err := config.OperateOnCIOperatorConfigDir(o.ConfigDir, func(configuration *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {

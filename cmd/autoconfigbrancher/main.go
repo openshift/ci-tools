@@ -13,7 +13,6 @@ import (
 	"k8s.io/test-infra/experiment/autobumper/bumper"
 	"k8s.io/test-infra/prow/config/secret"
 	"k8s.io/test-infra/prow/flagutil"
-	"k8s.io/test-infra/prow/github"
 )
 
 const (
@@ -28,8 +27,8 @@ var (
 )
 
 type options struct {
+	dryRun         bool
 	githubLogin    string
-	githubToken    string
 	gitName        string
 	gitEmail       string
 	targetDir      string
@@ -37,30 +36,31 @@ type options struct {
 	currentRelease string
 	futureReleases flagutil.Strings
 	debugMode      bool
+	flagutil.GitHubOptions
 }
 
 func parseOptions() options {
 	var o options
-	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
-	flag.StringVar(&o.githubLogin, "github-login", githubLogin, "The GitHub username to use.")
-	flag.StringVar(&o.githubToken, "github-token", "", "The path to the GitHub token file.")
-	flag.StringVar(&o.gitName, "git-name", "", "The name to use on the git commit. Requires --git-email. If not specified, uses the system default.")
-	flag.StringVar(&o.gitEmail, "git-email", "", "The email to use on the git commit. Requires --git-name. If not specified, uses the system default.")
-	flag.StringVar(&o.targetDir, "target-dir", "", "The directory containing the target repo.")
-	flag.StringVar(&o.assign, "assign", githubTeam, "The github username or group name to assign the created pull request to.")
-	flag.StringVar(&o.currentRelease, "current-release", "", "Configurations targeting this release will get branched.")
-	flag.Var(&o.futureReleases, "future-release", "Configurations will get branched to target this release, provide one or more times.")
-	flag.BoolVar(&o.debugMode, "debug-mode", false, "Enable the DEBUG level of logs if true.")
-	flag.Parse()
+	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually create the pull request with github client")
+	fs.StringVar(&o.githubLogin, "github-login", githubLogin, "The GitHub username to use.")
+	fs.StringVar(&o.gitName, "git-name", "", "The name to use on the git commit. Requires --git-email. If not specified, uses the system default.")
+	fs.StringVar(&o.gitEmail, "git-email", "", "The email to use on the git commit. Requires --git-name. If not specified, uses the system default.")
+	fs.StringVar(&o.targetDir, "target-dir", "", "The directory containing the target repo.")
+	fs.StringVar(&o.assign, "assign", githubTeam, "The github username or group name to assign the created pull request to.")
+	fs.StringVar(&o.currentRelease, "current-release", "", "Configurations targeting this release will get branched.")
+	fs.Var(&o.futureReleases, "future-release", "Configurations will get branched to target this release, provide one or more times.")
+	fs.BoolVar(&o.debugMode, "debug-mode", false, "Enable the DEBUG level of logs if true.")
+	o.AddFlagsWithoutDefaultGitHubTokenPath(fs)
+	if err := fs.Parse(os.Args[1:]); err != nil {
+		logrus.WithError(err).Errorf("cannot parse args: '%s'", os.Args[1:])
+	}
 	return o
 }
 
 func validateOptions(o options) error {
 	if o.githubLogin == "" {
 		return fmt.Errorf("--github-login cannot be empty string")
-	}
-	if o.githubToken == "" {
-		return fmt.Errorf("--github-token is mandatory")
 	}
 	if (o.gitEmail == "") != (o.gitName == "") {
 		return fmt.Errorf("--git-name and --git-email must be specified together")
@@ -77,7 +77,12 @@ func validateOptions(o options) error {
 	if len(o.futureReleases.Strings()) == 0 {
 		return fmt.Errorf("--future-release is mandatory")
 	}
-	return nil
+	for _, rf := range o.futureReleases.Strings() {
+		if rf == "" {
+			return fmt.Errorf("--future-release cannot be empty")
+		}
+	}
+	return o.GitHubOptions.Validate(o.dryRun)
 }
 
 func hasChanges() (bool, error) {
@@ -132,11 +137,14 @@ func main() {
 	}
 
 	sa := &secret.Agent{}
-	if err := sa.Start([]string{o.githubToken}); err != nil {
+	if err := sa.Start([]string{o.GitHubOptions.TokenPath}); err != nil {
 		logrus.WithError(err).Fatal("Failed to start secrets agent")
 	}
 
-	gc := github.NewClient(sa.GetTokenGenerator(o.githubToken), sa.Censor, github.DefaultGraphQLEndpoint, github.DefaultAPIEndpoint)
+	gc, err := o.GitHubOptions.GitHubClient(sa, o.dryRun)
+	if err != nil {
+		logrus.WithError(err).Fatal("error getting GitHub client")
+	}
 
 	logrus.Infof("Changing working directory to '%s' ...", o.targetDir)
 	if err := os.Chdir(o.targetDir); err != nil {
@@ -177,7 +185,7 @@ func main() {
 	title := fmt.Sprintf("%s by auto-config-brancher job at %s", matchTitle, time.Now().Format(time.RFC1123))
 	cmd = "git"
 	args = []string{"push", "-f", fmt.Sprintf("https://%s:%s@github.com/%s/%s.git", o.githubLogin,
-		string(sa.GetTokenGenerator(o.githubToken)()), o.githubLogin, githubRepo),
+		string(sa.GetTokenGenerator(o.GitHubOptions.TokenPath)()), o.githubLogin, githubRepo),
 		fmt.Sprintf("HEAD:%s", remoteBranch)}
 	run(cmd, args...)
 

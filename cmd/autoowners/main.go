@@ -136,25 +136,28 @@ func (r httpResult) resolveOwnerAliases() interface{} {
 	}
 }
 
-func getOwnersHTTP(orgRepo orgRepo) (httpResult, error) {
+type FileGetter interface {
+	GetFile(org, repo, filepath, commit string) ([]byte, error)
+}
+
+func getOwnersHTTP(fg FileGetter, orgRepo orgRepo) (httpResult, error) {
 	var httpResult httpResult
 
 	for _, filename := range []string{"OWNERS", "OWNERS_ALIASES"} {
-		data, err := gc.GetFile(orgRepo.Organization, orgRepo.Repository, filename, "")
+		data, err := fg.GetFile(orgRepo.Organization, orgRepo.Repository, filename, "")
 		if err != nil {
 			if _, nf := err.(*github.FileNotFound); nf {
 				logrus.WithField("orgRepo", orgRepo.repoString()).WithField("filename", filename).
 					Debug("Not found file in the upstream repo")
-				httpResult.ownersFileExists = false
 				continue
 			} else {
 				return httpResult, err
 			}
 		}
 
-		httpResult.ownersFileExists = true
 		switch filename {
 		case "OWNERS":
+			httpResult.ownersFileExists = true
 			simple, err := repoowners.LoadSimpleConfig(data)
 			if err != nil {
 				logrus.WithError(err).Error("Unable to load simple config.")
@@ -224,7 +227,7 @@ func writeOwners(orgRepo orgRepo, httpResult httpResult) error {
 	return nil
 }
 
-func pullOwners(directory string, blacklist sets.String) error {
+func pullOwners(gc github.Client, directory string, blacklist sets.String) error {
 	orgRepos, err := loadRepos(directory, blacklist)
 	if err != nil {
 		return err
@@ -232,7 +235,7 @@ func pullOwners(directory string, blacklist sets.String) error {
 
 	for _, orgRepo := range orgRepos {
 		logrus.WithField("orgRepo", orgRepo.repoString()).Info("handling repo ...")
-		httpResult, err := getOwnersHTTP(orgRepo)
+		httpResult, err := getOwnersHTTP(gc, orgRepo)
 		if err != nil {
 			// TODO we might need to handle errors from `yaml.Unmarshal` if OWNERS is not a valid yaml file
 			return err
@@ -249,10 +252,6 @@ func pullOwners(directory string, blacklist sets.String) error {
 
 	return nil
 }
-
-var (
-	gc github.Client
-)
 
 type options struct {
 	githubLogin string
@@ -363,14 +362,14 @@ func main() {
 	if err := secretAgent.Start([]string{o.githubToken}); err != nil {
 		logrus.WithError(err).Fatalf("Error starting secrets agent.")
 	}
-	gc = github.NewClient(secretAgent.GetTokenGenerator(o.githubToken), secretAgent.Censor, github.DefaultGraphQLEndpoint, github.DefaultAPIEndpoint)
+	gc := github.NewClient(secretAgent.GetTokenGenerator(o.githubToken), secretAgent.Censor, github.DefaultGraphQLEndpoint, github.DefaultAPIEndpoint)
 
 	logrus.Infof("Changing working directory to '%s' ...", o.targetDir)
 	if err := os.Chdir(o.targetDir); err != nil {
 		logrus.WithError(err).Fatal("Failed to change to root dir")
 	}
 
-	if err := pullOwners(o.targetDir, sets.NewString(o.blacklist.Strings()...)); err != nil {
+	if err := pullOwners(gc, o.targetDir, sets.NewString(o.blacklist.Strings()...)); err != nil {
 		logrus.WithError(err).Fatal("Error occurred when walking through the target dir.")
 	}
 

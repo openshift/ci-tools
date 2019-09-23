@@ -1,0 +1,8 @@
+test_groups:
+- name: something
+  gcs_prefix: wild
+dashboards:
+- name: other
+  dashboard_tab:
+  - name: something
+    test_group_name: something

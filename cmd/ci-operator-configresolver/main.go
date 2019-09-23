@@ -57,7 +57,6 @@ func validateOptions(o options) error {
 func missingQuery(w http.ResponseWriter, field string) {
 	w.WriteHeader(http.StatusBadRequest)
 	fmt.Fprintf(w, "%s query missing or incorrect", field)
-	return
 }
 
 func resolveConfig(o *options) http.HandlerFunc {

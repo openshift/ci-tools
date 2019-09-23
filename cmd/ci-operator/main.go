@@ -1045,7 +1045,7 @@ func eventJobDescription(jobSpec *api.JobSpec, namespace string) string {
 // jobDescription returns a string representing the job's description.
 func jobDescription(job *api.JobSpec, config *api.ReleaseBuildConfiguration) string {
 	if job.Refs == nil {
-		return fmt.Sprintf("%s", job.Job)
+		return job.Job
 	}
 	var links []string
 	for _, pull := range job.Refs.Pulls {

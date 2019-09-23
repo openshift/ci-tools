@@ -13,8 +13,6 @@ import (
 	"k8s.io/test-infra/prow/pod-utils/decorate"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 
-	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
-
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/junit"
 )
@@ -45,7 +43,6 @@ type podStep struct {
 	config      PodStepConfiguration
 	resources   api.ResourceConfiguration
 	podClient   PodClient
-	istClient   imageclientset.ImageStreamTagsGetter
 	artifactDir string
 	jobSpec     *api.JobSpec
 	dryLogger   *DryLogger

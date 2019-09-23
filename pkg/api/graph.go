@@ -137,10 +137,7 @@ type imagesReadyLink struct{}
 
 func (l *imagesReadyLink) Same(other StepLink) bool {
 	_, ok := other.(*imagesReadyLink)
-	if !ok {
-		return false
-	}
-	return true
+	return ok
 }
 
 func (l *imagesReadyLink) Matches(other StepLink) bool {
@@ -160,10 +157,7 @@ type rpmRepoLink struct{}
 
 func (l *rpmRepoLink) Same(other StepLink) bool {
 	_, ok := other.(*rpmRepoLink)
-	if !ok {
-		return false
-	}
-	return true
+	return ok
 }
 
 func (l *rpmRepoLink) Matches(other StepLink) bool {
@@ -183,10 +177,7 @@ type releaseImagesLink struct{}
 
 func (l *releaseImagesLink) Same(other StepLink) bool {
 	_, ok := other.(*releaseImagesLink)
-	if !ok {
-		return false
-	}
-	return true
+	return ok
 }
 
 func (l *releaseImagesLink) Matches(other StepLink) bool {

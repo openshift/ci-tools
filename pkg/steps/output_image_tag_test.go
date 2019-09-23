@@ -69,7 +69,6 @@ func TestOutputImageStep(t *testing.T) {
 
 	tests := []struct {
 		name            string
-		execSpec        executionExpectation
 		imageStreams    []*imagev1.ImageStream
 		imageStreamTags []*imagev1.ImageStreamTag
 

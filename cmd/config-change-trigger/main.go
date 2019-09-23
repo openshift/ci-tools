@@ -92,7 +92,7 @@ func main() {
 	}
 
 	prConfig := config.GetAllConfigs(o.releaseRepoPath, logger)
-	masterConfig, err := config.GetAllConfigsFromSHA(o.releaseRepoPath, jobSpec.Refs.BaseSHA, logger)
+	masterConfig, err := config.GetAllConfigsFromSHA(o.releaseRepoPath, fmt.Sprintf("%s^1", jobSpec.Refs.BaseSHA), logger)
 	if err != nil {
 		logger.WithError(err).Fatal("could not load configuration from base revision of release repo")
 	}

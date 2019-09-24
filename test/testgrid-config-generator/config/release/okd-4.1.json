@@ -20,6 +20,10 @@
     "aws-serial":{
       "prowJob":{"name":"release-openshift-origin-installer-e2e-aws-serial-4.1"}
     },
+    "aws-optional":{
+      "optional": true,
+      "prowJob":{"name":"release-openshift-origin-installer-e2e-aws-optional-4.1"}
+    },
     "upgrade":{
       "upgrade":true,
       "optional":true,

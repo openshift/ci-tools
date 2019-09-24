@@ -589,3 +589,10 @@ func trimLabels(labels map[string]string) map[string]string {
 	}
 	return labels
 }
+
+func getSourceSecretFromName(secretName string) *coreapi.LocalObjectReference {
+	if len(secretName) == 0 {
+		return nil
+	}
+	return &coreapi.LocalObjectReference{Name: secretName}
+}

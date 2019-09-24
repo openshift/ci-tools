@@ -325,6 +325,13 @@ func (o *options) Complete() error {
 		}
 	}
 
+	if len(o.sshKeyPath) > 0 {
+		o.sshSecret, err = getSSHSecretFromPath(o.sshKeyPath)
+		if err != nil {
+			return fmt.Errorf("could not get ssh secret from path %s: %v", o.sshKeyPath, err)
+		}
+	}
+
 	for _, path := range o.secretDirectories.values {
 		secret := &coreapi.Secret{Data: make(map[string][]byte)}
 		secret.Type = coreapi.SecretTypeOpaque
@@ -696,6 +703,12 @@ func (o *options) initializeNamespace() error {
 			UID:        is.UID,
 			Controller: &isTrue,
 		})
+	}
+
+	if o.sshSecret != nil {
+		if _, err := client.Secrets(o.namespace).Create(o.sshSecret); err != nil && !kerrors.IsAlreadyExists(err) {
+			return fmt.Errorf("couldn't create ssh secret %s: %v", o.sshSecret.Name, err)
+		}
 	}
 
 	for _, secret := range o.secrets {
@@ -1214,4 +1227,25 @@ func eventRecorder(kubeClient *coreclientset.CoreV1Client, namespace string) rec
 		Interface: coreclientset.New(kubeClient.RESTClient()).Events("")})
 	return eventBroadcaster.NewRecorder(
 		templatescheme.Scheme, coreapi.EventSource{Component: namespace})
+}
+
+func getSSHSecretFromPath(sshKeyPath string) (*coreapi.Secret, error) {
+	secret := &coreapi.Secret{Data: make(map[string][]byte)}
+	secret.Type = coreapi.SecretTypeSSHAuth
+
+	b, err := ioutil.ReadFile(sshKeyPath)
+	if err != nil {
+		return nil, fmt.Errorf("could not read file %s for secret: %v", sshKeyPath, err)
+	}
+
+	hash := sha256.New()
+	hash.Write(b)
+	hashFromBytes := oneWayNameEncoding.EncodeToString(hash.Sum(nil)[:5])
+	secret.Name = fmt.Sprintf("ssh-%s", hashFromBytes)
+
+	// Secret.Data["ssh-privatekey"] is required on SecretTypeSSHAuth type.
+	// https://github.com/kubernetes/api/blob/master/core/v1/types.go#L5466-L5470
+	secret.Data[coreapi.SSHAuthPrivateKey] = b
+
+	return secret, nil
 }

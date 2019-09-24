@@ -161,6 +161,10 @@ func main() {
 		blocking := dashboardFor(product, version, "blocking")
 		informing := dashboardFor(product, version, "informing")
 		for _, job := range releaseConfig.Verify {
+			if job.ProwJob.Name == "release-openshift-origin-installer-e2e-aws-upgrade" {
+				// this job is not sharded by version ... why? who knows
+				continue
+			}
 			if job.Optional {
 				informing.add(job.ProwJob.Name)
 			} else {

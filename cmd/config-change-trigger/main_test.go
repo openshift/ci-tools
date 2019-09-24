@@ -49,7 +49,7 @@ func TestJobsFor(t *testing.T) {
 			name: "error getting refs means no job and errors",
 			getter: fakeGetter{
 				data: map[refId]string{},
-				errs: map[refId]error{{org: "org", repo: "repo", ref: "master"}: errors.New("oops")},
+				errs: map[refId]error{{org: "org", repo: "repo", ref: "heads/master"}: errors.New("oops")},
 			},
 			changed:     []diffs.PostsubmitInContext{{Info: config.Info{Org: "org", Repo: "repo", Branch: "master"}}},
 			expectedErr: true,
@@ -57,7 +57,7 @@ func TestJobsFor(t *testing.T) {
 		{
 			name: "happy case creates a job",
 			getter: fakeGetter{
-				data: map[refId]string{{org: "org", repo: "repo", ref: "master"}: "sha123"},
+				data: map[refId]string{{org: "org", repo: "repo", ref: "heads/master"}: "sha123"},
 				errs: map[refId]error{},
 			},
 			changed: []diffs.PostsubmitInContext{{
@@ -80,8 +80,8 @@ func TestJobsFor(t *testing.T) {
 		{
 			name: "error getting some refs means some jobs and errors",
 			getter: fakeGetter{
-				data: map[refId]string{{org: "org", repo: "repo", ref: "master"}: "sha123"},
-				errs: map[refId]error{{org: "org", repo: "repo", ref: "release-1.13"}: errors.New("oops")},
+				data: map[refId]string{{org: "org", repo: "repo", ref: "heads/master"}: "sha123"},
+				errs: map[refId]error{{org: "org", repo: "repo", ref: "heads/release-1.13"}: errors.New("oops")},
 			},
 			changed: []diffs.PostsubmitInContext{{
 				Info: config.Info{Org: "org", Repo: "repo", Branch: "master"},

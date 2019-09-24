@@ -137,7 +137,7 @@ func jobsFor(changedImagesPostsubmits []diffs.PostsubmitInContext, getter refGet
 	var jobs []v1.ProwJob
 	var errs []error
 	for _, data := range changedImagesPostsubmits {
-		sha, err := getter.GetRef(data.Info.Org, data.Info.Repo, data.Info.Branch)
+		sha, err := getter.GetRef(data.Info.Org, data.Info.Repo, fmt.Sprintf("heads/%s", data.Info.Branch))
 		if err != nil {
 			errs = append(errs, err)
 			continue

@@ -36,6 +36,7 @@ func FromConfig(
 	clusterConfig *rest.Config,
 	requiredTargets []string,
 	dryLogger *steps.DryLogger,
+	sshSecretName string,
 ) ([]api.Step, []api.Step, error) {
 	var buildSteps []api.Step
 	var postSteps []api.Step

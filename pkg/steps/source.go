@@ -14,6 +14,7 @@ import (
 	"k8s.io/test-infra/prow/pod-utils/decorate"
 
 	coreapi "k8s.io/api/core/v1"
+
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -97,6 +98,7 @@ type sourceStep struct {
 	artifactDir        string
 	jobSpec            *api.JobSpec
 	dryLogger          *DryLogger
+	sshSecretName      string
 }
 
 func (s *sourceStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
@@ -566,7 +568,9 @@ func (s *sourceStep) Description() string {
 	return fmt.Sprintf("Clone the correct source code into an image and tag it as %s", s.config.To)
 }
 
-func SourceStep(config api.SourceStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, clonerefsSrcClient imageclientset.ImageV1Interface, imageClient imageclientset.ImageV1Interface, artifactDir string, jobSpec *api.JobSpec, dryLogger *DryLogger) api.Step {
+func SourceStep(config api.SourceStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient,
+	clonerefsSrcClient imageclientset.ImageV1Interface, imageClient imageclientset.ImageV1Interface,
+	artifactDir string, jobSpec *api.JobSpec, dryLogger *DryLogger, sshSecretName string) api.Step {
 	return &sourceStep{
 		config:             config,
 		resources:          resources,
@@ -576,6 +580,7 @@ func SourceStep(config api.SourceStepConfiguration, resources api.ResourceConfig
 		artifactDir:        artifactDir,
 		jobSpec:            jobSpec,
 		dryLogger:          dryLogger,
+		sshSecretName:      sshSecretName,
 	}
 }
 

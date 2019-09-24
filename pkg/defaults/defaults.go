@@ -121,7 +121,7 @@ func FromConfig(
 			if err != nil {
 				return nil, nil, fmt.Errorf("unable to access image stream tag on remote cluster: %v", err)
 			}
-			step = steps.SourceStep(*rawStep.SourceStepConfiguration, config.Resources, buildClient, srcClient, imageClient, artifactDir, jobSpec, dryLogger)
+			step = steps.SourceStep(*rawStep.SourceStepConfiguration, config.Resources, buildClient, srcClient, imageClient, artifactDir, jobSpec, dryLogger, sshSecretName)
 		} else if rawStep.ProjectDirectoryImageBuildStepConfiguration != nil {
 			step = steps.ProjectDirectoryImageBuildStep(*rawStep.ProjectDirectoryImageBuildStepConfiguration, config.Resources, buildClient, imageClient, imageClient, artifactDir, jobSpec, dryLogger)
 		} else if rawStep.ProjectDirectoryImageBuildInputs != nil {

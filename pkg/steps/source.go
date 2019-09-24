@@ -38,22 +38,40 @@ const (
 
 	ProwJobIdLabel = "prow.k8s.io/id"
 
-	gopath = "/go"
+	gopath        = "/go"
+	sshPrivateKey = "/sshprivatekey"
+	sshConfig     = "/ssh_config"
 )
 
 var (
 	JobSpecAnnotation = fmt.Sprintf("%s/%s", CiAnnotationPrefix, "job-spec")
 )
 
-func sourceDockerfile(fromTag api.PipelineImageStreamTagReference, workingDir string) string {
-	return fmt.Sprintf(`
-FROM %s:%s
-ADD ./app.binary /clonerefs
-RUN umask 0002 && /clonerefs && find %s/src -type d -not -perm -0775 | xargs -r chmod g+xw
-WORKDIR %s/
-ENV GOPATH=%s
-RUN git submodule update --init
-`, api.PipelineImageStream, fromTag, gopath, workingDir, gopath)
+func sourceDockerfile(fromTag api.PipelineImageStreamTagReference, workingDir string, sshSecretName string) string {
+	var dockerCommands []string
+	dockerCommands = append(dockerCommands, "")
+	dockerCommands = append(dockerCommands, fmt.Sprintf("FROM %s:%s", api.PipelineImageStream, fromTag))
+	dockerCommands = append(dockerCommands, "ADD ./app.binary /clonerefs")
+
+	if len(sshSecretName) > 0 {
+		dockerCommands = append(dockerCommands, fmt.Sprintf("ADD %s /etc/ssh/ssh_config", sshConfig))
+		dockerCommands = append(dockerCommands, fmt.Sprintf("COPY ./%s %s", coreapi.SSHAuthPrivateKey, sshPrivateKey))
+	}
+
+	dockerCommands = append(dockerCommands, fmt.Sprintf("RUN umask 0002 && /clonerefs && find %s/src -type d -not -perm -0775 | xargs -r chmod g+xw", gopath))
+	dockerCommands = append(dockerCommands, fmt.Sprintf("WORKDIR %s/", workingDir))
+	dockerCommands = append(dockerCommands, fmt.Sprintf("ENV GOPATH=%s", gopath))
+	dockerCommands = append(dockerCommands, "RUN git submodule update --init")
+
+	// After the clonerefs command, we don't need the secret anymore.
+	// We don't want to let the key keep existing in the image's layer.
+	if len(sshSecretName) > 0 {
+		dockerCommands = append(dockerCommands, fmt.Sprintf("RUN rm -f %s", sshPrivateKey))
+	}
+
+	dockerCommands = append(dockerCommands, "")
+
+	return strings.Join(dockerCommands, "\n")
 }
 
 func defaultPodLabels(jobSpec *api.JobSpec) map[string]string {
@@ -111,38 +129,42 @@ func (s *sourceStep) Run(ctx context.Context, dry bool) error {
 		return fmt.Errorf("could not resolve clonerefs source: %v", err)
 	}
 
-	return handleBuild(s.buildClient, createBuild(s.config, s.jobSpec, clonerefsRef, s.resources), dry, s.artifactDir, s.dryLogger)
+	return handleBuild(s.buildClient, createBuild(s.config, s.jobSpec, clonerefsRef, s.resources, s.sshSecretName), dry, s.artifactDir, s.dryLogger)
 }
 
-func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clonerefsRef coreapi.ObjectReference, resources api.ResourceConfiguration) *buildapi.Build {
+func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clonerefsRef coreapi.ObjectReference, resources api.ResourceConfiguration, sshSecretName string) *buildapi.Build {
 	var refs []prowapi.Refs
 	if jobSpec.Refs != nil {
-		refs = append(refs, *jobSpec.Refs)
+		r := *jobSpec.Refs
+		if len(sshSecretName) > 0 {
+			r.CloneURI = fmt.Sprintf("ssh://git@github.com/%s/%s.git", r.Org, r.Repo)
+		}
+		refs = append(refs, r)
 	}
-	refs = append(refs, jobSpec.ExtraRefs...)
 
-	dockerfile := sourceDockerfile(config.From, decorate.DetermineWorkDir(gopath, refs))
+	for _, r := range jobSpec.ExtraRefs {
+		if len(sshSecretName) > 0 {
+			r.CloneURI = fmt.Sprintf("ssh://git@github.com/%s/%s.git", r.Org, r.Repo)
+		}
+		refs = append(refs, r)
+	}
 
-	build := buildFromSource(
-		jobSpec, config.From, config.To,
-		buildapi.BuildSource{
-			Type:       buildapi.BuildSourceDockerfile,
-			Dockerfile: &dockerfile,
-			Images: []buildapi.ImageSource{
-				{
-					From: clonerefsRef,
-					Paths: []buildapi.ImageSourcePath{
-						{
-							SourcePath:     config.ClonerefsPath,
-							DestinationDir: ".",
-						},
+	dockerfile := sourceDockerfile(config.From, decorate.DetermineWorkDir(gopath, refs), sshSecretName)
+	buildSource := buildapi.BuildSource{
+		Type:       buildapi.BuildSourceDockerfile,
+		Dockerfile: &dockerfile,
+		Images: []buildapi.ImageSource{
+			{
+				From: clonerefsRef,
+				Paths: []buildapi.ImageSourcePath{
+					{
+						SourcePath:     config.ClonerefsPath,
+						DestinationDir: ".",
 					},
 				},
 			},
 		},
-		"",
-		resources,
-	)
+	}
 
 	optionsSpec := clonerefs.Options{
 		SrcRoot:      gopath,
@@ -152,11 +174,30 @@ func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clone
 		GitRefs:      refs,
 		Fail:         true,
 	}
+
+	if len(sshSecretName) > 0 {
+		buildSource.Secrets = append(buildSource.Secrets,
+			buildapi.SecretBuildSource{
+				Secret: *getSourceSecretFromName(sshSecretName),
+			},
+		)
+
+		for i, image := range buildSource.Images {
+			if image.From == clonerefsRef {
+				buildSource.Images[i].Paths = append(buildSource.Images[i].Paths, buildapi.ImageSourcePath{
+					SourcePath: sshConfig, DestinationDir: "."})
+			}
+		}
+
+		optionsSpec.KeyFiles = append(optionsSpec.KeyFiles, sshPrivateKey)
+	}
+
 	optionsJSON, err := clonerefs.Encode(optionsSpec)
 	if err != nil {
 		panic(fmt.Errorf("couldn't create JSON spec for clonerefs: %v", err))
 	}
 
+	build := buildFromSource(jobSpec, config.From, config.To, buildSource, "", resources)
 	build.Spec.CommonSpec.Strategy.DockerStrategy.Env = append(
 		build.Spec.CommonSpec.Strategy.DockerStrategy.Env,
 		coreapi.EnvVar{Name: clonerefs.JSONConfigEnvVar, Value: optionsJSON},

@@ -26,8 +26,6 @@ var extraFiles = map[string]bool{
 type options struct {
 	dryRun      bool
 	githubLogin string
-	gitName     string
-	gitEmail    string
 	targetDir   string
 	assign      string
 	flagutil.GitHubOptions
@@ -38,8 +36,6 @@ func parseOptions() options {
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually create the pull request with github client")
 	fs.StringVar(&o.githubLogin, "github-login", githubLogin, "The GitHub username to use.")
-	fs.StringVar(&o.gitName, "git-name", "", "The name to use on the git commit. Requires --git-email. If not specified, uses the system default.")
-	fs.StringVar(&o.gitEmail, "git-email", "", "The email to use on the git commit. Requires --git-name. If not specified, uses the system default.")
 	fs.StringVar(&o.targetDir, "target-dir", "", "The directory containing the target repo.")
 	fs.StringVar(&o.assign, "assign", githubTeam, "The github username or group name to assign the created pull request to.")
 	o.AddFlagsWithoutDefaultGitHubTokenPath(fs)
@@ -52,9 +48,6 @@ func parseOptions() options {
 func validateOptions(o options) error {
 	if o.githubLogin == "" {
 		return fmt.Errorf("--github-login cannot be empty string")
-	}
-	if (o.gitEmail == "") != (o.gitName == "") {
-		return fmt.Errorf("--git-name and --git-email must be specified together")
 	}
 	if o.targetDir == "" {
 		return fmt.Errorf("--target-dir is mandatory")
@@ -93,9 +86,14 @@ func main() {
 	stdout := bumper.HideSecretsWriter{Delegate: os.Stdout, Censor: sa}
 	stderr := bumper.HideSecretsWriter{Delegate: os.Stderr, Censor: sa}
 
+	botUser, err := gc.BotUser()
+	if err != nil || botUser == nil {
+		logrus.WithError(err).Fatal("Failed to get bot user data.")
+	}
+
 	remoteBranch := "autobump"
 	if err := bumper.MakeGitCommit(fmt.Sprintf("https://%s:%s@github.com/%s/%s.git", o.githubLogin,
-		string(sa.GetTokenGenerator(o.GitHubOptions.TokenPath)()), o.githubLogin, githubRepo), remoteBranch, o.gitName, o.gitEmail, images, stdout, stderr); err != nil {
+		string(sa.GetTokenGenerator(o.GitHubOptions.TokenPath)()), o.githubLogin, githubRepo), remoteBranch, botUser.Name, botUser.Email, images, stdout, stderr); err != nil {
 		logrus.WithError(err).Fatal("Failed to push changes.")
 	}
 

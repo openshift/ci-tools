@@ -256,8 +256,6 @@ func pullOwners(gc github.Client, directory string, blacklist sets.String) error
 type options struct {
 	dryRun      bool
 	githubLogin string
-	gitName     string
-	gitEmail    string
 	assign      string
 	targetDir   string
 	blacklist   flagutil.Strings
@@ -271,8 +269,6 @@ func parseOptions() options {
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually create the pull request with github client")
 	fs.StringVar(&o.githubLogin, "github-login", githubLogin, "The GitHub username to use.")
-	fs.StringVar(&o.gitName, "git-name", "", "The name to use on the git commit. Requires --git-email. If not specified, uses the system default.")
-	fs.StringVar(&o.gitEmail, "git-email", "", "The email to use on the git commit. Requires --git-name. If not specified, uses the system default.")
 	fs.StringVar(&o.assign, "assign", githubTeam, "The github username or group name to assign the created pull request to.")
 	fs.StringVar(&o.targetDir, "target-dir", "", "The directory containing the target repo.")
 	fs.Var(&o.blacklist, "ignore-repo", "The repo for which syncing OWNERS file is disabled.")
@@ -287,9 +283,6 @@ func parseOptions() options {
 func validateOptions(o options) error {
 	if o.githubLogin == "" {
 		return fmt.Errorf("--github-login is mandatory")
-	}
-	if (o.gitEmail == "") != (o.gitName == "") {
-		return fmt.Errorf("--git-name and --git-email must be specified together")
 	}
 	if o.assign == "" {
 		return fmt.Errorf("--assign is mandatory")
@@ -390,12 +383,17 @@ func main() {
 	stdout := bumper.HideSecretsWriter{Delegate: os.Stdout, Censor: secretAgent}
 	stderr := bumper.HideSecretsWriter{Delegate: os.Stderr, Censor: secretAgent}
 
+	botUser, err := gc.BotUser()
+	if err != nil || botUser == nil {
+		logrus.WithError(err).Fatal("Failed to get bot user data.")
+	}
+
 	remoteBranch := "autoowners"
 	matchTitle := "Sync OWNERS files"
 	title := getTitle(matchTitle, time.Now().Format(time.RFC1123))
 	if err := bumper.GitCommitAndPush(fmt.Sprintf("https://%s:%s@github.com/%s/%s.git", o.githubLogin,
 		string(secretAgent.GetTokenGenerator(o.GitHubOptions.TokenPath)()), o.githubLogin, githubRepo),
-		remoteBranch, o.gitName, o.gitEmail, title, stdout, stderr); err != nil {
+		remoteBranch, botUser.Name, botUser.Email, title, stdout, stderr); err != nil {
 		logrus.WithError(err).Fatal("Failed to push changes.")
 	}
 

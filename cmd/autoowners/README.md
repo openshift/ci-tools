@@ -11,10 +11,6 @@ Usage of ./autoowners:
         Enable the DEBUG level of logs if true.
   -dry-run
         Whether to actually create the pull request with github client (default true)
-  -git-email string
-        The email to use on the git commit. Requires --git-name. If not specified, uses the system default.
-  -git-name string
-        The name to use on the git commit. Requires --git-email. If not specified, uses the system default.
   -github-endpoint value
         GitHub's API endpoint (may differ for enterprise). (default https://api.github.com)
   -github-graphql-endpoint string

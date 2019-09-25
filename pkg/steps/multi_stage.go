@@ -170,6 +170,7 @@ func (s *multiStageTestStep) generatePods(steps []api.TestStep) ([]coreapi.Pod, 
 			continue
 		}
 		pod.Labels[multiStageTestLabel] = s.name
+		addSecretWrapper(pod)
 		container := &pod.Spec.Containers[0]
 		container.Env = append(container.Env, []coreapi.EnvVar{
 			{Name: "NAMESPACE", Value: s.jobSpec.Namespace},
@@ -190,6 +191,31 @@ func (s *multiStageTestStep) generatePods(steps []api.TestStep) ([]coreapi.Pod, 
 		ret = append(ret, *pod)
 	}
 	return ret, utilerrors.NewAggregate(errs)
+}
+
+func addSecretWrapper(pod *coreapi.Pod) {
+	volume := "secret-wrapper"
+	dir := "/tmp/secret-wrapper"
+	bin := filepath.Join(dir, "secret-wrapper")
+	pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{
+		Name: volume,
+		VolumeSource: coreapi.VolumeSource{
+			EmptyDir: &coreapi.EmptyDirVolumeSource{},
+		},
+	})
+	mount := coreapi.VolumeMount{Name: volume, MountPath: dir}
+	pod.Spec.InitContainers = append(pod.Spec.InitContainers, coreapi.Container{
+		Image:                    "registry.svc.ci.openshift.org/ci/secret-wrapper:latest",
+		Name:                     "cp-secret-wrapper",
+		Command:                  []string{"cp"},
+		Args:                     []string{"/bin/secret-wrapper", bin},
+		VolumeMounts:             []coreapi.VolumeMount{mount},
+		TerminationMessagePolicy: coreapi.TerminationMessageFallbackToLogsOnError,
+	})
+	container := &pod.Spec.Containers[0]
+	container.Args = append([]string{}, append(container.Command, container.Args...)...)
+	container.Command = []string{bin}
+	container.VolumeMounts = append(container.VolumeMounts, mount)
 }
 
 func addSecret(secret string, pod *coreapi.Pod) {

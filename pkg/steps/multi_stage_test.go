@@ -142,19 +142,42 @@ func TestGeneratePods(t *testing.T) {
 		},
 		Spec: coreapi.PodSpec{
 			RestartPolicy: "Never",
+			InitContainers: []coreapi.Container{{
+				Name:    "cp-secret-wrapper",
+				Image:   "registry.svc.ci.openshift.org/ci/secret-wrapper:latest",
+				Command: []string{"cp"},
+				Args: []string{
+					"/bin/secret-wrapper",
+					"/tmp/secret-wrapper/secret-wrapper",
+				},
+				VolumeMounts: []coreapi.VolumeMount{{
+					Name:      "secret-wrapper",
+					MountPath: "/tmp/secret-wrapper",
+				}},
+				TerminationMessagePolicy: coreapi.TerminationMessageFallbackToLogsOnError,
+			}},
 			Containers: []coreapi.Container{{
 				Name:                     "step0",
 				Image:                    "image0",
-				Command:                  []string{"/bin/bash", "-c", "#!/bin/bash\nset -eu\ncommand0"},
+				Command:                  []string{"/tmp/secret-wrapper/secret-wrapper"},
+				Args:                     []string{"/bin/bash", "-c", "#!/bin/bash\nset -eu\ncommand0"},
 				Env:                      env,
 				Resources:                coreapi.ResourceRequirements{},
 				TerminationMessagePolicy: "FallbackToLogsOnError",
 				VolumeMounts: []coreapi.VolumeMount{{
+					Name:      "secret-wrapper",
+					MountPath: "/tmp/secret-wrapper",
+				}, {
 					Name:      "test",
 					MountPath: "/var/run/secrets/ci.openshift.io/multi-stage",
 				}},
 			}},
 			Volumes: []coreapi.Volume{{
+				Name: "secret-wrapper",
+				VolumeSource: coreapi.VolumeSource{
+					EmptyDir: &coreapi.EmptyDirVolumeSource{},
+				},
+			}, {
 				Name: "test",
 				VolumeSource: coreapi.VolumeSource{
 					Secret: &coreapi.SecretVolumeSource{
@@ -174,14 +197,32 @@ func TestGeneratePods(t *testing.T) {
 		},
 		Spec: coreapi.PodSpec{
 			RestartPolicy: "Never",
+			InitContainers: []coreapi.Container{{
+				Name:    "cp-secret-wrapper",
+				Image:   "registry.svc.ci.openshift.org/ci/secret-wrapper:latest",
+				Command: []string{"cp"},
+				Args: []string{
+					"/bin/secret-wrapper",
+					"/tmp/secret-wrapper/secret-wrapper",
+				},
+				VolumeMounts: []coreapi.VolumeMount{{
+					Name:      "secret-wrapper",
+					MountPath: "/tmp/secret-wrapper",
+				}},
+				TerminationMessagePolicy: coreapi.TerminationMessageFallbackToLogsOnError,
+			}},
 			Containers: []coreapi.Container{{
 				Name:                     "step1",
 				Image:                    "image1",
-				Command:                  []string{"/bin/bash", "-c", "#!/bin/bash\nset -eu\ncommand1"},
+				Command:                  []string{"/tmp/secret-wrapper/secret-wrapper"},
+				Args:                     []string{"/bin/bash", "-c", "#!/bin/bash\nset -eu\ncommand1"},
 				Env:                      env,
 				Resources:                coreapi.ResourceRequirements{},
 				TerminationMessagePolicy: "FallbackToLogsOnError",
 				VolumeMounts: []coreapi.VolumeMount{{
+					Name:      "secret-wrapper",
+					MountPath: "/tmp/secret-wrapper",
+				}, {
 					Name:      "artifacts",
 					MountPath: "/artifact/dir",
 				}, {
@@ -214,6 +255,11 @@ done
 				}},
 			}},
 			Volumes: []coreapi.Volume{{
+				Name: "secret-wrapper",
+				VolumeSource: coreapi.VolumeSource{
+					EmptyDir: &coreapi.EmptyDirVolumeSource{},
+				},
+			}, {
 				Name: "artifacts",
 				VolumeSource: coreapi.VolumeSource{
 					EmptyDir: &coreapi.EmptyDirVolumeSource{},

@@ -454,10 +454,13 @@
     "spec": {
       "containers": [
         {
-          "command": [
+          "args": [
             "/bin/bash",
             "-c",
             "#!/bin/bash\nset -eu\npost0 command"
+          ],
+          "command": [
+            "/tmp/secret-wrapper/secret-wrapper"
           ],
           "env": [
             {
@@ -534,14 +537,43 @@
           "terminationMessagePolicy": "FallbackToLogsOnError",
           "volumeMounts": [
             {
+              "mountPath": "/tmp/secret-wrapper",
+              "name": "secret-wrapper"
+            },
+            {
               "mountPath": "/var/run/secrets/ci.openshift.io/multi-stage",
               "name": "multi-stage"
             }
           ]
         }
       ],
+      "initContainers": [
+        {
+          "args": [
+            "/bin/secret-wrapper",
+            "/tmp/secret-wrapper/secret-wrapper"
+          ],
+          "command": [
+            "cp"
+          ],
+          "image": "registry.svc.ci.openshift.org/ci/secret-wrapper:latest",
+          "name": "cp-secret-wrapper",
+          "resources": {},
+          "terminationMessagePolicy": "FallbackToLogsOnError",
+          "volumeMounts": [
+            {
+              "mountPath": "/tmp/secret-wrapper",
+              "name": "secret-wrapper"
+            }
+          ]
+        }
+      ],
       "restartPolicy": "Never",
       "volumes": [
+        {
+          "emptyDir": {},
+          "name": "secret-wrapper"
+        },
         {
           "name": "multi-stage",
           "secret": {
@@ -576,10 +608,13 @@
     "spec": {
       "containers": [
         {
-          "command": [
+          "args": [
             "/bin/bash",
             "-c",
             "#!/bin/bash\nset -eu\npost1 command"
+          ],
+          "command": [
+            "/tmp/secret-wrapper/secret-wrapper"
           ],
           "env": [
             {
@@ -656,14 +691,43 @@
           "terminationMessagePolicy": "FallbackToLogsOnError",
           "volumeMounts": [
             {
+              "mountPath": "/tmp/secret-wrapper",
+              "name": "secret-wrapper"
+            },
+            {
               "mountPath": "/var/run/secrets/ci.openshift.io/multi-stage",
               "name": "multi-stage"
             }
           ]
         }
       ],
+      "initContainers": [
+        {
+          "args": [
+            "/bin/secret-wrapper",
+            "/tmp/secret-wrapper/secret-wrapper"
+          ],
+          "command": [
+            "cp"
+          ],
+          "image": "registry.svc.ci.openshift.org/ci/secret-wrapper:latest",
+          "name": "cp-secret-wrapper",
+          "resources": {},
+          "terminationMessagePolicy": "FallbackToLogsOnError",
+          "volumeMounts": [
+            {
+              "mountPath": "/tmp/secret-wrapper",
+              "name": "secret-wrapper"
+            }
+          ]
+        }
+      ],
       "restartPolicy": "Never",
       "volumes": [
+        {
+          "emptyDir": {},
+          "name": "secret-wrapper"
+        },
         {
           "name": "multi-stage",
           "secret": {
@@ -698,10 +762,13 @@
     "spec": {
       "containers": [
         {
-          "command": [
+          "args": [
             "/bin/bash",
             "-c",
             "#!/bin/bash\nset -eu\npre0 command\n"
+          ],
+          "command": [
+            "/tmp/secret-wrapper/secret-wrapper"
           ],
           "env": [
             {
@@ -778,14 +845,43 @@
           "terminationMessagePolicy": "FallbackToLogsOnError",
           "volumeMounts": [
             {
+              "mountPath": "/tmp/secret-wrapper",
+              "name": "secret-wrapper"
+            },
+            {
               "mountPath": "/var/run/secrets/ci.openshift.io/multi-stage",
               "name": "multi-stage"
             }
           ]
         }
       ],
+      "initContainers": [
+        {
+          "args": [
+            "/bin/secret-wrapper",
+            "/tmp/secret-wrapper/secret-wrapper"
+          ],
+          "command": [
+            "cp"
+          ],
+          "image": "registry.svc.ci.openshift.org/ci/secret-wrapper:latest",
+          "name": "cp-secret-wrapper",
+          "resources": {},
+          "terminationMessagePolicy": "FallbackToLogsOnError",
+          "volumeMounts": [
+            {
+              "mountPath": "/tmp/secret-wrapper",
+              "name": "secret-wrapper"
+            }
+          ]
+        }
+      ],
       "restartPolicy": "Never",
       "volumes": [
+        {
+          "emptyDir": {},
+          "name": "secret-wrapper"
+        },
         {
           "name": "multi-stage",
           "secret": {
@@ -820,10 +916,13 @@
     "spec": {
       "containers": [
         {
-          "command": [
+          "args": [
             "/bin/bash",
             "-c",
             "#!/bin/bash\nset -eu\npre1 command"
+          ],
+          "command": [
+            "/tmp/secret-wrapper/secret-wrapper"
           ],
           "env": [
             {
@@ -900,14 +999,43 @@
           "terminationMessagePolicy": "FallbackToLogsOnError",
           "volumeMounts": [
             {
+              "mountPath": "/tmp/secret-wrapper",
+              "name": "secret-wrapper"
+            },
+            {
               "mountPath": "/var/run/secrets/ci.openshift.io/multi-stage",
               "name": "multi-stage"
             }
           ]
         }
       ],
+      "initContainers": [
+        {
+          "args": [
+            "/bin/secret-wrapper",
+            "/tmp/secret-wrapper/secret-wrapper"
+          ],
+          "command": [
+            "cp"
+          ],
+          "image": "registry.svc.ci.openshift.org/ci/secret-wrapper:latest",
+          "name": "cp-secret-wrapper",
+          "resources": {},
+          "terminationMessagePolicy": "FallbackToLogsOnError",
+          "volumeMounts": [
+            {
+              "mountPath": "/tmp/secret-wrapper",
+              "name": "secret-wrapper"
+            }
+          ]
+        }
+      ],
       "restartPolicy": "Never",
       "volumes": [
+        {
+          "emptyDir": {},
+          "name": "secret-wrapper"
+        },
         {
           "name": "multi-stage",
           "secret": {
@@ -942,10 +1070,13 @@
     "spec": {
       "containers": [
         {
-          "command": [
+          "args": [
             "/bin/bash",
             "-c",
             "#!/bin/bash\nset -eu\ntest0 command"
+          ],
+          "command": [
+            "/tmp/secret-wrapper/secret-wrapper"
           ],
           "env": [
             {
@@ -1022,14 +1153,43 @@
           "terminationMessagePolicy": "FallbackToLogsOnError",
           "volumeMounts": [
             {
+              "mountPath": "/tmp/secret-wrapper",
+              "name": "secret-wrapper"
+            },
+            {
               "mountPath": "/var/run/secrets/ci.openshift.io/multi-stage",
               "name": "multi-stage"
             }
           ]
         }
       ],
+      "initContainers": [
+        {
+          "args": [
+            "/bin/secret-wrapper",
+            "/tmp/secret-wrapper/secret-wrapper"
+          ],
+          "command": [
+            "cp"
+          ],
+          "image": "registry.svc.ci.openshift.org/ci/secret-wrapper:latest",
+          "name": "cp-secret-wrapper",
+          "resources": {},
+          "terminationMessagePolicy": "FallbackToLogsOnError",
+          "volumeMounts": [
+            {
+              "mountPath": "/tmp/secret-wrapper",
+              "name": "secret-wrapper"
+            }
+          ]
+        }
+      ],
       "restartPolicy": "Never",
       "volumes": [
+        {
+          "emptyDir": {},
+          "name": "secret-wrapper"
+        },
         {
           "name": "multi-stage",
           "secret": {
@@ -1064,10 +1224,13 @@
     "spec": {
       "containers": [
         {
-          "command": [
+          "args": [
             "/bin/bash",
             "-c",
             "#!/bin/bash\nset -eu\ntest1 command"
+          ],
+          "command": [
+            "/tmp/secret-wrapper/secret-wrapper"
           ],
           "env": [
             {
@@ -1144,14 +1307,43 @@
           "terminationMessagePolicy": "FallbackToLogsOnError",
           "volumeMounts": [
             {
+              "mountPath": "/tmp/secret-wrapper",
+              "name": "secret-wrapper"
+            },
+            {
               "mountPath": "/var/run/secrets/ci.openshift.io/multi-stage",
               "name": "multi-stage"
             }
           ]
         }
       ],
+      "initContainers": [
+        {
+          "args": [
+            "/bin/secret-wrapper",
+            "/tmp/secret-wrapper/secret-wrapper"
+          ],
+          "command": [
+            "cp"
+          ],
+          "image": "registry.svc.ci.openshift.org/ci/secret-wrapper:latest",
+          "name": "cp-secret-wrapper",
+          "resources": {},
+          "terminationMessagePolicy": "FallbackToLogsOnError",
+          "volumeMounts": [
+            {
+              "mountPath": "/tmp/secret-wrapper",
+              "name": "secret-wrapper"
+            }
+          ]
+        }
+      ],
       "restartPolicy": "Never",
       "volumes": [
+        {
+          "emptyDir": {},
+          "name": "secret-wrapper"
+        },
         {
           "name": "multi-stage",
           "secret": {
@@ -1186,10 +1378,13 @@
     "spec": {
       "containers": [
         {
-          "command": [
+          "args": [
             "/bin/bash",
             "-c",
             "#!/bin/bash\nset -eu\ntest2 command"
+          ],
+          "command": [
+            "/tmp/secret-wrapper/secret-wrapper"
           ],
           "env": [
             {
@@ -1266,14 +1461,43 @@
           "terminationMessagePolicy": "FallbackToLogsOnError",
           "volumeMounts": [
             {
+              "mountPath": "/tmp/secret-wrapper",
+              "name": "secret-wrapper"
+            },
+            {
               "mountPath": "/var/run/secrets/ci.openshift.io/multi-stage",
               "name": "multi-stage"
             }
           ]
         }
       ],
+      "initContainers": [
+        {
+          "args": [
+            "/bin/secret-wrapper",
+            "/tmp/secret-wrapper/secret-wrapper"
+          ],
+          "command": [
+            "cp"
+          ],
+          "image": "registry.svc.ci.openshift.org/ci/secret-wrapper:latest",
+          "name": "cp-secret-wrapper",
+          "resources": {},
+          "terminationMessagePolicy": "FallbackToLogsOnError",
+          "volumeMounts": [
+            {
+              "mountPath": "/tmp/secret-wrapper",
+              "name": "secret-wrapper"
+            }
+          ]
+        }
+      ],
       "restartPolicy": "Never",
       "volumes": [
+        {
+          "emptyDir": {},
+          "name": "secret-wrapper"
+        },
         {
           "name": "multi-stage",
           "secret": {

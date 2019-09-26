@@ -51,11 +51,12 @@ integration-ci-operator:
 
 integration-ci-operator-configresolver:
 	test/ci-operator-configresolver-integration/run.sh
-
-check-breaking-changes:
-	test/validate-prowgen-breaking-changes.sh
-.PHONY: check-breaking-changes
+.PHONY: integration-ci-operator-configresolver
 
 integration-testgrid-generator:
 	test/testgrid-config-generator/run.sh
+.PHONY: integration-testgrid-generator
+
+check-breaking-changes:
+	test/validate-prowgen-breaking-changes.sh
 .PHONY: check-breaking-changes

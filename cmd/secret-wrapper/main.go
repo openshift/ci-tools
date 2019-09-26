@@ -2,60 +2,94 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 
+	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/util"
 )
 
-const (
-	dir = "/tmp/secret"
-)
-
 func main() {
-	if len(os.Args) == 1 {
-		fmt.Fprintf(os.Stderr, "Usage: %s cmd...\n", os.Args[0])
+	flagSet := flag.NewFlagSet("", flag.ExitOnError)
+	opt := bindOptions(flagSet)
+	flagSet.Parse(os.Args[1:])
+	opt.cmd = flagSet.Args()
+	if err := opt.complete(); err != nil {
+		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
-	if err := run(os.Args); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+	if err := opt.run(); err != nil {
+		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
 }
 
-func run(argv []string) error {
-	var ns, name string
+type options struct {
+	dry       bool
+	dir, name string
+	cmd       []string
+	client    coreclientset.SecretInterface
+}
+
+func bindOptions(flag *flag.FlagSet) *options {
+	opt := &options{}
+	flag.BoolVar(&opt.dry, "dry-run", false, "Print the secret instead of creating it")
+	return opt
+}
+
+func (o *options) complete() error {
+	if len(o.cmd) == 0 {
+		return fmt.Errorf("a command is required")
+	}
+	var ns string
 	if ns = os.Getenv("NAMESPACE"); ns == "" {
 		return fmt.Errorf("environment variable NAMESPACE is empty")
 	}
-	if name = os.Getenv("JOB_NAME_SAFE"); name == "" {
+	if o.name = os.Getenv("JOB_NAME_SAFE"); o.name == "" {
 		return fmt.Errorf("environment variable JOB_NAME_SAFE is empty")
 	}
-	client, err := loadClient(ns)
-	if err != nil {
-		return err
+	o.dir = filepath.Join(os.TempDir(), "secret")
+	if !o.dry {
+		var err error
+		if o.client, err = loadClient(ns); err != nil {
+			return err
+		}
 	}
-	if err := execCmd(os.Args); err != nil {
+	return nil
+}
+
+func (o *options) run() error {
+	if err := execCmd(o.cmd); err != nil {
 		return fmt.Errorf("failed to execute wrapped command: %v", err)
 	}
-	if _, err := os.Stat(dir); err != nil {
+	if _, err := os.Stat(o.dir); err != nil {
 		if os.IsNotExist(err) {
 			return nil
 		}
-		return fmt.Errorf("failed to stat directory %q: %v", dir, err)
+		return fmt.Errorf("failed to stat directory %q: %v", o.dir, err)
 	}
-	secret, err := util.SecretFromDir(dir)
+	secret, err := util.SecretFromDir(o.dir)
 	if err != nil {
 		return fmt.Errorf("failed to generate secret: %v", err)
 	}
-	secret.Name = name
-	if _, err := util.UpdateSecret(client, secret); err != nil {
-		return fmt.Errorf("failed to update secret: %v", err)
+	secret.Name = o.name
+	if o.dry {
+		logger := steps.DryLogger{}
+		logger.AddObject(secret)
+		if err := logger.Log(); err != nil {
+			return fmt.Errorf("failed to log secret: %v", err)
+		}
+	} else {
+		if _, err := util.UpdateSecret(o.client, secret); err != nil {
+			return fmt.Errorf("failed to update secret: %v", err)
+		}
 	}
 	return nil
 }
@@ -73,7 +107,7 @@ func loadClient(namespace string) (coreclientset.SecretInterface, error) {
 }
 
 func execCmd(argv []string) error {
-	proc := exec.Command(argv[1], argv[2:]...)
+	proc := exec.Command(argv[0], argv[1:]...)
 	proc.Stdout = os.Stdout
 	proc.Stderr = os.Stderr
 	sig := make(chan os.Signal, 1)

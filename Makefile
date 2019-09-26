@@ -53,6 +53,10 @@ integration-ci-operator-configresolver:
 	test/ci-operator-configresolver-integration/run.sh
 .PHONY: integration-ci-operator-configresolver
 
+integration-secret-wrapper:
+	test/secret-wrapper-integration.sh
+.PHONY: integration-secret-wrapper
+
 integration-testgrid-generator:
 	test/testgrid-config-generator/run.sh
 .PHONY: integration-testgrid-generator

@@ -12,7 +12,7 @@ install:
 .PHONY: install
 
 test:
-	go test ./...
+	go test -race ./...
 .PHONY: test
 
 validate-vendor:

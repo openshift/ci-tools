@@ -14,10 +14,14 @@ import (
 )
 
 const (
-	DIR = "/tmp/secret"
+	dir = "/tmp/secret"
 )
 
 func main() {
+	if len(os.Args) == 1 {
+		fmt.Fprintf(os.Stderr, "Usage: %s cmd...\n", os.Args[0])
+		os.Exit(1)
+	}
 	if err := run(os.Args); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -25,9 +29,6 @@ func main() {
 }
 
 func run(argv []string) error {
-	if len(os.Args) == 1 {
-		return fmt.Errorf("Usage: %s cmd...\n", os.Args[0])
-	}
 	var ns, name string
 	if ns = os.Getenv("NAMESPACE"); ns == "" {
 		return fmt.Errorf("environment variable NAMESPACE is empty")
@@ -40,21 +41,21 @@ func run(argv []string) error {
 		return err
 	}
 	if err := execCmd(os.Args); err != nil {
-		return fmt.Errorf("failed to execute wrapped command: %v\n", err)
+		return fmt.Errorf("failed to execute wrapped command: %v", err)
 	}
-	if _, err := os.Stat(DIR); err != nil {
+	if _, err := os.Stat(dir); err != nil {
 		if os.IsNotExist(err) {
 			return nil
 		}
-		return fmt.Errorf("failed to stat directory %q: %v", DIR, err)
+		return fmt.Errorf("failed to stat directory %q: %v", dir, err)
 	}
-	secret, err := util.SecretFromDir(DIR)
+	secret, err := util.SecretFromDir(dir)
 	if err != nil {
-		return fmt.Errorf("failed to generate secret: %v\n", err)
+		return fmt.Errorf("failed to generate secret: %v", err)
 	}
 	secret.Name = name
 	if _, err := util.UpdateSecret(client, secret); err != nil {
-		return fmt.Errorf("failed to update secret: %v\n", err)
+		return fmt.Errorf("failed to update secret: %v", err)
 	}
 	return nil
 }

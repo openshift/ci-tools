@@ -323,27 +323,12 @@ func (o *options) Complete() error {
 	}
 
 	for _, path := range o.secretDirectories.values {
-		secret := &coreapi.Secret{Data: make(map[string][]byte)}
-		secret.Type = coreapi.SecretTypeOpaque
-		secret.Name = filepath.Base(path)
-		files, err := ioutil.ReadDir(path)
+		secret, err := util.SecretFromDir(path)
+		name := filepath.Base(path)
 		if err != nil {
-			return fmt.Errorf("could not read dir %s for secret: %v", path, err)
+			return fmt.Errorf("failed to generate secret %s: %v", name, err)
 		}
-		for _, f := range files {
-			if f.IsDir() {
-				continue
-			}
-			path := filepath.Join(path, f.Name())
-			// if the file is a broken symlink or a symlink to a dir, skip it
-			if fi, err := os.Stat(path); err != nil || fi.IsDir() {
-				continue
-			}
-			secret.Data[f.Name()], err = ioutil.ReadFile(path)
-			if err != nil {
-				return fmt.Errorf("could not read file %s for secret: %v", path, err)
-			}
-		}
+		secret.Name = name
 		if len(secret.Data) == 1 {
 			if _, ok := secret.Data[coreapi.DockerConfigJsonKey]; ok {
 				secret.Type = coreapi.SecretTypeDockerConfigJson
@@ -696,28 +681,15 @@ func (o *options) initializeNamespace() error {
 	}
 
 	for _, secret := range o.secrets {
-		_, err := client.Secrets(o.namespace).Create(secret)
-		if kerrors.IsAlreadyExists(err) {
-			existing, err := client.Secrets(o.namespace).Get(secret.Name, meta.GetOptions{})
-			if err != nil {
-				return fmt.Errorf("could not retrieve secret %s: %v", secret.Name, err)
-			}
-			if l := len(secret.Data); l != 0 && existing.Data == nil {
-				existing.Data = make(map[string][]byte, l)
-			}
-			for k, v := range secret.Data {
-				existing.Data[k] = v
-			}
-			if _, err := client.Secrets(o.namespace).Update(existing); err != nil {
-				return fmt.Errorf("could not update secret %s: %v", secret.Name, err)
-			}
-			log.Printf("Updated secret %s", secret.Name)
-			continue
-		}
+		created, err := util.UpdateSecret(client.Secrets(o.namespace), secret)
 		if err != nil {
-			return fmt.Errorf("could not create secret %s: %v", secret.Name, err)
+			return fmt.Errorf("could not update secret %s: %v", secret.Name, err)
 		}
-		log.Printf("Created secret %s", secret.Name)
+		if created {
+			log.Printf("Created secret %s", secret.Name)
+		} else {
+			log.Printf("Updated secret %s", secret.Name)
+		}
 	}
 	return nil
 }

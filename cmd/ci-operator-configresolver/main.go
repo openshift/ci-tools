@@ -6,10 +6,13 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/test-infra/prow/interrupts"
+	"k8s.io/test-infra/prow/pjutil"
 
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/load"
@@ -29,6 +32,46 @@ type options struct {
 	gracePeriod time.Duration
 	cycle       time.Duration
 }
+
+var (
+	configresolverMetrics = struct {
+		httpRequestDuration *prometheus.HistogramVec
+		httpResponseSize    *prometheus.HistogramVec
+		errorRate           *prometheus.CounterVec
+		configReloadTime    prometheus.Histogram
+	}{
+		httpRequestDuration: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name:    "configresolver_http_request_duration_seconds",
+				Help:    "http request duration in seconds",
+				Buckets: []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 20},
+			},
+			[]string{"status"},
+		),
+		httpResponseSize: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name:    "configresolver_http_response_size_bytes",
+				Help:    "http response size in bytes",
+				Buckets: []float64{16384, 32768, 65536, 131072, 262144, 524288, 1048576, 2097152, 4194304, 8388608, 16777216, 33554432},
+			},
+			[]string{"status"},
+		),
+		errorRate: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "configresolver_error_rate",
+				Help: "number of errors, sorted by label/type",
+			},
+			[]string{"error"},
+		),
+		configReloadTime: prometheus.NewHistogram(
+			prometheus.HistogramOpts{
+				Name:    "configresolver_config_reload_duration_milliseconds",
+				Help:    "config reload duration in milliseconds",
+				Buckets: []float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1, 2.5, 5, 7.5, 10},
+			},
+		),
+	}
+)
 
 func gatherOptions() options {
 	o := options{}
@@ -53,31 +96,48 @@ func validateOptions(o options) error {
 	return nil
 }
 
-func missingQuery(w http.ResponseWriter, field string) {
-	w.WriteHeader(http.StatusBadRequest)
-	fmt.Fprintf(w, "%s query missing or incorrect", field)
+func recordError(label string) {
+	labels := prometheus.Labels{"error": label}
+	configresolverMetrics.errorRate.With(labels).Inc()
+}
+
+func missingQuery(w http.ResponseWriter, field string) (int, []byte) {
+	recordError(fmt.Sprintf("query missing %s", field))
+	return http.StatusBadRequest, []byte(fmt.Sprintf("%s query missing or incorrect", field))
 }
 
 func resolveConfig(agent load.ConfigAgent) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		t := time.Now()
+		// get int pointer
+		statusCode := new(int)
+		var body []byte
+		defer func() {
+			latency := time.Since(t)
+			w.WriteHeader(*statusCode)
+			w.Write(body)
+			labels := prometheus.Labels{"status": strconv.Itoa(*statusCode)}
+			configresolverMetrics.httpRequestDuration.With(labels).Observe(latency.Seconds())
+			configresolverMetrics.httpResponseSize.With(labels).Observe(float64(len(body)))
+		}()
 		if r.Method != "GET" {
-			w.WriteHeader(http.StatusNotImplemented)
-			w.Write([]byte(http.StatusText(http.StatusNotImplemented)))
+			*statusCode = http.StatusNotImplemented
+			body = []byte(http.StatusText(http.StatusNotImplemented))
 			return
 		}
 		org := r.URL.Query().Get(orgQuery)
 		if org == "" {
-			missingQuery(w, orgQuery)
+			*statusCode, body = missingQuery(w, orgQuery)
 			return
 		}
 		repo := r.URL.Query().Get(repoQuery)
 		if repo == "" {
-			missingQuery(w, repoQuery)
+			*statusCode, body = missingQuery(w, repoQuery)
 			return
 		}
 		branch := r.URL.Query().Get(branchQuery)
 		if branch == "" {
-			missingQuery(w, branchQuery)
+			*statusCode, body = missingQuery(w, branchQuery)
 			return
 		}
 		variant := r.URL.Query().Get(variantQuery)
@@ -90,18 +150,22 @@ func resolveConfig(agent load.ConfigAgent) http.HandlerFunc {
 
 		config, err := agent.GetConfig(info)
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprintf(w, "failed to get config: %v", err)
+			recordError("config not found")
+			*statusCode = http.StatusBadRequest
+			body = []byte(fmt.Sprintf("failed to get config: %v", err))
+			log.WithError(err).Warning("failed to get config")
 			return
 		}
 		jsonConfig, err := json.MarshalIndent(config, "", "  ")
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "failed to marshal config to JSON: %v", err)
+			recordError("failed to unmarshal config")
+			*statusCode = http.StatusInternalServerError
+			body = []byte(fmt.Sprintf("failed to marshal config to JSON: %v", err))
+			log.WithError(err).Errorf("failed to unmarshal config to JSON")
 			return
 		}
-		w.WriteHeader(http.StatusOK)
-		w.Write(jsonConfig)
+		*statusCode = http.StatusOK
+		body = jsonConfig
 	}
 }
 
@@ -112,6 +176,13 @@ func getGeneration(agent load.ConfigAgent) http.HandlerFunc {
 	}
 }
 
+func init() {
+	prometheus.MustRegister(configresolverMetrics.httpRequestDuration)
+	prometheus.MustRegister(configresolverMetrics.httpResponseSize)
+	prometheus.MustRegister(configresolverMetrics.errorRate)
+	prometheus.MustRegister(configresolverMetrics.configReloadTime)
+}
+
 func main() {
 	o := gatherOptions()
 	err := validateOptions(o)
@@ -120,8 +191,9 @@ func main() {
 	}
 	level, _ := log.ParseLevel(o.logLevel)
 	log.SetLevel(level)
+	health := pjutil.NewHealth()
 
-	configAgent, err := load.NewConfigAgent(o.configPath, o.cycle)
+	configAgent, err := load.NewConfigAgent(o.configPath, o.cycle, configresolverMetrics.errorRate, &configresolverMetrics.configReloadTime)
 	if err != nil {
 		log.Fatalf("Failed to get config agent: %v", err)
 	}
@@ -129,5 +201,6 @@ func main() {
 	http.HandleFunc("/config", resolveConfig(configAgent))
 	http.HandleFunc("/generation", getGeneration(configAgent))
 	interrupts.ListenAndServe(&http.Server{Addr: o.address}, o.gracePeriod)
+	health.ServeReady()
 	interrupts.WaitForGracefulShutdown()
 }

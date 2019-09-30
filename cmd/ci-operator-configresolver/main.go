@@ -11,7 +11,9 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
+	prowConfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/interrupts"
+	"k8s.io/test-infra/prow/metrics"
 	"k8s.io/test-infra/prow/pjutil"
 
 	"github.com/openshift/ci-tools/pkg/config"
@@ -31,6 +33,23 @@ type options struct {
 	address     string
 	gracePeriod time.Duration
 	cycle       time.Duration
+}
+
+type traceResponseWriter struct {
+	http.ResponseWriter
+	statusCode int
+	size       int
+}
+
+func (w *traceResponseWriter) WriteHeader(code int) {
+	w.statusCode = code
+	w.ResponseWriter.WriteHeader(code)
+}
+
+func (w *traceResponseWriter) Write(data []byte) (int, error) {
+	size, err := w.ResponseWriter.Write(data)
+	w.size += size
+	return size, err
 }
 
 var (
@@ -101,43 +120,45 @@ func recordError(label string) {
 	configresolverMetrics.errorRate.With(labels).Inc()
 }
 
-func missingQuery(w http.ResponseWriter, field string) (int, []byte) {
+func missingQuery(w http.ResponseWriter, field string) {
 	recordError(fmt.Sprintf("query missing %s", field))
-	return http.StatusBadRequest, []byte(fmt.Sprintf("%s query missing or incorrect", field))
+	w.WriteHeader(http.StatusBadRequest)
+	fmt.Fprintf(w, "%s query missing or incorrect", field)
+}
+
+func handleWithMetrics(h http.HandlerFunc) http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t := time.Now()
+		// Initialize the status to 200 in case WriteHeader is not called
+		trw := &traceResponseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+		h(trw, r)
+		latency := time.Since(t)
+		labels := prometheus.Labels{"status": strconv.Itoa(trw.statusCode)}
+		configresolverMetrics.httpRequestDuration.With(labels).Observe(latency.Seconds())
+		configresolverMetrics.httpResponseSize.With(labels).Observe(float64(trw.size))
+	})
 }
 
 func resolveConfig(agent load.ConfigAgent) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		t := time.Now()
-		// get int pointer
-		statusCode := new(int)
-		var body []byte
-		defer func() {
-			latency := time.Since(t)
-			w.WriteHeader(*statusCode)
-			w.Write(body)
-			labels := prometheus.Labels{"status": strconv.Itoa(*statusCode)}
-			configresolverMetrics.httpRequestDuration.With(labels).Observe(latency.Seconds())
-			configresolverMetrics.httpResponseSize.With(labels).Observe(float64(len(body)))
-		}()
 		if r.Method != "GET" {
-			*statusCode = http.StatusNotImplemented
-			body = []byte(http.StatusText(http.StatusNotImplemented))
+			w.WriteHeader(http.StatusNotImplemented)
+			w.Write([]byte(http.StatusText(http.StatusNotImplemented)))
 			return
 		}
 		org := r.URL.Query().Get(orgQuery)
 		if org == "" {
-			*statusCode, body = missingQuery(w, orgQuery)
+			missingQuery(w, orgQuery)
 			return
 		}
 		repo := r.URL.Query().Get(repoQuery)
 		if repo == "" {
-			*statusCode, body = missingQuery(w, repoQuery)
+			missingQuery(w, repoQuery)
 			return
 		}
 		branch := r.URL.Query().Get(branchQuery)
 		if branch == "" {
-			*statusCode, body = missingQuery(w, branchQuery)
+			missingQuery(w, branchQuery)
 			return
 		}
 		variant := r.URL.Query().Get(variantQuery)
@@ -151,21 +172,21 @@ func resolveConfig(agent load.ConfigAgent) http.HandlerFunc {
 		config, err := agent.GetConfig(info)
 		if err != nil {
 			recordError("config not found")
-			*statusCode = http.StatusBadRequest
-			body = []byte(fmt.Sprintf("failed to get config: %v", err))
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprintf(w, "failed to get config: %v", err)
 			log.WithError(err).Warning("failed to get config")
 			return
 		}
 		jsonConfig, err := json.MarshalIndent(config, "", "  ")
 		if err != nil {
 			recordError("failed to unmarshal config")
-			*statusCode = http.StatusInternalServerError
-			body = []byte(fmt.Sprintf("failed to marshal config to JSON: %v", err))
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "failed to marshal config to JSON: %v", err)
 			log.WithError(err).Errorf("failed to unmarshal config to JSON")
 			return
 		}
-		*statusCode = http.StatusOK
-		body = jsonConfig
+		w.WriteHeader(http.StatusOK)
+		w.Write(jsonConfig)
 	}
 }
 
@@ -192,14 +213,15 @@ func main() {
 	level, _ := log.ParseLevel(o.logLevel)
 	log.SetLevel(level)
 	health := pjutil.NewHealth()
+	metrics.ExposeMetrics("ci-operator-configresolver", prowConfig.PushGateway{})
 
 	configAgent, err := load.NewConfigAgent(o.configPath, o.cycle, configresolverMetrics.errorRate, &configresolverMetrics.configReloadTime)
 	if err != nil {
 		log.Fatalf("Failed to get config agent: %v", err)
 	}
 
-	http.HandleFunc("/config", resolveConfig(configAgent))
-	http.HandleFunc("/generation", getGeneration(configAgent))
+	http.HandleFunc("/config", handleWithMetrics(resolveConfig(configAgent)))
+	http.HandleFunc("/generation", handleWithMetrics(getGeneration(configAgent)))
 	interrupts.ListenAndServe(&http.Server{Addr: o.address}, o.gracePeriod)
 	health.ServeReady()
 	interrupts.WaitForGracefulShutdown()

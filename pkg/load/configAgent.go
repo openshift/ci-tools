@@ -169,7 +169,7 @@ func reloadWatcher(ctx context.Context, w *fsnotify.Watcher, a *agent, c coalesc
 				log.WithError(err).Error("Failed to update fsnotify watchlist")
 			}
 		case err := <-w.Errors:
-			a.recordError(fmt.Sprintf("received fsnotify error: %v", err))
+			a.recordError("received fsnotify error")
 			log.WithError(err).Errorf("Received fsnotify error")
 		}
 	}

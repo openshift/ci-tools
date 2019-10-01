@@ -32,7 +32,7 @@ format:
 	gofmt -s -w $(shell go list -f '{{ .Dir }}' ./... )
 .PHONY: format
 
-integration: integration-prowgen integration-pj-rehearse integration-ci-operator integration-ci-operator-configresolver integration-testgrid-generator
+integration: integration-prowgen integration-pj-rehearse integration-ci-operator integration-ci-operator-configresolver integration-secret-wrapper integration-testgrid-generator
 .PHONY: integration
 
 integration-prowgen:

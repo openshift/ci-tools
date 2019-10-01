@@ -453,20 +453,17 @@ func (o *options) Run() error {
 		if err != nil {
 			return fmt.Errorf("could not get core client for cluster config: %v", err)
 		}
-		eventRecorder := eventRecorder(client, o.namespace)
+		eventRecorder := eventRecorder(client, o.namespace, o.dry)
 		runtimeObject := &coreapi.ObjectReference{Namespace: o.namespace}
-
-		if !o.dry {
-			eventRecorder.Event(runtimeObject, coreapi.EventTypeNormal, "CiJobStarted", eventJobDescription(o.jobSpec, o.namespace))
-		}
+		eventRecorder.Event(runtimeObject, coreapi.EventTypeNormal, "CiJobStarted", eventJobDescription(o.jobSpec, o.namespace))
 		// execute the graph
 		suites, err := steps.Run(ctx, nodes, o.dry)
 		if err := o.writeJUnit(suites, "operator"); err != nil {
 			log.Printf("warning: Unable to write JUnit result: %v", err)
 		}
 		if err != nil {
+			eventRecorder.Event(runtimeObject, coreapi.EventTypeWarning, "CiJobFailed", eventJobDescription(o.jobSpec, o.namespace))
 			if !o.dry {
-				eventRecorder.Event(runtimeObject, coreapi.EventTypeWarning, "CiJobFailed", eventJobDescription(o.jobSpec, o.namespace))
 				time.Sleep(time.Second)
 			}
 			return errWroteJUnit{fmt.Errorf("could not run steps: %v", err)}
@@ -474,17 +471,17 @@ func (o *options) Run() error {
 
 		for _, step := range postSteps {
 			if err := step.Run(ctx, o.dry); err != nil {
+				eventRecorder.Event(runtimeObject, coreapi.EventTypeWarning, "PostStepFailed",
+					fmt.Sprintf("Post step %s failed while %s", step.Name(), eventJobDescription(o.jobSpec, o.namespace)))
 				if !o.dry {
-					eventRecorder.Event(runtimeObject, coreapi.EventTypeWarning, "PostStepFailed",
-						fmt.Sprintf("Post step %s failed while %s", step.Name(), eventJobDescription(o.jobSpec, o.namespace)))
 					time.Sleep(time.Second)
 				}
 				return fmt.Errorf("could not run post step %s: %v", step.Name(), err)
 			}
 		}
 
+		eventRecorder.Event(runtimeObject, coreapi.EventTypeNormal, "CiJobSucceeded", eventJobDescription(o.jobSpec, o.namespace))
 		if !o.dry {
-			eventRecorder.Event(runtimeObject, coreapi.EventTypeNormal, "CiJobSucceeded", eventJobDescription(o.jobSpec, o.namespace))
 			time.Sleep(time.Second)
 		}
 
@@ -1197,7 +1194,10 @@ func summarizeRef(refs prowapi.Refs) string {
 	return fmt.Sprintf("Resolved source https://github.com/%s/%s to %s@%s", refs.Org, refs.Repo, refs.BaseRef, shorten(refs.BaseSHA, 8))
 }
 
-func eventRecorder(kubeClient *coreclientset.CoreV1Client, namespace string) record.EventRecorder {
+func eventRecorder(kubeClient *coreclientset.CoreV1Client, namespace string, dry bool) record.EventRecorder {
+	if dry {
+		return &record.FakeRecorder{}, nil
+	}
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartRecordingToSink(&coreclientset.EventSinkImpl{
 		Interface: coreclientset.New(kubeClient.RESTClient()).Events("")})

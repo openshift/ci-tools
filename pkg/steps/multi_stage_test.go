@@ -73,6 +73,7 @@ func TestGeneratePods(t *testing.T) {
 		Tests: []api.TestStepConfiguration{{
 			As: "test",
 			MultiStageTestConfiguration: &api.MultiStageTestConfiguration{
+				ClusterProfile: api.ClusterProfileAWS,
 				Test: []api.TestStep{{
 					LiteralTestStep: &api.LiteralTestStep{As: "step0", From: "image0", Commands: "command0"},
 				}, {
@@ -110,6 +111,8 @@ func TestGeneratePods(t *testing.T) {
 		{Name: "NAMESPACE", Value: "namespace"},
 		{Name: "JOB_NAME_SAFE", Value: "test"},
 		{Name: "JOB_NAME_HASH", Value: "5e8c9"},
+		{Name: "CLUSTER_TYPE", Value: "aws"},
+		{Name: "KUBECONFIG", Value: "/var/run/secrets/ci.openshift.io/multi-stage/kubeconfig"},
 	}
 	jobSpec := api.JobSpec{
 		JobSpec: prowdapi.JobSpec{
@@ -168,6 +171,9 @@ func TestGeneratePods(t *testing.T) {
 					Name:      "secret-wrapper",
 					MountPath: "/tmp/secret-wrapper",
 				}, {
+					Name:      "cluster-profile",
+					MountPath: "/var/run/secrets/ci.openshift.io/cluster-profile",
+				}, {
 					Name:      "test",
 					MountPath: "/var/run/secrets/ci.openshift.io/multi-stage",
 				}},
@@ -176,6 +182,13 @@ func TestGeneratePods(t *testing.T) {
 				Name: "secret-wrapper",
 				VolumeSource: coreapi.VolumeSource{
 					EmptyDir: &coreapi.EmptyDirVolumeSource{},
+				},
+			}, {
+				Name: "cluster-profile",
+				VolumeSource: coreapi.VolumeSource{
+					Secret: &coreapi.SecretVolumeSource{
+						SecretName: "test-cluster-profile",
+					},
 				},
 			}, {
 				Name: "test",
@@ -223,6 +236,9 @@ func TestGeneratePods(t *testing.T) {
 					Name:      "secret-wrapper",
 					MountPath: "/tmp/secret-wrapper",
 				}, {
+					Name:      "cluster-profile",
+					MountPath: "/var/run/secrets/ci.openshift.io/cluster-profile",
+				}, {
 					Name:      "artifacts",
 					MountPath: "/artifact/dir",
 				}, {
@@ -258,6 +274,13 @@ done
 				Name: "secret-wrapper",
 				VolumeSource: coreapi.VolumeSource{
 					EmptyDir: &coreapi.EmptyDirVolumeSource{},
+				},
+			}, {
+				Name: "cluster-profile",
+				VolumeSource: coreapi.VolumeSource{
+					Secret: &coreapi.SecretVolumeSource{
+						SecretName: "test-cluster-profile",
+					},
 				},
 			}, {
 				Name: "artifacts",

@@ -486,6 +486,36 @@ const (
 	ClusterProfileVSphere                           = "vsphere"
 )
 
+func (p ClusterProfile) ClusterType() string {
+	switch p {
+	case
+		ClusterProfileAWS,
+		ClusterProfileAWSAtomic,
+		ClusterProfileAWSCentos,
+		ClusterProfileAWSCentos40,
+		ClusterProfileAWSGluster:
+		return "aws"
+	case ClusterProfileAzure4:
+		return "azure"
+	case
+		ClusterProfileGCP,
+		ClusterProfileGCP40,
+		ClusterProfileGCPHA,
+		ClusterProfileGCPCRIO,
+		ClusterProfileGCPLogging,
+		ClusterProfileGCPLoggingJournald,
+		ClusterProfileGCPLoggingJSONFile,
+		ClusterProfileGCPLoggingCRIO:
+		return "gcp"
+	case ClusterProfileOpenStack:
+		return "openstack"
+	case ClusterProfileVSphere:
+		return "vsphere"
+	default:
+		return ""
+	}
+}
+
 // ClusterTestConfiguration describes a test that provisions
 // a cluster and runs a command in it.
 type ClusterTestConfiguration struct {

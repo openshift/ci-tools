@@ -268,7 +268,7 @@ func addProfile(name string, profile api.ClusterProfile, pod *coreapi.Pod) {
 	})
 	container.Env = append(container.Env, coreapi.EnvVar{
 		Name:  "CLUSTER_TYPE",
-		Value: strings.Split(string(profile), "-")[0],
+		Value: profile.ClusterType(),
 	})
 }
 

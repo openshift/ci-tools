@@ -23,11 +23,13 @@ import (
 
 	"github.com/golang/glog"
 
+	authapi "k8s.io/api/authorization/v1"
 	coreapi "k8s.io/api/core/v1"
 	rbacapi "k8s.io/api/rbac/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	authclientset "k8s.io/client-go/kubernetes/typed/authorization/v1"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	rbacclientset "k8s.io/client-go/kubernetes/typed/rbac/v1"
 	"k8s.io/client-go/rest"
@@ -453,7 +455,17 @@ func (o *options) Run() error {
 		if err != nil {
 			return fmt.Errorf("could not get core client for cluster config: %v", err)
 		}
-		eventRecorder := eventRecorder(client, o.namespace, o.dry)
+		var authClient *authclientset.AuthorizationV1Client
+		if !o.dry {
+			authClient, err = authclientset.NewForConfig(o.clusterConfig)
+			if err != nil {
+				return fmt.Errorf("could not get auth client for cluster config: %v", err)
+			}
+		}
+		eventRecorder, err := eventRecorder(client, authClient, o.namespace, o.dry)
+		if err != nil {
+			return fmt.Errorf("could not create event recorder: %v", err)
+		}
 		runtimeObject := &coreapi.ObjectReference{Namespace: o.namespace}
 		eventRecorder.Event(runtimeObject, coreapi.EventTypeNormal, "CiJobStarted", eventJobDescription(o.jobSpec, o.namespace))
 		// execute the graph
@@ -1194,15 +1206,31 @@ func summarizeRef(refs prowapi.Refs) string {
 	return fmt.Sprintf("Resolved source https://github.com/%s/%s to %s@%s", refs.Org, refs.Repo, refs.BaseRef, shorten(refs.BaseSHA, 8))
 }
 
-func eventRecorder(kubeClient *coreclientset.CoreV1Client, namespace string, dry bool) record.EventRecorder {
+func eventRecorder(kubeClient *coreclientset.CoreV1Client, authClient *authclientset.AuthorizationV1Client, namespace string, dry bool) (record.EventRecorder, error) {
 	if dry {
+		return &record.FakeRecorder{}, nil
+	}
+	res, err := authClient.SelfSubjectAccessReviews().Create(&authapi.SelfSubjectAccessReview{
+		Spec: authapi.SelfSubjectAccessReviewSpec{
+			ResourceAttributes: &authapi.ResourceAttributes{
+				Namespace: namespace,
+				Verb:      "create",
+				Resource:  "events",
+			},
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("could not check permission to create events: %v", err)
+	}
+	if !res.Status.Allowed {
+		log.Println("warning: Events will not be created because of lack of permission")
 		return &record.FakeRecorder{}, nil
 	}
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartRecordingToSink(&coreclientset.EventSinkImpl{
 		Interface: coreclientset.New(kubeClient.RESTClient()).Events("")})
 	return eventBroadcaster.NewRecorder(
-		templatescheme.Scheme, coreapi.EventSource{Component: namespace})
+		templatescheme.Scheme, coreapi.EventSource{Component: namespace}), nil
 }
 
 func getSSHSecretFromPath(sshKeyPath string) (*coreapi.Secret, error) {

@@ -31,6 +31,7 @@ const (
 
 	presubmitPrefix  = "pull"
 	postsubmitPrefix = "branch"
+	periodicPrefix   = "periodic"
 
 	openshiftInstallerRandomCmd = `set -eux
 target=$(awk < /usr/local/e2e-targets \
@@ -460,6 +461,29 @@ func generatePostsubmitForTest(name string, info *config.Info, label jc.ProwgenL
 	}
 }
 
+func generatePeriodicForTest(name string, info *config.Info, label jc.ProwgenLabel, podSpec *kubeapi.PodSpec, rehearsable bool, cron string, pathAlias *string) *prowconfig.Periodic {
+	if len(info.Variant) > 0 {
+		name = fmt.Sprintf("%s-%s", info.Variant, name)
+	}
+	base := generateJobBase(name, periodicPrefix, info, label, podSpec, rehearsable, nil)
+	// periodics are not associated with a repo per se, but we can add in an
+	// extra ref so that periodics which want to access the repo tha they are
+	// defined for can have that information
+	ref := v1.Refs{
+		Org:     info.Org,
+		Repo:    info.Repo,
+		BaseRef: info.Branch,
+	}
+	if pathAlias != nil {
+		ref.PathAlias = *pathAlias
+	}
+	base.ExtraRefs = append([]v1.Refs{ref}, base.ExtraRefs...)
+	return &prowconfig.Periodic{
+		JobBase: base,
+		Cron:    cron,
+	}
+}
+
 // Given a ci-operator configuration file and basic information about what
 // should be tested, generate a following JobConfig:
 //
@@ -474,6 +498,7 @@ func generateJobs(
 	orgrepo := fmt.Sprintf("%s/%s", info.Org, info.Repo)
 	presubmits := map[string][]prowconfig.Presubmit{}
 	postsubmits := map[string][]prowconfig.Postsubmit{}
+	var periodics []prowconfig.Periodic
 
 	for _, element := range configSpec.Tests {
 		var podSpec *kubeapi.PodSpec
@@ -491,7 +516,11 @@ func generateJobs(
 			}
 		}
 
-		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(element.As, info, label, podSpec, true, configSpec.CanonicalGoRepository))
+		if element.Cron == nil {
+			presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(element.As, info, label, podSpec, true, configSpec.CanonicalGoRepository))
+		} else {
+			periodics = append(periodics, *generatePeriodicForTest(element.As, info, label, podSpec, true, *element.Cron, configSpec.CanonicalGoRepository))
+		}
 	}
 
 	if len(configSpec.Images) > 0 {
@@ -516,6 +545,7 @@ func generateJobs(
 	return &prowconfig.JobConfig{
 		Presubmits:  presubmits,
 		Postsubmits: postsubmits,
+		Periodics:   periodics,
 	}
 }
 
@@ -598,20 +628,26 @@ func prune(jobConfig *prowconfig.JobConfig) *prowconfig.JobConfig {
 		}
 	}
 
-	// copy periodics to be sure
-	pruned.Periodics = append(pruned.Periodics, jobConfig.AllPeriodics()...)
+	for _, job := range jobConfig.Periodics {
+		if isStale(job.JobBase) {
+			continue
+		}
+		if isGenerated(job.JobBase) {
+			job.Labels[jc.ProwJobLabelGenerated] = string(jc.Generated)
+
+		}
+
+		pruned.Periodics = append(pruned.Periodics, job)
+	}
 
 	return &pruned
 }
 
 func pruneStaleJobs(jobDir, subDir string) error {
 	if err := jc.OperateOnJobConfigSubdir(jobDir, subDir, func(jobConfig *prowconfig.JobConfig, info *jc.Info) error {
-		if info.Type == "periodics" {
-			return nil
-		}
 		pruned := prune(jobConfig)
 
-		if len(pruned.Presubmits) == 0 && len(pruned.Postsubmits) == 0 {
+		if len(pruned.Presubmits) == 0 && len(pruned.Postsubmits) == 0 && len(pruned.Periodics) == 0 {
 			if err := os.Remove(info.Filename); err != nil && !os.IsNotExist(err) {
 				return err
 			}

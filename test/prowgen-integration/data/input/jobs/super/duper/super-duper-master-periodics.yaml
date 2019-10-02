@@ -1,0 +1,133 @@
+periodics:
+- agent: kubernetes
+  labels:
+    ci-operator.openshift.io/prowgen-controlled: "true"
+    pj-rehearse.openshift.io/can-be-rehearsed: "true"
+  cron: '@yearly'
+  extra_refs:
+  - base_ref: master
+    org: super
+    repo: duper
+  name: periodic-ci-super-duper-master-e2e-aws-nightly
+  decorate: true
+  decoration_config:
+    skip_cloning: true
+  spec:
+    containers:
+    - args:
+      - --give-pr-author-access-to-namespace=true
+      - --artifact-dir=$(ARTIFACTS)
+      - --target=e2e-aws-nightly
+      - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
+      - --secret-dir=/usr/local/e2e-aws-nightly-cluster-profile
+      - --template=/usr/local/e2e-aws-nightly
+      command:
+      - ci-operator
+      image: ci-operator:latest
+      imagePullPolicy: Always
+      name: ""
+      env:
+      - name: CONFIG_SPEC
+        valueFrom:
+          configMapKeyRef:
+            key: super-duper-master.yaml
+            name: ci-operator-master-configs
+      - name: CLUSTER_TYPE
+        value: aws
+      - name: JOB_NAME_SAFE
+        value: e2e-aws-nightly
+      - name: TEST_COMMAND
+        value: make e2e
+      - name: RPM_REPO_OPENSHIFT_ORIGIN
+        value: https://rpms.svc.ci.openshift.org/openshift-origin-v4.0/
+      volumeMounts:
+      - mountPath: /etc/sentry-dsn
+        name: sentry-dsn
+        readOnly: true
+      - mountPath: /usr/local/e2e-aws-nightly-cluster-profile
+        name: cluster-profile
+      - mountPath: /usr/local/e2e-aws-nightly
+        name: job-definition
+        subPath: cluster-launch-e2e.yaml
+      resources:
+        requests:
+          cpu: 10m
+    serviceAccountName: ci-operator
+    volumes:
+    - name: sentry-dsn
+      secret:
+        secretName: sentry-dsn
+    - configMap:
+        name: prow-job-cluster-launch-e2e
+      name: job-definition
+    - name: cluster-profile
+      projected:
+        sources:
+        - secret:
+            name: cluster-secrets-aws
+- agent: kubernetes
+  labels:
+    ci-operator.openshift.io/prowgen-controlled: "true"
+    pj-rehearse.openshift.io/can-be-rehearsed: "true"
+  cron: '@yearly'
+  extra_refs:
+  - base_ref: master
+    org: super
+    repo: duper
+  name: periodic-ci-super-duper-master-e2e-azure-nightly
+  decorate: true
+  decoration_config:
+    skip_cloning: true
+  spec:
+    containers:
+    - args:
+      - --give-pr-author-access-to-namespace=true
+      - --artifact-dir=$(ARTIFACTS)
+      - --target=e2e-azure-nightly
+      - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
+      - --secret-dir=/usr/local/e2e-azure-nightly-cluster-profile
+      - --template=/usr/local/e2e-azure-nightly
+      command:
+      - ci-operator
+      image: ci-operator:latest
+      imagePullPolicy: Always
+      name: ""
+      env:
+      - name: CONFIG_SPEC
+        valueFrom:
+          configMapKeyRef:
+            key: super-duper-master.yaml
+            name: ci-operator-master-configs
+      - name: CLUSTER_TYPE
+        value: azure
+      - name: JOB_NAME_SAFE
+        value: e2e-azure-nightly
+      - name: TEST_COMMAND
+        value: make e2e
+      - name: RPM_REPO_OPENSHIFT_ORIGIN
+        value: https://rpms.svc.ci.openshift.org/openshift-origin-v4.0/
+      volumeMounts:
+      - mountPath: /etc/sentry-dsn
+        name: sentry-dsn
+        readOnly: true
+      - mountPath: /usr/local/e2e-azure-nightly-cluster-profile
+        name: cluster-profile
+      - mountPath: /usr/local/e2e-azure-nightly
+        name: job-definition
+        subPath: cluster-launch-e2e.yaml
+      resources:
+        requests:
+          cpu: 10m
+    serviceAccountName: ci-operator
+    volumes:
+    - name: sentry-dsn
+      secret:
+        secretName: sentry-dsn
+    - configMap:
+        name: prow-job-cluster-launch-e2e
+      name: job-definition
+    - name: cluster-profile
+      projected:
+        sources:
+        - secret:
+            name: cluster-secrets-azure

@@ -43,3 +43,13 @@ tests:
 - as: e2e-random
   commands: make e2e
   openshift_installer_random: {}
+- as: e2e-nightly
+  commands: make e2e
+  openshift_ansible:
+    cluster_profile: gcp
+  cron: '@yearly'
+- as: e2e-aws-nightly
+  commands: make e2e
+  openshift_ansible:
+    cluster_profile: aws
+  cron: '@yearly'

@@ -12,7 +12,9 @@ import (
 	"sort"
 
 	"github.com/GoogleCloudPlatform/testgrid/config"
+	jc "github.com/openshift/ci-tools/pkg/jobconfig"
 	"github.com/sirupsen/logrus"
+	prowconfig "k8s.io/test-infra/prow/config"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/yaml"
@@ -21,9 +23,13 @@ import (
 type options struct {
 	releaseConfigDir  string
 	testGridConfigDir string
+	prowJobConfigDir  string
 }
 
 func (o *options) Validate() error {
+	if o.prowJobConfigDir == "" {
+		return errors.New("--prow-jobs-dir is required")
+	}
 	if o.releaseConfigDir == "" {
 		return errors.New("--release-config is required")
 	}
@@ -36,6 +42,7 @@ func (o *options) Validate() error {
 func gatherOptions() options {
 	o := options{}
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+	fs.StringVar(&o.prowJobConfigDir, "prow-jobs-dir", "", "Path to a root of directory structure with Prow job config files (ci-operator/jobs in openshift/release)")
 	fs.StringVar(&o.releaseConfigDir, "release-config", "", "Path to Release Controller configuration directory.")
 	fs.StringVar(&o.testGridConfigDir, "testgrid-config", "", "Path to TestGrid configuration directory.")
 	if err := fs.Parse(os.Args[1:]); err != nil {
@@ -48,6 +55,7 @@ func gatherOptions() options {
 type dashboard struct {
 	*config.Dashboard
 	testGroups []*config.TestGroup
+	existing   sets.String
 }
 
 func dashboardFor(product, version, role string) dashboard {
@@ -57,6 +65,7 @@ func dashboardFor(product, version, role string) dashboard {
 			DashboardTab: []*config.DashboardTab{},
 		},
 		testGroups: []*config.TestGroup{},
+		existing:   sets.NewString(),
 	}
 }
 
@@ -89,6 +98,10 @@ func testGroupFor(name string) *config.TestGroup {
 }
 
 func (d *dashboard) add(name string) {
+	if d.existing.Has(name) {
+		return
+	}
+	d.existing.Insert(name)
 	d.Dashboard.DashboardTab = append(d.Dashboard.DashboardTab, dashboardTabFor(name))
 	d.testGroups = append(d.testGroups, testGroupFor(name))
 }
@@ -126,6 +139,17 @@ func main() {
 	o := gatherOptions()
 	if err := o.Validate(); err != nil {
 		logrus.Fatalf("Invalid options: %v", err)
+	}
+
+	informingPeriodics := make(map[string]prowconfig.Periodic)
+	jobConfig, err := jc.ReadFromDir(o.prowJobConfigDir)
+	if err != nil {
+		logrus.WithError(err).Fatalf("Failed to load Prow jobs %s", o.prowJobConfigDir)
+	}
+	for _, p := range jobConfig.Periodics {
+		if p.Labels["ci.openshift.io/release-type"] == "informing" {
+			informingPeriodics[p.Name] = p
+		}
 	}
 
 	var dashboards []dashboard
@@ -169,6 +193,11 @@ func main() {
 				informing.add(job.ProwJob.Name)
 			} else {
 				blocking.add(job.ProwJob.Name)
+			}
+		}
+		for _, p := range informingPeriodics {
+			if p.Labels["job-release"] == version {
+				informing.add(p.Name)
 			}
 		}
 		if len(blocking.testGroups) > 0 {

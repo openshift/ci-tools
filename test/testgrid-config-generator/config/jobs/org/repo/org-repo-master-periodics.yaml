@@ -1,0 +1,18 @@
+periodics:
+- agent: kubernetes
+  decorate: true
+  interval: 12h
+  labels:
+    ci.openshift.io/release-type: informing
+    job-release: "4.2"
+  name: job-with-labels
+- agent: kubernetes
+  decorate: true
+  interval: 12h
+  labels:
+    ci.openshift.io/release-type: informing
+  name: job-without-release
+- agent: kubernetes
+  decorate: true
+  interval: 12h
+  name: job-without-informing

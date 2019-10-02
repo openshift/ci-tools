@@ -12,8 +12,8 @@ import (
 	"github.com/ghodss/yaml"
 	"github.com/openshift/ci-tools/pkg/promotion"
 	"github.com/sirupsen/logrus"
-	"k8s.io/api/core/v1"
 
+	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowconfig "k8s.io/test-infra/prow/config"
 )

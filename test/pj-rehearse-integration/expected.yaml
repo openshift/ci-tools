@@ -182,6 +182,7 @@
     - base_ref: master
       org: super
       repo: duper
+      workdir: true
     job: rehearse-1234-periodic-ci-super-duper-e2e
     namespace: test-namespace
     pod_spec:
@@ -310,6 +311,7 @@
     - base_ref: master
       org: super
       repo: duper
+      workdir: true
     job: rehearse-1234-periodic-ci-super-duper-no-ciop
     namespace: test-namespace
     pod_spec:

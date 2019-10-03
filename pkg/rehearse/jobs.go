@@ -341,6 +341,11 @@ func (jc *JobConfigurer) ConvertPeriodicsToPresubmits(periodics []prowconfig.Per
 			continue
 		}
 
+		if len(p.ExtraRefs) > 0 {
+			// we aren't injecting this as we do for presubmits, but we need it to be set
+			p.ExtraRefs[0].WorkDir = true
+		}
+
 		presubmits = append(presubmits, p)
 	}
 	return presubmits

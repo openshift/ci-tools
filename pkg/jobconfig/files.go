@@ -53,10 +53,6 @@ func (i *Info) ConfigMapName() string {
 	if i.Type == "periodics" && i.Branch == "" {
 		return fmt.Sprintf("job-config-%s", promotion.FlavorForBranch(""))
 	}
-	// job-config shards for master are already too big, shard them further by type
-	if i.Branch == "master" {
-		return fmt.Sprintf("job-config-%s-%s", promotion.FlavorForBranch(i.Branch), i.Type)
-	}
 	return fmt.Sprintf("job-config-%s", promotion.FlavorForBranch(i.Branch))
 }
 

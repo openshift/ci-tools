@@ -644,16 +644,16 @@ func TestInfo_ConfigMapName(t *testing.T) {
 		expected string
 	}{
 		{
-			name:     "master branch goes to master configmap further sharded by type: presubmits",
+			name:     "master branch goes to master configmap",
 			branch:   "master",
 			jobType:  "presubmits",
-			expected: "job-config-master-presubmits",
+			expected: "job-config-master",
 		},
 		{
-			name:     "master branch goes to master configmap further sharded by type: postsubmits",
+			name:     "master branch goes to master configmap",
 			branch:   "master",
 			jobType:  "postsubmits",
-			expected: "job-config-master-postsubmits",
+			expected: "job-config-master",
 		},
 		{
 			name:     "periodic without relationship to a repo goes to misc",
@@ -662,10 +662,10 @@ func TestInfo_ConfigMapName(t *testing.T) {
 			expected: "job-config-misc",
 		},
 		{
-			name:     "periodic with relationship to a repo master branch goes to type shard",
+			name:     "periodic with relationship to a repo master branch goes to branch shard",
 			branch:   "master",
 			jobType:  "periodics",
-			expected: "job-config-master-periodics",
+			expected: "job-config-master",
 		},
 		{
 			name:     "periodic with relationship to a repo branch goes to branch shard",

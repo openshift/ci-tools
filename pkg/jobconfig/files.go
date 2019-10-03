@@ -465,6 +465,15 @@ func sortConfigFields(jobConfig *prowconfig.JobConfig) {
 			}
 		}
 	}
+
+	sort.Slice(jobConfig.Periodics, func(i, j int) bool {
+		return jobConfig.Periodics[i].Name < jobConfig.Periodics[j].Name
+	})
+	for job := range jobConfig.Periodics {
+		if jobConfig.Periodics[job].Spec != nil {
+			sortPodSpec(jobConfig.Periodics[job].Spec)
+		}
+	}
 }
 
 func sortPodSpec(spec *v1.PodSpec) {

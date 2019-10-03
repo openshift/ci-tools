@@ -5,14 +5,21 @@ periodics:
   labels:
     ci.openshift.io/release-type: informing
     job-release: "4.2"
-  name: job-with-labels
+  name: release-openshift-origin-job
 - agent: kubernetes
   decorate: true
   interval: 12h
   labels:
     ci.openshift.io/release-type: informing
-  name: job-without-release
+  name: release-openshift-origin-job-without-release-label
 - agent: kubernetes
   decorate: true
   interval: 12h
-  name: job-without-informing
+  name: release-openshift-origin-job-without-informing
+- agent: kubernetes
+  decorate: true
+  interval: 12h
+  labels:
+    ci.openshift.io/release-type: informing
+    job-release: "4.2"
+  name: release-openshift-ocp-job

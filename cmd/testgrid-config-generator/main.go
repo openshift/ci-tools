@@ -9,7 +9,9 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"sort"
+	"strings"
 
 	"github.com/GoogleCloudPlatform/testgrid/config"
 	jc "github.com/openshift/ci-tools/pkg/jobconfig"
@@ -108,18 +110,7 @@ func (d *dashboard) add(name string) {
 
 // release is a subset of fields from the release controller's config
 type release struct {
-	Publish struct {
-		Mirror struct {
-			ImageStreamRef struct {
-				Name string `json:"name"`
-			} `json:"'imageStreamRef'"`
-		} `json:"mirror-to-origin"`
-		Tag struct {
-			TagRef struct {
-				Name string `json:"name"`
-			} `json:"tagRef"`
-		} `json:"tag"`
-	} `json:"publish"`
+	Name   string
 	Verify map[string]struct {
 		Optional bool `json:"optional"`
 		ProwJob  struct {
@@ -127,6 +118,8 @@ type release struct {
 		} `json:"prowJob"`
 	} `json:"verify"`
 }
+
+var reVersion = regexp.MustCompile(`^(\d+\.\d+)\.\d+-0\.`)
 
 // This tool is intended to make the process of maintaining TestGrid dashboards for
 // release-gating and release-informing tests simple.
@@ -170,21 +163,27 @@ func main() {
 			return fmt.Errorf("could not unmarshal release controller config at %s: %v", path, err)
 		}
 
-		var product, version string
-		if releaseConfig.Publish.Mirror.ImageStreamRef.Name != "" {
-			product = "okd"
-			version = releaseConfig.Publish.Mirror.ImageStreamRef.Name
-		} else if releaseConfig.Publish.Tag.TagRef.Name != "" {
+		var product string
+		switch {
+		case strings.HasSuffix(releaseConfig.Name, ".nightly"):
 			product = "ocp"
-			version = releaseConfig.Publish.Tag.TagRef.Name
-		} else {
-			logrus.Infof("could not determine publish destination for config at %v", path)
+		case strings.HasSuffix(releaseConfig.Name, ".ci"):
+			product = "okd"
+		default:
+			logrus.Infof("release is not recognized: %s", releaseConfig.Name)
 			return nil
 		}
+		m := reVersion.FindStringSubmatch(releaseConfig.Name)
+		if len(m) == 0 {
+			logrus.Infof("release is not in X.Y.Z form: %s", releaseConfig.Name)
+			return nil
+		}
+		version := m[1]
 
 		blocking := dashboardFor(product, version, "blocking")
 		informing := dashboardFor(product, version, "informing")
 		for _, job := range releaseConfig.Verify {
+			delete(informingPeriodics, job.ProwJob.Name)
 			if job.ProwJob.Name == "release-openshift-origin-installer-e2e-aws-upgrade" {
 				// this job is not sharded by version ... why? who knows
 				continue
@@ -196,9 +195,21 @@ func main() {
 			}
 		}
 		for _, p := range informingPeriodics {
-			if p.Labels["job-release"] == version {
-				informing.add(p.Name)
+			if p.Labels["job-release"] != version {
+				continue
 			}
+			switch product {
+			case "okd":
+				if !strings.Contains(p.Name, "-openshift-origin-") {
+					continue
+				}
+			case "ocp":
+				if !strings.Contains(p.Name, "-openshift-ocp-") {
+					continue
+				}
+			}
+			informing.add(p.Name)
+			delete(informingPeriodics, p.Name)
 		}
 		if len(blocking.testGroups) > 0 {
 			dashboards = append(dashboards, blocking)

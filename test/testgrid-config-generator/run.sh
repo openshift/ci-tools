@@ -8,8 +8,7 @@ set -o nounset
 set -o pipefail
 
 workdir="$( mktemp -d )"
-echo $workdir
-#trap 'rm -rf "${workdir}"' EXIT
+trap 'rm -rf "${workdir}"' EXIT
 
 data_dir="$( dirname "${BASH_SOURCE[0]}" )"
 input_jobs_dir="${data_dir}/config/jobs"
@@ -22,6 +21,12 @@ cp -r "${input_testgrid_dir}" "${workdir}"
 
 echo "[INFO] Generating TestGrid config..."
 testgrid-config-generator --release-config "${input_release_dir}" --testgrid-config "${generated_output_config_dir}" --prow-jobs-dir "${input_jobs_dir}"
+
+if [[ -n "${UPDATE_EXPECTED-}" ]]; then
+  cp "${generated_output_config_dir}"/* "${expected_output_config_dir}"
+  echo "[INFO] Updated"
+  exit 0
+fi
 
 echo "[INFO] Validating generated TestGrid config..."
 if ! diff -Naupr "${expected_output_config_dir}" "${generated_output_config_dir}"> "${workdir}/diff"; then

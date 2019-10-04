@@ -179,10 +179,10 @@ func resolveConfig(agent load.ConfigAgent) http.HandlerFunc {
 		}
 		jsonConfig, err := json.MarshalIndent(config, "", "  ")
 		if err != nil {
-			recordError("failed to unmarshal config")
+			recordError("failed to marshal config")
 			w.WriteHeader(http.StatusInternalServerError)
 			fmt.Fprintf(w, "failed to marshal config to JSON: %v", err)
-			log.WithError(err).Errorf("failed to unmarshal config to JSON")
+			log.WithError(err).Errorf("failed to marshal config to JSON")
 			return
 		}
 		w.WriteHeader(http.StatusOK)

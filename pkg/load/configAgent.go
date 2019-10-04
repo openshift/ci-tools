@@ -28,19 +28,30 @@ type ConfigAgent interface {
 type filenameToConfig map[string]api.ReleaseBuildConfiguration
 
 type agent struct {
-	lock          *sync.RWMutex
-	configs       filenameToConfig
-	configPath    string
-	cycle         time.Duration
-	generation    int
-	errorMetrics  *prometheus.CounterVec
-	reloadMetrics *prometheus.Histogram
+	lock         *sync.RWMutex
+	configs      filenameToConfig
+	configPath   string
+	cycle        time.Duration
+	generation   int
+	errorMetrics *prometheus.CounterVec
+}
+
+var reloadTimeMetric = prometheus.NewHistogram(
+	prometheus.HistogramOpts{
+		Name:    "configresolver_config_reload_duration_seconds",
+		Help:    "config reload duration in seconds",
+		Buckets: []float64{0.0005, 0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1},
+	},
+)
+
+func init() {
+	prometheus.MustRegister(reloadTimeMetric)
 }
 
 // NewConfigAgent returns a ConfigAgent interface that automatically reloads when
 // configs are changed on disk as well as on a period specified with a time.Duration.
-func NewConfigAgent(configPath string, cycle time.Duration, errorMetrics *prometheus.CounterVec, reloadMetrics *prometheus.Histogram) (ConfigAgent, error) {
-	a := &agent{configPath: configPath, cycle: cycle, lock: &sync.RWMutex{}, errorMetrics: errorMetrics, reloadMetrics: reloadMetrics}
+func NewConfigAgent(configPath string, cycle time.Duration, errorMetrics *prometheus.CounterVec) (ConfigAgent, error) {
+	a := &agent{configPath: configPath, cycle: cycle, lock: &sync.RWMutex{}, errorMetrics: errorMetrics}
 	configCoalescer := coalescer.NewCoalescer(a.loadFilenameToConfig)
 	err := configCoalescer.Run()
 	if err != nil {
@@ -123,7 +134,7 @@ func (a *agent) loadFilenameToConfig() error {
 	a.generation++
 	a.lock.Unlock()
 	duration := time.Since(startTime)
-	(*a.reloadMetrics).Observe(float64(duration.Seconds()))
+	reloadTimeMetric.Observe(float64(duration.Seconds()))
 	log.WithField("duration", duration).Info("Configs reloaded")
 	return nil
 }

@@ -57,7 +57,6 @@ var (
 		httpRequestDuration *prometheus.HistogramVec
 		httpResponseSize    *prometheus.HistogramVec
 		errorRate           *prometheus.CounterVec
-		configReloadTime    prometheus.Histogram
 	}{
 		httpRequestDuration: prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
@@ -81,13 +80,6 @@ var (
 				Help: "number of errors, sorted by label/type",
 			},
 			[]string{"error"},
-		),
-		configReloadTime: prometheus.NewHistogram(
-			prometheus.HistogramOpts{
-				Name:    "configresolver_config_reload_duration_seconds",
-				Help:    "config reload duration in seconds",
-				Buckets: []float64{0.0005, 0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1},
-			},
 		),
 	}
 )
@@ -201,7 +193,6 @@ func init() {
 	prometheus.MustRegister(configresolverMetrics.httpRequestDuration)
 	prometheus.MustRegister(configresolverMetrics.httpResponseSize)
 	prometheus.MustRegister(configresolverMetrics.errorRate)
-	prometheus.MustRegister(configresolverMetrics.configReloadTime)
 }
 
 func main() {
@@ -215,7 +206,7 @@ func main() {
 	health := pjutil.NewHealth()
 	metrics.ExposeMetrics("ci-operator-configresolver", prowConfig.PushGateway{})
 
-	configAgent, err := load.NewConfigAgent(o.configPath, o.cycle, configresolverMetrics.errorRate, &configresolverMetrics.configReloadTime)
+	configAgent, err := load.NewConfigAgent(o.configPath, o.cycle, configresolverMetrics.errorRate)
 	if err != nil {
 		log.Fatalf("Failed to get config agent: %v", err)
 	}

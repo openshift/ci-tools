@@ -75,7 +75,7 @@ func NewConfigAgent(configPath string, cycle time.Duration, errorMetrics *promet
 		return nil, fmt.Errorf("Failed to populate watcher: %v", err)
 	}
 	interrupts.Run(func(ctx context.Context) {
-		reloadWatcher(ctx, configWatcher, a, configCoalescer, a.configPath)
+		reloadWatcher(ctx, configWatcher, a, configCoalescer)
 	})
 	return a, nil
 }
@@ -154,7 +154,7 @@ func populateWatcher(watcher *fsnotify.Watcher, root string) error {
 	})
 }
 
-func reloadWatcher(ctx context.Context, w *fsnotify.Watcher, a *agent, c coalescer.Coalescer, path string) {
+func reloadWatcher(ctx context.Context, w *fsnotify.Watcher, a *agent, c coalescer.Coalescer) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -175,7 +175,7 @@ func reloadWatcher(ctx context.Context, w *fsnotify.Watcher, a *agent, c coalesc
 			go c.Run()
 			// add new files to be watched; if a watch already exists on a file, the
 			// watch is simply updated
-			if err := populateWatcher(w, path); err != nil {
+			if err := populateWatcher(w, a.configPath); err != nil {
 				a.recordError("failed to update watcher")
 				log.WithError(err).Error("Failed to update fsnotify watchlist")
 			}

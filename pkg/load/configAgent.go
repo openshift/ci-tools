@@ -123,7 +123,7 @@ func (a *agent) loadFilenameToConfig() error {
 	a.generation++
 	a.lock.Unlock()
 	duration := time.Since(startTime)
-	(*a.reloadMetrics).Observe(float64(duration.Nanoseconds() / 1e6))
+	(*a.reloadMetrics).Observe(float64(duration.Seconds()))
 	log.WithField("duration", duration).Info("Configs reloaded")
 	return nil
 }

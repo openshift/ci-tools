@@ -113,12 +113,12 @@ func (a *agent) loadFilenameToConfig() error {
 		if info != nil && !info.IsDir() && (ext == ".yml" || ext == ".yaml") {
 			configSpec, err := Config(path)
 			if err != nil {
-				a.recordError("failed to load config")
+				a.recordError("failed to load ci-operator config")
 				return fmt.Errorf("failed to load ci-operator config (%v)", err)
 			}
 
 			if err := configSpec.ValidateAtRuntime(); err != nil {
-				a.recordError("invalid config")
+				a.recordError("invalid ci-operator config")
 				return fmt.Errorf("invalid ci-operator config: %v", err)
 			}
 			log.Debugf("Adding %s to filenameToConfig", filepath.Base(path))

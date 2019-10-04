@@ -156,6 +156,8 @@ github.com/pkg/errors
 # github.com/prometheus/client_golang v0.9.4
 github.com/prometheus/client_golang/prometheus
 github.com/prometheus/client_golang/prometheus/internal
+github.com/prometheus/client_golang/prometheus/promhttp
+github.com/prometheus/client_golang/prometheus/push
 # github.com/prometheus/client_model v0.0.0-20190129233127-fd36f4220a90
 github.com/prometheus/client_model/go
 # github.com/prometheus/common v0.4.1
@@ -521,10 +523,11 @@ k8s.io/test-infra/prow/github
 k8s.io/test-infra/prow/repoowners
 k8s.io/test-infra/prow/apis/prowjobs/v1
 k8s.io/test-infra/prow/pod-utils/downwardapi
-k8s.io/test-infra/prow/interrupts
 k8s.io/test-infra/prow/config
-k8s.io/test-infra/prow/errorutil
+k8s.io/test-infra/prow/interrupts
+k8s.io/test-infra/prow/metrics
 k8s.io/test-infra/prow/pjutil
+k8s.io/test-infra/prow/errorutil
 k8s.io/test-infra/prow/hook
 k8s.io/test-infra/prow/plugins
 k8s.io/test-infra/prow/plugins/updateconfig

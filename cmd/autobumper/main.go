@@ -90,6 +90,11 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to update references.")
 	}
 
+	if len(images) == 0 {
+		logrus.Info("no images updated, exiting ...")
+		return
+	}
+
 	stdout := bumper.HideSecretsWriter{Delegate: os.Stdout, Censor: sa}
 	stderr := bumper.HideSecretsWriter{Delegate: os.Stderr, Censor: sa}
 

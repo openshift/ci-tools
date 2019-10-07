@@ -62,17 +62,17 @@ var (
 			prometheus.HistogramOpts{
 				Name:    "configresolver_http_request_duration_seconds",
 				Help:    "http request duration in seconds",
-				Buckets: []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 20},
+				Buckets: []float64{0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2},
 			},
-			[]string{"status"},
+			[]string{"status", "path"},
 		),
 		httpResponseSize: prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
 				Name:    "configresolver_http_response_size_bytes",
 				Help:    "http response size in bytes",
-				Buckets: []float64{16384, 32768, 65536, 131072, 262144, 524288, 1048576, 2097152, 4194304, 8388608, 16777216, 33554432},
+				Buckets: []float64{256, 512, 1024, 2048, 4096, 6144, 8192},
 			},
-			[]string{"status"},
+			[]string{"status", "path"},
 		),
 		errorRate: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
@@ -125,10 +125,17 @@ func handleWithMetrics(h http.HandlerFunc) http.HandlerFunc {
 		trw := &traceResponseWriter{ResponseWriter: w, statusCode: http.StatusOK}
 		h(trw, r)
 		latency := time.Since(t)
-		labels := prometheus.Labels{"status": strconv.Itoa(trw.statusCode)}
+		labels := prometheus.Labels{"status": strconv.Itoa(trw.statusCode), "path": r.URL.EscapedPath()}
 		configresolverMetrics.httpRequestDuration.With(labels).Observe(latency.Seconds())
 		configresolverMetrics.httpResponseSize.With(labels).Observe(float64(trw.size))
 	})
+}
+
+func genericHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte(http.StatusText(http.StatusNotFound)))
+	}
 }
 
 func resolveConfig(agent load.ConfigAgent) http.HandlerFunc {
@@ -211,6 +218,8 @@ func main() {
 		log.Fatalf("Failed to get config agent: %v", err)
 	}
 
+	// add handler func for incorrect paths as well; can help with identifying errors/404s caused by incorrect paths
+	http.HandleFunc("/", handleWithMetrics(genericHandler()))
 	http.HandleFunc("/config", handleWithMetrics(resolveConfig(configAgent)))
 	http.HandleFunc("/generation", handleWithMetrics(getGeneration(configAgent)))
 	interrupts.ListenAndServe(&http.Server{Addr: o.address}, o.gracePeriod)

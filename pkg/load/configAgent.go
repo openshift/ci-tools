@@ -40,7 +40,7 @@ var reloadTimeMetric = prometheus.NewHistogram(
 	prometheus.HistogramOpts{
 		Name:    "configresolver_config_reload_duration_seconds",
 		Help:    "config reload duration in seconds",
-		Buckets: []float64{0.0005, 0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1},
+		Buckets: []float64{0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3},
 	},
 )
 

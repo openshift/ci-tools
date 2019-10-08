@@ -164,14 +164,6 @@ func reloadWatcher(ctx context.Context, w *fsnotify.Watcher, a *agent, c coalesc
 			return
 		case event := <-w.Events:
 			log.Debugf("Received %v event for %s", event.Op, event.Name)
-			// Remove deleted files from watches
-			if event.Op == fsnotify.Remove {
-				log.Debugf("Removing %s from watches", event.Name)
-				if err := w.Remove(event.Name); err != nil {
-					a.recordError("failed to remove item from watcher")
-					log.WithError(err).Errorf("Failed to remove %s from watches", event.Name)
-				}
-			}
 			go c.Run()
 			// add new files to be watched; if a watch already exists on a file, the
 			// watch is simply updated

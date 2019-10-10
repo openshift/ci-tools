@@ -18,6 +18,7 @@ import (
 	"k8s.io/client-go/rest"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/lease"
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/steps/release"
 )
@@ -34,6 +35,7 @@ func FromConfig(
 	paramFile, artifactDir string,
 	promote bool,
 	clusterConfig *rest.Config,
+	leaseClient lease.Client,
 	requiredTargets []string,
 	dryLogger *steps.DryLogger,
 	sshSecretName string,
@@ -155,8 +157,14 @@ func FromConfig(
 			buildSteps = append(buildSteps, initialReleaseStep)
 
 		} else if testStep := rawStep.TestStepConfiguration; testStep != nil {
-			if testStep.MultiStageTestConfiguration != nil {
+			if test := testStep.MultiStageTestConfiguration; test != nil {
 				step = steps.MultiStageTestStep(*testStep, config, params, podClient, secretGetter, artifactDir, jobSpec, dryLogger)
+				if test.ClusterProfile != "" {
+					if leaseClient == nil {
+						return nil, nil, fmt.Errorf("step %q needs a lease but no lease client provided", testStep.As)
+					}
+					step = steps.LeaseStep(leaseClient, test.ClusterProfile.LeaseType(), step)
+				}
 			} else if testStep.OpenshiftInstallerClusterTestConfiguration != nil {
 				if testStep.OpenshiftInstallerClusterTestConfiguration.Upgrade {
 					var err error

@@ -438,7 +438,7 @@ func (o *options) Run() error {
 		secretName = o.sshSecret.Name
 	}
 	// load the graph from the configuration
-	buildSteps, postSteps, err := defaults.FromConfig(o.configSpec, o.jobSpec, o.templates, o.writeParams, o.artifactDir, o.promote, o.clusterConfig, o.targets.values, dryLogger, secretName)
+	buildSteps, postSteps, err := defaults.FromConfig(o.configSpec, o.jobSpec, o.templates, o.writeParams, o.artifactDir, o.promote, o.clusterConfig, o.leaseClient, o.targets.values, dryLogger, secretName)
 	if err != nil {
 		return fmt.Errorf("failed to generate steps from config: %v", err)
 	}

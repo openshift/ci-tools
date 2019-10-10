@@ -222,6 +222,12 @@ type options struct {
 	authors                       []string
 
 	sentryDSNPath string
+
+	resolverAddress string
+	org             string
+	repo            string
+	branch          string
+	variant         string
 }
 
 func bindOptions(flag *flag.FlagSet) *options {
@@ -267,11 +273,34 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.StringVar(&opt.sentryDSNPath, "sentry-dsn-path", "", "Path to a file containing Sentry DSN. Enables reporting errors to Sentry")
 	flag.BoolVar(&opt.determinizeOutput, "determinize-output", false, "Determinize dry run's output by ordering the created objects.")
 
+	// flags needed for the configresolver
+	flag.StringVar(&opt.resolverAddress, "resolver-address", "", "Address of configresolver")
+	flag.StringVar(&opt.org, "org", "", "Org of the project (used by configresolver)")
+	flag.StringVar(&opt.repo, "repo", "", "Repo of the project (used by configresolver)")
+	flag.StringVar(&opt.branch, "branch", "", "Branch of the project (used by configresolver)")
+	flag.StringVar(&opt.variant, "variant", "", "Variant of the project's ci-operator config (used by configresolver)")
+
 	return opt
 }
 
 func (o *options) Complete() error {
-	config, err := load.Config(o.configSpecPath)
+	if len(o.resolverAddress) > 0 && (len(o.org) == 0 || len(o.repo) == 0 || len(o.branch) == 0) {
+		return fmt.Errorf("if resolverAddress is set, org, repo, and branch must also be set")
+	}
+	if (len(o.org) > 0 || len(o.repo) > 0 || len(o.branch) > 0) && len(o.resolverAddress) == 0 {
+		return fmt.Errorf("if org, repo, and/or branch are set, resolverAddress must also be set")
+	}
+	var info *load.ResolverInfo
+	if len(o.resolverAddress) > 0 {
+		info = &load.ResolverInfo{
+			Address: o.resolverAddress,
+			Org:     o.org,
+			Repo:    o.repo,
+			Branch:  o.branch,
+			Variant: o.variant,
+		}
+	}
+	config, err := load.Config(o.configSpecPath, info)
 	if err != nil {
 		return fmt.Errorf("failed to load configuration: %v", err)
 	}

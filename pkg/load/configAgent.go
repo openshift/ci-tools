@@ -111,7 +111,7 @@ func (a *agent) loadFilenameToConfig() error {
 	err := filepath.Walk(a.configPath, func(path string, info os.FileInfo, err error) error {
 		ext := filepath.Ext(path)
 		if info != nil && !info.IsDir() && (ext == ".yml" || ext == ".yaml") {
-			configSpec, err := Config(path)
+			configSpec, err := Config(path, nil)
 			if err != nil {
 				a.recordError("failed to load ci-operator config")
 				return fmt.Errorf("failed to load ci-operator config (%v)", err)

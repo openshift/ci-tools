@@ -55,6 +55,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/defaults"
 	"github.com/openshift/ci-tools/pkg/interrupt"
 	"github.com/openshift/ci-tools/pkg/junit"
+	"github.com/openshift/ci-tools/pkg/lease"
 	"github.com/openshift/ci-tools/pkg/load"
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/util"
@@ -215,6 +216,8 @@ type options struct {
 	configSpec    *api.ReleaseBuildConfiguration
 	jobSpec       *api.JobSpec
 	clusterConfig *rest.Config
+	leaseServer   string
+	leaseClient   lease.Client
 
 	givePrAuthorAccessToNamespace bool
 	determinizeOutput             bool
@@ -242,6 +245,7 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.BoolVar(&opt.verbose, "v", false, "Show verbose output.")
 
 	// what we will run
+	flag.StringVar(&opt.leaseServer, "lease-server", "", "Address of the server that manages leases. Required if any test is configured to acquire a lease.")
 	flag.StringVar(&opt.configSpecPath, "config", "", "The configuration file. If not specified the CONFIG_SPEC environment variable will be used.")
 	flag.Var(&opt.targets, "target", "One or more targets in the configuration to build. Only steps that are required for this target will be run.")
 	flag.BoolVar(&opt.dry, "dry-run", opt.dry, "Print the steps that would be run and the objects that would be created without executing any steps")
@@ -411,7 +415,14 @@ func (o *options) Complete() error {
 	}
 
 	o.clusterConfig = clusterConfig
-
+	if o.leaseServer != "" {
+		owner := o.namespace + "-" + o.jobSpec.JobNameHash()
+		if o.dry {
+			o.leaseClient = lease.NewFakeClient(owner, o.leaseServer, nil, nil)
+		} else {
+			o.leaseClient = lease.NewClient(owner, o.leaseServer)
+		}
+	}
 	return nil
 }
 
@@ -433,7 +444,33 @@ func (o *options) Run() error {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-
+	if o.leaseClient != nil {
+		defer func() {
+			if l, err := o.leaseClient.ReleaseAll(); err != nil {
+				log.Printf("failed to release leaked leases (%v): %v", l, err)
+			} else if len(l) != 0 {
+				log.Printf("warning: Would leak leases: %v", l)
+			}
+		}()
+		go func() {
+			t := time.NewTicker(30 * time.Second)
+			for {
+				select {
+				case <-ctx.Done():
+					t.Stop()
+					log.Println("cleanup: releasing leases")
+					if _, err := o.leaseClient.ReleaseAll(); err != nil {
+						log.Printf("failed to release leases: %v", err)
+					}
+					return
+				case <-t.C:
+					if err := o.leaseClient.Heartbeat(); err != nil {
+						log.Printf("failed to update leases: %v", err)
+					}
+				}
+			}
+		}()
+	}
 	handler := func(s os.Signal) {
 		if o.dry {
 			os.Exit(0)

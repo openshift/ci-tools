@@ -87,6 +87,19 @@ func NewCMClient(clusterConfig *rest.Config, namespace string, dry bool) (corecl
 	return cmClient.ConfigMaps(namespace), nil
 }
 
+// TODO: remove this when we can upgrate test-infra
+func CompletePrimaryRefs(refs pjapi.Refs, jb prowconfig.JobBase) *pjapi.Refs {
+	if jb.PathAlias != "" {
+		refs.PathAlias = jb.PathAlias
+	}
+	if jb.CloneURI != "" {
+		refs.CloneURI = jb.CloneURI
+	}
+	refs.SkipSubmodules = jb.SkipSubmodules
+	refs.CloneDepth = jb.CloneDepth
+	return &refs
+}
+
 func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber int, refs *pjapi.Refs) (*prowconfig.Presubmit, error) {
 	var rehearsal prowconfig.Presubmit
 	deepcopy.Copy(&rehearsal, source)
@@ -105,12 +118,20 @@ func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber 
 
 			if refs != nil {
 				if refs.Org != jobOrg || refs.Repo != jobRepo {
-					rehearsal.ExtraRefs = append(rehearsal.ExtraRefs, pjapi.Refs{
+					// we need to add the "original" refs that the job will be testing
+					// from the target repo with all the "extra" fields from the job
+					// config, like path_alias, then remove them from the config so we
+					// don't use them in the future for any other refs
+					rehearsal.ExtraRefs = append(rehearsal.ExtraRefs, *CompletePrimaryRefs(pjapi.Refs{
 						Org:     jobOrg,
 						Repo:    jobRepo,
 						BaseRef: branch,
 						WorkDir: true,
-					})
+					}, source.JobBase))
+					rehearsal.PathAlias = ""
+					rehearsal.CloneURI = ""
+					rehearsal.SkipSubmodules = false
+					rehearsal.CloneDepth = 0
 				}
 			}
 			context += repo + "/"

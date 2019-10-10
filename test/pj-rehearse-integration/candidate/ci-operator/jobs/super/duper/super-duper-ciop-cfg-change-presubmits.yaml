@@ -34,3 +34,43 @@ presubmits:
             cpu: 10m
       serviceAccountName: ci-operator
     trigger: '(?m)^/test (?:.*? )?images(?: .*?)?$'
+  - agent: kubernetes
+    always_run: true
+    branches:
+    - ciop-cfg-change
+    context: ci/prow/custom
+    decorate: true
+    path_alias: foobar
+    clone_uri: thing
+    skip_submodules: true
+    clone_depth: 123
+    decoration_config:
+      skip_cloning: true
+    labels:
+      pj-rehearse.openshift.io/can-be-rehearsed: "true"
+    name: pull-ci-super-duper-ciop-cfg-change-custom
+    rerun_command: /test custom
+    spec:
+      containers:
+      - args:
+        - --artifact-dir=$(CHANGED)
+        - --give-pr-author-access-to-namespace=true
+        - --target=custom
+        command:
+        - ci-operator
+        env:
+        - name: CONFIG_SPEC
+          valueFrom:
+            configMapKeyRef:
+              key: super-duper-ciop-cfg-change.yaml
+              name: ci-operator-ciop-cfg-change-configs
+        image: ci-operator:latest
+        imagePullPolicy: Always
+        name: ""
+        resources:
+          limits:
+            cpu: 1500m
+          requests:
+            cpu: 10m
+      serviceAccountName: ci-operator
+    trigger: ((?m)^/test( all| custom),?(\s+|$))

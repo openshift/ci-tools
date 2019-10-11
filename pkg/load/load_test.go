@@ -1,7 +1,10 @@
 package load
 
 import (
+	"encoding/json"
 	"io/ioutil"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"reflect"
 	"testing"
@@ -559,7 +562,7 @@ func TestConfig(t *testing.T) {
 					t.Fatalf("%s: failed to populate env var: %v", testCase.name, err)
 				}
 			}
-			config, err := Config(path)
+			config, err := Config(path, nil)
 			if err == nil && testCase.expectedError {
 				t.Errorf("%s: expected an error, but got none", testCase.name)
 			}
@@ -572,6 +575,99 @@ func TestConfig(t *testing.T) {
 
 		})
 	}
+}
+
+func TestConfigFromResolver(t *testing.T) {
+	correctHandler := func(t *testing.T, jsonConfig []byte) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Query().Get("org") != "openshift" {
+				t.Errorf("%s: Org should equal openshift, but was %s", t.Name(), r.URL.Query().Get("org"))
+			}
+			if r.URL.Query().Get("repo") != "hyperkube" {
+				t.Errorf("%s: Repo should equal hyperkube, but was %s", t.Name(), r.URL.Query().Get("repo"))
+			}
+			if r.URL.Query().Get("branch") != "master" {
+				t.Errorf("%s: Branch should equal master, but was %s", t.Name(), r.URL.Query().Get("branch"))
+			}
+			w.WriteHeader(http.StatusOK)
+			w.Write(jsonConfig)
+		})
+	}
+	failingHandler := func(t *testing.T, jsonConfig []byte) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write(jsonConfig)
+		})
+	}
+	invalidHandler := func(t *testing.T) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			modifiedConfig := *parsedConfig
+			modifiedConfig.BinaryBuildCommands = "incorrect command"
+			jsonConfig, err := json.Marshal(modifiedConfig)
+			if err != nil {
+				t.Fatalf("%s: Failed to marshal parsedConfig to JSON: %v", t.Name(), err)
+			}
+			w.WriteHeader(http.StatusOK)
+			w.Write(jsonConfig)
+		})
+	}
+	var testCases = []struct {
+		name           string
+		handlerWrapper func(t *testing.T, jsonConfig []byte) http.Handler
+		expected       *api.ReleaseBuildConfiguration
+		expectedError  bool
+	}{
+		{
+			name:           "getting config works",
+			handlerWrapper: correctHandler,
+			expected:       parsedConfig,
+			expectedError:  false,
+		},
+		{
+			name:           "function errors on non OK status",
+			handlerWrapper: failingHandler,
+			expected:       nil,
+			expectedError:  true,
+		},
+	}
+
+	jsonConfig, err := json.Marshal(parsedConfig)
+	if err != nil {
+		t.Fatalf("%s: Failed to marshal parsedConfig to JSON: %v", t.Name(), err)
+	}
+	info := ResolverInfo{Org: "openshift", Repo: "hyperkube", Branch: "master"}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			server := httptest.NewServer(testCase.handlerWrapper(t, jsonConfig))
+			info.Address = server.URL
+			config, err := configFromResolver(&info)
+			if err == nil && testCase.expectedError {
+				t.Errorf("%s: expected an error, but got none", testCase.name)
+			}
+			if err != nil && !testCase.expectedError {
+				t.Errorf("%s: expected no error, but got one: %v", testCase.name, err)
+			}
+			if !reflect.DeepEqual(config, testCase.expected) {
+				t.Errorf("%s: didn't get correct config: %v", testCase.name, diff.ObjectReflectDiff(config, testCase.expected))
+			}
+			server.Close()
+		})
+	}
+
+	// make sure it still falls back to env/file config
+	server := httptest.NewServer(invalidHandler(t))
+	info.Address = server.URL
+	if err := os.Setenv("CONFIG_SPEC", rawConfig); err != nil {
+		t.Fatalf("%s: failed to populate env var: %v", t.Name(), err)
+	}
+	config, err := Config("", &info)
+	if err != nil {
+		t.Errorf("%s: expected no error, but got one: %v", t.Name(), err)
+	}
+	if !reflect.DeepEqual(config, parsedConfig) {
+		t.Errorf("%s: didn't get correct config: %v", t.Name(), diff.ObjectReflectDiff(config, parsedConfig))
+	}
+	server.Close()
 }
 
 func TestRegistry(t *testing.T) {

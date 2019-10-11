@@ -1,18 +1,33 @@
 package load
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 
 	"github.com/ghodss/yaml"
+	"github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/util/diff"
 
 	"github.com/openshift/ci-tools/pkg/api"
 )
 
-func Config(path string) (*api.ReleaseBuildConfiguration, error) {
+// ResolverInfo contains the data needed to get a config from the configresolver
+type ResolverInfo struct {
+	Address string
+	Org     string
+	Repo    string
+	Branch  string
+	// Variant is optional
+	Variant string
+}
+
+func Config(path string, info *ResolverInfo) (*api.ReleaseBuildConfiguration, error) {
 	// Load the standard configuration from the path or env
 	var raw string
 	if len(path) > 0 {
@@ -32,7 +47,53 @@ func Config(path string) (*api.ReleaseBuildConfiguration, error) {
 	if err := yaml.Unmarshal([]byte(raw), configSpec); err != nil {
 		return nil, fmt.Errorf("invalid configuration: %v\nvalue:\n%s", err, raw)
 	}
+
+	// If configresolver address info is provided, GET a copy of the config from there
+	if info != nil {
+		configSpecHTTP, err := configFromResolver(info)
+		if err != nil {
+			logrus.WithError(err).Errorf("Failed to get config from resolver")
+			return configSpec, nil
+		}
+		if !reflect.DeepEqual(configSpec, configSpecHTTP) {
+			logrus.Errorf("Config from configresolver differs from config from disk/CONFIG_SPEC\nDiff: %s\n", diff.ObjectReflectDiff(configSpec, configSpecHTTP))
+			return configSpec, nil
+		}
+	}
 	return configSpec, nil
+}
+
+func configFromResolver(info *ResolverInfo) (*api.ReleaseBuildConfiguration, error) {
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/config", info.Address), nil)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to create request for configresolver: %s", err)
+	}
+	query := req.URL.Query()
+	query.Add("org", info.Org)
+	query.Add("repo", info.Repo)
+	query.Add("branch", info.Branch)
+	if len(info.Variant) > 0 {
+		query.Add("variant", info.Variant)
+	}
+	req.URL.RawQuery = query.Encode()
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to make request to configresolver: %s", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("Response from configresolver != %d", http.StatusOK)
+	}
+	data, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to read configresolver response body: %s", err)
+	}
+	configSpecHTTP := &api.ReleaseBuildConfiguration{}
+	err = json.Unmarshal(data, configSpecHTTP)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal config from configresolver: invalid configuration: %v\nvalue:\n%s", err, string(data))
+	}
+	return configSpecHTTP, nil
 }
 
 // Registry takes the path to a registry config directory and returns the full set of references, chains,

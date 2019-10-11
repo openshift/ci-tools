@@ -67,7 +67,7 @@ func main() {
 	}
 
 	pluginAgent := plugins.ConfigAgent{}
-	if err := pluginAgent.Load(path.Join(o.releaseRepoDir, diffs.PluginsInRepoPath)); err != nil {
+	if err := pluginAgent.Load(path.Join(o.releaseRepoDir, diffs.PluginsInRepoPath), true); err != nil {
 		logrus.WithError(err).Fatal("Error loading Prow plugin config.")
 	}
 	pcfg := pluginAgent.Config()

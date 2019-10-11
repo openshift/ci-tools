@@ -13,7 +13,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/GoogleCloudPlatform/testgrid/config"
+	"github.com/GoogleCloudPlatform/testgrid/pb/config"
 	jc "github.com/openshift/ci-tools/pkg/jobconfig"
 	"github.com/sirupsen/logrus"
 	prowconfig "k8s.io/test-infra/prow/config"

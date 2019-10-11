@@ -93,7 +93,7 @@ func gracefulExit(suppressFailures bool, message string) int {
 
 func loadPluginConfig(releaseRepoPath string) (ret prowplugins.ConfigUpdater, err error) {
 	agent := prowplugins.ConfigAgent{}
-	if err = agent.Load(filepath.Join(releaseRepoPath, config.PluginConfigInRepoPath)); err == nil {
+	if err = agent.Load(filepath.Join(releaseRepoPath, config.PluginConfigInRepoPath), true); err == nil {
 		ret = agent.Config().ConfigUpdater
 	}
 	return

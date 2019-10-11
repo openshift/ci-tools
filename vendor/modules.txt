@@ -14,7 +14,6 @@ github.com/Azure/go-autorest/autorest/date
 github.com/Azure/go-autorest/logger
 github.com/Azure/go-autorest/version
 # github.com/GoogleCloudPlatform/testgrid v0.0.0-20191002194340-462e7a9505a0
-github.com/GoogleCloudPlatform/testgrid/config
 github.com/GoogleCloudPlatform/testgrid/metadata
 github.com/GoogleCloudPlatform/testgrid/metadata/junit
 github.com/GoogleCloudPlatform/testgrid/pb/config

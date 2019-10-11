@@ -30,6 +30,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/prow/bugzilla"
+	"k8s.io/test-infra/prow/errorutil"
 	"k8s.io/test-infra/prow/labels"
 )
 
@@ -54,31 +55,35 @@ type Configuration struct {
 	Owners Owners `json:"owners,omitempty"`
 
 	// Built-in plugins specific configuration.
+
 	Approve                    []Approve                    `json:"approve,omitempty"`
 	UseDeprecatedSelfApprove   bool                         `json:"use_deprecated_2018_implicit_self_approve_default_migrate_before_july_2019,omitempty"`
 	UseDeprecatedReviewApprove bool                         `json:"use_deprecated_2018_review_acts_as_approve_default_migrate_before_july_2019,omitempty"`
 	Blockades                  []Blockade                   `json:"blockades,omitempty"`
 	Blunderbuss                Blunderbuss                  `json:"blunderbuss,omitempty"`
-	Bugzilla                   Bugzilla                     `json:"bugzilla"`
+	Bugzilla                   Bugzilla                     `json:"bugzilla,omitempty"`
 	Cat                        Cat                          `json:"cat,omitempty"`
 	CherryPickUnapproved       CherryPickUnapproved         `json:"cherry_pick_unapproved,omitempty"`
 	ConfigUpdater              ConfigUpdater                `json:"config_updater,omitempty"`
 	Dco                        map[string]*Dco              `json:"dco,omitempty"`
-	Golint                     Golint                       `json:"golint"`
+	Golint                     Golint                       `json:"golint,omitempty"`
+	Goose                      Goose                        `json:"goose,omitempty"`
 	Heart                      Heart                        `json:"heart,omitempty"`
-	Label                      Label                        `json:"label"`
+	Label                      Label                        `json:"label,omitempty"`
 	Lgtm                       []Lgtm                       `json:"lgtm,omitempty"`
 	MilestoneApplier           map[string]BranchToMilestone `json:"milestone_applier,omitempty"`
 	RepoMilestone              map[string]Milestone         `json:"repo_milestone,omitempty"`
 	Project                    ProjectConfig                `json:"project_config,omitempty"`
+	ProjectManager             ProjectManager               `json:"project_manager,omitempty"`
 	RequireMatchingLabel       []RequireMatchingLabel       `json:"require_matching_label,omitempty"`
 	RequireSIG                 RequireSIG                   `json:"requiresig,omitempty"`
 	Retitle                    Retitle                      `json:"retitle,omitempty"`
 	Slack                      Slack                        `json:"slack,omitempty"`
 	SigMention                 SigMention                   `json:"sigmention,omitempty"`
-	Size                       Size                         `json:"size"`
+	Size                       Size                         `json:"size,omitempty"`
 	Triggers                   []Trigger                    `json:"triggers,omitempty"`
 	Welcome                    []Welcome                    `json:"welcome,omitempty"`
+	Override                   Override                     `json:"override"`
 }
 
 // Golint holds configuration for the golint plugin
@@ -318,6 +323,12 @@ type Cat struct {
 	KeyPath string `json:"key_path,omitempty"`
 }
 
+// Goose contains the configuration for the goose plugin.
+type Goose struct {
+	// Path to file containing an api key for unsplash.com
+	KeyPath string `json:"key_path,omitempty"`
+}
+
 // Label contains the configuration for the label plugin.
 type Label struct {
 	// AdditionalLabels is a set of additional labels enabled for use
@@ -345,8 +356,9 @@ type Trigger struct {
 	// This is a security mitigation to only allow testing from trusted users.
 	IgnoreOkToTest bool `json:"ignore_ok_to_test,omitempty"`
 	// ElideSkippedContexts makes trigger not post "Skipped" contexts for jobs
-	// that could run but do not run.
-	ElideSkippedContexts bool `json:"elide_skipped_contexts,omitempty"`
+	// that could run but do not run. Defaults to true.
+	// THIS FIELD IS DEPRECATED AND WILL BE REMOVED AFTER OCTOBER 2019.
+	ElideSkippedContexts *bool `json:"elide_skipped_contexts,omitempty"`
 }
 
 // Heart contains the configuration for the heart plugin.
@@ -416,15 +428,15 @@ type ConfigUpdater struct {
 	Maps map[string]ConfigMapSpec `json:"maps,omitempty"`
 	// The location of the prow configuration file inside the repository
 	// where the config-updater plugin is enabled. This needs to be relative
-	// to the root of the repository, eg. "prow/config.yaml" will match
-	// github.com/kubernetes/test-infra/prow/config.yaml assuming the config-updater
-	// plugin is enabled for kubernetes/test-infra. Defaults to "prow/config.yaml".
+	// to the root of the repository, eg. "config/prow/config.yaml" will match
+	// github.com/kubernetes/test-infra/config/prow/config.yaml assuming the config-updater
+	// plugin is enabled for kubernetes/test-infra. Defaults to "config/prow/config.yaml".
 	ConfigFile string `json:"config_file,omitempty"`
 	// The location of the prow plugin configuration file inside the repository
 	// where the config-updater plugin is enabled. This needs to be relative
-	// to the root of the repository, eg. "prow/plugins.yaml" will match
-	// github.com/kubernetes/test-infra/prow/plugins.yaml assuming the config-updater
-	// plugin is enabled for kubernetes/test-infra. Defaults to "prow/plugins.yaml".
+	// to the root of the repository, eg. "config/prow/plugins.yaml" will match
+	// github.com/kubernetes/test-infra/config/prow/plugins.yaml assuming the config-updater
+	// plugin is enabled for kubernetes/test-infra. Defaults to "config/prow/plugins.yaml".
 	PluginFile string `json:"plugin_file,omitempty"`
 	// If GZIP is true then files will be gzipped before insertion into
 	// their corresponding configmap
@@ -456,6 +468,39 @@ type ProjectRepoConfig struct {
 	// A map of project name to default column; an issue/PR will be added
 	// to the default column if column name is not provided in the command
 	ProjectColumnMap map[string]string `json:"repo_default_column_map,omitempty"`
+}
+
+// ProjectManager represents the config for the ProjectManager plugin, holding top
+// level config options, configuration is a hierarchial structure with top level element
+// being org or org/repo with the list of projects as its children
+type ProjectManager struct {
+	OrgRepos map[string]ManagedOrgRepo `json:"orgsRepos,omitempty"`
+}
+
+// ManagedOrgRepo is used by the ProjectManager plugin to represent an Organisation
+// or Repository with a list of Projects
+type ManagedOrgRepo struct {
+	Projects map[string]ManagedProject `json:"projects,omitempty"`
+}
+
+// ManagedProject is used by the ProjectManager plugin to represent a Project
+// with a list of Columns
+type ManagedProject struct {
+	Columns []ManagedColumn `json:"columns,omitempty"`
+}
+
+// ManagedColumn is used by the ProjectQueries plugin to represent a project column
+// and the conditions to add a PR to that column
+type ManagedColumn struct {
+	// Either of ID or Name should be specified
+	ID   *int   `json:"id,omitempty"`
+	Name string `json:"name,omitempty"`
+	// State must be open, closed or all
+	State string `json:"state,omitempty"`
+	// all the labels here should match to the incoming event to be bale to add the card to the project
+	Labels []string `json:"labels,omitempty"`
+	// Configuration is effective is the issue events repo/Owner/Login matched the org
+	Org string `json:"org,omitempty"`
 }
 
 // MergeWarning is a config for the slackevents plugin's manual merge warnings.
@@ -637,14 +682,32 @@ func (r RequireMatchingLabel) Describe() string {
 // a trigger can be listed for the repo itself or for the
 // owning organization
 func (c *Configuration) TriggerFor(org, repo string) Trigger {
+	orgRepo := fmt.Sprintf("%s/%s", org, repo)
 	for _, tr := range c.Triggers {
 		for _, r := range tr.Repos {
-			if r == org || r == fmt.Sprintf("%s/%s", org, repo) {
+			if r == org || r == orgRepo {
 				return tr
 			}
 		}
 	}
-	return Trigger{}
+	var tr Trigger
+	tr.SetDefaults()
+	return tr
+}
+
+var warnElideSkippedContexts time.Time
+
+func (t *Trigger) SetDefaults() {
+	truth := true
+	if t.ElideSkippedContexts == nil {
+		t.ElideSkippedContexts = &truth
+	} else {
+		warnDeprecated(&warnElideSkippedContexts, 5*time.Minute, "elide_skipped_contexts is deprecated and will be removed after Oct. 2019. Skipped contexts are now elided by default.")
+	}
+
+	if t.TrustedOrg != "" && t.JoinOrgURL == "" {
+		t.JoinOrgURL = fmt.Sprintf("https://github.com/orgs/%s/people", t.TrustedOrg)
+	}
 }
 
 // DcoFor finds the Dco for a repo, if one exists
@@ -711,13 +774,13 @@ func (c *ConfigUpdater) SetDefaults() {
 	if len(c.Maps) == 0 {
 		cf := c.ConfigFile
 		if cf == "" {
-			cf = "prow/config.yaml"
+			cf = "config/prow/config.yaml"
 		} else {
 			logrus.Warnf(`config_file is deprecated, please switch to "maps": {"%s": "config"} before July 2018`, cf)
 		}
 		pf := c.PluginFile
 		if pf == "" {
-			pf = "prow/plugins.yaml"
+			pf = "config/prow/plugins.yaml"
 		} else {
 			logrus.Warnf(`plugin_file is deprecated, please switch to "maps": {"%s": "plugins"} before July 2018`, pf)
 		}
@@ -752,11 +815,8 @@ func (c *Configuration) setDefaults() {
 		c.Blunderbuss.ReviewerCount = new(int)
 		*c.Blunderbuss.ReviewerCount = defaultBlunderbussReviewerCount
 	}
-	for i, trigger := range c.Triggers {
-		if trigger.TrustedOrg == "" || trigger.JoinOrgURL != "" {
-			continue
-		}
-		c.Triggers[i].JoinOrgURL = fmt.Sprintf("https://github.com/orgs/%s/people", trigger.TrustedOrg)
+	for i := range c.Triggers {
+		c.Triggers[i].SetDefaults()
 	}
 	if c.SigMention.Regexp == "" {
 		c.SigMention.Regexp = `(?m)@kubernetes/sig-([\w-]*)-(misc|test-failures|bugs|feature-requests|proposals|pr-reviews|api-reviews)`
@@ -783,30 +843,34 @@ func (c *Configuration) setDefaults() {
 	}
 }
 
-// validatePlugins will return error if
-// there are unknown or duplicated plugins.
-func validatePlugins(plugins map[string][]string) error {
-	var errors []string
-	for _, configuration := range plugins {
-		for _, plugin := range configuration {
-			if _, ok := pluginHelp[plugin]; !ok {
-				errors = append(errors, fmt.Sprintf("unknown plugin: %s", plugin))
-			}
-		}
-	}
+// validatePluginsDupes will return an error if there are duplicated plugins.
+// It is sometimes a sign of misconfiguration and is always useless for a
+// plugin to be specified at both the org and repo levels.
+func validatePluginsDupes(plugins map[string][]string) error {
+	var errors []error
 	for repo, repoConfig := range plugins {
 		if strings.Contains(repo, "/") {
 			org := strings.Split(repo, "/")[0]
 			if dupes := findDuplicatedPluginConfig(repoConfig, plugins[org]); len(dupes) > 0 {
-				errors = append(errors, fmt.Sprintf("plugins %v are duplicated for %s and %s", dupes, repo, org))
+				errors = append(errors, fmt.Errorf("plugins %v are duplicated for %s and %s", dupes, repo, org))
 			}
 		}
 	}
+	return errorutil.NewAggregate(errors...)
+}
 
-	if len(errors) > 0 {
-		return fmt.Errorf("invalid plugin configuration:\n\t%v", strings.Join(errors, "\n\t"))
+// ValidatePluginsUnknown will return an error if there are any unrecognized
+// plugins configured.
+func (c *Configuration) ValidatePluginsUnknown() error {
+	var errors []error
+	for _, configuration := range c.Plugins {
+		for _, plugin := range configuration {
+			if _, ok := pluginHelp[plugin]; !ok {
+				errors = append(errors, fmt.Errorf("unknown plugin: %s", plugin))
+			}
+		}
 	}
-	return nil
+	return errorutil.NewAggregate(errors...)
 }
 
 func validateSizes(size Size) error {
@@ -913,6 +977,46 @@ func validateRequireMatchingLabel(rs []RequireMatchingLabel) error {
 	return nil
 }
 
+func validateProjectManager(pm ProjectManager) error {
+
+	projectConfig := pm
+	// No ProjectManager configuration provided, we have nothing to validate
+	if len(projectConfig.OrgRepos) == 0 {
+		return nil
+	}
+
+	for orgRepoName, managedOrgRepo := range pm.OrgRepos {
+		if len(managedOrgRepo.Projects) == 0 {
+			return fmt.Errorf("Org/repo: %s, has no projects configured", orgRepoName)
+		}
+		for projectName, managedProject := range managedOrgRepo.Projects {
+			var labelSets []sets.String
+			if len(managedProject.Columns) == 0 {
+				return fmt.Errorf("Org/repo: %s, project %s, has no columns configured", orgRepoName, projectName)
+			}
+			for _, managedColumn := range managedProject.Columns {
+				if managedColumn.ID == nil && (len(managedColumn.Name) == 0) {
+					return fmt.Errorf("Org/repo: %s, project %s, column %v, has no name/id configured", orgRepoName, projectName, managedColumn)
+				}
+				if len(managedColumn.Labels) == 0 {
+					return fmt.Errorf("Org/repo: %s, project %s, column %s, has no labels configured", orgRepoName, projectName, managedColumn.Name)
+				}
+				if len(managedColumn.Org) == 0 {
+					return fmt.Errorf("Org/repo: %s, project %s, column %s, has no org configured", orgRepoName, projectName, managedColumn.Name)
+				}
+				s_set := sets.NewString(managedColumn.Labels...)
+				for _, labels := range labelSets {
+					if s_set.Equal(labels) {
+						return fmt.Errorf("Org/repo: %s, project %s, column %s has same labels configured as another column", orgRepoName, projectName, managedColumn.Name)
+					}
+				}
+				labelSets = append(labelSets, s_set)
+			}
+		}
+	}
+	return nil
+}
+
 func compileRegexpsAndDurations(pc *Configuration) error {
 	cRe, err := regexp.Compile(pc.SigMention.Regexp)
 	if err != nil {
@@ -962,7 +1066,7 @@ func (c *Configuration) Validate() error {
 		return err
 	}
 
-	if err := validatePlugins(c.Plugins); err != nil {
+	if err := validatePluginsDupes(c.Plugins); err != nil {
 		return err
 	}
 	if err := validateExternalPlugins(c.ExternalPlugins); err != nil {
@@ -978,6 +1082,10 @@ func (c *Configuration) Validate() error {
 		return err
 	}
 	if err := validateRequireMatchingLabel(c.RequireMatchingLabel); err != nil {
+		return err
+	}
+
+	if err := validateProjectManager(c.ProjectManager); err != nil {
 		return err
 	}
 
@@ -1415,4 +1523,12 @@ func (b *Bugzilla) OptionsForRepo(org, repo string) map[string]BugzillaBranchOpt
 	}
 
 	return options
+}
+
+// Override holds options for the override plugin
+type Override struct {
+	AllowTopLevelOwners bool `json:"allow_top_level_owners,omitempty"`
+	// AllowedGitHubTeams is a map of repositories (eg "k/k") to list of GitHub team slugs,
+	// members of which are allowed to override contexts
+	AllowedGitHubTeams map[string][]string `json:"allowed_github_teams,omitempty"`
 }

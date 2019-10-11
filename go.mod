@@ -3,14 +3,13 @@ module github.com/openshift/ci-tools
 go 1.12
 
 replace (
-	k8s.io/apimachinery => k8s.io/apimachinery v0.0.0-20190313205120-d7deff9243b1
-	k8s.io/client-go => k8s.io/client-go v11.0.0+incompatible
-
+	k8s.io/apimachinery => k8s.io/apimachinery v0.0.0-20190817020851-f2f3a405f61d
+	k8s.io/client-go => k8s.io/client-go v0.0.0-20190918200256-06eb1244587a
 )
 
 require (
 	cloud.google.com/go v0.44.3
-	github.com/GoogleCloudPlatform/testgrid v0.0.0-20190919235938-9a01187e28a6
+	github.com/GoogleCloudPlatform/testgrid v0.0.0-20191002194340-462e7a9505a0
 	github.com/SierraSoftworks/sentry-go v1.1.1
 	github.com/docker/spdystream v0.0.0-20181023171402-6480d4af844c // indirect
 	github.com/elazarl/goproxy v0.0.0-20190711103511-473e67f1d7d2 // indirect
@@ -29,9 +28,9 @@ require (
 	golang.org/x/oauth2 v0.0.0-20190604053449-0f29369cfe45
 	golang.org/x/sync v0.0.0-20190423024810-112230192c58
 	google.golang.org/api v0.9.0
-	k8s.io/api v0.0.0-20190816222004-e3a6b8045b0b
-	k8s.io/apimachinery v0.0.0-20190816221834-a9f1d8a9c101
+	k8s.io/api v0.0.0-20190918195907-bd6ac527cfd2
+	k8s.io/apimachinery v0.0.0-20190817020851-f2f3a405f61d
 	k8s.io/client-go v11.0.1-0.20190805182717-6502b5e7b1b5+incompatible
-	k8s.io/test-infra v0.0.0-20190917143826-bb5822c56adc
+	k8s.io/test-infra v0.0.0-20191011190724-8e2ca11899c5
 	sigs.k8s.io/yaml v1.1.0
 )

@@ -121,7 +121,7 @@ func (a *agent) loadFilenameToConfig() error {
 				a.recordError("invalid ci-operator config")
 				return fmt.Errorf("invalid ci-operator config: %v", err)
 			}
-			log.Debugf("Adding %s to filenameToConfig", filepath.Base(path))
+			//log.Debugf("Adding %s to filenameToConfig", filepath.Base(path))
 			configs[filepath.Base(path)] = *configSpec
 		}
 		return nil
@@ -144,7 +144,7 @@ func populateWatcher(watcher *fsnotify.Watcher, root string) error {
 		// We only need to watch directories as creation, deletion, and writes
 		// for files in a directory trigger events for the directory
 		if info != nil && info.IsDir() {
-			log.Debugf("Adding %s to watch list", path)
+			//log.Debugf("Adding %s to watch list", path)
 			err = watcher.Add(path)
 			if err != nil {
 				return fmt.Errorf("Failed to add watch on directory %s: %v", path, err)

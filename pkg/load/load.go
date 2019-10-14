@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -59,6 +60,7 @@ func Config(path string, info *ResolverInfo) (*api.ReleaseBuildConfiguration, er
 			logrus.Errorf("Config from configresolver differs from config from disk/CONFIG_SPEC\nDiff: %s\n", diff.ObjectReflectDiff(configSpec, configSpecHTTP))
 			return configSpec, nil
 		}
+		log.Print("Config from configresolver matches standard config")
 	}
 	return configSpec, nil
 }

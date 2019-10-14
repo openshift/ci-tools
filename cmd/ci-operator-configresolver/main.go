@@ -210,6 +210,7 @@ func main() {
 	}
 	level, _ := log.ParseLevel(o.logLevel)
 	log.SetLevel(level)
+
 	health := pjutil.NewHealth()
 	metrics.ExposeMetrics("ci-operator-configresolver", prowConfig.PushGateway{})
 

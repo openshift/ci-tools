@@ -623,11 +623,40 @@ func (e *Executor) waitForJobs(jobs sets.String, selector string) (bool, error) 
 	}
 }
 
+func removeConfigResolverFlags(args []string) []string {
+	newArgs := []string{}
+	ignoreNext := false
+	for _, arg := range args {
+		if ignoreNext {
+			ignoreNext = false
+			continue
+		}
+		ignore := false
+		for _, ignoredArg := range []string{"-resolver-address", "-org", "-repo", "-branch", "-variant"} {
+			// Handle both single and double dash forms of go flags
+			if strings.Contains(arg, ignoredArg) {
+				ignore = true
+			}
+			if !strings.Contains(arg, "=") {
+				ignoreNext = true
+			}
+		}
+		if !ignore {
+			newArgs = append(newArgs, arg)
+		}
+	}
+	return newArgs
+}
+
 func (e *Executor) submitRehearsals() ([]*pjapi.ProwJob, error) {
 	var errors []error
 	var pjs []*pjapi.ProwJob
 
 	for _, job := range e.presubmits {
+		// Remove configresolver flags from ci-operator jobs
+		if len(job.Spec.Containers) > 0 && len(job.Spec.Containers[0].Command) > 0 && job.Spec.Containers[0].Command[0] == "ci-operator" {
+			job.Spec.Containers[0].Args = removeConfigResolverFlags(job.Spec.Containers[0].Args)
+		}
 		created, err := e.submitPresubmit(job)
 		if err != nil {
 			e.loggers.Job.WithError(err).Warn("Failed to execute a rehearsal presubmit")

@@ -70,7 +70,7 @@ var (
 			prometheus.HistogramOpts{
 				Name:    "configresolver_http_response_size_bytes",
 				Help:    "http response size in bytes",
-				Buckets: []float64{256, 512, 1024, 2048, 4096, 6144, 8192},
+				Buckets: []float64{256, 512, 1024, 2048, 4096, 6144, 8192, 10240, 12288},
 			},
 			[]string{"status", "path"},
 		),

@@ -40,7 +40,7 @@ var reloadTimeMetric = prometheus.NewHistogram(
 	prometheus.HistogramOpts{
 		Name:    "configresolver_config_reload_duration_seconds",
 		Help:    "config reload duration in seconds",
-		Buckets: []float64{0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3},
+		Buckets: []float64{0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3, 4, 5, 6},
 	},
 )
 
@@ -121,7 +121,7 @@ func (a *agent) loadFilenameToConfig() error {
 				a.recordError("invalid ci-operator config")
 				return fmt.Errorf("invalid ci-operator config: %v", err)
 			}
-			//log.Debugf("Adding %s to filenameToConfig", filepath.Base(path))
+			log.Tracef("Adding %s to filenameToConfig", filepath.Base(path))
 			configs[filepath.Base(path)] = *configSpec
 		}
 		return nil
@@ -144,7 +144,7 @@ func populateWatcher(watcher *fsnotify.Watcher, root string) error {
 		// We only need to watch directories as creation, deletion, and writes
 		// for files in a directory trigger events for the directory
 		if info != nil && info.IsDir() {
-			//log.Debugf("Adding %s to watch list", path)
+			log.Tracef("Adding %s to watch list", path)
 			err = watcher.Add(path)
 			if err != nil {
 				return fmt.Errorf("Failed to add watch on directory %s: %v", path, err)
@@ -163,7 +163,7 @@ func reloadWatcher(ctx context.Context, w *fsnotify.Watcher, a *agent, c coalesc
 			}
 			return
 		case event := <-w.Events:
-			log.Debugf("Received %v event for %s", event.Op, event.Name)
+			log.Tracef("Received %v event for %s", event.Op, event.Name)
 			go c.Run()
 			// add new files to be watched; if a watch already exists on a file, the
 			// watch is simply updated

@@ -11,7 +11,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/promotion"
 	"github.com/sirupsen/logrus"
-	"k8s.io/test-infra/prow/apis/prowjobs/v1"
+	v1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
@@ -189,6 +189,18 @@ func generateCiOperatorPodSpec(info *config.Info, secret *cioperatorapi.Secret, 
 	}, additionalArgs...)
 	if secret != nil {
 		ret.Containers[0].Args = append(ret.Containers[0].Args, fmt.Sprintf("--secret-dir=%s", secret.MountPath))
+	}
+	// temporary hack until we are 100% sure the flags won't break anything
+	// TODO: add these flags to all ci-operator podspecs
+	if info.Repo == "ci-tools" {
+		ret.Containers[0].Args = append(ret.Containers[0].Args,
+			"--resolver-address=http://ci-operator-configresolver",
+			fmt.Sprintf("--org=%s", info.Org),
+			fmt.Sprintf("--repo=%s", info.Repo),
+			fmt.Sprintf("--branch=%s", info.Branch))
+		if len(info.Variant) > 0 {
+			ret.Containers[0].Args = append(ret.Containers[0].Args, fmt.Sprintf("--variant=%s", info.Variant))
+		}
 	}
 	return ret
 }

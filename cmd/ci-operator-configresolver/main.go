@@ -128,6 +128,8 @@ func handleWithMetrics(h http.HandlerFunc) http.HandlerFunc {
 		labels := prometheus.Labels{"status": strconv.Itoa(trw.statusCode), "path": r.URL.EscapedPath()}
 		configresolverMetrics.httpRequestDuration.With(labels).Observe(latency.Seconds())
 		configresolverMetrics.httpResponseSize.With(labels).Observe(float64(trw.size))
+		log.Debugf("Response Time: %.6f", latency.Seconds())
+		log.Debugf("Response Size: %.0f", float64(trw.size))
 	})
 }
 

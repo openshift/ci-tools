@@ -60,10 +60,21 @@ type dashboard struct {
 	existing   sets.String
 }
 
-func dashboardFor(product, version, role string) dashboard {
+func genericDashboardFor(role string) dashboard {
 	return dashboard{
 		Dashboard: &config.Dashboard{
-			Name:         fmt.Sprintf("redhat-openshift-%s-release-%s-%s", product, version, role),
+			Name:         fmt.Sprintf("redhat-openshift-%s", role),
+			DashboardTab: []*config.DashboardTab{},
+		},
+		testGroups: []*config.TestGroup{},
+		existing:   sets.NewString(),
+	}
+}
+
+func dashboardFor(stream, version, role string) dashboard {
+	return dashboard{
+		Dashboard: &config.Dashboard{
+			Name:         fmt.Sprintf("redhat-openshift-release-%s-%s-%s", version, role, stream),
 			DashboardTab: []*config.DashboardTab{},
 		},
 		testGroups: []*config.TestGroup{},
@@ -145,6 +156,8 @@ func main() {
 		}
 	}
 
+	genericInforming := genericDashboardFor("informing")
+
 	var dashboards []dashboard
 	if err := filepath.Walk(o.releaseConfigDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -163,12 +176,12 @@ func main() {
 			return fmt.Errorf("could not unmarshal release controller config at %s: %v", path, err)
 		}
 
-		var product string
+		var stream string
 		switch {
-		case strings.HasSuffix(releaseConfig.Name, ".nightly"):
-			product = "ocp"
+		case strings.HasSuffix(releaseConfig.Name, ".nightly") || strings.HasPrefix(releaseConfig.Name, "stable-4."):
+			stream = "ocp"
 		case strings.HasSuffix(releaseConfig.Name, ".ci"):
-			product = "okd"
+			stream = "ci"
 		default:
 			logrus.Infof("release is not recognized: %s", releaseConfig.Name)
 			return nil
@@ -180,12 +193,12 @@ func main() {
 		}
 		version := m[1]
 
-		blocking := dashboardFor(product, version, "blocking")
-		informing := dashboardFor(product, version, "informing")
+		blocking := dashboardFor(stream, version, "blocking")
+		informing := dashboardFor(stream, version, "informing")
 		for _, job := range releaseConfig.Verify {
 			delete(informingPeriodics, job.ProwJob.Name)
 			if job.ProwJob.Name == "release-openshift-origin-installer-e2e-aws-upgrade" {
-				// this job is not sharded by version ... why? who knows
+				genericInforming.add(job.ProwJob.Name)
 				continue
 			}
 			if job.Optional {
@@ -198,12 +211,14 @@ func main() {
 			if p.Labels["job-release"] != version {
 				continue
 			}
-			switch product {
-			case "okd":
-				if !strings.Contains(p.Name, "-openshift-origin-") {
+			switch stream {
+			case "ci":
+				// preparing to rename the jobs from -openshift-origin- to -openshift-ci-, remove -origin-
+				// after that rename
+				if !strings.Contains(p.Name, "-openshift-origin-") && !strings.Contains(p.Name, "-openshift-ci-") {
 					continue
 				}
-			case "ocp":
+			case "nightly":
 				if !strings.Contains(p.Name, "-openshift-ocp-") {
 					continue
 				}
@@ -216,6 +231,9 @@ func main() {
 		}
 		if len(informing.testGroups) > 0 {
 			dashboards = append(dashboards, informing)
+		}
+		if len(genericInforming.testGroups) > 0 {
+			dashboards = append(dashboards, genericInforming)
 		}
 		return nil
 	}); err != nil {

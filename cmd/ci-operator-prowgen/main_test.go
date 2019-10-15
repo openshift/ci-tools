@@ -51,6 +51,10 @@ func TestGeneratePodSpec(t *testing.T) {
 						"--artifact-dir=$(ARTIFACTS)",
 						"--target=target",
 						"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
+						"--resolver-address=http://ci-operator-configresolver",
+						"--org=org",
+						"--repo=repo",
+						"--branch=branch",
 					},
 					Resources: kubeapi.ResourceRequirements{
 						Requests: kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
@@ -93,6 +97,10 @@ func TestGeneratePodSpec(t *testing.T) {
 						"--artifact-dir=$(ARTIFACTS)",
 						"--target=target",
 						"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
+						"--resolver-address=http://ci-operator-configresolver",
+						"--org=org",
+						"--repo=repo",
+						"--branch=branch",
 						"--promote",
 						"--some=thing",
 					},
@@ -137,6 +145,10 @@ func TestGeneratePodSpec(t *testing.T) {
 						"--artifact-dir=$(ARTIFACTS)",
 						"--target=target",
 						"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
+						"--resolver-address=http://ci-operator-configresolver",
+						"--org=org",
+						"--repo=repo",
+						"--branch=branch",
 						"--promote",
 						"--some=thing",
 						fmt.Sprintf("--secret-dir=%s", testSecret.MountPath),
@@ -262,6 +274,10 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						"--artifact-dir=$(ARTIFACTS)",
 						"--target=test",
 						"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
+						"--resolver-address=http://ci-operator-configresolver",
+						"--org=organization",
+						"--repo=repo",
+						"--branch=branch",
 						"--secret-dir=/usr/local/test-cluster-profile",
 						"--template=/usr/local/test"},
 					Resources: kubeapi.ResourceRequirements{
@@ -348,6 +364,10 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						"--artifact-dir=$(ARTIFACTS)",
 						"--target=test",
 						"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
+						"--resolver-address=http://ci-operator-configresolver",
+						"--org=organization",
+						"--repo=repo",
+						"--branch=branch",
 						"--secret-dir=/usr/local/test-cluster-profile",
 						"--template=/usr/local/test"},
 					Resources: kubeapi.ResourceRequirements{
@@ -919,8 +939,12 @@ tests:
       containers:
       - args:
         - --artifact-dir=$(ARTIFACTS)
+        - --branch=branch
         - --give-pr-author-access-to-namespace=true
+        - --org=super
         - --promote
+        - --repo=duper
+        - --resolver-address=http://ci-operator-configresolver
         - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=[images]
         command:
@@ -966,7 +990,11 @@ tests:
       containers:
       - args:
         - --artifact-dir=$(ARTIFACTS)
+        - --branch=branch
         - --give-pr-author-access-to-namespace=true
+        - --org=super
+        - --repo=duper
+        - --resolver-address=http://ci-operator-configresolver
         - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=[images]
         command:
@@ -1010,7 +1038,11 @@ tests:
       containers:
       - args:
         - --artifact-dir=$(ARTIFACTS)
+        - --branch=branch
         - --give-pr-author-access-to-namespace=true
+        - --org=super
+        - --repo=duper
+        - --resolver-address=http://ci-operator-configresolver
         - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=unit
         command:
@@ -1130,9 +1162,14 @@ tests:
       containers:
       - args:
         - --artifact-dir=$(ARTIFACTS)
+        - --branch=branch
         - --give-pr-author-access-to-namespace=true
+        - --org=super
+        - --repo=duper
+        - --resolver-address=http://ci-operator-configresolver
         - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=[images]
+        - --variant=rhel
         command:
         - ci-operator
         env:
@@ -1175,9 +1212,14 @@ tests:
       containers:
       - args:
         - --artifact-dir=$(ARTIFACTS)
+        - --branch=branch
         - --give-pr-author-access-to-namespace=true
+        - --org=super
+        - --repo=duper
+        - --resolver-address=http://ci-operator-configresolver
         - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=unit
+        - --variant=rhel
         command:
         - ci-operator
         env:
@@ -1247,10 +1289,15 @@ tests:
       containers:
       - args:
         - --artifact-dir=$(ARTIFACTS)
+        - --branch=branch
         - --give-pr-author-access-to-namespace=true
+        - --org=super
         - --promote
+        - --repo=duper
+        - --resolver-address=http://ci-operator-configresolver
         - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=[images]
+        - --variant=rhel
         command:
         - ci-operator
         env:
@@ -1364,7 +1411,11 @@ tests:
       containers:
       - args:
         - --artifact-dir=$(ARTIFACTS)
+        - --branch=branch
         - --give-pr-author-access-to-namespace=true
+        - --org=super
+        - --repo=duper
+        - --resolver-address=http://ci-operator-configresolver
         - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=[images]
         command:
@@ -1408,7 +1459,11 @@ tests:
       containers:
       - args:
         - --artifact-dir=$(ARTIFACTS)
+        - --branch=branch
         - --give-pr-author-access-to-namespace=true
+        - --org=super
+        - --repo=duper
+        - --resolver-address=http://ci-operator-configresolver
         - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=unit
         command:
@@ -1477,8 +1532,12 @@ tests:
       containers:
       - args:
         - --artifact-dir=$(ARTIFACTS)
+        - --branch=branch
         - --give-pr-author-access-to-namespace=true
+        - --org=super
         - --promote
+        - --repo=duper
+        - --resolver-address=http://ci-operator-configresolver
         - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=[images]
         command:

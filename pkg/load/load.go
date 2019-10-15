@@ -61,6 +61,8 @@ func Config(path string, info *ResolverInfo) (*api.ReleaseBuildConfiguration, er
 			return configSpec, nil
 		}
 		log.Print("Config from configresolver matches standard config")
+	} else {
+		log.Print("Config resolver info not provided; using env var or file instead")
 	}
 	return configSpec, nil
 }

@@ -240,6 +240,7 @@ func makeTestingPresubmit(name, context string, org, repo, branch string) *prowc
 			Spec: &v1.PodSpec{
 				Containers: []v1.Container{{
 					Command: []string{"ci-operator"},
+					Args:    []string{"--resolver-address=http://ci-operator-resolver", "--org", "openshift", "--repo=origin", "--branch", "master", "--variant", "v2"},
 				}},
 			},
 		},
@@ -1108,5 +1109,37 @@ func makeBaseRefs() *pjapi.Refs {
 				SHA:    "bc825725cfe0acebb06a7e0b11c8228f5a3b89c0",
 			},
 		},
+	}
+}
+
+func TestRemoveConfigResolverFlags(t *testing.T) {
+	var testCases = []struct {
+		description string
+		input       []string
+		expected    []string
+	}{{
+		description: "just resolver flags",
+		input:       []string{"--resolver-address=http://ci-operator-resolver", "--org=openshift", "--repo=origin", "--branch=master", "--variant=v2"},
+		expected:    []string{},
+	}, {
+		description: "no resolver flags",
+		input:       []string{"--artifact-dir=$(ARTIFACTS)", "--target=target", "--sentry-dsn-path=/etc/sentry-dsn/ci-operator"},
+		expected:    []string{"--artifact-dir=$(ARTIFACTS)", "--target=target", "--sentry-dsn-path=/etc/sentry-dsn/ci-operator"},
+	}, {
+		description: "mixed resolver and non-resolver flags",
+		input:       []string{"--artifact-dir=$(ARTIFACTS)", "--resolver-address=http://ci-operator-resolver", "--org=openshift", "--target=target", "--repo=origin", "--sentry-dsn-path=/etc/sentry-dsn/ci-operator", "--branch=master", "--variant=v2"},
+		expected:    []string{"--artifact-dir=$(ARTIFACTS)", "--target=target", "--sentry-dsn-path=/etc/sentry-dsn/ci-operator"},
+	}, {
+		description: "spaces in between flag and value",
+		input:       []string{"--artifact-dir=$(ARTIFACTS)", "--resolver-address=http://ci-operator-resolver", "--org", "openshift", "--target=target", "--repo", "origin", "--sentry-dsn-path=/etc/sentry-dsn/ci-operator", "--branch", "master", "--variant=v2"},
+		expected:    []string{"--artifact-dir=$(ARTIFACTS)", "--target=target", "--sentry-dsn-path=/etc/sentry-dsn/ci-operator"},
+	}}
+	for _, testCase := range testCases {
+		t.Run(testCase.description, func(t *testing.T) {
+			newArgs := removeConfigResolverFlags(testCase.input)
+			if !reflect.DeepEqual(testCase.expected, newArgs) {
+				t.Fatalf("Diff found %v", diff.ObjectReflectDiff(testCase.expected, newArgs))
+			}
+		})
 	}
 }

@@ -13,8 +13,12 @@ postsubmits:
       containers:
       - args:
         - --artifact-dir=$(ARTIFACTS)
+        - --branch=master
         - --give-pr-author-access-to-namespace=true
+        - --org=super
         - --promote
+        - --repo=duper
+        - --resolver-address=http://ci-operator-configresolver
         - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=[images]
         command:
@@ -61,10 +65,15 @@ postsubmits:
       containers:
       - args:
         - --artifact-dir=$(ARTIFACTS)
+        - --branch=master
         - --give-pr-author-access-to-namespace=true
+        - --org=super
         - --promote
+        - --repo=duper
+        - --resolver-address=http://ci-operator-configresolver
         - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=[images]
+        - --variant=variant
         command:
         - ci-operator
         env:

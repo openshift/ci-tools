@@ -17,7 +17,11 @@ presubmits:
       containers:
       - args:
         - --artifact-dir=$(ARTIFACTS)
+        - --branch=release-3.11
         - --give-pr-author-access-to-namespace=true
+        - --org=super
+        - --repo=duper
+        - --resolver-address=http://ci-operator-configresolver
         - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=[images]
         command:
@@ -71,7 +75,11 @@ presubmits:
       containers:
       - args:
         - --artifact-dir=$(ARTIFACTS)
+        - --branch=release-3.11
         - --give-pr-author-access-to-namespace=true
+        - --org=super
+        - --repo=duper
+        - --resolver-address=http://ci-operator-configresolver
         - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=lint
         command:
@@ -115,7 +123,11 @@ presubmits:
       containers:
       - args:
         - --artifact-dir=$(ARTIFACTS)
+        - --branch=release-3.11
         - --give-pr-author-access-to-namespace=true
+        - --org=super
+        - --repo=duper
+        - --resolver-address=http://ci-operator-configresolver
         - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=unit
         command:

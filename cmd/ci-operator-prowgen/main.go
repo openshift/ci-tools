@@ -186,21 +186,16 @@ func generateCiOperatorPodSpec(info *config.Info, secret *cioperatorapi.Secret, 
 		"--artifact-dir=$(ARTIFACTS)",
 		fmt.Sprintf("--target=%s", target),
 		fmt.Sprintf("--sentry-dsn-path=%s", sentryDsnSecretPath),
+		"--resolver-address=http://ci-operator-configresolver",
+		fmt.Sprintf("--org=%s", info.Org),
+		fmt.Sprintf("--repo=%s", info.Repo),
+		fmt.Sprintf("--branch=%s", info.Branch),
 	}, additionalArgs...)
 	if secret != nil {
 		ret.Containers[0].Args = append(ret.Containers[0].Args, fmt.Sprintf("--secret-dir=%s", secret.MountPath))
 	}
-	// temporary hack until we are 100% sure the flags won't break anything
-	// TODO: add these flags to all ci-operator podspecs
-	if info.Repo == "ci-tools" {
-		ret.Containers[0].Args = append(ret.Containers[0].Args,
-			"--resolver-address=http://ci-operator-configresolver",
-			fmt.Sprintf("--org=%s", info.Org),
-			fmt.Sprintf("--repo=%s", info.Repo),
-			fmt.Sprintf("--branch=%s", info.Branch))
-		if len(info.Variant) > 0 {
-			ret.Containers[0].Args = append(ret.Containers[0].Args, fmt.Sprintf("--variant=%s", info.Variant))
-		}
+	if len(info.Variant) > 0 {
+		ret.Containers[0].Args = append(ret.Containers[0].Args, fmt.Sprintf("--variant=%s", info.Variant))
 	}
 	return ret
 }

@@ -256,6 +256,10 @@ tests:
   commands: TEST_SUITE=openshift/conformance/serial run-tests
   openshift_installer_upi:
     cluster_profile: aws
+- as: e2e-upi-src-vsphere
+  commands: make tests
+  openshift_installer_upi_src:
+    cluster_profile: vsphere
 `
 
 func strP(str string) *string {
@@ -506,6 +510,12 @@ var parsedConfig = &api.ReleaseBuildConfiguration{
 		Commands: `TEST_SUITE=openshift/conformance/serial run-tests`,
 		OpenshiftInstallerUPIClusterTestConfiguration: &api.OpenshiftInstallerUPIClusterTestConfiguration{
 			ClusterTestConfiguration: api.ClusterTestConfiguration{ClusterProfile: "aws"},
+		},
+	}, {
+		As:       "e2e-upi-src-vsphere",
+		Commands: `make tests`,
+		OpenshiftInstallerUPISrcClusterTestConfiguration: &api.OpenshiftInstallerUPISrcClusterTestConfiguration{
+			ClusterTestConfiguration: api.ClusterTestConfiguration{ClusterProfile: "vsphere"},
 		},
 	}},
 }

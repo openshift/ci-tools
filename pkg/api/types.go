@@ -341,6 +341,7 @@ type TestStepConfiguration struct {
 	OpenshiftInstallerClusterTestConfiguration                *OpenshiftInstallerClusterTestConfiguration                `json:"openshift_installer,omitempty"`
 	OpenshiftInstallerSrcClusterTestConfiguration             *OpenshiftInstallerSrcClusterTestConfiguration             `json:"openshift_installer_src,omitempty"`
 	OpenshiftInstallerUPIClusterTestConfiguration             *OpenshiftInstallerUPIClusterTestConfiguration             `json:"openshift_installer_upi,omitempty"`
+	OpenshiftInstallerUPISrcClusterTestConfiguration          *OpenshiftInstallerUPISrcClusterTestConfiguration          `json:"openshift_installer_upi_src,omitempty"`
 	OpenshiftInstallerConsoleClusterTestConfiguration         *OpenshiftInstallerConsoleClusterTestConfiguration         `json:"openshift_installer_console,omitempty"`
 	OpenshiftInstallerRandomClusterTestConfiguration          *OpenshiftInstallerRandomClusterTestConfiguration          `json:"openshift_installer_random,omitempty"`
 	OpenshiftInstallerCustomTestImageClusterTestConfiguration *OpenshiftInstallerCustomTestImageClusterTestConfiguration `json:"openshift_installer_custom_test_image,omitempty"`
@@ -593,6 +594,14 @@ type OpenshiftInstallerConsoleClusterTestConfiguration struct {
 // test that provisions machines using installer-upi image and
 // installs the cluster using UPI flow.
 type OpenshiftInstallerUPIClusterTestConfiguration struct {
+	ClusterTestConfiguration `json:",inline"`
+}
+
+// OpenshiftInstallerUPISrcClusterTestConfiguration describes a
+// test that provisions machines using installer-upi image and
+// installs the cluster using UPI flow. Tests will be run
+// akin to the OpenshiftInstallerSrcClusterTestConfiguration.
+type OpenshiftInstallerUPISrcClusterTestConfiguration struct {
 	ClusterTestConfiguration `json:",inline"`
 }
 

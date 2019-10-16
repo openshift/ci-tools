@@ -235,6 +235,9 @@ func generatePodSpecTemplate(info *config.Info, secret *cioperatorapi.Secret, re
 	} else if conf := test.OpenshiftInstallerUPIClusterTestConfiguration; conf != nil {
 		template = "cluster-launch-installer-upi-e2e"
 		clusterProfile = conf.ClusterProfile
+	} else if conf := test.OpenshiftInstallerUPISrcClusterTestConfiguration; conf != nil {
+		template = "cluster-launch-installer-upi-src"
+		clusterProfile = conf.ClusterProfile
 	} else if conf := test.OpenshiftInstallerConsoleClusterTestConfiguration; conf != nil {
 		template = "cluster-launch-installer-console"
 		clusterProfile = conf.ClusterProfile

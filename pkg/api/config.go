@@ -265,6 +265,10 @@ func validateTestConfigurationType(fieldRoot string, test TestStepConfiguration,
 		typeCount++
 		validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 	}
+	if testConfig := test.OpenshiftInstallerUPISrcClusterTestConfiguration; testConfig != nil {
+		typeCount++
+		validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
+	}
 	if testConfig := test.OpenshiftInstallerConsoleClusterTestConfiguration; testConfig != nil {
 		typeCount++
 		validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)

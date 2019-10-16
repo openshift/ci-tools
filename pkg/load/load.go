@@ -29,6 +29,21 @@ type ResolverInfo struct {
 }
 
 func Config(path string, info *ResolverInfo) (*api.ReleaseBuildConfiguration, error) {
+	// If configresolver address info is provided, GET a copy of the config from there
+	var configSpecHTTP *api.ReleaseBuildConfiguration
+	if info != nil {
+		var err error
+		configSpecHTTP, err = configFromResolver(info)
+		if err != nil {
+			logrus.WithError(err).Errorf("Failed to get config from resolver")
+		}
+		if info.Repo == "ci-tools" {
+			log.Print("Using config from resolver directly")
+			return configSpecHTTP, nil
+		}
+	} else {
+		log.Print("Config resolver info not provided; using env var or file instead")
+	}
 	// Load the standard configuration from the path or env
 	var raw string
 	if len(path) > 0 {
@@ -49,20 +64,13 @@ func Config(path string, info *ResolverInfo) (*api.ReleaseBuildConfiguration, er
 		return nil, fmt.Errorf("invalid configuration: %v\nvalue:\n%s", err, raw)
 	}
 
-	// If configresolver address info is provided, GET a copy of the config from there
-	if info != nil {
-		configSpecHTTP, err := configFromResolver(info)
-		if err != nil {
-			logrus.WithError(err).Errorf("Failed to get config from resolver")
-			return configSpec, nil
-		}
+	// if we got a config from the resolver earlier, check it against the env var/file here
+	if configSpecHTTP != nil {
 		if !reflect.DeepEqual(configSpec, configSpecHTTP) {
 			logrus.Errorf("Config from configresolver differs from config from disk/CONFIG_SPEC\nDiff: %s\n", diff.ObjectReflectDiff(configSpec, configSpecHTTP))
 			return configSpec, nil
 		}
 		log.Print("Config from configresolver matches standard config")
-	} else {
-		log.Print("Config resolver info not provided; using env var or file instead")
 	}
 	return configSpec, nil
 }

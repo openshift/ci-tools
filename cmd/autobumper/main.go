@@ -4,6 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 
@@ -65,6 +67,18 @@ func validateOptions(o options) error {
 	return o.GitHubOptions.Validate(o.dryRun)
 }
 
+func hasChanges() (bool, error) {
+	cmd := "git"
+	args := []string{"status", "--porcelain"}
+	logrus.WithField("cmd", cmd).WithField("args", args).Info("running command ...")
+	combinedOutput, err := exec.Command(cmd, args...).CombinedOutput()
+	if err != nil {
+		logrus.WithField("cmd", cmd).Debugf("output is '%s'", string(combinedOutput))
+		return false, err
+	}
+	return len(strings.TrimSuffix(string(combinedOutput), "\n")) > 0, nil
+}
+
 func main() {
 	o := parseOptions()
 	if err := validateOptions(o); err != nil {
@@ -90,7 +104,12 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to update references.")
 	}
 
-	if len(images) == 0 {
+	changed, err := hasChanges()
+	if err != nil {
+		logrus.WithError(err).Fatal("error occurred when checking changes")
+	}
+
+	if !changed {
 		logrus.Info("no images updated, exiting ...")
 		return
 	}

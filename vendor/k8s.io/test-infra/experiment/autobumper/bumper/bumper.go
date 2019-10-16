@@ -118,6 +118,19 @@ func getNewProwVersion(images map[string]string) string {
 	return ""
 }
 
+// HasChanges checks if the current git repo contains any changes
+func HasChanges() (bool, error) {
+	cmd := "git"
+	args := []string{"status", "--porcelain"}
+	logrus.WithField("cmd", cmd).WithField("args", args).Info("running command ...")
+	combinedOutput, err := exec.Command(cmd, args...).CombinedOutput()
+	if err != nil {
+		logrus.WithField("cmd", cmd).Debugf("output is '%s'", string(combinedOutput))
+		return false, err
+	}
+	return len(strings.TrimSuffix(string(combinedOutput), "\n")) > 0, nil
+}
+
 func makeCommitSummary(images map[string]string) string {
 	return fmt.Sprintf("Update prow to %s, and other images as necessary.", getNewProwVersion(images))
 }
@@ -163,7 +176,7 @@ func tagFromName(name string) string {
 }
 
 func componentFromName(name string) string {
-	s := strings.Split(strings.Split(name, ":")[0], "/")
+	s := strings.SplitN(strings.Split(name, ":")[0], "/", 3)
 	return s[len(s)-1]
 }
 

@@ -31,6 +31,6 @@ require (
 	k8s.io/api v0.0.0-20190918195907-bd6ac527cfd2
 	k8s.io/apimachinery v0.0.0-20190817020851-f2f3a405f61d
 	k8s.io/client-go v11.0.1-0.20190805182717-6502b5e7b1b5+incompatible
-	k8s.io/test-infra v0.0.0-20191011190724-8e2ca11899c5
+	k8s.io/test-infra v0.0.0-20191016170131-17458724a5d4
 	sigs.k8s.io/yaml v1.1.0
 )

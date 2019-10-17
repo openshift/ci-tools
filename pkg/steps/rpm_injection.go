@@ -14,7 +14,7 @@ import (
 
 func rpmInjectionDockerfile(from api.PipelineImageStreamTagReference, repo string) string {
 	return fmt.Sprintf(`FROM %s:%s
-RUN echo $'[built]\nname = Built RPMs\nbaseurl = http://%s/\ngpgcheck = 0\nenabled = 0\n\n[origin-local-release]\nname = Built RPMs\nbaseurl = http://%s/\ngpgcheck = 0\nenabled = 0' > /etc/yum.repos.d/built.repo`, api.PipelineImageStream, from, repo, repo)
+RUN echo $'[built]\nname = Built RPMs\nbaseurl = http://%s/\ngpgcheck = 0\nenabled = 1\n\n[origin-local-release]\nname = Built RPMs\nbaseurl = http://%s/\ngpgcheck = 0\nenabled = 1' > /etc/yum.repos.d/built.repo`, api.PipelineImageStream, from, repo, repo)
 }
 
 type rpmImageInjectionStep struct {

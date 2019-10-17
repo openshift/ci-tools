@@ -170,7 +170,7 @@
       },
       "serviceAccount": "builder",
       "source": {
-        "dockerfile": "FROM pipeline:base-machine\nRUN echo $'[built]\\nname = Built RPMs\\nbaseurl = http://dry-fake/\\ngpgcheck = 0\\nenabled = 0\\n\\n[origin-local-release]\\nname = Built RPMs\\nbaseurl = http://dry-fake/\\ngpgcheck = 0\\nenabled = 0' > /etc/yum.repos.d/built.repo",
+        "dockerfile": "FROM pipeline:base-machine\nRUN echo $'[built]\\nname = Built RPMs\\nbaseurl = http://dry-fake/\\ngpgcheck = 0\\nenabled = 1\\n\\n[origin-local-release]\\nname = Built RPMs\\nbaseurl = http://dry-fake/\\ngpgcheck = 0\\nenabled = 1' > /etc/yum.repos.d/built.repo",
         "type": "Dockerfile"
       },
       "strategy": {
@@ -235,7 +235,7 @@
       },
       "serviceAccount": "builder",
       "source": {
-        "dockerfile": "FROM pipeline:base\nRUN echo $'[built]\\nname = Built RPMs\\nbaseurl = http://dry-fake/\\ngpgcheck = 0\\nenabled = 0\\n\\n[origin-local-release]\\nname = Built RPMs\\nbaseurl = http://dry-fake/\\ngpgcheck = 0\\nenabled = 0' > /etc/yum.repos.d/built.repo",
+        "dockerfile": "FROM pipeline:base\nRUN echo $'[built]\\nname = Built RPMs\\nbaseurl = http://dry-fake/\\ngpgcheck = 0\\nenabled = 1\\n\\n[origin-local-release]\\nname = Built RPMs\\nbaseurl = http://dry-fake/\\ngpgcheck = 0\\nenabled = 1' > /etc/yum.repos.d/built.repo",
         "type": "Dockerfile"
       },
       "strategy": {

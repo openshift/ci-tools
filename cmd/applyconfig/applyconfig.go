@@ -83,8 +83,9 @@ func isStandardConfig(filename string) bool {
 		!isAdminConfig(filename)
 }
 
-func makeOcCommand(cmd command, path, user string) *exec.Cmd {
+func makeOcCommand(cmd command, path, user string, additionalArgs ...string) *exec.Cmd {
 	args := []string{string(cmd), "-f", path}
+	args = append(args, additionalArgs...)
 
 	if user != "" {
 		args = append(args, "--as", user)
@@ -139,8 +140,18 @@ func (c *configApplier) asGenericManifest() error {
 	return err
 }
 
-func (c configApplier) asTemplate() error {
-	ocProcessCmd := makeOcCommand(ocProcess, c.path, c.user)
+func (c configApplier) asTemplate(params []templateapi.Parameter) error {
+	var args []string
+	for _, param := range params {
+		if len(param.Generate) > 0 {
+			continue
+		}
+		envValue := os.Getenv(param.Name)
+		if len(envValue) > 0 {
+			args = append(args, []string{"-p", fmt.Sprintf("%s=%s", param.Name, envValue)}...)
+		}
+	}
+	ocProcessCmd := makeOcCommand(ocProcess, c.path, c.user, args...)
 
 	var processed []byte
 	var err error
@@ -157,19 +168,23 @@ func (c configApplier) asTemplate() error {
 // isTemplate return true when the content of the stream is an OpenShift template,
 // and returns false in all other cases (including when an error occurs while
 // reading from input).
-func isTemplate(input io.Reader) bool {
+// When it is template, return also its parameters.
+func isTemplate(input io.Reader) ([]templateapi.Parameter, bool) {
 	var contents bytes.Buffer
 	if _, err := io.Copy(&contents, input); err != nil {
-		return false
+		return nil, false
 	}
 
 	obj, _, err := templatescheme.Codecs.UniversalDeserializer().Decode(contents.Bytes(), nil, nil)
 	if err != nil {
-		return false
+		return nil, false
 	}
-	_, ok := obj.(*templateapi.Template)
+	t, ok := obj.(*templateapi.Template)
+	if ok {
+		return t.Parameters, true
+	}
 
-	return ok
+	return nil, false
 }
 
 func apply(path, user string, dry bool) error {
@@ -181,8 +196,9 @@ func apply(path, user string, dry bool) error {
 	}
 	defer file.Close()
 
-	if isTemplate(file) {
-		return do.asTemplate()
+	params, isTemplate := isTemplate(file)
+	if isTemplate {
+		return do.asTemplate(params)
 	}
 	return do.asGenericManifest()
 }

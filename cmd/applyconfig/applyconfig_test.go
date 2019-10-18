@@ -3,11 +3,13 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"os/exec"
 	"reflect"
 	"testing"
 
-	"k8s.io/apimachinery/pkg/util/diff"
+	"github.com/google/go-cmp/cmp"
+	templateapi "github.com/openshift/api/template/v1"
 )
 
 func TestIsAdminConfig(t *testing.T) {
@@ -105,7 +107,7 @@ func TestMakeOcCommand(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cmd := makeOcCommand(tc.cmd, tc.path, tc.user)
 			if !reflect.DeepEqual(cmd.Args, tc.expected) {
-				t.Errorf("Command differs from expected:\n%s", diff.ObjectReflectDiff(tc.expected, cmd.Args))
+				t.Errorf("Command differs from expected:\n%s", cmp.Diff(tc.expected, cmd.Args))
 			}
 		})
 	}
@@ -151,7 +153,7 @@ func TestMakeOcApply(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cmd := makeOcApply(tc.path, tc.user, tc.dry)
 			if !reflect.DeepEqual(cmd.Args, tc.expected) {
-				t.Errorf("Command differs from expected:\n%s", diff.ObjectReflectDiff(tc.expected, cmd.Args))
+				t.Errorf("Command differs from expected:\n%s", cmp.Diff(tc.expected, cmd.Args))
 			}
 		})
 	}
@@ -233,7 +235,7 @@ func TestAsGenericManifest(t *testing.T) {
 
 			calls := executor.getCalls()
 			if !reflect.DeepEqual(tc.expectedCalls, calls) {
-				t.Errorf("calls differ from expected:\n%s", diff.ObjectReflectDiff(tc.expectedCalls, calls))
+				t.Errorf("calls differ from expected:\n%s", cmp.Diff(tc.expectedCalls, calls))
 			}
 		})
 	}
@@ -244,6 +246,7 @@ func TestAsTemplate(t *testing.T) {
 		description string
 		applier     *configApplier
 		executions  []error
+		params      []templateapi.Parameter
 
 		expectedCalls [][]string
 		expectedError bool
@@ -253,6 +256,26 @@ func TestAsTemplate(t *testing.T) {
 			applier:       &configApplier{path: "path"},
 			executions:    []error{nil, nil},
 			expectedCalls: [][]string{{"oc", "process", "-f", "path"}, {"oc", "apply", "-f", "-"}},
+		},
+		{
+			description: "success with params",
+			applier:     &configApplier{path: "path"},
+			executions:  []error{nil, nil},
+			params: []templateapi.Parameter{
+				{
+					Name:        "REDIS_PASSWORD",
+					Description: "Password used for Redis authentication",
+					Generate:    "expression",
+					From:        "[A-Z0-9]{8}",
+				},
+				{
+					Name:        "image",
+					Description: "description does not matter",
+					Value:       "dockerfile/redis",
+				},
+				{Name: "name", Description: "description does not matter", Value: "master"},
+			},
+			expectedCalls: [][]string{{"oc", "process", "-f", "path", "-p", "image=docker.io/redis"}, {"oc", "apply", "-f", "-"}},
 		},
 		{
 			description:   "oc apply fails",
@@ -270,11 +293,18 @@ func TestAsTemplate(t *testing.T) {
 		},
 	}
 
+	original := os.Getenv("image")
+	if err := os.Setenv("image", "docker.io/redis"); err != nil {
+		t.Fatalf("failed to set env var 'image', %v", err)
+	}
+	if os.Getenv("image") != "docker.io/redis" {
+		t.Fatalf("failed to set env var 'image'.")
+	}
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
 			executor := &mockExecutor{t: t, responses: tc.executions}
 			tc.applier.executor = executor
-			err := tc.applier.asTemplate()
+			err := tc.applier.asTemplate(tc.params)
 			if err != nil && !tc.expectedError {
 				t.Errorf("returned unexpected error: %v", err)
 			}
@@ -284,17 +314,24 @@ func TestAsTemplate(t *testing.T) {
 
 			calls := executor.getCalls()
 			if !reflect.DeepEqual(tc.expectedCalls, calls) {
-				t.Errorf("calls differ from expected:\n%s", diff.ObjectReflectDiff(tc.expectedCalls, calls))
+				t.Errorf("calls differ from expected:\n%s", cmp.Diff(tc.expectedCalls, calls))
 			}
 		})
+	}
+	if err := os.Setenv("image", original); err != nil {
+		t.Fatalf("failed to recover env var 'image', %v", err)
+	}
+	if os.Getenv("image") != original {
+		t.Fatalf("failed to recover env var 'image'.")
 	}
 }
 
 func TestIsTemplate(t *testing.T) {
 	testCases := []struct {
-		name     string
-		contents []byte
-		expected bool
+		name           string
+		contents       []byte
+		expectedParams []templateapi.Parameter
+		expected       bool
 	}{
 		{
 			name: "template is a template",
@@ -316,8 +353,8 @@ objects:
     - env:
       - name: REDIS_PASSWORD
         value: ${REDIS_PASSWORD}
-      image: dockerfile/redis
-      name: master
+      image: ${image}
+      name: ${name}
       ports:
       - containerPort: 6379
         protocol: TCP
@@ -326,9 +363,29 @@ parameters:
   from: '[A-Z0-9]{8}'
   generate: expression
   name: REDIS_PASSWORD
+- description: description does not matter
+  name: image
+  value: dockerfile/redis
+- description: description does not matter
+  name: name
+  value: master
 labels:
   redis: master
 `),
+			expectedParams: []templateapi.Parameter{
+				{
+					Name:        "REDIS_PASSWORD",
+					Description: "Password used for Redis authentication",
+					Generate:    "expression",
+					From:        "[A-Z0-9]{8}",
+				},
+				{
+					Name:        "image",
+					Description: "description does not matter",
+					Value:       "dockerfile/redis",
+				},
+				{Name: "name", Description: "description does not matter", Value: "master"},
+			},
 			expected: true,
 		},
 		{
@@ -361,9 +418,12 @@ spec:
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			input := bytes.NewBuffer(tc.contents)
-			is := isTemplate(input)
+			params, is := isTemplate(input)
 			if is != tc.expected {
 				t.Errorf("%s: expected isTemplate()=%v, got %v", tc.name, tc.expected, is)
+			}
+			if !reflect.DeepEqual(params, tc.expectedParams) {
+				t.Errorf("actual differs from expected:\n%s", cmp.Diff(params, tc.expectedParams))
 			}
 		})
 	}

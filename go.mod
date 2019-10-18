@@ -18,6 +18,7 @@ require (
 	github.com/getlantern/deepcopy v0.0.0-20160317154340-7f45deb8130a
 	github.com/ghodss/yaml v1.0.0
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
+	github.com/google/go-cmp v0.3.1
 	github.com/mattn/go-zglob v0.0.1
 	github.com/openshift/api v3.9.1-0.20190725193935-b7d4eb0fa1e0+incompatible
 	github.com/openshift/client-go v0.0.0-20190721020503-a85ea6a6b3a5

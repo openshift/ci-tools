@@ -16,6 +16,10 @@ import (
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 )
 
+const (
+	prowgenConfigFile = ".config.prowgen"
+)
+
 func readCiOperatorConfig(configFilePath string, info Info) (*cioperatorapi.ReleaseBuildConfiguration, error) {
 	data, err := ioutil.ReadFile(configFilePath)
 	if err != nil {
@@ -34,6 +38,11 @@ func readCiOperatorConfig(configFilePath string, info Info) (*cioperatorapi.Rele
 	return configSpec, nil
 }
 
+// Prowgen holds the information of the prowgen's configuration file.
+type Prowgen struct {
+	Private bool `json:"private,omitempty"`
+}
+
 // DataWithInfo describes the metadata for a CI Operator configuration file
 type Info struct {
 	Org    string
@@ -43,6 +52,8 @@ type Info struct {
 	Variant string
 	// Filename is the full path to the file on disk
 	Filename string
+
+	ProwgenConfig Prowgen
 }
 
 // Basename returns the unique name for this file in the config
@@ -90,12 +101,25 @@ func InfoFromPath(configFilePath string) (*Info, error) {
 		branch = branch[:i]
 	}
 
+	pConfig := Prowgen{}
+	b, err := ioutil.ReadFile(filepath.Join(configSpecDir, prowgenConfigFile))
+	if err != nil && !os.IsNotExist(err) {
+		return nil, fmt.Errorf("prowgen config found but couldn't read the file: %v", err)
+	}
+
+	if err == nil {
+		if err := yaml.Unmarshal(b, &pConfig); err != nil {
+			return nil, fmt.Errorf("prowgen config found but couldn't unmarshal it: %v", err)
+		}
+	}
+
 	return &Info{
-		Org:      org,
-		Repo:     repo,
-		Branch:   branch,
-		Variant:  variant,
-		Filename: configFilePath,
+		Org:           org,
+		Repo:          repo,
+		Branch:        branch,
+		Variant:       variant,
+		Filename:      configFilePath,
+		ProwgenConfig: pConfig,
 	}, nil
 }
 

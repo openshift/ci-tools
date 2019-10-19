@@ -55,6 +55,9 @@ exec ci-operator \
     --target=%[1]s \
     --template=/tmp/%[1]s
 `
+
+	sshKeyPath    = "/usr/local/github-ssh-credentials-openshift-bot"
+	sshSecretName = "github-ssh-credentials-openshift-bot"
 )
 
 var (
@@ -155,6 +158,22 @@ func generatePodSpec(info *config.Info, secret *cioperatorapi.Secret) *kubeapi.P
 		})
 	}
 
+	if info.ProwgenConfig.Private {
+		volumes = append(volumes, kubeapi.Volume{
+			Name: sshSecretName,
+			VolumeSource: kubeapi.VolumeSource{
+				Secret: &kubeapi.SecretVolumeSource{SecretName: sshSecretName},
+			},
+		})
+
+		volumeMounts = append(volumeMounts, kubeapi.VolumeMount{
+			Name:      sshSecretName,
+			MountPath: sshKeyPath,
+			ReadOnly:  true,
+		})
+
+	}
+
 	return &kubeapi.PodSpec{
 		ServiceAccountName: "ci-operator",
 		Containers: []kubeapi.Container{
@@ -191,6 +210,11 @@ func generateCiOperatorPodSpec(info *config.Info, secret *cioperatorapi.Secret, 
 		fmt.Sprintf("--repo=%s", info.Repo),
 		fmt.Sprintf("--branch=%s", info.Branch),
 	}, additionalArgs...)
+
+	if info.ProwgenConfig.Private {
+		ret.Containers[0].Args = append(ret.Containers[0].Args, fmt.Sprintf("--ssh-key-path=%s", filepath.Join(sshKeyPath, "id_rsa")))
+	}
+
 	if secret != nil {
 		ret.Containers[0].Args = append(ret.Containers[0].Args, fmt.Sprintf("--secret-dir=%s", secret.MountPath))
 	}

@@ -75,7 +75,7 @@ func main() {
 		for _, futureRelease := range o.FutureReleases.Strings() {
 			futureBranch, err := promotion.DetermineReleaseBranch(o.CurrentRelease, futureRelease, repoInfo.Branch)
 			if err != nil {
-				logger.WithError(err).Error("could not determine release branch")
+				logger.WithError(err).Error("Failed to determine release branch.")
 				failed = true
 				return nil
 			}
@@ -218,7 +218,7 @@ func main() {
 				return nil
 			}
 			if labelQuery.Repository.Label.ID == nil {
-				logger.Error("Could not find a merge blocker label.")
+				logger.Error("Failed to find a merge blocker label.")
 				failed = true
 				return nil
 			}

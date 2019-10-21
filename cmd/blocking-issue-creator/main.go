@@ -67,7 +67,12 @@ func main() {
 		if (o.Org != "" && o.Org != repoInfo.Org) || (o.Repo != "" && o.Repo != repoInfo.Repo) {
 			return nil
 		}
-		if !(promotion.PromotesOfficialImages(configuration) && configuration.PromotionConfiguration.Name == o.CurrentRelease) {
+		if !promotion.PromotesOfficialImages(configuration) {
+			logger.Debugf("Skipping because no offical images are promoted from this configuration")
+			return nil
+		}
+		if configuration.PromotionConfiguration.Name != o.CurrentRelease {
+			logger.Debugf("Skipping because this configuration promotes %s, but the current release is %s", configuration.PromotionConfiguration.Name, o.CurrentRelease)
 			return nil
 		}
 

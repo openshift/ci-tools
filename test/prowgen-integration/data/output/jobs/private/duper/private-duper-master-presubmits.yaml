@@ -7,6 +7,12 @@ presubmits:
     context: ci/prow/e2e
     decorate: true
     decoration_config:
+      gcs_configuration:
+        bucket: origin-ci-test-private
+        mediaTypes:
+          log: text/plain
+        path_strategy: single
+      gcs_credentials_secret: gce-sa-credentials-gcs-publisher
       skip_cloning: true
     labels:
       ci-operator.openshift.io/prowgen-controlled: "true"
@@ -87,6 +93,12 @@ presubmits:
     context: ci/prow/images
     decorate: true
     decoration_config:
+      gcs_configuration:
+        bucket: origin-ci-test-private
+        mediaTypes:
+          log: text/plain
+        path_strategy: single
+      gcs_credentials_secret: gce-sa-credentials-gcs-publisher
       skip_cloning: true
     labels:
       ci-operator.openshift.io/prowgen-controlled: "true"
@@ -143,6 +155,12 @@ presubmits:
     context: ci/prow/unit
     decorate: true
     decoration_config:
+      gcs_configuration:
+        bucket: origin-ci-test-private
+        mediaTypes:
+          log: text/plain
+        path_strategy: single
+      gcs_credentials_secret: gce-sa-credentials-gcs-publisher
       skip_cloning: true
     labels:
       ci-operator.openshift.io/prowgen-controlled: "true"

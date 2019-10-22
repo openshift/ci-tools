@@ -14,6 +14,7 @@ func TestValidateTests(t *testing.T) {
 		id            string
 		release       *ReleaseTagConfiguration
 		tests         []TestStepConfiguration
+		resolved      bool
 		expectedValid bool
 	}{
 		{
@@ -273,9 +274,19 @@ func TestValidateTests(t *testing.T) {
 			},
 			expectedValid: false,
 		},
+		{
+			id:       "non-literal test is invalid in fully-resolved configuration",
+			resolved: true,
+			tests: []TestStepConfiguration{
+				{
+					As:                          "non-literal",
+					MultiStageTestConfiguration: &MultiStageTestConfiguration{},
+				},
+			},
+		},
 	} {
 		t.Run(tc.id, func(t *testing.T) {
-			if errs := validateTestStepConfiguration("tests", tc.tests, tc.release); len(errs) > 0 && tc.expectedValid {
+			if errs := validateTestStepConfiguration("tests", tc.tests, tc.release, tc.resolved); len(errs) > 0 && tc.expectedValid {
 				t.Errorf("expected to be valid, got: %v", errs)
 			} else if !tc.expectedValid && len(errs) == 0 {
 				t.Error("expected to be invalid, but returned valid")

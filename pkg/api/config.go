@@ -16,16 +16,26 @@ import (
 // ValidateAtRuntime validates all the configuration's values without knowledge of config
 // repo structure
 func (config *ReleaseBuildConfiguration) ValidateAtRuntime() error {
-	return config.Validate("", "")
+	return config.validate("", "", false)
+}
+
+// ValidateResolved behaves as ValidateAtRuntime and also validates that all
+// test steps are fully resolved.
+func (config *ReleaseBuildConfiguration) ValidateResolved() error {
+	return config.validate("", "", true)
 }
 
 // Validate validates all the configuration's values.
 func (config *ReleaseBuildConfiguration) Validate(org, repo string) error {
+	return config.validate(org, repo, false)
+}
+
+func (config *ReleaseBuildConfiguration) validate(org, repo string, resolved bool) error {
 	var validationErrors []error
 
 	validationErrors = append(validationErrors, validateReleaseBuildConfiguration(config, org, repo)...)
 	validationErrors = append(validationErrors, validateBuildRootImageConfiguration("build_root", config.InputConfiguration.BuildRootImage, len(config.Images) > 0)...)
-	validationErrors = append(validationErrors, validateTestStepConfiguration("tests", config.Tests, config.ReleaseTagConfiguration)...)
+	validationErrors = append(validationErrors, validateTestStepConfiguration("tests", config.Tests, config.ReleaseTagConfiguration, resolved)...)
 
 	if config.InputConfiguration.BaseImages != nil {
 		validationErrors = append(validationErrors, validateImageStreamTagReferenceMap("base_images", config.InputConfiguration.BaseImages)...)
@@ -97,7 +107,7 @@ func validateBuildRootImageConfiguration(fieldRoot string, input *BuildRootImage
 	return nil
 }
 
-func validateTestStepConfiguration(fieldRoot string, input []TestStepConfiguration, release *ReleaseTagConfiguration) []error {
+func validateTestStepConfiguration(fieldRoot string, input []TestStepConfiguration, release *ReleaseTagConfiguration, resolved bool) []error {
 	var validationErrors []error
 
 	// check for test.As duplicates
@@ -131,7 +141,7 @@ func validateTestStepConfiguration(fieldRoot string, input []TestStepConfigurati
 			}
 		}
 
-		validationErrors = append(validationErrors, validateTestConfigurationType(fieldRootN, test, release)...)
+		validationErrors = append(validationErrors, validateTestConfigurationType(fieldRootN, test, release, resolved)...)
 	}
 	return validationErrors
 }
@@ -192,7 +202,7 @@ func validateClusterProfile(fieldRoot string, p ClusterProfile) []error {
 	case ClusterProfileAWS, ClusterProfileAWSAtomic, ClusterProfileAWSCentos, ClusterProfileAWSCentos40, ClusterProfileAWSGluster, ClusterProfileAzure4, ClusterProfileGCP, ClusterProfileGCP40, ClusterProfileGCPHA, ClusterProfileGCPCRIO, ClusterProfileGCPLogging, ClusterProfileGCPLoggingJournald, ClusterProfileGCPLoggingJSONFile, ClusterProfileGCPLoggingCRIO, ClusterProfileOpenStack, ClusterProfileVSphere:
 		return nil
 	}
-	return []error{fmt.Errorf("%q: invalid cluster profile %q", fieldRoot, p)}
+	return []error{fmt.Errorf("%s: invalid cluster profile %q", fieldRoot, p)}
 }
 
 func searchForTestDuplicates(tests []TestStepConfiguration) []error {
@@ -213,7 +223,7 @@ func searchForTestDuplicates(tests []TestStepConfiguration) []error {
 	return nil
 }
 
-func validateTestConfigurationType(fieldRoot string, test TestStepConfiguration, release *ReleaseTagConfiguration) []error {
+func validateTestConfigurationType(fieldRoot string, test TestStepConfiguration, release *ReleaseTagConfiguration, resolved bool) []error {
 	var validationErrors []error
 	typeCount := 0
 	if testConfig := test.ContainerTestConfiguration; testConfig != nil {
@@ -278,8 +288,11 @@ func validateTestConfigurationType(fieldRoot string, test TestStepConfiguration,
 		validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 	}
 	if testConfig := test.MultiStageTestConfiguration; testConfig != nil {
+		if resolved {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: non-literal test found in fully-resolved configuration", fieldRoot))
+		}
 		typeCount++
-		if testConfig.ClusterProfile != "" && testConfig.Workflow == nil {
+		if testConfig.Workflow == nil && testConfig.ClusterProfile != "" {
 			validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 		}
 		seen := sets.NewString()

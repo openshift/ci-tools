@@ -75,9 +75,11 @@ func TestMakeOcCommand(t *testing.T) {
 	testCases := []struct {
 		name string
 
-		cmd  command
-		path string
-		user string
+		cmd        command
+		kubeConfig string
+		context    string
+		path       string
+		user       string
 
 		expected []string
 	}{
@@ -101,11 +103,35 @@ func TestMakeOcCommand(t *testing.T) {
 			user:     "joe",
 			expected: []string{"oc", "process", "-f", "/path/to/file", "--as", "joe"},
 		},
+		{
+			cmd:      ocApply,
+			name:     "apply, context",
+			context:  "/api-build01-ci-devcluster-openshift-com:6443/system:serviceaccount:ci:config-updater",
+			path:     "/path/to/file",
+			expected: []string{"oc", "apply", "-f", "/path/to/file", "--context", "/api-build01-ci-devcluster-openshift-com:6443/system:serviceaccount:ci:config-updater"},
+		},
+		{
+			cmd:      ocProcess,
+			name:     "process, user, context",
+			context:  "/context-name",
+			path:     "/path/to/file",
+			user:     "joe",
+			expected: []string{"oc", "process", "-f", "/path/to/file", "--as", "joe", "--context", "/context-name"},
+		},
+		{
+			cmd:        ocProcess,
+			name:       "process, user, kubeConfig, context",
+			kubeConfig: "/tmp/config",
+			context:    "/context-name",
+			path:       "/path/to/file",
+			user:       "joe",
+			expected:   []string{"oc", "process", "-f", "/path/to/file", "--as", "joe", "--kubeconfig", "/tmp/config", "--context", "/context-name"},
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			cmd := makeOcCommand(tc.cmd, tc.path, tc.user)
+			cmd := makeOcCommand(tc.cmd, tc.kubeConfig, tc.context, tc.path, tc.user)
 			if !reflect.DeepEqual(cmd.Args, tc.expected) {
 				t.Errorf("Command differs from expected:\n%s", cmp.Diff(tc.expected, cmd.Args))
 			}
@@ -117,9 +143,11 @@ func TestMakeOcApply(t *testing.T) {
 	testCases := []struct {
 		name string
 
-		path string
-		user string
-		dry  bool
+		kubeConfig string
+		context    string
+		path       string
+		user       string
+		dry        bool
 
 		expected []string
 	}{
@@ -147,11 +175,26 @@ func TestMakeOcApply(t *testing.T) {
 			user:     "joe",
 			expected: []string{"oc", "apply", "-f", "/path/to/file", "--as", "joe"},
 		},
+		{
+			name:     "context, user, not dry",
+			context:  "/context-name",
+			path:     "/path/to/file",
+			user:     "joe",
+			expected: []string{"oc", "apply", "-f", "/path/to/file", "--as", "joe", "--context", "/context-name"},
+		},
+		{
+			name:       "kubeConfig, context, user, not dry",
+			kubeConfig: "/tmp/config",
+			context:    "/context-name",
+			path:       "/path/to/file",
+			user:       "joe",
+			expected:   []string{"oc", "apply", "-f", "/path/to/file", "--as", "joe", "--kubeconfig", "/tmp/config", "--context", "/context-name"},
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			cmd := makeOcApply(tc.path, tc.user, tc.dry)
+			cmd := makeOcApply(tc.kubeConfig, tc.context, tc.path, tc.user, tc.dry)
 			if !reflect.DeepEqual(cmd.Args, tc.expected) {
 				t.Errorf("Command differs from expected:\n%s", cmp.Diff(tc.expected, cmd.Args))
 			}

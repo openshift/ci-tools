@@ -31,3 +31,7 @@ admin resources are applied first.
 By default, standard resources are applied using user's standard credentials and
 admin resources are attempted to apply as `system:admin`. It is possible to pass
 the username to impersonate using the `--as=USER` option.
+
+Optionally, we can use `--context=<context_name>` and `--kubeconfig=<kubeconfig_file>`
+to specify `<context_name>` and `<kubeconfig_file>` respectively when executing
+`oc-apply` commands.

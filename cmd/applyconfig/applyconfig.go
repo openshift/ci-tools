@@ -19,10 +19,12 @@ type level string
 type command string
 
 type options struct {
-	confirm   bool
-	level     level
-	user      string
-	directory string
+	confirm    bool
+	level      level
+	user       string
+	directory  string
+	context    string
+	kubeConfig string
 }
 
 const (
@@ -57,6 +59,8 @@ func gatherOptions() *options {
 	flag.StringVar(&lvl, "level", "standard", "Select which config to apply (standard, admin, all)")
 	flag.StringVar(&opt.user, "as", "", "Username to impersonate while applying the config")
 	flag.StringVar(&opt.directory, "config-dir", "", "Directory with config to apply")
+	flag.StringVar(&opt.context, "context", "", "Context name to use while applying the config")
+	flag.StringVar(&opt.kubeConfig, "kubeconfig", "", "Path to the kubeconfig file to apply the config")
 	flag.Parse()
 
 	opt.level = level(lvl)
@@ -83,12 +87,20 @@ func isStandardConfig(filename string) bool {
 		!isAdminConfig(filename)
 }
 
-func makeOcCommand(cmd command, path, user string, additionalArgs ...string) *exec.Cmd {
+func makeOcCommand(cmd command, kubeConfig, context, path, user string, additionalArgs ...string) *exec.Cmd {
 	args := []string{string(cmd), "-f", path}
 	args = append(args, additionalArgs...)
 
 	if user != "" {
 		args = append(args, "--as", user)
+	}
+
+	if kubeConfig != "" {
+		args = append(args, "--kubeconfig", kubeConfig)
+	}
+
+	if context != "" {
+		args = append(args, "--context", context)
 	}
 
 	return exec.Command("oc", args...)
@@ -121,13 +133,15 @@ func (c commandExecutor) runAndCheck(cmd *exec.Cmd, action string) ([]byte, erro
 type configApplier struct {
 	executor
 
-	path string
-	user string
-	dry  bool
+	kubeConfig string
+	context    string
+	path       string
+	user       string
+	dry        bool
 }
 
-func makeOcApply(path, user string, dry bool) *exec.Cmd {
-	cmd := makeOcCommand(ocApply, path, user)
+func makeOcApply(kubeConfig, context, path, user string, dry bool) *exec.Cmd {
+	cmd := makeOcCommand(ocApply, kubeConfig, context, path, user)
 	if dry {
 		cmd.Args = append(cmd.Args, "--dry-run")
 	}
@@ -135,7 +149,7 @@ func makeOcApply(path, user string, dry bool) *exec.Cmd {
 }
 
 func (c *configApplier) asGenericManifest() error {
-	cmd := makeOcApply(c.path, c.user, c.dry)
+	cmd := makeOcApply(c.kubeConfig, c.context, c.path, c.user, c.dry)
 	_, err := c.runAndCheck(cmd, "apply")
 	return err
 }
@@ -151,7 +165,7 @@ func (c configApplier) asTemplate(params []templateapi.Parameter) error {
 			args = append(args, []string{"-p", fmt.Sprintf("%s=%s", param.Name, envValue)}...)
 		}
 	}
-	ocProcessCmd := makeOcCommand(ocProcess, c.path, c.user, args...)
+	ocProcessCmd := makeOcCommand(ocProcess, c.kubeConfig, c.context, c.path, c.user, args...)
 
 	var processed []byte
 	var err error
@@ -159,7 +173,7 @@ func (c configApplier) asTemplate(params []templateapi.Parameter) error {
 		return err
 	}
 
-	ocApplyCmd := makeOcApply("-", c.user, c.dry)
+	ocApplyCmd := makeOcApply(c.kubeConfig, c.context, "-", c.user, c.dry)
 	ocApplyCmd.Stdin = bytes.NewBuffer(processed)
 	_, err = c.runAndCheck(ocApplyCmd, "apply")
 	return err
@@ -187,8 +201,8 @@ func isTemplate(input io.Reader) ([]templateapi.Parameter, bool) {
 	return nil, false
 }
 
-func apply(path, user string, dry bool) error {
-	do := configApplier{path: path, user: user, dry: dry, executor: &commandExecutor{}}
+func apply(kubeConfig, context, path, user string, dry bool) error {
+	do := configApplier{kubeConfig: kubeConfig, context: context, path: path, user: user, dry: dry, executor: &commandExecutor{}}
 
 	file, err := os.Open(path)
 	if err != nil {
@@ -252,7 +266,7 @@ func main() {
 			if !isAdminConfig(name) {
 				return nil
 			}
-			return apply(path, o.user, !o.confirm)
+			return apply(o.kubeConfig, o.context, path, o.user, !o.confirm)
 		}
 
 		adminErr = applyConfig(o.directory, "admin", f)
@@ -270,7 +284,7 @@ func main() {
 				return nil
 			}
 
-			return apply(path, o.user, !o.confirm)
+			return apply(o.kubeConfig, o.context, path, o.user, !o.confirm)
 		}
 
 		standardErr = applyConfig(o.directory, "standard", f)

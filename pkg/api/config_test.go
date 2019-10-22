@@ -2,18 +2,15 @@ package api
 
 import (
 	"errors"
-	"fmt"
 	"reflect"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/util/diff"
-	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 func TestValidateTests(t *testing.T) {
-	var validationErrors []error
-	var testTestsCases = []struct {
+	for _, tc := range []struct {
 		id            string
 		release       *ReleaseTagConfiguration
 		tests         []TestStepConfiguration
@@ -276,26 +273,19 @@ func TestValidateTests(t *testing.T) {
 			},
 			expectedValid: false,
 		},
-	}
-
-	for _, tc := range testTestsCases {
+	} {
 		t.Run(tc.id, func(t *testing.T) {
 			if errs := validateTestStepConfiguration("tests", tc.tests, tc.release); len(errs) > 0 && tc.expectedValid {
-				validationErrors = append(validationErrors, fmt.Errorf("expected to be valid, got: %v", errs))
+				t.Errorf("expected to be valid, got: %v", errs)
 			} else if !tc.expectedValid && len(errs) == 0 {
-				validationErrors = append(validationErrors, parseValidError(tc.id))
+				t.Error("expected to be invalid, but returned valid")
 			}
 		})
-	}
-
-	if validationErrors != nil {
-		t.Errorf("Errors: %v", kerrors.NewAggregate(validationErrors))
 	}
 }
 
 func TestValidateBuildRoot(t *testing.T) {
-	var validationErrors []error
-	var testBuildRootCases = []struct {
+	for _, tc := range []struct {
 		id                   string
 		buildRootImageConfig *BuildRootImageConfiguration
 		hasImages            bool
@@ -334,23 +324,19 @@ func TestValidateBuildRoot(t *testing.T) {
 			hasImages:            true,
 			expectedValid:        false,
 		},
-	}
-
-	for _, tc := range testBuildRootCases {
-		if errs := validateBuildRootImageConfiguration("build_root", tc.buildRootImageConfig, tc.hasImages); len(errs) > 0 && tc.expectedValid {
-			validationErrors = append(validationErrors, fmt.Errorf("%q expected to be valid, got: %v", tc.id, errs))
-		} else if !tc.expectedValid && len(errs) == 0 {
-			validationErrors = append(validationErrors, parseValidError(tc.id))
-		}
-	}
-	if validationErrors != nil {
-		t.Errorf("Errors: %v", kerrors.NewAggregate(validationErrors))
+	} {
+		t.Run(tc.id, func(t *testing.T) {
+			if errs := validateBuildRootImageConfiguration("build_root", tc.buildRootImageConfig, tc.hasImages); len(errs) > 0 && tc.expectedValid {
+				t.Errorf("expected to be valid, got: %v", errs)
+			} else if !tc.expectedValid && len(errs) == 0 {
+				t.Error("expected to be invalid, but returned valid")
+			}
+		})
 	}
 }
 
 func TestValidateBaseImages(t *testing.T) {
-	var validationErrors []error
-	var testBaseImagesCases = []struct {
+	for _, tc := range []struct {
 		id            string
 		baseImages    map[string]ImageStreamTagReference
 		expectedValid bool
@@ -362,22 +348,19 @@ func TestValidateBaseImages(t *testing.T) {
 			},
 			expectedValid: false,
 		},
-	}
-	for _, tc := range testBaseImagesCases {
-		if errs := validateImageStreamTagReferenceMap("base_images", tc.baseImages); len(errs) > 0 && tc.expectedValid {
-			validationErrors = append(validationErrors, fmt.Errorf("%q expected to be valid, got: %v", tc.id, errs))
-		} else if !tc.expectedValid && len(errs) == 0 {
-			validationErrors = append(validationErrors, parseValidError(tc.id))
-		}
-	}
-	if validationErrors != nil {
-		t.Errorf("Errors: %v", kerrors.NewAggregate(validationErrors))
+	} {
+		t.Run(tc.id, func(t *testing.T) {
+			if errs := validateImageStreamTagReferenceMap("base_images", tc.baseImages); len(errs) > 0 && tc.expectedValid {
+				t.Errorf("expected to be valid, got: %v", errs)
+			} else if !tc.expectedValid && len(errs) == 0 {
+				t.Error("expected to be invalid, but returned valid")
+			}
+		})
 	}
 }
 
 func TestValidateBaseRpmImages(t *testing.T) {
-	var validationErrors []error
-	var testBaseRpmImagesCases = []struct {
+	for _, tc := range []struct {
 		id            string
 		baseRpmImages map[string]ImageStreamTagReference
 		expectedValid bool
@@ -389,17 +372,14 @@ func TestValidateBaseRpmImages(t *testing.T) {
 			},
 			expectedValid: false,
 		},
-	}
-
-	for _, tc := range testBaseRpmImagesCases {
-		if errs := validateImageStreamTagReferenceMap("base_rpm_images", tc.baseRpmImages); len(errs) > 0 && tc.expectedValid {
-			validationErrors = append(validationErrors, fmt.Errorf("%q expected to be valid, got: %v", tc.id, errs))
-		} else if !tc.expectedValid && len(errs) == 0 {
-			validationErrors = append(validationErrors, parseValidError(tc.id))
-		}
-	}
-	if validationErrors != nil {
-		t.Errorf("Errors: %v", kerrors.NewAggregate(validationErrors))
+	} {
+		t.Run(tc.id, func(t *testing.T) {
+			if errs := validateImageStreamTagReferenceMap("base_rpm_images", tc.baseRpmImages); len(errs) > 0 && tc.expectedValid {
+				t.Errorf("expected to be valid, got: %v", errs)
+			} else if !tc.expectedValid && len(errs) == 0 {
+				t.Error("expected to be invalid, but returned valid")
+			}
+		})
 	}
 }
 
@@ -569,12 +549,8 @@ func TestValidateTestSteps(t *testing.T) {
 	}
 }
 
-func parseValidError(id string) error {
-	return fmt.Errorf("%q expected to be invalid, but returned valid", id)
-}
-
 func TestValidateResources(t *testing.T) {
-	var testCases = []struct {
+	for _, testCase := range []struct {
 		name        string
 		input       ResourceConfiguration
 		expectedErr bool
@@ -683,9 +659,7 @@ func TestValidateResources(t *testing.T) {
 			},
 			expectedErr: true,
 		},
-	}
-
-	for _, testCase := range testCases {
+	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			err := validateResources("", testCase.input)
 			if err == nil && testCase.expectedErr {

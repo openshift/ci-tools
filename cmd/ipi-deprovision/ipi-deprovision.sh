@@ -56,7 +56,7 @@ for r in "${regions[@]}"
 do
   echo "doing region ${r} ..."
   json_output=$(aws ec2 describe-vpcs --output json --region "${r}")
-  for cluster in $(echo ${json_output} | jq --arg date "${cluster_age_cutoff}" -r -S '.Vpcs[] | select (.Tags[]? | (.Key == "expirationDate" and .Value < $date)) | .Tags[] | select (.Value == "owned") | .Key')
+  for cluster in $(echo ${json_output} | jq --arg date "${cluster_age_cutoff}" -r -S '.Vpcs[] | select (.Tags[]? | (.Key == "expirationDate" and .Value < $date)) | .Tags[] | select (.Value == "owned") | .Key' | shuf)
   do
     expirationDateValue=$(echo ${json_output} | jq --arg cl "${cluster}" -r -S '.Vpcs[] | select (.Tags[]? | (.Key == $cl and .Value == "owned")) | .Tags[] | select (.Key == "expirationDate") | .Value')
     handle_cluster "${cluster}" "${expirationDateValue}" "${r}"

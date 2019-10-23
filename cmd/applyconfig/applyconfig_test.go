@@ -457,6 +457,50 @@ spec:
     name: hook
 `),
 		},
+		{
+			//https://docs.openshift.com/container-platform/4.2/openshift_images/using-templates.html#templates-writing_using-templates
+			name: "template in openshift doc in the doc is a template",
+			contents: []byte(`apiVersion: v1
+kind: Template
+metadata:
+  name: redis-template
+  annotations:
+    description: "Description"
+    iconClass: "icon-redis"
+    tags: "database,nosql"
+objects:
+- apiVersion: v1
+  kind: Pod
+  metadata:
+    name: redis-master
+  spec:
+    containers:
+    - env:
+      - name: REDIS_PASSWORD
+        value: ${REDIS_PASSWORD}
+      image: dockerfile/redis
+      name: master
+      ports:
+      - containerPort: 6379
+        protocol: TCP
+parameters:
+- description: Password used for Redis authentication
+  from: '[A-Z0-9]{8}'
+  generate: expression
+  name: REDIS_PASSWORD
+labels:
+  redis: master
+`),
+			expectedParams: []templateapi.Parameter{
+				{
+					Name:        "REDIS_PASSWORD",
+					Description: "Password used for Redis authentication",
+					Generate:    "expression",
+					From:        "[A-Z0-9]{8}",
+				},
+			},
+			expected: true,
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {

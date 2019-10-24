@@ -38,6 +38,8 @@ func readCiOperatorConfig(configFilePath string, info Info) (*cioperatorapi.Rele
 	return configSpec, nil
 }
 
+var prowgenConfigs map[string]*Prowgen
+
 // Prowgen holds the information of the prowgen's configuration file.
 type Prowgen struct {
 	Private bool `json:"private,omitempty"`
@@ -75,6 +77,22 @@ func IsCiopConfigCM(name string) bool {
 	return regexp.MustCompile(`^ci-operator-.+-configs$`).MatchString(name)
 }
 
+func readProwgenConfig(path string) (*Prowgen, error) {
+	var pConfig *Prowgen
+	b, err := ioutil.ReadFile(filepath.Join(path, prowgenConfigFile))
+	if err != nil && !os.IsNotExist(err) {
+		return nil, fmt.Errorf("prowgen config found in path %s but couldn't read the file: %v", path, err)
+	}
+
+	if err == nil {
+		if err := yaml.Unmarshal(b, &pConfig); err != nil {
+			return nil, fmt.Errorf("prowgen config found in path %sbut couldn't unmarshal it: %v", path, err)
+		}
+	}
+
+	return pConfig, nil
+}
+
 // We use the directory/file naming convention to encode useful information
 // about component repository information.
 // The convention for ci-operator config files in this repo:
@@ -102,15 +120,10 @@ func InfoFromPath(configFilePath string) (*Info, error) {
 	}
 
 	pConfig := Prowgen{}
-	b, err := ioutil.ReadFile(filepath.Join(configSpecDir, prowgenConfigFile))
-	if err != nil && !os.IsNotExist(err) {
-		return nil, fmt.Errorf("prowgen config found but couldn't read the file: %v", err)
-	}
-
-	if err == nil {
-		if err := yaml.Unmarshal(b, &pConfig); err != nil {
-			return nil, fmt.Errorf("prowgen config found but couldn't unmarshal it: %v", err)
-		}
+	if pc, ok := prowgenConfigs[fmt.Sprintf("%s/%s", org, repo)]; ok {
+		pConfig = *pc
+	} else if pc, ok := prowgenConfigs[org]; ok {
+		pConfig = *pc
 	}
 
 	return &Info{
@@ -160,6 +173,26 @@ func OperateOnCIOperatorConfigSubdir(configDir, subDir string, callback func(*ci
 			logrus.WithField("source-file", path).WithError(err).Error("Failed to walk CI Operator configuration dir")
 			return err
 		}
+
+		if info.IsDir() {
+			pConfig, err := readProwgenConfig(path)
+			if err != nil {
+				return err
+			}
+
+			if len(prowgenConfigs) == 0 {
+				prowgenConfigs = make(map[string]*Prowgen)
+			}
+
+			// Trim the --from-dir value from the current path. This will leave us with
+			// a org/repo value. Example `ci-operator/config/openshift/release` will be
+			// converted to `openshift/release` and `ci-operator/config/openshift` to `openshift`
+			orgRepo := strings.TrimPrefix(path, fmt.Sprintf("%s/", filepath.Clean(configDir)))
+			if len(orgRepo) > 0 && pConfig != nil {
+				prowgenConfigs[orgRepo] = pConfig
+			}
+		}
+
 		if isConfigFile(path, info) {
 			if err := OperateOnCIOperatorConfig(path, callback); err != nil {
 				return err

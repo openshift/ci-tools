@@ -216,6 +216,33 @@ func searchForTestDuplicates(tests []TestStepConfiguration) []error {
 func validateTestConfigurationType(fieldRoot string, test TestStepConfiguration, release *ReleaseTagConfiguration) []error {
 	var validationErrors []error
 	typeCount := 0
+	if test.Cron != nil && len(test.PullRequestPolicy) > 0 {
+		validationErrors = append(validationErrors, fmt.Errorf("%s: 'cron' and 'pull_request_policy' may not both be specified", fieldRoot))
+	}
+	policy := test.PullRequestPolicy
+	if len(policy) == 0 {
+		if len(test.PullRequestRunIfChanged) > 0 {
+			policy = "RunIfChanged"
+		} else {
+			policy = "Always"
+		}
+	}
+	switch policy {
+	case "Always", "OnRequest":
+		if len(test.PullRequestRunIfChanged) > 0 {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: 'pull_request_policy' must be empty or 'RunIfChanged' when pull_request_run_if_changed is set", fieldRoot))
+		}
+	case "RunIfChanged":
+		if len(test.PullRequestRunIfChanged) == 0 {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: 'pull_request_run_if_changed' must not be empty when 'pull_request_policy' is 'RunIfChanged'", fieldRoot))
+		} else {
+			if _, err := regexp.Compile(test.PullRequestRunIfChanged); err != nil {
+				validationErrors = append(validationErrors, fmt.Errorf("%s: 'pull_request_run_if_changed' must be a valid regular expression: %v", fieldRoot, err))
+			}
+		}
+	default:
+		validationErrors = append(validationErrors, fmt.Errorf("%s: 'pull_request_policy' must be 'Always', 'OnRequest', or empty", fieldRoot))
+	}
 	if testConfig := test.ContainerTestConfiguration; testConfig != nil {
 		typeCount++
 		if testConfig.MemoryBackedVolume != nil {

@@ -12,6 +12,7 @@ import (
 )
 
 func TestValidateTests(t *testing.T) {
+	testInterval := "0 0 0 0 0"
 	var validationErrors []error
 	var testTestsCases = []struct {
 		id            string
@@ -203,6 +204,131 @@ func TestValidateTests(t *testing.T) {
 			},
 			release:       &ReleaseTagConfiguration{Name: "origin-v3.11"},
 			expectedValid: true,
+		},
+		{
+			id: "with invalid policy",
+			tests: []TestStepConfiguration{
+				{
+					As:                "test",
+					Commands:          "commands",
+					PullRequestPolicy: "Unknown",
+					OpenshiftAnsibleClusterTestConfiguration: &OpenshiftAnsibleClusterTestConfiguration{
+						ClusterTestConfiguration: ClusterTestConfiguration{ClusterProfile: ClusterProfileGCP},
+					},
+				},
+			},
+			release:       &ReleaseTagConfiguration{Name: "origin-v3.11"},
+			expectedValid: false,
+		},
+		{
+			id: "with valid Always policy",
+			tests: []TestStepConfiguration{
+				{
+					As:                "test",
+					Commands:          "commands",
+					PullRequestPolicy: "Always",
+					OpenshiftAnsibleClusterTestConfiguration: &OpenshiftAnsibleClusterTestConfiguration{
+						ClusterTestConfiguration: ClusterTestConfiguration{ClusterProfile: ClusterProfileGCP},
+					},
+				},
+			},
+			release:       &ReleaseTagConfiguration{Name: "origin-v3.11"},
+			expectedValid: true,
+		},
+		{
+			id: "with valid OnRequest policy",
+			tests: []TestStepConfiguration{
+				{
+					As:                "test",
+					Commands:          "commands",
+					PullRequestPolicy: "OnRequest",
+					OpenshiftAnsibleClusterTestConfiguration: &OpenshiftAnsibleClusterTestConfiguration{
+						ClusterTestConfiguration: ClusterTestConfiguration{ClusterProfile: ClusterProfileGCP},
+					},
+				},
+			},
+			release:       &ReleaseTagConfiguration{Name: "origin-v3.11"},
+			expectedValid: true,
+		},
+		{
+			id: "with valid RunIfChanged policy",
+			tests: []TestStepConfiguration{
+				{
+					As:                      "test",
+					Commands:                "commands",
+					PullRequestPolicy:       "RunIfChanged",
+					PullRequestRunIfChanged: ".*",
+					OpenshiftAnsibleClusterTestConfiguration: &OpenshiftAnsibleClusterTestConfiguration{
+						ClusterTestConfiguration: ClusterTestConfiguration{ClusterProfile: ClusterProfileGCP},
+					},
+				},
+			},
+			release:       &ReleaseTagConfiguration{Name: "origin-v3.11"},
+			expectedValid: true,
+		},
+		{
+			id: "with invalid RunIfChanged policy",
+			tests: []TestStepConfiguration{
+				{
+					As:                      "test",
+					Commands:                "commands",
+					PullRequestPolicy:       "RunIfChanged",
+					PullRequestRunIfChanged: "",
+					OpenshiftAnsibleClusterTestConfiguration: &OpenshiftAnsibleClusterTestConfiguration{
+						ClusterTestConfiguration: ClusterTestConfiguration{ClusterProfile: ClusterProfileGCP},
+					},
+				},
+			},
+			release:       &ReleaseTagConfiguration{Name: "origin-v3.11"},
+			expectedValid: false,
+		},
+		{
+			id: "with invalid regex run_if_changed",
+			tests: []TestStepConfiguration{
+				{
+					As:                      "test",
+					Commands:                "commands",
+					PullRequestPolicy:       "RunIfChanged",
+					PullRequestRunIfChanged: "*",
+					OpenshiftAnsibleClusterTestConfiguration: &OpenshiftAnsibleClusterTestConfiguration{
+						ClusterTestConfiguration: ClusterTestConfiguration{ClusterProfile: ClusterProfileGCP},
+					},
+				},
+			},
+			release:       &ReleaseTagConfiguration{Name: "origin-v3.11"},
+			expectedValid: false,
+		},
+		{
+			id: "pull request policy should conflict with cron",
+			tests: []TestStepConfiguration{
+				{
+					As:                "test",
+					Commands:          "commands",
+					PullRequestPolicy: "OnRequest",
+					Cron:              &testInterval,
+					OpenshiftAnsibleClusterTestConfiguration: &OpenshiftAnsibleClusterTestConfiguration{
+						ClusterTestConfiguration: ClusterTestConfiguration{ClusterProfile: ClusterProfileGCP},
+					},
+				},
+			},
+			release:       &ReleaseTagConfiguration{Name: "origin-v3.11"},
+			expectedValid: false,
+		},
+		{
+			id: "pull request policy should conflict with run_if_changed",
+			tests: []TestStepConfiguration{
+				{
+					As:                      "test",
+					Commands:                "commands",
+					PullRequestPolicy:       "OnRequest",
+					PullRequestRunIfChanged: ".*",
+					OpenshiftAnsibleClusterTestConfiguration: &OpenshiftAnsibleClusterTestConfiguration{
+						ClusterTestConfiguration: ClusterTestConfiguration{ClusterProfile: ClusterProfileGCP},
+					},
+				},
+			},
+			release:       &ReleaseTagConfiguration{Name: "origin-v3.11"},
+			expectedValid: false,
 		},
 		{
 			id: "invalid secret mountPath",

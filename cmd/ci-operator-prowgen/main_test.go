@@ -547,34 +547,88 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 		"pj-rehearse.openshift.io/can-be-rehearsed":   "true"}
 
 	tests := []struct {
-		name     string
-		repoInfo *config.Info
-		expected *prowconfig.Presubmit
-	}{{
-		name:     "testname",
-		repoInfo: &config.Info{Org: "org", Repo: "repo", Branch: "branch"},
+		name         string
+		alwaysRun    bool
+		runIfChanged string
+		repoInfo     *config.Info
+		expected     *prowconfig.Presubmit
+	}{
+		{
+			name:     "testname",
+			repoInfo: &config.Info{Org: "org", Repo: "repo", Branch: "branch"},
 
-		expected: &prowconfig.Presubmit{
-			JobBase: prowconfig.JobBase{
-				Agent:  "kubernetes",
-				Labels: standardJobLabels,
-				Name:   "pull-ci-org-repo-branch-testname",
-				UtilityConfig: prowconfig.UtilityConfig{
-					DecorationConfig: &v1.DecorationConfig{SkipCloning: &newTrue},
-					Decorate:         true,
+			expected: &prowconfig.Presubmit{
+				JobBase: prowconfig.JobBase{
+					Agent:  "kubernetes",
+					Labels: standardJobLabels,
+					Name:   "pull-ci-org-repo-branch-testname",
+					UtilityConfig: prowconfig.UtilityConfig{
+						DecorationConfig: &v1.DecorationConfig{SkipCloning: &newTrue},
+						Decorate:         true,
+					},
 				},
+				AlwaysRun: false,
+				Brancher:  prowconfig.Brancher{Branches: []string{"branch"}},
+				Reporter: prowconfig.Reporter{
+					Context: "ci/prow/testname",
+				},
+				RerunCommand: "/test testname",
+				Trigger:      `(?m)^/test( | .* )testname,?($|\s.*)`,
 			},
-			AlwaysRun: true,
-			Brancher:  prowconfig.Brancher{Branches: []string{"branch"}},
-			Reporter: prowconfig.Reporter{
-				Context: "ci/prow/testname",
-			},
-			RerunCommand: "/test testname",
-			Trigger:      `(?m)^/test( | .* )testname,?($|\s.*)`,
 		},
-	}}
+		{
+			name:      "testname",
+			repoInfo:  &config.Info{Org: "org", Repo: "repo", Branch: "branch"},
+			alwaysRun: true,
+			expected: &prowconfig.Presubmit{
+				JobBase: prowconfig.JobBase{
+					Agent:  "kubernetes",
+					Labels: standardJobLabels,
+					Name:   "pull-ci-org-repo-branch-testname",
+					UtilityConfig: prowconfig.UtilityConfig{
+						DecorationConfig: &v1.DecorationConfig{SkipCloning: &newTrue},
+						Decorate:         true,
+					},
+				},
+				AlwaysRun: true,
+				Brancher:  prowconfig.Brancher{Branches: []string{"branch"}},
+				Reporter: prowconfig.Reporter{
+					Context: "ci/prow/testname",
+				},
+				RerunCommand: "/test testname",
+				Trigger:      `(?m)^/test( | .* )testname,?($|\s.*)`,
+			},
+		},
+		{
+			name:         "testname",
+			repoInfo:     &config.Info{Org: "org", Repo: "repo", Branch: "branch"},
+			alwaysRun:    true,
+			runIfChanged: ".*",
+			expected: &prowconfig.Presubmit{
+				JobBase: prowconfig.JobBase{
+					Agent:  "kubernetes",
+					Labels: standardJobLabels,
+					Name:   "pull-ci-org-repo-branch-testname",
+					UtilityConfig: prowconfig.UtilityConfig{
+						DecorationConfig: &v1.DecorationConfig{SkipCloning: &newTrue},
+						Decorate:         true,
+					},
+				},
+				AlwaysRun: true,
+				Brancher:  prowconfig.Brancher{Branches: []string{"branch"}},
+				Reporter: prowconfig.Reporter{
+					Context: "ci/prow/testname",
+				},
+				RegexpChangeMatcher: prowconfig.RegexpChangeMatcher{
+					RunIfChanged: ".*",
+				},
+				RerunCommand: "/test testname",
+				Trigger:      `(?m)^/test( | .* )testname,?($|\s.*)`,
+			},
+		},
+	}
 	for _, tc := range tests {
-		presubmit := generatePresubmitForTest(tc.name, tc.repoInfo, jobconfig.Generated, nil, true, nil) // podSpec tested in generatePodSpec
+		presubmit := generatePresubmitForTest(tc.name, tc.alwaysRun, tc.runIfChanged, tc.repoInfo, jobconfig.Generated, nil, true, nil) // podSpec tested in generatePodSpec
 		if !equality.Semantic.DeepEqual(presubmit, tc.expected) {
 			t.Errorf("expected presubmit diff:\n%s", diff.ObjectDiff(tc.expected, presubmit))
 		}

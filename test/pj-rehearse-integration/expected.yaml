@@ -1366,6 +1366,8 @@
               commands: make unit CHANGED
               container:
                 from: src
+              pull_request_policy: ""
+              pull_request_run_if_changed: ""
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -1479,6 +1481,8 @@
               commands: make unit CHANGED
               container:
                 from: src
+              pull_request_policy: ""
+              pull_request_run_if_changed: ""
         - name: JOB_NAME_SAFE
           value: e2e-aws
         - name: TEST_COMMAND
@@ -1607,6 +1611,8 @@
               commands: make unit CHANGED
               container:
                 from: src
+              pull_request_policy: ""
+              pull_request_run_if_changed: ""
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -1714,6 +1720,8 @@
               commands: make unit CHANGED
               container:
                 from: src
+              pull_request_policy: ""
+              pull_request_run_if_changed: ""
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""

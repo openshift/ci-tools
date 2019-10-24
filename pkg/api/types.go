@@ -330,6 +330,27 @@ type TestStepConfiguration struct {
 	// create a periodic job instead of a presubmit
 	Cron *string `json:"cron,omitempty"`
 
+	// PullRequestPolicy defines when this test is run as
+	// part of pull requests. It is a validation error to
+	// set this field when Cron is also set. Policies:
+	//
+	// * Always: this test is run on every pull request
+	// * OnRequest: this test will not be run until a user
+	//     explicitly requests it via /test NAME, at which
+	//     point it will be required for merge.
+	// * RunIfChanged: this test will be run if the regex
+	//     in pull_request_run_if_changed matches a change
+	//     in the PR.
+	//
+	// The default value is Always
+	PullRequestPolicy string `json:"pull_request_policy"`
+	// PullRequestRunIfChanged is an optional regex that
+	// will run this test if a filename in the repository
+	// matching the regex is changed. If this regex is
+	// set the PullRequestPolicy must be RunIfChanged or
+	// empty (in which case it is defaulted).
+	PullRequestRunIfChanged string `json:"pull_request_run_if_changed"`
+
 	// Only one of the following can be not-null.
 	ContainerTestConfiguration                                *ContainerTestConfiguration                                `json:"container,omitempty"`
 	MultiStageTestConfiguration                               *MultiStageTestConfiguration                               `json:"steps,omitempty"`

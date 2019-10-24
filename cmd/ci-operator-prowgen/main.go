@@ -479,15 +479,18 @@ func generateJobBase(name, prefix string, info *config.Info, label jc.ProwgenLab
 	return base
 }
 
-func generatePresubmitForTest(name string, info *config.Info, label jc.ProwgenLabel, podSpec *kubeapi.PodSpec, rehearsable bool, pathAlias *string) *prowconfig.Presubmit {
+func generatePresubmitForTest(name string, alwaysRun bool, runIfChanged string, info *config.Info, label jc.ProwgenLabel, podSpec *kubeapi.PodSpec, rehearsable bool, pathAlias *string) *prowconfig.Presubmit {
 	if len(info.Variant) > 0 {
 		name = fmt.Sprintf("%s-%s", info.Variant, name)
 	}
 	base := generateJobBase(name, presubmitPrefix, info, label, podSpec, rehearsable, pathAlias)
 	return &prowconfig.Presubmit{
 		JobBase:   base,
-		AlwaysRun: true,
-		Brancher:  prowconfig.Brancher{Branches: []string{info.Branch}},
+		AlwaysRun: alwaysRun,
+		RegexpChangeMatcher: prowconfig.RegexpChangeMatcher{
+			RunIfChanged: runIfChanged,
+		},
+		Brancher: prowconfig.Brancher{Branches: []string{info.Branch}},
 		Reporter: prowconfig.Reporter{
 			Context: fmt.Sprintf("ci/prow/%s", name),
 		},
@@ -563,7 +566,16 @@ func generateJobs(
 		}
 
 		if element.Cron == nil {
-			presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(element.As, info, label, podSpec, true, configSpec.CanonicalGoRepository))
+			var alwaysRun bool
+			switch element.PullRequestPolicy {
+			case "Always", "":
+				alwaysRun = true
+			case "OnRequest":
+				alwaysRun = false
+			default:
+				logrus.Errorf("Unrecognized pull request policy: %q", element.PullRequestPolicy)
+			}
+			presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(element.As, alwaysRun, element.PullRequestRunIfChanged, info, label, podSpec, true, configSpec.CanonicalGoRepository))
 		} else {
 			periodics = append(periodics, *generatePeriodicForTest(element.As, info, label, podSpec, true, *element.Cron, configSpec.CanonicalGoRepository))
 		}
@@ -576,7 +588,7 @@ func generateJobs(
 			additionalPresubmitArgs = []string{"--target=[release:latest]"}
 		}
 		podSpec := generateCiOperatorPodSpec(info, nil, "[images]", additionalPresubmitArgs...)
-		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest("images", info, label, podSpec, true, configSpec.CanonicalGoRepository))
+		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest("images", true, "", info, label, podSpec, true, configSpec.CanonicalGoRepository))
 
 		if configSpec.PromotionConfiguration != nil {
 			additionalPostsubmitArgs := []string{"--promote"}

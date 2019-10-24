@@ -10,9 +10,14 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 
 	templateapi "github.com/openshift/api/template/v1"
 	templatescheme "github.com/openshift/client-go/template/clientset/versioned/scheme"
+	"github.com/sirupsen/logrus"
+
+	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/test-infra/prow/logrusutil"
 )
 
 type level string
@@ -119,14 +124,14 @@ func (c commandExecutor) runAndCheck(cmd *exec.Cmd, action string) ([]byte, erro
 
 	if output, err = cmd.Output(); err != nil {
 		if exitError, ok := err.(*exec.ExitError); ok {
-			fmt.Printf("ERROR: %s: failed to %s\n%s\n", pretty, action, exitError.Stderr)
+			logrus.Errorf("%s: failed to '%s' '%s'", pretty, action, exitError.Stderr)
 		} else {
-			fmt.Printf("ERROR: %s: failed to execute: %v\n", pretty, err)
+			logrus.WithError(err).Errorf("%s: failed to execute", pretty)
 		}
 		return nil, fmt.Errorf("failed to %s config", action)
 	}
 
-	fmt.Printf("%s: OK\n", pretty)
+	logrus.Infof("%s: OK", pretty)
 	return output, nil
 }
 
@@ -163,6 +168,7 @@ func (c configApplier) asTemplate(params []templateapi.Parameter) error {
 		envValue := os.Getenv(param.Name)
 		if len(envValue) > 0 {
 			args = append(args, []string{"-p", fmt.Sprintf("%s=%s", param.Name, envValue)}...)
+			secrets.addSecrets(envValue)
 		}
 	}
 	ocProcessCmd := makeOcCommand(ocProcess, c.kubeConfig, c.context, c.path, c.user, args...)
@@ -228,10 +234,10 @@ func applyConfig(rootDir, cfgType string, process processFn) error {
 
 		if info.IsDir() {
 			if strings.HasPrefix(info.Name(), "_") {
-				fmt.Printf("Skipping directory: %s\n", path)
+				logrus.Infof("Skipping directory: %s", path)
 				return filepath.SkipDir
 			}
-			fmt.Printf("Applying %s config in directory: %s\n", cfgType, path)
+			logrus.Infof("Applying %s config in directory: %s", cfgType, path)
 			return nil
 		}
 
@@ -242,7 +248,7 @@ func applyConfig(rootDir, cfgType string, process processFn) error {
 		return nil
 	}); err != nil {
 		// should not happen
-		fmt.Fprintf(os.Stderr, "failed to walk directory '%s': %v\n", rootDir, err)
+		logrus.WithError(err).Errorf("failed to walk directory '%s'", rootDir)
 		return err
 	}
 
@@ -251,6 +257,32 @@ func applyConfig(rootDir, cfgType string, process processFn) error {
 	}
 
 	return nil
+}
+
+type secretGetter struct {
+	sync.RWMutex
+	secrets sets.String
+}
+
+func (g *secretGetter) addSecrets(newSecrets ...string) {
+	g.Lock()
+	defer g.Unlock()
+	g.secrets.Insert(newSecrets...)
+}
+
+func (g *secretGetter) getSecrets() sets.String {
+	g.RLock()
+	defer g.RUnlock()
+	return g.secrets
+}
+
+var (
+	secrets *secretGetter
+)
+
+func init() {
+	secrets = &secretGetter{secrets: sets.NewString()}
+	logrus.SetFormatter(logrusutil.NewCensoringFormatter(logrus.StandardLogger().Formatter, secrets.getSecrets))
 }
 
 func main() {
@@ -271,7 +303,7 @@ func main() {
 
 		adminErr = applyConfig(o.directory, "admin", f)
 		if adminErr != nil {
-			fmt.Printf("There were failures while applying admin config\n")
+			logrus.Errorf("There were failures while applying admin config")
 		}
 	}
 
@@ -289,7 +321,7 @@ func main() {
 
 		standardErr = applyConfig(o.directory, "standard", f)
 		if standardErr != nil {
-			fmt.Printf("There were failures while applying standard config\n")
+			logrus.Error("There were failures while applying standard config")
 		}
 	}
 
@@ -297,5 +329,5 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Printf("Success!\n")
+	logrus.Infof("Success!")
 }

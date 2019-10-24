@@ -144,9 +144,9 @@ func OperateOnJobConfigSubdir(configDir, subDir string, callback func(*prowconfi
 // ReadFromDir reads Prow job config from a directory and merges into one config
 func ReadFromDir(dir string) (*prowconfig.JobConfig, error) {
 	jobConfig := &prowconfig.JobConfig{
-		Presubmits:  map[string][]prowconfig.Presubmit{},
-		Postsubmits: map[string][]prowconfig.Postsubmit{},
-		Periodics:   []prowconfig.Periodic{},
+		PresubmitsStatic: map[string][]prowconfig.Presubmit{},
+		Postsubmits:      map[string][]prowconfig.Postsubmit{},
+		Periodics:        []prowconfig.Periodic{},
 	}
 	if err := OperateOnJobConfigDir(dir, func(config *prowconfig.JobConfig, elements *Info) error {
 		mergeConfigs(jobConfig, config)
@@ -160,15 +160,15 @@ func ReadFromDir(dir string) (*prowconfig.JobConfig, error) {
 
 // mergeConfigs merges job configuration from part into dest
 func mergeConfigs(dest, part *prowconfig.JobConfig) {
-	if part.Presubmits != nil {
-		if dest.Presubmits == nil {
-			dest.Presubmits = map[string][]prowconfig.Presubmit{}
+	if part.PresubmitsStatic != nil {
+		if dest.PresubmitsStatic == nil {
+			dest.PresubmitsStatic = map[string][]prowconfig.Presubmit{}
 		}
-		for repo := range part.Presubmits {
-			if _, ok := dest.Presubmits[repo]; ok {
-				dest.Presubmits[repo] = append(dest.Presubmits[repo], part.Presubmits[repo]...)
+		for repo := range part.PresubmitsStatic {
+			if _, ok := dest.PresubmitsStatic[repo]; ok {
+				dest.PresubmitsStatic[repo] = append(dest.PresubmitsStatic[repo], part.PresubmitsStatic[repo]...)
 			} else {
-				dest.Presubmits[repo] = part.Presubmits[repo]
+				dest.PresubmitsStatic[repo] = part.PresubmitsStatic[repo]
 			}
 		}
 	}
@@ -213,7 +213,7 @@ func WriteToDir(jobDir, org, repo string, jobConfig *prowconfig.JobConfig) error
 	allJobs := sets.String{}
 	files := map[string]*prowconfig.JobConfig{}
 	key := fmt.Sprintf("%s/%s", org, repo)
-	for _, job := range jobConfig.Presubmits[key] {
+	for _, job := range jobConfig.PresubmitsStatic[key] {
 		allJobs.Insert(job.Name)
 		branch := "master"
 		if len(job.Branches) > 0 {
@@ -223,9 +223,9 @@ func WriteToDir(jobDir, org, repo string, jobConfig *prowconfig.JobConfig) error
 		}
 		file := fmt.Sprintf("%s-%s-%s-presubmits.yaml", org, repo, branch)
 		if _, ok := files[file]; ok {
-			files[file].Presubmits[key] = append(files[file].Presubmits[key], job)
+			files[file].PresubmitsStatic[key] = append(files[file].PresubmitsStatic[key], job)
 		} else {
-			files[file] = &prowconfig.JobConfig{Presubmits: map[string][]prowconfig.Presubmit{
+			files[file] = &prowconfig.JobConfig{PresubmitsStatic: map[string][]prowconfig.Presubmit{
 				key: {job},
 			}}
 		}
@@ -308,14 +308,14 @@ func mergeJobsIntoFile(prowConfigPath string, jobConfig *prowconfig.JobConfig, a
 // way and are not otherwise in the set of all jobs being written stay untouched.
 func mergeJobConfig(destination, source *prowconfig.JobConfig, allJobs sets.String) {
 	// We do the same thing for all jobs
-	if source.Presubmits != nil {
-		if destination.Presubmits == nil {
-			destination.Presubmits = map[string][]prowconfig.Presubmit{}
+	if source.PresubmitsStatic != nil {
+		if destination.PresubmitsStatic == nil {
+			destination.PresubmitsStatic = map[string][]prowconfig.Presubmit{}
 		}
-		for repo, jobs := range source.Presubmits {
+		for repo, jobs := range source.PresubmitsStatic {
 			oldJobs := map[string]prowconfig.Presubmit{}
 			newJobs := map[string]prowconfig.Presubmit{}
-			for _, job := range destination.Presubmits[repo] {
+			for _, job := range destination.PresubmitsStatic[repo] {
 				oldJobs[job.Name] = job
 			}
 			for _, job := range jobs {
@@ -336,7 +336,7 @@ func mergeJobConfig(destination, source *prowconfig.JobConfig, allJobs sets.Stri
 					mergedJobs = append(mergedJobs, oldJobs[oldJobName])
 				}
 			}
-			destination.Presubmits[repo] = mergedJobs
+			destination.PresubmitsStatic[repo] = mergedJobs
 		}
 	}
 	if source.Postsubmits != nil {
@@ -441,13 +441,13 @@ func mergePeriodics(old, new *prowconfig.Periodic) prowconfig.Periodic {
 // sortConfigFields sorts array fields inside of job configurations so
 // that their serialized form is stable and deterministic
 func sortConfigFields(jobConfig *prowconfig.JobConfig) {
-	for repo := range jobConfig.Presubmits {
-		sort.Slice(jobConfig.Presubmits[repo], func(i, j int) bool {
-			return jobConfig.Presubmits[repo][i].Name < jobConfig.Presubmits[repo][j].Name
+	for repo := range jobConfig.PresubmitsStatic {
+		sort.Slice(jobConfig.PresubmitsStatic[repo], func(i, j int) bool {
+			return jobConfig.PresubmitsStatic[repo][i].Name < jobConfig.PresubmitsStatic[repo][j].Name
 		})
-		for job := range jobConfig.Presubmits[repo] {
-			if jobConfig.Presubmits[repo][job].Spec != nil {
-				sortPodSpec(jobConfig.Presubmits[repo][job].Spec)
+		for job := range jobConfig.PresubmitsStatic[repo] {
+			if jobConfig.PresubmitsStatic[repo][job].Spec != nil {
+				sortPodSpec(jobConfig.PresubmitsStatic[repo][job].Spec)
 			}
 		}
 	}

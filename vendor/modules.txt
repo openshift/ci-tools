@@ -13,13 +13,17 @@ github.com/Azure/go-autorest/autorest/azure
 github.com/Azure/go-autorest/autorest/date
 github.com/Azure/go-autorest/logger
 github.com/Azure/go-autorest/version
-# github.com/GoogleCloudPlatform/testgrid v0.0.0-20191002194340-462e7a9505a0
+# github.com/GoogleCloudPlatform/testgrid v0.0.0-20191016232453-9f0319fc1197
 github.com/GoogleCloudPlatform/testgrid/metadata
 github.com/GoogleCloudPlatform/testgrid/metadata/junit
 github.com/GoogleCloudPlatform/testgrid/pb/config
+github.com/GoogleCloudPlatform/testgrid/pb/custom_evaluator
+github.com/GoogleCloudPlatform/testgrid/pb/test_status
 github.com/GoogleCloudPlatform/testgrid/util/gcs
 # github.com/SierraSoftworks/sentry-go v1.1.1
 github.com/SierraSoftworks/sentry-go
+# github.com/andygrunwald/go-gerrit v0.0.0-20190120104749-174420ebee6c
+github.com/andygrunwald/go-gerrit
 # github.com/bazelbuild/buildtools v0.0.0-20190404153937-93253d6efaa9
 github.com/bazelbuild/buildtools/build
 github.com/bazelbuild/buildtools/tables
@@ -70,6 +74,8 @@ github.com/google/go-cmp/cmp/internal/diff
 github.com/google/go-cmp/cmp/internal/flags
 github.com/google/go-cmp/cmp/internal/function
 github.com/google/go-cmp/cmp/internal/value
+# github.com/google/go-querystring v1.0.0
+github.com/google/go-querystring/query
 # github.com/google/gofuzz v1.0.0
 github.com/google/gofuzz
 # github.com/googleapis/gax-go/v2 v2.0.5
@@ -155,11 +161,10 @@ github.com/openshift/client-go/template/clientset/versioned/typed/template/v1
 github.com/peterbourgon/diskv
 # github.com/pkg/errors v0.8.1
 github.com/pkg/errors
-# github.com/prometheus/client_golang v0.9.4
+# github.com/prometheus/client_golang v1.0.0
 github.com/prometheus/client_golang/prometheus
 github.com/prometheus/client_golang/prometheus/internal
 github.com/prometheus/client_golang/prometheus/promhttp
-github.com/prometheus/client_golang/prometheus/push
 # github.com/prometheus/client_model v0.0.0-20190129233127-fd36f4220a90
 github.com/prometheus/client_model/go
 # github.com/prometheus/common v0.4.1
@@ -519,7 +524,7 @@ k8s.io/client-go/util/workqueue
 k8s.io/klog
 # k8s.io/kube-openapi v0.0.0-20190816220812-743ec37842bf
 k8s.io/kube-openapi/pkg/util/proto
-# k8s.io/test-infra v0.0.0-20191016170131-17458724a5d4
+# k8s.io/test-infra v0.0.0-20191024014506-4a8918207c89
 k8s.io/test-infra/experiment/autobumper/bumper
 k8s.io/test-infra/experiment/image-bumper/bumper
 k8s.io/test-infra/ghproxy/ghcache
@@ -542,6 +547,7 @@ k8s.io/test-infra/prow/errorutil
 k8s.io/test-infra/prow/flagutil
 k8s.io/test-infra/prow/gcsupload
 k8s.io/test-infra/prow/genfiles
+k8s.io/test-infra/prow/gerrit/client
 k8s.io/test-infra/prow/git
 k8s.io/test-infra/prow/gitattributes
 k8s.io/test-infra/prow/github
@@ -553,6 +559,7 @@ k8s.io/test-infra/prow/initupload
 k8s.io/test-infra/prow/interrupts
 k8s.io/test-infra/prow/kube
 k8s.io/test-infra/prow/labels
+k8s.io/test-infra/prow/logrusutil
 k8s.io/test-infra/prow/metrics
 k8s.io/test-infra/prow/pjutil
 k8s.io/test-infra/prow/pluginhelp

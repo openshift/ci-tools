@@ -371,7 +371,7 @@ func TestGetChangedPresubmits(t *testing.T) {
 func makeConfig(p []prowconfig.Presubmit) *prowconfig.Config {
 	return &prowconfig.Config{
 		JobConfig: prowconfig.JobConfig{
-			Presubmits: config.Presubmits{"org/repo": p},
+			PresubmitsStatic: config.Presubmits{"org/repo": p},
 		},
 	}
 }
@@ -421,7 +421,7 @@ func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 		description: "return a presubmit using one of the input ciop configs",
 		prow: &prowconfig.Config{
 			JobConfig: prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{
+				PresubmitsStatic: map[string][]prowconfig.Presubmit{
 					"org/repo": {
 						func() prowconfig.Presubmit {
 							ret := prowconfig.Presubmit{}
@@ -451,7 +451,7 @@ func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 		description: "do not return a presubmit using a ciop config not present in input",
 		prow: &prowconfig.Config{
 			JobConfig: prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{
+				PresubmitsStatic: map[string][]prowconfig.Presubmit{
 					"org/repo": {
 						func() prowconfig.Presubmit {
 							ret := prowconfig.Presubmit{}
@@ -471,7 +471,7 @@ func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 		description: "handle jenkins presubmits",
 		prow: &prowconfig.Config{
 			JobConfig: prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{
+				PresubmitsStatic: map[string][]prowconfig.Presubmit{
 					"org/repo": {
 						func() prowconfig.Presubmit {
 							ret := prowconfig.Presubmit{}
@@ -675,7 +675,7 @@ func TestGetPresubmitsForClusterProfiles(t *testing.T) {
 		id: "not a kubernetes job",
 		cfg: &prowconfig.Config{
 			JobConfig: prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{
+				PresubmitsStatic: map[string][]prowconfig.Presubmit{
 					"org/repo": {
 						makePresubmit("not-a-kubernetes-job", pjapi.JenkinsAgent, []string{}),
 					},
@@ -689,7 +689,7 @@ func TestGetPresubmitsForClusterProfiles(t *testing.T) {
 		id: "job doesn't use cluster profiles",
 		cfg: &prowconfig.Config{
 			JobConfig: prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{
+				PresubmitsStatic: map[string][]prowconfig.Presubmit{
 					"org/repo": {
 						makePresubmit("no-cluster-profile", pjapi.KubernetesAgent, []string{}),
 					},
@@ -703,7 +703,7 @@ func TestGetPresubmitsForClusterProfiles(t *testing.T) {
 		id: "job doesn't use the cluster profile",
 		cfg: &prowconfig.Config{
 			JobConfig: prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{
+				PresubmitsStatic: map[string][]prowconfig.Presubmit{
 					"org/repo": {
 						makePresubmit("doesnt-use-cluster-profile", pjapi.KubernetesAgent, []string{"another-profile"}),
 					},
@@ -717,7 +717,7 @@ func TestGetPresubmitsForClusterProfiles(t *testing.T) {
 		id: "multiple jobs, one uses cluster the profile",
 		cfg: &prowconfig.Config{
 			JobConfig: prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{
+				PresubmitsStatic: map[string][]prowconfig.Presubmit{
 					"org/repo": {
 						makePresubmit("no-cluster-profile", pjapi.KubernetesAgent, []string{}),
 					},

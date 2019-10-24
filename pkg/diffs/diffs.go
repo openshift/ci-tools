@@ -97,8 +97,8 @@ func GetChangedCiopConfigs(masterConfig, prConfig config.ByFilename, logger *log
 func GetChangedPresubmits(prowMasterConfig, prowPRConfig *prowconfig.Config, logger *logrus.Entry) config.Presubmits {
 	ret := config.Presubmits{}
 
-	masterJobs := getJobsByRepoAndName(prowMasterConfig.JobConfig.Presubmits)
-	for repo, jobs := range prowPRConfig.JobConfig.Presubmits {
+	masterJobs := getJobsByRepoAndName(prowMasterConfig.JobConfig.PresubmitsStatic)
+	for repo, jobs := range prowPRConfig.JobConfig.PresubmitsStatic {
 		for _, job := range jobs {
 			masterJob := masterJobs[repo][job.Name]
 			logFields := logrus.Fields{logRepo: repo, logJobName: job.Name}
@@ -202,7 +202,7 @@ func GetPresubmitsForCiopConfigs(prowConfig *prowconfig.Config, ciopConfigs conf
 
 	for filename, data := range ciopConfigs {
 		orgRepo := fmt.Sprintf("%s/%s", data.Info.Org, data.Info.Repo)
-		for _, job := range prowConfig.JobConfig.Presubmits[orgRepo] {
+		for _, job := range prowConfig.JobConfig.PresubmitsStatic[orgRepo] {
 			key, ok := ciOpFileName(job.JobBase)
 			if !ok || key != filename {
 				continue
@@ -272,7 +272,7 @@ func GetPresubmitsForClusterProfiles(prowConfig *prowconfig.Config, profiles []c
 		return false
 	}
 	ret := config.Presubmits{}
-	for repo, jobs := range prowConfig.JobConfig.Presubmits {
+	for repo, jobs := range prowConfig.JobConfig.PresubmitsStatic {
 		for _, job := range jobs {
 			if matches(&job) {
 				ret.Add(repo, job)

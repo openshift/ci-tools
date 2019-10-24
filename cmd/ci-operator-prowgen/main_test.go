@@ -686,7 +686,7 @@ func TestGenerateJobs(t *testing.T) {
 				Branch: "branch",
 			},
 			expected: &prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {{
+				PresubmitsStatic: map[string][]prowconfig.Presubmit{"organization/repository": {{
 					JobBase: prowconfig.JobBase{
 						Name:   "pull-ci-organization-repository-branch-derTest",
 						Labels: standardPresubmitJobLabels,
@@ -713,7 +713,7 @@ func TestGenerateJobs(t *testing.T) {
 				Branch: "branch",
 			},
 			expected: &prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {{
+				PresubmitsStatic: map[string][]prowconfig.Presubmit{"organization/repository": {{
 					JobBase: prowconfig.JobBase{
 						Name:   "pull-ci-organization-repository-branch-derTest",
 						Labels: standardPresubmitJobLabels,
@@ -754,7 +754,7 @@ func TestGenerateJobs(t *testing.T) {
 				Branch: "branch",
 			},
 			expected: &prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {{
+				PresubmitsStatic: map[string][]prowconfig.Presubmit{"organization/repository": {{
 					JobBase: prowconfig.JobBase{
 						Name:   "pull-ci-organization-repository-branch-oTeste",
 						Labels: standardPresubmitJobLabels,
@@ -777,7 +777,7 @@ func TestGenerateJobs(t *testing.T) {
 				Branch: "branch",
 			},
 			expected: &prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {{
+				PresubmitsStatic: map[string][]prowconfig.Presubmit{"organization/repository": {{
 					JobBase: prowconfig.JobBase{
 						Name:   "pull-ci-organization-repository-branch-oTeste",
 						Labels: standardPresubmitJobLabels,
@@ -797,7 +797,7 @@ func TestGenerateJobs(t *testing.T) {
 				Branch: "branch",
 			},
 			expected: &prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {{
+				PresubmitsStatic: map[string][]prowconfig.Presubmit{"organization/repository": {{
 					JobBase: prowconfig.JobBase{
 						Name:   "pull-ci-organization-repository-branch-images",
 						Labels: standardPresubmitJobLabels,
@@ -825,7 +825,7 @@ func TestGenerateJobs(t *testing.T) {
 				Branch: "branch",
 			},
 			expected: &prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {{
+				PresubmitsStatic: map[string][]prowconfig.Presubmit{"organization/repository": {{
 					JobBase: prowconfig.JobBase{
 						Name:   "pull-ci-organization-repository-branch-images",
 						Labels: standardPresubmitJobLabels,
@@ -848,16 +848,16 @@ func TestGenerateJobs(t *testing.T) {
 }
 
 func pruneForTests(jobConfig *prowconfig.JobConfig) {
-	for repo := range jobConfig.Presubmits {
-		for i := range jobConfig.Presubmits[repo] {
-			jobConfig.Presubmits[repo][i].AlwaysRun = false
-			jobConfig.Presubmits[repo][i].Context = ""
-			jobConfig.Presubmits[repo][i].Trigger = ""
-			jobConfig.Presubmits[repo][i].RerunCommand = ""
-			jobConfig.Presubmits[repo][i].Agent = ""
-			jobConfig.Presubmits[repo][i].Spec = nil
-			jobConfig.Presubmits[repo][i].Brancher = prowconfig.Brancher{}
-			jobConfig.Presubmits[repo][i].UtilityConfig = prowconfig.UtilityConfig{}
+	for repo := range jobConfig.PresubmitsStatic {
+		for i := range jobConfig.PresubmitsStatic[repo] {
+			jobConfig.PresubmitsStatic[repo][i].AlwaysRun = false
+			jobConfig.PresubmitsStatic[repo][i].Context = ""
+			jobConfig.PresubmitsStatic[repo][i].Trigger = ""
+			jobConfig.PresubmitsStatic[repo][i].RerunCommand = ""
+			jobConfig.PresubmitsStatic[repo][i].Agent = ""
+			jobConfig.PresubmitsStatic[repo][i].Spec = nil
+			jobConfig.PresubmitsStatic[repo][i].Brancher = prowconfig.Brancher{}
+			jobConfig.PresubmitsStatic[repo][i].UtilityConfig = prowconfig.UtilityConfig{}
 		}
 	}
 	for repo := range jobConfig.Postsubmits {
@@ -1637,7 +1637,7 @@ func TestPruneStaleJobs(t *testing.T) {
 		{
 			name: "stale generated presubmit is pruned",
 			jobconfig: &prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{
+				PresubmitsStatic: map[string][]prowconfig.Presubmit{
 					"repo": {{JobBase: prowconfig.JobBase{Labels: map[string]string{jobconfig.ProwJobLabelGenerated: string(jobconfig.Generated)}}}},
 				},
 			},
@@ -1655,7 +1655,7 @@ func TestPruneStaleJobs(t *testing.T) {
 		{
 			name: "not stale generated presubmit is kept",
 			jobconfig: &prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{
+				PresubmitsStatic: map[string][]prowconfig.Presubmit{
 					"repo": {{JobBase: prowconfig.JobBase{Labels: map[string]string{jobconfig.ProwJobLabelGenerated: string(jobconfig.New)}}}},
 				},
 			},
@@ -1673,7 +1673,7 @@ func TestPruneStaleJobs(t *testing.T) {
 		{
 			name: "not generated presubmit is kept",
 			jobconfig: &prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{
+				PresubmitsStatic: map[string][]prowconfig.Presubmit{
 					"repo": {{JobBase: prowconfig.JobBase{Name: "job"}}},
 				},
 			},

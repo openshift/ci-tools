@@ -27,46 +27,46 @@ func TestMergeConfigs(t *testing.T) {
 			name: "empty dest leads to copy of part",
 			dest: &prowconfig.JobConfig{},
 			part: &prowconfig.JobConfig{
-				Presubmits:  map[string][]prowconfig.Presubmit{"super/duper": {{JobBase: prowconfig.JobBase{Name: "test"}}}},
-				Postsubmits: map[string][]prowconfig.Postsubmit{"super/duper": {{JobBase: prowconfig.JobBase{Name: "post-test"}}}},
-				Periodics:   []prowconfig.Periodic{{JobBase: prowconfig.JobBase{Name: "periodic-test"}}},
+				PresubmitsStatic: map[string][]prowconfig.Presubmit{"super/duper": {{JobBase: prowconfig.JobBase{Name: "test"}}}},
+				Postsubmits:      map[string][]prowconfig.Postsubmit{"super/duper": {{JobBase: prowconfig.JobBase{Name: "post-test"}}}},
+				Periodics:        []prowconfig.Periodic{{JobBase: prowconfig.JobBase{Name: "periodic-test"}}},
 			},
 			expected: &prowconfig.JobConfig{
-				Presubmits:  map[string][]prowconfig.Presubmit{"super/duper": {{JobBase: prowconfig.JobBase{Name: "test"}}}},
-				Postsubmits: map[string][]prowconfig.Postsubmit{"super/duper": {{JobBase: prowconfig.JobBase{Name: "post-test"}}}},
-				Periodics:   []prowconfig.Periodic{{JobBase: prowconfig.JobBase{Name: "periodic-test"}}},
+				PresubmitsStatic: map[string][]prowconfig.Presubmit{"super/duper": {{JobBase: prowconfig.JobBase{Name: "test"}}}},
+				Postsubmits:      map[string][]prowconfig.Postsubmit{"super/duper": {{JobBase: prowconfig.JobBase{Name: "post-test"}}}},
+				Periodics:        []prowconfig.Periodic{{JobBase: prowconfig.JobBase{Name: "periodic-test"}}},
 			},
 		},
 		{
 			name: "empty part leads to dest",
 			dest: &prowconfig.JobConfig{
-				Presubmits:  map[string][]prowconfig.Presubmit{"super/duper": {{JobBase: prowconfig.JobBase{Name: "test"}}}},
-				Postsubmits: map[string][]prowconfig.Postsubmit{"super/duper": {{JobBase: prowconfig.JobBase{Name: "post-test"}}}},
-				Periodics:   []prowconfig.Periodic{{JobBase: prowconfig.JobBase{Name: "periodic-test"}}},
+				PresubmitsStatic: map[string][]prowconfig.Presubmit{"super/duper": {{JobBase: prowconfig.JobBase{Name: "test"}}}},
+				Postsubmits:      map[string][]prowconfig.Postsubmit{"super/duper": {{JobBase: prowconfig.JobBase{Name: "post-test"}}}},
+				Periodics:        []prowconfig.Periodic{{JobBase: prowconfig.JobBase{Name: "periodic-test"}}},
 			},
 			part: &prowconfig.JobConfig{},
 			expected: &prowconfig.JobConfig{
-				Presubmits:  map[string][]prowconfig.Presubmit{"super/duper": {{JobBase: prowconfig.JobBase{Name: "test"}}}},
-				Postsubmits: map[string][]prowconfig.Postsubmit{"super/duper": {{JobBase: prowconfig.JobBase{Name: "post-test"}}}},
-				Periodics:   []prowconfig.Periodic{{JobBase: prowconfig.JobBase{Name: "periodic-test"}}},
+				PresubmitsStatic: map[string][]prowconfig.Presubmit{"super/duper": {{JobBase: prowconfig.JobBase{Name: "test"}}}},
+				Postsubmits:      map[string][]prowconfig.Postsubmit{"super/duper": {{JobBase: prowconfig.JobBase{Name: "post-test"}}}},
+				Periodics:        []prowconfig.Periodic{{JobBase: prowconfig.JobBase{Name: "periodic-test"}}},
 			},
 		},
 		{
 			name: "data in both leads to merge",
 			dest: &prowconfig.JobConfig{
-				Presubmits:  map[string][]prowconfig.Presubmit{"super/duper": {{JobBase: prowconfig.JobBase{Name: "test"}}}},
-				Postsubmits: map[string][]prowconfig.Postsubmit{"super/duper": {{JobBase: prowconfig.JobBase{Name: "post-test"}}}},
-				Periodics:   []prowconfig.Periodic{{JobBase: prowconfig.JobBase{Name: "periodic-test"}}},
+				PresubmitsStatic: map[string][]prowconfig.Presubmit{"super/duper": {{JobBase: prowconfig.JobBase{Name: "test"}}}},
+				Postsubmits:      map[string][]prowconfig.Postsubmit{"super/duper": {{JobBase: prowconfig.JobBase{Name: "post-test"}}}},
+				Periodics:        []prowconfig.Periodic{{JobBase: prowconfig.JobBase{Name: "periodic-test"}}},
 			},
 			part: &prowconfig.JobConfig{
-				Presubmits:  map[string][]prowconfig.Presubmit{"super/duper": {{JobBase: prowconfig.JobBase{Name: "test-2"}}}},
-				Postsubmits: map[string][]prowconfig.Postsubmit{"super/duper": {{JobBase: prowconfig.JobBase{Name: "post-test-2"}}}},
-				Periodics:   []prowconfig.Periodic{{JobBase: prowconfig.JobBase{Name: "periodic-test-2"}}},
+				PresubmitsStatic: map[string][]prowconfig.Presubmit{"super/duper": {{JobBase: prowconfig.JobBase{Name: "test-2"}}}},
+				Postsubmits:      map[string][]prowconfig.Postsubmit{"super/duper": {{JobBase: prowconfig.JobBase{Name: "post-test-2"}}}},
+				Periodics:        []prowconfig.Periodic{{JobBase: prowconfig.JobBase{Name: "periodic-test-2"}}},
 			},
 			expected: &prowconfig.JobConfig{
-				Presubmits:  map[string][]prowconfig.Presubmit{"super/duper": {{JobBase: prowconfig.JobBase{Name: "test"}}, {JobBase: prowconfig.JobBase{Name: "test-2"}}}},
-				Postsubmits: map[string][]prowconfig.Postsubmit{"super/duper": {{JobBase: prowconfig.JobBase{Name: "post-test"}}, {JobBase: prowconfig.JobBase{Name: "post-test-2"}}}},
-				Periodics:   []prowconfig.Periodic{{JobBase: prowconfig.JobBase{Name: "periodic-test"}}, {JobBase: prowconfig.JobBase{Name: "periodic-test-2"}}},
+				PresubmitsStatic: map[string][]prowconfig.Presubmit{"super/duper": {{JobBase: prowconfig.JobBase{Name: "test"}}, {JobBase: prowconfig.JobBase{Name: "test-2"}}}},
+				Postsubmits:      map[string][]prowconfig.Postsubmit{"super/duper": {{JobBase: prowconfig.JobBase{Name: "post-test"}}, {JobBase: prowconfig.JobBase{Name: "post-test-2"}}}},
+				Periodics:        []prowconfig.Periodic{{JobBase: prowconfig.JobBase{Name: "periodic-test"}}, {JobBase: prowconfig.JobBase{Name: "periodic-test-2"}}},
 			},
 		},
 	}
@@ -90,29 +90,29 @@ func TestMergeJobConfig(t *testing.T) {
 			allJobs:     sets.String{},
 			destination: &prowconfig.JobConfig{},
 			source: &prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
+				PresubmitsStatic: map[string][]prowconfig.Presubmit{"organization/repository": {
 					{JobBase: prowconfig.JobBase{Name: "source-job"}, Reporter: prowconfig.Reporter{Context: "ci/prow/source"}},
 				}},
 			},
 			expected: &prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
+				PresubmitsStatic: map[string][]prowconfig.Presubmit{"organization/repository": {
 					{JobBase: prowconfig.JobBase{Name: "source-job"}, Reporter: prowconfig.Reporter{Context: "ci/prow/source"}},
 				}},
 			},
 		}, {
 			allJobs: sets.String{},
 			destination: &prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
+				PresubmitsStatic: map[string][]prowconfig.Presubmit{"organization/repository": {
 					{JobBase: prowconfig.JobBase{Name: "another-job"}, Reporter: prowconfig.Reporter{Context: "ci/prow/another"}},
 				}},
 			},
 			source: &prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
+				PresubmitsStatic: map[string][]prowconfig.Presubmit{"organization/repository": {
 					{JobBase: prowconfig.JobBase{Name: "source-job"}, Reporter: prowconfig.Reporter{Context: "ci/prow/source"}},
 				}},
 			},
 			expected: &prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
+				PresubmitsStatic: map[string][]prowconfig.Presubmit{"organization/repository": {
 					{JobBase: prowconfig.JobBase{Name: "source-job"}, Reporter: prowconfig.Reporter{Context: "ci/prow/source"}},
 					{JobBase: prowconfig.JobBase{Name: "another-job"}, Reporter: prowconfig.Reporter{Context: "ci/prow/another"}},
 				}},
@@ -120,17 +120,17 @@ func TestMergeJobConfig(t *testing.T) {
 		}, {
 			allJobs: sets.String{},
 			destination: &prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
+				PresubmitsStatic: map[string][]prowconfig.Presubmit{"organization/repository": {
 					{JobBase: prowconfig.JobBase{Name: "same-job"}, Reporter: prowconfig.Reporter{Context: "ci/prow/same"}},
 				}},
 			},
 			source: &prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
+				PresubmitsStatic: map[string][]prowconfig.Presubmit{"organization/repository": {
 					{JobBase: prowconfig.JobBase{Name: "same-job"}, Reporter: prowconfig.Reporter{Context: "ci/prow/different"}},
 				}},
 			},
 			expected: &prowconfig.JobConfig{
-				Presubmits: map[string][]prowconfig.Presubmit{"organization/repository": {
+				PresubmitsStatic: map[string][]prowconfig.Presubmit{"organization/repository": {
 					{JobBase: prowconfig.JobBase{Name: "same-job"}, Reporter: prowconfig.Reporter{Context: "ci/prow/different"}},
 				}},
 			},

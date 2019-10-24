@@ -89,7 +89,7 @@ func main() {
 		// we know the path is relative, but there is no API to declare that
 		relPath, _ := filepath.Rel(o.releaseRepoDir, info.Filename)
 		pathsToCheck = append(pathsToCheck, pathWithConfig{path: relPath, configMap: info.ConfigMapName()})
-		for _, presubmits := range jobConfig.Presubmits {
+		for _, presubmits := range jobConfig.PresubmitsStatic {
 			for _, presubmit := range presubmits {
 				if presubmit.Spec != nil {
 					if foundFailure := checkSpec(presubmit.Spec, relPath, presubmit.Name, configInfos); foundFailure {

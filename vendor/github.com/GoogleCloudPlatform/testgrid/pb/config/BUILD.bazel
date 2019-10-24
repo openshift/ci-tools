@@ -5,6 +5,7 @@ proto_library(
     name = "config_proto",
     srcs = ["config.proto"],
     visibility = ["//visibility:public"],
+    deps = ["//pb/custom_evaluator:custom_evaluator_proto"],
 )
 
 go_proto_library(
@@ -12,6 +13,7 @@ go_proto_library(
     importpath = "github.com/GoogleCloudPlatform/testgrid/pb/config",
     proto = ":config_proto",
     visibility = ["//visibility:public"],
+    deps = ["//pb/custom_evaluator:go_default_library"],
 )
 
 go_library(

@@ -3,8 +3,11 @@ module github.com/openshift/ci-tools
 go 1.12
 
 replace (
+	k8s.io/api => k8s.io/api v0.0.0-20190918195907-bd6ac527cfd2
+	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.0.0-20190918201827-3de75813f604
 	k8s.io/apimachinery => k8s.io/apimachinery v0.0.0-20190817020851-f2f3a405f61d
 	k8s.io/client-go => k8s.io/client-go v0.0.0-20190918200256-06eb1244587a
+	k8s.io/code-generator => k8s.io/code-generator v0.0.0-20190612205613-18da4a14b22b
 )
 
 require (

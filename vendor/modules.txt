@@ -46,7 +46,7 @@ github.com/fsnotify/fsnotify
 github.com/getlantern/deepcopy
 # github.com/ghodss/yaml v1.0.0
 github.com/ghodss/yaml
-# github.com/gogo/protobuf v1.2.2-0.20190723190241-65acae22fc9d
+# github.com/gogo/protobuf v1.2.1
 github.com/gogo/protobuf/proto
 github.com/gogo/protobuf/sortkeys
 # github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
@@ -313,7 +313,7 @@ gopkg.in/robfig/cron.v2
 gopkg.in/yaml.v2
 # gopkg.in/yaml.v3 v3.0.0-20190709130402-674ba3eaed22
 gopkg.in/yaml.v3
-# k8s.io/api v0.0.0-20190918195907-bd6ac527cfd2
+# k8s.io/api v0.0.0-20190918195907-bd6ac527cfd2 => k8s.io/api v0.0.0-20190918195907-bd6ac527cfd2
 k8s.io/api/admissionregistration/v1beta1
 k8s.io/api/apps/v1
 k8s.io/api/apps/v1beta1
@@ -517,7 +517,7 @@ k8s.io/client-go/util/retry
 k8s.io/client-go/util/workqueue
 # k8s.io/klog v0.4.0
 k8s.io/klog
-# k8s.io/kube-openapi v0.0.0-20190816220812-743ec37842bf
+# k8s.io/kube-openapi v0.0.0-20190228160746-b3a7cee44a30
 k8s.io/kube-openapi/pkg/util/proto
 # k8s.io/test-infra v0.0.0-20191016170131-17458724a5d4
 k8s.io/test-infra/experiment/autobumper/bumper

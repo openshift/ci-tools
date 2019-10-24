@@ -124,7 +124,7 @@ func (c commandExecutor) runAndCheck(cmd *exec.Cmd, action string) ([]byte, erro
 
 	if output, err = cmd.Output(); err != nil {
 		if exitError, ok := err.(*exec.ExitError); ok {
-			logrus.Errorf("%s: failed to '%s' '%s'", pretty, action, exitError.Stderr)
+			logrus.Errorf("%s: failed to %s\n%s", pretty, action, exitError.Stderr)
 		} else {
 			logrus.WithError(err).Errorf("%s: failed to execute", pretty)
 		}

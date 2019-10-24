@@ -90,10 +90,10 @@ func (c ReleaseBuildConfiguration) IsPipelineImage(name string) bool {
 	}
 	switch name {
 	case string(PipelineImageStreamTagReferenceRoot),
-		PipelineImageStreamTagReferenceSource,
-		PipelineImageStreamTagReferenceBinaries,
-		PipelineImageStreamTagReferenceTestBinaries,
-		PipelineImageStreamTagReferenceRPMs:
+		string(PipelineImageStreamTagReferenceSource),
+		string(PipelineImageStreamTagReferenceBinaries),
+		string(PipelineImageStreamTagReferenceTestBinaries),
+		string(PipelineImageStreamTagReferenceRPMs):
 		return true
 	}
 	return false
@@ -475,21 +475,21 @@ type ClusterProfile string
 
 const (
 	ClusterProfileAWS                ClusterProfile = "aws"
-	ClusterProfileAWSAtomic                         = "aws-atomic"
-	ClusterProfileAWSCentos                         = "aws-centos"
-	ClusterProfileAWSCentos40                       = "aws-centos-40"
-	ClusterProfileAWSGluster                        = "aws-gluster"
-	ClusterProfileAzure4                            = "azure4"
-	ClusterProfileGCP                               = "gcp"
-	ClusterProfileGCP40                             = "gcp-40"
-	ClusterProfileGCPHA                             = "gcp-ha"
-	ClusterProfileGCPCRIO                           = "gcp-crio"
-	ClusterProfileGCPLogging                        = "gcp-logging"
-	ClusterProfileGCPLoggingJournald                = "gcp-logging-journald"
-	ClusterProfileGCPLoggingJSONFile                = "gcp-logging-json-file"
-	ClusterProfileGCPLoggingCRIO                    = "gcp-logging-crio"
-	ClusterProfileOpenStack                         = "openstack"
-	ClusterProfileVSphere                           = "vsphere"
+	ClusterProfileAWSAtomic          ClusterProfile = "aws-atomic"
+	ClusterProfileAWSCentos          ClusterProfile = "aws-centos"
+	ClusterProfileAWSCentos40        ClusterProfile = "aws-centos-40"
+	ClusterProfileAWSGluster         ClusterProfile = "aws-gluster"
+	ClusterProfileAzure4             ClusterProfile = "azure4"
+	ClusterProfileGCP                ClusterProfile = "gcp"
+	ClusterProfileGCP40              ClusterProfile = "gcp-40"
+	ClusterProfileGCPHA              ClusterProfile = "gcp-ha"
+	ClusterProfileGCPCRIO            ClusterProfile = "gcp-crio"
+	ClusterProfileGCPLogging         ClusterProfile = "gcp-logging"
+	ClusterProfileGCPLoggingJournald ClusterProfile = "gcp-logging-journald"
+	ClusterProfileGCPLoggingJSONFile ClusterProfile = "gcp-logging-json-file"
+	ClusterProfileGCPLoggingCRIO     ClusterProfile = "gcp-logging-crio"
+	ClusterProfileOpenStack          ClusterProfile = "openstack"
+	ClusterProfileVSphere            ClusterProfile = "vsphere"
 )
 
 func (p ClusterProfile) ClusterType() string {
@@ -629,10 +629,10 @@ type PipelineImageStreamTagReference string
 
 const (
 	PipelineImageStreamTagReferenceRoot         PipelineImageStreamTagReference = "root"
-	PipelineImageStreamTagReferenceSource                                       = "src"
-	PipelineImageStreamTagReferenceBinaries                                     = "bin"
-	PipelineImageStreamTagReferenceTestBinaries                                 = "test-bin"
-	PipelineImageStreamTagReferenceRPMs                                         = "rpms"
+	PipelineImageStreamTagReferenceSource       PipelineImageStreamTagReference = "src"
+	PipelineImageStreamTagReferenceBinaries     PipelineImageStreamTagReference = "bin"
+	PipelineImageStreamTagReferenceTestBinaries PipelineImageStreamTagReference = "test-bin"
+	PipelineImageStreamTagReferenceRPMs         PipelineImageStreamTagReference = "rpms"
 )
 
 // SourceStepConfiguration describes a step that

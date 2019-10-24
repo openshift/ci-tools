@@ -130,12 +130,13 @@ func (o *Options) Bind(fs *flag.FlagSet) {
 	fs.StringVar(&o.Repo, "repo", "", "Limit repos affected to this repo.")
 }
 
+var masterBranches = regexp.MustCompile(`^master.*$`)
 var threeXBranches = regexp.MustCompile(`^(release|enterprise|openshift)-3\.[0-9]+$`)
 var fourXBranches = regexp.MustCompile(`^(release|enterprise|openshift)-(4\.[0-9]+)$`)
 
 func FlavorForBranch(branch string) string {
 	var flavor string
-	if branch == "master" {
+	if masterBranches.MatchString(branch) {
 		flavor = "master"
 	} else if threeXBranches.MatchString(branch) {
 		flavor = "3.x"

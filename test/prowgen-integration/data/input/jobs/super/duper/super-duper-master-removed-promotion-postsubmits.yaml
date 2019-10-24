@@ -24,7 +24,7 @@ postsubmits:
           valueFrom:
             configMapKeyRef:
               key: super-duper-master-removed-promotion.yaml
-              name: ci-operator-misc-configs
+              name: ci-operator-master-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""

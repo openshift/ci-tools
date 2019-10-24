@@ -131,6 +131,16 @@ func TestFlavorForBranch(t *testing.T) {
 			expected: "master",
 		},
 		{
+			name:     "master-fcos branch goes to master configmap",
+			branch:   "master-fcos",
+			expected: "master",
+		},
+		{
+			name:     "branch containing master goes to misc configmap",
+			branch:   "not-really-master-branch",
+			expected: "misc",
+		},
+		{
 			name:     "enterprise 3.6 branch goes to 3.x configmap",
 			branch:   "enterprise-3.6",
 			expected: "3.x",

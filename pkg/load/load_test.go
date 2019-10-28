@@ -609,18 +609,6 @@ func TestConfigFromResolver(t *testing.T) {
 			w.Write(jsonConfig)
 		})
 	}
-	invalidHandler := func(t *testing.T) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			modifiedConfig := *parsedConfig
-			modifiedConfig.BinaryBuildCommands = "incorrect command"
-			jsonConfig, err := json.Marshal(modifiedConfig)
-			if err != nil {
-				t.Fatalf("%s: Failed to marshal parsedConfig to JSON: %v", t.Name(), err)
-			}
-			w.WriteHeader(http.StatusOK)
-			w.Write(jsonConfig)
-		})
-	}
 	var testCases = []struct {
 		name           string
 		handlerWrapper func(t *testing.T, jsonConfig []byte) http.Handler
@@ -663,21 +651,6 @@ func TestConfigFromResolver(t *testing.T) {
 			server.Close()
 		})
 	}
-
-	// make sure it still falls back to env/file config
-	server := httptest.NewServer(invalidHandler(t))
-	info.Address = server.URL
-	if err := os.Setenv("CONFIG_SPEC", rawConfig); err != nil {
-		t.Fatalf("%s: failed to populate env var: %v", t.Name(), err)
-	}
-	config, err := Config("", &info)
-	if err != nil {
-		t.Errorf("%s: expected no error, but got one: %v", t.Name(), err)
-	}
-	if !reflect.DeepEqual(config, parsedConfig) {
-		t.Errorf("%s: didn't get correct config: %v", t.Name(), diff.ObjectReflectDiff(config, parsedConfig))
-	}
-	server.Close()
 }
 
 func TestRegistry(t *testing.T) {

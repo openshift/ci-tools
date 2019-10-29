@@ -451,18 +451,6 @@ func generateJobBase(name, prefix string, info *config.Info, label jc.ProwgenLab
 	}
 	newTrue := true
 	dc := &v1.DecorationConfig{SkipCloning: &newTrue}
-
-	// TODO: remove this after we migrate to the new plank's default_decoration_configs
-	// https://github.com/openshift/release/blob/master/core-services/prow/02_config/_config.yaml#L7-L22
-	if info.ProwgenConfig.Private {
-		dc.GCSConfiguration = &v1.GCSConfiguration{
-			Bucket:       "origin-ci-test-private",
-			MediaTypes:   map[string]string{"log": "text/plain"},
-			PathStrategy: "single",
-		}
-		dc.GCSCredentialsSecret = "gce-sa-credentials-gcs-publisher"
-	}
-
 	base := prowconfig.JobBase{
 		Agent:  string(v1.KubernetesAgent),
 		Labels: labels,

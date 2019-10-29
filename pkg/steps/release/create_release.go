@@ -226,7 +226,7 @@ func (s *assembleReleaseStep) importFromReleaseImage(ctx context.Context, dry bo
 	// retry importing the image a few times because we might race against establishing credentials/roles
 	// and be unable to import images on the same cluster
 	if err := wait.ExponentialBackoff(wait.Backoff{Steps: 4, Duration: 1 * time.Second, Factor: 2}, func() (bool, error) {
-		result, err := s.imageClient.ImageStreamImports(s.config.Namespace).Create(&imageapi.ImageStreamImport{
+		result, err := s.imageClient.ImageStreamImports(s.jobSpec.Namespace).Create(&imageapi.ImageStreamImport{
 			ObjectMeta: meta.ObjectMeta{
 				Name: "release",
 			},

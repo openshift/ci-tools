@@ -27,7 +27,7 @@ type ConfigAgent interface {
 
 type filenameToConfig map[string]api.ReleaseBuildConfiguration
 
-type agent struct {
+type configAgent struct {
 	lock         *sync.RWMutex
 	configs      filenameToConfig
 	configPath   string
@@ -36,7 +36,7 @@ type agent struct {
 	errorMetrics *prometheus.CounterVec
 }
 
-var reloadTimeMetric = prometheus.NewHistogram(
+var configReloadTimeMetric = prometheus.NewHistogram(
 	prometheus.HistogramOpts{
 		Name:    "configresolver_config_reload_duration_seconds",
 		Help:    "config reload duration in seconds",
@@ -45,13 +45,13 @@ var reloadTimeMetric = prometheus.NewHistogram(
 )
 
 func init() {
-	prometheus.MustRegister(reloadTimeMetric)
+	prometheus.MustRegister(configReloadTimeMetric)
 }
 
 // NewConfigAgent returns a ConfigAgent interface that automatically reloads when
 // configs are changed on disk as well as on a period specified with a time.Duration.
 func NewConfigAgent(configPath string, cycle time.Duration, errorMetrics *prometheus.CounterVec) (ConfigAgent, error) {
-	a := &agent{configPath: configPath, cycle: cycle, lock: &sync.RWMutex{}, errorMetrics: errorMetrics}
+	a := &configAgent{configPath: configPath, cycle: cycle, lock: &sync.RWMutex{}, errorMetrics: errorMetrics}
 	configCoalescer := coalescer.NewCoalescer(a.loadFilenameToConfig)
 	err := configCoalescer.Run()
 	if err != nil {
@@ -75,17 +75,17 @@ func NewConfigAgent(configPath string, cycle time.Duration, errorMetrics *promet
 		return nil, fmt.Errorf("Failed to populate watcher: %v", err)
 	}
 	interrupts.Run(func(ctx context.Context) {
-		reloadWatcher(ctx, configWatcher, a, configCoalescer)
+		reloadWatcher(ctx, configWatcher, a.configPath, a.recordError, configCoalescer)
 	})
 	return a, nil
 }
 
-func (a *agent) recordError(label string) {
+func (a *configAgent) recordError(label string) {
 	labels := prometheus.Labels{"error": label}
 	a.errorMetrics.With(labels).Inc()
 }
 
-func (a *agent) GetConfig(info config.Info) (api.ReleaseBuildConfiguration, error) {
+func (a *configAgent) GetConfig(info config.Info) (api.ReleaseBuildConfiguration, error) {
 	a.lock.RLock()
 	config, ok := a.configs[info.Basename()]
 	a.lock.RUnlock()
@@ -95,7 +95,7 @@ func (a *agent) GetConfig(info config.Info) (api.ReleaseBuildConfiguration, erro
 	return config, nil
 }
 
-func (a *agent) GetGeneration() int {
+func (a *configAgent) GetGeneration() int {
 	var gen int
 	a.lock.RLock()
 	gen = a.generation
@@ -104,7 +104,7 @@ func (a *agent) GetGeneration() int {
 }
 
 // loadFilenameToConfig generates a new filenameToConfig map.
-func (a *agent) loadFilenameToConfig() error {
+func (a *configAgent) loadFilenameToConfig() error {
 	log.Debug("Reloading configs")
 	startTime := time.Now()
 	configs := filenameToConfig{}
@@ -134,46 +134,7 @@ func (a *agent) loadFilenameToConfig() error {
 	a.generation++
 	a.lock.Unlock()
 	duration := time.Since(startTime)
-	reloadTimeMetric.Observe(float64(duration.Seconds()))
+	configReloadTimeMetric.Observe(float64(duration.Seconds()))
 	log.WithField("duration", duration).Info("Configs reloaded")
 	return nil
-}
-
-func populateWatcher(watcher *fsnotify.Watcher, root string) error {
-	return filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-		// We only need to watch directories as creation, deletion, and writes
-		// for files in a directory trigger events for the directory
-		if info != nil && info.IsDir() {
-			log.Tracef("Adding %s to watch list", path)
-			err = watcher.Add(path)
-			if err != nil {
-				return fmt.Errorf("Failed to add watch on directory %s: %v", path, err)
-			}
-		}
-		return nil
-	})
-}
-
-func reloadWatcher(ctx context.Context, w *fsnotify.Watcher, a *agent, c coalescer.Coalescer) {
-	for {
-		select {
-		case <-ctx.Done():
-			if err := w.Close(); err != nil {
-				log.WithError(err).Error("Failed to close fsnotify watcher")
-			}
-			return
-		case event := <-w.Events:
-			log.Tracef("Received %v event for %s", event.Op, event.Name)
-			go c.Run()
-			// add new files to be watched; if a watch already exists on a file, the
-			// watch is simply updated
-			if err := populateWatcher(w, a.configPath); err != nil {
-				a.recordError("failed to update watcher")
-				log.WithError(err).Error("Failed to update fsnotify watchlist")
-			}
-		case err := <-w.Errors:
-			a.recordError("received fsnotify error")
-			log.WithError(err).Errorf("Received fsnotify error")
-		}
-	}
 }

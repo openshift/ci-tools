@@ -333,6 +333,7 @@ type TestStepConfiguration struct {
 	// Only one of the following can be not-null.
 	ContainerTestConfiguration                                *ContainerTestConfiguration                                `json:"container,omitempty"`
 	MultiStageTestConfiguration                               *MultiStageTestConfiguration                               `json:"steps,omitempty"`
+	MultiStageTestConfigurationLiteral                        *MultiStageTestConfigurationLiteral                        `json:"literal_steps,omitempty"`
 	OpenshiftAnsibleClusterTestConfiguration                  *OpenshiftAnsibleClusterTestConfiguration                  `json:"openshift_ansible,omitempty"`
 	OpenshiftAnsibleSrcClusterTestConfiguration               *OpenshiftAnsibleSrcClusterTestConfiguration               `json:"openshift_ansible_src,omitempty"`
 	OpenshiftAnsibleCustomClusterTestConfiguration            *OpenshiftAnsibleCustomClusterTestConfiguration            `json:"openshift_ansible_custom,omitempty"`
@@ -436,6 +437,21 @@ type MultiStageTestConfiguration struct {
 	// Workflow is the name of the workflow to be used for this configuration. For fields defined in both
 	// the config and the workflow, the fields from the config will override what is set in Workflow.
 	Workflow *string `json:"workflow,omitempty"`
+}
+
+// MultiStageTestConfigurationLiteral is a form of the MultiStageTestConfiguration that does not include
+// references. It is the type that MultiStageTestConfigurations are converted to when parsed by the
+// ci-operator-configresolver.
+type MultiStageTestConfigurationLiteral struct {
+	// ClusterProfile defines the profile/cloud provider for end-to-end test steps.
+	ClusterProfile ClusterProfile `json:"cluster_profile"`
+	// Pre is the array of test steps run to set up the environment for the test.
+	Pre []LiteralTestStep `json:"pre,omitempty"`
+	// Test is the array of test steps that define the actual test.
+	Test []LiteralTestStep `json:"test,omitempty"`
+	// Post is the array of test steps run after the tests finish and teardown/deprovision resources.
+	// Post steps always run, even if previous steps fail.
+	Post []LiteralTestStep `json:"post,omitempty"`
 }
 
 // Secret describes a secret to be mounted inside a test

@@ -1,0 +1,20 @@
+tag_specification:
+  name: origin-v4.0
+  namespace: openshift
+  tag: ''
+build_root:
+  image_stream_tag:
+    namespace: openshift
+    name: release
+    tag: golang-1.10
+resources:
+  '*':
+    limits:
+      cpu: 500Mi
+    requests:
+      cpu: 10Mi
+tests:
+- as: unit
+  commands: make test-unit
+  container:
+    from: src

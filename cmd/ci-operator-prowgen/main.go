@@ -4,21 +4,23 @@ import (
 	"flag"
 	"fmt"
 	"go/build"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 
-	"github.com/openshift/ci-tools/pkg/promotion"
+	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
+	kubeapi "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	v1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
+	prowconfig "k8s.io/test-infra/prow/config"
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
 	jc "github.com/openshift/ci-tools/pkg/jobconfig"
-	kubeapi "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
-	prowconfig "k8s.io/test-infra/prow/config"
+	"github.com/openshift/ci-tools/pkg/promotion"
 )
 
 const (
@@ -58,6 +60,8 @@ exec ci-operator \
 
 	sshKeyPath    = "/usr/local/github-ssh-credentials-openshift-bot"
 	sshSecretName = "github-ssh-credentials-openshift-bot"
+
+	prowgenConfigFile = ".config.prowgen"
 )
 
 var (
@@ -121,7 +125,7 @@ func (o *options) process() error {
 // Generate a PodSpec that runs `ci-operator`, to be used in Presubmit/Postsubmit
 // Various pieces are derived from `org`, `repo`, `branch` and `target`.
 // `additionalArgs` are passed as additional arguments to `ci-operator`
-func generatePodSpec(info *config.Info, secret *cioperatorapi.Secret) *kubeapi.PodSpec {
+func generatePodSpec(info *prowgenInfo, secret *cioperatorapi.Secret) *kubeapi.PodSpec {
 	configMapKeyRef := kubeapi.EnvVarSource{
 		ConfigMapKeyRef: &kubeapi.ConfigMapKeySelector{
 			LocalObjectReference: kubeapi.LocalObjectReference{
@@ -158,7 +162,7 @@ func generatePodSpec(info *config.Info, secret *cioperatorapi.Secret) *kubeapi.P
 		})
 	}
 
-	if info.ProwgenConfig.Private {
+	if info.config.Private {
 		volumes = append(volumes, kubeapi.Volume{
 			Name: sshSecretName,
 			VolumeSource: kubeapi.VolumeSource{
@@ -191,7 +195,7 @@ func generatePodSpec(info *config.Info, secret *cioperatorapi.Secret) *kubeapi.P
 	}
 }
 
-func generateCiOperatorPodSpec(info *config.Info, secret *cioperatorapi.Secret, target string, additionalArgs ...string) *kubeapi.PodSpec {
+func generateCiOperatorPodSpec(info *prowgenInfo, secret *cioperatorapi.Secret, target string, additionalArgs ...string) *kubeapi.PodSpec {
 	for _, arg := range additionalArgs {
 		if !strings.HasPrefix(arg, "--") {
 			panic(fmt.Sprintf("all args to ci-operator must be in the form --flag=value, not %s", arg))
@@ -211,7 +215,7 @@ func generateCiOperatorPodSpec(info *config.Info, secret *cioperatorapi.Secret, 
 		fmt.Sprintf("--branch=%s", info.Branch),
 	}, additionalArgs...)
 
-	if info.ProwgenConfig.Private {
+	if info.config.Private {
 		ret.Containers[0].Args = append(ret.Containers[0].Args, fmt.Sprintf("--ssh-key-path=%s", filepath.Join(sshKeyPath, "id_rsa")))
 	}
 
@@ -224,7 +228,7 @@ func generateCiOperatorPodSpec(info *config.Info, secret *cioperatorapi.Secret, 
 	return ret
 }
 
-func generatePodSpecTemplate(info *config.Info, secret *cioperatorapi.Secret, release string, test *cioperatorapi.TestStepConfiguration) *kubeapi.PodSpec {
+func generatePodSpecTemplate(info *prowgenInfo, secret *cioperatorapi.Secret, release string, test *cioperatorapi.TestStepConfiguration) *kubeapi.PodSpec {
 	var testImageStreamTag, template string
 	var clusterProfile cioperatorapi.ClusterProfile
 	var needsReleaseRpms bool
@@ -355,7 +359,7 @@ func generatePodSpecTemplate(info *config.Info, secret *cioperatorapi.Secret, re
 	return podSpec
 }
 
-func generatePodSpecRandom(info *config.Info, test *cioperatorapi.TestStepConfiguration) *kubeapi.PodSpec {
+func generatePodSpecRandom(info *prowgenInfo, test *cioperatorapi.TestStepConfiguration) *kubeapi.PodSpec {
 	podSpec := generatePodSpec(info, test.Secret)
 	for _, p := range openshiftInstallerRandomProfiles {
 		podSpec.Volumes = append(podSpec.Volumes, generateClusterProfileVolume("cluster-profile-"+string(p), "cluster-secrets-"+string(p)))
@@ -433,7 +437,7 @@ func generateConfigMapVolume(name string, templates []string) kubeapi.Volume {
 	return ret
 }
 
-func generateJobBase(name, prefix string, info *config.Info, label jc.ProwgenLabel, podSpec *kubeapi.PodSpec, rehearsable bool, pathAlias *string) prowconfig.JobBase {
+func generateJobBase(name, prefix string, info *prowgenInfo, label jc.ProwgenLabel, podSpec *kubeapi.PodSpec, rehearsable bool, pathAlias *string) prowconfig.JobBase {
 	labels := map[string]string{jc.ProwJobLabelGenerated: string(label)}
 
 	if rehearsable {
@@ -467,7 +471,7 @@ func generateJobBase(name, prefix string, info *config.Info, label jc.ProwgenLab
 	return base
 }
 
-func generatePresubmitForTest(name string, info *config.Info, label jc.ProwgenLabel, podSpec *kubeapi.PodSpec, rehearsable bool, pathAlias *string) *prowconfig.Presubmit {
+func generatePresubmitForTest(name string, info *prowgenInfo, label jc.ProwgenLabel, podSpec *kubeapi.PodSpec, rehearsable bool, pathAlias *string) *prowconfig.Presubmit {
 	if len(info.Variant) > 0 {
 		name = fmt.Sprintf("%s-%s", info.Variant, name)
 	}
@@ -484,7 +488,7 @@ func generatePresubmitForTest(name string, info *config.Info, label jc.ProwgenLa
 	}
 }
 
-func generatePostsubmitForTest(name string, info *config.Info, label jc.ProwgenLabel, podSpec *kubeapi.PodSpec, pathAlias *string) *prowconfig.Postsubmit {
+func generatePostsubmitForTest(name string, info *prowgenInfo, label jc.ProwgenLabel, podSpec *kubeapi.PodSpec, pathAlias *string) *prowconfig.Postsubmit {
 	if len(info.Variant) > 0 {
 		name = fmt.Sprintf("%s-%s", info.Variant, name)
 	}
@@ -495,7 +499,7 @@ func generatePostsubmitForTest(name string, info *config.Info, label jc.ProwgenL
 	}
 }
 
-func generatePeriodicForTest(name string, info *config.Info, label jc.ProwgenLabel, podSpec *kubeapi.PodSpec, rehearsable bool, cron string, pathAlias *string) *prowconfig.Periodic {
+func generatePeriodicForTest(name string, info *prowgenInfo, label jc.ProwgenLabel, podSpec *kubeapi.PodSpec, rehearsable bool, cron string, pathAlias *string) *prowconfig.Periodic {
 	if len(info.Variant) > 0 {
 		name = fmt.Sprintf("%s-%s", info.Variant, name)
 	}
@@ -526,7 +530,7 @@ func generatePeriodicForTest(name string, info *config.Info, label jc.ProwgenLab
 //   presubmit and postsubmit that has `--target=[images]`. This postsubmit
 //   will additionally pass `--promote` to ci-operator
 func generateJobs(
-	configSpec *cioperatorapi.ReleaseBuildConfiguration, info *config.Info, label jc.ProwgenLabel,
+	configSpec *cioperatorapi.ReleaseBuildConfiguration, info *prowgenInfo, label jc.ProwgenLabel,
 ) *prowconfig.JobConfig {
 
 	orgrepo := fmt.Sprintf("%s/%s", info.Org, info.Repo)
@@ -583,11 +587,73 @@ func generateJobs(
 	}
 }
 
+// Prowgen holds the information of the prowgen's configuration file.
+type Config struct {
+	Private bool `json:"private,omitempty"`
+}
+
+type prowgenInfo struct {
+	config.Info
+	config Config
+}
+
+func readProwgenConfig(path string) (*Config, error) {
+	var pConfig *Config
+	b, err := ioutil.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
+		return nil, fmt.Errorf("prowgen config found in path %s but couldn't read the file: %v", path, err)
+	}
+
+	if err == nil {
+		if err := yaml.Unmarshal(b, &pConfig); err != nil {
+			return nil, fmt.Errorf("prowgen config found in path %sbut couldn't unmarshal it: %v", path, err)
+		}
+	}
+
+	return pConfig, nil
+}
+
 // generateJobsToDir returns a callback that knows how to generate prow job configuration
-// into the dir provided by consuming ci-operator configuration
+// into the dir provided by consuming ci-operator configuration.
+//
+// Returned callback will cache Prowgen config reads, including unsuccessful attempts
+// The keys are either `org` or `org/repo`, and if present in the cache, a previous
+// execution of the callback already made an attempt to read a prowgen config in the
+// appropriate location, and either stored a pointer to the parsed config if if was
+// successfully read, or stored `nil` when the prowgen config could not be read (usually
+// because the drop-in is not there).
 func generateJobsToDir(dir string, label jc.ProwgenLabel) func(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *config.Info) error {
+	// Return a closure so the cache is shared among callback calls
+	cache := map[string]*Config{}
 	return func(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *config.Info) error {
-		return jc.WriteToDir(dir, info.Org, info.Repo, generateJobs(configSpec, info, label))
+		orgRepo := fmt.Sprintf("%s/%s", info.Org, info.Repo)
+		pInfo := &prowgenInfo{Info: *info, config: Config{Private: false}}
+		var ok bool
+		var err error
+		var orgConfig, repoConfig *Config
+
+		if orgConfig, ok = cache[info.Org]; !ok {
+			if cache[info.Org], err = readProwgenConfig(filepath.Join(info.OrgPath, prowgenConfigFile)); err != nil {
+				return err
+			}
+			orgConfig = cache[info.Org]
+		}
+
+		if repoConfig, ok = cache[orgRepo]; !ok {
+			if cache[orgRepo], err = readProwgenConfig(filepath.Join(info.RepoPath, prowgenConfigFile)); err != nil {
+				return err
+			}
+			repoConfig = cache[orgRepo]
+		}
+
+		switch {
+		case orgConfig != nil:
+			pInfo.config = *orgConfig
+		case repoConfig != nil:
+			pInfo.config = *repoConfig
+		}
+
+		return jc.WriteToDir(dir, info.Org, info.Repo, generateJobs(configSpec, pInfo, label))
 	}
 }
 

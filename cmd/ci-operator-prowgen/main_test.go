@@ -27,7 +27,7 @@ import (
 func TestGeneratePodSpec(t *testing.T) {
 	testSecret := &ciop.Secret{Name: "test-secret", MountPath: "/usr/local/test-secret"}
 	tests := []struct {
-		info           *config.Info
+		info           *prowgenInfo
 		secret         *ciop.Secret
 		target         string
 		additionalArgs []string
@@ -35,7 +35,7 @@ func TestGeneratePodSpec(t *testing.T) {
 		expected *kubeapi.PodSpec
 	}{
 		{
-			info:           &config.Info{Org: "org", Repo: "repo", Branch: "branch"},
+			info:           &prowgenInfo{Info: config.Info{Org: "org", Repo: "repo", Branch: "branch"}},
 			secret:         nil,
 			target:         "target",
 			additionalArgs: []string{},
@@ -81,7 +81,7 @@ func TestGeneratePodSpec(t *testing.T) {
 			},
 		},
 		{
-			info:           &config.Info{Org: "org", Repo: "repo", Branch: "branch"},
+			info:           &prowgenInfo{Info: config.Info{Org: "org", Repo: "repo", Branch: "branch"}},
 			secret:         nil,
 			target:         "target",
 			additionalArgs: []string{"--promote", "--some=thing"},
@@ -129,7 +129,7 @@ func TestGeneratePodSpec(t *testing.T) {
 			},
 		},
 		{
-			info:           &config.Info{Org: "org", Repo: "repo", Branch: "branch"},
+			info:           &prowgenInfo{Info: config.Info{Org: "org", Repo: "repo", Branch: "branch"}},
 			secret:         testSecret,
 			target:         "target",
 			additionalArgs: []string{"--promote", "--some=thing"},
@@ -205,14 +205,14 @@ func TestGeneratePodSpec(t *testing.T) {
 
 func TestGeneratePodSpecTemplate(t *testing.T) {
 	tests := []struct {
-		info    *config.Info
+		info    *prowgenInfo
 		release string
 		test    ciop.TestStepConfiguration
 
 		expected *kubeapi.PodSpec
 	}{
 		{
-			info:    &config.Info{Org: "organization", Repo: "repo", Branch: "branch"},
+			info:    &prowgenInfo{Info: config.Info{Org: "organization", Repo: "repo", Branch: "branch"}},
 			release: "origin-v4.0",
 			test: ciop.TestStepConfiguration{
 				As:       "test",
@@ -309,7 +309,7 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 			},
 		},
 		{
-			info:    &config.Info{Org: "organization", Repo: "repo", Branch: "branch"},
+			info:    &prowgenInfo{Info: config.Info{Org: "organization", Repo: "repo", Branch: "branch"}},
 			release: "origin-v4.0",
 			test: ciop.TestStepConfiguration{
 				As:       "test",
@@ -408,7 +408,7 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 }
 
 func TestGeneratePodSpecRandom(t *testing.T) {
-	info := config.Info{Org: "org", Repo: "repo", Branch: "branch"}
+	info := prowgenInfo{Info: config.Info{Org: "org", Repo: "repo", Branch: "branch"}}
 	test := ciop.TestStepConfiguration{
 		As:       "e2e",
 		Commands: "commands",
@@ -548,11 +548,11 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		repoInfo *config.Info
+		repoInfo *prowgenInfo
 		expected *prowconfig.Presubmit
 	}{{
 		name:     "testname",
-		repoInfo: &config.Info{Org: "org", Repo: "repo", Branch: "branch"},
+		repoInfo: &prowgenInfo{Info: config.Info{Org: "org", Repo: "repo", Branch: "branch"}},
 
 		expected: &prowconfig.Presubmit{
 			JobBase: prowconfig.JobBase{
@@ -586,17 +586,17 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 	standardJobLabels := map[string]string{"ci-operator.openshift.io/prowgen-controlled": "true"}
 	tests := []struct {
 		name     string
-		repoInfo *config.Info
+		repoInfo *prowgenInfo
 
 		expected *prowconfig.Postsubmit
 	}{
 		{
 			name: "name",
-			repoInfo: &config.Info{
+			repoInfo: &prowgenInfo{Info: config.Info{
 				Org:    "organization",
 				Repo:   "repository",
 				Branch: "branch",
-			},
+			}},
 
 			expected: &prowconfig.Postsubmit{
 				JobBase: prowconfig.JobBase{
@@ -614,11 +614,11 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 		},
 		{
 			name: "Name",
-			repoInfo: &config.Info{
+			repoInfo: &prowgenInfo{Info: config.Info{
 				Org:    "Organization",
 				Repo:   "Repository",
 				Branch: "Branch",
-			},
+			}},
 
 			expected: &prowconfig.Postsubmit{
 				JobBase: prowconfig.JobBase{
@@ -634,11 +634,11 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 		},
 		{
 			name: "name",
-			repoInfo: &config.Info{
+			repoInfo: &prowgenInfo{Info: config.Info{
 				Org:    "Organization",
 				Repo:   "Repository",
 				Branch: "Branch",
-			},
+			}},
 
 			expected: &prowconfig.Postsubmit{
 				JobBase: prowconfig.JobBase{
@@ -670,7 +670,7 @@ func TestGenerateJobs(t *testing.T) {
 	tests := []struct {
 		id       string
 		config   *ciop.ReleaseBuildConfiguration
-		repoInfo *config.Info
+		repoInfo *prowgenInfo
 		expected *prowconfig.JobConfig
 	}{
 		{
@@ -680,11 +680,11 @@ func TestGenerateJobs(t *testing.T) {
 					{As: "derTest", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "from"}},
 					{As: "leTest", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "from"}}},
 			},
-			repoInfo: &config.Info{
+			repoInfo: &prowgenInfo{Info: config.Info{
 				Org:    "organization",
 				Repo:   "repository",
 				Branch: "branch",
-			},
+			}},
 			expected: &prowconfig.JobConfig{
 				PresubmitsStatic: map[string][]prowconfig.Presubmit{"organization/repository": {{
 					JobBase: prowconfig.JobBase{
@@ -707,11 +707,11 @@ func TestGenerateJobs(t *testing.T) {
 				Images:                 []ciop.ProjectDirectoryImageBuildStepConfiguration{{}},
 				PromotionConfiguration: &ciop.PromotionConfiguration{},
 			},
-			repoInfo: &config.Info{
+			repoInfo: &prowgenInfo{Info: config.Info{
 				Org:    "organization",
 				Repo:   "repository",
 				Branch: "branch",
-			},
+			}},
 			expected: &prowconfig.JobConfig{
 				PresubmitsStatic: map[string][]prowconfig.Presubmit{"organization/repository": {{
 					JobBase: prowconfig.JobBase{
@@ -748,11 +748,11 @@ func TestGenerateJobs(t *testing.T) {
 					},
 				},
 			},
-			repoInfo: &config.Info{
+			repoInfo: &prowgenInfo{Info: config.Info{
 				Org:    "organization",
 				Repo:   "repository",
 				Branch: "branch",
-			},
+			}},
 			expected: &prowconfig.JobConfig{
 				PresubmitsStatic: map[string][]prowconfig.Presubmit{"organization/repository": {{
 					JobBase: prowconfig.JobBase{
@@ -771,11 +771,11 @@ func TestGenerateJobs(t *testing.T) {
 					},
 				}},
 			},
-			repoInfo: &config.Info{
+			repoInfo: &prowgenInfo{Info: config.Info{
 				Org:    "organization",
 				Repo:   "repository",
 				Branch: "branch",
-			},
+			}},
 			expected: &prowconfig.JobConfig{
 				PresubmitsStatic: map[string][]prowconfig.Presubmit{"organization/repository": {{
 					JobBase: prowconfig.JobBase{
@@ -791,11 +791,11 @@ func TestGenerateJobs(t *testing.T) {
 				Images:                 []ciop.ProjectDirectoryImageBuildStepConfiguration{{}},
 				PromotionConfiguration: &ciop.PromotionConfiguration{Namespace: "ci"},
 			},
-			repoInfo: &config.Info{
+			repoInfo: &prowgenInfo{Info: config.Info{
 				Org:    "organization",
 				Repo:   "repository",
 				Branch: "branch",
-			},
+			}},
 			expected: &prowconfig.JobConfig{
 				PresubmitsStatic: map[string][]prowconfig.Presubmit{"organization/repository": {{
 					JobBase: prowconfig.JobBase{
@@ -819,11 +819,11 @@ func TestGenerateJobs(t *testing.T) {
 					ReleaseTagConfiguration: &ciop.ReleaseTagConfiguration{Namespace: "openshift"},
 				},
 			},
-			repoInfo: &config.Info{
+			repoInfo: &prowgenInfo{Info: config.Info{
 				Org:    "organization",
 				Repo:   "repository",
 				Branch: "branch",
-			},
+			}},
 			expected: &prowconfig.JobConfig{
 				PresubmitsStatic: map[string][]prowconfig.Presubmit{"organization/repository": {{
 					JobBase: prowconfig.JobBase{
@@ -1719,7 +1719,7 @@ func TestGenerateJobBase(t *testing.T) {
 		testName    string
 		name        string
 		prefix      string
-		info        *config.Info
+		info        *prowgenInfo
 		label       jobconfig.ProwgenLabel
 		podSpec     *kubeapi.PodSpec
 		rehearsable bool
@@ -1730,7 +1730,7 @@ func TestGenerateJobBase(t *testing.T) {
 			testName: "no special options",
 			name:     "test",
 			prefix:   "pull",
-			info:     &config.Info{Org: "org", Repo: "repo", Branch: "branch"},
+			info:     &prowgenInfo{Info: config.Info{Org: "org", Repo: "repo", Branch: "branch"}},
 			label:    jobconfig.Generated,
 			podSpec:  &kubeapi.PodSpec{Containers: []kubeapi.Container{{Name: "test"}}},
 			expected: prowconfig.JobBase{
@@ -1747,7 +1747,7 @@ func TestGenerateJobBase(t *testing.T) {
 			testName:    "rehearsable",
 			name:        "test",
 			prefix:      "pull",
-			info:        &config.Info{Org: "org", Repo: "repo", Branch: "branch"},
+			info:        &prowgenInfo{Info: config.Info{Org: "org", Repo: "repo", Branch: "branch"}},
 			label:       jobconfig.Generated,
 			podSpec:     &kubeapi.PodSpec{Containers: []kubeapi.Container{{Name: "test"}}},
 			rehearsable: true,
@@ -1766,7 +1766,7 @@ func TestGenerateJobBase(t *testing.T) {
 			testName: "config variant",
 			name:     "test",
 			prefix:   "pull",
-			info:     &config.Info{Org: "org", Repo: "repo", Branch: "branch", Variant: "whatever"},
+			info:     &prowgenInfo{Info: config.Info{Org: "org", Repo: "repo", Branch: "branch", Variant: "whatever"}},
 			label:    jobconfig.Generated,
 			podSpec:  &kubeapi.PodSpec{Containers: []kubeapi.Container{{Name: "test"}}},
 			expected: prowconfig.JobBase{
@@ -1784,7 +1784,7 @@ func TestGenerateJobBase(t *testing.T) {
 			testName:  "path alias",
 			name:      "test",
 			prefix:    "pull",
-			info:      &config.Info{Org: "org", Repo: "repo", Branch: "branch", Variant: "whatever"},
+			info:      &prowgenInfo{Info: config.Info{Org: "org", Repo: "repo", Branch: "branch", Variant: "whatever"}},
 			label:     jobconfig.Generated,
 			podSpec:   &kubeapi.PodSpec{Containers: []kubeapi.Container{{Name: "test"}}},
 			pathAlias: &path,

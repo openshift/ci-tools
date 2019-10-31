@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/openshift/ci-tools/pkg/api"
-	types "github.com/openshift/ci-tools/pkg/steps/types"
 	"k8s.io/apimachinery/pkg/util/diff"
 )
 
@@ -22,7 +21,7 @@ func TestResolve(t *testing.T) {
 		stepMap     map[string]api.LiteralTestStep
 		chainMap    map[string][]api.TestStep
 		workflowMap map[string]api.MultiStageTestConfiguration
-		expectedRes types.TestFlow
+		expectedRes api.MultiStageTestConfigurationLiteral
 		expectErr   bool
 	}{{
 		// This is a full config that should not change (other than struct) when passed to the Resolver
@@ -60,9 +59,9 @@ func TestResolve(t *testing.T) {
 					}},
 			}},
 		},
-		expectedRes: types.TestFlow{
+		expectedRes: api.MultiStageTestConfigurationLiteral{
 			ClusterProfile: api.ClusterProfileAWS,
-			Pre: []types.TestStep{{
+			Pre: []api.LiteralTestStep{{
 				As:       "ipi-install",
 				From:     "installer",
 				Commands: "openshift-cluster install",
@@ -71,7 +70,7 @@ func TestResolve(t *testing.T) {
 					Limits:   api.ResourceList{"memory": "2Gi"},
 				},
 			}},
-			Test: []types.TestStep{{
+			Test: []api.LiteralTestStep{{
 				As:       "e2e",
 				From:     "my-image",
 				Commands: "make custom-e2e",
@@ -80,7 +79,7 @@ func TestResolve(t *testing.T) {
 					Limits:   api.ResourceList{"memory": "2Gi"},
 				},
 			}},
-			Post: []types.TestStep{{
+			Post: []api.LiteralTestStep{{
 				As:       "ipi-teardown",
 				From:     "installer",
 				Commands: "openshift-cluster destroy",
@@ -110,9 +109,9 @@ func TestResolve(t *testing.T) {
 				},
 			},
 		},
-		expectedRes: types.TestFlow{
+		expectedRes: api.MultiStageTestConfigurationLiteral{
 			ClusterProfile: api.ClusterProfileAWS,
-			Test: []types.TestStep{{
+			Test: []api.LiteralTestStep{{
 				As:       "generic-unit-test",
 				From:     "my-image",
 				Commands: "make test/unit",
@@ -142,7 +141,7 @@ func TestResolve(t *testing.T) {
 				},
 			},
 		},
-		expectedRes: types.TestFlow{},
+		expectedRes: api.MultiStageTestConfigurationLiteral{},
 		expectErr:   true,
 	}, {
 		name: "Test with chain and reference",
@@ -196,9 +195,9 @@ func TestResolve(t *testing.T) {
 					Limits:   api.ResourceList{"memory": "2Gi"},
 				}},
 		},
-		expectedRes: types.TestFlow{
+		expectedRes: api.MultiStageTestConfigurationLiteral{
 			ClusterProfile: api.ClusterProfileAWS,
-			Pre: []types.TestStep{{
+			Pre: []api.LiteralTestStep{{
 				As:       "ipi-install",
 				From:     "installer",
 				Commands: "openshift-cluster install",
@@ -215,7 +214,7 @@ func TestResolve(t *testing.T) {
 					Limits:   api.ResourceList{"memory": "2Gi"},
 				},
 			}},
-			Test: []types.TestStep{{
+			Test: []api.LiteralTestStep{{
 				As:       "e2e",
 				From:     "my-image",
 				Commands: "make custom-e2e",
@@ -224,7 +223,7 @@ func TestResolve(t *testing.T) {
 					Limits:   api.ResourceList{"memory": "2Gi"},
 				},
 			}},
-			Post: []types.TestStep{{
+			Post: []api.LiteralTestStep{{
 				As:       "ipi-teardown",
 				From:     "installer",
 				Commands: "openshift-cluster destroy",
@@ -255,7 +254,7 @@ func TestResolve(t *testing.T) {
 					}},
 			}},
 		},
-		expectedRes: types.TestFlow{},
+		expectedRes: api.MultiStageTestConfigurationLiteral{},
 		expectErr:   true,
 	}, {
 		name: "Test with nested chains",
@@ -298,9 +297,9 @@ func TestResolve(t *testing.T) {
 					}},
 			}},
 		},
-		expectedRes: types.TestFlow{
+		expectedRes: api.MultiStageTestConfigurationLiteral{
 			ClusterProfile: api.ClusterProfileAWS,
-			Pre: []types.TestStep{{
+			Pre: []api.LiteralTestStep{{
 				As:       "ipi-lease",
 				From:     "installer",
 				Commands: "lease",
@@ -368,7 +367,7 @@ func TestResolve(t *testing.T) {
 					}},
 			}},
 		},
-		expectedRes: types.TestFlow{},
+		expectedRes: api.MultiStageTestConfigurationLiteral{},
 		expectErr:   true,
 	}, {
 		name: "Full AWS Workflow",
@@ -427,9 +426,9 @@ func TestResolve(t *testing.T) {
 				}},
 			},
 		},
-		expectedRes: types.TestFlow{
+		expectedRes: api.MultiStageTestConfigurationLiteral{
 			ClusterProfile: api.ClusterProfileAWS,
-			Pre: []types.TestStep{{
+			Pre: []api.LiteralTestStep{{
 				As:       "ipi-install",
 				From:     "installer",
 				Commands: "openshift-cluster install",
@@ -445,7 +444,7 @@ func TestResolve(t *testing.T) {
 					Limits:   api.ResourceList{"memory": "2Gi"},
 				}},
 			},
-			Test: []types.TestStep{{
+			Test: []api.LiteralTestStep{{
 				As:       "e2e",
 				From:     "my-image",
 				Commands: "make custom-e2e",
@@ -454,7 +453,7 @@ func TestResolve(t *testing.T) {
 					Limits:   api.ResourceList{"memory": "2Gi"},
 				},
 			}},
-			Post: []types.TestStep{{
+			Post: []api.LiteralTestStep{{
 				As:       "ipi-teardown",
 				From:     "installer",
 				Commands: "openshift-cluster destroy",
@@ -516,9 +515,9 @@ func TestResolve(t *testing.T) {
 				}},
 			},
 		},
-		expectedRes: types.TestFlow{
+		expectedRes: api.MultiStageTestConfigurationLiteral{
 			ClusterProfile: api.ClusterProfileAzure4,
-			Pre: []types.TestStep{{
+			Pre: []api.LiteralTestStep{{
 				As:       "ipi-install",
 				From:     "installer",
 				Commands: "openshift-cluster install",
@@ -527,7 +526,7 @@ func TestResolve(t *testing.T) {
 					Limits:   api.ResourceList{"memory": "2Gi"},
 				},
 			}},
-			Test: []types.TestStep{{
+			Test: []api.LiteralTestStep{{
 				As:       "custom-e2e",
 				From:     "test-image",
 				Commands: "make custom-e2e-2",
@@ -536,7 +535,7 @@ func TestResolve(t *testing.T) {
 					Limits:   api.ResourceList{"memory": "2Gi"},
 				},
 			}},
-			Post: []types.TestStep{{
+			Post: []api.LiteralTestStep{{
 				As:       "ipi-teardown",
 				From:     "installer",
 				Commands: "openshift-cluster destroy",

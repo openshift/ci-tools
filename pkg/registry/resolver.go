@@ -4,12 +4,11 @@ import (
 	"fmt"
 
 	"github.com/openshift/ci-tools/pkg/api"
-	types "github.com/openshift/ci-tools/pkg/steps/types"
 	"k8s.io/apimachinery/pkg/util/errors"
 )
 
 type Resolver interface {
-	Resolve(config api.MultiStageTestConfiguration) (types.TestFlow, error)
+	Resolve(config api.MultiStageTestConfiguration) (api.MultiStageTestConfigurationLiteral, error)
 }
 
 // registry will hold all the registry information needed to convert between the
@@ -29,12 +28,12 @@ func NewResolver(stepsByName map[string]api.LiteralTestStep, chainsByName map[st
 	}
 }
 
-func (r *registry) Resolve(config api.MultiStageTestConfiguration) (types.TestFlow, error) {
+func (r *registry) Resolve(config api.MultiStageTestConfiguration) (api.MultiStageTestConfigurationLiteral, error) {
 	var resolveErrors []error
 	if config.Workflow != nil {
 		workflow, ok := r.workflowsByName[*config.Workflow]
 		if !ok {
-			return types.TestFlow{}, fmt.Errorf("no workflow named %s", *config.Workflow)
+			return api.MultiStageTestConfigurationLiteral{}, fmt.Errorf("no workflow named %s", *config.Workflow)
 		}
 		// is "" a valid cluster profile (for instance, can a user specify this for a random profile)?
 		// if yes, we should change ClusterProfile to a pointer
@@ -51,7 +50,7 @@ func (r *registry) Resolve(config api.MultiStageTestConfiguration) (types.TestFl
 			config.Post = workflow.Post
 		}
 	}
-	expandedFlow := types.TestFlow{
+	expandedFlow := api.MultiStageTestConfigurationLiteral{
 		ClusterProfile: config.ClusterProfile,
 	}
 	pre, errs := r.process(config.Pre)
@@ -67,12 +66,12 @@ func (r *registry) Resolve(config api.MultiStageTestConfiguration) (types.TestFl
 	resolveErrors = append(resolveErrors, errs...)
 
 	if resolveErrors != nil {
-		return types.TestFlow{}, errors.NewAggregate(resolveErrors)
+		return api.MultiStageTestConfigurationLiteral{}, errors.NewAggregate(resolveErrors)
 	}
 	return expandedFlow, nil
 }
 
-func (r *registry) process(steps []api.TestStep) (internalSteps []types.TestStep, errs []error) {
+func (r *registry) process(steps []api.TestStep) (literalSteps []api.LiteralTestStep, errs []error) {
 	// unroll chains
 	var unrolledSteps []api.TestStep
 	unrolledSteps, err := r.unrollChains(steps)
@@ -94,10 +93,9 @@ func (r *registry) process(steps []api.TestStep) (internalSteps []types.TestStep
 			errs = append(errs, fmt.Errorf("encountered TestStep where both `Reference` and `LiteralTestStep` are nil"))
 			continue
 		}
-		internalStep := toInternal(step)
-		internalSteps = append(internalSteps, internalStep)
+		literalSteps = append(literalSteps, step)
 	}
-	if err := checkForDuplicates(internalSteps); err != nil {
+	if err := checkForDuplicates(literalSteps); err != nil {
 		errs = append(errs, err...)
 	}
 	return
@@ -131,17 +129,7 @@ func (r *registry) dereference(input api.TestStep) (api.LiteralTestStep, error) 
 	return step, nil
 }
 
-func toInternal(input api.LiteralTestStep) types.TestStep {
-	return types.TestStep{
-		As:          input.As,
-		From:        input.From,
-		Commands:    input.Commands,
-		ArtifactDir: input.ArtifactDir,
-		Resources:   input.Resources,
-	}
-}
-
-func checkForDuplicates(input []types.TestStep) (errs []error) {
+func checkForDuplicates(input []api.LiteralTestStep) (errs []error) {
 	seen := make(map[string]bool)
 	for _, step := range input {
 		_, ok := seen[step.As]

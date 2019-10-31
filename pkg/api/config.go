@@ -112,10 +112,10 @@ func validateTestStepConfiguration(fieldRoot string, input []TestStepConfigurati
 		} else if ok := regexp.MustCompile("^[a-zA-Z0-9_.-]*$").MatchString(test.As); !ok {
 			validationErrors = append(validationErrors, fmt.Errorf("%s.as: '%s' is not valid value, should be [a-zA-Z0-9_.-]", fieldRootN, test.As))
 		}
-		if hasCommands, hasSteps := len(test.Commands) != 0, test.MultiStageTestConfiguration != nil; !hasCommands && !hasSteps {
-			validationErrors = append(validationErrors, fmt.Errorf("%s: either `commands` or `steps` should be set", fieldRootN))
-		} else if hasCommands && hasSteps {
-			validationErrors = append(validationErrors, fmt.Errorf("%s: `commands` and `steps` are mutually exclusive", fieldRootN))
+		if hasCommands, hasSteps, hasLiteral := len(test.Commands) != 0, test.MultiStageTestConfiguration != nil, test.MultiStageTestConfigurationLiteral != nil; !hasCommands && !hasSteps && !hasLiteral {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: either `commands`, `steps`, or `literal_steps` should be set", fieldRootN))
+		} else if hasCommands && (hasSteps || hasLiteral) || (hasSteps && hasLiteral) {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: `commands`, `steps`, and `literal_steps` are mutually exclusive", fieldRootN))
 		}
 
 		if test.Secret != nil {

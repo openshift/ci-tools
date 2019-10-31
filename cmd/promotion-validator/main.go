@@ -72,6 +72,7 @@ func main() {
 		logrus.Fatalf("Invalid options: %v", err)
 	}
 
+	// parse group.yml from ocp-build-data
 	raw, err := ioutil.ReadFile(filepath.Join(o.ocpBuildDataRepoDir, "group.yml"))
 	if err != nil {
 		logrus.WithError(err).Fatal("Could not load OCP build data branch configuration.")
@@ -81,6 +82,27 @@ func main() {
 	if err := yaml.Unmarshal(raw, &groupConfig); err != nil {
 		logrus.WithError(err).Fatal("Could not unmarshal OCP build data branch configuration.")
 	}
+
+	// parse whitelist.yml from ocp-build-data
+	whitelistRaw, err := ioutil.ReadFile(filepath.Join(o.ocpBuildDataRepoDir, "whitelist.yml"))
+	if err != nil {
+		logrus.WithError(err).Fatal("Could not load OCP build data image white list.")
+	}
+
+	var wl WhiteList
+	if err := yaml.Unmarshal(whitelistRaw, &wl); err != nil {
+		logrus.WithError(err).Fatal("Could not unmarshal OCP build data branch configuration.")
+	}
+
+	// initial the whiteList map
+	imageWhiteList := map[string]bool{}
+	for _, v := range wl.OnlyExistUpstream.Images {
+		imageWhiteList[v] = true
+	}
+	for _, v := range wl.NotCompleteDownstream.Images {
+		imageWhiteList[v] = true
+	}
+
 	targetRelease := fmt.Sprintf("%d.%d", groupConfig.Vars.Major, groupConfig.Vars.Minor)
 	if expected, actual := targetRelease, o.currentRelease; expected != actual {
 		logrus.Fatalf("Release configured in OCP build data (%s) does not match that in CI (%s)", expected, actual)
@@ -126,10 +148,17 @@ func main() {
 			}
 			logger = logger.WithField("image", image.To)
 			productImageName := fmt.Sprintf("openshift/ose-%s", image.To)
+			imageToString := fmt.Sprintf("%s", image.To)
 			logger.Debug("Validating image.")
 			productConfig, exists := imageConfigByName[productImageName]
+			productConfigName := "no-exist-image-name"
+			if strings.Contains(productConfig.path, "/") {
+				productConfigName = strings.Split(strings.Split(productConfig.path, "/")[1], ".")[0]
+			}
 			if !exists {
-				logger.Errorf("Promotion found in CI for image %s, but no configuration for %s found in OCP build data.", image.To, productImageName)
+				if _, e := imageWhiteList[imageToString]; !e {
+					logger.Errorf("Promotion found in CI for image %s, but no configuration for %s found in OCP build data.", image.To, productImageName)
+				}
 				continue
 			}
 
@@ -151,12 +180,15 @@ func main() {
 
 			resolvedBranch := strings.Replace(productConfig.Content.Source.Git.Branch.Target, "{MAJOR}.{MINOR}", targetRelease, -1)
 			if actual, expected := info.Branch, resolvedBranch; actual != expected {
-				if expected == "" {
-					logger.Error("Target branch not set in OCP build data configuration.")
-				} else {
-					logger.Errorf("Target branch in CI Operator configuration (%s) does not match that resolved from OCP build data (%s).", actual, expected)
+
+				if _, e := imageWhiteList[productConfigName]; !e {
+					if expected == "" {
+						logger.Error("Target branch not set in OCP build data configuration.")
+					} else {
+						logger.Errorf("Target branch in CI Operator configuration (%s) does not match that resolved from OCP build data (%s).", actual, expected)
+					}
+					foundFailures = true
 				}
-				foundFailures = true
 			}
 
 			// there is no standard, we just need to generally point at the right thing
@@ -167,12 +199,14 @@ func main() {
 				fmt.Sprintf("https://github.com/%s/%s.git", info.Org, info.Repo),
 			}
 			if actual, expected := productConfig.Content.Source.Git.Url, sets.NewString(urls...); !expected.Has(actual) {
-				if actual == "" {
-					logger.Error("Source repo URL not set in OCP build data configuration.")
-				} else {
-					logger.Errorf("Source repo URL in OCP build data (%s) is not a recognized URL for %s/%s.", actual, info.Org, info.Repo)
+				if _, e := imageWhiteList[productConfigName]; !e {
+					if actual == "" {
+						logger.Error("Source repo URL not set in OCP build data configuration.")
+					} else {
+						logger.Errorf("Source repo URL in OCP build data (%s) is not a recognized URL for %s/%s.", actual, info.Org, info.Repo)
+					}
+					foundFailures = true
 				}
-				foundFailures = true
 			}
 		}
 		return nil
@@ -184,6 +218,18 @@ func main() {
 		logrus.Fatal("Found configurations that promote to official streams but do not have corresponding OCP build data configurations.")
 	}
 }
+
+// imageWhiteList is a List parse from whitelist.yaml from ocp-build-data to exclude images
+// only exist on u/s
+type WhiteList struct {
+	OnlyExistUpstream struct {
+		Images []string `yaml:"images"`
+	} `yaml:"only_exist_upstream"`
+	NotCompleteDownstream struct {
+		Images []string `yaml:"images"`
+	} `yaml:"not_complete_downstream"`
+}
+
 
 // branchConfig holds branch-wide configurations in the ocp-build-data repository
 type branchConfig struct {

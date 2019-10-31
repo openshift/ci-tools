@@ -38,7 +38,7 @@ tag_specification:
   namespace: ci
 tests:
 - as: multi-stage
-  steps:
+  literal_steps:
     pre:
     - as: pre0
       from: base

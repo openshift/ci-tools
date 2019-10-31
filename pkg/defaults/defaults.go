@@ -155,9 +155,8 @@ func FromConfig(
 			initialReleaseStep := release.AssembleReleaseStep(false, *rawStep.ReleaseImagesTagStepConfiguration, params, config.Resources, podClient, imageClient, artifactDir, jobSpec, dryLogger)
 			addProvidesForStep(initialReleaseStep, params)
 			buildSteps = append(buildSteps, initialReleaseStep)
-
 		} else if testStep := rawStep.TestStepConfiguration; testStep != nil {
-			if test := testStep.MultiStageTestConfiguration; test != nil {
+			if test := testStep.MultiStageTestConfigurationLiteral; test != nil {
 				step = steps.MultiStageTestStep(*testStep, config, params, podClient, secretGetter, artifactDir, jobSpec, dryLogger)
 				if test.ClusterProfile != "" {
 					if leaseClient == nil {
@@ -423,7 +422,7 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.Job
 
 	for i := range config.Tests {
 		test := &config.Tests[i]
-		if test.ContainerTestConfiguration != nil || test.MultiStageTestConfiguration != nil || (test.OpenshiftInstallerClusterTestConfiguration != nil && test.OpenshiftInstallerClusterTestConfiguration.Upgrade) {
+		if test.ContainerTestConfiguration != nil || test.MultiStageTestConfigurationLiteral != nil || (test.OpenshiftInstallerClusterTestConfiguration != nil && test.OpenshiftInstallerClusterTestConfiguration.Upgrade) {
 			buildSteps = append(buildSteps, api.StepConfiguration{TestStepConfiguration: test})
 		}
 	}

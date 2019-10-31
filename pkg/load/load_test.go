@@ -661,7 +661,7 @@ func TestRegistry(t *testing.T) {
 				From:     "installer",
 				Commands: "openshift-cluster destroy\n",
 				Resources: api.ResourceRequirements{
-					Requests: api.ResourceList{"cpu": "1000m", "mem": "2Gi"},
+					Requests: api.ResourceList{"cpu": "1000m", "memory": "2Gi"},
 				},
 			},
 			"ipi-deprovision-must-gather": {
@@ -669,7 +669,7 @@ func TestRegistry(t *testing.T) {
 				From:     "installer",
 				Commands: "gather\n",
 				Resources: api.ResourceRequirements{
-					Requests: api.ResourceList{"cpu": "1000m", "mem": "2Gi"},
+					Requests: api.ResourceList{"cpu": "1000m", "memory": "2Gi"},
 				},
 			},
 			"ipi-install-install": {
@@ -677,7 +677,7 @@ func TestRegistry(t *testing.T) {
 				From:     "installer",
 				Commands: "openshift-cluster install\n",
 				Resources: api.ResourceRequirements{
-					Requests: api.ResourceList{"cpu": "1000m", "mem": "2Gi"},
+					Requests: api.ResourceList{"cpu": "1000m", "memory": "2Gi"},
 				},
 			},
 			"ipi-install-rbac": {
@@ -685,7 +685,7 @@ func TestRegistry(t *testing.T) {
 				From:     "installer",
 				Commands: "setup-rbac\n",
 				Resources: api.ResourceRequirements{
-					Requests: api.ResourceList{"cpu": "1000m", "mem": "2Gi"},
+					Requests: api.ResourceList{"cpu": "1000m", "memory": "2Gi"},
 				},
 			},
 		}
@@ -741,7 +741,7 @@ func TestRegistry(t *testing.T) {
 		}
 	)
 
-	references, chains, workflows, err := Registry("../../test/multistage-registry")
+	references, chains, workflows, err := Registry("../../test/multistage-registry/registry")
 	if err == nil && testCase.expectedError == true {
 		t.Errorf("%s: got no error when error was expected", testCase.name)
 	}

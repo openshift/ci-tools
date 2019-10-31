@@ -28,11 +28,12 @@ const (
 )
 
 type options struct {
-	configPath  string
-	logLevel    string
-	address     string
-	gracePeriod time.Duration
-	cycle       time.Duration
+	configPath   string
+	registryPath string
+	logLevel     string
+	address      string
+	gracePeriod  time.Duration
+	cycle        time.Duration
 }
 
 type traceResponseWriter struct {
@@ -88,6 +89,7 @@ func gatherOptions() options {
 	o := options{}
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	fs.StringVar(&o.configPath, "config", "", "Path to config dirs")
+	fs.StringVar(&o.registryPath, "registry", "", "Path to registry dirs")
 	fs.StringVar(&o.logLevel, "log-level", "info", "Level at which to log output.")
 	fs.StringVar(&o.address, "address", ":8080", "Address to run server on")
 	fs.DurationVar(&o.gracePeriod, "gracePeriod", time.Second*10, "Grace period for server shutdown")
@@ -140,7 +142,7 @@ func genericHandler() http.HandlerFunc {
 	}
 }
 
-func resolveConfig(agent load.ConfigAgent) http.HandlerFunc {
+func resolveConfig(configAgent load.ConfigAgent, registryAgent load.RegistryAgent) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "GET" {
 			w.WriteHeader(http.StatusNotImplemented)
@@ -170,12 +172,20 @@ func resolveConfig(agent load.ConfigAgent) http.HandlerFunc {
 			Variant: variant,
 		}
 
-		config, err := agent.GetConfig(info)
+		config, err := configAgent.GetConfig(info)
 		if err != nil {
 			recordError("config not found")
 			w.WriteHeader(http.StatusBadRequest)
 			fmt.Fprintf(w, "failed to get config: %v", err)
 			log.WithError(err).Warning("failed to get config")
+			return
+		}
+		config, err = registryAgent.ResolveConfig(config)
+		if err != nil {
+			recordError("failed to resolve config with registry")
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "failed to resolve config with registry: %v", err)
+			log.WithError(err).Warning("failed to resolve config with registry")
 			return
 		}
 		jsonConfig, err := json.MarshalIndent(config, "", "  ")
@@ -191,7 +201,14 @@ func resolveConfig(agent load.ConfigAgent) http.HandlerFunc {
 	}
 }
 
-func getGeneration(agent load.ConfigAgent) http.HandlerFunc {
+func getConfigGeneration(agent load.ConfigAgent) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, "%d", agent.GetGeneration())
+	}
+}
+
+func getRegistryGeneration(agent load.RegistryAgent) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintf(w, "%d", agent.GetGeneration())
@@ -220,10 +237,16 @@ func main() {
 		log.Fatalf("Failed to get config agent: %v", err)
 	}
 
+	registryAgent, err := load.NewRegistryAgent(o.registryPath, o.cycle, configresolverMetrics.errorRate)
+	if err != nil {
+		log.Fatalf("Failed to get registry agent: %v", err)
+	}
+
 	// add handler func for incorrect paths as well; can help with identifying errors/404s caused by incorrect paths
 	http.HandleFunc("/", handleWithMetrics(genericHandler()))
-	http.HandleFunc("/config", handleWithMetrics(resolveConfig(configAgent)))
-	http.HandleFunc("/generation", handleWithMetrics(getGeneration(configAgent)))
+	http.HandleFunc("/config", handleWithMetrics(resolveConfig(configAgent, registryAgent)))
+	http.HandleFunc("/configGeneration", handleWithMetrics(getConfigGeneration(configAgent)))
+	http.HandleFunc("/registryGeneration", handleWithMetrics(getRegistryGeneration(registryAgent)))
 	interrupts.ListenAndServe(&http.Server{Addr: o.address}, o.gracePeriod)
 	health.ServeReady()
 	interrupts.WaitForGracefulShutdown()

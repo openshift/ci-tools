@@ -28,6 +28,152 @@
       "openshift_installer": {
         "cluster_profile": "aws"
       }
+    },
+    {
+      "as": "e2e-azure",
+      "commands": "",
+      "literal_steps": {
+        "cluster_profile": "azure",
+        "pre": [
+          {
+            "as": "ipi-install-rbac",
+            "from": "installer",
+            "commands": "setup-rbac\n",
+            "resources": {
+              "requests": {
+                "cpu": "1000m",
+                "memory": "2Gi"
+              },
+              "limits": null
+            }
+          },
+          {
+            "as": "ipi-install-install",
+            "from": "installer",
+            "commands": "openshift-cluster install\n",
+            "resources": {
+              "requests": {
+                "cpu": "1000m",
+                "memory": "2Gi"
+              },
+              "limits": null
+            }
+          }
+        ],
+        "test": [
+          {
+            "as": "e2e",
+            "from": "my-image",
+            "commands": "make azure-e2e",
+            "resources": {
+              "requests": {
+                "cpu": "1000m",
+                "memory": "2Gi"
+              },
+              "limits": null
+            }
+          }
+        ],
+        "post": [
+          {
+            "as": "ipi-deprovision-must-gather",
+            "from": "installer",
+            "commands": "gather\n",
+            "resources": {
+              "requests": {
+                "cpu": "1000m",
+                "memory": "2Gi"
+              },
+              "limits": null
+            }
+          },
+          {
+            "as": "ipi-deprovision-deprovision",
+            "from": "installer",
+            "commands": "openshift-cluster destroy\n",
+            "resources": {
+              "requests": {
+                "cpu": "1000m",
+                "memory": "2Gi"
+              },
+              "limits": null
+            }
+          }
+        ]
+      }
+    },
+    {
+      "as": "e2e-gcp",
+      "commands": "",
+      "literal_steps": {
+        "cluster_profile": "gcp",
+        "pre": [
+          {
+            "as": "ipi-install-rbac",
+            "from": "installer",
+            "commands": "setup-rbac\n",
+            "resources": {
+              "requests": {
+                "cpu": "1000m",
+                "memory": "2Gi"
+              },
+              "limits": null
+            }
+          },
+          {
+            "as": "ipi-install-install",
+            "from": "installer",
+            "commands": "openshift-cluster install\n",
+            "resources": {
+              "requests": {
+                "cpu": "1000m",
+                "memory": "2Gi"
+              },
+              "limits": null
+            }
+          }
+        ],
+        "test": [
+          {
+            "as": "e2e",
+            "from": "my-image",
+            "commands": "make custom-e2e",
+            "resources": {
+              "requests": {
+                "cpu": "1000m",
+                "memory": "2Gi"
+              },
+              "limits": null
+            }
+          }
+        ],
+        "post": [
+          {
+            "as": "ipi-deprovision-must-gather",
+            "from": "installer",
+            "commands": "gather\n",
+            "resources": {
+              "requests": {
+                "cpu": "1000m",
+                "memory": "2Gi"
+              },
+              "limits": null
+            }
+          },
+          {
+            "as": "ipi-deprovision-deprovision",
+            "from": "installer",
+            "commands": "openshift-cluster destroy\n",
+            "resources": {
+              "requests": {
+                "cpu": "1000m",
+                "memory": "2Gi"
+              },
+              "limits": null
+            }
+          }
+        ]
+      }
     }
   ],
   "resources": {

@@ -7,9 +7,11 @@ trap 'rm -rf "${WORKDIR}"' EXIT
 TEST_ROOT="$(dirname "${BASH_SOURCE[0]}")"
 readonly TEST_ROOT
 readonly TEST_CONFIG_DIR="${TEST_ROOT}/configs"
+readonly TEST_REGISTRY_DIR="${TEST_ROOT}/../../multistage-registry/registry"
 readonly TEST_CONFIG="${TEST_CONFIG_DIR}/master/openshift-hyperkube-master.yaml"
 readonly TEST_NAMESPACE="testns"
-readonly EXPECTED="${TEST_ROOT}/expected.json"
+readonly EXPECTED1="${TEST_ROOT}/expected/hyperkube.json"
+readonly EXPECTED2="${TEST_ROOT}/expected/installer.json"
 readonly OUT="${WORKDIR}/out.json"
 readonly ERR="${WORKDIR}/err.json"
 readonly ARTIFACT_DIR="${WORKDIR}/artifacts"
@@ -25,13 +27,13 @@ if ! ci-operator --dry-run --determinize-output --namespace "${TEST_NAMESPACE}" 
     exit 1
 fi
 
-if ! diff "${EXPECTED}" "${OUT}"; then
+if ! diff "${EXPECTED1}" "${OUT}"; then
     echo "ERROR: differences have been found"
     exit 1
 fi
 
 # Run test with ci-operator-configresolver
-ci-operator-configresolver -config "${TEST_CONFIG_DIR}" -log-level debug -cycle 2m &
+ci-operator-configresolver -config "${TEST_CONFIG_DIR}" -registry "${TEST_REGISTRY_DIR}" -log-level debug -cycle 2m &
 PID=$!
 # Wait until ready
 for (( i = 0; i < 10; i++ )); do
@@ -48,7 +50,7 @@ for (( i = 0; i < 10; i++ )); do
 done
 
 if ! ci-operator --dry-run --determinize-output --namespace "${TEST_NAMESPACE}" --config "${TEST_CONFIG}" \
-    -resolver-address "http://127.0.0.1:8080" -org "openshift" -repo "hyperkube" -branch "master" 2> "${ERR}" | jq --sort-keys . > "${OUT}"; then
+    -resolver-address "http://127.0.0.1:8080" -org "openshift" -repo "installer" -branch "release-4.2" --lease-server "http://lease" 2> "${ERR}" | jq --sort-keys . > "${OUT}"; then
     echo "ERROR: ci-operator failed."
     cat "${ERR}"
     kill $PID
@@ -64,7 +66,7 @@ if grep "level=error" "${ERR}"; then
     exit 1
 fi
 
-if ! diff "${EXPECTED}" "${OUT}"; then
+if ! diff "${EXPECTED2}" "${OUT}"; then
     echo "ERROR: differences have been found"
     kill $PID
     wait $PID

@@ -60,8 +60,8 @@ type dashboard struct {
 	existing   sets.String
 }
 
-func genericDashboardFor(role string) dashboard {
-	return dashboard{
+func genericDashboardFor(role string) *dashboard {
+	return &dashboard{
 		Dashboard: &config.Dashboard{
 			Name:         fmt.Sprintf("redhat-openshift-%s", role),
 			DashboardTab: []*config.DashboardTab{},
@@ -71,10 +71,10 @@ func genericDashboardFor(role string) dashboard {
 	}
 }
 
-func dashboardFor(stream, version, role string) dashboard {
-	return dashboard{
+func dashboardFor(stream, version, role string) *dashboard {
+	return &dashboard{
 		Dashboard: &config.Dashboard{
-			Name:         fmt.Sprintf("redhat-openshift-release-%s-%s-%s", version, role, stream),
+			Name:         fmt.Sprintf("redhat-openshift-%s-release-%s-%s", stream, version, role),
 			DashboardTab: []*config.DashboardTab{},
 		},
 		testGroups: []*config.TestGroup{},
@@ -156,9 +156,11 @@ func main() {
 		}
 	}
 
+	unique := sets.NewString()
+	dashboards := make(map[string]*dashboard)
 	genericInforming := genericDashboardFor("informing")
+	dashboards[genericInforming.Name] = genericInforming
 
-	var dashboards []dashboard
 	if err := filepath.Walk(o.releaseConfigDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -178,10 +180,10 @@ func main() {
 
 		var stream string
 		switch {
-		case strings.HasSuffix(releaseConfig.Name, ".nightly") || strings.HasPrefix(releaseConfig.Name, "stable-4."):
+		case strings.HasSuffix(releaseConfig.Name, ".ci") || strings.HasSuffix(releaseConfig.Name, ".nightly") || strings.HasPrefix(releaseConfig.Name, "stable-4."):
 			stream = "ocp"
-		case strings.HasSuffix(releaseConfig.Name, ".ci"):
-			stream = "ci"
+		case strings.HasSuffix(releaseConfig.Name, ".okd"):
+			stream = "okd"
 		default:
 			logrus.Infof("release is not recognized: %s", releaseConfig.Name)
 			return nil
@@ -194,8 +196,24 @@ func main() {
 		version := m[1]
 
 		blocking := dashboardFor(stream, version, "blocking")
+		if existing, ok := dashboards[blocking.Name]; ok {
+			blocking = existing
+		} else {
+			dashboards[blocking.Name] = blocking
+		}
 		informing := dashboardFor(stream, version, "informing")
+		if existing, ok := dashboards[informing.Name]; ok {
+			informing = existing
+		} else {
+			dashboards[informing.Name] = informing
+		}
+
 		for _, job := range releaseConfig.Verify {
+			if unique.Has(job.ProwJob.Name) {
+				continue
+			}
+			unique.Insert(job.ProwJob.Name)
+
 			delete(informingPeriodics, job.ProwJob.Name)
 			if job.ProwJob.Name == "release-openshift-origin-installer-e2e-aws-upgrade" {
 				genericInforming.add(job.ProwJob.Name)
@@ -212,28 +230,25 @@ func main() {
 				continue
 			}
 			switch stream {
-			case "ci":
-				// preparing to rename the jobs from -openshift-origin- to -openshift-ci-, remove -origin-
-				// after that rename
-				if !strings.Contains(p.Name, "-openshift-origin-") && !strings.Contains(p.Name, "-openshift-ci-") {
+			case "okd":
+				if !strings.Contains(p.Name, "-openshift-okd-") {
 					continue
 				}
-			case "nightly":
-				if !strings.Contains(p.Name, "-openshift-ocp-") {
+			case "ocp":
+				// preparing to rename the jobs from -openshift-origin- to -openshift-ci-, remove -origin-
+				// after that rename
+				if !strings.Contains(p.Name, "-openshift-origin-") && !strings.Contains(p.Name, "-openshift-ci-") && !strings.Contains(p.Name, "-openshift-ocp-") {
 					continue
 				}
 			}
+
+			if unique.Has(p.Name) {
+				continue
+			}
+			unique.Insert(p.Name)
+
 			informing.add(p.Name)
 			delete(informingPeriodics, p.Name)
-		}
-		if len(blocking.testGroups) > 0 {
-			dashboards = append(dashboards, blocking)
-		}
-		if len(informing.testGroups) > 0 {
-			dashboards = append(dashboards, informing)
-		}
-		if len(genericInforming.testGroups) > 0 {
-			dashboards = append(dashboards, genericInforming)
 		}
 		return nil
 	}); err != nil {
@@ -243,6 +258,9 @@ func main() {
 	// first, update the overall list of dashboards that exist for the redhat group
 	dashboardNames := sets.NewString()
 	for _, dash := range dashboards {
+		if len(dash.testGroups) == 0 {
+			continue
+		}
 		dashboardNames.Insert(dash.Name)
 	}
 
@@ -275,6 +293,9 @@ func main() {
 
 	// then, rewrite any dashboard configs we are generating
 	for _, dash := range dashboards {
+		if len(dash.testGroups) == 0 {
+			continue
+		}
 		partialConfig := config.Configuration{
 			TestGroups: dash.testGroups,
 			Dashboards: []*config.Dashboard{dash.Dashboard},

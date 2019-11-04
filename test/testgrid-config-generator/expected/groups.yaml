@@ -2,10 +2,8 @@ dashboard_groups:
 - dashboard_names:
   - other
   - redhat-openshift-informing
-  - redhat-openshift-release-4.1-blocking-ci
-  - redhat-openshift-release-4.1-informing-ci
-  - redhat-openshift-release-4.2-blocking-ci
-  - redhat-openshift-release-4.2-blocking-ocp
-  - redhat-openshift-release-4.2-informing-ci
-  - redhat-openshift-release-4.2-informing-ocp
+  - redhat-openshift-ocp-release-4.1-blocking
+  - redhat-openshift-ocp-release-4.1-informing
+  - redhat-openshift-ocp-release-4.2-blocking
+  - redhat-openshift-ocp-release-4.2-informing
   name: redhat

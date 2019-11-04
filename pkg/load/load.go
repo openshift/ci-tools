@@ -89,6 +89,9 @@ func Registry(root string) (references map[string]api.LiteralTestStep, chains ma
 	chains = map[string][]api.TestStep{}
 	workflows = map[string]api.MultiStageTestConfiguration{}
 	err = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
 		if !info.IsDir() {
 			bytes, err := ioutil.ReadFile(path)
 			if err != nil {

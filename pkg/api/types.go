@@ -508,6 +508,7 @@ const (
 	ClusterProfileVSphere            ClusterProfile = "vsphere"
 )
 
+// ClusterType maps profiles to the type string used by tests.
 func (p ClusterProfile) ClusterType() string {
 	switch p {
 	case
@@ -533,6 +534,37 @@ func (p ClusterProfile) ClusterType() string {
 		return "openstack"
 	case ClusterProfileVSphere:
 		return "vsphere"
+	default:
+		return ""
+	}
+}
+
+// LeaseType maps profiles to the type string used in leases.
+func (p ClusterProfile) LeaseType() string {
+	switch p {
+	case
+		ClusterProfileAWS,
+		ClusterProfileAWSAtomic,
+		ClusterProfileAWSCentos,
+		ClusterProfileAWSCentos40,
+		ClusterProfileAWSGluster:
+		return "aws-quota-slice"
+	case ClusterProfileAzure4:
+		return "azure-quota-slice"
+	case
+		ClusterProfileGCP,
+		ClusterProfileGCP40,
+		ClusterProfileGCPHA,
+		ClusterProfileGCPCRIO,
+		ClusterProfileGCPLogging,
+		ClusterProfileGCPLoggingJournald,
+		ClusterProfileGCPLoggingJSONFile,
+		ClusterProfileGCPLoggingCRIO:
+		return "gcp-quota-slice"
+	case ClusterProfileOpenStack:
+		return "openstack-quota-slice"
+	case ClusterProfileVSphere:
+		return "vsphere-quota-slice"
 	default:
 		return ""
 	}

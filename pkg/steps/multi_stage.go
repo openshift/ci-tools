@@ -37,7 +37,7 @@ type multiStageTestStep struct {
 	secretClient    coreclientset.SecretsGetter
 	artifactDir     string
 	jobSpec         *api.JobSpec
-	pre, test, post []api.TestStep
+	pre, test, post []api.LiteralTestStep
 	subTests        []*junit.TestCase
 }
 
@@ -70,16 +70,16 @@ func newMultiStageTestStep(
 	return &multiStageTestStep{
 		logger:       logger,
 		name:         testConfig.As,
-		profile:      testConfig.MultiStageTestConfiguration.ClusterProfile,
+		profile:      testConfig.MultiStageTestConfigurationLiteral.ClusterProfile,
 		config:       config,
 		params:       params,
 		podClient:    podClient,
 		secretClient: secretClient,
 		artifactDir:  artifactDir,
 		jobSpec:      jobSpec,
-		pre:          testConfig.MultiStageTestConfiguration.Pre,
-		test:         testConfig.MultiStageTestConfiguration.Test,
-		post:         testConfig.MultiStageTestConfiguration.Post,
+		pre:          testConfig.MultiStageTestConfigurationLiteral.Pre,
+		test:         testConfig.MultiStageTestConfigurationLiteral.Test,
+		post:         testConfig.MultiStageTestConfigurationLiteral.Post,
 	}
 }
 
@@ -172,7 +172,7 @@ func (s *multiStageTestStep) createSecret() error {
 	return err
 }
 
-func (s *multiStageTestStep) runSteps(ctx context.Context, steps []api.TestStep, shortCircuit bool) error {
+func (s *multiStageTestStep) runSteps(ctx context.Context, steps []api.LiteralTestStep, shortCircuit bool) error {
 	pods, err := s.generatePods(steps)
 	if err != nil {
 		return err
@@ -180,7 +180,7 @@ func (s *multiStageTestStep) runSteps(ctx context.Context, steps []api.TestStep,
 	return s.runPods(ctx, pods, shortCircuit)
 }
 
-func (s *multiStageTestStep) generatePods(steps []api.TestStep) ([]coreapi.Pod, error) {
+func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep) ([]coreapi.Pod, error) {
 	var ret []coreapi.Pod
 	var errs []error
 	for _, step := range steps {

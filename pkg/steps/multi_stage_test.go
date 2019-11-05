@@ -25,11 +25,11 @@ func TestRequires(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		config api.ReleaseBuildConfiguration
-		steps  []api.TestStep
+		steps  []api.LiteralTestStep
 		req    []api.StepLink
 	}{{
 		name:  "step needs release images, should have ReleaseImagesLink",
-		steps: []api.TestStep{{LiteralTestStep: &api.LiteralTestStep{From: "from-release"}}},
+		steps: []api.LiteralTestStep{{From: "from-release"}},
 		req:   []api.StepLink{api.ReleaseImagesLink()},
 	}, {
 		name: "step needs images, should have ImagesReadyLink",
@@ -38,11 +38,11 @@ func TestRequires(t *testing.T) {
 				{To: "from-images"},
 			},
 		},
-		steps: []api.TestStep{{LiteralTestStep: &api.LiteralTestStep{From: "from-images"}}},
+		steps: []api.LiteralTestStep{{From: "from-images"}},
 		req:   []api.StepLink{api.ImagesReadyLink()},
 	}, {
 		name:  "step needs pipeline image, should have InternalImageLink",
-		steps: []api.TestStep{{LiteralTestStep: &api.LiteralTestStep{From: "src"}}},
+		steps: []api.LiteralTestStep{{From: "src"}},
 		req: []api.StepLink{
 			api.InternalImageLink(
 				api.PipelineImageStreamTagReferenceSource),
@@ -72,17 +72,15 @@ func TestGeneratePods(t *testing.T) {
 	config := api.ReleaseBuildConfiguration{
 		Tests: []api.TestStepConfiguration{{
 			As: "test",
-			MultiStageTestConfiguration: &api.MultiStageTestConfiguration{
+			MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
 				ClusterProfile: api.ClusterProfileAWS,
-				Test: []api.TestStep{{
-					LiteralTestStep: &api.LiteralTestStep{As: "step0", From: "image0", Commands: "command0"},
+				Test: []api.LiteralTestStep{{
+					As: "step0", From: "image0", Commands: "command0",
 				}, {
-					LiteralTestStep: &api.LiteralTestStep{
-						As:          "step1",
-						From:        "image1",
-						Commands:    "command1",
-						ArtifactDir: "/artifact/dir",
-					},
+					As:          "step1",
+					From:        "image1",
+					Commands:    "command1",
+					ArtifactDir: "/artifact/dir",
 				}},
 			},
 		}},
@@ -134,7 +132,7 @@ func TestGeneratePods(t *testing.T) {
 	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, nil, "artifact_dir", &jobSpec, nil)
 	step.releaseInitial = "release:initial"
 	step.releaseLatest = "release:latest"
-	ret, err := step.generatePods(config.Tests[0].MultiStageTestConfiguration.Test)
+	ret, err := step.generatePods(config.Tests[0].MultiStageTestConfigurationLiteral.Test)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -318,9 +316,9 @@ func TestRun(t *testing.T) {
 				Type:      prowapi.PeriodicJob,
 			},
 		},
-		pre:  []api.TestStep{{LiteralTestStep: &api.LiteralTestStep{As: "pre0"}}, {LiteralTestStep: &api.LiteralTestStep{As: "pre1"}}},
-		test: []api.TestStep{{LiteralTestStep: &api.LiteralTestStep{As: "test0"}}, {LiteralTestStep: &api.LiteralTestStep{As: "test1"}}},
-		post: []api.TestStep{{LiteralTestStep: &api.LiteralTestStep{As: "post0"}}, {LiteralTestStep: &api.LiteralTestStep{As: "post1"}}},
+		pre:  []api.LiteralTestStep{{As: "pre0"}, {As: "pre1"}},
+		test: []api.LiteralTestStep{{As: "test0"}, {As: "test1"}},
+		post: []api.LiteralTestStep{{As: "post0"}, {As: "post1"}},
 	}
 	for _, tc := range []struct {
 		name     string
@@ -424,12 +422,10 @@ func TestArtifacts(t *testing.T) {
 				Type:      prowapi.PeriodicJob,
 			},
 		},
-		test: []api.TestStep{{
-			LiteralTestStep: &api.LiteralTestStep{
-				As:          "test0",
-				ArtifactDir: "/path/to/artifacts",
-			}},
-		},
+		test: []api.LiteralTestStep{{
+			As:          "test0",
+			ArtifactDir: "/path/to/artifacts",
+		}},
 	}
 	var pods []*coreapi.Pod
 	fakecs := fake.NewSimpleClientset()

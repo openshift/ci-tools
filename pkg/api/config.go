@@ -287,6 +287,25 @@ func validateTestConfigurationType(fieldRoot string, test TestStepConfiguration,
 		validationErrors = append(validationErrors, validateTestSteps(fmt.Sprintf("%s.Test", fieldRoot), testConfig.Test, seen)...)
 		validationErrors = append(validationErrors, validateTestSteps(fmt.Sprintf("%s.Post", fieldRoot), testConfig.Post, seen)...)
 	}
+	if testConfig := test.MultiStageTestConfigurationLiteral; testConfig != nil {
+		typeCount++
+		if testConfig.ClusterProfile != "" {
+			validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
+		}
+		seen := sets.NewString()
+		for i, s := range testConfig.Pre {
+			fieldRootI := fmt.Sprintf("%s.Pre[%d]", fieldRoot, i)
+			validationErrors = append(validationErrors, validateLiteralTestStep(fieldRootI, s, seen)...)
+		}
+		for i, s := range testConfig.Test {
+			fieldRootI := fmt.Sprintf("%s.Test[%d]", fieldRoot, i)
+			validationErrors = append(validationErrors, validateLiteralTestStep(fieldRootI, s, seen)...)
+		}
+		for i, s := range testConfig.Post {
+			fieldRootI := fmt.Sprintf("%s.Post[%d]", fieldRoot, i)
+			validationErrors = append(validationErrors, validateLiteralTestStep(fieldRootI, s, seen)...)
+		}
+	}
 	if test.OpenshiftInstallerRandomClusterTestConfiguration != nil {
 		typeCount++
 	}
@@ -335,22 +354,27 @@ func validateTestSteps(fieldRoot string, steps []TestStep, seen sets.String) (re
 			}
 		}
 		if s.LiteralTestStep != nil {
-			if len(s.As) == 0 {
-				ret = append(ret, fmt.Errorf("%s: `as` is required", fieldRootI))
-			} else if seen.Has(s.As) {
-				ret = append(ret, fmt.Errorf("%s: duplicated name %q", fieldRootI, s.As))
-			} else {
-				seen.Insert(s.As)
-			}
-			if len(s.From) == 0 {
-				ret = append(ret, fmt.Errorf("%s: `from` is required", fieldRootI))
-			}
-			if len(s.Commands) == 0 {
-				ret = append(ret, fmt.Errorf("%s: `commands` is required", fieldRootI))
-			}
-			ret = append(ret, validateResourceRequirements(fieldRootI+".resources", s.Resources)...)
+			ret = append(ret, validateLiteralTestStep(fieldRootI, *s.LiteralTestStep, seen)...)
 		}
 	}
+	return
+}
+
+func validateLiteralTestStep(fieldRoot string, step LiteralTestStep, seen sets.String) (ret []error) {
+	if len(step.As) == 0 {
+		ret = append(ret, fmt.Errorf("%s: `as` is required", fieldRoot))
+	} else if seen.Has(step.As) {
+		ret = append(ret, fmt.Errorf("%s: duplicated name %q", fieldRoot, step.As))
+	} else {
+		seen.Insert(step.As)
+	}
+	if len(step.From) == 0 {
+		ret = append(ret, fmt.Errorf("%s: `from` is required", fieldRoot))
+	}
+	if len(step.Commands) == 0 {
+		ret = append(ret, fmt.Errorf("%s: `commands` is required", fieldRoot))
+	}
+	ret = append(ret, validateResourceRequirements(fieldRoot+".resources", step.Resources)...)
 	return
 }
 

@@ -159,10 +159,10 @@ func FromConfig(
 			if test := testStep.MultiStageTestConfigurationLiteral; test != nil {
 				step = steps.MultiStageTestStep(*testStep, config, params, podClient, secretGetter, artifactDir, jobSpec, dryLogger)
 				if test.ClusterProfile != "" {
-					if leaseClient == nil {
-						return nil, nil, fmt.Errorf("step %q needs a lease but no lease client provided", testStep.As)
+					var err error
+					if step, err = addLeaseStep(step, leaseClient, test.ClusterProfile.LeaseType()); err != nil {
+						return nil, nil, err
 					}
-					step = steps.LeaseStep(leaseClient, test.ClusterProfile.LeaseType(), step)
 				}
 			} else if testStep.OpenshiftInstallerClusterTestConfiguration != nil {
 				if testStep.OpenshiftInstallerClusterTestConfiguration.Upgrade {
@@ -187,6 +187,26 @@ func FromConfig(
 
 	for _, template := range templates {
 		step := steps.TemplateExecutionStep(template, params, podClient, templateClient, artifactDir, jobSpec, dryLogger, config.Resources)
+		// TODO remove when all templates are migrated
+		skipLease := true
+		for _, p := range template.Parameters {
+			if p.Name == "USE_LEASE_CLIENT" {
+				skipLease = false
+			}
+		}
+		if !skipLease && params.Has("CLUSTER_TYPE") {
+			clusterType, err := params.Get("CLUSTER_TYPE")
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to get \"CLUSTER_TYPE\" parameter: %v", err)
+			}
+			lease, err := api.LeaseTypeFromClusterType(clusterType)
+			if err != nil {
+				return nil, nil, fmt.Errorf("cannot resolve lease type from cluster type: %v", err)
+			}
+			if step, err = addLeaseStep(step, leaseClient, lease); err != nil {
+				return nil, nil, err
+			}
+		}
 		buildSteps = append(buildSteps, step)
 	}
 
@@ -289,6 +309,13 @@ func normalizeURL(s string) string {
 		return u.Host
 	}
 	return s
+}
+
+func addLeaseStep(s api.Step, client lease.Client, lease string) (api.Step, error) {
+	if client == nil {
+		return nil, fmt.Errorf("step %q needs a lease but no lease client provided", s.Name())
+	}
+	return steps.LeaseStep(client, lease, s), nil
 }
 
 func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.JobSpec) []api.StepConfiguration {

@@ -1,5 +1,7 @@
 package api
 
+import "fmt"
+
 // ReleaseBuildConfiguration describes how release
 // artifacts are built from a repository of source
 // code. The configuration is made up of two parts:
@@ -567,6 +569,16 @@ func (p ClusterProfile) LeaseType() string {
 		return "vsphere-quota-slice"
 	default:
 		return ""
+	}
+}
+
+// LeaseTypeFromClusterType maps cluster types to lease types
+func LeaseTypeFromClusterType(t string) (string, error) {
+	switch t {
+	case "aws", "azure", "gcp", "openstack", "vsphere":
+		return t + "-quota-slice", nil
+	default:
+		return "", fmt.Errorf("invalid cluster type %q", t)
 	}
 }
 

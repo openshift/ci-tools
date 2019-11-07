@@ -521,7 +521,7 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileAWSGluster:
 		return "aws"
 	case ClusterProfileAzure4:
-		return "azure"
+		return "azure4"
 	case
 		ClusterProfileGCP,
 		ClusterProfileGCP40,
@@ -552,7 +552,7 @@ func (p ClusterProfile) LeaseType() string {
 		ClusterProfileAWSGluster:
 		return "aws-quota-slice"
 	case ClusterProfileAzure4:
-		return "azure-quota-slice"
+		return "azure4-quota-slice"
 	case
 		ClusterProfileGCP,
 		ClusterProfileGCP40,
@@ -575,7 +575,7 @@ func (p ClusterProfile) LeaseType() string {
 // LeaseTypeFromClusterType maps cluster types to lease types
 func LeaseTypeFromClusterType(t string) (string, error) {
 	switch t {
-	case "aws", "azure", "gcp", "openstack", "vsphere":
+	case "aws", "azure4", "gcp", "openstack", "vsphere":
 		return t + "-quota-slice", nil
 	default:
 		return "", fmt.Errorf("invalid cluster type %q", t)

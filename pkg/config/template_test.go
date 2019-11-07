@@ -44,6 +44,7 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 			},
 		},
 	}
+	configUpdaterCfg.SetDefaults()
 	createByRehearseReq, err := labels.NewRequirement(createByRehearse, selection.Equals, []string{"true"})
 	if err != nil {
 		t.Fatal(err)
@@ -146,6 +147,7 @@ func TestCreateClusterProfiles(t *testing.T) {
 			},
 		},
 	}
+	configUpdaterCfg.SetDefaults()
 	cs := fake.NewSimpleClientset()
 	client := cs.CoreV1().ConfigMaps(ns)
 	m := NewTemplateCMManager(ns, client, configUpdaterCfg, pr, dir, logrus.NewEntry(logrus.New()))

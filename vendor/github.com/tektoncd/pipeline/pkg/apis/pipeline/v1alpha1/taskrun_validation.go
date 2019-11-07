@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Knative Authors.
+Copyright 2019 The Tekton Authors
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/knative/pkg/apis"
 	"k8s.io/apimachinery/pkg/api/equality"
+	"knative.dev/pkg/apis"
 )
 
 // Validate taskrun
@@ -49,9 +49,11 @@ func (ts *TaskRunSpec) Validate(ctx context.Context) *apis.FieldError {
 		return apis.ErrMissingField("spec.taskref.name", "spec.taskspec")
 	}
 
-	// Check for Trigger
-	if err := ts.Trigger.Validate(ctx, "spec.trigger"); err != nil {
-		return err
+	// Validate TaskSpec if it's present
+	if ts.TaskSpec != nil {
+		if err := ts.TaskSpec.Validate(ctx); err != nil {
+			return err
+		}
 	}
 
 	// check for input resources
@@ -64,10 +66,10 @@ func (ts *TaskRunSpec) Validate(ctx context.Context) *apis.FieldError {
 		return err
 	}
 
-	// check for results
-	if ts.Results != nil {
-		if err := ts.Results.Validate(ctx, "spec.results"); err != nil {
-			return err
+	if ts.Timeout != nil {
+		// timeout should be a valid duration of at least 0.
+		if ts.Timeout.Duration < 0 {
+			return apis.ErrInvalidValue(fmt.Sprintf("%s should be >= 0", ts.Timeout.Duration.String()), "spec.timeout")
 		}
 	}
 
@@ -112,27 +114,6 @@ func validatePipelineResources(ctx context.Context, resources []TaskResourceBind
 	}
 
 	return nil
-}
-
-// Validate validates that the task trigger is of a known type. If it was triggered by a PipelineRun, the
-// name of the trigger should be the name of a PipelienRun.
-func (r TaskTrigger) Validate(ctx context.Context, path string) *apis.FieldError {
-	if r.Type == "" {
-		return nil
-	}
-
-	taskType := strings.ToLower(string(r.Type))
-	for _, allowed := range []TaskTriggerType{TaskTriggerTypePipelineRun, TaskTriggerTypeManual} {
-		allowedType := strings.ToLower(string(allowed))
-
-		if taskType == allowedType {
-			if allowedType == strings.ToLower(string(TaskTriggerTypePipelineRun)) && r.Name == "" {
-				return apis.ErrMissingField(fmt.Sprintf("%s.name", path))
-			}
-			return nil
-		}
-	}
-	return apis.ErrInvalidValue(string(r.Type), fmt.Sprintf("%s.type", path))
 }
 
 func validateParameters(params []Param) *apis.FieldError {

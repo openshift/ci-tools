@@ -468,6 +468,9 @@ func generateJobBase(name, prefix string, info *prowgenInfo, label jc.ProwgenLab
 	if pathAlias != nil {
 		base.PathAlias = *pathAlias
 	}
+	if info.config.Private {
+		base.Hidden = true
+	}
 	return base
 }
 

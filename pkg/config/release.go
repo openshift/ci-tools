@@ -16,8 +16,12 @@ import (
 const (
 	// ConfigInRepoPath is the prow config path from release repo
 	ConfigInRepoPath = "core-services/prow/02_config/_config.yaml"
+	// ProwConfigFile is the filename where Prow config lives
+	ProwConfigFile = "_config.yaml"
+	// PluginConfigFile is the filename where plugins live
+	PluginConfigFile = "_plugins.yaml"
 	// PluginConfigInRepoPath is the prow plugin config path from release repo
-	PluginConfigInRepoPath = "core-services/prow/02_config/_plugins.yaml"
+	PluginConfigInRepoPath = "core-services/prow/02_config/" + PluginConfigFile
 	// JobConfigInRepoPath is the prowjobs path from release repo
 	JobConfigInRepoPath = "ci-operator/jobs"
 	// CiopConfigInRepoPath is the ci-operator config path from release repo

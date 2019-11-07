@@ -92,7 +92,7 @@ func Registry(root string) (references map[string]api.LiteralTestStep, chains ma
 		if err != nil {
 			return err
 		}
-		if !info.IsDir() {
+		if info != nil && !info.IsDir() {
 			bytes, err := ioutil.ReadFile(path)
 			if err != nil {
 				return err

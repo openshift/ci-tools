@@ -1,0 +1,1804 @@
+[
+  {
+    "apiVersion": "build.openshift.io/v1",
+    "kind": "Build",
+    "metadata": {
+      "annotations": {
+        "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+      },
+      "creationTimestamp": null,
+      "labels": {
+        "build-id": "0",
+        "ci.openshift.io/refs.branch": "master",
+        "ci.openshift.io/refs.org": "openshift",
+        "ci.openshift.io/refs.repo": "ci-tools",
+        "created-by-ci": "true",
+        "creates": "src",
+        "job": "pull-ci-openshift-release-master-ci-operator-integration",
+        "prow.k8s.io/id": "uuid"
+      },
+      "name": "src",
+      "namespace": "testns"
+    },
+    "spec": {
+      "nodeSelector": null,
+      "output": {
+        "to": {
+          "kind": "ImageStreamTag",
+          "name": "pipeline:src",
+          "namespace": "testns"
+        }
+      },
+      "postCommit": {},
+      "resources": {
+        "limits": {
+          "memory": "4Gi"
+        },
+        "requests": {
+          "cpu": "100m",
+          "memory": "200Mi"
+        }
+      },
+      "serviceAccount": "builder",
+      "source": {
+        "dockerfile": "\nFROM pipeline:root\nADD ./app.binary /clonerefs\nRUN umask 0002 && /clonerefs && find /go/src -type d -not -perm -0775 | xargs -r chmod g+xw\nWORKDIR /go/src/github.com/openshift/ci-tools/\nENV GOPATH=/go\nRUN git submodule update --init\n",
+        "images": [
+          {
+            "as": null,
+            "from": {
+              "kind": "DockerImage",
+              "name": "registry.svc.ci.openshift.org/ci/clonerefs@sha256:SHA"
+            },
+            "paths": [
+              {
+                "destinationDir": ".",
+                "sourcePath": "/app/prow/cmd/clonerefs/app.binary.runfiles/io_k8s_test_infra/prow/cmd/clonerefs/linux_amd64_pure_stripped/app.binary"
+              }
+            ]
+          }
+        ],
+        "type": "Dockerfile"
+      },
+      "strategy": {
+        "dockerStrategy": {
+          "env": [
+            {
+              "name": "CLONEREFS_OPTIONS",
+              "value": "{\"src_root\":\"/go\",\"log\":\"/dev/null\",\"git_user_name\":\"ci-robot\",\"git_user_email\":\"ci-robot@openshift.io\",\"refs\":[{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}],\"fail\":true}"
+            }
+          ],
+          "forcePull": true,
+          "from": {
+            "kind": "ImageStreamTag",
+            "name": "pipeline:root",
+            "namespace": "testns"
+          },
+          "imageOptimizationPolicy": "SkipLayers",
+          "noCache": true
+        },
+        "type": "Docker"
+      },
+      "triggeredBy": null
+    },
+    "status": {
+      "output": {},
+      "phase": ""
+    }
+  },
+  {
+    "apiVersion": "image.openshift.io/v1",
+    "generation": 0,
+    "image": {
+      "dockerImageLayers": null,
+      "dockerImageMetadata": null,
+      "metadata": {
+        "creationTimestamp": null
+      }
+    },
+    "kind": "ImageStreamTag",
+    "lookupPolicy": {
+      "local": false
+    },
+    "metadata": {
+      "creationTimestamp": null,
+      "name": "pipeline:base",
+      "namespace": "testns"
+    },
+    "tag": {
+      "annotations": null,
+      "from": {
+        "kind": "ImageStreamImage",
+        "name": "4.2@sha256:SHA",
+        "namespace": "ocp"
+      },
+      "generation": null,
+      "importPolicy": {},
+      "name": "",
+      "referencePolicy": {
+        "type": "Local"
+      }
+    }
+  },
+  {
+    "apiVersion": "image.openshift.io/v1",
+    "generation": 0,
+    "image": {
+      "dockerImageLayers": null,
+      "dockerImageMetadata": null,
+      "metadata": {
+        "creationTimestamp": null
+      }
+    },
+    "kind": "ImageStreamTag",
+    "lookupPolicy": {
+      "local": false
+    },
+    "metadata": {
+      "creationTimestamp": null,
+      "name": "pipeline:root",
+      "namespace": "testns"
+    },
+    "tag": {
+      "annotations": null,
+      "from": {
+        "kind": "ImageStreamImage",
+        "name": "release@sha256:SHA",
+        "namespace": "openshift"
+      },
+      "generation": null,
+      "importPolicy": {},
+      "name": "",
+      "referencePolicy": {
+        "type": "Local"
+      }
+    }
+  },
+  {
+    "apiVersion": "image.openshift.io/v1",
+    "kind": "ImageStream",
+    "metadata": {
+      "creationTimestamp": null,
+      "name": "stable"
+    },
+    "spec": {
+      "lookupPolicy": {
+        "local": true
+      }
+    },
+    "status": {
+      "dockerImageRepository": ""
+    }
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Pod",
+    "metadata": {
+      "annotations": {
+        "ci-operator.openshift.io/container-sub-tests": "e2e",
+        "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+      },
+      "creationTimestamp": null,
+      "labels": {
+        "build-id": "0",
+        "ci.openshift.io/multi-stage-test": "e2e-azure",
+        "ci.openshift.io/refs.branch": "master",
+        "ci.openshift.io/refs.org": "openshift",
+        "ci.openshift.io/refs.repo": "ci-tools",
+        "created-by-ci": "true",
+        "job": "pull-ci-openshift-release-master-ci-operator-integration",
+        "prow.k8s.io/id": "uuid"
+      },
+      "name": "e2e-azure-e2e"
+    },
+    "spec": {
+      "containers": [
+        {
+          "args": [
+            "/bin/bash",
+            "-c",
+            "#!/bin/bash\nset -eu\nmake azure-e2e"
+          ],
+          "command": [
+            "/tmp/secret-wrapper/secret-wrapper"
+          ],
+          "env": [
+            {
+              "name": "BUILD_ID",
+              "value": "0"
+            },
+            {
+              "name": "JOB_NAME",
+              "value": "pull-ci-openshift-release-master-ci-operator-integration"
+            },
+            {
+              "name": "JOB_SPEC",
+              "value": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+            },
+            {
+              "name": "JOB_TYPE",
+              "value": "presubmit"
+            },
+            {
+              "name": "PROW_JOB_ID",
+              "value": "uuid"
+            },
+            {
+              "name": "PULL_BASE_REF",
+              "value": "master"
+            },
+            {
+              "name": "PULL_BASE_SHA",
+              "value": "af8a90a2faf965eeda949dc1c607c48d3ffcda3e"
+            },
+            {
+              "name": "PULL_NUMBER",
+              "value": "1234"
+            },
+            {
+              "name": "PULL_PULL_SHA",
+              "value": "538680dfd2f6cff3b3506c80ca182dcb0dd22a58"
+            },
+            {
+              "name": "PULL_REFS",
+              "value": "master:af8a90a2faf965eeda949dc1c607c48d3ffcda3e,1234:538680dfd2f6cff3b3506c80ca182dcb0dd22a58"
+            },
+            {
+              "name": "REPO_NAME",
+              "value": "ci-tools"
+            },
+            {
+              "name": "REPO_OWNER",
+              "value": "openshift"
+            },
+            {
+              "name": "NAMESPACE",
+              "value": "testns"
+            },
+            {
+              "name": "JOB_NAME_SAFE",
+              "value": "e2e-azure"
+            },
+            {
+              "name": "JOB_NAME_HASH",
+              "value": "41093"
+            }
+          ],
+          "image": "my-image",
+          "name": "e2e",
+          "resources": {
+            "requests": {
+              "cpu": "1",
+              "memory": "2Gi"
+            }
+          },
+          "terminationMessagePolicy": "FallbackToLogsOnError",
+          "volumeMounts": [
+            {
+              "mountPath": "/tmp/secret-wrapper",
+              "name": "secret-wrapper"
+            },
+            {
+              "mountPath": "/var/run/secrets/ci.openshift.io/multi-stage",
+              "name": "e2e-azure"
+            }
+          ]
+        }
+      ],
+      "initContainers": [
+        {
+          "args": [
+            "/bin/secret-wrapper",
+            "/tmp/secret-wrapper/secret-wrapper"
+          ],
+          "command": [
+            "cp"
+          ],
+          "image": "registry.svc.ci.openshift.org/ci/secret-wrapper:latest",
+          "name": "cp-secret-wrapper",
+          "resources": {},
+          "terminationMessagePolicy": "FallbackToLogsOnError",
+          "volumeMounts": [
+            {
+              "mountPath": "/tmp/secret-wrapper",
+              "name": "secret-wrapper"
+            }
+          ]
+        }
+      ],
+      "restartPolicy": "Never",
+      "volumes": [
+        {
+          "emptyDir": {},
+          "name": "secret-wrapper"
+        },
+        {
+          "name": "e2e-azure",
+          "secret": {
+            "secretName": "e2e-azure"
+          }
+        }
+      ]
+    },
+    "status": {}
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Pod",
+    "metadata": {
+      "annotations": {
+        "ci-operator.openshift.io/container-sub-tests": "ipi-deprovision-deprovision",
+        "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+      },
+      "creationTimestamp": null,
+      "labels": {
+        "build-id": "0",
+        "ci.openshift.io/multi-stage-test": "e2e-azure",
+        "ci.openshift.io/refs.branch": "master",
+        "ci.openshift.io/refs.org": "openshift",
+        "ci.openshift.io/refs.repo": "ci-tools",
+        "created-by-ci": "true",
+        "job": "pull-ci-openshift-release-master-ci-operator-integration",
+        "prow.k8s.io/id": "uuid"
+      },
+      "name": "e2e-azure-ipi-deprovision-deprovision"
+    },
+    "spec": {
+      "containers": [
+        {
+          "args": [
+            "/bin/bash",
+            "-c",
+            "#!/bin/bash\nset -eu\nopenshift-cluster destroy\n"
+          ],
+          "command": [
+            "/tmp/secret-wrapper/secret-wrapper"
+          ],
+          "env": [
+            {
+              "name": "BUILD_ID",
+              "value": "0"
+            },
+            {
+              "name": "JOB_NAME",
+              "value": "pull-ci-openshift-release-master-ci-operator-integration"
+            },
+            {
+              "name": "JOB_SPEC",
+              "value": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+            },
+            {
+              "name": "JOB_TYPE",
+              "value": "presubmit"
+            },
+            {
+              "name": "PROW_JOB_ID",
+              "value": "uuid"
+            },
+            {
+              "name": "PULL_BASE_REF",
+              "value": "master"
+            },
+            {
+              "name": "PULL_BASE_SHA",
+              "value": "af8a90a2faf965eeda949dc1c607c48d3ffcda3e"
+            },
+            {
+              "name": "PULL_NUMBER",
+              "value": "1234"
+            },
+            {
+              "name": "PULL_PULL_SHA",
+              "value": "538680dfd2f6cff3b3506c80ca182dcb0dd22a58"
+            },
+            {
+              "name": "PULL_REFS",
+              "value": "master:af8a90a2faf965eeda949dc1c607c48d3ffcda3e,1234:538680dfd2f6cff3b3506c80ca182dcb0dd22a58"
+            },
+            {
+              "name": "REPO_NAME",
+              "value": "ci-tools"
+            },
+            {
+              "name": "REPO_OWNER",
+              "value": "openshift"
+            },
+            {
+              "name": "NAMESPACE",
+              "value": "testns"
+            },
+            {
+              "name": "JOB_NAME_SAFE",
+              "value": "e2e-azure"
+            },
+            {
+              "name": "JOB_NAME_HASH",
+              "value": "41093"
+            }
+          ],
+          "image": "installer",
+          "name": "ipi-deprovision-deprovision",
+          "resources": {
+            "requests": {
+              "cpu": "1",
+              "memory": "2Gi"
+            }
+          },
+          "terminationMessagePolicy": "FallbackToLogsOnError",
+          "volumeMounts": [
+            {
+              "mountPath": "/tmp/secret-wrapper",
+              "name": "secret-wrapper"
+            },
+            {
+              "mountPath": "/var/run/secrets/ci.openshift.io/multi-stage",
+              "name": "e2e-azure"
+            }
+          ]
+        }
+      ],
+      "initContainers": [
+        {
+          "args": [
+            "/bin/secret-wrapper",
+            "/tmp/secret-wrapper/secret-wrapper"
+          ],
+          "command": [
+            "cp"
+          ],
+          "image": "registry.svc.ci.openshift.org/ci/secret-wrapper:latest",
+          "name": "cp-secret-wrapper",
+          "resources": {},
+          "terminationMessagePolicy": "FallbackToLogsOnError",
+          "volumeMounts": [
+            {
+              "mountPath": "/tmp/secret-wrapper",
+              "name": "secret-wrapper"
+            }
+          ]
+        }
+      ],
+      "restartPolicy": "Never",
+      "volumes": [
+        {
+          "emptyDir": {},
+          "name": "secret-wrapper"
+        },
+        {
+          "name": "e2e-azure",
+          "secret": {
+            "secretName": "e2e-azure"
+          }
+        }
+      ]
+    },
+    "status": {}
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Pod",
+    "metadata": {
+      "annotations": {
+        "ci-operator.openshift.io/container-sub-tests": "ipi-deprovision-must-gather",
+        "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+      },
+      "creationTimestamp": null,
+      "labels": {
+        "build-id": "0",
+        "ci.openshift.io/multi-stage-test": "e2e-azure",
+        "ci.openshift.io/refs.branch": "master",
+        "ci.openshift.io/refs.org": "openshift",
+        "ci.openshift.io/refs.repo": "ci-tools",
+        "created-by-ci": "true",
+        "job": "pull-ci-openshift-release-master-ci-operator-integration",
+        "prow.k8s.io/id": "uuid"
+      },
+      "name": "e2e-azure-ipi-deprovision-must-gather"
+    },
+    "spec": {
+      "containers": [
+        {
+          "args": [
+            "/bin/bash",
+            "-c",
+            "#!/bin/bash\nset -eu\ngather\n"
+          ],
+          "command": [
+            "/tmp/secret-wrapper/secret-wrapper"
+          ],
+          "env": [
+            {
+              "name": "BUILD_ID",
+              "value": "0"
+            },
+            {
+              "name": "JOB_NAME",
+              "value": "pull-ci-openshift-release-master-ci-operator-integration"
+            },
+            {
+              "name": "JOB_SPEC",
+              "value": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+            },
+            {
+              "name": "JOB_TYPE",
+              "value": "presubmit"
+            },
+            {
+              "name": "PROW_JOB_ID",
+              "value": "uuid"
+            },
+            {
+              "name": "PULL_BASE_REF",
+              "value": "master"
+            },
+            {
+              "name": "PULL_BASE_SHA",
+              "value": "af8a90a2faf965eeda949dc1c607c48d3ffcda3e"
+            },
+            {
+              "name": "PULL_NUMBER",
+              "value": "1234"
+            },
+            {
+              "name": "PULL_PULL_SHA",
+              "value": "538680dfd2f6cff3b3506c80ca182dcb0dd22a58"
+            },
+            {
+              "name": "PULL_REFS",
+              "value": "master:af8a90a2faf965eeda949dc1c607c48d3ffcda3e,1234:538680dfd2f6cff3b3506c80ca182dcb0dd22a58"
+            },
+            {
+              "name": "REPO_NAME",
+              "value": "ci-tools"
+            },
+            {
+              "name": "REPO_OWNER",
+              "value": "openshift"
+            },
+            {
+              "name": "NAMESPACE",
+              "value": "testns"
+            },
+            {
+              "name": "JOB_NAME_SAFE",
+              "value": "e2e-azure"
+            },
+            {
+              "name": "JOB_NAME_HASH",
+              "value": "41093"
+            }
+          ],
+          "image": "installer",
+          "name": "ipi-deprovision-must-gather",
+          "resources": {
+            "requests": {
+              "cpu": "1",
+              "memory": "2Gi"
+            }
+          },
+          "terminationMessagePolicy": "FallbackToLogsOnError",
+          "volumeMounts": [
+            {
+              "mountPath": "/tmp/secret-wrapper",
+              "name": "secret-wrapper"
+            },
+            {
+              "mountPath": "/var/run/secrets/ci.openshift.io/multi-stage",
+              "name": "e2e-azure"
+            }
+          ]
+        }
+      ],
+      "initContainers": [
+        {
+          "args": [
+            "/bin/secret-wrapper",
+            "/tmp/secret-wrapper/secret-wrapper"
+          ],
+          "command": [
+            "cp"
+          ],
+          "image": "registry.svc.ci.openshift.org/ci/secret-wrapper:latest",
+          "name": "cp-secret-wrapper",
+          "resources": {},
+          "terminationMessagePolicy": "FallbackToLogsOnError",
+          "volumeMounts": [
+            {
+              "mountPath": "/tmp/secret-wrapper",
+              "name": "secret-wrapper"
+            }
+          ]
+        }
+      ],
+      "restartPolicy": "Never",
+      "volumes": [
+        {
+          "emptyDir": {},
+          "name": "secret-wrapper"
+        },
+        {
+          "name": "e2e-azure",
+          "secret": {
+            "secretName": "e2e-azure"
+          }
+        }
+      ]
+    },
+    "status": {}
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Pod",
+    "metadata": {
+      "annotations": {
+        "ci-operator.openshift.io/container-sub-tests": "ipi-install-install",
+        "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+      },
+      "creationTimestamp": null,
+      "labels": {
+        "build-id": "0",
+        "ci.openshift.io/multi-stage-test": "e2e-azure",
+        "ci.openshift.io/refs.branch": "master",
+        "ci.openshift.io/refs.org": "openshift",
+        "ci.openshift.io/refs.repo": "ci-tools",
+        "created-by-ci": "true",
+        "job": "pull-ci-openshift-release-master-ci-operator-integration",
+        "prow.k8s.io/id": "uuid"
+      },
+      "name": "e2e-azure-ipi-install-install"
+    },
+    "spec": {
+      "containers": [
+        {
+          "args": [
+            "/bin/bash",
+            "-c",
+            "#!/bin/bash\nset -eu\nopenshift-cluster install\n"
+          ],
+          "command": [
+            "/tmp/secret-wrapper/secret-wrapper"
+          ],
+          "env": [
+            {
+              "name": "BUILD_ID",
+              "value": "0"
+            },
+            {
+              "name": "JOB_NAME",
+              "value": "pull-ci-openshift-release-master-ci-operator-integration"
+            },
+            {
+              "name": "JOB_SPEC",
+              "value": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+            },
+            {
+              "name": "JOB_TYPE",
+              "value": "presubmit"
+            },
+            {
+              "name": "PROW_JOB_ID",
+              "value": "uuid"
+            },
+            {
+              "name": "PULL_BASE_REF",
+              "value": "master"
+            },
+            {
+              "name": "PULL_BASE_SHA",
+              "value": "af8a90a2faf965eeda949dc1c607c48d3ffcda3e"
+            },
+            {
+              "name": "PULL_NUMBER",
+              "value": "1234"
+            },
+            {
+              "name": "PULL_PULL_SHA",
+              "value": "538680dfd2f6cff3b3506c80ca182dcb0dd22a58"
+            },
+            {
+              "name": "PULL_REFS",
+              "value": "master:af8a90a2faf965eeda949dc1c607c48d3ffcda3e,1234:538680dfd2f6cff3b3506c80ca182dcb0dd22a58"
+            },
+            {
+              "name": "REPO_NAME",
+              "value": "ci-tools"
+            },
+            {
+              "name": "REPO_OWNER",
+              "value": "openshift"
+            },
+            {
+              "name": "NAMESPACE",
+              "value": "testns"
+            },
+            {
+              "name": "JOB_NAME_SAFE",
+              "value": "e2e-azure"
+            },
+            {
+              "name": "JOB_NAME_HASH",
+              "value": "41093"
+            }
+          ],
+          "image": "installer",
+          "name": "ipi-install-install",
+          "resources": {
+            "requests": {
+              "cpu": "1",
+              "memory": "2Gi"
+            }
+          },
+          "terminationMessagePolicy": "FallbackToLogsOnError",
+          "volumeMounts": [
+            {
+              "mountPath": "/tmp/secret-wrapper",
+              "name": "secret-wrapper"
+            },
+            {
+              "mountPath": "/var/run/secrets/ci.openshift.io/multi-stage",
+              "name": "e2e-azure"
+            }
+          ]
+        }
+      ],
+      "initContainers": [
+        {
+          "args": [
+            "/bin/secret-wrapper",
+            "/tmp/secret-wrapper/secret-wrapper"
+          ],
+          "command": [
+            "cp"
+          ],
+          "image": "registry.svc.ci.openshift.org/ci/secret-wrapper:latest",
+          "name": "cp-secret-wrapper",
+          "resources": {},
+          "terminationMessagePolicy": "FallbackToLogsOnError",
+          "volumeMounts": [
+            {
+              "mountPath": "/tmp/secret-wrapper",
+              "name": "secret-wrapper"
+            }
+          ]
+        }
+      ],
+      "restartPolicy": "Never",
+      "volumes": [
+        {
+          "emptyDir": {},
+          "name": "secret-wrapper"
+        },
+        {
+          "name": "e2e-azure",
+          "secret": {
+            "secretName": "e2e-azure"
+          }
+        }
+      ]
+    },
+    "status": {}
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Pod",
+    "metadata": {
+      "annotations": {
+        "ci-operator.openshift.io/container-sub-tests": "ipi-install-rbac",
+        "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+      },
+      "creationTimestamp": null,
+      "labels": {
+        "build-id": "0",
+        "ci.openshift.io/multi-stage-test": "e2e-azure",
+        "ci.openshift.io/refs.branch": "master",
+        "ci.openshift.io/refs.org": "openshift",
+        "ci.openshift.io/refs.repo": "ci-tools",
+        "created-by-ci": "true",
+        "job": "pull-ci-openshift-release-master-ci-operator-integration",
+        "prow.k8s.io/id": "uuid"
+      },
+      "name": "e2e-azure-ipi-install-rbac"
+    },
+    "spec": {
+      "containers": [
+        {
+          "args": [
+            "/bin/bash",
+            "-c",
+            "#!/bin/bash\nset -eu\nsetup-rbac\n"
+          ],
+          "command": [
+            "/tmp/secret-wrapper/secret-wrapper"
+          ],
+          "env": [
+            {
+              "name": "BUILD_ID",
+              "value": "0"
+            },
+            {
+              "name": "JOB_NAME",
+              "value": "pull-ci-openshift-release-master-ci-operator-integration"
+            },
+            {
+              "name": "JOB_SPEC",
+              "value": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+            },
+            {
+              "name": "JOB_TYPE",
+              "value": "presubmit"
+            },
+            {
+              "name": "PROW_JOB_ID",
+              "value": "uuid"
+            },
+            {
+              "name": "PULL_BASE_REF",
+              "value": "master"
+            },
+            {
+              "name": "PULL_BASE_SHA",
+              "value": "af8a90a2faf965eeda949dc1c607c48d3ffcda3e"
+            },
+            {
+              "name": "PULL_NUMBER",
+              "value": "1234"
+            },
+            {
+              "name": "PULL_PULL_SHA",
+              "value": "538680dfd2f6cff3b3506c80ca182dcb0dd22a58"
+            },
+            {
+              "name": "PULL_REFS",
+              "value": "master:af8a90a2faf965eeda949dc1c607c48d3ffcda3e,1234:538680dfd2f6cff3b3506c80ca182dcb0dd22a58"
+            },
+            {
+              "name": "REPO_NAME",
+              "value": "ci-tools"
+            },
+            {
+              "name": "REPO_OWNER",
+              "value": "openshift"
+            },
+            {
+              "name": "NAMESPACE",
+              "value": "testns"
+            },
+            {
+              "name": "JOB_NAME_SAFE",
+              "value": "e2e-azure"
+            },
+            {
+              "name": "JOB_NAME_HASH",
+              "value": "41093"
+            }
+          ],
+          "image": "installer",
+          "name": "ipi-install-rbac",
+          "resources": {
+            "requests": {
+              "cpu": "1",
+              "memory": "2Gi"
+            }
+          },
+          "terminationMessagePolicy": "FallbackToLogsOnError",
+          "volumeMounts": [
+            {
+              "mountPath": "/tmp/secret-wrapper",
+              "name": "secret-wrapper"
+            },
+            {
+              "mountPath": "/var/run/secrets/ci.openshift.io/multi-stage",
+              "name": "e2e-azure"
+            }
+          ]
+        }
+      ],
+      "initContainers": [
+        {
+          "args": [
+            "/bin/secret-wrapper",
+            "/tmp/secret-wrapper/secret-wrapper"
+          ],
+          "command": [
+            "cp"
+          ],
+          "image": "registry.svc.ci.openshift.org/ci/secret-wrapper:latest",
+          "name": "cp-secret-wrapper",
+          "resources": {},
+          "terminationMessagePolicy": "FallbackToLogsOnError",
+          "volumeMounts": [
+            {
+              "mountPath": "/tmp/secret-wrapper",
+              "name": "secret-wrapper"
+            }
+          ]
+        }
+      ],
+      "restartPolicy": "Never",
+      "volumes": [
+        {
+          "emptyDir": {},
+          "name": "secret-wrapper"
+        },
+        {
+          "name": "e2e-azure",
+          "secret": {
+            "secretName": "e2e-azure"
+          }
+        }
+      ]
+    },
+    "status": {}
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Pod",
+    "metadata": {
+      "annotations": {
+        "ci-operator.openshift.io/container-sub-tests": "e2e",
+        "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+      },
+      "creationTimestamp": null,
+      "labels": {
+        "build-id": "0",
+        "ci.openshift.io/multi-stage-test": "e2e-gcp",
+        "ci.openshift.io/refs.branch": "master",
+        "ci.openshift.io/refs.org": "openshift",
+        "ci.openshift.io/refs.repo": "ci-tools",
+        "created-by-ci": "true",
+        "job": "pull-ci-openshift-release-master-ci-operator-integration",
+        "prow.k8s.io/id": "uuid"
+      },
+      "name": "e2e-gcp-e2e"
+    },
+    "spec": {
+      "containers": [
+        {
+          "args": [
+            "/bin/bash",
+            "-c",
+            "#!/bin/bash\nset -eu\nmake custom-e2e"
+          ],
+          "command": [
+            "/tmp/secret-wrapper/secret-wrapper"
+          ],
+          "env": [
+            {
+              "name": "BUILD_ID",
+              "value": "0"
+            },
+            {
+              "name": "JOB_NAME",
+              "value": "pull-ci-openshift-release-master-ci-operator-integration"
+            },
+            {
+              "name": "JOB_SPEC",
+              "value": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+            },
+            {
+              "name": "JOB_TYPE",
+              "value": "presubmit"
+            },
+            {
+              "name": "PROW_JOB_ID",
+              "value": "uuid"
+            },
+            {
+              "name": "PULL_BASE_REF",
+              "value": "master"
+            },
+            {
+              "name": "PULL_BASE_SHA",
+              "value": "af8a90a2faf965eeda949dc1c607c48d3ffcda3e"
+            },
+            {
+              "name": "PULL_NUMBER",
+              "value": "1234"
+            },
+            {
+              "name": "PULL_PULL_SHA",
+              "value": "538680dfd2f6cff3b3506c80ca182dcb0dd22a58"
+            },
+            {
+              "name": "PULL_REFS",
+              "value": "master:af8a90a2faf965eeda949dc1c607c48d3ffcda3e,1234:538680dfd2f6cff3b3506c80ca182dcb0dd22a58"
+            },
+            {
+              "name": "REPO_NAME",
+              "value": "ci-tools"
+            },
+            {
+              "name": "REPO_OWNER",
+              "value": "openshift"
+            },
+            {
+              "name": "NAMESPACE",
+              "value": "testns"
+            },
+            {
+              "name": "JOB_NAME_SAFE",
+              "value": "e2e-gcp"
+            },
+            {
+              "name": "JOB_NAME_HASH",
+              "value": "41093"
+            }
+          ],
+          "image": "my-image",
+          "name": "e2e",
+          "resources": {
+            "requests": {
+              "cpu": "1",
+              "memory": "2Gi"
+            }
+          },
+          "terminationMessagePolicy": "FallbackToLogsOnError",
+          "volumeMounts": [
+            {
+              "mountPath": "/tmp/secret-wrapper",
+              "name": "secret-wrapper"
+            },
+            {
+              "mountPath": "/var/run/secrets/ci.openshift.io/multi-stage",
+              "name": "e2e-gcp"
+            }
+          ]
+        }
+      ],
+      "initContainers": [
+        {
+          "args": [
+            "/bin/secret-wrapper",
+            "/tmp/secret-wrapper/secret-wrapper"
+          ],
+          "command": [
+            "cp"
+          ],
+          "image": "registry.svc.ci.openshift.org/ci/secret-wrapper:latest",
+          "name": "cp-secret-wrapper",
+          "resources": {},
+          "terminationMessagePolicy": "FallbackToLogsOnError",
+          "volumeMounts": [
+            {
+              "mountPath": "/tmp/secret-wrapper",
+              "name": "secret-wrapper"
+            }
+          ]
+        }
+      ],
+      "restartPolicy": "Never",
+      "volumes": [
+        {
+          "emptyDir": {},
+          "name": "secret-wrapper"
+        },
+        {
+          "name": "e2e-gcp",
+          "secret": {
+            "secretName": "e2e-gcp"
+          }
+        }
+      ]
+    },
+    "status": {}
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Pod",
+    "metadata": {
+      "annotations": {
+        "ci-operator.openshift.io/container-sub-tests": "ipi-deprovision-deprovision",
+        "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+      },
+      "creationTimestamp": null,
+      "labels": {
+        "build-id": "0",
+        "ci.openshift.io/multi-stage-test": "e2e-gcp",
+        "ci.openshift.io/refs.branch": "master",
+        "ci.openshift.io/refs.org": "openshift",
+        "ci.openshift.io/refs.repo": "ci-tools",
+        "created-by-ci": "true",
+        "job": "pull-ci-openshift-release-master-ci-operator-integration",
+        "prow.k8s.io/id": "uuid"
+      },
+      "name": "e2e-gcp-ipi-deprovision-deprovision"
+    },
+    "spec": {
+      "containers": [
+        {
+          "args": [
+            "/bin/bash",
+            "-c",
+            "#!/bin/bash\nset -eu\nopenshift-cluster destroy\n"
+          ],
+          "command": [
+            "/tmp/secret-wrapper/secret-wrapper"
+          ],
+          "env": [
+            {
+              "name": "BUILD_ID",
+              "value": "0"
+            },
+            {
+              "name": "JOB_NAME",
+              "value": "pull-ci-openshift-release-master-ci-operator-integration"
+            },
+            {
+              "name": "JOB_SPEC",
+              "value": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+            },
+            {
+              "name": "JOB_TYPE",
+              "value": "presubmit"
+            },
+            {
+              "name": "PROW_JOB_ID",
+              "value": "uuid"
+            },
+            {
+              "name": "PULL_BASE_REF",
+              "value": "master"
+            },
+            {
+              "name": "PULL_BASE_SHA",
+              "value": "af8a90a2faf965eeda949dc1c607c48d3ffcda3e"
+            },
+            {
+              "name": "PULL_NUMBER",
+              "value": "1234"
+            },
+            {
+              "name": "PULL_PULL_SHA",
+              "value": "538680dfd2f6cff3b3506c80ca182dcb0dd22a58"
+            },
+            {
+              "name": "PULL_REFS",
+              "value": "master:af8a90a2faf965eeda949dc1c607c48d3ffcda3e,1234:538680dfd2f6cff3b3506c80ca182dcb0dd22a58"
+            },
+            {
+              "name": "REPO_NAME",
+              "value": "ci-tools"
+            },
+            {
+              "name": "REPO_OWNER",
+              "value": "openshift"
+            },
+            {
+              "name": "NAMESPACE",
+              "value": "testns"
+            },
+            {
+              "name": "JOB_NAME_SAFE",
+              "value": "e2e-gcp"
+            },
+            {
+              "name": "JOB_NAME_HASH",
+              "value": "41093"
+            }
+          ],
+          "image": "installer",
+          "name": "ipi-deprovision-deprovision",
+          "resources": {
+            "requests": {
+              "cpu": "1",
+              "memory": "2Gi"
+            }
+          },
+          "terminationMessagePolicy": "FallbackToLogsOnError",
+          "volumeMounts": [
+            {
+              "mountPath": "/tmp/secret-wrapper",
+              "name": "secret-wrapper"
+            },
+            {
+              "mountPath": "/var/run/secrets/ci.openshift.io/multi-stage",
+              "name": "e2e-gcp"
+            }
+          ]
+        }
+      ],
+      "initContainers": [
+        {
+          "args": [
+            "/bin/secret-wrapper",
+            "/tmp/secret-wrapper/secret-wrapper"
+          ],
+          "command": [
+            "cp"
+          ],
+          "image": "registry.svc.ci.openshift.org/ci/secret-wrapper:latest",
+          "name": "cp-secret-wrapper",
+          "resources": {},
+          "terminationMessagePolicy": "FallbackToLogsOnError",
+          "volumeMounts": [
+            {
+              "mountPath": "/tmp/secret-wrapper",
+              "name": "secret-wrapper"
+            }
+          ]
+        }
+      ],
+      "restartPolicy": "Never",
+      "volumes": [
+        {
+          "emptyDir": {},
+          "name": "secret-wrapper"
+        },
+        {
+          "name": "e2e-gcp",
+          "secret": {
+            "secretName": "e2e-gcp"
+          }
+        }
+      ]
+    },
+    "status": {}
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Pod",
+    "metadata": {
+      "annotations": {
+        "ci-operator.openshift.io/container-sub-tests": "ipi-deprovision-must-gather",
+        "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+      },
+      "creationTimestamp": null,
+      "labels": {
+        "build-id": "0",
+        "ci.openshift.io/multi-stage-test": "e2e-gcp",
+        "ci.openshift.io/refs.branch": "master",
+        "ci.openshift.io/refs.org": "openshift",
+        "ci.openshift.io/refs.repo": "ci-tools",
+        "created-by-ci": "true",
+        "job": "pull-ci-openshift-release-master-ci-operator-integration",
+        "prow.k8s.io/id": "uuid"
+      },
+      "name": "e2e-gcp-ipi-deprovision-must-gather"
+    },
+    "spec": {
+      "containers": [
+        {
+          "args": [
+            "/bin/bash",
+            "-c",
+            "#!/bin/bash\nset -eu\ngather\n"
+          ],
+          "command": [
+            "/tmp/secret-wrapper/secret-wrapper"
+          ],
+          "env": [
+            {
+              "name": "BUILD_ID",
+              "value": "0"
+            },
+            {
+              "name": "JOB_NAME",
+              "value": "pull-ci-openshift-release-master-ci-operator-integration"
+            },
+            {
+              "name": "JOB_SPEC",
+              "value": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+            },
+            {
+              "name": "JOB_TYPE",
+              "value": "presubmit"
+            },
+            {
+              "name": "PROW_JOB_ID",
+              "value": "uuid"
+            },
+            {
+              "name": "PULL_BASE_REF",
+              "value": "master"
+            },
+            {
+              "name": "PULL_BASE_SHA",
+              "value": "af8a90a2faf965eeda949dc1c607c48d3ffcda3e"
+            },
+            {
+              "name": "PULL_NUMBER",
+              "value": "1234"
+            },
+            {
+              "name": "PULL_PULL_SHA",
+              "value": "538680dfd2f6cff3b3506c80ca182dcb0dd22a58"
+            },
+            {
+              "name": "PULL_REFS",
+              "value": "master:af8a90a2faf965eeda949dc1c607c48d3ffcda3e,1234:538680dfd2f6cff3b3506c80ca182dcb0dd22a58"
+            },
+            {
+              "name": "REPO_NAME",
+              "value": "ci-tools"
+            },
+            {
+              "name": "REPO_OWNER",
+              "value": "openshift"
+            },
+            {
+              "name": "NAMESPACE",
+              "value": "testns"
+            },
+            {
+              "name": "JOB_NAME_SAFE",
+              "value": "e2e-gcp"
+            },
+            {
+              "name": "JOB_NAME_HASH",
+              "value": "41093"
+            }
+          ],
+          "image": "installer",
+          "name": "ipi-deprovision-must-gather",
+          "resources": {
+            "requests": {
+              "cpu": "1",
+              "memory": "2Gi"
+            }
+          },
+          "terminationMessagePolicy": "FallbackToLogsOnError",
+          "volumeMounts": [
+            {
+              "mountPath": "/tmp/secret-wrapper",
+              "name": "secret-wrapper"
+            },
+            {
+              "mountPath": "/var/run/secrets/ci.openshift.io/multi-stage",
+              "name": "e2e-gcp"
+            }
+          ]
+        }
+      ],
+      "initContainers": [
+        {
+          "args": [
+            "/bin/secret-wrapper",
+            "/tmp/secret-wrapper/secret-wrapper"
+          ],
+          "command": [
+            "cp"
+          ],
+          "image": "registry.svc.ci.openshift.org/ci/secret-wrapper:latest",
+          "name": "cp-secret-wrapper",
+          "resources": {},
+          "terminationMessagePolicy": "FallbackToLogsOnError",
+          "volumeMounts": [
+            {
+              "mountPath": "/tmp/secret-wrapper",
+              "name": "secret-wrapper"
+            }
+          ]
+        }
+      ],
+      "restartPolicy": "Never",
+      "volumes": [
+        {
+          "emptyDir": {},
+          "name": "secret-wrapper"
+        },
+        {
+          "name": "e2e-gcp",
+          "secret": {
+            "secretName": "e2e-gcp"
+          }
+        }
+      ]
+    },
+    "status": {}
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Pod",
+    "metadata": {
+      "annotations": {
+        "ci-operator.openshift.io/container-sub-tests": "ipi-install-install",
+        "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+      },
+      "creationTimestamp": null,
+      "labels": {
+        "build-id": "0",
+        "ci.openshift.io/multi-stage-test": "e2e-gcp",
+        "ci.openshift.io/refs.branch": "master",
+        "ci.openshift.io/refs.org": "openshift",
+        "ci.openshift.io/refs.repo": "ci-tools",
+        "created-by-ci": "true",
+        "job": "pull-ci-openshift-release-master-ci-operator-integration",
+        "prow.k8s.io/id": "uuid"
+      },
+      "name": "e2e-gcp-ipi-install-install"
+    },
+    "spec": {
+      "containers": [
+        {
+          "args": [
+            "/bin/bash",
+            "-c",
+            "#!/bin/bash\nset -eu\nopenshift-cluster install\n"
+          ],
+          "command": [
+            "/tmp/secret-wrapper/secret-wrapper"
+          ],
+          "env": [
+            {
+              "name": "BUILD_ID",
+              "value": "0"
+            },
+            {
+              "name": "JOB_NAME",
+              "value": "pull-ci-openshift-release-master-ci-operator-integration"
+            },
+            {
+              "name": "JOB_SPEC",
+              "value": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+            },
+            {
+              "name": "JOB_TYPE",
+              "value": "presubmit"
+            },
+            {
+              "name": "PROW_JOB_ID",
+              "value": "uuid"
+            },
+            {
+              "name": "PULL_BASE_REF",
+              "value": "master"
+            },
+            {
+              "name": "PULL_BASE_SHA",
+              "value": "af8a90a2faf965eeda949dc1c607c48d3ffcda3e"
+            },
+            {
+              "name": "PULL_NUMBER",
+              "value": "1234"
+            },
+            {
+              "name": "PULL_PULL_SHA",
+              "value": "538680dfd2f6cff3b3506c80ca182dcb0dd22a58"
+            },
+            {
+              "name": "PULL_REFS",
+              "value": "master:af8a90a2faf965eeda949dc1c607c48d3ffcda3e,1234:538680dfd2f6cff3b3506c80ca182dcb0dd22a58"
+            },
+            {
+              "name": "REPO_NAME",
+              "value": "ci-tools"
+            },
+            {
+              "name": "REPO_OWNER",
+              "value": "openshift"
+            },
+            {
+              "name": "NAMESPACE",
+              "value": "testns"
+            },
+            {
+              "name": "JOB_NAME_SAFE",
+              "value": "e2e-gcp"
+            },
+            {
+              "name": "JOB_NAME_HASH",
+              "value": "41093"
+            }
+          ],
+          "image": "installer",
+          "name": "ipi-install-install",
+          "resources": {
+            "requests": {
+              "cpu": "1",
+              "memory": "2Gi"
+            }
+          },
+          "terminationMessagePolicy": "FallbackToLogsOnError",
+          "volumeMounts": [
+            {
+              "mountPath": "/tmp/secret-wrapper",
+              "name": "secret-wrapper"
+            },
+            {
+              "mountPath": "/var/run/secrets/ci.openshift.io/multi-stage",
+              "name": "e2e-gcp"
+            }
+          ]
+        }
+      ],
+      "initContainers": [
+        {
+          "args": [
+            "/bin/secret-wrapper",
+            "/tmp/secret-wrapper/secret-wrapper"
+          ],
+          "command": [
+            "cp"
+          ],
+          "image": "registry.svc.ci.openshift.org/ci/secret-wrapper:latest",
+          "name": "cp-secret-wrapper",
+          "resources": {},
+          "terminationMessagePolicy": "FallbackToLogsOnError",
+          "volumeMounts": [
+            {
+              "mountPath": "/tmp/secret-wrapper",
+              "name": "secret-wrapper"
+            }
+          ]
+        }
+      ],
+      "restartPolicy": "Never",
+      "volumes": [
+        {
+          "emptyDir": {},
+          "name": "secret-wrapper"
+        },
+        {
+          "name": "e2e-gcp",
+          "secret": {
+            "secretName": "e2e-gcp"
+          }
+        }
+      ]
+    },
+    "status": {}
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Pod",
+    "metadata": {
+      "annotations": {
+        "ci-operator.openshift.io/container-sub-tests": "ipi-install-rbac",
+        "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+      },
+      "creationTimestamp": null,
+      "labels": {
+        "build-id": "0",
+        "ci.openshift.io/multi-stage-test": "e2e-gcp",
+        "ci.openshift.io/refs.branch": "master",
+        "ci.openshift.io/refs.org": "openshift",
+        "ci.openshift.io/refs.repo": "ci-tools",
+        "created-by-ci": "true",
+        "job": "pull-ci-openshift-release-master-ci-operator-integration",
+        "prow.k8s.io/id": "uuid"
+      },
+      "name": "e2e-gcp-ipi-install-rbac"
+    },
+    "spec": {
+      "containers": [
+        {
+          "args": [
+            "/bin/bash",
+            "-c",
+            "#!/bin/bash\nset -eu\nsetup-rbac\n"
+          ],
+          "command": [
+            "/tmp/secret-wrapper/secret-wrapper"
+          ],
+          "env": [
+            {
+              "name": "BUILD_ID",
+              "value": "0"
+            },
+            {
+              "name": "JOB_NAME",
+              "value": "pull-ci-openshift-release-master-ci-operator-integration"
+            },
+            {
+              "name": "JOB_SPEC",
+              "value": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+            },
+            {
+              "name": "JOB_TYPE",
+              "value": "presubmit"
+            },
+            {
+              "name": "PROW_JOB_ID",
+              "value": "uuid"
+            },
+            {
+              "name": "PULL_BASE_REF",
+              "value": "master"
+            },
+            {
+              "name": "PULL_BASE_SHA",
+              "value": "af8a90a2faf965eeda949dc1c607c48d3ffcda3e"
+            },
+            {
+              "name": "PULL_NUMBER",
+              "value": "1234"
+            },
+            {
+              "name": "PULL_PULL_SHA",
+              "value": "538680dfd2f6cff3b3506c80ca182dcb0dd22a58"
+            },
+            {
+              "name": "PULL_REFS",
+              "value": "master:af8a90a2faf965eeda949dc1c607c48d3ffcda3e,1234:538680dfd2f6cff3b3506c80ca182dcb0dd22a58"
+            },
+            {
+              "name": "REPO_NAME",
+              "value": "ci-tools"
+            },
+            {
+              "name": "REPO_OWNER",
+              "value": "openshift"
+            },
+            {
+              "name": "NAMESPACE",
+              "value": "testns"
+            },
+            {
+              "name": "JOB_NAME_SAFE",
+              "value": "e2e-gcp"
+            },
+            {
+              "name": "JOB_NAME_HASH",
+              "value": "41093"
+            }
+          ],
+          "image": "installer",
+          "name": "ipi-install-rbac",
+          "resources": {
+            "requests": {
+              "cpu": "1",
+              "memory": "2Gi"
+            }
+          },
+          "terminationMessagePolicy": "FallbackToLogsOnError",
+          "volumeMounts": [
+            {
+              "mountPath": "/tmp/secret-wrapper",
+              "name": "secret-wrapper"
+            },
+            {
+              "mountPath": "/var/run/secrets/ci.openshift.io/multi-stage",
+              "name": "e2e-gcp"
+            }
+          ]
+        }
+      ],
+      "initContainers": [
+        {
+          "args": [
+            "/bin/secret-wrapper",
+            "/tmp/secret-wrapper/secret-wrapper"
+          ],
+          "command": [
+            "cp"
+          ],
+          "image": "registry.svc.ci.openshift.org/ci/secret-wrapper:latest",
+          "name": "cp-secret-wrapper",
+          "resources": {},
+          "terminationMessagePolicy": "FallbackToLogsOnError",
+          "volumeMounts": [
+            {
+              "mountPath": "/tmp/secret-wrapper",
+              "name": "secret-wrapper"
+            }
+          ]
+        }
+      ],
+      "restartPolicy": "Never",
+      "volumes": [
+        {
+          "emptyDir": {},
+          "name": "secret-wrapper"
+        },
+        {
+          "name": "e2e-gcp",
+          "secret": {
+            "secretName": "e2e-gcp"
+          }
+        }
+      ]
+    },
+    "status": {}
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Pod",
+    "metadata": {
+      "annotations": {
+        "ci-operator.openshift.io/container-sub-tests": "test",
+        "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+      },
+      "creationTimestamp": null,
+      "labels": {
+        "build-id": "0",
+        "ci.openshift.io/refs.branch": "master",
+        "ci.openshift.io/refs.org": "openshift",
+        "ci.openshift.io/refs.repo": "ci-tools",
+        "created-by-ci": "true",
+        "job": "pull-ci-openshift-release-master-ci-operator-integration",
+        "prow.k8s.io/id": "uuid"
+      },
+      "name": "unit"
+    },
+    "spec": {
+      "containers": [
+        {
+          "command": [
+            "/bin/bash",
+            "-c",
+            "#!/bin/bash\nset -eu\ngo test ./pkg/..."
+          ],
+          "env": [
+            {
+              "name": "BUILD_ID",
+              "value": "0"
+            },
+            {
+              "name": "JOB_NAME",
+              "value": "pull-ci-openshift-release-master-ci-operator-integration"
+            },
+            {
+              "name": "JOB_SPEC",
+              "value": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+            },
+            {
+              "name": "JOB_TYPE",
+              "value": "presubmit"
+            },
+            {
+              "name": "PROW_JOB_ID",
+              "value": "uuid"
+            },
+            {
+              "name": "PULL_BASE_REF",
+              "value": "master"
+            },
+            {
+              "name": "PULL_BASE_SHA",
+              "value": "af8a90a2faf965eeda949dc1c607c48d3ffcda3e"
+            },
+            {
+              "name": "PULL_NUMBER",
+              "value": "1234"
+            },
+            {
+              "name": "PULL_PULL_SHA",
+              "value": "538680dfd2f6cff3b3506c80ca182dcb0dd22a58"
+            },
+            {
+              "name": "PULL_REFS",
+              "value": "master:af8a90a2faf965eeda949dc1c607c48d3ffcda3e,1234:538680dfd2f6cff3b3506c80ca182dcb0dd22a58"
+            },
+            {
+              "name": "REPO_NAME",
+              "value": "ci-tools"
+            },
+            {
+              "name": "REPO_OWNER",
+              "value": "openshift"
+            }
+          ],
+          "image": "pipeline:src",
+          "name": "test",
+          "resources": {
+            "limits": {
+              "memory": "4Gi"
+            },
+            "requests": {
+              "cpu": "100m",
+              "memory": "200Mi"
+            }
+          },
+          "terminationMessagePolicy": "FallbackToLogsOnError"
+        }
+      ],
+      "restartPolicy": "Never"
+    },
+    "status": {}
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Secret",
+    "metadata": {
+      "creationTimestamp": null,
+      "name": "e2e-azure"
+    }
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Secret",
+    "metadata": {
+      "creationTimestamp": null,
+      "name": "e2e-gcp"
+    }
+  }
+]

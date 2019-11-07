@@ -11,7 +11,7 @@
       "cluster": "https://api.ci.openshift.org",
       "namespace": "openshift",
       "name": "release",
-      "tag": "golang-1.10"
+      "tag": "golang-1.11"
     }
   },
   "tests": [
@@ -38,7 +38,7 @@
           {
             "as": "ipi-install-rbac",
             "from": "installer",
-            "commands": "setup-rbac\n",
+            "commands": "setup-rbac-2\n",
             "resources": {
               "requests": {
                 "cpu": "1000m",
@@ -50,7 +50,7 @@
           {
             "as": "ipi-install-install",
             "from": "installer",
-            "commands": "openshift-cluster install\n",
+            "commands": "openshift-cluster install --newFlag\n",
             "resources": {
               "requests": {
                 "cpu": "1000m",
@@ -111,7 +111,7 @@
           {
             "as": "ipi-install-rbac",
             "from": "installer",
-            "commands": "setup-rbac\n",
+            "commands": "setup-rbac-2\n",
             "resources": {
               "requests": {
                 "cpu": "1000m",
@@ -123,7 +123,7 @@
           {
             "as": "ipi-install-install",
             "from": "installer",
-            "commands": "openshift-cluster install\n",
+            "commands": "openshift-cluster install --newFlag\n",
             "resources": {
               "requests": {
                 "cpu": "1000m",

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/openshift/ci-tools/pkg/config"
 	"io/ioutil"
 	"os"
 	"path"
@@ -15,6 +14,8 @@ import (
 	prowconfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/plugins"
 	"sigs.k8s.io/yaml"
+
+	"github.com/openshift/ci-tools/pkg/config"
 )
 
 type options struct {

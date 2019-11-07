@@ -122,9 +122,9 @@ func getFileType(filename string) FileType {
 	}
 	base := basename[:len(basename)-len(ext)]
 	switch {
-	case ext == ".build" || base == "build":
+	case ext == ".build" || base == "build" || strings.HasPrefix(base, "build."):
 		return TypeBuild
-	case ext == ".workspace" || base == "workspace":
+	case ext == ".workspace" || base == "workspace" || strings.HasPrefix(base, "workspace."):
 		return TypeWorkspace
 	}
 	return TypeDefault
@@ -468,17 +468,35 @@ func (in *input) Lex(val *yySymType) int {
 		in.readRune()
 		return c
 
-	case '<', '>', '=', '!', '+', '-', '*', '/', '%', '|': // possibly followed by =
+	case '<', '>', '=', '!', '+', '-', '*', '/', '%', '|', '&', '~', '^': // possibly followed by =
 		in.readRune()
+
+		if c == '~' {
+			// unary bitwise not, shouldn't be followed by anything
+			return c
+		}
+
 		if c == '*' && in.peekRune() == '*' {
 			// double asterisk
 			in.readRune()
 			return _STAR_STAR
 		}
 
-		if c == '/' && in.peekRune() == '/' {
-			// integer division
-			in.readRune()
+		if c == in.peekRune() {
+			switch c {
+			case '/':
+				// integer division
+				in.readRune()
+				c = _INT_DIV
+			case '<':
+				// left shift
+				in.readRune()
+				c = _BIT_LSH
+			case '>':
+				// right shift
+				in.readRune()
+				c = _BIT_RSH
+			}
 		}
 
 		if in.peekRune() == '=' {
@@ -555,7 +573,7 @@ func (in *input) Lex(val *yySymType) int {
 			}
 		}
 		in.endToken(val)
-		s, triple, err := unquote(val.tok)
+		s, triple, err := Unquote(val.tok)
 		if err != nil {
 			in.Error(fmt.Sprint(err))
 		}

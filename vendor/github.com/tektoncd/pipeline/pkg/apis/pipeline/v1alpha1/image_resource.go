@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Knative Authors.
+Copyright 2019 The Tekton Authors
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,16 +17,16 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"fmt"
+	"encoding/json"
 	"strings"
 
-	corev1 "k8s.io/api/core/v1"
+	"golang.org/x/xerrors"
 )
 
 // NewImageResource creates a new ImageResource from a PipelineResource.
 func NewImageResource(r *PipelineResource) (*ImageResource, error) {
 	if r.Spec.Type != PipelineResourceTypeImage {
-		return nil, fmt.Errorf("ImageResource: Cannot create an Image resource from a %s Pipeline Resource", r.Spec.Type)
+		return nil, xerrors.Errorf("ImageResource: Cannot create an Image resource from a %s Pipeline Resource", r.Spec.Type)
 	}
 	ir := &ImageResource{
 		Name: r.Name,
@@ -47,10 +47,11 @@ func NewImageResource(r *PipelineResource) (*ImageResource, error) {
 
 // ImageResource defines an endpoint where artifacts can be stored, such as images.
 type ImageResource struct {
-	Name   string               `json:"name"`
-	Type   PipelineResourceType `json:"type"`
-	URL    string               `json:"url"`
-	Digest string               `json:"digest"`
+	Name           string               `json:"name"`
+	Type           PipelineResourceType `json:"type"`
+	URL            string               `json:"url"`
+	Digest         string               `json:"digest"`
+	OutputImageDir string
 }
 
 // GetName returns the name of the resource
@@ -63,9 +64,6 @@ func (s ImageResource) GetType() PipelineResourceType {
 	return PipelineResourceTypeImage
 }
 
-// GetParams returns the resoruce params
-func (s ImageResource) GetParams() []Param { return []Param{} }
-
 // Replacements is used for template replacement on an ImageResource inside of a Taskrun.
 func (s *ImageResource) Replacements() map[string]string {
 	return map[string]string{
@@ -76,11 +74,25 @@ func (s *ImageResource) Replacements() map[string]string {
 	}
 }
 
-func (s *ImageResource) GetUploadContainerSpec() ([]corev1.Container, error) {
-	return nil, nil
+// GetInputTaskModifier returns the TaskModifier to be used when this resource is an input.
+func (s *ImageResource) GetInputTaskModifier(_ *TaskSpec, _ string) (TaskModifier, error) {
+	return &InternalTaskModifier{}, nil
 }
-func (s *ImageResource) GetDownloadContainerSpec() ([]corev1.Container, error) {
-	return nil, nil
+
+// GetOutputTaskModifier returns a No-op TaskModifier.
+func (s *ImageResource) GetOutputTaskModifier(_ *TaskSpec, _ string) (TaskModifier, error) {
+	return &InternalTaskModifier{}, nil
 }
-func (s *ImageResource) SetDestinationDirectory(path string) {
+
+// GetOutputImageDir return the path to get the index.json file
+func (s *ImageResource) GetOutputImageDir() string {
+	return s.OutputImageDir
+}
+
+func (s ImageResource) String() string {
+	// the String() func implements the Stringer interface, and therefore
+	// cannot return an error
+	// if the Marshal func gives an error, the returned string will be empty
+	json, _ := json.Marshal(s)
+	return string(json)
 }

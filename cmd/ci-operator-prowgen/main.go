@@ -182,7 +182,7 @@ func generatePodSpec(info *prowgenInfo, secret *cioperatorapi.Secret) *kubeapi.P
 		ServiceAccountName: "ci-operator",
 		Containers: []kubeapi.Container{
 			{
-				Image:           "ci-operator:latest",
+				Image:           "registry.svc.ci.openshift.org/ci/ci-operator:latest",
 				ImagePullPolicy: kubeapi.PullAlways,
 				Env:             []kubeapi.EnvVar{{Name: "CONFIG_SPEC", ValueFrom: &configMapKeyRef}},
 				Resources: kubeapi.ResourceRequirements{

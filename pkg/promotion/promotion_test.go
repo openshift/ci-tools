@@ -101,6 +101,14 @@ func TestDetermineReleaseBranches(t *testing.T) {
 			expectedFutureBranch: "openshift-4.1",
 			expectedError:        false,
 		},
+		{
+			name:                 "promotion from release branch for a repo ahead of the branch cut makes a new release branch",
+			currentRelease:       "4.0",
+			futureRelease:        "4.1",
+			currentBranch:        "release-4.0",
+			expectedFutureBranch: "release-4.1",
+			expectedError:        false,
+		},
 	}
 
 	for _, testCase := range testCases {

@@ -51,7 +51,7 @@ func TestGeneratePodSpec(t *testing.T) {
 						"--artifact-dir=$(ARTIFACTS)",
 						"--target=target",
 						"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
-						"--resolver-address=http://ci-operator-configresolver",
+						"--resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org",
 						"--org=org",
 						"--repo=repo",
 						"--branch=branch",
@@ -97,7 +97,7 @@ func TestGeneratePodSpec(t *testing.T) {
 						"--artifact-dir=$(ARTIFACTS)",
 						"--target=target",
 						"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
-						"--resolver-address=http://ci-operator-configresolver",
+						"--resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org",
 						"--org=org",
 						"--repo=repo",
 						"--branch=branch",
@@ -145,7 +145,7 @@ func TestGeneratePodSpec(t *testing.T) {
 						"--artifact-dir=$(ARTIFACTS)",
 						"--target=target",
 						"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
-						"--resolver-address=http://ci-operator-configresolver",
+						"--resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org",
 						"--org=org",
 						"--repo=repo",
 						"--branch=branch",
@@ -274,7 +274,7 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						"--artifact-dir=$(ARTIFACTS)",
 						"--target=test",
 						"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
-						"--resolver-address=http://ci-operator-configresolver",
+						"--resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org",
 						"--org=organization",
 						"--repo=repo",
 						"--branch=branch",
@@ -364,7 +364,7 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						"--artifact-dir=$(ARTIFACTS)",
 						"--target=test",
 						"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
-						"--resolver-address=http://ci-operator-configresolver",
+						"--resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org",
 						"--org=organization",
 						"--repo=repo",
 						"--branch=branch",
@@ -944,7 +944,7 @@ tests:
         - --org=super
         - --promote
         - --repo=duper
-        - --resolver-address=http://ci-operator-configresolver
+        - --resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org
         - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=[images]
         command:
@@ -994,7 +994,7 @@ tests:
         - --give-pr-author-access-to-namespace=true
         - --org=super
         - --repo=duper
-        - --resolver-address=http://ci-operator-configresolver
+        - --resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org
         - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=[images]
         command:
@@ -1042,7 +1042,7 @@ tests:
         - --give-pr-author-access-to-namespace=true
         - --org=super
         - --repo=duper
-        - --resolver-address=http://ci-operator-configresolver
+        - --resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org
         - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=unit
         command:
@@ -1166,7 +1166,7 @@ tests:
         - --give-pr-author-access-to-namespace=true
         - --org=super
         - --repo=duper
-        - --resolver-address=http://ci-operator-configresolver
+        - --resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org
         - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=[images]
         - --variant=rhel
@@ -1216,7 +1216,7 @@ tests:
         - --give-pr-author-access-to-namespace=true
         - --org=super
         - --repo=duper
-        - --resolver-address=http://ci-operator-configresolver
+        - --resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org
         - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=unit
         - --variant=rhel
@@ -1294,7 +1294,7 @@ tests:
         - --org=super
         - --promote
         - --repo=duper
-        - --resolver-address=http://ci-operator-configresolver
+        - --resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org
         - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=[images]
         - --variant=rhel
@@ -1415,7 +1415,7 @@ tests:
         - --give-pr-author-access-to-namespace=true
         - --org=super
         - --repo=duper
-        - --resolver-address=http://ci-operator-configresolver
+        - --resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org
         - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=[images]
         command:
@@ -1463,7 +1463,7 @@ tests:
         - --give-pr-author-access-to-namespace=true
         - --org=super
         - --repo=duper
-        - --resolver-address=http://ci-operator-configresolver
+        - --resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org
         - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=unit
         command:
@@ -1537,7 +1537,7 @@ tests:
         - --org=super
         - --promote
         - --repo=duper
-        - --resolver-address=http://ci-operator-configresolver
+        - --resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org
         - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=[images]
         command:

@@ -22,7 +22,7 @@ presubmits:
         - --give-pr-author-access-to-namespace=true
         - --org=private
         - --repo=duper
-        - --resolver-address=http://ci-operator-configresolver
+        - --resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org
         - --secret-dir=/usr/local/e2e-cluster-profile
         - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --ssh-key-path=/usr/local/github-ssh-credentials-openshift-bot/id_rsa
@@ -103,7 +103,7 @@ presubmits:
         - --give-pr-author-access-to-namespace=true
         - --org=private
         - --repo=duper
-        - --resolver-address=http://ci-operator-configresolver
+        - --resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org
         - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --ssh-key-path=/usr/local/github-ssh-credentials-openshift-bot/id_rsa
         - --target=[images]
@@ -160,7 +160,7 @@ presubmits:
         - --give-pr-author-access-to-namespace=true
         - --org=private
         - --repo=duper
-        - --resolver-address=http://ci-operator-configresolver
+        - --resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org
         - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --ssh-key-path=/usr/local/github-ssh-credentials-openshift-bot/id_rsa
         - --target=unit

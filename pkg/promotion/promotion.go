@@ -69,6 +69,8 @@ func DetermineReleaseBranch(currentRelease, futureRelease, currentBranch string)
 		return fmt.Sprintf("release-%s", futureRelease), nil
 	} else if currentBranch == fmt.Sprintf("openshift-%s", currentRelease) {
 		return fmt.Sprintf("openshift-%s", futureRelease), nil
+	} else if currentBranch == fmt.Sprintf("release-%s", currentRelease) {
+		return fmt.Sprintf("release-%s", futureRelease), nil
 	} else {
 		return "", fmt.Errorf("invalid branch %q promoting to current release", currentBranch)
 	}

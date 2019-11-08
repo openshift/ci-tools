@@ -8,6 +8,7 @@ periodics:
   - base_ref: master
     org: private
     repo: duper
+  hidden: true
   labels:
     ci-operator.openshift.io/prowgen-controlled: "true"
     pj-rehearse.openshift.io/can-be-rehearsed: "true"

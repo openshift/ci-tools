@@ -1,0 +1,43 @@
+tide:
+  queries:
+  - repos:
+    - openshift/origin
+    includedBranches:
+    - release-4.0
+    - release-4.1
+    - release-4.2
+    - release-4.3
+    - release-4.4
+    - openshift-4.1
+    labels:
+    - lgtm
+    - approved
+    - bugzilla/valid-bug
+    - cherry-pick-approved
+    missingLabels:
+    - needs-rebase
+    - do-not-merge/blocked-paths
+    - do-not-merge/hold
+    - do-not-merge/work-in-progress
+    - do-not-merge/invalid-owners-file
+    - bugzilla/invalid-bug
+  - repos:
+    - openshift/ci-tools
+    - openshift/origin
+    excludedBranches:
+    - release-4.0
+    - release-4.1
+    - release-4.2
+    - release-4.3
+    - release-4.4
+    - openshift-4.1
+    labels:
+    - lgtm
+    - approved
+    missingLabels:
+    - needs-rebase
+    - do-not-merge/blocked-paths
+    - do-not-merge/hold
+    - do-not-merge/work-in-progress
+    - do-not-merge/invalid-owners-file
+    - bugzilla/invalid-bug

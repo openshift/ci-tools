@@ -1,0 +1,30 @@
+images:
+- context_dir: images/blocking-issue-creator/
+  from: os
+  inputs:
+    bin:
+      paths:
+      - destination_dir: .
+        source_path: /go/bin/blocking-issue-creator
+  to: blocking-issue-creator
+promotion:
+  namespace: ci
+  tag: latest
+resources:
+  '*':
+    limits:
+      memory: 10Gi
+    requests:
+      cpu: 100m
+      memory: 200Mi
+build_root:
+  image_stream_tag:
+    name: release
+    namespace: openshift
+    tag: golang-1.13
+tests:
+- artifact_dir: /tmp/artifacts
+  as: unit
+  commands: ARTIFACT_DIR=/tmp/artifacts make test
+  container:
+    from: src

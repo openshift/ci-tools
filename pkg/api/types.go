@@ -1,6 +1,8 @@
 package api
 
-import "fmt"
+import (
+	"fmt"
+)
 
 // ReleaseBuildConfiguration describes how release
 // artifacts are built from a repository of source
@@ -511,6 +513,29 @@ const (
 	ClusterProfileOvirt              ClusterProfile = "ovirt"
 	ClusterProfileVSphere            ClusterProfile = "vsphere"
 )
+
+// ClusterProfiles are all valid cluster profiles
+func ClusterProfiles() []ClusterProfile {
+	return []ClusterProfile{
+		ClusterProfileAWS,
+		ClusterProfileAWSAtomic,
+		ClusterProfileAWSCentos,
+		ClusterProfileAWSCentos40,
+		ClusterProfileAWSGluster,
+		ClusterProfileAzure4,
+		ClusterProfileGCP,
+		ClusterProfileGCP40,
+		ClusterProfileGCPHA,
+		ClusterProfileGCPCRIO,
+		ClusterProfileGCPLogging,
+		ClusterProfileGCPLoggingJournald,
+		ClusterProfileGCPLoggingJSONFile,
+		ClusterProfileGCPLoggingCRIO,
+		ClusterProfileOpenStack,
+		ClusterProfileOvirt,
+		ClusterProfileVSphere,
+	}
+}
 
 // ClusterType maps profiles to the type string used by tests.
 func (p ClusterProfile) ClusterType() string {

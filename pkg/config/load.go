@@ -58,6 +58,11 @@ func (i *Info) Basename() string {
 	return fmt.Sprintf("%s.yaml", basename)
 }
 
+// RelativePath returns the path to the config under the root config dir
+func (i *Info) RelativePath() string {
+	return path.Join(i.Org, i.Repo, i.Basename())
+}
+
 // ConfigMapName returns the configmap in which we expect this file to be uploaded
 func (i *Info) ConfigMapName() string {
 	return fmt.Sprintf("ci-operator-%s-configs", promotion.FlavorForBranch(i.Branch))
@@ -176,7 +181,11 @@ func (i *DataWithInfo) CommitTo(dir string) error {
 		i.Logger().WithError(err).Error("failed to marshal output CI Operator configuration")
 		return err
 	}
-	outputFile := path.Join(dir, i.Info.Org, i.Info.Repo, i.Info.Basename())
+	outputFile := path.Join(dir, i.Info.RelativePath())
+	if err := os.MkdirAll(path.Dir(outputFile), os.ModePerm); err != nil && !os.IsExist(err) {
+		i.Logger().WithError(err).Error("failed to ensure directory existed for new CI Operator configuration")
+		return err
+	}
 	if err := ioutil.WriteFile(outputFile, raw, 0664); err != nil {
 		i.Logger().WithError(err).Error("failed to write new CI Operator configuration")
 		return err

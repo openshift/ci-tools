@@ -525,6 +525,28 @@ func generatePeriodicForTest(name string, info *prowgenInfo, label jc.ProwgenLab
 	}
 }
 
+var (
+	clusterMap = map[string]string{
+		"openshift/ci-ns-ttl-controller":           "ci/api-build01-ci-devcluster-openshift-com:6443",
+		"openshift/ci-secret-mirroring-controller": "ci/api-build01-ci-devcluster-openshift-com:6443",
+	}
+)
+
+func getBuildClusterForPresubmit(org, repo string, e2e bool) string {
+	if e2e {
+		return ""
+	}
+	return clusterMap[fmt.Sprintf("%s/%s", org, repo)]
+}
+
+func getBuildClusterForPostsubmit(org, repo string) string {
+	return ""
+}
+
+func getBuildClusterForPeriodic(org, repo string) string {
+	return ""
+}
+
 // Given a ci-operator configuration file and basic information about what
 // should be tested, generate a following JobConfig:
 //
@@ -543,9 +565,11 @@ func generateJobs(
 
 	for _, element := range configSpec.Tests {
 		var podSpec *kubeapi.PodSpec
+		e2e := false
 		if element.ContainerTestConfiguration != nil {
 			podSpec = generateCiOperatorPodSpec(info, element.Secret, element.As)
 		} else {
+			e2e = true
 			var release string
 			if c := configSpec.ReleaseTagConfiguration; c != nil {
 				release = c.Name
@@ -558,8 +582,12 @@ func generateJobs(
 		}
 
 		if element.Cron == nil {
-			presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(element.As, info, label, podSpec, true, configSpec.CanonicalGoRepository))
+			presubmit := *generatePresubmitForTest(element.As, info, label, podSpec, true, configSpec.CanonicalGoRepository)
+			presubmit.Cluster = getBuildClusterForPresubmit(info.Org, info.Repo, e2e)
+			presubmits[orgrepo] = append(presubmits[orgrepo], presubmit)
 		} else {
+			periodic := *generatePeriodicForTest(element.As, info, label, podSpec, true, *element.Cron, configSpec.CanonicalGoRepository)
+			periodic.Cluster = getBuildClusterForPeriodic(info.Org, info.Repo)
 			periodics = append(periodics, *generatePeriodicForTest(element.As, info, label, podSpec, true, *element.Cron, configSpec.CanonicalGoRepository))
 		}
 	}
@@ -571,7 +599,9 @@ func generateJobs(
 			additionalPresubmitArgs = []string{"--target=[release:latest]"}
 		}
 		podSpec := generateCiOperatorPodSpec(info, nil, "[images]", additionalPresubmitArgs...)
-		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest("images", info, label, podSpec, true, configSpec.CanonicalGoRepository))
+		presubmit := *generatePresubmitForTest("images", info, label, podSpec, true, configSpec.CanonicalGoRepository)
+		presubmit.Cluster = getBuildClusterForPresubmit(info.Org, info.Repo, false)
+		presubmits[orgrepo] = append(presubmits[orgrepo], presubmit)
 
 		if configSpec.PromotionConfiguration != nil {
 			additionalPostsubmitArgs := []string{"--promote"}
@@ -579,7 +609,9 @@ func generateJobs(
 				additionalPostsubmitArgs = append(additionalPostsubmitArgs, fmt.Sprintf("--target=%s", configSpec.PromotionConfiguration.AdditionalImages[additionalImage]))
 			}
 			podSpec := generateCiOperatorPodSpec(info, nil, "[images]", additionalPostsubmitArgs...)
-			postsubmits[orgrepo] = append(postsubmits[orgrepo], *generatePostsubmitForTest("images", info, label, podSpec, configSpec.CanonicalGoRepository))
+			postsubmit := *generatePostsubmitForTest("images", info, label, podSpec, configSpec.CanonicalGoRepository)
+			postsubmit.Cluster = getBuildClusterForPostsubmit(info.Org, info.Repo)
+			postsubmits[orgrepo] = append(postsubmits[orgrepo], postsubmit)
 		}
 	}
 

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/openshift/ci-tools/pkg/coalescer"
@@ -37,7 +38,12 @@ func reloadWatcher(ctx context.Context, w *fsnotify.Watcher, root string, errFun
 			return
 		case event := <-w.Events:
 			log.Tracef("Received %v event for %s", event.Op, event.Name)
-			go c.Run()
+			go func() {
+				err := c.Run()
+				if err != nil {
+					logrus.WithError(err).Errorf("Coalescer function failed")
+				}
+			}()
 			// add new files to be watched; if a watch already exists on a file, the
 			// watch is simply updated
 			if err := populateWatcher(w, root); err != nil {

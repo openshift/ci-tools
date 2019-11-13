@@ -7,10 +7,11 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
-
 	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
 	pjdwapi "k8s.io/test-infra/prow/pod-utils/downwardapi"
+
+	"github.com/openshift/ci-tools/pkg/registry"
 )
 
 const (
@@ -163,6 +164,48 @@ func GetChangedTemplates(path, baseRev string) ([]ConfigMapSource, error) {
 		}
 	}
 	return ret, nil
+}
+
+func loadRegistryStep(filename string, graph, changes registry.NodeByName) error {
+	// if a commands script changed, mark reference as changed
+	filename = strings.ReplaceAll(filename, "-commands.sh", "-ref.yaml")
+	name := ""
+	if strings.HasSuffix(filename, "-ref.yaml") {
+		name = strings.TrimSuffix(filename, "-ref.yaml")
+	}
+	if strings.HasSuffix(filename, "-chain.yaml") {
+		name = strings.TrimSuffix(filename, "-chain.yaml")
+	}
+	if strings.HasSuffix(filename, "-workflow.yaml") {
+		name = strings.TrimSuffix(filename, "-workflow.yaml")
+	}
+	if name == "" {
+		return fmt.Errorf("invalid step filename: %s", filename)
+	}
+	node, ok := graph[name]
+	if !ok {
+		return fmt.Errorf("could not find registry component in registry graph: %s", name)
+	}
+	changes[name] = node
+	return nil
+}
+
+// GetChangedRegistrySteps identifies all registry components (refs, chains, and workflows) that changed.
+func GetChangedRegistrySteps(path, baseRev string, graph registry.NodeByName) (registry.NodeByName, error) {
+	changes := make(registry.NodeByName)
+	revChanges, err := getRevChanges(path, RegistryPath, baseRev, true)
+	if err != nil {
+		return changes, err
+	}
+	for _, c := range revChanges {
+		if filepath.Ext(c.Filename) == ".yaml" || strings.HasSuffix(c.Filename, "-commands.sh") {
+			err := loadRegistryStep(filepath.Base(c.Filename), graph, changes)
+			if err != nil {
+				return changes, err
+			}
+		}
+	}
+	return changes, nil
 }
 
 func GetChangedClusterProfiles(path, baseRev string) ([]ConfigMapSource, error) {

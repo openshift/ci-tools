@@ -558,11 +558,10 @@ func generateJobBase(name, prefix string, info *prowgenInfo, label jc.ProwgenLab
 		labels[jc.CanBeRehearsedLabel] = string(jc.Generated)
 	}
 
-	jobPrefix := fmt.Sprintf("%s-ci-%s-%s-%s-", prefix, info.Org, info.Repo, info.Branch)
+	jobName := info.Info.JobName(prefix, name)
 	if len(info.Variant) > 0 {
 		labels[prowJobLabelVariant] = info.Variant
 	}
-	jobName := fmt.Sprintf("%s%s", jobPrefix, name)
 	newTrue := true
 	dc := &v1.DecorationConfig{SkipCloning: &newTrue}
 	base := prowconfig.JobBase{

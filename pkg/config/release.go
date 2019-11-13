@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/sirupsen/logrus"
 
 	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
@@ -36,12 +37,28 @@ const (
 	ClusterProfilePrefix = "cluster-profile-"
 	// StagingNamespace is the staging namespace in api.ci
 	StagingNamespace = "ci-stg"
+	// RegistryPath is the path to the multistage step registry
+	RegistryPath = "ci-operator/step_registry"
 )
 
 // ReleaseRepoConfig contains all configuration present in release repo (usually openshift/release)
 type ReleaseRepoConfig struct {
 	Prow       *prowconfig.Config
 	CiOperator ByFilename
+}
+
+// RegistryStep includes the 3 types of components of the multistage registry as pointers
+// and is used to store all registry changes using a single struct that can be put into a slice.
+type RegistryStep struct {
+	Reference *api.RegistryReference
+	Chain     *api.RegistryChain
+	Workflow  *api.RegistryWorkflow
+}
+
+type registry struct {
+	refs      map[string]api.LiteralTestStep
+	chains    map[string][]api.TestStep
+	workflows map[string]api.MultiStageTestConfiguration
 }
 
 func git(repoPath string, args ...string) (string, error) {
@@ -161,6 +178,300 @@ func GetChangedTemplates(path, baseRev string) ([]ConfigMapSource, error) {
 		}
 	}
 	return ret, nil
+}
+
+func loadRegistryStep(filename string, fullRegistry registry) (RegistryStep, error) {
+	if strings.HasSuffix(filename, "-commands.sh") {
+		filename = strings.TrimSuffix(filename, "-commands.sh")
+		filename = strings.Join([]string{filename, "-ref.yaml"}, "")
+	}
+	if strings.HasSuffix(filename, "-ref.yaml") {
+		name := strings.TrimSuffix(filename, "-ref.yaml")
+		ref, ok := fullRegistry.refs[name]
+		if !ok {
+			return RegistryStep{}, fmt.Errorf("could not find reference: %s", name)
+		}
+		change := RegistryStep{
+			Reference: &api.RegistryReference{
+				LiteralTestStep: ref,
+			},
+		}
+		return change, nil
+	}
+	if strings.HasSuffix(filename, "-chain.yaml") {
+		name := strings.TrimSuffix(filename, "-chain.yaml")
+		chain, ok := fullRegistry.chains[name]
+		if !ok {
+			return RegistryStep{}, fmt.Errorf("could not find chain: %s", name)
+		}
+		change := RegistryStep{
+			Chain: &api.RegistryChain{
+				As:    name,
+				Steps: chain,
+			},
+		}
+		return change, nil
+	}
+	if strings.HasSuffix(filename, "-workflow.yaml") {
+		name := strings.TrimSuffix(filename, "-workflow.yaml")
+		workflow, ok := fullRegistry.workflows[name]
+		if !ok {
+			return RegistryStep{}, fmt.Errorf("could not find workflow: %s", name)
+		}
+		change := RegistryStep{
+			Workflow: &api.RegistryWorkflow{
+				As:    name,
+				Steps: workflow,
+			},
+		}
+		return change, nil
+	}
+	return RegistryStep{}, fmt.Errorf("invalid step filename: %s", filename)
+}
+
+// GetChangedRegistrySteps identifies all registry components (refs, chains, and workflows) that changed.
+// After all changes have been identified, the list gets "trimmed": all changed refs that are included in
+// changed refs are removed from the list since the refs will be tested when the chain gets tested. This
+// is done for changed chains included in changed workflows. This helps reduce the number of rehearsals
+// that are performed.
+func GetChangedRegistrySteps(path, baseRev string, refs map[string]api.LiteralTestStep, chains map[string][]api.TestStep, workflows map[string]api.MultiStageTestConfiguration) ([]RegistryStep, error) {
+	revChanges, err := getRevChanges(path, RegistryPath, baseRev, true)
+	if err != nil {
+		return nil, err
+	}
+	var registryChanges []RegistryStep
+	if err != nil {
+		return nil, fmt.Errorf("Failed to load registry: %v", err)
+	}
+	fullRegistry := registry{refs: refs, chains: chains, workflows: workflows}
+	seenReference := make(map[string]bool)
+	for _, c := range revChanges {
+		if filepath.Ext(c.Filename) == ".yaml" || strings.HasSuffix(c.Filename, "-commands.sh") {
+			change, err := loadRegistryStep(filepath.Base(c.Filename), fullRegistry)
+			if err != nil {
+				return nil, err
+			}
+			if change.Reference != nil {
+				if _, ok := seenReference[change.Reference.As]; ok {
+					continue
+				}
+				seenReference[change.Reference.As] = true
+			}
+			registryChanges = append(registryChanges, change)
+		}
+	}
+	trimmedChanges := trimRegistryChanges(registryChanges, fullRegistry)
+	return trimmedChanges, nil
+}
+
+// unrollChains expands/unrolls all chains recursively into references.
+// Borrowed from pkg/resolver/resolver.go
+func unrollChains(input []api.TestStep, fullRegistry registry) (unrolledSteps []api.TestStep, errs []error) {
+	for _, step := range input {
+		if step.Chain != nil {
+			chain, ok := fullRegistry.chains[*step.Chain]
+			if !ok {
+				return []api.TestStep{}, []error{fmt.Errorf("unknown step chain: %s", *step.Chain)}
+			}
+			// handle nested chains
+			chain, err := unrollChains(chain, fullRegistry)
+			if err != nil {
+				errs = append(errs, err...)
+			}
+			unrolledSteps = append(unrolledSteps, chain...)
+			continue
+		}
+		unrolledSteps = append(unrolledSteps, step)
+	}
+	return
+}
+
+// getNestedChainsRecursive returns the names of all chains nested inside other chains in the provided RegistryChanges
+func getNestedChainsRecursive(chains []api.TestStep, fullRegistry registry) []string {
+	// make a set of chain names to prevent duplicates
+	nestedChains := make(map[string]bool)
+	for _, change := range chains {
+		steps, ok := fullRegistry.chains[*change.Chain]
+		if !ok {
+			// handle this
+		}
+		for _, step := range steps {
+			// ignore steps that aren't chains
+			if step.Chain == nil {
+				continue
+			}
+			// add nested chain to set
+			nestedChains[*step.Chain] = true
+			// recursively check for nested chains and add those to the nested chain set
+			for _, chain := range getNestedChainsRecursive(fullRegistry.chains[*step.Chain], fullRegistry) {
+				nestedChains[chain] = true
+			}
+		}
+	}
+	// convert set into slice
+	var nestedChainsSlice []string
+	for k := range nestedChains {
+		nestedChainsSlice = append(nestedChainsSlice, k)
+	}
+	return nestedChainsSlice
+}
+
+// getNestedChains returns the names of all chains nested inside other chains in the provided RegistryChanges
+func getNestedChains(chains []api.RegistryChain, fullRegistry registry) []string {
+	// make a set of chain names to prevent duplicates
+	nestedChains := make(map[string]bool)
+	for _, change := range chains {
+		steps := change.Steps
+		for _, step := range steps {
+			// ignore steps that aren't chains
+			if step.Chain == nil {
+				continue
+			}
+			// add nested chain to set
+			nestedChains[*step.Chain] = true
+			// recursively check for nested chains and add those to the nested chain set
+			for _, chain := range getNestedChainsRecursive(fullRegistry.chains[*step.Chain], fullRegistry) {
+				nestedChains[chain] = true
+			}
+		}
+	}
+	// convert set into slice
+	var nestedChainsSlice []string
+	for k := range nestedChains {
+		nestedChainsSlice = append(nestedChainsSlice, k)
+	}
+	return nestedChainsSlice
+}
+
+func getReferencesInChains(steps []api.TestStep, fullRegistry registry) []string {
+	var usedReferences []string
+	for _, step := range steps {
+		if step.Chain != nil {
+			// this should never occur since we always provide unrolledChains; maybe throw an error (otherwise remove this if block)?
+			continue
+		}
+		if step.Reference != nil {
+			usedReferences = append(usedReferences, *step.Reference)
+		}
+	}
+	return usedReferences
+}
+
+func getStepsInWorkflowChanges(changes []RegistryStep) (refs, chains []string) {
+	for _, change := range changes {
+		if change.Workflow != nil {
+			steps := change.Workflow.Steps
+			combinedSteps := append(steps.Pre, steps.Test...)
+			combinedSteps = append(combinedSteps, steps.Post...)
+			for _, step := range combinedSteps {
+				if step.Chain != nil {
+					chains = append(chains, *step.Chain)
+				} else if step.Reference != nil {
+					refs = append(refs, *step.Reference)
+				}
+			}
+		}
+	}
+	return
+}
+
+// trimRegistryChanges removes changed registry components that are included as part of
+// other changed components, e.g. a changed reference that is part of a changed chain.
+// The trimming order is:
+// 1. Remove chains that exist in changed workflows from changed chains
+// 2. Remove any chains that are nested inside another changed chain (or chains inside changed workflows)
+// 3. Unroll all remaining chains and identify all used references
+// 4. Find all references used in workflows
+// 5. Remove all references that are included as part of a changed chain or workflow
+func trimRegistryChanges(changes []RegistryStep, fullRegistry registry) []RegistryStep {
+	wfRefs, wfChains := getStepsInWorkflowChanges(changes)
+	var chains []api.RegistryChain
+	for _, change := range changes {
+		if change.Chain != nil {
+			// only get chains not included in changed workflows
+			ignore := false
+			for _, chain := range wfChains {
+				if change.Chain.As == chain {
+					ignore = true
+				}
+			}
+			if !ignore {
+				chains = append(chains, *change.Chain)
+			}
+		}
+	}
+	// for getting nested chains, use both changed chains and chains from changed workflows
+	var resolvedWFChains []api.RegistryChain
+	for _, chain := range wfChains {
+		if resolvedChain, ok := fullRegistry.chains[chain]; !ok {
+			// throw error
+		} else {
+			// put into RegistryChain struct
+			registryChain := api.RegistryChain{As: chain, Steps: resolvedChain}
+			resolvedWFChains = append(resolvedWFChains, registryChain)
+		}
+	}
+	combinedChains := append(chains, resolvedWFChains...)
+	nestedChains := getNestedChains(combinedChains, fullRegistry)
+	var trimmedChanges []RegistryStep
+	// we still want a []api.TestStep of non-nested chains for later steps
+	chains = []api.RegistryChain{}
+	for _, change := range changes {
+		if change.Chain != nil {
+			ignore := false
+			for _, nested := range nestedChains {
+				if change.Chain.As == nested {
+					ignore = true
+					break
+				}
+			}
+			if !ignore {
+				trimmedChanges = append(trimmedChanges, change)
+				chains = append(chains, *change.Chain)
+			}
+			continue
+		}
+		trimmedChanges = append(trimmedChanges, change)
+	}
+	// new combinedChains only contains workflow chains and non-nested chains
+	combinedChains = append(chains, resolvedWFChains...)
+	// convert from RegistryChain into TestSteps for unrolling
+	var chainSteps []api.TestStep
+	for _, chain := range chains {
+		steps := chain.Steps
+		chainSteps = append(chainSteps, steps...)
+	}
+	unrolledChainSteps, errs := unrollChains(chainSteps, fullRegistry)
+	if len(errs) != 0 {
+		// handle this
+	}
+	// get references that exist in changed chains
+	var usedReferences []string
+	for _, step := range unrolledChainSteps {
+		if step.Reference != nil {
+			usedReferences = append(usedReferences, *step.Reference)
+		}
+	}
+	usedReferences = append(usedReferences, wfRefs...)
+	// remove references that are used in changed chains and workflows
+	var trimmedChanges2 []RegistryStep
+	for _, change := range trimmedChanges {
+		if change.Reference != nil {
+			ignore := false
+			for _, used := range usedReferences {
+				if change.Reference.As == used {
+					ignore = true
+					break
+				}
+			}
+			if !ignore {
+				trimmedChanges2 = append(trimmedChanges, change)
+			}
+			continue
+		}
+		trimmedChanges2 = append(trimmedChanges, change)
+	}
+	return trimmedChanges2
 }
 
 func GetChangedClusterProfiles(path, baseRev string) ([]ConfigMapSource, error) {

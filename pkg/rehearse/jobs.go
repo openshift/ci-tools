@@ -396,6 +396,64 @@ func AddRandomJobsForChangedTemplates(templates []config.ConfigMapSource, toBeRe
 	return rehearsals
 }
 
+func getPresubmitForRegistryStep(step config.RegistryStep, configs config.ByFilename, prConfigPresubmits map[string][]prowconfig.Presubmit) (string, *prowconfig.Presubmit) {
+	for _, ciopConfig := range configs {
+		tests := ciopConfig.Configuration.Tests
+		repoPresubmits := prConfigPresubmits[ciopConfig.Info.Repo]
+		for _, test := range tests {
+			if test.MultiStageTestConfiguration != nil {
+				jobPrefix := fmt.Sprintf("%s-ci-%s-%s-%s-", "pull", ciopConfig.Info.Org, ciopConfig.Info.Repo, ciopConfig.Info.Branch)
+				jobName := fmt.Sprintf("%s%s", jobPrefix, test.As)
+				if step.Workflow != nil && test.MultiStageTestConfiguration.Workflow != nil && step.Workflow.As == *test.MultiStageTestConfiguration.Workflow {
+					for _, presubmit := range repoPresubmits {
+						if presubmit.Name == jobName {
+							return ciopConfig.Info.Repo, &presubmit
+						}
+					}
+					// continue to check other tests
+					continue
+				}
+				testSteps := append(test.MultiStageTestConfiguration.Pre, append(test.MultiStageTestConfiguration.Test, test.MultiStageTestConfiguration.Post...)...)
+				for _, testStep := range testSteps {
+					if step.Reference != nil && testStep.Reference != nil && step.Reference.As == *testStep.Reference {
+						for _, presubmit := range repoPresubmits {
+							if presubmit.Name == jobName {
+								return ciopConfig.Info.Repo, &presubmit
+							}
+						}
+					}
+					if step.Chain != nil && testStep.Chain != nil && step.Chain.As == *testStep.Chain {
+						for _, presubmit := range repoPresubmits {
+							if presubmit.Name == jobName {
+								return ciopConfig.Info.Repo, &presubmit
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	return "", nil
+}
+
+func AddRandomJobsForChangedRegistry(regSteps []config.RegistryStep, prConfigPresubmits map[string][]prowconfig.Presubmit, configPath string, loggers Loggers) config.Presubmits {
+	configsByFilename, err := config.LoadConfigByFilename(configPath)
+	if err != nil {
+		loggers.Debug.Errorf("Failed to load config by filename in AddRandomJobsForChangedRegistry: %v", err)
+	}
+	rehearsals := make(config.Presubmits)
+	for _, step := range regSteps {
+		repo, presubmit := getPresubmitForRegistryStep(step, configsByFilename, prConfigPresubmits)
+		if presubmit != nil {
+			rehearsals[repo] = append(rehearsals[repo], *presubmit)
+			continue
+		}
+		// if the code reaches this point, then no config contains the step
+		loggers.Debug.Errorf("No config found containing step: %+v", step)
+	}
+	return rehearsals
+}
+
 func getClusterTypes(jobs map[string][]prowconfig.Presubmit) []string {
 	ret := sets.NewString()
 	for _, jobs := range jobs {

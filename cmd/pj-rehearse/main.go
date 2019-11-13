@@ -3,14 +3,14 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/openshift/ci-tools/pkg/util"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/sirupsen/logrus"
-
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/client-go/rest"
+
 	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowgithub "k8s.io/test-infra/prow/github"
 	prowplugins "k8s.io/test-infra/prow/plugins"
@@ -18,8 +18,9 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/diffs"
+	"github.com/openshift/ci-tools/pkg/load"
 	"github.com/openshift/ci-tools/pkg/rehearse"
-	"k8s.io/client-go/rest"
+	"github.com/openshift/ci-tools/pkg/util"
 )
 
 type options struct {
@@ -184,6 +185,22 @@ func rehearseMain() int {
 		metrics.RecordChangedCiopConfigs(changedCiopConfigData)
 	}
 
+	refs, chains, workflows, err := load.Registry(filepath.Join(o.releaseRepoPath, config.RegistryPath))
+	if err != nil {
+		logger.WithError(err).Error("could not load step registry")
+		return gracefulExit(o.noFail, misconfigurationOutput)
+	}
+	changedRegistrySteps, err := config.GetChangedRegistrySteps(o.releaseRepoPath, jobSpec.Refs.BaseSHA, refs, chains, workflows)
+	if err != nil {
+		logger.WithError(err).Error("could not get step registry differences")
+		return gracefulExit(o.noFail, misconfigurationOutput)
+	}
+	if len(changedRegistrySteps) != 0 {
+		logger.WithField("registry", changedRegistrySteps).Info("registry steps changed")
+		// TODO: add metrics for changed registry steps
+		//metrics.RecordChangedRegistrySteps(changedRegistrySteps)
+	}
+
 	changedTemplates, err := config.GetChangedTemplates(o.releaseRepoPath, jobSpec.Refs.BaseSHA)
 	if err != nil {
 		logger.WithError(err).Error("could not get template differences")
@@ -267,6 +284,10 @@ func rehearseMain() int {
 	toRehearseClusterProfiles := diffs.GetPresubmitsForClusterProfiles(prConfig.Prow, changedClusterProfiles)
 	metrics.RecordPresubmitsOpportunity(toRehearseClusterProfiles, "cluster-profile-change")
 	toRehearse.AddAll(toRehearseClusterProfiles)
+
+	presubmitsWithChangedRegistry := rehearse.AddRandomJobsForChangedRegistry(changedRegistrySteps, prConfig.Prow.JobConfig.PresubmitsStatic, filepath.Join(o.releaseRepoPath, diffs.CIOperatorConfigInRepoPath), loggers)
+	metrics.RecordPresubmitsOpportunity(presubmitsWithChangedRegistry, "registry-change")
+	toRehearse.AddAll(presubmitsWithChangedRegistry)
 
 	jobConfigurer := rehearse.NewJobConfigurer(prConfig.CiOperator, prNumber, loggers, o.allowVolumes, changedTemplates, changedClusterProfiles, jobSpec.Refs)
 

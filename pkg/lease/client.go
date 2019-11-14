@@ -87,12 +87,12 @@ func (c *client) Heartbeat() error {
 }
 
 func (c *client) Release(name string) error {
+	c.Lock()
+	defer c.Unlock()
 	if err := c.boskos.ReleaseOne(name, freeState); err != nil {
 		return err
 	}
-	c.Lock()
 	delete(c.cancel, name)
-	c.Unlock()
 	return nil
 }
 

@@ -2,6 +2,7 @@ package load
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -97,25 +98,44 @@ func Registry(root string) (references map[string]api.LiteralTestStep, chains ma
 			if err != nil {
 				return err
 			}
-			if strings.HasSuffix(path, "ref.yaml") {
-				name, ref, err := loadReference(bytes, filepath.Dir(path))
+			dir := filepath.Dir(path)
+			relpath, err := filepath.Rel(root, path)
+			if err != nil {
+				return fmt.Errorf("Failed to determine relative path for %s: %v", path, err)
+			}
+			prefix := strings.ReplaceAll(filepath.Dir(relpath), "/", "-")
+			// Verify that file prefix is correct based on directory path
+			if !strings.HasPrefix(filepath.Base(relpath), prefix) {
+				return fmt.Errorf("File %s has incorrect prefix. Prefix should be %s", path, prefix)
+			}
+			if strings.HasSuffix(path, "-ref.yaml") {
+				name, ref, err := loadReference(bytes, dir, prefix)
 				if err != nil {
-					return err
+					return fmt.Errorf("Failed to load registry file %s: %v", path, err)
+				}
+				if name != prefix {
+					return fmt.Errorf("name of reference in file %s should be %s", path, prefix)
 				}
 				references[name] = ref
-			} else if strings.HasSuffix(path, "chain.yaml") {
+			} else if strings.HasSuffix(path, "-chain.yaml") {
 				name, chain, err := loadChain(bytes)
 				if err != nil {
-					return err
+					return fmt.Errorf("Failed to load registry file %s: %v", path, err)
+				}
+				if name != prefix {
+					return fmt.Errorf("name of chain in file %s should be %s", path, prefix)
 				}
 				chains[name] = chain
-			} else if strings.HasSuffix(path, "workflow.yaml") {
+			} else if strings.HasSuffix(path, "-workflow.yaml") {
 				name, workflow, err := loadWorkflow(bytes)
 				if err != nil {
-					return err
+					return fmt.Errorf("Failed to load registry file %s: %v", path, err)
+				}
+				if name != prefix {
+					return fmt.Errorf("name of workflow in file %s should be %s", path, prefix)
 				}
 				workflows[name] = workflow
-			} else if strings.HasSuffix(path, "commands.sh") {
+			} else if strings.HasSuffix(path, "-commands.sh") {
 				// ignore
 			} else {
 				return fmt.Errorf("invalid file name: %s", path)
@@ -126,11 +146,14 @@ func Registry(root string) (references map[string]api.LiteralTestStep, chains ma
 	return references, chains, workflows, err
 }
 
-func loadReference(bytes []byte, baseDir string) (string, api.LiteralTestStep, error) {
+func loadReference(bytes []byte, baseDir, prefix string) (string, api.LiteralTestStep, error) {
 	step := api.RegistryReferenceConfig{}
 	err := yaml.Unmarshal(bytes, &step)
 	if err != nil {
 		return "", api.LiteralTestStep{}, err
+	}
+	if step.Reference.Commands != fmt.Sprintf("%s-commands.sh", prefix) {
+		return "", api.LiteralTestStep{}, fmt.Errorf("Reference %s has invalid command file path; command should be set to %s", step.Reference.As, fmt.Sprintf("%s-commands.sh", prefix))
 	}
 	command, err := ioutil.ReadFile(filepath.Join(baseDir, step.Reference.Commands))
 	if err != nil {
@@ -154,6 +177,9 @@ func loadWorkflow(bytes []byte) (string, api.MultiStageTestConfiguration, error)
 	err := yaml.Unmarshal(bytes, &workflow)
 	if err != nil {
 		return "", api.MultiStageTestConfiguration{}, err
+	}
+	if workflow.Workflow.Steps.Workflow != nil {
+		return "", api.MultiStageTestConfiguration{}, errors.New("workflows cannot contain other workflows")
 	}
 	return workflow.Workflow.As, workflow.Workflow.Steps, nil
 }

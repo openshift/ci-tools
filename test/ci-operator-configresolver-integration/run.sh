@@ -60,7 +60,8 @@ if ! diff -Naupr tests/expected/openshift-installer-release-4.2-golang111.json <
 fi
 currGen=$(curl 'http://127.0.0.1:8080/registryGeneration')
 export currGen
-cp -a multistage-registry/registry2 multistage-registry/registry
+rm -rf multistage-registry/registry/*
+cp -a multistage-registry/registry2/* multistage-registry/registry
 for (( i = 0; i < 10; i++ )); do
     if [[ "$(curl http://127.0.0.1:8080/registryGeneration 2>/dev/null)" -gt $currGen+1 ]]; then
         break

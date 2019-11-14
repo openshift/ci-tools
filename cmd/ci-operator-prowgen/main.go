@@ -286,6 +286,8 @@ func generatePodSpecTemplate(info *prowgenInfo, secret *cioperatorapi.Secret, re
 		targetCloud = "gcp"
 	case cioperatorapi.ClusterProfileOpenStack:
 		targetCloud = "openstack"
+	case cioperatorapi.ClusterProfileOvirt:
+		targetCloud = "ovirt"
 	case cioperatorapi.ClusterProfileVSphere:
 		targetCloud = "vsphere"
 	}

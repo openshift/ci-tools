@@ -37,6 +37,7 @@ func FromConfig(
 	clusterConfig *rest.Config,
 	leaseClient lease.Client,
 	requiredTargets []string,
+	kubeconfigs map[string]rest.Config,
 	dryLogger *steps.DryLogger,
 	sshSecretName string,
 ) ([]api.Step, []api.Step, error) {
@@ -111,7 +112,7 @@ func FromConfig(
 		var step api.Step
 		var stepLinks []api.StepLink
 		if rawStep.InputImageTagStepConfiguration != nil {
-			srcClient, err := anonymousClusterImageStreamClient(imageClient, clusterConfig, rawStep.InputImageTagStepConfiguration.BaseImage.Cluster)
+			srcClient, err := clusterImageStreamClient(imageClient, clusterConfig, rawStep.InputImageTagStepConfiguration.BaseImage.Cluster, kubeconfigs)
 			if err != nil {
 				return nil, nil, fmt.Errorf("unable to access image stream tag on remote cluster: %v", err)
 			}
@@ -119,7 +120,7 @@ func FromConfig(
 		} else if rawStep.PipelineImageCacheStepConfiguration != nil {
 			step = steps.PipelineImageCacheStep(*rawStep.PipelineImageCacheStepConfiguration, config.Resources, buildClient, imageClient, artifactDir, jobSpec, dryLogger)
 		} else if rawStep.SourceStepConfiguration != nil {
-			srcClient, err := anonymousClusterImageStreamClient(imageClient, clusterConfig, rawStep.SourceStepConfiguration.ClonerefsImage.Cluster)
+			srcClient, err := clusterImageStreamClient(imageClient, clusterConfig, rawStep.SourceStepConfiguration.ClonerefsImage.Cluster, kubeconfigs)
 			if err != nil {
 				return nil, nil, fmt.Errorf("unable to access image stream tag on remote cluster: %v", err)
 			}
@@ -139,7 +140,7 @@ func FromConfig(
 				stepLinks = append(stepLinks, step.Creates()...)
 			}
 		} else if rawStep.ReleaseImagesTagStepConfiguration != nil {
-			srcClient, err := anonymousClusterImageStreamClient(imageClient, clusterConfig, rawStep.ReleaseImagesTagStepConfiguration.Cluster)
+			srcClient, err := clusterImageStreamClient(imageClient, clusterConfig, rawStep.ReleaseImagesTagStepConfiguration.Cluster, kubeconfigs)
 			if err != nil {
 				return nil, nil, fmt.Errorf("unable to access release images on remote cluster: %v", err)
 			}
@@ -275,13 +276,20 @@ func promotionDefaults(configSpec *api.ReleaseBuildConfiguration) (*api.Promotio
 	return config, nil
 }
 
-func anonymousClusterImageStreamClient(client imageclientset.ImageV1Interface, config *rest.Config, overrideClusterHost string) (imageclientset.ImageV1Interface, error) {
+func clusterImageStreamClient(client imageclientset.ImageV1Interface, config *rest.Config, overrideClusterHost string, kubeconfigs map[string]rest.Config) (imageclientset.ImageV1Interface, error) {
 	if config == nil || len(overrideClusterHost) == 0 {
 		return client, nil
 	}
 	if equivalentHosts(config.Host, overrideClusterHost) {
 		return client, nil
 	}
+
+	for _, c := range kubeconfigs {
+		if equivalentHosts(c.Host, overrideClusterHost) {
+			return imageclientset.NewForConfig(&c)
+		}
+	}
+
 	newConfig := rest.AnonymousClientConfig(config)
 	newConfig.TLSClientConfig = rest.TLSClientConfig{}
 	newConfig.Host = overrideClusterHost

@@ -236,6 +236,9 @@ type options struct {
 	variant         string
 
 	metadataRevision int
+
+	kubeconfig  string
+	kubeconfigs map[string]rest.Config
 }
 
 func bindOptions(flag *flag.FlagSet) *options {
@@ -289,6 +292,8 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.StringVar(&opt.repo, "repo", "", "Repo of the project (used by configresolver)")
 	flag.StringVar(&opt.branch, "branch", "", "Branch of the project (used by configresolver)")
 	flag.StringVar(&opt.variant, "variant", "", "Variant of the project's ci-operator config (used by configresolver)")
+
+	flag.StringVar(&opt.kubeconfig, "kubeconfig", "", "Path to .kube/config file. First config whose host matches the cluster is used to access imagestreamtags. If not set or no matching config , use the anonymous user")
 
 	return opt
 }
@@ -429,6 +434,12 @@ func (o *options) Complete() error {
 			o.leaseClient = lease.NewClient(owner, o.leaseServer)
 		}
 	}
+
+	configs, _, err := util.LoadKubeConfigs(o.kubeconfig)
+	if err != nil {
+		return fmt.Errorf("failed to load kubeconfig from '%s': %v", o.kubeconfig, err)
+	}
+	o.kubeconfigs = configs
 	return nil
 }
 
@@ -444,7 +455,7 @@ func (o *options) Run() error {
 		secretName = o.sshSecret.Name
 	}
 	// load the graph from the configuration
-	buildSteps, postSteps, err := defaults.FromConfig(o.configSpec, o.jobSpec, o.templates, o.writeParams, o.artifactDir, o.promote, o.clusterConfig, o.leaseClient, o.targets.values, dryLogger, secretName)
+	buildSteps, postSteps, err := defaults.FromConfig(o.configSpec, o.jobSpec, o.templates, o.writeParams, o.artifactDir, o.promote, o.clusterConfig, o.leaseClient, o.targets.values, o.kubeconfigs, dryLogger, secretName)
 	if err != nil {
 		return fmt.Errorf("failed to generate steps from config: %v", err)
 	}

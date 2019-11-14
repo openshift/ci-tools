@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	registryutil "github.com/openshift/ci-tools/pkg/registry"
+
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -265,28 +267,6 @@ func GetChangedRegistrySteps(path, baseRev string, refs map[string]api.LiteralTe
 	return trimmedChanges, nil
 }
 
-// unrollChains expands/unrolls all chains recursively into references.
-// Borrowed from pkg/resolver/resolver.go
-func unrollChains(input []api.TestStep, fullRegistry registry) (unrolledSteps []api.TestStep, errs []error) {
-	for _, step := range input {
-		if step.Chain != nil {
-			chain, ok := fullRegistry.chains[*step.Chain]
-			if !ok {
-				return []api.TestStep{}, []error{fmt.Errorf("unknown step chain: %s", *step.Chain)}
-			}
-			// handle nested chains
-			chain, err := unrollChains(chain, fullRegistry)
-			if err != nil {
-				errs = append(errs, err...)
-			}
-			unrolledSteps = append(unrolledSteps, chain...)
-			continue
-		}
-		unrolledSteps = append(unrolledSteps, step)
-	}
-	return
-}
-
 // getNestedChainsFromSteps returns the names of all chains nested inside other chains in the provided RegistryChanges
 func getNestedChainsFromSteps(chains []api.TestStep, fullRegistry registry) []string {
 	// make a set of chain names to prevent duplicates
@@ -442,7 +422,7 @@ func trimRegistryChanges(changes []RegistryStep, fullRegistry registry) []Regist
 		steps := chain.Steps
 		chainSteps = append(chainSteps, steps...)
 	}
-	unrolledChainSteps, errs := unrollChains(chainSteps, fullRegistry)
+	unrolledChainSteps, errs := registryutil.UnrollChains(chainSteps, fullRegistry.chains)
 	if len(errs) != 0 {
 		// handle this
 	}

@@ -74,7 +74,7 @@ func (r *registry) Resolve(config api.MultiStageTestConfiguration) (api.MultiSta
 func (r *registry) process(steps []api.TestStep) (literalSteps []api.LiteralTestStep, errs []error) {
 	// unroll chains
 	var unrolledSteps []api.TestStep
-	unrolledSteps, err := r.unrollChains(steps)
+	unrolledSteps, err := UnrollChains(steps, r.chainsByName)
 	if err != nil {
 		errs = append(errs, err...)
 	}
@@ -101,15 +101,16 @@ func (r *registry) process(steps []api.TestStep) (literalSteps []api.LiteralTest
 	return
 }
 
-func (r *registry) unrollChains(input []api.TestStep) (unrolledSteps []api.TestStep, errs []error) {
+// UnrollChains expands/unrolls all chains recursively into references.
+func UnrollChains(input []api.TestStep, chainsByName map[string][]api.TestStep) (unrolledSteps []api.TestStep, errs []error) {
 	for _, step := range input {
 		if step.Chain != nil {
-			chain, ok := r.chainsByName[*step.Chain]
+			chain, ok := chainsByName[*step.Chain]
 			if !ok {
 				return []api.TestStep{}, []error{fmt.Errorf("unknown step chain: %s", *step.Chain)}
 			}
 			// handle nested chains
-			chain, err := r.unrollChains(chain)
+			chain, err := UnrollChains(chain, chainsByName)
 			if err != nil {
 				errs = append(errs, err...)
 			}

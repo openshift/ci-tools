@@ -9,6 +9,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/sirupsen/logrus"
 
+	"k8s.io/apimachinery/pkg/util/sets"
 	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
 	pjdwapi "k8s.io/test-infra/prow/pod-utils/downwardapi"
@@ -286,10 +287,10 @@ func unrollChains(input []api.TestStep, fullRegistry registry) (unrolledSteps []
 	return
 }
 
-// getNestedChainsRecursive returns the names of all chains nested inside other chains in the provided RegistryChanges
-func getNestedChainsRecursive(chains []api.TestStep, fullRegistry registry) []string {
+// getNestedChainsFromSteps returns the names of all chains nested inside other chains in the provided RegistryChanges
+func getNestedChainsFromSteps(chains []api.TestStep, fullRegistry registry) []string {
 	// make a set of chain names to prevent duplicates
-	nestedChains := make(map[string]bool)
+	nestedChains := sets.NewString()
 	for _, change := range chains {
 		steps, ok := fullRegistry.chains[*change.Chain]
 		if !ok {
@@ -301,10 +302,10 @@ func getNestedChainsRecursive(chains []api.TestStep, fullRegistry registry) []st
 				continue
 			}
 			// add nested chain to set
-			nestedChains[*step.Chain] = true
+			nestedChains.Insert(*step.Chain)
 			// recursively check for nested chains and add those to the nested chain set
-			for _, chain := range getNestedChainsRecursive(fullRegistry.chains[*step.Chain], fullRegistry) {
-				nestedChains[chain] = true
+			for _, chain := range getNestedChainsFromSteps(fullRegistry.chains[*step.Chain], fullRegistry) {
+				nestedChains.Insert(chain)
 			}
 		}
 	}
@@ -319,7 +320,7 @@ func getNestedChainsRecursive(chains []api.TestStep, fullRegistry registry) []st
 // getNestedChains returns the names of all chains nested inside other chains in the provided RegistryChanges
 func getNestedChains(chains []api.RegistryChain, fullRegistry registry) []string {
 	// make a set of chain names to prevent duplicates
-	nestedChains := make(map[string]bool)
+	nestedChains := sets.NewString()
 	for _, change := range chains {
 		steps := change.Steps
 		for _, step := range steps {
@@ -328,10 +329,10 @@ func getNestedChains(chains []api.RegistryChain, fullRegistry registry) []string
 				continue
 			}
 			// add nested chain to set
-			nestedChains[*step.Chain] = true
+			nestedChains.Insert(*step.Chain)
 			// recursively check for nested chains and add those to the nested chain set
-			for _, chain := range getNestedChainsRecursive(fullRegistry.chains[*step.Chain], fullRegistry) {
-				nestedChains[chain] = true
+			for _, chain := range getNestedChainsFromSteps(fullRegistry.chains[*step.Chain], fullRegistry) {
+				nestedChains.Insert(chain)
 			}
 		}
 	}

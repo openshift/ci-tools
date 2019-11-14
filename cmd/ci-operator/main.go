@@ -316,7 +316,7 @@ func (o *options) Complete() error {
 	}
 	o.configSpec = config
 
-	if err := o.configSpec.ValidateAtRuntime(); err != nil {
+	if err := o.configSpec.ValidateResolved(); err != nil {
 		return err
 	}
 

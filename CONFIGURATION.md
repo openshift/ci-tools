@@ -110,7 +110,8 @@ each of which references a single component by a well known name, e.g.
 `cluster` is an optional cluster string (`host`, `host:port`, or `scheme://host:port`)
 to connect to for the `ImageStream`. The referenced OpenShift cluster must support
 anonymous access to retrieve `ImageStream`s, `ImageStreamTag`s, and
-`ImageStreamImage`s in the provided namespace.
+`ImageStreamImage`s in the provided namespace unless `--kubeconfig` is filled as an arg:
+`ci-operator -h` for details.
 
 ## `tag_specification.namespace`
 `namespace` determines the `Namespace` on the target cluster where release

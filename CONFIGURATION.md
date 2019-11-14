@@ -377,6 +377,7 @@ field is only valid in tests that provision a cluster (`openshift_ansible`,
 - `gcp`
 - `gcp-ha`
 - `gcp-crio`
+- `ovirt`
 - `vsphere`
 
 These are a subset of the profiles found in the

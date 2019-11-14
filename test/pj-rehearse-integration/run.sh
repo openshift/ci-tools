@@ -29,13 +29,13 @@ make_testing_repository() {
   git config --local user.name test
   git config --local user.email test
   cp -R "${master_data}"/* .
-  cp -R  "${registry}"/ ./ci-operator/step_registry
+  cp -R  "${registry}"/ ./ci-operator/step-registry
   git add ci-operator core-services cluster
   git commit -m "Master version of openshift/release" --quiet
   base_sha="$(git rev-parse HEAD)"
   cp -R "${candidate_data}"/* .
-  rm -rf ./ci-operator/step_registry
-  cp -R  "${registry2}"/ ./ci-operator/step_registry
+  rm -rf ./ci-operator/step-registry
+  cp -R  "${registry2}"/ ./ci-operator/step-registry
   git add ci-operator core-services cluster
   git commit -m "Candidate version of openshift/release" --quiet
   candidate_sha="$(git rev-parse HEAD)"

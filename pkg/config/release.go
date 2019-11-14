@@ -39,7 +39,7 @@ const (
 	// StagingNamespace is the staging namespace in api.ci
 	StagingNamespace = "ci-stg"
 	// RegistryPath is the path to the multistage step registry
-	RegistryPath = "ci-operator/step_registry"
+	RegistryPath = "ci-operator/step-registry"
 )
 
 // ReleaseRepoConfig contains all configuration present in release repo (usually openshift/release)

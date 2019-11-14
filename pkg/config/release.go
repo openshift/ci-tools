@@ -231,9 +231,9 @@ func loadRegistryStep(filename string, fullRegistry registry) (RegistryStep, err
 
 // GetChangedRegistrySteps identifies all registry components (refs, chains, and workflows) that changed.
 // After all changes have been identified, the list gets "trimmed": all changed refs that are included in
-// changed refs are removed from the list since the refs will be tested when the chain gets tested. This
-// is done for changed chains included in changed workflows. This helps reduce the number of rehearsals
-// that are performed.
+// changed chains are removed from the list since the refs will be tested when the chain gets tested. This
+// is also done for changed chains and refs included in changed workflows. This helps reduce the number of
+// rehearsals that are performed.
 func GetChangedRegistrySteps(path, baseRev string, refs map[string]api.LiteralTestStep, chains map[string][]api.TestStep, workflows map[string]api.MultiStageTestConfiguration) ([]RegistryStep, error) {
 	revChanges, err := getRevChanges(path, RegistryPath, baseRev, true)
 	if err != nil {

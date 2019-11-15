@@ -34,6 +34,7 @@ type options struct {
 	address      string
 	gracePeriod  time.Duration
 	cycle        time.Duration
+	validateOnly bool
 }
 
 type traceResponseWriter struct {
@@ -94,6 +95,7 @@ func gatherOptions() options {
 	fs.StringVar(&o.address, "address", ":8080", "Address to run server on")
 	fs.DurationVar(&o.gracePeriod, "gracePeriod", time.Second*10, "Grace period for server shutdown")
 	fs.DurationVar(&o.cycle, "cycle", time.Minute*2, "Cycle duration for config reload")
+	fs.BoolVar(&o.validateOnly, "validate-only", false, "Load the config and registry, validate them and exit.")
 	fs.Parse(os.Args[1:])
 	return o
 }
@@ -105,6 +107,20 @@ func validateOptions(o options) error {
 	}
 	if o.cycle == 0 {
 		return fmt.Errorf("invalid cycle: duration cannot equal 0")
+	}
+	if o.configPath == "" {
+		return fmt.Errorf("--config is required")
+	} else {
+		if _, err := os.Stat(o.configPath); err != nil && os.IsNotExist(err) {
+			return fmt.Errorf("--config points to a nonexistent directory: %v", err)
+		}
+	}
+	if o.registryPath == "" {
+		return fmt.Errorf("--registry is required")
+	} else {
+		if _, err := os.Stat(o.registryPath); err != nil && os.IsNotExist(err) {
+			return fmt.Errorf("--registry points to a nonexistent directory: %v", err)
+		}
 	}
 	return nil
 }
@@ -240,6 +256,10 @@ func main() {
 	registryAgent, err := load.NewRegistryAgent(o.registryPath, o.cycle, configresolverMetrics.errorRate)
 	if err != nil {
 		log.Fatalf("Failed to get registry agent: %v", err)
+	}
+
+	if o.validateOnly {
+		os.Exit(0)
 	}
 
 	// add handler func for incorrect paths as well; can help with identifying errors/404s caused by incorrect paths

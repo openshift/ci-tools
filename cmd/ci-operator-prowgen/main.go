@@ -566,14 +566,17 @@ func generateJobs(
 		}
 	}
 
-	if len(configSpec.Images) > 0 {
+	if len(configSpec.Images) > 0 || (configSpec.PromotionConfiguration != nil && len(configSpec.PromotionConfiguration.AdditionalImages) > 0) {
 		// Identify which jobs need a to have a release payload explicitly requested
 		var additionalPresubmitArgs []string
 		if promotion.PromotesOfficialImages(configSpec) {
 			additionalPresubmitArgs = []string{"--target=[release:latest]"}
 		}
 		podSpec := generateCiOperatorPodSpec(info, nil, "[images]", additionalPresubmitArgs...)
-		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest("images", info, label, podSpec, true, configSpec.CanonicalGoRepository))
+
+		if len(configSpec.Images) > 0 {
+			presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest("images", info, label, podSpec, true, configSpec.CanonicalGoRepository))
+		}
 
 		if configSpec.PromotionConfiguration != nil {
 			additionalPostsubmitArgs := []string{"--promote"}

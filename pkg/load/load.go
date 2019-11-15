@@ -135,8 +135,8 @@ func Registry(root string) (references map[string]api.LiteralTestStep, chains ma
 					return fmt.Errorf("name of workflow in file %s should be %s", path, prefix)
 				}
 				workflows[name] = workflow
-			} else if strings.HasSuffix(path, "-commands.sh") {
-				// ignore
+			} else if strings.HasSuffix(path, "-commands.sh") || filepath.Base(path) == "OWNERS" || filepath.Ext(path) == ".md" {
+				// these are files that are allowed to be in the registry, but aren't loaded; ignore
 			} else {
 				return fmt.Errorf("invalid file name: %s", path)
 			}

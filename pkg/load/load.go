@@ -94,6 +94,9 @@ func Registry(root string) (references map[string]api.LiteralTestStep, chains ma
 			return err
 		}
 		if info != nil && !info.IsDir() {
+			if filepath.Ext(info.Name()) == ".md" || info.Name() == "OWNERS" {
+				return nil
+			}
 			bytes, err := ioutil.ReadFile(path)
 			if err != nil {
 				return err

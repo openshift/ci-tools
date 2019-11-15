@@ -286,7 +286,7 @@ func generateCiOperatorPodSpec(info *prowgenInfo, secret *cioperatorapi.Secret, 
 func generatePodSpecTemplate(info *prowgenInfo, secret *cioperatorapi.Secret, release string, test *cioperatorapi.TestStepConfiguration) *kubeapi.PodSpec {
 	var testImageStreamTag, template string
 	var clusterProfile cioperatorapi.ClusterProfile
-	var needsReleaseRpms bool
+	var needsReleaseRpms, needsLeaseServer bool
 	if conf := test.OpenshiftAnsibleClusterTestConfiguration; conf != nil {
 		template = "cluster-launch-e2e"
 		clusterProfile = conf.ClusterProfile
@@ -310,6 +310,7 @@ func generatePodSpecTemplate(info *prowgenInfo, secret *cioperatorapi.Secret, re
 	} else if conf := test.OpenshiftInstallerClusterTestConfiguration; conf != nil {
 		if !conf.Upgrade {
 			template = "cluster-launch-installer-e2e"
+			needsLeaseServer = true
 		}
 		clusterProfile = conf.ClusterProfile
 	} else if conf := test.OpenshiftInstallerSrcClusterTestConfiguration; conf != nil {
@@ -369,6 +370,11 @@ func generatePodSpecTemplate(info *prowgenInfo, secret *cioperatorapi.Secret, re
 	container.Args = append(container.Args, fmt.Sprintf("--secret-dir=%s", clusterProfilePath))
 	if len(template) > 0 {
 		container.Args = append(container.Args, fmt.Sprintf("--template=%s", templatePath))
+	}
+	// TODO add to all templates when they are migrated
+	// TODO expose boskos (behind an oauth proxy) so it can be used by build clusters
+	if needsLeaseServer {
+		container.Args = append(container.Args, "--lease-server=http://boskos")
 	}
 	container.VolumeMounts = append(container.VolumeMounts, kubeapi.VolumeMount{Name: "cluster-profile", MountPath: clusterProfilePath})
 	if len(template) > 0 {

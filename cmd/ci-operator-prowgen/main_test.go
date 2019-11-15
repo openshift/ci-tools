@@ -417,7 +417,8 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						"--branch=branch",
 						"--target=test",
 						"--secret-dir=/usr/local/test-cluster-profile",
-						"--template=/usr/local/test"},
+						"--template=/usr/local/test",
+						"--lease-server=http://boskos"},
 					Resources: kubeapi.ResourceRequirements{
 						Requests: kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
 					},

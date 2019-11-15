@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"net/http"
@@ -35,6 +36,7 @@ type options struct {
 	gracePeriod  time.Duration
 	cycle        time.Duration
 	validateOnly bool
+	flatRegistry bool
 }
 
 type traceResponseWriter struct {
@@ -96,6 +98,7 @@ func gatherOptions() options {
 	fs.DurationVar(&o.gracePeriod, "gracePeriod", time.Second*10, "Grace period for server shutdown")
 	fs.DurationVar(&o.cycle, "cycle", time.Minute*2, "Cycle duration for config reload")
 	fs.BoolVar(&o.validateOnly, "validate-only", false, "Load the config and registry, validate them and exit.")
+	fs.BoolVar(&o.flatRegistry, "flat-registry", false, "Disable directory structure based registry validation")
 	fs.Parse(os.Args[1:])
 	return o
 }
@@ -121,6 +124,9 @@ func validateOptions(o options) error {
 		if _, err := os.Stat(o.registryPath); err != nil && os.IsNotExist(err) {
 			return fmt.Errorf("--registry points to a nonexistent directory: %v", err)
 		}
+	}
+	if o.validateOnly && o.flatRegistry {
+		return errors.New("--validate-only and --flat-registry flags cannot be set simultaneously")
 	}
 	return nil
 }
@@ -253,7 +259,7 @@ func main() {
 		log.Fatalf("Failed to get config agent: %v", err)
 	}
 
-	registryAgent, err := load.NewRegistryAgent(o.registryPath, o.cycle, configresolverMetrics.errorRate)
+	registryAgent, err := load.NewRegistryAgent(o.registryPath, o.cycle, configresolverMetrics.errorRate, o.flatRegistry)
 	if err != nil {
 		log.Fatalf("Failed to get registry agent: %v", err)
 	}

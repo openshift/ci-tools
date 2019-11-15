@@ -85,11 +85,17 @@ func configFromResolver(info *ResolverInfo) (*api.ReleaseBuildConfiguration, err
 
 // Registry takes the path to a registry config directory and returns the full set of references, chains,
 // and workflows that the registry's Resolver needs to resolve a user's MultiStageTestConfiguration
-func Registry(root string) (references map[string]api.LiteralTestStep, chains map[string][]api.TestStep, workflows map[string]api.MultiStageTestConfiguration, err error) {
+func Registry(root string, flat bool) (references map[string]api.LiteralTestStep, chains map[string][]api.TestStep, workflows map[string]api.MultiStageTestConfiguration, err error) {
 	references = map[string]api.LiteralTestStep{}
 	chains = map[string][]api.TestStep{}
 	workflows = map[string]api.MultiStageTestConfiguration{}
 	err = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if strings.HasPrefix(info.Name(), "..") {
+			if info.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
 		if err != nil {
 			return err
 		}
@@ -102,21 +108,24 @@ func Registry(root string) (references map[string]api.LiteralTestStep, chains ma
 				return err
 			}
 			dir := filepath.Dir(path)
-			relpath, err := filepath.Rel(root, path)
-			if err != nil {
-				return fmt.Errorf("Failed to determine relative path for %s: %v", path, err)
-			}
-			prefix := strings.ReplaceAll(filepath.Dir(relpath), "/", "-")
-			// Verify that file prefix is correct based on directory path
-			if !strings.HasPrefix(filepath.Base(relpath), prefix) {
-				return fmt.Errorf("File %s has incorrect prefix. Prefix should be %s", path, prefix)
+			var prefix string
+			if !flat {
+				relpath, err := filepath.Rel(root, path)
+				if err != nil {
+					return fmt.Errorf("Failed to determine relative path for %s: %v", path, err)
+				}
+				prefix = strings.ReplaceAll(filepath.Dir(relpath), "/", "-")
+				// Verify that file prefix is correct based on directory path
+				if !strings.HasPrefix(filepath.Base(relpath), prefix) {
+					return fmt.Errorf("File %s has incorrect prefix. Prefix should be %s", path, prefix)
+				}
 			}
 			if strings.HasSuffix(path, "-ref.yaml") {
-				name, ref, err := loadReference(bytes, dir, prefix)
+				name, ref, err := loadReference(bytes, dir, prefix, flat)
 				if err != nil {
 					return fmt.Errorf("Failed to load registry file %s: %v", path, err)
 				}
-				if name != prefix {
+				if !flat && name != prefix {
 					return fmt.Errorf("name of reference in file %s should be %s", path, prefix)
 				}
 				references[name] = ref
@@ -125,7 +134,7 @@ func Registry(root string) (references map[string]api.LiteralTestStep, chains ma
 				if err != nil {
 					return fmt.Errorf("Failed to load registry file %s: %v", path, err)
 				}
-				if name != prefix {
+				if !flat && name != prefix {
 					return fmt.Errorf("name of chain in file %s should be %s", path, prefix)
 				}
 				chains[name] = chain
@@ -134,7 +143,7 @@ func Registry(root string) (references map[string]api.LiteralTestStep, chains ma
 				if err != nil {
 					return fmt.Errorf("Failed to load registry file %s: %v", path, err)
 				}
-				if name != prefix {
+				if !flat && name != prefix {
 					return fmt.Errorf("name of workflow in file %s should be %s", path, prefix)
 				}
 				workflows[name] = workflow
@@ -149,13 +158,13 @@ func Registry(root string) (references map[string]api.LiteralTestStep, chains ma
 	return references, chains, workflows, err
 }
 
-func loadReference(bytes []byte, baseDir, prefix string) (string, api.LiteralTestStep, error) {
+func loadReference(bytes []byte, baseDir, prefix string, flat bool) (string, api.LiteralTestStep, error) {
 	step := api.RegistryReferenceConfig{}
 	err := yaml.Unmarshal(bytes, &step)
 	if err != nil {
 		return "", api.LiteralTestStep{}, err
 	}
-	if step.Reference.Commands != fmt.Sprintf("%s-commands.sh", prefix) {
+	if !flat && step.Reference.Commands != fmt.Sprintf("%s-commands.sh", prefix) {
 		return "", api.LiteralTestStep{}, fmt.Errorf("Reference %s has invalid command file path; command should be set to %s", step.Reference.As, fmt.Sprintf("%s-commands.sh", prefix))
 	}
 	command, err := ioutil.ReadFile(filepath.Join(baseDir, step.Reference.Commands))

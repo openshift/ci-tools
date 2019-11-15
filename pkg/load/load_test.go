@@ -726,35 +726,51 @@ func TestRegistry(t *testing.T) {
 			},
 		}
 
-		testCase = struct {
+		testCases = []struct {
 			name          string
+			registryDir   string
+			flatRegistry  bool
 			references    map[string]api.LiteralTestStep
 			chains        map[string][]api.TestStep
 			workflows     map[string]api.MultiStageTestConfiguration
 			expectedError bool
-		}{
+		}{{
 			name:          "Read registry",
+			registryDir:   "../../test/multistage-registry/registry",
+			flatRegistry:  false,
 			references:    expectedReferences,
 			chains:        expectedChains,
 			workflows:     expectedWorkflows,
 			expectedError: false,
-		}
+		}, {
+			name:         "Read configmap style registry",
+			registryDir:  "../../test/multistage-registry/configmap",
+			flatRegistry: true,
+			references: map[string]api.LiteralTestStep{
+				installRef: expectedReferences[installRef],
+			},
+			chains:        map[string][]api.TestStep{},
+			workflows:     map[string]api.MultiStageTestConfiguration{},
+			expectedError: false,
+		}}
 	)
 
-	references, chains, workflows, err := Registry("../../test/multistage-registry/registry")
-	if err == nil && testCase.expectedError == true {
-		t.Errorf("%s: got no error when error was expected", testCase.name)
-	}
-	if err != nil && testCase.expectedError == false {
-		t.Errorf("%s: got error when error wasn't expected: %v", testCase.name, err)
-	}
-	if !reflect.DeepEqual(references, testCase.references) {
-		t.Errorf("%s: output references different from expected: %s", testCase.name, diff.ObjectReflectDiff(references, testCase.references))
-	}
-	if !reflect.DeepEqual(chains, testCase.chains) {
-		t.Errorf("%s: output chains different from expected: %s", testCase.name, diff.ObjectReflectDiff(chains, testCase.chains))
-	}
-	if !reflect.DeepEqual(workflows, testCase.workflows) {
-		t.Errorf("%s: output workflows different from expected: %s", testCase.name, diff.ObjectReflectDiff(workflows, testCase.workflows))
+	for _, testCase := range testCases {
+		references, chains, workflows, err := Registry(testCase.registryDir, testCase.flatRegistry)
+		if err == nil && testCase.expectedError == true {
+			t.Errorf("%s: got no error when error was expected", testCase.name)
+		}
+		if err != nil && testCase.expectedError == false {
+			t.Errorf("%s: got error when error wasn't expected: %v", testCase.name, err)
+		}
+		if !reflect.DeepEqual(references, testCase.references) {
+			t.Errorf("%s: output references different from expected: %s", testCase.name, diff.ObjectReflectDiff(references, testCase.references))
+		}
+		if !reflect.DeepEqual(chains, testCase.chains) {
+			t.Errorf("%s: output chains different from expected: %s", testCase.name, diff.ObjectReflectDiff(chains, testCase.chains))
+		}
+		if !reflect.DeepEqual(workflows, testCase.workflows) {
+			t.Errorf("%s: output workflows different from expected: %s", testCase.name, diff.ObjectReflectDiff(workflows, testCase.workflows))
+		}
 	}
 }

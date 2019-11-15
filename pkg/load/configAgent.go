@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -109,6 +110,12 @@ func (a *configAgent) loadFilenameToConfig() error {
 	startTime := time.Now()
 	configs := filenameToConfig{}
 	err := filepath.Walk(a.configPath, func(path string, info os.FileInfo, err error) error {
+		if strings.HasPrefix(info.Name(), "..") {
+			if info.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
 		ext := filepath.Ext(path)
 		if info != nil && !info.IsDir() && (ext == ".yml" || ext == ".yaml") {
 			configSpec, err := Config(path, nil)

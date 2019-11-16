@@ -29,6 +29,7 @@ type registryAgent struct {
 	cycle        time.Duration
 	generation   int
 	errorMetrics *prometheus.CounterVec
+	flatRegistry bool
 }
 
 var registryReloadTimeMetric = prometheus.NewHistogram(
@@ -45,8 +46,8 @@ func init() {
 
 // NewRegistryAgent returns a RegistryAgent interface that automatically reloads when
 // the registry is changed on disk as well as on a period specified with a time.Duration.
-func NewRegistryAgent(registryPath string, cycle time.Duration, errorMetrics *prometheus.CounterVec) (RegistryAgent, error) {
-	a := &registryAgent{registryPath: registryPath, cycle: cycle, lock: &sync.RWMutex{}, errorMetrics: errorMetrics}
+func NewRegistryAgent(registryPath string, cycle time.Duration, errorMetrics *prometheus.CounterVec, flatRegistry bool) (RegistryAgent, error) {
+	a := &registryAgent{registryPath: registryPath, cycle: cycle, lock: &sync.RWMutex{}, errorMetrics: errorMetrics, flatRegistry: flatRegistry}
 	registryCoalescer := coalescer.NewCoalescer(a.loadRegistry)
 	err := registryCoalescer.Run()
 	if err != nil {
@@ -114,7 +115,7 @@ func (a *registryAgent) GetGeneration() int {
 func (a *registryAgent) loadRegistry() error {
 	log.Debug("Reloading registry")
 	startTime := time.Now()
-	refs, chains, workflows, err := Registry(a.registryPath)
+	refs, chains, workflows, err := Registry(a.registryPath, a.flatRegistry)
 	if err != nil {
 		a.recordError("failed to load ci-operator registry")
 		return fmt.Errorf("failed to load ci-operator registry (%v)", err)

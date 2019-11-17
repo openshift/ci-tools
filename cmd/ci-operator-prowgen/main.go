@@ -140,12 +140,52 @@ func generatePodSpec(info *prowgenInfo, secret *cioperatorapi.Secret) *kubeapi.P
 		ReadOnly:  true,
 	}}
 
+	if info.Org == "openshift" && info.Repo == "ci-secret-mirroring-controller" {
+		volumeMounts = []kubeapi.VolumeMount{
+			{
+				Name:      sentryDsnMountName,
+				MountPath: sentryDsnMountPath,
+				ReadOnly:  true,
+			},
+			{
+				Name:      "apici-ci-operator-credentials",
+				MountPath: "/etc/apici",
+				ReadOnly:  true,
+			},
+		}
+	}
+
 	volumes := []kubeapi.Volume{{
 		Name: sentryDsnMountName,
 		VolumeSource: kubeapi.VolumeSource{
 			Secret: &kubeapi.SecretVolumeSource{SecretName: sentryDsnSecretName},
 		},
 	}}
+
+	if info.Org == "openshift" && info.Repo == "ci-secret-mirroring-controller" {
+		volumes = []kubeapi.Volume{
+			{
+				Name: sentryDsnMountName,
+				VolumeSource: kubeapi.VolumeSource{
+					Secret: &kubeapi.SecretVolumeSource{SecretName: sentryDsnSecretName},
+				},
+			},
+			{
+				Name: "apici-ci-operator-credentials",
+				VolumeSource: kubeapi.VolumeSource{
+					Secret: &kubeapi.SecretVolumeSource{
+						SecretName: "apici-ci-operator-credentials",
+						Items: []kubeapi.KeyToPath{
+							{
+								Key:  "sa.ci-operator.apici.config",
+								Path: "kubeconfig",
+							},
+						},
+					},
+				},
+			},
+		}
+	}
 
 	if secret != nil {
 		volumeMounts = append(volumeMounts, kubeapi.VolumeMount{
@@ -214,6 +254,20 @@ func generateCiOperatorPodSpec(info *prowgenInfo, secret *cioperatorapi.Secret, 
 		fmt.Sprintf("--repo=%s", info.Repo),
 		fmt.Sprintf("--branch=%s", info.Branch),
 	}, additionalArgs...)
+
+	if info.Org == "openshift" && info.Repo == "ci-secret-mirroring-controller" {
+		ret.Containers[0].Args = append([]string{
+			"--give-pr-author-access-to-namespace=true",
+			"--artifact-dir=$(ARTIFACTS)",
+			fmt.Sprintf("--target=%s", target),
+			fmt.Sprintf("--sentry-dsn-path=%s", sentryDsnSecretPath),
+			"--resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org",
+			fmt.Sprintf("--org=%s", info.Org),
+			fmt.Sprintf("--repo=%s", info.Repo),
+			fmt.Sprintf("--branch=%s", info.Branch),
+			"--kubeconfig=/etc/apici/kubeconfig",
+		}, additionalArgs...)
+	}
 
 	if info.config.Private {
 		ret.Containers[0].Args = append(ret.Containers[0].Args, fmt.Sprintf("--ssh-key-path=%s", filepath.Join(sshKeyPath, "id_rsa")))

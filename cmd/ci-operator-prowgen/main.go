@@ -505,10 +505,6 @@ func generateJobBase(name, prefix string, info *prowgenInfo, label jc.ProwgenLab
 		labels[prowJobLabelVariant] = info.Variant
 	}
 	jobName := fmt.Sprintf("%s%s", jobPrefix, name)
-	if len(jobName) > 63 && len(jobPrefix) < 53 {
-		// warn if the prefix gives people enough space to choose names and they've chosen something long
-		logrus.WithField("name", jobName).Warn("Generated job name is longer than 63 characters. This may cause issues when Prow attempts to label resources with job name. Consider a shorter name.")
-	}
 	newTrue := true
 	dc := &v1.DecorationConfig{SkipCloning: &newTrue}
 	base := prowconfig.JobBase{

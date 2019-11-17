@@ -90,7 +90,7 @@ func Registry(root string, flat bool) (references map[string]api.LiteralTestStep
 	chains = map[string][]api.TestStep{}
 	workflows = map[string]api.MultiStageTestConfiguration{}
 	err = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-		if strings.HasPrefix(info.Name(), "..") {
+		if info != nil && strings.HasPrefix(info.Name(), "..") {
 			if info.IsDir() {
 				return filepath.SkipDir
 			}

@@ -245,7 +245,6 @@ func bindOptions(flag *flag.FlagSet) *options {
 	opt := &options{
 		idleCleanupDuration: 1 * time.Hour,
 		cleanupDuration:     12 * time.Hour,
-		metadataRevision:    0,
 	}
 
 	// command specific options
@@ -832,7 +831,7 @@ func (o *options) initializeNamespace() error {
 // }
 //
 type prowResultMetadata struct {
-	Revision      int               `json:"revision"`
+	Revision      string            `json:"revision"`
 	RepoCommit    string            `json:"repo-commit"`
 	Repo          string            `json:"repo"`
 	Repos         map[string]string `json:"repos"`
@@ -917,7 +916,7 @@ func (o *options) findCustomMetadataFile() (customProwMetadataFile string, err e
 // generateProwMetadata generates the normal prow metadata from the arguments passed into ci-operator
 func (o *options) generateProwMetadata() (m prowResultMetadata) {
 	o.metadataRevision++
-	m.Revision = o.metadataRevision
+	m.Revision = strconv.Itoa(o.metadataRevision)
 
 	if o.jobSpec.Refs != nil {
 		m.Repo = fmt.Sprintf("%s/%s", o.jobSpec.Refs.Org, o.jobSpec.Refs.Repo)

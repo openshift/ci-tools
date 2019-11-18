@@ -9,10 +9,11 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 
-	"github.com/google/go-cmp/cmp"
 	"github.com/openshift/ci-tools/pkg/api"
 )
 
@@ -78,58 +79,74 @@ func TestSanitizeMessage(t *testing.T) {
 
 func TestProwMetadata(t *testing.T) {
 	tests := []struct {
-		TestName       string
-		Org            string
-		Repo           string
-		ExtraOrg       string
-		ExtraRepo      string
-		ProwJobID      string
-		Namespace      string
-		CustomMetadata map[string]string
+		id             string
+		jobSpec        *api.JobSpec
+		namespace      string
+		customMetadata map[string]string
 	}{
 		{
-			TestName:  "generate metadata",
-			Org:       "some-org",
-			Repo:      "some-repo",
-			ExtraOrg:  "some-extra-org",
-			ExtraRepo: "some-extra-repo",
-			ProwJobID: "some-prow-job-id",
-			Namespace: "some-namespace",
+			id: "generate metadata",
+			jobSpec: &api.JobSpec{
+				JobSpec: downwardapi.JobSpec{
+					Refs: &prowapi.Refs{
+						Org:  "some-org",
+						Repo: "some-repo",
+					},
+					ExtraRefs: []prowapi.Refs{
+						{
+							Org:  "some-extra-org",
+							Repo: "some-extra-repo",
+						},
+					},
+					ProwJobID: "some-prow-job-id",
+				},
+			},
+			namespace:      "some-namespace",
+			customMetadata: nil,
 		},
 		{
-			TestName:  "generate metadata with a custom metadata file",
-			Org:       "some-org",
-			Repo:      "some-repo",
-			ExtraOrg:  "some-extra-org",
-			ExtraRepo: "some-extra-repo",
-			ProwJobID: "some-prow-job-id",
-			Namespace: "some-namespace",
-			CustomMetadata: map[string]string{
+			id: "generate metadata with a custom metadata file",
+			jobSpec: &api.JobSpec{
+				JobSpec: downwardapi.JobSpec{
+					Refs: &prowapi.Refs{
+						Org:  "another-org",
+						Repo: "another-repo",
+					},
+					ExtraRefs: []prowapi.Refs{
+						{
+							Org:  "another-extra-org",
+							Repo: "another-extra-repo",
+						},
+						{
+							Org:  "another-extra-org2",
+							Repo: "another-extra-repo2",
+						},
+					},
+					ProwJobID: "another-prow-job-id",
+				},
+			},
+			namespace: "another-namespace",
+			customMetadata: map[string]string{
 				"custom-field1": "custom-value1",
 				"custom-field2": "custom-value2",
 			},
 		},
 	}
 	for _, tc := range tests {
-		err := verifyMetadata(tc.Org, tc.Repo, tc.ExtraOrg, tc.ExtraRepo, tc.ProwJobID, tc.Namespace, tc.CustomMetadata)
-		if err != nil {
-			t.Errorf("Test case '%s': error while running test: %v", tc.TestName, err)
-		}
+		t.Run(tc.id, func(t *testing.T) {
+			err := verifyMetadata(tc.jobSpec, tc.namespace, tc.customMetadata)
+			if err != nil {
+				t.Fatalf("error while running test: %v", err)
+			}
+		})
 	}
 }
 
-func verifyMetadata(org string,
-	repo string,
-	extraOrg string,
-	extraRepo string,
-	prowJobID string,
-	namespace string,
-	customMetadata map[string]string) error {
+func verifyMetadata(jobSpec *api.JobSpec, namespace string, customMetadata map[string]string) error {
 	tempDir, err := ioutil.TempDir("", "")
 	if err != nil {
 		return fmt.Errorf("Unable to create temporary directory: %v", err)
 	}
-
 	defer os.RemoveAll(tempDir)
 
 	metadataFile := filepath.Join(tempDir, "metadata.json")
@@ -137,17 +154,11 @@ func verifyMetadata(org string,
 	// Verify without custom metadata
 	o := &options{
 		artifactDir: tempDir,
-		jobSpec: &api.JobSpec{
-			JobSpec: downwardapi.JobSpec{
-				Refs:      &prowapi.Refs{Org: org, Repo: repo},
-				ExtraRefs: []prowapi.Refs{{Org: extraOrg, Repo: extraRepo}},
-				ProwJobID: prowJobID,
-			},
-		},
-		namespace: namespace,
+		jobSpec:     jobSpec,
+		namespace:   namespace,
 	}
-	err = o.writeMetadataJSON()
-	if err != nil {
+
+	if err := o.writeMetadataJSON(); err != nil {
 		return fmt.Errorf("error while writing metadata JSON: %v", err)
 	}
 
@@ -157,24 +168,22 @@ func verifyMetadata(org string,
 	}
 
 	var writtenMetadata prowResultMetadata
-	err = json.Unmarshal(metadataFileContents, &writtenMetadata)
-	if err != nil {
+	if err := json.Unmarshal(metadataFileContents, &writtenMetadata); err != nil {
 		return fmt.Errorf("error parsing prow metadata: %v", err)
 	}
 
 	expectedMetadata := prowResultMetadata{
-		Revision:   1,
-		RepoCommit: "",
-		Repo:       fmt.Sprintf("%s/%s", org, repo),
-		Repos: map[string]string{
-			fmt.Sprintf("%s/%s", extraOrg, extraRepo): "",
-			fmt.Sprintf("%s/%s", org, repo):           "",
-		},
-		InfraCommit:   "",
-		JobVersion:    "",
-		Pod:           prowJobID,
+		Revision:      "1",
+		Repo:          fmt.Sprintf("%s/%s", jobSpec.Refs.Org, jobSpec.Refs.Repo),
+		Repos:         map[string]string{fmt.Sprintf("%s/%s", jobSpec.Refs.Org, jobSpec.Refs.Repo): ""},
+		Pod:           jobSpec.ProwJobID,
 		WorkNamespace: namespace,
-		Metadata:      nil}
+	}
+
+	for _, extraRef := range jobSpec.ExtraRefs {
+		expectedMetadata.Repos[fmt.Sprintf("%s/%s", extraRef.Org, extraRef.Repo)] = ""
+	}
+
 	if !reflect.DeepEqual(expectedMetadata, writtenMetadata) {
 		return fmt.Errorf("written metadata does not match expected metadata: %s", cmp.Diff(expectedMetadata, writtenMetadata))
 	}
@@ -204,8 +213,7 @@ func verifyMetadata(org string,
 		return fmt.Errorf("one or more of the empty *ignore files failed to write: %v", err)
 	}
 
-	err = o.writeMetadataJSON()
-	if err != nil {
+	if err := o.writeMetadataJSON(); err != nil {
 		return fmt.Errorf("error while writing metadata JSON: %v", err)
 	}
 
@@ -214,15 +222,13 @@ func verifyMetadata(org string,
 		return fmt.Errorf("error reading metadata file (second revision): %v", err)
 	}
 
-	err = json.Unmarshal(metadataFileContents, &writtenMetadata)
-	if err != nil {
+	if err = json.Unmarshal(metadataFileContents, &writtenMetadata); err != nil {
 		return fmt.Errorf("error parsing prow metadata (second revision): %v", err)
 	}
 
-	hasCustomMetadata := len(customMetadata) > 0
-	revision := 1
-	if hasCustomMetadata {
-		revision = 2
+	revision := "1"
+	if len(customMetadata) > 0 {
+		revision = "2"
 	}
 
 	expectedMetadata.Revision = revision

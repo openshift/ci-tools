@@ -261,6 +261,10 @@
             {
               "name": "JOB_NAME_HASH",
               "value": "41093"
+            },
+            {
+              "name": "SHARED_DIR",
+              "value": "/var/run/secrets/ci.openshift.io/multi-stage"
             }
           ],
           "image": "my-image",
@@ -413,6 +417,10 @@
             {
               "name": "JOB_NAME_HASH",
               "value": "41093"
+            },
+            {
+              "name": "SHARED_DIR",
+              "value": "/var/run/secrets/ci.openshift.io/multi-stage"
             }
           ],
           "image": "installer",
@@ -565,6 +573,10 @@
             {
               "name": "JOB_NAME_HASH",
               "value": "41093"
+            },
+            {
+              "name": "SHARED_DIR",
+              "value": "/var/run/secrets/ci.openshift.io/multi-stage"
             }
           ],
           "image": "installer",
@@ -717,6 +729,10 @@
             {
               "name": "JOB_NAME_HASH",
               "value": "41093"
+            },
+            {
+              "name": "SHARED_DIR",
+              "value": "/var/run/secrets/ci.openshift.io/multi-stage"
             }
           ],
           "image": "installer",
@@ -869,6 +885,10 @@
             {
               "name": "JOB_NAME_HASH",
               "value": "41093"
+            },
+            {
+              "name": "SHARED_DIR",
+              "value": "/var/run/secrets/ci.openshift.io/multi-stage"
             }
           ],
           "image": "installer",
@@ -1021,6 +1041,10 @@
             {
               "name": "JOB_NAME_HASH",
               "value": "41093"
+            },
+            {
+              "name": "SHARED_DIR",
+              "value": "/var/run/secrets/ci.openshift.io/multi-stage"
             }
           ],
           "image": "my-image",
@@ -1173,6 +1197,10 @@
             {
               "name": "JOB_NAME_HASH",
               "value": "41093"
+            },
+            {
+              "name": "SHARED_DIR",
+              "value": "/var/run/secrets/ci.openshift.io/multi-stage"
             }
           ],
           "image": "installer",
@@ -1325,6 +1353,10 @@
             {
               "name": "JOB_NAME_HASH",
               "value": "41093"
+            },
+            {
+              "name": "SHARED_DIR",
+              "value": "/var/run/secrets/ci.openshift.io/multi-stage"
             }
           ],
           "image": "installer",
@@ -1477,6 +1509,10 @@
             {
               "name": "JOB_NAME_HASH",
               "value": "41093"
+            },
+            {
+              "name": "SHARED_DIR",
+              "value": "/var/run/secrets/ci.openshift.io/multi-stage"
             }
           ],
           "image": "installer",
@@ -1629,6 +1665,10 @@
             {
               "name": "JOB_NAME_HASH",
               "value": "41093"
+            },
+            {
+              "name": "SHARED_DIR",
+              "value": "/var/run/secrets/ci.openshift.io/multi-stage"
             }
           ],
           "image": "installer",

@@ -235,7 +235,7 @@ func generatePodSpec(info *prowgenInfo, secret *cioperatorapi.Secret) *kubeapi.P
 	}
 }
 
-func generateCiOperatorPodSpec(info *prowgenInfo, secret *cioperatorapi.Secret, target string, additionalArgs ...string) *kubeapi.PodSpec {
+func generateCiOperatorPodSpec(info *prowgenInfo, secret *cioperatorapi.Secret, targets []string, additionalArgs ...string) *kubeapi.PodSpec {
 	for _, arg := range additionalArgs {
 		if !strings.HasPrefix(arg, "--") {
 			panic(fmt.Sprintf("all args to ci-operator must be in the form --flag=value, not %s", arg))
@@ -247,7 +247,6 @@ func generateCiOperatorPodSpec(info *prowgenInfo, secret *cioperatorapi.Secret, 
 	ret.Containers[0].Args = append([]string{
 		"--give-pr-author-access-to-namespace=true",
 		"--artifact-dir=$(ARTIFACTS)",
-		fmt.Sprintf("--target=%s", target),
 		fmt.Sprintf("--sentry-dsn-path=%s", sentryDsnSecretPath),
 		"--resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org",
 		fmt.Sprintf("--org=%s", info.Org),
@@ -259,7 +258,6 @@ func generateCiOperatorPodSpec(info *prowgenInfo, secret *cioperatorapi.Secret, 
 		ret.Containers[0].Args = append([]string{
 			"--give-pr-author-access-to-namespace=true",
 			"--artifact-dir=$(ARTIFACTS)",
-			fmt.Sprintf("--target=%s", target),
 			fmt.Sprintf("--sentry-dsn-path=%s", sentryDsnSecretPath),
 			"--resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org",
 			fmt.Sprintf("--org=%s", info.Org),
@@ -267,6 +265,9 @@ func generateCiOperatorPodSpec(info *prowgenInfo, secret *cioperatorapi.Secret, 
 			fmt.Sprintf("--branch=%s", info.Branch),
 			"--kubeconfig=/etc/apici/kubeconfig",
 		}, additionalArgs...)
+	}
+	for _, target := range targets {
+		ret.Containers[0].Args = append(ret.Containers[0].Args, fmt.Sprintf("--target=%s", target))
 	}
 
 	if info.config.Private {
@@ -347,7 +348,7 @@ func generatePodSpecTemplate(info *prowgenInfo, secret *cioperatorapi.Secret, re
 	}
 	clusterProfilePath := fmt.Sprintf("/usr/local/%s-cluster-profile", test.As)
 	templatePath := fmt.Sprintf("/usr/local/%s", test.As)
-	podSpec := generateCiOperatorPodSpec(info, secret, test.As)
+	podSpec := generateCiOperatorPodSpec(info, secret, []string{test.As})
 	clusterProfileVolume := generateClusterProfileVolume("cluster-profile", fmt.Sprintf("cluster-secrets-%s", targetCloud))
 	switch clusterProfile {
 	case cioperatorapi.ClusterProfileAWS, cioperatorapi.ClusterProfileAzure4, cioperatorapi.ClusterProfileOpenStack, cioperatorapi.ClusterProfileVSphere:
@@ -596,7 +597,7 @@ func generateJobs(
 	for _, element := range configSpec.Tests {
 		var podSpec *kubeapi.PodSpec
 		if element.ContainerTestConfiguration != nil {
-			podSpec = generateCiOperatorPodSpec(info, element.Secret, element.As)
+			podSpec = generateCiOperatorPodSpec(info, element.Secret, []string{element.As})
 		} else {
 			var release string
 			if c := configSpec.ReleaseTagConfiguration; c != nil {
@@ -616,24 +617,28 @@ func generateJobs(
 		}
 	}
 
-	if len(configSpec.Images) > 0 || (configSpec.PromotionConfiguration != nil && len(configSpec.PromotionConfiguration.AdditionalImages) > 0) {
-		// Identify which jobs need a to have a release payload explicitly requested
-		var additionalPresubmitArgs []string
-		if promotion.PromotesOfficialImages(configSpec) {
-			additionalPresubmitArgs = []string{"--target=[release:latest]"}
+	var imageTargets []string
+	if configSpec.PromotionConfiguration != nil {
+		for additional := range configSpec.PromotionConfiguration.AdditionalImages {
+			imageTargets = append(imageTargets, configSpec.PromotionConfiguration.AdditionalImages[additional])
 		}
-		podSpec := generateCiOperatorPodSpec(info, nil, "[images]", additionalPresubmitArgs...)
+	}
 
-		if len(configSpec.Images) > 0 {
-			presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest("images", info, label, podSpec, true, configSpec.CanonicalGoRepository))
+	if len(configSpec.Images) > 0 || len(imageTargets) > 0 {
+		imageTargets = append(imageTargets, "[images]")
+	}
+
+	if len(imageTargets) > 0 {
+		// Identify which jobs need a to have a release payload explicitly requested
+		var presubmitTargets = imageTargets
+		if promotion.PromotesOfficialImages(configSpec) {
+			presubmitTargets = append(presubmitTargets, "[release:latest]")
 		}
+		podSpec := generateCiOperatorPodSpec(info, nil, presubmitTargets)
+		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest("images", info, label, podSpec, true, configSpec.CanonicalGoRepository))
 
 		if configSpec.PromotionConfiguration != nil {
-			additionalPostsubmitArgs := []string{"--promote"}
-			for additionalImage := range configSpec.PromotionConfiguration.AdditionalImages {
-				additionalPostsubmitArgs = append(additionalPostsubmitArgs, fmt.Sprintf("--target=%s", configSpec.PromotionConfiguration.AdditionalImages[additionalImage]))
-			}
-			podSpec := generateCiOperatorPodSpec(info, nil, "[images]", additionalPostsubmitArgs...)
+			podSpec := generateCiOperatorPodSpec(info, nil, imageTargets, []string{"--promote"}...)
 			postsubmits[orgrepo] = append(postsubmits[orgrepo], *generatePostsubmitForTest("images", info, label, podSpec, configSpec.CanonicalGoRepository))
 		}
 	}

@@ -3,6 +3,7 @@ package steps
 import (
 	"context"
 	"io/ioutil"
+	"k8s.io/apimachinery/pkg/api/equality"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -95,7 +96,7 @@ func TestGeneratePods(t *testing.T) {
 		"ci.openshift.io/refs.repo":        "repo",
 		"ci.openshift.io/multi-stage-test": "test",
 	}
-	env := []coreapi.EnvVar{
+	coreEnv := []coreapi.EnvVar{
 		{Name: "BUILD_ID", Value: "build id"},
 		{Name: "JOB_NAME", Value: "job"},
 		{Name: "JOB_SPEC", Value: `{"type":"postsubmit","job":"job","buildid":"build id","prowjobid":"prow job id","refs":{"org":"org","repo":"repo","base_ref":"base ref","base_sha":"base sha"}}`},
@@ -106,6 +107,8 @@ func TestGeneratePods(t *testing.T) {
 		{Name: "PULL_REFS", Value: "base ref:base sha"},
 		{Name: "REPO_NAME", Value: "repo"},
 		{Name: "REPO_OWNER", Value: "org"},
+	}
+	customEnv := []coreapi.EnvVar{
 		{Name: "NAMESPACE", Value: "namespace"},
 		{Name: "JOB_NAME_SAFE", Value: "test"},
 		{Name: "JOB_NAME_HASH", Value: "5e8c9"},
@@ -114,6 +117,7 @@ func TestGeneratePods(t *testing.T) {
 		{Name: "RELEASE_IMAGE_INITIAL", Value: "release:initial"},
 		{Name: "RELEASE_IMAGE_LATEST", Value: "release:latest"},
 	}
+
 	jobSpec := api.JobSpec{
 		JobSpec: prowdapi.JobSpec{
 			Job:       "job",
@@ -166,7 +170,7 @@ func TestGeneratePods(t *testing.T) {
 				Image:                    "image0",
 				Command:                  []string{"/tmp/secret-wrapper/secret-wrapper"},
 				Args:                     []string{"/bin/bash", "-c", "#!/bin/bash\nset -eu\ncommand0"},
-				Env:                      env,
+				Env:                      append(coreEnv, customEnv...),
 				Resources:                coreapi.ResourceRequirements{},
 				TerminationMessagePolicy: "FallbackToLogsOnError",
 				VolumeMounts: []coreapi.VolumeMount{{
@@ -231,18 +235,18 @@ func TestGeneratePods(t *testing.T) {
 				Image:                    "image1",
 				Command:                  []string{"/tmp/secret-wrapper/secret-wrapper"},
 				Args:                     []string{"/bin/bash", "-c", "#!/bin/bash\nset -eu\ncommand1"},
-				Env:                      env,
+				Env:                      append(append(coreEnv, coreapi.EnvVar{Name: "ARTIFACT_DIR", Value: "/artifact/dir"}), customEnv...),
 				Resources:                coreapi.ResourceRequirements{},
 				TerminationMessagePolicy: "FallbackToLogsOnError",
 				VolumeMounts: []coreapi.VolumeMount{{
+					Name:      "artifacts",
+					MountPath: "/artifact/dir",
+				}, {
 					Name:      "secret-wrapper",
 					MountPath: "/tmp/secret-wrapper",
 				}, {
 					Name:      "cluster-profile",
 					MountPath: "/var/run/secrets/ci.openshift.io/cluster-profile",
-				}, {
-					Name:      "artifacts",
-					MountPath: "/artifact/dir",
 				}, {
 					Name:      "test",
 					MountPath: "/var/run/secrets/ci.openshift.io/multi-stage",
@@ -273,6 +277,11 @@ done
 				}},
 			}},
 			Volumes: []coreapi.Volume{{
+				Name: "artifacts",
+				VolumeSource: coreapi.VolumeSource{
+					EmptyDir: &coreapi.EmptyDirVolumeSource{},
+				},
+			}, {
 				Name: "secret-wrapper",
 				VolumeSource: coreapi.VolumeSource{
 					EmptyDir: &coreapi.EmptyDirVolumeSource{},
@@ -285,11 +294,6 @@ done
 					},
 				},
 			}, {
-				Name: "artifacts",
-				VolumeSource: coreapi.VolumeSource{
-					EmptyDir: &coreapi.EmptyDirVolumeSource{},
-				},
-			}, {
 				Name: "test",
 				VolumeSource: coreapi.VolumeSource{
 					Secret: &coreapi.SecretVolumeSource{
@@ -299,8 +303,13 @@ done
 			}},
 		},
 	}}
-	if !reflect.DeepEqual(expected, ret) {
-		t.Fatalf("did not generate expected pods: %s", diff.ObjectReflectDiff(expected, ret))
+	if len(expected) != len(ret) {
+		t.Fatalf("did not generate %d pods, but %d: %s", len(expected), len(ret), diff.ObjectReflectDiff(expected, ret))
+	}
+	for i := range expected {
+		if !equality.Semantic.DeepEqual(expected[i], ret[i]) {
+			t.Errorf("did not generate expected pod: %s", diff.ObjectReflectDiff(expected[i], ret[i]))
+		}
 	}
 }
 

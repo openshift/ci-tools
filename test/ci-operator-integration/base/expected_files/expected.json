@@ -1436,6 +1436,10 @@
             {
               "name": "REPO_OWNER",
               "value": "openshift"
+            },
+            {
+              "name": "ARTIFACT_DIR",
+              "value": "/tmp/artifacts"
             }
           ],
           "image": "pipeline:src",
@@ -1452,14 +1456,38 @@
           "terminationMessagePolicy": "FallbackToLogsOnError",
           "volumeMounts": [
             {
+              "mountPath": "/tmp/artifacts",
+              "name": "artifacts"
+            },
+            {
               "mountPath": "/tmp/volume",
               "name": "memory-backed"
+            }
+          ]
+        },
+        {
+          "command": [
+            "/bin/sh",
+            "-c",
+            "#!/bin/sh\nset -euo pipefail\ntrap 'kill $(jobs -p); exit 0' TERM\n\ntouch /tmp/done\necho \"Waiting for artifacts to be extracted\"\nwhile true; do\n\tif [[ ! -f /tmp/done ]]; then\n\t\techo \"Artifacts extracted, will terminate after 30s\"\n\t\tsleep 30\n\t\techo \"Exiting\"\n\t\texit 0\n\tfi\n\tsleep 5 & wait\ndone\n"
+          ],
+          "image": "busybox",
+          "name": "artifacts",
+          "resources": {},
+          "volumeMounts": [
+            {
+              "mountPath": "/tmp/artifacts",
+              "name": "artifacts"
             }
           ]
         }
       ],
       "restartPolicy": "Never",
       "volumes": [
+        {
+          "emptyDir": {},
+          "name": "artifacts"
+        },
         {
           "emptyDir": {
             "medium": "Memory",
@@ -1547,6 +1575,10 @@
             {
               "name": "REPO_OWNER",
               "value": "openshift"
+            },
+            {
+              "name": "ARTIFACT_DIR",
+              "value": "/tmp/artifacts"
             }
           ],
           "image": "pipeline:bin",
@@ -1560,10 +1592,38 @@
               "memory": "8Gi"
             }
           },
-          "terminationMessagePolicy": "FallbackToLogsOnError"
+          "terminationMessagePolicy": "FallbackToLogsOnError",
+          "volumeMounts": [
+            {
+              "mountPath": "/tmp/artifacts",
+              "name": "artifacts"
+            }
+          ]
+        },
+        {
+          "command": [
+            "/bin/sh",
+            "-c",
+            "#!/bin/sh\nset -euo pipefail\ntrap 'kill $(jobs -p); exit 0' TERM\n\ntouch /tmp/done\necho \"Waiting for artifacts to be extracted\"\nwhile true; do\n\tif [[ ! -f /tmp/done ]]; then\n\t\techo \"Artifacts extracted, will terminate after 30s\"\n\t\tsleep 30\n\t\techo \"Exiting\"\n\t\texit 0\n\tfi\n\tsleep 5 & wait\ndone\n"
+          ],
+          "image": "busybox",
+          "name": "artifacts",
+          "resources": {},
+          "volumeMounts": [
+            {
+              "mountPath": "/tmp/artifacts",
+              "name": "artifacts"
+            }
+          ]
         }
       ],
-      "restartPolicy": "Never"
+      "restartPolicy": "Never",
+      "volumes": [
+        {
+          "emptyDir": {},
+          "name": "artifacts"
+        }
+      ]
     },
     "status": {}
   },

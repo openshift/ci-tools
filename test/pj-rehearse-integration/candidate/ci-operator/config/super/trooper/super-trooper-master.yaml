@@ -29,3 +29,14 @@ tests:
   commands: make unit CHANGED
   container:
     from: src
+- as: multistage
+  steps:
+    workflow: ipi
+    test:
+    - as: e2e
+      from: my-image
+      commands: make integration
+      resources:
+        requests:
+          cpu: 1000m
+          memory: 2Gi

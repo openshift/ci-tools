@@ -30,7 +30,11 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
+	"github.com/openshift/ci-tools/pkg/load"
+	"github.com/openshift/ci-tools/pkg/registry"
 )
+
+const testingRegistry = "../../test/multistage-registry/registry"
 
 func TestReplaceClusterProfiles(t *testing.T) {
 	makeVolume := func(name string) v1.Volume {
@@ -460,6 +464,11 @@ func TestExecuteJobsErrors(t *testing.T) {
 		failToCreate: sets.NewString("rehearse-123-job2"),
 	}}
 
+	references, chains, workflows, err := load.Registry(testingRegistry, false)
+	if err != nil {
+		t.Fatalf("Failed to read registry: %v", err)
+	}
+	resolver := registry.NewResolver(references, chains, workflows)
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
 			testLoggers := Loggers{logrus.New(), logrus.New()}
@@ -479,7 +488,7 @@ func TestExecuteJobsErrors(t *testing.T) {
 				return false, nil, nil
 			})
 
-			jc := NewJobConfigurer(testCiopConfigs, testPrNumber, testLoggers, true, nil, nil, makeBaseRefs())
+			jc := NewJobConfigurer(testCiopConfigs, resolver, testPrNumber, testLoggers, true, nil, nil, makeBaseRefs())
 
 			presubmits := jc.ConfigurePresubmitRehearsals(tc.jobs)
 			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, true, testLoggers, fakeclient)
@@ -525,9 +534,13 @@ func TestExecuteJobsUnsuccessful(t *testing.T) {
 			"rehearse-123-job1": pjapi.SuccessState,
 			"rehearse-123-job2": pjapi.FailureState,
 		},
-	},
-	}
+	}}
 
+	references, chains, workflows, err := load.Registry(testingRegistry, false)
+	if err != nil {
+		t.Fatalf("Failed to read registry: %v", err)
+	}
+	resolver := registry.NewResolver(references, chains, workflows)
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
 			testLoggers := Loggers{logrus.New(), logrus.New()}
@@ -552,7 +565,7 @@ func TestExecuteJobsUnsuccessful(t *testing.T) {
 				return true, ret, nil
 			})
 
-			jc := NewJobConfigurer(testCiopConfigs, testPrNumber, testLoggers, true, nil, nil, makeBaseRefs())
+			jc := NewJobConfigurer(testCiopConfigs, resolver, testPrNumber, testLoggers, true, nil, nil, makeBaseRefs())
 			presubmits := jc.ConfigurePresubmitRehearsals(tc.jobs)
 			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, false, testLoggers, fakeclient)
 			success, _ := executor.ExecuteJobs()
@@ -633,6 +646,11 @@ func TestExecuteJobsPositive(t *testing.T) {
 		},
 	}
 
+	references, chains, workflows, err := load.Registry(testingRegistry, false)
+	if err != nil {
+		t.Fatalf("Failed to read registry: %v", err)
+	}
+	resolver := registry.NewResolver(references, chains, workflows)
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
 			testLoggers := Loggers{logrus.New(), logrus.New()}
@@ -644,7 +662,7 @@ func TestExecuteJobsPositive(t *testing.T) {
 			}
 			fakecs.Fake.PrependWatchReactor("prowjobs", makeSuccessfulFinishReactor(watcher, tc.jobs))
 
-			jc := NewJobConfigurer(testCiopConfigs, testPrNumber, testLoggers, true, nil, nil, makeBaseRefs())
+			jc := NewJobConfigurer(testCiopConfigs, resolver, testPrNumber, testLoggers, true, nil, nil, makeBaseRefs())
 			presubmits := jc.ConfigurePresubmitRehearsals(tc.jobs)
 			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, true, testLoggers, fakeclient)
 			success, err := executor.ExecuteJobs()
@@ -1141,5 +1159,88 @@ func TestRemoveConfigResolverFlags(t *testing.T) {
 				t.Fatalf("Diff found %v", diff.ObjectReflectDiff(testCase.expected, newArgs))
 			}
 		})
+	}
+}
+
+func TestResolveInlineCiOpConfig(t *testing.T) {
+	const configSpec = `tests:
+- as: e2e-azure
+  steps:
+    cluster_profile: azure
+    workflow: ipi
+    test:
+    - as: e2e
+      from: my-image
+      commands: make azure-e2e
+      resources:
+        requests:
+          cpu: 1000m
+          memory: 2Gi`
+	const resolvedConfigSpec = `tests:
+- as: e2e-azure
+  commands: ""
+  literal_steps:
+    cluster_profile: azure
+    post:
+    - as: ipi-deprovision-must-gather
+      commands: |
+        gather
+      from: installer
+      resources:
+        limits: null
+        requests:
+          cpu: 1000m
+          memory: 2Gi
+    - as: ipi-deprovision-deprovision
+      commands: |
+        openshift-cluster destroy
+      from: installer
+      resources:
+        limits: null
+        requests:
+          cpu: 1000m
+          memory: 2Gi
+    pre:
+    - as: ipi-install-rbac
+      commands: |
+        setup-rbac
+      from: installer
+      resources:
+        limits: null
+        requests:
+          cpu: 1000m
+          memory: 2Gi
+    - as: ipi-install-install
+      commands: |
+        openshift-cluster install
+      from: installer
+      resources:
+        limits: null
+        requests:
+          cpu: 1000m
+          memory: 2Gi
+    test:
+    - as: e2e
+      commands: make azure-e2e
+      from: my-image
+      resources:
+        limits: null
+        requests:
+          cpu: 1000m
+          memory: 2Gi
+`
+	container := v1.Container{Env: []v1.EnvVar{{
+		Name:  "CONFIG_SPEC",
+		Value: configSpec,
+	}}}
+	references, chains, workflows, err := load.Registry(testingRegistry, false)
+	if err != nil {
+		t.Fatalf("Failed to read registry: %v", err)
+	}
+	resolver := registry.NewResolver(references, chains, workflows)
+	resolveInlineCiOpConfig(container, resolver, Loggers{logrus.New(), logrus.New()})
+	resolvedValue := container.Env[0].Value
+	if resolvedValue != resolvedConfigSpec {
+		t.Fatalf("Diff found %v", diff.ObjectReflectDiff(resolvedConfigSpec, resolvedValue))
 	}
 }

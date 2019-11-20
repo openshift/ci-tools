@@ -32,7 +32,9 @@ import (
 	prowconfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/pjutil"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
+	"github.com/openshift/ci-tools/pkg/registry"
 )
 
 const (
@@ -261,8 +263,9 @@ func inlineCiOpConfig(container v1.Container, ciopConfigs config.ByFilename, log
 
 // JobConfigurer holds all the information that is needed for the configuration of the jobs.
 type JobConfigurer struct {
-	ciopConfigs config.ByFilename
-	profiles    []config.ConfigMapSource
+	ciopConfigs      config.ByFilename
+	registryResolver registry.Resolver
+	profiles         []config.ConfigMapSource
 
 	prNumber     int
 	refs         *pjapi.Refs
@@ -272,15 +275,16 @@ type JobConfigurer struct {
 }
 
 // NewJobConfigurer filters the jobs and returns a new JobConfigurer.
-func NewJobConfigurer(ciopConfigs config.ByFilename, prNumber int, loggers Loggers, allowVolumes bool, templates []config.ConfigMapSource, profiles []config.ConfigMapSource, refs *pjapi.Refs) *JobConfigurer {
+func NewJobConfigurer(ciopConfigs config.ByFilename, resolver registry.Resolver, prNumber int, loggers Loggers, allowVolumes bool, templates []config.ConfigMapSource, profiles []config.ConfigMapSource, refs *pjapi.Refs) *JobConfigurer {
 	return &JobConfigurer{
-		ciopConfigs:  ciopConfigs,
-		profiles:     profiles,
-		prNumber:     prNumber,
-		refs:         refs,
-		loggers:      loggers,
-		allowVolumes: allowVolumes,
-		templateMap:  fillTemplateMap(templates),
+		ciopConfigs:      ciopConfigs,
+		registryResolver: resolver,
+		profiles:         profiles,
+		prNumber:         prNumber,
+		refs:             refs,
+		loggers:          loggers,
+		allowVolumes:     allowVolumes,
+		templateMap:      fillTemplateMap(templates),
 	}
 }
 
@@ -337,9 +341,55 @@ func (jc *JobConfigurer) ConfigurePresubmitRehearsals(presubmits config.Presubmi
 	return rehearsals
 }
 
+func resolveInlineCiOpConfig(container v1.Container, resolver registry.Resolver, loggers Loggers) error {
+	for index := range container.Env {
+		env := &(container.Env[index])
+		if env.Name == "CONFIG_SPEC" && env.Value != "" {
+			ciOpConfig := api.ReleaseBuildConfiguration{}
+			err := yaml.Unmarshal([]byte(env.Value), &ciOpConfig)
+			if err != nil {
+				loggers.Job.WithError(err).Error("Failed to unmarshal ci-operator config file")
+				return err
+			}
+			var resolvedTests []api.TestStepConfiguration
+			for _, step := range ciOpConfig.Tests {
+				// no changes if step is not multi-stage
+				if step.MultiStageTestConfiguration == nil {
+					resolvedTests = append(resolvedTests, step)
+					continue
+				}
+				resolvedConfig, err := resolver.Resolve(*step.MultiStageTestConfiguration)
+				if err != nil {
+					loggers.Job.WithError(err).Error("Failed resolve MultiStageTestConfiguration")
+					return err
+				}
+				step.MultiStageTestConfigurationLiteral = &resolvedConfig
+				// remove old multi stage config
+				step.MultiStageTestConfiguration = nil
+				resolvedTests = append(resolvedTests, step)
+			}
+			ciOpConfig.Tests = resolvedTests
+			ciOpConfigContent, err := yaml.Marshal(ciOpConfig)
+			if err != nil {
+				loggers.Job.WithError(err).Error("Failed to marshal ci-operator config file")
+				return err
+			}
+			env.Value = string(ciOpConfigContent)
+		}
+	}
+	return nil
+}
+
 func (jc *JobConfigurer) configureJobSpec(spec *v1.PodSpec, logger *logrus.Entry) error {
 	if err := inlineCiOpConfig(spec.Containers[0], jc.ciopConfigs, jc.loggers); err != nil {
 		return err
+	}
+	if err := resolveInlineCiOpConfig(spec.Containers[0], jc.registryResolver, jc.loggers); err != nil {
+		return err
+	}
+	// Remove configresolver flags from ci-operator jobs
+	if len(spec.Containers[0].Command) > 0 && spec.Containers[0].Command[0] == "ci-operator" {
+		spec.Containers[0].Args = removeConfigResolverFlags(spec.Containers[0].Args)
 	}
 
 	if jc.allowVolumes {
@@ -653,10 +703,6 @@ func (e *Executor) submitRehearsals() ([]*pjapi.ProwJob, error) {
 	var pjs []*pjapi.ProwJob
 
 	for _, job := range e.presubmits {
-		// Remove configresolver flags from ci-operator jobs
-		if len(job.Spec.Containers) > 0 && len(job.Spec.Containers[0].Command) > 0 && job.Spec.Containers[0].Command[0] == "ci-operator" {
-			job.Spec.Containers[0].Args = removeConfigResolverFlags(job.Spec.Containers[0].Args)
-		}
 		created, err := e.submitPresubmit(job)
 		if err != nil {
 			e.loggers.Job.WithError(err).Warn("Failed to execute a rehearsal presubmit")

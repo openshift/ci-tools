@@ -319,8 +319,8 @@ type TestStepConfiguration struct {
 	// the repository root to execute tests.
 	Commands string `json:"commands"`
 	// ArtifactDir is an optional directory that contains the
-	// artifacts to upload. If unset, this will default to
-	// "/tmp/artifacts".
+	// artifacts to upload. If unset, this will default under
+	// the repository root to _output/local/artifacts.
 	ArtifactDir string `json:"artifact_dir,omitempty"`
 
 	// Secret is an optional secret object which
@@ -406,8 +406,7 @@ type LiteralTestStep struct {
 	From string `json:"from,omitempty"`
 	// Commands is the command(s) that will be run inside the image.
 	Commands string `json:"commands,omitempty"`
-	// ArtifactDir is the directory from which artifacts will be extracted
-	// when the command finishes. Defaults to "/tmp/artifacts"
+	// ArtifactDir is the directory from which artifacts will be extracted when the command finishes.
 	ArtifactDir string `json:"artifact_dir,omitempty"`
 	// Resources defines the resource requirements for the step.
 	Resources ResourceRequirements `json:"resources,omitempty"`

@@ -13,23 +13,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation"
 )
 
-const defaultArtifacts = "/tmp/artifacts"
-
-// Default sets default values after loading but before validation
-func (config *ReleaseBuildConfiguration) Default() {
-	for _, step := range config.RawSteps {
-		if step.TestStepConfiguration != nil && step.TestStepConfiguration.ArtifactDir == "" {
-			step.TestStepConfiguration.ArtifactDir = defaultArtifacts
-		}
-	}
-
-	for _, test := range config.Tests {
-		if test.ArtifactDir == "" {
-			test.ArtifactDir = defaultArtifacts
-		}
-	}
-}
-
 // ValidateAtRuntime validates all the configuration's values without knowledge of config
 // repo structure
 func (config *ReleaseBuildConfiguration) ValidateAtRuntime() error {
@@ -44,7 +27,6 @@ func (config *ReleaseBuildConfiguration) ValidateResolved() error {
 
 // Validate validates all the configuration's values.
 func (config *ReleaseBuildConfiguration) Validate(org, repo string) error {
-	config.Default()
 	return config.validate(org, repo, false)
 }
 

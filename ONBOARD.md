@@ -42,7 +42,7 @@ Using [cloneref](https://github.com/kubernetes/test-infra/tree/master/prow/cmd/c
 and injects the source code into the base image specified by the `build_root` key. 
 There are two ways to specify the base image:
 
-* From an image stream that should contain all build dependencies of the tested component, so the it will often be a `openshift/release:<tag>` image.
+* From an image stream that should contain all build dependencies of the tested component, so it will often be a `openshift/release:<tag>` image.
 ```yaml
 build_root:
   image_stream_tag:

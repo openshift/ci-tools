@@ -27,18 +27,19 @@ import (
 func TestGeneratePodSpec(t *testing.T) {
 	testSecret := &ciop.Secret{Name: "test-secret", MountPath: "/usr/local/test-secret"}
 	tests := []struct {
+		description    string
 		info           *prowgenInfo
 		secret         *ciop.Secret
-		target         string
+		targets        []string
 		additionalArgs []string
 
 		expected *kubeapi.PodSpec
 	}{
 		{
-			info:           &prowgenInfo{Info: config.Info{Org: "org", Repo: "repo", Branch: "branch"}},
-			secret:         nil,
-			target:         "target",
-			additionalArgs: []string{},
+			description: "standard use case",
+			info:        &prowgenInfo{Info: config.Info{Org: "org", Repo: "repo", Branch: "branch"}},
+			secret:      nil,
+			targets:     []string{"target"},
 
 			expected: &kubeapi.PodSpec{
 				ServiceAccountName: "ci-operator",
@@ -49,12 +50,12 @@ func TestGeneratePodSpec(t *testing.T) {
 					Args: []string{
 						"--give-pr-author-access-to-namespace=true",
 						"--artifact-dir=$(ARTIFACTS)",
-						"--target=target",
 						"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
 						"--resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org",
 						"--org=org",
 						"--repo=repo",
 						"--branch=branch",
+						"--target=target",
 					},
 					Resources: kubeapi.ResourceRequirements{
 						Requests: kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
@@ -81,9 +82,10 @@ func TestGeneratePodSpec(t *testing.T) {
 			},
 		},
 		{
+			description:    "additional args are included in podspec",
 			info:           &prowgenInfo{Info: config.Info{Org: "org", Repo: "repo", Branch: "branch"}},
 			secret:         nil,
-			target:         "target",
+			targets:        []string{"target"},
 			additionalArgs: []string{"--promote", "--some=thing"},
 
 			expected: &kubeapi.PodSpec{
@@ -95,7 +97,6 @@ func TestGeneratePodSpec(t *testing.T) {
 					Args: []string{
 						"--give-pr-author-access-to-namespace=true",
 						"--artifact-dir=$(ARTIFACTS)",
-						"--target=target",
 						"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
 						"--resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org",
 						"--org=org",
@@ -103,6 +104,7 @@ func TestGeneratePodSpec(t *testing.T) {
 						"--branch=branch",
 						"--promote",
 						"--some=thing",
+						"--target=target",
 					},
 					Resources: kubeapi.ResourceRequirements{
 						Requests: kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
@@ -131,7 +133,7 @@ func TestGeneratePodSpec(t *testing.T) {
 		{
 			info:           &prowgenInfo{Info: config.Info{Org: "org", Repo: "repo", Branch: "branch"}},
 			secret:         testSecret,
-			target:         "target",
+			targets:        []string{"target"},
 			additionalArgs: []string{"--promote", "--some=thing"},
 
 			expected: &kubeapi.PodSpec{
@@ -143,7 +145,6 @@ func TestGeneratePodSpec(t *testing.T) {
 					Args: []string{
 						"--give-pr-author-access-to-namespace=true",
 						"--artifact-dir=$(ARTIFACTS)",
-						"--target=target",
 						"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
 						"--resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org",
 						"--org=org",
@@ -151,6 +152,7 @@ func TestGeneratePodSpec(t *testing.T) {
 						"--branch=branch",
 						"--promote",
 						"--some=thing",
+						"--target=target",
 						fmt.Sprintf("--secret-dir=%s", testSecret.MountPath),
 					},
 					Resources: kubeapi.ResourceRequirements{
@@ -188,18 +190,64 @@ func TestGeneratePodSpec(t *testing.T) {
 				},
 			},
 		},
+		{
+			description: "multiple targets",
+			info:        &prowgenInfo{Info: config.Info{Org: "org", Repo: "repo", Branch: "branch"}},
+			secret:      nil,
+			targets:     []string{"target", "more", "and-more"},
+
+			expected: &kubeapi.PodSpec{
+				ServiceAccountName: "ci-operator",
+				Containers: []kubeapi.Container{{
+					Image:           "ci-operator:latest",
+					ImagePullPolicy: kubeapi.PullAlways,
+					Command:         []string{"ci-operator"},
+					Args: []string{
+						"--give-pr-author-access-to-namespace=true",
+						"--artifact-dir=$(ARTIFACTS)",
+						"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
+						"--resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org",
+						"--org=org",
+						"--repo=repo",
+						"--branch=branch",
+						"--target=target",
+						"--target=more",
+						"--target=and-more",
+					},
+					Resources: kubeapi.ResourceRequirements{
+						Requests: kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
+					},
+					Env: []kubeapi.EnvVar{{
+						Name: "CONFIG_SPEC",
+						ValueFrom: &kubeapi.EnvVarSource{
+							ConfigMapKeyRef: &kubeapi.ConfigMapKeySelector{
+								LocalObjectReference: kubeapi.LocalObjectReference{
+									Name: "ci-operator-misc-configs",
+								},
+								Key: "org-repo-branch.yaml",
+							},
+						},
+					}},
+					VolumeMounts: []kubeapi.VolumeMount{{Name: "sentry-dsn", MountPath: "/etc/sentry-dsn", ReadOnly: true}},
+				}},
+				Volumes: []kubeapi.Volume{{
+					Name: "sentry-dsn",
+					VolumeSource: kubeapi.VolumeSource{
+						Secret: &kubeapi.SecretVolumeSource{SecretName: "sentry-dsn"},
+					},
+				}},
+			},
+		},
 	}
 
 	for _, tc := range tests {
-		var podSpec *kubeapi.PodSpec
-		if len(tc.additionalArgs) == 0 {
-			podSpec = generateCiOperatorPodSpec(tc.info, tc.secret, tc.target)
-		} else {
-			podSpec = generateCiOperatorPodSpec(tc.info, tc.secret, tc.target, tc.additionalArgs...)
-		}
-		if !equality.Semantic.DeepEqual(podSpec, tc.expected) {
-			t.Errorf("expected PodSpec diff:\n%s", diff.ObjectDiff(tc.expected, podSpec))
-		}
+		t.Run(tc.description, func(t *testing.T) {
+			var podSpec *kubeapi.PodSpec
+			podSpec = generateCiOperatorPodSpec(tc.info, tc.secret, tc.targets, tc.additionalArgs...)
+			if !equality.Semantic.DeepEqual(podSpec, tc.expected) {
+				t.Errorf("%s: expected PodSpec diff:\n%s", tc.description, diff.ObjectDiff(tc.expected, podSpec))
+			}
+		})
 	}
 }
 
@@ -272,12 +320,12 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 					Args: []string{
 						"--give-pr-author-access-to-namespace=true",
 						"--artifact-dir=$(ARTIFACTS)",
-						"--target=test",
 						"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
 						"--resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org",
 						"--org=organization",
 						"--repo=repo",
 						"--branch=branch",
+						"--target=test",
 						"--secret-dir=/usr/local/test-cluster-profile",
 						"--template=/usr/local/test"},
 					Resources: kubeapi.ResourceRequirements{
@@ -362,12 +410,12 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 					Args: []string{
 						"--give-pr-author-access-to-namespace=true",
 						"--artifact-dir=$(ARTIFACTS)",
-						"--target=test",
 						"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
 						"--resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org",
 						"--org=organization",
 						"--repo=repo",
 						"--branch=branch",
+						"--target=test",
 						"--secret-dir=/usr/local/test-cluster-profile",
 						"--template=/usr/local/test"},
 					Resources: kubeapi.ResourceRequirements{

@@ -41,8 +41,6 @@ const (
 	// A comma-delimited list of container names that will be returned as individual JUnit
 	// test results.
 	annotationContainersForSubTestResults = "ci-operator.openshift.io/container-sub-tests"
-	// artifactEnv is the env var in which we hold the artifact dir for users
-	artifactEnv = "ARTIFACT_DIR"
 )
 
 // ContainerNotifier receives updates about the status of a poll action on a pod. The caller
@@ -300,17 +298,6 @@ func removeFile(podClient PodClient, ns, name, containerName string, paths []str
 	}
 
 	return nil
-}
-
-func addArtifacts(pod *coreapi.Pod, artifactDir string) {
-	for i := range pod.Spec.Containers {
-		pod.Spec.Containers[i].VolumeMounts = append(pod.Spec.Containers[i].VolumeMounts, coreapi.VolumeMount{
-			Name:      "artifacts",
-			MountPath: artifactDir,
-		})
-		pod.Spec.Containers[i].Env = append(pod.Spec.Containers[i].Env, coreapi.EnvVar{Name: artifactEnv, Value: artifactDir})
-	}
-	addArtifactsContainer(pod)
 }
 
 func addArtifactsContainer(pod *coreapi.Pod) {

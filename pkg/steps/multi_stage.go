@@ -194,7 +194,7 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep) ([]coreap
 			continue
 		}
 		name := fmt.Sprintf("%s-%s", s.name, step.As)
-		pod, err := generateBasePod(s.jobSpec, name, step.As, []string{"/bin/bash", "-c", "#!/bin/bash\nset -eu\n" + step.Commands}, image, resources, step.ArtifactDir)
+		pod, err := generateBasePod(s.jobSpec, name, step.As, []string{"/bin/bash", "-c", "#!/bin/bash\nset -eu\n" + step.Commands}, image, resources)
 		if err != nil {
 			errs = append(errs, err)
 			continue
@@ -217,6 +217,13 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep) ([]coreap
 				{Name: "RELEASE_IMAGE_INITIAL", Value: s.releaseInitial},
 				{Name: "RELEASE_IMAGE_LATEST", Value: s.releaseLatest},
 			}...)
+		}
+		if s.artifactDir != "" && step.ArtifactDir != "" {
+			container.VolumeMounts = append(container.VolumeMounts, coreapi.VolumeMount{
+				Name:      "artifacts",
+				MountPath: step.ArtifactDir,
+			})
+			addArtifactsContainer(pod)
 		}
 		addSecret(s.name, pod)
 		ret = append(ret, *pod)

@@ -3,7 +3,7 @@ package steps
 import (
 	"testing"
 
-	v1 "k8s.io/api/core/v1"
+	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/resource"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -286,6 +286,52 @@ func TestGetPodObjectMounts(t *testing.T) {
 						},
 					},
 					Volumes: []v1.Volume{
+						{
+							Name: testSecretName,
+							VolumeSource: v1.VolumeSource{
+								Secret: &v1.SecretVolumeSource{
+									SecretName: testSecretName,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "with artifacts, secret name and path results in multiple mounts",
+			podStep: func(expectedPodStepTemplate *podStep) {
+				expectedPodStepTemplate.config.Secret = &api.Secret{
+					Name:      testSecretName,
+					MountPath: "/usr/local/secrets",
+				}
+				expectedPodStepTemplate.artifactDir = "/tmp/artifacts"
+				expectedPodStepTemplate.config.ArtifactDir = "/tmp/artifacts"
+			},
+			expectedVolumeConfig: &v1.Pod{
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							VolumeMounts: []v1.VolumeMount{
+								{
+									Name:      "artifacts",
+									MountPath: "/tmp/artifacts",
+								},
+								{
+									Name:      testSecretName,
+									MountPath: "/usr/local/secrets",
+									ReadOnly:  true,
+								},
+							},
+						},
+					},
+					Volumes: []v1.Volume{
+						{
+							Name: "artifacts",
+							VolumeSource: v1.VolumeSource{
+								EmptyDir: &v1.EmptyDirVolumeSource{},
+							},
+						},
 						{
 							Name: testSecretName,
 							VolumeSource: v1.VolumeSource{

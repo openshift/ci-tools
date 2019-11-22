@@ -77,11 +77,6 @@ func (s *podStep) Run(ctx context.Context, dry bool) error {
 	var notifier ContainerNotifier = NopNotifier
 	if s.gatherArtifacts() {
 		artifacts := NewArtifactWorker(s.podClient, filepath.Join(s.artifactDir, s.config.As), s.jobSpec.Namespace)
-		pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, coreapi.VolumeMount{
-			Name:      "artifacts",
-			MountPath: s.config.ArtifactDir,
-		})
-		addArtifactsContainer(pod)
 		artifacts.CollectFromPod(pod.Name, []string{s.name}, nil)
 		notifier = artifacts
 	}
@@ -197,12 +192,13 @@ func generateBasePod(
 	command []string,
 	image string,
 	containerResources coreapi.ResourceRequirements,
+	artifactDir string,
 ) (*coreapi.Pod, error) {
 	envMap, err := downwardapi.EnvForSpec(jobSpec.JobSpec)
 	if err != nil {
 		return nil, err
 	}
-	return &coreapi.Pod{
+	pod := &coreapi.Pod{
 		ObjectMeta: meta.ObjectMeta{
 			Name:   podName,
 			Labels: defaultPodLabels(jobSpec),
@@ -224,19 +220,23 @@ func generateBasePod(
 				},
 			},
 		},
-	}, nil
+	}
+	if artifactDir != "" {
+		addArtifacts(pod, artifactDir)
+	}
+	return pod, nil
 }
 
 func (s *podStep) generatePodForStep(image string, containerResources coreapi.ResourceRequirements) (*coreapi.Pod, error) {
-	pod, err := generateBasePod(s.jobSpec, s.config.As, s.name, []string{"/bin/bash", "-c", "#!/bin/bash\nset -eu\n" + s.config.Commands}, image, containerResources)
+	pod, err := generateBasePod(s.jobSpec, s.config.As, s.name, []string{"/bin/bash", "-c", "#!/bin/bash\nset -eu\n" + s.config.Commands}, image, containerResources, s.config.ArtifactDir)
 	if err != nil {
 		return nil, err
 	}
 	pod.Spec.ServiceAccountName = s.config.ServiceAccountName
 	container := &pod.Spec.Containers[0]
 	if s.config.Secret != nil {
-		container.VolumeMounts = getSecretVolumeMountFromSecret(s.config.Secret.MountPath)
-		pod.Spec.Volumes = getVolumeFromSecret(s.config.Secret.Name)
+		container.VolumeMounts = append(container.VolumeMounts, getSecretVolumeMountFromSecret(s.config.Secret.MountPath)...)
+		pod.Spec.Volumes = append(pod.Spec.Volumes, getVolumeFromSecret(s.config.Secret.Name)...)
 	}
 
 	if v := s.config.MemoryBackedVolume; v != nil {

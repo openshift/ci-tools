@@ -99,6 +99,107 @@ echo "[INFO] Got correct resolved config from resolver after registry change"
 
 kill $(jobs -p)
 wait $(jobs -p)
+# check for logrus style errors
+if grep -q "level=error" output.log; then
+    echo "configresolver output:"
+    cat output.log
+    echo "[ERROR] Detected errors in output:"
+    grep "level=error" output.log
+    exit 1
+fi
+
+rm output.log
+
+echo "[INFO] Testing configmap style reloading"
+# Test configmap reloading
+ci-operator-configresolver -config tests/ci-op-configmaps -registry multistage-registry/configmap -log-level debug -cycle 2m -flat-registry &> output.log &
+for (( i = 0; i < 10; i++ )); do
+    if [[ "$(curl http://127.0.0.1:8081/healthz/ready 2>/dev/null)" == "OK" ]]; then
+        break
+    fi
+    if [[ "${i}" -eq 9 ]]; then
+        echo "[ERROR] Timed out waiting for ci-operator-configresolver to be ready in cm-mount mode"
+        kill $(jobs -p)
+        wait $(jobs -p)
+        echo "configresolver output:"
+        cat output.log
+        exit 1
+    fi
+    sleep 0.5
+done
+
+# test with configs
+pushd tests/ci-op-configmaps/master
+currGen=$(curl 'http://127.0.0.1:8080/configGeneration' 2>/dev/null)
+export currGen
+# simulate a configmap update
+rm ..data && ln -s ..2019_11_15_19_57_20.547184898 ..data
+for (( i = 0; i < 10; i++ )); do
+    if [[ "$(curl http://127.0.0.1:8080/configGeneration 2>/dev/null)" -gt $currGen ]]; then
+        break
+    fi
+    if [[ "${i}" -eq 9 ]]; then
+        echo "[ERROR] Timed out waiting for ci-operator-configresolver to reload configs after file change in cm-mount mode"
+        kill $(jobs -p)
+        wait $(jobs -p)
+        echo "configresolver output:"
+        cat output.log
+        exit 1
+    fi
+    sleep 0.5
+done
+popd
+echo "[INFO] Successfully reloaded master configs"
+
+# test against another branch to make sure all branches are being watched
+pushd tests/ci-op-configmaps/release-4.2
+currGen=$(curl 'http://127.0.0.1:8080/configGeneration' 2>/dev/null)
+export currGen
+# simulate a configmap update
+rm ..data && ln -s ..2019_11_15_19_57_20.547184898 ..data
+for (( i = 0; i < 10; i++ )); do
+    if [[ "$(curl http://127.0.0.1:8080/configGeneration 2>/dev/null)" -gt $currGen ]]; then
+        break
+    fi
+    if [[ "${i}" -eq 9 ]]; then
+        echo "[ERROR] Timed out waiting for ci-operator-configresolver to reload configs after file change in cm-mount mode"
+        kill $(jobs -p)
+        wait $(jobs -p)
+        echo "configresolver output:"
+        cat output.log
+        exit 1
+    fi
+    sleep 0.5
+done
+popd
+echo "[INFO] Successfully reloaded release-4.2 configs"
+
+# test with registry
+pushd multistage-registry/configmap
+currGen=$(curl 'http://127.0.0.1:8080/registryGeneration' 2>/dev/null)
+export currGen
+# simulate a configmap update
+rm ..data && ln -s ..2019_11_15_19_57_20.547184898 ..data
+for (( i = 0; i < 10; i++ )); do
+    if [[ "$(curl http://127.0.0.1:8080/registryGeneration 2>/dev/null)" -gt $currGen ]]; then
+        break
+        exit 1
+    fi
+    if [[ $i -eq 9 ]]; then
+        echo "[ERROR] Timed out waiting for ci-operator-configresolver to reload registry after file change in cm-mount mode"
+        kill $(jobs -p)
+        wait $(jobs -p)
+        echo "configresolver output:"
+        cat output.log
+        exit 1
+    fi
+    sleep 0.5
+done
+popd
+echo "[INFO] Successfully reloaded registry"
+
+kill $(jobs -p)
+wait $(jobs -p)
 
 # check for logrus style errors
 if grep -q "level=error" output.log; then

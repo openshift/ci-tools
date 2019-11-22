@@ -1,12 +1,10 @@
 package load
 
 import (
-	"context"
 	"fmt"
 	"sync"
 	"time"
 
-	"github.com/fsnotify/fsnotify"
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/coalescer"
 	"github.com/openshift/ci-tools/pkg/registry"
@@ -61,19 +59,8 @@ func NewRegistryAgent(registryPath string, cycle time.Duration, errorMetrics *pr
 		}
 	}, a.cycle)
 
-	// fsnotify reload
-	registryWatcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		return nil, fmt.Errorf("Failed to create new watcher: %v", err)
-	}
-	err = populateWatcher(registryWatcher, a.registryPath)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to populate watcher: %v", err)
-	}
-	interrupts.Run(func(ctx context.Context) {
-		reloadWatcher(ctx, registryWatcher, a.registryPath, a.recordError, registryCoalescer)
-	})
-	return a, nil
+	err = startWatchers(a.registryPath, registryCoalescer, a.recordError)
+	return a, err
 }
 
 func (a *registryAgent) recordError(label string) {

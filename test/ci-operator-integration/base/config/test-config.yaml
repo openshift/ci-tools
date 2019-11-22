@@ -189,6 +189,9 @@ tests:
     verify -k
   container:
     from: bin
+  secret:
+    name: topsecret
+    mount_path: /dontlook
 - as: e2e-gcp
   commands: TEST_SUITE=openshift/conformance/parallel run-tests
   openshift_installer:

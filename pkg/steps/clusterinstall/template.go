@@ -25,11 +25,8 @@ parameters:
 - name: BASE_DOMAIN
 - name: CLUSTER_NETWORK_MANIFEST
 - name: CLUSTER_NETWORK_TYPE
-- name: ENABLE_FIPS
-- name: ENABLE_PROXY
 - name: BUILD_ID
   required: false
-- name: ENABLE_MIRROR
 - name: CLUSTER_VARIANT
 
 objects:
@@ -103,7 +100,7 @@ objects:
       ci-operator.openshift.io/container-sub-tests: "lease,setup,test,teardown"
   spec:
     restartPolicy: Never
-    activeDeadlineSeconds: 14400
+    activeDeadlineSeconds: 18000
     terminationGracePeriodSeconds: 900
     volumes:
     - name: artifacts
@@ -222,6 +219,26 @@ objects:
         trap 'touch /tmp/shared/exit' EXIT
         trap 'kill $(jobs -p); exit 0' TERM
 
+        function fips_check() {
+          oc --insecure-skip-tls-verify --request-timeout=60s get nodes -o jsonpath --template '{range .items[*]}{.metadata.name}{"\n"}{end}' > /tmp/nodelist
+          while IFS= read -r i; do
+            oc -n default --insecure-skip-tls-verify --request-timeout=60s debug node/$i -- cat /proc/sys/crypto/fips_enabled > /tmp/enabled
+            if [[ "${CLUSTER_VARIANT}" =~ "fips" ]]; then
+              if [[ $(< /tmp/enabled) == "0" ]]; then
+                echo fips not enabled in node "$i" but should be, exiting
+                exit 1
+              fi
+            else
+              if [[ $(< /tmp/enabled) == "1" ]]; then
+                echo fips is enabled in node "$i" but should not be, exiting
+                exit 1
+              fi
+            fi
+          done </tmp/nodelist
+          rm -f /tmp/nodelist
+          rm -f /tmp/enabled
+        }
+
         function patch_image_specs() {
           cat <<EOF >samples-patch.yaml
         - op: add
@@ -306,36 +323,12 @@ objects:
           cp /tmp/cluster/ssh-privatekey ~/.ssh/kube_aws_rsa || true
           export PROVIDER_ARGS="-provider=aws -gce-zone=us-east-1"
           # TODO: make openshift-tests auto-discover this from cluster config
-          export TEST_PROVIDER='{"type":"aws","region":"us-east-1","zone":"us-east-1a","multizone":true,"multimaster":true}'
+          REGION="$(oc get -o jsonpath='{.status.platformStatus.aws.region}' infrastructure cluster)"
+          ZONE="$(oc get -o jsonpath='{.items[0].metadata.labels.failure-domain\.beta\.kubernetes\.io/zone}' nodes)"
+          export TEST_PROVIDER="{\"type\":\"aws\",\"region\":\"${REGION}\",\"zone\":\"${ZONE}\",\"multizone\":true,\"multimaster\":true}"
           export KUBE_SSH_USER=core
         elif [[ "${CLUSTER_TYPE}" == "azure4" ]]; then
           export TEST_PROVIDER='azure'
-        fi
-
-        # create fips enable helper
-        function enable_fips() {
-            for name in $(oc get machineconfigpool --template='{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}')
-            do
-              cat > /tmp/fips-mc.yaml <<'EOF'
-        apiVersion: machineconfiguration.openshift.io/v1
-        kind: MachineConfig
-        metadata:
-          labels:
-            machineconfiguration.openshift.io/role: "{{name}}"
-          name: 99-fips-"{{name}}"
-        spec:
-          fips: true
-        EOF
-              sed -i "s/\"{{name}}\"/${name}/g" /tmp/fips-mc.yaml
-              oc create -f /tmp/fips-mc.yaml
-            done
-
-            for i in $(seq 0 10); do oc wait machineconfigpool --all --for=condition=Updating --timeout=5m && break; done
-            for i in $(seq 0 10); do oc wait machineconfigpool --all --for=condition=Updated --timeout=5m && break; sleep 30; done
-        }
-
-        if [[ "${ENABLE_FIPS}" == true ]]; then
-          enable_fips
         fi
 
         mkdir -p /tmp/output
@@ -438,8 +431,6 @@ objects:
         value: ${RELEASE_IMAGE_LATEST}
       - name: OPENSHIFT_INSTALL_INVOKER
         value: openshift-internal-ci/${JOB_NAME_SAFE}/${BUILD_ID}
-      - name: ENABLE_MIRROR
-        value: ${ENABLE_MIRROR}
       - name: USER
         value: test
       - name: HOME
@@ -477,7 +468,7 @@ objects:
         if [[ -n "${INSTALL_INITIAL_RELEASE}" && -n "${RELEASE_IMAGE_INITIAL}" ]]; then
           echo "Installing from initial release ${RELEASE_IMAGE_INITIAL}"
           OPENSHIFT_INSTALL_RELEASE_IMAGE_OVERRIDE="${RELEASE_IMAGE_INITIAL}"
-        elif [[ "${ENABLE_MIRROR}" == "true" ]]; then
+        elif [[ "${CLUSTER_VARIANT}" =~ "mirror" ]]; then
           export PATH=$PATH:/tmp  # gain access to oc
           while [ ! command -V oc ]; do sleep 1; done # poll to make sure that the test container has dropped oc into the shared volume
 
@@ -504,12 +495,23 @@ objects:
         mkdir -p ~/.ssh
         cp "${SSH_PRIV_KEY_PATH}" ~/.ssh/
 
-        if [[ "${CLUSTER_TYPE}" == "aws" ]]; then
-          workers=3
-          if [[ "${CLUSTER_VARIANT}" == "compact" ]]; then
-            workers=0
-          fi
-          cat > /tmp/artifacts/installer/install-config.yaml << EOF
+        workers=3
+        if [[ "${CLUSTER_VARIANT}" =~ "compact" ]]; then
+          workers=0
+        fi
+        if [[ "${CLUSTER_TYPE}" = "aws" ]]; then
+            subnets="[]"
+            if [[ "${CLUSTER_VARIANT}" =~ "shared-vpc" ]]; then
+              case $((RANDOM % 4)) in
+              0) subnets="['subnet-030a88e6e97101ab2','subnet-0e07763243186cac5','subnet-02c5fea7482f804fb','subnet-0291499fd1718ee01','subnet-01c4667ad446c8337','subnet-025e9043c44114baa']";;
+              1) subnets="['subnet-0170ee5ccdd7e7823','subnet-0d50cac95bebb5a6e','subnet-0094864467fc2e737','subnet-0daa3919d85296eb6','subnet-0ab1e11d3ed63cc97','subnet-07681ad7ce2b6c281']";;
+              2) subnets="['subnet-00de9462cf29cd3d3','subnet-06595d2851257b4df','subnet-04bbfdd9ca1b67e74','subnet-096992ef7d807f6b4','subnet-0b3d7ba41fc6278b2','subnet-0b99293450e2edb13']";;
+              3) subnets="['subnet-047f6294332aa3c1c','subnet-0c3bce80bbc2c8f1c','subnet-038c38c7d96364d7f','subnet-027a025e9d9db95ce','subnet-04d9008469025b101','subnet-02f75024b00b20a75']";;
+              *) echo >&2 "invalid subnets index"; exit 1;;
+              esac
+              echo "Subnets : ${subnets}"
+            fi
+            cat > /tmp/artifacts/installer/install-config.yaml << EOF
         apiVersion: v1
         baseDomain: ${BASE_DOMAIN:-origin-ci-int-aws.dev.rhcloud.com}
         metadata:
@@ -536,6 +538,7 @@ objects:
             region:       ${AWS_REGION}
             userTags:
               expirationDate: ${EXPIRATION_DATE}
+            subnets: ${subnets}
         pullSecret: >
           ${PULL_SECRET}
         sshKey: |
@@ -545,13 +548,23 @@ objects:
         elif [[ "${CLUSTER_TYPE}" == "azure4" ]]; then
             case $((RANDOM % 4)) in
             0) AZURE_REGION=centralus;;
-            1) AZURE_REGION=centralus;;
-            2) AZURE_REGION=centralus;;
+            1) AZURE_REGION=eastus;;
+            2) AZURE_REGION=eastus2;;
             3) AZURE_REGION=westus;;
             *) echo >&2 "invalid Azure region index"; exit 1;;
             esac
             echo "Azure region: ${AZURE_REGION}"
 
+            vnetrg=""
+            vnetname=""
+            ctrlsubnet=""
+            computesubnet=""
+            if [[ "${CLUSTER_VARIANT}" =~ "shared-vpc" ]]; then
+              vnetrg="os4-common"
+              vnetname="do-not-delete-shared-vnet-${AZURE_REGION}"
+              ctrlsubnet="subnet-1"
+              computesubnet="subnet-2"
+            fi
             cat > /tmp/artifacts/installer/install-config.yaml << EOF
         apiVersion: v1
         baseDomain: ${BASE_DOMAIN:-ci.azure.devcluster.openshift.com}
@@ -562,17 +575,42 @@ objects:
           replicas: 3
         compute:
         - name: worker
-          replicas: 3
+          replicas: ${workers}
         platform:
           azure:
             baseDomainResourceGroupName: os4-common
             region: ${AZURE_REGION}
+            networkResourceGroupName: ${vnetrg}
+            virtualNetwork: ${vnetname}
+            controlPlaneSubnet: ${ctrlsubnet}
+            computeSubnet: ${computesubnet}
         pullSecret: >
           ${PULL_SECRET}
         sshKey: |
           ${SSH_PUB_KEY}
         EOF
         elif [[ "${CLUSTER_TYPE}" == "gcp" ]]; then
+            # HACK: try to "poke" the token endpoint before the test starts
+            for i in $(seq 1 30); do
+              code="$( curl -s -o /dev/null -w "%{http_code}" https://oauth2.googleapis.com/token -X POST -d '' )"
+              if [[ "${code}" == "400" ]]; then
+                break
+              fi
+              echo "error: Unable to resolve https://oauth2.googleapis.com/token: $code" 1>&2
+              if [[ "${i}" == "30" ]]; then
+                echo "error: Unable to resolve https://oauth2.googleapis.com/token within timeout, exiting" 1>&2
+                exit 1
+              fi
+              sleep 1
+            done
+            network=""
+            ctrlsubnet=""
+            computesubnet=""
+            if [[ "${CLUSTER_VARIANT}" =~ "shared-vpc" ]]; then
+              network="do-not-delete-shared-network"
+              ctrlsubnet="do-not-delete-shared-master-subnet"
+              computesubnet="do-not-delete-shared-worker-subnet"
+            fi
             cat > /tmp/artifacts/installer/install-config.yaml << EOF
         apiVersion: v1
         baseDomain: ${BASE_DOMAIN:-origin-ci-int-gce.dev.openshift.com}
@@ -583,11 +621,14 @@ objects:
           replicas: 3
         compute:
         - name: worker
-          replicas: 3
+          replicas: ${workers}
         platform:
           gcp:
             projectID: ${GCP_PROJECT}
             region: ${GCP_REGION}
+            network: ${network}
+            controlPlaneSubnet: ${ctrlsubnet}
+            computeSubnet: ${computesubnet}
         pullSecret: >
           ${PULL_SECRET}
         sshKey: |
@@ -600,7 +641,7 @@ objects:
 
         # as a current stop gap -- this is pointing to a proxy hosted in
         # the namespace "ci-test-ewolinet" on the ci cluster
-        if [[ "${ENABLE_PROXY}" == "true" ]]; then
+        if [[ "${CLUSTER_VARIANT}" =~ "proxy" ]]; then
 
         # FIXME: due to https://bugzilla.redhat.com/show_bug.cgi?id=1750650 we need to
         # use a http endpoint for the httpsProxy value
@@ -683,19 +724,29 @@ objects:
         EOF
         fi
 
-        if [[ -n "${CLUSTER_NETWORK_TYPE}" ]]; then
+        network_type="${CLUSTER_NETWORK_TYPE-}"
+        if [[ "${CLUSTER_VARIANT}" =~ "ovn" ]]; then
+          network_type=OVNKubernetes
+        fi
+        if [[ -n "${network_type}" ]]; then
           cat >> /tmp/artifacts/installer/install-config.yaml << EOF
         networking:
-          networkType: ${CLUSTER_NETWORK_TYPE}
+          networkType: ${network_type}
         EOF
         fi
 
-        if [[ "${ENABLE_MIRROR}" == "true" ]]; then
+        if [[ "${CLUSTER_VARIANT}" =~ "mirror" ]]; then
           cat >> /tmp/artifacts/installer/install-config.yaml << EOF
         imageContentSources:
         - source: "${MIRROR_BASE}-scratch"
           mirrors:
           - "${MIRROR_BASE}"
+        EOF
+        fi
+
+        if [[ "${CLUSTER_VARIANT}" =~ "fips" ]]; then
+          cat >> /tmp/artifacts/installer/install-config.yaml << EOF
+        fips: true
         EOF
         fi
 
@@ -875,7 +926,7 @@ objects:
         trap 'teardown' EXIT
         trap 'kill $(jobs -p); exit 0' TERM
 
-        for i in $(seq 1 180); do
+        for i in $(seq 1 220); do
           if [[ -f /tmp/shared/exit ]]; then
             exit 0
           fi

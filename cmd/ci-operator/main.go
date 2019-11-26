@@ -239,6 +239,9 @@ type options struct {
 
 	kubeconfig  string
 	kubeconfigs map[string]rest.Config
+
+	pullSecretPath string
+	pullSecret     *coreapi.Secret
 }
 
 func bindOptions(flag *flag.FlagSet) *options {
@@ -293,6 +296,8 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.StringVar(&opt.variant, "variant", "", "Variant of the project's ci-operator config (used by configresolver)")
 
 	flag.StringVar(&opt.kubeconfig, "kubeconfig", "", "Path to .kube/config file. First config whose host matches the cluster is used to access imagestreamtags. If not set or no matching config , use the anonymous user")
+
+	flag.StringVar(&opt.pullSecretPath, "image-import-pull-secret", "", "A set of dockercfg credentials used to import images for the tag_specification.")
 
 	return opt
 }
@@ -439,6 +444,13 @@ func (o *options) Complete() error {
 		return fmt.Errorf("failed to load kubeconfig from '%s': %v", o.kubeconfig, err)
 	}
 	o.kubeconfigs = configs
+
+	if len(o.pullSecretPath) > 0 {
+		o.pullSecret, err = getPullSecretFromFile(o.pullSecretPath)
+		if err != nil {
+			return fmt.Errorf("could not get pull secret from path %s: %v", o.pullSecretPath, err)
+		}
+	}
 	return nil
 }
 
@@ -714,6 +726,12 @@ func (o *options) initializeNamespace() error {
 	client, err := coreclientset.NewForConfig(o.clusterConfig)
 	if err != nil {
 		return fmt.Errorf("could not get core client for cluster config: %v", err)
+	}
+
+	if o.pullSecret != nil {
+		if _, err := client.Secrets(o.namespace).Create(o.pullSecret); err != nil && !kerrors.IsAlreadyExists(err) {
+			return fmt.Errorf("couldn't create pull secret %s: %v", o.pullSecret.Name, err)
+		}
 	}
 
 	updates := map[string]string{}
@@ -1417,5 +1435,22 @@ func getSSHSecretFromPath(sshKeyPath string) (*coreapi.Secret, error) {
 	// https://github.com/kubernetes/api/blob/master/core/v1/types.go#L5466-L5470
 	secret.Data[coreapi.SSHAuthPrivateKey] = b
 
+	return secret, nil
+}
+
+func getPullSecretFromFile(filename string) (*coreapi.Secret, error) {
+	secret := &coreapi.Secret{
+		Data: make(map[string][]byte),
+		ObjectMeta: meta.ObjectMeta{
+			Name: fmt.Sprintf("regcred"),
+		},
+		Type: coreapi.SecretTypeDockerConfigJson,
+	}
+
+	src, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return nil, fmt.Errorf("could not read file %s for secret: %v", filename, err)
+	}
+	secret.Data[coreapi.DockerConfigJsonKey] = src
 	return secret, nil
 }

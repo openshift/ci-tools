@@ -15,6 +15,7 @@ import (
 	templateclientset "github.com/openshift/client-go/template/clientset/versioned/typed/template/v1"
 	appsclientset "k8s.io/client-go/kubernetes/typed/apps/v1"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
+	rbacclientset "k8s.io/client-go/kubernetes/typed/rbac/v1"
 	"k8s.io/client-go/rest"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -58,6 +59,8 @@ func FromConfig(
 	var serviceGetter coreclientset.ServicesGetter
 	var secretGetter coreclientset.SecretsGetter
 	var podClient steps.PodClient
+	var rbacClient rbacclientset.RbacV1Interface
+	var saGetter coreclientset.ServiceAccountsGetter
 
 	if clusterConfig != nil {
 		buildGetter, err := buildclientset.NewForConfig(clusterConfig)
@@ -98,6 +101,13 @@ func FromConfig(
 		secretGetter = coreGetter
 
 		podClient = steps.NewPodClient(coreGetter, clusterConfig, coreGetter.RESTClient())
+
+		rbacGetter, err := rbacclientset.NewForConfig(clusterConfig)
+		if err != nil {
+			return nil, nil, fmt.Errorf("could not get RBAC client for cluster config: %v", err)
+		}
+		rbacClient = rbacGetter
+		saGetter = coreGetter
 	}
 
 	params := api.NewDeferredParameters()
@@ -149,11 +159,11 @@ func FromConfig(
 
 			hasReleaseStep = true
 
-			releaseStep := release.AssembleReleaseStep(true, *rawStep.ReleaseImagesTagStepConfiguration, params, config.Resources, podClient, imageClient, artifactDir, jobSpec, dryLogger)
+			releaseStep := release.AssembleReleaseStep(true, *rawStep.ReleaseImagesTagStepConfiguration, params, config.Resources, podClient, imageClient, saGetter, rbacClient, artifactDir, jobSpec, dryLogger)
 			addProvidesForStep(releaseStep, params)
 			buildSteps = append(buildSteps, releaseStep)
 
-			initialReleaseStep := release.AssembleReleaseStep(false, *rawStep.ReleaseImagesTagStepConfiguration, params, config.Resources, podClient, imageClient, artifactDir, jobSpec, dryLogger)
+			initialReleaseStep := release.AssembleReleaseStep(false, *rawStep.ReleaseImagesTagStepConfiguration, params, config.Resources, podClient, imageClient, saGetter, rbacClient, artifactDir, jobSpec, dryLogger)
 			addProvidesForStep(initialReleaseStep, params)
 			buildSteps = append(buildSteps, initialReleaseStep)
 		} else if testStep := rawStep.TestStepConfiguration; testStep != nil {

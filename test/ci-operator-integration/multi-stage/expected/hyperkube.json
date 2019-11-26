@@ -1509,11 +1509,153 @@
     "status": {}
   },
   {
+    "apiVersion": "rbac.authorization.k8s.io/v1",
+    "kind": "RoleBinding",
+    "metadata": {
+      "creationTimestamp": null,
+      "name": "ci-operator-image",
+      "namespace": "testns"
+    },
+    "roleRef": {
+      "apiGroup": "",
+      "kind": "Role",
+      "name": "ci-operator-image"
+    },
+    "subjects": [
+      {
+        "kind": "ServiceAccount",
+        "name": "ci-operator",
+        "namespace": "testns"
+      }
+    ]
+  },
+  {
+    "apiVersion": "rbac.authorization.k8s.io/v1",
+    "kind": "RoleBinding",
+    "metadata": {
+      "creationTimestamp": null,
+      "name": "ci-operator-image",
+      "namespace": "testns"
+    },
+    "roleRef": {
+      "apiGroup": "",
+      "kind": "Role",
+      "name": "ci-operator-image"
+    },
+    "subjects": [
+      {
+        "kind": "ServiceAccount",
+        "name": "ci-operator",
+        "namespace": "testns"
+      }
+    ]
+  },
+  {
+    "apiVersion": "rbac.authorization.k8s.io/v1",
+    "kind": "Role",
+    "metadata": {
+      "creationTimestamp": null,
+      "name": "ci-operator-image",
+      "namespace": "testns"
+    },
+    "rules": [
+      {
+        "apiGroups": [
+          "",
+          "image.openshift.io"
+        ],
+        "resources": [
+          "imagestreams/layers"
+        ],
+        "verbs": [
+          "get",
+          "update"
+        ]
+      },
+      {
+        "apiGroups": [
+          "",
+          "image.openshift.io"
+        ],
+        "resources": [
+          "imagestreams",
+          "imagestreamtags"
+        ],
+        "verbs": [
+          "create",
+          "get",
+          "list",
+          "update",
+          "watch"
+        ]
+      }
+    ]
+  },
+  {
+    "apiVersion": "rbac.authorization.k8s.io/v1",
+    "kind": "Role",
+    "metadata": {
+      "creationTimestamp": null,
+      "name": "ci-operator-image",
+      "namespace": "testns"
+    },
+    "rules": [
+      {
+        "apiGroups": [
+          "",
+          "image.openshift.io"
+        ],
+        "resources": [
+          "imagestreams/layers"
+        ],
+        "verbs": [
+          "get",
+          "update"
+        ]
+      },
+      {
+        "apiGroups": [
+          "",
+          "image.openshift.io"
+        ],
+        "resources": [
+          "imagestreams",
+          "imagestreamtags"
+        ],
+        "verbs": [
+          "create",
+          "get",
+          "list",
+          "update",
+          "watch"
+        ]
+      }
+    ]
+  },
+  {
     "apiVersion": "v1",
     "kind": "Secret",
     "metadata": {
       "creationTimestamp": null,
       "name": "multi-stage"
+    }
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "ServiceAccount",
+    "metadata": {
+      "creationTimestamp": null,
+      "name": "ci-operator",
+      "namespace": "testns"
+    }
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "ServiceAccount",
+    "metadata": {
+      "creationTimestamp": null,
+      "name": "ci-operator",
+      "namespace": "testns"
     }
   }
 ]

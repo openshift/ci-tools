@@ -1,0 +1,83 @@
+branch-protection: {}
+deck:
+  rerun_auth_config: {}
+  spyglass:
+    size_limit: 100000000
+  tide_update_period: 10s
+default_job_timeout: 24h0m0s
+gerrit:
+  ratelimit: 5
+  tick_interval: 1m0s
+github:
+  link_url: https://github.com
+github_reporter:
+  job_types_to_report:
+  - presubmit
+  - postsubmit
+in_repo_config: {}
+log_level: info
+owners_dir_blacklist: {}
+plank:
+  max_goroutines: 20
+  pod_pending_timeout: 24h0m0s
+  pod_running_timeout: 48h0m0s
+pod_namespace: default
+prowjob_namespace: default
+push_gateway:
+  interval: 1m0s
+  serve_metrics: false
+sinker:
+  max_pod_age: 24h0m0s
+  max_prowjob_age: 168h0m0s
+  resync_period: 1h0m0s
+status_error_link: https://github.com/kubernetes/test-infra/issues
+tide:
+  context_options: {}
+  max_goroutines: 20
+  queries:
+  - includedBranches:
+    - release-4.0
+    - release-4.1
+    - release-4.2
+    - release-4.3
+    - release-4.4
+    - openshift-4.1
+    labels:
+    - lgtm
+    - approved
+    - bugzilla/valid-bug
+    - cherry-pick-approved
+    missingLabels:
+    - needs-rebase
+    - do-not-merge/blocked-paths
+    - do-not-merge/hold
+    - do-not-merge/work-in-progress
+    - do-not-merge/invalid-owners-file
+    - bugzilla/invalid-bug
+    repos:
+    - openshift/origin
+    - org/repo
+  - excludedBranches:
+    - release-4.0
+    - release-4.1
+    - release-4.2
+    - release-4.3
+    - release-4.4
+    - openshift-4.1
+    labels:
+    - lgtm
+    - approved
+    missingLabels:
+    - needs-rebase
+    - do-not-merge/blocked-paths
+    - do-not-merge/hold
+    - do-not-merge/work-in-progress
+    - do-not-merge/invalid-owners-file
+    - bugzilla/invalid-bug
+    repos:
+    - openshift/ci-tools
+    - openshift/origin
+    - org/repo
+    - org/other
+  status_update_period: 1m0s
+  sync_period: 1m0s

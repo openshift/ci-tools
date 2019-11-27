@@ -1,0 +1,46 @@
+base_images:
+  base:
+    name: "4.3"
+    namespace: ocp
+    tag: base
+binary_build_commands: make install
+build_root:
+  image_stream_tag:
+    name: release
+    namespace: openshift
+    tag: golang-1.12
+promotion:
+  name: "4.3"
+  namespace: ocp
+resources:
+  '*':
+    limits:
+      memory: 4Gi
+    requests:
+      cpu: 100m
+      memory: 200Mi
+tag_specification:
+  name: "4.3"
+  namespace: ocp
+test_binary_build_commands: make test-install
+tests:
+- as: e2e-aws
+  commands: TEST_SUITE=openshift/conformance/parallel run-tests
+  openshift_installer:
+    cluster_profile: aws
+- as: unit
+  commands: unit
+  container:
+    from: src
+- as: cmd
+  commands: make test-cmd
+  container:
+    from: bin
+- as: race
+  commands: race
+  container:
+    from: test-bin
+- as: e2e
+  commands: e2e
+  openshift_installer_src:
+    cluster_profile: aws

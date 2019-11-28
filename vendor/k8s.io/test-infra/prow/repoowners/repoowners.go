@@ -198,7 +198,7 @@ func (c *Client) LoadRepoAliases(org, repo, base string) (RepoAliases, error) {
 			return nil, err
 		}
 
-		entry.aliases = loadAliasesFrom(gitRepo.Dir, log)
+		entry.aliases = loadAliasesFrom(gitRepo.Directory(), log)
 		entry.sha = sha
 		c.cache[fullName] = entry
 	}
@@ -255,7 +255,7 @@ func (c *Client) LoadRepoOwners(org, repo, base string) (RepoOwner, error) {
 
 			if entry.aliases == nil || entry.sha != sha {
 				// aliases must be loaded
-				entry.aliases = loadAliasesFrom(gitRepo.Dir, log)
+				entry.aliases = loadAliasesFrom(gitRepo.Directory(), log)
 			}
 
 			dirBlacklistPatterns := c.ownersDirBlacklist().DirBlacklist(org, repo)
@@ -269,7 +269,7 @@ func (c *Client) LoadRepoOwners(org, repo, base string) (RepoOwner, error) {
 				dirBlacklist = append(dirBlacklist, re)
 			}
 
-			entry.owners, err = loadOwnersFrom(gitRepo.Dir, mdYaml, entry.aliases, dirBlacklist, log)
+			entry.owners, err = loadOwnersFrom(gitRepo.Directory(), mdYaml, entry.aliases, dirBlacklist, log)
 			if err != nil {
 				return nil, fmt.Errorf("failed to load RepoOwners for %s: %v", fullName, err)
 			}
@@ -412,7 +412,7 @@ func (o *RepoOwners) walkFunc(path string, info os.FileInfo, err error) error {
 		// Parse the yaml header from the file if it exists and marshal into the config
 		simple := &SimpleConfig{}
 		if err := decodeOwnersMdConfig(path, simple); err != nil {
-			log.WithError(err).Error("Error decoding OWNERS config from '*.md' file.")
+			log.WithError(err).Info("Error decoding OWNERS config from '*.md' file.")
 			return nil
 		}
 

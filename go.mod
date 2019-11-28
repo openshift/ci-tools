@@ -9,7 +9,7 @@ replace (
 
 require (
 	cloud.google.com/go v0.45.1
-	github.com/GoogleCloudPlatform/testgrid v0.0.0-20191021162744-e7f8ba7c55cb
+	github.com/GoogleCloudPlatform/testgrid v0.0.1-alpha.3
 	github.com/SierraSoftworks/sentry-go v1.1.1
 	github.com/docker/spdystream v0.0.0-20181023171402-6480d4af844c // indirect
 	github.com/elazarl/goproxy v0.0.0-20190711103511-473e67f1d7d2 // indirect
@@ -32,6 +32,6 @@ require (
 	k8s.io/api v0.0.0-20190918195907-bd6ac527cfd2
 	k8s.io/apimachinery v0.0.0-20190817020851-f2f3a405f61d
 	k8s.io/client-go v11.0.1-0.20190805182717-6502b5e7b1b5+incompatible
-	k8s.io/test-infra v0.0.0-20191107154714-49ad8afec57d
+	k8s.io/test-infra v0.0.0-20191128082303-6c78c1a6bcd2
 	sigs.k8s.io/yaml v1.1.0
 )

@@ -164,7 +164,6 @@ func Marshal(v interface{}) ([]byte, error) {
 	}
 	buf := append([]byte(nil), e.Bytes()...)
 
-	e.Reset()
 	encodeStatePool.Put(e)
 
 	return buf, nil
@@ -262,14 +261,22 @@ func (e *InvalidUTF8Error) Error() string {
 
 // A MarshalerError represents an error from calling a MarshalJSON or MarshalText method.
 type MarshalerError struct {
-	Type reflect.Type
-	Err  error
+	Type       reflect.Type
+	Err        error
+	sourceFunc string
 }
 
 func (e *MarshalerError) Error() string {
-	return "json: error calling MarshalJSON for type " + e.Type.String() + ": " + e.Err.Error()
+	srcFunc := e.sourceFunc
+	if srcFunc == "" {
+		srcFunc = "MarshalJSON"
+	}
+	return "json: error calling " + srcFunc +
+		" for type " + e.Type.String() +
+		": " + e.Err.Error()
 }
 
+// Unwrap returns the underlying error.
 func (e *MarshalerError) Unwrap() error { return e.Err }
 
 var hex = "0123456789abcdef"
@@ -403,18 +410,21 @@ var (
 // newTypeEncoder constructs an encoderFunc for a type.
 // The returned encoder only checks CanAddr when allowAddr is true.
 func newTypeEncoder(t reflect.Type, allowAddr bool) encoderFunc {
-	if t.Implements(marshalerType) {
-		return marshalerEncoder
-	}
+	// If we have a non-pointer value whose type implements
+	// Marshaler with a value receiver, then we're better off taking
+	// the address of the value - otherwise we end up with an
+	// allocation as we cast the value to an interface.
 	if t.Kind() != reflect.Ptr && allowAddr && reflect.PtrTo(t).Implements(marshalerType) {
 		return newCondAddrEncoder(addrMarshalerEncoder, newTypeEncoder(t, false))
 	}
-
-	if t.Implements(textMarshalerType) {
-		return textMarshalerEncoder
+	if t.Implements(marshalerType) {
+		return marshalerEncoder
 	}
 	if t.Kind() != reflect.Ptr && allowAddr && reflect.PtrTo(t).Implements(textMarshalerType) {
 		return newCondAddrEncoder(addrTextMarshalerEncoder, newTypeEncoder(t, false))
+	}
+	if t.Implements(textMarshalerType) {
+		return textMarshalerEncoder
 	}
 
 	switch t.Kind() {
@@ -467,7 +477,7 @@ func marshalerEncoder(e *encodeState, v reflect.Value, opts encOpts) {
 		err = compact(&e.Buffer, b, opts.escapeHTML)
 	}
 	if err != nil {
-		e.error(&MarshalerError{v.Type(), err})
+		e.error(&MarshalerError{v.Type(), err, "MarshalJSON"})
 	}
 }
 
@@ -484,7 +494,7 @@ func addrMarshalerEncoder(e *encodeState, v reflect.Value, opts encOpts) {
 		err = compact(&e.Buffer, b, opts.escapeHTML)
 	}
 	if err != nil {
-		e.error(&MarshalerError{v.Type(), err})
+		e.error(&MarshalerError{v.Type(), err, "MarshalJSON"})
 	}
 }
 
@@ -493,10 +503,14 @@ func textMarshalerEncoder(e *encodeState, v reflect.Value, opts encOpts) {
 		e.WriteString("null")
 		return
 	}
-	m := v.Interface().(encoding.TextMarshaler)
+	m, ok := v.Interface().(encoding.TextMarshaler)
+	if !ok {
+		e.WriteString("null")
+		return
+	}
 	b, err := m.MarshalText()
 	if err != nil {
-		e.error(&MarshalerError{v.Type(), err})
+		e.error(&MarshalerError{v.Type(), err, "MarshalText"})
 	}
 	e.stringBytes(b, opts.escapeHTML)
 }
@@ -510,7 +524,7 @@ func addrTextMarshalerEncoder(e *encodeState, v reflect.Value, opts encOpts) {
 	m := va.Interface().(encoding.TextMarshaler)
 	b, err := m.MarshalText()
 	if err != nil {
-		e.error(&MarshalerError{v.Type(), err})
+		e.error(&MarshalerError{v.Type(), err, "MarshalText"})
 	}
 	e.stringBytes(b, opts.escapeHTML)
 }
@@ -608,15 +622,21 @@ func stringEncoder(e *encodeState, v reflect.Value, opts encOpts) {
 		if !isValidNumber(numStr) {
 			e.error(fmt.Errorf("json: invalid number literal %q", numStr))
 		}
+		if opts.quoted {
+			e.WriteByte('"')
+		}
 		e.WriteString(numStr)
+		if opts.quoted {
+			e.WriteByte('"')
+		}
 		return
 	}
 	if opts.quoted {
-		sb, err := Marshal(v.String())
-		if err != nil {
-			e.error(err)
-		}
-		e.string(string(sb), opts.escapeHTML)
+		b := make([]byte, 0, v.Len()+2)
+		b = append(b, '"')
+		b = append(b, []byte(v.String())...)
+		b = append(b, '"')
+		e.stringBytes(b, opts.escapeHTML)
 	} else {
 		e.string(v.String(), opts.escapeHTML)
 	}
@@ -763,7 +783,7 @@ func (me mapEncoder) encode(e *encodeState, v reflect.Value, opts encOpts) {
 	for i, v := range keys {
 		sv[i].v = v
 		if err := sv[i].resolve(); err != nil {
-			e.error(&MarshalerError{v.Type(), err})
+			e.error(fmt.Errorf("json: encoding error for type %q: %q", v.Type().String(), err.Error()))
 		}
 	}
 	sort.Slice(sv, func(i, j int) bool { return sv[i].s < sv[j].s })

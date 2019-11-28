@@ -12,10 +12,12 @@ import (
 	"time"
 
 	coreapi "k8s.io/api/core/v1"
+	rbacapi "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
+	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	rbacclientset "k8s.io/client-go/kubernetes/typed/rbac/v1"
 	"k8s.io/client-go/util/retry"
 
@@ -54,6 +56,7 @@ type assembleReleaseStep struct {
 	resources   api.ResourceConfiguration
 	imageClient imageclientset.ImageV1Interface
 	podClient   steps.PodClient
+	saGetter    coreclientset.ServiceAccountsGetter
 	rbacClient  rbacclientset.RbacV1Interface
 	artifactDir string
 	jobSpec     *api.JobSpec
@@ -98,8 +101,61 @@ func (s *assembleReleaseStep) Inputs(ctx context.Context, dry bool) (api.InputDe
 }
 
 func (s *assembleReleaseStep) Run(ctx context.Context, dry bool) error {
+	sa := &coreapi.ServiceAccount{
+		ObjectMeta: meta.ObjectMeta{
+			Name:      "ci-operator",
+			Namespace: s.jobSpec.Namespace,
+		},
+	}
+
+	role := &rbacapi.Role{
+		ObjectMeta: meta.ObjectMeta{
+			Name:      "ci-operator-image",
+			Namespace: s.jobSpec.Namespace,
+		},
+		Rules: []rbacapi.PolicyRule{
+			{
+				APIGroups: []string{"", "image.openshift.io"},
+				Resources: []string{"imagestreams/layers"},
+				Verbs:     []string{"get", "update"},
+			},
+			{
+				APIGroups: []string{"", "image.openshift.io"},
+				Resources: []string{"imagestreams", "imagestreamtags"},
+				Verbs:     []string{"create", "get", "list", "update", "watch"},
+			},
+		},
+	}
+
+	roleBinding := &rbacapi.RoleBinding{
+		ObjectMeta: meta.ObjectMeta{
+			Name:      "ci-operator-image",
+			Namespace: s.jobSpec.Namespace,
+		},
+		Subjects: []rbacapi.Subject{{Kind: "ServiceAccount", Name: "ci-operator", Namespace: s.jobSpec.Namespace}},
+		RoleRef: rbacapi.RoleRef{
+			Kind: "Role",
+			Name: "ci-operator-image",
+		},
+	}
+
 	if dry {
+		s.dryLogger.AddObject(sa.DeepCopyObject())
+		s.dryLogger.AddObject(role.DeepCopyObject())
+		s.dryLogger.AddObject(roleBinding.DeepCopyObject())
 		return nil
+	}
+
+	if _, err := s.saGetter.ServiceAccounts(s.jobSpec.Namespace).Create(sa); err != nil && !errors.IsAlreadyExists(err) {
+		return fmt.Errorf("could not create service account 'ci-operator' for: %v", err)
+	}
+
+	if _, err := s.rbacClient.Roles(s.jobSpec.Namespace).Create(role); err != nil && !errors.IsAlreadyExists(err) {
+		return fmt.Errorf("could not create role 'ci-operator-image' for: %v", err)
+	}
+
+	if _, err := s.rbacClient.RoleBindings(s.jobSpec.Namespace).Create(roleBinding); err != nil && !errors.IsAlreadyExists(err) {
+		return fmt.Errorf("could not create role binding 'ci-operator-image' for: %v", err)
 	}
 
 	tag := s.tag()
@@ -165,7 +221,7 @@ func (s *assembleReleaseStep) Run(ctx context.Context, dry bool) error {
 			Name: streamName,
 			Tag:  "cli",
 		},
-		ServiceAccountName: "builder",
+		ServiceAccountName: "ci-operator",
 		ArtifactDir:        "/tmp/artifacts",
 		Commands: fmt.Sprintf(`
 set -euo pipefail
@@ -336,7 +392,7 @@ func (s *assembleReleaseStep) importFromReleaseImage(ctx context.Context, dry bo
 			Name: streamName,
 			Tag:  "cli",
 		},
-		ServiceAccountName: "builder",
+		ServiceAccountName: "ci-operator",
 		ArtifactDir:        "/tmp/artifacts",
 		Commands: fmt.Sprintf(`
 set -euo pipefail
@@ -562,7 +618,9 @@ func (s *assembleReleaseStep) Description() string {
 
 // AssembleReleaseStep builds a new update payload image based on the cluster version operator
 // and the operators defined in the release configuration.
-func AssembleReleaseStep(latest bool, config api.ReleaseTagConfiguration, params api.Parameters, resources api.ResourceConfiguration, podClient steps.PodClient, imageClient imageclientset.ImageV1Interface, artifactDir string, jobSpec *api.JobSpec, dryLogger *steps.DryLogger) api.Step {
+func AssembleReleaseStep(latest bool, config api.ReleaseTagConfiguration, params api.Parameters, resources api.ResourceConfiguration,
+	podClient steps.PodClient, imageClient imageclientset.ImageV1Interface, saGetter coreclientset.ServiceAccountsGetter,
+	rbacClient rbacclientset.RbacV1Interface, artifactDir string, jobSpec *api.JobSpec, dryLogger *steps.DryLogger) api.Step {
 	return &assembleReleaseStep{
 		config:      config,
 		latest:      latest,
@@ -570,6 +628,8 @@ func AssembleReleaseStep(latest bool, config api.ReleaseTagConfiguration, params
 		resources:   resources,
 		podClient:   podClient,
 		imageClient: imageClient,
+		saGetter:    saGetter,
+		rbacClient:  rbacClient,
 		artifactDir: artifactDir,
 		jobSpec:     jobSpec,
 		dryLogger:   dryLogger,

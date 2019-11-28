@@ -18,7 +18,9 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"regexp"
+	"strings"
 	"time"
 
 	pipelinev1alpha1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1alpha1"
@@ -27,6 +29,11 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/github"
+)
+
+const (
+	schemeHTTP  = "http"
+	schemeHTTPS = "https"
 )
 
 // Preset is intended to match the k8s' PodPreset feature, and may be removed
@@ -432,6 +439,41 @@ type UtilityConfig struct {
 	// DecorationConfig holds configuration options for
 	// decorating PodSpecs that users provide
 	DecorationConfig *prowapi.DecorationConfig `json:"decoration_config,omitempty"`
+}
+
+// Validate ensures all the values set in the UtilityConfig are valid.
+func (u *UtilityConfig) Validate() error {
+	cloneURIValidate := func(cloneURI string) error {
+		// Trim user from uri if exists.
+		cloneURI = cloneURI[strings.Index(cloneURI, "@")+1:]
+
+		if len(u.CloneURI) != 0 {
+			uri, err := url.Parse(cloneURI)
+			if err != nil {
+				return fmt.Errorf("couldn't parse uri from clone_uri: %v", err)
+			}
+
+			if u.DecorationConfig != nil && u.DecorationConfig.OauthTokenSecret != nil {
+				if uri.Scheme != schemeHTTP && uri.Scheme != schemeHTTPS {
+					return fmt.Errorf("scheme must be http or https when OAuth secret is specified: %s", cloneURI)
+				}
+			}
+		}
+
+		return nil
+	}
+
+	if err := cloneURIValidate(u.CloneURI); err != nil {
+		return err
+	}
+
+	for i, ref := range u.ExtraRefs {
+		if err := cloneURIValidate(ref.CloneURI); err != nil {
+			return fmt.Errorf("extra_ref[%d]: %v", i, err)
+		}
+	}
+
+	return nil
 }
 
 // SetPresubmits updates c.PresubmitStatic to jobs, after compiling and validating their regexes.

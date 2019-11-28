@@ -106,7 +106,7 @@ func getLabelsFromGenericMatches(matches [][]string, additionalLabels []string, 
 		labelFilter.Insert(strings.ToLower(l))
 	}
 	for _, match := range matches {
-		parts := strings.Split(match[0], " ")
+		parts := strings.Split(strings.TrimSpace(match[0]), " ")
 		if ((parts[0] != "/label") && (parts[0] != "/remove-label")) || len(parts) != 2 {
 			continue
 		}
@@ -160,7 +160,6 @@ func handle(gc githubClient, log *logrus.Entry, additionalLabels []string, e *gi
 		}
 
 		if !RepoLabelsExisting.Has(labelToAdd) {
-			nonexistent = append(nonexistent, labelToAdd)
 			continue
 		}
 
@@ -177,7 +176,6 @@ func handle(gc githubClient, log *logrus.Entry, additionalLabels []string, e *gi
 		}
 
 		if !RepoLabelsExisting.Has(labelToRemove) {
-			nonexistent = append(nonexistent, labelToRemove)
 			continue
 		}
 

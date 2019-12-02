@@ -71,6 +71,8 @@ inputs=(
                  "" # Are there any end-to-end test scripts to configure?  [default: no] no
 )
 for input in "${inputs[@]}"; do echo "${input}"; done | repo-init -release-repo .
+ci-operator-prowgen --from-dir ./ci-operator/config --to-dir ./ci-operator/jobs
+determinize-prow-jobs --prow-jobs-dir ./ci-operator/jobs
 
 if ! diff -Naupr "$ROOTDIR"/test/repo-init-integration/expected .> "$WORKDIR/diff"; then
     echo "[ERROR] Got incorrect output state after running repo-init:"

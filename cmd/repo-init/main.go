@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path"
 	"reflect"
 	"strings"
@@ -249,10 +248,6 @@ create this run without using the interactive interface:
 
 	if err := createCIOperatorConfig(config, o.releaseRepo); err != nil {
 		errorExit(fmt.Sprintf("could not generate new CI Operator configuration: %v", err))
-	}
-
-	if err := generateProwJobs(o.releaseRepo); err != nil {
-		errorExit(fmt.Sprintf("could not generate Prow jobs: %v", err))
 	}
 }
 
@@ -567,16 +562,4 @@ func generateCIOperatorConfig(config initConfig, originConfig *api.PromotionConf
 		})
 	}
 	return generated
-}
-
-func generateProwJobs(releaseRepo string) error {
-	fmt.Println(`
-Generating new Prow jobs and checking formatting...`)
-	cmd := exec.Command("make", "jobs")
-	cmd.Dir = releaseRepo
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("could not run \"make jobs\": %v\n output: %v", err, string(out))
-	}
-	return nil
 }

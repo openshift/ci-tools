@@ -29,6 +29,7 @@ import (
 	imageapi "github.com/openshift/api/image/v1"
 	routeapi "github.com/openshift/api/route/v1"
 	templateapi "github.com/openshift/api/template/v1"
+	userv1 "github.com/openshift/api/user/v1"
 	appsapi "k8s.io/api/apps/v1"
 	coreapi "k8s.io/api/core/v1"
 
@@ -60,11 +61,14 @@ func init() {
 	utilruntime.Must(appsapi.AddToScheme(coreScheme))
 	utilruntime.Must(routeapi.AddToScheme(coreScheme))
 	utilruntime.Must(rbacv1.AddToScheme(coreScheme))
+	utilruntime.Must(userv1.AddToScheme(coreScheme))
 
 	encoder = codecFactory.LegacyCodec(imageapi.SchemeGroupVersion, templateapi.SchemeGroupVersion,
-		coreapi.SchemeGroupVersion, buildapi.SchemeGroupVersion, appsapi.SchemeGroupVersion, routeapi.SchemeGroupVersion, rbacv1.SchemeGroupVersion)
+		coreapi.SchemeGroupVersion, buildapi.SchemeGroupVersion, appsapi.SchemeGroupVersion, routeapi.SchemeGroupVersion,
+		rbacv1.SchemeGroupVersion, userv1.SchemeGroupVersion)
 	decoder = codecFactory.UniversalDecoder(imageapi.SchemeGroupVersion, templateapi.SchemeGroupVersion,
-		coreapi.SchemeGroupVersion, buildapi.SchemeGroupVersion, appsapi.SchemeGroupVersion, routeapi.SchemeGroupVersion, rbacv1.SchemeGroupVersion)
+		coreapi.SchemeGroupVersion, buildapi.SchemeGroupVersion, appsapi.SchemeGroupVersion, routeapi.SchemeGroupVersion,
+		rbacv1.SchemeGroupVersion, userv1.SchemeGroupVersion)
 }
 
 // DryLogger holds the information of all objects that have been created from a dry run.

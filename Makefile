@@ -32,7 +32,7 @@ format:
 	gofmt -s -w $(shell go list -f '{{ .Dir }}' ./... )
 .PHONY: format
 
-integration: integration-prowgen integration-pj-rehearse integration-ci-operator integration-ci-operator-configresolver integration-secret-wrapper integration-testgrid-generator integration-repo-init
+integration: integration-prowgen integration-pj-rehearse integration-ci-operator integration-ci-operator-configresolver integration-secret-wrapper integration-testgrid-generator integration-repo-init integration-group-auto-updater
 .PHONY: integration
 
 integration-prowgen:
@@ -68,3 +68,7 @@ integration-repo-init:
 check-breaking-changes:
 	test/validate-prowgen-breaking-changes.sh
 .PHONY: check-breaking-changes
+
+integration-group-auto-updater:
+	test/group-auto-updater-integration/run.sh
+.PHONY: integration-group-auto-updater

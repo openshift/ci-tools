@@ -22,6 +22,7 @@ const (
 	multiStageTestLabel     = "ci.openshift.io/multi-stage-test"
 	clusterProfileMountPath = "/var/run/secrets/ci.openshift.io/cluster-profile"
 	secretMountPath         = "/var/run/secrets/ci.openshift.io/multi-stage"
+	secretMountEnv          = "SHARED_DIR"
 )
 
 type multiStageTestStep struct {
@@ -259,6 +260,10 @@ func addSecret(secret string, pod *coreapi.Pod) {
 	pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, coreapi.VolumeMount{
 		Name:      secret,
 		MountPath: secretMountPath,
+	})
+	pod.Spec.Containers[0].Env = append(pod.Spec.Containers[0].Env, coreapi.EnvVar{
+		Name:  secretMountEnv,
+		Value: secretMountPath,
 	})
 }
 

@@ -522,6 +522,10 @@
             {
               "name": "JOB_NAME_HASH",
               "value": "41093"
+            },
+            {
+              "name": "SHARED_DIR",
+              "value": "/var/run/secrets/ci.openshift.io/multi-stage"
             }
           ],
           "image": "tests",
@@ -676,6 +680,10 @@
             {
               "name": "JOB_NAME_HASH",
               "value": "41093"
+            },
+            {
+              "name": "SHARED_DIR",
+              "value": "/var/run/secrets/ci.openshift.io/multi-stage"
             }
           ],
           "image": "installer",
@@ -830,6 +838,10 @@
             {
               "name": "JOB_NAME_HASH",
               "value": "41093"
+            },
+            {
+              "name": "SHARED_DIR",
+              "value": "/var/run/secrets/ci.openshift.io/multi-stage"
             }
           ],
           "image": "pipeline:base",
@@ -984,6 +996,10 @@
             {
               "name": "JOB_NAME_HASH",
               "value": "41093"
+            },
+            {
+              "name": "SHARED_DIR",
+              "value": "/var/run/secrets/ci.openshift.io/multi-stage"
             }
           ],
           "image": "pipeline:root",
@@ -1138,6 +1154,10 @@
             {
               "name": "JOB_NAME_HASH",
               "value": "41093"
+            },
+            {
+              "name": "SHARED_DIR",
+              "value": "/var/run/secrets/ci.openshift.io/multi-stage"
             }
           ],
           "image": "pipeline:src",
@@ -1292,6 +1312,10 @@
             {
               "name": "JOB_NAME_HASH",
               "value": "41093"
+            },
+            {
+              "name": "SHARED_DIR",
+              "value": "/var/run/secrets/ci.openshift.io/multi-stage"
             }
           ],
           "image": "pipeline:bin",
@@ -1446,6 +1470,10 @@
             {
               "name": "JOB_NAME_HASH",
               "value": "41093"
+            },
+            {
+              "name": "SHARED_DIR",
+              "value": "/var/run/secrets/ci.openshift.io/multi-stage"
             }
           ],
           "image": "pipeline:cli",

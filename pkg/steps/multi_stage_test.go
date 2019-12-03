@@ -116,6 +116,7 @@ func TestGeneratePods(t *testing.T) {
 		{Name: "KUBECONFIG", Value: "/var/run/secrets/ci.openshift.io/multi-stage/kubeconfig"},
 		{Name: "RELEASE_IMAGE_INITIAL", Value: "release:initial"},
 		{Name: "RELEASE_IMAGE_LATEST", Value: "release:latest"},
+		{Name: "SHARED_DIR", Value: "/var/run/secrets/ci.openshift.io/multi-stage"},
 	}
 
 	jobSpec := api.JobSpec{

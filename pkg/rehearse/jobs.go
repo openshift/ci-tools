@@ -351,25 +351,12 @@ func resolveInlineCiOpConfig(container v1.Container, resolver registry.Resolver,
 				loggers.Job.WithError(err).Error("Failed to unmarshal ci-operator config file")
 				return err
 			}
-			var resolvedTests []api.TestStepConfiguration
-			for _, step := range ciOpConfig.Tests {
-				// no changes if step is not multi-stage
-				if step.MultiStageTestConfiguration == nil {
-					resolvedTests = append(resolvedTests, step)
-					continue
-				}
-				resolvedConfig, err := resolver.Resolve(*step.MultiStageTestConfiguration)
-				if err != nil {
-					loggers.Job.WithError(err).Error("Failed resolve MultiStageTestConfiguration")
-					return err
-				}
-				step.MultiStageTestConfigurationLiteral = &resolvedConfig
-				// remove old multi stage config
-				step.MultiStageTestConfiguration = nil
-				resolvedTests = append(resolvedTests, step)
+			ciOpConfigResolved, err := registry.ResolveConfig(resolver, ciOpConfig)
+			if err != nil {
+				loggers.Job.WithError(err).Error("Failed resolve ReleaseBuildConfiguration")
+				return err
 			}
-			ciOpConfig.Tests = resolvedTests
-			ciOpConfigContent, err := yaml.Marshal(ciOpConfig)
+			ciOpConfigContent, err := yaml.Marshal(ciOpConfigResolved)
 			if err != nil {
 				loggers.Job.WithError(err).Error("Failed to marshal ci-operator config file")
 				return err

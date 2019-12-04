@@ -307,26 +307,31 @@ func generatePodSpecTemplate(info *prowgenInfo, secret *cioperatorapi.Secret, re
 		template = "cluster-scaleup-e2e-40"
 		clusterProfile = conf.ClusterProfile
 		needsReleaseRpms = true
+		needsLeaseServer = true
 	} else if conf := test.OpenshiftInstallerClusterTestConfiguration; conf != nil {
 		if !conf.Upgrade {
 			template = "cluster-launch-installer-e2e"
-			needsLeaseServer = true
 		}
 		clusterProfile = conf.ClusterProfile
+		needsLeaseServer = true
 	} else if conf := test.OpenshiftInstallerSrcClusterTestConfiguration; conf != nil {
 		template = "cluster-launch-installer-src"
+		needsLeaseServer = true
 		clusterProfile = conf.ClusterProfile
 	} else if conf := test.OpenshiftInstallerUPIClusterTestConfiguration; conf != nil {
 		template = "cluster-launch-installer-upi-e2e"
+		needsLeaseServer = true
 		clusterProfile = conf.ClusterProfile
 	} else if conf := test.OpenshiftInstallerUPISrcClusterTestConfiguration; conf != nil {
 		template = "cluster-launch-installer-upi-src"
+		needsLeaseServer = true
 		clusterProfile = conf.ClusterProfile
 	} else if conf := test.OpenshiftInstallerConsoleClusterTestConfiguration; conf != nil {
 		template = "cluster-launch-installer-console"
 		clusterProfile = conf.ClusterProfile
 	} else if conf := test.OpenshiftInstallerCustomTestImageClusterTestConfiguration; conf != nil {
 		template = "cluster-launch-installer-custom-test-image"
+		needsLeaseServer = true
 		clusterProfile = conf.ClusterProfile
 		testImageStreamTag = conf.From
 	}

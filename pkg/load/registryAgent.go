@@ -81,27 +81,11 @@ func (a *registryAgent) recordError(label string) {
 	a.errorMetrics.With(labels).Inc()
 }
 
+// ResolveConfig uses the registryAgent's resolver to resolve a provided ReleaseBuildConfiguration
 func (a *registryAgent) ResolveConfig(config api.ReleaseBuildConfiguration) (api.ReleaseBuildConfiguration, error) {
-	var resolvedTests []api.TestStepConfiguration
-	for _, step := range config.Tests {
-		// no changes if step is not multi-stage
-		if step.MultiStageTestConfiguration == nil {
-			resolvedTests = append(resolvedTests, step)
-			continue
-		}
-		a.lock.RLock()
-		resolvedConfig, err := a.resolver.Resolve(*step.MultiStageTestConfiguration)
-		a.lock.RUnlock()
-		if err != nil {
-			return api.ReleaseBuildConfiguration{}, err
-		}
-		step.MultiStageTestConfigurationLiteral = &resolvedConfig
-		// remove old multi stage config
-		step.MultiStageTestConfiguration = nil
-		resolvedTests = append(resolvedTests, step)
-	}
-	config.Tests = resolvedTests
-	return config, nil
+	a.lock.RLock()
+	defer a.lock.RUnlock()
+	return registry.ResolveConfig(a.resolver, config)
 }
 
 func (a *registryAgent) GetGeneration() int {

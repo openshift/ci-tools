@@ -17,6 +17,8 @@ readonly FAKE_OPENSHIFT_RELEASE="${WORKDIR}/repo"
 make_testing_repository() {
   local -r master_data="${PWD}/${TEST_ROOT}/master"
   local -r candidate_data="${PWD}/${TEST_ROOT}/candidate"
+  local -r registry="${PWD}/${TEST_ROOT}/../multistage-registry/registry"
+  local -r registry2="${PWD}/${TEST_ROOT}/../multistage-registry/registry2"
   local base_sha
   local candidate_sha
 
@@ -27,10 +29,13 @@ make_testing_repository() {
   git config --local user.name test
   git config --local user.email test
   cp -R "${master_data}"/* .
+  cp -R  "${registry}"/ ./ci-operator/step-registry
   git add ci-operator core-services cluster
   git commit -m "Master version of openshift/release" --quiet
   base_sha="$(git rev-parse HEAD)"
   cp -R "${candidate_data}"/* .
+  rm -rf ./ci-operator/step-registry
+  cp -R  "${registry2}"/ ./ci-operator/step-registry
   git add ci-operator core-services cluster
   git commit -m "Candidate version of openshift/release" --quiet
   candidate_sha="$(git rev-parse HEAD)"

@@ -33,6 +33,7 @@ import (
 	"k8s.io/test-infra/prow/pjutil"
 
 	"github.com/openshift/ci-tools/pkg/config"
+	"github.com/openshift/ci-tools/pkg/registry"
 )
 
 const (
@@ -228,7 +229,7 @@ func filterJobSpec(spec *v1.PodSpec, allowVolumes bool) error {
 // of the needed config file passed to the job as a direct value. This needs
 // to happen because the rehearsed Prow jobs may depend on these config files
 // being also changed by the tested PR.
-func inlineCiOpConfig(container v1.Container, ciopConfigs config.ByFilename, loggers Loggers) error {
+func inlineCiOpConfig(container v1.Container, ciopConfigs config.ByFilename, resolver registry.Resolver, loggers Loggers) error {
 	for index := range container.Env {
 		env := &(container.Env[index])
 		if env.ValueFrom == nil {
@@ -245,8 +246,13 @@ func inlineCiOpConfig(container v1.Container, ciopConfigs config.ByFilename, log
 			if !ok {
 				return fmt.Errorf("ci-operator config file %s was not found", filename)
 			}
+			ciopConfigResolved, err := registry.ResolveConfig(resolver, ciopConfig.Configuration)
+			if err != nil {
+				loggers.Job.WithError(err).Error("Failed resolve ReleaseBuildConfiguration")
+				return err
+			}
 
-			ciOpConfigContent, err := yaml.Marshal(ciopConfig.Configuration)
+			ciOpConfigContent, err := yaml.Marshal(ciopConfigResolved)
 			if err != nil {
 				loggers.Job.WithError(err).Error("Failed to marshal ci-operator config file")
 				return err
@@ -261,8 +267,9 @@ func inlineCiOpConfig(container v1.Container, ciopConfigs config.ByFilename, log
 
 // JobConfigurer holds all the information that is needed for the configuration of the jobs.
 type JobConfigurer struct {
-	ciopConfigs config.ByFilename
-	profiles    []config.ConfigMapSource
+	ciopConfigs      config.ByFilename
+	registryResolver registry.Resolver
+	profiles         []config.ConfigMapSource
 
 	prNumber     int
 	refs         *pjapi.Refs
@@ -272,15 +279,16 @@ type JobConfigurer struct {
 }
 
 // NewJobConfigurer filters the jobs and returns a new JobConfigurer.
-func NewJobConfigurer(ciopConfigs config.ByFilename, prNumber int, loggers Loggers, allowVolumes bool, templates []config.ConfigMapSource, profiles []config.ConfigMapSource, refs *pjapi.Refs) *JobConfigurer {
+func NewJobConfigurer(ciopConfigs config.ByFilename, resolver registry.Resolver, prNumber int, loggers Loggers, allowVolumes bool, templates []config.ConfigMapSource, profiles []config.ConfigMapSource, refs *pjapi.Refs) *JobConfigurer {
 	return &JobConfigurer{
-		ciopConfigs:  ciopConfigs,
-		profiles:     profiles,
-		prNumber:     prNumber,
-		refs:         refs,
-		loggers:      loggers,
-		allowVolumes: allowVolumes,
-		templateMap:  fillTemplateMap(templates),
+		ciopConfigs:      ciopConfigs,
+		registryResolver: resolver,
+		profiles:         profiles,
+		prNumber:         prNumber,
+		refs:             refs,
+		loggers:          loggers,
+		allowVolumes:     allowVolumes,
+		templateMap:      fillTemplateMap(templates),
 	}
 }
 
@@ -338,8 +346,12 @@ func (jc *JobConfigurer) ConfigurePresubmitRehearsals(presubmits config.Presubmi
 }
 
 func (jc *JobConfigurer) configureJobSpec(spec *v1.PodSpec, logger *logrus.Entry) error {
-	if err := inlineCiOpConfig(spec.Containers[0], jc.ciopConfigs, jc.loggers); err != nil {
+	if err := inlineCiOpConfig(spec.Containers[0], jc.ciopConfigs, jc.registryResolver, jc.loggers); err != nil {
 		return err
+	}
+	// Remove configresolver flags from ci-operator jobs
+	if len(spec.Containers[0].Command) > 0 && spec.Containers[0].Command[0] == "ci-operator" {
+		spec.Containers[0].Args = removeConfigResolverFlags(spec.Containers[0].Args)
 	}
 
 	if jc.allowVolumes {
@@ -653,10 +665,6 @@ func (e *Executor) submitRehearsals() ([]*pjapi.ProwJob, error) {
 	var pjs []*pjapi.ProwJob
 
 	for _, job := range e.presubmits {
-		// Remove configresolver flags from ci-operator jobs
-		if len(job.Spec.Containers) > 0 && len(job.Spec.Containers[0].Command) > 0 && job.Spec.Containers[0].Command[0] == "ci-operator" {
-			job.Spec.Containers[0].Args = removeConfigResolverFlags(job.Spec.Containers[0].Args)
-		}
 		created, err := e.submitPresubmit(job)
 		if err != nil {
 			e.loggers.Job.WithError(err).Warn("Failed to execute a rehearsal presubmit")

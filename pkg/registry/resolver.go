@@ -140,3 +140,25 @@ func checkForDuplicates(input []api.LiteralTestStep) (errs []error) {
 	}
 	return
 }
+
+// ResolveConfig uses a resolver to resolve an entire ci-operator config
+func ResolveConfig(resolver Resolver, config api.ReleaseBuildConfiguration) (api.ReleaseBuildConfiguration, error) {
+	var resolvedTests []api.TestStepConfiguration
+	for _, step := range config.Tests {
+		// no changes if step is not multi-stage
+		if step.MultiStageTestConfiguration == nil {
+			resolvedTests = append(resolvedTests, step)
+			continue
+		}
+		resolvedConfig, err := resolver.Resolve(*step.MultiStageTestConfiguration)
+		if err != nil {
+			return api.ReleaseBuildConfiguration{}, fmt.Errorf("Failed resolve MultiStageTestConfiguration: %v", err)
+		}
+		step.MultiStageTestConfigurationLiteral = &resolvedConfig
+		// remove old multi stage config
+		step.MultiStageTestConfiguration = nil
+		resolvedTests = append(resolvedTests, step)
+	}
+	config.Tests = resolvedTests
+	return config, nil
+}

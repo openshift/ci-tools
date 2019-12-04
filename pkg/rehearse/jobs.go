@@ -32,7 +32,6 @@ import (
 	prowconfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/pjutil"
 
-	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/registry"
 )
@@ -230,7 +229,7 @@ func filterJobSpec(spec *v1.PodSpec, allowVolumes bool) error {
 // of the needed config file passed to the job as a direct value. This needs
 // to happen because the rehearsed Prow jobs may depend on these config files
 // being also changed by the tested PR.
-func inlineCiOpConfig(container v1.Container, ciopConfigs config.ByFilename, loggers Loggers) error {
+func inlineCiOpConfig(container v1.Container, ciopConfigs config.ByFilename, resolver registry.Resolver, loggers Loggers) error {
 	for index := range container.Env {
 		env := &(container.Env[index])
 		if env.ValueFrom == nil {
@@ -247,8 +246,13 @@ func inlineCiOpConfig(container v1.Container, ciopConfigs config.ByFilename, log
 			if !ok {
 				return fmt.Errorf("ci-operator config file %s was not found", filename)
 			}
+			ciopConfigResolved, err := registry.ResolveConfig(resolver, ciopConfig.Configuration)
+			if err != nil {
+				loggers.Job.WithError(err).Error("Failed resolve ReleaseBuildConfiguration")
+				return err
+			}
 
-			ciOpConfigContent, err := yaml.Marshal(ciopConfig.Configuration)
+			ciOpConfigContent, err := yaml.Marshal(ciopConfigResolved)
 			if err != nil {
 				loggers.Job.WithError(err).Error("Failed to marshal ci-operator config file")
 				return err
@@ -341,37 +345,8 @@ func (jc *JobConfigurer) ConfigurePresubmitRehearsals(presubmits config.Presubmi
 	return rehearsals
 }
 
-func resolveInlineCiOpConfig(container v1.Container, resolver registry.Resolver, loggers Loggers) error {
-	for index := range container.Env {
-		env := &(container.Env[index])
-		if env.Name == "CONFIG_SPEC" && env.Value != "" {
-			ciOpConfig := api.ReleaseBuildConfiguration{}
-			err := yaml.Unmarshal([]byte(env.Value), &ciOpConfig)
-			if err != nil {
-				loggers.Job.WithError(err).Error("Failed to unmarshal ci-operator config file")
-				return err
-			}
-			ciOpConfigResolved, err := registry.ResolveConfig(resolver, ciOpConfig)
-			if err != nil {
-				loggers.Job.WithError(err).Error("Failed resolve ReleaseBuildConfiguration")
-				return err
-			}
-			ciOpConfigContent, err := yaml.Marshal(ciOpConfigResolved)
-			if err != nil {
-				loggers.Job.WithError(err).Error("Failed to marshal ci-operator config file")
-				return err
-			}
-			env.Value = string(ciOpConfigContent)
-		}
-	}
-	return nil
-}
-
 func (jc *JobConfigurer) configureJobSpec(spec *v1.PodSpec, logger *logrus.Entry) error {
-	if err := inlineCiOpConfig(spec.Containers[0], jc.ciopConfigs, jc.loggers); err != nil {
-		return err
-	}
-	if err := resolveInlineCiOpConfig(spec.Containers[0], jc.registryResolver, jc.loggers); err != nil {
+	if err := inlineCiOpConfig(spec.Containers[0], jc.ciopConfigs, jc.registryResolver, jc.loggers); err != nil {
 		return err
 	}
 	// Remove configresolver flags from ci-operator jobs

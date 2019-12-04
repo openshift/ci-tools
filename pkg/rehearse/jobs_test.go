@@ -205,16 +205,20 @@ func TestInlineCiopConfig(t *testing.T) {
 		sourceEnv:     []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference(testCiopConfigInfo.ConfigMapName(), "filename")}},
 		configs:       config.ByFilename{},
 		expectedError: true,
-	},
-	}
+	}}
 
+	references, chains, workflows, err := load.Registry(testingRegistry, false)
+	if err != nil {
+		t.Fatalf("Failed to read registry: %v", err)
+	}
+	resolver := registry.NewResolver(references, chains, workflows)
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
 			testLoggers := Loggers{logrus.New(), logrus.New()}
 			job := makeTestingPresubmitForEnv(tc.sourceEnv)
 			expectedJob := makeTestingPresubmitForEnv(tc.expectedEnv)
 
-			err := inlineCiOpConfig(job.Spec.Containers[0], tc.configs, testLoggers)
+			err := inlineCiOpConfig(job.Spec.Containers[0], tc.configs, resolver, testLoggers)
 
 			if tc.expectedError && err == nil {
 				t.Errorf("Expected inlineCiopConfig() to return an error, none returned")
@@ -1159,88 +1163,5 @@ func TestRemoveConfigResolverFlags(t *testing.T) {
 				t.Fatalf("Diff found %v", diff.ObjectReflectDiff(testCase.expected, newArgs))
 			}
 		})
-	}
-}
-
-func TestResolveInlineCiOpConfig(t *testing.T) {
-	const configSpec = `tests:
-- as: e2e-azure
-  steps:
-    cluster_profile: azure
-    workflow: ipi
-    test:
-    - as: e2e
-      from: my-image
-      commands: make azure-e2e
-      resources:
-        requests:
-          cpu: 1000m
-          memory: 2Gi`
-	const resolvedConfigSpec = `tests:
-- as: e2e-azure
-  commands: ""
-  literal_steps:
-    cluster_profile: azure
-    post:
-    - as: ipi-deprovision-must-gather
-      commands: |
-        gather
-      from: installer
-      resources:
-        limits: null
-        requests:
-          cpu: 1000m
-          memory: 2Gi
-    - as: ipi-deprovision-deprovision
-      commands: |
-        openshift-cluster destroy
-      from: installer
-      resources:
-        limits: null
-        requests:
-          cpu: 1000m
-          memory: 2Gi
-    pre:
-    - as: ipi-install-rbac
-      commands: |
-        setup-rbac
-      from: installer
-      resources:
-        limits: null
-        requests:
-          cpu: 1000m
-          memory: 2Gi
-    - as: ipi-install-install
-      commands: |
-        openshift-cluster install
-      from: installer
-      resources:
-        limits: null
-        requests:
-          cpu: 1000m
-          memory: 2Gi
-    test:
-    - as: e2e
-      commands: make azure-e2e
-      from: my-image
-      resources:
-        limits: null
-        requests:
-          cpu: 1000m
-          memory: 2Gi
-`
-	container := v1.Container{Env: []v1.EnvVar{{
-		Name:  "CONFIG_SPEC",
-		Value: configSpec,
-	}}}
-	references, chains, workflows, err := load.Registry(testingRegistry, false)
-	if err != nil {
-		t.Fatalf("Failed to read registry: %v", err)
-	}
-	resolver := registry.NewResolver(references, chains, workflows)
-	resolveInlineCiOpConfig(container, resolver, Loggers{logrus.New(), logrus.New()})
-	resolvedValue := container.Env[0].Value
-	if resolvedValue != resolvedConfigSpec {
-		t.Fatalf("Diff found %v", diff.ObjectReflectDiff(resolvedConfigSpec, resolvedValue))
 	}
 }

@@ -33,17 +33,18 @@ if ! diff "${EXPECTED1}" "${OUT}"; then
 fi
 
 # Run test with ci-operator-configresolver
-ci-operator-configresolver -config "${TEST_CONFIG_DIR}" -registry "${TEST_REGISTRY_DIR}" -log-level debug -cycle 2m &
-PID=$!
+ci-operator-configresolver -config "${TEST_CONFIG_DIR}" -registry "${TEST_REGISTRY_DIR}" -log-level debug -cycle 2m  &> "${WORKDIR}"/output.log &
 # Wait until ready
 for (( i = 0; i < 10; i++ )); do
     if [[ "$(curl http://127.0.0.1:8081/healthz/ready 2>/dev/null)" == "OK" ]]; then
         break
     fi
-    if [[ "${i}" -eq 10 ]]; then
+    if [[ "${i}" -eq 9 ]]; then
         echo "[ERROR] Timed out waiting for ci-operator-configresolver to be ready"
-        kill $PID
-        wait $PID
+        kill $(jobs -p)
+        wait $(jobs -p)
+        echo "configresolver output:"
+        cat "${WORKDIR}"/output.log
         exit 1
     fi
     sleep 0.5
@@ -53,27 +54,42 @@ if ! ci-operator --dry-run --determinize-output --namespace "${TEST_NAMESPACE}" 
     -resolver-address "http://127.0.0.1:8080" -org "openshift" -repo "installer" -branch "release-4.2" --lease-server "http://lease" 2> "${ERR}" | jq --sort-keys . > "${OUT}"; then
     echo "ERROR: ci-operator failed."
     cat "${ERR}"
-    kill $PID
-    wait $PID
+    kill $(jobs -p)
+    wait $(jobs -p)
+    echo "configresolver output:"
+    cat "${WORKDIR}"/output.log
     exit 1
 fi
 
 if grep "level=error" "${ERR}"; then
     echo "ERROR: ci-operator stderr contains error level messages"
     cat "${ERR}"
-    kill $PID
-    wait $PID
+    kill $(jobs -p)
+    wait $(jobs -p)
+    echo "configresolver output:"
+    cat "${WORKDIR}"/output.log
     exit 1
 fi
 
 if ! diff "${EXPECTED2}" "${OUT}"; then
     echo "ERROR: differences have been found"
-    kill $PID
-    wait $PID
+    kill $(jobs -p)
+    wait $(jobs -p)
+    echo "configresolver output:"
+    cat "${WORKDIR}"/output.log
     exit 1
 fi
 
-kill $PID
-wait $PID
+kill $(jobs -p)
+wait $(jobs -p)
+
+# check for logrus style errors
+if grep -q "level=error" "${WORKDIR}"/output.log; then
+    echo "configresolver output:"
+    cat "${WORKDIR}"/output.log
+    echo "Detected errors in output:"
+    grep "level=error" "${WORKDIR}"/output.log
+    exit 1
+fi
 
 echo "[INFO] Success"

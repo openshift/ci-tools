@@ -439,6 +439,7 @@ func (o *options) Complete() error {
 		if o.dry {
 			o.leaseClient = lease.NewFakeClient(owner, o.leaseServer, nil, nil)
 		} else {
+			log.Printf("owner:%s---%s---%s---%s", owner, o.leaseServer, o.leaseServerUsername, o.leaseServerPasswordFile)
 			c, err := lease.NewClient(owner, o.leaseServer, o.leaseServerUsername, o.leaseServerPasswordFile)
 			if err != nil {
 				return fmt.Errorf("failed to create the lease client: %v", err)

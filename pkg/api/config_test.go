@@ -231,6 +231,46 @@ func TestValidateTests(t *testing.T) {
 			expectedValid: false,
 		},
 		{
+			id: "invalid secret and secrets both set",
+			tests: []TestStepConfiguration{
+				{
+					As:                                       "test",
+					OpenshiftAnsibleClusterTestConfiguration: &OpenshiftAnsibleClusterTestConfiguration{},
+					Secret: &Secret{
+						Name:      "secret_test_a",
+						MountPath: "/path/to/secret:exec",
+					},
+					Secrets: []*Secret{
+						{
+							Name:      "secret_test_b",
+							MountPath: "/path/to/secret:exec",
+						},
+					},
+				},
+			},
+			expectedValid: false,
+		},
+		{
+			id: "invalid duplicate secret names",
+			tests: []TestStepConfiguration{
+				{
+					As:                                       "test",
+					OpenshiftAnsibleClusterTestConfiguration: &OpenshiftAnsibleClusterTestConfiguration{},
+					Secrets: []*Secret{
+						{
+							Name:      "secret-test-a",
+							MountPath: "/path/to/secret:exec",
+						},
+						{
+							Name:      "secret-test-a",
+							MountPath: "/path/to/secret:exec",
+						},
+					},
+				},
+			},
+			expectedValid: false,
+		},
+		{
 			id: "valid secret",
 			tests: []TestStepConfiguration{
 				{
@@ -239,6 +279,41 @@ func TestValidateTests(t *testing.T) {
 					ContainerTestConfiguration: &ContainerTestConfiguration{From: "ignored"},
 					Secret: &Secret{
 						Name: "secret",
+					},
+				},
+			},
+			expectedValid: true,
+		},
+		{
+			id: "valid secrets single entry",
+			tests: []TestStepConfiguration{
+				{
+					As:                         "unit",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &ContainerTestConfiguration{From: "ignored"},
+					Secrets: []*Secret{
+						{
+							Name: "secret-a",
+						},
+					},
+				},
+			},
+			expectedValid: true,
+		},
+		{
+			id: "valid secrets multi entry",
+			tests: []TestStepConfiguration{
+				{
+					As:                         "unit",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &ContainerTestConfiguration{From: "ignored"},
+					Secrets: []*Secret{
+						{
+							Name: "secret-a",
+						},
+						{
+							Name: "secret-b",
+						},
 					},
 				},
 			},

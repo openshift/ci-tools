@@ -15,71 +15,98 @@ cd "$WORKDIR"
 # copy registry to tmpdir to allow tester to modify registry
 cp -a "$ROOTDIR"/test/ci-operator-configresolver-integration/ tests
 cp -a "$ROOTDIR"/test/multistage-registry multistage-registry
-ci-operator-configresolver -config tests/configs -registry multistage-registry/registry -log-level debug -cycle 2m &
-PID=$!
+ci-operator-configresolver -config tests/configs -registry multistage-registry/registry -log-level debug -cycle 2m &> output.log &
+echo "[INFO] Started configresolver"
 for (( i = 0; i < 10; i++ )); do
     if [[ "$(curl http://127.0.0.1:8081/healthz/ready 2>/dev/null)" == "OK" ]]; then
         break
     fi
-    if [[ "${i}" -eq 10 ]]; then
+    if [[ "${i}" -eq 9 ]]; then
         echo "[ERROR] Timed out waiting for ci-operator-configresolver to be ready"
-        kill $PID
-        wait $PID
+        kill $(jobs -p)
+        wait $(jobs -p)
+        echo "configresolver output:"
+        cat output.log
         exit 1
     fi
     sleep 0.5
 done
+echo "[INFO] configresolver ready"
 if ! diff -Naupr tests/expected/openshift-installer-release-4.2.json <(curl 'http://127.0.0.1:8080/config?org=openshift&repo=installer&branch=release-4.2' 2>/dev/null)> "$WORKDIR/diff"; then
-    echo "diff:"
+    echo "[ERROR] diff:"
     cat "$WORKDIR/diff"
-    kill $PID
-    wait $PID
+    kill $(jobs -p)
+    wait $(jobs -p)
+    echo "configresolver output:"
+    cat output.log
     exit 1
 fi
-currGen=$(curl 'http://127.0.0.1:8080/configGeneration')
+echo "[INFO] Got correct resolved config from resolver"
+currGen=$(curl 'http://127.0.0.1:8080/configGeneration' 2>/dev/null)
 export currGen
 cp tests/configs2/release-4.2/openshift-installer-release-4.2-golang111.yaml tests/configs/release-4.2/openshift-installer-release-4.2.yaml
 for (( i = 0; i < 10; i++ )); do
-    if [[ "$(curl http://127.0.0.1:8080/configGeneration 2>/dev/null)" -gt $currGen+1 ]]; then
+    if [[ "$(curl http://127.0.0.1:8080/configGeneration 2>/dev/null)" -gt $currGen ]]; then
         break
     fi
-    if [[ "${i}" -eq 10 ]]; then
+    if [[ "${i}" -eq 9 ]]; then
         echo "[ERROR] Timed out waiting for ci-operator-configresolver to reload configs after file change"
-        kill $PID
-        wait $PID
+        kill $(jobs -p)
+        wait $(jobs -p)
+        echo "configresolver output:"
+        cat output.log
         exit 1
     fi
     sleep 0.5
 done
 if ! diff -Naupr tests/expected/openshift-installer-release-4.2-golang111.json <(curl 'http://127.0.0.1:8080/config?org=openshift&repo=installer&branch=release-4.2' 2>/dev/null)> "$WORKDIR/diff"; then
-    echo "diff:"
+    echo "[ERROR] diff:"
     cat "$WORKDIR/diff"
-    kill $PID
-    wait $PID
+    kill $(jobs -p)
+    wait $(jobs -p)
+    echo "configresolver output:"
+    cat output.log
     exit 1
 fi
-currGen=$(curl 'http://127.0.0.1:8080/registryGeneration')
+echo "[INFO] Got correct resolved config from resolver after config change"
+currGen=$(curl 'http://127.0.0.1:8080/registryGeneration' 2>/dev/null)
 export currGen
-rm -rf multistage-registry/registry/*
-cp -a multistage-registry/registry2/* multistage-registry/registry
+rsync -avh --quiet --delete --inplace multistage-registry/registry2/ multistage-registry/registry/
 for (( i = 0; i < 10; i++ )); do
-    if [[ "$(curl http://127.0.0.1:8080/registryGeneration 2>/dev/null)" -gt $currGen+1 ]]; then
+    if [[ "$(curl http://127.0.0.1:8080/registryGeneration 2>/dev/null)" -gt $currGen ]]; then
         break
     fi
-    if [[ "${i}" -eq 10 ]]; then
+    if [[ "${i}" -eq 9 ]]; then
         echo "[ERROR] Timed out waiting for ci-operator-configresolver to reload registry after file change"
-        kill $PID
-        wait $PID
+        kill $(jobs -p)
+        wait $(jobs -p)
+        echo "configresolver output:"
+        cat output.log
         exit 1
     fi
     sleep 0.5
 done
 if ! diff -Naupr tests/expected/openshift-installer-release-4.2-regChange.json <(curl 'http://127.0.0.1:8080/config?org=openshift&repo=installer&branch=release-4.2' 2>/dev/null)> "$WORKDIR/diff"; then
-    echo "diff:"
+    echo "[ERROR] diff:"
     cat "$WORKDIR/diff"
-    kill $PID
-    wait $PID
+    kill $(jobs -p)
+    wait $(jobs -p)
+    echo "configresolver output:"
+    cat output.log
     exit 1
 fi
-kill $PID
-wait $PID
+echo "[INFO] Got correct resolved config from resolver after registry change"
+
+kill $(jobs -p)
+wait $(jobs -p)
+
+# check for logrus style errors
+if grep -q "level=error" output.log; then
+    echo "configresolver output:"
+    cat output.log
+    echo "[ERROR] Detected errors in output:"
+    grep "level=error" output.log
+    exit 1
+fi
+
+echo "[INFO] Success"

@@ -212,15 +212,17 @@ type options struct {
 	idleCleanupDuration time.Duration
 	cleanupDuration     time.Duration
 
-	inputHash     string
-	secrets       []*coreapi.Secret
-	sshSecret     *coreapi.Secret
-	templates     []*templateapi.Template
-	configSpec    *api.ReleaseBuildConfiguration
-	jobSpec       *api.JobSpec
-	clusterConfig *rest.Config
-	leaseServer   string
-	leaseClient   lease.Client
+	inputHash               string
+	secrets                 []*coreapi.Secret
+	sshSecret               *coreapi.Secret
+	templates               []*templateapi.Template
+	configSpec              *api.ReleaseBuildConfiguration
+	jobSpec                 *api.JobSpec
+	clusterConfig           *rest.Config
+	leaseServer             string
+	leaseServerUsername     string
+	leaseServerPasswordFile string
+	leaseClient             lease.Client
 
 	givePrAuthorAccessToNamespace bool
 	determinizeOutput             bool
@@ -257,6 +259,8 @@ func bindOptions(flag *flag.FlagSet) *options {
 
 	// what we will run
 	flag.StringVar(&opt.leaseServer, "lease-server", "", "Address of the server that manages leases. Required if any test is configured to acquire a lease.")
+	flag.StringVar(&opt.leaseServerUsername, "lease-server-username", "", "Username used to access the lease server")
+	flag.StringVar(&opt.leaseServerPasswordFile, "lease-server-password-file", "", "The path to password file used to access the lease server")
 	flag.StringVar(&opt.configSpecPath, "config", "", "The configuration file. If not specified the CONFIG_SPEC environment variable will be used.")
 	flag.Var(&opt.targets, "target", "One or more targets in the configuration to build. Only steps that are required for this target will be run.")
 	flag.BoolVar(&opt.dry, "dry-run", opt.dry, "Print the steps that would be run and the objects that would be created without executing any steps")
@@ -435,7 +439,11 @@ func (o *options) Complete() error {
 		if o.dry {
 			o.leaseClient = lease.NewFakeClient(owner, o.leaseServer, nil, nil)
 		} else {
-			o.leaseClient = lease.NewClient(owner, o.leaseServer)
+			c, err := lease.NewClient(owner, o.leaseServer, o.leaseServerUsername, o.leaseServerPasswordFile)
+			if err != nil {
+				return fmt.Errorf("failed to create the lease client: %v", err)
+			}
+			o.leaseClient = c
 		}
 	}
 

@@ -379,7 +379,32 @@ func generatePodSpecTemplate(info *prowgenInfo, secret *cioperatorapi.Secret, re
 	// TODO add to all templates when they are migrated
 	// TODO expose boskos (behind an oauth proxy) so it can be used by build clusters
 	if needsLeaseServer {
-		container.Args = append(container.Args, "--lease-server=http://boskos")
+		if info.Org == "openshift" && info.Repo == "ci-secret-mirroring-controller" {
+			container.Args = append(container.Args, "--lease-server=https://boskos-ci.svc.ci.openshift.org")
+			container.Args = append(container.Args, "--lease-server-username=ci")
+			container.Args = append(container.Args, "--lease-server-password-file=/etc/boskos/password")
+			container.VolumeMounts = append(container.VolumeMounts, kubeapi.VolumeMount{
+				Name:      "boskos",
+				MountPath: "/etc/boskos",
+				ReadOnly:  true,
+			})
+			podSpec.Volumes = append(podSpec.Volumes, kubeapi.Volume{
+				Name: "boskos",
+				VolumeSource: kubeapi.VolumeSource{
+					Secret: &kubeapi.SecretVolumeSource{
+						SecretName: "boskos-credentials",
+						Items: []kubeapi.KeyToPath{
+							{
+								Key:  "password",
+								Path: "password",
+							},
+						},
+					},
+				},
+			})
+		} else {
+			container.Args = append(container.Args, "--lease-server=http://boskos")
+		}
 	}
 	container.VolumeMounts = append(container.VolumeMounts, kubeapi.VolumeMount{Name: "cluster-profile", MountPath: clusterProfilePath})
 	if len(template) > 0 {

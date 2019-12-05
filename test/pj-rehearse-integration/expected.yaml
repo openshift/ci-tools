@@ -1366,6 +1366,57 @@
               commands: make unit CHANGED
               container:
                 from: src
+            - as: multistage
+              commands: ""
+              literal_steps:
+                cluster_profile: ""
+                post:
+                - as: ipi-deprovision-must-gather
+                  commands: |
+                    gather
+                  from: installer
+                  resources:
+                    limits: null
+                    requests:
+                      cpu: 1000m
+                      memory: 2Gi
+                - as: ipi-deprovision-deprovision
+                  commands: |
+                    openshift-cluster destroy
+                  from: installer
+                  resources:
+                    limits: null
+                    requests:
+                      cpu: 1000m
+                      memory: 2Gi
+                pre:
+                - as: ipi-install-rbac
+                  commands: |
+                    setup-rbac-2
+                  from: installer
+                  resources:
+                    limits: null
+                    requests:
+                      cpu: 1000m
+                      memory: 2Gi
+                - as: ipi-install-install
+                  commands: |
+                    openshift-cluster install --newFlag
+                  from: installer
+                  resources:
+                    limits: null
+                    requests:
+                      cpu: 1000m
+                      memory: 2Gi
+                test:
+                - as: e2e
+                  commands: make integration
+                  from: my-image
+                  resources:
+                    limits: null
+                    requests:
+                      cpu: 1000m
+                      memory: 2Gi
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -1479,6 +1530,57 @@
               commands: make unit CHANGED
               container:
                 from: src
+            - as: multistage
+              commands: ""
+              literal_steps:
+                cluster_profile: ""
+                post:
+                - as: ipi-deprovision-must-gather
+                  commands: |
+                    gather
+                  from: installer
+                  resources:
+                    limits: null
+                    requests:
+                      cpu: 1000m
+                      memory: 2Gi
+                - as: ipi-deprovision-deprovision
+                  commands: |
+                    openshift-cluster destroy
+                  from: installer
+                  resources:
+                    limits: null
+                    requests:
+                      cpu: 1000m
+                      memory: 2Gi
+                pre:
+                - as: ipi-install-rbac
+                  commands: |
+                    setup-rbac-2
+                  from: installer
+                  resources:
+                    limits: null
+                    requests:
+                      cpu: 1000m
+                      memory: 2Gi
+                - as: ipi-install-install
+                  commands: |
+                    openshift-cluster install --newFlag
+                  from: installer
+                  resources:
+                    limits: null
+                    requests:
+                      cpu: 1000m
+                      memory: 2Gi
+                test:
+                - as: e2e
+                  commands: make integration
+                  from: my-image
+                  resources:
+                    limits: null
+                    requests:
+                      cpu: 1000m
+                      memory: 2Gi
         - name: JOB_NAME_SAFE
           value: e2e-aws
         - name: TEST_COMMAND
@@ -1607,6 +1709,57 @@
               commands: make unit CHANGED
               container:
                 from: src
+            - as: multistage
+              commands: ""
+              literal_steps:
+                cluster_profile: ""
+                post:
+                - as: ipi-deprovision-must-gather
+                  commands: |
+                    gather
+                  from: installer
+                  resources:
+                    limits: null
+                    requests:
+                      cpu: 1000m
+                      memory: 2Gi
+                - as: ipi-deprovision-deprovision
+                  commands: |
+                    openshift-cluster destroy
+                  from: installer
+                  resources:
+                    limits: null
+                    requests:
+                      cpu: 1000m
+                      memory: 2Gi
+                pre:
+                - as: ipi-install-rbac
+                  commands: |
+                    setup-rbac-2
+                  from: installer
+                  resources:
+                    limits: null
+                    requests:
+                      cpu: 1000m
+                      memory: 2Gi
+                - as: ipi-install-install
+                  commands: |
+                    openshift-cluster install --newFlag
+                  from: installer
+                  resources:
+                    limits: null
+                    requests:
+                      cpu: 1000m
+                      memory: 2Gi
+                test:
+                - as: e2e
+                  commands: make integration
+                  from: my-image
+                  resources:
+                    limits: null
+                    requests:
+                      cpu: 1000m
+                      memory: 2Gi
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -1714,6 +1867,57 @@
               commands: make unit CHANGED
               container:
                 from: src
+            - as: multistage
+              commands: ""
+              literal_steps:
+                cluster_profile: ""
+                post:
+                - as: ipi-deprovision-must-gather
+                  commands: |
+                    gather
+                  from: installer
+                  resources:
+                    limits: null
+                    requests:
+                      cpu: 1000m
+                      memory: 2Gi
+                - as: ipi-deprovision-deprovision
+                  commands: |
+                    openshift-cluster destroy
+                  from: installer
+                  resources:
+                    limits: null
+                    requests:
+                      cpu: 1000m
+                      memory: 2Gi
+                pre:
+                - as: ipi-install-rbac
+                  commands: |
+                    setup-rbac-2
+                  from: installer
+                  resources:
+                    limits: null
+                    requests:
+                      cpu: 1000m
+                      memory: 2Gi
+                - as: ipi-install-install
+                  commands: |
+                    openshift-cluster install --newFlag
+                  from: installer
+                  resources:
+                    limits: null
+                    requests:
+                      cpu: 1000m
+                      memory: 2Gi
+                test:
+                - as: e2e
+                  commands: make integration
+                  from: my-image
+                  resources:
+                    limits: null
+                    requests:
+                      cpu: 1000m
+                      memory: 2Gi
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""

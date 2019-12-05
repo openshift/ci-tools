@@ -3,14 +3,13 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/openshift/ci-tools/pkg/util"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/sirupsen/logrus"
-
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/client-go/rest"
 	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowgithub "k8s.io/test-infra/prow/github"
 	prowplugins "k8s.io/test-infra/prow/plugins"
@@ -18,8 +17,10 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/diffs"
+	"github.com/openshift/ci-tools/pkg/load"
+	"github.com/openshift/ci-tools/pkg/registry"
 	"github.com/openshift/ci-tools/pkg/rehearse"
-	"k8s.io/client-go/rest"
+	"github.com/openshift/ci-tools/pkg/util"
 )
 
 type options struct {
@@ -268,7 +269,13 @@ func rehearseMain() int {
 	metrics.RecordPresubmitsOpportunity(toRehearseClusterProfiles, "cluster-profile-change")
 	toRehearse.AddAll(toRehearseClusterProfiles)
 
-	jobConfigurer := rehearse.NewJobConfigurer(prConfig.CiOperator, prNumber, loggers, o.allowVolumes, changedTemplates, changedClusterProfiles, jobSpec.Refs)
+	refs, chains, workflows, err := load.Registry(filepath.Join(o.releaseRepoPath, config.RegistryPath), false)
+	if err != nil {
+		logger.WithError(err).Error("could not load step registry")
+		return gracefulExit(o.noFail, misconfigurationOutput)
+	}
+	resolver := registry.NewResolver(refs, chains, workflows)
+	jobConfigurer := rehearse.NewJobConfigurer(prConfig.CiOperator, resolver, prNumber, loggers, o.allowVolumes, changedTemplates, changedClusterProfiles, jobSpec.Refs)
 
 	presubmitsToRehearse := jobConfigurer.ConfigurePresubmitRehearsals(toRehearse)
 	periodicsToRehearse := jobConfigurer.ConfigurePeriodicRehearsals(changedPeriodics)

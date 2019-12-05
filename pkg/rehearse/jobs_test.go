@@ -30,7 +30,11 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
+	"github.com/openshift/ci-tools/pkg/load"
+	"github.com/openshift/ci-tools/pkg/registry"
 )
+
+const testingRegistry = "../../test/multistage-registry/registry"
 
 func TestReplaceClusterProfiles(t *testing.T) {
 	makeVolume := func(name string) v1.Volume {
@@ -201,16 +205,20 @@ func TestInlineCiopConfig(t *testing.T) {
 		sourceEnv:     []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference(testCiopConfigInfo.ConfigMapName(), "filename")}},
 		configs:       config.ByFilename{},
 		expectedError: true,
-	},
-	}
+	}}
 
+	references, chains, workflows, err := load.Registry(testingRegistry, false)
+	if err != nil {
+		t.Fatalf("Failed to read registry: %v", err)
+	}
+	resolver := registry.NewResolver(references, chains, workflows)
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
 			testLoggers := Loggers{logrus.New(), logrus.New()}
 			job := makeTestingPresubmitForEnv(tc.sourceEnv)
 			expectedJob := makeTestingPresubmitForEnv(tc.expectedEnv)
 
-			err := inlineCiOpConfig(job.Spec.Containers[0], tc.configs, testLoggers)
+			err := inlineCiOpConfig(job.Spec.Containers[0], tc.configs, resolver, testLoggers)
 
 			if tc.expectedError && err == nil {
 				t.Errorf("Expected inlineCiopConfig() to return an error, none returned")
@@ -460,6 +468,11 @@ func TestExecuteJobsErrors(t *testing.T) {
 		failToCreate: sets.NewString("rehearse-123-job2"),
 	}}
 
+	references, chains, workflows, err := load.Registry(testingRegistry, false)
+	if err != nil {
+		t.Fatalf("Failed to read registry: %v", err)
+	}
+	resolver := registry.NewResolver(references, chains, workflows)
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
 			testLoggers := Loggers{logrus.New(), logrus.New()}
@@ -479,7 +492,7 @@ func TestExecuteJobsErrors(t *testing.T) {
 				return false, nil, nil
 			})
 
-			jc := NewJobConfigurer(testCiopConfigs, testPrNumber, testLoggers, true, nil, nil, makeBaseRefs())
+			jc := NewJobConfigurer(testCiopConfigs, resolver, testPrNumber, testLoggers, true, nil, nil, makeBaseRefs())
 
 			presubmits := jc.ConfigurePresubmitRehearsals(tc.jobs)
 			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, true, testLoggers, fakeclient)
@@ -525,9 +538,13 @@ func TestExecuteJobsUnsuccessful(t *testing.T) {
 			"rehearse-123-job1": pjapi.SuccessState,
 			"rehearse-123-job2": pjapi.FailureState,
 		},
-	},
-	}
+	}}
 
+	references, chains, workflows, err := load.Registry(testingRegistry, false)
+	if err != nil {
+		t.Fatalf("Failed to read registry: %v", err)
+	}
+	resolver := registry.NewResolver(references, chains, workflows)
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
 			testLoggers := Loggers{logrus.New(), logrus.New()}
@@ -552,7 +569,7 @@ func TestExecuteJobsUnsuccessful(t *testing.T) {
 				return true, ret, nil
 			})
 
-			jc := NewJobConfigurer(testCiopConfigs, testPrNumber, testLoggers, true, nil, nil, makeBaseRefs())
+			jc := NewJobConfigurer(testCiopConfigs, resolver, testPrNumber, testLoggers, true, nil, nil, makeBaseRefs())
 			presubmits := jc.ConfigurePresubmitRehearsals(tc.jobs)
 			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, false, testLoggers, fakeclient)
 			success, _ := executor.ExecuteJobs()
@@ -633,6 +650,11 @@ func TestExecuteJobsPositive(t *testing.T) {
 		},
 	}
 
+	references, chains, workflows, err := load.Registry(testingRegistry, false)
+	if err != nil {
+		t.Fatalf("Failed to read registry: %v", err)
+	}
+	resolver := registry.NewResolver(references, chains, workflows)
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
 			testLoggers := Loggers{logrus.New(), logrus.New()}
@@ -644,7 +666,7 @@ func TestExecuteJobsPositive(t *testing.T) {
 			}
 			fakecs.Fake.PrependWatchReactor("prowjobs", makeSuccessfulFinishReactor(watcher, tc.jobs))
 
-			jc := NewJobConfigurer(testCiopConfigs, testPrNumber, testLoggers, true, nil, nil, makeBaseRefs())
+			jc := NewJobConfigurer(testCiopConfigs, resolver, testPrNumber, testLoggers, true, nil, nil, makeBaseRefs())
 			presubmits := jc.ConfigurePresubmitRehearsals(tc.jobs)
 			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, true, testLoggers, fakeclient)
 			success, err := executor.ExecuteJobs()

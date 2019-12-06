@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/base32"
@@ -215,7 +216,6 @@ type options struct {
 
 	inputHash               string
 	secrets                 []*coreapi.Secret
-	sshSecret               *coreapi.Secret
 	templates               []*templateapi.Template
 	configSpec              *api.ReleaseBuildConfiguration
 	jobSpec                 *api.JobSpec
@@ -245,6 +245,8 @@ type options struct {
 
 	pullSecretPath string
 	pullSecret     *coreapi.Secret
+
+	cloneAuthConfig *steps.CloneAuthConfig
 }
 
 func bindOptions(flag *flag.FlagSet) *options {
@@ -381,10 +383,23 @@ func (o *options) Complete() error {
 		}
 	}
 
-	if len(o.sshKeyPath) > 0 {
-		o.sshSecret, err = getSSHSecretFromPath(o.sshKeyPath)
+	if len(o.sshKeyPath) > 0 && len(o.oauthTokenPath) > 0 {
+		return errors.New("both --ssh-key-path and --oauth-token-path are specified")
+	}
+
+	var cloneAuthSecretPath string
+	if len(o.oauthTokenPath) > 0 {
+		cloneAuthSecretPath = o.oauthTokenPath
+		o.cloneAuthConfig = &steps.CloneAuthConfig{Type: steps.CloneAuthTypeOAuth}
+	} else if len(o.sshKeyPath) > 0 {
+		cloneAuthSecretPath = o.sshKeyPath
+		o.cloneAuthConfig = &steps.CloneAuthConfig{Type: steps.CloneAuthTypeSSH}
+	}
+
+	if len(cloneAuthSecretPath) > 0 {
+		o.cloneAuthConfig.Secret, err = getCloneSecretFromPath(o.cloneAuthConfig.Type, cloneAuthSecretPath)
 		if err != nil {
-			return fmt.Errorf("could not get ssh secret from path %s: %v", o.sshKeyPath, err)
+			return fmt.Errorf("could not get secret from path %s: %v", cloneAuthSecretPath, err)
 		}
 	}
 
@@ -818,9 +833,9 @@ func (o *options) initializeNamespace() error {
 		})
 	}
 
-	if o.sshSecret != nil {
-		if _, err := client.Secrets(o.namespace).Create(o.sshSecret); err != nil && !kerrors.IsAlreadyExists(err) {
-			return fmt.Errorf("couldn't create ssh secret %s: %v", o.sshSecret.Name, err)
+	if o.cloneAuthConfig != nil && o.cloneAuthConfig.Secret != nil {
+		if _, err := client.Secrets(o.namespace).Create(o.cloneAuthConfig.Secret); err != nil && !kerrors.IsAlreadyExists(err) {
+			return fmt.Errorf("couldn't create secret %s for %s authentication: %v", o.cloneAuthConfig.Secret.Name, o.cloneAuthConfig.Type, err)
 		}
 	}
 
@@ -1427,25 +1442,34 @@ func eventRecorder(kubeClient *coreclientset.CoreV1Client, authClient *authclien
 		templatescheme.Scheme, coreapi.EventSource{Component: namespace}), nil
 }
 
-func getSSHSecretFromPath(sshKeyPath string) (*coreapi.Secret, error) {
+func getCloneSecretFromPath(cloneAuthType steps.CloneAuthType, secretPath string) (*coreapi.Secret, error) {
 	secret := &coreapi.Secret{Data: make(map[string][]byte)}
-	secret.Type = coreapi.SecretTypeSSHAuth
-
-	b, err := ioutil.ReadFile(sshKeyPath)
+	data, err := ioutil.ReadFile(secretPath)
 	if err != nil {
-		return nil, fmt.Errorf("could not read file %s for secret: %v", sshKeyPath, err)
+		return nil, fmt.Errorf("could not read file %s for secret: %v", secretPath, err)
+	}
+	hash := getHashFromBytes(data)
+	data = bytes.TrimSpace(data)
+
+	if cloneAuthType == steps.CloneAuthTypeSSH {
+		secret.Name = fmt.Sprintf("ssh-%s", hash)
+		secret.Type = coreapi.SecretTypeSSHAuth
+		// Secret.Data["ssh-privatekey"] is required on SecretTypeSSHAuth type.
+		// https://github.com/kubernetes/api/blob/master/core/v1/types.go#L5466-L5470
+		secret.Data[coreapi.SSHAuthPrivateKey] = data
+	} else if cloneAuthType == steps.CloneAuthTypeOAuth {
+		secret.Type = coreapi.SecretTypeOpaque
+		secret.Name = fmt.Sprintf("oauth-%s", hash)
+		secret.Data[steps.OauthSecretKey] = data
 	}
 
+	return secret, nil
+}
+
+func getHashFromBytes(b []byte) string {
 	hash := sha256.New()
 	hash.Write(b)
-	hashFromBytes := oneWayNameEncoding.EncodeToString(hash.Sum(nil)[:5])
-	secret.Name = fmt.Sprintf("ssh-%s", hashFromBytes)
-
-	// Secret.Data["ssh-privatekey"] is required on SecretTypeSSHAuth type.
-	// https://github.com/kubernetes/api/blob/master/core/v1/types.go#L5466-L5470
-	secret.Data[coreapi.SSHAuthPrivateKey] = b
-
-	return secret, nil
+	return oneWayNameEncoding.EncodeToString(hash.Sum(nil)[:5])
 }
 
 func getPullSecretFromFile(filename string) (*coreapi.Secret, error) {

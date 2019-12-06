@@ -156,7 +156,7 @@ func validateTestStepConfiguration(fieldRoot string, input []TestStepConfigurati
 			test.Secrets = append(test.Secrets, test.Secret)
 		}
 
-		secretNames := make(map[string]bool)
+		seen := sets.NewString()
 		for _, secret := range test.Secrets {
 			// K8s object names must be valid DNS 1123 subdomains.
 			if len(validation.IsDNS1123Subdomain(secret.Name)) != 0 {
@@ -164,10 +164,10 @@ func validateTestStepConfiguration(fieldRoot string, input []TestStepConfigurati
 			}
 
 			// Validate no duplicate secret names, then append to list of names.
-			if _, ok := secretNames[secret.Name]; ok {
+			if seen.Has(secret.Name) {
 				validationErrors = append(validationErrors, fmt.Errorf("duplicate secret name entries found for %s", secret.Name))
 			}
-			secretNames[secret.Name] = true
+			seen.Insert(secret.Name)
 
 			// validate path only if name is passed
 			if secret.MountPath != "" {

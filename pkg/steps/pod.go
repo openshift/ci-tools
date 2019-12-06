@@ -234,11 +234,9 @@ func (s *podStep) generatePodForStep(image string, containerResources coreapi.Re
 	}
 	pod.Spec.ServiceAccountName = s.config.ServiceAccountName
 	container := &pod.Spec.Containers[0]
-	if s.config.Secrets != nil {
-		for _, secret := range s.config.Secrets {
-			container.VolumeMounts = append(container.VolumeMounts, getSecretVolumeMountFromSecret(secret.MountPath)...)
-			pod.Spec.Volumes = append(pod.Spec.Volumes, getVolumeFromSecret(secret.Name)...)
-		}
+	for _, secret := range s.config.Secrets {
+		container.VolumeMounts = append(container.VolumeMounts, getSecretVolumeMountFromSecret(secret.MountPath)...)
+		pod.Spec.Volumes = append(pod.Spec.Volumes, getVolumeFromSecret(secret.Name)...)
 	}
 
 	if v := s.config.MemoryBackedVolume; v != nil {

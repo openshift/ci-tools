@@ -449,7 +449,7 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		podSpec := generatePodSpecTemplate(tc.info, nil, tc.release, &tc.test)
+		podSpec := generatePodSpecTemplate(tc.info, tc.release, &tc.test)
 		if !equality.Semantic.DeepEqual(podSpec, tc.expected) {
 			t.Errorf("expected PodSpec diff:\n%s", diff.ObjectDiff(tc.expected, podSpec))
 		}

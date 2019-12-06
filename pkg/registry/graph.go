@@ -7,8 +7,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
-// Type declarations
-
 // Type identifies the type of registry element a Node refers to
 type Type int
 
@@ -82,8 +80,6 @@ type workflowNodeByName map[string]*workflowNode
 type chainNodeByName map[string]*chainNode
 type referenceNodeByName map[string]*referenceNode
 
-// Set functions
-
 func (set workflowNodeSet) insert(node *workflowNode) {
 	set[node] = sets.Empty{}
 }
@@ -120,14 +116,9 @@ func (set referenceNodeSet) list() []*referenceNode {
 	return res
 }
 
-// Interface Functions
-// Name function
-
 func (n *nodeWithName) Name() string {
 	return n.name
 }
-
-// Type functions
 
 func (*workflowNode) Type() Type {
 	return Workflow
@@ -141,8 +132,6 @@ func (*referenceNode) Type() Type {
 	return Reference
 }
 
-// ParentNames functions
-
 func (n *nodeWithParents) ParentNames() sets.String {
 	parents := sets.NewString()
 	for parent := range n.workflowParents {
@@ -154,9 +143,7 @@ func (n *nodeWithParents) ParentNames() sets.String {
 	return parents
 }
 
-func (*workflowNode) ParentNames() sets.String { return nil }
-
-// ChildrenNames functions
+func (*workflowNode) ParentNames() sets.String { return sets.NewString() }
 
 func (n *nodeWithChildren) ChildrenNames() sets.String {
 	children := sets.NewString()
@@ -169,9 +156,7 @@ func (n *nodeWithChildren) ChildrenNames() sets.String {
 	return children
 }
 
-func (*referenceNode) ChildrenNames() sets.String { return nil }
-
-// AncestorNames functions
+func (*referenceNode) ChildrenNames() sets.String { return sets.NewString() }
 
 func (n *nodeWithParents) AncestorNames() sets.String {
 	ancestors := n.ParentNames()
@@ -181,9 +166,7 @@ func (n *nodeWithParents) AncestorNames() sets.String {
 	return ancestors
 }
 
-func (*workflowNode) AncestorNames() sets.String { return nil }
-
-// DescendantNames function
+func (*workflowNode) AncestorNames() sets.String { return sets.NewString() }
 
 func (n *nodeWithChildren) DescendantNames() sets.String {
 	descendants := n.ChildrenNames()
@@ -193,10 +176,7 @@ func (n *nodeWithChildren) DescendantNames() sets.String {
 	return descendants
 }
 
-func (*referenceNode) DescendantNames() sets.String { return nil }
-
-// Struct helper functions
-// addChild functions
+func (*referenceNode) DescendantNames() sets.String { return sets.NewString() }
 
 func (n *workflowNode) addChainChild(child *chainNode) {
 	n.chainChildren.insert(child)
@@ -238,7 +218,7 @@ func newNodeWithChildren() nodeWithChildren {
 
 func hasCycles(node *chainNode, ancestors sets.String, traversedPath []string) error {
 	if ancestors == nil {
-		ancestors = make(sets.String)
+		ancestors = sets.NewString()
 	}
 	if ancestors.Has(node.name) {
 		return fmt.Errorf("Cycle detected: %s is an ancestor of itself; traversedPath: %v", node.name, append(traversedPath, node.name))
@@ -249,10 +229,7 @@ func hasCycles(node *chainNode, ancestors sets.String, traversedPath []string) e
 			continue
 		}
 		// get new copy of ancestors and traversedPath so the root node's set isn't changed
-		ancestorsCopy := sets.NewString()
-		for _, ancestor := range ancestors.List() {
-			ancestorsCopy.Insert(ancestor)
-		}
+		ancestorsCopy := sets.NewString(ancestors.UnsortedList()...)
 		traversedPathCopy := append(traversedPath[:0:0], traversedPath...)
 		traversedPathCopy = append(traversedPathCopy, node.name)
 		if err := hasCycles(child, ancestorsCopy, traversedPathCopy); err != nil {
@@ -273,7 +250,7 @@ func NewGraph(stepsByName map[string]api.LiteralTestStep, chainsByName map[strin
 			nodeWithParents: newNodeWithParents(),
 		}
 		referenceNodes[name] = node
-		nodesByName[name] = Node(node)
+		nodesByName[name] = node
 	}
 	// since we may load the parent chain before a child chain, we need to make the parent->child links after loading all chains
 	parentChildChain := make(map[*chainNode]string)
@@ -285,7 +262,7 @@ func NewGraph(stepsByName map[string]api.LiteralTestStep, chainsByName map[strin
 			nodeWithParents:  newNodeWithParents(),
 		}
 		chainNodes[name] = node
-		nodesByName[name] = Node(node)
+		nodesByName[name] = node
 		for _, step := range chain {
 			if step.Reference != nil {
 				node.addReferenceChild(referenceNodes[*step.Reference])
@@ -300,7 +277,7 @@ func NewGraph(stepsByName map[string]api.LiteralTestStep, chainsByName map[strin
 	}
 	// verify that no cycles exist
 	for _, chain := range chainNodes {
-		if err := hasCycles(chain, make(sets.String), []string{}); err != nil {
+		if err := hasCycles(chain, sets.NewString(), []string{}); err != nil {
 			return nil, err
 		}
 	}
@@ -311,7 +288,7 @@ func NewGraph(stepsByName map[string]api.LiteralTestStep, chainsByName map[strin
 			nodeWithChildren: newNodeWithChildren(),
 		}
 		workflowNodes[name] = node
-		nodesByName[name] = Node(node)
+		nodesByName[name] = node
 		steps := append(workflow.Pre, append(workflow.Test, workflow.Post...)...)
 		for _, step := range steps {
 			if step.Reference != nil {

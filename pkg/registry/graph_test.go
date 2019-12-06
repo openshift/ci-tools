@@ -8,7 +8,7 @@ import (
 )
 
 // These maps contain the representation of ../../test/multistage-registry/registry with the
-// minimum of amount necessary to create a graph
+// minimum of amount of information necessary to create a graph
 var ipiInstallInstall = "ipi-install-install"
 var ipiInstallRBAC = "ipi-install-rbac"
 var ipiDeprovisionMustGather = "ipi-deprovision-must-gather"

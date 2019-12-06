@@ -14,6 +14,7 @@ import (
 	"github.com/sirupsen/logrus"
 	kubeapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/util/sets"
 	v1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
 
@@ -140,7 +141,7 @@ func generatePodSpec(info *prowgenInfo, secret *cioperatorapi.Secret) *kubeapi.P
 		ReadOnly:  true,
 	}}
 
-	if info.Org == "openshift" && info.Repo == "ci-secret-mirroring-controller" {
+	if migrated(info.Org, info.Repo) {
 		volumeMounts = []kubeapi.VolumeMount{
 			{
 				Name:      sentryDsnMountName,
@@ -162,7 +163,7 @@ func generatePodSpec(info *prowgenInfo, secret *cioperatorapi.Secret) *kubeapi.P
 		},
 	}}
 
-	if info.Org == "openshift" && info.Repo == "ci-secret-mirroring-controller" {
+	if migrated(info.Org, info.Repo) {
 		volumes = []kubeapi.Volume{
 			{
 				Name: sentryDsnMountName,
@@ -254,7 +255,7 @@ func generateCiOperatorPodSpec(info *prowgenInfo, secret *cioperatorapi.Secret, 
 		fmt.Sprintf("--branch=%s", info.Branch),
 	}, additionalArgs...)
 
-	if info.Org == "openshift" && info.Repo == "ci-secret-mirroring-controller" {
+	if migrated(info.Org, info.Repo) {
 		ret.Containers[0].Args = append([]string{
 			"--give-pr-author-access-to-namespace=true",
 			"--artifact-dir=$(ARTIFACTS)",
@@ -379,7 +380,7 @@ func generatePodSpecTemplate(info *prowgenInfo, secret *cioperatorapi.Secret, re
 	// TODO add to all templates when they are migrated
 	// TODO expose boskos (behind an oauth proxy) so it can be used by build clusters
 	if needsLeaseServer {
-		if info.Org == "openshift" && info.Repo == "ci-secret-mirroring-controller" {
+		if migrated(info.Org, info.Repo) {
 			container.Args = append(container.Args, "--lease-server=https://boskos-ci.svc.ci.openshift.org")
 			container.Args = append(container.Args, "--lease-server-username=ci")
 			container.Args = append(container.Args, "--lease-server-password-file=/etc/boskos/password")
@@ -450,6 +451,14 @@ func generatePodSpecTemplate(info *prowgenInfo, secret *cioperatorapi.Secret, re
 				Value: fmt.Sprintf("https://rpms.svc.ci.openshift.org/openshift-origin-v%s/", conf.PreviousVersion)})
 	}
 	return podSpec
+}
+
+var (
+	migratedRepos = sets.NewString("openshift/ci-secret-mirroring-controller")
+)
+
+func migrated(org, repo string) bool {
+	return migratedRepos.Has(fmt.Sprintf("%s/%s", org, repo))
 }
 
 func generatePodSpecRandom(info *prowgenInfo, test *cioperatorapi.TestStepConfiguration) *kubeapi.PodSpec {

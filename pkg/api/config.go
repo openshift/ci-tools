@@ -154,7 +154,6 @@ func validateTestStepConfiguration(fieldRoot string, input []TestStepConfigurati
 
 		if test.Secret != nil {
 			test.Secrets = append(test.Secrets, test.Secret)
-			test.Secret = nil
 		}
 
 		if test.Secrets != nil {

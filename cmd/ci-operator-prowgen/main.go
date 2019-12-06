@@ -611,6 +611,9 @@ func generateJobs(
 
 	for _, element := range configSpec.Tests {
 		var podSpec *kubeapi.PodSpec
+		if element.Secret != nil {
+			element.Secrets = append(element.Secrets, element.Secret)
+		}
 		if element.ContainerTestConfiguration != nil {
 			podSpec = generateCiOperatorPodSpec(info, element.Secrets, []string{element.As})
 		} else {

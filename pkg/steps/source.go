@@ -69,15 +69,24 @@ var (
 	JobSpecAnnotation = fmt.Sprintf("%s/%s", CiAnnotationPrefix, "job-spec")
 )
 
-func sourceDockerfile(fromTag api.PipelineImageStreamTagReference, workingDir string, sshSecretName string) string {
+func sourceDockerfile(fromTag api.PipelineImageStreamTagReference, workingDir string, cloneAuthConfig *CloneAuthConfig) string {
 	var dockerCommands []string
+	var secretPath string
+
 	dockerCommands = append(dockerCommands, "")
 	dockerCommands = append(dockerCommands, fmt.Sprintf("FROM %s:%s", api.PipelineImageStream, fromTag))
 	dockerCommands = append(dockerCommands, "ADD ./app.binary /clonerefs")
 
-	if len(sshSecretName) > 0 {
-		dockerCommands = append(dockerCommands, fmt.Sprintf("ADD %s /etc/ssh/ssh_config", sshConfig))
-		dockerCommands = append(dockerCommands, fmt.Sprintf("COPY ./%s %s", coreapi.SSHAuthPrivateKey, sshPrivateKey))
+	if cloneAuthConfig != nil {
+		switch cloneAuthConfig.Type {
+		case CloneAuthTypeSSH:
+			dockerCommands = append(dockerCommands, fmt.Sprintf("ADD %s /etc/ssh/ssh_config", sshConfig))
+			dockerCommands = append(dockerCommands, fmt.Sprintf("COPY ./%s %s", coreapi.SSHAuthPrivateKey, sshPrivateKey))
+			secretPath = sshPrivateKey
+		case CloneAuthTypeOAuth:
+			dockerCommands = append(dockerCommands, fmt.Sprintf("COPY ./%s %s", OauthSecretKey, oauthToken))
+			secretPath = oauthToken
+		}
 	}
 
 	dockerCommands = append(dockerCommands, fmt.Sprintf("RUN umask 0002 && /clonerefs && find %s/src -type d -not -perm -0775 | xargs -r chmod g+xw", gopath))
@@ -87,8 +96,8 @@ func sourceDockerfile(fromTag api.PipelineImageStreamTagReference, workingDir st
 
 	// After the clonerefs command, we don't need the secret anymore.
 	// We don't want to let the key keep existing in the image's layer.
-	if len(sshSecretName) > 0 {
-		dockerCommands = append(dockerCommands, fmt.Sprintf("RUN rm -f %s", sshPrivateKey))
+	if len(secretPath) > 0 {
+		dockerCommands = append(dockerCommands, fmt.Sprintf("RUN rm -f %s", secretPath))
 	}
 
 	dockerCommands = append(dockerCommands, "")
@@ -138,7 +147,7 @@ type sourceStep struct {
 	artifactDir        string
 	jobSpec            *api.JobSpec
 	dryLogger          *DryLogger
-	sshSecretName      string
+	cloneAuthConfig    *CloneAuthConfig
 }
 
 func (s *sourceStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
@@ -151,27 +160,27 @@ func (s *sourceStep) Run(ctx context.Context, dry bool) error {
 		return fmt.Errorf("could not resolve clonerefs source: %v", err)
 	}
 
-	return handleBuild(s.buildClient, createBuild(s.config, s.jobSpec, clonerefsRef, s.resources, s.sshSecretName), dry, s.artifactDir, s.dryLogger)
+	return handleBuild(s.buildClient, createBuild(s.config, s.jobSpec, clonerefsRef, s.resources, s.cloneAuthConfig), dry, s.artifactDir, s.dryLogger)
 }
 
-func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clonerefsRef coreapi.ObjectReference, resources api.ResourceConfiguration, sshSecretName string) *buildapi.Build {
+func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clonerefsRef coreapi.ObjectReference, resources api.ResourceConfiguration, cloneAuthConfig *CloneAuthConfig) *buildapi.Build {
 	var refs []prowapi.Refs
 	if jobSpec.Refs != nil {
 		r := *jobSpec.Refs
-		if len(sshSecretName) > 0 {
-			r.CloneURI = fmt.Sprintf("ssh://git@github.com/%s/%s.git", r.Org, r.Repo)
+		if cloneAuthConfig != nil {
+			r.CloneURI = cloneAuthConfig.getCloneURI(r.Org, r.Repo)
 		}
 		refs = append(refs, r)
 	}
 
 	for _, r := range jobSpec.ExtraRefs {
-		if len(sshSecretName) > 0 {
-			r.CloneURI = fmt.Sprintf("ssh://git@github.com/%s/%s.git", r.Org, r.Repo)
+		if cloneAuthConfig != nil {
+			r.CloneURI = cloneAuthConfig.getCloneURI(r.Org, r.Repo)
 		}
 		refs = append(refs, r)
 	}
 
-	dockerfile := sourceDockerfile(config.From, decorate.DetermineWorkDir(gopath, refs), sshSecretName)
+	dockerfile := sourceDockerfile(config.From, decorate.DetermineWorkDir(gopath, refs), cloneAuthConfig)
 	buildSource := buildapi.BuildSource{
 		Type:       buildapi.BuildSourceDockerfile,
 		Dockerfile: &dockerfile,
@@ -197,21 +206,24 @@ func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clone
 		Fail:         true,
 	}
 
-	if len(sshSecretName) > 0 {
+	if cloneAuthConfig != nil {
 		buildSource.Secrets = append(buildSource.Secrets,
 			buildapi.SecretBuildSource{
-				Secret: *getSourceSecretFromName(sshSecretName),
+				Secret: *getSourceSecretFromName(cloneAuthConfig.Secret.Name),
 			},
 		)
-
-		for i, image := range buildSource.Images {
-			if image.From == clonerefsRef {
-				buildSource.Images[i].Paths = append(buildSource.Images[i].Paths, buildapi.ImageSourcePath{
-					SourcePath: sshConfig, DestinationDir: "."})
+		if cloneAuthConfig.Type == CloneAuthTypeSSH {
+			for i, image := range buildSource.Images {
+				if image.From == clonerefsRef {
+					buildSource.Images[i].Paths = append(buildSource.Images[i].Paths, buildapi.ImageSourcePath{
+						SourcePath: sshConfig, DestinationDir: "."})
+				}
 			}
-		}
+			optionsSpec.KeyFiles = append(optionsSpec.KeyFiles, sshPrivateKey)
+		} else {
+			optionsSpec.OauthTokenFile = oauthToken
 
-		optionsSpec.KeyFiles = append(optionsSpec.KeyFiles, sshPrivateKey)
+		}
 	}
 
 	optionsJSON, err := clonerefs.Encode(optionsSpec)
@@ -633,7 +645,7 @@ func (s *sourceStep) Description() string {
 
 func SourceStep(config api.SourceStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient,
 	clonerefsSrcClient imageclientset.ImageV1Interface, imageClient imageclientset.ImageV1Interface,
-	artifactDir string, jobSpec *api.JobSpec, dryLogger *DryLogger, sshSecretName string) api.Step {
+	artifactDir string, jobSpec *api.JobSpec, dryLogger *DryLogger, cloneAuthConfig *CloneAuthConfig) api.Step {
 	return &sourceStep{
 		config:             config,
 		resources:          resources,
@@ -643,7 +655,7 @@ func SourceStep(config api.SourceStepConfiguration, resources api.ResourceConfig
 		artifactDir:        artifactDir,
 		jobSpec:            jobSpec,
 		dryLogger:          dryLogger,
-		sshSecretName:      sshSecretName,
+		cloneAuthConfig:    cloneAuthConfig,
 	}
 }
 

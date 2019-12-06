@@ -1,7 +1,6 @@
 package load
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/fsnotify/fsnotify"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/test-infra/prow/interrupts"
@@ -66,19 +64,8 @@ func NewConfigAgent(configPath string, cycle time.Duration, errorMetrics *promet
 		}
 	}, a.cycle)
 
-	// fsnotify reload
-	configWatcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		return nil, fmt.Errorf("Failed to create new watcher: %v", err)
-	}
-	err = populateWatcher(configWatcher, a.configPath)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to populate watcher: %v", err)
-	}
-	interrupts.Run(func(ctx context.Context) {
-		reloadWatcher(ctx, configWatcher, a.configPath, a.recordError, configCoalescer)
-	})
-	return a, nil
+	err = startWatchers(a.configPath, configCoalescer, a.recordError)
+	return a, err
 }
 
 func (a *configAgent) recordError(label string) {

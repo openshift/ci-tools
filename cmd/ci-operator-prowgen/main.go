@@ -153,6 +153,11 @@ func generatePodSpec(info *prowgenInfo, secret *cioperatorapi.Secret) *kubeapi.P
 				MountPath: "/etc/apici",
 				ReadOnly:  true,
 			},
+			{
+				Name:      "pull-secret",
+				MountPath: "/etc/pull-secret",
+				ReadOnly:  true,
+			},
 		}
 	}
 
@@ -183,6 +188,12 @@ func generatePodSpec(info *prowgenInfo, secret *cioperatorapi.Secret) *kubeapi.P
 							},
 						},
 					},
+				},
+			},
+			{
+				Name: "pull-secret",
+				VolumeSource: kubeapi.VolumeSource{
+					Secret: &kubeapi.SecretVolumeSource{SecretName: "regcred"},
 				},
 			},
 		}
@@ -265,6 +276,7 @@ func generateCiOperatorPodSpec(info *prowgenInfo, secret *cioperatorapi.Secret, 
 			fmt.Sprintf("--repo=%s", info.Repo),
 			fmt.Sprintf("--branch=%s", info.Branch),
 			"--kubeconfig=/etc/apici/kubeconfig",
+			"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 		}, additionalArgs...)
 	}
 	for _, target := range targets {

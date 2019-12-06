@@ -486,12 +486,8 @@ func (o *options) Run() error {
 	}()
 
 	dryLogger := steps.NewDryLogger(o.determinizeOutput)
-	var secretName string
-	if o.sshSecret != nil {
-		secretName = o.sshSecret.Name
-	}
 	// load the graph from the configuration
-	buildSteps, postSteps, err := defaults.FromConfig(o.configSpec, o.jobSpec, o.templates, o.writeParams, o.artifactDir, o.promote, o.clusterConfig, o.leaseClient, o.targets.values, o.kubeconfigs, dryLogger, secretName)
+	buildSteps, postSteps, err := defaults.FromConfig(o.configSpec, o.jobSpec, o.templates, o.writeParams, o.artifactDir, o.promote, o.clusterConfig, o.leaseClient, o.targets.values, o.kubeconfigs, dryLogger, o.cloneAuthConfig)
 	if err != nil {
 		return fmt.Errorf("failed to generate steps from config: %v", err)
 	}

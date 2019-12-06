@@ -40,7 +40,8 @@ func FromConfig(
 	requiredTargets []string,
 	kubeconfigs map[string]rest.Config,
 	dryLogger *steps.DryLogger,
-	sshSecretName string,
+	cloneAuthConfig *steps.CloneAuthConfig,
+
 ) ([]api.Step, []api.Step, error) {
 	var buildSteps []api.Step
 	var postSteps []api.Step

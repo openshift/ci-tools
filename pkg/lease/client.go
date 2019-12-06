@@ -3,7 +3,9 @@ package lease
 import (
 	"context"
 	"fmt"
+	"log"
 	"sync"
+	"time"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 
@@ -66,7 +68,10 @@ type client struct {
 }
 
 func (c *client) Acquire(rtype string, cancel context.CancelFunc) (string, error) {
+	start := time.Now()
+	log.Printf("starting to acquire for %s", rtype)
 	r, err := c.boskos.Acquire(rtype, freeState, leasedState)
+	log.Printf("finished acquring for %s in %s", rtype, time.Now().Sub(start).Truncate(time.Second))
 	if err != nil {
 		return "", err
 	}

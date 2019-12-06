@@ -40,8 +40,12 @@ type Client interface {
 }
 
 // NewClient creates a client that leases resources with the specified owner.
-func NewClient(owner, url string) Client {
-	return newClient(boskos.NewClient(owner, url))
+func NewClient(owner, url, username, passwordFile string) (Client, error) {
+	c, err := boskos.NewClient(owner, url, username, passwordFile)
+	if err != nil {
+		return nil, err
+	}
+	return newClient(c), nil
 }
 
 func newClient(boskos boskosClient) Client {

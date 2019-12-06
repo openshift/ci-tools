@@ -9,9 +9,9 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 
 	"k8s.io/test-infra/prow/git"
-	"k8s.io/test-infra/prow/github"
 	"sigs.k8s.io/yaml"
 )
 
@@ -47,7 +47,12 @@ func defaultProwYAMLGetter(
 		return nil, errors.New("gitClient is nil")
 	}
 
-	repo, err := gc.Clone(identifier)
+	identifierSlashSplit := strings.Split(identifier, "/")
+	if len(identifierSlashSplit) != 2 {
+		return nil, fmt.Errorf("didn't get two but %d results when splitting repo identifier %q", len(identifierSlashSplit), identifier)
+	}
+	organization, repository := identifierSlashSplit[0], identifierSlashSplit[1]
+	repo, err := gc.Clone(organization, repository)
 	if err != nil {
 		return nil, fmt.Errorf("failed to clone repo for %q: %v", identifier, err)
 	}
@@ -67,15 +72,8 @@ func defaultProwYAMLGetter(
 		return nil, err
 	}
 
-	var mergeMethod github.PullRequestMergeType
-	identifierSlashSplit := strings.Split(identifier, "/")
-	if len(identifierSlashSplit) == 2 {
-		mergeMethod = c.Tide.MergeMethod(identifierSlashSplit[0], identifierSlashSplit[1])
-		log.Debugf("Using merge strategy %q.", mergeMethod)
-	} else {
-		return nil, fmt.Errorf("didn't get two but %d results when splitting repo identifier %q", len(identifierSlashSplit), identifier)
-	}
-
+	mergeMethod := c.Tide.MergeMethod(organization, repository)
+	log.Debugf("Using merge strategy %q.", mergeMethod)
 	if err := repo.MergeAndCheckout(baseSHA, mergeMethod, headSHAs...); err != nil {
 		return nil, fmt.Errorf("failed to merge: %v", err)
 	}
@@ -99,7 +97,7 @@ func defaultProwYAMLGetter(
 		return nil, fmt.Errorf("failed to unmarshal %q: %v", inRepoConfigFileName, err)
 	}
 
-	if err := defaultAndValidateProwYAML(c, prowYAML, identifier); err != nil {
+	if err := DefaultAndValidateProwYAML(c, prowYAML, identifier); err != nil {
 		return nil, err
 	}
 
@@ -107,7 +105,7 @@ func defaultProwYAMLGetter(
 	return prowYAML, nil
 }
 
-func defaultAndValidateProwYAML(c *Config, p *ProwYAML, identifier string) error {
+func DefaultAndValidateProwYAML(c *Config, p *ProwYAML, identifier string) error {
 	if err := defaultPresubmits(p.Presubmits, c, identifier); err != nil {
 		return err
 	}
@@ -115,11 +113,12 @@ func defaultAndValidateProwYAML(c *Config, p *ProwYAML, identifier string) error
 		return err
 	}
 
+	var errs []error
 	for _, ps := range p.Presubmits {
 		if ps.Branches != nil || ps.SkipBranches != nil {
-			return fmt.Errorf("job %q contains branchconfig. This is not allowed for jobs in %q", ps.Name, inRepoConfigFileName)
+			errs = append(errs, fmt.Errorf("job %q contains branchconfig. This is not allowed for jobs in %q", ps.Name, inRepoConfigFileName))
 		}
 	}
 
-	return nil
+	return utilerrors.NewAggregate(errs)
 }

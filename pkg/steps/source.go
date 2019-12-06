@@ -41,7 +41,29 @@ const (
 	gopath        = "/go"
 	sshPrivateKey = "/sshprivatekey"
 	sshConfig     = "/ssh_config"
+	oauthToken    = "/oauth-token"
+
+	OauthSecretKey = "oauth-token"
 )
+
+type CloneAuthType string
+
+var (
+	CloneAuthTypeSSH   CloneAuthType = "SSH"
+	CloneAuthTypeOAuth CloneAuthType = "OAuth"
+)
+
+type CloneAuthConfig struct {
+	Secret *coreapi.Secret
+	Type   CloneAuthType
+}
+
+func (c *CloneAuthConfig) getCloneURI(org, repo string) string {
+	if c.Type == CloneAuthTypeSSH {
+		return fmt.Sprintf("ssh://git@github.com/%s/%s.git", org, repo)
+	}
+	return fmt.Sprintf("https://github.com/%s/%s.git", org, repo)
+}
 
 var (
 	JobSpecAnnotation = fmt.Sprintf("%s/%s", CiAnnotationPrefix, "job-spec")

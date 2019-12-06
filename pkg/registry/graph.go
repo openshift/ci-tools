@@ -9,11 +9,11 @@ import (
 
 // Type declarations
 
-// NodeType identifies the type of registry element a Node refers to
-type NodeType int
+// Type identifies the type of registry element a Node refers to
+type Type int
 
 const (
-	Workflow NodeType = iota
+	Workflow Type = iota
 	Chain
 	Reference
 )
@@ -21,9 +21,9 @@ const (
 // Node is an interface that allows a user to identify ancestors and descendants of a step registry element
 type Node interface {
 	Name() string
-	GetNodeType() NodeType
-	GetAncestorNames() sets.String
-	GetDescendantNames() sets.String
+	Type() Type
+	AncestorNames() sets.String
+	DescendantNames() sets.String
 }
 
 // NodeByName provides a mapping from node name to the Node interface
@@ -60,9 +60,9 @@ type referenceNode struct {
 }
 
 // Verify that all node types implement Node
-var _ = Node(&workflowNode{})
-var _ = Node(&chainNode{})
-var _ = Node(&referenceNode{})
+var _ Node = &workflowNode{}
+var _ Node = &chainNode{}
+var _ Node = &referenceNode{}
 
 // internal node type sets
 type workflowNodeSet map[*workflowNode]sets.Empty
@@ -119,51 +119,51 @@ func (n *nodeWithName) Name() string {
 	return n.name
 }
 
-// GetNodeType functions
+// Type functions
 
-func (*workflowNode) GetNodeType() NodeType {
+func (*workflowNode) Type() Type {
 	return Workflow
 }
 
-func (*chainNode) GetNodeType() NodeType {
+func (*chainNode) Type() Type {
 	return Chain
 }
 
-func (*referenceNode) GetNodeType() NodeType {
+func (*referenceNode) Type() Type {
 	return Reference
 }
 
-// GetAncestorNames functions
+// AncestorNames functions
 
-func (n *nodeWithParents) GetAncestorNames() sets.String {
+func (n *nodeWithParents) AncestorNames() sets.String {
 	ancestors := sets.NewString()
 	for parent := range n.workflowParents {
 		ancestors.Insert(parent.Name())
 	}
 	for parent := range n.chainParents {
 		ancestors.Insert(parent.Name())
-		ancestors.Insert(parent.GetAncestorNames().List()...)
+		ancestors.Insert(parent.AncestorNames().List()...)
 	}
 	return ancestors
 }
 
-func (*workflowNode) GetAncestorNames() sets.String { return nil }
+func (*workflowNode) AncestorNames() sets.String { return nil }
 
-// GetDescendantNames function
+// DescendantNames function
 
-func (n *nodeWithChildren) GetDescendantNames() sets.String {
+func (n *nodeWithChildren) DescendantNames() sets.String {
 	descendants := sets.NewString()
 	for child := range n.referenceChildren {
 		descendants.Insert(child.Name())
 	}
 	for child := range n.chainChildren {
 		descendants.Insert(child.Name())
-		descendants.Insert(child.GetDescendantNames().List()...)
+		descendants.Insert(child.DescendantNames().List()...)
 	}
 	return descendants
 }
 
-func (*referenceNode) GetDescendantNames() sets.String { return nil }
+func (*referenceNode) DescendantNames() sets.String { return nil }
 
 // Struct helper functions
 // addChild functions
@@ -215,7 +215,7 @@ func hasCycles(node *chainNode, ancestors sets.String, traversedPath []string) e
 	}
 	ancestors.Insert(node.name)
 	for child := range node.chainChildren {
-		if child.GetNodeType() != Chain {
+		if child.Type() != Chain {
 			continue
 		}
 		// get new copy of ancestors and traversedPath so the root node's set isn't changed

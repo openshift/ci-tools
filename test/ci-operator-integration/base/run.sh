@@ -29,8 +29,15 @@ export JOB_SPEC='{"type":"presubmit","job":"pull-ci-openshift-release-master-ci-
 # set by Prow
 unset BUILD_ID
 
+readonly args=(
+    --dry-run
+    --determinize-output
+    --lease-server http://boskos.example.com
+    --namespace "${TEST_NAMESPACE}"
+    --config "${TEST_CONFIG}"
+)
 echo "[INFO] Running ci-operator in dry-mode..."
-if ! ci-operator --dry-run --determinize-output --namespace "${TEST_NAMESPACE}" --config "${TEST_CONFIG}" 2> "${WORKDIR}/ci-op-stderr.log" | jq --sort-keys . > "${DRY_RUN_JSON}"; then
+if ! ci-operator "${args[@]}" 2> "${WORKDIR}/ci-op-stderr.log" | jq --sort-keys . > "${DRY_RUN_JSON}"; then
     echo "ERROR: ci-operator failed."
     cat "${WORKDIR}/ci-op-stderr.log"
     exit 1
@@ -46,7 +53,7 @@ export IMAGE_FORMAT="test"
 export CLUSTER_TYPE="aws"
 export TEST_COMMAND="test command"
 
-if ! ci-operator --dry-run --determinize-output --namespace "${TEST_NAMESPACE}" --config "${TEST_CONFIG}" --template "${TEST_TEMPLATE}" --target test-template --artifact-dir "${ARTIFACT_DIR}" 2> "${WORKDIR}/ci-op-stderr.log" | jq -S . > "${DRY_RUN_WITH_TEMPLATE_JSON}"; then
+if ! ci-operator "${args[@]}" --template "${TEST_TEMPLATE}" --target test-template --artifact-dir "${ARTIFACT_DIR}" 2> "${WORKDIR}/ci-op-stderr.log" | jq -S . > "${DRY_RUN_WITH_TEMPLATE_JSON}"; then
     echo "ERROR: ci-operator failed."
     cat "${WORKDIR}/ci-op-stderr.log"
     exit 1
@@ -58,7 +65,7 @@ if ! diff "${EXPECTED_WITH_TEMPLATE}" "${DRY_RUN_WITH_TEMPLATE_JSON}"; then
 fi
 
 echo "[INFO] Running ci-operator with OAuth"
-if ! ci-operator --dry-run --determinize-output --namespace "${TEST_NAMESPACE}" --config "${TEST_CONFIG}" --oauth-token-path "${OAUTH_FILE}" --artifact-dir "${ARTIFACT_DIR}" 2> "${WORKDIR}/ci-op-stderr.log" | jq -S . > "${DRY_RUN_WITH_OAUTH}"; then
+if ! ci-operator "${args[@]}" --oauth-token-path "${OAUTH_FILE}" --artifact-dir "${ARTIFACT_DIR}" 2> "${WORKDIR}/ci-op-stderr.log" | jq -S . > "${DRY_RUN_WITH_OAUTH}"; then
     echo "ERROR: ci-operator failed."
     cat "${WORKDIR}/ci-op-stderr.log"
     exit 1
@@ -70,7 +77,7 @@ if ! diff <(jq '.[] | select(.metadata.name=="src")' ${DRY_RUN_WITH_OAUTH}) <(ca
 fi
 
 echo "[INFO] Running ci-operator with SSH"
-if ! ci-operator --dry-run --determinize-output --namespace "${TEST_NAMESPACE}" --config "${TEST_CONFIG}" --ssh-key-path "${SSH_FILE}" --artifact-dir "${ARTIFACT_DIR}" 2> "${WORKDIR}/ci-op-stderr.log" | jq -S . > "${DRY_RUN_WITH_SSH}"; then
+if ! ci-operator "${args[@]}" --ssh-key-path "${SSH_FILE}" --artifact-dir "${ARTIFACT_DIR}" 2> "${WORKDIR}/ci-op-stderr.log" | jq -S . > "${DRY_RUN_WITH_SSH}"; then
     echo "ERROR: ci-operator failed."
     cat "${WORKDIR}/ci-op-stderr.log"
     exit 1

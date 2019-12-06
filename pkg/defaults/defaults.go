@@ -176,12 +176,15 @@ func FromConfig(
 						return nil, nil, err
 					}
 				}
-			} else if testStep.OpenshiftInstallerClusterTestConfiguration != nil {
+			} else if test := testStep.OpenshiftInstallerClusterTestConfiguration; test != nil {
 				if testStep.OpenshiftInstallerClusterTestConfiguration.Upgrade {
 					var err error
 					step, err = clusterinstall.E2ETestStep(*testStep.OpenshiftInstallerClusterTestConfiguration, *testStep, params, podClient, templateClient, secretGetter, artifactDir, jobSpec, dryLogger, config.Resources)
 					if err != nil {
 						return nil, nil, fmt.Errorf("unable to create end to end test step: %v", err)
+					}
+					if step, err = addLeaseStep(step, leaseClient, test.ClusterProfile.LeaseType()); err != nil {
+						return nil, nil, err
 					}
 				}
 			} else {
@@ -199,24 +202,23 @@ func FromConfig(
 
 	for _, template := range templates {
 		step := steps.TemplateExecutionStep(template, params, podClient, templateClient, artifactDir, jobSpec, dryLogger, config.Resources)
-		// TODO remove when all templates are migrated
-		skipLease := true
+		var hasClusterType, hasUseLease bool
 		for _, p := range template.Parameters {
-			if p.Name == "USE_LEASE_CLIENT" {
-				skipLease = false
-			}
-		}
-		if !skipLease && params.Has("CLUSTER_TYPE") {
-			clusterType, err := params.Get("CLUSTER_TYPE")
-			if err != nil {
-				return nil, nil, fmt.Errorf("failed to get \"CLUSTER_TYPE\" parameter: %v", err)
-			}
-			lease, err := api.LeaseTypeFromClusterType(clusterType)
-			if err != nil {
-				return nil, nil, fmt.Errorf("cannot resolve lease type from cluster type: %v", err)
-			}
-			if step, err = addLeaseStep(step, leaseClient, lease); err != nil {
-				return nil, nil, err
+			hasClusterType = hasClusterType || p.Name == "CLUSTER_TYPE"
+			hasUseLease = hasUseLease || p.Name == "USE_LEASE_CLIENT"
+			if hasClusterType && hasUseLease {
+				clusterType, err := params.Get("CLUSTER_TYPE")
+				if err != nil {
+					return nil, nil, fmt.Errorf("failed to get \"CLUSTER_TYPE\" parameter: %v", err)
+				}
+				lease, err := api.LeaseTypeFromClusterType(clusterType)
+				if err != nil {
+					return nil, nil, fmt.Errorf("cannot resolve lease type from cluster type: %v", err)
+				}
+				if step, err = addLeaseStep(step, leaseClient, lease); err != nil {
+					return nil, nil, err
+				}
+				break
 			}
 		}
 		buildSteps = append(buildSteps, step)

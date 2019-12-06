@@ -289,10 +289,6 @@ func generatePodSpecTemplate(info *prowgenInfo, release string, test *cioperator
 	var clusterProfile cioperatorapi.ClusterProfile
 	var needsReleaseRpms, needsLeaseServer bool
 
-	if test.Secret != nil {
-		test.Secrets = append(test.Secrets, test.Secret)
-	}
-
 	if conf := test.OpenshiftAnsibleClusterTestConfiguration; conf != nil {
 		template = "cluster-launch-e2e"
 		clusterProfile = conf.ClusterProfile
@@ -434,10 +430,6 @@ func generatePodSpecTemplate(info *prowgenInfo, release string, test *cioperator
 }
 
 func generatePodSpecRandom(info *prowgenInfo, test *cioperatorapi.TestStepConfiguration) *kubeapi.PodSpec {
-	if test.Secret != nil {
-		test.Secrets = append(test.Secrets, test.Secret)
-	}
-
 	podSpec := generatePodSpec(info, test.Secrets)
 	for _, p := range openshiftInstallerRandomProfiles {
 		podSpec.Volumes = append(podSpec.Volumes, generateClusterProfileVolume("cluster-profile-"+string(p), "cluster-secrets-"+string(p)))

@@ -28,6 +28,10 @@ type Node interface {
 	AncestorNames() sets.String
 	// DescendantNames returns a set of strings containing the names of all of the node's descendants
 	DescendantNames() sets.String
+	// ParentNames returns a set of strings containing the names of all the node's parents
+	ParentNames() sets.String
+	// ChildrenNames returns a set of strings containing the names of all the node's children
+	ChildrenNames() sets.String
 }
 
 // NodeByName provides a mapping from node name to the Node interface
@@ -137,15 +141,41 @@ func (*referenceNode) Type() Type {
 	return Reference
 }
 
+// ParentNames functions
+
+func (n *nodeWithParents) ParentNames() sets.String {
+	parents := sets.NewString()
+	for parent := range n.workflowParents {
+		parents.Insert(parent.Name())
+	}
+	for parent := range n.chainParents {
+		parents.Insert(parent.Name())
+	}
+	return parents
+}
+
+func (*workflowNode) ParentNames() sets.String { return nil }
+
+// ChildrenNames functions
+
+func (n *nodeWithChildren) ChildrenNames() sets.String {
+	children := sets.NewString()
+	for child := range n.referenceChildren {
+		children.Insert(child.Name())
+	}
+	for child := range n.chainChildren {
+		children.Insert(child.Name())
+	}
+	return children
+}
+
+func (*referenceNode) ChildrenNames() sets.String { return nil }
+
 // AncestorNames functions
 
 func (n *nodeWithParents) AncestorNames() sets.String {
-	ancestors := sets.NewString()
-	for parent := range n.workflowParents {
-		ancestors.Insert(parent.Name())
-	}
+	ancestors := n.ParentNames()
 	for parent := range n.chainParents {
-		ancestors.Insert(parent.Name())
 		ancestors.Insert(parent.AncestorNames().List()...)
 	}
 	return ancestors
@@ -156,12 +186,8 @@ func (*workflowNode) AncestorNames() sets.String { return nil }
 // DescendantNames function
 
 func (n *nodeWithChildren) DescendantNames() sets.String {
-	descendants := sets.NewString()
-	for child := range n.referenceChildren {
-		descendants.Insert(child.Name())
-	}
+	descendants := n.ChildrenNames()
 	for child := range n.chainChildren {
-		descendants.Insert(child.Name())
 		descendants.Insert(child.DescendantNames().List()...)
 	}
 	return descendants

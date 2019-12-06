@@ -20,9 +20,13 @@ const (
 
 // Node is an interface that allows a user to identify ancestors and descendants of a step registry element
 type Node interface {
+	// Name returns the name of the registry element a Node refers to
 	Name() string
+	// Type returns the type of the registry element a Node refers to
 	Type() Type
+	// AncestorNames returns a set of strings containing the names of all of the node's ancestors
 	AncestorNames() sets.String
+	// DescendantNames returns a set of strings containing the names of all of the node's descendants
 	DescendantNames() sets.String
 }
 
@@ -232,6 +236,7 @@ func hasCycles(node *chainNode, ancestors sets.String, traversedPath []string) e
 	return nil
 }
 
+// NewGraph returns a NodeByType map representing the provided step references, chains, and workflows as a directed graph.
 func NewGraph(stepsByName map[string]api.LiteralTestStep, chainsByName map[string][]api.TestStep, workflowsByName map[string]api.MultiStageTestConfiguration) (NodeByName, error) {
 	nodesByName := make(NodeByName)
 	// References can only be children; load them so they can be added as children by workflows and chains

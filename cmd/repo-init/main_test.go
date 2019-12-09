@@ -474,8 +474,8 @@ func TestGenerateCIOperatorConfig(t *testing.T) {
 						},
 						BaseImages: map[string]api.ImageStreamTagReference{
 							"base": {
-								Namespace: "ocp",
-								Name:      "4.3",
+								Namespace: "promote",
+								Name:      "version",
 								Tag:       "base",
 							},
 							"os": {

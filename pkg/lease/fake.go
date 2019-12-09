@@ -1,6 +1,7 @@
 package lease
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -33,7 +34,7 @@ func (c *fakeClient) addCall(call string, args ...string) error {
 	return nil
 }
 
-func (c *fakeClient) Acquire(rtype, state, dest string) (*common.Resource, error) {
+func (c *fakeClient) AcquireWait(_ context.Context, rtype, state, dest string) (*common.Resource, error) {
 	err := c.addCall("acquire", rtype, state, dest)
 	return &common.Resource{Name: fmt.Sprintf("%s%d", rtype, len(*c.calls)-1)}, err
 }

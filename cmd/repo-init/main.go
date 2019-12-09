@@ -122,7 +122,7 @@ Now, let's determine how the repository builds output artifacts...`)
 
 		fmt.Println(`
 Now, let's configure how the repository is compiled...`)
-		config.GoVersion = fetchOrDefaultWithPrompt("What version of Go does the repository build with?", "1.12")
+		config.GoVersion = fetchOrDefaultWithPrompt("What version of Go does the repository build with?", "1.13")
 		config.CanonicalGoRepository = fetchOrDefaultWithPrompt("[OPTIONAL] Enter the Go import path for the repository if it uses a vanity URL (e.g. \"k8s.io/my-repo\"):", "")
 		config.BuildCommands = fetchOrDefaultWithPrompt("[OPTIONAL] What commands are used to build binaries in the repository? (e.g. \"go install ./cmd/...\")", "")
 		config.TestBuildCommands = fetchOrDefaultWithPrompt("[OPTIONAL] What commands are used to build test binaries? (e.g. \"go install -race ./cmd/...\" or \"go test -c ./test/...\")", "")
@@ -518,8 +518,8 @@ func generateCIOperatorConfig(config initConfig, originConfig *api.PromotionConf
 
 	if config.NeedsBase {
 		generated.Configuration.BaseImages["base"] = api.ImageStreamTagReference{
-			Namespace: "ocp",
-			Name:      "4.3",
+			Namespace: originConfig.Namespace,
+			Name:      originConfig.Name,
 			Tag:       "base",
 		}
 	}

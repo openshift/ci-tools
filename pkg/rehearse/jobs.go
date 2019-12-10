@@ -3,6 +3,7 @@ package rehearse
 import (
 	"fmt"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -32,7 +33,9 @@ import (
 	prowconfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/pjutil"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
+	"github.com/openshift/ci-tools/pkg/jobconfig"
 	"github.com/openshift/ci-tools/pkg/registry"
 )
 
@@ -403,6 +406,129 @@ func AddRandomJobsForChangedTemplates(templates []config.ConfigMapSource, toBeRe
 				jobLogger.Info("Picking job to rehearse the template changes")
 				rehearsals[repo] = append(rehearsals[repo], *job)
 			}
+		}
+	}
+	return rehearsals
+}
+
+func getPresubmitByJobName(presubmits []prowconfig.Presubmit, name string) (prowconfig.Presubmit, error) {
+	for _, presubmit := range presubmits {
+		if presubmit.Name == name {
+			return presubmit, nil
+		}
+	}
+	return prowconfig.Presubmit{}, fmt.Errorf("could not find presubmit with name: %s", name)
+}
+
+func getPresubmitsForRegistryStep(node registry.Node, configs config.ByFilename, prConfigPresubmits map[string][]prowconfig.Presubmit, addedConfigs []*api.MultiStageTestConfiguration) (map[string][]prowconfig.Presubmit, []*api.MultiStageTestConfiguration, error) {
+	toTest := make(map[string][]prowconfig.Presubmit)
+	// get sorted list of configs keys to make the function deterministic
+	var keys []string
+	for k := range configs {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		ciopConfig := configs[key]
+		tests := ciopConfig.Configuration.Tests
+		orgRepo := fmt.Sprintf("%s/%s", ciopConfig.Info.Org, ciopConfig.Info.Repo)
+		repoPresubmits := prConfigPresubmits[orgRepo]
+		for _, test := range tests {
+			if test.MultiStageTestConfiguration == nil {
+				continue
+			}
+			skip := false
+			for _, added := range addedConfigs {
+				if reflect.DeepEqual(test.MultiStageTestConfiguration, added) {
+					skip = true
+					break
+				}
+			}
+			if skip {
+				continue
+			}
+			jobName := ciopConfig.Info.JobName(jobconfig.PresubmitPrefix, test.As)
+			// TODO: Handle workflows with overridden fields.
+			// Workflows can have overridden fields and thus may have overridden the field that made the workflow an ancestor.
+			// This should be handled to reduce the number of rehearsals being done, but requires much more information than
+			// the graph alone provides.
+			if test.MultiStageTestConfiguration.Workflow != nil && node.Type() == registry.Workflow && node.Name() == *test.MultiStageTestConfiguration.Workflow {
+				presubmit, err := getPresubmitByJobName(repoPresubmits, jobName)
+				if err != nil {
+					return toTest, addedConfigs, err
+				}
+				addedConfigs = append(addedConfigs, test.MultiStageTestConfiguration)
+				toTest[orgRepo] = append(toTest[orgRepo], presubmit)
+				// continue to check other tests
+				continue
+			}
+			testSteps := append(test.MultiStageTestConfiguration.Pre, append(test.MultiStageTestConfiguration.Test, test.MultiStageTestConfiguration.Post...)...)
+			for _, testStep := range testSteps {
+				if testStep.Reference != nil && node.Type() == registry.Reference && node.Name() == *testStep.Reference {
+					presubmit, err := getPresubmitByJobName(repoPresubmits, jobName)
+					if err != nil {
+						return toTest, addedConfigs, err
+					}
+					addedConfigs = append(addedConfigs, test.MultiStageTestConfiguration)
+					toTest[orgRepo] = append(toTest[orgRepo], presubmit)
+					// found step; break
+					break
+				}
+				if testStep.Chain != nil && node.Type() == registry.Chain && node.Name() == *testStep.Chain {
+					presubmit, err := getPresubmitByJobName(repoPresubmits, jobName)
+					if err != nil {
+						return toTest, addedConfigs, err
+					}
+					addedConfigs = append(addedConfigs, test.MultiStageTestConfiguration)
+					toTest[orgRepo] = append(toTest[orgRepo], presubmit)
+					// found step; break
+					break
+				}
+			}
+		}
+	}
+	return toTest, addedConfigs, nil
+}
+
+// expandAncestors takes a graph of changed steps and adds all ancestors of
+// the existing steps to the changed steps graph
+func expandAncestors(changed, graph registry.NodeByName) {
+	for _, node := range changed {
+		for name := range node.AncestorNames() {
+			changed[name] = graph[name]
+		}
+	}
+}
+
+func AddRandomJobsForChangedRegistry(regSteps, graph registry.NodeByName, prConfigPresubmits map[string][]prowconfig.Presubmit, configPath string, loggers Loggers) config.Presubmits {
+	configsByFilename, err := config.LoadConfigByFilename(configPath)
+	if err != nil {
+		loggers.Debug.Errorf("Failed to load config by filename in AddRandomJobsForChangedRegistry: %v", err)
+	}
+	expandAncestors(regSteps, graph)
+	rehearsals := make(config.Presubmits)
+	// get sorted list of regSteps keys to make the function deterministic
+	var keys []string
+	for k := range regSteps {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	// make list to store MultiStageTestConfigurations that we've already added to the test list
+	addedConfigs := []*api.MultiStageTestConfiguration{}
+	for _, key := range keys {
+		step := regSteps[key]
+		var presubmitsMap map[string][]prowconfig.Presubmit
+		presubmitsMap, addedConfigs, err = getPresubmitsForRegistryStep(step, configsByFilename, prConfigPresubmits, addedConfigs)
+		if err != nil {
+			loggers.Debug.Errorf("Error getting presubmits in AddRandomJobsForChangedRegistry: %v", err)
+		}
+		if len(presubmitsMap) == 0 {
+			// if the code reaches this point, then no config contains the step or the step has already been tested
+			loggers.Debug.Warnf("No config found containing step: %+v", step)
+		}
+		for repo, presubmits := range presubmitsMap {
+			rehearsals[repo] = append(rehearsals[repo], presubmits...)
+			continue
 		}
 	}
 	return rehearsals

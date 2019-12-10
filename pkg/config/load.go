@@ -49,6 +49,10 @@ type Info struct {
 	RepoPath string
 }
 
+func (i *Info) JobName(prefix, name string) string {
+	return fmt.Sprintf("%s-ci-%s-%s-%s-%s", prefix, i.Org, i.Repo, i.Branch, name)
+}
+
 // Basename returns the unique name for this file in the config
 func (i *Info) Basename() string {
 	basename := strings.Join([]string{i.Org, i.Repo, i.Branch}, "-")

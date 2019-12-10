@@ -29,3 +29,47 @@ tests:
   commands: make unit
   container:
     from: src
+- as: multistage
+  steps:
+    workflow: ipi
+    test:
+    - as: e2e
+      from: my-image
+      commands: make integration
+      resources:
+        requests:
+          cpu: 1000m
+          memory: 2Gi
+- as: multistage2 # identical to above; should be ignored by rehearse tool
+  steps:
+    workflow: ipi
+    test:
+    - as: e2e
+      from: my-image
+      commands: make integration
+      resources:
+        requests:
+          cpu: 1000m
+          memory: 2Gi
+- as: multistage3 # new cluster_profile field; should be rehearsed
+  steps:
+    cluster_profile: azure
+    workflow: ipi
+    test:
+    - as: e2e
+      from: my-image
+      commands: make integration
+      resources:
+        requests:
+          cpu: 1000m
+          memory: 2Gi
+- as: multistage4 # shouldn't get rehearsed since it doesn't use changed registry components
+  steps:
+    test:
+    - as: e2e
+      from: my-image
+      commands: make integration
+      resources:
+        requests:
+          cpu: 1000m
+          memory: 2Gi

@@ -4,52 +4,18 @@ presubmits:
     always_run: true
     branches:
     - ciop-cfg-change
-    context: ci/prow/images
-    decorate: true
-    decoration_config:
-      skip_cloning: true
-    labels:
-      pj-rehearse.openshift.io/can-be-rehearsed: "true"      
-    name: pull-ci-super-duper-ciop-cfg-change-images
-    rerun_command: /test images
-    spec:
-      containers:
-      - args:
-        - --artifact-dir=$(ARTIFACTS)
-        - --give-pr-author-access-to-namespace=true
-        - --target=[images]
-        command:
-        - ci-operator
-        env:
-        - name: CONFIG_SPEC
-          valueFrom:
-            configMapKeyRef:
-              key: super-duper-ciop-cfg-change.yaml
-              name: ci-operator-misc-configs
-        image: ci-operator:latest
-        imagePullPolicy: Always
-        name: ""
-        resources:
-          requests:
-            cpu: 10m
-      serviceAccountName: ci-operator
-    trigger: '(?m)^/test (?:.*? )?images(?: .*?)?$'
-  - agent: kubernetes
-    always_run: true
-    branches:
-    - ciop-cfg-change
+    clone_depth: 123
+    clone_uri: thing
     context: ci/prow/custom
     decorate: true
-    path_alias: foobar
-    clone_uri: thing
-    skip_submodules: true
-    clone_depth: 123
     decoration_config:
       skip_cloning: true
     labels:
       pj-rehearse.openshift.io/can-be-rehearsed: "true"
     name: pull-ci-super-duper-ciop-cfg-change-custom
+    path_alias: foobar
     rerun_command: /test custom
+    skip_submodules: true
     spec:
       containers:
       - args:
@@ -74,3 +40,51 @@ presubmits:
             cpu: 10m
       serviceAccountName: ci-operator
     trigger: ((?m)^/test( all| custom),?(\s+|$))
+  - agent: kubernetes
+    always_run: true
+    branches:
+    - ciop-cfg-change
+    context: ci/prow/images
+    decorate: true
+    decoration_config:
+      skip_cloning: true
+    labels:
+      ci-operator.openshift.io/prowgen-controlled: "true"
+      pj-rehearse.openshift.io/can-be-rehearsed: "true"
+    name: pull-ci-super-duper-ciop-cfg-change-images
+    rerun_command: /test images
+    spec:
+      containers:
+      - args:
+        - --artifact-dir=$(ARTIFACTS)
+        - --branch=ciop-cfg-change
+        - --give-pr-author-access-to-namespace=true
+        - --org=super
+        - --repo=duper
+        - --resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org
+        - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
+        - --target=[images]
+        command:
+        - ci-operator
+        env:
+        - name: CONFIG_SPEC
+          valueFrom:
+            configMapKeyRef:
+              key: super-duper-ciop-cfg-change.yaml
+              name: ci-operator-misc-configs
+        image: ci-operator:latest
+        imagePullPolicy: Always
+        name: ""
+        resources:
+          requests:
+            cpu: 10m
+        volumeMounts:
+        - mountPath: /etc/sentry-dsn
+          name: sentry-dsn
+          readOnly: true
+      serviceAccountName: ci-operator
+      volumes:
+      - name: sentry-dsn
+        secret:
+          secretName: sentry-dsn
+    trigger: (?m)^/test( | .* )images,?($|\s.*)

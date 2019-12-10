@@ -13,14 +13,14 @@ import (
 )
 
 type gitSourceStep struct {
-	config        api.ProjectDirectoryImageBuildInputs
-	resources     api.ResourceConfiguration
-	imageClient   imageclientset.ImageV1Interface
-	buildClient   BuildClient
-	artifactDir   string
-	jobSpec       *api.JobSpec
-	dryLogger     *DryLogger
-	sshSecretName string
+	config          api.ProjectDirectoryImageBuildInputs
+	resources       api.ResourceConfiguration
+	imageClient     imageclientset.ImageV1Interface
+	buildClient     BuildClient
+	artifactDir     string
+	jobSpec         *api.JobSpec
+	dryLogger       *DryLogger
+	cloneAuthConfig *CloneAuthConfig
 }
 
 func (s *gitSourceStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
@@ -30,14 +30,16 @@ func (s *gitSourceStep) Inputs(ctx context.Context, dry bool) (api.InputDefiniti
 func (s *gitSourceStep) Run(ctx context.Context, dry bool) error {
 	if refs := determineRefsWorkdir(s.jobSpec.Refs, s.jobSpec.ExtraRefs); refs != nil {
 		cloneURI := fmt.Sprintf("https://github.com/%s/%s.git", refs.Org, refs.Repo)
-		if len(s.sshSecretName) > 0 {
-			cloneURI = fmt.Sprintf("ssh://git@github.com/%s/%s.git", refs.Org, refs.Repo)
+		var secretName string
+		if s.cloneAuthConfig != nil {
+			cloneURI = s.cloneAuthConfig.getCloneURI(refs.Org, refs.Repo)
+			secretName = s.cloneAuthConfig.Secret.Name
 		}
 
 		return handleBuild(s.buildClient, buildFromSource(s.jobSpec, "", api.PipelineImageStreamTagReferenceRoot, buildapi.BuildSource{
 			Type:         buildapi.BuildSourceGit,
 			ContextDir:   s.config.ContextDir,
-			SourceSecret: getSourceSecretFromName(s.sshSecretName),
+			SourceSecret: getSourceSecretFromName(secretName),
 			Git: &buildapi.GitBuildSource{
 				URI: cloneURI,
 				Ref: refs.BaseRef,
@@ -90,15 +92,15 @@ func determineRefsWorkdir(refs *prowapi.Refs, extraRefs []prowapi.Refs) *prowapi
 }
 
 // GitSourceStep returns gitSourceStep that holds all the required information to create a build from a git source.
-func GitSourceStep(config api.ProjectDirectoryImageBuildInputs, resources api.ResourceConfiguration, buildClient BuildClient, imageClient imageclientset.ImageV1Interface, artifactDir string, jobSpec *api.JobSpec, dryLogger *DryLogger, sshSecretName string) api.Step {
+func GitSourceStep(config api.ProjectDirectoryImageBuildInputs, resources api.ResourceConfiguration, buildClient BuildClient, imageClient imageclientset.ImageV1Interface, artifactDir string, jobSpec *api.JobSpec, dryLogger *DryLogger, cloneAuthConfig *CloneAuthConfig) api.Step {
 	return &gitSourceStep{
-		config:        config,
-		resources:     resources,
-		buildClient:   buildClient,
-		imageClient:   imageClient,
-		artifactDir:   artifactDir,
-		jobSpec:       jobSpec,
-		dryLogger:     dryLogger,
-		sshSecretName: sshSecretName,
+		config:          config,
+		resources:       resources,
+		buildClient:     buildClient,
+		imageClient:     imageClient,
+		artifactDir:     artifactDir,
+		jobSpec:         jobSpec,
+		dryLogger:       dryLogger,
+		cloneAuthConfig: cloneAuthConfig,
 	}
 }

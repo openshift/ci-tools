@@ -1,0 +1,93 @@
+{
+  "apiVersion": "build.openshift.io/v1",
+  "kind": "Build",
+  "metadata": {
+    "annotations": {
+      "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+    },
+    "creationTimestamp": null,
+    "labels": {
+      "build-id": "0",
+      "ci.openshift.io/refs.branch": "master",
+      "ci.openshift.io/refs.org": "openshift",
+      "ci.openshift.io/refs.repo": "ci-tools",
+      "created-by-ci": "true",
+      "creates": "src",
+      "job": "pull-ci-openshift-release-master-ci-operator-integration",
+      "prow.k8s.io/id": "uuid"
+    },
+    "name": "src",
+    "namespace": "testns"
+  },
+  "spec": {
+    "nodeSelector": null,
+    "output": {
+      "to": {
+        "kind": "ImageStreamTag",
+        "name": "pipeline:src",
+        "namespace": "testns"
+      }
+    },
+    "postCommit": {},
+    "resources": {
+      "limits": {
+        "memory": "8Gi"
+      },
+      "requests": {
+        "cpu": "100m",
+        "memory": "4Gi"
+      }
+    },
+    "serviceAccount": "builder",
+    "source": {
+      "dockerfile": "\nFROM pipeline:root\nADD ./app.binary /clonerefs\nCOPY ./oauth-token /oauth-token\nRUN umask 0002 && /clonerefs && find /go/src -type d -not -perm -0775 | xargs -r chmod g+xw\nWORKDIR /go/src/github.com/openshift/ci-tools/\nENV GOPATH=/go\nRUN git submodule update --init\nRUN rm -f /oauth-token\n",
+      "images": [
+        {
+          "as": null,
+          "from": {
+            "kind": "DockerImage",
+            "name": "registry.svc.ci.openshift.org/ci/clonerefs@sha256:SHA"
+          },
+          "paths": [
+            {
+              "destinationDir": ".",
+              "sourcePath": "/app/prow/cmd/clonerefs/app.binary.runfiles/io_k8s_test_infra/prow/cmd/clonerefs/linux_amd64_pure_stripped/app.binary"
+            }
+          ]
+        }
+      ],
+      "secrets": [
+        {
+          "secret": {
+            "name": "oauth-k8m4ftwv"
+          }
+        }
+      ],
+      "type": "Dockerfile"
+    },
+    "strategy": {
+      "dockerStrategy": {
+        "env": [
+          {
+            "name": "CLONEREFS_OPTIONS",
+            "value": "{\"src_root\":\"/go\",\"log\":\"/dev/null\",\"git_user_name\":\"ci-robot\",\"git_user_email\":\"ci-robot@openshift.io\",\"refs\":[{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}],\"clone_uri\":\"https://github.com/openshift/ci-tools.git\"}],\"oauth_token_file\":\"/oauth-token\",\"fail\":true}"
+          }
+        ],
+        "forcePull": true,
+        "from": {
+          "kind": "ImageStreamTag",
+          "name": "pipeline:root",
+          "namespace": "testns"
+        },
+        "imageOptimizationPolicy": "SkipLayers",
+        "noCache": true
+      },
+      "type": "Docker"
+    },
+    "triggeredBy": null
+  },
+  "status": {
+    "output": {},
+    "phase": ""
+  }
+}

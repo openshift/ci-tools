@@ -1948,33 +1948,3 @@ func TestGenerateJobBase(t *testing.T) {
 		})
 	}
 }
-
-func TestMigrated(t *testing.T) {
-	var testCases = []struct {
-		testName string
-		org      string
-		repo     string
-		expected bool
-	}{
-		{
-			testName: "openshift/ci-secret-mirroring-controller is migrated",
-			org:      "openshift",
-			repo:     "ci-secret-mirroring-controller",
-			expected: true,
-		},
-		{
-			testName: "openshift/origin is NOT migrated",
-			org:      "openshift",
-			repo:     "origin",
-			expected: false,
-		},
-	}
-
-	for _, testCase := range testCases {
-		t.Run(testCase.testName, func(t *testing.T) {
-			if actual, expected := migrated(testCase.org, testCase.repo), testCase.expected; !reflect.DeepEqual(actual, expected) {
-				t.Errorf("%s: got incorrect result '%t', expecting '%t'", testCase.testName, actual, expected)
-			}
-		})
-	}
-}

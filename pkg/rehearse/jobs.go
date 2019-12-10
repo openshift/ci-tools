@@ -419,7 +419,7 @@ func getPresubmitByJobName(presubmits []prowconfig.Presubmit, name string) (prow
 	return prowconfig.Presubmit{}, fmt.Errorf("could not find presubmit with name: %s", name)
 }
 
-func getPresubmitForRegistryStep(node registry.Node, configs config.ByFilename, prConfigPresubmits map[string][]prowconfig.Presubmit, addedConfigs []*api.MultiStageTestConfiguration) (map[string][]prowconfig.Presubmit, []*api.MultiStageTestConfiguration, error) {
+func getPresubmitsForRegistryStep(node registry.Node, configs config.ByFilename, prConfigPresubmits map[string][]prowconfig.Presubmit, addedConfigs []*api.MultiStageTestConfiguration) (map[string][]prowconfig.Presubmit, []*api.MultiStageTestConfiguration, error) {
 	toTest := make(map[string][]prowconfig.Presubmit)
 	// get sorted list of configs keys to make the function deterministic
 	var keys []string
@@ -430,7 +430,8 @@ func getPresubmitForRegistryStep(node registry.Node, configs config.ByFilename, 
 	for _, key := range keys {
 		ciopConfig := configs[key]
 		tests := ciopConfig.Configuration.Tests
-		repoPresubmits := prConfigPresubmits[ciopConfig.Info.Repo]
+		orgRepo := fmt.Sprintf("%s/%s", ciopConfig.Info.Org, ciopConfig.Info.Repo)
+		repoPresubmits := prConfigPresubmits[orgRepo]
 		for _, test := range tests {
 			if test.MultiStageTestConfiguration == nil {
 				continue
@@ -456,7 +457,7 @@ func getPresubmitForRegistryStep(node registry.Node, configs config.ByFilename, 
 					return toTest, addedConfigs, err
 				}
 				addedConfigs = append(addedConfigs, test.MultiStageTestConfiguration)
-				toTest[ciopConfig.Info.Repo] = append(toTest[ciopConfig.Info.Repo], presubmit)
+				toTest[orgRepo] = append(toTest[orgRepo], presubmit)
 				// continue to check other tests
 				continue
 			}
@@ -468,7 +469,7 @@ func getPresubmitForRegistryStep(node registry.Node, configs config.ByFilename, 
 						return toTest, addedConfigs, err
 					}
 					addedConfigs = append(addedConfigs, test.MultiStageTestConfiguration)
-					toTest[ciopConfig.Info.Repo] = append(toTest[ciopConfig.Info.Repo], presubmit)
+					toTest[orgRepo] = append(toTest[orgRepo], presubmit)
 					// found step; break
 					break
 				}
@@ -478,7 +479,7 @@ func getPresubmitForRegistryStep(node registry.Node, configs config.ByFilename, 
 						return toTest, addedConfigs, err
 					}
 					addedConfigs = append(addedConfigs, test.MultiStageTestConfiguration)
-					toTest[ciopConfig.Info.Repo] = append(toTest[ciopConfig.Info.Repo], presubmit)
+					toTest[orgRepo] = append(toTest[orgRepo], presubmit)
 					// found step; break
 					break
 				}
@@ -516,7 +517,10 @@ func AddRandomJobsForChangedRegistry(regSteps, graph registry.NodeByName, prConf
 	for _, key := range keys {
 		step := regSteps[key]
 		var presubmitsMap map[string][]prowconfig.Presubmit
-		presubmitsMap, addedConfigs, err = getPresubmitForRegistryStep(step, configsByFilename, prConfigPresubmits, addedConfigs)
+		presubmitsMap, addedConfigs, err = getPresubmitsForRegistryStep(step, configsByFilename, prConfigPresubmits, addedConfigs)
+		if err != nil {
+			loggers.Debug.Errorf("Error getting presubmits in AddRandomJobsForChangedRegistry: %v", err)
+		}
 		if len(presubmitsMap) == 0 {
 			// if the code reaches this point, then no config contains the step or the step has already been tested
 			loggers.Debug.Warnf("No config found containing step: %+v", step)

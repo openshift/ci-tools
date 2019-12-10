@@ -1,16 +1,14 @@
 periodics:
 - agent: kubernetes
-  cron: ""
   decorate: true
+  extra_refs:
+  - base_ref: master
+    org: super
+    repo: duper
   interval: 24h
-  name: periodic-ci-super-duper-e2e
-  skip_cloning: true
   labels:
     pj-rehearse.openshift.io/can-be-rehearsed: "true"
-  extra_refs:
-  - org: super
-    repo: duper
-    base_ref: master
+  name: periodic-ci-super-duper-e2e
   spec:
     containers:
     - args:
@@ -59,17 +57,15 @@ periodics:
         name: prow-job-cluster-launch-src
       name: job-definition
 - agent: kubernetes
-  cron: ""
   decorate: true
+  extra_refs:
+  - base_ref: master
+    org: super
+    repo: duper
   interval: 24h
-  name: periodic-ci-super-duper-no-ciop
-  skip_cloning: true
   labels:
     pj-rehearse.openshift.io/can-be-rehearsed: "true"
-  extra_refs:
-  - org: super
-    repo: duper
-    base_ref: master
+  name: periodic-ci-super-duper-no-ciop
   spec:
     containers:
     - args:
@@ -90,4 +86,3 @@ periodics:
         requests:
           cpu: 10m
     serviceAccountName: ci-operator
-    

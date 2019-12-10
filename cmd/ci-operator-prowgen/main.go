@@ -20,6 +20,7 @@ import (
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
+	"github.com/openshift/ci-tools/pkg/jobconfig"
 	jc "github.com/openshift/ci-tools/pkg/jobconfig"
 	"github.com/openshift/ci-tools/pkg/promotion"
 )
@@ -31,10 +32,6 @@ const (
 	sentryDsnSecretName = "sentry-dsn"
 	sentryDsnMountPath  = "/etc/sentry-dsn"
 	sentryDsnSecretPath = "/etc/sentry-dsn/ci-operator"
-
-	presubmitPrefix  = "pull"
-	postsubmitPrefix = "branch"
-	periodicPrefix   = "periodic"
 
 	openshiftInstallerRandomCmd = `set -eux
 target=$(awk < /usr/local/e2e-targets \
@@ -587,7 +584,7 @@ func generatePresubmitForTest(name string, info *prowgenInfo, label jc.ProwgenLa
 	if len(info.Variant) > 0 {
 		name = fmt.Sprintf("%s-%s", info.Variant, name)
 	}
-	base := generateJobBase(name, presubmitPrefix, info, label, podSpec, rehearsable, pathAlias)
+	base := generateJobBase(name, jobconfig.PresubmitPrefix, info, label, podSpec, rehearsable, pathAlias)
 	return &prowconfig.Presubmit{
 		JobBase:   base,
 		AlwaysRun: true,
@@ -604,7 +601,7 @@ func generatePostsubmitForTest(name string, info *prowgenInfo, label jc.ProwgenL
 	if len(info.Variant) > 0 {
 		name = fmt.Sprintf("%s-%s", info.Variant, name)
 	}
-	base := generateJobBase(name, postsubmitPrefix, info, label, podSpec, false, pathAlias)
+	base := generateJobBase(name, jobconfig.PostsubmitPrefix, info, label, podSpec, false, pathAlias)
 	return &prowconfig.Postsubmit{
 		JobBase:  base,
 		Brancher: prowconfig.Brancher{Branches: []string{makeBranchExplicit(info.Branch)}},
@@ -615,7 +612,7 @@ func generatePeriodicForTest(name string, info *prowgenInfo, label jc.ProwgenLab
 	if len(info.Variant) > 0 {
 		name = fmt.Sprintf("%s-%s", info.Variant, name)
 	}
-	base := generateJobBase(name, periodicPrefix, info, label, podSpec, rehearsable, nil)
+	base := generateJobBase(name, jobconfig.PeriodicPrefix, info, label, podSpec, rehearsable, nil)
 	// periodics are not associated with a repo per se, but we can add in an
 	// extra ref so that periodics which want to access the repo tha they are
 	// defined for can have that information

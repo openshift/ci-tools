@@ -35,6 +35,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
+	"github.com/openshift/ci-tools/pkg/jobconfig"
 	"github.com/openshift/ci-tools/pkg/registry"
 )
 
@@ -446,7 +447,7 @@ func getPresubmitsForRegistryStep(node registry.Node, configs config.ByFilename,
 			if skip {
 				continue
 			}
-			jobName := ciopConfig.Info.JobName("pull", test.As)
+			jobName := ciopConfig.Info.JobName(jobconfig.PresubmitPrefix, test.As)
 			// TODO: Handle workflows with overridden fields.
 			// Workflows can have overridden fields and thus may have overridden the field that made the workflow an ancestor.
 			// This should be handled to reduce the number of rehearsals being done, but requires much more information than

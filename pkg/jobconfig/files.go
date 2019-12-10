@@ -13,7 +13,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/promotion"
 	"github.com/sirupsen/logrus"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowconfig "k8s.io/test-infra/prow/config"
 )
@@ -25,6 +25,9 @@ const (
 	CanBeRehearsedLabel                = "pj-rehearse.openshift.io/can-be-rehearsed"
 	Generated             ProwgenLabel = "true"
 	New                   ProwgenLabel = "newly-generated"
+	PresubmitPrefix                    = "pull"
+	PostsubmitPrefix                   = "branch"
+	PeriodicPrefix                     = "periodic"
 )
 
 // DataWithInfo describes the metadata for a Prow job configuration file

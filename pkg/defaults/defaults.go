@@ -171,10 +171,7 @@ func FromConfig(
 			if test := testStep.MultiStageTestConfigurationLiteral; test != nil {
 				step = steps.MultiStageTestStep(*testStep, config, params, podClient, secretGetter, artifactDir, jobSpec, dryLogger)
 				if test.ClusterProfile != "" {
-					var err error
-					if step, err = addLeaseStep(step, leaseClient, test.ClusterProfile.LeaseType()); err != nil {
-						return nil, nil, err
-					}
+					step = steps.LeaseStep(leaseClient, test.ClusterProfile.LeaseType(), step)
 				}
 			} else if test := testStep.OpenshiftInstallerClusterTestConfiguration; test != nil {
 				if testStep.OpenshiftInstallerClusterTestConfiguration.Upgrade {
@@ -183,9 +180,7 @@ func FromConfig(
 					if err != nil {
 						return nil, nil, fmt.Errorf("unable to create end to end test step: %v", err)
 					}
-					if step, err = addLeaseStep(step, leaseClient, test.ClusterProfile.LeaseType()); err != nil {
-						return nil, nil, err
-					}
+					step = steps.LeaseStep(leaseClient, test.ClusterProfile.LeaseType(), step)
 				}
 			} else {
 				step = steps.TestStep(*testStep, config.Resources, podClient, artifactDir, jobSpec, dryLogger)
@@ -215,9 +210,7 @@ func FromConfig(
 				if err != nil {
 					return nil, nil, fmt.Errorf("cannot resolve lease type from cluster type: %v", err)
 				}
-				if step, err = addLeaseStep(step, leaseClient, lease); err != nil {
-					return nil, nil, err
-				}
+				step = steps.LeaseStep(leaseClient, lease, step)
 				break
 			}
 		}
@@ -330,13 +323,6 @@ func normalizeURL(s string) string {
 		return u.Host
 	}
 	return s
-}
-
-func addLeaseStep(s api.Step, client lease.Client, lease string) (api.Step, error) {
-	if client == nil {
-		return nil, fmt.Errorf("step %q needs a lease but no lease client provided", s.Name())
-	}
-	return steps.LeaseStep(client, lease, s), nil
 }
 
 func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.JobSpec) []api.StepConfiguration {

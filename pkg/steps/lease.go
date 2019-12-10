@@ -39,7 +39,7 @@ func (s *leaseStep) Provides() (api.ParameterMap, api.StepLink) { return s.wrapp
 func (s *leaseStep) Run(ctx context.Context, dry bool) error {
 	log.Printf("Acquiring lease for %q", s.leaseType)
 	ctx, cancel := context.WithCancel(ctx)
-	lease, err := s.client.Acquire(s.leaseType, cancel)
+	lease, err := s.client.Acquire(s.leaseType, ctx, cancel)
 	if err != nil {
 		return fmt.Errorf("failed to acquire lease: %v", err)
 	}

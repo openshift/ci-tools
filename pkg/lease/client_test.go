@@ -1,6 +1,7 @@
 package lease
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
@@ -9,9 +10,10 @@ import (
 )
 
 func TestAcquire(t *testing.T) {
+	ctx := context.Background()
 	var calls []string
 	client := NewFakeClient("owner", "url", nil, &calls)
-	if _, err := client.Acquire("rtype", nil); err != nil {
+	if _, err := client.Acquire("rtype", ctx, nil); err != nil {
 		t.Fatal(err)
 	}
 	expected := []string{"acquire owner rtype free leased"}
@@ -39,10 +41,11 @@ func TestAcquire(t *testing.T) {
 }
 
 func TestHeartbeatCancel(t *testing.T) {
+	ctx := context.Background()
 	var calls []string
 	client := NewFakeClient("owner", "url", sets.NewString("updateone owner rtype0 leased"), &calls)
 	var called bool
-	if _, err := client.Acquire("rtype", func() { called = true }); err != nil {
+	if _, err := client.Acquire("rtype", ctx, func() { called = true }); err != nil {
 		t.Fatal(err)
 	}
 	if err := client.Heartbeat(); err == nil {

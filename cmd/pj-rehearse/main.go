@@ -202,8 +202,7 @@ func rehearseMain() int {
 	}
 	if len(changedRegistrySteps) != 0 {
 		logger.WithField("registry", changedRegistrySteps).Info("registry steps changed")
-		// TODO: add metrics for changed registry steps
-		//metrics.RecordChangedRegistrySteps(changedRegistrySteps)
+		metrics.RecordChangedRegistryElements(changedRegistrySteps)
 	}
 
 	changedTemplates, err := config.GetChangedTemplates(o.releaseRepoPath, jobSpec.Refs.BaseSHA)

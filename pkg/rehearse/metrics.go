@@ -9,11 +9,12 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/test-infra/prow/apis/prowjobs/v1"
+	v1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 
 	"github.com/openshift/ci-tools/pkg/config"
+	"github.com/openshift/ci-tools/pkg/registry"
 )
 
 type ExecutionMetrics struct {
@@ -25,11 +26,12 @@ type ExecutionMetrics struct {
 type Metrics struct {
 	JobSpec *downwardapi.JobSpec `json:"spec"`
 
-	ChangedCiopConfigs     []string `json:"changed_ciop_configs"`
-	ChangedPresubmits      []string `json:"changed_presubmits"`
-	ChangedPeriodics       []string `json:"changed_periodics"`
-	ChangedTemplates       []string `json:"changed_templates"`
-	ChangedClusterProfiles []string `json:"changed_cluster_profiles"`
+	ChangedCiopConfigs      []string `json:"changed_ciop_configs"`
+	ChangedPresubmits       []string `json:"changed_presubmits"`
+	ChangedPeriodics        []string `json:"changed_periodics"`
+	ChangedTemplates        []string `json:"changed_templates"`
+	ChangedClusterProfiles  []string `json:"changed_cluster_profiles"`
+	ChangedRegistryElements []string `jsob:"changed_registry_elements"`
 
 	// map a job name to a list of reasons why we want to rehearse it
 	Opportunities map[string][]string `json:"opportunities"`
@@ -48,10 +50,11 @@ type Metrics struct {
 
 func NewMetrics(file string) *Metrics {
 	return &Metrics{
-		ChangedCiopConfigs: []string{},
-		ChangedPresubmits:  []string{},
-		ChangedPeriodics:   []string{},
-		ChangedTemplates:   []string{},
+		ChangedCiopConfigs:      []string{},
+		ChangedPresubmits:       []string{},
+		ChangedPeriodics:        []string{},
+		ChangedTemplates:        []string{},
+		ChangedRegistryElements: []string{},
 
 		Opportunities: map[string][]string{},
 		Actual:        []string{},
@@ -75,6 +78,12 @@ func (m *Metrics) RecordChangedTemplates(ts []config.ConfigMapSource) {
 func (m *Metrics) RecordChangedClusterProfiles(ps []config.ConfigMapSource) {
 	for _, p := range ps {
 		m.ChangedClusterProfiles = append(m.ChangedClusterProfiles, p.Name())
+	}
+}
+
+func (m *Metrics) RecordChangedRegistryElements(nodes registry.NodeByName) {
+	for name := range nodes {
+		m.ChangedRegistryElements = append(m.ChangedRegistryElements, name)
 	}
 }
 

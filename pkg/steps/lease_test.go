@@ -105,20 +105,20 @@ func TestError(t *testing.T) {
 		expected []string
 	}{{
 		name:     "acquire fails",
-		failures: sets.NewString("acquire owner rtype free leased"),
-		expected: []string{"acquire owner rtype free leased"},
+		failures: sets.NewString("acquire owner rtype free leased random"),
+		expected: []string{"acquire owner rtype free leased random"},
 	}, {
 		name:     "release fails",
 		failures: sets.NewString("releaseone owner rtype0 free"),
 		expected: []string{
-			"acquire owner rtype free leased",
+			"acquire owner rtype free leased random",
 			"releaseone owner rtype0 free",
 		},
 	}, {
 		name:     "run fails",
 		runFails: true,
 		expected: []string{
-			"acquire owner rtype free leased",
+			"acquire owner rtype free leased random",
 			"releaseone owner rtype0 free",
 		},
 	}} {
@@ -148,7 +148,7 @@ func TestAcquireRelease(t *testing.T) {
 		t.Fatal("step was not executed")
 	}
 	expected := []string{
-		"acquire owner rtype free leased",
+		"acquire owner rtype free leased random",
 		"releaseone owner rtype0 free",
 	}
 	if !reflect.DeepEqual(calls, expected) {

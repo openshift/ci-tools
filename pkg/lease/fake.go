@@ -20,6 +20,9 @@ func NewFakeClient(owner, url string, failures sets.String, calls *[]string) Cli
 	if calls == nil {
 		calls = &[]string{}
 	}
+	randId = func() string {
+		return "random"
+	}
 	return newClient(&fakeClient{owner: owner, failures: failures, calls: calls})
 }
 
@@ -34,8 +37,8 @@ func (c *fakeClient) addCall(call string, args ...string) error {
 	return nil
 }
 
-func (c *fakeClient) AcquireWait(_ context.Context, rtype, state, dest string) (*common.Resource, error) {
-	err := c.addCall("acquire", rtype, state, dest)
+func (c *fakeClient) AcquireWaitWithPriority(ctx context.Context, rtype, state, dest, requestID string) (*common.Resource, error) {
+	err := c.addCall("acquire", rtype, state, dest, requestID)
 	return &common.Resource{Name: fmt.Sprintf("%s%d", rtype, len(*c.calls)-1)}, err
 }
 

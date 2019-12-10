@@ -3,6 +3,8 @@ package lease
 import (
 	"context"
 	"fmt"
+	"math/rand"
+	"strconv"
 	"sync"
 	"time"
 
@@ -18,7 +20,7 @@ const (
 )
 
 type boskosClient interface {
-	AcquireWait(ctx context.Context, rtype, state, dest string) (*common.Resource, error)
+	AcquireWaitWithPriority(ctx context.Context, rtype, state, dest, requestID string) (*common.Resource, error)
 	UpdateOne(name, dest string, _ *common.UserData) error
 	ReleaseOne(name, dest string) error
 	ReleaseAll(dest string) error
@@ -44,12 +46,18 @@ type Client interface {
 
 // NewClient creates a client that leases resources with the specified owner.
 func NewClient(owner, url, username, passwordFile string) (Client, error) {
+	randId = func() string {
+		return strconv.Itoa(rand.Int())
+	}
 	c, err := boskos.NewClient(owner, url, username, passwordFile)
 	if err != nil {
 		return nil, err
 	}
 	return newClient(c), nil
 }
+
+// for test mocking
+var randId func() string
 
 func newClient(boskos boskosClient) Client {
 	return &client{
@@ -72,7 +80,7 @@ func (c *client) Acquire(rtype string, ctx context.Context, cancel context.Cance
 	var cancelAcquire context.CancelFunc
 	ctx, cancelAcquire = context.WithTimeout(ctx, 150*time.Minute)
 	defer cancelAcquire()
-	r, err := c.boskos.AcquireWait(ctx, rtype, freeState, leasedState)
+	r, err := c.boskos.AcquireWaitWithPriority(ctx, rtype, freeState, leasedState, randId())
 	if err != nil {
 		return "", err
 	}

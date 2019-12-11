@@ -13,6 +13,7 @@ import (
 	"github.com/ghodss/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/registry"
 )
 
 // ResolverInfo contains the data needed to get a config from the configresolver
@@ -155,6 +156,8 @@ func Registry(root string, flat bool) (references map[string]api.LiteralTestStep
 		}
 		return nil
 	})
+	// create graph to verify that there are no cycles
+	_, err = registry.NewGraph(references, chains, workflows)
 	return references, chains, workflows, err
 }
 

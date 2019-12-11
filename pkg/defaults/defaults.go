@@ -457,6 +457,9 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.Job
 	for i := range config.Tests {
 		test := &config.Tests[i]
 		if test.ContainerTestConfiguration != nil || test.MultiStageTestConfigurationLiteral != nil || (test.OpenshiftInstallerClusterTestConfiguration != nil && test.OpenshiftInstallerClusterTestConfiguration.Upgrade) {
+			if test.Secret != nil {
+				test.Secrets = append(test.Secrets, test.Secret)
+			}
 			buildSteps = append(buildSteps, api.StepConfiguration{TestStepConfiguration: test})
 		}
 	}

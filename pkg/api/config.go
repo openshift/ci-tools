@@ -146,15 +146,33 @@ func validateTestStepConfiguration(fieldRoot string, input []TestStepConfigurati
 			validationErrors = append(validationErrors, fmt.Errorf("%s: `commands`, `steps`, and `literal_steps` are mutually exclusive", fieldRootN))
 		}
 
+		// Validate Secret/Secrets
+
+		if test.Secret != nil && test.Secrets != nil {
+			validationErrors = append(validationErrors, fmt.Errorf("test.Secret and test.Secrets cannot both be set"))
+		}
+
 		if test.Secret != nil {
+			test.Secrets = append(test.Secrets, test.Secret)
+		}
+
+		seen := sets.NewString()
+		for _, secret := range test.Secrets {
 			// K8s object names must be valid DNS 1123 subdomains.
-			if len(validation.IsDNS1123Subdomain(test.Secret.Name)) != 0 {
-				validationErrors = append(validationErrors, fmt.Errorf("%s.name: '%s' secret name is not valid value, should be [a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*", fieldRootN, test.Secret.Name))
+			if len(validation.IsDNS1123Subdomain(secret.Name)) != 0 {
+				validationErrors = append(validationErrors, fmt.Errorf("%s.name: '%s' secret name is not valid value, should be [a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*", fieldRootN, secret.Name))
 			}
+
+			// Validate no duplicate secret names, then append to list of names.
+			if seen.Has(secret.Name) {
+				validationErrors = append(validationErrors, fmt.Errorf("duplicate secret name entries found for %s", secret.Name))
+			}
+			seen.Insert(secret.Name)
+
 			// validate path only if name is passed
-			if test.Secret.MountPath != "" {
-				if ok := filepath.IsAbs(test.Secret.MountPath); !ok {
-					validationErrors = append(validationErrors, fmt.Errorf("%s.path: '%s' secret mount path is not valid value, should be ^((\\/*)\\w+)+", fieldRootN, test.Secret.MountPath))
+			if secret.MountPath != "" {
+				if ok := filepath.IsAbs(secret.MountPath); !ok {
+					validationErrors = append(validationErrors, fmt.Errorf("%s.path: '%s' secret mount path is not valid value, should be ^((\\/*)\\w+)+", fieldRootN, secret.MountPath))
 				}
 			}
 		}

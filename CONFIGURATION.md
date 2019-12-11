@@ -70,6 +70,9 @@ tests:
   secret:
     name: ''
     mount_path: ''
+  secrets:
+  - name: ''
+    mount_path: ''
   openshift_ansible:
     cluster_profile: ''
   openshift_ansible_src:
@@ -317,16 +320,22 @@ of the images in the pipeline.
 `size` is the required quantity of the volume to create in bytes. Use Kubernetes
 resource quantity semantics (e.g. `1Gi` or `500M`).
 
-# `tests.secret` 
+# `test.secrets`
+`Secrets` is an array of secrets. This  enables users to mount multiple secrets
+inside test container. It is users responsibility to make sure secret is available
+in the temporary namespace. This can be done by providing flag `--secret-dir`
+to ci-operator in prow configuration.
+
+# `tests.secret` Deprecated
 
 `Secret` field enables users to mount a secret inside test container.
 It is users responsibility to make sure secret is available in the temporary namespace.
 This can be done by providing flag `--secret-dir` to ci-operator in prow configuration.
 
-## `tests.secret.name`
+## `tests.secret(s).name`
 `secret.name` is the name of the secret to be mounted inside a test container.
 
-## `tests.secret.path`
+## `tests.secret(s).path`
 `secret.path` is the path at which to mount the secret. Optional, defaults to `/usr/test-secret`
 
 ## `tests.openshift_ansible`

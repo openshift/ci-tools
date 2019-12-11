@@ -123,7 +123,7 @@ func (o *options) process() error {
 // Generate a PodSpec that runs `ci-operator`, to be used in Presubmit/Postsubmit
 // Various pieces are derived from `org`, `repo`, `branch` and `target`.
 // `additionalArgs` are passed as additional arguments to `ci-operator`
-func generatePodSpec(info *prowgenInfo, secret *cioperatorapi.Secret) *kubeapi.PodSpec {
+func generatePodSpec(info *prowgenInfo, secrets []*cioperatorapi.Secret) *kubeapi.PodSpec {
 	configMapKeyRef := kubeapi.EnvVarSource{
 		ConfigMapKeyRef: &kubeapi.ConfigMapKeySelector{
 			LocalObjectReference: kubeapi.LocalObjectReference{
@@ -196,7 +196,7 @@ func generatePodSpec(info *prowgenInfo, secret *cioperatorapi.Secret) *kubeapi.P
 		}
 	}
 
-	if secret != nil {
+	for _, secret := range secrets {
 		volumeMounts = append(volumeMounts, kubeapi.VolumeMount{
 			Name:      secret.Name,
 			MountPath: secret.MountPath,
@@ -244,14 +244,14 @@ func generatePodSpec(info *prowgenInfo, secret *cioperatorapi.Secret) *kubeapi.P
 	}
 }
 
-func generateCiOperatorPodSpec(info *prowgenInfo, secret *cioperatorapi.Secret, targets []string, additionalArgs ...string) *kubeapi.PodSpec {
+func generateCiOperatorPodSpec(info *prowgenInfo, secrets []*cioperatorapi.Secret, targets []string, additionalArgs ...string) *kubeapi.PodSpec {
 	for _, arg := range additionalArgs {
 		if !strings.HasPrefix(arg, "--") {
 			panic(fmt.Sprintf("all args to ci-operator must be in the form --flag=value, not %s", arg))
 		}
 	}
 
-	ret := generatePodSpec(info, secret)
+	ret := generatePodSpec(info, secrets)
 	ret.Containers[0].Command = []string{"ci-operator"}
 	ret.Containers[0].Args = append([]string{
 		"--give-pr-author-access-to-namespace=true",
@@ -284,19 +284,21 @@ func generateCiOperatorPodSpec(info *prowgenInfo, secret *cioperatorapi.Secret, 
 		ret.Containers[0].Args = append(ret.Containers[0].Args, fmt.Sprintf("--ssh-key-path=%s", filepath.Join(sshKeyPath, "id_rsa")))
 	}
 
-	if secret != nil {
+	for _, secret := range secrets {
 		ret.Containers[0].Args = append(ret.Containers[0].Args, fmt.Sprintf("--secret-dir=%s", secret.MountPath))
 	}
+
 	if len(info.Variant) > 0 {
 		ret.Containers[0].Args = append(ret.Containers[0].Args, fmt.Sprintf("--variant=%s", info.Variant))
 	}
 	return ret
 }
 
-func generatePodSpecTemplate(info *prowgenInfo, secret *cioperatorapi.Secret, release string, test *cioperatorapi.TestStepConfiguration) *kubeapi.PodSpec {
+func generatePodSpecTemplate(info *prowgenInfo, release string, test *cioperatorapi.TestStepConfiguration) *kubeapi.PodSpec {
 	var testImageStreamTag, template string
 	var clusterProfile cioperatorapi.ClusterProfile
 	var needsReleaseRpms, needsLeaseServer bool
+
 	if conf := test.OpenshiftAnsibleClusterTestConfiguration; conf != nil {
 		template = "cluster-launch-e2e"
 		clusterProfile = conf.ClusterProfile
@@ -364,7 +366,7 @@ func generatePodSpecTemplate(info *prowgenInfo, secret *cioperatorapi.Secret, re
 	}
 	clusterProfilePath := fmt.Sprintf("/usr/local/%s-cluster-profile", test.As)
 	templatePath := fmt.Sprintf("/usr/local/%s", test.As)
-	podSpec := generateCiOperatorPodSpec(info, secret, []string{test.As})
+	podSpec := generateCiOperatorPodSpec(info, test.Secrets, []string{test.As})
 	clusterProfileVolume := generateClusterProfileVolume("cluster-profile", fmt.Sprintf("cluster-secrets-%s", targetCloud))
 	switch clusterProfile {
 	case cioperatorapi.ClusterProfileAWS, cioperatorapi.ClusterProfileAzure4, cioperatorapi.ClusterProfileOpenStack, cioperatorapi.ClusterProfileVSphere:
@@ -471,7 +473,7 @@ func migrated(org, repo string) bool {
 }
 
 func generatePodSpecRandom(info *prowgenInfo, test *cioperatorapi.TestStepConfiguration) *kubeapi.PodSpec {
-	podSpec := generatePodSpec(info, test.Secret)
+	podSpec := generatePodSpec(info, test.Secrets)
 	for _, p := range openshiftInstallerRandomProfiles {
 		podSpec.Volumes = append(podSpec.Volumes, generateClusterProfileVolume("cluster-profile-"+string(p), "cluster-secrets-"+string(p)))
 	}
@@ -649,8 +651,11 @@ func generateJobs(
 
 	for _, element := range configSpec.Tests {
 		var podSpec *kubeapi.PodSpec
+		if element.Secret != nil {
+			element.Secrets = append(element.Secrets, element.Secret)
+		}
 		if element.ContainerTestConfiguration != nil {
-			podSpec = generateCiOperatorPodSpec(info, element.Secret, []string{element.As})
+			podSpec = generateCiOperatorPodSpec(info, element.Secrets, []string{element.As})
 		} else {
 			var release string
 			if c := configSpec.ReleaseTagConfiguration; c != nil {
@@ -659,7 +664,7 @@ func generateJobs(
 			if conf := element.OpenshiftInstallerRandomClusterTestConfiguration; conf != nil {
 				podSpec = generatePodSpecRandom(info, &element)
 			} else {
-				podSpec = generatePodSpecTemplate(info, element.Secret, release, &element)
+				podSpec = generatePodSpecTemplate(info, release, &element)
 			}
 		}
 

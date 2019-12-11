@@ -327,7 +327,15 @@ type TestStepConfiguration struct {
 
 	// Secret is an optional secret object which
 	// will be mounted inside the test container.
+	// You cannot set the Secret and Secrets attributes
+	// at the same time.
 	Secret *Secret `json:"secret,omitempty"`
+
+	// Secrets is an optional array of secret objects
+	// which will be mounted inside the test container.
+	// You cannot set the Secret and Secrets attributes
+	// at the same time.
+	Secrets []*Secret `json:"secrets,omitempty"`
 
 	// Cron is how often the test is expected to run outside
 	// of pull request workflows. Setting this field will

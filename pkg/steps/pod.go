@@ -34,7 +34,7 @@ type PodStepConfiguration struct {
 	Commands           string
 	ArtifactDir        string
 	ServiceAccountName string
-	Secret             *api.Secret
+	Secrets            []*api.Secret
 	MemoryBackedVolume *api.MemoryBackedVolume
 }
 
@@ -163,7 +163,7 @@ func TestStep(config api.TestStepConfiguration, resources api.ResourceConfigurat
 			From:               api.ImageStreamTagReference{Name: api.PipelineImageStream, Tag: string(config.ContainerTestConfiguration.From)},
 			Commands:           config.Commands,
 			ArtifactDir:        config.ArtifactDir,
-			Secret:             config.Secret,
+			Secrets:            config.Secrets,
 			MemoryBackedVolume: config.ContainerTestConfiguration.MemoryBackedVolume,
 		},
 		resources,
@@ -234,9 +234,9 @@ func (s *podStep) generatePodForStep(image string, containerResources coreapi.Re
 	}
 	pod.Spec.ServiceAccountName = s.config.ServiceAccountName
 	container := &pod.Spec.Containers[0]
-	if s.config.Secret != nil {
-		container.VolumeMounts = append(container.VolumeMounts, getSecretVolumeMountFromSecret(s.config.Secret.MountPath)...)
-		pod.Spec.Volumes = append(pod.Spec.Volumes, getVolumeFromSecret(s.config.Secret.Name)...)
+	for _, secret := range s.config.Secrets {
+		container.VolumeMounts = append(container.VolumeMounts, getSecretVolumeMountFromSecret(secret.MountPath)...)
+		pod.Spec.Volumes = append(pod.Spec.Volumes, getVolumeFromSecret(secret.Name)...)
 	}
 
 	if v := s.config.MemoryBackedVolume; v != nil {

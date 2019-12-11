@@ -29,7 +29,7 @@ func TestGeneratePodSpec(t *testing.T) {
 	tests := []struct {
 		description    string
 		info           *prowgenInfo
-		secret         *ciop.Secret
+		secrets        []*ciop.Secret
 		targets        []string
 		additionalArgs []string
 
@@ -38,7 +38,7 @@ func TestGeneratePodSpec(t *testing.T) {
 		{
 			description: "standard use case",
 			info:        &prowgenInfo{Info: config.Info{Org: "org", Repo: "repo", Branch: "branch"}},
-			secret:      nil,
+			secrets:     nil,
 			targets:     []string{"target"},
 
 			expected: &kubeapi.PodSpec{
@@ -84,7 +84,7 @@ func TestGeneratePodSpec(t *testing.T) {
 		{
 			description:    "additional args are included in podspec",
 			info:           &prowgenInfo{Info: config.Info{Org: "org", Repo: "repo", Branch: "branch"}},
-			secret:         nil,
+			secrets:        nil,
 			targets:        []string{"target"},
 			additionalArgs: []string{"--promote", "--some=thing"},
 
@@ -132,7 +132,7 @@ func TestGeneratePodSpec(t *testing.T) {
 		},
 		{
 			info:           &prowgenInfo{Info: config.Info{Org: "org", Repo: "repo", Branch: "branch"}},
-			secret:         testSecret,
+			secrets:        []*ciop.Secret{testSecret},
 			targets:        []string{"target"},
 			additionalArgs: []string{"--promote", "--some=thing"},
 
@@ -193,7 +193,7 @@ func TestGeneratePodSpec(t *testing.T) {
 		{
 			description: "multiple targets",
 			info:        &prowgenInfo{Info: config.Info{Org: "org", Repo: "repo", Branch: "branch"}},
-			secret:      nil,
+			secrets:     nil,
 			targets:     []string{"target", "more", "and-more"},
 
 			expected: &kubeapi.PodSpec{
@@ -243,7 +243,7 @@ func TestGeneratePodSpec(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.description, func(t *testing.T) {
 			var podSpec *kubeapi.PodSpec
-			podSpec = generateCiOperatorPodSpec(tc.info, tc.secret, tc.targets, tc.additionalArgs...)
+			podSpec = generateCiOperatorPodSpec(tc.info, tc.secrets, tc.targets, tc.additionalArgs...)
 			if !equality.Semantic.DeepEqual(podSpec, tc.expected) {
 				t.Errorf("%s: expected PodSpec diff:\n%s", tc.description, diff.ObjectDiff(tc.expected, podSpec))
 			}
@@ -449,7 +449,7 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		podSpec := generatePodSpecTemplate(tc.info, nil, tc.release, &tc.test)
+		podSpec := generatePodSpecTemplate(tc.info, tc.release, &tc.test)
 		if !equality.Semantic.DeepEqual(podSpec, tc.expected) {
 			t.Errorf("expected PodSpec diff:\n%s", diff.ObjectDiff(tc.expected, podSpec))
 		}

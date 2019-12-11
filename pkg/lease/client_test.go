@@ -10,13 +10,14 @@ import (
 )
 
 func TestAcquire(t *testing.T) {
+
 	ctx := context.Background()
 	var calls []string
 	client := NewFakeClient("owner", "url", nil, &calls)
 	if _, err := client.Acquire("rtype", ctx, nil); err != nil {
 		t.Fatal(err)
 	}
-	expected := []string{"acquire owner rtype free leased"}
+	expected := []string{"acquire owner rtype free leased random"}
 	if !reflect.DeepEqual(calls, expected) {
 		t.Fatalf("wrong calls to the boskos client: %v", diff.ObjectDiff(calls, expected))
 	}
@@ -24,7 +25,7 @@ func TestAcquire(t *testing.T) {
 		t.Fatal(err)
 	}
 	expected = []string{
-		"acquire owner rtype free leased",
+		"acquire owner rtype free leased random",
 		"updateone owner rtype0 leased",
 	}
 	if !reflect.DeepEqual(calls, expected) {

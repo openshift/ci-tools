@@ -8,6 +8,7 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/junit"
 	"github.com/openshift/ci-tools/pkg/lease"
 )
 
@@ -35,6 +36,13 @@ func (s *leaseStep) Description() string                        { return s.wrapp
 func (s *leaseStep) Requires() []api.StepLink                   { return s.wrapped.Requires() }
 func (s *leaseStep) Creates() []api.StepLink                    { return s.wrapped.Creates() }
 func (s *leaseStep) Provides() (api.ParameterMap, api.StepLink) { return s.wrapped.Provides() }
+
+func (s *leaseStep) SubTests() []*junit.TestCase {
+	if subTests, ok := s.wrapped.(subtestReporter); ok {
+		return subTests.SubTests()
+	}
+	return nil
+}
 
 func (s *leaseStep) Run(ctx context.Context, dry bool) error {
 	log.Printf("Acquiring lease for %q", s.leaseType)

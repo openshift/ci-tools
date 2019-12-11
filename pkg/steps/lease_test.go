@@ -10,6 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/junit"
 	"github.com/openshift/ci-tools/pkg/lease"
 )
 
@@ -33,10 +34,16 @@ func (stepNeedsLease) Name() string             { return "needs_lease" }
 func (stepNeedsLease) Description() string      { return "this step needs a lease" }
 func (stepNeedsLease) Requires() []api.StepLink { return []api.StepLink{api.ReleaseImagesLink()} }
 func (stepNeedsLease) Creates() []api.StepLink  { return []api.StepLink{api.ImagesReadyLink()} }
+
 func (stepNeedsLease) Provides() (api.ParameterMap, api.StepLink) {
 	return api.ParameterMap{
 		"parameter": func() (string, error) { return "map", nil },
 	}, api.ExternalImageLink(api.ImageStreamTagReference{Name: "test"})
+}
+
+func (stepNeedsLease) SubTests() []*junit.TestCase {
+	ret := junit.TestCase{}
+	return []*junit.TestCase{&ret}
 }
 
 func TestLeaseStepForward(t *testing.T) {
@@ -92,6 +99,12 @@ func TestLeaseStepForward(t *testing.T) {
 		}
 		if !reflect.DeepEqual(lLinks, sLinks) {
 			t.Errorf("not properly forwarded (links): %s", diff.ObjectDiff(lLinks, sLinks))
+		}
+	})
+	t.Run("SubTests", func(T *testing.T) {
+		s, l := step.SubTests(), withLease.(subtestReporter).SubTests()
+		if !reflect.DeepEqual(l, s) {
+			t.Errorf("not properly forwarded: %s", diff.ObjectDiff(l, s))
 		}
 	})
 }

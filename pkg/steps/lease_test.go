@@ -137,7 +137,7 @@ func TestError(t *testing.T) {
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			var calls []string
-			client := lease.NewFakeClient("owner", "url", tc.failures, &calls)
+			client := lease.NewFakeClient("owner", "url", 0, tc.failures, &calls)
 			s := stepNeedsLease{fail: tc.runFails}
 			if LeaseStep(client, "rtype", &s).Run(ctx, false) == nil {
 				t.Fatalf("unexpected success, calls: %#v", calls)
@@ -151,7 +151,7 @@ func TestError(t *testing.T) {
 
 func TestAcquireRelease(t *testing.T) {
 	var calls []string
-	client := lease.NewFakeClient("owner", "url", nil, &calls)
+	client := lease.NewFakeClient("owner", "url", 0, nil, &calls)
 	step := stepNeedsLease{}
 	withLease := LeaseStep(client, "rtype", &step)
 	if err := withLease.Run(context.Background(), false); err != nil {

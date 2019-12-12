@@ -17,14 +17,14 @@ type fakeClient struct {
 	calls    *[]string
 }
 
-func NewFakeClient(owner, url string, failures sets.String, calls *[]string) Client {
+func NewFakeClient(owner, url string, retries int, failures sets.String, calls *[]string) Client {
 	if calls == nil {
 		calls = &[]string{}
 	}
 	randId = func() string {
 		return "random"
 	}
-	return newClient(&fakeClient{owner: owner, failures: failures, calls: calls})
+	return newClient(&fakeClient{owner: owner, failures: failures, calls: calls}, retries)
 }
 
 func (c *fakeClient) addCall(call string, args ...string) error {

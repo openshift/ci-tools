@@ -3,6 +3,7 @@ package lease
 import (
 	"context"
 	"fmt"
+	"log"
 	"math/rand"
 	"strconv"
 	"sync"
@@ -45,7 +46,7 @@ type Client interface {
 }
 
 // NewClient creates a client that leases resources with the specified owner.
-func NewClient(owner, url, username, passwordFile string) (Client, error) {
+func NewClient(owner, url, username, passwordFile string, retries int) (Client, error) {
 	randId = func() string {
 		return strconv.Itoa(rand.Int())
 	}
@@ -53,23 +54,25 @@ func NewClient(owner, url, username, passwordFile string) (Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newClient(c), nil
+	return newClient(c, retries), nil
 }
 
 // for test mocking
 var randId func() string
 
-func newClient(boskos boskosClient) Client {
+func newClient(boskos boskosClient, retries int) Client {
 	return &client{
-		boskos: boskos,
-		leases: make(map[string]*lease),
+		boskos:  boskos,
+		retries: retries,
+		leases:  make(map[string]*lease),
 	}
 }
 
 type client struct {
 	sync.RWMutex
-	boskos boskosClient
-	leases map[string]*lease
+	boskos  boskosClient
+	retries int
+	leases  map[string]*lease
 }
 
 type lease struct {
@@ -100,11 +103,19 @@ func (c *client) Heartbeat() error {
 	defer c.Unlock()
 	var errs []error
 	for name, lease := range c.leases {
-		if err := c.boskos.UpdateOne(name, leasedState, nil); err != nil {
-			errs = append(errs, fmt.Errorf("failed to update lease %q: %v", name, err))
-			lease.cancel()
-			delete(c.leases, name)
+		err := c.boskos.UpdateOne(name, leasedState, nil)
+		if err == nil {
+			c.leases[name].updateFailures = 0
+			continue
 		}
+		log.Printf("warning: failed to update lease %q: %v", name, err)
+		if lease.updateFailures != c.retries {
+			c.leases[name].updateFailures++
+			continue
+		}
+		errs = append(errs, fmt.Errorf("exceeded number of retries for lease %q", name))
+		lease.cancel()
+		delete(c.leases, name)
 	}
 	return utilerrors.NewAggregate(errs)
 }

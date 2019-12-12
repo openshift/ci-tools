@@ -454,9 +454,9 @@ func (o *options) Complete() error {
 	if o.leaseServer != "" {
 		owner := o.namespace + "-" + o.jobSpec.JobNameHash()
 		if o.dry {
-			o.leaseClient = lease.NewFakeClient(owner, o.leaseServer, nil, nil)
+			o.leaseClient = lease.NewFakeClient(owner, o.leaseServer, 0, nil, nil)
 		} else {
-			c, err := lease.NewClient(owner, o.leaseServer, o.leaseServerUsername, o.leaseServerPasswordFile)
+			c, err := lease.NewClient(owner, o.leaseServer, o.leaseServerUsername, o.leaseServerPasswordFile, 60)
 			if err != nil {
 				return fmt.Errorf("failed to create the lease client: %v", err)
 			}

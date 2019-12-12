@@ -3,6 +3,7 @@ package steps
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -10,6 +11,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	coreapi "k8s.io/api/core/v1"
@@ -117,9 +119,11 @@ func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 	}
 
 	var notifier ContainerNotifier = NopNotifier
+	var canceled int32
 
 	go func() {
 		<-ctx.Done()
+		atomic.StoreInt32(&canceled, 1)
 		notifier.Cancel()
 		log.Printf("cleanup: Deleting template %s", s.template.Name)
 		policy := meta.DeletePropagationForeground
@@ -176,6 +180,9 @@ func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 				return fmt.Errorf("template pod %q failed: %v", ref.Ref.Name, err)
 			}
 		}
+	}
+	if atomic.LoadInt32(&canceled) == 1 {
+		return errors.New("context cancelled")
 	}
 	return nil
 }

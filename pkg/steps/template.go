@@ -14,7 +14,7 @@ import (
 
 	coreapi "k8s.io/api/core/v1"
 
-	"k8s.io/apimachinery/pkg/api/errors"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -126,7 +126,7 @@ func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 		opt := &meta.DeleteOptions{
 			PropagationPolicy: &policy,
 		}
-		if err := s.templateClient.TemplateInstances(s.jobSpec.Namespace).Delete(s.template.Name, opt); err != nil && !errors.IsNotFound(err) {
+		if err := s.templateClient.TemplateInstances(s.jobSpec.Namespace).Delete(s.template.Name, opt); err != nil && !kerrors.IsNotFound(err) {
 			log.Printf("error: Could not delete template instance: %v", err)
 		}
 	}()
@@ -246,7 +246,7 @@ func (s *templateExecutionStep) SubTests() []*junit.TestCase {
 
 func (s *templateExecutionStep) Done() (bool, error) {
 	instance, err := s.templateClient.TemplateInstances(s.jobSpec.Namespace).Get(s.template.Name, meta.GetOptions{})
-	if errors.IsNotFound(err) {
+	if kerrors.IsNotFound(err) {
 		return false, nil
 	}
 	if err != nil {
@@ -347,7 +347,7 @@ func (c *templateClient) Process(namespace string, template *templateapi.Templat
 
 func isPodCompleted(podClient coreclientset.PodInterface, name string) (bool, error) {
 	pod, err := podClient.Get(name, meta.GetOptions{})
-	if errors.IsNotFound(err) {
+	if kerrors.IsNotFound(err) {
 		return false, nil
 	}
 	if err != nil {
@@ -397,7 +397,7 @@ func createOrRestartTemplateInstance(templateClient templateclientset.TemplateIn
 		return nil, fmt.Errorf("unable to delete completed template instance: %v", err)
 	}
 	created, err := templateClient.Create(instance)
-	if err != nil && !errors.IsAlreadyExists(err) {
+	if err != nil && !kerrors.IsAlreadyExists(err) {
 		return nil, fmt.Errorf("unable to create template instance: %v", err)
 	}
 	if err != nil {
@@ -412,7 +412,7 @@ func createOrRestartTemplateInstance(templateClient templateclientset.TemplateIn
 
 func waitForCompletedTemplateInstanceDeletion(templateClient templateclientset.TemplateInstanceInterface, podClient coreclientset.PodInterface, name string) error {
 	instance, err := templateClient.Get(name, meta.GetOptions{})
-	if errors.IsNotFound(err) {
+	if kerrors.IsNotFound(err) {
 		return nil
 	}
 
@@ -423,7 +423,7 @@ func waitForCompletedTemplateInstanceDeletion(templateClient templateclientset.T
 		PropagationPolicy: &policy,
 		Preconditions:     &meta.Preconditions{UID: &uid},
 	})
-	if errors.IsNotFound(err) {
+	if kerrors.IsNotFound(err) {
 		return nil
 	}
 	if err != nil {
@@ -432,7 +432,7 @@ func waitForCompletedTemplateInstanceDeletion(templateClient templateclientset.T
 
 	for i := 0; ; i++ {
 		instance, err := templateClient.Get(name, meta.GetOptions{})
-		if errors.IsNotFound(err) {
+		if kerrors.IsNotFound(err) {
 			break
 		}
 		if err != nil {
@@ -472,11 +472,11 @@ func createOrRestartPod(podClient coreclientset.PodInterface, pod *coreapi.Pod) 
 	if err := wait.ExponentialBackoff(wait.Backoff{Steps: 4, Factor: 2, Duration: time.Second}, func() (bool, error) {
 		newPod, err := podClient.Create(pod)
 		if err != nil {
-			if errors.IsForbidden(err) {
+			if kerrors.IsForbidden(err) {
 				log.Printf("Unable to create pod %s, may be temporary: %v", pod.Name, err)
 				return false, nil
 			}
-			if !errors.IsAlreadyExists(err) {
+			if !kerrors.IsAlreadyExists(err) {
 				return false, err
 			}
 			newPod, err = podClient.Get(pod.Name, meta.GetOptions{})
@@ -496,7 +496,7 @@ func waitForPodDeletion(podClient coreclientset.PodInterface, name string, uid t
 	timeout := 600
 	for i := 0; i < timeout; i += 2 {
 		pod, err := podClient.Get(name, meta.GetOptions{})
-		if errors.IsNotFound(err) {
+		if kerrors.IsNotFound(err) {
 			return nil
 		}
 		if err != nil {
@@ -514,7 +514,7 @@ func waitForPodDeletion(podClient coreclientset.PodInterface, name string, uid t
 
 func waitForCompletedPodDeletion(podClient coreclientset.PodInterface, name string) error {
 	pod, err := podClient.Get(name, meta.GetOptions{})
-	if errors.IsNotFound(err) {
+	if kerrors.IsNotFound(err) {
 		return nil
 	}
 	// running pods are left to run, we just wait for them to finish
@@ -525,7 +525,7 @@ func waitForCompletedPodDeletion(podClient coreclientset.PodInterface, name stri
 	// delete the pod we expect, otherwise another user has relaunched this pod
 	uid := pod.UID
 	err = podClient.Delete(name, &meta.DeleteOptions{Preconditions: &meta.Preconditions{UID: &uid}})
-	if errors.IsNotFound(err) {
+	if kerrors.IsNotFound(err) {
 		return nil
 	}
 	if err != nil {

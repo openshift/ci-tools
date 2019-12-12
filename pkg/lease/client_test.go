@@ -10,10 +10,9 @@ import (
 )
 
 func TestAcquire(t *testing.T) {
-
 	ctx := context.Background()
 	var calls []string
-	client := NewFakeClient("owner", "url", nil, &calls)
+	client := NewFakeClient("owner", "url", 0, nil, &calls)
 	if _, err := client.Acquire("rtype", ctx, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -26,7 +25,7 @@ func TestAcquire(t *testing.T) {
 	}
 	expected = []string{
 		"acquire owner rtype free leased random",
-		"updateone owner rtype0 leased",
+		"updateone owner rtype0 leased 0",
 	}
 	if !reflect.DeepEqual(calls, expected) {
 		t.Fatalf("wrong calls to the boskos client: %v", diff.ObjectDiff(calls, expected))
@@ -44,7 +43,7 @@ func TestAcquire(t *testing.T) {
 func TestHeartbeatCancel(t *testing.T) {
 	ctx := context.Background()
 	var calls []string
-	client := NewFakeClient("owner", "url", sets.NewString("updateone owner rtype0 leased"), &calls)
+	client := NewFakeClient("owner", "url", 0, sets.NewString("updateone owner rtype0 leased 0"), &calls)
 	var called bool
 	if _, err := client.Acquire("rtype", ctx, func() { called = true }); err != nil {
 		t.Fatal(err)
@@ -54,5 +53,81 @@ func TestHeartbeatCancel(t *testing.T) {
 	}
 	if !called {
 		t.Fatal("cancel function not called")
+	}
+}
+
+func TestHeartbeatRetries(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		success  bool
+		requests int
+		failures []string
+	}{{
+		name:     "requests == retries, should succeed",
+		requests: 3,
+		success:  true,
+		failures: []string{
+			"updateone owner rtype0 leased 0",
+			"updateone owner rtype0 leased 1",
+		},
+	}, {
+		name:     "requests < retries, should fail",
+		requests: 3,
+		failures: []string{
+			"updateone owner rtype0 leased 0",
+			"updateone owner rtype0 leased 1",
+			"updateone owner rtype0 leased 2",
+		},
+	}, {
+		name:     "requests > retries with intermittent failures, should succeed",
+		success:  true,
+		requests: 6,
+		failures: []string{
+			"updateone owner rtype0 leased 0",
+			"updateone owner rtype0 leased 1",
+			"updateone owner rtype0 leased 3",
+			"updateone owner rtype0 leased 4",
+		},
+	}, {
+		name:     "requests <= retries with intermittent failures, should fail",
+		requests: 6,
+		failures: []string{
+			"updateone owner rtype0 leased 0",
+			"updateone owner rtype0 leased 1",
+			"updateone owner rtype0 leased 3",
+			"updateone owner rtype0 leased 4",
+			"updateone owner rtype0 leased 5",
+		},
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			var calls []string
+			client := NewFakeClient("owner", "url", 2, sets.NewString(tc.failures...), &calls)
+			var called bool
+			if _, err := client.Acquire("rtype", ctx, func() { called = true }); err != nil {
+				t.Fatal(err)
+			}
+			for i := 0; i < tc.requests-1; i++ {
+				if err := client.Heartbeat(); err != nil {
+					t.Errorf("unexpected error (%d): %v", i, err)
+				}
+			}
+			err := client.Heartbeat()
+			if tc.success {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+				if called {
+					t.Error("cancel function unexpectedly called")
+				}
+			} else {
+				if err == nil {
+					t.Errorf("unexpected success")
+				}
+				if !called {
+					t.Error("cancel function not called")
+				}
+			}
+		})
 	}
 }

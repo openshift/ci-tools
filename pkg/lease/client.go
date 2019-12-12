@@ -62,18 +62,23 @@ var randId func() string
 func newClient(boskos boskosClient) Client {
 	return &client{
 		boskos: boskos,
-		cancel: make(map[string]context.CancelFunc),
+		leases: make(map[string]*lease),
 	}
 }
 
 type client struct {
 	sync.RWMutex
 	boskos boskosClient
-	// cancel holds cancellation functions for steps that depend on leases
-	// being active; we must cancel these when we encounter errors to tie the
+	leases map[string]*lease
+}
+
+type lease struct {
+	updateFailures int
+	// cancel holds a cancellation function for steps that depend on leases
+	// being active; we must cancel this when we encounter errors to tie the
 	// lifetime of the downstream user routines to those of the leases they
 	// require
-	cancel map[string]context.CancelFunc
+	cancel context.CancelFunc
 }
 
 func (c *client) Acquire(rtype string, ctx context.Context, cancel context.CancelFunc) (string, error) {
@@ -85,7 +90,7 @@ func (c *client) Acquire(rtype string, ctx context.Context, cancel context.Cance
 		return "", err
 	}
 	c.Lock()
-	c.cancel[r.Name] = cancel
+	c.leases[r.Name] = &lease{cancel: cancel}
 	c.Unlock()
 	return r.Name, nil
 }
@@ -94,11 +99,11 @@ func (c *client) Heartbeat() error {
 	c.Lock()
 	defer c.Unlock()
 	var errs []error
-	for name, cancel := range c.cancel {
+	for name, lease := range c.leases {
 		if err := c.boskos.UpdateOne(name, leasedState, nil); err != nil {
 			errs = append(errs, fmt.Errorf("failed to update lease %q: %v", name, err))
-			cancel()
-			delete(c.cancel, name)
+			lease.cancel()
+			delete(c.leases, name)
 		}
 	}
 	return utilerrors.NewAggregate(errs)
@@ -110,7 +115,7 @@ func (c *client) Release(name string) error {
 	if err := c.boskos.ReleaseOne(name, freeState); err != nil {
 		return err
 	}
-	delete(c.cancel, name)
+	delete(c.leases, name)
 	return nil
 }
 
@@ -119,13 +124,13 @@ func (c *client) ReleaseAll() ([]string, error) {
 	defer c.Unlock()
 	var ret []string
 	var errs []error
-	for l := range c.cancel {
+	for l := range c.leases {
 		ret = append(ret, l)
 		if err := c.boskos.ReleaseOne(l, freeState); err != nil {
 			errs = append(errs, err)
 			continue
 		}
-		delete(c.cancel, l)
+		delete(c.leases, l)
 	}
 	return ret, utilerrors.NewAggregate(errs)
 }

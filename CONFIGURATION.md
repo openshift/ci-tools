@@ -130,9 +130,9 @@ override specific components for specific tests at non-standard levels when many
 streams and one tag are used to assemble a release.
 
 # `base_images`
-`base_images` are parents for images built from the repository, but are not built
-from the repository. The field is a mapping from pipeline image name to remote
-`ImageStream` specification. A common base image might be an operating system:
+`base_images` are parent images.
+ The field is a mapping from pipeline image name to remote `ImageStream` specification. 
+ A common base image might be an operating system:
 
 ```yaml
 base_images:

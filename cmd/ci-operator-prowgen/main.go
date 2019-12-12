@@ -56,8 +56,9 @@ exec ci-operator \
     --template=/tmp/%[1]s
 `
 
-	sshKeyPath    = "/usr/local/github-ssh-credentials-openshift-bot"
-	sshSecretName = "github-ssh-credentials-openshift-bot"
+	oauthTokenPath  = "/usr/local/github-credentials"
+	oauthSecretName = "github-credentials-openshift-ci-robot-private-git-cloner"
+	oauthKey        = "oauth"
 
 	prowgenConfigFile = ".config.prowgen"
 )
@@ -213,18 +214,17 @@ func generatePodSpec(info *prowgenInfo, secrets []*cioperatorapi.Secret) *kubeap
 
 	if info.config.Private {
 		volumes = append(volumes, kubeapi.Volume{
-			Name: sshSecretName,
+			Name: oauthSecretName,
 			VolumeSource: kubeapi.VolumeSource{
-				Secret: &kubeapi.SecretVolumeSource{SecretName: sshSecretName},
+				Secret: &kubeapi.SecretVolumeSource{SecretName: oauthSecretName},
 			},
 		})
 
 		volumeMounts = append(volumeMounts, kubeapi.VolumeMount{
-			Name:      sshSecretName,
-			MountPath: sshKeyPath,
+			Name:      oauthSecretName,
+			MountPath: oauthTokenPath,
 			ReadOnly:  true,
 		})
-
 	}
 
 	return &kubeapi.PodSpec{
@@ -279,11 +279,9 @@ func generateCiOperatorPodSpec(info *prowgenInfo, secrets []*cioperatorapi.Secre
 	for _, target := range targets {
 		ret.Containers[0].Args = append(ret.Containers[0].Args, fmt.Sprintf("--target=%s", target))
 	}
-
 	if info.config.Private {
-		ret.Containers[0].Args = append(ret.Containers[0].Args, fmt.Sprintf("--ssh-key-path=%s", filepath.Join(sshKeyPath, "id_rsa")))
+		ret.Containers[0].Args = append(ret.Containers[0].Args, fmt.Sprintf("--oauth-token-path=%s", filepath.Join(oauthTokenPath, oauthKey)))
 	}
-
 	for _, secret := range secrets {
 		ret.Containers[0].Args = append(ret.Containers[0].Args, fmt.Sprintf("--secret-dir=%s", secret.MountPath))
 	}

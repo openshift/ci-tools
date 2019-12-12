@@ -238,6 +238,75 @@ func TestGeneratePodSpec(t *testing.T) {
 				}},
 			},
 		},
+		{
+			description: "private job",
+			info: &prowgenInfo{
+				Info:   config.Info{Org: "org", Repo: "repo", Branch: "branch"},
+				config: Config{Private: true},
+			},
+			secrets: nil,
+			targets: []string{"target"},
+
+			expected: &kubeapi.PodSpec{
+				ServiceAccountName: "ci-operator",
+				Containers: []kubeapi.Container{
+					{
+						Image:           "ci-operator:latest",
+						ImagePullPolicy: kubeapi.PullAlways,
+						Command:         []string{"ci-operator"},
+						Args: []string{
+							"--give-pr-author-access-to-namespace=true",
+							"--artifact-dir=$(ARTIFACTS)",
+							"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
+							"--resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org",
+							"--org=org",
+							"--repo=repo",
+							"--branch=branch",
+							"--target=target",
+							"--oauth-token-path=/usr/local/github-credentials/oauth",
+						},
+						Resources: kubeapi.ResourceRequirements{
+							Requests: kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
+						},
+						Env: []kubeapi.EnvVar{{
+							Name: "CONFIG_SPEC",
+							ValueFrom: &kubeapi.EnvVarSource{
+								ConfigMapKeyRef: &kubeapi.ConfigMapKeySelector{
+									LocalObjectReference: kubeapi.LocalObjectReference{
+										Name: "ci-operator-misc-configs",
+									},
+									Key: "org-repo-branch.yaml",
+								},
+							},
+						}},
+						VolumeMounts: []kubeapi.VolumeMount{
+							{
+								Name: "sentry-dsn", MountPath: "/etc/sentry-dsn", ReadOnly: true,
+							},
+							{
+								Name:      "github-credentials-openshift-ci-robot-private-git-cloner",
+								MountPath: "/usr/local/github-credentials",
+								ReadOnly:  true,
+							},
+						},
+					},
+				},
+				Volumes: []kubeapi.Volume{
+					{
+						Name: "sentry-dsn",
+						VolumeSource: kubeapi.VolumeSource{
+							Secret: &kubeapi.SecretVolumeSource{SecretName: "sentry-dsn"},
+						},
+					},
+					{
+						Name: "github-credentials-openshift-ci-robot-private-git-cloner",
+						VolumeSource: kubeapi.VolumeSource{
+							Secret: &kubeapi.SecretVolumeSource{SecretName: "github-credentials-openshift-ci-robot-private-git-cloner"},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tc := range tests {

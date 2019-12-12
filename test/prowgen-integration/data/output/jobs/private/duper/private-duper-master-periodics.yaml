@@ -19,12 +19,12 @@ periodics:
       - --artifact-dir=$(ARTIFACTS)
       - --branch=master
       - --give-pr-author-access-to-namespace=true
+      - --oauth-token-path=/usr/local/github-credentials/oauth
       - --org=private
       - --repo=duper
       - --resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org
       - --secret-dir=/usr/local/e2e-nightly-cluster-profile
       - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
-      - --ssh-key-path=/usr/local/github-ssh-credentials-openshift-bot/id_rsa
       - --target=e2e-nightly
       - --template=/usr/local/e2e-nightly
       command:
@@ -52,8 +52,8 @@ periodics:
       volumeMounts:
       - mountPath: /usr/local/e2e-nightly-cluster-profile
         name: cluster-profile
-      - mountPath: /usr/local/github-ssh-credentials-openshift-bot
-        name: github-ssh-credentials-openshift-bot
+      - mountPath: /usr/local/github-credentials
+        name: github-credentials-openshift-ci-robot-private-git-cloner
         readOnly: true
       - mountPath: /usr/local/e2e-nightly
         name: job-definition
@@ -70,9 +70,9 @@ periodics:
             name: cluster-secrets-gcp
         - configMap:
             name: cluster-profile-gcp
-    - name: github-ssh-credentials-openshift-bot
+    - name: github-credentials-openshift-ci-robot-private-git-cloner
       secret:
-        secretName: github-ssh-credentials-openshift-bot
+        secretName: github-credentials-openshift-ci-robot-private-git-cloner
     - configMap:
         name: prow-job-cluster-launch-e2e
       name: job-definition

@@ -19,7 +19,9 @@ def main():
     _, session_file, sprint = sys.argv
     ret = search(open(session_file).read().rstrip(), f'sprint="{sprint}"')
     print_issues(*partition(
-        json.load(ret)['issues'],
+        filter(
+            lambda x: not x['fields']['issuetype']['subtask'],
+            json.load(ret)['issues']),
         lambda x: x['fields']['status']['id'] == DONE))
 
 

@@ -177,6 +177,13 @@ func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 			}
 		}
 	}
+	// TODO properly identify deleted templates in waitForPodCompletion
+	select {
+	case <-ctx.Done():
+		return fmt.Errorf("template test cancelled")
+	default:
+		break
+	}
 	return nil
 }
 

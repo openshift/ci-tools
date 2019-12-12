@@ -3,6 +3,7 @@ package lease
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -32,7 +33,7 @@ func (c *fakeClient) addCall(call string, args ...string) error {
 		*c.calls = append(*c.calls, s)
 	}
 	if c.failures.Has(s) {
-		return fmt.Errorf("injected failure %q", call)
+		return fmt.Errorf("injected failure %q", s)
 	}
 	return nil
 }
@@ -43,7 +44,7 @@ func (c *fakeClient) AcquireWaitWithPriority(ctx context.Context, rtype, state, 
 }
 
 func (c *fakeClient) UpdateOne(name, dest string, _ *common.UserData) error {
-	return c.addCall("updateone", name, dest)
+	return c.addCall("updateone", name, dest, strconv.Itoa(len(*c.calls)-1))
 }
 
 func (c *fakeClient) ReleaseOne(name, dest string) error {

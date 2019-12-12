@@ -10,7 +10,6 @@ import (
 )
 
 func TestAcquire(t *testing.T) {
-
 	ctx := context.Background()
 	var calls []string
 	client := NewFakeClient("owner", "url", nil, &calls)
@@ -26,7 +25,7 @@ func TestAcquire(t *testing.T) {
 	}
 	expected = []string{
 		"acquire owner rtype free leased random",
-		"updateone owner rtype0 leased",
+		"updateone owner rtype0 leased 0",
 	}
 	if !reflect.DeepEqual(calls, expected) {
 		t.Fatalf("wrong calls to the boskos client: %v", diff.ObjectDiff(calls, expected))
@@ -44,7 +43,7 @@ func TestAcquire(t *testing.T) {
 func TestHeartbeatCancel(t *testing.T) {
 	ctx := context.Background()
 	var calls []string
-	client := NewFakeClient("owner", "url", sets.NewString("updateone owner rtype0 leased"), &calls)
+	client := NewFakeClient("owner", "url", sets.NewString("updateone owner rtype0 leased 0"), &calls)
 	var called bool
 	if _, err := client.Acquire("rtype", ctx, func() { called = true }); err != nil {
 		t.Fatal(err)

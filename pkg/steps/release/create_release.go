@@ -193,23 +193,35 @@ func (s *assembleReleaseStep) Run(ctx context.Context, dry bool) error {
 		return s.importFromReleaseImage(ctx, dry, providedImage)
 	}
 
-	stable, err := s.imageClient.ImageStreams(s.jobSpec.Namespace).Get(streamName, meta.GetOptions{})
-	if err != nil {
-		if errors.IsNotFound(err) {
+	var stable *imageapi.ImageStream
+	var cvo string
+	cvoExists := false
+	cliExists := false
+	// waiting for importing the images
+	// 2~3 mins: build01 on aws imports images from api.ci on gcp
+	log.Printf("waiting for importing cluster-version-operator and cli ...")
+	if err := wait.Poll(10*time.Second, 5*time.Minute, func() (bool, error) {
+		stable, err = s.imageClient.ImageStreams(s.jobSpec.Namespace).Get(streamName, meta.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+		cvo, cvoExists = resolvePullSpec(stable, "cluster-version-operator", true)
+		_, cliExists = resolvePullSpec(stable, "cli", true)
+		return cvoExists && cliExists, nil
+	}); err != nil {
+		if wait.ErrWaitTimeout == err {
+			if !cliExists {
+				return fmt.Errorf("no 'cli' image was tagged into the %s stream, that image is required for building a release", streamName)
+			}
+			log.Printf("No %s release image necessary, %s image stream does not include a cluster-version-operator image", tag, streamName)
+			return nil
+		} else if errors.IsNotFound(err) {
 			// if a user sets IMAGE_FORMAT=... we skip importing the image stream contents, which prevents us from
 			// generating a release image.
 			log.Printf("No %s release image can be generated when the %s image stream was skipped", tag, streamName)
 			return nil
 		}
 		return fmt.Errorf("could not resolve imagestream %s: %v", streamName, err)
-	}
-	cvo, ok := resolvePullSpec(stable, "cluster-version-operator", true)
-	if !ok {
-		log.Printf("No %s release image necessary, %s image stream does not include a cluster-version-operator image", tag, streamName)
-		return nil
-	}
-	if _, ok := resolvePullSpec(stable, "cli", true); !ok {
-		return fmt.Errorf("no 'cli' image was tagged into the %s stream, that image is required for building a release", streamName)
 	}
 
 	destination := fmt.Sprintf("%s:%s", release.Status.PublicDockerImageRepository, tag)

@@ -29,63 +29,55 @@ export JOB_SPEC='{"type":"presubmit","job":"pull-ci-openshift-release-master-ci-
 # set by Prow
 unset BUILD_ID
 
-readonly args=(
-    --dry-run
-    --determinize-output
-    --lease-server http://boskos.example.com
-    --namespace "${TEST_NAMESPACE}"
-    --config "${TEST_CONFIG}"
-)
-echo "[INFO] Running ci-operator in dry-mode..."
-if ! ci-operator "${args[@]}" 2> "${WORKDIR}/ci-op-stderr.log" | jq --sort-keys . > "${DRY_RUN_JSON}"; then
-    echo "ERROR: ci-operator failed."
-    cat "${WORKDIR}/ci-op-stderr.log"
-    exit 1
-fi
+run_test() {
+    if ! ci-operator \
+        --dry-run \
+        --determinize-output \
+        --namespace "${TEST_NAMESPACE}" \
+        --config "${TEST_CONFIG}" \
+        --lease-server http://boskos.example.com \
+        "$@" \
+        2> "${WORKDIR}/ci-op-stderr.log" | jq --sort-keys .
+    then
+        echo >&2 "ERROR: ci-operator failed."
+        cat >&2 "${WORKDIR}/ci-op-stderr.log"
+        return 1
+    fi
+}
 
-if ! diff "${EXPECTED}" "${DRY_RUN_JSON}"; then
-    echo "ERROR: differences have been found"
-    exit 1
-fi
+check() {
+    if ! diff "$@"; then
+        echo >"ERROR: differences have been found"
+        return 1
+    fi
+}
+
+echo "[INFO] Running ci-operator in dry-mode..."
+run_test > "${DRY_RUN_JSON}"
+check "${EXPECTED}" "${DRY_RUN_JSON}"
 
 echo "[INFO] Running ci-operator with a template"
-export IMAGE_FORMAT="test"
-export CLUSTER_TYPE="aws"
-export TEST_COMMAND="test command"
-
-if ! ci-operator "${args[@]}" --template "${TEST_TEMPLATE}" --target test-template --artifact-dir "${ARTIFACT_DIR}" 2> "${WORKDIR}/ci-op-stderr.log" | jq -S . > "${DRY_RUN_WITH_TEMPLATE_JSON}"; then
-    echo "ERROR: ci-operator failed."
-    cat "${WORKDIR}/ci-op-stderr.log"
-    exit 1
-fi
-
-if ! diff "${EXPECTED_WITH_TEMPLATE}" "${DRY_RUN_WITH_TEMPLATE_JSON}"; then
-    echo "ERROR: differences have been found"
-    exit 1
-fi
+IMAGE_FORMAT=test CLUSTER_TYPE=aws TEST_COMMAND='test command' \
+    run_test > "${DRY_RUN_WITH_TEMPLATE_JSON}" \
+    --template "${TEST_TEMPLATE}" \
+    --target test-template \
+    --artifact-dir "${ARTIFACT_DIR}"
+check "${EXPECTED_WITH_TEMPLATE}" "${DRY_RUN_WITH_TEMPLATE_JSON}"
 
 echo "[INFO] Running ci-operator with OAuth"
-if ! ci-operator "${args[@]}" --oauth-token-path "${OAUTH_FILE}" --artifact-dir "${ARTIFACT_DIR}" 2> "${WORKDIR}/ci-op-stderr.log" | jq -S . > "${DRY_RUN_WITH_OAUTH}"; then
-    echo "ERROR: ci-operator failed."
-    cat "${WORKDIR}/ci-op-stderr.log"
-    exit 1
-fi
-
-if ! diff <(jq '.[] | select(.metadata.name=="src")' ${DRY_RUN_WITH_OAUTH}) <(cat ${EXPECTED_WITH_OAUTH}); then
-    echo "ERROR: differences have been found"
-    exit 1
-fi
+run_test > "${DRY_RUN_WITH_OAUTH}" \
+    --oauth-token-path "${OAUTH_FILE}" \
+    --artifact-dir "${ARTIFACT_DIR}"
+check \
+    "${EXPECTED_WITH_OAUTH}" \
+    <(jq '.[] | select(.metadata.name=="src")' "${DRY_RUN_WITH_OAUTH}")
 
 echo "[INFO] Running ci-operator with SSH"
-if ! ci-operator "${args[@]}" --ssh-key-path "${SSH_FILE}" --artifact-dir "${ARTIFACT_DIR}" 2> "${WORKDIR}/ci-op-stderr.log" | jq -S . > "${DRY_RUN_WITH_SSH}"; then
-    echo "ERROR: ci-operator failed."
-    cat "${WORKDIR}/ci-op-stderr.log"
-    exit 1
-fi
-
-if ! diff <(jq '.[] | select(.metadata.name=="src")' ${DRY_RUN_WITH_SSH}) <(cat ${EXPECTED_WITH_SSH}); then
-    echo "ERROR: differences have been found"
-    exit 1
-fi
+run_test > "${DRY_RUN_WITH_SSH}" \
+    --ssh-key-path "${SSH_FILE}" \
+    --artifact-dir "${ARTIFACT_DIR}"
+check \
+    "${EXPECTED_WITH_SSH}" \
+    <(jq '.[] | select(.metadata.name=="src")' "${DRY_RUN_WITH_SSH}")
 
 echo "[INFO] Success"

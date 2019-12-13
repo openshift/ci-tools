@@ -35,7 +35,6 @@ run_test() {
         --determinize-output \
         --namespace "${TEST_NAMESPACE}" \
         --config "${TEST_CONFIG}" \
-        --lease-server http://boskos.example.com \
         "$@" \
         2> "${WORKDIR}/ci-op-stderr.log" | jq --sort-keys .
     then
@@ -53,7 +52,7 @@ check() {
 }
 
 echo "[INFO] Running ci-operator in dry-mode..."
-run_test > "${DRY_RUN_JSON}"
+run_test --lease-server http://boskos.example.com > "${DRY_RUN_JSON}"
 check "${EXPECTED}" "${DRY_RUN_JSON}"
 
 echo "[INFO] Running ci-operator with a template"
@@ -67,7 +66,8 @@ check "${EXPECTED_WITH_TEMPLATE}" "${DRY_RUN_WITH_TEMPLATE_JSON}"
 echo "[INFO] Running ci-operator with OAuth"
 run_test > "${DRY_RUN_WITH_OAUTH}" \
     --oauth-token-path "${OAUTH_FILE}" \
-    --artifact-dir "${ARTIFACT_DIR}"
+    --artifact-dir "${ARTIFACT_DIR}" \
+    --lease-server http://boskos.example.com
 check \
     "${EXPECTED_WITH_OAUTH}" \
     <(jq '.[] | select(.metadata.name=="src")' "${DRY_RUN_WITH_OAUTH}")
@@ -75,7 +75,8 @@ check \
 echo "[INFO] Running ci-operator with SSH"
 run_test > "${DRY_RUN_WITH_SSH}" \
     --ssh-key-path "${SSH_FILE}" \
-    --artifact-dir "${ARTIFACT_DIR}"
+    --artifact-dir "${ARTIFACT_DIR}" \
+    --lease-server http://boskos.example.com
 check \
     "${EXPECTED_WITH_SSH}" \
     <(jq '.[] | select(.metadata.name=="src")' "${DRY_RUN_WITH_SSH}")

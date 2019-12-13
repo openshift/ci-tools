@@ -487,7 +487,7 @@ func (o *options) Run() error {
 
 	dryLogger := steps.NewDryLogger(o.determinizeOutput)
 	// load the graph from the configuration
-	buildSteps, postSteps, err := defaults.FromConfig(o.configSpec, o.jobSpec, o.templates, o.writeParams, o.artifactDir, o.promote, o.clusterConfig, o.leaseClient, o.targets.values, o.kubeconfigs, dryLogger, o.cloneAuthConfig)
+	buildSteps, postSteps, err := defaults.FromConfig(o.configSpec, o.jobSpec, o.templates, o.writeParams, o.artifactDir, o.promote, o.clusterConfig, &o.leaseClient, o.targets.values, o.kubeconfigs, dryLogger, o.cloneAuthConfig)
 	if err != nil {
 		return fmt.Errorf("failed to generate steps from config: %v", err)
 	}

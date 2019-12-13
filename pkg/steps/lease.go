@@ -14,12 +14,12 @@ import (
 
 // leaseStep wraps another step and acquires/releases a lease.
 type leaseStep struct {
-	client    lease.Client
+	client    *lease.Client
 	leaseType string
 	wrapped   api.Step
 }
 
-func LeaseStep(client lease.Client, lease string, wrapped api.Step) api.Step {
+func LeaseStep(client *lease.Client, lease string, wrapped api.Step) api.Step {
 	return &leaseStep{
 		client:    client,
 		leaseType: lease,
@@ -46,18 +46,19 @@ func (s *leaseStep) SubTests() []*junit.TestCase {
 
 func (s *leaseStep) Run(ctx context.Context, dry bool) error {
 	log.Printf("Acquiring lease for %q", s.leaseType)
-	if s.client == nil {
+	client := *s.client
+	if client == nil {
 		return fmt.Errorf("step needs a lease but no lease client provided")
 	}
 	ctx, cancel := context.WithCancel(ctx)
-	lease, err := s.client.Acquire(s.leaseType, ctx, cancel)
+	lease, err := client.Acquire(s.leaseType, ctx, cancel)
 	if err != nil {
 		return fmt.Errorf("failed to acquire lease: %v", err)
 	}
 	var errs []error
 	errs = append(errs, s.wrapped.Run(ctx, dry))
 	log.Printf("Releasing lease for %q", s.leaseType)
-	errs = append(errs, s.client.Release(lease))
+	errs = append(errs, client.Release(lease))
 	return utilerrors.NewAggregate(errs)
 }
 

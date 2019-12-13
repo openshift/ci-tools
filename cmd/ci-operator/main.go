@@ -451,19 +451,6 @@ func (o *options) Complete() error {
 	}
 
 	o.clusterConfig = clusterConfig
-	if o.leaseServer != "" {
-		owner := o.namespace + "-" + o.jobSpec.JobNameHash()
-		if o.dry {
-			o.leaseClient = lease.NewFakeClient(owner, o.leaseServer, 0, nil, nil)
-		} else {
-			c, err := lease.NewClient(owner, o.leaseServer, o.leaseServerUsername, o.leaseServerPasswordFile, 60)
-			if err != nil {
-				return fmt.Errorf("failed to create the lease client: %v", err)
-			}
-			o.leaseClient = c
-		}
-	}
-
 	configs, _, err := util.LoadKubeConfigs(o.kubeconfig)
 	if err != nil {
 		return fmt.Errorf("failed to load kubeconfig from '%s': %v", o.kubeconfig, err)
@@ -493,33 +480,6 @@ func (o *options) Run() error {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	if o.leaseClient != nil {
-		defer func() {
-			if l, err := o.leaseClient.ReleaseAll(); err != nil {
-				log.Printf("failed to release leaked leases (%v): %v", l, err)
-			} else if len(l) != 0 {
-				log.Printf("warning: Would leak leases: %v", l)
-			}
-		}()
-		go func() {
-			t := time.NewTicker(30 * time.Second)
-			for {
-				select {
-				case <-ctx.Done():
-					t.Stop()
-					log.Println("cleanup: releasing leases")
-					if _, err := o.leaseClient.ReleaseAll(); err != nil {
-						log.Printf("failed to release leases: %v", err)
-					}
-					return
-				case <-t.C:
-					if err := o.leaseClient.Heartbeat(); err != nil {
-						log.Printf("failed to update leases: %v", err)
-					}
-				}
-			}
-		}()
-	}
 	handler := func(s os.Signal) {
 		if o.dry {
 			os.Exit(0)
@@ -542,7 +502,39 @@ func (o *options) Run() error {
 		if err := o.writeMetadataJSON(); err != nil {
 			return fmt.Errorf("unable to write metadata.json for build: %v", err)
 		}
-
+		if o.leaseServer != "" {
+			owner := o.namespace + "-" + o.jobSpec.JobNameHash()
+			if o.dry {
+				o.leaseClient = lease.NewFakeClient(owner, o.leaseServer, 0, nil, nil)
+			} else if o.leaseClient, err = lease.NewClient(owner, o.leaseServer, o.leaseServerUsername, o.leaseServerPasswordFile, 60); err != nil {
+				return fmt.Errorf("failed to create the lease client: %v", err)
+			}
+			defer func() {
+				if l, err := o.leaseClient.ReleaseAll(); err != nil {
+					log.Printf("failed to release leaked leases (%v): %v", l, err)
+				} else if len(l) != 0 {
+					log.Printf("warning: Would leak leases: %v", l)
+				}
+			}()
+			go func() {
+				t := time.NewTicker(30 * time.Second)
+				for {
+					select {
+					case <-ctx.Done():
+						t.Stop()
+						log.Println("cleanup: releasing leases")
+						if _, err := o.leaseClient.ReleaseAll(); err != nil {
+							log.Printf("failed to release leases: %v", err)
+						}
+						return
+					case <-t.C:
+						if err := o.leaseClient.Heartbeat(); err != nil {
+							log.Printf("failed to update leases: %v", err)
+						}
+					}
+				}
+			}()
+		}
 		if o.print {
 			if err := printDigraph(os.Stdout, buildSteps); err != nil {
 				return fmt.Errorf("could not print graph: %v", err)

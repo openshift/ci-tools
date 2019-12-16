@@ -36,7 +36,7 @@ func FromConfig(
 	paramFile, artifactDir string,
 	promote bool,
 	clusterConfig *rest.Config,
-	leaseClient lease.Client,
+	leaseClient *lease.Client,
 	requiredTargets []string,
 	kubeconfigs map[string]rest.Config,
 	dryLogger *steps.DryLogger,

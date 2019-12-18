@@ -46,6 +46,12 @@
       },
       "strategy": {
         "dockerStrategy": {
+          "env": [
+            {
+              "name": "foo",
+              "value": "bar"
+            }
+          ],
           "forcePull": true,
           "from": {
             "kind": "ImageStreamTag",
@@ -111,6 +117,12 @@
       },
       "strategy": {
         "dockerStrategy": {
+          "env": [
+            {
+              "name": "foo",
+              "value": "bar"
+            }
+          ],
           "forcePull": true,
           "from": {
             "kind": "ImageStreamTag",
@@ -239,6 +251,12 @@
       "strategy": {
         "dockerStrategy": {
           "dockerfilePath": "images/hyperkube/Dockerfile.rhel",
+          "env": [
+            {
+              "name": "foo",
+              "value": "bar"
+            }
+          ],
           "forcePull": true,
           "from": {
             "kind": "ImageStreamTag",
@@ -376,6 +394,12 @@
       },
       "strategy": {
         "dockerStrategy": {
+          "env": [
+            {
+              "name": "foo",
+              "value": "bar"
+            }
+          ],
           "forcePull": true,
           "from": {
             "kind": "ImageStreamTag",
@@ -441,6 +465,12 @@
       },
       "strategy": {
         "dockerStrategy": {
+          "env": [
+            {
+              "name": "foo",
+              "value": "bar"
+            }
+          ],
           "forcePull": true,
           "from": {
             "kind": "ImageStreamTag",
@@ -522,6 +552,10 @@
       "strategy": {
         "dockerStrategy": {
           "env": [
+            {
+              "name": "foo",
+              "value": "bar"
+            },
             {
               "name": "CLONEREFS_OPTIONS",
               "value": "{\"src_root\":\"/go\",\"log\":\"/dev/null\",\"git_user_name\":\"ci-robot\",\"git_user_email\":\"ci-robot@openshift.io\",\"refs\":[{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}],\"fail\":true}"
@@ -655,6 +689,12 @@
       "strategy": {
         "dockerStrategy": {
           "dockerfilePath": "images/tests/Dockerfile.rhel",
+          "env": [
+            {
+              "name": "foo",
+              "value": "bar"
+            }
+          ],
           "forcePull": true,
           "from": {
             "kind": "ImageStreamTag",

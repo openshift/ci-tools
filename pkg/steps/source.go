@@ -279,7 +279,7 @@ func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStrea
 						From:                    from,
 						ForcePull:               true,
 						NoCache:                 true,
-						Env:                     []coreapi.EnvVar{},
+						Env:                     []coreapi.EnvVar{{Name: "foo", Value: "bar"}}, //workaround https://bugzilla.redhat.com/show_bug.cgi?id=1784163#c8
 						ImageOptimizationPolicy: &layer,
 					},
 				},

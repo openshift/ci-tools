@@ -14,7 +14,6 @@ import (
 	"github.com/sirupsen/logrus"
 	kubeapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
-	"k8s.io/apimachinery/pkg/util/sets"
 	v1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
 
@@ -22,6 +21,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/jobconfig"
 	jc "github.com/openshift/ci-tools/pkg/jobconfig"
+	"github.com/openshift/ci-tools/pkg/migrate"
 	"github.com/openshift/ci-tools/pkg/promotion"
 )
 
@@ -139,7 +139,7 @@ func generatePodSpec(info *prowgenInfo, secrets []*cioperatorapi.Secret) *kubeap
 		ReadOnly:  true,
 	}}
 
-	if migrated(info.Org, info.Repo) {
+	if migrate.Migrated(info.Org, info.Repo, info.Branch) {
 		volumeMounts = []kubeapi.VolumeMount{
 			{
 				Name:      sentryDsnMountName,
@@ -166,7 +166,7 @@ func generatePodSpec(info *prowgenInfo, secrets []*cioperatorapi.Secret) *kubeap
 		},
 	}}
 
-	if migrated(info.Org, info.Repo) {
+	if migrate.Migrated(info.Org, info.Repo, info.Branch) {
 		volumes = []kubeapi.Volume{
 			{
 				Name: sentryDsnMountName,
@@ -263,7 +263,7 @@ func generateCiOperatorPodSpec(info *prowgenInfo, secrets []*cioperatorapi.Secre
 		fmt.Sprintf("--branch=%s", info.Branch),
 	}, additionalArgs...)
 
-	if migrated(info.Org, info.Repo) {
+	if migrate.Migrated(info.Org, info.Repo, info.Branch) {
 		ret.Containers[0].Args = append([]string{
 			"--give-pr-author-access-to-namespace=true",
 			"--artifact-dir=$(ARTIFACTS)",
@@ -395,7 +395,7 @@ func generatePodSpecOthers(info *prowgenInfo, release string, test *cioperatorap
 	}
 	// TODO expose boskos (behind an oauth proxy) so it can be used by build clusters
 	if needsLeaseServer {
-		if migrated(info.Org, info.Repo) {
+		if migrate.Migrated(info.Org, info.Repo, info.Branch) {
 			container.Args = append(container.Args, "--lease-server=https://boskos-ci.svc.ci.openshift.org")
 			container.Args = append(container.Args, "--lease-server-username=ci")
 			container.Args = append(container.Args, "--lease-server-password-file=/etc/boskos/password")
@@ -466,14 +466,6 @@ func generatePodSpecOthers(info *prowgenInfo, release string, test *cioperatorap
 				Value: fmt.Sprintf("https://rpms.svc.ci.openshift.org/openshift-origin-v%s/", conf.PreviousVersion)})
 	}
 	return podSpec
-}
-
-var (
-	migratedRepos = sets.NewString()
-)
-
-func migrated(org, repo string) bool {
-	return migratedRepos.Has(fmt.Sprintf("%s/%s", org, repo))
 }
 
 func generatePodSpecRandom(info *prowgenInfo, test *cioperatorapi.TestStepConfiguration) *kubeapi.PodSpec {

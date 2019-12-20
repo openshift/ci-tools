@@ -23,6 +23,7 @@ type projectDirectoryImageBuildStep struct {
 	jobSpec     *api.JobSpec
 	artifactDir string
 	dryLogger   *DryLogger
+	pullSecret  *coreapi.Secret
 }
 
 func (s *projectDirectoryImageBuildStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
@@ -103,6 +104,7 @@ func (s *projectDirectoryImageBuildStep) Run(ctx context.Context, dry bool) erro
 		},
 		s.config.DockerfilePath,
 		s.resources,
+		s.pullSecret,
 	)
 	for k, v := range labels {
 		build.Spec.Output.ImageLabels = append(build.Spec.Output.ImageLabels, buildapi.ImageLabel{
@@ -163,7 +165,7 @@ func (s *projectDirectoryImageBuildStep) Description() string {
 	return fmt.Sprintf("Build image %s from the repository", s.config.To)
 }
 
-func ProjectDirectoryImageBuildStep(config api.ProjectDirectoryImageBuildStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, imageClient imageclientset.ImageStreamsGetter, istClient imageclientset.ImageStreamTagsGetter, artifactDir string, jobSpec *api.JobSpec, dryLogger *DryLogger) api.Step {
+func ProjectDirectoryImageBuildStep(config api.ProjectDirectoryImageBuildStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, imageClient imageclientset.ImageStreamsGetter, istClient imageclientset.ImageStreamTagsGetter, artifactDir string, jobSpec *api.JobSpec, dryLogger *DryLogger, pullSecret *coreapi.Secret) api.Step {
 	return &projectDirectoryImageBuildStep{
 		config:      config,
 		resources:   resources,
@@ -173,5 +175,6 @@ func ProjectDirectoryImageBuildStep(config api.ProjectDirectoryImageBuildStepCon
 		artifactDir: artifactDir,
 		jobSpec:     jobSpec,
 		dryLogger:   dryLogger,
+		pullSecret:  pullSecret,
 	}
 }

@@ -15,11 +15,15 @@ readonly EXPECTED="${TEST_ROOT}/expected_files/expected.json"
 readonly EXPECTED_WITH_TEMPLATE="${TEST_ROOT}/expected_files/expected_with_template.json"
 readonly EXPECTED_WITH_OAUTH="${TEST_ROOT}/expected_files/expected_src_oauth.json"
 readonly EXPECTED_WITH_SSH="${TEST_ROOT}/expected_files/expected_src_ssh.json"
+EXPECTED_WITH_PULL_SECRET="${TEST_ROOT}/expected_files/expected_pull_secret.json"
+readonly EXPECTED_WITH_PULL_SECRET
 
 readonly DRY_RUN_JSON="${WORKDIR}/ci-op-dry.json"
 readonly DRY_RUN_WITH_TEMPLATE_JSON="${WORKDIR}/ci-op-template-dry.json"
 readonly DRY_RUN_WITH_OAUTH="${WORKDIR}/ci-op-oauth-dry.json"
 readonly DRY_RUN_WITH_SSH="${WORKDIR}/ci-op-ssh-dry.json"
+DRY_RUN_WITH_PULL_SECRET="${WORKDIR}/ci-op-pull-secret-dry.json"
+readonly DRY_RUN_WITH_PULL_SECRET
 
 readonly OAUTH_FILE="${TEST_ROOT}/auth_files/oauth-token"
 readonly SSH_FILE="${TEST_ROOT}/auth_files/id_rsa"
@@ -80,5 +84,13 @@ run_test > "${DRY_RUN_WITH_SSH}" \
 check \
     "${EXPECTED_WITH_SSH}" \
     <(jq '.[] | select(.metadata.name=="src")' "${DRY_RUN_WITH_SSH}")
+
+PULL_SECRET_PATH="${WORKDIR}/pull_secret"
+readonly PULL_SECRET_PATH
+touch "${PULL_SECRET_PATH}"
+
+echo "[INFO] Running ci-operator with a pull secret"
+run_test --lease-server http://boskos.example.com --image-import-pull-secret "${PULL_SECRET_PATH}" > "${DRY_RUN_WITH_PULL_SECRET}"
+check "${EXPECTED_WITH_PULL_SECRET}" "${DRY_RUN_WITH_PULL_SECRET}"
 
 echo "[INFO] Success"

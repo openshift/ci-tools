@@ -156,7 +156,7 @@ objects:
         export PATH=/usr/libexec/origin:$PATH
 
         trap 'touch /tmp/shared/exit' EXIT
-        trap 'kill $(jobs -p); exit 0' TERM
+        trap 'jobs -p | xargs -r kill || true; exit 0' TERM
 
         function fips_check() {
           oc --insecure-skip-tls-verify --request-timeout=60s get nodes -o jsonpath --template '{range .items[*]}{.metadata.name}{"\n"}{end}' > /tmp/nodelist
@@ -425,6 +425,12 @@ objects:
           workers=0
         fi
         if [[ "${CLUSTER_TYPE}" = "aws" ]]; then
+            master_type=null
+            if [[ "${CLUSTER_VARIANT}" =~ "xlarge" ]]; then
+              master_type=m5.8xlarge
+            elif [[ "${CLUSTER_VARIANT}" =~ "large" ]]; then
+              master_type=m5.4xlarge
+            fi
             subnets="[]"
             if [[ "${CLUSTER_VARIANT}" =~ "shared-vpc" ]]; then
               case $((RANDOM % 4)) in
@@ -446,6 +452,7 @@ objects:
           replicas: 3
           platform:
             aws:
+              type: ${master_type}
               zones:
               - us-east-1a
               - us-east-1b
@@ -517,7 +524,7 @@ objects:
         elif [[ "${CLUSTER_TYPE}" == "gcp" ]]; then
             # HACK: try to "poke" the token endpoint before the test starts
             for i in $(seq 1 30); do
-              code="$( curl -s -o /dev/null -w "%{http_code}" https://oauth2.googleapis.com/token -X POST -d '' )"
+              code="$( curl -s -o /dev/null -w "%{http_code}" https://oauth2.googleapis.com/token -X POST -d '' || echo "Failed to POST https://oauth2.googleapis.com/token with $?" 1>&2)"
               if [[ "${code}" == "400" ]]; then
                 break
               fi
@@ -706,6 +713,10 @@ objects:
         value: /etc/openshift-installer/gce.json
       - name: KUBECONFIG
         value: /tmp/artifacts/installer/auth/kubeconfig
+      - name: USER
+        value: test
+      - name: HOME
+        value: /tmp
       command:
       - /bin/bash
       - -c
@@ -773,6 +784,7 @@ objects:
           fi
 
           oc --insecure-skip-tls-verify --request-timeout=5s get nodes -o jsonpath --template '{range .items[*]}{.metadata.name}{"\n"}{end}' > /tmp/nodes
+          oc --insecure-skip-tls-verify --request-timeout=5s get nodes -o jsonpath --template '{range .items[*]}{.spec.providerID}{"\n"}{end}' | sed 's|.*/||' > /tmp/node-provider-IDs
           oc --insecure-skip-tls-verify --request-timeout=5s get pods --all-namespaces --template '{{ range .items }}{{ $name := .metadata.name }}{{ $ns := .metadata.namespace }}{{ range .spec.containers }}-n {{ $ns }} {{ $name }} -c {{ .name }}{{ "\n" }}{{ end }}{{ range .spec.initContainers }}-n {{ $ns }} {{ $name }} -c {{ .name }}{{ "\n" }}{{ end }}{{ end }}' > /tmp/containers
           oc --insecure-skip-tls-verify --request-timeout=5s get pods -l openshift.io/component=api --all-namespaces --template '{{ range .items }}-n {{ .metadata.namespace }} {{ .metadata.name }}{{ "\n" }}{{ end }}' > /tmp/pods-api
 
@@ -813,6 +825,22 @@ objects:
             queue /tmp/artifacts/nodes/$i/heap oc --insecure-skip-tls-verify get --request-timeout=20s --raw /api/v1/nodes/$i/proxy/debug/pprof/heap
           done < /tmp/nodes
 
+          if [[ "${CLUSTER_TYPE}" = "aws" ]]; then
+            # FIXME: get epel-release or otherwise add awscli to our teardown image
+            export PATH="${HOME}/.local/bin:${PATH}"
+            easy_install --user pip  # our Python 2.7.5 is even too old for ensurepip
+            pip install --user awscli
+            export AWS_DEFAULT_REGION="$(python -c 'import json; data = json.load(open("/tmp/artifacts/installer/metadata.json")); print(data["aws"]["region"])')"
+            echo "gathering node console output from ${AWS_DEFAULT_REGION}"
+          fi
+
+          while IFS= read -r i; do
+            mkdir -p "/tmp/artifacts/nodes/${i}"
+            if [[ "${CLUSTER_TYPE}" = "aws" ]]; then
+              queue /tmp/artifacts/nodes/$i/console aws ec2 get-console-output --instance-id "${i}"
+            fi
+          done < /tmp/node-provider-IDs
+
           FILTER=gzip queue /tmp/artifacts/nodes/masters-journal.gz oc --insecure-skip-tls-verify adm node-logs --role=master --unify=false
           FILTER=gzip queue /tmp/artifacts/nodes/workers-journal.gz oc --insecure-skip-tls-verify adm node-logs --role=worker --unify=false
 
@@ -836,6 +864,7 @@ objects:
 
           echo "Snapshotting prometheus (may take 15s) ..."
           queue /tmp/artifacts/metrics/prometheus.tar.gz oc --insecure-skip-tls-verify exec -n openshift-monitoring prometheus-k8s-0 -- tar cvzf - -C /prometheus .
+          FILTER=gzip queue /tmp/artifacts/metrics/prometheus-target-metadata.json.gz oc --insecure-skip-tls-verify exec -n openshift-monitoring prometheus-k8s-0 -- /bin/bash -c "curl -G http://localhost:9090/api/v1/targets/metadata --data-urlencode 'match_target={instance!=\"\"}'"
 
           echo "Running must-gather..."
           mkdir -p /tmp/artifacts/must-gather
@@ -849,7 +878,7 @@ objects:
         }
 
         trap 'teardown' EXIT
-        trap 'kill $(jobs -p); exit 0' TERM
+        trap 'jobs -p | xargs -r kill || true; exit 0' TERM
 
         for i in $(seq 1 220); do
           if [[ -f /tmp/shared/exit ]]; then

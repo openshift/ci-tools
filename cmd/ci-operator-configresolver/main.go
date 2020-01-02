@@ -19,6 +19,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/load"
+	"github.com/openshift/ci-tools/pkg/webreg"
 )
 
 const (
@@ -33,6 +34,7 @@ type options struct {
 	registryPath string
 	logLevel     string
 	address      string
+	uiAddress    string
 	gracePeriod  time.Duration
 	cycle        time.Duration
 	validateOnly bool
@@ -74,7 +76,7 @@ var (
 			prometheus.HistogramOpts{
 				Name:    "configresolver_http_response_size_bytes",
 				Help:    "http response size in bytes",
-				Buckets: []float64{256, 512, 1024, 2048, 4096, 6144, 8192, 10240, 12288},
+				Buckets: []float64{256, 512, 1024, 2048, 4096, 6144, 8192, 10240, 12288, 16384, 24576, 32768, 40960, 49152, 57344, 65536},
 			},
 			[]string{"status", "path"},
 		),
@@ -95,6 +97,7 @@ func gatherOptions() options {
 	fs.StringVar(&o.registryPath, "registry", "", "Path to registry dirs")
 	fs.StringVar(&o.logLevel, "log-level", "info", "Level at which to log output.")
 	fs.StringVar(&o.address, "address", ":8080", "Address to run server on")
+	fs.StringVar(&o.uiAddress, "ui-address", ":8082", "Address to run the registry UI on")
 	fs.DurationVar(&o.gracePeriod, "gracePeriod", time.Second*10, "Grace period for server shutdown")
 	fs.DurationVar(&o.cycle, "cycle", time.Minute*2, "Cycle duration for config reload")
 	fs.BoolVar(&o.validateOnly, "validate-only", false, "Load the config and registry, validate them and exit.")
@@ -274,6 +277,11 @@ func main() {
 	http.HandleFunc("/configGeneration", handleWithMetrics(getConfigGeneration(configAgent)))
 	http.HandleFunc("/registryGeneration", handleWithMetrics(getRegistryGeneration(registryAgent)))
 	interrupts.ListenAndServe(&http.Server{Addr: o.address}, o.gracePeriod)
+	uiServer := &http.Server{
+		Addr:    o.uiAddress,
+		Handler: handleWithMetrics(webreg.WebRegHandler(registryAgent, configAgent)),
+	}
+	interrupts.ListenAndServe(uiServer, o.gracePeriod)
 	health.ServeReady()
 	interrupts.WaitForGracefulShutdown()
 }

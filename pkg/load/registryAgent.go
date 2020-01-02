@@ -17,17 +17,22 @@ import (
 // memory and resolve ReleaseBuildConfigurations using the registry
 type RegistryAgent interface {
 	ResolveConfig(config api.ReleaseBuildConfiguration) (api.ReleaseBuildConfiguration, error)
+	GetRegistryComponents() (registry.ReferenceMap, registry.ChainMap, registry.WorkflowMap, map[string]string)
 	GetGeneration() int
 }
 
 type registryAgent struct {
-	lock         *sync.RWMutex
-	resolver     registry.Resolver
-	registryPath string
-	cycle        time.Duration
-	generation   int
-	errorMetrics *prometheus.CounterVec
-	flatRegistry bool
+	lock          *sync.RWMutex
+	resolver      registry.Resolver
+	registryPath  string
+	cycle         time.Duration
+	generation    int
+	errorMetrics  *prometheus.CounterVec
+	flatRegistry  bool
+	references    registry.ReferenceMap
+	chains        registry.ChainMap
+	workflows     registry.WorkflowMap
+	documentation map[string]string
 }
 
 var registryReloadTimeMetric = prometheus.NewHistogram(
@@ -76,23 +81,29 @@ func (a *registryAgent) ResolveConfig(config api.ReleaseBuildConfiguration) (api
 }
 
 func (a *registryAgent) GetGeneration() int {
-	var gen int
 	a.lock.RLock()
-	gen = a.generation
-	a.lock.RUnlock()
-	return gen
+	defer a.lock.RUnlock()
+	return a.generation
+}
+
+func (a *registryAgent) GetRegistryComponents() (registry.ReferenceMap, registry.ChainMap, registry.WorkflowMap, map[string]string) {
+	return a.references, a.chains, a.workflows, a.documentation
 }
 
 func (a *registryAgent) loadRegistry() error {
 	log.Debug("Reloading registry")
 	startTime := time.Now()
-	refs, chains, workflows, err := Registry(a.registryPath, a.flatRegistry)
+	references, chains, workflows, documentation, err := Registry(a.registryPath, a.flatRegistry)
 	if err != nil {
 		a.recordError("failed to load ci-operator registry")
 		return fmt.Errorf("failed to load ci-operator registry (%v)", err)
 	}
 	a.lock.Lock()
-	a.resolver = registry.NewResolver(refs, chains, workflows)
+	a.references = references
+	a.chains = chains
+	a.workflows = workflows
+	a.documentation = documentation
+	a.resolver = registry.NewResolver(references, chains, workflows)
 	a.generation++
 	a.lock.Unlock()
 	duration := time.Since(startTime)

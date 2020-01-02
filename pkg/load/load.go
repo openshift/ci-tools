@@ -86,10 +86,11 @@ func configFromResolver(info *ResolverInfo) (*api.ReleaseBuildConfiguration, err
 
 // Registry takes the path to a registry config directory and returns the full set of references, chains,
 // and workflows that the registry's Resolver needs to resolve a user's MultiStageTestConfiguration
-func Registry(root string, flat bool) (references registry.ReferenceMap, chains registry.ChainMap, workflows registry.WorkflowMap, err error) {
+func Registry(root string, flat bool) (references registry.ReferenceMap, chains registry.ChainMap, workflows registry.WorkflowMap, documentation map[string]string, err error) {
 	references = registry.ReferenceMap{}
 	chains = registry.ChainMap{}
 	workflows = registry.WorkflowMap{}
+	documentation = map[string]string{}
 	err = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if info != nil && strings.HasPrefix(info.Name(), "..") {
 			if info.IsDir() {
@@ -122,7 +123,7 @@ func Registry(root string, flat bool) (references registry.ReferenceMap, chains 
 				}
 			}
 			if strings.HasSuffix(path, "-ref.yaml") {
-				name, ref, err := loadReference(bytes, dir, prefix, flat)
+				name, doc, ref, err := loadReference(bytes, dir, prefix, flat)
 				if err != nil {
 					return fmt.Errorf("Failed to load registry file %s: %v", path, err)
 				}
@@ -130,8 +131,9 @@ func Registry(root string, flat bool) (references registry.ReferenceMap, chains 
 					return fmt.Errorf("name of reference in file %s should be %s", path, prefix)
 				}
 				references[name] = ref
+				documentation[name] = doc
 			} else if strings.HasSuffix(path, "-chain.yaml") {
-				name, chain, err := loadChain(bytes)
+				name, doc, chain, err := loadChain(bytes)
 				if err != nil {
 					return fmt.Errorf("Failed to load registry file %s: %v", path, err)
 				}
@@ -139,8 +141,9 @@ func Registry(root string, flat bool) (references registry.ReferenceMap, chains 
 					return fmt.Errorf("name of chain in file %s should be %s", path, prefix)
 				}
 				chains[name] = chain
+				documentation[name] = doc
 			} else if strings.HasSuffix(path, "-workflow.yaml") {
-				name, workflow, err := loadWorkflow(bytes)
+				name, doc, workflow, err := loadWorkflow(bytes)
 				if err != nil {
 					return fmt.Errorf("Failed to load registry file %s: %v", path, err)
 				}
@@ -148,6 +151,7 @@ func Registry(root string, flat bool) (references registry.ReferenceMap, chains 
 					return fmt.Errorf("name of workflow in file %s should be %s", path, prefix)
 				}
 				workflows[name] = workflow
+				documentation[name] = doc
 			} else if strings.HasSuffix(path, "-commands.sh") {
 				// ignore
 			} else {
@@ -158,43 +162,43 @@ func Registry(root string, flat bool) (references registry.ReferenceMap, chains 
 	})
 	// create graph to verify that there are no cycles
 	_, err = registry.NewGraph(references, chains, workflows)
-	return references, chains, workflows, err
+	return references, chains, workflows, documentation, err
 }
 
-func loadReference(bytes []byte, baseDir, prefix string, flat bool) (string, api.LiteralTestStep, error) {
+func loadReference(bytes []byte, baseDir, prefix string, flat bool) (string, string, api.LiteralTestStep, error) {
 	step := api.RegistryReferenceConfig{}
 	err := yaml.Unmarshal(bytes, &step)
 	if err != nil {
-		return "", api.LiteralTestStep{}, err
+		return "", "", api.LiteralTestStep{}, err
 	}
 	if !flat && step.Reference.Commands != fmt.Sprintf("%s-commands.sh", prefix) {
-		return "", api.LiteralTestStep{}, fmt.Errorf("Reference %s has invalid command file path; command should be set to %s", step.Reference.As, fmt.Sprintf("%s-commands.sh", prefix))
+		return "", "", api.LiteralTestStep{}, fmt.Errorf("Reference %s has invalid command file path; command should be set to %s", step.Reference.As, fmt.Sprintf("%s-commands.sh", prefix))
 	}
 	command, err := ioutil.ReadFile(filepath.Join(baseDir, step.Reference.Commands))
 	if err != nil {
-		return "", api.LiteralTestStep{}, err
+		return "", "", api.LiteralTestStep{}, err
 	}
 	step.Reference.Commands = string(command)
-	return step.Reference.As, step.Reference.LiteralTestStep, nil
+	return step.Reference.As, step.Reference.Documentation, step.Reference.LiteralTestStep, nil
 }
 
-func loadChain(bytes []byte) (string, []api.TestStep, error) {
+func loadChain(bytes []byte) (string, string, []api.TestStep, error) {
 	chain := api.RegistryChainConfig{}
 	err := yaml.Unmarshal(bytes, &chain)
 	if err != nil {
-		return "", []api.TestStep{}, err
+		return "", "", []api.TestStep{}, err
 	}
-	return chain.Chain.As, chain.Chain.Steps, nil
+	return chain.Chain.As, chain.Chain.Documentation, chain.Chain.Steps, nil
 }
 
-func loadWorkflow(bytes []byte) (string, api.MultiStageTestConfiguration, error) {
+func loadWorkflow(bytes []byte) (string, string, api.MultiStageTestConfiguration, error) {
 	workflow := api.RegistryWorkflowConfig{}
 	err := yaml.Unmarshal(bytes, &workflow)
 	if err != nil {
-		return "", api.MultiStageTestConfiguration{}, err
+		return "", "", api.MultiStageTestConfiguration{}, err
 	}
 	if workflow.Workflow.Steps.Workflow != nil {
-		return "", api.MultiStageTestConfiguration{}, errors.New("workflows cannot contain other workflows")
+		return "", "", api.MultiStageTestConfiguration{}, errors.New("workflows cannot contain other workflows")
 	}
-	return workflow.Workflow.As, workflow.Workflow.Steps, nil
+	return workflow.Workflow.As, workflow.Workflow.Documentation, workflow.Workflow.Steps, nil
 }

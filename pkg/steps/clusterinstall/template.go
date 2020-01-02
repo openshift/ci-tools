@@ -717,6 +717,8 @@ objects:
         value: test
       - name: HOME
         value: /tmp
+      - name: LC_ALL
+        value: en_US.UTF-8
       command:
       - /bin/bash
       - -c

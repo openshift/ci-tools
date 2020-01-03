@@ -282,15 +282,20 @@ func TestMakeRehearsalPresubmit(t *testing.T) {
 		Reporter:     prowconfig.Reporter{Context: "ci/prow/test"},
 		Brancher:     prowconfig.Brancher{Branches: []string{"^branch$"}},
 	}
+	hiddenPresubmit := &prowconfig.Presubmit{}
+	deepcopy.Copy(hiddenPresubmit, sourcePresubmit)
+	hiddenPresubmit.Hidden = true
 
 	testCases := []struct {
 		testID            string
 		refs              *pjapi.Refs
+		original          *prowconfig.Presubmit
 		expectedPresubmit *prowconfig.Presubmit
 	}{
 		{
-			testID: "job that belong to different org/repo than refs",
-			refs:   &pjapi.Refs{Org: "anotherOrg", Repo: "anotherRepo"},
+			testID:   "job that belong to different org/repo than refs",
+			refs:     &pjapi.Refs{Org: "anotherOrg", Repo: "anotherRepo"},
+			original: sourcePresubmit,
 			expectedPresubmit: func() *prowconfig.Presubmit {
 				p := &prowconfig.Presubmit{}
 				deepcopy.Copy(p, sourcePresubmit)
@@ -313,8 +318,9 @@ func TestMakeRehearsalPresubmit(t *testing.T) {
 			}(),
 		},
 		{
-			testID: "job that belong to the same org/repo with refs.",
-			refs:   &pjapi.Refs{Org: "org", Repo: "repo"},
+			testID:   "job that belong to the same org/repo with refs.",
+			refs:     &pjapi.Refs{Org: "org", Repo: "repo"},
+			original: sourcePresubmit,
 			expectedPresubmit: func() *prowconfig.Presubmit {
 				p := &prowconfig.Presubmit{}
 				deepcopy.Copy(p, sourcePresubmit)
@@ -329,8 +335,27 @@ func TestMakeRehearsalPresubmit(t *testing.T) {
 			}(),
 		},
 		{
-			testID: "job that belong to the same org but different repo than refs.",
-			refs:   &pjapi.Refs{Org: "org", Repo: "anotherRepo"},
+			testID:   "hidden job that belong to the same org/repo with refs.",
+			refs:     &pjapi.Refs{Org: "org", Repo: "repo"},
+			original: hiddenPresubmit,
+			expectedPresubmit: func() *prowconfig.Presubmit {
+				p := &prowconfig.Presubmit{}
+				deepcopy.Copy(p, hiddenPresubmit)
+
+				p.Name = "rehearse-123-pull-ci-org-repo-branch-test"
+				p.Labels = map[string]string{rehearseLabel: "123"}
+				p.Spec.Containers[0].Args = []string{"arg1", "arg2"}
+				p.RerunCommand = "/test pj-rehearse"
+				p.Context = "ci/rehearse/org/repo/branch/test"
+				p.Optional = true
+				p.SkipReport = true
+				return p
+			}(),
+		},
+		{
+			testID:   "job that belong to the same org but different repo than refs.",
+			refs:     &pjapi.Refs{Org: "org", Repo: "anotherRepo"},
+			original: sourcePresubmit,
 			expectedPresubmit: func() *prowconfig.Presubmit {
 				p := &prowconfig.Presubmit{}
 				deepcopy.Copy(p, sourcePresubmit)
@@ -356,7 +381,7 @@ func TestMakeRehearsalPresubmit(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.testID, func(t *testing.T) {
-			rehearsal, err := makeRehearsalPresubmit(sourcePresubmit, testRepo, testPrNumber, tc.refs)
+			rehearsal, err := makeRehearsalPresubmit(tc.original, testRepo, testPrNumber, tc.refs)
 			if err != nil {
 				t.Errorf("Unexpected error in makeRehearsalPresubmit: %v", err)
 			}

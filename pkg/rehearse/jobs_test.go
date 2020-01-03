@@ -10,6 +10,8 @@ import (
 
 	"github.com/getlantern/deepcopy"
 	"github.com/ghodss/yaml"
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/sirupsen/logrus"
 	logrustest "github.com/sirupsen/logrus/hooks/test"
 
@@ -22,7 +24,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
 
@@ -35,6 +36,8 @@ import (
 )
 
 const testingRegistry = "../../test/multistage-registry/registry"
+
+var ignoreUnexported = cmpopts.IgnoreUnexported(prowconfig.Presubmit{}, prowconfig.Brancher{}, prowconfig.RegexpChangeMatcher{})
 
 func TestReplaceClusterProfiles(t *testing.T) {
 	makeVolume := func(name string) v1.Volume {
@@ -127,7 +130,7 @@ func TestReplaceClusterProfiles(t *testing.T) {
 			}
 
 			if !reflect.DeepEqual(tc.expected, names) {
-				t.Fatal(diff.ObjectDiff(tc.expected, names))
+				t.Fatal(cmp.Diff(tc.expected, names))
 			}
 		})
 	}
@@ -232,14 +235,14 @@ func TestInlineCiopConfig(t *testing.T) {
 				}
 
 				if !equality.Semantic.DeepEqual(expectedJob, job) {
-					t.Errorf("Returned job differs from expected:\n%s", diff.ObjectReflectDiff(expectedJob, job))
+					t.Errorf("Returned job differs from expected:\n%s", cmp.Diff(expectedJob, job, ignoreUnexported))
 				}
 			}
 		})
 	}
 }
 
-func makeTestingPresubmit(name, context string, org, repo, branch string) *prowconfig.Presubmit {
+func makeTestingPresubmit(name, context, branch string) *prowconfig.Presubmit {
 	return &prowconfig.Presubmit{
 		JobBase: prowconfig.JobBase{
 			Agent:  "kubernetes",
@@ -358,7 +361,7 @@ func TestMakeRehearsalPresubmit(t *testing.T) {
 				t.Errorf("Unexpected error in makeRehearsalPresubmit: %v", err)
 			}
 			if !equality.Semantic.DeepEqual(tc.expectedPresubmit, rehearsal) {
-				t.Errorf("Expected rehearsal Presubmit differs:\n%s", diff.ObjectDiff(tc.expectedPresubmit, rehearsal))
+				t.Errorf("Expected rehearsal Presubmit differs:\n%s", cmp.Diff(tc.expectedPresubmit, rehearsal, ignoreUnexported))
 			}
 
 		})
@@ -696,7 +699,7 @@ func TestExecuteJobsPositive(t *testing.T) {
 			sort.Slice(createdJobSpecs, func(a, b int) bool { return createdJobSpecs[a].Job < createdJobSpecs[b].Job })
 
 			if !equality.Semantic.DeepEqual(tc.expectedJobs, createdJobSpecs) {
-				t.Errorf("Created ProwJobs differ from expected:\n%s", diff.ObjectReflectDiff(tc.expectedJobs, createdJobSpecs))
+				t.Errorf("Created ProwJobs differ from expected:\n%s", cmp.Diff(tc.expectedJobs, createdJobSpecs, ignoreUnexported))
 			}
 		})
 	}
@@ -1024,7 +1027,7 @@ func TestReplaceCMTemplateName(t *testing.T) {
 			replaceCMTemplateName(testCase.jobVolumeMounts, testCase.jobVolumes, templates)
 			expected := testCase.expectedToFind()
 			if !reflect.DeepEqual(expected, testCase.jobVolumes) {
-				t.Fatalf("Diff found %v", diff.ObjectReflectDiff(expected, testCase.jobVolumes))
+				t.Fatalf("Diff found %v", cmp.Diff(expected, testCase.jobVolumes))
 			}
 		})
 	}
@@ -1110,7 +1113,7 @@ func TestGetClusterTypes(t *testing.T) {
 		t.Run(tc.id, func(t *testing.T) {
 			ret := getClusterTypes(tc.jobs)
 			if !reflect.DeepEqual(tc.want, ret) {
-				t.Fatal(diff.ObjectDiff(tc.want, ret))
+				t.Fatal(cmp.Diff(tc.want, ret))
 			}
 		})
 	}
@@ -1160,7 +1163,7 @@ func TestRemoveConfigResolverFlags(t *testing.T) {
 		t.Run(testCase.description, func(t *testing.T) {
 			newArgs := removeConfigResolverFlags(testCase.input)
 			if !reflect.DeepEqual(testCase.expected, newArgs) {
-				t.Fatalf("Diff found %v", diff.ObjectReflectDiff(testCase.expected, newArgs))
+				t.Fatalf("Diff found %v", cmp.Diff(testCase.expected, newArgs))
 			}
 		})
 	}

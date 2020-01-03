@@ -448,8 +448,6 @@ func makeSuccessfulFinishReactor(watcher watch.Interface, jobs map[string][]prow
 func TestExecuteJobsErrors(t *testing.T) {
 	testPrNumber, testNamespace, testRepoPath, testRefs := makeTestData()
 	targetOrgRepo := "targetOrg/targetRepo"
-	targetOrg := "targetOrg"
-	targetRepo := "targetRepo"
 	testCiopConfigs := config.ByFilename{}
 
 	testCases := []struct {
@@ -459,14 +457,14 @@ func TestExecuteJobsErrors(t *testing.T) {
 	}{{
 		description: "fail to Create a prowjob",
 		jobs: map[string][]prowconfig.Presubmit{targetOrgRepo: {
-			*makeTestingPresubmit("job1", "ci/prow/job1", targetOrg, targetRepo, "master"),
+			*makeTestingPresubmit("job1", "ci/prow/job1", "master"),
 		}},
 		failToCreate: sets.NewString("rehearse-123-job1"),
 	}, {
 		description: "fail to Create one of two prowjobs",
 		jobs: map[string][]prowconfig.Presubmit{targetOrgRepo: {
-			*makeTestingPresubmit("job1", "ci/prow/job1", targetOrg, targetRepo, "master"),
-			*makeTestingPresubmit("job2", "ci/prow/job2", targetOrg, targetRepo, "master"),
+			*makeTestingPresubmit("job1", "ci/prow/job1", "master"),
+			*makeTestingPresubmit("job2", "ci/prow/job2", "master"),
 		}},
 		failToCreate: sets.NewString("rehearse-123-job2"),
 	}}
@@ -510,8 +508,6 @@ func TestExecuteJobsErrors(t *testing.T) {
 
 func TestExecuteJobsUnsuccessful(t *testing.T) {
 	testPrNumber, testNamespace, testRepoPath, testRefs := makeTestData()
-	targetOrg := "targetOrg"
-	targetRepo := "targetRepo"
 	targetOrgRepo := "targetOrg/targetRepo"
 	testCiopConfigs := config.ByFilename{}
 
@@ -522,20 +518,20 @@ func TestExecuteJobsUnsuccessful(t *testing.T) {
 	}{{
 		description: "single job that fails",
 		jobs: map[string][]prowconfig.Presubmit{targetOrgRepo: {
-			*makeTestingPresubmit("job1", "ci/prow/job1", targetOrg, targetRepo, "master"),
+			*makeTestingPresubmit("job1", "ci/prow/job1", "master"),
 		}},
 		results: map[string]pjapi.ProwJobState{"rehearse-123-job1": pjapi.FailureState},
 	}, {
 		description: "single job that aborts",
 		jobs: map[string][]prowconfig.Presubmit{targetOrgRepo: {
-			*makeTestingPresubmit("job1", "ci/prow/job1", targetOrg, targetRepo, "master"),
+			*makeTestingPresubmit("job1", "ci/prow/job1", "master"),
 		}},
 		results: map[string]pjapi.ProwJobState{"rehearse-123-job1": pjapi.AbortedState},
 	}, {
 		description: "one job succeeds, one fails",
 		jobs: map[string][]prowconfig.Presubmit{targetOrgRepo: {
-			*makeTestingPresubmit("job1", "ci/prow/job1", targetOrg, targetRepo, "master"),
-			*makeTestingPresubmit("job2", "ci/prow/job2", targetOrg, targetRepo, "master"),
+			*makeTestingPresubmit("job1", "ci/prow/job1", "master"),
+			*makeTestingPresubmit("job2", "ci/prow/job2", "master"),
 		}},
 		results: map[string]pjapi.ProwJobState{
 			"rehearse-123-job1": pjapi.SuccessState,
@@ -602,8 +598,8 @@ func TestExecuteJobsPositive(t *testing.T) {
 	}{{
 		description: "two jobs in a single repo",
 		jobs: map[string][]prowconfig.Presubmit{targetOrgRepo: {
-			*makeTestingPresubmit("job1", "ci/prow/job1", targetOrg, targetRepo, "master"),
-			*makeTestingPresubmit("job2", "ci/prow/job2", targetOrg, targetRepo, "master"),
+			*makeTestingPresubmit("job1", "ci/prow/job1", "master"),
+			*makeTestingPresubmit("job2", "ci/prow/job2", "master"),
 		}},
 		expectedJobs: []pjapi.ProwJobSpec{
 			makeTestingProwJob(testNamespace,
@@ -617,8 +613,8 @@ func TestExecuteJobsPositive(t *testing.T) {
 		}}, {
 		description: "two jobs in a single repo, same context but different branch",
 		jobs: map[string][]prowconfig.Presubmit{targetOrgRepo: {
-			*makeTestingPresubmit("job1", "ci/prow/job1", targetOrg, targetRepo, "master"),
-			*makeTestingPresubmit("job2", "ci/prow/job2", targetOrg, targetRepo, "not-master"),
+			*makeTestingPresubmit("job1", "ci/prow/job1", "master"),
+			*makeTestingPresubmit("job2", "ci/prow/job2", "not-master"),
 		}},
 		expectedJobs: []pjapi.ProwJobSpec{
 			makeTestingProwJob(testNamespace,
@@ -633,8 +629,8 @@ func TestExecuteJobsPositive(t *testing.T) {
 		{
 			description: "two jobs in a separate repos",
 			jobs: map[string][]prowconfig.Presubmit{
-				targetOrgRepo:        {*makeTestingPresubmit("job1", "ci/prow/job1", targetOrg, targetRepo, "master")},
-				anotherTargetOrgRepo: {*makeTestingPresubmit("job2", "ci/prow/job2", anotherTargetOrg, anotherTargetRepo, "master")},
+				targetOrgRepo:        {*makeTestingPresubmit("job1", "ci/prow/job1", "master")},
+				anotherTargetOrgRepo: {*makeTestingPresubmit("job2", "ci/prow/job2", "master")},
 			},
 			expectedJobs: []pjapi.ProwJobSpec{
 				makeTestingProwJob(testNamespace,

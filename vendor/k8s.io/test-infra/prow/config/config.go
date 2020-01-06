@@ -47,7 +47,7 @@ import (
 
 	pipelinev1alpha1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1alpha1"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
-	"k8s.io/test-infra/prow/git"
+	"k8s.io/test-infra/prow/git/v2"
 	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/kube"
 	"k8s.io/test-infra/prow/pod-utils/decorate"
@@ -157,6 +157,10 @@ type InRepoConfig struct {
 	// be set globally, per org or per repo using '*', 'org' or 'org/repo' as key. The
 	// narrowest match always takes precedence.
 	Enabled map[string]*bool `json:"enabled,omitempty"`
+	// AllowedClusters is a list of allowed clusternames that can be used for jobs on
+	// a given repo. All clusters that are allowed for the specific repo, its org or
+	// globally can be used.
+	AllowedClusters map[string][]string `json:"allowed_clusters,omitempty"`
 }
 
 // InRepoConfigEnabled returns whether InRepoConfig is enabled for a given repository.
@@ -170,6 +174,31 @@ func (c *Config) InRepoConfigEnabled(identifier string) bool {
 	}
 	if c.InRepoConfig.Enabled["*"] != nil {
 		return *c.InRepoConfig.Enabled["*"]
+	}
+	return false
+}
+
+// InRepoConfigAllowsCluster determines if a given cluster may be used for a given repository
+func (c *Config) InRepoConfigAllowsCluster(clusterName, repoIdentifier string) bool {
+	for _, allowedCluster := range c.InRepoConfig.AllowedClusters[repoIdentifier] {
+		if allowedCluster == clusterName {
+			return true
+		}
+	}
+
+	identifierSlashSplit := strings.Split(repoIdentifier, "/")
+	if len(identifierSlashSplit) == 2 {
+		for _, allowedCluster := range c.InRepoConfig.AllowedClusters[identifierSlashSplit[0]] {
+			if allowedCluster == clusterName {
+				return true
+			}
+		}
+	}
+
+	for _, allowedCluster := range c.InRepoConfig.AllowedClusters["*"] {
+		if allowedCluster == clusterName {
+			return true
+		}
 	}
 	return false
 }
@@ -267,7 +296,7 @@ func (rg *RefGetterForGitHubPullRequest) BaseSHA() (string, error) {
 // Consumers that pass in a RefGetter implementation that does a call to GitHub and who
 // also need the result of that GitHub call just keep a pointer to its result, but must
 // nilcheck that pointer before accessing it.
-func (c *Config) GetPresubmits(gc *git.Client, identifier string, baseSHAGetter RefGetter, headSHAGetters ...RefGetter) ([]Presubmit, error) {
+func (c *Config) GetPresubmits(gc git.ClientFactory, identifier string, baseSHAGetter RefGetter, headSHAGetters ...RefGetter) ([]Presubmit, error) {
 	if identifier == "" {
 		return nil, errors.New("no identifier for repo given")
 	}
@@ -371,7 +400,8 @@ type Controller struct {
 	// commits that have been superseded by newer commits in GitHub pull
 	// requests.
 	// This option will be removed and set to always true in March 2020.
-	AllowCancellations bool `json:"allow_cancellations,omitempty"`
+	// TODO(fejta): delete this Mar 2020
+	AllowCancellations *bool `json:"allow_cancellations,omitempty"`
 }
 
 // Plank is config for the plank controller.
@@ -765,6 +795,14 @@ func loadConfig(prowConfig, jobConfig string) (*Config, error) {
 	}
 
 	nc.ProwYAMLGetter = defaultProwYAMLGetter
+
+	if nc.InRepoConfig.AllowedClusters == nil {
+		nc.InRepoConfig.AllowedClusters = map[string][]string{}
+	}
+
+	if len(nc.InRepoConfig.AllowedClusters["*"]) == 0 {
+		nc.InRepoConfig.AllowedClusters["*"] = []string{kube.DefaultClusterAlias}
+	}
 
 	// TODO(krzyzacy): temporary allow empty jobconfig
 	//                 also temporary allow job config in prow config
@@ -1259,8 +1297,8 @@ func parseProwConfig(c *Config) error {
 		c.Plank.PodRunningTimeout = &metav1.Duration{Duration: 48 * time.Hour}
 	}
 
-	if !c.Plank.AllowCancellations {
-		logrus.Warning("The `plank.allow_cancellations` setting is deprecated. It will be removed and set to always true in March 2020")
+	if c.Plank.AllowCancellations != nil {
+		logrus.Warning("The plank.allow_cancellations setting is deprecated. It will be removed and set to always true in March 2020")
 	}
 
 	if c.Gerrit.TickInterval == nil {
@@ -1300,7 +1338,7 @@ func parseProwConfig(c *Config) error {
 			return errors.New("label_selector is invalid when used for a single jenkins-operator")
 		}
 
-		if !c.JenkinsOperators[i].AllowCancellations {
+		if c.JenkinsOperators[i].AllowCancellations != nil {
 			logrus.Warning("The `jenkins_operators.allow_cancellations` setting is deprecated. It will be removed and set to always true in March 2020")
 		}
 	}
@@ -1414,6 +1452,25 @@ func parseProwConfig(c *Config) error {
 	}
 	if c.Tide.MaxGoroutines <= 0 {
 		return fmt.Errorf("tide has invalid max_goroutines (%d), it needs to be a positive number", c.Tide.MaxGoroutines)
+	}
+
+	if c.Tide.PRStatusBaseURLs == nil {
+		c.Tide.PRStatusBaseURLs = map[string]string{}
+	}
+
+	if len(c.Tide.PRStatusBaseURL) > 0 {
+		if len(c.Tide.PRStatusBaseURLs) > 0 {
+			return fmt.Errorf("both pr_status_base_url and pr_status_base_urls are defined")
+		} else {
+			logrus.Warning("The `pr_status_base_url` setting is deprecated and it has been replaced by `pr_status_base_urls`. It will be removed in June 2020")
+			c.Tide.PRStatusBaseURLs["*"] = c.Tide.PRStatusBaseURL
+		}
+	}
+
+	if len(c.Tide.PRStatusBaseURLs) > 0 {
+		if _, ok := c.Tide.PRStatusBaseURLs["*"]; !ok {
+			return fmt.Errorf("pr_status_base_urls is defined but the default value ('*') is missing")
+		}
 	}
 
 	for name, method := range c.Tide.MergeType {

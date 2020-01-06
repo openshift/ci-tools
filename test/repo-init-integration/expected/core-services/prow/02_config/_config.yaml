@@ -14,7 +14,10 @@ github_reporter:
   job_types_to_report:
   - presubmit
   - postsubmit
-in_repo_config: {}
+in_repo_config:
+  allowed_clusters:
+    '*':
+    - default
 log_level: info
 owners_dir_blacklist: {}
 plank:

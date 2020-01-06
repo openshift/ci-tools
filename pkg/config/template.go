@@ -99,7 +99,7 @@ func (c *TemplateCMManager) createCM(name string, data []updateconfig.ConfigMapU
 	}
 	if _, err := c.cmclient.Create(cm); err != nil && !kerrors.IsAlreadyExists(err) {
 		return err
-	} else if err := updateconfig.Update(osFileGetter{root: c.releaseRepoPath}, c.cmclient, cm.Name, "", data, nil, c.logger); err != nil {
+	} else if err := updateconfig.Update(osFileGetter{root: c.releaseRepoPath}, c.cmclient, cm.Name, "", data, true, nil, c.logger); err != nil {
 		return err
 	}
 	return nil
@@ -152,7 +152,7 @@ func (c *TemplateCMManager) createCMs(sources []ConfigMapSource, mapping map[str
 		return err
 	}
 	var errs []error
-	for cm, data := range updateconfig.FilterChanges(replaceSpecNames(c.namespace, c.configUpdaterCfg, mapping), changes, c.logger) {
+	for cm, data := range updateconfig.FilterChanges(replaceSpecNames(c.namespace, c.configUpdaterCfg, mapping), changes, c.namespace, c.logger) {
 		c.logger.WithFields(logrus.Fields{"cm-name": cm.Name}).Info("creating rehearsal configMap")
 		if err := c.createCM(cm.Name, data); err != nil {
 			errs = append(errs, err)

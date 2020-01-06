@@ -46,7 +46,7 @@ run_test() {
 
 check() {
     if ! diff "$@"; then
-        echo >"ERROR: differences have been found"
+        echo >"ERROR: differences have been found against $1"
         return 1
     fi
 }

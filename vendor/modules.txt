@@ -173,7 +173,7 @@ github.com/prometheus/client_model/go
 github.com/prometheus/common/expfmt
 github.com/prometheus/common/internal/bitbucket.org/ww/goautoneg
 github.com/prometheus/common/model
-# github.com/prometheus/procfs v0.0.7
+# github.com/prometheus/procfs v0.0.8
 github.com/prometheus/procfs
 github.com/prometheus/procfs/internal/fs
 github.com/prometheus/procfs/internal/util
@@ -586,6 +586,7 @@ k8s.io/client-go/plugin/pkg/client/auth/oidc
 k8s.io/client-go/plugin/pkg/client/auth/openstack
 k8s.io/client-go/rest
 k8s.io/client-go/rest/watch
+k8s.io/client-go/restmapper
 k8s.io/client-go/testing
 k8s.io/client-go/third_party/forked/golang/template
 k8s.io/client-go/tools/auth
@@ -615,7 +616,7 @@ k8s.io/client-go/util/workqueue
 k8s.io/klog
 # k8s.io/kube-openapi v0.0.0-20190816220812-743ec37842bf
 k8s.io/kube-openapi/pkg/util/proto
-# k8s.io/test-infra v0.0.0-20191205141233-36670de472b8
+# k8s.io/test-infra v0.0.0-20200106052143-6b50e8c07171
 k8s.io/test-infra/boskos/client
 k8s.io/test-infra/boskos/common
 k8s.io/test-infra/boskos/storage
@@ -645,6 +646,7 @@ k8s.io/test-infra/prow/gcsupload
 k8s.io/test-infra/prow/genfiles
 k8s.io/test-infra/prow/gerrit/client
 k8s.io/test-infra/prow/git
+k8s.io/test-infra/prow/git/v2
 k8s.io/test-infra/prow/gitattributes
 k8s.io/test-infra/prow/github
 k8s.io/test-infra/prow/github/report
@@ -732,6 +734,9 @@ knative.dev/pkg/apis/duck/v1beta1
 knative.dev/pkg/apis/v1alpha1
 knative.dev/pkg/configmap
 knative.dev/pkg/kmp
+# sigs.k8s.io/controller-runtime v0.3.0
+sigs.k8s.io/controller-runtime/pkg/client
+sigs.k8s.io/controller-runtime/pkg/client/apiutil
 # sigs.k8s.io/yaml v1.1.0
 sigs.k8s.io/yaml
 # vbom.ml/util v0.0.0-20180919145318-efcd4e0f9787

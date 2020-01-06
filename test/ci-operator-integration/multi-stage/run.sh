@@ -28,7 +28,7 @@ if ! ci-operator --dry-run --determinize-output --namespace "${TEST_NAMESPACE}" 
 fi
 
 if ! diff "${EXPECTED1}" "${OUT}"; then
-    echo "ERROR: differences have been found"
+    echo "ERROR: differences have been found against ${EXPECTED1}"
     exit 1
 fi
 
@@ -72,7 +72,7 @@ if grep "level=error" "${ERR}"; then
 fi
 
 if ! diff "${EXPECTED2}" "${OUT}"; then
-    echo "ERROR: differences have been found"
+    echo "ERROR: differences have been found against ${EXPECTED2}"
     kill $(jobs -p)
     wait $(jobs -p)
     echo "configresolver output:"

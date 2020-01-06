@@ -211,6 +211,10 @@
               "value": "0"
             },
             {
+              "name": "CI",
+              "value": "true"
+            },
+            {
               "name": "JOB_NAME",
               "value": "pull-ci-openshift-release-master-ci-operator-integration"
             },
@@ -365,6 +369,10 @@
             {
               "name": "BUILD_ID",
               "value": "0"
+            },
+            {
+              "name": "CI",
+              "value": "true"
             },
             {
               "name": "JOB_NAME",
@@ -523,6 +531,10 @@
               "value": "0"
             },
             {
+              "name": "CI",
+              "value": "true"
+            },
+            {
               "name": "JOB_NAME",
               "value": "pull-ci-openshift-release-master-ci-operator-integration"
             },
@@ -677,6 +689,10 @@
             {
               "name": "BUILD_ID",
               "value": "0"
+            },
+            {
+              "name": "CI",
+              "value": "true"
             },
             {
               "name": "JOB_NAME",
@@ -835,6 +851,10 @@
               "value": "0"
             },
             {
+              "name": "CI",
+              "value": "true"
+            },
+            {
               "name": "JOB_NAME",
               "value": "pull-ci-openshift-release-master-ci-operator-integration"
             },
@@ -989,6 +1009,10 @@
             {
               "name": "BUILD_ID",
               "value": "0"
+            },
+            {
+              "name": "CI",
+              "value": "true"
             },
             {
               "name": "JOB_NAME",
@@ -1147,6 +1171,10 @@
               "value": "0"
             },
             {
+              "name": "CI",
+              "value": "true"
+            },
+            {
               "name": "JOB_NAME",
               "value": "pull-ci-openshift-release-master-ci-operator-integration"
             },
@@ -1301,6 +1329,10 @@
             {
               "name": "BUILD_ID",
               "value": "0"
+            },
+            {
+              "name": "CI",
+              "value": "true"
             },
             {
               "name": "JOB_NAME",
@@ -1459,6 +1491,10 @@
               "value": "0"
             },
             {
+              "name": "CI",
+              "value": "true"
+            },
+            {
               "name": "JOB_NAME",
               "value": "pull-ci-openshift-release-master-ci-operator-integration"
             },
@@ -1615,6 +1651,10 @@
               "value": "0"
             },
             {
+              "name": "CI",
+              "value": "true"
+            },
+            {
               "name": "JOB_NAME",
               "value": "pull-ci-openshift-release-master-ci-operator-integration"
             },
@@ -1765,6 +1805,10 @@
             {
               "name": "BUILD_ID",
               "value": "0"
+            },
+            {
+              "name": "CI",
+              "value": "true"
             },
             {
               "name": "JOB_NAME",

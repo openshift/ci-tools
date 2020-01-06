@@ -109,6 +109,7 @@ func makeExpectedPod(step *podStep, phaseAfterRun v1.PodPhase) *v1.Pod {
 					TerminationMessagePolicy: v1.TerminationMessageFallbackToLogsOnError,
 					Env: decorate.KubeEnv(map[string]string{
 						"BUILD_ID":      "test-build-id",
+						"CI":            "true",
 						"JOB_NAME":      "very-cool-prow-job",
 						"JOB_SPEC":      `{"type":"presubmit","job":"very-cool-prow-job","buildid":"test-build-id","prowjobid":"prow-job-id","refs":{"org":"org","repo":"repo","base_ref":"base-ref","base_sha":"base-sha","pulls":[{"number":123,"author":"","sha":"72532003f9e01e89f455187dd92c275204bc9781"}]}}`,
 						"JOB_TYPE":      string(prowapi.PresubmitJob),

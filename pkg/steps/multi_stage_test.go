@@ -98,6 +98,7 @@ func TestGeneratePods(t *testing.T) {
 	}
 	coreEnv := []coreapi.EnvVar{
 		{Name: "BUILD_ID", Value: "build id"},
+		{Name: "CI", Value: "true"},
 		{Name: "JOB_NAME", Value: "job"},
 		{Name: "JOB_SPEC", Value: `{"type":"postsubmit","job":"job","buildid":"build id","prowjobid":"prow job id","refs":{"org":"org","repo":"repo","base_ref":"base ref","base_sha":"base sha"}}`},
 		{Name: "JOB_TYPE", Value: "postsubmit"},

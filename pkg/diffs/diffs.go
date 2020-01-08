@@ -230,10 +230,10 @@ func ciOpFileName(job prowconfig.JobBase) (string, bool) {
 	}
 	for _, env := range job.Spec.Containers[0].Env {
 		if env.ValueFrom == nil {
-			return "", false
+			continue
 		}
 		if env.ValueFrom.ConfigMapKeyRef == nil {
-			return "", false
+			continue
 		}
 		if config.IsCiopConfigCM(env.ValueFrom.ConfigMapKeyRef.Name) {
 			return env.ValueFrom.ConfigMapKeyRef.Key, true

@@ -447,6 +447,46 @@ func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 			}(),
 		}},
 	}, {
+		description: "return a presubmit using one of the input ciop configs, with additional env vars",
+		prow: &prowconfig.Config{
+			JobConfig: prowconfig.JobConfig{
+				PresubmitsStatic: map[string][]prowconfig.Presubmit{
+					"org/repo": {
+						func() prowconfig.Presubmit {
+							ret := prowconfig.Presubmit{}
+							if err := deepcopy.Copy(&ret, &basePresubmitWithCiop); err != nil {
+								t.Fatal(err)
+							}
+							ret.Name = "org-repo-branch-testjob"
+							moreEnvVars := []v1.EnvVar{{
+								Name:  "SOMETHING",
+								Value: "value of SOMETHING",
+							}}
+							ret.Spec.Containers[0].Env = append(moreEnvVars, ret.Spec.Containers[0].Env...)
+							ret.Spec.Containers[0].Env[len(moreEnvVars)].ValueFrom.ConfigMapKeyRef.Key = baseCiopConfig.Filename
+							return ret
+						}(),
+					}},
+			},
+		},
+		ciop: config.ByFilename{baseCiopConfig.Filename: {Info: baseCiopConfig}},
+		expected: config.Presubmits{"org/repo": {
+			func() prowconfig.Presubmit {
+				ret := prowconfig.Presubmit{}
+				if err := deepcopy.Copy(&ret, &basePresubmitWithCiop); err != nil {
+					t.Fatal(err)
+				}
+				ret.Name = "org-repo-branch-testjob"
+				moreEnvVars := []v1.EnvVar{{
+					Name:  "SOMETHING",
+					Value: "value of SOMETHING",
+				}}
+				ret.Spec.Containers[0].Env = append(moreEnvVars, ret.Spec.Containers[0].Env...)
+				ret.Spec.Containers[0].Env[len(moreEnvVars)].ValueFrom.ConfigMapKeyRef.Key = baseCiopConfig.Filename
+				return ret
+			}(),
+		}},
+	}, {
 		description: "do not return a presubmit using a ciop config not present in input",
 		prow: &prowconfig.Config{
 			JobConfig: prowconfig.JobConfig{

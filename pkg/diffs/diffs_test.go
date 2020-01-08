@@ -6,21 +6,20 @@ import (
 	"testing"
 
 	"github.com/getlantern/deepcopy"
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/sirupsen/logrus"
-
 	"k8s.io/api/core/v1"
-
 	"k8s.io/apimachinery/pkg/api/equality"
-	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/apimachinery/pkg/util/sets"
-
 	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
-
 	"github.com/openshift/ci-tools/pkg/config"
 )
+
+var ignoreUnexported = cmpopts.IgnoreUnexported(prowconfig.Presubmit{}, prowconfig.Brancher{}, prowconfig.RegexpChangeMatcher{})
 
 func TestGetChangedCiopConfigs(t *testing.T) {
 	baseCiopConfig := config.DataWithInfo{
@@ -165,11 +164,11 @@ func TestGetChangedCiopConfigs(t *testing.T) {
 			expected := tc.expected()
 
 			if !reflect.DeepEqual(expected, actual) {
-				t.Errorf("Detected changed ci-operator config changes differ from expected:\n%s", diff.ObjectReflectDiff(expected, actual))
+				t.Errorf("Detected changed ci-operator config changes differ from expected:\n%s", cmp.Diff(expected, actual))
 			}
 
 			if !reflect.DeepEqual(tc.expectedAffectedJobs, affectedJobs) {
-				t.Errorf("Affected jobs differ from expected:\n%s", diff.ObjectReflectDiff(tc.expectedAffectedJobs, affectedJobs))
+				t.Errorf("Affected jobs differ from expected:\n%s", cmp.Diff(tc.expectedAffectedJobs, affectedJobs, ignoreUnexported))
 			}
 		})
 	}
@@ -362,7 +361,7 @@ func TestGetChangedPresubmits(t *testing.T) {
 			before, after := testCase.configGenerator(t)
 			p := GetChangedPresubmits(before, after, logrus.NewEntry(logrus.New()))
 			if !equality.Semantic.DeepEqual(p, testCase.expected) {
-				t.Fatalf(diff.ObjectDiff(testCase.expected["org/repo"], p["org/repo"]))
+				t.Fatalf(cmp.Diff(testCase.expected["org/repo"], p["org/repo"], ignoreUnexported))
 			}
 		})
 	}
@@ -496,7 +495,7 @@ func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 			presubmits := GetPresubmitsForCiopConfigs(tc.prow, tc.ciop, affectedJobs)
 
 			if !reflect.DeepEqual(tc.expected, presubmits) {
-				t.Errorf("Returned presubmits differ from expected:\n%s", diff.ObjectDiff(tc.expected, presubmits))
+				t.Errorf("Returned presubmits differ from expected:\n%s", cmp.Diff(tc.expected, presubmits, ignoreUnexported))
 			}
 		})
 	}
@@ -628,7 +627,7 @@ func TestGetImagesPostsubmitsForCiopConfigs(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			if actual, expected := GetImagesPostsubmitsForCiopConfigs(testCase.prowConfig, testCase.ciopConfigs), testCase.expected; !reflect.DeepEqual(actual, expected) {
-				t.Errorf("%s: got incorrect images postsubmits: %v", testCase.name, diff.ObjectReflectDiff(actual, expected))
+				t.Errorf("%s: got incorrect images postsubmits: %v", testCase.name, cmp.Diff(actual, expected, ignoreUnexported))
 			}
 		})
 	}

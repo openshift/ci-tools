@@ -10,6 +10,8 @@ import (
 
 	"github.com/getlantern/deepcopy"
 	"github.com/ghodss/yaml"
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/sirupsen/logrus"
 	logrustest "github.com/sirupsen/logrus/hooks/test"
 
@@ -22,7 +24,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
 
@@ -35,6 +36,8 @@ import (
 )
 
 const testingRegistry = "../../test/multistage-registry/registry"
+
+var ignoreUnexported = cmpopts.IgnoreUnexported(prowconfig.Presubmit{}, prowconfig.Brancher{}, prowconfig.RegexpChangeMatcher{})
 
 func TestReplaceClusterProfiles(t *testing.T) {
 	makeVolume := func(name string) v1.Volume {
@@ -127,7 +130,7 @@ func TestReplaceClusterProfiles(t *testing.T) {
 			}
 
 			if !reflect.DeepEqual(tc.expected, names) {
-				t.Fatal(diff.ObjectDiff(tc.expected, names))
+				t.Fatal(cmp.Diff(tc.expected, names))
 			}
 		})
 	}
@@ -232,14 +235,14 @@ func TestInlineCiopConfig(t *testing.T) {
 				}
 
 				if !equality.Semantic.DeepEqual(expectedJob, job) {
-					t.Errorf("Returned job differs from expected:\n%s", diff.ObjectReflectDiff(expectedJob, job))
+					t.Errorf("Returned job differs from expected:\n%s", cmp.Diff(expectedJob, job, ignoreUnexported))
 				}
 			}
 		})
 	}
 }
 
-func makeTestingPresubmit(name, context string, org, repo, branch string) *prowconfig.Presubmit {
+func makeTestingPresubmit(name, context, branch string) *prowconfig.Presubmit {
 	return &prowconfig.Presubmit{
 		JobBase: prowconfig.JobBase{
 			Agent:  "kubernetes",
@@ -279,15 +282,20 @@ func TestMakeRehearsalPresubmit(t *testing.T) {
 		Reporter:     prowconfig.Reporter{Context: "ci/prow/test"},
 		Brancher:     prowconfig.Brancher{Branches: []string{"^branch$"}},
 	}
+	hiddenPresubmit := &prowconfig.Presubmit{}
+	deepcopy.Copy(hiddenPresubmit, sourcePresubmit)
+	hiddenPresubmit.Hidden = true
 
 	testCases := []struct {
 		testID            string
 		refs              *pjapi.Refs
+		original          *prowconfig.Presubmit
 		expectedPresubmit *prowconfig.Presubmit
 	}{
 		{
-			testID: "job that belong to different org/repo than refs",
-			refs:   &pjapi.Refs{Org: "anotherOrg", Repo: "anotherRepo"},
+			testID:   "job that belong to different org/repo than refs",
+			refs:     &pjapi.Refs{Org: "anotherOrg", Repo: "anotherRepo"},
+			original: sourcePresubmit,
 			expectedPresubmit: func() *prowconfig.Presubmit {
 				p := &prowconfig.Presubmit{}
 				deepcopy.Copy(p, sourcePresubmit)
@@ -310,8 +318,9 @@ func TestMakeRehearsalPresubmit(t *testing.T) {
 			}(),
 		},
 		{
-			testID: "job that belong to the same org/repo with refs.",
-			refs:   &pjapi.Refs{Org: "org", Repo: "repo"},
+			testID:   "job that belong to the same org/repo with refs.",
+			refs:     &pjapi.Refs{Org: "org", Repo: "repo"},
+			original: sourcePresubmit,
 			expectedPresubmit: func() *prowconfig.Presubmit {
 				p := &prowconfig.Presubmit{}
 				deepcopy.Copy(p, sourcePresubmit)
@@ -326,8 +335,27 @@ func TestMakeRehearsalPresubmit(t *testing.T) {
 			}(),
 		},
 		{
-			testID: "job that belong to the same org but different repo than refs.",
-			refs:   &pjapi.Refs{Org: "org", Repo: "anotherRepo"},
+			testID:   "hidden job that belong to the same org/repo with refs.",
+			refs:     &pjapi.Refs{Org: "org", Repo: "repo"},
+			original: hiddenPresubmit,
+			expectedPresubmit: func() *prowconfig.Presubmit {
+				p := &prowconfig.Presubmit{}
+				deepcopy.Copy(p, hiddenPresubmit)
+
+				p.Name = "rehearse-123-pull-ci-org-repo-branch-test"
+				p.Labels = map[string]string{rehearseLabel: "123"}
+				p.Spec.Containers[0].Args = []string{"arg1", "arg2"}
+				p.RerunCommand = "/test pj-rehearse"
+				p.Context = "ci/rehearse/org/repo/branch/test"
+				p.Optional = true
+				p.SkipReport = true
+				return p
+			}(),
+		},
+		{
+			testID:   "job that belong to the same org but different repo than refs.",
+			refs:     &pjapi.Refs{Org: "org", Repo: "anotherRepo"},
+			original: sourcePresubmit,
 			expectedPresubmit: func() *prowconfig.Presubmit {
 				p := &prowconfig.Presubmit{}
 				deepcopy.Copy(p, sourcePresubmit)
@@ -353,12 +381,12 @@ func TestMakeRehearsalPresubmit(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.testID, func(t *testing.T) {
-			rehearsal, err := makeRehearsalPresubmit(sourcePresubmit, testRepo, testPrNumber, tc.refs)
+			rehearsal, err := makeRehearsalPresubmit(tc.original, testRepo, testPrNumber, tc.refs)
 			if err != nil {
 				t.Errorf("Unexpected error in makeRehearsalPresubmit: %v", err)
 			}
 			if !equality.Semantic.DeepEqual(tc.expectedPresubmit, rehearsal) {
-				t.Errorf("Expected rehearsal Presubmit differs:\n%s", diff.ObjectDiff(tc.expectedPresubmit, rehearsal))
+				t.Errorf("Expected rehearsal Presubmit differs:\n%s", cmp.Diff(tc.expectedPresubmit, rehearsal, ignoreUnexported))
 			}
 
 		})
@@ -445,8 +473,6 @@ func makeSuccessfulFinishReactor(watcher watch.Interface, jobs map[string][]prow
 func TestExecuteJobsErrors(t *testing.T) {
 	testPrNumber, testNamespace, testRepoPath, testRefs := makeTestData()
 	targetOrgRepo := "targetOrg/targetRepo"
-	targetOrg := "targetOrg"
-	targetRepo := "targetRepo"
 	testCiopConfigs := config.ByFilename{}
 
 	testCases := []struct {
@@ -456,14 +482,14 @@ func TestExecuteJobsErrors(t *testing.T) {
 	}{{
 		description: "fail to Create a prowjob",
 		jobs: map[string][]prowconfig.Presubmit{targetOrgRepo: {
-			*makeTestingPresubmit("job1", "ci/prow/job1", targetOrg, targetRepo, "master"),
+			*makeTestingPresubmit("job1", "ci/prow/job1", "master"),
 		}},
 		failToCreate: sets.NewString("rehearse-123-job1"),
 	}, {
 		description: "fail to Create one of two prowjobs",
 		jobs: map[string][]prowconfig.Presubmit{targetOrgRepo: {
-			*makeTestingPresubmit("job1", "ci/prow/job1", targetOrg, targetRepo, "master"),
-			*makeTestingPresubmit("job2", "ci/prow/job2", targetOrg, targetRepo, "master"),
+			*makeTestingPresubmit("job1", "ci/prow/job1", "master"),
+			*makeTestingPresubmit("job2", "ci/prow/job2", "master"),
 		}},
 		failToCreate: sets.NewString("rehearse-123-job2"),
 	}}
@@ -507,8 +533,6 @@ func TestExecuteJobsErrors(t *testing.T) {
 
 func TestExecuteJobsUnsuccessful(t *testing.T) {
 	testPrNumber, testNamespace, testRepoPath, testRefs := makeTestData()
-	targetOrg := "targetOrg"
-	targetRepo := "targetRepo"
 	targetOrgRepo := "targetOrg/targetRepo"
 	testCiopConfigs := config.ByFilename{}
 
@@ -519,20 +543,20 @@ func TestExecuteJobsUnsuccessful(t *testing.T) {
 	}{{
 		description: "single job that fails",
 		jobs: map[string][]prowconfig.Presubmit{targetOrgRepo: {
-			*makeTestingPresubmit("job1", "ci/prow/job1", targetOrg, targetRepo, "master"),
+			*makeTestingPresubmit("job1", "ci/prow/job1", "master"),
 		}},
 		results: map[string]pjapi.ProwJobState{"rehearse-123-job1": pjapi.FailureState},
 	}, {
 		description: "single job that aborts",
 		jobs: map[string][]prowconfig.Presubmit{targetOrgRepo: {
-			*makeTestingPresubmit("job1", "ci/prow/job1", targetOrg, targetRepo, "master"),
+			*makeTestingPresubmit("job1", "ci/prow/job1", "master"),
 		}},
 		results: map[string]pjapi.ProwJobState{"rehearse-123-job1": pjapi.AbortedState},
 	}, {
 		description: "one job succeeds, one fails",
 		jobs: map[string][]prowconfig.Presubmit{targetOrgRepo: {
-			*makeTestingPresubmit("job1", "ci/prow/job1", targetOrg, targetRepo, "master"),
-			*makeTestingPresubmit("job2", "ci/prow/job2", targetOrg, targetRepo, "master"),
+			*makeTestingPresubmit("job1", "ci/prow/job1", "master"),
+			*makeTestingPresubmit("job2", "ci/prow/job2", "master"),
 		}},
 		results: map[string]pjapi.ProwJobState{
 			"rehearse-123-job1": pjapi.SuccessState,
@@ -599,8 +623,8 @@ func TestExecuteJobsPositive(t *testing.T) {
 	}{{
 		description: "two jobs in a single repo",
 		jobs: map[string][]prowconfig.Presubmit{targetOrgRepo: {
-			*makeTestingPresubmit("job1", "ci/prow/job1", targetOrg, targetRepo, "master"),
-			*makeTestingPresubmit("job2", "ci/prow/job2", targetOrg, targetRepo, "master"),
+			*makeTestingPresubmit("job1", "ci/prow/job1", "master"),
+			*makeTestingPresubmit("job2", "ci/prow/job2", "master"),
 		}},
 		expectedJobs: []pjapi.ProwJobSpec{
 			makeTestingProwJob(testNamespace,
@@ -614,8 +638,8 @@ func TestExecuteJobsPositive(t *testing.T) {
 		}}, {
 		description: "two jobs in a single repo, same context but different branch",
 		jobs: map[string][]prowconfig.Presubmit{targetOrgRepo: {
-			*makeTestingPresubmit("job1", "ci/prow/job1", targetOrg, targetRepo, "master"),
-			*makeTestingPresubmit("job2", "ci/prow/job2", targetOrg, targetRepo, "not-master"),
+			*makeTestingPresubmit("job1", "ci/prow/job1", "master"),
+			*makeTestingPresubmit("job2", "ci/prow/job2", "not-master"),
 		}},
 		expectedJobs: []pjapi.ProwJobSpec{
 			makeTestingProwJob(testNamespace,
@@ -630,8 +654,8 @@ func TestExecuteJobsPositive(t *testing.T) {
 		{
 			description: "two jobs in a separate repos",
 			jobs: map[string][]prowconfig.Presubmit{
-				targetOrgRepo:        {*makeTestingPresubmit("job1", "ci/prow/job1", targetOrg, targetRepo, "master")},
-				anotherTargetOrgRepo: {*makeTestingPresubmit("job2", "ci/prow/job2", anotherTargetOrg, anotherTargetRepo, "master")},
+				targetOrgRepo:        {*makeTestingPresubmit("job1", "ci/prow/job1", "master")},
+				anotherTargetOrgRepo: {*makeTestingPresubmit("job2", "ci/prow/job2", "master")},
 			},
 			expectedJobs: []pjapi.ProwJobSpec{
 				makeTestingProwJob(testNamespace,
@@ -696,7 +720,7 @@ func TestExecuteJobsPositive(t *testing.T) {
 			sort.Slice(createdJobSpecs, func(a, b int) bool { return createdJobSpecs[a].Job < createdJobSpecs[b].Job })
 
 			if !equality.Semantic.DeepEqual(tc.expectedJobs, createdJobSpecs) {
-				t.Errorf("Created ProwJobs differ from expected:\n%s", diff.ObjectReflectDiff(tc.expectedJobs, createdJobSpecs))
+				t.Errorf("Created ProwJobs differ from expected:\n%s", cmp.Diff(tc.expectedJobs, createdJobSpecs, ignoreUnexported))
 			}
 		})
 	}
@@ -1024,7 +1048,7 @@ func TestReplaceCMTemplateName(t *testing.T) {
 			replaceCMTemplateName(testCase.jobVolumeMounts, testCase.jobVolumes, templates)
 			expected := testCase.expectedToFind()
 			if !reflect.DeepEqual(expected, testCase.jobVolumes) {
-				t.Fatalf("Diff found %v", diff.ObjectReflectDiff(expected, testCase.jobVolumes))
+				t.Fatalf("Diff found %v", cmp.Diff(expected, testCase.jobVolumes))
 			}
 		})
 	}
@@ -1110,7 +1134,7 @@ func TestGetClusterTypes(t *testing.T) {
 		t.Run(tc.id, func(t *testing.T) {
 			ret := getClusterTypes(tc.jobs)
 			if !reflect.DeepEqual(tc.want, ret) {
-				t.Fatal(diff.ObjectDiff(tc.want, ret))
+				t.Fatal(cmp.Diff(tc.want, ret))
 			}
 		})
 	}
@@ -1160,7 +1184,7 @@ func TestRemoveConfigResolverFlags(t *testing.T) {
 		t.Run(testCase.description, func(t *testing.T) {
 			newArgs := removeConfigResolverFlags(testCase.input)
 			if !reflect.DeepEqual(testCase.expected, newArgs) {
-				t.Fatalf("Diff found %v", diff.ObjectReflectDiff(testCase.expected, newArgs))
+				t.Fatalf("Diff found %v", cmp.Diff(testCase.expected, newArgs))
 			}
 		})
 	}

@@ -18,9 +18,9 @@ func TestResolve(t *testing.T) {
 	for _, testCase := range []struct {
 		name        string
 		config      api.MultiStageTestConfiguration
-		stepMap     map[string]api.LiteralTestStep
-		chainMap    map[string][]api.TestStep
-		workflowMap map[string]api.MultiStageTestConfiguration
+		stepMap     ReferenceMap
+		chainMap    ChainMap
+		workflowMap WorkflowMap
 		expectedRes api.MultiStageTestConfigurationLiteral
 		expectErr   bool
 	}{{
@@ -98,7 +98,7 @@ func TestResolve(t *testing.T) {
 				Reference: &reference1,
 			}},
 		},
-		stepMap: map[string]api.LiteralTestStep{
+		stepMap: ReferenceMap{
 			reference1: {
 				As:       "generic-unit-test",
 				From:     "my-image",
@@ -130,7 +130,7 @@ func TestResolve(t *testing.T) {
 				Reference: &reference1,
 			}},
 		},
-		stepMap: map[string]api.LiteralTestStep{
+		stepMap: ReferenceMap{
 			"generic-unit-test-2": {
 				As:       "generic-unit-test-2",
 				From:     "my-image",
@@ -164,7 +164,7 @@ func TestResolve(t *testing.T) {
 				Reference: &teardownRef,
 			}},
 		},
-		chainMap: map[string][]api.TestStep{
+		chainMap: ChainMap{
 			fipsPreChain: {{
 				LiteralTestStep: &api.LiteralTestStep{
 					As:       "ipi-install",
@@ -185,7 +185,7 @@ func TestResolve(t *testing.T) {
 					}},
 			}},
 		},
-		stepMap: map[string]api.LiteralTestStep{
+		stepMap: ReferenceMap{
 			teardownRef: {
 				As:       "ipi-teardown",
 				From:     "installer",
@@ -242,7 +242,7 @@ func TestResolve(t *testing.T) {
 				Reference: &fipsPreChain,
 			}},
 		},
-		chainMap: map[string][]api.TestStep{
+		chainMap: ChainMap{
 			"broken": {{
 				LiteralTestStep: &api.LiteralTestStep{
 					As:       "generic-unit-test-2",
@@ -264,7 +264,7 @@ func TestResolve(t *testing.T) {
 				Chain: &nestedChains,
 			}},
 		},
-		chainMap: map[string][]api.TestStep{
+		chainMap: ChainMap{
 			nestedChains: {{
 				Chain: &chainInstall,
 			}, {
@@ -334,7 +334,7 @@ func TestResolve(t *testing.T) {
 				Chain: &nestedChains,
 			}},
 		},
-		chainMap: map[string][]api.TestStep{
+		chainMap: ChainMap{
 			nestedChains: {{
 				Chain: &chainInstall,
 			}, {
@@ -374,7 +374,7 @@ func TestResolve(t *testing.T) {
 		config: api.MultiStageTestConfiguration{
 			Workflow: &awsWorkflow,
 		},
-		chainMap: map[string][]api.TestStep{
+		chainMap: ChainMap{
 			fipsPreChain: {{
 				LiteralTestStep: &api.LiteralTestStep{
 					As:       "ipi-install",
@@ -395,7 +395,7 @@ func TestResolve(t *testing.T) {
 					}},
 			}},
 		},
-		stepMap: map[string]api.LiteralTestStep{
+		stepMap: ReferenceMap{
 			teardownRef: {
 				As:       "ipi-teardown",
 				From:     "installer",
@@ -405,7 +405,7 @@ func TestResolve(t *testing.T) {
 					Limits:   api.ResourceList{"memory": "2Gi"},
 				}},
 		},
-		workflowMap: map[string]api.MultiStageTestConfiguration{
+		workflowMap: WorkflowMap{
 			awsWorkflow: {
 				ClusterProfile: api.ClusterProfileAWS,
 				Pre: []api.TestStep{{
@@ -480,7 +480,7 @@ func TestResolve(t *testing.T) {
 					}},
 			}},
 		},
-		workflowMap: map[string]api.MultiStageTestConfiguration{
+		workflowMap: WorkflowMap{
 			awsWorkflow: {
 				ClusterProfile: api.ClusterProfileAWS,
 				Pre: []api.TestStep{{

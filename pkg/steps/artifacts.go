@@ -275,7 +275,7 @@ func copyArtifacts(podClient PodClient, into, ns, name, containerName string, pa
 	// indicate why the step took a long amount of time. Conversely, if we just got a small
 	// number of files this is just noise and can be omitted to not distract from other steps.
 	if size > 1*1000*1000 {
-		log.Printf("Copied %0.2fMi of artifacts from %s to %s", float64(size)/1000000, name, into)
+		log.Printf("Copied %0.2fMB of artifacts from %s to %s", float64(size)/1000000, name, into)
 	}
 
 	return nil

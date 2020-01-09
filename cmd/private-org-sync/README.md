@@ -1,0 +1,73 @@
+# Private Org Sync
+
+This tool automatically syncs code from which "official" images are built
+from their public git repo locations to their mirrors in private GitHub
+organization. It is intended to be run in a Prow periodic job with an interval
+of less than an hour.
+
+Both source and destination are queried with `git ls-remote`: if they are
+already in sync, no further git operations are done. When the destination is
+detected to be an empty repo, full `git fetch` is done against a source,
+and FETCH_HEAD is then pushed to the destination. When the destination
+is a non-empty repository, `git fetch --depth X` is done against the
+source and the resulting shallow branch tip is attempted to be pushed.
+When this fails, X is exponentially increased and the fetch is retried.
+When a threshold is hit, the shallow branch tip is fully fetched with
+`--unshallow` and the push is retried again.
+
+Currently the tool does not fail when the destination repository does not exist
+at all: this should allow running against full openshift/release while
+repository mirrors are created in the private org.
+## Example
+
+```console
+$ private-org-sync --config-path ci-operator/config/ --target-org $ORG --token-path $TOKEN_PATH --only-repo openshift/api --confirm=true --git-dir $( mktemp -d )
+INFO[0000] Syncing content between locations             branch=master (more fields...)
+INFO[0001] Destination is an empty repo: will do a full fetch right away  branch=master (more fields...)
+INFO[0001] Fetching from source (full fetch)             branch=master (more fields...)
+INFO[0005] Pushing to destination                        branch=master (more fields...)
+INFO[0033] Syncing content between locations             branch=release-4.1 (more fields...)
+INFO[0034] Fetching from source (--depth=2)              branch=release-4.1 (more fields...)
+INFO[0035] Pushing to destination                        branch=release-4.1 (more fields...)
+INFO[0038] failed to push to destination, retrying with deeper fetch  branch=release-4.1 (more fields...)
+INFO[0038] Fetching from source (--depth=4)              branch=release-4.1 (more fields...)
+INFO[0039] Pushing to destination                        branch=release-4.1 (more fields...)
+INFO[0043] Syncing content between locations             branch=release-4.2 (more fields...)
+INFO[0044] Fetching from source (--depth=2)              branch=release-4.2 (more fields...)
+INFO[0045] Pushing to destination                        branch=release-4.2 (more fields...)
+INFO[0047] failed to push to destination, retrying with deeper fetch  branch=release-4.2 (more fields...)
+INFO[0047] Fetching from source (--depth=4)              branch=release-4.2 (more fields...)
+INFO[0049] Pushing to destination                        branch=release-4.2 (more fields...)
+INFO[0052] Syncing content between locations             branch=release-4.3 (more fields...)
+INFO[0053] Fetching from source (--depth=2)              branch=release-4.3 (more fields...)
+INFO[0057] Pushing to destination                        branch=release-4.3 (more fields...)
+INFO[0066] failed to push to destination, retrying with deeper fetch  branch=release-4.3 (more fields...)
+INFO[0066] Fetching from source (--depth=4)              branch=release-4.3 (more fields...)
+INFO[0068] Pushing to destination                        branch=release-4.3 (more fields...)
+INFO[0076] failed to push to destination, retrying with deeper fetch  branch=release-4.3 (more fields...)
+INFO[0076] Fetching from source (--depth=8)              branch=release-4.3 (more fields...)
+INFO[0078] Pushing to destination                        branch=release-4.3 (more fields...)
+INFO[0081] failed to push to destination, retrying with deeper fetch  branch=release-4.3 (more fields...)
+INFO[0081] Fetching from source (--depth=16)             branch=release-4.3 (more fields...)
+INFO[0082] Pushing to destination                        branch=release-4.3 (more fields...)
+INFO[0087] Syncing content between locations             branch=release-4.4 (more fields...)
+INFO[0088] Fetching from source (--depth=2)              branch=release-4.4 (more fields...)
+INFO[0089] Pushing to destination                        branch=release-4.4 (more fields...)
+INFO[0093] Syncing content between locations             branch=release-4.5 (more fields...)
+INFO[0094] Fetching from source (--depth=2)              branch=release-4.5 (more fields...)
+INFO[0095] Pushing to destination                        branch=release-4.5 (more fields...)
+
+$ private-org-sync --config-path ci-operator/config/ --target-org $ORG --token-path $TOKEN_PATH --only-repo openshift/api --confirm=true --git-dir $( mktemp -d )
+INFO[0000] Syncing content between locations             branch=master (more fields...)
+INFO[0001] Branches are already in sync                  branch=master (more fields...)
+INFO[0001] Syncing content between locations             branch=release-4.1 (more fields...)
+INFO[0002] Branches are already in sync                  branch=release-4.1 (more fields...)
+INFO[0002] Syncing content between locations             branch=release-4.2 (more fields...)
+INFO[0003] Branches are already in sync                  branch=release-4.2 (more fields...)
+INFO[0003] Syncing content between locations             branch=release-4.3 (more fields...)
+INFO[0004] Branches are already in sync                  branch=release-4.3 (more fields...)
+INFO[0004] Syncing content between locations             branch=release-4.4 (more fields...)
+INFO[0005] Branches are already in sync                  branch=release-4.4 (more fields...)
+INFO[0005] Syncing content between locations             branch=release-4.5 (more fields...)
+INFO[0006] Branches are already in sync                  branch=release-4.5 (more fields...)
+```

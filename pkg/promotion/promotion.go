@@ -21,7 +21,7 @@ const (
 // being promoted. This is a proxy for determining if a configuration contributes to
 // the release payload.
 func PromotesOfficialImages(configSpec *cioperatorapi.ReleaseBuildConfiguration) bool {
-	return !isDisabled(configSpec) && buildOfficialImages(configSpec)
+	return !isDisabled(configSpec) && BuildsOfficialImages(configSpec)
 }
 
 func isDisabled(configSpec *cioperatorapi.ReleaseBuildConfiguration) bool {
@@ -30,7 +30,7 @@ func isDisabled(configSpec *cioperatorapi.ReleaseBuildConfiguration) bool {
 
 // buildOfficialImages determines if a configuration will result in official images
 // being built.
-func buildOfficialImages(configSpec *cioperatorapi.ReleaseBuildConfiguration) bool {
+func BuildsOfficialImages(configSpec *cioperatorapi.ReleaseBuildConfiguration) bool {
 	promotionNamespace := extractPromotionNamespace(configSpec)
 	promotionName := extractPromotionName(configSpec)
 	return RefersToOfficialImage(promotionName, promotionNamespace)

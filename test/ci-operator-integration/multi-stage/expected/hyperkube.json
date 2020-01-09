@@ -532,6 +532,10 @@
               "value": "openshift"
             },
             {
+              "name": "ARTIFACT_DIR",
+              "value": "/tmp/artifacts"
+            },
+            {
               "name": "NAMESPACE",
               "value": "testns"
             },
@@ -561,12 +565,32 @@
           "terminationMessagePolicy": "FallbackToLogsOnError",
           "volumeMounts": [
             {
+              "mountPath": "/tmp/artifacts",
+              "name": "artifacts"
+            },
+            {
               "mountPath": "/tmp/secret-wrapper",
               "name": "secret-wrapper"
             },
             {
               "mountPath": "/var/run/secrets/ci.openshift.io/multi-stage",
               "name": "multi-stage"
+            }
+          ]
+        },
+        {
+          "command": [
+            "/bin/sh",
+            "-c",
+            "#!/bin/sh\nset -euo pipefail\ntrap 'kill $(jobs -p); exit 0' TERM\n\ntouch /tmp/done\necho \"Waiting for artifacts to be extracted\"\nwhile true; do\n\tif [[ ! -f /tmp/done ]]; then\n\t\techo \"Artifacts extracted, will terminate after 30s\"\n\t\tsleep 30\n\t\techo \"Exiting\"\n\t\texit 0\n\tfi\n\tsleep 5 & wait\ndone\n"
+          ],
+          "image": "busybox",
+          "name": "artifacts",
+          "resources": {},
+          "volumeMounts": [
+            {
+              "mountPath": "/tmp/artifacts",
+              "name": "artifacts"
             }
           ]
         }
@@ -594,6 +618,10 @@
       ],
       "restartPolicy": "Never",
       "volumes": [
+        {
+          "emptyDir": {},
+          "name": "artifacts"
+        },
         {
           "emptyDir": {},
           "name": "secret-wrapper"
@@ -694,6 +722,10 @@
               "value": "openshift"
             },
             {
+              "name": "ARTIFACT_DIR",
+              "value": "/tmp/artifacts"
+            },
+            {
               "name": "NAMESPACE",
               "value": "testns"
             },
@@ -723,12 +755,32 @@
           "terminationMessagePolicy": "FallbackToLogsOnError",
           "volumeMounts": [
             {
+              "mountPath": "/tmp/artifacts",
+              "name": "artifacts"
+            },
+            {
               "mountPath": "/tmp/secret-wrapper",
               "name": "secret-wrapper"
             },
             {
               "mountPath": "/var/run/secrets/ci.openshift.io/multi-stage",
               "name": "multi-stage"
+            }
+          ]
+        },
+        {
+          "command": [
+            "/bin/sh",
+            "-c",
+            "#!/bin/sh\nset -euo pipefail\ntrap 'kill $(jobs -p); exit 0' TERM\n\ntouch /tmp/done\necho \"Waiting for artifacts to be extracted\"\nwhile true; do\n\tif [[ ! -f /tmp/done ]]; then\n\t\techo \"Artifacts extracted, will terminate after 30s\"\n\t\tsleep 30\n\t\techo \"Exiting\"\n\t\texit 0\n\tfi\n\tsleep 5 & wait\ndone\n"
+          ],
+          "image": "busybox",
+          "name": "artifacts",
+          "resources": {},
+          "volumeMounts": [
+            {
+              "mountPath": "/tmp/artifacts",
+              "name": "artifacts"
             }
           ]
         }
@@ -756,6 +808,10 @@
       ],
       "restartPolicy": "Never",
       "volumes": [
+        {
+          "emptyDir": {},
+          "name": "artifacts"
+        },
         {
           "emptyDir": {},
           "name": "secret-wrapper"
@@ -856,6 +912,10 @@
               "value": "openshift"
             },
             {
+              "name": "ARTIFACT_DIR",
+              "value": "/tmp/artifacts"
+            },
+            {
               "name": "NAMESPACE",
               "value": "testns"
             },
@@ -885,12 +945,32 @@
           "terminationMessagePolicy": "FallbackToLogsOnError",
           "volumeMounts": [
             {
+              "mountPath": "/tmp/artifacts",
+              "name": "artifacts"
+            },
+            {
               "mountPath": "/tmp/secret-wrapper",
               "name": "secret-wrapper"
             },
             {
               "mountPath": "/var/run/secrets/ci.openshift.io/multi-stage",
               "name": "multi-stage"
+            }
+          ]
+        },
+        {
+          "command": [
+            "/bin/sh",
+            "-c",
+            "#!/bin/sh\nset -euo pipefail\ntrap 'kill $(jobs -p); exit 0' TERM\n\ntouch /tmp/done\necho \"Waiting for artifacts to be extracted\"\nwhile true; do\n\tif [[ ! -f /tmp/done ]]; then\n\t\techo \"Artifacts extracted, will terminate after 30s\"\n\t\tsleep 30\n\t\techo \"Exiting\"\n\t\texit 0\n\tfi\n\tsleep 5 & wait\ndone\n"
+          ],
+          "image": "busybox",
+          "name": "artifacts",
+          "resources": {},
+          "volumeMounts": [
+            {
+              "mountPath": "/tmp/artifacts",
+              "name": "artifacts"
             }
           ]
         }
@@ -918,6 +998,10 @@
       ],
       "restartPolicy": "Never",
       "volumes": [
+        {
+          "emptyDir": {},
+          "name": "artifacts"
+        },
         {
           "emptyDir": {},
           "name": "secret-wrapper"
@@ -1018,6 +1102,10 @@
               "value": "openshift"
             },
             {
+              "name": "ARTIFACT_DIR",
+              "value": "/tmp/artifacts"
+            },
+            {
               "name": "NAMESPACE",
               "value": "testns"
             },
@@ -1047,12 +1135,32 @@
           "terminationMessagePolicy": "FallbackToLogsOnError",
           "volumeMounts": [
             {
+              "mountPath": "/tmp/artifacts",
+              "name": "artifacts"
+            },
+            {
               "mountPath": "/tmp/secret-wrapper",
               "name": "secret-wrapper"
             },
             {
               "mountPath": "/var/run/secrets/ci.openshift.io/multi-stage",
               "name": "multi-stage"
+            }
+          ]
+        },
+        {
+          "command": [
+            "/bin/sh",
+            "-c",
+            "#!/bin/sh\nset -euo pipefail\ntrap 'kill $(jobs -p); exit 0' TERM\n\ntouch /tmp/done\necho \"Waiting for artifacts to be extracted\"\nwhile true; do\n\tif [[ ! -f /tmp/done ]]; then\n\t\techo \"Artifacts extracted, will terminate after 30s\"\n\t\tsleep 30\n\t\techo \"Exiting\"\n\t\texit 0\n\tfi\n\tsleep 5 & wait\ndone\n"
+          ],
+          "image": "busybox",
+          "name": "artifacts",
+          "resources": {},
+          "volumeMounts": [
+            {
+              "mountPath": "/tmp/artifacts",
+              "name": "artifacts"
             }
           ]
         }
@@ -1080,6 +1188,10 @@
       ],
       "restartPolicy": "Never",
       "volumes": [
+        {
+          "emptyDir": {},
+          "name": "artifacts"
+        },
         {
           "emptyDir": {},
           "name": "secret-wrapper"
@@ -1180,6 +1292,10 @@
               "value": "openshift"
             },
             {
+              "name": "ARTIFACT_DIR",
+              "value": "/tmp/artifacts"
+            },
+            {
               "name": "NAMESPACE",
               "value": "testns"
             },
@@ -1209,12 +1325,32 @@
           "terminationMessagePolicy": "FallbackToLogsOnError",
           "volumeMounts": [
             {
+              "mountPath": "/tmp/artifacts",
+              "name": "artifacts"
+            },
+            {
               "mountPath": "/tmp/secret-wrapper",
               "name": "secret-wrapper"
             },
             {
               "mountPath": "/var/run/secrets/ci.openshift.io/multi-stage",
               "name": "multi-stage"
+            }
+          ]
+        },
+        {
+          "command": [
+            "/bin/sh",
+            "-c",
+            "#!/bin/sh\nset -euo pipefail\ntrap 'kill $(jobs -p); exit 0' TERM\n\ntouch /tmp/done\necho \"Waiting for artifacts to be extracted\"\nwhile true; do\n\tif [[ ! -f /tmp/done ]]; then\n\t\techo \"Artifacts extracted, will terminate after 30s\"\n\t\tsleep 30\n\t\techo \"Exiting\"\n\t\texit 0\n\tfi\n\tsleep 5 & wait\ndone\n"
+          ],
+          "image": "busybox",
+          "name": "artifacts",
+          "resources": {},
+          "volumeMounts": [
+            {
+              "mountPath": "/tmp/artifacts",
+              "name": "artifacts"
             }
           ]
         }
@@ -1242,6 +1378,10 @@
       ],
       "restartPolicy": "Never",
       "volumes": [
+        {
+          "emptyDir": {},
+          "name": "artifacts"
+        },
         {
           "emptyDir": {},
           "name": "secret-wrapper"
@@ -1342,6 +1482,10 @@
               "value": "openshift"
             },
             {
+              "name": "ARTIFACT_DIR",
+              "value": "/tmp/artifacts"
+            },
+            {
               "name": "NAMESPACE",
               "value": "testns"
             },
@@ -1371,12 +1515,32 @@
           "terminationMessagePolicy": "FallbackToLogsOnError",
           "volumeMounts": [
             {
+              "mountPath": "/tmp/artifacts",
+              "name": "artifacts"
+            },
+            {
               "mountPath": "/tmp/secret-wrapper",
               "name": "secret-wrapper"
             },
             {
               "mountPath": "/var/run/secrets/ci.openshift.io/multi-stage",
               "name": "multi-stage"
+            }
+          ]
+        },
+        {
+          "command": [
+            "/bin/sh",
+            "-c",
+            "#!/bin/sh\nset -euo pipefail\ntrap 'kill $(jobs -p); exit 0' TERM\n\ntouch /tmp/done\necho \"Waiting for artifacts to be extracted\"\nwhile true; do\n\tif [[ ! -f /tmp/done ]]; then\n\t\techo \"Artifacts extracted, will terminate after 30s\"\n\t\tsleep 30\n\t\techo \"Exiting\"\n\t\texit 0\n\tfi\n\tsleep 5 & wait\ndone\n"
+          ],
+          "image": "busybox",
+          "name": "artifacts",
+          "resources": {},
+          "volumeMounts": [
+            {
+              "mountPath": "/tmp/artifacts",
+              "name": "artifacts"
             }
           ]
         }
@@ -1404,6 +1568,10 @@
       ],
       "restartPolicy": "Never",
       "volumes": [
+        {
+          "emptyDir": {},
+          "name": "artifacts"
+        },
         {
           "emptyDir": {},
           "name": "secret-wrapper"
@@ -1504,6 +1672,10 @@
               "value": "openshift"
             },
             {
+              "name": "ARTIFACT_DIR",
+              "value": "/tmp/artifacts"
+            },
+            {
               "name": "NAMESPACE",
               "value": "testns"
             },
@@ -1533,12 +1705,32 @@
           "terminationMessagePolicy": "FallbackToLogsOnError",
           "volumeMounts": [
             {
+              "mountPath": "/tmp/artifacts",
+              "name": "artifacts"
+            },
+            {
               "mountPath": "/tmp/secret-wrapper",
               "name": "secret-wrapper"
             },
             {
               "mountPath": "/var/run/secrets/ci.openshift.io/multi-stage",
               "name": "multi-stage"
+            }
+          ]
+        },
+        {
+          "command": [
+            "/bin/sh",
+            "-c",
+            "#!/bin/sh\nset -euo pipefail\ntrap 'kill $(jobs -p); exit 0' TERM\n\ntouch /tmp/done\necho \"Waiting for artifacts to be extracted\"\nwhile true; do\n\tif [[ ! -f /tmp/done ]]; then\n\t\techo \"Artifacts extracted, will terminate after 30s\"\n\t\tsleep 30\n\t\techo \"Exiting\"\n\t\texit 0\n\tfi\n\tsleep 5 & wait\ndone\n"
+          ],
+          "image": "busybox",
+          "name": "artifacts",
+          "resources": {},
+          "volumeMounts": [
+            {
+              "mountPath": "/tmp/artifacts",
+              "name": "artifacts"
             }
           ]
         }
@@ -1566,6 +1758,10 @@
       ],
       "restartPolicy": "Never",
       "volumes": [
+        {
+          "emptyDir": {},
+          "name": "artifacts"
+        },
         {
           "emptyDir": {},
           "name": "secret-wrapper"

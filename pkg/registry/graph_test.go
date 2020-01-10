@@ -17,13 +17,13 @@ var ipiInstall = "ipi-install"
 var ipiDeprovision = "ipi-deprovision"
 var ipi = "ipi"
 
-var referenceMap = map[string]api.LiteralTestStep{
+var referenceMap = ReferenceMap{
 	ipiInstallInstall:         {},
 	ipiInstallRBAC:            {},
 	ipiDeprovisionDeprovision: {},
 	ipiDeprovisionMustGather:  {},
 }
-var chainMap = map[string][]api.TestStep{
+var chainMap = ChainMap{
 	ipiInstall: {{
 		Reference: &ipiInstallInstall,
 	}, {
@@ -35,7 +35,7 @@ var chainMap = map[string][]api.TestStep{
 		Reference: &ipiDeprovisionDeprovision,
 	}},
 }
-var workflowMap = map[string]api.MultiStageTestConfiguration{
+var workflowMap = WorkflowMap{
 	ipi: {
 		Pre: []api.TestStep{{
 			Chain: &ipiInstall,

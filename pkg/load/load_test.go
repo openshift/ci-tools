@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/registry"
 	"k8s.io/apimachinery/pkg/util/diff"
 )
 
@@ -655,7 +656,7 @@ func TestConfigFromResolver(t *testing.T) {
 
 func TestRegistry(t *testing.T) {
 	var (
-		expectedReferences = map[string]api.LiteralTestStep{
+		expectedReferences = registry.ReferenceMap{
 			"ipi-deprovision-deprovision": {
 				As:       "ipi-deprovision-deprovision",
 				From:     "installer",
@@ -695,7 +696,7 @@ func TestRegistry(t *testing.T) {
 		installRef           = `ipi-install-install`
 		installRBACRef       = `ipi-install-rbac`
 
-		expectedChains = map[string][]api.TestStep{
+		expectedChains = registry.ChainMap{
 			"ipi-install": {
 				{
 					Reference: &installRBACRef,
@@ -715,7 +716,7 @@ func TestRegistry(t *testing.T) {
 		installChain     = `ipi-install`
 		deprovisionChain = `ipi-deprovision`
 
-		expectedWorkflows = map[string]api.MultiStageTestConfiguration{
+		expectedWorkflows = registry.WorkflowMap{
 			"ipi": {
 				Pre: []api.TestStep{{
 					Chain: &installChain,
@@ -730,9 +731,9 @@ func TestRegistry(t *testing.T) {
 			name          string
 			registryDir   string
 			flatRegistry  bool
-			references    map[string]api.LiteralTestStep
-			chains        map[string][]api.TestStep
-			workflows     map[string]api.MultiStageTestConfiguration
+			references    registry.ReferenceMap
+			chains        registry.ChainMap
+			workflows     registry.WorkflowMap
 			expectedError bool
 		}{{
 			name:          "Read registry",
@@ -746,11 +747,11 @@ func TestRegistry(t *testing.T) {
 			name:         "Read configmap style registry",
 			registryDir:  "../../test/multistage-registry/configmap",
 			flatRegistry: true,
-			references: map[string]api.LiteralTestStep{
+			references: registry.ReferenceMap{
 				installRef: expectedReferences[installRef],
 			},
-			chains:        map[string][]api.TestStep{},
-			workflows:     map[string]api.MultiStageTestConfiguration{},
+			chains:        registry.ChainMap{},
+			workflows:     registry.WorkflowMap{},
 			expectedError: false,
 		}}
 	)

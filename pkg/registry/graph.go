@@ -3,7 +3,6 @@ package registry
 import (
 	"fmt"
 
-	"github.com/openshift/ci-tools/pkg/api"
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
@@ -240,7 +239,7 @@ func hasCycles(node *chainNode, ancestors sets.String, traversedPath []string) e
 }
 
 // NewGraph returns a NodeByType map representing the provided step references, chains, and workflows as a directed graph.
-func NewGraph(stepsByName map[string]api.LiteralTestStep, chainsByName map[string][]api.TestStep, workflowsByName map[string]api.MultiStageTestConfiguration) (NodeByName, error) {
+func NewGraph(stepsByName ReferenceMap, chainsByName ChainMap, workflowsByName WorkflowMap) (NodeByName, error) {
 	nodesByName := make(NodeByName)
 	// References can only be children; load them so they can be added as children by workflows and chains
 	referenceNodes := make(referenceNodeByName)

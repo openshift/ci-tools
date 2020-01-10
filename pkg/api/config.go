@@ -17,16 +17,32 @@ const defaultArtifacts = "/tmp/artifacts"
 
 // Default sets default values after loading but before validation
 func (config *ReleaseBuildConfiguration) Default() {
-	for _, step := range config.RawSteps {
-		if step.TestStepConfiguration != nil && step.TestStepConfiguration.ArtifactDir == "" {
-			step.TestStepConfiguration.ArtifactDir = defaultArtifacts
+	def := func(p *string) {
+		if *p == "" {
+			*p = defaultArtifacts
 		}
 	}
-
-	for _, test := range config.Tests {
-		if test.ArtifactDir == "" {
-			test.ArtifactDir = defaultArtifacts
+	defTest := func(t *TestStepConfiguration) {
+		def(&t.ArtifactDir)
+		if s := t.MultiStageTestConfigurationLiteral; s != nil {
+			for i := range s.Pre {
+				def(&s.Pre[i].ArtifactDir)
+			}
+			for i := range s.Test {
+				def(&s.Test[i].ArtifactDir)
+			}
+			for i := range s.Post {
+				def(&s.Post[i].ArtifactDir)
+			}
 		}
+	}
+	for _, step := range config.RawSteps {
+		if test := step.TestStepConfiguration; test != nil {
+			defTest(test)
+		}
+	}
+	for _, test := range config.Tests {
+		defTest(&test)
 	}
 }
 
@@ -39,6 +55,7 @@ func (config *ReleaseBuildConfiguration) ValidateAtRuntime() error {
 // ValidateResolved behaves as ValidateAtRuntime and also validates that all
 // test steps are fully resolved.
 func (config *ReleaseBuildConfiguration) ValidateResolved() error {
+	config.Default()
 	return config.validate("", "", true)
 }
 

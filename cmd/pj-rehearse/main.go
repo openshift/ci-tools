@@ -27,7 +27,6 @@ type options struct {
 	dryRun       bool
 	noFail       bool
 	local        bool
-	allowVolumes bool
 	debugLogPath string
 	metricsPath  string
 
@@ -42,7 +41,6 @@ func gatherOptions() options {
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually submit rehearsal jobs to Prow")
 	fs.BoolVar(&o.noFail, "no-fail", true, "Whether to actually end unsuccessfuly when something breaks")
 	fs.BoolVar(&o.local, "local", false, "Whether this is a local execution or part of a CI job")
-	fs.BoolVar(&o.allowVolumes, "allow-volumes", false, "Allows jobs with extra volumes to be rehearsed")
 
 	fs.StringVar(&o.debugLogPath, "debug-log", "", "Alternate file for debug output, defaults to stderr")
 	fs.StringVar(&o.releaseRepoPath, "candidate-path", "", "Path to a openshift/release working copy with a revision to be tested")
@@ -290,7 +288,7 @@ func rehearseMain() int {
 	toRehearse.AddAll(toRehearseClusterProfiles)
 
 	resolver := registry.NewResolver(refs, chains, workflows)
-	jobConfigurer := rehearse.NewJobConfigurer(prConfig.CiOperator, resolver, prNumber, loggers, o.allowVolumes, changedTemplates, changedClusterProfiles, jobSpec.Refs)
+	jobConfigurer := rehearse.NewJobConfigurer(prConfig.CiOperator, resolver, prNumber, loggers, changedTemplates, changedClusterProfiles, jobSpec.Refs)
 	presubmitsWithChangedRegistry := rehearse.AddRandomJobsForChangedRegistry(changedRegistrySteps, graph, prConfig.Prow.JobConfig.PresubmitsStatic, filepath.Join(o.releaseRepoPath, diffs.CIOperatorConfigInRepoPath), loggers)
 	metrics.RecordPresubmitsOpportunity(presubmitsWithChangedRegistry, "registry-change")
 	toRehearse.AddAll(presubmitsWithChangedRegistry)

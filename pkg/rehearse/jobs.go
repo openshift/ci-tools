@@ -178,7 +178,7 @@ func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber 
 	return &rehearsal, nil
 }
 
-func filterPresubmits(changedPresubmits map[string][]prowconfig.Presubmit, allowVolumes bool, logger logrus.FieldLogger) config.Presubmits {
+func filterPresubmits(changedPresubmits map[string][]prowconfig.Presubmit, logger logrus.FieldLogger) config.Presubmits {
 	presubmits := config.Presubmits{}
 	for repo, jobs := range changedPresubmits {
 		for _, job := range jobs {
@@ -199,17 +199,13 @@ func filterPresubmits(changedPresubmits map[string][]prowconfig.Presubmit, allow
 				continue
 			}
 
-			if err := filterJobSpec(job.Spec, allowVolumes); err != nil {
-				jobLogger.WithError(err).Warn("could not rehearse job")
-				continue
-			}
 			presubmits.Add(repo, job)
 		}
 	}
 	return presubmits
 }
 
-func filterPeriodics(changedPeriodics []prowconfig.Periodic, allowVolumes bool, logger logrus.FieldLogger) []prowconfig.Periodic {
+func filterPeriodics(changedPeriodics []prowconfig.Periodic, logger logrus.FieldLogger) []prowconfig.Periodic {
 	var periodics []prowconfig.Periodic
 	for _, periodic := range changedPeriodics {
 		jobLogger := logger.WithField("job", periodic.Name)
@@ -219,10 +215,6 @@ func filterPeriodics(changedPeriodics []prowconfig.Periodic, allowVolumes bool, 
 			continue
 		}
 
-		if err := filterJobSpec(periodic.Spec, allowVolumes); err != nil {
-			jobLogger.WithError(err).Warn("could not rehearse job")
-			continue
-		}
 		periodics = append(periodics, periodic)
 	}
 	return periodics
@@ -233,14 +225,6 @@ func hasRehearsableLabel(labels map[string]string) bool {
 		return false
 	}
 	return true
-}
-
-func filterJobSpec(spec *v1.PodSpec, allowVolumes bool) error {
-	if len(spec.Volumes) > 0 && !allowVolumes {
-		return fmt.Errorf("jobs that need additional volumes mounted are not allowed")
-	}
-
-	return nil
 }
 
 // inlineCiOpConfig detects whether a job needs a ci-operator config file
@@ -290,16 +274,14 @@ type JobConfigurer struct {
 	ciopConfigs      config.ByFilename
 	registryResolver registry.Resolver
 	profiles         []config.ConfigMapSource
-
-	prNumber     int
-	refs         *pjapi.Refs
-	loggers      Loggers
-	allowVolumes bool
-	templateMap  map[string]string
+	prNumber         int
+	refs             *pjapi.Refs
+	loggers          Loggers
+	templateMap      map[string]string
 }
 
 // NewJobConfigurer filters the jobs and returns a new JobConfigurer.
-func NewJobConfigurer(ciopConfigs config.ByFilename, resolver registry.Resolver, prNumber int, loggers Loggers, allowVolumes bool, templates []config.ConfigMapSource, profiles []config.ConfigMapSource, refs *pjapi.Refs) *JobConfigurer {
+func NewJobConfigurer(ciopConfigs config.ByFilename, resolver registry.Resolver, prNumber int, loggers Loggers, templates []config.ConfigMapSource, profiles []config.ConfigMapSource, refs *pjapi.Refs) *JobConfigurer {
 	return &JobConfigurer{
 		ciopConfigs:      ciopConfigs,
 		registryResolver: resolver,
@@ -307,7 +289,6 @@ func NewJobConfigurer(ciopConfigs config.ByFilename, resolver registry.Resolver,
 		prNumber:         prNumber,
 		refs:             refs,
 		loggers:          loggers,
-		allowVolumes:     allowVolumes,
 		templateMap:      fillTemplateMap(templates),
 	}
 }
@@ -324,7 +305,7 @@ func fillTemplateMap(templates []config.ConfigMapSource) map[string]string {
 func (jc *JobConfigurer) ConfigurePeriodicRehearsals(periodics []prowconfig.Periodic) []prowconfig.Periodic {
 	var rehearsals []prowconfig.Periodic
 
-	filteredPeriodics := filterPeriodics(periodics, jc.allowVolumes, jc.loggers.Job)
+	filteredPeriodics := filterPeriodics(periodics, jc.loggers.Job)
 	for _, job := range filteredPeriodics {
 		jobLogger := jc.loggers.Job.WithField("target-job", job.Name)
 		if err := jc.configureJobSpec(job.Spec, jc.loggers.Debug.WithField("name", job.Name)); err != nil {
@@ -343,7 +324,7 @@ func (jc *JobConfigurer) ConfigurePeriodicRehearsals(periodics []prowconfig.Peri
 func (jc *JobConfigurer) ConfigurePresubmitRehearsals(presubmits config.Presubmits) []*prowconfig.Presubmit {
 	var rehearsals []*prowconfig.Presubmit
 
-	presubmitsFiltered := filterPresubmits(presubmits, jc.allowVolumes, jc.loggers.Job)
+	presubmitsFiltered := filterPresubmits(presubmits, jc.loggers.Job)
 	for repo, jobs := range presubmitsFiltered {
 		for _, job := range jobs {
 			jobLogger := jc.loggers.Job.WithFields(logrus.Fields{"target-repo": repo, "target-job": job.Name})
@@ -374,10 +355,9 @@ func (jc *JobConfigurer) configureJobSpec(spec *v1.PodSpec, logger *logrus.Entry
 		spec.Containers[0].Args = removeConfigResolverFlags(spec.Containers[0].Args)
 	}
 
-	if jc.allowVolumes {
-		replaceCMTemplateName(spec.Containers[0].VolumeMounts, spec.Volumes, jc.templateMap)
-		replaceClusterProfiles(spec.Volumes, jc.profiles, logger)
-	}
+	replaceCMTemplateName(spec.Containers[0].VolumeMounts, spec.Volumes, jc.templateMap)
+	replaceClusterProfiles(spec.Volumes, jc.profiles, logger)
+
 	return nil
 }
 

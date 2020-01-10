@@ -382,21 +382,23 @@ func isPodCompleted(podClient coreclientset.PodInterface, name string) (bool, er
 }
 
 func waitForTemplateInstanceReady(templateClient templateclientset.TemplateInstanceInterface, instance *templateapi.TemplateInstance) (*templateapi.TemplateInstance, error) {
-	for {
-		ready, err := templateInstanceReady(instance)
-		if err != nil {
-			return nil, fmt.Errorf("could not determine if template instance was ready: %v", err)
+	var actualErr error
+	err := wait.PollImmediate(2*time.Second, 10*time.Minute, func() (bool, error) {
+		instance, actualErr = templateClient.Get(instance.Name, meta.GetOptions{})
+		if actualErr != nil {
+			return false, nil
 		}
+		ready := false
+		ready, actualErr = templateInstanceReady(instance)
 		if ready {
-			return instance, nil
+			return true, nil
 		}
-
-		time.Sleep(2 * time.Second)
-		instance, err = templateClient.Get(instance.Name, meta.GetOptions{})
-		if err != nil {
-			return nil, fmt.Errorf("unable to retrieve existing template instance: %v", err)
-		}
+		return false, nil
+	})
+	if err == nil {
+		return instance, nil
 	}
+	return nil, actualErr
 }
 
 func createOrRestartTemplateInstance(templateClient templateclientset.TemplateInstanceInterface, podClient coreclientset.PodInterface, instance *templateapi.TemplateInstance) (*templateapi.TemplateInstance, error) {
@@ -420,6 +422,7 @@ func createOrRestartTemplateInstance(templateClient templateclientset.TemplateIn
 func waitForCompletedTemplateInstanceDeletion(templateClient templateclientset.TemplateInstanceInterface, podClient coreclientset.PodInterface, name string) error {
 	instance, err := templateClient.Get(name, meta.GetOptions{})
 	if errors.IsNotFound(err) {
+		log.Printf("Template instance %s already deleted, do not need to wait any longer", name)
 		return nil
 	}
 
@@ -431,6 +434,8 @@ func waitForCompletedTemplateInstanceDeletion(templateClient templateclientset.T
 		Preconditions:     &meta.Preconditions{UID: &uid},
 	})
 	if errors.IsNotFound(err) {
+		log.Printf("After initial existence check, a delete of template %s and instance %s received a not found error ",
+			name, string(instance.UID))
 		return nil
 	}
 	if err != nil {

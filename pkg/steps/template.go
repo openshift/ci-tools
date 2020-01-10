@@ -382,28 +382,21 @@ func isPodCompleted(podClient coreclientset.PodInterface, name string) (bool, er
 }
 
 func waitForTemplateInstanceReady(templateClient templateclientset.TemplateInstanceInterface, instance *templateapi.TemplateInstance) (*templateapi.TemplateInstance, error) {
-	var actualErr error
-	err := wait.PollImmediate(2*time.Second, 1*time.Minute, func() (bool, error) {
-		ready, actualErr := templateInstanceReady(instance)
-		if actualErr != nil {
-			log.Printf("could not determine if template instance was ready: %v", actualErr)
-			return false, nil
+	for {
+		ready, err := templateInstanceReady(instance)
+		if err != nil {
+			return nil, fmt.Errorf("could not determine if template instance was ready: %v", err)
 		}
 		if ready {
-			return true, nil
+			return instance, nil
 		}
 
-		instance, actualErr = templateClient.Get(instance.Name, meta.GetOptions{})
-		if actualErr != nil {
-			log.Printf("unable to retrieve existing template instance: %v", actualErr)
-			return false, nil
+		time.Sleep(2 * time.Second)
+		instance, err = templateClient.Get(instance.Name, meta.GetOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("unable to retrieve existing template instance: %v", err)
 		}
-		return true, nil
-	})
-	if err == nil {
-		return instance, nil
 	}
-	return nil, actualErr
 }
 
 func createOrRestartTemplateInstance(templateClient templateclientset.TemplateInstanceInterface, podClient coreclientset.PodInterface, instance *templateapi.TemplateInstance) (*templateapi.TemplateInstance, error) {

@@ -87,7 +87,7 @@ func dashboardTabFor(name string) *config.DashboardTab {
 	return &config.DashboardTab{
 		Name:             name,
 		TestGroupName:    name,
-		BaseOptions:      "width=10&exclude-filter-by-regex=Monitor%5Cscluster",
+		BaseOptions:      "width=10&exclude-filter-by-regex=Monitor%5Cscluster&exclude-filter-by-regex=%5Eoperator.Run%20template.*container%20test%24",
 		OpenTestTemplate: &config.LinkTemplate{Url: "https://prow.svc.ci.openshift.org/view/gcs/<gcs_prefix>/<changelist>"},
 		FileBugTemplate: &config.LinkTemplate{
 			Url: "https://github.com/openshift/origin/issues/new",

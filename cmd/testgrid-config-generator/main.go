@@ -6,12 +6,14 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"os"
 	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/GoogleCloudPlatform/testgrid/pb/config"
 	jc "github.com/openshift/ci-tools/pkg/jobconfig"
@@ -103,20 +105,21 @@ func dashboardTabFor(name string) *config.DashboardTab {
 	}
 }
 
-func testGroupFor(name string) *config.TestGroup {
+func testGroupFor(name string, daysOfResults int32) *config.TestGroup {
 	return &config.TestGroup{
-		Name:      name,
-		GcsPrefix: fmt.Sprintf("origin-ci-test/logs/%s", name),
+		Name:          name,
+		GcsPrefix:     fmt.Sprintf("origin-ci-test/logs/%s", name),
+		DaysOfResults: daysOfResults,
 	}
 }
 
-func (d *dashboard) add(name string) {
+func (d *dashboard) add(name string, daysOfResults int32) {
 	if d.existing.Has(name) {
 		return
 	}
 	d.existing.Insert(name)
 	d.Dashboard.DashboardTab = append(d.Dashboard.DashboardTab, dashboardTabFor(name))
-	d.testGroups = append(d.testGroups, testGroupFor(name))
+	d.testGroups = append(d.testGroups, testGroupFor(name, daysOfResults))
 }
 
 // release is a subset of fields from the release controller's config
@@ -216,13 +219,13 @@ func main() {
 
 			delete(informingPeriodics, job.ProwJob.Name)
 			if job.ProwJob.Name == "release-openshift-origin-installer-e2e-aws-upgrade" {
-				genericInforming.add(job.ProwJob.Name)
+				genericInforming.add(job.ProwJob.Name, 0)
 				continue
 			}
 			if job.Optional {
-				informing.add(job.ProwJob.Name)
+				informing.add(job.ProwJob.Name, 0)
 			} else {
-				blocking.add(job.ProwJob.Name)
+				blocking.add(job.ProwJob.Name, 0)
 			}
 		}
 		for _, p := range informingPeriodics {
@@ -247,7 +250,24 @@ func main() {
 			}
 			unique.Insert(p.Name)
 
-			informing.add(p.Name)
+			// for infrequently run jobs (at 12h or 24h intervals) we'd prefer to have more history than just the default
+			// 7-10 days (specified by the default testgrid config), so try to set number of days of results so that we
+			// see at least 100 entries, capping out at 2 months (60 days).
+			desiredResults := 100
+			daysOfResults := int32(0)
+			if len(p.Interval) > 0 {
+				if interval, err := time.ParseDuration(p.Interval); err == nil && interval > 0 && interval < (14*24*time.Hour) {
+					daysOfResults = int32(math.Round(float64(time.Duration(desiredResults)*interval) / float64(24*time.Hour)))
+					if daysOfResults < 7 {
+						daysOfResults = 0
+					}
+					if daysOfResults > 60 {
+						daysOfResults = 60
+					}
+				}
+			}
+
+			informing.add(p.Name, daysOfResults)
 			delete(informingPeriodics, p.Name)
 		}
 		return nil

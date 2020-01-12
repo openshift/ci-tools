@@ -28,6 +28,7 @@ parameters:
 - name: BUILD_ID
   required: false
 - name: CLUSTER_VARIANT
+- name: USE_LEASE_CLIENT
 
 objects:
 
@@ -228,6 +229,10 @@ objects:
 
         # wait for the API to come up
         while true; do
+          if [[ -f /tmp/shared/setup-failed ]]; then
+            echo "Setup reported a failure, do not report test failure" 2>&1
+            exit 0
+          fi
           if [[ -f /tmp/shared/exit ]]; then
             echo "Another process exited" 2>&1
             exit 1
@@ -385,7 +390,7 @@ objects:
         #!/bin/sh
         set -e
 
-        trap 'rc=$?; if test "${rc}" -eq 0; then touch /tmp/setup-success; else touch /tmp/exit; fi; exit "${rc}"' EXIT
+        trap 'rc=$?; if test "${rc}" -eq 0; then touch /tmp/setup-success; else touch /tmp/exit /tmp/setup-failed; fi; exit "${rc}"' EXIT
         trap 'CHILDREN=$(jobs -p); if test -n "${CHILDREN}"; then kill ${CHILDREN} && wait; fi' TERM
         cp "$(command -v openshift-install)" /tmp
         mkdir /tmp/artifacts/installer
@@ -478,11 +483,15 @@ objects:
         EOF
 
         elif [[ "${CLUSTER_TYPE}" == "azure4" ]]; then
-            case $((RANDOM % 4)) in
+            case $((RANDOM % 8)) in
             0) AZURE_REGION=centralus;;
-            1) AZURE_REGION=eastus;;
-            2) AZURE_REGION=eastus2;;
-            3) AZURE_REGION=westus;;
+            1) AZURE_REGION=centralus;;
+            2) AZURE_REGION=centralus;;
+            3) AZURE_REGION=centralus;;
+            4) AZURE_REGION=centralus;;
+            5) AZURE_REGION=eastus;;
+            6) AZURE_REGION=eastus2;;
+            7) AZURE_REGION=westus;;
             *) echo >&2 "invalid Azure region index"; exit 1;;
             esac
             echo "Azure region: ${AZURE_REGION}"

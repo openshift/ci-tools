@@ -348,7 +348,6 @@ func TestMakeRehearsalPresubmit(t *testing.T) {
 				p.RerunCommand = "/test pj-rehearse"
 				p.Context = "ci/rehearse/org/repo/branch/test"
 				p.Optional = true
-				p.SkipReport = true
 				return p
 			}(),
 		},

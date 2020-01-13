@@ -157,24 +157,6 @@ func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber 
 	}
 	rehearsal.Labels[rehearseLabel] = strconv.Itoa(prNumber)
 
-	// Rehearsals of hidden jobs are also hidden jobs, but they are "special"
-	// by being hidden jobs on a repository that should not have hidden
-	// jobs (openshift/release). This causes problems because the config makes
-	// jobs on `openshift/release` to have URLs in GH to the public Deck/Spyglass
-	// instance, but that instance does not have access to the underlying private
-	// storage so it cannot show the rehearsal's logs and artifacts.
-	//
-	// Additionally, whoever triggers a rehearsal of a hidden job is unlikely to
-	// have access to the Deck instance that shows hidden jobs, so they would not
-	// be able to access the logs even if the URL were correct.
-	//
-	// Therefore, we make such jobs skip reporting to GH to avoid confusion
-	//
-	// Note: "hidden" means the Deck concept of hidden jobs
-	if rehearsal.Hidden {
-		rehearsal.SkipReport = true
-	}
-
 	return &rehearsal, nil
 }
 

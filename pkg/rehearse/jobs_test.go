@@ -348,7 +348,6 @@ func TestMakeRehearsalPresubmit(t *testing.T) {
 				p.RerunCommand = "/test pj-rehearse"
 				p.Context = "ci/rehearse/org/repo/branch/test"
 				p.Optional = true
-				p.SkipReport = true
 				return p
 			}(),
 		},
@@ -912,6 +911,26 @@ func TestFilterPresubmits(t *testing.T) {
 				return config.Presubmits{"org/repo": {*j}}
 			},
 		},
+		{
+			description: "job with no rehearse label, not allowed",
+			crippleFunc: func(j *prowconfig.Presubmit) map[string][]prowconfig.Presubmit {
+				return map[string][]prowconfig.Presubmit{"org/repo": {*j}}
+			},
+			expected: func(j *prowconfig.Presubmit) config.Presubmits {
+				return config.Presubmits{}
+			},
+		},
+		{
+			description: "hidden job, not allowed",
+			crippleFunc: func(j *prowconfig.Presubmit) map[string][]prowconfig.Presubmit {
+				j.Labels = labels
+				j.Hidden = true
+				return map[string][]prowconfig.Presubmit{"org/repo": {*j}}
+			},
+			expected: func(j *prowconfig.Presubmit) config.Presubmits {
+				return config.Presubmits{}
+			},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
@@ -931,10 +950,9 @@ func TestFilterPresubmits(t *testing.T) {
 func makeBasePresubmit() *prowconfig.Presubmit {
 	return &prowconfig.Presubmit{
 		JobBase: prowconfig.JobBase{
-			Agent: "kubernetes",
-			Name:  "pull-ci-organization-repo-master-test",
-			Labels: map[string]string{"ci.openshift.org/rehearse": "123",
-				"pj-rehearse.openshift.io/can-be-rehearsed": "true"},
+			Agent:  "kubernetes",
+			Name:   "pull-ci-organization-repo-master-test",
+			Labels: map[string]string{"ci.openshift.org/rehearse": "123"},
 			Spec: &v1.PodSpec{
 				Containers: []v1.Container{{
 					Command: []string{"ci-operator"},

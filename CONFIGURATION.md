@@ -320,7 +320,7 @@ of the images in the pipeline.
 `size` is the required quantity of the volume to create in bytes. Use Kubernetes
 resource quantity semantics (e.g. `1Gi` or `500M`).
 
-# `test.secrets`
+# `tests.secrets`
 `Secrets` is an array of secrets. This  enables users to mount multiple secrets
 inside test container. It is users responsibility to make sure secret is available
 in the temporary namespace. This can be done by providing flag `--secret-dir`

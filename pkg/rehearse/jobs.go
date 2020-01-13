@@ -573,7 +573,7 @@ func pickTemplateJob(presubmits map[string][]prowconfig.Presubmit, templateFile,
 	sort.Strings(keys)
 	for _, repo := range keys {
 		for _, job := range presubmits[repo] {
-			if job.Agent != string(pjapi.KubernetesAgent) {
+			if job.Agent != string(pjapi.KubernetesAgent) || job.Hidden || !hasRehearsableLabel(job.Labels) {
 				continue
 			}
 

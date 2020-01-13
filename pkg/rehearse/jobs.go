@@ -166,6 +166,11 @@ func filterPresubmits(changedPresubmits map[string][]prowconfig.Presubmit, logge
 		for _, job := range jobs {
 			jobLogger := logger.WithFields(logrus.Fields{"repo": repo, "job": job.Name})
 
+			if job.Hidden {
+				jobLogger.Warn("hidden jobs are not allowed to be rehearsed")
+				continue
+			}
+
 			if !hasRehearsableLabel(job.Labels) {
 				jobLogger.Warnf("job is not allowed to be rehearsed. Label %s is required", jobconfig.CanBeRehearsedLabel)
 				continue
@@ -191,6 +196,11 @@ func filterPeriodics(changedPeriodics []prowconfig.Periodic, logger logrus.Field
 	var periodics []prowconfig.Periodic
 	for _, periodic := range changedPeriodics {
 		jobLogger := logger.WithField("job", periodic.Name)
+
+		if periodic.Hidden {
+			jobLogger.Warn("hidden jobs are not allowed to be rehearsed")
+			continue
+		}
 
 		if !hasRehearsableLabel(periodic.Labels) {
 			jobLogger.Warnf("job is not allowed to be rehearsed. Label %s is required", jobconfig.CanBeRehearsedLabel)

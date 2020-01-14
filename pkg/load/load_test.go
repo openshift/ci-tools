@@ -757,7 +757,7 @@ func TestRegistry(t *testing.T) {
 	)
 
 	for _, testCase := range testCases {
-		references, chains, workflows, err := Registry(testCase.registryDir, testCase.flatRegistry)
+		references, chains, workflows, _, err := Registry(testCase.registryDir, testCase.flatRegistry)
 		if err == nil && testCase.expectedError == true {
 			t.Errorf("%s: got no error when error was expected", testCase.name)
 		}

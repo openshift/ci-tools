@@ -21,14 +21,15 @@ import (
 // memory and retrieve them when provided with a config.Info.
 type ConfigAgent interface {
 	GetConfig(config.Info) (api.ReleaseBuildConfiguration, error)
+	GetFilenameToConfig() FilenameToConfig
 	GetGeneration() int
 }
 
-type filenameToConfig map[string]api.ReleaseBuildConfiguration
+type FilenameToConfig map[string]api.ReleaseBuildConfiguration
 
 type configAgent struct {
 	lock         *sync.RWMutex
-	configs      filenameToConfig
+	configs      FilenameToConfig
 	configPath   string
 	cycle        time.Duration
 	generation   int
@@ -75,27 +76,29 @@ func (a *configAgent) recordError(label string) {
 
 func (a *configAgent) GetConfig(info config.Info) (api.ReleaseBuildConfiguration, error) {
 	a.lock.RLock()
+	defer a.lock.RUnlock()
 	config, ok := a.configs[info.Basename()]
-	a.lock.RUnlock()
 	if !ok {
 		return api.ReleaseBuildConfiguration{}, fmt.Errorf("Could not find config %s", info.Basename())
 	}
 	return config, nil
 }
 
+func (a *configAgent) GetFilenameToConfig() FilenameToConfig {
+	return a.configs
+}
+
 func (a *configAgent) GetGeneration() int {
-	var gen int
 	a.lock.RLock()
-	gen = a.generation
-	a.lock.RUnlock()
-	return gen
+	defer a.lock.RUnlock()
+	return a.generation
 }
 
 // loadFilenameToConfig generates a new filenameToConfig map.
 func (a *configAgent) loadFilenameToConfig() error {
 	log.Debug("Reloading configs")
 	startTime := time.Now()
-	configs := filenameToConfig{}
+	configs := FilenameToConfig{}
 	err := filepath.Walk(a.configPath, func(path string, info os.FileInfo, err error) error {
 		if strings.HasPrefix(info.Name(), "..") {
 			if info.IsDir() {

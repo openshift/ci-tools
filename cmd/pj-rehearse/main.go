@@ -183,7 +183,7 @@ func rehearseMain() int {
 		metrics.RecordChangedCiopConfigs(changedCiopConfigData)
 	}
 
-	refs, chains, workflows, err := load.Registry(filepath.Join(o.releaseRepoPath, config.RegistryPath), false)
+	refs, chains, workflows, _, err := load.Registry(filepath.Join(o.releaseRepoPath, config.RegistryPath), false)
 	if err != nil {
 		logger.WithError(err).Error("could not load step registry")
 		return gracefulExit(o.noFail, misconfigurationOutput)

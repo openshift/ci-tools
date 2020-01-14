@@ -193,6 +193,7 @@ func maybeTooShallow(pushOutput string) bool {
 	patterns := []string{
 		"shallow update not allowed",
 		"Updates were rejected because the remote contains work that you do",
+		"Updates were rejected because a pushed branch tip is behind its remote",
 	}
 	for _, item := range patterns {
 		if strings.Contains(pushOutput, item) {

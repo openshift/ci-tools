@@ -70,7 +70,7 @@ func configFromResolver(info *ResolverInfo) (*api.ReleaseBuildConfiguration, err
 		return nil, fmt.Errorf("Failed to make request to configresolver: %s", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Response from configresolver != %d", http.StatusOK)
+		return nil, fmt.Errorf("Response from configresolver == %d (%s)", resp.StatusCode, http.StatusText(resp.StatusCode))
 	}
 	data, err := ioutil.ReadAll(resp.Body)
 	if err != nil {

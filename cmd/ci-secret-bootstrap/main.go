@@ -8,6 +8,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
@@ -16,8 +17,10 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/serializer/json"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/scheme"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/test-infra/prow/logrusutil"
 
 	"github.com/openshift/ci-tools/pkg/bitwarden"
 	"github.com/openshift/ci-tools/pkg/util"
@@ -64,6 +67,7 @@ func (o *options) validateOptions() error {
 
 func (o *options) completeOptions() error {
 	bytes, err := ioutil.ReadFile(o.bwPasswordPath)
+	secrets.addSecrets(string(bytes))
 	if err != nil {
 		return err
 	}
@@ -245,6 +249,32 @@ func printSecrets(secretsMap map[string][]*coreapi.Secret, w io.Writer) error {
 		}
 	}
 	return nil
+}
+
+type secretGetter struct {
+	sync.RWMutex
+	secrets sets.String
+}
+
+func (g *secretGetter) addSecrets(newSecrets ...string) {
+	g.Lock()
+	defer g.Unlock()
+	g.secrets.Insert(newSecrets...)
+}
+
+func (g *secretGetter) getSecrets() sets.String {
+	g.RLock()
+	defer g.RUnlock()
+	return g.secrets
+}
+
+var (
+	secrets *secretGetter
+)
+
+func init() {
+	secrets = &secretGetter{secrets: sets.NewString()}
+	logrus.SetFormatter(logrusutil.NewCensoringFormatter(logrus.StandardLogger().Formatter, secrets.getSecrets))
 }
 
 func main() {

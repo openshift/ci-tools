@@ -50,7 +50,6 @@ func (c *cliClient) loginAndListItems() error {
 	}
 	r := bwLoginResponse{}
 	if err := json.Unmarshal(output, &r); err != nil {
-		//TODO need to censor if we plan this on a job
 		return err
 	}
 	if r.Success {

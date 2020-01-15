@@ -39,8 +39,6 @@ const (
 
 	ocApply   command = "apply"
 	ocProcess command = "process"
-
-	validateFlag string = "--validate"
 )
 
 const defaultAdminUser = "system:admin"
@@ -148,7 +146,7 @@ type configApplier struct {
 }
 
 func makeOcApply(kubeConfig, context, path, user string, dry bool) *exec.Cmd {
-	cmd := makeOcCommand(ocApply, kubeConfig, context, path, user, validateFlag)
+	cmd := makeOcCommand(ocApply, kubeConfig, context, path, user)
 	if dry {
 		cmd.Args = append(cmd.Args, "--dry-run")
 	}

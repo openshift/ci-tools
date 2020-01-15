@@ -236,6 +236,25 @@ func (g gitSyncer) mirror(repoDir string, src, dst location) error {
 	logger := g.logger.WithFields(mirrorFields)
 	logger.Info("Syncing content between locations")
 
+	// We ls-remote destination first thing because when it does not exist
+	// we do not need to do any of the remaining operations.
+	logger.Debug("Determining HEAD of destination branch")
+	destUrlRaw := fmt.Sprintf("https://github.com/%s/%s", dst.org, dst.repo)
+	destUrl, err := url.Parse(destUrlRaw)
+	if err != nil {
+		logger.WithField("remote-url", destUrlRaw).WithError(err).Error("Failed to construct URL for the destination remote")
+		return fmt.Errorf("failed to construct URL for the destination remote")
+	}
+	destUrl.User = url.User(g.token)
+
+	dstHeads, err := getRemoteBranchHeads(logger, g.git, repoDir, destUrl.String())
+	if err != nil {
+		// This is currently fine but eventually should be controlled by a switch
+		logger.Warn("Destination repository does not exist or we cannot access it")
+		return nil
+	}
+	dstCommitHash := dstHeads[dst.branch]
+
 	logger.Debug("Initializing git repository")
 	if _, exitCode, err := g.git(logger, repoDir, "init", "--bare"); err != nil || exitCode != 0 {
 		logger.WithField("exit-code", exitCode).WithError(err).Error("Failed to initialize local git directory")
@@ -266,24 +285,6 @@ func (g gitSyncer) mirror(repoDir string, src, dst location) error {
 			return fmt.Errorf("failed to set up source remote")
 		}
 	}
-
-	// We ls-remote destination first because it is more likely to not exist
-	logger.Debug("Determining HEAD of destination branch")
-	destUrlRaw := fmt.Sprintf("https://github.com/%s/%s", dst.org, dst.repo)
-	destUrl, err := url.Parse(destUrlRaw)
-	if err != nil {
-		logger.WithField("remote-url", destUrlRaw).WithError(err).Error("Failed to construct URL for the destination remote")
-		return fmt.Errorf("failed to construct URL for the destination remote")
-	}
-	destUrl.User = url.User(g.token)
-
-	dstHeads, err := getRemoteBranchHeads(logger, g.git, repoDir, destUrl.String())
-	if err != nil {
-		// This is currently fine but eventually should be controlled by a switch
-		logger.Warn("Destination repository does not exist or we cannot access it")
-		return nil
-	}
-	dstCommitHash := dstHeads[dst.branch]
 
 	logger.Debug("Determining HEAD of source branch")
 	srcHeads, err := getRemoteBranchHeads(logger, g.git, repoDir, srcRemote)

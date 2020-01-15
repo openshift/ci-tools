@@ -158,33 +158,33 @@ func TestMakeOcApply(t *testing.T) {
 		{
 			name:     "no user, not dry",
 			path:     "/path/to/file",
-			expected: []string{"oc", "apply", "-f", "/path/to/file", "--validate"},
+			expected: []string{"oc", "apply", "-f", "/path/to/file"},
 		},
 		{
 			name:     "no user, dry",
 			path:     "/path/to/different/file",
 			dry:      true,
-			expected: []string{"oc", "apply", "-f", "/path/to/different/file", "--validate", "--dry-run"},
+			expected: []string{"oc", "apply", "-f", "/path/to/different/file", "--dry-run", "--validate"},
 		},
 		{
 			name:     "user, dry",
 			path:     "/path/to/file",
 			dry:      true,
 			user:     "joe",
-			expected: []string{"oc", "apply", "-f", "/path/to/file", "--validate", "--as", "joe", "--dry-run"},
+			expected: []string{"oc", "apply", "-f", "/path/to/file", "--as", "joe", "--dry-run", "--validate"},
 		},
 		{
 			name:     "user, not dry",
 			path:     "/path/to/file",
 			user:     "joe",
-			expected: []string{"oc", "apply", "-f", "/path/to/file", "--validate", "--as", "joe"},
+			expected: []string{"oc", "apply", "-f", "/path/to/file", "--as", "joe"},
 		},
 		{
 			name:     "context, user, not dry",
 			context:  "/context-name",
 			path:     "/path/to/file",
 			user:     "joe",
-			expected: []string{"oc", "apply", "-f", "/path/to/file", "--validate", "--as", "joe", "--context", "/context-name"},
+			expected: []string{"oc", "apply", "-f", "/path/to/file", "--as", "joe", "--context", "/context-name"},
 		},
 		{
 			name:       "kubeConfig, context, user, not dry",
@@ -192,7 +192,7 @@ func TestMakeOcApply(t *testing.T) {
 			context:    "/context-name",
 			path:       "/path/to/file",
 			user:       "joe",
-			expected:   []string{"oc", "apply", "-f", "/path/to/file", "--validate", "--as", "joe", "--kubeconfig", "/tmp/config", "--context", "/context-name"},
+			expected:   []string{"oc", "apply", "-f", "/path/to/file", "--as", "joe", "--kubeconfig", "/tmp/config", "--context", "/context-name"},
 		},
 	}
 
@@ -245,25 +245,25 @@ func TestAsGenericManifest(t *testing.T) {
 			description:   "success: oc apply -f path",
 			applier:       &configApplier{path: "path"},
 			executions:    []error{nil}, // expect a single successful call
-			expectedCalls: [][]string{{"oc", "apply", "-f", "path", "--validate"}},
+			expectedCalls: [][]string{{"oc", "apply", "-f", "path"}},
 		},
 		{
 			description:   "success: oc apply -f path --dry-run",
 			applier:       &configApplier{path: "path", dry: true},
 			executions:    []error{nil}, // expect a single successful call
-			expectedCalls: [][]string{{"oc", "apply", "-f", "path", "--validate", "--dry-run"}},
+			expectedCalls: [][]string{{"oc", "apply", "-f", "path", "--dry-run", "--validate"}},
 		},
 		{
 			description:   "success: oc apply -f path --dry-run --as user",
 			applier:       &configApplier{path: "path", user: "user", dry: true},
 			executions:    []error{nil}, // expect a single successful call
-			expectedCalls: [][]string{{"oc", "apply", "-f", "path", "--validate", "--as", "user", "--dry-run"}},
+			expectedCalls: [][]string{{"oc", "apply", "-f", "path", "--as", "user", "--dry-run", "--validate"}},
 		},
 		{
 			description:   "failure: oc apply -f path",
 			applier:       &configApplier{path: "path"},
 			executions:    []error{fmt.Errorf("NOPE")},
-			expectedCalls: [][]string{{"oc", "apply", "-f", "path", "--validate"}},
+			expectedCalls: [][]string{{"oc", "apply", "-f", "path"}},
 			expectedError: true,
 		},
 	}
@@ -302,7 +302,7 @@ func TestAsTemplate(t *testing.T) {
 			description:   "success",
 			applier:       &configApplier{path: "path"},
 			executions:    []error{nil, nil},
-			expectedCalls: [][]string{{"oc", "process", "-f", "path"}, {"oc", "apply", "-f", "-", "--validate"}},
+			expectedCalls: [][]string{{"oc", "process", "-f", "path"}, {"oc", "apply", "-f", "-"}},
 		},
 		{
 			description: "success with params",
@@ -322,13 +322,13 @@ func TestAsTemplate(t *testing.T) {
 				},
 				{Name: "name", Description: "description does not matter", Value: "master"},
 			},
-			expectedCalls: [][]string{{"oc", "process", "-f", "path", "-p", "image=docker.io/redis"}, {"oc", "apply", "-f", "-", "--validate"}},
+			expectedCalls: [][]string{{"oc", "process", "-f", "path", "-p", "image=docker.io/redis"}, {"oc", "apply", "-f", "-"}},
 		},
 		{
 			description:   "oc apply fails",
 			applier:       &configApplier{path: "path"},
 			executions:    []error{nil, fmt.Errorf("REALLY NOPE")},
-			expectedCalls: [][]string{{"oc", "process", "-f", "path"}, {"oc", "apply", "-f", "-", "--validate"}},
+			expectedCalls: [][]string{{"oc", "process", "-f", "path"}, {"oc", "apply", "-f", "-"}},
 			expectedError: true,
 		},
 		{

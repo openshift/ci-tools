@@ -3,6 +3,8 @@
 This tool extends the [populate-secrets-from-bitwarden.sh](https://github.com/openshift/release/blob/c8c89d08c56c653b91eb8c7580657f7ce522253f/ci-operator/populate-secrets-from-bitwarden.sh)
 to support mirroring secrets cross Kubernetes/OpenShift-clusters.
 
+## Args and config.yaml
+
 We use `--kubeconfig` to specify the path to a [kube config](https://kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig/)
 that the tool will load and use it to access clusters for writing secrets.
 
@@ -10,25 +12,24 @@ It expects a configuration like the one below which specifies the mapping from t
 in BitWarden and the targeting secret.
 
 ```yaml
-secrets:
 - from:
     key-name-1:
-      bw-item: item-name-1
+      bw_item: item-name-1
       field: field-name-1
     key-name-2:
-      bw-item: item-name-1
+      bw_item: item-name-1
       field: field-name-2
     key-name-3:
-      bw-item: item-name-1
+      bw_item: item-name-1
       attachment: attachment-name-1
     key-name-4:
-      bw-item: item-name-2
+      bw_item: item-name-2
       field: field-name-1
     key-name-5:
-      bw-item: item-name-2
+      bw_item: item-name-2
       attachment: attachment-name-1
     key-name-6:
-      bw-item: item-name-3
+      bw_item: item-name-3
       attachment: attachment-name-2
   to:
     - cluster: default
@@ -58,3 +59,14 @@ And then the secret will be populated to
 
 * the `secret` `prod-secret-1` in `namespace-1` on the `default` cluster, and
 * the `secret` `prod-secret-2` in `namespace-2` on the `build01` cluster.
+
+
+## Run
+
+```bash
+$ echo -n "bw_password" > /tmp/bw_password 
+$ ci-secret-bootstrap --bw-password-path=/tmp/bw_password -bw-user kerberos_id@redhat.com --kubeconfig <path_to_kubeconfig_file> --config <path_to_config.yaml>
+
+```
+
+where `kubeconfig` contains the `contexts` for the `default` cluster and the `build01` cluster.

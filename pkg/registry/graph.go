@@ -264,6 +264,9 @@ func NewGraph(stepsByName ReferenceMap, chainsByName ChainMap, workflowsByName W
 		nodesByName[name] = node
 		for _, step := range chain {
 			if step.Reference != nil {
+				if _, exists := referenceNodes[*step.Reference]; !exists {
+					return nil, fmt.Errorf("Chain %s contains non-existent reference %s", name, *step.Reference)
+				}
 				node.addReferenceChild(referenceNodes[*step.Reference])
 			}
 			if step.Chain != nil {
@@ -272,6 +275,9 @@ func NewGraph(stepsByName ReferenceMap, chainsByName ChainMap, workflowsByName W
 		}
 	}
 	for parent, child := range parentChildChain {
+		if _, exists := chainNodes[child]; !exists {
+			return nil, fmt.Errorf("Chain %s contains non-existent chain %s", parent.Name(), child)
+		}
 		parent.addChainChild(chainNodes[child])
 	}
 	// verify that no cycles exist
@@ -291,9 +297,15 @@ func NewGraph(stepsByName ReferenceMap, chainsByName ChainMap, workflowsByName W
 		steps := append(workflow.Pre, append(workflow.Test, workflow.Post...)...)
 		for _, step := range steps {
 			if step.Reference != nil {
+				if _, exists := referenceNodes[*step.Reference]; !exists {
+					return nil, fmt.Errorf("Workflow %s contains non-existent reference %s", name, *step.Reference)
+				}
 				node.addReferenceChild(referenceNodes[*step.Reference])
 			}
 			if step.Chain != nil {
+				if _, exists := chainNodes[*step.Chain]; !exists {
+					return nil, fmt.Errorf("Workflow %s contains non-existent chain %s", name, *step.Chain)
+				}
 				node.addChainChild(chainNodes[*step.Chain])
 			}
 		}

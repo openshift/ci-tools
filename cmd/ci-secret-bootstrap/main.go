@@ -8,7 +8,6 @@ import (
 	"os"
 	"sort"
 	"strings"
-	"sync"
 
 	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
@@ -67,11 +66,14 @@ func (o *options) validateOptions() error {
 
 func (o *options) completeOptions() error {
 	bytes, err := ioutil.ReadFile(o.bwPasswordPath)
-	secrets.addSecrets(string(bytes))
 	if err != nil {
 		return err
 	}
 	o.bwPassword = strings.TrimSpace(string(bytes))
+	secrets := sets.NewString(o.bwPassword)
+	logrus.SetFormatter(logrusutil.NewCensoringFormatter(logrus.StandardLogger().Formatter, func() sets.String {
+		return secrets
+	}))
 
 	kubeConfigs, _, err := util.LoadKubeConfigs(o.kubeConfigPath)
 	if err != nil {
@@ -249,32 +251,6 @@ func printSecrets(secretsMap map[string][]*coreapi.Secret, w io.Writer) error {
 		}
 	}
 	return nil
-}
-
-type secretGetter struct {
-	sync.RWMutex
-	secrets sets.String
-}
-
-func (g *secretGetter) addSecrets(newSecrets ...string) {
-	g.Lock()
-	defer g.Unlock()
-	g.secrets.Insert(newSecrets...)
-}
-
-func (g *secretGetter) getSecrets() sets.String {
-	g.RLock()
-	defer g.RUnlock()
-	return g.secrets
-}
-
-var (
-	secrets *secretGetter
-)
-
-func init() {
-	secrets = &secretGetter{secrets: sets.NewString()}
-	logrus.SetFormatter(logrusutil.NewCensoringFormatter(logrus.StandardLogger().Formatter, secrets.getSecrets))
 }
 
 func main() {

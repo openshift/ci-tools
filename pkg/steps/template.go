@@ -138,7 +138,7 @@ func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 	}
 
 	log.Printf("Waiting for template instance to be ready")
-	instance, err = waitForTemplateInstanceReady(s.templateClient.TemplateInstances(s.jobSpec.Namespace), instance)
+	instance, err = waitForTemplateInstanceReady(s.templateClient.TemplateInstances(s.jobSpec.Namespace), s.template.Name)
 	if err != nil {
 		return fmt.Errorf("could not wait for template instance to be ready: %v", err)
 	}
@@ -381,10 +381,11 @@ func isPodCompleted(podClient coreclientset.PodInterface, name string) (bool, er
 	return false, nil
 }
 
-func waitForTemplateInstanceReady(templateClient templateclientset.TemplateInstanceInterface, instance *templateapi.TemplateInstance) (*templateapi.TemplateInstance, error) {
+func waitForTemplateInstanceReady(templateClient templateclientset.TemplateInstanceInterface, name string) (*templateapi.TemplateInstance, error) {
 	var actualErr error
+	var instance *templateapi.TemplateInstance
 	err := wait.PollImmediate(2*time.Second, 10*time.Minute, func() (bool, error) {
-		instance, actualErr = templateClient.Get(instance.Name, meta.GetOptions{})
+		instance, actualErr = templateClient.Get(name, meta.GetOptions{})
 		if actualErr != nil {
 			return false, nil
 		}

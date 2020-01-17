@@ -1,23 +1,21 @@
-FROM registry.svc.ci.openshift.org/openshift/hive-v4.0:hive
+FROM centos:8
 LABEL maintainer="hongkliu@redhat.com"
 
 ARG JQ_VERSION=1.6
 
 COPY usr/bin/oc /usr/bin/oc
+COPY usr/bin/openshift-install /usr/bin/openshift-install
 
 COPY cmd/ipi-deprovision/ipi-deprovision.sh  /usr/bin/ipi-deprovision.sh
 
-# Install awscli
+COPY images/ipi-deprovision/google-cloud-sdk.repo  /etc/yum.repos.d/google-cloud-sdk.repo
+
 RUN chmod +x /usr/bin/ipi-deprovision.sh && \
+      dnf install --nogpg -y google-cloud-sdk python3 jq less && \
+      dnf clean all && \
       curl -O https://bootstrap.pypa.io/get-pip.py && \
-      python get-pip.py && \
+      python3 get-pip.py && \
       rm -fv get-pip.py && \
-      pip install awscli==1.16.202 && \
-      curl -L -o jq "https://github.com/stedolan/jq/releases/download/jq-${JQ_VERSION}/jq-linux64" && \
-      chmod +x ./jq && \
-      mv ./jq /usr/bin && \
-      yum install -y less && \
-      yum clean all && \
-      rm -rf /var/cache/yum
+      pip install awscli==1.16.202
 
 ENTRYPOINT ["/usr/bin/ipi-deprovision.sh"]

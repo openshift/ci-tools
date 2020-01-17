@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	coreapi "k8s.io/api/core/v1"
@@ -956,13 +957,13 @@ func TestUpdateSecrets(t *testing.T) {
 		existSecretsOnDefault    []runtime.Object
 		existSecretsOnBuild01    []runtime.Object
 		secretsMap               map[string][]*coreapi.Secret
+		force                    bool
 		expected                 error
 		expectedSecretsOnDefault []coreapi.Secret
 		expectedSecretsOnBuild01 []coreapi.Secret
 	}{
 		{
-
-			name: "basic case",
+			name: "basic case with force",
 			existSecretsOnDefault: []runtime.Object{
 				&coreapi.Secret{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1010,6 +1011,7 @@ func TestUpdateSecrets(t *testing.T) {
 					},
 				},
 			},
+			force: true,
 			expectedSecretsOnDefault: []coreapi.Secret{
 				{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1045,6 +1047,90 @@ func TestUpdateSecrets(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "basic case without force: not semantically equal",
+			existSecretsOnDefault: []runtime.Object{
+				&coreapi.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "prod-secret-1",
+						Namespace: "namespace-1",
+						Labels:    map[string]string{"ci.openshift.org/auto-managed": "true"},
+					},
+					Data: map[string][]byte{
+						"key-name-1": []byte("abc"),
+					},
+				},
+			},
+			secretsMap: map[string][]*coreapi.Secret{
+				"default": {
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "prod-secret-1",
+							Namespace: "namespace-1",
+							Labels:    map[string]string{"ci.openshift.org/auto-managed": "true"},
+						},
+						Data: map[string][]byte{
+							"key-name-1": []byte("value1"),
+						},
+					},
+				},
+			},
+			expected: fmt.Errorf("found unsynchronized secret: default:namespace-1/prod-secret-1"),
+			expectedSecretsOnDefault: []coreapi.Secret{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "prod-secret-1",
+						Namespace: "namespace-1",
+						Labels:    map[string]string{"ci.openshift.org/auto-managed": "true"},
+					},
+					Data: map[string][]byte{
+						"key-name-1": []byte("abc"),
+					},
+				},
+			},
+		},
+		{
+			name: "basic case without force: semantically equal",
+			existSecretsOnDefault: []runtime.Object{
+				&coreapi.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:              "prod-secret-1",
+						Namespace:         "namespace-1",
+						Labels:            map[string]string{"ci.openshift.org/auto-managed": "true"},
+						CreationTimestamp: metav1.NewTime(time.Now()),
+					},
+					Data: map[string][]byte{
+						"key-name-1": []byte("abc"),
+					},
+				},
+			},
+			secretsMap: map[string][]*coreapi.Secret{
+				"default": {
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "prod-secret-1",
+							Namespace: "namespace-1",
+							Labels:    map[string]string{"ci.openshift.org/auto-managed": "true"},
+						},
+						Data: map[string][]byte{
+							"key-name-1": []byte("abc"),
+						},
+					},
+				},
+			},
+			expectedSecretsOnDefault: []coreapi.Secret{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "prod-secret-1",
+						Namespace: "namespace-1",
+						Labels:    map[string]string{"ci.openshift.org/auto-managed": "true"},
+					},
+					Data: map[string][]byte{
+						"key-name-1": []byte("abc"),
+					},
+				},
+			},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1055,7 +1141,7 @@ func TestUpdateSecrets(t *testing.T) {
 				"build01": fkcBuild01.CoreV1(),
 			}
 
-			actual := updateSecrets(clients, tc.secretsMap)
+			actual := updateSecrets(clients, tc.secretsMap, tc.force)
 			equalError(t, tc.expected, actual)
 
 			actualSecretsOnDefault, err := fkcDefault.CoreV1().Secrets("").List(metav1.ListOptions{})

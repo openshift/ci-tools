@@ -57,11 +57,6 @@ func TestLoadKubeConfigs(t *testing.T) {
 		expectedError   error
 	}{
 		{
-			name: "empty string",
-			//help us avoid nil checking
-			expectedConfigs: map[string]rest.Config{},
-		},
-		{
 			name:          "file not exist",
 			kubeconfig:    "/tmp/file-not-exists",
 			expectedError: fmt.Errorf("stat /tmp/file-not-exists: no such file or directory"),

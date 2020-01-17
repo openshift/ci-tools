@@ -402,6 +402,57 @@ func TestGetAttachmentOnItem(t *testing.T) {
 	}
 }
 
+func TestLogout(t *testing.T) {
+	client := &cliClient{}
+	testCases := []struct {
+		name          string
+		responses     map[string]execResponse
+		expectedCalls [][]string
+		expected      []byte
+		expectedErr   error
+	}{
+		{
+			name: "basic case",
+			responses: map[string]execResponse{
+				"logout": {
+					out: []byte(`You have logged out.
+`),
+				},
+			},
+			expectedCalls: [][]string{
+				{"logout"},
+			},
+			expected: []byte(`You have logged out.
+`),
+		},
+		{
+			name: "some err",
+			responses: map[string]execResponse{
+				"logout": {
+					err: fmt.Errorf("some err"),
+				},
+			},
+			expectedCalls: [][]string{
+				{"logout"},
+			},
+			expectedErr: fmt.Errorf("some err"),
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			e := fakeExecutor{
+				records:   [][]string{},
+				responses: tc.responses,
+			}
+			client.run = e.Run
+			actual, actualErr := client.Logout()
+			equalError(t, tc.expectedErr, actualErr)
+			equal(t, tc.expected, actual)
+			equal(t, tc.expectedCalls, e.records)
+		})
+	}
+}
+
 type execResponse struct {
 	out []byte
 	err error

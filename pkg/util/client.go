@@ -27,7 +27,8 @@ func LoadClusterConfig() (*rest.Config, error) {
 }
 
 func LoadKubeConfigs(kubeconfig string) (map[string]rest.Config, string, error) {
-	loader := &clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeconfig}
+	loader := clientcmd.NewDefaultClientConfigLoadingRules()
+	loader.ExplicitPath = kubeconfig
 	cfg, err := loader.Load()
 	if err != nil {
 		return nil, "", err

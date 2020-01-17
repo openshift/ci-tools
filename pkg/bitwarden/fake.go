@@ -35,6 +35,10 @@ func (c fakeClient) GetAttachmentOnItem(itemName, attachmentName string) ([]byte
 	return nil, fmt.Errorf("failed to find attachment %s in item %s", attachmentName, itemName)
 }
 
+func (c fakeClient) Logout() ([]byte, error) {
+	return []byte("logged out"), nil
+}
+
 // NewFakeClient generates a fake BitWarden client which is supposed to used only for testing
 func NewFakeClient(items []Item, attachments map[string]string) Client {
 	return fakeClient{items: items, attachments: attachments}

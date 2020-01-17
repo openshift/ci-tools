@@ -16,7 +16,7 @@ echo "deprovisioning in AWS ..."
 for region in $( aws ec2 describe-regions --region us-east-1 --query "Regions[].{Name:RegionName}" --output text ); do
   echo "deprovisioning in AWS region ${region} ..."
   for cluster in $( aws ec2 describe-vpcs --output json --region "${region}" | jq --arg date "${cluster_age_cutoff}" -r -S '.Vpcs[] | select (.Tags[]? | (.Key == "expirationDate" and .Value < $date)) | .Tags[] | select (.Value == "owned") | .Key' | shuf ); do
-    workdir="/tmp/deprovision/aws/${infraID}"
+    workdir="/tmp/deprovision/${cluster:22:14}"
     mkdir -p "${workdir}"
     cat <<EOF >"${workdir}/metadata.json"
 {
@@ -45,7 +45,7 @@ for network in $( gcloud --project=openshift-gce-devel-ci compute networks list 
     echo "could not determine region for cluster ${infraID}, ignoring ..."
     continue
   fi
-  workdir="/tmp/deprovision/gce/${infraID}"
+  workdir="/tmp/deprovision/${infraID}"
   mkdir -p "${workdir}"
   cat <<EOF >"${workdir}/metadata.json"
 {

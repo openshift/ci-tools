@@ -28,8 +28,7 @@ for region in $( aws ec2 describe-regions --region us-east-1 --query "Regions[].
   }
 }
 EOF
-    echo "will deprovision AWS cluster ${cluster} in region ${region}:"
-    cat "${workdir}/metadata.json"
+    echo "will deprovision AWS cluster ${cluster} in region ${region}"
   done
 done
 
@@ -56,12 +55,11 @@ for network in $( gcloud --project=openshift-gce-devel-ci compute networks list 
   }
 }
 EOF
-  echo "will deprovision GCE cluster ${infraID} in region ${region}:"
-  cat "${workdir}/metadata.json"
+  echo "will deprovision GCE cluster ${infraID} in region ${region}"
 done
 
 for workdir in $( find /tmp/deprovision -mindepth 1 -type d | shuf ); do
-  echo openshift-install --dir "${workdir}" --log-level debug destroy cluster
+  openshift-install --dir "${workdir}" --log-level debug destroy cluster
 done
 
 echo "Deprovision finished successfully"

@@ -15,7 +15,7 @@ echo "deprovisioning in AWS ..."
 # we need to pass --region for ... some reason?
 for region in $( aws ec2 describe-regions --region us-east-1 --query "Regions[].{Name:RegionName}" --output text ); do
   echo "deprovisioning in AWS region ${region} ..."
-  for cluster in $( aws ec2 describe-vpcs --output json --region "${region}" | jq --arg date "${cluster_age_cutoff}" -r -S '.Vpcs[] | select (.Tags[]? | (.Key == "expirationDate" and .Value < $date)) | .Tags[] | select (.Value == "owned") | .Key' | shuf ); do
+  for cluster in $( aws ec2 describe-vpcs --output json --region "${region}" | jq --arg date "${cluster_age_cutoff}" -r -S '.Vpcs[] | select (.Tags[]? | (.Key == "expirationDate" and .Value < $date)) | .Tags[] | select (.Value == "owned") | .Key' ); do
     workdir="/tmp/deprovision/${cluster:22:14}"
     mkdir -p "${workdir}"
     cat <<EOF >"${workdir}/metadata.json"
@@ -38,7 +38,7 @@ export CLOUDSDK_CONFIG=/tmp/gcloudconfig
 mkdir -p "${CLOUDSDK_CONFIG}"
 gcloud auth activate-service-account --key-file="${GOOGLE_APPLICATION_CREDENTIALS}"
 export FILTER="creationTimestamp.date('%Y-%m-%dT%H:%M+0000')<${cluster_age_cutoff} AND name~'ci-*'"
-for network in $( gcloud --project=openshift-gce-devel-ci compute networks list --filter "${FILTER}" --format "value(name)" | shuf ); do
+for network in $( gcloud --project=openshift-gce-devel-ci compute networks list --filter "${FILTER}" --format "value(name)" ); do
   infraID="${network%"-network"}"
   region="$( gcloud --project=openshift-gce-devel-ci compute networks describe "${network}" --format="value(subnetworks[0])" | grep -Po "(?<=regions/)[^/]+" )"
   if [[ -z "${region:-}" ]]; then
@@ -60,7 +60,7 @@ EOF
   cat "${workdir}/metadata.json"
 done
 
-for workdir in $( find /tmp/deprovision -mindepth 1 -type d ); do
+for workdir in $( find /tmp/deprovision -mindepth 1 -type d | shuf ); do
   echo openshift-install --dir "${workdir}" --log-level debug destroy cluster
 done
 

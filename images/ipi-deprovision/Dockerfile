@@ -16,6 +16,6 @@ RUN chmod +x /usr/bin/ipi-deprovision.sh && \
       curl -O https://bootstrap.pypa.io/get-pip.py && \
       python3 get-pip.py && \
       rm -fv get-pip.py && \
-      pip install awscli==1.16.202
+      pip install awscli
 
 ENTRYPOINT ["/usr/bin/ipi-deprovision.sh"]

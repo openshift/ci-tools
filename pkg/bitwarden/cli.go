@@ -19,9 +19,14 @@ type cliClient struct {
 }
 
 func newCliClient(username, password string) (Client, error) {
-	return newCliClientWithRun(username, password, func(args ...string) (bytes []byte, err error) {
+	return newCliClientWithRun(username, password, func(args ...string) ([]byte, error) {
+		// bw-password is protected, session in args is not
 		logrus.WithField("args", args).Info("running bw command ...")
-		return exec.Command("bw", args...).Output()
+		out, err := exec.Command("bw", args...).CombinedOutput()
+		if err != nil {
+			logrus.WithError(err).Errorf("bw cmd failed: %v", string(out))
+		}
+		return out, err
 	})
 }
 
@@ -99,4 +104,8 @@ func (c *cliClient) GetAttachmentOnItem(itemName, attachmentName string) ([]byte
 		}
 	}
 	return nil, fmt.Errorf("failed to find attachment %s in item %s", attachmentName, itemName)
+}
+
+func (c *cliClient) Logout() ([]byte, error) {
+	return c.run("logout")
 }

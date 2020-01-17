@@ -25,6 +25,7 @@ type Item struct {
 type Client interface {
 	GetFieldOnItem(itemName, fieldName string) ([]byte, error)
 	GetAttachmentOnItem(itemName, attachmentName string) ([]byte, error)
+	Logout() ([]byte, error)
 }
 
 // NewBitwardenClient generates a BitWarden client

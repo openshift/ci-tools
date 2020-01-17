@@ -215,6 +215,7 @@ func constructSecrets(config []secretConfig, bwClient bitwarden.Client) (map[str
 func updateSecrets(secretsGetters map[string]coreclientset.SecretsGetter, secretsMap map[string][]*coreapi.Secret) error {
 	for cluster, secrets := range secretsMap {
 		for _, secret := range secrets {
+			logrus.Infof("handling secret: %s:%s/%s", cluster, secret.Namespace, secret.Name)
 			secretsGetter := secretsGetters[cluster]
 			if _, err := secretsGetter.Secrets(secret.Namespace).Create(secret); err != nil {
 				if !kerrors.IsAlreadyExists(err) {
@@ -265,6 +266,11 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get Bitwarden client.")
 	}
+	defer func() {
+		if _, err := bwClient.Logout(); err != nil {
+			logrus.WithError(err).Fatal("Failed to logout.")
+		}
+	}()
 
 	secretsMap, err := constructSecrets(o.config, bwClient)
 	if err != nil {

@@ -17,7 +17,7 @@ import (
 // memory and resolve ReleaseBuildConfigurations using the registry
 type RegistryAgent interface {
 	ResolveConfig(config api.ReleaseBuildConfiguration) (api.ReleaseBuildConfiguration, error)
-	GetRegistryComponents() (registry.ReferenceMap, registry.ChainMap, registry.WorkflowMap, map[string]string)
+	GetRegistryComponents() (registry.ReferenceByName, registry.ChainByName, registry.WorkflowByName, map[string]string)
 	GetGeneration() int
 }
 
@@ -29,9 +29,9 @@ type registryAgent struct {
 	generation    int
 	errorMetrics  *prometheus.CounterVec
 	flatRegistry  bool
-	references    registry.ReferenceMap
-	chains        registry.ChainMap
-	workflows     registry.WorkflowMap
+	references    registry.ReferenceByName
+	chains        registry.ChainByName
+	workflows     registry.WorkflowByName
 	documentation map[string]string
 }
 
@@ -86,7 +86,7 @@ func (a *registryAgent) GetGeneration() int {
 	return a.generation
 }
 
-func (a *registryAgent) GetRegistryComponents() (registry.ReferenceMap, registry.ChainMap, registry.WorkflowMap, map[string]string) {
+func (a *registryAgent) GetRegistryComponents() (registry.ReferenceByName, registry.ChainByName, registry.WorkflowByName, map[string]string) {
 	return a.references, a.chains, a.workflows, a.documentation
 }
 

@@ -296,7 +296,7 @@ func getTestStepName(step api.TestStep) string {
 	return ""
 }
 
-func jobToWorkflow(name string, config api.MultiStageTestConfiguration, workflows registry.WorkflowMap, docs map[string]string) (workflowJob, map[string]string) {
+func jobToWorkflow(name string, config api.MultiStageTestConfiguration, workflows registry.WorkflowByName, docs map[string]string) (workflowJob, map[string]string) {
 	// If there are literal test steps, we need to add the command to the docs, without changing the original map
 	// check if there are literal test steps
 	literalExists := false
@@ -383,9 +383,9 @@ func mainPageHandler(agent load.RegistryAgent, templateString string, jobs map[s
 		return
 	}
 	comps := struct {
-		References registry.ReferenceMap
-		Chains     registry.ChainMap
-		Workflows  registry.WorkflowMap
+		References registry.ReferenceByName
+		Chains     registry.ChainByName
+		Workflows  registry.WorkflowByName
 		Jobs       map[string][]string
 	}{
 		References: refs,
@@ -571,7 +571,7 @@ func jobHandler(regAgent load.RegistryAgent, confAgent load.ConfigAgent, w http.
 	defer func() { logrus.Infof("rendered in %s", time.Now().Sub(start)) }()
 	w.Header().Set("Content-Type", "text/html;charset=UTF-8")
 	name := path.Base(req.URL.Path)
-	config, err := findConfigForJob(name, confAgent.GetFilenameToConfig())
+	config, err := findConfigForJob(name, confAgent.GetAll())
 	if err != nil {
 		writeErrorPage(w, err, http.StatusNotFound)
 		return
@@ -590,7 +590,7 @@ func jobHandler(regAgent load.RegistryAgent, confAgent load.ConfigAgent, w http.
 // getAllMultiStageTests return a map that has the config name in org-repo-branch format as the key and the test names for multi stage jobs as the value
 func getAllMultiStageTests(confAgent load.ConfigAgent) map[string][]string {
 	testMap := make(map[string][]string)
-	configs := confAgent.GetFilenameToConfig()
+	configs := confAgent.GetAll()
 	for filename, config := range configs {
 		name := strings.TrimSuffix(filename, ".yaml")
 		for _, test := range config.Tests {

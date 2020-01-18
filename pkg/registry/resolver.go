@@ -11,20 +11,20 @@ type Resolver interface {
 	Resolve(config api.MultiStageTestConfiguration) (api.MultiStageTestConfigurationLiteral, error)
 }
 
-type ReferenceMap map[string]api.LiteralTestStep
-type ChainMap map[string][]api.TestStep
-type WorkflowMap map[string]api.MultiStageTestConfiguration
+type ReferenceByName map[string]api.LiteralTestStep
+type ChainByName map[string][]api.TestStep
+type WorkflowByName map[string]api.MultiStageTestConfiguration
 
 // registry will hold all the registry information needed to convert between the
 // user provided configs referencing the registry and the internal, complete
 // representation
 type registry struct {
-	stepsByName     ReferenceMap
-	chainsByName    ChainMap
-	workflowsByName WorkflowMap
+	stepsByName     ReferenceByName
+	chainsByName    ChainByName
+	workflowsByName WorkflowByName
 }
 
-func NewResolver(stepsByName ReferenceMap, chainsByName ChainMap, workflowsByName WorkflowMap) Resolver {
+func NewResolver(stepsByName ReferenceByName, chainsByName ChainByName, workflowsByName WorkflowByName) Resolver {
 	return &registry{
 		stepsByName:     stepsByName,
 		chainsByName:    chainsByName,

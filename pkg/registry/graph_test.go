@@ -17,13 +17,13 @@ var ipiInstall = "ipi-install"
 var ipiDeprovision = "ipi-deprovision"
 var ipi = "ipi"
 
-var referenceMap = ReferenceMap{
+var referenceMap = ReferenceByName{
 	ipiInstallInstall:         {},
 	ipiInstallRBAC:            {},
 	ipiDeprovisionDeprovision: {},
 	ipiDeprovisionMustGather:  {},
 }
-var chainMap = ChainMap{
+var chainMap = ChainByName{
 	ipiInstall: {{
 		Reference: &ipiInstallInstall,
 	}, {
@@ -35,7 +35,7 @@ var chainMap = ChainMap{
 		Reference: &ipiDeprovisionDeprovision,
 	}},
 }
-var workflowMap = WorkflowMap{
+var workflowMap = WorkflowByName{
 	ipi: {
 		Pre: []api.TestStep{{
 			Chain: &ipiInstall,

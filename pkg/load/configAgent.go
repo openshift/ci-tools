@@ -21,7 +21,7 @@ import (
 // memory and retrieve them when provided with a config.Info.
 type ConfigAgent interface {
 	GetConfig(config.Info) (api.ReleaseBuildConfiguration, error)
-	GetFilenameToConfig() FilenameToConfig
+	GetAll() FilenameToConfig
 	GetGeneration() int
 }
 
@@ -84,7 +84,7 @@ func (a *configAgent) GetConfig(info config.Info) (api.ReleaseBuildConfiguration
 	return config, nil
 }
 
-func (a *configAgent) GetFilenameToConfig() FilenameToConfig {
+func (a *configAgent) GetAll() FilenameToConfig {
 	return a.configs
 }
 

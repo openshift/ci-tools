@@ -18,9 +18,9 @@ func TestResolve(t *testing.T) {
 	for _, testCase := range []struct {
 		name        string
 		config      api.MultiStageTestConfiguration
-		stepMap     ReferenceMap
-		chainMap    ChainMap
-		workflowMap WorkflowMap
+		stepMap     ReferenceByName
+		chainMap    ChainByName
+		workflowMap WorkflowByName
 		expectedRes api.MultiStageTestConfigurationLiteral
 		expectErr   bool
 	}{{
@@ -98,7 +98,7 @@ func TestResolve(t *testing.T) {
 				Reference: &reference1,
 			}},
 		},
-		stepMap: ReferenceMap{
+		stepMap: ReferenceByName{
 			reference1: {
 				As:       "generic-unit-test",
 				From:     "my-image",
@@ -130,7 +130,7 @@ func TestResolve(t *testing.T) {
 				Reference: &reference1,
 			}},
 		},
-		stepMap: ReferenceMap{
+		stepMap: ReferenceByName{
 			"generic-unit-test-2": {
 				As:       "generic-unit-test-2",
 				From:     "my-image",
@@ -164,7 +164,7 @@ func TestResolve(t *testing.T) {
 				Reference: &teardownRef,
 			}},
 		},
-		chainMap: ChainMap{
+		chainMap: ChainByName{
 			fipsPreChain: {{
 				LiteralTestStep: &api.LiteralTestStep{
 					As:       "ipi-install",
@@ -185,7 +185,7 @@ func TestResolve(t *testing.T) {
 					}},
 			}},
 		},
-		stepMap: ReferenceMap{
+		stepMap: ReferenceByName{
 			teardownRef: {
 				As:       "ipi-teardown",
 				From:     "installer",
@@ -242,7 +242,7 @@ func TestResolve(t *testing.T) {
 				Reference: &fipsPreChain,
 			}},
 		},
-		chainMap: ChainMap{
+		chainMap: ChainByName{
 			"broken": {{
 				LiteralTestStep: &api.LiteralTestStep{
 					As:       "generic-unit-test-2",
@@ -264,7 +264,7 @@ func TestResolve(t *testing.T) {
 				Chain: &nestedChains,
 			}},
 		},
-		chainMap: ChainMap{
+		chainMap: ChainByName{
 			nestedChains: {{
 				Chain: &chainInstall,
 			}, {
@@ -334,7 +334,7 @@ func TestResolve(t *testing.T) {
 				Chain: &nestedChains,
 			}},
 		},
-		chainMap: ChainMap{
+		chainMap: ChainByName{
 			nestedChains: {{
 				Chain: &chainInstall,
 			}, {
@@ -374,7 +374,7 @@ func TestResolve(t *testing.T) {
 		config: api.MultiStageTestConfiguration{
 			Workflow: &awsWorkflow,
 		},
-		chainMap: ChainMap{
+		chainMap: ChainByName{
 			fipsPreChain: {{
 				LiteralTestStep: &api.LiteralTestStep{
 					As:       "ipi-install",
@@ -395,7 +395,7 @@ func TestResolve(t *testing.T) {
 					}},
 			}},
 		},
-		stepMap: ReferenceMap{
+		stepMap: ReferenceByName{
 			teardownRef: {
 				As:       "ipi-teardown",
 				From:     "installer",
@@ -405,7 +405,7 @@ func TestResolve(t *testing.T) {
 					Limits:   api.ResourceList{"memory": "2Gi"},
 				}},
 		},
-		workflowMap: WorkflowMap{
+		workflowMap: WorkflowByName{
 			awsWorkflow: {
 				ClusterProfile: api.ClusterProfileAWS,
 				Pre: []api.TestStep{{
@@ -480,7 +480,7 @@ func TestResolve(t *testing.T) {
 					}},
 			}},
 		},
-		workflowMap: WorkflowMap{
+		workflowMap: WorkflowByName{
 			awsWorkflow: {
 				ClusterProfile: api.ClusterProfileAWS,
 				Pre: []api.TestStep{{

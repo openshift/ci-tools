@@ -239,7 +239,7 @@ func hasCycles(node *chainNode, ancestors sets.String, traversedPath []string) e
 }
 
 // NewGraph returns a NodeByType map representing the provided step references, chains, and workflows as a directed graph.
-func NewGraph(stepsByName ReferenceMap, chainsByName ChainMap, workflowsByName WorkflowMap) (NodeByName, error) {
+func NewGraph(stepsByName ReferenceByName, chainsByName ChainByName, workflowsByName WorkflowByName) (NodeByName, error) {
 	nodesByName := make(NodeByName)
 	// References can only be children; load them so they can be added as children by workflows and chains
 	referenceNodes := make(referenceNodeByName)

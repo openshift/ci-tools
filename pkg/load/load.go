@@ -86,10 +86,10 @@ func configFromResolver(info *ResolverInfo) (*api.ReleaseBuildConfiguration, err
 
 // Registry takes the path to a registry config directory and returns the full set of references, chains,
 // and workflows that the registry's Resolver needs to resolve a user's MultiStageTestConfiguration
-func Registry(root string, flat bool) (references registry.ReferenceMap, chains registry.ChainMap, workflows registry.WorkflowMap, documentation map[string]string, err error) {
-	references = registry.ReferenceMap{}
-	chains = registry.ChainMap{}
-	workflows = registry.WorkflowMap{}
+func Registry(root string, flat bool) (references registry.ReferenceByName, chains registry.ChainByName, workflows registry.WorkflowByName, documentation map[string]string, err error) {
+	references = registry.ReferenceByName{}
+	chains = registry.ChainByName{}
+	workflows = registry.WorkflowByName{}
 	documentation = map[string]string{}
 	err = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if info != nil && strings.HasPrefix(info.Name(), "..") {

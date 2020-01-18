@@ -656,7 +656,7 @@ func TestConfigFromResolver(t *testing.T) {
 
 func TestRegistry(t *testing.T) {
 	var (
-		expectedReferences = registry.ReferenceMap{
+		expectedReferences = registry.ReferenceByName{
 			"ipi-deprovision-deprovision": {
 				As:       "ipi-deprovision-deprovision",
 				From:     "installer",
@@ -696,7 +696,7 @@ func TestRegistry(t *testing.T) {
 		installRef           = `ipi-install-install`
 		installRBACRef       = `ipi-install-rbac`
 
-		expectedChains = registry.ChainMap{
+		expectedChains = registry.ChainByName{
 			"ipi-install": {
 				{
 					Reference: &installRBACRef,
@@ -716,7 +716,7 @@ func TestRegistry(t *testing.T) {
 		installChain     = `ipi-install`
 		deprovisionChain = `ipi-deprovision`
 
-		expectedWorkflows = registry.WorkflowMap{
+		expectedWorkflows = registry.WorkflowByName{
 			"ipi": {
 				Pre: []api.TestStep{{
 					Chain: &installChain,
@@ -731,9 +731,9 @@ func TestRegistry(t *testing.T) {
 			name          string
 			registryDir   string
 			flatRegistry  bool
-			references    registry.ReferenceMap
-			chains        registry.ChainMap
-			workflows     registry.WorkflowMap
+			references    registry.ReferenceByName
+			chains        registry.ChainByName
+			workflows     registry.WorkflowByName
 			expectedError bool
 		}{{
 			name:          "Read registry",
@@ -747,11 +747,11 @@ func TestRegistry(t *testing.T) {
 			name:         "Read configmap style registry",
 			registryDir:  "../../test/multistage-registry/configmap",
 			flatRegistry: true,
-			references: registry.ReferenceMap{
+			references: registry.ReferenceByName{
 				installRef: expectedReferences[installRef],
 			},
-			chains:        registry.ChainMap{},
-			workflows:     registry.WorkflowMap{},
+			chains:        registry.ChainByName{},
+			workflows:     registry.WorkflowByName{},
 			expectedError: false,
 		}}
 	)

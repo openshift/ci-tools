@@ -292,12 +292,19 @@ func generateCiOperatorPodSpec(info *prowgenInfo, secrets []*cioperatorapi.Secre
 	return ret
 }
 
-func generatePodSpecTemplate(info *prowgenInfo, release string, test *cioperatorapi.TestStepConfiguration) *kubeapi.PodSpec {
+// generatePodSpecOthers handles tests types other than `container`
+// (i.e. template and multi-stage), which may need to acquire leases and/or
+// mount a cluster profile/secret.
+func generatePodSpecOthers(info *prowgenInfo, release string, test *cioperatorapi.TestStepConfiguration) *kubeapi.PodSpec {
 	var testImageStreamTag, template string
 	var clusterProfile cioperatorapi.ClusterProfile
 	var needsReleaseRpms, needsLeaseServer bool
-
-	if conf := test.OpenshiftAnsibleClusterTestConfiguration; conf != nil {
+	if conf := test.MultiStageTestConfiguration; conf != nil {
+		clusterProfile = conf.ClusterProfile
+		if clusterProfile != "" {
+			needsLeaseServer = true
+		}
+	} else if conf := test.OpenshiftAnsibleClusterTestConfiguration; conf != nil {
 		template = "cluster-launch-e2e"
 		clusterProfile = conf.ClusterProfile
 		needsReleaseRpms = true
@@ -386,7 +393,6 @@ func generatePodSpecTemplate(info *prowgenInfo, release string, test *cioperator
 	if len(template) > 0 {
 		container.Args = append(container.Args, fmt.Sprintf("--template=%s", templatePath))
 	}
-	// TODO add to all templates when they are migrated
 	// TODO expose boskos (behind an oauth proxy) so it can be used by build clusters
 	if needsLeaseServer {
 		if migrated(info.Org, info.Repo) {
@@ -662,7 +668,7 @@ func generateJobs(
 			if conf := element.OpenshiftInstallerRandomClusterTestConfiguration; conf != nil {
 				podSpec = generatePodSpecRandom(info, &element)
 			} else {
-				podSpec = generatePodSpecTemplate(info, release, &element)
+				podSpec = generatePodSpecOthers(info, release, &element)
 			}
 		}
 

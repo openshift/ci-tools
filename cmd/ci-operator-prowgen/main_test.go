@@ -515,10 +515,83 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 				}},
 			},
 		},
+		{
+			info:    &prowgenInfo{Info: config.Info{Org: "organization", Repo: "repo", Branch: "branch"}},
+			release: "origin-v4.0",
+			test: ciop.TestStepConfiguration{
+				As: "test",
+				MultiStageTestConfiguration: &ciop.MultiStageTestConfiguration{
+					ClusterProfile: ciop.ClusterProfileAWS,
+				},
+			},
+			expected: &kubeapi.PodSpec{
+				ServiceAccountName: "ci-operator",
+				Volumes: []kubeapi.Volume{
+					{
+						Name: "sentry-dsn",
+						VolumeSource: kubeapi.VolumeSource{
+							Secret: &kubeapi.SecretVolumeSource{SecretName: "sentry-dsn"},
+						},
+					},
+					{
+						Name: "cluster-profile",
+						VolumeSource: kubeapi.VolumeSource{
+							Projected: &kubeapi.ProjectedVolumeSource{
+								Sources: []kubeapi.VolumeProjection{
+									{
+										Secret: &kubeapi.SecretProjection{
+											LocalObjectReference: kubeapi.LocalObjectReference{
+												Name: "cluster-secrets-aws",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				Containers: []kubeapi.Container{{
+					Image:           "ci-operator:latest",
+					ImagePullPolicy: kubeapi.PullAlways,
+					Command:         []string{"ci-operator"},
+					Args: []string{
+						"--give-pr-author-access-to-namespace=true",
+						"--artifact-dir=$(ARTIFACTS)",
+						"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
+						"--resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org",
+						"--org=organization",
+						"--repo=repo",
+						"--branch=branch",
+						"--target=test",
+						"--secret-dir=/usr/local/test-cluster-profile",
+						"--lease-server=http://boskos"},
+					Resources: kubeapi.ResourceRequirements{
+						Requests: kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
+					},
+					Env: []kubeapi.EnvVar{
+						{
+							Name: "CONFIG_SPEC",
+							ValueFrom: &kubeapi.EnvVarSource{
+								ConfigMapKeyRef: &kubeapi.ConfigMapKeySelector{
+									LocalObjectReference: kubeapi.LocalObjectReference{
+										Name: "ci-operator-misc-configs",
+									},
+									Key: "organization-repo-branch.yaml",
+								},
+							},
+						},
+					},
+					VolumeMounts: []kubeapi.VolumeMount{
+						{Name: "sentry-dsn", MountPath: "/etc/sentry-dsn", ReadOnly: true},
+						{Name: "cluster-profile", MountPath: "/usr/local/test-cluster-profile"},
+					},
+				}},
+			},
+		},
 	}
 
 	for _, tc := range tests {
-		podSpec := generatePodSpecTemplate(tc.info, tc.release, &tc.test)
+		podSpec := generatePodSpecOthers(tc.info, tc.release, &tc.test)
 		if !equality.Semantic.DeepEqual(podSpec, tc.expected) {
 			t.Errorf("expected PodSpec diff:\n%s", diff.ObjectDiff(tc.expected, podSpec))
 		}

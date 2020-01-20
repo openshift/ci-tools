@@ -59,7 +59,7 @@ EOF
 done
 
 for workdir in $( find /tmp/deprovision -mindepth 1 -type d | shuf ); do
-  openshift-install --dir "${workdir}" --log-level debug destroy cluster
+  timeout 30m openshift-install --dir "${workdir}" --log-level debug destroy cluster
 done
 
 echo "Deprovision finished successfully"

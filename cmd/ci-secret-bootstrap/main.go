@@ -10,9 +10,11 @@ import (
 	"strings"
 
 	"github.com/ghodss/yaml"
+	"github.com/google/go-cmp/cmp"
 	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/serializer/json"
@@ -31,6 +33,7 @@ type options struct {
 	configPath     string
 	bwUser         string
 	bwPasswordPath string
+	force          bool
 
 	bwPassword     string
 	secretsGetters map[string]coreclientset.SecretsGetter
@@ -45,6 +48,7 @@ func parseOptions() options {
 	fs.StringVar(&o.configPath, "config", "", "Path to the config file to use for this tool.")
 	fs.StringVar(&o.bwUser, "bw-user", "", "Username to access BitWarden.")
 	fs.StringVar(&o.bwPasswordPath, "bw-password-path", "", "Path to a password file to access BitWarden.")
+	fs.BoolVar(&o.force, "force", false, "If true, update the secrets even if existing one differs from Bitwarden items instead of existing with error. Default false.")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Errorf("cannot parse args: %q", os.Args[1:])
 	}
@@ -212,22 +216,38 @@ func constructSecrets(config []secretConfig, bwClient bitwarden.Client) (map[str
 	return secretsMap, nil
 }
 
-func updateSecrets(secretsGetters map[string]coreclientset.SecretsGetter, secretsMap map[string][]*coreapi.Secret) error {
+func updateSecrets(secretsGetters map[string]coreclientset.SecretsGetter, secretsMap map[string][]*coreapi.Secret, force bool) error {
 	for cluster, secrets := range secretsMap {
 		for _, secret := range secrets {
 			logrus.Infof("handling secret: %s:%s/%s", cluster, secret.Namespace, secret.Name)
 			secretsGetter := secretsGetters[cluster]
-			if _, err := secretsGetter.Secrets(secret.Namespace).Create(secret); err != nil {
-				if !kerrors.IsAlreadyExists(err) {
-					return err
+			if existingSecret, err := secretsGetter.Secrets(secret.Namespace).Get(secret.Name, meta.GetOptions{}); err == nil {
+				if !force && !equality.Semantic.DeepEqual(secret.Data, existingSecret.Data) {
+					logrus.Errorf("actual %s:%s/%s differs the expected:\n%s", cluster, secret.Namespace, secret.Name,
+						cmp.Diff(bytesMapToStringMap(secret.Data), bytesMapToStringMap(existingSecret.Data)))
+					return fmt.Errorf("found unsynchronized secret: %s:%s/%s", cluster, secret.Namespace, secret.Name)
 				}
 				if _, err := secretsGetter.Secrets(secret.Namespace).Update(secret); err != nil {
 					return err
 				}
+			} else if kerrors.IsNotFound(err) {
+				if _, err := secretsGetter.Secrets(secret.Namespace).Create(secret); err != nil {
+					return err
+				}
+			} else {
+				return err
 			}
 		}
 	}
 	return nil
+}
+
+func bytesMapToStringMap(bytesMap map[string][]byte) map[string]string {
+	strMap := map[string]string{}
+	for k, v := range bytesMap {
+		strMap[k] = string(v)
+	}
+	return strMap
 }
 
 func printSecrets(secretsMap map[string][]*coreapi.Secret, w io.Writer) error {
@@ -282,7 +302,7 @@ func main() {
 			logrus.WithError(err).Fatalf("Failed to print secrets on dry run.")
 		}
 	} else {
-		if err := updateSecrets(o.secretsGetters, secretsMap); err != nil {
+		if err := updateSecrets(o.secretsGetters, secretsMap, o.force); err != nil {
 			logrus.WithError(err).Fatalf("Failed to update secrets.")
 		}
 	}

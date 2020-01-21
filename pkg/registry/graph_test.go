@@ -157,3 +157,79 @@ func TestHasCycles(t *testing.T) {
 		t.Errorf("Did not get error when a chain had a cycle")
 	}
 }
+
+func combineChains(map1, map2 map[string][]api.TestStep) map[string][]api.TestStep {
+	newMap := make(map[string][]api.TestStep)
+	for k, v := range map1 {
+		newMap[k] = v
+	}
+	for k, v := range map2 {
+		newMap[k] = v
+	}
+	return newMap
+}
+
+func combineWorkflows(map1, map2 map[string]api.MultiStageTestConfiguration) map[string]api.MultiStageTestConfiguration {
+	newMap := make(map[string]api.MultiStageTestConfiguration)
+	for k, v := range map1 {
+		newMap[k] = v
+	}
+	for k, v := range map2 {
+		newMap[k] = v
+	}
+	return newMap
+}
+
+// TestNewGraph verifies that the graph successfully returns errors
+// for invalid registry items. The TestAncestorNames and
+// TestDescendantNames tests verify that the structure of the graph
+// is correct, so that is not done in this test.
+func TestNewGraph(t *testing.T) {
+	testCases := []struct {
+		name      string
+		workflows WorkflowByName
+		chains    ChainByName
+	}{{
+		name: "Invalid reference in workflow",
+		workflows: WorkflowByName{
+			"ipi2": api.MultiStageTestConfiguration{
+				Pre: []api.TestStep{{
+					Reference: &ipiInstall,
+				}},
+			}},
+		chains: ChainByName{},
+	}, {
+		name: "Invalid chain in workflow",
+		workflows: WorkflowByName{
+			"ipi2": api.MultiStageTestConfiguration{
+				Pre: []api.TestStep{{
+					Chain: &ipiInstallInstall,
+				}},
+			}},
+		chains: ChainByName{},
+	}, {
+		name:      "Invalid reference in chain",
+		workflows: WorkflowByName{},
+		chains: ChainByName{
+			"ipi-install-2": []api.TestStep{{
+				Reference: &ipiInstall,
+			}},
+		},
+	}, {
+		name:      "Invalid chain in chain",
+		workflows: WorkflowByName{},
+		chains: ChainByName{
+			"ipi-install-2": []api.TestStep{{
+				Chain: &ipiInstallInstall,
+			}},
+		},
+	}}
+
+	for _, testCase := range testCases {
+		workflows := combineWorkflows(workflowMap, testCase.workflows)
+		chains := combineChains(chainMap, testCase.chains)
+		if _, err := NewGraph(referenceMap, chains, workflows); err == nil {
+			t.Errorf("%s: No error returned on invalid registry", testCase.name)
+		}
+	}
+}

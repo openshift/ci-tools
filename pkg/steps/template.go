@@ -138,7 +138,7 @@ func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 	}
 
 	log.Printf("Waiting for template instance to be ready")
-	instance, err = waitForTemplateInstanceReady(s.templateClient.TemplateInstances(s.jobSpec.Namespace), instance)
+	instance, err = waitForTemplateInstanceReady(s.templateClient.TemplateInstances(s.jobSpec.Namespace), s.template.Name)
 	if err != nil {
 		return fmt.Errorf("could not wait for template instance to be ready: %v", err)
 	}
@@ -381,22 +381,18 @@ func isPodCompleted(podClient coreclientset.PodInterface, name string) (bool, er
 	return false, nil
 }
 
-func waitForTemplateInstanceReady(templateClient templateclientset.TemplateInstanceInterface, instance *templateapi.TemplateInstance) (*templateapi.TemplateInstance, error) {
-	for {
-		ready, err := templateInstanceReady(instance)
-		if err != nil {
-			return nil, fmt.Errorf("could not determine if template instance was ready: %v", err)
-		}
-		if ready {
-			return instance, nil
+func waitForTemplateInstanceReady(templateClient templateclientset.TemplateInstanceInterface, name string) (*templateapi.TemplateInstance, error) {
+	var instance *templateapi.TemplateInstance
+	err := wait.PollImmediate(2*time.Second, 10*time.Minute, func() (bool, error) {
+		var getErr error
+		if instance, getErr = templateClient.Get(name, meta.GetOptions{}); getErr != nil {
+			return false, nil
 		}
 
-		time.Sleep(2 * time.Second)
-		instance, err = templateClient.Get(instance.Name, meta.GetOptions{})
-		if err != nil {
-			return nil, fmt.Errorf("unable to retrieve existing template instance: %v", err)
-		}
-	}
+		return templateInstanceReady(instance)
+	})
+
+	return instance, err
 }
 
 func createOrRestartTemplateInstance(templateClient templateclientset.TemplateInstanceInterface, podClient coreclientset.PodInterface, instance *templateapi.TemplateInstance) (*templateapi.TemplateInstance, error) {
@@ -420,6 +416,7 @@ func createOrRestartTemplateInstance(templateClient templateclientset.TemplateIn
 func waitForCompletedTemplateInstanceDeletion(templateClient templateclientset.TemplateInstanceInterface, podClient coreclientset.PodInterface, name string) error {
 	instance, err := templateClient.Get(name, meta.GetOptions{})
 	if errors.IsNotFound(err) {
+		log.Printf("Template instance %s already deleted, do not need to wait any longer", name)
 		return nil
 	}
 
@@ -431,6 +428,8 @@ func waitForCompletedTemplateInstanceDeletion(templateClient templateclientset.T
 		Preconditions:     &meta.Preconditions{UID: &uid},
 	})
 	if errors.IsNotFound(err) {
+		log.Printf("After initial existence check, a delete of template %s and instance %s received a not found error ",
+			name, string(instance.UID))
 		return nil
 	}
 	if err != nil {

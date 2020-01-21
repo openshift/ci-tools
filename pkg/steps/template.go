@@ -382,24 +382,17 @@ func isPodCompleted(podClient coreclientset.PodInterface, name string) (bool, er
 }
 
 func waitForTemplateInstanceReady(templateClient templateclientset.TemplateInstanceInterface, name string) (*templateapi.TemplateInstance, error) {
-	var actualErr error
 	var instance *templateapi.TemplateInstance
 	err := wait.PollImmediate(2*time.Second, 10*time.Minute, func() (bool, error) {
-		instance, actualErr = templateClient.Get(name, meta.GetOptions{})
-		if actualErr != nil {
+		var getErr error
+		if instance, getErr = templateClient.Get(name, meta.GetOptions{}); getErr != nil {
 			return false, nil
 		}
-		ready := false
-		ready, actualErr = templateInstanceReady(instance)
-		if ready {
-			return true, nil
-		}
-		return false, nil
+
+		return templateInstanceReady(instance)
 	})
-	if err == nil {
-		return instance, nil
-	}
-	return nil, actualErr
+
+	return instance, err
 }
 
 func createOrRestartTemplateInstance(templateClient templateclientset.TemplateInstanceInterface, podClient coreclientset.PodInterface, instance *templateapi.TemplateInstance) (*templateapi.TemplateInstance, error) {

@@ -137,11 +137,26 @@ func (o *options) validateCompletedOptions() error {
 			if bwContext.BWItem == "" {
 				return fmt.Errorf("config[%d].from[%s]: empty value is not allowed", i, key)
 			}
-			if bwContext.Field == "" && bwContext.Attachment == "" {
-				return fmt.Errorf("config[%d].from[%s]: either field or attachment needs to be non-empty", i, key)
+			switch bwContext.Attribute {
+			case attributeTypePassword, "":
+			default:
+				return fmt.Errorf("config[%d].from[%s].attribute: only the '%s' is supported, not %s", i, key, attributeTypePassword, bwContext.Attribute)
 			}
-			if bwContext.Field != "" && bwContext.Attachment != "" {
-				return fmt.Errorf("config[%d].from[%s]: cannot use both field and attachment", i, key)
+			nonEmptyFields := 0
+			if bwContext.Field != "" {
+				nonEmptyFields++
+			}
+			if bwContext.Attachment != "" {
+				nonEmptyFields++
+			}
+			if bwContext.Attribute != "" {
+				nonEmptyFields++
+			}
+			if nonEmptyFields == 0 {
+				return fmt.Errorf("config[%d].from[%s]: one of [field, attachment, attribute] must be set", i, key)
+			}
+			if nonEmptyFields > 1 {
+				return fmt.Errorf("config[%d].from[%s]: cannot use more than one in [field, attachment, attribute]", i, key)
 			}
 		}
 		for j, secretContext := range secretConfig.To {
@@ -167,10 +182,17 @@ func (o *options) validateCompletedOptions() error {
 	return nil
 }
 
+type attributeType string
+
+const (
+	attributeTypePassword attributeType = "password"
+)
+
 type bitWardenContext struct {
-	BWItem     string `json:"bw_item"`
-	Field      string `json:"field,omitempty"`
-	Attachment string `json:"attachment,omitempty"`
+	BWItem     string        `json:"bw_item"`
+	Field      string        `json:"field,omitempty"`
+	Attachment string        `json:"attachment,omitempty"`
+	Attribute  attributeType `json:"attribute,omitempty"`
 }
 
 type secretContext struct {
@@ -193,8 +215,16 @@ func constructSecrets(config []secretConfig, bwClient bitwarden.Client) (map[str
 			var err error
 			if bwContext.Field != "" {
 				value, err = bwClient.GetFieldOnItem(bwContext.BWItem, bwContext.Field)
-			} else {
+			} else if bwContext.Attachment != "" {
 				value, err = bwClient.GetAttachmentOnItem(bwContext.BWItem, bwContext.Attachment)
+			} else {
+				switch bwContext.Attribute {
+				case attributeTypePassword:
+					value, err = bwClient.GetPassword(bwContext.BWItem)
+				default:
+					// should never happen since we have validated the config
+					return nil, fmt.Errorf("invalid attribute: only the '%s' is supported, not %s", attributeTypePassword, bwContext.Attribute)
+				}
 			}
 			if err != nil {
 				return nil, err

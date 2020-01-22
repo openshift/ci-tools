@@ -70,6 +70,10 @@ func TestLoginAndListItems(t *testing.T) {
     "folderId": null,
     "type": 2,
     "name": "my-credentials",
+    "login": {
+      "username": "xxx",
+      "password": "yyy"
+    },
     "notes": "important notes",
     "favorite": false,
     "secureNote": {
@@ -109,8 +113,9 @@ func TestLoginAndListItems(t *testing.T) {
 					},
 				},
 				{
-					ID:   "id2",
-					Name: "my-credentials",
+					ID:    "id2",
+					Name:  "my-credentials",
+					Login: &Login{Password: "yyy"},
 					Attachments: []Attachment{
 						{
 							ID:       "a-id1",
@@ -321,6 +326,124 @@ func TestGetFieldOnItem(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			actual, actualErr := tc.client.GetFieldOnItem(tc.itemName, tc.fieldName)
+			equalError(t, tc.expectedErr, actualErr)
+			equal(t, tc.expected, actual)
+		})
+	}
+}
+
+func TestGetPassword(t *testing.T) {
+	testCases := []struct {
+		name        string
+		client      *cliClient
+		itemName    string
+		expected    []byte
+		expectedErr error
+	}{
+		{
+			name: "basic case",
+			client: &cliClient{
+				savedItems: []Item{
+					{
+						ID:   "id1",
+						Name: "unsplash.com",
+						Fields: []Field{
+							{
+								Name:  "API Key",
+								Value: "value1",
+							},
+							{
+								Name:  "no name",
+								Value: "value2",
+							},
+						},
+						Login: &Login{Password: "yyy"},
+					},
+					{
+						ID:   "id2",
+						Name: "my-credentials",
+						Attachments: []Attachment{
+							{
+								ID:       "a-id1",
+								FileName: "secret.auto.vars",
+							},
+						},
+					},
+				},
+			},
+			itemName: "unsplash.com",
+			expected: []byte("yyy"),
+		},
+		{
+			name: "item not find",
+			client: &cliClient{
+				savedItems: []Item{
+					{
+						ID:   "id1",
+						Name: "unsplash.com",
+						Fields: []Field{
+							{
+								Name:  "API Key",
+								Value: "value1",
+							},
+							{
+								Name:  "no name",
+								Value: "value2",
+							},
+						},
+					},
+					{
+						ID:   "id2",
+						Name: "my-credentials",
+						Attachments: []Attachment{
+							{
+								ID:       "a-id1",
+								FileName: "secret.auto.vars",
+							},
+						},
+					},
+				},
+			},
+			itemName:    "no-item",
+			expectedErr: fmt.Errorf("failed to find password in item no-item"),
+		},
+		{
+			name: "password not found",
+			client: &cliClient{
+				savedItems: []Item{
+					{
+						ID:   "id1",
+						Name: "unsplash.com",
+						Fields: []Field{
+							{
+								Name:  "API Key",
+								Value: "value1",
+							},
+							{
+								Name:  "no name",
+								Value: "value2",
+							},
+						},
+					},
+					{
+						ID:   "id2",
+						Name: "my-credentials",
+						Attachments: []Attachment{
+							{
+								ID:       "a-id1",
+								FileName: "secret.auto.vars",
+							},
+						},
+					},
+				},
+			},
+			itemName:    "unsplash.com",
+			expectedErr: fmt.Errorf("failed to find password in item unsplash.com"),
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual, actualErr := tc.client.GetPassword(tc.itemName)
 			equalError(t, tc.expectedErr, actualErr)
 			equal(t, tc.expected, actual)
 		})

@@ -31,6 +31,9 @@ in BitWarden and the targeting secret.
     key-name-6:
       bw_item: item-name-3
       attachment: attachment-name-2
+    key-name-7:
+      bw_item: item-name-3
+      attribute: password
   to:
     - cluster: default
       namespace: namespace-1
@@ -50,10 +53,12 @@ So the above configuration tells the tool to use the following data to
 create a secret with its `key` as `secret.data.key` and the following as `secret.data.value`:
 
 * `field`s of `field-name-1` and `field-name-2`, and the `attachment` of `attachment-name-1` in
-Bitwarden item `item-name-1`, and
+Bitwarden item `item-name-1`,
 
 * `field` of `field-name-3`, and the `attachments` of `attachment-name-2` and `attachment-name-3` in
-Bitwarden item `item-name-2`.
+Bitwarden item `item-name-2`, and
+
+* `login.password` of Bitwarden item `item-name-3`.
 
 And then the secret will be populated to
 

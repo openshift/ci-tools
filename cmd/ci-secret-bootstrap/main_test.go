@@ -138,6 +138,9 @@ const (
     key-name-6:
       bw_item: item-name-3
       attachment: attachment-name-2
+    key-name-7:
+      bw_item: item-name-3
+      attribute: password
   to:
     - cluster: default
       namespace: namespace-1
@@ -171,6 +174,22 @@ const (
       namespace: namespace-1
       name: prod-secret-1
     - cluster: bla
+      namespace: namespace-2
+      name: prod-secret-2
+`
+	configContentWithNonPasswordAttribute = `---
+- from:
+    key-name-1:
+      bw_item: item-name-1
+      field: field-name-1
+    key-name-2:
+      bw_item: item-name-1
+      attribute: not-password
+  to:
+    - cluster: default
+      namespace: namespace-1
+      name: prod-secret-1
+    - cluster: build01
       namespace: namespace-2
       name: prod-secret-2
 `
@@ -244,6 +263,10 @@ var (
 					BWItem:     "item-name-3",
 					Attachment: "attachment-name-2",
 				},
+				"key-name-7": {
+					BWItem:    "item-name-3",
+					Attribute: "password",
+				},
 			},
 			To: []secretContext{
 				{
@@ -276,12 +299,14 @@ func TestCompleteOptions(t *testing.T) {
 	configPath := filepath.Join(dir, "configPath")
 	kubeConfigPath := filepath.Join(dir, "kubeConfigPath")
 	configWithTypoPath := filepath.Join(dir, "configWithTypoPath")
+	configWithNonPasswordAttributePath := filepath.Join(dir, "configContentWithNonPasswordAttribute")
 
 	fileMap := map[string][]byte{
-		bwPasswordPath:     []byte("topSecret"),
-		configPath:         []byte(configContent),
-		kubeConfigPath:     []byte(kubeConfigContent),
-		configWithTypoPath: []byte(configContentWithTypo),
+		bwPasswordPath:                     []byte("topSecret"),
+		configPath:                         []byte(configContent),
+		kubeConfigPath:                     []byte(kubeConfigContent),
+		configWithTypoPath:                 []byte(configContentWithTypo),
+		configWithNonPasswordAttributePath: []byte(configContentWithNonPasswordAttribute),
 	}
 
 	for k, v := range fileMap {
@@ -318,9 +343,19 @@ func TestCompleteOptions(t *testing.T) {
 				configPath:     configWithTypoPath,
 				kubeConfigPath: kubeConfigPath,
 			},
-			expectedBWPassword: "topSecret",
-			expectedConfig:     defaultConfig,
-			expectedError:      fmt.Errorf("config[0].to[1]: failed to find cluster context \"bla\" in the kubeconfig"),
+			expectedConfig: defaultConfig,
+			expectedError:  fmt.Errorf("config[0].to[1]: failed to find cluster context \"bla\" in the kubeconfig"),
+		},
+		{
+			name: "attribute is not password",
+			given: options{
+				bwUser:         "username",
+				bwPasswordPath: bwPasswordPath,
+				configPath:     configWithNonPasswordAttributePath,
+				kubeConfigPath: kubeConfigPath,
+			},
+			expectedConfig: defaultConfig,
+			expectedError:  fmt.Errorf("config[0].from[key-name-2].attribute: only the 'password' is supported, not not-password"),
 		},
 	}
 	for _, tc := range testCases {
@@ -464,7 +499,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 					},
 				},
 			},
-			expected: fmt.Errorf("config[0].from[key-name-1]: either field or attachment needs to be non-empty"),
+			expected: fmt.Errorf("config[0].from[key-name-1]: one of [field, attachment, attribute] must be set"),
 		},
 		{
 			name: "non-empty field and non-empty attachment",
@@ -489,7 +524,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 					},
 				},
 			},
-			expected: fmt.Errorf("config[0].from[key-name-1]: cannot use both field and attachment"),
+			expected: fmt.Errorf("config[0].from[key-name-1]: cannot use more than one in [field, attachment, attribute]"),
 		},
 		{
 			name: "empty cluster",
@@ -724,6 +759,9 @@ func TestConstructSecrets(t *testing.T) {
 					{
 						ID:   "3",
 						Name: "item-name-3",
+						Login: &bitwarden.Login{
+							Password: "yyy",
+						},
 						Fields: []bitwarden.Field{
 							{
 								Name:  "field-name-1",
@@ -763,6 +801,7 @@ func TestConstructSecrets(t *testing.T) {
 							"key-name-4": []byte("value3"),
 							"key-name-5": []byte("attachment-name-2-1-value"),
 							"key-name-6": []byte("attachment-name-3-2-value"),
+							"key-name-7": []byte("yyy"),
 						},
 					},
 				},
@@ -780,6 +819,7 @@ func TestConstructSecrets(t *testing.T) {
 							"key-name-4": []byte("value3"),
 							"key-name-5": []byte("attachment-name-2-1-value"),
 							"key-name-6": []byte("attachment-name-3-2-value"),
+							"key-name-7": []byte("yyy"),
 						},
 					},
 				},
@@ -837,6 +877,9 @@ func TestConstructSecrets(t *testing.T) {
 					{
 						ID:   "3",
 						Name: "item-name-3",
+						Login: &bitwarden.Login{
+							Password: "yyy",
+						},
 						Fields: []bitwarden.Field{
 							{
 								Name:  "field-name-1",
@@ -990,6 +1033,7 @@ func TestUpdateSecrets(t *testing.T) {
 							"key-name-4": []byte("value3"),
 							"key-name-5": []byte("attachment-name-2-1-value"),
 							"key-name-6": []byte("attachment-name-3-2-value"),
+							"key-name-7": []byte("yyy"),
 						},
 					},
 				},
@@ -1007,6 +1051,7 @@ func TestUpdateSecrets(t *testing.T) {
 							"key-name-4": []byte("value3"),
 							"key-name-5": []byte("attachment-name-2-1-value"),
 							"key-name-6": []byte("attachment-name-3-2-value"),
+							"key-name-7": []byte("yyy"),
 						},
 					},
 				},
@@ -1026,6 +1071,7 @@ func TestUpdateSecrets(t *testing.T) {
 						"key-name-4": []byte("value3"),
 						"key-name-5": []byte("attachment-name-2-1-value"),
 						"key-name-6": []byte("attachment-name-3-2-value"),
+						"key-name-7": []byte("yyy"),
 					},
 				},
 			},
@@ -1043,6 +1089,7 @@ func TestUpdateSecrets(t *testing.T) {
 						"key-name-4": []byte("value3"),
 						"key-name-5": []byte("attachment-name-2-1-value"),
 						"key-name-6": []byte("attachment-name-3-2-value"),
+						"key-name-7": []byte("yyy"),
 					},
 				},
 			},

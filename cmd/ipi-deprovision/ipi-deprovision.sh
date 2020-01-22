@@ -4,18 +4,12 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-# CLUSTER_TTL controls the relative time to the running time of this script.
-# eg, export CLUSTER_TTL="22 hours ago"
-echo "Searching for clusters with a TTL of ${CLUSTER_TTL}"
-cluster_age_cutoff="$(TZ=":Africa/Abidjan" date --date="${CLUSTER_TTL}" '+%Y-%m-%dT%H:%M+0000')"
-
-echo "cluster_age_cutoff: ${cluster_age_cutoff}"
-
-echo "deprovisioning in AWS ..."
+aws_cluster_age_cutoff="$(TZ=":Africa/Abidjan" date --date="${CLUSTER_TTL}" '+%Y-%m-%dT%H:%M+0000')"
+echo "deprovisioning clusters with an expirationDate before ${aws_cluster_age_cutoff} in AWS ..."
 # we need to pass --region for ... some reason?
 for region in $( aws ec2 describe-regions --region us-east-1 --query "Regions[].{Name:RegionName}" --output text ); do
   echo "deprovisioning in AWS region ${region} ..."
-  for cluster in $( aws ec2 describe-vpcs --output json --region "${region}" | jq --arg date "${cluster_age_cutoff}" -r -S '.Vpcs[] | select (.Tags[]? | (.Key == "expirationDate" and .Value < $date)) | .Tags[] | select (.Value == "owned") | .Key' ); do
+  for cluster in $( aws ec2 describe-vpcs --output json --region "${region}" | jq --arg date "${aws_cluster_age_cutoff}" -r -S '.Vpcs[] | select (.Tags[]? | (.Key == "expirationDate" and .Value < $date)) | .Tags[] | select (.Value == "owned") | .Key' ); do
     workdir="/tmp/deprovision/${cluster:22:14}"
     mkdir -p "${workdir}"
     cat <<EOF >"${workdir}/metadata.json"
@@ -32,11 +26,12 @@ EOF
   done
 done
 
-echo "deprovisioning in GCE ..."
+gce_cluster_age_cutoff="$(TZ=":Africa/Abidjan" date --date="${CLUSTER_TTL}+4 hours" '+%Y-%m-%dT%H:%M+0000')"
+echo "deprovisioning clusters with a creationTimestamp before ${gce_cluster_age_cutoff} in GCE ..."
 export CLOUDSDK_CONFIG=/tmp/gcloudconfig
 mkdir -p "${CLOUDSDK_CONFIG}"
 gcloud auth activate-service-account --key-file="${GOOGLE_APPLICATION_CREDENTIALS}"
-export FILTER="creationTimestamp.date('%Y-%m-%dT%H:%M+0000')<${cluster_age_cutoff} AND name~'ci-*'"
+export FILTER="creationTimestamp.date('%Y-%m-%dT%H:%M+0000')<${gce_cluster_age_cutoff} AND name~'ci-*'"
 for network in $( gcloud --project=openshift-gce-devel-ci compute networks list --filter "${FILTER}" --format "value(name)" ); do
   infraID="${network%"-network"}"
   region="$( gcloud --project=openshift-gce-devel-ci compute networks describe "${network}" --format="value(subnetworks[0])" | grep -Po "(?<=regions/)[^/]+" || true )"

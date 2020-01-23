@@ -334,6 +334,10 @@ objects:
           setup-google-cloud-sdk
         fi
 
+        echo "Running must-gather..."
+        mkdir -p /tmp/artifacts/pre-test-must-gather
+        oc --insecure-skip-tls-verify adm must-gather --dest-dir /tmp/artifacts/pre-test-must-gather >/tmp/artifacts/pre-test-must-gather/must-gather.log
+
         ${TEST_COMMAND}
 
     # Runs an install

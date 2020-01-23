@@ -8,11 +8,13 @@ import (
 	"strings"
 
 	coreapi "k8s.io/api/core/v1"
+	rbacapi "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
+	rbacclientset "k8s.io/client-go/kubernetes/typed/rbac/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/junit"
@@ -36,6 +38,8 @@ type multiStageTestStep struct {
 	params          api.Parameters
 	podClient       PodClient
 	secretClient    coreclientset.SecretsGetter
+	saClient        coreclientset.ServiceAccountsGetter
+	rbacClient      rbacclientset.RbacV1Interface
 	artifactDir     string
 	jobSpec         *api.JobSpec
 	pre, test, post []api.LiteralTestStep
@@ -48,11 +52,13 @@ func MultiStageTestStep(
 	params api.Parameters,
 	podClient PodClient,
 	secretClient coreclientset.SecretsGetter,
+	saClient coreclientset.ServiceAccountsGetter,
+	rbacClient rbacclientset.RbacV1Interface,
 	artifactDir string,
 	jobSpec *api.JobSpec,
 	logger *DryLogger,
 ) api.Step {
-	return newMultiStageTestStep(testConfig, config, params, podClient, secretClient, artifactDir, jobSpec, logger)
+	return newMultiStageTestStep(testConfig, config, params, podClient, secretClient, saClient, rbacClient, artifactDir, jobSpec, logger)
 }
 
 func newMultiStageTestStep(
@@ -61,6 +67,8 @@ func newMultiStageTestStep(
 	params api.Parameters,
 	podClient PodClient,
 	secretClient coreclientset.SecretsGetter,
+	saClient coreclientset.ServiceAccountsGetter,
+	rbacClient rbacclientset.RbacV1Interface,
 	artifactDir string,
 	jobSpec *api.JobSpec,
 	logger *DryLogger,
@@ -76,6 +84,8 @@ func newMultiStageTestStep(
 		params:       params,
 		podClient:    podClient,
 		secretClient: secretClient,
+		saClient:     saClient,
+		rbacClient:   rbacClient,
 		artifactDir:  artifactDir,
 		jobSpec:      jobSpec,
 		pre:          testConfig.MultiStageTestConfigurationLiteral.Pre,
@@ -109,6 +119,9 @@ func (s *multiStageTestStep) Run(ctx context.Context, dry bool) error {
 	}
 	if err := s.createSecret(); err != nil {
 		return fmt.Errorf("failed to create secret: %v", err)
+	}
+	if err := s.setupRBAC(); err != nil {
+		return fmt.Errorf("failed to create RBAC objects: %v", err)
 	}
 	var errs []error
 	if err := s.runSteps(ctx, s.pre, true); err != nil {
@@ -158,6 +171,54 @@ func (s *multiStageTestStep) Provides() (api.ParameterMap, api.StepLink) {
 }
 func (s *multiStageTestStep) SubTests() []*junit.TestCase { return s.subTests }
 
+func (s *multiStageTestStep) setupRBAC() error {
+	labels := map[string]string{multiStageTestLabel: s.name}
+	m := meta.ObjectMeta{Name: s.name, Labels: labels}
+	sa := &coreapi.ServiceAccount{ObjectMeta: m}
+	role := &rbacapi.Role{
+		ObjectMeta: m,
+		Rules: []rbacapi.PolicyRule{{
+			APIGroups: []string{"rbac.authorization.k8s.io"},
+			Resources: []string{"rolebindings"},
+			Verbs:     []string{"create", "list"},
+		}, {
+			APIGroups:     []string{""},
+			Resources:     []string{"secrets"},
+			ResourceNames: []string{s.name},
+			Verbs:         []string{"update"},
+		}, {
+			APIGroups: []string{"", "image.openshift.io"},
+			Resources: []string{"imagestreams/layers"},
+			Verbs:     []string{"get"},
+		}},
+	}
+	subj := []rbacapi.Subject{{Kind: "ServiceAccount", Name: s.name}}
+	binding := &rbacapi.RoleBinding{
+		ObjectMeta: m,
+		RoleRef:    rbacapi.RoleRef{Kind: "Role", Name: s.name},
+		Subjects:   subj,
+	}
+	if s.dry {
+		s.logger.AddObject(sa.DeepCopyObject())
+		s.logger.AddObject(role.DeepCopyObject())
+		s.logger.AddObject(binding.DeepCopyObject())
+		return nil
+	}
+	check := func(err error) bool {
+		return err == nil || errors.IsAlreadyExists(err)
+	}
+	if _, err := s.saClient.ServiceAccounts(s.jobSpec.Namespace).Create(sa); !check(err) {
+		return err
+	}
+	if _, err := s.rbacClient.Roles(s.jobSpec.Namespace).Create(role); !check(err) {
+		return err
+	}
+	if _, err := s.rbacClient.RoleBindings(s.jobSpec.Namespace).Create(binding); !check(err) {
+		return err
+	}
+	return nil
+}
+
 func (s *multiStageTestStep) createSecret() error {
 	log.Printf("Creating multi-stage test secret %q", s.name)
 	secret := coreapi.Secret{ObjectMeta: meta.ObjectMeta{Name: s.name}}
@@ -201,6 +262,7 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep) ([]coreap
 			continue
 		}
 		pod.Labels[multiStageTestLabel] = s.name
+		pod.Spec.ServiceAccountName = s.name
 		addSecretWrapper(pod)
 		container := &pod.Spec.Containers[0]
 		container.Env = append(container.Env, []coreapi.EnvVar{

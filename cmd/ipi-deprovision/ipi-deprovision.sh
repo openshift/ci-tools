@@ -26,7 +26,7 @@ EOF
   done
 done
 
-gce_cluster_age_cutoff="$(TZ=":Africa/Abidjan" date --date="${CLUSTER_TTL}+4 hours" '+%Y-%m-%dT%H:%M+0000')"
+gce_cluster_age_cutoff="$(TZ=":Africa/Abidjan" date --date="${CLUSTER_TTL}-4 hours" '+%Y-%m-%dT%H:%M+0000')"
 echo "deprovisioning clusters with a creationTimestamp before ${gce_cluster_age_cutoff} in GCE ..."
 export CLOUDSDK_CONFIG=/tmp/gcloudconfig
 mkdir -p "${CLOUDSDK_CONFIG}"

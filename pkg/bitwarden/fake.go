@@ -39,6 +39,17 @@ func (c fakeClient) Logout() ([]byte, error) {
 	return []byte("logged out"), nil
 }
 
+func (c fakeClient) GetPassword(itemName string) ([]byte, error) {
+	for _, item := range c.items {
+		if itemName == item.Name {
+			if item.Login != nil {
+				return []byte(item.Login.Password), nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("failed to find password in item %s", itemName)
+}
+
 // NewFakeClient generates a fake BitWarden client which is supposed to used only for testing
 func NewFakeClient(items []Item, attachments map[string]string) Client {
 	return fakeClient{items: items, attachments: attachments}

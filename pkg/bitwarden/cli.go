@@ -106,6 +106,17 @@ func (c *cliClient) GetAttachmentOnItem(itemName, attachmentName string) ([]byte
 	return nil, fmt.Errorf("failed to find attachment %s in item %s", attachmentName, itemName)
 }
 
+func (c *cliClient) GetPassword(itemName string) ([]byte, error) {
+	for _, item := range c.savedItems {
+		if itemName == item.Name {
+			if item.Login != nil {
+				return []byte(item.Login.Password), nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("failed to find password in item %s", itemName)
+}
+
 func (c *cliClient) Logout() ([]byte, error) {
 	return c.run("logout")
 }

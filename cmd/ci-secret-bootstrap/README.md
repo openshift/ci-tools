@@ -65,6 +65,7 @@ And then the secret will be populated to
 * the `secret` `prod-secret-1` in `namespace-1` on the `default` cluster, and
 * the `secret` `prod-secret-2` in `namespace-2` on the `build01` cluster.
 
+Additionally, `.to.type` can be used to specify the [type of the secret](https://github.com/kubernetes/kubernetes/blob/07b358b1904c3c16a40a93a18f95e9411d9a2789/pkg/apis/core/types.go#L4753), such as `kubernetes.io/dockerconfigjson`.
 
 ## Run
 

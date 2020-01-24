@@ -148,6 +148,15 @@ const (
     - cluster: build01
       namespace: namespace-2
       name: prod-secret-2
+- from:
+    .dockerconfigjson:
+      bw_item: quay.io
+      field: Pull Credentials
+  to:
+    - cluster: default
+      namespace: ci
+      name: ci-pull-credentials
+      type: kubernetes.io/dockerconfigjson
 `
 	configContentWithTypo = `---
 - from:
@@ -278,6 +287,22 @@ var (
 					Cluster:   "build01",
 					Namespace: "namespace-2",
 					Name:      "prod-secret-2",
+				},
+			},
+		},
+		{
+			From: map[string]bitWardenContext{
+				".dockerconfigjson": {
+					BWItem: "quay.io",
+					Field:  "Pull Credentials",
+				},
+			},
+			To: []secretContext{
+				{
+					Cluster:   "default",
+					Namespace: "ci",
+					Name:      "ci-pull-credentials",
+					Type:      "kubernetes.io/dockerconfigjson",
 				},
 			},
 		},
@@ -612,6 +637,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 								Cluster:   "default",
 								Namespace: "namespace-1",
 								Name:      "prod-secret-1",
+								Type:      "kubernetes.io/dockerconfigjson",
 							},
 							{
 								Cluster:   "build01",
@@ -622,6 +648,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 								Cluster:   "default",
 								Namespace: "namespace-1",
 								Name:      "prod-secret-1",
+								Type:      "kubernetes.io/dockerconfigjson",
 							},
 						},
 					},
@@ -631,7 +658,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 				"default": configDefault,
 				"build01": configBuild01,
 			},
-			expected: fmt.Errorf("config[0].to[2]: secret {default namespace-1 prod-secret-1} listed more than once in the config"),
+			expected: fmt.Errorf("config[0].to[2]: secret {default namespace-1 prod-secret-1 kubernetes.io/dockerconfigjson} listed more than once in the config"),
 		},
 		{
 			name: "conflicting secrets in different TOs",
@@ -684,7 +711,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 				"default": configDefault,
 				"build01": configBuild01,
 			},
-			expected: fmt.Errorf("config[1].to[0]: secret {default namespace-1 prod-secret-1} listed more than once in the config"),
+			expected: fmt.Errorf("config[1].to[0]: secret {default namespace-1 prod-secret-1 } listed more than once in the config"),
 		},
 	}
 	for _, tc := range testCases {
@@ -779,6 +806,16 @@ func TestConstructSecrets(t *testing.T) {
 							},
 						},
 					},
+					{
+						ID:   "a",
+						Name: "quay.io",
+						Fields: []bitwarden.Field{
+							{
+								Name:  "Pull Credentials",
+								Value: "123",
+							},
+						},
+					},
 				},
 				map[string]string{
 					"a-id-1-1": "attachment-name-1-1-value",
@@ -803,6 +840,17 @@ func TestConstructSecrets(t *testing.T) {
 							"key-name-6": []byte("attachment-name-3-2-value"),
 							"key-name-7": []byte("yyy"),
 						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "ci-pull-credentials",
+							Namespace: "ci",
+							Labels:    map[string]string{"ci.openshift.org/auto-managed": "true"},
+						},
+						Data: map[string][]byte{
+							".dockerconfigjson": []byte("123"),
+						},
+						Type: "kubernetes.io/dockerconfigjson",
 					},
 				},
 				"build01": {
@@ -1175,6 +1223,131 @@ func TestUpdateSecrets(t *testing.T) {
 					Data: map[string][]byte{
 						"key-name-1": []byte("abc"),
 					},
+				},
+			},
+		},
+		{
+			name: "change secret type with force",
+			existSecretsOnDefault: []runtime.Object{
+				&coreapi.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "prod-secret-2",
+						Namespace: "namespace-2",
+					},
+					Data: map[string][]byte{
+						"key-name-1": []byte(`{
+  "auths": {
+    "quay.io": {
+      "auth": "aaa",
+      "email": ""
+    }
+  }
+}`),
+					},
+					Type: coreapi.SecretTypeDockerConfigJson,
+				},
+			},
+			secretsMap: map[string][]*coreapi.Secret{
+				"default": {
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "prod-secret-2",
+							Namespace: "namespace-2",
+						},
+						Data: map[string][]byte{
+							"key-name-1": []byte(`{
+  "auths": {
+    "quay.io": {
+      "auth": "aaa",
+      "email": ""
+    }
+  }
+}`),
+						},
+					},
+				},
+			},
+			force:    true,
+			expected: fmt.Errorf("cannot change secret type from \"kubernetes.io/dockerconfigjson\" to \"\" (immutable file): default:namespace-2/prod-secret-2"),
+			expectedSecretsOnDefault: []coreapi.Secret{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "prod-secret-2",
+						Namespace: "namespace-2",
+					},
+					Data: map[string][]byte{
+						"key-name-1": []byte(`{
+  "auths": {
+    "quay.io": {
+      "auth": "aaa",
+      "email": ""
+    }
+  }
+}`),
+					},
+					Type: coreapi.SecretTypeDockerConfigJson,
+				},
+			},
+		},
+		{
+			name: "change secret type without force",
+			existSecretsOnDefault: []runtime.Object{
+				&coreapi.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "prod-secret-2",
+						Namespace: "namespace-2",
+					},
+					Data: map[string][]byte{
+						"key-name-1": []byte(`{
+  "auths": {
+    "quay.io": {
+      "auth": "aaa",
+      "email": ""
+    }
+  }
+}`),
+					},
+					Type: coreapi.SecretTypeDockerConfigJson,
+				},
+			},
+			secretsMap: map[string][]*coreapi.Secret{
+				"default": {
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "prod-secret-2",
+							Namespace: "namespace-2",
+						},
+						Data: map[string][]byte{
+							"key-name-1": []byte(`{
+  "auths": {
+    "quay.io": {
+      "auth": "aaa",
+      "email": ""
+    }
+  }
+}`),
+						},
+					},
+				},
+			},
+			expected: fmt.Errorf("cannot change secret type from \"kubernetes.io/dockerconfigjson\" to \"\" (immutable file): default:namespace-2/prod-secret-2"),
+			expectedSecretsOnDefault: []coreapi.Secret{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "prod-secret-2",
+						Namespace: "namespace-2",
+					},
+					Data: map[string][]byte{
+						"key-name-1": []byte(`{
+  "auths": {
+    "quay.io": {
+      "auth": "aaa",
+      "email": ""
+    }
+  }
+}`),
+					},
+					Type: coreapi.SecretTypeDockerConfigJson,
 				},
 			},
 		},

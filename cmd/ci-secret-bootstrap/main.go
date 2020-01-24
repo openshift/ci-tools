@@ -196,9 +196,10 @@ type bitWardenContext struct {
 }
 
 type secretContext struct {
-	Cluster   string `json:"cluster"`
-	Namespace string `json:"namespace"`
-	Name      string `json:"name"`
+	Cluster   string             `json:"cluster"`
+	Namespace string             `json:"namespace"`
+	Name      string             `json:"name"`
+	Type      coreapi.SecretType `json:"type,omitempty"`
 }
 
 type secretConfig struct {
@@ -239,6 +240,7 @@ func constructSecrets(config []secretConfig, bwClient bitwarden.Client) (map[str
 					Namespace: secretContext.Namespace,
 					Labels:    map[string]string{"ci.openshift.org/auto-managed": "true"},
 				},
+				Type: secretContext.Type,
 			}
 			secretsMap[secretContext.Cluster] = append(secretsMap[secretContext.Cluster], secret)
 		}
@@ -252,6 +254,9 @@ func updateSecrets(secretsGetters map[string]coreclientset.SecretsGetter, secret
 			logrus.Infof("handling secret: %s:%s/%s", cluster, secret.Namespace, secret.Name)
 			secretsGetter := secretsGetters[cluster]
 			if existingSecret, err := secretsGetter.Secrets(secret.Namespace).Get(secret.Name, meta.GetOptions{}); err == nil {
+				if secret.Type != existingSecret.Type {
+					return fmt.Errorf("cannot change secret type from %q to %q (immutable file): %s:%s/%s", existingSecret.Type, secret.Type, cluster, secret.Namespace, secret.Name)
+				}
 				if !force && !equality.Semantic.DeepEqual(secret.Data, existingSecret.Data) {
 					logrus.Errorf("actual %s:%s/%s differs the expected:\n%s", cluster, secret.Namespace, secret.Name,
 						cmp.Diff(bytesMapToStringMap(secret.Data), bytesMapToStringMap(existingSecret.Data)))

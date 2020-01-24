@@ -3,6 +3,8 @@ package bitwarden
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"os"
 	"os/exec"
 	"sync"
 
@@ -93,12 +95,29 @@ func (c *cliClient) GetFieldOnItem(itemName, fieldName string) ([]byte, error) {
 	return nil, fmt.Errorf("failed to find field %s in item %s", fieldName, itemName)
 }
 
-func (c *cliClient) GetAttachmentOnItem(itemName, attachmentName string) ([]byte, error) {
+func (c *cliClient) GetAttachmentOnItem(itemName, attachmentName string) (bytes []byte, retErr error) {
+	file, err := ioutil.TempFile("", "attachmentName")
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err := os.Remove(file.Name()); err != nil {
+			retErr = err
+		}
+	}()
+	return c.getAttachmentOnItemToFile(itemName, attachmentName, file.Name())
+}
+
+func (c *cliClient) getAttachmentOnItemToFile(itemName, attachmentName, filename string) ([]byte, error) {
 	for _, item := range c.savedItems {
 		if itemName == item.Name {
 			for _, attachment := range item.Attachments {
 				if attachment.FileName == attachmentName {
-					return c.run("--session", c.session, "get", "attachment", attachment.ID, "--itemid", item.ID, "--raw")
+					_, err := c.run("--session", c.session, "get", "attachment", attachment.ID, "--itemid", item.ID, "--output", filename)
+					if err != nil {
+						return nil, err
+					}
+					return ioutil.ReadFile(filename)
 				}
 			}
 		}

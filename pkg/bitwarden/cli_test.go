@@ -2,6 +2,8 @@ package bitwarden
 
 import (
 	"fmt"
+	"io/ioutil"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -450,7 +452,17 @@ func TestGetPassword(t *testing.T) {
 	}
 }
 
-func TestGetAttachmentOnItem(t *testing.T) {
+func TestGetAttachmentOnItemToFile(t *testing.T) {
+	file, err := ioutil.TempFile("", "attachmentName")
+	if err != nil {
+		t.Errorf("Failed to create tmp file.")
+	}
+	defer func() {
+		if err := os.Remove(file.Name()); err != nil {
+			t.Errorf("Failed to remove tmp file: %q", file.Name())
+		}
+	}()
+	ioutil.WriteFile(file.Name(), []byte(`bla`), 0755)
 	client := &cliClient{
 		session: "abc",
 		savedItems: []Item{
@@ -470,12 +482,12 @@ func TestGetAttachmentOnItem(t *testing.T) {
 		{
 			name: "basic case",
 			responses: map[string]execResponse{
-				"--session abc get attachment a-id1 --itemid id2 --raw": {
-					out: []byte(`bla`),
+				fmt.Sprintf("--session abc get attachment a-id1 --itemid id2 --output %s", file.Name()): {
+					out: []byte(file.Name()),
 				},
 			},
 			expectedCalls: [][]string{
-				{"--session", "abc", "get", "attachment", "a-id1", "--itemid", "id2", "--raw"},
+				{"--session", "abc", "get", "attachment", "a-id1", "--itemid", "id2", "--output", file.Name()},
 			},
 			itemName:       "my-credentials",
 			attachmentName: "secret.auto.vars",
@@ -484,12 +496,12 @@ func TestGetAttachmentOnItem(t *testing.T) {
 		{
 			name: "get attachment cmd err",
 			responses: map[string]execResponse{
-				"--session abc get attachment a-id1 --itemid id2 --raw": {
+				fmt.Sprintf("--session abc get attachment a-id1 --itemid id2 --output %s", file.Name()): {
 					err: fmt.Errorf("some err"),
 				},
 			},
 			expectedCalls: [][]string{
-				{"--session", "abc", "get", "attachment", "a-id1", "--itemid", "id2", "--raw"},
+				{"--session", "abc", "get", "attachment", "a-id1", "--itemid", "id2", "--output", file.Name()},
 			},
 			itemName:       "my-credentials",
 			attachmentName: "secret.auto.vars",
@@ -517,7 +529,7 @@ func TestGetAttachmentOnItem(t *testing.T) {
 				responses: tc.responses,
 			}
 			client.run = e.Run
-			actual, actualErr := client.GetAttachmentOnItem(tc.itemName, tc.attachmentName)
+			actual, actualErr := client.getAttachmentOnItemToFile(tc.itemName, tc.attachmentName, file.Name())
 			equalError(t, tc.expectedErr, actualErr)
 			equal(t, tc.expected, actual)
 			equal(t, tc.expectedCalls, e.records)

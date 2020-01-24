@@ -350,8 +350,6 @@ objects:
       env:
       - name: AWS_SHARED_CREDENTIALS_FILE
         value: /etc/openshift-installer/.awscred
-      - name: AWS_REGION
-        value: us-east-1
       - name: AZURE_AUTH_LOCATION
         value: /etc/openshift-installer/osServicePrincipal.json
       - name: GCP_REGION
@@ -388,18 +386,26 @@ objects:
       - /bin/bash
       - -c
       - |
-        #!/bin/sh
-        set -e
+        #!/bin/bash
+        set -euo pipefail
 
         trap 'rc=$?; if test "${rc}" -eq 0; then touch /tmp/setup-success; else touch /tmp/exit /tmp/setup-failed; fi; exit "${rc}"' EXIT
         trap 'CHILDREN=$(jobs -p); if test -n "${CHILDREN}"; then kill ${CHILDREN} && wait; fi' TERM
         cp "$(command -v openshift-install)" /tmp
         mkdir /tmp/artifacts/installer
 
+        function has_variant() {
+          regex="(^|,)$1($|,)"
+          if [[ $CLUSTER_VARIANT =~ $regex ]]; then
+            return 0
+          fi
+          return 1
+        }
+
         if [[ -n "${INSTALL_INITIAL_RELEASE}" && -n "${RELEASE_IMAGE_INITIAL}" ]]; then
           echo "Installing from initial release ${RELEASE_IMAGE_INITIAL}"
           OPENSHIFT_INSTALL_RELEASE_IMAGE_OVERRIDE="${RELEASE_IMAGE_INITIAL}"
-        elif [[ "${CLUSTER_VARIANT}" =~ "mirror" ]]; then
+        elif has_variant "mirror"; then
           export PATH=$PATH:/tmp  # gain access to oc
           while [ ! command -V oc ]; do sleep 1; done # poll to make sure that the test container has dropped oc into the shared volume
 
@@ -427,23 +433,45 @@ objects:
         cp "${SSH_PRIV_KEY_PATH}" ~/.ssh/
 
         workers=3
-        if [[ "${CLUSTER_VARIANT}" =~ "compact" ]]; then
+        if has_variant "compact"; then
           workers=0
         fi
         if [[ "${CLUSTER_TYPE}" = "aws" ]]; then
             master_type=null
-            if [[ "${CLUSTER_VARIANT}" =~ "xlarge" ]]; then
+            if has_variant "xlarge"; then
               master_type=m5.8xlarge
-            elif [[ "${CLUSTER_VARIANT}" =~ "large" ]]; then
+            elif has_variant "large"; then
               master_type=m5.4xlarge
             fi
+            case $((RANDOM % 4)) in
+            0) AWS_REGION=us-east-1
+               ZONE_1=us-east-1b
+               ZONE_2=us-east-1c;;
+            1) AWS_REGION=us-east-2;;
+            2) AWS_REGION=us-west-1;;
+            3) AWS_REGION=us-west-2;;
+            *) echo >&2 "invalid AWS region index"; exit 1;;
+            esac
+            echo "AWS region: ${AWS_REGION} (zones: ${ZONE_1:-${AWS_REGION}a} ${ZONE_2:-${AWS_REGION}b})"
             subnets="[]"
-            if [[ "${CLUSTER_VARIANT}" =~ "shared-vpc" ]]; then
-              case $((RANDOM % 4)) in
-              0) subnets="['subnet-030a88e6e97101ab2','subnet-0e07763243186cac5','subnet-02c5fea7482f804fb','subnet-0291499fd1718ee01','subnet-01c4667ad446c8337','subnet-025e9043c44114baa']";;
-              1) subnets="['subnet-0170ee5ccdd7e7823','subnet-0d50cac95bebb5a6e','subnet-0094864467fc2e737','subnet-0daa3919d85296eb6','subnet-0ab1e11d3ed63cc97','subnet-07681ad7ce2b6c281']";;
-              2) subnets="['subnet-00de9462cf29cd3d3','subnet-06595d2851257b4df','subnet-04bbfdd9ca1b67e74','subnet-096992ef7d807f6b4','subnet-0b3d7ba41fc6278b2','subnet-0b99293450e2edb13']";;
-              3) subnets="['subnet-047f6294332aa3c1c','subnet-0c3bce80bbc2c8f1c','subnet-038c38c7d96364d7f','subnet-027a025e9d9db95ce','subnet-04d9008469025b101','subnet-02f75024b00b20a75']";;
+            if has_variant "shared-vpc"; then
+              case "${AWS_REGION}_$((RANDOM % 4))" in
+              us-east-1_0) subnets="['subnet-030a88e6e97101ab2','subnet-0e07763243186cac5','subnet-02c5fea7482f804fb','subnet-0291499fd1718ee01','subnet-01c4667ad446c8337','subnet-025e9043c44114baa']";;
+              us-east-1_1) subnets="['subnet-0170ee5ccdd7e7823','subnet-0d50cac95bebb5a6e','subnet-0094864467fc2e737','subnet-0daa3919d85296eb6','subnet-0ab1e11d3ed63cc97','subnet-07681ad7ce2b6c281']";;
+              us-east-1_2) subnets="['subnet-00de9462cf29cd3d3','subnet-06595d2851257b4df','subnet-04bbfdd9ca1b67e74','subnet-096992ef7d807f6b4','subnet-0b3d7ba41fc6278b2','subnet-0b99293450e2edb13']";;
+              us-east-1_3) subnets="['subnet-047f6294332aa3c1c','subnet-0c3bce80bbc2c8f1c','subnet-038c38c7d96364d7f','subnet-027a025e9d9db95ce','subnet-04d9008469025b101','subnet-02f75024b00b20a75']";;
+              us-east-2_0) subnets="['subnet-0faf6d16c378ee7a7','subnet-0e104572db1b7d092','subnet-014ca96c04f36adec','subnet-0ea06057dceadfe8e','subnet-0689efe5e1f9f4212','subnet-0d36bb8edbcb3d916']";;
+              us-east-2_1) subnets="['subnet-085787cc4b80b84b2','subnet-09dfbf66e8f6e5b50','subnet-0db5d90ff3087444e','subnet-047f15f2a0210fbe0','subnet-0bf13f041c4233849','subnet-0e2a5320549e289d8']";;
+              us-east-2_2) subnets="['subnet-07d59b122f7a76f67','subnet-0d1a413c66cd59a3b','subnet-020df1de666b06b20','subnet-0ce9183380508d88d','subnet-04c83a79a1913824c','subnet-0d97ed1a54b1e9235']";;
+              us-east-2_3) subnets="['subnet-0d689957169836114','subnet-081c5c0c7bc351205','subnet-023b79f57b84894e5','subnet-070c0b96148b58787','subnet-0c693d11c33437345','subnet-0249c4ec2d6509b4e']";;
+              us-west-1_0) subnets="['subnet-0b0a3190ff0b05fb0','subnet-038719a99ae7f208c','subnet-0afc43ade6ca7f8e0','subnet-0df272b93eb3d79a5']";;
+              us-west-1_1) subnets="['subnet-070d5f1a70aa7b2ad','subnet-0e371618c77a58409','subnet-046cbad6141e391ba','subnet-0528b85478ef9d2b5']";;
+              us-west-1_2) subnets="['subnet-0a51561b99949d3c4','subnet-0de96f5675188f16f','subnet-05d1cbeccfb032e31','subnet-01e489eab26e95ec9']";;
+              us-west-1_3) subnets="['subnet-0029d43cd2d22bfe4','subnet-0b5476fddae459d10','subnet-0955a46cb4b379c91','subnet-04e3dae5b3fdcbe61']";;
+              us-west-2_0) subnets="['subnet-0a1956a6a6babc86b','subnet-07252d4a4737ec97e','subnet-00bcec6286b15a024','subnet-0f979e13d715cc03a','subnet-02e3b436e780363c5','subnet-02f0597dc582d3bde']";;
+              us-west-2_1) subnets="['subnet-0e2979f62a537ab59','subnet-060b22e9f90846c58','subnet-0c61f833b2a4caa2a','subnet-022d5d9affc6a2241','subnet-02c903aa40cf463ef','subnet-0db7df4231255086d']";;
+              us-west-2_2) subnets="['subnet-0d9b5481442b7d212','subnet-07795ec1097c5e34c','subnet-000d265d2bf4729f3','subnet-0d419e59ee340211c','subnet-0c8027d8d9794d822','subnet-05a19cfee3f602c7e']";;
+              us-west-2_3) subnets="['subnet-08c871a474ab034cc','subnet-0fe9e5f0d33e16eb0','subnet-0731dfd7678a5bac8','subnet-0d476b24170ac5942','subnet-0f0da17f8581745e6','subnet-0842d7a0250595e13']";;
               *) echo >&2 "invalid subnets index"; exit 1;;
               esac
               echo "Subnets : ${subnets}"
@@ -460,8 +488,8 @@ objects:
             aws:
               type: ${master_type}
               zones:
-              - us-east-1a
-              - us-east-1b
+              - ${ZONE_1:-${AWS_REGION}a}
+              - ${ZONE_2:-${AWS_REGION}b}
         compute:
         - name: worker
           replicas: ${workers}
@@ -469,11 +497,11 @@ objects:
             aws:
               type: m4.xlarge
               zones:
-              - us-east-1a
-              - us-east-1b
+              - ${ZONE_1:-${AWS_REGION}a}
+              - ${ZONE_2:-${AWS_REGION}b}
         platform:
           aws:
-            region:       ${AWS_REGION}
+            region: ${AWS_REGION}
             userTags:
               expirationDate: ${EXPIRATION_DATE}
             subnets: ${subnets}
@@ -501,7 +529,7 @@ objects:
             vnetname=""
             ctrlsubnet=""
             computesubnet=""
-            if [[ "${CLUSTER_VARIANT}" =~ "shared-vpc" ]]; then
+            if has_variant "shared-vpc"; then
               vnetrg="os4-common"
               vnetname="do-not-delete-shared-vnet-${AZURE_REGION}"
               ctrlsubnet="subnet-1"
@@ -548,7 +576,7 @@ objects:
             network=""
             ctrlsubnet=""
             computesubnet=""
-            if [[ "${CLUSTER_VARIANT}" =~ "shared-vpc" ]]; then
+            if has_variant "shared-vpc"; then
               network="do-not-delete-shared-network"
               ctrlsubnet="do-not-delete-shared-master-subnet"
               computesubnet="do-not-delete-shared-worker-subnet"
@@ -583,7 +611,7 @@ objects:
 
         # as a current stop gap -- this is pointing to a proxy hosted in
         # the namespace "ci-test-ewolinet" on the ci cluster
-        if [[ "${CLUSTER_VARIANT}" =~ "proxy" ]]; then
+        if has_variant "proxy"; then
 
         # FIXME: due to https://bugzilla.redhat.com/show_bug.cgi?id=1750650 we need to
         # use a http endpoint for the httpsProxy value
@@ -667,17 +695,31 @@ objects:
         fi
 
         network_type="${CLUSTER_NETWORK_TYPE-}"
-        if [[ "${CLUSTER_VARIANT}" =~ "ovn" ]]; then
+        if has_variant "ovn"; then
           network_type=OVNKubernetes
         fi
-        if [[ -n "${network_type}" ]]; then
+        if has_variant "ipv6"; then
+          export OPENSHIFT_INSTALL_AZURE_EMULATE_SINGLESTACK_IPV6=true
+          cat >> /tmp/artifacts/installer/install-config.yaml << EOF
+        networking:
+          networkType: OVNKubernetes
+          machineNetwork:
+            - cidr: 10.0.0.0/16
+            - cidr: fd00::/48
+          clusterNetwork:
+            - cidr: fd01::/48
+              hostPrefix: 64
+          serviceNetwork:
+            - fd02::/112
+        EOF
+        elif [[ -n "${network_type}" ]]; then
           cat >> /tmp/artifacts/installer/install-config.yaml << EOF
         networking:
           networkType: ${network_type}
         EOF
         fi
 
-        if [[ "${CLUSTER_VARIANT}" =~ "mirror" ]]; then
+        if has_variant "mirror"; then
           cat >> /tmp/artifacts/installer/install-config.yaml << EOF
         imageContentSources:
         - source: "${MIRROR_BASE}-scratch"
@@ -686,19 +728,19 @@ objects:
         EOF
         fi
 
-        if [[ "${CLUSTER_VARIANT}" =~ "fips" ]]; then
+        if has_variant "fips"; then
           cat >> /tmp/artifacts/installer/install-config.yaml << EOF
         fips: true
         EOF
         fi
 
         # TODO: Replace with a more concise manifest injection approach
-        if [[ -n "${CLUSTER_NETWORK_MANIFEST}" ]]; then
+        if [[ -n "${CLUSTER_NETWORK_MANIFEST:-}" ]]; then
             openshift-install --dir=/tmp/artifacts/installer/ create manifests
             echo "${CLUSTER_NETWORK_MANIFEST}" > /tmp/artifacts/installer/manifests/cluster-network-03-config.yml
         fi
 
-        TF_LOG=debug openshift-install --dir=/tmp/artifacts/installer create cluster &
+        TF_LOG=debug openshift-install --dir=/tmp/artifacts/installer create cluster 2>&1 | grep -v password &
         wait "$!"
 
     # Performs cleanup of all created resources
@@ -734,6 +776,8 @@ objects:
       - -c
       - |
         #!/bin/bash
+        set -eo pipefail
+
         function queue() {
           local TARGET="${1}"
           shift

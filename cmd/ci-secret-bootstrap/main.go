@@ -233,6 +233,9 @@ func constructSecrets(config []secretConfig, bwClient bitwarden.Client) (map[str
 			data[key] = value
 		}
 		for _, secretContext := range secretConfig.To {
+			if secretContext.Type == "" {
+				secretContext.Type = coreapi.SecretTypeOpaque
+			}
 			secret := &coreapi.Secret{
 				Data: data,
 				ObjectMeta: meta.ObjectMeta{
@@ -255,7 +258,7 @@ func updateSecrets(secretsGetters map[string]coreclientset.SecretsGetter, secret
 			secretsGetter := secretsGetters[cluster]
 			if existingSecret, err := secretsGetter.Secrets(secret.Namespace).Get(secret.Name, meta.GetOptions{}); err == nil {
 				if secret.Type != existingSecret.Type {
-					return fmt.Errorf("cannot change secret type from %q to %q (immutable file): %s:%s/%s", existingSecret.Type, secret.Type, cluster, secret.Namespace, secret.Name)
+					return fmt.Errorf("cannot change secret type from %q to %q (immutable field): %s:%s/%s", existingSecret.Type, secret.Type, cluster, secret.Namespace, secret.Name)
 				}
 				if !force && !equality.Semantic.DeepEqual(secret.Data, existingSecret.Data) {
 					logrus.Errorf("actual %s:%s/%s differs the expected:\n%s", cluster, secret.Namespace, secret.Name,

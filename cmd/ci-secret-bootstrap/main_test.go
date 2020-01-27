@@ -840,6 +840,7 @@ func TestConstructSecrets(t *testing.T) {
 							"key-name-6": []byte("attachment-name-3-2-value"),
 							"key-name-7": []byte("yyy"),
 						},
+						Type: "Opaque",
 					},
 					{
 						ObjectMeta: metav1.ObjectMeta{
@@ -869,6 +870,7 @@ func TestConstructSecrets(t *testing.T) {
 							"key-name-6": []byte("attachment-name-3-2-value"),
 							"key-name-7": []byte("yyy"),
 						},
+						Type: "Opaque",
 					},
 				},
 			},
@@ -960,8 +962,9 @@ func TestConstructSecrets(t *testing.T) {
 			bwClient: bitwarden.NewFakeClient(
 				[]bitwarden.Item{
 					{
-						ID:   "1",
-						Name: "item-name-1",
+						ID:    "1",
+						Name:  "item-name-1",
+						Login: &bitwarden.Login{Password: "abc"},
 						Fields: []bitwarden.Field{
 							{
 								Name:  "field-name-1",
@@ -1268,7 +1271,7 @@ func TestUpdateSecrets(t *testing.T) {
 				},
 			},
 			force:    true,
-			expected: fmt.Errorf("cannot change secret type from \"kubernetes.io/dockerconfigjson\" to \"\" (immutable file): default:namespace-2/prod-secret-2"),
+			expected: fmt.Errorf("cannot change secret type from \"kubernetes.io/dockerconfigjson\" to \"\" (immutable field): default:namespace-2/prod-secret-2"),
 			expectedSecretsOnDefault: []coreapi.Secret{
 				{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1330,7 +1333,7 @@ func TestUpdateSecrets(t *testing.T) {
 					},
 				},
 			},
-			expected: fmt.Errorf("cannot change secret type from \"kubernetes.io/dockerconfigjson\" to \"\" (immutable file): default:namespace-2/prod-secret-2"),
+			expected: fmt.Errorf("cannot change secret type from \"kubernetes.io/dockerconfigjson\" to \"\" (immutable field): default:namespace-2/prod-secret-2"),
 			expectedSecretsOnDefault: []coreapi.Secret{
 				{
 					ObjectMeta: metav1.ObjectMeta{

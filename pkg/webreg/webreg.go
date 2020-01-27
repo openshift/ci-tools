@@ -28,6 +28,24 @@ const htmlPageStart = `
 <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css" integrity="sha384-MCw98/SFnGE8fJT3GXwEOngsV7Zt27NXFoaoApmYm81iuXoPkFOJwJ8ERdknLPMO" crossorigin="anonymous">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <style>
+@namespace svg url(http://www.w3.org/2000/svg);
+svg|a:link, svg|a:visited {
+  cursor: pointer;
+}
+
+svg|a text,
+text svg|a {
+  fill: #007bff;
+  text-decoration: none;
+  background-color: transparent;
+  -webkit-text-decoration-skip: objects;
+}
+
+svg|a:hover text, svg|a:active text {
+  fill: #0056b3;
+  text-decoration: underline;
+}
+
 @media (max-width: 992px) {
   .container {
     width: 100%%;
@@ -95,6 +113,8 @@ const chainPage = `
 <p id="documentation">{{ .Documentation }}</p>
 <h2 id="steps" title="Step run by the chain, in runtime order">Steps</h2>
 {{ template "stepTable" .Steps}}
+<h2 id="graph" title="Visual representation of steps run by this chain">Step Graph</h2>
+{{ chainGraph .As }}
 `
 
 // workflowJobPage defines the template for both jobs and workflows
@@ -115,6 +135,8 @@ const workflowJobPage = `
 {{ template "stepTable" .Steps.Test }}
 <h2 id="post" title="Steps run by this {{ toLower $type }} to clean up and teardown test resources, in runtime order">Post Steps</h2>
 {{ template "stepTable" .Steps.Post }}
+<h2 id="graph" title="Visual representation of steps run by this {{ toLower $type }}">Step Graph</h2>
+{{ workflowGraph .As }}
 `
 
 const templateDefinitions = `
@@ -264,7 +286,7 @@ type workflowJob struct {
 	Type string
 }
 
-func getBaseTemplate(docs map[string]string) *template.Template {
+func getBaseTemplate(workflows registry.WorkflowByName, chains registry.ChainByName, docs map[string]string) *template.Template {
 	base := template.New("baseTemplate").Funcs(
 		template.FuncMap{
 			"docsForName": func(name string) string {
@@ -275,6 +297,20 @@ func getBaseTemplate(docs map[string]string) *template.Template {
 				return template.HTML(str)
 			},
 			"toLower": strings.ToLower,
+			"workflowGraph": func(as string) template.HTML {
+				svg, err := WorkflowGraph(as, workflows, chains)
+				if err != nil {
+					return template.HTML(err.Error())
+				}
+				return template.HTML(svg)
+			},
+			"chainGraph": func(as string) template.HTML {
+				svg, err := ChainGraph(as, chains)
+				if err != nil {
+					return template.HTML(err.Error())
+				}
+				return template.HTML(svg)
+			},
 		},
 	)
 	base, err := base.Parse(templateDefinitions)
@@ -376,7 +412,7 @@ func mainPageHandler(agent load.RegistryAgent, templateString string, jobs map[s
 
 	w.Header().Set("Content-Type", "text/html;charset=UTF-8")
 	refs, chains, wfs, docs := agent.GetRegistryComponents()
-	page := getBaseTemplate(docs)
+	page := getBaseTemplate(wfs, chains, docs)
 	page, err := page.Parse(templateString)
 	if err != nil {
 		writeErrorPage(w, err, http.StatusInternalServerError)
@@ -502,8 +538,8 @@ func chainHandler(agent load.RegistryAgent, w http.ResponseWriter, req *http.Req
 	w.Header().Set("Content-Type", "text/html;charset=UTF-8")
 	name := path.Base(req.URL.Path)
 
-	_, chains, _, docs := agent.GetRegistryComponents()
-	page := getBaseTemplate(docs)
+	_, chains, wfs, docs := agent.GetRegistryComponents()
+	page := getBaseTemplate(wfs, chains, docs)
 	page, err := page.Parse(chainPage)
 	if err != nil {
 		writeErrorPage(w, fmt.Errorf("Failed to render page: %v", err), http.StatusInternalServerError)
@@ -523,8 +559,8 @@ func workflowHandler(agent load.RegistryAgent, w http.ResponseWriter, req *http.
 	w.Header().Set("Content-Type", "text/html;charset=UTF-8")
 	name := path.Base(req.URL.Path)
 
-	_, _, workflows, docs := agent.GetRegistryComponents()
-	page := getBaseTemplate(docs)
+	_, chains, workflows, docs := agent.GetRegistryComponents()
+	page := getBaseTemplate(workflows, chains, docs)
 	page, err := page.Parse(workflowJobPage)
 	if err != nil {
 		writeErrorPage(w, fmt.Errorf("Failed to render page: %v", err), http.StatusInternalServerError)
@@ -576,9 +612,14 @@ func jobHandler(regAgent load.RegistryAgent, confAgent load.ConfigAgent, w http.
 		writeErrorPage(w, err, http.StatusNotFound)
 		return
 	}
-	_, _, workflows, docs := regAgent.GetRegistryComponents()
+	_, chains, workflows, docs := regAgent.GetRegistryComponents()
 	workflow, docs := jobToWorkflow(name, config, workflows, docs)
-	page := getBaseTemplate(docs)
+	updatedWorkflows := make(registry.WorkflowByName)
+	for k, v := range workflows {
+		updatedWorkflows[k] = v
+	}
+	updatedWorkflows[name] = workflow.Steps
+	page := getBaseTemplate(updatedWorkflows, chains, docs)
 	page, err = page.Parse(workflowJobPage)
 	if err != nil {
 		writeErrorPage(w, fmt.Errorf("Failed to render page: %v", err), http.StatusInternalServerError)

@@ -7,6 +7,7 @@ trap 'rm -rf "${WORKDIR}"' EXIT
 TEST_ROOT="$(dirname "${BASH_SOURCE[0]}")"
 readonly TEST_ROOT
 readonly TEST_CONFIG_DIR="${TEST_ROOT}/configs"
+readonly TEST_PROWCONFIG="${TEST_ROOT}/../../ci-operator-configresolver-integration/config.yaml"
 readonly TEST_REGISTRY_DIR="${TEST_ROOT}/../../multistage-registry/registry"
 readonly TEST_CONFIG="${TEST_CONFIG_DIR}/master/openshift-hyperkube-master.yaml"
 readonly TEST_NAMESPACE="testns"
@@ -33,7 +34,7 @@ if ! diff "${EXPECTED1}" "${OUT}"; then
 fi
 
 # Run test with ci-operator-configresolver
-ci-operator-configresolver -config "${TEST_CONFIG_DIR}" -registry "${TEST_REGISTRY_DIR}" -log-level debug -cycle 2m  &> "${WORKDIR}"/output.log &
+ci-operator-configresolver -config "${TEST_CONFIG_DIR}" -registry "${TEST_REGISTRY_DIR}" -prow-config "${TEST_PROWCONFIG}" -log-level debug -cycle 2m  &> "${WORKDIR}"/output.log &
 # Wait until ready
 for (( i = 0; i < 10; i++ )); do
     if [[ "$(curl http://127.0.0.1:8081/healthz/ready 2>/dev/null)" == "OK" ]]; then

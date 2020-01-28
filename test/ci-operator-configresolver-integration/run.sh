@@ -15,7 +15,7 @@ cd "$WORKDIR"
 # copy registry to tmpdir to allow tester to modify registry
 cp -a "$ROOTDIR"/test/ci-operator-configresolver-integration/ tests
 cp -a "$ROOTDIR"/test/multistage-registry multistage-registry
-ci-operator-configresolver -config tests/configs -registry multistage-registry/registry -log-level debug -cycle 2m &> output.log &
+ci-operator-configresolver -config tests/configs -registry multistage-registry/registry -prow-config tests/config.yaml -log-level debug -cycle 2m &> output.log &
 echo "[INFO] Started configresolver"
 for (( i = 0; i < 10; i++ )); do
     if [[ "$(curl http://127.0.0.1:8081/healthz/ready 2>/dev/null)" == "OK" ]]; then
@@ -112,7 +112,7 @@ rm output.log
 
 echo "[INFO] Testing configmap style reloading"
 # Test configmap reloading
-ci-operator-configresolver -config tests/ci-op-configmaps -registry multistage-registry/configmap -log-level debug -cycle 2m -flat-registry &> output.log &
+ci-operator-configresolver -config tests/ci-op-configmaps -registry multistage-registry/configmap -prow-config tests/config.yaml -log-level debug -cycle 2m -flat-registry &> output.log &
 for (( i = 0; i < 10; i++ )); do
     if [[ "$(curl http://127.0.0.1:8081/healthz/ready 2>/dev/null)" == "OK" ]]; then
         break

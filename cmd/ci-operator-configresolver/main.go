@@ -32,6 +32,7 @@ const (
 type options struct {
 	configPath   string
 	registryPath string
+	prowPath     string
 	logLevel     string
 	address      string
 	uiAddress    string
@@ -95,6 +96,7 @@ func gatherOptions() options {
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	fs.StringVar(&o.configPath, "config", "", "Path to config dirs")
 	fs.StringVar(&o.registryPath, "registry", "", "Path to registry dirs")
+	fs.StringVar(&o.prowPath, "prow-config", "", "Path to prow config")
 	fs.StringVar(&o.logLevel, "log-level", "info", "Level at which to log output.")
 	fs.StringVar(&o.address, "address", ":8080", "Address to run server on")
 	fs.StringVar(&o.uiAddress, "ui-address", ":8082", "Address to run the registry UI on")
@@ -126,6 +128,13 @@ func validateOptions(o options) error {
 	} else {
 		if _, err := os.Stat(o.registryPath); err != nil && os.IsNotExist(err) {
 			return fmt.Errorf("--registry points to a nonexistent directory: %v", err)
+		}
+	}
+	if o.prowPath == "" {
+		return fmt.Errorf("--prow-config is required")
+	} else {
+		if _, err := os.Stat(o.prowPath); err != nil && os.IsNotExist(err) {
+			return fmt.Errorf("--prow-config points to a nonexistent file/directory: %v", err)
 		}
 	}
 	if o.validateOnly && o.flatRegistry {
@@ -267,6 +276,13 @@ func main() {
 		log.Fatalf("Failed to get registry agent: %v", err)
 	}
 
+	jobAgent := &prowConfig.Agent{}
+	// we only care about the org/repo information; we don't need to load jobs
+	err = jobAgent.Start(o.prowPath, "")
+	if err != nil {
+		log.Fatalf("Failed to get job agent: %v", err)
+	}
+
 	if o.validateOnly {
 		os.Exit(0)
 	}
@@ -279,7 +295,7 @@ func main() {
 	interrupts.ListenAndServe(&http.Server{Addr: o.address}, o.gracePeriod)
 	uiServer := &http.Server{
 		Addr:    o.uiAddress,
-		Handler: handleWithMetrics(webreg.WebRegHandler(registryAgent, configAgent)),
+		Handler: handleWithMetrics(webreg.WebRegHandler(registryAgent, configAgent, jobAgent)),
 	}
 	interrupts.ListenAndServe(uiServer, o.gracePeriod)
 	health.ServeReady()

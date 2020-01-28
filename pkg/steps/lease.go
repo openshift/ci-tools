@@ -55,6 +55,7 @@ func (s *leaseStep) Run(ctx context.Context, dry bool) error {
 	if err != nil {
 		return fmt.Errorf("failed to acquire lease: %v", err)
 	}
+	log.Printf("Acquired lease %q for %q", lease, s.leaseType)
 	var errs []error
 	errs = append(errs, s.wrapped.Run(ctx, dry))
 	log.Printf("Releasing lease for %q", s.leaseType)

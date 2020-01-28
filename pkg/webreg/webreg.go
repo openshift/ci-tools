@@ -55,6 +55,14 @@ svg|a:hover text, svg|a:active text {
 pre {
 	border: 10px solid transparent;
 }
+h1, h2, p {
+	padding-top: 10px;
+}
+.info {
+	text-decoration-line: underline;
+	text-decoration-style: dotted;
+	text-decoration-color: #c0c0c0
+}
 </style>
 </head>
 <body>
@@ -101,7 +109,8 @@ const jobListPage = `
 `
 
 const referencePage = `
-<h2><a href="/">Openshift CI Step Registry</a> &gt; <a href="/references">References</a> &gt; <nobr>{{ .As }}</nobr></h2>
+<h1><a href="/">Openshift CI Step Registry</a></h1>
+<h2><a href="/references">References</a> &gt; <nobr>{{ .As }}</nobr></h2>
 <p id="documentation">{{ .Documentation }}</p>
 <h2 id="image">Container image used for this step: <span style="font-family:monospace">{{ .From }}</span></h2>
 <h2 id="source">Source Code</h2>
@@ -109,7 +118,8 @@ const referencePage = `
 `
 
 const chainPage = `
-<h2><a href="/">Openshift CI Step Registry</a> &gt; <a href="/chains">Chains</a> &gt; <nobr>{{ .As }}</nobr></h2>
+<h1><a href="/">Openshift CI Step Registry</a></h1>
+<h2><a href="/chains">Chains</a> &gt; <nobr>{{ .As }}</nobr></h2>
 <p id="documentation">{{ .Documentation }}</p>
 <h2 id="steps" title="Step run by the chain, in runtime order">Steps</h2>
 {{ template "stepTable" .Steps}}
@@ -119,11 +129,12 @@ const chainPage = `
 
 // workflowJobPage defines the template for both jobs and workflows
 const workflowJobPage = `
+<h1><a href="/">Openshift CI Step Registry</a></h1>
 {{ $type := .Type }}
 {{ if eq $type "Job" }}
-	<h2><a href="/">Openshift CI Step Registry</a> &gt; <a href="/jobs">Jobs</a> &gt; <nobr>{{ .As }}</nobr></h2>
+	<h2><a href="/jobs">Jobs</a> &gt; <nobr>{{ .As }}</nobr></h2>
 {{ else if eq $type "Workflow" }}
-	<h2><a href="/">Openshift CI Step Registry</a> &gt; <a href="/workflows">Workflows</a> &gt; <nobr>{{ .As }}</nobr></h2>
+	<h2><a href="/workflows">Workflows</a> &gt; <nobr>{{ .As }}</nobr></h2>
 	<p id="documentation">{{ .Documentation }}</p>
 {{ end }}
 {{ if .Steps.ClusterProfile }}
@@ -151,8 +162,8 @@ const templateDefinitions = `
 	<table class="table">
 	<thead>
 		<tr>
-			<th title="The name of the reference or chain">Name</th>
-			<th title="The documentation for the reference or chain">Documentation</th>
+			<th title="The name of the reference or chain" class="info">Name</th>
+			<th title="The documentation for the reference or chain" class="info">Description</th>
 		</tr>
 	</thead>
 	<tbody>
@@ -183,15 +194,15 @@ const templateDefinitions = `
 {{ end }}
 
 {{ define "workflowTable" }}
-	<h2 id="workflows"><a href="/workflows">Workflows</a></h2>
+	<h2 id="workflows">Workflows</h2>
 	<table class="table">
 		<thead>
 			<tr>
-				<th title="The name of the workflow">Name</th>
-				<th title="What the workflow is supposed to do">Documentation</th>
-				<th title="The registry elements used during setup">Pre</th>
-				<th title="The registry elements containing the tests">Test</th>
-				<th title="The registry elements used to teardown and clean up the test">Post</th>
+				<th title="The name of the workflow" class="info">Name</th>
+				<th title="What the workflow is supposed to do" class="info">Description</th>
+				<th title="The registry elements used during setup" class="info">Pre</th>
+				<th title="The registry elements containing the tests" class="info">Test</th>
+				<th title="The registry elements used to teardown and clean up the test" class="info">Post</th>
 			</tr>
 		</thead>
 		<tbody>
@@ -209,13 +220,13 @@ const templateDefinitions = `
 {{ end }}
 
 {{ define "chainTable" }}
-	<h2 id="chains"><a href="/chains">Chains</a></h2>
+	<h2 id="chains">Chains</h2>
 	<table class="table">
 		<thead>
 			<tr>
-				<th title="The name of the chain">Name</th>
-				<th title="What the chain is supposed to do">Documentation</th>
-				<th title="The steps (references and other chains) that the chain runs (in order)">Steps</th>
+				<th title="The name of the chain" class="info">Name</th>
+				<th title="What the chain is supposed to do" class="info">Description</th>
+				<th title="The steps (references and other chains) that the chain runs (in order)" class="info">Steps</th>
 			</tr>
 		</thead>
 		<tbody>
@@ -231,12 +242,12 @@ const templateDefinitions = `
 {{ end }}
 
 {{ define "referenceTable" }}
-	<h2 id="references"><a href="/references">References</a></h2>
+	<h2 id="references">References</h2>
 	<table class="table">
 		<thead>
 			<tr>
-				<th title="The name of the reference">Name</th>
-				<th title="The documentation for the reference">Documentation</th>
+				<th title="The name of the reference" class="info">Name</th>
+				<th title="The documentation for the reference" class="info">Description</th>
 			</tr>
 		</thead>
 		<tbody>
@@ -251,12 +262,12 @@ const templateDefinitions = `
 {{ end }}
 
 {{ define "jobTable" }}
-<h2 id="jobs"><a href="/jobs">Jobs</a></h2>
+<h2 id="jobs">Jobs</h2>
 	<table class="table">
 		<thead>
 			<tr>
-				<th title="The name of the parent config of the test in org-repo-branch format">Org-Repo-Branch</th>
-				<th title="The multistage tests in the config">Tests</th>
+				<th title="The name of the parent config of the test in org-repo-branch format" class="info">Org-Repo-Branch</th>
+				<th title="The multistage tests in the config" class="info">Tests</th>
 			</tr>
 		</thead>
 		<tbody>

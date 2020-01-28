@@ -211,7 +211,13 @@ func constructSecrets(config []secretConfig, bwClient bitwarden.Client) (map[str
 	secretsMap := map[string][]*coreapi.Secret{}
 	for _, secretConfig := range config {
 		data := make(map[string][]byte)
-		for key, bwContext := range secretConfig.From {
+		var keys []string
+		for key := range secretConfig.From {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			bwContext := secretConfig.From[key]
 			var value []byte
 			var err error
 			if bwContext.Field != "" {

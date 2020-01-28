@@ -87,7 +87,7 @@ func (o *options) run() error {
 			return fmt.Errorf("failed to log secret: %v", err)
 		}
 	} else {
-		if _, err := util.UpdateSecret(o.client, secret); err != nil {
+		if _, err := o.client.Update(secret); err != nil {
 			return fmt.Errorf("failed to update secret: %v", err)
 		}
 	}

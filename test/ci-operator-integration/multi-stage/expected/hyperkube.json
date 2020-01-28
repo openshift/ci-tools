@@ -617,6 +617,7 @@
         }
       ],
       "restartPolicy": "Never",
+      "serviceAccountName": "multi-stage",
       "volumes": [
         {
           "emptyDir": {},
@@ -807,6 +808,7 @@
         }
       ],
       "restartPolicy": "Never",
+      "serviceAccountName": "multi-stage",
       "volumes": [
         {
           "emptyDir": {},
@@ -997,6 +999,7 @@
         }
       ],
       "restartPolicy": "Never",
+      "serviceAccountName": "multi-stage",
       "volumes": [
         {
           "emptyDir": {},
@@ -1187,6 +1190,7 @@
         }
       ],
       "restartPolicy": "Never",
+      "serviceAccountName": "multi-stage",
       "volumes": [
         {
           "emptyDir": {},
@@ -1377,6 +1381,7 @@
         }
       ],
       "restartPolicy": "Never",
+      "serviceAccountName": "multi-stage",
       "volumes": [
         {
           "emptyDir": {},
@@ -1567,6 +1572,7 @@
         }
       ],
       "restartPolicy": "Never",
+      "serviceAccountName": "multi-stage",
       "volumes": [
         {
           "emptyDir": {},
@@ -1757,6 +1763,7 @@
         }
       ],
       "restartPolicy": "Never",
+      "serviceAccountName": "multi-stage",
       "volumes": [
         {
           "emptyDir": {},
@@ -1820,6 +1827,28 @@
   },
   {
     "apiVersion": "rbac.authorization.k8s.io/v1",
+    "kind": "RoleBinding",
+    "metadata": {
+      "creationTimestamp": null,
+      "labels": {
+        "ci.openshift.io/multi-stage-test": "multi-stage"
+      },
+      "name": "multi-stage"
+    },
+    "roleRef": {
+      "apiGroup": "",
+      "kind": "Role",
+      "name": "multi-stage"
+    },
+    "subjects": [
+      {
+        "kind": "ServiceAccount",
+        "name": "multi-stage"
+      }
+    ]
+  },
+  {
+    "apiVersion": "rbac.authorization.k8s.io/v1",
     "kind": "Role",
     "metadata": {
       "creationTimestamp": null,
@@ -1901,6 +1930,57 @@
     ]
   },
   {
+    "apiVersion": "rbac.authorization.k8s.io/v1",
+    "kind": "Role",
+    "metadata": {
+      "creationTimestamp": null,
+      "labels": {
+        "ci.openshift.io/multi-stage-test": "multi-stage"
+      },
+      "name": "multi-stage"
+    },
+    "rules": [
+      {
+        "apiGroups": [
+          "rbac.authorization.k8s.io"
+        ],
+        "resources": [
+          "rolebindings"
+        ],
+        "verbs": [
+          "create",
+          "list"
+        ]
+      },
+      {
+        "apiGroups": [
+          ""
+        ],
+        "resourceNames": [
+          "multi-stage"
+        ],
+        "resources": [
+          "secrets"
+        ],
+        "verbs": [
+          "update"
+        ]
+      },
+      {
+        "apiGroups": [
+          "",
+          "image.openshift.io"
+        ],
+        "resources": [
+          "imagestreams/layers"
+        ],
+        "verbs": [
+          "get"
+        ]
+      }
+    ]
+  },
+  {
     "apiVersion": "v1",
     "kind": "Secret",
     "metadata": {
@@ -1924,6 +2004,17 @@
       "creationTimestamp": null,
       "name": "ci-operator",
       "namespace": "testns"
+    }
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "ServiceAccount",
+    "metadata": {
+      "creationTimestamp": null,
+      "labels": {
+        "ci.openshift.io/multi-stage-test": "multi-stage"
+      },
+      "name": "multi-stage"
     }
   }
 ]

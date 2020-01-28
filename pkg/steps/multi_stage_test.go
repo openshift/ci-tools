@@ -135,7 +135,7 @@ func TestGeneratePods(t *testing.T) {
 		},
 		Namespace: "namespace",
 	}
-	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, nil, "artifact_dir", &jobSpec, nil)
+	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, nil, nil, nil, "artifact_dir", &jobSpec, nil)
 	step.releaseInitial = "release:initial"
 	step.releaseLatest = "release:latest"
 	ret, err := step.generatePods(config.Tests[0].MultiStageTestConfigurationLiteral.Test)
@@ -152,7 +152,8 @@ func TestGeneratePods(t *testing.T) {
 			},
 		},
 		Spec: coreapi.PodSpec{
-			RestartPolicy: "Never",
+			RestartPolicy:      "Never",
+			ServiceAccountName: "test",
 			InitContainers: []coreapi.Container{{
 				Name:    "cp-secret-wrapper",
 				Image:   "registry.svc.ci.openshift.org/ci/secret-wrapper:latest",
@@ -217,7 +218,8 @@ func TestGeneratePods(t *testing.T) {
 			},
 		},
 		Spec: coreapi.PodSpec{
-			RestartPolicy: "Never",
+			RestartPolicy:      "Never",
+			ServiceAccountName: "test",
 			InitContainers: []coreapi.Container{{
 				Name:    "cp-secret-wrapper",
 				Image:   "registry.svc.ci.openshift.org/ci/secret-wrapper:latest",
@@ -388,8 +390,11 @@ func TestRun(t *testing.T) {
 				}
 				return false, nil, nil
 			})
+			client := fakecs.CoreV1()
 			step.podClient = NewPodClient(fakecs.CoreV1(), nil, nil)
-			step.secretClient = fakecs.CoreV1()
+			step.secretClient = client
+			step.saClient = client
+			step.rbacClient = fakecs.RbacV1()
 			if err := step.Run(context.Background(), false); tc.failures == nil && err != nil {
 				t.Error(err)
 				return
@@ -459,6 +464,8 @@ func TestArtifacts(t *testing.T) {
 	podClient := fakePodClient{PodsGetter: client}
 	step.podClient = &podClient
 	step.secretClient = client
+	step.saClient = client
+	step.rbacClient = fakecs.RbacV1()
 	if err := step.Run(context.Background(), false); err != nil {
 		t.Fatal(err)
 	}

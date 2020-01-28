@@ -169,7 +169,7 @@ func FromConfig(
 			buildSteps = append(buildSteps, initialReleaseStep)
 		} else if testStep := rawStep.TestStepConfiguration; testStep != nil {
 			if test := testStep.MultiStageTestConfigurationLiteral; test != nil {
-				step = steps.MultiStageTestStep(*testStep, config, params, podClient, secretGetter, artifactDir, jobSpec, dryLogger)
+				step = steps.MultiStageTestStep(*testStep, config, params, podClient, secretGetter, saGetter, rbacClient, artifactDir, jobSpec, dryLogger)
 				if test.ClusterProfile != "" {
 					step = steps.LeaseStep(leaseClient, test.ClusterProfile.LeaseType(), step)
 				}

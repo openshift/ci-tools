@@ -44,7 +44,7 @@ in BitWarden and the targeting secret.
 
 ```
 
-where `cluster` is `context` name in the `kubeconfig`:
+where `cluster` is `context` name in the `kubeconfig` (`oc config rename-context` to rename a context in `kubeconfig`):
 
 * `default`: `https://api.ci.openshift.org:443`, and
 * `build01`: `https://api.build01.ci.devcluster.openshift.com:6443`.

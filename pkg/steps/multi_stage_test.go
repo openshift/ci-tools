@@ -89,7 +89,6 @@ func TestGeneratePods(t *testing.T) {
 	labels := map[string]string{
 		"job":                              "job",
 		"build-id":                         "build id",
-		"prow.k8s.io/id":                   "prow job id",
 		"created-by-ci":                    "true",
 		"ci.openshift.io/refs.branch":      "base ref",
 		"ci.openshift.io/refs.org":         "org",
@@ -149,6 +148,7 @@ func TestGeneratePods(t *testing.T) {
 			Annotations: map[string]string{
 				"ci.openshift.io/job-spec":                     "",
 				"ci-operator.openshift.io/container-sub-tests": "step0",
+				"ci-operator.openshift.io/save-container-logs": "true",
 			},
 		},
 		Spec: coreapi.PodSpec{
@@ -215,6 +215,7 @@ func TestGeneratePods(t *testing.T) {
 			Annotations: map[string]string{
 				"ci.openshift.io/job-spec":                     "",
 				"ci-operator.openshift.io/container-sub-tests": "step1",
+				"ci-operator.openshift.io/save-container-logs": "true",
 			},
 		},
 		Spec: coreapi.PodSpec{

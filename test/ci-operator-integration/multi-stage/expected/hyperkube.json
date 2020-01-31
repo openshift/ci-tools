@@ -452,6 +452,7 @@
     "metadata": {
       "annotations": {
         "ci-operator.openshift.io/container-sub-tests": "post0",
+        "ci-operator.openshift.io/save-container-logs": "true",
         "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
       },
       "creationTimestamp": null,
@@ -462,8 +463,7 @@
         "ci.openshift.io/refs.org": "openshift",
         "ci.openshift.io/refs.repo": "ci-tools",
         "created-by-ci": "true",
-        "job": "pull-ci-openshift-release-master-ci-operator-integration",
-        "prow.k8s.io/id": "uuid"
+        "job": "pull-ci-openshift-release-master-ci-operator-integration"
       },
       "name": "multi-stage-post0"
     },
@@ -643,6 +643,7 @@
     "metadata": {
       "annotations": {
         "ci-operator.openshift.io/container-sub-tests": "post1",
+        "ci-operator.openshift.io/save-container-logs": "true",
         "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
       },
       "creationTimestamp": null,
@@ -653,8 +654,7 @@
         "ci.openshift.io/refs.org": "openshift",
         "ci.openshift.io/refs.repo": "ci-tools",
         "created-by-ci": "true",
-        "job": "pull-ci-openshift-release-master-ci-operator-integration",
-        "prow.k8s.io/id": "uuid"
+        "job": "pull-ci-openshift-release-master-ci-operator-integration"
       },
       "name": "multi-stage-post1"
     },
@@ -834,6 +834,7 @@
     "metadata": {
       "annotations": {
         "ci-operator.openshift.io/container-sub-tests": "pre0",
+        "ci-operator.openshift.io/save-container-logs": "true",
         "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
       },
       "creationTimestamp": null,
@@ -844,8 +845,7 @@
         "ci.openshift.io/refs.org": "openshift",
         "ci.openshift.io/refs.repo": "ci-tools",
         "created-by-ci": "true",
-        "job": "pull-ci-openshift-release-master-ci-operator-integration",
-        "prow.k8s.io/id": "uuid"
+        "job": "pull-ci-openshift-release-master-ci-operator-integration"
       },
       "name": "multi-stage-pre0"
     },
@@ -1025,6 +1025,7 @@
     "metadata": {
       "annotations": {
         "ci-operator.openshift.io/container-sub-tests": "pre1",
+        "ci-operator.openshift.io/save-container-logs": "true",
         "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
       },
       "creationTimestamp": null,
@@ -1035,8 +1036,7 @@
         "ci.openshift.io/refs.org": "openshift",
         "ci.openshift.io/refs.repo": "ci-tools",
         "created-by-ci": "true",
-        "job": "pull-ci-openshift-release-master-ci-operator-integration",
-        "prow.k8s.io/id": "uuid"
+        "job": "pull-ci-openshift-release-master-ci-operator-integration"
       },
       "name": "multi-stage-pre1"
     },
@@ -1216,6 +1216,7 @@
     "metadata": {
       "annotations": {
         "ci-operator.openshift.io/container-sub-tests": "test0",
+        "ci-operator.openshift.io/save-container-logs": "true",
         "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
       },
       "creationTimestamp": null,
@@ -1226,8 +1227,7 @@
         "ci.openshift.io/refs.org": "openshift",
         "ci.openshift.io/refs.repo": "ci-tools",
         "created-by-ci": "true",
-        "job": "pull-ci-openshift-release-master-ci-operator-integration",
-        "prow.k8s.io/id": "uuid"
+        "job": "pull-ci-openshift-release-master-ci-operator-integration"
       },
       "name": "multi-stage-test0"
     },
@@ -1407,6 +1407,7 @@
     "metadata": {
       "annotations": {
         "ci-operator.openshift.io/container-sub-tests": "test1",
+        "ci-operator.openshift.io/save-container-logs": "true",
         "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
       },
       "creationTimestamp": null,
@@ -1417,8 +1418,7 @@
         "ci.openshift.io/refs.org": "openshift",
         "ci.openshift.io/refs.repo": "ci-tools",
         "created-by-ci": "true",
-        "job": "pull-ci-openshift-release-master-ci-operator-integration",
-        "prow.k8s.io/id": "uuid"
+        "job": "pull-ci-openshift-release-master-ci-operator-integration"
       },
       "name": "multi-stage-test1"
     },
@@ -1598,6 +1598,7 @@
     "metadata": {
       "annotations": {
         "ci-operator.openshift.io/container-sub-tests": "test2",
+        "ci-operator.openshift.io/save-container-logs": "true",
         "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
       },
       "creationTimestamp": null,
@@ -1608,8 +1609,7 @@
         "ci.openshift.io/refs.org": "openshift",
         "ci.openshift.io/refs.repo": "ci-tools",
         "created-by-ci": "true",
-        "job": "pull-ci-openshift-release-master-ci-operator-integration",
-        "prow.k8s.io/id": "uuid"
+        "job": "pull-ci-openshift-release-master-ci-operator-integration"
       },
       "name": "multi-stage-test2"
     },

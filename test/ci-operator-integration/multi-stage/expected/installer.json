@@ -179,6 +179,7 @@
     "metadata": {
       "annotations": {
         "ci-operator.openshift.io/container-sub-tests": "e2e",
+        "ci-operator.openshift.io/save-container-logs": "true",
         "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
       },
       "creationTimestamp": null,
@@ -189,8 +190,7 @@
         "ci.openshift.io/refs.org": "openshift",
         "ci.openshift.io/refs.repo": "ci-tools",
         "created-by-ci": "true",
-        "job": "pull-ci-openshift-release-master-ci-operator-integration",
-        "prow.k8s.io/id": "uuid"
+        "job": "pull-ci-openshift-release-master-ci-operator-integration"
       },
       "name": "e2e-azure-e2e"
     },
@@ -368,6 +368,7 @@
     "metadata": {
       "annotations": {
         "ci-operator.openshift.io/container-sub-tests": "ipi-deprovision-deprovision",
+        "ci-operator.openshift.io/save-container-logs": "true",
         "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
       },
       "creationTimestamp": null,
@@ -378,8 +379,7 @@
         "ci.openshift.io/refs.org": "openshift",
         "ci.openshift.io/refs.repo": "ci-tools",
         "created-by-ci": "true",
-        "job": "pull-ci-openshift-release-master-ci-operator-integration",
-        "prow.k8s.io/id": "uuid"
+        "job": "pull-ci-openshift-release-master-ci-operator-integration"
       },
       "name": "e2e-azure-ipi-deprovision-deprovision"
     },
@@ -557,6 +557,7 @@
     "metadata": {
       "annotations": {
         "ci-operator.openshift.io/container-sub-tests": "ipi-deprovision-must-gather",
+        "ci-operator.openshift.io/save-container-logs": "true",
         "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
       },
       "creationTimestamp": null,
@@ -567,8 +568,7 @@
         "ci.openshift.io/refs.org": "openshift",
         "ci.openshift.io/refs.repo": "ci-tools",
         "created-by-ci": "true",
-        "job": "pull-ci-openshift-release-master-ci-operator-integration",
-        "prow.k8s.io/id": "uuid"
+        "job": "pull-ci-openshift-release-master-ci-operator-integration"
       },
       "name": "e2e-azure-ipi-deprovision-must-gather"
     },
@@ -746,6 +746,7 @@
     "metadata": {
       "annotations": {
         "ci-operator.openshift.io/container-sub-tests": "ipi-install-install",
+        "ci-operator.openshift.io/save-container-logs": "true",
         "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
       },
       "creationTimestamp": null,
@@ -756,8 +757,7 @@
         "ci.openshift.io/refs.org": "openshift",
         "ci.openshift.io/refs.repo": "ci-tools",
         "created-by-ci": "true",
-        "job": "pull-ci-openshift-release-master-ci-operator-integration",
-        "prow.k8s.io/id": "uuid"
+        "job": "pull-ci-openshift-release-master-ci-operator-integration"
       },
       "name": "e2e-azure-ipi-install-install"
     },
@@ -935,6 +935,7 @@
     "metadata": {
       "annotations": {
         "ci-operator.openshift.io/container-sub-tests": "ipi-install-rbac",
+        "ci-operator.openshift.io/save-container-logs": "true",
         "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
       },
       "creationTimestamp": null,
@@ -945,8 +946,7 @@
         "ci.openshift.io/refs.org": "openshift",
         "ci.openshift.io/refs.repo": "ci-tools",
         "created-by-ci": "true",
-        "job": "pull-ci-openshift-release-master-ci-operator-integration",
-        "prow.k8s.io/id": "uuid"
+        "job": "pull-ci-openshift-release-master-ci-operator-integration"
       },
       "name": "e2e-azure-ipi-install-rbac"
     },
@@ -1124,6 +1124,7 @@
     "metadata": {
       "annotations": {
         "ci-operator.openshift.io/container-sub-tests": "e2e",
+        "ci-operator.openshift.io/save-container-logs": "true",
         "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
       },
       "creationTimestamp": null,
@@ -1134,8 +1135,7 @@
         "ci.openshift.io/refs.org": "openshift",
         "ci.openshift.io/refs.repo": "ci-tools",
         "created-by-ci": "true",
-        "job": "pull-ci-openshift-release-master-ci-operator-integration",
-        "prow.k8s.io/id": "uuid"
+        "job": "pull-ci-openshift-release-master-ci-operator-integration"
       },
       "name": "e2e-gcp-e2e"
     },
@@ -1313,6 +1313,7 @@
     "metadata": {
       "annotations": {
         "ci-operator.openshift.io/container-sub-tests": "ipi-deprovision-deprovision",
+        "ci-operator.openshift.io/save-container-logs": "true",
         "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
       },
       "creationTimestamp": null,
@@ -1323,8 +1324,7 @@
         "ci.openshift.io/refs.org": "openshift",
         "ci.openshift.io/refs.repo": "ci-tools",
         "created-by-ci": "true",
-        "job": "pull-ci-openshift-release-master-ci-operator-integration",
-        "prow.k8s.io/id": "uuid"
+        "job": "pull-ci-openshift-release-master-ci-operator-integration"
       },
       "name": "e2e-gcp-ipi-deprovision-deprovision"
     },
@@ -1502,6 +1502,7 @@
     "metadata": {
       "annotations": {
         "ci-operator.openshift.io/container-sub-tests": "ipi-deprovision-must-gather",
+        "ci-operator.openshift.io/save-container-logs": "true",
         "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
       },
       "creationTimestamp": null,
@@ -1512,8 +1513,7 @@
         "ci.openshift.io/refs.org": "openshift",
         "ci.openshift.io/refs.repo": "ci-tools",
         "created-by-ci": "true",
-        "job": "pull-ci-openshift-release-master-ci-operator-integration",
-        "prow.k8s.io/id": "uuid"
+        "job": "pull-ci-openshift-release-master-ci-operator-integration"
       },
       "name": "e2e-gcp-ipi-deprovision-must-gather"
     },
@@ -1691,6 +1691,7 @@
     "metadata": {
       "annotations": {
         "ci-operator.openshift.io/container-sub-tests": "ipi-install-install",
+        "ci-operator.openshift.io/save-container-logs": "true",
         "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
       },
       "creationTimestamp": null,
@@ -1701,8 +1702,7 @@
         "ci.openshift.io/refs.org": "openshift",
         "ci.openshift.io/refs.repo": "ci-tools",
         "created-by-ci": "true",
-        "job": "pull-ci-openshift-release-master-ci-operator-integration",
-        "prow.k8s.io/id": "uuid"
+        "job": "pull-ci-openshift-release-master-ci-operator-integration"
       },
       "name": "e2e-gcp-ipi-install-install"
     },
@@ -1880,6 +1880,7 @@
     "metadata": {
       "annotations": {
         "ci-operator.openshift.io/container-sub-tests": "ipi-install-rbac",
+        "ci-operator.openshift.io/save-container-logs": "true",
         "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
       },
       "creationTimestamp": null,
@@ -1890,8 +1891,7 @@
         "ci.openshift.io/refs.org": "openshift",
         "ci.openshift.io/refs.repo": "ci-tools",
         "created-by-ci": "true",
-        "job": "pull-ci-openshift-release-master-ci-operator-integration",
-        "prow.k8s.io/id": "uuid"
+        "job": "pull-ci-openshift-release-master-ci-operator-integration"
       },
       "name": "e2e-gcp-ipi-install-rbac"
     },

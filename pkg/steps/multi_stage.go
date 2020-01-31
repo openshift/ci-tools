@@ -261,6 +261,8 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep) ([]coreap
 			errs = append(errs, err)
 			continue
 		}
+		delete(pod.Labels, ProwJobIdLabel)
+		pod.Annotations[annotationSaveContainerLogs] = "true"
 		pod.Labels[multiStageTestLabel] = s.name
 		pod.Spec.ServiceAccountName = s.name
 		addSecretWrapper(pod)

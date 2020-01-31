@@ -30,8 +30,9 @@ type options struct {
 	org  string
 	repo string
 
-	gitDir  string
-	confirm bool
+	gitDir               string
+	confirm              bool
+	failOnNonexistentDst bool
 }
 
 func (o *options) validate() []error {
@@ -78,6 +79,7 @@ func gatherOptions() options {
 	fs.StringVar(&o.repo, "only-repo", "", "Mirror only a single repo")
 	fs.StringVar(&o.gitDir, "git-dir", "", "Path to directory in which to perform Git operations")
 	fs.BoolVar(&o.confirm, "confirm", false, "Set true to actually execute all world-changing operations")
+	fs.BoolVar(&o.failOnNonexistentDst, "fail-on-missing-destination", false, "Set true to make the tool to consider missing sync destination as an error")
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("Could not parse options")
@@ -155,7 +157,10 @@ type gitSyncer struct {
 	root string
 	// If false, no write operations will be done.
 	confirm bool
-	logger  *logrus.Entry
+	// If true, fail when destination repo does not exist
+	failOnNonexistentDst bool
+
+	logger *logrus.Entry
 
 	// wrapper for `git` execution: it is a member of the struct for testability
 	git gitFunc
@@ -249,8 +254,13 @@ func (g gitSyncer) mirror(repoDir string, src, dst location) error {
 
 	dstHeads, err := getRemoteBranchHeads(logger, g.git, repoDir, destUrl.String())
 	if err != nil {
-		// This is currently fine but eventually should be controlled by a switch
-		logger.Warn("Destination repository does not exist or we cannot access it")
+		message := "destination repository does not exist or we cannot access it"
+		if g.failOnNonexistentDst {
+			logger.Errorf(message)
+			return fmt.Errorf(message)
+		}
+
+		logger.Warn(message)
 		return nil
 	}
 	dstCommitHash := dstHeads[dst.branch]
@@ -435,10 +445,11 @@ func main() {
 	}
 
 	syncer := gitSyncer{
-		token:   token,
-		root:    o.gitDir,
-		confirm: o.confirm,
-		git:     gitExec,
+		token:                token,
+		root:                 o.gitDir,
+		confirm:              o.confirm,
+		git:                  gitExec,
+		failOnNonexistentDst: o.failOnNonexistentDst,
 	}
 
 	var syncErrors []error

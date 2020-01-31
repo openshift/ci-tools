@@ -246,9 +246,10 @@ func TestMirror(t *testing.T) {
 	testCases := []struct {
 		description string
 
-		src     location
-		dst     location
-		confirm bool
+		src                  location
+		dst                  location
+		failOnNonexistentDst bool
+		confirm              bool
 
 		expectedGitCalls []mockGitCall
 		expectError      bool
@@ -382,14 +383,27 @@ func TestMirror(t *testing.T) {
 			},
 			expectError: true,
 		},
-		{ // If git ls-remote fails, destination repository does not exist
-			// At the moment, this is intentionally not an error
-			description: "warm cache, ls-remote destination fails on git -> no error",
+		{
+			// If git ls-remote fails, destination repository does not exist
+			// This is not an error unless failOnNonexistentDst is set
+			description: "warm cache, ls-remote destination fails on git -> no error when configured",
 			src:         location{org: org, repo: repo, branch: branch},
 			dst:         location{org: destOrg, repo: repo, branch: branch},
 			expectedGitCalls: []mockGitCall{
 				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo", exitCode: 1},
 			},
+		},
+		{
+			// If git ls-remote fails, destination repository does not exist
+			// This is an error when failOnNonexistentDst is set
+			description: "warm cache, ls-remote destination fails on git -> error when configured",
+			src:         location{org: org, repo: repo, branch: branch},
+			dst:         location{org: destOrg, repo: repo, branch: branch},
+			expectedGitCalls: []mockGitCall{
+				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo", exitCode: 1},
+			},
+			failOnNonexistentDst: true,
+			expectError:          true,
 		},
 		{
 			description: "warm cache, destination is empty repo, needs many commits -> full fetch then success",
@@ -460,11 +474,12 @@ func TestMirror(t *testing.T) {
 				t:        t,
 			}
 			m := gitSyncer{
-				logger:  logrus.WithField("test", tc.description),
-				token:   token,
-				confirm: tc.confirm,
-				root:    "git-dir",
-				git:     git.exec,
+				logger:               logrus.WithField("test", tc.description),
+				token:                token,
+				confirm:              tc.confirm,
+				root:                 "git-dir",
+				git:                  git.exec,
+				failOnNonexistentDst: tc.failOnNonexistentDst,
 			}
 			err := m.mirror("repo-dir", tc.src, tc.dst)
 			if err == nil && tc.expectError {

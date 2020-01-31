@@ -464,12 +464,12 @@ func main() {
 		destination.org = o.targetOrg
 		gitDir, err := syncer.makeGitDir(source.org, source.repo)
 		if err != nil {
-			syncErrors = append(syncErrors, err)
+			syncErrors = append(syncErrors, fmt.Errorf("%s->%s: %v", source.String(), destination.String(), err))
 			return nil
 		}
 
 		if err := syncer.mirror(gitDir, source, destination); err != nil {
-			syncErrors = append(syncErrors, err)
+			syncErrors = append(syncErrors, fmt.Errorf("%s->%s: %v", source.String(), destination.String(), err))
 		}
 		return nil
 	}

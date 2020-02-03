@@ -16,6 +16,11 @@ import (
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 )
 
+// Prowgen holds the information of the prowgen's configuration file.
+type Prowgen struct {
+	Private bool `json:"private,omitempty"`
+}
+
 func readCiOperatorConfig(configFilePath string, info Info) (*cioperatorapi.ReleaseBuildConfiguration, error) {
 	data, err := ioutil.ReadFile(configFilePath)
 	if err != nil {

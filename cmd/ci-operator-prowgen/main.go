@@ -712,18 +712,13 @@ func generateJobs(
 	}
 }
 
-// Prowgen holds the information of the prowgen's configuration file.
-type Config struct {
-	Private bool `json:"private,omitempty"`
-}
-
 type prowgenInfo struct {
 	config.Info
-	config Config
+	config config.Prowgen
 }
 
-func readProwgenConfig(path string) (*Config, error) {
-	var pConfig *Config
+func readProwgenConfig(path string) (*config.Prowgen, error) {
+	var pConfig *config.Prowgen
 	b, err := ioutil.ReadFile(path)
 	if err != nil && !os.IsNotExist(err) {
 		return nil, fmt.Errorf("prowgen config found in path %s but couldn't read the file: %v", path, err)
@@ -749,13 +744,13 @@ func readProwgenConfig(path string) (*Config, error) {
 // because the drop-in is not there).
 func generateJobsToDir(dir string, label jc.ProwgenLabel) func(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *config.Info) error {
 	// Return a closure so the cache is shared among callback calls
-	cache := map[string]*Config{}
+	cache := map[string]*config.Prowgen{}
 	return func(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *config.Info) error {
 		orgRepo := fmt.Sprintf("%s/%s", info.Org, info.Repo)
-		pInfo := &prowgenInfo{Info: *info, config: Config{Private: false}}
+		pInfo := &prowgenInfo{Info: *info, config: config.Prowgen{Private: false}}
 		var ok bool
 		var err error
-		var orgConfig, repoConfig *Config
+		var orgConfig, repoConfig *config.Prowgen
 
 		if orgConfig, ok = cache[info.Org]; !ok {
 			if cache[info.Org], err = readProwgenConfig(filepath.Join(info.OrgPath, prowgenConfigFile)); err != nil {

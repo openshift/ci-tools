@@ -334,17 +334,6 @@ objects:
           setup-google-cloud-sdk
         fi
 
-        echo "Running must-gather..."
-
-        mkdir -p /tmp/artifacts/pre-test-must-gather
-        oc --insecure-skip-tls-verify adm must-gather --dest-dir /tmp/artifacts/pre-test-must-gather >/tmp/artifacts/pre-test-must-gather/must-gather.log
-
-        # Snapshot iptables-save on each node for debugging possible kube-proxy issues
-        oc --insecure-skip-tls-verify get --request-timeout=20s -n openshift-sdn -l app=sdn pods --template '{{ range .items }}{{ .metadata.name }}{{ "\n" }}{{ end }}' > /tmp/sdn-pre-upgrade-pods
-        while IFS= read -r i; do
-          queue /tmp/artifacts/network/iptables-pre-upgrade-save-$i oc --insecure-skip-tls-verify rsh --timeout=20 -n openshift-sdn -c sdn $i iptables-save -c
-          done < /tmp/sdn-pre-upgrade-pods
-
         ${TEST_COMMAND}
 
     # Runs an install

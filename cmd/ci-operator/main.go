@@ -333,7 +333,14 @@ func (o *options) Complete() error {
 	}
 	o.configSpec = config
 
-	if err := o.configSpec.ValidateResolved(); err != nil {
+	var validateFunc func() error
+	if info != nil {
+		validateFunc = o.configSpec.ValidateResolved
+	} else {
+		validateFunc = o.configSpec.ValidateAtRuntime
+	}
+
+	if err := validateFunc(); err != nil {
 		return err
 	}
 

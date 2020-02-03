@@ -49,6 +49,7 @@ func (config *ReleaseBuildConfiguration) Default() {
 // ValidateAtRuntime validates all the configuration's values without knowledge of config
 // repo structure
 func (config *ReleaseBuildConfiguration) ValidateAtRuntime() error {
+	config.Default()
 	return config.validate("", "", false)
 }
 

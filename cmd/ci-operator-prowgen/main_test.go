@@ -242,7 +242,7 @@ func TestGeneratePodSpec(t *testing.T) {
 			description: "private job",
 			info: &prowgenInfo{
 				Info:   config.Info{Org: "org", Repo: "repo", Branch: "branch"},
-				config: Config{Private: true},
+				config: config.Prowgen{Private: true},
 			},
 			secrets: nil,
 			targets: []string{"target"},
@@ -1996,7 +1996,7 @@ func TestGenerateJobBase(t *testing.T) {
 			prefix:   "pull",
 			info: &prowgenInfo{
 				Info:   config.Info{Org: "org", Repo: "repo", Branch: "branch"},
-				config: Config{Private: true},
+				config: config.Prowgen{Private: true},
 			},
 			label:   jobconfig.Generated,
 			podSpec: &kubeapi.PodSpec{Containers: []kubeapi.Container{{Name: "test"}}},

@@ -469,7 +469,7 @@ func generatePodSpecOthers(info *prowgenInfo, release string, test *cioperatorap
 }
 
 var (
-	migratedRepos = sets.NewString("openshift/ci-secret-mirroring-controller")
+	migratedRepos = sets.NewString()
 )
 
 func migrated(org, repo string) bool {

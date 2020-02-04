@@ -16,6 +16,9 @@ import (
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 )
 
+// ProwgenFile is the name of prowgen's configuration file.
+var ProwgenFile = ".config.prowgen"
+
 // Prowgen holds the information of the prowgen's configuration file.
 type Prowgen struct {
 	Private bool `json:"private,omitempty"`

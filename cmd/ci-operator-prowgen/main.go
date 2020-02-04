@@ -59,8 +59,6 @@ exec ci-operator \
 	oauthTokenPath  = "/usr/local/github-credentials"
 	oauthSecretName = "github-credentials-openshift-ci-robot-private-git-cloner"
 	oauthKey        = "oauth"
-
-	prowgenConfigFile = ".config.prowgen"
 )
 
 var (
@@ -753,14 +751,14 @@ func generateJobsToDir(dir string, label jc.ProwgenLabel) func(configSpec *ciope
 		var orgConfig, repoConfig *config.Prowgen
 
 		if orgConfig, ok = cache[info.Org]; !ok {
-			if cache[info.Org], err = readProwgenConfig(filepath.Join(info.OrgPath, prowgenConfigFile)); err != nil {
+			if cache[info.Org], err = readProwgenConfig(filepath.Join(info.OrgPath, config.ProwgenFile)); err != nil {
 				return err
 			}
 			orgConfig = cache[info.Org]
 		}
 
 		if repoConfig, ok = cache[orgRepo]; !ok {
-			if cache[orgRepo], err = readProwgenConfig(filepath.Join(info.RepoPath, prowgenConfigFile)); err != nil {
+			if cache[orgRepo], err = readProwgenConfig(filepath.Join(info.RepoPath, config.ProwgenFile)); err != nil {
 				return err
 			}
 			repoConfig = cache[orgRepo]

@@ -14,6 +14,7 @@ import (
 	"github.com/alecthomas/chroma/lexers"
 	"github.com/alecthomas/chroma/styles"
 	"github.com/sirupsen/logrus"
+	prowConfig "k8s.io/test-infra/prow/config"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/load"
@@ -61,7 +62,15 @@ h1, h2, p {
 .info {
 	text-decoration-line: underline;
 	text-decoration-style: dotted;
-	text-decoration-color: #c0c0c0
+	text-decoration-color: #c0c0c0;
+}
+button {
+  padding:0.2em 1em;
+  border-radius: 8px;
+  cursor:pointer;
+}
+td {
+  vertical-align: middle;
 }
 </style>
 </head>
@@ -70,7 +79,7 @@ h1, h2, p {
 `
 
 const htmlPageEnd = `
-<p class="small">Source code for this page located on <a href="https://github.com/openshift/ci-tools">github</a></p>
+<p class="small">Source code for this page located on <a href="https://github.com/openshift/ci-tools">GitHub</a></p>
 </div>
 </body>
 </html>
@@ -82,6 +91,12 @@ const errPage = `
 `
 
 const mainPage = `<h1>Openshift CI Step Registry</h1>
+<form action="/search">
+  <div>
+    Search for job: <input type="search" id="search" name="job" placeholder="Job Name">
+	<button>Search</button>
+  </div>
+</form>
 {{ template "workflowTable" .Workflows }}
 {{ template "chainTable" .Chains }}
 {{ template "referenceTable" .References}}
@@ -132,7 +147,7 @@ const workflowJobPage = `
 <h1><a href="/">Openshift CI Step Registry</a></h1>
 {{ $type := .Type }}
 {{ if eq $type "Job" }}
-	<h2><a href="/jobs">Jobs</a> &gt; <nobr>{{ .As }}</nobr></h2>
+	<h2><a href="/search">Jobs</a> &gt; <nobr>{{ .As }}</nobr></h2>
 {{ else if eq $type "Workflow" }}
 	<h2><a href="/workflows">Workflows</a> &gt; <nobr>{{ .As }}</nobr></h2>
 	<p id="documentation">{{ .Documentation }}</p>
@@ -148,6 +163,18 @@ const workflowJobPage = `
 {{ template "stepTable" .Steps.Post }}
 <h2 id="graph" title="Visual representation of steps run by this {{ toLower $type }}">Step Graph</h2>
 {{ workflowGraph .As }}
+`
+
+const jobSearchPage = `
+<h1><a href="/">Openshift CI Step Registry</a></h1>
+<h2>Multistage Test ProwJob Search</h2>
+<form>
+  <div>
+    <input type="search" id="search" name="job" placeholder="Job Name">
+	<button>Search</button>
+  </div>
+</form>
+{{ template "jobTable" . }}
 `
 
 const templateDefinitions = `
@@ -266,22 +293,35 @@ const templateDefinitions = `
 	<table class="table">
 		<thead>
 			<tr>
-				<th title="The name of the parent config of the test in org-repo-branch format" class="info">Org-Repo-Branch</th>
+				<th title="GitHub organization that the job is from" class="info">Org</th>
+				<th title="GitHub repo that the job is from" class="info">Repo</th>
+				<th title="GitHub branch that the job is from" class="info">Branch</th>
 				<th title="The multistage tests in the config" class="info">Tests</th>
 			</tr>
 		</thead>
 		<tbody>
-			{{ range $parent, $tests := . }}
+			{{ range $index, $org := .Orgs }}
 				<tr>
-					<td>{{ $parent }}</td>
-					<td>
-						<ul>
-						{{ range $index, $job := . }}
-							<li><nobr><a href="/job/{{$parent}}-{{$job}}" style="font-family:monospace">{{$job}}</a></nobr></li>
-						{{ end }}
-						</ul>
-					</td>
+					<td rowspan="{{ orgSpan $org }}" style="vertical-align: middle;">{{ $org.Name }}</td>
 				</tr>
+				{{ range $index, $repo := $org.Repos }}
+				    {{ $repoLen := len $repo.Branches }}
+					<tr>
+						<td rowspan="{{ inc $repoLen }}" style="vertical-align: middle;">{{ $repo.Name }}</td>
+					</tr>
+					{{ range $index, $branch := $repo.Branches }}
+						<tr>
+							<td style="vertical-align: middle;">{{ $branch.Name }}</td>
+							<td>
+								<ul>
+								{{ range $index, $test := $branch.Tests }}
+									<li><nobr><a href="/job/{{$org.Name}}-{{$repo.Name}}-{{$branch.Name}}-{{$test}}" style="font-family:monospace">{{$test}}</a></nobr></li>
+								{{ end }}
+								</ul>
+							</td>
+						</tr>
+					{{ end }}
+				{{ end }}
 			{{ end }}
 		</tbody>
 	</table>
@@ -295,6 +335,25 @@ const jobType = "Job"
 type workflowJob struct {
 	api.RegistryWorkflow
 	Type string
+}
+
+type Jobs struct {
+	Orgs []Org
+}
+
+type Org struct {
+	Name  string
+	Repos []Repo
+}
+
+type Repo struct {
+	Name     string
+	Branches []Branch
+}
+
+type Branch struct {
+	Name  string
+	Tests []string
 }
 
 func getBaseTemplate(workflows registry.WorkflowByName, chains registry.ChainByName, docs map[string]string) *template.Template {
@@ -321,6 +380,17 @@ func getBaseTemplate(workflows registry.WorkflowByName, chains registry.ChainByN
 					return template.HTML(err.Error())
 				}
 				return template.HTML(svg)
+			},
+			"orgSpan": func(o Org) int {
+				rowspan := 0
+				for _, repo := range o.Repos {
+					rowspan += len(repo.Branches)
+					rowspan++
+				}
+				return rowspan + 1
+			},
+			"inc": func(i int) int {
+				return i + 1
 			},
 		},
 	)
@@ -417,7 +487,7 @@ func writePage(w http.ResponseWriter, title string, body *template.Template, dat
 	fmt.Fprintln(w, htmlPageEnd)
 }
 
-func mainPageHandler(agent load.RegistryAgent, templateString string, jobs map[string][]string, w http.ResponseWriter, req *http.Request) {
+func mainPageHandler(agent load.RegistryAgent, templateString string, jobList *Jobs, w http.ResponseWriter, req *http.Request) {
 	start := time.Now()
 	defer func() { logrus.Infof("rendered in %s", time.Now().Sub(start)) }()
 
@@ -433,17 +503,17 @@ func mainPageHandler(agent load.RegistryAgent, templateString string, jobs map[s
 		References registry.ReferenceByName
 		Chains     registry.ChainByName
 		Workflows  registry.WorkflowByName
-		Jobs       map[string][]string
+		Jobs       *Jobs
 	}{
 		References: refs,
 		Chains:     chains,
 		Workflows:  wfs,
-		Jobs:       jobs,
+		Jobs:       jobList,
 	}
 	writePage(w, "Step Registry Help Page", page, comps)
 }
 
-func WebRegHandler(regAgent load.RegistryAgent, confAgent load.ConfigAgent) http.HandlerFunc {
+func WebRegHandler(regAgent load.RegistryAgent, confAgent load.ConfigAgent, jobAgent *prowConfig.Agent) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		trimmedPath := strings.TrimPrefix(req.URL.Path, req.URL.Host)
 		// remove leading slash
@@ -454,10 +524,10 @@ func WebRegHandler(regAgent load.RegistryAgent, confAgent load.ConfigAgent) http
 		if len(splitURI) == 1 {
 			switch splitURI[0] {
 			case "":
-				jobs := getAllMultiStageTests(confAgent)
+				jobs := getAllMultiStageTests(confAgent, jobAgent)
 				mainPageHandler(regAgent, mainPage, jobs, w, req)
 			case "jobs":
-				jobs := getAllMultiStageTests(confAgent)
+				jobs := getAllMultiStageTests(confAgent, jobAgent)
 				mainPageHandler(regAgent, jobListPage, jobs, w, req)
 			case "references":
 				mainPageHandler(regAgent, referenceListPage, nil, w, req)
@@ -465,6 +535,8 @@ func WebRegHandler(regAgent load.RegistryAgent, confAgent load.ConfigAgent) http
 				mainPageHandler(regAgent, chainListPage, nil, w, req)
 			case "workflows":
 				mainPageHandler(regAgent, workflowListPage, nil, w, req)
+			case "search":
+				searchHandler(confAgent, jobAgent, w, req)
 			default:
 				writeErrorPage(w, errors.New("Invalid path"), http.StatusNotImplemented)
 			}
@@ -639,21 +711,146 @@ func jobHandler(regAgent load.RegistryAgent, confAgent load.ConfigAgent, w http.
 	writePage(w, "Job Test Workflow Help Page", page, workflow)
 }
 
+// addJob adds a test to the specified org, repo, and branch in the Jobs struct in alphabetical order
+func (j *Jobs) addJob(orgName, repoName, branchName, testName string) {
+	orgIndex := 0
+	orgExists := false
+	for _, currOrg := range j.Orgs {
+		if diff := strings.Compare(currOrg.Name, orgName); diff == 0 {
+			orgExists = true
+			break
+		} else if diff > 0 {
+			break
+		}
+		orgIndex++
+	}
+	if !orgExists {
+		newOrg := Org{Name: orgName}
+		j.Orgs = append(j.Orgs[:orgIndex], append([]Org{newOrg}, j.Orgs[orgIndex:]...)...)
+	}
+	repoIndex := 0
+	repoExists := false
+	for _, currRepo := range j.Orgs[orgIndex].Repos {
+		if diff := strings.Compare(currRepo.Name, repoName); diff == 0 {
+			repoExists = true
+			break
+		} else if diff > 0 {
+			break
+		}
+		repoIndex++
+	}
+	if !repoExists {
+		newRepo := Repo{Name: repoName}
+		repos := j.Orgs[orgIndex].Repos
+		j.Orgs[orgIndex].Repos = append(repos[:repoIndex], append([]Repo{newRepo}, repos[repoIndex:]...)...)
+	}
+	branchIndex := 0
+	branchExists := false
+	for _, currBranch := range j.Orgs[orgIndex].Repos[repoIndex].Branches {
+		if diff := strings.Compare(currBranch.Name, branchName); diff == 0 {
+			branchExists = true
+			break
+		} else if diff > 0 {
+			break
+		}
+		branchIndex++
+	}
+	if !branchExists {
+		newBranch := Branch{Name: branchName}
+		branches := j.Orgs[orgIndex].Repos[repoIndex].Branches
+		j.Orgs[orgIndex].Repos[repoIndex].Branches = append(branches[:branchIndex], append([]Branch{newBranch}, branches[branchIndex:]...)...)
+	}
+	// a single test shouldn't be added multiple times, but that case should be handled correctly just in case
+	testIndex := 0
+	testExists := false
+	for _, currTestName := range j.Orgs[orgIndex].Repos[repoIndex].Branches[branchIndex].Tests {
+		if diff := strings.Compare(currTestName, testName); diff == 0 {
+			testExists = true
+			break
+		} else if diff > 0 {
+			break
+		}
+		testIndex++
+	}
+	if !testExists {
+		tests := j.Orgs[orgIndex].Repos[repoIndex].Branches[branchIndex].Tests
+		j.Orgs[orgIndex].Repos[repoIndex].Branches[branchIndex].Tests = append(tests[:testIndex], append([]string{testName}, tests[testIndex:]...)...)
+	}
+}
+
 // getAllMultiStageTests return a map that has the config name in org-repo-branch format as the key and the test names for multi stage jobs as the value
-func getAllMultiStageTests(confAgent load.ConfigAgent) map[string][]string {
-	testMap := make(map[string][]string)
+func getAllMultiStageTests(confAgent load.ConfigAgent, jobAgent *prowConfig.Agent) *Jobs {
+	jobs := &Jobs{}
+	// TODO: remove after making --prow-config a required configresolver arg
+	if jobAgent == nil {
+		return jobs
+	}
 	configs := confAgent.GetAll()
-	for filename, config := range configs {
+	allRepos := jobAgent.Config().AllRepos
+	for filename, releaseConfig := range configs {
 		name := strings.TrimSuffix(filename, ".yaml")
-		for _, test := range config.Tests {
+		var org, repo, branch string
+		for orgRepo := range allRepos {
+			dashed := strings.ReplaceAll(orgRepo, "/", "-")
+			if strings.HasPrefix(name, dashed) {
+				split := strings.Split(orgRepo, "/")
+				if len(split) != 2 {
+					// TODO: handle error? currently just ignoring
+					continue
+				}
+				org = split[0]
+				repo = split[1]
+				branchVariant := strings.TrimPrefix(name, fmt.Sprint(dashed, "-"))
+				splitBV := strings.Split(branchVariant, "__")
+				branch = splitBV[0]
+				if len(splitBV) == 2 {
+					// TODO: how should we handle variants?
+				}
+				break
+			}
+		}
+		for _, test := range releaseConfig.Tests {
 			if test.MultiStageTestConfiguration != nil {
-				if _, ok := testMap[name]; ok {
-					testMap[name] = append(testMap[name], test.As)
-				} else {
-					testMap[name] = []string{test.As}
+				jobs.addJob(org, repo, branch, test.As)
+			}
+		}
+	}
+	return jobs
+}
+
+func searchHandler(confAgent load.ConfigAgent, jobAgent *prowConfig.Agent, w http.ResponseWriter, req *http.Request) {
+	start := time.Now()
+	defer func() { logrus.Infof("rendered in %s", time.Now().Sub(start)) }()
+	w.Header().Set("Content-Type", "text/html;charset=UTF-8")
+	searchTerm := req.URL.Query().Get("job")
+	matches := getAllMultiStageTests(confAgent, jobAgent)
+	if searchTerm != "" {
+		matches = searchJobs(matches, searchTerm)
+	}
+	page := getBaseTemplate(nil, nil, nil)
+	page, err := page.Parse(jobSearchPage)
+	if err != nil {
+		writeErrorPage(w, fmt.Errorf("Failed to render page: %v", err), http.StatusInternalServerError)
+		return
+	}
+	writePage(w, "Job Search Page", page, matches)
+}
+
+func searchJobs(jobs *Jobs, search string) *Jobs {
+	search = strings.TrimPrefix(search, "pull-ci-")
+	search = strings.TrimPrefix(search, "branch-ci-")
+	matches := &Jobs{}
+	for _, org := range jobs.Orgs {
+		for _, repo := range org.Repos {
+			for _, branch := range repo.Branches {
+				for _, test := range branch.Tests {
+					fullJobName := fmt.Sprintf("%s-%s-%s-%s", org.Name, repo.Name, branch.Name, test)
+					if strings.Contains(fullJobName, search) {
+						matches.addJob(org.Name, repo.Name, branch.Name, test)
+					}
 				}
 			}
 		}
 	}
-	return testMap
+	return matches
 }

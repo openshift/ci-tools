@@ -781,10 +781,6 @@ func (j *Jobs) addJob(orgName, repoName, branchName, testName string) {
 // getAllMultiStageTests return a map that has the config name in org-repo-branch format as the key and the test names for multi stage jobs as the value
 func getAllMultiStageTests(confAgent load.ConfigAgent, jobAgent *prowConfig.Agent) *Jobs {
 	jobs := &Jobs{}
-	// TODO: remove after making --prow-config a required configresolver arg
-	if jobAgent == nil {
-		return jobs
-	}
 	configs := confAgent.GetAll()
 	allRepos := jobAgent.Config().AllRepos
 	for filename, releaseConfig := range configs {

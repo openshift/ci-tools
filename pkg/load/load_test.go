@@ -6,9 +6,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
+	"github.com/ghodss/yaml"
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/registry"
 	"k8s.io/apimachinery/pkg/util/diff"
@@ -773,5 +775,34 @@ func TestRegistry(t *testing.T) {
 		if !reflect.DeepEqual(workflows, testCase.workflows) {
 			t.Errorf("%s: output workflows different from expected: %s", testCase.name, diff.ObjectReflectDiff(workflows, testCase.workflows))
 		}
+	}
+	// set up a temporary directory registry with a broken component
+	temp, err := ioutil.TempDir("", "")
+	if err != nil {
+		t.Fatalf("failed to create temp step registry: %v", err)
+	}
+	defer func() {
+		if err := os.RemoveAll(temp); err != nil {
+			t.Fatalf("failed to remove temp step registry: %v", err)
+		}
+	}()
+
+	// create directory with slightly incorrect path based on ref name
+	path := filepath.Join(temp, "ipi/deprovision/gather")
+	err = os.MkdirAll(path, 0755)
+	if err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
+	fileData, err := yaml.Marshal(expectedChains[deprovisionGatherRef])
+	if err != nil {
+		t.Fatalf("failed to marshal %s into a yaml []byte: %v", deprovisionGatherRef, err)
+	}
+
+	if err := ioutil.WriteFile(filepath.Join(path, deprovisionGatherRef), fileData, 0664); err != nil {
+		t.Fatalf("failed to populate temp reference file: %v", err)
+	}
+	_, _, _, _, err = Registry(temp, false)
+	if err == nil {
+		t.Error("got no error when expecting error on incorrect reference name")
 	}
 }

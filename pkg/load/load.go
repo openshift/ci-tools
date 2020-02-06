@@ -160,6 +160,9 @@ func Registry(root string, flat bool) (references registry.ReferenceByName, chai
 		}
 		return nil
 	})
+	if err != nil {
+		return references, chains, workflows, documentation, err
+	}
 	// create graph to verify that there are no cycles
 	_, err = registry.NewGraph(references, chains, workflows)
 	return references, chains, workflows, documentation, err

@@ -127,6 +127,7 @@ type release struct {
 	Name   string
 	Verify map[string]struct {
 		Optional bool `json:"optional"`
+		Upgrade  bool `json:"upgrade"`
 		ProwJob  struct {
 			Name string `json:"name"`
 		} `json:"prowJob"`
@@ -218,7 +219,7 @@ func main() {
 			unique.Insert(job.ProwJob.Name)
 
 			delete(informingPeriodics, job.ProwJob.Name)
-			if job.ProwJob.Name == "release-openshift-origin-installer-e2e-aws-upgrade" {
+			if job.Upgrade {
 				genericInforming.add(job.ProwJob.Name, 0)
 				continue
 			}

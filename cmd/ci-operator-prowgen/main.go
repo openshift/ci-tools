@@ -362,6 +362,8 @@ func generatePodSpecOthers(info *prowgenInfo, release string, test *cioperatorap
 		targetCloud = "gcp"
 	case cioperatorapi.ClusterProfileOpenStack:
 		targetCloud = "openstack"
+	case cioperatorapi.ClusterProfileOpenStackPpc64le:
+		targetCloud = "openstack-ppc64le"
 	case cioperatorapi.ClusterProfileOvirt:
 		targetCloud = "ovirt"
 	case cioperatorapi.ClusterProfileVSphere:
@@ -372,7 +374,7 @@ func generatePodSpecOthers(info *prowgenInfo, release string, test *cioperatorap
 	podSpec := generateCiOperatorPodSpec(info, test.Secrets, []string{test.As})
 	clusterProfileVolume := generateClusterProfileVolume("cluster-profile", fmt.Sprintf("cluster-secrets-%s", targetCloud))
 	switch clusterProfile {
-	case cioperatorapi.ClusterProfileAWS, cioperatorapi.ClusterProfileAzure4, cioperatorapi.ClusterProfileOpenStack, cioperatorapi.ClusterProfileVSphere:
+	case cioperatorapi.ClusterProfileAWS, cioperatorapi.ClusterProfileAzure4, cioperatorapi.ClusterProfileOpenStack, cioperatorapi.ClusterProfileOpenStackPpc64le, cioperatorapi.ClusterProfileVSphere:
 	default:
 		clusterProfileVolume.VolumeSource.Projected.Sources = append(clusterProfileVolume.VolumeSource.Projected.Sources, kubeapi.VolumeProjection{
 			ConfigMap: &kubeapi.ConfigMapProjection{

@@ -33,6 +33,7 @@ type options struct {
 	configPath   string
 	registryPath string
 	prowPath     string
+	jobPath      string
 	logLevel     string
 	address      string
 	uiAddress    string
@@ -97,6 +98,7 @@ func gatherOptions() options {
 	fs.StringVar(&o.configPath, "config", "", "Path to config dirs")
 	fs.StringVar(&o.registryPath, "registry", "", "Path to registry dirs")
 	fs.StringVar(&o.prowPath, "prow-config", "", "Path to prow config")
+	fs.StringVar(&o.jobPath, "jobs", "", "Path to job config dir")
 	fs.StringVar(&o.logLevel, "log-level", "info", "Level at which to log output.")
 	fs.StringVar(&o.address, "address", ":8080", "Address to run server on")
 	fs.StringVar(&o.uiAddress, "ui-address", ":8082", "Address to run the registry UI on")
@@ -284,7 +286,7 @@ func main() {
 
 	jobAgent := &prowConfig.Agent{}
 	// we only care about the org/repo information; we don't need to load jobs
-	err = jobAgent.Start(o.prowPath, "")
+	err = jobAgent.Start(o.prowPath, o.jobPath)
 	if err != nil {
 		log.Fatalf("Failed to get job agent: %v", err)
 	}

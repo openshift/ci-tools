@@ -44,6 +44,8 @@ const (
 	oauthToken    = "/oauth-token"
 
 	OauthSecretKey = "oauth-token"
+
+	PullSecretName = "regcred"
 )
 
 type CloneAuthType string
@@ -148,6 +150,7 @@ type sourceStep struct {
 	jobSpec            *api.JobSpec
 	dryLogger          *DryLogger
 	cloneAuthConfig    *CloneAuthConfig
+	pullSecret         *coreapi.Secret
 }
 
 func (s *sourceStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
@@ -160,10 +163,10 @@ func (s *sourceStep) Run(ctx context.Context, dry bool) error {
 		return fmt.Errorf("could not resolve clonerefs source: %v", err)
 	}
 
-	return handleBuild(s.buildClient, createBuild(s.config, s.jobSpec, clonerefsRef, s.resources, s.cloneAuthConfig), dry, s.artifactDir, s.dryLogger)
+	return handleBuild(s.buildClient, createBuild(s.config, s.jobSpec, clonerefsRef, s.resources, s.cloneAuthConfig, s.pullSecret), dry, s.artifactDir, s.dryLogger)
 }
 
-func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clonerefsRef coreapi.ObjectReference, resources api.ResourceConfiguration, cloneAuthConfig *CloneAuthConfig) *buildapi.Build {
+func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clonerefsRef coreapi.ObjectReference, resources api.ResourceConfiguration, cloneAuthConfig *CloneAuthConfig, pullSecret *coreapi.Secret) *buildapi.Build {
 	var refs []prowapi.Refs
 	if jobSpec.Refs != nil {
 		r := *jobSpec.Refs
@@ -231,7 +234,7 @@ func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clone
 		panic(fmt.Errorf("couldn't create JSON spec for clonerefs: %v", err))
 	}
 
-	build := buildFromSource(jobSpec, config.From, config.To, buildSource, "", resources)
+	build := buildFromSource(jobSpec, config.From, config.To, buildSource, "", resources, pullSecret)
 	build.Spec.CommonSpec.Strategy.DockerStrategy.Env = append(
 		build.Spec.CommonSpec.Strategy.DockerStrategy.Env,
 		coreapi.EnvVar{Name: clonerefs.JSONConfigEnvVar, Value: optionsJSON},
@@ -240,7 +243,7 @@ func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clone
 	return build
 }
 
-func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStreamTagReference, source buildapi.BuildSource, dockerfilePath string, resources api.ResourceConfiguration) *buildapi.Build {
+func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStreamTagReference, source buildapi.BuildSource, dockerfilePath string, resources api.ResourceConfiguration, pullSecret *coreapi.Secret) *buildapi.Build {
 	log.Printf("Building %s", toTag)
 	buildResources, err := resourcesFor(resources.RequirementsForStep(string(toTag)))
 	if err != nil {
@@ -292,6 +295,9 @@ func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStrea
 				},
 			},
 		},
+	}
+	if pullSecret != nil {
+		build.Spec.Strategy.DockerStrategy.PullSecret = getSourceSecretFromName(PullSecretName)
 	}
 	if owner := jobSpec.Owner(); owner != nil {
 		build.OwnerReferences = append(build.OwnerReferences, *owner)
@@ -645,7 +651,7 @@ func (s *sourceStep) Description() string {
 
 func SourceStep(config api.SourceStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient,
 	clonerefsSrcClient imageclientset.ImageV1Interface, imageClient imageclientset.ImageV1Interface,
-	artifactDir string, jobSpec *api.JobSpec, dryLogger *DryLogger, cloneAuthConfig *CloneAuthConfig) api.Step {
+	artifactDir string, jobSpec *api.JobSpec, dryLogger *DryLogger, cloneAuthConfig *CloneAuthConfig, pullSecret *coreapi.Secret) api.Step {
 	return &sourceStep{
 		config:             config,
 		resources:          resources,
@@ -656,6 +662,7 @@ func SourceStep(config api.SourceStepConfiguration, resources api.ResourceConfig
 		jobSpec:            jobSpec,
 		dryLogger:          dryLogger,
 		cloneAuthConfig:    cloneAuthConfig,
+		pullSecret:         pullSecret,
 	}
 }
 

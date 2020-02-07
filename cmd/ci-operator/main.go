@@ -474,7 +474,7 @@ func (o *options) Run() error {
 
 	dryLogger := steps.NewDryLogger(o.determinizeOutput)
 	// load the graph from the configuration
-	buildSteps, postSteps, err := defaults.FromConfig(o.configSpec, o.jobSpec, o.templates, o.writeParams, o.artifactDir, o.promote, o.clusterConfig, &o.leaseClient, o.targets.values, o.kubeconfigs, dryLogger, o.cloneAuthConfig)
+	buildSteps, postSteps, err := defaults.FromConfig(o.configSpec, o.jobSpec, o.templates, o.writeParams, o.artifactDir, o.promote, o.clusterConfig, &o.leaseClient, o.targets.values, o.kubeconfigs, dryLogger, o.cloneAuthConfig, o.pullSecret)
 	if err != nil {
 		return fmt.Errorf("failed to generate steps from config: %v", err)
 	}
@@ -1464,7 +1464,7 @@ func getPullSecretFromFile(filename string) (*coreapi.Secret, error) {
 	secret := &coreapi.Secret{
 		Data: make(map[string][]byte),
 		ObjectMeta: meta.ObjectMeta{
-			Name: fmt.Sprintf("regcred"),
+			Name: steps.PullSecretName,
 		},
 		Type: coreapi.SecretTypeDockerConfigJson,
 	}

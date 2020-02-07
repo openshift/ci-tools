@@ -175,6 +175,18 @@ func main() {
 
 	commitIfNeeded(fmt.Sprintf("%s --from-dir ./ci-operator/config --to-dir ./ci-operator/jobs", "ci-operator-prowgen"), author)
 
+	cmd = "/usr/bin/ci-op-configs-mirror"
+	args = []string{"--config-path", "./ci-operator/config", "--to-org", "openshift-priv"}
+	run(cmd, args...)
+
+	commitIfNeeded(fmt.Sprintf("%s --config-path ./ci-operator/config --to-org openshift-priv", "ci-op-configs-mirror"), author)
+
+	cmd = "/usr/bin/ci-operator-prowgen"
+	args = []string{"--from-dir", "./ci-operator/config", "--to-dir", "./ci-operator/jobs"}
+	run(cmd, args...)
+
+	commitIfNeeded(fmt.Sprintf("%s --from-dir ./ci-operator/config --to-dir ./ci-operator/jobs", "ci-operator-prowgen"), author)
+
 	if count == 0 {
 		logrus.Info("no new commits, existing ...")
 		return

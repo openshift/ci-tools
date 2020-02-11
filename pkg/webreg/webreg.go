@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/alecthomas/chroma"
 	"github.com/alecthomas/chroma/formatters/html"
 	"github.com/alecthomas/chroma/lexers"
 	"github.com/alecthomas/chroma/styles"
@@ -380,18 +381,7 @@ for the container, and documentation for the reference. Example of a
 reference:
 </p>
 
-<pre>
-ref:
-  as: ipi-conf
-  from: centos:7
-  commands: ipi-conf-commands.sh
-  resources:
-    requests:
-      cpu: 1000m
-      memory: 100Mi
-  documentation: |-
-	The IPI configure step generates the install-config.yaml file based on the cluster profile and optional input files.
-</pre>
+{{ yamlSyntax .RefExample }}
 
 <p>
 Note: the shell script file must follow the <a href="#layout">naming convention</a> described later
@@ -421,18 +411,12 @@ A reference may be referred to in chains, workflows, and ci-operator configs.
 <p>
 A chain is a registry component that specifies multiple steps to be run.
 Steps are run in the order that they are written. Steps specified by a chain
-can be either references and other chains. Example of a chain:
+can be either references and other chains. If any step inside a chain fails
+to execute, the chain stops and the following steps are not run. Example of a
+chain:
 </p>
 
-<pre>
-chain:
-  as: ipi-deprovision
-  steps:
-  - chain: gather
-  - ref: ipi-deprovision-deprovision
-  documentation: |-
-    The IPI deprovision step chain contains all the individual steps necessary to deprovision an OpenShift cluster.
-</pre>
+{{ yamlSyntax .ChainExample }}
 
 <h2 id="workflow">Workflow:</h2>
 <p>
@@ -451,20 +435,7 @@ steps are skipped and all <code>post</code> steps are run to ensure that
 resources are properly cleaned up. This is an example of a workflow config:
 </p>
 
-<pre>
-workflow:
-  as: origin-e2e
-  steps:
-    pre:
-    - ref: ipi-conf
-    - chain: ipi-install
-    test:
-    - ref: origin-e2e-test
-    post:
-    - chain: ipi-deprovision
-  documentation: |-
-	The Origin E2E workflow executes the common end-to-end test suite.
-</pre>
+{{ yamlSyntax .WorkflowExample }}
 
 <h2 id="config">CI-Operator Test Config:</h2>
 <p>
@@ -478,14 +449,11 @@ of the <code>tests</code> section of a ci-operator config using the
 multistage test design:
 </p>
 
-<pre>
-tests:
-- as: e2e-steps
-  commands: ""
-  steps:
-    cluster_profile: aws
-    workflow: origin-e2e
-</pre>
+{{ yamlSyntax .ConfigExample1 }}
+
+Example of a ci-operator config that overrides a workflow field.
+
+{{ yamlSyntax .ConfigExample2 }}
 
 <p>
 In this example, the ci-operator config simply specifies the desired cluster
@@ -538,6 +506,50 @@ Other files that are allowed in the step registry but are not used for
 testing are <code>OWNERS</code> files and files that end in <code>.md</code>.
 </p>
 `
+
+const refExample = `ref:
+  as: ipi-conf                   # name of the reference
+  from: centos:7                 # image to run the commands in
+  commands: ipi-conf-commands.sh # script file containing the command(s) to be run
+  resources:
+    requests:
+      cpu: 1000m
+      memory: 100Mi
+  documentation: |-
+	The IPI configure step generates the install-config.yaml file based on the cluster profile and optional input files.`
+const chainExample = `chain:
+  as: ipi-deprovision                # name of this chain
+  steps:
+  - chain: gather                    # a chain being used as a step in another chain
+  - ref: ipi-deprovision-deprovision # a reference being used as a step in a chain
+  documentation: |-
+    The IPI deprovision step chain contains all the individual steps necessary to deprovision an OpenShift cluster.`
+const workflowExample = `workflow:
+  as: origin-e2e             # name of workflow
+  steps:
+    pre:                     # "pre" chain used to set up test environment
+    - ref: ipi-conf
+    - chain: ipi-install
+    test:                    # "test" chain containing actual tests to be run
+    - ref: origin-e2e-test
+    post:                    # "post" chain containing cleanup steps
+    - chain: ipi-deprovision
+  documentation: |-
+	The Origin E2E workflow executes the common end-to-end test suite.`
+const configExample1 = `tests:
+- as: e2e-steps # test name
+  commands: ""
+  steps:
+    cluster_profile: aws
+    workflow: origin-e2e`
+const configExample2 = `tests:
+- as: e2e-steps # test name
+  commands: ""
+  steps:
+    cluster_profile: aws
+	workflow: origin-e2e
+	test:                     # this chain will be run for "test" instead of the one in the origin-e2e workflow
+	  ref: origin-e2e-minimal`
 
 const workflowType = "Workflow"
 const jobType = "Job"
@@ -701,12 +713,36 @@ func writePage(w http.ResponseWriter, title string, body *template.Template, dat
 func helpHandler(w http.ResponseWriter, req *http.Request) {
 	start := time.Now()
 	defer func() { logrus.Infof("rendered in %s", time.Now().Sub(start)) }()
-	help, err := template.New("helpPage").Parse(helpPage)
+	help, err := template.New("helpPage").Funcs(
+		template.FuncMap{
+			"yamlSyntax": func(source string) template.HTML {
+				formatted, err := syntaxYAML(source)
+				if err != nil {
+					logrus.Errorf("Failed to format source file: %v", err)
+					return template.HTML(source)
+				}
+				return template.HTML(formatted)
+			},
+		},
+	).Parse(helpPage)
 	if err != nil {
 		writeErrorPage(w, err, http.StatusInternalServerError)
 		return
 	}
-	writePage(w, "Step Registry Help Page", help, nil)
+	data := struct {
+		RefExample      string
+		ChainExample    string
+		WorkflowExample string
+		ConfigExample1  string
+		ConfigExample2  string
+	}{
+		RefExample:      refExample,
+		ChainExample:    chainExample,
+		WorkflowExample: workflowExample,
+		ConfigExample1:  configExample1,
+		ConfigExample2:  configExample2,
+	}
+	writePage(w, "Step Registry Help Page", help, data)
 }
 
 func mainPageHandler(agent load.RegistryAgent, templateString string, jobList *Jobs, w http.ResponseWriter, req *http.Request) {
@@ -792,9 +828,8 @@ func WebRegHandler(regAgent load.RegistryAgent, confAgent load.ConfigAgent, jobA
 	}
 }
 
-func syntaxBash(source string) (string, error) {
+func syntax(source string, lexer chroma.Lexer) (string, error) {
 	var output bytes.Buffer
-	lexer := lexers.Get("bash")
 	style := styles.Get("dracula")
 	formatter := html.New(html.Standalone(false))
 	iterator, err := lexer.Tokenise(nil, source)
@@ -803,6 +838,14 @@ func syntaxBash(source string) (string, error) {
 	}
 	err = formatter.Format(&output, style, iterator)
 	return output.String(), err
+}
+
+func syntaxYAML(source string) (string, error) {
+	return syntax(source, lexers.Get("yaml"))
+}
+
+func syntaxBash(source string) (string, error) {
+	return syntax(source, lexers.Get("bash"))
 }
 
 func referenceHandler(agent load.RegistryAgent, w http.ResponseWriter, req *http.Request) {

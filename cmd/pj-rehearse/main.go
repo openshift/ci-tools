@@ -30,6 +30,10 @@ type options struct {
 	debugLogPath string
 	metricsPath  string
 
+	noTemplates       bool
+	noRegistry        bool
+	noClusterProfiles bool
+
 	releaseRepoPath string
 	rehearsalLimit  int
 }
@@ -45,6 +49,10 @@ func gatherOptions() options {
 	fs.StringVar(&o.debugLogPath, "debug-log", "", "Alternate file for debug output, defaults to stderr")
 	fs.StringVar(&o.releaseRepoPath, "candidate-path", "", "Path to a openshift/release working copy with a revision to be tested")
 	fs.StringVar(&o.metricsPath, "metrics-output", "", "Path to a file where JSON metrics will be dumped after rehearsal")
+
+	fs.BoolVar(&o.noTemplates, "no-templates", false, "If true, do not attempt to compare templates")
+	fs.BoolVar(&o.noRegistry, "no-registry", false, "If true, do not attempt to compare step registry content")
+	fs.BoolVar(&o.noClusterProfiles, "no-cluster-profiles", false, "If true, do not attempt to compare cluster profiles")
 
 	fs.IntVar(&o.rehearsalLimit, "rehearsal-limit", 15, "Upper limit of jobs attempted to rehearse (if more jobs would be rehearsed, none will)")
 
@@ -183,39 +191,60 @@ func rehearseMain() int {
 		metrics.RecordChangedCiopConfigs(changedCiopConfigData)
 	}
 
-	refs, chains, workflows, _, err := load.Registry(filepath.Join(o.releaseRepoPath, config.RegistryPath), false)
-	if err != nil {
-		logger.WithError(err).Error("could not load step registry")
-		return gracefulExit(o.noFail, misconfigurationOutput)
-	}
-	graph, err := registry.NewGraph(refs, chains, workflows)
-	if err != nil {
-		logger.WithError(err).Error("could not create step registry graph")
-		return gracefulExit(o.noFail, misconfigurationOutput)
-	}
-	changedRegistrySteps, err := config.GetChangedRegistrySteps(o.releaseRepoPath, jobSpec.Refs.BaseSHA, graph)
-	if err != nil {
-		logger.WithError(err).Error("could not get step registry differences")
-		return gracefulExit(o.noFail, misconfigurationOutput)
+	var changedRegistrySteps registry.NodeByName
+	var refs registry.ReferenceByName
+	var chains registry.ChainByName
+	var workflows registry.WorkflowByName
+	var graph registry.NodeByName
+
+	if !o.noRegistry {
+		refs, chains, workflows, _, err = load.Registry(filepath.Join(o.releaseRepoPath, config.RegistryPath), false)
+		if err != nil {
+			logger.WithError(err).Error("could not load step registry")
+			return gracefulExit(o.noFail, misconfigurationOutput)
+		}
+		graph, err = registry.NewGraph(refs, chains, workflows)
+		if err != nil {
+			logger.WithError(err).Error("could not create step registry graph")
+			return gracefulExit(o.noFail, misconfigurationOutput)
+		}
+		changedRegistrySteps, err = config.GetChangedRegistrySteps(o.releaseRepoPath, jobSpec.Refs.BaseSHA, graph)
+		if err != nil {
+			logger.WithError(err).Error("could not get step registry differences")
+			return gracefulExit(o.noFail, misconfigurationOutput)
+		}
+	} else {
+		graph, err = registry.NewGraph(refs, chains, workflows)
+		if err != nil {
+			logger.WithError(err).Error("could not create step registry graph")
+			return gracefulExit(o.noFail, misconfigurationOutput)
+		}
 	}
 	if len(changedRegistrySteps) != 0 {
 		logger.WithField("registry", changedRegistrySteps).Info("registry steps changed")
 		metrics.RecordChangedRegistryElements(changedRegistrySteps)
 	}
 
-	changedTemplates, err := config.GetChangedTemplates(o.releaseRepoPath, jobSpec.Refs.BaseSHA)
-	if err != nil {
-		logger.WithError(err).Error("could not get template differences")
-		return gracefulExit(o.noFail, misconfigurationOutput)
+	var changedTemplates []config.ConfigMapSource
+	if !o.noTemplates {
+		changedTemplates, err = config.GetChangedTemplates(o.releaseRepoPath, jobSpec.Refs.BaseSHA)
+		if err != nil {
+			logger.WithError(err).Error("could not get template differences")
+			return gracefulExit(o.noFail, misconfigurationOutput)
+		}
 	}
 	if len(changedTemplates) != 0 {
 		logger.WithField("templates", changedTemplates).Info("templates changed")
 		metrics.RecordChangedTemplates(changedTemplates)
 	}
-	changedClusterProfiles, err := config.GetChangedClusterProfiles(o.releaseRepoPath, jobSpec.Refs.BaseSHA)
-	if err != nil {
-		logger.WithError(err).Error("could not get cluster profile differences")
-		return gracefulExit(o.noFail, misconfigurationOutput)
+
+	var changedClusterProfiles []config.ConfigMapSource
+	if !o.noClusterProfiles {
+		changedClusterProfiles, err = config.GetChangedClusterProfiles(o.releaseRepoPath, jobSpec.Refs.BaseSHA)
+		if err != nil {
+			logger.WithError(err).Error("could not get cluster profile differences")
+			return gracefulExit(o.noFail, misconfigurationOutput)
+		}
 	}
 	if len(changedClusterProfiles) != 0 {
 		logger.WithField("profiles", changedClusterProfiles).Info("cluster profiles changed")

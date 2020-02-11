@@ -250,7 +250,7 @@ const templateDefinitions = `
 
 {{ define "chainTable" }}
 	<h2 id="chains">Chains</h2>
-	<p>Chains are registry components that allow users to string together multiple steps under one name.</p>
+	<p>Chains are registry components that allow users to string together multiple test steps under one name. These steps can be references and other chains.</p>
 	<table class="table">
 		<thead>
 			<tr>
@@ -335,12 +335,12 @@ const templateDefinitions = `
 
 const helpPage = `
 <h1><a href="/">Openshift CI Step Registry</a></h1>
-<h1>What is the Multi-Stage Test and the Test Step Registry?</h1>
+<h1>What is the Multistage Test and the Test Step Registry?</h1>
 
 <p>
 The multistage test style in the ci-operator is a modular test design that
 allows users to create new tests by combining smaller, individual test steps.
-These individual tests can be put into a shared registry that other tests can
+These individual steps can be put into a shared registry that other tests can
 access. This results in test workflows that are easier to maintain and
 upgrade as multiple test workflows can share steps and don’t have to each be
 updated individually to fix bugs or add new features. It also reduces the
@@ -351,10 +351,27 @@ another.
 <p>
 To understand how the multistage tests and registry work, we must first talk
 about the 3 components of the test registry and how to use those components
-to create a test.
+to create a test:
+<ul>
+  <li>
+    <a href="#reference">Reference</a>: A reference is the lowest level
+    component in the test step registry. It describes an individual test
+    step.
+  </li>
+  <li>
+	<a href="#chain">Chain</a>: A chain is a registry component that
+	specifies multiple steps to be run. Any item of the chain can be either a
+	reference or another chain.
+  </li>
+  <li>
+    <a href="#workflow">Workflow</a>: A workflow is the highest level
+    component of the step registry. It contains three chains:
+    <code>pre</code>, <code>test</code>, <code>post</code>.
+  </li>
+</ul>
 </p>
 
-<h2>Reference:</h2>
+<h2 id="reference">Reference:</h2>
 <p>
 A reference is the lowest level component in the test step registry. A
 reference defines a base container image for a step, the filename of the
@@ -377,7 +394,7 @@ ref:
 </pre>
 
 <p>
-Note: the shell script file must follow the naming convention described later
+Note: the shell script file must follow the <a href="#layout">naming convention</a> described later
 in this help page.
 </p>
 
@@ -400,7 +417,7 @@ stored in the <code>ARTIFACTS_DIR</code> environment variable.
 A reference may be referred to in chains, workflows, and ci-operator configs.
 </p>
 
-<h2>Chain:</h2>
+<h2 id="chain">Chain:</h2>
 <p>
 A chain is a registry component that specifies multiple steps to be run.
 Steps are run in the order that they are written. Steps specified by a chain
@@ -417,12 +434,12 @@ chain:
     The IPI deprovision step chain contains all the individual steps necessary to deprovision an OpenShift cluster.
 </pre>
 
-<h2>Workflow:</h2>
+<h2 id="workflow">Workflow:</h2>
 <p>
 A workflow is the highest level component of the step registry. It is almost
 identical to the syntax of the ci-operator config for multistage tests and
 defines an entire test from start to finish. It has 4 basic components: a
-cluster_type string (eg: <code>aws</code>, <code>azure4</code>,
+<code>cluster_profile</code> string (eg: <code>aws</code>, <code>azure4</code>,
 <code>gcp</code>), and 3 chains: <code>pre</code>, <code>test</code>, and
 <code>post</code>. The <code>pre</code> chain is intended to be used to set
 up a testing environment (such as creating a test cluster), the
@@ -449,7 +466,7 @@ workflow:
 	The Origin E2E workflow executes the common end-to-end test suite.
 </pre>
 
-<h2>CI-Operator Test Config:</h2>
+<h2 id="config">CI-Operator Test Config:</h2>
 <p>
 The CI-Operator test config syntax for multistage tests is very similar to
 the registry workflow syntax. The main differences are that the ci-operator
@@ -483,7 +500,7 @@ workflow and a ci-operator config specify the same field, the ci-operator config
 field has priority (i.e. the value from the ci-operator config is used).
 </p>
 
-<h2>Registry Layout:</h2>
+<h2 id="layout">Registry Layout and Naming Convention:</h2>
 <p>
 To prevent naming collisions between all the registry components, the step
 registry has a very strict naming scheme and directory layout. First, all

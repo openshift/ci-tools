@@ -126,22 +126,13 @@ func (s *multiStageTestStep) Run(ctx context.Context, dry bool) error {
 	if err := s.setupRBAC(); err != nil {
 		return fmt.Errorf("failed to create RBAC objects: %v", err)
 	}
-	go func() {
-		<-ctx.Done()
-		log.Printf("cleanup: Deleting pods with label %s=%s", multiStageTestLabel, s.name)
-		if !s.dry {
-			if err := deletePods(s.podClient.Pods(s.jobSpec.Namespace), s.name); err != nil {
-				log.Printf("failed to delete pods with label %s=%s: %v", multiStageTestLabel, s.name, err)
-			}
-		}
-	}()
 	var errs []error
 	if err := s.runSteps(ctx, s.pre, true); err != nil {
 		errs = append(errs, fmt.Errorf("%q pre steps failed: %v", s.name, err))
 	} else if err := s.runSteps(ctx, s.test, true); err != nil {
 		errs = append(errs, fmt.Errorf("%q test steps failed: %v", s.name, err))
 	}
-	if err := s.runSteps(ctx, s.post, false); err != nil {
+	if err := s.runSteps(context.Background(), s.post, false); err != nil {
 		errs = append(errs, fmt.Errorf("%q post steps failed: %v", s.name, err))
 	}
 	return utilerrors.NewAggregate(errs)
@@ -245,7 +236,23 @@ func (s *multiStageTestStep) runSteps(ctx context.Context, steps []api.LiteralTe
 	if err != nil {
 		return err
 	}
-	return s.runPods(ctx, pods, shortCircuit)
+	var errs []error
+	if err := s.runPods(ctx, pods, shortCircuit); err != nil {
+		errs = append(errs, err)
+	}
+	select {
+	case <-ctx.Done():
+		log.Printf("cleanup: Deleting pods with label %s=%s", multiStageTestLabel, s.name)
+		if !s.dry {
+			if err := deletePods(s.podClient.Pods(s.jobSpec.Namespace), s.name); err != nil {
+				errs = append(errs, fmt.Errorf("failed to delete pods with label %s=%s: %v", multiStageTestLabel, s.name, err))
+			}
+		}
+		errs = append(errs, fmt.Errorf("cancelled"))
+	default:
+		break
+	}
+	return utilerrors.NewAggregate(errs)
 }
 
 func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep) ([]coreapi.Pod, error) {
@@ -362,6 +369,7 @@ func addProfile(name string, profile api.ClusterProfile, pod *coreapi.Pod) {
 }
 
 func (s *multiStageTestStep) runPods(ctx context.Context, pods []coreapi.Pod, shortCircuit bool) error {
+	done := ctx.Done()
 	var errs []error
 	for _, pod := range pods {
 		log.Printf("Executing %q", pod.Name)
@@ -375,7 +383,13 @@ func (s *multiStageTestStep) runPods(ctx context.Context, pods []coreapi.Pod, sh
 				break
 			}
 		}
-		if err := s.runPod(ctx, &pod, NewTestCaseNotifier(notifier)); err != nil {
+		err := s.runPod(ctx, &pod, NewTestCaseNotifier(notifier))
+		select {
+		case <-done:
+			notifier.Cancel()
+		default:
+		}
+		if err != nil {
 			errs = append(errs, err)
 			if shortCircuit {
 				break
@@ -390,14 +404,10 @@ func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notif
 		s.logger.AddObject(pod.DeepCopyObject())
 		return nil
 	}
-	go func() {
-		<-ctx.Done()
-		notifier.Cancel()
-	}()
 	if _, err := createOrRestartPod(s.podClient.Pods(s.jobSpec.Namespace), pod); err != nil {
 		return fmt.Errorf("failed to create or restart %q pod: %v", pod.Name, err)
 	}
-	if err := waitForPodCompletion(context.TODO(), s.podClient.Pods(s.jobSpec.Namespace), pod.Name, notifier, false); err != nil {
+	if err := waitForPodCompletion(ctx, s.podClient.Pods(s.jobSpec.Namespace), pod.Name, notifier, false); err != nil {
 		return fmt.Errorf("%q pod %q failed: %v", s.name, pod.Name, err)
 	}
 	s.subTests = append(s.subTests, notifier.SubTests(fmt.Sprintf("%s - %s ", s.Description(), pod.Name))...)

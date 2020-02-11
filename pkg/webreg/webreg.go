@@ -91,6 +91,7 @@ const errPage = `
 `
 
 const mainPage = `<h1>Openshift CI Step Registry</h1>
+<p>Not sure what the step registry is or how to use it? Visit the <a href="/help">help page</a>.</p>
 <form action="/search">
   <div>
     Search for job: <input type="search" id="search" name="job" placeholder="Job Name">
@@ -222,6 +223,7 @@ const templateDefinitions = `
 
 {{ define "workflowTable" }}
 	<h2 id="workflows">Workflows</h2>
+	<p>Workflows are the highest level registry components, defining a test from start to finish.</p>
 	<table class="table">
 		<thead>
 			<tr>
@@ -248,6 +250,7 @@ const templateDefinitions = `
 
 {{ define "chainTable" }}
 	<h2 id="chains">Chains</h2>
+	<p>Chains are registry components that allow users to string together multiple steps under one name.</p>
 	<table class="table">
 		<thead>
 			<tr>
@@ -270,6 +273,7 @@ const templateDefinitions = `
 
 {{ define "referenceTable" }}
 	<h2 id="references">References</h2>
+	<p>References are the lowest level registry components, defining a command to run and a container to run the command in.</p>
 	<table class="table">
 		<thead>
 			<tr>
@@ -289,7 +293,8 @@ const templateDefinitions = `
 {{ end }}
 
 {{ define "jobTable" }}
-<h2 id="jobs">Jobs</h2>
+    <h2 id="jobs">Jobs</h2>
+    <p>Jobs using the multistage test design.</p>
 	<table class="table">
 		<thead>
 			<tr>
@@ -326,6 +331,195 @@ const templateDefinitions = `
 		</tbody>
 	</table>
 {{ end }}
+`
+
+const helpPage = `
+<h1><a href="/">Openshift CI Step Registry</a></h1>
+<h1>What is the Multi-Stage Test and the Test Step Registry?</h1>
+
+<p>
+The multistage test style in the ci-operator is a modular test design that
+allows users to create new tests by combining smaller, individual test steps.
+These individual tests can be put into a shared registry that other tests can
+access. This results in test workflows that are easier to maintain and
+upgrade as multiple test workflows can share steps and don’t have to each be
+updated individually to fix bugs or add new features. It also reduces the
+chances of a mistake when copying a feature from one test workflow to
+another.
+</p>
+
+<p>
+To understand how the multistage tests and registry work, we must first talk
+about the 3 components of the test registry and how to use those components
+to create a test.
+</p>
+
+<h2>Reference:</h2>
+<p>
+A reference is the lowest level component in the test step registry. A
+reference defines a base container image for a step, the filename of the
+shell script to run inside the container, the resource requests and limits
+for the container, and documentation for the reference. Example of a
+reference:
+</p>
+
+<pre>
+ref:
+  as: ipi-conf
+  from: centos:7
+  commands: ipi-conf-commands.sh
+  resources:
+    requests:
+      cpu: 1000m
+      memory: 100Mi
+  documentation: |-
+	The IPI configure step generates the install-config.yaml file based on the cluster profile and optional input files.
+</pre>
+
+<p>
+Note: the shell script file must follow the naming convention described later
+in this help page.
+</p>
+
+<p>
+The commands file must contain shell script in a shell language supported by
+the <code>shellcheck</code> program used to validate the commands. However,
+regardless of the shell language used for the commands, the web UI will
+syntax highlight all commands as bash.
+</p>
+
+<p>
+Sharing files between steps is supported via a shared directory. All
+containers will have an environment variable <code>SHARED_DIR</code> which
+contains the path of the shared directory. An artifacts directory also exists
+for steps that produce artifacts. The path for the artifacts directory is
+stored in the <code>ARTIFACTS_DIR</code> environment variable.
+</p>
+
+<p>
+A reference may be referred to in chains, workflows, and ci-operator configs.
+</p>
+
+<h2>Chain:</h2>
+<p>
+A chain is a registry component that specifies multiple steps to be run.
+Steps are run in the order that they are written. Steps specified by a chain
+can be either references and other chains. Example of a chain:
+</p>
+
+<pre>
+chain:
+  as: ipi-deprovision
+  steps:
+  - chain: gather
+  - ref: ipi-deprovision-deprovision
+  documentation: |-
+    The IPI deprovision step chain contains all the individual steps necessary to deprovision an OpenShift cluster.
+</pre>
+
+<h2>Workflow:</h2>
+<p>
+A workflow is the highest level component of the step registry. It is almost
+identical to the syntax of the ci-operator config for multistage tests and
+defines an entire test from start to finish. It has 4 basic components: a
+cluster_type string (eg: <code>aws</code>, <code>azure4</code>,
+<code>gcp</code>), and 3 chains: <code>pre</code>, <code>test</code>, and
+<code>post</code>. The <code>pre</code> chain is intended to be used to set
+up a testing environment (such as creating a test cluster), the
+<code>test</code> chain is intended to contain all tests that a job wants to
+run, and the <code>post</code> chain is intended to be used to clean up any
+resources created/used by the test. If a step in <code>pre</code> or
+<code>test</code> fails, all pending <code>pre</code> and <code>test</code>
+steps are skipped and all <code>post</code> steps are run to ensure that
+resources are properly cleaned up. This is an example of a workflow config:
+</p>
+
+<pre>
+workflow:
+  as: origin-e2e
+  steps:
+    pre:
+    - ref: ipi-conf
+    - chain: ipi-install
+    test:
+    - ref: origin-e2e-test
+    post:
+    - chain: ipi-deprovision
+  documentation: |-
+	The Origin E2E workflow executes the common end-to-end test suite.
+</pre>
+
+<h2>CI-Operator Test Config:</h2>
+<p>
+The CI-Operator test config syntax for multistage tests is very similar to
+the registry workflow syntax. The main differences are that the ci-operator
+config does not have a <code>documentation</code> field, and the ci-operator
+config can specify a workflow to use. Also, the <code>cluster_profile</code>,
+<code>pre</code>, <code>test</code>, and <code>post</code> fields are under a
+<code>steps</code> field instead of <code>workflow</code>. Here is an example
+of the <code>tests</code> section of a ci-operator config using the
+multistage test design:
+</p>
+
+<pre>
+tests:
+- as: e2e-steps
+  commands: ""
+  steps:
+    cluster_profile: aws
+    workflow: origin-e2e
+</pre>
+
+<p>
+In this example, the ci-operator config simply specifies the desired cluster
+profile and the <code>origin-e2e</code> workflow shown in the example for the
+<code>Workflow</code> section above.
+</p>
+
+<p>
+Since the ci-operator-config and workflows share the same fields, it is
+possible to override fields specified in a workflow. In cases where both the
+workflow and a ci-operator config specify the same field, the ci-operator config’s
+field has priority (i.e. the value from the ci-operator config is used).
+</p>
+
+<h2>Registry Layout:</h2>
+<p>
+To prevent naming collisions between all the registry components, the step
+registry has a very strict naming scheme and directory layout. First, all
+components have a prefix determined by the directory structure, similar to
+how the ci-operator configs do. The prefix is the relative directory path
+with all &#96;<code>/</code>&#96; characters changed to
+&#96;<code>-</code>&#96;. For example, a file under the
+<code>ipi/install/conf</code> directory would have as prefix of
+<code>ipi-install-conf</code>. If there is a workflow, chain, or reference in
+that directory, the <code>as</code> field for that component would need to be
+the same as the prefix. Further, only one of reference, chain, or workflow
+can be in a subdirectory (otherwise there would be a name conflict),
+</p>
+
+<p>
+After the prefix, we apply a suffix based on what the file is defining. These
+are the suffixes for the 4 file types that exist in the registry:
+<ul style="margin-bottom:0px;">
+  <li>Reference: <code>-ref.yaml</code></li>
+  <li>Reference command script: <code>-commands.sh</code></li>
+  <li>Chain: <code>-chain.yaml</code></li>
+  <li>Workflow: <code>-workflow.yaml</code></li>
+</ul>
+</p>
+
+<p>
+Continuing the example above, a reference in the
+<code>ipi/install/conf</code> subdirectory would have a filename of
+<code>ipi-install-conf-ref.yaml</code> and the command would be
+<code>ipi-install-conf-commands.sh</code>.
+</p>
+
+<p>
+Other files that are allowed in the step registry but are not used for
+testing are <code>OWNERS</code> files and files that end in <code>.md</code>.
+</p>
 `
 
 const workflowType = "Workflow"
@@ -487,6 +681,17 @@ func writePage(w http.ResponseWriter, title string, body *template.Template, dat
 	fmt.Fprintln(w, htmlPageEnd)
 }
 
+func helpHandler(w http.ResponseWriter, req *http.Request) {
+	start := time.Now()
+	defer func() { logrus.Infof("rendered in %s", time.Now().Sub(start)) }()
+	help, err := template.New("helpPage").Parse(helpPage)
+	if err != nil {
+		writeErrorPage(w, err, http.StatusInternalServerError)
+		return
+	}
+	writePage(w, "Step Registry Help Page", help, nil)
+}
+
 func mainPageHandler(agent load.RegistryAgent, templateString string, jobList *Jobs, w http.ResponseWriter, req *http.Request) {
 	start := time.Now()
 	defer func() { logrus.Infof("rendered in %s", time.Now().Sub(start)) }()
@@ -537,6 +742,8 @@ func WebRegHandler(regAgent load.RegistryAgent, confAgent load.ConfigAgent, jobA
 				mainPageHandler(regAgent, workflowListPage, nil, w, req)
 			case "search":
 				searchHandler(confAgent, jobAgent, w, req)
+			case "help":
+				helpHandler(w, req)
 			default:
 				writeErrorPage(w, errors.New("Invalid path"), http.StatusNotImplemented)
 			}

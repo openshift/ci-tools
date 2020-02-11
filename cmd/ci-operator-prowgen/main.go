@@ -59,6 +59,8 @@ exec ci-operator \
 	oauthTokenPath  = "/usr/local/github-credentials"
 	oauthSecretName = "github-credentials-openshift-ci-robot-private-git-cloner"
 	oauthKey        = "oauth"
+
+	build01Context = "ci/api-build01-ci-devcluster-openshift-com:6443"
 )
 
 var (
@@ -665,7 +667,11 @@ func generateJobs(
 		}
 
 		if element.Cron == nil {
-			presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(element.As, info, label, podSpec, true, configSpec.CanonicalGoRepository))
+			presubmit := *generatePresubmitForTest(element.As, info, label, podSpec, true, configSpec.CanonicalGoRepository)
+			if migrate.Migrated(info.Org, info.Repo, info.Branch) {
+				presubmit.Cluster = build01Context
+			}
+			presubmits[orgrepo] = append(presubmits[orgrepo], presubmit)
 		} else {
 			periodics = append(periodics, *generatePeriodicForTest(element.As, info, label, podSpec, true, *element.Cron, configSpec.CanonicalGoRepository))
 		}
@@ -689,7 +695,11 @@ func generateJobs(
 			presubmitTargets = append(presubmitTargets, "[release:latest]")
 		}
 		podSpec := generateCiOperatorPodSpec(info, nil, presubmitTargets)
-		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest("images", info, label, podSpec, true, configSpec.CanonicalGoRepository))
+		presubmit := *generatePresubmitForTest("images", info, label, podSpec, true, configSpec.CanonicalGoRepository)
+		if migrate.Migrated(info.Org, info.Repo, info.Branch) {
+			presubmit.Cluster = build01Context
+		}
+		presubmits[orgrepo] = append(presubmits[orgrepo], presubmit)
 
 		if configSpec.PromotionConfiguration != nil {
 			podSpec := generateCiOperatorPodSpec(info, nil, imageTargets, []string{"--promote"}...)

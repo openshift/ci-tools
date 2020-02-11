@@ -15,6 +15,10 @@ import (
 	"github.com/openshift/ci-tools/pkg/promotion"
 )
 
+const (
+	privateNamespace = "ocp-private"
+)
+
 type options struct {
 	configDir string
 	toOrg     string
@@ -73,7 +77,8 @@ func main() {
 		repoInfo.Org = o.toOrg
 
 		rbc.PromotionConfiguration.Disabled = true
-		rbc.PromotionConfiguration.Name = fmt.Sprintf("%s-private", rbc.PromotionConfiguration.Name)
+		rbc.PromotionConfiguration.Namespace = privateNamespace
+		rbc.PromotionConfiguration.Name = fmt.Sprintf("%s-priv", rbc.PromotionConfiguration.Name)
 
 		dataWithInfo := config.DataWithInfo{
 			Configuration: *rbc,

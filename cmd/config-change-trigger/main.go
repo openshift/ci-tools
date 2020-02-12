@@ -25,6 +25,7 @@ import (
 type options struct {
 	dryRun bool
 	local  bool
+	limit  int
 
 	releaseRepoPath string
 	flagutil.GitHubOptions
@@ -36,6 +37,7 @@ func gatherOptions() options {
 
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually submit jobs to Prow")
 	fs.BoolVar(&o.local, "local", false, "Whether this is a local execution or part of a CI job")
+	fs.IntVar(&o.limit, "limit", 30, "Maximum number of jobs to trigger.")
 
 	fs.StringVar(&o.releaseRepoPath, "candidate-path", "", "Path to a openshift/release working copy with a revision to be tested")
 	o.AddFlagsWithoutDefaultGitHubTokenPath(fs)
@@ -115,6 +117,10 @@ func main() {
 	}
 
 	jobs, errs := jobsFor(changedImagesPostsubmits, githubClient)
+	if len(jobs) > o.limit {
+		logger.Infof("Truncating %d changed jobs to a limit of %d.", len(jobs), o.limit)
+		jobs = jobs[:o.limit]
+	}
 	for _, job := range jobs {
 		logger = logger.WithFields(pjutil.ProwJobFields(&job))
 		if _, err := pjclient.Create(&job); err != nil {

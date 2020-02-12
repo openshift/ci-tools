@@ -55,8 +55,6 @@ func TestGeneratePodSpec(t *testing.T) {
 						"--org=org",
 						"--repo=repo",
 						"--branch=branch",
-						"--kubeconfig=/etc/apici/kubeconfig",
-						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 						"--target=target",
 					},
 					Resources: kubeapi.ResourceRequirements{
@@ -73,29 +71,14 @@ func TestGeneratePodSpec(t *testing.T) {
 							},
 						},
 					}},
-					VolumeMounts: []kubeapi.VolumeMount{{Name: "sentry-dsn", MountPath: "/etc/sentry-dsn", ReadOnly: true},
-						{Name: "apici-ci-operator-credentials", ReadOnly: true, MountPath: "/etc/apici"},
-						{Name: "pull-secret", ReadOnly: true, MountPath: "/etc/pull-secret"}},
+					VolumeMounts: []kubeapi.VolumeMount{{Name: "sentry-dsn", MountPath: "/etc/sentry-dsn", ReadOnly: true}},
 				}},
 				Volumes: []kubeapi.Volume{{
 					Name: "sentry-dsn",
 					VolumeSource: kubeapi.VolumeSource{
 						Secret: &kubeapi.SecretVolumeSource{SecretName: "sentry-dsn"},
 					},
-				},
-					{
-						Name: "apici-ci-operator-credentials",
-						VolumeSource: kubeapi.VolumeSource{
-							Secret: &kubeapi.SecretVolumeSource{SecretName: "apici-ci-operator-credentials", Items: []kubeapi.KeyToPath{{Key: "sa.ci-operator.apici.config", Path: "kubeconfig"}}},
-						},
-					},
-					{
-						Name: "pull-secret",
-						VolumeSource: kubeapi.VolumeSource{
-							Secret: &kubeapi.SecretVolumeSource{SecretName: "regcred"},
-						},
-					},
-				},
+				}},
 			},
 		},
 		{
@@ -119,8 +102,6 @@ func TestGeneratePodSpec(t *testing.T) {
 						"--org=org",
 						"--repo=repo",
 						"--branch=branch",
-						"--kubeconfig=/etc/apici/kubeconfig",
-						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 						"--promote",
 						"--some=thing",
 						"--target=target",
@@ -139,29 +120,14 @@ func TestGeneratePodSpec(t *testing.T) {
 							},
 						},
 					}},
-					VolumeMounts: []kubeapi.VolumeMount{{Name: "sentry-dsn", MountPath: "/etc/sentry-dsn", ReadOnly: true},
-						{Name: "apici-ci-operator-credentials", ReadOnly: true, MountPath: "/etc/apici"},
-						{Name: "pull-secret", ReadOnly: true, MountPath: "/etc/pull-secret"}},
+					VolumeMounts: []kubeapi.VolumeMount{{Name: "sentry-dsn", MountPath: "/etc/sentry-dsn", ReadOnly: true}},
 				}},
 				Volumes: []kubeapi.Volume{{
 					Name: "sentry-dsn",
 					VolumeSource: kubeapi.VolumeSource{
 						Secret: &kubeapi.SecretVolumeSource{SecretName: "sentry-dsn"},
 					},
-				},
-					{
-						Name: "apici-ci-operator-credentials",
-						VolumeSource: kubeapi.VolumeSource{
-							Secret: &kubeapi.SecretVolumeSource{SecretName: "apici-ci-operator-credentials", Items: []kubeapi.KeyToPath{{Key: "sa.ci-operator.apici.config", Path: "kubeconfig"}}},
-						},
-					},
-					{
-						Name: "pull-secret",
-						VolumeSource: kubeapi.VolumeSource{
-							Secret: &kubeapi.SecretVolumeSource{SecretName: "regcred"},
-						},
-					},
-				},
+				}},
 			},
 		},
 		{
@@ -184,8 +150,6 @@ func TestGeneratePodSpec(t *testing.T) {
 						"--org=org",
 						"--repo=repo",
 						"--branch=branch",
-						"--kubeconfig=/etc/apici/kubeconfig",
-						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 						"--promote",
 						"--some=thing",
 						"--target=target",
@@ -207,8 +171,6 @@ func TestGeneratePodSpec(t *testing.T) {
 					}},
 					VolumeMounts: []kubeapi.VolumeMount{
 						{Name: "sentry-dsn", MountPath: "/etc/sentry-dsn", ReadOnly: true},
-						{Name: "apici-ci-operator-credentials", ReadOnly: true, MountPath: "/etc/apici"},
-						{Name: "pull-secret", ReadOnly: true, MountPath: "/etc/pull-secret"},
 						{Name: testSecret.Name, MountPath: testSecret.MountPath, ReadOnly: true},
 					},
 				}},
@@ -217,18 +179,6 @@ func TestGeneratePodSpec(t *testing.T) {
 						Name: "sentry-dsn",
 						VolumeSource: kubeapi.VolumeSource{
 							Secret: &kubeapi.SecretVolumeSource{SecretName: "sentry-dsn"},
-						},
-					},
-					{
-						Name: "apici-ci-operator-credentials",
-						VolumeSource: kubeapi.VolumeSource{
-							Secret: &kubeapi.SecretVolumeSource{SecretName: "apici-ci-operator-credentials", Items: []kubeapi.KeyToPath{{Key: "sa.ci-operator.apici.config", Path: "kubeconfig"}}},
-						},
-					},
-					{
-						Name: "pull-secret",
-						VolumeSource: kubeapi.VolumeSource{
-							Secret: &kubeapi.SecretVolumeSource{SecretName: "regcred"},
 						},
 					},
 					{
@@ -260,8 +210,6 @@ func TestGeneratePodSpec(t *testing.T) {
 						"--org=org",
 						"--repo=repo",
 						"--branch=branch",
-						"--kubeconfig=/etc/apici/kubeconfig",
-						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 						"--target=target",
 						"--target=more",
 						"--target=and-more",
@@ -280,27 +228,14 @@ func TestGeneratePodSpec(t *testing.T) {
 							},
 						},
 					}},
-					VolumeMounts: []kubeapi.VolumeMount{{Name: "sentry-dsn", MountPath: "/etc/sentry-dsn", ReadOnly: true},
-						{Name: "apici-ci-operator-credentials", ReadOnly: true, MountPath: "/etc/apici"},
-						{Name: "pull-secret", ReadOnly: true, MountPath: "/etc/pull-secret"}},
+					VolumeMounts: []kubeapi.VolumeMount{{Name: "sentry-dsn", MountPath: "/etc/sentry-dsn", ReadOnly: true}},
 				}},
 				Volumes: []kubeapi.Volume{{
 					Name: "sentry-dsn",
 					VolumeSource: kubeapi.VolumeSource{
 						Secret: &kubeapi.SecretVolumeSource{SecretName: "sentry-dsn"},
 					},
-				}, {
-					Name: "apici-ci-operator-credentials",
-					VolumeSource: kubeapi.VolumeSource{
-						Secret: &kubeapi.SecretVolumeSource{SecretName: "apici-ci-operator-credentials", Items: []kubeapi.KeyToPath{{Key: "sa.ci-operator.apici.config", Path: "kubeconfig"}}},
-					},
-				},
-					{
-						Name: "pull-secret",
-						VolumeSource: kubeapi.VolumeSource{
-							Secret: &kubeapi.SecretVolumeSource{SecretName: "regcred"},
-						},
-					}},
+				}},
 			},
 		},
 		{
@@ -327,8 +262,6 @@ func TestGeneratePodSpec(t *testing.T) {
 							"--org=org",
 							"--repo=repo",
 							"--branch=branch",
-							"--kubeconfig=/etc/apici/kubeconfig",
-							"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 							"--target=target",
 							"--oauth-token-path=/usr/local/github-credentials/oauth",
 						},
@@ -350,8 +283,6 @@ func TestGeneratePodSpec(t *testing.T) {
 							{
 								Name: "sentry-dsn", MountPath: "/etc/sentry-dsn", ReadOnly: true,
 							},
-							{Name: "apici-ci-operator-credentials", ReadOnly: true, MountPath: "/etc/apici"},
-							{Name: "pull-secret", ReadOnly: true, MountPath: "/etc/pull-secret"},
 							{
 								Name:      "github-credentials-openshift-ci-robot-private-git-cloner",
 								MountPath: "/usr/local/github-credentials",
@@ -365,18 +296,6 @@ func TestGeneratePodSpec(t *testing.T) {
 						Name: "sentry-dsn",
 						VolumeSource: kubeapi.VolumeSource{
 							Secret: &kubeapi.SecretVolumeSource{SecretName: "sentry-dsn"},
-						},
-					},
-					{
-						Name: "apici-ci-operator-credentials",
-						VolumeSource: kubeapi.VolumeSource{
-							Secret: &kubeapi.SecretVolumeSource{SecretName: "apici-ci-operator-credentials", Items: []kubeapi.KeyToPath{{Key: "sa.ci-operator.apici.config", Path: "kubeconfig"}}},
-						},
-					},
-					{
-						Name: "pull-secret",
-						VolumeSource: kubeapi.VolumeSource{
-							Secret: &kubeapi.SecretVolumeSource{SecretName: "regcred"},
 						},
 					},
 					{
@@ -430,18 +349,6 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						},
 					},
 					{
-						Name: "apici-ci-operator-credentials",
-						VolumeSource: kubeapi.VolumeSource{
-							Secret: &kubeapi.SecretVolumeSource{SecretName: "apici-ci-operator-credentials", Items: []kubeapi.KeyToPath{{Key: "sa.ci-operator.apici.config", Path: "kubeconfig"}}},
-						},
-					},
-					{
-						Name: "pull-secret",
-						VolumeSource: kubeapi.VolumeSource{
-							Secret: &kubeapi.SecretVolumeSource{SecretName: "regcred"},
-						},
-					},
-					{
 						Name: "job-definition",
 						VolumeSource: kubeapi.VolumeSource{
 							ConfigMap: &kubeapi.ConfigMapVolumeSource{
@@ -487,8 +394,6 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						"--org=organization",
 						"--repo=repo",
 						"--branch=branch",
-						"--kubeconfig=/etc/apici/kubeconfig",
-						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 						"--target=test",
 						"--secret-dir=/usr/local/test-cluster-profile",
 						"--template=/usr/local/test"},
@@ -514,8 +419,6 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 					},
 					VolumeMounts: []kubeapi.VolumeMount{
 						{Name: "sentry-dsn", MountPath: "/etc/sentry-dsn", ReadOnly: true},
-						{Name: "apici-ci-operator-credentials", ReadOnly: true, MountPath: "/etc/apici"},
-						{Name: "pull-secret", ReadOnly: true, MountPath: "/etc/pull-secret"},
 						{Name: "cluster-profile", MountPath: "/usr/local/test-cluster-profile"},
 						{Name: "job-definition", MountPath: "/usr/local/test", SubPath: "cluster-launch-e2e.yaml"},
 					},
@@ -540,18 +443,6 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						Name: "sentry-dsn",
 						VolumeSource: kubeapi.VolumeSource{
 							Secret: &kubeapi.SecretVolumeSource{SecretName: "sentry-dsn"},
-						},
-					},
-					{
-						Name: "apici-ci-operator-credentials",
-						VolumeSource: kubeapi.VolumeSource{
-							Secret: &kubeapi.SecretVolumeSource{SecretName: "apici-ci-operator-credentials", Items: []kubeapi.KeyToPath{{Key: "sa.ci-operator.apici.config", Path: "kubeconfig"}}},
-						},
-					},
-					{
-						Name: "pull-secret",
-						VolumeSource: kubeapi.VolumeSource{
-							Secret: &kubeapi.SecretVolumeSource{SecretName: "regcred"},
 						},
 					},
 					{
@@ -580,12 +471,6 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 							},
 						},
 					},
-					{
-						Name: "boskos",
-						VolumeSource: kubeapi.VolumeSource{
-							Secret: &kubeapi.SecretVolumeSource{SecretName: "boskos-credentials", Items: []kubeapi.KeyToPath{{Key: "password", Path: "password"}}},
-						},
-					},
 				},
 				Containers: []kubeapi.Container{{
 					Image:           "ci-operator:latest",
@@ -599,15 +484,10 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						"--org=organization",
 						"--repo=repo",
 						"--branch=branch",
-						"--kubeconfig=/etc/apici/kubeconfig",
-						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 						"--target=test",
 						"--secret-dir=/usr/local/test-cluster-profile",
 						"--template=/usr/local/test",
-						"--lease-server=https://boskos-ci.svc.ci.openshift.org",
-						"--lease-server-username=ci",
-						"--lease-server-password-file=/etc/boskos/password",
-					},
+						"--lease-server=http://boskos"},
 					Resources: kubeapi.ResourceRequirements{
 						Requests: kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
 					},
@@ -629,9 +509,6 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 					},
 					VolumeMounts: []kubeapi.VolumeMount{
 						{Name: "sentry-dsn", MountPath: "/etc/sentry-dsn", ReadOnly: true},
-						{Name: "apici-ci-operator-credentials", ReadOnly: true, MountPath: "/etc/apici"},
-						{Name: "pull-secret", ReadOnly: true, MountPath: "/etc/pull-secret"},
-						{Name: "boskos", ReadOnly: true, MountPath: "/etc/boskos"},
 						{Name: "cluster-profile", MountPath: "/usr/local/test-cluster-profile"},
 						{Name: "job-definition", MountPath: "/usr/local/test", SubPath: "cluster-launch-installer-e2e.yaml"},
 					},
@@ -657,18 +534,6 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						},
 					},
 					{
-						Name: "apici-ci-operator-credentials",
-						VolumeSource: kubeapi.VolumeSource{
-							Secret: &kubeapi.SecretVolumeSource{SecretName: "apici-ci-operator-credentials", Items: []kubeapi.KeyToPath{{Key: "sa.ci-operator.apici.config", Path: "kubeconfig"}}},
-						},
-					},
-					{
-						Name: "pull-secret",
-						VolumeSource: kubeapi.VolumeSource{
-							Secret: &kubeapi.SecretVolumeSource{SecretName: "regcred"},
-						},
-					},
-					{
 						Name: "cluster-profile",
 						VolumeSource: kubeapi.VolumeSource{
 							Projected: &kubeapi.ProjectedVolumeSource{
@@ -684,12 +549,6 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 							},
 						},
 					},
-					{
-						Name: "boskos",
-						VolumeSource: kubeapi.VolumeSource{
-							Secret: &kubeapi.SecretVolumeSource{SecretName: "boskos-credentials", Items: []kubeapi.KeyToPath{{Key: "password", Path: "password"}}},
-						},
-					},
 				},
 				Containers: []kubeapi.Container{{
 					Image:           "ci-operator:latest",
@@ -703,14 +562,9 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						"--org=organization",
 						"--repo=repo",
 						"--branch=branch",
-						"--kubeconfig=/etc/apici/kubeconfig",
-						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 						"--target=test",
 						"--secret-dir=/usr/local/test-cluster-profile",
-						"--lease-server=https://boskos-ci.svc.ci.openshift.org",
-						"--lease-server-username=ci",
-						"--lease-server-password-file=/etc/boskos/password",
-					},
+						"--lease-server=http://boskos"},
 					Resources: kubeapi.ResourceRequirements{
 						Requests: kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
 					},
@@ -729,9 +583,6 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 					},
 					VolumeMounts: []kubeapi.VolumeMount{
 						{Name: "sentry-dsn", MountPath: "/etc/sentry-dsn", ReadOnly: true},
-						{Name: "apici-ci-operator-credentials", ReadOnly: true, MountPath: "/etc/apici"},
-						{Name: "pull-secret", ReadOnly: true, MountPath: "/etc/pull-secret"},
-						{Name: "boskos", ReadOnly: true, MountPath: "/etc/boskos"},
 						{Name: "cluster-profile", MountPath: "/usr/local/test-cluster-profile"},
 					},
 				}},
@@ -783,10 +634,6 @@ func TestGeneratePodSpecRandom(t *testing.T) {
 				MountPath: "/etc/sentry-dsn",
 				ReadOnly:  true,
 			}, {
-				Name: "apici-ci-operator-credentials", ReadOnly: true, MountPath: "/etc/apici",
-			}, {
-				Name: "pull-secret", ReadOnly: true, MountPath: "/etc/pull-secret",
-			}, {
 				Name:      "cluster-profile-aws",
 				MountPath: "/usr/local/cluster-profiles/aws",
 			}, {
@@ -808,16 +655,6 @@ func TestGeneratePodSpecRandom(t *testing.T) {
 			Name: "sentry-dsn",
 			VolumeSource: kubeapi.VolumeSource{
 				Secret: &kubeapi.SecretVolumeSource{SecretName: "sentry-dsn"},
-			},
-		}, {
-			Name: "apici-ci-operator-credentials",
-			VolumeSource: kubeapi.VolumeSource{
-				Secret: &kubeapi.SecretVolumeSource{SecretName: "apici-ci-operator-credentials", Items: []kubeapi.KeyToPath{{Key: "sa.ci-operator.apici.config", Path: "kubeconfig"}}},
-			},
-		}, {
-			Name: "pull-secret",
-			VolumeSource: kubeapi.VolumeSource{
-				Secret: &kubeapi.SecretVolumeSource{SecretName: "regcred"},
 			},
 		}, {
 			Name: "cluster-profile-aws",
@@ -1295,8 +1132,6 @@ tests:
         - --artifact-dir=$(ARTIFACTS)
         - --branch=branch
         - --give-pr-author-access-to-namespace=true
-        - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
-        - --kubeconfig=/etc/apici/kubeconfig
         - --org=super
         - --promote
         - --repo=duper
@@ -1318,26 +1153,11 @@ tests:
           requests:
             cpu: 10m
         volumeMounts:
-        - mountPath: /etc/apici
-          name: apici-ci-operator-credentials
-          readOnly: true
-        - mountPath: /etc/pull-secret
-          name: pull-secret
-          readOnly: true
         - mountPath: /etc/sentry-dsn
           name: sentry-dsn
           readOnly: true
       serviceAccountName: ci-operator
       volumes:
-      - name: apici-ci-operator-credentials
-        secret:
-          items:
-          - key: sa.ci-operator.apici.config
-            path: kubeconfig
-          secretName: apici-ci-operator-credentials
-      - name: pull-secret
-        secret:
-          secretName: regcred
       - name: sentry-dsn
         secret:
           secretName: sentry-dsn
@@ -1363,8 +1183,6 @@ tests:
         - --artifact-dir=$(ARTIFACTS)
         - --branch=branch
         - --give-pr-author-access-to-namespace=true
-        - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
-        - --kubeconfig=/etc/apici/kubeconfig
         - --org=super
         - --repo=duper
         - --resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org
@@ -1385,26 +1203,11 @@ tests:
           requests:
             cpu: 10m
         volumeMounts:
-        - mountPath: /etc/apici
-          name: apici-ci-operator-credentials
-          readOnly: true
-        - mountPath: /etc/pull-secret
-          name: pull-secret
-          readOnly: true
         - mountPath: /etc/sentry-dsn
           name: sentry-dsn
           readOnly: true
       serviceAccountName: ci-operator
       volumes:
-      - name: apici-ci-operator-credentials
-        secret:
-          items:
-          - key: sa.ci-operator.apici.config
-            path: kubeconfig
-          secretName: apici-ci-operator-credentials
-      - name: pull-secret
-        secret:
-          secretName: regcred
       - name: sentry-dsn
         secret:
           secretName: sentry-dsn
@@ -1428,8 +1231,6 @@ tests:
         - --artifact-dir=$(ARTIFACTS)
         - --branch=branch
         - --give-pr-author-access-to-namespace=true
-        - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
-        - --kubeconfig=/etc/apici/kubeconfig
         - --org=super
         - --repo=duper
         - --resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org
@@ -1450,26 +1251,11 @@ tests:
           requests:
             cpu: 10m
         volumeMounts:
-        - mountPath: /etc/apici
-          name: apici-ci-operator-credentials
-          readOnly: true
-        - mountPath: /etc/pull-secret
-          name: pull-secret
-          readOnly: true
         - mountPath: /etc/sentry-dsn
           name: sentry-dsn
           readOnly: true
       serviceAccountName: ci-operator
       volumes:
-      - name: apici-ci-operator-credentials
-        secret:
-          items:
-          - key: sa.ci-operator.apici.config
-            path: kubeconfig
-          secretName: apici-ci-operator-credentials
-      - name: pull-secret
-        secret:
-          secretName: regcred
       - name: sentry-dsn
         secret:
           secretName: sentry-dsn
@@ -1569,8 +1355,6 @@ tests:
         - --artifact-dir=$(ARTIFACTS)
         - --branch=branch
         - --give-pr-author-access-to-namespace=true
-        - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
-        - --kubeconfig=/etc/apici/kubeconfig
         - --org=super
         - --repo=duper
         - --resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org
@@ -1592,26 +1376,11 @@ tests:
           requests:
             cpu: 10m
         volumeMounts:
-        - mountPath: /etc/apici
-          name: apici-ci-operator-credentials
-          readOnly: true
-        - mountPath: /etc/pull-secret
-          name: pull-secret
-          readOnly: true
         - mountPath: /etc/sentry-dsn
           name: sentry-dsn
           readOnly: true
       serviceAccountName: ci-operator
       volumes:
-      - name: apici-ci-operator-credentials
-        secret:
-          items:
-          - key: sa.ci-operator.apici.config
-            path: kubeconfig
-          secretName: apici-ci-operator-credentials
-      - name: pull-secret
-        secret:
-          secretName: regcred
       - name: sentry-dsn
         secret:
           secretName: sentry-dsn
@@ -1636,8 +1405,6 @@ tests:
         - --artifact-dir=$(ARTIFACTS)
         - --branch=branch
         - --give-pr-author-access-to-namespace=true
-        - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
-        - --kubeconfig=/etc/apici/kubeconfig
         - --org=super
         - --repo=duper
         - --resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org
@@ -1659,26 +1426,11 @@ tests:
           requests:
             cpu: 10m
         volumeMounts:
-        - mountPath: /etc/apici
-          name: apici-ci-operator-credentials
-          readOnly: true
-        - mountPath: /etc/pull-secret
-          name: pull-secret
-          readOnly: true
         - mountPath: /etc/sentry-dsn
           name: sentry-dsn
           readOnly: true
       serviceAccountName: ci-operator
       volumes:
-      - name: apici-ci-operator-credentials
-        secret:
-          items:
-          - key: sa.ci-operator.apici.config
-            path: kubeconfig
-          secretName: apici-ci-operator-credentials
-      - name: pull-secret
-        secret:
-          secretName: regcred
       - name: sentry-dsn
         secret:
           secretName: sentry-dsn
@@ -1730,8 +1482,6 @@ tests:
         - --artifact-dir=$(ARTIFACTS)
         - --branch=branch
         - --give-pr-author-access-to-namespace=true
-        - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
-        - --kubeconfig=/etc/apici/kubeconfig
         - --org=super
         - --promote
         - --repo=duper
@@ -1754,26 +1504,11 @@ tests:
           requests:
             cpu: 10m
         volumeMounts:
-        - mountPath: /etc/apici
-          name: apici-ci-operator-credentials
-          readOnly: true
-        - mountPath: /etc/pull-secret
-          name: pull-secret
-          readOnly: true
         - mountPath: /etc/sentry-dsn
           name: sentry-dsn
           readOnly: true
       serviceAccountName: ci-operator
       volumes:
-      - name: apici-ci-operator-credentials
-        secret:
-          items:
-          - key: sa.ci-operator.apici.config
-            path: kubeconfig
-          secretName: apici-ci-operator-credentials
-      - name: pull-secret
-        secret:
-          secretName: regcred
       - name: sentry-dsn
         secret:
           secretName: sentry-dsn
@@ -1869,8 +1604,6 @@ tests:
         - --artifact-dir=$(ARTIFACTS)
         - --branch=branch
         - --give-pr-author-access-to-namespace=true
-        - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
-        - --kubeconfig=/etc/apici/kubeconfig
         - --org=super
         - --repo=duper
         - --resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org
@@ -1891,26 +1624,11 @@ tests:
           requests:
             cpu: 10m
         volumeMounts:
-        - mountPath: /etc/apici
-          name: apici-ci-operator-credentials
-          readOnly: true
-        - mountPath: /etc/pull-secret
-          name: pull-secret
-          readOnly: true
         - mountPath: /etc/sentry-dsn
           name: sentry-dsn
           readOnly: true
       serviceAccountName: ci-operator
       volumes:
-      - name: apici-ci-operator-credentials
-        secret:
-          items:
-          - key: sa.ci-operator.apici.config
-            path: kubeconfig
-          secretName: apici-ci-operator-credentials
-      - name: pull-secret
-        secret:
-          secretName: regcred
       - name: sentry-dsn
         secret:
           secretName: sentry-dsn
@@ -1934,8 +1652,6 @@ tests:
         - --artifact-dir=$(ARTIFACTS)
         - --branch=branch
         - --give-pr-author-access-to-namespace=true
-        - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
-        - --kubeconfig=/etc/apici/kubeconfig
         - --org=super
         - --repo=duper
         - --resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org
@@ -1956,26 +1672,11 @@ tests:
           requests:
             cpu: 10m
         volumeMounts:
-        - mountPath: /etc/apici
-          name: apici-ci-operator-credentials
-          readOnly: true
-        - mountPath: /etc/pull-secret
-          name: pull-secret
-          readOnly: true
         - mountPath: /etc/sentry-dsn
           name: sentry-dsn
           readOnly: true
       serviceAccountName: ci-operator
       volumes:
-      - name: apici-ci-operator-credentials
-        secret:
-          items:
-          - key: sa.ci-operator.apici.config
-            path: kubeconfig
-          secretName: apici-ci-operator-credentials
-      - name: pull-secret
-        secret:
-          secretName: regcred
       - name: sentry-dsn
         secret:
           secretName: sentry-dsn
@@ -2024,8 +1725,6 @@ tests:
         - --artifact-dir=$(ARTIFACTS)
         - --branch=branch
         - --give-pr-author-access-to-namespace=true
-        - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
-        - --kubeconfig=/etc/apici/kubeconfig
         - --org=super
         - --promote
         - --repo=duper
@@ -2047,26 +1746,11 @@ tests:
           requests:
             cpu: 10m
         volumeMounts:
-        - mountPath: /etc/apici
-          name: apici-ci-operator-credentials
-          readOnly: true
-        - mountPath: /etc/pull-secret
-          name: pull-secret
-          readOnly: true
         - mountPath: /etc/sentry-dsn
           name: sentry-dsn
           readOnly: true
       serviceAccountName: ci-operator
       volumes:
-      - name: apici-ci-operator-credentials
-        secret:
-          items:
-          - key: sa.ci-operator.apici.config
-            path: kubeconfig
-          secretName: apici-ci-operator-credentials
-      - name: pull-secret
-        secret:
-          secretName: regcred
       - name: sentry-dsn
         secret:
           secretName: sentry-dsn

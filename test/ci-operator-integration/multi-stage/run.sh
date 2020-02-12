@@ -21,6 +21,18 @@ export JOB_SPEC='{"type":"presubmit","job":"pull-ci-openshift-release-master-ci-
 # set by Prow
 unset BUILD_ID
 
+check() {
+    if grep "level=error" "${ERR}"; then
+        echo "ERROR: ci-operator stderr contains error level messages"
+        cat "${ERR}"
+        return 1
+    fi
+    if ! diff "${EXPECTED2}" "${OUT}"; then
+        echo "ERROR: differences have been found against ${EXPECTED2}"
+        return 1
+    fi
+}
+
 echo "[INFO] Running ci-operator in dry-mode..."
 if ! ci-operator --dry-run --determinize-output --namespace "${TEST_NAMESPACE}" --config "${TEST_CONFIG}" 2> "${ERR}" | jq --sort-keys . > "${OUT}"; then
     echo "ERROR: ci-operator failed."
@@ -33,7 +45,7 @@ if ! diff "${EXPECTED1}" "${OUT}"; then
     exit 1
 fi
 
-# Run test with ci-operator-configresolver
+echo '[INFO] Running test with ci-operator-configresolver'
 ci-operator-configresolver -config "${TEST_CONFIG_DIR}" -registry "${TEST_REGISTRY_DIR}" -prow-config "${TEST_PROWCONFIG}" -log-level debug -cycle 2m  &> "${WORKDIR}"/output.log &
 # Wait until ready
 for (( i = 0; i < 10; i++ )); do
@@ -62,18 +74,7 @@ if ! ci-operator --dry-run --determinize-output --namespace "${TEST_NAMESPACE}" 
     exit 1
 fi
 
-if grep "level=error" "${ERR}"; then
-    echo "ERROR: ci-operator stderr contains error level messages"
-    cat "${ERR}"
-    kill $(jobs -p)
-    wait $(jobs -p)
-    echo "configresolver output:"
-    cat "${WORKDIR}"/output.log
-    exit 1
-fi
-
-if ! diff "${EXPECTED2}" "${OUT}"; then
-    echo "ERROR: differences have been found against ${EXPECTED2}"
+if ! check; then
     kill $(jobs -p)
     wait $(jobs -p)
     echo "configresolver output:"

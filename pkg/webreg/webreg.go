@@ -77,6 +77,7 @@ td {
 </head>
 <body>
 <div class="container">
+<p>Navigation: <a href="/">Step Registry</a> | <a href="/search">Jobs and Search</a> | <a href="/help">Help</a></p>
 `
 
 const htmlPageEnd = `
@@ -87,46 +88,32 @@ const htmlPageEnd = `
 `
 
 const errPage = `
-<h1><a href="/">Openshift CI Step Registry</a></h1>
 {{ . }}
 `
 
-const mainPage = `<h1>Openshift CI Step Registry</h1>
-<p>Not sure what the step registry is or how to use it? Visit the <a href="/help">help page</a>.</p>
-<form action="/search">
-  <div>
-    Search for job: <input type="search" id="search" name="job" placeholder="Job Name">
-	<button>Search</button>
-  </div>
-</form>
+const mainPage = `<h1>Step Registry</h1>
 {{ template "workflowTable" .Workflows }}
 {{ template "chainTable" .Chains }}
 {{ template "referenceTable" .References}}
-{{ template "jobTable" .Jobs }}
 `
 
-const workflowListPage = `
-<h2><a href="/">Openshift CI Step Registry</a> &gt; Workflows
+const workflowListPage = `<h2>Step Registry &gt; Workflows</h2>
 {{ template "workflowTable" .Workflows }}
 `
 
-const chainListPage = `
-<h2><a href="/">Openshift CI Step Registry</a> &gt; Chains
+const chainListPage = `<h2>Step Registry &gt; Chains</h2>
 {{ template "chainTable" .Chains }}
 `
 
-const referenceListPage = `
-<h2><a href="/">Openshift CI Step Registry</a> &gt; References
+const referenceListPage = `<h2>Step Registry &gt; References</h2>
 {{ template "referenceTable" .References }}
 `
 
-const jobListPage = `
-<h2><a href="/">Openshift CI Step Registry</a> &gt; Jobs
+const jobListPage = `<h2>Jobs</h2>
 {{ template "jobTable" .Jobs }}
 `
 
-const referencePage = `
-<h1><a href="/">Openshift CI Step Registry</a></h1>
+const referencePage = `<h1>Step Registry</h1>
 <h2><a href="/references">References</a> &gt; <nobr>{{ .As }}</nobr></h2>
 <p id="documentation">{{ .Documentation }}</p>
 <h2 id="image">Container image used for this step: <span style="font-family:monospace">{{ .From }}</span></h2>
@@ -134,8 +121,7 @@ const referencePage = `
 {{ syntaxedSource .Commands }}
 `
 
-const chainPage = `
-<h1><a href="/">Openshift CI Step Registry</a></h1>
+const chainPage = `<h1>Step Registry</h1>
 <h2><a href="/chains">Chains</a> &gt; <nobr>{{ .As }}</nobr></h2>
 <p id="documentation">{{ .Documentation }}</p>
 <h2 id="steps" title="Step run by the chain, in runtime order">Steps</h2>
@@ -145,8 +131,7 @@ const chainPage = `
 `
 
 // workflowJobPage defines the template for both jobs and workflows
-const workflowJobPage = `
-<h1><a href="/">Openshift CI Step Registry</a></h1>
+const workflowJobPage = `<h1>Step Registry</h1>
 {{ $type := .Type }}
 {{ if eq $type "Job" }}
 	<h2><a href="/search">Jobs</a> &gt; <nobr>{{ .As }}</nobr></h2>
@@ -167,8 +152,7 @@ const workflowJobPage = `
 {{ workflowGraph .As }}
 `
 
-const jobSearchPage = `
-<h1><a href="/">Openshift CI Step Registry</a></h1>
+const jobSearchPage = `<h1>Jobs and Search</h1>
 <h2>Multistage Test ProwJob Search</h2>
 <form>
   <div>
@@ -334,8 +318,7 @@ const templateDefinitions = `
 {{ end }}
 `
 
-const helpPage = `
-<h1><a href="/">Openshift CI Step Registry</a></h1>
+const helpPage = `<h1>Step Registry Help</h1>
 <h1>What is the Multistage Test and the Test Step Registry?</h1>
 
 <p>
@@ -381,7 +364,7 @@ for the container, and documentation for the reference. Example of a
 reference:
 </p>
 
-{{ yamlSyntax .RefExample }}
+{{ yamlSyntax (index . "refExample") }}
 
 <p>
 Note: the shell script file must follow the <a href="#layout">naming convention</a> described later
@@ -416,7 +399,7 @@ to execute, the chain stops and the following steps are not run. Example of a
 chain:
 </p>
 
-{{ yamlSyntax .ChainExample }}
+{{ yamlSyntax (index . "chainExample") }}
 
 <h2 id="workflow">Workflow:</h2>
 <p>
@@ -435,7 +418,7 @@ steps are skipped and all <code>post</code> steps are run to ensure that
 resources are properly cleaned up. This is an example of a workflow config:
 </p>
 
-{{ yamlSyntax .WorkflowExample }}
+{{ yamlSyntax (index . "workflowExample") }}
 
 <h2 id="config">CI-Operator Test Config:</h2>
 <p>
@@ -449,11 +432,11 @@ of the <code>tests</code> section of a ci-operator config using the
 multistage test design:
 </p>
 
-{{ yamlSyntax .ConfigExample1 }}
+{{ yamlSyntax (index . "configExample1") }}
 
 Example of a ci-operator config that overrides a workflow field.
 
-{{ yamlSyntax .ConfigExample2 }}
+{{ yamlSyntax (index . "configExample2") }}
 
 <p>
 In this example, the ci-operator config simply specifies the desired cluster
@@ -710,10 +693,10 @@ func writePage(w http.ResponseWriter, title string, body *template.Template, dat
 	fmt.Fprintln(w, htmlPageEnd)
 }
 
-func helpHandler(w http.ResponseWriter, req *http.Request) {
+func helpHandler(subPath string, w http.ResponseWriter, req *http.Request) {
 	start := time.Now()
 	defer func() { logrus.Infof("rendered in %s", time.Now().Sub(start)) }()
-	help, err := template.New("helpPage").Funcs(
+	helpFuncs := template.New("helpPage").Funcs(
 		template.FuncMap{
 			"yamlSyntax": func(source string) template.HTML {
 				formatted, err := syntaxYAML(source)
@@ -723,26 +706,35 @@ func helpHandler(w http.ResponseWriter, req *http.Request) {
 				}
 				return template.HTML(formatted)
 			},
+			"bashSyntax": func(source string) template.HTML {
+				formatted, err := syntaxBash(source)
+				if err != nil {
+					logrus.Errorf("Failed to format source file: %v", err)
+					return template.HTML(source)
+				}
+				return template.HTML(formatted)
+			},
 		},
-	).Parse(helpPage)
+	)
+	var helpTemplate *template.Template
+	var err error
+	data := make(map[string]string)
+	switch subPath {
+	case "":
+		helpTemplate, err = helpFuncs.Parse(helpPage)
+		data["refExample"] = refExample
+		data["chainExample"] = chainExample
+		data["workflowExample"] = workflowExample
+		data["configExample1"] = configExample1
+		data["configExample2"] = configExample2
+	default:
+		writeErrorPage(w, errors.New("Invalid path"), http.StatusNotImplemented)
+	}
 	if err != nil {
 		writeErrorPage(w, err, http.StatusInternalServerError)
 		return
 	}
-	data := struct {
-		RefExample      string
-		ChainExample    string
-		WorkflowExample string
-		ConfigExample1  string
-		ConfigExample2  string
-	}{
-		RefExample:      refExample,
-		ChainExample:    chainExample,
-		WorkflowExample: workflowExample,
-		ConfigExample1:  configExample1,
-		ConfigExample2:  configExample2,
-	}
-	writePage(w, "Step Registry Help Page", help, data)
+	writePage(w, "Step Registry Help Page", helpTemplate, data)
 }
 
 func mainPageHandler(agent load.RegistryAgent, templateString string, jobList *Jobs, w http.ResponseWriter, req *http.Request) {
@@ -779,7 +771,10 @@ func WebRegHandler(regAgent load.RegistryAgent, confAgent load.ConfigAgent, jobA
 		// remove trailing slash
 		trimmedPath = strings.TrimSuffix(trimmedPath, "/")
 		splitURI := strings.Split(trimmedPath, "/")
-		if len(splitURI) == 1 {
+		if len(splitURI) >= 1 && splitURI[0] == "help" {
+			helpHandler(strings.TrimPrefix(trimmedPath, "help"), w, req)
+			return
+		} else if len(splitURI) == 1 {
 			switch splitURI[0] {
 			case "":
 				jobs := getAllMultiStageTests(confAgent, jobAgent)
@@ -795,14 +790,11 @@ func WebRegHandler(regAgent load.RegistryAgent, confAgent load.ConfigAgent, jobA
 				mainPageHandler(regAgent, workflowListPage, nil, w, req)
 			case "search":
 				searchHandler(confAgent, jobAgent, w, req)
-			case "help":
-				helpHandler(w, req)
 			default:
 				writeErrorPage(w, errors.New("Invalid path"), http.StatusNotImplemented)
 			}
 			return
-		}
-		if len(splitURI) == 2 {
+		} else if len(splitURI) == 2 {
 			if splitURI[0] == "registry" {
 				refs, chains, workflows, _ := regAgent.GetRegistryComponents()
 				if _, ok := refs[splitURI[1]]; ok {

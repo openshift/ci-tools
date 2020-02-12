@@ -19,6 +19,8 @@ periodics:
       - --artifact-dir=$(ARTIFACTS)
       - --branch=master
       - --give-pr-author-access-to-namespace=true
+      - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
+      - --kubeconfig=/etc/apici/kubeconfig
       - --oauth-token-path=/usr/local/github-credentials/oauth
       - --org=private
       - --repo=duper
@@ -50,6 +52,9 @@ periodics:
         requests:
           cpu: 10m
       volumeMounts:
+      - mountPath: /etc/apici
+        name: apici-ci-operator-credentials
+        readOnly: true
       - mountPath: /usr/local/e2e-nightly-cluster-profile
         name: cluster-profile
       - mountPath: /usr/local/github-credentials
@@ -58,11 +63,20 @@ periodics:
       - mountPath: /usr/local/e2e-nightly
         name: job-definition
         subPath: cluster-launch-e2e.yaml
+      - mountPath: /etc/pull-secret
+        name: pull-secret
+        readOnly: true
       - mountPath: /etc/sentry-dsn
         name: sentry-dsn
         readOnly: true
     serviceAccountName: ci-operator
     volumes:
+    - name: apici-ci-operator-credentials
+      secret:
+        items:
+        - key: sa.ci-operator.apici.config
+          path: kubeconfig
+        secretName: apici-ci-operator-credentials
     - name: cluster-profile
       projected:
         sources:
@@ -76,6 +90,9 @@ periodics:
     - configMap:
         name: prow-job-cluster-launch-e2e
       name: job-definition
+    - name: pull-secret
+      secret:
+        secretName: regcred
     - name: sentry-dsn
       secret:
         secretName: sentry-dsn

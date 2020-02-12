@@ -23,6 +23,7 @@ func Run(ctx context.Context, graph []*api.StepNode, dry bool) (*junit.TestSuite
 	results := make(chan message)
 	done := make(chan bool)
 	ctxDone := ctx.Done()
+	var interrupted bool
 	wg := &sync.WaitGroup{}
 	wg.Add(len(graph))
 	go func() {
@@ -46,8 +47,8 @@ func Run(ctx context.Context, graph []*api.StepNode, dry bool) (*junit.TestSuite
 		select {
 		case <-ctxDone:
 			errors = append(errors, fmt.Errorf("execution cancelled"))
-			suite.Duration = time.Now().Sub(start).Seconds()
-			return suites, aggregateError(errors)
+			interrupted = true
+			ctxDone = nil
 		case out := <-results:
 			testCase := &junit.TestCase{Name: out.node.Step.Description(), Duration: out.duration.Seconds()}
 			if out.err != nil {
@@ -58,15 +59,17 @@ func Run(ctx context.Context, graph []*api.StepNode, dry bool) (*junit.TestSuite
 					testCase.SkipMessage = &junit.SkipMessage{Message: "Dry run"}
 				}
 				seen = append(seen, out.node.Step.Creates()...)
-				for _, child := range out.node.Children {
-					// we can trigger a child if all of it's pre-requisites
-					// have been completed and if it has not yet been triggered.
-					// We can ignore the child if it does not have prerequisites
-					// finished as we know that we will process it here again
-					// when the last of its parents finishes.
-					if api.HasAllLinks(child.Step.Requires(), seen) {
-						wg.Add(1)
-						go runStep(ctx, child, results, dry)
+				if !interrupted {
+					for _, child := range out.node.Children {
+						// we can trigger a child if all of it's pre-requisites
+						// have been completed and if it has not yet been triggered.
+						// We can ignore the child if it does not have prerequisites
+						// finished as we know that we will process it here again
+						// when the last of its parents finishes.
+						if api.HasAllLinks(child.Step.Requires(), seen) {
+							wg.Add(1)
+							go runStep(ctx, child, results, dry)
+						}
 					}
 				}
 			}

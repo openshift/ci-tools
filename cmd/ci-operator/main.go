@@ -532,13 +532,8 @@ func (o *options) Run() error {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	handler := func(s os.Signal) {
-		if o.dry {
-			os.Exit(0)
-		}
-		log.Printf("error: Process interrupted with signal %s, exiting in 10s ...", s)
+		log.Printf("error: Process interrupted with signal %s, cancelling execution...", s)
 		cancel()
-		time.Sleep(10 * time.Second)
-		os.Exit(1)
 	}
 
 	return interrupt.New(handler, o.saveNamespaceArtifacts).Run(func() error {

@@ -8,9 +8,11 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/openshift/ci-tools/pkg/api"
-
 	"github.com/openshift/ci-tools/pkg/config"
-	"github.com/openshift/ci-tools/pkg/migrate"
+)
+
+const (
+	prowClusterURL = "https://api.ci.openshift.org"
 )
 
 type options struct {
@@ -54,11 +56,6 @@ func main() {
 }
 
 func generateMigratedConfigs(input config.DataWithInfo) []config.DataWithInfo {
-
-	if !migrate.Migrated(input.Info.Org, input.Info.Repo, input.Info.Branch) {
-		logrus.Debugf("%s/%s is not migrated", input.Info.Org, input.Info.Repo)
-		return nil
-	}
 	logrus.Infof("%s/%s is migrated", input.Info.Org, input.Info.Repo)
 
 	var output []config.DataWithInfo
@@ -77,18 +74,18 @@ func generateMigratedConfigs(input config.DataWithInfo) []config.DataWithInfo {
 			newBaseImages = map[string]api.ImageStreamTagReference{}
 		}
 		if baseImage.Cluster == "" {
-			baseImage.Cluster = migrate.ProwClusterURL
+			baseImage.Cluster = prowClusterURL
 		}
 		newBaseImages[k] = baseImage
 	}
 	futureConfig.BaseImages = newBaseImages
 
 	if futureConfig.ReleaseTagConfiguration != nil && futureConfig.ReleaseTagConfiguration.Cluster == "" {
-		futureConfig.ReleaseTagConfiguration.Cluster = migrate.ProwClusterURL
+		futureConfig.ReleaseTagConfiguration.Cluster = prowClusterURL
 	}
 
 	if futureConfig.BuildRootImage != nil && futureConfig.BuildRootImage.ImageStreamTagReference != nil && futureConfig.BuildRootImage.ImageStreamTagReference.Cluster == "" {
-		futureConfig.BuildRootImage.ImageStreamTagReference.Cluster = migrate.ProwClusterURL
+		futureConfig.BuildRootImage.ImageStreamTagReference.Cluster = prowClusterURL
 	}
 
 	// this config will promote to the new location on the release branch

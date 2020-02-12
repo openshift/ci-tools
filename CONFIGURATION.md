@@ -388,6 +388,7 @@ field is only valid in tests that provision a cluster (`openshift_ansible`,
 - `gcp-ha`
 - `gcp-crio`
 - `ovirt`
+- `packet`
 - `vsphere`
 
 These are a subset of the profiles found in the

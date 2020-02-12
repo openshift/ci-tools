@@ -100,6 +100,9 @@ func (a *configAgent) loadFilenameToConfig() error {
 	startTime := time.Now()
 	configs := FilenameToConfig{}
 	err := filepath.Walk(a.configPath, func(path string, info os.FileInfo, err error) error {
+		if info == nil || err != nil {
+			return err
+		}
 		if strings.HasPrefix(info.Name(), "..") {
 			if info.IsDir() {
 				return filepath.SkipDir

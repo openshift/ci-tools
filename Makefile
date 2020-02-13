@@ -1,5 +1,7 @@
 SHELL=/usr/bin/env bash -o pipefail
 
+export GOPROXY=https://proxy.golang.org,direct
+
 all: lint test build
 .PHONY: all
 
@@ -17,10 +19,9 @@ test:
 
 validate-vendor:
 	go version
-	GO111MODULE=on GOPROXY=https://proxy.golang.org go mod tidy
-	GO111MODULE=on GOPROXY=https://proxy.golang.org go mod vendor
-	git status -s ./vendor/ go.mod go.sum
-	test -z "$$(git status -s ./vendor/ go.mod go.sum | grep -v vendor/modules.txt)"
+	go mod tidy
+	git status -s go.mod go.sum
+	test -z "$$(git status -s go.mod go.sum)"
 .PHONY: validate-vendor
 
 lint:

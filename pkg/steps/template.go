@@ -170,7 +170,7 @@ func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
 	for _, ref := range instance.Status.Objects {
 		switch {
 		case ref.Ref.Kind == "Pod" && ref.Ref.APIVersion == "v1":
-			err := waitForPodCompletion(s.podClient.Pods(s.jobSpec.Namespace), ref.Ref.Name, testCaseNotifier, false)
+			err := waitForPodCompletion(context.TODO(), s.podClient.Pods(s.jobSpec.Namespace), ref.Ref.Name, testCaseNotifier, false)
 			s.subTests = append(s.subTests, testCaseNotifier.SubTests(fmt.Sprintf("%s - %s ", s.Description(), ref.Ref.Name))...)
 			if err != nil {
 				return fmt.Errorf("template pod %q failed: %v", ref.Ref.Name, err)
@@ -511,22 +511,25 @@ func waitForCompletedPodDeletion(podClient coreclientset.PodInterface, name stri
 	return waitForPodDeletion(podClient, name, uid)
 }
 
-func waitForPodCompletion(podClient coreclientset.PodInterface, name string, notifier ContainerNotifier, skipLogs bool) error {
+func waitForPodCompletion(ctx context.Context, podClient coreclientset.PodInterface, name string, notifier ContainerNotifier, skipLogs bool) error {
 	if notifier == nil {
 		notifier = NopNotifier
 	}
-	done := notifier.Done(name)
+	ctxDone := ctx.Done()
+	notifierDone := notifier.Done(name)
 	completed := make(map[string]time.Time)
 	for {
-		retry, err := waitForPodCompletionOrTimeout(podClient, name, completed, notifier, skipLogs)
+		retry, err := waitForPodCompletionOrTimeout(ctx, podClient, name, completed, notifier, skipLogs)
 		// continue waiting if the container notifier is not yet complete for the given pod
 		select {
-		case <-done:
+		case <-notifierDone:
+		case <-ctxDone:
 		default:
 			skipLogs = true
 			if !retry || err == nil {
 				select {
-				case <-done:
+				case <-notifierDone:
+				case <-ctxDone:
 				case <-time.After(5 * time.Second):
 				}
 			}
@@ -542,7 +545,7 @@ func waitForPodCompletion(podClient coreclientset.PodInterface, name string, not
 	return nil
 }
 
-func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name string, completed map[string]time.Time, notifier ContainerNotifier, skipLogs bool) (bool, error) {
+func waitForPodCompletionOrTimeout(ctx context.Context, podClient coreclientset.PodInterface, name string, completed map[string]time.Time, notifier ContainerNotifier, skipLogs bool) (bool, error) {
 	watcher, err := podClient.Watch(meta.ListOptions{
 		FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String(),
 		Watch:         true,
@@ -576,9 +579,15 @@ func waitForPodCompletionOrTimeout(podClient coreclientset.PodInterface, name st
 	if podJobIsFailed(pod) {
 		return false, appendLogToError(fmt.Errorf("the pod %s/%s failed after %s (failed containers: %s): %s", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", "), podReason(pod)), podMessages(pod))
 	}
-
+	done := ctx.Done()
 	for {
-		event, ok := <-watcher.ResultChan()
+		var event watch.Event
+		var ok bool
+		select {
+		case <-done:
+			return false, ctx.Err()
+		case event, ok = <-watcher.ResultChan():
+		}
 		if !ok {
 			// restart
 			return true, nil

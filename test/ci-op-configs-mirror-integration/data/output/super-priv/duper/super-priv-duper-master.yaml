@@ -16,8 +16,8 @@ images:
   to: test-image
 promotion:
   disabled: true
-  name: other-private
-  namespace: ocp
+  name: other-priv
+  namespace: ocp-private
 resources:
   '*':
     limits:

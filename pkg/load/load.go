@@ -26,7 +26,7 @@ type ResolverInfo struct {
 	Variant string
 }
 
-func Config(path string, info *ResolverInfo) (*api.ReleaseBuildConfiguration, error) {
+func Config(path, registryPath string, info *ResolverInfo) (*api.ReleaseBuildConfiguration, error) {
 	// Load the standard configuration from the configresolver, path, or env
 	var raw string
 	if info != nil {
@@ -44,11 +44,21 @@ func Config(path string, info *ResolverInfo) (*api.ReleaseBuildConfiguration, er
 			return nil, fmt.Errorf("CONFIG_SPEC environment variable is not set or empty and no config file was set")
 		}
 	}
-	configSpec := &api.ReleaseBuildConfiguration{}
-	if err := yaml.Unmarshal([]byte(raw), configSpec); err != nil {
+	configSpec := api.ReleaseBuildConfiguration{}
+	if err := yaml.Unmarshal([]byte(raw), &configSpec); err != nil {
 		return nil, fmt.Errorf("invalid configuration: %v\nvalue:\n%s", err, raw)
 	}
-	return configSpec, nil
+	if registryPath != "" {
+		refs, chains, workflows, _, err := Registry(registryPath, false)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load registry: %v", err)
+		}
+		configSpec, err = registry.ResolveConfig(registry.NewResolver(refs, chains, workflows), configSpec)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve configuration: %v", err)
+		}
+	}
+	return &configSpec, nil
 }
 
 func configFromResolver(info *ResolverInfo) (*api.ReleaseBuildConfiguration, error) {

@@ -233,6 +233,7 @@ type options struct {
 	sentryDSNPath string
 
 	resolverAddress string
+	registryPath    string
 	org             string
 	repo            string
 	branch          string
@@ -264,6 +265,7 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.StringVar(&opt.leaseServer, "lease-server", "", "Address of the server that manages leases. Required if any test is configured to acquire a lease.")
 	flag.StringVar(&opt.leaseServerUsername, "lease-server-username", "", "Username used to access the lease server")
 	flag.StringVar(&opt.leaseServerPasswordFile, "lease-server-password-file", "", "The path to password file used to access the lease server")
+	flag.StringVar(&opt.registryPath, "registry", "", "Path to the step registry directory")
 	flag.StringVar(&opt.configSpecPath, "config", "", "The configuration file. If not specified the CONFIG_SPEC environment variable will be used.")
 	flag.Var(&opt.targets, "target", "One or more targets in the configuration to build. Only steps that are required for this target will be run.")
 	flag.BoolVar(&opt.dry, "dry-run", opt.dry, "Print the steps that would be run and the objects that would be created without executing any steps")
@@ -327,7 +329,7 @@ func (o *options) Complete() error {
 			Variant: o.variant,
 		}
 	}
-	config, err := load.Config(o.configSpecPath, info)
+	config, err := load.Config(o.configSpecPath, o.registryPath, info)
 	if err != nil {
 		return fmt.Errorf("failed to load configuration: %v", err)
 	}

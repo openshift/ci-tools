@@ -339,6 +339,8 @@ func generatePodSpecOthers(info *prowgenInfo, release string, test *cioperatorap
 		targetCloud = "openstack-ppc64le"
 	case cioperatorapi.ClusterProfileOvirt:
 		targetCloud = "ovirt"
+	case cioperatorapi.ClusterProfilePacket:
+		targetCloud = "packet"
 	case cioperatorapi.ClusterProfileVSphere:
 		targetCloud = "vsphere"
 	}

@@ -40,9 +40,6 @@ tests:
   commands: make e2e
   openshift_ansible:
     cluster_profile: gcp
-- as: e2e-random
-  commands: make e2e
-  openshift_installer_random: {}
 - as: e2e-nightly
   commands: make e2e
   openshift_ansible:

@@ -192,7 +192,7 @@ func filterPresubmits(changedPresubmits map[string][]prowconfig.Presubmit, logge
 	return presubmits
 }
 
-func filterPeriodics(changedPeriodics []prowconfig.Periodic, logger logrus.FieldLogger) []prowconfig.Periodic {
+func filterPeriodics(changedPeriodics config.Periodics, logger logrus.FieldLogger) []prowconfig.Periodic {
 	var periodics []prowconfig.Periodic
 	for _, periodic := range changedPeriodics {
 		jobLogger := logger.WithField("job", periodic.Name)
@@ -294,7 +294,7 @@ func fillTemplateMap(templates []config.ConfigMapSource) map[string]string {
 }
 
 // ConfigurePeriodicRehearsals adds the required configuration for the periodics to be rehearsed.
-func (jc *JobConfigurer) ConfigurePeriodicRehearsals(periodics []prowconfig.Periodic) []prowconfig.Periodic {
+func (jc *JobConfigurer) ConfigurePeriodicRehearsals(periodics config.Periodics) []prowconfig.Periodic {
 	var rehearsals []prowconfig.Periodic
 
 	filteredPeriodics := filterPeriodics(periodics, jc.loggers.Job)

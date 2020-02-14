@@ -806,14 +806,14 @@ func TestGetChangedPeriodics(t *testing.T) {
 	testCases := []struct {
 		name            string
 		configGenerator func(*testing.T) (before, after *prowconfig.Config)
-		expected        []prowconfig.Periodic
+		expected        config.Periodics
 	}{
 		{
 			name: "no differences mean nothing is identified as a diff",
 			configGenerator: func(t *testing.T) (*prowconfig.Config, *prowconfig.Config) {
 				return makeConfigWithPeriodics(basePeriodic), makeConfigWithPeriodics(basePeriodic)
 			},
-			expected: nil,
+			expected: config.Periodics{},
 		},
 		{
 			name: "new job added",
@@ -831,7 +831,7 @@ func TestGetChangedPeriodics(t *testing.T) {
 				return makeConfigWithPeriodics(basePeriodic), makeConfigWithPeriodics(p)
 
 			},
-			expected: func() []prowconfig.Periodic {
+			expected: func() config.Periodics {
 				var p []prowconfig.Periodic
 				var pNew prowconfig.Periodic
 				if err := deepcopy.Copy(&p, basePeriodic); err != nil {
@@ -840,7 +840,7 @@ func TestGetChangedPeriodics(t *testing.T) {
 				pNew = p[0]
 				pNew.Name = "test-base-periodic-new"
 
-				return append([]prowconfig.Periodic{}, pNew)
+				return config.Periodics{pNew.Name: pNew}
 			}(),
 		},
 		{
@@ -854,13 +854,13 @@ func TestGetChangedPeriodics(t *testing.T) {
 				return makeConfigWithPeriodics(basePeriodic), makeConfigWithPeriodics(p)
 
 			},
-			expected: func() []prowconfig.Periodic {
+			expected: func() config.Periodics {
 				var p []prowconfig.Periodic
 				if err := deepcopy.Copy(&p, basePeriodic); err != nil {
 					t.Fatal(err)
 				}
 				p[0].Spec.Containers[0].Command = []string{"test-command"}
-				return p
+				return config.Periodics{p[0].Name: p[0]}
 			}(),
 		},
 		{
@@ -880,7 +880,7 @@ func TestGetChangedPeriodics(t *testing.T) {
 				}
 				return makeConfigWithPeriodics(basePeriodic), makeConfigWithPeriodics(p)
 			},
-			expected: func() []prowconfig.Periodic {
+			expected: func() config.Periodics {
 				var p []prowconfig.Periodic
 				if err := deepcopy.Copy(&p, basePeriodic); err != nil {
 					t.Fatal(err)
@@ -893,7 +893,7 @@ func TestGetChangedPeriodics(t *testing.T) {
 						EmptyDir: &v1.EmptyDirVolumeSource{},
 					}},
 				}
-				return p
+				return config.Periodics{p[0].Name: p[0]}
 			}(),
 		},
 	}
@@ -914,5 +914,71 @@ func makeConfigWithPeriodics(p []prowconfig.Periodic) *prowconfig.Config {
 		JobConfig: prowconfig.JobConfig{
 			Periodics: p,
 		},
+	}
+}
+
+func TestGetChangedClusterJobs(t *testing.T) {
+	baseConfig := prowconfig.Config{
+		JobConfig: prowconfig.JobConfig{
+			PresubmitsStatic: map[string][]prowconfig.Presubmit{
+				"org/repo": {{JobBase: prowconfig.JobBase{Name: "test-base-presubmit", Cluster: "base"}}},
+			},
+			Periodics: []prowconfig.Periodic{{JobBase: prowconfig.JobBase{Name: "test-base-periodic", Cluster: "base"}}},
+		},
+	}
+
+	var testCases = []struct {
+		name               string
+		configGenerator    func(*testing.T) (before, after *prowconfig.Config)
+		expectedPeriodics  config.Periodics
+		expectedPresubmits config.Presubmits
+	}{
+		{
+			name: "no cluster changes, nothing to rehearse",
+			configGenerator: func(t *testing.T) (before, after *prowconfig.Config) {
+				var a, b prowconfig.Config
+				if err := deepcopy.Copy(&a, baseConfig); err != nil {
+					t.Fatal(err)
+				}
+				if err := deepcopy.Copy(&b, baseConfig); err != nil {
+					t.Fatal(err)
+				}
+				return &a, &b
+			},
+			expectedPresubmits: config.Presubmits{},
+			expectedPeriodics:  config.Periodics{},
+		},
+		{
+			name: "all cluster changes, many to rehearse",
+			configGenerator: func(t *testing.T) (before, after *prowconfig.Config) {
+				var a, b prowconfig.Config
+				if err := deepcopy.Copy(&a, baseConfig); err != nil {
+					t.Fatal(err)
+				}
+				if err := deepcopy.Copy(&b, baseConfig); err != nil {
+					t.Fatal(err)
+				}
+				b.PresubmitsStatic["org/repo"][0].Cluster = "new"
+				b.Periodics[0].Cluster = "new"
+				return &a, &b
+			},
+			expectedPresubmits: config.Presubmits{
+				"org/repo": {{JobBase: prowconfig.JobBase{Name: "test-base-presubmit", Cluster: "new"}}},
+			},
+			expectedPeriodics: config.Periodics{"test-base-periodic": {JobBase: prowconfig.JobBase{Name: "test-base-periodic", Cluster: "new"}}},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			before, after := testCase.configGenerator(t)
+			presubmits, periodics := GetChangedClusterJobs(before, after, logrus.NewEntry(logrus.New()))
+			if !reflect.DeepEqual(testCase.expectedPresubmits, presubmits) {
+				t.Errorf("%s:\nexpected\n%#v\nfound:%#v\n", testCase.name, testCase.expectedPresubmits, presubmits)
+			}
+			if !reflect.DeepEqual(testCase.expectedPeriodics, periodics) {
+				t.Errorf("%s:\nexpected\n%#v\nfound:%#v\n", testCase.name, testCase.expectedPeriodics, periodics)
+			}
+		})
 	}
 }

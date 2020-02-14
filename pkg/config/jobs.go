@@ -8,7 +8,7 @@ type Presubmits map[string][]prowconfig.Presubmit
 
 // AddAll adds all jobs from a different instance.
 // The method assumes two jobs with a matching name for the same repository
-// are identical, so so if a presubmit with a given name already exists, it
+// are identical, so if a presubmit with a given name already exists, it
 // is kept as is.
 func (p Presubmits) AddAll(jobs Presubmits) {
 	for repo := range jobs {
@@ -33,4 +33,24 @@ func (p Presubmits) Add(repo string, job prowconfig.Presubmit) {
 	}
 
 	p[repo] = append(p[repo], job)
+}
+
+type Periodics map[string]prowconfig.Periodic
+
+// AddAll adds all jobs from a different instance.
+// The method assumes two jobs with a matching name are identical,
+// so if a periodic with a given name already exists, it
+// is overriden.
+func (p Periodics) AddAll(jobs Periodics) {
+	for name, periodic := range jobs {
+		p[name] = periodic
+	}
+}
+
+// Add adds a job from a different instance.
+// The method assumes two jobs with a matching name are identical,
+// so if a periodic with a given name already exists, it
+// is overriden.
+func (p Periodics) Add(job prowconfig.Periodic) {
+	p[job.Name] = job
 }

@@ -6,38 +6,46 @@ set -o pipefail
 
 workdir="$(mktemp -d)"
 trap 'rm -rf "${workdir}"' EXIT
+clonedir="${workdir}/release"
+failure=0
 
-git clone https://github.com/openshift/release.git --depth 1 "${workdir}/release"
+for org in openshift redhat-operator-ecosystem; do
+  rm -rf "${clonedir}"
+  git clone "https://github.com/${org}/release.git" --depth 1 "${clonedir}"
 
-# We need to enter the git directory and run git commands from there, our git
-# is too old to know the `-C` option.
-pushd "${workdir}/release"
+  # We need to enter the git directory and run git commands from there, our git
+  # is too old to know the `-C` option.
+  pushd "${clonedir}"
 
-ci-operator-prowgen --from-dir "${workdir}/release/ci-operator/config" --to-dir "${workdir}/release/ci-operator/jobs"
+  ci-operator-prowgen --from-dir "${clonedir}/ci-operator/config" --to-dir "${clonedir}/ci-operator/jobs"
+  out="$(git status --porcelain)"
+  if [[ -n "$out" ]]; then
+    echo "ERROR: Changes in $org/release:"
+    git diff
+    echo "ERROR: Running Prowgen in $org/release results in changes ^^^"
+    echo "ERROR: To avoid breaking $org/release for everyone you should regenerate"
+    echo "ERROR: the jobs there and merge the changes ASAP after this change to Prowgen"
+    failure=1
+  else
+    echo "Running Prowgen in $org/release does not result in changes, no followups needed"
+  fi
 
-out="$(git status --porcelain)"
-if [[ -n "$out" ]]; then
-  echo "ERROR: Changes in openshift/release:"
-  git diff
-  echo "ERROR: Running Prowgen in openshift/release results in changes ^^^"
-  echo "ERROR: To avoid breaking openshift/release for everyone you should regenerate"
-  echo "ERROR: the jobs there and merge the changes ASAP after this change to Prowgen"
-  exit 1
-else
-  echo "Running Prowgen in openshift/release does not result in changes, no followups needed"
-fi
+  if [[ -d "${clonedir}/core-services/prow/02_config" ]]; then
+    determinize-prow-config --prow-config-dir "${clonedir}/core-services/prow/02_config"
+    out="$(git status --porcelain)"
+    if [[ -n "$out" ]]; then
+      echo "ERROR: Changes in $org/release:"
+      git diff
+      echo "ERROR: Running determinize-prow-config in $org/release results in changes ^^^"
+      echo "ERROR: To avoid breaking $org/release for everyone you should make a PR there"
+      echo "ERROR: to include these changes and merge it ASAP after this change to ci-tools"
+      failure=1
+    else
+      echo "Running determinize-prow-config in $org/release does not result in changes, no followups needed"
+    fi
+  fi
 
-determinize-prow-config --prow-config-dir "${workdir}/release/core-services/prow/02_config"
-out="$(git status --porcelain)"
-if [[ -n "$out" ]]; then
-  echo "ERROR: Changes in openshift/release:"
-  git diff
-  echo "ERROR: Running determinize-prow-config in openshift/release results in changes ^^^"
-  echo "ERROR: To avoid breaking openshift/release for everyone you should make a PR there"
-  echo "ERROR: to include these changes and merge it ASAP after this change to ci-tools"
-  exit 1
-else
-  echo "Running determinize-prow-config in openshift/release does not result in changes, no followups needed"
-fi
+  popd
+done
 
-popd
+exit $failure

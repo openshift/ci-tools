@@ -654,11 +654,6 @@
         env:
         - name: CLUSTER_TYPE
           value: gcp
-        - name: CONFIG_SPEC
-          valueFrom:
-            configMapKeyRef:
-              key: super-duper-test-profile.yaml
-              name: ci-operator-configs
         - name: JOB_NAME_SAFE
           value: test-profile
         - name: TEST_COMMAND

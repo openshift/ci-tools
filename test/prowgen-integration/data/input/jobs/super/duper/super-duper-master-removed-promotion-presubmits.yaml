@@ -22,12 +22,6 @@ presubmits:
         - --target=[release:latest] # This option should be removed in the output, because promotion stanza is no longer present
         command:
         - ci-operator
-        env:
-        - name: CONFIG_SPEC
-          valueFrom:
-            configMapKeyRef:
-              key: super-duper-master-removed-promotion.yaml
-              name: ci-operator-misc-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""

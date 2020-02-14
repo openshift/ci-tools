@@ -21,12 +21,6 @@ postsubmits:
         - --target=[images]
         command:
         - ci-operator
-        env:
-        - name: CONFIG_SPEC
-          valueFrom:
-            configMapKeyRef:
-              key: super-duper-master-removed-promotion.yaml
-              name: ci-operator-misc-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""

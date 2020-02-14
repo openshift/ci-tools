@@ -62,17 +62,6 @@ func TestGeneratePodSpec(t *testing.T) {
 					Resources: kubeapi.ResourceRequirements{
 						Requests: kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
 					},
-					Env: []kubeapi.EnvVar{{
-						Name: "CONFIG_SPEC",
-						ValueFrom: &kubeapi.EnvVarSource{
-							ConfigMapKeyRef: &kubeapi.ConfigMapKeySelector{
-								LocalObjectReference: kubeapi.LocalObjectReference{
-									Name: "ci-operator-misc-configs",
-								},
-								Key: "org-repo-branch.yaml",
-							},
-						},
-					}},
 					VolumeMounts: []kubeapi.VolumeMount{{Name: "sentry-dsn", MountPath: "/etc/sentry-dsn", ReadOnly: true},
 						{Name: "apici-ci-operator-credentials", ReadOnly: true, MountPath: "/etc/apici"},
 						{Name: "pull-secret", ReadOnly: true, MountPath: "/etc/pull-secret"}},
@@ -128,17 +117,6 @@ func TestGeneratePodSpec(t *testing.T) {
 					Resources: kubeapi.ResourceRequirements{
 						Requests: kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
 					},
-					Env: []kubeapi.EnvVar{{
-						Name: "CONFIG_SPEC",
-						ValueFrom: &kubeapi.EnvVarSource{
-							ConfigMapKeyRef: &kubeapi.ConfigMapKeySelector{
-								LocalObjectReference: kubeapi.LocalObjectReference{
-									Name: "ci-operator-misc-configs",
-								},
-								Key: "org-repo-branch.yaml",
-							},
-						},
-					}},
 					VolumeMounts: []kubeapi.VolumeMount{{Name: "sentry-dsn", MountPath: "/etc/sentry-dsn", ReadOnly: true},
 						{Name: "apici-ci-operator-credentials", ReadOnly: true, MountPath: "/etc/apici"},
 						{Name: "pull-secret", ReadOnly: true, MountPath: "/etc/pull-secret"}},
@@ -194,17 +172,6 @@ func TestGeneratePodSpec(t *testing.T) {
 					Resources: kubeapi.ResourceRequirements{
 						Requests: kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
 					},
-					Env: []kubeapi.EnvVar{{
-						Name: "CONFIG_SPEC",
-						ValueFrom: &kubeapi.EnvVarSource{
-							ConfigMapKeyRef: &kubeapi.ConfigMapKeySelector{
-								LocalObjectReference: kubeapi.LocalObjectReference{
-									Name: "ci-operator-misc-configs",
-								},
-								Key: "org-repo-branch.yaml",
-							},
-						},
-					}},
 					VolumeMounts: []kubeapi.VolumeMount{
 						{Name: "sentry-dsn", MountPath: "/etc/sentry-dsn", ReadOnly: true},
 						{Name: "apici-ci-operator-credentials", ReadOnly: true, MountPath: "/etc/apici"},
@@ -269,17 +236,6 @@ func TestGeneratePodSpec(t *testing.T) {
 					Resources: kubeapi.ResourceRequirements{
 						Requests: kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
 					},
-					Env: []kubeapi.EnvVar{{
-						Name: "CONFIG_SPEC",
-						ValueFrom: &kubeapi.EnvVarSource{
-							ConfigMapKeyRef: &kubeapi.ConfigMapKeySelector{
-								LocalObjectReference: kubeapi.LocalObjectReference{
-									Name: "ci-operator-misc-configs",
-								},
-								Key: "org-repo-branch.yaml",
-							},
-						},
-					}},
 					VolumeMounts: []kubeapi.VolumeMount{{Name: "sentry-dsn", MountPath: "/etc/sentry-dsn", ReadOnly: true},
 						{Name: "apici-ci-operator-credentials", ReadOnly: true, MountPath: "/etc/apici"},
 						{Name: "pull-secret", ReadOnly: true, MountPath: "/etc/pull-secret"}},
@@ -335,17 +291,6 @@ func TestGeneratePodSpec(t *testing.T) {
 						Resources: kubeapi.ResourceRequirements{
 							Requests: kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
 						},
-						Env: []kubeapi.EnvVar{{
-							Name: "CONFIG_SPEC",
-							ValueFrom: &kubeapi.EnvVarSource{
-								ConfigMapKeyRef: &kubeapi.ConfigMapKeySelector{
-									LocalObjectReference: kubeapi.LocalObjectReference{
-										Name: "ci-operator-misc-configs",
-									},
-									Key: "org-repo-branch.yaml",
-								},
-							},
-						}},
 						VolumeMounts: []kubeapi.VolumeMount{
 							{
 								Name: "sentry-dsn", MountPath: "/etc/sentry-dsn", ReadOnly: true,
@@ -496,17 +441,6 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						Requests: kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
 					},
 					Env: []kubeapi.EnvVar{
-						{
-							Name: "CONFIG_SPEC",
-							ValueFrom: &kubeapi.EnvVarSource{
-								ConfigMapKeyRef: &kubeapi.ConfigMapKeySelector{
-									LocalObjectReference: kubeapi.LocalObjectReference{
-										Name: "ci-operator-misc-configs",
-									},
-									Key: "organization-repo-branch.yaml",
-								},
-							},
-						},
 						{Name: "CLUSTER_TYPE", Value: "gcp"},
 						{Name: "JOB_NAME_SAFE", Value: "test"},
 						{Name: "TEST_COMMAND", Value: "commands"},
@@ -612,17 +546,6 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						Requests: kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
 					},
 					Env: []kubeapi.EnvVar{
-						{
-							Name: "CONFIG_SPEC",
-							ValueFrom: &kubeapi.EnvVarSource{
-								ConfigMapKeyRef: &kubeapi.ConfigMapKeySelector{
-									LocalObjectReference: kubeapi.LocalObjectReference{
-										Name: "ci-operator-misc-configs",
-									},
-									Key: "organization-repo-branch.yaml",
-								},
-							},
-						},
 						{Name: "CLUSTER_TYPE", Value: "aws"},
 						{Name: "JOB_NAME_SAFE", Value: "test"},
 						{Name: "TEST_COMMAND", Value: "commands"},
@@ -713,19 +636,6 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 					},
 					Resources: kubeapi.ResourceRequirements{
 						Requests: kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
-					},
-					Env: []kubeapi.EnvVar{
-						{
-							Name: "CONFIG_SPEC",
-							ValueFrom: &kubeapi.EnvVarSource{
-								ConfigMapKeyRef: &kubeapi.ConfigMapKeySelector{
-									LocalObjectReference: kubeapi.LocalObjectReference{
-										Name: "ci-operator-misc-configs",
-									},
-									Key: "organization-repo-branch.yaml",
-								},
-							},
-						},
 					},
 					VolumeMounts: []kubeapi.VolumeMount{
 						{Name: "sentry-dsn", MountPath: "/etc/sentry-dsn", ReadOnly: true},
@@ -1158,12 +1068,6 @@ tests:
         - --target=[images]
         command:
         - ci-operator
-        env:
-        - name: CONFIG_SPEC
-          valueFrom:
-            configMapKeyRef:
-              key: super-duper-branch.yaml
-              name: ci-operator-misc-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -1225,12 +1129,6 @@ tests:
         - --target=[images]
         command:
         - ci-operator
-        env:
-        - name: CONFIG_SPEC
-          valueFrom:
-            configMapKeyRef:
-              key: super-duper-branch.yaml
-              name: ci-operator-misc-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -1290,12 +1188,6 @@ tests:
         - --target=unit
         command:
         - ci-operator
-        env:
-        - name: CONFIG_SPEC
-          valueFrom:
-            configMapKeyRef:
-              key: super-duper-branch.yaml
-              name: ci-operator-misc-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -1386,12 +1278,6 @@ tests:
         - --target=unit
         command:
         - ci-operator
-        env:
-        - name: CONFIG_SPEC
-          valueFrom:
-            configMapKeyRef:
-              key: super-duper-branch__rhel.yaml
-              name: ci-operator-misc-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -1432,12 +1318,6 @@ tests:
         - --variant=rhel
         command:
         - ci-operator
-        env:
-        - name: CONFIG_SPEC
-          valueFrom:
-            configMapKeyRef:
-              key: super-duper-branch__rhel.yaml
-              name: ci-operator-misc-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -1499,12 +1379,6 @@ tests:
         - --variant=rhel
         command:
         - ci-operator
-        env:
-        - name: CONFIG_SPEC
-          valueFrom:
-            configMapKeyRef:
-              key: super-duper-branch__rhel.yaml
-              name: ci-operator-misc-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -1554,12 +1428,6 @@ tests:
         - --target=unit
         command:
         - ci-operator
-        env:
-        - name: CONFIG_SPEC
-          valueFrom:
-            configMapKeyRef:
-              key: super-duper-branch__rhel.yaml
-              name: ci-operator-misc-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -1594,12 +1462,6 @@ tests:
         - --variant=rhel
         command:
         - ci-operator
-        env:
-        - name: CONFIG_SPEC
-          valueFrom:
-            configMapKeyRef:
-              key: super-duper-branch__rhel.yaml
-              name: ci-operator-misc-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -1687,12 +1549,6 @@ tests:
         - --target=unit
         command:
         - ci-operator
-        env:
-        - name: CONFIG_SPEC
-          valueFrom:
-            configMapKeyRef:
-              key: super-duper-branch.yaml
-              name: ci-operator-misc-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -1731,12 +1587,6 @@ tests:
         - --target=[images]
         command:
         - ci-operator
-        env:
-        - name: CONFIG_SPEC
-          valueFrom:
-            configMapKeyRef:
-              key: super-duper-branch.yaml
-              name: ci-operator-misc-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -1796,12 +1646,6 @@ tests:
         - --target=unit
         command:
         - ci-operator
-        env:
-        - name: CONFIG_SPEC
-          valueFrom:
-            configMapKeyRef:
-              key: super-duper-branch.yaml
-              name: ci-operator-misc-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -1849,12 +1693,6 @@ tests:
         - --target=unit
         command:
         - ci-operator
-        env:
-        - name: CONFIG_SPEC
-          valueFrom:
-            configMapKeyRef:
-              key: super-duper-branch.yaml
-              name: ci-operator-misc-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -1887,12 +1725,6 @@ tests:
         - --target=[images]
         command:
         - ci-operator
-        env:
-        - name: CONFIG_SPEC
-          valueFrom:
-            configMapKeyRef:
-              key: super-duper-branch.yaml
-              name: ci-operator-misc-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""

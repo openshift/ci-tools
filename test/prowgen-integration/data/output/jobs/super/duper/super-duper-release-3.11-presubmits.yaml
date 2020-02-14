@@ -29,12 +29,6 @@ presubmits:
         - --target=src
         command:
         - ci-operator
-        env:
-        - name: CONFIG_SPEC
-          valueFrom:
-            configMapKeyRef:
-              key: super-duper-release-3.11.yaml
-              name: ci-operator-3.x-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -104,12 +98,6 @@ presubmits:
         - --target=lint
         command:
         - ci-operator
-        env:
-        - name: CONFIG_SPEC
-          valueFrom:
-            configMapKeyRef:
-              key: super-duper-release-3.11.yaml
-              name: ci-operator-3.x-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -169,12 +157,6 @@ presubmits:
         - --target=unit
         command:
         - ci-operator
-        env:
-        - name: CONFIG_SPEC
-          valueFrom:
-            configMapKeyRef:
-              key: super-duper-release-3.11.yaml
-              name: ci-operator-3.x-configs
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""

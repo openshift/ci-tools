@@ -26,12 +26,6 @@ periodics:
       image: ci-operator:latest
       imagePullPolicy: Always
       name: ""
-      env:
-      - name: CONFIG_SPEC
-        valueFrom:
-          configMapKeyRef:
-            key: super-duper-master.yaml
-            name: ci-operator-master-configs
       - name: CLUSTER_TYPE
         value: aws
       - name: JOB_NAME_SAFE
@@ -92,12 +86,6 @@ periodics:
       image: ci-operator:latest
       imagePullPolicy: Always
       name: ""
-      env:
-      - name: CONFIG_SPEC
-        valueFrom:
-          configMapKeyRef:
-            key: super-duper-master.yaml
-            name: ci-operator-master-configs
       - name: CLUSTER_TYPE
         value: azure
       - name: JOB_NAME_SAFE

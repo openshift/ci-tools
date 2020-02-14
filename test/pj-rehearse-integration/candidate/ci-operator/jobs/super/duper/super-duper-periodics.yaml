@@ -21,11 +21,6 @@ periodics:
       env:
       - name: CLUSTER_TYPE
         value: gcp
-      - name: CONFIG_SPEC
-        valueFrom:
-          configMapKeyRef:
-            key: super-duper-ciop-cfg-change.yaml
-            name: ci-operator-misc-configs
       - name: JOB_NAME_SAFE
         value: e2e
       - name: RPM_REPO_OPENSHIFT_ORIGIN
@@ -73,12 +68,6 @@ periodics:
       - --CHANGED
       command:
       - no-ci-op
-      env:
-      - name: CONFIG_SPEC
-        valueFrom:
-          configMapKeyRef:
-            key: super-duper-ciop-cfg-change.yaml
-            name: ci-operator-misc-configs
       image: ci-operator:latest
       imagePullPolicy: Always
       name: ""

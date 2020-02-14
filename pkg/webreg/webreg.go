@@ -318,7 +318,16 @@ const templateDefinitions = `
 {{ end }}
 `
 
-const helpPage = `<h1>Step Registry Help</h1>
+const helpIndexPage = `
+<h2>Available help pages:</h2>
+<ul>
+  <li><a href="/help/getting-started">Getting Started</a></li>
+  <li><a href="/help/adding-components">Adding or Changing Registry Components</a></li>
+  <li><a href="/help/examples">Examples Of Using The Registry</a></li>
+</ul>
+`
+
+const gettingStartedPage = `<h1>Step Registry Help</h1>
 <h1>What is the Multistage Test and the Test Step Registry?</h1>
 
 <p>
@@ -521,18 +530,177 @@ const workflowExample = `workflow:
 	The Origin E2E workflow executes the common end-to-end test suite.`
 const configExample1 = `tests:
 - as: e2e-steps # test name
-  commands: ""
   steps:
     cluster_profile: aws
     workflow: origin-e2e`
 const configExample2 = `tests:
 - as: e2e-steps # test name
-  commands: ""
   steps:
     cluster_profile: aws
 	workflow: origin-e2e
 	test:                     # this chain will be run for "test" instead of the one in the origin-e2e workflow
 	  ref: origin-e2e-minimal`
+
+const addingComponentPage = `
+<h2>Adding and Changing Step Registry Content</h2>
+
+<h3>Adding Content</h3>
+<p>
+Adding a new component (reference, chain, or workflow) to the registry is
+quite simple. Descriptions of each of the components as well as the naming
+scheme and directory layout is available at the <a href="/help/getting-started">
+Getting Started</a> page. To add a new component, add the new files into the
+<code>ci-operator/step-registry</code> directory in
+<code>openshift/release</code> following the naming scheme along with an
+<code>OWNERS</code> file for the new component and open a PR.
+</p>
+
+Prow will automatically run a few tests on registry components.
+<ul>
+  <li>Verify that all required fields are supplied</li>
+  <li>Verify that the naming scheme for all components is correct</li>
+  <li>Verify that there are no cyclic dependencies (infinite loops) in chains</li>
+  <li>Run shellcheck on all shell files used by references, failing on errors</li>
+</ul>
+
+<p>
+If a new test is added that uses the new component as well,
+<code>pj-rehearse</code> will test the new job with the new component.
+</p>
+
+<h3>Changing Content</h3>
+<p>
+To change registry content, make the changes in
+<code>openshift/release</code> and open a new PR. Prow will run all of the
+same checks on the registry listed in the above “Adding Content” section and
+run rehearsals for all jobs that use the changed registry component. The
+component will require approval and an lgtm from one of the people listed in
+the <code>OWNERS</code> file for the component, located in the same directory
+as the component.
+</p>
+`
+const examplesPage = `
+<h2>Usage Examples</h2>
+<h3>Available Examples</h3>
+<ul>
+  <li><a href="#aws">How do I add a job that runs the standard e2e tests on AWS?</a></li>
+  <li><a href="#image">How do I use an image from another repo in my repo’s tests?</a></li>
+</ul>
+
+<h3 id="aws">How do I add a job that runs the standard e2e tests on AWS?</h3>
+<p>
+Use the <code>origin-e2e</code> workflow and set <code>cluster_profile</code>
+to <code>aws</code>.
+</p>
+Example:
+{{ yamlSyntax (index . "awsExample") }}
+
+<h3 id="image">How do I use an image from another repo in my repo’s tests?</h3>
+<p>
+All images built for the release targeted by the job (ex:
+<code>release-4.2</code>) are available under <code>stable:tag-name</code>
+(example: <code>stable:installer</code> or <code>stable:cli</code>). There
+are 2 ways of using these images: creating a registry reference that can be
+used in your <code>ci-operator</code> config or adding a literal test step to
+the test in your <code>ci-operator</code> config. Images built by ci-operator
+for your repo are also available under <code>pipeline:tag-name</code>. Here
+are 2 examples of adding a very simple step that runs an oc command on the
+cluster created by <code>ipi-install</code> using the <code>stable:cli</code>
+image:
+</p>
+
+Both examples assume we are starting off with this ci-operator config:
+{{ yamlSyntax (index . "imageExampleBaseConfig") }}
+
+<h4>Method 1: Adding a new reference:</h4>
+
+<p>
+Make directory for repo: <code>ci-operator/step-registry/org/repo/setup/project</code>
+</p>
+
+Make reference: <code>org-repo-tests-custom-ref.yaml</code>
+{{ yamlSyntax (index . "imageExampleRef") }}
+
+Make command: <code>org-repo-tests-integration-commands.sh</code>
+{{ bashSyntax (index . "imageExampleCommands") }}
+
+Update <code>ci-operator</code> config:
+{{ yamlSyntax (index . "imageExampleConfig") }}
+
+<h4>Method 2: Adding a literal test step</h4>
+<p>
+It is possible to directly declare a test step in the
+<code>ci-operator</code> config without adding a new registry component.
+However, this is usually not recommended for most use cases as commands must
+be inlined (making multilined scripts difficult to handle) and the steps are
+not reusable by other tests:
+</p>
+<code>ci-operator</code> config:
+{{ yamlSyntax (index . "imageExampleLiteral") }}
+`
+
+const awsExample = `- as: e2e-steps
+  steps:
+    cluster_profile: aws
+    workflow: origin-e2e
+`
+const imageExampleBaseConfig = `- as: e2e-steps
+  steps:
+    cluster_profile: aws
+    pre:
+    - ref: ipi-conf
+    - chain: ipi-install
+    test:
+    - ref: org-repo-tests-integration
+    post:
+    - chain: ipi-deprovision
+`
+const imageExampleRef = `ref:
+  as: org-repo-setup-project
+  from: stable:cli
+  commands: org-repo-setup-project-commands.sh
+  resources:
+    requests:
+      cpu: 1000m
+      memory: 100Mi
+  documentation: |-
+    Creates new project needed for org/repo tests
+`
+const imageExampleCommands = `#!/bin/bash
+oc new project custom-namespace
+`
+const imageExampleConfig = `- as: e2e-steps
+  steps:
+    cluster_profile: aws
+    pre:
+    - ref: ipi-conf
+    - chain: ipi-install
+    - ref: org-repo-setup-project # new custom ref
+    test:
+    - ref: org-repo-tests-integration
+    post:
+    - chain: ipi-deprovision
+`
+const imageExampleLiteral = `- as: e2e-steps
+  steps:
+    cluster_profile: aws
+    pre:
+    - ref: ipi-conf
+    - chain: ipi-install
+    - as: new-project
+      from: stable:cli
+      commands: |-
+        #!/bin/bash
+        oc new project custom-namespace
+      resources:
+        requests:
+          cpu: 1000m
+          memory: 2Gi
+    test:
+    - ref: org-repo-tests-integration
+    post:
+    - chain: ipi-deprovision
+`
 
 const workflowType = "Workflow"
 const jobType = "Job"
@@ -721,14 +889,27 @@ func helpHandler(subPath string, w http.ResponseWriter, req *http.Request) {
 	data := make(map[string]string)
 	switch subPath {
 	case "":
-		helpTemplate, err = helpFuncs.Parse(helpPage)
+		helpTemplate, err = helpFuncs.Parse(helpIndexPage)
+	case "/getting-started":
+		helpTemplate, err = helpFuncs.Parse(gettingStartedPage)
 		data["refExample"] = refExample
 		data["chainExample"] = chainExample
 		data["workflowExample"] = workflowExample
 		data["configExample1"] = configExample1
 		data["configExample2"] = configExample2
+	case "/adding-components":
+		helpTemplate, err = helpFuncs.Parse(addingComponentPage)
+	case "/examples":
+		helpTemplate, err = helpFuncs.Parse(examplesPage)
+		data["awsExample"] = awsExample
+		data["imageExampleBaseConfig"] = imageExampleBaseConfig
+		data["imageExampleRef"] = imageExampleRef
+		data["imageExampleCommands"] = imageExampleCommands
+		data["imageExampleConfig"] = imageExampleConfig
+		data["imageExampleLiteral"] = imageExampleLiteral
 	default:
 		writeErrorPage(w, errors.New("Invalid path"), http.StatusNotImplemented)
+		return
 	}
 	if err != nil {
 		writeErrorPage(w, err, http.StatusInternalServerError)

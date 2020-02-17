@@ -722,7 +722,7 @@
     namespace: test-namespace
   spec:
     agent: kubernetes
-    cluster: default
+    cluster: foo
     context: ci/rehearse/super/duper/master/cmd
     decoration_config:
       gcs_configuration:

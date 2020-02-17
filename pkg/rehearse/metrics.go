@@ -95,7 +95,7 @@ func (m *Metrics) RecordChangedPresubmits(presubmits config.Presubmits) {
 	}
 }
 
-func (m *Metrics) RecordChangedPeriodics(periodics []prowconfig.Periodic) {
+func (m *Metrics) RecordChangedPeriodics(periodics config.Periodics) {
 	for _, job := range periodics {
 		m.ChangedPeriodics = append(m.ChangedPeriodics, job.Name)
 	}
@@ -113,7 +113,7 @@ func (m *Metrics) RecordPresubmitsOpportunity(presubmits config.Presubmits, reas
 	}
 }
 
-func (m *Metrics) RecordPeriodicsOpportunity(periodics []prowconfig.Periodic, reason string) {
+func (m *Metrics) RecordPeriodicsOpportunity(periodics config.Periodics, reason string) {
 	for _, job := range periodics {
 		m.Opportunities[job.Name] = append(m.Opportunities[job.Name], reason)
 	}

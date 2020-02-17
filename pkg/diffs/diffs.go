@@ -147,6 +147,32 @@ func getJobsByRepoAndName(presubmits config.Presubmits) map[string]map[string]pr
 	return jobsByRepo
 }
 
+// GetChangedClusterJobs returns presubmits and periodics that have had their cluster field changed.
+func GetChangedClusterJobs(prowMasterConfig, prowPRConfig *prowconfig.Config, logger *logrus.Entry) (config.Presubmits, config.Periodics) {
+	presubmits := config.Presubmits{}
+	periodics := config.Periodics{}
+
+	masterPresubmits := getJobsByRepoAndName(prowMasterConfig.JobConfig.PresubmitsStatic)
+	for repo, jobs := range prowPRConfig.JobConfig.PresubmitsStatic {
+		for _, job := range jobs {
+			if masterPresubmits[repo][job.Name].Cluster != job.Cluster {
+				logger.WithFields(logrus.Fields{logRepo: repo, logJobName: job.Name}).Info(chosenJob)
+				presubmits.Add(repo, job)
+			}
+		}
+	}
+
+	masterPeriodics := getPeriodicsPerName(prowMasterConfig.JobConfig.AllPeriodics())
+	for _, periodic := range prowPRConfig.JobConfig.AllPeriodics() {
+		if masterPeriodics[periodic.Name].Cluster != periodic.Cluster {
+			logger.WithField(logJobName, periodic.Name).Info(chosenJob)
+			periodics.Add(periodic)
+		}
+	}
+
+	return presubmits, periodics
+}
+
 // Converts the multiline diff string, to one line human readable that
 // includes information about the object.
 // Example:
@@ -285,8 +311,8 @@ func GetPresubmitsForClusterProfiles(prowConfig *prowconfig.Config, profiles []c
 }
 
 // GetChangedPeriodics compares the periodic jobs from two prow configs and returns a list the changed periodics.
-func GetChangedPeriodics(prowMasterConfig, prowPRConfig *prowconfig.Config, logger *logrus.Entry) []prowconfig.Periodic {
-	var changedPeriodics []prowconfig.Periodic
+func GetChangedPeriodics(prowMasterConfig, prowPRConfig *prowconfig.Config, logger *logrus.Entry) config.Periodics {
+	changedPeriodics := config.Periodics{}
 	masterPeriodicsPerName := getPeriodicsPerName(prowMasterConfig.JobConfig.AllPeriodics())
 
 	for name, job := range getPeriodicsPerName(prowPRConfig.JobConfig.AllPeriodics()) {
@@ -294,7 +320,7 @@ func GetChangedPeriodics(prowMasterConfig, prowPRConfig *prowconfig.Config, logg
 			masterPeriodics := masterPeriodicsPerName[name]
 			if !equality.Semantic.DeepEqual(masterPeriodics.Spec, job.Spec) {
 				logger.WithFields(logrus.Fields{logJobName: job.Name, logDiffs: convertToReadableDiff(masterPeriodics.Spec, job.Spec, objectSpec)}).Info(chosenJob)
-				changedPeriodics = append(changedPeriodics, job)
+				changedPeriodics[job.Name] = job
 			}
 		}
 	}

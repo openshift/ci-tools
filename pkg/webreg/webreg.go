@@ -28,6 +28,8 @@ const htmlPageStart = `
 <head>
 <meta charset="UTF-8"><title>%s</title>
 <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css" integrity="sha384-MCw98/SFnGE8fJT3GXwEOngsV7Zt27NXFoaoApmYm81iuXoPkFOJwJ8ERdknLPMO" crossorigin="anonymous">
+<script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/js/bootstrap.min.js" integrity="sha384-ChfqqxuZUCnJSK3+MXmPNIyE6ZbWh2IMqE241rYiqJxyMiZ6OW/JmZQ5stwEULTy" crossorigin="anonymous"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <style>
 @namespace svg url(http://www.w3.org/2000/svg);
@@ -48,12 +50,6 @@ svg|a:hover text, svg|a:active text {
   text-decoration: underline;
 }
 
-@media (max-width: 992px) {
-  .container {
-    width: 100%%;
-    max-width: none;
-  }
-}
 pre {
 	border: 10px solid transparent;
 }
@@ -73,11 +69,65 @@ button {
 td {
   vertical-align: middle;
 }
+/* From https://www.w3schools.com/howto/howto_css_fixed_sidebar.asp */
+/* The sidebar menu */
+.sidenav {
+  width: 250px;
+  position: fixed;
+  z-index: 1;
+  top: 20px;
+  left: 10px;
+  background: #eee;
+  overflow-x: hidden;
+  padding: 8px 0;
+}
+
+.sidenav a {
+  padding: 6px 8px 6px 16px;
+  text-decoration: none;
+  font-size: 1.2rem;
+  color: #2196F3;
+  display: block;
+}
+
+.sidenav a:hover {
+  color: #064579;
+}
 </style>
 </head>
 <body>
+<nav class="navbar navbar-expand-lg navbar-light bg-light">
+  <a class="navbar-brand" href="#">Openshift CI Step Registry</a>
+  <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+    <span class="navbar-toggler-icon"></span>
+  </button>
+
+  <div class="collapse navbar-collapse" id="navbarSupportedContent">
+    <ul class="navbar-nav mr-auto">
+      <li class="nav-item">
+        <a class="nav-link" href="/">Home <span class="sr-only">(current)</span></a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/search">Jobs</a>
+      </li>
+      <li class="nav-item dropdown">
+        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+          Help
+        </a>
+        <div class="dropdown-menu" aria-labelledby="navbarDropdown">
+          <a class="dropdown-item" href="/help">Getting Started</a>
+          <a class="dropdown-item" href="/help/adding-components">Adding and Changing Content</a>
+          <a class="dropdown-item" href="/help/examples">Examples</a>
+        </div>
+      </li>
+    </ul>
+    <form class="form-inline my-2 my-lg-0" role="search" action="/search" method="get">
+      <input class="form-control mr-sm-2" type="search" placeholder="Prow Job" aria-label="Search" name="job">
+      <button class="btn btn-outline-success my-2 my-sm-0" type="submit">Search Jobs</button>
+    </form>
+  </div>
+</nav>
 <div class="container">
-<p>Navigation: <a href="/">Step Registry</a> | <a href="/search">Jobs and Search</a> | <a href="/help">Help</a></p>
 `
 
 const htmlPageEnd = `
@@ -91,38 +141,22 @@ const errPage = `
 {{ . }}
 `
 
-const mainPage = `<h1>Step Registry</h1>
+const mainPage = `
 {{ template "workflowTable" .Workflows }}
 {{ template "chainTable" .Chains }}
 {{ template "referenceTable" .References}}
 `
 
-const workflowListPage = `<h2>Step Registry &gt; Workflows</h2>
-{{ template "workflowTable" .Workflows }}
-`
-
-const chainListPage = `<h2>Step Registry &gt; Chains</h2>
-{{ template "chainTable" .Chains }}
-`
-
-const referenceListPage = `<h2>Step Registry &gt; References</h2>
-{{ template "referenceTable" .References }}
-`
-
-const jobListPage = `<h2>Jobs</h2>
-{{ template "jobTable" .Jobs }}
-`
-
-const referencePage = `<h1>Step Registry</h1>
-<h2><a href="/references">References</a> &gt; <nobr>{{ .As }}</nobr></h2>
+const referencePage = `
+<h2>Reference: <nobr style="font-family:monospace">{{ .As }}</nobr></h2>
 <p id="documentation">{{ .Documentation }}</p>
 <h2 id="image">Container image used for this step: <span style="font-family:monospace">{{ .From }}</span></h2>
 <h2 id="source">Source Code</h2>
 {{ syntaxedSource .Commands }}
 `
 
-const chainPage = `<h1>Step Registry</h1>
-<h2><a href="/chains">Chains</a> &gt; <nobr>{{ .As }}</nobr></h2>
+const chainPage = `
+<h2>Chains: <nobr style="font-family:monospace">{{ .As }}</nobr></h2>
 <p id="documentation">{{ .Documentation }}</p>
 <h2 id="steps" title="Step run by the chain, in runtime order">Steps</h2>
 {{ template "stepTable" .Steps}}
@@ -131,12 +165,10 @@ const chainPage = `<h1>Step Registry</h1>
 `
 
 // workflowJobPage defines the template for both jobs and workflows
-const workflowJobPage = `<h1>Step Registry</h1>
+const workflowJobPage = `
 {{ $type := .Type }}
-{{ if eq $type "Job" }}
-	<h2><a href="/search">Jobs</a> &gt; <nobr>{{ .As }}</nobr></h2>
-{{ else if eq $type "Workflow" }}
-	<h2><a href="/workflows">Workflows</a> &gt; <nobr>{{ .As }}</nobr></h2>
+<h2>{{ $type }}: <nobr style="font-family:monospace">{{ .As }}</nobr></h2>
+{{ if .Documentation }}
 	<p id="documentation">{{ .Documentation }}</p>
 {{ end }}
 {{ if .Steps.ClusterProfile }}
@@ -152,14 +184,7 @@ const workflowJobPage = `<h1>Step Registry</h1>
 {{ workflowGraph .As }}
 `
 
-const jobSearchPage = `<h1>Jobs and Search</h1>
-<h2>Multistage Test ProwJob Search</h2>
-<form>
-  <div>
-    <input type="search" id="search" name="job" placeholder="Job Name">
-	<button>Search</button>
-  </div>
-</form>
+const jobSearchPage = `
 {{ template "jobTable" . }}
 `
 
@@ -279,7 +304,6 @@ const templateDefinitions = `
 
 {{ define "jobTable" }}
     <h2 id="jobs">Jobs</h2>
-    <p>Jobs using the multistage test design.</p>
 	<table class="table">
 		<thead>
 			<tr>
@@ -318,17 +342,8 @@ const templateDefinitions = `
 {{ end }}
 `
 
-const helpIndexPage = `
-<h2>Available help pages:</h2>
-<ul>
-  <li><a href="/help/getting-started">Getting Started</a></li>
-  <li><a href="/help/adding-components">Adding or Changing Registry Components</a></li>
-  <li><a href="/help/examples">Examples Of Using The Registry</a></li>
-</ul>
-`
-
-const gettingStartedPage = `<h1>Step Registry Help</h1>
-<h1>What is the Multistage Test and the Test Step Registry?</h1>
+const gettingStartedPage = `
+<h2>What is the Multistage Test and the Test Step Registry?</h2>
 
 <p>
 The multistage test style in the ci-operator is a modular test design that
@@ -364,7 +379,7 @@ to create a test:
 </ul>
 </p>
 
-<h2 id="reference">Reference:</h2>
+<h3 id="reference">Reference:</h3>
 <p>
 A reference is the lowest level component in the test step registry. A
 reference defines a base container image for a step, the filename of the
@@ -399,7 +414,7 @@ stored in the <code>ARTIFACTS_DIR</code> environment variable.
 A reference may be referred to in chains, workflows, and ci-operator configs.
 </p>
 
-<h2 id="chain">Chain:</h2>
+<h3 id="chain">Chain:</h3>
 <p>
 A chain is a registry component that specifies multiple steps to be run.
 Steps are run in the order that they are written. Steps specified by a chain
@@ -410,7 +425,7 @@ chain:
 
 {{ yamlSyntax (index . "chainExample") }}
 
-<h2 id="workflow">Workflow:</h2>
+<h3 id="workflow">Workflow:</h3>
 <p>
 A workflow is the highest level component of the step registry. It is almost
 identical to the syntax of the ci-operator config for multistage tests and
@@ -429,7 +444,7 @@ resources are properly cleaned up. This is an example of a workflow config:
 
 {{ yamlSyntax (index . "workflowExample") }}
 
-<h2 id="config">CI-Operator Test Config:</h2>
+<h3 id="config">CI-Operator Test Config:</h3>
 <p>
 The CI-Operator test config syntax for multistage tests is very similar to
 the registry workflow syntax. The main differences are that the ci-operator
@@ -460,7 +475,7 @@ workflow and a ci-operator config specify the same field, the ci-operator config
 field has priority (i.e. the value from the ci-operator config is used).
 </p>
 
-<h2 id="layout">Registry Layout and Naming Convention:</h2>
+<h3 id="layout">Registry Layout and Naming Convention:</h3>
 <p>
 To prevent naming collisions between all the registry components, the step
 registry has a very strict naming scheme and directory layout. First, all
@@ -580,8 +595,7 @@ as the component.
 </p>
 `
 const examplesPage = `
-<h2>Usage Examples</h2>
-<h3>Available Examples</h3>
+<h2>Available Examples</h2>
 <ul>
   <li><a href="#aws">How do I add a job that runs the standard e2e tests on AWS?</a></li>
   <li><a href="#image">How do I use an image from another repo in my repo’s tests?</a></li>
@@ -889,8 +903,6 @@ func helpHandler(subPath string, w http.ResponseWriter, req *http.Request) {
 	data := make(map[string]string)
 	switch subPath {
 	case "":
-		helpTemplate, err = helpFuncs.Parse(helpIndexPage)
-	case "/getting-started":
 		helpTemplate, err = helpFuncs.Parse(gettingStartedPage)
 		data["refExample"] = refExample
 		data["chainExample"] = chainExample
@@ -918,7 +930,7 @@ func helpHandler(subPath string, w http.ResponseWriter, req *http.Request) {
 	writePage(w, "Step Registry Help Page", helpTemplate, data)
 }
 
-func mainPageHandler(agent load.RegistryAgent, templateString string, jobList *Jobs, w http.ResponseWriter, req *http.Request) {
+func mainPageHandler(agent load.RegistryAgent, templateString string, w http.ResponseWriter, req *http.Request) {
 	start := time.Now()
 	defer func() { logrus.Infof("rendered in %s", time.Now().Sub(start)) }()
 
@@ -934,12 +946,10 @@ func mainPageHandler(agent load.RegistryAgent, templateString string, jobList *J
 		References registry.ReferenceByName
 		Chains     registry.ChainByName
 		Workflows  registry.WorkflowByName
-		Jobs       *Jobs
 	}{
 		References: refs,
 		Chains:     chains,
 		Workflows:  wfs,
-		Jobs:       jobList,
 	}
 	writePage(w, "Step Registry Help Page", page, comps)
 }
@@ -958,17 +968,7 @@ func WebRegHandler(regAgent load.RegistryAgent, confAgent load.ConfigAgent, jobA
 		} else if len(splitURI) == 1 {
 			switch splitURI[0] {
 			case "":
-				jobs := getAllMultiStageTests(confAgent, jobAgent)
-				mainPageHandler(regAgent, mainPage, jobs, w, req)
-			case "jobs":
-				jobs := getAllMultiStageTests(confAgent, jobAgent)
-				mainPageHandler(regAgent, jobListPage, jobs, w, req)
-			case "references":
-				mainPageHandler(regAgent, referenceListPage, nil, w, req)
-			case "chains":
-				mainPageHandler(regAgent, chainListPage, nil, w, req)
-			case "workflows":
-				mainPageHandler(regAgent, workflowListPage, nil, w, req)
+				mainPageHandler(regAgent, mainPage, w, req)
 			case "search":
 				searchHandler(confAgent, jobAgent, w, req)
 			default:

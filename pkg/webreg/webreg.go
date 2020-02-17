@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/alecthomas/chroma"
 	"github.com/alecthomas/chroma/formatters/html"
 	"github.com/alecthomas/chroma/lexers"
 	"github.com/alecthomas/chroma/styles"
@@ -27,6 +28,8 @@ const htmlPageStart = `
 <head>
 <meta charset="UTF-8"><title>%s</title>
 <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css" integrity="sha384-MCw98/SFnGE8fJT3GXwEOngsV7Zt27NXFoaoApmYm81iuXoPkFOJwJ8ERdknLPMO" crossorigin="anonymous">
+<script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/js/bootstrap.min.js" integrity="sha384-ChfqqxuZUCnJSK3+MXmPNIyE6ZbWh2IMqE241rYiqJxyMiZ6OW/JmZQ5stwEULTy" crossorigin="anonymous"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <style>
 @namespace svg url(http://www.w3.org/2000/svg);
@@ -47,12 +50,6 @@ svg|a:hover text, svg|a:active text {
   text-decoration: underline;
 }
 
-@media (max-width: 992px) {
-  .container {
-    width: 100%%;
-    max-width: none;
-  }
-}
 pre {
 	border: 10px solid transparent;
 }
@@ -72,9 +69,64 @@ button {
 td {
   vertical-align: middle;
 }
+/* From https://www.w3schools.com/howto/howto_css_fixed_sidebar.asp */
+/* The sidebar menu */
+.sidenav {
+  width: 250px;
+  position: fixed;
+  z-index: 1;
+  top: 20px;
+  left: 10px;
+  background: #eee;
+  overflow-x: hidden;
+  padding: 8px 0;
+}
+
+.sidenav a {
+  padding: 6px 8px 6px 16px;
+  text-decoration: none;
+  font-size: 1.2rem;
+  color: #2196F3;
+  display: block;
+}
+
+.sidenav a:hover {
+  color: #064579;
+}
 </style>
 </head>
 <body>
+<nav class="navbar navbar-expand-lg navbar-light bg-light">
+  <a class="navbar-brand" href="#">Openshift CI Step Registry</a>
+  <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+    <span class="navbar-toggler-icon"></span>
+  </button>
+
+  <div class="collapse navbar-collapse" id="navbarSupportedContent">
+    <ul class="navbar-nav mr-auto">
+      <li class="nav-item">
+        <a class="nav-link" href="/">Home <span class="sr-only">(current)</span></a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/search">Jobs</a>
+      </li>
+      <li class="nav-item dropdown">
+        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+          Help
+        </a>
+        <div class="dropdown-menu" aria-labelledby="navbarDropdown">
+          <a class="dropdown-item" href="/help">Getting Started</a>
+          <a class="dropdown-item" href="/help/adding-components">Adding and Changing Content</a>
+          <a class="dropdown-item" href="/help/examples">Examples</a>
+        </div>
+      </li>
+    </ul>
+    <form class="form-inline my-2 my-lg-0" role="search" action="/search" method="get">
+      <input class="form-control mr-sm-2" type="search" placeholder="Prow Job" aria-label="Search" name="job">
+      <button class="btn btn-outline-success my-2 my-sm-0" type="submit">Search Jobs</button>
+    </form>
+  </div>
+</nav>
 <div class="container">
 `
 
@@ -86,46 +138,17 @@ const htmlPageEnd = `
 `
 
 const errPage = `
-<h1><a href="/">Openshift CI Step Registry</a></h1>
 {{ . }}
 `
 
-const mainPage = `<h1>Openshift CI Step Registry</h1>
-<form action="/search">
-  <div>
-    Search for job: <input type="search" id="search" name="job" placeholder="Job Name">
-	<button>Search</button>
-  </div>
-</form>
+const mainPage = `
 {{ template "workflowTable" .Workflows }}
 {{ template "chainTable" .Chains }}
 {{ template "referenceTable" .References}}
-{{ template "jobTable" .Jobs }}
-`
-
-const workflowListPage = `
-<h2><a href="/">Openshift CI Step Registry</a> &gt; Workflows
-{{ template "workflowTable" .Workflows }}
-`
-
-const chainListPage = `
-<h2><a href="/">Openshift CI Step Registry</a> &gt; Chains
-{{ template "chainTable" .Chains }}
-`
-
-const referenceListPage = `
-<h2><a href="/">Openshift CI Step Registry</a> &gt; References
-{{ template "referenceTable" .References }}
-`
-
-const jobListPage = `
-<h2><a href="/">Openshift CI Step Registry</a> &gt; Jobs
-{{ template "jobTable" .Jobs }}
 `
 
 const referencePage = `
-<h1><a href="/">Openshift CI Step Registry</a></h1>
-<h2><a href="/references">References</a> &gt; <nobr>{{ .As }}</nobr></h2>
+<h2>Reference: <nobr style="font-family:monospace">{{ .As }}</nobr></h2>
 <p id="documentation">{{ .Documentation }}</p>
 <h2 id="image">Container image used for this step: <span style="font-family:monospace">{{ .From }}</span></h2>
 <h2 id="source">Source Code</h2>
@@ -133,8 +156,7 @@ const referencePage = `
 `
 
 const chainPage = `
-<h1><a href="/">Openshift CI Step Registry</a></h1>
-<h2><a href="/chains">Chains</a> &gt; <nobr>{{ .As }}</nobr></h2>
+<h2>Chains: <nobr style="font-family:monospace">{{ .As }}</nobr></h2>
 <p id="documentation">{{ .Documentation }}</p>
 <h2 id="steps" title="Step run by the chain, in runtime order">Steps</h2>
 {{ template "stepTable" .Steps}}
@@ -144,12 +166,9 @@ const chainPage = `
 
 // workflowJobPage defines the template for both jobs and workflows
 const workflowJobPage = `
-<h1><a href="/">Openshift CI Step Registry</a></h1>
 {{ $type := .Type }}
-{{ if eq $type "Job" }}
-	<h2><a href="/search">Jobs</a> &gt; <nobr>{{ .As }}</nobr></h2>
-{{ else if eq $type "Workflow" }}
-	<h2><a href="/workflows">Workflows</a> &gt; <nobr>{{ .As }}</nobr></h2>
+<h2>{{ $type }}: <nobr style="font-family:monospace">{{ .As }}</nobr></h2>
+{{ if .Documentation }}
 	<p id="documentation">{{ .Documentation }}</p>
 {{ end }}
 {{ if .Steps.ClusterProfile }}
@@ -166,14 +185,6 @@ const workflowJobPage = `
 `
 
 const jobSearchPage = `
-<h1><a href="/">Openshift CI Step Registry</a></h1>
-<h2>Multistage Test ProwJob Search</h2>
-<form>
-  <div>
-    <input type="search" id="search" name="job" placeholder="Job Name">
-	<button>Search</button>
-  </div>
-</form>
 {{ template "jobTable" . }}
 `
 
@@ -222,6 +233,7 @@ const templateDefinitions = `
 
 {{ define "workflowTable" }}
 	<h2 id="workflows">Workflows</h2>
+	<p>Workflows are the highest level registry components, defining a test from start to finish.</p>
 	<table class="table">
 		<thead>
 			<tr>
@@ -248,6 +260,7 @@ const templateDefinitions = `
 
 {{ define "chainTable" }}
 	<h2 id="chains">Chains</h2>
+	<p>Chains are registry components that allow users to string together multiple test steps under one name. These steps can be references and other chains.</p>
 	<table class="table">
 		<thead>
 			<tr>
@@ -270,6 +283,7 @@ const templateDefinitions = `
 
 {{ define "referenceTable" }}
 	<h2 id="references">References</h2>
+	<p>References are the lowest level registry components, defining a command to run and a container to run the command in.</p>
 	<table class="table">
 		<thead>
 			<tr>
@@ -289,7 +303,7 @@ const templateDefinitions = `
 {{ end }}
 
 {{ define "jobTable" }}
-<h2 id="jobs">Jobs</h2>
+    <h2 id="jobs">Jobs</h2>
 	<table class="table">
 		<thead>
 			<tr>
@@ -326,6 +340,380 @@ const templateDefinitions = `
 		</tbody>
 	</table>
 {{ end }}
+`
+
+const gettingStartedPage = `
+<h2>What is the Multistage Test and the Test Step Registry?</h2>
+
+<p>
+The multistage test style in the ci-operator is a modular test design that
+allows users to create new tests by combining smaller, individual test steps.
+These individual steps can be put into a shared registry that other tests can
+access. This results in test workflows that are easier to maintain and
+upgrade as multiple test workflows can share steps and don’t have to each be
+updated individually to fix bugs or add new features. It also reduces the
+chances of a mistake when copying a feature from one test workflow to
+another.
+</p>
+
+<p>
+To understand how the multistage tests and registry work, we must first talk
+about the 3 components of the test registry and how to use those components
+to create a test:
+<ul>
+  <li>
+    <a href="#reference">Reference</a>: A reference is the lowest level
+    component in the test step registry. It describes an individual test
+    step.
+  </li>
+  <li>
+	<a href="#chain">Chain</a>: A chain is a registry component that
+	specifies multiple steps to be run. Any item of the chain can be either a
+	reference or another chain.
+  </li>
+  <li>
+    <a href="#workflow">Workflow</a>: A workflow is the highest level
+    component of the step registry. It contains three chains:
+    <code>pre</code>, <code>test</code>, <code>post</code>.
+  </li>
+</ul>
+</p>
+
+<h3 id="reference">Reference:</h3>
+<p>
+A reference is the lowest level component in the test step registry. A
+reference defines a base container image for a step, the filename of the
+shell script to run inside the container, the resource requests and limits
+for the container, and documentation for the reference. Example of a
+reference:
+</p>
+
+{{ yamlSyntax (index . "refExample") }}
+
+<p>
+Note: the shell script file must follow the <a href="#layout">naming convention</a> described later
+in this help page.
+</p>
+
+<p>
+The commands file must contain shell script in a shell language supported by
+the <code>shellcheck</code> program used to validate the commands. However,
+regardless of the shell language used for the commands, the web UI will
+syntax highlight all commands as bash.
+</p>
+
+<p>
+Sharing files between steps is supported via a shared directory. All
+containers will have an environment variable <code>SHARED_DIR</code> which
+contains the path of the shared directory. An artifacts directory also exists
+for steps that produce artifacts. The path for the artifacts directory is
+stored in the <code>ARTIFACTS_DIR</code> environment variable.
+</p>
+
+<p>
+A reference may be referred to in chains, workflows, and ci-operator configs.
+</p>
+
+<h3 id="chain">Chain:</h3>
+<p>
+A chain is a registry component that specifies multiple steps to be run.
+Steps are run in the order that they are written. Steps specified by a chain
+can be either references and other chains. If any step inside a chain fails
+to execute, the chain stops and the following steps are not run. Example of a
+chain:
+</p>
+
+{{ yamlSyntax (index . "chainExample") }}
+
+<h3 id="workflow">Workflow:</h3>
+<p>
+A workflow is the highest level component of the step registry. It is almost
+identical to the syntax of the ci-operator config for multistage tests and
+defines an entire test from start to finish. It has 4 basic components: a
+<code>cluster_profile</code> string (eg: <code>aws</code>, <code>azure4</code>,
+<code>gcp</code>), and 3 chains: <code>pre</code>, <code>test</code>, and
+<code>post</code>. The <code>pre</code> chain is intended to be used to set
+up a testing environment (such as creating a test cluster), the
+<code>test</code> chain is intended to contain all tests that a job wants to
+run, and the <code>post</code> chain is intended to be used to clean up any
+resources created/used by the test. If a step in <code>pre</code> or
+<code>test</code> fails, all pending <code>pre</code> and <code>test</code>
+steps are skipped and all <code>post</code> steps are run to ensure that
+resources are properly cleaned up. This is an example of a workflow config:
+</p>
+
+{{ yamlSyntax (index . "workflowExample") }}
+
+<h3 id="config">CI-Operator Test Config:</h3>
+<p>
+The CI-Operator test config syntax for multistage tests is very similar to
+the registry workflow syntax. The main differences are that the ci-operator
+config does not have a <code>documentation</code> field, and the ci-operator
+config can specify a workflow to use. Also, the <code>cluster_profile</code>,
+<code>pre</code>, <code>test</code>, and <code>post</code> fields are under a
+<code>steps</code> field instead of <code>workflow</code>. Here is an example
+of the <code>tests</code> section of a ci-operator config using the
+multistage test design:
+</p>
+
+{{ yamlSyntax (index . "configExample1") }}
+
+Example of a ci-operator config that overrides a workflow field.
+
+{{ yamlSyntax (index . "configExample2") }}
+
+<p>
+In this example, the ci-operator config simply specifies the desired cluster
+profile and the <code>origin-e2e</code> workflow shown in the example for the
+<code>Workflow</code> section above.
+</p>
+
+<p>
+Since the ci-operator-config and workflows share the same fields, it is
+possible to override fields specified in a workflow. In cases where both the
+workflow and a ci-operator config specify the same field, the ci-operator config’s
+field has priority (i.e. the value from the ci-operator config is used).
+</p>
+
+<h3 id="layout">Registry Layout and Naming Convention:</h3>
+<p>
+To prevent naming collisions between all the registry components, the step
+registry has a very strict naming scheme and directory layout. First, all
+components have a prefix determined by the directory structure, similar to
+how the ci-operator configs do. The prefix is the relative directory path
+with all &#96;<code>/</code>&#96; characters changed to
+&#96;<code>-</code>&#96;. For example, a file under the
+<code>ipi/install/conf</code> directory would have as prefix of
+<code>ipi-install-conf</code>. If there is a workflow, chain, or reference in
+that directory, the <code>as</code> field for that component would need to be
+the same as the prefix. Further, only one of reference, chain, or workflow
+can be in a subdirectory (otherwise there would be a name conflict),
+</p>
+
+<p>
+After the prefix, we apply a suffix based on what the file is defining. These
+are the suffixes for the 4 file types that exist in the registry:
+<ul style="margin-bottom:0px;">
+  <li>Reference: <code>-ref.yaml</code></li>
+  <li>Reference command script: <code>-commands.sh</code></li>
+  <li>Chain: <code>-chain.yaml</code></li>
+  <li>Workflow: <code>-workflow.yaml</code></li>
+</ul>
+</p>
+
+<p>
+Continuing the example above, a reference in the
+<code>ipi/install/conf</code> subdirectory would have a filename of
+<code>ipi-install-conf-ref.yaml</code> and the command would be
+<code>ipi-install-conf-commands.sh</code>.
+</p>
+
+<p>
+Other files that are allowed in the step registry but are not used for
+testing are <code>OWNERS</code> files and files that end in <code>.md</code>.
+</p>
+`
+
+const refExample = `ref:
+  as: ipi-conf                   # name of the reference
+  from: centos:7                 # image to run the commands in
+  commands: ipi-conf-commands.sh # script file containing the command(s) to be run
+  resources:
+    requests:
+      cpu: 1000m
+      memory: 100Mi
+  documentation: |-
+	The IPI configure step generates the install-config.yaml file based on the cluster profile and optional input files.`
+const chainExample = `chain:
+  as: ipi-deprovision                # name of this chain
+  steps:
+  - chain: gather                    # a chain being used as a step in another chain
+  - ref: ipi-deprovision-deprovision # a reference being used as a step in a chain
+  documentation: |-
+    The IPI deprovision step chain contains all the individual steps necessary to deprovision an OpenShift cluster.`
+const workflowExample = `workflow:
+  as: origin-e2e             # name of workflow
+  steps:
+    pre:                     # "pre" chain used to set up test environment
+    - ref: ipi-conf
+    - chain: ipi-install
+    test:                    # "test" chain containing actual tests to be run
+    - ref: origin-e2e-test
+    post:                    # "post" chain containing cleanup steps
+    - chain: ipi-deprovision
+  documentation: |-
+	The Origin E2E workflow executes the common end-to-end test suite.`
+const configExample1 = `tests:
+- as: e2e-steps # test name
+  steps:
+    cluster_profile: aws
+    workflow: origin-e2e`
+const configExample2 = `tests:
+- as: e2e-steps # test name
+  steps:
+    cluster_profile: aws
+	workflow: origin-e2e
+	test:                     # this chain will be run for "test" instead of the one in the origin-e2e workflow
+	  ref: origin-e2e-minimal`
+
+const addingComponentPage = `
+<h2>Adding and Changing Step Registry Content</h2>
+
+<h3>Adding Content</h3>
+<p>
+Adding a new component (reference, chain, or workflow) to the registry is
+quite simple. Descriptions of each of the components as well as the naming
+scheme and directory layout is available at the <a href="/help/getting-started">
+Getting Started</a> page. To add a new component, add the new files into the
+<code>ci-operator/step-registry</code> directory in
+<code>openshift/release</code> following the naming scheme along with an
+<code>OWNERS</code> file for the new component and open a PR.
+</p>
+
+Prow will automatically run a few tests on registry components.
+<ul>
+  <li>Verify that all required fields are supplied</li>
+  <li>Verify that the naming scheme for all components is correct</li>
+  <li>Verify that there are no cyclic dependencies (infinite loops) in chains</li>
+  <li>Run shellcheck on all shell files used by references, failing on errors</li>
+</ul>
+
+<p>
+If a new test is added that uses the new component as well,
+<code>pj-rehearse</code> will test the new job with the new component.
+</p>
+
+<h3>Changing Content</h3>
+<p>
+To change registry content, make the changes in
+<code>openshift/release</code> and open a new PR. Prow will run all of the
+same checks on the registry listed in the above “Adding Content” section and
+run rehearsals for all jobs that use the changed registry component. The
+component will require approval and an lgtm from one of the people listed in
+the <code>OWNERS</code> file for the component, located in the same directory
+as the component.
+</p>
+`
+const examplesPage = `
+<h2>Available Examples</h2>
+<ul>
+  <li><a href="#aws">How do I add a job that runs the standard e2e tests on AWS?</a></li>
+  <li><a href="#image">How do I use an image from another repo in my repo’s tests?</a></li>
+</ul>
+
+<h3 id="aws">How do I add a job that runs the standard e2e tests on AWS?</h3>
+<p>
+Use the <code>origin-e2e</code> workflow and set <code>cluster_profile</code>
+to <code>aws</code>.
+</p>
+Example:
+{{ yamlSyntax (index . "awsExample") }}
+
+<h3 id="image">How do I use an image from another repo in my repo’s tests?</h3>
+<p>
+All images built for the release targeted by the job (ex:
+<code>release-4.2</code>) are available under <code>stable:tag-name</code>
+(example: <code>stable:installer</code> or <code>stable:cli</code>). There
+are 2 ways of using these images: creating a registry reference that can be
+used in your <code>ci-operator</code> config or adding a literal test step to
+the test in your <code>ci-operator</code> config. Images built by ci-operator
+for your repo are also available under <code>pipeline:tag-name</code>. Here
+are 2 examples of adding a very simple step that runs an oc command on the
+cluster created by <code>ipi-install</code> using the <code>stable:cli</code>
+image:
+</p>
+
+Both examples assume we are starting off with this ci-operator config:
+{{ yamlSyntax (index . "imageExampleBaseConfig") }}
+
+<h4>Method 1: Adding a new reference:</h4>
+
+<p>
+Make directory for repo: <code>ci-operator/step-registry/org/repo/setup/project</code>
+</p>
+
+Make reference: <code>org-repo-tests-custom-ref.yaml</code>
+{{ yamlSyntax (index . "imageExampleRef") }}
+
+Make command: <code>org-repo-tests-integration-commands.sh</code>
+{{ bashSyntax (index . "imageExampleCommands") }}
+
+Update <code>ci-operator</code> config:
+{{ yamlSyntax (index . "imageExampleConfig") }}
+
+<h4>Method 2: Adding a literal test step</h4>
+<p>
+It is possible to directly declare a test step in the
+<code>ci-operator</code> config without adding a new registry component.
+However, this is usually not recommended for most use cases as commands must
+be inlined (making multilined scripts difficult to handle) and the steps are
+not reusable by other tests:
+</p>
+<code>ci-operator</code> config:
+{{ yamlSyntax (index . "imageExampleLiteral") }}
+`
+
+const awsExample = `- as: e2e-steps
+  steps:
+    cluster_profile: aws
+    workflow: origin-e2e
+`
+const imageExampleBaseConfig = `- as: e2e-steps
+  steps:
+    cluster_profile: aws
+    pre:
+    - ref: ipi-conf
+    - chain: ipi-install
+    test:
+    - ref: org-repo-tests-integration
+    post:
+    - chain: ipi-deprovision
+`
+const imageExampleRef = `ref:
+  as: org-repo-setup-project
+  from: stable:cli
+  commands: org-repo-setup-project-commands.sh
+  resources:
+    requests:
+      cpu: 1000m
+      memory: 100Mi
+  documentation: |-
+    Creates new project needed for org/repo tests
+`
+const imageExampleCommands = `#!/bin/bash
+oc new project custom-namespace
+`
+const imageExampleConfig = `- as: e2e-steps
+  steps:
+    cluster_profile: aws
+    pre:
+    - ref: ipi-conf
+    - chain: ipi-install
+    - ref: org-repo-setup-project # new custom ref
+    test:
+    - ref: org-repo-tests-integration
+    post:
+    - chain: ipi-deprovision
+`
+const imageExampleLiteral = `- as: e2e-steps
+  steps:
+    cluster_profile: aws
+    pre:
+    - ref: ipi-conf
+    - chain: ipi-install
+    - as: new-project
+      from: stable:cli
+      commands: |-
+        #!/bin/bash
+        oc new project custom-namespace
+      resources:
+        requests:
+          cpu: 1000m
+          memory: 2Gi
+    test:
+    - ref: org-repo-tests-integration
+    post:
+    - chain: ipi-deprovision
 `
 
 const workflowType = "Workflow"
@@ -487,7 +875,62 @@ func writePage(w http.ResponseWriter, title string, body *template.Template, dat
 	fmt.Fprintln(w, htmlPageEnd)
 }
 
-func mainPageHandler(agent load.RegistryAgent, templateString string, jobList *Jobs, w http.ResponseWriter, req *http.Request) {
+func helpHandler(subPath string, w http.ResponseWriter, req *http.Request) {
+	start := time.Now()
+	defer func() { logrus.Infof("rendered in %s", time.Now().Sub(start)) }()
+	helpFuncs := template.New("helpPage").Funcs(
+		template.FuncMap{
+			"yamlSyntax": func(source string) template.HTML {
+				formatted, err := syntaxYAML(source)
+				if err != nil {
+					logrus.Errorf("Failed to format source file: %v", err)
+					return template.HTML(source)
+				}
+				return template.HTML(formatted)
+			},
+			"bashSyntax": func(source string) template.HTML {
+				formatted, err := syntaxBash(source)
+				if err != nil {
+					logrus.Errorf("Failed to format source file: %v", err)
+					return template.HTML(source)
+				}
+				return template.HTML(formatted)
+			},
+		},
+	)
+	var helpTemplate *template.Template
+	var err error
+	data := make(map[string]string)
+	switch subPath {
+	case "":
+		helpTemplate, err = helpFuncs.Parse(gettingStartedPage)
+		data["refExample"] = refExample
+		data["chainExample"] = chainExample
+		data["workflowExample"] = workflowExample
+		data["configExample1"] = configExample1
+		data["configExample2"] = configExample2
+	case "/adding-components":
+		helpTemplate, err = helpFuncs.Parse(addingComponentPage)
+	case "/examples":
+		helpTemplate, err = helpFuncs.Parse(examplesPage)
+		data["awsExample"] = awsExample
+		data["imageExampleBaseConfig"] = imageExampleBaseConfig
+		data["imageExampleRef"] = imageExampleRef
+		data["imageExampleCommands"] = imageExampleCommands
+		data["imageExampleConfig"] = imageExampleConfig
+		data["imageExampleLiteral"] = imageExampleLiteral
+	default:
+		writeErrorPage(w, errors.New("Invalid path"), http.StatusNotImplemented)
+		return
+	}
+	if err != nil {
+		writeErrorPage(w, err, http.StatusInternalServerError)
+		return
+	}
+	writePage(w, "Step Registry Help Page", helpTemplate, data)
+}
+
+func mainPageHandler(agent load.RegistryAgent, templateString string, w http.ResponseWriter, req *http.Request) {
 	start := time.Now()
 	defer func() { logrus.Infof("rendered in %s", time.Now().Sub(start)) }()
 
@@ -503,12 +946,10 @@ func mainPageHandler(agent load.RegistryAgent, templateString string, jobList *J
 		References registry.ReferenceByName
 		Chains     registry.ChainByName
 		Workflows  registry.WorkflowByName
-		Jobs       *Jobs
 	}{
 		References: refs,
 		Chains:     chains,
 		Workflows:  wfs,
-		Jobs:       jobList,
 	}
 	writePage(w, "Step Registry Help Page", page, comps)
 }
@@ -521,28 +962,20 @@ func WebRegHandler(regAgent load.RegistryAgent, confAgent load.ConfigAgent, jobA
 		// remove trailing slash
 		trimmedPath = strings.TrimSuffix(trimmedPath, "/")
 		splitURI := strings.Split(trimmedPath, "/")
-		if len(splitURI) == 1 {
+		if len(splitURI) >= 1 && splitURI[0] == "help" {
+			helpHandler(strings.TrimPrefix(trimmedPath, "help"), w, req)
+			return
+		} else if len(splitURI) == 1 {
 			switch splitURI[0] {
 			case "":
-				jobs := getAllMultiStageTests(confAgent, jobAgent)
-				mainPageHandler(regAgent, mainPage, jobs, w, req)
-			case "jobs":
-				jobs := getAllMultiStageTests(confAgent, jobAgent)
-				mainPageHandler(regAgent, jobListPage, jobs, w, req)
-			case "references":
-				mainPageHandler(regAgent, referenceListPage, nil, w, req)
-			case "chains":
-				mainPageHandler(regAgent, chainListPage, nil, w, req)
-			case "workflows":
-				mainPageHandler(regAgent, workflowListPage, nil, w, req)
+				mainPageHandler(regAgent, mainPage, w, req)
 			case "search":
 				searchHandler(confAgent, jobAgent, w, req)
 			default:
 				writeErrorPage(w, errors.New("Invalid path"), http.StatusNotImplemented)
 			}
 			return
-		}
-		if len(splitURI) == 2 {
+		} else if len(splitURI) == 2 {
 			if splitURI[0] == "registry" {
 				refs, chains, workflows, _ := regAgent.GetRegistryComponents()
 				if _, ok := refs[splitURI[1]]; ok {
@@ -568,9 +1001,8 @@ func WebRegHandler(regAgent load.RegistryAgent, confAgent load.ConfigAgent, jobA
 	}
 }
 
-func syntaxBash(source string) (string, error) {
+func syntax(source string, lexer chroma.Lexer) (string, error) {
 	var output bytes.Buffer
-	lexer := lexers.Get("bash")
 	style := styles.Get("dracula")
 	formatter := html.New(html.Standalone(false))
 	iterator, err := lexer.Tokenise(nil, source)
@@ -579,6 +1011,14 @@ func syntaxBash(source string) (string, error) {
 	}
 	err = formatter.Format(&output, style, iterator)
 	return output.String(), err
+}
+
+func syntaxYAML(source string) (string, error) {
+	return syntax(source, lexers.Get("yaml"))
+}
+
+func syntaxBash(source string) (string, error) {
+	return syntax(source, lexers.Get("bash"))
 }
 
 func referenceHandler(agent load.RegistryAgent, w http.ResponseWriter, req *http.Request) {

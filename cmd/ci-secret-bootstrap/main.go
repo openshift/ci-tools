@@ -68,16 +68,13 @@ func (o *options) validateOptions() error {
 	return nil
 }
 
-func (o *options) completeOptions() error {
+func (o *options) completeOptions(secrets *sets.String) error {
 	bytes, err := ioutil.ReadFile(o.bwPasswordPath)
 	if err != nil {
 		return err
 	}
 	o.bwPassword = strings.TrimSpace(string(bytes))
-	secrets := sets.NewString(o.bwPassword)
-	logrus.SetFormatter(logrusutil.NewCensoringFormatter(logrus.StandardLogger().Formatter, func() sets.String {
-		return secrets
-	}))
+	secrets.Insert(o.bwPassword)
 
 	kubeConfigs, _, err := util.LoadKubeConfigs(o.kubeConfigPath)
 	if err != nil {
@@ -320,13 +317,19 @@ func printSecrets(secretsMap map[string][]*coreapi.Secret, w io.Writer) error {
 
 func main() {
 	o := parseOptions()
+	secrets := sets.NewString()
+	logrus.SetFormatter(logrusutil.NewCensoringFormatter(logrus.StandardLogger().Formatter, func() sets.String {
+		return secrets
+	}))
 	if err := o.validateOptions(); err != nil {
 		logrus.WithError(err).Fatal("Invalid arguments.")
 	}
-	if err := o.completeOptions(); err != nil {
+	if err := o.completeOptions(&secrets); err != nil {
 		logrus.WithError(err).Fatal("Failed to complete options.")
 	}
-	bwClient, err := bitwarden.NewClient(o.bwUser, o.bwPassword)
+	bwClient, err := bitwarden.NewClient(o.bwUser, o.bwPassword, func(s string) {
+		secrets.Insert(s)
+	})
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get Bitwarden client.")
 	}

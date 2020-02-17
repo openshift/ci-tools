@@ -559,7 +559,7 @@ const configExample2 = `tests:
 const addingComponentPage = `
 <h2>Adding and Changing Step Registry Content</h2>
 
-<h3>Adding Content</h3>
+<h3 id="adding-content"> Adding Content</h3>
 <p>
 Adding a new component (reference, chain, or workflow) to the registry is
 quite simple. Descriptions of each of the components as well as the naming
@@ -611,37 +611,87 @@ Example:
 
 <h3 id="image">How do I use an image from another repo in my repo’s tests?</h3>
 <p>
-All images built for the release targeted by the job (ex:
-<code>release-4.2</code>) are available under <code>stable:tag-name</code>
-(example: <code>stable:installer</code> or <code>stable:cli</code>). There
-are 2 ways of using these images: creating a registry reference that can be
-used in your <code>ci-operator</code> config or adding a literal test step to
-the test in your <code>ci-operator</code> config. Images built by ci-operator
-for your repo are also available under <code>pipeline:tag-name</code>. Here
-are 2 examples of adding a very simple step that runs an oc command on the
-cluster created by <code>ipi-install</code> using the <code>stable:cli</code>
-image:
+In order to use an image from one repository in the tests of another, it is necessary
+to first publish the image from the producer repository and import it in the consumer
+repository. Generally, a central <code>ImageStream</code> is used for continuous
+integration; a repository opts into using an integration stream with the <code>tag_specification</code>
+field in the <code>ci-operator</code> configuration and opts into publishing to the
+stream with the <code>promotion</code> field.
 </p>
 
-Both examples assume we are starting off with this ci-operator config:
-{{ yamlSyntax (index . "imageExampleBaseConfig") }}
+<h4 id="image-publication">Publishing an Image For Reuse</h3>
+<p>
+When configuring <code>ci-operator</code> for a repository, the <code>promotion</code>
+stanza declares which container images are published and defines the integration
+<code>ImageStream</code> where they will be available. By default, all container images
+declared in the <code>images</code> block of a <code>ci-operator</code> configuration
+are published when a <code>promotion</code> stanza is present to define the integration
+<code>ImageStream</code>. Promotion can be futhermore configured to include other images,
+as well. In the following <code>ci-operator</code> configuration, the following images
+are promoted for reuse by other repositories to the <code>ocp/4.4</code> integration
+<code>ImageStream</code>:
+</p>
+<ul>
+  <li>the <code>pipeline:src</code> tag, published as <code>ocp/4.4:repo-scripts</code> containing the latest version of the repository to allow for executing helper scripts</li>
+  <li>the <code>pipeline:test-bin</code> tag, published as <code>ocp/4.4:repo-tests</code> containing built test binaries to allow for running the repository's tests</li>
+  <li>the <code>stable:component</code> tag, published as <code>ocp/4.4:component</code> containing the component itself to allow for deployments and installations in end-to-end scenarios</li>
+</ul>
 
-<h4>Method 1: Adding a new reference:</h4>
+<code>ci-operator</code> config:
+{{ yamlSyntax (index . "imagePromotionConfig") }}
+
+<h4 id="image-consumption">Consuming an Image</h3>
+<p>
+Once a repository is publishing an image for reuse by others, downstream users can
+configure <code>ci-operator</code> to use that image in tests by including it as a
+<code>base_image</code> or as part of the <code>tag_specification</code>. In general,
+images will be available as part of the <code>tag_specification</code> and explicitly
+including them as a <code>base_image</code> will only be necessary if the promoting
+repository is exposing them to a non-standard <code>ImageStream</code>. Regardless of
+which workflow is used to consume the image, the resulting tag will be available under
+the <code>stable</code> <code>ImageStream</code>. The following <code>ci-operator</code>
+configuration imports a number of images:
+</p>
+<ul>
+  <li>the <code>stable:custom-scripts</code> tag, published as <code>myregistry.com/project/custom-scripts:latest</code></li>
+  <li>the <code>stable:component</code> and <code>:repo-{scripts|tests}</code> tags, by virtue of them being published under <code>ocp/4.4</code> and brought in with the <code>tag_specification</code></li>
+</ul>
+
+<code>ci-operator</code> config:
+{{ yamlSyntax (index . "imageConsumptionConfig") }}
 
 <p>
-Make directory for repo: <code>ci-operator/step-registry/org/repo/setup/project</code>
+Once the image has been configured to be an input for the repository's tests in the
+<code>ci-operator</code> configuration, either explicitly as a <code>base_image</code>
+or implicitly as part of the <code>tag_specification</code>, it can be used in tests
+in one of two ways. A registry reference step can be written to execute the shared tests
+in any <code>ci-operator</code> config, or a literal test step can be added just to one
+repository's configuration to run the shared tests. Two examples follow which add an
+execution of shared end-to-end tests using these two approaches. Both examples assume
+that we have the <code>ipi</code> workflow available to use.
 </p>
 
-Make reference: <code>org-repo-tests-custom-ref.yaml</code>
+<h5>Adding a Reusable Test Step:</h4>
+
+<p>
+Full directions for adding a new resuable test step can be found in the overview for
+<a href="./adding-components#adding-content">new registry content</a>. An example of the process
+is provided here. First, make directory for the test step in the registry:
+<code>ci-operator/step-registry/org/repo/e2e</code>.
+</p>
+
+Then, declare a reusable step: <code>ci-operator/step-registry/org/repo/e2e/org-repo-e2e-ref.yaml</code>
 {{ yamlSyntax (index . "imageExampleRef") }}
 
-Make command: <code>org-repo-tests-integration-commands.sh</code>
+Finally, populate a command file for the step: <code>ci-operator/step-registry/org/repo/e2e/org-repo-e2e-commands.sh</code>
 {{ bashSyntax (index . "imageExampleCommands") }}
 
-Update <code>ci-operator</code> config:
+Now the test step is ready for use by any repository. To make use of it, update
+<code>ci-operator</code> config for a separate repository under
+<code>ci-operator/config/org/other/org-other-master.yaml</code>:
 {{ yamlSyntax (index . "imageExampleConfig") }}
 
-<h4>Method 2: Adding a literal test step</h4>
+<h5>Adding a Literal Test Step</h4>
 <p>
 It is possible to directly declare a test step in the
 <code>ci-operator</code> config without adding a new registry component.
@@ -658,62 +708,63 @@ const awsExample = `- as: e2e-steps
     cluster_profile: aws
     workflow: origin-e2e
 `
-const imageExampleBaseConfig = `- as: e2e-steps
-  steps:
-    cluster_profile: aws
-    pre:
-    - ref: ipi-conf
-    - chain: ipi-install
-    test:
-    - ref: org-repo-tests-integration
-    post:
-    - chain: ipi-deprovision
+const imagePromotionConfig = `test_binary_build_commands: go test -race -c -o e2e-tests # will create the test-bin tag
+promotion:
+  additional_images:
+    repo-scripts: src    # promotes "src" as "repo-scripts" 
+    repo-tests: test-bin # promotes "test-bin" as "repo-tests"
+  namespace: ocp
+  name: 4.4
+images:
+- from: ubi8
+  to: component # promotes "component" by default
+  context_dir: images/component
+`
+const imageConsumptionConfig = `base_images:
+  custom-scripts:
+    cluster: myregistry.com
+    namespace: project
+    name: custom-scripts
+    tag: latest
+tag_specification:
+  namespace: ocp
+  name: 4.4
 `
 const imageExampleRef = `ref:
-  as: org-repo-setup-project
-  from: stable:cli
-  commands: org-repo-setup-project-commands.sh
+  as: org-repo-e2e
+  from: stable:repo-tests
+  commands: org-repo-e2e-commands.sh
   resources:
     requests:
       cpu: 1000m
       memory: 100Mi
   documentation: |-
-    Creates new project needed for org/repo tests
+    Runs the end-to-end suite published by org/repo.
 `
 const imageExampleCommands = `#!/bin/bash
-oc new project custom-namespace
+e2e-tests # as built by go test -c
 `
-const imageExampleConfig = `- as: e2e-steps
+const imageExampleConfig = `- as: org-repo-e2e
   steps:
     cluster_profile: aws
-    pre:
-    - ref: ipi-conf
-    - chain: ipi-install
-    - ref: org-repo-setup-project # new custom ref
+    workflow: ipi
     test:
-    - ref: org-repo-tests-integration
-    post:
-    - chain: ipi-deprovision
+    - ref: org-repo-e2e
 `
-const imageExampleLiteral = `- as: e2e-steps
+const imageExampleLiteral = `- as: repo-e2e
   steps:
     cluster_profile: aws
-    pre:
-    - ref: ipi-conf
-    - chain: ipi-install
-    - as: new-project
-      from: stable:cli
+	workflow: ipi
+    test:
+    - as: e2e
+      from: stable:repo-tests
       commands: |-
         #!/bin/bash
-        oc new project custom-namespace
+        e2e-tests # as built by go test -c
       resources:
         requests:
           cpu: 1000m
           memory: 2Gi
-    test:
-    - ref: org-repo-tests-integration
-    post:
-    - chain: ipi-deprovision
 `
 
 const workflowType = "Workflow"
@@ -914,11 +965,12 @@ func helpHandler(subPath string, w http.ResponseWriter, req *http.Request) {
 	case "/examples":
 		helpTemplate, err = helpFuncs.Parse(examplesPage)
 		data["awsExample"] = awsExample
-		data["imageExampleBaseConfig"] = imageExampleBaseConfig
 		data["imageExampleRef"] = imageExampleRef
 		data["imageExampleCommands"] = imageExampleCommands
 		data["imageExampleConfig"] = imageExampleConfig
 		data["imageExampleLiteral"] = imageExampleLiteral
+		data["imagePromotionConfig"] = imagePromotionConfig
+		data["imageConsumptionConfig"] = imageConsumptionConfig
 	default:
 		writeErrorPage(w, errors.New("Invalid path"), http.StatusNotImplemented)
 		return

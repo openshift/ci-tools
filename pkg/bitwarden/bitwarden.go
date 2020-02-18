@@ -37,6 +37,6 @@ type Client interface {
 }
 
 // NewBitwardenClient generates a BitWarden client
-func NewClient(username, password string) (Client, error) {
-	return newCliClient(username, password)
+func NewClient(username, password string, addSecret func(s string)) (Client, error) {
+	return newCliClient(username, password, addSecret)
 }

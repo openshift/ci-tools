@@ -15,6 +15,7 @@ import (
 	coreapi "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/fake"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
@@ -385,7 +386,8 @@ func TestCompleteOptions(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actualError := tc.given.completeOptions()
+			secrets := sets.NewString()
+			actualError := tc.given.completeOptions(&secrets)
 			equalError(t, tc.expectedError, actualError)
 			if tc.expectedError == nil {
 				equal(t, tc.expectedBWPassword, tc.given.bwPassword)
@@ -396,6 +398,7 @@ func TestCompleteOptions(t *testing.T) {
 				}
 				sort.Strings(actualClusters)
 				equal(t, tc.expectedClusters, actualClusters)
+				equal(t, sets.NewString("topSecret"), secrets)
 			}
 		})
 	}

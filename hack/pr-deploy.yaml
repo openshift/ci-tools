@@ -1,0 +1,207 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+parameters:
+- description: The PR to deploy from.
+  name: PULL_REQUEST
+  required: true
+- description: The fork to deploy from.
+  name: USER
+  required: true
+- description: The branch to deploy from.
+  name: BRANCH
+  required: true
+objects:
+- apiVersion: v1
+  kind: Namespace
+  metadata:
+    name: ci-tools-${PULL_REQUEST}
+    annotations:
+      ci.openshift.io/ttl.hard: 48h0m0s
+- kind: RoleBinding
+  apiVersion: rbac.authorization.k8s.io/v1
+  metadata:
+    name: author-admin
+    namespace: ci-tools-${PULL_REQUEST}
+  roleRef:
+    kind: ClusterRole
+    name: admin
+    namespace: ci-tools-${PULL_REQUEST}
+  subjects:
+    - kind: User
+      name: ${USER}
+      apiGroup: rbac.authorization.k8s.io
+- kind: ImageStream
+  apiVersion: image.openshift.io/v1
+  metadata:
+    namespace: ci-tools-${PULL_REQUEST}
+    name: output
+  spec:
+    lookupPolicy:
+      local: true
+- apiVersion: build.openshift.io/v1
+  kind: BuildConfig
+  metadata:
+    name: server
+    namespace: ci-tools-${PULL_REQUEST}
+  spec:
+    output:
+      to:
+        kind: ImageStreamTag
+        name: output:server
+    source:
+      contextDir: images/ci-operator-configresolver
+      git:
+        ref: ${BRANCH}
+        uri: https://github.com/${USER}/ci-tools.git
+      images:
+      - from:
+          kind: ImageStreamTag
+          namespace: ci-tools-${PULL_REQUEST}
+          name: "output:binaries"
+        paths:
+        - destinationDir: images/ci-operator-configresolver/.
+          sourcePath: /go/bin/ci-operator-configresolver
+      type: Git
+    strategy:
+      dockerStrategy:
+        from:
+          kind: ImageStreamTag
+          namespace: origin
+          name: centos:8
+        imageOptimizationPolicy: SkipLayers
+      type: Docker
+    triggers:
+    - type: ImageChange
+      imageChange:
+        from:
+          kind: ImageStreamTag
+          namespace: ci-tools-${PULL_REQUEST}
+          name: "output:binaries"
+- apiVersion: build.openshift.io/v1
+  kind: BuildConfig
+  metadata:
+    name: binaries
+    namespace: ci-tools-${PULL_REQUEST}
+  spec:
+    output:
+      to:
+        kind: ImageStreamTag
+        name: "output:binaries"
+    source:
+      dockerfile: |
+        FROM api.ci.openshift.org/openshift/release:golang-1.13
+
+        COPY . .
+        RUN make install
+      git:
+        ref: ${BRANCH}
+        uri: https://github.com/${USER}/ci-tools.git
+      contextDir: ./
+      type: Git
+    strategy:
+      dockerStrategy:
+        from:
+          kind: ImageStreamTag
+          namespace: openshift
+          name: "release:golang-1.13"
+        imageOptimizationPolicy: SkipLayers
+      type: Docker
+    triggers:
+    - type: ConfigChange
+- apiVersion: v1
+  kind: Service
+  metadata:
+    namespace: ci-tools-${PULL_REQUEST}
+    labels:
+      app: server
+    name: server
+  spec:
+    ports:
+    - name: ui
+      port: 8082
+      protocol: TCP
+      targetPort: ui
+    selector:
+      app: server
+- apiVersion: route.openshift.io/v1
+  kind: Route
+  metadata:
+    labels:
+      app: server
+    name: server
+    namespace: ci-tools-${PULL_REQUEST}
+  spec:
+    tls:
+      insecureEdgeTerminationPolicy: Redirect
+      termination: edge
+    port:
+      targetPort: ui
+    to:
+      kind: Service
+      name: server
+- apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    namespace: ci-tools-${PULL_REQUEST}
+    name: server
+  spec:
+    replicas: 1
+    selector:
+      matchLabels:
+        app: server
+    template:
+      metadata:
+        labels:
+          app: server
+      spec:
+        containers:
+        - name: ci-operator-configresolver
+          image: "output:server"
+          imagePullPolicy: Always
+          args:
+          - -config=/etc/configs
+          - -registry=/etc/registry
+          - -prow-config=/etc/config/config.yaml
+          - -flat-registry
+          - -log-level=debug
+          - -cycle=2m
+          ports:
+          - name: ui
+            containerPort: 8082
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8081
+            initialDelaySeconds: 3
+            periodSeconds: 3
+          readinessProbe:
+            httpGet:
+              path: /healthz/ready
+              port: 8081
+            initialDelaySeconds: 10
+            periodSeconds: 3
+            timeoutSeconds: 600
+          volumeMounts:
+          - name: registry
+            mountPath: /etc/registry
+            readOnly: true
+          - name: configs
+            mountPath: /etc/configs
+            readOnly: true
+          - name: config
+            mountPath: /etc/config
+            readonly: true
+          resources:
+            requests:
+              memory: "2Gi"
+              cpu: "200m"
+        volumes:
+        - name: registry
+          configMap:
+            name: step-registry
+        - name: configs
+          configMap:
+            name: ci-operator-configs
+        - name: config
+          configMap:
+            name: config

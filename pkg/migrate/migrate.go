@@ -14,6 +14,7 @@ const (
 var (
 	migratedRepos = sets.NewString(
 		"openshift/jenkins-openshift-login-plugin/*",
+		"heketi/heketi/*",
 		//find ./ci-operator/config -type d -depth 2 | head -n 30 | while read i; do echo "\"${i#./ci-operator/config/}/*\","; done
 		"ostreedev/ostree/*",
 		"openshift-priv/csi-external-attacher/*",

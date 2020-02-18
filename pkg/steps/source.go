@@ -393,17 +393,26 @@ func handleBuild(ctx context.Context, buildClient BuildClient, build *buildapi.B
 }
 
 func waitForBuildDeletion(ctx context.Context, client BuildClient, ns, name string) error {
-	return wait.ExponentialBackoff(wait.Backoff{
-		Duration: 10 * time.Millisecond, Factor: 2, Steps: 10,
-	}, func() (done bool, err error) {
-		if _, err := client.Builds(ns).Get(name, meta.GetOptions{}); err != nil {
-			if errors.IsNotFound(err) {
-				return true, nil
+	ch := make(chan error)
+	go func() {
+		ch <- wait.ExponentialBackoff(wait.Backoff{
+			Duration: 10 * time.Millisecond, Factor: 2, Steps: 10,
+		}, func() (done bool, err error) {
+			if _, err := client.Builds(ns).Get(name, meta.GetOptions{}); err != nil {
+				if errors.IsNotFound(err) {
+					return true, nil
+				}
+				return false, err
 			}
-			return false, err
-		}
-		return false, nil
-	})
+			return false, nil
+		})
+	}()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case err := <-ch:
+		return err
+	}
 }
 
 func isInfraReason(reason buildapi.StatusReason) bool {
@@ -486,10 +495,16 @@ func waitForBuildOrTimeout(ctx context.Context, buildClient BuildClient, namespa
 		printBuildLogs(buildClient, build.Namespace, build.Name)
 		return false, appendLogToError(fmt.Errorf("the build %s failed with reason %s: %s", build.Name, build.Status.Reason, build.Status.Message), build.Status.LogSnippet)
 	}
-
+	done := ctx.Done()
 	ch := watcher.ResultChan()
 	for {
-		event, ok := <-ch
+		var event watch.Event
+		var ok bool
+		select {
+		case <-done:
+			return false, ctx.Err()
+		case event, ok = <-ch:
+		}
 		if !ok {
 			// restart
 			return true, nil

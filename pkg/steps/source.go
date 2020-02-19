@@ -374,7 +374,7 @@ func handleBuild(buildClient BuildClient, build *buildapi.Build, dry bool, artif
 				if err := wait.ExponentialBackoff(wait.Backoff{
 					Duration: 10 * time.Millisecond, Factor: 2, Steps: 10,
 				}, func() (done bool, err error) {
-					if _, err := buildClient.Builds(build.Namespace).Get(build.Namespace, meta.GetOptions{}); err != nil {
+					if _, err := buildClient.Builds(build.Namespace).Get(build.Name, meta.GetOptions{}); err != nil {
 						if errors.IsNotFound(err) {
 							return true, nil
 						}

@@ -4,6 +4,11 @@ base_images:
     name: origin-v4.0
     namespace: openshift
     tag: base
+  os:
+    cluster: https://api.ci.openshift.org
+    name: centos
+    namespace: ocp
+    tag: os
 images:
 - from: base
   to: test-image

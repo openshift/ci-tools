@@ -538,37 +538,9 @@ func (o *options) Run() error {
 
 	return interrupt.New(handler, o.saveNamespaceArtifacts).Run(func() error {
 		if o.leaseServer != "" {
-			owner := o.namespace + "-" + o.jobSpec.JobNameHash()
-			if o.dry {
-				o.leaseClient = lease.NewFakeClient(owner, o.leaseServer, 0, nil, nil)
-			} else if o.leaseClient, err = lease.NewClient(owner, o.leaseServer, o.leaseServerUsername, o.leaseServerPasswordFile, 60); err != nil {
+			if err := o.initializeLeaseClient(); err != nil {
 				return fmt.Errorf("failed to create the lease client: %v", err)
 			}
-			defer func() {
-				if l, err := o.leaseClient.ReleaseAll(); err != nil {
-					log.Printf("failed to release leaked leases (%v): %v", l, err)
-				} else if len(l) != 0 {
-					log.Printf("warning: Would leak leases: %v", l)
-				}
-			}()
-			go func() {
-				t := time.NewTicker(30 * time.Second)
-				for {
-					select {
-					case <-ctx.Done():
-						t.Stop()
-						log.Println("cleanup: releasing leases")
-						if _, err := o.leaseClient.ReleaseAll(); err != nil {
-							log.Printf("failed to release leases: %v", err)
-						}
-						return
-					case <-t.C:
-						if err := o.leaseClient.Heartbeat(); err != nil {
-							log.Printf("failed to update leases: %v", err)
-						}
-					}
-				}
-			}()
 		}
 		client, err := coreclientset.NewForConfig(o.clusterConfig)
 		if err != nil {
@@ -1114,6 +1086,30 @@ func (o *options) saveNamespaceArtifacts() {
 		data, _ := json.MarshalIndent(templateInstances, "", "  ")
 		ioutil.WriteFile(filepath.Join(namespaceDir, "templateinstances.json"), data, 0644)
 	}
+}
+
+func (o *options) initializeLeaseClient() error {
+	var err error
+	owner := o.namespace + "-" + o.jobSpec.JobNameHash()
+	if o.dry {
+		o.leaseClient = lease.NewFakeClient(owner, o.leaseServer, 0, nil, nil)
+	} else if o.leaseClient, err = lease.NewClient(owner, o.leaseServer, o.leaseServerUsername, o.leaseServerPasswordFile, 60); err != nil {
+		return fmt.Errorf("failed to create the lease client: %v", err)
+	}
+	t := time.NewTicker(30 * time.Second)
+	go func() {
+		for range t.C {
+			if err := o.leaseClient.Heartbeat(); err != nil {
+				log.Printf("failed to update leases: %v", err)
+			}
+		}
+		if l, err := o.leaseClient.ReleaseAll(); err != nil {
+			log.Printf("failed to release leaked leases (%v): %v", l, err)
+		} else if len(l) != 0 {
+			log.Printf("warning: Would leak leases: %v", l)
+		}
+	}()
+	return nil
 }
 
 func sentryOptionsFromJobSpec(jobSpec *api.JobSpec) []sentry.Option {

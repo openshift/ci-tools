@@ -480,7 +480,39 @@ func (o *options) Run() error {
 	if err != nil {
 		return fmt.Errorf("failed to generate steps from config: %v", err)
 	}
+	// Before we create the namespace, we need to ensure all inputs to the graph
+	// have been resolved. We must run this step before we resolve the partial
+	// graph or otherwise two jobs with different targets would create different
+	// artifact caches.
+	if err := o.resolveInputs(buildSteps); err != nil {
+		return fmt.Errorf("could not resolve inputs: %v", err)
+	}
 
+	if err := o.writeMetadataJSON(); err != nil {
+		return fmt.Errorf("unable to write metadata.json for build: %v", err)
+	}
+	if o.print {
+		if err := printDigraph(os.Stdout, buildSteps); err != nil {
+			return fmt.Errorf("could not print graph: %v", err)
+		}
+		return nil
+	}
+
+	// convert the full graph into the subset we must run
+	nodes, err := api.BuildPartialGraph(buildSteps, o.targets.values)
+	if err != nil {
+		return fmt.Errorf("could not build execution graph: %v", err)
+	}
+
+	if err := printExecutionOrder(nodes); err != nil {
+		return fmt.Errorf("could not print execution order: %v", err)
+	}
+
+	// initialize the namespace if necessary and create any resources that must
+	// exist prior to execution
+	if err := o.initializeNamespace(); err != nil {
+		return fmt.Errorf("could not initialize namespace: %v", err)
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	handler := func(s os.Signal) {
 		if o.dry {
@@ -493,17 +525,6 @@ func (o *options) Run() error {
 	}
 
 	return interrupt.New(handler, o.saveNamespaceArtifacts).Run(func() error {
-		// Before we create the namespace, we need to ensure all inputs to the graph
-		// have been resolved. We must run this step before we resolve the partial
-		// graph or otherwise two jobs with different targets would create different
-		// artifact caches.
-		if err := o.resolveInputs(buildSteps); err != nil {
-			return fmt.Errorf("could not resolve inputs: %v", err)
-		}
-
-		if err := o.writeMetadataJSON(); err != nil {
-			return fmt.Errorf("unable to write metadata.json for build: %v", err)
-		}
 		if o.leaseServer != "" {
 			owner := o.namespace + "-" + o.jobSpec.JobNameHash()
 			if o.dry {
@@ -537,39 +558,13 @@ func (o *options) Run() error {
 				}
 			}()
 		}
-		if o.print {
-			if err := printDigraph(os.Stdout, buildSteps); err != nil {
-				return fmt.Errorf("could not print graph: %v", err)
-			}
-			return nil
-		}
-
-		// convert the full graph into the subset we must run
-		nodes, err := api.BuildPartialGraph(buildSteps, o.targets.values)
-		if err != nil {
-			return fmt.Errorf("could not build execution graph: %v", err)
-		}
-
-		if err := printExecutionOrder(nodes); err != nil {
-			return fmt.Errorf("could not print execution order: %v", err)
-		}
-
-		// initialize the namespace if necessary and create any resources that must
-		// exist prior to execution
-		if err := o.initializeNamespace(); err != nil {
-			return fmt.Errorf("could not initialize namespace: %v", err)
-		}
-
 		client, err := coreclientset.NewForConfig(o.clusterConfig)
 		if err != nil {
 			return fmt.Errorf("could not get core client for cluster config: %v", err)
 		}
-		var authClient *authclientset.AuthorizationV1Client
-		if !o.dry {
-			authClient, err = authclientset.NewForConfig(o.clusterConfig)
-			if err != nil {
-				return fmt.Errorf("could not get auth client for cluster config: %v", err)
-			}
+		authClient, err := authclientset.NewForConfig(o.clusterConfig)
+		if err != nil {
+			return fmt.Errorf("could not get auth client for cluster config: %v", err)
 		}
 		eventRecorder, err := eventRecorder(client, authClient, o.namespace, o.dry)
 		if err != nil {
@@ -606,15 +601,10 @@ func (o *options) Run() error {
 		}
 
 		eventRecorder.Event(runtimeObject, coreapi.EventTypeNormal, "CiJobSucceeded", eventJobDescription(o.jobSpec, o.namespace))
-
 		if !o.dry {
 			time.Sleep(time.Second)
-		}
-
-		if o.dry {
-			if err := dryLogger.Log(); err != nil {
-				fmt.Println(err)
-			}
+		} else if err := dryLogger.Log(); err != nil {
+			fmt.Println(err)
 		}
 
 		return nil

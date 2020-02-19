@@ -50,7 +50,7 @@ type podStep struct {
 	subTests []*junit.TestCase
 }
 
-func (s *podStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
+func (s *podStep) Inputs(dry bool) (api.InputDefinition, error) {
 	return nil, nil
 }
 

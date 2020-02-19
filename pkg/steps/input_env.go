@@ -27,7 +27,7 @@ func NewInputEnvironmentStep(name string, values map[string]string, links []api.
 
 var _ api.Step = &inputEnvironmentStep{}
 
-func (s *inputEnvironmentStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
+func (s *inputEnvironmentStep) Inputs(dry bool) (api.InputDefinition, error) {
 	var values []string
 	for _, v := range s.values {
 		values = append(values, v)

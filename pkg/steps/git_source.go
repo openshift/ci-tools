@@ -25,7 +25,7 @@ type gitSourceStep struct {
 	pullSecret      *coreapi.Secret
 }
 
-func (s *gitSourceStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
+func (s *gitSourceStep) Inputs(dry bool) (api.InputDefinition, error) {
 	return s.jobSpec.Inputs(), nil
 }
 

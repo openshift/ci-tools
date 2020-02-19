@@ -62,7 +62,7 @@ func (s *stableImagesTagStep) Run(ctx context.Context, dry bool) error {
 	return nil
 }
 
-func (s *stableImagesTagStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
+func (s *stableImagesTagStep) Inputs(dry bool) (api.InputDefinition, error) {
 	return nil, nil
 }
 
@@ -126,7 +126,7 @@ func findStatusTag(is *imageapi.ImageStream, tag string) (*coreapi.ObjectReferen
 	return nil, ""
 }
 
-func (s *releaseImagesTagStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
+func (s *releaseImagesTagStep) Inputs(dry bool) (api.InputDefinition, error) {
 	return nil, nil
 }
 

@@ -64,7 +64,7 @@ type assembleReleaseStep struct {
 	dryLogger   *steps.DryLogger
 }
 
-func (s *assembleReleaseStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
+func (s *assembleReleaseStep) Inputs(dry bool) (api.InputDefinition, error) {
 	if val, _ := s.params.Get(s.envVar()); len(val) > 0 {
 		result, err := s.imageClient.ImageStreamImports(s.config.Namespace).Create(&imageapi.ImageStreamImport{
 			ObjectMeta: meta.ObjectMeta{

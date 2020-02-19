@@ -153,7 +153,7 @@ type sourceStep struct {
 	pullSecret         *coreapi.Secret
 }
 
-func (s *sourceStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
+func (s *sourceStep) Inputs(dry bool) (api.InputDefinition, error) {
 	return s.jobSpec.Inputs(), nil
 }
 

@@ -18,7 +18,7 @@ type stepNeedsLease struct {
 	fail, ran bool
 }
 
-func (stepNeedsLease) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
+func (stepNeedsLease) Inputs(dry bool) (api.InputDefinition, error) {
 	return api.InputDefinition{"step", "inputs"}, nil
 }
 func (s *stepNeedsLease) Run(ctx context.Context, dry bool) error {
@@ -50,11 +50,11 @@ func TestLeaseStepForward(t *testing.T) {
 	step := stepNeedsLease{}
 	withLease := LeaseStep(nil, name, &step)
 	t.Run("Inputs", func(t *testing.T) {
-		s, err := step.Inputs(nil, false)
+		s, err := step.Inputs(false)
 		if err != nil {
 			t.Fatal(err)
 		}
-		l, err := withLease.Inputs(nil, false)
+		l, err := withLease.Inputs(false)
 		if err != nil {
 			t.Fatal(err)
 		}

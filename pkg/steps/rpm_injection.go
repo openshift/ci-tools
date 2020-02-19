@@ -30,7 +30,7 @@ type rpmImageInjectionStep struct {
 	pullSecret  *coreapi.Secret
 }
 
-func (s *rpmImageInjectionStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
+func (s *rpmImageInjectionStep) Inputs(dry bool) (api.InputDefinition, error) {
 	return nil, nil
 }
 

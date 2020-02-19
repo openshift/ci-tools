@@ -118,7 +118,7 @@ func (s *e2eTestStep) checkPrereqs() error {
 	return nil
 }
 
-func (s *e2eTestStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
+func (s *e2eTestStep) Inputs(dry bool) (api.InputDefinition, error) {
 	return nil, nil
 }
 

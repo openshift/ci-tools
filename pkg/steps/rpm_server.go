@@ -43,7 +43,7 @@ type rpmServerStep struct {
 	dryLogger        *DryLogger
 }
 
-func (s *rpmServerStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
+func (s *rpmServerStep) Inputs(dry bool) (api.InputDefinition, error) {
 	return nil, nil
 }
 

@@ -29,7 +29,7 @@ type pipelineImageCacheStep struct {
 	pullSecret  *coreapi.Secret
 }
 
-func (s *pipelineImageCacheStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
+func (s *pipelineImageCacheStep) Inputs(dry bool) (api.InputDefinition, error) {
 	return nil, nil
 }
 

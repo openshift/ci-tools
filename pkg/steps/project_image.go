@@ -26,7 +26,7 @@ type projectDirectoryImageBuildStep struct {
 	pullSecret  *coreapi.Secret
 }
 
-func (s *projectDirectoryImageBuildStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
+func (s *projectDirectoryImageBuildStep) Inputs(dry bool) (api.InputDefinition, error) {
 	return nil, nil
 }
 

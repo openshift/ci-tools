@@ -39,7 +39,7 @@ func targetName(config api.PromotionConfiguration) string {
 	return fmt.Sprintf("%s/${component}:%s", config.Namespace, config.Tag)
 }
 
-func (s *promotionStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
+func (s *promotionStep) Inputs(dry bool) (api.InputDefinition, error) {
 	return nil, nil
 }
 

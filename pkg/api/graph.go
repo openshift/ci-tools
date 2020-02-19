@@ -9,7 +9,7 @@ import (
 // Step is a self-contained bit of work that the
 // build pipeline needs to do.
 type Step interface {
-	Inputs(ctx context.Context, dry bool) (InputDefinition, error)
+	Inputs(dry bool) (InputDefinition, error)
 	Run(ctx context.Context, dry bool) error
 
 	// Name is the name of the stage, used to target it.

@@ -53,7 +53,7 @@ type templateExecutionStep struct {
 	subTests []*junit.TestCase
 }
 
-func (s *templateExecutionStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
+func (s *templateExecutionStep) Inputs(dry bool) (api.InputDefinition, error) {
 	return nil, nil
 }
 

@@ -98,7 +98,7 @@ func (s *multiStageTestStep) profileSecretName() string {
 	return s.name + "-cluster-profile"
 }
 
-func (s *multiStageTestStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
+func (s *multiStageTestStep) Inputs(dry bool) (api.InputDefinition, error) {
 	return nil, nil
 }
 

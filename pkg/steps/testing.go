@@ -318,7 +318,7 @@ func examineStep(t *testing.T, step api.Step, expected stepExpectation) {
 		t.Errorf("step.Provides returned different link\n%s", diff.ObjectReflectDiff(expected.provides.link, link))
 	}
 
-	inputs, err := step.Inputs(context.Background(), false)
+	inputs, err := step.Inputs(false)
 	if !reflect.DeepEqual(expected.inputs.values, inputs) {
 		t.Errorf("step.Inputs returned different inputs\n%s", diff.ObjectReflectDiff(expected.inputs.values, inputs))
 	}

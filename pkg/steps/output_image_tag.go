@@ -27,7 +27,7 @@ type outputImageTagStep struct {
 	dryLogger *DryLogger
 }
 
-func (s *outputImageTagStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
+func (s *outputImageTagStep) Inputs(dry bool) (api.InputDefinition, error) {
 	return nil, nil
 }
 

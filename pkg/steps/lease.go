@@ -27,8 +27,8 @@ func LeaseStep(client *lease.Client, lease string, wrapped api.Step) api.Step {
 	}
 }
 
-func (s *leaseStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
-	return s.wrapped.Inputs(ctx, dry)
+func (s *leaseStep) Inputs(dry bool) (api.InputDefinition, error) {
+	return s.wrapped.Inputs(dry)
 }
 
 func (s *leaseStep) Name() string                               { return s.wrapped.Name() }

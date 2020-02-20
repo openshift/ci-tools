@@ -9,7 +9,7 @@ postsubmits:
     hidden: true
     labels:
       ci-operator.openshift.io/prowgen-controlled: "true"
-    name: branch-ci-private-duper-master-images
+    name: priv-ci-private-duper-master-images
     spec:
       containers:
       - args:

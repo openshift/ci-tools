@@ -18,7 +18,7 @@ import (
 	"k8s.io/test-infra/prow/pjutil"
 
 	"github.com/openshift/ci-tools/pkg/config"
-	"github.com/openshift/ci-tools/pkg/load"
+	"github.com/openshift/ci-tools/pkg/load/agents"
 	"github.com/openshift/ci-tools/pkg/webreg"
 )
 
@@ -184,7 +184,7 @@ func genericHandler() http.HandlerFunc {
 	}
 }
 
-func resolveConfig(configAgent load.ConfigAgent, registryAgent load.RegistryAgent) http.HandlerFunc {
+func resolveConfig(configAgent agents.ConfigAgent, registryAgent agents.RegistryAgent) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "GET" {
 			w.WriteHeader(http.StatusNotImplemented)
@@ -243,14 +243,14 @@ func resolveConfig(configAgent load.ConfigAgent, registryAgent load.RegistryAgen
 	}
 }
 
-func getConfigGeneration(agent load.ConfigAgent) http.HandlerFunc {
+func getConfigGeneration(agent agents.ConfigAgent) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintf(w, "%d", agent.GetGeneration())
 	}
 }
 
-func getRegistryGeneration(agent load.RegistryAgent) http.HandlerFunc {
+func getRegistryGeneration(agent agents.RegistryAgent) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintf(w, "%d", agent.GetGeneration())
@@ -274,12 +274,12 @@ func main() {
 	health := pjutil.NewHealth()
 	metrics.ExposeMetrics("ci-operator-configresolver", prowConfig.PushGateway{})
 
-	configAgent, err := load.NewConfigAgent(o.configPath, o.cycle, configresolverMetrics.errorRate)
+	configAgent, err := agents.NewConfigAgent(o.configPath, o.cycle, configresolverMetrics.errorRate)
 	if err != nil {
 		log.Fatalf("Failed to get config agent: %v", err)
 	}
 
-	registryAgent, err := load.NewRegistryAgent(o.registryPath, o.cycle, configresolverMetrics.errorRate, o.flatRegistry)
+	registryAgent, err := agents.NewRegistryAgent(o.registryPath, o.cycle, configresolverMetrics.errorRate, o.flatRegistry)
 	if err != nil {
 		log.Fatalf("Failed to get registry agent: %v", err)
 	}

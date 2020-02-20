@@ -1,4 +1,4 @@
-package load
+package agents
 
 import (
 	"fmt"
@@ -15,6 +15,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/coalescer"
 	"github.com/openshift/ci-tools/pkg/config"
+	"github.com/openshift/ci-tools/pkg/load"
 )
 
 // ConfigAgent is an interface that can load configs from disk into
@@ -111,7 +112,7 @@ func (a *configAgent) loadFilenameToConfig() error {
 		}
 		ext := filepath.Ext(path)
 		if info != nil && !info.IsDir() && (ext == ".yml" || ext == ".yaml") {
-			configSpec, err := Config(path, "", nil)
+			configSpec, err := load.Config(path, "", nil)
 			if err != nil {
 				a.recordError("failed to load ci-operator config")
 				return fmt.Errorf("failed to load ci-operator config (%v)", err)

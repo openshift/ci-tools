@@ -17,6 +17,7 @@ import (
 
 const (
 	privatePromotionNamespace = "ocp-private"
+	ocpNamespace              = "ocp"
 )
 
 type options struct {
@@ -74,12 +75,23 @@ func main() {
 			rbc.CanonicalGoRepository = strP(fmt.Sprintf("github.com/%s/%s", repoInfo.Org, repoInfo.Repo))
 		}
 
+		if rbc.ReleaseTagConfiguration != nil {
+			privateReleaseTagConfiguration(rbc.ReleaseTagConfiguration)
+		}
+
+		if rbc.BuildRootImage != nil && rbc.BuildRootImage.ImageStreamTagReference != nil {
+			privateBuildRoot(rbc.BuildRootImage)
+		}
+
+		if len(rbc.BaseImages) > 0 {
+			privateBaseImages(rbc.BaseImages)
+		}
+
+		if rbc.PromotionConfiguration != nil {
+			privatePromotionConfiguration(rbc.PromotionConfiguration)
+		}
+
 		repoInfo.Org = o.toOrg
-
-		rbc.PromotionConfiguration.Disabled = true
-		rbc.PromotionConfiguration.Name = fmt.Sprintf("%s-priv", rbc.PromotionConfiguration.Name)
-		rbc.PromotionConfiguration.Namespace = privatePromotionNamespace
-
 		dataWithInfo := config.DataWithInfo{
 			Configuration: *rbc,
 			Info:          *repoInfo,
@@ -94,6 +106,38 @@ func main() {
 
 	if err := config.OperateOnCIOperatorConfigDir(o.configDir, callback); err != nil {
 		logrus.WithError(err).Fatal("error while generating the ci-operator configuration files")
+	}
+}
+
+func privateReleaseTagConfiguration(tagSpecification *api.ReleaseTagConfiguration) {
+	if tagSpecification.Namespace == ocpNamespace {
+		tagSpecification.Name = fmt.Sprintf("%s-priv", tagSpecification.Name)
+		tagSpecification.Namespace = privatePromotionNamespace
+	}
+}
+
+func privateBuildRoot(buildRoot *api.BuildRootImageConfiguration) {
+	if buildRoot.ImageStreamTagReference.Namespace == ocpNamespace {
+		buildRoot.ImageStreamTagReference.Name = fmt.Sprintf("%s-priv", buildRoot.ImageStreamTagReference.Name)
+		buildRoot.ImageStreamTagReference.Namespace = privatePromotionNamespace
+	}
+}
+
+func privateBaseImages(baseImages map[string]api.ImageStreamTagReference) {
+	for name, reference := range baseImages {
+		if reference.Namespace == ocpNamespace {
+			reference.Name = fmt.Sprintf("%s-priv", reference.Name)
+			reference.Namespace = privatePromotionNamespace
+			baseImages[name] = reference
+		}
+	}
+}
+
+func privatePromotionConfiguration(promotion *api.PromotionConfiguration) {
+	if promotion.Namespace == ocpNamespace {
+		promotion.Disabled = true
+		promotion.Name = fmt.Sprintf("%s-priv", promotion.Name)
+		promotion.Namespace = privatePromotionNamespace
 	}
 }
 

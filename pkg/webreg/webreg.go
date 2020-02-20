@@ -18,7 +18,7 @@ import (
 	prowConfig "k8s.io/test-infra/prow/config"
 
 	"github.com/openshift/ci-tools/pkg/api"
-	"github.com/openshift/ci-tools/pkg/load"
+	"github.com/openshift/ci-tools/pkg/load/agents"
 	"github.com/openshift/ci-tools/pkg/registry"
 )
 
@@ -930,7 +930,7 @@ func helpHandler(subPath string, w http.ResponseWriter, req *http.Request) {
 	writePage(w, "Step Registry Help Page", helpTemplate, data)
 }
 
-func mainPageHandler(agent load.RegistryAgent, templateString string, w http.ResponseWriter, req *http.Request) {
+func mainPageHandler(agent agents.RegistryAgent, templateString string, w http.ResponseWriter, req *http.Request) {
 	start := time.Now()
 	defer func() { logrus.Infof("rendered in %s", time.Now().Sub(start)) }()
 
@@ -954,7 +954,7 @@ func mainPageHandler(agent load.RegistryAgent, templateString string, w http.Res
 	writePage(w, "Step Registry Help Page", page, comps)
 }
 
-func WebRegHandler(regAgent load.RegistryAgent, confAgent load.ConfigAgent, jobAgent *prowConfig.Agent) http.HandlerFunc {
+func WebRegHandler(regAgent agents.RegistryAgent, confAgent agents.ConfigAgent, jobAgent *prowConfig.Agent) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		trimmedPath := strings.TrimPrefix(req.URL.Path, req.URL.Host)
 		// remove leading slash
@@ -1021,7 +1021,7 @@ func syntaxBash(source string) (string, error) {
 	return syntax(source, lexers.Get("bash"))
 }
 
-func referenceHandler(agent load.RegistryAgent, w http.ResponseWriter, req *http.Request) {
+func referenceHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *http.Request) {
 	start := time.Now()
 	defer func() { logrus.Infof("rendered in %s", time.Now().Sub(start)) }()
 	w.Header().Set("Content-Type", "text/html;charset=UTF-8")
@@ -1055,7 +1055,7 @@ func referenceHandler(agent load.RegistryAgent, w http.ResponseWriter, req *http
 	writePage(w, "Registry Reference Help Page", page, ref)
 }
 
-func chainHandler(agent load.RegistryAgent, w http.ResponseWriter, req *http.Request) {
+func chainHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *http.Request) {
 	start := time.Now()
 	defer func() { logrus.Infof("rendered in %s", time.Now().Sub(start)) }()
 	w.Header().Set("Content-Type", "text/html;charset=UTF-8")
@@ -1076,7 +1076,7 @@ func chainHandler(agent load.RegistryAgent, w http.ResponseWriter, req *http.Req
 	writePage(w, "Registry Chain Help Page", page, chain)
 }
 
-func workflowHandler(agent load.RegistryAgent, w http.ResponseWriter, req *http.Request) {
+func workflowHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *http.Request) {
 	start := time.Now()
 	defer func() { logrus.Infof("rendered in %s", time.Now().Sub(start)) }()
 	w.Header().Set("Content-Type", "text/html;charset=UTF-8")
@@ -1099,7 +1099,7 @@ func workflowHandler(agent load.RegistryAgent, w http.ResponseWriter, req *http.
 	writePage(w, "Registry Workflow Help Page", page, workflow)
 }
 
-func findConfigForJob(jobName string, configs load.FilenameToConfig) (api.MultiStageTestConfiguration, error) {
+func findConfigForJob(jobName string, configs agents.FilenameToConfig) (api.MultiStageTestConfiguration, error) {
 	splitJobName := strings.Split(jobName, "-")
 	var filename, testname string
 	var config api.ReleaseBuildConfiguration
@@ -1125,7 +1125,7 @@ func findConfigForJob(jobName string, configs load.FilenameToConfig) (api.MultiS
 	return api.MultiStageTestConfiguration{}, fmt.Errorf("Could not find job %s. Job either does not exist or is not a multi stage test", jobName)
 }
 
-func jobHandler(regAgent load.RegistryAgent, confAgent load.ConfigAgent, w http.ResponseWriter, req *http.Request) {
+func jobHandler(regAgent agents.RegistryAgent, confAgent agents.ConfigAgent, w http.ResponseWriter, req *http.Request) {
 	start := time.Now()
 	defer func() { logrus.Infof("rendered in %s", time.Now().Sub(start)) }()
 	w.Header().Set("Content-Type", "text/html;charset=UTF-8")
@@ -1219,7 +1219,7 @@ func (j *Jobs) addJob(orgName, repoName, branchName, testName string) {
 }
 
 // getAllMultiStageTests return a map that has the config name in org-repo-branch format as the key and the test names for multi stage jobs as the value
-func getAllMultiStageTests(confAgent load.ConfigAgent, jobAgent *prowConfig.Agent) *Jobs {
+func getAllMultiStageTests(confAgent agents.ConfigAgent, jobAgent *prowConfig.Agent) *Jobs {
 	jobs := &Jobs{}
 	configs := confAgent.GetAll()
 	allRepos := jobAgent.Config().AllRepos
@@ -1254,7 +1254,7 @@ func getAllMultiStageTests(confAgent load.ConfigAgent, jobAgent *prowConfig.Agen
 	return jobs
 }
 
-func searchHandler(confAgent load.ConfigAgent, jobAgent *prowConfig.Agent, w http.ResponseWriter, req *http.Request) {
+func searchHandler(confAgent agents.ConfigAgent, jobAgent *prowConfig.Agent, w http.ResponseWriter, req *http.Request) {
 	start := time.Now()
 	defer func() { logrus.Infof("rendered in %s", time.Now().Sub(start)) }()
 	w.Header().Set("Content-Type", "text/html;charset=UTF-8")

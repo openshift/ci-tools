@@ -1,16 +1,18 @@
-package load
+package agents
 
 import (
 	"fmt"
 	"sync"
 	"time"
 
-	"github.com/openshift/ci-tools/pkg/api"
-	"github.com/openshift/ci-tools/pkg/coalescer"
-	"github.com/openshift/ci-tools/pkg/registry"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/test-infra/prow/interrupts"
+
+	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/coalescer"
+	"github.com/openshift/ci-tools/pkg/load"
+	"github.com/openshift/ci-tools/pkg/registry"
 )
 
 // RegistryAgent is an interface that can load a registry from disk into
@@ -93,7 +95,7 @@ func (a *registryAgent) GetRegistryComponents() (registry.ReferenceByName, regis
 func (a *registryAgent) loadRegistry() error {
 	log.Debug("Reloading registry")
 	startTime := time.Now()
-	references, chains, workflows, documentation, err := Registry(a.registryPath, a.flatRegistry)
+	references, chains, workflows, documentation, err := load.Registry(a.registryPath, a.flatRegistry)
 	if err != nil {
 		a.recordError("failed to load ci-operator registry")
 		return fmt.Errorf("failed to load ci-operator registry (%v)", err)

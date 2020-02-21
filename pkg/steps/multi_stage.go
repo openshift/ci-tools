@@ -142,18 +142,13 @@ func (s *multiStageTestStep) Description() string {
 }
 
 func (s *multiStageTestStep) Requires() (ret []api.StepLink) {
-	var needsImages, needsRelease bool
+	var needsRelease bool
 	for _, step := range append(append(s.pre, s.test...), s.post...) {
-		if s.config.IsPipelineImage(step.From) {
+		if s.config.IsPipelineImage(step.From) || s.config.BuildsImage(step.From) {
 			ret = append(ret, api.InternalImageLink(api.PipelineImageStreamTagReference(step.From)))
-		} else if s.config.BuildsImage(step.From) {
-			needsImages = true
 		} else {
 			needsRelease = true
 		}
-	}
-	if needsImages {
-		ret = append(ret, api.ImagesReadyLink())
 	}
 	if needsRelease {
 		ret = append(ret, api.ReleaseImagesLink())

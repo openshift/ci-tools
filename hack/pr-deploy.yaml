@@ -144,6 +144,8 @@ objects:
   metadata:
     namespace: ci-tools-${PULL_REQUEST}
     name: server
+    annotations:
+      image.openshift.io/triggers: '[{"from":{"kind":"ImageStreamTag","name":"output:server"},"fieldPath":"spec.template.spec.containers[?(@.name==\"ci-operator-configresolver\")].image"}]'
   spec:
     replicas: 1
     selector:

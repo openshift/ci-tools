@@ -620,11 +620,11 @@ as the component.
 const examplesPage = `
 <h2 id="examples"><a href="#examples">Available Examples</a></h2>
 <ul>
-  <li><a href="#aws">How do I add a job that runs the standard e2e tests on AWS?</a></li>
+  <li><a href="#aws">How do I add a job that runs the OpenShift end-to-end conformance suite on AWS?</a></li>
   <li><a href="#image">How do I use an image from another repo in my repo’s tests?</a></li>
 </ul>
 
-<h3 id="aws"><a href="#aws">How do I add a job that runs the standard e2e tests on AWS?</a></h3>
+<h3 id="aws"><a href="#aws">How do I add a job that runs the OpenShift end-to-end conformance suite on AWS?</a></h3>
 <p>
 Use the <code>origin-e2e</code> workflow and set <code>cluster_profile</code>
 to <code>aws</code>.

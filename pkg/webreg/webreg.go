@@ -358,7 +358,7 @@ another.
 
 <p>
 To understand how the multistage tests and registry work, we must first talk
-about the 3 components of the test registry and how to use those components
+about the three components of the test registry and how to use those components
 to create a test:
 <ul>
   <li>
@@ -429,9 +429,9 @@ chain:
 <p>
 A workflow is the highest level component of the step registry. It is almost
 identical to the syntax of the <code>ci-operator</code> configuration for multistage tests and
-defines an entire test from start to finish. It has 4 basic components: a
+defines an entire test from start to finish. It has four basic components: a
 <code>cluster_profile</code> string (eg: <code>aws</code>, <code>azure4</code>,
-<code>gcp</code>), and 3 chains: <code>pre</code>, <code>test</code>, and
+<code>gcp</code>), and three chains: <code>pre</code>, <code>test</code>, and
 <code>post</code>. The <code>pre</code> chain is intended to be used to set
 up a testing environment (such as creating a test cluster), the
 <code>test</code> chain is intended to contain all tests that a job wants to
@@ -492,7 +492,7 @@ can be in a subdirectory (otherwise there would be a name conflict),
 
 <p>
 After the prefix, we apply a suffix based on what the file is defining. These
-are the suffixes for the 4 file types that exist in the registry:
+are the suffixes for the four file types that exist in the registry:
 <ul style="margin-bottom:0px;">
   <li>Reference: <code>-ref.yaml</code></li>
   <li>Reference command script: <code>-commands.sh</code></li>

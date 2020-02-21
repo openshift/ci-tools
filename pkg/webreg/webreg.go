@@ -310,7 +310,7 @@ const templateDefinitions = `
 				<th title="GitHub organization that the job is from" class="info">Org</th>
 				<th title="GitHub repo that the job is from" class="info">Repo</th>
 				<th title="GitHub branch that the job is from" class="info">Branch</th>
-				<th title="The multistage tests in the config" class="info">Tests</th>
+				<th title="The multistage tests in the configuration" class="info">Tests</th>
 			</tr>
 		</thead>
 		<tbody>
@@ -428,7 +428,7 @@ chain:
 <h3 id="workflow">Workflow:</h3>
 <p>
 A workflow is the highest level component of the step registry. It is almost
-identical to the syntax of the ci-operator config for multistage tests and
+identical to the syntax of the ci-operator configuration for multistage tests and
 defines an entire test from start to finish. It has 4 basic components: a
 <code>cluster_profile</code> string (eg: <code>aws</code>, <code>azure4</code>,
 <code>gcp</code>), and 3 chains: <code>pre</code>, <code>test</code>, and
@@ -439,40 +439,40 @@ run, and the <code>post</code> chain is intended to be used to clean up any
 resources created/used by the test. If a step in <code>pre</code> or
 <code>test</code> fails, all pending <code>pre</code> and <code>test</code>
 steps are skipped and all <code>post</code> steps are run to ensure that
-resources are properly cleaned up. This is an example of a workflow config:
+resources are properly cleaned up. This is an example of a workflow configuration:
 </p>
 
 {{ yamlSyntax (index . "workflowExample") }}
 
-<h3 id="config">CI-Operator Test Config:</h3>
+<h3 id="config">CI-Operator Test Configuration:</h3>
 <p>
-The CI-Operator test config syntax for multistage tests is very similar to
+The CI-Operator test configuration syntax for multistage tests is very similar to
 the registry workflow syntax. The main differences are that the ci-operator
-config does not have a <code>documentation</code> field, and the ci-operator
-config can specify a workflow to use. Also, the <code>cluster_profile</code>,
+configuration does not have a <code>documentation</code> field, and the ci-operator
+configuration can specify a workflow to use. Also, the <code>cluster_profile</code>,
 <code>pre</code>, <code>test</code>, and <code>post</code> fields are under a
 <code>steps</code> field instead of <code>workflow</code>. Here is an example
-of the <code>tests</code> section of a ci-operator config using the
+of the <code>tests</code> section of a ci-operator configuration using the
 multistage test design:
 </p>
 
 {{ yamlSyntax (index . "configExample1") }}
 
-Example of a ci-operator config that overrides a workflow field.
+Example of a ci-operator configuration that overrides a workflow field.
 
 {{ yamlSyntax (index . "configExample2") }}
 
 <p>
-In this example, the ci-operator config simply specifies the desired cluster
+In this example, the ci-operator configuration simply specifies the desired cluster
 profile and the <code>origin-e2e</code> workflow shown in the example for the
 <code>Workflow</code> section above.
 </p>
 
 <p>
-Since the ci-operator-config and workflows share the same fields, it is
+Since the ci-operator configuration and workflows share the same fields, it is
 possible to override fields specified in a workflow. In cases where both the
-workflow and a ci-operator config specify the same field, the ci-operator config’s
-field has priority (i.e. the value from the ci-operator config is used).
+workflow and a ci-operator configuration specify the same field, the ci-operator configuration’s
+field has priority (i.e. the value from the ci-operator configuration is used).
 </p>
 
 <h3 id="layout">Registry Layout and Naming Convention:</h3>
@@ -637,7 +637,7 @@ are promoted for reuse by other repositories to the <code>ocp/4.4</code> integra
   <li>the <code>stable:component</code> tag, published as <code>ocp/4.4:component</code> containing the component itself to allow for deployments and installations in end-to-end scenarios</li>
 </ul>
 
-<code>ci-operator</code> config:
+<code>ci-operator</code> configuration:
 {{ yamlSyntax (index . "imagePromotionConfig") }}
 
 <h4 id="image-consumption">Consuming an Image</h3>
@@ -657,7 +657,7 @@ configuration imports a number of images:
   <li>the <code>stable:component</code> and <code>:repo-{scripts|tests}</code> tags, by virtue of them being published under <code>ocp/4.4</code> and brought in with the <code>tag_specification</code></li>
 </ul>
 
-<code>ci-operator</code> config:
+<code>ci-operator</code> configuration:
 {{ yamlSyntax (index . "imageConsumptionConfig") }}
 
 <p>
@@ -665,7 +665,7 @@ Once the image has been configured to be an input for the repository's tests in 
 <code>ci-operator</code> configuration, either explicitly as a <code>base_image</code>
 or implicitly as part of the <code>tag_specification</code>, it can be used in tests
 in one of two ways. A registry reference step can be written to execute the shared tests
-in any <code>ci-operator</code> config, or a literal test step can be added just to one
+in any <code>ci-operator</code> configuration, or a literal test step can be added just to one
 repository's configuration to run the shared tests. Two examples follow which add an
 execution of shared end-to-end tests using these two approaches. Both examples assume
 that we have the <code>ipi</code> workflow available to use.
@@ -687,19 +687,19 @@ Finally, populate a command file for the step: <code>ci-operator/step-registry/o
 {{ bashSyntax (index . "imageExampleCommands") }}
 
 Now the test step is ready for use by any repository. To make use of it, update
-<code>ci-operator</code> config for a separate repository under
+<code>ci-operator</code> configuration for a separate repository under
 <code>ci-operator/config/org/other/org-other-master.yaml</code>:
 {{ yamlSyntax (index . "imageExampleConfig") }}
 
 <h5>Adding a Literal Test Step</h4>
 <p>
 It is possible to directly declare a test step in the
-<code>ci-operator</code> config without adding a new registry component.
+<code>ci-operator</code> configuration without adding a new registry component.
 However, this is usually not recommended for most use cases as commands must
 be inlined (making multilined scripts difficult to handle) and the steps are
 not reusable by other tests:
 </p>
-<code>ci-operator</code> config:
+<code>ci-operator</code> configuration:
 {{ yamlSyntax (index . "imageExampleLiteral") }}
 `
 

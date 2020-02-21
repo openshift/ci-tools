@@ -37,9 +37,31 @@ func TestInputImageTagStep(t *testing.T) {
 	}
 
 	fakecs := ciopTestingClient{
-		kubecs:  nil,
-		imagecs: fakeimageclientset.NewSimpleClientset(),
-		t:       t,
+		kubecs: nil,
+		imagecs: fakeimageclientset.NewSimpleClientset(&apiimagev1.ImageStream{
+			ObjectMeta: meta.ObjectMeta{
+				Namespace: "target-namespace",
+				Name:      api.PipelineImageStream,
+			},
+			Spec: apiimagev1.ImageStreamSpec{
+				// pipeline:* will now be directly referenceable
+				LookupPolicy: apiimagev1.ImageLookupPolicy{Local: true},
+			},
+			Status: apiimagev1.ImageStreamStatus{
+				PublicDockerImageRepository: "some-reg/target-namespace/pipeline",
+				Tags: []apiimagev1.NamedTagEventList{
+					{
+						Tag: "TO",
+						Items: []apiimagev1.TagEvent{
+							{
+								Image: "sha256:47e2f82dbede8ff990e6e240f82d78830e7558f7b30df7bd8c0693992018b1e3",
+							},
+						},
+					},
+				},
+			},
+		}),
+		t: t,
 	}
 
 	srcClient := fakecs.ImageV1()

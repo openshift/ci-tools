@@ -139,6 +139,7 @@ td {
         </a>
         <div class="dropdown-menu" aria-labelledby="navbarDropdown">
           <a class="dropdown-item" href="/help">Getting Started</a>
+          <a class="dropdown-item" href="/help/ci-operator">CI Operator Overview</a>
           <a class="dropdown-item" href="/help/adding-components">Adding and Changing Content</a>
           <a class="dropdown-item" href="/help/examples">Examples</a>
         </div>
@@ -363,6 +364,313 @@ const templateDefinitions = `
 		</tbody>
 	</table>
 {{ end }}
+`
+
+const ciOperatorOverviewPage = `<h2 id="title"><a href="#title">What is <code>ci-operator</code> and how does it work?</a></h2>
+
+<p>
+<code>ci-operator</code> is a highly opinionated test workflow execution engine
+that knows about how OpenShift is built, released and installed. <code>ci-operator</code>
+hides the complexity of assembling an ephemeral OpenShift 4.x release payload,
+thereby allowing authors of end-to-end test suites to focus on the content of
+their tests and not the infrastructure required for cluster setup and installation.
+</p>
+
+<p>
+<code>ci-operator</code> allows for components that make up an OpenShift
+release to be tested together by allowing each component repository to
+test with the latest published versions of all other components. An
+integration stream of container images is maintained with the latest
+tested versions of every component. A test for any one component snapshots
+that stream, replaces any images that are being tested with newer versions,
+and creates an ephemeral release payload to support installing an OpenShift
+cluster to run end-to-end tests.
+</p>
+
+<p>
+In addition to giving first-class support for testing OpenShift components,
+<code>ci-operator</code> expects to run in an OpenShift cluster and uses
+OpenShift features like <code>Builds</code> and <code>ImageStreams</code>
+extensively, thereby exemplifying a complex OpenShift user workflow and
+making use of the platform itself. Each test with a unique set of inputs
+will have a <code>Namespace</code> provisioned to hold the OpenShift objects
+that implement the test workflow.
+</p>
+
+<p>
+<code>ci-operator</code> needs to understand a few important characteristics of
+any repository it runs tests for. This document will begin by walking through
+those characteristics and how they are exposed in the configuration. With an
+understanding of those building blocks, then, the internal workflow of
+<code>ci-operator</code> will be presented.
+</p>
+
+<h3 id="configuration"><a href="#configuration">Configuring <code>ci-operator</code>: Defining A Repository</a></h3>
+
+<p>
+At a high level, when a repository author writes a <code>ci-operator</code>
+configuration file, they are describing how a repository produces output
+artifacts, how those artifacts fit into the larger OpenShift release and
+how those artifacts should be tested. The following examples will describe
+the configuration file as well as walk through how <code>ci-operator</code>
+creates OpenShift objects to fulfill their intent. 
+</p>
+
+<h4 id="inputs"><a href="#inputs">Configuring Inputs</a></h4>
+
+<p>
+When <code>ci-operator</code> runs tests to verify proposed changes in a pull
+request to a component repository, it must first build the output artifacts
+from the repository. In order to generate these builds, <code>ci-operator</code>
+needs to know the inputs from which they will be created. A number of inputs
+can be configured; the following example provides both:
+</p>
+<ul>
+  <li><code>base_images</code>: provides a mapping of named <code>ImageStreamTags</code> which will be aviailable for use in container image builds</li>
+  <li><code>build_root</code>: defines the <code>ImageStreamTag</code> in which dependencies exist for building executables and non-image artifacts</li>
+</ul>
+
+<code>ci-operator</code> configuration:
+{{ yamlSyntax (index . "ciOperatorInputConfig") }}
+
+<p>
+As <code>ci-operator</code> is an OpenShift-native tool, all image references
+take the form of an <code>ImageStreamTag</code> on the build farm cluster, not
+just a valid pull-spec for an image. <code>ci-operator</code> will import these
+<code>ImageStreamTags</code> into the <code>Namespace</code> created for the
+test workflow; snapshotting the current state of inputs to allow for reproducible
+builds. If an image that is required for building is not yet present on the
+cluster, the correct <code>ImageStream</code> should be declared and committed
+to the <code>openshift/release</code> repository <a href="https://github.com/openshift/release/tree/master/core-services/supplemental-ci-images">here.</a>
+</p>
+
+<h4 id="artifacts"><a href="#artifacts">Building Artifacts</a></h4>
+
+<p>
+Starting <code>FROM</code> the image described as the <code>build_root</code>,
+<code>ci-operator</code> will clone the repository under test and compile
+artifacts, committing them as image layers that may be referenced in derivative
+builds. The commands which are run to compile artifacts are configured with
+<code>binary_build_commands</code> and are run in the root of the cloned
+repository. A a separate set of commands, <code>test_binary_build_commands</code>,
+can be configured for building artifacts to support test execution. The following
+<code>ImageStreamTags</code> are created in the test's <code>Namespace</code>:
+</p>
+<ul>
+  <li><code>pipeline:root</code>: imports the <code>build_root</code></li>
+  <li><code>pipeline:src</code>: clones the code under test <code>FROM pipeline:root</code></li>
+  <li><code>pipeline:bin</code>: runs commands in the cloned repository to build artifacts <code>FROM pipeline:src</code></li>
+  <li><code>pipeline:test-bin</code>: runs a separate set of commands in the cloned repository to build test artifacts <code>FROM pipeline:src</code></li>
+</ul>
+
+<code>ci-operator</code> configuration:
+{{ yamlSyntax (index . "ciOperatorPipelineConfig") }}
+
+<p>
+The content created with these OpenShift <code>Builds</code> is addressable
+in the <code>ci-operator</code> configuration simply with the tag. For instance,
+the <code>pipeline:bin</code> image can be referenced as <code>bin</code> when
+the content in that image is needed in derivative <code>Builds</code>. 
+</p>
+
+<h4 id="images"><a href="#images">Building Container Images</a></h4>
+
+<p>
+Once container images exist with output artifacts for a repository, additional
+output container images may be built that make use of those artifacts. Commonly,
+the desired output container image will contain only the executables for a
+component and not any of the build-time dependencies. Furthermore, most teams
+will need to publish their output container images through the automated release
+pipeline, which requires that the images are built in Red Hat's production image
+build system, OSBS. In order to create an output container image without build-time
+dependencies in a manner which is compatible with OSBS, the simplest approach is a
+multi-stage <code>Dockerfile</code> build.
+</p>
+
+<p>
+The standard pattern for a multi-stage <code>Dockerfile</code> is to run a compilation
+in a builder image and copy the resulting artifacts into a separate output image base.
+For instance, a repository could add this <code>Dockerfile</code> to their source:
+<p>
+
+<code>Dockerfile</code>:
+{{ dockerfileSyntax (index . "multistageDockerfile") }}
+
+<p>
+While such a <code>Dockerfile</code> could simply be built by <code>ci-operator</code>,
+a number of optimizations can be configured to speed up the process -- especially if
+multiple output images share artifacts. An output container image build is configured
+for <code>ci-operator</code> with the <code>images</code> stanza in the configuration.
+Any entry in the <code>images</code> stanza can be configured with native OpenShift
+<code>Builds</code> options; the full list can be viewed <a href="https://godoc.org/github.com/openshift/ci-tools/pkg/api#ProjectDirectoryImageBuildInputs">here.</a>
+In the following example, an output container image is built where the <code>builder</code>
+image is replaced with the image layers containing built artifacts in <code>pipeline:bin</code>
+and the output image base is replaced with the appropriate entry from <code>base_images</code>.
+<p>
+
+<code>ci-operator</code> configuration:
+{{ yamlSyntax (index . "ciOperatorImageConfig") }}
+
+<p>
+By making use of the previously compiled artifacts in the intermediate <code>pipeline:bin</code>
+image, this repository is able to cache the Go build. If multiple output images exist that
+rely on a previously built artifact, this caching effect can reduce build times dramatically.
+</p>
+
+<h4 id="promotion"><a href="#promotion">Publishing Container Images</a></h4>
+
+<p>
+Once <code>ci-operator</code> has built output container images for a repository,
+it can publish them to an integration <code>ImageStream</code> so that other
+repositories can consume them. For instance, every image that makes up the
+OpenShift release payload is incrementally updated in an integration <code>ImageStream</code>.
+This allows release payloads to be created incorporating the latest tested version
+of every component. In order to publish images to an integration <code>ImageStream</code>,
+add the <code>promotion</code> stanza to <code>ci-operator</code> configuration.
+</p>
+
+<p>
+The <code>promotion</code> stanza declares which container images are published
+and defines the integration <code>ImageStream</code> where they will be available.
+By default, all container images declared in the <code>images</code> block of a
+<code>ci-operator</code> configuration are published when a <code>promotion</code>
+stanza is present to define the integration <code>ImageStream</code>. Promotion can
+also be configured to include other images by setting <code>additional_images</code>
+and to exclude images using <code>excluded_images</code>. For instance, this example
+publishes the following images:
+</p>
+<ul>
+  <li>the <code>pipeline:src</code> tag, published as <code>ocp/4.5:repo-scripts</code> containing the latest version of the repository</li>
+  <li>the <code>stable:component</code> tag, published as <code>ocp/4.5:mycomponent</code> containing the output component itself</li>
+</ul>
+
+<code>ci-operator</code> configuration:
+{{ yamlSyntax (index . "ciOperatorPromotionConfig") }}
+
+<h4 id="release"><a href="#release">Describing Inclusion in an OpenShift Release</a></h4>
+
+<p>
+<code>ci-operator</code> gives first-class support to repositories which need to
+run end-to-end tests in the context of an OpenShift cluster. With the <code>tag_specification</code>
+configuration option, a repository declares which version of OpenShift it is a 
+part of by specifying the images that will be used to create an ephemeral OpenShift
+release payload for testing. Most commonly, the same integration <code>ImageStream</code>
+is specified for <code>tag_specification</code> as is for <code>promotion</code>.
+</p>
+
+<code>ci-operator</code> configuration:
+{{ yamlSyntax (index . "ciOperatorTagSpecificationConfig") }}
+
+<p>
+When <code>ci-operator</code> begins to test a repository, it will snapshot the current
+state of the integration <code>ImageStream</code>, importing all tags into the test
+<code>Namespace</code>. Any output image tags built from the repository under test
+overwrite those that are imported from the integration <code>ImageStream</code>. An
+ephemeral release payload is built from the resulting <code>ImageStream</code>,
+containing the latest published versions of all components and the proposed version
+of the component under test.
+</p>
+
+<h4 id="tests"><a href="#tests">Declaring Tests</a></h4>
+
+<p>
+Tests as executed by <code>ci-operator</code> run a set of commands inside of a container;
+this is implemented by scheduling a <code>Pod</code> under the hood. <code>ci-operator</code>
+can be configured to run one of two types of tests: simple, single-stage container
+tests and longer, multi-stage container tests. A single-stage test will schedule one
+<code>Pod</code> and execute the commands specified. Note that the default working
+directory for any container image in the <code>pipeline</code> <code>ImageStream</code>
+is the root of the cloned repository under test. The following example uses this
+approach to run static verification of source code:
+</p>
+
+<code>ci-operator</code> configuration:
+{{ yamlSyntax (index . "ciOperatorContainerTestConfig") }}
+
+</p>
+The second approach to describing tests allows for multiple containers to be chained
+together and describes a more complicated executioin flow between them. This multi-stage
+test approach is best suited for end-to-end test suites that require full OpenShift
+test clusters to be brought up and torn down. Learn more about this type of test
+at the <a href="./">getting started overview</a>.
+<p>
+`
+
+const ciOperatorInputConfig = `base_images:
+  base: # provides the OpenShift universal base image for other builds to use when they reference "base"
+    cluster: "https://api.ci.openshift.org"
+    name: "4.5"
+    namespace: "ocp"
+    tag: "base"
+  cli: # provides an image with the OpenShift CLI for other builds to use when they reference "cli"
+    cluster: "https://api.ci.openshift.org"
+    name: "4.5"
+    namespace: "ocp"
+    tag: "cli"
+build_root: # declares that the release:golang-1.13 image has the build-time dependencies
+  image_stream_tag:
+    cluster: "https://api.ci.openshift.org"
+    name: "release"
+    namespace: "openshift"
+    tag: "golang-1.13"
+`
+
+const ciOperatorPipelineConfig = `binary_build_commands: "go build ./cmd/..."         # these commands are run to build "pipeline:bin"
+test_binary_build_commands: "go test -c -o mytests" # these commands are run to build "pipeline:test-bin"`
+
+const multistageDockerfile = `# this image is replaced by the build system to provide repository source code
+FROM registry.svc.ci.openshift.org/ocp/builder:golang-1.13 AS builder
+# the repository's source code will be available under $GOPATH of /go
+WORKDIR /go/src/github.com/myorg/myrepo
+# this COPY bring the repository's source code from the build context into an image layer
+COPY . . 
+# this matches the binary_build_commands but runs against the build cache
+RUN go build ./cmd/... 
+
+# this is the production output image base and matches the "base" build_root
+FROM registry.svc.ci.openshift.org/openshift/origin-v4.5:base
+# inject the built artifact into the output
+COPY --from=builder /go/src/github.com/myorg/myrepo/mybinary /usr/bin/
+`
+
+const ciOperatorImageConfig = `images:
+- dockerfile_path: "Dockerfile" # this is a relative path from the root of the repository to the multi-stage Dockerfile
+  from: "base" # a reference to the named base_image, used to replace the output FROM in the Dockerfile
+  inputs:
+    bin: # declares that the "bin" tag is used as the builder image when overwriting that FROM instruction 
+      as:
+      - "registry.svc.ci.openshift.org/ocp/builder:golang-1.13"
+  to: "mycomponent" # names the output container image "mycomponent"
+- dockerfile_path: "tests/Dockerfile"
+  from: "test-bin" # base the build off of the built test binaries
+  inputs:
+    cli:
+      paths:
+      - destination_dir: "."
+        source_path: "/go/bin/oc" # inject the OpenShift clients into the build context directory
+  to: "mytests" # names the output container image "mytests"
+`
+
+const ciOperatorPromotionConfig = `promotion:
+  additional_images:
+    repo-scripts: "src"    # promotes "src" as "repo-scripts"
+  excluded_images:
+  - "mytests" # does not promote the test image
+  namespace: "ocp"
+  name: "4.5"
+`
+
+const ciOperatorTagSpecificationConfig = `tag_specification:
+  cluster: "https://api.ci.openshift.org"
+  namespace: "ocp"
+  name: "4.5"
+`
+
+const ciOperatorContainerTestConfig = `tests:
+- as: "vet"                 # names this test "vet"
+  commands: "go vet ./..."  # declares which commands to run
+  container:
+    from: "src"             # runs the commands in "pipeline:src" 
 `
 
 const gettingStartedPage = `
@@ -649,7 +957,7 @@ stanza declares which container images are published and defines the integration
 <code>ImageStream</code> where they will be available. By default, all container images
 declared in the <code>images</code> block of a <code>ci-operator</code> configuration
 are published when a <code>promotion</code> stanza is present to define the integration
-<code>ImageStream</code>. Promotion can be futhermore configured to include other images,
+<code>ImageStream</code>. Promotion can be furthermore configured to include other images,
 as well. In the following <code>ci-operator</code> configuration, the following images
 are promoted for reuse by other repositories to the <code>ocp/4.4</code> integration
 <code>ImageStream</code>:
@@ -970,6 +1278,14 @@ func helpHandler(subPath string, w http.ResponseWriter, req *http.Request) {
 				}
 				return template.HTML(formatted)
 			},
+			"dockerfileSyntax": func(source string) template.HTML {
+				formatted, err := syntaxDockerfile(source)
+				if err != nil {
+					logrus.Errorf("Failed to format source file: %v", err)
+					return template.HTML(source)
+				}
+				return template.HTML(formatted)
+			},
 		},
 	)
 	var helpTemplate *template.Template
@@ -994,6 +1310,15 @@ func helpHandler(subPath string, w http.ResponseWriter, req *http.Request) {
 		data["imageExampleLiteral"] = imageExampleLiteral
 		data["imagePromotionConfig"] = imagePromotionConfig
 		data["imageConsumptionConfig"] = imageConsumptionConfig
+	case "/ci-operator":
+		helpTemplate, err = helpFuncs.Parse(ciOperatorOverviewPage)
+		data["ciOperatorInputConfig"] = ciOperatorInputConfig
+		data["ciOperatorPipelineConfig"] = ciOperatorPipelineConfig
+		data["multistageDockerfile"] = multistageDockerfile
+		data["ciOperatorImageConfig"] = ciOperatorImageConfig
+		data["ciOperatorPromotionConfig"] = ciOperatorPromotionConfig
+		data["ciOperatorTagSpecificationConfig"] = ciOperatorTagSpecificationConfig
+		data["ciOperatorContainerTestConfig"] = ciOperatorContainerTestConfig
 	default:
 		writeErrorPage(w, errors.New("Invalid path"), http.StatusNotImplemented)
 		return
@@ -1090,6 +1415,10 @@ func syntax(source string, lexer chroma.Lexer) (string, error) {
 
 func syntaxYAML(source string) (string, error) {
 	return syntax(source, lexers.Get("yaml"))
+}
+
+func syntaxDockerfile(source string) (string, error) {
+	return syntax(source, lexers.Get("Dockerfile"))
 }
 
 func syntaxBash(source string) (string, error) {

@@ -33,14 +33,14 @@ func TestRequires(t *testing.T) {
 		steps: []api.LiteralTestStep{{From: "from-release"}},
 		req:   []api.StepLink{api.ReleaseImagesLink()},
 	}, {
-		name: "step needs images, should have ImagesReadyLink",
+		name: "step needs images, should have InternalImageLink",
 		config: api.ReleaseBuildConfiguration{
 			Images: []api.ProjectDirectoryImageBuildStepConfiguration{
 				{To: "from-images"},
 			},
 		},
 		steps: []api.LiteralTestStep{{From: "from-images"}},
-		req:   []api.StepLink{api.ImagesReadyLink()},
+		req:   []api.StepLink{api.InternalImageLink("from-images")},
 	}, {
 		name:  "step needs pipeline image, should have InternalImageLink",
 		steps: []api.LiteralTestStep{{From: "src"}},

@@ -56,6 +56,29 @@ pre {
 h1, h2, p {
 	padding-top: 10px;
 }
+h1 a:link,
+h2 a:link,
+h3 a:link,
+h4 a:link,
+h5 a:link {
+  color: inherit;
+  text-decoration: none;
+}
+h1 a:hover,
+h2 a:hover,
+h3 a:hover,
+h4 a:hover,
+h5 a:hover {
+  text-decoration: underline;
+}
+h1 a:visited,
+h2 a:visited,
+h3 a:visited,
+h4 a:visited,
+h5 a:visited {
+  color: inherit;
+  text-decoration: none;
+}
 .info {
 	text-decoration-line: underline;
 	text-decoration-style: dotted;
@@ -97,7 +120,7 @@ td {
 </head>
 <body>
 <nav class="navbar navbar-expand-lg navbar-light bg-light">
-  <a class="navbar-brand" href="#">Openshift CI Step Registry</a>
+  <a class="navbar-brand" href="/">Openshift CI Step Registry</a>
   <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
     <span class="navbar-toggler-icon"></span>
   </button>
@@ -148,39 +171,39 @@ const mainPage = `
 `
 
 const referencePage = `
-<h2>Reference: <nobr style="font-family:monospace">{{ .As }}</nobr></h2>
+<h2 id="title"><a href="#title">Reference: <nobr style="font-family:monospace">{{ .As }}</nobr></a></h2>
 <p id="documentation">{{ .Documentation }}</p>
-<h2 id="image">Container image used for this step: <span style="font-family:monospace">{{ .From }}</span></h2>
-<h2 id="source">Source Code</h2>
+<h2 id="image"><a href="#image">Container image used for this step: <span style="font-family:monospace">{{ .From }}</span></a></h2>
+<h2 id="source"><a href="#source">Source Code</a></h2>
 {{ syntaxedSource .Commands }}
 `
 
 const chainPage = `
-<h2>Chains: <nobr style="font-family:monospace">{{ .As }}</nobr></h2>
+<h2 id="title"><a href="#title">Chains: <nobr style="font-family:monospace">{{ .As }}</nobr></a></h2>
 <p id="documentation">{{ .Documentation }}</p>
-<h2 id="steps" title="Step run by the chain, in runtime order">Steps</h2>
+<h2 id="steps" title="Step run by the chain, in runtime order"><a href="#steps">Steps</a></h2>
 {{ template "stepTable" .Steps}}
-<h2 id="graph" title="Visual representation of steps run by this chain">Step Graph</h2>
+<h2 id="graph" title="Visual representation of steps run by this chain"><a href="#graph">Step Graph</a></h2>
 {{ chainGraph .As }}
 `
 
 // workflowJobPage defines the template for both jobs and workflows
 const workflowJobPage = `
 {{ $type := .Type }}
-<h2>{{ $type }}: <nobr style="font-family:monospace">{{ .As }}</nobr></h2>
+<h2 id="title"><a href="#title">{{ $type }}: <nobr style="font-family:monospace">{{ .As }}</nobr></a></h2>
 {{ if .Documentation }}
 	<p id="documentation">{{ .Documentation }}</p>
 {{ end }}
 {{ if .Steps.ClusterProfile }}
-	<h2 id="cluster_profile">Cluster Profile: <span style="font-family:monospace">{{ .Steps.ClusterProfile }}</span></h2>
+	<h2 id="cluster_profile"><a href="#cluster_profile">Cluster Profile: <span style="font-family:monospace">{{ .Steps.ClusterProfile }}</span></a></h2>
 {{ end }}
-<h2 id="pre" title="Steps run by this {{ toLower $type }} to set up and configure the tests, in runtime order">Pre Steps</h2>
+<h2 id="pre" title="Steps run by this {{ toLower $type }} to set up and configure the tests, in runtime order"><a href="#pre">Pre Steps</a></h2>
 {{ template "stepTable" .Steps.Pre }}
-<h2 id="test" title="Steps in the {{ toLower $type }} that run actual tests, in runtime order">Test Steps</h2>
+<h2 id="test" title="Steps in the {{ toLower $type }} that run actual tests, in runtime order"><a href="#test">Test Steps</a></h2>
 {{ template "stepTable" .Steps.Test }}
-<h2 id="post" title="Steps run by this {{ toLower $type }} to clean up and teardown test resources, in runtime order">Post Steps</h2>
+<h2 id="post" title="Steps run by this {{ toLower $type }} to clean up and teardown test resources, in runtime order"><a href="#post">Post Steps</a></h2>
 {{ template "stepTable" .Steps.Post }}
-<h2 id="graph" title="Visual representation of steps run by this {{ toLower $type }}">Step Graph</h2>
+<h2 id="graph" title="Visual representation of steps run by this {{ toLower $type }}"><a href="#graph">Step Graph</a></h2>
 {{ workflowGraph .As }}
 `
 
@@ -232,7 +255,7 @@ const templateDefinitions = `
 {{ end }}
 
 {{ define "workflowTable" }}
-	<h2 id="workflows">Workflows</h2>
+	<h2 id="workflows"><a href="#workflows">Workflows</a></h2>
 	<p>Workflows are the highest level registry components, defining a test from start to finish.</p>
 	<table class="table">
 		<thead>
@@ -259,7 +282,7 @@ const templateDefinitions = `
 {{ end }}
 
 {{ define "chainTable" }}
-	<h2 id="chains">Chains</h2>
+	<h2 id="chains"><a href="#chains">Chains</a></h2>
 	<p>Chains are registry components that allow users to string together multiple test steps under one name. These steps can be references and other chains.</p>
 	<table class="table">
 		<thead>
@@ -282,7 +305,7 @@ const templateDefinitions = `
 {{ end }}
 
 {{ define "referenceTable" }}
-	<h2 id="references">References</h2>
+	<h2 id="references"><a href="#references">References</a></h2>
 	<p>References are the lowest level registry components, defining a command to run and a container to run the command in.</p>
 	<table class="table">
 		<thead>
@@ -303,7 +326,7 @@ const templateDefinitions = `
 {{ end }}
 
 {{ define "jobTable" }}
-    <h2 id="jobs">Jobs</h2>
+    <h2 id="jobs"><a href="#jobs">Jobs</a></h2>
 	<table class="table">
 		<thead>
 			<tr>
@@ -343,7 +366,7 @@ const templateDefinitions = `
 `
 
 const gettingStartedPage = `
-<h2>What is the Multistage Test and the Test Step Registry?</h2>
+<h2 id="title"><a href="#title">What is the Multistage Test and the Test Step Registry?</a></h2>
 
 <p>
 The multistage test style in the <code>ci-operator</code> is a modular test design that
@@ -379,7 +402,7 @@ to create a test:
 </ul>
 </p>
 
-<h3 id="reference">Reference:</h3>
+<h3 id="reference"><a href="#reference">Reference:</a></h3>
 <p>
 A reference is the lowest level component in the test step registry. A
 reference defines a base container image for a step, the filename of the
@@ -414,7 +437,7 @@ stored in the <code>ARTIFACTS_DIR</code> environment variable.
 A reference may be referred to in chains, workflows, and <code>ci-operator</code> configs.
 </p>
 
-<h3 id="chain">Chain:</h3>
+<h3 id="chain"><a href="#chain">Chain:</a></h3>
 <p>
 A chain is a registry component that specifies multiple steps to be run.
 Steps are run in the order that they are written. Steps specified by a chain
@@ -425,7 +448,7 @@ chain:
 
 {{ yamlSyntax (index . "chainExample") }}
 
-<h3 id="workflow">Workflow:</h3>
+<h3 id="workflow"><a href="#workflow">Workflow:</a></h3>
 <p>
 A workflow is the highest level component of the step registry. It is almost
 identical to the syntax of the <code>ci-operator</code> configuration for multistage tests and
@@ -444,7 +467,7 @@ resources are properly cleaned up. This is an example of a workflow configuratio
 
 {{ yamlSyntax (index . "workflowExample") }}
 
-<h3 id="config"><code>ci-operator</code> Test Configuration:</h3>
+<h3 id="config"><a href="#config"><code>ci-operator</code> Test Configuration:</a></h3>
 <p>
 The <code>ci-operator</code> test configuration syntax for multistage tests is very similar to
 the registry workflow syntax. The main differences are that the <code>ci-operator</code>
@@ -475,7 +498,7 @@ workflow and a <code>ci-operator</code> configuration specify the same field, th
 field has priority (i.e. the value from the <code>ci-operator</code> configuration is used).
 </p>
 
-<h3 id="layout">Registry Layout and Naming Convention:</h3>
+<h3 id="layout"><a href="#layout">Registry Layout and Naming Convention:</a></h3>
 <p>
 To prevent naming collisions between all the registry components, the step
 registry has a very strict naming scheme and directory layout. First, all
@@ -559,7 +582,7 @@ const configExample2 = `tests:
 const addingComponentPage = `
 <h2>Adding and Changing Step Registry Content</h2>
 
-<h3 id="adding-content"> Adding Content</h3>
+<h3 id="adding-content"><a href="#adding-contnet">Adding Content</a></h3>
 <p>
 Adding a new component (reference, chain, or workflow) to the registry is
 quite simple. Descriptions of each of the components as well as the naming
@@ -583,7 +606,7 @@ If a new test is added that uses the new component as well,
 <code>pj-rehearse</code> will test the new job with the new component.
 </p>
 
-<h3>Changing Content</h3>
+<h3 id="changing-content"><a href="#changing-contnet">Changing Content</a></h3>
 <p>
 To change registry content, make the changes in
 <code>openshift/release</code> and open a new PR. Prow will run all of the
@@ -595,13 +618,13 @@ as the component.
 </p>
 `
 const examplesPage = `
-<h2>Available Examples</h2>
+<h2 id="examples"><a href="#examples">Available Examples</a></h2>
 <ul>
   <li><a href="#aws">How do I add a job that runs the standard e2e tests on AWS?</a></li>
   <li><a href="#image">How do I use an image from another repo in my repo’s tests?</a></li>
 </ul>
 
-<h3 id="aws">How do I add a job that runs the standard e2e tests on AWS?</h3>
+<h3 id="aws"><a href="#aws">How do I add a job that runs the standard e2e tests on AWS?</a></h3>
 <p>
 Use the <code>origin-e2e</code> workflow and set <code>cluster_profile</code>
 to <code>aws</code>.
@@ -609,7 +632,7 @@ to <code>aws</code>.
 Example:
 {{ yamlSyntax (index . "awsExample") }}
 
-<h3 id="image">How do I use an image from another repo in my repo’s tests?</h3>
+<h3 id="image"><a href="#image">How do I use an image from another repo in my repo’s tests?</a></h3>
 <p>
 In order to use an image from one repository in the tests of another, it is necessary
 to first publish the image from the producer repository and import it in the consumer
@@ -619,7 +642,7 @@ field in the <code>ci-operator</code> configuration and opts into publishing to 
 stream with the <code>promotion</code> field.
 </p>
 
-<h4 id="image-publication">Publishing an Image For Reuse</h3>
+<h4 id="image-publication"><a href="#image-publication">Publishing an Image For Reuse</a></h3>
 <p>
 When configuring <code>ci-operator</code> for a repository, the <code>promotion</code>
 stanza declares which container images are published and defines the integration
@@ -640,7 +663,7 @@ are promoted for reuse by other repositories to the <code>ocp/4.4</code> integra
 <code>ci-operator</code> configuration:
 {{ yamlSyntax (index . "imagePromotionConfig") }}
 
-<h4 id="image-consumption">Consuming an Image</h3>
+<h4 id="image-consumption"><a href="#image-consumption">Consuming an Image</a></h3>
 <p>
 Once a repository is publishing an image for reuse by others, downstream users can
 configure <code>ci-operator</code> to use that image in tests by including it as a
@@ -671,7 +694,7 @@ execution of shared end-to-end tests using these two approaches. Both examples a
 that we have the <code>ipi</code> workflow available to use.
 </p>
 
-<h5>Adding a Reusable Test Step:</h4>
+<h5 id="adding-step"><a href="#adding-step">Adding a Reusable Test Step:</a></h4>
 
 <p>
 Full directions for adding a new resuable test step can be found in the overview for
@@ -691,7 +714,7 @@ Now the test step is ready for use by any repository. To make use of it, update
 <code>ci-operator/config/org/other/org-other-master.yaml</code>:
 {{ yamlSyntax (index . "imageExampleConfig") }}
 
-<h5>Adding a Literal Test Step</h4>
+<h5 id="adding-literal"><a href="#adding-literal">Adding a Literal Test Step</a></h4>
 <p>
 It is possible to directly declare a test step in the
 <code>ci-operator</code> configuration without adding a new registry component.

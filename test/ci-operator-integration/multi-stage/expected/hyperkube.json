@@ -552,7 +552,7 @@
               "value": "/var/run/secrets/ci.openshift.io/multi-stage"
             }
           ],
-          "image": "tests",
+          "image": "pipeline:tests",
           "name": "post0",
           "resources": {
             "limits": {

@@ -346,7 +346,7 @@ const gettingStartedPage = `
 <h2>What is the Multistage Test and the Test Step Registry?</h2>
 
 <p>
-The multistage test style in the ci-operator is a modular test design that
+The multistage test style in the <code>ci-operator</code> is a modular test design that
 allows users to create new tests by combining smaller, individual test steps.
 These individual steps can be put into a shared registry that other tests can
 access. This results in test workflows that are easier to maintain and
@@ -411,7 +411,7 @@ stored in the <code>ARTIFACTS_DIR</code> environment variable.
 </p>
 
 <p>
-A reference may be referred to in chains, workflows, and ci-operator configs.
+A reference may be referred to in chains, workflows, and <code>ci-operator</code> configs.
 </p>
 
 <h3 id="chain">Chain:</h3>
@@ -428,7 +428,7 @@ chain:
 <h3 id="workflow">Workflow:</h3>
 <p>
 A workflow is the highest level component of the step registry. It is almost
-identical to the syntax of the ci-operator configuration for multistage tests and
+identical to the syntax of the <code>ci-operator</code> configuration for multistage tests and
 defines an entire test from start to finish. It has 4 basic components: a
 <code>cluster_profile</code> string (eg: <code>aws</code>, <code>azure4</code>,
 <code>gcp</code>), and 3 chains: <code>pre</code>, <code>test</code>, and
@@ -444,35 +444,35 @@ resources are properly cleaned up. This is an example of a workflow configuratio
 
 {{ yamlSyntax (index . "workflowExample") }}
 
-<h3 id="config">CI-Operator Test Configuration:</h3>
+<h3 id="config"><code>ci-operator</code> Test Configuration:</h3>
 <p>
-The CI-Operator test configuration syntax for multistage tests is very similar to
-the registry workflow syntax. The main differences are that the ci-operator
-configuration does not have a <code>documentation</code> field, and the ci-operator
+The <code>ci-operator</code> test configuration syntax for multistage tests is very similar to
+the registry workflow syntax. The main differences are that the <code>ci-operator</code>
+configuration does not have a <code>documentation</code> field, and the <code>ci-operator</code>
 configuration can specify a workflow to use. Also, the <code>cluster_profile</code>,
 <code>pre</code>, <code>test</code>, and <code>post</code> fields are under a
 <code>steps</code> field instead of <code>workflow</code>. Here is an example
-of the <code>tests</code> section of a ci-operator configuration using the
+of the <code>tests</code> section of a <code>ci-operator</code> configuration using the
 multistage test design:
 </p>
 
 {{ yamlSyntax (index . "configExample1") }}
 
-Example of a ci-operator configuration that overrides a workflow field.
+Example of a <code>ci-operator</code> configuration that overrides a workflow field.
 
 {{ yamlSyntax (index . "configExample2") }}
 
 <p>
-In this example, the ci-operator configuration simply specifies the desired cluster
+In this example, the <code>ci-operator</code> configuration simply specifies the desired cluster
 profile and the <code>origin-e2e</code> workflow shown in the example for the
 <code>Workflow</code> section above.
 </p>
 
 <p>
-Since the ci-operator configuration and workflows share the same fields, it is
+Since the <code>ci-operator</code> configuration and workflows share the same fields, it is
 possible to override fields specified in a workflow. In cases where both the
-workflow and a ci-operator configuration specify the same field, the ci-operator configuration’s
-field has priority (i.e. the value from the ci-operator configuration is used).
+workflow and a <code>ci-operator</code> configuration specify the same field, the <code>ci-operator</code> configuration’s
+field has priority (i.e. the value from the <code>ci-operator</code> configuration is used).
 </p>
 
 <h3 id="layout">Registry Layout and Naming Convention:</h3>
@@ -480,7 +480,7 @@ field has priority (i.e. the value from the ci-operator configuration is used).
 To prevent naming collisions between all the registry components, the step
 registry has a very strict naming scheme and directory layout. First, all
 components have a prefix determined by the directory structure, similar to
-how the ci-operator configs do. The prefix is the relative directory path
+how the <code>ci-operator</code> configs do. The prefix is the relative directory path
 with all &#96;<code>/</code>&#96; characters changed to
 &#96;<code>-</code>&#96;. For example, a file under the
 <code>ipi/install/conf</code> directory would have as prefix of

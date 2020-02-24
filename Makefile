@@ -76,6 +76,10 @@ integration-repo-init:
 	test/repo-init-integration/run.sh
 .PHONY: integration-repo-init
 
+integration-repo-init-update:
+	UPDATE=true test/repo-init-integration/run.sh
+.PHONY: integration-repo-init-update
+
 check-breaking-changes:
 	test/validate-prowgen-breaking-changes.sh
 .PHONY: check-breaking-changes

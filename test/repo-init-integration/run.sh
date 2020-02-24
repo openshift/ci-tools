@@ -74,8 +74,14 @@ for input in "${inputs[@]}"; do echo "${input}"; done | repo-init -release-repo 
 ci-operator-prowgen --from-dir ./ci-operator/config --to-dir ./ci-operator/jobs
 determinize-prow-jobs --prow-jobs-dir ./ci-operator/jobs
 
+if [[  "${UPDATE:-}" = true ]]; then
+  rm -rf  "$ROOTDIR"/test/repo-init-integration/expected/*
+  cp -ar "$WORKDIR"/* "$ROOTDIR"/test/repo-init-integration/expected/
+fi
+
 if ! diff -Naupr "$ROOTDIR"/test/repo-init-integration/expected .> "$WORKDIR/diff"; then
     echo "[ERROR] Got incorrect output state after running repo-init:"
     cat "$WORKDIR/diff"
+    echo "If this is expected, run \`make integration-repo-init-update\`"
     exit 1
 fi

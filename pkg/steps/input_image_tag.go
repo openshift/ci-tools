@@ -4,13 +4,17 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"time"
 
 	imageapi "github.com/openshift/api/image/v1"
-	"github.com/openshift/ci-tools/pkg/api"
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
+
+	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/util"
 )
 
 // inputImageTagStep will ensure that a tag exists
@@ -95,6 +99,19 @@ func (s *inputImageTagStep) Run(ctx context.Context, dry bool) error {
 
 	if _, err := s.dstClient.ImageStreamTags(s.jobSpec.Namespace).Create(ist); err != nil && !errors.IsAlreadyExists(err) {
 		return fmt.Errorf("failed to create imagestreamtag for input image: %v", err)
+	}
+	// Wait image is ready
+	log.Printf("waiting for importing %s ...", ist.ObjectMeta.Name)
+	if err := wait.Poll(10*time.Second, 5*time.Minute, func() (bool, error) {
+		pipeline, err := s.dstClient.ImageStreams(s.jobSpec.Namespace).Get(api.PipelineImageStream, meta.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+		_, exists := util.ResolvePullSpec(pipeline, string(s.config.To), true)
+		return exists, nil
+	}); err != nil {
+		log.Printf("could not resolve tag %s in imagestream %s: %v", s.config.To, api.PipelineImageStream, err)
+		return err
 	}
 	return nil
 }

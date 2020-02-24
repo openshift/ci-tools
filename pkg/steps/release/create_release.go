@@ -26,6 +26,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/steps"
+	"github.com/openshift/ci-tools/pkg/util"
 )
 
 // assembleReleaseStep is responsible for creating release images from
@@ -205,8 +206,8 @@ func (s *assembleReleaseStep) Run(ctx context.Context, dry bool) error {
 		if err != nil {
 			return false, err
 		}
-		cvo, cvoExists = resolvePullSpec(stable, "cluster-version-operator", true)
-		_, cliExists = resolvePullSpec(stable, "cli", true)
+		cvo, cvoExists = util.ResolvePullSpec(stable, "cluster-version-operator", true)
+		_, cliExists = util.ResolvePullSpec(stable, "cli", true)
 		return cvoExists && cliExists, nil
 	}); err != nil {
 		if wait.ErrWaitTimeout == err {

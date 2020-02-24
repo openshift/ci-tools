@@ -20,6 +20,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/steps"
+	"github.com/openshift/ci-tools/pkg/util"
 )
 
 // stableImagesTagStep is used when no release configuration is necessary
@@ -215,7 +216,7 @@ func (s *releaseImagesTagStep) Run(ctx context.Context, dry bool) error {
 	}
 
 	for _, tag := range is.Spec.Tags {
-		spec, ok := resolvePullSpec(is, tag.Name, false)
+		spec, ok := util.ResolvePullSpec(is, tag.Name, false)
 		if !ok {
 			continue
 		}
@@ -292,34 +293,4 @@ func ReleaseImagesTagStep(config api.ReleaseTagConfiguration, srcClient, dstClie
 
 func componentToParamName(component string) string {
 	return strings.ToUpper(strings.Replace(component, "-", "_", -1))
-}
-
-func resolvePullSpec(is *imageapi.ImageStream, tag string, requireExact bool) (string, bool) {
-	for _, tags := range is.Status.Tags {
-		if tags.Tag != tag {
-			continue
-		}
-		if len(tags.Items) == 0 {
-			break
-		}
-		if image := tags.Items[0].Image; len(image) > 0 {
-			if len(is.Status.PublicDockerImageRepository) > 0 {
-				return fmt.Sprintf("%s@%s", is.Status.PublicDockerImageRepository, image), true
-			}
-			if len(is.Status.DockerImageRepository) > 0 {
-				return fmt.Sprintf("%s@%s", is.Status.DockerImageRepository, image), true
-			}
-		}
-		break
-	}
-	if requireExact {
-		return "", false
-	}
-	if len(is.Status.PublicDockerImageRepository) > 0 {
-		return fmt.Sprintf("%s:%s", is.Status.PublicDockerImageRepository, tag), true
-	}
-	if len(is.Status.DockerImageRepository) > 0 {
-		return fmt.Sprintf("%s:%s", is.Status.DockerImageRepository, tag), true
-	}
-	return "", false
 }

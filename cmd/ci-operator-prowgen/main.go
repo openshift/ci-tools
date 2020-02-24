@@ -334,6 +334,11 @@ func generatePodSpecTemplate(info *prowgenInfo, secret *cioperatorapi.Secret, re
 		needsLeaseServer = true
 		clusterProfile = conf.ClusterProfile
 		testImageStreamTag = conf.From
+	} else if conf := test.OpenshiftInstallerGCPNestedVirtCustomTestImageClusterTestConfiguration; conf != nil {
+		template = "cluster-launch-installer-gcp-nested-virt-custom-test-image"
+		needsLeaseServer = true
+		clusterProfile = conf.ClusterProfile
+		testImageStreamTag = conf.From
 	}
 	var targetCloud string
 	switch clusterProfile {

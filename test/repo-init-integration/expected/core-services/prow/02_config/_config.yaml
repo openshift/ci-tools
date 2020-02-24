@@ -24,6 +24,7 @@ plank:
   max_goroutines: 20
   pod_pending_timeout: 24h0m0s
   pod_running_timeout: 48h0m0s
+  pod_unscheduled_timeout: 24h0m0s
 pod_namespace: default
 prowjob_namespace: default
 push_gateway:
@@ -33,6 +34,7 @@ sinker:
   max_pod_age: 24h0m0s
   max_prowjob_age: 168h0m0s
   resync_period: 1h0m0s
+  terminated_pod_ttl: 24h0m0s
 status_error_link: https://github.com/kubernetes/test-infra/issues
 tide:
   context_options: {}

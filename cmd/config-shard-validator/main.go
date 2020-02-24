@@ -98,7 +98,7 @@ func main() {
 				}
 			}
 		}
-		for _, postsubmits := range jobConfig.Postsubmits {
+		for _, postsubmits := range jobConfig.PostsubmitsStatic {
 			for _, postsubmit := range postsubmits {
 				if postsubmit.Spec != nil {
 					if foundFailure := checkSpec(postsubmit.Spec, relPath, postsubmit.Name, configInfos); foundFailure {

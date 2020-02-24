@@ -569,7 +569,7 @@ func TestGetImagesPostsubmitsForCiopConfigs(t *testing.T) {
 			name: "no changed ci-op configs means no changed postsubmits",
 			prowConfig: &prowconfig.Config{
 				JobConfig: prowconfig.JobConfig{
-					Postsubmits: map[string][]prowconfig.Postsubmit{
+					PostsubmitsStatic: map[string][]prowconfig.Postsubmit{
 						"org/repo": {{
 							JobBase: prowconfig.JobBase{
 								Name:  "branch-ci-org-repo-branch-images",
@@ -586,7 +586,7 @@ func TestGetImagesPostsubmitsForCiopConfigs(t *testing.T) {
 			name: "changed ci-op configs but no images job means no changed postsubmits",
 			prowConfig: &prowconfig.Config{
 				JobConfig: prowconfig.JobConfig{
-					Postsubmits: map[string][]prowconfig.Postsubmit{
+					PostsubmitsStatic: map[string][]prowconfig.Postsubmit{
 						"org/repo": {},
 					},
 				},
@@ -599,7 +599,7 @@ func TestGetImagesPostsubmitsForCiopConfigs(t *testing.T) {
 			name: "changed ci-op configs means changed postsubmits",
 			prowConfig: &prowconfig.Config{
 				JobConfig: prowconfig.JobConfig{
-					Postsubmits: map[string][]prowconfig.Postsubmit{
+					PostsubmitsStatic: map[string][]prowconfig.Postsubmit{
 						"org/repo": {{
 							JobBase: prowconfig.JobBase{
 								Name:  "branch-ci-org-repo-branch-images",
@@ -628,7 +628,7 @@ func TestGetImagesPostsubmitsForCiopConfigs(t *testing.T) {
 			name: "changed ci-op configs but images job referencing a different file means no changed postsubmits",
 			prowConfig: &prowconfig.Config{
 				JobConfig: prowconfig.JobConfig{
-					Postsubmits: map[string][]prowconfig.Postsubmit{
+					PostsubmitsStatic: map[string][]prowconfig.Postsubmit{
 						"org/repo": {{
 							JobBase: prowconfig.JobBase{
 								Name:  "branch-ci-org-repo-branch-images",
@@ -647,7 +647,7 @@ func TestGetImagesPostsubmitsForCiopConfigs(t *testing.T) {
 			name: "changed ci-op configs but only non-images job means no changed postsubmits",
 			prowConfig: &prowconfig.Config{
 				JobConfig: prowconfig.JobConfig{
-					Postsubmits: map[string][]prowconfig.Postsubmit{
+					PostsubmitsStatic: map[string][]prowconfig.Postsubmit{
 						"org/repo": {{
 							JobBase: prowconfig.JobBase{
 								Name:  "branch-ci-org-repo-branch-othertest",

@@ -147,9 +147,9 @@ func OperateOnJobConfigSubdir(configDir, subDir string, callback func(*prowconfi
 // ReadFromDir reads Prow job config from a directory and merges into one config
 func ReadFromDir(dir string) (*prowconfig.JobConfig, error) {
 	jobConfig := &prowconfig.JobConfig{
-		PresubmitsStatic: map[string][]prowconfig.Presubmit{},
-		Postsubmits:      map[string][]prowconfig.Postsubmit{},
-		Periodics:        []prowconfig.Periodic{},
+		PresubmitsStatic:  map[string][]prowconfig.Presubmit{},
+		PostsubmitsStatic: map[string][]prowconfig.Postsubmit{},
+		Periodics:         []prowconfig.Periodic{},
 	}
 	if err := OperateOnJobConfigDir(dir, func(config *prowconfig.JobConfig, elements *Info) error {
 		mergeConfigs(jobConfig, config)
@@ -175,15 +175,15 @@ func mergeConfigs(dest, part *prowconfig.JobConfig) {
 			}
 		}
 	}
-	if part.Postsubmits != nil {
-		if dest.Postsubmits == nil {
-			dest.Postsubmits = map[string][]prowconfig.Postsubmit{}
+	if part.PostsubmitsStatic != nil {
+		if dest.PostsubmitsStatic == nil {
+			dest.PostsubmitsStatic = map[string][]prowconfig.Postsubmit{}
 		}
-		for repo := range part.Postsubmits {
-			if _, ok := dest.Postsubmits[repo]; ok {
-				dest.Postsubmits[repo] = append(dest.Postsubmits[repo], part.Postsubmits[repo]...)
+		for repo := range part.PostsubmitsStatic {
+			if _, ok := dest.PostsubmitsStatic[repo]; ok {
+				dest.PostsubmitsStatic[repo] = append(dest.PostsubmitsStatic[repo], part.PostsubmitsStatic[repo]...)
 			} else {
-				dest.Postsubmits[repo] = part.Postsubmits[repo]
+				dest.PostsubmitsStatic[repo] = part.PostsubmitsStatic[repo]
 			}
 		}
 	}
@@ -233,7 +233,7 @@ func WriteToDir(jobDir, org, repo string, jobConfig *prowconfig.JobConfig) error
 			}}
 		}
 	}
-	for _, job := range jobConfig.Postsubmits[key] {
+	for _, job := range jobConfig.PostsubmitsStatic[key] {
 		allJobs.Insert(job.Name)
 		branch := "master"
 		if len(job.Branches) > 0 {
@@ -243,9 +243,9 @@ func WriteToDir(jobDir, org, repo string, jobConfig *prowconfig.JobConfig) error
 		}
 		file := fmt.Sprintf("%s-%s-%s-postsubmits.yaml", org, repo, branch)
 		if _, ok := files[file]; ok {
-			files[file].Postsubmits[key] = append(files[file].Postsubmits[key], job)
+			files[file].PostsubmitsStatic[key] = append(files[file].PostsubmitsStatic[key], job)
 		} else {
-			files[file] = &prowconfig.JobConfig{Postsubmits: map[string][]prowconfig.Postsubmit{
+			files[file] = &prowconfig.JobConfig{PostsubmitsStatic: map[string][]prowconfig.Postsubmit{
 				key: {job},
 			}}
 		}
@@ -342,14 +342,14 @@ func mergeJobConfig(destination, source *prowconfig.JobConfig, allJobs sets.Stri
 			destination.PresubmitsStatic[repo] = mergedJobs
 		}
 	}
-	if source.Postsubmits != nil {
-		if destination.Postsubmits == nil {
-			destination.Postsubmits = map[string][]prowconfig.Postsubmit{}
+	if source.PostsubmitsStatic != nil {
+		if destination.PostsubmitsStatic == nil {
+			destination.PostsubmitsStatic = map[string][]prowconfig.Postsubmit{}
 		}
-		for repo, jobs := range source.Postsubmits {
+		for repo, jobs := range source.PostsubmitsStatic {
 			oldJobs := map[string]prowconfig.Postsubmit{}
 			newJobs := map[string]prowconfig.Postsubmit{}
-			for _, job := range destination.Postsubmits[repo] {
+			for _, job := range destination.PostsubmitsStatic[repo] {
 				oldJobs[job.Name] = job
 			}
 			for _, job := range jobs {
@@ -370,7 +370,7 @@ func mergeJobConfig(destination, source *prowconfig.JobConfig, allJobs sets.Stri
 					mergedJobs = append(mergedJobs, oldJobs[oldJobName])
 				}
 			}
-			destination.Postsubmits[repo] = mergedJobs
+			destination.PostsubmitsStatic[repo] = mergedJobs
 		}
 	}
 	if len(source.Periodics) != 0 {
@@ -454,13 +454,13 @@ func sortConfigFields(jobConfig *prowconfig.JobConfig) {
 			}
 		}
 	}
-	for repo := range jobConfig.Postsubmits {
-		sort.Slice(jobConfig.Postsubmits[repo], func(i, j int) bool {
-			return jobConfig.Postsubmits[repo][i].Name < jobConfig.Postsubmits[repo][j].Name
+	for repo := range jobConfig.PostsubmitsStatic {
+		sort.Slice(jobConfig.PostsubmitsStatic[repo], func(i, j int) bool {
+			return jobConfig.PostsubmitsStatic[repo][i].Name < jobConfig.PostsubmitsStatic[repo][j].Name
 		})
-		for job := range jobConfig.Postsubmits[repo] {
-			if jobConfig.Postsubmits[repo][job].Spec != nil {
-				sortPodSpec(jobConfig.Postsubmits[repo][job].Spec)
+		for job := range jobConfig.PostsubmitsStatic[repo] {
+			if jobConfig.PostsubmitsStatic[repo][job].Spec != nil {
+				sortPodSpec(jobConfig.PostsubmitsStatic[repo][job].Spec)
 			}
 		}
 	}

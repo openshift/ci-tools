@@ -20,9 +20,10 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"k8s.io/test-infra/pkg/genyaml"
 	"sync"
 	"time"
+
+	"k8s.io/test-infra/pkg/genyaml"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
@@ -56,7 +57,7 @@ var (
 
 // HelpProvider defines the function type that construct a pluginhelp.PluginHelp for enabled
 // plugins. It takes into account the plugins configuration and enabled repositories.
-type HelpProvider func(config *Configuration, enabledRepos []string) (*pluginhelp.PluginHelp, error)
+type HelpProvider func(config *Configuration, enabledRepos []config.OrgRepo) (*pluginhelp.PluginHelp, error)
 
 // HelpProviders returns the map of registered plugins with their associated HelpProvider.
 func HelpProviders() map[string]HelpProvider {
@@ -145,7 +146,7 @@ type Agent struct {
 	SlackClient               *slack.Client
 	BugzillaClient            bugzilla.Client
 
-	OwnersClient *repoowners.Client
+	OwnersClient repoowners.Interface
 
 	// Metrics exposes metrics that can be updated by plugins
 	Metrics *Metrics
@@ -173,7 +174,7 @@ func NewAgent(configAgent *config.Agent, pluginConfigAgent *ConfigAgent, clientA
 		ProwJobClient:             clientAgent.ProwJobClient,
 		GitClient:                 clientAgent.GitClient,
 		SlackClient:               clientAgent.SlackClient,
-		OwnersClient:              clientAgent.OwnersClient,
+		OwnersClient:              clientAgent.OwnersClient.WithFields(logger.Data),
 		BugzillaClient:            clientAgent.BugzillaClient,
 		Metrics:                   metrics,
 		Config:                    prowConfig,
@@ -208,7 +209,7 @@ type ClientAgent struct {
 	BuildClusterCoreV1Clients map[string]corev1.CoreV1Interface
 	GitClient                 git.ClientFactory
 	SlackClient               *slack.Client
-	OwnersClient              *repoowners.Client
+	OwnersClient              repoowners.Interface
 	BugzillaClient            bugzilla.Client
 }
 

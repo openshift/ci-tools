@@ -1,3 +1,19 @@
+/*
+Copyright 2019 The Kubernetes Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package config
 
 import (
@@ -6,7 +22,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
-	"strings"
 
 	"github.com/sirupsen/logrus"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -20,9 +35,10 @@ const (
 )
 
 // ProwYAML represents the content of a .prow.yaml file
-// used to version Presubmits inside the tested repo.
+// used to version Presubmits and Postsubmits inside the tested repo.
 type ProwYAML struct {
-	Presubmits []Presubmit `json:"presubmits"`
+	Presubmits  []Presubmit  `json:"presubmits"`
+	Postsubmits []Postsubmit `json:"postsubmits"`
 }
 
 // ProwYAMLGetter is used to retrieve a ProwYAML. Tests should provide
@@ -47,12 +63,11 @@ func defaultProwYAMLGetter(
 		return nil, errors.New("gitClient is nil")
 	}
 
-	identifierSlashSplit := strings.Split(identifier, "/")
-	if len(identifierSlashSplit) != 2 {
-		return nil, fmt.Errorf("didn't get two but %d results when splitting repo identifier %q", len(identifierSlashSplit), identifier)
+	orgRepo := *NewOrgRepo(identifier)
+	if orgRepo.Repo == "" {
+		return nil, fmt.Errorf("didn't get two results when splitting repo identifier %q", identifier)
 	}
-	organization, repository := identifierSlashSplit[0], identifierSlashSplit[1]
-	repo, err := gc.ClientFor(organization, repository)
+	repo, err := gc.ClientFor(orgRepo.Org, orgRepo.Repo)
 	if err != nil {
 		return nil, fmt.Errorf("failed to clone repo for %q: %v", identifier, err)
 	}
@@ -72,7 +87,7 @@ func defaultProwYAMLGetter(
 		return nil, err
 	}
 
-	mergeMethod := c.Tide.MergeMethod(organization, repository)
+	mergeMethod := c.Tide.MergeMethod(orgRepo)
 	log.Debugf("Using merge strategy %q.", mergeMethod)
 	if err := repo.MergeAndCheckout(baseSHA, string(mergeMethod), headSHAs...); err != nil {
 		return nil, fmt.Errorf("failed to merge: %v", err)
@@ -101,7 +116,7 @@ func defaultProwYAMLGetter(
 		return nil, err
 	}
 
-	log.Debugf("Successfully got %d presubmits from %q.", len(prowYAML.Presubmits), inRepoConfigFileName)
+	log.Debugf("Successfully got %d presubmits and %d postsubmits from %q.", len(prowYAML.Presubmits), len(prowYAML.Postsubmits), inRepoConfigFileName)
 	return prowYAML, nil
 }
 
@@ -109,17 +124,25 @@ func DefaultAndValidateProwYAML(c *Config, p *ProwYAML, identifier string) error
 	if err := defaultPresubmits(p.Presubmits, c, identifier); err != nil {
 		return err
 	}
+	if err := defaultPostsubmits(p.Postsubmits, c, identifier); err != nil {
+		return err
+	}
 	if err := validatePresubmits(append(p.Presubmits, c.PresubmitsStatic[identifier]...), c.PodNamespace); err != nil {
+		return err
+	}
+	if err := validatePostsubmits(append(p.Postsubmits, c.PostsubmitsStatic[identifier]...), c.PodNamespace); err != nil {
 		return err
 	}
 
 	var errs []error
-	for _, ps := range p.Presubmits {
-		if ps.Branches != nil || ps.SkipBranches != nil {
-			errs = append(errs, fmt.Errorf("job %q contains branchconfig. This is not allowed for jobs in %q", ps.Name, inRepoConfigFileName))
+	for _, pre := range p.Presubmits {
+		if !c.InRepoConfigAllowsCluster(pre.Cluster, identifier) {
+			errs = append(errs, fmt.Errorf("cluster %q is not allowed for repository %q", pre.Cluster, identifier))
 		}
-		if !c.InRepoConfigAllowsCluster(ps.Cluster, identifier) {
-			errs = append(errs, fmt.Errorf("cluster %q is not allowed for repository %q", ps.Cluster, identifier))
+	}
+	for _, post := range p.Postsubmits {
+		if !c.InRepoConfigAllowsCluster(post.Cluster, identifier) {
+			errs = append(errs, fmt.Errorf("cluster %q is not allowed for repository %q", post.Cluster, identifier))
 		}
 	}
 

@@ -21,15 +21,12 @@ import (
 	"time"
 
 	"github.com/tektoncd/pipeline/pkg/apis/pipeline"
+	"github.com/tektoncd/pipeline/pkg/apis/pipeline/v1alpha2"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"knative.dev/pkg/apis"
 	duckv1beta1 "knative.dev/pkg/apis/duck/v1beta1"
 )
-
-// Check that TaskRun may be validated and defaulted.
-var _ apis.Validatable = (*TaskRun)(nil)
-var _ apis.Defaultable = (*TaskRun)(nil)
 
 // TaskRunSpec defines the desired state of TaskRun
 type TaskRunSpec struct {
@@ -39,10 +36,6 @@ type TaskRunSpec struct {
 	Outputs TaskRunOutputs `json:"outputs,omitempty"`
 	// +optional
 	ServiceAccountName string `json:"serviceAccountName"`
-	// DeprecatedServiceAccount is a depreciated alias for ServiceAccountName.
-	// Deprecated: Use serviceAccountName instead.
-	// +optional
-	DeprecatedServiceAccount string `json:"serviceAccount,omitempty"`
 	// no more than one of the TaskRef and TaskSpec may be specified.
 	// +optional
 	TaskRef *TaskRef `json:"taskRef,omitempty"`
@@ -58,16 +51,21 @@ type TaskRunSpec struct {
 	Timeout *metav1.Duration `json:"timeout,omitempty"`
 
 	// PodTemplate holds pod specific configuration
-	PodTemplate PodTemplate `json:"podTemplate,omitempty"`
+	// +optional
+	PodTemplate *PodTemplate `json:"podTemplate,omitempty"`
+
+	// Workspaces is a list of WorkspaceBindings from volumes to workspaces.
+	// +optional
+	Workspaces []WorkspaceBinding `json:"workspaces,omitempty"`
 }
 
 // TaskRunSpecStatus defines the taskrun spec status the user can provide
-type TaskRunSpecStatus string
+type TaskRunSpecStatus = v1alpha2.TaskRunSpecStatus
 
 const (
 	// TaskRunSpecStatusCancelled indicates that the user wants to cancel the task,
 	// if not already cancelled or terminated
-	TaskRunSpecStatusCancelled = "TaskRunCancelled"
+	TaskRunSpecStatusCancelled = v1alpha2.TaskRunSpecStatusCancelled
 )
 
 // TaskRunInputs holds the input values that this task was invoked with.
@@ -101,6 +99,14 @@ var taskRunCondSet = apis.NewBatchConditionSet()
 type TaskRunStatus struct {
 	duckv1beta1.Status `json:",inline"`
 
+	// TaskRunStatusFields inlines the status fields.
+	TaskRunStatusFields `json:",inline"`
+}
+
+// TaskRunStatusFields holds the fields of TaskRun's status.  This is defined
+// separately and inlined so that other types can readily consume these fields
+// via duck typing.
+type TaskRunStatusFields struct {
 	// PodName is the name of the pod responsible for executing this task's steps.
 	PodName string `json:"podName"`
 
@@ -129,6 +135,10 @@ type TaskRunStatus struct {
 	// the digest of build container images
 	// optional
 	ResourcesResult []PipelineResourceResult `json:"resourcesResult,omitempty"`
+
+	// The list has one entry per sidecar in the manifest. Each entry is
+	// represents the imageid of the corresponding sidecar.
+	Sidecars []SidecarState `json:"sidecars,omitempty"`
 }
 
 // GetCondition returns the Condition matching the given type.
@@ -159,6 +169,12 @@ type StepState struct {
 	Name          string `json:"name,omitempty"`
 	ContainerName string `json:"container,omitempty"`
 	ImageID       string `json:"imageID,omitempty"`
+}
+
+// SidecarState reports the results of sidecar in the Task.
+type SidecarState struct {
+	Name    string `json:"name,omitempty"`
+	ImageID string `json:"imageID,omitempty"`
 }
 
 // CloudEventDelivery is the target of a cloud event along with the state of
@@ -241,7 +257,7 @@ func (tr *TaskRun) GetPipelineRunPVCName() string {
 		return ""
 	}
 	for _, ref := range tr.GetOwnerReferences() {
-		if ref.Kind == pipelineRunControllerName {
+		if ref.Kind == pipeline.PipelineRunControllerName {
 			return fmt.Sprintf("%s-pvc", ref.Name)
 		}
 	}
@@ -252,7 +268,7 @@ func (tr *TaskRun) GetPipelineRunPVCName() string {
 // owner reference of type PipelineRun
 func (tr *TaskRun) HasPipelineRunOwnerReference() bool {
 	for _, ref := range tr.GetOwnerReferences() {
-		if ref.Kind == pipelineRunControllerName {
+		if ref.Kind == pipeline.PipelineRunControllerName {
 			return true
 		}
 	}
@@ -283,15 +299,6 @@ func (tr *TaskRun) IsCancelled() bool {
 func (tr *TaskRun) GetRunKey() string {
 	// The address of the pointer is a threadsafe unique identifier for the taskrun
 	return fmt.Sprintf("%s/%p", "TaskRun", tr)
-}
-
-func (tr *TaskRun) GetServiceAccountName() string {
-	name := tr.Spec.ServiceAccountName
-	if name == "" {
-		name = tr.Spec.DeprecatedServiceAccount
-	}
-	return name
-
 }
 
 // IsPartOfPipeline return true if TaskRun is a part of a Pipeline.

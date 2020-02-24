@@ -24,6 +24,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/pluginhelp"
 	"k8s.io/test-infra/prow/plugins"
@@ -33,10 +34,10 @@ const pluginName = "label"
 
 var (
 	defaultLabels          = []string{"kind", "priority", "area"}
-	labelRegex             = regexp.MustCompile(`(?m)^/(area|committee|kind|language|priority|sig|triage|wg)\s*(.*)$`)
-	removeLabelRegex       = regexp.MustCompile(`(?m)^/remove-(area|committee|kind|language|priority|sig|triage|wg)\s*(.*)$`)
-	customLabelRegex       = regexp.MustCompile(`(?m)^/label\s*(.*)$`)
-	customRemoveLabelRegex = regexp.MustCompile(`(?m)^/remove-label\s*(.*)$`)
+	labelRegex             = regexp.MustCompile(`(?m)^/(area|committee|kind|language|priority|sig|triage|wg)\s*(.*?)\s*$`)
+	removeLabelRegex       = regexp.MustCompile(`(?m)^/remove-(area|committee|kind|language|priority|sig|triage|wg)\s*(.*?)\s*$`)
+	customLabelRegex       = regexp.MustCompile(`(?m)^/label\s*(.*?)\s*$`)
+	customRemoveLabelRegex = regexp.MustCompile(`(?m)^/remove-label\s*(.*?)\s*$`)
 )
 
 func init() {
@@ -51,7 +52,7 @@ func configString(labels []string) string {
 	return fmt.Sprintf("The label plugin will work on %s and %s labels.", strings.Join(formattedLabels[:len(formattedLabels)-1], ", "), formattedLabels[len(formattedLabels)-1])
 }
 
-func helpProvider(config *plugins.Configuration, enabledRepos []string) (*pluginhelp.PluginHelp, error) {
+func helpProvider(config *plugins.Configuration, _ []config.OrgRepo) (*pluginhelp.PluginHelp, error) {
 	labels := []string{}
 	labels = append(labels, defaultLabels...)
 	labels = append(labels, config.Label.AdditionalLabels...)

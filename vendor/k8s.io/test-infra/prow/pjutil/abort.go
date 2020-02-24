@@ -30,7 +30,7 @@ import (
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
-	"k8s.io/test-infra/prow/github/reporter"
+	reporter "k8s.io/test-infra/prow/crier/reporters/github"
 )
 
 // patchClient a minimalistic prow client required by the aborter
@@ -127,6 +127,9 @@ func TerminateOlderJobs(pjc patchClient, log *logrus.Entry, pjs []prowapi.ProwJo
 		if err := pjc.Patch(context.Background(), &toCancel, ctrlruntimeclient.MergeFrom(prevPJ)); err != nil {
 			return err
 		}
+
+		// Update the cancelled jobs entry in pjs.
+		pjs[cancelIndex] = toCancel
 	}
 
 	return nil

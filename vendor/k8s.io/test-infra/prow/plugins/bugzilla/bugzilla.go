@@ -28,6 +28,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/test-infra/prow/bugzilla"
+	"k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/labels"
 	"k8s.io/test-infra/prow/pluginhelp"
@@ -49,17 +50,10 @@ func init() {
 	plugins.RegisterPullRequestHandler(PluginName, handlePullRequest, helpProvider)
 }
 
-func helpProvider(config *plugins.Configuration, enabledRepos []string) (*pluginhelp.PluginHelp, error) {
+func helpProvider(config *plugins.Configuration, enabledRepos []config.OrgRepo) (*pluginhelp.PluginHelp, error) {
 	configInfo := make(map[string]string)
-	for _, orgRepo := range enabledRepos {
-		parts := strings.Split(orgRepo, "/")
-		var opts map[string]plugins.BugzillaBranchOptions
-		switch len(parts) {
-		case 2:
-			opts = config.Bugzilla.OptionsForRepo(parts[0], parts[1])
-		default:
-			return nil, fmt.Errorf("invalid repo in enabledRepos: %q", orgRepo)
-		}
+	for _, repo := range enabledRepos {
+		opts := config.Bugzilla.OptionsForRepo(repo.Org, repo.Repo)
 		if len(opts) == 0 {
 			continue
 		}
@@ -93,6 +87,16 @@ func helpProvider(config *plugins.Configuration, enabledRepos []string) (*plugin
 			if opts[branch].ValidStates != nil && len(*opts[branch].ValidStates) > 0 {
 				pretty := strings.Join(prettyStates(*opts[branch].ValidStates), ", ")
 				conditions = append(conditions, fmt.Sprintf("be in one of the following states: %s", pretty))
+			}
+			if opts[branch].DependentBugStates != nil || opts[branch].DependentBugTargetRelease != nil {
+				conditions = append(conditions, "depend on at least one other bug")
+			}
+			if opts[branch].DependentBugStates != nil {
+				pretty := strings.Join(prettyStates(*opts[branch].DependentBugStates), ", ")
+				conditions = append(conditions, fmt.Sprintf("have all dependent bugs in one of the following states: %s", pretty))
+			}
+			if opts[branch].DependentBugTargetRelease != nil {
+				conditions = append(conditions, fmt.Sprintf("have all dependent bugs target the %q release", *opts[branch].DependentBugTargetRelease))
 			}
 			switch len(conditions) {
 			case 0:
@@ -133,7 +137,7 @@ func helpProvider(config *plugins.Configuration, enabledRepos []string) (*plugin
 		}
 		configInfoStrings = append(configInfoStrings, "</ul>")
 
-		configInfo[orgRepo] = strings.Join(configInfoStrings, "\n")
+		configInfo[repo.String()] = strings.Join(configInfoStrings, "\n")
 	}
 	pluginHelp := &pluginhelp.PluginHelp{
 		Description: "The bugzilla plugin ensures that pull requests reference a valid Bugzilla bug in their title.",

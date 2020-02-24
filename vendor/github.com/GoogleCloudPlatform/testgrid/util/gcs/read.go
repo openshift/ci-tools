@@ -51,10 +51,10 @@ type Finished struct {
 
 // Build points to a build stored under a particular gcs prefix.
 type Build struct {
-	Bucket     *storage.BucketHandle
-	Context    context.Context
-	Prefix     string
-	BucketPath string
+	Bucket         *storage.BucketHandle
+	Prefix         string
+	BucketPath     string
+	originalPrefix string
 }
 
 func (build Build) String() string {
@@ -70,11 +70,13 @@ func (b Builds) Swap(i, j int) { b[i], b[j] = b[j], b[i] }
 // Expect builds to be in monotonically increasing order.
 // So build8 < build9 < build10 < build888
 func (b Builds) Less(i, j int) bool {
-	return sortorder.NaturalLess(b[i].Prefix, b[j].Prefix)
+	return sortorder.NaturalLess(b[i].originalPrefix, b[j].originalPrefix)
 }
 
 // ListBuilds returns the array of builds under path, sorted in monotonically decreasing order.
-func ListBuilds(ctx context.Context, client *storage.Client, path Path) (Builds, error) {
+func ListBuilds(parent context.Context, client *storage.Client, path Path) (Builds, error) {
+	ctx, cancel := context.WithCancel(parent)
+	defer cancel()
 	p := path.Object()
 	if !strings.HasSuffix(p, "/") {
 		p += "/"
@@ -95,7 +97,7 @@ func ListBuilds(ctx context.Context, client *storage.Client, path Path) (Builds,
 		}
 
 		// if this is a link under directory, resolve the build value
-		if link := objAttrs.Metadata["link"]; len(link) > 0 {
+		if link := objAttrs.Metadata["x-goog-meta-link"]; len(link) > 0 {
 			// links created by bootstrap.py have a space
 			link = strings.TrimSpace(link)
 			u, err := url.Parse(link)
@@ -110,10 +112,10 @@ func ListBuilds(ctx context.Context, client *storage.Client, path Path) (Builds,
 				return nil, fmt.Errorf("could not make GCS path for key %s: %v", objAttrs.Name, err)
 			}
 			all = append(all, Build{
-				Bucket:     bkt,
-				Context:    ctx,
-				Prefix:     linkPath.Object(),
-				BucketPath: path.Bucket(),
+				Bucket:         bkt,
+				Prefix:         linkPath.Object(),
+				BucketPath:     path.Bucket(),
+				originalPrefix: objAttrs.Name,
 			})
 			continue
 		}
@@ -123,10 +125,10 @@ func ListBuilds(ctx context.Context, client *storage.Client, path Path) (Builds,
 		}
 
 		all = append(all, Build{
-			Bucket:     bkt,
-			Context:    ctx,
-			Prefix:     objAttrs.Prefix,
-			BucketPath: path.Bucket(),
+			Bucket:         bkt,
+			Prefix:         objAttrs.Prefix,
+			BucketPath:     path.Bucket(),
+			originalPrefix: objAttrs.Prefix,
 		})
 	}
 	sort.Sort(sort.Reverse(all))
@@ -181,10 +183,10 @@ func readJSON(ctx context.Context, obj *storage.ObjectHandle, i interface{}) err
 }
 
 // Started parses the build's started metadata.
-func (build Build) Started() (*Started, error) {
+func (build Build) Started(ctx context.Context) (*Started, error) {
 	uri := build.Prefix + "started.json"
 	var started Started
-	err := readJSON(build.Context, build.Bucket.Object(uri), &started)
+	err := readJSON(ctx, build.Bucket.Object(uri), &started)
 	if err == storage.ErrObjectNotExist {
 		started.Pending = true
 		return &started, nil
@@ -196,10 +198,10 @@ func (build Build) Started() (*Started, error) {
 }
 
 // Finished parses the build's finished metadata.
-func (build Build) Finished() (*Finished, error) {
+func (build Build) Finished(ctx context.Context) (*Finished, error) {
 	uri := build.Prefix + "finished.json"
 	var finished Finished
-	err := readJSON(build.Context, build.Bucket.Object(uri), &finished)
+	err := readJSON(ctx, build.Bucket.Object(uri), &finished)
 	if err == storage.ErrObjectNotExist {
 		finished.Running = true
 		return &finished, nil
@@ -211,9 +213,9 @@ func (build Build) Finished() (*Finished, error) {
 }
 
 // Artifacts writes the object name of all paths under the build's artifact dir to the output channel.
-func (build Build) Artifacts(artifacts chan<- string) error {
+func (build Build) Artifacts(ctx context.Context, artifacts chan<- string) error {
 	pref := build.Prefix
-	objs := build.Bucket.Objects(build.Context, &storage.Query{Prefix: pref})
+	objs := build.Bucket.Objects(ctx, &storage.Query{Prefix: pref})
 	for {
 		obj, err := objs.Next()
 		if err == iterator.Done {
@@ -223,7 +225,7 @@ func (build Build) Artifacts(artifacts chan<- string) error {
 			return fmt.Errorf("failed to list %s: %v", pref, err)
 		}
 		select {
-		case <-build.Context.Done():
+		case <-ctx.Done():
 			return fmt.Errorf("interrupted listing %s", pref)
 		case artifacts <- obj.Name:
 		}
@@ -260,11 +262,11 @@ type SuitesMeta struct {
 // Suites takes a channel of artifact names, parses those representing junit suites, writing the result to the suites channel.
 //
 // Note that junit suites are parsed in parallel, so there are no guarantees about suites ordering.
-func (build Build) Suites(artifacts <-chan string, suites chan<- SuitesMeta) error {
+func (build Build) Suites(parent context.Context, artifacts <-chan string, suites chan<- SuitesMeta) error {
 
 	var wg sync.WaitGroup
 	ec := make(chan error)
-	ctx, cancel := context.WithCancel(build.Context)
+	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
 	for art := range artifacts {
 		meta := parseSuitesMeta(art)

@@ -74,7 +74,7 @@ message TestGroup {
   bool ignore_built = 5;
 
   enum TestsName {
-    TESTS_NAME_MIN = 0;
+    TESTS_NAME_UNSPECIFIED = 0;
     TESTS_NAME_IGNORE = 1;
     TESTS_NAME_REPLACE = 2;
     TESTS_NAME_APPEND = 3;
@@ -426,6 +426,16 @@ message Dashboard {
   // Control which tab is displayed when first opening a dashboard.
   // Defaults to Summary
   string default_tab = 5;
+
+  // Controls whether to suppress highlighting of failing tabs.
+  bool downplay_failing_tabs = 8;
+
+  // Deprecated: Invert of 'downplay_failing_tabs'
+  bool highlight_failing_tabs = 6 [deprecated=true];
+
+  // Controls whether to apply special highlighting to result header columns for
+  // the current day.
+  bool highlight_today = 7;
 }
 
 message LinkTemplate {

@@ -15,6 +15,17 @@ test:
 	go test -race ./...
 .PHONY: test
 
+update-vendor:
+	docker run --rm \
+		--user=$$UID \
+		-v $$(go env GOCACHE):/.cache \
+		-v $$PWD:/go/src/github.com/openshift/ci-tools \
+		-w /go/src/github.com/openshift/ci-tools \
+		-e GO111MODULE=on \
+		-e GOPROXY=https://proxy.golang.org \
+		golang:1.13 go mod vendor
+.PHONY: update-vendor
+
 validate-vendor:
 	go version
 	GO111MODULE=on GOPROXY=https://proxy.golang.org go mod tidy
@@ -64,6 +75,10 @@ integration-testgrid-generator:
 integration-repo-init:
 	test/repo-init-integration/run.sh
 .PHONY: integration-repo-init
+
+integration-repo-init-update:
+	UPDATE=true test/repo-init-integration/run.sh
+.PHONY: integration-repo-init-update
 
 check-breaking-changes:
 	test/validate-prowgen-breaking-changes.sh

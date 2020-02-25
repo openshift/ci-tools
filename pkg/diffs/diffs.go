@@ -205,7 +205,7 @@ func GetImagesPostsubmitsForCiopConfigs(prowConfig *prowconfig.Config, ciopConfi
 	var ret []PostsubmitInContext
 
 	for filename, data := range ciopConfigs {
-		for _, job := range prowConfig.JobConfig.Postsubmits[fmt.Sprintf("%s/%s", data.Info.Org, data.Info.Repo)] {
+		for _, job := range prowConfig.JobConfig.PostsubmitsStatic[fmt.Sprintf("%s/%s", data.Info.Org, data.Info.Repo)] {
 			key, ok := ciOpFileName(job.JobBase)
 			if !ok || key != filename {
 				continue

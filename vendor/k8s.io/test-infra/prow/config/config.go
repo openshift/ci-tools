@@ -76,8 +76,11 @@ type JobConfig struct {
 	// inside the code repo, hence giving an incomplete view. Use
 	// `GetPresubmits` instead if possible.
 	PresubmitsStatic map[string][]Presubmit `json:"presubmits,omitempty"`
-	// Full repo name (such as "kubernetes/kubernetes") -> list of jobs.
-	Postsubmits map[string][]Postsubmit `json:"postsubmits,omitempty"`
+	// .PostsubmitsStatic contains the Postsubmits in Prows main config.
+	// **Warning:** This does not return dynamic postsubmits configured
+	// inside the code repo, hence giving an incomplete view. Use
+	// `GetPostsubmits` instead if possible.
+	PostsubmitsStatic map[string][]Postsubmit `json:"postsubmits,omitempty"`
 
 	// Periodics are not associated with any repo.
 	Periodics []Periodic `json:"periodics,omitempty"`
@@ -290,18 +293,17 @@ func (rg *RefGetterForGitHubPullRequest) BaseSHA() (string, error) {
 	return rg.baseSHA, nil
 }
 
-// GetPresubmits will return all presumits for the given identifier. This includes
-// Presubmits that are versioned inside the tested repo, if the `inrepoconfig feature
-// is enabled.
+// getProwYAML will load presubmits and postsubmits for the given identifier that are
+// versioned inside the tested repo, if the inrepoconfig feature is enabled.
 // Consumers that pass in a RefGetter implementation that does a call to GitHub and who
 // also need the result of that GitHub call just keep a pointer to its result, but must
 // nilcheck that pointer before accessing it.
-func (c *Config) GetPresubmits(gc git.ClientFactory, identifier string, baseSHAGetter RefGetter, headSHAGetters ...RefGetter) ([]Presubmit, error) {
+func (c *Config) getProwYAML(gc git.ClientFactory, identifier string, baseSHAGetter RefGetter, headSHAGetters ...RefGetter) (*ProwYAML, error) {
 	if identifier == "" {
 		return nil, errors.New("no identifier for repo given")
 	}
 	if !c.InRepoConfigEnabled(identifier) {
-		return c.PresubmitsStatic[identifier], nil
+		return &ProwYAML{}, nil
 	}
 
 	baseSHA, err := baseSHAGetter()
@@ -321,7 +323,37 @@ func (c *Config) GetPresubmits(gc git.ClientFactory, identifier string, baseSHAG
 		return nil, err
 	}
 
+	return prowYAML, nil
+}
+
+// GetPresubmits will return all presubmits for the given identifier. This includes
+// Presubmits that are versioned inside the tested repo, if the inrepoconfig feature
+// is enabled.
+// Consumers that pass in a RefGetter implementation that does a call to GitHub and who
+// also need the result of that GitHub call just keep a pointer to its result, but must
+// nilcheck that pointer before accessing it.
+func (c *Config) GetPresubmits(gc git.ClientFactory, identifier string, baseSHAGetter RefGetter, headSHAGetters ...RefGetter) ([]Presubmit, error) {
+	prowYAML, err := c.getProwYAML(gc, identifier, baseSHAGetter, headSHAGetters...)
+	if err != nil {
+		return nil, err
+	}
+
 	return append(c.PresubmitsStatic[identifier], prowYAML.Presubmits...), nil
+}
+
+// GetPostsubmits will return all postsubmits for the given identifier. This includes
+// Postsubmits that are versioned inside the tested repo, if the inrepoconfig feature
+// is enabled.
+// Consumers that pass in a RefGetter implementation that does a call to GitHub and who
+// also need the result of that GitHub call just keep a pointer to its result, but must
+// nilcheck that pointer before accessing it.
+func (c *Config) GetPostsubmits(gc git.ClientFactory, identifier string, baseSHAGetter RefGetter, headSHAGetters ...RefGetter) ([]Postsubmit, error) {
+	prowYAML, err := c.getProwYAML(gc, identifier, baseSHAGetter, headSHAGetters...)
+	if err != nil {
+		return nil, err
+	}
+
+	return append(c.PostsubmitsStatic[identifier], prowYAML.Postsubmits...), nil
 }
 
 // OwnersDirBlacklist is used to configure regular expressions matching directories
@@ -413,6 +445,9 @@ type Plank struct {
 	// PodRunningTimeout is after how long the controller will abort a prowjob pod
 	// stuck in running state. Defaults to two days.
 	PodRunningTimeout *metav1.Duration `json:"pod_running_timeout,omitempty"`
+	// PodUnscheduledTimeout is after how long the controller will abort a prowjob
+	// stuck in an unscheduled state. Defaults to one day.
+	PodUnscheduledTimeout *metav1.Duration `json:"pod_unscheduled_timeout,omitempty"`
 	// DefaultDecorationConfig are defaults for shared fields for ProwJobs
 	// that request to have their PodSpecs decorated.
 	// This will be deprecated on April 2020, and it will be replaces with DefaultDecorationConfigs['*'] instead.
@@ -499,6 +534,10 @@ type Sinker struct {
 	// MaxPodAge is how old a Pod can be before it is garbage-collected.
 	// Defaults to one day.
 	MaxPodAge *metav1.Duration `json:"max_pod_age,omitempty"`
+	// TerminatedPodTTL is how long a Pod can live after termination before it is
+	// garbage collected.
+	// Defaults to matching MaxPodAge.
+	TerminatedPodTTL *metav1.Duration `json:"terminated_pod_ttl,omitempty"`
 }
 
 // LensConfig names a specific lens, and optionally provides some configuration for it.
@@ -846,13 +885,13 @@ func yamlToConfig(path string, nc interface{}) error {
 			fix(&jc.PresubmitsStatic[rep][i])
 		}
 	}
-	for rep := range jc.Postsubmits {
+	for rep := range jc.PostsubmitsStatic {
 		var fix func(*Postsubmit)
 		fix = func(job *Postsubmit) {
 			job.SourcePath = path
 		}
-		for i := range jc.Postsubmits[rep] {
-			fix(&jc.Postsubmits[rep][i])
+		for i := range jc.PostsubmitsStatic[rep] {
+			fix(&jc.PostsubmitsStatic[rep][i])
 		}
 	}
 
@@ -888,10 +927,10 @@ func ReadFileMaybeGZIP(path string) ([]byte, error) {
 
 func (c *Config) mergeJobConfig(jc JobConfig) error {
 	m, err := mergeJobConfigs(JobConfig{
-		Presets:          c.Presets,
-		PresubmitsStatic: c.PresubmitsStatic,
-		Periodics:        c.Periodics,
-		Postsubmits:      c.Postsubmits,
+		Presets:           c.Presets,
+		PresubmitsStatic:  c.PresubmitsStatic,
+		Periodics:         c.Periodics,
+		PostsubmitsStatic: c.PostsubmitsStatic,
 	}, jc)
 	if err != nil {
 		return err
@@ -899,7 +938,7 @@ func (c *Config) mergeJobConfig(jc JobConfig) error {
 	c.Presets = m.Presets
 	c.PresubmitsStatic = m.PresubmitsStatic
 	c.Periodics = m.Periodics
-	c.Postsubmits = m.Postsubmits
+	c.PostsubmitsStatic = m.PostsubmitsStatic
 	return nil
 }
 
@@ -940,12 +979,12 @@ func mergeJobConfigs(a, b JobConfig) (JobConfig, error) {
 	}
 
 	// *** Postsubmits ***
-	c.Postsubmits = make(map[string][]Postsubmit)
-	for repo, jobs := range a.Postsubmits {
-		c.Postsubmits[repo] = jobs
+	c.PostsubmitsStatic = make(map[string][]Postsubmit)
+	for repo, jobs := range a.PostsubmitsStatic {
+		c.PostsubmitsStatic[repo] = jobs
 	}
-	for repo, jobs := range b.Postsubmits {
-		c.Postsubmits[repo] = append(c.Postsubmits[repo], jobs...)
+	for repo, jobs := range b.PostsubmitsStatic {
+		c.PostsubmitsStatic[repo] = append(c.PostsubmitsStatic[repo], jobs...)
 	}
 	return c, nil
 }
@@ -1060,7 +1099,7 @@ func (c *Config) finalizeJobConfig() error {
 		c.AllRepos.Insert(repo)
 	}
 
-	for repo, jobs := range c.Postsubmits {
+	for repo, jobs := range c.PostsubmitsStatic {
 		if err := defaultPostsubmits(jobs, c, repo); err != nil {
 			return err
 		}
@@ -1229,45 +1268,47 @@ func validatePeriodics(periodics []Periodic, podNamespace string) error {
 // if you are mutating the jobs, please add it to finalizeJobConfig above
 func (c *Config) validateJobConfig() error {
 
+	var errs []error
+
 	// Validate presubmits.
 	for _, jobs := range c.PresubmitsStatic {
 		if err := validatePresubmits(jobs, c.PodNamespace); err != nil {
-			return err
+			errs = append(errs, err)
 		}
 	}
 
 	// Validate postsubmits.
-	for _, jobs := range c.Postsubmits {
+	for _, jobs := range c.PostsubmitsStatic {
 		if err := validatePostsubmits(jobs, c.PodNamespace); err != nil {
-			return err
+			errs = append(errs, err)
 		}
 	}
 
 	if err := validatePeriodics(c.Periodics, c.PodNamespace); err != nil {
-		return err
+		errs = append(errs, err)
 	}
 
 	// Set the interval on the periodic jobs. It doesn't make sense to do this
 	// for child jobs.
 	for j, p := range c.Periodics {
 		if p.Cron != "" && p.Interval != "" {
-			return fmt.Errorf("cron and interval cannot be both set in periodic %s", p.Name)
+			errs = append(errs, fmt.Errorf("cron and interval cannot be both set in periodic %s", p.Name))
 		} else if p.Cron == "" && p.Interval == "" {
-			return fmt.Errorf("cron and interval cannot be both empty in periodic %s", p.Name)
+			errs = append(errs, fmt.Errorf("cron and interval cannot be both empty in periodic %s", p.Name))
 		} else if p.Cron != "" {
 			if _, err := cron.Parse(p.Cron); err != nil {
-				return fmt.Errorf("invalid cron string %s in periodic %s: %v", p.Cron, p.Name, err)
+				errs = append(errs, fmt.Errorf("invalid cron string %s in periodic %s: %v", p.Cron, p.Name, err))
 			}
 		} else {
 			d, err := time.ParseDuration(c.Periodics[j].Interval)
 			if err != nil {
-				return fmt.Errorf("cannot parse duration for %s: %v", c.Periodics[j].Name, err)
+				errs = append(errs, fmt.Errorf("cannot parse duration for %s: %v", c.Periodics[j].Name, err))
 			}
 			c.Periodics[j].interval = d
 		}
 	}
 
-	return nil
+	return utilerrors.NewAggregate(errs)
 }
 
 // DefaultConfigPath will be used if a --config-path is unset
@@ -1295,6 +1336,10 @@ func parseProwConfig(c *Config) error {
 
 	if c.Plank.PodRunningTimeout == nil {
 		c.Plank.PodRunningTimeout = &metav1.Duration{Duration: 48 * time.Hour}
+	}
+
+	if c.Plank.PodUnscheduledTimeout == nil {
+		c.Plank.PodUnscheduledTimeout = &metav1.Duration{Duration: 24 * time.Hour}
 	}
 
 	if c.Plank.AllowCancellations != nil {
@@ -1439,6 +1484,10 @@ func parseProwConfig(c *Config) error {
 		c.Sinker.MaxPodAge = &metav1.Duration{Duration: 24 * time.Hour}
 	}
 
+	if c.Sinker.TerminatedPodTTL == nil {
+		c.Sinker.TerminatedPodTTL = &metav1.Duration{Duration: c.Sinker.MaxPodAge.Duration}
+	}
+
 	if c.Tide.SyncPeriod == nil {
 		c.Tide.SyncPeriod = &metav1.Duration{Duration: time.Minute}
 	}
@@ -1561,7 +1610,7 @@ func (c *JobConfig) decorationRequested() bool {
 		}
 	}
 
-	for _, js := range c.Postsubmits {
+	for _, js := range c.PostsubmitsStatic {
 		for i := range js {
 			if js[i].Decorate {
 				return true
@@ -1706,45 +1755,63 @@ func validatePodSpec(jobType prowapi.ProwJobType, spec *v1.PodSpec) error {
 		return nil
 	}
 
+	var errs []error
+
 	if len(spec.InitContainers) != 0 {
-		return errors.New("pod spec may not use init containers")
+		errs = append(errs, errors.New("pod spec may not use init containers"))
 	}
 
 	if n := len(spec.Containers); n != 1 {
-		return fmt.Errorf("pod spec must specify exactly 1 container, found: %d", n)
+		// We must return here to not cause an out of bounds panic in the remaining validation
+		return utilerrors.NewAggregate(append(errs, fmt.Errorf("pod spec must specify exactly 1 container, found: %d", n)))
 	}
 
+	envNames := sets.String{}
 	for _, env := range spec.Containers[0].Env {
+		if envNames.Has(env.Name) {
+			errs = append(errs, fmt.Errorf("env var named %q is defined more than once", env.Name))
+		}
+		envNames.Insert(env.Name)
+
 		for _, prowEnv := range downwardapi.EnvForType(jobType) {
 			if env.Name == prowEnv {
 				// TODO(fejta): consider allowing this
-				return fmt.Errorf("env %s is reserved", env.Name)
+				errs = append(errs, fmt.Errorf("env %s is reserved", env.Name))
+			}
+		}
+	}
+
+	volumeNames := sets.String{}
+	for _, volume := range spec.Volumes {
+		if volumeNames.Has(volume.Name) {
+			errs = append(errs, fmt.Errorf("volume named %q is defined more than once", volume.Name))
+		}
+		volumeNames.Insert(volume.Name)
+
+		for _, prowVolume := range decorate.VolumeMounts() {
+			if volume.Name == prowVolume {
+				errs = append(errs, fmt.Errorf("volume %s is a reserved for decoration", volume.Name))
 			}
 		}
 	}
 
 	for _, mount := range spec.Containers[0].VolumeMounts {
+		if !volumeNames.Has(mount.Name) {
+			errs = append(errs, fmt.Errorf("volumeMount named %q is undefined", mount.Name))
+		}
 		for _, prowMount := range decorate.VolumeMounts() {
 			if mount.Name == prowMount {
-				return fmt.Errorf("volumeMount name %s is reserved for decoration", prowMount)
+				errs = append(errs, fmt.Errorf("volumeMount name %s is reserved for decoration", prowMount))
 			}
 		}
 		for _, prowMountPath := range decorate.VolumeMountPaths() {
 			if strings.HasPrefix(mount.MountPath, prowMountPath) || strings.HasPrefix(prowMountPath, mount.MountPath) {
-				return fmt.Errorf("mount %s at %s conflicts with decoration mount at %s", mount.Name, mount.MountPath, prowMountPath)
+				errs = append(errs, fmt.Errorf("mount %s at %s conflicts with decoration mount at %s", mount.Name, mount.MountPath, prowMountPath))
 			}
 		}
 	}
 
-	for _, volume := range spec.Volumes {
-		for _, prowVolume := range decorate.VolumeMounts() {
-			if volume.Name == prowVolume {
-				return fmt.Errorf("volume %s is a reserved for decoration", volume.Name)
-			}
-		}
-	}
-
-	return nil
+	return utilerrors.NewAggregate(errs)
 }
 
 func validateTriggering(job Presubmit) error {
@@ -1919,4 +1986,45 @@ func SetPostsubmitRegexes(ps []Postsubmit) error {
 		ps[i].RegexpChangeMatcher = c
 	}
 	return nil
+}
+
+// OrgRepo supercedes org/repo string handling
+type OrgRepo struct {
+	Org  string
+	Repo string
+}
+
+func (repo OrgRepo) String() string {
+	return fmt.Sprintf("%s/%s", repo.Org, repo.Repo)
+}
+
+// NewOrgRepo creates a OrgRepo from org/repo string
+func NewOrgRepo(orgRepo string) *OrgRepo {
+	parts := strings.Split(orgRepo, "/")
+	switch len(parts) {
+	case 1:
+		return &OrgRepo{Org: parts[0]}
+	case 2:
+		return &OrgRepo{Org: parts[0], Repo: parts[1]}
+	default:
+		return nil
+	}
+}
+
+// OrgReposToStrings converts a list of OrgRepo to its String() equivalent
+func OrgReposToStrings(vs []OrgRepo) []string {
+	vsm := make([]string, len(vs))
+	for i, v := range vs {
+		vsm[i] = v.String()
+	}
+	return vsm
+}
+
+// StringsToOrgRepos converts a list of org/repo strings to its OrgRepo equivalent
+func StringsToOrgRepos(vs []string) []OrgRepo {
+	vsm := make([]OrgRepo, len(vs))
+	for i, v := range vs {
+		vsm[i] = *NewOrgRepo(v)
+	}
+	return vsm
 }

@@ -352,7 +352,7 @@ func editProwConfig(prowConfig *prowconfig.Config, config initConfig) {
 	fmt.Println(`
 Updating Prow configuration ...`)
 	queries := prowConfig.Tide.Queries.QueryMap()
-	existing := queries.ForRepo(config.Org, config.Repo)
+	existing := queries.ForRepo(prowconfig.OrgRepo{Org: config.Org, Repo: config.Repo})
 	var existingStrings []string
 	for _, query := range existing {
 		existingStrings = append(existingStrings, query.Query())
@@ -373,9 +373,9 @@ No additional "tide" queries will be added.
 	var copyCatQueries prowconfig.TideQueries
 	switch {
 	case config.Promotes && config.PromotesWithOpenShift:
-		copyCatQueries = queries.ForRepo("openshift", "origin")
+		copyCatQueries = queries.ForRepo(prowconfig.OrgRepo{Org: "openshift", Repo: "origin"})
 	case config.Promotes && !config.PromotesWithOpenShift:
-		copyCatQueries = queries.ForRepo("openshift", "ci-tools")
+		copyCatQueries = queries.ForRepo(prowconfig.OrgRepo{Org: "openshift", Repo: "ci-tools"})
 	}
 
 	orgRepo := fmt.Sprintf("%s/%s", config.Org, config.Repo)

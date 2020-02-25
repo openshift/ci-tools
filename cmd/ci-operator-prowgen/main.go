@@ -620,9 +620,9 @@ func generateJobs(
 	}
 
 	return &prowconfig.JobConfig{
-		PresubmitsStatic: presubmits,
-		Postsubmits:      postsubmits,
-		Periodics:        periodics,
+		PresubmitsStatic:  presubmits,
+		PostsubmitsStatic: postsubmits,
+		Periodics:         periodics,
 	}
 }
 
@@ -745,7 +745,7 @@ func prune(jobConfig *prowconfig.JobConfig) *prowconfig.JobConfig {
 		}
 	}
 
-	for repo, jobs := range jobConfig.Postsubmits {
+	for repo, jobs := range jobConfig.PostsubmitsStatic {
 		for _, job := range jobs {
 			if isStale(job.JobBase) {
 				continue
@@ -754,11 +754,11 @@ func prune(jobConfig *prowconfig.JobConfig) *prowconfig.JobConfig {
 				job.Labels[jc.ProwJobLabelGenerated] = string(jc.Generated)
 
 			}
-			if pruned.Postsubmits == nil {
-				pruned.Postsubmits = map[string][]prowconfig.Postsubmit{}
+			if pruned.PostsubmitsStatic == nil {
+				pruned.PostsubmitsStatic = map[string][]prowconfig.Postsubmit{}
 			}
 
-			pruned.Postsubmits[repo] = append(pruned.Postsubmits[repo], job)
+			pruned.PostsubmitsStatic[repo] = append(pruned.PostsubmitsStatic[repo], job)
 		}
 	}
 
@@ -781,7 +781,7 @@ func pruneStaleJobs(jobDir, subDir string) error {
 	if err := jc.OperateOnJobConfigSubdir(jobDir, subDir, func(jobConfig *prowconfig.JobConfig, info *jc.Info) error {
 		pruned := prune(jobConfig)
 
-		if len(pruned.PresubmitsStatic) == 0 && len(pruned.Postsubmits) == 0 && len(pruned.Periodics) == 0 {
+		if len(pruned.PresubmitsStatic) == 0 && len(pruned.PostsubmitsStatic) == 0 && len(pruned.Periodics) == 0 {
 			if err := os.Remove(info.Filename); err != nil && !os.IsNotExist(err) {
 				return err
 			}

@@ -25,6 +25,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
+	ctrlruntimemetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 
 	"k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/interrupts"
@@ -33,7 +34,7 @@ import (
 const metricsPort = 9090
 
 // ExposeMetricsWithRegistry chooses whether to serve or push metrics for the service with the registry
-func ExposeMetricsWithRegistry(component string, pushGateway config.PushGateway, reg *prometheus.Registry) {
+func ExposeMetricsWithRegistry(component string, pushGateway config.PushGateway, reg prometheus.Gatherer) {
 	if pushGateway.Endpoint != "" {
 		pushMetrics(component, pushGateway.Endpoint, pushGateway.Interval.Duration)
 		if pushGateway.ServeMetrics {
@@ -50,13 +51,14 @@ func ExposeMetrics(component string, pushGateway config.PushGateway) {
 }
 
 // serveMetrics serves prometheus metrics for the service
-func serveMetrics(reg *prometheus.Registry) {
-	var handler http.Handler
+func serveMetrics(reg prometheus.Gatherer) {
 	if reg == nil {
-		handler = promhttp.Handler()
-	} else {
-		handler = promhttp.HandlerFor(reg, promhttp.HandlerOpts{})
+		reg = prometheus.DefaultGatherer
 	}
+	handler := promhttp.HandlerFor(
+		prometheus.Gatherers{reg, ctrlruntimemetrics.Registry},
+		promhttp.HandlerOpts{},
+	)
 	metricsMux := http.NewServeMux()
 	metricsMux.Handle("/metrics", handler)
 	server := &http.Server{Addr: ":" + strconv.Itoa(metricsPort), Handler: metricsMux}

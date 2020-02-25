@@ -13,7 +13,6 @@ import (
 	"k8s.io/test-infra/experiment/autobumper/bumper"
 	"k8s.io/test-infra/prow/config/secret"
 	"k8s.io/test-infra/prow/flagutil"
-	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/labels"
 )
 
@@ -205,54 +204,14 @@ func main() {
 		fmt.Sprintf("HEAD:%s", remoteBranch)}
 	run(cmd, args...)
 
-	if err := bumper.UpdatePullRequest(gc, githubOrg, githubRepo, title, fmt.Sprintf("/cc @%s", o.assign),
-		matchTitle, o.githubLogin+":"+remoteBranch, "master"); err != nil {
+	var labelsToAdd []string
+	if o.selfApprove {
+		logrus.Infof("Self-aproving PR by adding the %q and %q labels", labels.Approved, labels.LGTM)
+		labelsToAdd = append(labelsToAdd, labels.Approved, labels.LGTM)
+	}
+	if err := bumper.UpdatePullRequestWithLabels(gc, githubOrg, githubRepo, title, fmt.Sprintf("/cc @%s", o.assign),
+		matchTitle, o.githubLogin+":"+remoteBranch, "master", labelsToAdd); err != nil {
 		logrus.WithError(err).Fatal("PR creation failed.")
 	}
 
-	if !o.selfApprove {
-		return
-	}
-
-	if err := selfApprove(gc, githubOrg, githubRepo); err != nil {
-		logrus.WithError(err).Fatal("Self-approve failed.")
-	}
-
-}
-
-func selfApprove(gc github.Client, org, repo string) error {
-	logrus.Infof("Self-aproving PR by adding the %q and %q labels", labels.Approved, labels.LGTM)
-
-	me, err := gc.BotName()
-	if err != nil {
-		return fmt.Errorf("bot name: %v", err)
-	}
-
-	issues, err := gc.FindIssues("is:open is:pr archived:false in:title author:"+me+" "+matchTitle, "updated", false)
-	if err != nil {
-		return fmt.Errorf("find issues: %v", err)
-	} else if len(issues) == 0 {
-		logrus.Info("No reusable issues found")
-		return nil
-	} else if len(issues) > 1 {
-		return fmt.Errorf("found more than one issue (%d), refusing to approve", len(issues))
-	}
-	issue := issues[0]
-
-	var missingLabels []string
-	if !issue.HasLabel(labels.Approved) {
-		missingLabels = append(missingLabels, labels.Approved)
-	}
-	if !issue.HasLabel(labels.LGTM) {
-		missingLabels = append(missingLabels, labels.LGTM)
-	}
-
-	for _, label := range missingLabels {
-		if err := gc.AddLabel(githubOrg, githubRepo, issue.Number, label); err != nil {
-			return fmt.Errorf("failed to add label %q: %v", label, err)
-		}
-		logrus.WithField("label", label).Info("Successfully added label")
-	}
-
-	return nil
 }

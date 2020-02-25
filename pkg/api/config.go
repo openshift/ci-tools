@@ -340,6 +340,10 @@ func validateTestConfigurationType(fieldRoot string, test TestStepConfiguration,
 		typeCount++
 		validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 	}
+	if testConfig := test.OpenshiftInstallerGCPNestedVirtCustomTestImageClusterTestConfiguration; testConfig != nil {
+		typeCount++
+		validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
+	}
 	if testConfig := test.MultiStageTestConfiguration; testConfig != nil {
 		if resolved {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: non-literal test found in fully-resolved configuration", fieldRoot))

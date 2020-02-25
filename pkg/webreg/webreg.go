@@ -413,7 +413,7 @@ configuration file, they are describing how a repository produces output
 artifacts, how those artifacts fit into the larger OpenShift release and
 how those artifacts should be tested. The following examples will describe
 the configuration file as well as walk through how <code>ci-operator</code>
-creates OpenShift objects to fulfill their intent. 
+creates OpenShift objects to fulfill their intent.
 </p>
 
 <h4 id="inputs"><a href="#inputs">Configuring Inputs</a></h4>
@@ -470,7 +470,7 @@ can be configured for building artifacts to support test execution. The followin
 The content created with these OpenShift <code>Builds</code> is addressable
 in the <code>ci-operator</code> configuration simply with the tag. For instance,
 the <code>pipeline:bin</code> image can be referenced as <code>bin</code> when
-the content in that image is needed in derivative <code>Builds</code>. 
+the content in that image is needed in derivative <code>Builds</code>.
 </p>
 
 <h4 id="images"><a href="#images">Building Container Images</a></h4>
@@ -552,7 +552,7 @@ publishes the following images:
 <p>
 <code>ci-operator</code> gives first-class support to repositories which need to
 run end-to-end tests in the context of an OpenShift cluster. With the <code>tag_specification</code>
-configuration option, a repository declares which version of OpenShift it is a 
+configuration option, a repository declares which version of OpenShift it is a
 part of by specifying the images that will be used to create an ephemeral OpenShift
 release payload for testing. Most commonly, the same integration <code>ImageStream</code>
 is specified for <code>tag_specification</code> as is for <code>promotion</code>.
@@ -623,9 +623,9 @@ FROM registry.svc.ci.openshift.org/ocp/builder:golang-1.13 AS builder
 # the repository's source code will be available under $GOPATH of /go
 WORKDIR /go/src/github.com/myorg/myrepo
 # this COPY bring the repository's source code from the build context into an image layer
-COPY . . 
+COPY . .
 # this matches the binary_build_commands but runs against the build cache
-RUN go build ./cmd/... 
+RUN go build ./cmd/...
 
 # this is the production output image base and matches the "base" build_root
 FROM registry.svc.ci.openshift.org/openshift/origin-v4.5:base
@@ -637,7 +637,7 @@ const ciOperatorImageConfig = `images:
 - dockerfile_path: "Dockerfile" # this is a relative path from the root of the repository to the multi-stage Dockerfile
   from: "base" # a reference to the named base_image, used to replace the output FROM in the Dockerfile
   inputs:
-    bin: # declares that the "bin" tag is used as the builder image when overwriting that FROM instruction 
+    bin: # declares that the "bin" tag is used as the builder image when overwriting that FROM instruction
       as:
       - "registry.svc.ci.openshift.org/ocp/builder:golang-1.13"
   to: "mycomponent" # names the output container image "mycomponent"
@@ -670,7 +670,7 @@ const ciOperatorContainerTestConfig = `tests:
 - as: "vet"                 # names this test "vet"
   commands: "go vet ./..."  # declares which commands to run
   container:
-    from: "src"             # runs the commands in "pipeline:src" 
+    from: "src"             # runs the commands in "pipeline:src"
 `
 
 const gettingStartedPage = `
@@ -1042,7 +1042,7 @@ const awsExample = `- as: e2e-steps
 const imagePromotionConfig = `test_binary_build_commands: go test -race -c -o e2e-tests # will create the test-bin tag
 promotion:
   additional_images:
-    repo-scripts: src    # promotes "src" as "repo-scripts" 
+    repo-scripts: src    # promotes "src" as "repo-scripts"
     repo-tests: test-bin # promotes "test-bin" as "repo-tests"
   namespace: ocp
   name: 4.4
@@ -1085,7 +1085,7 @@ const imageExampleConfig = `- as: org-repo-e2e
 const imageExampleLiteral = `- as: repo-e2e
   steps:
     cluster_profile: aws
-	workflow: ipi
+    workflow: ipi
     test:
     - as: e2e
       from: stable:repo-tests

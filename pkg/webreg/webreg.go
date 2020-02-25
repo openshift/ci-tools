@@ -894,7 +894,7 @@ const addingComponentPage = `
 <p>
 Adding a new component (reference, chain, or workflow) to the registry is
 quite simple. Descriptions of each of the components as well as the naming
-scheme and directory layout is available at the <a href="/help/getting-started">
+scheme and directory layout is available at the <a href="/help">
 Getting Started</a> page. To add a new component, add the new files into the
 <code>ci-operator/step-registry</code> directory in
 <code>openshift/release</code> following the naming scheme along with an

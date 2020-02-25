@@ -23,7 +23,8 @@ update-vendor:
 		-w /go/src/github.com/openshift/ci-tools \
 		-e GO111MODULE=on \
 		-e GOPROXY=https://proxy.golang.org \
-		golang:1.13 go mod vendor
+		golang:1.13 \
+		/bin/bash -c "go mod tidy && go mod vendor"
 .PHONY: update-vendor
 
 validate-vendor:

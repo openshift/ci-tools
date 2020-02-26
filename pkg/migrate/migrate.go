@@ -204,7 +204,7 @@ var (
 		"integr8ly/integreatly-operator/.*",
 		"integr8ly/installation/.*",
 		"integr8ly/heimdall/.*",
-		"integr8ly/ansible-tower-configuration/.*",
+		//"integr8ly/ansible-tower-configuration/.*",
 		"fabric8-services/toolchain-operator/.*",
 		"openshift/csi-external-attacher/.*",
 		"openshift/cluster-api-provider-azure/.*",

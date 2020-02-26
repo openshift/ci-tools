@@ -11,7 +11,6 @@ import (
 type Step interface {
 	Inputs(ctx context.Context, dry bool) (InputDefinition, error)
 	Run(ctx context.Context, dry bool) error
-	Done() (bool, error)
 
 	// Name is the name of the stage, used to target it.
 	// If this is the empty string the stage cannot be targeted.

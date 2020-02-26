@@ -66,8 +66,6 @@ func (s *stableImagesTagStep) Inputs(ctx context.Context, dry bool) (api.InputDe
 	return nil, nil
 }
 
-func (s *stableImagesTagStep) Done() (bool, error) { return true, nil }
-
 func (s *stableImagesTagStep) Requires() []api.StepLink { return []api.StepLink{} }
 
 func (s *stableImagesTagStep) Creates() []api.StepLink { return []api.StepLink{api.ReleaseImagesLink()} }
@@ -224,10 +222,6 @@ func (s *releaseImagesTagStep) Run(ctx context.Context, dry bool) error {
 	}
 
 	return nil
-}
-
-func (s *releaseImagesTagStep) Done() (bool, error) {
-	return false, nil
 }
 
 func (s *releaseImagesTagStep) Requires() []api.StepLink {

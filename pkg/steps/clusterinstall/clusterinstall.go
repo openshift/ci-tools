@@ -132,10 +132,6 @@ func (s *e2eTestStep) Run(ctx context.Context, dry bool) error {
 	return s.step.Run(ctx, dry)
 }
 
-func (s *e2eTestStep) Done() (bool, error) {
-	return false, nil
-}
-
 func (s *e2eTestStep) Requires() []api.StepLink {
 	links := s.step.Requires()
 	if s.config.Upgrade {

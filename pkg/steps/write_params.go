@@ -49,10 +49,6 @@ func (s *writeParametersStep) Run(ctx context.Context, dry bool) error {
 	return ioutil.WriteFile(s.paramFile, []byte(strings.Join(params, "\n")), 0640)
 }
 
-func (s *writeParametersStep) Done() (bool, error) {
-	return false, nil
-}
-
 func (s *writeParametersStep) Requires() []api.StepLink {
 	return s.params.AllLinks()
 }

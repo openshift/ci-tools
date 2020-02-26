@@ -18,10 +18,6 @@ func (s *imagesReadyStep) Run(ctx context.Context, dry bool) error {
 	return nil
 }
 
-func (s *imagesReadyStep) Done() (bool, error) {
-	return true, nil
-}
-
 func (s *imagesReadyStep) Requires() []api.StepLink {
 	return s.links
 }

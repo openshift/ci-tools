@@ -29,7 +29,6 @@ func (f *fakeStep) Run(ctx context.Context, dry bool) error {
 
 	return f.runErr
 }
-func (f *fakeStep) Done() (bool, error)      { return true, nil }
 func (f *fakeStep) Requires() []api.StepLink { return f.requires }
 func (f *fakeStep) Creates() []api.StepLink  { return f.creates }
 func (f *fakeStep) Name() string             { return f.name }

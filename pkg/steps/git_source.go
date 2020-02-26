@@ -52,10 +52,6 @@ func (s *gitSourceStep) Run(ctx context.Context, dry bool) error {
 	return fmt.Errorf("nothing to build source image from, no refs")
 }
 
-func (s *gitSourceStep) Done() (bool, error) {
-	return imageStreamTagExists(api.PipelineImageStreamTagReferenceRoot, s.imageClient.ImageStreamTags(s.jobSpec.Namespace))
-}
-
 func (s *gitSourceStep) Name() string { return string(api.PipelineImageStreamTagReferenceRoot) }
 
 func (s *gitSourceStep) Description() string {

@@ -62,5 +62,3 @@ func (s *leaseStep) Run(ctx context.Context, dry bool) error {
 	errs = append(errs, client.Release(lease))
 	return utilerrors.NewAggregate(errs)
 }
-
-func (s *leaseStep) Done() (bool, error) { return s.wrapped.Done() }

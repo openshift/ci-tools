@@ -552,10 +552,6 @@ func hasFailedImportCondition(conditions []imageapi.TagEventCondition, generatio
 	return false
 }
 
-func (s *assembleReleaseStep) Done() (bool, error) {
-	return false, nil
-}
-
 func (s *assembleReleaseStep) Requires() []api.StepLink {
 	// if our prereq is provided, we only depend on the stable and stable-initial
 	// image streams to be populated

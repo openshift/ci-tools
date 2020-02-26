@@ -594,10 +594,6 @@ func resourcesFor(req api.ResourceRequirements) (coreapi.ResourceRequirements, e
 	return apireq, nil
 }
 
-func (s *sourceStep) Done() (bool, error) {
-	return imageStreamTagExists(s.config.To, s.imageClient.ImageStreamTags(s.jobSpec.Namespace))
-}
-
 func imageStreamTagExists(reference api.PipelineImageStreamTagReference, istClient imageclientset.ImageStreamTagInterface) (bool, error) {
 	log.Printf("Checking for existence of %s:%s", api.PipelineImageStream, reference)
 	_, err := istClient.Get(

@@ -173,11 +173,6 @@ func (s *promotionStep) Run(ctx context.Context, dry bool) error {
 	return nil
 }
 
-func (s *promotionStep) Done() (bool, error) {
-	// TODO: define done
-	return true, nil
-}
-
 func (s *promotionStep) Requires() []api.StepLink {
 	return []api.StepLink{api.AllStepsLink()}
 }

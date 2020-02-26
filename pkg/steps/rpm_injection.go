@@ -58,10 +58,6 @@ func (s *rpmImageInjectionStep) Run(ctx context.Context, dry bool) error {
 	), dry, s.artifactDir, s.dryLogger)
 }
 
-func (s *rpmImageInjectionStep) Done() (bool, error) {
-	return imageStreamTagExists(s.config.To, s.istClient.ImageStreamTags(s.jobSpec.Namespace))
-}
-
 func (s *rpmImageInjectionStep) Requires() []api.StepLink {
 	return []api.StepLink{api.InternalImageLink(s.config.From), api.RPMRepoLink()}
 }

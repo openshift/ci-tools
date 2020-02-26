@@ -220,10 +220,6 @@ python /tmp/serve.py
 	return waitForRouteReachable(s.routeClient, s.jobSpec.Namespace, route.Name, "http")
 }
 
-func (s *rpmServerStep) Done() (bool, error) {
-	return currentDeploymentStatus(s.deploymentClient.Deployments(s.jobSpec.Namespace), RPMRepoName)
-}
-
 func waitForDeployment(client appsclientset.DeploymentInterface, name string) error {
 	for {
 		retry, err := waitForDeploymentOrTimeout(client, name)

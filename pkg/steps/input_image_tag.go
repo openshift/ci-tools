@@ -136,21 +136,6 @@ func istObjectReference(client imageclientset.ImageV1Interface, reference api.Im
 	return coreapi.ObjectReference{Kind: "DockerImage", Name: fmt.Sprintf("%s@%s", repo, ist.Image.Name)}, nil
 }
 
-func (s *inputImageTagStep) Done() (bool, error) {
-	log.Printf("Checking for existence of %s:%s", api.PipelineImageStream, s.config.To)
-	_, err := s.dstClient.ImageStreamTags(s.jobSpec.Namespace).Get(
-		fmt.Sprintf("%s:%s", api.PipelineImageStream, s.config.To),
-		meta.GetOptions{},
-	)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return false, nil
-		}
-		return false, fmt.Errorf("could not retrieve input imagestreamtag: %v", err)
-	}
-	return true, nil
-}
-
 func (s *inputImageTagStep) Requires() []api.StepLink {
 	return nil
 }

@@ -29,7 +29,6 @@ func (s *stepNeedsLease) Run(ctx context.Context, dry bool) error {
 	return nil
 }
 
-func (stepNeedsLease) Done() (bool, error)      { return false, nil }
 func (stepNeedsLease) Name() string             { return "needs_lease" }
 func (stepNeedsLease) Description() string      { return "this step needs a lease" }
 func (stepNeedsLease) Requires() []api.StepLink { return []api.StepLink{api.ReleaseImagesLink()} }

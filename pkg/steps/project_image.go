@@ -115,10 +115,6 @@ func (s *projectDirectoryImageBuildStep) Run(ctx context.Context, dry bool) erro
 	return handleBuild(s.buildClient, build, dry, s.artifactDir, s.dryLogger)
 }
 
-func (s *projectDirectoryImageBuildStep) Done() (bool, error) {
-	return imageStreamTagExists(s.config.To, s.istClient.ImageStreamTags(s.jobSpec.Namespace))
-}
-
 func (s *projectDirectoryImageBuildStep) Requires() []api.StepLink {
 	links := []api.StepLink{
 		api.InternalImageLink(api.PipelineImageStreamTagReferenceSource),

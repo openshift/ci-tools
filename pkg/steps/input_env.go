@@ -40,10 +40,6 @@ func (s *inputEnvironmentStep) Run(ctx context.Context, dry bool) error {
 	return nil
 }
 
-func (s *inputEnvironmentStep) Done() (bool, error) {
-	return true, nil
-}
-
 func (s *inputEnvironmentStep) Name() string {
 	return s.name
 }

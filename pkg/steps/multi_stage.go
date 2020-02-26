@@ -135,8 +135,7 @@ func (s *multiStageTestStep) Run(ctx context.Context, dry bool) error {
 	return utilerrors.NewAggregate(errs)
 }
 
-func (s *multiStageTestStep) Done() (bool, error) { return false, nil }
-func (s *multiStageTestStep) Name() string        { return s.name }
+func (s *multiStageTestStep) Name() string { return s.name }
 func (s *multiStageTestStep) Description() string {
 	return fmt.Sprintf("Run multi-stage test %s", s.name)
 }

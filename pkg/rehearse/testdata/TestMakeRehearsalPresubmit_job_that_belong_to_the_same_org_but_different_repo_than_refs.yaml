@@ -22,3 +22,4 @@ spec:
     - ci-operator
     name: ""
     resources: {}
+trigger: '(?m)^/test (?:.*? )?pj-rehearse(?: .*?)?$'

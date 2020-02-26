@@ -42,6 +42,7 @@ import (
 const (
 	rehearseLabel                = "ci.openshift.org/rehearse"
 	defaultRehearsalRerunCommand = "/test pj-rehearse"
+	defaultRehearsalTrigger      = `(?m)^/test (?:.*? )?pj-rehearse(?: .*?)?$`
 	logRehearsalJob              = "rehearsal-job"
 	logCiopConfigFile            = "ciop-config-file"
 
@@ -151,6 +152,7 @@ func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber 
 	rehearsal.Context = fmt.Sprintf("ci/rehearse/%s", context)
 
 	rehearsal.RerunCommand = defaultRehearsalRerunCommand
+	rehearsal.Trigger = defaultRehearsalTrigger
 	rehearsal.Optional = true
 	if rehearsal.Labels == nil {
 		rehearsal.Labels = make(map[string]string, 1)

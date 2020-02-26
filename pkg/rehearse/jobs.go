@@ -156,6 +156,7 @@ func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber 
 		rehearsal.Labels = make(map[string]string, 1)
 	}
 	rehearsal.Labels[rehearseLabel] = strconv.Itoa(prNumber)
+	rehearsal.SkipReport = false
 
 	return &rehearsal, nil
 }

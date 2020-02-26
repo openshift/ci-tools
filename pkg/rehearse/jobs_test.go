@@ -285,6 +285,9 @@ func TestMakeRehearsalPresubmit(t *testing.T) {
 	hiddenPresubmit := &prowconfig.Presubmit{}
 	deepcopy.Copy(hiddenPresubmit, sourcePresubmit)
 	hiddenPresubmit.Hidden = true
+	notReportingPresubmit := &prowconfig.Presubmit{}
+	deepcopy.Copy(notReportingPresubmit, sourcePresubmit)
+	notReportingPresubmit.SkipReport = true
 
 	testCases := []struct {
 		testID            string
@@ -376,6 +379,23 @@ func TestMakeRehearsalPresubmit(t *testing.T) {
 				return p
 			}(),
 		},
+		{
+			testID:   "job that doesn't report reports on rehearsal",
+			refs:     &pjapi.Refs{Org: "org", Repo: "repo"},
+			original: notReportingPresubmit,
+			expectedPresubmit: func() *prowconfig.Presubmit {
+				p := &prowconfig.Presubmit{}
+				deepcopy.Copy(p, sourcePresubmit)
+
+				p.Name = "rehearse-123-pull-ci-org-repo-branch-test"
+				p.Labels = map[string]string{rehearseLabel: "123"}
+				p.Spec.Containers[0].Args = []string{"arg1", "arg2"}
+				p.RerunCommand = "/test pj-rehearse"
+				p.Context = "ci/rehearse/org/repo/branch/test"
+				p.Optional = true
+				return p
+			}(),
+		},
 	}
 
 	for _, tc := range testCases {
@@ -384,6 +404,7 @@ func TestMakeRehearsalPresubmit(t *testing.T) {
 			if err != nil {
 				t.Errorf("Unexpected error in makeRehearsalPresubmit: %v", err)
 			}
+			t.Logf("skipreport is: %t", rehearsal.SkipReport)
 			if !equality.Semantic.DeepEqual(tc.expectedPresubmit, rehearsal) {
 				t.Errorf("Expected rehearsal Presubmit differs:\n%s", cmp.Diff(tc.expectedPresubmit, rehearsal, ignoreUnexported))
 			}

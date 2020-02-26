@@ -560,9 +560,6 @@ func waitForPodCompletion(podClient coreclientset.PodInterface, name string, not
 				case <-time.After(5 * time.Second):
 				}
 			}
-			if err != nil {
-				return err
-			}
 			continue
 		}
 		if err != nil {

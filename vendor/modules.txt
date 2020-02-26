@@ -723,7 +723,7 @@ k8s.io/client-go/util/workqueue
 k8s.io/klog
 # k8s.io/kube-openapi v0.0.0-20191107075043-30be4d16710a
 k8s.io/kube-openapi/pkg/util/proto
-# k8s.io/test-infra v0.0.0-20200225153650-e5243e7de52a
+# k8s.io/test-infra v0.0.0-20200226141626-6a62db41cdd8
 k8s.io/test-infra/boskos/client
 k8s.io/test-infra/boskos/common
 k8s.io/test-infra/boskos/storage

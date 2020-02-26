@@ -26,6 +26,7 @@ require (
 	github.com/openshift/api v3.9.1-0.20190725193935-b7d4eb0fa1e0+incompatible
 	github.com/openshift/client-go v0.0.0-20190721020503-a85ea6a6b3a5
 	github.com/pkg/errors v0.8.1
+	github.com/pmezard/go-difflib v1.0.0
 	github.com/prometheus/client_golang v1.1.0
 	github.com/shurcooL/githubv4 v0.0.0-20191102174205-af46314aec7b
 	github.com/sirupsen/logrus v1.4.2

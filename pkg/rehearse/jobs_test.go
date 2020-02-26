@@ -1,17 +1,21 @@
 package rehearse
 
 import (
+	"flag"
 	"fmt"
+	"io/ioutil"
 	"path/filepath"
 	"reflect"
 	"sort"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/getlantern/deepcopy"
 	"github.com/ghodss/yaml"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/pmezard/go-difflib/difflib"
 	"github.com/sirupsen/logrus"
 	logrustest "github.com/sirupsen/logrus/hooks/test"
 
@@ -36,6 +40,8 @@ import (
 )
 
 const testingRegistry = "../../test/multistage-registry/registry"
+
+var update = flag.Bool("update", false, "update fixtures")
 
 var ignoreUnexported = cmpopts.IgnoreUnexported(prowconfig.Presubmit{}, prowconfig.Brancher{}, prowconfig.RegexpChangeMatcher{})
 
@@ -290,111 +296,34 @@ func TestMakeRehearsalPresubmit(t *testing.T) {
 	notReportingPresubmit.SkipReport = true
 
 	testCases := []struct {
-		testID            string
-		refs              *pjapi.Refs
-		original          *prowconfig.Presubmit
-		expectedPresubmit *prowconfig.Presubmit
+		testID   string
+		refs     *pjapi.Refs
+		original *prowconfig.Presubmit
 	}{
 		{
 			testID:   "job that belong to different org/repo than refs",
 			refs:     &pjapi.Refs{Org: "anotherOrg", Repo: "anotherRepo"},
 			original: sourcePresubmit,
-			expectedPresubmit: func() *prowconfig.Presubmit {
-				p := &prowconfig.Presubmit{}
-				deepcopy.Copy(p, sourcePresubmit)
-
-				p.Name = "rehearse-123-pull-ci-org-repo-branch-test"
-				p.Labels = map[string]string{rehearseLabel: "123"}
-				p.Spec.Containers[0].Args = []string{"arg1", "arg2"}
-				p.RerunCommand = "/test pj-rehearse"
-				p.Context = "ci/rehearse/org/repo/branch/test"
-				p.Optional = true
-				p.ExtraRefs = []pjapi.Refs{
-					{
-						Org:     "org",
-						Repo:    "repo",
-						BaseRef: "branch",
-						WorkDir: true,
-					},
-				}
-				return p
-			}(),
 		},
 		{
-			testID:   "job that belong to the same org/repo with refs.",
+			testID:   "job that belong to the same org/repo with refs",
 			refs:     &pjapi.Refs{Org: "org", Repo: "repo"},
 			original: sourcePresubmit,
-			expectedPresubmit: func() *prowconfig.Presubmit {
-				p := &prowconfig.Presubmit{}
-				deepcopy.Copy(p, sourcePresubmit)
-
-				p.Name = "rehearse-123-pull-ci-org-repo-branch-test"
-				p.Labels = map[string]string{rehearseLabel: "123"}
-				p.Spec.Containers[0].Args = []string{"arg1", "arg2"}
-				p.RerunCommand = "/test pj-rehearse"
-				p.Context = "ci/rehearse/org/repo/branch/test"
-				p.Optional = true
-				return p
-			}(),
 		},
 		{
-			testID:   "hidden job that belong to the same org/repo with refs.",
+			testID:   "hidden job that belong to the same org/repo with refs",
 			refs:     &pjapi.Refs{Org: "org", Repo: "repo"},
 			original: hiddenPresubmit,
-			expectedPresubmit: func() *prowconfig.Presubmit {
-				p := &prowconfig.Presubmit{}
-				deepcopy.Copy(p, hiddenPresubmit)
-
-				p.Name = "rehearse-123-pull-ci-org-repo-branch-test"
-				p.Labels = map[string]string{rehearseLabel: "123"}
-				p.Spec.Containers[0].Args = []string{"arg1", "arg2"}
-				p.RerunCommand = "/test pj-rehearse"
-				p.Context = "ci/rehearse/org/repo/branch/test"
-				p.Optional = true
-				return p
-			}(),
 		},
 		{
-			testID:   "job that belong to the same org but different repo than refs.",
+			testID:   "job that belong to the same org but different repo than refs",
 			refs:     &pjapi.Refs{Org: "org", Repo: "anotherRepo"},
 			original: sourcePresubmit,
-			expectedPresubmit: func() *prowconfig.Presubmit {
-				p := &prowconfig.Presubmit{}
-				deepcopy.Copy(p, sourcePresubmit)
-
-				p.Name = "rehearse-123-pull-ci-org-repo-branch-test"
-				p.Labels = map[string]string{rehearseLabel: "123"}
-				p.Spec.Containers[0].Args = []string{"arg1", "arg2"}
-				p.RerunCommand = "/test pj-rehearse"
-				p.Context = "ci/rehearse/org/repo/branch/test"
-				p.Optional = true
-				p.ExtraRefs = []pjapi.Refs{
-					{
-						Org:     "org",
-						Repo:    "repo",
-						BaseRef: "branch",
-						WorkDir: true,
-					},
-				}
-				return p
-			}(),
 		},
 		{
 			testID:   "job that doesn't report reports on rehearsal",
 			refs:     &pjapi.Refs{Org: "org", Repo: "repo"},
 			original: notReportingPresubmit,
-			expectedPresubmit: func() *prowconfig.Presubmit {
-				p := &prowconfig.Presubmit{}
-				deepcopy.Copy(p, sourcePresubmit)
-
-				p.Name = "rehearse-123-pull-ci-org-repo-branch-test"
-				p.Labels = map[string]string{rehearseLabel: "123"}
-				p.Spec.Containers[0].Args = []string{"arg1", "arg2"}
-				p.RerunCommand = "/test pj-rehearse"
-				p.Context = "ci/rehearse/org/repo/branch/test"
-				p.Optional = true
-				return p
-			}(),
 		},
 	}
 
@@ -402,13 +331,13 @@ func TestMakeRehearsalPresubmit(t *testing.T) {
 		t.Run(tc.testID, func(t *testing.T) {
 			rehearsal, err := makeRehearsalPresubmit(tc.original, testRepo, testPrNumber, tc.refs)
 			if err != nil {
-				t.Errorf("Unexpected error in makeRehearsalPresubmit: %v", err)
+				t.Fatalf("Unexpected error in makeRehearsalPresubmit: %v", err)
 			}
-			t.Logf("skipreport is: %t", rehearsal.SkipReport)
-			if !equality.Semantic.DeepEqual(tc.expectedPresubmit, rehearsal) {
-				t.Errorf("Expected rehearsal Presubmit differs:\n%s", cmp.Diff(tc.expectedPresubmit, rehearsal, ignoreUnexported))
+			serializedResult, err := yaml.Marshal(rehearsal)
+			if err != nil {
+				t.Fatalf("failed to serialize job: %v", err)
 			}
-
+			compareWithFixture(t, string(serializedResult), *update)
 		})
 	}
 }
@@ -1214,5 +1143,37 @@ func TestRemoveConfigResolverFlags(t *testing.T) {
 				t.Fatalf("Diff found %v", cmp.Diff(testCase.expected, newArgs))
 			}
 		})
+	}
+}
+
+func compareWithFixture(t *testing.T, output string, update bool) {
+	golden, err := filepath.Abs(filepath.Join("testdata", strings.ReplaceAll(t.Name(), "/", "_")+".yaml"))
+	if err != nil {
+		t.Fatalf("failed to get absolute path to testdata file: %v", err)
+	}
+	if update {
+		if err := ioutil.WriteFile(golden, []byte(output), 0644); err != nil {
+			t.Fatalf("failed to write updated fixture: %v", err)
+		}
+	}
+	expected, err := ioutil.ReadFile(golden)
+	if err != nil {
+		t.Fatalf("failed to read testdata file: %v", err)
+	}
+
+	diff := difflib.UnifiedDiff{
+		A:        difflib.SplitLines(string(expected)),
+		B:        difflib.SplitLines(output),
+		FromFile: "Fixture",
+		ToFile:   "Current",
+		Context:  3,
+	}
+	diffStr, err := difflib.GetUnifiedDiffString(diff)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if diffStr != "" {
+		t.Errorf("got diff between expected and actual result: \n%s\n\nIf this is expected, re-run the test with `-update` flag to update the fixture.", diffStr)
 	}
 }

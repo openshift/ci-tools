@@ -26,7 +26,7 @@ type projectDirectoryImageBuildStep struct {
 	pullSecret  *coreapi.Secret
 }
 
-func (s *projectDirectoryImageBuildStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
+func (s *projectDirectoryImageBuildStep) Inputs(dry bool) (api.InputDefinition, error) {
 	return nil, nil
 }
 
@@ -113,10 +113,6 @@ func (s *projectDirectoryImageBuildStep) Run(ctx context.Context, dry bool) erro
 		})
 	}
 	return handleBuild(s.buildClient, build, dry, s.artifactDir, s.dryLogger)
-}
-
-func (s *projectDirectoryImageBuildStep) Done() (bool, error) {
-	return imageStreamTagExists(s.config.To, s.istClient.ImageStreamTags(s.jobSpec.Namespace))
 }
 
 func (s *projectDirectoryImageBuildStep) Requires() []api.StepLink {

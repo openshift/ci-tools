@@ -118,7 +118,7 @@ func (s *e2eTestStep) checkPrereqs() error {
 	return nil
 }
 
-func (s *e2eTestStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
+func (s *e2eTestStep) Inputs(dry bool) (api.InputDefinition, error) {
 	return nil, nil
 }
 
@@ -130,10 +130,6 @@ func (s *e2eTestStep) Run(ctx context.Context, dry bool) error {
 		return fmt.Errorf("could not find required secret: %v", err)
 	}
 	return s.step.Run(ctx, dry)
-}
-
-func (s *e2eTestStep) Done() (bool, error) {
-	return false, nil
 }
 
 func (s *e2eTestStep) Requires() []api.StepLink {

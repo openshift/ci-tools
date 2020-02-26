@@ -20,7 +20,7 @@ type fakeStep struct {
 	numRuns int
 }
 
-func (f *fakeStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) { return nil, nil }
+func (f *fakeStep) Inputs(dry bool) (api.InputDefinition, error) { return nil, nil }
 
 func (f *fakeStep) Run(ctx context.Context, dry bool) error {
 	defer f.lock.Unlock()
@@ -29,7 +29,6 @@ func (f *fakeStep) Run(ctx context.Context, dry bool) error {
 
 	return f.runErr
 }
-func (f *fakeStep) Done() (bool, error)      { return true, nil }
 func (f *fakeStep) Requires() []api.StepLink { return f.requires }
 func (f *fakeStep) Creates() []api.StepLink  { return f.creates }
 func (f *fakeStep) Name() string             { return f.name }

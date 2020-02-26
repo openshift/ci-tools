@@ -27,7 +27,7 @@ type outputImageTagStep struct {
 	dryLogger *DryLogger
 }
 
-func (s *outputImageTagStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
+func (s *outputImageTagStep) Inputs(dry bool) (api.InputDefinition, error) {
 	return nil, nil
 }
 
@@ -64,21 +64,6 @@ func (s *outputImageTagStep) Run(ctx context.Context, dry bool) error {
 		return fmt.Errorf("could not update output imagestreamtag: %v", err)
 	}
 	return nil
-}
-
-func (s *outputImageTagStep) Done() (bool, error) {
-	toNamespace := s.namespace()
-	log.Printf("Checking for existence of %s/%s:%s", toNamespace, s.config.To.Name, s.config.To.Tag)
-	if _, err := s.istClient.ImageStreamTags(toNamespace).Get(
-		fmt.Sprintf("%s:%s", s.config.To.Name, s.config.To.Tag),
-		meta.GetOptions{},
-	); err != nil {
-		if errors.IsNotFound(err) {
-			return false, nil
-		}
-		return false, fmt.Errorf("could not retrieve output imagestreamtag: %v", err)
-	}
-	return true, nil
 }
 
 func (s *outputImageTagStep) Requires() []api.StepLink {

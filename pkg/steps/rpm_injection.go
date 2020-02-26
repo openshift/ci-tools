@@ -30,7 +30,7 @@ type rpmImageInjectionStep struct {
 	pullSecret  *coreapi.Secret
 }
 
-func (s *rpmImageInjectionStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
+func (s *rpmImageInjectionStep) Inputs(dry bool) (api.InputDefinition, error) {
 	return nil, nil
 }
 
@@ -56,10 +56,6 @@ func (s *rpmImageInjectionStep) Run(ctx context.Context, dry bool) error {
 		s.resources,
 		s.pullSecret,
 	), dry, s.artifactDir, s.dryLogger)
-}
-
-func (s *rpmImageInjectionStep) Done() (bool, error) {
-	return imageStreamTagExists(s.config.To, s.istClient.ImageStreamTags(s.jobSpec.Namespace))
 }
 
 func (s *rpmImageInjectionStep) Requires() []api.StepLink {

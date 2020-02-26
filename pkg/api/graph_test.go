@@ -104,11 +104,10 @@ type fakeStep struct {
 	name     string
 }
 
-func (f *fakeStep) Inputs(ctx context.Context, dry bool) (InputDefinition, error) { return nil, nil }
+func (f *fakeStep) Inputs(dry bool) (InputDefinition, error) { return nil, nil }
 
 func (f *fakeStep) Run(ctx context.Context, dry bool) error { return nil }
 
-func (f *fakeStep) Done() (bool, error)  { return true, nil }
 func (f *fakeStep) Requires() []StepLink { return f.requires }
 func (f *fakeStep) Creates() []StepLink  { return f.creates }
 func (f *fakeStep) Name() string         { return f.name }

@@ -153,7 +153,7 @@ type sourceStep struct {
 	pullSecret         *coreapi.Secret
 }
 
-func (s *sourceStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
+func (s *sourceStep) Inputs(dry bool) (api.InputDefinition, error) {
 	return s.jobSpec.Inputs(), nil
 }
 
@@ -592,10 +592,6 @@ func resourcesFor(req api.ResourceRequirements) (coreapi.ResourceRequirements, e
 		apireq.Limits[coreapi.ResourceName(name)] = q
 	}
 	return apireq, nil
-}
-
-func (s *sourceStep) Done() (bool, error) {
-	return imageStreamTagExists(s.config.To, s.imageClient.ImageStreamTags(s.jobSpec.Namespace))
 }
 
 func imageStreamTagExists(reference api.PipelineImageStreamTagReference, istClient imageclientset.ImageStreamTagInterface) (bool, error) {

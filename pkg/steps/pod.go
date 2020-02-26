@@ -50,7 +50,7 @@ type podStep struct {
 	subTests []*junit.TestCase
 }
 
-func (s *podStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
+func (s *podStep) Inputs(dry bool) (api.InputDefinition, error) {
 	return nil, nil
 }
 
@@ -121,17 +121,6 @@ func (s *podStep) SubTests() []*junit.TestCase {
 
 func (s *podStep) gatherArtifacts() bool {
 	return len(s.config.ArtifactDir) > 0 && len(s.artifactDir) > 0
-}
-
-func (s *podStep) Done() (bool, error) {
-	ready, err := isPodCompleted(s.podClient.Pods(s.jobSpec.Namespace), s.config.As)
-	if err != nil {
-		return false, fmt.Errorf("failed to determine if %s pod was completed: %v", s.name, err)
-	}
-	if !ready {
-		return false, nil
-	}
-	return true, nil
 }
 
 func (s *podStep) Requires() []api.StepLink {

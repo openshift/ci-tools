@@ -53,7 +53,7 @@ type templateExecutionStep struct {
 	subTests []*junit.TestCase
 }
 
-func (s *templateExecutionStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
+func (s *templateExecutionStep) Inputs(dry bool) (api.InputDefinition, error) {
 	return nil, nil
 }
 
@@ -249,36 +249,6 @@ func operateOnTemplatePods(template *templateapi.Template, artifactDir string, r
 
 func (s *templateExecutionStep) SubTests() []*junit.TestCase {
 	return s.subTests
-}
-
-func (s *templateExecutionStep) Done() (bool, error) {
-	instance, err := s.templateClient.TemplateInstances(s.jobSpec.Namespace).Get(s.template.Name, meta.GetOptions{})
-	if errors.IsNotFound(err) {
-		return false, nil
-	}
-	if err != nil {
-		return false, fmt.Errorf("unable to retrieve existing template: %v", err)
-	}
-	ready, err := templateInstanceReady(instance)
-	if err != nil {
-		return false, fmt.Errorf("could not determine if template instance was ready: %v", err)
-	}
-	if !ready {
-		return false, nil
-	}
-	for _, ref := range instance.Status.Objects {
-		switch {
-		case ref.Ref.Kind == "Pod" && ref.Ref.APIVersion == "v1":
-			ready, err := isPodCompleted(s.podClient.Pods(s.jobSpec.Namespace), ref.Ref.Name)
-			if err != nil {
-				return false, fmt.Errorf("could not determine if pod completed: %v", err)
-			}
-			if !ready {
-				return false, nil
-			}
-		}
-	}
-	return true, nil
 }
 
 func (s *templateExecutionStep) Requires() []api.StepLink {

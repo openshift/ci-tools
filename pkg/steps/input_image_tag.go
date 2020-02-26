@@ -30,7 +30,7 @@ type inputImageTagStep struct {
 	imageName string
 }
 
-func (s *inputImageTagStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
+func (s *inputImageTagStep) Inputs(dry bool) (api.InputDefinition, error) {
 	if len(s.imageName) > 0 {
 		return api.InputDefinition{s.imageName}, nil
 	}
@@ -62,7 +62,7 @@ func (s *inputImageTagStep) Run(ctx context.Context, dry bool) error {
 		log.Printf("Tagging %s/%s:%s into %s:%s", s.config.BaseImage.Namespace, s.config.BaseImage.Name, s.config.BaseImage.Tag, api.PipelineImageStream, s.config.To)
 	}
 
-	_, err := s.Inputs(ctx, dry)
+	_, err := s.Inputs(dry)
 	if err != nil {
 		return fmt.Errorf("could not resolve inputs for image tag step: %v", err)
 	}
@@ -134,21 +134,6 @@ func istObjectReference(client imageclientset.ImageV1Interface, reference api.Im
 		return coreapi.ObjectReference{}, fmt.Errorf("could not resolve remote image stream tag: %v", err)
 	}
 	return coreapi.ObjectReference{Kind: "DockerImage", Name: fmt.Sprintf("%s@%s", repo, ist.Image.Name)}, nil
-}
-
-func (s *inputImageTagStep) Done() (bool, error) {
-	log.Printf("Checking for existence of %s:%s", api.PipelineImageStream, s.config.To)
-	_, err := s.dstClient.ImageStreamTags(s.jobSpec.Namespace).Get(
-		fmt.Sprintf("%s:%s", api.PipelineImageStream, s.config.To),
-		meta.GetOptions{},
-	)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return false, nil
-		}
-		return false, fmt.Errorf("could not retrieve input imagestreamtag: %v", err)
-	}
-	return true, nil
 }
 
 func (s *inputImageTagStep) Requires() []api.StepLink {

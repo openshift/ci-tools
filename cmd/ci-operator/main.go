@@ -497,7 +497,7 @@ func (o *options) Run() error {
 		// have been resolved. We must run this step before we resolve the partial
 		// graph or otherwise two jobs with different targets would create different
 		// artifact caches.
-		if err := o.resolveInputs(ctx, buildSteps); err != nil {
+		if err := o.resolveInputs(buildSteps); err != nil {
 			return fmt.Errorf("could not resolve inputs: %v", err)
 		}
 
@@ -621,10 +621,10 @@ func (o *options) Run() error {
 	})
 }
 
-func (o *options) resolveInputs(ctx context.Context, steps []api.Step) error {
+func (o *options) resolveInputs(steps []api.Step) error {
 	var inputs api.InputDefinition
 	for _, step := range steps {
-		definition, err := step.Inputs(ctx, o.dry)
+		definition, err := step.Inputs(o.dry)
 		if err != nil {
 			return fmt.Errorf("could not determine inputs for step %s: %v", step.Name(), err)
 		}

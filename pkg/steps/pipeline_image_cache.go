@@ -29,7 +29,7 @@ type pipelineImageCacheStep struct {
 	pullSecret  *coreapi.Secret
 }
 
-func (s *pipelineImageCacheStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
+func (s *pipelineImageCacheStep) Inputs(dry bool) (api.InputDefinition, error) {
 	return nil, nil
 }
 
@@ -45,10 +45,6 @@ func (s *pipelineImageCacheStep) Run(ctx context.Context, dry bool) error {
 		s.resources,
 		s.pullSecret,
 	), dry, s.artifactDir, s.dryLogger)
-}
-
-func (s *pipelineImageCacheStep) Done() (bool, error) {
-	return imageStreamTagExists(s.config.To, s.imageClient.ImageStreamTags(s.jobSpec.Namespace))
 }
 
 func (s *pipelineImageCacheStep) Requires() []api.StepLink {

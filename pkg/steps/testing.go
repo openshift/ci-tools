@@ -318,7 +318,7 @@ func examineStep(t *testing.T, step api.Step, expected stepExpectation) {
 		t.Errorf("step.Provides returned different link\n%s", diff.ObjectReflectDiff(expected.provides.link, link))
 	}
 
-	inputs, err := step.Inputs(context.Background(), false)
+	inputs, err := step.Inputs(false)
 	if !reflect.DeepEqual(expected.inputs.values, inputs) {
 		t.Errorf("step.Inputs returned different inputs\n%s", diff.ObjectReflectDiff(expected.inputs.values, inputs))
 	}
@@ -327,22 +327,8 @@ func examineStep(t *testing.T, step api.Step, expected stepExpectation) {
 
 func executeStep(t *testing.T, step api.Step, expected executionExpectation, fakeClusterBehavior func()) {
 	t.Helper()
-	done, err := step.Done()
-	if !reflect.DeepEqual(expected.prerun.value, done) {
-		t.Errorf("step.Done() before Run() returned %t, expected %t)", done, expected.prerun.value)
-	}
-	errorCheck(t, "step.Done() before Run()", expected.prerun.err, err)
-
 	if fakeClusterBehavior != nil {
 		go fakeClusterBehavior()
 	}
-
-	err = step.Run(context.Background(), false)
-	errorCheck(t, "step.Run()", expected.runError, err)
-
-	done, err = step.Done()
-	errorCheck(t, "step.Done() after Run()", expected.postrun.err, err)
-	if !reflect.DeepEqual(expected.postrun.value, done) {
-		t.Errorf("step.Done() after Run() returned %t, expected %t)", done, expected.postrun.value)
-	}
+	errorCheck(t, "step.Run()", expected.runError, step.Run(context.Background(), false))
 }

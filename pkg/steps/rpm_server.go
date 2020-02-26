@@ -43,7 +43,7 @@ type rpmServerStep struct {
 	dryLogger        *DryLogger
 }
 
-func (s *rpmServerStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
+func (s *rpmServerStep) Inputs(dry bool) (api.InputDefinition, error) {
 	return nil, nil
 }
 
@@ -218,10 +218,6 @@ python /tmp/serve.py
 		return fmt.Errorf("could not wait for RPM repo server to deploy: %v", err)
 	}
 	return waitForRouteReachable(s.routeClient, s.jobSpec.Namespace, route.Name, "http")
-}
-
-func (s *rpmServerStep) Done() (bool, error) {
-	return currentDeploymentStatus(s.deploymentClient.Deployments(s.jobSpec.Namespace), RPMRepoName)
 }
 
 func waitForDeployment(client appsclientset.DeploymentInterface, name string) error {

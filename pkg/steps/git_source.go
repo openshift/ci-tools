@@ -25,7 +25,7 @@ type gitSourceStep struct {
 	pullSecret      *coreapi.Secret
 }
 
-func (s *gitSourceStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
+func (s *gitSourceStep) Inputs(dry bool) (api.InputDefinition, error) {
 	return s.jobSpec.Inputs(), nil
 }
 
@@ -50,10 +50,6 @@ func (s *gitSourceStep) Run(ctx context.Context, dry bool) error {
 	}
 
 	return fmt.Errorf("nothing to build source image from, no refs")
-}
-
-func (s *gitSourceStep) Done() (bool, error) {
-	return imageStreamTagExists(api.PipelineImageStreamTagReferenceRoot, s.imageClient.ImageStreamTags(s.jobSpec.Namespace))
 }
 
 func (s *gitSourceStep) Name() string { return string(api.PipelineImageStreamTagReferenceRoot) }

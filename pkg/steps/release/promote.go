@@ -39,7 +39,7 @@ func targetName(config api.PromotionConfiguration) string {
 	return fmt.Sprintf("%s/${component}:%s", config.Namespace, config.Tag)
 }
 
-func (s *promotionStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
+func (s *promotionStep) Inputs(dry bool) (api.InputDefinition, error) {
 	return nil, nil
 }
 
@@ -171,11 +171,6 @@ func (s *promotionStep) Run(ctx context.Context, dry bool) error {
 		}
 	}
 	return nil
-}
-
-func (s *promotionStep) Done() (bool, error) {
-	// TODO: define done
-	return true, nil
 }
 
 func (s *promotionStep) Requires() []api.StepLink {

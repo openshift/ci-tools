@@ -19,7 +19,7 @@ type writeParametersStep struct {
 
 var safeEnv = regexp.MustCompile(`^[a-zA-Z0-9_\-\.]*$`)
 
-func (s *writeParametersStep) Inputs(ctx context.Context, dry bool) (api.InputDefinition, error) {
+func (s *writeParametersStep) Inputs(dry bool) (api.InputDefinition, error) {
 	return nil, nil
 }
 
@@ -47,10 +47,6 @@ func (s *writeParametersStep) Run(ctx context.Context, dry bool) error {
 	}
 	params = append(params, "")
 	return ioutil.WriteFile(s.paramFile, []byte(strings.Join(params, "\n")), 0640)
-}
-
-func (s *writeParametersStep) Done() (bool, error) {
-	return false, nil
 }
 
 func (s *writeParametersStep) Requires() []api.StepLink {

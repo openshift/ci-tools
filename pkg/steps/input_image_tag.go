@@ -101,15 +101,19 @@ func (s *inputImageTagStep) Run(ctx context.Context, dry bool) error {
 		return fmt.Errorf("failed to create imagestreamtag for input image: %v", err)
 	}
 	// Wait image is ready
-	log.Printf("waiting for importing %s ...", ist.ObjectMeta.Name)
-	if err := wait.Poll(10*time.Second, 35*time.Minute, func() (bool, error) {
+	importCtx, cancel := context.WithTimeout(ctx, 35*time.Minute)
+	defer cancel()
+	if err := wait.PollImmediateUntil(10*time.Second, func() (bool, error) {
 		pipeline, err := s.dstClient.ImageStreams(s.jobSpec.Namespace).Get(api.PipelineImageStream, meta.GetOptions{})
 		if err != nil {
 			return false, err
 		}
 		_, exists := util.ResolvePullSpec(pipeline, string(s.config.To), true)
+		if !exists {
+			log.Printf("waiting for importing %s ...", ist.ObjectMeta.Name)
+		}
 		return exists, nil
-	}); err != nil {
+	}, importCtx.Done()); err != nil {
 		log.Printf("could not resolve tag %s in imagestream %s: %v", s.config.To, api.PipelineImageStream, err)
 		return err
 	}

@@ -14,7 +14,7 @@ const (
 var (
 	migratedRepos = sets.NewString(
 		"openshift/jenkins-openshift-login-plugin/*",
-		//find ./ci-operator/config -type d -depth 2 | head -n 200 | while read i; do echo "\"${i#./ci-operator/config/}/.*\","; done
+		//find ./ci-operator/config -type d -depth 2 | head -n 230 | while read i; do echo "\"${i#./ci-operator/config/}/.*\","; done
 		"ostreedev/ostree/.*",
 		"openshift-priv/csi-external-attacher/.*",
 		"openshift-priv/cluster-api-provider-azure/.*",
@@ -215,6 +215,36 @@ var (
 		"openshift/oauth-server/.*",
 		"openshift/template-service-broker-operator/.*",
 		"openshift/kubernetes-kube-storage-version-migrator/.*",
+		"openshift/openshift-state-metrics/.*",
+		"openshift/cluster-api-provider-baremetal/.*",
+		"openshift/kube-state-metrics/.*",
+		"openshift/dedicated-admin-operator/.*",
+		"openshift/loki/.*",
+		"openshift/cluster-capacity/.*",
+		"openshift/cluster-version-operator/.*",
+		"openshift/odo/.*",
+		"openshift/cluster-dns-operator/.*",
+		"openshift/crd-schema-gen/.*",
+		"openshift/oauth-proxy/.*",
+		"openshift/cluster-nfd-operator/.*",
+		"openshift/pagerduty-operator/.*",
+		"openshift/descheduler/.*",
+		"openshift/client-go/.*",
+		"openshift/leader-elector/.*",
+		"openshift/openshift-tuned/.*",
+		"openshift/managed-cluster-validating-webhooks/.*",
+		"openshift/cluster-autoscaler-operator/.*",
+		"openshift/service-ca-operator/.*",
+		"openshift/jenkins-client-plugin/.*",
+		"openshift/ocs-operator/.*",
+		"openshift/rbac-permissions-operator/.*",
+		"openshift/cluster-config-operator/.*",
+		"openshift/kubecsr/.*",
+		"openshift/kuryr-kubernetes/.*",
+		"openshift/cluster-bootstrap/.*",
+		"openshift/whereabouts-cni/.*",
+		"openshift/origin-web-console-server/.*",
+		"openshift/service-catalog/.*",
 	)
 	migratedRegexes []*regexp.Regexp
 )

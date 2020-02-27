@@ -21,6 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/apimachinery/pkg/watch"
 	appsclientset "k8s.io/client-go/kubernetes/typed/apps/v1"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 
@@ -214,15 +215,15 @@ python /tmp/serve.py
 	if _, err := s.routeClient.Routes(s.jobSpec.Namespace).Create(route); err != nil && !kerrors.IsAlreadyExists(err) {
 		return fmt.Errorf("could not create RPM repo server route: %v", err)
 	}
-	if err := waitForDeployment(s.deploymentClient.Deployments(s.jobSpec.Namespace), deployment.Name); err != nil {
+	if err := waitForDeployment(ctx, s.deploymentClient.Deployments(s.jobSpec.Namespace), deployment.Name); err != nil {
 		return fmt.Errorf("could not wait for RPM repo server to deploy: %v", err)
 	}
-	return waitForRouteReachable(s.routeClient, s.jobSpec.Namespace, route.Name, "http")
+	return waitForRouteReachable(ctx, s.routeClient, s.jobSpec.Namespace, route.Name, "http")
 }
 
-func waitForDeployment(client appsclientset.DeploymentInterface, name string) error {
+func waitForDeployment(ctx context.Context, client appsclientset.DeploymentInterface, name string) error {
 	for {
-		retry, err := waitForDeploymentOrTimeout(client, name)
+		retry, err := waitForDeploymentOrTimeout(ctx, client, name)
 		if err != nil {
 			return fmt.Errorf("could not wait for deployment: %v", err)
 		}
@@ -261,7 +262,7 @@ func deploymentReason(b *appsapi.Deployment) string {
 	return ""
 }
 
-func waitForDeploymentOrTimeout(client appsclientset.DeploymentInterface, name string) (bool, error) {
+func waitForDeploymentOrTimeout(ctx context.Context, client appsclientset.DeploymentInterface, name string) (bool, error) {
 	// First we set up a watcher to catch all events that happen while we check
 	// the deployment status
 	watcher, err := client.Watch(meta.ListOptions{
@@ -280,9 +281,15 @@ func waitForDeploymentOrTimeout(client appsclientset.DeploymentInterface, name s
 	if done {
 		return false, nil
 	}
-
+	ctxDone := ctx.Done()
 	for {
-		event, ok := <-watcher.ResultChan()
+		var event watch.Event
+		var ok bool
+		select {
+		case <-ctxDone:
+			return false, ctx.Err()
+		case event, ok = <-watcher.ResultChan():
+		}
 		if !ok {
 			// restart
 			return true, nil
@@ -316,11 +323,12 @@ func currentDeploymentStatus(client appsclientset.DeploymentInterface, name stri
 	return false, nil
 }
 
-func waitForRouteReachable(client routeclientset.RoutesGetter, namespace, name, scheme string, pathSegments ...string) error {
+func waitForRouteReachable(ctx context.Context, client routeclientset.RoutesGetter, namespace, name, scheme string, pathSegments ...string) error {
 	host, err := admittedHostForRoute(client, namespace, name, 5*time.Minute)
 	if err != nil {
 		return fmt.Errorf("could not determine admitted host for route: %v", err)
 	}
+	done := ctx.Done()
 	for {
 		u := &url.URL{Scheme: scheme, Host: host, Path: "/" + path.Join(pathSegments...)}
 		req, err := http.NewRequest("GET", u.String(), nil)
@@ -330,14 +338,22 @@ func waitForRouteReachable(client routeclientset.RoutesGetter, namespace, name, 
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			log.Printf("Waiting for route to become available: %v", err)
-			time.Sleep(time.Second)
-			continue
+			select {
+			case <-done:
+				return ctx.Err()
+			case <-time.After(time.Second):
+				continue
+			}
 		}
 		resp.Body.Close()
 		if resp.StatusCode >= 400 {
 			log.Printf("Waiting for route to become available: %d", resp.StatusCode)
-			time.Sleep(time.Second)
-			continue
+			select {
+			case <-done:
+				return ctx.Err()
+			case <-time.After(time.Second):
+				continue
+			}
 		}
 		log.Printf("RPMs being served at %s", u)
 		return nil

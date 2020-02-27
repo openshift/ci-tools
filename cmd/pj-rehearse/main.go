@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/rest"
 	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
+	prowconfig "k8s.io/test-infra/prow/config"
 	prowgithub "k8s.io/test-infra/prow/github"
 	prowplugins "k8s.io/test-infra/prow/plugins"
 	pjdwapi "k8s.io/test-infra/prow/pod-utils/downwardapi"
@@ -141,10 +142,10 @@ func rehearseMain() int {
 		return 0
 	}
 
-	prNumber := jobSpec.Refs.Pulls[0].Number
 	if o.local {
-		prNumber = int(time.Now().Unix())
+		jobSpec.Refs.Pulls[0].Number = int(time.Now().Unix())
 	}
+	org, repo, prNumber := jobSpec.Refs.Org, jobSpec.Refs.Repo, jobSpec.Refs.Pulls[0].Number
 
 	logger = logrus.WithField(prowgithub.PrLogField, prNumber)
 	logger.Info("Rehearsing Prow jobs for a configuration PR")
@@ -251,18 +252,17 @@ func rehearseMain() int {
 		metrics.RecordChangedClusterProfiles(changedClusterProfiles)
 	}
 
-	namespace := prConfig.Prow.ProwJobNamespace
 	if o.local {
-		namespace = config.StagingNamespace
+		prConfig.Prow.ProwJobNamespace = config.StagingNamespace
 	}
 
-	cmClient, err := rehearse.NewCMClient(clusterConfig, namespace, o.dryRun)
+	cmClient, err := rehearse.NewCMClient(clusterConfig, prConfig.Prow.ProwJobNamespace, o.dryRun)
 	if err != nil {
 		logger.WithError(err).Error("could not create a configMap client")
 		return gracefulExit(o.noFail, misconfigurationOutput)
 	}
 
-	cmManager := config.NewTemplateCMManager(namespace, cmClient, pluginConfig, prNumber, o.releaseRepoPath, logger)
+	cmManager := config.NewTemplateCMManager(prConfig.Prow.ProwJobNamespace, cmClient, pluginConfig, prNumber, o.releaseRepoPath, logger)
 	defer func() {
 		if err := cmManager.CleanupCMTemplates(); err != nil {
 			logger.WithError(err).Error("failed to clean up temporary template CM")
@@ -277,7 +277,7 @@ func rehearseMain() int {
 		return gracefulExit(o.noFail, failedSetupOutput)
 	}
 
-	pjclient, err := rehearse.NewProwJobClient(clusterConfig, namespace, o.dryRun)
+	pjclient, err := rehearse.NewProwJobClient(clusterConfig, prConfig.Prow.ProwJobNamespace, o.dryRun)
 	if err != nil {
 		logger.WithError(err).Error("could not create a ProwJob client")
 		return gracefulExit(o.noFail, failedSetupOutput)
@@ -348,6 +348,17 @@ func rehearseMain() int {
 	}
 
 	presubmitsToRehearse = append(presubmitsToRehearse, jobConfigurer.ConvertPeriodicsToPresubmits(periodicsToRehearse)...)
+	if prConfig.Prow.JobConfig.PresubmitsStatic == nil {
+		prConfig.Prow.JobConfig.PresubmitsStatic = map[string][]prowconfig.Presubmit{}
+	}
+	for _, presubmit := range presubmitsToRehearse {
+		prConfig.Prow.JobConfig.PresubmitsStatic[org+"/"+repo] = append(prConfig.Prow.JobConfig.PresubmitsStatic[org+"/"+repo], *presubmit)
+	}
+	if err := prConfig.Prow.ValidateJobConfig(); err != nil {
+		logger.WithError(err).Error("jobconfig validation failed")
+		return 1
+	}
+
 	executor := rehearse.NewExecutor(presubmitsToRehearse, prNumber, o.releaseRepoPath, jobSpec.Refs, o.dryRun, loggers, pjclient)
 	success, err := executor.ExecuteJobs()
 	metrics.Execution = executor.Metrics

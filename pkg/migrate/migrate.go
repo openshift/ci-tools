@@ -300,7 +300,7 @@ var (
 		"openshift/grafana/.*",
 		"openshift/library/.*",
 		"openshift/kubefed-operator/.*",
-		"openshift/release/.*",
+		//"openshift/release/.*",
 		"openshift/cluster-machine-approver/.*",
 		"openshift/source-to-image/.*",
 		"openshift/kube-rbac-proxy/.*",

@@ -594,6 +594,103 @@ test approach is best suited for end-to-end test suites that require full OpenSh
 test clusters to be brought up and torn down. Learn more about this type of test
 at the <a href="./">getting started overview</a>.
 <p>
+
+<h3 id="image-references"><a href="#image-references">Referencing Images</a></h3>
+<p>
+As <code>ci-operator</code> is OpenShift-native, all images used in a test workflow
+are stored as <code>ImageStreamTags</code>. Inside of the <code>Namespace</code> which
+contains a test workflow, the following <code>ImageStreams</code> will exist:
+</p>
+
+<table>
+  <tr>
+    <th style="white-space: nowrap"><code>ImageStream</code></th>
+    <th>Description</th>
+  </tr>
+  <tr>
+    <td style="white-space: nowrap"><code>pipeline<code></td>
+    <td>Input images described with <code>base_images</code> and <code>build_root</code> as well as images holding built artifacts and output images as defined in <code>images</code>.</td>
+  </tr>
+  <tr>
+    <td style="white-space: nowrap"><code>release<code></td>
+    <td>Two tags will be present, <code>:initial</code> and <code>:latest</code>, holding release payload images used in installing and upgrading an ephemeral OpenShift cluster for testing.</td>
+  </tr>
+  <tr>
+    <td style="white-space: nowrap"><code>stable-initial<code></td>
+    <td>Images in the snapshot used to create the <code>release:initial</code> release payload.</td>
+  </tr>
+  <tr>
+    <td style="white-space: nowrap"><code>stable<code></td>
+    <td>Images from <code>stable-initial</code> with appropriate tags overridden using the container images built during the test; used to create the <code>release:latest</code> release payload.</td>
+  </tr>
+</table>
+
+<h4 id="config-references"><a href="#config-references">Referring to Images in <code>ci-operator</code> Configuration</a></h4>
+<p>
+Inside of any <code>ci-operator</code> configuration file all images must be 
+referenced as an <code>ImageStreamTag</code>, but may be referenced simply with
+the tag name. When an image is referenced with a tag name, the tag will be
+resolved on the <code>pipeline</code> <code>ImageStream</code>, if possible,
+falling back to the <code>stable</code> <code>ImageStream</code> if not. 
+For example, an image referenced as <code>installer</code> will use
+<code>pipeline:installer</code> if that tag is present, falling back to
+<code>stable:installer</code> if not. The following configuration fields
+use this defaulting mechanism:
+</p>
+
+<ul>
+  <li><code>images[*].from</code>: configuring the base <code>FROM</code> which an image builds</li>
+  <li><code>promotion.additional_images</code>: configuring which images are published</li>
+  <li><code>promotion.excluded_images</code>: configuring which images are not published</li>
+  <li><code>tests[*].container.from</code>: configuring the container image in which a single-stage test runs</li>
+  <li><code>tests[*].steps.{pre,test,post}[*].from</code>: configuring the container image which some part of a multi-stage test runs</li>
+</ul>
+
+<h4 id="literal-references"><a href="#literal-references">Referring to Images in Tests</a></h4>
+<p>
+In some cases, it is necessary for a test command to refer to an image that
+was built during the test workflow. Test workloads have access to three types
+of environment variables which expose the fully resolved pull specification
+for any image from the <code>pipeline</code> or <code>stable</code> 
+<code>ImageStreams</code>: 
+</p>
+
+<table>
+  <tr>
+    <th style="white-space: nowrap">Variable</th>
+    <th style="white-space: nowrap">Example</th>
+  </tr>
+  <tr>
+    <td style="white-space: nowrap"><code>${IMAGE_FORMAT}<code></td>
+    <td style="white-space: nowrap"><code>registry.svc.ci.openshift.org/ci-op-74fcb0ba/stable:${component}<code></td>
+  </tr>
+  <tr style="border-bottom:1px solid black">
+    <td colspan="100%">The pull specification for an image from the <code>stable</code> <code>ImageStream</code>, with a <code>${component}</code> placeholder for the tag name.</td>
+  </tr>
+  <tr>
+    <td style="white-space: nowrap"><code>${IMAGE_&lt;component&gt;}<code></td>
+    <td style="white-space: nowrap"><code>registry.svc.ci.openshift.org/ci-op-74fcb0ba/stable:machine-config-operator<code></td>
+  </tr>
+  <tr style="border-bottom:1px solid black">
+    <td colspan="100%">The pull specification for the component image from the <code>stable</code> or <code>pipeline</code> <code>ImageStreams</code>. <code>&lt;component&gt;</code> is an escaped tag name; for instance, the <code>stable:machine-config-operator</code> tag would be exposed as <code>${IMAGE_MACHINE_CONFIG_OPERATOR}</code></td>
+  </tr>
+</table>
+
+<p>
+Tests may opt into reading the <code>${IMAGE_&lt;component&gt;}</code>
+environment variables by declaring <code>dependencies</code> in the <code>ci-operator</code>
+configuration for the test. For instance, the example container test will be
+able to access the following environment variables:
+</p>
+
+<ul>
+  <li><code>${IMAGE_FORMAT}</code>: exposing an the pull specification of the <code>stable</code> <code>ImageStream</code></li>
+  <li><code>${IMAGE_MACHINE_CONFIG_OPERATOR}</code>: exposing an the pull specification of the <code>stable:machine-config-operator</code> <code>ImageStreamTag</code></li>
+  <li><code>${IMAGE_TEST_BIN}</code>: exposing an the pull specification of the <code>pipeline:test-bin</code> <code>ImageStreamTag</code></li>
+</ul>
+
+<code>ci-operator</code> configuration:
+{{ yamlSyntax (index . "ciOperatorContainerTestWithDependenciesConfig") }}
 `
 
 const ciOperatorInputConfig = `base_images:
@@ -671,6 +768,15 @@ const ciOperatorContainerTestConfig = `tests:
   commands: "go vet ./..."  # declares which commands to run
   container:
     from: "src"             # runs the commands in "pipeline:src"
+`
+const ciOperatorContainerTestWithDependenciesConfig = `tests:
+- as: "vet"
+  commands: "test-script.sh ${LOCAL_IMAGE_TEST_BIN} ${IMAGE_MACHINE_CONFIG_OPERATOR}"
+  container:
+    from: "src"
+  dependencies:
+  - "machine-config-operator" # will populate ${IMAGE_MACHINE_CONFIG_OPERATOR}
+  - "test-bin"                # will populate ${IMAGE_TEST_BIN}
 `
 
 const gettingStartedPage = `
@@ -1394,6 +1500,7 @@ func helpHandler(subPath string, w http.ResponseWriter, req *http.Request) {
 		data["ciOperatorPromotionConfig"] = ciOperatorPromotionConfig
 		data["ciOperatorTagSpecificationConfig"] = ciOperatorTagSpecificationConfig
 		data["ciOperatorContainerTestConfig"] = ciOperatorContainerTestConfig
+		data["ciOperatorContainerTestWithDependenciesConfig"] = ciOperatorContainerTestWithDependenciesConfig
 	default:
 		writeErrorPage(w, errors.New("Invalid path"), http.StatusNotImplemented)
 		return

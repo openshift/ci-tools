@@ -108,13 +108,13 @@ type httpResult struct {
 }
 
 // resolveOwnerAliases computes the resolved (simple or full config) format of the OWNERS file
-func (r httpResult) resolveOwnerAliases() interface{} {
+func (r httpResult) resolveOwnerAliases(cleaner ownersCleaner) interface{} {
 	if !r.simpleConfig.Empty() {
 		return SimpleConfig{
 			Config: repoowners.Config{
-				Approvers:         r.repoAliases.ExpandAliases(repoowners.NormLogins(r.simpleConfig.Approvers)).List(),
-				Reviewers:         r.repoAliases.ExpandAliases(repoowners.NormLogins(r.simpleConfig.Reviewers)).List(),
-				RequiredReviewers: r.repoAliases.ExpandAliases(repoowners.NormLogins(r.simpleConfig.RequiredReviewers)).List(),
+				Approvers:         cleaner(r.repoAliases.ExpandAliases(repoowners.NormLogins(r.simpleConfig.Approvers)).List()),
+				Reviewers:         cleaner(r.repoAliases.ExpandAliases(repoowners.NormLogins(r.simpleConfig.Reviewers)).List()),
+				RequiredReviewers: cleaner(r.repoAliases.ExpandAliases(repoowners.NormLogins(r.simpleConfig.RequiredReviewers)).List()),
 				Labels:            sets.NewString(r.simpleConfig.Labels...).List(),
 			},
 			Options: r.simpleConfig.Options,
@@ -126,9 +126,9 @@ func (r httpResult) resolveOwnerAliases() interface{} {
 		}
 		for k, v := range r.fullConfig.Filters {
 			fc.Filters[k] = repoowners.Config{
-				Approvers:         r.repoAliases.ExpandAliases(repoowners.NormLogins(v.Approvers)).List(),
-				Reviewers:         r.repoAliases.ExpandAliases(repoowners.NormLogins(v.Reviewers)).List(),
-				RequiredReviewers: r.repoAliases.ExpandAliases(repoowners.NormLogins(v.RequiredReviewers)).List(),
+				Approvers:         cleaner(r.repoAliases.ExpandAliases(repoowners.NormLogins(v.Approvers)).List()),
+				Reviewers:         cleaner(r.repoAliases.ExpandAliases(repoowners.NormLogins(v.Reviewers)).List()),
+				RequiredReviewers: cleaner(r.repoAliases.ExpandAliases(repoowners.NormLogins(v.RequiredReviewers)).List()),
 				Labels:            sets.NewString(v.Labels...).List(),
 			}
 		}
@@ -196,7 +196,7 @@ func addHeader(path string, header string) error {
 	return ioutil.WriteFile(path, append([]byte(header), content...), 0644)
 }
 
-func writeOwners(orgRepo orgRepo, httpResult httpResult) error {
+func writeOwners(orgRepo orgRepo, httpResult httpResult, cleaner ownersCleaner) error {
 	for _, directory := range orgRepo.Directories {
 		path := filepath.Join(directory, "OWNERS")
 		err := os.Remove(path)
@@ -206,7 +206,7 @@ func writeOwners(orgRepo orgRepo, httpResult httpResult) error {
 
 		logrus.WithField("path", path).Debug("Writing to path ...")
 		err = nil
-		config := httpResult.resolveOwnerAliases()
+		config := httpResult.resolveOwnerAliases(cleaner)
 		switch config.(type) {
 		case SimpleConfig:
 			err = repoowners.SaveSimpleConfig(config.(SimpleConfig), path)
@@ -233,6 +233,11 @@ func pullOwners(gc github.Client, directory string, blacklist sets.String) error
 		return err
 	}
 
+	cleaner, err := ownersCleanerFactory(gc)
+	if err != nil {
+		return fmt.Errorf("failed to construct owners cleaner: %w", err)
+	}
+
 	for _, orgRepo := range orgRepos {
 		logrus.WithField("orgRepo", orgRepo.repoString()).Info("handling repo ...")
 		httpResult, err := getOwnersHTTP(gc, orgRepo)
@@ -245,7 +250,7 @@ func pullOwners(gc github.Client, directory string, blacklist sets.String) error
 				Warn("Ignoring the repo with no OWNERS file in the upstream repo.")
 			continue
 		}
-		if err := writeOwners(orgRepo, httpResult); err != nil {
+		if err := writeOwners(orgRepo, httpResult, cleaner); err != nil {
 			return err
 		}
 	}
@@ -403,4 +408,22 @@ func main() {
 		getBody(directories, o.assign), matchTitle, o.githubLogin+":"+remoteBranch, "master"); err != nil {
 		logrus.WithError(err).Fatal("PR creation failed.")
 	}
+}
+
+type ownersCleaner func([]string) []string
+
+func ownersCleanerFactory(ghc github.OrganizationClient) (ownersCleaner, error) {
+	members, err := ghc.ListOrgMembers(githubOrg, "all")
+	if err != nil {
+		return nil, fmt.Errorf("listOrgMembers failed: %w", err)
+	}
+
+	membersSet := sets.String{}
+	for _, member := range members {
+		membersSet.Insert(member.Login)
+	}
+
+	return func(unfilteredMembers []string) []string {
+		return sets.NewString(unfilteredMembers...).Intersection(membersSet).List()
+	}, nil
 }

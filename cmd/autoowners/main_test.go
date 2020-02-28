@@ -116,8 +116,7 @@ func TestResolveAliases(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
-			tc.given.resolveOwnerAliases()
-			result := tc.given.resolveOwnerAliases()
+			result := tc.given.resolveOwnerAliases(noOpCleaner)
 			assertEqual(t, result, tc.expected)
 		})
 	}
@@ -338,4 +337,48 @@ aliases:
 			assertEqual(t, err, tc.expectedError)
 		})
 	}
+}
+
+func TestResolveOwnerAliasesCleans(t *testing.T) {
+	cleaner := func(_ []string) []string {
+		return []string{"hans"}
+	}
+	testCases := []struct {
+		name           string
+		in             httpResult
+		expectedResult interface{}
+	}{
+		{
+			name: "simpleconfig",
+			in:   httpResult{simpleConfig: SimpleConfig{Config: repoowners.Config{Approvers: []string{"Gretel"}}}},
+			expectedResult: SimpleConfig{Config: repoowners.Config{
+				Approvers:         []string{"hans"},
+				Reviewers:         []string{"hans"},
+				RequiredReviewers: []string{"hans"},
+				Labels:            []string{},
+			}},
+		},
+		{
+			name: "fullconfig",
+			in:   httpResult{fullConfig: FullConfig{Filters: map[string]repoowners.Config{"tld": {}}}},
+			expectedResult: FullConfig{Filters: map[string]repoowners.Config{
+				"tld": {
+					Approvers:         []string{"hans"},
+					Reviewers:         []string{"hans"},
+					RequiredReviewers: []string{"hans"},
+					Labels:            []string{},
+				},
+			}},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assertEqual(t, tc.in.resolveOwnerAliases(cleaner), tc.expectedResult)
+		})
+	}
+}
+
+func noOpCleaner(in []string) []string {
+	return in
 }

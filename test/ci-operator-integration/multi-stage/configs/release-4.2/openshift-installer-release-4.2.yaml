@@ -27,8 +27,7 @@ tests:
     cluster_profile: aws
 - as: e2e-azure
   steps:
-    # TODO: fix dry runs when using cluster_profile
-    #cluster_profile: azure4
+    cluster_profile: azure4
     workflow: ipi
     test:
     - as: e2e
@@ -40,8 +39,7 @@ tests:
           memory: 2Gi
 - as: e2e-gcp
   steps:
-    # TODO: fix dry runs when using cluster_profile
-    #cluster_profile: gcp
+    cluster_profile: gcp
     pre:
     - chain: ipi-install
     test:

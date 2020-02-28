@@ -883,9 +883,9 @@ const configExample2 = `tests:
 - as: e2e-steps # test name
   steps:
     cluster_profile: aws
-	workflow: origin-e2e
-	test:                     # this chain will be run for "test" instead of the one in the origin-e2e workflow
-	  ref: origin-e2e-minimal`
+    workflow: origin-e2e
+    test:                     # this chain will be run for "test" instead of the one in the origin-e2e workflow
+      ref: origin-e2e-minimal`
 
 const addingComponentPage = `
 <h2>Adding and Changing Step Registry Content</h2>

@@ -106,9 +106,11 @@ func (s *multiStageTestStep) Inputs(dry bool) (api.InputDefinition, error) {
 func (s *multiStageTestStep) Run(ctx context.Context, dry bool) error {
 	s.dry = dry
 	if s.profile != "" {
-		secret := s.profileSecretName()
-		if _, err := s.secretClient.Secrets(s.jobSpec.Namespace).Get(secret, meta.GetOptions{}); err != nil {
-			return fmt.Errorf("could not find secret %q: %v", secret, err)
+		if !dry {
+			secret := s.profileSecretName()
+			if _, err := s.secretClient.Secrets(s.jobSpec.Namespace).Get(secret, meta.GetOptions{}); err != nil {
+				return fmt.Errorf("could not find secret %q: %v", secret, err)
+			}
 		}
 		var err error
 		if s.releaseInitial, err = s.params.Get("RELEASE_IMAGE_INITIAL"); err != nil {

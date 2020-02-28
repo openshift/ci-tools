@@ -25,6 +25,7 @@ const (
 	clusterProfileMountPath = "/var/run/secrets/ci.openshift.io/cluster-profile"
 	secretMountPath         = "/var/run/secrets/ci.openshift.io/multi-stage"
 	secretMountEnv          = "SHARED_DIR"
+	clusterProfileMountEnv  = "CLUSTER_PROFILE_DIR"
 )
 
 type multiStageTestStep struct {
@@ -340,10 +341,13 @@ func addProfile(name string, profile api.ClusterProfile, pod *coreapi.Pod) {
 		Name:      volumeName,
 		MountPath: clusterProfileMountPath,
 	})
-	container.Env = append(container.Env, coreapi.EnvVar{
+	container.Env = append(container.Env, []coreapi.EnvVar{{
 		Name:  "CLUSTER_TYPE",
 		Value: profile.ClusterType(),
-	})
+	}, {
+		Name:  clusterProfileMountEnv,
+		Value: clusterProfileMountPath,
+	}}...)
 }
 
 func (s *multiStageTestStep) runPods(ctx context.Context, pods []coreapi.Pod, shortCircuit bool) error {

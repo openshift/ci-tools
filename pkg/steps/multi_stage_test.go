@@ -113,6 +113,7 @@ func TestGeneratePods(t *testing.T) {
 		{Name: "JOB_NAME_SAFE", Value: "test"},
 		{Name: "JOB_NAME_HASH", Value: "5e8c9"},
 		{Name: "CLUSTER_TYPE", Value: "aws"},
+		{Name: "CLUSTER_PROFILE_DIR", Value: "/var/run/secrets/ci.openshift.io/cluster-profile"},
 		{Name: "KUBECONFIG", Value: "/var/run/secrets/ci.openshift.io/multi-stage/kubeconfig"},
 		{Name: "RELEASE_IMAGE_INITIAL", Value: "release:initial"},
 		{Name: "RELEASE_IMAGE_LATEST", Value: "release:latest"},

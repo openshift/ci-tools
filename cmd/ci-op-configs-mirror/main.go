@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 
@@ -87,6 +88,10 @@ func main() {
 			privateBaseImages(rbc.BaseImages)
 		}
 
+		if len(rbc.BaseRPMImages) > 0 {
+			privateBaseImages(rbc.BaseRPMImages)
+		}
+
 		if rbc.PromotionConfiguration != nil {
 			privatePromotionConfiguration(rbc.PromotionConfiguration)
 		}
@@ -125,7 +130,7 @@ func privateBuildRoot(buildRoot *api.BuildRootImageConfiguration) {
 
 func privateBaseImages(baseImages map[string]api.ImageStreamTagReference) {
 	for name, reference := range baseImages {
-		if reference.Namespace == ocpNamespace {
+		if reference.Namespace == ocpNamespace && isIntegrationImageStream(reference.Name) {
 			reference.Name = fmt.Sprintf("%s-priv", reference.Name)
 			reference.Namespace = privatePromotionNamespace
 			baseImages[name] = reference
@@ -143,4 +148,11 @@ func privatePromotionConfiguration(promotion *api.PromotionConfiguration) {
 
 func strP(str string) *string {
 	return &str
+}
+
+func isIntegrationImageStream(name string) bool {
+	if strings.HasPrefix(name, "4.") {
+		return true
+	}
+	return false
 }

@@ -120,22 +120,24 @@ func TestPrivateBaseImages(t *testing.T) {
 			baseImages: map[string]api.ImageStreamTagReference{
 				"base": {Name: "origin-v4", Namespace: "openshift"},
 				"os":   {Name: "centos", Namespace: "ocp"},
+				"test": {Name: "4.3", Namespace: "ocp"},
 			},
 			expected: map[string]api.ImageStreamTagReference{
 				"base": {Name: "origin-v4", Namespace: "openshift"},
-				"os":   {Name: "centos-priv", Namespace: "ocp-private"},
+				"os":   {Name: "centos", Namespace: "ocp"},
+				"test": {Name: "4.3-priv", Namespace: "ocp-private"},
 			},
 		},
 
 		{
 			id: "massive changes",
 			baseImages: map[string]api.ImageStreamTagReference{
-				"base": {Name: "origin-v4", Namespace: "ocp"},
-				"os":   {Name: "centos", Namespace: "ocp"},
+				"base": {Name: "4.2", Namespace: "ocp"},
+				"os":   {Name: "4.3", Namespace: "ocp"},
 			},
 			expected: map[string]api.ImageStreamTagReference{
-				"base": {Name: "origin-v4-priv", Namespace: "ocp-private"},
-				"os":   {Name: "centos-priv", Namespace: "ocp-private"},
+				"base": {Name: "4.2-priv", Namespace: "ocp-private"},
+				"os":   {Name: "4.3-priv", Namespace: "ocp-private"},
 			},
 		},
 	}

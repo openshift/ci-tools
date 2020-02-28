@@ -6,8 +6,8 @@ base_images:
     tag: base
   os:
     cluster: https://api.ci.openshift.org
-    name: centos-priv
-    namespace: ocp-private
+    name: centos
+    namespace: ocp
     tag: os
 build_root:
   image_stream_tag:

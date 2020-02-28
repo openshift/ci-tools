@@ -734,15 +734,91 @@ syntax highlight all commands as bash.
 </p>
 
 <p>
-Sharing files between steps is supported via a shared directory. All
-containers will have an environment variable <code>SHARED_DIR</code> which
-contains the path of the shared directory. An artifacts directory also exists
-for steps that produce artifacts. The path for the artifacts directory is
-stored in the <code>ARTIFACTS_DIR</code> environment variable.
+A reference may be referred to in chains, workflows, and <code>ci-operator</code> configs.
 </p>
 
+<h4 id="execution"><a href="#execution">Step Execution Environment</a></h4>
 <p>
-A reference may be referred to in chains, workflows, and <code>ci-operator</code> configs.
+While a step simply defines a set of commands to run in a container image,
+by virtue of executing within a <code>ci-operator</code> workflow, the commands
+have a number of special considerations for their execution environment.
+The commands can expect a set of environment variables to exist that inform
+them of the context in which they run. Commands in steps can communicate to
+other steps via a shared directory in their filesystem.
+</p>
+
+<h5 id="env"><a href="#env">Available Environment Variables</a></h5>
+<p>
+The following environment variables will be available to commands in a step: 
+</p>
+
+<table class="table">
+  <tr>
+    <th style="white-space: nowrap">Variable</th>
+	<th>Definition</th>
+	<th>When is it Present?</th>
+  </tr>
+  <tr>
+    <td style="white-space: nowrap"><code>${SHARED_DIR}<code></td>
+	<td>Directory on the step's filesystem where files shared between steps can be read.</td>
+	<td>Always.</td>
+  </tr>
+  <tr>
+    <td style="white-space: nowrap"><code>${CLUSTER_PROFILE_DIR}<code></td>
+	<td>Directory on the step's filesystem where credentials and configuration from the cluster profile are stored.</td>
+	<td>When the test as defined in a <code>ci-operator</code> configuration file sets a <code>cluster_profile</code>.</td>
+  </tr>
+  <tr>
+    <td style="white-space: nowrap"><code>${KUBECONFIG}<code></td>
+	<td>Path to <code>system:admin</code> credentials for the ephemeral OpenShift cluster under test.</td>
+	<td>After an ephemeral cluster has been installed.</td>
+  </tr>
+  <tr>
+    <td style="white-space: nowrap"><code>${RELEASE_IMAGE_INITIAL}<code></td>
+	<td>Image pull specification for the initial release payload snapshot when the test began to run.</td>
+	<td>Always.</td>
+  </tr>
+  <tr>
+    <td style="white-space: nowrap"><code>${RELEASE_IMAGE_LATEST}<code></td>
+	<td>Image pull specification for the ephemeral release payload used to install the ephemeral OpenShift cluster.</td>
+	<td>Always.</td>
+  </tr>
+</table>
+
+<p>
+In addition to these variables, commands will also have a number of other
+environment variables available to them from
+<a href="https://github.com/kubernetes/test-infra/blob/master/prow/jobs.md#job-environment-variables">Prow</a>
+as well as from
+<a href="https://github.com/openshift/ci-tools/blob/master/TEMPLATES.md#parameters-available-to-templates"><code>ci-operator</code></a>.
+If a job is using these variables, however, it may be an indication that
+some level of encapsulation has been broken and that a more straightforward
+approach exists to achieve the same outcome.
+</p>
+
+<h5 id="data"><a href="#data">Sharing Data Between Steps</a></h5>
+<p>
+Steps can communicate between each other by using a shared directory on their
+filesystems. This directory is available to read for test processes via
+<code>${SHARED_DIR}</code>. Any new data to be stored in the shared directory
+should be written to <code>/tmp/secret</code> and will be available to following
+steps under <code>${SHARED_DIR}</code> after being merged with the pre-existing
+data in the directory. New data will overwrite previous data. The underlying
+mechanism for this uses Kubernetes concepts; therefore, the total amount of
+data that can be shared is capped at 1MB and only a flat file structure is
+permissible: no sub-directories are supported. Steps are more commonly expected to
+communicate between each other by using state in the OpenShift cluster under
+test. For instance, if a step installs some components or changes configuration,
+a later step could check for that as a pre-condition by using <code>oc</code>
+or the API to view the cluster's configuration.
+</p>
+
+<h5 id="artifacts"><a href="#artifacts">Exposing Artifacts</a></h5>
+<p>
+Steps can commit artifacts to the output of a job by placing files at the
+<code>${ARTIFACT_DIR}</code>. These artifacts will be available for a job
+under <code>artifacts/job-name/step-name/</code>. The logs of each container
+in a step will also be present at that location.
 </p>
 
 <h3 id="chain"><a href="#chain">Chain:</a></h3>

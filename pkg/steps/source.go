@@ -372,21 +372,9 @@ func handleBuild(buildClient BuildClient, build *buildapi.Build, dry bool, artif
 			if err := buildClient.Builds(build.Namespace).Delete(build.Name, opts); err != nil && !errors.IsNotFound(err) && !errors.IsConflict(err) {
 				return fmt.Errorf("could not delete build %s: %v", build.Name, err)
 			}
-
-			if err := wait.ExponentialBackoff(wait.Backoff{
-				Duration: 10 * time.Millisecond, Factor: 2, Steps: 10,
-			}, func() (done bool, err error) {
-				if _, err := buildClient.Builds(build.Namespace).Get(build.Name, meta.GetOptions{}); err != nil {
-					if errors.IsNotFound(err) {
-						return true, nil
-					}
-					return false, err
-				}
-				return false, nil
-			}); err != nil {
+			if err := waitForBuildDeletion(buildClient, build.Namespace, build.Name); err != nil {
 				return fmt.Errorf("could not wait for build %s to be deleted: %v", build.Name, err)
 			}
-
 			if _, err := buildClient.Builds(build.Namespace).Create(build); err != nil && !errors.IsAlreadyExists(err) {
 				return fmt.Errorf("could not recreate build %s: %v", build.Name, err)
 			}
@@ -402,6 +390,20 @@ func handleBuild(buildClient BuildClient, build *buildapi.Build, dry bool, artif
 	// this will still be the err from waitForBuild
 	return err
 
+}
+
+func waitForBuildDeletion(client BuildClient, ns, name string) error {
+	return wait.ExponentialBackoff(wait.Backoff{
+		Duration: 10 * time.Millisecond, Factor: 2, Steps: 10,
+	}, func() (done bool, err error) {
+		if _, err := client.Builds(ns).Get(name, meta.GetOptions{}); err != nil {
+			if errors.IsNotFound(err) {
+				return true, nil
+			}
+			return false, err
+		}
+		return false, nil
+	})
 }
 
 func isInfraReason(reason buildapi.StatusReason) bool {

@@ -172,7 +172,7 @@ const mainPage = `
 `
 
 const referencePage = `
-<h2 id="title"><a href="#title">Reference: <nobr style="font-family:monospace">{{ .As }}</nobr></a></h2>
+<h2 id="title"><a href="#title">Step: <nobr style="font-family:monospace">{{ .As }}</nobr></a></h2>
 <p id="documentation">{{ .Documentation }}</p>
 <h2 id="image"><a href="#image">Container image used for this step: <span style="font-family:monospace">{{ .From }}</span></a></h2>
 <h2 id="source"><a href="#source">Source Code</a></h2>
@@ -224,8 +224,8 @@ const templateDefinitions = `
 	<table class="table">
 	<thead>
 		<tr>
-			<th title="The name of the reference or chain" class="info">Name</th>
-			<th title="The documentation for the reference or chain" class="info">Description</th>
+			<th title="The name of the step or chain" class="info">Name</th>
+			<th title="The documentation for the step or chain" class="info">Description</th>
 		</tr>
 	</thead>
 	<tbody>
@@ -263,9 +263,9 @@ const templateDefinitions = `
 			<tr>
 				<th title="The name of the workflow" class="info">Name</th>
 				<th title="What the workflow is supposed to do" class="info">Description</th>
-				<th title="The registry elements used during setup" class="info">Pre</th>
-				<th title="The registry elements containing the tests" class="info">Test</th>
-				<th title="The registry elements used to teardown and clean up the test" class="info">Post</th>
+				<th title="The registry components used during setup" class="info">Pre</th>
+				<th title="The registry components containing the tests" class="info">Test</th>
+				<th title="The registry components used to teardown and clean up the test" class="info">Post</th>
 			</tr>
 		</thead>
 		<tbody>
@@ -284,13 +284,13 @@ const templateDefinitions = `
 
 {{ define "chainTable" }}
 	<h2 id="chains"><a href="#chains">Chains</a></h2>
-	<p>Chains are registry components that allow users to string together multiple test steps under one name. These steps can be references and other chains.</p>
+	<p>Chains are registry components that allow users to string together multiple registry components under one name. These components can be steps and other chains.</p>
 	<table class="table">
 		<thead>
 			<tr>
 				<th title="The name of the chain" class="info">Name</th>
 				<th title="What the chain is supposed to do" class="info">Description</th>
-				<th title="The steps (references and other chains) that the chain runs (in order)" class="info">Steps</th>
+				<th title="The components (steps and other chains) that the chain runs (in order)" class="info">Steps</th>
 			</tr>
 		</thead>
 		<tbody>
@@ -306,13 +306,13 @@ const templateDefinitions = `
 {{ end }}
 
 {{ define "referenceTable" }}
-	<h2 id="references"><a href="#references">References</a></h2>
-	<p>References are the lowest level registry components, defining a command to run and a container to run the command in.</p>
+	<h2 id="steps"><a href="#steps">Steps</a></h2>
+	<p>Steps are the lowest level registry components, defining a command to run and a container to run the command in.</p>
 	<table class="table">
 		<thead>
 			<tr>
-				<th title="The name of the reference" class="info">Name</th>
-				<th title="The documentation for the reference" class="info">Description</th>
+				<th title="The name of the step" class="info">Name</th>
+				<th title="The documentation for the step" class="info">Description</th>
 			</tr>
 		</thead>
 		<tbody>
@@ -693,14 +693,14 @@ about the three components of the test registry and how to use those components
 to create a test:
 <ul>
   <li>
-    <a href="#reference">Reference</a>: A reference is the lowest level
+    <a href="#step">Step</a>: A step is the lowest level
     component in the test step registry. It describes an individual test
     step.
   </li>
   <li>
 	<a href="#chain">Chain</a>: A chain is a registry component that
 	specifies multiple steps to be run. Any item of the chain can be either a
-	reference or another chain.
+	step or another chain.
   </li>
   <li>
     <a href="#workflow">Workflow</a>: A workflow is the highest level
@@ -710,13 +710,13 @@ to create a test:
 </ul>
 </p>
 
-<h3 id="reference"><a href="#reference">Reference:</a></h3>
+<h3 id="step"><a href="#step">Step:</a></h3>
 <p>
-A reference is the lowest level component in the test step registry. A
-reference defines a base container image for a step, the filename of the
+A step is the lowest level component in the test registry. A
+step defines a base container image, the filename of the
 shell script to run inside the container, the resource requests and limits
-for the container, and documentation for the reference. Example of a
-reference:
+for the container, and documentation for the step. Example of a
+step:
 </p>
 
 {{ yamlSyntax (index . "refExample") }}
@@ -734,7 +734,7 @@ syntax highlight all commands as bash.
 </p>
 
 <p>
-A reference may be referred to in chains, workflows, and <code>ci-operator</code> configs.
+A step may be referred to in chains, workflows, and <code>ci-operator</code> configs.
 </p>
 
 <h4 id="execution"><a href="#execution">Step Execution Environment</a></h4>
@@ -749,7 +749,7 @@ other steps via a shared directory in their filesystem.
 
 <h5 id="env"><a href="#env">Available Environment Variables</a></h5>
 <p>
-The following environment variables will be available to commands in a step: 
+The following environment variables will be available to commands in a step:
 </p>
 
 <table class="table">
@@ -823,10 +823,10 @@ in a step will also be present at that location.
 
 <h3 id="chain"><a href="#chain">Chain:</a></h3>
 <p>
-A chain is a registry component that specifies multiple steps to be run.
-Steps are run in the order that they are written. Steps specified by a chain
-can be either references and other chains. If any step inside a chain fails
-to execute, the chain stops and the following steps are not run. Example of a
+A chain is a registry component that specifies multiple registry components to be run.
+Components are run in the order that they are written. Components specified by a chain
+can be either steps and other chains. If any component inside a chain fails
+to execute, the chain stops and the following components are not run. Example of a
 chain:
 </p>
 
@@ -891,9 +891,9 @@ how the <code>ci-operator</code> configs do. The prefix is the relative director
 with all &#96;<code>/</code>&#96; characters changed to
 &#96;<code>-</code>&#96;. For example, a file under the
 <code>ipi/install/conf</code> directory would have as prefix of
-<code>ipi-install-conf</code>. If there is a workflow, chain, or reference in
+<code>ipi-install-conf</code>. If there is a workflow, chain, or step in
 that directory, the <code>as</code> field for that component would need to be
-the same as the prefix. Further, only one of reference, chain, or workflow
+the same as the prefix. Further, only one of step, chain, or workflow
 can be in a subdirectory (otherwise there would be a name conflict),
 </p>
 
@@ -901,15 +901,15 @@ can be in a subdirectory (otherwise there would be a name conflict),
 After the prefix, we apply a suffix based on what the file is defining. These
 are the suffixes for the four file types that exist in the registry:
 <ul style="margin-bottom:0px;">
-  <li>Reference: <code>-ref.yaml</code></li>
-  <li>Reference command script: <code>-commands.sh</code></li>
+  <li>Step: <code>-ref.yaml</code></li>
+  <li>Step command script: <code>-commands.sh</code></li>
   <li>Chain: <code>-chain.yaml</code></li>
   <li>Workflow: <code>-workflow.yaml</code></li>
 </ul>
 </p>
 
 <p>
-Continuing the example above, a reference in the
+Continuing the example above, a step in the
 <code>ipi/install/conf</code> subdirectory would have a filename of
 <code>ipi-install-conf-ref.yaml</code> and the command would be
 <code>ipi-install-conf-commands.sh</code>.
@@ -922,7 +922,7 @@ testing are <code>OWNERS</code> files and files that end in <code>.md</code>.
 `
 
 const refExample = `ref:
-  as: ipi-conf                   # name of the reference
+  as: ipi-conf                   # name of the step
   from: centos:7                 # image to run the commands in
   commands: ipi-conf-commands.sh # script file containing the command(s) to be run
   resources:
@@ -935,7 +935,7 @@ const chainExample = `chain:
   as: ipi-deprovision                # name of this chain
   steps:
   - chain: gather                    # a chain being used as a step in another chain
-  - ref: ipi-deprovision-deprovision # a reference being used as a step in a chain
+  - ref: ipi-deprovision-deprovision # a step being used as a step in a chain
   documentation: |-
     The IPI deprovision step chain contains all the individual steps necessary to deprovision an OpenShift cluster.`
 const workflowExample = `workflow:
@@ -968,7 +968,7 @@ const addingComponentPage = `
 
 <h3 id="adding-content"><a href="#adding-contnet">Adding Content</a></h3>
 <p>
-Adding a new component (reference, chain, or workflow) to the registry is
+Adding a new component (step, chain, or workflow) to the registry is
 quite simple. Descriptions of each of the components as well as the naming
 scheme and directory layout is available at the <a href="/help">
 Getting Started</a> page. To add a new component, add the new files into the
@@ -982,7 +982,7 @@ Prow will automatically run a few tests on registry components.
   <li>Verify that all required fields are supplied</li>
   <li>Verify that the naming scheme for all components is correct</li>
   <li>Verify that there are no cyclic dependencies (infinite loops) in chains</li>
-  <li>Run shellcheck on all shell files used by references, failing on errors</li>
+  <li>Run shellcheck on all shell files used by steps, failing on errors</li>
 </ul>
 
 <p>
@@ -1071,7 +1071,7 @@ configuration imports a number of images:
 Once the image has been configured to be an input for the repository's tests in the
 <code>ci-operator</code> configuration, either explicitly as a <code>base_image</code>
 or implicitly as part of the <code>tag_specification</code>, it can be used in tests
-in one of two ways. A registry reference step can be written to execute the shared tests
+in one of two ways. A registry step can be written to execute the shared tests
 in any <code>ci-operator</code> configuration, or a literal test step can be added just to one
 repository's configuration to run the shared tests. Two examples follow which add an
 execution of shared end-to-end tests using these two approaches. Both examples assume
@@ -1532,7 +1532,7 @@ func referenceHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *ht
 		},
 		Documentation: docs[name],
 	}
-	writePage(w, "Registry Reference Help Page", page, ref)
+	writePage(w, "Registry Step Help Page", page, ref)
 }
 
 func chainHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *http.Request) {

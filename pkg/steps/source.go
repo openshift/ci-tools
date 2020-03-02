@@ -351,46 +351,45 @@ func handleBuild(buildClient BuildClient, build *buildapi.Build, dry bool, artif
 	}
 
 	if _, err := buildClient.Builds(build.Namespace).Create(build); err != nil {
-		if errors.IsAlreadyExists(err) {
-			b, err := buildClient.Builds(build.Namespace).Get(build.Name, meta.GetOptions{})
-			if err != nil {
-				return fmt.Errorf("could not get build %s: %v", build.Name, err)
-			}
-
-			if isBuildPhaseTerminated(b.Status.Phase) &&
-				(isInfraReason(b.Status.Reason) || hintsAtInfraReason(b.Status.LogSnippet)) {
-				log.Printf("Build %s previously failed from an infrastructure error (%s), retrying...\n", b.Name, b.Status.Reason)
-				zero := int64(0)
-				foreground := meta.DeletePropagationForeground
-				opts := &meta.DeleteOptions{
-					GracePeriodSeconds: &zero,
-					Preconditions:      &meta.Preconditions{UID: &b.UID},
-					PropagationPolicy:  &foreground,
-				}
-				if err := buildClient.Builds(build.Namespace).Delete(build.Name, opts); err != nil && !errors.IsNotFound(err) && !errors.IsConflict(err) {
-					return fmt.Errorf("could not delete build %s: %v", build.Name, err)
-				}
-
-				if err := wait.ExponentialBackoff(wait.Backoff{
-					Duration: 10 * time.Millisecond, Factor: 2, Steps: 10,
-				}, func() (done bool, err error) {
-					if _, err := buildClient.Builds(build.Namespace).Get(build.Name, meta.GetOptions{}); err != nil {
-						if errors.IsNotFound(err) {
-							return true, nil
-						}
-						return false, err
-					}
-					return false, nil
-				}); err != nil {
-					return fmt.Errorf("could not wait for build %s to be deleted: %v", build.Name, err)
-				}
-
-				if _, err := buildClient.Builds(build.Namespace).Create(build); err != nil && !errors.IsAlreadyExists(err) {
-					return fmt.Errorf("could not recreate build %s: %v", build.Name, err)
-				}
-			}
-		} else {
+		if !errors.IsAlreadyExists(err) {
 			return fmt.Errorf("could not create build %s: %v", build.Name, err)
+		}
+		b, err := buildClient.Builds(build.Namespace).Get(build.Name, meta.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("could not get build %s: %v", build.Name, err)
+		}
+
+		if isBuildPhaseTerminated(b.Status.Phase) &&
+			(isInfraReason(b.Status.Reason) || hintsAtInfraReason(b.Status.LogSnippet)) {
+			log.Printf("Build %s previously failed from an infrastructure error (%s), retrying...\n", b.Name, b.Status.Reason)
+			zero := int64(0)
+			foreground := meta.DeletePropagationForeground
+			opts := &meta.DeleteOptions{
+				GracePeriodSeconds: &zero,
+				Preconditions:      &meta.Preconditions{UID: &b.UID},
+				PropagationPolicy:  &foreground,
+			}
+			if err := buildClient.Builds(build.Namespace).Delete(build.Name, opts); err != nil && !errors.IsNotFound(err) && !errors.IsConflict(err) {
+				return fmt.Errorf("could not delete build %s: %v", build.Name, err)
+			}
+
+			if err := wait.ExponentialBackoff(wait.Backoff{
+				Duration: 10 * time.Millisecond, Factor: 2, Steps: 10,
+			}, func() (done bool, err error) {
+				if _, err := buildClient.Builds(build.Namespace).Get(build.Name, meta.GetOptions{}); err != nil {
+					if errors.IsNotFound(err) {
+						return true, nil
+					}
+					return false, err
+				}
+				return false, nil
+			}); err != nil {
+				return fmt.Errorf("could not wait for build %s to be deleted: %v", build.Name, err)
+			}
+
+			if _, err := buildClient.Builds(build.Namespace).Create(build); err != nil && !errors.IsAlreadyExists(err) {
+				return fmt.Errorf("could not recreate build %s: %v", build.Name, err)
+			}
 		}
 	}
 	err := waitForBuild(buildClient, build.Namespace, build.Name)

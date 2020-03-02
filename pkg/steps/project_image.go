@@ -112,7 +112,7 @@ func (s *projectDirectoryImageBuildStep) Run(ctx context.Context, dry bool) erro
 			Value: v,
 		})
 	}
-	return handleBuild(s.buildClient, build, dry, s.artifactDir, s.dryLogger)
+	return handleBuild(ctx, s.buildClient, build, dry, s.artifactDir, s.dryLogger)
 }
 
 func (s *projectDirectoryImageBuildStep) Requires() []api.StepLink {

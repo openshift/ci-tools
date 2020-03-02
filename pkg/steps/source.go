@@ -163,7 +163,7 @@ func (s *sourceStep) Run(ctx context.Context, dry bool) error {
 		return fmt.Errorf("could not resolve clonerefs source: %v", err)
 	}
 
-	return handleBuild(s.buildClient, createBuild(s.config, s.jobSpec, clonerefsRef, s.resources, s.cloneAuthConfig, s.pullSecret), dry, s.artifactDir, s.dryLogger)
+	return handleBuild(ctx, s.buildClient, createBuild(s.config, s.jobSpec, clonerefsRef, s.resources, s.cloneAuthConfig, s.pullSecret), dry, s.artifactDir, s.dryLogger)
 }
 
 func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clonerefsRef coreapi.ObjectReference, resources api.ResourceConfiguration, cloneAuthConfig *CloneAuthConfig, pullSecret *coreapi.Secret) *buildapi.Build {
@@ -344,7 +344,7 @@ func isBuildPhaseTerminated(phase buildapi.BuildPhase) bool {
 	return true
 }
 
-func handleBuild(buildClient BuildClient, build *buildapi.Build, dry bool, artifactDir string, dryLogger *DryLogger) error {
+func handleBuild(ctx context.Context, buildClient BuildClient, build *buildapi.Build, dry bool, artifactDir string, dryLogger *DryLogger) error {
 	if dry {
 		dryLogger.AddBuild(build)
 		return nil
@@ -372,7 +372,7 @@ func handleBuild(buildClient BuildClient, build *buildapi.Build, dry bool, artif
 			if err := buildClient.Builds(build.Namespace).Delete(build.Name, opts); err != nil && !errors.IsNotFound(err) && !errors.IsConflict(err) {
 				return fmt.Errorf("could not delete build %s: %v", build.Name, err)
 			}
-			if err := waitForBuildDeletion(buildClient, build.Namespace, build.Name); err != nil {
+			if err := waitForBuildDeletion(ctx, buildClient, build.Namespace, build.Name); err != nil {
 				return fmt.Errorf("could not wait for build %s to be deleted: %v", build.Name, err)
 			}
 			if _, err := buildClient.Builds(build.Namespace).Create(build); err != nil && !errors.IsAlreadyExists(err) {
@@ -380,7 +380,7 @@ func handleBuild(buildClient BuildClient, build *buildapi.Build, dry bool, artif
 			}
 		}
 	}
-	err := waitForBuild(buildClient, build.Namespace, build.Name)
+	err := waitForBuild(ctx, buildClient, build.Namespace, build.Name)
 	if err == nil && len(artifactDir) > 0 {
 		if err := gatherSuccessfulBuildLog(buildClient, artifactDir, build.Namespace, build.Name); err != nil {
 			// log error but do not fail successful build
@@ -392,7 +392,7 @@ func handleBuild(buildClient BuildClient, build *buildapi.Build, dry bool, artif
 
 }
 
-func waitForBuildDeletion(client BuildClient, ns, name string) error {
+func waitForBuildDeletion(ctx context.Context, client BuildClient, ns, name string) error {
 	return wait.ExponentialBackoff(wait.Backoff{
 		Duration: 10 * time.Millisecond, Factor: 2, Steps: 10,
 	}, func() (done bool, err error) {
@@ -435,9 +435,9 @@ func hintsAtInfraReason(logSnippet string) bool {
 		strings.Contains(logSnippet, "Error: Failed to synchronize cache for repo")
 }
 
-func waitForBuild(buildClient BuildClient, namespace, name string) error {
+func waitForBuild(ctx context.Context, buildClient BuildClient, namespace, name string) error {
 	for {
-		retry, err := waitForBuildOrTimeout(buildClient, namespace, name)
+		retry, err := waitForBuildOrTimeout(ctx, buildClient, namespace, name)
 		if err != nil {
 			return fmt.Errorf("could not wait for build: %v", err)
 		}
@@ -448,7 +448,7 @@ func waitForBuild(buildClient BuildClient, namespace, name string) error {
 	return nil
 }
 
-func waitForBuildOrTimeout(buildClient BuildClient, namespace, name string) (bool, error) {
+func waitForBuildOrTimeout(ctx context.Context, buildClient BuildClient, namespace, name string) (bool, error) {
 	isOK := func(b *buildapi.Build) bool {
 		return b.Status.Phase == buildapi.BuildPhaseComplete
 	}

@@ -382,3 +382,51 @@ func TestResolveOwnerAliasesCleans(t *testing.T) {
 func noOpCleaner(in []string) []string {
 	return in
 }
+
+type fakeGithubOrgMemberLister []string
+
+func (fghoml fakeGithubOrgMemberLister) ListOrgMembers(org, role string) ([]github.TeamMember, error) {
+	var result []github.TeamMember
+	for _, member := range fghoml {
+		result = append(result, github.TeamMember{Login: member})
+	}
+	return result, nil
+}
+
+func TestOwnersCleanerFactory(t *testing.T) {
+	testCases := []struct {
+		name              string
+		orgMembers        []string
+		unfilteredMembers []string
+		expectedResult    []string
+	}{
+		{
+			name:              "Nothing to filter",
+			orgMembers:        []string{"a", "b", "c"},
+			unfilteredMembers: []string{"a", "b", "c"},
+			expectedResult:    []string{"a", "b", "c"},
+		},
+		{
+			name:              "Basic filtering",
+			orgMembers:        []string{"a", "b", "d"},
+			unfilteredMembers: []string{"a", "b", "c"},
+			expectedResult:    []string{"a", "b", ""},
+		},
+		{
+			name:              "Casing is ignored",
+			orgMembers:        []string{"aA"},
+			unfilteredMembers: []string{"Aa"},
+			expectedResult:    []string{"aa"},
+		},
+	}
+
+	for _, tc := range testCases {
+		cleaner, err := ownersCleanerFactory(fakeGithubOrgMemberLister(tc.orgMembers))
+		if err != nil {
+			t.Fatalf("failed to construct cleaner: %v", err)
+		}
+		if diff := sets.NewString(cleaner(tc.unfilteredMembers)...).Difference(sets.NewString(tc.expectedResult...)); len(diff) > 0 {
+			t.Errorf("Actual result  does not match expected, diff: %v", diff)
+		}
+	}
+}

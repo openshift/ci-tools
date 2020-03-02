@@ -412,7 +412,11 @@ func main() {
 
 type ownersCleaner func([]string) []string
 
-func ownersCleanerFactory(ghc github.OrganizationClient) (ownersCleaner, error) {
+type githubOrgMemberLister interface {
+	ListOrgMembers(org, role string) ([]github.TeamMember, error)
+}
+
+func ownersCleanerFactory(ghc githubOrgMemberLister) (ownersCleaner, error) {
 	members, err := ghc.ListOrgMembers(githubOrg, "all")
 	if err != nil {
 		return nil, fmt.Errorf("listOrgMembers failed: %w", err)
@@ -420,10 +424,16 @@ func ownersCleanerFactory(ghc github.OrganizationClient) (ownersCleaner, error) 
 
 	membersSet := sets.String{}
 	for _, member := range members {
-		membersSet.Insert(member.Login)
+		membersSet.Insert(strings.ToLower(member.Login))
 	}
 
 	return func(unfilteredMembers []string) []string {
-		return sets.NewString(unfilteredMembers...).Intersection(membersSet).List()
+		var result []string
+		for _, member := range unfilteredMembers {
+			if lowercaseMember := strings.ToLower(member); membersSet.Has(lowercaseMember) {
+				result = append(result, lowercaseMember)
+			}
+		}
+		return result
 	}, nil
 }

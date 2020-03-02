@@ -142,6 +142,13 @@ additional images to promote and their target names via the "additional_images"
 map.
 `
 
+const (
+	// annotationIdleCleanupDurationTTL is the annotation for requesting namespace cleanup after all pods complete
+	annotationIdleCleanupDurationTTL = "ci.openshift.io/ttl.soft"
+	// annotationCleanupDurationTTL is the annotation for requesting namespace cleanup after the namespace has been active
+	annotationCleanupDurationTTL = "ci.openshift.io/ttl.hard"
+)
+
 // CustomProwMetadata the name of the custom prow metadata file that's expected to be found in the artifacts directory.
 const CustomProwMetadata = "custom-prow-metadata.json"
 
@@ -159,6 +166,14 @@ func main() {
 		flagSet.Usage()
 		os.Exit(0)
 	}
+	flagSet.Visit(func(f *flag.Flag) {
+		switch f.Name {
+		case "delete-when-idle":
+			opt.idleCleanupDurationSet = true
+		case "delete-after":
+			opt.cleanupDurationSet = true
+		}
+	})
 
 	if err := opt.Complete(); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
@@ -207,12 +222,14 @@ type options struct {
 	writeParams string
 	artifactDir string
 
-	gitRef              string
-	namespace           string
-	baseNamespace       string
-	extraInputHash      stringSlice
-	idleCleanupDuration time.Duration
-	cleanupDuration     time.Duration
+	gitRef                 string
+	namespace              string
+	baseNamespace          string
+	extraInputHash         stringSlice
+	idleCleanupDuration    time.Duration
+	idleCleanupDurationSet bool
+	cleanupDuration        time.Duration
+	cleanupDurationSet     bool
 
 	inputHash               string
 	secrets                 []*coreapi.Secret
@@ -741,13 +758,17 @@ func (o *options) initializeNamespace() error {
 
 	updates := map[string]string{}
 	if o.idleCleanupDuration > 0 {
-		log.Printf("Setting a soft TTL of %s for the namespace\n", o.idleCleanupDuration.String())
-		updates["ci.openshift.io/ttl.soft"] = o.idleCleanupDuration.String()
+		if o.idleCleanupDurationSet {
+			log.Printf("Setting a soft TTL of %s for the namespace\n", o.idleCleanupDuration.String())
+		}
+		updates[annotationIdleCleanupDurationTTL] = o.idleCleanupDuration.String()
 	}
 
 	if o.cleanupDuration > 0 {
-		log.Printf("Setting a hard TTL of %s for the namespace\n", o.cleanupDuration.String())
-		updates["ci.openshift.io/ttl.hard"] = o.cleanupDuration.String()
+		if o.cleanupDurationSet {
+			log.Printf("Setting a hard TTL of %s for the namespace\n", o.cleanupDuration.String())
+		}
+		updates[annotationCleanupDurationTTL] = o.cleanupDuration.String()
 	}
 
 	// This label makes sure that the namespace is active, and the value will be updated
@@ -765,6 +786,17 @@ func (o *options) initializeNamespace() error {
 				ns.Annotations = make(map[string]string)
 			}
 			for key, value := range updates {
+				// allow specific annotations to be skipped if they are already set and the user didn't ask
+				switch key {
+				case annotationCleanupDurationTTL:
+					if !o.cleanupDurationSet && len(ns.Annotations[key]) != 0 {
+						continue
+					}
+				case annotationIdleCleanupDurationTTL:
+					if !o.idleCleanupDurationSet && len(ns.Annotations[key]) != 0 {
+						continue
+					}
+				}
 				ns.ObjectMeta.Annotations[key] = value
 			}
 

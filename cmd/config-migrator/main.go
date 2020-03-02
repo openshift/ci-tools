@@ -68,11 +68,17 @@ func generateMigratedConfigs(input config.DataWithInfo) []config.DataWithInfo {
 		return nil
 	}
 
-	var newBaseImages map[string]api.ImageStreamTagReference
-	for k, baseImage := range futureConfig.BaseImages {
-		if newBaseImages == nil {
-			newBaseImages = map[string]api.ImageStreamTagReference{}
+	newBaseRPMImages := map[string]api.ImageStreamTagReference{}
+	for k, baseRPMImage := range futureConfig.BaseRPMImages {
+		if baseRPMImage.Cluster == "" {
+			baseRPMImage.Cluster = prowClusterURL
 		}
+		newBaseRPMImages[k] = baseRPMImage
+	}
+	futureConfig.BaseRPMImages = newBaseRPMImages
+
+	newBaseImages := map[string]api.ImageStreamTagReference{}
+	for k, baseImage := range futureConfig.BaseImages {
 		if baseImage.Cluster == "" {
 			baseImage.Cluster = prowClusterURL
 		}

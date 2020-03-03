@@ -1,5 +1,6 @@
 periodics:
 - agent: kubernetes
+  cluster: ci/api-build01-ci-devcluster-openshift-com:6443
   cron: '@yearly'
   decorate: true
   decoration_config:
@@ -87,6 +88,7 @@ periodics:
       secret:
         secretName: sentry-dsn
 - agent: kubernetes
+  cluster: ci/api-build01-ci-devcluster-openshift-com:6443
   cron: '@yearly'
   decorate: true
   decoration_config:

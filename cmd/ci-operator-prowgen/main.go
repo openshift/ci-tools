@@ -590,7 +590,9 @@ func generateJobs(
 			}
 			presubmits[orgrepo] = append(presubmits[orgrepo], presubmit)
 		} else {
-			periodics = append(periodics, *generatePeriodicForTest(element.As, info, label, podSpec, true, *element.Cron, configSpec.CanonicalGoRepository))
+			periodic := *generatePeriodicForTest(element.As, info, label, podSpec, true, *element.Cron, configSpec.CanonicalGoRepository)
+			periodic.Cluster = build01Context
+			periodics = append(periodics, periodic)
 		}
 	}
 

@@ -102,7 +102,7 @@ func (s *inputImageTagStep) Run(ctx context.Context, dry bool) error {
 	}
 	// Wait image is ready
 	log.Printf("waiting for importing %s ...", ist.ObjectMeta.Name)
-	if err := wait.Poll(10*time.Second, 5*time.Minute, func() (bool, error) {
+	if err := wait.Poll(10*time.Second, 35*time.Minute, func() (bool, error) {
 		pipeline, err := s.dstClient.ImageStreams(s.jobSpec.Namespace).Get(api.PipelineImageStream, meta.GetOptions{})
 		if err != nil {
 			return false, err

@@ -35,7 +35,7 @@ func (s *pipelineImageCacheStep) Inputs(dry bool) (api.InputDefinition, error) {
 
 func (s *pipelineImageCacheStep) Run(ctx context.Context, dry bool) error {
 	dockerfile := rawCommandDockerfile(s.config.From, s.config.Commands)
-	return handleBuild(s.buildClient, buildFromSource(
+	return handleBuild(ctx, s.buildClient, buildFromSource(
 		s.jobSpec, s.config.From, s.config.To,
 		buildapi.BuildSource{
 			Type:       buildapi.BuildSourceDockerfile,

@@ -46,7 +46,7 @@ func (s *rpmImageInjectionStep) Run(ctx context.Context, dry bool) error {
 		host = route.Spec.Host
 	}
 	dockerfile := rpmInjectionDockerfile(s.config.From, host)
-	return handleBuild(s.buildClient, buildFromSource(
+	return handleBuild(ctx, s.buildClient, buildFromSource(
 		s.jobSpec, s.config.From, s.config.To,
 		buildapi.BuildSource{
 			Type:       buildapi.BuildSourceDockerfile,

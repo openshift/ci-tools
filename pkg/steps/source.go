@@ -163,7 +163,7 @@ func (s *sourceStep) Run(ctx context.Context, dry bool) error {
 		return fmt.Errorf("could not resolve clonerefs source: %v", err)
 	}
 
-	return handleBuild(s.buildClient, createBuild(s.config, s.jobSpec, clonerefsRef, s.resources, s.cloneAuthConfig, s.pullSecret), dry, s.artifactDir, s.dryLogger)
+	return handleBuild(ctx, s.buildClient, createBuild(s.config, s.jobSpec, clonerefsRef, s.resources, s.cloneAuthConfig, s.pullSecret), dry, s.artifactDir, s.dryLogger)
 }
 
 func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clonerefsRef coreapi.ObjectReference, resources api.ResourceConfiguration, cloneAuthConfig *CloneAuthConfig, pullSecret *coreapi.Secret) *buildapi.Build {
@@ -344,56 +344,43 @@ func isBuildPhaseTerminated(phase buildapi.BuildPhase) bool {
 	return true
 }
 
-func handleBuild(buildClient BuildClient, build *buildapi.Build, dry bool, artifactDir string, dryLogger *DryLogger) error {
+func handleBuild(ctx context.Context, buildClient BuildClient, build *buildapi.Build, dry bool, artifactDir string, dryLogger *DryLogger) error {
 	if dry {
 		dryLogger.AddBuild(build)
 		return nil
 	}
 
 	if _, err := buildClient.Builds(build.Namespace).Create(build); err != nil {
-		if errors.IsAlreadyExists(err) {
-			b, err := buildClient.Builds(build.Namespace).Get(build.Name, meta.GetOptions{})
-			if err != nil {
-				return fmt.Errorf("could not get build %s: %v", build.Name, err)
-			}
-
-			if isBuildPhaseTerminated(b.Status.Phase) &&
-				(isInfraReason(b.Status.Reason) || hintsAtInfraReason(b.Status.LogSnippet)) {
-				log.Printf("Build %s previously failed from an infrastructure error (%s), retrying...\n", b.Name, b.Status.Reason)
-				zero := int64(0)
-				foreground := meta.DeletePropagationForeground
-				opts := &meta.DeleteOptions{
-					GracePeriodSeconds: &zero,
-					Preconditions:      &meta.Preconditions{UID: &b.UID},
-					PropagationPolicy:  &foreground,
-				}
-				if err := buildClient.Builds(build.Namespace).Delete(build.Name, opts); err != nil && !errors.IsNotFound(err) && !errors.IsConflict(err) {
-					return fmt.Errorf("could not delete build %s: %v", build.Name, err)
-				}
-
-				if err := wait.ExponentialBackoff(wait.Backoff{
-					Duration: 10 * time.Millisecond, Factor: 2, Steps: 10,
-				}, func() (done bool, err error) {
-					if _, err := buildClient.Builds(build.Namespace).Get(build.Name, meta.GetOptions{}); err != nil {
-						if errors.IsNotFound(err) {
-							return true, nil
-						}
-						return false, err
-					}
-					return false, nil
-				}); err != nil {
-					return fmt.Errorf("could not wait for build %s to be deleted: %v", build.Name, err)
-				}
-
-				if _, err := buildClient.Builds(build.Namespace).Create(build); err != nil && !errors.IsAlreadyExists(err) {
-					return fmt.Errorf("could not recreate build %s: %v", build.Name, err)
-				}
-			}
-		} else {
+		if !errors.IsAlreadyExists(err) {
 			return fmt.Errorf("could not create build %s: %v", build.Name, err)
 		}
+		b, err := buildClient.Builds(build.Namespace).Get(build.Name, meta.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("could not get build %s: %v", build.Name, err)
+		}
+
+		if isBuildPhaseTerminated(b.Status.Phase) &&
+			(isInfraReason(b.Status.Reason) || hintsAtInfraReason(b.Status.LogSnippet)) {
+			log.Printf("Build %s previously failed from an infrastructure error (%s), retrying...\n", b.Name, b.Status.Reason)
+			zero := int64(0)
+			foreground := meta.DeletePropagationForeground
+			opts := &meta.DeleteOptions{
+				GracePeriodSeconds: &zero,
+				Preconditions:      &meta.Preconditions{UID: &b.UID},
+				PropagationPolicy:  &foreground,
+			}
+			if err := buildClient.Builds(build.Namespace).Delete(build.Name, opts); err != nil && !errors.IsNotFound(err) && !errors.IsConflict(err) {
+				return fmt.Errorf("could not delete build %s: %v", build.Name, err)
+			}
+			if err := waitForBuildDeletion(ctx, buildClient, build.Namespace, build.Name); err != nil {
+				return fmt.Errorf("could not wait for build %s to be deleted: %v", build.Name, err)
+			}
+			if _, err := buildClient.Builds(build.Namespace).Create(build); err != nil && !errors.IsAlreadyExists(err) {
+				return fmt.Errorf("could not recreate build %s: %v", build.Name, err)
+			}
+		}
 	}
-	err := waitForBuild(buildClient, build.Namespace, build.Name)
+	err := waitForBuild(ctx, buildClient, build.Namespace, build.Name)
 	if err == nil && len(artifactDir) > 0 {
 		if err := gatherSuccessfulBuildLog(buildClient, artifactDir, build.Namespace, build.Name); err != nil {
 			// log error but do not fail successful build
@@ -403,6 +390,29 @@ func handleBuild(buildClient BuildClient, build *buildapi.Build, dry bool, artif
 	// this will still be the err from waitForBuild
 	return err
 
+}
+
+func waitForBuildDeletion(ctx context.Context, client BuildClient, ns, name string) error {
+	ch := make(chan error)
+	go func() {
+		ch <- wait.ExponentialBackoff(wait.Backoff{
+			Duration: 10 * time.Millisecond, Factor: 2, Steps: 10,
+		}, func() (done bool, err error) {
+			if _, err := client.Builds(ns).Get(name, meta.GetOptions{}); err != nil {
+				if errors.IsNotFound(err) {
+					return true, nil
+				}
+				return false, err
+			}
+			return false, nil
+		})
+	}()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case err := <-ch:
+		return err
+	}
 }
 
 func isInfraReason(reason buildapi.StatusReason) bool {
@@ -434,9 +444,9 @@ func hintsAtInfraReason(logSnippet string) bool {
 		strings.Contains(logSnippet, "Error: Failed to synchronize cache for repo")
 }
 
-func waitForBuild(buildClient BuildClient, namespace, name string) error {
+func waitForBuild(ctx context.Context, buildClient BuildClient, namespace, name string) error {
 	for {
-		retry, err := waitForBuildOrTimeout(buildClient, namespace, name)
+		retry, err := waitForBuildOrTimeout(ctx, buildClient, namespace, name)
 		if err != nil {
 			return fmt.Errorf("could not wait for build: %v", err)
 		}
@@ -447,7 +457,7 @@ func waitForBuild(buildClient BuildClient, namespace, name string) error {
 	return nil
 }
 
-func waitForBuildOrTimeout(buildClient BuildClient, namespace, name string) (bool, error) {
+func waitForBuildOrTimeout(ctx context.Context, buildClient BuildClient, namespace, name string) (bool, error) {
 	isOK := func(b *buildapi.Build) bool {
 		return b.Status.Phase == buildapi.BuildPhaseComplete
 	}
@@ -485,10 +495,16 @@ func waitForBuildOrTimeout(buildClient BuildClient, namespace, name string) (boo
 		printBuildLogs(buildClient, build.Namespace, build.Name)
 		return false, appendLogToError(fmt.Errorf("the build %s failed with reason %s: %s", build.Name, build.Status.Reason, build.Status.Message), build.Status.LogSnippet)
 	}
-
+	done := ctx.Done()
 	ch := watcher.ResultChan()
 	for {
-		event, ok := <-ch
+		var event watch.Event
+		var ok bool
+		select {
+		case <-done:
+			return false, ctx.Err()
+		case event, ok = <-ch:
+		}
 		if !ok {
 			// restart
 			return true, nil

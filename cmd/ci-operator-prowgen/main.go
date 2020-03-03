@@ -21,7 +21,6 @@ import (
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/jobconfig"
 	jc "github.com/openshift/ci-tools/pkg/jobconfig"
-	"github.com/openshift/ci-tools/pkg/migrate"
 	"github.com/openshift/ci-tools/pkg/promotion"
 )
 
@@ -585,9 +584,7 @@ func generateJobs(
 
 		if element.Cron == nil {
 			presubmit := *generatePresubmitForTest(element.As, info, label, podSpec, true, configSpec.CanonicalGoRepository)
-			if migrate.Migrated(info.Org, info.Repo, info.Branch) {
-				presubmit.Cluster = build01Context
-			}
+			presubmit.Cluster = build01Context
 			presubmits[orgrepo] = append(presubmits[orgrepo], presubmit)
 		} else {
 			periodics = append(periodics, *generatePeriodicForTest(element.As, info, label, podSpec, true, *element.Cron, configSpec.CanonicalGoRepository))
@@ -613,9 +610,7 @@ func generateJobs(
 		}
 		podSpec := generateCiOperatorPodSpec(info, nil, presubmitTargets)
 		presubmit := *generatePresubmitForTest("images", info, label, podSpec, true, configSpec.CanonicalGoRepository)
-		if migrate.Migrated(info.Org, info.Repo, info.Branch) {
-			presubmit.Cluster = build01Context
-		}
+		presubmit.Cluster = build01Context
 		presubmits[orgrepo] = append(presubmits[orgrepo], presubmit)
 
 		if configSpec.PromotionConfiguration != nil {

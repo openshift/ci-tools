@@ -895,12 +895,14 @@ func TestGenerateJobs(t *testing.T) {
 			expected: &prowconfig.JobConfig{
 				PresubmitsStatic: map[string][]prowconfig.Presubmit{"organization/repository": {{
 					JobBase: prowconfig.JobBase{
-						Name:   "pull-ci-organization-repository-branch-derTest",
-						Labels: standardPresubmitJobLabels,
+						Name:    "pull-ci-organization-repository-branch-derTest",
+						Labels:  standardPresubmitJobLabels,
+						Cluster: build01Context,
 					}}, {
 					JobBase: prowconfig.JobBase{
-						Name:   "pull-ci-organization-repository-branch-leTest",
-						Labels: standardPresubmitJobLabels,
+						Name:    "pull-ci-organization-repository-branch-leTest",
+						Labels:  standardPresubmitJobLabels,
+						Cluster: build01Context,
 					}},
 				}},
 				PostsubmitsStatic: map[string][]prowconfig.Postsubmit{},
@@ -922,16 +924,19 @@ func TestGenerateJobs(t *testing.T) {
 			expected: &prowconfig.JobConfig{
 				PresubmitsStatic: map[string][]prowconfig.Presubmit{"organization/repository": {{
 					JobBase: prowconfig.JobBase{
-						Name:   "pull-ci-organization-repository-branch-derTest",
-						Labels: standardPresubmitJobLabels,
+						Name:    "pull-ci-organization-repository-branch-derTest",
+						Labels:  standardPresubmitJobLabels,
+						Cluster: build01Context,
 					}}, {
 					JobBase: prowconfig.JobBase{
-						Name:   "pull-ci-organization-repository-branch-leTest",
-						Labels: standardPresubmitJobLabels,
+						Name:    "pull-ci-organization-repository-branch-leTest",
+						Labels:  standardPresubmitJobLabels,
+						Cluster: build01Context,
 					}}, {
 					JobBase: prowconfig.JobBase{
-						Name:   "pull-ci-organization-repository-branch-images",
-						Labels: standardPresubmitJobLabels,
+						Name:    "pull-ci-organization-repository-branch-images",
+						Labels:  standardPresubmitJobLabels,
+						Cluster: build01Context,
 					}},
 				}},
 				PostsubmitsStatic: map[string][]prowconfig.Postsubmit{"organization/repository": {{
@@ -963,8 +968,9 @@ func TestGenerateJobs(t *testing.T) {
 			expected: &prowconfig.JobConfig{
 				PresubmitsStatic: map[string][]prowconfig.Presubmit{"organization/repository": {{
 					JobBase: prowconfig.JobBase{
-						Name:   "pull-ci-organization-repository-branch-oTeste",
-						Labels: standardPresubmitJobLabels,
+						Name:    "pull-ci-organization-repository-branch-oTeste",
+						Labels:  standardPresubmitJobLabels,
+						Cluster: build01Context,
 					}},
 				}},
 			},
@@ -986,8 +992,9 @@ func TestGenerateJobs(t *testing.T) {
 			expected: &prowconfig.JobConfig{
 				PresubmitsStatic: map[string][]prowconfig.Presubmit{"organization/repository": {{
 					JobBase: prowconfig.JobBase{
-						Name:   "pull-ci-organization-repository-branch-oTeste",
-						Labels: standardPresubmitJobLabels,
+						Name:    "pull-ci-organization-repository-branch-oTeste",
+						Labels:  standardPresubmitJobLabels,
+						Cluster: build01Context,
 					}},
 				}},
 			},
@@ -1006,8 +1013,9 @@ func TestGenerateJobs(t *testing.T) {
 			expected: &prowconfig.JobConfig{
 				PresubmitsStatic: map[string][]prowconfig.Presubmit{"organization/repository": {{
 					JobBase: prowconfig.JobBase{
-						Name:   "pull-ci-organization-repository-branch-images",
-						Labels: standardPresubmitJobLabels,
+						Name:    "pull-ci-organization-repository-branch-images",
+						Labels:  standardPresubmitJobLabels,
+						Cluster: build01Context,
 					}},
 				}},
 				PostsubmitsStatic: map[string][]prowconfig.Postsubmit{"organization/repository": {{
@@ -1034,8 +1042,9 @@ func TestGenerateJobs(t *testing.T) {
 			expected: &prowconfig.JobConfig{
 				PresubmitsStatic: map[string][]prowconfig.Presubmit{"organization/repository": {{
 					JobBase: prowconfig.JobBase{
-						Name:   "pull-ci-organization-repository-branch-images",
-						Labels: standardPresubmitJobLabels,
+						Name:    "pull-ci-organization-repository-branch-images",
+						Labels:  standardPresubmitJobLabels,
+						Cluster: build01Context,
 					}},
 				}},
 			},
@@ -1201,6 +1210,7 @@ tests:
     always_run: true
     branches:
     - branch
+    cluster: ci/api-build01-ci-devcluster-openshift-com:6443
     context: ci/prow/images
     decorate: true
     decoration_config:
@@ -1266,6 +1276,7 @@ tests:
     always_run: true
     branches:
     - branch
+    cluster: ci/api-build01-ci-devcluster-openshift-com:6443
     context: ci/prow/unit
     decorate: true
     decoration_config:
@@ -1406,6 +1417,7 @@ tests:
     always_run: true
     branches:
     - branch
+    cluster: ci/api-build01-ci-devcluster-openshift-com:6443
     context: ci/prow/rhel-images
     decorate: true
     decoration_config:
@@ -1473,6 +1485,7 @@ tests:
     always_run: true
     branches:
     - branch
+    cluster: ci/api-build01-ci-devcluster-openshift-com:6443
     context: ci/prow/rhel-unit
     decorate: true
     decoration_config:
@@ -1707,6 +1720,7 @@ tests:
     always_run: true
     branches:
     - branch
+    cluster: ci/api-build01-ci-devcluster-openshift-com:6443
     context: ci/prow/images
     decorate: true
     decoration_config:
@@ -1772,6 +1786,7 @@ tests:
     always_run: true
     branches:
     - branch
+    cluster: ci/api-build01-ci-devcluster-openshift-com:6443
     context: ci/prow/unit
     decorate: true
     decoration_config:

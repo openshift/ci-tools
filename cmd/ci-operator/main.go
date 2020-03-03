@@ -1470,9 +1470,13 @@ func getCloneSecretFromPath(cloneAuthType steps.CloneAuthType, secretPath string
 		// https://github.com/kubernetes/api/blob/master/core/v1/types.go#L5466-L5470
 		secret.Data[coreapi.SSHAuthPrivateKey] = data
 	} else if cloneAuthType == steps.CloneAuthTypeOAuth {
-		secret.Type = coreapi.SecretTypeOpaque
+		secret.Type = coreapi.SecretTypeBasicAuth
 		secret.Name = fmt.Sprintf("oauth-%s", hash)
 		secret.Data[steps.OauthSecretKey] = data
+
+		// Those keys will be used in a git source strategy build
+		secret.Data["username"] = data
+		secret.Data["password"] = data
 	}
 
 	return secret, nil

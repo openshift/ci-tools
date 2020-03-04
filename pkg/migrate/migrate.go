@@ -12,9 +12,7 @@ const (
 )
 
 var (
-	migratedRepos = sets.NewString(
-		"openshift/jenkins-openshift-login-plugin/*",
-	)
+	migratedRepos   = sets.NewString()
 	migratedRegexes []*regexp.Regexp
 )
 

@@ -15,7 +15,6 @@ var (
 	migratedRepos = sets.NewString(
 		"openshift/jenkins-openshift-login-plugin/*",
 		"openshift/installer/*",
-		"openshift/origin/*",
 		"ostreedev/ostree/.*",
 		"openshift-priv/csi-external-attacher/.*",
 		"openshift-priv/cluster-api-provider-azure/.*",

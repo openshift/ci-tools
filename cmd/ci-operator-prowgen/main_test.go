@@ -739,6 +739,391 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 				}},
 			},
 		},
+		{
+			info:    &prowgenInfo{Info: config.Info{Org: "organization", Repo: "repo", Branch: "branch"}},
+			release: "origin-v4.0",
+			test: ciop.TestStepConfiguration{
+				As:       "test",
+				Commands: "commands",
+				OpenshiftInstallerCustomTestImageClusterTestConfiguration: &ciop.OpenshiftInstallerCustomTestImageClusterTestConfiguration{
+					ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: "gcp"},
+					From:                     "pipeline:kubevirt-test",
+					NestedVirtImage:          "nested-virt-image-name",
+					EnableNestedVirt:         true,
+				},
+			},
+
+			expected: &kubeapi.PodSpec{
+				ServiceAccountName: "ci-operator",
+				Volumes: []kubeapi.Volume{
+					{
+						Name: "sentry-dsn",
+						VolumeSource: kubeapi.VolumeSource{
+							Secret: &kubeapi.SecretVolumeSource{SecretName: "sentry-dsn"},
+						},
+					},
+					{
+						Name: "apici-ci-operator-credentials",
+						VolumeSource: kubeapi.VolumeSource{
+							Secret: &kubeapi.SecretVolumeSource{SecretName: "apici-ci-operator-credentials", Items: []kubeapi.KeyToPath{{Key: "sa.ci-operator.apici.config", Path: "kubeconfig"}}},
+						},
+					},
+					{
+						Name: "pull-secret",
+						VolumeSource: kubeapi.VolumeSource{
+							Secret: &kubeapi.SecretVolumeSource{SecretName: "regcred"},
+						},
+					},
+					{
+						Name: "job-definition",
+						VolumeSource: kubeapi.VolumeSource{
+							ConfigMap: &kubeapi.ConfigMapVolumeSource{
+								LocalObjectReference: kubeapi.LocalObjectReference{
+									Name: "prow-job-cluster-launch-installer-custom-test-image",
+								},
+							},
+						},
+					},
+					{
+						Name: "cluster-profile",
+						VolumeSource: kubeapi.VolumeSource{
+							Projected: &kubeapi.ProjectedVolumeSource{
+								Sources: []kubeapi.VolumeProjection{
+									{
+										Secret: &kubeapi.SecretProjection{
+											LocalObjectReference: kubeapi.LocalObjectReference{
+												Name: "cluster-secrets-gcp",
+											},
+										},
+									},
+									{
+										ConfigMap: &kubeapi.ConfigMapProjection{
+											LocalObjectReference: kubeapi.LocalObjectReference{
+												Name: "cluster-profile-gcp",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					{
+						Name: "boskos",
+						VolumeSource: kubeapi.VolumeSource{
+							Secret: &kubeapi.SecretVolumeSource{SecretName: "boskos-credentials", Items: []kubeapi.KeyToPath{{Key: "password", Path: "password"}}},
+						},
+					},
+				},
+				Containers: []kubeapi.Container{{
+					Image:           "ci-operator:latest",
+					ImagePullPolicy: kubeapi.PullAlways,
+					Command:         []string{"ci-operator"},
+					Args: []string{
+						"--give-pr-author-access-to-namespace=true",
+						"--artifact-dir=$(ARTIFACTS)",
+						"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
+						"--resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org",
+						"--org=organization",
+						"--repo=repo",
+						"--branch=branch",
+						"--kubeconfig=/etc/apici/kubeconfig",
+						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
+						"--target=test",
+						"--secret-dir=/usr/local/test-cluster-profile",
+						"--template=/usr/local/test",
+						"--lease-server=https://boskos-ci.svc.ci.openshift.org",
+						"--lease-server-username=ci",
+						"--lease-server-password-file=/etc/boskos/password",
+					},
+					Resources: kubeapi.ResourceRequirements{
+						Requests: kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
+					},
+					Env: []kubeapi.EnvVar{
+						{
+							Name: "CONFIG_SPEC",
+							ValueFrom: &kubeapi.EnvVarSource{
+								ConfigMapKeyRef: &kubeapi.ConfigMapKeySelector{
+									LocalObjectReference: kubeapi.LocalObjectReference{
+										Name: "ci-operator-misc-configs",
+									},
+									Key: "organization-repo-branch.yaml",
+								},
+							},
+						},
+						{Name: "CLUSTER_TYPE", Value: "gcp"},
+						{Name: "JOB_NAME_SAFE", Value: "test"},
+						{Name: "TEST_COMMAND", Value: "commands"},
+						{Name: "TEST_IMAGESTREAM_TAG", Value: "pipeline:kubevirt-test"},
+						{Name: "CLUSTER_ENABLE_NESTED_VIRT", Value: "true"},
+						{Name: "CLUSTER_NESTED_VIRT_IMAGE", Value: "nested-virt-image-name"},
+					},
+					VolumeMounts: []kubeapi.VolumeMount{
+						{Name: "sentry-dsn", MountPath: "/etc/sentry-dsn", ReadOnly: true},
+						{Name: "apici-ci-operator-credentials", ReadOnly: true, MountPath: "/etc/apici"},
+						{Name: "pull-secret", ReadOnly: true, MountPath: "/etc/pull-secret"},
+						{Name: "boskos", ReadOnly: true, MountPath: "/etc/boskos"},
+						{Name: "cluster-profile", MountPath: "/usr/local/test-cluster-profile"},
+						{Name: "job-definition", MountPath: "/usr/local/test", SubPath: "cluster-launch-installer-custom-test-image.yaml"},
+					},
+				}},
+			},
+		},
+		{
+			info:    &prowgenInfo{Info: config.Info{Org: "organization", Repo: "repo", Branch: "branch"}},
+			release: "origin-v4.0",
+			test: ciop.TestStepConfiguration{
+				As:       "test",
+				Commands: "commands",
+				OpenshiftInstallerCustomTestImageClusterTestConfiguration: &ciop.OpenshiftInstallerCustomTestImageClusterTestConfiguration{
+					ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: "gcp"},
+					From:                     "pipeline:kubevirt-test",
+					NestedVirtImage:          "",
+					EnableNestedVirt:         false,
+				},
+			},
+
+			expected: &kubeapi.PodSpec{
+				ServiceAccountName: "ci-operator",
+				Volumes: []kubeapi.Volume{
+					{
+						Name: "sentry-dsn",
+						VolumeSource: kubeapi.VolumeSource{
+							Secret: &kubeapi.SecretVolumeSource{SecretName: "sentry-dsn"},
+						},
+					},
+					{
+						Name: "apici-ci-operator-credentials",
+						VolumeSource: kubeapi.VolumeSource{
+							Secret: &kubeapi.SecretVolumeSource{SecretName: "apici-ci-operator-credentials", Items: []kubeapi.KeyToPath{{Key: "sa.ci-operator.apici.config", Path: "kubeconfig"}}},
+						},
+					},
+					{
+						Name: "pull-secret",
+						VolumeSource: kubeapi.VolumeSource{
+							Secret: &kubeapi.SecretVolumeSource{SecretName: "regcred"},
+						},
+					},
+					{
+						Name: "job-definition",
+						VolumeSource: kubeapi.VolumeSource{
+							ConfigMap: &kubeapi.ConfigMapVolumeSource{
+								LocalObjectReference: kubeapi.LocalObjectReference{
+									Name: "prow-job-cluster-launch-installer-custom-test-image",
+								},
+							},
+						},
+					},
+					{
+						Name: "cluster-profile",
+						VolumeSource: kubeapi.VolumeSource{
+							Projected: &kubeapi.ProjectedVolumeSource{
+								Sources: []kubeapi.VolumeProjection{
+									{
+										Secret: &kubeapi.SecretProjection{
+											LocalObjectReference: kubeapi.LocalObjectReference{
+												Name: "cluster-secrets-gcp",
+											},
+										},
+									},
+									{
+										ConfigMap: &kubeapi.ConfigMapProjection{
+											LocalObjectReference: kubeapi.LocalObjectReference{
+												Name: "cluster-profile-gcp",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					{
+						Name: "boskos",
+						VolumeSource: kubeapi.VolumeSource{
+							Secret: &kubeapi.SecretVolumeSource{SecretName: "boskos-credentials", Items: []kubeapi.KeyToPath{{Key: "password", Path: "password"}}},
+						},
+					},
+				},
+				Containers: []kubeapi.Container{{
+					Image:           "ci-operator:latest",
+					ImagePullPolicy: kubeapi.PullAlways,
+					Command:         []string{"ci-operator"},
+					Args: []string{
+						"--give-pr-author-access-to-namespace=true",
+						"--artifact-dir=$(ARTIFACTS)",
+						"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
+						"--resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org",
+						"--org=organization",
+						"--repo=repo",
+						"--branch=branch",
+						"--kubeconfig=/etc/apici/kubeconfig",
+						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
+						"--target=test",
+						"--secret-dir=/usr/local/test-cluster-profile",
+						"--template=/usr/local/test",
+						"--lease-server=https://boskos-ci.svc.ci.openshift.org",
+						"--lease-server-username=ci",
+						"--lease-server-password-file=/etc/boskos/password",
+					},
+					Resources: kubeapi.ResourceRequirements{
+						Requests: kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
+					},
+					Env: []kubeapi.EnvVar{
+						{
+							Name: "CONFIG_SPEC",
+							ValueFrom: &kubeapi.EnvVarSource{
+								ConfigMapKeyRef: &kubeapi.ConfigMapKeySelector{
+									LocalObjectReference: kubeapi.LocalObjectReference{
+										Name: "ci-operator-misc-configs",
+									},
+									Key: "organization-repo-branch.yaml",
+								},
+							},
+						},
+						{Name: "CLUSTER_TYPE", Value: "gcp"},
+						{Name: "JOB_NAME_SAFE", Value: "test"},
+						{Name: "TEST_COMMAND", Value: "commands"},
+						{Name: "TEST_IMAGESTREAM_TAG", Value: "pipeline:kubevirt-test"},
+						{Name: "CLUSTER_ENABLE_NESTED_VIRT", Value: "false"},
+						{Name: "CLUSTER_NESTED_VIRT_IMAGE", Value: ""},
+					},
+					VolumeMounts: []kubeapi.VolumeMount{
+						{Name: "sentry-dsn", MountPath: "/etc/sentry-dsn", ReadOnly: true},
+						{Name: "apici-ci-operator-credentials", ReadOnly: true, MountPath: "/etc/apici"},
+						{Name: "pull-secret", ReadOnly: true, MountPath: "/etc/pull-secret"},
+						{Name: "boskos", ReadOnly: true, MountPath: "/etc/boskos"},
+						{Name: "cluster-profile", MountPath: "/usr/local/test-cluster-profile"},
+						{Name: "job-definition", MountPath: "/usr/local/test", SubPath: "cluster-launch-installer-custom-test-image.yaml"},
+					},
+				}},
+			},
+		},
+		{
+			info:    &prowgenInfo{Info: config.Info{Org: "organization", Repo: "repo", Branch: "branch"}},
+			release: "origin-v4.0",
+			test: ciop.TestStepConfiguration{
+				As:       "test",
+				Commands: "commands",
+				OpenshiftInstallerCustomTestImageClusterTestConfiguration: &ciop.OpenshiftInstallerCustomTestImageClusterTestConfiguration{
+					ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: "gcp"},
+					From:                     "pipeline:kubevirt-test",
+				},
+			},
+
+			expected: &kubeapi.PodSpec{
+				ServiceAccountName: "ci-operator",
+				Volumes: []kubeapi.Volume{
+					{
+						Name: "sentry-dsn",
+						VolumeSource: kubeapi.VolumeSource{
+							Secret: &kubeapi.SecretVolumeSource{SecretName: "sentry-dsn"},
+						},
+					},
+					{
+						Name: "apici-ci-operator-credentials",
+						VolumeSource: kubeapi.VolumeSource{
+							Secret: &kubeapi.SecretVolumeSource{SecretName: "apici-ci-operator-credentials", Items: []kubeapi.KeyToPath{{Key: "sa.ci-operator.apici.config", Path: "kubeconfig"}}},
+						},
+					},
+					{
+						Name: "pull-secret",
+						VolumeSource: kubeapi.VolumeSource{
+							Secret: &kubeapi.SecretVolumeSource{SecretName: "regcred"},
+						},
+					},
+					{
+						Name: "job-definition",
+						VolumeSource: kubeapi.VolumeSource{
+							ConfigMap: &kubeapi.ConfigMapVolumeSource{
+								LocalObjectReference: kubeapi.LocalObjectReference{
+									Name: "prow-job-cluster-launch-installer-custom-test-image",
+								},
+							},
+						},
+					},
+					{
+						Name: "cluster-profile",
+						VolumeSource: kubeapi.VolumeSource{
+							Projected: &kubeapi.ProjectedVolumeSource{
+								Sources: []kubeapi.VolumeProjection{
+									{
+										Secret: &kubeapi.SecretProjection{
+											LocalObjectReference: kubeapi.LocalObjectReference{
+												Name: "cluster-secrets-gcp",
+											},
+										},
+									},
+									{
+										ConfigMap: &kubeapi.ConfigMapProjection{
+											LocalObjectReference: kubeapi.LocalObjectReference{
+												Name: "cluster-profile-gcp",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					{
+						Name: "boskos",
+						VolumeSource: kubeapi.VolumeSource{
+							Secret: &kubeapi.SecretVolumeSource{SecretName: "boskos-credentials", Items: []kubeapi.KeyToPath{{Key: "password", Path: "password"}}},
+						},
+					},
+				},
+				Containers: []kubeapi.Container{{
+					Image:           "ci-operator:latest",
+					ImagePullPolicy: kubeapi.PullAlways,
+					Command:         []string{"ci-operator"},
+					Args: []string{
+						"--give-pr-author-access-to-namespace=true",
+						"--artifact-dir=$(ARTIFACTS)",
+						"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
+						"--resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org",
+						"--org=organization",
+						"--repo=repo",
+						"--branch=branch",
+						"--kubeconfig=/etc/apici/kubeconfig",
+						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
+						"--target=test",
+						"--secret-dir=/usr/local/test-cluster-profile",
+						"--template=/usr/local/test",
+						"--lease-server=https://boskos-ci.svc.ci.openshift.org",
+						"--lease-server-username=ci",
+						"--lease-server-password-file=/etc/boskos/password",
+					},
+					Resources: kubeapi.ResourceRequirements{
+						Requests: kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
+					},
+					Env: []kubeapi.EnvVar{
+						{
+							Name: "CONFIG_SPEC",
+							ValueFrom: &kubeapi.EnvVarSource{
+								ConfigMapKeyRef: &kubeapi.ConfigMapKeySelector{
+									LocalObjectReference: kubeapi.LocalObjectReference{
+										Name: "ci-operator-misc-configs",
+									},
+									Key: "organization-repo-branch.yaml",
+								},
+							},
+						},
+						{Name: "CLUSTER_TYPE", Value: "gcp"},
+						{Name: "JOB_NAME_SAFE", Value: "test"},
+						{Name: "TEST_COMMAND", Value: "commands"},
+						{Name: "TEST_IMAGESTREAM_TAG", Value: "pipeline:kubevirt-test"},
+						{Name: "CLUSTER_ENABLE_NESTED_VIRT", Value: "false"},
+						{Name: "CLUSTER_NESTED_VIRT_IMAGE", Value: ""},
+					},
+					VolumeMounts: []kubeapi.VolumeMount{
+						{Name: "sentry-dsn", MountPath: "/etc/sentry-dsn", ReadOnly: true},
+						{Name: "apici-ci-operator-credentials", ReadOnly: true, MountPath: "/etc/apici"},
+						{Name: "pull-secret", ReadOnly: true, MountPath: "/etc/pull-secret"},
+						{Name: "boskos", ReadOnly: true, MountPath: "/etc/boskos"},
+						{Name: "cluster-profile", MountPath: "/usr/local/test-cluster-profile"},
+						{Name: "job-definition", MountPath: "/usr/local/test", SubPath: "cluster-launch-installer-custom-test-image.yaml"},
+					},
+				}},
+			},
+		},
 	}
 
 	for _, tc := range tests {

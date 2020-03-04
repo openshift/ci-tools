@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/ghodss/yaml"
@@ -291,11 +292,6 @@ func generatePodSpecOthers(info *prowgenInfo, release string, test *cioperatorap
 		needsLeaseServer = true
 		clusterProfile = conf.ClusterProfile
 		testImageStreamTag = conf.From
-	} else if conf := test.OpenshiftInstallerGCPNestedVirtCustomTestImageClusterTestConfiguration; conf != nil {
-		template = "cluster-launch-installer-gcp-nested-virt-custom-test-image"
-		needsLeaseServer = true
-		clusterProfile = conf.ClusterProfile
-		testImageStreamTag = conf.From
 	}
 	var targetCloud string
 	switch clusterProfile {
@@ -409,6 +405,12 @@ func generatePodSpecOthers(info *prowgenInfo, release string, test *cioperatorap
 				Value: conf.PreviousRPMDeps},
 			kubeapi.EnvVar{Name: "PREVIOUS_RPM_REPO",
 				Value: fmt.Sprintf("https://rpms.svc.ci.openshift.org/openshift-origin-v%s/", conf.PreviousVersion)})
+	}
+	if conf := test.OpenshiftInstallerCustomTestImageClusterTestConfiguration; conf != nil {
+		container.Env = append(
+			container.Env,
+			kubeapi.EnvVar{Name: "CLUSTER_ENABLE_NESTED_VIRT", Value: strconv.FormatBool(conf.EnableNestedVirt)},
+			kubeapi.EnvVar{Name: "CLUSTER_NESTED_VIRT_IMAGE", Value: conf.NestedVirtImage})
 	}
 	return podSpec
 }

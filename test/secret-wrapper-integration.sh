@@ -30,7 +30,7 @@ fail() {
 
 test_output() {
     local out
-    if ! out=$(diff /dev/fd/3 /dev/fd/4 3<<<"$1" 4<<<"$2"); then
+    if ! out=$(diff /dev/fd/3 /dev/fd/4 3<<<"$1" 4<<<"${SECRET}"); then
         echo '[ERROR] incorrect dry-run output:'
         echo "${out}"
         return 1
@@ -61,16 +61,16 @@ echo '[INFO] Running `secret-wrapper true`...'
 if ! out=$(secret-wrapper --dry-run true 2> "${ERR}"); then
     fail "[ERROR] secret-wrapper failed:"
 fi
-test_output "${out}" "${SECRET}"
+test_output "${out}"
 echo '[INFO] Running `secret-wrapper false`...'
 if out=$(secret-wrapper --dry-run false 2> "${ERR}"); then
     fail "[ERROR] secret-wrapper did not fail:"
 fi
-test_output "${out}" ""
+test_output "${out}"
 echo '[INFO] Running `secret-wrapper sleep 1d` and sending SIGINT...'
 out=$(test_signal INT)
-test_output "${out}" ""
+test_output "${out}"
 echo '[INFO] Running `secret-wrapper sleep 1d` and sending SIGTERM...'
 out=$(test_signal TERM)
-test_output "${out}" ""
+test_output "${out}"
 echo "[INFO] Success"

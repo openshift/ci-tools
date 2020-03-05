@@ -12,6 +12,8 @@ import (
 
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 
+	"k8s.io/test-infra/prow/errorutil"
+
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/util"
 )
@@ -66,32 +68,14 @@ func (o *options) complete() error {
 }
 
 func (o *options) run() error {
+	var errs []error
 	if err := execCmd(o.cmd); err != nil {
-		return fmt.Errorf("failed to execute wrapped command: %v", err)
+		errs = append(errs, fmt.Errorf("failed to execute wrapped command: %v", err))
 	}
-	if _, err := os.Stat(o.dir); err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return fmt.Errorf("failed to stat directory %q: %v", o.dir, err)
+	if err := createSecret(o.client, o.name, o.dir, o.dry); err != nil {
+		errs = append(errs, fmt.Errorf("failed to create/update secret: %v", err))
 	}
-	secret, err := util.SecretFromDir(o.dir)
-	if err != nil {
-		return fmt.Errorf("failed to generate secret: %v", err)
-	}
-	secret.Name = o.name
-	if o.dry {
-		logger := steps.DryLogger{}
-		logger.AddObject(secret)
-		if err := logger.Log(); err != nil {
-			return fmt.Errorf("failed to log secret: %v", err)
-		}
-	} else {
-		if _, err := o.client.Update(secret); err != nil {
-			return fmt.Errorf("failed to update secret: %v", err)
-		}
-	}
-	return nil
+	return errorutil.NewAggregate(errs...)
 }
 
 func loadClient(namespace string) (coreclientset.SecretInterface, error) {
@@ -104,6 +88,30 @@ func loadClient(namespace string) (coreclientset.SecretInterface, error) {
 		return nil, fmt.Errorf("failed to create client: %v", err)
 	}
 	return client.Secrets(namespace), nil
+}
+
+func createSecret(client coreclientset.SecretInterface, name, dir string, dry bool) error {
+	if _, err := os.Stat(dir); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("failed to stat directory %q: %v", dir, err)
+	}
+	secret, err := util.SecretFromDir(dir)
+	if err != nil {
+		return fmt.Errorf("failed to generate secret: %v", err)
+	}
+	secret.Name = name
+	if dry {
+		logger := steps.DryLogger{}
+		logger.AddObject(secret)
+		if err := logger.Log(); err != nil {
+			return fmt.Errorf("failed to log secret: %v", err)
+		}
+	} else if _, err := client.Update(secret); err != nil {
+		return fmt.Errorf("failed to update secret: %v", err)
+	}
+	return nil
 }
 
 func execCmd(argv []string) error {

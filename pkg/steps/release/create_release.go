@@ -200,16 +200,21 @@ func (s *assembleReleaseStep) Run(ctx context.Context, dry bool) error {
 	cliExists := false
 	// waiting for importing the images
 	// 2~3 mins: build01 on aws imports images from api.ci on gcp
-	log.Printf("waiting for importing cluster-version-operator and cli ...")
-	if err := wait.Poll(10*time.Second, 5*time.Minute, func() (bool, error) {
+	importCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
+	if err := wait.PollImmediateUntil(10*time.Second, func() (bool, error) {
 		stable, err = s.imageClient.ImageStreams(s.jobSpec.Namespace).Get(streamName, meta.GetOptions{})
 		if err != nil {
 			return false, err
 		}
 		cvo, cvoExists = util.ResolvePullSpec(stable, "cluster-version-operator", true)
 		_, cliExists = util.ResolvePullSpec(stable, "cli", true)
-		return cvoExists && cliExists, nil
-	}); err != nil {
+		ret := cvoExists && cliExists
+		if !ret {
+			log.Printf("waiting for importing cluster-version-operator and cli ...")
+		}
+		return ret, nil
+	}, importCtx.Done()); err != nil {
 		if wait.ErrWaitTimeout == err {
 			if !cliExists {
 				return fmt.Errorf("no 'cli' image was tagged into the %s stream, that image is required for building a release", streamName)

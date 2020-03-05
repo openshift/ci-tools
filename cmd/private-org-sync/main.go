@@ -320,7 +320,7 @@ func (g gitSyncer) mirror(repoDir string, src, dst location) error {
 	}
 
 	push := func() (retry func() error, err error) {
-		cmd := []string{"push"}
+		cmd := []string{"push", "--tags"}
 		var logDryRun string
 		if !g.confirm {
 			cmd = append(cmd, "--dry-run")

@@ -173,7 +173,7 @@ const unshallow = maxExpDepth + 1
 
 func makeFetch(logger *logrus.Entry, repoDir string, git gitFunc, remote, branch string, expDepth int) func() error {
 	return func() error {
-		fetch := []string{"fetch", remote, branch}
+		fetch := []string{"fetch", "--tags", remote, branch}
 
 		depthArg := "full fetch" // no depth arg is used when doing a full fetch
 		if expDepth != fullFetch {

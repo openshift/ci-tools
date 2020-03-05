@@ -109,7 +109,7 @@ func (s *podStep) Run(ctx context.Context, dry bool) error {
 		s.subTests = testCaseNotifier.SubTests(s.Description() + " - ")
 	}()
 
-	if err := waitForPodCompletion(s.podClient.Pods(s.jobSpec.Namespace), pod.Name, testCaseNotifier, s.config.SkipLogs); err != nil {
+	if err := waitForPodCompletion(context.TODO(), s.podClient.Pods(s.jobSpec.Namespace), pod.Name, testCaseNotifier, s.config.SkipLogs); err != nil {
 		return fmt.Errorf("%s %q failed: %v", s.name, pod.Name, err)
 	}
 	return nil
@@ -282,10 +282,10 @@ func getSecretVolumeMountFromSecret(secretMountPath string) []coreapi.VolumeMoun
 // PodStep and is intended for other steps that may need to run transient actions.
 // This pod will not be able to gather artifacts, nor will it report log messages
 // unless it fails.
-func RunPod(podClient PodClient, pod *coreapi.Pod) error {
+func RunPod(ctx context.Context, podClient PodClient, pod *coreapi.Pod) error {
 	pod, err := createOrRestartPod(podClient.Pods(pod.Namespace), pod)
 	if err != nil {
 		return err
 	}
-	return waitForPodCompletion(podClient.Pods(pod.Namespace), pod.Name, nil, true)
+	return waitForPodCompletion(ctx, podClient.Pods(pod.Namespace), pod.Name, nil, true)
 }

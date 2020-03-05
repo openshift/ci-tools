@@ -126,6 +126,15 @@ func (s *multiStageTestStep) Run(ctx context.Context, dry bool) error {
 	if err := s.setupRBAC(); err != nil {
 		return fmt.Errorf("failed to create RBAC objects: %v", err)
 	}
+	go func() {
+		<-ctx.Done()
+		log.Printf("cleanup: Deleting pods with label %s=%s", multiStageTestLabel, s.name)
+		if !s.dry {
+			if err := deletePods(s.podClient.Pods(s.jobSpec.Namespace), s.name); err != nil {
+				log.Printf("failed to delete pods with label %s=%s: %v", multiStageTestLabel, s.name, err)
+			}
+		}
+	}()
 	var errs []error
 	if err := s.runSteps(ctx, s.pre, true); err != nil {
 		errs = append(errs, fmt.Errorf("%q pre steps failed: %v", s.name, err))
@@ -353,15 +362,6 @@ func addProfile(name string, profile api.ClusterProfile, pod *coreapi.Pod) {
 }
 
 func (s *multiStageTestStep) runPods(ctx context.Context, pods []coreapi.Pod, shortCircuit bool) error {
-	go func() {
-		<-ctx.Done()
-		log.Printf("cleanup: Deleting pods with label %s=%s", multiStageTestLabel, s.name)
-		if !s.dry {
-			if err := deletePods(s.podClient.Pods(s.jobSpec.Namespace), s.name); err != nil {
-				log.Printf("failed to delete pods with label %s=%s: %v", multiStageTestLabel, s.name, err)
-			}
-		}
-	}()
 	var errs []error
 	for _, pod := range pods {
 		log.Printf("Executing %q", pod.Name)

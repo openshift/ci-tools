@@ -182,7 +182,7 @@ func (s *multiStageTestStep) setupRBAC() error {
 			APIGroups:     []string{""},
 			Resources:     []string{"secrets"},
 			ResourceNames: []string{s.name},
-			Verbs:         []string{"update"},
+			Verbs:         []string{"get", "update"},
 		}, {
 			APIGroups: []string{"", "image.openshift.io"},
 			Resources: []string{"imagestreams/layers"},

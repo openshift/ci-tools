@@ -1963,6 +1963,7 @@
           "secrets"
         ],
         "verbs": [
+          "get",
           "update"
         ]
       },

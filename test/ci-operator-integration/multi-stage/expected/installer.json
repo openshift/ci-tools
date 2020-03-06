@@ -2521,6 +2521,7 @@
           "secrets"
         ],
         "verbs": [
+          "get",
           "update"
         ]
       },
@@ -2572,6 +2573,7 @@
           "secrets"
         ],
         "verbs": [
+          "get",
           "update"
         ]
       },

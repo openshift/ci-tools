@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -34,10 +35,12 @@ func main() {
 }
 
 type options struct {
-	dry       bool
-	dir, name string
-	cmd       []string
-	client    coreclientset.SecretInterface
+	dry     bool
+	name    string
+	srcPath string
+	dstPath string
+	cmd     []string
+	client  coreclientset.SecretInterface
 }
 
 func bindOptions(flag *flag.FlagSet) *options {
@@ -50,6 +53,11 @@ func (o *options) complete() error {
 	if len(o.cmd) == 0 {
 		return fmt.Errorf("a command is required")
 	}
+	if o.srcPath = os.Getenv("SHARED_DIR"); o.srcPath == "" {
+		return fmt.Errorf("environment variable SHARED_DIR is empty")
+	}
+	o.dstPath = filepath.Join(os.TempDir(), "secret")
+	os.Setenv("SHARED_DIR", o.dstPath)
 	var ns string
 	if ns = os.Getenv("NAMESPACE"); ns == "" {
 		return fmt.Errorf("environment variable NAMESPACE is empty")
@@ -57,7 +65,6 @@ func (o *options) complete() error {
 	if o.name = os.Getenv("JOB_NAME_SAFE"); o.name == "" {
 		return fmt.Errorf("environment variable JOB_NAME_SAFE is empty")
 	}
-	o.dir = filepath.Join(os.TempDir(), "secret")
 	if !o.dry {
 		var err error
 		if o.client, err = loadClient(ns); err != nil {
@@ -68,11 +75,14 @@ func (o *options) complete() error {
 }
 
 func (o *options) run() error {
+	if err := copyDir(o.dstPath, o.srcPath); err != nil {
+		return fmt.Errorf("failed to copy secret mount: %v", err)
+	}
 	var errs []error
 	if err := execCmd(o.cmd); err != nil {
 		errs = append(errs, fmt.Errorf("failed to execute wrapped command: %v", err))
 	}
-	if err := createSecret(o.client, o.name, o.dir, o.dry); err != nil {
+	if err := createSecret(o.client, o.name, o.dstPath, o.dry); err != nil {
 		errs = append(errs, fmt.Errorf("failed to create/update secret: %v", err))
 	}
 	return errorutil.NewAggregate(errs...)
@@ -90,26 +100,39 @@ func loadClient(namespace string) (coreclientset.SecretInterface, error) {
 	return client.Secrets(namespace), nil
 }
 
-func createSecret(client coreclientset.SecretInterface, name, dir string, dry bool) error {
-	if _, err := os.Stat(dir); err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return fmt.Errorf("failed to stat directory %q: %v", dir, err)
+func copyDir(dst, src string) error {
+	if err := os.MkdirAll(dst, 0770); err != nil {
+		return err
 	}
-	secret, err := util.SecretFromDir(dir)
+	dir, err := os.Open(src)
 	if err != nil {
-		return fmt.Errorf("failed to generate secret: %v", err)
+		return err
 	}
-	secret.Name = name
-	if dry {
-		logger := steps.DryLogger{}
-		logger.AddObject(secret)
-		if err := logger.Log(); err != nil {
-			return fmt.Errorf("failed to log secret: %v", err)
+	files, err := dir.Readdirnames(-1)
+	if err != nil {
+		return err
+	}
+	for _, f := range files {
+		srcPath := filepath.Join(src, f)
+		if stat, err := os.Stat(srcPath); err != nil {
+			return err
+		} else if stat.IsDir() {
+			continue
 		}
-	} else if _, err := client.Update(secret); err != nil {
-		return fmt.Errorf("failed to update secret: %v", err)
+		srcFD, err := os.Open(srcPath)
+		if err != nil {
+			return err
+		}
+		defer srcFD.Close()
+		dstFD, err := os.Create(filepath.Join(dst, f))
+		if err != nil {
+			return err
+		}
+		defer dstFD.Close()
+		_, err = io.Copy(dstFD, srcFD)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -134,4 +157,28 @@ func execCmd(argv []string) error {
 		}
 	}()
 	return proc.Run()
+}
+
+func createSecret(client coreclientset.SecretInterface, name, dir string, dry bool) error {
+	if _, err := os.Stat(dir); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("failed to stat directory %q: %v", dir, err)
+	}
+	secret, err := util.SecretFromDir(dir)
+	if err != nil {
+		return fmt.Errorf("failed to generate secret: %v", err)
+	}
+	secret.Name = name
+	if dry {
+		logger := steps.DryLogger{}
+		logger.AddObject(secret)
+		if err := logger.Log(); err != nil {
+			return fmt.Errorf("failed to log secret: %v", err)
+		}
+	} else if _, err := client.Update(secret); err != nil {
+		return fmt.Errorf("failed to update secret: %v", err)
+	}
+	return nil
 }

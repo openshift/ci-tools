@@ -3,8 +3,6 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"io/ioutil"
 	"log"
 	"os"
@@ -900,22 +898,10 @@ func TestGenerateJobs(t *testing.T) {
 						Name:   "pull-ci-organization-repository-branch-derTest",
 						Labels: standardPresubmitJobLabels,
 					}}, {
-					Optional: true,
-					JobBase: prowconfig.JobBase{
-						Name:    "pull-ci-organization-repository-branch-derTest-build01",
-						Labels:  standardPresubmitJobLabels,
-						Cluster: "ci/api-build01-ci-devcluster-openshift-com:6443",
-					}, Reporter: prowconfig.Reporter{SkipReport: true}}, {
 					JobBase: prowconfig.JobBase{
 						Name:   "pull-ci-organization-repository-branch-leTest",
 						Labels: standardPresubmitJobLabels,
-					}}, {
-					Optional: true,
-					JobBase: prowconfig.JobBase{
-						Name:    "pull-ci-organization-repository-branch-leTest-build01",
-						Labels:  standardPresubmitJobLabels,
-						Cluster: "ci/api-build01-ci-devcluster-openshift-com:6443",
-					}, Reporter: prowconfig.Reporter{SkipReport: true}},
+					}},
 				}},
 				PostsubmitsStatic: map[string][]prowconfig.Postsubmit{},
 			},
@@ -939,32 +925,14 @@ func TestGenerateJobs(t *testing.T) {
 						Name:   "pull-ci-organization-repository-branch-derTest",
 						Labels: standardPresubmitJobLabels,
 					}}, {
-					Optional: true,
-					JobBase: prowconfig.JobBase{
-						Name:    "pull-ci-organization-repository-branch-derTest-build01",
-						Labels:  standardPresubmitJobLabels,
-						Cluster: "ci/api-build01-ci-devcluster-openshift-com:6443",
-					}, Reporter: prowconfig.Reporter{SkipReport: true}}, {
 					JobBase: prowconfig.JobBase{
 						Name:   "pull-ci-organization-repository-branch-leTest",
 						Labels: standardPresubmitJobLabels,
 					}}, {
-					Optional: true,
-					JobBase: prowconfig.JobBase{
-						Name:    "pull-ci-organization-repository-branch-leTest-build01",
-						Labels:  standardPresubmitJobLabels,
-						Cluster: "ci/api-build01-ci-devcluster-openshift-com:6443",
-					}, Reporter: prowconfig.Reporter{SkipReport: true}}, {
 					JobBase: prowconfig.JobBase{
 						Name:   "pull-ci-organization-repository-branch-images",
 						Labels: standardPresubmitJobLabels,
-					}}, {
-					Optional: true,
-					JobBase: prowconfig.JobBase{
-						Name:    "pull-ci-organization-repository-branch-images-build01",
-						Labels:  standardPresubmitJobLabels,
-						Cluster: "ci/api-build01-ci-devcluster-openshift-com:6443",
-					}, Reporter: prowconfig.Reporter{SkipReport: true}},
+					}},
 				}},
 				PostsubmitsStatic: map[string][]prowconfig.Postsubmit{"organization/repository": {{
 					JobBase: prowconfig.JobBase{
@@ -1040,13 +1008,7 @@ func TestGenerateJobs(t *testing.T) {
 					JobBase: prowconfig.JobBase{
 						Name:   "pull-ci-organization-repository-branch-images",
 						Labels: standardPresubmitJobLabels,
-					}}, {
-					Optional: true,
-					JobBase: prowconfig.JobBase{
-						Name:    "pull-ci-organization-repository-branch-images-build01",
-						Labels:  standardPresubmitJobLabels,
-						Cluster: "ci/api-build01-ci-devcluster-openshift-com:6443",
-					}, Reporter: prowconfig.Reporter{SkipReport: true}},
+					}},
 				}},
 				PostsubmitsStatic: map[string][]prowconfig.Postsubmit{"organization/repository": {{
 					JobBase: prowconfig.JobBase{
@@ -1074,13 +1036,7 @@ func TestGenerateJobs(t *testing.T) {
 					JobBase: prowconfig.JobBase{
 						Name:   "pull-ci-organization-repository-branch-images",
 						Labels: standardPresubmitJobLabels,
-					}}, {
-					Optional: true,
-					JobBase: prowconfig.JobBase{
-						Name:    "pull-ci-organization-repository-branch-images-build01",
-						Labels:  standardPresubmitJobLabels,
-						Cluster: "ci/api-build01-ci-devcluster-openshift-com:6443",
-					}, Reporter: prowconfig.Reporter{SkipReport: true}},
+					}},
 				}},
 			},
 		},
@@ -1093,18 +1049,9 @@ func TestGenerateJobs(t *testing.T) {
 		pruneForTests(jobConfig) // prune the fields that are tested in TestGeneratePre/PostsubmitForTest
 
 		if !equality.Semantic.DeepEqual(jobConfig, tc.expected) {
-			t.Errorf("testcase: %s\nexpected job config diff:\n%s", tc.id, compare(tc.expected, jobConfig))
+			t.Errorf("testcase: %s\nexpected job config diff:\n%s", tc.id, diff.ObjectDiff(tc.expected, jobConfig))
 		}
 	}
-}
-
-func compare(a, b *prowconfig.JobConfig) string {
-	return cmp.Diff(
-		a, b,
-		cmpopts.IgnoreUnexported(prowconfig.Presubmit{}),
-		cmpopts.IgnoreUnexported(prowconfig.Brancher{}),
-		cmpopts.IgnoreUnexported(prowconfig.RegexpChangeMatcher{}),
-	)
 }
 
 func pruneForTests(jobConfig *prowconfig.JobConfig) {
@@ -1319,74 +1266,6 @@ tests:
     always_run: true
     branches:
     - branch
-    cluster: ci/api-build01-ci-devcluster-openshift-com:6443
-    context: ci/prow/images-build01
-    decorate: true
-    decoration_config:
-      skip_cloning: true
-    labels:
-      ci-operator.openshift.io/prowgen-controlled: "true"
-      pj-rehearse.openshift.io/can-be-rehearsed: "true"
-    name: pull-ci-super-duper-branch-images-build01
-    optional: true
-    rerun_command: /test images-build01
-    skip_report: true
-    spec:
-      containers:
-      - args:
-        - --artifact-dir=$(ARTIFACTS)
-        - --branch=branch
-        - --give-pr-author-access-to-namespace=true
-        - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
-        - --kubeconfig=/etc/apici/kubeconfig
-        - --org=super
-        - --repo=duper
-        - --resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org
-        - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
-        - --target=[images]
-        command:
-        - ci-operator
-        env:
-        - name: CONFIG_SPEC
-          valueFrom:
-            configMapKeyRef:
-              key: super-duper-branch.yaml
-              name: ci-operator-misc-configs
-        image: ci-operator:latest
-        imagePullPolicy: Always
-        name: ""
-        resources:
-          requests:
-            cpu: 10m
-        volumeMounts:
-        - mountPath: /etc/apici
-          name: apici-ci-operator-credentials
-          readOnly: true
-        - mountPath: /etc/pull-secret
-          name: pull-secret
-          readOnly: true
-        - mountPath: /etc/sentry-dsn
-          name: sentry-dsn
-          readOnly: true
-      serviceAccountName: ci-operator
-      volumes:
-      - name: apici-ci-operator-credentials
-        secret:
-          items:
-          - key: sa.ci-operator.apici.config
-            path: kubeconfig
-          secretName: apici-ci-operator-credentials
-      - name: pull-secret
-        secret:
-          secretName: regcred
-      - name: sentry-dsn
-        secret:
-          secretName: sentry-dsn
-    trigger: (?m)^/test( | .* )images-build01,?($|\s.*)
-  - agent: kubernetes
-    always_run: true
-    branches:
-    - branch
     context: ci/prow/unit
     decorate: true
     decoration_config:
@@ -1448,74 +1327,6 @@ tests:
         secret:
           secretName: sentry-dsn
     trigger: (?m)^/test( | .* )unit,?($|\s.*)
-  - agent: kubernetes
-    always_run: true
-    branches:
-    - branch
-    cluster: ci/api-build01-ci-devcluster-openshift-com:6443
-    context: ci/prow/unit-build01
-    decorate: true
-    decoration_config:
-      skip_cloning: true
-    labels:
-      ci-operator.openshift.io/prowgen-controlled: "true"
-      pj-rehearse.openshift.io/can-be-rehearsed: "true"
-    name: pull-ci-super-duper-branch-unit-build01
-    optional: true
-    rerun_command: /test unit-build01
-    skip_report: true
-    spec:
-      containers:
-      - args:
-        - --artifact-dir=$(ARTIFACTS)
-        - --branch=branch
-        - --give-pr-author-access-to-namespace=true
-        - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
-        - --kubeconfig=/etc/apici/kubeconfig
-        - --org=super
-        - --repo=duper
-        - --resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org
-        - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
-        - --target=unit
-        command:
-        - ci-operator
-        env:
-        - name: CONFIG_SPEC
-          valueFrom:
-            configMapKeyRef:
-              key: super-duper-branch.yaml
-              name: ci-operator-misc-configs
-        image: ci-operator:latest
-        imagePullPolicy: Always
-        name: ""
-        resources:
-          requests:
-            cpu: 10m
-        volumeMounts:
-        - mountPath: /etc/apici
-          name: apici-ci-operator-credentials
-          readOnly: true
-        - mountPath: /etc/pull-secret
-          name: pull-secret
-          readOnly: true
-        - mountPath: /etc/sentry-dsn
-          name: sentry-dsn
-          readOnly: true
-      serviceAccountName: ci-operator
-      volumes:
-      - name: apici-ci-operator-credentials
-        secret:
-          items:
-          - key: sa.ci-operator.apici.config
-            path: kubeconfig
-          secretName: apici-ci-operator-credentials
-      - name: pull-secret
-        secret:
-          secretName: regcred
-      - name: sentry-dsn
-        secret:
-          secretName: sentry-dsn
-    trigger: (?m)^/test( | .* )unit-build01,?($|\s.*)
 `),
 		}, {
 			id:        "Using a variant config, one test and images, one existing job. Expect one presubmit, pre/post submit images jobs. Existing job should not be changed.",
@@ -1662,76 +1473,6 @@ tests:
     always_run: true
     branches:
     - branch
-    cluster: ci/api-build01-ci-devcluster-openshift-com:6443
-    context: ci/prow/rhel-images-build01
-    decorate: true
-    decoration_config:
-      skip_cloning: true
-    labels:
-      ci-operator.openshift.io/prowgen-controlled: "true"
-      ci-operator.openshift.io/variant: rhel
-      pj-rehearse.openshift.io/can-be-rehearsed: "true"
-    name: pull-ci-super-duper-branch-rhel-images-build01
-    optional: true
-    rerun_command: /test rhel-images-build01
-    skip_report: true
-    spec:
-      containers:
-      - args:
-        - --artifact-dir=$(ARTIFACTS)
-        - --branch=branch
-        - --give-pr-author-access-to-namespace=true
-        - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
-        - --kubeconfig=/etc/apici/kubeconfig
-        - --org=super
-        - --repo=duper
-        - --resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org
-        - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
-        - --target=[images]
-        - --variant=rhel
-        command:
-        - ci-operator
-        env:
-        - name: CONFIG_SPEC
-          valueFrom:
-            configMapKeyRef:
-              key: super-duper-branch__rhel.yaml
-              name: ci-operator-misc-configs
-        image: ci-operator:latest
-        imagePullPolicy: Always
-        name: ""
-        resources:
-          requests:
-            cpu: 10m
-        volumeMounts:
-        - mountPath: /etc/apici
-          name: apici-ci-operator-credentials
-          readOnly: true
-        - mountPath: /etc/pull-secret
-          name: pull-secret
-          readOnly: true
-        - mountPath: /etc/sentry-dsn
-          name: sentry-dsn
-          readOnly: true
-      serviceAccountName: ci-operator
-      volumes:
-      - name: apici-ci-operator-credentials
-        secret:
-          items:
-          - key: sa.ci-operator.apici.config
-            path: kubeconfig
-          secretName: apici-ci-operator-credentials
-      - name: pull-secret
-        secret:
-          secretName: regcred
-      - name: sentry-dsn
-        secret:
-          secretName: sentry-dsn
-    trigger: (?m)^/test( | .* )rhel-images-build01,?($|\s.*)
-  - agent: kubernetes
-    always_run: true
-    branches:
-    - branch
     context: ci/prow/rhel-unit
     decorate: true
     decoration_config:
@@ -1795,76 +1536,6 @@ tests:
         secret:
           secretName: sentry-dsn
     trigger: (?m)^/test( | .* )rhel-unit,?($|\s.*)
-  - agent: kubernetes
-    always_run: true
-    branches:
-    - branch
-    cluster: ci/api-build01-ci-devcluster-openshift-com:6443
-    context: ci/prow/rhel-unit-build01
-    decorate: true
-    decoration_config:
-      skip_cloning: true
-    labels:
-      ci-operator.openshift.io/prowgen-controlled: "true"
-      ci-operator.openshift.io/variant: rhel
-      pj-rehearse.openshift.io/can-be-rehearsed: "true"
-    name: pull-ci-super-duper-branch-rhel-unit-build01
-    optional: true
-    rerun_command: /test rhel-unit-build01
-    skip_report: true
-    spec:
-      containers:
-      - args:
-        - --artifact-dir=$(ARTIFACTS)
-        - --branch=branch
-        - --give-pr-author-access-to-namespace=true
-        - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
-        - --kubeconfig=/etc/apici/kubeconfig
-        - --org=super
-        - --repo=duper
-        - --resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org
-        - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
-        - --target=unit
-        - --variant=rhel
-        command:
-        - ci-operator
-        env:
-        - name: CONFIG_SPEC
-          valueFrom:
-            configMapKeyRef:
-              key: super-duper-branch__rhel.yaml
-              name: ci-operator-misc-configs
-        image: ci-operator:latest
-        imagePullPolicy: Always
-        name: ""
-        resources:
-          requests:
-            cpu: 10m
-        volumeMounts:
-        - mountPath: /etc/apici
-          name: apici-ci-operator-credentials
-          readOnly: true
-        - mountPath: /etc/pull-secret
-          name: pull-secret
-          readOnly: true
-        - mountPath: /etc/sentry-dsn
-          name: sentry-dsn
-          readOnly: true
-      serviceAccountName: ci-operator
-      volumes:
-      - name: apici-ci-operator-credentials
-        secret:
-          items:
-          - key: sa.ci-operator.apici.config
-            path: kubeconfig
-          secretName: apici-ci-operator-credentials
-      - name: pull-secret
-        secret:
-          secretName: regcred
-      - name: sentry-dsn
-        secret:
-          secretName: sentry-dsn
-    trigger: (?m)^/test( | .* )rhel-unit-build01,?($|\s.*)
 `),
 			prowExpectedPostsubmitYAML: []byte(`postsubmits:
   super/duper:
@@ -2101,74 +1772,6 @@ tests:
     always_run: true
     branches:
     - branch
-    cluster: ci/api-build01-ci-devcluster-openshift-com:6443
-    context: ci/prow/images-build01
-    decorate: true
-    decoration_config:
-      skip_cloning: true
-    labels:
-      ci-operator.openshift.io/prowgen-controlled: "true"
-      pj-rehearse.openshift.io/can-be-rehearsed: "true"
-    name: pull-ci-super-duper-branch-images-build01
-    optional: true
-    rerun_command: /test images-build01
-    skip_report: true
-    spec:
-      containers:
-      - args:
-        - --artifact-dir=$(ARTIFACTS)
-        - --branch=branch
-        - --give-pr-author-access-to-namespace=true
-        - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
-        - --kubeconfig=/etc/apici/kubeconfig
-        - --org=super
-        - --repo=duper
-        - --resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org
-        - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
-        - --target=[images]
-        command:
-        - ci-operator
-        env:
-        - name: CONFIG_SPEC
-          valueFrom:
-            configMapKeyRef:
-              key: super-duper-branch.yaml
-              name: ci-operator-misc-configs
-        image: ci-operator:latest
-        imagePullPolicy: Always
-        name: ""
-        resources:
-          requests:
-            cpu: 10m
-        volumeMounts:
-        - mountPath: /etc/apici
-          name: apici-ci-operator-credentials
-          readOnly: true
-        - mountPath: /etc/pull-secret
-          name: pull-secret
-          readOnly: true
-        - mountPath: /etc/sentry-dsn
-          name: sentry-dsn
-          readOnly: true
-      serviceAccountName: ci-operator
-      volumes:
-      - name: apici-ci-operator-credentials
-        secret:
-          items:
-          - key: sa.ci-operator.apici.config
-            path: kubeconfig
-          secretName: apici-ci-operator-credentials
-      - name: pull-secret
-        secret:
-          secretName: regcred
-      - name: sentry-dsn
-        secret:
-          secretName: sentry-dsn
-    trigger: (?m)^/test( | .* )images-build01,?($|\s.*)
-  - agent: kubernetes
-    always_run: true
-    branches:
-    - branch
     context: ci/prow/unit
     decorate: true
     decoration_config:
@@ -2230,74 +1833,6 @@ tests:
         secret:
           secretName: sentry-dsn
     trigger: (?m)^/test( | .* )unit,?($|\s.*)
-  - agent: kubernetes
-    always_run: true
-    branches:
-    - branch
-    cluster: ci/api-build01-ci-devcluster-openshift-com:6443
-    context: ci/prow/unit-build01
-    decorate: true
-    decoration_config:
-      skip_cloning: true
-    labels:
-      ci-operator.openshift.io/prowgen-controlled: "true"
-      pj-rehearse.openshift.io/can-be-rehearsed: "true"
-    name: pull-ci-super-duper-branch-unit-build01
-    optional: true
-    rerun_command: /test unit-build01
-    skip_report: true
-    spec:
-      containers:
-      - args:
-        - --artifact-dir=$(ARTIFACTS)
-        - --branch=branch
-        - --give-pr-author-access-to-namespace=true
-        - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
-        - --kubeconfig=/etc/apici/kubeconfig
-        - --org=super
-        - --repo=duper
-        - --resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org
-        - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
-        - --target=unit
-        command:
-        - ci-operator
-        env:
-        - name: CONFIG_SPEC
-          valueFrom:
-            configMapKeyRef:
-              key: super-duper-branch.yaml
-              name: ci-operator-misc-configs
-        image: ci-operator:latest
-        imagePullPolicy: Always
-        name: ""
-        resources:
-          requests:
-            cpu: 10m
-        volumeMounts:
-        - mountPath: /etc/apici
-          name: apici-ci-operator-credentials
-          readOnly: true
-        - mountPath: /etc/pull-secret
-          name: pull-secret
-          readOnly: true
-        - mountPath: /etc/sentry-dsn
-          name: sentry-dsn
-          readOnly: true
-      serviceAccountName: ci-operator
-      volumes:
-      - name: apici-ci-operator-credentials
-        secret:
-          items:
-          - key: sa.ci-operator.apici.config
-            path: kubeconfig
-          secretName: apici-ci-operator-credentials
-      - name: pull-secret
-        secret:
-          secretName: regcred
-      - name: sentry-dsn
-        secret:
-          secretName: sentry-dsn
-    trigger: (?m)^/test( | .* )unit-build01,?($|\s.*)
 `),
 			prowExpectedPostsubmitYAML: []byte(`postsubmits:
   super/duper:

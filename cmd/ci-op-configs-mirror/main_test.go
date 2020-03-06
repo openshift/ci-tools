@@ -161,7 +161,7 @@ func TestPrivatePromotionConfiguration(t *testing.T) {
 		{
 			id:        "changes expected",
 			promotion: &api.PromotionConfiguration{Name: "4.x", Namespace: "ocp"},
-			expected:  &api.PromotionConfiguration{Name: "4.x-priv", Namespace: "ocp-private", Disabled: true},
+			expected:  &api.PromotionConfiguration{Name: "4.x-priv", Namespace: "ocp-private"},
 		},
 	}
 	for _, tc := range testCases {

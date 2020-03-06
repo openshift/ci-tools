@@ -140,7 +140,6 @@ func privateBaseImages(baseImages map[string]api.ImageStreamTagReference) {
 
 func privatePromotionConfiguration(promotion *api.PromotionConfiguration) {
 	if promotion.Namespace == ocpNamespace {
-		promotion.Disabled = true
 		promotion.Name = fmt.Sprintf("%s-priv", promotion.Name)
 		promotion.Namespace = privatePromotionNamespace
 	}

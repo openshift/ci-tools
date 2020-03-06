@@ -407,10 +407,16 @@ func generatePodSpecOthers(info *prowgenInfo, release string, test *cioperatorap
 				Value: fmt.Sprintf("https://rpms.svc.ci.openshift.org/openshift-origin-v%s/", conf.PreviousVersion)})
 	}
 	if conf := test.OpenshiftInstallerCustomTestImageClusterTestConfiguration; conf != nil {
-		container.Env = append(
-			container.Env,
-			kubeapi.EnvVar{Name: "CLUSTER_ENABLE_NESTED_VIRT", Value: strconv.FormatBool(conf.EnableNestedVirt)},
-			kubeapi.EnvVar{Name: "CLUSTER_NESTED_VIRT_IMAGE", Value: conf.NestedVirtImage})
+		if conf.EnableNestedVirt {
+			container.Env = append(
+				container.Env,
+				kubeapi.EnvVar{Name: "CLUSTER_ENABLE_NESTED_VIRT", Value: strconv.FormatBool(conf.EnableNestedVirt)})
+			if conf.NestedVirtImage != "" {
+				container.Env = append(
+					container.Env,
+					kubeapi.EnvVar{Name: "CLUSTER_NESTED_VIRT_IMAGE", Value: conf.NestedVirtImage})
+			}
+		}
 	}
 	return podSpec
 }

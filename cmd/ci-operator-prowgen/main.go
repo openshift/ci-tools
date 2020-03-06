@@ -589,6 +589,14 @@ func generateJobs(
 				presubmit.Cluster = build01Context
 			}
 			presubmits[orgrepo] = append(presubmits[orgrepo], presubmit)
+			if element.ContainerTestConfiguration != nil {
+				// only duplicate jobs that can't use IaaS quota
+				dupe := *generatePresubmitForTest(element.As+"-build01", info, label, podSpec, true, configSpec.CanonicalGoRepository)
+				dupe.Cluster = build01Context
+				dupe.Optional = true
+				dupe.SkipReport = true
+				presubmits[orgrepo] = append(presubmits[orgrepo], dupe)
+			}
 		} else {
 			periodics = append(periodics, *generatePeriodicForTest(element.As, info, label, podSpec, true, *element.Cron, configSpec.CanonicalGoRepository))
 		}
@@ -617,6 +625,11 @@ func generateJobs(
 			presubmit.Cluster = build01Context
 		}
 		presubmits[orgrepo] = append(presubmits[orgrepo], presubmit)
+		dupe := *generatePresubmitForTest("images-build01", info, label, podSpec, true, configSpec.CanonicalGoRepository)
+		dupe.Cluster = build01Context
+		dupe.Optional = true
+		dupe.SkipReport = true
+		presubmits[orgrepo] = append(presubmits[orgrepo], dupe)
 
 		if configSpec.PromotionConfiguration != nil {
 			podSpec := generateCiOperatorPodSpec(info, nil, imageTargets, []string{"--promote"}...)

@@ -17,6 +17,7 @@ limitations under the License.
 package common
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -62,7 +63,10 @@ type DRLCByName []DynamicResourceLifeCycle
 
 func (ut DRLCByName) Len() int           { return len(ut) }
 func (ut DRLCByName) Swap(i, j int)      { ut[i], ut[j] = ut[j], ut[i] }
-func (ut DRLCByName) Less(i, j int) bool { return ut[i].Type < ut[j].Type }
+func (ut DRLCByName) Less(i, j int) bool { return ut[i].GetName() < ut[j].GetName() }
+
+// GetName implements the Item interface used for storage
+func (res DynamicResourceLifeCycle) GetName() string { return res.Type }
 
 // NewDynamicResourceLifeCycleFromConfig parse the a ResourceEntry into a DynamicResourceLifeCycle
 func NewDynamicResourceLifeCycleFromConfig(e ResourceEntry) DynamicResourceLifeCycle {
@@ -81,6 +85,12 @@ func NewDynamicResourceLifeCycleFromConfig(e ResourceEntry) DynamicResourceLifeC
 	}
 }
 
+// NewResourceFromNewDynamicResourceLifeCycle creates a resource from DynamicResourceLifeCycle given a name and a time.
+// Using this method helps make sure all the resources are created the same way.
+func NewResourceFromNewDynamicResourceLifeCycle(name string, dlrc *DynamicResourceLifeCycle, now time.Time) Resource {
+	return NewResource(name, dlrc.Type, dlrc.InitialState, "", now)
+}
+
 // Copy returns a copy of the TypeToResources
 func (t TypeToResources) Copy() TypeToResources {
 	n := TypeToResources{}
@@ -88,6 +98,15 @@ func (t TypeToResources) Copy() TypeToResources {
 		n[k] = v
 	}
 	return n
+}
+
+// ItemToDynamicResourceLifeCycle casts a Item back to a Resource
+func ItemToDynamicResourceLifeCycle(i Item) (DynamicResourceLifeCycle, error) {
+	res, ok := i.(DynamicResourceLifeCycle)
+	if !ok {
+		return DynamicResourceLifeCycle{}, fmt.Errorf("cannot construct Resource from received object %v", i)
+	}
+	return res, nil
 }
 
 // GenerateDynamicResourceName generates a unique name for dynamic resources

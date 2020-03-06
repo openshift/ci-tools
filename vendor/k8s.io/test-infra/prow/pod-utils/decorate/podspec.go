@@ -411,10 +411,6 @@ func CloneRefs(pj prowapi.ProwJob, codeMount, logMount coreapi.VolumeMount) (*co
 		Env:          env,
 		VolumeMounts: append([]coreapi.VolumeMount{logMount, codeMount}, cloneMounts...),
 	}
-
-	if pj.Spec.DecorationConfig.Resources != nil && pj.Spec.DecorationConfig.Resources.CloneRefs != nil {
-		container.Resources = *pj.Spec.DecorationConfig.Resources.CloneRefs
-	}
 	return &container, refs, cloneVolumes, nil
 }
 
@@ -477,18 +473,14 @@ func InjectEntrypoint(c *coreapi.Container, timeout, gracePeriod time.Duration, 
 }
 
 // PlaceEntrypoint will copy entrypoint from the entrypoint image to the tools volume
-func PlaceEntrypoint(config *prowapi.DecorationConfig, toolsMount coreapi.VolumeMount) coreapi.Container {
-	container := coreapi.Container{
+func PlaceEntrypoint(image string, toolsMount coreapi.VolumeMount) coreapi.Container {
+	return coreapi.Container{
 		Name:         "place-entrypoint",
-		Image:        config.UtilityImages.Entrypoint,
+		Image:        image,
 		Command:      []string{"/bin/cp"},
 		Args:         []string{"/entrypoint", entrypointLocation(toolsMount)},
 		VolumeMounts: []coreapi.VolumeMount{toolsMount},
 	}
-	if config.Resources != nil && config.Resources.PlaceEntrypoint != nil {
-		container.Resources = *config.Resources.PlaceEntrypoint
-	}
-	return container
 }
 
 func GCSOptions(dc prowapi.DecorationConfig, localMode bool) (*coreapi.Volume, *coreapi.VolumeMount, gcsupload.Options) {
@@ -520,7 +512,7 @@ func GCSOptions(dc prowapi.DecorationConfig, localMode bool) (*coreapi.Volume, *
 	return vol, mount, opt
 }
 
-func InitUpload(config *prowapi.DecorationConfig, opt gcsupload.Options, creds *coreapi.VolumeMount, cloneLogMount *coreapi.VolumeMount, outputMount *coreapi.VolumeMount, encodedJobSpec string) (*coreapi.Container, error) {
+func InitUpload(image string, opt gcsupload.Options, creds *coreapi.VolumeMount, cloneLogMount *coreapi.VolumeMount, outputMount *coreapi.VolumeMount, encodedJobSpec string) (*coreapi.Container, error) {
 	// TODO(fejta): remove encodedJobSpec
 	initUploadOptions := initupload.Options{
 		Options: &opt,
@@ -541,20 +533,16 @@ func InitUpload(config *prowapi.DecorationConfig, opt gcsupload.Options, creds *
 	if err != nil {
 		return nil, fmt.Errorf("could not encode initupload configuration as JSON: %v", err)
 	}
-	container := &coreapi.Container{
+	return &coreapi.Container{
 		Name:    "initupload",
-		Image:   config.UtilityImages.InitUpload,
+		Image:   image,
 		Command: []string{"/initupload"}, // TODO(fejta): remove this, use image's entrypoint and delete /initupload symlink
 		Env: KubeEnv(map[string]string{
 			downwardapi.JobSpecEnv:      encodedJobSpec,
 			initupload.JSONConfigEnvVar: initUploadConfigEnv,
 		}),
 		VolumeMounts: mounts,
-	}
-	if config.Resources != nil && config.Resources.InitUpload != nil {
-		container.Resources = *config.Resources.InitUpload
-	}
-	return container, nil
+	}, nil
 }
 
 func decorate(spec *coreapi.PodSpec, pj *prowapi.ProwJob, rawEnv map[string]string, outputDir string) error {
@@ -628,14 +616,14 @@ func decorate(spec *coreapi.PodSpec, pj *prowapi.ProwJob, rawEnv map[string]stri
 	}
 
 	encodedJobSpec := rawEnv[downwardapi.JobSpecEnv]
-	initUpload, err := InitUpload(pj.Spec.DecorationConfig, gcsOptions, gcsMount, cloneLogMount, outputMount, encodedJobSpec)
+	initUpload, err := InitUpload(pj.Spec.DecorationConfig.UtilityImages.InitUpload, gcsOptions, gcsMount, cloneLogMount, outputMount, encodedJobSpec)
 	if err != nil {
 		return fmt.Errorf("create initupload container: %v", err)
 	}
 	spec.InitContainers = append(
 		spec.InitContainers,
 		*initUpload,
-		PlaceEntrypoint(pj.Spec.DecorationConfig, toolsMount),
+		PlaceEntrypoint(pj.Spec.DecorationConfig.UtilityImages.Entrypoint, toolsMount),
 	)
 
 	spec.Containers[0].Env = append(spec.Containers[0].Env, KubeEnv(rawEnv)...)
@@ -650,7 +638,7 @@ func decorate(spec *coreapi.PodSpec, pj *prowapi.ProwJob, rawEnv map[string]stri
 		return fmt.Errorf("wrap container: %v", err)
 	}
 
-	sidecar, err := Sidecar(pj.Spec.DecorationConfig, gcsOptions, gcsMount, logMount, outputMount, encodedJobSpec, !RequirePassingEntries, *wrapperOptions)
+	sidecar, err := Sidecar(pj.Spec.DecorationConfig.UtilityImages.Sidecar, gcsOptions, gcsMount, logMount, outputMount, encodedJobSpec, !RequirePassingEntries, *wrapperOptions)
 	if err != nil {
 		return fmt.Errorf("create sidecar: %v", err)
 	}
@@ -693,7 +681,7 @@ const (
 	RequirePassingEntries = true
 )
 
-func Sidecar(config *prowapi.DecorationConfig, gcsOptions gcsupload.Options, gcsMount *coreapi.VolumeMount, logMount coreapi.VolumeMount, outputMount *coreapi.VolumeMount, encodedJobSpec string, requirePassingEntries bool, wrappers ...wrapper.Options) (*coreapi.Container, error) {
+func Sidecar(image string, gcsOptions gcsupload.Options, gcsMount *coreapi.VolumeMount, logMount coreapi.VolumeMount, outputMount *coreapi.VolumeMount, encodedJobSpec string, requirePassingEntries bool, wrappers ...wrapper.Options) (*coreapi.Container, error) {
 	gcsOptions.Items = append(gcsOptions.Items, artifactsDir(logMount))
 	sidecarConfigEnv, err := sidecar.Encode(sidecar.Options{
 		GcsOptions: &gcsOptions,
@@ -711,20 +699,17 @@ func Sidecar(config *prowapi.DecorationConfig, gcsOptions gcsupload.Options, gcs
 		mounts = append(mounts, *outputMount)
 	}
 
-	container := &coreapi.Container{
+	return &coreapi.Container{
 		Name:    "sidecar",
-		Image:   config.UtilityImages.Sidecar,
+		Image:   image,
 		Command: []string{"/sidecar"}, // TODO(fejta): remove, use image's entrypoint
 		Env: KubeEnv(map[string]string{
 			sidecar.JSONConfigEnvVar: sidecarConfigEnv,
 			downwardapi.JobSpecEnv:   encodedJobSpec, // TODO: shouldn't need this?
 		}),
 		VolumeMounts: mounts,
-	}
-	if config.Resources != nil && config.Resources.Sidecar != nil {
-		container.Resources = *config.Resources.Sidecar
-	}
-	return container, nil
+	}, nil
+
 }
 
 // KubeEnv transforms a mapping of environment variables

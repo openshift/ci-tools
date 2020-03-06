@@ -18,6 +18,7 @@ import (
 	"k8s.io/test-infra/prow/config/secret"
 	"k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/github"
+	"k8s.io/test-infra/prow/labels"
 	"k8s.io/test-infra/prow/repoowners"
 )
 
@@ -267,6 +268,7 @@ type options struct {
 	targetDir   string
 	blacklist   flagutil.Strings
 	debugMode   bool
+	selfApprove bool
 	flagutil.GitHubOptions
 }
 
@@ -282,6 +284,7 @@ func parseOptions() options {
 	fs.StringVar(&o.targetDir, "target-dir", "", "The directory containing the target repo.")
 	fs.Var(&o.blacklist, "ignore-repo", "The repo for which syncing OWNERS file is disabled.")
 	fs.BoolVar(&o.debugMode, "debug-mode", false, "Enable the DEBUG level of logs if true.")
+	fs.BoolVar(&o.selfApprove, "self-approve", false, "Self-approve the PR by adding the `approved` and `lgtm` labels. Requires write permissions on the repo.")
 	o.AddFlagsWithoutDefaultGitHubTokenPath(fs)
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Errorf("cannot parse args: '%s'", os.Args[1:])
@@ -404,8 +407,13 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to push changes.")
 	}
 
-	if err := bumper.UpdatePullRequest(gc, githubOrg, githubRepo, title,
-		getBody(directories, o.assign), matchTitle, o.githubLogin+":"+remoteBranch, "master"); err != nil {
+	var labelsToAdd []string
+	if o.selfApprove {
+		logrus.Infof("Self-aproving PR by adding the %q and %q labels", labels.Approved, labels.LGTM)
+		labelsToAdd = append(labelsToAdd, labels.Approved, labels.LGTM)
+	}
+	if err := bumper.UpdatePullRequestWithLabels(gc, githubOrg, githubRepo, title,
+		getBody(directories, o.assign), matchTitle, o.githubLogin+":"+remoteBranch, "master", labelsToAdd); err != nil {
 		logrus.WithError(err).Fatal("PR creation failed.")
 	}
 }

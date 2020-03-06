@@ -897,6 +897,9 @@ objects:
           echo "Waiting for logs ..."
           wait
 
+          tar -czC "${ARTIFACT_DIR}/must-gather" -f "${ARTIFACT_DIR}/must-gather.tar.gz" .
+          rm -rf "${ARTIFACT_DIR}"/must-gather
+
           echo "Deprovisioning cluster ..."
           openshift-install --dir /tmp/artifacts/installer destroy cluster
         }

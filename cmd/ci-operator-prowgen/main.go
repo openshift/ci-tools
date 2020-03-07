@@ -513,16 +513,7 @@ func generatePostsubmitForTest(name string, info *prowgenInfo, label jc.ProwgenL
 	if len(info.Variant) > 0 {
 		name = fmt.Sprintf("%s-%s", info.Variant, name)
 	}
-
-	prefix := jobconfig.PostsubmitPrefix
-	// TODO(petr-muller) Revert this after DPTP-823
-	// For the CVE effort we expect many builds to be broken for some time
-	// so we are changing the name to not be covered by the regexes that
-	// openshift org build cops are watching.
-	if info.config.Private {
-		prefix = "priv"
-	}
-	base := generateJobBase(name, prefix, info, label, podSpec, false, pathAlias)
+	base := generateJobBase(name, jobconfig.PostsubmitPrefix, info, label, podSpec, false, pathAlias)
 	return &prowconfig.Postsubmit{
 		JobBase:  base,
 		Brancher: prowconfig.Brancher{Branches: []string{makeBranchExplicit(info.Branch)}},

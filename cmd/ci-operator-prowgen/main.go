@@ -599,6 +599,9 @@ func generateJobs(
 			}
 		} else {
 			periodics = append(periodics, *generatePeriodicForTest(element.As, info, label, podSpec, true, *element.Cron, configSpec.CanonicalGoRepository))
+			dupe := *generatePeriodicForTest(element.As+"-build01", info, label, podSpec, true, *element.Cron, configSpec.CanonicalGoRepository)
+			dupe.Cluster = build01Context
+			periodics = append(periodics, dupe)
 		}
 	}
 

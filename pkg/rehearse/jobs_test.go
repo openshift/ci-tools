@@ -35,57 +35,11 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
-	"github.com/openshift/ci-tools/pkg/jobconfig"
 	"github.com/openshift/ci-tools/pkg/load"
 	"github.com/openshift/ci-tools/pkg/registry"
 )
 
 const testingRegistry = "../../test/multistage-registry/registry"
-
-// configFiles contains the info needed to allow inlineCiOpConfig to successfully inline
-// CONFIG_SPEC and not fail
-func generateTestConfigFiles() config.ByFilename {
-	return config.ByFilename{
-		"targetOrg-targetRepo-master.yaml": config.DataWithInfo{
-			Configuration: api.ReleaseBuildConfiguration{
-				Tests: []api.TestStepConfiguration{
-					{As: "job1"},
-					{As: "job2"},
-				},
-			},
-			Info: config.Info{
-				Org:    "targetOrg",
-				Repo:   "targetRepo",
-				Branch: "master",
-			},
-		},
-		"targetOrg-targetRepo-not-master.yaml": config.DataWithInfo{
-			Configuration: api.ReleaseBuildConfiguration{
-				Tests: []api.TestStepConfiguration{
-					{As: "job1"},
-					{As: "job2"},
-				},
-			},
-			Info: config.Info{
-				Org:    "targetOrg",
-				Repo:   "targetRepo",
-				Branch: "not-master",
-			},
-		}, "anotherOrg-anotherRepo-master.yaml": config.DataWithInfo{
-			Configuration: api.ReleaseBuildConfiguration{
-				Tests: []api.TestStepConfiguration{
-					{As: "job1"},
-					{As: "job2"},
-				},
-			},
-			Info: config.Info{
-				Org:    "anotherOrg",
-				Repo:   "anotherRepo",
-				Branch: "master",
-			},
-		},
-	}
-}
 
 var update = flag.Bool("update", false, "update fixtures")
 
@@ -221,7 +175,7 @@ func TestInlineCiopConfig(t *testing.T) {
 		Branch: "master",
 	}
 	testCiopConfig := api.ReleaseBuildConfiguration{}
-	testCiopConfigContent, err := yaml.Marshal(&testCiopConfig)
+	testCiopCongigContent, err := yaml.Marshal(&testCiopConfig)
 	if err != nil {
 		t.Fatal("Failed to marshal ci-operator config")
 	}
@@ -254,7 +208,7 @@ func TestInlineCiopConfig(t *testing.T) {
 		description: "CM reference to ci-operator-configs -> cm content inlined",
 		sourceEnv:   []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference(testCiopConfigInfo.ConfigMapName(), "filename")}},
 		configs:     config.ByFilename{"filename": {Info: testCiopConfigInfo, Configuration: testCiopConfig}},
-		expectedEnv: []v1.EnvVar{{Name: "T", Value: string(testCiopConfigContent)}},
+		expectedEnv: []v1.EnvVar{{Name: "T", Value: string(testCiopCongigContent)}},
 	}, {
 		description:   "bad CM key is handled",
 		sourceEnv:     []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference(testCiopConfigInfo.ConfigMapName(), "filename")}},
@@ -273,7 +227,7 @@ func TestInlineCiopConfig(t *testing.T) {
 			job := makeTestingPresubmitForEnv(tc.sourceEnv)
 			expectedJob := makeTestingPresubmitForEnv(tc.expectedEnv)
 
-			err := inlineCiOpConfig(job.Spec.Containers[0], tc.configs, resolver, testCiopConfigInfo, testLoggers)
+			err := inlineCiOpConfig(job.Spec.Containers[0], tc.configs, resolver, testLoggers)
 
 			if tc.expectedError && err == nil {
 				t.Errorf("Expected inlineCiopConfig() to return an error, none returned")
@@ -299,11 +253,11 @@ func makeTestingPresubmit(name, context, branch string) *prowconfig.Presubmit {
 		JobBase: prowconfig.JobBase{
 			Agent:  "kubernetes",
 			Name:   name,
-			Labels: map[string]string{rehearseLabel: "123", jobconfig.CanBeRehearsedLabel: "true"},
+			Labels: map[string]string{rehearseLabel: "123", "pj-rehearse.openshift.io/can-be-rehearsed": "true"},
 			Spec: &v1.PodSpec{
 				Containers: []v1.Container{{
 					Command: []string{"ci-operator"},
-					Args:    []string{"--resolver-address=http://ci-operator-resolver", "--org", "openshift", "--repo=origin", "--branch", "master"},
+					Args:    []string{"--resolver-address=http://ci-operator-resolver", "--org", "openshift", "--repo=origin", "--branch", "master", "--variant", "v2"},
 				}},
 			},
 		},
@@ -468,7 +422,7 @@ func makeSuccessfulFinishReactor(watcher watch.Interface, jobs map[string][]prow
 func TestExecuteJobsErrors(t *testing.T) {
 	testPrNumber, testNamespace, testRepoPath, testRefs := makeTestData()
 	targetOrgRepo := "targetOrg/targetRepo"
-	testCiopConfigs := generateTestConfigFiles()
+	testCiopConfigs := config.ByFilename{}
 
 	testCases := []struct {
 		description  string
@@ -529,7 +483,7 @@ func TestExecuteJobsErrors(t *testing.T) {
 func TestExecuteJobsUnsuccessful(t *testing.T) {
 	testPrNumber, testNamespace, testRepoPath, testRefs := makeTestData()
 	targetOrgRepo := "targetOrg/targetRepo"
-	testCiopConfigs := generateTestConfigFiles()
+	testCiopConfigs := config.ByFilename{}
 
 	testCases := []struct {
 		description string
@@ -609,7 +563,7 @@ func TestExecuteJobsPositive(t *testing.T) {
 	targetRepo := "targetRepo"
 	anotherTargetOrg := "anotherOrg"
 	anotherTargetRepo := "anotherRepo"
-	testCiopConfigs := generateTestConfigFiles()
+	testCiopConfigs := config.ByFilename{}
 
 	testCases := []struct {
 		description  string
@@ -1221,58 +1175,5 @@ func compareWithFixture(t *testing.T, output string, update bool) {
 
 	if diffStr != "" {
 		t.Errorf("got diff between expected and actual result: \n%s\n\nIf this is expected, re-run the test with `-update` flag to update the fixture.", diffStr)
-	}
-}
-
-func TestGetTrimmedBranch(t *testing.T) {
-	testCases := []struct {
-		name     string
-		input    []string
-		expected string
-	}{{
-		name:     "master with regex",
-		input:    []string{"^master$"},
-		expected: "master",
-	}, {
-		name:     "release-4.2 no regex",
-		input:    []string{"release-4.2"},
-		expected: "release-4.2",
-	}}
-	for _, testCase := range testCases {
-		branch := getTrimmedBranch(testCase.input)
-		if branch != testCase.expected {
-			t.Errorf("%s: getTrimmedBranches returned %s, expected %s", testCase.name, branch, testCase.expected)
-		}
-	}
-}
-
-func TestVariantFromLabels(t *testing.T) {
-	testCases := []struct {
-		name     string
-		input    map[string]string
-		expected string
-	}{{
-		name:     "no labels",
-		input:    map[string]string{},
-		expected: "",
-	}, {
-		name: "generated label",
-		input: map[string]string{
-			jobconfig.ProwJobLabelGenerated: "true",
-		},
-		expected: "",
-	}, {
-		name: "generated and variant labels",
-		input: map[string]string{
-			jobconfig.ProwJobLabelGenerated: "true",
-			jobconfig.ProwJobLabelVariant:   "v2",
-		},
-		expected: "v2",
-	}}
-	for _, testCase := range testCases {
-		variant := variantFromLabels(testCase.input)
-		if variant != testCase.expected {
-			t.Errorf("%s: variantFromLabels returned %s, expected %s", testCase.name, variant, testCase.expected)
-		}
 	}
 }

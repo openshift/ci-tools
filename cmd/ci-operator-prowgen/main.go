@@ -26,6 +26,8 @@ import (
 )
 
 const (
+	prowJobLabelVariant = "ci-operator.openshift.io/variant"
+
 	sentryDsnMountName  = "sentry-dsn"
 	sentryDsnSecretName = "sentry-dsn"
 	sentryDsnMountPath  = "/etc/sentry-dsn"
@@ -92,6 +94,14 @@ func (o *options) process() error {
 // Various pieces are derived from `org`, `repo`, `branch` and `target`.
 // `additionalArgs` are passed as additional arguments to `ci-operator`
 func generatePodSpec(info *prowgenInfo, secrets []*cioperatorapi.Secret) *kubeapi.PodSpec {
+	configMapKeyRef := kubeapi.EnvVarSource{
+		ConfigMapKeyRef: &kubeapi.ConfigMapKeySelector{
+			LocalObjectReference: kubeapi.LocalObjectReference{
+				Name: info.ConfigMapName(),
+			},
+			Key: info.Basename(),
+		},
+	}
 	volumeMounts := []kubeapi.VolumeMount{
 		{
 			Name:      sentryDsnMountName,
@@ -175,6 +185,7 @@ func generatePodSpec(info *prowgenInfo, secrets []*cioperatorapi.Secret) *kubeap
 			{
 				Image:           "ci-operator:latest",
 				ImagePullPolicy: kubeapi.PullAlways,
+				Env:             []kubeapi.EnvVar{{Name: "CONFIG_SPEC", ValueFrom: &configMapKeyRef}},
 				Resources: kubeapi.ResourceRequirements{
 					Requests: kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
 				},
@@ -465,7 +476,7 @@ func generateJobBase(name, prefix string, info *prowgenInfo, label jc.ProwgenLab
 
 	jobName := info.Info.JobName(prefix, name)
 	if len(info.Variant) > 0 {
-		labels[jc.ProwJobLabelVariant] = info.Variant
+		labels[prowJobLabelVariant] = info.Variant
 	}
 	newTrue := true
 	dc := &v1.DecorationConfig{SkipCloning: &newTrue}

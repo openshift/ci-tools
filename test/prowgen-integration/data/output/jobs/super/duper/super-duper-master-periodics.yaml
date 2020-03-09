@@ -32,6 +32,11 @@ periodics:
       env:
       - name: CLUSTER_TYPE
         value: aws
+      - name: CONFIG_SPEC
+        valueFrom:
+          configMapKeyRef:
+            key: super-duper-master.yaml
+            name: ci-operator-master-configs
       - name: JOB_NAME_SAFE
         value: e2e-aws-nightly
       - name: RPM_REPO_OPENSHIFT_ORIGIN
@@ -114,6 +119,11 @@ periodics:
       env:
       - name: CLUSTER_TYPE
         value: gcp
+      - name: CONFIG_SPEC
+        valueFrom:
+          configMapKeyRef:
+            key: super-duper-master.yaml
+            name: ci-operator-master-configs
       - name: JOB_NAME_SAFE
         value: e2e-nightly
       - name: RPM_REPO_OPENSHIFT_ORIGIN

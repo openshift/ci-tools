@@ -85,7 +85,7 @@ func main() {
 	if err := os.Chdir(o.targetDir); err != nil {
 		logrus.WithError(err).Fatal("Failed to change to root dir")
 	}
-	images, err := bumper.UpdateReferences([]string{"cluster/ci/config/prow/", "core-services/prow", "ci-operator/", "hack/"}, extraFiles)
+	images, err := bumper.UpdateReferences([]string{"clusters/", "cluster/ci/config/prow/", "core-services/prow", "ci-operator/", "hack/"}, extraFiles)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to update references.")
 	}

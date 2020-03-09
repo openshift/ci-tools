@@ -1,5 +1,5 @@
 presubmits:
-  openshift/origin:
+  super/duper:
   - agent: kubernetes
     always_run: false
     branches:
@@ -28,8 +28,8 @@ presubmits:
         - name: CONFIG_SPEC
           valueFrom:
             configMapKeyRef:
-              key: super-duper-test-profile.yaml
-              name: ci-operator-configs
+              key: super-duper-cluster-profile.yaml
+              name: ci-operator-misc-configs
         - name: JOB_NAME_SAFE
           value: test-profile
         - name: TEST_COMMAND

@@ -343,22 +343,21 @@ type TestStepConfiguration struct {
 	Cron *string `json:"cron,omitempty"`
 
 	// Only one of the following can be not-null.
-	ContainerTestConfiguration                                             *ContainerTestConfiguration                                             `json:"container,omitempty"`
-	MultiStageTestConfiguration                                            *MultiStageTestConfiguration                                            `json:"steps,omitempty"`
-	MultiStageTestConfigurationLiteral                                     *MultiStageTestConfigurationLiteral                                     `json:"literal_steps,omitempty"`
-	OpenshiftAnsibleClusterTestConfiguration                               *OpenshiftAnsibleClusterTestConfiguration                               `json:"openshift_ansible,omitempty"`
-	OpenshiftAnsibleSrcClusterTestConfiguration                            *OpenshiftAnsibleSrcClusterTestConfiguration                            `json:"openshift_ansible_src,omitempty"`
-	OpenshiftAnsibleCustomClusterTestConfiguration                         *OpenshiftAnsibleCustomClusterTestConfiguration                         `json:"openshift_ansible_custom,omitempty"`
-	OpenshiftAnsible40ClusterTestConfiguration                             *OpenshiftAnsible40ClusterTestConfiguration                             `json:"openshift_ansible_40,omitempty"`
-	OpenshiftAnsibleUpgradeClusterTestConfiguration                        *OpenshiftAnsibleUpgradeClusterTestConfiguration                        `json:"openshift_ansible_upgrade,omitempty"`
-	OpenshiftInstallerClusterTestConfiguration                             *OpenshiftInstallerClusterTestConfiguration                             `json:"openshift_installer,omitempty"`
-	OpenshiftInstallerSrcClusterTestConfiguration                          *OpenshiftInstallerSrcClusterTestConfiguration                          `json:"openshift_installer_src,omitempty"`
-	OpenshiftInstallerUPIClusterTestConfiguration                          *OpenshiftInstallerUPIClusterTestConfiguration                          `json:"openshift_installer_upi,omitempty"`
-	OpenshiftInstallerUPISrcClusterTestConfiguration                       *OpenshiftInstallerUPISrcClusterTestConfiguration                       `json:"openshift_installer_upi_src,omitempty"`
-	OpenshiftInstallerConsoleClusterTestConfiguration                      *OpenshiftInstallerConsoleClusterTestConfiguration                      `json:"openshift_installer_console,omitempty"`
-	OpenshiftInstallerRandomClusterTestConfiguration                       *OpenshiftInstallerRandomClusterTestConfiguration                       `json:"openshift_installer_random,omitempty"`
-	OpenshiftInstallerCustomTestImageClusterTestConfiguration              *OpenshiftInstallerCustomTestImageClusterTestConfiguration              `json:"openshift_installer_custom_test_image,omitempty"`
-	OpenshiftInstallerGCPNestedVirtCustomTestImageClusterTestConfiguration *OpenshiftInstallerGCPNestedVirtCustomTestImageClusterTestConfiguration `json:"openshift_installer_gcp_nested_virt_custom_test_image,omitempty"`
+	ContainerTestConfiguration                                *ContainerTestConfiguration                                `json:"container,omitempty"`
+	MultiStageTestConfiguration                               *MultiStageTestConfiguration                               `json:"steps,omitempty"`
+	MultiStageTestConfigurationLiteral                        *MultiStageTestConfigurationLiteral                        `json:"literal_steps,omitempty"`
+	OpenshiftAnsibleClusterTestConfiguration                  *OpenshiftAnsibleClusterTestConfiguration                  `json:"openshift_ansible,omitempty"`
+	OpenshiftAnsibleSrcClusterTestConfiguration               *OpenshiftAnsibleSrcClusterTestConfiguration               `json:"openshift_ansible_src,omitempty"`
+	OpenshiftAnsibleCustomClusterTestConfiguration            *OpenshiftAnsibleCustomClusterTestConfiguration            `json:"openshift_ansible_custom,omitempty"`
+	OpenshiftAnsible40ClusterTestConfiguration                *OpenshiftAnsible40ClusterTestConfiguration                `json:"openshift_ansible_40,omitempty"`
+	OpenshiftAnsibleUpgradeClusterTestConfiguration           *OpenshiftAnsibleUpgradeClusterTestConfiguration           `json:"openshift_ansible_upgrade,omitempty"`
+	OpenshiftInstallerClusterTestConfiguration                *OpenshiftInstallerClusterTestConfiguration                `json:"openshift_installer,omitempty"`
+	OpenshiftInstallerSrcClusterTestConfiguration             *OpenshiftInstallerSrcClusterTestConfiguration             `json:"openshift_installer_src,omitempty"`
+	OpenshiftInstallerUPIClusterTestConfiguration             *OpenshiftInstallerUPIClusterTestConfiguration             `json:"openshift_installer_upi,omitempty"`
+	OpenshiftInstallerUPISrcClusterTestConfiguration          *OpenshiftInstallerUPISrcClusterTestConfiguration          `json:"openshift_installer_upi_src,omitempty"`
+	OpenshiftInstallerConsoleClusterTestConfiguration         *OpenshiftInstallerConsoleClusterTestConfiguration         `json:"openshift_installer_console,omitempty"`
+	OpenshiftInstallerRandomClusterTestConfiguration          *OpenshiftInstallerRandomClusterTestConfiguration          `json:"openshift_installer_random,omitempty"`
+	OpenshiftInstallerCustomTestImageClusterTestConfiguration *OpenshiftInstallerCustomTestImageClusterTestConfiguration `json:"openshift_installer_custom_test_image,omitempty"`
 }
 
 // RegistryReferenceConfig is the struct that step references are unmarshalled into.
@@ -729,7 +728,9 @@ type OpenshiftInstallerCustomTestImageClusterTestConfiguration struct {
 	ClusterTestConfiguration `json:",inline"`
 	// From defines the imagestreamtag that will be used to run the
 	// provided test command.  e.g. stable:console-test
-	From string `json:"from"`
+	From             string `json:"from"`
+	EnableNestedVirt bool   `json:"enable_nested_virt,omitempty"`
+	NestedVirtImage  string `json:"nested_virt_image"`
 }
 
 // OpenshiftInstallerGCPNestedVirtCustomTestImageClusterTestConfiguration describes a

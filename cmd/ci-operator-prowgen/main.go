@@ -22,7 +22,6 @@ import (
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/jobconfig"
 	jc "github.com/openshift/ci-tools/pkg/jobconfig"
-	"github.com/openshift/ci-tools/pkg/migrate"
 	"github.com/openshift/ci-tools/pkg/promotion"
 )
 
@@ -583,11 +582,7 @@ func generateJobs(
 		}
 
 		if element.Cron == nil {
-			presubmit := *generatePresubmitForTest(element.As, info, label, podSpec, true, configSpec.CanonicalGoRepository)
-			if migrate.Migrated(info.Org, info.Repo, info.Branch) {
-				presubmit.Cluster = build01Context
-			}
-			presubmits[orgrepo] = append(presubmits[orgrepo], presubmit)
+			presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(element.As, info, label, podSpec, true, configSpec.CanonicalGoRepository))
 			if element.ContainerTestConfiguration != nil {
 				// only duplicate jobs that can't use IaaS quota
 				dupe := *generatePresubmitForTest(element.As+"-build01", info, label, podSpec, true, configSpec.CanonicalGoRepository)
@@ -619,11 +614,7 @@ func generateJobs(
 			presubmitTargets = append(presubmitTargets, "[release:latest]")
 		}
 		podSpec := generateCiOperatorPodSpec(info, nil, presubmitTargets)
-		presubmit := *generatePresubmitForTest("images", info, label, podSpec, true, configSpec.CanonicalGoRepository)
-		if migrate.Migrated(info.Org, info.Repo, info.Branch) {
-			presubmit.Cluster = build01Context
-		}
-		presubmits[orgrepo] = append(presubmits[orgrepo], presubmit)
+		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest("images", info, label, podSpec, true, configSpec.CanonicalGoRepository))
 		dupe := *generatePresubmitForTest("images-build01", info, label, podSpec, true, configSpec.CanonicalGoRepository)
 		dupe.Cluster = build01Context
 		dupe.Optional = true

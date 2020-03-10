@@ -9,7 +9,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/sirupsen/logrus"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/util/sets"
 	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
@@ -17,6 +17,7 @@ import (
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
+	"github.com/openshift/ci-tools/pkg/jobconfig"
 )
 
 var ignoreUnexported = cmpopts.IgnoreUnexported(prowconfig.Presubmit{}, prowconfig.Brancher{}, prowconfig.RegexpChangeMatcher{})
@@ -388,6 +389,7 @@ func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 			Branches: []string{baseCiopConfig.Branch},
 		},
 		JobBase: prowconfig.JobBase{
+			Name:  baseCiopConfig.JobName(jobconfig.PresubmitPrefix, "test"),
 			Agent: string(pjapi.KubernetesAgent),
 			Spec: &v1.PodSpec{
 				Containers: []v1.Container{{
@@ -427,7 +429,7 @@ func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 							if err := deepcopy.Copy(&ret, &basePresubmitWithCiop); err != nil {
 								t.Fatal(err)
 							}
-							ret.Name = "org-repo-branch-testjob"
+							ret.Name = baseCiopConfig.JobName(jobconfig.PresubmitPrefix, "testjob")
 							ret.Spec.Containers[0].Env[0].ValueFrom.ConfigMapKeyRef.Key = baseCiopConfig.Filename
 							return ret
 						}(),
@@ -441,7 +443,7 @@ func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 				if err := deepcopy.Copy(&ret, &basePresubmitWithCiop); err != nil {
 					t.Fatal(err)
 				}
-				ret.Name = "org-repo-branch-testjob"
+				ret.Name = baseCiopConfig.JobName(jobconfig.PresubmitPrefix, "testjob")
 				ret.Spec.Containers[0].Env[0].ValueFrom.ConfigMapKeyRef.Key = baseCiopConfig.Filename
 				return ret
 			}(),
@@ -457,7 +459,7 @@ func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 							if err := deepcopy.Copy(&ret, &basePresubmitWithCiop); err != nil {
 								t.Fatal(err)
 							}
-							ret.Name = "org-repo-branch-testjob"
+							ret.Name = baseCiopConfig.JobName(jobconfig.PresubmitPrefix, "testjob")
 							moreEnvVars := []v1.EnvVar{{
 								Name:  "SOMETHING",
 								Value: "value of SOMETHING",
@@ -476,7 +478,7 @@ func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 				if err := deepcopy.Copy(&ret, &basePresubmitWithCiop); err != nil {
 					t.Fatal(err)
 				}
-				ret.Name = "org-repo-branch-testjob"
+				ret.Name = baseCiopConfig.JobName(jobconfig.PresubmitPrefix, "testjob")
 				moreEnvVars := []v1.EnvVar{{
 					Name:  "SOMETHING",
 					Value: "value of SOMETHING",
@@ -497,7 +499,7 @@ func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 							if err := deepcopy.Copy(&ret, &basePresubmitWithCiop); err != nil {
 								t.Fatal(err)
 							}
-							ret.Name = "org-repo-branch-testjob"
+							ret.Name = baseCiopConfig.JobName(jobconfig.PresubmitPrefix, "testjob")
 							ret.Spec.Containers[0].Env[0].ValueFrom.ConfigMapKeyRef.Key = baseCiopConfig.Filename
 							return ret
 						}(),
@@ -517,7 +519,7 @@ func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 							if err := deepcopy.Copy(&ret, &basePresubmitWithCiop); err != nil {
 								t.Fatal(err)
 							}
-							ret.Name = "org-repo-branch-testjob"
+							ret.Name = baseCiopConfig.JobName(jobconfig.PresubmitPrefix, "testjob")
 							ret.Agent = string(pjapi.JenkinsAgent)
 							ret.Spec.Containers[0].Env = []v1.EnvVar{}
 							return ret
@@ -631,7 +633,7 @@ func TestGetImagesPostsubmitsForCiopConfigs(t *testing.T) {
 					PostsubmitsStatic: map[string][]prowconfig.Postsubmit{
 						"org/repo": {{
 							JobBase: prowconfig.JobBase{
-								Name:  "branch-ci-org-repo-branch-images",
+								Name:  "branch-ci-org-repo-BRANCH-images",
 								Agent: "kubernetes",
 								Spec:  podSpecReferencing(config.Info{Org: "org", Repo: "repo", Branch: "BRANCH"}),
 							},

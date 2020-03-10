@@ -197,6 +197,12 @@
         env:
         - name: CLUSTER_TYPE
           value: gcp
+        - name: JOB_NAME_SAFE
+          value: e2e
+        - name: RPM_REPO_OPENSHIFT_ORIGIN
+          value: https://rpms.svc.ci.openshift.org/openshift-origin-v3.11/
+        - name: TEST_COMMAND
+          value: make test-e2e
         - name: CONFIG_SPEC
           value: |
             base_images:
@@ -226,12 +232,6 @@
               cluster: https://api.ci.openshift.org
               name: origin-v4.0
               namespace: openshift
-        - name: JOB_NAME_SAFE
-          value: e2e
-        - name: RPM_REPO_OPENSHIFT_ORIGIN
-          value: https://rpms.svc.ci.openshift.org/openshift-origin-v3.11/
-        - name: TEST_COMMAND
-          value: make test-e2e
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -654,6 +654,10 @@
         env:
         - name: CLUSTER_TYPE
           value: gcp
+        - name: JOB_NAME_SAFE
+          value: test-profile
+        - name: TEST_COMMAND
+          value: make test
         - name: CONFIG_SPEC
           value: |
             base_images:
@@ -681,10 +685,6 @@
               cluster: https://api.ci.openshift.org
               name: origin-v4.0
               namespace: openshift
-        - name: JOB_NAME_SAFE
-          value: test-profile
-        - name: TEST_COMMAND
-          value: make test
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -885,6 +885,10 @@
         env:
         - name: CLUSTER_TYPE
           value: aws
+        - name: JOB_NAME_SAFE
+          value: e2e-aws
+        - name: TEST_COMMAND
+          value: changed command
         - name: CONFIG_SPEC
           value: |
             base_images:
@@ -912,10 +916,6 @@
               cluster: https://api.ci.openshift.org
               name: origin-v4.0
               namespace: openshift
-        - name: JOB_NAME_SAFE
-          value: e2e-aws
-        - name: TEST_COMMAND
-          value: changed command
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -1116,6 +1116,10 @@
         env:
         - name: CLUSTER_TYPE
           value: aws
+        - name: JOB_NAME_SAFE
+          value: e2e-aws
+        - name: TEST_COMMAND
+          value: TEST_SUITE=openshift/conformance/parallel run-tests
         - name: CONFIG_SPEC
           value: |
             base_images:
@@ -1143,10 +1147,6 @@
               cluster: https://api.ci.openshift.org
               name: origin-v4.0
               namespace: openshift
-        - name: JOB_NAME_SAFE
-          value: e2e-aws
-        - name: TEST_COMMAND
-          value: TEST_SUITE=openshift/conformance/parallel run-tests
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -1243,6 +1243,10 @@
         env:
         - name: CLUSTER_TYPE
           value: openstack
+        - name: JOB_NAME_SAFE
+          value: e2e-aws
+        - name: TEST_COMMAND
+          value: TEST_SUITE=openshift/conformance/parallel run-tests
         - name: CONFIG_SPEC
           value: |
             base_images:
@@ -1270,10 +1274,6 @@
               cluster: https://api.ci.openshift.org
               name: origin-v4.0
               namespace: openshift
-        - name: JOB_NAME_SAFE
-          value: e2e-aws
-        - name: TEST_COMMAND
-          value: TEST_SUITE=openshift/conformance/parallel run-tests
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -1658,6 +1658,10 @@
         env:
         - name: CLUSTER_TYPE
           value: aws
+        - name: JOB_NAME_SAFE
+          value: e2e-aws
+        - name: TEST_COMMAND
+          value: changed command
         - name: CONFIG_SPEC
           value: |
             base_images:
@@ -1869,10 +1873,6 @@
                     requests:
                       cpu: 1000m
                       memory: 2Gi
-        - name: JOB_NAME_SAFE
-          value: e2e-aws
-        - name: TEST_COMMAND
-          value: changed command
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""

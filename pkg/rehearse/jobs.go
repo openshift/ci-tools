@@ -104,6 +104,11 @@ func CompletePrimaryRefs(refs pjapi.Refs, jb prowconfig.JobBase) *pjapi.Refs {
 	return &refs
 }
 
+func getTrimmedBranch(branches []string) string {
+	return strings.TrimPrefix(strings.TrimSuffix(branches[0], "$"), "^")
+
+}
+
 func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber int, refs *pjapi.Refs) (*prowconfig.Presubmit, error) {
 	var rehearsal prowconfig.Presubmit
 	deepcopy.Copy(&rehearsal, source)
@@ -114,7 +119,7 @@ func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber 
 	var context string
 
 	if len(source.Branches) > 0 {
-		branch = strings.TrimPrefix(strings.TrimSuffix(source.Branches[0], "$"), "^")
+		branch = getTrimmedBranch(source.Branches)
 		if len(repo) > 0 {
 			orgRepo := strings.Split(repo, "/")
 			jobOrg := orgRepo[0]
@@ -228,9 +233,14 @@ func hasRehearsableLabel(labels map[string]string) bool {
 // of the needed config file passed to the job as a direct value. This needs
 // to happen because the rehearsed Prow jobs may depend on these config files
 // being also changed by the tested PR.
-func inlineCiOpConfig(container v1.Container, ciopConfigs config.ByFilename, resolver registry.Resolver, loggers Loggers) error {
+func inlineCiOpConfig(container *v1.Container, ciopConfigs config.ByFilename, resolver registry.Resolver, info config.Info, loggers Loggers) error {
+	configSpecSet := false
+	// replace all ConfigMapKeyRef mounts with inline config maps
 	for index := range container.Env {
 		env := &(container.Env[index])
+		if env.Name == "CONFIG_SPEC" {
+			configSpecSet = true
+		}
 		if env.ValueFrom == nil {
 			continue
 		}
@@ -260,6 +270,38 @@ func inlineCiOpConfig(container v1.Container, ciopConfigs config.ByFilename, res
 			env.Value = string(ciOpConfigContent)
 			env.ValueFrom = nil
 		}
+	}
+	// if CONFIG_SPEC has already been set, do not add new CONFIG_SPEC section
+	if configSpecSet {
+		return nil
+	}
+	// inline CONFIG_SPEC for all ci-operator jobs
+	if container.Command != nil && container.Command[0] == "ci-operator" {
+		filename := info.Basename()
+		loggers.Debug.WithField(logCiopConfigFile, filename).Debug("Rehearsal job uses ci-operator config ConfigMap, needed content will be inlined")
+		ciopConfig, ok := ciopConfigs[filename]
+		if !ok {
+			return fmt.Errorf("ci-operator config file %s was not found", filename)
+		}
+		ciopConfigResolved, err := registry.ResolveConfig(resolver, ciopConfig.Configuration)
+		if err != nil {
+			loggers.Job.WithError(err).Error("Failed resolve ReleaseBuildConfiguration")
+			return err
+		}
+
+		ciOpConfigContent, err := yaml.Marshal(ciopConfigResolved)
+		if err != nil {
+			loggers.Job.WithError(err).Error("Failed to marshal ci-operator config file")
+			return err
+		}
+
+		envs := container.Env
+		env := v1.EnvVar{
+			Name:  "CONFIG_SPEC",
+			Value: string(ciOpConfigContent),
+		}
+		envs = append(envs, env)
+		container.Env = envs
 	}
 	return nil
 }
@@ -296,6 +338,14 @@ func fillTemplateMap(templates []config.ConfigMapSource) map[string]string {
 	return templateMap
 }
 
+func variantFromLabels(labels map[string]string) string {
+	variant := ""
+	if variantLabel, ok := labels[jobconfig.ProwJobLabelVariant]; ok {
+		variant = variantLabel
+	}
+	return variant
+}
+
 // ConfigurePeriodicRehearsals adds the required configuration for the periodics to be rehearsed.
 func (jc *JobConfigurer) ConfigurePeriodicRehearsals(periodics config.Periodics) []prowconfig.Periodic {
 	var rehearsals []prowconfig.Periodic
@@ -303,7 +353,15 @@ func (jc *JobConfigurer) ConfigurePeriodicRehearsals(periodics config.Periodics)
 	filteredPeriodics := filterPeriodics(periodics, jc.loggers.Job)
 	for _, job := range filteredPeriodics {
 		jobLogger := jc.loggers.Job.WithField("target-job", job.Name)
-		if err := jc.configureJobSpec(job.Spec, jc.loggers.Debug.WithField("name", job.Name)); err != nil {
+		info := config.Info{
+			Variant: variantFromLabels(job.Labels),
+		}
+		if len(job.ExtraRefs) != 0 {
+			info.Org = job.ExtraRefs[0].Org
+			info.Repo = job.ExtraRefs[0].Repo
+			info.Branch = job.ExtraRefs[0].BaseRef
+		}
+		if err := jc.configureJobSpec(job.Spec, info, jc.loggers.Debug.WithField("name", job.Name)); err != nil {
 			jobLogger.WithError(err).Warn("Failed to inline ci-operator-config into rehearsal periodic job")
 			continue
 		}
@@ -320,16 +378,27 @@ func (jc *JobConfigurer) ConfigurePresubmitRehearsals(presubmits config.Presubmi
 	var rehearsals []*prowconfig.Presubmit
 
 	presubmitsFiltered := filterPresubmits(presubmits, jc.loggers.Job)
-	for repo, jobs := range presubmitsFiltered {
+	for orgrepo, jobs := range presubmitsFiltered {
 		for _, job := range jobs {
-			jobLogger := jc.loggers.Job.WithFields(logrus.Fields{"target-repo": repo, "target-job": job.Name})
-			rehearsal, err := makeRehearsalPresubmit(&job, repo, jc.prNumber, jc.refs)
+			jobLogger := jc.loggers.Job.WithFields(logrus.Fields{"target-repo": orgrepo, "target-job": job.Name})
+			rehearsal, err := makeRehearsalPresubmit(&job, orgrepo, jc.prNumber, jc.refs)
 			if err != nil {
 				jobLogger.WithError(err).Warn("Failed to make a rehearsal presubmit")
 				continue
 			}
 
-			if err := jc.configureJobSpec(rehearsal.Spec, jc.loggers.Debug.WithField("name", job.Name)); err != nil {
+			splitOrgRepo := strings.Split(orgrepo, "/")
+			if len(splitOrgRepo) != 2 {
+				jobLogger.WithError(fmt.Errorf("failed to identify org and repo from string %s", orgrepo)).Warn("Failed to inline ci-operator-config into rehearsal presubmit job")
+			}
+			info := config.Info{
+				Org:     splitOrgRepo[0],
+				Repo:    splitOrgRepo[1],
+				Branch:  getTrimmedBranch(job.Branches),
+				Variant: variantFromLabels(job.Labels),
+			}
+
+			if err := jc.configureJobSpec(rehearsal.Spec, info, jc.loggers.Debug.WithField("name", job.Name)); err != nil {
 				jobLogger.WithError(err).Warn("Failed to inline ci-operator-config into rehearsal presubmit job")
 				continue
 			}
@@ -341,8 +410,8 @@ func (jc *JobConfigurer) ConfigurePresubmitRehearsals(presubmits config.Presubmi
 	return rehearsals
 }
 
-func (jc *JobConfigurer) configureJobSpec(spec *v1.PodSpec, logger *logrus.Entry) error {
-	if err := inlineCiOpConfig(spec.Containers[0], jc.ciopConfigs, jc.registryResolver, jc.loggers); err != nil {
+func (jc *JobConfigurer) configureJobSpec(spec *v1.PodSpec, info config.Info, logger *logrus.Entry) error {
+	if err := inlineCiOpConfig(&spec.Containers[0], jc.ciopConfigs, jc.registryResolver, info, jc.loggers); err != nil {
 		return err
 	}
 	// Remove configresolver flags from ci-operator jobs

@@ -26,7 +26,7 @@ type command string
 type options struct {
 	confirm    bool
 	level      level
-	user       string
+	user       *nullableStringFlag
 	directory  string
 	context    string
 	kubeConfig string
@@ -57,12 +57,27 @@ func (l level) shouldApplyStandard() bool {
 
 var adminConfig = regexp.MustCompile(`^admin_.+\.yaml$`)
 
+type nullableStringFlag struct {
+	val     string
+	beenSet bool
+}
+
+func (n *nullableStringFlag) String() string {
+	return n.val
+}
+
+func (n *nullableStringFlag) Set(val string) error {
+	n.val = val
+	n.beenSet = true
+	return nil
+}
+
 func gatherOptions() *options {
-	opt := &options{}
+	opt := &options{user: &nullableStringFlag{}}
 	var lvl string
 	flag.BoolVar(&opt.confirm, "confirm", false, "Set to true to make applyconfig commit the config to the cluster")
 	flag.StringVar(&lvl, "level", "standard", "Select which config to apply (standard, admin, all)")
-	flag.StringVar(&opt.user, "as", "", "Username to impersonate while applying the config")
+	flag.Var(opt.user, "as", "Username to impersonate while applying the config")
 	flag.StringVar(&opt.directory, "config-dir", "", "Directory with config to apply")
 	flag.StringVar(&opt.context, "context", "", "Context name to use while applying the config")
 	flag.StringVar(&opt.kubeConfig, "kubeconfig", "", "Path to the kubeconfig file to apply the config")
@@ -290,15 +305,15 @@ func main() {
 	var adminErr, standardErr error
 
 	if o.level.shouldApplyAdmin() {
-		if o.user == "" {
-			o.user = defaultAdminUser
+		if !o.user.beenSet {
+			o.user.val = defaultAdminUser
 		}
 
 		f := func(name, path string) error {
 			if !isAdminConfig(name) {
 				return nil
 			}
-			return apply(o.kubeConfig, o.context, path, o.user, !o.confirm)
+			return apply(o.kubeConfig, o.context, path, o.user.val, !o.confirm)
 		}
 
 		adminErr = applyConfig(o.directory, "admin", f)
@@ -316,7 +331,7 @@ func main() {
 				return nil
 			}
 
-			return apply(o.kubeConfig, o.context, path, o.user, !o.confirm)
+			return apply(o.kubeConfig, o.context, path, o.user.val, !o.confirm)
 		}
 
 		standardErr = applyConfig(o.directory, "standard", f)

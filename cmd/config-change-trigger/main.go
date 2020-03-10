@@ -3,13 +3,14 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/openshift/ci-tools/pkg/util"
 	"os"
+
+	"github.com/openshift/ci-tools/pkg/util"
 
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/client-go/rest"
-	"k8s.io/test-infra/prow/apis/prowjobs/v1"
+	v1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/config/secret"
 	"k8s.io/test-infra/prow/errorutil"
 	"k8s.io/test-infra/prow/flagutil"
@@ -93,7 +94,10 @@ func main() {
 		}
 	}
 
-	prConfig := config.GetAllConfigs(o.releaseRepoPath, logger)
+	prConfig, err := config.GetAllConfigs(o.releaseRepoPath, logger)
+	if err != nil {
+		logger.WithError(err).Fatal("could not load the current configuration of release repo")
+	}
 	masterConfig, err := config.GetAllConfigsFromSHA(o.releaseRepoPath, fmt.Sprintf("%s^1", jobSpec.Refs.BaseSHA), logger)
 	if err != nil {
 		logger.WithError(err).Fatal("could not load configuration from base revision of release repo")

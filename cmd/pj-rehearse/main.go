@@ -159,7 +159,11 @@ func rehearseMain() int {
 		}
 	}
 
-	prConfig := config.GetAllConfigs(o.releaseRepoPath, logger)
+	prConfig, err := config.GetAllConfigs(o.releaseRepoPath, logger)
+	if err != nil {
+		logger.WithError(err).Error("could not load ci-operator and prow configs")
+		return gracefulExit(o.noFail, misconfigurationOutput)
+	}
 	pluginConfig, err := loadPluginConfig(o.releaseRepoPath)
 	if err != nil {
 		logger.WithError(err).Error("could not load plugin configuration from tested revision of release repo")

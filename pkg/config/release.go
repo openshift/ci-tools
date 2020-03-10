@@ -103,23 +103,23 @@ func NewLocalJobSpec(path string) (*pjdwapi.JobSpec, error) {
 // GetAllConfigs loads all configuration from the working copy of the release repo (usually openshift/release).
 // When an error occurs during some config loading, the error is not propagated, but the returned struct field will
 // have a nil value in the appropriate field. The error is only logged.
-func GetAllConfigs(releaseRepoPath string, logger *logrus.Entry) *ReleaseRepoConfig {
+func GetAllConfigs(releaseRepoPath string, logger *logrus.Entry) (*ReleaseRepoConfig, error) {
 	config := &ReleaseRepoConfig{}
 	var err error
 	ciopConfigPath := filepath.Join(releaseRepoPath, CiopConfigInRepoPath)
 	config.CiOperator, err = LoadConfigByFilename(ciopConfigPath)
 	if err != nil {
-		logger.WithError(err).Warn("failed to load ci-operator configuration from release repo")
+		return nil, fmt.Errorf("failed to load ci-operator configuration from release repo: %v", err)
 	}
 
 	prowConfigPath := filepath.Join(releaseRepoPath, ConfigInRepoPath)
 	prowJobConfigPath := filepath.Join(releaseRepoPath, JobConfigInRepoPath)
 	config.Prow, err = prowconfig.Load(prowConfigPath, prowJobConfigPath)
 	if err != nil {
-		logger.WithError(err).Warn("failed to load Prow configuration from release repo")
+		return nil, fmt.Errorf("failed to load Prow configuration from release repo: %v", err)
 	}
 
-	return config
+	return config, nil
 }
 
 // GetAllConfigsFromSHA loads all configuration from given SHA revision of the release repo (usually openshift/release).

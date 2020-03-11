@@ -44,7 +44,7 @@ format:
 	gofmt -s -w $(shell go list -f '{{ .Dir }}' ./... )
 .PHONY: format
 
-integration: integration-prowgen integration-pj-rehearse integration-ci-operator integration-ci-operator-configresolver integration-secret-wrapper integration-testgrid-generator integration-repo-init integration-group-auto-updater integration-ci-op-configs-mirror
+integration: integration-prowgen integration-pj-rehearse integration-ci-operator integration-ci-operator-configresolver integration-secret-wrapper integration-testgrid-generator integration-repo-init integration-group-auto-updater integration-ci-op-configs-mirror integration-cvp-trigger
 .PHONY: integration
 
 integration-prowgen:
@@ -92,6 +92,15 @@ integration-group-auto-updater:
 integration-ci-op-configs-mirror:
 	test/ci-op-configs-mirror-integration/run.sh
 .PHONY: integration-ci-op-configs-mirror
+
+integration-cvp-trigger:
+	test/cvp-trigger-integration/run.sh
+.PHONY: integration-cvp-trigger
+
+update-integration-cvp-trigger:
+	test/cvp-trigger-integration/run.sh --update
+.PHONY: integration-cvp-trigger
+
 
 pr-deploy:
 	oc process -p USER=$(USER) -p BRANCH=$(BRANCH) -p PULL_REQUEST=$(PULL_REQUEST) -f hack/pr-deploy.yaml | oc apply -f - --as system:admin

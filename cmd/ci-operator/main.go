@@ -147,6 +147,8 @@ const (
 	annotationIdleCleanupDurationTTL = "ci.openshift.io/ttl.soft"
 	// annotationCleanupDurationTTL is the annotation for requesting namespace cleanup after the namespace has been active
 	annotationCleanupDurationTTL = "ci.openshift.io/ttl.hard"
+	// configResolverAddress is the default configresolver address in api.ci
+	configResolverAddress = "http://ci-operator-configresolver-ci.svc.ci.openshift.org"
 )
 
 // CustomProwMetadata the name of the custom prow metadata file that's expected to be found in the artifacts directory.
@@ -283,7 +285,7 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.StringVar(&opt.leaseServerUsername, "lease-server-username", "", "Username used to access the lease server")
 	flag.StringVar(&opt.leaseServerPasswordFile, "lease-server-password-file", "", "The path to password file used to access the lease server")
 	flag.StringVar(&opt.registryPath, "registry", "", "Path to the step registry directory")
-	flag.StringVar(&opt.configSpecPath, "config", "", "The configuration file. If not specified the CONFIG_SPEC environment variable will be used.")
+	flag.StringVar(&opt.configSpecPath, "config", "", "The configuration file. If not specified the CONFIG_SPEC environment variable or the configresolver will be used.")
 	flag.Var(&opt.targets, "target", "One or more targets in the configuration to build. Only steps that are required for this target will be run.")
 	flag.BoolVar(&opt.dry, "dry-run", opt.dry, "Print the steps that would be run and the objects that would be created without executing any steps")
 	flag.BoolVar(&opt.print, "print-graph", opt.print, "Print a directed graph of the build steps and exit. Intended for use with the golang digraph utility.")
@@ -316,7 +318,7 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.BoolVar(&opt.determinizeOutput, "determinize-output", false, "Determinize dry run's output by ordering the created objects.")
 
 	// flags needed for the configresolver
-	flag.StringVar(&opt.resolverAddress, "resolver-address", "", "Address of configresolver")
+	flag.StringVar(&opt.resolverAddress, "resolver-address", configResolverAddress, "Address of configresolver")
 	flag.StringVar(&opt.org, "org", "", "Org of the project (used by configresolver)")
 	flag.StringVar(&opt.repo, "repo", "", "Repo of the project (used by configresolver)")
 	flag.StringVar(&opt.branch, "branch", "", "Branch of the project (used by configresolver)")
@@ -330,32 +332,6 @@ func bindOptions(flag *flag.FlagSet) *options {
 }
 
 func (o *options) Complete() error {
-	if len(o.resolverAddress) > 0 && (len(o.org) == 0 || len(o.repo) == 0 || len(o.branch) == 0) {
-		return fmt.Errorf("if resolverAddress is set, org, repo, and branch must also be set")
-	}
-	if (len(o.org) > 0 || len(o.repo) > 0 || len(o.branch) > 0) && len(o.resolverAddress) == 0 {
-		return fmt.Errorf("if org, repo, and/or branch are set, resolverAddress must also be set")
-	}
-	var info *load.ResolverInfo
-	if len(o.resolverAddress) > 0 {
-		info = &load.ResolverInfo{
-			Address: o.resolverAddress,
-			Org:     o.org,
-			Repo:    o.repo,
-			Branch:  o.branch,
-			Variant: o.variant,
-		}
-	}
-	config, err := load.Config(o.configSpecPath, o.registryPath, info)
-	if err != nil {
-		return fmt.Errorf("failed to load configuration: %v", err)
-	}
-	o.configSpec = config
-
-	if err := o.configSpec.ValidateResolved(); err != nil {
-		return err
-	}
-
 	jobSpec, err := api.ResolveSpecFromEnv()
 	if err != nil {
 		if len(o.gitRef) == 0 {
@@ -377,6 +353,18 @@ func (o *options) Complete() error {
 	}
 	jobSpec.BaseNamespace = o.baseNamespace
 	o.jobSpec = jobSpec
+
+	info := getResolverInfo(jobSpec, o)
+
+	config, err := load.Config(o.configSpecPath, o.registryPath, info)
+	if err != nil {
+		return fmt.Errorf("failed to load configuration: %v", err)
+	}
+	o.configSpec = config
+
+	if err := o.configSpec.ValidateResolved(); err != nil {
+		return err
+	}
 
 	if o.dry && o.verbose {
 		config, _ := yaml.Marshal(o.configSpec)
@@ -1494,4 +1482,50 @@ func getPullSecretFromFile(filename string) (*coreapi.Secret, error) {
 	}
 	secret.Data[coreapi.DockerConfigJsonKey] = src
 	return secret, nil
+}
+
+func getResolverInfo(jobSpec *api.JobSpec, o *options) *load.ResolverInfo {
+	// identify org, repo, and branch from refs
+	var refs prowapi.Refs
+	if jobSpec.Refs != nil {
+		refs = *jobSpec.Refs
+	}
+	info := &load.ResolverInfo{
+		Address: o.resolverAddress,
+		Org:     refs.Org,
+		Repo:    refs.Repo,
+		Branch:  refs.BaseRef,
+		Variant: o.variant,
+	}
+	if len(info.Org) > 0 && len(info.Repo) > 0 && len(info.Branch) > 0 {
+		return info
+	}
+
+	// if org, repo, or branch could not be identified, try extra refs
+	for _, ref := range jobSpec.ExtraRefs {
+		if len(info.Org) == 0 {
+			info.Org = ref.Org
+		}
+		if len(info.Repo) == 0 {
+			info.Repo = ref.Repo
+		}
+		if len(info.Branch) == 0 {
+			info.Branch = ref.BaseRef
+		}
+		if len(info.Org) > 0 && len(info.Repo) > 0 && len(info.Branch) > 0 {
+			return info
+		}
+	}
+
+	// if org, repo, or branch could not be identified in any refs, try flags
+	if len(info.Org) == 0 {
+		info.Org = o.org
+	}
+	if len(info.Repo) == 0 {
+		info.Repo = o.repo
+	}
+	if len(info.Branch) == 0 {
+		info.Branch = o.branch
+	}
+	return info
 }

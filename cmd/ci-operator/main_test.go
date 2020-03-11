@@ -13,8 +13,10 @@ import (
 
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
+	"k8s.io/utils/diff"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/load"
 )
 
 func TestSanitizeMessage(t *testing.T) {
@@ -238,4 +240,155 @@ func verifyMetadata(jobSpec *api.JobSpec, namespace string, customMetadata map[s
 	}
 
 	return nil
+}
+
+func TestGetResolverInfo(t *testing.T) {
+	testCases := []struct {
+		name     string
+		o        *options
+		jobSpec  *api.JobSpec
+		expected *load.ResolverInfo
+	}{{
+		name: "Only JobSpec Refs",
+		o: &options{
+			resolverAddress: configResolverAddress,
+		},
+		jobSpec: &api.JobSpec{
+			JobSpec: downwardapi.JobSpec{
+				Refs: &prowapi.Refs{
+					Org:     "testOrganization",
+					Repo:    "testRepo",
+					BaseRef: "testBranch",
+				},
+			},
+		},
+		expected: &load.ResolverInfo{
+			Address: configResolverAddress,
+			Org:     "testOrganization",
+			Repo:    "testRepo",
+			Branch:  "testBranch",
+		},
+	}, {
+		name: "JobSpec Refs and Options with Variant",
+		o: &options{
+			resolverAddress: configResolverAddress,
+			org:             "anotherOrganization",
+			repo:            "anotherRepo",
+			branch:          "anotherBranch",
+			variant:         "v2",
+		},
+		jobSpec: &api.JobSpec{
+			JobSpec: downwardapi.JobSpec{
+				Refs: &prowapi.Refs{
+					Org:     "testOrganization",
+					Repo:    "testRepo",
+					BaseRef: "testBranch",
+				},
+			},
+		},
+		expected: &load.ResolverInfo{
+			Address: configResolverAddress,
+			Org:     "testOrganization",
+			Repo:    "testRepo",
+			Branch:  "testBranch",
+			Variant: "v2",
+		},
+	}, {
+		name: "Ref with ExtraRefs",
+		o: &options{
+			resolverAddress: configResolverAddress,
+		},
+		jobSpec: &api.JobSpec{
+			JobSpec: downwardapi.JobSpec{
+				Refs: &prowapi.Refs{
+					Org:     "testOrganization",
+					Repo:    "testRepo",
+					BaseRef: "testBranch",
+				},
+				ExtraRefs: []prowapi.Refs{{
+					Org:     "anotherOrganization",
+					Repo:    "anotherRepo",
+					BaseRef: "anotherBranch",
+				}},
+			},
+		},
+		expected: &load.ResolverInfo{
+			Address: configResolverAddress,
+			Org:     "testOrganization",
+			Repo:    "testRepo",
+			Branch:  "testBranch",
+		},
+	}, {
+		name: "JobSpec ExtraRefs and Options with Variant",
+		o: &options{
+			resolverAddress: configResolverAddress,
+			org:             "anotherOrganization",
+			repo:            "anotherRepo",
+			branch:          "anotherBranch",
+			variant:         "v2",
+		},
+		jobSpec: &api.JobSpec{
+			JobSpec: downwardapi.JobSpec{
+				ExtraRefs: []prowapi.Refs{{
+					Org:     "testOrganization",
+					Repo:    "testRepo",
+					BaseRef: "testBranch",
+				}},
+			},
+		},
+		expected: &load.ResolverInfo{
+			Address: configResolverAddress,
+			Org:     "testOrganization",
+			Repo:    "testRepo",
+			Branch:  "testBranch",
+			Variant: "v2",
+		},
+	}, {
+		name: "Refs with missing field + options",
+		o: &options{
+			resolverAddress: configResolverAddress,
+			org:             "anotherOrganization",
+			repo:            "anotherRepo",
+			branch:          "anotherBranch",
+			variant:         "v2",
+		},
+		jobSpec: &api.JobSpec{
+			JobSpec: downwardapi.JobSpec{
+				Refs: &prowapi.Refs{
+					Org:     "testOrganization",
+					BaseRef: "testBranch",
+				},
+			},
+		},
+		expected: &load.ResolverInfo{
+			Address: configResolverAddress,
+			Org:     "testOrganization",
+			Repo:    "anotherRepo",
+			Branch:  "testBranch",
+			Variant: "v2",
+		},
+	}, {
+		name: "Only options",
+		o: &options{
+			resolverAddress: configResolverAddress,
+			org:             "testOrganization",
+			repo:            "testRepo",
+			branch:          "testBranch",
+			variant:         "v2",
+		},
+		jobSpec: &api.JobSpec{},
+		expected: &load.ResolverInfo{
+			Address: configResolverAddress,
+			Org:     "testOrganization",
+			Repo:    "testRepo",
+			Branch:  "testBranch",
+			Variant: "v2",
+		},
+	}}
+	for _, testCase := range testCases {
+		actual := getResolverInfo(testCase.jobSpec, testCase.o)
+		if !reflect.DeepEqual(actual, testCase.expected) {
+			t.Errorf("%s: Actual does not match expected:\n%s", testCase.name, diff.ObjectReflectDiff(testCase.expected, actual))
+		}
+	}
 }

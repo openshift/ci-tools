@@ -354,7 +354,7 @@ func (o *options) Complete() error {
 	jobSpec.BaseNamespace = o.baseNamespace
 	o.jobSpec = jobSpec
 
-	info := getResolverInfo(jobSpec, o)
+	info := o.getResolverInfo(jobSpec)
 
 	config, err := load.Config(o.configSpecPath, o.registryPath, info)
 	if err != nil {
@@ -1484,47 +1484,36 @@ func getPullSecretFromFile(filename string) (*coreapi.Secret, error) {
 	return secret, nil
 }
 
-func getResolverInfo(jobSpec *api.JobSpec, o *options) *load.ResolverInfo {
-	// identify org, repo, and branch from refs
-	var refs prowapi.Refs
-	if jobSpec.Refs != nil {
-		refs = *jobSpec.Refs
-	}
+func (o *options) getResolverInfo(jobSpec *api.JobSpec) *load.ResolverInfo {
+	// address and variant can only be set via options
 	info := &load.ResolverInfo{
 		Address: o.resolverAddress,
-		Org:     refs.Org,
-		Repo:    refs.Repo,
-		Branch:  refs.BaseRef,
 		Variant: o.variant,
 	}
-	if len(info.Org) > 0 && len(info.Repo) > 0 && len(info.Branch) > 0 {
-		return info
+
+	allRefs := jobSpec.ExtraRefs
+	if jobSpec.Refs != nil {
+		allRefs = append([]prowapi.Refs{*jobSpec.Refs}, allRefs...)
 	}
 
-	// if org, repo, or branch could not be identified, try extra refs
-	for _, ref := range jobSpec.ExtraRefs {
-		if len(info.Org) == 0 {
+	// identify org, repo, and branch from refs object
+	for _, ref := range allRefs {
+		if ref.Org != "" && ref.Repo != "" && ref.BaseRef != "" {
 			info.Org = ref.Org
-		}
-		if len(info.Repo) == 0 {
 			info.Repo = ref.Repo
-		}
-		if len(info.Branch) == 0 {
 			info.Branch = ref.BaseRef
-		}
-		if len(info.Org) > 0 && len(info.Repo) > 0 && len(info.Branch) > 0 {
-			return info
+			break
 		}
 	}
 
-	// if org, repo, or branch could not be identified in any refs, try flags
-	if len(info.Org) == 0 {
+	// if flags set, override previous values
+	if o.org != "" {
 		info.Org = o.org
 	}
-	if len(info.Repo) == 0 {
+	if o.repo != "" {
 		info.Repo = o.repo
 	}
-	if len(info.Branch) == 0 {
+	if o.branch != "" {
 		info.Branch = o.branch
 	}
 	return info

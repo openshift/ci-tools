@@ -245,12 +245,12 @@ func verifyMetadata(jobSpec *api.JobSpec, namespace string, customMetadata map[s
 func TestGetResolverInfo(t *testing.T) {
 	testCases := []struct {
 		name     string
-		o        *options
+		opt      *options
 		jobSpec  *api.JobSpec
 		expected *load.ResolverInfo
 	}{{
 		name: "Only JobSpec Refs",
-		o: &options{
+		opt: &options{
 			resolverAddress: configResolverAddress,
 		},
 		jobSpec: &api.JobSpec{
@@ -269,12 +269,9 @@ func TestGetResolverInfo(t *testing.T) {
 			Branch:  "testBranch",
 		},
 	}, {
-		name: "JobSpec Refs and Options with Variant",
-		o: &options{
+		name: "JobSpec Refs w/ vairant set via flag",
+		opt: &options{
 			resolverAddress: configResolverAddress,
-			org:             "anotherOrganization",
-			repo:            "anotherRepo",
-			branch:          "anotherBranch",
 			variant:         "v2",
 		},
 		jobSpec: &api.JobSpec{
@@ -295,7 +292,7 @@ func TestGetResolverInfo(t *testing.T) {
 		},
 	}, {
 		name: "Ref with ExtraRefs",
-		o: &options{
+		opt: &options{
 			resolverAddress: configResolverAddress,
 		},
 		jobSpec: &api.JobSpec{
@@ -319,43 +316,41 @@ func TestGetResolverInfo(t *testing.T) {
 			Branch:  "testBranch",
 		},
 	}, {
-		name: "JobSpec ExtraRefs and Options with Variant",
-		o: &options{
+		name: "Incomplete refs not used",
+		opt: &options{
 			resolverAddress: configResolverAddress,
-			org:             "anotherOrganization",
-			repo:            "anotherRepo",
-			branch:          "anotherBranch",
-			variant:         "v2",
 		},
 		jobSpec: &api.JobSpec{
 			JobSpec: downwardapi.JobSpec{
-				ExtraRefs: []prowapi.Refs{{
+				Refs: &prowapi.Refs{
 					Org:     "testOrganization",
-					Repo:    "testRepo",
 					BaseRef: "testBranch",
+				},
+				ExtraRefs: []prowapi.Refs{{
+					Org:     "anotherOrganization",
+					Repo:    "anotherRepo",
+					BaseRef: "anotherBranch",
 				}},
 			},
 		},
 		expected: &load.ResolverInfo{
 			Address: configResolverAddress,
-			Org:     "testOrganization",
-			Repo:    "testRepo",
-			Branch:  "testBranch",
-			Variant: "v2",
+			Org:     "anotherOrganization",
+			Repo:    "anotherRepo",
+			Branch:  "anotherBranch",
 		},
 	}, {
-		name: "Refs with missing field + options",
-		o: &options{
+		name: "Refs with single field overridden by options",
+		opt: &options{
 			resolverAddress: configResolverAddress,
-			org:             "anotherOrganization",
 			repo:            "anotherRepo",
-			branch:          "anotherBranch",
 			variant:         "v2",
 		},
 		jobSpec: &api.JobSpec{
 			JobSpec: downwardapi.JobSpec{
 				Refs: &prowapi.Refs{
 					Org:     "testOrganization",
+					Repo:    "testRepo",
 					BaseRef: "testBranch",
 				},
 			},
@@ -369,7 +364,7 @@ func TestGetResolverInfo(t *testing.T) {
 		},
 	}, {
 		name: "Only options",
-		o: &options{
+		opt: &options{
 			resolverAddress: configResolverAddress,
 			org:             "testOrganization",
 			repo:            "testRepo",
@@ -384,9 +379,34 @@ func TestGetResolverInfo(t *testing.T) {
 			Branch:  "testBranch",
 			Variant: "v2",
 		},
+	}, {
+		name: "All fields overridden by options",
+		opt: &options{
+			resolverAddress: configResolverAddress,
+			org:             "anotherOrganization",
+			repo:            "anotherRepo",
+			branch:          "anotherBranch",
+			variant:         "v2",
+		},
+		jobSpec: &api.JobSpec{
+			JobSpec: downwardapi.JobSpec{
+				Refs: &prowapi.Refs{
+					Org:     "testOrganization",
+					Repo:    "testRepo",
+					BaseRef: "testBranch",
+				},
+			},
+		},
+		expected: &load.ResolverInfo{
+			Address: configResolverAddress,
+			Org:     "anotherOrganization",
+			Repo:    "anotherRepo",
+			Branch:  "anotherBranch",
+			Variant: "v2",
+		},
 	}}
 	for _, testCase := range testCases {
-		actual := getResolverInfo(testCase.jobSpec, testCase.o)
+		actual := testCase.opt.getResolverInfo(testCase.jobSpec)
 		if !reflect.DeepEqual(actual, testCase.expected) {
 			t.Errorf("%s: Actual does not match expected:\n%s", testCase.name, diff.ObjectReflectDiff(testCase.expected, actual))
 		}

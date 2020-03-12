@@ -33,6 +33,7 @@ type options struct {
 	configPath     string
 	bwUser         string
 	bwPasswordPath string
+	cluster        string
 	force          bool
 
 	bwPassword     string
@@ -48,6 +49,7 @@ func parseOptions() options {
 	fs.StringVar(&o.configPath, "config", "", "Path to the config file to use for this tool.")
 	fs.StringVar(&o.bwUser, "bw-user", "", "Username to access BitWarden.")
 	fs.StringVar(&o.bwPasswordPath, "bw-password-path", "", "Path to a password file to access BitWarden.")
+	fs.StringVar(&o.cluster, "cluster", "", "If set, only provision secrets for this cluster")
 	fs.BoolVar(&o.force, "force", false, "If true, update the secrets even if existing one differs from Bitwarden items instead of existing with error. Default false.")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Errorf("cannot parse args: %q", os.Args[1:])
@@ -93,8 +95,17 @@ func (o *options) completeOptions(secrets *sets.String) error {
 	o.config = config
 
 	o.secretsGetters = map[string]coreclientset.SecretsGetter{}
-	for i, secretConfig := range o.config {
+	for i, secretConfig := range config {
+		o.config[i].To = nil
+
 		for j, secretContext := range secretConfig.To {
+			if o.cluster != "" && o.cluster != secretContext.Cluster {
+				logrus.WithField("cluster", o.cluster).Info("Skipping provisioniong of secret for cluster that does not match the one configured via --cluster")
+
+				continue
+			}
+			o.config[i].To = append(o.config[i].To, secretContext)
+
 			if o.secretsGetters[secretContext.Cluster] == nil {
 				kc, ok := kubeConfigs[secretContext.Cluster]
 				if !ok {

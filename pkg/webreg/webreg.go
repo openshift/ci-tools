@@ -799,18 +799,17 @@ approach exists to achieve the same outcome.
 <h5 id="data"><a href="#data">Sharing Data Between Steps</a></h5>
 <p>
 Steps can communicate between each other by using a shared directory on their
-filesystems. This directory is available to read for test processes via
-<code>${SHARED_DIR}</code>. Any new data to be stored in the shared directory
-should be written to <code>/tmp/secret</code> and will be available to following
-steps under <code>${SHARED_DIR}</code> after being merged with the pre-existing
-data in the directory. New data will overwrite previous data. The underlying
-mechanism for this uses Kubernetes concepts; therefore, the total amount of
-data that can be shared is capped at 1MB and only a flat file structure is
-permissible: no sub-directories are supported. Steps are more commonly expected to
-communicate between each other by using state in the OpenShift cluster under
-test. For instance, if a step installs some components or changes configuration,
-a later step could check for that as a pre-condition by using <code>oc</code>
-or the API to view the cluster's configuration.
+filesystems. This directory is available for test processes via
+<code>${SHARED_DIR}</code>. When the process finishes executing, the contents
+of that directory will be copied and will be available to following
+steps. New data will overwrite previous data, absent files will be removed. The
+underlying mechanism for this uses Kubernetes concepts; therefore, the total
+amount of data that can be shared is capped at 1MB and only a flat file
+structure is permissible: no sub-directories are supported.  Steps are more
+commonly expected to communicate between each other by using state in the
+OpenShift cluster under test. For instance, if a step installs some components
+or changes configuration, a later step could check for that as a pre-condition
+by using <code>oc</code> or the API to view the cluster's configuration.
 </p>
 
 <h5 id="artifacts"><a href="#artifacts">Exposing Artifacts</a></h5>

@@ -1177,7 +1177,6 @@
       "port": {
         "targetPort": 8080
       },
-      "subdomain": "",
       "to": {
         "kind": "",
         "name": "rpm-repo",

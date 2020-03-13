@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -62,6 +63,11 @@ func Config(path, registryPath string, info *ResolverInfo) (*api.ReleaseBuildCon
 }
 
 func configFromResolver(info *ResolverInfo) (*api.ReleaseBuildConfiguration, error) {
+	identifier := fmt.Sprintf("%s/%s@%s", info.Org, info.Repo, info.Branch)
+	if info.Variant != "" {
+		identifier = fmt.Sprintf("%s [%s]", identifier, info.Variant)
+	}
+	log.Printf("Loading configuration from %s for %s", info.Address, identifier)
 	req, err := http.NewRequest("GET", fmt.Sprintf("%s/config", info.Address), nil)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to create request for configresolver: %s", err)

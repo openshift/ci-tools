@@ -27,21 +27,22 @@ type ResolverInfo struct {
 }
 
 func Config(path, registryPath string, info *ResolverInfo) (*api.ReleaseBuildConfiguration, error) {
-	// Load the standard configuration path, env, or configresolver (in that order of priority)
+	// Load the standard configuration from the configresolver, path, or env
 	var raw string
-	if len(path) > 0 {
+	if info != nil {
+		return configFromResolver(info)
+	} else if len(path) > 0 {
 		data, err := ioutil.ReadFile(path)
 		if err != nil {
 			return nil, fmt.Errorf("--config error: %v", err)
 		}
 		raw = string(data)
-	} else if spec, ok := os.LookupEnv("CONFIG_SPEC"); ok {
-		if len(spec) == 0 {
-			return nil, errors.New("CONFIG_SPEC environment variable cannot be set to an empty string")
-		}
-		raw = spec
 	} else {
-		return configFromResolver(info)
+		var ok bool
+		raw, ok = os.LookupEnv("CONFIG_SPEC")
+		if !ok || len(raw) == 0 {
+			return nil, fmt.Errorf("CONFIG_SPEC environment variable is not set or empty and no config file was set")
+		}
 	}
 	configSpec := api.ReleaseBuildConfiguration{}
 	if err := yaml.Unmarshal([]byte(raw), &configSpec); err != nil {

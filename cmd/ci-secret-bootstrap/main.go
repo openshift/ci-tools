@@ -92,11 +92,10 @@ func (o *options) completeOptions(secrets *sets.String) error {
 	if err != nil {
 		return err
 	}
-	o.config = config
 
 	o.secretsGetters = map[string]coreclientset.SecretsGetter{}
 	for i, secretConfig := range config {
-		o.config[i].To = nil
+		var to []secretContext
 
 		for j, secretContext := range secretConfig.To {
 			if o.cluster != "" && o.cluster != secretContext.Cluster {
@@ -104,7 +103,7 @@ func (o *options) completeOptions(secrets *sets.String) error {
 
 				continue
 			}
-			o.config[i].To = append(o.config[i].To, secretContext)
+			to = append(to, secretContext)
 
 			if o.secretsGetters[secretContext.Cluster] == nil {
 				kc, ok := kubeConfigs[secretContext.Cluster]
@@ -117,6 +116,11 @@ func (o *options) completeOptions(secrets *sets.String) error {
 				}
 				o.secretsGetters[secretContext.Cluster] = client
 			}
+		}
+
+		if len(to) > 0 {
+			secretConfig.To = to
+			o.config = append(o.config, secretConfig)
 		}
 	}
 

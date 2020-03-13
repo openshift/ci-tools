@@ -159,43 +159,6 @@ const (
       name: ci-pull-credentials
       type: kubernetes.io/dockerconfigjson
 `
-	configContentDefaultClusterOnly = `---
-- from:
-    key-name-1:
-      bw_item: item-name-1
-      field: field-name-1
-    key-name-2:
-      bw_item: item-name-1
-      field: field-name-2
-    key-name-3:
-      bw_item: item-name-1
-      attachment: attachment-name-1
-    key-name-4:
-      bw_item: item-name-2
-      field: field-name-1
-    key-name-5:
-      bw_item: item-name-2
-      attachment: attachment-name-1
-    key-name-6:
-      bw_item: item-name-3
-      attachment: attachment-name-2
-    key-name-7:
-      bw_item: item-name-3
-      attribute: password
-  to:
-    - cluster: default
-      namespace: namespace-1
-      name: prod-secret-1
-- from:
-    .dockerconfigjson:
-      bw_item: quay.io
-      field: Pull Credentials
-  to:
-    - cluster: default
-      namespace: ci
-      name: ci-pull-credentials
-      type: kubernetes.io/dockerconfigjson
-`
 	configContentWithTypo = `---
 - from:
     key-name-1:
@@ -345,7 +308,7 @@ var (
 			},
 		},
 	}
-	defaultConfigWithoutBuild01 = []secretConfig{
+	defaultConfigWithoutDefaultCluster = []secretConfig{
 		{
 			From: map[string]bitWardenContext{
 				"key-name-1": {
@@ -379,25 +342,9 @@ var (
 			},
 			To: []secretContext{
 				{
-					Cluster:   "default",
-					Namespace: "namespace-1",
-					Name:      "prod-secret-1",
-				},
-			},
-		},
-		{
-			From: map[string]bitWardenContext{
-				".dockerconfigjson": {
-					BWItem: "quay.io",
-					Field:  "Pull Credentials",
-				},
-			},
-			To: []secretContext{
-				{
-					Cluster:   "default",
-					Namespace: "ci",
-					Name:      "ci-pull-credentials",
-					Type:      "kubernetes.io/dockerconfigjson",
+					Cluster:   "build01",
+					Namespace: "namespace-2",
+					Name:      "prod-secret-2",
 				},
 			},
 		},
@@ -419,7 +366,6 @@ func TestCompleteOptions(t *testing.T) {
 	configPath := filepath.Join(dir, "configPath")
 	kubeConfigPath := filepath.Join(dir, "kubeConfigPath")
 	configWithTypoPath := filepath.Join(dir, "configWithTypoPath")
-	configDefaultClusterOnly := filepath.Join(dir, "configDefaultClusterOnly")
 	configWithNonPasswordAttributePath := filepath.Join(dir, "configContentWithNonPasswordAttribute")
 
 	fileMap := map[string][]byte{
@@ -427,7 +373,6 @@ func TestCompleteOptions(t *testing.T) {
 		configPath:                         []byte(configContent),
 		kubeConfigPath:                     []byte(kubeConfigContent),
 		configWithTypoPath:                 []byte(configContentWithTypo),
-		configDefaultClusterOnly:           []byte(configContentDefaultClusterOnly),
 		configWithNonPasswordAttributePath: []byte(configContentWithNonPasswordAttribute),
 	}
 
@@ -475,11 +420,11 @@ func TestCompleteOptions(t *testing.T) {
 				bwPasswordPath: bwPasswordPath,
 				configPath:     configPath,
 				kubeConfigPath: kubeConfigPath,
-				cluster:        "default",
+				cluster:        "build01",
 			},
 			expectedBWPassword: "topSecret",
-			expectedConfig:     defaultConfigWithoutBuild01,
-			expectedClusters:   []string{"default"},
+			expectedConfig:     defaultConfigWithoutDefaultCluster,
+			expectedClusters:   []string{"build01"},
 		},
 		{
 			name: "attribute is not password",

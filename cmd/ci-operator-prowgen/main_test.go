@@ -52,6 +52,10 @@ func TestGeneratePodSpec(t *testing.T) {
 						"--give-pr-author-access-to-namespace=true",
 						"--artifact-dir=$(ARTIFACTS)",
 						"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
+						"--resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org",
+						"--org=org",
+						"--repo=repo",
+						"--branch=branch",
 						"--kubeconfig=/etc/apici/kubeconfig",
 						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 						"--target=target",
@@ -101,6 +105,10 @@ func TestGeneratePodSpec(t *testing.T) {
 						"--give-pr-author-access-to-namespace=true",
 						"--artifact-dir=$(ARTIFACTS)",
 						"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
+						"--resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org",
+						"--org=org",
+						"--repo=repo",
+						"--branch=branch",
 						"--kubeconfig=/etc/apici/kubeconfig",
 						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 						"--promote",
@@ -151,6 +159,10 @@ func TestGeneratePodSpec(t *testing.T) {
 						"--give-pr-author-access-to-namespace=true",
 						"--artifact-dir=$(ARTIFACTS)",
 						"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
+						"--resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org",
+						"--org=org",
+						"--repo=repo",
+						"--branch=branch",
 						"--kubeconfig=/etc/apici/kubeconfig",
 						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 						"--promote",
@@ -212,6 +224,10 @@ func TestGeneratePodSpec(t *testing.T) {
 						"--give-pr-author-access-to-namespace=true",
 						"--artifact-dir=$(ARTIFACTS)",
 						"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
+						"--resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org",
+						"--org=org",
+						"--repo=repo",
+						"--branch=branch",
 						"--kubeconfig=/etc/apici/kubeconfig",
 						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 						"--target=target",
@@ -264,6 +280,10 @@ func TestGeneratePodSpec(t *testing.T) {
 							"--give-pr-author-access-to-namespace=true",
 							"--artifact-dir=$(ARTIFACTS)",
 							"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
+							"--resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org",
+							"--org=org",
+							"--repo=repo",
+							"--branch=branch",
 							"--kubeconfig=/etc/apici/kubeconfig",
 							"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 							"--target=target",
@@ -409,6 +429,10 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						"--give-pr-author-access-to-namespace=true",
 						"--artifact-dir=$(ARTIFACTS)",
 						"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
+						"--resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org",
+						"--org=organization",
+						"--repo=repo",
+						"--branch=branch",
 						"--kubeconfig=/etc/apici/kubeconfig",
 						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 						"--target=test",
@@ -506,6 +530,10 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						"--give-pr-author-access-to-namespace=true",
 						"--artifact-dir=$(ARTIFACTS)",
 						"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
+						"--resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org",
+						"--org=organization",
+						"--repo=repo",
+						"--branch=branch",
 						"--kubeconfig=/etc/apici/kubeconfig",
 						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 						"--target=test",
@@ -595,6 +623,10 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						"--give-pr-author-access-to-namespace=true",
 						"--artifact-dir=$(ARTIFACTS)",
 						"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
+						"--resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org",
+						"--org=organization",
+						"--repo=repo",
+						"--branch=branch",
 						"--kubeconfig=/etc/apici/kubeconfig",
 						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 						"--target=test",
@@ -699,6 +731,10 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						"--give-pr-author-access-to-namespace=true",
 						"--artifact-dir=$(ARTIFACTS)",
 						"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
+						"--resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org",
+						"--org=organization",
+						"--repo=repo",
+						"--branch=branch",
 						"--kubeconfig=/etc/apici/kubeconfig",
 						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 						"--target=test",
@@ -812,6 +848,10 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						"--give-pr-author-access-to-namespace=true",
 						"--artifact-dir=$(ARTIFACTS)",
 						"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
+						"--resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org",
+						"--org=organization",
+						"--repo=repo",
+						"--branch=branch",
 						"--kubeconfig=/etc/apici/kubeconfig",
 						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 						"--target=test",
@@ -925,6 +965,10 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						"--give-pr-author-access-to-namespace=true",
 						"--artifact-dir=$(ARTIFACTS)",
 						"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
+						"--resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org",
+						"--org=organization",
+						"--repo=repo",
+						"--branch=branch",
 						"--kubeconfig=/etc/apici/kubeconfig",
 						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 						"--target=test",
@@ -1035,6 +1079,10 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						"--give-pr-author-access-to-namespace=true",
 						"--artifact-dir=$(ARTIFACTS)",
 						"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
+						"--resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org",
+						"--org=organization",
+						"--repo=repo",
+						"--branch=branch",
 						"--kubeconfig=/etc/apici/kubeconfig",
 						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 						"--target=test",
@@ -1524,10 +1572,14 @@ tests:
       containers:
       - args:
         - --artifact-dir=$(ARTIFACTS)
+        - --branch=branch
         - --give-pr-author-access-to-namespace=true
         - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
         - --kubeconfig=/etc/apici/kubeconfig
+        - --org=super
         - --promote
+        - --repo=duper
+        - --resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org
         - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=[images]
         command:
@@ -1582,9 +1634,13 @@ tests:
       containers:
       - args:
         - --artifact-dir=$(ARTIFACTS)
+        - --branch=branch
         - --give-pr-author-access-to-namespace=true
         - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
         - --kubeconfig=/etc/apici/kubeconfig
+        - --org=super
+        - --repo=duper
+        - --resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org
         - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=[images]
         command:
@@ -1640,9 +1696,13 @@ tests:
       containers:
       - args:
         - --artifact-dir=$(ARTIFACTS)
+        - --branch=branch
         - --give-pr-author-access-to-namespace=true
         - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
         - --kubeconfig=/etc/apici/kubeconfig
+        - --org=super
+        - --repo=duper
+        - --resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org
         - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=[images]
         command:
@@ -1695,9 +1755,13 @@ tests:
       containers:
       - args:
         - --artifact-dir=$(ARTIFACTS)
+        - --branch=branch
         - --give-pr-author-access-to-namespace=true
         - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
         - --kubeconfig=/etc/apici/kubeconfig
+        - --org=super
+        - --repo=duper
+        - --resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org
         - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=unit
         command:
@@ -1753,9 +1817,13 @@ tests:
       containers:
       - args:
         - --artifact-dir=$(ARTIFACTS)
+        - --branch=branch
         - --give-pr-author-access-to-namespace=true
         - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
         - --kubeconfig=/etc/apici/kubeconfig
+        - --org=super
+        - --repo=duper
+        - --resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org
         - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=unit
         command:
@@ -1878,9 +1946,13 @@ tests:
       containers:
       - args:
         - --artifact-dir=$(ARTIFACTS)
+        - --branch=branch
         - --give-pr-author-access-to-namespace=true
         - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
         - --kubeconfig=/etc/apici/kubeconfig
+        - --org=super
+        - --repo=duper
+        - --resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org
         - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=[images]
         - --variant=rhel
@@ -1938,9 +2010,13 @@ tests:
       containers:
       - args:
         - --artifact-dir=$(ARTIFACTS)
+        - --branch=branch
         - --give-pr-author-access-to-namespace=true
         - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
         - --kubeconfig=/etc/apici/kubeconfig
+        - --org=super
+        - --repo=duper
+        - --resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org
         - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=[images]
         - --variant=rhel
@@ -1995,9 +2071,13 @@ tests:
       containers:
       - args:
         - --artifact-dir=$(ARTIFACTS)
+        - --branch=branch
         - --give-pr-author-access-to-namespace=true
         - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
         - --kubeconfig=/etc/apici/kubeconfig
+        - --org=super
+        - --repo=duper
+        - --resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org
         - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=unit
         - --variant=rhel
@@ -2055,9 +2135,13 @@ tests:
       containers:
       - args:
         - --artifact-dir=$(ARTIFACTS)
+        - --branch=branch
         - --give-pr-author-access-to-namespace=true
         - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
         - --kubeconfig=/etc/apici/kubeconfig
+        - --org=super
+        - --repo=duper
+        - --resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org
         - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=unit
         - --variant=rhel
@@ -2133,10 +2217,14 @@ tests:
       containers:
       - args:
         - --artifact-dir=$(ARTIFACTS)
+        - --branch=branch
         - --give-pr-author-access-to-namespace=true
         - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
         - --kubeconfig=/etc/apici/kubeconfig
+        - --org=super
         - --promote
+        - --repo=duper
+        - --resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org
         - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=[images]
         - --variant=rhel
@@ -2256,9 +2344,13 @@ tests:
       containers:
       - args:
         - --artifact-dir=$(ARTIFACTS)
+        - --branch=branch
         - --give-pr-author-access-to-namespace=true
         - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
         - --kubeconfig=/etc/apici/kubeconfig
+        - --org=super
+        - --repo=duper
+        - --resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org
         - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=[images]
         command:
@@ -2314,9 +2406,13 @@ tests:
       containers:
       - args:
         - --artifact-dir=$(ARTIFACTS)
+        - --branch=branch
         - --give-pr-author-access-to-namespace=true
         - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
         - --kubeconfig=/etc/apici/kubeconfig
+        - --org=super
+        - --repo=duper
+        - --resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org
         - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=[images]
         command:
@@ -2369,9 +2465,13 @@ tests:
       containers:
       - args:
         - --artifact-dir=$(ARTIFACTS)
+        - --branch=branch
         - --give-pr-author-access-to-namespace=true
         - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
         - --kubeconfig=/etc/apici/kubeconfig
+        - --org=super
+        - --repo=duper
+        - --resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org
         - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=unit
         command:
@@ -2427,9 +2527,13 @@ tests:
       containers:
       - args:
         - --artifact-dir=$(ARTIFACTS)
+        - --branch=branch
         - --give-pr-author-access-to-namespace=true
         - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
         - --kubeconfig=/etc/apici/kubeconfig
+        - --org=super
+        - --repo=duper
+        - --resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org
         - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=unit
         command:
@@ -2501,10 +2605,14 @@ tests:
       containers:
       - args:
         - --artifact-dir=$(ARTIFACTS)
+        - --branch=branch
         - --give-pr-author-access-to-namespace=true
         - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
         - --kubeconfig=/etc/apici/kubeconfig
+        - --org=super
         - --promote
+        - --repo=duper
+        - --resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org
         - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=[images]
         command:

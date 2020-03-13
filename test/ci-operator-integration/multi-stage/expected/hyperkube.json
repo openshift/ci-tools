@@ -4,14 +4,14 @@
     "kind": "Build",
     "metadata": {
       "annotations": {
-        "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"installer\",\"base_ref\":\"release-4.2\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+        "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
       },
       "creationTimestamp": null,
       "labels": {
         "build-id": "0",
-        "ci.openshift.io/refs.branch": "release-4.2",
+        "ci.openshift.io/refs.branch": "master",
         "ci.openshift.io/refs.org": "openshift",
-        "ci.openshift.io/refs.repo": "installer",
+        "ci.openshift.io/refs.repo": "ci-tools",
         "created-by-ci": "true",
         "creates": "bin",
         "job": "pull-ci-openshift-release-master-ci-operator-integration",
@@ -75,14 +75,14 @@
     "kind": "Build",
     "metadata": {
       "annotations": {
-        "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"installer\",\"base_ref\":\"release-4.2\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+        "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
       },
       "creationTimestamp": null,
       "labels": {
         "build-id": "0",
-        "ci.openshift.io/refs.branch": "release-4.2",
+        "ci.openshift.io/refs.branch": "master",
         "ci.openshift.io/refs.org": "openshift",
-        "ci.openshift.io/refs.repo": "installer",
+        "ci.openshift.io/refs.repo": "ci-tools",
         "created-by-ci": "true",
         "creates": "src",
         "job": "pull-ci-openshift-release-master-ci-operator-integration",
@@ -112,7 +112,7 @@
       },
       "serviceAccount": "builder",
       "source": {
-        "dockerfile": "\nFROM pipeline:root\nADD ./app.binary /clonerefs\nRUN umask 0002 && /clonerefs && find /go/src -type d -not -perm -0775 | xargs -r chmod g+xw\nWORKDIR /go/src/github.com/openshift/installer/\nENV GOPATH=/go\nRUN git submodule update --init\n",
+        "dockerfile": "\nFROM pipeline:root\nADD ./app.binary /clonerefs\nRUN umask 0002 && /clonerefs && find /go/src -type d -not -perm -0775 | xargs -r chmod g+xw\nWORKDIR /go/src/github.com/openshift/ci-tools/\nENV GOPATH=/go\nRUN git submodule update --init\n",
         "images": [
           {
             "as": null,
@@ -139,7 +139,7 @@
             },
             {
               "name": "CLONEREFS_OPTIONS",
-              "value": "{\"src_root\":\"/go\",\"log\":\"/dev/null\",\"git_user_name\":\"ci-robot\",\"git_user_email\":\"ci-robot@openshift.io\",\"refs\":[{\"org\":\"openshift\",\"repo\":\"installer\",\"base_ref\":\"release-4.2\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}],\"fail\":true}"
+              "value": "{\"src_root\":\"/go\",\"log\":\"/dev/null\",\"git_user_name\":\"ci-robot\",\"git_user_email\":\"ci-robot@openshift.io\",\"refs\":[{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}],\"fail\":true}"
             }
           ],
           "forcePull": true,
@@ -165,14 +165,14 @@
     "kind": "Build",
     "metadata": {
       "annotations": {
-        "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"installer\",\"base_ref\":\"release-4.2\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+        "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
       },
       "creationTimestamp": null,
       "labels": {
         "build-id": "0",
-        "ci.openshift.io/refs.branch": "release-4.2",
+        "ci.openshift.io/refs.branch": "master",
         "ci.openshift.io/refs.org": "openshift",
-        "ci.openshift.io/refs.repo": "installer",
+        "ci.openshift.io/refs.repo": "ci-tools",
         "created-by-ci": "true",
         "creates": "tests",
         "job": "pull-ci-openshift-release-master-ci-operator-integration",
@@ -453,15 +453,15 @@
       "annotations": {
         "ci-operator.openshift.io/container-sub-tests": "post0",
         "ci-operator.openshift.io/save-container-logs": "true",
-        "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"installer\",\"base_ref\":\"release-4.2\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+        "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
       },
       "creationTimestamp": null,
       "labels": {
         "build-id": "0",
         "ci.openshift.io/multi-stage-test": "multi-stage",
-        "ci.openshift.io/refs.branch": "release-4.2",
+        "ci.openshift.io/refs.branch": "master",
         "ci.openshift.io/refs.org": "openshift",
-        "ci.openshift.io/refs.repo": "installer",
+        "ci.openshift.io/refs.repo": "ci-tools",
         "created-by-ci": "true",
         "job": "pull-ci-openshift-release-master-ci-operator-integration"
       },
@@ -493,7 +493,7 @@
             },
             {
               "name": "JOB_SPEC",
-              "value": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"installer\",\"base_ref\":\"release-4.2\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+              "value": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
             },
             {
               "name": "JOB_TYPE",
@@ -505,7 +505,7 @@
             },
             {
               "name": "PULL_BASE_REF",
-              "value": "release-4.2"
+              "value": "master"
             },
             {
               "name": "PULL_BASE_SHA",
@@ -521,11 +521,11 @@
             },
             {
               "name": "PULL_REFS",
-              "value": "release-4.2:af8a90a2faf965eeda949dc1c607c48d3ffcda3e,1234:538680dfd2f6cff3b3506c80ca182dcb0dd22a58"
+              "value": "master:af8a90a2faf965eeda949dc1c607c48d3ffcda3e,1234:538680dfd2f6cff3b3506c80ca182dcb0dd22a58"
             },
             {
               "name": "REPO_NAME",
-              "value": "installer"
+              "value": "ci-tools"
             },
             {
               "name": "REPO_OWNER",
@@ -644,15 +644,15 @@
       "annotations": {
         "ci-operator.openshift.io/container-sub-tests": "post1",
         "ci-operator.openshift.io/save-container-logs": "true",
-        "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"installer\",\"base_ref\":\"release-4.2\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+        "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
       },
       "creationTimestamp": null,
       "labels": {
         "build-id": "0",
         "ci.openshift.io/multi-stage-test": "multi-stage",
-        "ci.openshift.io/refs.branch": "release-4.2",
+        "ci.openshift.io/refs.branch": "master",
         "ci.openshift.io/refs.org": "openshift",
-        "ci.openshift.io/refs.repo": "installer",
+        "ci.openshift.io/refs.repo": "ci-tools",
         "created-by-ci": "true",
         "job": "pull-ci-openshift-release-master-ci-operator-integration"
       },
@@ -684,7 +684,7 @@
             },
             {
               "name": "JOB_SPEC",
-              "value": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"installer\",\"base_ref\":\"release-4.2\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+              "value": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
             },
             {
               "name": "JOB_TYPE",
@@ -696,7 +696,7 @@
             },
             {
               "name": "PULL_BASE_REF",
-              "value": "release-4.2"
+              "value": "master"
             },
             {
               "name": "PULL_BASE_SHA",
@@ -712,11 +712,11 @@
             },
             {
               "name": "PULL_REFS",
-              "value": "release-4.2:af8a90a2faf965eeda949dc1c607c48d3ffcda3e,1234:538680dfd2f6cff3b3506c80ca182dcb0dd22a58"
+              "value": "master:af8a90a2faf965eeda949dc1c607c48d3ffcda3e,1234:538680dfd2f6cff3b3506c80ca182dcb0dd22a58"
             },
             {
               "name": "REPO_NAME",
-              "value": "installer"
+              "value": "ci-tools"
             },
             {
               "name": "REPO_OWNER",
@@ -835,15 +835,15 @@
       "annotations": {
         "ci-operator.openshift.io/container-sub-tests": "pre0",
         "ci-operator.openshift.io/save-container-logs": "true",
-        "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"installer\",\"base_ref\":\"release-4.2\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+        "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
       },
       "creationTimestamp": null,
       "labels": {
         "build-id": "0",
         "ci.openshift.io/multi-stage-test": "multi-stage",
-        "ci.openshift.io/refs.branch": "release-4.2",
+        "ci.openshift.io/refs.branch": "master",
         "ci.openshift.io/refs.org": "openshift",
-        "ci.openshift.io/refs.repo": "installer",
+        "ci.openshift.io/refs.repo": "ci-tools",
         "created-by-ci": "true",
         "job": "pull-ci-openshift-release-master-ci-operator-integration"
       },
@@ -875,7 +875,7 @@
             },
             {
               "name": "JOB_SPEC",
-              "value": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"installer\",\"base_ref\":\"release-4.2\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+              "value": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
             },
             {
               "name": "JOB_TYPE",
@@ -887,7 +887,7 @@
             },
             {
               "name": "PULL_BASE_REF",
-              "value": "release-4.2"
+              "value": "master"
             },
             {
               "name": "PULL_BASE_SHA",
@@ -903,11 +903,11 @@
             },
             {
               "name": "PULL_REFS",
-              "value": "release-4.2:af8a90a2faf965eeda949dc1c607c48d3ffcda3e,1234:538680dfd2f6cff3b3506c80ca182dcb0dd22a58"
+              "value": "master:af8a90a2faf965eeda949dc1c607c48d3ffcda3e,1234:538680dfd2f6cff3b3506c80ca182dcb0dd22a58"
             },
             {
               "name": "REPO_NAME",
-              "value": "installer"
+              "value": "ci-tools"
             },
             {
               "name": "REPO_OWNER",
@@ -1026,15 +1026,15 @@
       "annotations": {
         "ci-operator.openshift.io/container-sub-tests": "pre1",
         "ci-operator.openshift.io/save-container-logs": "true",
-        "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"installer\",\"base_ref\":\"release-4.2\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+        "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
       },
       "creationTimestamp": null,
       "labels": {
         "build-id": "0",
         "ci.openshift.io/multi-stage-test": "multi-stage",
-        "ci.openshift.io/refs.branch": "release-4.2",
+        "ci.openshift.io/refs.branch": "master",
         "ci.openshift.io/refs.org": "openshift",
-        "ci.openshift.io/refs.repo": "installer",
+        "ci.openshift.io/refs.repo": "ci-tools",
         "created-by-ci": "true",
         "job": "pull-ci-openshift-release-master-ci-operator-integration"
       },
@@ -1066,7 +1066,7 @@
             },
             {
               "name": "JOB_SPEC",
-              "value": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"installer\",\"base_ref\":\"release-4.2\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+              "value": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
             },
             {
               "name": "JOB_TYPE",
@@ -1078,7 +1078,7 @@
             },
             {
               "name": "PULL_BASE_REF",
-              "value": "release-4.2"
+              "value": "master"
             },
             {
               "name": "PULL_BASE_SHA",
@@ -1094,11 +1094,11 @@
             },
             {
               "name": "PULL_REFS",
-              "value": "release-4.2:af8a90a2faf965eeda949dc1c607c48d3ffcda3e,1234:538680dfd2f6cff3b3506c80ca182dcb0dd22a58"
+              "value": "master:af8a90a2faf965eeda949dc1c607c48d3ffcda3e,1234:538680dfd2f6cff3b3506c80ca182dcb0dd22a58"
             },
             {
               "name": "REPO_NAME",
-              "value": "installer"
+              "value": "ci-tools"
             },
             {
               "name": "REPO_OWNER",
@@ -1217,15 +1217,15 @@
       "annotations": {
         "ci-operator.openshift.io/container-sub-tests": "test0",
         "ci-operator.openshift.io/save-container-logs": "true",
-        "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"installer\",\"base_ref\":\"release-4.2\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+        "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
       },
       "creationTimestamp": null,
       "labels": {
         "build-id": "0",
         "ci.openshift.io/multi-stage-test": "multi-stage",
-        "ci.openshift.io/refs.branch": "release-4.2",
+        "ci.openshift.io/refs.branch": "master",
         "ci.openshift.io/refs.org": "openshift",
-        "ci.openshift.io/refs.repo": "installer",
+        "ci.openshift.io/refs.repo": "ci-tools",
         "created-by-ci": "true",
         "job": "pull-ci-openshift-release-master-ci-operator-integration"
       },
@@ -1257,7 +1257,7 @@
             },
             {
               "name": "JOB_SPEC",
-              "value": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"installer\",\"base_ref\":\"release-4.2\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+              "value": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
             },
             {
               "name": "JOB_TYPE",
@@ -1269,7 +1269,7 @@
             },
             {
               "name": "PULL_BASE_REF",
-              "value": "release-4.2"
+              "value": "master"
             },
             {
               "name": "PULL_BASE_SHA",
@@ -1285,11 +1285,11 @@
             },
             {
               "name": "PULL_REFS",
-              "value": "release-4.2:af8a90a2faf965eeda949dc1c607c48d3ffcda3e,1234:538680dfd2f6cff3b3506c80ca182dcb0dd22a58"
+              "value": "master:af8a90a2faf965eeda949dc1c607c48d3ffcda3e,1234:538680dfd2f6cff3b3506c80ca182dcb0dd22a58"
             },
             {
               "name": "REPO_NAME",
-              "value": "installer"
+              "value": "ci-tools"
             },
             {
               "name": "REPO_OWNER",
@@ -1408,15 +1408,15 @@
       "annotations": {
         "ci-operator.openshift.io/container-sub-tests": "test1",
         "ci-operator.openshift.io/save-container-logs": "true",
-        "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"installer\",\"base_ref\":\"release-4.2\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+        "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
       },
       "creationTimestamp": null,
       "labels": {
         "build-id": "0",
         "ci.openshift.io/multi-stage-test": "multi-stage",
-        "ci.openshift.io/refs.branch": "release-4.2",
+        "ci.openshift.io/refs.branch": "master",
         "ci.openshift.io/refs.org": "openshift",
-        "ci.openshift.io/refs.repo": "installer",
+        "ci.openshift.io/refs.repo": "ci-tools",
         "created-by-ci": "true",
         "job": "pull-ci-openshift-release-master-ci-operator-integration"
       },
@@ -1448,7 +1448,7 @@
             },
             {
               "name": "JOB_SPEC",
-              "value": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"installer\",\"base_ref\":\"release-4.2\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+              "value": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
             },
             {
               "name": "JOB_TYPE",
@@ -1460,7 +1460,7 @@
             },
             {
               "name": "PULL_BASE_REF",
-              "value": "release-4.2"
+              "value": "master"
             },
             {
               "name": "PULL_BASE_SHA",
@@ -1476,11 +1476,11 @@
             },
             {
               "name": "PULL_REFS",
-              "value": "release-4.2:af8a90a2faf965eeda949dc1c607c48d3ffcda3e,1234:538680dfd2f6cff3b3506c80ca182dcb0dd22a58"
+              "value": "master:af8a90a2faf965eeda949dc1c607c48d3ffcda3e,1234:538680dfd2f6cff3b3506c80ca182dcb0dd22a58"
             },
             {
               "name": "REPO_NAME",
-              "value": "installer"
+              "value": "ci-tools"
             },
             {
               "name": "REPO_OWNER",
@@ -1599,15 +1599,15 @@
       "annotations": {
         "ci-operator.openshift.io/container-sub-tests": "test2",
         "ci-operator.openshift.io/save-container-logs": "true",
-        "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"installer\",\"base_ref\":\"release-4.2\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+        "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
       },
       "creationTimestamp": null,
       "labels": {
         "build-id": "0",
         "ci.openshift.io/multi-stage-test": "multi-stage",
-        "ci.openshift.io/refs.branch": "release-4.2",
+        "ci.openshift.io/refs.branch": "master",
         "ci.openshift.io/refs.org": "openshift",
-        "ci.openshift.io/refs.repo": "installer",
+        "ci.openshift.io/refs.repo": "ci-tools",
         "created-by-ci": "true",
         "job": "pull-ci-openshift-release-master-ci-operator-integration"
       },
@@ -1639,7 +1639,7 @@
             },
             {
               "name": "JOB_SPEC",
-              "value": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"installer\",\"base_ref\":\"release-4.2\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+              "value": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"ci-tools\",\"base_ref\":\"master\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
             },
             {
               "name": "JOB_TYPE",
@@ -1651,7 +1651,7 @@
             },
             {
               "name": "PULL_BASE_REF",
-              "value": "release-4.2"
+              "value": "master"
             },
             {
               "name": "PULL_BASE_SHA",
@@ -1667,11 +1667,11 @@
             },
             {
               "name": "PULL_REFS",
-              "value": "release-4.2:af8a90a2faf965eeda949dc1c607c48d3ffcda3e,1234:538680dfd2f6cff3b3506c80ca182dcb0dd22a58"
+              "value": "master:af8a90a2faf965eeda949dc1c607c48d3ffcda3e,1234:538680dfd2f6cff3b3506c80ca182dcb0dd22a58"
             },
             {
               "name": "REPO_NAME",
-              "value": "installer"
+              "value": "ci-tools"
             },
             {
               "name": "REPO_OWNER",

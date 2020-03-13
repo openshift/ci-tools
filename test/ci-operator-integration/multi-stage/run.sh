@@ -18,8 +18,7 @@ readonly OUT="${WORKDIR}/out.json"
 readonly ERR="${WORKDIR}/err.json"
 readonly ARTIFACT_DIR="${WORKDIR}/artifacts"
 
-# CI-Operator requires JOB_SPEC to be set; ci-operator also uses the JOB_SPEC for configuring the args for configresolver
-export JOB_SPEC='{"type":"presubmit","job":"pull-ci-openshift-release-master-ci-operator-integration","buildid":"0","prowjobid":"uuid","refs":{"org":"openshift","repo":"installer","base_ref":"release-4.2","base_sha":"af8a90a2faf965eeda949dc1c607c48d3ffcda3e","pulls":[{"number":1234,"author":"droslean","sha":"538680dfd2f6cff3b3506c80ca182dcb0dd22a58"}]}}'
+export JOB_SPEC='{"type":"presubmit","job":"pull-ci-openshift-release-master-ci-operator-integration","buildid":"0","prowjobid":"uuid","refs":{"org":"openshift","repo":"ci-tools","base_ref":"master","base_sha":"af8a90a2faf965eeda949dc1c607c48d3ffcda3e","pulls":[{"number":1234,"author":"droslean","sha":"538680dfd2f6cff3b3506c80ca182dcb0dd22a58"}]}}'
 # set by Prow
 unset BUILD_ID
 
@@ -29,7 +28,7 @@ check() {
         cat "${ERR}"
         return 1
     fi
-    if ! diff -Naupr "${EXPECTED2}" "${OUT}"; then
+    if ! diff "${EXPECTED2}" "${OUT}"; then
         echo "ERROR: differences have been found against ${EXPECTED2}"
         return 1
     fi
@@ -42,7 +41,7 @@ if ! ci-operator --dry-run --determinize-output --namespace "${TEST_NAMESPACE}" 
     exit 1
 fi
 
-if ! diff -Naupr "${EXPECTED1}" "${OUT}"; then
+if ! diff "${EXPECTED1}" "${OUT}"; then
     echo "ERROR: differences have been found against ${EXPECTED1}"
     exit 1
 fi
@@ -79,8 +78,8 @@ for (( i = 0; i < 10; i++ )); do
     sleep 0.5
 done
 
-if ! ci-operator --dry-run --determinize-output --namespace "${TEST_NAMESPACE}" \
-    -resolver-address "http://127.0.0.1:8080" --lease-server "http://lease" 2> "${ERR}" | jq --sort-keys . > "${OUT}"; then
+if ! ci-operator --dry-run --determinize-output --namespace "${TEST_NAMESPACE}" --config "${TEST_CONFIG0}" \
+    -resolver-address "http://127.0.0.1:8080" -org "openshift" -repo "installer" -branch "release-4.2" --lease-server "http://lease" 2> "${ERR}" | jq --sort-keys . > "${OUT}"; then
     echo "ERROR: ci-operator failed."
     cat "${ERR}"
     kill $(jobs -p)

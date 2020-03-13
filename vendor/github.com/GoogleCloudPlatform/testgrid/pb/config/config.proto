@@ -58,9 +58,7 @@ message TestGroup {
   // Name of this TestGroup, for mapping dashboard tabs to tests.
   string name = 1;
 
-  // Path to the test result location, including protocol.
-  // The location must be accessible from the Update Server, and not local.
-  // GCS is usually used, making this field "gs://<bucket>"
+  // Path to the test result stored in gcs (gs://some/path)
   string gcs_prefix = 2;
 
   // Number of days of test results to gather and serve.
@@ -96,7 +94,8 @@ message TestGroup {
   // Custom column headers for defining extra column-heading rows from values in
   // the test result.
   message ColumnHeader {
-    reserved 1, 2;
+    string label = 1;
+    string property = 2;
     string configuration_value = 3;
   }
   repeated ColumnHeader column_header = 9;
@@ -229,7 +228,7 @@ message TestGroup {
   // Default metadata that should be applied for opening bugs, if a given regex
   // matches against a test's name.
   // Requires 'use_test_metadata = true'.
-  TestMetadataOptions test_metadata_options = 34;
+  repeated TestMetadataOptions test_metadata_options = 34;
 
   // A space-delimited string of tags that are used to filter test targets.
   // A leading - before the tag means this tag should not be present
@@ -398,6 +397,9 @@ message AutoBugOptions {
   // query by testgrid for a single failure group exceeds this value. Requires
   // 'file_individual' to be True.
   int32 max_allowed_individual_bugs = 7;
+
+  // If True; file issues for the 'Overall' target, even if otherwise invalid.
+  bool file_overall = 8;
 }
 
 message HotlistIdFromSource {

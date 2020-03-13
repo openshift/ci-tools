@@ -11,7 +11,7 @@ replace (
 
 require (
 	cloud.google.com/go/storage v1.0.0
-	github.com/GoogleCloudPlatform/testgrid v0.0.1-alpha.4
+	github.com/GoogleCloudPlatform/testgrid v0.0.7
 	github.com/SierraSoftworks/sentry-go v1.1.1
 	github.com/alecthomas/chroma v0.7.1
 	github.com/docker/spdystream v0.0.0-20181023171402-6480d4af844c // indirect
@@ -36,6 +36,6 @@ require (
 	k8s.io/api v0.17.3
 	k8s.io/apimachinery v0.17.3
 	k8s.io/client-go v11.0.1-0.20190805182717-6502b5e7b1b5+incompatible
-	k8s.io/test-infra v0.0.0-20200305212238-062b3366cf1b
+	k8s.io/test-infra v0.0.0-20200313130039-a5264bb493d6
 	sigs.k8s.io/yaml v1.1.0
 )

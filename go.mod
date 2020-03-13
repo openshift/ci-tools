@@ -4,14 +4,14 @@ go 1.12
 
 replace (
 	github.com/Azure/go-autorest => github.com/Azure/go-autorest v12.2.0+incompatible
-	k8s.io/api => k8s.io/api v0.0.0-20190918195907-bd6ac527cfd2
-	k8s.io/apimachinery => k8s.io/apimachinery v0.0.0-20190817020851-f2f3a405f61d
-	k8s.io/client-go => k8s.io/client-go v0.0.0-20190918200256-06eb1244587a
+	k8s.io/api => k8s.io/api v0.17.3
+	k8s.io/apimachinery => k8s.io/apimachinery v0.17.3
+	k8s.io/client-go => k8s.io/client-go v0.17.3
 )
 
 require (
 	cloud.google.com/go/storage v1.0.0
-	github.com/GoogleCloudPlatform/testgrid v0.0.1-alpha.4
+	github.com/GoogleCloudPlatform/testgrid v0.0.7
 	github.com/SierraSoftworks/sentry-go v1.1.1
 	github.com/alecthomas/chroma v0.7.1
 	github.com/docker/spdystream v0.0.0-20181023171402-6480d4af844c // indirect
@@ -23,8 +23,8 @@ require (
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 	github.com/google/go-cmp v0.4.0
 	github.com/mattn/go-zglob v0.0.1
-	github.com/openshift/api v3.9.1-0.20190725193935-b7d4eb0fa1e0+incompatible
-	github.com/openshift/client-go v0.0.0-20190721020503-a85ea6a6b3a5
+	github.com/openshift/api v0.0.0-20200116145750-0e2ff1e215dd
+	github.com/openshift/client-go v0.0.0-20200116152001-92a2713fa240
 	github.com/pkg/errors v0.9.1
 	github.com/pmezard/go-difflib v1.0.0
 	github.com/prometheus/client_golang v1.5.0
@@ -36,6 +36,6 @@ require (
 	k8s.io/api v0.17.3
 	k8s.io/apimachinery v0.17.3
 	k8s.io/client-go v11.0.1-0.20190805182717-6502b5e7b1b5+incompatible
-	k8s.io/test-infra v0.0.0-20200305212238-062b3366cf1b
+	k8s.io/test-infra v0.0.0-20200313130039-a5264bb493d6
 	sigs.k8s.io/yaml v1.1.0
 )

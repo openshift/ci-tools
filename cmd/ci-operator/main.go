@@ -38,6 +38,7 @@ import (
 	"k8s.io/client-go/util/retry"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
+	"k8s.io/test-infra/prow/version"
 
 	"github.com/ghodss/yaml"
 
@@ -153,6 +154,7 @@ const (
 const CustomProwMetadata = "custom-prow-metadata.json"
 
 func main() {
+	log.Printf("%s version %s", version.Name, version.Version)
 	flagSet := flag.NewFlagSet("", flag.ExitOnError)
 	opt := bindOptions(flagSet)
 	flagSet.Parse(os.Args[1:])

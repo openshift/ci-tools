@@ -8,7 +8,7 @@ build:
 .PHONY: build
 
 install:
-	go install ./cmd/...
+	hack/install.sh
 .PHONY: install
 
 test:

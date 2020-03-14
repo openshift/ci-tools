@@ -37,8 +37,10 @@ import (
 	githubql "github.com/shurcooL/githubv4"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/oauth2"
+
 	"k8s.io/test-infra/ghproxy/ghcache"
 	"k8s.io/test-infra/prow/errorutil"
+	"k8s.io/test-infra/prow/version"
 )
 
 type timeClient interface {
@@ -229,12 +231,15 @@ type Client interface {
 	SetMax404Retries(int)
 
 	WithFields(fields logrus.Fields) Client
+	ForPlugin(plugin string) Client
 }
 
 // client interacts with the github api.
 type client struct {
 	// If logger is non-nil, log all method calls with it.
 	logger *logrus.Entry
+	// plugin is used to add more identification to the user-agent header
+	plugin string
 	*delegate
 }
 
@@ -258,6 +263,23 @@ type delegate struct {
 
 	mut      sync.Mutex // protects botName and email
 	userData *User
+}
+
+// ForPlugin clones the client, keeping the underlying delegate the same but adding
+// a plugin identifier and log field
+func (c *client) ForPlugin(plugin string) Client {
+	return &client{
+		plugin:   plugin,
+		logger:   c.logger.WithField("plugin", plugin),
+		delegate: c.delegate,
+	}
+}
+
+func (c *client) userAgent() string {
+	if c.plugin != "" {
+		return version.UserAgentWithIdentifier(c.plugin)
+	}
+	return version.UserAgent()
 }
 
 // WithFields clones the client, keeping the underlying delegate the same but adding
@@ -750,6 +772,9 @@ func (c *client) doRequest(method, path, accept string, body interface{}) (*http
 		req.Header.Add("Accept", "application/vnd.github.v3+json")
 	} else {
 		req.Header.Add("Accept", accept)
+	}
+	if userAgent := c.userAgent(); userAgent != "" {
+		req.Header.Add("User-Agent", userAgent)
 	}
 	// Disable keep-alive so that we don't get flakes when GitHub closes the
 	// connection prematurely.

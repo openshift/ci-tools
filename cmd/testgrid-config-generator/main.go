@@ -92,10 +92,20 @@ func dashboardTabFor(name string) *config.DashboardTab {
 		BaseOptions:      "width=10&exclude-filter-by-regex=Monitor%5Cscluster&exclude-filter-by-regex=%5Eoperator.Run%20template.*container%20test%24",
 		OpenTestTemplate: &config.LinkTemplate{Url: "https://prow.svc.ci.openshift.org/view/gcs/<gcs_prefix>/<changelist>"},
 		FileBugTemplate: &config.LinkTemplate{
-			Url: "https://github.com/openshift/origin/issues/new",
+			Url: "https://bugzilla.redhat.com/enter_bug.cgi?classification=Red%20Hat&product=OpenShift%20Container%20Platform&cf_internal_whiteboard=buildcop",
 			Options: []*config.LinkOptionsTemplate{
-				{Key: "title", Value: "E2E: <test-name>"},
-				{Key: "body", Value: "<test-url>"},
+				{
+					Key:   "short_desc",
+					Value: "test: <test-name>",
+				},
+				{
+					Key:   "cf_environment",
+					Value: "test: <test-name>",
+				},
+				{
+					Key:   "comment",
+					Value: "test: <test-name> failed, see job: <test-url>",
+				},
 			},
 		},
 		OpenBugTemplate:       &config.LinkTemplate{Url: "https://github.com/openshift/origin/issues/"},

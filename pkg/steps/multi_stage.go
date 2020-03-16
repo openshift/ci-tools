@@ -263,10 +263,7 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep) ([]coreap
 		if s.config.IsPipelineImage(image) || s.config.BuildsImage(image) {
 			image = fmt.Sprintf("%s:%s", api.PipelineImageStream, image)
 		} else {
-			// TODO remove once jobs are migrated
-			if !strings.HasPrefix(image, "stable:") {
-				image = fmt.Sprintf("%s:%s", api.StableImageStream, image)
-			}
+			image = fmt.Sprintf("%s:%s", api.StableImageStream, image)
 		}
 		resources, err := resourcesFor(step.Resources)
 		if err != nil {

@@ -85,9 +85,10 @@ func dashboardFor(stream, version, role string) *dashboard {
 }
 
 // dashboardTabFor builds a dashboard tab with default values injected
-func dashboardTabFor(name string) *config.DashboardTab {
+func dashboardTabFor(name, description string) *config.DashboardTab {
 	return &config.DashboardTab{
 		Name:             name,
+		Description:      description,
 		TestGroupName:    name,
 		BaseOptions:      "width=10&exclude-filter-by-regex=Monitor%5Cscluster&exclude-filter-by-regex=%5Eoperator.Run%20template.*container%20test%24",
 		OpenTestTemplate: &config.LinkTemplate{Url: "https://prow.svc.ci.openshift.org/view/gcs/<gcs_prefix>/<changelist>"},
@@ -135,12 +136,12 @@ func testGroupFor(name string, daysOfResults int32) *config.TestGroup {
 	}
 }
 
-func (d *dashboard) add(name string, daysOfResults int32) {
+func (d *dashboard) add(name string, description string, daysOfResults int32) {
 	if d.existing.Has(name) {
 		return
 	}
 	d.existing.Insert(name)
-	d.Dashboard.DashboardTab = append(d.Dashboard.DashboardTab, dashboardTabFor(name))
+	d.Dashboard.DashboardTab = append(d.Dashboard.DashboardTab, dashboardTabFor(name, description))
 	d.testGroups = append(d.testGroups, testGroupFor(name, daysOfResults))
 }
 
@@ -151,7 +152,8 @@ type release struct {
 		Optional bool `json:"optional"`
 		Upgrade  bool `json:"upgrade"`
 		ProwJob  struct {
-			Name string `json:"name"`
+			Name        string            `json:"name"`
+			Annotations map[string]string `json:"annotations"`
 		} `json:"prowJob"`
 	} `json:"verify"`
 }
@@ -242,13 +244,13 @@ func main() {
 
 			delete(informingPeriodics, job.ProwJob.Name)
 			if job.Upgrade {
-				genericInforming.add(job.ProwJob.Name, 0)
+				genericInforming.add(job.ProwJob.Name, job.ProwJob.Annotations["description"], 0)
 				continue
 			}
 			if job.Optional {
-				informing.add(job.ProwJob.Name, 0)
+				informing.add(job.ProwJob.Name, job.ProwJob.Annotations["description"], 0)
 			} else {
-				blocking.add(job.ProwJob.Name, 0)
+				blocking.add(job.ProwJob.Name, job.ProwJob.Annotations["description"], 0)
 			}
 		}
 		for _, p := range informingPeriodics {
@@ -289,8 +291,7 @@ func main() {
 					}
 				}
 			}
-
-			informing.add(p.Name, daysOfResults)
+			informing.add(p.Name, p.Annotations["description"], daysOfResults)
 			delete(informingPeriodics, p.Name)
 		}
 		return nil

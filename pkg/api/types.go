@@ -517,6 +517,7 @@ const (
 	ClusterProfileGCPLoggingJournald ClusterProfile = "gcp-logging-journald"
 	ClusterProfileGCPLoggingJSONFile ClusterProfile = "gcp-logging-json-file"
 	ClusterProfileGCPLoggingCRIO     ClusterProfile = "gcp-logging-crio"
+	ClusterProfileLibvirtS390x       ClusterProfile = "libvirt-s390x"
 	ClusterProfileOpenStack          ClusterProfile = "openstack"
 	ClusterProfileOpenStackPpc64le   ClusterProfile = "openstack-ppc64le"
 	ClusterProfileOvirt              ClusterProfile = "ovirt"
@@ -541,6 +542,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileGCPLoggingJournald,
 		ClusterProfileGCPLoggingJSONFile,
 		ClusterProfileGCPLoggingCRIO,
+		ClusterProfileLibvirtS390x,
 		ClusterProfileOpenStack,
 		ClusterProfileOpenStackPpc64le,
 		ClusterProfileOvirt,
@@ -571,6 +573,8 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileGCPLoggingJSONFile,
 		ClusterProfileGCPLoggingCRIO:
 		return "gcp"
+	case ClusterProfileLibvirtS390x:
+		return "libvirt-s390x"
 	case ClusterProfileOpenStack:
 		return "openstack"
 	case ClusterProfileOpenStackPpc64le:
@@ -608,6 +612,8 @@ func (p ClusterProfile) LeaseType() string {
 		ClusterProfileGCPLoggingJSONFile,
 		ClusterProfileGCPLoggingCRIO:
 		return "gcp-quota-slice"
+	case ClusterProfileLibvirtS390x:
+		return "libvirt-s390x-quota-slice"
 	case ClusterProfileOpenStack:
 		return "openstack-quota-slice"
 	case ClusterProfileOpenStackPpc64le:
@@ -626,7 +632,7 @@ func (p ClusterProfile) LeaseType() string {
 // LeaseTypeFromClusterType maps cluster types to lease types
 func LeaseTypeFromClusterType(t string) (string, error) {
 	switch t {
-	case "aws", "azure4", "gcp", "openstack", "openstack-ppc64le", "vsphere", "ovirt", "packet":
+	case "aws", "azure4", "gcp", "libvirt-s390x", "openstack", "openstack-ppc64le", "vsphere", "ovirt", "packet":
 		return t + "-quota-slice", nil
 	default:
 		return "", fmt.Errorf("invalid cluster type %q", t)

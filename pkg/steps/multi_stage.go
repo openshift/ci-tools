@@ -262,6 +262,8 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep) ([]coreap
 		image := step.From
 		if s.config.IsPipelineImage(image) || s.config.BuildsImage(image) {
 			image = fmt.Sprintf("%s:%s", api.PipelineImageStream, image)
+		} else {
+			image = fmt.Sprintf("%s:%s", api.StableImageStream, image)
 		}
 		resources, err := resourcesFor(step.Resources)
 		if err != nil {

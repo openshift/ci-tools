@@ -589,11 +589,46 @@ approach to run static verification of source code:
 
 </p>
 The second approach to describing tests allows for multiple containers to be chained
-together and describes a more complicated executioin flow between them. This multi-stage
+together and describes a more complicated execution flow between them. This multi-stage
 test approach is best suited for end-to-end test suites that require full OpenShift
 test clusters to be brought up and torn down. Learn more about this type of test
 at the <a href="./">getting started overview</a>.
 <p>
+
+<h4 id="test-types"><a href="#test-types">Types of Tests</a></h4>
+<h5 id="presubmit"><a href="#presubmit">Pre-submit Tests</a></h5>
+<p>
+By default, any entry declared in the <code>tests</code> stanza of a <code>ci-operator</code>
+configuration file will be a <i>pre-submit</i> test: these tests run before code is
+submitted (merged) into the target repository. <i>Pre-submit</i> tests are useful
+to give feedback to a developer on the content of their pull request and to gate
+merges to the central repository. These tests will fire when a pull request is opened,
+when the contents of a pull request are changed, or on demand when a user requests
+them.
+</p>
+
+<h5 id="postsubmit"><a href="#postsubmit">Post-submit Tests</a></h5>
+<p>
+When a repository configures <code>ci-operator</code> to build images and publish
+them (by declaring container image builds with <code>images</code> and the destination
+for them to be published with <code>promotion</code>), a <i>post-submit</i> test will
+exist. A <i>post-submit</i> test executes after code is merged to the target repository;
+this sort of test type is a good fit for publication of new artifacts after changes to
+source code. It is not possible to configure any additional <i>post-submit</i> tests
+at this time using <code>ci-operator</code> configuration.
+</p>
+
+<h5 id="periodic"><a href="#periodic">Periodic Tests</a></h5>
+<p>
+A repository may be interested in validating the health of the latest source code,
+but not at every moment that the code changes. In these cases, a <i>periodic</i>
+test may be configured to run on the latest source code on a schedule. The following
+example sets the <code>cron</code> field on an entry in the <code>tests</code> list
+to configure that test to run on a schedule, instead of as a <i>pre-submit</i>:
+</p>
+
+<code>ci-operator</code> configuration:
+{{ yamlSyntax (index . "ciOperatorPeriodicTestConfig") }}
 `
 
 const ciOperatorInputConfig = `base_images:
@@ -671,6 +706,14 @@ const ciOperatorContainerTestConfig = `tests:
   commands: "go vet ./..."  # declares which commands to run
   container:
     from: "src"             # runs the commands in "pipeline:src"
+`
+
+const ciOperatorPeriodicTestConfig = `tests:
+- as: "sanity"               # names this test "sanity"
+  commands: "go test ./..."  # declares which commands to run
+  container:
+    from: "src"              # runs the commands in "pipeline:src"
+  cron: "0 */6 * * *"        # schedule a run on the hour, every six hours
 `
 
 const gettingStartedPage = `
@@ -1394,6 +1437,7 @@ func helpHandler(subPath string, w http.ResponseWriter, req *http.Request) {
 		data["ciOperatorPromotionConfig"] = ciOperatorPromotionConfig
 		data["ciOperatorTagSpecificationConfig"] = ciOperatorTagSpecificationConfig
 		data["ciOperatorContainerTestConfig"] = ciOperatorContainerTestConfig
+		data["ciOperatorPeriodicTestConfig"] = ciOperatorPeriodicTestConfig
 	default:
 		writeErrorPage(w, errors.New("Invalid path"), http.StatusNotImplemented)
 		return

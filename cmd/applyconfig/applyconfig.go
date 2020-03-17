@@ -17,6 +17,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/logrusutil"
 )
 
@@ -24,12 +25,12 @@ type level string
 type command string
 
 type options struct {
-	confirm    bool
-	level      level
-	user       *nullableStringFlag
-	directory  string
-	context    string
-	kubeConfig string
+	confirm     bool
+	level       level
+	user        *nullableStringFlag
+	directories flagutil.Strings
+	context     string
+	kubeConfig  string
 }
 
 const (
@@ -78,7 +79,7 @@ func gatherOptions() *options {
 	flag.BoolVar(&opt.confirm, "confirm", false, "Set to true to make applyconfig commit the config to the cluster")
 	flag.StringVar(&lvl, "level", "standard", "Select which config to apply (standard, admin, all)")
 	flag.Var(opt.user, "as", "Username to impersonate while applying the config")
-	flag.StringVar(&opt.directory, "config-dir", "", "Directory with config to apply")
+	flag.Var(&opt.directories, "config-dir", "Directory with config to apply. Can be repeated multiple times.")
 	flag.StringVar(&opt.context, "context", "", "Context name to use while applying the config")
 	flag.StringVar(&opt.kubeConfig, "kubeconfig", "", "Path to the kubeconfig file to apply the config")
 	flag.Parse()
@@ -90,7 +91,7 @@ func gatherOptions() *options {
 		os.Exit(1)
 	}
 
-	if opt.directory == "" {
+	if len(opt.directories.Strings()) < 1 || opt.directories.Strings()[0] == "" {
 		fmt.Fprintf(os.Stderr, "--config-dir must be provided\n")
 		os.Exit(1)
 	}
@@ -302,7 +303,7 @@ func init() {
 
 func main() {
 	o := gatherOptions()
-	var adminErr, standardErr error
+	var hadErr bool
 
 	if o.level.shouldApplyAdmin() {
 		if !o.user.beenSet {
@@ -316,9 +317,11 @@ func main() {
 			return apply(o.kubeConfig, o.context, path, o.user.val, !o.confirm)
 		}
 
-		adminErr = applyConfig(o.directory, "admin", f)
-		if adminErr != nil {
-			logrus.Errorf("There were failures while applying admin config")
+		for _, dir := range o.directories.Strings() {
+			if err := applyConfig(dir, "admin", f); err != nil {
+				hadErr = true
+				logrus.WithError(err).Error("There were failures while applying admin config")
+			}
 		}
 	}
 
@@ -334,13 +337,15 @@ func main() {
 			return apply(o.kubeConfig, o.context, path, o.user.val, !o.confirm)
 		}
 
-		standardErr = applyConfig(o.directory, "standard", f)
-		if standardErr != nil {
-			logrus.Error("There were failures while applying standard config")
+		for _, dir := range o.directories.Strings() {
+			if err := applyConfig(dir, "standard", f); err != nil {
+				hadErr = true
+				logrus.WithError(err).Error("There were failures while applying standard config")
+			}
 		}
 	}
 
-	if standardErr != nil || adminErr != nil {
+	if hadErr {
 		os.Exit(1)
 	}
 

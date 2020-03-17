@@ -2904,6 +2904,47 @@ func TestGenerateJobBase(t *testing.T) {
 				Hidden:        true,
 			},
 		},
+		{
+			testName: "expose job for private repos with public results",
+			name:     "test",
+			prefix:   "pull",
+			info: &prowgenInfo{
+				Info:   config.Info{Org: "org", Repo: "repo", Branch: "branch"},
+				config: config.Prowgen{Private: true, Expose: true},
+			},
+			label:   jobconfig.Generated,
+			podSpec: &kubeapi.PodSpec{Containers: []kubeapi.Container{{Name: "test"}}},
+			expected: prowconfig.JobBase{
+				Name:  "pull-ci-org-repo-branch-test",
+				Agent: "kubernetes",
+				Labels: map[string]string{
+					"ci-operator.openshift.io/prowgen-controlled": "true",
+				},
+				Spec:          &kubeapi.PodSpec{Containers: []kubeapi.Container{{Name: "test"}}},
+				UtilityConfig: prowconfig.UtilityConfig{Decorate: true, DecorationConfig: &v1.DecorationConfig{SkipCloning: &yes}},
+				Hidden:        false,
+			},
+		},
+		{
+			testName: "expose option set but not private",
+			name:     "test",
+			prefix:   "pull",
+			info: &prowgenInfo{
+				Info:   config.Info{Org: "org", Repo: "repo", Branch: "branch"},
+				config: config.Prowgen{Private: false, Expose: true},
+			},
+			label:   jobconfig.Generated,
+			podSpec: &kubeapi.PodSpec{Containers: []kubeapi.Container{{Name: "test"}}},
+			expected: prowconfig.JobBase{
+				Name:  "pull-ci-org-repo-branch-test",
+				Agent: "kubernetes",
+				Labels: map[string]string{
+					"ci-operator.openshift.io/prowgen-controlled": "true",
+				},
+				Spec:          &kubeapi.PodSpec{Containers: []kubeapi.Container{{Name: "test"}}},
+				UtilityConfig: prowconfig.UtilityConfig{Decorate: true, DecorationConfig: &v1.DecorationConfig{SkipCloning: &yes}},
+			},
+		},
 	}
 
 	for _, testCase := range testCases {

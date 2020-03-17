@@ -22,6 +22,7 @@ var ProwgenFile = ".config.prowgen"
 // Prowgen holds the information of the prowgen's configuration file.
 type Prowgen struct {
 	Private bool `json:"private,omitempty"`
+	Expose  bool `json:"expose,omitempty"`
 }
 
 func readCiOperatorConfig(configFilePath string, info Info) (*cioperatorapi.ReleaseBuildConfiguration, error) {

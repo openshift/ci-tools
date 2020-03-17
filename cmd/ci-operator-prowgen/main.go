@@ -198,10 +198,6 @@ func generateCiOperatorPodSpec(info *prowgenInfo, secrets []*cioperatorapi.Secre
 		"--give-pr-author-access-to-namespace=true",
 		"--artifact-dir=$(ARTIFACTS)",
 		fmt.Sprintf("--sentry-dsn-path=%s", sentryDsnSecretPath),
-		"--resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org",
-		fmt.Sprintf("--org=%s", info.Org),
-		fmt.Sprintf("--repo=%s", info.Repo),
-		fmt.Sprintf("--branch=%s", info.Branch),
 		"--kubeconfig=/etc/apici/kubeconfig",
 		"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 	}, additionalArgs...)

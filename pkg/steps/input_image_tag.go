@@ -31,6 +31,9 @@ type inputImageTagStep struct {
 }
 
 func (s *inputImageTagStep) Inputs(dry bool) (api.InputDefinition, error) {
+	if dry {
+		return api.InputDefinition{"sha256:integration-test"}, nil
+	}
 	if len(s.imageName) > 0 {
 		return api.InputDefinition{s.imageName}, nil
 	}

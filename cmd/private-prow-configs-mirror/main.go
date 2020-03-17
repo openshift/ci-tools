@@ -28,7 +28,8 @@ import (
 )
 
 const (
-	openshiftPrivOrg = "openshift-priv"
+	openshiftPrivOrg   = "openshift-priv"
+	approvePluginValue = "approve"
 )
 
 type options struct {
@@ -328,6 +329,12 @@ func mergeCommonPrivatePlugins(plugins map[string][]string, privateReposWithValu
 		if len(repeatedValues) > 0 {
 			privateOrgPlugins = privateOrgPlugins.Union(valuesSet.Intersection(repeatedValues))
 			repoLevelPlugins = repoLevelPlugins.Union(valuesSet.Difference(repeatedValues))
+
+			// We want to keep the `approve` value in the repo level
+			// because it interacts with the tide.queries.
+			if valuesSet.Has(approvePluginValue) {
+				repoLevelPlugins.Insert(approvePluginValue)
+			}
 		} else {
 			repoLevelPlugins.Insert(repoValues...)
 		}
@@ -339,6 +346,7 @@ func mergeCommonPrivatePlugins(plugins map[string][]string, privateReposWithValu
 	}
 
 	if len(privateOrgPlugins.List()) > 0 {
+		privateOrgPlugins.Delete(approvePluginValue)
 		logrus.WithField("value", privateOrgPlugins.List()).Info("Generating openshift-priv org.")
 		plugins[openshiftPrivOrg] = privateOrgPlugins.List()
 	}

@@ -632,9 +632,9 @@ func TestInjectPrivatePlugins(t *testing.T) {
 				"openshift/testRepo1": {"approve"},
 				"testshift/testRepo3": {"approve", "trigger"},
 
-				"openshift-priv":           {"approve", "hold", "lgtm"},
-				"openshift-priv/testRepo1": {"cat", "dog"},
-				"openshift-priv/testRepo3": {"label", "milestone", "trigger"},
+				"openshift-priv":           {"hold", "lgtm"},
+				"openshift-priv/testRepo1": {"approve", "cat", "dog"},
+				"openshift-priv/testRepo3": {"approve", "label", "milestone", "trigger"},
 			},
 		},
 	}

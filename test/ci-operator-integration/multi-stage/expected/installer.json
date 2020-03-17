@@ -297,7 +297,7 @@
               "value": "/var/run/secrets/ci.openshift.io/multi-stage"
             }
           ],
-          "image": "my-image",
+          "image": "stable:my-image",
           "name": "e2e",
           "resources": {
             "requests": {
@@ -514,7 +514,7 @@
               "value": "/var/run/secrets/ci.openshift.io/multi-stage"
             }
           ],
-          "image": "installer",
+          "image": "stable:installer",
           "name": "ipi-deprovision-deprovision",
           "resources": {
             "requests": {
@@ -731,7 +731,7 @@
               "value": "/var/run/secrets/ci.openshift.io/multi-stage"
             }
           ],
-          "image": "installer",
+          "image": "stable:installer",
           "name": "ipi-deprovision-must-gather",
           "resources": {
             "requests": {
@@ -948,7 +948,7 @@
               "value": "/var/run/secrets/ci.openshift.io/multi-stage"
             }
           ],
-          "image": "installer",
+          "image": "stable:installer",
           "name": "ipi-install-install",
           "resources": {
             "requests": {
@@ -1165,7 +1165,7 @@
               "value": "/var/run/secrets/ci.openshift.io/multi-stage"
             }
           ],
-          "image": "installer",
+          "image": "stable:installer",
           "name": "ipi-install-rbac",
           "resources": {
             "requests": {
@@ -1382,7 +1382,7 @@
               "value": "/var/run/secrets/ci.openshift.io/multi-stage"
             }
           ],
-          "image": "my-image",
+          "image": "stable:my-image",
           "name": "e2e",
           "resources": {
             "requests": {
@@ -1599,7 +1599,7 @@
               "value": "/var/run/secrets/ci.openshift.io/multi-stage"
             }
           ],
-          "image": "installer",
+          "image": "stable:installer",
           "name": "ipi-deprovision-deprovision",
           "resources": {
             "requests": {
@@ -1816,7 +1816,7 @@
               "value": "/var/run/secrets/ci.openshift.io/multi-stage"
             }
           ],
-          "image": "installer",
+          "image": "stable:installer",
           "name": "ipi-deprovision-must-gather",
           "resources": {
             "requests": {
@@ -2033,7 +2033,7 @@
               "value": "/var/run/secrets/ci.openshift.io/multi-stage"
             }
           ],
-          "image": "installer",
+          "image": "stable:installer",
           "name": "ipi-install-install",
           "resources": {
             "requests": {
@@ -2250,7 +2250,7 @@
               "value": "/var/run/secrets/ci.openshift.io/multi-stage"
             }
           ],
-          "image": "installer",
+          "image": "stable:installer",
           "name": "ipi-install-rbac",
           "resources": {
             "requests": {

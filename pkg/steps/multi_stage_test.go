@@ -76,7 +76,7 @@ func TestGeneratePods(t *testing.T) {
 			MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
 				ClusterProfile: api.ClusterProfileAWS,
 				Test: []api.LiteralTestStep{{
-					As: "step0", From: "image0", Commands: "command0",
+					As: "step0", From: "src", Commands: "command0",
 				}, {
 					As:          "step1",
 					From:        "image1",
@@ -171,7 +171,7 @@ func TestGeneratePods(t *testing.T) {
 			}},
 			Containers: []coreapi.Container{{
 				Name:                     "step0",
-				Image:                    "image0",
+				Image:                    "pipeline:src",
 				Command:                  []string{"/tmp/secret-wrapper/secret-wrapper"},
 				Args:                     []string{"/bin/bash", "-c", "#!/bin/bash\nset -eu\ncommand0"},
 				Env:                      append(coreEnv, customEnv...),
@@ -238,7 +238,7 @@ func TestGeneratePods(t *testing.T) {
 			}},
 			Containers: []coreapi.Container{{
 				Name:                     "step1",
-				Image:                    "image1",
+				Image:                    "stable:image1",
 				Command:                  []string{"/tmp/secret-wrapper/secret-wrapper"},
 				Args:                     []string{"/bin/bash", "-c", "#!/bin/bash\nset -eu\ncommand1"},
 				Env:                      append(append(coreEnv, coreapi.EnvVar{Name: "ARTIFACT_DIR", Value: "/artifact/dir"}), customEnv...),

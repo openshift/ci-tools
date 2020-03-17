@@ -743,7 +743,7 @@
               "value": "/var/run/secrets/ci.openshift.io/multi-stage"
             }
           ],
-          "image": "installer",
+          "image": "stable:installer",
           "name": "post1",
           "resources": {
             "limits": {

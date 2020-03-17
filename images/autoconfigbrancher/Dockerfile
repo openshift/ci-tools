@@ -5,7 +5,6 @@ ADD config-brancher /usr/bin/config-brancher
 ADD ci-operator-prowgen /usr/bin/ci-operator-prowgen
 ADD autoconfigbrancher /usr/bin/autoconfigbrancher
 ADD ci-op-configs-mirror /usr/bin/ci-op-configs-mirror
-ADD private-prow-configs-mirror /usr/bin/private-prow-configs-mirror
 
 RUN yum install -y git && \
     yum clean all && \

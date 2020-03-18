@@ -753,7 +753,7 @@ to create a test:
 </ul>
 </p>
 
-<h3 id="step"><a href="#step">Step:</a></h3>
+<h3 id="step"><a href="#step">Step</a></h3>
 <p>
 A step is the lowest level component in the test registry. A
 step defines a base container image, the filename of the
@@ -863,7 +863,7 @@ under <code>artifacts/job-name/step-name/</code>. The logs of each container
 in a step will also be present at that location.
 </p>
 
-<h3 id="chain"><a href="#chain">Chain:</a></h3>
+<h3 id="chain"><a href="#chain">Chain</a></h3>
 <p>
 A chain is a registry component that specifies multiple registry components to be run.
 Components are run in the order that they are written. Components specified by a chain
@@ -874,7 +874,7 @@ chain:
 
 {{ yamlSyntax (index . "chainExample") }}
 
-<h3 id="workflow"><a href="#workflow">Workflow:</a></h3>
+<h3 id="workflow"><a href="#workflow">Workflow</a></h3>
 <p>
 A workflow is the highest level component of the step registry. It is almost
 identical to the syntax of the <code>ci-operator</code> configuration for multistage tests and
@@ -893,7 +893,7 @@ resources are properly cleaned up. This is an example of a workflow configuratio
 
 {{ yamlSyntax (index . "workflowExample") }}
 
-<h3 id="config"><a href="#config"><code>ci-operator</code> Test Configuration:</a></h3>
+<h3 id="config"><a href="#config"><code>ci-operator</code> Test Configuration</a></h3>
 <p>
 The <code>ci-operator</code> test configuration syntax for multistage tests is very similar to
 the registry workflow syntax. The main differences are that the <code>ci-operator</code>
@@ -924,7 +924,7 @@ workflow and a <code>ci-operator</code> configuration specify the same field, th
 field has priority (i.e. the value from the <code>ci-operator</code> configuration is used).
 </p>
 
-<h3 id="layout"><a href="#layout">Registry Layout and Naming Convention:</a></h3>
+<h3 id="layout"><a href="#layout">Registry Layout and Naming Convention</a></h3>
 <p>
 To prevent naming collisions between all the registry components, the step
 registry has a very strict naming scheme and directory layout. First, all
@@ -1120,7 +1120,7 @@ execution of shared end-to-end tests using these two approaches. Both examples a
 that we have the <code>ipi</code> workflow available to use.
 </p>
 
-<h5 id="adding-step"><a href="#adding-step">Adding a Reusable Test Step:</a></h4>
+<h5 id="adding-step"><a href="#adding-step">Adding a Reusable Test Step</a></h4>
 
 <p>
 Full directions for adding a new resuable test step can be found in the overview for

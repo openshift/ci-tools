@@ -164,32 +164,36 @@ func main() {
 	run(cmd, args...)
 
 	author := fmt.Sprintf("%s <%s>", o.gitName, o.gitEmail)
-	commitIfNeeded(fmt.Sprintf("%s --current-release %s --future-release %s", "determinize-ci-operator",
-		o.currentRelease, strings.Join(o.futureReleases.Strings(), ",")), author)
+	commitIfNeeded(fmt.Sprintf("determinize-ci-operator --current-release %s --future-release %s", o.currentRelease, strings.Join(o.futureReleases.Strings(), ",")), author)
 
 	cmd = "/usr/bin/config-brancher"
 	run(cmd, args...)
 
-	commitIfNeeded(fmt.Sprintf("%s --current-release %s --future-release %s", "config-brancher",
-		o.currentRelease, strings.Join(o.futureReleases.Strings(), ",")), author)
+	commitIfNeeded(fmt.Sprintf("config-brancher --current-release %s --future-release %s", o.currentRelease, strings.Join(o.futureReleases.Strings(), ",")), author)
 
 	cmd = "/usr/bin/ci-operator-prowgen"
 	args = []string{"--from-dir", "./ci-operator/config", "--to-dir", "./ci-operator/jobs"}
 	run(cmd, args...)
 
-	commitIfNeeded(fmt.Sprintf("%s --from-dir ./ci-operator/config --to-dir ./ci-operator/jobs", "ci-operator-prowgen"), author)
+	commitIfNeeded("ci-operator-prowgen --from-dir ./ci-operator/config --to-dir ./ci-operator/jobs", author)
 
 	cmd = "/usr/bin/ci-op-configs-mirror"
 	args = []string{"--config-path", "./ci-operator/config", "--to-org", "openshift-priv"}
 	run(cmd, args...)
 
-	commitIfNeeded(fmt.Sprintf("%s --config-path ./ci-operator/config --to-org openshift-priv", "ci-op-configs-mirror"), author)
+	commitIfNeeded("ci-op-configs-mirror --config-path ./ci-operator/config --to-org openshift-priv", author)
 
 	cmd = "/usr/bin/ci-operator-prowgen"
 	args = []string{"--from-dir", "./ci-operator/config", "--to-dir", "./ci-operator/jobs"}
 	run(cmd, args...)
 
-	commitIfNeeded(fmt.Sprintf("%s --from-dir ./ci-operator/config --to-dir ./ci-operator/jobs", "ci-operator-prowgen"), author)
+	commitIfNeeded("ci-operator-prowgen --from-dir ./ci-operator/config --to-dir ./ci-operator/jobs", author)
+
+	cmd = "/usr/bin/private-prow-configs-mirror"
+	args = []string{"--release-repo-path", "."}
+	run(cmd, args...)
+
+	commitIfNeeded("private-prow-configs-mirror --release-repo-path .", author)
 
 	if count == 0 {
 		logrus.Info("no new commits, existing ...")

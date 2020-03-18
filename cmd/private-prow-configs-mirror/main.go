@@ -290,73 +290,51 @@ func injectPrivateBugzillaPlugin(bugzillaPlugins plugins.Bugzilla, orgRepos orgR
 }
 
 func injectPrivatePlugins(plugins map[string][]string, orgRepos orgReposWithOfficialImages) {
-	logrus.Info("Processing...")
+	privateRepoPlugins := make(map[string][]string)
+	for org, repos := range orgRepos {
 
-	var allPrivate []string
+		for repo := range repos {
+			values := sets.NewString()
+			values.Insert(plugins[org]...)
 
-	privateReposWithValues := make(map[string][]string)
-
-	for orgRepo, value := range plugins {
-		if orgRepos.isOfficialRepoFull(orgRepo) {
-			newValue := value
-
-			// We want to append the org level values, because the private repo
-			// can exist in different org with different configuration.
-			org := strings.Split(orgRepo, "/")[0]
-			if _, ok := plugins[org]; ok {
-				newValue = append(newValue, plugins[org]...)
+			if repoValues, ok := plugins[fmt.Sprintf("%s/%s", org, repo)]; ok {
+				values.Insert(repoValues...)
 			}
-
-			privateReposWithValues[privateOrgRepo(strings.Split(orgRepo, "/")[1])] = newValue
-			allPrivate = append(allPrivate, newValue...)
+			privateRepoPlugins[privateOrgRepo(repo)] = values.List()
 		}
 	}
 
-	mergeCommonPrivatePlugins(plugins, privateReposWithValues, getRepeatedValues(allPrivate))
-}
+	commonPlugins := getCommonPlugins(privateRepoPlugins)
+	for repo, values := range privateRepoPlugins {
+		repoLevelPlugins := sets.NewString(values...)
 
-// mergeCommonPrivatePlugins detects the common values from all the private repositories
-// and merges them into the org `openshift-priv` level.
-// In addition, it generates a repo. if it contains an extra non-common field.
-func mergeCommonPrivatePlugins(plugins map[string][]string, privateReposWithValues map[string][]string, repeatedValues sets.String) {
-	privateOrgPlugins := sets.NewString()
-
-	for repoName, repoValues := range privateReposWithValues {
-		repoLevelPlugins := sets.NewString()
-		valuesSet := sets.NewString(repoValues...)
-
-		if len(repeatedValues) > 0 {
-			privateOrgPlugins = privateOrgPlugins.Union(valuesSet.Intersection(repeatedValues))
-			repoLevelPlugins = repoLevelPlugins.Union(valuesSet.Difference(repeatedValues))
-		} else {
-			repoLevelPlugins.Insert(repoValues...)
-		}
+		repoLevelPlugins = repoLevelPlugins.Difference(commonPlugins)
 
 		if len(repoLevelPlugins.List()) > 0 {
-			logrus.WithFields(logrus.Fields{"repo": repoName, "value": repoLevelPlugins.List()}).Info("Generating repo")
-			plugins[repoName] = repoLevelPlugins.List()
+			logrus.WithFields(logrus.Fields{"repo": repo, "value": repoLevelPlugins.List()}).Info("Generating repo")
+			plugins[repo] = repoLevelPlugins.List()
 		}
 	}
 
-	if len(privateOrgPlugins.List()) > 0 {
-		logrus.WithField("value", privateOrgPlugins.List()).Info("Generating openshift-priv org.")
-		plugins[openshiftPrivOrg] = privateOrgPlugins.List()
+	if len(commonPlugins.List()) > 0 {
+		logrus.WithField("value", commonPlugins.List()).Info("Generating openshift-priv org.")
+		plugins[openshiftPrivOrg] = commonPlugins.List()
 	}
 }
 
-func getRepeatedValues(values []string) sets.String {
-	temp := sets.NewString()
-	repeated := sets.NewString()
+func getCommonPlugins(privateRepoPlugins map[string][]string) sets.String {
+	var ret sets.String
+	for _, values := range privateRepoPlugins {
+		valuesSet := sets.NewString(values...)
 
-	for _, value := range values {
-		if temp.Has(value) {
-			repeated.Insert(value)
-		} else {
-			temp.Insert(value)
+		if ret == nil {
+			ret = valuesSet
+			continue
 		}
-	}
 
-	return repeated
+		ret = ret.Intersection(valuesSet)
+	}
+	return ret
 }
 
 func getAllConfigs(releaseRepoPath string, logger *logrus.Entry) (*config.ReleaseRepoConfig, error) {

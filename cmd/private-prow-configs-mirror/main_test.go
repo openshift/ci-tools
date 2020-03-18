@@ -632,9 +632,11 @@ func TestInjectPrivatePlugins(t *testing.T) {
 				"openshift/testRepo1": {"approve"},
 				"testshift/testRepo3": {"approve", "trigger"},
 
-				"openshift-priv":           {"approve", "hold", "lgtm"},
-				"openshift-priv/testRepo1": {"cat", "dog"},
-				"openshift-priv/testRepo3": {"label", "milestone", "trigger"},
+				"openshift-priv":           {"hold", "lgtm"},
+				"openshift-priv/testRepo1": {"approve", "cat", "dog"},
+				"openshift-priv/testRepo2": {"cat", "dog"},
+				"openshift-priv/testRepo3": {"approve", "label", "milestone", "trigger"},
+				"openshift-priv/testRepo4": {"label", "milestone"},
 			},
 		},
 	}
@@ -646,5 +648,28 @@ func TestInjectPrivatePlugins(t *testing.T) {
 				t.Fatal(cmp.Diff(tc.plugins, tc.expected))
 			}
 		})
+	}
+}
+
+func TestGetCommonPlugins(t *testing.T) {
+	plugins := map[string][]string{
+		"openshift/repo1":   {"approve", "label", "hold", "cat", "dog"},
+		"openshift/repo2":   {"approve", "label", "hold", "lgtm", "milestone"},
+		"openshift/repo3":   {"approve", "label", "hold", "trigger"},
+		"openshift/repo4":   {"approve", "label", "hold", "lgtm"},
+		"openshift/repo5":   {"approve", "label", "hold", "lgtm"},
+		"openshift/repo6":   {"approve", "label", "hold", "trigger"},
+		"openshift/repo7":   {"approve", "label", "hold", "cat", "bugzilla"},
+		"openshift/repo8":   {"approve", "label", "hold", "milestone"},
+		"openshift/arepo9":  {"approve", "label", "hold", "bugzilla"},
+		"openshift/arepo10": {"approve", "label", "hold", "milestone"},
+		"openshift/arepo11": {"approve", "label", "hold", "lgtm", "milestone"},
+		"openshift/arepo12": {"approve", "label", "hold", "lgtm", "milestone"},
+	}
+	expected := sets.String{"approve": sets.Empty{}, "hold": sets.Empty{}, "label": sets.Empty{}}
+
+	commonValues := getCommonPlugins(plugins)
+	if !reflect.DeepEqual(commonValues, expected) {
+		t.Fatal(cmp.Diff(commonValues, expected))
 	}
 }

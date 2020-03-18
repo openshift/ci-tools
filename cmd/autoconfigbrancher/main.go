@@ -189,6 +189,12 @@ func main() {
 
 	commitIfNeeded("ci-operator-prowgen --from-dir ./ci-operator/config --to-dir ./ci-operator/jobs", author)
 
+	cmd = "/usr/bin/private-prow-configs-mirror"
+	args = []string{"--release-repo-path", "."}
+	run(cmd, args...)
+
+	commitIfNeeded("private-prow-configs-mirror --release-repo-path .", author)
+
 	if count == 0 {
 		logrus.Info("no new commits, existing ...")
 		return

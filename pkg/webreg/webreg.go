@@ -1181,7 +1181,7 @@ tag_specification:
 `
 const imageExampleRef = `ref:
   as: org-repo-e2e
-  from: stable:repo-tests
+  from: repo-tests
   commands: org-repo-e2e-commands.sh
   resources:
     requests:
@@ -1206,7 +1206,7 @@ const imageExampleLiteral = `- as: repo-e2e
     workflow: ipi
     test:
     - as: e2e
-      from: stable:repo-tests
+      from: repo-tests
       commands: |-
         #!/bin/bash
         e2e-tests # as built by go test -c

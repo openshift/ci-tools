@@ -965,7 +965,7 @@ testing are <code>OWNERS</code> files and files that end in <code>.md</code>.
 
 const refExample = `ref:
   as: ipi-conf                   # name of the step
-  from: centos:7                 # image to run the commands in
+  from: base                     # image to run the commands in
   commands: ipi-conf-commands.sh # script file containing the command(s) to be run
   resources:
     requests:

@@ -470,6 +470,10 @@ func TestValidateBaseRpmImages(t *testing.T) {
 }
 
 func TestValidateTestSteps(t *testing.T) {
+	resources := ResourceRequirements{
+		Requests: ResourceList{"cpu": "1"},
+		Limits:   ResourceList{"memory": "1m"},
+	}
 	// string pointers in golang are annoying
 	myReference := "my-reference"
 	asReference := "as"
@@ -482,55 +486,40 @@ func TestValidateTestSteps(t *testing.T) {
 		name: "valid step",
 		steps: []TestStep{{
 			LiteralTestStep: &LiteralTestStep{
-				As:       "as",
-				From:     "from",
-				Commands: "commands",
-				Resources: ResourceRequirements{
-					Requests: ResourceList{"cpu": "1"},
-					Limits:   ResourceList{"memory": "1m"},
-				}},
+				As:        "as",
+				From:      "from",
+				Commands:  "commands",
+				Resources: resources},
 		}},
 	}, {
 		name: "no name",
 		steps: []TestStep{{
 			LiteralTestStep: &LiteralTestStep{
-				From:     "from",
-				Commands: "commands",
-				Resources: ResourceRequirements{
-					Requests: ResourceList{"cpu": "1"},
-					Limits:   ResourceList{"memory": "1m"},
-				}},
+				From:      "from",
+				Commands:  "commands",
+				Resources: resources},
 		}},
 		errs: []error{errors.New("test[0]: `as` is required")},
 	}, {
 		name: "duplicated names",
 		steps: []TestStep{{
 			LiteralTestStep: &LiteralTestStep{
-				As:       "s0",
-				From:     "from",
-				Commands: "commands",
-				Resources: ResourceRequirements{
-					Requests: ResourceList{"cpu": "1"},
-					Limits:   ResourceList{"memory": "1m"},
-				}},
+				As:        "s0",
+				From:      "from",
+				Commands:  "commands",
+				Resources: resources},
 		}, {
 			LiteralTestStep: &LiteralTestStep{
-				As:       "s1",
-				From:     "from",
-				Commands: "commands",
-				Resources: ResourceRequirements{
-					Requests: ResourceList{"cpu": "1"},
-					Limits:   ResourceList{"memory": "1m"},
-				}},
+				As:        "s1",
+				From:      "from",
+				Commands:  "commands",
+				Resources: resources},
 		}, {
 			LiteralTestStep: &LiteralTestStep{
-				As:       "s0",
-				From:     "from",
-				Commands: "commands",
-				Resources: ResourceRequirements{
-					Requests: ResourceList{"cpu": "1"},
-					Limits:   ResourceList{"memory": "1m"},
-				}},
+				As:        "s0",
+				From:      "from",
+				Commands:  "commands",
+				Resources: resources},
 		}},
 		errs: []error{errors.New(`test[2]: duplicated name "s0"`)},
 	}, {
@@ -538,13 +527,10 @@ func TestValidateTestSteps(t *testing.T) {
 		seen: sets.NewString("s0"),
 		steps: []TestStep{{
 			LiteralTestStep: &LiteralTestStep{
-				As:       "s0",
-				From:     "from",
-				Commands: "commands",
-				Resources: ResourceRequirements{
-					Requests: ResourceList{"cpu": "1"},
-					Limits:   ResourceList{"memory": "1m"},
-				}},
+				As:        "s0",
+				From:      "from",
+				Commands:  "commands",
+				Resources: resources},
 		},
 		},
 		errs: []error{errors.New(`test[0]: duplicated name "s0"`)},
@@ -552,24 +538,18 @@ func TestValidateTestSteps(t *testing.T) {
 		name: "no image",
 		steps: []TestStep{{
 			LiteralTestStep: &LiteralTestStep{
-				As:       "no_image",
-				Commands: "commands",
-				Resources: ResourceRequirements{
-					Requests: ResourceList{"cpu": "1"},
-					Limits:   ResourceList{"memory": "1m"},
-				}},
+				As:        "no_image",
+				Commands:  "commands",
+				Resources: resources},
 		}},
 		errs: []error{errors.New("test[0]: `from` is required")},
 	}, {
 		name: "no commands",
 		steps: []TestStep{{
 			LiteralTestStep: &LiteralTestStep{
-				As:   "no_commands",
-				From: "from",
-				Resources: ResourceRequirements{
-					Requests: ResourceList{"cpu": "1"},
-					Limits:   ResourceList{"memory": "1m"},
-				}},
+				As:        "no_commands",
+				From:      "from",
+				Resources: resources},
 		}},
 		errs: []error{errors.New("test[0]: `commands` is required")},
 	}, {
@@ -592,13 +572,10 @@ func TestValidateTestSteps(t *testing.T) {
 		name: "Reference and TestStep set",
 		steps: []TestStep{{
 			LiteralTestStep: &LiteralTestStep{
-				As:       "as",
-				From:     "from",
-				Commands: "commands",
-				Resources: ResourceRequirements{
-					Requests: ResourceList{"cpu": "1"},
-					Limits:   ResourceList{"memory": "1m"},
-				}},
+				As:        "as",
+				From:      "from",
+				Commands:  "commands",
+				Resources: resources},
 			Reference: &myReference,
 		}},
 		errs: []error{
@@ -608,13 +585,10 @@ func TestValidateTestSteps(t *testing.T) {
 		name: "Step with same name as reference",
 		steps: []TestStep{{
 			LiteralTestStep: &LiteralTestStep{
-				As:       "as",
-				From:     "from",
-				Commands: "commands",
-				Resources: ResourceRequirements{
-					Requests: ResourceList{"cpu": "1"},
-					Limits:   ResourceList{"memory": "1m"},
-				}},
+				As:        "as",
+				From:      "from",
+				Commands:  "commands",
+				Resources: resources},
 		}, {
 			Reference: &asReference,
 		}},

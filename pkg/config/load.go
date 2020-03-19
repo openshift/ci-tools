@@ -21,8 +21,15 @@ var ProwgenFile = ".config.prowgen"
 
 // Prowgen holds the information of the prowgen's configuration file.
 type Prowgen struct {
+	// Private indicates that the openshift-ci-operator's github credentials should
+	// be made available via kube secrets and that hidden: true should
+	// be added to the job to prevent the prow job's logs from being public.
 	Private bool `json:"private,omitempty"`
-	Expose  bool `json:"expose,omitempty"`
+	// Expose indicates that, when the Private field is true, that the github
+	// credentials should be made available, but "hidden: true" should not be
+	// added so that the job's logs will be publicly available. This field
+	// has no effect if Private is false.
+	Expose bool `json:"expose,omitempty"`
 }
 
 func readCiOperatorConfig(configFilePath string, info Info) (*cioperatorapi.ReleaseBuildConfiguration, error) {

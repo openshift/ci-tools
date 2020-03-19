@@ -111,7 +111,7 @@ type httpResult struct {
 // resolveOwnerAliases computes the resolved (simple or full config) format of the OWNERS file
 func (r httpResult) resolveOwnerAliases(cleaner ownersCleaner) interface{} {
 	if !r.simpleConfig.Empty() {
-		return SimpleConfig{
+		sc := SimpleConfig{
 			Config: repoowners.Config{
 				Approvers:         cleaner(r.repoAliases.ExpandAliases(repoowners.NormLogins(r.simpleConfig.Approvers)).List()),
 				Reviewers:         cleaner(r.repoAliases.ExpandAliases(repoowners.NormLogins(r.simpleConfig.Reviewers)).List()),
@@ -120,18 +120,26 @@ func (r httpResult) resolveOwnerAliases(cleaner ownersCleaner) interface{} {
 			},
 			Options: r.simpleConfig.Options,
 		}
+		if len(sc.Reviewers) == 0 {
+			sc.Reviewers = sc.Approvers
+		}
+		return sc
 	} else {
 		fc := FullConfig{
 			Filters: map[string]repoowners.Config{},
 			Options: r.fullConfig.Options,
 		}
 		for k, v := range r.fullConfig.Filters {
-			fc.Filters[k] = repoowners.Config{
+			cfg := repoowners.Config{
 				Approvers:         cleaner(r.repoAliases.ExpandAliases(repoowners.NormLogins(v.Approvers)).List()),
 				Reviewers:         cleaner(r.repoAliases.ExpandAliases(repoowners.NormLogins(v.Reviewers)).List()),
 				RequiredReviewers: cleaner(r.repoAliases.ExpandAliases(repoowners.NormLogins(v.RequiredReviewers)).List()),
 				Labels:            sets.NewString(v.Labels...).List(),
 			}
+			if len(cfg.Reviewers) == 0 {
+				cfg.Reviewers = cfg.Approvers
+			}
+			fc.Filters[k] = cfg
 		}
 		return fc
 	}

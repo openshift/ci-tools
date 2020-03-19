@@ -48,6 +48,25 @@ func TestResolveAliases(t *testing.T) {
 			},
 		},
 		{
+			description: "Simple Config, empty reviewers list gets defaulted to approvers",
+			given: httpResult{
+				simpleConfig: SimpleConfig{
+					Config: repoowners.Config{
+						Approvers: []string{"david", "sig-alIas", "Alice"},
+					},
+				},
+				repoAliases: ra,
+			},
+			expected: SimpleConfig{
+				Config: repoowners.Config{
+					Approvers:         []string{"alice", "bob", "carol", "david"},
+					Reviewers:         []string{"alice", "bob", "carol", "david"},
+					RequiredReviewers: []string{},
+					Labels:            []string{},
+				},
+			},
+		},
+		{
 			description: "Simple Config case with initialized RequiredReviewers",
 			given: httpResult{
 				simpleConfig: SimpleConfig{
@@ -82,7 +101,7 @@ func TestResolveAliases(t *testing.T) {
 			expected: SimpleConfig{
 				Config: repoowners.Config{
 					Approvers:         []string{"alice", "bob", "carol", "david"},
-					Reviewers:         []string{},
+					Reviewers:         []string{"alice", "bob", "carol", "david"},
 					RequiredReviewers: []string{},
 					Labels:            []string{},
 				},
@@ -106,6 +125,29 @@ func TestResolveAliases(t *testing.T) {
 					"abc": {
 						Approvers:         []string{"alice", "bob", "carol", "david"},
 						Reviewers:         []string{"adam", "bob", "carol"},
+						RequiredReviewers: []string{},
+						Labels:            []string{},
+					},
+				},
+			},
+		},
+		{
+			description: "Full Config, empty reviewers list gets defaulted to approvers",
+			given: httpResult{
+				repoAliases: ra,
+				fullConfig: FullConfig{
+					Filters: map[string]repoowners.Config{
+						"abc": {
+							Approvers: []string{"david", "sig-alias", "alice"},
+						},
+					},
+				},
+			},
+			expected: FullConfig{
+				Filters: map[string]repoowners.Config{
+					"abc": {
+						Approvers:         []string{"alice", "bob", "carol", "david"},
+						Reviewers:         []string{"alice", "bob", "carol", "david"},
 						RequiredReviewers: []string{},
 						Labels:            []string{},
 					},

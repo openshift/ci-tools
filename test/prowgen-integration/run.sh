@@ -41,29 +41,6 @@ EOF
   exit 1
 fi
 
-determinized_output_jobs_dir="${workdir}/determinized"
-mkdir -p "${determinized_output_jobs_dir}"
-cp -r "${generated_output_jobs_dir}"/* "${determinized_output_jobs_dir}"
-
-echo "[INFO] Determinizing Prow jobs..."
-determinize-prow-jobs --prow-jobs-dir "${determinized_output_jobs_dir}/${subdir}"
-
-echo "[INFO] Validating determinized Prow jobs..."
-if [[ "$UPDATE" = true ]]; then
-  rm -rf "${generated_output_jobs_dir}"
-  cp -r "${determinized_output_jobs_dir}" "${generated_output_jobs_dir}"
-fi
-if ! diff -Naupr "${determinized_output_jobs_dir}" "${generated_output_jobs_dir}"> "${workdir}/gen_diff"; then
-  cat << EOF
-ERROR: Prow job generator did not output determinized jobs!
-ERROR: The following errors were found:
-
-EOF
-  cat "${workdir}/gen_diff"
-  echo "ERROR: If this is expected, run \`make update-integration\`"
-  exit 1
-fi
-
 if [[ "${subdir}" ]]; then
   echo "[INFO] Verifying other sub-directories were not modified..."
   rm -rf "${generated_output_jobs_dir}/${subdir}"

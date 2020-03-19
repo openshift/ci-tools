@@ -11,6 +11,8 @@ import (
 	jc "github.com/openshift/ci-tools/pkg/jobconfig"
 )
 
+const defaultCluster = "api.ci"
+
 type options struct {
 	prowJobConfigDir string
 
@@ -39,6 +41,8 @@ func determinizeJobs(prowJobConfigDir string) error {
 				return fmt.Errorf("failed to read Prow job config from '%s' (%v)", path, err)
 			}
 
+			defaultJobConfig(jobConfig)
+
 			repo := filepath.Base(path)
 			org := filepath.Base(filepath.Dir(path))
 			if err := jc.WriteToDir(prowJobConfigDir, org, repo, jobConfig); err != nil {
@@ -51,6 +55,30 @@ func determinizeJobs(prowJobConfigDir string) error {
 	}
 
 	return nil
+}
+
+func defaultJobConfig(jc *prowconfig.JobConfig) {
+	for k := range jc.PresubmitsStatic {
+		for idx := range jc.PresubmitsStatic[k] {
+			defaultJobBase(&jc.PresubmitsStatic[k][idx].JobBase)
+		}
+	}
+	for k := range jc.PostsubmitsStatic {
+		for idx := range jc.PostsubmitsStatic[k] {
+			defaultJobBase(&jc.PostsubmitsStatic[k][idx].JobBase)
+		}
+	}
+	for idx := range jc.Periodics {
+		defaultJobBase(&jc.Periodics[idx].JobBase)
+	}
+}
+
+func defaultJobBase(jb *prowconfig.JobBase) {
+
+	if jb.Cluster == "" || jb.Cluster == "default" {
+		jb.Cluster = defaultCluster
+	}
+
 }
 
 func main() {

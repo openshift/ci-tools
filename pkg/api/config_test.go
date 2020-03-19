@@ -544,6 +544,26 @@ func TestValidateTestSteps(t *testing.T) {
 		}},
 		errs: []error{errors.New("test[0]: `from` is required")},
 	}, {
+		name: "invalid image 0",
+		steps: []TestStep{{
+			LiteralTestStep: &LiteralTestStep{
+				As:        "as",
+				From:      "docker.io/library/centos:7",
+				Commands:  "commands",
+				Resources: resources},
+		}},
+		errs: []error{errors.New("test[0].from: 'docker.io/library/centos:7' is not a valid Kubernetes object name")},
+	}, {
+		name: "invalid image 1",
+		steps: []TestStep{{
+			LiteralTestStep: &LiteralTestStep{
+				As:        "as",
+				From:      "stable:base",
+				Commands:  "commands",
+				Resources: resources},
+		}},
+		errs: []error{errors.New("test[0].from: 'stable:base' is not a valid Kubernetes object name")},
+	}, {
 		name: "no commands",
 		steps: []TestStep{{
 			LiteralTestStep: &LiteralTestStep{

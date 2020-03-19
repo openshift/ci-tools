@@ -741,9 +741,45 @@ step:
 {{ yamlSyntax (index . "refExample") }}
 
 <p>
-Note: the shell script file must follow the <a href="#layout">naming convention</a> described later
-in this help page.
+A step may be referred to in chains, workflows, and <code>ci-operator</code> configs.
 </p>
+
+<h4 id="step-from"><a href="#step-from"><code>from</code></a></h4>
+
+<p>
+The image must be present in the <code>ci-operator</code> configuration file,
+either:
+</p>
+
+<ul>
+  <li>
+    <a href="https://github.com/openshift/ci-tools/blob/master/ARCHITECTURE.md#build-graph-traversal">
+      a pipeline image
+    </a>
+  </li>
+  <li>
+    <a href="https://github.com/openshift/ci-tools/blob/master/CONFIGURATION.md#base_images">
+      an external image
+    </a>
+  </li>
+  <li>
+    <a href="https://github.com/openshift/ci-tools/blob/master/CONFIGURATION.md#images">
+      an image built by <code>ci-operator</code>
+    </a>
+  </li>
+  <li>
+    <a href="https://github.com/openshift/ci-tools/blob/master/CONFIGURATION.md#tag_specification">
+      an image imported from a release <code>ImageStream</code>
+    </a>
+  </li>
+</ul>
+
+<p>
+Note that static validation for this field is limited because the set of images
+originating from the release <code>ImageStream</code> is only known at runtime.
+</p>
+
+<h4 id="step-commands"><a href="#step-commands"><code>commands</code></a></h4>
 
 <p>
 The commands file must contain shell script in a shell language supported by
@@ -753,7 +789,8 @@ syntax highlight all commands as bash.
 </p>
 
 <p>
-A step may be referred to in chains, workflows, and <code>ci-operator</code> configs.
+Note: the shell script file must follow the <a href="#layout">naming convention</a> described later
+in this help page.
 </p>
 
 <h4 id="execution"><a href="#execution">Step Execution Environment</a></h4>

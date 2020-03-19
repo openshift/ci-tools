@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/url"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -154,8 +153,8 @@ func validateTestStepConfiguration(fieldRoot string, input []TestStepConfigurati
 			validationErrors = append(validationErrors, fmt.Errorf("%s.as: is required", fieldRootN))
 		} else if test.As == "images" {
 			validationErrors = append(validationErrors, fmt.Errorf("%s.as: should not be called 'images' because it gets confused with '[images]' target", fieldRootN))
-		} else if ok := regexp.MustCompile("^[a-zA-Z0-9_.-]*$").MatchString(test.As); !ok {
-			validationErrors = append(validationErrors, fmt.Errorf("%s.as: '%s' is not valid value, should be [a-zA-Z0-9_.-]", fieldRootN, test.As))
+		} else if len(validation.IsDNS1123Subdomain(test.As)) != 0 {
+			validationErrors = append(validationErrors, fmt.Errorf("%s.as: '%s' is not a valid Kubernetes object name", fieldRootN, test.As))
 		}
 		if hasCommands, hasSteps, hasLiteral := len(test.Commands) != 0, test.MultiStageTestConfiguration != nil, test.MultiStageTestConfigurationLiteral != nil; !hasCommands && !hasSteps && !hasLiteral {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: either `commands`, `steps`, or `literal_steps` should be set", fieldRootN))
@@ -177,9 +176,8 @@ func validateTestStepConfiguration(fieldRoot string, input []TestStepConfigurati
 		for _, secret := range test.Secrets {
 			// K8s object names must be valid DNS 1123 subdomains.
 			if len(validation.IsDNS1123Subdomain(secret.Name)) != 0 {
-				validationErrors = append(validationErrors, fmt.Errorf("%s.name: '%s' secret name is not valid value, should be [a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*", fieldRootN, secret.Name))
+				validationErrors = append(validationErrors, fmt.Errorf("%s.name: '%s' is not a valid Kubernetes object name", fieldRootN, secret.Name))
 			}
-
 			// Validate no duplicate secret names, then append to list of names.
 			if seen.Has(secret.Name) {
 				validationErrors = append(validationErrors, fmt.Errorf("duplicate secret name entries found for %s", secret.Name))
@@ -436,6 +434,8 @@ func validateLiteralTestStep(fieldRoot string, step LiteralTestStep, seen sets.S
 	}
 	if len(step.From) == 0 {
 		ret = append(ret, fmt.Errorf("%s: `from` is required", fieldRoot))
+	} else if len(validation.IsDNS1123Subdomain(step.From)) != 0 {
+		ret = append(ret, fmt.Errorf("%s.from: '%s' is not a valid Kubernetes object name", fieldRoot, step.From))
 	}
 	if len(step.Commands) == 0 {
 		ret = append(ret, fmt.Errorf("%s: `commands` is required", fieldRoot))

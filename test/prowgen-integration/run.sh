@@ -7,6 +7,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+UPDATE="${UPDATE:-false}"
+
 workdir="$( mktemp -d )"
 trap 'rm -rf "${workdir}"' EXIT
 
@@ -24,6 +26,10 @@ echo "[INFO] Generating Prow jobs..."
 ci-operator-prowgen --from-dir "${input_config_dir}" --to-dir "${generated_output_jobs_dir}" $subdir
 
 echo "[INFO] Validating generated Prow jobs..."
+if [[ "$UPDATE" = true ]]; then
+  rm -rf "${expected_output_jobs_dir}/${subdir}"
+  cp -r "${generated_output_jobs_dir}/${subdir}" "${expected_output_jobs_dir}/${subdir}"
+fi
 if ! diff -Naupr "${expected_output_jobs_dir}/${subdir}" "${generated_output_jobs_dir}/${subdir}"> "${workdir}/diff"; then
   cat << EOF
 ERROR: Incorrect Prow jobs were generated!
@@ -31,6 +37,7 @@ ERROR: The following errors were found:
 
 EOF
   cat "${workdir}/diff"
+  echo "ERROR: If this is expected, run \`make update-integration\`"
   exit 1
 fi
 
@@ -42,6 +49,10 @@ echo "[INFO] Determinizing Prow jobs..."
 determinize-prow-jobs --prow-jobs-dir "${determinized_output_jobs_dir}/${subdir}"
 
 echo "[INFO] Validating determinized Prow jobs..."
+if [[ "$UPDATE" = true ]]; then
+  rm -rf "${generated_output_jobs_dir}"
+  cp -r "${determinized_output_jobs_dir}" "${generated_output_jobs_dir}"
+fi
 if ! diff -Naupr "${determinized_output_jobs_dir}" "${generated_output_jobs_dir}"> "${workdir}/gen_diff"; then
   cat << EOF
 ERROR: Prow job generator did not output determinized jobs!
@@ -49,6 +60,7 @@ ERROR: The following errors were found:
 
 EOF
   cat "${workdir}/gen_diff"
+  echo "ERROR: If this is expected, run \`make update-integration\`"
   exit 1
 fi
 
@@ -65,6 +77,7 @@ ERROR: The following errors were found:
 
 EOF
     cat "${workdir}/subdir_diff"
+    echo "ERROR: If this is expected, run \`make update-integration\`"
     exit 1
   fi
 fi

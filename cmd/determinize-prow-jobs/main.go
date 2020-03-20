@@ -3,12 +3,16 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 
+	"github.com/sirupsen/logrus"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	prowconfig "k8s.io/test-infra/prow/config"
-
-	jc "github.com/openshift/ci-tools/pkg/jobconfig"
+	"sigs.k8s.io/yaml"
 )
 
 const defaultCluster = "api.ci"
@@ -29,32 +33,67 @@ func bindOptions(flag *flag.FlagSet) *options {
 }
 
 func determinizeJobs(prowJobConfigDir string) error {
+	errChan := make(chan error)
+	wg := sync.WaitGroup{}
 	if err := filepath.Walk(prowJobConfigDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to walk file/directory '%s'", path)
 			return nil
 		}
 
-		if info.IsDir() && filepath.Clean(filepath.Dir(filepath.Dir(path))) == filepath.Clean(prowJobConfigDir) {
-			var jobConfig *prowconfig.JobConfig
-			if jobConfig, err = jc.ReadFromDir(path); err != nil {
-				return fmt.Errorf("failed to read Prow job config from '%s' (%v)", path, err)
+		if info.IsDir() || !strings.HasSuffix(path, ".yaml") {
+			return nil
+		}
+
+		wg.Add(1)
+		go func(path string) {
+			defer wg.Done()
+
+			data, err := ioutil.ReadFile(path)
+			if err != nil {
+				errChan <- fmt.Errorf("failed to read file %q: %v", path, err)
+				return
+			}
+
+			jobConfig := &prowconfig.JobConfig{}
+			if err := yaml.Unmarshal(data, jobConfig); err != nil {
+				errChan <- fmt.Errorf("failed to unmarshal file %q: %v", err, path)
+				return
 			}
 
 			defaultJobConfig(jobConfig)
 
-			repo := filepath.Base(path)
-			org := filepath.Base(filepath.Dir(path))
-			if err := jc.WriteToDir(prowJobConfigDir, org, repo, jobConfig); err != nil {
-				return fmt.Errorf("failed to write Prow job config to '%s' (%v)", path, err)
+			serialized, err := yaml.Marshal(jobConfig)
+			if err != nil {
+				errChan <- fmt.Errorf("failed to marshal file %q: %v", err, path)
+				return
 			}
-		}
+
+			if err := ioutil.WriteFile(path, serialized, 0644); err != nil {
+				errChan <- fmt.Errorf("failed to write file %q: %v", path, err)
+				return
+			}
+		}(path)
+
 		return nil
 	}); err != nil {
 		return fmt.Errorf("failed to determinize all Prow jobs: %v", err)
 	}
 
-	return nil
+	var errs []error
+	errReadingDone := make(chan struct{})
+	go func() {
+		for err := range errChan {
+			errs = append(errs, err)
+		}
+		close(errReadingDone)
+	}()
+
+	wg.Wait()
+	close(errChan)
+	<-errReadingDone
+
+	return utilerrors.NewAggregate(errs)
 }
 
 func defaultJobConfig(jc *prowconfig.JobConfig) {
@@ -93,11 +132,9 @@ func main() {
 
 	if len(opt.prowJobConfigDir) > 0 {
 		if err := determinizeJobs(opt.prowJobConfigDir); err != nil {
-			fmt.Fprintf(os.Stderr, "determinize failed (%v)\n", err)
-
+			logrus.WithError(err).Fatal("Failed to determinize")
 		}
 	} else {
-		fmt.Fprintln(os.Stderr, "determinize tool needs the --prow-jobs-dir")
-		os.Exit(1)
+		logrus.Fatal("mandatory argument --prow-jobs-dir wasn't set")
 	}
 }

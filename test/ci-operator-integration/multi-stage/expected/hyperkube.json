@@ -500,6 +500,10 @@
               "value": "presubmit"
             },
             {
+              "name": "OPENSHIFT_CI",
+              "value": "true"
+            },
+            {
               "name": "PROW_JOB_ID",
               "value": "uuid"
             },
@@ -689,6 +693,10 @@
             {
               "name": "JOB_TYPE",
               "value": "presubmit"
+            },
+            {
+              "name": "OPENSHIFT_CI",
+              "value": "true"
             },
             {
               "name": "PROW_JOB_ID",
@@ -882,6 +890,10 @@
               "value": "presubmit"
             },
             {
+              "name": "OPENSHIFT_CI",
+              "value": "true"
+            },
+            {
               "name": "PROW_JOB_ID",
               "value": "uuid"
             },
@@ -1071,6 +1083,10 @@
             {
               "name": "JOB_TYPE",
               "value": "presubmit"
+            },
+            {
+              "name": "OPENSHIFT_CI",
+              "value": "true"
             },
             {
               "name": "PROW_JOB_ID",
@@ -1264,6 +1280,10 @@
               "value": "presubmit"
             },
             {
+              "name": "OPENSHIFT_CI",
+              "value": "true"
+            },
+            {
               "name": "PROW_JOB_ID",
               "value": "uuid"
             },
@@ -1455,6 +1475,10 @@
               "value": "presubmit"
             },
             {
+              "name": "OPENSHIFT_CI",
+              "value": "true"
+            },
+            {
               "name": "PROW_JOB_ID",
               "value": "uuid"
             },
@@ -1644,6 +1668,10 @@
             {
               "name": "JOB_TYPE",
               "value": "presubmit"
+            },
+            {
+              "name": "OPENSHIFT_CI",
+              "value": "true"
             },
             {
               "name": "PROW_JOB_ID",

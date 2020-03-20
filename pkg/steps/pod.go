@@ -17,8 +17,12 @@ import (
 	"github.com/openshift/ci-tools/pkg/junit"
 )
 
-const testSecretName = "test-secret"
-const testSecretDefaultPath = "/usr/test-secrets"
+const (
+	testSecretName        = "test-secret"
+	testSecretDefaultPath = "/usr/test-secrets"
+
+	openshiftCIEnv = "OPENSHIFT_CI"
+)
 
 // PodStepConfiguration allows other steps to reuse the pod launching and monitoring
 // behavior without reimplementing function. It also enforces conventions like naming,
@@ -184,6 +188,7 @@ func generateBasePod(
 	artifactDir string,
 ) (*coreapi.Pod, error) {
 	envMap, err := downwardapi.EnvForSpec(jobSpec.JobSpec)
+	envMap[openshiftCIEnv] = "true"
 	if err != nil {
 		return nil, err
 	}

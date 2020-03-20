@@ -31,7 +31,6 @@
     },
     {
       "as": "e2e-azure",
-      "commands": "",
       "literal_steps": {
         "cluster_profile": "azure",
         "pre": [
@@ -104,7 +103,6 @@
     },
     {
       "as": "e2e-gcp",
-      "commands": "",
       "literal_steps": {
         "cluster_profile": "gcp",
         "pre": [

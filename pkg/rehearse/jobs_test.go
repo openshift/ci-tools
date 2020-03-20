@@ -42,7 +42,7 @@ import (
 
 const testingRegistry = "../../test/multistage-registry/registry"
 
-const testingCiOpCfgYAML = "tests:\n- as: job1\n  commands: \"\"\n- as: job2\n  commands: \"\"\n"
+const testingCiOpCfgYAML = "tests:\n- as: job1\n- as: job2\n"
 
 // configFiles contains the info needed to allow inlineCiOpConfig to successfully inline
 // CONFIG_SPEC and not fail

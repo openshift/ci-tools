@@ -319,7 +319,7 @@ type TestStepConfiguration struct {
 	As string `json:"as"`
 	// Commands are the shell commands to run in
 	// the repository root to execute tests.
-	Commands string `json:"commands"`
+	Commands string `json:"commands,omitempty"`
 	// ArtifactDir is an optional directory that contains the
 	// artifacts to upload. If unset, this will default to
 	// "/tmp/artifacts".

@@ -237,21 +237,20 @@ const templateDefinitions = `
 	<table class="table">
 		<thead>
 			<tr>
-				<th title="The name of the workflow" class="info">Name</th>
-				<th title="What the workflow is supposed to do" class="info">Description</th>
-				<th title="The registry components used during setup" class="info">Pre</th>
-				<th title="The registry components containing the tests" class="info">Test</th>
-				<th title="The registry components used to teardown and clean up the test" class="info">Post</th>
+				<th title="The name of the workflow and what the workflow is supposed to do" class="info">Name and Description</th>
+				<th title="The registry components used during the Pre, Test, and Post sections of the workflow" class="info">Steps</th>
 			</tr>
 		</thead>
 		<tbody>
 			{{ range $name, $config := . }}
 				<tr>
-					<td>{{ template "nameWithLink" $name }}</td>
-					<td>{{ docsForName $name }}</td>
-					<td>{{ template "stepList" $config.Pre }}</td>
-					<td>{{ template "stepList" $config.Test }}</td>
-					<td>{{ template "stepList" $config.Post }}</td>
+					<td><b>Name:</b> {{ template "nameWithLink" $name }}<p>
+						<b>Description:</b><br>{{ docsForName $name }}
+					</td>
+					<td>{{ if (len $config.Pre) gt 0 }}<b>Pre:</b>{{ template "stepList" $config.Pre }}{{ end }}
+					    {{ if (len $config.Test) gt 0 }}<b>Test:</b>{{ template "stepList" $config.Test }}{{ end }}
+						{{ if (len $config.Post) gt 0 }}<b>Post:</b>{{ template "stepList" $config.Post }}{{ end }}
+					</td>
 				</tr>
 			{{ end }}
 		</tbody>

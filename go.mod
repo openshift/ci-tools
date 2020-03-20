@@ -21,6 +21,7 @@ require (
 	github.com/getlantern/deepcopy v0.0.0-20160317154340-7f45deb8130a
 	github.com/ghodss/yaml v1.0.0
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
+	github.com/golang/protobuf v1.3.5 // indirect
 	github.com/google/go-cmp v0.4.0
 	github.com/mattn/go-zglob v0.0.1
 	github.com/openshift/api v0.0.0-20200116145750-0e2ff1e215dd
@@ -36,7 +37,8 @@ require (
 	k8s.io/api v0.17.4
 	k8s.io/apimachinery v0.17.4
 	k8s.io/client-go v11.0.1-0.20190805182717-6502b5e7b1b5+incompatible
-	k8s.io/test-infra v0.0.0-20200314074034-a0cadb92a2b4
+	k8s.io/test-infra v0.0.0-20200320144636-9b228124be5c
 	k8s.io/utils v0.0.0-20191114184206-e782cd3c129f
+	sigs.k8s.io/controller-runtime v0.5.1 // indirect
 	sigs.k8s.io/yaml v1.1.0
 )

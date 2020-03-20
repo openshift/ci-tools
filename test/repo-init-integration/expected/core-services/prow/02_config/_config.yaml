@@ -1,6 +1,5 @@
 branch-protection: {}
 deck:
-  rerun_auth_config: {}
   spyglass:
     size_limit: 100000000
   tide_update_period: 10s

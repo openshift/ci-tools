@@ -266,7 +266,6 @@
         sha: 2a2c6326002a2df6099cb3cadf145f338ad3e137
       repo: release
     report: true
-    rerun_auth_config: {}
     rerun_command: /test pj-rehearse
     type: presubmit
   status:
@@ -368,7 +367,6 @@
         sha: 783e2532831a60e2ea50eb7fea52bcba2ecb6107
       repo: release
     report: true
-    rerun_auth_config: {}
     rerun_command: /test pj-rehearse
     type: presubmit
   status:
@@ -478,7 +476,6 @@
         sha: 1303e418a8be200e400667c6ea6e7a549e4a8f6f
       repo: release
     report: true
-    rerun_auth_config: {}
     rerun_command: /test pj-rehearse
     type: presubmit
   status:
@@ -592,7 +589,6 @@
         sha: 2a4d89d759b611ad3f423378c7d78f3af15d78e2
       repo: release
     report: true
-    rerun_auth_config: {}
     rerun_command: /test pj-rehearse
     type: presubmit
   status:
@@ -719,7 +715,6 @@
         sha: 7c0b9788f819121ac637fa3f8a319d0bc2cda73e
       repo: release
     report: true
-    rerun_auth_config: {}
     rerun_command: /test pj-rehearse
     type: presubmit
   status:
@@ -823,7 +818,6 @@
         sha: 7c0b9788f819121ac637fa3f8a319d0bc2cda73e
       repo: release
     report: true
-    rerun_auth_config: {}
     rerun_command: /test pj-rehearse
     type: presubmit
   status:
@@ -950,7 +944,6 @@
         sha: bb928f30f5790ce48231cb1b2601a135869da8cc
       repo: release
     report: true
-    rerun_auth_config: {}
     rerun_command: /test pj-rehearse
     type: presubmit
   status:
@@ -1054,7 +1047,6 @@
         sha: 7c0b9788f819121ac637fa3f8a319d0bc2cda73e
       repo: release
     report: true
-    rerun_auth_config: {}
     rerun_command: /test pj-rehearse
     type: presubmit
   status:
@@ -1181,7 +1173,6 @@
         sha: 4fe34c7d9b223067e30397a98a64bc0915d602e2
       repo: release
     report: true
-    rerun_auth_config: {}
     rerun_command: /test pj-rehearse
     type: presubmit
   status:
@@ -1308,7 +1299,6 @@
         sha: 4fe34c7d9b223067e30397a98a64bc0915d602e2
       repo: release
     report: true
-    rerun_auth_config: {}
     rerun_command: /test pj-rehearse
     type: presubmit
   status:
@@ -1591,7 +1581,6 @@
         sha: bb928f30f5790ce48231cb1b2601a135869da8cc
       repo: release
     report: true
-    rerun_auth_config: {}
     rerun_command: /test pj-rehearse
     type: presubmit
   status:
@@ -1897,7 +1886,6 @@
         sha: bb928f30f5790ce48231cb1b2601a135869da8cc
       repo: release
     report: true
-    rerun_auth_config: {}
     rerun_command: /test pj-rehearse
     type: presubmit
   status:
@@ -2198,7 +2186,6 @@
         sha: bd54f9c2b25d95fbcde47597e52c6866be831382
       repo: release
     report: true
-    rerun_auth_config: {}
     rerun_command: /test pj-rehearse
     type: presubmit
   status:
@@ -2499,7 +2486,6 @@
         sha: bb928f30f5790ce48231cb1b2601a135869da8cc
       repo: release
     report: true
-    rerun_auth_config: {}
     rerun_command: /test pj-rehearse
     type: presubmit
   status:
@@ -2800,7 +2786,6 @@
         sha: 7c0b9788f819121ac637fa3f8a319d0bc2cda73e
       repo: release
     report: true
-    rerun_auth_config: {}
     rerun_command: /test pj-rehearse
     type: presubmit
   status:
@@ -3091,7 +3076,6 @@
         sha: 7c0b9788f819121ac637fa3f8a319d0bc2cda73e
       repo: release
     report: true
-    rerun_auth_config: {}
     rerun_command: /test pj-rehearse
     type: presubmit
   status:

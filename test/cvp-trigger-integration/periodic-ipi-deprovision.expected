@@ -71,7 +71,6 @@ spec:
           path: gce.json
         secretName: cluster-secrets-gcp
   report: true
-  rerun_auth_config: {}
   type: periodic
 status:
   startTime: "2020-03-09T18:42:19Z"

@@ -92,30 +92,6 @@ button {
 td {
   vertical-align: middle;
 }
-/* From https://www.w3schools.com/howto/howto_css_fixed_sidebar.asp */
-/* The sidebar menu */
-.sidenav {
-  width: 250px;
-  position: fixed;
-  z-index: 1;
-  top: 20px;
-  left: 10px;
-  background: #eee;
-  overflow-x: hidden;
-  padding: 8px 0;
-}
-
-.sidenav a {
-  padding: 6px 8px 6px 16px;
-  text-decoration: none;
-  font-size: 1.2rem;
-  color: #2196F3;
-  display: block;
-}
-
-.sidenav a:hover {
-  color: #064579;
-}
 </style>
 </head>
 <body>

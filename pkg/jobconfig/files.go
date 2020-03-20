@@ -416,7 +416,9 @@ func mergePresubmits(old, new *prowconfig.Presubmit) prowconfig.Presubmit {
 	merged.Optional = old.Optional
 	merged.MaxConcurrency = old.MaxConcurrency
 	merged.SkipReport = old.SkipReport
-	merged.Cluster = old.Cluster
+	if old.Cluster != "" {
+		merged.Cluster = old.Cluster
+	}
 
 	return merged
 }
@@ -428,7 +430,9 @@ func mergePostsubmits(old, new *prowconfig.Postsubmit) prowconfig.Postsubmit {
 	merged := *new
 
 	merged.MaxConcurrency = old.MaxConcurrency
-	merged.Cluster = old.Cluster
+	if old.Cluster != "" {
+		merged.Cluster = old.Cluster
+	}
 
 	return merged
 }
@@ -440,7 +444,9 @@ func mergePeriodics(old, new *prowconfig.Periodic) prowconfig.Periodic {
 	merged := *new
 
 	merged.MaxConcurrency = old.MaxConcurrency
-	merged.Cluster = old.Cluster
+	if old.Cluster != "" {
+		merged.Cluster = old.Cluster
+	}
 
 	return merged
 }

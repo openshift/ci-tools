@@ -92,7 +92,7 @@ objects:
         FROM api.ci.openshift.org/openshift/release:golang-1.13
 
         COPY . .
-        RUN make install
+        RUN go install ./cmd/ci-operator-configresolver/...
       git:
         ref: ${BRANCH}
         uri: https://github.com/${USER}/ci-tools.git

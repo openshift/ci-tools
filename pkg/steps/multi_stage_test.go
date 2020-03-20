@@ -101,6 +101,7 @@ func TestGeneratePods(t *testing.T) {
 		{Name: "JOB_NAME", Value: "job"},
 		{Name: "JOB_SPEC", Value: `{"type":"postsubmit","job":"job","buildid":"build id","prowjobid":"prow job id","refs":{"org":"org","repo":"repo","base_ref":"base ref","base_sha":"base sha"}}`},
 		{Name: "JOB_TYPE", Value: "postsubmit"},
+		{Name: "OPENSHIFT_CI", Value: "true"},
 		{Name: "PROW_JOB_ID", Value: "prow job id"},
 		{Name: "PULL_BASE_REF", Value: "base ref"},
 		{Name: "PULL_BASE_SHA", Value: "base sha"},

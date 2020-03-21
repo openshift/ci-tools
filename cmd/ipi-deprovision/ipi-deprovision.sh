@@ -70,4 +70,13 @@ if [[ "${#buckets[@]}" -gt 0 ]]; then
   timeout 30m gsutil -m rm -r "${buckets[@]}"
 fi
 
+# After tearing down 'ci-*' stale clusters, tear down remaining stale 'ci-*' resources
+# from release/ci-operator/templates/openshift/installer/cluster-launch-installer-libvirt-e2e.yaml
+for instances in $( gcloud --project=openshift-gce-devel-ci compute instances list --filter "${FILTER}" --format "value(name)" ); do
+  gcloud compute instances delete "${instance}" --quiet || true
+  gcloud compute firewall-rules delete "${instance}" --quiet || true
+  gcloud compute networks subnets delete "${instance}" --quiet || true
+  gcloud compute networks delete "${instance}" --quiet || true
+done
+
 echo "Deprovision finished successfully"

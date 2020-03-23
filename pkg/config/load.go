@@ -21,7 +21,14 @@ var ProwgenFile = ".config.prowgen"
 
 // Prowgen holds the information of the prowgen's configuration file.
 type Prowgen struct {
+	// Private indicates that generated jobs should be marked as hidden
+	// from display in deck and that they should mount appropriate git credentials
+	// to clone the repository under test.
 	Private bool `json:"private,omitempty"`
+	// Expose declares that jobs should not be hidden from view in deck if they
+	// are private.
+	// This field has no effect if private is not set.
+	Expose bool `json:"expose,omitempty"`
 }
 
 func readCiOperatorConfig(configFilePath string, info Info) (*cioperatorapi.ReleaseBuildConfiguration, error) {

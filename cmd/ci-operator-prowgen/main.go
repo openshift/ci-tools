@@ -480,7 +480,7 @@ func generateJobBase(name, prefix string, info *prowgenInfo, label jc.ProwgenLab
 	if pathAlias != nil {
 		base.PathAlias = *pathAlias
 	}
-	if info.config.Private {
+	if info.config.Private && !info.config.Expose {
 		base.Hidden = true
 	}
 	return base
@@ -656,7 +656,7 @@ func generateJobsToDir(dir string, label jc.ProwgenLabel) func(configSpec *ciope
 	cache := map[string]*config.Prowgen{}
 	return func(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *config.Info) error {
 		orgRepo := fmt.Sprintf("%s/%s", info.Org, info.Repo)
-		pInfo := &prowgenInfo{Info: *info, config: config.Prowgen{Private: false}}
+		pInfo := &prowgenInfo{Info: *info, config: config.Prowgen{Private: false, Expose: false}}
 		var ok bool
 		var err error
 		var orgConfig, repoConfig *config.Prowgen

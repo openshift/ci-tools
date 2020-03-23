@@ -339,9 +339,6 @@ func TestMakeRehearsalPresubmit(t *testing.T) {
 	hiddenPresubmit := &prowconfig.Presubmit{}
 	deepcopy.Copy(hiddenPresubmit, sourcePresubmit)
 	hiddenPresubmit.Hidden = true
-	notReportingPresubmit := &prowconfig.Presubmit{}
-	deepcopy.Copy(notReportingPresubmit, sourcePresubmit)
-	notReportingPresubmit.SkipReport = true
 
 	testCases := []struct {
 		testID   string
@@ -367,11 +364,6 @@ func TestMakeRehearsalPresubmit(t *testing.T) {
 			testID:   "job that belong to the same org but different repo than refs",
 			refs:     &pjapi.Refs{Org: "org", Repo: "anotherRepo"},
 			original: sourcePresubmit,
-		},
-		{
-			testID:   "job that doesn't report reports on rehearsal",
-			refs:     &pjapi.Refs{Org: "org", Repo: "repo"},
-			original: notReportingPresubmit,
 		},
 	}
 

@@ -34,10 +34,20 @@ func bindOptions(flag *flag.FlagSet) *options {
 
 func determinizeJobs(prowJobConfigDir string) error {
 	errChan := make(chan error)
+
+	var errs []error
+	errReadingDone := make(chan struct{})
+	go func() {
+		for err := range errChan {
+			errs = append(errs, err)
+		}
+		close(errReadingDone)
+	}()
+
 	wg := sync.WaitGroup{}
 	if err := filepath.Walk(prowJobConfigDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to walk file/directory '%s'", path)
+			errChan <- fmt.Errorf("Failed to walk file/directory '%s'", path)
 			return nil
 		}
 
@@ -79,15 +89,6 @@ func determinizeJobs(prowJobConfigDir string) error {
 	}); err != nil {
 		return fmt.Errorf("failed to determinize all Prow jobs: %v", err)
 	}
-
-	var errs []error
-	errReadingDone := make(chan struct{})
-	go func() {
-		for err := range errChan {
-			errs = append(errs, err)
-		}
-		close(errReadingDone)
-	}()
 
 	wg.Wait()
 	close(errChan)

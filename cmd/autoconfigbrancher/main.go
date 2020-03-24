@@ -196,7 +196,7 @@ func main() {
 	commitIfNeeded("private-prow-configs-mirror --release-repo-path .", author)
 
 	cmd = "/usr/bin/determinize-prow-jobs"
-	args = []string{"--prow-jobs-dir", "--prow-jobs-dir", "./ci-operator/jobs"}
+	args = []string{"--prow-jobs-dir", "./ci-operator/jobs"}
 	run(cmd, args...)
 	commitIfNeeded("determinize-prow-jobs  --prow-jobs-dir ./ci-operator/jobs", author)
 

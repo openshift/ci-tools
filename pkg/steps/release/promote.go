@@ -23,13 +23,13 @@ import (
 // promotionStep will tag a full release suite
 // of images out to the configured namespace.
 type promotionStep struct {
-	config api.PromotionConfiguration
-	// tags is the set of all tags to attempt to copy over
-	tags      []string
-	srcClient imageclientset.ImageV1Interface
-	dstClient imageclientset.ImageV1Interface
-	jobSpec   *api.JobSpec
-	dryLogger *steps.DryLogger
+	config         api.PromotionConfiguration
+	images         []api.ProjectDirectoryImageBuildStepConfiguration
+	requiredImages sets.String
+	srcClient      imageclientset.ImageV1Interface
+	dstClient      imageclientset.ImageV1Interface
+	jobSpec        *api.JobSpec
+	dryLogger      *steps.DryLogger
 }
 
 func targetName(config api.PromotionConfiguration) string {
@@ -51,24 +51,10 @@ var promotionRetry = wait.Backoff{
 }
 
 func (s *promotionStep) Run(ctx context.Context, dry bool) error {
-	if s.config.Disabled {
-		log.Println("Promotion is disabled, skipping...")
+	tags, names := ToPromote(s.config, s.images, s.requiredImages)
+	if len(names) == 0 {
+		log.Println("Nothing to promote, skipping...")
 		return nil
-	}
-
-	tags := make(map[string]string)
-	names := sets.NewString()
-	for _, tag := range s.tags {
-		tags[tag] = tag
-		names.Insert(tag)
-	}
-	for _, tag := range s.config.ExcludedImages {
-		delete(tags, tag)
-		names.Delete(tag)
-	}
-	for dst, src := range s.config.AdditionalImages {
-		tags[dst] = src
-		names.Insert(dst)
 	}
 
 	log.Printf("Promoting tags to %s: %s", targetName(s.config), strings.Join(names.List(), ", "))
@@ -123,14 +109,12 @@ func (s *promotionStep) Run(ctx context.Context, dry bool) error {
 			continue
 		}
 
-		name := fmt.Sprintf("%s%s", s.config.NamePrefix, dst)
-
 		err := retry.RetryOnConflict(promotionRetry, func() error {
-			_, err := s.dstClient.ImageStreams(s.config.Namespace).Get(name, meta.GetOptions{})
+			_, err := s.dstClient.ImageStreams(s.config.Namespace).Get(dst, meta.GetOptions{})
 			if errors.IsNotFound(err) {
 				_, err = s.dstClient.ImageStreams(s.config.Namespace).Create(&imageapi.ImageStream{
 					ObjectMeta: meta.ObjectMeta{
-						Name:      name,
+						Name:      dst,
 						Namespace: s.config.Namespace,
 					},
 					Spec: imageapi.ImageStreamSpec{
@@ -146,7 +130,7 @@ func (s *promotionStep) Run(ctx context.Context, dry bool) error {
 
 			ist := &imageapi.ImageStreamTag{
 				ObjectMeta: meta.ObjectMeta{
-					Name:      fmt.Sprintf("%s:%s", name, s.config.Tag),
+					Name:      fmt.Sprintf("%s:%s", dst, s.config.Tag),
 					Namespace: s.config.Namespace,
 				},
 				Tag: &imageapi.TagReference{
@@ -173,6 +157,47 @@ func (s *promotionStep) Run(ctx context.Context, dry bool) error {
 	return nil
 }
 
+// ToPromote determines the mapping of local tag to external tag which should be promoted
+func ToPromote(config api.PromotionConfiguration, images []api.ProjectDirectoryImageBuildStepConfiguration, requiredImages sets.String) (map[string]string, sets.String) {
+	tagsByDst := map[string]string{}
+	names := sets.NewString()
+
+	if config.Disabled {
+		return tagsByDst, names
+	}
+
+	for _, image := range images {
+		// if the image is required or non-optional, include it in promotion
+		tag := string(image.To)
+		if requiredImages.Has(tag) || !image.Optional {
+			tagsByDst[tag] = tag
+			names.Insert(tag)
+		}
+	}
+	for _, tag := range config.ExcludedImages {
+		delete(tagsByDst, tag)
+		names.Delete(tag)
+	}
+	for dst, src := range config.AdditionalImages {
+		tagsByDst[dst] = src
+		names.Insert(dst)
+	}
+
+	if config.NamePrefix == "" {
+		return tagsByDst, names
+	}
+
+	namesByDst := map[string]string{}
+	names = sets.NewString()
+	for dst, src := range tagsByDst {
+		name := fmt.Sprintf("%s%s", config.NamePrefix, dst)
+		namesByDst[name] = src
+		names.Insert(name)
+	}
+
+	return namesByDst, names
+}
+
 func (s *promotionStep) Requires() []api.StepLink {
 	return []api.StepLink{api.AllStepsLink()}
 }
@@ -193,13 +218,14 @@ func (s *promotionStep) Description() string {
 
 // PromotionStep copies tags from the pipeline image stream to the destination defined in the promotion config.
 // If the source tag does not exist it is silently skipped.
-func PromotionStep(config api.PromotionConfiguration, tags []string, srcClient, dstClient imageclientset.ImageV1Interface, jobSpec *api.JobSpec, dryLogger *steps.DryLogger) api.Step {
+func PromotionStep(config api.PromotionConfiguration, images []api.ProjectDirectoryImageBuildStepConfiguration, requiredImages sets.String, srcClient, dstClient imageclientset.ImageV1Interface, jobSpec *api.JobSpec, dryLogger *steps.DryLogger) api.Step {
 	return &promotionStep{
-		config:    config,
-		tags:      tags,
-		srcClient: srcClient,
-		dstClient: dstClient,
-		jobSpec:   jobSpec,
-		dryLogger: dryLogger,
+		config:         config,
+		images:         images,
+		requiredImages: requiredImages,
+		srcClient:      srcClient,
+		dstClient:      dstClient,
+		jobSpec:        jobSpec,
+		dryLogger:      dryLogger,
 	}
 }

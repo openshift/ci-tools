@@ -213,6 +213,10 @@ func validatePromotionConfiguration(fieldRoot string, input PromotionConfigurati
 	if len(input.Name) == 0 && len(input.Tag) == 0 {
 		validationErrors = append(validationErrors, fmt.Errorf("%s: no name or tag defined", fieldRoot))
 	}
+
+	if len(input.Name) != 0 && len(input.Tag) != 0 {
+		validationErrors = append(validationErrors, fmt.Errorf("%s: both name and tag defined", fieldRoot))
+	}
 	return validationErrors
 }
 

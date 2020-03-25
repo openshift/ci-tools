@@ -23,6 +23,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/jobconfig"
 	jc "github.com/openshift/ci-tools/pkg/jobconfig"
 	"github.com/openshift/ci-tools/pkg/promotion"
+	"github.com/openshift/ci-tools/pkg/promotion/releasepromotion"
 )
 
 const (
@@ -43,6 +44,7 @@ type options struct {
 	fromReleaseRepo bool
 
 	toDir         string
+	toReleaseDir  string
 	toReleaseRepo bool
 
 	help bool
@@ -55,7 +57,8 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.BoolVar(&opt.fromReleaseRepo, "from-release-repo", false, "If set, it behaves like --from-dir=$GOPATH/src/github.com/openshift/release/ci-operator/config")
 
 	flag.StringVar(&opt.toDir, "to-dir", "", "Path to a directory with a directory structure holding Prow job configuration files for multiple components")
-	flag.BoolVar(&opt.toReleaseRepo, "to-release-repo", false, "If set, it behaves like --to-dir=$GOPATH/src/github.com/openshift/release/ci-operator/jobs")
+	flag.StringVar(&opt.toReleaseDir, "to-release-dir", "", "Path to a directory with a directory structure holding release promotion rules for multiple components")
+	flag.BoolVar(&opt.toReleaseRepo, "to-release-repo", false, "If set, it behaves like --to-dir=$GOPATH/src/github.com/openshift/release/ci-operator/jobs --to-release-dir=$GOPATH/src/github.com/openshift/release/ci-operator/releases")
 
 	flag.BoolVar(&opt.help, "h", false, "Show help for ci-operator-prowgen")
 
@@ -75,6 +78,9 @@ func (o *options) process() error {
 		if o.toDir, err = getReleaseRepoDir("ci-operator/jobs"); err != nil {
 			return fmt.Errorf("--to-release-repo error: %v", err)
 		}
+		if o.toReleaseDir, err = getReleaseRepoDir("ci-operator/releases"); err != nil {
+			return fmt.Errorf("--to-release-repo error: %v", err)
+		}
 	}
 
 	if o.fromDir == "" {
@@ -88,7 +94,7 @@ func (o *options) process() error {
 	return nil
 }
 
-// Generate a PodSpec that runs `ci-operator`, to be used in Presubmit/Postsubmit
+// generatePodSpec creates a PodSpec that runs `ci-operator`, to be used in Presubmit/Postsubmit
 // Various pieces are derived from `org`, `repo`, `branch` and `target`.
 // `additionalArgs` are passed as additional arguments to `ci-operator`
 func generatePodSpec(info *prowgenInfo, secrets []*cioperatorapi.Secret) *kubeapi.PodSpec {
@@ -806,7 +812,31 @@ func main() {
 	if len(args) == 0 {
 		args = append(args, "")
 	}
+
 	genJobs := generateJobsToDir(opt.toDir, jc.New)
+
+	if len(args) == 0 && len(opt.toReleaseDir) > 0 {
+		promotions := releasepromotion.NewVerifier()
+		if err := config.OperateOnCIOperatorConfigSubdir(opt.fromDir, "", promotions.LoadConfig); err != nil {
+			fields := logrus.Fields{"target": opt.toReleaseDir, "source": opt.fromDir, "subdir": ""}
+			logrus.WithError(err).WithFields(fields).Fatal("Failed to load promotion targets")
+		}
+		if err := promotions.WriteImages(opt.toReleaseDir, filepath.Base(os.Args[0])); err != nil {
+			fields := logrus.Fields{"target": opt.toReleaseDir, "source": opt.fromDir, "subdir": ""}
+			logrus.WithError(err).WithFields(fields).Fatal("Failed to generate promotion names")
+		}
+		if err := promotions.WriteMirroringRules(opt.toReleaseDir, filepath.Base(os.Args[0])); err != nil {
+			fields := logrus.Fields{"target": opt.toReleaseDir, "source": opt.fromDir, "subdir": ""}
+			logrus.WithError(err).WithFields(fields).Fatal("Failed to generate mirroring rules")
+		}
+		if errs := promotions.Errors(); len(errs) > 0 {
+			for _, err := range errs {
+				logrus.WithError(err).Error("Failed verification")
+			}
+			logrus.Fatal("Failed to verify release promotion rules")
+		}
+	}
+
 	for _, subDir := range args {
 		if err := config.OperateOnCIOperatorConfigSubdir(opt.fromDir, subDir, genJobs); err != nil {
 			fields := logrus.Fields{"target": opt.toDir, "source": opt.fromDir, "subdir": subDir}

@@ -1228,22 +1228,10 @@ func TestGenerateJobs(t *testing.T) {
 						Name:   "pull-ci-organization-repository-branch-derTest",
 						Labels: standardPresubmitJobLabels,
 					}}, {
-					Optional: true,
-					JobBase: prowconfig.JobBase{
-						Name:    "pull-ci-organization-repository-branch-derTest-build01",
-						Labels:  standardPresubmitJobLabels,
-						Cluster: "ci/api-build01-ci-devcluster-openshift-com:6443",
-					}, Reporter: prowconfig.Reporter{SkipReport: true}}, {
 					JobBase: prowconfig.JobBase{
 						Name:   "pull-ci-organization-repository-branch-leTest",
 						Labels: standardPresubmitJobLabels,
-					}}, {
-					Optional: true,
-					JobBase: prowconfig.JobBase{
-						Name:    "pull-ci-organization-repository-branch-leTest-build01",
-						Labels:  standardPresubmitJobLabels,
-						Cluster: "ci/api-build01-ci-devcluster-openshift-com:6443",
-					}, Reporter: prowconfig.Reporter{SkipReport: true}},
+					}},
 				}},
 				PostsubmitsStatic: map[string][]prowconfig.Postsubmit{},
 			},
@@ -1267,32 +1255,14 @@ func TestGenerateJobs(t *testing.T) {
 						Name:   "pull-ci-organization-repository-branch-derTest",
 						Labels: standardPresubmitJobLabels,
 					}}, {
-					Optional: true,
-					JobBase: prowconfig.JobBase{
-						Name:    "pull-ci-organization-repository-branch-derTest-build01",
-						Labels:  standardPresubmitJobLabels,
-						Cluster: "ci/api-build01-ci-devcluster-openshift-com:6443",
-					}, Reporter: prowconfig.Reporter{SkipReport: true}}, {
 					JobBase: prowconfig.JobBase{
 						Name:   "pull-ci-organization-repository-branch-leTest",
 						Labels: standardPresubmitJobLabels,
 					}}, {
-					Optional: true,
-					JobBase: prowconfig.JobBase{
-						Name:    "pull-ci-organization-repository-branch-leTest-build01",
-						Labels:  standardPresubmitJobLabels,
-						Cluster: "ci/api-build01-ci-devcluster-openshift-com:6443",
-					}, Reporter: prowconfig.Reporter{SkipReport: true}}, {
 					JobBase: prowconfig.JobBase{
 						Name:   "pull-ci-organization-repository-branch-images",
 						Labels: standardPresubmitJobLabels,
-					}}, {
-					Optional: true,
-					JobBase: prowconfig.JobBase{
-						Name:    "pull-ci-organization-repository-branch-images-build01",
-						Labels:  standardPresubmitJobLabels,
-						Cluster: "ci/api-build01-ci-devcluster-openshift-com:6443",
-					}, Reporter: prowconfig.Reporter{SkipReport: true}},
+					}},
 				}},
 				PostsubmitsStatic: map[string][]prowconfig.Postsubmit{"organization/repository": {{
 					JobBase: prowconfig.JobBase{
@@ -1368,13 +1338,7 @@ func TestGenerateJobs(t *testing.T) {
 					JobBase: prowconfig.JobBase{
 						Name:   "pull-ci-organization-repository-branch-images",
 						Labels: standardPresubmitJobLabels,
-					}}, {
-					Optional: true,
-					JobBase: prowconfig.JobBase{
-						Name:    "pull-ci-organization-repository-branch-images-build01",
-						Labels:  standardPresubmitJobLabels,
-						Cluster: "ci/api-build01-ci-devcluster-openshift-com:6443",
-					}, Reporter: prowconfig.Reporter{SkipReport: true}},
+					}},
 				}},
 				PostsubmitsStatic: map[string][]prowconfig.Postsubmit{"organization/repository": {{
 					JobBase: prowconfig.JobBase{
@@ -1402,13 +1366,7 @@ func TestGenerateJobs(t *testing.T) {
 					JobBase: prowconfig.JobBase{
 						Name:   "pull-ci-organization-repository-branch-images",
 						Labels: standardPresubmitJobLabels,
-					}}, {
-					Optional: true,
-					JobBase: prowconfig.JobBase{
-						Name:    "pull-ci-organization-repository-branch-images-build01",
-						Labels:  standardPresubmitJobLabels,
-						Cluster: "ci/api-build01-ci-devcluster-openshift-com:6443",
-					}, Reporter: prowconfig.Reporter{SkipReport: true}},
+					}},
 				}},
 			},
 		},

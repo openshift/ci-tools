@@ -1535,11 +1535,15 @@ func WebRegHandler(regAgent agents.RegistryAgent, confAgent agents.ConfigAgent, 
 func syntax(source string, lexer chroma.Lexer) (string, error) {
 	var output bytes.Buffer
 	style := styles.Get("dracula")
-	formatter := html.New(html.Standalone(false))
+	// hightlighted lines based on linking currently require WithClasses to be used
+	formatter := html.New(html.Standalone(false), html.LinkableLineNumbers(true, "line"), html.WithLineNumbers(true), html.WithClasses(true))
 	iterator, err := lexer.Tokenise(nil, source)
 	if err != nil {
-		return "", fmt.Errorf("failed to tokenise source: %w", err)
+		return "", fmt.Errorf("failed to tokenise source: %v", err)
 	}
+	output.WriteString("<style>")
+	formatter.WriteCSS(&output, style)
+	output.WriteString("</style>")
 	err = formatter.Format(&output, style, iterator)
 	return output.String(), err
 }

@@ -773,6 +773,11 @@ func TestValidatePromotion(t *testing.T) {
 			input:    PromotionConfiguration{},
 			expected: []error{errors.New("promotion: no namespace defined"), errors.New("promotion: no name or tag defined")},
 		},
+		{
+			name:     "config with extra fields yields errors",
+			input:    PromotionConfiguration{Namespace: "foo", Name: "bar", Tag: "baz"},
+			expected: []error{errors.New("promotion: both name and tag defined")},
+		},
 	}
 	for _, test := range testCases {
 		t.Run(test.name, func(t *testing.T) {

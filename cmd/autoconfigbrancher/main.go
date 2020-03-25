@@ -195,10 +195,10 @@ func main() {
 
 	commitIfNeeded("private-prow-configs-mirror --release-repo-path .", author)
 
-	cmd = "/usr/bin/determinize-prow-jobs"
+	cmd = "/usr/bin/sanitize-prow-jobs"
 	args = []string{"--prow-jobs-dir", "./ci-operator/jobs"}
 	run(cmd, args...)
-	commitIfNeeded("determinize-prow-jobs  --prow-jobs-dir ./ci-operator/jobs", author)
+	commitIfNeeded("sanitize-prow-jobs  --prow-jobs-dir ./ci-operator/jobs", author)
 
 	if count == 0 {
 		logrus.Info("no new commits, existing ...")

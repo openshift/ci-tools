@@ -6,7 +6,7 @@ ADD ci-operator-prowgen /usr/bin/ci-operator-prowgen
 ADD autoconfigbrancher /usr/bin/autoconfigbrancher
 ADD ci-op-configs-mirror /usr/bin/ci-op-configs-mirror
 ADD private-prow-configs-mirror /usr/bin/private-prow-configs-mirror
-ADD determinize-prow-jobs /usr/bin/determinize-prow-jobs
+ADD sanitize-prow-jobs /usr/bin/sanitize-prow-jobs
 
 RUN yum install -y git && \
     yum clean all && \

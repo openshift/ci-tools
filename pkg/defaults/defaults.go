@@ -6,14 +6,13 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/openshift/ci-tools/pkg/steps/clusterinstall"
-
 	templateapi "github.com/openshift/api/template/v1"
 	buildclientset "github.com/openshift/client-go/build/clientset/versioned/typed/build/v1"
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 	routeclientset "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
 	templateclientset "github.com/openshift/client-go/template/clientset/versioned/typed/template/v1"
 	coreapi "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 	appsclientset "k8s.io/client-go/kubernetes/typed/apps/v1"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	rbacclientset "k8s.io/client-go/kubernetes/typed/rbac/v1"
@@ -22,6 +21,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/lease"
 	"github.com/openshift/ci-tools/pkg/steps"
+	"github.com/openshift/ci-tools/pkg/steps/clusterinstall"
 	"github.com/openshift/ci-tools/pkg/steps/release"
 )
 
@@ -48,9 +48,9 @@ func FromConfig(
 	var buildSteps []api.Step
 	var postSteps []api.Step
 
-	requiredNames := make(map[string]struct{})
+	requiredNames := sets.NewString()
 	for _, target := range requiredTargets {
-		requiredNames[target] = struct{}{}
+		requiredNames.Insert(target)
 	}
 
 	var buildClient steps.BuildClient
@@ -149,7 +149,7 @@ func FromConfig(
 		} else if rawStep.OutputImageTagStepConfiguration != nil {
 			step = steps.OutputImageTagStep(*rawStep.OutputImageTagStepConfiguration, imageClient, imageClient, jobSpec, dryLogger)
 			// all required or non-optional output images are considered part of [images]
-			if _, ok := requiredNames[string(rawStep.OutputImageTagStepConfiguration.From)]; ok || !rawStep.OutputImageTagStepConfiguration.Optional {
+			if requiredNames.Has(string(rawStep.OutputImageTagStepConfiguration.From)) || !rawStep.OutputImageTagStepConfiguration.Optional {
 				stepLinks = append(stepLinks, step.Creates()...)
 			}
 		} else if rawStep.ReleaseImagesTagStepConfiguration != nil {
@@ -234,14 +234,7 @@ func FromConfig(
 		if err != nil {
 			return nil, nil, fmt.Errorf("could not determine promotion defaults: %v", err)
 		}
-		var tags []string
-		for _, image := range config.Images {
-			// if the image is required or non-optional, include it in promotion
-			if _, ok := requiredNames[string(image.To)]; ok || !image.Optional {
-				tags = append(tags, string(image.To))
-			}
-		}
-		postSteps = append(postSteps, release.PromotionStep(*cfg, tags, imageClient, imageClient, jobSpec, dryLogger))
+		postSteps = append(postSteps, release.PromotionStep(*cfg, config.Images, requiredNames, imageClient, imageClient, jobSpec, dryLogger))
 	}
 
 	return buildSteps, postSteps, nil

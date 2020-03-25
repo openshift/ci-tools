@@ -84,10 +84,8 @@ func (config *ReleaseBuildConfiguration) validate(org, repo string, resolved boo
 		validationErrors = append(validationErrors, validateReleaseTagConfiguration("tag_specification", *config.InputConfiguration.ReleaseTagConfiguration)...)
 	}
 
-	// Validate promotion in case of `tag_specification` exists or not
-	if config.PromotionConfiguration != nil && config.InputConfiguration.ReleaseTagConfiguration != nil {
-		validationErrors = append(validationErrors, validatePromotionWithTagSpec(config.PromotionConfiguration, config.InputConfiguration.ReleaseTagConfiguration)...)
-	} else if config.PromotionConfiguration != nil && config.InputConfiguration.ReleaseTagConfiguration == nil {
+	// Validate promotion
+	if config.PromotionConfiguration != nil {
 		validationErrors = append(validationErrors, validatePromotionConfiguration("promotion", *config.PromotionConfiguration)...)
 	}
 
@@ -106,23 +104,6 @@ func (config *ReleaseBuildConfiguration) validate(org, repo string, resolved boo
 	default:
 		return fmt.Errorf("configuration has %d errors:\n\n  * %s\n", len(lines), strings.Join(lines, "\n  * "))
 	}
-}
-
-func validatePromotionWithTagSpec(promotion *PromotionConfiguration, tagSpec *ReleaseTagConfiguration) []error {
-	var validationErrors []error
-
-	if len(promotion.Namespace) == 0 && len(tagSpec.Namespace) == 0 {
-		validationErrors = append(validationErrors, fmt.Errorf("promotion: no namespace defined"))
-	}
-	if len(promotion.Name) == 0 && len(promotion.Tag) == 0 {
-		if len(tagSpec.Name) != 0 {
-			// will get defaulted, is ok
-		} else {
-			validationErrors = append(validationErrors, errors.New("promotion: no name or tag provided and could not derive defaults from tag_specification"))
-		}
-	}
-
-	return validationErrors
 }
 
 func validateBuildRootImageConfiguration(fieldRoot string, input *BuildRootImageConfiguration, hasImages bool) []error {

@@ -5,8 +5,8 @@ import (
 	"reflect"
 	"testing"
 
-	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/utils/diff"
 )
 
 func TestValidateTests(t *testing.T) {
@@ -747,6 +747,37 @@ func TestValidateResources(t *testing.T) {
 			}
 			if err != nil && !testCase.expectedErr {
 				t.Errorf("%s: expected no error, but got one: %v", testCase.name, err)
+			}
+		})
+	}
+}
+
+func TestValidatePromotion(t *testing.T) {
+	var testCases = []struct {
+		name     string
+		input    PromotionConfiguration
+		expected []error
+	}{
+		{
+			name:     "normal config by name is valid",
+			input:    PromotionConfiguration{Namespace: "foo", Name: "bar"},
+			expected: nil,
+		},
+		{
+			name:     "normal config by tag is valid",
+			input:    PromotionConfiguration{Namespace: "foo", Tag: "bar"},
+			expected: nil,
+		},
+		{
+			name:     "config missing fields yields errors",
+			input:    PromotionConfiguration{},
+			expected: []error{errors.New("promotion: no namespace defined"), errors.New("promotion: no name or tag defined")},
+		},
+	}
+	for _, test := range testCases {
+		t.Run(test.name, func(t *testing.T) {
+			if actual, expected := validatePromotionConfiguration("promotion", test.input), test.expected; !reflect.DeepEqual(actual, expected) {
+				t.Errorf("%s: got incorrect errors: %v", test.name, diff.ObjectDiff(actual, expected))
 			}
 		})
 	}

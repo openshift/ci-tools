@@ -107,5 +107,5 @@ update-integration-cvp-trigger:
 
 pr-deploy:
 	oc process -p USER=$(USER) -p BRANCH=$(BRANCH) -p PULL_REQUEST=$(PULL_REQUEST) -f hack/pr-deploy.yaml | oc apply -f - --as system:admin
-	for cm in ci-operator-configs step-registry config; do oc get --export configmap $${cm} -n ci -o json | oc apply -f - -n ci-tools-$(PULL_REQUEST) --as system:admin; done
+	for cm in ci-operator-master-configs step-registry config; do oc get --export configmap $${cm} -n ci -o json | oc create -f - -n ci-tools-$(PULL_REQUEST) --as system:admin; done
 .PHONY: pr-deploy

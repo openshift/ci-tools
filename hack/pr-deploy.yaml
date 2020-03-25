@@ -203,7 +203,7 @@ objects:
             name: step-registry
         - name: configs
           configMap:
-            name: ci-operator-configs
+            name: ci-operator-master-configs
         - name: config
           configMap:
             name: config

@@ -755,6 +755,14 @@ func TestRegistry(t *testing.T) {
 			chains:        registry.ChainByName{},
 			workflows:     registry.WorkflowByName{},
 			expectedError: false,
+		}, {
+			name:          "Read registry with ref where name and filename don't match",
+			registryDir:   "../../test/multistage-registry/invalid-filename",
+			flatRegistry:  false,
+			references:    registry.ReferenceByName{},
+			chains:        registry.ChainByName{},
+			workflows:     registry.WorkflowByName{},
+			expectedError: true,
 		}}
 	)
 

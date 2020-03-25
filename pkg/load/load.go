@@ -27,6 +27,13 @@ type ResolverInfo struct {
 	Variant string
 }
 
+const (
+	refSuffix      = "-ref.yaml"
+	chainSuffix    = "-chain.yaml"
+	workflowSuffix = "-workflow.yaml"
+	commandsSuffix = "-commands.sh"
+)
+
 func Config(path, registryPath string, info *ResolverInfo) (*api.ReleaseBuildConfiguration, error) {
 	// Load the standard configuration path, env, or configresolver (in that order of priority)
 	var raw string
@@ -137,7 +144,7 @@ func Registry(root string, flat bool) (references registry.ReferenceByName, chai
 					return fmt.Errorf("File %s has incorrect prefix. Prefix should be %s", path, prefix)
 				}
 			}
-			if strings.HasSuffix(path, "-ref.yaml") {
+			if strings.HasSuffix(path, refSuffix) {
 				name, doc, ref, err := loadReference(bytes, dir, prefix, flat)
 				if err != nil {
 					return fmt.Errorf("Failed to load registry file %s: %v", path, err)
@@ -145,9 +152,12 @@ func Registry(root string, flat bool) (references registry.ReferenceByName, chai
 				if !flat && name != prefix {
 					return fmt.Errorf("name of reference in file %s should be %s", path, prefix)
 				}
+				if strings.TrimSuffix(filepath.Base(path), refSuffix) != name {
+					return fmt.Errorf("filename %s does not match name of reference; filename should be %s", filepath.Base(path), fmt.Sprint(prefix, refSuffix))
+				}
 				references[name] = ref
 				documentation[name] = doc
-			} else if strings.HasSuffix(path, "-chain.yaml") {
+			} else if strings.HasSuffix(path, chainSuffix) {
 				name, doc, chain, err := loadChain(bytes)
 				if err != nil {
 					return fmt.Errorf("Failed to load registry file %s: %v", path, err)
@@ -155,9 +165,12 @@ func Registry(root string, flat bool) (references registry.ReferenceByName, chai
 				if !flat && name != prefix {
 					return fmt.Errorf("name of chain in file %s should be %s", path, prefix)
 				}
+				if strings.TrimSuffix(filepath.Base(path), chainSuffix) != name {
+					return fmt.Errorf("filename %s does not match name of chain; filename should be %s", filepath.Base(path), fmt.Sprint(prefix, chainSuffix))
+				}
 				chains[name] = chain
 				documentation[name] = doc
-			} else if strings.HasSuffix(path, "-workflow.yaml") {
+			} else if strings.HasSuffix(path, workflowSuffix) {
 				name, doc, workflow, err := loadWorkflow(bytes)
 				if err != nil {
 					return fmt.Errorf("Failed to load registry file %s: %v", path, err)
@@ -165,9 +178,12 @@ func Registry(root string, flat bool) (references registry.ReferenceByName, chai
 				if !flat && name != prefix {
 					return fmt.Errorf("name of workflow in file %s should be %s", path, prefix)
 				}
+				if strings.TrimSuffix(filepath.Base(path), workflowSuffix) != name {
+					return fmt.Errorf("filename %s does not match name of workflow; filename should be %s", filepath.Base(path), fmt.Sprint(prefix, workflowSuffix))
+				}
 				workflows[name] = workflow
 				documentation[name] = doc
-			} else if strings.HasSuffix(path, "-commands.sh") {
+			} else if strings.HasSuffix(path, commandsSuffix) {
 				// ignore
 			} else {
 				return fmt.Errorf("invalid file name: %s", path)
@@ -189,8 +205,8 @@ func loadReference(bytes []byte, baseDir, prefix string, flat bool) (string, str
 	if err != nil {
 		return "", "", api.LiteralTestStep{}, err
 	}
-	if !flat && step.Reference.Commands != fmt.Sprintf("%s-commands.sh", prefix) {
-		return "", "", api.LiteralTestStep{}, fmt.Errorf("Reference %s has invalid command file path; command should be set to %s", step.Reference.As, fmt.Sprintf("%s-commands.sh", prefix))
+	if !flat && step.Reference.Commands != fmt.Sprintf("%s%s", prefix, commandsSuffix) {
+		return "", "", api.LiteralTestStep{}, fmt.Errorf("Reference %s has invalid command file path; command should be set to %s", step.Reference.As, fmt.Sprintf("%s%s", prefix, commandsSuffix))
 	}
 	command, err := ioutil.ReadFile(filepath.Join(baseDir, step.Reference.Commands))
 	if err != nil {

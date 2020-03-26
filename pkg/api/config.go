@@ -114,6 +114,10 @@ func validateBuildRootImageConfiguration(fieldRoot string, input *BuildRootImage
 		return nil
 	}
 
+	if input.ImageStreamTagReference != nil && len(input.ImageStreamTagReference.Cluster) == 0 {
+		return []error{fmt.Errorf("%s.image_stream_tag: no cluster defined", fieldRoot)}
+	}
+
 	if input.ProjectImageBuild != nil && input.ImageStreamTagReference != nil {
 		return []error{fmt.Errorf("%s: both image_stream_tag and project_image cannot be set", fieldRoot)}
 	} else if input.ProjectImageBuild == nil && input.ImageStreamTagReference == nil {
@@ -198,6 +202,9 @@ func validateImageStreamTagReferenceMap(fieldRoot string, input map[string]Image
 		if k == "root" {
 			validationErrors = append(validationErrors, fmt.Errorf("%s.%s can't be named 'root'", fieldRoot, k))
 		}
+		if len(v.Cluster) == 0 {
+			validationErrors = append(validationErrors, fmt.Errorf("%s[%s]: no cluster defined", fieldRoot, k))
+		}
 		validationErrors = append(validationErrors, validateImageStreamTagReference(fmt.Sprintf("%s.%s", fieldRoot, k), v)...)
 	}
 	return validationErrors
@@ -229,6 +236,10 @@ func validateReleaseTagConfiguration(fieldRoot string, input ReleaseTagConfigura
 
 	if len(input.Name) == 0 {
 		validationErrors = append(validationErrors, fmt.Errorf("%s: no name defined", fieldRoot))
+	}
+
+	if len(input.Cluster) == 0 {
+		return append(validationErrors, fmt.Errorf("%s: no cluster defined", fieldRoot))
 	}
 	return validationErrors
 }

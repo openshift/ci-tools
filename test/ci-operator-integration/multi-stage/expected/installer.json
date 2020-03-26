@@ -279,6 +279,16 @@
               "value": "41093"
             },
             {
+              "name": "RELEASE_IMAGE_INITIAL"
+            },
+            {
+              "name": "RELEASE_IMAGE_LATEST"
+            },
+            {
+              "name": "LEASED_RESOURCE",
+              "value": "gcp-quota-slice0"
+            },
+            {
               "name": "CLUSTER_TYPE",
               "value": "azure4"
             },
@@ -289,12 +299,6 @@
             {
               "name": "KUBECONFIG",
               "value": "/var/run/secrets/ci.openshift.io/multi-stage/kubeconfig"
-            },
-            {
-              "name": "RELEASE_IMAGE_INITIAL"
-            },
-            {
-              "name": "RELEASE_IMAGE_LATEST"
             },
             {
               "name": "SHARED_DIR",
@@ -500,6 +504,16 @@
               "value": "41093"
             },
             {
+              "name": "RELEASE_IMAGE_INITIAL"
+            },
+            {
+              "name": "RELEASE_IMAGE_LATEST"
+            },
+            {
+              "name": "LEASED_RESOURCE",
+              "value": "gcp-quota-slice0"
+            },
+            {
               "name": "CLUSTER_TYPE",
               "value": "azure4"
             },
@@ -510,12 +524,6 @@
             {
               "name": "KUBECONFIG",
               "value": "/var/run/secrets/ci.openshift.io/multi-stage/kubeconfig"
-            },
-            {
-              "name": "RELEASE_IMAGE_INITIAL"
-            },
-            {
-              "name": "RELEASE_IMAGE_LATEST"
             },
             {
               "name": "SHARED_DIR",
@@ -721,6 +729,16 @@
               "value": "41093"
             },
             {
+              "name": "RELEASE_IMAGE_INITIAL"
+            },
+            {
+              "name": "RELEASE_IMAGE_LATEST"
+            },
+            {
+              "name": "LEASED_RESOURCE",
+              "value": "gcp-quota-slice0"
+            },
+            {
               "name": "CLUSTER_TYPE",
               "value": "azure4"
             },
@@ -731,12 +749,6 @@
             {
               "name": "KUBECONFIG",
               "value": "/var/run/secrets/ci.openshift.io/multi-stage/kubeconfig"
-            },
-            {
-              "name": "RELEASE_IMAGE_INITIAL"
-            },
-            {
-              "name": "RELEASE_IMAGE_LATEST"
             },
             {
               "name": "SHARED_DIR",
@@ -942,6 +954,16 @@
               "value": "41093"
             },
             {
+              "name": "RELEASE_IMAGE_INITIAL"
+            },
+            {
+              "name": "RELEASE_IMAGE_LATEST"
+            },
+            {
+              "name": "LEASED_RESOURCE",
+              "value": "gcp-quota-slice0"
+            },
+            {
               "name": "CLUSTER_TYPE",
               "value": "azure4"
             },
@@ -952,12 +974,6 @@
             {
               "name": "KUBECONFIG",
               "value": "/var/run/secrets/ci.openshift.io/multi-stage/kubeconfig"
-            },
-            {
-              "name": "RELEASE_IMAGE_INITIAL"
-            },
-            {
-              "name": "RELEASE_IMAGE_LATEST"
             },
             {
               "name": "SHARED_DIR",
@@ -1163,6 +1179,16 @@
               "value": "41093"
             },
             {
+              "name": "RELEASE_IMAGE_INITIAL"
+            },
+            {
+              "name": "RELEASE_IMAGE_LATEST"
+            },
+            {
+              "name": "LEASED_RESOURCE",
+              "value": "gcp-quota-slice0"
+            },
+            {
               "name": "CLUSTER_TYPE",
               "value": "azure4"
             },
@@ -1173,12 +1199,6 @@
             {
               "name": "KUBECONFIG",
               "value": "/var/run/secrets/ci.openshift.io/multi-stage/kubeconfig"
-            },
-            {
-              "name": "RELEASE_IMAGE_INITIAL"
-            },
-            {
-              "name": "RELEASE_IMAGE_LATEST"
             },
             {
               "name": "SHARED_DIR",
@@ -1384,6 +1404,16 @@
               "value": "41093"
             },
             {
+              "name": "RELEASE_IMAGE_INITIAL"
+            },
+            {
+              "name": "RELEASE_IMAGE_LATEST"
+            },
+            {
+              "name": "LEASED_RESOURCE",
+              "value": "gcp-quota-slice0"
+            },
+            {
               "name": "CLUSTER_TYPE",
               "value": "gcp"
             },
@@ -1394,12 +1424,6 @@
             {
               "name": "KUBECONFIG",
               "value": "/var/run/secrets/ci.openshift.io/multi-stage/kubeconfig"
-            },
-            {
-              "name": "RELEASE_IMAGE_INITIAL"
-            },
-            {
-              "name": "RELEASE_IMAGE_LATEST"
             },
             {
               "name": "SHARED_DIR",
@@ -1605,6 +1629,16 @@
               "value": "41093"
             },
             {
+              "name": "RELEASE_IMAGE_INITIAL"
+            },
+            {
+              "name": "RELEASE_IMAGE_LATEST"
+            },
+            {
+              "name": "LEASED_RESOURCE",
+              "value": "gcp-quota-slice0"
+            },
+            {
               "name": "CLUSTER_TYPE",
               "value": "gcp"
             },
@@ -1615,12 +1649,6 @@
             {
               "name": "KUBECONFIG",
               "value": "/var/run/secrets/ci.openshift.io/multi-stage/kubeconfig"
-            },
-            {
-              "name": "RELEASE_IMAGE_INITIAL"
-            },
-            {
-              "name": "RELEASE_IMAGE_LATEST"
             },
             {
               "name": "SHARED_DIR",
@@ -1826,6 +1854,16 @@
               "value": "41093"
             },
             {
+              "name": "RELEASE_IMAGE_INITIAL"
+            },
+            {
+              "name": "RELEASE_IMAGE_LATEST"
+            },
+            {
+              "name": "LEASED_RESOURCE",
+              "value": "gcp-quota-slice0"
+            },
+            {
               "name": "CLUSTER_TYPE",
               "value": "gcp"
             },
@@ -1836,12 +1874,6 @@
             {
               "name": "KUBECONFIG",
               "value": "/var/run/secrets/ci.openshift.io/multi-stage/kubeconfig"
-            },
-            {
-              "name": "RELEASE_IMAGE_INITIAL"
-            },
-            {
-              "name": "RELEASE_IMAGE_LATEST"
             },
             {
               "name": "SHARED_DIR",
@@ -2047,6 +2079,16 @@
               "value": "41093"
             },
             {
+              "name": "RELEASE_IMAGE_INITIAL"
+            },
+            {
+              "name": "RELEASE_IMAGE_LATEST"
+            },
+            {
+              "name": "LEASED_RESOURCE",
+              "value": "gcp-quota-slice0"
+            },
+            {
               "name": "CLUSTER_TYPE",
               "value": "gcp"
             },
@@ -2057,12 +2099,6 @@
             {
               "name": "KUBECONFIG",
               "value": "/var/run/secrets/ci.openshift.io/multi-stage/kubeconfig"
-            },
-            {
-              "name": "RELEASE_IMAGE_INITIAL"
-            },
-            {
-              "name": "RELEASE_IMAGE_LATEST"
             },
             {
               "name": "SHARED_DIR",
@@ -2268,6 +2304,16 @@
               "value": "41093"
             },
             {
+              "name": "RELEASE_IMAGE_INITIAL"
+            },
+            {
+              "name": "RELEASE_IMAGE_LATEST"
+            },
+            {
+              "name": "LEASED_RESOURCE",
+              "value": "gcp-quota-slice0"
+            },
+            {
               "name": "CLUSTER_TYPE",
               "value": "gcp"
             },
@@ -2278,12 +2324,6 @@
             {
               "name": "KUBECONFIG",
               "value": "/var/run/secrets/ci.openshift.io/multi-stage/kubeconfig"
-            },
-            {
-              "name": "RELEASE_IMAGE_INITIAL"
-            },
-            {
-              "name": "RELEASE_IMAGE_LATEST"
             },
             {
               "name": "SHARED_DIR",

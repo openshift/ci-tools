@@ -30,7 +30,7 @@ const (
 	latestReleaseEnv        = "RELEASE_IMAGE_LATEST"
 )
 
-var envForProfile = []string{initialReleaseEnv, latestReleaseEnv}
+var envForProfile = []string{initialReleaseEnv, latestReleaseEnv, leaseEnv}
 
 type multiStageTestStep struct {
 	dry     bool

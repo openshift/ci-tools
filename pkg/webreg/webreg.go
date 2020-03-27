@@ -116,6 +116,7 @@ td {
         <div class="dropdown-menu" aria-labelledby="navbarDropdown">
           <a class="dropdown-item" href="/help">Getting Started</a>
           <a class="dropdown-item" href="/help/ci-operator">CI Operator Overview</a>
+          <a class="dropdown-item" href="/help/leases">Leases and Quota</a>
           <a class="dropdown-item" href="/help/adding-components">Adding and Changing Content</a>
           <a class="dropdown-item" href="/help/examples">Examples</a>
         </div>
@@ -814,27 +815,27 @@ The following environment variables will be available to commands in a step:
 	<th>When is it Present?</th>
   </tr>
   <tr>
-    <td style="white-space: nowrap"><code>${SHARED_DIR}<code></td>
+    <td style="white-space: nowrap"><code>${SHARED_DIR}</code></td>
 	<td>Directory on the step's filesystem where files shared between steps can be read.</td>
 	<td>Always.</td>
   </tr>
   <tr>
-    <td style="white-space: nowrap"><code>${CLUSTER_PROFILE_DIR}<code></td>
+    <td style="white-space: nowrap"><code>${CLUSTER_PROFILE_DIR}</code></td>
 	<td>Directory on the step's filesystem where credentials and configuration from the cluster profile are stored.</td>
 	<td>When the test as defined in a <code>ci-operator</code> configuration file sets a <code>cluster_profile</code>.</td>
   </tr>
   <tr>
-    <td style="white-space: nowrap"><code>${KUBECONFIG}<code></td>
+    <td style="white-space: nowrap"><code>${KUBECONFIG}</code></td>
 	<td>Path to <code>system:admin</code> credentials for the ephemeral OpenShift cluster under test.</td>
 	<td>After an ephemeral cluster has been installed.</td>
   </tr>
   <tr>
-    <td style="white-space: nowrap"><code>${RELEASE_IMAGE_INITIAL}<code></td>
+    <td style="white-space: nowrap"><code>${RELEASE_IMAGE_INITIAL}</code></td>
 	<td>Image pull specification for the initial release payload snapshot when the test began to run.</td>
 	<td>Always.</td>
   </tr>
   <tr>
-    <td style="white-space: nowrap"><code>${RELEASE_IMAGE_LATEST}<code></td>
+    <td style="white-space: nowrap"><code>${RELEASE_IMAGE_LATEST}</code></td>
 	<td>Image pull specification for the ephemeral release payload used to install the ephemeral OpenShift cluster.</td>
 	<td>Always.</td>
   </tr>
@@ -1228,6 +1229,143 @@ const imageExampleLiteral = `- as: repo-e2e
           memory: 2Gi
 `
 
+const quotasAndLeasesPage = `<h2 id="title"><a href="#title">How are Cloud Quota and Aggregate Concurrency Limits Handled?</a></h2>
+<p>
+A centralized locking system is provided to jobs in order to limit concurrent usage of shared resources like third-party
+cloud APIs.
+</p>
+
+<p>
+Jobs that interact with an Infrastructure-as-a-Service (IaaS) cloud provider use credentials shared across the broader
+CI platform. Therefore, all jobs interacting with a specific IaaS will use API quota for these cloud providers from a
+shared pool. In order to ensure that our job throughput for a provider remains within the aggregate limit imposed by
+shared quota, jobs acquire leases for slices of the quota before they run and only relinquish them once all actions are
+completed. This document describes the mechanism used to provide leases of quota slices to jobs, how jobs determine
+which quota to ask for, how available leases can be configured and how current usage can be monitored.
+</p>
+
+<h3 id="boskos"><a href="#boskos">Introducing the <code>boskos</code> Leasing Server</a></h3>
+<p>
+<code>boskos</code> (βοσκός), translating as "shepherd" from Greek, is a resource management server that apportions
+<i>leases</i> of <i>resources</i> to clients and manages the lifecycle of the <i>resources</i>. When considering the
+actions of this server, two terms should be defined:
+</p>
+
+<table class="table">
+  <tr>
+    <th style="white-space: nowrap">Term</th>
+    <th>Definition</th>
+  </tr>
+  <tr>
+    <td style="white-space: nowrap"><i>resource</i></td>
+    <td>An item which may be leased to clients. Resources represent slices of the larger cloud quota.</td>
+  </tr>
+  <tr>
+    <td style="white-space: nowrap"><i>lease</i></td>
+    <td>A binding between a <i>resource</i> and a client. When a lease is active, the underlying <i>resource</i> is not available for other clients.</td>
+  </tr>
+</table>
+
+<p>
+The process for granting a <i>lease</i> on a <i>resource</i> follows this workflow:
+</p>
+
+<ul>
+  <li>a client (<i>lessee</i>) requests a <i>lease</i> on an available <i>resource</i></li>
+  <li>the server (<i>lessor</i>) grants the <i>lease</i>, if possible, or places the client in a FIFO queue to wait for the next available <i>resource</i></li>
+  <li>the client emits a heartbeat while the <i>lease</i> is under active use</li>
+  <li>the client relinquishes the <i>lease</i> once it is no longer in use</li>
+  <li>the server places the <i>resource</i> back into the available pool for future clients to request</li>
+</ul>
+
+<p>
+If a client fails to emit a heartbeat for long enough while the client holds a <i>lease</i>, the server will forcibly
+relinquish the <i>lease</i> and return the <i>resource</i> to the available pool for other clients. This mechanism
+ensures that clients which crash or otherwise fail to remain responsive cannot exhaust <i>resources</i> by holding a
+<i>lease</i> indefinitely.
+</p>
+
+<h3 id="admins"><a href="#admins">Directions for Cloud Administrators</a></h3>
+<p>
+An administrator of a cloud platform will interact with the leasing server in order to configure the aggregate limit on 
+jobs for the platform or inspect the current settings and usage. Care must be taken when configuring the leasing server
+in order to ensure that jobs are well-behaved against the cloud provider APIs.
+</p>
+
+<h4 id="adding"><a href="#adding">Adding a New Type Of Resource</a></h4>
+<p>
+In order to add a new type of cloud quota to the system, changes to the <code>boskos</code> leasing server configuration
+are required. The configuration is checked into source control <a href="https://github.com/openshift/release/blob/master/core-services/prow/02_config/_boskos.yaml">here.</a>
+When adding a new type of quota, a new entry to the <code>resources</code> list is required, for example:
+</p>
+
+<code>boskos</code> configuration:
+{{ yamlSyntax (index . "dynamicBoskosConfig") }}
+
+<p>
+If it is not clear exactly how many concurrent jobs can share the cloud provider at once, the convention is to set the
+<code>min-count</code> and <code>max-count</code> to <code>1000</code>, to effectively leave jobs unlimited and allow
+for investigation.
+</p>
+
+<p>
+In addition to registering the volume of concurrent jobs that are allowed against a new cloud platform, it is required
+that the leasing server is configured to reap leases which have not seen a recent heartbeat. This is done by adding the
+name of the resource type to the <a href="https://github.com/openshift/release/blob/master/core-services/prow/03_deployment/boskos_reaper.yaml#L27">reaper's configuration.</a>
+</p>
+
+<h5 id="static"><a href="#static">Configuration for Heterogeneous Resources</a></h5>
+<p>
+The example configuration above will create <i>dynamic</i> resources and is most appropriate for operating against large
+cloud APIs where clients act identically regardless of which slice of the quota they have leased. If the cloud provider
+that is being configured has a static pool of resources and jobs are expected to act differently based on the specific
+lease that they acquire, it is necessary to create a static list of resources for <code>boskos</code>: 
+</p>
+
+<code>boskos</code> configuration:
+{{ yamlSyntax (index . "staticBoskosConfig") }}
+
+<p>
+A test may access the name of the resource that was acquired using the <code>${LEASED_RESOURCE}</code> environment
+variable.
+</p>
+
+<h4 id="inspecting"><a href="#inspecting">Viewing Lease Activity Over Time</a></h4>
+<p>
+In order to view the number of concurrent jobs executing against any specific cloud, or to view the states of resources
+in the lease system, a <a href="https://grafana-prow-monitoring.svc.ci.openshift.org/d/628a36ebd9ef30d67e28576a5d5201fd/boskos-dashboard?orgId=1">dashboard</a>
+exists.
+</p>
+
+<h3 id="job-authors"><a href="#job-authors">Directions for Job Authors</a></h3>
+<p>
+Job authors should generally not be concerned with the process of acquiring a lease or the mechanisms behind it. However,
+a quick overview of the process is given here to explain what is happening behind the scenes. Whenever <code>ci-operator</code>
+runs a test target that has a <code>cluster_profile</code> set, a lease will be acquired before the test steps are
+executed. <code>ci-operator</code> will acquire the lease, present the name of the leased resource to the job in the
+<code>${LEASED_RESOURCE}</code> environment variable, send heartbeats as necessary and relinquish the lease when it is
+no longer needed. In order for a <code>cluster_profile</code> to be supported, the cloud administrator will need to have
+set up the quota slice resources, so by the time a job author uses a <code>cluster_profile</code>, all the infrastructure
+should be in place.
+</p>
+`
+
+const dynamicBoskosConfig = `resources:
+- type: "my-new-quota-slice"
+  state: "free"
+  min-count: 10 # how many concurrent jobs can run against the cloud
+  max-count: 10 # set equal to min-count
+`
+
+const staticBoskosConfig = `resources:
+- type: "some-static-quota-slice"
+  state: "free"
+  names:
+  - "server01.prod.service.com" # these names should be semantically meaningful to a client
+  - "server02.prod.service.com"
+  - "server03.prod.service.com"
+`
+
 const workflowType = "Workflow"
 const jobType = "Job"
 
@@ -1450,6 +1588,10 @@ func helpHandler(subPath string, w http.ResponseWriter, req *http.Request) {
 		data["ciOperatorTagSpecificationConfig"] = ciOperatorTagSpecificationConfig
 		data["ciOperatorContainerTestConfig"] = ciOperatorContainerTestConfig
 		data["ciOperatorPeriodicTestConfig"] = ciOperatorPeriodicTestConfig
+	case "/leases":
+		helpTemplate, err = helpFuncs.Parse(quotasAndLeasesPage)
+		data["dynamicBoskosConfig"] = dynamicBoskosConfig
+		data["staticBoskosConfig"] = staticBoskosConfig
 	default:
 		writeErrorPage(w, errors.New("Invalid path"), http.StatusNotImplemented)
 		return

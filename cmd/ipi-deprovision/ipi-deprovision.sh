@@ -53,33 +53,6 @@ EOF
   echo "will deprovision GCE cluster ${infraID} in region ${region}"
 done
 
-azure_cluster_age_cutoff="$(TZ=":Africa/Abidjan" date --date="${CLUSTER_TTL}-4 hours" '+%Y-%m-%dT%H:%M:%S.%N%:z')"
-echo "deprovisioning clusters with a creationTimestamp before ${azure_cluster_age_cutoff} in Azure ..."
-az login --service-principal \
-  --username "$( jq --raw-output .clientId <"${AZURE_AUTH_LOCATION}" )" \
-  --password "$( jq --raw-output .clientSecret <"${AZURE_AUTH_LOCATION}" )" \
-  --tenant "$( jq --raw-output .tenantId <"${AZURE_AUTH_LOCATION}" )"
-az account set --subscription "$( jq --raw-output .subscriptionId <"${AZURE_AUTH_LOCATION}" )"
-for group in $( az group list | jq --arg date "${azure_cluster_age_cutoff}" -r -S '.[] | select(.name | test("ci-op-.*")) | select(.tags.openshift_creationDate? < $date) .name' ); do
-  infraID="${group%"-rg"}"
-  region="$( az group show --resource-group "${group}" | jq --raw-output .location )"
-  if [[ -z "${region:-}" ]]; then
-    echo "could not determine region for cluster ${infraID}, ignoring ..."
-    continue
-  fi
-  workdir="/tmp/deprovision/${infraID}"
-  mkdir -p "${workdir}"
-  cat <<EOF >"${workdir}/metadata.json"
-{
-  "infraID":"${infraID}",
-  "azure":{
-    "region":"${region}"
-  }
-}
-EOF
-  echo "will deprovision Azure cluster ${infraID} in region ${region}"
-done
-
 for workdir in $( find /tmp/deprovision -mindepth 1 -type d | shuf ); do
   timeout 30m openshift-install --dir "${workdir}" --log-level debug destroy cluster
 done

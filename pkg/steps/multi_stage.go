@@ -29,22 +29,23 @@ const (
 )
 
 type multiStageTestStep struct {
-	dry             bool
-	logger          *DryLogger
-	name            string
-	releaseInitial  string
-	releaseLatest   string
-	profile         api.ClusterProfile
-	config          *api.ReleaseBuildConfiguration
-	params          api.Parameters
-	podClient       PodClient
-	secretClient    coreclientset.SecretsGetter
-	saClient        coreclientset.ServiceAccountsGetter
-	rbacClient      rbacclientset.RbacV1Interface
-	artifactDir     string
-	jobSpec         *api.JobSpec
-	pre, test, post []api.LiteralTestStep
-	subTests        []*junit.TestCase
+	dry              bool
+	logger           *DryLogger
+	name             string
+	releaseInitial   string
+	releaseLatest    string
+	optionalOperator *optionalOperator
+	profile          api.ClusterProfile
+	config           *api.ReleaseBuildConfiguration
+	params           api.Parameters
+	podClient        PodClient
+	secretClient     coreclientset.SecretsGetter
+	saClient         coreclientset.ServiceAccountsGetter
+	rbacClient       rbacclientset.RbacV1Interface
+	artifactDir      string
+	jobSpec          *api.JobSpec
+	pre, test, post  []api.LiteralTestStep
+	subTests         []*junit.TestCase
 }
 
 func MultiStageTestStep(
@@ -117,6 +118,9 @@ func (s *multiStageTestStep) Run(ctx context.Context, dry bool) error {
 			return err
 		}
 		if s.releaseLatest, err = s.params.Get("RELEASE_IMAGE_LATEST"); err != nil {
+			return err
+		}
+		if s.optionalOperator, err = resolveOptionalOperator(s.params); err != nil {
 			return err
 		}
 	}
@@ -297,6 +301,9 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep) ([]coreap
 				{Name: "RELEASE_IMAGE_INITIAL", Value: s.releaseInitial},
 				{Name: "RELEASE_IMAGE_LATEST", Value: s.releaseLatest},
 			}...)
+		}
+		if s.optionalOperator != nil {
+			container.Env = append(container.Env, s.optionalOperator.asEnv()...)
 		}
 		addSecret(s.name, pod)
 		ret = append(ret, *pod)

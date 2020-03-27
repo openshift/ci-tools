@@ -171,7 +171,8 @@ func makeOcApply(kubeConfig, context, path, user string, dry bool) *exec.Cmd {
 
 func (c *configApplier) asGenericManifest() error {
 	cmd := makeOcApply(c.kubeConfig, c.context, c.path, c.user, c.dry)
-	_, err := c.runAndCheck(cmd, "apply")
+	out, err := c.runAndCheck(cmd, "apply")
+	logrus.WithField("output", string(out)).Info("Ran apply command")
 	return err
 }
 
@@ -197,7 +198,8 @@ func (c configApplier) asTemplate(params []templateapi.Parameter) error {
 
 	ocApplyCmd := makeOcApply(c.kubeConfig, c.context, "-", c.user, c.dry)
 	ocApplyCmd.Stdin = bytes.NewBuffer(processed)
-	_, err = c.runAndCheck(ocApplyCmd, "apply")
+	out, err := c.runAndCheck(ocApplyCmd, "apply")
+	logrus.WithField("output", string(out)).Info("Ran apply command")
 	return err
 }
 

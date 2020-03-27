@@ -113,11 +113,11 @@ func TestGeneratePods(t *testing.T) {
 		{Name: "NAMESPACE", Value: "namespace"},
 		{Name: "JOB_NAME_SAFE", Value: "test"},
 		{Name: "JOB_NAME_HASH", Value: "5e8c9"},
+		{Name: "RELEASE_IMAGE_INITIAL", Value: "release:initial"},
+		{Name: "RELEASE_IMAGE_LATEST", Value: "release:latest"},
 		{Name: "CLUSTER_TYPE", Value: "aws"},
 		{Name: "CLUSTER_PROFILE_DIR", Value: "/var/run/secrets/ci.openshift.io/cluster-profile"},
 		{Name: "KUBECONFIG", Value: "/var/run/secrets/ci.openshift.io/multi-stage/kubeconfig"},
-		{Name: "RELEASE_IMAGE_INITIAL", Value: "release:initial"},
-		{Name: "RELEASE_IMAGE_LATEST", Value: "release:latest"},
 		{Name: "SHARED_DIR", Value: "/var/run/secrets/ci.openshift.io/multi-stage"},
 	}
 
@@ -137,8 +137,10 @@ func TestGeneratePods(t *testing.T) {
 		Namespace: "namespace",
 	}
 	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, nil, nil, nil, "artifact_dir", &jobSpec, nil)
-	step.releaseInitial = "release:initial"
-	step.releaseLatest = "release:latest"
+	step.env = []coreapi.EnvVar{
+		{Name: "RELEASE_IMAGE_INITIAL", Value: "release:initial"},
+		{Name: "RELEASE_IMAGE_LATEST", Value: "release:latest"},
+	}
 	ret, err := step.generatePods(config.Tests[0].MultiStageTestConfigurationLiteral.Test)
 	if err != nil {
 		t.Fatal(err)

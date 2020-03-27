@@ -3,6 +3,39 @@
 CVP Trigger tool will be used by the CVP pipeline to parametrize and trigger
 the verification jobs for optional operator artifacts built internally in RH.
 
+## High-level CVP ↔ Prow Job Architecture
+
+To test the optional operator images built internally in Red Hat, CVP triggers
+testing jobs via the `cvp-trigger` tool. Currently, the only implemented test
+workflow is the one executing the common operator tests (component-agnostic).
+For common operator tests, `cvp-trigger` creates a parameterized instance of the
+`cpaas-cvp-optional-operator-common-tests` job, living in [openshift/release](https://github.com/openshift/release/blob/master/ci-operator/jobs/openshift/release/openshift-release-infra-periodics.yaml).
+See the [Triggered Job Interface](#triggered-job-interface) section for details
+ about the parametrization.
+
+The `cpaas-cvp-optional-operator-common-tests` job runs ci-operator using
+a config stored in [redhat-operator-ecosystem](https://github.com/redhat-operator-ecosystem/release/tree/master/ci-operator/config/redhat-operator-ecosystem/playground).
+The exact configuration to use is inferred from the desired OCP version. For
+example, for OCP version 4.5, ci-operator uses the config for the
+artificial `cvp-ocp-4.5` branch of the `redhat-operator-ecosystem/playground`
+repository. The ci-operator targets a test with a name inferred from the desired
+cloud platform. For example, when `aws` is requested, ci-operator targets the
+`cvp-common-aws` test from the config. This example shows how the job calls
+ci-operator:
+
+```console
+$  ci-operator --org=redhat-operator-ecosystem \
+               --repo=playground \
+               --branch=cvp-ocp-$(OCP_VERSION) \
+               --target=cvp-common-$(CLOUD_PLATFORM) \
+               < ...more irrelevant args... >
+```
+
+The `cvp-common-$CLOUD_PLATFORM` tests are using the [`optional-operators-cvp-workflow-$CLOUD_PLATFORM`](https://steps.svc.ci.openshift.org/registry/optional-operators-cvp-common-aws)
+workflows. These workflows install an OCP cluster of a given version and
+install the requested optional operator in it. In its `test` section, the
+workflow executes the shared CVP tests against the installed cluster.
+
 ## Triggered Job Interface
 
 The tool should work by loading Prow and Job configuration, finding specific job

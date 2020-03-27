@@ -8,6 +8,7 @@ postsubmits:
       skip_cloning: true
     labels:
       ci-operator.openshift.io/prowgen-controlled: "true"
+    max_concurrency: 1
     name: branch-ci-super-duper-branch-images
     spec:
       containers:

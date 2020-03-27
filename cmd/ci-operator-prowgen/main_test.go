@@ -1266,8 +1266,9 @@ func TestGenerateJobs(t *testing.T) {
 				}},
 				PostsubmitsStatic: map[string][]prowconfig.Postsubmit{"organization/repository": {{
 					JobBase: prowconfig.JobBase{
-						Name:   "branch-ci-organization-repository-branch-images",
-						Labels: standardPostsubmitJobLabels,
+						Name:           "branch-ci-organization-repository-branch-images",
+						Labels:         standardPostsubmitJobLabels,
+						MaxConcurrency: 1,
 					}},
 				}},
 			},
@@ -1342,8 +1343,9 @@ func TestGenerateJobs(t *testing.T) {
 				}},
 				PostsubmitsStatic: map[string][]prowconfig.Postsubmit{"organization/repository": {{
 					JobBase: prowconfig.JobBase{
-						Name:   "branch-ci-organization-repository-branch-images",
-						Labels: standardPostsubmitJobLabels,
+						Name:           "branch-ci-organization-repository-branch-images",
+						Labels:         standardPostsubmitJobLabels,
+						MaxConcurrency: 1,
 					}},
 				}},
 			},

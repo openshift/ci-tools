@@ -114,16 +114,17 @@ func validateBuildRootImageConfiguration(fieldRoot string, input *BuildRootImage
 		return nil
 	}
 
+	var validationErrors []error
 	if input.ImageStreamTagReference != nil && len(input.ImageStreamTagReference.Cluster) == 0 {
-		return []error{fmt.Errorf("%s.image_stream_tag: no cluster defined", fieldRoot)}
+		validationErrors = append(validationErrors, fmt.Errorf("%s.image_stream_tag: no cluster defined", fieldRoot))
 	}
 
 	if input.ProjectImageBuild != nil && input.ImageStreamTagReference != nil {
-		return []error{fmt.Errorf("%s: both image_stream_tag and project_image cannot be set", fieldRoot)}
+		validationErrors = append(validationErrors, fmt.Errorf("%s: both image_stream_tag and project_image cannot be set", fieldRoot))
 	} else if input.ProjectImageBuild == nil && input.ImageStreamTagReference == nil {
-		return []error{fmt.Errorf("%s: you have to specify either image_stream_tag or project_image", fieldRoot)}
+		validationErrors = append(validationErrors, fmt.Errorf("%s: you have to specify either image_stream_tag or project_image", fieldRoot))
 	}
-	return nil
+	return validationErrors
 }
 
 func validateTestStepConfiguration(fieldRoot string, input []TestStepConfiguration, release *ReleaseTagConfiguration, resolved bool) []error {

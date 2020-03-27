@@ -17,6 +17,10 @@ import (
 	"github.com/openshift/ci-tools/pkg/util"
 )
 
+const (
+	apiCIRegistry = "registry.svc.ci.openshift.org"
+)
+
 // inputImageTagStep will ensure that a tag exists
 // in the pipeline ImageStream that resolves to
 // the base image
@@ -89,8 +93,8 @@ func (s *inputImageTagStep) Run(ctx context.Context, dry bool) error {
 	}
 
 	if len(s.config.BaseImage.Cluster) > 0 && s.srcClient != s.dstClient {
-		from := coreapi.ObjectReference{Kind: "DockerImage", Name: fmt.Sprintf("registry.svc.ci.openshift.org/%s/%s@sha256:SHA",
-			s.config.BaseImage.Namespace, s.config.BaseImage.Name)}
+		from := coreapi.ObjectReference{Kind: "DockerImage", Name: fmt.Sprintf("%s/%s/%s@sha256:SHA",
+			apiCIRegistry, s.config.BaseImage.Namespace, s.config.BaseImage.Name)}
 		if !dry {
 			from, err = istObjectReference(s.srcClient, s.config.BaseImage)
 			if err != nil {

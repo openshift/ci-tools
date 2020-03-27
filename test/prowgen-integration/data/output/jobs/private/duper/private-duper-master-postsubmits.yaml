@@ -9,6 +9,7 @@ postsubmits:
     hidden: true
     labels:
       ci-operator.openshift.io/prowgen-controlled: "true"
+    max_concurrency: 1
     name: branch-ci-private-duper-master-images
     spec:
       containers:

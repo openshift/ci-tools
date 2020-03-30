@@ -29,6 +29,10 @@ check() {
         cat "${ERR}"
         return 1
     fi
+    if [[ "${UPDATE:-}" = true ]]; then
+      rm -rf "${EXPECTED2}"
+      cp -r "${OUT}" "${EXPECTED2}"
+    fi
     if ! diff -Naupr "${EXPECTED2}" "${OUT}"; then
         echo "ERROR: differences have been found against ${EXPECTED2}"
         return 1
@@ -42,6 +46,10 @@ if ! ci-operator --dry-run --determinize-output --namespace "${TEST_NAMESPACE}" 
     exit 1
 fi
 
+if [[ "${UPDATE:-}" = true ]]; then
+  rm -rf "${EXPECTED1}"
+  cp -r "${OUT}" "${EXPECTED1}"
+fi
 if ! diff -Naupr "${EXPECTED1}" "${OUT}"; then
     echo "ERROR: differences have been found against ${EXPECTED1}"
     exit 1

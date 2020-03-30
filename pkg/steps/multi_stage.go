@@ -26,26 +26,30 @@ const (
 	secretMountPath         = "/var/run/secrets/ci.openshift.io/multi-stage"
 	secretMountEnv          = "SHARED_DIR"
 	clusterProfileMountEnv  = "CLUSTER_PROFILE_DIR"
+	initialReleaseEnv       = "RELEASE_IMAGE_INITIAL"
+	latestReleaseEnv        = "RELEASE_IMAGE_LATEST"
 )
 
+var envForProfile = []string{initialReleaseEnv, latestReleaseEnv, leaseEnv}
+
 type multiStageTestStep struct {
-	dry              bool
-	logger           *DryLogger
-	name             string
-	releaseInitial   string
-	releaseLatest    string
-	optionalOperator *optionalOperator
-	profile          api.ClusterProfile
-	config           *api.ReleaseBuildConfiguration
-	params           api.Parameters
-	podClient        PodClient
-	secretClient     coreclientset.SecretsGetter
-	saClient         coreclientset.ServiceAccountsGetter
-	rbacClient       rbacclientset.RbacV1Interface
-	artifactDir      string
-	jobSpec          *api.JobSpec
-	pre, test, post  []api.LiteralTestStep
-	subTests         []*junit.TestCase
+	dry     bool
+	logger  *DryLogger
+	name    string
+	profile api.ClusterProfile
+	config  *api.ReleaseBuildConfiguration
+	// params exposes getters for variables created by other steps
+	params api.Parameters
+	// env holds all of the variables we need to expose to pods
+	env             []coreapi.EnvVar
+	podClient       PodClient
+	secretClient    coreclientset.SecretsGetter
+	saClient        coreclientset.ServiceAccountsGetter
+	rbacClient      rbacclientset.RbacV1Interface
+	artifactDir     string
+	jobSpec         *api.JobSpec
+	pre, test, post []api.LiteralTestStep
+	subTests        []*junit.TestCase
 }
 
 func MultiStageTestStep(
@@ -113,15 +117,17 @@ func (s *multiStageTestStep) Run(ctx context.Context, dry bool) error {
 				return fmt.Errorf("could not find secret %q: %v", secret, err)
 			}
 		}
-		var err error
-		if s.releaseInitial, err = s.params.Get("RELEASE_IMAGE_INITIAL"); err != nil {
-			return err
+		for _, env := range envForProfile {
+			val, err := s.params.Get(env)
+			if err != nil {
+				return err
+			}
+			s.env = append(s.env, coreapi.EnvVar{Name: env, Value: val})
 		}
-		if s.releaseLatest, err = s.params.Get("RELEASE_IMAGE_LATEST"); err != nil {
+		if optionalOperator, err := resolveOptionalOperator(s.params); err != nil {
 			return err
-		}
-		if s.optionalOperator, err = resolveOptionalOperator(s.params); err != nil {
-			return err
+		} else if optionalOperator != nil {
+			s.env = append(s.env, optionalOperator.asEnv()...)
 		}
 	}
 	if err := s.createSecret(); err != nil {
@@ -160,8 +166,9 @@ func (s *multiStageTestStep) Requires() (ret []api.StepLink) {
 		ret = append(ret, api.ReleaseImagesLink())
 	}
 	if s.profile != "" {
-		ret = append(ret, s.params.Links("RELEASE_IMAGE_INITIAL")...)
-		ret = append(ret, s.params.Links("RELEASE_IMAGE_LATEST")...)
+		for _, env := range envForProfile {
+			ret = append(ret, s.params.Links(env)...)
+		}
 	}
 	return
 }
@@ -291,6 +298,7 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep) ([]coreap
 			{Name: "JOB_NAME_SAFE", Value: strings.Replace(s.name, "_", "-", -1)},
 			{Name: "JOB_NAME_HASH", Value: s.jobSpec.JobNameHash()},
 		}...)
+		container.Env = append(container.Env, s.env...)
 		if owner := s.jobSpec.Owner(); owner != nil {
 			pod.OwnerReferences = append(pod.OwnerReferences, *owner)
 		}
@@ -298,12 +306,7 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep) ([]coreap
 			addProfile(s.profileSecretName(), s.profile, pod)
 			container.Env = append(container.Env, []coreapi.EnvVar{
 				{Name: "KUBECONFIG", Value: filepath.Join(secretMountPath, "kubeconfig")},
-				{Name: "RELEASE_IMAGE_INITIAL", Value: s.releaseInitial},
-				{Name: "RELEASE_IMAGE_LATEST", Value: s.releaseLatest},
 			}...)
-		}
-		if s.optionalOperator != nil {
-			container.Env = append(container.Env, s.optionalOperator.asEnv()...)
 		}
 		addSecret(s.name, pod)
 		ret = append(ret, *pod)

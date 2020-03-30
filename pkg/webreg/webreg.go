@@ -811,33 +811,38 @@ The following environment variables will be available to commands in a step:
 <table class="table">
   <tr>
     <th style="white-space: nowrap">Variable</th>
-	<th>Definition</th>
-	<th>When is it Present?</th>
+    <th>Definition</th>
+    <th>When is it Present?</th>
+  </tr>
+  <tr>
+    <td style="white-space: nowrap"><code>${OPENSHIFT_CI}</code></td>
+    <td>Set to <code>"true"</code>, should be used to detect that a script is running in a <code>ci-operator</code> environment.</td>
+    <td>Always.</td>
   </tr>
   <tr>
     <td style="white-space: nowrap"><code>${SHARED_DIR}</code></td>
-	<td>Directory on the step's filesystem where files shared between steps can be read.</td>
-	<td>Always.</td>
+    <td>Directory on the step's filesystem where files shared between steps can be read.</td>
+    <td>Always.</td>
   </tr>
   <tr>
     <td style="white-space: nowrap"><code>${CLUSTER_PROFILE_DIR}</code></td>
-	<td>Directory on the step's filesystem where credentials and configuration from the cluster profile are stored.</td>
-	<td>When the test as defined in a <code>ci-operator</code> configuration file sets a <code>cluster_profile</code>.</td>
+    <td>Directory on the step's filesystem where credentials and configuration from the cluster profile are stored.</td>
+    <td>When the test as defined in a <code>ci-operator</code> configuration file sets a <code>cluster_profile</code>.</td>
   </tr>
   <tr>
     <td style="white-space: nowrap"><code>${KUBECONFIG}</code></td>
-	<td>Path to <code>system:admin</code> credentials for the ephemeral OpenShift cluster under test.</td>
-	<td>After an ephemeral cluster has been installed.</td>
+    <td>Path to <code>system:admin</code> credentials for the ephemeral OpenShift cluster under test.</td>
+    <td>After an ephemeral cluster has been installed.</td>
   </tr>
   <tr>
     <td style="white-space: nowrap"><code>${RELEASE_IMAGE_INITIAL}</code></td>
-	<td>Image pull specification for the initial release payload snapshot when the test began to run.</td>
-	<td>Always.</td>
+    <td>Image pull specification for the initial release payload snapshot when the test began to run.</td>
+    <td>Always.</td>
   </tr>
   <tr>
     <td style="white-space: nowrap"><code>${RELEASE_IMAGE_LATEST}</code></td>
-	<td>Image pull specification for the ephemeral release payload used to install the ephemeral OpenShift cluster.</td>
-	<td>Always.</td>
+    <td>Image pull specification for the ephemeral release payload used to install the ephemeral OpenShift cluster.</td>
+    <td>Always.</td>
   </tr>
 </table>
 

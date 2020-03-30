@@ -841,9 +841,8 @@
     "tag": {
       "annotations": null,
       "from": {
-        "kind": "ImageStreamImage",
-        "name": "4.3@sha256:SHA",
-        "namespace": "ocp"
+        "kind": "DockerImage",
+        "name": "registry.svc.ci.openshift.org/ocp/4.3@sha256:SHA"
       },
       "generation": null,
       "importPolicy": {},
@@ -875,9 +874,8 @@
     "tag": {
       "annotations": null,
       "from": {
-        "kind": "ImageStreamImage",
-        "name": "fedora@sha256:SHA",
-        "namespace": "openshift"
+        "kind": "DockerImage",
+        "name": "registry.svc.ci.openshift.org/openshift/fedora@sha256:SHA"
       },
       "generation": null,
       "importPolicy": {},
@@ -909,9 +907,8 @@
     "tag": {
       "annotations": null,
       "from": {
-        "kind": "ImageStreamImage",
-        "name": "4.3@sha256:SHA",
-        "namespace": "ocp"
+        "kind": "DockerImage",
+        "name": "registry.svc.ci.openshift.org/ocp/4.3@sha256:SHA"
       },
       "generation": null,
       "importPolicy": {},
@@ -943,9 +940,8 @@
     "tag": {
       "annotations": null,
       "from": {
-        "kind": "ImageStreamImage",
-        "name": "4.3@sha256:SHA",
-        "namespace": "ocp"
+        "kind": "DockerImage",
+        "name": "registry.svc.ci.openshift.org/ocp/4.3@sha256:SHA"
       },
       "generation": null,
       "importPolicy": {},
@@ -977,9 +973,8 @@
     "tag": {
       "annotations": null,
       "from": {
-        "kind": "ImageStreamImage",
-        "name": "src-cache-origin@sha256:SHA",
-        "namespace": "ci"
+        "kind": "DockerImage",
+        "name": "registry.svc.ci.openshift.org/ci/src-cache-origin@sha256:SHA"
       },
       "generation": null,
       "importPolicy": {},

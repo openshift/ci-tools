@@ -1,5 +1,6 @@
 base_images:
   base:
+    cluster: https://api.ci.openshift.org
     name: "4.3"
     namespace: ocp
     tag: base
@@ -9,10 +10,12 @@ base_images:
     namespace: openshift
     tag: "29"
   cli:
+    cluster: https://api.ci.openshift.org
     name: "4.3"
     namespace: ocp
     tag: cli
   machine-os-content-base:
+    cluster: https://api.ci.openshift.org
     name: "4.3"
     namespace: ocp
     tag: machine-os-content
@@ -172,6 +175,7 @@ resources:
       memory: 30Gi
 rpm_build_commands: make build-rpms
 tag_specification:
+  cluster: https://api.ci.openshift.org
   name: "ci-operator-test"
   namespace: ci
 tests:

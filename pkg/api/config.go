@@ -114,12 +114,17 @@ func validateBuildRootImageConfiguration(fieldRoot string, input *BuildRootImage
 		return nil
 	}
 
-	if input.ProjectImageBuild != nil && input.ImageStreamTagReference != nil {
-		return []error{fmt.Errorf("%s: both image_stream_tag and project_image cannot be set", fieldRoot)}
-	} else if input.ProjectImageBuild == nil && input.ImageStreamTagReference == nil {
-		return []error{fmt.Errorf("%s: you have to specify either image_stream_tag or project_image", fieldRoot)}
+	var validationErrors []error
+	if input.ImageStreamTagReference != nil && len(input.ImageStreamTagReference.Cluster) == 0 {
+		validationErrors = append(validationErrors, fmt.Errorf("%s.image_stream_tag: no cluster defined", fieldRoot))
 	}
-	return nil
+
+	if input.ProjectImageBuild != nil && input.ImageStreamTagReference != nil {
+		validationErrors = append(validationErrors, fmt.Errorf("%s: both image_stream_tag and project_image cannot be set", fieldRoot))
+	} else if input.ProjectImageBuild == nil && input.ImageStreamTagReference == nil {
+		validationErrors = append(validationErrors, fmt.Errorf("%s: you have to specify either image_stream_tag or project_image", fieldRoot))
+	}
+	return validationErrors
 }
 
 func validateTestStepConfiguration(fieldRoot string, input []TestStepConfiguration, release *ReleaseTagConfiguration, resolved bool) []error {
@@ -198,6 +203,9 @@ func validateImageStreamTagReferenceMap(fieldRoot string, input map[string]Image
 		if k == "root" {
 			validationErrors = append(validationErrors, fmt.Errorf("%s.%s can't be named 'root'", fieldRoot, k))
 		}
+		if len(v.Cluster) == 0 {
+			validationErrors = append(validationErrors, fmt.Errorf("%s[%s]: no cluster defined", fieldRoot, k))
+		}
 		validationErrors = append(validationErrors, validateImageStreamTagReference(fmt.Sprintf("%s.%s", fieldRoot, k), v)...)
 	}
 	return validationErrors
@@ -229,6 +237,10 @@ func validateReleaseTagConfiguration(fieldRoot string, input ReleaseTagConfigura
 
 	if len(input.Name) == 0 {
 		validationErrors = append(validationErrors, fmt.Errorf("%s: no name defined", fieldRoot))
+	}
+
+	if len(input.Cluster) == 0 {
+		return append(validationErrors, fmt.Errorf("%s: no cluster defined", fieldRoot))
 	}
 	return validationErrors
 }

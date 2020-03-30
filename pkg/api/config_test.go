@@ -2,7 +2,6 @@ package api
 
 import (
 	"errors"
-	"fmt"
 	"reflect"
 	"testing"
 
@@ -411,11 +410,6 @@ func TestValidateBuildRoot(t *testing.T) {
 			hasImages:            true,
 			expectedValid:        false,
 		},
-		{
-			id:                   "build root without cluster",
-			buildRootImageConfig: &BuildRootImageConfiguration{ImageStreamTagReference: &ImageStreamTagReference{}},
-			expectedValid:        false,
-		},
 	} {
 		t.Run(tc.id, func(t *testing.T) {
 			if errs := validateBuildRootImageConfiguration("build_root", tc.buildRootImageConfig, tc.hasImages); len(errs) > 0 && tc.expectedValid {
@@ -438,11 +432,6 @@ func TestValidateBaseImages(t *testing.T) {
 			baseImages: map[string]ImageStreamTagReference{"test": {Cluster: "test"},
 				"test2": {Tag: "test2"}, "test3": {Cluster: "test3"},
 			},
-			expectedValid: false,
-		},
-		{
-			id:            "no cluster error",
-			baseImages:    map[string]ImageStreamTagReference{"test": {Name: "test", Tag: "test"}},
 			expectedValid: false,
 		},
 	} {
@@ -794,32 +783,6 @@ func TestValidatePromotion(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			if actual, expected := validatePromotionConfiguration("promotion", test.input), test.expected; !reflect.DeepEqual(actual, expected) {
 				t.Errorf("%s: got incorrect errors: %v", test.name, diff.ObjectDiff(actual, expected))
-			}
-		})
-	}
-}
-
-func TestValidateReleaseTagConfiguration(t *testing.T) {
-	var testCases = []struct {
-		name     string
-		input    ReleaseTagConfiguration
-		expected []error
-	}{
-		{
-			name:     "no cluster defined error",
-			input:    ReleaseTagConfiguration{Name: "test", Namespace: "test"},
-			expected: []error{fmt.Errorf("tag_specification: no cluster defined")},
-		},
-		{
-			name:     "valid tag_specification",
-			input:    ReleaseTagConfiguration{Name: "test", Namespace: "test", Cluster: "https://test.com"},
-			expected: nil,
-		},
-	}
-	for _, testCase := range testCases {
-		t.Run(testCase.name, func(t *testing.T) {
-			if actual, expected := validateReleaseTagConfiguration("tag_specification", testCase.input), testCase.expected; !reflect.DeepEqual(actual, expected) {
-				t.Errorf("%s: got incorrect errors: %v", testCase.name, diff.ObjectDiff(actual, expected))
 			}
 		})
 	}

@@ -21,22 +21,6 @@ tests:
   commands: go test ./pkg/...
   container:
     from: src
-- as: e2e-aws
-  commands: TEST_SUITE=openshift/conformance/parallel run-tests
-  openshift_installer:
-    cluster_profile: aws
-- as: e2e-azure
-  steps:
-    cluster_profile: azure4
-    workflow: ipi
-    test:
-    - as: e2e
-      from: my-image
-      commands: make azure-e2e
-      resources:
-        requests:
-          cpu: 1000m
-          memory: 2Gi
 - as: e2e-gcp
   steps:
     cluster_profile: gcp

@@ -352,10 +352,16 @@ func generatePodSpecOthers(info *prowgenInfo, release string, test *cioperatorap
 	container.VolumeMounts = append(container.VolumeMounts, kubeapi.VolumeMount{Name: "cluster-profile", MountPath: clusterProfilePath})
 	if len(template) > 0 {
 		container.VolumeMounts = append(container.VolumeMounts, kubeapi.VolumeMount{Name: "job-definition", MountPath: templatePath, SubPath: fmt.Sprintf("%s.yaml", template)})
+
+		jobNameSafe := strings.Replace(test.As, "_", "-", -1)
+		if len(info.Variant) > 0 {
+			jobNameSafe = fmt.Sprintf("%s-%s", info.Variant, jobNameSafe)
+		}
+
 		container.Env = append(
 			container.Env,
 			kubeapi.EnvVar{Name: "CLUSTER_TYPE", Value: targetCloud},
-			kubeapi.EnvVar{Name: "JOB_NAME_SAFE", Value: strings.Replace(test.As, "_", "-", -1)},
+			kubeapi.EnvVar{Name: "JOB_NAME_SAFE", Value: jobNameSafe},
 			kubeapi.EnvVar{Name: "TEST_COMMAND", Value: test.Commands})
 		if len(testImageStreamTag) > 0 {
 			container.Env = append(container.Env,

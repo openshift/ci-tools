@@ -576,7 +576,7 @@ at the <a href="./">getting started overview</a>.
 <p>
 By default, any entry declared in the <code>tests</code> stanza of a <code>ci-operator</code>
 configuration file will be a <i>pre-submit</i> test: these tests run before code is
-submitted (merged) into the target repository. <i>Pre-submit</i> tests are useful
+submitted (merged) into the target repository. Pre-submit tests are useful
 to give feedback to a developer on the content of their pull request and to gate
 merges to the central repository. These tests will fire when a pull request is opened,
 when the contents of a pull request are changed, or on demand when a user requests
@@ -588,9 +588,9 @@ them.
 When a repository configures <code>ci-operator</code> to build images and publish
 them (by declaring container image builds with <code>images</code> and the destination
 for them to be published with <code>promotion</code>), a <i>post-submit</i> test will
-exist. A <i>post-submit</i> test executes after code is merged to the target repository;
+exist. A post-submit test executes after code is merged to the target repository;
 this sort of test type is a good fit for publication of new artifacts after changes to
-source code. It is not possible to configure any additional <i>post-submit</i> tests
+source code. It is not possible to configure any additional post-submit tests
 at this time using <code>ci-operator</code> configuration.
 </p>
 
@@ -600,7 +600,7 @@ A repository may be interested in validating the health of the latest source cod
 but not at every moment that the code changes. In these cases, a <i>periodic</i>
 test may be configured to run on the latest source code on a schedule. The following
 example sets the <code>cron</code> field on an entry in the <code>tests</code> list
-to configure that test to run on a schedule, instead of as a <i>pre-submit</i>:
+to configure that test to run on a schedule, instead of as a pre-submit:
 </p>
 
 <code>ci-operator</code> configuration:
@@ -851,8 +851,8 @@ The following environment variables will be available to commands in a step:
   </tr>
   <tr>
     <td style="white-space: nowrap"><code>${LEASED_RESOURCE}</code></td>
-    <td>The name of the <i>resource</i> leased to grant access to cloud quota. See <a href="./help/leases">the documentation</a>.</td>
-    <td>When the test requires a <i>lease</i>.</td>
+    <td>The name of the resource leased to grant access to cloud quota. See <a href="./help/leases">the documentation</a>.</td>
+    <td>When the test requires a lease.</td>
   </tr>
 </table>
 
@@ -1262,7 +1262,7 @@ which quota to ask for, how available leases can be configured and how current u
 <h3 id="boskos"><a href="#boskos">Introducing the <code>boskos</code> Leasing Server</a></h3>
 <p>
 <code>boskos</code> (βοσκός), translating as "shepherd" from Greek, is a resource management server that apportions
-<i>leases</i> of <i>resources</i> to clients and manages the lifecycle of the <i>resources</i>. When considering the
+<i>leases</i> of <i>resources</i> to clients and manages the lifecycle of the resources. When considering the
 actions of this server, two terms should be defined:
 </p>
 
@@ -1272,32 +1272,32 @@ actions of this server, two terms should be defined:
     <th>Definition</th>
   </tr>
   <tr>
-    <td style="white-space: nowrap"><i>resource</i></td>
+    <td style="white-space: nowrap">resource</td>
     <td>An item which may be leased to clients. Resources represent slices of the larger cloud quota.</td>
   </tr>
   <tr>
-    <td style="white-space: nowrap"><i>lease</i></td>
-    <td>A binding between a <i>resource</i> and a client. When a lease is active, the underlying <i>resource</i> is not available for other clients.</td>
+    <td style="white-space: nowrap">lease</td>
+    <td>A binding between a resource and a client. When a lease is active, the underlying resource is not available for other clients.</td>
   </tr>
 </table>
 
 <p>
-The process for granting a <i>lease</i> on a <i>resource</i> follows this workflow:
+The process for granting a lease on a resource follows this workflow:
 </p>
 
 <ul>
-  <li>a client (<i>lessee</i>) requests a <i>lease</i> on an available <i>resource</i></li>
-  <li>the server (<i>lessor</i>) grants the <i>lease</i>, if possible, or places the client in a FIFO queue to wait for the next available <i>resource</i></li>
-  <li>the client emits a heartbeat while the <i>lease</i> is under active use</li>
-  <li>the client relinquishes the <i>lease</i> once it is no longer in use</li>
-  <li>the server places the <i>resource</i> back into the available pool for future clients to request</li>
+  <li>a client (<i>lessee</i>) requests a lease on an available resource</li>
+  <li>the server (<i>lessor</i>) grants the lease, if possible, or places the client in a FIFO queue to wait for the next available resource</li>
+  <li>the client emits a heartbeat while the lease is under active use</li>
+  <li>the client relinquishes the lease once it is no longer in use</li>
+  <li>the server places the resource back into the available pool for future clients to request</li>
 </ul>
 
 <p>
-If a client fails to emit a heartbeat for long enough while the client holds a <i>lease</i>, the server will forcibly
-relinquish the <i>lease</i> and return the <i>resource</i> to the available pool for other clients. This mechanism
-ensures that clients which crash or otherwise fail to remain responsive cannot exhaust <i>resources</i> by holding a
-<i>lease</i> indefinitely.
+If a client fails to emit a heartbeat for long enough while the client holds a lease, the server will forcibly
+relinquish the lease and return the resource to the available pool for other clients. This mechanism
+ensures that clients which crash or otherwise fail to remain responsive cannot exhaust resources by holding a
+lease indefinitely.
 </p>
 
 <h3 id="admins"><a href="#admins">Directions for Cloud Administrators</a></h3>

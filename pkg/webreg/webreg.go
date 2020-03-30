@@ -821,7 +821,12 @@ The following environment variables will be available to commands in a step:
   </tr>
   <tr>
     <td style="white-space: nowrap"><code>${SHARED_DIR}</code></td>
-    <td>Directory on the step's filesystem where files shared between steps can be read.</td>
+    <td>Directory on the step's filesystem where files shared between steps can be read and written.</td>
+    <td>Always.</td>
+  </tr>
+  <tr>
+    <td style="white-space: nowrap"><code>${ARTIFACT_DIR}</code></td>
+    <td>Directory on the step's filesystem where files should be placed to persist them in the job's artifacts.</td>
     <td>Always.</td>
   </tr>
   <tr>
@@ -843,6 +848,11 @@ The following environment variables will be available to commands in a step:
     <td style="white-space: nowrap"><code>${RELEASE_IMAGE_LATEST}</code></td>
     <td>Image pull specification for the ephemeral release payload used to install the ephemeral OpenShift cluster.</td>
     <td>Always.</td>
+  </tr>
+  <tr>
+    <td style="white-space: nowrap"><code>${LEASED_RESOURCE}</code></td>
+    <td>The name of the <i>resource</i> leased to grant access to cloud quota. See <a href="./help/leases">the documentation</a>.</td>
+    <td>When the test requires a <i>lease</i>.</td>
   </tr>
 </table>
 

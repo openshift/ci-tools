@@ -300,7 +300,13 @@ func generatePodSpecOthers(info *prowgenInfo, release string, test *cioperatorap
 	case cioperatorapi.ClusterProfileVSphere:
 		targetCloud = "vsphere"
 	}
-	clusterProfilePath := fmt.Sprintf("/usr/local/%s-cluster-profile", test.As)
+
+	clusterProfileName := fmt.Sprintf("%s-cluster-profile", test.As)
+	if len(info.Variant) > 0 {
+		clusterProfileName = fmt.Sprintf("%s-%s", info.Variant, clusterProfileName)
+	}
+	clusterProfilePath := fmt.Sprintf("/usr/local/%s", clusterProfileName)
+
 	templatePath := fmt.Sprintf("/usr/local/%s", test.As)
 	podSpec := generateCiOperatorPodSpec(info, test.Secrets, []string{test.As})
 	clusterProfileVolume := generateClusterProfileVolume("cluster-profile", fmt.Sprintf("cluster-secrets-%s", targetCloud))

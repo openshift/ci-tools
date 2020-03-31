@@ -177,11 +177,11 @@ func main() {
 
 	commitIfNeeded("ci-operator-prowgen --from-dir ./ci-operator/config --to-dir ./ci-operator/jobs", author)
 
-	cmd = "/usr/bin/ci-op-configs-mirror"
+	cmd = "/usr/bin/ci-operator-config-mirror"
 	args = []string{"--config-path", "./ci-operator/config", "--to-org", "openshift-priv"}
 	run(cmd, args...)
 
-	commitIfNeeded("ci-op-configs-mirror --config-path ./ci-operator/config --to-org openshift-priv", author)
+	commitIfNeeded("ci-operator-config-mirror --config-path ./ci-operator/config --to-org openshift-priv", author)
 
 	cmd = "/usr/bin/ci-operator-prowgen"
 	args = []string{"--from-dir", "./ci-operator/config", "--to-dir", "./ci-operator/jobs"}

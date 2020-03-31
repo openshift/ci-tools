@@ -47,7 +47,7 @@ format:
 update-integration:
 	UPDATE=true make integration
 
-integration: integration-prowgen integration-pj-rehearse integration-ci-operator integration-ci-operator-configresolver integration-secret-wrapper integration-testgrid-generator integration-repo-init integration-group-auto-updater integration-ci-op-configs-mirror integration-cvp-trigger
+integration: integration-prowgen integration-pj-rehearse integration-ci-operator integration-ci-operator-configresolver integration-secret-wrapper integration-testgrid-generator integration-repo-init integration-group-auto-updater integration-ci-operator-config-mirror integration-cvp-trigger
 .PHONY: integration
 
 integration-prowgen:
@@ -92,9 +92,9 @@ integration-group-auto-updater:
 	test/group-auto-updater-integration/run.sh
 .PHONY: integration-group-auto-updater
 
-integration-ci-op-configs-mirror:
-	test/ci-op-configs-mirror-integration/run.sh
-.PHONY: integration-ci-op-configs-mirror
+integration-ci-operator-config-mirror:
+	test/ci-operator-config-mirror-integration/run.sh
+.PHONY: integration-ci-operator-config-mirror
 
 integration-cvp-trigger:
 	test/cvp-trigger-integration/run.sh

@@ -12,16 +12,16 @@ OUTPUT_FILES="${TEST_ROOT}/data/output"
 
 cp -r ${INPUT_FILES} ${WORKDIR}
 
-echo "[INFO] Running ci-op-configs-mirror..."
-if ! ci-op-configs-mirror --to-org "super-priv" --config-path "${WORKDIR}/input" 2> "${WORKDIR}/ci-op-configs-mirror-stderr.log"; then
-  echo "ERROR: ci-op-configs-mirror failed:"
-  cat "${WORKDIR}/ci-op-configs-mirror-stderr.log"
+echo "[INFO] Running ci-operator-config-mirror..."
+if ! ci-operator-config-mirror --to-org "super-priv" --config-path "${WORKDIR}/input" 2> "${WORKDIR}/ci-operator-config-mirror-stderr.log"; then
+  echo "ERROR: ci-operator-config-mirror failed:"
+  cat "${WORKDIR}/ci-operator-config-mirror-stderr.log"
   exit 1
 fi
 
 echo "[INFO] Validating generated ci-operator configuration files"
 if ! diff -Naupr "${WORKDIR}/input" "${OUTPUT_FILES}"; then
-  printf "ERROR: ci-op-configs-mirror output differs from expected\n"
+  printf "ERROR: ci-operator-config-mirror output differs from expected\n"
   exit 1
 fi
 

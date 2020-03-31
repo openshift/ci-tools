@@ -7,6 +7,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/ghodss/yaml"
@@ -62,6 +63,32 @@ type Info struct {
 	OrgPath string
 	// RepoPath is the full path to the directory containing config for the repo
 	RepoPath string
+}
+
+// IsComplete returns an error if at least one of Org, Repo, Branch members is
+// empty, otherwise it returns nil
+func (i *Info) IsComplete() error {
+	var missing []string
+	for item, value := range map[string]string{
+		"organization": i.Org,
+		"repository":   i.Repo,
+		"branch":       i.Branch,
+	} {
+		if value == "" {
+			missing = append(missing, item)
+		}
+	}
+	sort.Strings(missing)
+
+	if len(missing) > 0 {
+		s := ""
+		if len(missing) > 1 {
+			s = "s"
+		}
+		return fmt.Errorf("missing item%s: %s", s, strings.Join(missing, ", "))
+	}
+
+	return nil
 }
 
 func (i *Info) JobName(prefix, name string) string {

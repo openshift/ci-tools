@@ -85,6 +85,53 @@ func TestExtractRepoElementsFromPath(t *testing.T) {
 	}
 }
 
+func TestInfo_IsComplete(t *testing.T) {
+	testCases := []struct {
+		name        string
+		info        Info
+		expectError string
+	}{
+		{
+			name: "All required members -> complete",
+			info: Info{Org: "organization", Repo: "repository", Branch: "branch"},
+		},
+		{
+			name:        "Missing org -> incomplete",
+			info:        Info{Repo: "repository", Branch: "branch"},
+			expectError: "missing item: organization",
+		},
+		{
+			name:        "Missing repo -> incomplete",
+			info:        Info{Org: "organization", Branch: "branch"},
+			expectError: "missing item: repository",
+		},
+		{
+			name:        "Missing branch -> incomplete",
+			info:        Info{Org: "organization", Repo: "repository"},
+			expectError: "missing item: branch",
+		},
+		{
+			name:        "Everything missing -> incomplete",
+			expectError: "missing items: branch, organization, repository",
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.info.IsComplete()
+			if err == nil && tc.expectError != "" {
+				t.Errorf("%s: expected error '%s', got nil", tc.expectError, tc.name)
+			}
+			if err != nil {
+				if tc.expectError == "" {
+					t.Errorf("%s: unexpected error %s", tc.name, err.Error())
+				} else if err.Error() != tc.expectError {
+					t.Errorf("%s: expected error '%s', got '%s", tc.name, tc.expectError, err.Error())
+				}
+			}
+		})
+	}
+}
+
 func TestInfo_Basename(t *testing.T) {
 	testCases := []struct {
 		name     string

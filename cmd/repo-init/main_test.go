@@ -322,6 +322,7 @@ func TestGenerateCIOperatorConfig(t *testing.T) {
 					InputConfiguration: api.InputConfiguration{
 						BuildRootImage: &api.BuildRootImageConfiguration{
 							ImageStreamTagReference: &api.ImageStreamTagReference{
+								Cluster:   "https://api.ci.openshift.org",
 								Namespace: "openshift",
 								Name:      "release",
 								Tag:       "golang-1",
@@ -366,11 +367,13 @@ func TestGenerateCIOperatorConfig(t *testing.T) {
 					},
 					InputConfiguration: api.InputConfiguration{
 						ReleaseTagConfiguration: &api.ReleaseTagConfiguration{
+							Cluster:   "https://api.ci.openshift.org",
 							Namespace: "promote",
 							Name:      "version",
 						},
 						BuildRootImage: &api.BuildRootImageConfiguration{
 							ImageStreamTagReference: &api.ImageStreamTagReference{
+								Cluster:   "https://api.ci.openshift.org",
 								Namespace: "openshift",
 								Name:      "release",
 								Tag:       "golang-1",
@@ -414,11 +417,13 @@ func TestGenerateCIOperatorConfig(t *testing.T) {
 					},
 					InputConfiguration: api.InputConfiguration{
 						ReleaseTagConfiguration: &api.ReleaseTagConfiguration{
+							Cluster:   "https://api.ci.openshift.org",
 							Namespace: "promote",
 							Name:      "version",
 						},
 						BuildRootImage: &api.BuildRootImageConfiguration{
 							ImageStreamTagReference: &api.ImageStreamTagReference{
+								Cluster:   "https://api.ci.openshift.org",
 								Namespace: "openshift",
 								Name:      "release",
 								Tag:       "golang-1",
@@ -467,6 +472,7 @@ func TestGenerateCIOperatorConfig(t *testing.T) {
 					InputConfiguration: api.InputConfiguration{
 						BuildRootImage: &api.BuildRootImageConfiguration{
 							ImageStreamTagReference: &api.ImageStreamTagReference{
+								Cluster:   "https://api.ci.openshift.org",
 								Namespace: "openshift",
 								Name:      "release",
 								Tag:       "golang-1",
@@ -474,11 +480,13 @@ func TestGenerateCIOperatorConfig(t *testing.T) {
 						},
 						BaseImages: map[string]api.ImageStreamTagReference{
 							"base": {
+								Cluster:   "https://api.ci.openshift.org",
 								Namespace: "promote",
 								Name:      "version",
 								Tag:       "base",
 							},
 							"os": {
+								Cluster:   "https://api.ci.openshift.org",
 								Namespace: "openshift",
 								Name:      "centos",
 								Tag:       "7",
@@ -525,6 +533,7 @@ func TestGenerateCIOperatorConfig(t *testing.T) {
 					InputConfiguration: api.InputConfiguration{
 						BuildRootImage: &api.BuildRootImageConfiguration{
 							ImageStreamTagReference: &api.ImageStreamTagReference{
+								Cluster:   "https://api.ci.openshift.org",
 								Namespace: "openshift",
 								Name:      "release",
 								Tag:       "golang-1",

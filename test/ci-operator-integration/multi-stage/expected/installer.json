@@ -111,9 +111,8 @@
     "tag": {
       "annotations": null,
       "from": {
-        "kind": "ImageStreamImage",
-        "name": "4.2@sha256:SHA",
-        "namespace": "ocp"
+        "kind": "DockerImage",
+        "name": "registry.svc.ci.openshift.org/ocp/4.2@sha256:SHA"
       },
       "generation": null,
       "importPolicy": {},
@@ -145,9 +144,8 @@
     "tag": {
       "annotations": null,
       "from": {
-        "kind": "ImageStreamImage",
-        "name": "release@sha256:SHA",
-        "namespace": "openshift"
+        "kind": "DockerImage",
+        "name": "registry.svc.ci.openshift.org/openshift/release@sha256:SHA"
       },
       "generation": null,
       "importPolicy": {},

@@ -450,16 +450,21 @@ func (o *options) Complete() error {
 		o.templates = append(o.templates, template)
 	}
 
-	clusterConfig, err := util.LoadClusterConfig()
-	if err != nil {
-		return fmt.Errorf("failed to load cluster config: %v", err)
+	o.clusterConfig = &rest.Config{}
+	if !o.dry {
+
+		clusterConfig, err := util.LoadClusterConfig()
+		if err != nil {
+			return fmt.Errorf("failed to load cluster config: %v", err)
+		}
+
+		if len(o.impersonateUser) > 0 {
+			clusterConfig.Impersonate = rest.ImpersonationConfig{UserName: o.impersonateUser}
+		}
+
+		o.clusterConfig = clusterConfig
 	}
 
-	if len(o.impersonateUser) > 0 {
-		clusterConfig.Impersonate = rest.ImpersonationConfig{UserName: o.impersonateUser}
-	}
-
-	o.clusterConfig = clusterConfig
 	configs, _, err := util.LoadKubeConfigs(o.kubeconfig)
 	if err != nil {
 		return fmt.Errorf("failed to load kubeconfig from '%s': %v", o.kubeconfig, err)

@@ -1,6 +1,7 @@
 {
   "base_images": {
     "base": {
+      "cluster": "https://api.ci.openshift.org",
       "namespace": "ocp",
       "name": "4.2",
       "tag": "base"

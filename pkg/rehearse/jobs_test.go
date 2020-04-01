@@ -1158,31 +1158,38 @@ func makeBaseRefs() *pjapi.Refs {
 
 func TestRemoveConfigResolverFlags(t *testing.T) {
 	var testCases = []struct {
-		description string
-		input       []string
-		expected    []string
+		description  string
+		input        []string
+		expectedArgs []string
+		expectedInfo config.Info
 	}{{
-		description: "just resolver flags",
-		input:       []string{"--resolver-address=http://ci-operator-resolver", "--org=openshift", "--repo=origin", "--branch=master", "--variant=v2"},
-		expected:    []string{},
+		description:  "just resolver flags",
+		input:        []string{"--resolver-address=http://ci-operator-resolver", "--org=openshift", "--repo=origin", "--branch=master", "--variant=v2"},
+		expectedArgs: nil,
+		expectedInfo: config.Info{Org: "openshift", Repo: "origin", Branch: "master", Variant: "v2"},
 	}, {
-		description: "no resolver flags",
-		input:       []string{"--artifact-dir=$(ARTIFACTS)", "--target=target", "--sentry-dsn-path=/etc/sentry-dsn/ci-operator"},
-		expected:    []string{"--artifact-dir=$(ARTIFACTS)", "--target=target", "--sentry-dsn-path=/etc/sentry-dsn/ci-operator"},
+		description:  "no resolver flags",
+		input:        []string{"--artifact-dir=$(ARTIFACTS)", "--target=target", "--sentry-dsn-path=/etc/sentry-dsn/ci-operator"},
+		expectedArgs: []string{"--artifact-dir=$(ARTIFACTS)", "--target=target", "--sentry-dsn-path=/etc/sentry-dsn/ci-operator"},
 	}, {
-		description: "mixed resolver and non-resolver flags",
-		input:       []string{"--artifact-dir=$(ARTIFACTS)", "--resolver-address=http://ci-operator-resolver", "--org=openshift", "--target=target", "--repo=origin", "--sentry-dsn-path=/etc/sentry-dsn/ci-operator", "--branch=master", "--variant=v2"},
-		expected:    []string{"--artifact-dir=$(ARTIFACTS)", "--target=target", "--sentry-dsn-path=/etc/sentry-dsn/ci-operator"},
+		description:  "mixed resolver and non-resolver flags",
+		input:        []string{"--artifact-dir=$(ARTIFACTS)", "--resolver-address=http://ci-operator-resolver", "--org=openshift", "--target=target", "--repo=origin", "--sentry-dsn-path=/etc/sentry-dsn/ci-operator", "--branch=master", "--variant=v2"},
+		expectedArgs: []string{"--artifact-dir=$(ARTIFACTS)", "--target=target", "--sentry-dsn-path=/etc/sentry-dsn/ci-operator"},
+		expectedInfo: config.Info{Org: "openshift", Repo: "origin", Branch: "master", Variant: "v2"},
 	}, {
-		description: "spaces in between flag and value",
-		input:       []string{"--artifact-dir=$(ARTIFACTS)", "--resolver-address=http://ci-operator-resolver", "--org", "openshift", "--target=target", "--repo", "origin", "--sentry-dsn-path=/etc/sentry-dsn/ci-operator", "--branch", "master", "--variant=v2"},
-		expected:    []string{"--artifact-dir=$(ARTIFACTS)", "--target=target", "--sentry-dsn-path=/etc/sentry-dsn/ci-operator"},
+		description:  "spaces in between flag and value",
+		input:        []string{"--artifact-dir=$(ARTIFACTS)", "--resolver-address=http://ci-operator-resolver", "--org", "openshift", "--target=target", "--repo", "origin", "--sentry-dsn-path=/etc/sentry-dsn/ci-operator", "--branch", "master", "--variant=v2"},
+		expectedArgs: []string{"--artifact-dir=$(ARTIFACTS)", "--target=target", "--sentry-dsn-path=/etc/sentry-dsn/ci-operator"},
+		expectedInfo: config.Info{Org: "openshift", Repo: "origin", Branch: "master", Variant: "v2"},
 	}}
 	for _, testCase := range testCases {
 		t.Run(testCase.description, func(t *testing.T) {
-			newArgs := removeConfigResolverFlags(testCase.input)
-			if !reflect.DeepEqual(testCase.expected, newArgs) {
-				t.Fatalf("Diff found %v", cmp.Diff(testCase.expected, newArgs))
+			newArgs, info := removeConfigResolverFlags(testCase.input)
+			if !reflect.DeepEqual(testCase.expectedArgs, newArgs) {
+				t.Fatalf("Args differ from expected: %v", cmp.Diff(testCase.expectedArgs, newArgs))
+			}
+			if !reflect.DeepEqual(testCase.expectedInfo, info) {
+				t.Fatalf("ci-operator config info differs from expected: %v", cmp.Diff(testCase.expectedInfo, info))
 			}
 		})
 	}

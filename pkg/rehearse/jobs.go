@@ -276,6 +276,9 @@ func inlineCiOpConfig(container *v1.Container, ciopConfigs config.ByFilename, re
 	}
 	// inline CONFIG_SPEC for all ci-operator jobs
 	if container.Command != nil && container.Command[0] == "ci-operator" {
+		if err := info.IsComplete(); err != nil {
+			return fmt.Errorf("could not infer which ci-operator config this job uses: %v", err)
+		}
 		filename := info.Basename()
 		loggers.Debug.WithField(logCiopConfigFile, filename).Debug("Rehearsal job uses ci-operator config ConfigMap, needed content will be inlined")
 		ciopConfig, ok := ciopConfigs[filename]
@@ -410,12 +413,20 @@ func (jc *JobConfigurer) ConfigurePresubmitRehearsals(presubmits config.Presubmi
 }
 
 func (jc *JobConfigurer) configureJobSpec(spec *v1.PodSpec, info config.Info, logger *logrus.Entry) error {
+	// Remove configresolver flags from ci-operator jobs
+	var infoFromFlags config.Info
+	if len(spec.Containers[0].Command) > 0 && spec.Containers[0].Command[0] == "ci-operator" {
+		spec.Containers[0].Args, infoFromFlags = removeConfigResolverFlags(spec.Containers[0].Args)
+	}
+
+	// Periodics may not be tied to a specific ci-operator configuration, but
+	// we may have inferred ci-op config from ci-operator flags
+	if info.IsComplete() != nil && infoFromFlags.IsComplete() == nil {
+		info = infoFromFlags
+	}
+
 	if err := inlineCiOpConfig(&spec.Containers[0], jc.ciopConfigs, jc.registryResolver, info, jc.loggers); err != nil {
 		return err
-	}
-	// Remove configresolver flags from ci-operator jobs
-	if len(spec.Containers[0].Command) > 0 && spec.Containers[0].Command[0] == "ci-operator" {
-		spec.Containers[0].Args = removeConfigResolverFlags(spec.Containers[0].Args)
 	}
 
 	replaceCMTemplateName(spec.Containers[0].VolumeMounts, spec.Volumes, jc.templateMap)
@@ -821,29 +832,59 @@ func (e *Executor) waitForJobs(jobs sets.String, selector string) (bool, error) 
 	}
 }
 
-func removeConfigResolverFlags(args []string) []string {
-	newArgs := []string{}
-	ignoreNext := false
-	for _, arg := range args {
-		if ignoreNext {
-			ignoreNext = false
-			continue
-		}
-		ignore := false
-		for _, ignoredArg := range []string{"-resolver-address", "-org", "-repo", "-branch", "-variant"} {
-			// Handle both single and double dash forms of go flags
-			if strings.Contains(arg, ignoredArg) {
-				ignore = true
+func removeConfigResolverFlags(args []string) ([]string, config.Info) {
+	var newArgs []string
+	var usedConfig config.Info
+	toConfig := map[string]*string{
+		"org":     &usedConfig.Org,
+		"repo":    &usedConfig.Repo,
+		"branch":  &usedConfig.Branch,
+		"variant": &usedConfig.Variant,
+	}
+
+	// Behave like a parser: consume items from the front of the slice until the
+	// slice is empty. Keep all items that are not config resolver flags. When an
+	// option that takes a parameter is encountered, but not in a `--param=value`
+	// form, two items need to be consumed instead of one.
+	consumeOne := func() string {
+		item := args[0]
+		args = args[1:]
+		return item
+	}
+	for len(args) > 0 {
+		current := consumeOne()
+		keep := true
+
+		for _, ignored := range []string{"resolver-address", "org", "repo", "branch", "variant"} {
+			for _, form := range []string{"-%s=", "--%s=", "-%s", "--%s"} {
+				// TrimPrefix returns unchanged string when it does not match the prefix,
+				// so if it returns anything else, we found an ignored param.
+				if value := strings.TrimPrefix(current, fmt.Sprintf(form, ignored)); value != current {
+					// If this is not a --%s= form, consume next item, if possible
+					if !strings.HasSuffix(form, "=") && len(args) > 0 {
+						value = consumeOne()
+					}
+					// Fill the config.Info with the value
+					if store := toConfig[ignored]; store != nil {
+						*store = value
+					}
+					keep = false
+					// break prevents us from reaching the --%s form when --%s= one matched
+					break
+				}
 			}
-			if !strings.Contains(arg, "=") {
-				ignoreNext = true
+			// If we already matched something to ignore, we do not need to process
+			// the remaining options
+			if !keep {
+				break
 			}
 		}
-		if !ignore {
-			newArgs = append(newArgs, arg)
+
+		if keep {
+			newArgs = append(newArgs, current)
 		}
 	}
-	return newArgs
+	return newArgs, usedConfig
 }
 
 func (e *Executor) submitRehearsals() ([]*pjapi.ProwJob, error) {

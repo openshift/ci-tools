@@ -9,7 +9,6 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/apimachinery/pkg/api/equality"
-	utildiff "k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
@@ -24,7 +23,6 @@ import (
 const (
 	logRepo       = "repo"
 	logJobName    = "job-name"
-	logDiffs      = "diffs"
 	logCiopConfig = "ciop-config"
 
 	// ConfigInRepoPath is the prow config path from release repo
@@ -35,11 +33,6 @@ const (
 	JobConfigInRepoPath = "ci-operator/jobs"
 	// CIOperatorConfigInRepoPath is the ci-operator config path from release repo
 	CIOperatorConfigInRepoPath = "ci-operator/config"
-
-	objectSpec      = ".Spec"
-	objectAgent     = ".Agent"
-	objectOptional  = ".Optional"
-	objectAlwaysRun = ".AlwaysRun"
 
 	chosenJob            = "Job has been chosen for rehearsal"
 	newCiopConfigMsg     = "New ci-operator config file"
@@ -110,19 +103,15 @@ func GetChangedPresubmits(prowMasterConfig, prowPRConfig *prowconfig.Config, log
 			if job.Agent == string(pjapi.KubernetesAgent) {
 				// If the agent was changed and is a kubernetes agent, just choose the job for rehearse.
 				if masterJob.Agent != job.Agent {
-					logFields[logDiffs] = convertToReadableDiff(masterJob.Agent, job.Agent, objectAgent)
 					logger.WithFields(logFields).Info(chosenJob)
 					ret.Add(repo, job)
 				} else if !equality.Semantic.DeepEqual(masterJob.Spec, job.Spec) {
-					logFields[logDiffs] = convertToReadableDiff(masterJob.Spec, job.Spec, objectSpec)
 					logger.WithFields(logFields).Info(chosenJob)
 					ret.Add(repo, job)
 				} else if masterJob.Optional && !job.Optional {
-					logFields[logDiffs] = convertToReadableDiff(masterJob.Optional, job.Optional, objectOptional)
 					logger.WithFields(logFields).Info(chosenJob)
 					ret.Add(repo, job)
 				} else if !masterJob.AlwaysRun && job.AlwaysRun {
-					logFields[logDiffs] = convertToReadableDiff(masterJob.AlwaysRun, job.AlwaysRun, objectAlwaysRun)
 					logger.WithFields(logFields).Info(chosenJob)
 					ret.Add(repo, job)
 				}
@@ -173,26 +162,6 @@ func GetChangedClusterJobs(prowMasterConfig, prowPRConfig *prowconfig.Config, lo
 	}
 
 	return presubmits, periodics
-}
-
-// Converts the multiline diff string, to one line human readable that
-// includes information about the object.
-// Example:
-//
-// object[0].Args[0]:
-//   a: "--artifact-dir=$(ARTIFACTS)"
-//   b: "--artifact-dir=$(TEST_ARTIFACTS)"
-//
-// 	converted to:
-//
-//  .Spec.Containers[0].Args[0]:   a: '--artifact-dir=$(ARTIFACTS)'   b: '--artifact-dir=$(TEST_ARTIFACTS)'
-//
-func convertToReadableDiff(a, b interface{}, objName string) string {
-	d := utildiff.ObjectReflectDiff(a, b)
-	d = strings.Replace(d, "\nobject", fmt.Sprintf(" %s", objName), -1)
-	d = strings.Replace(d, "\n", " ", -1)
-	d = strings.Replace(d, "\"", "'", -1)
-	return d
 }
 
 // PostsubmitInContext is a postsubmit with the org/repo#branch for which it will trigger
@@ -307,7 +276,7 @@ func GetChangedPeriodics(prowMasterConfig, prowPRConfig *prowconfig.Config, logg
 		if job.Agent == string(pjapi.KubernetesAgent) {
 			masterPeriodics := masterPeriodicsPerName[name]
 			if !equality.Semantic.DeepEqual(masterPeriodics.Spec, job.Spec) {
-				logger.WithFields(logrus.Fields{logJobName: job.Name, logDiffs: convertToReadableDiff(masterPeriodics.Spec, job.Spec, objectSpec)}).Info(chosenJob)
+				logger.WithFields(logrus.Fields{logJobName: job.Name}).Info(chosenJob)
 				changedPeriodics[job.Name] = job
 			}
 		}

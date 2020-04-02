@@ -499,26 +499,21 @@ func generateJobBase(name, prefix string, info *prowgenInfo, label jc.ProwgenLab
 }
 
 func generatePresubmitForTest(name string, info *prowgenInfo, label jc.ProwgenLabel, podSpec *kubeapi.PodSpec, rehearsable bool, pathAlias *string) *prowconfig.Presubmit {
-	if len(info.Variant) > 0 {
-		name = fmt.Sprintf("%s-%s", info.Variant, name)
-	}
+	shortName := info.Info.TestName(name)
 	base := generateJobBase(name, jobconfig.PresubmitPrefix, info, label, podSpec, rehearsable, pathAlias)
 	return &prowconfig.Presubmit{
 		JobBase:   base,
 		AlwaysRun: true,
 		Brancher:  prowconfig.Brancher{Branches: []string{info.Branch}},
 		Reporter: prowconfig.Reporter{
-			Context: fmt.Sprintf("ci/prow/%s", name),
+			Context: fmt.Sprintf("ci/prow/%s", shortName),
 		},
-		RerunCommand: prowconfig.DefaultRerunCommandFor(name),
-		Trigger:      prowconfig.DefaultTriggerFor(name),
+		RerunCommand: prowconfig.DefaultRerunCommandFor(shortName),
+		Trigger:      prowconfig.DefaultTriggerFor(shortName),
 	}
 }
 
 func generatePostsubmitForTest(name string, info *prowgenInfo, label jc.ProwgenLabel, podSpec *kubeapi.PodSpec, pathAlias *string) *prowconfig.Postsubmit {
-	if len(info.Variant) > 0 {
-		name = fmt.Sprintf("%s-%s", info.Variant, name)
-	}
 	base := generateJobBase(name, jobconfig.PostsubmitPrefix, info, label, podSpec, false, pathAlias)
 	return &prowconfig.Postsubmit{
 		JobBase:  base,
@@ -527,9 +522,6 @@ func generatePostsubmitForTest(name string, info *prowgenInfo, label jc.ProwgenL
 }
 
 func generatePeriodicForTest(name string, info *prowgenInfo, label jc.ProwgenLabel, podSpec *kubeapi.PodSpec, rehearsable bool, cron string, pathAlias *string) *prowconfig.Periodic {
-	if len(info.Variant) > 0 {
-		name = fmt.Sprintf("%s-%s", info.Variant, name)
-	}
 	base := generateJobBase(name, jobconfig.PeriodicPrefix, info, label, podSpec, rehearsable, nil)
 	// periodics are not associated with a repo per se, but we can add in an
 	// extra ref so that periodics which want to access the repo tha they are

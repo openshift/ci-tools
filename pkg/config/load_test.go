@@ -254,3 +254,62 @@ func TestInfo_ConfigMapName(t *testing.T) {
 		})
 	}
 }
+
+func TestInfo_JobName(t *testing.T) {
+	prefix := "le"
+	testName := "a-test"
+	testCases := []struct {
+		name     string
+		info     Info
+		expected string
+	}{
+		{
+			name:     "without variant",
+			info:     Info{Org: "org", Repo: "repo", Branch: "branch"},
+			expected: "le-ci-org-repo-branch-a-test",
+		},
+		{
+			name:     "with variant",
+			info:     Info{Org: "gro", Repo: "oper", Branch: "hcnarb", Variant: "also"},
+			expected: "le-ci-gro-oper-hcnarb-also-a-test",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := tc.info.JobName(prefix, testName)
+			if actual != tc.expected {
+				t.Errorf("%s: expected '%s', got '%s'", tc.name, tc.expected, actual)
+			}
+		})
+	}
+}
+
+func TestInfo_TestName(t *testing.T) {
+	testName := "a-test"
+	testCases := []struct {
+		name     string
+		info     Info
+		expected string
+	}{
+		{
+			name:     "without variant",
+			info:     Info{Org: "org", Repo: "repo", Branch: "branch"},
+			expected: "a-test",
+		},
+		{
+			name:     "with variant",
+			info:     Info{Org: "gro", Repo: "oper", Branch: "hcnarb", Variant: "also"},
+			expected: "also-a-test",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := tc.info.TestName(testName)
+			if actual != tc.expected {
+				t.Errorf("%s: expected '%s', got '%s'", tc.name, tc.expected, actual)
+			}
+		})
+	}
+}

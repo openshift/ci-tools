@@ -1011,7 +1011,7 @@ func TestConstructSecrets(t *testing.T) {
 					"a-id-3-2": "attachment-name-3-2-value",
 				},
 			),
-			expectedError: fmt.Errorf("failed to find field field-name-1 in item item-name-1"),
+			expectedError: fmt.Errorf("[failed to find field Pull Credentials in item quay.io, failed to find field field-name-1 in item item-name-1]"),
 		},
 		{
 			name:   "error: no such an attachment",
@@ -1089,14 +1089,27 @@ func TestConstructSecrets(t *testing.T) {
 					"a-id-3-2": "attachment-name-3-2-value",
 				},
 			),
-			expectedError: fmt.Errorf("failed to find attachment attachment-name-1 in item item-name-2"),
+			expectedError: fmt.Errorf("[failed to find attachment attachment-name-1 in item item-name-2, failed to find field Pull Credentials in item quay.io, failed to find password in item item-name-3]"),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual, acutalError := constructSecrets(tc.config, tc.bwClient)
-			equalError(t, tc.expectedError, acutalError)
+			actual, actualError := constructSecrets(tc.config, tc.bwClient)
+			equalError(t, tc.expectedError, actualError)
+			if actualError != nil {
+				return
+			}
+			for key := range actual {
+				sort.Slice(actual[key], func(i, j int) bool {
+					return actual[key][i].Name < actual[key][j].Name
+				})
+			}
+			for key := range tc.expected {
+				sort.Slice(tc.expected[key], func(i, j int) bool {
+					return tc.expected[key][i].Name < tc.expected[key][j].Name
+				})
+			}
 			equal(t, tc.expected, actual)
 		})
 	}

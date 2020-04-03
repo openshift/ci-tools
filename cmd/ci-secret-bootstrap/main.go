@@ -8,6 +8,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/ghodss/yaml"
 	"github.com/google/go-cmp/cmp"
@@ -18,6 +19,7 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/serializer/json"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/scheme"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -221,52 +223,88 @@ type secretConfig struct {
 
 func constructSecrets(config []secretConfig, bwClient bitwarden.Client) (map[string][]*coreapi.Secret, error) {
 	secretsMap := map[string][]*coreapi.Secret{}
-	for _, secretConfig := range config {
-		data := make(map[string][]byte)
-		var keys []string
-		for key := range secretConfig.From {
-			keys = append(keys, key)
-		}
-		sort.Strings(keys)
-		for _, key := range keys {
-			bwContext := secretConfig.From[key]
-			var value []byte
-			var err error
-			if bwContext.Field != "" {
-				value, err = bwClient.GetFieldOnItem(bwContext.BWItem, bwContext.Field)
-			} else if bwContext.Attachment != "" {
-				value, err = bwClient.GetAttachmentOnItem(bwContext.BWItem, bwContext.Attachment)
-			} else {
-				switch bwContext.Attribute {
-				case attributeTypePassword:
-					value, err = bwClient.GetPassword(bwContext.BWItem)
-				default:
-					// should never happen since we have validated the config
-					return nil, fmt.Errorf("invalid attribute: only the '%s' is supported, not %s", attributeTypePassword, bwContext.Attribute)
+	secretsMapLock := &sync.Mutex{}
+
+	var errs []error
+	errLock := &sync.Mutex{}
+
+	secretConfigWG := &sync.WaitGroup{}
+	for _, cfg := range config {
+		secretConfigWG.Add(1)
+
+		go func(secretConfig secretConfig) {
+			defer secretConfigWG.Done()
+
+			data := make(map[string][]byte)
+			dataLock := &sync.Mutex{}
+			var keys []string
+			for key := range secretConfig.From {
+				keys = append(keys, key)
+			}
+			sort.Strings(keys)
+
+			keyWG := &sync.WaitGroup{}
+			for _, key := range keys {
+				keyWG.Add(1)
+				go func(key string) {
+					defer keyWG.Done()
+					bwContext := secretConfig.From[key]
+					var value []byte
+					var err error
+					if bwContext.Field != "" {
+						value, err = bwClient.GetFieldOnItem(bwContext.BWItem, bwContext.Field)
+					} else if bwContext.Attachment != "" {
+						value, err = bwClient.GetAttachmentOnItem(bwContext.BWItem, bwContext.Attachment)
+					} else {
+						switch bwContext.Attribute {
+						case attributeTypePassword:
+							value, err = bwClient.GetPassword(bwContext.BWItem)
+						default:
+							// should never happen since we have validated the config
+							errLock.Lock()
+							errs = append(errs, fmt.Errorf("invalid attribute: only the '%s' is supported, not %s", attributeTypePassword, bwContext.Attribute))
+							errLock.Unlock()
+							return
+						}
+					}
+					if err != nil {
+						errLock.Lock()
+						errs = append(errs, err)
+						errLock.Unlock()
+						return
+					}
+					dataLock.Lock()
+					data[key] = value
+					dataLock.Unlock()
+				}(key)
+			}
+			keyWG.Wait()
+
+			for _, secretContext := range secretConfig.To {
+				if secretContext.Type == "" {
+					secretContext.Type = coreapi.SecretTypeOpaque
 				}
+				secret := &coreapi.Secret{
+					Data: data,
+					ObjectMeta: meta.ObjectMeta{
+						Name:      secretContext.Name,
+						Namespace: secretContext.Namespace,
+						Labels:    map[string]string{"ci.openshift.org/auto-managed": "true"},
+					},
+					Type: secretContext.Type,
+				}
+				secretsMapLock.Lock()
+				secretsMap[secretContext.Cluster] = append(secretsMap[secretContext.Cluster], secret)
+				secretsMapLock.Unlock()
 			}
-			if err != nil {
-				return nil, err
-			}
-			data[key] = value
-		}
-		for _, secretContext := range secretConfig.To {
-			if secretContext.Type == "" {
-				secretContext.Type = coreapi.SecretTypeOpaque
-			}
-			secret := &coreapi.Secret{
-				Data: data,
-				ObjectMeta: meta.ObjectMeta{
-					Name:      secretContext.Name,
-					Namespace: secretContext.Namespace,
-					Labels:    map[string]string{"ci.openshift.org/auto-managed": "true"},
-				},
-				Type: secretContext.Type,
-			}
-			secretsMap[secretContext.Cluster] = append(secretsMap[secretContext.Cluster], secret)
-		}
+		}(cfg)
 	}
-	return secretsMap, nil
+	secretConfigWG.Wait()
+
+	sort.Slice(errs, func(i, j int) bool {
+		return errs[i] != nil && errs[j] != nil && errs[i].Error() < errs[j].Error()
+	})
+	return secretsMap, utilerrors.NewAggregate(errs)
 }
 
 func updateSecrets(secretsGetters map[string]coreclientset.SecretsGetter, secretsMap map[string][]*coreapi.Secret, force bool) error {

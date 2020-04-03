@@ -17,7 +17,6 @@ import (
 	kubeapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/resource"
-	"k8s.io/apimachinery/pkg/util/diff"
 	v1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
 
@@ -27,6 +26,12 @@ import (
 )
 
 var update = flag.Bool("update", false, "update fixtures")
+
+var unexportedFields = []cmp.Option{
+	cmpopts.IgnoreUnexported(prowconfig.Presubmit{}),
+	cmpopts.IgnoreUnexported(prowconfig.Brancher{}),
+	cmpopts.IgnoreUnexported(prowconfig.RegexpChangeMatcher{}),
+}
 
 func TestGeneratePodSpec(t *testing.T) {
 	testSecret := &ciop.Secret{Name: "test-secret", MountPath: "/usr/local/test-secret"}
@@ -324,7 +329,7 @@ func TestGeneratePodSpec(t *testing.T) {
 			var podSpec *kubeapi.PodSpec
 			podSpec = generateCiOperatorPodSpec(tc.info, tc.secrets, tc.targets, tc.additionalArgs...)
 			if !equality.Semantic.DeepEqual(podSpec, tc.expected) {
-				t.Errorf("%s: expected PodSpec diff:\n%s", tc.description, diff.ObjectDiff(tc.expected, podSpec))
+				t.Errorf("%s: expected PodSpec diff:\n%s", tc.description, cmp.Diff(tc.expected, podSpec, unexportedFields...))
 			}
 		})
 	}
@@ -1193,7 +1198,7 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 	for _, tc := range tests {
 		postsubmit := generatePostsubmitForTest(tc.name, tc.repoInfo, jobconfig.Generated, nil, nil) // podSpec tested in TestGeneratePodSpec
 		if !equality.Semantic.DeepEqual(postsubmit, tc.expected) {
-			t.Errorf("expected postsubmit diff:\n%s", diff.ObjectDiff(tc.expected, postsubmit))
+			t.Errorf("expected postsubmit diff:\n%s", cmp.Diff(tc.expected, postsubmit, unexportedFields...))
 		}
 	}
 }
@@ -1381,18 +1386,9 @@ func TestGenerateJobs(t *testing.T) {
 		pruneForTests(jobConfig) // prune the fields that are tested in TestGeneratePre/PostsubmitForTest
 
 		if !equality.Semantic.DeepEqual(jobConfig, tc.expected) {
-			t.Errorf("testcase: %s\nexpected job config diff:\n%s", tc.id, compare(tc.expected, jobConfig))
+			t.Errorf("testcase: %s\nexpected job config diff:\n%s", tc.id, cmp.Diff(tc.expected, jobConfig, unexportedFields...))
 		}
 	}
-}
-
-func compare(a, b *prowconfig.JobConfig) string {
-	return cmp.Diff(
-		a, b,
-		cmpopts.IgnoreUnexported(prowconfig.Presubmit{}),
-		cmpopts.IgnoreUnexported(prowconfig.Brancher{}),
-		cmpopts.IgnoreUnexported(prowconfig.RegexpChangeMatcher{}),
-	)
 }
 
 func pruneForTests(jobConfig *prowconfig.JobConfig) {
@@ -1736,7 +1732,7 @@ func TestPruneStaleJobs(t *testing.T) {
 			}
 
 			if pruned := prune(tc.jobconfig); !reflect.DeepEqual(pruned, expected) {
-				t.Errorf("Pruned config differs:\n%s", diff.ObjectReflectDiff(expected, pruned))
+				t.Errorf("Pruned config differs:\n%s", cmp.Diff(expected, pruned, unexportedFields...))
 			}
 		})
 	}
@@ -1896,7 +1892,7 @@ func TestGenerateJobBase(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.testName, func(t *testing.T) {
 			if actual, expected := generateJobBase(testCase.name, testCase.prefix, testCase.info, testCase.label, testCase.podSpec, testCase.rehearsable, testCase.pathAlias), testCase.expected; !reflect.DeepEqual(actual, expected) {
-				t.Errorf("%s: got incorrect job base: %v", testCase.testName, diff.ObjectReflectDiff(actual, expected))
+				t.Errorf("%s: got incorrect job base: %v", testCase.testName, cmp.Diff(actual, expected, unexportedFields...))
 			}
 		})
 	}

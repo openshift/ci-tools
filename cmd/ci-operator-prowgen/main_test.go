@@ -17,7 +17,6 @@ import (
 	kubeapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/resource"
-	"k8s.io/apimachinery/pkg/util/diff"
 	v1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
 
@@ -27,6 +26,13 @@ import (
 )
 
 var update = flag.Bool("update", false, "update fixtures")
+
+var unexportedFields = []cmp.Option{
+	cmpopts.IgnoreUnexported(prowconfig.Presubmit{}),
+	cmpopts.IgnoreUnexported(prowconfig.Periodic{}),
+	cmpopts.IgnoreUnexported(prowconfig.Brancher{}),
+	cmpopts.IgnoreUnexported(prowconfig.RegexpChangeMatcher{}),
+}
 
 func TestGeneratePodSpec(t *testing.T) {
 	testSecret := &ciop.Secret{Name: "test-secret", MountPath: "/usr/local/test-secret"}
@@ -324,7 +330,7 @@ func TestGeneratePodSpec(t *testing.T) {
 			var podSpec *kubeapi.PodSpec
 			podSpec = generateCiOperatorPodSpec(tc.info, tc.secrets, tc.targets, tc.additionalArgs...)
 			if !equality.Semantic.DeepEqual(podSpec, tc.expected) {
-				t.Errorf("%s: expected PodSpec diff:\n%s", tc.description, diff.ObjectDiff(tc.expected, podSpec))
+				t.Errorf("%s: expected PodSpec diff:\n%s", tc.description, cmp.Diff(tc.expected, podSpec, unexportedFields...))
 			}
 		})
 	}
@@ -1072,30 +1078,33 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 	for _, tc := range tests {
 		podSpec := generatePodSpecOthers(tc.info, tc.release, &tc.test)
 		if !equality.Semantic.DeepEqual(podSpec, tc.expected) {
-			t.Errorf("expected PodSpec diff:\n%s", diff.ObjectDiff(tc.expected, podSpec))
+			t.Errorf("expected PodSpec diff:\n%s", cmp.Diff(tc.expected, podSpec, unexportedFields...))
 		}
 	}
 }
 
 func TestGeneratePresubmitForTest(t *testing.T) {
 	newTrue := true
-	standardJobLabels := map[string]string{
-		"ci-operator.openshift.io/prowgen-controlled": "true",
-		"pj-rehearse.openshift.io/can-be-rehearsed":   "true"}
 
 	tests := []struct {
-		name     string
+		description string
+
+		test     string
 		repoInfo *prowgenInfo
 		expected *prowconfig.Presubmit
 	}{{
-		name:     "testname",
-		repoInfo: &prowgenInfo{Info: config.Info{Org: "org", Repo: "repo", Branch: "branch"}},
+		description: "presubmit for standard test",
+		test:        "testname",
+		repoInfo:    &prowgenInfo{Info: config.Info{Org: "org", Repo: "repo", Branch: "branch"}},
 
 		expected: &prowconfig.Presubmit{
 			JobBase: prowconfig.JobBase{
-				Agent:  "kubernetes",
-				Labels: standardJobLabels,
-				Name:   "pull-ci-org-repo-branch-testname",
+				Agent: "kubernetes",
+				Labels: map[string]string{
+					"ci-operator.openshift.io/prowgen-controlled": "true",
+					"pj-rehearse.openshift.io/can-be-rehearsed":   "true",
+				},
+				Name: "pull-ci-org-repo-branch-testname",
 				UtilityConfig: prowconfig.UtilityConfig{
 					DecorationConfig: &v1.DecorationConfig{SkipCloning: &newTrue},
 					Decorate:         true,
@@ -1109,11 +1118,114 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 			RerunCommand: "/test testname",
 			Trigger:      `(?m)^/test( | .* )testname,?($|\s.*)`,
 		},
-	}}
+	},
+		{
+			description: "presubmit for a test in a variant config",
+			test:        "testname",
+			repoInfo:    &prowgenInfo{Info: config.Info{Org: "org", Repo: "repo", Branch: "branch", Variant: "also"}},
+
+			expected: &prowconfig.Presubmit{
+				JobBase: prowconfig.JobBase{
+					Agent: "kubernetes",
+					Labels: map[string]string{
+						"ci-operator.openshift.io/prowgen-controlled": "true",
+						"ci-operator.openshift.io/variant":            "also",
+						"pj-rehearse.openshift.io/can-be-rehearsed":   "true",
+					},
+					Name: "pull-ci-org-repo-branch-also-testname",
+					UtilityConfig: prowconfig.UtilityConfig{
+						DecorationConfig: &v1.DecorationConfig{SkipCloning: &newTrue},
+						Decorate:         true,
+					},
+				},
+				AlwaysRun: true,
+				Brancher:  prowconfig.Brancher{Branches: []string{"branch"}},
+				Reporter: prowconfig.Reporter{
+					Context: "ci/prow/also-testname",
+				},
+				RerunCommand: "/test also-testname",
+				Trigger:      `(?m)^/test( | .* )also-testname,?($|\s.*)`,
+			},
+		},
+	}
 	for _, tc := range tests {
-		presubmit := generatePresubmitForTest(tc.name, tc.repoInfo, jobconfig.Generated, nil, true, nil) // podSpec tested in generatePodSpec
+		presubmit := generatePresubmitForTest(tc.test, tc.repoInfo, jobconfig.Generated, nil, true, nil) // podSpec tested in generatePodSpec
 		if !equality.Semantic.DeepEqual(presubmit, tc.expected) {
-			t.Errorf("expected presubmit diff:\n%s", diff.ObjectDiff(tc.expected, presubmit))
+			t.Errorf("expected presubmit diff:\n%s", cmp.Diff(tc.expected, presubmit, unexportedFields...))
+		}
+	}
+}
+
+func TestGeneratePeriodicForTest(t *testing.T) {
+	newTrue := true
+
+	tests := []struct {
+		description string
+
+		test     string
+		repoInfo *prowgenInfo
+		expected *prowconfig.Periodic
+	}{{
+		description: "periodic for standard test",
+		test:        "testname",
+		repoInfo:    &prowgenInfo{Info: config.Info{Org: "org", Repo: "repo", Branch: "branch"}},
+
+		expected: &prowconfig.Periodic{
+			Cron: "@yearly",
+			JobBase: prowconfig.JobBase{
+				Agent: "kubernetes",
+				Labels: map[string]string{
+					"ci-operator.openshift.io/prowgen-controlled": "true",
+					"pj-rehearse.openshift.io/can-be-rehearsed":   "true",
+				},
+				Name: "periodic-ci-org-repo-branch-testname",
+				UtilityConfig: prowconfig.UtilityConfig{
+					DecorationConfig: &v1.DecorationConfig{SkipCloning: &newTrue},
+					Decorate:         true,
+					ExtraRefs: []v1.Refs{{
+						Org:     "org",
+						Repo:    "repo",
+						BaseRef: "branch",
+					}},
+				},
+			},
+		},
+	},
+		{
+			description: "periodic for a test in a variant config",
+			test:        "testname",
+			repoInfo:    &prowgenInfo{Info: config.Info{Org: "org", Repo: "repo", Branch: "branch", Variant: "also"}},
+			expected: &prowconfig.Periodic{
+				Cron: "@yearly",
+				JobBase: prowconfig.JobBase{
+					Agent: "kubernetes",
+					Labels: map[string]string{
+						"ci-operator.openshift.io/prowgen-controlled": "true",
+						"ci-operator.openshift.io/variant":            "also",
+						"pj-rehearse.openshift.io/can-be-rehearsed":   "true",
+					},
+					Name: "periodic-ci-org-repo-branch-also-testname",
+					UtilityConfig: prowconfig.UtilityConfig{
+						DecorationConfig: &v1.DecorationConfig{SkipCloning: &newTrue},
+						Decorate:         true,
+						ExtraRefs: []v1.Refs{{
+							Org:     "org",
+							Repo:    "repo",
+							BaseRef: "branch",
+						}},
+					},
+				},
+			},
+		},
+	}
+	for _, tc := range tests {
+		periodic := generatePeriodicForTest(tc.test, tc.repoInfo, jobconfig.Generated, nil, true, "@yearly", nil) // podSpec tested in generatePodSpec
+		// Periodic has unexported fields on which DeepEqual panics, so we need to compare member-wise
+		if !equality.Semantic.DeepEqual(periodic.JobBase, tc.expected.JobBase) {
+			t.Errorf("expected periodic diff:\n%s", cmp.Diff(tc.expected.JobBase, periodic.JobBase, unexportedFields...))
+		}
+		if periodic.Cron != tc.expected.Cron {
+			t.Errorf("expected periodic cron diff:\n%s", cmp.Diff(tc.expected.Cron, periodic.Cron, unexportedFields...))
 		}
 	}
 }
@@ -1193,7 +1305,7 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 	for _, tc := range tests {
 		postsubmit := generatePostsubmitForTest(tc.name, tc.repoInfo, jobconfig.Generated, nil, nil) // podSpec tested in TestGeneratePodSpec
 		if !equality.Semantic.DeepEqual(postsubmit, tc.expected) {
-			t.Errorf("expected postsubmit diff:\n%s", diff.ObjectDiff(tc.expected, postsubmit))
+			t.Errorf("expected postsubmit diff:\n%s", cmp.Diff(tc.expected, postsubmit, unexportedFields...))
 		}
 	}
 }
@@ -1381,18 +1493,9 @@ func TestGenerateJobs(t *testing.T) {
 		pruneForTests(jobConfig) // prune the fields that are tested in TestGeneratePre/PostsubmitForTest
 
 		if !equality.Semantic.DeepEqual(jobConfig, tc.expected) {
-			t.Errorf("testcase: %s\nexpected job config diff:\n%s", tc.id, compare(tc.expected, jobConfig))
+			t.Errorf("testcase: %s\nexpected job config diff:\n%s", tc.id, cmp.Diff(tc.expected, jobConfig, unexportedFields...))
 		}
 	}
-}
-
-func compare(a, b *prowconfig.JobConfig) string {
-	return cmp.Diff(
-		a, b,
-		cmpopts.IgnoreUnexported(prowconfig.Presubmit{}),
-		cmpopts.IgnoreUnexported(prowconfig.Brancher{}),
-		cmpopts.IgnoreUnexported(prowconfig.RegexpChangeMatcher{}),
-	)
 }
 
 func pruneForTests(jobConfig *prowconfig.JobConfig) {
@@ -1736,7 +1839,7 @@ func TestPruneStaleJobs(t *testing.T) {
 			}
 
 			if pruned := prune(tc.jobconfig); !reflect.DeepEqual(pruned, expected) {
-				t.Errorf("Pruned config differs:\n%s", diff.ObjectReflectDiff(expected, pruned))
+				t.Errorf("Pruned config differs:\n%s", cmp.Diff(expected, pruned, unexportedFields...))
 			}
 		})
 	}
@@ -1800,7 +1903,7 @@ func TestGenerateJobBase(t *testing.T) {
 			label:    jobconfig.Generated,
 			podSpec:  &kubeapi.PodSpec{Containers: []kubeapi.Container{{Name: "test"}}},
 			expected: prowconfig.JobBase{
-				Name:  "pull-ci-org-repo-branch-test",
+				Name:  "pull-ci-org-repo-branch-whatever-test",
 				Agent: "kubernetes",
 				Labels: map[string]string{
 					"ci-operator.openshift.io/prowgen-controlled": "true",
@@ -1819,7 +1922,7 @@ func TestGenerateJobBase(t *testing.T) {
 			podSpec:   &kubeapi.PodSpec{Containers: []kubeapi.Container{{Name: "test"}}},
 			pathAlias: &path,
 			expected: prowconfig.JobBase{
-				Name:  "pull-ci-org-repo-branch-test",
+				Name:  "pull-ci-org-repo-branch-whatever-test",
 				Agent: "kubernetes",
 				Labels: map[string]string{
 					"ci-operator.openshift.io/prowgen-controlled": "true",
@@ -1896,7 +1999,7 @@ func TestGenerateJobBase(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.testName, func(t *testing.T) {
 			if actual, expected := generateJobBase(testCase.name, testCase.prefix, testCase.info, testCase.label, testCase.podSpec, testCase.rehearsable, testCase.pathAlias), testCase.expected; !reflect.DeepEqual(actual, expected) {
-				t.Errorf("%s: got incorrect job base: %v", testCase.testName, diff.ObjectReflectDiff(actual, expected))
+				t.Errorf("%s: got incorrect job base: %v", testCase.testName, cmp.Diff(actual, expected, unexportedFields...))
 			}
 		})
 	}

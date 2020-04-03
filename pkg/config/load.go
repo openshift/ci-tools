@@ -91,8 +91,19 @@ func (i *Info) IsComplete() error {
 	return nil
 }
 
+// TestName returns a short name of a test defined in this file, including
+// variant, if present
+func (i *Info) TestName(testName string) string {
+	if i.Variant == "" {
+		return testName
+	}
+	return fmt.Sprintf("%s-%s", i.Variant, testName)
+}
+
+// JobName returns a full name of a job corresponding to a test defined in this
+// file, including variant, if present
 func (i *Info) JobName(prefix, name string) string {
-	return fmt.Sprintf("%s-ci-%s-%s-%s-%s", prefix, i.Org, i.Repo, i.Branch, name)
+	return fmt.Sprintf("%s-ci-%s-%s-%s-%s", prefix, i.Org, i.Repo, i.Branch, i.TestName(name))
 }
 
 // Basename returns the unique name for this file in the config

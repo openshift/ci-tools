@@ -85,7 +85,7 @@ test_signal() {
     secret-wrapper --dry-run sleep 1d 2> "${ERR}" &
     pid=$!
     if ! timeout 1s sh -c \
-        'until pgrep --count --parent "$1" sleep > /dev/null ; do :; done' \
+        'until pgrep -P "$1" sleep > /dev/null ; do :; done' \
         sh "${pid}"
     then
         kill "${pid}"

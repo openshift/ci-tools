@@ -13,7 +13,7 @@ trap 'rm -rf ${WORKDIR}' EXIT
 
 cd "$WORKDIR"
 # copy config to tmpdir to allow tester to modify config
-cp -ar "$ROOTDIR"/test/repo-init-integration/input/* .
+cp -a "$ROOTDIR"/test/repo-init-integration/input/* .
 
 # this test case will copy-cat origin
 inputs=(

@@ -18,7 +18,6 @@ import (
 	"github.com/GoogleCloudPlatform/testgrid/pb/config"
 	jc "github.com/openshift/ci-tools/pkg/jobconfig"
 	"github.com/sirupsen/logrus"
-	prowconfig "k8s.io/test-infra/prow/config"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/yaml"
@@ -158,37 +157,24 @@ type release struct {
 	} `json:"verify"`
 }
 
-var reVersion = regexp.MustCompile(`^(\d+\.\d+)\.\d+-0\.`)
+var reVersion = regexp.MustCompile(`-(\d+\.\d+)(-|$)`)
 
 // This tool is intended to make the process of maintaining TestGrid dashboards for
 // release-gating and release-informing tests simple.
 //
-// We read the release controller's configuration for all of the release candidates
-// being tested and auto-generate TestGrid configuration for the jobs involved,
-// partitioning them by which release they are using (OKD or OCP), which version they
-// run for and whether or not they are informing or blocking.
+// We read all jobs that are annotated for the grid. The release controller's configuration
+// is used to default those roles but they can be overriden per job. We partition by overall
+// type (blocking, informing, broken), version or generic (generic have no version), and by
+// release type (ocp or okd). If the job is blocking on a release definition it will be
+// upgraded from informing to blocking if the job is set to informing.
 func main() {
 	o := gatherOptions()
 	if err := o.Validate(); err != nil {
 		logrus.Fatalf("Invalid options: %v", err)
 	}
 
-	informingPeriodics := make(map[string]prowconfig.Periodic)
-	jobConfig, err := jc.ReadFromDir(o.prowJobConfigDir)
-	if err != nil {
-		logrus.WithError(err).Fatalf("Failed to load Prow jobs %s", o.prowJobConfigDir)
-	}
-	for _, p := range jobConfig.Periodics {
-		if p.Labels["ci.openshift.io/release-type"] == "informing" {
-			informingPeriodics[p.Name] = p
-		}
-	}
-
-	unique := sets.NewString()
-	dashboards := make(map[string]*dashboard)
-	genericInforming := genericDashboardFor("informing")
-	dashboards[genericInforming.Name] = genericInforming
-
+	// find the default type for jobs referenced by the release controllers
+	configuredJobs := make(map[string]string)
 	if err := filepath.Walk(o.releaseConfigDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -206,80 +192,99 @@ func main() {
 			return fmt.Errorf("could not unmarshal release controller config at %s: %v", path, err)
 		}
 
-		var stream string
-		switch {
-		case strings.HasSuffix(releaseConfig.Name, ".ci") || strings.HasSuffix(releaseConfig.Name, ".nightly") || strings.HasPrefix(releaseConfig.Name, "stable-4."):
-			stream = "ocp"
-		case strings.HasSuffix(releaseConfig.Name, ".okd"):
-			stream = "okd"
-		default:
-			logrus.Infof("release is not recognized: %s", releaseConfig.Name)
-			return nil
-		}
-		m := reVersion.FindStringSubmatch(releaseConfig.Name)
-		if len(m) == 0 {
-			logrus.Infof("release is not in X.Y.Z form: %s", releaseConfig.Name)
-			return nil
-		}
-		version := m[1]
-
-		blocking := dashboardFor(stream, version, "blocking")
-		if existing, ok := dashboards[blocking.Name]; ok {
-			blocking = existing
-		} else {
-			dashboards[blocking.Name] = blocking
-		}
-		informing := dashboardFor(stream, version, "informing")
-		if existing, ok := dashboards[informing.Name]; ok {
-			informing = existing
-		} else {
-			dashboards[informing.Name] = informing
-		}
-
 		for _, job := range releaseConfig.Verify {
-			if unique.Has(job.ProwJob.Name) {
-				continue
+			existing := configuredJobs[job.ProwJob.Name]
+			var dashboardType string
+			switch {
+			case job.Upgrade:
+				dashboardType = "generic-informing"
+			case job.Optional:
+				if existing == "generic-informing" || existing == "blocking" {
+					continue
+				}
+				dashboardType = "informing"
+			default:
+				if existing == "generic-informing" {
+					continue
+				}
+				dashboardType = "blocking"
 			}
-			unique.Insert(job.ProwJob.Name)
-
-			delete(informingPeriodics, job.ProwJob.Name)
-			if job.Upgrade {
-				genericInforming.add(job.ProwJob.Name, job.ProwJob.Annotations["description"], 0)
-				continue
-			}
-			if job.Optional {
-				informing.add(job.ProwJob.Name, job.ProwJob.Annotations["description"], 0)
-			} else {
-				blocking.add(job.ProwJob.Name, job.ProwJob.Annotations["description"], 0)
-			}
+			configuredJobs[job.ProwJob.Name] = dashboardType
 		}
-		for _, p := range informingPeriodics {
-			if p.Labels["job-release"] != version {
+		return nil
+	}); err != nil {
+		logrus.WithError(err).Fatal("Could not process input configurations.")
+	}
+
+	// find and assign all jobs to the dashboards
+	dashboards := make(map[string]*dashboard)
+	jobConfig, err := jc.ReadFromDir(o.prowJobConfigDir)
+	if err != nil {
+		logrus.WithError(err).Fatalf("Failed to load Prow jobs %s", o.prowJobConfigDir)
+	}
+	for _, p := range jobConfig.Periodics {
+		name := p.Name
+		calculateDays := len(p.Cron) > 0 || len(p.Interval) > 0
+
+		var dashboardType string
+		switch label := p.Labels["ci.openshift.io/release-type"]; label {
+		case "informing", "blocking", "broken", "generic-informing":
+			dashboardType = label
+			if label == "informing" && configuredJobs[p.Name] == "blocking" {
+				dashboardType = "blocking"
+				calculateDays = false
+			}
+		default:
+			label, ok := configuredJobs[name]
+			if !ok {
 				continue
 			}
-			switch stream {
-			case "okd":
-				if !strings.Contains(p.Name, "-openshift-okd-") {
-					continue
-				}
-			case "ocp":
-				// preparing to rename the jobs from -openshift-origin- to -openshift-ci-, remove -origin-
-				// after that rename
-				if !strings.Contains(p.Name, "-openshift-origin-") && !strings.Contains(p.Name, "-openshift-ci-") && !strings.Contains(p.Name, "-openshift-ocp-") {
-					continue
-				}
-			}
+			dashboardType = label
+			calculateDays = false
+		}
 
-			if unique.Has(p.Name) {
+		var current *dashboard
+		switch dashboardType {
+		case "generic-informing":
+			current = genericDashboardFor("informing")
+		default:
+			var stream string
+			switch {
+			case strings.Contains(name, "-ocp-") || strings.Contains(name, "-origin-"):
+				stream = "ocp"
+			case strings.Contains(name, "-okd-"):
+				stream = "okd"
+			case strings.HasPrefix(name, "promote-release-openshift-"):
+				// TODO fix these jobs to have a consistent name
+				stream = "ocp"
+			default:
+				logrus.Warningf("unrecognized release type in job: %s", name)
 				continue
 			}
-			unique.Insert(p.Name)
+			version := p.Labels["job-release"]
+			if len(version) == 0 {
+				m := reVersion.FindStringSubmatch(name)
+				if len(m) == 0 {
+					logrus.Warningf("release is not in -X.Y- form: %s", name)
+					continue
+				}
+				version = m[1]
+			}
 
+			current = dashboardFor(stream, version, dashboardType)
+		}
+		if existing, ok := dashboards[current.Name]; ok {
+			current = existing
+		} else {
+			dashboards[current.Name] = current
+		}
+
+		daysOfResults := int32(0)
+		if calculateDays {
 			// for infrequently run jobs (at 12h or 24h intervals) we'd prefer to have more history than just the default
 			// 7-10 days (specified by the default testgrid config), so try to set number of days of results so that we
 			// see at least 100 entries, capping out at 2 months (60 days).
 			desiredResults := 100
-			daysOfResults := int32(0)
 			if len(p.Interval) > 0 {
 				if interval, err := time.ParseDuration(p.Interval); err == nil && interval > 0 && interval < (14*24*time.Hour) {
 					daysOfResults = int32(math.Round(float64(time.Duration(desiredResults)*interval) / float64(24*time.Hour)))
@@ -291,12 +296,8 @@ func main() {
 					}
 				}
 			}
-			informing.add(p.Name, p.Annotations["description"], daysOfResults)
-			delete(informingPeriodics, p.Name)
 		}
-		return nil
-	}); err != nil {
-		logrus.WithError(err).Fatal("Could not process input configurations.")
+		current.add(p.Name, p.Annotations["description"], daysOfResults)
 	}
 
 	// first, update the overall list of dashboards that exist for the redhat group

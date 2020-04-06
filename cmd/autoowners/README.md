@@ -4,9 +4,11 @@ This utility updates the `OWNERS` files from remote OpenShift repositories.
 
 ```console
 $ ./autoowners -h
-Usage of ./autoowners:
+Usage of autoowners:
   -assign string
         The github username or group name to assign the created pull request to. (default "openshift/openshift-team-developer-productivity-test-platform")
+  -config-subdirs string
+        The comma-separated list of sub-directories where configuration is stored. (default "jobs,config,templates")
   -debug-mode
         Enable the DEBUG level of logs if true.
   -dry-run
@@ -19,17 +21,28 @@ Usage of ./autoowners:
         GitHub's API endpoint (may differ for enterprise). (default https://api.github.com)
   -github-graphql-endpoint string
         GitHub GraphQL API endpoint (may differ for enterprise). (default "https://api.github.com/graphql")
+  -github-host string
+        GitHub's default host (may differ for enterprise) (default "github.com")
   -github-login string
         The GitHub username to use. (default "openshift-bot")
+  -github-org string
+        The GitHub org to use. (default "openshift")
+  -github-repo string
+        The GitHub repo to use. (default "release")
+  -github-team string
+        The GitHub team to use. (default "openshift/openshift-team-developer-productivity-test-platform")
   -github-token-file string
         DEPRECATED: use -github-token-path instead.  -github-token-file may be removed anytime after 2019-01-01.
   -github-token-path string
         Path to the file containing the GitHub OAuth secret.
   -ignore-repo value
         The repo for which syncing OWNERS file is disabled.
+  -self-approve approved
+        Self-approve the PR by adding the approved and `lgtm` labels. Requires write permissions on the repo.
   -target-dir string
         The directory containing the target repo.
-
+  -target-subdir string
+        The sub-directory of the target repo where the configurations are stored. (default "ci-operator")
 ```
 
 Upstream repositories are calculated from `ci-operator/jobs/{organization}/{repository}`.

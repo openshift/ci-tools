@@ -24,7 +24,7 @@ type cliClient struct {
 func newCliClient(username, password string, addSecret func(s string)) (Client, error) {
 	return newCliClientWithRun(username, password, addSecret, func(args ...string) ([]byte, error) {
 		// bw-password is protected, session in args is not
-		logrus.WithField("args", args).Info("running bw command ...")
+		logrus.WithField("args", args).Debug("running bw command ...")
 		out, err := exec.Command("bw", args...).CombinedOutput()
 		if err != nil {
 			logrus.WithError(err).Errorf("bw cmd failed: %v", string(out))

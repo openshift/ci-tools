@@ -605,6 +605,11 @@ to configure that test to run on a schedule, instead of as a pre-submit:
 
 <code>ci-operator</code> configuration:
 {{ yamlSyntax (index . "ciOperatorPeriodicTestConfig") }}
+
+<p>
+Note that the build farms used to execute jobs run on UTC time, so time-of-day based
+<code>cron</cron> schedules must be set with that in mind.
+</p>
 `
 
 const ciOperatorInputConfig = `base_images:

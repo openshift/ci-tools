@@ -44,7 +44,7 @@ func gatherOptions() options {
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually submit rehearsal jobs to Prow")
-	fs.BoolVar(&o.noFail, "no-fail", true, "Whether to actually end unsuccessfuly when something breaks")
+	fs.BoolVar(&o.noFail, "no-fail", false, "Whether to actually end unsuccessfuly when something breaks")
 	fs.BoolVar(&o.local, "local", false, "Whether this is a local execution or part of a CI job")
 
 	fs.StringVar(&o.debugLogPath, "debug-log", "", "Alternate file for debug output, defaults to stderr")

@@ -141,7 +141,7 @@ func (o *options) validateCompletedOptions() error {
 		return fmt.Errorf("--bw-password-file was empty")
 	}
 	if len(o.config) == 0 {
-		return fmt.Errorf("--config was empty")
+		return fmt.Errorf("no secrets found for --cluster=%s", o.cluster)
 	}
 	toMap := map[string]map[string]string{}
 	for i, secretConfig := range o.config {
@@ -326,7 +326,7 @@ func updateSecrets(secretsGetters map[string]coreclientset.SecretsGetter, secret
 				if !force && !equality.Semantic.DeepEqual(secret.Data, existingSecret.Data) {
 					logrus.Errorf("actual %s:%s/%s differs the expected:\n%s", cluster, secret.Namespace, secret.Name,
 						cmp.Diff(bytesMapToStringMap(secret.Data), bytesMapToStringMap(existingSecret.Data)))
-					return fmt.Errorf("found unsynchronized secret: %s:%s/%s", cluster, secret.Namespace, secret.Name)
+					return fmt.Errorf("secret %s:%s/%s needs updating in place, use --force to do so", cluster, secret.Namespace, secret.Name)
 				}
 				if _, err := secretsGetter.Secrets(secret.Namespace).Update(secret); err != nil {
 					return err

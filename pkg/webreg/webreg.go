@@ -900,9 +900,7 @@ in a step will also be present at that location.
 <p>
 A chain is a registry component that specifies multiple registry components to be run.
 Components are run in the order that they are written. Components specified by a chain
-can be either steps and other chains. If any component inside a chain fails
-to execute, the chain stops and the following components are not run. Example of a
-chain:
+can be either steps and other chains. Example of a chain:
 </p>
 
 {{ yamlSyntax (index . "chainExample") }}

@@ -141,7 +141,11 @@ func (o *options) validateCompletedOptions() error {
 		return fmt.Errorf("--bw-password-file was empty")
 	}
 	if len(o.config) == 0 {
-		return fmt.Errorf("no secrets found for --cluster=%s", o.cluster)
+		msg := "no secrets found to sync"
+		if o.cluster != "" {
+			msg = msg + " for --cluster=" + o.cluster
+		}
+		return fmt.Errorf(msg)
 	}
 	toMap := map[string]map[string]string{}
 	for i, secretConfig := range o.config {
@@ -395,11 +399,12 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get Bitwarden client.")
 	}
-	defer func() {
+	logrus.RegisterExitHandler(func() {
 		if _, err := bwClient.Logout(); err != nil {
 			logrus.WithError(err).Fatal("Failed to logout.")
 		}
-	}()
+	})
+	defer logrus.Exit(0)
 
 	secretsMap, err := constructSecrets(o.config, bwClient)
 	if err != nil {
@@ -415,4 +420,5 @@ func main() {
 			logrus.WithError(err).Fatalf("Failed to update secrets.")
 		}
 	}
+	logrus.Info("Updated secrets.")
 }

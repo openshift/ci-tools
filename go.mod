@@ -10,7 +10,6 @@ replace (
 )
 
 require (
-	cloud.google.com/go/storage v1.0.0
 	github.com/GoogleCloudPlatform/testgrid v0.0.7
 	github.com/SierraSoftworks/sentry-go v1.1.1
 	github.com/alecthomas/chroma v0.7.1
@@ -32,8 +31,6 @@ require (
 	github.com/shurcooL/githubv4 v0.0.0-20191102174205-af46314aec7b
 	github.com/sirupsen/logrus v1.4.2
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
-	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
-	google.golang.org/api v0.10.0
 	k8s.io/api v0.17.4
 	k8s.io/apimachinery v0.17.4
 	k8s.io/client-go v11.0.1-0.20190805182717-6502b5e7b1b5+incompatible

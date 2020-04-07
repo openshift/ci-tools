@@ -29,7 +29,6 @@ type options struct {
 	noFail       bool
 	local        bool
 	debugLogPath string
-	metricsPath  string
 
 	noTemplates       bool
 	noRegistry        bool
@@ -49,7 +48,6 @@ func gatherOptions() options {
 
 	fs.StringVar(&o.debugLogPath, "debug-log", "", "Alternate file for debug output, defaults to stderr")
 	fs.StringVar(&o.releaseRepoPath, "candidate-path", "", "Path to a openshift/release working copy with a revision to be tested")
-	fs.StringVar(&o.metricsPath, "metrics-output", "", "Path to a file where JSON metrics will be dumped after rehearsal")
 
 	fs.BoolVar(&o.noTemplates, "no-templates", false, "If true, do not attempt to compare templates")
 	fs.BoolVar(&o.noRegistry, "no-registry", false, "If true, do not attempt to compare step registry content")
@@ -115,9 +113,6 @@ func rehearseMain() int {
 		return gracefulExit(o.noFail, misconfigurationOutput)
 	}
 
-	metrics := rehearse.NewMetrics(o.metricsPath)
-	defer metrics.Dump()
-
 	var jobSpec *pjdwapi.JobSpec
 	if o.local {
 		if jobSpec, err = config.NewLocalJobSpec(o.releaseRepoPath); err != nil {
@@ -130,7 +125,6 @@ func rehearseMain() int {
 			return gracefulExit(o.noFail, misconfigurationOutput)
 		}
 	}
-	metrics.JobSpec = jobSpec
 
 	prFields := logrus.Fields{prowgithub.OrgLogField: jobSpec.Refs.Org, prowgithub.RepoLogField: jobSpec.Refs.Repo}
 	logger := logrus.WithFields(prFields)
@@ -189,7 +183,6 @@ func rehearseMain() int {
 		data, jobs := diffs.GetChangedCiopConfigs(masterConfig.CiOperator, prConfig.CiOperator, logger)
 		changedCiopConfigData = data
 		affectedJobs = jobs
-		metrics.RecordChangedCiopConfigs(changedCiopConfigData)
 	}
 
 	var changedRegistrySteps registry.NodeByName
@@ -223,7 +216,6 @@ func rehearseMain() int {
 	}
 	if len(changedRegistrySteps) != 0 {
 		logger.WithField("registry", changedRegistrySteps).Info("registry steps changed")
-		metrics.RecordChangedRegistryElements(changedRegistrySteps)
 	}
 
 	var changedTemplates []config.ConfigMapSource
@@ -236,7 +228,6 @@ func rehearseMain() int {
 	}
 	if len(changedTemplates) != 0 {
 		logger.WithField("templates", changedTemplates).Info("templates changed")
-		metrics.RecordChangedTemplates(changedTemplates)
 	}
 
 	var changedClusterProfiles []config.ConfigMapSource
@@ -249,7 +240,6 @@ func rehearseMain() int {
 	}
 	if len(changedClusterProfiles) != 0 {
 		logger.WithField("profiles", changedClusterProfiles).Info("cluster profiles changed")
-		metrics.RecordChangedClusterProfiles(changedClusterProfiles)
 	}
 
 	if o.local {
@@ -297,42 +287,28 @@ func rehearseMain() int {
 	loggers := rehearse.Loggers{Job: logger, Debug: debugLogger.WithField(prowgithub.PrLogField, prNumber)}
 
 	changedPeriodics := diffs.GetChangedPeriodics(masterConfig.Prow, prConfig.Prow, logger)
-	metrics.RecordChangedPeriodics(changedPeriodics)
-	metrics.RecordPeriodicsOpportunity(changedPeriodics, "changed-periodic")
-
 	toRehearse := diffs.GetChangedPresubmits(masterConfig.Prow, prConfig.Prow, logger)
-	metrics.RecordChangedPresubmits(toRehearse)
-	metrics.RecordPresubmitsOpportunity(toRehearse, "direct-change")
 
 	clusterChangedPresubmits, clusterChangedPeriodics := diffs.GetChangedClusterJobs(masterConfig.Prow, prConfig.Prow, logger)
 	changedPeriodics.AddAll(clusterChangedPeriodics)
 	toRehearse.AddAll(clusterChangedPresubmits)
-	metrics.RecordChangedPeriodics(clusterChangedPeriodics)
-	metrics.RecordChangedPresubmits(clusterChangedPresubmits)
-	metrics.RecordPeriodicsOpportunity(clusterChangedPeriodics, "changed-cluster")
-	metrics.RecordPresubmitsOpportunity(clusterChangedPresubmits, "changed-cluster")
 
 	presubmitsWithChangedCiopConfigs := diffs.GetPresubmitsForCiopConfigs(prConfig.Prow, changedCiopConfigData, affectedJobs)
-	metrics.RecordPresubmitsOpportunity(presubmitsWithChangedCiopConfigs, "ci-operator-config-change")
 	toRehearse.AddAll(presubmitsWithChangedCiopConfigs)
 
-	presubmitsWithChangedTemplates := rehearse.AddRandomJobsForChangedTemplates(changedTemplates, toRehearse, prConfig.Prow.JobConfig.PresubmitsStatic, loggers, prNumber)
-	metrics.RecordPresubmitsOpportunity(presubmitsWithChangedTemplates, "templates-change")
+	presubmitsWithChangedTemplates := rehearse.AddRandomJobsForChangedTemplates(changedTemplates, toRehearse, prConfig.Prow.JobConfig.PresubmitsStatic, loggers)
 	toRehearse.AddAll(presubmitsWithChangedTemplates)
 
 	toRehearseClusterProfiles := diffs.GetPresubmitsForClusterProfiles(prConfig.Prow, changedClusterProfiles)
-	metrics.RecordPresubmitsOpportunity(toRehearseClusterProfiles, "cluster-profile-change")
 	toRehearse.AddAll(toRehearseClusterProfiles)
 
 	resolver := registry.NewResolver(refs, chains, workflows)
-	jobConfigurer := rehearse.NewJobConfigurer(prConfig.CiOperator, resolver, prNumber, loggers, changedTemplates, changedClusterProfiles, jobSpec.Refs)
 	presubmitsWithChangedRegistry := rehearse.AddRandomJobsForChangedRegistry(changedRegistrySteps, graph, prConfig.Prow.JobConfig.PresubmitsStatic, filepath.Join(o.releaseRepoPath, diffs.CIOperatorConfigInRepoPath), loggers)
-	metrics.RecordPresubmitsOpportunity(presubmitsWithChangedRegistry, "registry-change")
 	toRehearse.AddAll(presubmitsWithChangedRegistry)
 
+	jobConfigurer := rehearse.NewJobConfigurer(prConfig.CiOperator, resolver, prNumber, loggers, changedTemplates, changedClusterProfiles, jobSpec.Refs)
 	presubmitsToRehearse := jobConfigurer.ConfigurePresubmitRehearsals(toRehearse)
 	periodicsToRehearse := jobConfigurer.ConfigurePeriodicRehearsals(changedPeriodics)
-	metrics.RecordActual(presubmitsToRehearse, periodicsToRehearse)
 
 	rehearsals := len(presubmitsToRehearse) + len(periodicsToRehearse)
 	if rehearsals == 0 {
@@ -361,7 +337,6 @@ func rehearseMain() int {
 
 	executor := rehearse.NewExecutor(presubmitsToRehearse, prNumber, o.releaseRepoPath, jobSpec.Refs, o.dryRun, loggers, pjclient)
 	success, err := executor.ExecuteJobs()
-	metrics.Execution = executor.Metrics
 	if err != nil {
 		logger.WithError(err).Error("Failed to rehearse jobs")
 		return gracefulExit(o.noFail, rehearseFailureOutput)

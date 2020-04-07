@@ -461,7 +461,7 @@ func (jc *JobConfigurer) ConvertPeriodicsToPresubmits(periodics []prowconfig.Per
 // AddRandomJobsForChangedTemplates finds jobs from the PR config that are using a specific template with a specific cluster type.
 // The job selection is done by iterating in an unspecified order, which avoids picking the same job
 // So if a template will be changed, find the jobs that are using a template in combination with the `aws`,`openstack`,`gcs` and `libvirt` cluster types.
-func AddRandomJobsForChangedTemplates(templates []config.ConfigMapSource, toBeRehearsed config.Presubmits, prConfigPresubmits map[string][]prowconfig.Presubmit, loggers Loggers, prNumber int) config.Presubmits {
+func AddRandomJobsForChangedTemplates(templates []config.ConfigMapSource, toBeRehearsed config.Presubmits, prConfigPresubmits map[string][]prowconfig.Presubmit, loggers Loggers) config.Presubmits {
 	clusterTypes := getClusterTypes(prConfigPresubmits)
 	rehearsals := make(config.Presubmits)
 
@@ -716,8 +716,6 @@ func replaceClusterProfiles(volumes []v1.Volume, profiles []config.ConfigMapSour
 
 // Executor holds all the information needed for the jobs to be executed.
 type Executor struct {
-	Metrics *ExecutionMetrics
-
 	dryRun     bool
 	presubmits []*prowconfig.Presubmit
 	prNumber   int
@@ -731,8 +729,6 @@ type Executor struct {
 func NewExecutor(presubmits []*prowconfig.Presubmit, prNumber int, prRepo string, refs *pjapi.Refs,
 	dryRun bool, loggers Loggers, pjclient pj.ProwJobInterface) *Executor {
 	return &Executor{
-		Metrics: &ExecutionMetrics{},
-
 		dryRun:     dryRun,
 		presubmits: presubmits,
 		prNumber:   prNumber,
@@ -816,11 +812,9 @@ func (e *Executor) waitForJobs(jobs sets.String, selector string) (bool, error) 
 			switch prowJob.Status.State {
 			case pjapi.FailureState, pjapi.AbortedState, pjapi.ErrorState:
 				e.loggers.Job.WithFields(fields).Error("Job failed")
-				e.Metrics.FailedRehearsals = append(e.Metrics.FailedRehearsals, prowJob.Spec.Job)
 				success = false
 			case pjapi.SuccessState:
 				e.loggers.Job.WithFields(fields).Info("Job succeeded")
-				e.Metrics.PassedRehearsals = append(e.Metrics.FailedRehearsals, prowJob.Spec.Job)
 			default:
 				continue
 			}
@@ -898,7 +892,6 @@ func (e *Executor) submitRehearsals() ([]*pjapi.ProwJob, error) {
 			errors = append(errors, err)
 			continue
 		}
-		e.Metrics.SubmittedRehearsals = append(e.Metrics.SubmittedRehearsals, created.Spec.Job)
 		e.loggers.Job.WithFields(pjutil.ProwJobFields(created)).Info("Submitted rehearsal prowjob")
 		pjs = append(pjs, created)
 	}

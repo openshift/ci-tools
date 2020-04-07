@@ -80,6 +80,7 @@ func TestValidateOptions(t *testing.T) {
 		{
 			name: "basic case",
 			given: options{
+				logLevel:       "info",
 				bwUser:         "username",
 				bwPasswordPath: "/tmp/bw-password",
 				configPath:     "/tmp/config",
@@ -88,6 +89,7 @@ func TestValidateOptions(t *testing.T) {
 		{
 			name: "empty bw user",
 			given: options{
+				logLevel:       "info",
 				bwPasswordPath: "/tmp/bw-password",
 				configPath:     "/tmp/config",
 			},
@@ -96,6 +98,7 @@ func TestValidateOptions(t *testing.T) {
 		{
 			name: "empty bw user password path",
 			given: options{
+				logLevel:   "info",
 				bwUser:     "username",
 				configPath: "/tmp/config",
 			},
@@ -104,6 +107,7 @@ func TestValidateOptions(t *testing.T) {
 		{
 			name: "empty config path",
 			given: options{
+				logLevel:       "info",
 				bwUser:         "username",
 				bwPasswordPath: "/tmp/bw-password",
 			},
@@ -393,6 +397,7 @@ func TestCompleteOptions(t *testing.T) {
 		{
 			name: "basic case",
 			given: options{
+				logLevel:       "info",
 				bwUser:         "username",
 				bwPasswordPath: bwPasswordPath,
 				configPath:     configPath,
@@ -405,6 +410,7 @@ func TestCompleteOptions(t *testing.T) {
 		{
 			name: "missing context in kubeconfig",
 			given: options{
+				logLevel:       "info",
 				bwUser:         "username",
 				bwPasswordPath: bwPasswordPath,
 				configPath:     configWithTypoPath,
@@ -416,6 +422,7 @@ func TestCompleteOptions(t *testing.T) {
 		{
 			name: "only configured cluster is used",
 			given: options{
+				logLevel:       "info",
 				bwUser:         "username",
 				bwPasswordPath: bwPasswordPath,
 				configPath:     configPath,
@@ -429,6 +436,7 @@ func TestCompleteOptions(t *testing.T) {
 		{
 			name: "attribute is not password",
 			given: options{
+				logLevel:       "info",
 				bwUser:         "username",
 				bwPasswordPath: bwPasswordPath,
 				configPath:     configWithNonPasswordAttributePath,
@@ -468,6 +476,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 		{
 			name: "basic case",
 			given: options{
+				logLevel:   "info",
 				bwPassword: "topSecret",
 				config:     defaultConfig,
 			},
@@ -484,11 +493,17 @@ func TestValidateCompletedOptions(t *testing.T) {
 		{
 			name:     "empty config",
 			given:    options{bwPassword: "topSecret"},
-			expected: fmt.Errorf("--config was empty"),
+			expected: fmt.Errorf("no secrets found to sync"),
+		},
+		{
+			name:     "empty config with cluster filter",
+			given:    options{bwPassword: "topSecret", cluster: "cluster"},
+			expected: fmt.Errorf("no secrets found to sync for --cluster=cluster"),
 		},
 		{
 			name: "empty to",
 			given: options{
+				logLevel:   "info",
 				bwPassword: "topSecret",
 				config: []secretConfig{
 					{
@@ -506,6 +521,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 		{
 			name: "empty from",
 			given: options{
+				logLevel:   "info",
 				bwPassword: "topSecret",
 				config: []secretConfig{
 					{},
@@ -516,6 +532,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 		{
 			name: "empty key",
 			given: options{
+				logLevel:   "info",
 				bwPassword: "topSecret",
 				config: []secretConfig{
 					{
@@ -540,6 +557,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 		{
 			name: "empty bw item",
 			given: options{
+				logLevel:   "info",
 				bwPassword: "topSecret",
 				config: []secretConfig{
 					{
@@ -563,6 +581,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 		{
 			name: "empty field and empty attachment",
 			given: options{
+				logLevel:   "info",
 				bwPassword: "topSecret",
 				config: []secretConfig{
 					{
@@ -586,6 +605,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 		{
 			name: "non-empty field and non-empty attachment",
 			given: options{
+				logLevel:   "info",
 				bwPassword: "topSecret",
 				config: []secretConfig{
 					{
@@ -611,6 +631,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 		{
 			name: "empty cluster",
 			given: options{
+				logLevel:   "info",
 				bwPassword: "topSecret",
 				config: []secretConfig{
 					{
@@ -634,6 +655,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 		{
 			name: "empty namespace",
 			given: options{
+				logLevel:   "info",
 				bwPassword: "topSecret",
 				config: []secretConfig{
 					{
@@ -657,6 +679,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 		{
 			name: "empty name",
 			given: options{
+				logLevel:   "info",
 				bwPassword: "topSecret",
 				config: []secretConfig{
 					{
@@ -680,6 +703,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 		{
 			name: "conflicting secrets in same TO",
 			given: options{
+				logLevel:   "info",
 				bwPassword: "topSecret",
 				config: []secretConfig{
 					{
@@ -720,6 +744,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 		{
 			name: "conflicting secrets in different TOs",
 			given: options{
+				logLevel:   "info",
 				bwPassword: "topSecret",
 				config: []secretConfig{
 					{
@@ -1243,7 +1268,7 @@ func TestUpdateSecrets(t *testing.T) {
 					},
 				},
 			},
-			expected: fmt.Errorf("found unsynchronized secret: default:namespace-1/prod-secret-1"),
+			expected: fmt.Errorf("secret default:namespace-1/prod-secret-1 needs updating in place, use --force to do so"),
 			expectedSecretsOnDefault: []coreapi.Secret{
 				{
 					ObjectMeta: metav1.ObjectMeta{

@@ -37,6 +37,7 @@ type options struct {
 	bwPasswordPath string
 	cluster        string
 	force          bool
+	logLevel       string
 
 	bwPassword     string
 	secretsGetters map[string]coreclientset.SecretsGetter
@@ -53,6 +54,7 @@ func parseOptions() options {
 	fs.StringVar(&o.bwPasswordPath, "bw-password-path", "", "Path to a password file to access BitWarden.")
 	fs.StringVar(&o.cluster, "cluster", "", "If set, only provision secrets for this cluster")
 	fs.BoolVar(&o.force, "force", false, "If true, update the secrets even if existing one differs from Bitwarden items instead of existing with error. Default false.")
+	fs.StringVar(&o.logLevel, "log-level", "info", fmt.Sprintf("Log level is one of %v.", logrus.AllLevels))
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Errorf("cannot parse args: %q", os.Args[1:])
 	}
@@ -60,6 +62,11 @@ func parseOptions() options {
 }
 
 func (o *options) validateOptions() error {
+	level, err := logrus.ParseLevel(o.logLevel)
+	if err != nil {
+		return fmt.Errorf("invalid log level specified: %v", err)
+	}
+	logrus.SetLevel(level)
 	if o.bwUser == "" {
 		return fmt.Errorf("--bw-user is empty")
 	}
@@ -101,7 +108,7 @@ func (o *options) completeOptions(secrets *sets.String) error {
 
 		for j, secretContext := range secretConfig.To {
 			if o.cluster != "" && o.cluster != secretContext.Cluster {
-				logrus.WithField("cluster", o.cluster).Info("Skipping provisioniong of secret for cluster that does not match the one configured via --cluster")
+				logrus.WithFields(logrus.Fields{"target-cluster": o.cluster, "secret-cluster": secretContext.Cluster}).Debug("Skipping provisioniong of secret for cluster that does not match the one configured via --cluster")
 
 				continue
 			}
@@ -134,7 +141,11 @@ func (o *options) validateCompletedOptions() error {
 		return fmt.Errorf("--bw-password-file was empty")
 	}
 	if len(o.config) == 0 {
-		return fmt.Errorf("--config was empty")
+		msg := "no secrets found to sync"
+		if o.cluster != "" {
+			msg = msg + " for --cluster=" + o.cluster
+		}
+		return fmt.Errorf(msg)
 	}
 	toMap := map[string]map[string]string{}
 	for i, secretConfig := range o.config {
@@ -310,7 +321,7 @@ func constructSecrets(config []secretConfig, bwClient bitwarden.Client) (map[str
 func updateSecrets(secretsGetters map[string]coreclientset.SecretsGetter, secretsMap map[string][]*coreapi.Secret, force bool) error {
 	for cluster, secrets := range secretsMap {
 		for _, secret := range secrets {
-			logrus.Infof("handling secret: %s:%s/%s", cluster, secret.Namespace, secret.Name)
+			logrus.Debugf("handling secret: %s:%s/%s", cluster, secret.Namespace, secret.Name)
 			secretsGetter := secretsGetters[cluster]
 			if existingSecret, err := secretsGetter.Secrets(secret.Namespace).Get(secret.Name, meta.GetOptions{}); err == nil {
 				if secret.Type != existingSecret.Type {
@@ -319,15 +330,17 @@ func updateSecrets(secretsGetters map[string]coreclientset.SecretsGetter, secret
 				if !force && !equality.Semantic.DeepEqual(secret.Data, existingSecret.Data) {
 					logrus.Errorf("actual %s:%s/%s differs the expected:\n%s", cluster, secret.Namespace, secret.Name,
 						cmp.Diff(bytesMapToStringMap(secret.Data), bytesMapToStringMap(existingSecret.Data)))
-					return fmt.Errorf("found unsynchronized secret: %s:%s/%s", cluster, secret.Namespace, secret.Name)
+					return fmt.Errorf("secret %s:%s/%s needs updating in place, use --force to do so", cluster, secret.Namespace, secret.Name)
 				}
 				if _, err := secretsGetter.Secrets(secret.Namespace).Update(secret); err != nil {
 					return err
 				}
+				logrus.Debugf("updated secret: %s:%s/%s", cluster, secret.Namespace, secret.Name)
 			} else if kerrors.IsNotFound(err) {
 				if _, err := secretsGetter.Secrets(secret.Namespace).Create(secret); err != nil {
 					return err
 				}
+				logrus.Debugf("created secret: %s:%s/%s", cluster, secret.Namespace, secret.Name)
 			} else {
 				return err
 			}
@@ -386,11 +399,12 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get Bitwarden client.")
 	}
-	defer func() {
+	logrus.RegisterExitHandler(func() {
 		if _, err := bwClient.Logout(); err != nil {
 			logrus.WithError(err).Fatal("Failed to logout.")
 		}
-	}()
+	})
+	defer logrus.Exit(0)
 
 	secretsMap, err := constructSecrets(o.config, bwClient)
 	if err != nil {
@@ -406,4 +420,5 @@ func main() {
 			logrus.WithError(err).Fatalf("Failed to update secrets.")
 		}
 	}
+	logrus.Info("Updated secrets.")
 }

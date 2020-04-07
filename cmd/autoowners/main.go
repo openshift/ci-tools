@@ -250,7 +250,7 @@ func pullOwners(gc github.Client, configRootDir string, blacklist sets.String, s
 		return err
 	}
 
-	cleaner, err := ownersCleanerFactory(gc)
+	cleaner, err := ownersCleanerFactory(githubOrg, gc)
 	if err != nil {
 		return fmt.Errorf("failed to construct owners cleaner: %w", err)
 	}
@@ -431,7 +431,7 @@ func main() {
 	matchTitle := "Sync OWNERS files"
 	title := getTitle(matchTitle, time.Now().Format(time.RFC1123))
 	if err := bumper.GitCommitAndPush(fmt.Sprintf("https://%s:%s@github.com/%s/%s.git", o.githubLogin,
-		string(secretAgent.GetTokenGenerator(o.GitHubOptions.TokenPath)()), o.githubLogin, githubRepo),
+		string(secretAgent.GetTokenGenerator(o.GitHubOptions.TokenPath)()), o.githubLogin, o.githubRepo),
 		remoteBranch, o.gitName, o.gitEmail, title, stdout, stderr); err != nil {
 		logrus.WithError(err).Fatal("Failed to push changes.")
 	}
@@ -441,7 +441,7 @@ func main() {
 		logrus.Infof("Self-aproving PR by adding the %q and %q labels", labels.Approved, labels.LGTM)
 		labelsToAdd = append(labelsToAdd, labels.Approved, labels.LGTM)
 	}
-	if err := bumper.UpdatePullRequestWithLabels(gc, githubOrg, githubRepo, title,
+	if err := bumper.UpdatePullRequestWithLabels(gc, o.githubOrg, o.githubRepo, title,
 		getBody(directories, o.assign), matchTitle, o.githubLogin+":"+remoteBranch, "master", labelsToAdd); err != nil {
 		logrus.WithError(err).Fatal("PR creation failed.")
 	}
@@ -453,7 +453,7 @@ type githubOrgMemberLister interface {
 	ListOrgMembers(org, role string) ([]github.TeamMember, error)
 }
 
-func ownersCleanerFactory(ghc githubOrgMemberLister) (ownersCleaner, error) {
+func ownersCleanerFactory(githubOrg string, ghc githubOrgMemberLister) (ownersCleaner, error) {
 	members, err := ghc.ListOrgMembers(githubOrg, "all")
 	if err != nil {
 		return nil, fmt.Errorf("listOrgMembers failed: %w", err)

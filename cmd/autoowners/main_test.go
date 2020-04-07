@@ -463,7 +463,7 @@ func TestOwnersCleanerFactory(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		cleaner, err := ownersCleanerFactory(fakeGithubOrgMemberLister(tc.orgMembers))
+		cleaner, err := ownersCleanerFactory(githubOrg, fakeGithubOrgMemberLister(tc.orgMembers))
 		if err != nil {
 			t.Fatalf("failed to construct cleaner: %v", err)
 		}

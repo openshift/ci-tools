@@ -13,7 +13,7 @@ import (
 
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 
-	"k8s.io/test-infra/prow/errorutil"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/util"
@@ -85,7 +85,7 @@ func (o *options) run() error {
 	if err := createSecret(o.client, o.name, o.dstPath, o.dry); err != nil {
 		errs = append(errs, fmt.Errorf("failed to create/update secret: %v", err))
 	}
-	return errorutil.NewAggregate(errs...)
+	return utilerrors.NewAggregate(errs)
 }
 
 func loadClient(namespace string) (coreclientset.SecretInterface, error) {

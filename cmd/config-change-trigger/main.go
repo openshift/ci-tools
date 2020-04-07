@@ -3,15 +3,17 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/openshift/ci-tools/pkg/util"
 	"os"
+
+	"github.com/openshift/ci-tools/pkg/util"
 
 	"github.com/sirupsen/logrus"
 
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/rest"
-	"k8s.io/test-infra/prow/apis/prowjobs/v1"
+
+	v1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/config/secret"
-	"k8s.io/test-infra/prow/errorutil"
 	"k8s.io/test-infra/prow/flagutil"
 	prowgithub "k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/pjutil"
@@ -131,7 +133,7 @@ func main() {
 		logger.Info("Started ProwJob")
 	}
 	if len(errs) > 0 {
-		logger.WithError(errorutil.NewAggregate(errs...)).Fatal("failed to start all changed images postsubmits")
+		logger.WithError(utilerrors.NewAggregate(errs)).Fatal("failed to start all changed images postsubmits")
 	}
 }
 

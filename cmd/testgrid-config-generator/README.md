@@ -16,11 +16,34 @@ release version.
 New jobs should start in `broken` until they have successive runs, then they can graduate to `informing` or `blocking`. A job does not have
 to be referenced by the release controller to be informing - the release controller simply ensures it is run once per release build.
 
-```console
-$ testgrid-config-generator -testgrid-config path/to/k8s.io/test-infra/config/testgrids/openshift -release-config path/to/openshift/release/core-services/release-controller/_releases -prow-jobs-dir path/to/openshift/release/ci-operator/jobs
-```
+Note: Go 1.13 is required.
 
-After running the tool, commit the `test-infra` changes and file a PR to land them.
+First build testgrid-config-generator:
+```console
+$ pwd
+path/to/github.com/openshift/ci-tools/cmd/testgrid-config-generator
+$ ls
+main.go  README.md
+$ go version
+go version go1.13 linux/amd64
+$ go build .
+go: downloading ...
+...
+$ ls
+main.go  README.md  testgrid-config-generator
+```
+Now run testgrid-config-generator.  You must first clone: https://github.com/kubernetes/test-infra/ locally.
+```console
+$ testgrid-config-generator -testgrid-config path/to/github.com/kubernetes/test-infra/config/testgrids/openshift -release-config path/to/openshift/release/core-services/release-controller/_releases -prow-jobs-dir path/to/openshift/release/ci-operator/jobs
+```
+Verify that changes were made by checking your local `test-infra` repo. For example:
+```console
+$ cd path/to/github.com/kubernetes/test-infra/config/testgrids/openshift
+$ git status
+modified:   groups.yaml
+new file:   redhat-openshift-...
+```
+Commit the  changes and file a PR in https://github.com/kubernetes/test-infra/ to land them.
 
 [generic-informing]: https://testgrid.k8s.io/redhat-openshift-informing
 [release-controller-config]: https://github.com/openshift/release/tree/master/core-services/release-controller

@@ -12,8 +12,9 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/test-infra/prow/errorutil"
+
 	"k8s.io/test-infra/prow/interrupts"
 	"k8s.io/test-infra/prow/logrusutil"
 
@@ -479,7 +480,7 @@ func main() {
 		if err != nil {
 			syncErrors = append(syncErrors, err)
 		}
-		e := errorutil.NewAggregate(syncErrors...)
+		e := utilerrors.NewAggregate(syncErrors)
 		logrus.WithError(e).Fatal("There were failures during git content synchronization")
 	}
 }

@@ -16,65 +16,6 @@ import (
 	"k8s.io/test-infra/prow/logrusutil"
 )
 
-func TestIsAdminConfig(t *testing.T) {
-	testCases := []struct {
-		filename string
-		expected bool
-	}{
-		{
-			filename: "admin_01_something_rbac.yaml",
-			expected: true,
-		},
-		{
-			filename: "admin_something_rbac.yaml",
-			expected: true,
-		},
-		// Negative
-		{filename: "cfg_01_something"},
-		{filename: "admin_01_something_rbac"},
-		{filename: "admin_01_something_rbac.yml"},
-		{filename: "admin.yaml"},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.filename, func(t *testing.T) {
-			is := isAdminConfig(tc.filename)
-			if is != tc.expected {
-				t.Errorf("expected %t, got %t", tc.expected, is)
-			}
-		})
-	}
-}
-
-func TestIsStandardConfig(t *testing.T) {
-	testCases := []struct {
-		filename string
-		expected bool
-	}{
-		{
-			filename: "01_something_rbac.yaml",
-			expected: true,
-		},
-		{
-			filename: "something_rbac.yaml",
-			expected: true,
-		},
-		// Negative
-		{filename: "admin_01_something.yaml"},
-		{filename: "cfg_01_something_rbac"},
-		{filename: "cfg_01_something_rbac.yml"},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.filename, func(t *testing.T) {
-			is := isStandardConfig(tc.filename)
-			if is != tc.expected {
-				t.Errorf("expected %t, got %t", tc.expected, is)
-			}
-		})
-	}
-}
-
 func TestMakeOcCommand(t *testing.T) {
 	testCases := []struct {
 		name string

@@ -29,7 +29,8 @@ const (
 	githubOrg   = "openshift"
 	githubRepo  = "release"
 	githubLogin = "openshift-bot"
-	githubTeam  = "openshift/openshift-team-developer-productivity-test-platform"
+
+	defaultPRAssignee = "openshift/openshift-team-developer-productivity-test-platform"
 
 	configSubDirs      = "jobs,config,templates"
 	targetSubDirectory = "ci-operator"
@@ -51,15 +52,14 @@ func (orgRepo orgRepo) repoString() string {
 	return fmt.Sprintf("%s/%s", orgRepo.Organization, orgRepo.Repository)
 }
 
-func loadRepos(configRootDir string, blacklist sets.String, sourceSubDirs []string, githubOrg string, githubRepo string) ([]orgRepo, error) {
+func loadRepos(configRootDir string, blacklist sets.String, configSubDirs []string, githubOrg string, githubRepo string) ([]orgRepo, error) {
 	var orgRepos []orgRepo
-	configSubDirectories := make([]string, 0, len(sourceSubDirs))
-	for _, sourceSubDir := range sourceSubDirs {
+	configSubDirectories := make([]string, 0, len(configSubDirs))
+	for _, sourceSubDir := range configSubDirs {
 		configSubDirectories = append(configSubDirectories, filepath.Join(configRootDir, sourceSubDir))
 	}
-	jobs := configSubDirectories[0]
 
-	orgDirs, err := ioutil.ReadDir(jobs)
+	orgDirs, err := ioutil.ReadDir(configSubDirectories[0])
 	if err != nil {
 		return nil, err
 	}
@@ -69,12 +69,12 @@ func loadRepos(configRootDir string, blacklist sets.String, sourceSubDirs []stri
 		}
 		logrus.WithField("orgDir.Name()", orgDir.Name()).Debug("loading orgDir ...")
 		org := filepath.Base(orgDir.Name())
-		repoDirs, err := ioutil.ReadDir(filepath.Join(jobs, orgDir.Name()))
+		repoDirs, err := ioutil.ReadDir(filepath.Join(configSubDirectories[0], orgDir.Name()))
 		if err != nil {
 			return nil, err
 		}
 		for _, repoDir := range repoDirs {
-			if !orgDir.IsDir() {
+			if !repoDir.IsDir() {
 				continue
 			}
 			repo := repoDir.Name()
@@ -244,8 +244,8 @@ func writeOwners(orgRepo orgRepo, httpResult httpResult, cleaner ownersCleaner) 
 	return nil
 }
 
-func pullOwners(gc github.Client, configRootDir string, blacklist sets.String, sourceSubDirs []string, githubOrg string, githubRepo string) error {
-	orgRepos, err := loadRepos(configRootDir, blacklist, sourceSubDirs, githubOrg, githubRepo)
+func pullOwners(gc github.Client, configRootDir string, blacklist sets.String, configSubDirs []string, githubOrg string, githubRepo string) error {
+	orgRepos, err := loadRepos(configRootDir, blacklist, configSubDirs, githubOrg, githubRepo)
 	if err != nil {
 		return err
 	}
@@ -280,13 +280,12 @@ type options struct {
 	githubLogin        string
 	githubOrg          string
 	githubRepo         string
-	githubTeam         string
 	gitName            string
 	gitEmail           string
 	assign             string
 	targetDir          string
-	configSubDirs      string
 	targetSubDirectory string
+	configSubDirs      flagutil.Strings
 	blacklist          flagutil.Strings
 	debugMode          bool
 	selfApprove        bool
@@ -299,15 +298,14 @@ func parseOptions() options {
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually create the pull request with github client")
 	fs.StringVar(&o.githubLogin, "github-login", githubLogin, "The GitHub username to use.")
-	fs.StringVar(&o.githubOrg, "github-org", githubOrg, "The GitHub org to use.")
-	fs.StringVar(&o.githubRepo, "github-repo", githubRepo, "The GitHub repo to use.")
-	fs.StringVar(&o.githubTeam, "github-team", githubTeam, "The GitHub team to use.")
+	fs.StringVar(&o.githubOrg, "org", githubOrg, "The downstream GitHub org name.")
+	fs.StringVar(&o.githubRepo, "repo", githubRepo, "The downstream GitHub repository name.")
 	fs.StringVar(&o.gitName, "git-name", "", "The name to use on the git commit. Requires --git-email. If not specified, uses the system default.")
 	fs.StringVar(&o.gitEmail, "git-email", "", "The email to use on the git commit. Requires --git-name. If not specified, uses the system default.")
-	fs.StringVar(&o.assign, "assign", githubTeam, "The github username or group name to assign the created pull request to.")
+	fs.StringVar(&o.assign, "assign", defaultPRAssignee, "The github username or group name to assign the created pull request to.")
 	fs.StringVar(&o.targetDir, "target-dir", "", "The directory containing the target repo.")
 	fs.StringVar(&o.targetSubDirectory, "target-subdir", targetSubDirectory, "The sub-directory of the target repo where the configurations are stored.")
-	fs.StringVar(&o.configSubDirs, "config-subdirs", configSubDirs, "The comma-separated list of sub-directories where configuration is stored.")
+	fs.Var(&o.configSubDirs, "config-subdir", "The sub-directory where configuration is stored. (Default list of directories: "+configSubDirs+")")
 	fs.Var(&o.blacklist, "ignore-repo", "The repo for which syncing OWNERS file is disabled.")
 	fs.BoolVar(&o.debugMode, "debug-mode", false, "Enable the DEBUG level of logs if true.")
 	fs.BoolVar(&o.selfApprove, "self-approve", false, "Self-approve the PR by adding the `approved` and `lgtm` labels. Requires write permissions on the repo.")
@@ -330,9 +328,6 @@ func validateOptions(o options) error {
 	}
 	if o.targetDir == "" {
 		return fmt.Errorf("--target-dir is mandatory")
-	}
-	if subDirs := strings.Split(o.configSubDirs, ","); len(subDirs) == 0 {
-		return fmt.Errorf("--config-subdirs needs to have at least one entry")
 	}
 	return o.GitHubOptions.Validate(o.dryRun)
 }
@@ -411,7 +406,11 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to change to root dir")
 	}
 
-	if err := pullOwners(gc, filepath.Join(o.targetDir, o.targetSubDirectory), sets.NewString(o.blacklist.Strings()...), strings.Split(o.configSubDirs, ","), o.githubOrg, o.githubRepo); err != nil {
+	var configSubDirectories = o.configSubDirs.Strings()
+	if len(o.configSubDirs.Strings()) == 0 {
+		configSubDirectories = strings.Split(configSubDirs, ",")
+	}
+	if err := pullOwners(gc, filepath.Join(o.targetDir, o.targetSubDirectory), sets.NewString(o.blacklist.Strings()...), configSubDirectories, o.githubOrg, o.githubRepo); err != nil {
 		logrus.WithError(err).Fatal("Error occurred when walking through the target dir.")
 	}
 

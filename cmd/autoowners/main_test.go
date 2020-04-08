@@ -181,7 +181,7 @@ func TestGetBody(t *testing.T) {
 
 /cc @openshift/openshift-team-developer-productivity-test-platform
 `
-	result := getBody([]string{"config/openshift/origin", "jobs/org/repo"}, githubTeam)
+	result := getBody([]string{"config/openshift/origin", "jobs/org/repo"}, defaultPRAssignee)
 
 	if expect != result {
 		t.Errorf("body '%s' differs from expected '%s'", result, expect)
@@ -507,7 +507,7 @@ func TestLoadRepos(t *testing.T) {
 			ConfigSubDirs: []string{"jobs", "config", "templates"},
 			GitHubOrg:     "openshift",
 			GitHubRepo:    "release",
-			BlackList:		sets.NewString("testdata/test2/templates/openshift/installer"),
+			BlackList:     sets.NewString("testdata/test2/templates/openshift/installer"),
 			ExpectedRepos: []orgRepo{
 				{
 					Directories: []string{

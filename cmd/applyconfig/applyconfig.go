@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
 
@@ -34,10 +33,6 @@ type options struct {
 }
 
 const (
-	standardLevel level = "standard"
-	adminLevel    level = "admin"
-	allLevel      level = "all"
-
 	ocApply   command = "apply"
 	ocProcess command = "process"
 )
@@ -45,18 +40,8 @@ const (
 const defaultAdminUser = "system:admin"
 
 func (l level) isValid() bool {
-	return l == standardLevel || l == adminLevel || l == allLevel
+	return l == "all"
 }
-
-func (l level) shouldApplyAdmin() bool {
-	return l == adminLevel || l == allLevel
-}
-
-func (l level) shouldApplyStandard() bool {
-	return l == standardLevel || l == allLevel
-}
-
-var adminConfig = regexp.MustCompile(`^admin_.+\.yaml$`)
 
 type nullableStringFlag struct {
 	val     string
@@ -87,7 +72,7 @@ func gatherOptions() *options {
 	opt.level = level(lvl)
 
 	if !opt.level.isValid() {
-		fmt.Fprintf(os.Stderr, "--level: must be one of [standard, admin, all]\n")
+		fmt.Fprintf(os.Stderr, "--level: must be one of [all]\n")
 		os.Exit(1)
 	}
 
@@ -98,16 +83,6 @@ func gatherOptions() *options {
 
 	return opt
 }
-
-func isAdminConfig(filename string) bool {
-	return adminConfig.MatchString(filename)
-}
-
-func isStandardConfig(filename string) bool {
-	return filepath.Ext(filename) == ".yaml" &&
-		!isAdminConfig(filename)
-}
-
 func makeOcCommand(cmd command, kubeConfig, context, path, user string, additionalArgs ...string) *exec.Cmd {
 	args := []string{string(cmd), "-f", path}
 	args = append(args, additionalArgs...)
@@ -241,25 +216,18 @@ func apply(kubeConfig, context, path, user string, dry bool) error {
 	return do.asGenericManifest()
 }
 
-type processFn func(name, path string) error
-
-func applyConfig(rootDir, cfgType string, process processFn) error {
+func applyConfig(rootDir string, o *options) error {
 	failures := false
 	if err := filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 
-		if info.IsDir() {
-			if strings.HasPrefix(info.Name(), "_") {
-				logrus.Infof("Skipping directory: %s", path)
-				return filepath.SkipDir
-			}
-			logrus.Infof("Applying %s config in directory: %s", cfgType, path)
-			return nil
+		if skip, err := fileFilter(info, path); skip || err != nil {
+			return err
 		}
 
-		if err := process(info.Name(), path); err != nil {
+		if err := apply(o.kubeConfig, o.context, path, o.user.val, !o.confirm); err != nil {
 			failures = true
 		}
 
@@ -271,10 +239,31 @@ func applyConfig(rootDir, cfgType string, process processFn) error {
 	}
 
 	if failures {
-		return fmt.Errorf("failed to apply admin config")
+		return fmt.Errorf("failed to apply config")
 	}
 
 	return nil
+}
+
+func fileFilter(info os.FileInfo, path string) (bool, error) {
+	if info.IsDir() {
+		if strings.HasPrefix(info.Name(), "_") {
+			logrus.Infof("Skipping directory: %s", path)
+			return false, filepath.SkipDir
+		}
+		logrus.Infof("Applying config in directory: %s", path)
+		return true, nil
+	}
+
+	if filepath.Ext(info.Name()) != ".yaml" {
+		return true, nil
+	}
+
+	if strings.HasPrefix(info.Name(), "_") {
+		return true, nil
+	}
+
+	return false, nil
 }
 
 type secretGetter struct {
@@ -307,43 +296,14 @@ func main() {
 	o := gatherOptions()
 	var hadErr bool
 
-	if o.level.shouldApplyAdmin() {
-		if !o.user.beenSet {
-			o.user.val = defaultAdminUser
-		}
-
-		f := func(name, path string) error {
-			if !isAdminConfig(name) {
-				return nil
-			}
-			return apply(o.kubeConfig, o.context, path, o.user.val, !o.confirm)
-		}
-
-		for _, dir := range o.directories.Strings() {
-			if err := applyConfig(dir, "admin", f); err != nil {
-				hadErr = true
-				logrus.WithError(err).Error("There were failures while applying admin config")
-			}
-		}
+	if !o.user.beenSet {
+		o.user.val = defaultAdminUser
 	}
 
-	if o.level.shouldApplyStandard() {
-		f := func(name, path string) error {
-			if !isStandardConfig(name) {
-				return nil
-			}
-			if strings.HasPrefix(name, "_") {
-				return nil
-			}
-
-			return apply(o.kubeConfig, o.context, path, o.user.val, !o.confirm)
-		}
-
-		for _, dir := range o.directories.Strings() {
-			if err := applyConfig(dir, "standard", f); err != nil {
-				hadErr = true
-				logrus.WithError(err).Error("There were failures while applying standard config")
-			}
+	for _, dir := range o.directories.Strings() {
+		if err := applyConfig(dir, o); err != nil {
+			hadErr = true
+			logrus.WithError(err).Error("There were failures while applying config")
 		}
 	}
 

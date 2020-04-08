@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -33,6 +34,10 @@ type options struct {
 }
 
 const (
+	standardLevel level = "standard"
+	adminLevel    level = "admin"
+	allLevel      level = "all"
+
 	ocApply   command = "apply"
 	ocProcess command = "process"
 )
@@ -40,8 +45,18 @@ const (
 const defaultAdminUser = "system:admin"
 
 func (l level) isValid() bool {
-	return l == "all"
+	return l == standardLevel || l == adminLevel || l == allLevel
 }
+
+func (l level) shouldApplyAdmin() bool {
+	return l == adminLevel || l == allLevel
+}
+
+func (l level) shouldApplyStandard() bool {
+	return l == standardLevel || l == allLevel
+}
+
+var adminConfig = regexp.MustCompile(`^admin_.+\.yaml$`)
 
 type nullableStringFlag struct {
 	val     string
@@ -72,7 +87,7 @@ func gatherOptions() *options {
 	opt.level = level(lvl)
 
 	if !opt.level.isValid() {
-		fmt.Fprintf(os.Stderr, "--level: must be one of [all]\n")
+		fmt.Fprintf(os.Stderr, "--level: must be one of [standard, admin, all]\n")
 		os.Exit(1)
 	}
 
@@ -83,6 +98,16 @@ func gatherOptions() *options {
 
 	return opt
 }
+
+func isAdminConfig(filename string) bool {
+	return adminConfig.MatchString(filename)
+}
+
+func isStandardConfig(filename string) bool {
+	return filepath.Ext(filename) == ".yaml" &&
+		!isAdminConfig(filename)
+}
+
 func makeOcCommand(cmd command, kubeConfig, context, path, user string, additionalArgs ...string) *exec.Cmd {
 	args := []string{string(cmd), "-f", path}
 	args = append(args, additionalArgs...)
@@ -216,7 +241,9 @@ func apply(kubeConfig, context, path, user string, dry bool) error {
 	return do.asGenericManifest()
 }
 
-func applyConfig(rootDir string, o *options) error {
+type processFn func(name, path string) error
+
+func applyConfig(rootDir, cfgType string, process processFn) error {
 	failures := false
 	if err := filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -228,19 +255,11 @@ func applyConfig(rootDir string, o *options) error {
 				logrus.Infof("Skipping directory: %s", path)
 				return filepath.SkipDir
 			}
-			logrus.Infof("Applying config in directory: %s", path)
+			logrus.Infof("Applying %s config in directory: %s", cfgType, path)
 			return nil
 		}
 
-		if filepath.Ext(info.Name()) == ".yaml" {
-			return nil
-		}
-
-		if strings.HasPrefix(info.Name(), "_") {
-			return nil
-		}
-
-		if err := apply(o.kubeConfig, o.context, path, o.user.val, !o.confirm); err != nil {
+		if err := process(info.Name(), path); err != nil {
 			failures = true
 		}
 
@@ -252,7 +271,7 @@ func applyConfig(rootDir string, o *options) error {
 	}
 
 	if failures {
-		return fmt.Errorf("failed to apply config")
+		return fmt.Errorf("failed to apply admin config")
 	}
 
 	return nil
@@ -288,14 +307,43 @@ func main() {
 	o := gatherOptions()
 	var hadErr bool
 
-	if !o.user.beenSet {
-		o.user.val = defaultAdminUser
+	if o.level.shouldApplyAdmin() {
+		if !o.user.beenSet {
+			o.user.val = defaultAdminUser
+		}
+
+		f := func(name, path string) error {
+			if !isAdminConfig(name) {
+				return nil
+			}
+			return apply(o.kubeConfig, o.context, path, o.user.val, !o.confirm)
+		}
+
+		for _, dir := range o.directories.Strings() {
+			if err := applyConfig(dir, "admin", f); err != nil {
+				hadErr = true
+				logrus.WithError(err).Error("There were failures while applying admin config")
+			}
+		}
 	}
 
-	for _, dir := range o.directories.Strings() {
-		if err := applyConfig(dir, o); err != nil {
-			hadErr = true
-			logrus.WithError(err).Error("There were failures while applying config")
+	if o.level.shouldApplyStandard() {
+		f := func(name, path string) error {
+			if !isStandardConfig(name) {
+				return nil
+			}
+			if strings.HasPrefix(name, "_") {
+				return nil
+			}
+
+			return apply(o.kubeConfig, o.context, path, o.user.val, !o.confirm)
+		}
+
+		for _, dir := range o.directories.Strings() {
+			if err := applyConfig(dir, "standard", f); err != nil {
+				hadErr = true
+				logrus.WithError(err).Error("There were failures while applying standard config")
+			}
 		}
 	}
 

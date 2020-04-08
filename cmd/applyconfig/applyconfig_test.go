@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	templateapi "github.com/openshift/api/template/v1"
@@ -522,5 +524,61 @@ func TestCensoringFormatter(t *testing.T) {
 				t.Errorf("Expected '%s', got '%s'", tc.expected, string(censored))
 			}
 		})
+	}
+}
+
+type fileStat struct {
+	name  string
+	isDir bool
+}
+
+func (fs *fileStat) Name() string       { return fs.name }
+func (fs *fileStat) IsDir() bool        { return fs.isDir }
+func (fs *fileStat) Size() int64        { panic("not implemented") }
+func (fs *fileStat) Mode() os.FileMode  { panic("not implemented") }
+func (fs *fileStat) ModTime() time.Time { panic("not implemented") }
+func (fs *fileStat) Sys() interface{}   { panic("not implemented") }
+
+func TestFileFilter(t *testing.T) {
+	testCases := []struct {
+		name       string
+		file       *fileStat
+		expectSkip bool
+		expectErr  error
+	}{
+		{
+			name:       "dir is skipped",
+			file:       &fileStat{isDir: true},
+			expectSkip: true,
+		},
+		{
+			name:      "underscore dir yields filepath.SkipDir",
+			file:      &fileStat{name: "_dir", isDir: true},
+			expectErr: filepath.SkipDir,
+		},
+		{
+			name:       "not yaml is skipped",
+			file:       &fileStat{name: "readme.md"},
+			expectSkip: true,
+		},
+		{
+			name:       "underscore file is skipped",
+			file:       &fileStat{name: "_some_file.yaml"},
+			expectSkip: true,
+		},
+		{
+			name: "yaml is not skipped",
+			file: &fileStat{name: "manifest.yaml"},
+		},
+	}
+
+	for _, tc := range testCases {
+		skip, err := fileFilter(tc.file, "")
+		if err != tc.expectErr {
+			t.Errorf("expect err: %v, got err: %v", tc.expectErr, err)
+		}
+		if skip != tc.expectSkip {
+			t.Errorf("expect skip: %t, got skip: %t", tc.expectSkip, skip)
+		}
 	}
 }

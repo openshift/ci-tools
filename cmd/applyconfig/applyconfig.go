@@ -223,21 +223,8 @@ func applyConfig(rootDir string, o *options) error {
 			return err
 		}
 
-		if info.IsDir() {
-			if strings.HasPrefix(info.Name(), "_") {
-				logrus.Infof("Skipping directory: %s", path)
-				return filepath.SkipDir
-			}
-			logrus.Infof("Applying config in directory: %s", path)
-			return nil
-		}
-
-		if filepath.Ext(info.Name()) == ".yaml" {
-			return nil
-		}
-
-		if strings.HasPrefix(info.Name(), "_") {
-			return nil
+		if skip, err := fileFilter(info, path); skip || err != nil {
+			return err
 		}
 
 		if err := apply(o.kubeConfig, o.context, path, o.user.val, !o.confirm); err != nil {
@@ -256,6 +243,27 @@ func applyConfig(rootDir string, o *options) error {
 	}
 
 	return nil
+}
+
+func fileFilter(info os.FileInfo, path string) (bool, error) {
+	if info.IsDir() {
+		if strings.HasPrefix(info.Name(), "_") {
+			logrus.Infof("Skipping directory: %s", path)
+			return false, filepath.SkipDir
+		}
+		logrus.Infof("Applying config in directory: %s", path)
+		return true, nil
+	}
+
+	if filepath.Ext(info.Name()) != ".yaml" {
+		return true, nil
+	}
+
+	if strings.HasPrefix(info.Name(), "_") {
+		return true, nil
+	}
+
+	return false, nil
 }
 
 type secretGetter struct {

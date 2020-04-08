@@ -289,10 +289,6 @@ func rehearseMain() int {
 	changedPeriodics := diffs.GetChangedPeriodics(masterConfig.Prow, prConfig.Prow, logger)
 	toRehearse := diffs.GetChangedPresubmits(masterConfig.Prow, prConfig.Prow, logger)
 
-	clusterChangedPresubmits, clusterChangedPeriodics := diffs.GetChangedClusterJobs(masterConfig.Prow, prConfig.Prow, logger)
-	changedPeriodics.AddAll(clusterChangedPeriodics)
-	toRehearse.AddAll(clusterChangedPresubmits)
-
 	presubmitsWithChangedCiopConfigs := diffs.GetPresubmitsForCiopConfigs(prConfig.Prow, changedCiopConfigData, affectedJobs)
 	toRehearse.AddAll(presubmitsWithChangedCiopConfigs)
 

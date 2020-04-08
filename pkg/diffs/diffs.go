@@ -114,6 +114,9 @@ func GetChangedPresubmits(prowMasterConfig, prowPRConfig *prowconfig.Config, log
 				} else if !masterJob.AlwaysRun && job.AlwaysRun {
 					logger.WithFields(logFields).Info(chosenJob)
 					ret.Add(repo, job)
+				} else if masterJob.Cluster != job.Cluster {
+					logger.WithFields(logFields).Info(chosenJob)
+					ret.Add(repo, job)
 				}
 			}
 		}
@@ -136,32 +139,6 @@ func getJobsByRepoAndName(presubmits config.Presubmits) map[string]map[string]pr
 		jobsByRepo[repo] = pm
 	}
 	return jobsByRepo
-}
-
-// GetChangedClusterJobs returns presubmits and periodics that have had their cluster field changed.
-func GetChangedClusterJobs(prowMasterConfig, prowPRConfig *prowconfig.Config, logger *logrus.Entry) (config.Presubmits, config.Periodics) {
-	presubmits := config.Presubmits{}
-	periodics := config.Periodics{}
-
-	masterPresubmits := getJobsByRepoAndName(prowMasterConfig.JobConfig.PresubmitsStatic)
-	for repo, jobs := range prowPRConfig.JobConfig.PresubmitsStatic {
-		for _, job := range jobs {
-			if masterPresubmits[repo][job.Name].Cluster != job.Cluster {
-				logger.WithFields(logrus.Fields{logRepo: repo, logJobName: job.Name}).Info(chosenJob)
-				presubmits.Add(repo, job)
-			}
-		}
-	}
-
-	masterPeriodics := getPeriodicsPerName(prowMasterConfig.JobConfig.AllPeriodics())
-	for _, periodic := range prowPRConfig.JobConfig.AllPeriodics() {
-		if masterPeriodics[periodic.Name].Cluster != periodic.Cluster {
-			logger.WithField(logJobName, periodic.Name).Info(chosenJob)
-			periodics.Add(periodic)
-		}
-	}
-
-	return presubmits, periodics
 }
 
 // PostsubmitInContext is a postsubmit with the org/repo#branch for which it will trigger
@@ -276,6 +253,9 @@ func GetChangedPeriodics(prowMasterConfig, prowPRConfig *prowconfig.Config, logg
 		if job.Agent == string(pjapi.KubernetesAgent) {
 			masterPeriodics := masterPeriodicsPerName[name]
 			if !equality.Semantic.DeepEqual(masterPeriodics.Spec, job.Spec) {
+				logger.WithFields(logrus.Fields{logJobName: job.Name}).Info(chosenJob)
+				changedPeriodics[job.Name] = job
+			} else if masterPeriodics.Cluster != job.Cluster {
 				logger.WithFields(logrus.Fields{logJobName: job.Name}).Info(chosenJob)
 				changedPeriodics[job.Name] = job
 			}

@@ -2,6 +2,7 @@ package steps
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -494,5 +495,61 @@ func TestArtifacts(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(tmp, "test0")); err != nil {
 		t.Fatalf("error verifying output directory exists: %v", err)
+	}
+}
+
+func TestJUnit(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		failures sets.String
+		expected []string
+	}{{
+		name: "no step fails",
+		expected: []string{
+			"Run multi-stage test test - test-pre0 container pre0",
+			"Run multi-stage test test - test-pre1 container pre1",
+			"Run multi-stage test test - test-test0 container test0",
+			"Run multi-stage test test - test-test1 container test1",
+			"Run multi-stage test test - test-post0 container post0",
+			"Run multi-stage test test - test-post1 container post1",
+		},
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			fakecs := fake.NewSimpleClientset()
+			executor := fakePodExecutor{failures: tc.failures}
+			executor.AddReactors(fakecs)
+			client := fakecs.CoreV1()
+			step := multiStageTestStep{
+				name:   "test",
+				config: &api.ReleaseBuildConfiguration{},
+				jobSpec: &api.JobSpec{
+					JobSpec: prowdapi.JobSpec{
+						Job:       "job",
+						BuildID:   "build_id",
+						ProwJobID: "prow_job_id",
+						Type:      prowapi.PeriodicJob,
+					},
+				},
+				pre:  []api.LiteralTestStep{{As: "pre0"}, {As: "pre1"}},
+				test: []api.LiteralTestStep{{As: "test0"}, {As: "test1"}},
+				post: []api.LiteralTestStep{{As: "post0"}, {As: "post1"}},
+			}
+			step.podClient = &fakePodClient{NewPodClient(fakecs.CoreV1(), nil, nil)}
+			step.secretClient = client
+			step.saClient = client
+			step.rbacClient = fakecs.RbacV1()
+			step.artifactDir = "/dev/null"
+			if err := step.Run(context.Background(), false); tc.failures == nil && err != nil {
+				t.Error(err)
+				return
+			}
+			var names []string
+			for _, t := range step.SubTests() {
+				names = append(names, t.Name)
+			}
+			if !reflect.DeepEqual(names, tc.expected) {
+				t.Error(diff.ObjectReflectDiff(names, tc.expected))
+			}
+		})
 	}
 }

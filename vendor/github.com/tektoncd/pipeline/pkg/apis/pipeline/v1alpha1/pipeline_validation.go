@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/tektoncd/pipeline/pkg/apis/pipeline/v1beta1"
 	"github.com/tektoncd/pipeline/pkg/apis/validate"
 	"github.com/tektoncd/pipeline/pkg/list"
 	"github.com/tektoncd/pipeline/pkg/reconciler/pipeline/dag"
@@ -42,6 +43,13 @@ func (p *Pipeline) Validate(ctx context.Context) *apis.FieldError {
 }
 
 func validateDeclaredResources(ps *PipelineSpec) error {
+	encountered := map[string]struct{}{}
+	for _, r := range ps.Resources {
+		if _, ok := encountered[r.Name]; ok {
+			return fmt.Errorf("resource with name %q appears more than once", r.Name)
+		}
+		encountered[r.Name] = struct{}{}
+	}
 	required := []string{}
 	for _, t := range ps.Tasks {
 		if t.Resources != nil {
@@ -128,16 +136,37 @@ func validateGraph(tasks []PipelineTask) error {
 	return nil
 }
 
+// validateParamResults ensure that task result variables are properly configured
+func validateParamResults(tasks []PipelineTask) error {
+	for _, task := range tasks {
+		for _, param := range task.Params {
+			if v1beta1.LooksLikeContainsResultRefs(param) {
+				if _, err := v1beta1.NewResultRefs(param); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+
 // Validate checks that taskNames in the Pipeline are valid and that the graph
 // of Tasks expressed in the Pipeline makes sense.
 func (ps *PipelineSpec) Validate(ctx context.Context) *apis.FieldError {
 	if equality.Semantic.DeepEqual(ps, &PipelineSpec{}) {
-		return apis.ErrMissingField(apis.CurrentField)
+		return apis.ErrGeneric("expected at least one, got none", "spec.description", "spec.params", "spec.resources", "spec.tasks", "spec.workspaces")
 	}
 
 	// Names cannot be duplicated
 	taskNames := map[string]struct{}{}
 	for i, t := range ps.Tasks {
+		if errs := validation.IsDNS1123Label(t.Name); len(errs) > 0 {
+			return &apis.FieldError{
+				Message: fmt.Sprintf("invalid value %q", t.Name),
+				Paths:   []string{fmt.Sprintf("spec.tasks[%d].name", i)},
+				Details: "Pipeline Task name must be a valid DNS Label. For more info refer to https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names",
+			}
+		}
 		// can't have both taskRef and taskSpec at the same time
 		if (t.TaskRef != nil && t.TaskRef.Name != "") && t.TaskSpec != nil {
 			return apis.ErrMultipleOneOf(fmt.Sprintf("spec.tasks[%d].taskRef", i), fmt.Sprintf("spec.tasks[%d].taskSpec", i))
@@ -183,6 +212,10 @@ func (ps *PipelineSpec) Validate(ctx context.Context) *apis.FieldError {
 	// Validate the pipeline task graph
 	if err := validateGraph(ps.Tasks); err != nil {
 		return apis.ErrInvalidValue(err.Error(), "spec.tasks")
+	}
+
+	if err := validateParamResults(ps.Tasks); err != nil {
+		return apis.ErrInvalidValue(err.Error(), "spec.tasks.params.value")
 	}
 
 	// The parameter variables should be valid
@@ -290,13 +323,13 @@ func validatePipelineVariables(tasks []PipelineTask, prefix string, paramNames m
 }
 
 func validatePipelineVariable(name, value, prefix string, vars map[string]struct{}) *apis.FieldError {
-	return substitution.ValidateVariable(name, value, prefix, "", "task parameter", "pipelinespec.params", vars)
+	return substitution.ValidateVariable(name, value, prefix, "task parameter", "pipelinespec.params", vars)
 }
 
 func validatePipelineNoArrayReferenced(name, value, prefix string, vars map[string]struct{}) *apis.FieldError {
-	return substitution.ValidateVariableProhibited(name, value, prefix, "", "task parameter", "pipelinespec.params", vars)
+	return substitution.ValidateVariableProhibited(name, value, prefix, "task parameter", "pipelinespec.params", vars)
 }
 
 func validatePipelineArraysIsolated(name, value, prefix string, vars map[string]struct{}) *apis.FieldError {
-	return substitution.ValidateVariableIsolated(name, value, prefix, "", "task parameter", "pipelinespec.params", vars)
+	return substitution.ValidateVariableIsolated(name, value, prefix, "task parameter", "pipelinespec.params", vars)
 }

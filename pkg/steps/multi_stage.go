@@ -419,10 +419,11 @@ func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notif
 	if _, err := createOrRestartPod(s.podClient.Pods(s.jobSpec.Namespace), pod); err != nil {
 		return fmt.Errorf("failed to create or restart %q pod: %v", pod.Name, err)
 	}
-	if err := waitForPodCompletion(ctx, s.podClient.Pods(s.jobSpec.Namespace), pod.Name, notifier, false); err != nil {
+	err := waitForPodCompletion(ctx, s.podClient.Pods(s.jobSpec.Namespace), pod.Name, notifier, false)
+	s.subTests = append(s.subTests, notifier.SubTests(fmt.Sprintf("%s - %s ", s.Description(), pod.Name))...)
+	if err != nil {
 		return fmt.Errorf("%q pod %q failed: %v", s.name, pod.Name, err)
 	}
-	s.subTests = append(s.subTests, notifier.SubTests(fmt.Sprintf("%s - %s ", s.Description(), pod.Name))...)
 	return nil
 }
 

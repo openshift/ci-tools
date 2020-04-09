@@ -178,8 +178,20 @@ type podClient struct {
 	client rest.Interface
 }
 
+type fakePodsInterface struct {
+	coreclientset.PodInterface
+}
+
+func (fakePodsInterface) GetLogs(string, *coreapi.PodLogOptions) *rest.Request {
+	return rest.NewRequestWithClient(nil, "", rest.ClientContentConfig{}, nil)
+}
+
 type fakePodClient struct {
 	coreclientset.PodsGetter
+}
+
+func (c *fakePodClient) Pods(ns string) coreclientset.PodInterface {
+	return &fakePodsInterface{PodInterface: c.PodsGetter.Pods(ns)}
 }
 
 func (c *fakePodClient) Exec(namespace, name string, opts *coreapi.PodExecOptions) (remotecommand.Executor, error) {

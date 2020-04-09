@@ -23,6 +23,7 @@ import (
 const (
 	logRepo       = "repo"
 	logJobName    = "job-name"
+	logReasons    = "reasons"
 	logCiopConfig = "ciop-config"
 
 	// ConfigInRepoPath is the prow config path from release repo
@@ -97,27 +98,24 @@ func GetChangedPresubmits(prowMasterConfig, prowPRConfig *prowconfig.Config, log
 	masterJobs := getJobsByRepoAndName(prowMasterConfig.JobConfig.PresubmitsStatic)
 	for repo, jobs := range prowPRConfig.JobConfig.PresubmitsStatic {
 		for _, job := range jobs {
-			masterJob := masterJobs[repo][job.Name]
-			logFields := logrus.Fields{logRepo: repo, logJobName: job.Name}
-
-			if job.Agent == string(pjapi.KubernetesAgent) {
-				// If the agent was changed and is a kubernetes agent, just choose the job for rehearse.
-				if masterJob.Agent != job.Agent {
-					logger.WithFields(logFields).Info(chosenJob)
-					ret.Add(repo, job)
-				} else if !equality.Semantic.DeepEqual(masterJob.Spec, job.Spec) {
-					logger.WithFields(logFields).Info(chosenJob)
-					ret.Add(repo, job)
-				} else if masterJob.Optional && !job.Optional {
-					logger.WithFields(logFields).Info(chosenJob)
-					ret.Add(repo, job)
-				} else if !masterJob.AlwaysRun && job.AlwaysRun {
-					logger.WithFields(logFields).Info(chosenJob)
-					ret.Add(repo, job)
-				} else if masterJob.Cluster != job.Cluster {
-					logger.WithFields(logFields).Info(chosenJob)
-					ret.Add(repo, job)
+			var reasons []string
+			master, existed := masterJobs[repo][job.Name]
+			if existed {
+				reasons = rehearsableDifferences(master.JobBase, job.JobBase)
+				if master.Optional && !job.Optional {
+					reasons = append(reasons, "changed to non-optional")
 				}
+				if !master.AlwaysRun && job.AlwaysRun {
+					reasons = append(reasons, "changed to always run")
+				}
+			} else {
+				reasons = []string{"new presubmit"}
+			}
+
+			if len(reasons) > 0 {
+				selectionFields := logrus.Fields{logRepo: repo, logJobName: job.Name, logReasons: strings.Join(reasons, ",")}
+				logger.WithFields(selectionFields).Info(chosenJob)
+				ret.Add(repo, job)
 			}
 		}
 	}
@@ -244,25 +242,44 @@ func GetPresubmitsForClusterProfiles(prowConfig *prowconfig.Config, profiles []c
 	return ret
 }
 
-// GetChangedPeriodics compares the periodic jobs from two prow configs and returns a list the changed periodics.
-func GetChangedPeriodics(prowMasterConfig, prowPRConfig *prowconfig.Config, logger *logrus.Entry) config.Periodics {
-	changedPeriodics := config.Periodics{}
-	masterPeriodicsPerName := getPeriodicsPerName(prowMasterConfig.JobConfig.AllPeriodics())
-
-	for name, job := range getPeriodicsPerName(prowPRConfig.JobConfig.AllPeriodics()) {
-		if job.Agent == string(pjapi.KubernetesAgent) {
-			masterPeriodics := masterPeriodicsPerName[name]
-			if !equality.Semantic.DeepEqual(masterPeriodics.Spec, job.Spec) {
-				logger.WithFields(logrus.Fields{logJobName: job.Name}).Info(chosenJob)
-				changedPeriodics[job.Name] = job
-			} else if masterPeriodics.Cluster != job.Cluster {
-				logger.WithFields(logrus.Fields{logJobName: job.Name}).Info(chosenJob)
-				changedPeriodics[job.Name] = job
-			}
+func rehearsableDifferences(master, pr prowconfig.JobBase) []string {
+	var reasons []string
+	if pr.Agent == string(pjapi.KubernetesAgent) {
+		if master.Agent != pr.Agent {
+			reasons = append(reasons, "agent changed")
+		}
+		if !equality.Semantic.DeepEqual(master.Spec, pr.Spec) {
+			reasons = append(reasons, "spec changed")
+		}
+		if master.Cluster != pr.Cluster {
+			reasons = append(reasons, "cluster changed")
 		}
 	}
 
-	return changedPeriodics
+	return reasons
+}
+
+// GetChangedPeriodics compares the periodic jobs from two prow configs and returns a list the changed periodics.
+func GetChangedPeriodics(prowMasterConfig, prowPRConfig *prowconfig.Config, logger *logrus.Entry) config.Periodics {
+	changed := config.Periodics{}
+	masterByName := getPeriodicsPerName(prowMasterConfig.JobConfig.AllPeriodics())
+
+	for name, job := range getPeriodicsPerName(prowPRConfig.JobConfig.AllPeriodics()) {
+		var reasons []string
+		master, existed := masterByName[name]
+		if existed {
+			reasons = rehearsableDifferences(master.JobBase, job.JobBase)
+		} else {
+			reasons = []string{"new periodic"}
+		}
+		if len(reasons) > 0 {
+			selectionFields := logrus.Fields{logJobName: name, logReasons: reasons}
+			logger.WithFields(selectionFields).Info(chosenJob)
+			changed.Add(job)
+		}
+	}
+
+	return changed
 }
 
 func getPeriodicsPerName(periodics []prowconfig.Periodic) map[string]prowconfig.Periodic {

@@ -964,3 +964,78 @@ func makeConfigWithPeriodics(p []prowconfig.Periodic) *prowconfig.Config {
 		},
 	}
 }
+
+func TestRehearsableDifferences(t *testing.T) {
+	masterAgent := string(pjapi.KubernetesAgent)
+	masterCluster := "api.ci"
+	masterSpec := &v1.PodSpec{
+		Containers: []v1.Container{{Name: "master"}},
+	}
+	masterJob := prowconfig.JobBase{Agent: masterAgent, Cluster: masterCluster, Spec: masterSpec}
+
+	testCases := []struct {
+		name   string
+		master prowconfig.JobBase
+		job    prowconfig.JobBase
+
+		expected []string
+	}{
+		{
+			name:   "nothing differs",
+			master: masterJob,
+			job:    masterJob,
+		},
+		{
+			name:   "cluster differs",
+			master: masterJob,
+			job: prowconfig.JobBase{
+				Agent:   masterAgent,
+				Cluster: "OCP 6.7 Cluster",
+				Spec:    masterSpec,
+			},
+			expected: []string{"cluster changed"},
+		},
+		{
+			name:   "spec differs",
+			master: masterJob,
+			job: prowconfig.JobBase{
+				Agent:   masterAgent,
+				Cluster: masterCluster,
+				Spec: &v1.PodSpec{
+					Containers: []v1.Container{{Name: "NOT MASTER"}},
+				},
+			},
+			expected: []string{"spec changed"},
+		},
+		{
+			name: "agent differs",
+			master: prowconfig.JobBase{
+				Agent:   string(pjapi.JenkinsAgent),
+				Cluster: masterCluster,
+				Spec:    masterSpec,
+			},
+			job:      masterJob,
+			expected: []string{"agent changed"},
+		},
+		{
+			name: "everything differs",
+			master: prowconfig.JobBase{
+				Agent:   string(pjapi.JenkinsAgent),
+				Cluster: "OCP 6.7 Cluster",
+				Spec: &v1.PodSpec{
+					Containers: []v1.Container{{Name: "NOT MASTER"}},
+				},
+			},
+			job:      masterJob,
+			expected: []string{"agent changed", "spec changed", "cluster changed"},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			reasons := rehearsableDifferences(tc.master, tc.job)
+			if !reflect.DeepEqual(reasons, tc.expected) {
+				t.Errorf("%s: expected '%v', got '%v'", tc.name, tc.expected, reasons)
+			}
+		})
+	}
+}

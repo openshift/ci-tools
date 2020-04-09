@@ -333,16 +333,16 @@ func updateSecrets(secretsGetters map[string]coreclientset.SecretsGetter, secret
 					return fmt.Errorf("secret %s:%s/%s needs updating in place, use --force to do so", cluster, secret.Namespace, secret.Name)
 				}
 				if _, err := secretsGetter.Secrets(secret.Namespace).Update(secret); err != nil {
-					return err
+					return fmt.Errorf("error updating secret %s:%s/%s: %v", cluster, secret.Namespace, secret.Name, err)
 				}
 				logrus.Debugf("updated secret: %s:%s/%s", cluster, secret.Namespace, secret.Name)
 			} else if kerrors.IsNotFound(err) {
 				if _, err := secretsGetter.Secrets(secret.Namespace).Create(secret); err != nil {
-					return err
+					return fmt.Errorf("error creating secret %s:%s/%s: %v", cluster, secret.Namespace, secret.Name, err)
 				}
 				logrus.Debugf("created secret: %s:%s/%s", cluster, secret.Namespace, secret.Name)
 			} else {
-				return err
+				return fmt.Errorf("error reading secret %s:%s/%s: %v", cluster, secret.Namespace, secret.Name, err)
 			}
 		}
 	}

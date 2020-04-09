@@ -3,17 +3,19 @@ package steps
 import (
 	"context"
 	"io/ioutil"
-	"k8s.io/apimachinery/pkg/api/equality"
 	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
 
 	coreapi "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/diff"
+	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes/fake"
 	clientgoTesting "k8s.io/client-go/testing"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
@@ -324,6 +326,53 @@ done
 	}
 }
 
+type fakePodExecutor struct {
+	failures sets.String
+	pods     []*coreapi.Pod
+}
+
+func (e *fakePodExecutor) AddReactors(cs *fake.Clientset) {
+	cs.PrependReactor("create", "pods", func(action clientgoTesting.Action) (bool, runtime.Object, error) {
+		pod := action.(clientgoTesting.CreateAction).GetObject().(*coreapi.Pod)
+		pod.Status.Phase = coreapi.PodPending
+		e.pods = append(e.pods, pod)
+		return false, nil, nil
+	})
+	cs.PrependReactor("list", "pods", func(action clientgoTesting.Action) (bool, runtime.Object, error) {
+		fieldRestrictions := action.(clientgoTesting.ListAction).GetListRestrictions().Fields
+		for _, pod := range e.pods {
+			if fieldRestrictions.Matches(fields.Set{"metadata.name": pod.Name}) {
+				return true, &coreapi.PodList{Items: []coreapi.Pod{*pod.DeepCopy()}}, nil
+			}
+		}
+		return false, nil, nil
+	})
+	cs.PrependWatchReactor("pods", func(clientgoTesting.Action) (bool, watch.Interface, error) {
+		if e.pods == nil {
+			return false, nil, nil
+		}
+		pod := e.pods[len(e.pods)-1].DeepCopy()
+		fail := e.failures.Has(pod.Name)
+		if fail {
+			pod.Status.Phase = coreapi.PodFailed
+		} else {
+			pod.Status.Phase = coreapi.PodSucceeded
+		}
+		for _, container := range pod.Spec.Containers {
+			terminated := &coreapi.ContainerStateTerminated{}
+			if fail {
+				terminated.ExitCode = 1
+			}
+			pod.Status.ContainerStatuses = append(pod.Status.ContainerStatuses, coreapi.ContainerStatus{
+				Name:  container.Name,
+				State: coreapi.ContainerState{Terminated: terminated}})
+		}
+		ret := watch.NewFakeWithChanSize(1, true)
+		ret.Modify(pod)
+		return true, ret, nil
+	})
+}
+
 func TestRun(t *testing.T) {
 	step := multiStageTestStep{
 		name:   "test",
@@ -342,7 +391,7 @@ func TestRun(t *testing.T) {
 	}
 	for _, tc := range []struct {
 		name     string
-		failures []string
+		failures sets.String
 		expected []string
 	}{{
 		name: "no step fails, no error",
@@ -353,14 +402,14 @@ func TestRun(t *testing.T) {
 		},
 	}, {
 		name:     "failure in a pre step, test should not run, post should",
-		failures: []string{"test-pre0"},
+		failures: sets.NewString("test-pre0"),
 		expected: []string{
 			"test-pre0",
 			"test-post0", "test-post1",
 		},
 	}, {
 		name:     "failure in a test step, post should run",
-		failures: []string{"test-test0"},
+		failures: sets.NewString("test-test0"),
 		expected: []string{
 			"test-pre0", "test-pre1",
 			"test-test0",
@@ -368,7 +417,7 @@ func TestRun(t *testing.T) {
 		},
 	}, {
 		name:     "failure in a post step, other post steps should still run",
-		failures: []string{"test-post0"},
+		failures: sets.NewString("test-post0"),
 		expected: []string{
 			"test-pre0", "test-pre1",
 			"test-test0", "test-test1",
@@ -377,28 +426,10 @@ func TestRun(t *testing.T) {
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			fakecs := fake.NewSimpleClientset()
-			var pods []*coreapi.Pod
-			fakecs.PrependReactor("create", "pods", func(action clientgoTesting.Action) (bool, runtime.Object, error) {
-				pod := action.(clientgoTesting.CreateAction).GetObject().(*coreapi.Pod)
-				for _, failure := range tc.failures {
-					if pod.Name == failure {
-						pod.Status.Phase = coreapi.PodFailed
-					}
-				}
-				pods = append(pods, pod)
-				return false, nil, nil
-			})
-			fakecs.PrependReactor("list", "pods", func(action clientgoTesting.Action) (bool, runtime.Object, error) {
-				fieldRestrictions := action.(clientgoTesting.ListAction).GetListRestrictions().Fields
-				for _, pods := range pods {
-					if fieldRestrictions.Matches(fields.Set{"metadata.name": pods.Name}) {
-						return true, &coreapi.PodList{Items: []coreapi.Pod{*pods}}, nil
-					}
-				}
-				return false, nil, nil
-			})
+			executor := fakePodExecutor{failures: tc.failures}
+			executor.AddReactors(fakecs)
 			client := fakecs.CoreV1()
-			step.podClient = NewPodClient(fakecs.CoreV1(), nil, nil)
+			step.podClient = &fakePodClient{NewPodClient(client, nil, nil)}
 			step.secretClient = client
 			step.saClient = client
 			step.rbacClient = fakecs.RbacV1()
@@ -415,7 +446,7 @@ func TestRun(t *testing.T) {
 				t.Errorf("unexpected secrets: %#v", l)
 			}
 			var names []string
-			for _, pods := range pods {
+			for _, pods := range executor.pods {
 				names = append(names, pods.ObjectMeta.Name)
 			}
 			if !reflect.DeepEqual(names, tc.expected) {
@@ -450,26 +481,11 @@ func TestArtifacts(t *testing.T) {
 			ArtifactDir: "/path/to/artifacts",
 		}},
 	}
-	var pods []*coreapi.Pod
 	fakecs := fake.NewSimpleClientset()
-	fakecs.PrependReactor("create", "pods", func(action clientgoTesting.Action) (bool, runtime.Object, error) {
-		pod := action.(clientgoTesting.CreateAction).GetObject().(*coreapi.Pod)
-		pod.Status.Phase = coreapi.PodSucceeded
-		pods = append(pods, pod)
-		return false, nil, nil
-	})
-	fakecs.PrependReactor("list", "pods", func(action clientgoTesting.Action) (bool, runtime.Object, error) {
-		fieldRestrictions := action.(clientgoTesting.ListAction).GetListRestrictions().Fields
-		for _, pods := range pods {
-			if fieldRestrictions.Matches(fields.Set{"metadata.name": pods.Name}) {
-				return true, &coreapi.PodList{Items: []coreapi.Pod{*pods}}, nil
-			}
-		}
-		return false, nil, nil
-	})
+	executor := fakePodExecutor{}
+	executor.AddReactors(fakecs)
 	client := fakecs.CoreV1()
-	podClient := fakePodClient{PodsGetter: client}
-	step.podClient = &podClient
+	step.podClient = &fakePodClient{NewPodClient(client, nil, nil)}
 	step.secretClient = client
 	step.saClient = client
 	step.rbacClient = fakecs.RbacV1()

@@ -1,4 +1,4 @@
-FROM centos:7
+FROM centos:8
 
 ADD determinize-ci-operator /usr/bin/determinize-ci-operator
 ADD config-brancher /usr/bin/config-brancher
@@ -8,7 +8,7 @@ ADD ci-operator-config-mirror /usr/bin/ci-operator-config-mirror
 ADD private-prow-configs-mirror /usr/bin/private-prow-configs-mirror
 ADD sanitize-prow-jobs /usr/bin/sanitize-prow-jobs
 
-RUN yum install -y git && \
+RUN yum install -y git python3 python3-pyyaml && \
     yum clean all && \
     rm -rf /var/cache/yum
 

@@ -26,7 +26,6 @@ import (
 
 type options struct {
 	dryRun       bool
-	noFail       bool
 	local        bool
 	debugLogPath string
 
@@ -43,7 +42,6 @@ func gatherOptions() options {
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually submit rehearsal jobs to Prow")
-	fs.BoolVar(&o.noFail, "no-fail", false, "Whether to actually end unsuccessfuly when something breaks")
 	fs.BoolVar(&o.local, "local", false, "Whether this is a local execution or part of a CI job")
 
 	fs.StringVar(&o.debugLogPath, "debug-log", "", "Alternate file for debug output, defaults to stderr")
@@ -84,18 +82,13 @@ job would fail when executed against the current HEAD of the target branch.`
 
 pj-rehearse failed to finish all setup necessary to perform job rehearsals.
 This is either a pj-rehearse bug or an infrastructure failure.`
+	jobValidationOutput = `ERROR: pj-rehearse: failed to validate rehearsal jobs
+
+pj-rehearse created invalid rehearsal jobs.This is either a pj-rehearse bug, or
+the rehearsed jobs themselves are invalid.`
+
+	FAILURE = 1
 )
-
-func gracefulExit(suppressFailures bool, message string) int {
-	if message != "" {
-		fmt.Fprintln(os.Stderr, message)
-	}
-
-	if suppressFailures {
-		return 0
-	}
-	return 1
-}
 
 func loadPluginConfig(releaseRepoPath string) (ret prowplugins.ConfigUpdater, err error) {
 	agent := prowplugins.ConfigAgent{}
@@ -105,24 +98,23 @@ func loadPluginConfig(releaseRepoPath string) (ret prowplugins.ConfigUpdater, er
 	return
 }
 
-func rehearseMain() int {
+func rehearseMain() error {
 	o := gatherOptions()
 	err := validateOptions(o)
 	if err != nil {
 		logrus.WithError(err).Fatal("invalid options")
-		return gracefulExit(o.noFail, misconfigurationOutput)
 	}
 
 	var jobSpec *pjdwapi.JobSpec
 	if o.local {
 		if jobSpec, err = config.NewLocalJobSpec(o.releaseRepoPath); err != nil {
 			logrus.WithError(err).Error("could not create local JobSpec")
-			gracefulExit(o.noFail, misconfigurationOutput)
+			return fmt.Errorf(misconfigurationOutput)
 		}
 	} else {
 		if jobSpec, err = pjdwapi.ResolveSpecFromEnv(); err != nil {
 			logrus.WithError(err).Error("could not read JOB_SPEC")
-			return gracefulExit(o.noFail, misconfigurationOutput)
+			return fmt.Errorf(misconfigurationOutput)
 		}
 	}
 
@@ -133,7 +125,7 @@ func rehearseMain() int {
 		logger.Info("Not able to rehearse jobs when not run in the context of a presubmit job")
 		// Exiting successfully will make pj-rehearsal job not fail when run as a
 		// in a batch job. Such failures would be confusing and unactionable
-		return 0
+		return nil
 	}
 
 	if o.local {
@@ -149,7 +141,7 @@ func rehearseMain() int {
 		clusterConfig, err = util.LoadClusterConfig()
 		if err != nil {
 			logger.WithError(err).Error("could not load cluster clusterConfig")
-			return gracefulExit(o.noFail, misconfigurationOutput)
+			return fmt.Errorf(misconfigurationOutput)
 		}
 	}
 
@@ -157,23 +149,23 @@ func rehearseMain() int {
 	pluginConfig, err := loadPluginConfig(o.releaseRepoPath)
 	if err != nil {
 		logger.WithError(err).Error("could not load plugin configuration from tested revision of release repo")
-		return gracefulExit(o.noFail, misconfigurationOutput)
+		return fmt.Errorf(misconfigurationOutput)
 	}
 	masterConfig, err := config.GetAllConfigsFromSHA(o.releaseRepoPath, jobSpec.Refs.BaseSHA, logger)
 	if err != nil {
 		logger.WithError(err).Error("could not load configuration from base revision of release repo")
-		return gracefulExit(o.noFail, misconfigurationOutput)
+		return fmt.Errorf(misconfigurationOutput)
 	}
 
 	// We always need both Prow config versions, otherwise we cannot compare them
 	if masterConfig.Prow == nil || prConfig.Prow == nil {
 		logger.WithError(err).Error("could not load Prow configs from base or tested revision of release repo")
-		return gracefulExit(o.noFail, misconfigurationOutput)
+		return fmt.Errorf(misconfigurationOutput)
 	}
 	// We always need PR versions of ciop config, otherwise we cannot provide them to rehearsed jobs
 	if prConfig.CiOperator == nil {
 		logger.WithError(err).Error("could not load ci-operator configs from tested revision of release repo")
-		return gracefulExit(o.noFail, misconfigurationOutput)
+		return fmt.Errorf(misconfigurationOutput)
 	}
 
 	// We can only detect changes if we managed to load both ci-operator config versions
@@ -195,23 +187,23 @@ func rehearseMain() int {
 		refs, chains, workflows, _, err = load.Registry(filepath.Join(o.releaseRepoPath, config.RegistryPath), false)
 		if err != nil {
 			logger.WithError(err).Error("could not load step registry")
-			return gracefulExit(o.noFail, misconfigurationOutput)
+			return fmt.Errorf(misconfigurationOutput)
 		}
 		graph, err = registry.NewGraph(refs, chains, workflows)
 		if err != nil {
 			logger.WithError(err).Error("could not create step registry graph")
-			return gracefulExit(o.noFail, misconfigurationOutput)
+			return fmt.Errorf(misconfigurationOutput)
 		}
 		changedRegistrySteps, err = config.GetChangedRegistrySteps(o.releaseRepoPath, jobSpec.Refs.BaseSHA, graph)
 		if err != nil {
 			logger.WithError(err).Error("could not get step registry differences")
-			return gracefulExit(o.noFail, misconfigurationOutput)
+			return fmt.Errorf(misconfigurationOutput)
 		}
 	} else {
 		graph, err = registry.NewGraph(refs, chains, workflows)
 		if err != nil {
 			logger.WithError(err).Error("could not create step registry graph")
-			return gracefulExit(o.noFail, misconfigurationOutput)
+			return fmt.Errorf(misconfigurationOutput)
 		}
 	}
 	if len(changedRegistrySteps) != 0 {
@@ -223,7 +215,7 @@ func rehearseMain() int {
 		changedTemplates, err = config.GetChangedTemplates(o.releaseRepoPath, jobSpec.Refs.BaseSHA)
 		if err != nil {
 			logger.WithError(err).Error("could not get template differences")
-			return gracefulExit(o.noFail, misconfigurationOutput)
+			return fmt.Errorf(misconfigurationOutput)
 		}
 	}
 	if len(changedTemplates) != 0 {
@@ -235,7 +227,7 @@ func rehearseMain() int {
 		changedClusterProfiles, err = config.GetChangedClusterProfiles(o.releaseRepoPath, jobSpec.Refs.BaseSHA)
 		if err != nil {
 			logger.WithError(err).Error("could not get cluster profile differences")
-			return gracefulExit(o.noFail, misconfigurationOutput)
+			return fmt.Errorf(misconfigurationOutput)
 		}
 	}
 	if len(changedClusterProfiles) != 0 {
@@ -249,7 +241,7 @@ func rehearseMain() int {
 	cmClient, err := rehearse.NewCMClient(clusterConfig, prConfig.Prow.ProwJobNamespace, o.dryRun)
 	if err != nil {
 		logger.WithError(err).Error("could not create a configMap client")
-		return gracefulExit(o.noFail, misconfigurationOutput)
+		return fmt.Errorf(misconfigurationOutput)
 	}
 
 	cmManager := config.NewTemplateCMManager(prConfig.Prow.ProwJobNamespace, cmClient, pluginConfig, prNumber, o.releaseRepoPath, logger)
@@ -260,17 +252,17 @@ func rehearseMain() int {
 	}()
 	if err := cmManager.CreateCMTemplates(changedTemplates); err != nil {
 		logger.WithError(err).Error("couldn't create template configMap")
-		return gracefulExit(o.noFail, failedSetupOutput)
+		return fmt.Errorf(failedSetupOutput)
 	}
 	if err := cmManager.CreateClusterProfiles(changedClusterProfiles); err != nil {
 		logger.WithError(err).Error("couldn't create cluster profile ConfigMaps")
-		return gracefulExit(o.noFail, failedSetupOutput)
+		return fmt.Errorf(failedSetupOutput)
 	}
 
 	pjclient, err := rehearse.NewProwJobClient(clusterConfig, prConfig.Prow.ProwJobNamespace, o.dryRun)
 	if err != nil {
 		logger.WithError(err).Error("could not create a ProwJob client")
-		return gracefulExit(o.noFail, failedSetupOutput)
+		return fmt.Errorf(failedSetupOutput)
 	}
 
 	debugLogger := logrus.New()
@@ -281,7 +273,7 @@ func rehearseMain() int {
 			debugLogger.Out = f
 		} else {
 			logger.WithError(err).Error("could not open debug log file")
-			return gracefulExit(o.noFail, failedSetupOutput)
+			return fmt.Errorf(failedSetupOutput)
 		}
 	}
 	loggers := rehearse.Loggers{Job: logger, Debug: debugLogger.WithField(prowgithub.PrLogField, prNumber)}
@@ -309,14 +301,14 @@ func rehearseMain() int {
 	rehearsals := len(presubmitsToRehearse) + len(periodicsToRehearse)
 	if rehearsals == 0 {
 		logger.Info("no jobs to rehearse have been found")
-		return 0
+		return nil
 	} else if rehearsals > o.rehearsalLimit {
 		jobCountFields := logrus.Fields{
 			"rehearsal-threshold": o.rehearsalLimit,
 			"rehearsal-jobs":      rehearsals,
 		}
 		logger.WithFields(jobCountFields).Info("Would rehearse too many jobs, will not proceed")
-		return 0
+		return nil
 	}
 
 	presubmitsToRehearse = append(presubmitsToRehearse, jobConfigurer.ConvertPeriodicsToPresubmits(periodicsToRehearse)...)
@@ -328,23 +320,26 @@ func rehearseMain() int {
 	}
 	if err := prConfig.Prow.ValidateJobConfig(); err != nil {
 		logger.WithError(err).Error("jobconfig validation failed")
-		return 1
+		return fmt.Errorf(jobValidationOutput)
 	}
 
 	executor := rehearse.NewExecutor(presubmitsToRehearse, prNumber, o.releaseRepoPath, jobSpec.Refs, o.dryRun, loggers, pjclient)
 	success, err := executor.ExecuteJobs()
 	if err != nil {
 		logger.WithError(err).Error("Failed to rehearse jobs")
-		return gracefulExit(o.noFail, rehearseFailureOutput)
+		return fmt.Errorf(rehearseFailureOutput)
 	}
 	if !success {
 		logger.Error("Some jobs failed their rehearsal runs")
-		return gracefulExit(o.noFail, jobsFailureOutput)
+		return fmt.Errorf(jobsFailureOutput)
 	}
 	logger.Info("All jobs were rehearsed successfully")
-	return 0
+	return nil
 }
 
 func main() {
-	os.Exit(rehearseMain())
+	if err := rehearseMain(); err != nil {
+		fmt.Fprintln(os.Stderr, err.Error())
+		os.Exit(1)
+	}
 }

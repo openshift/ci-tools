@@ -57,7 +57,7 @@ make_testing_repository
 
 readonly REHEARSED_JOBS="${WORKDIR}/rehearsals.yaml"
 echo "[INFO] Running pj-rehearse in dry-mode..."
-if ! pj-rehearse --dry-run=true --no-fail=false --candidate-path "${FAKE_OPENSHIFT_RELEASE}" --rehearsal-limit 20 > "${REHEARSED_JOBS}" 2> "${WORKDIR}/pj-rehearse-stderr.log"; then
+if ! pj-rehearse --dry-run=true --candidate-path "${FAKE_OPENSHIFT_RELEASE}" --rehearsal-limit 20 > "${REHEARSED_JOBS}" 2> "${WORKDIR}/pj-rehearse-stderr.log"; then
   echo "ERROR: pj-rehearse failed:"
   cat "${WORKDIR}/pj-rehearse-stderr.log"
   exit 1

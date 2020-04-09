@@ -2,7 +2,6 @@ package steps
 
 import (
 	"context"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -505,6 +504,35 @@ func TestJUnit(t *testing.T) {
 		expected []string
 	}{{
 		name: "no step fails",
+		expected: []string{
+			"Run multi-stage test test - test-pre0 container pre0",
+			"Run multi-stage test test - test-pre1 container pre1",
+			"Run multi-stage test test - test-test0 container test0",
+			"Run multi-stage test test - test-test1 container test1",
+			"Run multi-stage test test - test-post0 container post0",
+			"Run multi-stage test test - test-post1 container post1",
+		},
+	}, {
+		name:     "failure in a pre step",
+		failures: sets.NewString("test-pre0"),
+		expected: []string{
+			"Run multi-stage test test - test-pre0 container pre0",
+			"Run multi-stage test test - test-post0 container post0",
+			"Run multi-stage test test - test-post1 container post1",
+		},
+	}, {
+		name:     "failure in a test step",
+		failures: sets.NewString("test-test0"),
+		expected: []string{
+			"Run multi-stage test test - test-pre0 container pre0",
+			"Run multi-stage test test - test-pre1 container pre1",
+			"Run multi-stage test test - test-test0 container test0",
+			"Run multi-stage test test - test-post0 container post0",
+			"Run multi-stage test test - test-post1 container post1",
+		},
+	}, {
+		name:     "failure in a post step",
+		failures: sets.NewString("test-post1"),
 		expected: []string{
 			"Run multi-stage test test - test-pre0 container pre0",
 			"Run multi-stage test test - test-pre1 container pre1",

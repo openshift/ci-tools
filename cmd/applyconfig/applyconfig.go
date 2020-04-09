@@ -20,12 +20,10 @@ import (
 	"k8s.io/test-infra/prow/logrusutil"
 )
 
-type level string
 type command string
 
 type options struct {
 	confirm     bool
-	level       level
 	user        *nullableStringFlag
 	directories flagutil.Strings
 	context     string
@@ -38,10 +36,6 @@ const (
 )
 
 const defaultAdminUser = "system:admin"
-
-func (l level) isValid() bool {
-	return l == "all"
-}
 
 type nullableStringFlag struct {
 	val     string
@@ -60,21 +54,12 @@ func (n *nullableStringFlag) Set(val string) error {
 
 func gatherOptions() *options {
 	opt := &options{user: &nullableStringFlag{}}
-	var lvl string
 	flag.BoolVar(&opt.confirm, "confirm", false, "Set to true to make applyconfig commit the config to the cluster")
-	flag.StringVar(&lvl, "level", "standard", "Select which config to apply (standard, admin, all)")
 	flag.Var(opt.user, "as", "Username to impersonate while applying the config")
 	flag.Var(&opt.directories, "config-dir", "Directory with config to apply. Can be repeated multiple times.")
 	flag.StringVar(&opt.context, "context", "", "Context name to use while applying the config")
 	flag.StringVar(&opt.kubeConfig, "kubeconfig", "", "Path to the kubeconfig file to apply the config")
 	flag.Parse()
-
-	opt.level = level(lvl)
-
-	if !opt.level.isValid() {
-		fmt.Fprintf(os.Stderr, "--level: must be one of [all]\n")
-		os.Exit(1)
-	}
 
 	if len(opt.directories.Strings()) < 1 || opt.directories.Strings()[0] == "" {
 		fmt.Fprintf(os.Stderr, "--config-dir must be provided\n")

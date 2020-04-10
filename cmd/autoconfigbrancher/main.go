@@ -199,7 +199,7 @@ func main() {
 	run(cmd, args...)
 
 	cmd = "/usr/bin/sanitize-prow-jobs"
-	args = []string{"--prow-jobs-dir", "./ci-operator/jobs"}
+	args = []string{"--prow-jobs-dir", "./ci-operator/jobs", "--config-path", "./core-services/sanitize-prow-jobs/_config.yaml"}
 	run(cmd, args...)
 	commitIfNeeded("sanitize-prow-jobs  --prow-jobs-dir ./ci-operator/jobs", author)
 

@@ -1,0 +1,23 @@
+default: api.ci
+nonKubernetes: app.ci
+groups:
+  "api.ci":
+    paths:
+      - ".*-postsubmits.yaml$"
+      - ".*openshift/release/.*-periodics.yaml$"
+      - ".*-periodics.yaml$"
+    jobs:
+      - pull-ci-openshift-release-master-build01-dry
+      - pull-ci-openshift-release-master-core-dry
+      - pull-ci-openshift-release-master-services-dry
+      - periodic-acme-cert-issuer-for-build01
+  "ci/api-build01-ci-devcluster-openshift-com:6443":
+    paths:
+      - ".*openshift-priv/.*-presubmits.yaml$"
+    jobs:
+      - periodic-build01-upgrade
+      - periodic-ci-image-import-to-build01
+      - pull-ci-openshift-config-master-format
+      - pull-ci-openshift-psap-special-resource-operator-release-4.6-images
+      - pull-ci-openshift-psap-special-resource-operator-release-4.6-unit
+      - pull-ci-openshift-psap-special-resource-operator-release-4.6-verify

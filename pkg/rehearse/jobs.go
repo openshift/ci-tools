@@ -2,6 +2,7 @@ package rehearse
 
 import (
 	"fmt"
+	"github.com/openshift/ci-tools/pkg/diffs"
 	"path/filepath"
 	"reflect"
 	"sort"
@@ -473,8 +474,8 @@ func AddRandomJobsForChangedTemplates(templates []config.ConfigMapSource, toBeRe
 			}
 
 			if repo, job := pickTemplateJob(prConfigPresubmits, templateFile, clusterType); job != nil {
-				jobLogger := loggers.Job.WithFields(logrus.Fields{"target-repo": repo, "target-job": job.Name})
-				jobLogger.Info("Picking job to rehearse the template changes")
+				selectionFields := logrus.Fields{diffs.LogRepo: repo, diffs.LogJobName: job.Name, diffs.LogReasons: fmt.Sprintf("template %s changed", templateFile)}
+				loggers.Job.WithFields(selectionFields).Info(diffs.ChosenJob)
 				rehearsals[repo] = append(rehearsals[repo], *job)
 			}
 		}
@@ -598,6 +599,10 @@ func AddRandomJobsForChangedRegistry(regSteps, graph registry.NodeByName, prConf
 			loggers.Debug.Warnf("No config found containing step: %+v", step)
 		}
 		for repo, presubmits := range presubmitsMap {
+			for _, job := range presubmits {
+				selectionFields := logrus.Fields{diffs.LogRepo: repo, diffs.LogJobName: job.Name, diffs.LogReasons: fmt.Sprintf("registry step %s changed", key)}
+				loggers.Job.WithFields(selectionFields).Info(diffs.ChosenJob)
+			}
 			rehearsals[repo] = append(rehearsals[repo], presubmits...)
 			continue
 		}
@@ -892,7 +897,6 @@ func (e *Executor) submitRehearsals() ([]*pjapi.ProwJob, error) {
 			errors = append(errors, err)
 			continue
 		}
-		e.loggers.Job.WithFields(pjutil.ProwJobFields(created)).Info("Submitted rehearsal prowjob")
 		pjs = append(pjs, created)
 	}
 

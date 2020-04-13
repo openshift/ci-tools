@@ -21,9 +21,9 @@ import (
 )
 
 const (
-	logRepo       = "repo"
-	logJobName    = "job-name"
-	logReasons    = "reasons"
+	LogRepo       = "repo"
+	LogJobName    = "job-name"
+	LogReasons    = "reasons"
 	logCiopConfig = "ciop-config"
 
 	// ConfigInRepoPath is the prow config path from release repo
@@ -35,7 +35,7 @@ const (
 	// CIOperatorConfigInRepoPath is the ci-operator config path from release repo
 	CIOperatorConfigInRepoPath = "ci-operator/config"
 
-	chosenJob            = "Job has been chosen for rehearsal"
+	ChosenJob            = "Job has been chosen for rehearsal"
 	newCiopConfigMsg     = "New ci-operator config file"
 	changedCiopConfigMsg = "ci-operator config file changed"
 )
@@ -113,8 +113,8 @@ func GetChangedPresubmits(prowMasterConfig, prowPRConfig *prowconfig.Config, log
 			}
 
 			if len(reasons) > 0 {
-				selectionFields := logrus.Fields{logRepo: repo, logJobName: job.Name, logReasons: strings.Join(reasons, ",")}
-				logger.WithFields(selectionFields).Info(chosenJob)
+				selectionFields := logrus.Fields{LogRepo: repo, LogJobName: job.Name, LogReasons: strings.Join(reasons, ",")}
+				logger.WithFields(selectionFields).Info(ChosenJob)
 				ret.Add(repo, job)
 			}
 		}
@@ -173,7 +173,7 @@ func GetImagesPostsubmitsForCiopConfigs(prowConfig *prowconfig.Config, ciopConfi
 	return ret
 }
 
-func GetPresubmitsForCiopConfigs(prowConfig *prowconfig.Config, ciopConfigs config.ByFilename, affectedJobs map[string]sets.String) config.Presubmits {
+func GetPresubmitsForCiopConfigs(prowConfig *prowconfig.Config, ciopConfigs config.ByFilename, affectedJobs map[string]sets.String, logger *logrus.Entry) config.Presubmits {
 	ret := config.Presubmits{}
 
 	for _, data := range ciopConfigs {
@@ -193,6 +193,8 @@ func GetPresubmitsForCiopConfigs(prowConfig *prowconfig.Config, ciopConfigs conf
 				continue
 			}
 
+			selectionFields := logrus.Fields{LogRepo: orgRepo, LogJobName: job.Name, LogReasons: "ci-operator config changed"}
+			logger.WithFields(selectionFields).Info(ChosenJob)
 			ret.Add(orgRepo, job)
 		}
 	}
@@ -210,7 +212,7 @@ func getTestsByName(tests []cioperatorapi.TestStepConfiguration) map[string]ciop
 
 // GetPresubmitsForClusterProfiles returns a filtered list of jobs from the
 // Prow configuration, with only presubmits that use certain cluster profiles.
-func GetPresubmitsForClusterProfiles(prowConfig *prowconfig.Config, profiles []config.ConfigMapSource) config.Presubmits {
+func GetPresubmitsForClusterProfiles(prowConfig *prowconfig.Config, profiles []config.ConfigMapSource, logger *logrus.Entry) config.Presubmits {
 	names := make(sets.String, len(profiles))
 	for _, p := range profiles {
 		names.Insert(p.CMName(config.ClusterProfilePrefix))
@@ -235,6 +237,8 @@ func GetPresubmitsForClusterProfiles(prowConfig *prowconfig.Config, profiles []c
 	for repo, jobs := range prowConfig.JobConfig.PresubmitsStatic {
 		for _, job := range jobs {
 			if matches(&job) {
+				selectionFields := logrus.Fields{LogRepo: repo, LogJobName: job.Name, LogReasons: "cluster profile changed"}
+				logger.WithFields(selectionFields).Info(ChosenJob)
 				ret.Add(repo, job)
 			}
 		}
@@ -273,8 +277,8 @@ func GetChangedPeriodics(prowMasterConfig, prowPRConfig *prowconfig.Config, logg
 			reasons = []string{"new periodic"}
 		}
 		if len(reasons) > 0 {
-			selectionFields := logrus.Fields{logJobName: name, logReasons: reasons}
-			logger.WithFields(selectionFields).Info(chosenJob)
+			selectionFields := logrus.Fields{LogJobName: name, LogReasons: reasons}
+			logger.WithFields(selectionFields).Info(ChosenJob)
 			changed.Add(job)
 		}
 	}

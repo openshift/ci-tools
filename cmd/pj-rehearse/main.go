@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -132,9 +133,7 @@ func rehearseMain() error {
 		jobSpec.Refs.Pulls[0].Number = int(time.Now().Unix())
 	}
 	org, repo, prNumber := jobSpec.Refs.Org, jobSpec.Refs.Repo, jobSpec.Refs.Pulls[0].Number
-
-	logger = logrus.WithField(prowgithub.PrLogField, prNumber)
-	logger.Info("Rehearsing Prow jobs for a configuration PR")
+	logger.Infof("Rehearsing Prow jobs for configuration PR %s/%s#%d", org, repo, prNumber)
 
 	var clusterConfig *rest.Config
 	if !o.dryRun {
@@ -207,7 +206,11 @@ func rehearseMain() error {
 		}
 	}
 	if len(changedRegistrySteps) != 0 {
-		logger.WithField("registry", changedRegistrySteps).Info("registry steps changed")
+		var names []string
+		for step := range changedRegistrySteps {
+			names = append(names, step)
+		}
+		logger.Infof("found %d changed registry steps: %s", len(changedRegistrySteps), strings.Join(names, ", "))
 	}
 
 	var changedTemplates []config.ConfigMapSource
@@ -281,13 +284,13 @@ func rehearseMain() error {
 	changedPeriodics := diffs.GetChangedPeriodics(masterConfig.Prow, prConfig.Prow, logger)
 	toRehearse := diffs.GetChangedPresubmits(masterConfig.Prow, prConfig.Prow, logger)
 
-	presubmitsWithChangedCiopConfigs := diffs.GetPresubmitsForCiopConfigs(prConfig.Prow, changedCiopConfigData, affectedJobs)
+	presubmitsWithChangedCiopConfigs := diffs.GetPresubmitsForCiopConfigs(prConfig.Prow, changedCiopConfigData, affectedJobs, logger)
 	toRehearse.AddAll(presubmitsWithChangedCiopConfigs)
 
 	presubmitsWithChangedTemplates := rehearse.AddRandomJobsForChangedTemplates(changedTemplates, toRehearse, prConfig.Prow.JobConfig.PresubmitsStatic, loggers)
 	toRehearse.AddAll(presubmitsWithChangedTemplates)
 
-	toRehearseClusterProfiles := diffs.GetPresubmitsForClusterProfiles(prConfig.Prow, changedClusterProfiles)
+	toRehearseClusterProfiles := diffs.GetPresubmitsForClusterProfiles(prConfig.Prow, changedClusterProfiles, logger)
 	toRehearse.AddAll(toRehearseClusterProfiles)
 
 	resolver := registry.NewResolver(refs, chains, workflows)

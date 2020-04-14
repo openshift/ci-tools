@@ -840,6 +840,7 @@ k8s.io/test-infra/prow/git
 k8s.io/test-infra/prow/git/v2
 k8s.io/test-infra/prow/gitattributes
 k8s.io/test-infra/prow/github
+k8s.io/test-infra/prow/github/fakegithub
 k8s.io/test-infra/prow/github/report
 k8s.io/test-infra/prow/hook
 k8s.io/test-infra/prow/hook/plugin-imports

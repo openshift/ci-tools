@@ -608,7 +608,7 @@ to configure that test to run on a schedule, instead of as a pre-submit:
 
 <p>
 Note that the build farms used to execute jobs run on UTC time, so time-of-day based
-<code>cron</cron> schedules must be set with that in mind.
+<code>cron</code> schedules must be set with that in mind.
 </p>
 `
 

@@ -25,7 +25,6 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	ciopconfig "github.com/openshift/ci-tools/pkg/config"
-	"github.com/openshift/ci-tools/pkg/diffs"
 )
 
 type options struct {
@@ -331,7 +330,7 @@ func fetchOrDefaultWithPrompt(msg, def string) string {
 }
 
 func updateProwConfig(config initConfig, releaseRepo string) error {
-	configPath := path.Join(releaseRepo, diffs.ConfigInRepoPath)
+	configPath := path.Join(releaseRepo, ciopconfig.ConfigInRepoPath)
 	agent := prowconfig.Agent{}
 	if err := agent.Start(configPath, ""); err != nil {
 		return fmt.Errorf("could not load Prow configuration: %v", err)
@@ -391,7 +390,7 @@ No additional "tide" queries will be added.
 func updatePluginConfig(config initConfig, releaseRepo string) error {
 	fmt.Println(`
 Updating Prow plugin configuration ...`)
-	configPath := path.Join(releaseRepo, diffs.PluginsInRepoPath)
+	configPath := path.Join(releaseRepo, ciopconfig.PluginConfigInRepoPath)
 	agent := plugins.ConfigAgent{}
 	if err := agent.Load(configPath, false); err != nil {
 		return fmt.Errorf("could not load Prow plugin configuration: %v", err)
@@ -453,7 +452,7 @@ Generating CI Operator configuration ...`)
 		Repo:   "origin",
 		Branch: "master",
 	}
-	originPath := path.Join(releaseRepo, diffs.CIOperatorConfigInRepoPath, info.RelativePath())
+	originPath := path.Join(releaseRepo, ciopconfig.CiopConfigInRepoPath, info.RelativePath())
 	var originConfig *api.ReleaseBuildConfiguration
 	if err := ciopconfig.OperateOnCIOperatorConfig(originPath, func(configuration *api.ReleaseBuildConfiguration, _ *ciopconfig.Info) error {
 		originConfig = configuration
@@ -463,7 +462,7 @@ Generating CI Operator configuration ...`)
 	}
 
 	generated := generateCIOperatorConfig(config, originConfig.PromotionConfiguration)
-	return generated.CommitTo(path.Join(releaseRepo, diffs.CIOperatorConfigInRepoPath))
+	return generated.CommitTo(path.Join(releaseRepo, ciopconfig.CiopConfigInRepoPath))
 }
 
 func generateCIOperatorConfig(config initConfig, originConfig *api.PromotionConfiguration) ciopconfig.DataWithInfo {

@@ -15,9 +15,8 @@ import (
 	prowconfig "k8s.io/test-infra/prow/config"
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
-	"github.com/openshift/ci-tools/pkg/jobconfig"
-
 	"github.com/openshift/ci-tools/pkg/config"
+	"github.com/openshift/ci-tools/pkg/jobconfig"
 )
 
 const (
@@ -25,15 +24,6 @@ const (
 	LogJobName    = "job-name"
 	LogReasons    = "reasons"
 	logCiopConfig = "ciop-config"
-
-	// ConfigInRepoPath is the prow config path from release repo
-	ConfigInRepoPath = "core-services/prow/02_config/_config.yaml"
-	// PluginsInRepoPath is the prow plugins config path from release repo
-	PluginsInRepoPath = "core-services/prow/02_config/_plugins.yaml"
-	// JobConfigInRepoPath is the prowjobs path from release repo
-	JobConfigInRepoPath = "ci-operator/jobs"
-	// CIOperatorConfigInRepoPath is the ci-operator config path from release repo
-	CIOperatorConfigInRepoPath = "ci-operator/config"
 
 	ChosenJob            = "Job has been chosen for rehearsal"
 	newCiopConfigMsg     = "New ci-operator config file"

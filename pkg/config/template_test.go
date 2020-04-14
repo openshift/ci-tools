@@ -21,8 +21,38 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	coretesting "k8s.io/client-go/testing"
 
+	prowgithub "k8s.io/test-infra/prow/github"
 	prowplugins "k8s.io/test-infra/prow/plugins"
 )
+
+func TestValidateConfigMaps(t *testing.T) {
+	config := prowplugins.ConfigUpdater{
+		Maps: map[string]prowplugins.ConfigMapSpec{
+			"templates/dir/file":           {Namespace: "ns", Name: "cm0"},
+			"cluster/test-deploy/dir/file": {Namespace: "ns", Name: "cm1"},
+		},
+	}
+	changes := []prowgithub.PullRequestChange{
+		{Filename: "templates/dir/file", SHA: "00000000"},
+		{Filename: "cluster/test-deploy/dir/file", SHA: "11111111"},
+	}
+	client := fake.NewSimpleClientset().CoreV1().ConfigMaps("ns")
+	config.SetDefaults()
+	manager := NewTemplateCMManager("ns", client, config, 0, "/", logrus.NewEntry(logrus.New()))
+	if err := manager.validateChanges(changes); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	err := manager.validateChanges(append(changes, prowgithub.PullRequestChange{
+		Filename: "404", SHA: "11111111",
+	}))
+	if err == nil {
+		t.Fatal("unexpected success")
+	}
+	expected := "no entry in `updateconfig` matches \"404\""
+	if err.Error() != expected {
+		t.Errorf("unexpected error: %v", diff.ObjectDiff(expected, err.Error()))
+	}
+}
 
 func TestCreateCleanupCMTemplates(t *testing.T) {
 	testRepoPath := "../../test/pj-rehearse-integration/master"

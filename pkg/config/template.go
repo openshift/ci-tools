@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/mattn/go-zglob"
 	"github.com/sirupsen/logrus"
 
 	"k8s.io/api/core/v1"
@@ -130,6 +131,25 @@ func genChanges(root string, sources []ConfigMapSource) ([]prowgithub.PullReques
 	return ret, nil
 }
 
+func (c *TemplateCMManager) validateChanges(changes []prowgithub.PullRequestChange) error {
+	var errs []error
+	for _, change := range changes {
+		found := false
+		for glob := range c.configUpdaterCfg.Maps {
+			var err error
+			if found, err = zglob.Match(glob, change.Filename); err != nil {
+				errs = append(errs, err)
+			} else if found {
+				break
+			}
+		}
+		if !found {
+			errs = append(errs, fmt.Errorf("no entry in `updateconfig` matches %q", change.Filename))
+		}
+	}
+	return kutilerrors.NewAggregate(errs)
+}
+
 func replaceSpecNames(namespace string, cfg prowplugins.ConfigUpdater, mapping map[string]string) (ret prowplugins.ConfigUpdater) {
 	ret = cfg
 	ret.Maps = make(map[string]prowplugins.ConfigMapSpec, len(cfg.Maps))
@@ -149,6 +169,9 @@ func replaceSpecNames(namespace string, cfg prowplugins.ConfigUpdater, mapping m
 func (c *TemplateCMManager) createCMs(sources []ConfigMapSource, mapping map[string]string) error {
 	changes, err := genChanges(c.releaseRepoPath, sources)
 	if err != nil {
+		return err
+	}
+	if err := c.validateChanges(changes); err != nil {
 		return err
 	}
 	var errs []error

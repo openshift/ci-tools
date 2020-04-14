@@ -14,12 +14,11 @@ import (
 	"k8s.io/test-infra/prow/plugins"
 
 	"github.com/mattn/go-zglob"
-	"github.com/openshift/ci-tools/pkg/diffs"
-	"github.com/openshift/ci-tools/pkg/jobconfig"
 	"github.com/sirupsen/logrus"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
+	"github.com/openshift/ci-tools/pkg/jobconfig"
 )
 
 type options struct {
@@ -67,14 +66,14 @@ func main() {
 	}
 
 	pluginAgent := plugins.ConfigAgent{}
-	if err := pluginAgent.Load(path.Join(o.releaseRepoDir, diffs.PluginsInRepoPath), true); err != nil {
+	if err := pluginAgent.Load(path.Join(o.releaseRepoDir, config.PluginConfigInRepoPath), true); err != nil {
 		logrus.WithError(err).Fatal("Error loading Prow plugin config.")
 	}
 	pcfg := pluginAgent.Config()
 
 	var pathsToCheck []pathWithConfig
 	configInfos := map[string]*config.Info{}
-	if err := config.OperateOnCIOperatorConfigDir(path.Join(o.releaseRepoDir, diffs.CIOperatorConfigInRepoPath), func(configuration *api.ReleaseBuildConfiguration, info *config.Info) error {
+	if err := config.OperateOnCIOperatorConfigDir(path.Join(o.releaseRepoDir, config.CiopConfigInRepoPath), func(configuration *api.ReleaseBuildConfiguration, info *config.Info) error {
 		// we know the path is relative, but there is no API to declare that
 		relPath, _ := filepath.Rel(o.releaseRepoDir, info.Filename)
 		pathsToCheck = append(pathsToCheck, pathWithConfig{path: relPath, configMap: info.ConfigMapName()})
@@ -85,7 +84,7 @@ func main() {
 	}
 
 	var foundFailures bool
-	if err := jobconfig.OperateOnJobConfigDir(path.Join(o.releaseRepoDir, diffs.JobConfigInRepoPath), func(jobConfig *prowconfig.JobConfig, info *jobconfig.Info) error {
+	if err := jobconfig.OperateOnJobConfigDir(path.Join(o.releaseRepoDir, config.JobConfigInRepoPath), func(jobConfig *prowconfig.JobConfig, info *jobconfig.Info) error {
 		// we know the path is relative, but there is no API to declare that
 		relPath, _ := filepath.Rel(o.releaseRepoDir, info.Filename)
 		pathsToCheck = append(pathsToCheck, pathWithConfig{path: relPath, configMap: info.ConfigMapName()})

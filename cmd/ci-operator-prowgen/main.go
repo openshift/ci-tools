@@ -142,7 +142,7 @@ func generatePodSpec(info *prowgenInfo, secrets []*cioperatorapi.Secret) *kubeap
 	for _, secret := range secrets {
 		volumeMounts = append(volumeMounts, kubeapi.VolumeMount{
 			Name:      secret.Name,
-			MountPath: secret.MountPath,
+			MountPath: fmt.Sprintf("/secrets/%s", secret.Name),
 			ReadOnly:  true,
 		})
 
@@ -208,7 +208,7 @@ func generateCiOperatorPodSpec(info *prowgenInfo, secrets []*cioperatorapi.Secre
 		ret.Containers[0].Args = append(ret.Containers[0].Args, fmt.Sprintf("--oauth-token-path=%s", filepath.Join(oauthTokenPath, oauthKey)))
 	}
 	for _, secret := range secrets {
-		ret.Containers[0].Args = append(ret.Containers[0].Args, fmt.Sprintf("--secret-dir=%s", secret.MountPath))
+		ret.Containers[0].Args = append(ret.Containers[0].Args, fmt.Sprintf("--secret-dir=/secrets/%s", secret.Name))
 	}
 
 	if len(info.Variant) > 0 {

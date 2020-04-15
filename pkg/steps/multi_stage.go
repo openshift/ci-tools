@@ -282,7 +282,7 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep) ([]coreap
 			continue
 		}
 		name := fmt.Sprintf("%s-%s", s.name, step.As)
-		pod, err := generateBasePod(s.jobSpec, name, step.As, []string{"/bin/bash", "-c", "#!/bin/bash\nset -eu\n" + step.Commands}, image, resources, step.ArtifactDir)
+		pod, err := generateBasePod(s.jobSpec, name, "test", []string{"/bin/bash", "-c", "#!/bin/bash\nset -eu\n" + step.Commands}, image, resources, step.ArtifactDir)
 		if err != nil {
 			errs = append(errs, err)
 			continue

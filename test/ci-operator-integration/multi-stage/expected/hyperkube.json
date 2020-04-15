@@ -448,7 +448,7 @@
     "kind": "Pod",
     "metadata": {
       "annotations": {
-        "ci-operator.openshift.io/container-sub-tests": "post0",
+        "ci-operator.openshift.io/container-sub-tests": "test",
         "ci-operator.openshift.io/save-container-logs": "true",
         "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"installer\",\"base_ref\":\"release-4.2\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
       },
@@ -554,7 +554,7 @@
             }
           ],
           "image": "pipeline:tests",
-          "name": "post0",
+          "name": "test",
           "resources": {
             "limits": {
               "memory": "6"
@@ -643,7 +643,7 @@
     "kind": "Pod",
     "metadata": {
       "annotations": {
-        "ci-operator.openshift.io/container-sub-tests": "post1",
+        "ci-operator.openshift.io/container-sub-tests": "test",
         "ci-operator.openshift.io/save-container-logs": "true",
         "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"installer\",\"base_ref\":\"release-4.2\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
       },
@@ -749,7 +749,7 @@
             }
           ],
           "image": "stable:installer",
-          "name": "post1",
+          "name": "test",
           "resources": {
             "limits": {
               "memory": "7"
@@ -838,7 +838,7 @@
     "kind": "Pod",
     "metadata": {
       "annotations": {
-        "ci-operator.openshift.io/container-sub-tests": "pre0",
+        "ci-operator.openshift.io/container-sub-tests": "test",
         "ci-operator.openshift.io/save-container-logs": "true",
         "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"installer\",\"base_ref\":\"release-4.2\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
       },
@@ -944,7 +944,7 @@
             }
           ],
           "image": "pipeline:base",
-          "name": "pre0",
+          "name": "test",
           "resources": {
             "limits": {
               "memory": "1"
@@ -1033,7 +1033,7 @@
     "kind": "Pod",
     "metadata": {
       "annotations": {
-        "ci-operator.openshift.io/container-sub-tests": "pre1",
+        "ci-operator.openshift.io/container-sub-tests": "test",
         "ci-operator.openshift.io/save-container-logs": "true",
         "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"installer\",\"base_ref\":\"release-4.2\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
       },
@@ -1139,7 +1139,7 @@
             }
           ],
           "image": "pipeline:root",
-          "name": "pre1",
+          "name": "test",
           "resources": {
             "limits": {
               "memory": "2"
@@ -1228,7 +1228,7 @@
     "kind": "Pod",
     "metadata": {
       "annotations": {
-        "ci-operator.openshift.io/container-sub-tests": "test0",
+        "ci-operator.openshift.io/container-sub-tests": "test",
         "ci-operator.openshift.io/save-container-logs": "true",
         "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"installer\",\"base_ref\":\"release-4.2\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
       },
@@ -1334,7 +1334,7 @@
             }
           ],
           "image": "pipeline:src",
-          "name": "test0",
+          "name": "test",
           "resources": {
             "limits": {
               "memory": "3"
@@ -1423,7 +1423,7 @@
     "kind": "Pod",
     "metadata": {
       "annotations": {
-        "ci-operator.openshift.io/container-sub-tests": "test1",
+        "ci-operator.openshift.io/container-sub-tests": "test",
         "ci-operator.openshift.io/save-container-logs": "true",
         "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"installer\",\"base_ref\":\"release-4.2\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
       },
@@ -1529,7 +1529,7 @@
             }
           ],
           "image": "pipeline:bin",
-          "name": "test1",
+          "name": "test",
           "resources": {
             "limits": {
               "memory": "4"
@@ -1618,7 +1618,7 @@
     "kind": "Pod",
     "metadata": {
       "annotations": {
-        "ci-operator.openshift.io/container-sub-tests": "test2",
+        "ci-operator.openshift.io/container-sub-tests": "test",
         "ci-operator.openshift.io/save-container-logs": "true",
         "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"installer\",\"base_ref\":\"release-4.2\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
       },
@@ -1724,7 +1724,7 @@
             }
           ],
           "image": "pipeline:cli",
-          "name": "test2",
+          "name": "test",
           "resources": {
             "limits": {
               "memory": "5"

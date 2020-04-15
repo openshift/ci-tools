@@ -53,6 +53,9 @@ func Config(path, registryPath string, info *ResolverInfo) (*api.ReleaseBuildCon
 	}
 	configSpec := api.ReleaseBuildConfiguration{}
 	if err := yaml.UnmarshalStrict([]byte(raw), &configSpec); err != nil {
+		if len(path) > 0 {
+			return nil, fmt.Errorf("invalid configuration in file %s: %v\nvalue:\n%s", path, err, raw)
+		}
 		return nil, fmt.Errorf("invalid configuration: %v\nvalue:\n%s", err, raw)
 	}
 	if registryPath != "" {

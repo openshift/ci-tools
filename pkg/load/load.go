@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/ghodss/yaml"
+	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/registry"
@@ -52,7 +52,10 @@ func Config(path, registryPath string, info *ResolverInfo) (*api.ReleaseBuildCon
 		return configFromResolver(info)
 	}
 	configSpec := api.ReleaseBuildConfiguration{}
-	if err := yaml.Unmarshal([]byte(raw), &configSpec); err != nil {
+	if err := yaml.UnmarshalStrict([]byte(raw), &configSpec); err != nil {
+		if len(path) > 0 {
+			return nil, fmt.Errorf("invalid configuration in file %s: %v\nvalue:\n%s", path, err, raw)
+		}
 		return nil, fmt.Errorf("invalid configuration: %v\nvalue:\n%s", err, raw)
 	}
 	if registryPath != "" {
@@ -201,7 +204,7 @@ func Registry(root string, flat bool) (references registry.ReferenceByName, chai
 
 func loadReference(bytes []byte, baseDir, prefix string, flat bool) (string, string, api.LiteralTestStep, error) {
 	step := api.RegistryReferenceConfig{}
-	err := yaml.Unmarshal(bytes, &step)
+	err := yaml.UnmarshalStrict(bytes, &step)
 	if err != nil {
 		return "", "", api.LiteralTestStep{}, err
 	}
@@ -218,7 +221,7 @@ func loadReference(bytes []byte, baseDir, prefix string, flat bool) (string, str
 
 func loadChain(bytes []byte) (string, string, []api.TestStep, error) {
 	chain := api.RegistryChainConfig{}
-	err := yaml.Unmarshal(bytes, &chain)
+	err := yaml.UnmarshalStrict(bytes, &chain)
 	if err != nil {
 		return "", "", []api.TestStep{}, err
 	}
@@ -227,7 +230,7 @@ func loadChain(bytes []byte) (string, string, []api.TestStep, error) {
 
 func loadWorkflow(bytes []byte) (string, string, api.MultiStageTestConfiguration, error) {
 	workflow := api.RegistryWorkflowConfig{}
-	err := yaml.Unmarshal(bytes, &workflow)
+	err := yaml.UnmarshalStrict(bytes, &workflow)
 	if err != nil {
 		return "", "", api.MultiStageTestConfiguration{}, err
 	}

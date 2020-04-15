@@ -6,8 +6,6 @@ import (
 	"os"
 	"strings"
 
-	"k8s.io/apimachinery/pkg/util/sets"
-
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/steps/release"
@@ -27,7 +25,7 @@ func main() {
 	if err := config.OperateOnCIOperatorConfigDir(configDir, func(configuration *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {
 		// validation is implicit, so we don't need to do anything
 		// but record the images we saw for future validation
-		for _, tag := range promotedTags(configuration) {
+		for _, tag := range release.PromotedTags(configuration) {
 			seen[tag] = append(seen[tag], repoInfo)
 		}
 		return nil
@@ -57,30 +55,4 @@ func main() {
 		}
 		os.Exit(1)
 	}
-}
-
-func promotedTags(configuration *api.ReleaseBuildConfiguration) []api.ImageStreamTagReference {
-	if configuration.PromotionConfiguration == nil {
-		return nil
-	}
-	tags, _ := release.ToPromote(*configuration.PromotionConfiguration, configuration.Images, sets.NewString())
-	var promotedTags []api.ImageStreamTagReference
-	for dst := range tags {
-		var tag api.ImageStreamTagReference
-		if configuration.PromotionConfiguration.Name != "" {
-			tag = api.ImageStreamTagReference{
-				Namespace: configuration.PromotionConfiguration.Namespace,
-				Name:      configuration.PromotionConfiguration.Name,
-				Tag:       dst,
-			}
-		} else { // promotion.Tag must be set
-			tag = api.ImageStreamTagReference{
-				Namespace: configuration.PromotionConfiguration.Namespace,
-				Name:      dst,
-				Tag:       configuration.PromotionConfiguration.Tag,
-			}
-		}
-		promotedTags = append(promotedTags, tag)
-	}
-	return promotedTags
 }

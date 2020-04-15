@@ -1,0 +1,5 @@
+ref:
+  as: ipi-install
+  from: installer
+  commands: ipi-install-commands.sh
+  invalid_field: bad

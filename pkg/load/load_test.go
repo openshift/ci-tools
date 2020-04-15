@@ -523,9 +523,19 @@ var parsedConfig = &api.ReleaseBuildConfiguration{
 	}},
 }
 
+const configWithInvalidField = `
+tests:
+- as: e2e-aws-multistage
+  steps:
+    invalid_field: bad
+    cluster_profile: aws
+    workflow: origin-e2e-aws
+`
+
 func TestConfig(t *testing.T) {
 	var testCases = []struct {
 		name          string
+		config        string
 		asFile        bool
 		asEnv         bool
 		expected      *api.ReleaseBuildConfiguration
@@ -533,21 +543,31 @@ func TestConfig(t *testing.T) {
 	}{
 		{
 			name:          "loading config from file works",
+			config:        rawConfig,
 			asFile:        true,
 			expected:      parsedConfig,
 			expectedError: false,
 		},
 		{
 			name:          "loading config from env works",
+			config:        rawConfig,
 			asEnv:         true,
 			expected:      parsedConfig,
 			expectedError: false,
 		},
 		{
 			name:          "no file or env fails to load config",
+			config:        rawConfig,
 			asEnv:         true,
 			expected:      parsedConfig,
 			expectedError: false,
+		},
+		{
+			name:          "extra fields results in error",
+			config:        configWithInvalidField,
+			asEnv:         true,
+			expected:      nil,
+			expectedError: true,
 		},
 	}
 
@@ -566,12 +586,12 @@ func TestConfig(t *testing.T) {
 				}()
 				path = temp.Name()
 
-				if err := ioutil.WriteFile(path, []byte(rawConfig), 0664); err != nil {
+				if err := ioutil.WriteFile(path, []byte(testCase.config), 0664); err != nil {
 					t.Fatalf("%s: failed to populate temp config file: %v", testCase.name, err)
 				}
 			}
 			if testCase.asEnv {
-				if err := os.Setenv("CONFIG_SPEC", rawConfig); err != nil {
+				if err := os.Setenv("CONFIG_SPEC", testCase.config); err != nil {
 					t.Fatalf("%s: failed to populate env var: %v", testCase.name, err)
 				}
 			}
@@ -758,6 +778,14 @@ func TestRegistry(t *testing.T) {
 		}, {
 			name:          "Read registry with ref where name and filename don't match",
 			registryDir:   "../../test/multistage-registry/invalid-filename",
+			flatRegistry:  false,
+			references:    registry.ReferenceByName{},
+			chains:        registry.ChainByName{},
+			workflows:     registry.WorkflowByName{},
+			expectedError: true,
+		}, {
+			name:          "Read registry where ref has an extra, invalid field",
+			registryDir:   "../../test/multistage-registry/invalid-field",
 			flatRegistry:  false,
 			references:    registry.ReferenceByName{},
 			chains:        registry.ChainByName{},

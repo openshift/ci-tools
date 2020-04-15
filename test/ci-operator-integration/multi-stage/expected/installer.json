@@ -176,7 +176,7 @@
     "kind": "Pod",
     "metadata": {
       "annotations": {
-        "ci-operator.openshift.io/container-sub-tests": "e2e",
+        "ci-operator.openshift.io/container-sub-tests": "test",
         "ci-operator.openshift.io/save-container-logs": "true",
         "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"installer\",\"base_ref\":\"release-4.2\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
       },
@@ -304,7 +304,7 @@
             }
           ],
           "image": "stable:my-image",
-          "name": "e2e",
+          "name": "test",
           "resources": {
             "requests": {
               "cpu": "1",
@@ -401,7 +401,7 @@
     "kind": "Pod",
     "metadata": {
       "annotations": {
-        "ci-operator.openshift.io/container-sub-tests": "ipi-deprovision-deprovision",
+        "ci-operator.openshift.io/container-sub-tests": "test",
         "ci-operator.openshift.io/save-container-logs": "true",
         "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"installer\",\"base_ref\":\"release-4.2\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
       },
@@ -529,7 +529,7 @@
             }
           ],
           "image": "stable:installer",
-          "name": "ipi-deprovision-deprovision",
+          "name": "test",
           "resources": {
             "requests": {
               "cpu": "1",
@@ -626,7 +626,7 @@
     "kind": "Pod",
     "metadata": {
       "annotations": {
-        "ci-operator.openshift.io/container-sub-tests": "ipi-deprovision-must-gather",
+        "ci-operator.openshift.io/container-sub-tests": "test",
         "ci-operator.openshift.io/save-container-logs": "true",
         "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"installer\",\"base_ref\":\"release-4.2\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
       },
@@ -754,7 +754,7 @@
             }
           ],
           "image": "stable:installer",
-          "name": "ipi-deprovision-must-gather",
+          "name": "test",
           "resources": {
             "requests": {
               "cpu": "1",
@@ -851,7 +851,7 @@
     "kind": "Pod",
     "metadata": {
       "annotations": {
-        "ci-operator.openshift.io/container-sub-tests": "ipi-install-install",
+        "ci-operator.openshift.io/container-sub-tests": "test",
         "ci-operator.openshift.io/save-container-logs": "true",
         "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"installer\",\"base_ref\":\"release-4.2\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
       },
@@ -979,7 +979,7 @@
             }
           ],
           "image": "stable:installer",
-          "name": "ipi-install-install",
+          "name": "test",
           "resources": {
             "requests": {
               "cpu": "1",
@@ -1076,7 +1076,7 @@
     "kind": "Pod",
     "metadata": {
       "annotations": {
-        "ci-operator.openshift.io/container-sub-tests": "ipi-install-rbac",
+        "ci-operator.openshift.io/container-sub-tests": "test",
         "ci-operator.openshift.io/save-container-logs": "true",
         "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"installer\",\"base_ref\":\"release-4.2\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
       },
@@ -1204,7 +1204,7 @@
             }
           ],
           "image": "stable:installer",
-          "name": "ipi-install-rbac",
+          "name": "test",
           "resources": {
             "requests": {
               "cpu": "1",

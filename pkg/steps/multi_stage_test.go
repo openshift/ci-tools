@@ -155,7 +155,7 @@ func TestGeneratePods(t *testing.T) {
 			Labels: labels,
 			Annotations: map[string]string{
 				"ci.openshift.io/job-spec":                     "",
-				"ci-operator.openshift.io/container-sub-tests": "step0",
+				"ci-operator.openshift.io/container-sub-tests": "test",
 				"ci-operator.openshift.io/save-container-logs": "true",
 			},
 		},
@@ -177,7 +177,7 @@ func TestGeneratePods(t *testing.T) {
 				TerminationMessagePolicy: coreapi.TerminationMessageFallbackToLogsOnError,
 			}},
 			Containers: []coreapi.Container{{
-				Name:                     "step0",
+				Name:                     "test",
 				Image:                    "pipeline:src",
 				Command:                  []string{"/tmp/secret-wrapper/secret-wrapper"},
 				Args:                     []string{"/bin/bash", "-c", "#!/bin/bash\nset -eu\ncommand0"},
@@ -222,7 +222,7 @@ func TestGeneratePods(t *testing.T) {
 			Labels: labels,
 			Annotations: map[string]string{
 				"ci.openshift.io/job-spec":                     "",
-				"ci-operator.openshift.io/container-sub-tests": "step1",
+				"ci-operator.openshift.io/container-sub-tests": "test",
 				"ci-operator.openshift.io/save-container-logs": "true",
 			},
 		},
@@ -244,7 +244,7 @@ func TestGeneratePods(t *testing.T) {
 				TerminationMessagePolicy: coreapi.TerminationMessageFallbackToLogsOnError,
 			}},
 			Containers: []coreapi.Container{{
-				Name:                     "step1",
+				Name:                     "test",
 				Image:                    "stable:image1",
 				Command:                  []string{"/tmp/secret-wrapper/secret-wrapper"},
 				Args:                     []string{"/bin/bash", "-c", "#!/bin/bash\nset -eu\ncommand1"},
@@ -492,7 +492,7 @@ func TestArtifacts(t *testing.T) {
 	if err := step.Run(context.Background(), false); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(tmp, "test0")); err != nil {
+	if _, err := os.Stat(filepath.Join(tmp, "test")); err != nil {
 		t.Fatalf("error verifying output directory exists: %v", err)
 	}
 }
@@ -505,41 +505,41 @@ func TestJUnit(t *testing.T) {
 	}{{
 		name: "no step fails",
 		expected: []string{
-			"Run multi-stage test test - test-pre0 container pre0",
-			"Run multi-stage test test - test-pre1 container pre1",
-			"Run multi-stage test test - test-test0 container test0",
-			"Run multi-stage test test - test-test1 container test1",
-			"Run multi-stage test test - test-post0 container post0",
-			"Run multi-stage test test - test-post1 container post1",
+			"Run multi-stage test test - test-pre0 container test",
+			"Run multi-stage test test - test-pre1 container test",
+			"Run multi-stage test test - test-test0 container test",
+			"Run multi-stage test test - test-test1 container test",
+			"Run multi-stage test test - test-post0 container test",
+			"Run multi-stage test test - test-post1 container test",
 		},
 	}, {
 		name:     "failure in a pre step",
 		failures: sets.NewString("test-pre0"),
 		expected: []string{
-			"Run multi-stage test test - test-pre0 container pre0",
-			"Run multi-stage test test - test-post0 container post0",
-			"Run multi-stage test test - test-post1 container post1",
+			"Run multi-stage test test - test-pre0 container test",
+			"Run multi-stage test test - test-post0 container test",
+			"Run multi-stage test test - test-post1 container test",
 		},
 	}, {
 		name:     "failure in a test step",
 		failures: sets.NewString("test-test0"),
 		expected: []string{
-			"Run multi-stage test test - test-pre0 container pre0",
-			"Run multi-stage test test - test-pre1 container pre1",
-			"Run multi-stage test test - test-test0 container test0",
-			"Run multi-stage test test - test-post0 container post0",
-			"Run multi-stage test test - test-post1 container post1",
+			"Run multi-stage test test - test-pre0 container test",
+			"Run multi-stage test test - test-pre1 container test",
+			"Run multi-stage test test - test-test0 container test",
+			"Run multi-stage test test - test-post0 container test",
+			"Run multi-stage test test - test-post1 container test",
 		},
 	}, {
 		name:     "failure in a post step",
 		failures: sets.NewString("test-post1"),
 		expected: []string{
-			"Run multi-stage test test - test-pre0 container pre0",
-			"Run multi-stage test test - test-pre1 container pre1",
-			"Run multi-stage test test - test-test0 container test0",
-			"Run multi-stage test test - test-test1 container test1",
-			"Run multi-stage test test - test-post0 container post0",
-			"Run multi-stage test test - test-post1 container post1",
+			"Run multi-stage test test - test-pre0 container test",
+			"Run multi-stage test test - test-pre1 container test",
+			"Run multi-stage test test - test-test0 container test",
+			"Run multi-stage test test - test-test1 container test",
+			"Run multi-stage test test - test-post0 container test",
+			"Run multi-stage test test - test-post1 container test",
 		},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {

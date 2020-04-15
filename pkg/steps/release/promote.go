@@ -51,7 +51,7 @@ var promotionRetry = wait.Backoff{
 }
 
 func (s *promotionStep) Run(ctx context.Context, dry bool) error {
-	tags, names := ToPromote(s.config, s.images, s.requiredImages)
+	tags, names := toPromote(s.config, s.images, s.requiredImages)
 	if len(names) == 0 {
 		log.Println("Nothing to promote, skipping...")
 		return nil
@@ -157,8 +157,8 @@ func (s *promotionStep) Run(ctx context.Context, dry bool) error {
 	return nil
 }
 
-// ToPromote determines the mapping of local tag to external tag which should be promoted
-func ToPromote(config api.PromotionConfiguration, images []api.ProjectDirectoryImageBuildStepConfiguration, requiredImages sets.String) (map[string]string, sets.String) {
+// toPromote determines the mapping of local tag to external tag which should be promoted
+func toPromote(config api.PromotionConfiguration, images []api.ProjectDirectoryImageBuildStepConfiguration, requiredImages sets.String) (map[string]string, sets.String) {
 	tagsByDst := map[string]string{}
 	names := sets.NewString()
 
@@ -196,6 +196,33 @@ func ToPromote(config api.PromotionConfiguration, images []api.ProjectDirectoryI
 	}
 
 	return namesByDst, names
+}
+
+// PromotedTags returns the tags that are being promoted for the given ReleaseBuildConfiguration
+func PromotedTags(configuration *api.ReleaseBuildConfiguration) []api.ImageStreamTagReference {
+	if configuration.PromotionConfiguration == nil {
+		return nil
+	}
+	tags, _ := toPromote(*configuration.PromotionConfiguration, configuration.Images, sets.NewString())
+	var promotedTags []api.ImageStreamTagReference
+	for dst := range tags {
+		var tag api.ImageStreamTagReference
+		if configuration.PromotionConfiguration.Name != "" {
+			tag = api.ImageStreamTagReference{
+				Namespace: configuration.PromotionConfiguration.Namespace,
+				Name:      configuration.PromotionConfiguration.Name,
+				Tag:       dst,
+			}
+		} else { // promotion.Tag must be set
+			tag = api.ImageStreamTagReference{
+				Namespace: configuration.PromotionConfiguration.Namespace,
+				Name:      dst,
+				Tag:       configuration.PromotionConfiguration.Tag,
+			}
+		}
+		promotedTags = append(promotedTags, tag)
+	}
+	return promotedTags
 }
 
 func (s *promotionStep) Requires() []api.StepLink {

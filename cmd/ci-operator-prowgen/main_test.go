@@ -35,7 +35,7 @@ var unexportedFields = []cmp.Option{
 }
 
 func TestGeneratePodSpec(t *testing.T) {
-	testSecret := &ciop.Secret{Name: "test-secret", MountPath: "/usr/local/test-secret"}
+	testSecret := &ciop.Secret{Name: "secret-name", MountPath: "/usr/local/test-secret"}
 	tests := []struct {
 		description    string
 		info           *prowgenInfo
@@ -145,6 +145,7 @@ func TestGeneratePodSpec(t *testing.T) {
 			},
 		},
 		{
+			description:    "additional args and secret are included in podspec",
 			info:           &prowgenInfo{Info: config.Info{Org: "org", Repo: "repo", Branch: "branch"}},
 			secrets:        []*ciop.Secret{testSecret},
 			targets:        []string{"target"},
@@ -165,7 +166,7 @@ func TestGeneratePodSpec(t *testing.T) {
 						"--promote",
 						"--some=thing",
 						"--target=target",
-						fmt.Sprintf("--secret-dir=%s", testSecret.MountPath),
+						fmt.Sprintf("--secret-dir=/secrets/%s", testSecret.Name),
 					},
 					Resources: kubeapi.ResourceRequirements{
 						Requests: kubeapi.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
@@ -174,7 +175,7 @@ func TestGeneratePodSpec(t *testing.T) {
 						{Name: "sentry-dsn", MountPath: "/etc/sentry-dsn", ReadOnly: true},
 						{Name: "apici-ci-operator-credentials", ReadOnly: true, MountPath: "/etc/apici"},
 						{Name: "pull-secret", ReadOnly: true, MountPath: "/etc/pull-secret"},
-						{Name: testSecret.Name, MountPath: testSecret.MountPath, ReadOnly: true},
+						{Name: testSecret.Name, MountPath: fmt.Sprintf("/secrets/%s", testSecret.Name), ReadOnly: true},
 					},
 				}},
 				Volumes: []kubeapi.Volume{

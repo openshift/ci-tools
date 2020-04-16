@@ -200,7 +200,7 @@ func (s *assembleReleaseStep) Run(ctx context.Context, dry bool) error {
 	cliExists := false
 	// waiting for importing the images
 	// 2~3 mins: build01 on aws imports images from api.ci on gcp
-	importCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	importCtx, cancel := context.WithTimeout(ctx, 15*time.Minute)
 	defer cancel()
 	if err := wait.PollImmediateUntil(10*time.Second, func() (bool, error) {
 		stable, err = s.imageClient.ImageStreams(s.jobSpec.Namespace).Get(streamName, meta.GetOptions{})
@@ -482,7 +482,7 @@ oc adm release extract --from=%q --file=image-references > /tmp/artifacts/%s
 	// loop until we observe all images have successfully imported, kicking import if a particular
 	// tag fails
 	var waiting map[string]int64
-	if err := wait.Poll(3*time.Second, 5*time.Minute, func() (bool, error) {
+	if err := wait.Poll(3*time.Second, 15*time.Minute, func() (bool, error) {
 		stable, err := s.imageClient.ImageStreams(s.jobSpec.Namespace).Get(streamName, meta.GetOptions{})
 		if err != nil {
 			return false, fmt.Errorf("could not resolve imagestream %s: %v", streamName, err)

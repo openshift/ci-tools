@@ -519,6 +519,7 @@ const (
 	ClusterProfileGCPLoggingCRIO     ClusterProfile = "gcp-logging-crio"
 	ClusterProfileLibvirtS390x       ClusterProfile = "libvirt-s390x"
 	ClusterProfileOpenStack          ClusterProfile = "openstack"
+	ClusterProfileOpenStackVexxhost  ClusterProfile = "openstack-vexxhost"
 	ClusterProfileOpenStackPpc64le   ClusterProfile = "openstack-ppc64le"
 	ClusterProfileOvirt              ClusterProfile = "ovirt"
 	ClusterProfilePacket             ClusterProfile = "packet"
@@ -544,6 +545,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileGCPLoggingCRIO,
 		ClusterProfileLibvirtS390x,
 		ClusterProfileOpenStack,
+		ClusterProfileOpenStackVexxhost,
 		ClusterProfileOpenStackPpc64le,
 		ClusterProfileOvirt,
 		ClusterProfilePacket,
@@ -577,6 +579,8 @@ func (p ClusterProfile) ClusterType() string {
 		return "libvirt-s390x"
 	case ClusterProfileOpenStack:
 		return "openstack"
+	case ClusterProfileOpenStackVexxhost:
+		return "openstack-vexxhost"
 	case ClusterProfileOpenStackPpc64le:
 		return "openstack-ppc64le"
 	case ClusterProfileVSphere:
@@ -616,6 +620,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "libvirt-s390x-quota-slice"
 	case ClusterProfileOpenStack:
 		return "openstack-quota-slice"
+	case ClusterProfileOpenStackVexxhost:
+		return "openstack-vexxhost-quota-slice"
 	case ClusterProfileOpenStackPpc64le:
 		return "openstack-ppc64le-quota-slice"
 	case ClusterProfileOvirt:
@@ -632,7 +638,7 @@ func (p ClusterProfile) LeaseType() string {
 // LeaseTypeFromClusterType maps cluster types to lease types
 func LeaseTypeFromClusterType(t string) (string, error) {
 	switch t {
-	case "aws", "azure4", "gcp", "libvirt-s390x", "openstack", "openstack-ppc64le", "vsphere", "ovirt", "packet":
+	case "aws", "azure4", "gcp", "libvirt-s390x", "openstack", "openstack-vexxhost", "openstack-ppc64le", "vsphere", "ovirt", "packet":
 		return t + "-quota-slice", nil
 	default:
 		return "", fmt.Errorf("invalid cluster type %q", t)

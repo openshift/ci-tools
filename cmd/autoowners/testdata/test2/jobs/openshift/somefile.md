@@ -1,0 +1,1 @@
+This is a file to check that non directory files are being ignored

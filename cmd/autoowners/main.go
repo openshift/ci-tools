@@ -29,7 +29,11 @@ const (
 	githubOrg   = "openshift"
 	githubRepo  = "release"
 	githubLogin = "openshift-bot"
-	githubTeam  = "openshift/openshift-team-developer-productivity-test-platform"
+
+	defaultPRAssignee = "openshift/openshift-team-developer-productivity-test-platform"
+
+	configSubDirs      = "jobs,config,templates"
+	targetSubDirectory = "ci-operator"
 )
 
 type SimpleConfig = repoowners.SimpleConfig
@@ -48,14 +52,14 @@ func (orgRepo orgRepo) repoString() string {
 	return fmt.Sprintf("%s/%s", orgRepo.Organization, orgRepo.Repository)
 }
 
-func loadRepos(dir string, blacklist sets.String) ([]orgRepo, error) {
+func loadRepos(configRootDir string, blacklist sets.String, configSubDirs []string, githubOrg string, githubRepo string) ([]orgRepo, error) {
 	var orgRepos []orgRepo
-	operatorRoot := filepath.Join(dir, "ci-operator")
-	jobs := filepath.Join(operatorRoot, "jobs")
-	config := filepath.Join(operatorRoot, "config")
-	templates := filepath.Join(operatorRoot, "templates")
+	configSubDirectories := make([]string, 0, len(configSubDirs))
+	for _, sourceSubDir := range configSubDirs {
+		configSubDirectories = append(configSubDirectories, filepath.Join(configRootDir, sourceSubDir))
+	}
 
-	orgDirs, err := ioutil.ReadDir(jobs)
+	orgDirs, err := ioutil.ReadDir(configSubDirectories[0])
 	if err != nil {
 		return nil, err
 	}
@@ -65,20 +69,24 @@ func loadRepos(dir string, blacklist sets.String) ([]orgRepo, error) {
 		}
 		logrus.WithField("orgDir.Name()", orgDir.Name()).Debug("loading orgDir ...")
 		org := filepath.Base(orgDir.Name())
-		repoDirs, err := ioutil.ReadDir(filepath.Join(jobs, orgDir.Name()))
+		repoDirs, err := ioutil.ReadDir(filepath.Join(configSubDirectories[0], orgDir.Name()))
 		if err != nil {
 			return nil, err
 		}
 		for _, repoDir := range repoDirs {
-			if !orgDir.IsDir() {
+			if !repoDir.IsDir() {
 				continue
 			}
 			repo := repoDir.Name()
-			if org == "openshift" && repo == "release" {
+			if org == githubOrg && repo == githubRepo {
 				continue
 			}
+			repoConfigDirs := make([]string, 0, len(configSubDirectories))
+			for _, sourceSubDir := range configSubDirectories {
+				repoConfigDirs = append(repoConfigDirs, filepath.Join(sourceSubDir, org, repo))
+			}
 			var dirs []string
-			for _, d := range []string{filepath.Join(jobs, org, repo), filepath.Join(config, org, repo), filepath.Join(templates, org, repo)} {
+			for _, d := range repoConfigDirs {
 				fileInfo, err := os.Stat(d)
 				logrus.WithField("err", err).Debug("os.Stat(d): checking error ...")
 				if !os.IsNotExist(err) && fileInfo.IsDir() {
@@ -236,13 +244,13 @@ func writeOwners(orgRepo orgRepo, httpResult httpResult, cleaner ownersCleaner) 
 	return nil
 }
 
-func pullOwners(gc github.Client, directory string, blacklist sets.String) error {
-	orgRepos, err := loadRepos(directory, blacklist)
+func pullOwners(gc github.Client, configRootDir string, blacklist sets.String, configSubDirs []string, githubOrg string, githubRepo string) error {
+	orgRepos, err := loadRepos(configRootDir, blacklist, configSubDirs, githubOrg, githubRepo)
 	if err != nil {
 		return err
 	}
 
-	cleaner, err := ownersCleanerFactory(gc)
+	cleaner, err := ownersCleanerFactory(githubOrg, gc)
 	if err != nil {
 		return fmt.Errorf("failed to construct owners cleaner: %w", err)
 	}
@@ -268,15 +276,19 @@ func pullOwners(gc github.Client, directory string, blacklist sets.String) error
 }
 
 type options struct {
-	dryRun      bool
-	githubLogin string
-	gitName     string
-	gitEmail    string
-	assign      string
-	targetDir   string
-	blacklist   flagutil.Strings
-	debugMode   bool
-	selfApprove bool
+	dryRun             bool
+	githubLogin        string
+	githubOrg          string
+	githubRepo         string
+	gitName            string
+	gitEmail           string
+	assign             string
+	targetDir          string
+	targetSubDirectory string
+	configSubDirs      flagutil.Strings
+	blacklist          flagutil.Strings
+	debugMode          bool
+	selfApprove        bool
 	flagutil.GitHubOptions
 }
 
@@ -286,10 +298,14 @@ func parseOptions() options {
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually create the pull request with github client")
 	fs.StringVar(&o.githubLogin, "github-login", githubLogin, "The GitHub username to use.")
+	fs.StringVar(&o.githubOrg, "org", githubOrg, "The downstream GitHub org name.")
+	fs.StringVar(&o.githubRepo, "repo", githubRepo, "The downstream GitHub repository name.")
 	fs.StringVar(&o.gitName, "git-name", "", "The name to use on the git commit. Requires --git-email. If not specified, uses the system default.")
 	fs.StringVar(&o.gitEmail, "git-email", "", "The email to use on the git commit. Requires --git-name. If not specified, uses the system default.")
-	fs.StringVar(&o.assign, "assign", githubTeam, "The github username or group name to assign the created pull request to.")
+	fs.StringVar(&o.assign, "assign", defaultPRAssignee, "The github username or group name to assign the created pull request to.")
 	fs.StringVar(&o.targetDir, "target-dir", "", "The directory containing the target repo.")
+	fs.StringVar(&o.targetSubDirectory, "target-subdir", targetSubDirectory, "The sub-directory of the target repo where the configurations are stored.")
+	fs.Var(&o.configSubDirs, "config-subdir", "The sub-directory where configuration is stored. (Default list of directories: "+configSubDirs+")")
 	fs.Var(&o.blacklist, "ignore-repo", "The repo for which syncing OWNERS file is disabled.")
 	fs.BoolVar(&o.debugMode, "debug-mode", false, "Enable the DEBUG level of logs if true.")
 	fs.BoolVar(&o.selfApprove, "self-approve", false, "Self-approve the PR by adding the `approved` and `lgtm` labels. Requires write permissions on the repo.")
@@ -390,7 +406,13 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to change to root dir")
 	}
 
-	if err := pullOwners(gc, o.targetDir, sets.NewString(o.blacklist.Strings()...)); err != nil {
+	var configSubDirectories = o.configSubDirs.Strings()
+	if len(configSubDirectories) == 0 {
+		configSubDirectories = strings.Split(configSubDirs, ",")
+	}
+	configRootDirectory := filepath.Join(o.targetDir, o.targetSubDirectory)
+	blackListDirectories := sets.NewString(o.blacklist.Strings()...)
+	if err := pullOwners(gc, configRootDirectory, blackListDirectories, configSubDirectories, o.githubOrg, o.githubRepo); err != nil {
 		logrus.WithError(err).Fatal("Error occurred when walking through the target dir.")
 	}
 
@@ -410,7 +432,7 @@ func main() {
 	matchTitle := "Sync OWNERS files"
 	title := getTitle(matchTitle, time.Now().Format(time.RFC1123))
 	if err := bumper.GitCommitAndPush(fmt.Sprintf("https://%s:%s@github.com/%s/%s.git", o.githubLogin,
-		string(secretAgent.GetTokenGenerator(o.GitHubOptions.TokenPath)()), o.githubLogin, githubRepo),
+		string(secretAgent.GetTokenGenerator(o.GitHubOptions.TokenPath)()), o.githubLogin, o.githubRepo),
 		remoteBranch, o.gitName, o.gitEmail, title, stdout, stderr); err != nil {
 		logrus.WithError(err).Fatal("Failed to push changes.")
 	}
@@ -420,7 +442,7 @@ func main() {
 		logrus.Infof("Self-aproving PR by adding the %q and %q labels", labels.Approved, labels.LGTM)
 		labelsToAdd = append(labelsToAdd, labels.Approved, labels.LGTM)
 	}
-	if err := bumper.UpdatePullRequestWithLabels(gc, githubOrg, githubRepo, title,
+	if err := bumper.UpdatePullRequestWithLabels(gc, o.githubOrg, o.githubRepo, title,
 		getBody(directories, o.assign), matchTitle, o.githubLogin+":"+remoteBranch, "master", labelsToAdd); err != nil {
 		logrus.WithError(err).Fatal("PR creation failed.")
 	}
@@ -432,7 +454,7 @@ type githubOrgMemberLister interface {
 	ListOrgMembers(org, role string) ([]github.TeamMember, error)
 }
 
-func ownersCleanerFactory(ghc githubOrgMemberLister) (ownersCleaner, error) {
+func ownersCleanerFactory(githubOrg string, ghc githubOrgMemberLister) (ownersCleaner, error) {
 	members, err := ghc.ListOrgMembers(githubOrg, "all")
 	if err != nil {
 		return nil, fmt.Errorf("listOrgMembers failed: %w", err)

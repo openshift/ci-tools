@@ -181,7 +181,7 @@ func TestGetBody(t *testing.T) {
 
 /cc @openshift/openshift-team-developer-productivity-test-platform
 `
-	result := getBody([]string{"config/openshift/origin", "jobs/org/repo"}, githubTeam)
+	result := getBody([]string{"config/openshift/origin", "jobs/org/repo"}, defaultPRAssignee)
 
 	if expect != result {
 		t.Errorf("body '%s' differs from expected '%s'", result, expect)
@@ -463,12 +463,77 @@ func TestOwnersCleanerFactory(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		cleaner, err := ownersCleanerFactory(fakeGithubOrgMemberLister(tc.orgMembers))
+		cleaner, err := ownersCleanerFactory(githubOrg, fakeGithubOrgMemberLister(tc.orgMembers))
 		if err != nil {
 			t.Fatalf("failed to construct cleaner: %v", err)
 		}
 		if diff := sets.NewString(cleaner(tc.unfilteredMembers)...).Difference(sets.NewString(tc.expectedResult...)); len(diff) > 0 {
 			t.Errorf("Actual result  does not match expected, diff: %v", diff)
 		}
+	}
+}
+
+type loadRepoTestData struct {
+	TestDirectory string
+	ConfigSubDirs []string
+	GitHubOrg     string
+	GitHubRepo    string
+	BlackList     sets.String
+	ExpectedRepos []orgRepo
+}
+
+func TestLoadRepos(t *testing.T) {
+	loadRepoTestData := []loadRepoTestData{
+		{
+			TestDirectory: "testdata/test1",
+			ConfigSubDirs: []string{"jobs"},
+			GitHubOrg:     "kubevirt",
+			GitHubRepo:    "project-infra",
+			ExpectedRepos: []orgRepo{
+				{
+					Directories:  []string{"testdata/test1/jobs/kubevirt/hostpath-provisioner"},
+					Organization: "kubevirt",
+					Repository:   "hostpath-provisioner",
+				},
+				{
+					Directories:  []string{"testdata/test1/jobs/kubevirt/kubevirt"},
+					Organization: "kubevirt",
+					Repository:   "kubevirt",
+				},
+			},
+		},
+		{
+			TestDirectory: "testdata/test2",
+			ConfigSubDirs: []string{"jobs", "config", "templates"},
+			GitHubOrg:     "openshift",
+			GitHubRepo:    "release",
+			BlackList:     sets.NewString("testdata/test2/templates/openshift/installer"),
+			ExpectedRepos: []orgRepo{
+				{
+					Directories: []string{
+						"testdata/test2/jobs/kubevirt/kubevirt",
+						"testdata/test2/config/kubevirt/kubevirt",
+					},
+					Organization: "kubevirt",
+					Repository:   "kubevirt",
+				},
+				{
+					Directories: []string{
+						"testdata/test2/jobs/openshift/installer",
+						"testdata/test2/config/openshift/installer",
+						//"testdata/test2/templates/openshift/installer", // not present due to blacklist
+					},
+					Organization: "openshift",
+					Repository:   "installer",
+				},
+			},
+		},
+	}
+	for _, data := range loadRepoTestData {
+		repos, err := loadRepos(data.TestDirectory, data.BlackList, data.ConfigSubDirs, data.GitHubOrg, data.GitHubRepo)
+		if err != nil {
+			t.Fatalf("%s: failed to load repos: %v", data.TestDirectory, err)
+		}
+		assertEqual(t, repos, data.ExpectedRepos)
 	}
 }

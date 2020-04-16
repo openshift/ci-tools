@@ -407,10 +407,12 @@ func main() {
 	}
 
 	var configSubDirectories = o.configSubDirs.Strings()
-	if len(o.configSubDirs.Strings()) == 0 {
+	if len(configSubDirectories) == 0 {
 		configSubDirectories = strings.Split(configSubDirs, ",")
 	}
-	if err := pullOwners(gc, filepath.Join(o.targetDir, o.targetSubDirectory), sets.NewString(o.blacklist.Strings()...), configSubDirectories, o.githubOrg, o.githubRepo); err != nil {
+	configRootDirectory := filepath.Join(o.targetDir, o.targetSubDirectory)
+	blackListDirectories := sets.NewString(o.blacklist.Strings()...)
+	if err := pullOwners(gc, configRootDirectory, blackListDirectories, configSubDirectories, o.githubOrg, o.githubRepo); err != nil {
 		logrus.WithError(err).Fatal("Error occurred when walking through the target dir.")
 	}
 

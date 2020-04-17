@@ -49,9 +49,7 @@ type multiStageTestStep struct {
 	profile api.ClusterProfile
 	config  *api.ReleaseBuildConfiguration
 	// params exposes getters for variables created by other steps
-	params api.Parameters
-	// env holds all of the variables we need to expose to pods
-	env             []coreapi.EnvVar
+	params          api.Parameters
 	podClient       PodClient
 	secretClient    coreclientset.SecretsGetter
 	saClient        coreclientset.ServiceAccountsGetter
@@ -124,6 +122,7 @@ func (s *multiStageTestStep) Run(ctx context.Context, dry bool) error {
 
 func (s *multiStageTestStep) run(ctx context.Context, dry bool) error {
 	s.dry = dry
+	var env []coreapi.EnvVar
 	if s.profile != "" {
 		if !dry {
 			secret := s.profileSecretName()
@@ -131,17 +130,17 @@ func (s *multiStageTestStep) run(ctx context.Context, dry bool) error {
 				return fmt.Errorf("could not find secret %q: %v", secret, err)
 			}
 		}
-		for _, env := range envForProfile {
-			val, err := s.params.Get(env)
+		for _, e := range envForProfile {
+			val, err := s.params.Get(e)
 			if err != nil {
 				return err
 			}
-			s.env = append(s.env, coreapi.EnvVar{Name: env, Value: val})
+			env = append(env, coreapi.EnvVar{Name: e, Value: val})
 		}
 		if optionalOperator, err := resolveOptionalOperator(s.params); err != nil {
 			return err
 		} else if optionalOperator != nil {
-			s.env = append(s.env, optionalOperator.asEnv()...)
+			env = append(env, optionalOperator.asEnv()...)
 		}
 	}
 	if err := s.createSecret(); err != nil {
@@ -154,12 +153,12 @@ func (s *multiStageTestStep) run(ctx context.Context, dry bool) error {
 		return fmt.Errorf("failed to create RBAC objects: %v", err)
 	}
 	var errs []error
-	if err := s.runSteps(ctx, s.pre, true); err != nil {
+	if err := s.runSteps(ctx, s.pre, env, true); err != nil {
 		errs = append(errs, fmt.Errorf("%q pre steps failed: %v", s.name, err))
-	} else if err := s.runSteps(ctx, s.test, true); err != nil {
+	} else if err := s.runSteps(ctx, s.test, env, true); err != nil {
 		errs = append(errs, fmt.Errorf("%q test steps failed: %v", s.name, err))
 	}
-	if err := s.runSteps(context.Background(), s.post, false); err != nil {
+	if err := s.runSteps(context.Background(), s.post, env, false); err != nil {
 		errs = append(errs, fmt.Errorf("%q post steps failed: %v", s.name, err))
 	}
 	return utilerrors.NewAggregate(errs)
@@ -307,8 +306,13 @@ func (s *multiStageTestStep) createCredentials() error {
 	return nil
 }
 
-func (s *multiStageTestStep) runSteps(ctx context.Context, steps []api.LiteralTestStep, shortCircuit bool) error {
-	pods, err := s.generatePods(steps)
+func (s *multiStageTestStep) runSteps(
+	ctx context.Context,
+	steps []api.LiteralTestStep,
+	env []coreapi.EnvVar,
+	shortCircuit bool,
+) error {
+	pods, err := s.generatePods(steps, env)
 	if err != nil {
 		return err
 	}
@@ -331,7 +335,7 @@ func (s *multiStageTestStep) runSteps(ctx context.Context, steps []api.LiteralTe
 	return utilerrors.NewAggregate(errs)
 }
 
-func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep) ([]coreapi.Pod, error) {
+func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []coreapi.EnvVar) ([]coreapi.Pod, error) {
 	var ret []coreapi.Pod
 	var errs []error
 	for _, step := range steps {
@@ -367,7 +371,7 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep) ([]coreap
 			{Name: "JOB_NAME_SAFE", Value: strings.Replace(s.name, "_", "-", -1)},
 			{Name: "JOB_NAME_HASH", Value: s.jobSpec.JobNameHash()},
 		}...)
-		container.Env = append(container.Env, s.env...)
+		container.Env = append(container.Env, env...)
 		if owner := s.jobSpec.Owner(); owner != nil {
 			pod.OwnerReferences = append(pod.OwnerReferences, *owner)
 		}

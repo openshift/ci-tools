@@ -156,12 +156,12 @@ func TestGeneratePods(t *testing.T) {
 		Namespace: "namespace",
 	}
 	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, nil, nil, nil, "artifact_dir", &jobSpec, nil)
-	step.env = []coreapi.EnvVar{
+	env := []coreapi.EnvVar{
 		{Name: "RELEASE_IMAGE_INITIAL", Value: "release:initial"},
 		{Name: "RELEASE_IMAGE_LATEST", Value: "release:latest"},
 		{Name: "LEASED_RESOURCE", Value: "uuid"},
 	}
-	ret, err := step.generatePods(config.Tests[0].MultiStageTestConfigurationLiteral.Test)
+	ret, err := step.generatePods(config.Tests[0].MultiStageTestConfigurationLiteral.Test, env)
 	if err != nil {
 		t.Fatal(err)
 	}

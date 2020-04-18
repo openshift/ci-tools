@@ -107,7 +107,6 @@ presubmits:
         - --org=super
         - --repo=duper
         - --resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org
-        - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=[images]
         command:
         - ci-operator
@@ -117,15 +116,7 @@ presubmits:
         resources:
           requests:
             cpu: 10m
-        volumeMounts:
-        - mountPath: /etc/sentry-dsn
-          name: sentry-dsn
-          readOnly: true
       serviceAccountName: ci-operator
-      volumes:
-      - name: sentry-dsn
-        secret:
-          secretName: sentry-dsn
     trigger: (?m)^/test( | .* )images,?($|\s.*)
   - agent: kubernetes
     always_run: true

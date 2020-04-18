@@ -106,7 +106,6 @@ presubmits:
         - --org=super
         - --repo=trooper
         - --resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org
-        - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=[images]
         command:
         - ci-operator
@@ -116,15 +115,7 @@ presubmits:
         resources:
           requests:
             cpu: 10m
-        volumeMounts:
-        - mountPath: /etc/sentry-dsn
-          name: sentry-dsn
-          readOnly: true
       serviceAccountName: ci-operator
-      volumes:
-      - name: sentry-dsn
-        secret:
-          secretName: sentry-dsn
     trigger: (?m)^/test( | .* )images,?($|\s.*)
   - agent: kubernetes
     always_run: true
@@ -179,7 +170,6 @@ presubmits:
         - --repo=trooper
         - --resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org
         - --secret-dir=/usr/local/multistage-cluster-profile
-        - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=multistage
         command:
         - ci-operator
@@ -192,9 +182,6 @@ presubmits:
         volumeMounts:
         - mountPath: /usr/local/multistage-cluster-profile
           name: cluster-profile
-        - mountPath: /etc/sentry-dsn
-          name: sentry-dsn
-          readOnly: true
       serviceAccountName: ci-operator
       volumes:
       - name: cluster-profile
@@ -204,9 +191,6 @@ presubmits:
               name: cluster-secrets-
           - configMap:
               name: cluster-profile-
-      - name: sentry-dsn
-        secret:
-          secretName: sentry-dsn
     trigger: (?m)^/test( | .* )multistage,?($|\s.*)
   - agent: kubernetes
     always_run: true
@@ -231,7 +215,6 @@ presubmits:
         - --repo=trooper
         - --resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org
         - --secret-dir=/usr/local/multistage2-cluster-profile
-        - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=multistage2
         command:
         - ci-operator
@@ -244,9 +227,6 @@ presubmits:
         volumeMounts:
         - mountPath: /usr/local/multistage2-cluster-profile
           name: cluster-profile
-        - mountPath: /etc/sentry-dsn
-          name: sentry-dsn
-          readOnly: true
       serviceAccountName: ci-operator
       volumes:
       - name: cluster-profile
@@ -256,9 +236,6 @@ presubmits:
               name: cluster-secrets-
           - configMap:
               name: cluster-profile-
-      - name: sentry-dsn
-        secret:
-          secretName: sentry-dsn
     trigger: (?m)^/test( | .* )multistage2,?($|\s.*)
   - agent: kubernetes
     always_run: true
@@ -283,7 +260,6 @@ presubmits:
         - --repo=trooper
         - --resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org
         - --secret-dir=/usr/local/multistage3-cluster-profile
-        - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=multistage3
         command:
         - ci-operator
@@ -296,9 +272,6 @@ presubmits:
         volumeMounts:
         - mountPath: /usr/local/multistage3-cluster-profile
           name: cluster-profile
-        - mountPath: /etc/sentry-dsn
-          name: sentry-dsn
-          readOnly: true
       serviceAccountName: ci-operator
       volumes:
       - name: cluster-profile
@@ -308,9 +281,6 @@ presubmits:
               name: cluster-secrets-
           - configMap:
               name: cluster-profile-
-      - name: sentry-dsn
-        secret:
-          secretName: sentry-dsn
     trigger: (?m)^/test( | .* )multistage3,?($|\s.*)
   - agent: kubernetes
     always_run: true
@@ -335,7 +305,6 @@ presubmits:
         - --repo=trooper
         - --resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org
         - --secret-dir=/usr/local/multistage4-cluster-profile
-        - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=multistage4
         command:
         - ci-operator
@@ -348,9 +317,6 @@ presubmits:
         volumeMounts:
         - mountPath: /usr/local/multistage4-cluster-profile
           name: cluster-profile
-        - mountPath: /etc/sentry-dsn
-          name: sentry-dsn
-          readOnly: true
       serviceAccountName: ci-operator
       volumes:
       - name: cluster-profile
@@ -360,9 +326,6 @@ presubmits:
               name: cluster-secrets-
           - configMap:
               name: cluster-profile-
-      - name: sentry-dsn
-        secret:
-          secretName: sentry-dsn
     trigger: (?m)^/test( | .* )multistage4,?($|\s.*)
   - agent: kubernetes
     always_run: true
@@ -386,7 +349,6 @@ presubmits:
         - --org=super
         - --repo=trooper
         - --resolver-address=http://ci-operator-configresolver-ci.svc.ci.openshift.org
-        - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=unit
         command:
         - ci-operator
@@ -396,15 +358,7 @@ presubmits:
         resources:
           requests:
             cpu: 10m
-        volumeMounts:
-        - mountPath: /etc/sentry-dsn
-          name: sentry-dsn
-          readOnly: true
       serviceAccountName: ci-operator
-      volumes:
-      - name: sentry-dsn
-        secret:
-          secretName: sentry-dsn
     trigger: (?m)^/test( | .* )unit,?($|\s.*)
   - agent: jenkins
     always_run: false

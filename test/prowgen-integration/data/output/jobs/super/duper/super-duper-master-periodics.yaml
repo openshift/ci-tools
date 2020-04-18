@@ -20,7 +20,6 @@ periodics:
       - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
       - --kubeconfig=/etc/apici/kubeconfig
       - --secret-dir=/usr/local/e2e-aws-nightly-cluster-profile
-      - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
       - --target=e2e-aws-nightly
       - --template=/usr/local/e2e-aws-nightly
       command:
@@ -52,9 +51,6 @@ periodics:
       - mountPath: /etc/pull-secret
         name: pull-secret
         readOnly: true
-      - mountPath: /etc/sentry-dsn
-        name: sentry-dsn
-        readOnly: true
     serviceAccountName: ci-operator
     volumes:
     - name: apici-ci-operator-credentials
@@ -74,9 +70,6 @@ periodics:
     - name: pull-secret
       secret:
         secretName: regcred
-    - name: sentry-dsn
-      secret:
-        secretName: sentry-dsn
 - agent: kubernetes
   cron: '@yearly'
   decorate: true
@@ -98,7 +91,6 @@ periodics:
       - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
       - --kubeconfig=/etc/apici/kubeconfig
       - --secret-dir=/usr/local/e2e-nightly-cluster-profile
-      - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
       - --target=e2e-nightly
       - --template=/usr/local/e2e-nightly
       command:
@@ -130,9 +122,6 @@ periodics:
       - mountPath: /etc/pull-secret
         name: pull-secret
         readOnly: true
-      - mountPath: /etc/sentry-dsn
-        name: sentry-dsn
-        readOnly: true
     serviceAccountName: ci-operator
     volumes:
     - name: apici-ci-operator-credentials
@@ -154,6 +143,3 @@ periodics:
     - name: pull-secret
       secret:
         secretName: regcred
-    - name: sentry-dsn
-      secret:
-        secretName: sentry-dsn

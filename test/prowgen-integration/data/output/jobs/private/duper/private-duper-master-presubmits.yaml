@@ -23,7 +23,6 @@ presubmits:
         - --kubeconfig=/etc/apici/kubeconfig
         - --oauth-token-path=/usr/local/github-credentials/oauth
         - --secret-dir=/usr/local/e2e-cluster-profile
-        - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=e2e
         - --template=/usr/local/e2e
         command:
@@ -58,9 +57,6 @@ presubmits:
         - mountPath: /etc/pull-secret
           name: pull-secret
           readOnly: true
-        - mountPath: /etc/sentry-dsn
-          name: sentry-dsn
-          readOnly: true
       serviceAccountName: ci-operator
       volumes:
       - name: apici-ci-operator-credentials
@@ -85,9 +81,6 @@ presubmits:
       - name: pull-secret
         secret:
           secretName: regcred
-      - name: sentry-dsn
-        secret:
-          secretName: sentry-dsn
     trigger: (?m)^/test( | .* )e2e,?($|\s.*)
   - agent: kubernetes
     always_run: true
@@ -111,7 +104,6 @@ presubmits:
         - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
         - --kubeconfig=/etc/apici/kubeconfig
         - --oauth-token-path=/usr/local/github-credentials/oauth
-        - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=[images]
         - --target=[release:latest]
         command:
@@ -132,9 +124,6 @@ presubmits:
         - mountPath: /etc/pull-secret
           name: pull-secret
           readOnly: true
-        - mountPath: /etc/sentry-dsn
-          name: sentry-dsn
-          readOnly: true
       serviceAccountName: ci-operator
       volumes:
       - name: apici-ci-operator-credentials
@@ -149,9 +138,6 @@ presubmits:
       - name: pull-secret
         secret:
           secretName: regcred
-      - name: sentry-dsn
-        secret:
-          secretName: sentry-dsn
     trigger: (?m)^/test( | .* )images,?($|\s.*)
   - agent: kubernetes
     always_run: true
@@ -175,7 +161,6 @@ presubmits:
         - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
         - --kubeconfig=/etc/apici/kubeconfig
         - --oauth-token-path=/usr/local/github-credentials/oauth
-        - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=unit
         command:
         - ci-operator
@@ -195,9 +180,6 @@ presubmits:
         - mountPath: /etc/pull-secret
           name: pull-secret
           readOnly: true
-        - mountPath: /etc/sentry-dsn
-          name: sentry-dsn
-          readOnly: true
       serviceAccountName: ci-operator
       volumes:
       - name: apici-ci-operator-credentials
@@ -212,7 +194,4 @@ presubmits:
       - name: pull-secret
         secret:
           secretName: regcred
-      - name: sentry-dsn
-        secret:
-          secretName: sentry-dsn
     trigger: (?m)^/test( | .* )unit,?($|\s.*)

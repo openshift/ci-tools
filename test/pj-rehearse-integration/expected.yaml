@@ -530,7 +530,6 @@
       - args:
         - --artifact-dir=$(ARTIFACTS)
         - --give-pr-author-access-to-namespace=true
-        - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=[images]
         command:
         - ci-operator
@@ -570,15 +569,7 @@
         resources:
           requests:
             cpu: 10m
-        volumeMounts:
-        - mountPath: /etc/sentry-dsn
-          name: sentry-dsn
-          readOnly: true
       serviceAccountName: ci-operator
-      volumes:
-      - name: sentry-dsn
-        secret:
-          secretName: sentry-dsn
     refs:
       base_ref: master
       base_sha: 328cef7c6235073b55754d503b98c9233eaa9955
@@ -1941,7 +1932,6 @@
         - --artifact-dir=$(ARTIFACTS)
         - --give-pr-author-access-to-namespace=true
         - --secret-dir=/usr/local/multistage-cluster-profile
-        - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=multistage
         command:
         - ci-operator
@@ -2161,9 +2151,6 @@
         volumeMounts:
         - mountPath: /usr/local/multistage-cluster-profile
           name: cluster-profile
-        - mountPath: /etc/sentry-dsn
-          name: sentry-dsn
-          readOnly: true
       serviceAccountName: ci-operator
       volumes:
       - name: cluster-profile
@@ -2173,9 +2160,6 @@
               name: cluster-secrets-
           - configMap:
               name: cluster-profile-
-      - name: sentry-dsn
-        secret:
-          secretName: sentry-dsn
     refs:
       base_ref: master
       base_sha: 9691f0df19066bb68113f19dad0389184279fefe
@@ -2241,7 +2225,6 @@
         - --artifact-dir=$(ARTIFACTS)
         - --give-pr-author-access-to-namespace=true
         - --secret-dir=/usr/local/multistage3-cluster-profile
-        - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=multistage3
         command:
         - ci-operator
@@ -2461,9 +2444,6 @@
         volumeMounts:
         - mountPath: /usr/local/multistage3-cluster-profile
           name: cluster-profile
-        - mountPath: /etc/sentry-dsn
-          name: sentry-dsn
-          readOnly: true
       serviceAccountName: ci-operator
       volumes:
       - name: cluster-profile
@@ -2473,9 +2453,6 @@
               name: cluster-secrets-
           - configMap:
               name: cluster-profile-
-      - name: sentry-dsn
-        secret:
-          secretName: sentry-dsn
     refs:
       base_ref: master
       base_sha: 9691f0df19066bb68113f19dad0389184279fefe
@@ -2541,7 +2518,6 @@
         - --artifact-dir=$(ARTIFACTS)
         - --give-pr-author-access-to-namespace=true
         - --secret-dir=/usr/local/multistage5-cluster-profile
-        - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=multistage5
         command:
         - ci-operator
@@ -2761,9 +2737,6 @@
         volumeMounts:
         - mountPath: /usr/local/multistage5-cluster-profile
           name: cluster-profile
-        - mountPath: /etc/sentry-dsn
-          name: sentry-dsn
-          readOnly: true
       serviceAccountName: ci-operator
       volumes:
       - name: cluster-profile
@@ -2773,9 +2746,6 @@
               name: cluster-secrets-
           - configMap:
               name: cluster-profile-
-      - name: sentry-dsn
-        secret:
-          secretName: sentry-dsn
     refs:
       base_ref: master
       base_sha: a1e0de27c562d86647c901554094d12d7c358ba8
@@ -2840,7 +2810,6 @@
       - args:
         - --artifact-dir=$(ARTIFACTS)
         - --give-pr-author-access-to-namespace=true
-        - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
         - --target=unit
         command:
         - ci-operator
@@ -3057,15 +3026,7 @@
         resources:
           requests:
             cpu: 10m
-        volumeMounts:
-        - mountPath: /etc/sentry-dsn
-          name: sentry-dsn
-          readOnly: true
       serviceAccountName: ci-operator
-      volumes:
-      - name: sentry-dsn
-        secret:
-          secretName: sentry-dsn
     refs:
       base_ref: master
       base_sha: a1e0de27c562d86647c901554094d12d7c358ba8

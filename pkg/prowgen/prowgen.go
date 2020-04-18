@@ -19,11 +19,6 @@ import (
 )
 
 const (
-	sentryDsnMountName  = "sentry-dsn"
-	sentryDsnSecretName = "sentry-dsn"
-	sentryDsnMountPath  = "/etc/sentry-dsn"
-	sentryDsnSecretPath = "/etc/sentry-dsn/ci-operator"
-
 	oauthTokenPath  = "/usr/local/github-credentials"
 	oauthSecretName = "github-credentials-openshift-ci-robot-private-git-cloner"
 	oauthKey        = "oauth"
@@ -40,11 +35,6 @@ type ProwgenInfo struct {
 func generatePodSpec(info *ProwgenInfo, secrets []*cioperatorapi.Secret) *corev1.PodSpec {
 	volumeMounts := []corev1.VolumeMount{
 		{
-			Name:      sentryDsnMountName,
-			MountPath: sentryDsnMountPath,
-			ReadOnly:  true,
-		},
-		{
 			Name:      "apici-ci-operator-credentials",
 			MountPath: "/etc/apici",
 			ReadOnly:  true,
@@ -57,12 +47,6 @@ func generatePodSpec(info *ProwgenInfo, secrets []*cioperatorapi.Secret) *corev1
 	}
 
 	volumes := []corev1.Volume{
-		{
-			Name: sentryDsnMountName,
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{SecretName: sentryDsnSecretName},
-			},
-		},
 		{
 			Name: "apici-ci-operator-credentials",
 			VolumeSource: corev1.VolumeSource{
@@ -215,7 +199,6 @@ func generateCiOperatorPodSpec(info *ProwgenInfo, secrets []*cioperatorapi.Secre
 	ret.Containers[0].Args = append([]string{
 		"--give-pr-author-access-to-namespace=true",
 		"--artifact-dir=$(ARTIFACTS)",
-		fmt.Sprintf("--sentry-dsn-path=%s", sentryDsnSecretPath),
 		"--kubeconfig=/etc/apici/kubeconfig",
 		"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 	}, additionalArgs...)

@@ -1169,17 +1169,17 @@ func TestRemoveConfigResolverFlags(t *testing.T) {
 		expectedInfo: config.Info{Org: "openshift", Repo: "origin", Branch: "master", Variant: "v2"},
 	}, {
 		description:  "no resolver flags",
-		input:        []string{"--artifact-dir=$(ARTIFACTS)", "--target=target", "--sentry-dsn-path=/etc/sentry-dsn/ci-operator"},
-		expectedArgs: []string{"--artifact-dir=$(ARTIFACTS)", "--target=target", "--sentry-dsn-path=/etc/sentry-dsn/ci-operator"},
+		input:        []string{"--artifact-dir=$(ARTIFACTS)", "--target=target"},
+		expectedArgs: []string{"--artifact-dir=$(ARTIFACTS)", "--target=target"},
 	}, {
 		description:  "mixed resolver and non-resolver flags",
-		input:        []string{"--artifact-dir=$(ARTIFACTS)", "--resolver-address=http://ci-operator-resolver", "--org=openshift", "--target=target", "--repo=origin", "--sentry-dsn-path=/etc/sentry-dsn/ci-operator", "--branch=master", "--variant=v2"},
-		expectedArgs: []string{"--artifact-dir=$(ARTIFACTS)", "--target=target", "--sentry-dsn-path=/etc/sentry-dsn/ci-operator"},
+		input:        []string{"--artifact-dir=$(ARTIFACTS)", "--resolver-address=http://ci-operator-resolver", "--org=openshift", "--target=target", "--repo=origin", "--branch=master", "--variant=v2"},
+		expectedArgs: []string{"--artifact-dir=$(ARTIFACTS)", "--target=target"},
 		expectedInfo: config.Info{Org: "openshift", Repo: "origin", Branch: "master", Variant: "v2"},
 	}, {
 		description:  "spaces in between flag and value",
-		input:        []string{"--artifact-dir=$(ARTIFACTS)", "--resolver-address=http://ci-operator-resolver", "--org", "openshift", "--target=target", "--repo", "origin", "--sentry-dsn-path=/etc/sentry-dsn/ci-operator", "--branch", "master", "--variant=v2"},
-		expectedArgs: []string{"--artifact-dir=$(ARTIFACTS)", "--target=target", "--sentry-dsn-path=/etc/sentry-dsn/ci-operator"},
+		input:        []string{"--artifact-dir=$(ARTIFACTS)", "--resolver-address=http://ci-operator-resolver", "--org", "openshift", "--target=target", "--repo", "origin", "--branch", "master", "--variant=v2"},
+		expectedArgs: []string{"--artifact-dir=$(ARTIFACTS)", "--target=target"},
 		expectedInfo: config.Info{Org: "openshift", Repo: "origin", Branch: "master", Variant: "v2"},
 	}}
 	for _, testCase := range testCases {

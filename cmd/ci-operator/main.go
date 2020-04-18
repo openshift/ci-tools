@@ -48,6 +48,7 @@ import (
 	buildclientset "github.com/openshift/client-go/build/clientset/versioned/typed/build/v1"
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 	projectclientset "github.com/openshift/client-go/project/clientset/versioned"
+	routeclientset "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
 	templatescheme "github.com/openshift/client-go/template/clientset/versioned/scheme"
 	templateclientset "github.com/openshift/client-go/template/clientset/versioned/typed/template/v1"
 
@@ -625,7 +626,24 @@ func (o *options) resolveInputs(steps []api.Step) error {
 	// TODO: instead of mutating this here, we should pass the parts of graph execution that are resolved
 	// after the graph is created but before it is run down into the run step.
 	o.jobSpec.Namespace = o.namespace
-	log.Printf("Using namespace %s", o.namespace)
+
+	//If we can resolve the field, use it. If not, don't.
+	var consoleHost string
+	if routeGetter, err := routeclientset.NewForConfig(o.clusterConfig); err != nil {
+		log.Printf("could not get route client for cluster config")
+	} else {
+		if consoleRoute, err := routeGetter.Routes("openshift-console").Get("console", meta.GetOptions{}); err != nil {
+			log.Printf("could not get route console in namespace openshift-console")
+		} else {
+			consoleHost = consoleRoute.Spec.Host
+		}
+	}
+
+	if consoleHost != "" {
+		log.Printf("Using namespace https://%s/k8s/cluster/projects/%s", consoleHost, o.namespace)
+	} else {
+		log.Printf("Using namespace %s", o.namespace)
+	}
 
 	return nil
 }

@@ -42,8 +42,6 @@ import (
 
 	"github.com/ghodss/yaml"
 
-	"github.com/SierraSoftworks/sentry-go"
-
 	imageapi "github.com/openshift/api/image/v1"
 	projectapi "github.com/openshift/api/project/v1"
 	templateapi "github.com/openshift/api/template/v1"
@@ -186,9 +184,6 @@ func main() {
 	}
 
 	if err := opt.Run(); err != nil {
-		if !opt.dry {
-			opt.reportToSentry(err)
-		}
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		opt.writeFailingJUnit(err)
 		os.Exit(1)
@@ -1105,128 +1100,6 @@ func (o *options) initializeLeaseClient() error {
 		}
 	}()
 	return nil
-}
-
-func sentryOptionsFromJobSpec(jobSpec *api.JobSpec) []sentry.Option {
-	tags := map[string]string{
-		"prowjob-type": string(jobSpec.Type),
-		"job":          jobSpec.Job,
-		"build-id":     jobSpec.BuildID,
-		"prowjob-id":   jobSpec.ProwJobID,
-	}
-
-	userInfo := sentry.UserInfo{ID: "ci-operator", Username: "ci-operator"}
-
-	if jobSpec.Refs != nil {
-		tags["org"] = jobSpec.Refs.Org
-		tags["repo"] = jobSpec.Refs.Repo
-		tags["base-ref"] = jobSpec.Refs.BaseRef
-		tags["base-sha"] = jobSpec.Refs.BaseSHA
-
-		if len(jobSpec.Refs.Pulls) == 1 {
-			tags["pull-request"] = strconv.Itoa(jobSpec.Refs.Pulls[0].Number)
-			tags["pull-request-sha"] = jobSpec.Refs.Pulls[0].SHA
-			userInfo.Username = jobSpec.Refs.Pulls[0].Author
-			userInfo.ID = jobSpec.Refs.Pulls[0].Author
-		} else if len(jobSpec.Refs.Pulls) > 1 {
-			var prs []string
-			for _, pull := range jobSpec.Refs.Pulls {
-				prs = append(prs, strconv.Itoa(pull.Number))
-			}
-			tags["pull-requests"] = strings.Join(prs, ",")
-		}
-	}
-
-	return []sentry.Option{sentry.Tags(tags), sentry.User(&userInfo)}
-}
-
-func (o *options) reportToSentry(toReport error) {
-	if o.sentryDSNPath == "" || toReport == nil {
-		return
-	}
-
-	rawDsn, err := ioutil.ReadFile(o.sentryDSNPath)
-	if err != nil {
-		log.Printf("Failed to read Sentry DSN from %s: %v", o.sentryDSNPath, err)
-		return
-	}
-	dsn := strings.TrimSpace(string(rawDsn))
-	sc := sentry.NewClient(sentry.DSN(dsn))
-
-	sentryOpts := sentryOptionsFromJobSpec(o.jobSpec)
-	fingerprint := makeFingerprint(toReport)
-	sentryOpts = append(sentryOpts, sentry.Fingerprint(fingerprint...))
-	sentryOpts = append(sentryOpts, sentry.Message(toReport.Error()))
-	qEvent := sc.Capture(sentryOpts...)
-
-	select {
-	case err := <-qEvent.WaitChannel():
-		if err != nil {
-			log.Printf("Failed to submit failure event to Sentry: %v", err)
-		} else {
-			log.Printf("Submitted failure event to sentry (id=%s)", qEvent.EventID())
-		}
-	case <-time.After(5 * time.Second):
-		log.Printf("Failed to submit failure event to Sentry before 5s timeout")
-	}
-}
-
-func makeFingerprint(toReport error) []string {
-	sanitized := sanitizeMessage(toReport.Error())
-	return []string{sanitized}
-}
-
-type cleanup struct {
-	replacement string
-	patterns    []*regexp.Regexp
-}
-
-func newCleanup(placeholder string, patterns ...string) *cleanup {
-	c := cleanup{replacement: placeholder}
-	for _, pattern := range patterns {
-		c.patterns = append(c.patterns, regexp.MustCompile(pattern))
-	}
-	return &c
-}
-
-func (p *cleanup) apply(message string) string {
-	for _, pattern := range p.patterns {
-		message = pattern.ReplaceAllString(message, p.replacement)
-	}
-	return message
-}
-
-func sanitizeMessage(message string) string {
-	podNames := newCleanup("<PODNAME>", `ci-op-[a-z0-9]{8}`) // ci-op-h4shh4sh
-	isoTimes := newCleanup(
-		"<ISO-DATETIME>",
-		`[0-9]{4}-[0-9]{2}-[0-9]{2}(T[0-9]{2}:[0-9]{2}:[0-9]{2}Z)?`, // 2019-05-21T10:12:14Z | 2019-05-21
-	)
-	uuids := newCleanup(
-		"<UUID>",
-		`[[:alnum:]]{8}-([[:alnum:]]{4}-){3}[[:alnum:]]{12}`, // 8f4e0db5-86a8-11e9-8c0a-12bbdc8a555a
-	)
-	// Few notes about why this is so complex:
-	// 1. We sometimes want to remove generic items like '4s' (four seconds) that
-	//    can occur also as a word substring (e.g. in hashes). So we rectify this
-	//    by capturing these only if surrounded by non-alpha characters (prefix
-	//    and suffix).
-	// 2. Patterns are searched and replaced in the order in which they are passed
-	//    to the `newCleanup` method (so ordering matters!). This allows to first
-	//    find and replace a whole '00h 24m 26s' duration before we would find
-	//    and replace its '26s' member.
-	durations := newCleanup("${prefix}<DURATION>${suffix}",
-		`(?P<prefix>[[:^alpha:]])([\d]+h )?[\d]+m [\d]+s(?P<suffix>[[:^alpha:]])`, // 2h 4m 2s | 4m 2s
-		`(?P<prefix>[[:^alpha:]])([\d]+\.)?[\d]+ms(?P<suffix>[[:^alpha:]])`,       // 0.24ms | 520ms
-		`(?P<prefix>[[:^alpha:]])([\d]+h)?[\d]+m[\d]+s(?P<suffix>[[:^alpha:]])`,   // 2m24s | 24h12m24s
-		`(?P<prefix>[[:^alpha:]])([\d]+\.)?[\d]+s(?P<suffix>[[:^alpha:]])`,        // 0.24s | 234s
-	)
-
-	for _, rule := range []*cleanup{podNames, isoTimes, uuids, durations} {
-		message = rule.apply(message)
-	}
-
-	return message
 }
 
 // eventJobDescription returns a string representing the pull requests and authors description, to be used in events.

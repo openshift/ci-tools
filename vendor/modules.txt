@@ -28,8 +28,6 @@ github.com/GoogleCloudPlatform/testgrid/pb/config
 github.com/GoogleCloudPlatform/testgrid/pb/custom_evaluator
 github.com/GoogleCloudPlatform/testgrid/pb/test_status
 github.com/GoogleCloudPlatform/testgrid/util/gcs
-# github.com/SierraSoftworks/sentry-go v1.1.1
-github.com/SierraSoftworks/sentry-go
 # github.com/alecthomas/chroma v0.7.1
 github.com/alecthomas/chroma
 github.com/alecthomas/chroma/formatters/html
@@ -115,8 +113,6 @@ github.com/bazelbuild/buildtools/tables
 github.com/beorn7/perks/quantile
 # github.com/bwmarrin/snowflake v0.0.0
 github.com/bwmarrin/snowflake
-# github.com/certifi/gocertifi v0.0.0-20190105021004-abcd57078448
-github.com/certifi/gocertifi
 # github.com/cespare/xxhash/v2 v2.1.1
 github.com/cespare/xxhash/v2
 # github.com/clarketm/json v1.13.4
@@ -220,8 +216,6 @@ github.com/jstemmer/go-junit-report/formatter
 github.com/jstemmer/go-junit-report/parser
 # github.com/konsorten/go-windows-terminal-sequences v1.0.2
 github.com/konsorten/go-windows-terminal-sequences
-# github.com/matishsiao/goInfo v0.0.0-20170803142006-617e6440957e
-github.com/matishsiao/goInfo
 # github.com/mattbaird/jsonpatch v0.0.0-20171005235357-81af80346b1a
 github.com/mattbaird/jsonpatch
 # github.com/mattn/go-zglob v0.0.1

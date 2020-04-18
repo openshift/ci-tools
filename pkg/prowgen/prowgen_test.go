@@ -51,7 +51,6 @@ func TestGeneratePodSpec(t *testing.T) {
 					Args: []string{
 						"--give-pr-author-access-to-namespace=true",
 						"--artifact-dir=$(ARTIFACTS)",
-						"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
 						"--kubeconfig=/etc/apici/kubeconfig",
 						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 						"--target=target",
@@ -59,16 +58,11 @@ func TestGeneratePodSpec(t *testing.T) {
 					Resources: corev1.ResourceRequirements{
 						Requests: corev1.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
 					},
-					VolumeMounts: []corev1.VolumeMount{{Name: "sentry-dsn", MountPath: "/etc/sentry-dsn", ReadOnly: true},
+					VolumeMounts: []corev1.VolumeMount{
 						{Name: "apici-ci-operator-credentials", ReadOnly: true, MountPath: "/etc/apici"},
 						{Name: "pull-secret", ReadOnly: true, MountPath: "/etc/pull-secret"}},
 				}},
-				Volumes: []corev1.Volume{{
-					Name: "sentry-dsn",
-					VolumeSource: corev1.VolumeSource{
-						Secret: &corev1.SecretVolumeSource{SecretName: "sentry-dsn"},
-					},
-				},
+				Volumes: []corev1.Volume{
 					{
 						Name: "apici-ci-operator-credentials",
 						VolumeSource: corev1.VolumeSource{
@@ -100,7 +94,6 @@ func TestGeneratePodSpec(t *testing.T) {
 					Args: []string{
 						"--give-pr-author-access-to-namespace=true",
 						"--artifact-dir=$(ARTIFACTS)",
-						"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
 						"--kubeconfig=/etc/apici/kubeconfig",
 						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 						"--promote",
@@ -110,16 +103,11 @@ func TestGeneratePodSpec(t *testing.T) {
 					Resources: corev1.ResourceRequirements{
 						Requests: corev1.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
 					},
-					VolumeMounts: []corev1.VolumeMount{{Name: "sentry-dsn", MountPath: "/etc/sentry-dsn", ReadOnly: true},
+					VolumeMounts: []corev1.VolumeMount{
 						{Name: "apici-ci-operator-credentials", ReadOnly: true, MountPath: "/etc/apici"},
 						{Name: "pull-secret", ReadOnly: true, MountPath: "/etc/pull-secret"}},
 				}},
-				Volumes: []corev1.Volume{{
-					Name: "sentry-dsn",
-					VolumeSource: corev1.VolumeSource{
-						Secret: &corev1.SecretVolumeSource{SecretName: "sentry-dsn"},
-					},
-				},
+				Volumes: []corev1.Volume{
 					{
 						Name: "apici-ci-operator-credentials",
 						VolumeSource: corev1.VolumeSource{
@@ -151,7 +139,6 @@ func TestGeneratePodSpec(t *testing.T) {
 					Args: []string{
 						"--give-pr-author-access-to-namespace=true",
 						"--artifact-dir=$(ARTIFACTS)",
-						"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
 						"--kubeconfig=/etc/apici/kubeconfig",
 						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 						"--promote",
@@ -163,19 +150,13 @@ func TestGeneratePodSpec(t *testing.T) {
 						Requests: corev1.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
 					},
 					VolumeMounts: []corev1.VolumeMount{
-						{Name: "sentry-dsn", MountPath: "/etc/sentry-dsn", ReadOnly: true},
+
 						{Name: "apici-ci-operator-credentials", ReadOnly: true, MountPath: "/etc/apici"},
 						{Name: "pull-secret", ReadOnly: true, MountPath: "/etc/pull-secret"},
 						{Name: "secret-name", MountPath: "/secrets/secret-name", ReadOnly: true},
 					},
 				}},
 				Volumes: []corev1.Volume{
-					{
-						Name: "sentry-dsn",
-						VolumeSource: corev1.VolumeSource{
-							Secret: &corev1.SecretVolumeSource{SecretName: "sentry-dsn"},
-						},
-					},
 					{
 						Name: "apici-ci-operator-credentials",
 						VolumeSource: corev1.VolumeSource{
@@ -212,7 +193,6 @@ func TestGeneratePodSpec(t *testing.T) {
 					Args: []string{
 						"--give-pr-author-access-to-namespace=true",
 						"--artifact-dir=$(ARTIFACTS)",
-						"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
 						"--kubeconfig=/etc/apici/kubeconfig",
 						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 						"--target=target",
@@ -222,16 +202,11 @@ func TestGeneratePodSpec(t *testing.T) {
 					Resources: corev1.ResourceRequirements{
 						Requests: corev1.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
 					},
-					VolumeMounts: []corev1.VolumeMount{{Name: "sentry-dsn", MountPath: "/etc/sentry-dsn", ReadOnly: true},
+					VolumeMounts: []corev1.VolumeMount{
 						{Name: "apici-ci-operator-credentials", ReadOnly: true, MountPath: "/etc/apici"},
 						{Name: "pull-secret", ReadOnly: true, MountPath: "/etc/pull-secret"}},
 				}},
 				Volumes: []corev1.Volume{{
-					Name: "sentry-dsn",
-					VolumeSource: corev1.VolumeSource{
-						Secret: &corev1.SecretVolumeSource{SecretName: "sentry-dsn"},
-					},
-				}, {
 					Name: "apici-ci-operator-credentials",
 					VolumeSource: corev1.VolumeSource{
 						Secret: &corev1.SecretVolumeSource{SecretName: "apici-ci-operator-credentials", Items: []corev1.KeyToPath{{Key: "sa.ci-operator.apici.config", Path: "kubeconfig"}}},
@@ -264,7 +239,6 @@ func TestGeneratePodSpec(t *testing.T) {
 						Args: []string{
 							"--give-pr-author-access-to-namespace=true",
 							"--artifact-dir=$(ARTIFACTS)",
-							"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
 							"--kubeconfig=/etc/apici/kubeconfig",
 							"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 							"--target=target",
@@ -274,9 +248,6 @@ func TestGeneratePodSpec(t *testing.T) {
 							Requests: corev1.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
 						},
 						VolumeMounts: []corev1.VolumeMount{
-							{
-								Name: "sentry-dsn", MountPath: "/etc/sentry-dsn", ReadOnly: true,
-							},
 							{Name: "apici-ci-operator-credentials", ReadOnly: true, MountPath: "/etc/apici"},
 							{Name: "pull-secret", ReadOnly: true, MountPath: "/etc/pull-secret"},
 							{
@@ -288,12 +259,6 @@ func TestGeneratePodSpec(t *testing.T) {
 					},
 				},
 				Volumes: []corev1.Volume{
-					{
-						Name: "sentry-dsn",
-						VolumeSource: corev1.VolumeSource{
-							Secret: &corev1.SecretVolumeSource{SecretName: "sentry-dsn"},
-						},
-					},
 					{
 						Name: "apici-ci-operator-credentials",
 						VolumeSource: corev1.VolumeSource{
@@ -350,12 +315,6 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 				ServiceAccountName: "ci-operator",
 				Volumes: []corev1.Volume{
 					{
-						Name: "sentry-dsn",
-						VolumeSource: corev1.VolumeSource{
-							Secret: &corev1.SecretVolumeSource{SecretName: "sentry-dsn"},
-						},
-					},
-					{
 						Name: "apici-ci-operator-credentials",
 						VolumeSource: corev1.VolumeSource{
 							Secret: &corev1.SecretVolumeSource{SecretName: "apici-ci-operator-credentials", Items: []corev1.KeyToPath{{Key: "sa.ci-operator.apici.config", Path: "kubeconfig"}}},
@@ -408,7 +367,6 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 					Args: []string{
 						"--give-pr-author-access-to-namespace=true",
 						"--artifact-dir=$(ARTIFACTS)",
-						"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
 						"--kubeconfig=/etc/apici/kubeconfig",
 						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 						"--target=test",
@@ -424,7 +382,7 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						{Name: "RPM_REPO_OPENSHIFT_ORIGIN", Value: "https://rpms.svc.ci.openshift.org/openshift-origin-v4.0/"},
 					},
 					VolumeMounts: []corev1.VolumeMount{
-						{Name: "sentry-dsn", MountPath: "/etc/sentry-dsn", ReadOnly: true},
+
 						{Name: "apici-ci-operator-credentials", ReadOnly: true, MountPath: "/etc/apici"},
 						{Name: "pull-secret", ReadOnly: true, MountPath: "/etc/pull-secret"},
 						{Name: "cluster-profile", MountPath: "/usr/local/test-cluster-profile"},
@@ -447,12 +405,6 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 			expected: &corev1.PodSpec{
 				ServiceAccountName: "ci-operator",
 				Volumes: []corev1.Volume{
-					{
-						Name: "sentry-dsn",
-						VolumeSource: corev1.VolumeSource{
-							Secret: &corev1.SecretVolumeSource{SecretName: "sentry-dsn"},
-						},
-					},
 					{
 						Name: "apici-ci-operator-credentials",
 						VolumeSource: corev1.VolumeSource{
@@ -505,7 +457,6 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 					Args: []string{
 						"--give-pr-author-access-to-namespace=true",
 						"--artifact-dir=$(ARTIFACTS)",
-						"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
 						"--kubeconfig=/etc/apici/kubeconfig",
 						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 						"--target=test",
@@ -524,7 +475,7 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						{Name: "TEST_COMMAND", Value: "commands"},
 					},
 					VolumeMounts: []corev1.VolumeMount{
-						{Name: "sentry-dsn", MountPath: "/etc/sentry-dsn", ReadOnly: true},
+
 						{Name: "apici-ci-operator-credentials", ReadOnly: true, MountPath: "/etc/apici"},
 						{Name: "pull-secret", ReadOnly: true, MountPath: "/etc/pull-secret"},
 						{Name: "boskos", ReadOnly: true, MountPath: "/etc/boskos"},
@@ -546,12 +497,6 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 			expected: &corev1.PodSpec{
 				ServiceAccountName: "ci-operator",
 				Volumes: []corev1.Volume{
-					{
-						Name: "sentry-dsn",
-						VolumeSource: corev1.VolumeSource{
-							Secret: &corev1.SecretVolumeSource{SecretName: "sentry-dsn"},
-						},
-					},
 					{
 						Name: "apici-ci-operator-credentials",
 						VolumeSource: corev1.VolumeSource{
@@ -594,7 +539,6 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 					Args: []string{
 						"--give-pr-author-access-to-namespace=true",
 						"--artifact-dir=$(ARTIFACTS)",
-						"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
 						"--kubeconfig=/etc/apici/kubeconfig",
 						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 						"--target=test",
@@ -607,7 +551,7 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						Requests: corev1.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
 					},
 					VolumeMounts: []corev1.VolumeMount{
-						{Name: "sentry-dsn", MountPath: "/etc/sentry-dsn", ReadOnly: true},
+
 						{Name: "apici-ci-operator-credentials", ReadOnly: true, MountPath: "/etc/apici"},
 						{Name: "pull-secret", ReadOnly: true, MountPath: "/etc/pull-secret"},
 						{Name: "boskos", ReadOnly: true, MountPath: "/etc/boskos"},
@@ -634,12 +578,6 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 				ServiceAccountName: "ci-operator",
 				Volumes: []corev1.Volume{
 					{
-						Name: "sentry-dsn",
-						VolumeSource: corev1.VolumeSource{
-							Secret: &corev1.SecretVolumeSource{SecretName: "sentry-dsn"},
-						},
-					},
-					{
 						Name: "apici-ci-operator-credentials",
 						VolumeSource: corev1.VolumeSource{
 							Secret: &corev1.SecretVolumeSource{SecretName: "apici-ci-operator-credentials", Items: []corev1.KeyToPath{{Key: "sa.ci-operator.apici.config", Path: "kubeconfig"}}},
@@ -698,7 +636,6 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 					Args: []string{
 						"--give-pr-author-access-to-namespace=true",
 						"--artifact-dir=$(ARTIFACTS)",
-						"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
 						"--kubeconfig=/etc/apici/kubeconfig",
 						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 						"--target=test",
@@ -720,7 +657,7 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						{Name: "CLUSTER_NESTED_VIRT_IMAGE", Value: "nested-virt-image-name"},
 					},
 					VolumeMounts: []corev1.VolumeMount{
-						{Name: "sentry-dsn", MountPath: "/etc/sentry-dsn", ReadOnly: true},
+
 						{Name: "apici-ci-operator-credentials", ReadOnly: true, MountPath: "/etc/apici"},
 						{Name: "pull-secret", ReadOnly: true, MountPath: "/etc/pull-secret"},
 						{Name: "boskos", ReadOnly: true, MountPath: "/etc/boskos"},
@@ -747,12 +684,6 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 				ServiceAccountName: "ci-operator",
 				Volumes: []corev1.Volume{
 					{
-						Name: "sentry-dsn",
-						VolumeSource: corev1.VolumeSource{
-							Secret: &corev1.SecretVolumeSource{SecretName: "sentry-dsn"},
-						},
-					},
-					{
 						Name: "apici-ci-operator-credentials",
 						VolumeSource: corev1.VolumeSource{
 							Secret: &corev1.SecretVolumeSource{SecretName: "apici-ci-operator-credentials", Items: []corev1.KeyToPath{{Key: "sa.ci-operator.apici.config", Path: "kubeconfig"}}},
@@ -811,7 +742,6 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 					Args: []string{
 						"--give-pr-author-access-to-namespace=true",
 						"--artifact-dir=$(ARTIFACTS)",
-						"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
 						"--kubeconfig=/etc/apici/kubeconfig",
 						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 						"--target=test",
@@ -832,7 +762,7 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						{Name: "CLUSTER_ENABLE_NESTED_VIRT", Value: "true"},
 					},
 					VolumeMounts: []corev1.VolumeMount{
-						{Name: "sentry-dsn", MountPath: "/etc/sentry-dsn", ReadOnly: true},
+
 						{Name: "apici-ci-operator-credentials", ReadOnly: true, MountPath: "/etc/apici"},
 						{Name: "pull-secret", ReadOnly: true, MountPath: "/etc/pull-secret"},
 						{Name: "boskos", ReadOnly: true, MountPath: "/etc/boskos"},
@@ -860,12 +790,6 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 				ServiceAccountName: "ci-operator",
 				Volumes: []corev1.Volume{
 					{
-						Name: "sentry-dsn",
-						VolumeSource: corev1.VolumeSource{
-							Secret: &corev1.SecretVolumeSource{SecretName: "sentry-dsn"},
-						},
-					},
-					{
 						Name: "apici-ci-operator-credentials",
 						VolumeSource: corev1.VolumeSource{
 							Secret: &corev1.SecretVolumeSource{SecretName: "apici-ci-operator-credentials", Items: []corev1.KeyToPath{{Key: "sa.ci-operator.apici.config", Path: "kubeconfig"}}},
@@ -924,7 +848,6 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 					Args: []string{
 						"--give-pr-author-access-to-namespace=true",
 						"--artifact-dir=$(ARTIFACTS)",
-						"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
 						"--kubeconfig=/etc/apici/kubeconfig",
 						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 						"--target=test",
@@ -944,7 +867,7 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						{Name: "TEST_IMAGESTREAM_TAG", Value: "pipeline:kubevirt-test"},
 					},
 					VolumeMounts: []corev1.VolumeMount{
-						{Name: "sentry-dsn", MountPath: "/etc/sentry-dsn", ReadOnly: true},
+
 						{Name: "apici-ci-operator-credentials", ReadOnly: true, MountPath: "/etc/apici"},
 						{Name: "pull-secret", ReadOnly: true, MountPath: "/etc/pull-secret"},
 						{Name: "boskos", ReadOnly: true, MountPath: "/etc/boskos"},
@@ -970,12 +893,6 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 				ServiceAccountName: "ci-operator",
 				Volumes: []corev1.Volume{
 					{
-						Name: "sentry-dsn",
-						VolumeSource: corev1.VolumeSource{
-							Secret: &corev1.SecretVolumeSource{SecretName: "sentry-dsn"},
-						},
-					},
-					{
 						Name: "apici-ci-operator-credentials",
 						VolumeSource: corev1.VolumeSource{
 							Secret: &corev1.SecretVolumeSource{SecretName: "apici-ci-operator-credentials", Items: []corev1.KeyToPath{{Key: "sa.ci-operator.apici.config", Path: "kubeconfig"}}},
@@ -1034,7 +951,6 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 					Args: []string{
 						"--give-pr-author-access-to-namespace=true",
 						"--artifact-dir=$(ARTIFACTS)",
-						"--sentry-dsn-path=/etc/sentry-dsn/ci-operator",
 						"--kubeconfig=/etc/apici/kubeconfig",
 						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 						"--target=test",
@@ -1054,7 +970,7 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						{Name: "TEST_IMAGESTREAM_TAG", Value: "pipeline:kubevirt-test"},
 					},
 					VolumeMounts: []corev1.VolumeMount{
-						{Name: "sentry-dsn", MountPath: "/etc/sentry-dsn", ReadOnly: true},
+
 						{Name: "apici-ci-operator-credentials", ReadOnly: true, MountPath: "/etc/apici"},
 						{Name: "pull-secret", ReadOnly: true, MountPath: "/etc/pull-secret"},
 						{Name: "boskos", ReadOnly: true, MountPath: "/etc/boskos"},

@@ -18,7 +18,6 @@ periodics:
       - --give-pr-author-access-to-namespace=true
       - --artifact-dir=$(ARTIFACTS)
       - --target=e2e-aws-nightly
-      - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
       - --secret-dir=/usr/local/e2e-aws-nightly-cluster-profile
       - --template=/usr/local/e2e-aws-nightly
       command:
@@ -41,9 +40,6 @@ periodics:
       - name: RPM_REPO_OPENSHIFT_ORIGIN
         value: https://rpms.svc.ci.openshift.org/openshift-origin-v4.0/
       volumeMounts:
-      - mountPath: /etc/sentry-dsn
-        name: sentry-dsn
-        readOnly: true
       - mountPath: /usr/local/e2e-aws-nightly-cluster-profile
         name: cluster-profile
       - mountPath: /usr/local/e2e-aws-nightly
@@ -54,9 +50,6 @@ periodics:
           cpu: 10m
     serviceAccountName: ci-operator
     volumes:
-    - name: sentry-dsn
-      secret:
-        secretName: sentry-dsn
     - configMap:
         name: prow-job-cluster-launch-e2e
       name: job-definition
@@ -84,7 +77,6 @@ periodics:
       - --give-pr-author-access-to-namespace=true
       - --artifact-dir=$(ARTIFACTS)
       - --target=e2e-azure-nightly
-      - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
       - --secret-dir=/usr/local/e2e-azure-nightly-cluster-profile
       - --template=/usr/local/e2e-azure-nightly
       command:
@@ -107,9 +99,6 @@ periodics:
       - name: RPM_REPO_OPENSHIFT_ORIGIN
         value: https://rpms.svc.ci.openshift.org/openshift-origin-v4.0/
       volumeMounts:
-      - mountPath: /etc/sentry-dsn
-        name: sentry-dsn
-        readOnly: true
       - mountPath: /usr/local/e2e-azure-nightly-cluster-profile
         name: cluster-profile
       - mountPath: /usr/local/e2e-azure-nightly
@@ -120,9 +109,6 @@ periodics:
           cpu: 10m
     serviceAccountName: ci-operator
     volumes:
-    - name: sentry-dsn
-      secret:
-        secretName: sentry-dsn
     - configMap:
         name: prow-job-cluster-launch-e2e
       name: job-definition

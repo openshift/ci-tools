@@ -22,7 +22,6 @@ periodics:
       - --kubeconfig=/etc/apici/kubeconfig
       - --oauth-token-path=/usr/local/github-credentials/oauth
       - --secret-dir=/usr/local/e2e-nightly-cluster-profile
-      - --sentry-dsn-path=/etc/sentry-dsn/ci-operator
       - --target=e2e-nightly
       - --template=/usr/local/e2e-nightly
       command:
@@ -57,9 +56,6 @@ periodics:
       - mountPath: /etc/pull-secret
         name: pull-secret
         readOnly: true
-      - mountPath: /etc/sentry-dsn
-        name: sentry-dsn
-        readOnly: true
     serviceAccountName: ci-operator
     volumes:
     - name: apici-ci-operator-credentials
@@ -84,6 +80,3 @@ periodics:
     - name: pull-secret
       secret:
         secretName: regcred
-    - name: sentry-dsn
-      secret:
-        secretName: sentry-dsn

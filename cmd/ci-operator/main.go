@@ -57,6 +57,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/junit"
 	"github.com/openshift/ci-tools/pkg/lease"
 	"github.com/openshift/ci-tools/pkg/load"
+	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/util"
 )
@@ -178,12 +179,21 @@ func main() {
 	})
 
 	if err := opt.Complete(); err != nil {
+		err = results.ForReason(results.ReasonLoadingArgs).ForError(err)
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		opt.writeFailingJUnit(err)
 		os.Exit(1)
 	}
 
 	if err := opt.Run(); err != nil {
+		// TODO: maybe we can think of a better way to do this,
+		// but it would be awesome to not need to make the results
+		// library aware of this typed error
+		baseErr := err
+		if wrapped, ok := err.(errWroteJUnit); ok {
+			baseErr = wrapped.error
+		}
+		err = results.DefaultReason(baseErr)
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		opt.writeFailingJUnit(err)
 		os.Exit(1)
@@ -332,19 +342,19 @@ func (o *options) Complete() error {
 	jobSpec, err := api.ResolveSpecFromEnv()
 	if err != nil {
 		if len(o.gitRef) == 0 {
-			return fmt.Errorf("failed to determine job spec: no --git-ref passed and failed to resolve job spec from env: %v", err)
+			return results.ForReason(results.ReasonMissingJobSpec).WithError(err).Errorf("failed to determine job spec: no --git-ref passed and failed to resolve job spec from env: %v", err)
 		}
 		// Failed to read $JOB_SPEC but --git-ref was passed, so try that instead
 		spec, refErr := jobSpecFromGitRef(o.gitRef, o.configSpec.CanonicalGoRepository)
 		if refErr != nil {
-			return fmt.Errorf("failed to determine job spec: failed to resolve --git-ref: %v", refErr)
+			return results.ForReason(results.ReasonMissingJobSpec).WithError(err).Errorf("failed to determine job spec: failed to resolve --git-ref: %v", refErr)
 		}
 		jobSpec = spec
 	} else if len(o.gitRef) > 0 {
 		// Read from $JOB_SPEC but --git-ref was also passed, so merge them
 		spec, err := jobSpecFromGitRef(o.gitRef, o.configSpec.CanonicalGoRepository)
 		if err != nil {
-			return fmt.Errorf("failed to determine job spec: failed to resolve --git-ref: %v", err)
+			return results.ForReason(results.ReasonMissingJobSpec).WithError(err).Errorf("failed to determine job spec: failed to resolve --git-ref: %v", err)
 		}
 		jobSpec.Refs = spec.Refs
 	}
@@ -355,12 +365,12 @@ func (o *options) Complete() error {
 
 	config, err := load.Config(o.configSpecPath, o.registryPath, info)
 	if err != nil {
-		return fmt.Errorf("failed to load configuration: %v", err)
+		return results.ForReason(results.ReasonLoadingConfig).WithError(err).Errorf("failed to load configuration: %v", err)
 	}
 	o.configSpec = config
 
 	if err := o.configSpec.ValidateResolved(); err != nil {
-		return err
+		return results.ForReason(results.ReasonValidatingConfig).ForError(err)
 	}
 
 	if o.dry && o.verbose {
@@ -485,14 +495,14 @@ func (o *options) Run() error {
 	// load the graph from the configuration
 	buildSteps, postSteps, err := defaults.FromConfig(o.configSpec, o.jobSpec, o.templates, o.writeParams, o.artifactDir, o.promote, o.clusterConfig, &o.leaseClient, o.targets.values, o.kubeconfigs, dryLogger, o.cloneAuthConfig, o.pullSecret)
 	if err != nil {
-		return fmt.Errorf("failed to generate steps from config: %v", err)
+		return results.ForReason(results.ReasonDefaultingConfig).WithError(err).Errorf("failed to generate steps from config: %v", err)
 	}
 	// Before we create the namespace, we need to ensure all inputs to the graph
 	// have been resolved. We must run this step before we resolve the partial
 	// graph or otherwise two jobs with different targets would create different
 	// artifact caches.
 	if err := o.resolveInputs(buildSteps); err != nil {
-		return fmt.Errorf("could not resolve inputs: %v", err)
+		return results.ForReason(results.ReasonResolvingInputs).WithError(err).Errorf("could not resolve inputs: %v", err)
 	}
 
 	if err := o.writeMetadataJSON(); err != nil {
@@ -508,7 +518,7 @@ func (o *options) Run() error {
 	// convert the full graph into the subset we must run
 	nodes, err := api.BuildPartialGraph(buildSteps, o.targets.values)
 	if err != nil {
-		return fmt.Errorf("could not build execution graph: %v", err)
+		return results.ForReason(results.ReasonBuildingGraph).WithError(err).Errorf("could not build execution graph: %v", err)
 	}
 
 	if err := printExecutionOrder(nodes); err != nil {
@@ -518,7 +528,7 @@ func (o *options) Run() error {
 	// initialize the namespace if necessary and create any resources that must
 	// exist prior to execution
 	if err := o.initializeNamespace(); err != nil {
-		return fmt.Errorf("could not initialize namespace: %v", err)
+		return results.ForReason(results.ReasonInitializingNamespace).WithError(err).Errorf("could not initialize namespace: %v", err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	handler := func(s os.Signal) {
@@ -560,7 +570,7 @@ func (o *options) Run() error {
 			if !o.dry {
 				time.Sleep(time.Second)
 			}
-			return errWroteJUnit{fmt.Errorf("could not run steps: %v", err)}
+			return errWroteJUnit{results.ForReason(results.ReasonExecutingGraph).WithError(err).Errorf("could not run steps: %v", err)}
 		}
 
 		for _, step := range postSteps {
@@ -570,7 +580,7 @@ func (o *options) Run() error {
 				if !o.dry {
 					time.Sleep(time.Second)
 				}
-				return fmt.Errorf("could not run post step %s: %v", step.Name(), err)
+				return results.ForReason(results.ReasonExecutingPost).WithError(err).Errorf("could not run post step %s: %v", step.Name(), err)
 			}
 		}
 

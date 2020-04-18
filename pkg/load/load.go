@@ -15,6 +15,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/registry"
+	"github.com/openshift/ci-tools/pkg/results"
 )
 
 // ResolverInfo contains the data needed to get a config from the configresolver
@@ -49,7 +50,9 @@ func Config(path, registryPath string, info *ResolverInfo) (*api.ReleaseBuildCon
 		}
 		raw = spec
 	} else {
-		return configFromResolver(info)
+		configSpec, err := configFromResolver(info)
+		err = results.ForReason(results.ReasonConfigResolver).ForError(err)
+		return configSpec, err
 	}
 	configSpec := api.ReleaseBuildConfiguration{}
 	if err := yaml.UnmarshalStrict([]byte(raw), &configSpec); err != nil {

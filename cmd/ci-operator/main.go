@@ -246,8 +246,6 @@ type options struct {
 	impersonateUser               string
 	authors                       []string
 
-	sentryDSNPath string
-
 	resolverAddress string
 	registryPath    string
 	org             string
@@ -311,7 +309,6 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.StringVar(&opt.gitRef, "git-ref", "", "Populate the job spec from this local Git reference. If JOB_SPEC is set, the refs field will be overwritten.")
 	flag.BoolVar(&opt.givePrAuthorAccessToNamespace, "give-pr-author-access-to-namespace", false, "Give view access to the temporarily created namespace to the PR author.")
 	flag.StringVar(&opt.impersonateUser, "as", "", "Username to impersonate")
-	flag.StringVar(&opt.sentryDSNPath, "sentry-dsn-path", "", "Path to a file containing Sentry DSN. Enables reporting errors to Sentry")
 	flag.BoolVar(&opt.determinizeOutput, "determinize-output", false, "Determinize dry run's output by ordering the created objects.")
 
 	// flags needed for the configresolver

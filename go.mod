@@ -35,6 +35,7 @@ require (
 	github.com/prometheus/client_golang v1.5.0
 	github.com/shurcooL/githubv4 v0.0.0-20191102174205-af46314aec7b
 	github.com/sirupsen/logrus v1.4.2
+	github.com/spf13/afero v1.2.2
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
 	k8s.io/api v0.18.0
 	k8s.io/apimachinery v0.18.0

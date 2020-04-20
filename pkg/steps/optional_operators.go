@@ -8,11 +8,16 @@ import (
 )
 
 const (
-	ooIndex            = "OO_INDEX"
-	ooPackage          = "OO_PACKAGE"
-	ooChannel          = "OO_CHANNEL"
-	ooInstallNamespace = "OO_INSTALL_NAMESPACE"
-	ooTargetNamespaces = "OO_TARGET_NAMESPACES"
+	//OOIndex is a text placeholder
+	OOIndex = "OO_INDEX"
+	//OOPackage is a text placeholder
+	OOPackage = "OO_PACKAGE"
+	//OOChannel is a text placeholder
+	OOChannel = "OO_CHANNEL"
+	//OOInstallNamespace is a text placeholder
+	OOInstallNamespace = "OO_INSTALL_NAMESPACE"
+	//OOTargetNamespaces is a text placeholder
+	OOTargetNamespaces = "OO_TARGET_NAMESPACES"
 )
 
 // optionalOperator is the information needed by the optional operator installation
@@ -45,9 +50,9 @@ func resolveOptionalOperator(parameters getter) (*optionalOperator, error) {
 	var oo optionalOperator
 
 	required := map[string]*string{
-		ooIndex:   &oo.Index,
-		ooPackage: &oo.Package,
-		ooChannel: &oo.Channel,
+		OOIndex:   &oo.Index,
+		OOPackage: &oo.Package,
+		OOChannel: &oo.Channel,
 	}
 
 	for param, valuePointer := range required {
@@ -58,10 +63,10 @@ func resolveOptionalOperator(parameters getter) (*optionalOperator, error) {
 		*valuePointer = value
 	}
 
-	if oo.Namespace, err = parameters.Get(ooInstallNamespace); err != nil {
+	if oo.Namespace, err = parameters.Get(OOInstallNamespace); err != nil {
 		oo.Namespace = ""
 	}
-	if targetNamespaces, err := parameters.Get(ooTargetNamespaces); err != nil || targetNamespaces == "" {
+	if targetNamespaces, err := parameters.Get(OOTargetNamespaces); err != nil || targetNamespaces == "" {
 		oo.TargetNamespaces = nil
 	} else {
 		oo.TargetNamespaces = strings.Split(targetNamespaces, ",")
@@ -86,21 +91,21 @@ func resolveOptionalOperator(parameters getter) (*optionalOperator, error) {
 // the optional operator installation step.
 func (oo *optionalOperator) asEnv() []coreapi.EnvVar {
 	env := []coreapi.EnvVar{
-		{Name: ooIndex, Value: oo.Index},
-		{Name: ooPackage, Value: oo.Package},
-		{Name: ooChannel, Value: oo.Channel},
+		{Name: OOIndex, Value: oo.Index},
+		{Name: OOPackage, Value: oo.Package},
+		{Name: OOChannel, Value: oo.Channel},
 	}
 
 	if oo.Namespace != "" {
 		env = append(env, coreapi.EnvVar{
-			Name:  ooInstallNamespace,
+			Name:  OOInstallNamespace,
 			Value: oo.Namespace,
 		})
 	}
 
 	if len(oo.TargetNamespaces) > 0 {
 		env = append(env, coreapi.EnvVar{
-			Name:  ooTargetNamespaces,
+			Name:  OOTargetNamespaces,
 			Value: strings.Join(oo.TargetNamespaces, ","),
 		})
 	}

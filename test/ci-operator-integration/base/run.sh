@@ -57,6 +57,7 @@ check() {
 
 echo "[INFO] Running ci-operator in dry-mode..."
 run_test --lease-server http://boskos.example.com > "${DRY_RUN_JSON}"
+if [[ ${UPDATE:-false} = true ]]; then cat $DRY_RUN_JSON > $EXPECTED; fi
 check "${EXPECTED}" "${DRY_RUN_JSON}"
 
 echo "[INFO] Running ci-operator with a template"
@@ -65,6 +66,7 @@ IMAGE_FORMAT=test CLUSTER_TYPE=aws TEST_COMMAND='test command' \
     --template "${TEST_TEMPLATE}" \
     --target test-template \
     --artifact-dir "${ARTIFACT_DIR}"
+if [[ ${UPDATE:-false} = true ]]; then cat $DRY_RUN_WITH_TEMPLATE_JSON > $EXPECTED_WITH_TEMPLATE; fi
 check "${EXPECTED_WITH_TEMPLATE}" "${DRY_RUN_WITH_TEMPLATE_JSON}"
 
 echo "[INFO] Running ci-operator with OAuth"
@@ -91,6 +93,7 @@ touch "${PULL_SECRET_PATH}"
 
 echo "[INFO] Running ci-operator with a pull secret"
 run_test --lease-server http://boskos.example.com --image-import-pull-secret "${PULL_SECRET_PATH}" > "${DRY_RUN_WITH_PULL_SECRET}"
+if [[ ${UPDATE:-false} = true ]]; then cat $DRY_RUN_WITH_PULL_SECRET > $EXPECTED_WITH_PULL_SECRET; fi
 check "${EXPECTED_WITH_PULL_SECRET}" "${DRY_RUN_WITH_PULL_SECRET}"
 
 echo "[INFO] Success"

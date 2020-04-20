@@ -1168,7 +1168,6 @@
       "namespace": "testns"
     },
     "spec": {
-      "host": "",
       "port": {
         "targetPort": 8080
       },
@@ -1178,9 +1177,7 @@
         "weight": null
       }
     },
-    "status": {
-      "ingress": null
-    }
+    "status": {}
   },
   {
     "apiVersion": "v1",

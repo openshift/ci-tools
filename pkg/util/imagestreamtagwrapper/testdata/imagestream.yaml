@@ -1,0 +1,68 @@
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  creationTimestamp: "2020-04-17T23:30:58Z"
+  generation: 3
+  name: pipeline
+  namespace: ci-op-jpdy23wx
+  resourceVersion: "632136220"
+  selfLink: /apis/image.openshift.io/v1/namespaces/ci-op-jpdy23wx/imagestreams/pipeline
+  uid: 7df88811-8103-11ea-99ef-42010a8e0002
+spec:
+  lookupPolicy:
+    local: true
+  tags:
+  - annotations: null
+    from:
+      kind: ImageStreamImage
+      name: 4.5@sha256:3823c45b9feec9e861d1fd7ef268e38717b3b94adae26dd76eba3ac5f8b8cab9
+      namespace: ocp
+    generation: 3
+    importPolicy: {}
+    name: base
+    referencePolicy:
+      type: Local
+  - annotations: null
+    from:
+      kind: ImageStreamImage
+      name: release@sha256:fd41b8b3efb8db1187ac231ca84863a8106880d049123d6eddfe21d7f751c627
+      namespace: openshift
+    generation: 2
+    importPolicy: {}
+    name: root
+    referencePolicy:
+      type: Local
+status:
+  dockerImageRepository: docker-registry.default.svc:5000/ci-op-jpdy23wx/pipeline
+  publicDockerImageRepository: registry.svc.ci.openshift.org/ci-op-jpdy23wx/pipeline
+  tags:
+  - items:
+    - created: "2020-04-17T23:30:58Z"
+      dockerImageReference: docker-registry.default.svc:5000/ci-op-jpdy23wx/pipeline@sha256:3823c45b9feec9e861d1fd7ef268e38717b3b94adae26dd76eba3ac5f8b8cab9
+      generation: 3
+      image: sha256:3823c45b9feec9e861d1fd7ef268e38717b3b94adae26dd76eba3ac5f8b8cab9
+    tag: base
+  - items:
+    - created: "2020-04-17T23:34:13Z"
+      dockerImageReference: docker-registry.default.svc:5000/ci-op-jpdy23wx/pipeline@sha256:1ce9116f933912f8fc948194c8515a2917e705bf7e772b465aa643544eabcaec
+      generation: 3
+      image: sha256:1ce9116f933912f8fc948194c8515a2917e705bf7e772b465aa643544eabcaec
+    tag: bin
+  - items:
+    - created: "2020-04-17T23:35:07Z"
+      dockerImageReference: docker-registry.default.svc:5000/ci-op-jpdy23wx/pipeline@sha256:382c10e43129fe7ca09b7a63c26ee01c8880168b3166615220eaa7738b2c4a31
+      generation: 3
+      image: sha256:382c10e43129fe7ca09b7a63c26ee01c8880168b3166615220eaa7738b2c4a31
+    tag: cluster-etcd-operator
+  - items:
+    - created: "2020-04-17T23:30:58Z"
+      dockerImageReference: docker.io/openshift/origin-release@sha256:fd41b8b3efb8db1187ac231ca84863a8106880d049123d6eddfe21d7f751c627
+      generation: 2
+      image: sha256:fd41b8b3efb8db1187ac231ca84863a8106880d049123d6eddfe21d7f751c627
+    tag: root
+  - items:
+    - created: "2020-04-17T23:31:47Z"
+      dockerImageReference: docker-registry.default.svc:5000/ci-op-jpdy23wx/pipeline@sha256:8f73863b1fe4485ff173fdd5fefd54d03949cf83437084780815329d9d88c76a
+      generation: 3
+      image: sha256:8f73863b1fe4485ff173fdd5fefd54d03949cf83437084780815329d9d88c76a
+    tag: src

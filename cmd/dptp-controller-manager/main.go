@@ -81,9 +81,10 @@ func main() {
 		ProwJobNamespace:      opts.ProwJobNamespace,
 		GitClient:             gitClient,
 	}
-	if err := imagestreamtagreconciler.AddToManager(mgr, imageStreamTagReconcilerOpts); err != nil {
-		logrus.WithError(err).Fatal("Failed to add imagestreamtagreconciler")
-	}
+	_ = imageStreamTagReconcilerOpts
+	//	if err := imagestreamtagreconciler.AddToManager(mgr, imageStreamTagReconcilerOpts); err != nil {
+	//		logrus.WithError(err).Fatal("Failed to add imagestreamtagreconciler")
+	//	}
 
 	stopCh := controllerruntime.SetupSignalHandler()
 	if err := mgr.Start(stopCh); err != nil {

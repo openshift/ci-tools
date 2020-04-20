@@ -1,6 +1,7 @@
 FROM centos:8
 
 ADD private-org-peribolos-sync /usr/bin/private-org-peribolos-sync
+ADD autoperibolossync /usr/bin/autoperibolossync
 
 RUN yum install -y git && \
     yum clean all && \

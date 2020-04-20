@@ -21,16 +21,23 @@ import (
 )
 
 const (
-	multiStageTestLabel     = "ci.openshift.io/multi-stage-test"
-	clusterProfileMountPath = "/var/run/secrets/ci.openshift.io/cluster-profile"
-	secretMountPath         = "/var/run/secrets/ci.openshift.io/multi-stage"
-	secretMountEnv          = "SHARED_DIR"
-	clusterProfileMountEnv  = "CLUSTER_PROFILE_DIR"
-	initialReleaseEnv       = "RELEASE_IMAGE_INITIAL"
-	latestReleaseEnv        = "RELEASE_IMAGE_LATEST"
+	//MultiStageTestLabel is a text placeholder
+	MultiStageTestLabel = "ci.openshift.io/multi-stage-test"
+	//ClusterProfileMountPath is a text placeholder
+	ClusterProfileMountPath = "/var/run/secrets/ci.openshift.io/cluster-profile"
+	//SecretMountPath is a text placeholder
+	SecretMountPath = "/var/run/secrets/ci.openshift.io/multi-stage"
+	//SecretMountEnv is a text placeholder
+	SecretMountEnv = "SHARED_DIR"
+	//ClusterProfileMountEnv is a text placeholder
+	ClusterProfileMountEnv = "CLUSTER_PROFILE_DIR"
+	//InitialReleaseEnv is a text placeholder
+	InitialReleaseEnv = "RELEASE_IMAGE_INITIAL"
+	//LatestReleaseEnv is a text placeholder
+	LatestReleaseEnv = "RELEASE_IMAGE_LATEST"
 )
 
-var envForProfile = []string{initialReleaseEnv, latestReleaseEnv, leaseEnv}
+var envForProfile = []string{InitialReleaseEnv, LatestReleaseEnv, leaseEnv}
 
 type multiStageTestStep struct {
 	dry     bool
@@ -180,7 +187,7 @@ func (s *multiStageTestStep) Provides() (api.ParameterMap, api.StepLink) {
 func (s *multiStageTestStep) SubTests() []*junit.TestCase { return s.subTests }
 
 func (s *multiStageTestStep) setupRBAC() error {
-	labels := map[string]string{multiStageTestLabel: s.name}
+	labels := map[string]string{MultiStageTestLabel: s.name}
 	m := meta.ObjectMeta{Name: s.name, Labels: labels}
 	sa := &coreapi.ServiceAccount{ObjectMeta: m}
 	role := &rbacapi.Role{
@@ -253,10 +260,10 @@ func (s *multiStageTestStep) runSteps(ctx context.Context, steps []api.LiteralTe
 	}
 	select {
 	case <-ctx.Done():
-		log.Printf("cleanup: Deleting pods with label %s=%s", multiStageTestLabel, s.name)
+		log.Printf("cleanup: Deleting pods with label %s=%s", MultiStageTestLabel, s.name)
 		if !s.dry {
 			if err := deletePods(s.podClient.Pods(s.jobSpec.Namespace), s.name); err != nil {
-				errs = append(errs, fmt.Errorf("failed to delete pods with label %s=%s: %v", multiStageTestLabel, s.name, err))
+				errs = append(errs, fmt.Errorf("failed to delete pods with label %s=%s: %v", MultiStageTestLabel, s.name, err))
 			}
 		}
 		errs = append(errs, fmt.Errorf("cancelled"))
@@ -289,7 +296,7 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep) ([]coreap
 		}
 		delete(pod.Labels, ProwJobIdLabel)
 		pod.Annotations[annotationSaveContainerLogs] = "true"
-		pod.Labels[multiStageTestLabel] = s.name
+		pod.Labels[MultiStageTestLabel] = s.name
 		pod.Spec.ServiceAccountName = s.name
 		addSecretWrapper(pod)
 		container := &pod.Spec.Containers[0]
@@ -305,7 +312,7 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep) ([]coreap
 		if s.profile != "" {
 			addProfile(s.profileSecretName(), s.profile, pod)
 			container.Env = append(container.Env, []coreapi.EnvVar{
-				{Name: "KUBECONFIG", Value: filepath.Join(secretMountPath, "kubeconfig")},
+				{Name: "KUBECONFIG", Value: filepath.Join(SecretMountPath, "kubeconfig")},
 			}...)
 		}
 		addSecret(s.name, pod)
@@ -348,11 +355,11 @@ func addSecret(secret string, pod *coreapi.Pod) {
 	})
 	pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, coreapi.VolumeMount{
 		Name:      secret,
-		MountPath: secretMountPath,
+		MountPath: SecretMountPath,
 	})
 	pod.Spec.Containers[0].Env = append(pod.Spec.Containers[0].Env, coreapi.EnvVar{
-		Name:  secretMountEnv,
-		Value: secretMountPath,
+		Name:  SecretMountEnv,
+		Value: SecretMountPath,
 	})
 }
 
@@ -369,14 +376,14 @@ func addProfile(name string, profile api.ClusterProfile, pod *coreapi.Pod) {
 	container := &pod.Spec.Containers[0]
 	container.VolumeMounts = append(container.VolumeMounts, coreapi.VolumeMount{
 		Name:      volumeName,
-		MountPath: clusterProfileMountPath,
+		MountPath: ClusterProfileMountPath,
 	})
 	container.Env = append(container.Env, []coreapi.EnvVar{{
 		Name:  "CLUSTER_TYPE",
 		Value: profile.ClusterType(),
 	}, {
-		Name:  clusterProfileMountEnv,
-		Value: clusterProfileMountPath,
+		Name:  ClusterProfileMountEnv,
+		Value: ClusterProfileMountPath,
 	}}...)
 }
 
@@ -432,7 +439,7 @@ func deletePods(client coreclientset.PodInterface, test string) error {
 		&meta.DeleteOptions{},
 		meta.ListOptions{
 			LabelSelector: fields.Set{
-				multiStageTestLabel: test,
+				MultiStageTestLabel: test,
 			}.AsSelector().String(),
 		},
 	)

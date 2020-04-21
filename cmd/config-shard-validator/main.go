@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 
 	"k8s.io/api/core/v1"
+	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
 	_ "k8s.io/test-infra/prow/hook"
 	"k8s.io/test-infra/prow/plugins"
@@ -123,10 +124,22 @@ func main() {
 		var matchedMap string
 		logger := logrus.WithField("source-file", pathToCheck.path)
 		for glob, updateConfig := range pcfg.ConfigUpdater.Maps {
+			if _, hasDefaultCluster := updateConfig.Clusters[prowv1.DefaultClusterAlias]; hasDefaultCluster {
+				logger.Errorf("cluster alias %s is not allowed, please explicitly specific the name of the cluster", prowv1.DefaultClusterAlias)
+				foundFailures = true
+			}
+
 			globLogger := logger.WithField("glob", glob)
 			matches, matchErr := zglob.Match(glob, pathToCheck.path)
 			if matchErr != nil {
 				globLogger.WithError(matchErr).Warn("Failed to check glob match.")
+			}
+			if jobConfigMatch, err := zglob.Match(glob, "ci-operator/jobs"); err != nil {
+				globLogger.WithError(err).Error("failed to check if config is a jobconfig")
+				foundFailures = true
+			} else if jobConfigMatch && (updateConfig.GZIP == nil || !*updateConfig.GZIP) {
+				globLogger.Error("gzip must be enabled for job configs")
+				foundFailures = true
 			}
 			if matches {
 				if matchesAny {

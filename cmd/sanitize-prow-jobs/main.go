@@ -19,6 +19,7 @@ const defaultCluster = "api.ci"
 
 type options struct {
 	prowJobConfigDir string
+	configPath       string
 
 	help bool
 }
@@ -27,6 +28,7 @@ func bindOptions(flag *flag.FlagSet) *options {
 	opt := &options{}
 
 	flag.StringVar(&opt.prowJobConfigDir, "prow-jobs-dir", "", "Path to a root of directory structure with Prow job config files (ci-operator/jobs in openshift/release)")
+	flag.StringVar(&opt.configPath, "config-path", "", "Path to the config file (core-services/sanitize-prow-jobs/_config.yaml in openshift/release)")
 	flag.BoolVar(&opt.help, "h", false, "Show help for ci-operator-prowgen")
 
 	return opt

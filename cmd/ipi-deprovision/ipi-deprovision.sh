@@ -53,6 +53,26 @@ EOF
   echo "will deprovision GCE cluster ${infraID} in region ${region}"
 done
 
+libvirt_p_cluster_age_cutoff="4 hours ago"
+echo "deprovisioning clusters with creation time before ${libvirt_p_cluster_age_cutoff} in libvirt-p"
+for network in $( ssh "${bastion_p}" virsh net-list --all --name | grep -v default ) ; do
+	if $( ssh "${bastion_p}" journalctl -u libvirtd.service --until "${libvirt_p_cluster_age_cutoff}" 2>/dev/null | grep "${network}" ) ; then
+    infraID="${network}"
+    workdir="/tmp/deprovision/${infraID}"
+    mkdir -p "${workdir}"
+    cat <<EOF >"${workdir}/metadata.json"
+{
+  "infraID":"${infraID}",
+  "libvirt":{
+    "uri":"qemu+tcp://${bastion_p}/system"
+  }
+}
+EOF
+  echo "will deprovision libvirt cluster ${infraID} on p host ${bastion_p}"
+  fi
+done
+
+
 for workdir in $( find /tmp/deprovision -mindepth 1 -type d | shuf ); do
   timeout 30m openshift-install --dir "${workdir}" --log-level debug destroy cluster
 done

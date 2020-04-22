@@ -172,8 +172,6 @@ func handleWithMetrics(h http.HandlerFunc) http.HandlerFunc {
 		labels := prometheus.Labels{"status": strconv.Itoa(trw.statusCode), "path": r.URL.EscapedPath()}
 		configresolverMetrics.httpRequestDuration.With(labels).Observe(latency.Seconds())
 		configresolverMetrics.httpResponseSize.With(labels).Observe(float64(trw.size))
-		log.Debugf("Response Time: %.6f", latency.Seconds())
-		log.Debugf("Response Size: %.0f", float64(trw.size))
 	})
 }
 
@@ -213,13 +211,19 @@ func resolveConfig(configAgent agents.ConfigAgent, registryAgent agents.Registry
 			Branch:  branch,
 			Variant: variant,
 		}
+		logger := log.WithFields(log.Fields{
+			"org":     org,
+			"repo":    repo,
+			"branch":  branch,
+			"variant": variant,
+		})
 
 		config, err := configAgent.GetConfig(info)
 		if err != nil {
 			recordError("config not found")
-			w.WriteHeader(http.StatusBadRequest)
+			w.WriteHeader(http.StatusNotFound)
 			fmt.Fprintf(w, "failed to get config: %v", err)
-			log.WithError(err).Warning("failed to get config")
+			logger.WithError(err).Warning("failed to get config")
 			return
 		}
 		config, err = registryAgent.ResolveConfig(config)
@@ -227,7 +231,7 @@ func resolveConfig(configAgent agents.ConfigAgent, registryAgent agents.Registry
 			recordError("failed to resolve config with registry")
 			w.WriteHeader(http.StatusInternalServerError)
 			fmt.Fprintf(w, "failed to resolve config with registry: %v", err)
-			log.WithError(err).Warning("failed to resolve config with registry")
+			logger.WithError(err).Warning("failed to resolve config with registry")
 			return
 		}
 		jsonConfig, err := json.MarshalIndent(config, "", "  ")
@@ -235,7 +239,7 @@ func resolveConfig(configAgent agents.ConfigAgent, registryAgent agents.Registry
 			recordError("failed to marshal config")
 			w.WriteHeader(http.StatusInternalServerError)
 			fmt.Fprintf(w, "failed to marshal config to JSON: %v", err)
-			log.WithError(err).Errorf("failed to marshal config to JSON")
+			logger.WithError(err).Errorf("failed to marshal config to JSON")
 			return
 		}
 		w.WriteHeader(http.StatusOK)

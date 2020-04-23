@@ -476,10 +476,10 @@ func TestArtifacts(t *testing.T) {
 				Type:      prowapi.PeriodicJob,
 			},
 		},
-		test: []api.LiteralTestStep{{
-			As:          "test0",
-			ArtifactDir: "/path/to/artifacts",
-		}},
+		test: []api.LiteralTestStep{
+			{As: "test0", ArtifactDir: "/path/to/artifacts"},
+			{As: "test1", ArtifactDir: "/path/to/artifacts"},
+		},
 	}
 	fakecs := fake.NewSimpleClientset()
 	executor := fakePodExecutor{}
@@ -492,8 +492,10 @@ func TestArtifacts(t *testing.T) {
 	if err := step.Run(context.Background(), false); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(tmp, "test")); err != nil {
-		t.Fatalf("error verifying output directory exists: %v", err)
+	for _, x := range []string{"test0", "test1"} {
+		if _, err := os.Stat(filepath.Join(tmp, x)); err != nil {
+			t.Fatalf("error verifying output directory %q exists: %v", x, err)
+		}
 	}
 }
 

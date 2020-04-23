@@ -389,6 +389,7 @@ func addProfile(name string, profile api.ClusterProfile, pod *coreapi.Pod) {
 
 func (s *multiStageTestStep) runPods(ctx context.Context, pods []coreapi.Pod, shortCircuit bool) error {
 	done := ctx.Done()
+	namePrefix := s.name + "-"
 	var errs []error
 	for _, pod := range pods {
 		log.Printf("Executing %q", pod.Name)
@@ -396,7 +397,8 @@ func (s *multiStageTestStep) runPods(ctx context.Context, pods []coreapi.Pod, sh
 		for _, c := range pod.Spec.Containers {
 			if c.Name == "artifacts" {
 				container := pod.Spec.Containers[0].Name
-				artifacts := NewArtifactWorker(s.podClient, filepath.Join(s.artifactDir, container), s.jobSpec.Namespace)
+				dir := filepath.Join(s.artifactDir, strings.TrimPrefix(pod.Name, namePrefix))
+				artifacts := NewArtifactWorker(s.podClient, dir, s.jobSpec.Namespace)
 				artifacts.CollectFromPod(pod.Name, []string{container}, nil)
 				notifier = artifacts
 				break

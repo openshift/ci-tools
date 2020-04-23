@@ -9,6 +9,7 @@ import (
 	"github.com/sirupsen/logrus"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/test-infra/prow/git"
+	"k8s.io/test-infra/prow/pjutil"
 	"sigs.k8s.io/controller-runtime"
 
 	"github.com/openshift/ci-tools/pkg/controller/image-stream-tag-reconciler"
@@ -51,6 +52,7 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get options")
 	}
+	logrus.SetLevel(logrus.DebugLevel)
 
 	cfg, err := controllerruntime.GetConfig()
 	if err != nil {
@@ -74,6 +76,7 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to construct manager")
 	}
+	pjutil.ServePProf()
 
 	imageStreamTagReconcilerOpts := imagestreamtagreconciler.Options{
 		DryRun:                opts.DryRun,
@@ -81,10 +84,9 @@ func main() {
 		ProwJobNamespace:      opts.ProwJobNamespace,
 		GitClient:             gitClient,
 	}
-	_ = imageStreamTagReconcilerOpts
-	//	if err := imagestreamtagreconciler.AddToManager(mgr, imageStreamTagReconcilerOpts); err != nil {
-	//		logrus.WithError(err).Fatal("Failed to add imagestreamtagreconciler")
-	//	}
+	if err := imagestreamtagreconciler.AddToManager(mgr, imageStreamTagReconcilerOpts); err != nil {
+		logrus.WithError(err).Fatal("Failed to add imagestreamtagreconciler")
+	}
 
 	stopCh := controllerruntime.SetupSignalHandler()
 	if err := mgr.Start(stopCh); err != nil {

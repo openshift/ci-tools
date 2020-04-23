@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	imagev1 "github.com/openshift/api/image/v1"
 	"github.com/sirupsen/logrus"
@@ -29,6 +30,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/load/agents"
 	"github.com/openshift/ci-tools/pkg/prowgen"
 	"github.com/openshift/ci-tools/pkg/steps/release"
+	"github.com/openshift/ci-tools/pkg/util/imagestreamtagwrapper"
 )
 
 type Options struct {
@@ -46,21 +48,26 @@ func AddToManager(mgr controllerruntime.Manager, opts Options) error {
 		return fmt.Errorf("failed to add prowv1 to scheme: %w", err)
 	}
 
+	if err := opts.CIOperatorConfigAgent.AddIndex(configIndexName, configIndexFn); err != nil {
+		return fmt.Errorf("failed to add indexer to config-agent: %w", err)
+	}
+
+	log := logrus.WithField("controller", "imageStreamTagReconciler")
 	r := &reconciler{
-		ctx:              context.Background(),
-		log:              logrus.WithField("controller", "imageStreamTagReconciler"),
-		client:           mgr.GetClient(),
-		dryRun:           opts.DryRun,
-		ciOPConfigAgent:  opts.CIOperatorConfigAgent,
-		prowJobNamespace: opts.ProwJobNamespace,
-		gitClient:        opts.GitClient,
+		ctx:                 context.Background(),
+		log:                 log,
+		client:              imagestreamtagwrapper.New(mgr.GetClient()),
+		releaseBuildConfigs: opts.CIOperatorConfigAgent,
+		dryRun:              opts.DryRun,
+		prowJobNamespace:    opts.ProwJobNamespace,
+		gitClient:           opts.GitClient,
 	}
 	c, err := controller.New(
 		"imageStreamTagReconciler",
 		mgr,
 		// We currently have 50k ImageStreamTags in the OCP namespace and need to periodically reconcile all of them,
 		// so don't be stingy with the workers
-		controller.Options{Reconciler: r, MaxConcurrentReconciles: 100})
+		controller.Options{Reconciler: r, MaxConcurrentReconciles: 1000})
 	if err != nil {
 		return fmt.Errorf("failed to construct controller: %w", err)
 	}
@@ -86,23 +93,27 @@ func AddToManager(mgr controllerruntime.Manager, opts Options) error {
 		)}); err != nil {
 		return fmt.Errorf("failed to create watch for ImageStreams: %w", err)
 	}
+	r.log.Info("Successfully added reconciler to manager")
 
 	return nil
 }
 
 type reconciler struct {
-	ctx              context.Context
-	log              *logrus.Entry
-	client           ctrlruntimeclient.Client
-	dryRun           bool
-	ciOPConfigAgent  agents.ConfigAgent
-	prowJobNamespace string
-	gitClient        *git.Client
+	ctx                 context.Context
+	log                 *logrus.Entry
+	client              ctrlruntimeclient.Client
+	releaseBuildConfigs agents.ConfigAgent
+	dryRun              bool
+	prowJobNamespace    string
+	gitClient           *git.Client
 }
 
 func (r *reconciler) Reconcile(req controllerruntime.Request) (controllerruntime.Result, error) {
 	log := r.log.WithField("name", req.Name).WithField("namespace", req.Namespace)
 	log.Info("Starting reconciliation")
+	startTime := time.Now()
+	defer func() { log.WithField("duration", time.Since(startTime)).Info("Finished reconciliation") }()
+
 	err := r.reconcile(req, log)
 	if err != nil {
 		log.WithError(err).Error("Reconciliation failed")
@@ -116,6 +127,9 @@ func (r *reconciler) Reconcile(req controllerruntime.Request) (controllerruntime
 }
 
 func (r *reconciler) reconcile(req controllerruntime.Request, log *logrus.Entry) error {
+
+	log.Debug("Getting ImageStreamTag")
+	startTime := time.Now()
 	ist := &imagev1.ImageStreamTag{}
 	if err := r.client.Get(r.ctx, req.NamespacedName, ist); err != nil {
 		// Object got deleted while it was in the workqueue
@@ -124,12 +138,18 @@ func (r *reconciler) reconcile(req controllerruntime.Request, log *logrus.Entry)
 		}
 		return fmt.Errorf("failed to get object: %w", err)
 	}
+	log.WithField("duration", time.Since(startTime)).Debug("Got ImageStreamTag")
 
-	ciOPConfig, publishedViaCIOperator := r.isPublishedFromCIOperatorRepo(log, ist)
-	if !publishedViaCIOperator {
+	log.Debug("Checking if is published from CI Opreator")
+	ciOPConfig, err := r.promotionConfig(ist)
+	if err != nil {
+		return fmt.Errorf("failed to get promotionConfig: %w", err)
+	}
+	if ciOPConfig == nil {
 		// We don't know how to build this
 		return nil
 	}
+	log.Debug("Done checking if is published from CI Opreator")
 
 	istRef, err := refForIST(ist)
 	if err != nil {
@@ -162,18 +182,20 @@ func (r *reconciler) reconcile(req controllerruntime.Request, log *logrus.Entry)
 	return nil
 }
 
-func (r *reconciler) isPublishedFromCIOperatorRepo(log *logrus.Entry, ist *imagev1.ImageStreamTag) (*cioperatorapi.ReleaseBuildConfiguration, bool) {
-	// TODO: Index this, what we do here is incredibly slow. And remember, we do it 50k times
-	// during startup and resync
-	for _, config := range r.ciOPConfigAgent.GetAll() {
-		for _, istRef := range release.PromotedTags(&config) {
-			if ist.Name == istRef.Name+":"+istRef.Name {
-				return &config, true
-			}
-		}
+func (r *reconciler) promotionConfig(ist *imagev1.ImageStreamTag) (*cioperatorapi.ReleaseBuildConfiguration, error) {
+	results, err := r.releaseBuildConfigs.GetFromIndex(configIndexName, configIndexKeyForIST(ist))
+	if err != nil {
+		return nil, fmt.Errorf("query index: %w", err)
 	}
-
-	return nil, false
+	switch len(results) {
+	case 0:
+		return nil, nil
+	case 1:
+		return results[0], nil
+	default:
+		// Config might get updated, so do not make this a nonRetriableError
+		return nil, fmt.Errorf("found multiple promotion configs for ImageStreamTag. This is likely a configuration error")
+	}
 }
 
 type branchReference struct {
@@ -280,9 +302,11 @@ func (r *reconciler) createBuildForIST(job *prowconfig.Postsubmit, headSHA strin
 		BaseSHA: headSHA,
 	}), nil, nil)
 	prowJob.Namespace = r.prowJobNamespace
+	serialized, _ := json.Marshal(prowJob)
 
 	if r.dryRun {
-		r.log.Infof("Not creating %s prowjob because dryRun is enabled", prowJob.Spec.Job)
+		r.log.Infof("Not creating %s prowjob because dryRun is enabled, job: %s", prowJob.Spec.Job, serialized)
+		panic("got it")
 		return nil
 	}
 
@@ -310,4 +334,18 @@ type nonRetriableError struct {
 
 func (nre nonRetriableError) Error() string {
 	return nre.err.Error()
+}
+
+const configIndexName = "release-build-config-by-image-stream-tag"
+
+func configIndexFn(in cioperatorapi.ReleaseBuildConfiguration) []string {
+	var result []string
+	for _, istRef := range release.PromotedTags(&in) {
+		result = append(result, fmt.Sprintf("%s/%s:%s", istRef.Namespace, istRef.Name, istRef.Tag))
+	}
+	return result
+}
+
+func configIndexKeyForIST(ist *imagev1.ImageStreamTag) string {
+	return ist.Namespace + "/" + ist.Name
 }

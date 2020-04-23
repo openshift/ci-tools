@@ -1,0 +1,7 @@
+default: api.ci
+nonKubernetes: api.ci
+groups:
+  "default":
+    paths:
+      - "["
+      - "[0-9]++"

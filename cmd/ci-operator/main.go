@@ -494,12 +494,10 @@ func (o *options) Complete() error {
 }
 
 func (o *options) Report(err error) {
-	var reporter results.Reporter
-	var loadErr error
-	reporter, loadErr = o.resultsOptions.Reporter(o.jobSpec, o.consoleHost)
+	reporter, loadErr := o.resultsOptions.Reporter(o.jobSpec, o.consoleHost)
 	if loadErr != nil {
 		log.Printf("could not load result reporting options: %v", err)
-		reporter = results.NoopReporter()
+		return
 	}
 	reporter.Report(err)
 }

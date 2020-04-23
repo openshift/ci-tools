@@ -49,6 +49,9 @@ func (o *Options) Validate() error {
 
 // Client returns an HTTP or HTTPs client, based on the options
 func (o *Options) Reporter(spec *api.JobSpec, consoleHost string) (Reporter, error) {
+	if o.address == "" {
+		return &noopReporter{}, nil
+	}
 	r := &reporter{
 		spec:        spec,
 		address:     o.address,
@@ -102,10 +105,6 @@ const (
 
 type Reporter interface {
 	Report(err error)
-}
-
-func NoopReporter() Reporter {
-	return &noopReporter{}
 }
 
 type noopReporter struct{}

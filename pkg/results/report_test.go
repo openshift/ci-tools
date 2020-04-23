@@ -136,3 +136,16 @@ func TestReporter_Report(t *testing.T) {
 		})
 	}
 }
+
+func TestOptions_Reporter(t *testing.T) {
+	// this simulates the flow for ci-operator while we migrate to using the tool
+	options := Options{} // no flags set
+	reporter, err := options.Reporter(&api.JobSpec{JobSpec: downwardapi.JobSpec{Job: "runme", Type: v1.PresubmitJob}}, "http.com")
+	if err != nil {
+		t.Errorf("should not get an error creating a reporter, but got: %v", err)
+	}
+
+	// neither of these should not fail
+	reporter.Report(nil)
+	reporter.Report(ForReason("foo").ForError(errors.New("oops")))
+}

@@ -183,7 +183,6 @@ func main() {
 		err = results.ForReason(results.ReasonLoadingArgs).ForError(err)
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		opt.writeFailingJUnit(err)
-		opt.Report(err)
 		os.Exit(1)
 	}
 
@@ -198,7 +197,6 @@ func main() {
 		err = results.DefaultReason(baseErr)
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		opt.writeFailingJUnit(err)
-		opt.Report(err)
 		os.Exit(1)
 	}
 }
@@ -249,7 +247,6 @@ type options struct {
 	configSpec              *api.ReleaseBuildConfiguration
 	jobSpec                 *api.JobSpec
 	clusterConfig           *rest.Config
-	consoleHost             string
 	leaseServer             string
 	leaseServerUsername     string
 	leaseServerPasswordFile string
@@ -276,8 +273,6 @@ type options struct {
 	pullSecret     *coreapi.Secret
 
 	cloneAuthConfig *steps.CloneAuthConfig
-
-	resultsOptions results.Options
 }
 
 func bindOptions(flag *flag.FlagSet) *options {
@@ -338,7 +333,6 @@ func bindOptions(flag *flag.FlagSet) *options {
 
 	flag.StringVar(&opt.pullSecretPath, "image-import-pull-secret", "", "A set of dockercfg credentials used to import images for the tag_specification.")
 
-	opt.resultsOptions.Bind(flag)
 	return opt
 }
 
@@ -346,28 +340,24 @@ func (o *options) Complete() error {
 	jobSpec, err := api.ResolveSpecFromEnv()
 	if err != nil {
 		if len(o.gitRef) == 0 {
-			return fmt.Errorf("failed to determine job spec: no --git-ref passed and failed to resolve job spec from env: %v", err)
+			return results.ForReason(results.ReasonMissingJobSpec).WithError(err).Errorf("failed to determine job spec: no --git-ref passed and failed to resolve job spec from env: %v", err)
 		}
 		// Failed to read $JOB_SPEC but --git-ref was passed, so try that instead
 		spec, refErr := jobSpecFromGitRef(o.gitRef, o.configSpec.CanonicalGoRepository)
 		if refErr != nil {
-			return fmt.Errorf("failed to determine job spec: failed to resolve --git-ref: %v", refErr)
+			return results.ForReason(results.ReasonMissingJobSpec).WithError(err).Errorf("failed to determine job spec: failed to resolve --git-ref: %v", refErr)
 		}
 		jobSpec = spec
 	} else if len(o.gitRef) > 0 {
 		// Read from $JOB_SPEC but --git-ref was also passed, so merge them
 		spec, err := jobSpecFromGitRef(o.gitRef, o.configSpec.CanonicalGoRepository)
 		if err != nil {
-			return fmt.Errorf("failed to determine job spec: failed to resolve --git-ref: %v", err)
+			return results.ForReason(results.ReasonMissingJobSpec).WithError(err).Errorf("failed to determine job spec: failed to resolve --git-ref: %v", err)
 		}
 		jobSpec.Refs = spec.Refs
 	}
 	jobSpec.BaseNamespace = o.baseNamespace
 	o.jobSpec = jobSpec
-
-	if err := o.resultsOptions.Validate(); err != nil {
-		return fmt.Errorf("invalid result reporting options: %v", err)
-	}
 
 	info := o.getResolverInfo(jobSpec)
 
@@ -491,17 +481,6 @@ func (o *options) Complete() error {
 		}
 	}
 	return nil
-}
-
-func (o *options) Report(err error) {
-	var reporter results.Reporter
-	var loadErr error
-	reporter, loadErr = o.resultsOptions.Reporter(o.jobSpec, o.consoleHost)
-	if loadErr != nil {
-		log.Printf("could not load result reporting options: %v", err)
-		reporter = results.NoopReporter()
-	}
-	reporter.Report(err)
 }
 
 func (o *options) Run() error {
@@ -659,18 +638,19 @@ func (o *options) resolveInputs(steps []api.Step) error {
 	o.jobSpec.Namespace = o.namespace
 
 	//If we can resolve the field, use it. If not, don't.
+	var consoleHost string
 	if routeGetter, err := routeclientset.NewForConfig(o.clusterConfig); err != nil {
 		log.Printf("could not get route client for cluster config")
 	} else {
 		if consoleRoute, err := routeGetter.Routes("openshift-console").Get("console", meta.GetOptions{}); err != nil {
 			log.Printf("could not get route console in namespace openshift-console")
 		} else {
-			o.consoleHost = consoleRoute.Spec.Host
+			consoleHost = consoleRoute.Spec.Host
 		}
 	}
 
-	if o.consoleHost != "" {
-		log.Printf("Using namespace https://%s/k8s/cluster/projects/%s", o.consoleHost, o.namespace)
+	if consoleHost != "" {
+		log.Printf("Using namespace https://%s/k8s/cluster/projects/%s", consoleHost, o.namespace)
 	} else {
 		log.Printf("Using namespace %s", o.namespace)
 	}

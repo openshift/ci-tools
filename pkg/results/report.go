@@ -139,6 +139,7 @@ func (r *reporter) Report(err error) {
 	resp, err := r.client.Post(fmt.Sprintf("%s/result", r.address), "application/json", bytes.NewReader(data))
 	if err != nil {
 		glog.V(4).Infof("could not create report request: %v", err)
+		return
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {

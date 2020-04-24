@@ -24,7 +24,12 @@ type ConfigAgent interface {
 	GetConfig(config.Info) (api.ReleaseBuildConfiguration, error)
 	GetAll() FilenameToConfig
 	GetGeneration() int
+	AddIndex(indexName string, indexFunc IndexFn) error
+	GetFromIndex(indexName string, indexKey string) ([]*api.ReleaseBuildConfiguration, error)
 }
+
+// IndexFn can be used to add indexes to the ConfigAgent
+type IndexFn func(api.ReleaseBuildConfiguration) []string
 
 type FilenameToConfig map[string]api.ReleaseBuildConfiguration
 
@@ -35,7 +40,11 @@ type configAgent struct {
 	cycle        time.Duration
 	generation   int
 	errorMetrics *prometheus.CounterVec
+	indexFuncs   map[string]IndexFn
+	indexes      map[string]configIndex
 }
+
+type configIndex map[string][]*api.ReleaseBuildConfiguration
 
 var configReloadTimeMetric = prometheus.NewHistogram(
 	prometheus.HistogramOpts{
@@ -95,6 +104,28 @@ func (a *configAgent) GetGeneration() int {
 	return a.generation
 }
 
+func (a *configAgent) GetFromIndex(indexName string, indexKey string) ([]*api.ReleaseBuildConfiguration, error) {
+	a.lock.RLock()
+	defer a.lock.RUnlock()
+	if _, exists := a.indexes[indexName]; !exists {
+		return nil, fmt.Errorf("no index %s configured", indexName)
+	}
+	return a.indexes[indexName][indexKey], nil
+}
+
+func (a *configAgent) AddIndex(indexName string, indexFunc IndexFn) error {
+	a.lock.Lock()
+	defer a.lock.Unlock()
+	if a.indexFuncs == nil {
+		a.indexFuncs = map[string]IndexFn{}
+	}
+	if _, exists := a.indexFuncs[indexName]; exists {
+		return fmt.Errorf("there is already an index named %q", indexName)
+	}
+	a.indexFuncs[indexName] = indexFunc
+	return nil
+}
+
 // loadFilenameToConfig generates a new filenameToConfig map.
 func (a *configAgent) loadFilenameToConfig() error {
 	log.Debug("Reloading configs")
@@ -130,12 +161,42 @@ func (a *configAgent) loadFilenameToConfig() error {
 	if err != nil {
 		return err
 	}
+
+	indexes := a.buildIndexes(configs)
+
 	a.lock.Lock()
 	a.configs = configs
 	a.generation++
+	a.indexes = indexes
 	a.lock.Unlock()
 	duration := time.Since(startTime)
 	configReloadTimeMetric.Observe(float64(duration.Seconds()))
 	log.WithField("duration", duration).Info("Configs reloaded")
 	return nil
+}
+
+func (a *configAgent) buildIndexes(configs FilenameToConfig) map[string]configIndex {
+	indexes := map[string]configIndex{}
+	for indexName, indexFunc := range a.indexFuncs {
+		for _, config := range configs {
+			var resusableConfigPtr *api.ReleaseBuildConfiguration
+
+			for _, indexKey := range indexFunc(config) {
+				if _, exists := indexes[indexName]; !exists {
+					indexes[indexName] = configIndex{}
+				}
+				if resusableConfigPtr == nil {
+					config := config
+					resusableConfigPtr = &config
+				}
+				if _, exists := indexes[indexName][indexKey]; !exists {
+					indexes[indexName][indexKey] = []*api.ReleaseBuildConfiguration{}
+				}
+
+				indexes[indexName][indexKey] = append(indexes[indexName][indexKey], resusableConfigPtr)
+			}
+		}
+	}
+
+	return indexes
 }

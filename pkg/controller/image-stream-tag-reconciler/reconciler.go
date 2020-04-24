@@ -67,7 +67,7 @@ func AddToManager(mgr controllerruntime.Manager, opts Options) error {
 		mgr,
 		// We currently have 50k ImageStreamTags in the OCP namespace and need to periodically reconcile all of them,
 		// so don't be stingy with the workers
-		controller.Options{Reconciler: r, MaxConcurrentReconciles: 1000})
+		controller.Options{Reconciler: r, MaxConcurrentReconciles: 100})
 	if err != nil {
 		return fmt.Errorf("failed to construct controller: %w", err)
 	}
@@ -147,6 +147,7 @@ func (r *reconciler) reconcile(req controllerruntime.Request, log *logrus.Entry)
 	}
 	if ciOPConfig == nil {
 		// We don't know how to build this
+		log.Debug("No promotionConfig found")
 		return nil
 	}
 	log.Debug("Done checking if is published from CI Opreator")
@@ -207,15 +208,17 @@ type branchReference struct {
 
 func refForIST(ist *imagev1.ImageStreamTag) (*branchReference, error) {
 	imageMetadataLabels := struct {
-		Labels map[string]string `json:"labels"`
+		Config struct {
+			Labels map[string]string `json:"labels"`
+		} `json:"Config"`
 	}{}
 	if err := json.Unmarshal(ist.Image.DockerImageMetadata.Raw, &imageMetadataLabels); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal imagestream.image.dockerImageMetadata: %w", err)
 	}
 
-	branch := imageMetadataLabels.Labels["io.openshift.build.commit.ref"]
-	commit := imageMetadataLabels.Labels["io.openshift.build.commit.id"]
-	sourceLocation := imageMetadataLabels.Labels["io.openshift.build.source-location"]
+	branch := imageMetadataLabels.Config.Labels["io.openshift.build.commit.ref"]
+	commit := imageMetadataLabels.Config.Labels["io.openshift.build.commit.id"]
+	sourceLocation := imageMetadataLabels.Config.Labels["io.openshift.build.source-location"]
 	if branch == "" {
 		return nil, nre(errors.New("imageStreamTag has no `io.openshift.build.commit.ref` label, can't find out source branch"))
 	}
@@ -225,7 +228,7 @@ func refForIST(ist *imagev1.ImageStreamTag) (*branchReference, error) {
 	if sourceLocation == "" {
 		return nil, nre(errors.New("imageStreamTag has no `io.openshift.build.source-location` label, can't find out source repo"))
 	}
-	sourceLocation = strings.TrimLeft(sourceLocation, "https://github.com/")
+	sourceLocation = strings.TrimPrefix(sourceLocation, "https://github.com/")
 	splitSourceLocation := strings.Split(sourceLocation, "/")
 	if n := len(splitSourceLocation); n != 2 {
 		return nil, nre(fmt.Errorf("sourceLocation %q split by `/` does not return 2 but %d results, can not find out org/repo", sourceLocation, n))
@@ -248,6 +251,8 @@ func (r *reconciler) currentHEADForBranch(br *branchReference) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("fauld to git rev-parse %s: %w", br.branch, err)
 	}
+	// RevParse output contains a trailing newline
+	branchHEADRef = strings.TrimSpace(branchHEADRef)
 
 	return branchHEADRef, nil
 }
@@ -268,9 +273,13 @@ func (r *reconciler) getPublishJob(br *branchReference, ciOPConfig *cioperatorap
 }
 
 func (r *reconciler) isJobRunningForCommit(job *prowconfig.Postsubmit, commitSHA string, istRef *branchReference) (bool, error) {
+	jobNameLabelValue := job.Name
+	// Label values are capped at 63 characters and the job name frequently exceeds that.
+	if len(jobNameLabelValue) > 63 {
+		jobNameLabelValue = job.Name[0:62]
+	}
 	labelSelector := ctrlruntimeclient.MatchingLabels{
-		// Label values are capped at 63 characters and the job name frequently exceeds that.
-		kube.ProwJobAnnotation: job.Name[0:62],
+		kube.ProwJobAnnotation: jobNameLabelValue,
 		kube.OrgLabel:          istRef.org,
 		kube.RepoLabel:         istRef.repo,
 		kube.ProwJobTypeLabel:  string(prowv1.PostsubmitJob),
@@ -306,7 +315,6 @@ func (r *reconciler) createBuildForIST(job *prowconfig.Postsubmit, headSHA strin
 
 	if r.dryRun {
 		r.log.Infof("Not creating %s prowjob because dryRun is enabled, job: %s", prowJob.Spec.Job, serialized)
-		panic("got it")
 		return nil
 	}
 

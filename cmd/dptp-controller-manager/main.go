@@ -52,7 +52,7 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get options")
 	}
-	logrus.SetLevel(logrus.DebugLevel)
+	logrus.SetLevel(logrus.InfoLevel)
 
 	cfg, err := controllerruntime.GetConfig()
 	if err != nil {
@@ -67,6 +67,8 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to construct git client")
 	}
+	// TODO alvaroaleman: Fix upstream, needed because otherwise we get a NPD
+	gitClient.SetCredentials("", func() []byte { return nil })
 
 	mgr, err := controllerruntime.NewManager(cfg, controllerruntime.Options{
 		LeaderElection:          true,

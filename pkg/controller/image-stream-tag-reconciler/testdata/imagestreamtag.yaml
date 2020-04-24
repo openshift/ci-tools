@@ -1,0 +1,157 @@
+apiVersion: image.openshift.io/v1
+generation: 4638
+image:
+  dockerImageLayers:
+  - mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
+    name: sha256:fcd63ccfdd0ccd78cc0b23a6e9cef0c400625c1506f3eed694d92c7ced04b4c4
+    size: 76252616
+  - mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
+    name: sha256:09dbbf8834d2d84d8d8a37dcf7d6049794c9c8c604a3d3f2606768a82771438d
+    size: 1612
+  - mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
+    name: sha256:9a46ec39f5326be6a4d215cb6de224a907481ecb91e22ecc3a7f8ff3dbb72622
+    size: 402
+  - mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
+    name: sha256:bcdcb44ae450c6e3f129f7b4a507947e4d3791da68c8722d47a73128d9984b17
+    size: 8231209
+  - mediaType: application/vnd.docker.image.rootfs.diff.tar.gzip
+    name: sha256:ab88d2164bea45752c26a8c84cd2a21b3349ad3b8566154ad2ae71caeadacbac
+    size: 29186731
+  dockerImageManifestMediaType: application/vnd.docker.distribution.manifest.v2+json
+  dockerImageMetadata:
+    Architecture: amd64
+    Config:
+      Cmd:
+      - /bin/bash
+      Env:
+      - foo=bar
+      - OPENSHIFT_BUILD_NAME=cluster-openshift-apiserver-operator
+      - OPENSHIFT_BUILD_NAMESPACE=ci-op-q19q0441
+      - PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      - container=oci
+      Hostname: 1a6370b10892
+      Labels:
+        architecture: x86_64
+        authoritative-source-url: registry.access.redhat.com
+        build-date: 2020-03-10T10:38:13.657446
+        com.redhat.build-host: cpt-1004.osbs.prod.upshift.rdu2.redhat.com
+        com.redhat.component: ubi7-container
+        com.redhat.license_terms: https://www.redhat.com/en/about/red-hat-end-user-license-agreements#UBI
+        description: The Universal Base Image is designed and engineered to be the
+          base layer for all of your containerized applications, middleware and utilities.
+          This base image is freely redistributable, but Red Hat only supports Red
+          Hat technologies through subscriptions for Red Hat products. This image
+          is maintained by Red Hat and updated regularly.
+        distribution-scope: public
+        io.k8s.description: This is the base image from which all OpenShift images
+          inherit.
+        io.k8s.display-name: OpenShift Base
+        io.openshift.build.commit.author: ""
+        io.openshift.build.commit.date: ""
+        io.openshift.build.commit.id: 96d6c74347445e0687267165a1a7d8f2c98dd3a1
+        io.openshift.build.commit.message: ""
+        io.openshift.build.commit.ref: master
+        io.openshift.build.name: ""
+        io.openshift.build.namespace: ""
+        io.openshift.build.source-context-dir: ""
+        io.openshift.build.source-location: https://github.com/openshift/cluster-openshift-apiserver-operator
+        io.openshift.release.operator: "true"
+        io.openshift.tags: base rhel7
+        maintainer: Red Hat, Inc.
+        name: ubi7
+        release: "358"
+        summary: Provides the latest release of the Red Hat Universal Base Image 7.
+        url: https://access.redhat.com/containers/#/registry.access.redhat.com/ubi7/images/7.7-358
+        vcs-ref: 96d6c74347445e0687267165a1a7d8f2c98dd3a1
+        vcs-type: git
+        vcs-url: https://github.com/openshift/cluster-openshift-apiserver-operator
+        vendor: Red Hat, Inc.
+        version: "7.7"
+    Container: 6bd17be0fb0bb25b80f46d98b276b30a9db8a8363509c03a0f68d337a15fde16
+    ContainerConfig:
+      Entrypoint:
+      - /bin/sh
+      - -c
+      - '#(imagebuilder)'
+      Env:
+      - foo=bar
+      - OPENSHIFT_BUILD_NAME=base
+      - OPENSHIFT_BUILD_NAMESPACE=ci-op-1t3559hx
+      - PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      - container=oci
+      Hostname: 6bd17be0fb0b
+      Image: docker-registry.default.svc:5000/ci-op-q19q0441/pipeline@sha256:3823c45b9feec9e861d1fd7ef268e38717b3b94adae26dd76eba3ac5f8b8cab9
+      Labels:
+        architecture: x86_64
+        authoritative-source-url: registry.access.redhat.com
+        build-date: 2020-03-10T10:38:13.657446
+        com.redhat.build-host: cpt-1004.osbs.prod.upshift.rdu2.redhat.com
+        com.redhat.component: ubi7-container
+        com.redhat.license_terms: https://www.redhat.com/en/about/red-hat-end-user-license-agreements#UBI
+        description: The Universal Base Image is designed and engineered to be the
+          base layer for all of your containerized applications, middleware and utilities.
+          This base image is freely redistributable, but Red Hat only supports Red
+          Hat technologies through subscriptions for Red Hat products. This image
+          is maintained by Red Hat and updated regularly.
+        distribution-scope: public
+        io.k8s.description: This is the base image from which all OpenShift images
+          inherit.
+        io.k8s.display-name: OpenShift Base
+        io.openshift.build.commit.author: ""
+        io.openshift.build.commit.date: ""
+        io.openshift.build.commit.id: 6cdb5d360768d8f87a615286180e46784ae7d28f
+        io.openshift.build.commit.message: ""
+        io.openshift.build.commit.ref: master
+        io.openshift.build.name: ""
+        io.openshift.build.namespace: ""
+        io.openshift.build.source-context-dir: base/
+        io.openshift.build.source-location: https://github.com/openshift/images
+        io.openshift.tags: base rhel7
+        maintainer: Red Hat, Inc.
+        name: ubi7
+        release: "358"
+        summary: Provides the latest release of the Red Hat Universal Base Image 7.
+        url: https://access.redhat.com/containers/#/registry.access.redhat.com/ubi7/images/7.7-358
+        vcs-ref: 6cdb5d360768d8f87a615286180e46784ae7d28f
+        vcs-type: git
+        vcs-url: https://github.com/openshift/images
+        vendor: Red Hat, Inc.
+        version: "7.7"
+    Created: "2020-04-15T21:42:11Z"
+    DockerVersion: 1.13.1
+    Id: sha256:b30dd86077b7f7e70ec31d06cf51f0394ccab4b85d0abbaea80f1bbb71ef2fe9
+    Size: 113678077
+    apiVersion: "1.0"
+    kind: DockerImage
+  dockerImageMetadataVersion: "1.0"
+  dockerImageReference: docker-registry.default.svc:5000/ocp/4.5@sha256:afb7f3a8d0918dd655ffd808186ece1e49e236e8645dbbff934e83c0b146f1d6
+  metadata:
+    annotations:
+      image.openshift.io/dockerLayersOrder: ascending
+      image.openshift.io/manifestBlobStored: "true"
+      openshift.io/image.managed: "true"
+    creationTimestamp: "2020-04-15T21:42:24Z"
+    name: sha256:afb7f3a8d0918dd655ffd808186ece1e49e236e8645dbbff934e83c0b146f1d6
+    resourceVersion: "626750246"
+    uid: fe9d9956-7f61-11ea-9097-42010a8e0003
+kind: ImageStreamTag
+lookupPolicy:
+  local: false
+metadata:
+  creationTimestamp: "2020-04-15T21:42:25Z"
+  name: 4.5:cluster-openshift-apiserver-operator
+  namespace: ocp
+  resourceVersion: "648362424"
+  selfLink: /apis/image.openshift.io/v1/namespaces/ocp/imagestreamtags/4.5%3Acluster-openshift-apiserver-operator
+  uid: b0a8b6e6-16df-11ea-a519-42010a8e0003
+tag:
+  annotations: null
+  from:
+    kind: ImageStreamImage
+    name: pipeline@sha256:afb7f3a8d0918dd655ffd808186ece1e49e236e8645dbbff934e83c0b146f1d6
+    namespace: ci-op-q19q0441
+  generation: 4638
+  importPolicy: {}
+  name: cluster-openshift-apiserver-operator
+  referencePolicy:
+    type: Source

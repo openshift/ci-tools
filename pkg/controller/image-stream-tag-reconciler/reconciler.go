@@ -40,6 +40,8 @@ type Options struct {
 	GitClient             *git.Client
 }
 
+const controllerName = "imageStreamTagReconciler"
+
 func AddToManager(mgr controllerruntime.Manager, opts Options) error {
 	if err := imagev1.AddToScheme(mgr.GetScheme()); err != nil {
 		return fmt.Errorf("failed to add imagev1 to scheme: %w", err)
@@ -52,7 +54,7 @@ func AddToManager(mgr controllerruntime.Manager, opts Options) error {
 		return fmt.Errorf("failed to add indexer to config-agent: %w", err)
 	}
 
-	log := logrus.WithField("controller", "imageStreamTagReconciler")
+	log := logrus.WithField("controller", controllerName)
 	r := &reconciler{
 		ctx:                 context.Background(),
 		log:                 log,
@@ -61,9 +63,12 @@ func AddToManager(mgr controllerruntime.Manager, opts Options) error {
 		dryRun:              opts.DryRun,
 		prowJobNamespace:    opts.ProwJobNamespace,
 		gitClient:           opts.GitClient,
+		createdProwJobLabels: map[string]string{
+			"openshift.io/created-by": controllerName,
+		},
 	}
 	c, err := controller.New(
-		"imageStreamTagReconciler",
+		controllerName,
 		mgr,
 		// We currently have 50k ImageStreamTags in the OCP namespace and need to periodically reconcile all of them,
 		// so don't be stingy with the workers
@@ -99,13 +104,14 @@ func AddToManager(mgr controllerruntime.Manager, opts Options) error {
 }
 
 type reconciler struct {
-	ctx                 context.Context
-	log                 *logrus.Entry
-	client              ctrlruntimeclient.Client
-	releaseBuildConfigs agents.ConfigAgent
-	dryRun              bool
-	prowJobNamespace    string
-	gitClient           *git.Client
+	ctx                  context.Context
+	log                  *logrus.Entry
+	client               ctrlruntimeclient.Client
+	releaseBuildConfigs  agents.ConfigAgent
+	dryRun               bool
+	prowJobNamespace     string
+	gitClient            *git.Client
+	createdProwJobLabels map[string]string
 }
 
 func (r *reconciler) Reconcile(req controllerruntime.Request) (controllerruntime.Result, error) {
@@ -309,11 +315,11 @@ func (r *reconciler) createBuildForIST(job *prowconfig.Postsubmit, headSHA strin
 		Repo:    istRef.repo,
 		BaseRef: istRef.branch,
 		BaseSHA: headSHA,
-	}), nil, nil)
+	}), r.createdProwJobLabels, nil)
 	prowJob.Namespace = r.prowJobNamespace
-	serialized, _ := json.Marshal(prowJob)
 
 	if r.dryRun {
+		serialized, _ := json.Marshal(prowJob)
 		r.log.Infof("Not creating %s prowjob because dryRun is enabled, job: %s", prowJob.Spec.Job, serialized)
 		return nil
 	}

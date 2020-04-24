@@ -67,6 +67,8 @@ while read -r bucket; do
     buckets+=("${bucket}")
   fi
 done <<< $( gsutil -m ls -p 'openshift-gce-devel-ci' -L -b 'gs://ci-op-*' | grep -Po "(gs:[^ ]+)|(?<=Time created:).*" )
-timeout 30m gsutil -m rm -r "${buckets[@]}"
+if [[ "${#buckets[@]}" -gt 0 ]]; then
+  timeout 30m gsutil -m rm -r "${buckets[@]}"
+fi
 
 echo "Deprovision finished successfully"

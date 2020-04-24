@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 
 	"k8s.io/api/core/v1"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
 	_ "k8s.io/test-infra/prow/hook"
@@ -119,45 +121,11 @@ func main() {
 		logrus.WithError(err).Fatal("Could not load Prow job configurations.")
 	}
 
-	for _, pathToCheck := range pathsToCheck {
-		var matchesAny bool
-		var matchedMap string
-		logger := logrus.WithField("source-file", pathToCheck.path)
-		for glob, updateConfig := range pcfg.ConfigUpdater.Maps {
-			if _, hasDefaultCluster := updateConfig.Clusters[prowv1.DefaultClusterAlias]; hasDefaultCluster {
-				logger.Errorf("cluster alias %s is not allowed, please explicitly specific the name of the cluster", prowv1.DefaultClusterAlias)
-				foundFailures = true
-			}
-
-			globLogger := logger.WithField("glob", glob)
-			matches, matchErr := zglob.Match(glob, pathToCheck.path)
-			if matchErr != nil {
-				globLogger.WithError(matchErr).Warn("Failed to check glob match.")
-			}
-			if jobConfigMatch, err := zglob.Match(glob, "ci-operator/jobs"); err != nil {
-				globLogger.WithError(err).Error("failed to check if config is a jobconfig")
-				foundFailures = true
-			} else if jobConfigMatch && (updateConfig.GZIP == nil || !*updateConfig.GZIP) {
-				globLogger.Error("gzip must be enabled for job configs")
-				foundFailures = true
-			}
-			if matches {
-				if matchesAny {
-					globLogger.Errorf("File matches glob from more than one ConfigMap: %s, %s.", matchedMap, pathToCheck.configMap)
-					foundFailures = true
-				}
-				if updateConfig.Name != pathToCheck.configMap {
-					globLogger.Errorf("File matches glob from unexpected ConfigMap %s instead of %s.", updateConfig.Name, pathToCheck.configMap)
-					foundFailures = true
-				}
-				matchesAny = true
-				matchedMap = pathToCheck.configMap
-			}
+	if err := validatePaths(pathsToCheck, &pcfg.ConfigUpdater); err != nil {
+		for _, validationErr := range err.Errors() {
+			logrus.WithError(validationErr).Error("Validation failed")
 		}
-		if !matchesAny {
-			logger.Error("Config file does not belong to any auto-updating config.")
-			foundFailures = true
-		}
+		foundFailures = true
 	}
 
 	if foundFailures {
@@ -193,4 +161,47 @@ func checkSpec(spec *v1.PodSpec, relPath, name string, configInfos map[string]*c
 		}
 	}
 	return foundFailures
+}
+
+func validatePaths(pathsToCheck []pathWithConfig, pcfg *plugins.ConfigUpdater) utilerrors.Aggregate {
+	var errs []error
+
+	for _, pathToCheck := range pathsToCheck {
+		var matchesAny bool
+		var matchedMap string
+		logger := logrus.WithField("source-file", pathToCheck.path)
+		path := field.NewPath(pathToCheck.path, "config_updater", "maps")
+		for glob, updateConfig := range pcfg.Maps {
+			path := path.Child(glob)
+			if _, hasDefaultCluster := updateConfig.Clusters[prowv1.DefaultClusterAlias]; hasDefaultCluster {
+				errs = append(errs, field.Invalid(path.Child("clusters"), prowv1.DefaultClusterAlias, "`default` cluster name is not allowed, a clustername must be explicitly specified"))
+			}
+
+			globLogger := logger.WithField("glob", glob)
+			matches, matchErr := zglob.Match(glob, pathToCheck.path)
+			if matchErr != nil {
+				globLogger.WithError(matchErr).Warn("Failed to check glob match.")
+			}
+			if jobConfigMatch, err := zglob.Match(glob, "ci-operator/jobs"); err != nil {
+				errs = append(errs, field.Invalid(path, glob, fmt.Sprintf("value can not be parsed as glob: %v", err)))
+			} else if jobConfigMatch && (updateConfig.GZIP == nil || !*updateConfig.GZIP) {
+				errs = append(errs, field.Invalid(path.Child("gzip"), updateConfig.GZIP, "field must be set to `true` for jobconfigs"))
+			}
+			if matches {
+				if matchesAny {
+					errs = append(errs, field.Invalid(path, glob, fmt.Sprintf("File matches glob from more than one ConfigMap: %s, %s.", matchedMap, pathToCheck.configMap)))
+				}
+				if updateConfig.Name != pathToCheck.configMap {
+					errs = append(errs, field.Invalid(path, glob, fmt.Sprintf("File matches glob from unexpected ConfigMap %s instead of %s.", updateConfig.Name, pathToCheck.configMap)))
+				}
+				matchesAny = true
+				matchedMap = pathToCheck.configMap
+			}
+		}
+		if !matchesAny {
+			errs = append(errs, field.Invalid(path, pathToCheck.path, "Config file does not belong to any auto-updating config."))
+		}
+	}
+
+	return utilerrors.NewAggregate(errs)
 }

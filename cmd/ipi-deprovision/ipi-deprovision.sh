@@ -66,7 +66,7 @@ while read -r bucket; do
   if [[ ${gcs_bucket_age_cutoff_seconds} -ge $( date --date="${creationTime}" '+%s' ) ]]; then
     buckets+=("${bucket}")
   fi
-done <<< $( gsutil -m ls -L -b 'gs://ci-op-*' | grep -Po "(gs:[^ ]+)|(?<=Time created:).*" )
+done <<< $( gsutil -m ls -p 'openshift-gce-devel-ci' -L -b 'gs://ci-op-*' | grep -Po "(gs:[^ ]+)|(?<=Time created:).*" )
 timeout 30m gsutil -m rm -r "${buckets[@]}"
 
 echo "Deprovision finished successfully"

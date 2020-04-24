@@ -57,4 +57,16 @@ for workdir in $( find /tmp/deprovision -mindepth 1 -type d | shuf ); do
   timeout 30m openshift-install --dir "${workdir}" --log-level debug destroy cluster
 done
 
+gcs_bucket_age_cutoff="$(TZ="GMT" date --date="${CLUSTER_TTL}-4 hours" '+%a, %d %b %Y %H:%M:%S GMT')"
+gcs_bucket_age_cutoff_seconds="$(date --date="${gcs_bucket_age_cutoff}" '+%s')"
+echo "deleting GCS buckets with a creationTimestamp before ${gcs_bucket_age_cutoff} in GCE ..."
+buckets=()
+while read -r bucket; do
+  read -r creationTime
+  if [[ ${gcs_bucket_age_cutoff_seconds} -ge $( date --date="${creationTime}" '+%s' ) ]]; then
+    buckets+=("${bucket}")
+  fi
+done <<< $( gsutil -m ls -L -b 'gs://ci-op-*' | grep -Po "(gs:[^ ]+)|(?<=Time created:).*" )
+timeout 30m gsutil -m rm -r "${buckets[@]}"
+
 echo "Deprovision finished successfully"

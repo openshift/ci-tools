@@ -192,11 +192,8 @@ func main() {
 	cmd = "/usr/bin/private-prow-configs-mirror"
 	args = []string{"--release-repo-path", "."}
 	run(cmd, args...)
-	commitIfNeeded("private-prow-configs-mirror --release-repo-path .", author)
 
-	cmd = "./hack/ensure_job_cluster.py"
-	args = []string{"-w=true"}
-	run(cmd, args...)
+	commitIfNeeded("private-prow-configs-mirror --release-repo-path .", author)
 
 	cmd = "/usr/bin/sanitize-prow-jobs"
 	args = []string{"--prow-jobs-dir", "./ci-operator/jobs", "--config-path", "./core-services/sanitize-prow-jobs/_config.yaml"}

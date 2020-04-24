@@ -8,7 +8,7 @@ ADD ci-operator-config-mirror /usr/bin/ci-operator-config-mirror
 ADD private-prow-configs-mirror /usr/bin/private-prow-configs-mirror
 ADD sanitize-prow-jobs /usr/bin/sanitize-prow-jobs
 
-RUN yum install -y git python3 python3-pyyaml && \
+RUN yum install -y git && \
     yum clean all && \
     rm -rf /var/cache/yum
 

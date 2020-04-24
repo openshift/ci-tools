@@ -86,7 +86,7 @@ type lease struct {
 
 func (c *client) Acquire(rtype string, ctx context.Context, cancel context.CancelFunc) (string, error) {
 	var cancelAcquire context.CancelFunc
-	ctx, cancelAcquire = context.WithTimeout(ctx, 50*time.Minute)
+	ctx, cancelAcquire = context.WithTimeout(ctx, 120*time.Minute)
 	defer cancelAcquire()
 	r, err := c.boskos.AcquireWaitWithPriority(ctx, rtype, freeState, leasedState, randId())
 	if err != nil {

@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/scheme"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/rest"
 	"k8s.io/test-infra/prow/logrusutil"
 
 	"github.com/openshift/ci-tools/pkg/bitwarden"
@@ -38,6 +39,8 @@ type options struct {
 	cluster        string
 	force          bool
 	logLevel       string
+
+	impersonateUser string
 
 	bwPassword     string
 	secretsGetters map[string]coreclientset.SecretsGetter
@@ -55,6 +58,7 @@ func parseOptions() options {
 	fs.StringVar(&o.cluster, "cluster", "", "If set, only provision secrets for this cluster")
 	fs.BoolVar(&o.force, "force", false, "If true, update the secrets even if existing one differs from Bitwarden items instead of existing with error. Default false.")
 	fs.StringVar(&o.logLevel, "log-level", "info", fmt.Sprintf("Log level is one of %v.", logrus.AllLevels))
+	fs.StringVar(&o.impersonateUser, "as", "", "Username to impersonate")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Errorf("cannot parse args: %q", os.Args[1:])
 	}
@@ -90,6 +94,11 @@ func (o *options) completeOptions(secrets *sets.String) error {
 	kubeConfigs, _, err := util.LoadKubeConfigs(o.kubeConfigPath)
 	if err != nil {
 		return err
+	}
+	if o.impersonateUser != "" {
+		for _, kubeConfig := range kubeConfigs {
+			kubeConfig.Impersonate = rest.ImpersonationConfig{UserName: o.impersonateUser}
+		}
 	}
 
 	bytes, err = ioutil.ReadFile(o.configPath)

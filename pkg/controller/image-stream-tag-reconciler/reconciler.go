@@ -228,18 +228,18 @@ func refForIST(ist *imagev1.ImageStreamTag) (*branchReference, error) {
 	commit := metadata.Config.Labels["io.openshift.build.commit.id"]
 	sourceLocation := metadata.Config.Labels["io.openshift.build.source-location"]
 	if branch == "" {
-		return nil, nre(errors.New("imageStreamTag has no `io.openshift.build.commit.ref` label, can't find out source branch"))
+		return nil, nonRetriableError{errors.New("imageStreamTag has no `io.openshift.build.commit.ref` label, can't find out source branch")}
 	}
 	if commit == "" {
-		return nil, nre(errors.New("ImageStreamTag has no `io.openshift.build.commit.id` label, can't find out source commit"))
+		return nil, nonRetriableError{errors.New("ImageStreamTag has no `io.openshift.build.commit.id` label, can't find out source commit")}
 	}
 	if sourceLocation == "" {
-		return nil, nre(errors.New("imageStreamTag has no `io.openshift.build.source-location` label, can't find out source repo"))
+		return nil, nonRetriableError{errors.New("imageStreamTag has no `io.openshift.build.source-location` label, can't find out source repo")}
 	}
 	sourceLocation = strings.TrimPrefix(sourceLocation, "https://github.com/")
 	splitSourceLocation := strings.Split(sourceLocation, "/")
 	if n := len(splitSourceLocation); n != 2 {
-		return nil, nre(fmt.Errorf("sourceLocation %q split by `/` does not return 2 but %d results, can not find out org/repo", sourceLocation, n))
+		return nil, nonRetriableError{fmt.Errorf("sourceLocation %q split by `/` does not return 2 but %d results, can not find out org/repo", sourceLocation, n)}
 	}
 
 	return &branchReference{
@@ -333,10 +333,10 @@ func (r *reconciler) createBuildForIST(job *prowconfig.Postsubmit, headSHA strin
 	return nil
 }
 
-func nre(err error) error {
-	return nonRetriableError{err: err}
-}
-
+// nonRetriableError indicates that we encountered an error
+// that we know wont resolve itself via retrying. We use it
+// to still bubble the message up but swallow it after we
+// logged it so we don't waste cycles on useless work.
 type nonRetriableError struct {
 	err error
 }

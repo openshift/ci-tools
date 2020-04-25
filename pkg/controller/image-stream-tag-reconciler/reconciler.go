@@ -179,8 +179,13 @@ func (r *reconciler) reconcile(req controllerruntime.Request, log *logrus.Entry)
 	}
 
 	istHasBuildRunning, err := r.isJobRunningForCommit(buildJob, currentHEAD, istRef)
-	if istHasBuildRunning || err != nil {
-		return wrapErrIfNonNil("failed to check if there is a running build for imageStreamTag", err)
+	if err != nil {
+		return fmt.Errorf("failed to check if there is a running build for ImageStramTag: %w", err)
+	}
+	if istHasBuildRunning {
+		// Nothing to do right now. We wont get an event if the build fails but we periodically reconcile
+		// which will catch that case.
+		return nil
 	}
 
 	if err := r.createBuildForIST(buildJob, currentHEAD, istRef); err != nil {
@@ -317,7 +322,7 @@ func (r *reconciler) createBuildForIST(job *prowconfig.Postsubmit, headSHA strin
 
 	if r.dryRun {
 		serialized, _ := json.Marshal(prowJob)
-		r.log.Infof("Not creating %s prowjob because dryRun is enabled, job: %s", prowJob.Spec.Job, serialized)
+		r.log.WithField("job_name", prowJob.Spec.Job).WithField("job", serialized).Info("Not creating prowjob because dryRun is enabled")
 		return nil
 	}
 
@@ -326,13 +331,6 @@ func (r *reconciler) createBuildForIST(job *prowconfig.Postsubmit, headSHA strin
 	}
 
 	return nil
-}
-
-func wrapErrIfNonNil(wrapping string, err error) error {
-	if err == nil {
-		return nil
-	}
-	return fmt.Errorf(wrapping+" %w", err)
 }
 
 func nre(err error) error {

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/openshift/api/image/docker10"
 	imagev1 "github.com/openshift/api/image/v1"
 	"github.com/sirupsen/logrus"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -213,18 +214,14 @@ type branchReference struct {
 }
 
 func refForIST(ist *imagev1.ImageStreamTag) (*branchReference, error) {
-	imageMetadataLabels := struct {
-		Config struct {
-			Labels map[string]string `json:"labels"`
-		} `json:"Config"`
-	}{}
-	if err := json.Unmarshal(ist.Image.DockerImageMetadata.Raw, &imageMetadataLabels); err != nil {
+	metadata := &docker10.DockerImage{}
+	if err := json.Unmarshal(ist.Image.DockerImageMetadata.Raw, metadata); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal imagestream.image.dockerImageMetadata: %w", err)
 	}
 
-	branch := imageMetadataLabels.Config.Labels["io.openshift.build.commit.ref"]
-	commit := imageMetadataLabels.Config.Labels["io.openshift.build.commit.id"]
-	sourceLocation := imageMetadataLabels.Config.Labels["io.openshift.build.source-location"]
+	branch := metadata.Config.Labels["io.openshift.build.commit.ref"]
+	commit := metadata.Config.Labels["io.openshift.build.commit.id"]
+	sourceLocation := metadata.Config.Labels["io.openshift.build.source-location"]
 	if branch == "" {
 		return nil, nre(errors.New("imageStreamTag has no `io.openshift.build.commit.ref` label, can't find out source branch"))
 	}

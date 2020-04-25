@@ -2,6 +2,7 @@ package jobconfig
 
 import (
 	"fmt"
+	"github.com/openshift/ci-tools/pkg/config"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -10,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/ghodss/yaml"
-	"github.com/openshift/ci-tools/pkg/promotion"
 	"github.com/sirupsen/logrus"
 
 	v1 "k8s.io/api/core/v1"
@@ -55,9 +55,9 @@ func (i *Info) Basename() string {
 func (i *Info) ConfigMapName() string {
 	// put periodics not directly correlated to code in the misc job
 	if i.Type == "periodics" && i.Branch == "" {
-		return fmt.Sprintf("job-config-%s", promotion.FlavorForBranch(""))
+		return fmt.Sprintf("job-config-%s", config.FlavorForBranch(""))
 	}
-	return fmt.Sprintf("job-config-%s", promotion.FlavorForBranch(i.Branch))
+	return fmt.Sprintf("job-config-%s", config.FlavorForBranch(i.Branch))
 }
 
 // We use the directory/file naming convention to encode useful information

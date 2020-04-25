@@ -660,7 +660,7 @@ type OpenshiftAnsibleClusterTestConfiguration struct {
 
 // OpenshiftAnsibleSrcClusterTestConfiguration describes a
 // test that provisions a cluster using openshift-ansible and
-// executes a command in the `src` image.F
+// executes a command in the `src` image.
 type OpenshiftAnsibleSrcClusterTestConfiguration struct {
 	ClusterTestConfiguration `json:",inline"`
 }

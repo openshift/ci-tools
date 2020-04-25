@@ -22,7 +22,7 @@ import (
 )
 
 type options struct {
-	promotion.Options
+	promotion.FutureOptions
 	gitDir      string
 	username    string
 	tokenPath   string
@@ -105,14 +105,8 @@ func main() {
 	}
 
 	failed := false
-	if err := config.OperateOnCIOperatorConfigDir(o.ConfigDir, func(configuration *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {
+	if err := o.OperateOnCIOperatorConfigDir(o.ConfigDir, func(configuration *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {
 		logger := config.LoggerForInfo(*repoInfo)
-		if (o.Org != "" && o.Org != repoInfo.Org) || (o.Repo != "" && o.Repo != repoInfo.Repo) {
-			return nil
-		}
-		if !(promotion.PromotesOfficialImages(configuration) && configuration.PromotionConfiguration.Name == o.CurrentRelease) {
-			return nil
-		}
 
 		repoDir := path.Join(gitDir, repoInfo.Org, repoInfo.Repo)
 		if err := os.MkdirAll(repoDir, 0775); err != nil {

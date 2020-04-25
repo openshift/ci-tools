@@ -7,13 +7,11 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/openshift/ci-tools/pkg/api"
-
 	"github.com/openshift/ci-tools/pkg/config"
-	"github.com/openshift/ci-tools/pkg/promotion"
 )
 
-func gatherOptions() promotion.Options {
-	o := promotion.Options{}
+func gatherOptions() config.Options {
+	o := config.Options{}
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	o.Bind(fs)
 	if err := fs.Parse(os.Args[1:]); err != nil {
@@ -29,13 +27,7 @@ func main() {
 	}
 
 	var toCommit []config.DataWithInfo
-	if err := config.OperateOnCIOperatorConfigDir(o.ConfigDir, func(configuration *api.ReleaseBuildConfiguration, info *config.Info) error {
-		if (o.Org != "" && o.Org != info.Org) || (o.Repo != "" && o.Repo != info.Repo) {
-			return nil
-		}
-		if !(promotion.PromotesOfficialImages(configuration) && configuration.PromotionConfiguration.Name == o.CurrentRelease) {
-			return nil
-		}
+	if err := o.OperateOnCIOperatorConfigDir(o.ConfigDir, func(configuration *api.ReleaseBuildConfiguration, info *config.Info) error {
 		output := config.DataWithInfo{Configuration: *configuration, Info: *info}
 		if !o.Confirm {
 			output.Logger().Info("Would re-format file.")

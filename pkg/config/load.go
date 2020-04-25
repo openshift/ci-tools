@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/ghodss/yaml"
-	"github.com/openshift/ci-tools/pkg/promotion"
 	"github.com/sirupsen/logrus"
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
@@ -122,7 +121,25 @@ func (i *Info) RelativePath() string {
 
 // ConfigMapName returns the configmap in which we expect this file to be uploaded
 func (i *Info) ConfigMapName() string {
-	return fmt.Sprintf("ci-operator-%s-configs", promotion.FlavorForBranch(i.Branch))
+	return fmt.Sprintf("ci-operator-%s-configs", FlavorForBranch(i.Branch))
+}
+
+var threeXBranches = regexp.MustCompile(`^(release|enterprise|openshift)-3\.[0-9]+$`)
+var fourXBranches = regexp.MustCompile(`^(release|enterprise|openshift)-(4\.[0-9]+)$`)
+
+func FlavorForBranch(branch string) string {
+	var flavor string
+	if branch == "master" {
+		flavor = "master"
+	} else if threeXBranches.MatchString(branch) {
+		flavor = "3.x"
+	} else if fourXBranches.MatchString(branch) {
+		matches := fourXBranches.FindStringSubmatch(branch)
+		flavor = matches[2] // the 4.x release string
+	} else {
+		flavor = "misc"
+	}
+	return flavor
 }
 
 // IsCiopConfigCM returns true if a given name is a valid ci-operator config ConfigMap

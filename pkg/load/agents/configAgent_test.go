@@ -58,6 +58,7 @@ func TestGetFromIndex_threadsafety(t *testing.T) {
 		indexes: map[string]configIndex{
 			"index": {"key": []*api.ReleaseBuildConfiguration{{TestBinaryBuildCommands: "make test"}}},
 		},
+		reloadConfig: func() error { return nil },
 	}
 
 	wg := &sync.WaitGroup{}
@@ -82,6 +83,7 @@ func TestAddIndex(t *testing.T) {
 		indexFuncs: map[string]IndexFn{
 			"exists": func(_ api.ReleaseBuildConfiguration) []string { return nil },
 		},
+		reloadConfig: func() error { return nil },
 	}
 	testCases := []struct {
 		name          string

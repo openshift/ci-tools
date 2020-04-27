@@ -42,6 +42,7 @@ type configAgent struct {
 	errorMetrics *prometheus.CounterVec
 	indexFuncs   map[string]IndexFn
 	indexes      map[string]configIndex
+	reloadConfig func() error
 }
 
 type configIndex map[string][]*api.ReleaseBuildConfiguration
@@ -75,8 +76,8 @@ func NewConfigAgent(configPath string, cycle time.Duration, errorMetrics *promet
 		}
 	}, a.cycle)
 
-	err = startWatchers(a.configPath, configCoalescer, a.recordError)
-	return a, err
+	a.reloadConfig = configCoalescer.Run
+	return a, startWatchers(a.configPath, configCoalescer, a.recordError)
 }
 
 func (a *configAgent) recordError(label string) {
@@ -114,15 +115,26 @@ func (a *configAgent) GetFromIndex(indexName string, indexKey string) ([]*api.Re
 }
 
 func (a *configAgent) AddIndex(indexName string, indexFunc IndexFn) error {
-	a.lock.Lock()
-	defer a.lock.Unlock()
-	if a.indexFuncs == nil {
-		a.indexFuncs = map[string]IndexFn{}
+	// Closure to capture the defer statement
+	if err := func() error {
+		a.lock.Lock()
+		defer a.lock.Unlock()
+		if a.indexFuncs == nil {
+			a.indexFuncs = map[string]IndexFn{}
+		}
+		if _, exists := a.indexFuncs[indexName]; exists {
+			return fmt.Errorf("there is already an index named %q", indexName)
+		}
+		a.indexFuncs[indexName] = indexFunc
+		return nil
+	}(); err != nil {
+		return err
 	}
-	if _, exists := a.indexFuncs[indexName]; exists {
-		return fmt.Errorf("there is already an index named %q", indexName)
+
+	// Make sure the index is available after we return
+	if err := a.reloadConfig(); err != nil {
+		return fmt.Errorf("failed to reload config after adding index: %w", err)
 	}
-	a.indexFuncs[indexName] = indexFunc
 	return nil
 }
 

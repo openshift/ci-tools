@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/sirupsen/logrus"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -34,13 +35,16 @@ func LoadKubeConfigs(kubeconfig string) (map[string]rest.Config, string, error) 
 		return nil, "", err
 	}
 	configs := map[string]rest.Config{}
+	var errs []error
 	for context := range cfg.Contexts {
 		contextCfg, err := clientcmd.NewNonInteractiveClientConfig(*cfg, context, &clientcmd.ConfigOverrides{}, loader).ClientConfig()
 		if err != nil {
-			return nil, "", fmt.Errorf("create %s client: %v", context, err)
+			// Let the caller decide if they want to handle errors
+			errs = append(errs, fmt.Errorf("create %s client: %v", context, err))
+			continue
 		}
 		configs[context] = *contextCfg
 		logrus.Infof("Parsed kubeconfig context: %s", context)
 	}
-	return configs, cfg.CurrentContext, nil
+	return configs, cfg.CurrentContext, utilerrors.NewAggregate(errs)
 }

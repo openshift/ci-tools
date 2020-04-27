@@ -93,7 +93,8 @@ func (o *options) completeOptions(secrets *sets.String) error {
 
 	kubeConfigs, _, err := util.LoadKubeConfigs(o.kubeConfigPath)
 	if err != nil {
-		return err
+		// We will bail out later on if we don't have the have the right kubeconfigs
+		logrus.WithError(err).Warn("Encountered errors while loading kubeconfigs")
 	}
 	if o.impersonateUser != "" {
 		for cluster, kubeConfig := range kubeConfigs {
@@ -329,34 +330,39 @@ func constructSecrets(config []secretConfig, bwClient bitwarden.Client) (map[str
 }
 
 func updateSecrets(secretsGetters map[string]coreclientset.SecretsGetter, secretsMap map[string][]*coreapi.Secret, force bool) error {
+	var errs []error
 	for cluster, secrets := range secretsMap {
 		for _, secret := range secrets {
 			logrus.Debugf("handling secret: %s:%s/%s", cluster, secret.Namespace, secret.Name)
 			secretsGetter := secretsGetters[cluster]
 			if existingSecret, err := secretsGetter.Secrets(secret.Namespace).Get(secret.Name, meta.GetOptions{}); err == nil {
 				if secret.Type != existingSecret.Type {
-					return fmt.Errorf("cannot change secret type from %q to %q (immutable field): %s:%s/%s", existingSecret.Type, secret.Type, cluster, secret.Namespace, secret.Name)
+					errs = append(errs, fmt.Errorf("cannot change secret type from %q to %q (immutable field): %s:%s/%s", existingSecret.Type, secret.Type, cluster, secret.Namespace, secret.Name))
+					continue
 				}
 				if !force && !equality.Semantic.DeepEqual(secret.Data, existingSecret.Data) {
 					logrus.Errorf("actual %s:%s/%s differs the expected:\n%s", cluster, secret.Namespace, secret.Name,
 						cmp.Diff(bytesMapToStringMap(secret.Data), bytesMapToStringMap(existingSecret.Data)))
-					return fmt.Errorf("secret %s:%s/%s needs updating in place, use --force to do so", cluster, secret.Namespace, secret.Name)
+					errs = append(errs, fmt.Errorf("secret %s:%s/%s needs updating in place, use --force to do so", cluster, secret.Namespace, secret.Name))
+					continue
 				}
 				if _, err := secretsGetter.Secrets(secret.Namespace).Update(secret); err != nil {
-					return fmt.Errorf("error updating secret %s:%s/%s: %v", cluster, secret.Namespace, secret.Name, err)
+					errs = append(errs, fmt.Errorf("error updating secret %s:%s/%s: %v", cluster, secret.Namespace, secret.Name, err))
+					continue
 				}
 				logrus.Debugf("updated secret: %s:%s/%s", cluster, secret.Namespace, secret.Name)
 			} else if kerrors.IsNotFound(err) {
 				if _, err := secretsGetter.Secrets(secret.Namespace).Create(secret); err != nil {
-					return fmt.Errorf("error creating secret %s:%s/%s: %v", cluster, secret.Namespace, secret.Name, err)
+					errs = append(errs, fmt.Errorf("error creating secret %s:%s/%s: %v", cluster, secret.Namespace, secret.Name, err))
+					continue
 				}
 				logrus.Debugf("created secret: %s:%s/%s", cluster, secret.Namespace, secret.Name)
 			} else {
-				return fmt.Errorf("error reading secret %s:%s/%s: %v", cluster, secret.Namespace, secret.Name, err)
+				errs = append(errs, fmt.Errorf("error reading secret %s:%s/%s: %v", cluster, secret.Namespace, secret.Name, err))
 			}
 		}
 	}
-	return nil
+	return utilerrors.NewAggregate(errs)
 }
 
 func bytesMapToStringMap(bytesMap map[string][]byte) map[string]string {

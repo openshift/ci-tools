@@ -96,8 +96,9 @@ func (o *options) completeOptions(secrets *sets.String) error {
 		return err
 	}
 	if o.impersonateUser != "" {
-		for _, kubeConfig := range kubeConfigs {
+		for cluster, kubeConfig := range kubeConfigs {
 			kubeConfig.Impersonate = rest.ImpersonationConfig{UserName: o.impersonateUser}
+			kubeConfigs[cluster] = kubeConfig
 		}
 	}
 

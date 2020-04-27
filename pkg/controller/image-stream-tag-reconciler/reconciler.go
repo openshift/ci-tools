@@ -30,6 +30,7 @@ import (
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
+	controllerutil "github.com/openshift/ci-tools/pkg/controller/util"
 	"github.com/openshift/ci-tools/pkg/jobconfig"
 	"github.com/openshift/ci-tools/pkg/load/agents"
 	"github.com/openshift/ci-tools/pkg/prowgen"
@@ -83,12 +84,15 @@ func AddToManager(mgr controllerruntime.Manager, opts Options) error {
 		ignoredGitHubOrganizations: sets.NewString(opts.IgnoredGitHubOrganizations...),
 		createdJobsCounter:         createdJobsCounter,
 	}
-	c, err := controller.New(
-		controllerName,
-		mgr,
+	c, err := controller.New(controllerName, mgr, controller.Options{
+		// Since we watch ImageStreams and not ImageStreamTags as the latter do not support
+		// watch, we create a lot more events the needed. In order to decrease load, we coalesce
+		// and delay all requests after a successful reconciliation for up to an hour.
+		Reconciler: controllerutil.NewReconcileRequestCoalescer(r, time.Hour),
 		// We currently have 50k ImageStreamTags in the OCP namespace and need to periodically reconcile all of them,
 		// so don't be stingy with the workers
-		controller.Options{Reconciler: r, MaxConcurrentReconciles: 100})
+		MaxConcurrentReconciles: 10,
+	})
 	if err != nil {
 		return fmt.Errorf("failed to construct controller: %w", err)
 	}

@@ -10,6 +10,7 @@ import (
 
 	"github.com/openshift/api/image/docker10"
 	imagev1 "github.com/openshift/api/image/v1"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
@@ -23,6 +24,7 @@ import (
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
@@ -57,6 +59,15 @@ func AddToManager(mgr controllerruntime.Manager, opts Options) error {
 		return fmt.Errorf("failed to add indexer to config-agent: %w", err)
 	}
 
+	createdJobsCounter := prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: controllerName,
+		Name:      "prowjobs_created",
+		Help:      "The number of prowjobs the controller created",
+	}, []string{"org", "repo", "branch", "success"})
+	if err := metrics.Registry.Register(createdJobsCounter); err != nil {
+		return fmt.Errorf("failed to register createdJobsCounter: %w", err)
+	}
+
 	log := logrus.WithField("controller", controllerName)
 	r := &reconciler{
 		ctx:                 context.Background(),
@@ -70,6 +81,7 @@ func AddToManager(mgr controllerruntime.Manager, opts Options) error {
 			"openshift.io/created-by": controllerName,
 		},
 		ignoredGitHubOrganizations: sets.NewString(opts.IgnoredGitHubOrganizations...),
+		createdJobsCounter:         createdJobsCounter,
 	}
 	c, err := controller.New(
 		controllerName,
@@ -117,6 +129,7 @@ type reconciler struct {
 	gitClient                  *git.Client
 	createdProwJobLabels       map[string]string
 	ignoredGitHubOrganizations sets.String
+	createdJobsCounter         *prometheus.CounterVec
 }
 
 func (r *reconciler) Reconcile(req controllerruntime.Request) (controllerruntime.Result, error) {
@@ -191,7 +204,9 @@ func (r *reconciler) reconcile(req controllerruntime.Request, log *logrus.Entry)
 		return nil
 	}
 
-	if err := r.createBuildForIST(buildJob, currentHEAD, istRef); err != nil {
+	err = r.createBuildForIST(buildJob, currentHEAD, istRef)
+	r.createdJobsCounter.WithLabelValues(istRef.org, istRef.repo, istRef.branch, boolToString(err == nil)).Inc()
+	if err != nil {
 		return fmt.Errorf("failed to create build for imageStreamTagL %w", err)
 	}
 
@@ -361,4 +376,11 @@ func configIndexFn(in cioperatorapi.ReleaseBuildConfiguration) []string {
 
 func configIndexKeyForIST(ist *imagev1.ImageStreamTag) string {
 	return ist.Namespace + "/" + ist.Name
+}
+
+func boolToString(b bool) string {
+	if b {
+		return "true"
+	}
+	return "false"
 }

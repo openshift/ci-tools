@@ -97,9 +97,8 @@ func (o *options) completeOptions(secrets *sets.String) error {
 		logrus.WithError(err).Warn("Encountered errors while loading kubeconfigs")
 	}
 	if o.impersonateUser != "" {
-		for cluster, kubeConfig := range kubeConfigs {
+		for _, kubeConfig := range kubeConfigs {
 			kubeConfig.Impersonate = rest.ImpersonationConfig{UserName: o.impersonateUser}
-			kubeConfigs[cluster] = kubeConfig
 		}
 	}
 

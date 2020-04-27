@@ -8,6 +8,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/git"
 	"k8s.io/test-infra/prow/pjutil"
 	"sigs.k8s.io/controller-runtime"
@@ -17,10 +18,15 @@ import (
 )
 
 type options struct {
-	LeaderElectionNamespace string
-	CiOperatorConfigPath    string
-	ProwJobNamespace        string
-	DryRun                  bool
+	LeaderElectionNamespace      string
+	CiOperatorConfigPath         string
+	ProwJobNamespace             string
+	DryRun                       bool
+	ImageStreamTagReconcilerOpts imageStreamTagReconcilerOptions
+}
+
+type imageStreamTagReconcilerOptions struct {
+	IgnoredGitHubOrganizations flagutil.Strings
 }
 
 func newOpts() (*options, error) {
@@ -28,6 +34,7 @@ func newOpts() (*options, error) {
 	flag.StringVar(&opts.LeaderElectionNamespace, "leader-election-namespace", "ci", "The namespace to use for leaderelection")
 	flag.StringVar(&opts.CiOperatorConfigPath, "ci-operator-config-path", "", "Path to the ci operator config")
 	flag.StringVar(&opts.ProwJobNamespace, "prow-job-namespace", "ci", "Namespace to create prowjobs in")
+	flag.Var(&opts.ImageStreamTagReconcilerOpts.IgnoredGitHubOrganizations, "imagestreamtagreconciler.ignored-github-organization", "GitHub organization to ignore in the imagestreamtagreconciler. Can be specified multiple times")
 	// TODO: rather than relying on humans implementing dry-run properly, we should switch
 	// to just do it on client-level once it becomes available: https://github.com/kubernetes-sigs/controller-runtime/pull/839
 	flag.BoolVar(&opts.DryRun, "dry-run", true, "Whether to run the controller-manager with dry-run")
@@ -52,7 +59,7 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get options")
 	}
-	logrus.SetLevel(logrus.InfoLevel)
+	logrus.SetLevel(logrus.DebugLevel)
 
 	cfg, err := controllerruntime.GetConfig()
 	if err != nil {
@@ -81,10 +88,11 @@ func main() {
 	pjutil.ServePProf()
 
 	imageStreamTagReconcilerOpts := imagestreamtagreconciler.Options{
-		DryRun:                opts.DryRun,
-		CIOperatorConfigAgent: ciOPConfigAgent,
-		ProwJobNamespace:      opts.ProwJobNamespace,
-		GitClient:             gitClient,
+		DryRun:                     opts.DryRun,
+		CIOperatorConfigAgent:      ciOPConfigAgent,
+		ProwJobNamespace:           opts.ProwJobNamespace,
+		GitClient:                  gitClient,
+		IgnoredGitHubOrganizations: opts.ImageStreamTagReconcilerOpts.IgnoredGitHubOrganizations.Strings(),
 	}
 	if err := imagestreamtagreconciler.AddToManager(mgr, imageStreamTagReconcilerOpts); err != nil {
 		logrus.WithError(err).Fatal("Failed to add imagestreamtagreconciler")

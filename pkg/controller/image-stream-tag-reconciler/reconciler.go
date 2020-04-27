@@ -13,6 +13,7 @@ import (
 	"github.com/sirupsen/logrus"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/git"
@@ -35,10 +36,11 @@ import (
 )
 
 type Options struct {
-	DryRun                bool
-	CIOperatorConfigAgent agents.ConfigAgent
-	ProwJobNamespace      string
-	GitClient             *git.Client
+	DryRun                     bool
+	CIOperatorConfigAgent      agents.ConfigAgent
+	ProwJobNamespace           string
+	GitClient                  *git.Client
+	IgnoredGitHubOrganizations []string
 }
 
 const controllerName = "imageStreamTagReconciler"
@@ -67,6 +69,7 @@ func AddToManager(mgr controllerruntime.Manager, opts Options) error {
 		createdProwJobLabels: map[string]string{
 			"openshift.io/created-by": controllerName,
 		},
+		ignoredGitHubOrganizations: sets.NewString(opts.IgnoredGitHubOrganizations...),
 	}
 	c, err := controller.New(
 		controllerName,
@@ -105,21 +108,22 @@ func AddToManager(mgr controllerruntime.Manager, opts Options) error {
 }
 
 type reconciler struct {
-	ctx                  context.Context
-	log                  *logrus.Entry
-	client               ctrlruntimeclient.Client
-	releaseBuildConfigs  agents.ConfigAgent
-	dryRun               bool
-	prowJobNamespace     string
-	gitClient            *git.Client
-	createdProwJobLabels map[string]string
+	ctx                        context.Context
+	log                        *logrus.Entry
+	client                     ctrlruntimeclient.Client
+	releaseBuildConfigs        agents.ConfigAgent
+	dryRun                     bool
+	prowJobNamespace           string
+	gitClient                  *git.Client
+	createdProwJobLabels       map[string]string
+	ignoredGitHubOrganizations sets.String
 }
 
 func (r *reconciler) Reconcile(req controllerruntime.Request) (controllerruntime.Result, error) {
 	log := r.log.WithField("name", req.Name).WithField("namespace", req.Namespace)
-	log.Info("Starting reconciliation")
+	log.Debug("Starting reconciliation")
 	startTime := time.Now()
-	defer func() { log.WithField("duration", time.Since(startTime)).Info("Finished reconciliation") }()
+	defer func() { log.WithField("duration", time.Since(startTime)).Debug("Finished reconciliation") }()
 
 	err := r.reconcile(req, log)
 	if err != nil {
@@ -134,9 +138,6 @@ func (r *reconciler) Reconcile(req controllerruntime.Request) (controllerruntime
 }
 
 func (r *reconciler) reconcile(req controllerruntime.Request, log *logrus.Entry) error {
-
-	log.Debug("Getting ImageStreamTag")
-	startTime := time.Now()
 	ist := &imagev1.ImageStreamTag{}
 	if err := r.client.Get(r.ctx, req.NamespacedName, ist); err != nil {
 		// Object got deleted while it was in the workqueue
@@ -145,9 +146,7 @@ func (r *reconciler) reconcile(req controllerruntime.Request, log *logrus.Entry)
 		}
 		return fmt.Errorf("failed to get object: %w", err)
 	}
-	log.WithField("duration", time.Since(startTime)).Debug("Got ImageStreamTag")
 
-	log.Debug("Checking if is published from CI Opreator")
 	ciOPConfig, err := r.promotionConfig(ist)
 	if err != nil {
 		return fmt.Errorf("failed to get promotionConfig: %w", err)
@@ -157,11 +156,15 @@ func (r *reconciler) reconcile(req controllerruntime.Request, log *logrus.Entry)
 		log.Debug("No promotionConfig found")
 		return nil
 	}
-	log.Debug("Done checking if is published from CI Opreator")
 
 	istRef, err := refForIST(ist)
 	if err != nil {
 		return fmt.Errorf("failed to get ref for imageStreamTag: %w", err)
+	}
+	log = log.WithField("org", istRef.org).WithField("repo", istRef.repo).WithField("branch", istRef.branch)
+	if r.ignoredGitHubOrganizations.Has(istRef.org) {
+		log.WithField("github-organization", istRef.org).Debug("Ignoring ImageStreamTag because its source organization is configured to be ignored")
+		return nil
 	}
 
 	currentHEAD, err := r.currentHEADForBranch(istRef)
@@ -255,6 +258,7 @@ func (r *reconciler) currentHEADForBranch(br *branchReference) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to get git client for %s/%s: %w", br.org, br.repo, err)
 	}
+	// Use git show-ref -s instead
 	branchHEADRef, err := repo.RevParse(br.branch)
 	if err != nil {
 		return "", fmt.Errorf("fauld to git rev-parse %s: %w", br.branch, err)
@@ -322,7 +326,7 @@ func (r *reconciler) createBuildForIST(job *prowconfig.Postsubmit, headSHA strin
 
 	if r.dryRun {
 		serialized, _ := json.Marshal(prowJob)
-		r.log.WithField("job_name", prowJob.Spec.Job).WithField("job", serialized).Info("Not creating prowjob because dryRun is enabled")
+		r.log.WithField("job_name", prowJob.Spec.Job).WithField("job", string(serialized)).Info("Not creating prowjob because dryRun is enabled")
 		return nil
 	}
 

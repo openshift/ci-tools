@@ -27,14 +27,14 @@ func LoadClusterConfig() (*rest.Config, error) {
 	return clusterConfig, nil
 }
 
-func LoadKubeConfigs(kubeconfig string) (map[string]rest.Config, string, error) {
+func LoadKubeConfigs(kubeconfig string) (map[string]*rest.Config, string, error) {
 	loader := clientcmd.NewDefaultClientConfigLoadingRules()
 	loader.ExplicitPath = kubeconfig
 	cfg, err := loader.Load()
 	if err != nil {
 		return nil, "", err
 	}
-	configs := map[string]rest.Config{}
+	configs := map[string]*rest.Config{}
 	var errs []error
 	for context := range cfg.Contexts {
 		contextCfg, err := clientcmd.NewNonInteractiveClientConfig(*cfg, context, &clientcmd.ConfigOverrides{}, loader).ClientConfig()
@@ -43,7 +43,7 @@ func LoadKubeConfigs(kubeconfig string) (map[string]rest.Config, string, error) 
 			errs = append(errs, fmt.Errorf("create %s client: %v", context, err))
 			continue
 		}
-		configs[context] = *contextCfg
+		configs[context] = contextCfg
 		logrus.Infof("Parsed kubeconfig context: %s", context)
 	}
 	return configs, cfg.CurrentContext, utilerrors.NewAggregate(errs)

@@ -39,7 +39,7 @@ func FromConfig(
 	clusterConfig *rest.Config,
 	leaseClient *lease.Client,
 	requiredTargets []string,
-	kubeconfigs map[string]rest.Config,
+	kubeconfigs map[string]*rest.Config,
 	dryLogger *steps.DryLogger,
 	cloneAuthConfig *steps.CloneAuthConfig,
 	pullSecret *coreapi.Secret,
@@ -277,7 +277,7 @@ func promotionDefaults(configSpec *api.ReleaseBuildConfiguration) (*api.Promotio
 	return config, nil
 }
 
-func clusterImageStreamClient(client imageclientset.ImageV1Interface, config *rest.Config, overrideClusterHost string, kubeconfigs map[string]rest.Config) (imageclientset.ImageV1Interface, error) {
+func clusterImageStreamClient(client imageclientset.ImageV1Interface, config *rest.Config, overrideClusterHost string, kubeconfigs map[string]*rest.Config) (imageclientset.ImageV1Interface, error) {
 	if config == nil || len(overrideClusterHost) == 0 {
 		return client, nil
 	}
@@ -287,7 +287,7 @@ func clusterImageStreamClient(client imageclientset.ImageV1Interface, config *re
 
 	for _, c := range kubeconfigs {
 		if equivalentHosts(c.Host, overrideClusterHost) {
-			return imageclientset.NewForConfig(&c)
+			return imageclientset.NewForConfig(c)
 		}
 	}
 

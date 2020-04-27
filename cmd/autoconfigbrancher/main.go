@@ -14,6 +14,8 @@ import (
 	"k8s.io/test-infra/prow/config/secret"
 	"k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/labels"
+
+	"github.com/openshift/ci-tools/pkg/promotion"
 )
 
 const (
@@ -29,31 +31,25 @@ var (
 )
 
 type options struct {
-	dryRun         bool
-	githubLogin    string
-	gitName        string
-	gitEmail       string
-	targetDir      string
-	assign         string
-	currentRelease string
-	selfApprove    bool
-	futureReleases flagutil.Strings
-	debugMode      bool
+	promotion.FutureOptions
+	githubLogin string
+	gitName     string
+	gitEmail    string
+	targetDir   string
+	assign      string
+	selfApprove bool
 	flagutil.GitHubOptions
 }
 
 func parseOptions() options {
 	var o options
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
-	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually create the pull request with github client")
+	o.FutureOptions.Bind(fs)
 	fs.StringVar(&o.githubLogin, "github-login", githubLogin, "The GitHub username to use.")
 	fs.StringVar(&o.gitName, "git-name", "", "The name to use on the git commit. Requires --git-email. If not specified, uses the system default.")
 	fs.StringVar(&o.gitEmail, "git-email", "", "The email to use on the git commit. Requires --git-name. If not specified, uses the system default.")
 	fs.StringVar(&o.targetDir, "target-dir", "", "The directory containing the target repo.")
 	fs.StringVar(&o.assign, "assign", githubTeam, "The github username or group name to assign the created pull request to.")
-	fs.StringVar(&o.currentRelease, "current-release", "", "Configurations targeting this release will get branched.")
-	fs.Var(&o.futureReleases, "future-release", "Configurations will get branched to target this release, provide one or more times.")
-	fs.BoolVar(&o.debugMode, "debug-mode", false, "Enable the DEBUG level of logs if true.")
 	fs.BoolVar(&o.selfApprove, "self-approve", false, "Self-approve the PR by adding the `approved` and `lgtm` labels. Requires write permissions on the repo.")
 	o.AddFlagsWithoutDefaultGitHubTokenPath(fs)
 	if err := fs.Parse(os.Args[1:]); err != nil {
@@ -75,18 +71,10 @@ func validateOptions(o options) error {
 	if o.assign == "" {
 		return fmt.Errorf("--assign is mandatory")
 	}
-	if o.currentRelease == "" {
-		return fmt.Errorf("--current-release is mandatory")
+	if err := o.FutureOptions.Validate(); err != nil {
+		return err
 	}
-	if len(o.futureReleases.Strings()) == 0 {
-		return fmt.Errorf("--future-release is mandatory")
-	}
-	for _, rf := range o.futureReleases.Strings() {
-		if rf == "" {
-			return fmt.Errorf("--future-release cannot be empty")
-		}
-	}
-	return o.GitHubOptions.Validate(o.dryRun)
+	return o.GitHubOptions.Validate(!o.Confirm)
 }
 
 func hasChanges() (bool, error) {
@@ -135,17 +123,12 @@ func main() {
 		logrus.WithError(err).Fatal("Invalid arguments.")
 	}
 
-	if o.debugMode {
-		logrus.Info("debug mode is enabled")
-		logrus.SetLevel(logrus.DebugLevel)
-	}
-
 	sa := &secret.Agent{}
 	if err := sa.Start([]string{o.GitHubOptions.TokenPath}); err != nil {
 		logrus.WithError(err).Fatal("Failed to start secrets agent")
 	}
 
-	gc, err := o.GitHubOptions.GitHubClient(sa, o.dryRun)
+	gc, err := o.GitHubOptions.GitHubClient(sa, !o.Confirm)
 	if err != nil {
 		logrus.WithError(err).Fatal("error getting GitHub client")
 	}
@@ -156,20 +139,21 @@ func main() {
 	}
 
 	cmd := "/usr/bin/determinize-ci-operator"
-	args := []string{"--config-dir", "./ci-operator/config", "--current-release", o.currentRelease}
-	for _, fr := range o.futureReleases.Strings() {
+	args := []string{"--config-dir", "./ci-operator/config", "--confirm"}
+	run(cmd, args...)
+
+	author := fmt.Sprintf("%s <%s>", o.gitName, o.gitEmail)
+	commitIfNeeded("determinize-ci-operator --confirm", author)
+
+	cmd = "/usr/bin/config-brancher"
+	args = []string{"--config-dir", "./ci-operator/config", "--current-release", o.CurrentRelease}
+	for _, fr := range o.FutureReleases.Strings() {
 		args = append(args, []string{"--future-release", fr}...)
 	}
 	args = append(args, "--confirm")
 	run(cmd, args...)
 
-	author := fmt.Sprintf("%s <%s>", o.gitName, o.gitEmail)
-	commitIfNeeded(fmt.Sprintf("determinize-ci-operator --current-release %s --future-release %s", o.currentRelease, strings.Join(o.futureReleases.Strings(), ",")), author)
-
-	cmd = "/usr/bin/config-brancher"
-	run(cmd, args...)
-
-	commitIfNeeded(fmt.Sprintf("config-brancher --current-release %s --future-release %s", o.currentRelease, strings.Join(o.futureReleases.Strings(), ",")), author)
+	commitIfNeeded(fmt.Sprintf("config-brancher --current-release %s --future-release %s", o.CurrentRelease, strings.Join(o.FutureReleases.Strings(), ",")), author)
 
 	cmd = "/usr/bin/ci-operator-prowgen"
 	args = []string{"--from-dir", "./ci-operator/config", "--to-dir", "./ci-operator/jobs"}

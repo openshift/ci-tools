@@ -43,8 +43,7 @@
               "requests": {
                 "cpu": "1000m",
                 "memory": "2Gi"
-              },
-              "limits": null
+              }
             }
           },
           {
@@ -55,8 +54,7 @@
               "requests": {
                 "cpu": "1000m",
                 "memory": "2Gi"
-              },
-              "limits": null
+              }
             }
           }
         ],
@@ -69,8 +67,7 @@
               "requests": {
                 "cpu": "1000m",
                 "memory": "2Gi"
-              },
-              "limits": null
+              }
             }
           }
         ],
@@ -83,8 +80,7 @@
               "requests": {
                 "cpu": "1000m",
                 "memory": "2Gi"
-              },
-              "limits": null
+              }
             }
           },
           {
@@ -95,8 +91,7 @@
               "requests": {
                 "cpu": "1000m",
                 "memory": "2Gi"
-              },
-              "limits": null
+              }
             }
           }
         ]
@@ -115,8 +110,7 @@
               "requests": {
                 "cpu": "1000m",
                 "memory": "2Gi"
-              },
-              "limits": null
+              }
             }
           },
           {
@@ -127,8 +121,7 @@
               "requests": {
                 "cpu": "1000m",
                 "memory": "2Gi"
-              },
-              "limits": null
+              }
             }
           }
         ],
@@ -141,8 +134,7 @@
               "requests": {
                 "cpu": "1000m",
                 "memory": "2Gi"
-              },
-              "limits": null
+              }
             }
           }
         ],
@@ -155,8 +147,7 @@
               "requests": {
                 "cpu": "1000m",
                 "memory": "2Gi"
-              },
-              "limits": null
+              }
             }
           },
           {
@@ -167,8 +158,7 @@
               "requests": {
                 "cpu": "1000m",
                 "memory": "2Gi"
-              },
-              "limits": null
+              }
             }
           }
         ]

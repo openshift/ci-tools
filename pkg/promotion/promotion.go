@@ -5,10 +5,8 @@ import (
 	"flag"
 	"fmt"
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
-	"github.com/sirupsen/logrus"
-	"k8s.io/apimachinery/pkg/util/sets"
+	"github.com/openshift/ci-tools/pkg/config"
 	"k8s.io/test-infra/prow/flagutil"
-	"regexp"
 )
 
 const (
@@ -76,27 +74,15 @@ func DetermineReleaseBranch(currentRelease, futureRelease, currentBranch string)
 	}
 }
 
-type Options struct {
-	ConfigDir      string
-	CurrentRelease string
-	FutureReleases flagutil.Strings
-	BumpRelease    string
-	Confirm        bool
-	Org            string
-	Repo           string
+// Options holds options to load CI Operator configuration and
+// operate on a subset of them to update for future releases.
+type FutureOptions struct {
+	Options
 
-	logLevel string
+	FutureReleases flagutil.Strings
 }
 
-func (o *Options) Validate() error {
-	if o.ConfigDir == "" {
-		return errors.New("required flag --config-dir was unset")
-	}
-
-	if o.CurrentRelease == "" {
-		return errors.New("required flag --current-release was unset")
-	}
-
+func (o *FutureOptions) Validate() error {
 	if len(o.FutureReleases.Strings()) == 0 {
 		return errors.New("required flag --future-release was not provided at least once")
 	}
@@ -108,44 +94,47 @@ func (o *Options) Validate() error {
 		return fmt.Errorf("could not add current release to future releases: %v", err)
 	}
 
-	futureReleases := sets.NewString(o.FutureReleases.Strings()...)
-	if o.BumpRelease != "" && !futureReleases.Has(o.BumpRelease) {
-		return fmt.Errorf("future releases %v do not contain bump release %v", futureReleases.List(), o.BumpRelease)
+	return o.Options.Validate()
+}
+
+func (o *FutureOptions) Bind(fs *flag.FlagSet) {
+	fs.Var(&o.FutureReleases, "future-release", "Configurations will get branched to target this release, provide one or more times.")
+	o.Options.Bind(fs)
+}
+
+// Options holds options to load CI Operator configuration
+// and select a subset of that configuration to operate on.
+// Configurations can be filtered by current release.
+type Options struct {
+	config.Options
+
+	CurrentRelease string
+}
+
+func (o *Options) Validate() error {
+	if o.CurrentRelease == "" {
+		return errors.New("required flag --current-release was unset")
 	}
 
-	level, err := logrus.ParseLevel(o.logLevel)
-	if err != nil {
-		return fmt.Errorf("invalid --log-level: %v", err)
-	}
-	logrus.SetLevel(level)
-	return nil
+	return o.Options.Validate()
 }
 
 func (o *Options) Bind(fs *flag.FlagSet) {
-	fs.StringVar(&o.ConfigDir, "config-dir", "", "Path to CI Operator configuration directory.")
 	fs.StringVar(&o.CurrentRelease, "current-release", "", "Configurations targeting this release will get branched.")
-	fs.Var(&o.FutureReleases, "future-release", "Configurations will get branched to target this release, provide one or more times.")
-	fs.StringVar(&o.BumpRelease, "bump-release", "", "Bump the dev config to this release and manage mirroring.")
-	fs.BoolVar(&o.Confirm, "confirm", false, "Create the branched configuration files.")
-	fs.StringVar(&o.logLevel, "log-level", "info", "Level at which to log output.")
-	fs.StringVar(&o.Org, "org", "", "Limit repos affected to those in this org.")
-	fs.StringVar(&o.Repo, "repo", "", "Limit repos affected to this repo.")
+	o.Options.Bind(fs)
 }
 
-var threeXBranches = regexp.MustCompile(`^(release|enterprise|openshift)-3\.[0-9]+$`)
-var fourXBranches = regexp.MustCompile(`^(release|enterprise|openshift)-(4\.[0-9]+)$`)
+func (o *Options) matches(configuration *cioperatorapi.ReleaseBuildConfiguration) bool {
+	return PromotesOfficialImages(configuration) && configuration.PromotionConfiguration.Name == o.CurrentRelease
+}
 
-func FlavorForBranch(branch string) string {
-	var flavor string
-	if branch == "master" {
-		flavor = "master"
-	} else if threeXBranches.MatchString(branch) {
-		flavor = "3.x"
-	} else if fourXBranches.MatchString(branch) {
-		matches := fourXBranches.FindStringSubmatch(branch)
-		flavor = matches[2] // the 4.x release string
-	} else {
-		flavor = "misc"
-	}
-	return flavor
+// OperateOnCIOperatorConfigDir filters the full set of configurations
+// down to those that were selected by the user with promotion options
+func (o *Options) OperateOnCIOperatorConfigDir(configDir string, callback func(*cioperatorapi.ReleaseBuildConfiguration, *config.Info) error) error {
+	return o.Options.OperateOnCIOperatorConfigDir(configDir, func(configuration *cioperatorapi.ReleaseBuildConfiguration, info *config.Info) error {
+		if !o.matches(configuration) {
+			return nil
+		}
+		return callback(configuration, info)
+	})
 }

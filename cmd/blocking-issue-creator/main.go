@@ -19,7 +19,7 @@ import (
 )
 
 type options struct {
-	promotion.Options
+	promotion.FutureOptions
 	username  string
 	tokenPath string
 }
@@ -62,19 +62,8 @@ func main() {
 	client := githubql.NewClient(oauth2.NewClient(context.Background(), oauth2.StaticTokenSource(&oauth2.Token{AccessToken: strings.TrimSpace(string(rawToken))})))
 
 	failed := false
-	if err := config.OperateOnCIOperatorConfigDir(o.ConfigDir, func(configuration *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {
+	if err := o.OperateOnCIOperatorConfigDir(o.ConfigDir, func(configuration *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {
 		logger := config.LoggerForInfo(*repoInfo)
-		if (o.Org != "" && o.Org != repoInfo.Org) || (o.Repo != "" && o.Repo != repoInfo.Repo) {
-			return nil
-		}
-		if !promotion.PromotesOfficialImages(configuration) {
-			logger.Debugf("Skipping because no offical images are promoted from this configuration")
-			return nil
-		}
-		if configuration.PromotionConfiguration.Name != o.CurrentRelease {
-			logger.Debugf("Skipping because this configuration promotes %s, but the current release is %s", configuration.PromotionConfiguration.Name, o.CurrentRelease)
-			return nil
-		}
 
 		var branches []string
 		for _, futureRelease := range o.FutureReleases.Strings() {

@@ -127,8 +127,8 @@ func (c ResourceConfiguration) RequirementsForStep(name string) ResourceRequirem
 // to the individual steps in the job. They are passed directly to
 // builds or pods.
 type ResourceRequirements struct {
-	Requests ResourceList `json:"requests"`
-	Limits   ResourceList `json:"limits"`
+	Requests ResourceList `json:"requests,omitempty"`
+	Limits   ResourceList `json:"limits,omitempty"`
 }
 
 // ResourceList is a map of string resource names and resource
@@ -231,7 +231,7 @@ type PromotionConfiguration struct {
 	// Name is an optional image stream name to use that
 	// contains all component tags. If specified, tag is
 	// ignored.
-	Name string `json:"name"`
+	Name string `json:"name,omitempty"`
 
 	// Tag is the ImageStreamTag tagged in for each
 	// build image's ImageStream.
@@ -742,7 +742,7 @@ type OpenshiftInstallerCustomTestImageClusterTestConfiguration struct {
 	// provided test command.  e.g. stable:console-test
 	From             string `json:"from"`
 	EnableNestedVirt bool   `json:"enable_nested_virt,omitempty"`
-	NestedVirtImage  string `json:"nested_virt_image"`
+	NestedVirtImage  string `json:"nested_virt_image,omitempty"`
 }
 
 // OpenshiftInstallerGCPNestedVirtCustomTestImageClusterTestConfiguration describes a

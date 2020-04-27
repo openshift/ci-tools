@@ -2,19 +2,40 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
 
 	"github.com/getlantern/deepcopy"
 	"github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/openshift/ci-tools/pkg/api"
-
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/promotion"
 )
 
-func gatherOptions() promotion.Options {
-	o := promotion.Options{}
+type options struct {
+	promotion.FutureOptions
+
+	BumpRelease string
+}
+
+func (o *options) Validate() error {
+	futureReleases := sets.NewString(o.FutureReleases.Strings()...)
+	if o.BumpRelease != "" && !futureReleases.Has(o.BumpRelease) {
+		return fmt.Errorf("future releases %v do not contain bump release %v", futureReleases.List(), o.BumpRelease)
+	}
+
+	return o.Options.Validate()
+}
+
+func (o *options) Bind(fs *flag.FlagSet) {
+	fs.StringVar(&o.BumpRelease, "bump-release", "", "Bump the dev config to this release and manage mirroring.")
+	o.Options.Bind(fs)
+}
+
+func gatherOptions() options {
+	o := options{}
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	o.Bind(fs)
 	if err := fs.Parse(os.Args[1:]); err != nil {
@@ -47,10 +68,7 @@ func main() {
 	}
 
 	var toCommit []config.DataWithInfo
-	if err := config.OperateOnCIOperatorConfigDir(o.ConfigDir, func(configuration *api.ReleaseBuildConfiguration, info *config.Info) error {
-		if (o.Org != "" && o.Org != info.Org) || (o.Repo != "" && o.Repo != info.Repo) {
-			return nil
-		}
+	if err := o.OperateOnCIOperatorConfigDir(o.ConfigDir, func(configuration *api.ReleaseBuildConfiguration, info *config.Info) error {
 		for _, output := range generateBranchedConfigs(o.CurrentRelease, o.BumpRelease, o.FutureReleases.Strings(), config.DataWithInfo{Configuration: *configuration, Info: *info}) {
 			if !o.Confirm {
 				output.Logger().Info("Would commit new file.")
@@ -78,10 +96,6 @@ func main() {
 }
 
 func generateBranchedConfigs(currentRelease, bumpRelease string, futureReleases []string, input config.DataWithInfo) []config.DataWithInfo {
-	if !(promotion.PromotesOfficialImages(&input.Configuration) && input.Configuration.PromotionConfiguration.Name == currentRelease) {
-		return nil
-	}
-
 	var output []config.DataWithInfo
 	input.Logger().Info("Branching configuration.")
 	currentConfig := input.Configuration

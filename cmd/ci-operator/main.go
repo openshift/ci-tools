@@ -270,7 +270,7 @@ type options struct {
 	metadataRevision int
 
 	kubeconfig  string
-	kubeconfigs map[string]rest.Config
+	kubeconfigs map[string]*rest.Config
 
 	pullSecretPath string
 	pullSecret     *coreapi.Secret

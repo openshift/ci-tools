@@ -52,7 +52,7 @@ func TestLoadKubeConfigs(t *testing.T) {
 	var testCases = []struct {
 		name            string
 		kubeconfig      string
-		expectedConfigs map[string]rest.Config
+		expectedConfigs map[string]*rest.Config
 		expectedContext string
 		expectedError   error
 	}{
@@ -64,7 +64,7 @@ func TestLoadKubeConfigs(t *testing.T) {
 		{
 			name:       "file kubeconfig1",
 			kubeconfig: filename1,
-			expectedConfigs: map[string]rest.Config{
+			expectedConfigs: map[string]*rest.Config{
 				"ci/api-build01-ci-devcluster-openshift-com:6443": {
 					Host:        "https://api.build01.ci.devcluster.openshift.com:6443",
 					BearerToken: "TOKEN",

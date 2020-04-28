@@ -87,8 +87,6 @@ This is either a pj-rehearse bug or an infrastructure failure.`
 
 pj-rehearse created invalid rehearsal jobs.This is either a pj-rehearse bug, or
 the rehearsed jobs themselves are invalid.`
-
-	FAILURE = 1
 )
 
 func loadPluginConfig(releaseRepoPath string) (ret prowplugins.ConfigUpdater, err error) {

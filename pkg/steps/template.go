@@ -322,35 +322,6 @@ func (c *templateClient) Process(namespace string, template *templateapi.Templat
 	return processed, fmt.Errorf("could not process template: %v", err)
 }
 
-func isPodCompleted(podClient coreclientset.PodInterface, name string) (bool, error) {
-	pod, err := podClient.Get(name, meta.GetOptions{})
-	if errors.IsNotFound(err) {
-		return false, nil
-	}
-	if err != nil {
-		return false, fmt.Errorf("could not retrieve pod: %v", err)
-	}
-	if pod.Status.Phase == coreapi.PodSucceeded || pod.Status.Phase == coreapi.PodFailed {
-		return true, nil
-	}
-	for _, status := range append(append([]coreapi.ContainerStatus{}, pod.Status.InitContainerStatuses...), pod.Status.ContainerStatuses...) {
-		// don't fail until everything has started at least once
-		if status.State.Waiting != nil && status.LastTerminationState.Terminated == nil {
-			return false, nil
-		}
-		// artifacts doesn't count as requiring completion
-		if status.Name == "artifacts" {
-			continue
-		}
-		if s := status.State.Terminated; s != nil {
-			if s.ExitCode != 0 {
-				return true, nil
-			}
-		}
-	}
-	return false, nil
-}
-
 func waitForTemplateInstanceReady(templateClient templateclientset.TemplateInstanceInterface, name string) (*templateapi.TemplateInstance, error) {
 	var instance *templateapi.TemplateInstance
 	err := wait.PollImmediate(2*time.Second, 10*time.Minute, func() (bool, error) {

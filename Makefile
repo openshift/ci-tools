@@ -36,9 +36,8 @@ validate-vendor:
 .PHONY: validate-vendor
 
 lint:
-	gofmt -s -l $(shell go list -f '{{ .Dir }}' ./... ) | grep ".*\.go"; if [ "$$?" = "0" ]; then gofmt -s -d $(shell go list -f '{{ .Dir }}' ./... ); exit 1; fi
-	go vet ./...
 .PHONY: lint
+	./hack/lint.sh
 
 format:
 	gofmt -s -w $(shell go list -f '{{ .Dir }}' ./... )

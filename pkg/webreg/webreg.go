@@ -1305,7 +1305,7 @@ lease indefinitely.
 
 <h3 id="admins"><a href="#admins">Directions for Cloud Administrators</a></h3>
 <p>
-An administrator of a cloud platform will interact with the leasing server in order to configure the aggregate limit on 
+An administrator of a cloud platform will interact with the leasing server in order to configure the aggregate limit on
 jobs for the platform or inspect the current settings and usage. Care must be taken when configuring the leasing server
 in order to ensure that jobs are well-behaved against the cloud provider APIs.
 </p>
@@ -1337,7 +1337,7 @@ name of the resource type to the <a href="https://github.com/openshift/release/b
 The example configuration above will create <i>dynamic</i> resources and is most appropriate for operating against large
 cloud APIs where clients act identically regardless of which slice of the quota they have leased. If the cloud provider
 that is being configured has a static pool of resources and jobs are expected to act differently based on the specific
-lease that they acquire, it is necessary to create a static list of resources for <code>boskos</code>: 
+lease that they acquire, it is necessary to create a static list of resources for <code>boskos</code>:
 </p>
 
 <code>boskos</code> configuration:
@@ -1545,7 +1545,7 @@ func writePage(w http.ResponseWriter, title string, body *template.Template, dat
 
 func helpHandler(subPath string, w http.ResponseWriter, req *http.Request) {
 	start := time.Now()
-	defer func() { logrus.Infof("rendered in %s", time.Now().Sub(start)) }()
+	defer func() { logrus.Infof("rendered in %s", time.Since(start)) }()
 	helpFuncs := template.New("helpPage").Funcs(
 		template.FuncMap{
 			"yamlSyntax": func(source string) template.HTML {
@@ -1623,7 +1623,7 @@ func helpHandler(subPath string, w http.ResponseWriter, req *http.Request) {
 
 func mainPageHandler(agent agents.RegistryAgent, templateString string, w http.ResponseWriter, req *http.Request) {
 	start := time.Now()
-	defer func() { logrus.Infof("rendered in %s", time.Now().Sub(start)) }()
+	defer func() { logrus.Infof("rendered in %s", time.Since(start)) }()
 
 	w.Header().Set("Content-Type", "text/html;charset=UTF-8")
 	refs, chains, wfs, docs := agent.GetRegistryComponents()
@@ -1722,7 +1722,7 @@ func syntaxBash(source string) (string, error) {
 
 func referenceHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *http.Request) {
 	start := time.Now()
-	defer func() { logrus.Infof("rendered in %s", time.Now().Sub(start)) }()
+	defer func() { logrus.Infof("rendered in %s", time.Since(start)) }()
 	w.Header().Set("Content-Type", "text/html;charset=UTF-8")
 	name := path.Base(req.URL.Path)
 
@@ -1756,7 +1756,7 @@ func referenceHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *ht
 
 func chainHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *http.Request) {
 	start := time.Now()
-	defer func() { logrus.Infof("rendered in %s", time.Now().Sub(start)) }()
+	defer func() { logrus.Infof("rendered in %s", time.Since(start)) }()
 	w.Header().Set("Content-Type", "text/html;charset=UTF-8")
 	name := path.Base(req.URL.Path)
 
@@ -1777,7 +1777,7 @@ func chainHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *http.R
 
 func workflowHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *http.Request) {
 	start := time.Now()
-	defer func() { logrus.Infof("rendered in %s", time.Now().Sub(start)) }()
+	defer func() { logrus.Infof("rendered in %s", time.Since(start)) }()
 	w.Header().Set("Content-Type", "text/html;charset=UTF-8")
 	name := path.Base(req.URL.Path)
 
@@ -1826,7 +1826,7 @@ func findConfigForJob(jobName string, configs agents.FilenameToConfig) (api.Mult
 
 func jobHandler(regAgent agents.RegistryAgent, confAgent agents.ConfigAgent, w http.ResponseWriter, req *http.Request) {
 	start := time.Now()
-	defer func() { logrus.Infof("rendered in %s", time.Now().Sub(start)) }()
+	defer func() { logrus.Infof("rendered in %s", time.Since(start)) }()
 	w.Header().Set("Content-Type", "text/html;charset=UTF-8")
 	name := path.Base(req.URL.Path)
 	config, err := findConfigForJob(name, confAgent.GetAll())
@@ -1955,7 +1955,7 @@ func getAllMultiStageTests(confAgent agents.ConfigAgent, jobAgent *prowConfig.Ag
 
 func searchHandler(confAgent agents.ConfigAgent, jobAgent *prowConfig.Agent, w http.ResponseWriter, req *http.Request) {
 	start := time.Now()
-	defer func() { logrus.Infof("rendered in %s", time.Now().Sub(start)) }()
+	defer func() { logrus.Infof("rendered in %s", time.Since(start)) }()
 	w.Header().Set("Content-Type", "text/html;charset=UTF-8")
 	searchTerm := req.URL.Query().Get("job")
 	matches := getAllMultiStageTests(confAgent, jobAgent)

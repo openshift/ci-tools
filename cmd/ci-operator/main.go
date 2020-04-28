@@ -505,7 +505,7 @@ func (o *options) Report(err error) {
 func (o *options) Run() error {
 	start := time.Now()
 	defer func() {
-		log.Printf("Ran for %s", time.Now().Sub(start).Truncate(time.Second))
+		log.Printf("Ran for %s", time.Since(start).Truncate(time.Second))
 	}()
 
 	dryLogger := steps.NewDryLogger(o.determinizeOutput)

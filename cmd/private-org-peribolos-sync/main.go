@@ -215,7 +215,7 @@ func makeCallback(includeRepos, orgReposPicked map[string]sets.String) func(*api
 
 		// skip this repo unless it's in the whitelist
 		if !promotion.BuildsOfficialImages(c) {
-			if repos, _ := includeRepos[i.Org]; !repos.Has(i.Repo) {
+			if !includeRepos[i.Org].Has(i.Repo) {
 				return nil
 			}
 		}

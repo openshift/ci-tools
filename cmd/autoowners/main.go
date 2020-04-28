@@ -167,9 +167,8 @@ func getOwnersHTTP(fg FileGetter, orgRepo orgRepo) (httpResult, error) {
 				logrus.WithField("orgRepo", orgRepo.repoString()).WithField("filename", filename).
 					Debug("Not found file in the upstream repo")
 				continue
-			} else {
-				return httpResult, err
 			}
+			return httpResult, err
 		}
 
 		switch filename {
@@ -224,11 +223,11 @@ func writeOwners(orgRepo orgRepo, httpResult httpResult, cleaner ownersCleaner) 
 		logrus.WithField("path", path).Debug("Writing to path ...")
 		err = nil
 		config := httpResult.resolveOwnerAliases(cleaner)
-		switch config.(type) {
+		switch cfg := config.(type) {
 		case SimpleConfig:
-			err = repoowners.SaveSimpleConfig(config.(SimpleConfig), path)
+			err = repoowners.SaveSimpleConfig(cfg, path)
 		case FullConfig:
-			err = repoowners.SaveFullConfig(config.(FullConfig), path)
+			err = repoowners.SaveFullConfig(cfg, path)
 		default:
 			return fmt.Errorf("unknown config type: %+v", config)
 		}

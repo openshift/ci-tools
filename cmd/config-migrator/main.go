@@ -34,10 +34,9 @@ func main() {
 
 	var toCommit []config.DataWithInfo
 	if err := config.OperateOnCIOperatorConfigDir(o.ConfigDir, func(configuration *api.ReleaseBuildConfiguration, info *config.Info) error {
-		for _, output := range generateMigratedConfigs(config.DataWithInfo{Configuration: *configuration, Info: *info}) {
-			// we are walking the config so we need to commit once we're done
-			toCommit = append(toCommit, output)
-		}
+
+		// we are walking the config so we need to commit once we're done
+		toCommit = append(toCommit, generateMigratedConfigs(config.DataWithInfo{Configuration: *configuration, Info: *info})...)
 
 		return nil
 	}); err != nil {

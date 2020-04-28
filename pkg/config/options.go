@@ -74,5 +74,6 @@ func (o *ConfirmableOptions) Validate() error {
 }
 
 func (o *ConfirmableOptions) Bind(fs *flag.FlagSet) {
+	o.Options.Bind(fs)
 	fs.BoolVar(&o.Confirm, "confirm", false, "Create the branched configuration files.")
 }

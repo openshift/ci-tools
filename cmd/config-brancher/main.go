@@ -7,6 +7,7 @@ import (
 
 	"github.com/getlantern/deepcopy"
 	"github.com/sirupsen/logrus"
+
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -31,7 +32,7 @@ func (o *options) Validate() error {
 
 func (o *options) Bind(fs *flag.FlagSet) {
 	fs.StringVar(&o.BumpRelease, "bump-release", "", "Bump the dev config to this release and manage mirroring.")
-	o.Options.Bind(fs)
+	o.FutureOptions.Bind(fs)
 }
 
 func gatherOptions() options {

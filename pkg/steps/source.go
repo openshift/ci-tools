@@ -610,23 +610,6 @@ func resourcesFor(req api.ResourceRequirements) (coreapi.ResourceRequirements, e
 	return apireq, nil
 }
 
-func imageStreamTagExists(reference api.PipelineImageStreamTagReference, istClient imageclientset.ImageStreamTagInterface) (bool, error) {
-	log.Printf("Checking for existence of %s:%s", api.PipelineImageStream, reference)
-	_, err := istClient.Get(
-		fmt.Sprintf("%s:%s", api.PipelineImageStream, reference),
-		meta.GetOptions{},
-	)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return false, nil
-		} else {
-			return false, fmt.Errorf("could not get output imagestreamtag: %v", err)
-		}
-	} else {
-		return true, nil
-	}
-}
-
 func (s *sourceStep) Requires() []api.StepLink {
 	return []api.StepLink{api.InternalImageLink(s.config.From)}
 }

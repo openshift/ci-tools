@@ -929,7 +929,7 @@ func (o *options) writeMetadataJSON() error {
 		log.Printf("Error parsing custom metadata: %v", err)
 	}
 
-	data, err := json.MarshalIndent(m, "", "")
+	data, _ := json.MarshalIndent(m, "", "")
 
 	if o.dry {
 		log.Printf("metadata.json:\n%s", string(data))

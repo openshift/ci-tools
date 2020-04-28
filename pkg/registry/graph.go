@@ -83,36 +83,12 @@ func (set workflowNodeSet) insert(node *workflowNode) {
 	set[node] = sets.Empty{}
 }
 
-func (set workflowNodeSet) list() []*workflowNode {
-	res := make([]*workflowNode, 0, len(set))
-	for key := range set {
-		res = append(res, key)
-	}
-	return res
-}
-
 func (set chainNodeSet) insert(node *chainNode) {
 	set[node] = sets.Empty{}
 }
 
-func (set chainNodeSet) list() []*chainNode {
-	res := make([]*chainNode, 0, len(set))
-	for key := range set {
-		res = append(res, key)
-	}
-	return res
-}
-
 func (set referenceNodeSet) insert(node *referenceNode) {
 	set[node] = sets.Empty{}
-}
-
-func (set referenceNodeSet) list() []*referenceNode {
-	res := make([]*referenceNode, 0, len(set))
-	for key := range set {
-		res = append(res, key)
-	}
-	return res
 }
 
 func (n *nodeWithName) Name() string {

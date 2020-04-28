@@ -17,12 +17,12 @@ import (
 )
 
 func populateWatcher(watcher *fsnotify.Watcher, root string) error {
-	return filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+	return filepath.Walk(root, func(path string, info os.FileInfo, _ error) error {
 		// We only need to watch directories as creation, deletion, and writes
 		// for files in a directory trigger events for the directory
 		if info != nil && info.IsDir() {
 			log.Tracef("Adding %s to watch list", path)
-			err = watcher.Add(path)
+			err := watcher.Add(path)
 			if err != nil {
 				return fmt.Errorf("Failed to add watch on directory %s: %v", path, err)
 			}

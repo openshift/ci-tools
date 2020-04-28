@@ -96,7 +96,7 @@ func Run(ctx context.Context, graph []*api.StepNode, dry bool) (*junit.TestSuite
 		case <-done:
 			close(results)
 			close(done)
-			suite.Duration = time.Now().Sub(start).Seconds()
+			suite.Duration = time.Since(start).Seconds()
 			return suites, aggregateError(errors)
 		}
 	}
@@ -133,7 +133,7 @@ func runStep(ctx context.Context, node *api.StepNode, out chan<- message, dry bo
 	if reporter, ok := node.Step.(subtestReporter); ok {
 		additionalTests = reporter.SubTests()
 	}
-	duration := time.Now().Sub(start)
+	duration := time.Since(start)
 	out <- message{
 		node:            node,
 		duration:        duration,

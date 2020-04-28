@@ -41,10 +41,7 @@ type allStepsLink struct{}
 
 func (_ allStepsLink) Same(other StepLink) bool {
 	_, ok := other.(allStepsLink)
-	if !ok {
-		return false
-	}
-	return true
+	return ok
 }
 
 func (_ allStepsLink) Matches(other StepLink) bool {

@@ -150,8 +150,5 @@ func strP(str string) *string {
 }
 
 func isIntegrationImageStream(name string) bool {
-	if strings.HasPrefix(name, "4.") {
-		return true
-	}
-	return false
+	return strings.HasPrefix(name, "4.")
 }

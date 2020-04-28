@@ -19,7 +19,6 @@ type Options struct {
 	Repo      string
 
 	logLevel string
-	Confirm  bool
 }
 
 func (o *Options) Validate() error {
@@ -40,7 +39,6 @@ func (o *Options) Bind(fs *flag.FlagSet) {
 	fs.StringVar(&o.logLevel, "log-level", "info", "Level at which to log output.")
 	fs.StringVar(&o.Org, "org", "", "Limit repos affected to those in this org.")
 	fs.StringVar(&o.Repo, "repo", "", "Limit repos affected to this repo.")
-	fs.BoolVar(&o.Confirm, "confirm", false, "Create the branched configuration files.")
 }
 
 func (o *Options) matches(info *Info) bool {
@@ -63,4 +61,18 @@ func (o *Options) OperateOnCIOperatorConfigDir(configDir string, callback func(*
 		}
 		return callback(configuration, info)
 	})
+}
+
+type ConfirmableOptions struct {
+	Options
+
+	Confirm bool
+}
+
+func (o *ConfirmableOptions) Validate() error {
+	return o.Options.Validate()
+}
+
+func (o *ConfirmableOptions) Bind(fs *flag.FlagSet) {
+	fs.BoolVar(&o.Confirm, "confirm", false, "Create the branched configuration files.")
 }

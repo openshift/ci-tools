@@ -106,7 +106,7 @@ func (o *FutureOptions) Bind(fs *flag.FlagSet) {
 // and select a subset of that configuration to operate on.
 // Configurations can be filtered by current release.
 type Options struct {
-	config.Options
+	config.ConfirmableOptions
 
 	CurrentRelease string
 }
@@ -116,12 +116,12 @@ func (o *Options) Validate() error {
 		return errors.New("required flag --current-release was unset")
 	}
 
-	return o.Options.Validate()
+	return o.ConfirmableOptions.Validate()
 }
 
 func (o *Options) Bind(fs *flag.FlagSet) {
 	fs.StringVar(&o.CurrentRelease, "current-release", "", "Configurations targeting this release will get branched.")
-	o.Options.Bind(fs)
+	o.ConfirmableOptions.Bind(fs)
 }
 
 func (o *Options) matches(configuration *cioperatorapi.ReleaseBuildConfiguration) bool {

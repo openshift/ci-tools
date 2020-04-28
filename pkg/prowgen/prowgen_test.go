@@ -1221,7 +1221,7 @@ func TestGenerateJobs(t *testing.T) {
 	standardPresubmitJobLabels := map[string]string{
 		"ci-operator.openshift.io/prowgen-controlled": "true",
 		"pj-rehearse.openshift.io/can-be-rehearsed":   "true"}
-	standardPostsubmitJobLabels := map[string]string{"ci-operator.openshift.io/prowgen-controlled": "true"}
+	standardPostsubmitJobLabels := map[string]string{"ci-operator.openshift.io/prowgen-controlled": "true", "ci-operator.openshift.io/is-promotion": "true"}
 
 	tests := []struct {
 		id       string

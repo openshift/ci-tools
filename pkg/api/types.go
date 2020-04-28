@@ -4,6 +4,12 @@ import (
 	"fmt"
 )
 
+const (
+	// PromotionJobLabelKey marks promotion jobs as such. Only its presence is
+	// relevant, its value is not.
+	PromotionJobLabelKey = "ci-operator.openshift.io/is-promotion"
+)
+
 // ReleaseBuildConfiguration describes how release
 // artifacts are built from a repository of source
 // code. The configuration is made up of two parts:

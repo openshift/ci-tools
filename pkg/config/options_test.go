@@ -21,7 +21,7 @@ func TestOptions_Validate(t *testing.T) {
 			name: "invalid log level errors",
 			input: Options{
 				ConfigDir: "/somewhere",
-				logLevel:  "whoa",
+				LogLevel:  "whoa",
 			},
 			expected: errors.New("invalid --log-level: not a valid logrus Level: \"whoa\""),
 		},
@@ -29,7 +29,7 @@ func TestOptions_Validate(t *testing.T) {
 			name: "valid config has no errors",
 			input: Options{
 				ConfigDir: "/somewhere",
-				logLevel:  "debug",
+				LogLevel:  "debug",
 			},
 			expected: nil,
 		},

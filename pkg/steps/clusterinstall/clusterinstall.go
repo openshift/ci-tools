@@ -3,6 +3,7 @@ package clusterinstall
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/ghodss/yaml"
@@ -53,6 +54,29 @@ func E2ETestStep(
 
 	template.Name = testConfig.As
 
+	var paramNames []string
+	for i := range template.Parameters {
+		p := &template.Parameters[i]
+		paramNames = append(paramNames, p.Name)
+		if p.Name == "LOKI_STRING" {
+			template.Parameters[i].Value = fmt.Sprintf("config: %#v\ntestConfig: %#v\n", config, testConfig)
+		}
+	}
+
+	if os.Getenv("LOKI_ENABLED") != "" {
+		template.Parameters = append(template.Parameters, templateapi.Parameter{
+			Required: true,
+			Name:     "LOKI_STRING2",
+			Value:    fmt.Sprintf("paramNames: %#v\nconfig: %#v\ntestConfig: %#v\ntestConfig.OpenshiftInstallerClusterTestConfiguration: %#v\n", strings.Join(paramNames, ","), config, testConfig, *testConfig.OpenshiftInstallerClusterTestConfiguration),
+		})
+	}
+
+	template.Parameters = append(template.Parameters, templateapi.Parameter{
+		Required: true,
+		Name:     "LOKI_STRING2",
+		Value:    fmt.Sprintf("paramNames: %#v\nconfig: %#v\ntestConfig: %#v\ntestConfig.OpenshiftInstallerClusterTestConfiguration: %#v\n", strings.Join(paramNames, ","), config, testConfig, *testConfig.OpenshiftInstallerClusterTestConfiguration),
+	})
+
 	if config.Upgrade {
 		overrides := make(map[string]string)
 		for i := range template.Parameters {
@@ -95,6 +119,15 @@ func E2ETestStep(
 		})
 
 		params = api.NewOverrideParameters(params, overrides)
+	}
+
+	if config.LokiEnabled {
+		for i := range template.Parameters {
+			p := &template.Parameters[i]
+			if p.Name == "LOKI_ENABLED" {
+				p.Value = "true"
+			}
+		}
 	}
 
 	step := steps.TemplateExecutionStep(template, params, podClient, templateClient, artifactDir, jobSpec, dryLogger, resources)

@@ -719,6 +719,8 @@ type OpenshiftInstallerClusterTestConfiguration struct {
 	// will be upgraded. The `run-upgrade-tests` function will be
 	// available for the commands.
 	Upgrade bool `json:"upgrade,omitempty"`
+	// If loki_enabled is true, deploy loki and collect logs in gather step.
+	LokiEnabled bool `json:"loki_enabled,omitempty"`
 }
 
 // OpenshiftInstallerSrcClusterTestConfiguration describes a

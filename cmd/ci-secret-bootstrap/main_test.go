@@ -1473,7 +1473,7 @@ func TestUpdateSecrets(t *testing.T) {
 	}
 }
 
-func TestPrintSecrets(t *testing.T) {
+func TestWriteSecrets(t *testing.T) {
 	testCases := []struct {
 		name          string
 		secretsMap    map[string][]*coreapi.Secret
@@ -1555,7 +1555,7 @@ metadata:
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actualError := printSecrets(tc.secretsMap, tc.w)
+			actualError := writeSecrets(tc.secretsMap, tc.w)
 			equalError(t, tc.expectedError, actualError)
 			equal(t, tc.expected, tc.w.String())
 		})

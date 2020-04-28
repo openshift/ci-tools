@@ -372,7 +372,7 @@ func bytesMapToStringMap(bytesMap map[string][]byte) map[string]string {
 	return strMap
 }
 
-func printSecrets(secretsMap map[string][]*coreapi.Secret, w io.Writer) error {
+func writeSecrets(secretsMap map[string][]*coreapi.Secret, w io.Writer) error {
 	var clusters []string
 	for cluster := range secretsMap {
 		clusters = append(clusters, cluster)
@@ -427,13 +427,19 @@ func main() {
 	}
 
 	if o.dryRun {
-		if err := printSecrets(secretsMap, os.Stdout); err != nil {
-			logrus.WithError(err).Fatalf("Failed to print secrets on dry run.")
+		tmpFile, err := ioutil.TempFile("", "ci-secret-bootstrapper")
+		if err != nil {
+			logrus.WithError(err).Fatal("failed to create tempfile")
+		}
+		defer tmpFile.Close()
+		logrus.Infof("Dry-Run enabled, writing secrets to %s", tmpFile.Name())
+		if err := writeSecrets(secretsMap, tmpFile); err != nil {
+			logrus.WithError(err).Fatalf("Failed to write secrets on dry run.")
 		}
 	} else {
 		if err := updateSecrets(o.secretsGetters, secretsMap, o.force); err != nil {
 			logrus.WithError(err).Fatalf("Failed to update secrets.")
 		}
+		logrus.Info("Updated secrets.")
 	}
-	logrus.Info("Updated secrets.")
 }

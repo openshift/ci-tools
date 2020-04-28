@@ -2,7 +2,6 @@ package jobconfig
 
 import (
 	"fmt"
-	"github.com/openshift/ci-tools/pkg/config"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -16,6 +15,9 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowconfig "k8s.io/test-infra/prow/config"
+
+	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/config"
 )
 
 type ProwgenLabel string
@@ -429,7 +431,9 @@ func mergePresubmits(old, new *prowconfig.Presubmit) prowconfig.Presubmit {
 func mergePostsubmits(old, new *prowconfig.Postsubmit) prowconfig.Postsubmit {
 	merged := *new
 
-	merged.MaxConcurrency = old.MaxConcurrency
+	if _, ok := merged.Labels[cioperatorapi.PromotionJobLabelKey]; !ok {
+		merged.MaxConcurrency = old.MaxConcurrency
+	}
 	if old.Cluster != "" {
 		merged.Cluster = old.Cluster
 	}

@@ -508,6 +508,63 @@ func TestMergePostsubmits(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "job with promotion label and MaxConcurrency 1",
+			old: &prowconfig.Postsubmit{
+				JobBase: prowconfig.JobBase{
+					Name:           "pull-ci-super-duper",
+					Labels:         map[string]string{"foo": "bar"},
+					MaxConcurrency: 3,
+					Agent:          "agent",
+					Cluster:        "somewhere",
+				},
+			},
+			new: &prowconfig.Postsubmit{
+				JobBase: prowconfig.JobBase{
+					Name:           "pull-ci-super-duper",
+					Labels:         map[string]string{"foo": "bar", "ci-operator.openshift.io/is-promotion": "bla"},
+					MaxConcurrency: 1,
+					Agent:          "agent",
+					Cluster:        "somewhere",
+				},
+			},
+			expected: prowconfig.Postsubmit{
+				JobBase: prowconfig.JobBase{
+					Name:           "pull-ci-super-duper",
+					Labels:         map[string]string{"foo": "bar", "ci-operator.openshift.io/is-promotion": "bla"},
+					MaxConcurrency: 1,
+					Agent:          "agent",
+					Cluster:        "somewhere",
+				},
+			},
+		},
+		{
+			name: "job without promotion label",
+			old: &prowconfig.Postsubmit{
+				JobBase: prowconfig.JobBase{
+					Name:           "pull-ci-super-duper",
+					MaxConcurrency: 3,
+					Agent:          "agent",
+					Cluster:        "somewhere",
+				},
+			},
+			new: &prowconfig.Postsubmit{
+				JobBase: prowconfig.JobBase{
+					Name:           "pull-ci-super-duper",
+					MaxConcurrency: 1,
+					Agent:          "agent",
+					Cluster:        "somewhere",
+				},
+			},
+			expected: prowconfig.Postsubmit{
+				JobBase: prowconfig.JobBase{
+					Name:           "pull-ci-super-duper",
+					MaxConcurrency: 3,
+					Agent:          "agent",
+					Cluster:        "somewhere",
+				},
+			},
+		},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {

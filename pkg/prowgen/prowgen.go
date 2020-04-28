@@ -176,6 +176,10 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 			podSpec := generateCiOperatorPodSpec(info, nil, imageTargets, []string{"--promote"}...)
 			postsubmit := generatePostsubmitForTest("images", info, label, podSpec, configSpec.CanonicalGoRepository)
 			postsubmit.MaxConcurrency = 1
+			if postsubmit.Labels == nil {
+				postsubmit.Labels = map[string]string{}
+			}
+			postsubmit.Labels[cioperatorapi.PromotionJobLabelKey] = "true"
 			postsubmits[orgrepo] = append(postsubmits[orgrepo], *postsubmit)
 		}
 	}

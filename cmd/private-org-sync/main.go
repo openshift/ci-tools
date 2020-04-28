@@ -24,10 +24,10 @@ import (
 )
 
 type options struct {
-	configDir string
 	tokenPath string
 	targetOrg string
 
+	config.Options
 	org  string
 	repo string
 
@@ -38,32 +38,26 @@ type options struct {
 
 func (o *options) validate() []error {
 	var errs []error
-	if o.configDir == "" {
-		errs = append(errs, fmt.Errorf("--config-dir is required"))
-	}
 
+	// allow users to pass the previous set of flags
+	if o.Org == "" {
+		o.Org = o.org
+	}
+	if o.Repo == "" {
+		o.Repo = o.repo
+	}
 	if o.targetOrg == "" {
 		errs = append(errs, fmt.Errorf("--target-org is required"))
 	}
-	if o.org != "" && o.targetOrg == o.org {
-		errs = append(errs, fmt.Errorf("--only-org cannot be equal to --target-org"))
-	}
-
-	if o.repo != "" {
-		if o.org != "" {
-			errs = append(errs, fmt.Errorf("--only-org cannot be used together with --only-repo"))
-		}
-		items := strings.Split(o.repo, "/")
-		if len(items) != 2 {
-			errs = append(errs, fmt.Errorf("--only-repo must have org/repo format"))
-		}
-		if items[0] == o.targetOrg {
-			errs = append(errs, fmt.Errorf("repo passed in --repo-only must have org different from --target-org"))
-		}
+	if o.Org != "" && o.targetOrg == o.Org {
+		errs = append(errs, fmt.Errorf("--org cannot be equal to --target-org"))
 	}
 
 	if o.tokenPath == "" {
 		errs = append(errs, fmt.Errorf("--token-path is required"))
+	}
+	if err := o.Options.Validate(); err != nil {
+		errs = append(errs, err)
 	}
 	return errs
 }
@@ -71,9 +65,9 @@ func (o *options) validate() []error {
 func gatherOptions() options {
 	o := options{}
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+	o.Options.Bind(fs)
 
 	fs.StringVar(&o.tokenPath, "token-path", "", "Path to token to use when pushing to GitHub.")
-	fs.StringVar(&o.configDir, "config-path", "", "Path to directory containing ci-operator configurations")
 	fs.StringVar(&o.targetOrg, "target-org", "", "Name of the org holding repos into which the git content should be mirrored")
 
 	fs.StringVar(&o.org, "only-org", "", "Mirror only repos that belong to this org")
@@ -395,12 +389,6 @@ func (g gitSyncer) mirror(repoDir string, src, dst location) error {
 // options passed to the program
 func (o *options) makeFilter(callback func(*api.ReleaseBuildConfiguration, *config.Info) error) func(*api.ReleaseBuildConfiguration, *config.Info) error {
 	return func(c *api.ReleaseBuildConfiguration, i *config.Info) error {
-		if o.org != "" && o.org != i.Org {
-			return nil
-		}
-		if o.repo != "" && o.repo != fmt.Sprintf("%s/%s", i.Org, i.Repo) {
-			return nil
-		}
 		if !promotion.BuildsOfficialImages(c) {
 			return nil
 		}
@@ -476,7 +464,7 @@ func main() {
 	}
 
 	callback = o.makeFilter(callback)
-	if err := config.OperateOnCIOperatorConfigDir(o.configDir, callback); err != nil || len(syncErrors) > 0 {
+	if err := o.OperateOnCIOperatorConfigDir(o.ConfigDir, callback); err != nil || len(syncErrors) > 0 {
 		if err != nil {
 			syncErrors = append(syncErrors, err)
 		}

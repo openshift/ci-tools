@@ -14,7 +14,7 @@ import (
 
 func TestOptionsValidate(t *testing.T) {
 	good := options{
-		configDir: "path/to/dir",
+		Options:   config.Options{ConfigDir: "path/to/dir", LogLevel: "debug"},
 		tokenPath: "path/to/token",
 		targetOrg: "org",
 	}
@@ -37,12 +37,12 @@ func TestOptionsValidate(t *testing.T) {
 		},
 		{
 			description:    "missing --token-path does not pass validation",
-			bad:            &options{configDir: "path/to/dir", targetOrg: "org"},
+			bad:            &options{Options: config.Options{ConfigDir: "path/to/dir", LogLevel: "debug"}, targetOrg: "org"},
 			expectedErrors: 1,
 		},
 		{
 			description:    "missing --target-org does not pass validation",
-			bad:            &options{configDir: "path/to/dir", tokenPath: "path/to/token"},
+			bad:            &options{Options: config.Options{ConfigDir: "path/to/dir", LogLevel: "debug"}, tokenPath: "path/to/token"},
 			expectedErrors: 1,
 		},
 		{
@@ -52,22 +52,6 @@ func TestOptionsValidate(t *testing.T) {
 		{
 			description:    "--only-org same as --target-org does not pass validation",
 			org:            "org",
-			expectedErrors: 1,
-		},
-		{
-			description:    "--only-org and --only-repo does not pass validation",
-			org:            "different-org",
-			repo:           "another-org/repo",
-			expectedErrors: 1,
-		},
-		{
-			description:    "bad --only-repo does not pass validation",
-			repo:           "not-a-repo",
-			expectedErrors: 1,
-		},
-		{
-			description:    "--only-repo in --target-org does not pass validation",
-			repo:           "org/repo",
 			expectedErrors: 1,
 		},
 	}
@@ -108,8 +92,6 @@ func TestOptionsMakeFilter(t *testing.T) {
 	}
 	testcases := []struct {
 		description   string
-		optionOrg     string
-		optionRepo    string
 		repoOrg       string
 		repoName      string
 		callbackError error
@@ -118,36 +100,6 @@ func TestOptionsMakeFilter(t *testing.T) {
 		expectCall  bool
 		expectError bool
 	}{
-		{
-			description: "no org option passed, callbacks are not filtered",
-			expectCall:  true,
-		},
-		{
-			description: "org option passed, callback is made for repo in that org",
-			optionOrg:   "org",
-			repoOrg:     "org",
-			expectCall:  true,
-		},
-		{
-			description: "org option passed, callback is not made for repo not in that org",
-			optionOrg:   "org",
-			repoOrg:     "not-org",
-			expectCall:  false,
-		},
-		{
-			description: "repo option passed, callback is made for that repo",
-			optionRepo:  "org/repo",
-			repoOrg:     "org",
-			repoName:    "repo",
-			expectCall:  true,
-		},
-		{
-			description: "repo option passed, callback is not made for other repo",
-			optionRepo:  "org/repo",
-			repoOrg:     "org",
-			repoName:    "not-repo",
-			expectCall:  false,
-		},
 		{
 			description:   "callback is made and its error is propagated",
 			callbackError: fmt.Errorf("FAIL"),
@@ -162,10 +114,7 @@ func TestOptionsMakeFilter(t *testing.T) {
 	}
 	for _, tc := range testcases {
 		t.Run(tc.description, func(t *testing.T) {
-			o := &options{
-				org:  tc.optionOrg,
-				repo: tc.optionRepo,
-			}
+			o := &options{}
 			ciop := official
 			if tc.notOfficial {
 				ciop = notOfficial

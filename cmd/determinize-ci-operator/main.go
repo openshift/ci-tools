@@ -10,8 +10,8 @@ import (
 	"github.com/openshift/ci-tools/pkg/config"
 )
 
-func gatherOptions() config.Options {
-	o := config.Options{}
+func gatherOptions() config.ConfirmableOptions {
+	o := config.ConfirmableOptions{}
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	o.Bind(fs)
 	if err := fs.Parse(os.Args[1:]); err != nil {

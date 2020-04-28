@@ -1,9 +1,14 @@
 package promotion
 
 import (
+	"flag"
+	"reflect"
 	"testing"
 
+	"k8s.io/test-infra/prow/flagutil"
+
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/config"
 )
 
 func TestPromotesOfficialImages(t *testing.T) {
@@ -120,6 +125,159 @@ func TestDetermineReleaseBranches(t *testing.T) {
 			}
 			if actual, expected := actualFutureBranch, testCase.expectedFutureBranch; actual != expected {
 				t.Errorf("%s: incorrect future branch, expected %q, got %q", testCase.name, expected, actual)
+			}
+		})
+	}
+}
+
+func TestOptions_Bind(t *testing.T) {
+	var testCases = []struct {
+		name     string
+		input    []string
+		expected Options
+	}{
+		{
+			name:  "nothing set has defaults",
+			input: []string{},
+			expected: Options{
+				ConfirmableOptions: config.ConfirmableOptions{
+					Options: config.Options{
+						LogLevel: "info",
+					},
+				},
+			},
+		},
+		{
+			name: "everything set",
+			input: []string{
+				"--config-dir=foo",
+				"--org=bar",
+				"--repo=baz",
+				"--log-level=debug",
+				"--confirm",
+				"--current-release=one",
+			},
+			expected: Options{
+				ConfirmableOptions: config.ConfirmableOptions{
+					Options: config.Options{
+						ConfigDir: "foo",
+						Org:       "bar",
+						Repo:      "baz",
+						LogLevel:  "debug",
+					},
+					Confirm: true},
+				CurrentRelease: "one",
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			var o Options
+			fs := flag.NewFlagSet(testCase.name, flag.PanicOnError)
+			o.Bind(fs)
+			if err := fs.Parse(testCase.input); err != nil {
+				t.Fatalf("%s: cannot parse args: %v", testCase.name, err)
+			}
+			if actual, expected := o, testCase.expected; !reflect.DeepEqual(actual, expected) {
+				t.Errorf("%s: got incorrect options: expected %v, got %v", testCase.name, expected, actual)
+			}
+		})
+	}
+}
+
+func TestFutureOptions_Bind(t *testing.T) {
+	var testCases = []struct {
+		name               string
+		input              []string
+		expected           FutureOptions
+		expectedFutureOpts []string
+	}{
+		{
+			name:  "nothing set has defaults",
+			input: []string{},
+			expected: FutureOptions{
+				Options: Options{
+					ConfirmableOptions: config.ConfirmableOptions{
+						Options: config.Options{
+							LogLevel: "info",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "everything set",
+			input: []string{
+				"--config-dir=foo",
+				"--org=bar",
+				"--repo=baz",
+				"--log-level=debug",
+				"--confirm",
+				"--current-release=one",
+				"--future-release=two",
+			},
+			expected: FutureOptions{
+				Options: Options{
+					ConfirmableOptions: config.ConfirmableOptions{
+						Options: config.Options{
+							ConfigDir: "foo",
+							Org:       "bar",
+							Repo:      "baz",
+							LogLevel:  "debug",
+						},
+						Confirm: true},
+					CurrentRelease: "one",
+				},
+				FutureReleases: flagutil.Strings{},
+			},
+			expectedFutureOpts: []string{"two"},
+		},
+		{
+			name: "many future releases set",
+			input: []string{
+				"--config-dir=foo",
+				"--org=bar",
+				"--repo=baz",
+				"--log-level=debug",
+				"--confirm",
+				"--current-release=one",
+				"--future-release=two",
+				"--future-release=three",
+			},
+			expected: FutureOptions{
+				Options: Options{
+					ConfirmableOptions: config.ConfirmableOptions{
+						Options: config.Options{
+							ConfigDir: "foo",
+							Org:       "bar",
+							Repo:      "baz",
+							LogLevel:  "debug",
+						},
+						Confirm: true},
+					CurrentRelease: "one",
+				},
+				FutureReleases: flagutil.Strings{},
+			},
+			expectedFutureOpts: []string{"two", "three"},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			var o FutureOptions
+			fs := flag.NewFlagSet(testCase.name, flag.PanicOnError)
+			o.Bind(fs)
+			if err := fs.Parse(testCase.input); err != nil {
+				t.Fatalf("%s: cannot parse args: %v", testCase.name, err)
+			}
+			expected := testCase.expected
+			// this is not exposed for testing
+			for _, opt := range testCase.expectedFutureOpts {
+				expected.FutureReleases.Set(opt)
+			}
+			if actual, expected := o, expected; !reflect.DeepEqual(actual, expected) {
+				t.Errorf("%s: got incorrect options: expected %v, got %v", testCase.name, expected, actual)
 			}
 		})
 	}

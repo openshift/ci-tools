@@ -30,7 +30,7 @@ type options struct {
 }
 
 func (o *options) Validate() error {
-	if err := o.Options.Validate(); err != nil {
+	if err := o.FutureOptions.Validate(); err != nil {
 		return err
 	}
 	if o.Confirm {
@@ -44,14 +44,18 @@ func (o *options) Validate() error {
 	return nil
 }
 
-func gatherOptions() options {
-	o := options{}
-	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+func (o *options) bind(fs *flag.FlagSet) {
 	fs.StringVar(&o.gitDir, "git-dir", "", "Optional dir to do git operations in. If unset, temp dir will be used.")
 	fs.StringVar(&o.username, "username", "", "Username to use when pushing to GitHub.")
 	fs.StringVar(&o.tokenPath, "token-path", "", "Path to token to use when pushing to GitHub.")
 	fs.BoolVar(&o.fastForward, "fast-forward", false, "Attempt to fast-forward future branches if they already exist.")
-	o.Bind(fs)
+	o.FutureOptions.Bind(fs)
+}
+
+func gatherOptions() options {
+	o := options{}
+	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+	o.bind(fs)
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("could not parse input")
 	}

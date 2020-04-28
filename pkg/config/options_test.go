@@ -2,9 +2,106 @@ package config
 
 import (
 	"errors"
+	"flag"
 	"reflect"
 	"testing"
 )
+
+func TestOptions_Bind(t *testing.T) {
+	var testCases = []struct {
+		name     string
+		input    []string
+		expected Options
+	}{
+		{
+			name:  "nothing set has defaults",
+			input: []string{},
+			expected: Options{
+				LogLevel: "info",
+			},
+		},
+		{
+			name: "everything set",
+			input: []string{
+				"--config-dir=foo",
+				"--org=bar",
+				"--repo=baz",
+				"--log-level=debug",
+			},
+			expected: Options{
+				ConfigDir: "foo",
+				Org:       "bar",
+				Repo:      "baz",
+				LogLevel:  "debug",
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			var o Options
+			fs := flag.NewFlagSet(testCase.name, flag.PanicOnError)
+			o.Bind(fs)
+			if err := fs.Parse(testCase.input); err != nil {
+				t.Fatalf("%s: cannot parse args: %v", testCase.name, err)
+			}
+			if actual, expected := o, testCase.expected; !reflect.DeepEqual(actual, expected) {
+				t.Errorf("%s: got incorrect options: expected %v, got %v", testCase.name, expected, actual)
+			}
+		})
+	}
+}
+
+func TestConfirmableOptions_Bind(t *testing.T) {
+	var testCases = []struct {
+		name     string
+		input    []string
+		expected ConfirmableOptions
+	}{
+		{
+			name:  "nothing set has defaults",
+			input: []string{},
+			expected: ConfirmableOptions{
+				Options: Options{
+					LogLevel: "info",
+				},
+			},
+		},
+		{
+			name: "everything set",
+			input: []string{
+				"--config-dir=foo",
+				"--org=bar",
+				"--repo=baz",
+				"--log-level=debug",
+				"--confirm",
+			},
+			expected: ConfirmableOptions{
+				Options: Options{
+					ConfigDir: "foo",
+					Org:       "bar",
+					Repo:      "baz",
+					LogLevel:  "debug",
+				},
+				Confirm: true,
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			var o ConfirmableOptions
+			fs := flag.NewFlagSet(testCase.name, flag.PanicOnError)
+			o.Bind(fs)
+			if err := fs.Parse(testCase.input); err != nil {
+				t.Fatalf("%s: cannot parse args: %v", testCase.name, err)
+			}
+			if actual, expected := o, testCase.expected; !reflect.DeepEqual(actual, expected) {
+				t.Errorf("%s: got incorrect options: expected %v, got %v", testCase.name, expected, actual)
+			}
+		})
+	}
+}
 
 func TestOptions_Validate(t *testing.T) {
 	var testCases = []struct {
@@ -21,7 +118,7 @@ func TestOptions_Validate(t *testing.T) {
 			name: "invalid log level errors",
 			input: Options{
 				ConfigDir: "/somewhere",
-				logLevel:  "whoa",
+				LogLevel:  "whoa",
 			},
 			expected: errors.New("invalid --log-level: not a valid logrus Level: \"whoa\""),
 		},
@@ -29,7 +126,7 @@ func TestOptions_Validate(t *testing.T) {
 			name: "valid config has no errors",
 			input: Options{
 				ConfigDir: "/somewhere",
-				logLevel:  "debug",
+				LogLevel:  "debug",
 			},
 			expected: nil,
 		},

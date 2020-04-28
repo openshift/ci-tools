@@ -42,7 +42,8 @@ func gatherOptions() options {
 	fs.IntVar(&o.limit, "limit", 30, "Maximum number of jobs to trigger.")
 
 	fs.StringVar(&o.releaseRepoPath, "candidate-path", "", "Path to a openshift/release working copy with a revision to be tested")
-	o.AddFlagsWithoutDefaultGitHubTokenPath(fs)
+	o.AddFlags(fs)
+	o.AllowAnonymous = true
 
 	fs.Parse(os.Args[1:])
 	return o

@@ -842,7 +842,7 @@ k8s.io/klog
 k8s.io/kube-openapi/pkg/util/proto
 # k8s.io/kubernetes v1.13.0
 k8s.io/kubernetes/pkg/apis/core
-# k8s.io/test-infra v0.0.0-20200409154144-fb1ab80ea17c
+# k8s.io/test-infra v0.0.0-20200428145208-ce87b074baee
 k8s.io/test-infra/boskos/client
 k8s.io/test-infra/boskos/common
 k8s.io/test-infra/boskos/storage
@@ -851,8 +851,6 @@ k8s.io/test-infra/experiment/image-bumper/bumper
 k8s.io/test-infra/ghproxy/ghcache
 k8s.io/test-infra/ghproxy/ghmetrics
 k8s.io/test-infra/pkg/genyaml
-k8s.io/test-infra/pkg/io
-k8s.io/test-infra/pkg/io/providers
 k8s.io/test-infra/prow/apis/prowjobs
 k8s.io/test-infra/prow/apis/prowjobs/v1
 k8s.io/test-infra/prow/bugzilla
@@ -882,6 +880,8 @@ k8s.io/test-infra/prow/hook
 k8s.io/test-infra/prow/hook/plugin-imports
 k8s.io/test-infra/prow/initupload
 k8s.io/test-infra/prow/interrupts
+k8s.io/test-infra/prow/io
+k8s.io/test-infra/prow/io/providers
 k8s.io/test-infra/prow/kube
 k8s.io/test-infra/prow/labels
 k8s.io/test-infra/prow/logrusutil
@@ -901,7 +901,6 @@ k8s.io/test-infra/prow/plugins/cat
 k8s.io/test-infra/prow/plugins/cherrypickunapproved
 k8s.io/test-infra/prow/plugins/cla
 k8s.io/test-infra/prow/plugins/dco
-k8s.io/test-infra/prow/plugins/docs-no-retest
 k8s.io/test-infra/prow/plugins/dog
 k8s.io/test-infra/prow/plugins/golint
 k8s.io/test-infra/prow/plugins/golint/suggestion

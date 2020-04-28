@@ -308,7 +308,8 @@ func parseOptions() options {
 	fs.Var(&o.blacklist, "ignore-repo", "The repo for which syncing OWNERS file is disabled.")
 	fs.BoolVar(&o.debugMode, "debug-mode", false, "Enable the DEBUG level of logs if true.")
 	fs.BoolVar(&o.selfApprove, "self-approve", false, "Self-approve the PR by adding the `approved` and `lgtm` labels. Requires write permissions on the repo.")
-	o.AddFlagsWithoutDefaultGitHubTokenPath(fs)
+	o.AddFlags(fs)
+	o.AllowAnonymous = true
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Errorf("cannot parse args: '%s'", os.Args[1:])
 	}
@@ -442,7 +443,7 @@ func main() {
 		labelsToAdd = append(labelsToAdd, labels.Approved, labels.LGTM)
 	}
 	if err := bumper.UpdatePullRequestWithLabels(gc, o.githubOrg, o.githubRepo, title,
-		getBody(directories, o.assign), matchTitle, o.githubLogin+":"+remoteBranch, "master", labelsToAdd); err != nil {
+		getBody(directories, o.assign), matchTitle, o.githubLogin+":"+remoteBranch, "master", true, labelsToAdd); err != nil {
 		logrus.WithError(err).Fatal("PR creation failed.")
 	}
 }

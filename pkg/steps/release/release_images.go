@@ -68,7 +68,9 @@ func (s *stableImagesTagStep) Inputs(dry bool) (api.InputDefinition, error) {
 
 func (s *stableImagesTagStep) Requires() []api.StepLink { return []api.StepLink{} }
 
-func (s *stableImagesTagStep) Creates() []api.StepLink { return []api.StepLink{api.ReleaseImagesLink()} }
+func (s *stableImagesTagStep) Creates() []api.StepLink {
+	return []api.StepLink{api.ReleaseImagesLink()}
+}
 
 func (s *stableImagesTagStep) Provides() (api.ParameterMap, api.StepLink) { return nil, nil }
 

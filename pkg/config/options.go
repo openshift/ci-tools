@@ -18,7 +18,7 @@ type Options struct {
 	Org       string
 	Repo      string
 
-	logLevel string
+	LogLevel string
 }
 
 func (o *Options) Validate() error {
@@ -26,7 +26,7 @@ func (o *Options) Validate() error {
 		return errors.New("required flag --config-dir was unset")
 	}
 
-	level, err := logrus.ParseLevel(o.logLevel)
+	level, err := logrus.ParseLevel(o.LogLevel)
 	if err != nil {
 		return fmt.Errorf("invalid --log-level: %v", err)
 	}
@@ -36,7 +36,7 @@ func (o *Options) Validate() error {
 
 func (o *Options) Bind(fs *flag.FlagSet) {
 	fs.StringVar(&o.ConfigDir, "config-dir", "", "Path to CI Operator configuration directory.")
-	fs.StringVar(&o.logLevel, "log-level", "info", "Level at which to log output.")
+	fs.StringVar(&o.LogLevel, "log-level", "info", "Level at which to log output.")
 	fs.StringVar(&o.Org, "org", "", "Limit repos affected to those in this org.")
 	fs.StringVar(&o.Repo, "repo", "", "Limit repos affected to this repo.")
 }

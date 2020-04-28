@@ -7,6 +7,7 @@ import (
 
 	"github.com/getlantern/deepcopy"
 	"github.com/sirupsen/logrus"
+
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/openshift/ci-tools/pkg/api"

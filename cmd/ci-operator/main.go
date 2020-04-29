@@ -8,6 +8,9 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"errors"
+
+DOES NOT COMPILE
+
 	"flag"
 	"fmt"
 	"io"

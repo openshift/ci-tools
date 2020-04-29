@@ -142,9 +142,9 @@ type reconciler struct {
 
 func (r *reconciler) Reconcile(req controllerruntime.Request) (controllerruntime.Result, error) {
 	log := r.log.WithField("name", req.Name).WithField("namespace", req.Namespace)
-	//	log.Debug("Starting reconciliation")
-	//	startTime := time.Now()
-	//	defer func() { log.WithField("duration", time.Since(startTime)).Debug("Finished reconciliation") }()
+	log.Debug("Starting reconciliation")
+	startTime := time.Now()
+	defer func() { log.WithField("duration", time.Since(startTime)).Debug("Finished reconciliation") }()
 
 	err := r.reconcile(req, log)
 	isNonRetriable := errors.Is(err, nonRetriableError{})
@@ -175,7 +175,7 @@ func (r *reconciler) reconcile(req controllerruntime.Request, log *logrus.Entry)
 	}
 	if ciOPConfig == nil {
 		// We don't know how to build this
-		//log.Debug("No promotionConfig found")
+		log.Debug("No promotionConfig found")
 		return nil
 	}
 
@@ -296,10 +296,14 @@ func (r *reconciler) getPublishJob(br *branchReference, ciOPConfig *cioperatorap
 		},
 	}
 	postsubmits := prowgen.GenerateJobs(ciOPConfig, info, jobconfig.Generated).AllStaticPostsubmits(nil)
-	if n := len(postsubmits); n != 1 {
-		return nil, fmt.Errorf("expected to find exactly one postsubmit, got %d", n)
+	for _, postubmit := range postsubmits {
+		if _, ok := postubmit.Labels[cioperatorapi.PromotionJobLabelKey]; ok {
+			return &postubmit, nil
+		}
 	}
-	return &postsubmits[0], nil
+
+	// Config might change so do not consider this a nonRetriableError
+	return nil, errors.New("no publishing postubmit found")
 }
 
 func (r *reconciler) isJobRunningForCommit(job *prowconfig.Postsubmit, commitSHA string, istRef *branchReference) (bool, error) {

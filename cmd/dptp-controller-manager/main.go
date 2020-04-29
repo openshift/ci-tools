@@ -86,10 +86,16 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to get gitHubClient")
 	}
 
+	// Needed by the ImageStreamTagReconciler. This is a setting on the SharedInformer
+	// so its applied for all watches for all controller in this manager. If needed,
+	// we can move this to a custom sigs.k8s.io/controller-runtime/pkg/source.Source
+	// so its only applied for the ImageStreamTagReconciler.
+	resyncInterval := 24 * time.Hour
 	mgr, err := controllerruntime.NewManager(cfg, controllerruntime.Options{
 		LeaderElection:          true,
 		LeaderElectionNamespace: opts.LeaderElectionNamespace,
 		LeaderElectionID:        "dptp-controller-manager",
+		SyncPeriod:              &resyncInterval,
 	})
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to construct manager")

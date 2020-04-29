@@ -83,6 +83,7 @@ func handleError(w http.ResponseWriter, err error) {
 
 func genericHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		log.Debug("got invalid request")
 		w.WriteHeader(http.StatusNotFound)
 		w.Write([]byte(http.StatusText(http.StatusNotFound)))
 	}
@@ -100,7 +101,8 @@ func withErrorRate(request *results.Request) {
 }
 
 func handleCIOperatorResult() http.HandlerFunc {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
 		bytes, err := ioutil.ReadAll(r.Body)
 		if err != nil {
 			handleError(w, fmt.Errorf("unable to ready request body: %v", err))
@@ -122,8 +124,8 @@ func handleCIOperatorResult() http.HandlerFunc {
 
 		w.WriteHeader(http.StatusOK)
 
-		log.Infof("Request with %#v request processed", request)
-	})
+		log.WithFields(log.Fields{"request": request, "duration": time.Since(start).String()}).Info("Request processed")
+	}
 }
 
 func main() {

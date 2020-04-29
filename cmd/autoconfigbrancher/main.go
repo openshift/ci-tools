@@ -51,7 +51,8 @@ func parseOptions() options {
 	fs.StringVar(&o.targetDir, "target-dir", "", "The directory containing the target repo.")
 	fs.StringVar(&o.assign, "assign", githubTeam, "The github username or group name to assign the created pull request to.")
 	fs.BoolVar(&o.selfApprove, "self-approve", false, "Self-approve the PR by adding the `approved` and `lgtm` labels. Requires write permissions on the repo.")
-	o.AddFlagsWithoutDefaultGitHubTokenPath(fs)
+	o.AddFlags(fs)
+	o.AllowAnonymous = true
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Errorf("cannot parse args: '%s'", os.Args[1:])
 	}
@@ -203,7 +204,7 @@ func main() {
 		labelsToAdd = append(labelsToAdd, labels.Approved, labels.LGTM)
 	}
 	if err := bumper.UpdatePullRequestWithLabels(gc, githubOrg, githubRepo, title, fmt.Sprintf("/cc @%s", o.assign),
-		matchTitle, o.githubLogin+":"+remoteBranch, "master", labelsToAdd); err != nil {
+		matchTitle, o.githubLogin+":"+remoteBranch, "master", true, labelsToAdd); err != nil {
 		logrus.WithError(err).Fatal("PR creation failed.")
 	}
 

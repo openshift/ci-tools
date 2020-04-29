@@ -48,7 +48,8 @@ func parseOptions() options {
 	fs.StringVar(&o.peribolosConfig, "peribolos-config", "", "The peribolos configuration to be updated. Assuming that the file exists in the working directory.")
 	fs.StringVar(&o.releaseRepoPath, "release-repo-path", "", "Path to a openshift/release repository directory")
 
-	o.AddFlagsWithoutDefaultGitHubTokenPath(fs)
+	o.AddFlags(fs)
+	o.AllowAnonymous = true
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Errorf("cannot parse args: '%s'", os.Args[1:])
 	}
@@ -120,7 +121,7 @@ func main() {
 	}
 
 	source := fmt.Sprintf("%s:%s", o.githubLogin, remoteBranch)
-	if err := bumper.UpdatePullRequest(gc, githubOrg, githubRepo, title, description, matchTitle, source, "master"); err != nil {
+	if err := bumper.UpdatePullRequest(gc, githubOrg, githubRepo, title, description, matchTitle, source, "master", true); err != nil {
 		logrus.WithError(err).Fatal("PR creation failed.")
 	}
 }

@@ -43,7 +43,8 @@ func parseOptions() options {
 	fs.StringVar(&o.gitEmail, "git-email", "", "The email to use on the git commit. Requires --git-name. If not specified, uses the system default.")
 	fs.StringVar(&o.targetDir, "target-dir", "", "The directory containing the target repo.")
 	fs.StringVar(&o.assign, "assign", githubTeam, "The github username or group name to assign the created pull request to.")
-	o.AddFlagsWithoutDefaultGitHubTokenPath(fs)
+	o.AddFlags(fs)
+	o.AllowAnonymous = true
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Errorf("cannot parse args: '%s'", os.Args[1:])
 	}
@@ -116,7 +117,7 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to push changes.")
 	}
 
-	if err := bumper.UpdatePR(gc, githubOrg, githubRepo, images, "/cc @"+o.assign, "Update prow to", o.githubLogin+":"+remoteBranch, "master"); err != nil {
+	if err := bumper.UpdatePR(gc, githubOrg, githubRepo, images, "/cc @"+o.assign, "Update prow to", o.githubLogin+":"+remoteBranch, "master", true); err != nil {
 		logrus.WithError(err).Fatal("PR creation failed.")
 	}
 }

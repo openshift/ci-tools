@@ -469,14 +469,9 @@ type Plank struct {
 	// PodUnscheduledTimeout is after how long the controller will abort a prowjob
 	// stuck in an unscheduled state. Defaults to one day.
 	PodUnscheduledTimeout *metav1.Duration `json:"pod_unscheduled_timeout,omitempty"`
-	// DefaultDecorationConfig are defaults for shared fields for ProwJobs
-	// that request to have their PodSpecs decorated.
-	// This will be deprecated on April 2020, and it will be replaces with DefaultDecorationConfigs['*'] instead.
-	DefaultDecorationConfig *prowapi.DecorationConfig `json:"default_decoration_config,omitempty"`
-
 	// DefaultDecorationConfigs holds the default decoration config for specific values.
 	// This config will be used on each Presubmit and Postsubmit's corresponding org/repo, and on Periodics
-	// if extraRefs[0] exists. The missing fields will be merged with the DefaultDecorationConfig.
+	// if extraRefs[0] exists.
 	// Use `org/repo`, `org` or `*` as a key.
 	DefaultDecorationConfigs map[string]*prowapi.DecorationConfig `json:"default_decoration_configs,omitempty"`
 
@@ -584,6 +579,24 @@ type LensFileConfig struct {
 	OptionalFiles []string `json:"optional_files,omitempty"`
 	// Lens is the lens to use, alongside any lens-specific configuration.
 	Lens LensConfig `json:"lens"`
+	// RemoteConfig specifies how to access remote lenses
+	RemoteConfig *LensRemoteConfig `json:"remote_config,omitempty"`
+}
+
+// LensRemoteConfig is the configuration for a remote lens.
+type LensRemoteConfig struct {
+	// The endpoint for the lense
+	Endpoint string `json:"endpoint"`
+	// The parsed endpoint
+	ParsedEndpoint *url.URL `json:"-"`
+	// The endpoint for static resources
+	StaticRoot string `json:"static_root"`
+	// The human-readable title for the lens
+	Title string `json:"title"`
+	// Priority for lens ordering, lowest priority first
+	Priority *uint `json:"priority"`
+	// HideTitle defines if we will keep showing the title after lens loads
+	HideTitle *bool `json:"hide_title"`
 }
 
 // Spyglass holds config for Spyglass
@@ -772,7 +785,7 @@ func (cfg *SlackReporter) DefaultAndValidate() error {
 }
 
 // Load loads and parses the config at path.
-func Load(prowConfig, jobConfig string) (c *Config, err error) {
+func Load(prowConfig, jobConfig string, additionals ...func(*Config) error) (c *Config, err error) {
 	// we never want config loading to take down the prow components
 	defer func() {
 		if r := recover(); r != nil {
@@ -791,6 +804,12 @@ func Load(prowConfig, jobConfig string) (c *Config, err error) {
 	}
 	if err := c.ValidateJobConfig(); err != nil {
 		return nil, err
+	}
+
+	for _, additional := range additionals {
+		if err := additional(c); err != nil {
+			return nil, err
+		}
 	}
 	return c, nil
 }
@@ -1118,27 +1137,15 @@ func defaultPeriodics(periodics []Periodic, c *Config) error {
 func (c *Config) finalizeJobConfig() error {
 	if c.decorationRequested() {
 
-		if c.Plank.DefaultDecorationConfig != nil {
-			if len(c.Plank.DefaultDecorationConfigs) > 0 {
-				return errors.New("both default_decoration_config and default_decoration_configs are specified")
-			}
-
-			logrus.Warning("default_decoration_config will be deprecated on April 2020, and it will be replaced with default_decoration_configs['*'].")
-			c.Plank.DefaultDecorationConfigs = make(map[string]*prowapi.DecorationConfig)
-			c.Plank.DefaultDecorationConfigs["*"] = c.Plank.DefaultDecorationConfig
-		}
-
-		if len(c.Plank.DefaultDecorationConfigs) == 0 {
-			return errors.New("both default_decoration_config and default_decoration_configs['*'] are missing")
-
-		}
-
-		if _, ok := c.Plank.DefaultDecorationConfigs["*"]; !ok {
+		def, ok := c.Plank.DefaultDecorationConfigs["*"]
+		if !ok {
 			return errors.New("default_decoration_configs['*'] is missing")
 		}
 
-		if err := c.Plank.DefaultDecorationConfigs["*"].Validate(); err != nil {
-			return fmt.Errorf("decoration config validation error: %v", err)
+		for key, valCfg := range c.Plank.DefaultDecorationConfigs {
+			if err := valCfg.ApplyDefault(def).Validate(); err != nil {
+				return fmt.Errorf("default_decoration_configs[%q]: validation error: %v", key, err)
+			}
 		}
 
 		for i := range c.Periodics {
@@ -1395,20 +1402,6 @@ func (c *Config) ValidateJobConfig() error {
 	}
 
 	return utilerrors.NewAggregate(errs)
-}
-
-// DefaultConfigPath will be used if a --config-path is unset
-const DefaultConfigPath = "/etc/config/config.yaml"
-
-// ConfigPath returns the value for the component's configPath if provided
-// explicitly or default otherwise.
-func ConfigPath(value string) string {
-
-	if value != "" {
-		return value
-	}
-	logrus.Warningf("defaulting to %s until 15 July 2019, please migrate", DefaultConfigPath)
-	return DefaultConfigPath
 }
 
 func parseProwConfig(c *Config) error {

@@ -8,8 +8,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/test-infra/prow/config/secret"
 	"k8s.io/test-infra/prow/flagutil"
-	git "k8s.io/test-infra/prow/git/v2"
 	"k8s.io/test-infra/prow/pjutil"
 	"sigs.k8s.io/controller-runtime"
 
@@ -23,6 +23,7 @@ type options struct {
 	ProwJobNamespace             string
 	DryRun                       bool
 	ImageStreamTagReconcilerOpts imageStreamTagReconcilerOptions
+	*flagutil.GitHubOptions
 }
 
 type imageStreamTagReconcilerOptions struct {
@@ -30,7 +31,8 @@ type imageStreamTagReconcilerOptions struct {
 }
 
 func newOpts() (*options, error) {
-	opts := &options{}
+	opts := &options{GitHubOptions: &flagutil.GitHubOptions{}}
+	opts.AddFlags(flag.CommandLine)
 	flag.StringVar(&opts.LeaderElectionNamespace, "leader-election-namespace", "ci", "The namespace to use for leaderelection")
 	flag.StringVar(&opts.CiOperatorConfigPath, "ci-operator-config-path", "", "Path to the ci operator config")
 	flag.StringVar(&opts.ProwJobNamespace, "prow-job-namespace", "ci", "Namespace to create prowjobs in")
@@ -49,6 +51,10 @@ func newOpts() (*options, error) {
 	}
 	if opts.ProwJobNamespace == "" {
 		errs = append(errs, errors.New("--prow-job-namespace must be set"))
+	}
+
+	if err := opts.GitHubOptions.Validate(opts.DryRun); err != nil {
+		errs = append(errs, err)
 	}
 
 	return opts, utilerrors.NewAggregate(errs)
@@ -70,9 +76,14 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to construct ci-opeartor config agent")
 	}
-	gitClientFactory, err := git.NewClientFactory()
+
+	secretAgent := &secret.Agent{}
+	if err := secretAgent.Start([]string{opts.GitHubOptions.TokenPath}); err != nil {
+		logrus.WithError(err).Fatal("Failed to start secrets agent.")
+	}
+	gitHubClient, err := opts.GitHubClient(secretAgent, opts.DryRun)
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to construct git client")
+		logrus.WithError(err).Fatal("Failed to get gitHubClient")
 	}
 
 	mgr, err := controllerruntime.NewManager(cfg, controllerruntime.Options{
@@ -89,7 +100,7 @@ func main() {
 		DryRun:                     opts.DryRun,
 		CIOperatorConfigAgent:      ciOPConfigAgent,
 		ProwJobNamespace:           opts.ProwJobNamespace,
-		GitClientFactory:           gitClientFactory,
+		GitHubClient:               gitHubClient,
 		IgnoredGitHubOrganizations: opts.ImageStreamTagReconcilerOpts.IgnoredGitHubOrganizations.Strings(),
 	}
 	if err := imagestreamtagreconciler.AddToManager(mgr, imageStreamTagReconcilerOpts); err != nil {

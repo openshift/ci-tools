@@ -17,7 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
-	git "k8s.io/test-infra/prow/git/v2"
+	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/kube"
 	"k8s.io/test-infra/prow/pjutil"
 	"sigs.k8s.io/controller-runtime"
@@ -42,7 +42,7 @@ type Options struct {
 	DryRun                     bool
 	CIOperatorConfigAgent      agents.ConfigAgent
 	ProwJobNamespace           string
-	GitClientFactory           git.ClientFactory
+	GitHubClient               github.Client
 	IgnoredGitHubOrganizations []string
 }
 
@@ -77,7 +77,7 @@ func AddToManager(mgr controllerruntime.Manager, opts Options) error {
 		releaseBuildConfigs: opts.CIOperatorConfigAgent,
 		dryRun:              opts.DryRun,
 		prowJobNamespace:    opts.ProwJobNamespace,
-		gitClientFactory:    opts.GitClientFactory,
+		gitHubClient:        opts.GitHubClient,
 		createdProwJobLabels: map[string]string{
 			"openshift.io/created-by": controllerName,
 		},
@@ -91,7 +91,7 @@ func AddToManager(mgr controllerruntime.Manager, opts Options) error {
 		Reconciler: controllerutil.NewReconcileRequestCoalescer(r, time.Hour),
 		// We currently have 50k ImageStreamTags in the OCP namespace and need to periodically reconcile all of them,
 		// so don't be stingy with the workers
-		MaxConcurrentReconciles: 10,
+		MaxConcurrentReconciles: 1,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to construct controller: %w", err)
@@ -130,7 +130,7 @@ type reconciler struct {
 	releaseBuildConfigs        agents.ConfigAgent
 	dryRun                     bool
 	prowJobNamespace           string
-	gitClientFactory           git.ClientFactory
+	gitHubClient               github.Client
 	createdProwJobLabels       map[string]string
 	ignoredGitHubOrganizations sets.String
 	createdJobsCounter         *prometheus.CounterVec
@@ -184,7 +184,7 @@ func (r *reconciler) reconcile(req controllerruntime.Request, log *logrus.Entry)
 		return nil
 	}
 
-	currentHEAD, err := r.currentHEADForBranch(istRef)
+	currentHEAD, err := r.currentHEADForBranch(istRef, log)
 	if err != nil {
 		return fmt.Errorf("failed to get current git head for imageStreamTag: %w", err)
 	}
@@ -272,17 +272,14 @@ func refForIST(ist *imagev1.ImageStreamTag) (*branchReference, error) {
 	}, nil
 }
 
-func (r *reconciler) currentHEADForBranch(br *branchReference) (string, error) {
-	repo, err := r.gitClientFactory.ClientFor(br.org, br.repo)
+func (r *reconciler) currentHEADForBranch(br *branchReference, log *logrus.Entry) (string, error) {
+	// We attempted for some time to use the gitClient for this, but we do so many reconciliations that
+	// it results in a massive performance issues that can easely kill the developers laptop.
+	ref, err := r.gitHubClient.GetRef(br.org, br.repo, "heads/"+br.branch)
 	if err != nil {
-		return "", fmt.Errorf("failed to get git client for %s/%s: %w", br.org, br.repo, err)
+		return "", fmt.Errorf("failed to get ref: %w", err)
 	}
-	branchHEADRef, err := repo.ShowRef(br.branch)
-	if err != nil {
-		return "", fmt.Errorf("failed to git show-ref %s: %w", br.branch, err)
-	}
-
-	return branchHEADRef, nil
+	return ref, nil
 }
 
 func (r *reconciler) getPublishJob(br *branchReference, ciOPConfig *cioperatorapi.ReleaseBuildConfiguration) (*prowconfig.Postsubmit, error) {

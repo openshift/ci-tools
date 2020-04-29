@@ -28,12 +28,20 @@ func TestRequires(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		config api.ReleaseBuildConfiguration
-		steps  []api.LiteralTestStep
+		steps  api.MultiStageTestConfigurationLiteral
 		req    []api.StepLink
 	}{{
-		name:  "step needs release images, should have ReleaseImagesLink",
-		steps: []api.LiteralTestStep{{From: "from-release"}},
-		req:   []api.StepLink{api.ReleaseImagesLink()},
+		name: "step has a cluster profile, should have ReleaseImagesLink",
+		steps: api.MultiStageTestConfigurationLiteral{
+			ClusterProfile: api.ClusterProfileAWS,
+		},
+		req: []api.StepLink{api.ReleaseImagesLink()},
+	}, {
+		name: "step needs release images, should have ReleaseImagesLink",
+		steps: api.MultiStageTestConfigurationLiteral{
+			Test: []api.LiteralTestStep{{From: "from-release"}},
+		},
+		req: []api.StepLink{api.ReleaseImagesLink()},
 	}, {
 		name: "step needs images, should have InternalImageLink",
 		config: api.ReleaseBuildConfiguration{
@@ -41,11 +49,15 @@ func TestRequires(t *testing.T) {
 				{To: "from-images"},
 			},
 		},
-		steps: []api.LiteralTestStep{{From: "from-images"}},
-		req:   []api.StepLink{api.InternalImageLink("from-images")},
+		steps: api.MultiStageTestConfigurationLiteral{
+			Test: []api.LiteralTestStep{{From: "from-images"}},
+		},
+		req: []api.StepLink{api.InternalImageLink("from-images")},
 	}, {
-		name:  "step needs pipeline image, should have InternalImageLink",
-		steps: []api.LiteralTestStep{{From: "src"}},
+		name: "step needs pipeline image, should have InternalImageLink",
+		steps: api.MultiStageTestConfigurationLiteral{
+			Test: []api.LiteralTestStep{{From: "src"}},
+		},
 		req: []api.StepLink{
 			api.InternalImageLink(
 				api.PipelineImageStreamTagReferenceSource),
@@ -53,10 +65,8 @@ func TestRequires(t *testing.T) {
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			step := MultiStageTestStep(api.TestStepConfiguration{
-				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
-					Test: tc.steps,
-				},
-			}, &tc.config, nil, nil, nil, nil, nil, "", nil, nil)
+				MultiStageTestConfigurationLiteral: &tc.steps,
+			}, &tc.config, api.NewDeferredParameters(), nil, nil, nil, nil, "", nil, nil)
 			ret := step.Requires()
 			if len(ret) == len(tc.req) {
 				matches := true

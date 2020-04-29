@@ -83,7 +83,6 @@ func (o *Options) Reporter(spec *api.JobSpec, consoleHost string) (Reporter, err
 		Certificates: []tls.Certificate{cert},
 		RootCAs:      caCertPool,
 	}
-	tlsConfig.BuildNameToCertificate()
 	transport := &http.Transport{TLSClientConfig: tlsConfig}
 	r.client = &http.Client{Transport: transport}
 	return r, nil

@@ -214,7 +214,7 @@ func (s *releaseImagesTagStep) run(ctx context.Context, dry bool) error {
 	initialIS := newIS.DeepCopy()
 	initialIS.Name = fmt.Sprintf("%s-initial", api.StableImageStream)
 
-	is, err = s.dstClient.ImageStreams(s.jobSpec.Namespace).Create(newIS)
+	_, err = s.dstClient.ImageStreams(s.jobSpec.Namespace).Create(newIS)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		return fmt.Errorf("could not copy stable imagestreamtag: %v", err)
 	}

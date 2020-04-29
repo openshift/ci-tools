@@ -169,7 +169,7 @@ func main() {
 		flag.CommandLine.Set("v", "10")
 	}
 	if opt.help {
-		fmt.Printf(usage)
+		fmt.Print(usage)
 		flagSet.SetOutput(os.Stdout)
 		flagSet.Usage()
 		os.Exit(0)
@@ -400,7 +400,7 @@ func (o *options) Complete() error {
 		log.Printf("No source defined")
 	}
 	for _, ref := range refs {
-		log.Printf(summarizeRef(ref))
+		log.Print(summarizeRef(ref))
 
 		for _, pull := range ref.Pulls {
 			o.authors = append(o.authors, pull.Author)

@@ -1957,7 +1957,7 @@ func getAllMultiStageTests(confAgent agents.ConfigAgent, jobAgent *prowConfig.Ag
 				splitBV := strings.Split(branchVariant, "__")
 				branch = splitBV[0]
 				if len(splitBV) == 2 {
-					// TODO: how should we handle variants?
+					logrus.Info("TODO: how should we handle variants?")
 				}
 				break
 			}

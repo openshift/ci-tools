@@ -317,7 +317,7 @@ func fetchOrDefaultWithPrompt(msg, def string) string {
 		line, err := reader.ReadString('\n')
 		if err != nil {
 			response(fmt.Sprintf("could not read the value: %v", err))
-			break
+			continue
 		}
 		line = strings.TrimSuffix(line, "\n")
 		if line == "" {

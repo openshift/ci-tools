@@ -203,7 +203,7 @@ func refForIST(ist *imagev1.ImageStreamTag) (*branchReference, error) {
 	if sourceLocation == "" {
 		return nil, nre(errors.New("imageStreamTag has no `io.openshift.build.source-location` label, can't find out source repo"))
 	}
-	sourceLocation = strings.TrimLeft(sourceLocation, "https://github.com/")
+	sourceLocation = strings.TrimPrefix(sourceLocation, "https://github.com/")
 	splitSourceLocation := strings.Split(sourceLocation, "/")
 	if n := len(splitSourceLocation); n != 2 {
 		return nil, nre(fmt.Errorf("sourceLocation %q split by `/` does not return 2 but %d results, can not find out org/repo", sourceLocation, n))

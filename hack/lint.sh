@@ -8,4 +8,5 @@ echo "Running golangci-lint"
 if [[ $HOME = '/' ]]; then
   export HOME=/tmp
 fi
-golangci-lint run --disable-all --enable=unused,deadcode,gosimple,gofmt,govet --timeout=10m ./...
+
+golangci-lint run --disable-all --enable=unused,deadcode,gosimple,gofmt,govet,staticcheck --timeout=10m ./...

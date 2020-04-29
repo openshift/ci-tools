@@ -137,7 +137,7 @@ func (s *templateExecutionStep) run(ctx context.Context, dry bool) error {
 	}()
 
 	log.Printf("Creating or restarting template instance")
-	instance, err := createOrRestartTemplateInstance(s.templateClient.TemplateInstances(s.jobSpec.Namespace), s.podClient.Pods(s.jobSpec.Namespace), instance)
+	_, err := createOrRestartTemplateInstance(s.templateClient.TemplateInstances(s.jobSpec.Namespace), s.podClient.Pods(s.jobSpec.Namespace), instance)
 	if err != nil {
 		return fmt.Errorf("could not create or restart template instance: %v", err)
 	}

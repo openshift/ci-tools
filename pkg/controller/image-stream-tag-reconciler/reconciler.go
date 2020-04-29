@@ -91,7 +91,7 @@ func AddToManager(mgr controllerruntime.Manager, opts Options) error {
 		Reconciler: controllerutil.NewReconcileRequestCoalescer(r, time.Hour),
 		// We currently have 50k ImageStreamTags in the OCP namespace and need to periodically reconcile all of them,
 		// so don't be stingy with the workers
-		MaxConcurrentReconciles: 1,
+		MaxConcurrentReconciles: 100,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to construct controller: %w", err)
@@ -103,11 +103,15 @@ func AddToManager(mgr controllerruntime.Manager, opts Options) error {
 			func(mo handler.MapObject) []reconcile.Request {
 				imageStream, ok := mo.Object.(*imagev1.ImageStream)
 				if !ok {
-					logrus.Errorf("got object that was not an imageStream but a %T", mo.Object)
+					logrus.WithField("type", fmt.Sprintf("%T", mo.Object)).Error("Got object that was not an ImageStram")
 					return nil
 				}
 				var requests []reconcile.Request
 				for _, imageStreamTag := range imageStream.Spec.Tags {
+					// Not sure why this happens but seems to be a thing
+					if imageStreamTag.Name == "" {
+						continue
+					}
 					requests = append(requests, reconcile.Request{NamespacedName: types.NamespacedName{
 						Namespace: mo.Meta.GetNamespace(),
 						Name:      fmt.Sprintf("%s:%s", mo.Meta.GetName(), imageStreamTag.Name),
@@ -143,12 +147,13 @@ func (r *reconciler) Reconcile(req controllerruntime.Request) (controllerruntime
 	//	defer func() { log.WithField("duration", time.Since(startTime)).Debug("Finished reconciliation") }()
 
 	err := r.reconcile(req, log)
+	isNonRetriable := errors.Is(err, nonRetriableError{})
 	if err != nil {
-		log.WithError(err).Error("Reconciliation failed")
+		log.WithError(err).WithField("not-retriable", isNonRetriable).Error("Reconciliation failed")
 	}
 
-	// Swallow non-retriable errors to avoid putting the item back into the workqueue
-	if errors.Is(err, nonRetriableError{}) {
+	if !isNonRetriable {
+		// Swallow non-retriable errors to avoid putting the item back into the workqueue
 		err = nil
 	}
 	return controllerruntime.Result{}, err
@@ -176,7 +181,7 @@ func (r *reconciler) reconcile(req controllerruntime.Request, log *logrus.Entry)
 
 	istRef, err := refForIST(ist)
 	if err != nil {
-		return fmt.Errorf("failed to get ref for imageStreamTag: %w", err)
+		return nonRetriableError{fmt.Errorf("failed to get ref for imageStreamTag: %w", err)}
 	}
 	log = log.WithField("org", istRef.org).WithField("repo", istRef.repo).WithField("branch", istRef.branch)
 	if r.ignoredGitHubOrganizations.Has(istRef.org) {
@@ -266,7 +271,7 @@ func refForIST(ist *imagev1.ImageStreamTag) (*branchReference, error) {
 
 	return &branchReference{
 		org:    splitSourceLocation[0],
-		repo:   splitSourceLocation[1],
+		repo:   strings.TrimSuffix(splitSourceLocation[1], ".git"),
 		branch: branch,
 		commit: commit,
 	}, nil

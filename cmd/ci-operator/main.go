@@ -550,7 +550,7 @@ func (o *options) Run() error {
 	}
 
 	return interrupt.New(handler, o.saveNamespaceArtifacts).Run(func() error {
-		if o.leaseServer != "" {
+		if o.leaseServer != "" && o.leaseServerUsername != "" && o.leaseServerPasswordFile != "" {
 			if err := o.initializeLeaseClient(); err != nil {
 				return fmt.Errorf("failed to create the lease client: %v", err)
 			}

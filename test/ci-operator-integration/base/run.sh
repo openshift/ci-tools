@@ -39,6 +39,9 @@ run_test() {
         --determinize-output \
         --namespace "${TEST_NAMESPACE}" \
         --config "${TEST_CONFIG}" \
+        --lease-server http://boskos.example.com \
+        --lease-server-username ci \
+        --lease-server-password-file /tmp/anything \
         "$@" \
         2> "${WORKDIR}/ci-op-stderr.log" | jq --sort-keys .
     then
@@ -56,7 +59,7 @@ check() {
 }
 
 echo "[INFO] Running ci-operator in dry-mode..."
-run_test --lease-server http://boskos.example.com > "${DRY_RUN_JSON}"
+run_test > "${DRY_RUN_JSON}"
 if [[ ${UPDATE:-false} = true ]]; then cat $DRY_RUN_JSON > $EXPECTED; fi
 check "${EXPECTED}" "${DRY_RUN_JSON}"
 
@@ -72,8 +75,7 @@ check "${EXPECTED_WITH_TEMPLATE}" "${DRY_RUN_WITH_TEMPLATE_JSON}"
 echo "[INFO] Running ci-operator with OAuth"
 run_test > "${DRY_RUN_WITH_OAUTH}" \
     --oauth-token-path "${OAUTH_FILE}" \
-    --artifact-dir "${ARTIFACT_DIR}" \
-    --lease-server http://boskos.example.com
+    --artifact-dir "${ARTIFACT_DIR}"
 check \
     "${EXPECTED_WITH_OAUTH}" \
     <(jq '.[] | select(.metadata.name=="src")' "${DRY_RUN_WITH_OAUTH}")
@@ -81,8 +83,7 @@ check \
 echo "[INFO] Running ci-operator with SSH"
 run_test > "${DRY_RUN_WITH_SSH}" \
     --ssh-key-path "${SSH_FILE}" \
-    --artifact-dir "${ARTIFACT_DIR}" \
-    --lease-server http://boskos.example.com
+    --artifact-dir "${ARTIFACT_DIR}"
 check \
     "${EXPECTED_WITH_SSH}" \
     <(jq '.[] | select(.metadata.name=="src")' "${DRY_RUN_WITH_SSH}")
@@ -92,7 +93,7 @@ readonly PULL_SECRET_PATH
 touch "${PULL_SECRET_PATH}"
 
 echo "[INFO] Running ci-operator with a pull secret"
-run_test --lease-server http://boskos.example.com --image-import-pull-secret "${PULL_SECRET_PATH}" > "${DRY_RUN_WITH_PULL_SECRET}"
+run_test --image-import-pull-secret "${PULL_SECRET_PATH}" > "${DRY_RUN_WITH_PULL_SECRET}"
 if [[ ${UPDATE:-false} = true ]]; then cat $DRY_RUN_WITH_PULL_SECRET > $EXPECTED_WITH_PULL_SECRET; fi
 check "${EXPECTED_WITH_PULL_SECRET}" "${DRY_RUN_WITH_PULL_SECRET}"
 

@@ -150,6 +150,10 @@ const (
 	annotationCleanupDurationTTL = "ci.openshift.io/ttl.hard"
 	// configResolverAddress is the default configresolver address in api.ci
 	configResolverAddress = "http://ci-operator-configresolver-ci.svc.ci.openshift.org"
+	// leaseServerAddress is the default lease server in api.ci
+	leaseServerAddress = "https://boskos-ci.svc.ci.openshift.org"
+	// leaseServerUsername is the default lease server username in api.ci
+	leaseServerUsername = "ci"
 )
 
 // CustomProwMetadata the name of the custom prow metadata file that's expected to be found in the artifacts directory.
@@ -292,8 +296,8 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.BoolVar(&opt.verbose, "v", false, "Show verbose output.")
 
 	// what we will run
-	flag.StringVar(&opt.leaseServer, "lease-server", "", "Address of the server that manages leases. Required if any test is configured to acquire a lease.")
-	flag.StringVar(&opt.leaseServerUsername, "lease-server-username", "", "Username used to access the lease server")
+	flag.StringVar(&opt.leaseServer, "lease-server", leaseServerAddress, "Address of the server that manages leases. Required if any test is configured to acquire a lease.")
+	flag.StringVar(&opt.leaseServerUsername, "lease-server-username", leaseServerUsername, "Username used to access the lease server")
 	flag.StringVar(&opt.leaseServerPasswordFile, "lease-server-password-file", "", "The path to password file used to access the lease server")
 	flag.StringVar(&opt.registryPath, "registry", "", "Path to the step registry directory")
 	flag.StringVar(&opt.configSpecPath, "config", "", "The configuration file. If not specified the CONFIG_SPEC environment variable or the configresolver will be used.")
@@ -323,7 +327,7 @@ func bindOptions(flag *flag.FlagSet) *options {
 
 	// experimental flags
 	flag.StringVar(&opt.gitRef, "git-ref", "", "Populate the job spec from this local Git reference. If JOB_SPEC is set, the refs field will be overwritten.")
-	flag.BoolVar(&opt.givePrAuthorAccessToNamespace, "give-pr-author-access-to-namespace", false, "Give view access to the temporarily created namespace to the PR author.")
+	flag.BoolVar(&opt.givePrAuthorAccessToNamespace, "give-pr-author-access-to-namespace", true, "Give view access to the temporarily created namespace to the PR author.")
 	flag.StringVar(&opt.impersonateUser, "as", "", "Username to impersonate")
 	flag.BoolVar(&opt.determinizeOutput, "determinize-output", false, "Determinize dry run's output by ordering the created objects.")
 

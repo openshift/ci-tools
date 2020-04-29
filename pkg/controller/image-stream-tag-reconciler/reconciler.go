@@ -55,6 +55,12 @@ func AddToManager(mgr controllerruntime.Manager, opts Options) error {
 	if err := prowv1.AddToScheme(mgr.GetScheme()); err != nil {
 		return fmt.Errorf("failed to add prowv1 to scheme: %w", err)
 	}
+	// Pre-Allocate the Image informer rather than letting it allocate on demand, because
+	// starting the watch takes very long (~2 minutes) and having that delay added to our
+	// first (# worker) reconciles skews the workqueue duration metric bigtimes.
+	if _, err := mgr.GetCache().GetInformer(&imagev1.Image{}); err != nil {
+		return fmt.Errorf("failed to get informer for image: %w", err)
+	}
 
 	if err := opts.CIOperatorConfigAgent.AddIndex(configIndexName, configIndexFn); err != nil {
 		return fmt.Errorf("failed to add indexer to config-agent: %w", err)
@@ -88,7 +94,7 @@ func AddToManager(mgr controllerruntime.Manager, opts Options) error {
 		// Since we watch ImageStreams and not ImageStreamTags as the latter do not support
 		// watch, we create a lot more events the needed. In order to decrease load, we coalesce
 		// and delay all requests after a successful reconciliation for up to an hour.
-		Reconciler: controllerutil.NewReconcileRequestCoalescer(r, time.Hour),
+		Reconciler: controllerutil.NewReconcileRequestCoalescer(r, 10*time.Minute),
 		// We currently have 50k ImageStreamTags in the OCP namespace and need to periodically reconcile all of them,
 		// so don't be stingy with the workers
 		MaxConcurrentReconciles: 100,
@@ -142,9 +148,9 @@ type reconciler struct {
 
 func (r *reconciler) Reconcile(req controllerruntime.Request) (controllerruntime.Result, error) {
 	log := r.log.WithField("name", req.Name).WithField("namespace", req.Namespace)
-	log.Debug("Starting reconciliation")
+	log.Trace("Starting reconciliation")
 	startTime := time.Now()
-	defer func() { log.WithField("duration", time.Since(startTime)).Debug("Finished reconciliation") }()
+	defer func() { log.WithField("duration", time.Since(startTime)).Trace("Finished reconciliation") }()
 
 	err := r.reconcile(req, log)
 	isNonRetriable := errors.Is(err, nonRetriableError{})

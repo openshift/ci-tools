@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"flag"
+	"fmt"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -23,6 +24,7 @@ type options struct {
 	ProwJobNamespace             string
 	DryRun                       bool
 	ImageStreamTagReconcilerOpts imageStreamTagReconcilerOptions
+	logLevel                     string
 	*flagutil.GitHubOptions
 }
 
@@ -37,6 +39,7 @@ func newOpts() (*options, error) {
 	flag.StringVar(&opts.CiOperatorConfigPath, "ci-operator-config-path", "", "Path to the ci operator config")
 	flag.StringVar(&opts.ProwJobNamespace, "prow-job-namespace", "ci", "Namespace to create prowjobs in")
 	flag.Var(&opts.ImageStreamTagReconcilerOpts.IgnoredGitHubOrganizations, "imagestreamtagreconciler.ignored-github-organization", "GitHub organization to ignore in the imagestreamtagreconciler. Can be specified multiple times")
+	flag.StringVar(&opts.logLevel, "log-level", "info", fmt.Sprintf("Log level is one of %v.", logrus.AllLevels))
 	// TODO: rather than relying on humans implementing dry-run properly, we should switch
 	// to just do it on client-level once it becomes available: https://github.com/kubernetes-sigs/controller-runtime/pull/839
 	flag.BoolVar(&opts.DryRun, "dry-run", true, "Whether to run the controller-manager with dry-run")
@@ -65,7 +68,11 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get options")
 	}
-	logrus.SetLevel(logrus.DebugLevel)
+	logLevel, err := logrus.ParseLevel(opts.logLevel)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to parse loglevel")
+	}
+	logrus.SetLevel(logLevel)
 
 	cfg, err := controllerruntime.GetConfig()
 	if err != nil {

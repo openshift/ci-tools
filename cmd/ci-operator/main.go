@@ -180,17 +180,11 @@ func main() {
 	})
 
 	if err := opt.Complete(); err != nil {
-		err = results.ForReason(results.ReasonLoadingArgs).ForError(err)
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		opt.writeFailingJUnit(err)
-		opt.Report(err)
+		opt.Report(results.ForReason(results.ReasonLoadingArgs).ForError(err))
 		os.Exit(1)
 	}
 
 	if err := opt.Run(); err != nil {
-		err = results.DefaultReason(err)
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		opt.writeFailingJUnit(err)
 		opt.Report(err)
 		os.Exit(1)
 	}
@@ -487,6 +481,11 @@ func (o *options) Complete() error {
 }
 
 func (o *options) Report(err error) {
+	err = results.DefaultReason(err)
+
+	fmt.Fprintf(os.Stderr, "error: %v\n", err)
+	o.writeFailingJUnit(err)
+
 	reporter, loadErr := o.resultsOptions.Reporter(o.jobSpec, o.consoleHost)
 	if loadErr != nil {
 		log.Printf("could not load result reporting options: %v", err)

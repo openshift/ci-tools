@@ -17,7 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
-	"k8s.io/test-infra/prow/git"
+	git "k8s.io/test-infra/prow/git/v2"
 	"k8s.io/test-infra/prow/kube"
 	"k8s.io/test-infra/prow/pjutil"
 	"sigs.k8s.io/controller-runtime"
@@ -42,7 +42,7 @@ type Options struct {
 	DryRun                     bool
 	CIOperatorConfigAgent      agents.ConfigAgent
 	ProwJobNamespace           string
-	GitClient                  *git.Client
+	GitClientFactory           git.ClientFactory
 	IgnoredGitHubOrganizations []string
 }
 
@@ -77,7 +77,7 @@ func AddToManager(mgr controllerruntime.Manager, opts Options) error {
 		releaseBuildConfigs: opts.CIOperatorConfigAgent,
 		dryRun:              opts.DryRun,
 		prowJobNamespace:    opts.ProwJobNamespace,
-		gitClient:           opts.GitClient,
+		gitClientFactory:    opts.GitClientFactory,
 		createdProwJobLabels: map[string]string{
 			"openshift.io/created-by": controllerName,
 		},
@@ -130,7 +130,7 @@ type reconciler struct {
 	releaseBuildConfigs        agents.ConfigAgent
 	dryRun                     bool
 	prowJobNamespace           string
-	gitClient                  *git.Client
+	gitClientFactory           git.ClientFactory
 	createdProwJobLabels       map[string]string
 	ignoredGitHubOrganizations sets.String
 	createdJobsCounter         *prometheus.CounterVec
@@ -138,9 +138,9 @@ type reconciler struct {
 
 func (r *reconciler) Reconcile(req controllerruntime.Request) (controllerruntime.Result, error) {
 	log := r.log.WithField("name", req.Name).WithField("namespace", req.Namespace)
-	log.Debug("Starting reconciliation")
-	startTime := time.Now()
-	defer func() { log.WithField("duration", time.Since(startTime)).Debug("Finished reconciliation") }()
+	//	log.Debug("Starting reconciliation")
+	//	startTime := time.Now()
+	//	defer func() { log.WithField("duration", time.Since(startTime)).Debug("Finished reconciliation") }()
 
 	err := r.reconcile(req, log)
 	if err != nil {
@@ -170,7 +170,7 @@ func (r *reconciler) reconcile(req controllerruntime.Request, log *logrus.Entry)
 	}
 	if ciOPConfig == nil {
 		// We don't know how to build this
-		log.Debug("No promotionConfig found")
+		//log.Debug("No promotionConfig found")
 		return nil
 	}
 
@@ -273,17 +273,14 @@ func refForIST(ist *imagev1.ImageStreamTag) (*branchReference, error) {
 }
 
 func (r *reconciler) currentHEADForBranch(br *branchReference) (string, error) {
-	repo, err := r.gitClient.Clone(br.org, br.repo)
+	repo, err := r.gitClientFactory.ClientFor(br.org, br.repo)
 	if err != nil {
 		return "", fmt.Errorf("failed to get git client for %s/%s: %w", br.org, br.repo, err)
 	}
-	// Use git show-ref -s instead
-	branchHEADRef, err := repo.RevParse(br.branch)
+	branchHEADRef, err := repo.ShowRef(br.branch)
 	if err != nil {
-		return "", fmt.Errorf("fauld to git rev-parse %s: %w", br.branch, err)
+		return "", fmt.Errorf("failed to git show-ref %s: %w", br.branch, err)
 	}
-	// RevParse output contains a trailing newline
-	branchHEADRef = strings.TrimSpace(branchHEADRef)
 
 	return branchHEADRef, nil
 }

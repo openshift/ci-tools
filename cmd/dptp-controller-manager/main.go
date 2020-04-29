@@ -9,7 +9,7 @@ import (
 	"github.com/sirupsen/logrus"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/test-infra/prow/flagutil"
-	"k8s.io/test-infra/prow/git"
+	git "k8s.io/test-infra/prow/git/v2"
 	"k8s.io/test-infra/prow/pjutil"
 	"sigs.k8s.io/controller-runtime"
 
@@ -70,12 +70,10 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to construct ci-opeartor config agent")
 	}
-	gitClient, err := git.NewClient()
+	gitClientFactory, err := git.NewClientFactory()
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to construct git client")
 	}
-	// TODO alvaroaleman: Fix upstream, needed because otherwise we get a NPD
-	gitClient.SetCredentials("", func() []byte { return nil })
 
 	mgr, err := controllerruntime.NewManager(cfg, controllerruntime.Options{
 		LeaderElection:          true,
@@ -91,7 +89,7 @@ func main() {
 		DryRun:                     opts.DryRun,
 		CIOperatorConfigAgent:      ciOPConfigAgent,
 		ProwJobNamespace:           opts.ProwJobNamespace,
-		GitClient:                  gitClient,
+		GitClientFactory:           gitClientFactory,
 		IgnoredGitHubOrganizations: opts.ImageStreamTagReconcilerOpts.IgnoredGitHubOrganizations.Strings(),
 	}
 	if err := imagestreamtagreconciler.AddToManager(mgr, imageStreamTagReconcilerOpts); err != nil {

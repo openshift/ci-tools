@@ -1,13 +1,8 @@
-tag_specification:
-  cluster: https://api.ci.openshift.org
-  name: origin-v4.0
-  namespace: openshift
-  tag: ''
 build_root:
   image_stream_tag:
     cluster: https://api.ci.openshift.org
-    namespace: openshift
     name: release
+    namespace: openshift
     tag: golang-1.10
 resources:
   '*':
@@ -15,8 +10,16 @@ resources:
       cpu: 500Mi
     requests:
       cpu: 10Mi
+tag_specification:
+  cluster: https://api.ci.openshift.org
+  name: origin-v4.0
+  namespace: openshift
 tests:
 - as: unit
   commands: make test-unit
   container:
     from: src
+zz_generated_metadata:
+  branch: master
+  org: private-org
+  repo: duper

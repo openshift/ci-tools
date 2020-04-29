@@ -4,25 +4,28 @@ base_images:
     name: origin-v4.0
     namespace: openshift
     tag: base
+build_root:
+  image_stream_tag:
+    cluster: https://api.ci.openshift.org
+    name: release
+    namespace: openshift
+    tag: golang-1.10
 images:
 - from: base
   to: test-image
 - from: base
   to: change-should-cause-rehearsal-of-all-jobs-that-use-this-cfg
-tag_specification:
-  cluster: https://api.ci.openshift.org
-  name: origin-v4.0
-  namespace: openshift
-  tag: ''
-build_root:
-  image_stream_tag:
-    cluster: https://api.ci.openshift.org
-    namespace: openshift
-    name: release
-    tag: golang-1.10
 resources:
   '*':
     limits:
       cpu: 500Mi
     requests:
       cpu: 10Mi
+tag_specification:
+  cluster: https://api.ci.openshift.org
+  name: origin-v4.0
+  namespace: openshift
+zz_generated_metadata:
+  branch: ciop-cfg-change
+  org: super
+  repo: duper

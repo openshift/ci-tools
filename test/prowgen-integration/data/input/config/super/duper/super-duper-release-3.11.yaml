@@ -4,31 +4,30 @@ base_images:
     name: origin-v3.11
     namespace: openshift
     tag: base
-images:
-- from: base
-  to: test-image
-tag_specification:
-  cluster: https://api.ci.openshift.org
-  name: origin-v3.11
-  namespace: openshift
-  tag: ''
-promotion:
-  namespace: openshift
-  name: other
-  additional_images:
-    super-duper-src: src
 build_root:
   image_stream_tag:
     cluster: https://api.ci.openshift.org
-    namespace: openshift
     name: release
+    namespace: openshift
     tag: golang-1.10
+images:
+- from: base
+  to: test-image
+promotion:
+  additional_images:
+    super-duper-src: src
+  name: other
+  namespace: openshift
 resources:
   '*':
     limits:
       cpu: 500Mi
     requests:
       cpu: 10Mi
+tag_specification:
+  cluster: https://api.ci.openshift.org
+  name: origin-v3.11
+  namespace: openshift
 tests:
 - as: unit
   commands: make test-unit
@@ -38,3 +37,7 @@ tests:
   commands: make test-lint
   container:
     from: src
+zz_generated_metadata:
+  branch: release-3.11
+  org: super
+  repo: duper

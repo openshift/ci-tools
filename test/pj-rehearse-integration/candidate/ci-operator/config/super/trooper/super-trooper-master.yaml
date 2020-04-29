@@ -4,26 +4,25 @@ base_images:
     name: origin-v4.0
     namespace: openshift
     tag: base
-images:
-- from: base
-  to: test-image
-tag_specification:
-  cluster: https://api.ci.openshift.org
-  name: origin-v4.0
-  namespace: openshift
-  tag: ''
 build_root:
   image_stream_tag:
     cluster: https://api.ci.openshift.org
-    namespace: openshift
     name: release
+    namespace: openshift
     tag: golang-1.10
+images:
+- from: base
+  to: test-image
 resources:
   '*':
     limits:
       cpu: 500Mi
     requests:
       cpu: 10Mi
+tag_specification:
+  cluster: https://api.ci.openshift.org
+  name: origin-v4.0
+  namespace: openshift
 tests:
 - as: unit
   commands: make unit CHANGED
@@ -31,55 +30,63 @@ tests:
     from: src
 - as: multistage
   steps:
-    workflow: ipi
+    cluster_profile: ""
     test:
     - as: e2e
-      from: my-image
       commands: make integration
+      from: my-image
       resources:
         requests:
           cpu: 1000m
           memory: 2Gi
-- as: multistage2 # identical to above; should be ignored by rehearse tool
+    workflow: ipi
+- as: multistage2
   steps:
-    workflow: ipi
+    cluster_profile: ""
     test:
     - as: e2e
-      from: my-image
       commands: make integration
+      from: my-image
       resources:
         requests:
           cpu: 1000m
           memory: 2Gi
-- as: multistage3 # new cluster_profile field; should be rehearsed
+    workflow: ipi
+- as: multistage3
   steps:
     cluster_profile: azure
+    test:
+    - as: e2e
+      commands: make integration
+      from: my-image
+      resources:
+        requests:
+          cpu: 1000m
+          memory: 2Gi
     workflow: ipi
-    test:
-    - as: e2e
-      from: my-image
-      commands: make integration
-      resources:
-        requests:
-          cpu: 1000m
-          memory: 2Gi
-- as: multistage4 # shouldn't get rehearsed since it doesn't use changed registry components
+- as: multistage4
   steps:
+    cluster_profile: ""
     test:
     - as: e2e
-      from: my-image
       commands: make integration
+      from: my-image
       resources:
         requests:
           cpu: 1000m
           memory: 2Gi
-- as: multistage5 # doesn't exist in previous revision; should get tested
+- as: multistage5
   steps:
+    cluster_profile: ""
     test:
     - as: e2e
-      from: my-image
       commands: make integration
+      from: my-image
       resources:
         requests:
           cpu: 1000m
           memory: 2Gi
+zz_generated_metadata:
+  branch: master
+  org: super
+  repo: trooper

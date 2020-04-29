@@ -73,6 +73,7 @@ inputs=(
 for input in "${inputs[@]}"; do echo "${input}"; done | repo-init -release-repo .
 ci-operator-prowgen --from-dir ./ci-operator/config --to-dir ./ci-operator/jobs
 sanitize-prow-jobs --prow-jobs-dir ./ci-operator/jobs --config-path ./core-services/sanitize-prow-jobs/_config.yaml
+determinize-ci-operator --config-dir ./ci-operator/config --confirm
 
 if [[  "${UPDATE:-}" = true ]]; then
   rm -rf  "$ROOTDIR"/test/repo-init-integration/expected/*

@@ -40,3 +40,7 @@ tests:
     from: src
     memory_backed_volume:
       size: 4Gi
+zz_generated_metadata:
+  branch: master
+  org: openshift
+  repo: origin

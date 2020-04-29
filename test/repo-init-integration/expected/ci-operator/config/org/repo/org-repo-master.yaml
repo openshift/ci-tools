@@ -47,3 +47,7 @@ tests:
   commands: e2e
   openshift_installer_src:
     cluster_profile: aws
+zz_generated_metadata:
+  branch: master
+  org: org
+  repo: repo

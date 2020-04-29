@@ -158,7 +158,7 @@
       prow.k8s.io/refs.pull: "1234"
       prow.k8s.io/refs.repo: release
       prow.k8s.io/type: presubmit
-    name: 1e57006d-b7c8-11e9-a628-54e1ad07d68a
+    name: 770b3e5e-8b04-11ea-a187-98fa9bcb3ca2
     namespace: test-namespace
   spec:
     agent: kubernetes
@@ -232,6 +232,10 @@
               cluster: https://api.ci.openshift.org
               name: origin-v4.0
               namespace: openshift
+            zz_generated_metadata:
+              branch: ciop-cfg-change
+              org: super
+              repo: duper
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -258,18 +262,18 @@
         name: job-definition
     refs:
       base_ref: master
-      base_sha: 362ea74ab530befb4201e0d447d7a19174edb8d3
+      base_sha: 32db953cb0ed936a25475d6aba2625b0ff4a2347
       org: openshift
       pulls:
       - author: petr-muller
         number: 1234
-        sha: 2a2c6326002a2df6099cb3cadf145f338ad3e137
+        sha: a937d41182950a2f60a58e1c49c73fd3cf1cac2f
       repo: release
     report: true
     rerun_command: /test pj-rehearse
     type: presubmit
   status:
-    startTime: "2019-06-18T09:30:17Z"
+    startTime: "2020-04-30T17:03:08Z"
     state: triggered
 - apiVersion: prow.k8s.io/v1
   kind: ProwJob
@@ -286,7 +290,7 @@
       prow.k8s.io/refs.pull: "1234"
       prow.k8s.io/refs.repo: release
       prow.k8s.io/type: presubmit
-    name: 1d97c3ab-b9f3-11e9-ae13-54e1ad07d68a
+    name: 770b3ffa-8b04-11ea-a187-98fa9bcb3ca2
     namespace: test-namespace
   spec:
     agent: kubernetes
@@ -350,6 +354,10 @@
               cluster: https://api.ci.openshift.org
               name: origin-v4.0
               namespace: openshift
+            zz_generated_metadata:
+              branch: ciop-cfg-change
+              org: super
+              repo: duper
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -359,18 +367,18 @@
       serviceAccountName: ci-operator
     refs:
       base_ref: master
-      base_sha: af9ec8fe29f22367f34ba1176cfdbf624fe77cab
+      base_sha: 32db953cb0ed936a25475d6aba2625b0ff4a2347
       org: openshift
       pulls:
       - author: petr-muller
         number: 1234
-        sha: 783e2532831a60e2ea50eb7fea52bcba2ecb6107
+        sha: a937d41182950a2f60a58e1c49c73fd3cf1cac2f
       repo: release
     report: true
     rerun_command: /test pj-rehearse
     type: presubmit
   status:
-    startTime: "2019-08-08T15:42:23Z"
+    startTime: "2020-04-30T17:03:08Z"
     state: triggered
 - apiVersion: prow.k8s.io/v1
   kind: ProwJob
@@ -387,7 +395,7 @@
       prow.k8s.io/refs.pull: "1234"
       prow.k8s.io/refs.repo: release
       prow.k8s.io/type: presubmit
-    name: a4d7cde0-eb8f-11e9-ac83-54ee753e2644
+    name: 770b3202-8b04-11ea-a187-98fa9bcb3ca2
     namespace: test-namespace
   spec:
     agent: kubernetes
@@ -457,6 +465,10 @@
               cluster: https://api.ci.openshift.org
               name: origin-v4.0
               namespace: openshift
+            zz_generated_metadata:
+              branch: ciop-cfg-change
+              org: super
+              repo: duper
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -468,18 +480,18 @@
       serviceAccountName: ci-operator
     refs:
       base_ref: master
-      base_sha: 92aeb56b6799e26148806168e5636cd7f793bee2
+      base_sha: 32db953cb0ed936a25475d6aba2625b0ff4a2347
       org: openshift
       pulls:
       - author: petr-muller
         number: 1234
-        sha: 1303e418a8be200e400667c6ea6e7a549e4a8f6f
+        sha: a937d41182950a2f60a58e1c49c73fd3cf1cac2f
       repo: release
     report: true
     rerun_command: /test pj-rehearse
     type: presubmit
   status:
-    startTime: "2019-10-10T18:56:18Z"
+    startTime: "2020-04-30T17:03:08Z"
     state: triggered
 - apiVersion: prow.k8s.io/v1
   kind: ProwJob
@@ -497,7 +509,7 @@
       prow.k8s.io/refs.pull: "1234"
       prow.k8s.io/refs.repo: release
       prow.k8s.io/type: presubmit
-    name: 9bdfbae2-405b-11e9-ac33-74d435fb2dc0
+    name: 770b32f9-8b04-11ea-a187-98fa9bcb3ca2
     namespace: test-namespace
   spec:
     agent: kubernetes
@@ -563,6 +575,10 @@
               cluster: https://api.ci.openshift.org
               name: origin-v4.0
               namespace: openshift
+            zz_generated_metadata:
+              branch: ciop-cfg-change
+              org: super
+              repo: duper
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -572,18 +588,18 @@
       serviceAccountName: ci-operator
     refs:
       base_ref: master
-      base_sha: 328cef7c6235073b55754d503b98c9233eaa9955
+      base_sha: 32db953cb0ed936a25475d6aba2625b0ff4a2347
       org: openshift
       pulls:
       - author: petr-muller
         number: 1234
-        sha: 2a4d89d759b611ad3f423378c7d78f3af15d78e2
+        sha: a937d41182950a2f60a58e1c49c73fd3cf1cac2f
       repo: release
     report: true
     rerun_command: /test pj-rehearse
     type: presubmit
   status:
-    startTime: "2019-03-06T22:03:01Z"
+    startTime: "2020-04-30T17:03:08Z"
     state: triggered
 - apiVersion: prow.k8s.io/v1
   kind: ProwJob
@@ -600,7 +616,7 @@
       prow.k8s.io/refs.pull: "1234"
       prow.k8s.io/refs.repo: release
       prow.k8s.io/type: presubmit
-    name: aa2b50c7-4b4e-11e9-b014-e86a6403f52c
+    name: 770b34f0-8b04-11ea-a187-98fa9bcb3ca2
     namespace: test-namespace
   spec:
     agent: kubernetes
@@ -672,6 +688,10 @@
               cluster: https://api.ci.openshift.org
               name: origin-v4.0
               namespace: openshift
+            zz_generated_metadata:
+              branch: cluster-profile
+              org: super
+              repo: duper
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -698,18 +718,18 @@
         name: job-definition
     refs:
       base_ref: master
-      base_sha: a1e0de27c562d86647c901554094d12d7c358ba8
+      base_sha: 32db953cb0ed936a25475d6aba2625b0ff4a2347
       org: openshift
       pulls:
       - author: petr-muller
         number: 1234
-        sha: 7c0b9788f819121ac637fa3f8a319d0bc2cda73e
+        sha: a937d41182950a2f60a58e1c49c73fd3cf1cac2f
       repo: release
     report: true
     rerun_command: /test pj-rehearse
     type: presubmit
   status:
-    startTime: "2019-02-11T17:02:53Z"
+    startTime: "2020-04-30T17:03:08Z"
     state: triggered
 - apiVersion: prow.k8s.io/v1
   kind: ProwJob
@@ -726,7 +746,7 @@
       prow.k8s.io/refs.pull: "1234"
       prow.k8s.io/refs.repo: release
       prow.k8s.io/type: presubmit
-    name: df02e525-2e1e-11e9-bbf5-8c16455629bd
+    name: 770b2df9-8b04-11ea-a187-98fa9bcb3ca2
     namespace: test-namespace
   spec:
     agent: kubernetes
@@ -790,6 +810,10 @@
               cluster: https://api.ci.openshift.org
               name: origin-v4.0
               namespace: openshift
+            zz_generated_metadata:
+              branch: master
+              org: super
+              repo: duper
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -801,18 +825,18 @@
       serviceAccountName: ci-operator
     refs:
       base_ref: master
-      base_sha: a1e0de27c562d86647c901554094d12d7c358ba8
+      base_sha: 32db953cb0ed936a25475d6aba2625b0ff4a2347
       org: openshift
       pulls:
       - author: petr-muller
         number: 1234
-        sha: 7c0b9788f819121ac637fa3f8a319d0bc2cda73e
+        sha: a937d41182950a2f60a58e1c49c73fd3cf1cac2f
       repo: release
     report: true
     rerun_command: /test pj-rehearse
     type: presubmit
   status:
-    startTime: "2019-03-06T22:03:01Z"
+    startTime: "2020-04-30T17:03:08Z"
     state: triggered
 - apiVersion: prow.k8s.io/v1
   kind: ProwJob
@@ -829,7 +853,7 @@
       prow.k8s.io/refs.pull: "1234"
       prow.k8s.io/refs.repo: release
       prow.k8s.io/type: presubmit
-    name: 44acebef-4fc4-11e9-b82b-54e1ad07d68a
+    name: 770b2fe2-8b04-11ea-a187-98fa9bcb3ca2
     namespace: test-namespace
   spec:
     agent: kubernetes
@@ -901,6 +925,10 @@
               cluster: https://api.ci.openshift.org
               name: origin-v4.0
               namespace: openshift
+            zz_generated_metadata:
+              branch: master
+              org: super
+              repo: duper
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -927,18 +955,18 @@
         name: job-definition
     refs:
       base_ref: master
-      base_sha: 7effc9d6d41c9038e853dc54814eaace10f0bbfa
+      base_sha: 32db953cb0ed936a25475d6aba2625b0ff4a2347
       org: openshift
       pulls:
       - author: petr-muller
         number: 1234
-        sha: bb928f30f5790ce48231cb1b2601a135869da8cc
+        sha: a937d41182950a2f60a58e1c49c73fd3cf1cac2f
       repo: release
     report: true
     rerun_command: /test pj-rehearse
     type: presubmit
   status:
-    startTime: "2019-03-06T22:03:01Z"
+    startTime: "2020-04-30T17:03:08Z"
     state: triggered
 - apiVersion: prow.k8s.io/v1
   kind: ProwJob
@@ -955,7 +983,7 @@
       prow.k8s.io/refs.pull: "1234"
       prow.k8s.io/refs.repo: release
       prow.k8s.io/type: presubmit
-    name: df02e8fc-2e1e-11e9-bbf5-8c16455629bd
+    name: 770b3112-8b04-11ea-a187-98fa9bcb3ca2
     namespace: test-namespace
   spec:
     agent: kubernetes
@@ -1019,6 +1047,10 @@
               cluster: https://api.ci.openshift.org
               name: origin-v4.0
               namespace: openshift
+            zz_generated_metadata:
+              branch: master
+              org: super
+              repo: duper
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -1030,18 +1062,18 @@
       serviceAccountName: ci-operator
     refs:
       base_ref: master
-      base_sha: a1e0de27c562d86647c901554094d12d7c358ba8
+      base_sha: 32db953cb0ed936a25475d6aba2625b0ff4a2347
       org: openshift
       pulls:
       - author: petr-muller
         number: 1234
-        sha: 7c0b9788f819121ac637fa3f8a319d0bc2cda73e
+        sha: a937d41182950a2f60a58e1c49c73fd3cf1cac2f
       repo: release
     report: true
     rerun_command: /test pj-rehearse
     type: presubmit
   status:
-    startTime: "2019-02-11T17:02:53Z"
+    startTime: "2020-04-30T17:03:08Z"
     state: triggered
 - apiVersion: prow.k8s.io/v1
   kind: ProwJob
@@ -1058,7 +1090,7 @@
       prow.k8s.io/refs.pull: "1234"
       prow.k8s.io/refs.repo: release
       prow.k8s.io/type: presubmit
-    name: ab89c04c-4fc2-11e9-96b2-54e1ad07d68a
+    name: 770b33d4-8b04-11ea-a187-98fa9bcb3ca2
     namespace: test-namespace
   spec:
     agent: kubernetes
@@ -1130,6 +1162,10 @@
               cluster: https://api.ci.openshift.org
               name: origin-v4.0
               namespace: openshift
+            zz_generated_metadata:
+              branch: master
+              org: super
+              repo: duper
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -1156,18 +1192,18 @@
         name: job-definition
     refs:
       base_ref: master
-      base_sha: bfd4c4d0fe97177b4278dfef1691c7ef8dca1af0
+      base_sha: 32db953cb0ed936a25475d6aba2625b0ff4a2347
       org: openshift
       pulls:
       - author: petr-muller
         number: 1234
-        sha: 4fe34c7d9b223067e30397a98a64bc0915d602e2
+        sha: a937d41182950a2f60a58e1c49c73fd3cf1cac2f
       repo: release
     report: true
     rerun_command: /test pj-rehearse
     type: presubmit
   status:
-    startTime: "2019-03-26T12:28:33Z"
+    startTime: "2020-04-30T17:03:08Z"
     state: triggered
 - apiVersion: prow.k8s.io/v1
   kind: ProwJob
@@ -1184,7 +1220,7 @@
       prow.k8s.io/refs.pull: "1234"
       prow.k8s.io/refs.repo: release
       prow.k8s.io/type: presubmit
-    name: ab89c26f-4fc2-11e9-96b2-54e1ad07d68a
+    name: 770b363e-8b04-11ea-a187-98fa9bcb3ca2
     namespace: test-namespace
   spec:
     agent: kubernetes
@@ -1256,6 +1292,10 @@
               cluster: https://api.ci.openshift.org
               name: origin-v4.0
               namespace: openshift
+            zz_generated_metadata:
+              branch: master
+              org: super
+              repo: duper
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -1282,18 +1322,18 @@
         name: job-definition
     refs:
       base_ref: master
-      base_sha: bfd4c4d0fe97177b4278dfef1691c7ef8dca1af0
+      base_sha: 32db953cb0ed936a25475d6aba2625b0ff4a2347
       org: openshift
       pulls:
       - author: petr-muller
         number: 1234
-        sha: 4fe34c7d9b223067e30397a98a64bc0915d602e2
+        sha: a937d41182950a2f60a58e1c49c73fd3cf1cac2f
       repo: release
     report: true
     rerun_command: /test pj-rehearse
     type: presubmit
   status:
-    startTime: "2019-03-26T12:28:33Z"
+    startTime: "2020-04-30T17:03:08Z"
     state: triggered
 - apiVersion: prow.k8s.io/v1
   kind: ProwJob
@@ -1310,7 +1350,7 @@
       prow.k8s.io/refs.pull: "1234"
       prow.k8s.io/refs.repo: release
       prow.k8s.io/type: presubmit
-    name: df02ea78-2e1e-11e9-bbf5-8c16455629bd
+    name: 770b3745-8b04-11ea-a187-98fa9bcb3ca2
     namespace: test-namespace
   spec:
     agent: kubernetes
@@ -1536,6 +1576,10 @@
                     requests:
                       cpu: 1000m
                       memory: 2Gi
+            zz_generated_metadata:
+              branch: master
+              org: super
+              repo: trooper
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -1547,18 +1591,18 @@
       serviceAccountName: ci-operator
     refs:
       base_ref: master
-      base_sha: a1e0de27c562d86647c901554094d12d7c358ba8
+      base_sha: 32db953cb0ed936a25475d6aba2625b0ff4a2347
       org: openshift
       pulls:
       - author: petr-muller
         number: 1234
-        sha: bb928f30f5790ce48231cb1b2601a135869da8cc
+        sha: a937d41182950a2f60a58e1c49c73fd3cf1cac2f
       repo: release
     report: true
     rerun_command: /test pj-rehearse
     type: presubmit
   status:
-    startTime: "2019-03-06T22:03:01Z"
+    startTime: "2020-04-30T17:03:08Z"
     state: triggered
 - apiVersion: prow.k8s.io/v1
   kind: ProwJob
@@ -1575,7 +1619,7 @@
       prow.k8s.io/refs.pull: "1234"
       prow.k8s.io/refs.repo: release
       prow.k8s.io/type: presubmit
-    name: 44acf399-4fc4-11e9-b82b-54e1ad07d68a
+    name: 770b3823-8b04-11ea-a187-98fa9bcb3ca2
     namespace: test-namespace
   spec:
     agent: kubernetes
@@ -1809,6 +1853,10 @@
                     requests:
                       cpu: 1000m
                       memory: 2Gi
+            zz_generated_metadata:
+              branch: master
+              org: super
+              repo: trooper
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -1835,18 +1883,18 @@
         name: job-definition
     refs:
       base_ref: master
-      base_sha: 7effc9d6d41c9038e853dc54814eaace10f0bbfa
+      base_sha: 32db953cb0ed936a25475d6aba2625b0ff4a2347
       org: openshift
       pulls:
       - author: petr-muller
         number: 1234
-        sha: bb928f30f5790ce48231cb1b2601a135869da8cc
+        sha: a937d41182950a2f60a58e1c49c73fd3cf1cac2f
       repo: release
     report: true
     rerun_command: /test pj-rehearse
     type: presubmit
   status:
-    startTime: "2019-02-11T17:02:53Z"
+    startTime: "2020-04-30T17:03:08Z"
     state: triggered
 - apiVersion: prow.k8s.io/v1
   kind: ProwJob
@@ -1864,7 +1912,7 @@
       prow.k8s.io/refs.pull: "1234"
       prow.k8s.io/refs.repo: release
       prow.k8s.io/type: presubmit
-    name: 72fccf67-1b9d-11ea-a5f6-8c1645feb4f4
+    name: 770b3b77-8b04-11ea-a187-98fa9bcb3ca2
     namespace: test-namespace
   spec:
     agent: kubernetes
@@ -2091,6 +2139,10 @@
                     requests:
                       cpu: 1000m
                       memory: 2Gi
+            zz_generated_metadata:
+              branch: master
+              org: super
+              repo: trooper
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -2111,18 +2163,18 @@
               name: cluster-profile-
     refs:
       base_ref: master
-      base_sha: 9691f0df19066bb68113f19dad0389184279fefe
+      base_sha: 32db953cb0ed936a25475d6aba2625b0ff4a2347
       org: openshift
       pulls:
       - author: petr-muller
         number: 1234
-        sha: bd54f9c2b25d95fbcde47597e52c6866be831382
+        sha: a937d41182950a2f60a58e1c49c73fd3cf1cac2f
       repo: release
     report: true
     rerun_command: /test pj-rehearse
     type: presubmit
   status:
-    startTime: "2019-12-10T22:36:04Z"
+    startTime: "2020-04-30T17:03:08Z"
     state: triggered
 - apiVersion: prow.k8s.io/v1
   kind: ProwJob
@@ -2140,7 +2192,7 @@
       prow.k8s.io/refs.pull: "1234"
       prow.k8s.io/refs.repo: release
       prow.k8s.io/type: presubmit
-    name: 72fcd110-1b9d-11ea-a5f6-8c1645feb4f4
+    name: 770b3d63-8b04-11ea-a187-98fa9bcb3ca2
     namespace: test-namespace
   spec:
     agent: kubernetes
@@ -2367,6 +2419,10 @@
                     requests:
                       cpu: 1000m
                       memory: 2Gi
+            zz_generated_metadata:
+              branch: master
+              org: super
+              repo: trooper
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -2387,18 +2443,18 @@
               name: cluster-profile-
     refs:
       base_ref: master
-      base_sha: 9691f0df19066bb68113f19dad0389184279fefe
+      base_sha: 32db953cb0ed936a25475d6aba2625b0ff4a2347
       org: openshift
       pulls:
       - author: petr-muller
         number: 1234
-        sha: bb928f30f5790ce48231cb1b2601a135869da8cc
+        sha: a937d41182950a2f60a58e1c49c73fd3cf1cac2f
       repo: release
     report: true
     rerun_command: /test pj-rehearse
     type: presubmit
   status:
-    startTime: "2019-02-11T17:02:53Z"
+    startTime: "2020-04-30T17:03:08Z"
     state: triggered
 - apiVersion: prow.k8s.io/v1
   kind: ProwJob
@@ -2416,7 +2472,7 @@
       prow.k8s.io/refs.pull: "1234"
       prow.k8s.io/refs.repo: release
       prow.k8s.io/type: presubmit
-    name: 72fccbb1-1b9d-11ea-a5f6-8c1645feb4f4
+    name: 770b3944-8b04-11ea-a187-98fa9bcb3ca2
     namespace: test-namespace
   spec:
     agent: kubernetes
@@ -2643,6 +2699,10 @@
                     requests:
                       cpu: 1000m
                       memory: 2Gi
+            zz_generated_metadata:
+              branch: master
+              org: super
+              repo: trooper
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -2663,18 +2723,18 @@
               name: cluster-profile-
     refs:
       base_ref: master
-      base_sha: a1e0de27c562d86647c901554094d12d7c358ba8
+      base_sha: 32db953cb0ed936a25475d6aba2625b0ff4a2347
       org: openshift
       pulls:
       - author: petr-muller
         number: 1234
-        sha: 7c0b9788f819121ac637fa3f8a319d0bc2cda73e
+        sha: a937d41182950a2f60a58e1c49c73fd3cf1cac2f
       repo: release
     report: true
     rerun_command: /test pj-rehearse
     type: presubmit
   status:
-    startTime: "2019-02-11T17:02:53Z"
+    startTime: "2020-04-30T17:03:08Z"
     state: triggered
 - apiVersion: prow.k8s.io/v1
   kind: ProwJob
@@ -2692,7 +2752,7 @@
       prow.k8s.io/refs.pull: "1234"
       prow.k8s.io/refs.repo: release
       prow.k8s.io/type: presubmit
-    name: 7216cd7e-4c84-11e9-996c-54e1ad07d68a
+    name: 770b3a57-8b04-11ea-a187-98fa9bcb3ca2
     namespace: test-namespace
   spec:
     agent: kubernetes
@@ -2918,6 +2978,10 @@
                     requests:
                       cpu: 1000m
                       memory: 2Gi
+            zz_generated_metadata:
+              branch: master
+              org: super
+              repo: trooper
         image: ci-operator:latest
         imagePullPolicy: Always
         name: ""
@@ -2927,17 +2991,17 @@
       serviceAccountName: ci-operator
     refs:
       base_ref: master
-      base_sha: a1e0de27c562d86647c901554094d12d7c358ba8
+      base_sha: 32db953cb0ed936a25475d6aba2625b0ff4a2347
       org: openshift
       pulls:
       - author: petr-muller
         number: 1234
-        sha: 7c0b9788f819121ac637fa3f8a319d0bc2cda73e
+        sha: a937d41182950a2f60a58e1c49c73fd3cf1cac2f
       repo: release
     report: true
     rerun_command: /test pj-rehearse
     type: presubmit
   status:
-    startTime: "2019-02-11T17:02:53Z"
+    startTime: "2020-04-30T17:03:08Z"
     state: triggered
 

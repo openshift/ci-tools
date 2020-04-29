@@ -97,6 +97,7 @@ func main() {
 		}
 
 		repoInfo.Org = o.toOrg
+		rbc.Metadata.Org = o.toOrg
 		dataWithInfo := config.DataWithInfo{
 			Configuration: *rbc,
 			Info:          *repoInfo,

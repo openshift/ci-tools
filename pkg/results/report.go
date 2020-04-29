@@ -16,6 +16,11 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 )
 
+const (
+	// reportAddress is the default result aggregator address in api.ci
+	reportAddress = "http://result-aggregator-ci.svc.ci.openshift.org"
+)
+
 // Options holds the configuration options for connecting to the remote aggregation server
 type Options struct {
 	address  string
@@ -26,7 +31,7 @@ type Options struct {
 
 // Bind adds flags for the options
 func (o *Options) Bind(flag *flag.FlagSet) {
-	flag.StringVar(&o.address, "report-address", "", "Address of the aggregate reporting server.")
+	flag.StringVar(&o.address, "report-address", reportAddress, "Address of the aggregate reporting server.")
 	flag.StringVar(&o.certFile, "report-cert-file", "", "File holding the certificate for the aggregate reporting server.")
 	flag.StringVar(&o.keyFile, "report-key-file", "", "File holding the key for the aggregate reporting server.")
 	flag.StringVar(&o.caFile, "report-ca-file", "", "File holding the certificate authority for the aggregate reporting server.")

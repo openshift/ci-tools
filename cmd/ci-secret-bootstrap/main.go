@@ -38,7 +38,9 @@ type options struct {
 	bwPasswordPath string
 	cluster        string
 	force          bool
-	logLevel       string
+
+	logLevel      string
+	discardLogrus bool
 
 	impersonateUser string
 
@@ -59,6 +61,7 @@ func parseOptions() options {
 	fs.BoolVar(&o.force, "force", false, "If true, update the secrets even if existing one differs from Bitwarden items instead of existing with error. Default false.")
 	fs.StringVar(&o.logLevel, "log-level", "info", fmt.Sprintf("Log level is one of %v.", logrus.AllLevels))
 	fs.StringVar(&o.impersonateUser, "as", "", "Username to impersonate")
+	fs.BoolVar(&o.discardLogrus, "discard-logrus", false, "If true, the output of logrus will be /dev/null. Default false.")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Errorf("cannot parse args: %q", os.Args[1:])
 	}
@@ -66,6 +69,9 @@ func parseOptions() options {
 }
 
 func (o *options) validateOptions() error {
+	if o.discardLogrus {
+		logrus.SetOutput(ioutil.Discard)
+	}
 	level, err := logrus.ParseLevel(o.logLevel)
 	if err != nil {
 		return fmt.Errorf("invalid log level specified: %v", err)
@@ -398,6 +404,9 @@ func writeSecrets(secretsMap map[string][]*coreapi.Secret, w io.Writer) error {
 
 func main() {
 	o := parseOptions()
+	if o.discardLogrus {
+		fmt.Println("Initializing ...")
+	}
 	secrets := sets.NewString()
 	logrus.SetFormatter(logrusutil.NewCensoringFormatter(logrus.StandardLogger().Formatter, func() sets.String {
 		return secrets
@@ -426,6 +435,9 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to get secrets.")
 	}
 
+	if o.discardLogrus {
+		fmt.Println("Running ...")
+	}
 	if o.dryRun {
 		tmpFile, err := ioutil.TempFile("", "ci-secret-bootstrapper")
 		if err != nil {
@@ -441,5 +453,8 @@ func main() {
 			logrus.WithError(err).Fatalf("Failed to update secrets.")
 		}
 		logrus.Info("Updated secrets.")
+	}
+	if o.discardLogrus {
+		fmt.Println("Updated secrets.")
 	}
 }

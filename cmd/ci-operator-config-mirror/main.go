@@ -22,6 +22,8 @@ const (
 )
 
 type options struct {
+	config.WhitelistOptions
+
 	configDir string
 	toOrg     string
 }
@@ -33,6 +35,7 @@ func gatherOptions() options {
 	fs.StringVar(&o.configDir, "config-path", "", "Path to directory containing ci-operator configurations")
 	fs.StringVar(&o.toOrg, "to-org", "", "Name of the organization which the ci-operator configuration files will be mirrored")
 
+	o.WhitelistOptions.Bind(fs)
 	fs.Parse(os.Args[1:])
 	return o
 }
@@ -45,7 +48,7 @@ func (o *options) validate() error {
 	if len(o.toOrg) == 0 {
 		return errors.New("--to-org is not defined")
 	}
-	return nil
+	return o.WhitelistOptions.Validate()
 }
 
 func main() {
@@ -66,10 +69,11 @@ func main() {
 			return nil
 		}
 
-		if !promotion.BuildsOfficialImages(rbc) {
+		if !promotion.BuildsOfficialImages(rbc) && !o.WhitelistConfig.IsWhitelisted(repoInfo) {
 			logger.Warn("Skipping...")
 			return nil
 		}
+
 		logger.Info("Processing...")
 
 		if rbc.CanonicalGoRepository == nil {
@@ -93,6 +97,10 @@ func main() {
 		}
 
 		if rbc.PromotionConfiguration != nil {
+			if o.WhitelistConfig.IsWhitelisted(repoInfo) {
+				logger.Warn("Repo is whitelisted. Disable promotion...")
+				rbc.PromotionConfiguration.Disabled = true
+			}
 			privatePromotionConfiguration(rbc.PromotionConfiguration)
 		}
 

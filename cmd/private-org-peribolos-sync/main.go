@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
@@ -31,13 +30,12 @@ type gitHubClient interface {
 }
 
 type options struct {
+	config.WhitelistOptions
+
 	peribolosConfig string
 	destOrg         string
 	releaseRepoPath string
-	whitelist       flagutil.Strings
 	github          flagutil.GitHubOptions
-
-	whitelistByOrg map[string]sets.String
 }
 
 func gatherOptions() options {
@@ -48,9 +46,8 @@ func gatherOptions() options {
 	fs.StringVar(&o.releaseRepoPath, "release-repo-path", "", "Path to a openshift/release repository directory")
 	fs.StringVar(&o.destOrg, "destination-org", "", "Destination name of the peribolos configuration organzation")
 
-	fs.Var(&o.whitelist, "whitelist", "One or more repositories that do not promote official images and need to be included")
-
 	o.github.AddFlags(fs)
+	o.WhitelistOptions.Bind(fs)
 	fs.Parse(os.Args[1:])
 
 	return o
@@ -68,48 +65,13 @@ func validateOptions(o *options) error {
 	if len(o.destOrg) == 0 {
 		validationErrors = append(validationErrors, errors.New("--destination-org is not specified"))
 	}
-
-	if len(o.whitelist.Strings()) > 0 {
-		if err := validateWhitelist(o.whitelist.Strings()); err != nil {
-			validationErrors = append(validationErrors, err)
-		} else {
-			o.whitelistByOrg = getWhitelistByOrg(o.whitelist.Strings())
-		}
-	}
-
 	if err := o.github.Validate(false); err != nil {
 		validationErrors = append(validationErrors, err)
 	}
-
+	if err := o.Validate(); err != nil {
+		validationErrors = append(validationErrors, err)
+	}
 	return kerrors.NewAggregate(validationErrors)
-}
-
-func validateWhitelist(whitelist []string) error {
-	for _, repo := range whitelist {
-		if len(strings.Split(repo, "/")) != 2 {
-			return fmt.Errorf("--whitelist: %s must be in org/repo format", repo)
-		}
-	}
-	return nil
-}
-
-func getWhitelistByOrg(whitelist []string) map[string]sets.String {
-	ret := make(map[string]sets.String)
-
-	for _, repo := range whitelist {
-		orgRepo := strings.Split(repo, "/")
-
-		orgName := orgRepo[0]
-		repoName := orgRepo[1]
-
-		repos, exist := ret[orgName]
-		if !exist {
-			repos = sets.NewString()
-		}
-		ret[orgName] = repos.Insert(repoName)
-
-	}
-	return ret
 }
 
 func main() {
@@ -144,7 +106,7 @@ func main() {
 		logger.WithError(err).Fatal("Error getting GitHub client.")
 	}
 
-	orgRepos, err := getReposForPrivateOrg(o.releaseRepoPath, o.whitelistByOrg)
+	orgRepos, err := getReposForPrivateOrg(o.releaseRepoPath)
 	if err != nil {
 		logger.WithError(err).Fatal("couldn't get the list of org/repos that promote official images")
 	}
@@ -196,36 +158,26 @@ func generateRepositories(gc gitHubClient, orgRepos map[string]sets.String, logg
 }
 
 // getReposForPrivateOrg itterates through the release repository directory and creates a map of
-// repository sets by organization that promote official images or if they are whitelisted by user.
-func getReposForPrivateOrg(releaseRepoPath string, includeRepos map[string]sets.String) (map[string]sets.String, error) {
+// repository sets by organization that promote official images.
+func getReposForPrivateOrg(releaseRepoPath string) (map[string]sets.String, error) {
 	ret := make(map[string]sets.String)
+	callback := func(c *api.ReleaseBuildConfiguration, i *config.Info) error {
+		if !promotion.BuildsOfficialImages(c) {
+			return nil
+		}
 
-	callback := makeCallback(includeRepos, ret)
+		repos, exist := ret[i.Org]
+		if !exist {
+			repos = sets.NewString()
+		}
+		ret[i.Org] = repos.Insert(i.Repo)
+
+		return nil
+	}
+
 	if err := config.OperateOnCIOperatorConfigDir(filepath.Join(releaseRepoPath, config.CiopConfigInRepoPath), callback); err != nil {
 		return ret, fmt.Errorf("error while operating in ci-operator configuration files: %v", err)
 	}
 
 	return ret, nil
-}
-
-// makeCallback returns a function usable for OperateOnCIOperatorConfigDir that picks the orgs/repos
-// that promotes official images and the one that are in whitelist.
-func makeCallback(includeRepos, orgReposPicked map[string]sets.String) func(*api.ReleaseBuildConfiguration, *config.Info) error {
-	return func(c *api.ReleaseBuildConfiguration, i *config.Info) error {
-
-		// skip this repo unless it's in the whitelist
-		if !promotion.BuildsOfficialImages(c) {
-			if !includeRepos[i.Org].Has(i.Repo) {
-				return nil
-			}
-		}
-
-		repos, exist := orgReposPicked[i.Org]
-		if !exist {
-			repos = sets.NewString()
-		}
-		orgReposPicked[i.Org] = repos.Insert(i.Repo)
-
-		return nil
-	}
 }

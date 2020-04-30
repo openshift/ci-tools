@@ -24,6 +24,8 @@ import (
 )
 
 type options struct {
+	config.WhitelistOptions
+
 	configDir string
 	tokenPath string
 	targetOrg string
@@ -65,6 +67,11 @@ func (o *options) validate() []error {
 	if o.tokenPath == "" {
 		errs = append(errs, fmt.Errorf("--token-path is required"))
 	}
+
+	if err := o.WhitelistOptions.Validate(); err != nil {
+		errs = append(errs, err)
+
+	}
 	return errs
 }
 
@@ -82,6 +89,7 @@ func gatherOptions() options {
 	fs.BoolVar(&o.confirm, "confirm", false, "Set true to actually execute all world-changing operations")
 	fs.BoolVar(&o.failOnNonexistentDst, "fail-on-missing-destination", false, "Set true to make the tool to consider missing sync destination as an error")
 
+	o.WhitelistOptions.Bind(fs)
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("Could not parse options")
 	}

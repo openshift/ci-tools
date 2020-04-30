@@ -32,6 +32,8 @@ const (
 )
 
 type options struct {
+	config.WhitelistOptions
+
 	releaseRepoPath string
 }
 
@@ -58,6 +60,8 @@ func gatherOptions() options {
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 
 	fs.StringVar(&o.releaseRepoPath, "release-repo-path", "", "Path to a openshift/release repository directory")
+
+	o.WhitelistOptions.Bind(fs)
 	fs.Parse(os.Args[1:])
 	return o
 }
@@ -66,7 +70,7 @@ func (o *options) validate() error {
 	if len(o.releaseRepoPath) == 0 {
 		return errors.New("--release-repo-path is not defined")
 	}
-	return nil
+	return o.WhitelistOptions.Validate()
 }
 
 func loadProwPlugins(pluginsPath string) (*plugins.Configuration, error) {

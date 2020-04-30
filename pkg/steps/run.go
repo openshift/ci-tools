@@ -1,14 +1,14 @@
 package steps
 
 import (
-	"bytes"
 	"context"
-	"fmt"
+	"errors"
 	"sync"
 	"time"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/junit"
+	"github.com/openshift/ci-tools/pkg/results"
 )
 
 type message struct {
@@ -18,9 +18,9 @@ type message struct {
 	additionalTests []*junit.TestCase
 }
 
-func Run(ctx context.Context, graph []*api.StepNode, dry bool) (*junit.TestSuites, error) {
+func Run(ctx context.Context, graph []*api.StepNode, dry bool) (*junit.TestSuites, []error) {
 	var seen []api.StepLink
-	results := make(chan message)
+	executionResults := make(chan message)
 	done := make(chan bool)
 	ctxDone := ctx.Done()
 	var interrupted bool
@@ -33,7 +33,7 @@ func Run(ctx context.Context, graph []*api.StepNode, dry bool) (*junit.TestSuite
 
 	start := time.Now()
 	for _, root := range graph {
-		go runStep(ctx, root, results, dry)
+		go runStep(ctx, root, executionResults, dry)
 	}
 
 	suites := &junit.TestSuites{
@@ -42,18 +42,18 @@ func Run(ctx context.Context, graph []*api.StepNode, dry bool) (*junit.TestSuite
 		},
 	}
 	suite := suites.Suites[0]
-	var errors []error
+	var executionErrors []error
 	for {
 		select {
 		case <-ctxDone:
-			errors = append(errors, fmt.Errorf("execution cancelled"))
+			executionErrors = append(executionErrors, results.ForReason(results.ReasonInterrupted).ForError(errors.New("execution cancelled")))
 			interrupted = true
 			ctxDone = nil
-		case out := <-results:
+		case out := <-executionResults:
 			testCase := &junit.TestCase{Name: out.node.Step.Description(), Duration: out.duration.Seconds()}
 			if out.err != nil {
 				testCase.FailureOutput = &junit.FailureOutput{Output: out.err.Error()}
-				errors = append(errors, fmt.Errorf("step %s failed: %v", out.node.Step.Name(), out.err))
+				executionErrors = append(executionErrors, results.ForReason(results.ReasonStepFailed).WithError(out.err).Errorf("step %s failed: %v", out.node.Step.Name(), out.err))
 			} else {
 				if dry {
 					testCase.SkipMessage = &junit.SkipMessage{Message: "Dry run"}
@@ -68,7 +68,7 @@ func Run(ctx context.Context, graph []*api.StepNode, dry bool) (*junit.TestSuite
 						// when the last of its parents finishes.
 						if api.HasAllLinks(child.Step.Requires(), seen) {
 							wg.Add(1)
-							go runStep(ctx, child, results, dry)
+							go runStep(ctx, child, executionResults, dry)
 						}
 					}
 				}
@@ -94,30 +94,12 @@ func Run(ctx context.Context, graph []*api.StepNode, dry bool) (*junit.TestSuite
 
 			wg.Done()
 		case <-done:
-			close(results)
+			close(executionResults)
 			close(done)
 			suite.Duration = time.Since(start).Seconds()
-			return suites, aggregateError(errors)
+			return suites, executionErrors
 		}
 	}
-}
-
-func aggregateError(errors []error) error {
-	var aggregateErr error
-	if len(errors) == 0 {
-		return nil
-	}
-	if len(errors) == 1 {
-		return errors[0]
-	}
-	if len(errors) > 1 {
-		message := bytes.Buffer{}
-		for _, err := range errors {
-			message.WriteString(fmt.Sprintf("\n  * %s", err.Error()))
-		}
-		aggregateErr = fmt.Errorf("some steps failed:%s", message.String())
-	}
-	return aggregateErr
 }
 
 // subtestReporter may be implemented by steps that can return an optional set of

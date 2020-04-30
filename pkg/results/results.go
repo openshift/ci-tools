@@ -30,4 +30,9 @@ const (
 	ReasonExecutingGraph Reason = "executing_graph"
 	// ReasonExecutingPost indicates a failure to execute the post steps
 	ReasonExecutingPost Reason = "executing_post"
+
+	// ReasonInterrupted indicates that we were interrupted during execution
+	ReasonInterrupted Reason = "interrupted"
+	// ReasonStepFailed indicates a step failed to execute
+	ReasonStepFailed Reason = "step_failed"
 )

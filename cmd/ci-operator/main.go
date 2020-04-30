@@ -188,14 +188,7 @@ func main() {
 	}
 
 	if err := opt.Run(); err != nil {
-		// TODO: maybe we can think of a better way to do this,
-		// but it would be awesome to not need to make the results
-		// library aware of this typed error
-		baseErr := err
-		if wrapped, ok := err.(errWroteJUnit); ok {
-			baseErr = wrapped.error
-		}
-		err = results.DefaultReason(baseErr)
+		err = results.DefaultReason(err)
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		opt.writeFailingJUnit(err)
 		opt.Report(err)
@@ -587,7 +580,7 @@ func (o *options) Run() error {
 			if !o.dry {
 				time.Sleep(time.Second)
 			}
-			return errWroteJUnit{results.ForReason(results.ReasonExecutingGraph).WithError(err).Errorf("could not run steps: %v", err)}
+			return &errWroteJUnit{wrapped: results.ForReason(results.ReasonExecutingGraph).WithError(err).Errorf("could not run steps: %v", err)}
 		}
 
 		for _, step := range postSteps {
@@ -1015,13 +1008,29 @@ func (o *options) parseCustomMetadata(customProwMetadataFile string) (customMeta
 // errWroteJUnit indicates that this error is covered by existing JUnit output and writing
 // another JUnit file is not necessary (in writeFailingJUnit)
 type errWroteJUnit struct {
-	error
+	wrapped error
+}
+
+// Error makes an errWroteJUnit an error
+func (e *errWroteJUnit) Error() string {
+	return e.wrapped.Error()
+}
+
+// Unwrap allows nesting of errors
+func (e *errWroteJUnit) Unwrap() error {
+	return e.wrapped
+}
+
+// Is allows us to say we are an errWroteJUnit
+func (e *errWroteJUnit) Is(target error) bool {
+	_, is := target.(*errWroteJUnit)
+	return is
 }
 
 // writeFailingJUnit attempts to write a JUnit artifact when the graph could not be
 // initialized in order to capture the result for higher level automation.
 func (o *options) writeFailingJUnit(err error) {
-	if _, ok := err.(errWroteJUnit); ok {
+	if errors.Is(err, &errWroteJUnit{}) {
 		return
 	}
 	suites := &junit.TestSuites{

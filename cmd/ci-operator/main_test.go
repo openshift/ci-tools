@@ -2,7 +2,9 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"github.com/openshift/ci-tools/pkg/results"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -350,5 +352,20 @@ func TestGetResolverInfo(t *testing.T) {
 		if !reflect.DeepEqual(actual, testCase.expected) {
 			t.Errorf("%s: Actual does not match expected:\n%s", testCase.name, diff.ObjectReflectDiff(testCase.expected, actual))
 		}
+	}
+}
+
+func TestErrWroteJUnit(t *testing.T) {
+	// this simulates the error chain bubbling up to the top of the call chain
+	rootCause := errors.New("failure")
+	reasonedErr := results.ForReason("something").WithError(rootCause).Errorf("couldn't do it: %v", rootCause)
+	withJunit := &errWroteJUnit{wrapped: reasonedErr}
+	defaulted := results.DefaultReason(withJunit)
+
+	if !errors.Is(defaulted, &errWroteJUnit{}) {
+		t.Error("expected the top-level error to still expose that we wrote jUnit")
+	}
+	if results.FullReason(defaulted) != "something" {
+		t.Errorf(`expected full reason for error to be "something", but got %q"`, results.FullReason(defaulted))
 	}
 }

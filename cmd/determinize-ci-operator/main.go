@@ -34,6 +34,16 @@ func main() {
 			return nil
 		}
 
+		// we treat the filepath as the ultimate source of truth for this
+		// data, but we record it in the configuration files to ensure that
+		// it's easy to consume it for downstream tools
+		output.Configuration.Metadata = api.Metadata{
+			Org:     info.Org,
+			Repo:    info.Repo,
+			Branch:  info.Branch,
+			Variant: info.Variant,
+		}
+
 		// we are walking the config so we need to commit once we're done
 		toCommit = append(toCommit, output)
 

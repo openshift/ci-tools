@@ -32,3 +32,7 @@ tests:
   commands: make test-unit
   container:
     from: src
+zz_generated_metadata:
+  branch: master
+  org: super-priv
+  repo: trooper

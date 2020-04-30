@@ -21,6 +21,8 @@ const (
 //  - raw steps that can be used to create custom and
 //    fine-grained build flows
 type ReleaseBuildConfiguration struct {
+	Metadata Metadata `json:"zz_generated_metadata"`
+
 	InputConfiguration `json:",inline"`
 
 	// BinaryBuildCommands will create a "bin" image based on "src" that
@@ -74,6 +76,14 @@ type ReleaseBuildConfiguration struct {
 	// input types. The special name '*' may be used to set default
 	// requests and limits.
 	Resources ResourceConfiguration `json:"resources,omitempty"`
+}
+
+// Metadata describes the source repo for which a config is written
+type Metadata struct {
+	Org     string `json:"org"`
+	Repo    string `json:"repo"`
+	Branch  string `json:"branch"`
+	Variant string `json:"variant,omitempty"`
 }
 
 // BuildsImage checks if an image is built by the release configuration.

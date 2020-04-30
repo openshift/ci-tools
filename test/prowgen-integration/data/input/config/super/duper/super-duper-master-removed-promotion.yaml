@@ -4,25 +4,26 @@ base_images:
     name: origin-v4.0
     namespace: openshift
     tag: base
-images:
-- from: base
-  to: test-image
-tag_specification:
-  cluster: https://api.ci.openshift.org
-  name: origin-v4.0
-  namespace: openshift
-  tag: ''
-# promotion is not present here but the promoting postsubmit exists in the
-# input, so that job should be pruned in the output
 build_root:
   image_stream_tag:
     cluster: https://api.ci.openshift.org
-    namespace: openshift
     name: release
+    namespace: openshift
     tag: golang-1.10
+images:
+- from: base
+  to: test-image
 resources:
   '*':
     limits:
       cpu: 500Mi
     requests:
       cpu: 10Mi
+tag_specification:
+  cluster: https://api.ci.openshift.org
+  name: origin-v4.0
+  namespace: openshift
+zz_generated_metadata:
+  branch: master-removed-promotion
+  org: super
+  repo: duper

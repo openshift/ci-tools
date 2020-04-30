@@ -1,3 +1,9 @@
+build_root:
+  image_stream_tag:
+    cluster: https://api.ci.openshift.org
+    name: release
+    namespace: openshift
+    tag: golang-1.13
 images:
 - context_dir: images/blocking-issue-creator/
   from: os
@@ -17,15 +23,13 @@ resources:
     requests:
       cpu: 100m
       memory: 200Mi
-build_root:
-  image_stream_tag:
-    cluster: https://api.ci.openshift.org
-    name: release
-    namespace: openshift
-    tag: golang-1.13
 tests:
 - artifact_dir: /tmp/artifacts
   as: unit
   commands: ARTIFACT_DIR=/tmp/artifacts make test
   container:
     from: src
+zz_generated_metadata:
+  branch: master
+  org: openshift
+  repo: ci-tools

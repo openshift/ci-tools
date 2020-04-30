@@ -34,6 +34,9 @@ gcloud auth activate-service-account --key-file="${GOOGLE_APPLICATION_CREDENTIAL
 export FILTER="creationTimestamp.date('%Y-%m-%dT%H:%M%z')<${gce_cluster_age_cutoff} AND name~'ci-*'"
 for network in $( gcloud --project=openshift-gce-devel-ci compute networks list --filter "${FILTER}" --format "value(name)" ); do
   infraID="${network%"-network"}"
+  if [[ "${#infraID}" -gt 12 ]]; then
+    echo "cluster ${infraID} is a 3.11 cluster, ignoring..."
+  fi
   region="$( gcloud --project=openshift-gce-devel-ci compute networks describe "${network}" --format="value(subnetworks[0])" | grep -Po "(?<=regions/)[^/]+" || true )"
   if [[ -z "${region:-}" ]]; then
     echo "could not determine region for cluster ${infraID}, ignoring ..."

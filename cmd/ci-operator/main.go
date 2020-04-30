@@ -185,7 +185,7 @@ func main() {
 
 	if err := opt.Complete(); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		opt.Report([]error{results.ForReason(results.ReasonLoadingArgs).ForError(err)})
+		opt.Report([]error{results.ForReason("loading_args").ForError(err)})
 		os.Exit(1)
 	}
 
@@ -375,12 +375,12 @@ func (o *options) Complete() error {
 
 	config, err := load.Config(o.configSpecPath, o.registryPath, info)
 	if err != nil {
-		return results.ForReason(results.ReasonLoadingConfig).WithError(err).Errorf("failed to load configuration: %v", err)
+		return results.ForReason("loading_config").WithError(err).Errorf("failed to load configuration: %v", err)
 	}
 	o.configSpec = config
 
 	if err := o.configSpec.ValidateResolved(); err != nil {
-		return results.ForReason(results.ReasonValidatingConfig).ForError(err)
+		return results.ForReason("validating_config").ForError(err)
 	}
 
 	if o.dry && o.verbose {
@@ -518,14 +518,14 @@ func (o *options) Run() []error {
 	// load the graph from the configuration
 	buildSteps, postSteps, err := defaults.FromConfig(o.configSpec, o.jobSpec, o.templates, o.writeParams, o.artifactDir, o.promote, o.clusterConfig, &o.leaseClient, o.targets.values, o.kubeconfigs, dryLogger, o.cloneAuthConfig, o.pullSecret)
 	if err != nil {
-		return []error{results.ForReason(results.ReasonDefaultingConfig).WithError(err).Errorf("failed to generate steps from config: %v", err)}
+		return []error{results.ForReason("defaulting_config").WithError(err).Errorf("failed to generate steps from config: %v", err)}
 	}
 	// Before we create the namespace, we need to ensure all inputs to the graph
 	// have been resolved. We must run this step before we resolve the partial
 	// graph or otherwise two jobs with different targets would create different
 	// artifact caches.
 	if err := o.resolveInputs(buildSteps); err != nil {
-		return []error{results.ForReason(results.ReasonResolvingInputs).WithError(err).Errorf("could not resolve inputs: %v", err)}
+		return []error{results.ForReason("resolving_inputs").WithError(err).Errorf("could not resolve inputs: %v", err)}
 	}
 
 	if err := o.writeMetadataJSON(); err != nil {
@@ -541,7 +541,7 @@ func (o *options) Run() []error {
 	// convert the full graph into the subset we must run
 	nodes, err := api.BuildPartialGraph(buildSteps, o.targets.values)
 	if err != nil {
-		return []error{results.ForReason(results.ReasonBuildingGraph).WithError(err).Errorf("could not build execution graph: %v", err)}
+		return []error{results.ForReason("building_graph").WithError(err).Errorf("could not build execution graph: %v", err)}
 	}
 
 	if err := printExecutionOrder(nodes); err != nil {
@@ -551,7 +551,7 @@ func (o *options) Run() []error {
 	// initialize the namespace if necessary and create any resources that must
 	// exist prior to execution
 	if err := o.initializeNamespace(); err != nil {
-		return []error{results.ForReason(results.ReasonInitializingNamespace).WithError(err).Errorf("could not initialize namespace: %v", err)}
+		return []error{results.ForReason("initializing_namespace").WithError(err).Errorf("could not initialize namespace: %v", err)}
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	handler := func(s os.Signal) {
@@ -595,7 +595,7 @@ func (o *options) Run() []error {
 			}
 			var wrapped []error
 			for _, err := range errs {
-				wrapped = append(wrapped, &errWroteJUnit{wrapped: results.ForReason(results.ReasonExecutingGraph).WithError(err).Errorf("could not run steps: %v", err)})
+				wrapped = append(wrapped, &errWroteJUnit{wrapped: results.ForReason("executing_graph").WithError(err).Errorf("could not run steps: %v", err)})
 			}
 			return wrapped
 		}
@@ -607,7 +607,7 @@ func (o *options) Run() []error {
 				if !o.dry {
 					time.Sleep(time.Second)
 				}
-				return []error{results.ForReason(results.ReasonExecutingPost).WithError(err).Errorf("could not run post step %s: %v", step.Name(), err)}
+				return []error{results.ForReason("executing_post").WithError(err).Errorf("could not run post step %s: %v", step.Name(), err)}
 			}
 		}
 

@@ -46,14 +46,14 @@ func Run(ctx context.Context, graph []*api.StepNode, dry bool) (*junit.TestSuite
 	for {
 		select {
 		case <-ctxDone:
-			executionErrors = append(executionErrors, results.ForReason(results.ReasonInterrupted).ForError(errors.New("execution cancelled")))
+			executionErrors = append(executionErrors, results.ForReason("interrupted").ForError(errors.New("execution cancelled")))
 			interrupted = true
 			ctxDone = nil
 		case out := <-executionResults:
 			testCase := &junit.TestCase{Name: out.node.Step.Description(), Duration: out.duration.Seconds()}
 			if out.err != nil {
 				testCase.FailureOutput = &junit.FailureOutput{Output: out.err.Error()}
-				executionErrors = append(executionErrors, results.ForReason(results.ReasonStepFailed).WithError(out.err).Errorf("step %s failed: %v", out.node.Step.Name(), out.err))
+				executionErrors = append(executionErrors, results.ForReason("step_failed").WithError(out.err).Errorf("step %s failed: %v", out.node.Step.Name(), out.err))
 			} else {
 				if dry {
 					testCase.SkipMessage = &junit.SkipMessage{Message: "Dry run"}

@@ -36,8 +36,8 @@ validate-vendor:
 .PHONY: validate-vendor
 
 lint:
-.PHONY: lint
 	./hack/lint.sh
+.PHONY: lint
 
 format:
 	gofmt -s -w $(shell go list -f '{{ .Dir }}' ./... )

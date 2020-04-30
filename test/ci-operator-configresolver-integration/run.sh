@@ -44,7 +44,13 @@ fi
 echo "[INFO] Got correct resolved config from resolver"
 currGen=$(curl 'http://127.0.0.1:8080/configGeneration' 2>/dev/null)
 export currGen
-cp tests/configs2/release-4.2/openshift-installer-release-4.2-golang111.yaml tests/configs/release-4.2/openshift-installer-release-4.2.yaml
+# This used to be just a cp but that makes the test flaky because the configresolver would sometimes see an empty file, presumably because cp does create, read, write
+# and we already get triggered by the create. Since its a race in an app that has a hardcoded listenAddress its annoying to reproduce, last time I used a go app
+# that starts many containers that have the binary and script mounted and stops as soon as an error occurs.
+# There are more races in here, but this is the only one we saw in CI so I am not going to bother for now.
+tmpfile=$(mktemp)
+cp tests/configs2/release-4.2/openshift-installer-release-4.2-golang111.yaml $tmpfile
+mv $tmpfile tests/configs/release-4.2/openshift-installer-release-4.2.yaml
 for (( i = 0; i < 10; i++ )); do
     if [[ "$(curl http://127.0.0.1:8080/configGeneration 2>/dev/null)" -gt $currGen ]]; then
         break

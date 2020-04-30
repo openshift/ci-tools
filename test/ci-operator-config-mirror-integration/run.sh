@@ -9,11 +9,12 @@ trap 'rm -rf "${WORKDIR}"' EXIT
 TEST_ROOT="$( dirname "${BASH_SOURCE[0]}")"
 INPUT_FILES="${TEST_ROOT}/data/input"
 OUTPUT_FILES="${TEST_ROOT}/data/output"
+WHITELIST="${TEST_ROOT}/data/whitelist.yaml"
 
 cp -r ${INPUT_FILES} ${WORKDIR}
 
 echo "[INFO] Running ci-operator-config-mirror..."
-if ! ci-operator-config-mirror --to-org "super-priv" --config-path "${WORKDIR}/input" 2> "${WORKDIR}/ci-operator-config-mirror-stderr.log"; then
+if ! ci-operator-config-mirror --to-org "super-priv" --config-path "${WORKDIR}/input" --whitelist-file "${WHITELIST}" 2> "${WORKDIR}/ci-operator-config-mirror-stderr.log"; then
   echo "ERROR: ci-operator-config-mirror failed:"
   cat "${WORKDIR}/ci-operator-config-mirror-stderr.log"
   exit 1

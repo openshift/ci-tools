@@ -3,7 +3,6 @@ package steps
 import (
 	"context"
 	"fmt"
-	"github.com/openshift/ci-tools/pkg/results"
 	"io"
 	"log"
 	"os"
@@ -28,6 +27,7 @@ import (
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/results"
 )
 
 const (

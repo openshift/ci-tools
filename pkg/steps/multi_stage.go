@@ -3,7 +3,6 @@ package steps
 import (
 	"context"
 	"fmt"
-	"github.com/openshift/ci-tools/pkg/results"
 	"log"
 	"path/filepath"
 	"strings"
@@ -19,6 +18,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/junit"
+	"github.com/openshift/ci-tools/pkg/results"
 )
 
 const (

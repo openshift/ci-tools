@@ -3,7 +3,6 @@ package steps
 import (
 	"context"
 	"fmt"
-	"github.com/openshift/ci-tools/pkg/results"
 
 	coreapi "k8s.io/api/core/v1"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
@@ -12,6 +11,7 @@ import (
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/results"
 )
 
 type gitSourceStep struct {

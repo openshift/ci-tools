@@ -3,7 +3,6 @@ package steps
 import (
 	"context"
 	"fmt"
-	"github.com/openshift/ci-tools/pkg/results"
 	"log"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -11,6 +10,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/junit"
 	"github.com/openshift/ci-tools/pkg/lease"
+	"github.com/openshift/ci-tools/pkg/results"
 )
 
 const leaseEnv = "LEASED_RESOURCE"

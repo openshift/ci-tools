@@ -139,15 +139,10 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to change to root dir")
 	}
 
-	cmd := "/usr/bin/determinize-ci-operator"
-	args := []string{"--config-dir", o.ConfigDir, "--confirm"}
-	run(cmd, args...)
-
 	author := fmt.Sprintf("%s <%s>", o.gitName, o.gitEmail)
-	commitIfNeeded("determinize-ci-operator --confirm", author)
 
-	cmd = "/usr/bin/config-brancher"
-	args = []string{"--config-dir", o.ConfigDir, "--current-release", o.CurrentRelease}
+	cmd := "/usr/bin/config-brancher"
+	args := []string{"--config-dir", o.ConfigDir, "--current-release", o.CurrentRelease}
 	for _, fr := range o.FutureReleases.Strings() {
 		args = append(args, []string{"--future-release", fr}...)
 	}
@@ -156,17 +151,17 @@ func main() {
 
 	commitIfNeeded(fmt.Sprintf("config-brancher --current-release %s --future-release %s", o.CurrentRelease, strings.Join(o.FutureReleases.Strings(), ",")), author)
 
-	cmd = "/usr/bin/ci-operator-prowgen"
-	args = []string{"--from-dir", o.ConfigDir, "--to-dir", "./ci-operator/jobs"}
-	run(cmd, args...)
-
-	commitIfNeeded("ci-operator-prowgen --from-dir ./ci-operator/config --to-dir ./ci-operator/jobs", author)
-
 	cmd = "/usr/bin/ci-operator-config-mirror"
 	args = []string{"--config-path", o.ConfigDir, "--to-org", "openshift-priv"}
 	run(cmd, args...)
 
 	commitIfNeeded("ci-operator-config-mirror --config-path ./ci-operator/config --to-org openshift-priv", author)
+
+	cmd = "/usr/bin/determinize-ci-operator"
+	args = []string{"--config-dir", o.ConfigDir, "--confirm"}
+	run(cmd, args...)
+
+	commitIfNeeded("determinize-ci-operator --confirm", author)
 
 	cmd = "/usr/bin/ci-operator-prowgen"
 	args = []string{"--from-dir", o.ConfigDir, "--to-dir", "./ci-operator/jobs"}

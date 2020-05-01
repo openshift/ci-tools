@@ -3,6 +3,7 @@ package steps
 import (
 	"context"
 	"fmt"
+	"github.com/openshift/ci-tools/pkg/results"
 	"log"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -57,6 +58,10 @@ func (s *leaseStep) SubTests() []*junit.TestCase {
 }
 
 func (s *leaseStep) Run(ctx context.Context, dry bool) error {
+	return results.ForReason("acquiring_lease").ForError(s.run(ctx, dry))
+}
+
+func (s *leaseStep) run(ctx context.Context, dry bool) error {
 	log.Printf("Acquiring lease for %q", s.leaseType)
 	client := *s.client
 	if client == nil {

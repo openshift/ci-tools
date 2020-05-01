@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/openshift/ci-tools/pkg/results"
 	"strings"
 
 	buildapi "github.com/openshift/api/build/v1"
@@ -31,6 +32,10 @@ func (s *projectDirectoryImageBuildStep) Inputs(dry bool) (api.InputDefinition, 
 }
 
 func (s *projectDirectoryImageBuildStep) Run(ctx context.Context, dry bool) error {
+	return results.ForReason("building_project_image").ForError(s.run(ctx, dry))
+}
+
+func (s *projectDirectoryImageBuildStep) run(ctx context.Context, dry bool) error {
 	source := fmt.Sprintf("%s:%s", api.PipelineImageStream, api.PipelineImageStreamTagReferenceSource)
 
 	var workingDir string

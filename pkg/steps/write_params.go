@@ -3,6 +3,7 @@ package steps
 import (
 	"context"
 	"fmt"
+	"github.com/openshift/ci-tools/pkg/results"
 	"io/ioutil"
 	"log"
 	"regexp"
@@ -24,6 +25,10 @@ func (s *writeParametersStep) Inputs(dry bool) (api.InputDefinition, error) {
 }
 
 func (s *writeParametersStep) Run(ctx context.Context, dry bool) error {
+	return results.ForReason("writing_parameters").ForError(s.run(ctx, dry))
+}
+
+func (s *writeParametersStep) run(ctx context.Context, dry bool) error {
 	log.Printf("Writing parameters to %s", s.paramFile)
 	var params []string
 

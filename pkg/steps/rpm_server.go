@@ -3,6 +3,7 @@ package steps
 import (
 	"context"
 	"fmt"
+	"github.com/openshift/ci-tools/pkg/results"
 	"log"
 	"net/http"
 	"net/url"
@@ -49,6 +50,10 @@ func (s *rpmServerStep) Inputs(dry bool) (api.InputDefinition, error) {
 }
 
 func (s *rpmServerStep) Run(ctx context.Context, dry bool) error {
+	return results.ForReason("serving_rpms").ForError(s.run(ctx, dry))
+}
+
+func (s *rpmServerStep) run(ctx context.Context, dry bool) error {
 	var imageReference string
 	if dry {
 		imageReference = "dry-fake"

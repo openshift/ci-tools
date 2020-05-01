@@ -3,6 +3,7 @@ package release
 import (
 	"context"
 	"fmt"
+	"github.com/openshift/ci-tools/pkg/results"
 	"log"
 	"strings"
 
@@ -39,6 +40,10 @@ func StableImagesTagStep(dstClient imageclientset.ImageV1Interface, jobSpec *api
 }
 
 func (s *stableImagesTagStep) Run(ctx context.Context, dry bool) error {
+	return results.ForReason("creating_stable_images").ForError(s.run(ctx, dry))
+}
+
+func (s *stableImagesTagStep) run(ctx context.Context, dry bool) error {
 	log.Printf("Will output images to %s:%s", api.StableImageStream, api.ComponentFormatReplacement)
 
 	newIS := &imageapi.ImageStream{
@@ -137,6 +142,10 @@ func sourceName(config api.ReleaseTagConfiguration) string {
 }
 
 func (s *releaseImagesTagStep) Run(ctx context.Context, dry bool) error {
+	return results.ForReason("creating_release_images").ForError(s.run(ctx, dry))
+}
+
+func (s *releaseImagesTagStep) run(ctx context.Context, dry bool) error {
 	if dry {
 		log.Printf("Tagging shared images from %s", sourceName(s.config))
 	} else {

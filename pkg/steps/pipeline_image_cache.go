@@ -3,6 +3,7 @@ package steps
 import (
 	"context"
 	"fmt"
+	"github.com/openshift/ci-tools/pkg/results"
 	"strconv"
 	"strings"
 
@@ -34,6 +35,10 @@ func (s *pipelineImageCacheStep) Inputs(dry bool) (api.InputDefinition, error) {
 }
 
 func (s *pipelineImageCacheStep) Run(ctx context.Context, dry bool) error {
+	return results.ForReason("building_cache_image").ForError(s.run(ctx, dry))
+}
+
+func (s *pipelineImageCacheStep) run(ctx context.Context, dry bool) error {
 	dockerfile := rawCommandDockerfile(s.config.From, s.config.Commands)
 	return handleBuild(ctx, s.buildClient, buildFromSource(
 		s.jobSpec, s.config.From, s.config.To,

@@ -3,6 +3,7 @@ package steps
 import (
 	"context"
 	"fmt"
+	"github.com/openshift/ci-tools/pkg/results"
 	"log"
 	"time"
 
@@ -64,6 +65,10 @@ func (s *inputImageTagStep) Inputs(dry bool) (api.InputDefinition, error) {
 }
 
 func (s *inputImageTagStep) Run(ctx context.Context, dry bool) error {
+	return results.ForReason("tagging_input_image").ForError(s.run(ctx, dry))
+}
+
+func (s *inputImageTagStep) run(ctx context.Context, dry bool) error {
 	if len(s.config.BaseImage.Cluster) > 0 {
 		log.Printf("Tagging %s/%s/%s:%s into %s:%s", s.config.BaseImage.Cluster, s.config.BaseImage.Namespace, s.config.BaseImage.Name, s.config.BaseImage.Tag, api.PipelineImageStream, s.config.To)
 	} else {

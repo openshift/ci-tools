@@ -3,6 +3,7 @@ package steps
 import (
 	"context"
 	"fmt"
+	"github.com/openshift/ci-tools/pkg/results"
 	"log"
 	"path/filepath"
 	"strings"
@@ -116,6 +117,10 @@ func (s *multiStageTestStep) Inputs(dry bool) (api.InputDefinition, error) {
 }
 
 func (s *multiStageTestStep) Run(ctx context.Context, dry bool) error {
+	return results.ForReason("executing_multi_stage_test").ForError(s.run(ctx, dry))
+}
+
+func (s *multiStageTestStep) run(ctx context.Context, dry bool) error {
 	s.dry = dry
 	if s.profile != "" {
 		if !dry {

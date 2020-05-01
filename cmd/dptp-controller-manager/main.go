@@ -9,6 +9,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/config/secret"
 	"k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/pjutil"
@@ -21,7 +22,8 @@ import (
 type options struct {
 	LeaderElectionNamespace      string
 	CiOperatorConfigPath         string
-	ProwJobNamespace             string
+	ConfigPath                   string
+	JobConfigPath                string
 	DryRun                       bool
 	ImageStreamTagReconcilerOpts imageStreamTagReconcilerOptions
 	logLevel                     string
@@ -37,7 +39,8 @@ func newOpts() (*options, error) {
 	opts.AddFlags(flag.CommandLine)
 	flag.StringVar(&opts.LeaderElectionNamespace, "leader-election-namespace", "ci", "The namespace to use for leaderelection")
 	flag.StringVar(&opts.CiOperatorConfigPath, "ci-operator-config-path", "", "Path to the ci operator config")
-	flag.StringVar(&opts.ProwJobNamespace, "prow-job-namespace", "ci", "Namespace to create prowjobs in")
+	flag.StringVar(&opts.ConfigPath, "config-path", "", "Path to the prow config")
+	flag.StringVar(&opts.JobConfigPath, "job-config-path", "", "Path to the job config")
 	flag.Var(&opts.ImageStreamTagReconcilerOpts.IgnoredGitHubOrganizations, "imagestreamtagreconciler.ignored-github-organization", "GitHub organization to ignore in the imagestreamtagreconciler. Can be specified multiple times")
 	flag.StringVar(&opts.logLevel, "log-level", "info", fmt.Sprintf("Log level is one of %v.", logrus.AllLevels))
 	// TODO: rather than relying on humans implementing dry-run properly, we should switch
@@ -52,8 +55,11 @@ func newOpts() (*options, error) {
 	if opts.CiOperatorConfigPath == "" {
 		errs = append(errs, errors.New("--ci-operations-config-path must be set"))
 	}
-	if opts.ProwJobNamespace == "" {
-		errs = append(errs, errors.New("--prow-job-namespace must be set"))
+	if opts.ConfigPath == "" {
+		errs = append(errs, errors.New("--config-path must be set"))
+	}
+	if opts.JobConfigPath == "" {
+		errs = append(errs, errors.New("--job-config-path must be set"))
 	}
 
 	if err := opts.GitHubOptions.Validate(opts.DryRun); err != nil {
@@ -82,6 +88,10 @@ func main() {
 	ciOPConfigAgent, err := agents.NewConfigAgent(opts.CiOperatorConfigPath, 2*time.Minute, prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"error"}))
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to construct ci-opeartor config agent")
+	}
+	configAgent := &config.Agent{}
+	if err := configAgent.Start(opts.ConfigPath, opts.JobConfigPath); err != nil {
+		logrus.WithError(err).Fatal("Failed to start config agent")
 	}
 
 	secretAgent := &secret.Agent{}
@@ -112,7 +122,7 @@ func main() {
 	imageStreamTagReconcilerOpts := imagestreamtagreconciler.Options{
 		DryRun:                     opts.DryRun,
 		CIOperatorConfigAgent:      ciOPConfigAgent,
-		ProwJobNamespace:           opts.ProwJobNamespace,
+		ConfigGetter:               configAgent.Config,
 		GitHubClient:               gitHubClient,
 		IgnoredGitHubOrganizations: opts.ImageStreamTagReconcilerOpts.IgnoredGitHubOrganizations.Strings(),
 	}

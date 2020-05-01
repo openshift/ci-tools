@@ -10,30 +10,24 @@ import (
 
 	"github.com/openshift/api/image/docker10"
 	imagev1 "github.com/openshift/api/image/v1"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
-	prowconfig "k8s.io/test-infra/prow/config"
+	"k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/github"
-	"k8s.io/test-infra/prow/kube"
-	"k8s.io/test-infra/prow/pjutil"
 	"sigs.k8s.io/controller-runtime"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
-	"github.com/openshift/ci-tools/pkg/config"
+	"github.com/openshift/ci-tools/pkg/controller/image-stream-tag-reconciler/prowjobreconciler"
 	controllerutil "github.com/openshift/ci-tools/pkg/controller/util"
-	"github.com/openshift/ci-tools/pkg/jobconfig"
 	"github.com/openshift/ci-tools/pkg/load/agents"
-	"github.com/openshift/ci-tools/pkg/prowgen"
 	"github.com/openshift/ci-tools/pkg/steps/release"
 	"github.com/openshift/ci-tools/pkg/util/imagestreamtagwrapper"
 )
@@ -41,7 +35,7 @@ import (
 type Options struct {
 	DryRun                     bool
 	CIOperatorConfigAgent      agents.ConfigAgent
-	ProwJobNamespace           string
+	ConfigGetter               config.Getter
 	GitHubClient               github.Client
 	IgnoredGitHubOrganizations []string
 }
@@ -66,29 +60,20 @@ func AddToManager(mgr controllerruntime.Manager, opts Options) error {
 		return fmt.Errorf("failed to add indexer to config-agent: %w", err)
 	}
 
-	createdJobsCounter := prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: controllerName,
-		Name:      "prowjobs_created",
-		Help:      "The number of prowjobs the controller created",
-	}, []string{"org", "repo", "branch", "success"})
-	if err := metrics.Registry.Register(createdJobsCounter); err != nil {
-		return fmt.Errorf("failed to register createdJobsCounter: %w", err)
+	prowJobEnqueuer, err := prowjobreconciler.AddToManager(mgr, opts.ConfigGetter, opts.DryRun)
+	if err != nil {
+		return fmt.Errorf("failed to construct prowjobreconciler: %w", err)
 	}
 
 	log := logrus.WithField("controller", controllerName)
 	r := &reconciler{
-		ctx:                 context.Background(),
-		log:                 log,
-		client:              imagestreamtagwrapper.New(mgr.GetClient()),
-		releaseBuildConfigs: opts.CIOperatorConfigAgent,
-		dryRun:              opts.DryRun,
-		prowJobNamespace:    opts.ProwJobNamespace,
-		gitHubClient:        opts.GitHubClient,
-		createdProwJobLabels: map[string]string{
-			"openshift.io/created-by": controllerName,
-		},
+		ctx:                        context.Background(),
+		log:                        log,
+		client:                     imagestreamtagwrapper.New(mgr.GetClient()),
+		releaseBuildConfigs:        opts.CIOperatorConfigAgent,
+		gitHubClient:               opts.GitHubClient,
 		ignoredGitHubOrganizations: sets.NewString(opts.IgnoredGitHubOrganizations...),
-		createdJobsCounter:         createdJobsCounter,
+		enqueueJob:                 prowJobEnqueuer,
 	}
 	c, err := controller.New(controllerName, mgr, controller.Options{
 		// Since we watch ImageStreams and not ImageStreamTags as the latter do not support
@@ -138,12 +123,9 @@ type reconciler struct {
 	log                        *logrus.Entry
 	client                     ctrlruntimeclient.Client
 	releaseBuildConfigs        agents.ConfigAgent
-	dryRun                     bool
-	prowJobNamespace           string
 	gitHubClient               github.Client
-	createdProwJobLabels       map[string]string
 	ignoredGitHubOrganizations sets.String
-	createdJobsCounter         *prometheus.CounterVec
+	enqueueJob                 prowjobreconciler.Enqueuer
 }
 
 func (r *reconciler) Reconcile(req controllerruntime.Request) (controllerruntime.Result, error) {
@@ -204,27 +186,12 @@ func (r *reconciler) reconcile(req controllerruntime.Request, log *logrus.Entry)
 		return nil
 	}
 
-	buildJob, err := r.getPublishJob(istRef, ciOPConfig)
-	if err != nil {
-		return fmt.Errorf("failed to get buildJob for imageStreamTag: %w", err)
-	}
-
-	istHasBuildRunning, err := r.isJobRunningForCommit(buildJob, currentHEAD, istRef)
-	if err != nil {
-		return fmt.Errorf("failed to check if there is a running build for ImageStramTag: %w", err)
-	}
-	if istHasBuildRunning {
-		// Nothing to do right now. We wont get an event if the build fails but we periodically reconcile
-		// which will catch that case.
-		return nil
-	}
-
-	err = r.createBuildForIST(buildJob, currentHEAD, istRef)
-	r.createdJobsCounter.WithLabelValues(istRef.org, istRef.repo, istRef.branch, boolToString(err == nil)).Inc()
-	if err != nil {
-		return fmt.Errorf("failed to create build for imageStreamTagL %w", err)
-	}
-
+	r.enqueueJob(prowjobreconciler.OrgRepoBranchCommit{
+		Org:    istRef.org,
+		Repo:   istRef.repo,
+		Branch: istRef.branch,
+		Commit: currentHEAD,
+	})
 	return nil
 }
 
@@ -293,78 +260,6 @@ func (r *reconciler) currentHEADForBranch(br *branchReference, log *logrus.Entry
 	return ref, nil
 }
 
-func (r *reconciler) getPublishJob(br *branchReference, ciOPConfig *cioperatorapi.ReleaseBuildConfiguration) (*prowconfig.Postsubmit, error) {
-	info := &prowgen.ProwgenInfo{
-		Info: config.Info{
-			Org:    br.org,
-			Repo:   br.repo,
-			Branch: br.branch,
-		},
-	}
-	postsubmits := prowgen.GenerateJobs(ciOPConfig, info, jobconfig.Generated).AllStaticPostsubmits(nil)
-	for _, postubmit := range postsubmits {
-		if _, ok := postubmit.Labels[cioperatorapi.PromotionJobLabelKey]; ok {
-			return &postubmit, nil
-		}
-	}
-
-	// Config might change so do not consider this a nonRetriableError
-	return nil, errors.New("no publishing postubmit found")
-}
-
-func (r *reconciler) isJobRunningForCommit(job *prowconfig.Postsubmit, commitSHA string, istRef *branchReference) (bool, error) {
-	jobNameLabelValue := job.Name
-	// Label values are capped at 63 characters and the job name frequently exceeds that.
-	if len(jobNameLabelValue) > 63 {
-		jobNameLabelValue = job.Name[0:62]
-	}
-	labelSelector := ctrlruntimeclient.MatchingLabels{
-		kube.ProwJobAnnotation: jobNameLabelValue,
-		kube.OrgLabel:          istRef.org,
-		kube.RepoLabel:         istRef.repo,
-		kube.ProwJobTypeLabel:  string(prowv1.PostsubmitJob),
-	}
-	namespaceSelector := ctrlruntimeclient.InNamespace(r.prowJobNamespace)
-
-	prowJobs := &prowv1.ProwJobList{}
-	if err := r.client.List(r.ctx, prowJobs, labelSelector, namespaceSelector); err != nil {
-		return false, fmt.Errorf("failed to list prowjobs: %w", err)
-	}
-
-	for _, job := range prowJobs.Items {
-		if job.Complete() {
-			continue
-		}
-		if job.Spec.Refs != nil && job.Spec.Refs.BaseRef == commitSHA {
-			return true, nil
-		}
-	}
-
-	return false, nil
-}
-
-func (r *reconciler) createBuildForIST(job *prowconfig.Postsubmit, headSHA string, istRef *branchReference) error {
-	prowJob := pjutil.NewProwJob(pjutil.PostsubmitSpec(*job, prowv1.Refs{
-		Org:     istRef.org,
-		Repo:    istRef.repo,
-		BaseRef: istRef.branch,
-		BaseSHA: headSHA,
-	}), r.createdProwJobLabels, nil)
-	prowJob.Namespace = r.prowJobNamespace
-
-	if r.dryRun {
-		serialized, _ := json.Marshal(prowJob)
-		r.log.WithField("job_name", prowJob.Spec.Job).WithField("job", string(serialized)).Info("Not creating prowjob because dryRun is enabled")
-		return nil
-	}
-
-	if err := r.client.Create(r.ctx, &prowJob); err != nil {
-		return fmt.Errorf("failed to create prowjob: %w", err)
-	}
-
-	return nil
-}
-
 // nonRetriableError indicates that we encountered an error
 // that we know wont resolve itself via retrying. We use it
 // to still bubble the message up but swallow it after we
@@ -389,11 +284,4 @@ func configIndexFn(in cioperatorapi.ReleaseBuildConfiguration) []string {
 
 func configIndexKeyForIST(ist *imagev1.ImageStreamTag) string {
 	return ist.Namespace + "/" + ist.Name
-}
-
-func boolToString(b bool) string {
-	if b {
-		return "true"
-	}
-	return "false"
 }

@@ -22,7 +22,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang/glog"
+	"github.com/sirupsen/logrus"
 
 	authapi "k8s.io/api/authorization/v1"
 	coreapi "k8s.io/api/core/v1"
@@ -648,10 +648,10 @@ func (o *options) resolveInputs(steps []api.Step) error {
 		path = os.Args[0]
 	}
 	if stat, err := os.Stat(path); err == nil {
-		glog.V(4).Infof("Using binary as hash: %s %d %d", path, stat.ModTime().UTC().Unix(), stat.Size())
+		logrus.Tracef("Using binary as hash: %s %d %d", path, stat.ModTime().UTC().Unix(), stat.Size())
 		inputs = append(inputs, fmt.Sprintf("%d-%d", stat.ModTime().UTC().Unix(), stat.Size()))
 	} else {
-		glog.V(4).Infof("Could not calculate info from current binary to add to input hash: %v", err)
+		logrus.Tracef("Could not calculate info from current binary to add to input hash: %v", err)
 	}
 
 	sort.Strings(inputs)
@@ -1072,7 +1072,7 @@ func (o *options) writeFailingJUnit(errs []error) {
 		},
 	}
 	if err := o.writeJUnit(suites, "job"); err != nil {
-		glog.V(4).Infof("Unable to write top level failing JUnit artifact")
+		logrus.Trace("Unable to write top level failing JUnit artifact")
 	}
 }
 

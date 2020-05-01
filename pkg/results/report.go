@@ -11,7 +11,7 @@ import (
 	"io/ioutil"
 	"net/http"
 
-	"github.com/golang/glog"
+	"github.com/sirupsen/logrus"
 
 	"github.com/openshift/ci-tools/pkg/api"
 )
@@ -139,15 +139,15 @@ func (r *reporter) Report(err error) {
 	}
 	data, err := json.Marshal(request)
 	if err != nil {
-		glog.V(4).Infof("could not marshal request: %v", err)
+		logrus.Tracef("could not marshal request: %v", err)
 	}
 	resp, err := r.client.Post(fmt.Sprintf("%s/result", r.address), "application/json", bytes.NewReader(data))
 	if err != nil {
-		glog.V(4).Infof("could not create report request: %v", err)
+		logrus.Tracef("could not create report request: %v", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		body, _ := ioutil.ReadAll(resp.Body)
-		glog.V(4).Infof("response for report was not 200: %v", body)
+		logrus.Tracef("response for report was not 200: %v", body)
 	}
 }

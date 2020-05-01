@@ -3,6 +3,7 @@ package steps
 import (
 	"context"
 	"fmt"
+	"github.com/openshift/ci-tools/pkg/results"
 	"log"
 	"path/filepath"
 
@@ -59,6 +60,10 @@ func (s *podStep) Inputs(dry bool) (api.InputDefinition, error) {
 }
 
 func (s *podStep) Run(ctx context.Context, dry bool) error {
+	return results.ForReason("running_pod").ForError(s.run(ctx, dry))
+}
+
+func (s *podStep) run(ctx context.Context, dry bool) error {
 	if !s.config.SkipLogs {
 		log.Printf("Executing %s %s", s.name, s.config.As)
 	}

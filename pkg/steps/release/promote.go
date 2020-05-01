@@ -3,6 +3,7 @@ package release
 import (
 	"context"
 	"fmt"
+	"github.com/openshift/ci-tools/pkg/results"
 	"log"
 	"strings"
 	"time"
@@ -51,6 +52,10 @@ var promotionRetry = wait.Backoff{
 }
 
 func (s *promotionStep) Run(ctx context.Context, dry bool) error {
+	return results.ForReason("promoting_images").ForError(s.run(ctx, dry))
+}
+
+func (s *promotionStep) run(ctx context.Context, dry bool) error {
 	tags, names := toPromote(s.config, s.images, s.requiredImages)
 	if len(names) == 0 {
 		log.Println("Nothing to promote, skipping...")

@@ -11,6 +11,7 @@ import (
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/results"
 )
 
 type gitSourceStep struct {
@@ -30,6 +31,10 @@ func (s *gitSourceStep) Inputs(dry bool) (api.InputDefinition, error) {
 }
 
 func (s *gitSourceStep) Run(ctx context.Context, dry bool) error {
+	return results.ForReason("building_image_from_source").ForError(s.run(ctx, dry))
+}
+
+func (s *gitSourceStep) run(ctx context.Context, dry bool) error {
 	if refs := determineRefsWorkdir(s.jobSpec.Refs, s.jobSpec.ExtraRefs); refs != nil {
 		cloneURI := fmt.Sprintf("https://github.com/%s/%s.git", refs.Org, refs.Repo)
 		var secretName string

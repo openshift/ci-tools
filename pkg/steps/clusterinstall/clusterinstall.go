@@ -14,6 +14,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/junit"
+	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps"
 )
 
@@ -119,11 +120,15 @@ func (s *e2eTestStep) Inputs(dry bool) (api.InputDefinition, error) {
 }
 
 func (s *e2eTestStep) Run(ctx context.Context, dry bool) error {
+	return results.ForReason("installing_cluster").ForError(s.run(ctx, dry))
+}
+
+func (s *e2eTestStep) run(ctx context.Context, dry bool) error {
 	if dry {
 		return nil
 	}
 	if _, err := s.secretClient.Secrets(s.jobSpec.Namespace).Get(fmt.Sprintf("%s-cluster-profile", s.testConfig.As), meta.GetOptions{}); err != nil {
-		return fmt.Errorf("could not find required secret: %v", err)
+		return results.ForReason("missing_cluster_profile").WithError(err).Errorf("could not find required secret: %v", err)
 	}
 	return s.step.Run(ctx, dry)
 }

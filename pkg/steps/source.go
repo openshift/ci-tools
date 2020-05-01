@@ -27,6 +27,7 @@ import (
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/results"
 )
 
 const (
@@ -158,6 +159,10 @@ func (s *sourceStep) Inputs(dry bool) (api.InputDefinition, error) {
 }
 
 func (s *sourceStep) Run(ctx context.Context, dry bool) error {
+	return results.ForReason("cloning_source").ForError(s.run(ctx, dry))
+}
+
+func (s *sourceStep) run(ctx context.Context, dry bool) error {
 	clonerefsRef, err := istObjectReference(s.clonerefsSrcClient, s.config.ClonerefsImage)
 	if err != nil {
 		return fmt.Errorf("could not resolve clonerefs source: %v", err)

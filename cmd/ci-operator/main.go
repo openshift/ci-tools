@@ -184,12 +184,23 @@ func main() {
 	})
 
 	if err := opt.Complete(); err != nil {
-		opt.Report(results.ForReason(results.ReasonLoadingArgs).ForError(err))
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		opt.Report([]error{results.ForReason("loading_args").ForError(err)})
 		os.Exit(1)
 	}
 
-	if err := opt.Run(); err != nil {
-		opt.Report(err)
+	if errs := opt.Run(); len(errs) > 1 {
+		var defaulted []error
+		for _, err := range errs {
+			defaulted = append(defaulted, results.DefaultReason(err))
+		}
+
+		message := bytes.Buffer{}
+		for _, err := range errs {
+			message.WriteString(fmt.Sprintf("\n  * %s", err.Error()))
+		}
+		fmt.Fprintf(os.Stderr, "error: some steps failed:%s\n", message.String())
+		opt.Report(errs)
 		os.Exit(1)
 	}
 }
@@ -364,12 +375,12 @@ func (o *options) Complete() error {
 
 	config, err := load.Config(o.configSpecPath, o.registryPath, info)
 	if err != nil {
-		return results.ForReason(results.ReasonLoadingConfig).WithError(err).Errorf("failed to load configuration: %v", err)
+		return results.ForReason("loading_config").WithError(err).Errorf("failed to load configuration: %v", err)
 	}
 	o.configSpec = config
 
 	if err := o.configSpec.ValidateResolved(); err != nil {
-		return results.ForReason(results.ReasonValidatingConfig).ForError(err)
+		return results.ForReason("validating_config").ForError(err)
 	}
 
 	if o.dry && o.verbose {
@@ -484,21 +495,20 @@ func (o *options) Complete() error {
 	return nil
 }
 
-func (o *options) Report(err error) {
-	err = results.DefaultReason(err)
-
-	fmt.Fprintf(os.Stderr, "error: %v\n", err)
-	o.writeFailingJUnit(err)
+func (o *options) Report(errs []error) {
+	o.writeFailingJUnit(errs)
 
 	reporter, loadErr := o.resultsOptions.Reporter(o.jobSpec, o.consoleHost)
 	if loadErr != nil {
-		log.Printf("could not load result reporting options: %v", err)
+		log.Printf("could not load result reporting options: %v", loadErr)
 		return
 	}
-	reporter.Report(err)
+	for _, err := range errs {
+		reporter.Report(err)
+	}
 }
 
-func (o *options) Run() error {
+func (o *options) Run() []error {
 	start := time.Now()
 	defer func() {
 		log.Printf("Ran for %s", time.Since(start).Truncate(time.Second))
@@ -508,22 +518,22 @@ func (o *options) Run() error {
 	// load the graph from the configuration
 	buildSteps, postSteps, err := defaults.FromConfig(o.configSpec, o.jobSpec, o.templates, o.writeParams, o.artifactDir, o.promote, o.clusterConfig, &o.leaseClient, o.targets.values, o.kubeconfigs, dryLogger, o.cloneAuthConfig, o.pullSecret)
 	if err != nil {
-		return results.ForReason(results.ReasonDefaultingConfig).WithError(err).Errorf("failed to generate steps from config: %v", err)
+		return []error{results.ForReason("defaulting_config").WithError(err).Errorf("failed to generate steps from config: %v", err)}
 	}
 	// Before we create the namespace, we need to ensure all inputs to the graph
 	// have been resolved. We must run this step before we resolve the partial
 	// graph or otherwise two jobs with different targets would create different
 	// artifact caches.
 	if err := o.resolveInputs(buildSteps); err != nil {
-		return results.ForReason(results.ReasonResolvingInputs).WithError(err).Errorf("could not resolve inputs: %v", err)
+		return []error{results.ForReason("resolving_inputs").WithError(err).Errorf("could not resolve inputs: %v", err)}
 	}
 
 	if err := o.writeMetadataJSON(); err != nil {
-		return fmt.Errorf("unable to write metadata.json for build: %v", err)
+		return []error{fmt.Errorf("unable to write metadata.json for build: %v", err)}
 	}
 	if o.print {
 		if err := printDigraph(os.Stdout, buildSteps); err != nil {
-			return fmt.Errorf("could not print graph: %v", err)
+			return []error{fmt.Errorf("could not print graph: %v", err)}
 		}
 		return nil
 	}
@@ -531,17 +541,17 @@ func (o *options) Run() error {
 	// convert the full graph into the subset we must run
 	nodes, err := api.BuildPartialGraph(buildSteps, o.targets.values)
 	if err != nil {
-		return results.ForReason(results.ReasonBuildingGraph).WithError(err).Errorf("could not build execution graph: %v", err)
+		return []error{results.ForReason("building_graph").WithError(err).Errorf("could not build execution graph: %v", err)}
 	}
 
 	if err := printExecutionOrder(nodes); err != nil {
-		return fmt.Errorf("could not print execution order: %v", err)
+		return []error{fmt.Errorf("could not print execution order: %v", err)}
 	}
 
 	// initialize the namespace if necessary and create any resources that must
 	// exist prior to execution
 	if err := o.initializeNamespace(); err != nil {
-		return results.ForReason(results.ReasonInitializingNamespace).WithError(err).Errorf("could not initialize namespace: %v", err)
+		return []error{results.ForReason("initializing_namespace").WithError(err).Errorf("could not initialize namespace: %v", err)}
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	handler := func(s os.Signal) {
@@ -549,28 +559,28 @@ func (o *options) Run() error {
 		cancel()
 	}
 
-	return interrupt.New(handler, o.saveNamespaceArtifacts).Run(func() error {
+	return interrupt.New(handler, o.saveNamespaceArtifacts).Run(func() []error {
 		if o.leaseServer != "" && o.leaseServerUsername != "" && o.leaseServerPasswordFile != "" {
 			if err := o.initializeLeaseClient(); err != nil {
-				return fmt.Errorf("failed to create the lease client: %v", err)
+				return []error{fmt.Errorf("failed to create the lease client: %v", err)}
 			}
 		}
 		client, err := coreclientset.NewForConfig(o.clusterConfig)
 		if err != nil {
-			return fmt.Errorf("could not get core client for cluster config: %v", err)
+			return []error{fmt.Errorf("could not get core client for cluster config: %v", err)}
 		}
 		authClient, err := authclientset.NewForConfig(o.clusterConfig)
 		if err != nil {
-			return fmt.Errorf("could not get auth client for cluster config: %v", err)
+			return []error{fmt.Errorf("could not get auth client for cluster config: %v", err)}
 		}
 		eventRecorder, err := eventRecorder(client, authClient, o.namespace, o.dry)
 		if err != nil {
-			return fmt.Errorf("could not create event recorder: %v", err)
+			return []error{fmt.Errorf("could not create event recorder: %v", err)}
 		}
 		runtimeObject := &coreapi.ObjectReference{Namespace: o.namespace}
 		eventRecorder.Event(runtimeObject, coreapi.EventTypeNormal, "CiJobStarted", eventJobDescription(o.jobSpec, o.namespace))
 		// execute the graph
-		suites, err := steps.Run(ctx, nodes, o.dry)
+		suites, errs := steps.Run(ctx, nodes, o.dry)
 		if err := o.writeJUnit(suites, "operator"); err != nil {
 			log.Printf("warning: Unable to write JUnit result: %v", err)
 		}
@@ -578,12 +588,16 @@ func (o *options) Run() error {
 		if err := o.writeMetadataJSON(); err != nil {
 			log.Printf("warning: unable to update metadata.json for build: %v", err)
 		}
-		if err != nil {
+		if len(errs) > 0 {
 			eventRecorder.Event(runtimeObject, coreapi.EventTypeWarning, "CiJobFailed", eventJobDescription(o.jobSpec, o.namespace))
 			if !o.dry {
 				time.Sleep(time.Second)
 			}
-			return &errWroteJUnit{wrapped: results.ForReason(results.ReasonExecutingGraph).WithError(err).Errorf("could not run steps: %v", err)}
+			var wrapped []error
+			for _, err := range errs {
+				wrapped = append(wrapped, &errWroteJUnit{wrapped: results.ForReason("executing_graph").WithError(err).Errorf("could not run steps: %v", err)})
+			}
+			return wrapped
 		}
 
 		for _, step := range postSteps {
@@ -593,7 +607,7 @@ func (o *options) Run() error {
 				if !o.dry {
 					time.Sleep(time.Second)
 				}
-				return results.ForReason(results.ReasonExecutingPost).WithError(err).Errorf("could not run post step %s: %v", step.Name(), err)
+				return []error{results.ForReason("executing_post").WithError(err).Errorf("could not run post step %s: %v", step.Name(), err)}
 			}
 		}
 
@@ -1032,23 +1046,28 @@ func (e *errWroteJUnit) Is(target error) bool {
 
 // writeFailingJUnit attempts to write a JUnit artifact when the graph could not be
 // initialized in order to capture the result for higher level automation.
-func (o *options) writeFailingJUnit(err error) {
-	if errors.Is(err, &errWroteJUnit{}) {
+func (o *options) writeFailingJUnit(errs []error) {
+	var testCases []*junit.TestCase
+	for _, err := range errs {
+		if errors.Is(err, &errWroteJUnit{}) {
+			continue
+		}
+		testCases = append(testCases, &junit.TestCase{
+			Name: "initialize",
+			FailureOutput: &junit.FailureOutput{
+				Output: err.Error(),
+			},
+		})
+	}
+	if len(testCases) == 0 {
 		return
 	}
 	suites := &junit.TestSuites{
 		Suites: []*junit.TestSuite{
 			{
-				NumTests:  1,
-				NumFailed: 1,
-				TestCases: []*junit.TestCase{
-					{
-						Name: "initialize",
-						FailureOutput: &junit.FailureOutput{
-							Output: err.Error(),
-						},
-					},
-				},
+				NumTests:  uint(len(errs)),
+				NumFailed: uint(len(errs)),
+				TestCases: testCases,
 			},
 		},
 	}

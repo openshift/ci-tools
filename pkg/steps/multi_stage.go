@@ -18,6 +18,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/junit"
+	"github.com/openshift/ci-tools/pkg/results"
 )
 
 const (
@@ -116,6 +117,10 @@ func (s *multiStageTestStep) Inputs(dry bool) (api.InputDefinition, error) {
 }
 
 func (s *multiStageTestStep) Run(ctx context.Context, dry bool) error {
+	return results.ForReason("executing_multi_stage_test").ForError(s.run(ctx, dry))
+}
+
+func (s *multiStageTestStep) run(ctx context.Context, dry bool) error {
 	s.dry = dry
 	if s.profile != "" {
 		if !dry {

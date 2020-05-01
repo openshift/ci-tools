@@ -10,6 +10,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/junit"
 	"github.com/openshift/ci-tools/pkg/lease"
+	"github.com/openshift/ci-tools/pkg/results"
 )
 
 const leaseEnv = "LEASED_RESOURCE"
@@ -57,6 +58,10 @@ func (s *leaseStep) SubTests() []*junit.TestCase {
 }
 
 func (s *leaseStep) Run(ctx context.Context, dry bool) error {
+	return results.ForReason("acquiring_lease").ForError(s.run(ctx, dry))
+}
+
+func (s *leaseStep) run(ctx context.Context, dry bool) error {
 	log.Printf("Acquiring lease for %q", s.leaseType)
 	client := *s.client
 	if client == nil {

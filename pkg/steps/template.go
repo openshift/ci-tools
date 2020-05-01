@@ -30,6 +30,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/junit"
+	"github.com/openshift/ci-tools/pkg/results"
 )
 
 const (
@@ -58,6 +59,10 @@ func (s *templateExecutionStep) Inputs(dry bool) (api.InputDefinition, error) {
 }
 
 func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
+	return results.ForReason("executing_template").ForError(s.run(ctx, dry))
+}
+
+func (s *templateExecutionStep) run(ctx context.Context, dry bool) error {
 	log.Printf("Executing template %s", s.template.Name)
 
 	if len(s.template.Objects) == 0 {

@@ -6,14 +6,15 @@ import (
 	"log"
 	"strings"
 
-	"k8s.io/client-go/util/retry"
-
 	imageapi "github.com/openshift/api/image/v1"
-	"github.com/openshift/ci-tools/pkg/api"
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/util/retry"
+
+	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/results"
 )
 
 // outputImageTagStep will ensure that a tag exists
@@ -32,6 +33,10 @@ func (s *outputImageTagStep) Inputs(dry bool) (api.InputDefinition, error) {
 }
 
 func (s *outputImageTagStep) Run(ctx context.Context, dry bool) error {
+	return results.ForReason("tagging_output_image").ForError(s.run(ctx, dry))
+}
+
+func (s *outputImageTagStep) run(ctx context.Context, dry bool) error {
 	toNamespace := s.namespace()
 	if string(s.config.From) == s.config.To.Tag && toNamespace == s.jobSpec.Namespace && s.config.To.Name == api.StableImageStream {
 		log.Printf("Tagging %s into %s", s.config.From, s.config.To.Name)

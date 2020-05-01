@@ -51,7 +51,7 @@ func Config(path, registryPath string, info *ResolverInfo) (*api.ReleaseBuildCon
 		raw = spec
 	} else {
 		configSpec, err := configFromResolver(info)
-		err = results.ForReason(results.ReasonConfigResolver).ForError(err)
+		err = results.ForReason("config_resolver").ForError(err)
 		return configSpec, err
 	}
 	configSpec := api.ReleaseBuildConfiguration{}

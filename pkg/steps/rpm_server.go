@@ -26,6 +26,7 @@ import (
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/results"
 )
 
 const (
@@ -49,6 +50,10 @@ func (s *rpmServerStep) Inputs(dry bool) (api.InputDefinition, error) {
 }
 
 func (s *rpmServerStep) Run(ctx context.Context, dry bool) error {
+	return results.ForReason("serving_rpms").ForError(s.run(ctx, dry))
+}
+
+func (s *rpmServerStep) run(ctx context.Context, dry bool) error {
 	var imageReference string
 	if dry {
 		imageReference = "dry-fake"

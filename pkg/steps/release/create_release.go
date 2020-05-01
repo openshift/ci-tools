@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/openshift/ci-tools/pkg/results"
 	"io/ioutil"
 	"log"
 	"path/filepath"
@@ -102,6 +103,10 @@ func (s *assembleReleaseStep) Inputs(dry bool) (api.InputDefinition, error) {
 }
 
 func (s *assembleReleaseStep) Run(ctx context.Context, dry bool) error {
+	return results.ForReason("assembling_release").ForError(s.run(ctx, dry))
+}
+
+func (s *assembleReleaseStep) run(ctx context.Context, dry bool) error {
 	sa := &coreapi.ServiceAccount{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      "ci-operator",
@@ -148,15 +153,15 @@ func (s *assembleReleaseStep) Run(ctx context.Context, dry bool) error {
 	}
 
 	if _, err := s.saGetter.ServiceAccounts(s.jobSpec.Namespace).Create(sa); err != nil && !errors.IsAlreadyExists(err) {
-		return fmt.Errorf("could not create service account 'ci-operator' for: %v", err)
+		return results.ForReason("creating_service_account").WithError(err).Errorf("could not create service account 'ci-operator' for: %v", err)
 	}
 
 	if _, err := s.rbacClient.Roles(s.jobSpec.Namespace).Create(role); err != nil && !errors.IsAlreadyExists(err) {
-		return fmt.Errorf("could not create role 'ci-operator-image' for: %v", err)
+		return results.ForReason("creating_roles").WithError(err).Errorf("could not create role 'ci-operator-image' for: %v", err)
 	}
 
 	if _, err := s.rbacClient.RoleBindings(s.jobSpec.Namespace).Create(roleBinding); err != nil && !errors.IsAlreadyExists(err) {
-		return fmt.Errorf("could not create role binding 'ci-operator-image' for: %v", err)
+		return results.ForReason("binding_roles").WithError(err).Errorf("could not create role binding 'ci-operator-image' for: %v", err)
 	}
 
 	tag := s.tag()
@@ -174,7 +179,7 @@ func (s *assembleReleaseStep) Run(ctx context.Context, dry bool) error {
 		}
 		release, err = s.imageClient.ImageStreams(s.jobSpec.Namespace).Get("release", meta.GetOptions{})
 		if err != nil {
-			return err
+			return results.ForReason("creating_release_stream").ForError(err)
 		}
 	}
 
@@ -191,7 +196,7 @@ func (s *assembleReleaseStep) Run(ctx context.Context, dry bool) error {
 		if len(s.releaseSpec) > 0 {
 			providedImage = s.releaseSpec
 		}
-		return s.importFromReleaseImage(ctx, dry, providedImage)
+		return results.ForReason("importing_release").ForError(s.importFromReleaseImage(ctx, dry, providedImage))
 	}
 
 	var stable *imageapi.ImageStream
@@ -217,7 +222,7 @@ func (s *assembleReleaseStep) Run(ctx context.Context, dry bool) error {
 	}, importCtx.Done()); err != nil {
 		if wait.ErrWaitTimeout == err {
 			if !cliExists {
-				return fmt.Errorf("no 'cli' image was tagged into the %s stream, that image is required for building a release", streamName)
+				return results.ForReason("missing_cli").WithError(err).Errorf("no 'cli' image was tagged into the %s stream, that image is required for building a release", streamName)
 			}
 			log.Printf("No %s release image necessary, %s image stream does not include a cluster-version-operator image", tag, streamName)
 			return nil
@@ -227,7 +232,7 @@ func (s *assembleReleaseStep) Run(ctx context.Context, dry bool) error {
 			log.Printf("No %s release image can be generated when the %s image stream was skipped", tag, streamName)
 			return nil
 		}
-		return fmt.Errorf("could not resolve imagestream %s: %v", streamName, err)
+		return results.ForReason("missing_release").WithError(err).Errorf("could not resolve imagestream %s: %v", streamName, err)
 	}
 
 	destination := fmt.Sprintf("%s:%s", release.Status.PublicDockerImageRepository, tag)
@@ -264,7 +269,7 @@ oc adm release extract --from=%q --to=/tmp/artifacts/release-payload-%s
 
 	step := steps.PodStep("release", podConfig, resources, s.podClient, s.artifactDir, s.jobSpec, s.dryLogger)
 
-	return step.Run(ctx, dry)
+	return results.ForReason("creating_release").ForError(step.Run(ctx, dry))
 }
 
 // importFromReleaseImage uses the provided release image and updates the stable / release streams as

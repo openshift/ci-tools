@@ -11,6 +11,7 @@ import (
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/results"
 )
 
 func rpmInjectionDockerfile(from api.PipelineImageStreamTagReference, repo string) string {
@@ -35,6 +36,10 @@ func (s *rpmImageInjectionStep) Inputs(dry bool) (api.InputDefinition, error) {
 }
 
 func (s *rpmImageInjectionStep) Run(ctx context.Context, dry bool) error {
+	return results.ForReason("injecting_rpms").ForError(s.run(ctx, dry))
+}
+
+func (s *rpmImageInjectionStep) run(ctx context.Context, dry bool) error {
 	var host string
 	if dry {
 		host = "dry-fake"

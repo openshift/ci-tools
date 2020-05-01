@@ -76,7 +76,7 @@ func (h *Handler) Signal(s os.Signal) {
 // Run ensures that any notifications are invoked after the provided fn exits (even if the
 // process is interrupted by an OS termination signal). Notifications are only invoked once
 // per Handler instance, so calling Run more than once will not behave as the user expects.
-func (h *Handler) Run(fn func() error) error {
+func (h *Handler) Run(fn func() []error) []error {
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, terminationSignals...)
 	defer func() {

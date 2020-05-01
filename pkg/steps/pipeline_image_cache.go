@@ -7,10 +7,12 @@ import (
 	"strings"
 
 	buildapi "github.com/openshift/api/build/v1"
-	"github.com/openshift/ci-tools/pkg/api"
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 	coreapi "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/results"
 )
 
 func rawCommandDockerfile(from api.PipelineImageStreamTagReference, commands string) string {
@@ -34,6 +36,10 @@ func (s *pipelineImageCacheStep) Inputs(dry bool) (api.InputDefinition, error) {
 }
 
 func (s *pipelineImageCacheStep) Run(ctx context.Context, dry bool) error {
+	return results.ForReason("building_cache_image").ForError(s.run(ctx, dry))
+}
+
+func (s *pipelineImageCacheStep) run(ctx context.Context, dry bool) error {
 	dockerfile := rawCommandDockerfile(s.config.From, s.config.Commands)
 	return handleBuild(ctx, s.buildClient, buildFromSource(
 		s.jobSpec, s.config.From, s.config.To,

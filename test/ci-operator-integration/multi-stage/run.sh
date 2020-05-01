@@ -59,7 +59,9 @@ echo '[INFO] Running test with --registry'
 if ! ci-operator \
     --dry-run --determinize-output --namespace "${TEST_NAMESPACE}" \
     --config "${TEST_CONFIG1}" --registry "${TEST_REGISTRY_DIR}" \
-    --lease-server "http://lease" 2> "${ERR}" \
+    --lease-server http://boskos.example.com \
+    --lease-server-username ci \
+    --lease-server-password-file /tmp/anything  2> "${ERR}" \
     | jq --sort-keys . > "${OUT}"
 then
     echo "ERROR: ci-operator failed."
@@ -88,7 +90,8 @@ for (( i = 0; i < 10; i++ )); do
 done
 
 if ! ci-operator --dry-run --determinize-output --namespace "${TEST_NAMESPACE}" \
-    -resolver-address "http://127.0.0.1:8080" --lease-server "http://lease" 2> "${ERR}" | jq --sort-keys . > "${OUT}"; then
+    -resolver-address "http://127.0.0.1:8080" --lease-server http://boskos.example.com \
+    --lease-server-username ci --lease-server-password-file /tmp/anything 2> "${ERR}" | jq --sort-keys . > "${OUT}"; then
     echo "ERROR: ci-operator failed."
     cat "${ERR}"
     kill $(jobs -p)

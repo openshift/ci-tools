@@ -200,7 +200,7 @@ func main() {
 			message.WriteString(fmt.Sprintf("\n  * %s", err.Error()))
 		}
 		fmt.Fprintf(os.Stderr, "error: some steps failed:%s\n", message.String())
-		opt.Report(errs)
+		opt.Report(defaulted)
 		os.Exit(1)
 	}
 }

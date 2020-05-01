@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"flag"
-	"fmt"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -20,13 +19,12 @@ import (
 )
 
 type options struct {
-	LeaderElectionNamespace      string
-	CiOperatorConfigPath         string
-	ConfigPath                   string
-	JobConfigPath                string
-	DryRun                       bool
-	ImageStreamTagReconcilerOpts imageStreamTagReconcilerOptions
-	logLevel                     string
+	leaderElectionNamespace      string
+	ciOperatorconfigPath         string
+	configPath                   string
+	jobConfigPath                string
+	dryRun                       bool
+	imageStreamTagReconcilerOpts imageStreamTagReconcilerOptions
 	*flagutil.GitHubOptions
 }
 
@@ -37,32 +35,31 @@ type imageStreamTagReconcilerOptions struct {
 func newOpts() (*options, error) {
 	opts := &options{GitHubOptions: &flagutil.GitHubOptions{}}
 	opts.AddFlags(flag.CommandLine)
-	flag.StringVar(&opts.LeaderElectionNamespace, "leader-election-namespace", "ci", "The namespace to use for leaderelection")
-	flag.StringVar(&opts.CiOperatorConfigPath, "ci-operator-config-path", "", "Path to the ci operator config")
-	flag.StringVar(&opts.ConfigPath, "config-path", "", "Path to the prow config")
-	flag.StringVar(&opts.JobConfigPath, "job-config-path", "", "Path to the job config")
-	flag.Var(&opts.ImageStreamTagReconcilerOpts.IgnoredGitHubOrganizations, "imagestreamtagreconciler.ignored-github-organization", "GitHub organization to ignore in the imagestreamtagreconciler. Can be specified multiple times")
-	flag.StringVar(&opts.logLevel, "log-level", "info", fmt.Sprintf("Log level is one of %v.", logrus.AllLevels))
+	flag.StringVar(&opts.leaderElectionNamespace, "leader-election-namespace", "ci", "The namespace to use for leaderelection")
+	flag.StringVar(&opts.ciOperatorconfigPath, "ci-operator-config-path", "", "Path to the ci operator config")
+	flag.StringVar(&opts.configPath, "config-path", "", "Path to the prow config")
+	flag.StringVar(&opts.jobConfigPath, "job-config-path", "", "Path to the job config")
+	flag.Var(&opts.imageStreamTagReconcilerOpts.IgnoredGitHubOrganizations, "imagestreamtagreconciler.ignored-github-organization", "GitHub organization to ignore in the imagestreamtagreconciler. Can be specified multiple times")
 	// TODO: rather than relying on humans implementing dry-run properly, we should switch
 	// to just do it on client-level once it becomes available: https://github.com/kubernetes-sigs/controller-runtime/pull/839
-	flag.BoolVar(&opts.DryRun, "dry-run", true, "Whether to run the controller-manager with dry-run")
+	flag.BoolVar(&opts.dryRun, "dry-run", true, "Whether to run the controller-manager with dry-run")
 	flag.Parse()
 
 	var errs []error
-	if opts.LeaderElectionNamespace == "" {
+	if opts.leaderElectionNamespace == "" {
 		errs = append(errs, errors.New("--leader-election-namespace must be set"))
 	}
-	if opts.CiOperatorConfigPath == "" {
+	if opts.ciOperatorconfigPath == "" {
 		errs = append(errs, errors.New("--ci-operations-config-path must be set"))
 	}
-	if opts.ConfigPath == "" {
+	if opts.configPath == "" {
 		errs = append(errs, errors.New("--config-path must be set"))
 	}
-	if opts.JobConfigPath == "" {
+	if opts.jobConfigPath == "" {
 		errs = append(errs, errors.New("--job-config-path must be set"))
 	}
 
-	if err := opts.GitHubOptions.Validate(opts.DryRun); err != nil {
+	if err := opts.GitHubOptions.Validate(opts.dryRun); err != nil {
 		errs = append(errs, err)
 	}
 
@@ -74,23 +71,18 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get options")
 	}
-	logLevel, err := logrus.ParseLevel(opts.logLevel)
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to parse loglevel")
-	}
-	logrus.SetLevel(logLevel)
 
 	cfg, err := controllerruntime.GetConfig()
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get kubeconfig")
 	}
 
-	ciOPConfigAgent, err := agents.NewConfigAgent(opts.CiOperatorConfigPath, 2*time.Minute, prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"error"}))
+	ciOPConfigAgent, err := agents.NewConfigAgent(opts.ciOperatorconfigPath, 2*time.Minute, prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"error"}))
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to construct ci-opeartor config agent")
 	}
 	configAgent := &config.Agent{}
-	if err := configAgent.Start(opts.ConfigPath, opts.JobConfigPath); err != nil {
+	if err := configAgent.Start(opts.configPath, opts.jobConfigPath); err != nil {
 		logrus.WithError(err).Fatal("Failed to start config agent")
 	}
 
@@ -98,7 +90,7 @@ func main() {
 	if err := secretAgent.Start([]string{opts.GitHubOptions.TokenPath}); err != nil {
 		logrus.WithError(err).Fatal("Failed to start secrets agent.")
 	}
-	gitHubClient, err := opts.GitHubClient(secretAgent, opts.DryRun)
+	gitHubClient, err := opts.GitHubClient(secretAgent, opts.dryRun)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get gitHubClient")
 	}
@@ -110,7 +102,7 @@ func main() {
 	resyncInterval := 24 * time.Hour
 	mgr, err := controllerruntime.NewManager(cfg, controllerruntime.Options{
 		LeaderElection:          true,
-		LeaderElectionNamespace: opts.LeaderElectionNamespace,
+		LeaderElectionNamespace: opts.leaderElectionNamespace,
 		LeaderElectionID:        "dptp-controller-manager",
 		SyncPeriod:              &resyncInterval,
 	})
@@ -120,11 +112,11 @@ func main() {
 	pjutil.ServePProf()
 
 	imageStreamTagReconcilerOpts := imagestreamtagreconciler.Options{
-		DryRun:                     opts.DryRun,
+		DryRun:                     opts.dryRun,
 		CIOperatorConfigAgent:      ciOPConfigAgent,
 		ConfigGetter:               configAgent.Config,
 		GitHubClient:               gitHubClient,
-		IgnoredGitHubOrganizations: opts.ImageStreamTagReconcilerOpts.IgnoredGitHubOrganizations.Strings(),
+		IgnoredGitHubOrganizations: opts.imageStreamTagReconcilerOpts.IgnoredGitHubOrganizations.Strings(),
 	}
 	if err := imagestreamtagreconciler.AddToManager(mgr, imageStreamTagReconcilerOpts); err != nil {
 		logrus.WithError(err).Fatal("Failed to add imagestreamtagreconciler")

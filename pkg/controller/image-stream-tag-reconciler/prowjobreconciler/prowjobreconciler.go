@@ -54,6 +54,7 @@ func AddToManager(mgr controllerruntime.Manager, config config.Getter, dryRun bo
 	ctrl, err := controller.New(controllerName, mgr, controller.Options{
 		MaxConcurrentReconciles: 10,
 		Reconciler: &reconciler{
+			ctx:    context.Background(),
 			log:    logrus.WithField("controller", controllerName),
 			config: config,
 			client: mgr.GetClient(),

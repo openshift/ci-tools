@@ -455,7 +455,7 @@ type TestStep struct {
 // the multiple stages of end to end tests.
 type MultiStageTestConfiguration struct {
 	// ClusterProfile defines the profile/cloud provider for end-to-end test steps.
-	ClusterProfile ClusterProfile `json:"cluster_profile"`
+	ClusterProfile ClusterProfile `json:"cluster_profile,omitempty"`
 	// Pre is the array of test steps run to set up the environment for the test.
 	Pre []TestStep `json:"pre,omitempty"`
 	// Test is the array of test steps that define the actual test.

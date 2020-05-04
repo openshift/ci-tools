@@ -12,15 +12,17 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
-// WhitelistConfig holds a list of repositories mapped by organization
+// WhitelistConfig holds a list of repositories mapped by organization and repository
 type WhitelistConfig struct {
-	Whitelist map[string][]string `json:"whitelist,omitempty"`
+	Whitelist map[string]map[string][]string `json:"whitelist,omitempty"`
 }
 
 func (w *WhitelistConfig) IsWhitelisted(info *Info) bool {
 	if whiteRepos, ok := w.Whitelist[info.Org]; ok {
-		if sets.NewString(whiteRepos...).Has(info.Repo) {
-			return true
+		if branches, ok := whiteRepos[info.Repo]; ok {
+			if sets.NewString(branches...).Has(info.Branch) {
+				return true
+			}
 		}
 	}
 	return false

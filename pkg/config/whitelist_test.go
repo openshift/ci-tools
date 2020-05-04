@@ -12,22 +12,56 @@ func TestIsWhiteListed(t *testing.T) {
 		expected  bool
 	}{
 		{
-			id:        "org/repo is not in whitelist",
-			whitelist: WhitelistConfig{Whitelist: map[string][]string{"openshift": {"repo1, repo2"}}},
-			info:      &Info{Org: "anotherOrg", Repo: "anotherRepo"},
-			expected:  false,
+			id: "org/repo is not in whitelist",
+			whitelist: WhitelistConfig{
+				Whitelist: map[string]map[string][]string{
+					"openshift": {
+						"repo1": {"master", "release-4.x"},
+						"repo2": {"master", "release-4.x"},
+					},
+				},
+			},
+			info:     &Info{Org: "anotherOrg", Repo: "anotherRepo", Branch: "anotherBranch"},
+			expected: false,
 		},
 		{
-			id:        "org is in whitelist but not repo",
-			whitelist: WhitelistConfig{Whitelist: map[string][]string{"openshift": {"repo1, repo2"}}},
-			info:      &Info{Org: "openshift", Repo: "anotherRepo"},
-			expected:  false,
+			id: "org is in whitelist but not repo",
+			whitelist: WhitelistConfig{
+				Whitelist: map[string]map[string][]string{
+					"openshift": {
+						"repo1": {"master", "release-4.x"},
+						"repo2": {"master", "release-4.x"},
+					},
+				},
+			},
+			info:     &Info{Org: "openshift", Repo: "anotherRepo"},
+			expected: false,
 		},
 		{
-			id:        "org/repo is in whitelist",
-			whitelist: WhitelistConfig{Whitelist: map[string][]string{"openshift": {"repo1", "repo2"}}},
-			info:      &Info{Org: "openshift", Repo: "repo1"},
-			expected:  true,
+			id: "org/repo is in whitelist but not the branch",
+			whitelist: WhitelistConfig{
+				Whitelist: map[string]map[string][]string{
+					"openshift": {
+						"repo1": {"master", "release-4.x"},
+						"repo2": {"master", "release-4.x"},
+					},
+				},
+			},
+			info:     &Info{Org: "openshift", Repo: "repo1", Branch: "anotherBranch"},
+			expected: false,
+		},
+		{
+			id: "org/repo/branch is in whitelist",
+			whitelist: WhitelistConfig{
+				Whitelist: map[string]map[string][]string{
+					"openshift": {
+						"repo1": {"master", "release-4.x"},
+						"repo2": {"master", "release-4.x"},
+					},
+				},
+			},
+			info:     &Info{Org: "openshift", Repo: "repo1", Branch: "release-4.x"},
+			expected: true,
 		},
 	}
 

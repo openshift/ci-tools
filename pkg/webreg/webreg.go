@@ -18,6 +18,7 @@ import (
 	prowConfig "k8s.io/test-infra/prow/config"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/load"
 	"github.com/openshift/ci-tools/pkg/load/agents"
 	"github.com/openshift/ci-tools/pkg/registry"
 )
@@ -1816,7 +1817,7 @@ func workflowHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *htt
 	writePage(w, "Registry Workflow Help Page", page, workflow)
 }
 
-func findConfigForJob(jobName string, configs agents.FilenameToConfig) (api.MultiStageTestConfiguration, error) {
+func findConfigForJob(jobName string, configs load.FilenameToConfig) (api.MultiStageTestConfiguration, error) {
 	splitJobName := strings.Split(jobName, "-")
 	var filename, testname string
 	var config api.ReleaseBuildConfiguration

@@ -7,6 +7,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/load"
 )
 
 func TestGetFromIndex(t *testing.T) {
@@ -124,7 +125,7 @@ func TestBuildIndexes(t *testing.T) {
 	testCases := []struct {
 		name     string
 		agent    *configAgent
-		configs  FilenameToConfig
+		configs  load.FilenameToConfig
 		expected map[string]configIndex
 	}{
 		{
@@ -134,7 +135,7 @@ func TestBuildIndexes(t *testing.T) {
 					"index-a": func(_ api.ReleaseBuildConfiguration) []string { return []string{"key-a"} },
 				},
 			},
-			configs:  FilenameToConfig{"myfile.yaml": cfg},
+			configs:  load.FilenameToConfig{"myfile.yaml": cfg},
 			expected: map[string]configIndex{"index-a": {"key-a": []*api.ReleaseBuildConfiguration{&cfg}}},
 		},
 		{
@@ -145,7 +146,7 @@ func TestBuildIndexes(t *testing.T) {
 					"index-b": func(_ api.ReleaseBuildConfiguration) []string { return []string{"key-b"} },
 				},
 			},
-			configs: FilenameToConfig{"myfile.yaml": cfg},
+			configs: load.FilenameToConfig{"myfile.yaml": cfg},
 			expected: map[string]configIndex{
 				"index-a": {"key-a": []*api.ReleaseBuildConfiguration{&cfg}},
 				"index-b": {"key-b": []*api.ReleaseBuildConfiguration{&cfg}},
@@ -158,7 +159,7 @@ func TestBuildIndexes(t *testing.T) {
 					"index-a": func(_ api.ReleaseBuildConfiguration) []string { return nil },
 				},
 			},
-			configs:  FilenameToConfig{"myfile.yaml": cfg},
+			configs:  load.FilenameToConfig{"myfile.yaml": cfg},
 			expected: map[string]configIndex{},
 		},
 	}

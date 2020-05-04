@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/sirupsen/logrus"
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -34,6 +35,41 @@ const (
 	workflowSuffix = "-workflow.yaml"
 	commandsSuffix = "-commands.sh"
 )
+
+// FilenameToConfig contains configs keyed by the file they were found int
+type FilenameToConfig map[string]api.ReleaseBuildConfiguration
+
+// FromPath returns all configs found at or below the given path
+func FromPath(path string) (FilenameToConfig, error) {
+	configs := FilenameToConfig{}
+	err := filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
+		if info == nil || err != nil {
+			return err
+		}
+		if strings.HasPrefix(info.Name(), "..") {
+			if info.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		ext := filepath.Ext(path)
+		if info != nil && !info.IsDir() && (ext == ".yml" || ext == ".yaml") {
+			configSpec, err := Config(path, "", nil)
+			if err != nil {
+				return fmt.Errorf("failed to load ci-operator config (%v)", err)
+			}
+
+			if err := configSpec.ValidateAtRuntime(); err != nil {
+				return fmt.Errorf("invalid ci-operator config: %v", err)
+			}
+			logrus.Tracef("Adding %s to filenameToConfig", filepath.Base(path))
+			configs[filepath.Base(path)] = *configSpec
+		}
+		return nil
+	})
+
+	return configs, err
+}
 
 func Config(path, registryPath string, info *ResolverInfo) (*api.ReleaseBuildConfiguration, error) {
 	// Load the standard configuration path, env, or configresolver (in that order of priority)

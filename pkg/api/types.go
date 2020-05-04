@@ -10,6 +10,12 @@ const (
 	PromotionJobLabelKey = "ci-operator.openshift.io/is-promotion"
 )
 
+// IsPromotionJob determines if a given ProwJob is a PromotionJob
+func IsPromotionJob(jobLabels map[string]string) bool {
+	_, ok := jobLabels[PromotionJobLabelKey]
+	return ok
+}
+
 // ReleaseBuildConfiguration describes how release
 // artifacts are built from a repository of source
 // code. The configuration is made up of two parts:

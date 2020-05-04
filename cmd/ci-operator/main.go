@@ -189,7 +189,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if errs := opt.Run(); len(errs) > 1 {
+	if errs := opt.Run(); len(errs) > 0 {
 		var defaulted []error
 		for _, err := range errs {
 			defaulted = append(defaulted, results.DefaultReason(err))

@@ -46,8 +46,8 @@ const testingCiOpCfgYAML = "tests:\n- as: job1\n- as: job2\nzz_generated_metadat
 
 // configFiles contains the info needed to allow inlineCiOpConfig to successfully inline
 // CONFIG_SPEC and not fail
-func generateTestConfigFiles() config.ByFilename {
-	return config.ByFilename{
+func generateTestConfigFiles() config.DataByFilename {
+	return config.DataByFilename{
 		"targetOrg-targetRepo-master.yaml": config.DataWithInfo{
 			Configuration: api.ReleaseBuildConfiguration{
 				Tests: []api.TestStepConfiguration{
@@ -231,36 +231,36 @@ func TestInlineCiopConfig(t *testing.T) {
 	testCases := []struct {
 		description   string
 		sourceEnv     []v1.EnvVar
-		configs       config.ByFilename
+		configs       config.DataByFilename
 		expectedEnv   []v1.EnvVar
 		expectedError bool
 	}{{
 		description: "empty env -> no changes",
-		configs:     config.ByFilename{},
+		configs:     config.DataByFilename{},
 	}, {
 		description: "no Env.ValueFrom -> no changes",
 		sourceEnv:   []v1.EnvVar{{Name: "T", Value: "V"}},
-		configs:     config.ByFilename{},
+		configs:     config.DataByFilename{},
 		expectedEnv: []v1.EnvVar{{Name: "T", Value: "V"}},
 	}, {
 		description: "no Env.ValueFrom.ConfigMapKeyRef -> no changes",
 		sourceEnv:   []v1.EnvVar{{Name: "T", ValueFrom: &v1.EnvVarSource{ResourceFieldRef: &v1.ResourceFieldSelector{}}}},
-		configs:     config.ByFilename{},
+		configs:     config.DataByFilename{},
 		expectedEnv: []v1.EnvVar{{Name: "T", ValueFrom: &v1.EnvVarSource{ResourceFieldRef: &v1.ResourceFieldSelector{}}}},
 	}, {
 		description: "CM reference but not ci-operator-configs -> no changes",
 		sourceEnv:   []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference("test-cm", "key")}},
-		configs:     config.ByFilename{},
+		configs:     config.DataByFilename{},
 		expectedEnv: []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference("test-cm", "key")}},
 	}, {
 		description: "CM reference to ci-operator-configs -> cm content inlined",
 		sourceEnv:   []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference(testCiopConfigInfo.ConfigMapName(), "filename")}},
-		configs:     config.ByFilename{"filename": {Info: testCiopConfigInfo, Configuration: testCiopConfig}},
+		configs:     config.DataByFilename{"filename": {Info: testCiopConfigInfo, Configuration: testCiopConfig}},
 		expectedEnv: []v1.EnvVar{{Name: "T", Value: string(testCiopConfigContent)}},
 	}, {
 		description:   "bad CM key is handled",
 		sourceEnv:     []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference(testCiopConfigInfo.ConfigMapName(), "filename")}},
-		configs:       config.ByFilename{},
+		configs:       config.DataByFilename{},
 		expectedError: true,
 	}}
 

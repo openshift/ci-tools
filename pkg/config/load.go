@@ -267,10 +267,10 @@ func (i *DataWithInfo) CommitTo(dir string) error {
 	return nil
 }
 
-// ByFilename stores CI Operator configurations with their metadata by filename
-type ByFilename map[string]DataWithInfo
+// DataByFilename stores CI Operator configurations with their metadata by filename
+type DataByFilename map[string]DataWithInfo
 
-func (all ByFilename) add(handledConfig *cioperatorapi.ReleaseBuildConfiguration, handledElements *Info) error {
+func (all DataByFilename) add(handledConfig *cioperatorapi.ReleaseBuildConfiguration, handledElements *Info) error {
 	all[handledElements.Basename()] = DataWithInfo{
 		Configuration: *handledConfig,
 		Info:          *handledElements,
@@ -278,8 +278,8 @@ func (all ByFilename) add(handledConfig *cioperatorapi.ReleaseBuildConfiguration
 	return nil
 }
 
-func LoadConfigByFilename(path string) (ByFilename, error) {
-	config := ByFilename{}
+func LoadDataByFilename(path string) (DataByFilename, error) {
+	config := DataByFilename{}
 	if err := OperateOnCIOperatorConfigDir(path, config.add); err != nil {
 		return nil, err
 	}

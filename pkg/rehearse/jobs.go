@@ -233,7 +233,7 @@ func hasRehearsableLabel(labels map[string]string) bool {
 // of the needed config file passed to the job as a direct value. This needs
 // to happen because the rehearsed Prow jobs may depend on these config files
 // being also changed by the tested PR.
-func inlineCiOpConfig(container *v1.Container, ciopConfigs config.ByFilename, resolver registry.Resolver, info config.Info, loggers Loggers) error {
+func inlineCiOpConfig(container *v1.Container, ciopConfigs config.DataByFilename, resolver registry.Resolver, info config.Info, loggers Loggers) error {
 	configSpecSet := false
 	// replace all ConfigMapKeyRef mounts with inline config maps
 	for index := range container.Env {
@@ -311,7 +311,7 @@ func inlineCiOpConfig(container *v1.Container, ciopConfigs config.ByFilename, re
 
 // JobConfigurer holds all the information that is needed for the configuration of the jobs.
 type JobConfigurer struct {
-	ciopConfigs      config.ByFilename
+	ciopConfigs      config.DataByFilename
 	registryResolver registry.Resolver
 	profiles         []config.ConfigMapSource
 	prNumber         int
@@ -321,7 +321,7 @@ type JobConfigurer struct {
 }
 
 // NewJobConfigurer filters the jobs and returns a new JobConfigurer.
-func NewJobConfigurer(ciopConfigs config.ByFilename, resolver registry.Resolver, prNumber int, loggers Loggers, templates []config.ConfigMapSource, profiles []config.ConfigMapSource, refs *pjapi.Refs) *JobConfigurer {
+func NewJobConfigurer(ciopConfigs config.DataByFilename, resolver registry.Resolver, prNumber int, loggers Loggers, templates []config.ConfigMapSource, profiles []config.ConfigMapSource, refs *pjapi.Refs) *JobConfigurer {
 	return &JobConfigurer{
 		ciopConfigs:      ciopConfigs,
 		registryResolver: resolver,
@@ -492,7 +492,7 @@ func getPresubmitByJobName(presubmits []prowconfig.Presubmit, name string) (prow
 	return prowconfig.Presubmit{}, fmt.Errorf("could not find presubmit with name: %s", name)
 }
 
-func getPresubmitsForRegistryStep(node registry.Node, configs config.ByFilename, prConfigPresubmits map[string][]prowconfig.Presubmit, addedConfigs []*api.MultiStageTestConfiguration) (map[string][]prowconfig.Presubmit, []*api.MultiStageTestConfiguration, error) {
+func getPresubmitsForRegistryStep(node registry.Node, configs config.DataByFilename, prConfigPresubmits map[string][]prowconfig.Presubmit, addedConfigs []*api.MultiStageTestConfiguration) (map[string][]prowconfig.Presubmit, []*api.MultiStageTestConfiguration, error) {
 	toTest := make(map[string][]prowconfig.Presubmit)
 	// get sorted list of configs keys to make the function deterministic
 	var keys []string
@@ -573,7 +573,7 @@ func expandAncestors(changed, graph registry.NodeByName) {
 }
 
 func AddRandomJobsForChangedRegistry(regSteps, graph registry.NodeByName, prConfigPresubmits map[string][]prowconfig.Presubmit, configPath string, loggers Loggers) config.Presubmits {
-	configsByFilename, err := config.LoadConfigByFilename(configPath)
+	configsByFilename, err := config.LoadDataByFilename(configPath)
 	if err != nil {
 		loggers.Debug.Errorf("Failed to load config by filename in AddRandomJobsForChangedRegistry: %v", err)
 	}

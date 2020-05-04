@@ -62,97 +62,97 @@ func TestGetChangedCiopConfigs(t *testing.T) {
 
 	testCases := []struct {
 		name                 string
-		configGenerator      func(*testing.T) (before, after config.ByFilename)
-		expected             func() config.ByFilename
+		configGenerator      func(*testing.T) (before, after config.DataByFilename)
+		expected             func() config.DataByFilename
 		expectedAffectedJobs map[string]sets.String
 	}{{
 		name: "no changes",
-		configGenerator: func(t *testing.T) (config.ByFilename, config.ByFilename) {
-			before := config.ByFilename{"org-repo-branch.yaml": baseCiopConfig}
-			after := config.ByFilename{"org-repo-branch.yaml": baseCiopConfig}
+		configGenerator: func(t *testing.T) (config.DataByFilename, config.DataByFilename) {
+			before := config.DataByFilename{"org-repo-branch.yaml": baseCiopConfig}
+			after := config.DataByFilename{"org-repo-branch.yaml": baseCiopConfig}
 			return before, after
 		},
-		expected:             func() config.ByFilename { return config.ByFilename{} },
+		expected:             func() config.DataByFilename { return config.DataByFilename{} },
 		expectedAffectedJobs: map[string]sets.String{},
 	}, {
 		name: "new config",
-		configGenerator: func(t *testing.T) (config.ByFilename, config.ByFilename) {
-			before := config.ByFilename{"org-repo-branch.yaml": baseCiopConfig}
-			after := config.ByFilename{
+		configGenerator: func(t *testing.T) (config.DataByFilename, config.DataByFilename) {
+			before := config.DataByFilename{"org-repo-branch.yaml": baseCiopConfig}
+			after := config.DataByFilename{
 				"org-repo-branch.yaml":         baseCiopConfig,
 				"org-repo-another-branch.yaml": baseCiopConfig,
 			}
 			return before, after
 		},
-		expected: func() config.ByFilename {
-			return config.ByFilename{"org-repo-another-branch.yaml": baseCiopConfig}
+		expected: func() config.DataByFilename {
+			return config.DataByFilename{"org-repo-another-branch.yaml": baseCiopConfig}
 		},
 		expectedAffectedJobs: map[string]sets.String{},
 	}, {
 		name: "changed config",
-		configGenerator: func(t *testing.T) (config.ByFilename, config.ByFilename) {
-			before := config.ByFilename{"org-repo-branch.yaml": baseCiopConfig}
+		configGenerator: func(t *testing.T) (config.DataByFilename, config.DataByFilename) {
+			before := config.DataByFilename{"org-repo-branch.yaml": baseCiopConfig}
 			afterConfig := config.DataWithInfo{}
 			if err := deepcopy.Copy(&afterConfig, &baseCiopConfig); err != nil {
 				t.Fatal(err)
 			}
 			afterConfig.Configuration.InputConfiguration.ReleaseTagConfiguration.Name = "another-name"
-			after := config.ByFilename{"org-repo-branch.yaml": afterConfig}
+			after := config.DataByFilename{"org-repo-branch.yaml": afterConfig}
 			return before, after
 		},
-		expected: func() config.ByFilename {
+		expected: func() config.DataByFilename {
 			expected := config.DataWithInfo{}
 			if err := deepcopy.Copy(&expected, &baseCiopConfig); err != nil {
 				t.Fatal(err)
 			}
 			expected.Configuration.InputConfiguration.ReleaseTagConfiguration.Name = "another-name"
-			return config.ByFilename{"org-repo-branch.yaml": expected}
+			return config.DataByFilename{"org-repo-branch.yaml": expected}
 		},
 		expectedAffectedJobs: map[string]sets.String{},
 	},
 		{
 			name: "changed tests",
-			configGenerator: func(t *testing.T) (config.ByFilename, config.ByFilename) {
-				before := config.ByFilename{"org-repo-branch.yaml": baseCiopConfig}
+			configGenerator: func(t *testing.T) (config.DataByFilename, config.DataByFilename) {
+				before := config.DataByFilename{"org-repo-branch.yaml": baseCiopConfig}
 				afterConfig := config.DataWithInfo{}
 				if err := deepcopy.Copy(&afterConfig, &baseCiopConfig); err != nil {
 					t.Fatal(err)
 				}
 				afterConfig.Configuration.Tests[0].Commands = "changed commands"
-				after := config.ByFilename{"org-repo-branch.yaml": afterConfig}
+				after := config.DataByFilename{"org-repo-branch.yaml": afterConfig}
 				return before, after
 			},
-			expected: func() config.ByFilename {
+			expected: func() config.DataByFilename {
 				expected := config.DataWithInfo{}
 				if err := deepcopy.Copy(&expected, &baseCiopConfig); err != nil {
 					t.Fatal(err)
 				}
 				expected.Configuration.Tests[0].Commands = "changed commands"
-				return config.ByFilename{"org-repo-branch.yaml": expected}
+				return config.DataByFilename{"org-repo-branch.yaml": expected}
 			},
 			expectedAffectedJobs: map[string]sets.String{"org-repo-branch.yaml": {"unit": sets.Empty{}}},
 		},
 		{
 			name: "changed multiple tests",
-			configGenerator: func(t *testing.T) (config.ByFilename, config.ByFilename) {
-				before := config.ByFilename{"org-repo-branch.yaml": baseCiopConfig}
+			configGenerator: func(t *testing.T) (config.DataByFilename, config.DataByFilename) {
+				before := config.DataByFilename{"org-repo-branch.yaml": baseCiopConfig}
 				afterConfig := config.DataWithInfo{}
 				if err := deepcopy.Copy(&afterConfig, &baseCiopConfig); err != nil {
 					t.Fatal(err)
 				}
 				afterConfig.Configuration.Tests[0].Commands = "changed commands"
 				afterConfig.Configuration.Tests[1].Commands = "changed commands"
-				after := config.ByFilename{"org-repo-branch.yaml": afterConfig}
+				after := config.DataByFilename{"org-repo-branch.yaml": afterConfig}
 				return before, after
 			},
-			expected: func() config.ByFilename {
+			expected: func() config.DataByFilename {
 				expected := config.DataWithInfo{}
 				if err := deepcopy.Copy(&expected, &baseCiopConfig); err != nil {
 					t.Fatal(err)
 				}
 				expected.Configuration.Tests[0].Commands = "changed commands"
 				expected.Configuration.Tests[1].Commands = "changed commands"
-				return config.ByFilename{"org-repo-branch.yaml": expected}
+				return config.DataByFilename{"org-repo-branch.yaml": expected}
 			},
 			expectedAffectedJobs: map[string]sets.String{
 				"org-repo-branch.yaml": {
@@ -441,7 +441,7 @@ func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 	testCases := []struct {
 		description string
 		prow        *prowconfig.Config
-		ciop        config.ByFilename
+		ciop        config.DataByFilename
 		expected    config.Presubmits
 	}{{
 		description: "return a presubmit using one of the input ciop configs",
@@ -461,7 +461,7 @@ func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 					}},
 			},
 		},
-		ciop: config.ByFilename{baseCiopConfig.Filename: {Info: baseCiopConfig}},
+		ciop: config.DataByFilename{baseCiopConfig.Filename: {Info: baseCiopConfig}},
 		expected: config.Presubmits{"org/repo": {
 			func() prowconfig.Presubmit {
 				ret := prowconfig.Presubmit{}
@@ -496,7 +496,7 @@ func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 					}},
 			},
 		},
-		ciop: config.ByFilename{baseCiopConfig.Filename: {Info: baseCiopConfig}},
+		ciop: config.DataByFilename{baseCiopConfig.Filename: {Info: baseCiopConfig}},
 		expected: config.Presubmits{"org/repo": {
 			func() prowconfig.Presubmit {
 				ret := prowconfig.Presubmit{}
@@ -531,7 +531,7 @@ func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 					}},
 			},
 		},
-		ciop:     config.ByFilename{},
+		ciop:     config.DataByFilename{},
 		expected: config.Presubmits{},
 	}, {
 		description: "handle jenkins presubmits",
@@ -552,7 +552,7 @@ func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 					}},
 			},
 		},
-		ciop:     config.ByFilename{},
+		ciop:     config.DataByFilename{},
 		expected: config.Presubmits{},
 	},
 	}
@@ -589,7 +589,7 @@ func TestGetImagesPostsubmitsForCiopConfigs(t *testing.T) {
 	var testCases = []struct {
 		name        string
 		prowConfig  *prowconfig.Config
-		ciopConfigs config.ByFilename
+		ciopConfigs config.DataByFilename
 		expected    []PostsubmitInContext
 	}{
 		{

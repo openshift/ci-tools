@@ -155,16 +155,17 @@ func (r *reconciler) reconcile(log *logrus.Entry, request controllerruntime.Requ
 		return nil
 	}
 
+	if r.dryRun {
+		serialized, _ := json.Marshal(pj)
+		log.WithField("job_name", pj.Spec.Job).WithField("job", string(serialized)).Info("Not creating prowjob because dryRun is enabled")
+		r.createdJobsCounter.WithLabelValues(orbc.Org, orbc.Repo, orbc.Branch).Inc()
+		return nil
+	}
+
 	if err := r.client.Create(r.ctx, pj); err != nil {
 		return fmt.Errorf("failed to create prowjob: %w", err)
 	}
 	r.createdJobsCounter.WithLabelValues(orbc.Org, orbc.Repo, orbc.Branch).Inc()
-
-	if r.dryRun {
-		serialized, _ := json.Marshal(pj)
-		log.WithField("job_name", pj.Spec.Job).WithField("job", string(serialized)).Info("Not creating prowjob because dryRun is enabled")
-		return nil
-	}
 
 	// There is some delay until it gets back to our cache, so block until we can retrieve
 	// it successfully.

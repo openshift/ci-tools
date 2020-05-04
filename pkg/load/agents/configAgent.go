@@ -2,9 +2,6 @@ package agents
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -22,7 +19,7 @@ import (
 // memory and retrieve them when provided with a config.Info.
 type ConfigAgent interface {
 	GetConfig(config.Info) (api.ReleaseBuildConfiguration, error)
-	GetAll() FilenameToConfig
+	GetAll() load.FilenameToConfig
 	GetGeneration() int
 	AddIndex(indexName string, indexFunc IndexFn) error
 	GetFromIndex(indexName string, indexKey string) ([]*api.ReleaseBuildConfiguration, error)
@@ -31,11 +28,9 @@ type ConfigAgent interface {
 // IndexFn can be used to add indexes to the ConfigAgent
 type IndexFn func(api.ReleaseBuildConfiguration) []string
 
-type FilenameToConfig map[string]api.ReleaseBuildConfiguration
-
 type configAgent struct {
 	lock         *sync.RWMutex
-	configs      FilenameToConfig
+	configs      load.FilenameToConfig
 	configPath   string
 	cycle        time.Duration
 	generation   int
@@ -94,7 +89,7 @@ func (a *configAgent) GetConfig(info config.Info) (api.ReleaseBuildConfiguration
 	return config, nil
 }
 
-func (a *configAgent) GetAll() FilenameToConfig {
+func (a *configAgent) GetAll() load.FilenameToConfig {
 	return a.configs
 }
 
@@ -130,36 +125,9 @@ func (a *configAgent) AddIndex(indexName string, indexFunc IndexFn) error {
 func (a *configAgent) loadFilenameToConfig() error {
 	log.Debug("Reloading configs")
 	startTime := time.Now()
-	configs := FilenameToConfig{}
-	err := filepath.Walk(a.configPath, func(path string, info os.FileInfo, err error) error {
-		if info == nil || err != nil {
-			return err
-		}
-		if strings.HasPrefix(info.Name(), "..") {
-			if info.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		ext := filepath.Ext(path)
-		if info != nil && !info.IsDir() && (ext == ".yml" || ext == ".yaml") {
-			configSpec, err := load.Config(path, "", nil)
-			if err != nil {
-				a.recordError("failed to load ci-operator config")
-				return fmt.Errorf("failed to load ci-operator config (%v)", err)
-			}
-
-			if err := configSpec.ValidateAtRuntime(); err != nil {
-				a.recordError("invalid ci-operator config")
-				return fmt.Errorf("invalid ci-operator config: %v", err)
-			}
-			log.Tracef("Adding %s to filenameToConfig", filepath.Base(path))
-			configs[filepath.Base(path)] = *configSpec
-		}
-		return nil
-	})
+	configs, err := load.FromPath(a.configPath)
 	if err != nil {
-		return err
+		return fmt.Errorf("loading config failed: %w", err)
 	}
 
 	indexes := a.buildIndexes(configs)
@@ -175,7 +143,7 @@ func (a *configAgent) loadFilenameToConfig() error {
 	return nil
 }
 
-func (a *configAgent) buildIndexes(configs FilenameToConfig) map[string]configIndex {
+func (a *configAgent) buildIndexes(configs load.FilenameToConfig) map[string]configIndex {
 	indexes := map[string]configIndex{}
 	for indexName, indexFunc := range a.indexFuncs {
 		for _, config := range configs {

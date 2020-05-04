@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/glog"
+	"github.com/sirupsen/logrus"
 
 	coreapi "k8s.io/api/core/v1"
 
@@ -217,7 +217,7 @@ type PodClient interface {
 }
 
 func copyArtifacts(podClient PodClient, into, ns, name, containerName string, paths []string) error {
-	glog.V(4).Infof("Copying artifacts from %s into %s", name, into)
+	logrus.Tracef("Copying artifacts from %s into %s", name, into)
 	var args []string
 	for _, s := range paths {
 		args = append(args, "-C", s, ".")

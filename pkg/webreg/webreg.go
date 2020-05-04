@@ -402,7 +402,7 @@ needs to know the inputs from which they will be created. A number of inputs
 can be configured; the following example provides both:
 </p>
 <ul>
-  <li><code>base_images</code>: provides a mapping of named <code>ImageStreamTags</code> which will be aviailable for use in container image builds</li>
+  <li><code>base_images</code>: provides a mapping of named <code>ImageStreamTags</code> which will be available for use in container image builds</li>
   <li><code>build_root</code>: defines the <code>ImageStreamTag</code> in which dependencies exist for building executables and non-image artifacts</li>
 </ul>
 
@@ -415,10 +415,28 @@ take the form of an <code>ImageStreamTag</code> on the build farm cluster, not
 just a valid pull-spec for an image. <code>ci-operator</code> will import these
 <code>ImageStreamTags</code> into the <code>Namespace</code> created for the
 test workflow; snapshotting the current state of inputs to allow for reproducible
-builds. If an image that is required for building is not yet present on the
-cluster, the correct <code>ImageStream</code> should be declared and committed
-to the <code>openshift/release</code> repository <a href="https://github.com/openshift/release/tree/master/core-services/supplemental-ci-images">here.</a>
+builds.
 </p>
+
+<p>
+If an image that is required for building is not yet present on the cluster,
+either:
+</p>
+
+<ul>
+  <li>
+    The correct <code>ImageStream</code> should be declared and committed to
+    the <code>openshift/release</code> repository <a
+    href="https://github.com/openshift/release/tree/master/core-services/supplemental-ci-images">here.</a></li>
+  </li>
+  <li>
+	The image referenced in <code>base_images</code> has to be accessible. The
+	simplest RBAC rule to achieve this is to allow the
+	<code>system:authenticated</code> role to <code>get</code>
+	<code>imagestreams/layers</code> in the namespace that contains the
+	<code>ImageStream</code>.
+  </li>
+</ul>
 
 <h4 id="artifacts"><a href="#artifacts">Building Artifacts</a></h4>
 

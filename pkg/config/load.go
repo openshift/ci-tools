@@ -191,7 +191,7 @@ func isConfigFile(path string, info os.FileInfo) bool {
 
 // OperateOnCIOperatorConfig runs the callback on the parsed data from
 // the CI Operator configuration file provided
-func OperateOnCIOperatorConfig(path string, callback func(*cioperatorapi.ReleaseBuildConfiguration, *Info) error, conditions ...func(*cioperatorapi.ReleaseBuildConfiguration, *Info) bool) error {
+func OperateOnCIOperatorConfig(path string, callback func(*cioperatorapi.ReleaseBuildConfiguration, *Info) error) error {
 	info, err := InfoFromPath(path)
 	if err != nil {
 		logrus.WithField("source-file", path).WithError(err).Error("Failed to resolve info from CI Operator configuration path")
@@ -202,13 +202,6 @@ func OperateOnCIOperatorConfig(path string, callback func(*cioperatorapi.Release
 		logrus.WithField("source-file", path).WithError(err).Error("Failed to load CI Operator configuration")
 		return err
 	}
-
-	for _, condition := range conditions {
-		if !condition(jobConfig, info) {
-			return nil
-		}
-	}
-
 	if err = callback(jobConfig, info); err != nil {
 		logrus.WithField("source-file", path).WithError(err).Error("Failed to execute callback")
 		return err
@@ -218,19 +211,18 @@ func OperateOnCIOperatorConfig(path string, callback func(*cioperatorapi.Release
 
 // OperateOnCIOperatorConfigDir runs the callback on all CI Operator
 // configuration files found while walking the directory provided
-func OperateOnCIOperatorConfigDir(configDir string, callback func(*cioperatorapi.ReleaseBuildConfiguration, *Info) error, conditions ...func(*cioperatorapi.ReleaseBuildConfiguration, *Info) bool) error {
-	return OperateOnCIOperatorConfigSubdir(configDir, "", callback, conditions...)
+func OperateOnCIOperatorConfigDir(configDir string, callback func(*cioperatorapi.ReleaseBuildConfiguration, *Info) error) error {
+	return OperateOnCIOperatorConfigSubdir(configDir, "", callback)
 }
 
-func OperateOnCIOperatorConfigSubdir(configDir, subDir string, callback func(*cioperatorapi.ReleaseBuildConfiguration, *Info) error, conditions ...func(*cioperatorapi.ReleaseBuildConfiguration, *Info) bool) error {
+func OperateOnCIOperatorConfigSubdir(configDir, subDir string, callback func(*cioperatorapi.ReleaseBuildConfiguration, *Info) error) error {
 	return filepath.Walk(filepath.Join(configDir, subDir), func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			logrus.WithField("source-file", path).WithError(err).Error("Failed to walk CI Operator configuration dir")
 			return err
 		}
-
 		if isConfigFile(path, info) {
-			if err := OperateOnCIOperatorConfig(path, callback, conditions...); err != nil {
+			if err := OperateOnCIOperatorConfig(path, callback); err != nil {
 				return err
 			}
 		}

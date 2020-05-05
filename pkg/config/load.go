@@ -49,13 +49,10 @@ func readCiOperatorConfig(configFilePath string, info Info) (*cioperatorapi.Rele
 	return configSpec, nil
 }
 
-// DataWithInfo describes the metadata for a CI Operator configuration file
+// Info describes the metadata for a CI Operator configuration file
+// along with where it's loaded from
 type Info struct {
-	Org    string
-	Repo   string
-	Branch string
-	// Variant allows for parallel configuration files for one (org,repo,branch)
-	Variant string
+	cioperatorapi.Metadata
 	// Filename is the full path to the file on disk
 	Filename string
 	// OrgPath is the full path to the directory containing config for the org
@@ -174,10 +171,12 @@ func InfoFromPath(configFilePath string) (*Info, error) {
 	}
 
 	return &Info{
-		Org:      org,
-		Repo:     repo,
-		Branch:   branch,
-		Variant:  variant,
+		Metadata: cioperatorapi.Metadata{
+			Org:     org,
+			Repo:    repo,
+			Branch:  branch,
+			Variant: variant,
+		},
 		Filename: configFilePath,
 		OrgPath:  filepath.Dir(configSpecDir),
 		RepoPath: configSpecDir,
@@ -280,6 +279,23 @@ func (all DataByFilename) add(handledConfig *cioperatorapi.ReleaseBuildConfigura
 
 func LoadDataByFilename(path string) (DataByFilename, error) {
 	config := DataByFilename{}
+	if err := OperateOnCIOperatorConfigDir(path, config.add); err != nil {
+		return nil, err
+	}
+
+	return config, nil
+}
+
+// ByFilename stores CI Operator configurations with their metadata by filename
+type ByFilename map[string]cioperatorapi.ReleaseBuildConfiguration
+
+func (all ByFilename) add(handledConfig *cioperatorapi.ReleaseBuildConfiguration, handledElements *Info) error {
+	all[handledElements.Basename()] = *handledConfig
+	return nil
+}
+
+func LoadByFilename(path string) (ByFilename, error) {
+	config := ByFilename{}
 	if err := OperateOnCIOperatorConfigDir(path, config.add); err != nil {
 		return nil, err
 	}

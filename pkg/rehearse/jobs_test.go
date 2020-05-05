@@ -56,9 +56,11 @@ func generateTestConfigFiles() config.DataByFilename {
 				},
 			},
 			Info: config.Info{
-				Org:    "targetOrg",
-				Repo:   "targetRepo",
-				Branch: "master",
+				Metadata: api.Metadata{
+					Org:    "targetOrg",
+					Repo:   "targetRepo",
+					Branch: "master",
+				},
 			},
 		},
 		"targetOrg-targetRepo-not-master.yaml": config.DataWithInfo{
@@ -69,9 +71,11 @@ func generateTestConfigFiles() config.DataByFilename {
 				},
 			},
 			Info: config.Info{
-				Org:    "targetOrg",
-				Repo:   "targetRepo",
-				Branch: "not-master",
+				Metadata: api.Metadata{
+					Org:    "targetOrg",
+					Repo:   "targetRepo",
+					Branch: "not-master",
+				},
 			},
 		}, "anotherOrg-anotherRepo-master.yaml": config.DataWithInfo{
 			Configuration: api.ReleaseBuildConfiguration{
@@ -81,9 +85,11 @@ func generateTestConfigFiles() config.DataByFilename {
 				},
 			},
 			Info: config.Info{
-				Org:    "anotherOrg",
-				Repo:   "anotherRepo",
-				Branch: "master",
+				Metadata: api.Metadata{
+					Org:    "anotherOrg",
+					Repo:   "anotherRepo",
+					Branch: "master",
+				},
 			},
 		},
 	}
@@ -217,9 +223,9 @@ func makeCMReference(cmName, key string) *v1.EnvVarSource {
 }
 
 func TestInlineCiopConfig(t *testing.T) {
-	testCiopConfigInfo := config.Info{
-		Org:    "org",
-		Repo:   "repo",
+	testCiopConfigInfo := api.Metadata{
+		Org:    "targetOrg",
+		Repo:   "targetRepo",
 		Branch: "master",
 	}
 	testCiopConfig := api.ReleaseBuildConfiguration{}
@@ -255,7 +261,7 @@ func TestInlineCiopConfig(t *testing.T) {
 	}, {
 		description: "CM reference to ci-operator-configs -> cm content inlined",
 		sourceEnv:   []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference(testCiopConfigInfo.ConfigMapName(), "filename")}},
-		configs:     config.DataByFilename{"filename": {Info: testCiopConfigInfo, Configuration: testCiopConfig}},
+		configs:     config.DataByFilename{"filename": {Info: config.Info{Metadata: testCiopConfigInfo}, Configuration: testCiopConfig}},
 		expectedEnv: []v1.EnvVar{{Name: "T", Value: string(testCiopConfigContent)}},
 	}, {
 		description:   "bad CM key is handled",
@@ -1161,12 +1167,12 @@ func TestRemoveConfigResolverFlags(t *testing.T) {
 		description  string
 		input        []string
 		expectedArgs []string
-		expectedInfo config.Info
+		expectedInfo api.Metadata
 	}{{
 		description:  "just resolver flags",
 		input:        []string{"--resolver-address=http://ci-operator-resolver", "--org=openshift", "--repo=origin", "--branch=master", "--variant=v2"},
 		expectedArgs: nil,
-		expectedInfo: config.Info{Org: "openshift", Repo: "origin", Branch: "master", Variant: "v2"},
+		expectedInfo: api.Metadata{Org: "openshift", Repo: "origin", Branch: "master", Variant: "v2"},
 	}, {
 		description:  "no resolver flags",
 		input:        []string{"--artifact-dir=$(ARTIFACTS)", "--target=target"},
@@ -1175,12 +1181,12 @@ func TestRemoveConfigResolverFlags(t *testing.T) {
 		description:  "mixed resolver and non-resolver flags",
 		input:        []string{"--artifact-dir=$(ARTIFACTS)", "--resolver-address=http://ci-operator-resolver", "--org=openshift", "--target=target", "--repo=origin", "--branch=master", "--variant=v2"},
 		expectedArgs: []string{"--artifact-dir=$(ARTIFACTS)", "--target=target"},
-		expectedInfo: config.Info{Org: "openshift", Repo: "origin", Branch: "master", Variant: "v2"},
+		expectedInfo: api.Metadata{Org: "openshift", Repo: "origin", Branch: "master", Variant: "v2"},
 	}, {
 		description:  "spaces in between flag and value",
 		input:        []string{"--artifact-dir=$(ARTIFACTS)", "--resolver-address=http://ci-operator-resolver", "--org", "openshift", "--target=target", "--repo", "origin", "--branch", "master", "--variant=v2"},
 		expectedArgs: []string{"--artifact-dir=$(ARTIFACTS)", "--target=target"},
-		expectedInfo: config.Info{Org: "openshift", Repo: "origin", Branch: "master", Variant: "v2"},
+		expectedInfo: api.Metadata{Org: "openshift", Repo: "origin", Branch: "master", Variant: "v2"},
 	}}
 	for _, testCase := range testCases {
 		t.Run(testCase.description, func(t *testing.T) {

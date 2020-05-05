@@ -25,7 +25,7 @@ const (
 )
 
 type ProwgenInfo struct {
-	config.Info
+	cioperatorapi.Metadata
 	Config config.Prowgen
 }
 
@@ -415,7 +415,7 @@ func generatePodSpecOthers(info *ProwgenInfo, release string, test *cioperatorap
 }
 
 func generatePresubmitForTest(name string, info *ProwgenInfo, label jc.ProwgenLabel, podSpec *corev1.PodSpec, rehearsable bool, pathAlias *string) *prowconfig.Presubmit {
-	shortName := info.Info.TestName(name)
+	shortName := info.TestName(name)
 	base := generateJobBase(name, jc.PresubmitPrefix, info, label, podSpec, rehearsable, pathAlias)
 	return &prowconfig.Presubmit{
 		JobBase:   base,
@@ -511,7 +511,7 @@ func generateJobBase(name, prefix string, info *ProwgenInfo, label jc.ProwgenLab
 		labels[jc.CanBeRehearsedLabel] = string(jc.Generated)
 	}
 
-	jobName := info.Info.JobName(prefix, name)
+	jobName := info.JobName(prefix, name)
 	if len(info.Variant) > 0 {
 		labels[jc.ProwJobLabelVariant] = info.Variant
 	}

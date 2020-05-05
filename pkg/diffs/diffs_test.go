@@ -53,9 +53,11 @@ func TestGetChangedCiopConfigs(t *testing.T) {
 			},
 		},
 		Info: config.Info{
-			Org:      "org",
-			Repo:     "repo",
-			Branch:   "branch",
+			Metadata: cioperatorapi.Metadata{
+				Org:    "org",
+				Repo:   "repo",
+				Branch: "branch",
+			},
 			Filename: "org-repo-branch.yaml",
 		},
 	}
@@ -403,9 +405,11 @@ func makeConfig(p []prowconfig.Presubmit) *prowconfig.Config {
 
 func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 	baseCiopConfig := config.Info{
-		Org:      "org",
-		Repo:     "repo",
-		Branch:   "branch",
+		Metadata: cioperatorapi.Metadata{
+			Org:    "org",
+			Repo:   "repo",
+			Branch: "branch",
+		},
 		Filename: "org-repo-branch.yaml",
 	}
 
@@ -568,16 +572,16 @@ func TestGetPresubmitsForCiopConfigs(t *testing.T) {
 	}
 }
 
-func podSpecReferencing(info config.Info) *v1.PodSpec {
+func podSpecReferencing(metadata cioperatorapi.Metadata) *v1.PodSpec {
 	return &v1.PodSpec{
 		Containers: []v1.Container{{
 			Env: []v1.EnvVar{{
 				ValueFrom: &v1.EnvVarSource{
 					ConfigMapKeyRef: &v1.ConfigMapKeySelector{
 						LocalObjectReference: v1.LocalObjectReference{
-							Name: info.ConfigMapName(),
+							Name: metadata.ConfigMapName(),
 						},
-						Key: info.Basename(),
+						Key: metadata.Basename(),
 					},
 				},
 			}},
@@ -601,7 +605,7 @@ func TestGetImagesPostsubmitsForCiopConfigs(t *testing.T) {
 							JobBase: prowconfig.JobBase{
 								Name:  "branch-ci-org-repo-branch-images",
 								Agent: "kubernetes",
-								Spec:  podSpecReferencing(config.Info{Org: "org", Repo: "repo", Branch: "branch"}),
+								Spec:  podSpecReferencing(cioperatorapi.Metadata{Org: "org", Repo: "repo", Branch: "branch"}),
 							},
 						}},
 					},
@@ -619,7 +623,7 @@ func TestGetImagesPostsubmitsForCiopConfigs(t *testing.T) {
 				},
 			},
 			ciopConfigs: map[string]config.DataWithInfo{
-				"org-repo-branch.yaml": {Info: config.Info{Org: "org", Repo: "repo", Branch: "branch"}},
+				"org-repo-branch.yaml": {Info: config.Info{Metadata: cioperatorapi.Metadata{Org: "org", Repo: "repo", Branch: "branch"}}},
 			},
 		},
 		{
@@ -631,22 +635,22 @@ func TestGetImagesPostsubmitsForCiopConfigs(t *testing.T) {
 							JobBase: prowconfig.JobBase{
 								Name:  "branch-ci-org-repo-branch-images",
 								Agent: "kubernetes",
-								Spec:  podSpecReferencing(config.Info{Org: "org", Repo: "repo", Branch: "branch"}),
+								Spec:  podSpecReferencing(cioperatorapi.Metadata{Org: "org", Repo: "repo", Branch: "branch"}),
 							},
 						}},
 					},
 				},
 			},
 			ciopConfigs: map[string]config.DataWithInfo{
-				"org-repo-branch.yaml": {Info: config.Info{Org: "org", Repo: "repo", Branch: "branch"}},
+				"org-repo-branch.yaml": {Info: config.Info{Metadata: cioperatorapi.Metadata{Org: "org", Repo: "repo", Branch: "branch"}}},
 			},
 			expected: []PostsubmitInContext{{
-				Info: config.Info{Org: "org", Repo: "repo", Branch: "branch"},
+				Metadata: cioperatorapi.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
 				Job: prowconfig.Postsubmit{
 					JobBase: prowconfig.JobBase{
 						Name:  "branch-ci-org-repo-branch-images",
 						Agent: "kubernetes",
-						Spec:  podSpecReferencing(config.Info{Org: "org", Repo: "repo", Branch: "branch"}),
+						Spec:  podSpecReferencing(cioperatorapi.Metadata{Org: "org", Repo: "repo", Branch: "branch"}),
 					},
 				},
 			}},
@@ -660,14 +664,14 @@ func TestGetImagesPostsubmitsForCiopConfigs(t *testing.T) {
 							JobBase: prowconfig.JobBase{
 								Name:  "branch-ci-org-repo-BRANCH-images",
 								Agent: "kubernetes",
-								Spec:  podSpecReferencing(config.Info{Org: "org", Repo: "repo", Branch: "BRANCH"}),
+								Spec:  podSpecReferencing(cioperatorapi.Metadata{Org: "org", Repo: "repo", Branch: "BRANCH"}),
 							},
 						}},
 					},
 				},
 			},
 			ciopConfigs: map[string]config.DataWithInfo{
-				"org-repo-branch.yaml": {Info: config.Info{Org: "org", Repo: "repo", Branch: "branch"}},
+				"org-repo-branch.yaml": {Info: config.Info{Metadata: cioperatorapi.Metadata{Org: "org", Repo: "repo", Branch: "branch"}}},
 			},
 		},
 		{
@@ -679,14 +683,14 @@ func TestGetImagesPostsubmitsForCiopConfigs(t *testing.T) {
 							JobBase: prowconfig.JobBase{
 								Name:  "branch-ci-org-repo-branch-othertest",
 								Agent: "kubernetes",
-								Spec:  podSpecReferencing(config.Info{Org: "org", Repo: "repo", Branch: "branch"}),
+								Spec:  podSpecReferencing(cioperatorapi.Metadata{Org: "org", Repo: "repo", Branch: "branch"}),
 							},
 						}},
 					},
 				},
 			},
 			ciopConfigs: map[string]config.DataWithInfo{
-				"org-repo-branch.yaml": {Info: config.Info{Org: "org", Repo: "repo", Branch: "branch"}},
+				"org-repo-branch.yaml": {Info: config.Info{Metadata: cioperatorapi.Metadata{Org: "org", Repo: "repo", Branch: "branch"}}},
 			},
 		},
 	}

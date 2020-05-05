@@ -131,8 +131,8 @@ func getJobsByRepoAndName(presubmits config.Presubmits) map[string]map[string]pr
 
 // PostsubmitInContext is a postsubmit with the org/repo#branch for which it will trigger
 type PostsubmitInContext struct {
-	Info config.Info
-	Job  prowconfig.Postsubmit
+	Metadata cioperatorapi.Metadata
+	Job      prowconfig.Postsubmit
 }
 
 // GetImagesPostsubmitsForCiopConfigs determines the [images] postsubmit jobs affected by the changed
@@ -153,8 +153,8 @@ func GetImagesPostsubmitsForCiopConfigs(prowConfig *prowconfig.Config, ciopConfi
 
 			if testName == "images" {
 				ret = append(ret, PostsubmitInContext{
-					Info: data.Info,
-					Job:  job,
+					Metadata: data.Info.Metadata,
+					Job:      job,
 				})
 			}
 		}

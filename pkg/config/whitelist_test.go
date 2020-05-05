@@ -1,6 +1,7 @@
 package config
 
 import (
+	"github.com/openshift/ci-tools/pkg/api"
 	"testing"
 )
 
@@ -14,19 +15,19 @@ func TestIsWhiteListed(t *testing.T) {
 		{
 			id:        "org/repo is not in whitelist",
 			whitelist: WhitelistConfig{Whitelist: map[string][]string{"openshift": {"repo1, repo2"}}},
-			info:      &Info{Org: "anotherOrg", Repo: "anotherRepo"},
+			info:      &Info{Metadata: api.Metadata{Org: "anotherOrg", Repo: "anotherRepo"}},
 			expected:  false,
 		},
 		{
 			id:        "org is in whitelist but not repo",
 			whitelist: WhitelistConfig{Whitelist: map[string][]string{"openshift": {"repo1, repo2"}}},
-			info:      &Info{Org: "openshift", Repo: "anotherRepo"},
+			info:      &Info{Metadata: api.Metadata{Org: "openshift", Repo: "anotherRepo"}},
 			expected:  false,
 		},
 		{
 			id:        "org/repo is in whitelist",
 			whitelist: WhitelistConfig{Whitelist: map[string][]string{"openshift": {"repo1", "repo2"}}},
-			info:      &Info{Org: "openshift", Repo: "repo1"},
+			info:      &Info{Metadata: api.Metadata{Org: "openshift", Repo: "repo1"}},
 			expected:  true,
 		},
 	}

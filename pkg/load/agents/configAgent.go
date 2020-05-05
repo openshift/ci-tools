@@ -11,14 +11,13 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/coalescer"
-	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/load"
 )
 
 // ConfigAgent is an interface that can load configs from disk into
 // memory and retrieve them when provided with a config.Info.
 type ConfigAgent interface {
-	GetConfig(config.Info) (api.ReleaseBuildConfiguration, error)
+	GetConfig(metadata api.Metadata) (api.ReleaseBuildConfiguration, error)
 	GetAll() load.FilenameToConfig
 	GetGeneration() int
 	AddIndex(indexName string, indexFunc IndexFn) error
@@ -80,12 +79,12 @@ func (a *configAgent) recordError(label string) {
 	a.errorMetrics.With(labels).Inc()
 }
 
-func (a *configAgent) GetConfig(info config.Info) (api.ReleaseBuildConfiguration, error) {
+func (a *configAgent) GetConfig(metadata api.Metadata) (api.ReleaseBuildConfiguration, error) {
 	a.lock.RLock()
 	defer a.lock.RUnlock()
-	config, ok := a.configs[info.Basename()]
+	config, ok := a.configs[metadata.Basename()]
 	if !ok {
-		return api.ReleaseBuildConfiguration{}, fmt.Errorf("Could not find config %s", info.Basename())
+		return api.ReleaseBuildConfiguration{}, fmt.Errorf("Could not find config %s", metadata.Basename())
 	}
 	return config, nil
 }

@@ -31,7 +31,7 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 					PromotionConfiguration: nil,
 				},
 				Info: config.Info{
-					Org: "org", Repo: "repo", Branch: "branch",
+					Metadata: api.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
 				},
 			},
 			output: nil,
@@ -48,7 +48,7 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 					},
 				},
 				Info: config.Info{
-					Org: "org", Repo: "repo", Branch: "branch",
+					Metadata: api.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
 				},
 			},
 			output: nil,
@@ -65,7 +65,7 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 					},
 				},
 				Info: config.Info{
-					Org: "org", Repo: "repo", Branch: "branch",
+					Metadata: api.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
 				},
 			},
 			output: nil,
@@ -109,7 +109,7 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 					},
 				},
 				Info: config.Info{
-					Org: "org", Repo: "repo", Branch: "master",
+					Metadata: api.Metadata{Org: "org", Repo: "repo", Branch: "master"},
 				},
 			},
 			output: []config.DataWithInfo{
@@ -149,7 +149,7 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 						},
 					},
 					Info: config.Info{
-						Org: "org", Repo: "repo", Branch: "release-current-release",
+						Metadata: api.Metadata{Org: "org", Repo: "repo", Branch: "release-current-release"},
 					},
 				},
 			},
@@ -172,7 +172,7 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 					},
 				},
 				Info: config.Info{
-					Org: "org", Repo: "repo", Branch: "openshift-current-release",
+					Metadata: api.Metadata{Org: "org", Repo: "repo", Branch: "openshift-current-release"},
 				},
 			},
 			output: []config.DataWithInfo{},
@@ -216,7 +216,7 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 					},
 				},
 				Info: config.Info{
-					Org: "org", Repo: "repo", Branch: "master",
+					Metadata: api.Metadata{Org: "org", Repo: "repo", Branch: "master"},
 				},
 			},
 			output: []config.DataWithInfo{
@@ -256,7 +256,7 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 						},
 					},
 					Info: config.Info{
-						Org: "org", Repo: "repo", Branch: "release-current-release",
+						Metadata: api.Metadata{Org: "org", Repo: "repo", Branch: "release-current-release"},
 					},
 				},
 				{
@@ -294,7 +294,7 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 						},
 					},
 					Info: config.Info{
-						Org: "org", Repo: "repo", Branch: "release-future-release-1",
+						Metadata: api.Metadata{Org: "org", Repo: "repo", Branch: "release-future-release-1"},
 					},
 				},
 				{
@@ -332,7 +332,7 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 						},
 					},
 					Info: config.Info{
-						Org: "org", Repo: "repo", Branch: "release-future-release-2",
+						Metadata: api.Metadata{Org: "org", Repo: "repo", Branch: "release-future-release-2"},
 					},
 				},
 			},
@@ -356,7 +356,7 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 					},
 				},
 				Info: config.Info{
-					Org: "org", Repo: "repo", Branch: "master",
+					Metadata: api.Metadata{Org: "org", Repo: "repo", Branch: "master"},
 				},
 			},
 			output: []config.DataWithInfo{
@@ -374,7 +374,7 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 						},
 					},
 					Info: config.Info{
-						Org: "org", Repo: "repo", Branch: "master",
+						Metadata: api.Metadata{Org: "org", Repo: "repo", Branch: "master"},
 					},
 				},
 				{
@@ -391,7 +391,7 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 						},
 					},
 					Info: config.Info{
-						Org: "org", Repo: "repo", Branch: "release-current-release",
+						Metadata: api.Metadata{Org: "org", Repo: "repo", Branch: "release-current-release"},
 					},
 				},
 				{
@@ -409,7 +409,7 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 						},
 					},
 					Info: config.Info{
-						Org: "org", Repo: "repo", Branch: "release-future-release-1",
+						Metadata: api.Metadata{Org: "org", Repo: "repo", Branch: "release-future-release-1"},
 					},
 				},
 				{
@@ -426,7 +426,7 @@ func TestGenerateBranchedConfigs(t *testing.T) {
 						},
 					},
 					Info: config.Info{
-						Org: "org", Repo: "repo", Branch: "release-future-release-2",
+						Metadata: api.Metadata{Org: "org", Repo: "repo", Branch: "release-future-release-2"},
 					},
 				},
 			},

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/openshift/ci-tools/pkg/api"
 	"net/http"
 	"os"
 	"strconv"
@@ -17,7 +18,6 @@ import (
 	"k8s.io/test-infra/prow/metrics"
 	"k8s.io/test-infra/prow/pjutil"
 
-	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/load/agents"
 	"github.com/openshift/ci-tools/pkg/webreg"
 )
@@ -205,7 +205,7 @@ func resolveConfig(configAgent agents.ConfigAgent, registryAgent agents.Registry
 			return
 		}
 		variant := r.URL.Query().Get(variantQuery)
-		info := config.Info{
+		metadata := api.Metadata{
 			Org:     org,
 			Repo:    repo,
 			Branch:  branch,
@@ -218,7 +218,7 @@ func resolveConfig(configAgent agents.ConfigAgent, registryAgent agents.Registry
 			"variant": variant,
 		})
 
-		config, err := configAgent.GetConfig(info)
+		config, err := configAgent.GetConfig(metadata)
 		if err != nil {
 			recordError("config not found")
 			w.WriteHeader(http.StatusNotFound)

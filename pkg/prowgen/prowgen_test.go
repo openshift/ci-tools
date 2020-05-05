@@ -38,7 +38,7 @@ func TestGeneratePodSpec(t *testing.T) {
 	}{
 		{
 			description: "standard use case",
-			info:        &ProwgenInfo{Info: config.Info{Org: "org", Repo: "repo", Branch: "branch"}},
+			info:        &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
 			secrets:     nil,
 			targets:     []string{"target"},
 
@@ -80,7 +80,7 @@ func TestGeneratePodSpec(t *testing.T) {
 		},
 		{
 			description:    "additional args are included in podspec",
-			info:           &ProwgenInfo{Info: config.Info{Org: "org", Repo: "repo", Branch: "branch"}},
+			info:           &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
 			secrets:        nil,
 			targets:        []string{"target"},
 			additionalArgs: []string{"--promote", "--some=thing"},
@@ -125,7 +125,7 @@ func TestGeneratePodSpec(t *testing.T) {
 		},
 		{
 			description:    "additional args and secret are included in podspec",
-			info:           &ProwgenInfo{Info: config.Info{Org: "org", Repo: "repo", Branch: "branch"}},
+			info:           &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
 			secrets:        []*ciop.Secret{{Name: "secret-name", MountPath: "/usr/local/test-secret"}},
 			targets:        []string{"target"},
 			additionalArgs: []string{"--promote", "--some=thing"},
@@ -180,7 +180,7 @@ func TestGeneratePodSpec(t *testing.T) {
 		},
 		{
 			description: "multiple targets",
-			info:        &ProwgenInfo{Info: config.Info{Org: "org", Repo: "repo", Branch: "branch"}},
+			info:        &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
 			secrets:     nil,
 			targets:     []string{"target", "more", "and-more"},
 
@@ -223,8 +223,8 @@ func TestGeneratePodSpec(t *testing.T) {
 		{
 			description: "private job",
 			info: &ProwgenInfo{
-				Info:   config.Info{Org: "org", Repo: "repo", Branch: "branch"},
-				Config: config.Prowgen{Private: true},
+				Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
+				Config:   config.Prowgen{Private: true},
 			},
 			secrets: nil,
 			targets: []string{"target"},
@@ -301,7 +301,7 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 		expected *corev1.PodSpec
 	}{
 		{
-			info:    &ProwgenInfo{Info: config.Info{Org: "organization", Repo: "repo", Branch: "branch"}},
+			info:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "organization", Repo: "repo", Branch: "branch"}},
 			release: "origin-v4.0",
 			test: ciop.TestStepConfiguration{
 				As:       "test",
@@ -392,7 +392,7 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 			},
 		},
 		{
-			info:    &ProwgenInfo{Info: config.Info{Org: "organization", Repo: "repo", Branch: "branch"}},
+			info:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "organization", Repo: "repo", Branch: "branch"}},
 			release: "origin-v4.0",
 			test: ciop.TestStepConfiguration{
 				As:       "test",
@@ -486,7 +486,7 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 			},
 		},
 		{
-			info:    &ProwgenInfo{Info: config.Info{Org: "organization", Repo: "repo", Branch: "branch"}},
+			info:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "organization", Repo: "repo", Branch: "branch"}},
 			release: "origin-v4.0",
 			test: ciop.TestStepConfiguration{
 				As: "test",
@@ -561,7 +561,7 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 			},
 		},
 		{
-			info:    &ProwgenInfo{Info: config.Info{Org: "organization", Repo: "repo", Branch: "branch"}},
+			info:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "organization", Repo: "repo", Branch: "branch"}},
 			release: "origin-v4.0",
 			test: ciop.TestStepConfiguration{
 				As:       "test",
@@ -668,7 +668,7 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 			},
 		},
 		{
-			info:    &ProwgenInfo{Info: config.Info{Org: "organization", Repo: "repo", Branch: "branch"}},
+			info:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "organization", Repo: "repo", Branch: "branch"}},
 			release: "origin-v4.0",
 			test: ciop.TestStepConfiguration{
 				As:       "test",
@@ -773,7 +773,7 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 			},
 		},
 		{
-			info:    &ProwgenInfo{Info: config.Info{Org: "organization", Repo: "repo", Branch: "branch"}},
+			info:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "organization", Repo: "repo", Branch: "branch"}},
 			release: "origin-v4.0",
 			test: ciop.TestStepConfiguration{
 				As:       "test",
@@ -878,7 +878,7 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 			},
 		},
 		{
-			info:    &ProwgenInfo{Info: config.Info{Org: "organization", Repo: "repo", Branch: "branch"}},
+			info:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "organization", Repo: "repo", Branch: "branch"}},
 			release: "origin-v4.0",
 			test: ciop.TestStepConfiguration{
 				As:       "test",
@@ -1002,7 +1002,7 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 	}{{
 		description: "presubmit for standard test",
 		test:        "testname",
-		repoInfo:    &ProwgenInfo{Info: config.Info{Org: "org", Repo: "repo", Branch: "branch"}},
+		repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
 
 		expected: &prowconfig.Presubmit{
 			JobBase: prowconfig.JobBase{
@@ -1029,7 +1029,7 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 		{
 			description: "presubmit for a test in a variant config",
 			test:        "testname",
-			repoInfo:    &ProwgenInfo{Info: config.Info{Org: "org", Repo: "repo", Branch: "branch", Variant: "also"}},
+			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch", Variant: "also"}},
 
 			expected: &prowconfig.Presubmit{
 				JobBase: prowconfig.JobBase{
@@ -1075,7 +1075,7 @@ func TestGeneratePeriodicForTest(t *testing.T) {
 	}{{
 		description: "periodic for standard test",
 		test:        "testname",
-		repoInfo:    &ProwgenInfo{Info: config.Info{Org: "org", Repo: "repo", Branch: "branch"}},
+		repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
 
 		expected: &prowconfig.Periodic{
 			Cron: "@yearly",
@@ -1101,7 +1101,7 @@ func TestGeneratePeriodicForTest(t *testing.T) {
 		{
 			description: "periodic for a test in a variant config",
 			test:        "testname",
-			repoInfo:    &ProwgenInfo{Info: config.Info{Org: "org", Repo: "repo", Branch: "branch", Variant: "also"}},
+			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch", Variant: "also"}},
 			expected: &prowconfig.Periodic{
 				Cron: "@yearly",
 				JobBase: prowconfig.JobBase{
@@ -1148,7 +1148,7 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 	}{
 		{
 			name: "name",
-			repoInfo: &ProwgenInfo{Info: config.Info{
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
 				Org:    "organization",
 				Repo:   "repository",
 				Branch: "branch",
@@ -1170,7 +1170,7 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 		},
 		{
 			name: "Name",
-			repoInfo: &ProwgenInfo{Info: config.Info{
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
 				Org:    "Organization",
 				Repo:   "Repository",
 				Branch: "Branch",
@@ -1190,7 +1190,7 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 		},
 		{
 			name: "name",
-			repoInfo: &ProwgenInfo{Info: config.Info{
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
 				Org:    "Organization",
 				Repo:   "Repository",
 				Branch: "Branch",
@@ -1236,7 +1236,7 @@ func TestGenerateJobs(t *testing.T) {
 					{As: "derTest", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "from"}},
 					{As: "leTest", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "from"}}},
 			},
-			repoInfo: &ProwgenInfo{Info: config.Info{
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
 				Org:    "organization",
 				Repo:   "repository",
 				Branch: "branch",
@@ -1263,7 +1263,7 @@ func TestGenerateJobs(t *testing.T) {
 				Images:                 []ciop.ProjectDirectoryImageBuildStepConfiguration{{}},
 				PromotionConfiguration: &ciop.PromotionConfiguration{},
 			},
-			repoInfo: &ProwgenInfo{Info: config.Info{
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
 				Org:    "organization",
 				Repo:   "repository",
 				Branch: "branch",
@@ -1305,7 +1305,7 @@ func TestGenerateJobs(t *testing.T) {
 					},
 				},
 			},
-			repoInfo: &ProwgenInfo{Info: config.Info{
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
 				Org:    "organization",
 				Repo:   "repository",
 				Branch: "branch",
@@ -1328,7 +1328,7 @@ func TestGenerateJobs(t *testing.T) {
 					},
 				}},
 			},
-			repoInfo: &ProwgenInfo{Info: config.Info{
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
 				Org:    "organization",
 				Repo:   "repository",
 				Branch: "branch",
@@ -1348,7 +1348,7 @@ func TestGenerateJobs(t *testing.T) {
 				Images:                 []ciop.ProjectDirectoryImageBuildStepConfiguration{{}},
 				PromotionConfiguration: &ciop.PromotionConfiguration{Namespace: "ci"},
 			},
-			repoInfo: &ProwgenInfo{Info: config.Info{
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
 				Org:    "organization",
 				Repo:   "repository",
 				Branch: "branch",
@@ -1377,7 +1377,7 @@ func TestGenerateJobs(t *testing.T) {
 					ReleaseTagConfiguration: &ciop.ReleaseTagConfiguration{Namespace: "openshift"},
 				},
 			},
-			repoInfo: &ProwgenInfo{Info: config.Info{
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
 				Org:    "organization",
 				Repo:   "repository",
 				Branch: "branch",
@@ -1423,7 +1423,7 @@ func TestGenerateJobBase(t *testing.T) {
 			testName: "no special options",
 			name:     "test",
 			prefix:   "pull",
-			info:     &ProwgenInfo{Info: config.Info{Org: "org", Repo: "repo", Branch: "branch"}},
+			info:     &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
 			label:    jobconfig.Generated,
 			podSpec:  &corev1.PodSpec{Containers: []corev1.Container{{Name: "test"}}},
 			expected: prowconfig.JobBase{
@@ -1440,7 +1440,7 @@ func TestGenerateJobBase(t *testing.T) {
 			testName:    "rehearsable",
 			name:        "test",
 			prefix:      "pull",
-			info:        &ProwgenInfo{Info: config.Info{Org: "org", Repo: "repo", Branch: "branch"}},
+			info:        &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
 			label:       jobconfig.Generated,
 			podSpec:     &corev1.PodSpec{Containers: []corev1.Container{{Name: "test"}}},
 			rehearsable: true,
@@ -1459,7 +1459,7 @@ func TestGenerateJobBase(t *testing.T) {
 			testName: "config variant",
 			name:     "test",
 			prefix:   "pull",
-			info:     &ProwgenInfo{Info: config.Info{Org: "org", Repo: "repo", Branch: "branch", Variant: "whatever"}},
+			info:     &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch", Variant: "whatever"}},
 			label:    jobconfig.Generated,
 			podSpec:  &corev1.PodSpec{Containers: []corev1.Container{{Name: "test"}}},
 			expected: prowconfig.JobBase{
@@ -1477,7 +1477,7 @@ func TestGenerateJobBase(t *testing.T) {
 			testName:  "path alias",
 			name:      "test",
 			prefix:    "pull",
-			info:      &ProwgenInfo{Info: config.Info{Org: "org", Repo: "repo", Branch: "branch", Variant: "whatever"}},
+			info:      &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch", Variant: "whatever"}},
 			label:     jobconfig.Generated,
 			podSpec:   &corev1.PodSpec{Containers: []corev1.Container{{Name: "test"}}},
 			pathAlias: &path,
@@ -1497,8 +1497,8 @@ func TestGenerateJobBase(t *testing.T) {
 			name:     "test",
 			prefix:   "pull",
 			info: &ProwgenInfo{
-				Info:   config.Info{Org: "org", Repo: "repo", Branch: "branch"},
-				Config: config.Prowgen{Private: true},
+				Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
+				Config:   config.Prowgen{Private: true},
 			},
 			label:   jobconfig.Generated,
 			podSpec: &corev1.PodSpec{Containers: []corev1.Container{{Name: "test"}}},
@@ -1518,8 +1518,8 @@ func TestGenerateJobBase(t *testing.T) {
 			name:     "test",
 			prefix:   "pull",
 			info: &ProwgenInfo{
-				Info:   config.Info{Org: "org", Repo: "repo", Branch: "branch"},
-				Config: config.Prowgen{Private: true, Expose: true},
+				Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
+				Config:   config.Prowgen{Private: true, Expose: true},
 			},
 			label:   jobconfig.Generated,
 			podSpec: &corev1.PodSpec{Containers: []corev1.Container{{Name: "test"}}},
@@ -1539,8 +1539,8 @@ func TestGenerateJobBase(t *testing.T) {
 			name:     "test",
 			prefix:   "pull",
 			info: &ProwgenInfo{
-				Info:   config.Info{Org: "org", Repo: "repo", Branch: "branch"},
-				Config: config.Prowgen{Private: false, Expose: true},
+				Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
+				Config:   config.Prowgen{Private: false, Expose: true},
 			},
 			label:   jobconfig.Generated,
 			podSpec: &corev1.PodSpec{Containers: []corev1.Container{{Name: "test"}}},

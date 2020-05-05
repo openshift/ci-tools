@@ -6,8 +6,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"regexp"
-	"sort"
 	"strings"
 
 	"github.com/ghodss/yaml"
@@ -59,89 +57,6 @@ type Info struct {
 	OrgPath string
 	// RepoPath is the full path to the directory containing config for the repo
 	RepoPath string
-}
-
-// IsComplete returns an error if at least one of Org, Repo, Branch members is
-// empty, otherwise it returns nil
-func (i *Info) IsComplete() error {
-	var missing []string
-	for item, value := range map[string]string{
-		"organization": i.Org,
-		"repository":   i.Repo,
-		"branch":       i.Branch,
-	} {
-		if value == "" {
-			missing = append(missing, item)
-		}
-	}
-	sort.Strings(missing)
-
-	if len(missing) > 0 {
-		s := ""
-		if len(missing) > 1 {
-			s = "s"
-		}
-		return fmt.Errorf("missing item%s: %s", s, strings.Join(missing, ", "))
-	}
-
-	return nil
-}
-
-// TestName returns a short name of a test defined in this file, including
-// variant, if present
-func (i *Info) TestName(testName string) string {
-	if i.Variant == "" {
-		return testName
-	}
-	return fmt.Sprintf("%s-%s", i.Variant, testName)
-}
-
-// JobName returns a full name of a job corresponding to a test defined in this
-// file, including variant, if present
-func (i *Info) JobName(prefix, name string) string {
-	return fmt.Sprintf("%s-ci-%s-%s-%s-%s", prefix, i.Org, i.Repo, i.Branch, i.TestName(name))
-}
-
-// Basename returns the unique name for this file in the config
-func (i *Info) Basename() string {
-	basename := strings.Join([]string{i.Org, i.Repo, i.Branch}, "-")
-	if i.Variant != "" {
-		basename = fmt.Sprintf("%s__%s", basename, i.Variant)
-	}
-	return fmt.Sprintf("%s.yaml", basename)
-}
-
-// RelativePath returns the path to the config under the root config dir
-func (i *Info) RelativePath() string {
-	return path.Join(i.Org, i.Repo, i.Basename())
-}
-
-// ConfigMapName returns the configmap in which we expect this file to be uploaded
-func (i *Info) ConfigMapName() string {
-	return fmt.Sprintf("ci-operator-%s-configs", FlavorForBranch(i.Branch))
-}
-
-var threeXBranches = regexp.MustCompile(`^(release|enterprise|openshift)-3\.[0-9]+$`)
-var fourXBranches = regexp.MustCompile(`^(release|enterprise|openshift)-(4\.[0-9]+)$`)
-
-func FlavorForBranch(branch string) string {
-	var flavor string
-	if branch == "master" {
-		flavor = "master"
-	} else if threeXBranches.MatchString(branch) {
-		flavor = "3.x"
-	} else if fourXBranches.MatchString(branch) {
-		matches := fourXBranches.FindStringSubmatch(branch)
-		flavor = matches[2] // the 4.x release string
-	} else {
-		flavor = "misc"
-	}
-	return flavor
-}
-
-// IsCiopConfigCM returns true if a given name is a valid ci-operator config ConfigMap
-func IsCiopConfigCM(name string) bool {
-	return regexp.MustCompile(`^ci-operator-.+-configs$`).MatchString(name)
 }
 
 // We use the directory/file naming convention to encode useful information

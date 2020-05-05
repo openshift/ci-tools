@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/openshift/ci-tools/pkg/api"
 	"reflect"
 	"testing"
 
@@ -10,7 +11,6 @@ import (
 	"k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
 
-	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/diffs"
 )
 
@@ -51,7 +51,7 @@ func TestJobsFor(t *testing.T) {
 				data: map[refId]string{},
 				errs: map[refId]error{{org: "org", repo: "repo", ref: "heads/master"}: errors.New("oops")},
 			},
-			changed:     []diffs.PostsubmitInContext{{Info: config.Info{Org: "org", Repo: "repo", Branch: "master"}}},
+			changed:     []diffs.PostsubmitInContext{{Metadata: api.Metadata{Org: "org", Repo: "repo", Branch: "master"}}},
 			expectedErr: true,
 		},
 		{
@@ -61,7 +61,7 @@ func TestJobsFor(t *testing.T) {
 				errs: map[refId]error{},
 			},
 			changed: []diffs.PostsubmitInContext{{
-				Info: config.Info{Org: "org", Repo: "repo", Branch: "master"},
+				Metadata: api.Metadata{Org: "org", Repo: "repo", Branch: "master"},
 				Job: prowconfig.Postsubmit{
 					JobBase: prowconfig.JobBase{
 						Name:  "my-images",
@@ -84,7 +84,7 @@ func TestJobsFor(t *testing.T) {
 				errs: map[refId]error{{org: "org", repo: "repo", ref: "heads/release-1.13"}: errors.New("oops")},
 			},
 			changed: []diffs.PostsubmitInContext{{
-				Info: config.Info{Org: "org", Repo: "repo", Branch: "master"},
+				Metadata: api.Metadata{Org: "org", Repo: "repo", Branch: "master"},
 				Job: prowconfig.Postsubmit{
 					JobBase: prowconfig.JobBase{
 						Name:  "my-images",
@@ -92,7 +92,7 @@ func TestJobsFor(t *testing.T) {
 					},
 				},
 			}, {
-				Info: config.Info{Org: "org", Repo: "repo", Branch: "release-1.13"},
+				Metadata: api.Metadata{Org: "org", Repo: "repo", Branch: "release-1.13"},
 			}},
 			expected: []v1.ProwJobSpec{{
 				Type:   v1.PostsubmitJob,

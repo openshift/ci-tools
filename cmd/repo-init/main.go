@@ -447,7 +447,7 @@ Ensure that webhooks are set up for Prow to watch GitHub state.`)
 func createCIOperatorConfig(config initConfig, releaseRepo string) error {
 	fmt.Println(`
 Generating CI Operator configuration ...`)
-	info := ciopconfig.Info{
+	info := api.Metadata{
 		Org:    "openshift",
 		Repo:   "origin",
 		Branch: "master",
@@ -468,9 +468,11 @@ Generating CI Operator configuration ...`)
 func generateCIOperatorConfig(config initConfig, originConfig *api.PromotionConfiguration) ciopconfig.DataWithInfo {
 	generated := ciopconfig.DataWithInfo{
 		Info: ciopconfig.Info{
-			Org:    config.Org,
-			Repo:   config.Repo,
-			Branch: config.Branch,
+			Metadata: api.Metadata{
+				Org:    config.Org,
+				Repo:   config.Repo,
+				Branch: config.Branch,
+			},
 		},
 		Configuration: api.ReleaseBuildConfiguration{
 			BinaryBuildCommands:     config.BuildCommands,

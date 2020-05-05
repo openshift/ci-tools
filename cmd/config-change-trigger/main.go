@@ -146,15 +146,15 @@ func jobsFor(changedImagesPostsubmits []diffs.PostsubmitInContext, getter refGet
 	var jobs []v1.ProwJob
 	var errs []error
 	for _, data := range changedImagesPostsubmits {
-		sha, err := getter.GetRef(data.Info.Org, data.Info.Repo, fmt.Sprintf("heads/%s", data.Info.Branch))
+		sha, err := getter.GetRef(data.Metadata.Org, data.Metadata.Repo, fmt.Sprintf("heads/%s", data.Metadata.Branch))
 		if err != nil {
 			errs = append(errs, err)
 			continue
 		}
 		refs := v1.Refs{
-			Org:     data.Info.Org,
-			Repo:    data.Info.Repo,
-			BaseRef: data.Info.Branch,
+			Org:     data.Metadata.Org,
+			Repo:    data.Metadata.Repo,
+			BaseRef: data.Metadata.Branch,
 			BaseSHA: sha,
 		}
 		jobs = append(jobs, pjutil.NewProwJob(pjutil.PostsubmitSpec(data.Job, refs), data.Job.Labels, data.Job.Annotations))

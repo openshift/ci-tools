@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"flag"
+	"github.com/openshift/ci-tools/pkg/api"
 	"reflect"
 	"testing"
 )
@@ -145,13 +146,13 @@ func TestOptions_Matches(t *testing.T) {
 	var testCases = []struct {
 		name     string
 		input    Options
-		info     *Info
+		metadata api.Metadata
 		expected bool
 	}{
 		{
 			name:  "nothing set matches everything",
 			input: Options{},
-			info: &Info{
+			metadata: api.Metadata{
 				Org:  "org",
 				Repo: "repo",
 			},
@@ -162,7 +163,7 @@ func TestOptions_Matches(t *testing.T) {
 			input: Options{
 				Org: "org",
 			},
-			info: &Info{
+			metadata: api.Metadata{
 				Org:  "org",
 				Repo: "repo",
 			},
@@ -173,7 +174,7 @@ func TestOptions_Matches(t *testing.T) {
 			input: Options{
 				Org: "org",
 			},
-			info: &Info{
+			metadata: api.Metadata{
 				Org:  "arg",
 				Repo: "repo",
 			},
@@ -184,7 +185,7 @@ func TestOptions_Matches(t *testing.T) {
 			input: Options{
 				Repo: "repo",
 			},
-			info: &Info{
+			metadata: api.Metadata{
 				Org:  "anything",
 				Repo: "repo",
 			},
@@ -195,7 +196,7 @@ func TestOptions_Matches(t *testing.T) {
 			input: Options{
 				Repo: "repo",
 			},
-			info: &Info{
+			metadata: api.Metadata{
 				Org:  "anything",
 				Repo: "ripo",
 			},
@@ -207,7 +208,7 @@ func TestOptions_Matches(t *testing.T) {
 				Org:  "org",
 				Repo: "repo",
 			},
-			info: &Info{
+			metadata: api.Metadata{
 				Org:  "org",
 				Repo: "repo",
 			},
@@ -219,7 +220,7 @@ func TestOptions_Matches(t *testing.T) {
 				Org:  "org",
 				Repo: "repo",
 			},
-			info: &Info{
+			metadata: api.Metadata{
 				Org:  "org",
 				Repo: "ripo",
 			},
@@ -231,7 +232,7 @@ func TestOptions_Matches(t *testing.T) {
 				Org:  "org",
 				Repo: "repo",
 			},
-			info: &Info{
+			metadata: api.Metadata{
 				Org:  "arg",
 				Repo: "repo",
 			},
@@ -241,7 +242,7 @@ func TestOptions_Matches(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			if actual, expected := testCase.input.matches(testCase.info), testCase.expected; actual != expected {
+			if actual, expected := testCase.input.matches(testCase.metadata), testCase.expected; actual != expected {
 				t.Errorf("%s: got incorrect match: expected %v, got %v", testCase.name, expected, actual)
 			}
 		})

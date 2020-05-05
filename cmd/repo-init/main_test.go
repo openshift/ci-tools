@@ -339,9 +339,11 @@ func TestGenerateCIOperatorConfig(t *testing.T) {
 					}},
 				},
 				Info: ciopconfig.Info{
-					Org:    "org",
-					Repo:   "repo",
-					Branch: "branch",
+					Metadata: api.Metadata{
+						Org:    "org",
+						Repo:   "repo",
+						Branch: "branch",
+					},
 				},
 			},
 		},
@@ -388,9 +390,11 @@ func TestGenerateCIOperatorConfig(t *testing.T) {
 					}},
 				},
 				Info: ciopconfig.Info{
-					Org:    "org",
-					Repo:   "repo",
-					Branch: "branch",
+					Metadata: api.Metadata{
+						Org:    "org",
+						Repo:   "repo",
+						Branch: "branch",
+					},
 				},
 			},
 		},
@@ -446,9 +450,11 @@ func TestGenerateCIOperatorConfig(t *testing.T) {
 					}},
 				},
 				Info: ciopconfig.Info{
-					Org:    "org",
-					Repo:   "repo",
-					Branch: "branch",
+					Metadata: api.Metadata{
+						Org:    "org",
+						Repo:   "repo",
+						Branch: "branch",
+					},
 				},
 			},
 		},
@@ -501,9 +507,11 @@ func TestGenerateCIOperatorConfig(t *testing.T) {
 					}},
 				},
 				Info: ciopconfig.Info{
-					Org:    "org",
-					Repo:   "repo",
-					Branch: "branch",
+					Metadata: api.Metadata{
+						Org:    "org",
+						Repo:   "repo",
+						Branch: "branch",
+					},
 				},
 			},
 		},
@@ -581,9 +589,11 @@ func TestGenerateCIOperatorConfig(t *testing.T) {
 					}},
 				},
 				Info: ciopconfig.Info{
-					Org:    "org",
-					Repo:   "repo",
-					Branch: "branch",
+					Metadata: api.Metadata{
+						Org:    "org",
+						Repo:   "repo",
+						Branch: "branch",
+					},
 				},
 			},
 		},

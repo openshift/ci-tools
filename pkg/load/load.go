@@ -98,11 +98,11 @@ func Config(path, registryPath string, info *ResolverInfo) (*api.ReleaseBuildCon
 		return nil, fmt.Errorf("invalid configuration: %v\nvalue:\n%s", err, raw)
 	}
 	if registryPath != "" {
-		refs, chains, workflows, _, err := Registry(registryPath, false)
+		resolver, err := Resolver(registryPath)
 		if err != nil {
-			return nil, fmt.Errorf("failed to load registry: %v", err)
+			return nil, err
 		}
-		configSpec, err = registry.ResolveConfig(registry.NewResolver(refs, chains, workflows), configSpec)
+		configSpec, err = registry.ResolveConfig(resolver, configSpec)
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve configuration: %v", err)
 		}
@@ -277,4 +277,12 @@ func loadWorkflow(bytes []byte) (string, string, api.MultiStageTestConfiguration
 		return "", "", api.MultiStageTestConfiguration{}, errors.New("workflows cannot contain other workflows")
 	}
 	return workflow.Workflow.As, workflow.Workflow.Documentation, workflow.Workflow.Steps, nil
+}
+
+func Resolver(root string) (registry.Resolver, error) {
+	refs, chains, workflows, _, err := Registry(root, false)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load registry: %v", err)
+	}
+	return registry.NewResolver(refs, chains, workflows), nil
 }

@@ -229,7 +229,7 @@ func generatePodSpecOthers(info *ProwgenInfo, release string, test *cioperatorap
 	var testImageStreamTag, template string
 	var clusterProfile cioperatorapi.ClusterProfile
 	var needsReleaseRpms, needsLeaseServer bool
-	if conf := test.MultiStageTestConfiguration; conf != nil {
+	if conf := test.MultiStageTestConfigurationLiteral; conf != nil {
 		clusterProfile = conf.ClusterProfile
 		if clusterProfile != "" {
 			needsLeaseServer = true

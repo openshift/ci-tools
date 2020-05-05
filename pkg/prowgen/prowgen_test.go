@@ -490,7 +490,7 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 			release: "origin-v4.0",
 			test: ciop.TestStepConfiguration{
 				As: "test",
-				MultiStageTestConfiguration: &ciop.MultiStageTestConfiguration{
+				MultiStageTestConfigurationLiteral: &ciop.MultiStageTestConfigurationLiteral{
 					ClusterProfile: ciop.ClusterProfileAWS,
 				},
 			},

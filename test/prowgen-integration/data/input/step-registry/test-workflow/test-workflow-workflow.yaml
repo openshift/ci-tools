@@ -1,0 +1,5 @@
+workflow:
+  as: test-workflow
+  steps:
+    cluster_profile: aws
+  documentation: Test workflow.

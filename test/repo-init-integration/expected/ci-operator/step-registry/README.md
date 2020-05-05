@@ -1,0 +1,1 @@
+Empty registry for tests.

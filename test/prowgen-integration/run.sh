@@ -16,6 +16,7 @@ subdir=${1:-}
 data_dir="$( dirname "${BASH_SOURCE[0]}" )/data"
 input_config_dir="${data_dir}/input/config"
 input_jobs_dir="${data_dir}/input/jobs"
+input_registry_dir="${data_dir}/input/step-registry"
 generated_output_jobs_dir="${workdir}/jobs"
 expected_output_jobs_dir="${data_dir}/output/jobs"
 
@@ -23,7 +24,11 @@ mkdir -p "${generated_output_jobs_dir}"
 cp -r "${input_jobs_dir}" "${workdir}"
 
 echo "[INFO] Generating Prow jobs..."
-ci-operator-prowgen --from-dir "${input_config_dir}" --to-dir "${generated_output_jobs_dir}" $subdir
+ci-operator-prowgen \
+    --from-dir "${input_config_dir}" \
+    --to-dir "${generated_output_jobs_dir}" \
+    --registry "${input_registry_dir}" \
+    $subdir
 
 echo "[INFO] Validating generated Prow jobs..."
 if [[ "$UPDATE" = true ]]; then

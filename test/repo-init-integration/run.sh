@@ -71,7 +71,10 @@ inputs=(
                  "" # Are there any end-to-end test scripts to configure?  [default: no] no
 )
 for input in "${inputs[@]}"; do echo "${input}"; done | repo-init -release-repo .
-ci-operator-prowgen --from-dir ./ci-operator/config --to-dir ./ci-operator/jobs
+ci-operator-prowgen \
+    --from-dir ./ci-operator/config \
+    --to-dir ./ci-operator/jobs \
+    --registry ./ci-operator/step-registry
 sanitize-prow-jobs --prow-jobs-dir ./ci-operator/jobs --config-path ./core-services/sanitize-prow-jobs/_config.yaml
 determinize-ci-operator --config-dir ./ci-operator/config --confirm
 

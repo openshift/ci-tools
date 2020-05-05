@@ -2,7 +2,7 @@ package steps
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"log"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -58,25 +58,33 @@ func (s *leaseStep) SubTests() []*junit.TestCase {
 }
 
 func (s *leaseStep) Run(ctx context.Context, dry bool) error {
-	return results.ForReason("acquiring_lease").ForError(s.run(ctx, dry))
+	return results.ForReason("utilizing_lease").ForError(s.run(ctx, dry))
 }
 
 func (s *leaseStep) run(ctx context.Context, dry bool) error {
 	log.Printf("Acquiring lease for %q", s.leaseType)
 	client := *s.client
 	if client == nil {
-		return fmt.Errorf("step needs a lease but no lease client provided")
+		return results.ForReason("initializing_client").ForError(errors.New("step needs a lease but no lease client provided"))
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	lease, err := client.Acquire(s.leaseType, ctx, cancel)
 	if err != nil {
-		return fmt.Errorf("failed to acquire lease: %v", err)
+		return results.ForReason("acquiring_Lease").WithError(err).Errorf("failed to acquire lease: %v", err)
 	}
 	log.Printf("Acquired lease %q for %q", lease, s.leaseType)
 	s.leasedResource = lease
-	var errs []error
-	errs = append(errs, s.wrapped.Run(ctx, dry))
+	wrappedErr := results.ForReason("executing_test").ForError(s.wrapped.Run(ctx, dry))
 	log.Printf("Releasing lease for %q", s.leaseType)
-	errs = append(errs, client.Release(lease))
-	return utilerrors.NewAggregate(errs)
+	releaseErr := results.ForReason("releasing_lease").ForError(client.Release(lease))
+
+	// we want a sensible output error for reporting, so we bubble up these individually
+	//if we can, as this is the only step that can have multiple errors
+	if wrappedErr != nil && releaseErr == nil {
+		return wrappedErr
+	} else if wrappedErr == nil && releaseErr != nil {
+		return releaseErr
+	} else {
+		return utilerrors.NewAggregate([]error{wrappedErr, releaseErr})
+	}
 }

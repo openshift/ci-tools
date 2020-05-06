@@ -137,12 +137,14 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 		}
 		if element.ContainerTestConfiguration != nil {
 			podSpec = generateCiOperatorPodSpec(info, element.Secrets, []string{element.As})
+		} else if element.MultiStageTestConfiguration != nil {
+			podSpec = generatePodSpecMultiStage(info, &element)
 		} else {
 			var release string
 			if c := configSpec.ReleaseTagConfiguration; c != nil {
 				release = c.Name
 			}
-			podSpec = generatePodSpecOthers(info, release, &element)
+			podSpec = generatePodSpecTemplate(info, release, &element)
 		}
 
 		if element.Cron == nil {
@@ -222,19 +224,26 @@ func generateCiOperatorPodSpec(info *ProwgenInfo, secrets []*cioperatorapi.Secre
 	return ret
 }
 
-// generatePodSpecOthers handles tests types other than `container`
-// (i.e. template and multi-stage), which may need to acquire leases and/or
-// mount a cluster profile/secret.
-func generatePodSpecOthers(info *ProwgenInfo, release string, test *cioperatorapi.TestStepConfiguration) *corev1.PodSpec {
+func generatePodSpecMultiStage(info *ProwgenInfo, test *cioperatorapi.TestStepConfiguration) *corev1.PodSpec {
+	profile := test.MultiStageTestConfiguration.ClusterProfile
+	podSpec := generateCiOperatorPodSpec(info, nil, []string{test.As})
+	if profile == "" {
+		return podSpec
+	}
+	podSpec.Volumes = append(podSpec.Volumes, generateClusterProfileVolume(profile, profile.ClusterType()))
+	clusterProfilePath := fmt.Sprintf("/usr/local/%s-cluster-profile", test.As)
+	container := &podSpec.Containers[0]
+	container.Args = append(container.Args, fmt.Sprintf("--secret-dir=%s", clusterProfilePath))
+	container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{Name: "cluster-profile", MountPath: clusterProfilePath})
+	addLeaseClient(podSpec)
+	return podSpec
+}
+
+func generatePodSpecTemplate(info *ProwgenInfo, release string, test *cioperatorapi.TestStepConfiguration) *corev1.PodSpec {
 	var testImageStreamTag, template string
 	var clusterProfile cioperatorapi.ClusterProfile
 	var needsReleaseRpms, needsLeaseServer bool
-	if conf := test.MultiStageTestConfiguration; conf != nil {
-		clusterProfile = conf.ClusterProfile
-		if clusterProfile != "" {
-			needsLeaseServer = true
-		}
-	} else if conf := test.OpenshiftAnsibleClusterTestConfiguration; conf != nil {
+	if conf := test.OpenshiftAnsibleClusterTestConfiguration; conf != nil {
 		template = "cluster-launch-e2e"
 		clusterProfile = conf.ClusterProfile
 		needsReleaseRpms = true
@@ -297,26 +306,7 @@ func generatePodSpecOthers(info *ProwgenInfo, release string, test *cioperatorap
 		container.Args = append(container.Args, fmt.Sprintf("--template=%s", templatePath))
 	}
 	if needsLeaseServer {
-		container.Args = append(container.Args, "--lease-server-password-file=/etc/boskos/password")
-		container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
-			Name:      "boskos",
-			MountPath: "/etc/boskos",
-			ReadOnly:  true,
-		})
-		podSpec.Volumes = append(podSpec.Volumes, corev1.Volume{
-			Name: "boskos",
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{
-					SecretName: "boskos-credentials",
-					Items: []corev1.KeyToPath{
-						{
-							Key:  "password",
-							Path: "password",
-						},
-					},
-				},
-			},
-		})
+		addLeaseClient(podSpec)
 	}
 	container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{Name: "cluster-profile", MountPath: clusterProfilePath})
 	if len(template) > 0 {
@@ -374,6 +364,24 @@ func generatePodSpecOthers(info *ProwgenInfo, release string, test *cioperatorap
 		}
 	}
 	return podSpec
+}
+
+func addLeaseClient(s *corev1.PodSpec) {
+	s.Containers[0].Args = append(s.Containers[0].Args, "--lease-server-password-file=/etc/boskos/password")
+	s.Containers[0].VolumeMounts = append(s.Containers[0].VolumeMounts, corev1.VolumeMount{
+		Name:      "boskos",
+		MountPath: "/etc/boskos",
+		ReadOnly:  true,
+	})
+	s.Volumes = append(s.Volumes, corev1.Volume{
+		Name: "boskos",
+		VolumeSource: corev1.VolumeSource{
+			Secret: &corev1.SecretVolumeSource{
+				SecretName: "boskos-credentials",
+				Items:      []corev1.KeyToPath{{Key: "password", Path: "password"}},
+			},
+		},
+	})
 }
 
 func generatePresubmitForTest(name string, info *ProwgenInfo, label jc.ProwgenLabel, podSpec *corev1.PodSpec, rehearsable bool, pathAlias *string) *prowconfig.Presubmit {
@@ -443,8 +451,7 @@ func generateClusterProfileVolume(profile cioperatorapi.ClusterProfile, clusterT
 		cioperatorapi.ClusterProfileOpenStackPpc64le,
 		cioperatorapi.ClusterProfileVSphere:
 	default:
-		s := &ret.VolumeSource.Projected.Sources
-		*s = append(*s, corev1.VolumeProjection{
+		ret.VolumeSource.Projected.Sources = append(ret.VolumeSource.Projected.Sources, corev1.VolumeProjection{
 			ConfigMap: &corev1.ConfigMapProjection{
 				LocalObjectReference: corev1.LocalObjectReference{
 					Name: fmt.Sprintf("cluster-profile-%s", profile),

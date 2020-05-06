@@ -218,7 +218,7 @@ func resolveConfig(configAgent agents.ConfigAgent, registryAgent agents.Registry
 			"variant": variant,
 		})
 
-		config, err := configAgent.GetConfig(metadata)
+		config, err := configAgent.GetMatchingConfig(metadata)
 		if err != nil {
 			recordError("config not found")
 			w.WriteHeader(http.StatusNotFound)

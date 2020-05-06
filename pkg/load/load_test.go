@@ -11,6 +11,8 @@ import (
 	"testing"
 
 	"github.com/ghodss/yaml"
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/registry"
 	"k8s.io/apimachinery/pkg/util/diff"
@@ -840,5 +842,87 @@ func TestRegistry(t *testing.T) {
 	_, _, _, _, err = Registry(temp, false)
 	if err == nil {
 		t.Error("got no error when expecting error on incorrect reference name")
+	}
+}
+
+func TestPartitionByRepo(t *testing.T) {
+	var testCases = []struct {
+		name   string
+		input  FilenameToConfig
+		output ByOrgRepo
+	}{
+		{
+			name:   "no input",
+			input:  FilenameToConfig{},
+			output: ByOrgRepo{},
+		},
+		{
+			name: "complex input",
+			input: FilenameToConfig{
+				"a": api.ReleaseBuildConfiguration{Metadata: api.Metadata{
+					Org:    "org",
+					Repo:   "repo",
+					Branch: "branch",
+				}},
+				"b": api.ReleaseBuildConfiguration{Metadata: api.Metadata{
+					Org:    "org",
+					Repo:   "repo",
+					Branch: "other",
+				}},
+				"c": api.ReleaseBuildConfiguration{Metadata: api.Metadata{
+					Org:     "org",
+					Repo:    "repo",
+					Branch:  "branch",
+					Variant: "variant",
+				}},
+				"d": api.ReleaseBuildConfiguration{Metadata: api.Metadata{
+					Org:    "org",
+					Repo:   "other",
+					Branch: "branch",
+				}},
+				"e": api.ReleaseBuildConfiguration{Metadata: api.Metadata{
+					Org:    "other",
+					Repo:   "repo",
+					Branch: "branch",
+				}},
+			},
+			output: ByOrgRepo{
+				"org": map[string][]api.ReleaseBuildConfiguration{
+					"repo": {{Metadata: api.Metadata{
+						Org:    "org",
+						Repo:   "repo",
+						Branch: "branch",
+					}}, {Metadata: api.Metadata{
+						Org:    "org",
+						Repo:   "repo",
+						Branch: "other",
+					}}, {Metadata: api.Metadata{
+						Org:     "org",
+						Repo:    "repo",
+						Branch:  "branch",
+						Variant: "variant",
+					}}},
+					"other": {{Metadata: api.Metadata{
+						Org:    "org",
+						Repo:   "other",
+						Branch: "branch",
+					}}},
+				},
+				"other": map[string][]api.ReleaseBuildConfiguration{
+					"repo": {{Metadata: api.Metadata{
+						Org:    "other",
+						Repo:   "repo",
+						Branch: "branch",
+					}}},
+				},
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		actual, expected := PartitionByOrgRepo(testCase.input), testCase.output
+		if diff := cmp.Diff(actual, expected); diff != "" {
+			t.Errorf("%s: did not get correct partitioned config: %s", testCase.name, diff)
+		}
 	}
 }

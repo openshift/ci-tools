@@ -102,3 +102,7 @@ tests:
           memory: "7"
         requests:
           memory: "7"
+zz_generated_metadata:
+  org: openshift
+  repo: hyperkube
+  branch: master

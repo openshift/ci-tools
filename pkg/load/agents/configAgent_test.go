@@ -175,3 +175,183 @@ func TestBuildIndexes(t *testing.T) {
 		})
 	}
 }
+
+func TestConfigAgent_GetMatchingConfig(t *testing.T) {
+	var testCases = []struct {
+		name        string
+		input       load.ByOrgRepo
+		meta        api.Metadata
+		expected    api.ReleaseBuildConfiguration
+		expectedErr bool
+	}{
+		{
+			name:  "no configs in org fails",
+			input: load.ByOrgRepo{},
+			meta: api.Metadata{
+				Org:    "org",
+				Repo:   "repo",
+				Branch: "branch",
+			},
+			expectedErr: true,
+		},
+		{
+			name: "no configs in repo fails",
+			input: load.ByOrgRepo{
+				"org": map[string][]api.ReleaseBuildConfiguration{},
+			},
+			meta: api.Metadata{
+				Org:    "org",
+				Repo:   "repo",
+				Branch: "branch",
+			},
+			expectedErr: true,
+		},
+		{
+			name: "no configs for variant fails",
+			input: load.ByOrgRepo{
+				"org": map[string][]api.ReleaseBuildConfiguration{
+					"repo": {{Metadata: api.Metadata{
+						Org:    "org",
+						Repo:   "repo",
+						Branch: "branch",
+					}}},
+				},
+			},
+			meta: api.Metadata{
+				Org:     "org",
+				Repo:    "repo",
+				Branch:  "branch",
+				Variant: "variant",
+			},
+			expectedErr: true,
+		},
+		{
+			name: "literal match returns it",
+			input: load.ByOrgRepo{
+				"org": map[string][]api.ReleaseBuildConfiguration{
+					"repo": {{Metadata: api.Metadata{
+						Org:    "org",
+						Repo:   "repo",
+						Branch: "branch",
+					}}},
+				},
+			},
+			meta: api.Metadata{
+				Org:    "org",
+				Repo:   "repo",
+				Branch: "branch",
+			},
+			expected: api.ReleaseBuildConfiguration{Metadata: api.Metadata{
+				Org:    "org",
+				Repo:   "repo",
+				Branch: "branch",
+			}},
+			expectedErr: false,
+		},
+		{
+			name: "regex match on branch returns it",
+			input: load.ByOrgRepo{
+				"org": map[string][]api.ReleaseBuildConfiguration{
+					"repo": {{Metadata: api.Metadata{
+						Org:    "org",
+						Repo:   "repo",
+						Branch: "branch",
+					}}},
+				},
+			},
+			meta: api.Metadata{
+				Org:    "org",
+				Repo:   "repo",
+				Branch: "branch-foo",
+			},
+			expected: api.ReleaseBuildConfiguration{Metadata: api.Metadata{
+				Org:    "org",
+				Repo:   "repo",
+				Branch: "branch",
+			}},
+			expectedErr: false,
+		},
+		{
+			name: "regex match on branch with variant returns it",
+			input: load.ByOrgRepo{
+				"org": map[string][]api.ReleaseBuildConfiguration{
+					"repo": {{Metadata: api.Metadata{
+						Org:     "org",
+						Repo:    "repo",
+						Branch:  "branch",
+						Variant: "variant",
+					}}},
+				},
+			},
+			meta: api.Metadata{
+				Org:     "org",
+				Repo:    "repo",
+				Branch:  "branch-foo",
+				Variant: "variant",
+			},
+			expected: api.ReleaseBuildConfiguration{Metadata: api.Metadata{
+				Org:     "org",
+				Repo:    "repo",
+				Branch:  "branch",
+				Variant: "variant",
+			}},
+			expectedErr: false,
+		},
+		{
+			name: "regex match on branch without variant fails",
+			input: load.ByOrgRepo{
+				"org": map[string][]api.ReleaseBuildConfiguration{
+					"repo": {{Metadata: api.Metadata{
+						Org:    "org",
+						Repo:   "repo",
+						Branch: "branch",
+					}}},
+				},
+			},
+			meta: api.Metadata{
+				Org:     "org",
+				Repo:    "repo",
+				Branch:  "branch-foo",
+				Variant: "variant",
+			},
+			expectedErr: true,
+		},
+		{
+			name: "multiple matches fails",
+			input: load.ByOrgRepo{
+				"org": map[string][]api.ReleaseBuildConfiguration{
+					"repo": {{Metadata: api.Metadata{
+						Org:    "org",
+						Repo:   "repo",
+						Branch: "branch",
+					}}, {Metadata: api.Metadata{
+						Org:    "org",
+						Repo:   "repo",
+						Branch: "branch-fo",
+					}}},
+				},
+			},
+			meta: api.Metadata{
+				Org:    "org",
+				Repo:   "repo",
+				Branch: "branch-foo",
+			},
+			expectedErr: true,
+		},
+	}
+
+	for _, testCase := range testCases {
+		agent := &configAgent{lock: &sync.RWMutex{}, configs: testCase.input}
+		actual, actualErr := agent.GetMatchingConfig(testCase.meta)
+		if testCase.expectedErr && actualErr == nil {
+			t.Errorf("%s: expected an error but got none", testCase.name)
+		}
+		if !testCase.expectedErr && actualErr != nil {
+			t.Errorf("%s: expected no error but got one: %v", testCase.name, actualErr)
+		}
+
+		if diff := cmp.Diff(actual, testCase.expected); diff != "" {
+			t.Errorf("%s: got incorrect config: %v", testCase.name, diff)
+		}
+	}
+}

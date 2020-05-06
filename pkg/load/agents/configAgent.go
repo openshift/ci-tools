@@ -2,6 +2,7 @@ package agents
 
 import (
 	"fmt"
+	"regexp"
 	"sync"
 	"time"
 
@@ -17,8 +18,9 @@ import (
 // ConfigAgent is an interface that can load configs from disk into
 // memory and retrieve them when provided with a config.Info.
 type ConfigAgent interface {
-	GetConfig(metadata api.Metadata) (api.ReleaseBuildConfiguration, error)
-	GetAll() load.FilenameToConfig
+	// GetMatchingConfig loads a configuration that matches the metadata,
+	// allowing for regex matching on branch names.
+	GetMatchingConfig(metadata api.Metadata) (api.ReleaseBuildConfiguration, error)
 	GetGeneration() int
 	AddIndex(indexName string, indexFunc IndexFn) error
 	GetFromIndex(indexName string, indexKey string) ([]*api.ReleaseBuildConfiguration, error)
@@ -29,7 +31,7 @@ type IndexFn func(api.ReleaseBuildConfiguration) []string
 
 type configAgent struct {
 	lock         *sync.RWMutex
-	configs      load.FilenameToConfig
+	configs      load.ByOrgRepo
 	configPath   string
 	cycle        time.Duration
 	generation   int
@@ -79,18 +81,33 @@ func (a *configAgent) recordError(label string) {
 	a.errorMetrics.With(labels).Inc()
 }
 
-func (a *configAgent) GetConfig(metadata api.Metadata) (api.ReleaseBuildConfiguration, error) {
+// GetMatchingConfig loads a configuration that matches the metadata,
+// allowing for regex matching on branch names.
+func (a *configAgent) GetMatchingConfig(metadata api.Metadata) (api.ReleaseBuildConfiguration, error) {
 	a.lock.RLock()
 	defer a.lock.RUnlock()
-	config, ok := a.configs[metadata.Basename()]
-	if !ok {
-		return api.ReleaseBuildConfiguration{}, fmt.Errorf("Could not find config %s", metadata.Basename())
+	orgConfigs, exist := a.configs[metadata.Org]
+	if !exist {
+		return api.ReleaseBuildConfiguration{}, fmt.Errorf("could not find any config for org %s", metadata.Org)
 	}
-	return config, nil
-}
-
-func (a *configAgent) GetAll() load.FilenameToConfig {
-	return a.configs
+	repoConfigs, exist := orgConfigs[metadata.Repo]
+	if !exist {
+		return api.ReleaseBuildConfiguration{}, fmt.Errorf("could not find any config for repo %s/%s", metadata.Org, metadata.Repo)
+	}
+	var matchingConfigs []api.ReleaseBuildConfiguration
+	for _, config := range repoConfigs {
+		if regexp.MustCompile(config.Metadata.Branch).MatchString(metadata.Branch) && config.Metadata.Variant == metadata.Variant {
+			matchingConfigs = append(matchingConfigs, config)
+		}
+	}
+	switch len(matchingConfigs) {
+	case 0:
+		return api.ReleaseBuildConfiguration{}, fmt.Errorf("could not find any config for branch %s on repo %s/%s", metadata.Branch, metadata.Org, metadata.Repo)
+	case 1:
+		return matchingConfigs[0], nil
+	default:
+		return api.ReleaseBuildConfiguration{}, fmt.Errorf("found more than one matching config for branch %s on repo %s/%s", metadata.Branch, metadata.Org, metadata.Repo)
+	}
 }
 
 func (a *configAgent) GetGeneration() int {
@@ -144,7 +161,7 @@ func (a *configAgent) loadFilenameToConfig() error {
 	indexes := a.buildIndexes(configs)
 
 	a.lock.Lock()
-	a.configs = configs
+	a.configs = load.PartitionByOrgRepo(configs)
 	a.generation++
 	a.indexes = indexes
 	a.lock.Unlock()

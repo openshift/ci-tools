@@ -8,6 +8,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/config/secret"
 	"k8s.io/test-infra/prow/flagutil"
@@ -19,12 +20,13 @@ import (
 )
 
 type options struct {
-	leaderElectionNamespace      string
-	ciOperatorconfigPath         string
-	configPath                   string
-	jobConfigPath                string
-	dryRun                       bool
-	imageStreamTagReconcilerOpts imageStreamTagReconcilerOptions
+	leaderElectionNamespace       string
+	ciOperatorconfigPath          string
+	configPath                    string
+	jobConfigPath                 string
+	registryClusterKubeconfigPath string
+	dryRun                        bool
+	imageStreamTagReconcilerOpts  imageStreamTagReconcilerOptions
 	*flagutil.GitHubOptions
 }
 
@@ -39,6 +41,7 @@ func newOpts() (*options, error) {
 	flag.StringVar(&opts.ciOperatorconfigPath, "ci-operator-config-path", "", "Path to the ci operator config")
 	flag.StringVar(&opts.configPath, "config-path", "", "Path to the prow config")
 	flag.StringVar(&opts.jobConfigPath, "job-config-path", "", "Path to the job config")
+	flag.StringVar(&opts.registryClusterKubeconfigPath, "registry-cluster-kubeconfig", "", "If set, this kubeconfig will be used to access registry-related resources like Images and ImageStreams. Defaults to the global kubeconfig")
 	flag.Var(&opts.imageStreamTagReconcilerOpts.IgnoredGitHubOrganizations, "imagestreamtagreconciler.ignored-github-organization", "GitHub organization to ignore in the imagestreamtagreconciler. Can be specified multiple times")
 	// TODO: rather than relying on humans implementing dry-run properly, we should switch
 	// to just do it on client-level once it becomes available: https://github.com/kubernetes-sigs/controller-runtime/pull/839
@@ -95,21 +98,44 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to get gitHubClient")
 	}
 
-	// Needed by the ImageStreamTagReconciler. This is a setting on the SharedInformer
-	// so its applied for all watches for all controller in this manager. If needed,
-	// we can move this to a custom sigs.k8s.io/controller-runtime/pkg/source.Source
-	// so its only applied for the ImageStreamTagReconciler.
-	resyncInterval := 24 * time.Hour
 	mgr, err := controllerruntime.NewManager(cfg, controllerruntime.Options{
 		LeaderElection:          true,
 		LeaderElectionNamespace: opts.leaderElectionNamespace,
 		LeaderElectionID:        "dptp-controller-manager",
-		SyncPeriod:              &resyncInterval,
 	})
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to construct manager")
 	}
 	pjutil.ServePProf()
+
+	var registryMgr controllerruntime.Manager
+	if opts.registryClusterKubeconfigPath == "" {
+		registryMgr = mgr
+	} else {
+		logrus.WithField("path", opts.registryClusterKubeconfigPath).Info("Using dedicated kubeconfig for interacting with registry resources")
+		registryCFG, err := clientcmd.BuildConfigFromFlags("", opts.registryClusterKubeconfigPath)
+		if err != nil {
+			logrus.WithError(err).Fatal("Failed to load registry kubeconfig")
+		}
+		// Needed by the ImageStreamTagReconciler. This is a setting on the SharedInformer
+		// so its applied for all watches for all controllers in this manager. If needed,
+		// we can move this to a custom sigs.k8s.io/controller-runtime/pkg/source.Source
+		// so its only applied for the ImageStreamTagReconciler.
+		resyncInterval := 24 * time.Hour
+		registryMgr, err = controllerruntime.NewManager(registryCFG, controllerruntime.Options{
+			LeaderElection: false,
+			// The normal manager already serves these metrics and we must disable it here to not
+			// get an error when attempting to create the second listener on the same address.
+			MetricsBindAddress: "0",
+			SyncPeriod:         &resyncInterval,
+		})
+		if err != nil {
+			logrus.WithError(err).Fatal("Failed to construct manager for registry")
+		}
+		if err := mgr.Add(registryMgr); err != nil {
+			logrus.WithError(err).Fatal("Failed to add registry manager to main manager.")
+		}
+	}
 
 	imageStreamTagReconcilerOpts := imagestreamtagreconciler.Options{
 		DryRun:                     opts.dryRun,
@@ -117,6 +143,7 @@ func main() {
 		ConfigGetter:               configAgent.Config,
 		GitHubClient:               gitHubClient,
 		IgnoredGitHubOrganizations: opts.imageStreamTagReconcilerOpts.IgnoredGitHubOrganizations.Strings(),
+		RegistryManager:            registryMgr,
 	}
 	if err := imagestreamtagreconciler.AddToManager(mgr, imageStreamTagReconcilerOpts); err != nil {
 		logrus.WithError(err).Fatal("Failed to add imagestreamtagreconciler")

@@ -38,6 +38,10 @@ type Options struct {
 	ConfigGetter               config.Getter
 	GitHubClient               github.Client
 	IgnoredGitHubOrganizations []string
+	// The registryManager is set up to talk to the cluster
+	// that contains our imageRegistry. This cluster is
+	// most likely not the one the normal manager talks to.
+	RegistryManager controllerruntime.Manager
 }
 
 const controllerName = "imageStreamTagReconciler"
@@ -52,7 +56,7 @@ func AddToManager(mgr controllerruntime.Manager, opts Options) error {
 	// Pre-Allocate the Image informer rather than letting it allocate on demand, because
 	// starting the watch takes very long (~2 minutes) and having that delay added to our
 	// first (# worker) reconciles skews the workqueue duration metric bigtimes.
-	if _, err := mgr.GetCache().GetInformer(&imagev1.Image{}); err != nil {
+	if _, err := opts.RegistryManager.GetCache().GetInformer(&imagev1.Image{}); err != nil {
 		return fmt.Errorf("failed to get informer for image: %w", err)
 	}
 
@@ -69,13 +73,13 @@ func AddToManager(mgr controllerruntime.Manager, opts Options) error {
 	r := &reconciler{
 		ctx:                        context.Background(),
 		log:                        log,
-		client:                     imagestreamtagwrapper.New(mgr.GetClient()),
+		client:                     imagestreamtagwrapper.New(opts.RegistryManager.GetClient()),
 		releaseBuildConfigs:        opts.CIOperatorConfigAgent,
 		gitHubClient:               opts.GitHubClient,
 		ignoredGitHubOrganizations: sets.NewString(opts.IgnoredGitHubOrganizations...),
 		enqueueJob:                 prowJobEnqueuer,
 	}
-	c, err := controller.New(controllerName, mgr, controller.Options{
+	c, err := controller.New(controllerName, opts.RegistryManager, controller.Options{
 		// Since we watch ImageStreams and not ImageStreamTags as the latter do not support
 		// watch, we create a lot more events the needed. In order to decrease load, we coalesce
 		// and delay all requests after a successful reconciliation for up to an hour.

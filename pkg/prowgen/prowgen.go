@@ -282,48 +282,11 @@ func generatePodSpecOthers(info *ProwgenInfo, release string, test *cioperatorap
 		clusterProfile = conf.ClusterProfile
 		testImageStreamTag = conf.From
 	}
-	var targetCloud string
-	switch clusterProfile {
-	case cioperatorapi.ClusterProfileAWS, cioperatorapi.ClusterProfileAWSAtomic, cioperatorapi.ClusterProfileAWSCentos, cioperatorapi.ClusterProfileAWSCentos40, cioperatorapi.ClusterProfileAWSGluster:
-		targetCloud = "aws"
-	case cioperatorapi.ClusterProfileAzure4:
-		targetCloud = "azure4"
-	case cioperatorapi.ClusterProfileGCP, cioperatorapi.ClusterProfileGCP40, cioperatorapi.ClusterProfileGCPHA,
-		cioperatorapi.ClusterProfileGCPCRIO, cioperatorapi.ClusterProfileGCPLogging, cioperatorapi.ClusterProfileGCPLoggingJournald,
-		cioperatorapi.ClusterProfileGCPLoggingJSONFile, cioperatorapi.ClusterProfileGCPLoggingCRIO:
-		targetCloud = "gcp"
-	case cioperatorapi.ClusterProfileLibvirtS390x:
-		targetCloud = "libvirt-s390x"
-	case cioperatorapi.ClusterProfileLibvirtPpc64le:
-		targetCloud = "libvirt-ppc64le"
-	case cioperatorapi.ClusterProfileOpenStack:
-		targetCloud = "openstack"
-	case cioperatorapi.ClusterProfileOpenStackVexxhost:
-		targetCloud = "openstack-vexxhost"
-	case cioperatorapi.ClusterProfileOpenStackPpc64le:
-		targetCloud = "openstack-ppc64le"
-	case cioperatorapi.ClusterProfileOvirt:
-		targetCloud = "ovirt"
-	case cioperatorapi.ClusterProfilePacket:
-		targetCloud = "packet"
-	case cioperatorapi.ClusterProfileVSphere:
-		targetCloud = "vsphere"
-	}
+	clusterType := clusterProfile.ClusterType()
 	clusterProfilePath := fmt.Sprintf("/usr/local/%s-cluster-profile", test.As)
 	templatePath := fmt.Sprintf("/usr/local/%s", test.As)
 	podSpec := generateCiOperatorPodSpec(info, test.Secrets, []string{test.As})
-	clusterProfileVolume := generateClusterProfileVolume("cluster-profile", fmt.Sprintf("cluster-secrets-%s", targetCloud))
-	switch clusterProfile {
-	case cioperatorapi.ClusterProfileAWS, cioperatorapi.ClusterProfileAzure4, cioperatorapi.ClusterProfileLibvirtPpc64le, cioperatorapi.ClusterProfileLibvirtS390x, cioperatorapi.ClusterProfileOpenStack, cioperatorapi.ClusterProfileOpenStackVexxhost, cioperatorapi.ClusterProfileOpenStackPpc64le, cioperatorapi.ClusterProfileVSphere:
-	default:
-		clusterProfileVolume.VolumeSource.Projected.Sources = append(clusterProfileVolume.VolumeSource.Projected.Sources, corev1.VolumeProjection{
-			ConfigMap: &corev1.ConfigMapProjection{
-				LocalObjectReference: corev1.LocalObjectReference{
-					Name: fmt.Sprintf("cluster-profile-%s", clusterProfile),
-				},
-			},
-		})
-	}
+	clusterProfileVolume := generateClusterProfileVolume(clusterProfile, clusterType)
 	if len(template) > 0 {
 		podSpec.Volumes = append(podSpec.Volumes, generateConfigMapVolume("job-definition", []string{fmt.Sprintf("prow-job-%s", template)}))
 	}
@@ -360,7 +323,7 @@ func generatePodSpecOthers(info *ProwgenInfo, release string, test *cioperatorap
 		container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{Name: "job-definition", MountPath: templatePath, SubPath: fmt.Sprintf("%s.yaml", template)})
 		container.Env = append(
 			container.Env,
-			corev1.EnvVar{Name: "CLUSTER_TYPE", Value: targetCloud},
+			corev1.EnvVar{Name: "CLUSTER_TYPE", Value: clusterType},
 			corev1.EnvVar{Name: "JOB_NAME_SAFE", Value: strings.Replace(test.As, "_", "-", -1)},
 			corev1.EnvVar{Name: "TEST_COMMAND", Value: test.Commands})
 		if len(testImageStreamTag) > 0 {
@@ -456,21 +419,40 @@ func generatePeriodicForTest(name string, info *ProwgenInfo, label jc.ProwgenLab
 	}
 }
 
-func generateClusterProfileVolume(name, profile string) corev1.Volume {
-	return corev1.Volume{
-		Name: name,
+func generateClusterProfileVolume(profile cioperatorapi.ClusterProfile, clusterType string) corev1.Volume {
+	ret := corev1.Volume{
+		Name: "cluster-profile",
 		VolumeSource: corev1.VolumeSource{
 			Projected: &corev1.ProjectedVolumeSource{
 				Sources: []corev1.VolumeProjection{{
 					Secret: &corev1.SecretProjection{
 						LocalObjectReference: corev1.LocalObjectReference{
-							Name: profile,
+							Name: fmt.Sprintf("cluster-secrets-%s", clusterType),
 						},
 					}},
 				},
 			},
 		},
 	}
+	switch profile {
+	case cioperatorapi.ClusterProfileAWS,
+		cioperatorapi.ClusterProfileAzure4,
+		cioperatorapi.ClusterProfileLibvirtS390x,
+		cioperatorapi.ClusterProfileOpenStack,
+		cioperatorapi.ClusterProfileOpenStackVexxhost,
+		cioperatorapi.ClusterProfileOpenStackPpc64le,
+		cioperatorapi.ClusterProfileVSphere:
+	default:
+		s := &ret.VolumeSource.Projected.Sources
+		*s = append(*s, corev1.VolumeProjection{
+			ConfigMap: &corev1.ConfigMapProjection{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: fmt.Sprintf("cluster-profile-%s", profile),
+				},
+			},
+		})
+	}
+	return ret
 }
 
 func generateConfigMapVolume(name string, templates []string) corev1.Volume {

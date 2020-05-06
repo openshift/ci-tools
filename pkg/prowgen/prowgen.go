@@ -331,10 +331,7 @@ func generatePodSpecOthers(info *ProwgenInfo, release string, test *cioperatorap
 	if len(template) > 0 {
 		container.Args = append(container.Args, fmt.Sprintf("--template=%s", templatePath))
 	}
-	// TODO expose boskos (behind an oauth proxy) so it can be used by build clusters
 	if needsLeaseServer {
-		container.Args = append(container.Args, "--lease-server=https://boskos-ci.svc.ci.openshift.org")
-		container.Args = append(container.Args, "--lease-server-username=ci")
 		container.Args = append(container.Args, "--lease-server-password-file=/etc/boskos/password")
 		container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
 			Name:      "boskos",

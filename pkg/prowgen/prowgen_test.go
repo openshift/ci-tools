@@ -462,8 +462,6 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						"--target=test",
 						"--secret-dir=/usr/local/test-cluster-profile",
 						"--template=/usr/local/test",
-						"--lease-server=https://boskos-ci.svc.ci.openshift.org",
-						"--lease-server-username=ci",
 						"--lease-server-password-file=/etc/boskos/password",
 					},
 					Resources: corev1.ResourceRequirements{
@@ -543,8 +541,6 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 						"--target=test",
 						"--secret-dir=/usr/local/test-cluster-profile",
-						"--lease-server=https://boskos-ci.svc.ci.openshift.org",
-						"--lease-server-username=ci",
 						"--lease-server-password-file=/etc/boskos/password",
 					},
 					Resources: corev1.ResourceRequirements{
@@ -641,8 +637,6 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						"--target=test",
 						"--secret-dir=/usr/local/test-cluster-profile",
 						"--template=/usr/local/test",
-						"--lease-server=https://boskos-ci.svc.ci.openshift.org",
-						"--lease-server-username=ci",
 						"--lease-server-password-file=/etc/boskos/password",
 					},
 					Resources: corev1.ResourceRequirements{
@@ -747,8 +741,6 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						"--target=test",
 						"--secret-dir=/usr/local/test-cluster-profile",
 						"--template=/usr/local/test",
-						"--lease-server=https://boskos-ci.svc.ci.openshift.org",
-						"--lease-server-username=ci",
 						"--lease-server-password-file=/etc/boskos/password",
 					},
 					Resources: corev1.ResourceRequirements{
@@ -853,8 +845,6 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						"--target=test",
 						"--secret-dir=/usr/local/test-cluster-profile",
 						"--template=/usr/local/test",
-						"--lease-server=https://boskos-ci.svc.ci.openshift.org",
-						"--lease-server-username=ci",
 						"--lease-server-password-file=/etc/boskos/password",
 					},
 					Resources: corev1.ResourceRequirements{
@@ -956,8 +946,6 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						"--target=test",
 						"--secret-dir=/usr/local/test-cluster-profile",
 						"--template=/usr/local/test",
-						"--lease-server=https://boskos-ci.svc.ci.openshift.org",
-						"--lease-server-username=ci",
 						"--lease-server-password-file=/etc/boskos/password",
 					},
 					Resources: corev1.ResourceRequirements{

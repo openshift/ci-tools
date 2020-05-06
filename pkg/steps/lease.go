@@ -70,7 +70,7 @@ func (s *leaseStep) run(ctx context.Context, dry bool) error {
 	ctx, cancel := context.WithCancel(ctx)
 	lease, err := client.Acquire(s.leaseType, ctx, cancel)
 	if err != nil {
-		return results.ForReason("acquiring_Lease").WithError(err).Errorf("failed to acquire lease: %v", err)
+		return results.ForReason("acquiring_lease").WithError(err).Errorf("failed to acquire lease: %v", err)
 	}
 	log.Printf("Acquired lease %q for %q", lease, s.leaseType)
 	s.leasedResource = lease

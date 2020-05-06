@@ -103,8 +103,18 @@ func privateOrgRepo(repo string) string {
 	return fmt.Sprintf("%s/%s", openshiftPrivOrg, repo)
 }
 
-func getOrgReposWithOfficialImages(releaseRepoPath string) (orgReposWithOfficialImages, error) {
+func getOrgReposWithOfficialImages(releaseRepoPath string, whitelist map[string][]string) (orgReposWithOfficialImages, error) {
 	ret := make(orgReposWithOfficialImages)
+
+	for org, repos := range whitelist {
+		for _, repo := range repos {
+			if _, ok := ret[org]; !ok {
+				ret[org] = sets.NewString(repo)
+			} else {
+				ret[org].Insert(repo)
+			}
+		}
+	}
 
 	callback := func(c *api.ReleaseBuildConfiguration, i *config.Info) error {
 		if !promotion.BuildsOfficialImages(c) {
@@ -391,7 +401,7 @@ func main() {
 	}
 
 	logrus.Info("Getting a summary of the orgs/repos that promote official images")
-	orgRepos, err := getOrgReposWithOfficialImages(o.releaseRepoPath)
+	orgRepos, err := getOrgReposWithOfficialImages(o.releaseRepoPath, o.WhitelistOptions.WhitelistConfig.Whitelist)
 	if err != nil {
 		logrus.WithError(err).Fatal("couldn't get the list of org/repos that promote official images")
 	}

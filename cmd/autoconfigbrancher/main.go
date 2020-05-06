@@ -149,36 +149,27 @@ func main() {
 	args = append(args, "--confirm")
 	run(cmd, args...)
 
-	commitIfNeeded(fmt.Sprintf("config-brancher --current-release %s --future-release %s", o.CurrentRelease, strings.Join(o.FutureReleases.Strings(), ",")), author)
-
 	cmd = "/usr/bin/ci-operator-config-mirror"
 	args = []string{"--config-path", o.ConfigDir, "--to-org", "openshift-priv"}
 	run(cmd, args...)
-
-	commitIfNeeded("ci-operator-config-mirror --config-path ./ci-operator/config --to-org openshift-priv", author)
 
 	cmd = "/usr/bin/determinize-ci-operator"
 	args = []string{"--config-dir", o.ConfigDir, "--confirm"}
 	run(cmd, args...)
 
-	commitIfNeeded("determinize-ci-operator --confirm", author)
-
 	cmd = "/usr/bin/ci-operator-prowgen"
 	args = []string{"--from-dir", o.ConfigDir, "--to-dir", "./ci-operator/jobs"}
 	run(cmd, args...)
-
-	commitIfNeeded("ci-operator-prowgen --from-dir ./ci-operator/config --to-dir ./ci-operator/jobs", author)
 
 	cmd = "/usr/bin/private-prow-configs-mirror"
 	args = []string{"--release-repo-path", "."}
 	run(cmd, args...)
 
-	commitIfNeeded("private-prow-configs-mirror --release-repo-path .", author)
-
 	cmd = "/usr/bin/sanitize-prow-jobs"
 	args = []string{"--prow-jobs-dir", "./ci-operator/jobs", "--config-path", "./core-services/sanitize-prow-jobs/_config.yaml"}
 	run(cmd, args...)
-	commitIfNeeded("sanitize-prow-jobs  --prow-jobs-dir ./ci-operator/jobs", author)
+
+	commitIfNeeded(fmt.Sprintf("auto-config-brancher --current-release %s --future-release %s", o.CurrentRelease, strings.Join(o.FutureReleases.Strings(), ",")), author)
 
 	if count == 0 {
 		logrus.Info("no new commits, existing ...")

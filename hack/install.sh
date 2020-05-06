@@ -4,6 +4,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+export CGO_ENABLED=0
+
 # if we're not building an official output binary, we don't care to tag it
 if [[ -z "${OPENSHIFT_CI:-}" ]]; then
 	go install ./cmd/...

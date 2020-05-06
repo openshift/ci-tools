@@ -461,34 +461,71 @@ func main() {
 		failOnNonexistentDst: o.failOnNonexistentDst,
 	}
 
-	var syncErrors []error
+	var errs []error
+
+	locations, whitelistErrors := getWhitelistedLocations(o.WhitelistOptions.WhitelistConfig.Whitelist, syncer.git)
+	errs = append(errs, whitelistErrors...)
+
 	callback := func(_ *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {
-		syncer.logger = config.LoggerForInfo(*repoInfo)
-		source := location{
+		l := location{
 			org:    repoInfo.Org,
 			repo:   repoInfo.Repo,
 			branch: repoInfo.Branch,
 		}
+		locations[l] = struct{}{}
+		return nil
+	}
+
+	if err := config.OperateOnCIOperatorConfigDir(o.configDir, o.makeFilter(callback)); err != nil {
+		errs = append(errs, err)
+	}
+
+	for source := range locations {
+		syncer.logger = config.LoggerForInfo(config.Info{
+			Metadata: api.Metadata{
+				Org:    source.org,
+				Repo:   source.repo,
+				Branch: source.branch,
+			},
+		})
+
 		destination := source
 		destination.org = o.targetOrg
 		gitDir, err := syncer.makeGitDir(source.org, source.repo)
 		if err != nil {
-			syncErrors = append(syncErrors, fmt.Errorf("%s->%s: %v", source.String(), destination.String(), err))
-			return nil
+			errs = append(errs, fmt.Errorf("%s->%s: %v", source.String(), destination.String(), err))
+			continue
 		}
 
 		if err := syncer.mirror(gitDir, source, destination); err != nil {
-			syncErrors = append(syncErrors, fmt.Errorf("%s->%s: %v", source.String(), destination.String(), err))
+			errs = append(errs, fmt.Errorf("%s->%s: %v", source.String(), destination.String(), err))
 		}
-		return nil
 	}
 
-	callback = o.makeFilter(callback)
-	if err := config.OperateOnCIOperatorConfigDir(o.configDir, callback); err != nil || len(syncErrors) > 0 {
-		if err != nil {
-			syncErrors = append(syncErrors, err)
-		}
-		e := utilerrors.NewAggregate(syncErrors)
-		logrus.WithError(e).Fatal("There were failures during git content synchronization")
+	if len(errs) > 0 {
+		logrus.WithError(utilerrors.NewAggregate(errs)).Fatal("There were failures")
 	}
+}
+
+func getWhitelistedLocations(whitelist map[string][]string, git gitFunc) (map[location]struct{}, []error) {
+	var errs []error
+	locations := make(map[location]struct{})
+
+	for org, repos := range whitelist {
+		for _, repo := range repos {
+			remote := fmt.Sprintf("https://github.com/%s/%s", org, repo)
+			logger := logrus.WithField("remote", remote)
+
+			branches, err := getRemoteBranchHeads(logger, git, "", remote)
+			if err != nil {
+				errs = append(errs, err)
+				continue
+			}
+
+			for branch := range branches {
+				locations[location{org: org, repo: repo, branch: branch}] = struct{}{}
+			}
+		}
+	}
+	return locations, errs
 }

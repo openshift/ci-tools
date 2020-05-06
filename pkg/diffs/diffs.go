@@ -32,8 +32,8 @@ const (
 
 // GetChangedCiopConfigs identifies CI Operator configurations that are new or have changed and
 // determines for each which jobs are impacted if job-specific changes were made
-func GetChangedCiopConfigs(masterConfig, prConfig config.ByFilename, logger *logrus.Entry) (config.ByFilename, map[string]sets.String) {
-	ret := config.ByFilename{}
+func GetChangedCiopConfigs(masterConfig, prConfig config.DataByFilename, logger *logrus.Entry) (config.DataByFilename, map[string]sets.String) {
+	ret := config.DataByFilename{}
 	affectedJobs := map[string]sets.String{}
 
 	for filename, newConfig := range prConfig {
@@ -131,13 +131,13 @@ func getJobsByRepoAndName(presubmits config.Presubmits) map[string]map[string]pr
 
 // PostsubmitInContext is a postsubmit with the org/repo#branch for which it will trigger
 type PostsubmitInContext struct {
-	Info config.Info
-	Job  prowconfig.Postsubmit
+	Metadata cioperatorapi.Metadata
+	Job      prowconfig.Postsubmit
 }
 
 // GetImagesPostsubmitsForCiopConfigs determines the [images] postsubmit jobs affected by the changed
 // ci-operator configurations
-func GetImagesPostsubmitsForCiopConfigs(prowConfig *prowconfig.Config, ciopConfigs config.ByFilename) []PostsubmitInContext {
+func GetImagesPostsubmitsForCiopConfigs(prowConfig *prowconfig.Config, ciopConfigs config.DataByFilename) []PostsubmitInContext {
 	var ret []PostsubmitInContext
 
 	for _, data := range ciopConfigs {
@@ -153,8 +153,8 @@ func GetImagesPostsubmitsForCiopConfigs(prowConfig *prowconfig.Config, ciopConfi
 
 			if testName == "images" {
 				ret = append(ret, PostsubmitInContext{
-					Info: data.Info,
-					Job:  job,
+					Metadata: data.Info.Metadata,
+					Job:      job,
 				})
 			}
 		}
@@ -163,7 +163,7 @@ func GetImagesPostsubmitsForCiopConfigs(prowConfig *prowconfig.Config, ciopConfi
 	return ret
 }
 
-func GetPresubmitsForCiopConfigs(prowConfig *prowconfig.Config, ciopConfigs config.ByFilename, affectedJobs map[string]sets.String, logger *logrus.Entry) config.Presubmits {
+func GetPresubmitsForCiopConfigs(prowConfig *prowconfig.Config, ciopConfigs config.DataByFilename, affectedJobs map[string]sets.String, logger *logrus.Entry) config.Presubmits {
 	ret := config.Presubmits{}
 
 	for _, data := range ciopConfigs {

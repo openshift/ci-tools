@@ -345,7 +345,7 @@ func getAllConfigs(releaseRepoPath string, logger *logrus.Entry) (*config.Releas
 	c := &config.ReleaseRepoConfig{}
 	var err error
 	ciopConfigPath := filepath.Join(releaseRepoPath, config.CiopConfigInRepoPath)
-	c.CiOperator, err = config.LoadConfigByFilename(ciopConfigPath)
+	c.CiOperator, err = config.LoadDataByFilename(ciopConfigPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load ci-operator configuration from release repo: %v", err)
 	}

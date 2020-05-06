@@ -171,8 +171,10 @@ func TestOptionsMakeFilter(t *testing.T) {
 				ciop = notOfficial
 			}
 			info := &config.Info{
-				Org:  tc.repoOrg,
-				Repo: tc.repoName,
+				Metadata: api.Metadata{
+					Org:  tc.repoOrg,
+					Repo: tc.repoName,
+				},
 			}
 			var called bool
 			callback := func(*api.ReleaseBuildConfiguration, *config.Info) error {

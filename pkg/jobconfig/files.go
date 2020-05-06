@@ -17,7 +17,6 @@ import (
 	prowconfig "k8s.io/test-infra/prow/config"
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
-	"github.com/openshift/ci-tools/pkg/config"
 )
 
 type ProwgenLabel string
@@ -57,9 +56,9 @@ func (i *Info) Basename() string {
 func (i *Info) ConfigMapName() string {
 	// put periodics not directly correlated to code in the misc job
 	if i.Type == "periodics" && i.Branch == "" {
-		return fmt.Sprintf("job-config-%s", config.FlavorForBranch(""))
+		return fmt.Sprintf("job-config-%s", cioperatorapi.FlavorForBranch(""))
 	}
-	return fmt.Sprintf("job-config-%s", config.FlavorForBranch(i.Branch))
+	return fmt.Sprintf("job-config-%s", cioperatorapi.FlavorForBranch(i.Branch))
 }
 
 // We use the directory/file naming convention to encode useful information

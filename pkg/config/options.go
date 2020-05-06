@@ -41,14 +41,14 @@ func (o *Options) Bind(fs *flag.FlagSet) {
 	fs.StringVar(&o.Repo, "repo", "", "Limit repos affected to this repo.")
 }
 
-func (o *Options) matches(info *Info) bool {
+func (o *Options) matches(metadata cioperatorapi.Metadata) bool {
 	switch {
 	case o.Org == "" && o.Repo == "":
 		return true
 	case o.Org != "" && o.Repo != "":
-		return o.Org == info.Org && o.Repo == info.Repo
+		return o.Org == metadata.Org && o.Repo == metadata.Repo
 	default:
-		return (o.Org != "" && o.Org == info.Org) || (o.Repo != "" && o.Repo == info.Repo)
+		return (o.Org != "" && o.Org == metadata.Org) || (o.Repo != "" && o.Repo == metadata.Repo)
 	}
 }
 
@@ -56,7 +56,7 @@ func (o *Options) matches(info *Info) bool {
 // down to those that were selected by the user with --{org|repo}
 func (o *Options) OperateOnCIOperatorConfigDir(configDir string, callback func(*cioperatorapi.ReleaseBuildConfiguration, *Info) error) error {
 	return OperateOnCIOperatorConfigDir(configDir, func(configuration *cioperatorapi.ReleaseBuildConfiguration, info *Info) error {
-		if !o.matches(info) {
+		if !o.matches(info.Metadata) {
 			return nil
 		}
 		return callback(configuration, info)

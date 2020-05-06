@@ -98,7 +98,7 @@ func generateJobsToDir(dir string, label jc.ProwgenLabel) func(configSpec *ciope
 	cache := map[string]*config.Prowgen{}
 	return func(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *config.Info) error {
 		orgRepo := fmt.Sprintf("%s/%s", info.Org, info.Repo)
-		pInfo := &prowgen.ProwgenInfo{Info: *info, Config: config.Prowgen{Private: false, Expose: false}}
+		pInfo := &prowgen.ProwgenInfo{Metadata: info.Metadata, Config: config.Prowgen{Private: false, Expose: false}}
 		var ok bool
 		var err error
 		var orgConfig, repoConfig *config.Prowgen

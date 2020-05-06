@@ -233,7 +233,7 @@ func hasRehearsableLabel(labels map[string]string) bool {
 // of the needed config file passed to the job as a direct value. This needs
 // to happen because the rehearsed Prow jobs may depend on these config files
 // being also changed by the tested PR.
-func inlineCiOpConfig(container *v1.Container, ciopConfigs config.ByFilename, resolver registry.Resolver, info config.Info, loggers Loggers) error {
+func inlineCiOpConfig(container *v1.Container, ciopConfigs config.DataByFilename, resolver registry.Resolver, metadata api.Metadata, loggers Loggers) error {
 	configSpecSet := false
 	// replace all ConfigMapKeyRef mounts with inline config maps
 	for index := range container.Env {
@@ -247,7 +247,7 @@ func inlineCiOpConfig(container *v1.Container, ciopConfigs config.ByFilename, re
 		if env.ValueFrom.ConfigMapKeyRef == nil {
 			continue
 		}
-		if config.IsCiopConfigCM(env.ValueFrom.ConfigMapKeyRef.Name) {
+		if api.IsCiopConfigCM(env.ValueFrom.ConfigMapKeyRef.Name) {
 			filename := env.ValueFrom.ConfigMapKeyRef.Key
 
 			loggers.Debug.WithField(logCiopConfigFile, filename).Debug("Rehearsal job uses ci-operator config ConfigMap, needed content will be inlined")
@@ -277,10 +277,10 @@ func inlineCiOpConfig(container *v1.Container, ciopConfigs config.ByFilename, re
 	}
 	// inline CONFIG_SPEC for all ci-operator jobs
 	if container.Command != nil && container.Command[0] == "ci-operator" {
-		if err := info.IsComplete(); err != nil {
+		if err := metadata.IsComplete(); err != nil {
 			return fmt.Errorf("could not infer which ci-operator config this job uses: %v", err)
 		}
-		filename := info.Basename()
+		filename := metadata.Basename()
 		loggers.Debug.WithField(logCiopConfigFile, filename).Debug("Rehearsal job uses ci-operator config ConfigMap, needed content will be inlined")
 		ciopConfig, ok := ciopConfigs[filename]
 		if !ok {
@@ -311,7 +311,7 @@ func inlineCiOpConfig(container *v1.Container, ciopConfigs config.ByFilename, re
 
 // JobConfigurer holds all the information that is needed for the configuration of the jobs.
 type JobConfigurer struct {
-	ciopConfigs      config.ByFilename
+	ciopConfigs      config.DataByFilename
 	registryResolver registry.Resolver
 	profiles         []config.ConfigMapSource
 	prNumber         int
@@ -321,7 +321,7 @@ type JobConfigurer struct {
 }
 
 // NewJobConfigurer filters the jobs and returns a new JobConfigurer.
-func NewJobConfigurer(ciopConfigs config.ByFilename, resolver registry.Resolver, prNumber int, loggers Loggers, templates []config.ConfigMapSource, profiles []config.ConfigMapSource, refs *pjapi.Refs) *JobConfigurer {
+func NewJobConfigurer(ciopConfigs config.DataByFilename, resolver registry.Resolver, prNumber int, loggers Loggers, templates []config.ConfigMapSource, profiles []config.ConfigMapSource, refs *pjapi.Refs) *JobConfigurer {
 	return &JobConfigurer{
 		ciopConfigs:      ciopConfigs,
 		registryResolver: resolver,
@@ -356,15 +356,15 @@ func (jc *JobConfigurer) ConfigurePeriodicRehearsals(periodics config.Periodics)
 	filteredPeriodics := filterPeriodics(periodics, jc.loggers.Job)
 	for _, job := range filteredPeriodics {
 		jobLogger := jc.loggers.Job.WithField("target-job", job.Name)
-		info := config.Info{
+		metadata := api.Metadata{
 			Variant: variantFromLabels(job.Labels),
 		}
 		if len(job.ExtraRefs) != 0 {
-			info.Org = job.ExtraRefs[0].Org
-			info.Repo = job.ExtraRefs[0].Repo
-			info.Branch = job.ExtraRefs[0].BaseRef
+			metadata.Org = job.ExtraRefs[0].Org
+			metadata.Repo = job.ExtraRefs[0].Repo
+			metadata.Branch = job.ExtraRefs[0].BaseRef
 		}
-		if err := jc.configureJobSpec(job.Spec, info, jc.loggers.Debug.WithField("name", job.Name)); err != nil {
+		if err := jc.configureJobSpec(job.Spec, metadata, jc.loggers.Debug.WithField("name", job.Name)); err != nil {
 			jobLogger.WithError(err).Warn("Failed to inline ci-operator-config into rehearsal periodic job")
 			continue
 		}
@@ -394,14 +394,14 @@ func (jc *JobConfigurer) ConfigurePresubmitRehearsals(presubmits config.Presubmi
 			if len(splitOrgRepo) != 2 {
 				jobLogger.WithError(fmt.Errorf("failed to identify org and repo from string %s", orgrepo)).Warn("Failed to inline ci-operator-config into rehearsal presubmit job")
 			}
-			info := config.Info{
+			metadata := api.Metadata{
 				Org:     splitOrgRepo[0],
 				Repo:    splitOrgRepo[1],
 				Branch:  getTrimmedBranch(job.Branches),
 				Variant: variantFromLabels(job.Labels),
 			}
 
-			if err := jc.configureJobSpec(rehearsal.Spec, info, jc.loggers.Debug.WithField("name", job.Name)); err != nil {
+			if err := jc.configureJobSpec(rehearsal.Spec, metadata, jc.loggers.Debug.WithField("name", job.Name)); err != nil {
 				jobLogger.WithError(err).Warn("Failed to inline ci-operator-config into rehearsal presubmit job")
 				continue
 			}
@@ -413,20 +413,20 @@ func (jc *JobConfigurer) ConfigurePresubmitRehearsals(presubmits config.Presubmi
 	return rehearsals
 }
 
-func (jc *JobConfigurer) configureJobSpec(spec *v1.PodSpec, info config.Info, logger *logrus.Entry) error {
+func (jc *JobConfigurer) configureJobSpec(spec *v1.PodSpec, metadata api.Metadata, logger *logrus.Entry) error {
 	// Remove configresolver flags from ci-operator jobs
-	var infoFromFlags config.Info
+	var metadataFromFlags api.Metadata
 	if len(spec.Containers[0].Command) > 0 && spec.Containers[0].Command[0] == "ci-operator" {
-		spec.Containers[0].Args, infoFromFlags = removeConfigResolverFlags(spec.Containers[0].Args)
+		spec.Containers[0].Args, metadataFromFlags = removeConfigResolverFlags(spec.Containers[0].Args)
 	}
 
 	// Periodics may not be tied to a specific ci-operator configuration, but
 	// we may have inferred ci-op config from ci-operator flags
-	if info.IsComplete() != nil && infoFromFlags.IsComplete() == nil {
-		info = infoFromFlags
+	if metadata.IsComplete() != nil && metadataFromFlags.IsComplete() == nil {
+		metadata = metadataFromFlags
 	}
 
-	if err := inlineCiOpConfig(&spec.Containers[0], jc.ciopConfigs, jc.registryResolver, info, jc.loggers); err != nil {
+	if err := inlineCiOpConfig(&spec.Containers[0], jc.ciopConfigs, jc.registryResolver, metadata, jc.loggers); err != nil {
 		return err
 	}
 
@@ -492,7 +492,7 @@ func getPresubmitByJobName(presubmits []prowconfig.Presubmit, name string) (prow
 	return prowconfig.Presubmit{}, fmt.Errorf("could not find presubmit with name: %s", name)
 }
 
-func getPresubmitsForRegistryStep(node registry.Node, configs config.ByFilename, prConfigPresubmits map[string][]prowconfig.Presubmit, addedConfigs []*api.MultiStageTestConfiguration) (map[string][]prowconfig.Presubmit, []*api.MultiStageTestConfiguration, error) {
+func getPresubmitsForRegistryStep(node registry.Node, configs config.DataByFilename, prConfigPresubmits map[string][]prowconfig.Presubmit, addedConfigs []*api.MultiStageTestConfiguration) (map[string][]prowconfig.Presubmit, []*api.MultiStageTestConfiguration, error) {
 	toTest := make(map[string][]prowconfig.Presubmit)
 	// get sorted list of configs keys to make the function deterministic
 	var keys []string
@@ -573,7 +573,7 @@ func expandAncestors(changed, graph registry.NodeByName) {
 }
 
 func AddRandomJobsForChangedRegistry(regSteps, graph registry.NodeByName, prConfigPresubmits map[string][]prowconfig.Presubmit, configPath string, loggers Loggers) config.Presubmits {
-	configsByFilename, err := config.LoadConfigByFilename(configPath)
+	configsByFilename, err := config.LoadDataByFilename(configPath)
 	if err != nil {
 		loggers.Debug.Errorf("Failed to load config by filename in AddRandomJobsForChangedRegistry: %v", err)
 	}
@@ -831,9 +831,9 @@ func (e *Executor) waitForJobs(jobs sets.String, selector string) (bool, error) 
 	}
 }
 
-func removeConfigResolverFlags(args []string) ([]string, config.Info) {
+func removeConfigResolverFlags(args []string) ([]string, api.Metadata) {
 	var newArgs []string
-	var usedConfig config.Info
+	var usedConfig api.Metadata
 	toConfig := map[string]*string{
 		"org":     &usedConfig.Org,
 		"repo":    &usedConfig.Repo,

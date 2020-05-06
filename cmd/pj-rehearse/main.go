@@ -166,7 +166,7 @@ func rehearseMain() error {
 	}
 
 	// We can only detect changes if we managed to load both ci-operator config versions
-	changedCiopConfigData := config.ByFilename{}
+	changedCiopConfigData := config.DataByFilename{}
 	affectedJobs := make(map[string]sets.String)
 	if masterConfig.CiOperator != nil && prConfig.CiOperator != nil {
 		data, jobs := diffs.GetChangedCiopConfigs(masterConfig.CiOperator, prConfig.CiOperator, logger)

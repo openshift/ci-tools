@@ -189,7 +189,7 @@ const workflowJobPage = `
 <h2 id="post" title="Steps run by this {{ toLower $type }} to clean up and teardown test resources, in runtime order"><a href="#post">Post Steps</a></h2>
 {{ template "stepTable" .Steps.Post }}
 <h2 id="graph" title="Visual representation of steps run by this {{ toLower $type }}"><a href="#graph">Step Graph</a></h2>
-{{ workflowGraph .As }}
+{{ workflowGraph .As .Type }}
 `
 
 const jobSearchPage = `
@@ -1448,8 +1448,8 @@ func getBaseTemplate(workflows registry.WorkflowByName, chains registry.ChainByN
 				return template.HTML(str)
 			},
 			"toLower": strings.ToLower,
-			"workflowGraph": func(as string) template.HTML {
-				svg, err := WorkflowGraph(as, workflows, chains)
+			"workflowGraph": func(as string, wfType string) template.HTML {
+				svg, err := WorkflowGraph(as, workflows, chains, wfType)
 				if err != nil {
 					return template.HTML(err.Error())
 				}

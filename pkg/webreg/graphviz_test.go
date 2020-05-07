@@ -108,7 +108,7 @@ func TestWorkflowDotFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to load registry: %v", err)
 	}
-	ipi := workflowDotFile("ipi", workflows, chains)
+	ipi := workflowDotFile("ipi", workflows, chains, workflowType)
 	if ipi != ipiWorkflow {
 		t.Errorf("Generated dot file for ipi differs from expected: %s", diff.StringDiff(ipiWorkflow, ipi))
 	}

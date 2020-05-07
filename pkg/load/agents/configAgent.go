@@ -21,6 +21,7 @@ type ConfigAgent interface {
 	// GetMatchingConfig loads a configuration that matches the metadata,
 	// allowing for regex matching on branch names.
 	GetMatchingConfig(metadata api.Metadata) (api.ReleaseBuildConfiguration, error)
+	GetAll() load.ByOrgRepo
 	GetGeneration() int
 	AddIndex(indexName string, indexFunc IndexFn) error
 	GetFromIndex(indexName string, indexKey string) ([]*api.ReleaseBuildConfiguration, error)
@@ -96,7 +97,11 @@ func (a *configAgent) GetMatchingConfig(metadata api.Metadata) (api.ReleaseBuild
 	}
 	var matchingConfigs []api.ReleaseBuildConfiguration
 	for _, config := range repoConfigs {
-		if regexp.MustCompile(config.Metadata.Branch).MatchString(metadata.Branch) && config.Metadata.Variant == metadata.Variant {
+		r, err := regexp.Compile(config.Metadata.Branch)
+		if err != nil {
+			return api.ReleaseBuildConfiguration{}, fmt.Errorf("could not compile regex for %s/%s@%s: %v", metadata.Org, metadata.Repo, config.Metadata.Branch, err)
+		}
+		if r.MatchString(metadata.Branch) && config.Metadata.Variant == metadata.Variant {
 			matchingConfigs = append(matchingConfigs, config)
 		}
 	}
@@ -108,6 +113,12 @@ func (a *configAgent) GetMatchingConfig(metadata api.Metadata) (api.ReleaseBuild
 	default:
 		return api.ReleaseBuildConfiguration{}, fmt.Errorf("found more than one matching config for branch %s on repo %s/%s", metadata.Branch, metadata.Org, metadata.Repo)
 	}
+}
+
+func (a *configAgent) GetAll() load.ByOrgRepo {
+	a.lock.RLock()
+	defer a.lock.RUnlock()
+	return a.configs
 }
 
 func (a *configAgent) GetGeneration() int {

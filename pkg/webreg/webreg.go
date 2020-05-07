@@ -15,12 +15,18 @@ import (
 	"github.com/alecthomas/chroma/lexers"
 	"github.com/alecthomas/chroma/styles"
 	"github.com/sirupsen/logrus"
-	prowConfig "k8s.io/test-infra/prow/config"
 
 	"github.com/openshift/ci-tools/pkg/api"
-	"github.com/openshift/ci-tools/pkg/load"
 	"github.com/openshift/ci-tools/pkg/load/agents"
 	"github.com/openshift/ci-tools/pkg/registry"
+)
+
+const (
+	OrgQuery     = "org"
+	RepoQuery    = "repo"
+	BranchQuery  = "branch"
+	VariantQuery = "variant"
+	TestQuery    = "test"
 )
 
 const htmlPageStart = `
@@ -330,7 +336,7 @@ const templateDefinitions = `
 							<td>
 								<ul>
 								{{ range $index, $test := $branch.Tests }}
-									<li><nobr><a href="/job/{{$org.Name}}-{{$repo.Name}}-{{$branch.Name}}-{{$test}}" style="font-family:monospace">{{$test}}</a></nobr></li>
+									<li><nobr><a href="/job?org={{$org.Name}}&repo={{$repo.Name}}&branch={{$branch.Name}}&test={{$test}}" style="font-family:monospace">{{$test}}</a></nobr></li>
 								{{ end }}
 								</ul>
 							</td>
@@ -1664,7 +1670,7 @@ func mainPageHandler(agent agents.RegistryAgent, templateString string, w http.R
 	writePage(w, "Step Registry Help Page", page, comps)
 }
 
-func WebRegHandler(regAgent agents.RegistryAgent, confAgent agents.ConfigAgent, jobAgent *prowConfig.Agent) http.HandlerFunc {
+func WebRegHandler(regAgent agents.RegistryAgent, confAgent agents.ConfigAgent) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		trimmedPath := strings.TrimPrefix(req.URL.Path, req.URL.Host)
 		// remove leading slash
@@ -1680,7 +1686,7 @@ func WebRegHandler(regAgent agents.RegistryAgent, confAgent agents.ConfigAgent, 
 			case "":
 				mainPageHandler(regAgent, mainPage, w, req)
 			case "search":
-				searchHandler(confAgent, jobAgent, w, req)
+				searchHandler(confAgent, w, req)
 			default:
 				writeErrorPage(w, errors.New("Invalid path"), http.StatusNotImplemented)
 			}
@@ -1817,42 +1823,78 @@ func workflowHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *htt
 	writePage(w, "Registry Workflow Help Page", page, workflow)
 }
 
-func findConfigForJob(jobName string, configs load.FilenameToConfig) (api.MultiStageTestConfiguration, error) {
-	splitJobName := strings.Split(jobName, "-")
-	var filename, testname string
-	var config api.ReleaseBuildConfiguration
-	for i := 3; i < len(splitJobName); i++ {
-		filename = strings.Join(splitJobName[:i], "-")
-		filename = strings.Join([]string{filename, "yaml"}, ".")
-		if foundConfig, ok := configs[filename]; ok {
-			config = foundConfig
-			testname = strings.Join(splitJobName[i:], "-")
-		}
-	}
-	if testname == "" {
-		return api.MultiStageTestConfiguration{}, fmt.Errorf("Config not found for job %s", jobName)
-	}
+func findConfigForJob(testName string, config api.ReleaseBuildConfiguration) (api.MultiStageTestConfiguration, error) {
 	for _, test := range config.Tests {
-		if test.As == testname {
+		if test.As == testName {
 			if test.MultiStageTestConfiguration != nil {
 				return *test.MultiStageTestConfiguration, nil
 			}
-			return api.MultiStageTestConfiguration{}, fmt.Errorf("Provided job %s is not a multi stage type test", jobName)
+			return api.MultiStageTestConfiguration{}, fmt.Errorf("Provided job %s is not a multi stage type test", testName)
 		}
 	}
-	return api.MultiStageTestConfiguration{}, fmt.Errorf("Could not find job %s. Job either does not exist or is not a multi stage test", jobName)
+	return api.MultiStageTestConfiguration{}, fmt.Errorf("Could not find job %s. Job either does not exist or is not a multi stage test", testName)
 }
 
-func jobHandler(regAgent agents.RegistryAgent, confAgent agents.ConfigAgent, w http.ResponseWriter, req *http.Request) {
+func MetadataFromQuery(w http.ResponseWriter, r *http.Request) (api.Metadata, error) {
+	if r.Method != "GET" {
+		w.WriteHeader(http.StatusNotImplemented)
+		w.Write([]byte(http.StatusText(http.StatusNotImplemented)))
+		return api.Metadata{}, fmt.Errorf("expected GET, got %s", r.Method)
+	}
+	org := r.URL.Query().Get(OrgQuery)
+	if org == "" {
+		missingQuery(w, OrgQuery)
+		return api.Metadata{}, fmt.Errorf("missing query %s", OrgQuery)
+	}
+	repo := r.URL.Query().Get(RepoQuery)
+	if repo == "" {
+		missingQuery(w, RepoQuery)
+		return api.Metadata{}, fmt.Errorf("missing query %s", RepoQuery)
+	}
+	branch := r.URL.Query().Get(BranchQuery)
+	if branch == "" {
+		missingQuery(w, BranchQuery)
+		return api.Metadata{}, fmt.Errorf("missing query %s", BranchQuery)
+	}
+	variant := r.URL.Query().Get(VariantQuery)
+	return api.Metadata{
+		Org:     org,
+		Repo:    repo,
+		Branch:  branch,
+		Variant: variant,
+	}, nil
+}
+
+func missingQuery(w http.ResponseWriter, field string) {
+	w.WriteHeader(http.StatusBadRequest)
+	fmt.Fprintf(w, "%s query missing or incorrect", field)
+}
+
+func jobHandler(regAgent agents.RegistryAgent, confAgent agents.ConfigAgent, w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	defer func() { logrus.Infof("rendered in %s", time.Since(start)) }()
 	w.Header().Set("Content-Type", "text/html;charset=UTF-8")
-	name := path.Base(req.URL.Path)
-	config, err := findConfigForJob(name, confAgent.GetAll())
+	metadata, err := MetadataFromQuery(w, r)
+	if err != nil {
+		return
+	}
+	test := r.URL.Query().Get(TestQuery)
+	if test == "" {
+		missingQuery(w, TestQuery)
+		return
+	}
+	configs, err := confAgent.GetMatchingConfig(metadata)
 	if err != nil {
 		writeErrorPage(w, err, http.StatusNotFound)
 		return
 	}
+	config, err := findConfigForJob(test, configs)
+	if err != nil {
+		writeErrorPage(w, err, http.StatusNotFound)
+		return
+	}
+	// TODO(apavel): support jobs other than presubmits
+	name := metadata.JobName("pull", test)
 	_, chains, workflows, docs := regAgent.GetRegistryComponents()
 	workflow, docs := jobToWorkflow(name, config, workflows, docs)
 	updatedWorkflows := make(registry.WorkflowByName)
@@ -1937,47 +1979,30 @@ func (j *Jobs) addJob(orgName, repoName, branchName, testName string) {
 }
 
 // getAllMultiStageTests return a map that has the config name in org-repo-branch format as the key and the test names for multi stage jobs as the value
-func getAllMultiStageTests(confAgent agents.ConfigAgent, jobAgent *prowConfig.Agent) *Jobs {
+func getAllMultiStageTests(confAgent agents.ConfigAgent) *Jobs {
 	jobs := &Jobs{}
 	configs := confAgent.GetAll()
-	allRepos := jobAgent.Config().AllRepos
-	for filename, releaseConfig := range configs {
-		name := strings.TrimSuffix(filename, ".yaml")
-		var org, repo, branch string
-		for orgRepo := range allRepos {
-			dashed := strings.ReplaceAll(orgRepo, "/", "-")
-			if strings.HasPrefix(name, dashed) {
-				split := strings.Split(orgRepo, "/")
-				if len(split) != 2 {
-					// TODO: handle error? currently just ignoring
-					continue
+	for org, orgConfigs := range configs {
+		for repo, repoConfigs := range orgConfigs {
+			for _, releaseConfig := range repoConfigs {
+				for _, test := range releaseConfig.Tests {
+					if test.MultiStageTestConfiguration != nil {
+						// TODO(apavel): handle variant configs here
+						jobs.addJob(org, repo, releaseConfig.Metadata.Branch, test.As)
+					}
 				}
-				org = split[0]
-				repo = split[1]
-				branchVariant := strings.TrimPrefix(name, fmt.Sprint(dashed, "-"))
-				splitBV := strings.Split(branchVariant, "__")
-				branch = splitBV[0]
-				if len(splitBV) == 2 {
-					logrus.Info("TODO: how should we handle variants?")
-				}
-				break
-			}
-		}
-		for _, test := range releaseConfig.Tests {
-			if test.MultiStageTestConfiguration != nil {
-				jobs.addJob(org, repo, branch, test.As)
 			}
 		}
 	}
 	return jobs
 }
 
-func searchHandler(confAgent agents.ConfigAgent, jobAgent *prowConfig.Agent, w http.ResponseWriter, req *http.Request) {
+func searchHandler(confAgent agents.ConfigAgent, w http.ResponseWriter, req *http.Request) {
 	start := time.Now()
 	defer func() { logrus.Infof("rendered in %s", time.Since(start)) }()
 	w.Header().Set("Content-Type", "text/html;charset=UTF-8")
 	searchTerm := req.URL.Query().Get("job")
-	matches := getAllMultiStageTests(confAgent, jobAgent)
+	matches := getAllMultiStageTests(confAgent)
 	if searchTerm != "" {
 		matches = searchJobs(matches, searchTerm)
 	}

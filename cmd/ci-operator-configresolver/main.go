@@ -22,13 +22,6 @@ import (
 	"github.com/openshift/ci-tools/pkg/webreg"
 )
 
-const (
-	orgQuery     = "org"
-	repoQuery    = "repo"
-	branchQuery  = "branch"
-	variantQuery = "variant"
-)
-
 type options struct {
 	configPath   string
 	registryPath string
@@ -156,12 +149,6 @@ func recordError(label string) {
 	configresolverMetrics.errorRate.With(labels).Inc()
 }
 
-func missingQuery(w http.ResponseWriter, field string) {
-	recordError(fmt.Sprintf("query missing %s", field))
-	w.WriteHeader(http.StatusBadRequest)
-	fmt.Fprintf(w, "%s query missing or incorrect", field)
-}
-
 func handleWithMetrics(h http.HandlerFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t := time.Now()
@@ -189,34 +176,11 @@ func resolveConfig(configAgent agents.ConfigAgent, registryAgent agents.Registry
 			w.Write([]byte(http.StatusText(http.StatusNotImplemented)))
 			return
 		}
-		org := r.URL.Query().Get(orgQuery)
-		if org == "" {
-			missingQuery(w, orgQuery)
-			return
+		metadata, err := webreg.MetadataFromQuery(w, r)
+		if err != nil {
+			recordError("invalid query")
 		}
-		repo := r.URL.Query().Get(repoQuery)
-		if repo == "" {
-			missingQuery(w, repoQuery)
-			return
-		}
-		branch := r.URL.Query().Get(branchQuery)
-		if branch == "" {
-			missingQuery(w, branchQuery)
-			return
-		}
-		variant := r.URL.Query().Get(variantQuery)
-		metadata := api.Metadata{
-			Org:     org,
-			Repo:    repo,
-			Branch:  branch,
-			Variant: variant,
-		}
-		logger := log.WithFields(log.Fields{
-			"org":     org,
-			"repo":    repo,
-			"branch":  branch,
-			"variant": variant,
-		})
+		logger := log.WithFields(api.LogFieldsFor(metadata))
 
 		config, err := configAgent.GetMatchingConfig(metadata)
 		if err != nil {
@@ -288,13 +252,6 @@ func main() {
 		log.Fatalf("Failed to get registry agent: %v", err)
 	}
 
-	jobAgent := &prowConfig.Agent{}
-	// we only care about the org/repo information; we don't need to load jobs
-	err = jobAgent.Start(o.prowPath, o.jobPath)
-	if err != nil {
-		log.Fatalf("Failed to get job agent: %v", err)
-	}
-
 	if o.validateOnly {
 		os.Exit(0)
 	}
@@ -307,7 +264,7 @@ func main() {
 	interrupts.ListenAndServe(&http.Server{Addr: o.address}, o.gracePeriod)
 	uiServer := &http.Server{
 		Addr:    o.uiAddress,
-		Handler: handleWithMetrics(webreg.WebRegHandler(registryAgent, configAgent, jobAgent)),
+		Handler: handleWithMetrics(webreg.WebRegHandler(registryAgent, configAgent)),
 	}
 	interrupts.ListenAndServe(uiServer, o.gracePeriod)
 	health.ServeReady()

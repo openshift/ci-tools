@@ -137,6 +137,8 @@ func generateBranchedConfigs(currentRelease, bumpRelease string, futureReleases 
 		// users can reference the release streams via build roots or
 		// input images, so we need to update those, too
 		updateImages(&futureConfig, devRelease, futureRelease)
+		// we need to make sure this relates to the right branch
+		futureConfig.Metadata.Branch = futureBranch
 
 		// this config will promote to the new location on the release branch
 		output = append(output, config.DataWithInfo{Configuration: futureConfig, Info: copyInfoSwappingBranches(input.Info, futureBranch)})

@@ -164,7 +164,7 @@ func (a *configAgent) AddIndex(indexName string, indexFunc IndexFn) error {
 func (a *configAgent) loadFilenameToConfig() error {
 	log.Debug("Reloading configs")
 	startTime := time.Now()
-	configs, err := load.FromPath(a.configPath)
+	configs, err := load.FromPathByOrgRepo(a.configPath)
 	if err != nil {
 		return fmt.Errorf("loading config failed: %w", err)
 	}
@@ -172,7 +172,7 @@ func (a *configAgent) loadFilenameToConfig() error {
 	indexes := a.buildIndexes(configs)
 
 	a.lock.Lock()
-	a.configs = load.PartitionByOrgRepo(configs)
+	a.configs = configs
 	a.generation++
 	a.indexes = indexes
 	a.lock.Unlock()
@@ -182,25 +182,29 @@ func (a *configAgent) loadFilenameToConfig() error {
 	return nil
 }
 
-func (a *configAgent) buildIndexes(configs load.FilenameToConfig) map[string]configIndex {
+func (a *configAgent) buildIndexes(orgRepoConfigs load.ByOrgRepo) map[string]configIndex {
 	indexes := map[string]configIndex{}
 	for indexName, indexFunc := range a.indexFuncs {
-		for _, config := range configs {
-			var resusableConfigPtr *api.ReleaseBuildConfiguration
+		for _, orgConfigs := range orgRepoConfigs {
+			for _, repoConfigs := range orgConfigs {
+				for _, config := range repoConfigs {
+					var resusableConfigPtr *api.ReleaseBuildConfiguration
 
-			for _, indexKey := range indexFunc(config) {
-				if _, exists := indexes[indexName]; !exists {
-					indexes[indexName] = configIndex{}
-				}
-				if resusableConfigPtr == nil {
-					config := config
-					resusableConfigPtr = &config
-				}
-				if _, exists := indexes[indexName][indexKey]; !exists {
-					indexes[indexName][indexKey] = []*api.ReleaseBuildConfiguration{}
-				}
+					for _, indexKey := range indexFunc(config) {
+						if _, exists := indexes[indexName]; !exists {
+							indexes[indexName] = configIndex{}
+						}
+						if resusableConfigPtr == nil {
+							config := config
+							resusableConfigPtr = &config
+						}
+						if _, exists := indexes[indexName][indexKey]; !exists {
+							indexes[indexName][indexKey] = []*api.ReleaseBuildConfiguration{}
+						}
 
-				indexes[indexName][indexKey] = append(indexes[indexName][indexKey], resusableConfigPtr)
+						indexes[indexName][indexKey] = append(indexes[indexName][indexKey], resusableConfigPtr)
+					}
+				}
 			}
 		}
 	}

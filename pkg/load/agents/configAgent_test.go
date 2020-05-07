@@ -127,7 +127,7 @@ func TestBuildIndexes(t *testing.T) {
 	testCases := []struct {
 		name     string
 		agent    *configAgent
-		configs  load.FilenameToConfig
+		configs  load.ByOrgRepo
 		expected map[string]configIndex
 	}{
 		{
@@ -137,7 +137,7 @@ func TestBuildIndexes(t *testing.T) {
 					"index-a": func(_ api.ReleaseBuildConfiguration) []string { return []string{"key-a"} },
 				},
 			},
-			configs:  load.FilenameToConfig{"myfile.yaml": cfg},
+			configs:  load.ByOrgRepo{"org": {"repo": []api.ReleaseBuildConfiguration{cfg}}},
 			expected: map[string]configIndex{"index-a": {"key-a": []*api.ReleaseBuildConfiguration{&cfg}}},
 		},
 		{
@@ -148,7 +148,7 @@ func TestBuildIndexes(t *testing.T) {
 					"index-b": func(_ api.ReleaseBuildConfiguration) []string { return []string{"key-b"} },
 				},
 			},
-			configs: load.FilenameToConfig{"myfile.yaml": cfg},
+			configs: load.ByOrgRepo{"org": {"repo": []api.ReleaseBuildConfiguration{cfg}}},
 			expected: map[string]configIndex{
 				"index-a": {"key-a": []*api.ReleaseBuildConfiguration{&cfg}},
 				"index-b": {"key-b": []*api.ReleaseBuildConfiguration{&cfg}},
@@ -161,7 +161,7 @@ func TestBuildIndexes(t *testing.T) {
 					"index-a": func(_ api.ReleaseBuildConfiguration) []string { return nil },
 				},
 			},
-			configs:  load.FilenameToConfig{"myfile.yaml": cfg},
+			configs:  load.ByOrgRepo{"org": {"repo": []api.ReleaseBuildConfiguration{cfg}}},
 			expected: map[string]configIndex{},
 		},
 	}

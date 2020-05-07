@@ -40,15 +40,15 @@ const (
 type ByOrgRepo map[string]map[string][]api.ReleaseBuildConfiguration
 
 func FromPathByOrgRepo(path string) (ByOrgRepo, error) {
-	byFilename, err := FromPath(path)
+	byFilename, err := fromPath(path)
 	if err != nil {
 		return nil, err
 	}
 
-	return PartitionByOrgRepo(byFilename), nil
+	return partitionByOrgRepo(byFilename), nil
 }
 
-func PartitionByOrgRepo(byFilename FilenameToConfig) ByOrgRepo {
+func partitionByOrgRepo(byFilename filenameToConfig) ByOrgRepo {
 	byOrgRepo := map[string]map[string][]api.ReleaseBuildConfiguration{}
 	for _, configuration := range byFilename {
 		org, repo := configuration.Metadata.Org, configuration.Metadata.Repo
@@ -64,11 +64,11 @@ func PartitionByOrgRepo(byFilename FilenameToConfig) ByOrgRepo {
 }
 
 // FilenameToConfig contains configs keyed by the file they were found in
-type FilenameToConfig map[string]api.ReleaseBuildConfiguration
+type filenameToConfig map[string]api.ReleaseBuildConfiguration
 
 // FromPath returns all configs found at or below the given path
-func FromPath(path string) (FilenameToConfig, error) {
-	configs := FilenameToConfig{}
+func fromPath(path string) (filenameToConfig, error) {
+	configs := filenameToConfig{}
 	err := filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
 		if info == nil || err != nil {
 			return err

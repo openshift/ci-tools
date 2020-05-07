@@ -848,17 +848,17 @@ func TestRegistry(t *testing.T) {
 func TestPartitionByRepo(t *testing.T) {
 	var testCases = []struct {
 		name   string
-		input  FilenameToConfig
+		input  filenameToConfig
 		output ByOrgRepo
 	}{
 		{
 			name:   "no input",
-			input:  FilenameToConfig{},
+			input:  filenameToConfig{},
 			output: ByOrgRepo{},
 		},
 		{
 			name: "complex input",
-			input: FilenameToConfig{
+			input: filenameToConfig{
 				"a": api.ReleaseBuildConfiguration{Metadata: api.Metadata{
 					Org:    "org",
 					Repo:   "repo",
@@ -920,7 +920,7 @@ func TestPartitionByRepo(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		actual, expected := PartitionByOrgRepo(testCase.input), testCase.output
+		actual, expected := partitionByOrgRepo(testCase.input), testCase.output
 		if diff := cmp.Diff(actual, expected); diff != "" {
 			t.Errorf("%s: did not get correct partitioned config: %s", testCase.name, diff)
 		}

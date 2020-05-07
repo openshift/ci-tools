@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/sirupsen/logrus"
 )
 
 // IsComplete returns an error if at least one of Org, Repo, Branch members is
@@ -89,4 +91,13 @@ func FlavorForBranch(branch string) string {
 		flavor = "misc"
 	}
 	return flavor
+}
+
+func LogFieldsFor(metadata Metadata) logrus.Fields {
+	return logrus.Fields{
+		"org":     metadata.Org,
+		"repo":    metadata.Repo,
+		"branch":  metadata.Branch,
+		"variant": metadata.Variant,
+	}
 }

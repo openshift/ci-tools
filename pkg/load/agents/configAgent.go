@@ -2,6 +2,7 @@ package agents
 
 import (
 	"fmt"
+	"regexp"
 	"sync"
 	"time"
 
@@ -17,8 +18,10 @@ import (
 // ConfigAgent is an interface that can load configs from disk into
 // memory and retrieve them when provided with a config.Info.
 type ConfigAgent interface {
-	GetConfig(metadata api.Metadata) (api.ReleaseBuildConfiguration, error)
-	GetAll() load.FilenameToConfig
+	// GetMatchingConfig loads a configuration that matches the metadata,
+	// allowing for regex matching on branch names.
+	GetMatchingConfig(metadata api.Metadata) (api.ReleaseBuildConfiguration, error)
+	GetAll() load.ByOrgRepo
 	GetGeneration() int
 	AddIndex(indexName string, indexFunc IndexFn) error
 	GetFromIndex(indexName string, indexKey string) ([]*api.ReleaseBuildConfiguration, error)
@@ -29,7 +32,7 @@ type IndexFn func(api.ReleaseBuildConfiguration) []string
 
 type configAgent struct {
 	lock         *sync.RWMutex
-	configs      load.FilenameToConfig
+	configs      load.ByOrgRepo
 	configPath   string
 	cycle        time.Duration
 	generation   int
@@ -79,17 +82,42 @@ func (a *configAgent) recordError(label string) {
 	a.errorMetrics.With(labels).Inc()
 }
 
-func (a *configAgent) GetConfig(metadata api.Metadata) (api.ReleaseBuildConfiguration, error) {
+// GetMatchingConfig loads a configuration that matches the metadata,
+// allowing for regex matching on branch names.
+func (a *configAgent) GetMatchingConfig(metadata api.Metadata) (api.ReleaseBuildConfiguration, error) {
 	a.lock.RLock()
 	defer a.lock.RUnlock()
-	config, ok := a.configs[metadata.Basename()]
-	if !ok {
-		return api.ReleaseBuildConfiguration{}, fmt.Errorf("Could not find config %s", metadata.Basename())
+	orgConfigs, exist := a.configs[metadata.Org]
+	if !exist {
+		return api.ReleaseBuildConfiguration{}, fmt.Errorf("could not find any config for org %s", metadata.Org)
 	}
-	return config, nil
+	repoConfigs, exist := orgConfigs[metadata.Repo]
+	if !exist {
+		return api.ReleaseBuildConfiguration{}, fmt.Errorf("could not find any config for repo %s/%s", metadata.Org, metadata.Repo)
+	}
+	var matchingConfigs []api.ReleaseBuildConfiguration
+	for _, config := range repoConfigs {
+		r, err := regexp.Compile(config.Metadata.Branch)
+		if err != nil {
+			return api.ReleaseBuildConfiguration{}, fmt.Errorf("could not compile regex for %s/%s@%s: %v", metadata.Org, metadata.Repo, config.Metadata.Branch, err)
+		}
+		if r.MatchString(metadata.Branch) && config.Metadata.Variant == metadata.Variant {
+			matchingConfigs = append(matchingConfigs, config)
+		}
+	}
+	switch len(matchingConfigs) {
+	case 0:
+		return api.ReleaseBuildConfiguration{}, fmt.Errorf("could not find any config for branch %s on repo %s/%s", metadata.Branch, metadata.Org, metadata.Repo)
+	case 1:
+		return matchingConfigs[0], nil
+	default:
+		return api.ReleaseBuildConfiguration{}, fmt.Errorf("found more than one matching config for branch %s on repo %s/%s", metadata.Branch, metadata.Org, metadata.Repo)
+	}
 }
 
-func (a *configAgent) GetAll() load.FilenameToConfig {
+func (a *configAgent) GetAll() load.ByOrgRepo {
+	a.lock.RLock()
+	defer a.lock.RUnlock()
 	return a.configs
 }
 
@@ -136,7 +164,7 @@ func (a *configAgent) AddIndex(indexName string, indexFunc IndexFn) error {
 func (a *configAgent) loadFilenameToConfig() error {
 	log.Debug("Reloading configs")
 	startTime := time.Now()
-	configs, err := load.FromPath(a.configPath)
+	configs, err := load.FromPathByOrgRepo(a.configPath)
 	if err != nil {
 		return fmt.Errorf("loading config failed: %w", err)
 	}
@@ -154,25 +182,29 @@ func (a *configAgent) loadFilenameToConfig() error {
 	return nil
 }
 
-func (a *configAgent) buildIndexes(configs load.FilenameToConfig) map[string]configIndex {
+func (a *configAgent) buildIndexes(orgRepoConfigs load.ByOrgRepo) map[string]configIndex {
 	indexes := map[string]configIndex{}
 	for indexName, indexFunc := range a.indexFuncs {
-		for _, config := range configs {
-			var resusableConfigPtr *api.ReleaseBuildConfiguration
+		for _, orgConfigs := range orgRepoConfigs {
+			for _, repoConfigs := range orgConfigs {
+				for _, config := range repoConfigs {
+					var resusableConfigPtr *api.ReleaseBuildConfiguration
 
-			for _, indexKey := range indexFunc(config) {
-				if _, exists := indexes[indexName]; !exists {
-					indexes[indexName] = configIndex{}
-				}
-				if resusableConfigPtr == nil {
-					config := config
-					resusableConfigPtr = &config
-				}
-				if _, exists := indexes[indexName][indexKey]; !exists {
-					indexes[indexName][indexKey] = []*api.ReleaseBuildConfiguration{}
-				}
+					for _, indexKey := range indexFunc(config) {
+						if _, exists := indexes[indexName]; !exists {
+							indexes[indexName] = configIndex{}
+						}
+						if resusableConfigPtr == nil {
+							config := config
+							resusableConfigPtr = &config
+						}
+						if _, exists := indexes[indexName][indexKey]; !exists {
+							indexes[indexName][indexKey] = []*api.ReleaseBuildConfiguration{}
+						}
 
-				indexes[indexName][indexKey] = append(indexes[indexName][indexKey], resusableConfigPtr)
+						indexes[indexName][indexKey] = append(indexes[indexName][indexKey], resusableConfigPtr)
+					}
+				}
 			}
 		}
 	}

@@ -36,12 +36,39 @@ const (
 	commandsSuffix = "-commands.sh"
 )
 
-// FilenameToConfig contains configs keyed by the file they were found int
-type FilenameToConfig map[string]api.ReleaseBuildConfiguration
+// ByOrgRepo maps org --> repo --> list of branched and variant configs
+type ByOrgRepo map[string]map[string][]api.ReleaseBuildConfiguration
+
+func FromPathByOrgRepo(path string) (ByOrgRepo, error) {
+	byFilename, err := fromPath(path)
+	if err != nil {
+		return nil, err
+	}
+
+	return partitionByOrgRepo(byFilename), nil
+}
+
+func partitionByOrgRepo(byFilename filenameToConfig) ByOrgRepo {
+	byOrgRepo := map[string]map[string][]api.ReleaseBuildConfiguration{}
+	for _, configuration := range byFilename {
+		org, repo := configuration.Metadata.Org, configuration.Metadata.Repo
+		if _, exists := byOrgRepo[org]; !exists {
+			byOrgRepo[org] = map[string][]api.ReleaseBuildConfiguration{}
+		}
+		if _, exists := byOrgRepo[org][repo]; !exists {
+			byOrgRepo[org][repo] = []api.ReleaseBuildConfiguration{}
+		}
+		byOrgRepo[org][repo] = append(byOrgRepo[org][repo], configuration)
+	}
+	return byOrgRepo
+}
+
+// FilenameToConfig contains configs keyed by the file they were found in
+type filenameToConfig map[string]api.ReleaseBuildConfiguration
 
 // FromPath returns all configs found at or below the given path
-func FromPath(path string) (FilenameToConfig, error) {
-	configs := FilenameToConfig{}
+func fromPath(path string) (filenameToConfig, error) {
+	configs := filenameToConfig{}
 	err := filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
 		if info == nil || err != nil {
 			return err

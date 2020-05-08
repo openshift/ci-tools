@@ -8,10 +8,12 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"testing"
 
 	"github.com/ghodss/yaml"
 	"github.com/google/go-cmp/cmp"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/registry"
@@ -921,8 +923,38 @@ func TestPartitionByRepo(t *testing.T) {
 
 	for _, testCase := range testCases {
 		actual, expected := partitionByOrgRepo(testCase.input), testCase.output
+		// The output slices are sorted based on the sorting of the input map so
+		// this is more involded than just comparing two maps and ignoring their
+		// order.
+		if err := sortByOrgRepoSlices(&actual); err != nil {
+			t.Fatalf("failed to sort actual: %v", err)
+		}
+		if err := sortByOrgRepoSlices(&expected); err != nil {
+			t.Fatalf("failed to sort expected: %v", err)
+		}
 		if diff := cmp.Diff(actual, expected); diff != "" {
 			t.Errorf("%s: did not get correct partitioned config: %s", testCase.name, diff)
 		}
 	}
+}
+
+func sortByOrgRepoSlices(in *ByOrgRepo) error {
+	var errs []error
+	for _, org := range *in {
+		for _, repo := range org {
+			sort.Slice(repo, func(i, j int) bool {
+				iSerialized, err := json.Marshal(repo[i])
+				if err != nil {
+					errs = append(errs, err)
+				}
+				jSerialized, err := json.Marshal(repo[j])
+				if err != nil {
+					errs = append(errs, err)
+				}
+				return string(iSerialized) < string(jSerialized)
+			})
+		}
+	}
+
+	return utilerrors.NewAggregate(errs)
 }

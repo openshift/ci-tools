@@ -1,7 +1,9 @@
 package main
 
 import (
+	"flag"
 	"fmt"
+	"os"
 	"reflect"
 	"testing"
 
@@ -101,6 +103,7 @@ func Test_getProwjob(t *testing.T) {
 }
 
 func Test_options_gatherOptions(t *testing.T) {
+	fs = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	o := options{}
 	o.gatherOptions()
 	_ = fs.Lookup("channel").Value.Set("foo")

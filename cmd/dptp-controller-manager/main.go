@@ -15,7 +15,7 @@ import (
 	"k8s.io/test-infra/prow/pjutil"
 	"sigs.k8s.io/controller-runtime"
 
-	"github.com/openshift/ci-tools/pkg/controller/image-stream-tag-reconciler"
+	"github.com/openshift/ci-tools/pkg/controller/promotionreconciler"
 	"github.com/openshift/ci-tools/pkg/load/agents"
 )
 
@@ -26,11 +26,11 @@ type options struct {
 	jobConfigPath                 string
 	registryClusterKubeconfigPath string
 	dryRun                        bool
-	imageStreamTagReconcilerOpts  imageStreamTagReconcilerOptions
+	promotionreconcilerOptions    promotionreconcilerOptions
 	*flagutil.GitHubOptions
 }
 
-type imageStreamTagReconcilerOptions struct {
+type promotionreconcilerOptions struct {
 	IgnoredGitHubOrganizations flagutil.Strings
 }
 
@@ -42,7 +42,7 @@ func newOpts() (*options, error) {
 	flag.StringVar(&opts.configPath, "config-path", "", "Path to the prow config")
 	flag.StringVar(&opts.jobConfigPath, "job-config-path", "", "Path to the job config")
 	flag.StringVar(&opts.registryClusterKubeconfigPath, "registry-cluster-kubeconfig", "", "If set, this kubeconfig will be used to access registry-related resources like Images and ImageStreams. Defaults to the global kubeconfig")
-	flag.Var(&opts.imageStreamTagReconcilerOpts.IgnoredGitHubOrganizations, "imagestreamtagreconciler.ignored-github-organization", "GitHub organization to ignore in the imagestreamtagreconciler. Can be specified multiple times")
+	flag.Var(&opts.promotionreconcilerOptions.IgnoredGitHubOrganizations, "promotionreconcilerOptions.ignored-github-organization", "GitHub organization to ignore in the imagestreamtagreconciler. Can be specified multiple times")
 	// TODO: rather than relying on humans implementing dry-run properly, we should switch
 	// to just do it on client-level once it becomes available: https://github.com/kubernetes-sigs/controller-runtime/pull/839
 	flag.BoolVar(&opts.dryRun, "dry-run", true, "Whether to run the controller-manager with dry-run")
@@ -137,15 +137,15 @@ func main() {
 		}
 	}
 
-	imageStreamTagReconcilerOpts := imagestreamtagreconciler.Options{
+	imageStreamTagReconcilerOpts := promotionreconciler.Options{
 		DryRun:                     opts.dryRun,
 		CIOperatorConfigAgent:      ciOPConfigAgent,
 		ConfigGetter:               configAgent.Config,
 		GitHubClient:               gitHubClient,
-		IgnoredGitHubOrganizations: opts.imageStreamTagReconcilerOpts.IgnoredGitHubOrganizations.Strings(),
+		IgnoredGitHubOrganizations: opts.promotionreconcilerOptions.IgnoredGitHubOrganizations.Strings(),
 		RegistryManager:            registryMgr,
 	}
-	if err := imagestreamtagreconciler.AddToManager(mgr, imageStreamTagReconcilerOpts); err != nil {
+	if err := promotionreconciler.AddToManager(mgr, imageStreamTagReconcilerOpts); err != nil {
 		logrus.WithError(err).Fatal("Failed to add imagestreamtagreconciler")
 	}
 

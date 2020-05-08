@@ -11,8 +11,13 @@ install:
 	hack/install.sh
 .PHONY: install
 
+# Make sure we detect flakes early.
+ifdef CI
+COUNT_ARG = -count=25
+endif
+
 test:
-	go test -race ./...
+	go test -race $(COUNT_ARG) ./...
 .PHONY: test
 
 update-vendor:

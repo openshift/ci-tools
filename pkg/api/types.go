@@ -539,6 +539,7 @@ const (
 	ClusterProfileGCPLoggingJournald ClusterProfile = "gcp-logging-journald"
 	ClusterProfileGCPLoggingJSONFile ClusterProfile = "gcp-logging-json-file"
 	ClusterProfileGCPLoggingCRIO     ClusterProfile = "gcp-logging-crio"
+	ClusterProfileLibvirtPpc64le     ClusterProfile = "libvirt-ppc64le"
 	ClusterProfileLibvirtS390x       ClusterProfile = "libvirt-s390x"
 	ClusterProfileOpenStack          ClusterProfile = "openstack"
 	ClusterProfileOpenStackVexxhost  ClusterProfile = "openstack-vexxhost"
@@ -565,6 +566,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileGCPLoggingJournald,
 		ClusterProfileGCPLoggingJSONFile,
 		ClusterProfileGCPLoggingCRIO,
+		ClusterProfileLibvirtPpc64le,
 		ClusterProfileLibvirtS390x,
 		ClusterProfileOpenStack,
 		ClusterProfileOpenStackVexxhost,
@@ -597,6 +599,8 @@ func (p ClusterProfile) ClusterType() string {
 		ClusterProfileGCPLoggingJSONFile,
 		ClusterProfileGCPLoggingCRIO:
 		return "gcp"
+	case ClusterProfileLibvirtPpc64le:
+		return "libvirt-ppc64le"
 	case ClusterProfileLibvirtS390x:
 		return "libvirt-s390x"
 	case ClusterProfileOpenStack:
@@ -638,6 +642,8 @@ func (p ClusterProfile) LeaseType() string {
 		ClusterProfileGCPLoggingJSONFile,
 		ClusterProfileGCPLoggingCRIO:
 		return "gcp-quota-slice"
+	case ClusterProfileLibvirtPpc64le:
+		return "libvirt-ppc64le-quota-slice"
 	case ClusterProfileLibvirtS390x:
 		return "libvirt-s390x-quota-slice"
 	case ClusterProfileOpenStack:
@@ -660,7 +666,7 @@ func (p ClusterProfile) LeaseType() string {
 // LeaseTypeFromClusterType maps cluster types to lease types
 func LeaseTypeFromClusterType(t string) (string, error) {
 	switch t {
-	case "aws", "azure4", "gcp", "libvirt-s390x", "openstack", "openstack-vexxhost", "openstack-ppc64le", "vsphere", "ovirt", "packet":
+	case "aws", "azure4", "gcp", "libvirt-ppc64le", "libvirt-s390x", "openstack", "openstack-vexxhost", "openstack-ppc64le", "vsphere", "ovirt", "packet":
 		return t + "-quota-slice", nil
 	default:
 		return "", fmt.Errorf("invalid cluster type %q", t)

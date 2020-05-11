@@ -292,6 +292,78 @@ func TestGeneratePodSpec(t *testing.T) {
 	}
 }
 
+func TestGeneratePodSpecMultiStage(t *testing.T) {
+	info := ProwgenInfo{Metadata: ciop.Metadata{Org: "organization", Repo: "repo", Branch: "branch"}}
+	test := ciop.TestStepConfiguration{
+		As: "test",
+		MultiStageTestConfiguration: &ciop.MultiStageTestConfiguration{
+			ClusterProfile: ciop.ClusterProfileAWS,
+		},
+	}
+	expected := corev1.PodSpec{
+		ServiceAccountName: "ci-operator",
+		Volumes: []corev1.Volume{{
+			Name: "apici-ci-operator-credentials",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{SecretName: "apici-ci-operator-credentials", Items: []corev1.KeyToPath{{Key: "sa.ci-operator.apici.config", Path: "kubeconfig"}}},
+			},
+		}, {
+			Name: "pull-secret",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{SecretName: "regcred"},
+			},
+		}, {
+			Name: "cluster-profile",
+			VolumeSource: corev1.VolumeSource{
+				Projected: &corev1.ProjectedVolumeSource{
+					Sources: []corev1.VolumeProjection{{
+						Secret: &corev1.SecretProjection{
+							LocalObjectReference: corev1.LocalObjectReference{
+								Name: "cluster-secrets-aws",
+							},
+						},
+					}},
+				},
+			},
+		}, {
+			Name: "boskos",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: "boskos-credentials",
+					Items:      []corev1.KeyToPath{{Key: "password", Path: "password"}},
+				},
+			},
+		}},
+		Containers: []corev1.Container{{
+			Image:           "ci-operator:latest",
+			ImagePullPolicy: corev1.PullAlways,
+			Command:         []string{"ci-operator"},
+			Args: []string{
+				"--give-pr-author-access-to-namespace=true",
+				"--artifact-dir=$(ARTIFACTS)",
+				"--kubeconfig=/etc/apici/kubeconfig",
+				"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
+				"--target=test",
+				"--secret-dir=/usr/local/test-cluster-profile",
+				"--lease-server-password-file=/etc/boskos/password",
+			},
+			Resources: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
+			},
+			VolumeMounts: []corev1.VolumeMount{
+				{Name: "apici-ci-operator-credentials", ReadOnly: true, MountPath: "/etc/apici"},
+				{Name: "pull-secret", ReadOnly: true, MountPath: "/etc/pull-secret"},
+				{Name: "cluster-profile", MountPath: "/usr/local/test-cluster-profile"},
+				{Name: "boskos", ReadOnly: true, MountPath: "/etc/boskos"},
+			},
+		}},
+	}
+	podSpec := *generatePodSpecMultiStage(&info, &test)
+	if !equality.Semantic.DeepEqual(&podSpec, &expected) {
+		t.Errorf("expected PodSpec diff:\n%s", cmp.Diff(expected, podSpec, unexportedFields...))
+	}
+}
+
 func TestGeneratePodSpecTemplate(t *testing.T) {
 	tests := []struct {
 		info    *ProwgenInfo
@@ -479,79 +551,6 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						{Name: "boskos", ReadOnly: true, MountPath: "/etc/boskos"},
 						{Name: "cluster-profile", MountPath: "/usr/local/test-cluster-profile"},
 						{Name: "job-definition", MountPath: "/usr/local/test", SubPath: "cluster-launch-installer-e2e.yaml"},
-					},
-				}},
-			},
-		},
-		{
-			info:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "organization", Repo: "repo", Branch: "branch"}},
-			release: "origin-v4.0",
-			test: ciop.TestStepConfiguration{
-				As: "test",
-				MultiStageTestConfiguration: &ciop.MultiStageTestConfiguration{
-					ClusterProfile: ciop.ClusterProfileAWS,
-				},
-			},
-			expected: &corev1.PodSpec{
-				ServiceAccountName: "ci-operator",
-				Volumes: []corev1.Volume{
-					{
-						Name: "apici-ci-operator-credentials",
-						VolumeSource: corev1.VolumeSource{
-							Secret: &corev1.SecretVolumeSource{SecretName: "apici-ci-operator-credentials", Items: []corev1.KeyToPath{{Key: "sa.ci-operator.apici.config", Path: "kubeconfig"}}},
-						},
-					},
-					{
-						Name: "pull-secret",
-						VolumeSource: corev1.VolumeSource{
-							Secret: &corev1.SecretVolumeSource{SecretName: "regcred"},
-						},
-					},
-					{
-						Name: "cluster-profile",
-						VolumeSource: corev1.VolumeSource{
-							Projected: &corev1.ProjectedVolumeSource{
-								Sources: []corev1.VolumeProjection{
-									{
-										Secret: &corev1.SecretProjection{
-											LocalObjectReference: corev1.LocalObjectReference{
-												Name: "cluster-secrets-aws",
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-					{
-						Name: "boskos",
-						VolumeSource: corev1.VolumeSource{
-							Secret: &corev1.SecretVolumeSource{SecretName: "boskos-credentials", Items: []corev1.KeyToPath{{Key: "password", Path: "password"}}},
-						},
-					},
-				},
-				Containers: []corev1.Container{{
-					Image:           "ci-operator:latest",
-					ImagePullPolicy: corev1.PullAlways,
-					Command:         []string{"ci-operator"},
-					Args: []string{
-						"--give-pr-author-access-to-namespace=true",
-						"--artifact-dir=$(ARTIFACTS)",
-						"--kubeconfig=/etc/apici/kubeconfig",
-						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
-						"--target=test",
-						"--secret-dir=/usr/local/test-cluster-profile",
-						"--lease-server-password-file=/etc/boskos/password",
-					},
-					Resources: corev1.ResourceRequirements{
-						Requests: corev1.ResourceList{"cpu": *resource.NewMilliQuantity(10, resource.DecimalSI)},
-					},
-					VolumeMounts: []corev1.VolumeMount{
-
-						{Name: "apici-ci-operator-credentials", ReadOnly: true, MountPath: "/etc/apici"},
-						{Name: "pull-secret", ReadOnly: true, MountPath: "/etc/pull-secret"},
-						{Name: "boskos", ReadOnly: true, MountPath: "/etc/boskos"},
-						{Name: "cluster-profile", MountPath: "/usr/local/test-cluster-profile"},
 					},
 				}},
 			},
@@ -971,7 +970,7 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		podSpec := generatePodSpecOthers(tc.info, tc.release, &tc.test)
+		podSpec := generatePodSpecTemplate(tc.info, tc.release, &tc.test)
 		if !equality.Semantic.DeepEqual(podSpec, tc.expected) {
 			t.Errorf("expected PodSpec diff:\n%s", cmp.Diff(tc.expected, podSpec, unexportedFields...))
 		}

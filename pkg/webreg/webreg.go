@@ -1687,31 +1687,28 @@ func WebRegHandler(regAgent agents.RegistryAgent, confAgent agents.ConfigAgent) 
 				mainPageHandler(regAgent, mainPage, w, req)
 			case "search":
 				searchHandler(confAgent, w, req)
+			case "job":
+				jobHandler(regAgent, confAgent, w, req)
 			default:
 				writeErrorPage(w, errors.New("Invalid path"), http.StatusNotImplemented)
 			}
 			return
-		} else if len(splitURI) == 2 {
-			if splitURI[0] == "registry" {
-				refs, chains, workflows, _ := regAgent.GetRegistryComponents()
-				if _, ok := refs[splitURI[1]]; ok {
-					referenceHandler(regAgent, w, req)
-					return
-				}
-				if _, ok := chains[splitURI[1]]; ok {
-					chainHandler(regAgent, w, req)
-					return
-				}
-				if _, ok := workflows[splitURI[1]]; ok {
-					workflowHandler(regAgent, w, req)
-					return
-				}
-				writeErrorPage(w, fmt.Errorf("Registry element %s not found", splitURI[1]), http.StatusNotFound)
-				return
-			} else if splitURI[0] == "job" {
-				jobHandler(regAgent, confAgent, w, req)
+		} else if len(splitURI) == 2 && splitURI[0] == "registry" {
+			refs, chains, workflows, _ := regAgent.GetRegistryComponents()
+			if _, ok := refs[splitURI[1]]; ok {
+				referenceHandler(regAgent, w, req)
 				return
 			}
+			if _, ok := chains[splitURI[1]]; ok {
+				chainHandler(regAgent, w, req)
+				return
+			}
+			if _, ok := workflows[splitURI[1]]; ok {
+				workflowHandler(regAgent, w, req)
+				return
+			}
+			writeErrorPage(w, fmt.Errorf("Registry element %s not found", splitURI[1]), http.StatusNotFound)
+			return
 		}
 		writeErrorPage(w, errors.New("Invalid path"), http.StatusNotImplemented)
 	}

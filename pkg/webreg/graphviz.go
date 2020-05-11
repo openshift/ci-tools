@@ -130,10 +130,10 @@ func addEmptySubgraph(mainGraph graph, name string) (graph, int) {
 
 }
 
-func workflowDotFile(name string, workflows registry.WorkflowByName, chains registry.ChainByName) string {
+func workflowDotFile(name string, workflows registry.WorkflowByName, chains registry.ChainByName, wfType string) string {
 	workflow := workflows[name]
 	mainGraph := graph{
-		label: fmt.Sprintf("Workflow \"%s\"", name),
+		label: fmt.Sprintf("%s \"%s\"", wfType, name),
 	}
 	var preIndex, testIndex, postIndex int
 	if len(workflow.Pre) == 0 {
@@ -167,8 +167,8 @@ func workflowDotFile(name string, workflows registry.WorkflowByName, chains regi
 	return writeDotFile(mainGraph)
 }
 
-func WorkflowGraph(name string, workflows registry.WorkflowByName, chains registry.ChainByName) ([]byte, error) {
-	return renderDotFile(workflowDotFile(name, workflows, chains))
+func WorkflowGraph(name string, workflows registry.WorkflowByName, chains registry.ChainByName, wfType string) ([]byte, error) {
+	return renderDotFile(workflowDotFile(name, workflows, chains, wfType))
 }
 
 func chainDotFile(name string, chains registry.ChainByName) string {
@@ -256,10 +256,15 @@ func writeDotFile(mainGraph graph) string {
 			attrs = append(attrs, fmt.Sprintf("lhead=cluster_%d", edge.dst))
 		}
 		builder.WriteString(fmt.Sprintf("%s%d -> %d ", indentPrefix, srcNode, dstNode))
-		if len(attrs) == 1 {
-			builder.WriteString(fmt.Sprintf("[%s]", attrs[0]))
-		} else if len(attrs) == 2 {
-			builder.WriteString(fmt.Sprintf("[%s %s minlen=2]", attrs[0], attrs[1]))
+		if len(attrs) > 0 {
+			builder.WriteString(fmt.Sprintf("[%s", attrs[0]))
+			if len(attrs) > 1 {
+				builder.WriteString(fmt.Sprintf(" %s", attrs[1]))
+			}
+			if edge.dstType == subgraphType {
+				builder.WriteString(" minlen=2")
+			}
+			builder.WriteString("]")
 		}
 		builder.WriteString(";\n")
 	}

@@ -33,19 +33,17 @@ func TestOptions_Validate(t *testing.T) {
 			name: "everything set is valid",
 			options: Options{
 				address:  "dotcom.com",
-				certFile: "cert.pem",
-				keyFile:  "key.pem",
-				caFile:   "cacert.pem",
+				username: "super",
+				password: "secrets.txt",
 			},
 		},
 		{
 			name: "subset is not valid",
 			options: Options{
 				address:  "dotcom.com",
-				certFile: "cert.pem",
-				caFile:   "cacert.pem",
+				password: "secrets.txt",
 			},
-			expected: errors.New("--report-{cert|key|cacert}-file must be set together or not at all"),
+			expected: errors.New("--report-{username|password-file} must be set together or not at all"),
 		},
 	}
 	for _, testCase := range testCases {

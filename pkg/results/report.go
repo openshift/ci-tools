@@ -2,8 +2,6 @@ package results
 
 import (
 	"bytes"
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -24,30 +22,28 @@ const (
 // Options holds the configuration options for connecting to the remote aggregation server
 type Options struct {
 	address  string
-	certFile string
-	keyFile  string
-	caFile   string
+	username string
+	password string
 }
 
 // Bind adds flags for the options
 func (o *Options) Bind(flag *flag.FlagSet) {
 	flag.StringVar(&o.address, "report-address", reportAddress, "Address of the aggregate reporting server.")
-	flag.StringVar(&o.certFile, "report-cert-file", "", "File holding the certificate for the aggregate reporting server.")
-	flag.StringVar(&o.keyFile, "report-key-file", "", "File holding the key for the aggregate reporting server.")
-	flag.StringVar(&o.caFile, "report-ca-file", "", "File holding the certificate authority for the aggregate reporting server.")
+	flag.StringVar(&o.username, "report-username", "", "Username for the aggregate reporting server.")
+	flag.StringVar(&o.password, "report-password-file", "", "File holding the password for the aggregate reporting server.")
 }
 
 // Validate ensures that options are set correctly
 func (o *Options) Validate() error {
 	numSet := 0
-	for _, field := range []string{o.certFile, o.keyFile, o.caFile} {
+	for _, field := range []string{o.username, o.password} {
 		if field != "" {
 			numSet = numSet + 1
 		}
 	}
 
-	if numSet != 0 && numSet != 3 {
-		return errors.New("--report-{cert|key|cacert}-file must be set together or not at all")
+	if numSet != 0 && numSet != 2 {
+		return errors.New("--report-{username|password-file} must be set together or not at all")
 	}
 	return nil
 }
@@ -57,35 +53,18 @@ func (o *Options) Reporter(spec *api.JobSpec, consoleHost string) (Reporter, err
 	if o.address == "" {
 		return &noopReporter{}, nil
 	}
-	r := &reporter{
+	password, err := ioutil.ReadFile(o.password)
+	if err != nil {
+		return nil, err
+	}
+	return &reporter{
 		spec:        spec,
 		address:     o.address,
 		consoleHost: consoleHost,
 		client:      &http.Client{},
-	}
-	if o.certFile == "" {
-		return r, nil
-	}
-
-	cert, err := tls.LoadX509KeyPair(o.certFile, o.keyFile)
-	if err != nil {
-		return nil, fmt.Errorf("could not load client cert: %v", err)
-	}
-
-	caCert, err := ioutil.ReadFile(o.caFile)
-	if err != nil {
-		return nil, fmt.Errorf("could not load CA cert: %v", err)
-	}
-	caCertPool := x509.NewCertPool()
-	caCertPool.AppendCertsFromPEM(caCert)
-
-	tlsConfig := &tls.Config{
-		Certificates: []tls.Certificate{cert},
-		RootCAs:      caCertPool,
-	}
-	transport := &http.Transport{TLSClientConfig: tlsConfig}
-	r.client = &http.Client{Transport: transport}
-	return r, nil
+		username:    o.username,
+		password:    string(password),
+	}, nil
 }
 
 // Request holds the data used to report a result to an aggregation server
@@ -116,10 +95,12 @@ type noopReporter struct{}
 func (r *noopReporter) Report(err error) {}
 
 type reporter struct {
-	client      *http.Client
+	client             *http.Client
+	username, password string
+	address            string
+
 	spec        *api.JobSpec
 	consoleHost string
-	address     string
 }
 
 // Report sends a report for this error to an aggregation server.
@@ -140,12 +121,22 @@ func (r *reporter) Report(err error) {
 	if err != nil {
 		logrus.Tracef("could not marshal request: %v", err)
 	}
-	resp, err := r.client.Post(fmt.Sprintf("%s/result", r.address), "application/json", bytes.NewReader(data))
+	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/result", r.address), bytes.NewReader(data))
 	if err != nil {
 		logrus.Tracef("could not create report request: %v", err)
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
+	req.Header.Set("Content-Type", "application/json")
+	req.SetBasicAuth(r.username, r.password)
+	resp, err := r.client.Do(req)
+	if err != nil {
+		logrus.Tracef("could not send report request: %v", err)
+	}
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			logrus.Tracef("could not close report response: %v", err)
+		}
+	}()
+	if resp != nil && resp.StatusCode != http.StatusOK {
 		body, _ := ioutil.ReadAll(resp.Body)
 		logrus.Tracef("response for report was not 200: %v", body)
 	}

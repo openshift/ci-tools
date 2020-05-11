@@ -201,6 +201,8 @@ type ImageStreamTagReference struct {
 	// referenced cluster must support anonymous access to retrieve
 	// image streams, image stream tags, and image stream images in
 	// the provided namespace.
+	// TODO: Deprecate this field once we enforce ImageStreamTags to be
+	// local.
 	Cluster   string `json:"cluster,omitempty"`
 	Namespace string `json:"namespace"`
 	Name      string `json:"name"`

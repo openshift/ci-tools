@@ -1,7 +1,7 @@
-# Imagestreamtag reconciler
+# Promotion reconciler
 
-This controller is responsible for making sure that ImageStreamTags for the latest revision that was merged
-exist, even if the publishing job fails for whatever reason.
+This controller is responsible for making sure that promotions happen, even if the promotion job fails
+for whatever reason.
 
 To do so it:
 * Watches Images (As ImageStreamTags do not support watching)

@@ -1,4 +1,4 @@
-package imagestreamtagreconciler
+package promotionreconciler
 
 import (
 	"context"
@@ -25,7 +25,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
-	"github.com/openshift/ci-tools/pkg/controller/image-stream-tag-reconciler/prowjobreconciler"
+	"github.com/openshift/ci-tools/pkg/controller/promotionreconciler/prowjobreconciler"
 	controllerutil "github.com/openshift/ci-tools/pkg/controller/util"
 	"github.com/openshift/ci-tools/pkg/load/agents"
 	"github.com/openshift/ci-tools/pkg/steps/release"
@@ -44,7 +44,7 @@ type Options struct {
 	RegistryManager controllerruntime.Manager
 }
 
-const controllerName = "imageStreamTagReconciler"
+const controllerName = "promotionreconciler"
 
 func AddToManager(mgr controllerruntime.Manager, opts Options) error {
 	if err := imagev1.AddToScheme(mgr.GetScheme()); err != nil {

@@ -1,4 +1,4 @@
-package imagestreamtagreconciler
+package promotionreconciler
 
 import (
 	"io/ioutil"

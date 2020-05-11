@@ -53,9 +53,13 @@ func (o *Options) Reporter(spec *api.JobSpec, consoleHost string) (Reporter, err
 	if o.address == "" {
 		return &noopReporter{}, nil
 	}
-	password, err := ioutil.ReadFile(o.password)
-	if err != nil {
-		return nil, err
+	var password string
+	if o.password != "" {
+		raw, err := ioutil.ReadFile(o.password)
+		if err != nil {
+			return nil, err
+		}
+		password = string(raw)
 	}
 	return &reporter{
 		spec:        spec,
@@ -63,7 +67,7 @@ func (o *Options) Reporter(spec *api.JobSpec, consoleHost string) (Reporter, err
 		consoleHost: consoleHost,
 		client:      &http.Client{},
 		username:    o.username,
-		password:    string(password),
+		password:    password,
 	}, nil
 }
 

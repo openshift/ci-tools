@@ -12,7 +12,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	prowConfig "k8s.io/test-infra/prow/config"
+	"k8s.io/test-infra/prow/config/secret"
 	"k8s.io/test-infra/prow/interrupts"
+	"k8s.io/test-infra/prow/logrusutil"
 	"k8s.io/test-infra/prow/metrics"
 	"k8s.io/test-infra/prow/pjutil"
 
@@ -37,6 +39,8 @@ type options struct {
 	logLevel    string
 	address     string
 	gracePeriod time.Duration
+	username    string
+	password    string
 }
 
 func gatherOptions() options {
@@ -45,6 +49,8 @@ func gatherOptions() options {
 	fs.StringVar(&o.logLevel, "log-level", "info", "Level at which to log output.")
 	fs.StringVar(&o.address, "address", ":8080", "Address to run server on")
 	fs.DurationVar(&o.gracePeriod, "gracePeriod", time.Second*10, "Grace period for server shutdown")
+	flag.StringVar(&o.username, "username", "", "Username to trust for clients.")
+	flag.StringVar(&o.password, "password-file", "", "File holding the password for clients.")
 	fs.Parse(os.Args[1:])
 	return o
 }
@@ -100,9 +106,18 @@ func withErrorRate(request *results.Request) {
 	errorRate.With(labels).Inc()
 }
 
-func handleCIOperatorResult() http.HandlerFunc {
+func handleCIOperatorResult(username string, password func() []byte) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
+		if username != "" {
+			user, pass, ok := r.BasicAuth()
+			if !ok || user != username || pass != string(password()) {
+				w.WriteHeader(http.StatusUnauthorized)
+				fmt.Fprint(w, "Unauthorized")
+				return
+			}
+		}
+
 		bytes, err := ioutil.ReadAll(r.Body)
 		if err != nil {
 			handleError(w, fmt.Errorf("unable to ready request body: %v", err))
@@ -137,10 +152,16 @@ func main() {
 
 	level, _ := log.ParseLevel(o.logLevel)
 	log.SetLevel(level)
+	logrusutil.ComponentInit()
 	health := pjutil.NewHealth()
 
+	secretAgent := secret.Agent{}
+	if err := secretAgent.Start([]string{o.password}); err != nil {
+		log.WithError(err).Fatal("Could not load secrets.")
+	}
+
 	http.HandleFunc("/", genericHandler())
-	http.HandleFunc("/result", handleCIOperatorResult())
+	http.HandleFunc("/result", handleCIOperatorResult(o.username, secretAgent.GetTokenGenerator(o.password)))
 	metrics.ExposeMetrics("result-aggregator", prowConfig.PushGateway{})
 
 	interrupts.ListenAndServe(&http.Server{Addr: o.address}, o.gracePeriod)

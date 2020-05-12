@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -60,6 +61,12 @@ func validateOptions(o options) error {
 	if err != nil {
 		return fmt.Errorf("invalid --log-level: %v", err)
 	}
+	if o.username == "" {
+		return errors.New("--username is required")
+	}
+	if o.password == "" {
+		return errors.New("--password-file is required")
+	}
 	return nil
 }
 
@@ -109,13 +116,11 @@ func withErrorRate(request *results.Request) {
 func handleCIOperatorResult(username string, password func() []byte) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		if username != "" {
-			user, pass, ok := r.BasicAuth()
-			if !ok || user != username || pass != string(password()) {
-				w.WriteHeader(http.StatusUnauthorized)
-				fmt.Fprint(w, "Unauthorized")
-				return
-			}
+		user, pass, ok := r.BasicAuth()
+		if !ok || user != username || pass != string(password()) {
+			w.WriteHeader(http.StatusUnauthorized)
+			fmt.Fprint(w, "Unauthorized")
+			return
 		}
 
 		bytes, err := ioutil.ReadAll(r.Body)

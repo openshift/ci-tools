@@ -8,8 +8,12 @@ build:
 .PHONY: build
 
 install:
-	hack/install.sh
+	go install ./cmd/...
 .PHONY: install
+
+production-install:
+	hack/install.sh
+.PHONY: production-install
 
 # Make sure we detect flakes early.
 ifdef CI

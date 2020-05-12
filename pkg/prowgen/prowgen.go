@@ -44,6 +44,11 @@ func generatePodSpec(info *ProwgenInfo, secrets []*cioperatorapi.Secret) *corev1
 			MountPath: "/etc/pull-secret",
 			ReadOnly:  true,
 		},
+		{
+			Name:      "result-aggregator",
+			MountPath: "/etc/report",
+			ReadOnly:  true,
+		},
 	}
 
 	volumes := []corev1.Volume{
@@ -65,6 +70,12 @@ func generatePodSpec(info *ProwgenInfo, secrets []*cioperatorapi.Secret) *corev1
 			Name: "pull-secret",
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{SecretName: "regcred"},
+			},
+		},
+		{
+			Name: "result-aggregator",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{SecretName: "result-aggregator"},
 			},
 		},
 	}
@@ -207,6 +218,8 @@ func generateCiOperatorPodSpec(info *ProwgenInfo, secrets []*cioperatorapi.Secre
 		"--artifact-dir=$(ARTIFACTS)",
 		"--kubeconfig=/etc/apici/kubeconfig",
 		"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
+		"--report-username=ci",
+		"--report-password-file=/etc/report/password.txt",
 	}, additionalArgs...)
 	for _, target := range targets {
 		ret.Containers[0].Args = append(ret.Containers[0].Args, fmt.Sprintf("--target=%s", target))

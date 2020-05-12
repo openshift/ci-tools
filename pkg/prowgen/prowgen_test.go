@@ -53,6 +53,8 @@ func TestGeneratePodSpec(t *testing.T) {
 						"--artifact-dir=$(ARTIFACTS)",
 						"--kubeconfig=/etc/apici/kubeconfig",
 						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
+						"--report-username=ci",
+						"--report-password-file=/etc/report/password.txt",
 						"--target=target",
 					},
 					Resources: corev1.ResourceRequirements{
@@ -60,7 +62,9 @@ func TestGeneratePodSpec(t *testing.T) {
 					},
 					VolumeMounts: []corev1.VolumeMount{
 						{Name: "apici-ci-operator-credentials", ReadOnly: true, MountPath: "/etc/apici"},
-						{Name: "pull-secret", ReadOnly: true, MountPath: "/etc/pull-secret"}},
+						{Name: "pull-secret", ReadOnly: true, MountPath: "/etc/pull-secret"},
+						{Name: "result-aggregator", ReadOnly: true, MountPath: "/etc/report"},
+					},
 				}},
 				Volumes: []corev1.Volume{
 					{
@@ -73,6 +77,12 @@ func TestGeneratePodSpec(t *testing.T) {
 						Name: "pull-secret",
 						VolumeSource: corev1.VolumeSource{
 							Secret: &corev1.SecretVolumeSource{SecretName: "regcred"},
+						},
+					},
+					{
+						Name: "result-aggregator",
+						VolumeSource: corev1.VolumeSource{
+							Secret: &corev1.SecretVolumeSource{SecretName: "result-aggregator"},
 						},
 					},
 				},
@@ -96,6 +106,8 @@ func TestGeneratePodSpec(t *testing.T) {
 						"--artifact-dir=$(ARTIFACTS)",
 						"--kubeconfig=/etc/apici/kubeconfig",
 						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
+						"--report-username=ci",
+						"--report-password-file=/etc/report/password.txt",
 						"--promote",
 						"--some=thing",
 						"--target=target",
@@ -105,7 +117,9 @@ func TestGeneratePodSpec(t *testing.T) {
 					},
 					VolumeMounts: []corev1.VolumeMount{
 						{Name: "apici-ci-operator-credentials", ReadOnly: true, MountPath: "/etc/apici"},
-						{Name: "pull-secret", ReadOnly: true, MountPath: "/etc/pull-secret"}},
+						{Name: "pull-secret", ReadOnly: true, MountPath: "/etc/pull-secret"},
+						{Name: "result-aggregator", ReadOnly: true, MountPath: "/etc/report"},
+					},
 				}},
 				Volumes: []corev1.Volume{
 					{
@@ -118,6 +132,12 @@ func TestGeneratePodSpec(t *testing.T) {
 						Name: "pull-secret",
 						VolumeSource: corev1.VolumeSource{
 							Secret: &corev1.SecretVolumeSource{SecretName: "regcred"},
+						},
+					},
+					{
+						Name: "result-aggregator",
+						VolumeSource: corev1.VolumeSource{
+							Secret: &corev1.SecretVolumeSource{SecretName: "result-aggregator"},
 						},
 					},
 				},
@@ -141,6 +161,8 @@ func TestGeneratePodSpec(t *testing.T) {
 						"--artifact-dir=$(ARTIFACTS)",
 						"--kubeconfig=/etc/apici/kubeconfig",
 						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
+						"--report-username=ci",
+						"--report-password-file=/etc/report/password.txt",
 						"--promote",
 						"--some=thing",
 						"--target=target",
@@ -153,6 +175,7 @@ func TestGeneratePodSpec(t *testing.T) {
 
 						{Name: "apici-ci-operator-credentials", ReadOnly: true, MountPath: "/etc/apici"},
 						{Name: "pull-secret", ReadOnly: true, MountPath: "/etc/pull-secret"},
+						{Name: "result-aggregator", ReadOnly: true, MountPath: "/etc/report"},
 						{Name: "secret-name", MountPath: "/secrets/secret-name", ReadOnly: true},
 					},
 				}},
@@ -167,6 +190,12 @@ func TestGeneratePodSpec(t *testing.T) {
 						Name: "pull-secret",
 						VolumeSource: corev1.VolumeSource{
 							Secret: &corev1.SecretVolumeSource{SecretName: "regcred"},
+						},
+					},
+					{
+						Name: "result-aggregator",
+						VolumeSource: corev1.VolumeSource{
+							Secret: &corev1.SecretVolumeSource{SecretName: "result-aggregator"},
 						},
 					},
 					{
@@ -195,6 +224,8 @@ func TestGeneratePodSpec(t *testing.T) {
 						"--artifact-dir=$(ARTIFACTS)",
 						"--kubeconfig=/etc/apici/kubeconfig",
 						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
+						"--report-username=ci",
+						"--report-password-file=/etc/report/password.txt",
 						"--target=target",
 						"--target=more",
 						"--target=and-more",
@@ -204,20 +235,30 @@ func TestGeneratePodSpec(t *testing.T) {
 					},
 					VolumeMounts: []corev1.VolumeMount{
 						{Name: "apici-ci-operator-credentials", ReadOnly: true, MountPath: "/etc/apici"},
-						{Name: "pull-secret", ReadOnly: true, MountPath: "/etc/pull-secret"}},
-				}},
-				Volumes: []corev1.Volume{{
-					Name: "apici-ci-operator-credentials",
-					VolumeSource: corev1.VolumeSource{
-						Secret: &corev1.SecretVolumeSource{SecretName: "apici-ci-operator-credentials", Items: []corev1.KeyToPath{{Key: "sa.ci-operator.apici.config", Path: "kubeconfig"}}},
+						{Name: "pull-secret", ReadOnly: true, MountPath: "/etc/pull-secret"},
+						{Name: "result-aggregator", ReadOnly: true, MountPath: "/etc/report"},
 					},
-				},
+				}},
+				Volumes: []corev1.Volume{
+					{
+						Name: "apici-ci-operator-credentials",
+						VolumeSource: corev1.VolumeSource{
+							Secret: &corev1.SecretVolumeSource{SecretName: "apici-ci-operator-credentials", Items: []corev1.KeyToPath{{Key: "sa.ci-operator.apici.config", Path: "kubeconfig"}}},
+						},
+					},
 					{
 						Name: "pull-secret",
 						VolumeSource: corev1.VolumeSource{
 							Secret: &corev1.SecretVolumeSource{SecretName: "regcred"},
 						},
-					}},
+					},
+					{
+						Name: "result-aggregator",
+						VolumeSource: corev1.VolumeSource{
+							Secret: &corev1.SecretVolumeSource{SecretName: "result-aggregator"},
+						},
+					},
+				},
 			},
 		},
 		{
@@ -241,6 +282,8 @@ func TestGeneratePodSpec(t *testing.T) {
 							"--artifact-dir=$(ARTIFACTS)",
 							"--kubeconfig=/etc/apici/kubeconfig",
 							"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
+							"--report-username=ci",
+							"--report-password-file=/etc/report/password.txt",
 							"--target=target",
 							"--oauth-token-path=/usr/local/github-credentials/oauth",
 						},
@@ -250,6 +293,7 @@ func TestGeneratePodSpec(t *testing.T) {
 						VolumeMounts: []corev1.VolumeMount{
 							{Name: "apici-ci-operator-credentials", ReadOnly: true, MountPath: "/etc/apici"},
 							{Name: "pull-secret", ReadOnly: true, MountPath: "/etc/pull-secret"},
+							{Name: "result-aggregator", ReadOnly: true, MountPath: "/etc/report"},
 							{
 								Name:      "github-credentials-openshift-ci-robot-private-git-cloner",
 								MountPath: "/usr/local/github-credentials",
@@ -269,6 +313,12 @@ func TestGeneratePodSpec(t *testing.T) {
 						Name: "pull-secret",
 						VolumeSource: corev1.VolumeSource{
 							Secret: &corev1.SecretVolumeSource{SecretName: "regcred"},
+						},
+					},
+					{
+						Name: "result-aggregator",
+						VolumeSource: corev1.VolumeSource{
+							Secret: &corev1.SecretVolumeSource{SecretName: "result-aggregator"},
 						},
 					},
 					{
@@ -313,6 +363,11 @@ func TestGeneratePodSpecMultiStage(t *testing.T) {
 				Secret: &corev1.SecretVolumeSource{SecretName: "regcred"},
 			},
 		}, {
+			Name: "result-aggregator",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{SecretName: "result-aggregator"},
+			},
+		}, {
 			Name: "cluster-profile",
 			VolumeSource: corev1.VolumeSource{
 				Projected: &corev1.ProjectedVolumeSource{
@@ -343,6 +398,8 @@ func TestGeneratePodSpecMultiStage(t *testing.T) {
 				"--artifact-dir=$(ARTIFACTS)",
 				"--kubeconfig=/etc/apici/kubeconfig",
 				"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
+				"--report-username=ci",
+				"--report-password-file=/etc/report/password.txt",
 				"--target=test",
 				"--secret-dir=/usr/local/test-cluster-profile",
 				"--lease-server-password-file=/etc/boskos/password",
@@ -353,6 +410,7 @@ func TestGeneratePodSpecMultiStage(t *testing.T) {
 			VolumeMounts: []corev1.VolumeMount{
 				{Name: "apici-ci-operator-credentials", ReadOnly: true, MountPath: "/etc/apici"},
 				{Name: "pull-secret", ReadOnly: true, MountPath: "/etc/pull-secret"},
+				{Name: "result-aggregator", ReadOnly: true, MountPath: "/etc/report"},
 				{Name: "cluster-profile", MountPath: "/usr/local/test-cluster-profile"},
 				{Name: "boskos", ReadOnly: true, MountPath: "/etc/boskos"},
 			},
@@ -399,6 +457,12 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						},
 					},
 					{
+						Name: "result-aggregator",
+						VolumeSource: corev1.VolumeSource{
+							Secret: &corev1.SecretVolumeSource{SecretName: "result-aggregator"},
+						},
+					},
+					{
 						Name: "job-definition",
 						VolumeSource: corev1.VolumeSource{
 							ConfigMap: &corev1.ConfigMapVolumeSource{
@@ -441,6 +505,8 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						"--artifact-dir=$(ARTIFACTS)",
 						"--kubeconfig=/etc/apici/kubeconfig",
 						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
+						"--report-username=ci",
+						"--report-password-file=/etc/report/password.txt",
 						"--target=test",
 						"--secret-dir=/usr/local/test-cluster-profile",
 						"--template=/usr/local/test"},
@@ -457,6 +523,7 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 
 						{Name: "apici-ci-operator-credentials", ReadOnly: true, MountPath: "/etc/apici"},
 						{Name: "pull-secret", ReadOnly: true, MountPath: "/etc/pull-secret"},
+						{Name: "result-aggregator", ReadOnly: true, MountPath: "/etc/report"},
 						{Name: "cluster-profile", MountPath: "/usr/local/test-cluster-profile"},
 						{Name: "job-definition", MountPath: "/usr/local/test", SubPath: "cluster-launch-e2e.yaml"},
 					},
@@ -487,6 +554,12 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						Name: "pull-secret",
 						VolumeSource: corev1.VolumeSource{
 							Secret: &corev1.SecretVolumeSource{SecretName: "regcred"},
+						},
+					},
+					{
+						Name: "result-aggregator",
+						VolumeSource: corev1.VolumeSource{
+							Secret: &corev1.SecretVolumeSource{SecretName: "result-aggregator"},
 						},
 					},
 					{
@@ -531,6 +604,8 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						"--artifact-dir=$(ARTIFACTS)",
 						"--kubeconfig=/etc/apici/kubeconfig",
 						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
+						"--report-username=ci",
+						"--report-password-file=/etc/report/password.txt",
 						"--target=test",
 						"--secret-dir=/usr/local/test-cluster-profile",
 						"--template=/usr/local/test",
@@ -548,6 +623,7 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 
 						{Name: "apici-ci-operator-credentials", ReadOnly: true, MountPath: "/etc/apici"},
 						{Name: "pull-secret", ReadOnly: true, MountPath: "/etc/pull-secret"},
+						{Name: "result-aggregator", ReadOnly: true, MountPath: "/etc/report"},
 						{Name: "boskos", ReadOnly: true, MountPath: "/etc/boskos"},
 						{Name: "cluster-profile", MountPath: "/usr/local/test-cluster-profile"},
 						{Name: "job-definition", MountPath: "/usr/local/test", SubPath: "cluster-launch-installer-e2e.yaml"},
@@ -585,6 +661,12 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						},
 					},
 					{
+						Name: "result-aggregator",
+						VolumeSource: corev1.VolumeSource{
+							Secret: &corev1.SecretVolumeSource{SecretName: "result-aggregator"},
+						},
+					},
+					{
 						Name: "job-definition",
 						VolumeSource: corev1.VolumeSource{
 							ConfigMap: &corev1.ConfigMapVolumeSource{
@@ -633,6 +715,8 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						"--artifact-dir=$(ARTIFACTS)",
 						"--kubeconfig=/etc/apici/kubeconfig",
 						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
+						"--report-username=ci",
+						"--report-password-file=/etc/report/password.txt",
 						"--target=test",
 						"--secret-dir=/usr/local/test-cluster-profile",
 						"--template=/usr/local/test",
@@ -653,6 +737,7 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 
 						{Name: "apici-ci-operator-credentials", ReadOnly: true, MountPath: "/etc/apici"},
 						{Name: "pull-secret", ReadOnly: true, MountPath: "/etc/pull-secret"},
+						{Name: "result-aggregator", ReadOnly: true, MountPath: "/etc/report"},
 						{Name: "boskos", ReadOnly: true, MountPath: "/etc/boskos"},
 						{Name: "cluster-profile", MountPath: "/usr/local/test-cluster-profile"},
 						{Name: "job-definition", MountPath: "/usr/local/test", SubPath: "cluster-launch-installer-custom-test-image.yaml"},
@@ -689,6 +774,12 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						},
 					},
 					{
+						Name: "result-aggregator",
+						VolumeSource: corev1.VolumeSource{
+							Secret: &corev1.SecretVolumeSource{SecretName: "result-aggregator"},
+						},
+					},
+					{
 						Name: "job-definition",
 						VolumeSource: corev1.VolumeSource{
 							ConfigMap: &corev1.ConfigMapVolumeSource{
@@ -737,6 +828,8 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						"--artifact-dir=$(ARTIFACTS)",
 						"--kubeconfig=/etc/apici/kubeconfig",
 						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
+						"--report-username=ci",
+						"--report-password-file=/etc/report/password.txt",
 						"--target=test",
 						"--secret-dir=/usr/local/test-cluster-profile",
 						"--template=/usr/local/test",
@@ -756,6 +849,7 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 
 						{Name: "apici-ci-operator-credentials", ReadOnly: true, MountPath: "/etc/apici"},
 						{Name: "pull-secret", ReadOnly: true, MountPath: "/etc/pull-secret"},
+						{Name: "result-aggregator", ReadOnly: true, MountPath: "/etc/report"},
 						{Name: "boskos", ReadOnly: true, MountPath: "/etc/boskos"},
 						{Name: "cluster-profile", MountPath: "/usr/local/test-cluster-profile"},
 						{Name: "job-definition", MountPath: "/usr/local/test", SubPath: "cluster-launch-installer-custom-test-image.yaml"},
@@ -793,6 +887,12 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						},
 					},
 					{
+						Name: "result-aggregator",
+						VolumeSource: corev1.VolumeSource{
+							Secret: &corev1.SecretVolumeSource{SecretName: "result-aggregator"},
+						},
+					},
+					{
 						Name: "job-definition",
 						VolumeSource: corev1.VolumeSource{
 							ConfigMap: &corev1.ConfigMapVolumeSource{
@@ -841,6 +941,8 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						"--artifact-dir=$(ARTIFACTS)",
 						"--kubeconfig=/etc/apici/kubeconfig",
 						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
+						"--report-username=ci",
+						"--report-password-file=/etc/report/password.txt",
 						"--target=test",
 						"--secret-dir=/usr/local/test-cluster-profile",
 						"--template=/usr/local/test",
@@ -859,6 +961,7 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 
 						{Name: "apici-ci-operator-credentials", ReadOnly: true, MountPath: "/etc/apici"},
 						{Name: "pull-secret", ReadOnly: true, MountPath: "/etc/pull-secret"},
+						{Name: "result-aggregator", ReadOnly: true, MountPath: "/etc/report"},
 						{Name: "boskos", ReadOnly: true, MountPath: "/etc/boskos"},
 						{Name: "cluster-profile", MountPath: "/usr/local/test-cluster-profile"},
 						{Name: "job-definition", MountPath: "/usr/local/test", SubPath: "cluster-launch-installer-custom-test-image.yaml"},
@@ -894,6 +997,12 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						},
 					},
 					{
+						Name: "result-aggregator",
+						VolumeSource: corev1.VolumeSource{
+							Secret: &corev1.SecretVolumeSource{SecretName: "result-aggregator"},
+						},
+					},
+					{
 						Name: "job-definition",
 						VolumeSource: corev1.VolumeSource{
 							ConfigMap: &corev1.ConfigMapVolumeSource{
@@ -942,6 +1051,8 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						"--artifact-dir=$(ARTIFACTS)",
 						"--kubeconfig=/etc/apici/kubeconfig",
 						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
+						"--report-username=ci",
+						"--report-password-file=/etc/report/password.txt",
 						"--target=test",
 						"--secret-dir=/usr/local/test-cluster-profile",
 						"--template=/usr/local/test",
@@ -960,6 +1071,7 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 
 						{Name: "apici-ci-operator-credentials", ReadOnly: true, MountPath: "/etc/apici"},
 						{Name: "pull-secret", ReadOnly: true, MountPath: "/etc/pull-secret"},
+						{Name: "result-aggregator", ReadOnly: true, MountPath: "/etc/report"},
 						{Name: "boskos", ReadOnly: true, MountPath: "/etc/boskos"},
 						{Name: "cluster-profile", MountPath: "/usr/local/test-cluster-profile"},
 						{Name: "job-definition", MountPath: "/usr/local/test", SubPath: "cluster-launch-installer-custom-test-image.yaml"},

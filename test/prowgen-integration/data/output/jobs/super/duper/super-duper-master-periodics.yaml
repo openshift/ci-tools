@@ -19,6 +19,8 @@ periodics:
       - --give-pr-author-access-to-namespace=true
       - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
       - --kubeconfig=/etc/apici/kubeconfig
+      - --report-password-file=/etc/report/password.txt
+      - --report-username=ci
       - --secret-dir=/usr/local/e2e-aws-nightly-cluster-profile
       - --target=e2e-aws-nightly
       - --template=/usr/local/e2e-aws-nightly
@@ -51,6 +53,9 @@ periodics:
       - mountPath: /etc/pull-secret
         name: pull-secret
         readOnly: true
+      - mountPath: /etc/report
+        name: result-aggregator
+        readOnly: true
     serviceAccountName: ci-operator
     volumes:
     - name: apici-ci-operator-credentials
@@ -70,6 +75,9 @@ periodics:
     - name: pull-secret
       secret:
         secretName: regcred
+    - name: result-aggregator
+      secret:
+        secretName: result-aggregator
 - agent: kubernetes
   cron: '@yearly'
   decorate: true
@@ -90,6 +98,8 @@ periodics:
       - --give-pr-author-access-to-namespace=true
       - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
       - --kubeconfig=/etc/apici/kubeconfig
+      - --report-password-file=/etc/report/password.txt
+      - --report-username=ci
       - --secret-dir=/usr/local/e2e-nightly-cluster-profile
       - --target=e2e-nightly
       - --template=/usr/local/e2e-nightly
@@ -122,6 +132,9 @@ periodics:
       - mountPath: /etc/pull-secret
         name: pull-secret
         readOnly: true
+      - mountPath: /etc/report
+        name: result-aggregator
+        readOnly: true
     serviceAccountName: ci-operator
     volumes:
     - name: apici-ci-operator-credentials
@@ -143,3 +156,6 @@ periodics:
     - name: pull-secret
       secret:
         secretName: regcred
+    - name: result-aggregator
+      secret:
+        secretName: result-aggregator

@@ -49,8 +49,8 @@ func gatherOptions() options {
 	fs.StringVar(&o.logLevel, "log-level", "info", "Level at which to log output.")
 	fs.StringVar(&o.address, "address", ":8080", "Address to run server on")
 	fs.DurationVar(&o.gracePeriod, "gracePeriod", time.Second*10, "Grace period for server shutdown")
-	flag.StringVar(&o.username, "username", "", "Username to trust for clients.")
-	flag.StringVar(&o.password, "password-file", "", "File holding the password for clients.")
+	fs.StringVar(&o.username, "username", "", "Username to trust for clients.")
+	fs.StringVar(&o.password, "password-file", "", "File holding the password for clients.")
 	fs.Parse(os.Args[1:])
 	return o
 }

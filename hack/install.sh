@@ -6,12 +6,6 @@ set -o pipefail
 
 export CGO_ENABLED=0
 
-# if we're not building an official output binary, we don't care to tag it
-if [[ -z "${OPENSHIFT_CI:-}" ]]; then
-	go install ./cmd/...
-	exit
-fi
-
 git_commit="$( git describe --tags --always --dirty )"
 build_date="$( date -u '+%Y%m%d' )"
 version="v${build_date}-${git_commit}"

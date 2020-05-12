@@ -16,13 +16,13 @@ import (
 	prowgithub "k8s.io/test-infra/prow/github"
 	prowplugins "k8s.io/test-infra/prow/plugins"
 	pjdwapi "k8s.io/test-infra/prow/pod-utils/downwardapi"
+	clientconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/diffs"
 	"github.com/openshift/ci-tools/pkg/load"
 	"github.com/openshift/ci-tools/pkg/registry"
 	"github.com/openshift/ci-tools/pkg/rehearse"
-	"github.com/openshift/ci-tools/pkg/util"
 )
 
 type options struct {
@@ -40,7 +40,7 @@ type options struct {
 
 func gatherOptions() options {
 	o := options{}
-	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+	fs := flag.CommandLine
 
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually submit rehearsal jobs to Prow")
 	fs.BoolVar(&o.local, "local", false, "Whether this is a local execution or part of a CI job")
@@ -135,7 +135,7 @@ func rehearseMain() error {
 
 	var clusterConfig *rest.Config
 	if !o.dryRun {
-		clusterConfig, err = util.LoadClusterConfig()
+		clusterConfig, err = clientconfig.GetConfig()
 		if err != nil {
 			logger.WithError(err).Error("could not load cluster clusterConfig")
 			return fmt.Errorf(misconfigurationOutput)

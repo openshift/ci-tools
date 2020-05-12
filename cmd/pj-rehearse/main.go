@@ -11,24 +11,26 @@ import (
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
 	prowgithub "k8s.io/test-infra/prow/github"
 	prowplugins "k8s.io/test-infra/prow/plugins"
 	pjdwapi "k8s.io/test-infra/prow/pod-utils/downwardapi"
+	clientconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/diffs"
 	"github.com/openshift/ci-tools/pkg/load"
 	"github.com/openshift/ci-tools/pkg/registry"
 	"github.com/openshift/ci-tools/pkg/rehearse"
-	"github.com/openshift/ci-tools/pkg/util"
 )
 
 type options struct {
-	dryRun       bool
-	local        bool
-	debugLogPath string
+	dryRun            bool
+	local             bool
+	debugLogPath      string
+	prowjobKubeconfig string
 
 	noTemplates       bool
 	noRegistry        bool
@@ -40,13 +42,14 @@ type options struct {
 
 func gatherOptions() options {
 	o := options{}
-	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+	fs := flag.CommandLine
 
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually submit rehearsal jobs to Prow")
 	fs.BoolVar(&o.local, "local", false, "Whether this is a local execution or part of a CI job")
 
 	fs.StringVar(&o.debugLogPath, "debug-log", "", "Alternate file for debug output, defaults to stderr")
 	fs.StringVar(&o.releaseRepoPath, "candidate-path", "", "Path to a openshift/release working copy with a revision to be tested")
+	fs.StringVar(&o.prowjobKubeconfig, "prowjob-kubeconfig", "", "Path to the prowjob kubeconfig. If unset, default kubeconfig will be used for prowjobs.")
 
 	fs.BoolVar(&o.noTemplates, "no-templates", false, "If true, do not attempt to compare templates")
 	fs.BoolVar(&o.noRegistry, "no-registry", false, "If true, do not attempt to compare step registry content")
@@ -134,10 +137,16 @@ func rehearseMain() error {
 	logger.Infof("Rehearsing Prow jobs for configuration PR %s/%s#%d", org, repo, prNumber)
 
 	var clusterConfig *rest.Config
+	var prowJobConfig *rest.Config
 	if !o.dryRun {
-		clusterConfig, err = util.LoadClusterConfig()
+		clusterConfig, err = clientconfig.GetConfig()
 		if err != nil {
 			logger.WithError(err).Error("could not load cluster clusterConfig")
+			return fmt.Errorf(misconfigurationOutput)
+		}
+		prowJobConfig, err = pjKubeconfig(o.prowjobKubeconfig, clusterConfig)
+		if err != nil {
+			logger.WithError(err).Error("Could not load prowjob kubeconfig")
 			return fmt.Errorf(misconfigurationOutput)
 		}
 	}
@@ -239,7 +248,7 @@ func rehearseMain() error {
 		prConfig.Prow.ProwJobNamespace = config.StagingNamespace
 	}
 
-	cmClient, err := rehearse.NewCMClient(clusterConfig, prConfig.Prow.ProwJobNamespace, o.dryRun)
+	cmClient, err := rehearse.NewCMClient(clusterConfig, prConfig.Prow.PodNamespace, o.dryRun)
 	if err != nil {
 		logger.WithError(err).Error("could not create a configMap client")
 		return fmt.Errorf(misconfigurationOutput)
@@ -260,7 +269,7 @@ func rehearseMain() error {
 		return fmt.Errorf(failedSetupOutput)
 	}
 
-	pjclient, err := rehearse.NewProwJobClient(clusterConfig, prConfig.Prow.ProwJobNamespace, o.dryRun)
+	pjclient, err := rehearse.NewProwJobClient(prowJobConfig, prConfig.Prow.ProwJobNamespace, o.dryRun)
 	if err != nil {
 		logger.WithError(err).Error("could not create a ProwJob client")
 		return fmt.Errorf(failedSetupOutput)
@@ -343,4 +352,14 @@ func main() {
 		fmt.Fprintln(os.Stderr, err.Error())
 		os.Exit(1)
 	}
+}
+
+func pjKubeconfig(path string, defaultKubeconfig *rest.Config) (*rest.Config, error) {
+	if path == "" {
+		return defaultKubeconfig, nil
+	}
+	return clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+		&clientcmd.ClientConfigLoadingRules{ExplicitPath: path},
+		&clientcmd.ConfigOverrides{},
+	).ClientConfig()
 }

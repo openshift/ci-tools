@@ -148,8 +148,8 @@ const (
 	annotationIdleCleanupDurationTTL = "ci.openshift.io/ttl.soft"
 	// annotationCleanupDurationTTL is the annotation for requesting namespace cleanup after the namespace has been active
 	annotationCleanupDurationTTL = "ci.openshift.io/ttl.hard"
-	// configResolverAddress is the default configresolver address in api.ci
-	configResolverAddress = "http://ci-operator-configresolver-ci.svc.ci.openshift.org"
+	// configResolverAddress is the default configresolver address in app.ci
+	configResolverAddress = "http://ci-operator-configresolver-ci.apps.ci.l2s4.p1.openshiftapps.com"
 	// leaseServerAddress is the default lease server in api.ci
 	leaseServerAddress = "https://boskos-ci.svc.ci.openshift.org"
 	// leaseServerUsername is the default lease server username in api.ci

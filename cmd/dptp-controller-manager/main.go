@@ -12,6 +12,7 @@ import (
 	"k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/config/secret"
 	"k8s.io/test-infra/prow/flagutil"
+	"k8s.io/test-infra/prow/logrusutil"
 	"k8s.io/test-infra/prow/pjutil"
 	"sigs.k8s.io/controller-runtime"
 
@@ -79,6 +80,8 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get kubeconfig")
 	}
+
+	logrusutil.ComponentInit()
 
 	ciOPConfigAgent, err := agents.NewConfigAgent(opts.ciOperatorconfigPath, 2*time.Minute, prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"error"}))
 	if err != nil {

@@ -16,7 +16,7 @@ import (
 
 const (
 	// reportAddress is the default result aggregator address in api.ci
-	reportAddress = "https://result-aggregator-ci.svc.ci.openshift.org"
+	reportAddress = "https://result-aggregator-ci.apps.ci.l2s4.p1.openshiftapps.com"
 )
 
 // Options holds the configuration options for connecting to the remote aggregation server

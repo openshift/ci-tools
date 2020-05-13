@@ -773,6 +773,7 @@ type OpenshiftInstallerCustomTestImageClusterTestConfiguration struct {
 	From             string `json:"from"`
 	EnableNestedVirt bool   `json:"enable_nested_virt,omitempty"`
 	NestedVirtImage  string `json:"nested_virt_image,omitempty"`
+	CustomSecretName string `json:"custom_secret_name,omitempty"`
 }
 
 // OpenshiftInstallerGCPNestedVirtCustomTestImageClusterTestConfiguration describes a

@@ -375,6 +375,13 @@ func generatePodSpecTemplate(info *ProwgenInfo, release string, test *cioperator
 					corev1.EnvVar{Name: "CLUSTER_NESTED_VIRT_IMAGE", Value: conf.NestedVirtImage})
 			}
 		}
+		customSecretName := "empty-secret"
+		if conf.CustomSecretName != "" {
+			customSecretName = conf.CustomSecretName
+		}
+		container.Env = append(
+			container.Env,
+			corev1.EnvVar{Name: "CUSTOM_SECRET_NAME", Value: customSecretName})
 	}
 	return podSpec
 }

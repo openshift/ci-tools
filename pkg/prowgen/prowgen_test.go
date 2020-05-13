@@ -732,6 +732,7 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						{Name: "TEST_IMAGESTREAM_TAG", Value: "pipeline:kubevirt-test"},
 						{Name: "CLUSTER_ENABLE_NESTED_VIRT", Value: "true"},
 						{Name: "CLUSTER_NESTED_VIRT_IMAGE", Value: "nested-virt-image-name"},
+						{Name: "CUSTOM_SECRET_NAME", Value: "empty-secret"},
 					},
 					VolumeMounts: []corev1.VolumeMount{
 
@@ -755,6 +756,7 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 					ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: "gcp"},
 					From:                     "pipeline:kubevirt-test",
 					EnableNestedVirt:         true,
+					CustomSecretName:         "custom-secret",
 				},
 			},
 
@@ -844,6 +846,7 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						{Name: "TEST_COMMAND", Value: "commands"},
 						{Name: "TEST_IMAGESTREAM_TAG", Value: "pipeline:kubevirt-test"},
 						{Name: "CLUSTER_ENABLE_NESTED_VIRT", Value: "true"},
+						{Name: "CUSTOM_SECRET_NAME", Value: "custom-secret"},
 					},
 					VolumeMounts: []corev1.VolumeMount{
 
@@ -956,6 +959,7 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						{Name: "JOB_NAME_SAFE", Value: "test"},
 						{Name: "TEST_COMMAND", Value: "commands"},
 						{Name: "TEST_IMAGESTREAM_TAG", Value: "pipeline:kubevirt-test"},
+						{Name: "CUSTOM_SECRET_NAME", Value: "empty-secret"},
 					},
 					VolumeMounts: []corev1.VolumeMount{
 
@@ -1066,6 +1070,7 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 						{Name: "JOB_NAME_SAFE", Value: "test"},
 						{Name: "TEST_COMMAND", Value: "commands"},
 						{Name: "TEST_IMAGESTREAM_TAG", Value: "pipeline:kubevirt-test"},
+						{Name: "CUSTOM_SECRET_NAME", Value: "empty-secret"},
 					},
 					VolumeMounts: []corev1.VolumeMount{
 

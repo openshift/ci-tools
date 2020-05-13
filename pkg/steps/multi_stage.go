@@ -174,13 +174,14 @@ func (s *multiStageTestStep) Requires() (ret []api.StepLink) {
 			needsRelease = true
 		}
 	}
-	if needsRelease {
-		ret = append(ret, api.ReleaseImagesLink())
-	}
 	if s.profile != "" {
+		needsRelease = true
 		for _, env := range envForProfile {
 			ret = append(ret, s.params.Links(env)...)
 		}
+	}
+	if needsRelease {
+		ret = append(ret, api.ReleaseImagesLink())
 	}
 	return
 }

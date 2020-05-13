@@ -28,12 +28,20 @@ func TestRequires(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		config api.ReleaseBuildConfiguration
-		steps  []api.LiteralTestStep
+		steps  api.MultiStageTestConfigurationLiteral
 		req    []api.StepLink
 	}{{
-		name:  "step needs release images, should have ReleaseImagesLink",
-		steps: []api.LiteralTestStep{{From: "from-release"}},
-		req:   []api.StepLink{api.ReleaseImagesLink()},
+		name: "step has a cluster profile, should have ReleaseImagesLink",
+		steps: api.MultiStageTestConfigurationLiteral{
+			ClusterProfile: api.ClusterProfileAWS,
+		},
+		req: []api.StepLink{api.ReleaseImagesLink()},
+	}, {
+		name: "step needs release images, should have ReleaseImagesLink",
+		steps: api.MultiStageTestConfigurationLiteral{
+			Test: []api.LiteralTestStep{{From: "from-release"}},
+		},
+		req: []api.StepLink{api.ReleaseImagesLink()},
 	}, {
 		name: "step needs images, should have InternalImageLink",
 		config: api.ReleaseBuildConfiguration{
@@ -41,18 +49,24 @@ func TestRequires(t *testing.T) {
 				{To: "from-images"},
 			},
 		},
-		steps: []api.LiteralTestStep{{From: "from-images"}},
-		req:   []api.StepLink{api.InternalImageLink("from-images")},
+		steps: api.MultiStageTestConfigurationLiteral{
+			Test: []api.LiteralTestStep{{From: "from-images"}},
+		},
+		req: []api.StepLink{api.InternalImageLink("from-images")},
 	}, {
-		name:  "step needs pipeline image, should have InternalImageLink",
-		steps: []api.LiteralTestStep{{From: "src"}},
+		name: "step needs pipeline image, should have InternalImageLink",
+		steps: api.MultiStageTestConfigurationLiteral{
+			Test: []api.LiteralTestStep{{From: "src"}},
+		},
 		req: []api.StepLink{
 			api.InternalImageLink(
 				api.PipelineImageStreamTagReferenceSource),
 		},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			step := multiStageTestStep{config: &tc.config, test: tc.steps}
+			step := MultiStageTestStep(api.TestStepConfiguration{
+				MultiStageTestConfigurationLiteral: &tc.steps,
+			}, &tc.config, api.NewDeferredParameters(), nil, nil, nil, nil, "", nil, nil)
 			ret := step.Requires()
 			if len(ret) == len(tc.req) {
 				matches := true
@@ -374,21 +388,6 @@ func (e *fakePodExecutor) AddReactors(cs *fake.Clientset) {
 }
 
 func TestRun(t *testing.T) {
-	step := multiStageTestStep{
-		name:   "test",
-		config: &api.ReleaseBuildConfiguration{},
-		jobSpec: &api.JobSpec{
-			JobSpec: prowdapi.JobSpec{
-				Job:       "job",
-				BuildID:   "build_id",
-				ProwJobID: "prow_job_id",
-				Type:      prowapi.PeriodicJob,
-			},
-		},
-		pre:  []api.LiteralTestStep{{As: "pre0"}, {As: "pre1"}},
-		test: []api.LiteralTestStep{{As: "test0"}, {As: "test1"}},
-		post: []api.LiteralTestStep{{As: "post0"}, {As: "post1"}},
-	}
 	for _, tc := range []struct {
 		name     string
 		failures sets.String
@@ -428,21 +427,35 @@ func TestRun(t *testing.T) {
 			fakecs := fake.NewSimpleClientset()
 			executor := fakePodExecutor{failures: tc.failures}
 			executor.AddReactors(fakecs)
+			name := "test"
 			client := fakecs.CoreV1()
-			step.podClient = &fakePodClient{NewPodClient(client, nil, nil)}
-			step.secretClient = client
-			step.saClient = client
-			step.rbacClient = fakecs.RbacV1()
+			jobSpec := api.JobSpec{
+				Namespace: "ns",
+				JobSpec: prowdapi.JobSpec{
+					Job:       "job",
+					BuildID:   "build_id",
+					ProwJobID: "prow_job_id",
+					Type:      prowapi.PeriodicJob,
+				},
+			}
+			step := MultiStageTestStep(api.TestStepConfiguration{
+				As: name,
+				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+					Pre:  []api.LiteralTestStep{{As: "pre0"}, {As: "pre1"}},
+					Test: []api.LiteralTestStep{{As: "test0"}, {As: "test1"}},
+					Post: []api.LiteralTestStep{{As: "post0"}, {As: "post1"}},
+				},
+			}, &api.ReleaseBuildConfiguration{}, nil, &fakePodClient{NewPodClient(client, nil, nil)}, client, client, fakecs.RbacV1(), "", &jobSpec, nil)
 			if err := step.Run(context.Background(), false); tc.failures == nil && err != nil {
 				t.Error(err)
 				return
 			}
-			secrets, err := step.secretClient.Secrets(step.jobSpec.Namespace).List(meta.ListOptions{})
+			secrets, err := client.Secrets(jobSpec.Namespace).List(meta.ListOptions{})
 			if err != nil {
 				t.Error(err)
 				return
 			}
-			if l := secrets.Items; len(l) != 1 || l[0].ObjectMeta.Name != step.name {
+			if l := secrets.Items; len(l) != 1 || l[0].ObjectMeta.Name != name {
 				t.Errorf("unexpected secrets: %#v", l)
 			}
 			var names []string
@@ -463,37 +476,34 @@ func TestArtifacts(t *testing.T) {
 	}
 	defer os.RemoveAll(tmp)
 	ns := "namespace"
-	step := multiStageTestStep{
-		name:        "test",
-		artifactDir: tmp,
-		config:      &api.ReleaseBuildConfiguration{},
-		jobSpec: &api.JobSpec{
-			Namespace: ns,
-			JobSpec: prowdapi.JobSpec{
-				Job:       "job",
-				BuildID:   "build_id",
-				ProwJobID: "prow_job_id",
-				Type:      prowapi.PeriodicJob,
-			},
-		},
-		test: []api.LiteralTestStep{
-			{As: "test0", ArtifactDir: "/path/to/artifacts"},
-			{As: "test1", ArtifactDir: "/path/to/artifacts"},
-		},
-	}
 	fakecs := fake.NewSimpleClientset()
 	executor := fakePodExecutor{}
 	executor.AddReactors(fakecs)
 	client := fakecs.CoreV1()
-	step.podClient = &fakePodClient{NewPodClient(client, nil, nil)}
-	step.secretClient = client
-	step.saClient = client
-	step.rbacClient = fakecs.RbacV1()
+	jobSpec := api.JobSpec{
+		Namespace: ns,
+		JobSpec: prowdapi.JobSpec{
+			Job:       "job",
+			BuildID:   "build_id",
+			ProwJobID: "prow_job_id",
+			Type:      prowapi.PeriodicJob,
+		},
+	}
+	testName := "test"
+	step := MultiStageTestStep(api.TestStepConfiguration{
+		As: testName,
+		MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+			Test: []api.LiteralTestStep{
+				{As: "test0", ArtifactDir: "/path/to/artifacts"},
+				{As: "test1", ArtifactDir: "/path/to/artifacts"},
+			},
+		},
+	}, &api.ReleaseBuildConfiguration{}, nil, &fakePodClient{NewPodClient(client, nil, nil)}, client, client, fakecs.RbacV1(), tmp, &jobSpec, nil)
 	if err := step.Run(context.Background(), false); err != nil {
 		t.Fatal(err)
 	}
 	for _, x := range []string{"test0", "test1"} {
-		if _, err := os.Stat(filepath.Join(tmp, x)); err != nil {
+		if _, err := os.Stat(filepath.Join(tmp, testName, x)); err != nil {
 			t.Fatalf("error verifying output directory %q exists: %v", x, err)
 		}
 	}
@@ -549,32 +559,28 @@ func TestJUnit(t *testing.T) {
 			executor := fakePodExecutor{failures: tc.failures}
 			executor.AddReactors(fakecs)
 			client := fakecs.CoreV1()
-			step := multiStageTestStep{
-				name:   "test",
-				config: &api.ReleaseBuildConfiguration{},
-				jobSpec: &api.JobSpec{
-					JobSpec: prowdapi.JobSpec{
-						Job:       "job",
-						BuildID:   "build_id",
-						ProwJobID: "prow_job_id",
-						Type:      prowapi.PeriodicJob,
-					},
+			jobSpec := api.JobSpec{
+				JobSpec: prowdapi.JobSpec{
+					Job:       "job",
+					BuildID:   "build_id",
+					ProwJobID: "prow_job_id",
+					Type:      prowapi.PeriodicJob,
 				},
-				pre:  []api.LiteralTestStep{{As: "pre0"}, {As: "pre1"}},
-				test: []api.LiteralTestStep{{As: "test0"}, {As: "test1"}},
-				post: []api.LiteralTestStep{{As: "post0"}, {As: "post1"}},
 			}
-			step.podClient = &fakePodClient{NewPodClient(fakecs.CoreV1(), nil, nil)}
-			step.secretClient = client
-			step.saClient = client
-			step.rbacClient = fakecs.RbacV1()
-			step.artifactDir = "/dev/null"
+			step := MultiStageTestStep(api.TestStepConfiguration{
+				As: "test",
+				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+					Pre:  []api.LiteralTestStep{{As: "pre0"}, {As: "pre1"}},
+					Test: []api.LiteralTestStep{{As: "test0"}, {As: "test1"}},
+					Post: []api.LiteralTestStep{{As: "post0"}, {As: "post1"}},
+				},
+			}, &api.ReleaseBuildConfiguration{}, nil, &fakePodClient{NewPodClient(client, nil, nil)}, client, client, fakecs.RbacV1(), "/dev/null", &jobSpec, nil)
 			if err := step.Run(context.Background(), false); tc.failures == nil && err != nil {
 				t.Error(err)
 				return
 			}
 			var names []string
-			for _, t := range step.SubTests() {
+			for _, t := range step.(subtestReporter).SubTests() {
 				names = append(names, t.Name)
 			}
 			if !reflect.DeepEqual(names, tc.expected) {

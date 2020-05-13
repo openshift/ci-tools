@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
 
 	"github.com/sirupsen/logrus"
 
@@ -90,12 +89,6 @@ func main() {
 	images, err := bumper.UpdateReferences([]string{"clusters/", "cluster/ci/config/prow/", "core-services/prow", "ci-operator/", "hack/"}, extraFiles)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to update references.")
-	}
-
-	// The image tags are in the diff as context, even though they are not part of any change,
-	// so we have to update the diff here.
-	if out, err := exec.Command("make", "update-app-ci").CombinedOutput(); err != nil {
-		logrus.WithError(err).Fatalf("Failed to run `make update-app-ci`: %s", string(out))
 	}
 
 	changed, err := bumper.HasChanges()

@@ -37,6 +37,7 @@ type options struct {
 	gitEmail    string
 	targetDir   string
 	assign      string
+	whitelist   string
 	selfApprove bool
 	flagutil.GitHubOptions
 }
@@ -50,6 +51,8 @@ func parseOptions() options {
 	fs.StringVar(&o.gitEmail, "git-email", "", "The email to use on the git commit. Requires --git-name. If not specified, uses the system default.")
 	fs.StringVar(&o.targetDir, "target-dir", "", "The directory containing the target repo.")
 	fs.StringVar(&o.assign, "assign", githubTeam, "The github username or group name to assign the created pull request to.")
+	fs.StringVar(&o.whitelist, "whitelist-file", "", "The path of the whitelisted repositories file.")
+
 	fs.BoolVar(&o.selfApprove, "self-approve", false, "Self-approve the PR by adding the `approved` and `lgtm` labels. Requires write permissions on the repo.")
 	o.AddFlags(fs)
 	o.AllowAnonymous = true
@@ -153,6 +156,10 @@ func main() {
 
 	cmd = "/usr/bin/ci-operator-config-mirror"
 	args = []string{"--config-path", o.ConfigDir, "--to-org", "openshift-priv"}
+	if o.whitelist != "" {
+		args = append(args, []string{"--whitelist-file", o.whitelist}...)
+	}
+
 	run(cmd, args...)
 
 	commitIfNeeded("ci-operator-config-mirror --config-path ./ci-operator/config --to-org openshift-priv", author)
@@ -171,6 +178,9 @@ func main() {
 
 	cmd = "/usr/bin/private-prow-configs-mirror"
 	args = []string{"--release-repo-path", "."}
+	if o.whitelist != "" {
+		args = append(args, []string{"--whitelist-file", o.whitelist}...)
+	}
 	run(cmd, args...)
 
 	commitIfNeeded("private-prow-configs-mirror --release-repo-path .", author)

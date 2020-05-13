@@ -173,6 +173,29 @@ func TestGetTitle(t *testing.T) {
 	}
 }
 
+func TestGetCommitMessage(t *testing.T) {
+	const blankMessage = "Sync OWNERS files"
+
+	result := getCommitMessage(blankMessage, options{gitSignoff: false})
+	if blankMessage != result {
+		t.Errorf("message '%s' differs from expected '%s'", result, blankMessage)
+	}
+
+	const name = "John Doe"
+	const email = "jdoe@example.org"
+	o := options{
+		gitSignoff: true,
+		gitName:    name,
+		gitEmail:   email,
+	}
+	expect := blankMessage + "\n\nSigned-off-by: " + name + " <" + email + ">"
+	result = getCommitMessage(blankMessage, o)
+
+	if expect != result {
+		t.Errorf("message '%s' differs from expected '%s'", result, expect)
+	}
+}
+
 func TestGetBody(t *testing.T) {
 	expect := `The OWNERS file has been synced for the following folder(s):
 

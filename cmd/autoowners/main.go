@@ -34,6 +34,8 @@ const (
 
 	configSubDirs      = "jobs,config,templates"
 	targetSubDirectory = "ci-operator"
+
+	signedOffPattern = "Signed-off-by: %s <%s>"
 )
 
 type SimpleConfig = repoowners.SimpleConfig
@@ -281,6 +283,7 @@ type options struct {
 	githubRepo         string
 	gitName            string
 	gitEmail           string
+	gitSignoff         bool
 	assign             string
 	targetDir          string
 	targetSubDirectory string
@@ -301,6 +304,7 @@ func parseOptions() options {
 	fs.StringVar(&o.githubRepo, "repo", githubRepo, "The downstream GitHub repository name.")
 	fs.StringVar(&o.gitName, "git-name", "", "The name to use on the git commit. Requires --git-email. If not specified, uses the system default.")
 	fs.StringVar(&o.gitEmail, "git-email", "", "The email to use on the git commit. Requires --git-name. If not specified, uses the system default.")
+	fs.BoolVar(&o.gitSignoff, "git-signoff", false, "Whether to signoff the commit. (https://git-scm.com/docs/git-commit#Documentation/git-commit.txt---signoff)")
 	fs.StringVar(&o.assign, "assign", defaultPRAssignee, "The github username or group name to assign the created pull request to.")
 	fs.StringVar(&o.targetDir, "target-dir", "", "The directory containing the target repo.")
 	fs.StringVar(&o.targetSubDirectory, "target-subdir", targetSubDirectory, "The sub-directory of the target repo where the configurations are stored.")
@@ -322,6 +326,9 @@ func validateOptions(o options) error {
 	}
 	if (o.gitEmail == "") != (o.gitName == "") {
 		return fmt.Errorf("--git-name and --git-email must be specified together")
+	}
+	if o.gitSignoff && (o.gitEmail == "" || o.gitName == "") {
+		return fmt.Errorf("--git-signoff requires --git-name and --git-email to be specified")
 	}
 	if o.assign == "" {
 		return fmt.Errorf("--assign is mandatory")
@@ -431,9 +438,10 @@ func main() {
 	remoteBranch := "autoowners"
 	matchTitle := "Sync OWNERS files"
 	title := getTitle(matchTitle, time.Now().Format(time.RFC1123))
+	message := getCommitMessage(title, o)
 	if err := bumper.GitCommitAndPush(fmt.Sprintf("https://%s:%s@github.com/%s/%s.git", o.githubLogin,
 		string(secretAgent.GetTokenGenerator(o.GitHubOptions.TokenPath)()), o.githubLogin, o.githubRepo),
-		remoteBranch, o.gitName, o.gitEmail, title, stdout, stderr); err != nil {
+		remoteBranch, o.gitName, o.gitEmail, message, stdout, stderr); err != nil {
 		logrus.WithError(err).Fatal("Failed to push changes.")
 	}
 
@@ -446,6 +454,14 @@ func main() {
 		getBody(directories, o.assign), matchTitle, o.githubLogin+":"+remoteBranch, "master", true, labelsToAdd); err != nil {
 		logrus.WithError(err).Fatal("PR creation failed.")
 	}
+}
+
+func getCommitMessage(title string, o options) string {
+	message := title
+	if o.gitSignoff {
+		message += fmt.Sprintf("\n\n"+signedOffPattern, o.gitName, o.gitEmail)
+	}
+	return message
 }
 
 type ownersCleaner func([]string) []string

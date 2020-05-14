@@ -154,6 +154,9 @@ const (
 	leaseServerAddress = "https://boskos-ci.svc.ci.openshift.org"
 	// leaseServerUsername is the default lease server username in api.ci
 	leaseServerUsername = "ci"
+
+	// where Prow wants us to put artifacts
+	artifactsEnv = "ARTIFACTS"
 )
 
 // CustomProwMetadata the name of the custom prow metadata file that's expected to be found in the artifacts directory.
@@ -320,7 +323,7 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.BoolVar(&opt.promote, "promote", false, "When all other targets complete, publish the set of images built by this job into the release configuration.")
 
 	// output control
-	flag.StringVar(&opt.artifactDir, "artifact-dir", "", "If set grab artifacts from test and template jobs.")
+	flag.StringVar(&opt.artifactDir, "artifact-dir", "", "If set grab artifacts from test and template jobs. Defaults to $ARTIFACTS if set.")
 	flag.StringVar(&opt.writeParams, "write-params", "", "If set write an env-compatible file with the output of the job.")
 
 	// experimental flags
@@ -345,6 +348,14 @@ func bindOptions(flag *flag.FlagSet) *options {
 }
 
 func (o *options) Complete() error {
+	if o.artifactDir == "" {
+		// user did not set an artifact dir, but we can default to the Prow dir if set
+		arifactDir, ok := os.LookupEnv(artifactsEnv)
+		if ok {
+			o.artifactDir = arifactDir
+		}
+	}
+
 	jobSpec, err := api.ResolveSpecFromEnv()
 	if err != nil {
 		if len(o.gitRef) == 0 {

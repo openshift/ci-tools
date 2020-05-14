@@ -159,7 +159,7 @@ integration:
 #   make e2e
 #   make e2e SUITE=multi-stage
 e2e:
-	exit 0
+	hack/test-e2e.sh $(SUITE)
 .PHONY: e2e
 
 # Update golden output files for integration tests.

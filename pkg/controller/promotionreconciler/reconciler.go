@@ -141,7 +141,14 @@ func (r *reconciler) Reconcile(req controllerruntime.Request) (controllerruntime
 	err := r.reconcile(req, log)
 	isNonRetriable := errors.Is(err, nonRetriableError{})
 	if err != nil {
-		log.WithError(err).WithField("not-retriable", isNonRetriable).Error("Reconciliation failed")
+		log := log.WithError(err).WithField("not-retriable", isNonRetriable)
+		// Degrade non-retriable errors to debug, they most lilely just mean a given imageStreamTag wasn't built
+		// via ci operator.
+		if isNonRetriable {
+			log.Debug("Reconciliation failed")
+		} else {
+			log.Error("Reconciliation failed")
+		}
 	}
 
 	if !isNonRetriable {
@@ -270,6 +277,13 @@ func (r *reconciler) currentHEADForBranch(br *branchReference, log *logrus.Entry
 // logged it so we don't waste cycles on useless work.
 type nonRetriableError struct {
 	err error
+}
+
+// errors.Is compares via == which means if our .err holds something,
+// we never match.
+func (nonRetriableError) Is(target error) bool {
+	_, ok := target.(nonRetriableError)
+	return ok
 }
 
 func (nre nonRetriableError) Error() string {

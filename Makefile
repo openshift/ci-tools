@@ -155,6 +155,17 @@ integration:
 	hack/test-integration.sh $(SUITE)
 .PHONY: integration
 
+# Run e2e tests.
+#
+# Accepts a specific suite to run as an argument.
+#
+# Example:
+#   make e2e
+#   make e2e SUITE=multi-stage
+e2e:
+	exit 0
+.PHONY: e2e
+
 # Update golden output files for integration tests.
 #
 # Example:

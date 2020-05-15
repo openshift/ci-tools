@@ -17,8 +17,12 @@ function os::integration::compare() {
     local expected="$2"
 
     if [[ "${UPDATE:-false}" == "true" ]]; then
-        os::log::info "Updating golden files in ${actual}..."
-        cp -r "${expected}" "${actual}"
+        os::log::info "Updating golden files in ${expected}..."
+        if [[ -d "${actual}" ]]; then
+            cp -a "${actual}/." "${expected}"
+        else
+            cp "${actual}" "${expected}"
+        fi
     fi
 
     os::cmd::expect_success "diff -Naupr --ignore-matching-lines 'startTime' --ignore-matching-lines 'name: \w\{8\}\(-\w\{4\}\)\{3\}-\w\{12\}' --ignore-matching-lines 'sha: \w\{40\}' ${actual} ${expected}"

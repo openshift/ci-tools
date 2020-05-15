@@ -1113,7 +1113,7 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 				Name: "pull-ci-org-repo-branch-testname",
 				UtilityConfig: prowconfig.UtilityConfig{
 					DecorationConfig: &prowv1.DecorationConfig{SkipCloning: &newTrue},
-					Decorate:         true,
+					Decorate:         ptrBool(true),
 				},
 			},
 			AlwaysRun: true,
@@ -1141,7 +1141,7 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 					Name: "pull-ci-org-repo-branch-also-testname",
 					UtilityConfig: prowconfig.UtilityConfig{
 						DecorationConfig: &prowv1.DecorationConfig{SkipCloning: &newTrue},
-						Decorate:         true,
+						Decorate:         ptrBool(true),
 					},
 				},
 				AlwaysRun: true,
@@ -1187,7 +1187,7 @@ func TestGeneratePeriodicForTest(t *testing.T) {
 				Name: "periodic-ci-org-repo-branch-testname",
 				UtilityConfig: prowconfig.UtilityConfig{
 					DecorationConfig: &prowv1.DecorationConfig{SkipCloning: &newTrue},
-					Decorate:         true,
+					Decorate:         ptrBool(true),
 					ExtraRefs: []prowv1.Refs{{
 						Org:     "org",
 						Repo:    "repo",
@@ -1213,7 +1213,7 @@ func TestGeneratePeriodicForTest(t *testing.T) {
 					Name: "periodic-ci-org-repo-branch-also-testname",
 					UtilityConfig: prowconfig.UtilityConfig{
 						DecorationConfig: &prowv1.DecorationConfig{SkipCloning: &newTrue},
-						Decorate:         true,
+						Decorate:         ptrBool(true),
 						ExtraRefs: []prowv1.Refs{{
 							Org:     "org",
 							Repo:    "repo",
@@ -1260,7 +1260,7 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 					Name:   "branch-ci-organization-repository-branch-name",
 					UtilityConfig: prowconfig.UtilityConfig{
 						DecorationConfig: &prowv1.DecorationConfig{SkipCloning: &newTrue},
-						Decorate:         true,
+						Decorate:         ptrBool(true),
 					},
 				},
 
@@ -1282,7 +1282,7 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 					Labels: map[string]string{"ci-operator.openshift.io/prowgen-controlled": "true"},
 					UtilityConfig: prowconfig.UtilityConfig{
 						DecorationConfig: &prowv1.DecorationConfig{SkipCloning: &newTrue},
-						Decorate:         true,
+						Decorate:         ptrBool(true),
 					}},
 				Brancher: prowconfig.Brancher{Branches: []string{"^Branch$"}},
 			},
@@ -1302,7 +1302,7 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 					Labels: map[string]string{"ci-operator.openshift.io/prowgen-controlled": "true"},
 					UtilityConfig: prowconfig.UtilityConfig{
 						DecorationConfig: &prowv1.DecorationConfig{SkipCloning: &newTrue},
-						Decorate:         true,
+						Decorate:         ptrBool(true),
 					}},
 				Brancher: prowconfig.Brancher{Branches: []string{"^Branch$"}},
 			},
@@ -1532,7 +1532,7 @@ func TestGenerateJobBase(t *testing.T) {
 					"ci-operator.openshift.io/prowgen-controlled": "true",
 				},
 				Spec:          &corev1.PodSpec{Containers: []corev1.Container{{Name: "test"}}},
-				UtilityConfig: prowconfig.UtilityConfig{Decorate: true, DecorationConfig: &prowv1.DecorationConfig{SkipCloning: &yes}},
+				UtilityConfig: prowconfig.UtilityConfig{Decorate: ptrBool(true), DecorationConfig: &prowv1.DecorationConfig{SkipCloning: &yes}},
 			},
 		},
 		{
@@ -1551,7 +1551,7 @@ func TestGenerateJobBase(t *testing.T) {
 					"pj-rehearse.openshift.io/can-be-rehearsed":   "true",
 				},
 				Spec:          &corev1.PodSpec{Containers: []corev1.Container{{Name: "test"}}},
-				UtilityConfig: prowconfig.UtilityConfig{Decorate: true, DecorationConfig: &prowv1.DecorationConfig{SkipCloning: &yes}},
+				UtilityConfig: prowconfig.UtilityConfig{Decorate: ptrBool(true), DecorationConfig: &prowv1.DecorationConfig{SkipCloning: &yes}},
 			},
 		},
 		{
@@ -1569,7 +1569,7 @@ func TestGenerateJobBase(t *testing.T) {
 					"ci-operator.openshift.io/variant":            "whatever",
 				},
 				Spec:          &corev1.PodSpec{Containers: []corev1.Container{{Name: "test"}}},
-				UtilityConfig: prowconfig.UtilityConfig{Decorate: true, DecorationConfig: &prowv1.DecorationConfig{SkipCloning: &yes}},
+				UtilityConfig: prowconfig.UtilityConfig{Decorate: ptrBool(true), DecorationConfig: &prowv1.DecorationConfig{SkipCloning: &yes}},
 			},
 		},
 		{
@@ -1588,7 +1588,7 @@ func TestGenerateJobBase(t *testing.T) {
 					"ci-operator.openshift.io/variant":            "whatever",
 				},
 				Spec:          &corev1.PodSpec{Containers: []corev1.Container{{Name: "test"}}},
-				UtilityConfig: prowconfig.UtilityConfig{Decorate: true, DecorationConfig: &prowv1.DecorationConfig{SkipCloning: &yes}, PathAlias: "/some/where"},
+				UtilityConfig: prowconfig.UtilityConfig{Decorate: ptrBool(true), DecorationConfig: &prowv1.DecorationConfig{SkipCloning: &yes}, PathAlias: "/some/where"},
 			},
 		},
 		{
@@ -1608,7 +1608,7 @@ func TestGenerateJobBase(t *testing.T) {
 					"ci-operator.openshift.io/prowgen-controlled": "true",
 				},
 				Spec:          &corev1.PodSpec{Containers: []corev1.Container{{Name: "test"}}},
-				UtilityConfig: prowconfig.UtilityConfig{Decorate: true, DecorationConfig: &prowv1.DecorationConfig{SkipCloning: &yes}},
+				UtilityConfig: prowconfig.UtilityConfig{Decorate: ptrBool(true), DecorationConfig: &prowv1.DecorationConfig{SkipCloning: &yes}},
 				Hidden:        true,
 			},
 		},
@@ -1629,7 +1629,7 @@ func TestGenerateJobBase(t *testing.T) {
 					"ci-operator.openshift.io/prowgen-controlled": "true",
 				},
 				Spec:          &corev1.PodSpec{Containers: []corev1.Container{{Name: "test"}}},
-				UtilityConfig: prowconfig.UtilityConfig{Decorate: true, DecorationConfig: &prowv1.DecorationConfig{SkipCloning: &yes}},
+				UtilityConfig: prowconfig.UtilityConfig{Decorate: ptrBool(true), DecorationConfig: &prowv1.DecorationConfig{SkipCloning: &yes}},
 				Hidden:        false,
 			},
 		},
@@ -1650,7 +1650,7 @@ func TestGenerateJobBase(t *testing.T) {
 					"ci-operator.openshift.io/prowgen-controlled": "true",
 				},
 				Spec:          &corev1.PodSpec{Containers: []corev1.Container{{Name: "test"}}},
-				UtilityConfig: prowconfig.UtilityConfig{Decorate: true, DecorationConfig: &prowv1.DecorationConfig{SkipCloning: &yes}},
+				UtilityConfig: prowconfig.UtilityConfig{Decorate: ptrBool(true), DecorationConfig: &prowv1.DecorationConfig{SkipCloning: &yes}},
 			},
 		},
 	}
@@ -1685,4 +1685,8 @@ func pruneForTests(jobConfig *prowconfig.JobConfig) {
 			jobConfig.PostsubmitsStatic[repo][i].UtilityConfig = prowconfig.UtilityConfig{}
 		}
 	}
+}
+
+func ptrBool(b bool) *bool {
+	return &b
 }

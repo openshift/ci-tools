@@ -49,8 +49,6 @@ func TestGeneratePodSpec(t *testing.T) {
 					ImagePullPolicy: corev1.PullAlways,
 					Command:         []string{"ci-operator"},
 					Args: []string{
-						"--give-pr-author-access-to-namespace=true",
-						"--artifact-dir=$(ARTIFACTS)",
 						"--kubeconfig=/etc/apici/kubeconfig",
 						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 						"--report-username=ci",
@@ -102,8 +100,6 @@ func TestGeneratePodSpec(t *testing.T) {
 					ImagePullPolicy: corev1.PullAlways,
 					Command:         []string{"ci-operator"},
 					Args: []string{
-						"--give-pr-author-access-to-namespace=true",
-						"--artifact-dir=$(ARTIFACTS)",
 						"--kubeconfig=/etc/apici/kubeconfig",
 						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 						"--report-username=ci",
@@ -157,8 +153,6 @@ func TestGeneratePodSpec(t *testing.T) {
 					ImagePullPolicy: corev1.PullAlways,
 					Command:         []string{"ci-operator"},
 					Args: []string{
-						"--give-pr-author-access-to-namespace=true",
-						"--artifact-dir=$(ARTIFACTS)",
 						"--kubeconfig=/etc/apici/kubeconfig",
 						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 						"--report-username=ci",
@@ -220,8 +214,6 @@ func TestGeneratePodSpec(t *testing.T) {
 					ImagePullPolicy: corev1.PullAlways,
 					Command:         []string{"ci-operator"},
 					Args: []string{
-						"--give-pr-author-access-to-namespace=true",
-						"--artifact-dir=$(ARTIFACTS)",
 						"--kubeconfig=/etc/apici/kubeconfig",
 						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 						"--report-username=ci",
@@ -278,8 +270,6 @@ func TestGeneratePodSpec(t *testing.T) {
 						ImagePullPolicy: corev1.PullAlways,
 						Command:         []string{"ci-operator"},
 						Args: []string{
-							"--give-pr-author-access-to-namespace=true",
-							"--artifact-dir=$(ARTIFACTS)",
 							"--kubeconfig=/etc/apici/kubeconfig",
 							"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 							"--report-username=ci",
@@ -394,8 +384,6 @@ func TestGeneratePodSpecMultiStage(t *testing.T) {
 			ImagePullPolicy: corev1.PullAlways,
 			Command:         []string{"ci-operator"},
 			Args: []string{
-				"--give-pr-author-access-to-namespace=true",
-				"--artifact-dir=$(ARTIFACTS)",
 				"--kubeconfig=/etc/apici/kubeconfig",
 				"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 				"--report-username=ci",
@@ -501,8 +489,6 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 					ImagePullPolicy: corev1.PullAlways,
 					Command:         []string{"ci-operator"},
 					Args: []string{
-						"--give-pr-author-access-to-namespace=true",
-						"--artifact-dir=$(ARTIFACTS)",
 						"--kubeconfig=/etc/apici/kubeconfig",
 						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 						"--report-username=ci",
@@ -600,8 +586,6 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 					ImagePullPolicy: corev1.PullAlways,
 					Command:         []string{"ci-operator"},
 					Args: []string{
-						"--give-pr-author-access-to-namespace=true",
-						"--artifact-dir=$(ARTIFACTS)",
 						"--kubeconfig=/etc/apici/kubeconfig",
 						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 						"--report-username=ci",
@@ -711,8 +695,6 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 					ImagePullPolicy: corev1.PullAlways,
 					Command:         []string{"ci-operator"},
 					Args: []string{
-						"--give-pr-author-access-to-namespace=true",
-						"--artifact-dir=$(ARTIFACTS)",
 						"--kubeconfig=/etc/apici/kubeconfig",
 						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 						"--report-username=ci",
@@ -824,8 +806,6 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 					ImagePullPolicy: corev1.PullAlways,
 					Command:         []string{"ci-operator"},
 					Args: []string{
-						"--give-pr-author-access-to-namespace=true",
-						"--artifact-dir=$(ARTIFACTS)",
 						"--kubeconfig=/etc/apici/kubeconfig",
 						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 						"--report-username=ci",
@@ -937,8 +917,6 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 					ImagePullPolicy: corev1.PullAlways,
 					Command:         []string{"ci-operator"},
 					Args: []string{
-						"--give-pr-author-access-to-namespace=true",
-						"--artifact-dir=$(ARTIFACTS)",
 						"--kubeconfig=/etc/apici/kubeconfig",
 						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 						"--report-username=ci",
@@ -1047,8 +1025,6 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 					ImagePullPolicy: corev1.PullAlways,
 					Command:         []string{"ci-operator"},
 					Args: []string{
-						"--give-pr-author-access-to-namespace=true",
-						"--artifact-dir=$(ARTIFACTS)",
 						"--kubeconfig=/etc/apici/kubeconfig",
 						"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 						"--report-username=ci",

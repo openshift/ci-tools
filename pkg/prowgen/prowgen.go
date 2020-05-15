@@ -214,8 +214,6 @@ func generateCiOperatorPodSpec(info *ProwgenInfo, secrets []*cioperatorapi.Secre
 	ret := generatePodSpec(info, secrets)
 	ret.Containers[0].Command = []string{"ci-operator"}
 	ret.Containers[0].Args = append([]string{
-		"--give-pr-author-access-to-namespace=true",
-		"--artifact-dir=$(ARTIFACTS)",
 		"--kubeconfig=/etc/apici/kubeconfig",
 		"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 		"--report-username=ci",

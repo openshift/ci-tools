@@ -142,7 +142,6 @@ integration:
 	# legacy, so we don't break them
 	test/prowgen-integration/run.sh
 	test/repo-init-integration/run.sh
-	test/validate-prowgen-breaking-changes.sh
 	test/ci-operator-integration/multi-stage/run.sh
 	test/ci-operator-integration/base/run.sh
 	test/secret-wrapper-integration.sh

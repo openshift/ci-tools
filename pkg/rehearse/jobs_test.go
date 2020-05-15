@@ -42,7 +42,8 @@ import (
 
 const testingRegistry = "../../test/multistage-registry/registry"
 
-const testingCiOpCfgYAML = "tests:\n- as: job1\n- as: job2\nzz_generated_metadata:\n  branch: \"\"\n  org: \"\"\n  repo: \"\"\n"
+const testingCiOpCfgJob1YAML = "tests:\n- as: job1\nzz_generated_metadata:\n  branch: \"\"\n  org: \"\"\n  repo: \"\"\n"
+const testingCiOpCfgJob2YAML = "tests:\n- as: job2\nzz_generated_metadata:\n  branch: \"\"\n  org: \"\"\n  repo: \"\"\n"
 
 // configFiles contains the info needed to allow inlineCiOpConfig to successfully inline
 // CONFIG_SPEC and not fail
@@ -228,14 +229,35 @@ func TestInlineCiopConfig(t *testing.T) {
 		Repo:   "targetRepo",
 		Branch: "master",
 	}
-	testCiopConfig := api.ReleaseBuildConfiguration{}
-	testCiopConfigContent, err := yaml.Marshal(&testCiopConfig)
+	testCiopConfig := api.ReleaseBuildConfiguration{
+		Tests: []api.TestStepConfiguration{{
+			As: "test1",
+		}, {
+			As: "test2",
+		}},
+	}
+	testCiopConfigTest1 := api.ReleaseBuildConfiguration{
+		Tests: []api.TestStepConfiguration{{
+			As: "test1",
+		}},
+	}
+	testCiopConfigContentTest1, err := yaml.Marshal(&testCiopConfigTest1)
+	if err != nil {
+		t.Fatal("Failed to marshal ci-operator config")
+	}
+	testCiopConfigTest2 := api.ReleaseBuildConfiguration{
+		Tests: []api.TestStepConfiguration{{
+			As: "test2",
+		}},
+	}
+	testCiopConfigContentTest2, err := yaml.Marshal(&testCiopConfigTest2)
 	if err != nil {
 		t.Fatal("Failed to marshal ci-operator config")
 	}
 
 	testCases := []struct {
 		description   string
+		testname      string
 		sourceEnv     []v1.EnvVar
 		configs       config.DataByFilename
 		expectedEnv   []v1.EnvVar
@@ -259,10 +281,17 @@ func TestInlineCiopConfig(t *testing.T) {
 		configs:     config.DataByFilename{},
 		expectedEnv: []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference("test-cm", "key")}},
 	}, {
-		description: "CM reference to ci-operator-configs -> cm content inlined",
+		description: "CM reference to ci-operator-configs -> cm content inlined; test1",
+		testname:    "test1",
 		sourceEnv:   []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference(testCiopConfigInfo.ConfigMapName(), "filename")}},
 		configs:     config.DataByFilename{"filename": {Info: config.Info{Metadata: testCiopConfigInfo}, Configuration: testCiopConfig}},
-		expectedEnv: []v1.EnvVar{{Name: "T", Value: string(testCiopConfigContent)}},
+		expectedEnv: []v1.EnvVar{{Name: "T", Value: string(testCiopConfigContentTest1)}},
+	}, {
+		description: "CM reference to ci-operator-configs -> cm content inlined; test2",
+		testname:    "test2",
+		sourceEnv:   []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference(testCiopConfigInfo.ConfigMapName(), "filename")}},
+		configs:     config.DataByFilename{"filename": {Info: config.Info{Metadata: testCiopConfigInfo}, Configuration: testCiopConfig}},
+		expectedEnv: []v1.EnvVar{{Name: "T", Value: string(testCiopConfigContentTest2)}},
 	}, {
 		description:   "bad CM key is handled",
 		sourceEnv:     []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference(testCiopConfigInfo.ConfigMapName(), "filename")}},
@@ -281,7 +310,7 @@ func TestInlineCiopConfig(t *testing.T) {
 			job := makeTestingPresubmitForEnv(tc.sourceEnv)
 			expectedJob := makeTestingPresubmitForEnv(tc.expectedEnv)
 
-			err := inlineCiOpConfig(&job.Spec.Containers[0], tc.configs, resolver, testCiopConfigInfo, testLoggers)
+			err := inlineCiOpConfig(&job.Spec.Containers[0], tc.configs, resolver, testCiopConfigInfo, tc.testname, testLoggers)
 
 			if tc.expectedError && err == nil {
 				t.Errorf("Expected inlineCiopConfig() to return an error, none returned")
@@ -388,7 +417,7 @@ func TestMakeRehearsalPresubmit(t *testing.T) {
 	}
 }
 
-func makeTestingProwJob(namespace, jobName, context string, refs *pjapi.Refs, org, repo, branch string) *pjapi.ProwJob {
+func makeTestingProwJob(namespace, jobName, context string, refs *pjapi.Refs, org, repo, branch, configSpec string) *pjapi.ProwJob {
 	return &pjapi.ProwJob{
 		TypeMeta: metav1.TypeMeta{Kind: "ProwJob", APIVersion: "prow.k8s.io/v1"},
 		ObjectMeta: metav1.ObjectMeta{
@@ -425,7 +454,7 @@ func makeTestingProwJob(namespace, jobName, context string, refs *pjapi.Refs, or
 				Containers: []v1.Container{{
 					Command: []string{"ci-operator"},
 					Args:    []string{},
-					Env:     []v1.EnvVar{{Name: "CONFIG_SPEC", Value: testingCiOpCfgYAML}},
+					Env:     []v1.EnvVar{{Name: "CONFIG_SPEC", Value: configSpec}},
 				}},
 			},
 		},
@@ -627,11 +656,11 @@ func TestExecuteJobsPositive(t *testing.T) {
 			makeTestingProwJob(testNamespace,
 				"rehearse-123-job1",
 				fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "master", "job1"),
-				testRefs, targetOrg, targetRepo, "master").Spec,
+				testRefs, targetOrg, targetRepo, "master", testingCiOpCfgJob1YAML).Spec,
 			makeTestingProwJob(testNamespace,
 				"rehearse-123-job2",
 				fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "master", "job2"),
-				testRefs, targetOrg, targetRepo, "master").Spec,
+				testRefs, targetOrg, targetRepo, "master", testingCiOpCfgJob2YAML).Spec,
 		}}, {
 		description: "two jobs in a single repo, same context but different branch",
 		jobs: map[string][]prowconfig.Presubmit{targetOrgRepo: {
@@ -642,11 +671,11 @@ func TestExecuteJobsPositive(t *testing.T) {
 			makeTestingProwJob(testNamespace,
 				"rehearse-123-job1",
 				fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "master", "job1"),
-				testRefs, targetOrg, targetRepo, "master").Spec,
+				testRefs, targetOrg, targetRepo, "master", testingCiOpCfgJob1YAML).Spec,
 			makeTestingProwJob(testNamespace,
 				"rehearse-123-job2",
 				fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "not-master", "job2"),
-				testRefs, targetOrg, targetRepo, "not-master").Spec,
+				testRefs, targetOrg, targetRepo, "not-master", testingCiOpCfgJob2YAML).Spec,
 		}},
 		{
 			description: "two jobs in a separate repos",
@@ -658,11 +687,11 @@ func TestExecuteJobsPositive(t *testing.T) {
 				makeTestingProwJob(testNamespace,
 					"rehearse-123-job1",
 					fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "master", "job1"),
-					testRefs, targetOrg, targetRepo, "master").Spec,
+					testRefs, targetOrg, targetRepo, "master", testingCiOpCfgJob1YAML).Spec,
 				makeTestingProwJob(testNamespace,
 					"rehearse-123-job2",
 					fmt.Sprintf(rehearseJobContextTemplate, anotherTargetOrgRepo, "master", "job2"),
-					testRefs, anotherTargetOrg, anotherTargetRepo, "master").Spec,
+					testRefs, anotherTargetOrg, anotherTargetRepo, "master", testingCiOpCfgJob2YAML).Spec,
 			},
 		}, {
 			description:  "no jobs",

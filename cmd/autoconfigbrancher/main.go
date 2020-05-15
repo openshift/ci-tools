@@ -3,8 +3,9 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"os"
-	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -19,26 +20,25 @@ import (
 )
 
 const (
-	githubOrg   = "openshift"
-	githubRepo  = "release"
-	githubLogin = "openshift-bot"
-	githubTeam  = "openshift/openshift-team-developer-productivity-test-platform"
-	matchTitle  = "Automate config brancher"
-)
-
-var (
-	count = 0
+	githubOrg    = "openshift"
+	githubRepo   = "release"
+	githubLogin  = "openshift-bot"
+	githubTeam   = "openshift/openshift-team-developer-productivity-test-platform"
+	matchTitle   = "Automate config brancher"
+	remoteBranch = "auto-config-brancher"
 )
 
 type options struct {
-	promotion.FutureOptions
+	selfApprove bool
+
 	githubLogin string
 	gitName     string
 	gitEmail    string
 	targetDir   string
 	assign      string
 	whitelist   string
-	selfApprove bool
+
+	promotion.FutureOptions
 	flagutil.GitHubOptions
 }
 
@@ -81,44 +81,35 @@ func validateOptions(o options) error {
 	return o.GitHubOptions.Validate(!o.Confirm)
 }
 
-func hasChanges() (bool, error) {
-	cmd := "git"
-	args := []string{"status", "--porcelain"}
-	logrus.WithField("cmd", cmd).WithField("args", args).Info("running command ...")
-	combinedOutput, err := exec.Command(cmd, args...).CombinedOutput()
+func runAndCommitIfNeeded(stdout, stderr io.Writer, author, cmd string, args []string) (bool, error) {
+	fullCommand := fmt.Sprintf("%s %s", filepath.Base(cmd), strings.Join(args, " "))
+
+	logrus.Infof("Running: %s", fullCommand)
+	if err := bumper.Call(stdout, stderr, cmd, args...); err != nil {
+		return false, fmt.Errorf("failed to run %s: %v", fullCommand, err)
+	}
+
+	changed, err := bumper.HasChanges()
 	if err != nil {
-		logrus.WithField("cmd", cmd).Debugf("output is '%s'", string(combinedOutput))
-		return false, err
+		return false, fmt.Errorf("error occurred when checking changes: %v", err)
 	}
-	return len(strings.TrimSuffix(string(combinedOutput), "\n")) > 0, nil
-}
 
-func commitIfNeeded(msg, author string) {
-	changed, err := hasChanges()
-	if err != nil {
-		logrus.WithError(err).Fatal("error occurred when checking changes")
+	if !changed {
+		logrus.WithField("command", fullCommand).Info("No changes to commit")
+		return false, nil
 	}
-	if changed {
-		count++
-		addAndCommit(msg, author)
-	}
-}
 
-func addAndCommit(msg, author string) {
-	cmd := "git"
-	args := []string{"add", "."}
-	run(cmd, args...)
-	cmd = "git"
-	args = []string{"commit", "-m", msg, "--author", author}
-	run(cmd, args...)
-}
-
-func run(cmd string, args ...string) {
-	logrus.WithField("cmd", cmd).WithField("args", args).Info("running command ...")
-	if combinedOutput, err := exec.Command(cmd, args...).CombinedOutput(); err != nil {
-		logrus.WithField("cmd", cmd).Debugf("output is '%s'", string(combinedOutput))
-		logrus.Fatalf("Failed to run command:'%s'", err)
+	gitCmd := "git"
+	if err := bumper.Call(stdout, stderr, gitCmd, []string{"add", "."}...); err != nil {
+		return false, fmt.Errorf("failed to 'git add .': %v", err)
 	}
+
+	commitArgs := []string{"commit", "-m", fullCommand, "--author", author}
+	if err := bumper.Call(stdout, stderr, gitCmd, commitArgs...); err != nil {
+		return false, fmt.Errorf("fail to %s %s: %v", gitCmd, strings.Join(commitArgs, " "), err)
+	}
+
+	return true, nil
 }
 
 func main() {
@@ -142,66 +133,80 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to change to root dir")
 	}
 
+	steps := []struct {
+		command   string
+		arguments []string
+	}{
+		{
+			command: "/usr/bin/config-brancher",
+			arguments: func() []string {
+				args := []string{"--config-dir", "./ci-operator/config", "--current-release", o.CurrentRelease}
+				for _, fr := range o.FutureReleases.Strings() {
+					args = append(args, []string{"--future-release", fr}...)
+				}
+				args = append(args, "--confirm")
+				return args
+			}(),
+		},
+		{
+			command: "/usr/bin/ci-operator-config-mirror",
+			arguments: func() []string {
+				args := []string{"--config-path", o.ConfigDir, "--to-org", "openshift-priv"}
+				if o.whitelist != "" {
+					args = append(args, []string{"--whitelist-file", o.whitelist}...)
+				}
+				return args
+
+			}(),
+		},
+		{
+			command:   "/usr/bin/determinize-ci-operator",
+			arguments: []string{"--config-dir", o.ConfigDir, "--confirm"},
+		},
+		{
+			command:   "/usr/bin/ci-operator-prowgen",
+			arguments: []string{"--from-dir", o.ConfigDir, "--to-dir", "./ci-operator/jobs"},
+		},
+		{
+			command: "/usr/bin/private-prow-configs-mirror",
+			arguments: func() []string {
+				args := []string{"--release-repo-path", "."}
+				if o.whitelist != "" {
+					args = append(args, []string{"--whitelist-file", o.whitelist}...)
+				}
+				return args
+			}(),
+		},
+		{
+			command:   "/usr/bin/sanitize-prow-jobs",
+			arguments: []string{"--prow-jobs-dir", "./ci-operator/jobs", "--config-path", "./core-services/sanitize-prow-jobs/_config.yaml"},
+		},
+	}
+
+	stdout := bumper.HideSecretsWriter{Delegate: os.Stdout, Censor: sa}
+	stderr := bumper.HideSecretsWriter{Delegate: os.Stderr, Censor: sa}
 	author := fmt.Sprintf("%s <%s>", o.gitName, o.gitEmail)
+	commitsCounter := 0
 
-	cmd := "/usr/bin/config-brancher"
-	args := []string{"--config-dir", o.ConfigDir, "--current-release", o.CurrentRelease}
-	for _, fr := range o.FutureReleases.Strings() {
-		args = append(args, []string{"--future-release", fr}...)
+	for _, step := range steps {
+		commited, err := runAndCommitIfNeeded(stdout, stderr, author, step.command, step.arguments)
+		if err != nil {
+			logrus.WithError(err).Fatal("failed to run command and commit the changes")
+		}
+
+		if commited {
+			commitsCounter++
+		}
 	}
-	args = append(args, "--confirm")
-	run(cmd, args...)
-
-	commitIfNeeded(fmt.Sprintf("config-brancher --current-release %s --future-release %s", o.CurrentRelease, strings.Join(o.FutureReleases.Strings(), ",")), author)
-
-	cmd = "/usr/bin/ci-operator-config-mirror"
-	args = []string{"--config-path", o.ConfigDir, "--to-org", "openshift-priv"}
-	if o.whitelist != "" {
-		args = append(args, []string{"--whitelist-file", o.whitelist}...)
-	}
-
-	run(cmd, args...)
-
-	commitIfNeeded("ci-operator-config-mirror --config-path ./ci-operator/config --to-org openshift-priv", author)
-
-	cmd = "/usr/bin/determinize-ci-operator"
-	args = []string{"--config-dir", o.ConfigDir, "--confirm"}
-	run(cmd, args...)
-
-	commitIfNeeded("determinize-ci-operator --confirm", author)
-
-	cmd = "/usr/bin/ci-operator-prowgen"
-	args = []string{"--from-dir", o.ConfigDir, "--to-dir", "./ci-operator/jobs"}
-	run(cmd, args...)
-
-	commitIfNeeded("ci-operator-prowgen --from-dir ./ci-operator/config --to-dir ./ci-operator/jobs", author)
-
-	cmd = "/usr/bin/private-prow-configs-mirror"
-	args = []string{"--release-repo-path", "."}
-	if o.whitelist != "" {
-		args = append(args, []string{"--whitelist-file", o.whitelist}...)
-	}
-	run(cmd, args...)
-
-	commitIfNeeded("private-prow-configs-mirror --release-repo-path .", author)
-
-	cmd = "/usr/bin/sanitize-prow-jobs"
-	args = []string{"--prow-jobs-dir", "./ci-operator/jobs", "--config-path", "./core-services/sanitize-prow-jobs/_config.yaml"}
-	run(cmd, args...)
-	commitIfNeeded("sanitize-prow-jobs  --prow-jobs-dir ./ci-operator/jobs", author)
-
-	if count == 0 {
+	if commitsCounter == 0 {
 		logrus.Info("no new commits, existing ...")
-		return
+		os.Exit(0)
 	}
 
-	remoteBranch := "auto-config-brancher"
 	title := fmt.Sprintf("%s by auto-config-brancher job at %s", matchTitle, time.Now().Format(time.RFC1123))
-	cmd = "git"
-	args = []string{"push", "-f", fmt.Sprintf("https://%s:%s@github.com/%s/%s.git", o.githubLogin,
-		string(sa.GetTokenGenerator(o.GitHubOptions.TokenPath)()), o.githubLogin, githubRepo),
-		fmt.Sprintf("HEAD:%s", remoteBranch)}
-	run(cmd, args...)
+	if err := bumper.GitPush(fmt.Sprintf("https://%s:%s@github.com/%s/%s.git", o.githubLogin, string(sa.GetTokenGenerator(o.GitHubOptions.TokenPath)()), o.githubLogin, githubRepo), remoteBranch, stdout, stderr); err != nil {
+		logrus.WithError(err).Fatal("Failed to push changes.")
+	}
 
 	var labelsToAdd []string
 	if o.selfApprove {
@@ -212,5 +217,4 @@ func main() {
 		matchTitle, o.githubLogin+":"+remoteBranch, "master", true, labelsToAdd); err != nil {
 		logrus.WithError(err).Fatal("PR creation failed.")
 	}
-
 }

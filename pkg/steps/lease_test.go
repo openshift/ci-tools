@@ -48,7 +48,7 @@ func (stepNeedsLease) SubTests() []*junit.TestCase {
 func TestLeaseStepForward(t *testing.T) {
 	name := "lease_name"
 	step := stepNeedsLease{}
-	withLease := LeaseStep(nil, name, &step)
+	withLease := LeaseStep(nil, name, &step, "", nil)
 	t.Run("Inputs", func(t *testing.T) {
 		s, err := step.Inputs(false)
 		if err != nil {
@@ -138,7 +138,7 @@ func TestError(t *testing.T) {
 			var calls []string
 			client := lease.NewFakeClient("owner", "url", 0, tc.failures, &calls)
 			s := stepNeedsLease{fail: tc.runFails}
-			if LeaseStep(&client, "rtype", &s).Run(ctx, false) == nil {
+			if LeaseStep(&client, "rtype", &s, "", nil).Run(ctx, false) == nil {
 				t.Fatalf("unexpected success, calls: %#v", calls)
 			}
 			if !reflect.DeepEqual(calls, tc.expected) {
@@ -152,7 +152,7 @@ func TestAcquireRelease(t *testing.T) {
 	var calls []string
 	client := lease.NewFakeClient("owner", "url", 0, nil, &calls)
 	step := stepNeedsLease{}
-	withLease := LeaseStep(&client, "rtype", &step)
+	withLease := LeaseStep(&client, "rtype", &step, "", nil)
 	if err := withLease.Run(context.Background(), false); err != nil {
 		t.Fatal(err)
 	}

@@ -93,6 +93,7 @@ type CommentClient interface {
 
 // IssueClient interface for issue related API actions
 type IssueClient interface {
+	CreateIssue(org, repo, title, body string, milestone int, labels, assignees []string) (int, error)
 	CreateIssueReaction(org, repo string, id int, reaction string) error
 	ListIssueComments(org, repo string, number int) ([]IssueComment, error)
 	GetIssueLabels(org, repo string, number int) ([]Label, error)
@@ -798,7 +799,11 @@ func (c *client) doRequest(method, path, accept string, body interface{}) (*http
 }
 
 func (c *client) authHeader() string {
-	return fmt.Sprintf("Bearer %s", c.getToken())
+	token := c.getToken()
+	if len(token) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("Bearer %s", token)
 }
 
 // userInfo provides the 'github_user_info' vector that is indexed
@@ -1250,6 +1255,46 @@ func (c *client) CreateCommentReaction(org, repo string, id int, reaction string
 		requestBody: &r,
 	}, nil)
 	return err
+}
+
+// CreateIssue creates a new issue and returns its number if
+// the creation is successful, otherwise any error that is encountered.
+//
+// See https://developer.github.com/v3/issues/#create-an-issue
+func (c *client) CreateIssue(org, repo, title, body string, milestone int, labels, assignees []string) (int, error) {
+	durationLogger := c.log("CreateIssue", org, repo, title)
+	defer durationLogger()
+
+	data := struct {
+		Title     string   `json:"title,omitempty"`
+		Body      string   `json:"body,omitempty"`
+		Milestone int      `json:"milestone,omitempty"`
+		Labels    []string `json:"labels,omitempty"`
+		Assignees []string `json:"assignees,omitempty"`
+	}{
+		Title:     title,
+		Body:      body,
+		Milestone: milestone,
+		Labels:    labels,
+		Assignees: assignees,
+	}
+	var resp struct {
+		Num int `json:"number"`
+	}
+	_, err := c.request(&request{
+		// allow the description and draft fields
+		// https://developer.github.com/changes/2018-02-22-label-description-search-preview/
+		// https://developer.github.com/changes/2019-02-14-draft-pull-requests/
+		accept:      "application/vnd.github.symmetra-preview+json, application/vnd.github.shadow-cat-preview",
+		method:      http.MethodPost,
+		path:        fmt.Sprintf("/repos/%s/%s/issues", org, repo),
+		requestBody: &data,
+		exitCodes:   []int{201},
+	}, &resp)
+	if err != nil {
+		return 0, err
+	}
+	return resp.Num, nil
 }
 
 // CreateIssueReaction responds emotionally to org/repo#id
@@ -2834,7 +2879,15 @@ func (c *client) ListTeamRepos(id int) ([]Repo, error) {
 			return &[]Repo{}
 		},
 		func(obj interface{}) {
-			repos = append(repos, *(obj.(*[]Repo))...)
+			for _, repo := range *obj.(*[]Repo) {
+				// Currently, GitHub API returns false for all permission levels
+				// for a repo on which the team has 'Maintain' or 'Triage' role.
+				// This check is to avoid listing a repo under the team but
+				// showing the permission level as none.
+				if LevelFromPermissions(repo.Permissions) != None {
+					repos = append(repos, repo)
+				}
+			}
 		},
 	)
 	if err != nil {

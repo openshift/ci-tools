@@ -525,7 +525,7 @@ func generateJobBase(name, prefix string, info *ProwgenInfo, label jc.ProwgenLab
 		Spec:   podSpec,
 		UtilityConfig: prowconfig.UtilityConfig{
 			DecorationConfig: dc,
-			Decorate:         true,
+			Decorate:         func(b bool) *bool { return &b }(true),
 		},
 	}
 	if pathAlias != nil {

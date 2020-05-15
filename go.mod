@@ -40,7 +40,7 @@ require (
 	k8s.io/api v0.18.0
 	k8s.io/apimachinery v0.18.0
 	k8s.io/client-go v9.0.0+incompatible
-	k8s.io/test-infra v0.0.0-20200428145208-ce87b074baee
+	k8s.io/test-infra v0.0.0-20200515104936-59705fc01a8d
 	k8s.io/utils v0.0.0-20200324210504-a9aa75ae1b89
 	sigs.k8s.io/controller-runtime v0.5.1
 	sigs.k8s.io/yaml v1.2.0

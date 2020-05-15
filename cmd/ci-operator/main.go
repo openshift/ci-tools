@@ -30,6 +30,7 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"k8s.io/apimachinery/pkg/fields"
 	authclientset "k8s.io/client-go/kubernetes/typed/authorization/v1"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	rbacclientset "k8s.io/client-go/kubernetes/typed/rbac/v1"
@@ -579,6 +580,9 @@ func (o *options) Run() []error {
 		client, err := coreclientset.NewForConfig(o.clusterConfig)
 		if err != nil {
 			return []error{fmt.Errorf("could not get core client for cluster config: %v", err)}
+		}
+		if !o.dry {
+			go monitorNamespace(ctx, cancel, o.namespace, client.Namespaces())
 		}
 		authClient, err := authclientset.NewForConfig(o.clusterConfig)
 		if err != nil {
@@ -1482,4 +1486,42 @@ func (o *options) getResolverInfo(jobSpec *api.JobSpec) *load.ResolverInfo {
 		info.Branch = o.branch
 	}
 	return info
+}
+
+func monitorNamespace(ctx context.Context, cancel func(), namespace string, client coreclientset.NamespaceInterface) {
+	for {
+		watcher, err := client.Watch(meta.ListOptions{
+			TypeMeta:      meta.TypeMeta{},
+			FieldSelector: fields.Set{"metadata.name": namespace}.AsSelector().String(),
+			Watch:         true,
+		})
+		if err != nil {
+			log.Printf("Could not start a watch on our test namespace... (details; %v)", err)
+			cancel()
+			return
+		}
+		for {
+			select {
+			case <-ctx.Done():
+				// we're done operating anyway
+				return
+			case event, ok := <-watcher.ResultChan():
+				if !ok {
+					continue
+				}
+				ns, ok := event.Object.(*coreapi.Namespace)
+				if !ok {
+					continue
+				}
+				if ns.Name != namespace {
+					continue
+				}
+				if ns.DeletionTimestamp != nil {
+					log.Print("The namespace in which this test is executing has been deleted, cancelling the test...")
+					cancel()
+					return
+				}
+			}
+		}
+	}
 }

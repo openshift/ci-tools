@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -13,6 +15,8 @@ import (
 	"github.com/ghodss/yaml"
 	"github.com/google/go-cmp/cmp"
 	"github.com/sirupsen/logrus"
+
+	"golang.org/x/sync/semaphore"
 
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -45,6 +49,8 @@ type options struct {
 	bwPassword     string
 	secretsGetters map[string]coreclientset.SecretsGetter
 	config         []secretConfig
+
+	maxConcurrency int
 }
 
 func parseOptions() options {
@@ -59,6 +65,7 @@ func parseOptions() options {
 	fs.BoolVar(&o.force, "force", false, "If true, update the secrets even if existing one differs from Bitwarden items instead of existing with error. Default false.")
 	fs.StringVar(&o.logLevel, "log-level", "info", fmt.Sprintf("Log level is one of %v.", logrus.AllLevels))
 	fs.StringVar(&o.impersonateUser, "as", "", "Username to impersonate")
+	fs.IntVar(&o.maxConcurrency, "concurrency", 0, "Maximum number of concurrent in-flight goroutines to BitWarden.")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Errorf("cannot parse args: %q", os.Args[1:])
 	}
@@ -141,6 +148,10 @@ func (o *options) completeOptions(secrets *sets.String) error {
 			secretConfig.To = to
 			o.config = append(o.config, secretConfig)
 		}
+	}
+
+	if o.maxConcurrency == 0 {
+		o.maxConcurrency = runtime.GOMAXPROCS(0)
 	}
 
 	return o.validateCompletedOptions()
@@ -242,12 +253,16 @@ type secretConfig struct {
 	To   []secretContext             `json:"to"`
 }
 
-func constructSecrets(config []secretConfig, bwClient bitwarden.Client) (map[string][]*coreapi.Secret, error) {
+func constructSecrets(ctx context.Context, config []secretConfig, bwClient bitwarden.Client, maxConcurrency int) (map[string][]*coreapi.Secret, error) {
+	sem := semaphore.NewWeighted(int64(maxConcurrency))
 	secretsMap := map[string][]*coreapi.Secret{}
 	secretsMapLock := &sync.Mutex{}
 
-	var errs []error
-	errLock := &sync.Mutex{}
+	var potentialErrors int
+	for _, item := range config {
+		potentialErrors = potentialErrors + len(item.From)
+	}
+	errChan := make(chan error, potentialErrors)
 
 	secretConfigWG := &sync.WaitGroup{}
 	for _, cfg := range config {
@@ -264,11 +279,14 @@ func constructSecrets(config []secretConfig, bwClient bitwarden.Client) (map[str
 			}
 			sort.Strings(keys)
 
-			keyWG := &sync.WaitGroup{}
 			for _, key := range keys {
-				keyWG.Add(1)
+				if err := sem.Acquire(ctx, 1); err != nil {
+					errChan <- fmt.Errorf("failed to acquire semaphore for key %s: %v", key, err)
+					continue
+				}
+
 				go func(key string) {
-					defer keyWG.Done()
+					defer sem.Release(1)
 					bwContext := secretConfig.From[key]
 					var value []byte
 					var err error
@@ -282,16 +300,12 @@ func constructSecrets(config []secretConfig, bwClient bitwarden.Client) (map[str
 							value, err = bwClient.GetPassword(bwContext.BWItem)
 						default:
 							// should never happen since we have validated the config
-							errLock.Lock()
-							errs = append(errs, fmt.Errorf("invalid attribute: only the '%s' is supported, not %s", attributeTypePassword, bwContext.Attribute))
-							errLock.Unlock()
+							errChan <- fmt.Errorf("invalid attribute: only the '%s' is supported, not %s", attributeTypePassword, bwContext.Attribute)
 							return
 						}
 					}
 					if err != nil {
-						errLock.Lock()
-						errs = append(errs, err)
-						errLock.Unlock()
+						errChan <- err
 						return
 					}
 					dataLock.Lock()
@@ -299,7 +313,6 @@ func constructSecrets(config []secretConfig, bwClient bitwarden.Client) (map[str
 					dataLock.Unlock()
 				}(key)
 			}
-			keyWG.Wait()
 
 			for _, secretContext := range secretConfig.To {
 				if secretContext.Type == "" {
@@ -321,7 +334,14 @@ func constructSecrets(config []secretConfig, bwClient bitwarden.Client) (map[str
 		}(cfg)
 	}
 	secretConfigWG.Wait()
-
+	if err := sem.Acquire(ctx, int64(maxConcurrency)); err != nil {
+		errChan <- fmt.Errorf("failed to acquire semaphore while wating all workers to finish: %v", err)
+	}
+	close(errChan)
+	var errs []error
+	for err := range errChan {
+		errs = append(errs, err)
+	}
 	sort.Slice(errs, func(i, j int) bool {
 		return errs[i] != nil && errs[j] != nil && errs[i].Error() < errs[j].Error()
 	})
@@ -421,7 +441,8 @@ func main() {
 	})
 	defer logrus.Exit(0)
 
-	secretsMap, err := constructSecrets(o.config, bwClient)
+	ctx := context.TODO()
+	secretsMap, err := constructSecrets(ctx, o.config, bwClient, o.maxConcurrency)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get secrets.")
 	}

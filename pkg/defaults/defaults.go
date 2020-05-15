@@ -64,6 +64,7 @@ func FromConfig(
 	var podClient steps.PodClient
 	var rbacClient rbacclientset.RbacV1Interface
 	var saGetter coreclientset.ServiceAccountsGetter
+	var namespaceClient coreclientset.NamespaceInterface
 
 	if clusterConfig != nil {
 		buildGetter, err := buildclientset.NewForConfig(clusterConfig)
@@ -102,6 +103,7 @@ func FromConfig(
 		serviceGetter = coreGetter
 		configMapGetter = coreGetter
 		secretGetter = coreGetter
+		namespaceClient = coreGetter.Namespaces()
 
 		podClient = steps.NewPodClient(coreGetter, clusterConfig, coreGetter.RESTClient())
 
@@ -173,7 +175,7 @@ func FromConfig(
 			if test := testStep.MultiStageTestConfigurationLiteral; test != nil {
 				step = steps.MultiStageTestStep(*testStep, config, params, podClient, secretGetter, saGetter, rbacClient, artifactDir, jobSpec, dryLogger)
 				if test.ClusterProfile != "" {
-					step = steps.LeaseStep(leaseClient, test.ClusterProfile.LeaseType(), step)
+					step = steps.LeaseStep(leaseClient, test.ClusterProfile.LeaseType(), step, jobSpec.Namespace, namespaceClient)
 				}
 			} else if test := testStep.OpenshiftInstallerClusterTestConfiguration; test != nil {
 				if testStep.OpenshiftInstallerClusterTestConfiguration.Upgrade {
@@ -182,7 +184,7 @@ func FromConfig(
 					if err != nil {
 						return nil, nil, fmt.Errorf("unable to create end to end test step: %v", err)
 					}
-					step = steps.LeaseStep(leaseClient, test.ClusterProfile.LeaseType(), step)
+					step = steps.LeaseStep(leaseClient, test.ClusterProfile.LeaseType(), step, jobSpec.Namespace, namespaceClient)
 				}
 			} else {
 				step = steps.TestStep(*testStep, config.Resources, podClient, artifactDir, jobSpec, dryLogger)
@@ -212,7 +214,7 @@ func FromConfig(
 				if err != nil {
 					return nil, nil, fmt.Errorf("cannot resolve lease type from cluster type: %v", err)
 				}
-				step = steps.LeaseStep(leaseClient, lease, step)
+				step = steps.LeaseStep(leaseClient, lease, step, jobSpec.Namespace, namespaceClient)
 				break
 			}
 		}

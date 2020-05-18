@@ -36,6 +36,11 @@ func (m *Metadata) IsComplete() error {
 	return nil
 }
 
+// TestNameFromJobName returns the name of the test from a given job name and prefix
+func (m *Metadata) TestNameFromJobName(jobName, prefix string) string {
+	return strings.TrimPrefix(jobName, m.JobName(prefix, ""))
+}
+
 // TestName returns a short name of a test defined in this file, including
 // variant, if present
 func (m *Metadata) TestName(testName string) string {

@@ -1,9 +1,10 @@
 package api
 
 import (
-	"k8s.io/utils/diff"
 	"reflect"
 	"testing"
+
+	"k8s.io/utils/diff"
 )
 
 func TestMetadata_IsComplete(t *testing.T) {
@@ -228,6 +229,33 @@ func TestMetadata_TestName(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			actual := tc.metadata.TestName(testName)
+			if actual != tc.expected {
+				t.Errorf("%s: expected '%s', got '%s'", tc.name, tc.expected, actual)
+			}
+		})
+	}
+}
+
+func TestMetadata_TestNameFromJobName(t *testing.T) {
+	testCases := []struct {
+		name     string
+		metadata Metadata
+		jobName  string
+		expected string
+	}{{
+		name:     "without variant",
+		metadata: Metadata{Org: "org", Repo: "repo", Branch: "branch"},
+		jobName:  "pull-ci-org-repo-branch-test1",
+		expected: "test1",
+	}, {
+		name:     "with variant",
+		metadata: Metadata{Org: "gro", Repo: "oper", Branch: "hcnarb", Variant: "also"},
+		jobName:  "pull-ci-gro-oper-hcnarb-also-test2",
+		expected: "test2",
+	}}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := tc.metadata.TestNameFromJobName(tc.jobName, "pull")
 			if actual != tc.expected {
 				t.Errorf("%s: expected '%s', got '%s'", tc.name, tc.expected, actual)
 			}

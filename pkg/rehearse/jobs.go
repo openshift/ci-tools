@@ -2,7 +2,6 @@ package rehearse
 
 import (
 	"fmt"
-	"github.com/openshift/ci-tools/pkg/diffs"
 	"path/filepath"
 	"reflect"
 	"sort"
@@ -36,6 +35,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
+	"github.com/openshift/ci-tools/pkg/diffs"
 	"github.com/openshift/ci-tools/pkg/jobconfig"
 	"github.com/openshift/ci-tools/pkg/registry"
 )
@@ -227,13 +227,45 @@ func hasRehearsableLabel(labels map[string]string) bool {
 	return true
 }
 
+// getResolverConfigForTest returns a resolved ci-operator based on the provided filename and only includes the specified test in the
+// `tests` section of the config
+func getResolvedConfigForTest(ciopConfigs config.DataByFilename, resolver registry.Resolver, filename, testname string) (string, error) {
+	ciopConfig, ok := ciopConfigs[filename]
+	if !ok {
+		return "", fmt.Errorf("ci-operator config file %s was not found", filename)
+	}
+	// make copy so we don't change in-memory config
+	ciopCopy := config.DataWithInfo{
+		Configuration: ciopConfig.Configuration,
+		Info:          ciopConfig.Info,
+	}
+	// only include the test we need to reduce env var size
+	ciopCopy.Configuration.Tests = []api.TestStepConfiguration{}
+	for _, test := range ciopConfig.Configuration.Tests {
+		if test.As == testname {
+			ciopCopy.Configuration.Tests = append(ciopCopy.Configuration.Tests, test)
+			break
+		}
+	}
+	ciopConfigResolved, err := registry.ResolveConfig(resolver, ciopCopy.Configuration)
+	if err != nil {
+		return "", fmt.Errorf("%v: Failed resolve ReleaseBuildConfiguration", err)
+	}
+
+	ciOpConfigContent, err := yaml.Marshal(ciopConfigResolved)
+	if err != nil {
+		return "", fmt.Errorf("%v: Failed to marshal ci-operator config file", err)
+	}
+	return string(ciOpConfigContent), nil
+}
+
 // inlineCiOpConfig detects whether a job needs a ci-operator config file
 // provided by a `ci-operator-configs` ConfigMap and if yes, returns a copy
 // of the job where a reference to this ConfigMap is replaced by the content
 // of the needed config file passed to the job as a direct value. This needs
 // to happen because the rehearsed Prow jobs may depend on these config files
 // being also changed by the tested PR.
-func inlineCiOpConfig(container *v1.Container, ciopConfigs config.DataByFilename, resolver registry.Resolver, metadata api.Metadata, loggers Loggers) error {
+func inlineCiOpConfig(container *v1.Container, ciopConfigs config.DataByFilename, resolver registry.Resolver, metadata api.Metadata, testname string, loggers Loggers) error {
 	configSpecSet := false
 	// replace all ConfigMapKeyRef mounts with inline config maps
 	for index := range container.Env {
@@ -251,19 +283,9 @@ func inlineCiOpConfig(container *v1.Container, ciopConfigs config.DataByFilename
 			filename := env.ValueFrom.ConfigMapKeyRef.Key
 
 			loggers.Debug.WithField(logCiopConfigFile, filename).Debug("Rehearsal job uses ci-operator config ConfigMap, needed content will be inlined")
-			ciopConfig, ok := ciopConfigs[filename]
-			if !ok {
-				return fmt.Errorf("ci-operator config file %s was not found", filename)
-			}
-			ciopConfigResolved, err := registry.ResolveConfig(resolver, ciopConfig.Configuration)
+			ciOpConfigContent, err := getResolvedConfigForTest(ciopConfigs, resolver, filename, testname)
 			if err != nil {
-				loggers.Job.WithError(err).Error("Failed resolve ReleaseBuildConfiguration")
-				return err
-			}
-
-			ciOpConfigContent, err := yaml.Marshal(ciopConfigResolved)
-			if err != nil {
-				loggers.Job.WithError(err).Error("Failed to marshal ci-operator config file")
+				loggers.Job.WithError(err).Error("Failed to get resolved config for test")
 				return err
 			}
 
@@ -282,26 +304,16 @@ func inlineCiOpConfig(container *v1.Container, ciopConfigs config.DataByFilename
 		}
 		filename := metadata.Basename()
 		loggers.Debug.WithField(logCiopConfigFile, filename).Debug("Rehearsal job uses ci-operator config ConfigMap, needed content will be inlined")
-		ciopConfig, ok := ciopConfigs[filename]
-		if !ok {
-			return fmt.Errorf("ci-operator config file %s was not found", filename)
-		}
-		ciopConfigResolved, err := registry.ResolveConfig(resolver, ciopConfig.Configuration)
+		ciOpConfigContent, err := getResolvedConfigForTest(ciopConfigs, resolver, filename, testname)
 		if err != nil {
-			loggers.Job.WithError(err).Error("Failed resolve ReleaseBuildConfiguration")
-			return err
-		}
-
-		ciOpConfigContent, err := yaml.Marshal(ciopConfigResolved)
-		if err != nil {
-			loggers.Job.WithError(err).Error("Failed to marshal ci-operator config file")
+			loggers.Job.WithError(err).Error("Failed to get resolved config for test")
 			return err
 		}
 
 		envs := container.Env
 		env := v1.EnvVar{
 			Name:  "CONFIG_SPEC",
-			Value: string(ciOpConfigContent),
+			Value: ciOpConfigContent,
 		}
 		envs = append(envs, env)
 		container.Env = envs
@@ -364,7 +376,8 @@ func (jc *JobConfigurer) ConfigurePeriodicRehearsals(periodics config.Periodics)
 			metadata.Repo = job.ExtraRefs[0].Repo
 			metadata.Branch = job.ExtraRefs[0].BaseRef
 		}
-		if err := jc.configureJobSpec(job.Spec, metadata, jc.loggers.Debug.WithField("name", job.Name)); err != nil {
+		testname := metadata.TestNameFromJobName(job.Name, jobconfig.PeriodicPrefix)
+		if err := jc.configureJobSpec(job.Spec, metadata, testname, jc.loggers.Debug.WithField("name", job.Name)); err != nil {
 			jobLogger.WithError(err).Warn("Failed to inline ci-operator-config into rehearsal periodic job")
 			continue
 		}
@@ -400,8 +413,9 @@ func (jc *JobConfigurer) ConfigurePresubmitRehearsals(presubmits config.Presubmi
 				Branch:  getTrimmedBranch(job.Branches),
 				Variant: variantFromLabels(job.Labels),
 			}
+			testname := metadata.TestNameFromJobName(job.Name, jobconfig.PresubmitPrefix)
 
-			if err := jc.configureJobSpec(rehearsal.Spec, metadata, jc.loggers.Debug.WithField("name", job.Name)); err != nil {
+			if err := jc.configureJobSpec(rehearsal.Spec, metadata, testname, jc.loggers.Debug.WithField("name", job.Name)); err != nil {
 				jobLogger.WithError(err).Warn("Failed to inline ci-operator-config into rehearsal presubmit job")
 				continue
 			}
@@ -413,7 +427,7 @@ func (jc *JobConfigurer) ConfigurePresubmitRehearsals(presubmits config.Presubmi
 	return rehearsals
 }
 
-func (jc *JobConfigurer) configureJobSpec(spec *v1.PodSpec, metadata api.Metadata, logger *logrus.Entry) error {
+func (jc *JobConfigurer) configureJobSpec(spec *v1.PodSpec, metadata api.Metadata, testName string, logger *logrus.Entry) error {
 	// Remove configresolver flags from ci-operator jobs
 	var metadataFromFlags api.Metadata
 	if len(spec.Containers[0].Command) > 0 && spec.Containers[0].Command[0] == "ci-operator" {
@@ -426,7 +440,7 @@ func (jc *JobConfigurer) configureJobSpec(spec *v1.PodSpec, metadata api.Metadat
 		metadata = metadataFromFlags
 	}
 
-	if err := inlineCiOpConfig(&spec.Containers[0], jc.ciopConfigs, jc.registryResolver, metadata, jc.loggers); err != nil {
+	if err := inlineCiOpConfig(&spec.Containers[0], jc.ciopConfigs, jc.registryResolver, metadata, testName, jc.loggers); err != nil {
 		return err
 	}
 

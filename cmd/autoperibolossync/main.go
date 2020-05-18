@@ -14,6 +14,7 @@ import (
 	"k8s.io/test-infra/experiment/autobumper/bumper"
 	"k8s.io/test-infra/prow/config/secret"
 	"k8s.io/test-infra/prow/flagutil"
+	"k8s.io/test-infra/prow/labels"
 )
 
 const (
@@ -27,7 +28,9 @@ const (
 )
 
 type options struct {
-	dryRun          bool
+	dryRun      bool
+	selfApprove bool
+
 	githubLogin     string
 	gitName         string
 	gitEmail        string
@@ -42,6 +45,8 @@ func parseOptions() options {
 	var o options
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually create the pull request with github client")
+	fs.BoolVar(&o.selfApprove, "self-approve", false, "Self-approve the PR by adding the `approved` and `lgtm` labels. Requires write permissions on the repo.")
+
 	fs.StringVar(&o.githubLogin, "github-login", githubLogin, "The GitHub username to use.")
 	fs.StringVar(&o.gitName, "git-name", "", "The name to use on the git commit. Requires --git-email. If not specified, uses the system default.")
 	fs.StringVar(&o.gitEmail, "git-email", "", "The email to use on the git commit. Requires --git-name. If not specified, uses the system default.")
@@ -127,8 +132,14 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to push changes.")
 	}
 
+	var labelsToAdd []string
+	if o.selfApprove {
+		logrus.Infof("Self-aproving PR by adding the %q and %q labels", labels.Approved, labels.LGTM)
+		labelsToAdd = append(labelsToAdd, labels.Approved, labels.LGTM)
+	}
+
 	source := fmt.Sprintf("%s:%s", o.githubLogin, remoteBranch)
-	if err := bumper.UpdatePullRequest(gc, githubOrg, githubRepo, title, description, matchTitle, source, "master", true); err != nil {
+	if err := bumper.UpdatePullRequestWithLabels(gc, githubOrg, githubRepo, title, description, matchTitle, source, "master", true, labelsToAdd); err != nil {
 		logrus.WithError(err).Fatal("PR creation failed.")
 	}
 }

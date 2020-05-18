@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -1120,7 +1121,7 @@ func TestConstructSecrets(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual, actualError := constructSecrets(tc.config, tc.bwClient)
+			actual, actualError := constructSecrets(context.TODO(), tc.config, tc.bwClient, 10)
 			equalError(t, tc.expectedError, actualError)
 			if actualError != nil {
 				return

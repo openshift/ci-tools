@@ -2,6 +2,7 @@ package steps
 
 import (
 	"context"
+	"github.com/google/go-cmp/cmp"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -585,6 +586,64 @@ func TestJUnit(t *testing.T) {
 			}
 			if !reflect.DeepEqual(names, tc.expected) {
 				t.Error(diff.ObjectReflectDiff(names, tc.expected))
+			}
+		})
+	}
+}
+
+func TestAddCredentials(t *testing.T) {
+	var testCases = []struct {
+		name        string
+		credentials []api.CredentialReference
+		pod         coreapi.Pod
+		expected    coreapi.Pod
+	}{
+		{
+			name:        "none to add",
+			credentials: []api.CredentialReference{},
+			pod:         coreapi.Pod{},
+			expected:    coreapi.Pod{},
+		},
+		{
+			name:        "one to add",
+			credentials: []api.CredentialReference{{Namespace: "ns", Name: "name", MountPath: "/tmp"}},
+			pod: coreapi.Pod{Spec: coreapi.PodSpec{
+				Containers: []coreapi.Container{{VolumeMounts: []coreapi.VolumeMount{}}},
+				Volumes:    []coreapi.Volume{},
+			}},
+			expected: coreapi.Pod{Spec: coreapi.PodSpec{
+				Containers: []coreapi.Container{{VolumeMounts: []coreapi.VolumeMount{{Name: "ns-name", MountPath: "/tmp"}}}},
+				Volumes:    []coreapi.Volume{{Name: "ns-name", VolumeSource: coreapi.VolumeSource{Secret: &coreapi.SecretVolumeSource{SecretName: "ns-name"}}}},
+			}},
+		},
+		{
+			name: "many to add and disambiguate",
+			credentials: []api.CredentialReference{
+				{Namespace: "ns", Name: "name", MountPath: "/tmp"},
+				{Namespace: "other", Name: "name", MountPath: "/tamp"},
+			},
+			pod: coreapi.Pod{Spec: coreapi.PodSpec{
+				Containers: []coreapi.Container{{VolumeMounts: []coreapi.VolumeMount{}}},
+				Volumes:    []coreapi.Volume{},
+			}},
+			expected: coreapi.Pod{Spec: coreapi.PodSpec{
+				Containers: []coreapi.Container{{VolumeMounts: []coreapi.VolumeMount{
+					{Name: "ns-name", MountPath: "/tmp"},
+					{Name: "other-name", MountPath: "/tamp"},
+				}}},
+				Volumes: []coreapi.Volume{
+					{Name: "ns-name", VolumeSource: coreapi.VolumeSource{Secret: &coreapi.SecretVolumeSource{SecretName: "ns-name"}}},
+					{Name: "other-name", VolumeSource: coreapi.VolumeSource{Secret: &coreapi.SecretVolumeSource{SecretName: "other-name"}}},
+				},
+			}},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			addCredentials(testCase.credentials, &testCase.pod)
+			if !equality.Semantic.DeepEqual(testCase.pod, testCase.expected) {
+				t.Errorf("%s: got incorrect Pod: %s", testCase.name, cmp.Diff(testCase.pod, testCase.expected))
 			}
 		})
 	}

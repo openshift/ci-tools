@@ -36,6 +36,7 @@ for network in $( gcloud --project=openshift-gce-devel-ci compute networks list 
   infraID="${network%"-network"}"
   if [[ "${#infraID}" -gt 12 ]]; then
     echo "cluster ${infraID} is a 3.11 cluster, ignoring..."
+    continue
   fi
   region="$( gcloud --project=openshift-gce-devel-ci compute networks describe "${network}" --format="value(subnetworks[0])" | grep -Po "(?<=regions/)[^/]+" || true )"
   if [[ -z "${region:-}" ]]; then

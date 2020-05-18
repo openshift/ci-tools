@@ -376,8 +376,7 @@ func (jc *JobConfigurer) ConfigurePeriodicRehearsals(periodics config.Periodics)
 			metadata.Repo = job.ExtraRefs[0].Repo
 			metadata.Branch = job.ExtraRefs[0].BaseRef
 		}
-		jobNameWithoutTest := metadata.JobName(jobconfig.PeriodicPrefix, "")
-		testname := strings.TrimPrefix(job.Name, jobNameWithoutTest)
+		testname := metadata.TestNameFromJobName(job.Name, jobconfig.PeriodicPrefix)
 		if err := jc.configureJobSpec(job.Spec, metadata, testname, jc.loggers.Debug.WithField("name", job.Name)); err != nil {
 			jobLogger.WithError(err).Warn("Failed to inline ci-operator-config into rehearsal periodic job")
 			continue
@@ -414,8 +413,7 @@ func (jc *JobConfigurer) ConfigurePresubmitRehearsals(presubmits config.Presubmi
 				Branch:  getTrimmedBranch(job.Branches),
 				Variant: variantFromLabels(job.Labels),
 			}
-			jobNameWithoutTest := metadata.JobName(jobconfig.PresubmitPrefix, "")
-			testname := strings.TrimPrefix(job.Name, jobNameWithoutTest)
+			testname := metadata.TestNameFromJobName(job.Name, jobconfig.PresubmitPrefix)
 
 			if err := jc.configureJobSpec(rehearsal.Spec, metadata, testname, jc.loggers.Debug.WithField("name", job.Name)); err != nil {
 				jobLogger.WithError(err).Warn("Failed to inline ci-operator-config into rehearsal presubmit job")

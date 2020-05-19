@@ -913,6 +913,16 @@ or changes configuration, a later step could check for that as a pre-condition
 by using <code>oc</code> or the API to view the cluster's configuration.
 </p>
 
+<h5 id="kubeconfig"><a href="#kubeconfig">A Note on <code>$KUBECONFIG</code></a></h5>
+<p>
+In the default execution environment, commands run in steps will be given the
+<code>$KUBECONFIG</code> environment variable to allow them to interact with
+the ephemeral cluster that was created for testing. It is required that any
+steps which execute a cluster installation publish the resulting configuration
+file to <code>$SHARED_DIR/kubeconfig</code> to allow the <code>ci-operator</code>
+to correctly propagate this configuration to subsequent steps.
+</p>
+
 <h5 id="artifacts"><a href="#artifacts">Exposing Artifacts</a></h5>
 <p>
 Steps can commit artifacts to the output of a job by placing files at the

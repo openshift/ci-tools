@@ -183,7 +183,7 @@ func rehearseMain() error {
 		affectedJobs = jobs
 	}
 
-	var changedRegistrySteps registry.NodeByName
+	var changedRegistrySteps []registry.Node
 	var refs registry.ReferenceByName
 	var chains registry.ChainByName
 	var workflows registry.WorkflowByName
@@ -214,8 +214,8 @@ func rehearseMain() error {
 	}
 	if len(changedRegistrySteps) != 0 {
 		var names []string
-		for step := range changedRegistrySteps {
-			names = append(names, step)
+		for _, step := range changedRegistrySteps {
+			names = append(names, step.Name())
 		}
 		logger.Infof("found %d changed registry steps: %s", len(changedRegistrySteps), strings.Join(names, ", "))
 	}

@@ -166,43 +166,41 @@ func GetChangedTemplates(path, baseRev string) ([]ConfigMapSource, error) {
 	return ret, nil
 }
 
-func loadRegistryStep(filename string, graph, changes registry.NodeByName) error {
+func loadRegistryStep(filename string, graph registry.NodeByName) (registry.Node, error) {
 	// if a commands script changed, mark reference as changed
 	filename = strings.ReplaceAll(filename, "-commands.sh", "-ref.yaml")
-	name := ""
-	if strings.HasSuffix(filename, "-ref.yaml") {
-		name = strings.TrimSuffix(filename, "-ref.yaml")
+	var node registry.Node
+	var ok bool
+	switch {
+	case strings.HasSuffix(filename, "-ref.yaml"):
+		node, ok = graph.References[strings.TrimSuffix(filename, "-ref.yaml")]
+	case strings.HasSuffix(filename, "-chain.yaml"):
+		node, ok = graph.Chains[strings.TrimSuffix(filename, "-chain.yaml")]
+	case strings.HasSuffix(filename, "-workflow.yaml"):
+		node, ok = graph.Workflows[strings.TrimSuffix(filename, "-workflow.yaml")]
+	default:
+		return nil, fmt.Errorf("invalid step filename: %s", filename)
 	}
-	if strings.HasSuffix(filename, "-chain.yaml") {
-		name = strings.TrimSuffix(filename, "-chain.yaml")
-	}
-	if strings.HasSuffix(filename, "-workflow.yaml") {
-		name = strings.TrimSuffix(filename, "-workflow.yaml")
-	}
-	if name == "" {
-		return fmt.Errorf("invalid step filename: %s", filename)
-	}
-	node, ok := graph[name]
 	if !ok {
-		return fmt.Errorf("could not find registry component in registry graph: %s", name)
+		return nil, fmt.Errorf("could not find registry component in registry graph: %s", filename)
 	}
-	changes[name] = node
-	return nil
+	return node, nil
 }
 
 // GetChangedRegistrySteps identifies all registry components (refs, chains, and workflows) that changed.
-func GetChangedRegistrySteps(path, baseRev string, graph registry.NodeByName) (registry.NodeByName, error) {
-	changes := make(registry.NodeByName)
+func GetChangedRegistrySteps(path, baseRev string, graph registry.NodeByName) ([]registry.Node, error) {
+	var changes []registry.Node
 	revChanges, err := getRevChanges(path, RegistryPath, baseRev, true)
 	if err != nil {
 		return changes, err
 	}
 	for _, c := range revChanges {
 		if filepath.Ext(c.Filename) == ".yaml" || strings.HasSuffix(c.Filename, "-commands.sh") {
-			err := loadRegistryStep(filepath.Base(c.Filename), graph, changes)
+			node, err := loadRegistryStep(filepath.Base(c.Filename), graph)
 			if err != nil {
 				return changes, err
 			}
+			changes = append(changes, node)
 		}
 	}
 	return changes, nil

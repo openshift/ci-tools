@@ -840,7 +840,7 @@ k8s.io/klog
 k8s.io/kube-openapi/pkg/util/proto
 # k8s.io/kubernetes v1.13.0
 k8s.io/kubernetes/pkg/apis/core
-# k8s.io/test-infra v0.0.0-20200515104936-59705fc01a8d
+# k8s.io/test-infra v0.0.0-20200518220536-8da074ad41b6
 k8s.io/test-infra/boskos/client
 k8s.io/test-infra/boskos/common
 k8s.io/test-infra/boskos/storage

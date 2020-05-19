@@ -153,6 +153,7 @@ func (o *options) completeOptions(secrets *sets.String) error {
 	if o.maxConcurrency == 0 {
 		o.maxConcurrency = runtime.GOMAXPROCS(0)
 	}
+	logrus.Infof("The max concurrency is %d", o.maxConcurrency)
 
 	return o.validateCompletedOptions()
 }

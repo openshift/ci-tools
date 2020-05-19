@@ -305,8 +305,14 @@ func rehearseMain() error {
 
 	resolver := registry.NewResolver(refs, chains, workflows)
 	jobConfigurer := rehearse.NewJobConfigurer(prConfig.CiOperator, resolver, prNumber, loggers, changedTemplates, changedClusterProfiles, jobSpec.Refs)
-	presubmitsToRehearse := jobConfigurer.ConfigurePresubmitRehearsals(toRehearse)
-	periodicsToRehearse := jobConfigurer.ConfigurePeriodicRehearsals(changedPeriodics)
+	presubmitsToRehearse, err := jobConfigurer.ConfigurePresubmitRehearsals(toRehearse)
+	if err != nil {
+		return err
+	}
+	periodicsToRehearse, err := jobConfigurer.ConfigurePeriodicRehearsals(changedPeriodics)
+	if err != nil {
+		return err
+	}
 
 	rehearsals := len(presubmitsToRehearse) + len(periodicsToRehearse)
 	if rehearsals == 0 {

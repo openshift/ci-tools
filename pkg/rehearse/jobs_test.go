@@ -546,7 +546,10 @@ func TestExecuteJobsErrors(t *testing.T) {
 
 			jc := NewJobConfigurer(testCiopConfigs, resolver, testPrNumber, testLoggers, nil, nil, makeBaseRefs())
 
-			presubmits := jc.ConfigurePresubmitRehearsals(tc.jobs)
+			presubmits, err := jc.ConfigurePresubmitRehearsals(tc.jobs)
+			if err != nil {
+				t.Errorf("Expected to get no error, but got one: %v", err)
+			}
 			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, true, testLoggers, fakeclient)
 			_, err = executor.ExecuteJobs()
 
@@ -620,7 +623,10 @@ func TestExecuteJobsUnsuccessful(t *testing.T) {
 			})
 
 			jc := NewJobConfigurer(testCiopConfigs, resolver, testPrNumber, testLoggers, nil, nil, makeBaseRefs())
-			presubmits := jc.ConfigurePresubmitRehearsals(tc.jobs)
+			presubmits, err := jc.ConfigurePresubmitRehearsals(tc.jobs)
+			if err != nil {
+				t.Errorf("Expected to get no error, but got one: %v", err)
+			}
 			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, false, testLoggers, fakeclient)
 			success, _ := executor.ExecuteJobs()
 
@@ -717,7 +723,10 @@ func TestExecuteJobsPositive(t *testing.T) {
 			fakecs.Fake.PrependWatchReactor("prowjobs", makeSuccessfulFinishReactor(watcher, tc.jobs))
 
 			jc := NewJobConfigurer(testCiopConfigs, resolver, testPrNumber, testLoggers, nil, nil, makeBaseRefs())
-			presubmits := jc.ConfigurePresubmitRehearsals(tc.jobs)
+			presubmits, err := jc.ConfigurePresubmitRehearsals(tc.jobs)
+			if err != nil {
+				t.Errorf("Expected to get no error, but got one: %v", err)
+			}
 			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, true, testLoggers, fakeclient)
 			success, err := executor.ExecuteJobs()
 

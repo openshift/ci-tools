@@ -362,7 +362,7 @@ func variantFromLabels(labels map[string]string) string {
 }
 
 // ConfigurePeriodicRehearsals adds the required configuration for the periodics to be rehearsed.
-func (jc *JobConfigurer) ConfigurePeriodicRehearsals(periodics config.Periodics) []prowconfig.Periodic {
+func (jc *JobConfigurer) ConfigurePeriodicRehearsals(periodics config.Periodics) ([]prowconfig.Periodic, error) {
 	var rehearsals []prowconfig.Periodic
 
 	filteredPeriodics := filterPeriodics(periodics, jc.loggers.Job)
@@ -379,18 +379,18 @@ func (jc *JobConfigurer) ConfigurePeriodicRehearsals(periodics config.Periodics)
 		testname := metadata.TestNameFromJobName(job.Name, jobconfig.PeriodicPrefix)
 		if err := jc.configureJobSpec(job.Spec, metadata, testname, jc.loggers.Debug.WithField("name", job.Name)); err != nil {
 			jobLogger.WithError(err).Warn("Failed to inline ci-operator-config into rehearsal periodic job")
-			continue
+			return nil, err
 		}
 
 		jobLogger.WithField(logRehearsalJob, job.Name).Info("Created a rehearsal job to be submitted")
 		rehearsals = append(rehearsals, job)
 	}
 
-	return rehearsals
+	return rehearsals, nil
 }
 
 // ConfigurePresubmitRehearsals adds the required configuration for the presubmits to be rehearsed.
-func (jc *JobConfigurer) ConfigurePresubmitRehearsals(presubmits config.Presubmits) []*prowconfig.Presubmit {
+func (jc *JobConfigurer) ConfigurePresubmitRehearsals(presubmits config.Presubmits) ([]*prowconfig.Presubmit, error) {
 	var rehearsals []*prowconfig.Presubmit
 
 	presubmitsFiltered := filterPresubmits(presubmits, jc.loggers.Job)
@@ -417,14 +417,14 @@ func (jc *JobConfigurer) ConfigurePresubmitRehearsals(presubmits config.Presubmi
 
 			if err := jc.configureJobSpec(rehearsal.Spec, metadata, testname, jc.loggers.Debug.WithField("name", job.Name)); err != nil {
 				jobLogger.WithError(err).Warn("Failed to inline ci-operator-config into rehearsal presubmit job")
-				continue
+				return nil, err
 			}
 
 			jobLogger.WithField(logRehearsalJob, rehearsal.Name).Info("Created a rehearsal job to be submitted")
 			rehearsals = append(rehearsals, rehearsal)
 		}
 	}
-	return rehearsals
+	return rehearsals, nil
 }
 
 func (jc *JobConfigurer) configureJobSpec(spec *v1.PodSpec, metadata api.Metadata, testName string, logger *logrus.Entry) error {

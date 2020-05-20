@@ -140,7 +140,6 @@ production-install:
 #   make integration SUITE=multi-stage
 integration:
 	# legacy, so we don't break them
-	test/prowgen-integration/run.sh
 	test/repo-init-integration/run.sh
 	test/ci-operator-integration/multi-stage/run.sh
 	test/ci-operator-integration/base/run.sh
@@ -149,7 +148,6 @@ integration:
 	test/testgrid-config-generator/run.sh
 	test/pj-rehearse-integration/run.sh
 	test/cvp-trigger-integration/run.sh
-	test/ci-operator-configresolver-integration/run.sh
 	hack/test-integration.sh $(SUITE)
 .PHONY: integration
 

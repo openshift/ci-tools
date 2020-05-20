@@ -7,7 +7,7 @@ trap 'rm -rf "${WORKDIR}"' EXIT
 TEST_ROOT="$(dirname "${BASH_SOURCE[0]}")"
 readonly TEST_ROOT
 readonly TEST_CONFIG_DIR="${TEST_ROOT}/configs"
-readonly TEST_PROWCONFIG="${TEST_ROOT}/../../ci-operator-configresolver-integration/config.yaml"
+readonly TEST_PROWCONFIG="${TEST_ROOT}/../../integration/ci-operator-configresolver/config.yaml"
 readonly TEST_REGISTRY_DIR="${TEST_ROOT}/../../multistage-registry/registry"
 readonly TEST_CONFIG0="${TEST_CONFIG_DIR}/master/openshift-hyperkube-master.yaml"
 readonly TEST_CONFIG1="${TEST_CONFIG_DIR}/release-4.2/openshift-installer-release-4.2.yaml"

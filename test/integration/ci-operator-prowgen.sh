@@ -7,7 +7,7 @@ function cleanup() {
 }
 trap "cleanup" EXIT
 
-suite_dir="${OS_ROOT}/test/prowgen-integration/data"
+suite_dir="${OS_ROOT}/test/integration/ci-operator-prowgen"
 actual="${BASETMPDIR}/jobs"
 mkdir -p "${actual}"
 # we need to seed this with the input data as we operate "in place"

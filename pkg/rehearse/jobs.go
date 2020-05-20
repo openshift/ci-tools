@@ -576,33 +576,44 @@ func getPresubmitsForRegistryStep(node registry.Node, configs config.DataByFilen
 	return toTest, addedConfigs, nil
 }
 
-// expandAncestors takes a graph of changed steps and adds all ancestors of
-// the existing steps to the changed steps graph
-func expandAncestors(changed, graph registry.NodeByName) {
-	for _, node := range changed {
-		for name := range node.AncestorNames() {
-			changed[name] = graph[name]
-		}
+// sorting functions for []registry.Node
+type nodeArr []registry.Node
+
+func (s nodeArr) Len() int {
+	return len(s)
+}
+func (s nodeArr) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
+}
+func (s nodeArr) Less(i, j int) bool {
+	if s[i].Name() == s[j].Name() {
+		return s[i].Type() < s[j].Type()
 	}
+	return s[i].Name() < s[j].Name()
 }
 
-func AddRandomJobsForChangedRegistry(regSteps, graph registry.NodeByName, prConfigPresubmits map[string][]prowconfig.Presubmit, configPath string, loggers Loggers) config.Presubmits {
+// getAllAncestors takes a graph of changed steps and finds all ancestors of
+// the existing steps in changed
+func getAllAncestors(changed []registry.Node) []registry.Node {
+	var ancestors []registry.Node
+	for _, node := range changed {
+		ancestors = append(ancestors, node.Ancestors()...)
+	}
+	return ancestors
+}
+
+func AddRandomJobsForChangedRegistry(regSteps []registry.Node, graph registry.NodeByName, prConfigPresubmits map[string][]prowconfig.Presubmit, configPath string, loggers Loggers) config.Presubmits {
 	configsByFilename, err := config.LoadDataByFilename(configPath)
 	if err != nil {
 		loggers.Debug.Errorf("Failed to load config by filename in AddRandomJobsForChangedRegistry: %v", err)
 	}
-	expandAncestors(regSteps, graph)
+	regSteps = append(regSteps, getAllAncestors(regSteps)...)
 	rehearsals := make(config.Presubmits)
-	// get sorted list of regSteps keys to make the function deterministic
-	var keys []string
-	for k := range regSteps {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
+	// sort steps to make it deterministic
+	sort.Sort(nodeArr(regSteps))
 	// make list to store MultiStageTestConfigurations that we've already added to the test list
 	addedConfigs := []*api.MultiStageTestConfiguration{}
-	for _, key := range keys {
-		step := regSteps[key]
+	for _, step := range regSteps {
 		var presubmitsMap map[string][]prowconfig.Presubmit
 		presubmitsMap, addedConfigs, err = getPresubmitsForRegistryStep(step, configsByFilename, prConfigPresubmits, addedConfigs)
 		if err != nil {
@@ -614,7 +625,7 @@ func AddRandomJobsForChangedRegistry(regSteps, graph registry.NodeByName, prConf
 		}
 		for repo, presubmits := range presubmitsMap {
 			for _, job := range presubmits {
-				selectionFields := logrus.Fields{diffs.LogRepo: repo, diffs.LogJobName: job.Name, diffs.LogReasons: fmt.Sprintf("registry step %s changed", key)}
+				selectionFields := logrus.Fields{diffs.LogRepo: repo, diffs.LogJobName: job.Name, diffs.LogReasons: fmt.Sprintf("registry step %s changed", step.Name())}
 				loggers.Job.WithFields(selectionFields).Info(diffs.ChosenJob)
 			}
 			rehearsals[repo] = append(rehearsals[repo], presubmits...)

@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/openshift/ci-tools/pkg/api"
-	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 // These maps contain the representation of ../../test/multistage-registry/registry with the
@@ -16,14 +15,24 @@ var ipiDeprovisionDeprovision = "ipi-deprovision-deprovision"
 var ipiInstall = "ipi-install"
 var ipiDeprovision = "ipi-deprovision"
 var ipi = "ipi"
+var nested = "nested"
+var ipiConf = "ipi-conf"
+var ipiConfAWS = "ipi-conf-aws"
 
 var referenceMap = ReferenceByName{
 	ipiInstallInstall:         {},
 	ipiInstallRBAC:            {},
 	ipiDeprovisionDeprovision: {},
 	ipiDeprovisionMustGather:  {},
+	ipiConf:                   {},
+	ipiConfAWS:                {},
 }
 var chainMap = ChainByName{
+	ipiConfAWS: {{
+		Reference: &ipiConf,
+	}, {
+		Reference: &ipiConfAWS,
+	}},
 	ipiInstall: {{
 		Reference: &ipiInstallInstall,
 	}, {
@@ -33,6 +42,11 @@ var chainMap = ChainByName{
 		Reference: &ipiDeprovisionMustGather,
 	}, {
 		Reference: &ipiDeprovisionDeprovision,
+	}},
+	nested: {{
+		Chain: &ipiInstall,
+	}, {
+		Chain: &ipiDeprovision,
 	}},
 }
 var workflowMap = WorkflowByName{
@@ -46,23 +60,54 @@ var workflowMap = WorkflowByName{
 	},
 }
 
-func TestAncestorNames(t *testing.T) {
+func nodesEqual(x, y []Node) bool {
+	if len(x) != len(y) {
+		return false
+	}
+	for _, xNode := range x {
+		found := false
+		for _, yNode := range y {
+			if xNode.Name() == yNode.Name() && xNode.Type() == yNode.Type() {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
+func TestAncestors(t *testing.T) {
 	testCases := []struct {
-		name string
-		set  sets.String
+		name     string
+		nodeType Type
+		expected []Node
 	}{{
-		name: ipi,
-		set:  sets.String{},
+		name:     ipi,
+		nodeType: Workflow,
+		expected: []Node{},
 	}, {
-		name: ipiInstall,
-		set: sets.String{
-			ipi: sets.Empty{},
+		name:     ipiInstall,
+		nodeType: Chain,
+		expected: []Node{
+			&workflowNode{nodeWithName: nodeWithName{name: ipi}},
+			&chainNode{nodeWithName: nodeWithName{name: nested}},
 		},
 	}, {
-		name: ipiDeprovisionMustGather,
-		set: sets.String{
-			ipi:            sets.Empty{},
-			ipiDeprovision: sets.Empty{},
+		name:     ipiDeprovisionMustGather,
+		nodeType: Reference,
+		expected: []Node{
+			&workflowNode{nodeWithName: nodeWithName{name: ipi}},
+			&chainNode{nodeWithName: nodeWithName{name: ipiDeprovision}},
+			&chainNode{nodeWithName: nodeWithName{name: nested}},
+		},
+	}, {
+		name:     ipiConfAWS,
+		nodeType: Reference,
+		expected: []Node{
+			&chainNode{nodeWithName: nodeWithName{name: ipiConfAWS}},
 		},
 	}}
 
@@ -71,36 +116,66 @@ func TestAncestorNames(t *testing.T) {
 		t.Fatalf("failed to create graph: %v", err)
 	}
 	for _, testCase := range testCases {
-		node := graph[testCase.name]
-		if !testCase.set.Equal(node.AncestorNames()) {
+		var node Node
+		switch testCase.nodeType {
+		case Reference:
+			node = graph.References[testCase.name]
+		case Chain:
+			node = graph.Chains[testCase.name]
+		case Workflow:
+			node = graph.Workflows[testCase.name]
+		}
+		if !nodesEqual(node.Ancestors(), testCase.expected) {
 			t.Errorf("%s: ancestor sets not equal", testCase.name)
 		}
 	}
 }
 
-func TestDescendantNames(t *testing.T) {
+func TestDescendants(t *testing.T) {
 	testCases := []struct {
-		name string
-		set  sets.String
+		name     string
+		nodeType Type
+		expected []Node
 	}{{
-		name: ipi,
-		set: sets.String{
-			ipiInstall:                sets.Empty{},
-			ipiInstallInstall:         sets.Empty{},
-			ipiInstallRBAC:            sets.Empty{},
-			ipiDeprovision:            sets.Empty{},
-			ipiDeprovisionMustGather:  sets.Empty{},
-			ipiDeprovisionDeprovision: sets.Empty{},
+		name:     ipi,
+		nodeType: Workflow,
+		expected: []Node{
+			&chainNode{nodeWithName: nodeWithName{name: ipiInstall}},
+			&referenceNode{nodeWithName: nodeWithName{name: ipiInstallInstall}},
+			&referenceNode{nodeWithName: nodeWithName{name: ipiInstallRBAC}},
+			&chainNode{nodeWithName: nodeWithName{name: ipiDeprovision}},
+			&referenceNode{nodeWithName: nodeWithName{name: ipiDeprovisionMustGather}},
+			&referenceNode{nodeWithName: nodeWithName{name: ipiDeprovisionDeprovision}},
 		},
 	}, {
-		name: ipiInstall,
-		set: sets.String{
-			ipiInstallInstall: sets.Empty{},
-			ipiInstallRBAC:    sets.Empty{},
+		name:     ipiInstall,
+		nodeType: Chain,
+		expected: []Node{
+			&referenceNode{nodeWithName: nodeWithName{name: ipiInstallInstall}},
+			&referenceNode{nodeWithName: nodeWithName{name: ipiInstallRBAC}},
 		},
 	}, {
-		name: ipiDeprovisionMustGather,
-		set:  sets.String{},
+		name:     ipiDeprovisionMustGather,
+		nodeType: Reference,
+		expected: []Node{},
+	}, {
+		name:     nested,
+		nodeType: Chain,
+		expected: []Node{
+			&chainNode{nodeWithName: nodeWithName{name: ipiInstall}},
+			&referenceNode{nodeWithName: nodeWithName{name: ipiInstallInstall}},
+			&referenceNode{nodeWithName: nodeWithName{name: ipiInstallRBAC}},
+			&chainNode{nodeWithName: nodeWithName{name: ipiDeprovision}},
+			&referenceNode{nodeWithName: nodeWithName{name: ipiDeprovisionMustGather}},
+			&referenceNode{nodeWithName: nodeWithName{name: ipiDeprovisionDeprovision}},
+		},
+	}, {
+		name:     ipiConfAWS,
+		nodeType: Chain,
+		expected: []Node{
+			&referenceNode{nodeWithName: nodeWithName{name: ipiConfAWS}},
+			&referenceNode{nodeWithName: nodeWithName{name: ipiConf}},
+		},
 	}}
 
 	graph, err := NewGraph(referenceMap, chainMap, workflowMap)
@@ -108,8 +183,16 @@ func TestDescendantNames(t *testing.T) {
 		t.Fatalf("failed to create graph: %v", err)
 	}
 	for _, testCase := range testCases {
-		node := graph[testCase.name]
-		if !testCase.set.Equal(node.DescendantNames()) {
+		var node Node
+		switch testCase.nodeType {
+		case Reference:
+			node = graph.References[testCase.name]
+		case Chain:
+			node = graph.Chains[testCase.name]
+		case Workflow:
+			node = graph.Workflows[testCase.name]
+		}
+		if !nodesEqual(node.Descendants(), testCase.expected) {
 			t.Errorf("%s: descendant sets not equal", testCase.name)
 		}
 	}

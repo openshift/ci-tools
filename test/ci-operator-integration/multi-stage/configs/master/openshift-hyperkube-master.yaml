@@ -69,6 +69,10 @@ tests:
           memory: "3"
         requests:
           memory: "3"
+      credentials:
+        - namespace: "ns"
+          name: "name"
+          mountPath: "/tmp"
     - as: test1
       from: bin
       commands: test1 command

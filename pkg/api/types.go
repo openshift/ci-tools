@@ -445,6 +445,18 @@ type LiteralTestStep struct {
 	ArtifactDir string `json:"artifact_dir,omitempty"`
 	// Resources defines the resource requirements for the step.
 	Resources ResourceRequirements `json:"resources,omitempty"`
+	// Credentials defines the credentials we'll mount into this step.
+	Credentials []CredentialReference `json:"credentials,omitempty"`
+}
+
+// CredentialReference defines a secret to mount into a step and where to mount it.
+type CredentialReference struct {
+	// Namespace is where the source secret exists.
+	Namespace string
+	// Names is which source secret to mount.
+	Name string
+	// MountPath is where the secret should be mounted.
+	MountPath string
 }
 
 // TestStep is the struct that a user's configuration gets unmarshalled into.

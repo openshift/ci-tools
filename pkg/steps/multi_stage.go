@@ -145,6 +145,9 @@ func (s *multiStageTestStep) run(ctx context.Context, dry bool) error {
 	if err := s.createSecret(); err != nil {
 		return fmt.Errorf("failed to create secret: %v", err)
 	}
+	if err := s.createCredentials(); err != nil {
+		return fmt.Errorf("failed to create credentials: %v", err)
+	}
 	if err := s.setupRBAC(); err != nil {
 		return fmt.Errorf("failed to create RBAC objects: %v", err)
 	}
@@ -255,6 +258,38 @@ func (s *multiStageTestStep) createSecret() error {
 	return err
 }
 
+func (s *multiStageTestStep) createCredentials() error {
+	log.Printf("Creating multi-stage test credentials for %q", s.name)
+	toCreate := map[string]*coreapi.Secret{}
+	for _, step := range append(s.pre, append(s.test, s.post...)...) {
+		for _, credential := range step.Credentials {
+			// we don't want secrets imported from separate namespaces to collide
+			// but we want to keep them generally recognizable for debugging, and the
+			// chance we get a second-level collision (ns-a, name) and (ns, a-name) is
+			// small, so we can get away with this string prefixing
+			name := fmt.Sprintf("%s-%s", credential.Namespace, credential.Name)
+			if s.dry {
+				s.logger.AddObject(&coreapi.Secret{ObjectMeta: meta.ObjectMeta{Name: name}})
+				continue
+			}
+			raw, err := s.secretClient.Secrets(credential.Namespace).Get(credential.Name, meta.GetOptions{})
+			if err != nil {
+				return fmt.Errorf("could not read source credential: %v", err)
+			}
+			raw.Namespace = s.jobSpec.Namespace
+			raw.Name = name
+			toCreate[name] = raw
+		}
+	}
+
+	for name := range toCreate {
+		if _, err := s.secretClient.Secrets(s.jobSpec.Namespace).Create(toCreate[name]); err != nil && !errors.IsAlreadyExists(err) {
+			return fmt.Errorf("could not create source credential: %v", err)
+		}
+	}
+	return nil
+}
+
 func (s *multiStageTestStep) runSteps(ctx context.Context, steps []api.LiteralTestStep, shortCircuit bool) error {
 	pods, err := s.generatePods(steps)
 	if err != nil {
@@ -322,6 +357,7 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep) ([]coreap
 			}...)
 		}
 		addSecret(s.name, pod)
+		addCredentials(step.Credentials, pod)
 		ret = append(ret, *pod)
 	}
 	return ret, utilerrors.NewAggregate(errs)
@@ -367,6 +403,22 @@ func addSecret(secret string, pod *coreapi.Pod) {
 		Name:  SecretMountEnv,
 		Value: SecretMountPath,
 	})
+}
+
+func addCredentials(credentials []api.CredentialReference, pod *coreapi.Pod) {
+	for _, credential := range credentials {
+		name := fmt.Sprintf("%s-%s", credential.Namespace, credential.Name)
+		pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{
+			Name: name,
+			VolumeSource: coreapi.VolumeSource{
+				Secret: &coreapi.SecretVolumeSource{SecretName: name},
+			},
+		})
+		pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, coreapi.VolumeMount{
+			Name:      name,
+			MountPath: credential.MountPath,
+		})
+	}
 }
 
 func addProfile(name string, profile api.ClusterProfile, pod *coreapi.Pod) {

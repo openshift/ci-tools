@@ -921,6 +921,26 @@ under <code>artifacts/job-name/step-name/</code>. The logs of each container
 in a step will also be present at that location.
 </p>
 
+<h5 id="credentials"><a href="#credentials">Injecting Custom Credentials</a></h5>
+<p>
+Steps can inject custom credentials by adding configuration that identifies
+which secrets hold the credentials and where the data should be mounted in
+the step. For instance, to mount the <code>my-data</code> secret into the
+step's filesytem at <code>/var/run/my-data</code>, a step could be configured
+in a literal <code>ci-operator</code> configuration, or in the step's configuration
+in the registry in the following manner:
+</p>
+
+Registry step configuration:
+{{ yamlSyntax (index . "credentialExample") }}
+
+<p>
+Note that access to read these secrets from the namespace configured must be
+granted separately from the configuration being added to a step. By default,
+only secrets in the <code>test-credentials</code> namespace will be available
+for mounting into test steps.
+</p>
+
 <h3 id="chain"><a href="#chain">Chain</a></h3>
 <p>
 A chain is a registry component that specifies multiple registry components to be run.
@@ -1029,6 +1049,20 @@ const refExample = `ref:
       memory: 100Mi
   documentation: |-
 	The IPI configure step generates the install-config.yaml file based on the cluster profile and optional input files.`
+const credentialExample = `ref:
+  as: step
+  from: base
+  commands: step-commands.sh
+  resources:
+    requests:
+      cpu: 1000m
+      memory: 100Mi
+  credentials:
+  - namespace: test-credentials # this entry injects the custom credential
+    name: my-data
+    mountPath: /var/run/my-data
+  documentation: |-
+	The step runs with custom credentials injected.`
 const chainExample = `chain:
   as: ipi-deprovision                # name of this chain
   steps:
@@ -1606,6 +1640,7 @@ func helpHandler(subPath string, w http.ResponseWriter, req *http.Request) {
 	case "":
 		helpTemplate, err = helpFuncs.Parse(gettingStartedPage)
 		data["refExample"] = refExample
+		data["credentialExample"] = credentialExample
 		data["chainExample"] = chainExample
 		data["workflowExample"] = workflowExample
 		data["configExample1"] = configExample1

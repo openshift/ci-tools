@@ -438,7 +438,53 @@ func validateLiteralTestStep(fieldRoot string, step LiteralTestStep, seen sets.S
 		ret = append(ret, fmt.Errorf("%s: `commands` is required", fieldRoot))
 	}
 	ret = append(ret, validateResourceRequirements(fieldRoot+".resources", step.Resources)...)
+	ret = append(ret, validateCredentials(fieldRoot, step.Credentials)...)
 	return
+}
+
+func validateCredentials(fieldRoot string, credentials []CredentialReference) []error {
+	var errs []error
+	for i, credential := range credentials {
+		if credential.Name == "" {
+			errs = append(errs, fmt.Errorf("%s.credentials[%d].name cannot be empty", fieldRoot, i))
+		}
+		if credential.Namespace == "" {
+			errs = append(errs, fmt.Errorf("%s.credentials[%d].namespace cannot be empty", fieldRoot, i))
+		}
+		if credential.MountPath == "" {
+			errs = append(errs, fmt.Errorf("%s.credentials[%d].mountPath cannot be empty", fieldRoot, i))
+		} else if !filepath.IsAbs(credential.MountPath) {
+			errs = append(errs, fmt.Errorf("%s.credentials[%d].mountPath is not absolute: %s", fieldRoot, i, credential.MountPath))
+		}
+		for j, other := range credentials[i+1:] {
+			index := i + j + 1
+			if credential.MountPath == other.MountPath {
+				errs = append(errs, fmt.Errorf("%s.credentials[%d] and credentials[%d] mount to the same location (%s)", fieldRoot, i, index, credential.MountPath))
+				continue
+			}
+			// we can make a couple of assumptions here to improve our check:
+			//  - valid mount paths must be absolute paths
+			//  - given two absolute paths, a relative path between A and B will
+			//    never contain '..' if B is a subdirectory of A
+			relPath, err := filepath.Rel(other.MountPath, credential.MountPath)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("%s.credentials[%d] could not check relative path to credentials[%d] (%s)", fieldRoot, i, index, err))
+				continue
+			}
+			if !strings.Contains(relPath, "..") {
+				errs = append(errs, fmt.Errorf("%s.credentials[%d] mounts at %s, which is under credentials[%d] (%s)", fieldRoot, i, credential.MountPath, index, other.MountPath))
+			}
+			relPath, err = filepath.Rel(credential.MountPath, other.MountPath)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("%s.credentials[%d] could not check relative path to credentials[%d] (%s)", fieldRoot, index, i, err))
+				continue
+			}
+			if !strings.Contains(relPath, "..") {
+				errs = append(errs, fmt.Errorf("%s.credentials[%d] mounts at %s, which is under credentials[%d] (%s)", fieldRoot, index, other.MountPath, i, credential.MountPath))
+			}
+		}
+	}
+	return errs
 }
 
 func validateReleaseBuildConfiguration(input *ReleaseBuildConfiguration, org, repo string) []error {

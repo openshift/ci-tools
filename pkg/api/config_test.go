@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/diff"
 )
@@ -820,6 +821,100 @@ func TestValidateReleaseTagConfiguration(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			if actual, expected := validateReleaseTagConfiguration("tag_specification", testCase.input), testCase.expected; !reflect.DeepEqual(actual, expected) {
 				t.Errorf("%s: got incorrect errors: %v", testCase.name, diff.ObjectDiff(actual, expected))
+			}
+		})
+	}
+}
+
+func TestValidateCredentials(t *testing.T) {
+	var testCases = []struct {
+		name   string
+		input  []CredentialReference
+		output []error
+	}{
+		{
+			name: "no creds means no error",
+		},
+		{
+			name: "cred mount with no name means error",
+			input: []CredentialReference{
+				{Namespace: "ns", MountPath: "/foo"},
+			},
+			output: []error{
+				errors.New("root.credentials[0].name cannot be empty"),
+			},
+		},
+		{
+			name: "cred mount with no namespace means error",
+			input: []CredentialReference{
+				{Name: "name", MountPath: "/foo"},
+			},
+			output: []error{
+				errors.New("root.credentials[0].namespace cannot be empty"),
+			},
+		},
+		{
+			name: "cred mount with no path means error",
+			input: []CredentialReference{
+				{Namespace: "ns", Name: "name"},
+			},
+			output: []error{
+				errors.New("root.credentials[0].mountPath cannot be empty"),
+			},
+		},
+		{
+			name: "cred mount with relative path means error",
+			input: []CredentialReference{
+				{Namespace: "ns", Name: "name", MountPath: "./foo"},
+			},
+			output: []error{
+				errors.New("root.credentials[0].mountPath is not absolute: ./foo"),
+			},
+		},
+		{
+			name: "normal creds means no error",
+			input: []CredentialReference{
+				{Namespace: "ns", Name: "name", MountPath: "/foo"},
+				{Namespace: "ns", Name: "name", MountPath: "/bar"},
+			},
+		},
+		{
+			name: "duped cred mount path means error",
+			input: []CredentialReference{
+				{Namespace: "ns", Name: "name", MountPath: "/foo"},
+				{Namespace: "ns", Name: "name", MountPath: "/foo"},
+			},
+			output: []error{
+				errors.New("root.credentials[0] and credentials[1] mount to the same location (/foo)"),
+			},
+		},
+		{
+			name: "subdir cred mount path means error",
+			input: []CredentialReference{
+				{Namespace: "ns", Name: "name", MountPath: "/foo/bar"},
+				{Namespace: "ns", Name: "name", MountPath: "/foo"},
+				{Namespace: "ns", Name: "name", MountPath: "/foo/bar/baz"},
+			},
+			output: []error{
+				errors.New("root.credentials[0] mounts at /foo/bar, which is under credentials[1] (/foo)"),
+				errors.New("root.credentials[2] mounts at /foo/bar/baz, which is under credentials[0] (/foo/bar)"),
+				errors.New("root.credentials[2] mounts at /foo/bar/baz, which is under credentials[1] (/foo)"),
+			},
+		},
+		{
+			name: "substring cred mount path means no error",
+			input: []CredentialReference{
+				{Namespace: "ns", Name: "name", MountPath: "/foo-bar"},
+				{Namespace: "ns", Name: "name", MountPath: "/foo"},
+			},
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if actual, expected := validateCredentials("root", testCase.input), testCase.output; !reflect.DeepEqual(actual, expected) {
+				t.Errorf("%s: got incorrect errors: %s", testCase.name, cmp.Diff(actual, expected, cmp.Comparer(func(x, y error) bool {
+					return x.Error() == y.Error()
+				})))
 			}
 		})
 	}

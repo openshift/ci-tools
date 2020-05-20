@@ -1356,6 +1356,10 @@
             {
               "mountPath": "/var/run/secrets/ci.openshift.io/multi-stage",
               "name": "multi-stage"
+            },
+            {
+              "mountPath": "/tmp",
+              "name": "ns-name"
             }
           ]
         },
@@ -1412,6 +1416,12 @@
           "name": "multi-stage",
           "secret": {
             "secretName": "multi-stage"
+          }
+        },
+        {
+          "name": "ns-name",
+          "secret": {
+            "secretName": "ns-name"
           }
         }
       ]
@@ -2012,6 +2022,14 @@
     "metadata": {
       "creationTimestamp": null,
       "name": "multi-stage"
+    }
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Secret",
+    "metadata": {
+      "creationTimestamp": null,
+      "name": "ns-name"
     }
   },
   {

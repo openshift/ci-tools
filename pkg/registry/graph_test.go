@@ -16,14 +16,23 @@ var ipiInstall = "ipi-install"
 var ipiDeprovision = "ipi-deprovision"
 var ipi = "ipi"
 var nested = "nested"
+var ipiConf = "ipi-conf"
+var ipiConfAWS = "ipi-conf-aws"
 
 var referenceMap = ReferenceByName{
 	ipiInstallInstall:         {},
 	ipiInstallRBAC:            {},
 	ipiDeprovisionDeprovision: {},
 	ipiDeprovisionMustGather:  {},
+	ipiConf:                   {},
+	ipiConfAWS:                {},
 }
 var chainMap = ChainByName{
+	ipiConfAWS: {{
+		Reference: &ipiConf,
+	}, {
+		Reference: &ipiConfAWS,
+	}},
 	ipiInstall: {{
 		Reference: &ipiInstallInstall,
 	}, {
@@ -94,6 +103,12 @@ func TestAncestors(t *testing.T) {
 			&chainNode{nodeWithName: nodeWithName{name: ipiDeprovision}},
 			&chainNode{nodeWithName: nodeWithName{name: nested}},
 		},
+	}, {
+		name:     ipiConfAWS,
+		nodeType: Reference,
+		expected: []Node{
+			&chainNode{nodeWithName: nodeWithName{name: ipiConfAWS}},
+		},
 	}}
 
 	graph, err := NewGraph(referenceMap, chainMap, workflowMap)
@@ -153,6 +168,13 @@ func TestDescendants(t *testing.T) {
 			&chainNode{nodeWithName: nodeWithName{name: ipiDeprovision}},
 			&referenceNode{nodeWithName: nodeWithName{name: ipiDeprovisionMustGather}},
 			&referenceNode{nodeWithName: nodeWithName{name: ipiDeprovisionDeprovision}},
+		},
+	}, {
+		name:     ipiConfAWS,
+		nodeType: Chain,
+		expected: []Node{
+			&referenceNode{nodeWithName: nodeWithName{name: ipiConfAWS}},
+			&referenceNode{nodeWithName: nodeWithName{name: ipiConf}},
 		},
 	}}
 

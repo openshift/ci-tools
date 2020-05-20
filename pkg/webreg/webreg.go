@@ -255,9 +255,9 @@ const templateDefinitions = `
 					<td><b>Name:</b> {{ template "nameWithLink" $name }}<p>
 						<b>Description:</b><br>{{ docsForName $name }}
 					</td>
-					<td>{{ if (len $config.Pre) gt 0 }}<b>Pre:</b>{{ template "stepList" $config.Pre }}{{ end }}
-					    {{ if (len $config.Test) gt 0 }}<b>Test:</b>{{ template "stepList" $config.Test }}{{ end }}
-						{{ if (len $config.Post) gt 0 }}<b>Post:</b>{{ template "stepList" $config.Post }}{{ end }}
+					<td>{{ if gt (len $config.Pre) 0 }}<b>Pre:</b>{{ template "stepList" $config.Pre }}{{ end }}
+					    {{ if gt (len $config.Test) 0 }}<b>Test:</b>{{ template "stepList" $config.Test }}{{ end }}
+						{{ if gt (len $config.Post) 0 }}<b>Post:</b>{{ template "stepList" $config.Post }}{{ end }}
 					</td>
 				</tr>
 			{{ end }}

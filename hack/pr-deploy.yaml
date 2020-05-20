@@ -64,10 +64,6 @@ objects:
       type: Git
     strategy:
       dockerStrategy:
-        from:
-          kind: ImageStreamTag
-          namespace: origin
-          name: centos:8
         imageOptimizationPolicy: SkipLayers
       type: Docker
     triggers:
@@ -89,7 +85,7 @@ objects:
         name: "output:binaries"
     source:
       dockerfile: |
-        FROM api.ci.openshift.org/openshift/release:golang-1.13
+        FROM registry.svc.ci.openshift.org/openshift/release:golang-1.13
 
         COPY . .
         RUN go install ./cmd/ci-operator-configresolver/...
@@ -100,10 +96,6 @@ objects:
       type: Git
     strategy:
       dockerStrategy:
-        from:
-          kind: ImageStreamTag
-          namespace: openshift
-          name: "release:golang-1.13"
         imageOptimizationPolicy: SkipLayers
       type: Docker
     triggers:

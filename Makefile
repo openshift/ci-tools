@@ -149,7 +149,6 @@ integration:
 	test/testgrid-config-generator/run.sh
 	test/pj-rehearse-integration/run.sh
 	test/cvp-trigger-integration/run.sh
-	test/ci-operator-configresolver-integration/run.sh
 	hack/test-integration.sh $(SUITE)
 .PHONY: integration
 

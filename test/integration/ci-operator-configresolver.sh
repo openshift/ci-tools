@@ -8,7 +8,7 @@ function cleanup() {
 }
 trap "cleanup" EXIT
 
-suite_dir="${OS_ROOT}/test/ci-operator-configresolver-integration/"
+suite_dir="${OS_ROOT}/test/integration/ci-operator-configresolver/"
 cp -a "${suite_dir}"/* "${BASETMPDIR}"
 cp -a "${OS_ROOT}/test/multistage-registry" "${BASETMPDIR}"
 actual="${BASETMPDIR}/actual"

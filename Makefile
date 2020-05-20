@@ -146,7 +146,6 @@ integration:
 	test/ci-operator-integration/base/run.sh
 	test/secret-wrapper-integration.sh
 	test/group-auto-updater-integration/run.sh
-	test/ci-operator-config-mirror-integration/run.sh
 	test/testgrid-config-generator/run.sh
 	test/pj-rehearse-integration/run.sh
 	test/cvp-trigger-integration/run.sh

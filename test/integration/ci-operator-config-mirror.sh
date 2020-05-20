@@ -2,7 +2,7 @@
 source "$(dirname "${BASH_SOURCE}")/../../hack/lib/init.sh"
 trap os::test::junit::reconcile_output EXIT
 
-suite_dir="${OS_ROOT}/test/ci-operator-config-mirror-integration/data/"
+suite_dir="${OS_ROOT}/test/integration/ci-operator-config-mirror/"
 cp -r "${suite_dir}/input" "${BASETMPDIR}"
 actual="${BASETMPDIR}/input"
 expected="${suite_dir}/output"

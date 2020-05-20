@@ -125,6 +125,7 @@ func FromConfig(
 	var hasReleaseStep bool
 	for _, rawStep := range stepConfigsForBuild(config, jobSpec) {
 		var step api.Step
+		var additional []api.Step
 		var stepLinks []api.StepLink
 		if rawStep.InputImageTagStepConfiguration != nil {
 			srcClient, err := clusterImageStreamClient(imageClient, clusterConfig, rawStep.InputImageTagStepConfiguration.BaseImage.Cluster, kubeconfigs)
@@ -177,6 +178,19 @@ func FromConfig(
 				if test.ClusterProfile != "" {
 					step = steps.LeaseStep(leaseClient, test.ClusterProfile.LeaseType(), step, jobSpec.Namespace, namespaceClient)
 				}
+				for _, subStep := range append(append(test.Pre, test.Test...), test.Post...) {
+					if link, ok := subStep.FromImageTag(); ok {
+						config := api.InputImageTagStepConfiguration{
+							BaseImage: *subStep.FromImage,
+							To:        link,
+						}
+						srcClient, err := clusterImageStreamClient(imageClient, clusterConfig, config.BaseImage.Cluster, kubeconfigs)
+						if err != nil {
+							return nil, nil, fmt.Errorf("unable to access image stream tag on remote cluster: %v", err)
+						}
+						additional = append(additional, steps.InputImageTagStep(config, srcClient, imageClient, jobSpec, dryLogger))
+					}
+				}
 			} else if test := testStep.OpenshiftInstallerClusterTestConfiguration; test != nil {
 				if testStep.OpenshiftInstallerClusterTestConfiguration.Upgrade {
 					var err error
@@ -197,6 +211,7 @@ func FromConfig(
 			imageStepLinks = append(imageStepLinks, stepLinks...)
 		}
 		buildSteps = append(buildSteps, step)
+		buildSteps = append(buildSteps, additional...)
 	}
 
 	for _, template := range templates {

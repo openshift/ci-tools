@@ -774,11 +774,25 @@ step:
 A step may be referred to in chains, workflows, and <code>ci-operator</code> configs.
 </p>
 
-<h4 id="step-from"><a href="#step-from"><code>from</code></a></h4>
+<h4 id="step-image"><a href="#step-image">Configuring the Container Image For a Step</a></h4>
 
 <p>
-The image must be present in the <code>ci-operator</code> configuration file,
-either:
+The container image used to run a test step can be configured in one of two
+ways: by referencing an image tag otherwise present in the configuration or
+by explicitly referencing an image tag present on the build farm.
+</p>
+
+<h5 id="step-from"><a href="#step-from">Referencing Another Configured Image</a></h5>
+
+<p>
+A step may execute in a container image already present in the <code>ci-operator</code>
+configuration file by identifying the tag with the <code>from</code> configuration
+field. Steps should use this mechanism to determine the container image they run in
+when that image will vary with the code under test. For example, the container image
+could have contents from the code under test (like <code>src</code>); similarly, the
+image may need to contain a component matching the version of OpenShift used in the
+test (like <code>installer</code>). When using this configuration option, ensure that
+the tag is already present in one of the following places:
 </p>
 
 <ul>
@@ -808,6 +822,21 @@ either:
 Note that static validation for this field is limited because the set of images
 originating from the release <code>ImageStream</code> is only known at runtime.
 </p>
+
+<h5 id="step-from-image"><a href="#step-from-image">Referencing a Literal Image</a></h5>
+
+<p>
+A step may also be configured to use an available <code>ImageStreamTag</code> on
+the build farm where the test is executed by specifying the details for the tag with
+the <code>from_image</code> configuration field. A step should use this option when
+the version of the container image to be used does not vary with the code under test
+or the version of OpenShift being tested. Using the <code>from_image</code> field is
+synonymous with importing the image as a <code>base_image</code> and referencing the
+tag with the <code>from</code> field, but allows the step definition to be entirely
+self-contained. The following example of a step configuration uses this option:
+</p>
+
+{{ yamlSyntax (index . "refFromImageExample") }}
 
 <h4 id="step-commands"><a href="#step-commands"><code>commands</code></a></h4>
 
@@ -1053,6 +1082,19 @@ const refExample = `ref:
   as: ipi-conf                   # name of the step
   from: base                     # image to run the commands in
   commands: ipi-conf-commands.sh # script file containing the command(s) to be run
+  resources:
+    requests:
+      cpu: 1000m
+      memory: 100Mi
+  documentation: |-
+	The IPI configure step generates the install-config.yaml file based on the cluster profile and optional input files.`
+const refFromImageExample = `ref:
+  as: ipi-conf
+  from_image: # literal image tag to run the commands in
+    namespace: my-namespace
+    name: test-image
+    tag: latest
+  commands: ipi-conf-commands.sh
   resources:
     requests:
       cpu: 1000m
@@ -1650,6 +1692,7 @@ func helpHandler(subPath string, w http.ResponseWriter, req *http.Request) {
 	case "":
 		helpTemplate, err = helpFuncs.Parse(gettingStartedPage)
 		data["refExample"] = refExample
+		data["refFromImageExample"] = refFromImageExample
 		data["credentialExample"] = credentialExample
 		data["chainExample"] = chainExample
 		data["workflowExample"] = workflowExample

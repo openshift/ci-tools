@@ -2,7 +2,6 @@ package helper
 
 import (
 	"fmt"
-
 	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -23,12 +22,21 @@ func GetAllTestInputImageStreamTags(config load.ByOrgRepo) map[string]types.Name
 					insert(*cfg.BuildRootImage.ImageStreamTagReference, result)
 				}
 
+				for _, testStep := range cfg.Tests {
+					if testStep.MultiStageTestConfiguration != nil {
+						insertTagReferencesFromSteps(testStep.MultiStageTestConfiguration, result)
+					}
+				}
+
 				for _, rawStep := range cfg.RawSteps {
 					if rawStep.InputImageTagStepConfiguration != nil {
 						insert(rawStep.InputImageTagStepConfiguration.BaseImage, result)
 					}
 					if rawStep.SourceStepConfiguration != nil {
 						insert(rawStep.SourceStepConfiguration.ClonerefsImage, result)
+					}
+					if rawStep.TestStepConfiguration != nil && rawStep.TestStepConfiguration.MultiStageTestConfiguration != nil {
+						insertTagReferencesFromSteps(rawStep.TestStepConfiguration.MultiStageTestConfiguration, result)
 					}
 				}
 			}
@@ -46,6 +54,14 @@ func imageStreamTagReferenceMapIntoMap(i map[string]api.ImageStreamTagReference,
 
 func imageStreamTagReferenceToString(istr api.ImageStreamTagReference) string {
 	return fmt.Sprintf("%s/%s:%s", istr.Namespace, istr.Name, istr.Tag)
+}
+
+func insertTagReferencesFromSteps(config *api.MultiStageTestConfiguration, m map[string]types.NamespacedName) {
+	for _, subStep := range append(append(config.Pre, config.Test...), config.Post...) {
+		if subStep.LiteralTestStep != nil && subStep.LiteralTestStep.FromImage != nil {
+			insert(*subStep.LiteralTestStep.FromImage, m)
+		}
+	}
 }
 
 func insert(item api.ImageStreamTagReference, m map[string]types.NamespacedName) {

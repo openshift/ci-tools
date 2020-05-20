@@ -438,6 +438,8 @@ type LiteralTestStep struct {
 	As string `json:"as,omitempty"`
 	// From is the container image that will be used for this step.
 	From string `json:"from,omitempty"`
+	// FromImage is a literal ImageStreamTag reference to use for this step.
+	FromImage *ImageStreamTagReference `json:"from_image,omitempty"`
 	// Commands is the command(s) that will be run inside the image.
 	Commands string `json:"commands,omitempty"`
 	// ArtifactDir is the directory from which artifacts will be extracted
@@ -457,6 +459,15 @@ type CredentialReference struct {
 	Name string `json:"name"`
 	// MountPath is where the secret should be mounted.
 	MountPath string `json:"mount_path"`
+}
+
+// FromImageTag returns the internal name for the image tag that will be used
+// for this step, if one is configured.
+func (s *LiteralTestStep) FromImageTag() (PipelineImageStreamTagReference, bool) {
+	if s.FromImage == nil {
+		return "", false
+	}
+	return PipelineImageStreamTagReference(fmt.Sprintf("%s-%s-%s", s.FromImage.Namespace, s.FromImage.Name, s.FromImage.Tag)), true
 }
 
 // TestStep is the struct that a user's configuration gets unmarshalled into.

@@ -11,9 +11,9 @@ import (
 	"path/filepath"
 	"syscall"
 
-	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
-	"k8s.io/client-go/rest"
+
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/util"
@@ -89,7 +89,7 @@ func (o *options) run() error {
 }
 
 func loadClient(namespace string) (coreclientset.SecretInterface, error) {
-	config, err := rest.InClusterConfig()
+	config, err := util.LoadClusterConfig()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load cluster config: %v", err)
 	}

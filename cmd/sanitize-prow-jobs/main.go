@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -8,10 +9,10 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"sync"
 
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/semaphore"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	prowconfig "k8s.io/test-infra/prow/config"
 	"sigs.k8s.io/yaml"
@@ -20,6 +21,8 @@ import (
 type options struct {
 	prowJobConfigDir string
 	configPath       string
+
+	workers int64
 
 	help bool
 }
@@ -70,7 +73,8 @@ func bindOptions(flag *flag.FlagSet) *options {
 
 	flag.StringVar(&opt.prowJobConfigDir, "prow-jobs-dir", "", "Path to a root of directory structure with Prow job config files (ci-operator/jobs in openshift/release)")
 	flag.StringVar(&opt.configPath, "config-path", "", "Path to the config file (core-services/sanitize-prow-jobs/_config.yaml in openshift/release)")
-	flag.BoolVar(&opt.help, "h", false, "Show help for ci-operator-prowgen")
+	flag.Int64Var(&opt.workers, "workers", 50, "Number of parallel workers to use.")
+	flag.BoolVar(&opt.help, "h", false, "Show help for sanitize-prow-jobs")
 
 	return opt
 }
@@ -107,7 +111,7 @@ func loadConfig(configPath string) (*Config, error) {
 	return config, nil
 }
 
-func determinizeJobs(prowJobConfigDir string, config *Config) error {
+func determinizeJobs(prowJobConfigDir string, config *Config, workers int64) error {
 	errChan := make(chan error)
 	var errs []error
 
@@ -119,7 +123,7 @@ func determinizeJobs(prowJobConfigDir string, config *Config) error {
 		close(errReadingDone)
 	}()
 
-	wg := sync.WaitGroup{}
+	s := semaphore.NewWeighted(workers)
 	if err := filepath.Walk(prowJobConfigDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			errChan <- fmt.Errorf("Failed to walk file/directory '%s'", path)
@@ -130,9 +134,11 @@ func determinizeJobs(prowJobConfigDir string, config *Config) error {
 			return nil
 		}
 
-		wg.Add(1)
+		if err := s.Acquire(context.TODO(), 1); err != nil {
+			return err
+		}
 		go func(path string) {
-			defer wg.Done()
+			defer s.Release(1)
 
 			data, err := ioutil.ReadFile(path)
 			if err != nil {
@@ -165,7 +171,9 @@ func determinizeJobs(prowJobConfigDir string, config *Config) error {
 		return fmt.Errorf("failed to determinize all Prow jobs: %v", err)
 	}
 
-	wg.Wait()
+	if err := s.Acquire(context.TODO(), workers); err != nil {
+		return err
+	}
 	close(errChan)
 	<-errReadingDone
 
@@ -209,7 +217,7 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatalf("Failed to load config from %q", opt.configPath)
 	}
-	if err := determinizeJobs(opt.prowJobConfigDir, config); err != nil {
+	if err := determinizeJobs(opt.prowJobConfigDir, config, opt.workers); err != nil {
 		logrus.WithError(err).Fatal("Failed to determinize")
 	}
 }

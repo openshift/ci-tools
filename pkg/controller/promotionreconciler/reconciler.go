@@ -139,23 +139,18 @@ func (r *reconciler) Reconcile(req controllerruntime.Request) (controllerruntime
 	defer func() { log.WithField("duration", time.Since(startTime)).Trace("Finished reconciliation") }()
 
 	err := r.reconcile(req, log)
-	isNonRetriable := errors.Is(err, nonRetriableError{})
 	if err != nil {
-		log := log.WithError(err).WithField("not-retriable", isNonRetriable)
-		// Degrade non-retriable errors to debug, they most lilely just mean a given imageStreamTag wasn't built
+		log := log.WithError(err)
+		// Degrade terminal errors to debug, they most lilely just mean a given imageStreamTag wasn't built
 		// via ci operator.
-		if isNonRetriable {
+		if controllerutil.IsTerminal(err) {
 			log.Debug("Reconciliation failed")
 		} else {
 			log.Error("Reconciliation failed")
 		}
 	}
 
-	if !isNonRetriable {
-		// Swallow non-retriable errors to avoid putting the item back into the workqueue
-		err = nil
-	}
-	return controllerruntime.Result{}, err
+	return controllerruntime.Result{}, controllerutil.SwallowIfTerminal(err)
 }
 
 func (r *reconciler) reconcile(req controllerruntime.Request, log *logrus.Entry) error {
@@ -180,7 +175,7 @@ func (r *reconciler) reconcile(req controllerruntime.Request, log *logrus.Entry)
 
 	istRef, err := refForIST(ist)
 	if err != nil {
-		return nonRetriableError{fmt.Errorf("failed to get ref for imageStreamTag: %w", err)}
+		return controllerutil.TerminalError(fmt.Errorf("failed to get ref for imageStreamTag: %w", err))
 	}
 	log = log.WithField("org", istRef.org).WithField("repo", istRef.repo).WithField("branch", istRef.branch)
 	if r.ignoredGitHubOrganizations.Has(istRef.org) {
@@ -239,18 +234,18 @@ func refForIST(ist *imagev1.ImageStreamTag) (*branchReference, error) {
 	commit := metadata.Config.Labels["io.openshift.build.commit.id"]
 	sourceLocation := metadata.Config.Labels["io.openshift.build.source-location"]
 	if branch == "" {
-		return nil, nonRetriableError{errors.New("imageStreamTag has no `io.openshift.build.commit.ref` label, can't find out source branch")}
+		return nil, controllerutil.TerminalError(errors.New("imageStreamTag has no `io.openshift.build.commit.ref` label, can't find out source branch"))
 	}
 	if commit == "" {
-		return nil, nonRetriableError{errors.New("ImageStreamTag has no `io.openshift.build.commit.id` label, can't find out source commit")}
+		return nil, controllerutil.TerminalError(errors.New("ImageStreamTag has no `io.openshift.build.commit.id` label, can't find out source commit"))
 	}
 	if sourceLocation == "" {
-		return nil, nonRetriableError{errors.New("imageStreamTag has no `io.openshift.build.source-location` label, can't find out source repo")}
+		return nil, controllerutil.TerminalError(errors.New("imageStreamTag has no `io.openshift.build.source-location` label, can't find out source repo"))
 	}
 	sourceLocation = strings.TrimPrefix(sourceLocation, "https://github.com/")
 	splitSourceLocation := strings.Split(sourceLocation, "/")
 	if n := len(splitSourceLocation); n != 2 {
-		return nil, nonRetriableError{fmt.Errorf("sourceLocation %q split by `/` does not return 2 but %d results, can not find out org/repo", sourceLocation, n)}
+		return nil, controllerutil.TerminalError(fmt.Errorf("sourceLocation %q split by `/` does not return 2 but %d results, can not find out org/repo", sourceLocation, n))
 	}
 
 	return &branchReference{
@@ -269,25 +264,6 @@ func (r *reconciler) currentHEADForBranch(br *branchReference, log *logrus.Entry
 		return "", fmt.Errorf("failed to get ref: %w", err)
 	}
 	return ref, nil
-}
-
-// nonRetriableError indicates that we encountered an error
-// that we know wont resolve itself via retrying. We use it
-// to still bubble the message up but swallow it after we
-// logged it so we don't waste cycles on useless work.
-type nonRetriableError struct {
-	err error
-}
-
-// errors.Is compares via == which means if our .err holds something,
-// we never match.
-func (nonRetriableError) Is(target error) bool {
-	_, ok := target.(nonRetriableError)
-	return ok
-}
-
-func (nre nonRetriableError) Error() string {
-	return nre.err.Error()
 }
 
 const configIndexName = "release-build-config-by-image-stream-tag"

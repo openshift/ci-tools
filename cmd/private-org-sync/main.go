@@ -289,19 +289,10 @@ func (g gitSyncer) mirror(repoDir string, src, dst location) error {
 		logger.WithError(err).Error("Failed to query local git repository for remotes")
 		return fmt.Errorf("failed to query local git repository for remotes")
 	}
+
 	if exitCode != 0 {
-		remoteSetupLogger := logger.WithField("remote-name", srcRemote)
-		remoteSetupLogger.Debug("Remote does not exist, setting up")
-		srcUrl, err := url.Parse(fmt.Sprintf("https://github.com/%s/%s", src.org, src.repo))
-		if err != nil {
-			remoteSetupLogger.WithError(err).Error("Failed to construct URL for the source remote")
-			return fmt.Errorf("failed to construct URL for the source remote")
-		}
-		remoteSetupLogger = remoteSetupLogger.WithField("remote-url", srcUrl.String())
-		remoteSetupLogger.Debug("Adding remote")
-		if _, exitCode, err := g.git(logger, repoDir, "remote", "add", srcRemote, srcUrl.String()); err != nil || exitCode != 0 {
-			remoteSetupLogger.WithField("exit-code", exitCode).WithError(err).Error("Failed to set up source remote")
-			return fmt.Errorf("failed to set up source remote")
+		if err := addGitRemote(logger, g.git, src.org, src.repo, repoDir, srcRemote); err != nil {
+			return err
 		}
 	}
 
@@ -393,6 +384,27 @@ func (g gitSyncer) mirror(repoDir string, src, dst location) error {
 		if fetch != nil {
 			logger.Info("failed to push to destination, retrying with deeper fetch")
 		}
+	}
+
+	return nil
+}
+
+func addGitRemote(logger *logrus.Entry, git gitFunc, org, repo, repoDir, remoteName string) error {
+	remoteSetupLogger := logger.WithField("remote-name", remoteName)
+	remoteSetupLogger.Debug("Remote does not exist, setting up")
+
+	srcUrl, err := url.Parse(fmt.Sprintf("https://github.com/%s/%s", org, repo))
+	if err != nil {
+		remoteSetupLogger.WithError(err).Error("Failed to construct URL for the source remote")
+		return fmt.Errorf("failed to construct URL for the source remote")
+	}
+
+	remoteSetupLogger = remoteSetupLogger.WithField("remote-url", srcUrl.String())
+	remoteSetupLogger.Debug("Adding remote")
+
+	if _, exitCode, err := git(logger, repoDir, "remote", "add", remoteName, srcUrl.String()); err != nil || exitCode != 0 {
+		remoteSetupLogger.WithField("exit-code", exitCode).WithError(err).Error("Failed to set up source remote")
+		return fmt.Errorf("failed to set up source remote")
 	}
 
 	return nil

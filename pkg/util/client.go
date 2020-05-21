@@ -2,6 +2,7 @@ package util
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/sirupsen/logrus"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -10,21 +11,21 @@ import (
 )
 
 func LoadClusterConfig() (*rest.Config, error) {
-	clusterConfig, err := rest.InClusterConfig()
-	if err == nil {
+	if env := os.Getenv(clientcmd.RecommendedConfigPathEnvVar); env != "" {
+		credentials, err := clientcmd.NewDefaultClientConfigLoadingRules().Load()
+		if err != nil {
+			return nil, fmt.Errorf("could not load credentials from config: %v", err)
+		}
+
+		clusterConfig, err := clientcmd.NewDefaultClientConfig(*credentials, &clientcmd.ConfigOverrides{}).ClientConfig()
+		if err != nil {
+			return nil, fmt.Errorf("could not load client configuration: %v", err)
+		}
 		return clusterConfig, nil
 	}
 
-	credentials, err := clientcmd.NewDefaultClientConfigLoadingRules().Load()
-	if err != nil {
-		return nil, fmt.Errorf("could not load credentials from config: %v", err)
-	}
-
-	clusterConfig, err = clientcmd.NewDefaultClientConfig(*credentials, &clientcmd.ConfigOverrides{}).ClientConfig()
-	if err != nil {
-		return nil, fmt.Errorf("could not load client configuration: %v", err)
-	}
-	return clusterConfig, nil
+	// otherwise, prefer in-cluster config
+	return rest.InClusterConfig()
 }
 
 func LoadKubeConfigs(kubeconfig string) (map[string]*rest.Config, string, error) {

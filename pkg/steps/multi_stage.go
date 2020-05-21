@@ -276,9 +276,16 @@ func (s *multiStageTestStep) createCredentials() error {
 			if err != nil {
 				return fmt.Errorf("could not read source credential: %v", err)
 			}
-			raw.Namespace = s.jobSpec.Namespace
-			raw.Name = name
-			toCreate[name] = raw
+			toCreate[name] = &coreapi.Secret{
+				TypeMeta: raw.TypeMeta,
+				ObjectMeta: meta.ObjectMeta{
+					Name:      name,
+					Namespace: s.jobSpec.Namespace,
+				},
+				Type:       raw.Type,
+				Data:       raw.Data,
+				StringData: raw.StringData,
+			}
 		}
 	}
 

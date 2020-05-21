@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# This script runs all of the integration test suites.
+# This script runs all of the e2e test suites.
 source "$(dirname "${BASH_SOURCE}")/lib/init.sh"
 os::util::environment::setup_time_vars
 
@@ -15,14 +15,14 @@ trap "cleanup" EXIT
 
 os::cleanup::tmpdir
 
-for test in $(find "${OS_ROOT}/test/integration" -name '*.sh'); do
+for test in $(find "${OS_ROOT}/test/e2e" -name '*.sh'); do
   if ! ${test}; then
     failed="true"
-    os::log::error "integration suite ${test} failed"
+    os::log::error "e2e suite ${test} failed"
   fi
 done
 
 if [[ -n "${failed:-}" ]]; then
-    os::log::fatal "integration suites failed"
+    os::log::fatal "e2e suites failed"
 fi
-os::log::info "integration suites successful"
+os::log::info "e2e suites successful"

@@ -1,7 +1,6 @@
 package promotionreconciler
 
 import (
-	"errors"
 	"io/ioutil"
 	"testing"
 
@@ -67,12 +66,5 @@ func TestRefForIST(t *testing.T) {
 				t.Errorf("expected commit to be %s , was %q", tc.expectedCommit, ref.commit)
 			}
 		})
-	}
-}
-
-func TestNonRetriableErrorMatchesItself(t *testing.T) {
-	nre := nonRetriableError{err: errors.New("somne erro")}
-	if match := errors.Is(nre, nonRetriableError{}); !match {
-		t.Error("non retriable error doesn't match itself via errors.Is")
 	}
 }

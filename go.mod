@@ -19,7 +19,7 @@ require (
 	github.com/docker/spdystream v0.0.0-20181023171402-6480d4af844c // indirect
 	github.com/elazarl/goproxy v0.0.0-20190711103511-473e67f1d7d2 // indirect
 	github.com/elazarl/goproxy/ext v0.0.0-20190711103511-473e67f1d7d2 // indirect
-	github.com/fsnotify/fsnotify v1.4.9
+	github.com/fsnotify/fsnotify v1.4.9 // indirect
 	github.com/getlantern/deepcopy v0.0.0-20160317154340-7f45deb8130a
 	github.com/ghodss/yaml v1.0.0
 	github.com/golang/protobuf v1.3.5 // indirect
@@ -38,10 +38,11 @@ require (
 	github.com/spf13/afero v1.2.2
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
+	gopkg.in/fsnotify.v1 v1.4.7
 	k8s.io/api v0.18.0
 	k8s.io/apimachinery v0.18.0
 	k8s.io/client-go v9.0.0+incompatible
-	k8s.io/test-infra v0.0.0-20200515104936-59705fc01a8d
+	k8s.io/test-infra v0.0.0-20200518220536-8da074ad41b6
 	k8s.io/utils v0.0.0-20200324210504-a9aa75ae1b89
 	sigs.k8s.io/controller-runtime v0.5.1
 	sigs.k8s.io/yaml v1.2.0

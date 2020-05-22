@@ -919,3 +919,428 @@ func TestValidateCredentials(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateReleases(t *testing.T) {
+	var testCases = []struct {
+		name       string
+		input      map[string]UnresolvedRelease
+		hasTagSpec bool
+		output     []error
+	}{
+		{
+			name:  "no releases",
+			input: map[string]UnresolvedRelease{},
+		},
+		{
+			name: "valid releases",
+			input: map[string]UnresolvedRelease{
+				"first": {
+					Candidate: &Candidate{
+						Product:      ReleaseProductOKD,
+						Architecture: ReleaseArchitectureAMD64,
+						Stream:       ReleaseStreamOKD,
+						Version:      "4.4",
+					},
+				},
+				"second": {
+					Release: &Release{
+						Architecture: ReleaseArchitectureAMD64,
+						Channel:      ReleaseChannelCandidate,
+						Version:      "4.4",
+					},
+				},
+				"third": {
+					Prerelease: &Prerelease{
+						Product:      ReleaseProductOCP,
+						Architecture: ReleaseArchitectureS390x,
+						VersionBounds: VersionBounds{
+							Lower: "4.1.0",
+							Upper: "4.2.0",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "invalid use of latest release with tag spec",
+			input: map[string]UnresolvedRelease{
+				"latest": {
+					Candidate: &Candidate{
+						Product:      ReleaseProductOKD,
+						Architecture: ReleaseArchitectureAMD64,
+						Stream:       ReleaseStreamOKD,
+						Version:      "4.4",
+					},
+				},
+			},
+			hasTagSpec: true,
+			output: []error{
+				errors.New("root.latest: cannot request resolving a latest release and set tag_specification"),
+			},
+		},
+		{
+			name: "invalid release with no options set",
+			input: map[string]UnresolvedRelease{
+				"latest": {},
+			},
+			output: []error{
+				errors.New("root.latest: must set candidate, prerelease or release"),
+			},
+		},
+		{
+			name: "invalid release with two options set",
+			input: map[string]UnresolvedRelease{
+				"latest": {
+					Candidate: &Candidate{},
+					Release:   &Release{},
+				},
+			},
+			output: []error{
+				errors.New("root.latest: cannot set more than one of candidate, prerelease and release"),
+			},
+		},
+		{
+			name: "invalid release with all options set",
+			input: map[string]UnresolvedRelease{
+				"latest": {
+					Candidate:  &Candidate{},
+					Release:    &Release{},
+					Prerelease: &Prerelease{},
+				},
+			},
+			output: []error{
+				errors.New("root.latest: cannot set more than one of candidate, prerelease and release"),
+			},
+		},
+		{
+			name: "invalid releases",
+			input: map[string]UnresolvedRelease{
+				"first": {
+					Candidate: &Candidate{
+						Product:      "bad",
+						Architecture: ReleaseArchitectureAMD64,
+						Stream:       ReleaseStreamOKD,
+						Version:      "4.4",
+					},
+				},
+				"second": {
+					Release: &Release{
+						Architecture: ReleaseArchitectureAMD64,
+						Channel:      "ew",
+						Version:      "4.4",
+					},
+				},
+				"third": {
+					Prerelease: &Prerelease{
+						Product:      ReleaseProductOCP,
+						Architecture: ReleaseArchitectureS390x,
+						VersionBounds: VersionBounds{
+							Lower: "4.1.0",
+						},
+					},
+				},
+			},
+			hasTagSpec: true,
+			output: []error{
+				errors.New("root.first.product: must be one of ocp, okd"),
+				errors.New("root.second.channel: must be one of candidate, fast, stable"),
+				errors.New("root.third.version_bounds.upper: must be set"),
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if actual, expected := validateReleases("root", testCase.input, testCase.hasTagSpec), testCase.output; !reflect.DeepEqual(actual, expected) {
+				t.Errorf("%s: got incorrect errors: %s", testCase.name, cmp.Diff(actual, expected, cmp.Comparer(func(x, y error) bool {
+					return x.Error() == y.Error()
+				})))
+			}
+		})
+	}
+}
+
+func TestValidateCandidate(t *testing.T) {
+	var testCases = []struct {
+		name   string
+		input  Candidate
+		output []error
+	}{
+		{
+			name: "valid candidate",
+			input: Candidate{
+				Product:      ReleaseProductOKD,
+				Architecture: ReleaseArchitectureAMD64,
+				Stream:       ReleaseStreamOKD,
+				Version:      "4.4",
+				Relative:     10,
+			},
+		},
+		{
+			name: "valid candidate for ocp",
+			input: Candidate{
+				Product:      ReleaseProductOCP,
+				Architecture: ReleaseArchitectureS390x,
+				Stream:       ReleaseStreamNightly,
+				Version:      "4.5",
+			},
+		},
+		{
+			name: "valid candidate with defaulted arch",
+			input: Candidate{
+				Product: ReleaseProductOKD,
+				Stream:  ReleaseStreamOKD,
+				Version: "4.4",
+			},
+		},
+		{
+			name: "valid candidate with defaulted arch and okd stream",
+			input: Candidate{
+				Product: ReleaseProductOKD,
+				Version: "4.4",
+			},
+		},
+		{
+			name: "invalid candidate from arch",
+			input: Candidate{
+				Product:      ReleaseProductOKD,
+				Architecture: "oops",
+				Stream:       ReleaseStreamOKD,
+				Version:      "4.4",
+			},
+			output: []error{
+				errors.New("root.architecture: must be one of amd64, ppc64le, s390x"),
+			},
+		},
+		{
+			name: "invalid candidate from product",
+			input: Candidate{
+				Product:      "whoa",
+				Architecture: ReleaseArchitectureAMD64,
+				Stream:       ReleaseStreamOKD,
+				Version:      "4.4",
+			},
+			output: []error{
+				errors.New("root.product: must be one of ocp, okd"),
+			},
+		},
+		{
+			name: "invalid candidate from stream",
+			input: Candidate{
+				Product:      ReleaseProductOKD,
+				Architecture: ReleaseArchitectureAMD64,
+				Stream:       ReleaseStreamCI,
+				Version:      "4.4",
+			},
+			output: []error{
+				errors.New("root.stream: must be one of , okd"),
+			},
+		},
+		{
+			name: "invalid candidate from version",
+			input: Candidate{
+				Product:      ReleaseProductOKD,
+				Architecture: ReleaseArchitectureAMD64,
+				Stream:       ReleaseStreamOKD,
+				Version:      "4",
+			},
+			output: []error{
+				errors.New(`root.version: must be a minor version in the form [0-9]\.[0-9]+`),
+			},
+		},
+		{
+			name: "invalid candidate from ocp stream",
+			input: Candidate{
+				Product:      ReleaseProductOCP,
+				Architecture: ReleaseArchitectureAMD64,
+				Stream:       ReleaseStreamOKD,
+				Version:      "4.4",
+			},
+			output: []error{
+				errors.New("root.stream: must be one of ci, nightly"),
+			},
+		},
+		{
+			name: "invalid relative",
+			input: Candidate{
+				Product:      ReleaseProductOCP,
+				Architecture: ReleaseArchitectureAMD64,
+				Stream:       ReleaseStreamCI,
+				Version:      "4.4",
+				Relative:     -1,
+			},
+			output: []error{
+				errors.New("root.relative: must be a positive integer"),
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if actual, expected := validateCandidate("root", testCase.input), testCase.output; !reflect.DeepEqual(actual, expected) {
+				t.Errorf("%s: got incorrect errors: %s", testCase.name, cmp.Diff(actual, expected, cmp.Comparer(func(x, y error) bool {
+					return x.Error() == y.Error()
+				})))
+			}
+		})
+	}
+}
+
+func TestValidateRelease(t *testing.T) {
+	var testCases = []struct {
+		name   string
+		input  Release
+		output []error
+	}{
+		{
+			name: "valid release",
+			input: Release{
+				Architecture: ReleaseArchitectureAMD64,
+				Channel:      ReleaseChannelCandidate,
+				Version:      "4.4",
+			},
+		},
+		{
+			name: "valid release with defaulted arch",
+			input: Release{
+				Version: "4.4",
+				Channel: ReleaseChannelCandidate,
+			},
+		},
+		{
+			name: "invalid release from arch",
+			input: Release{
+				Architecture: "oops",
+				Channel:      ReleaseChannelFast,
+				Version:      "4.4",
+			},
+			output: []error{
+				errors.New("root.architecture: must be one of amd64, ppc64le, s390x"),
+			},
+		},
+		{
+			name: "invalid release from channel",
+			input: Release{
+				Architecture: ReleaseArchitectureAMD64,
+				Channel:      "oops",
+				Version:      "4.4",
+			},
+			output: []error{
+				errors.New("root.channel: must be one of candidate, fast, stable"),
+			},
+		},
+
+		{
+			name: "invalid release from version",
+			input: Release{
+				Architecture: ReleaseArchitectureAMD64,
+				Channel:      ReleaseChannelStable,
+				Version:      "4",
+			},
+			output: []error{
+				errors.New(`root.version: must be a minor version in the form [0-9]\.[0-9]+`),
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if actual, expected := validateRelease("root", testCase.input), testCase.output; !reflect.DeepEqual(actual, expected) {
+				t.Errorf("%s: got incorrect errors: %s", testCase.name, cmp.Diff(actual, expected, cmp.Comparer(func(x, y error) bool {
+					return x.Error() == y.Error()
+				})))
+			}
+		})
+	}
+}
+
+func TestValidatePrerelease(t *testing.T) {
+	var testCases = []struct {
+		name   string
+		input  Prerelease
+		output []error
+	}{
+		{
+			name: "valid prerelease",
+			input: Prerelease{
+				Product:      ReleaseProductOKD,
+				Architecture: ReleaseArchitectureAMD64,
+				VersionBounds: VersionBounds{
+					Lower: "4.1.0",
+					Upper: "4.2.0",
+				},
+			},
+		},
+		{
+			name: "valid prerelease for ocp",
+			input: Prerelease{
+				Product:      ReleaseProductOCP,
+				Architecture: ReleaseArchitectureS390x,
+				VersionBounds: VersionBounds{
+					Lower: "4.1.0",
+					Upper: "4.2.0",
+				},
+			},
+		},
+		{
+			name: "valid prerelease with defaulted arch",
+			input: Prerelease{
+				Product: ReleaseProductOKD,
+				VersionBounds: VersionBounds{
+					Lower: "4.1.0",
+					Upper: "4.2.0",
+				},
+			},
+		},
+		{
+			name: "invalid prerelease from arch",
+			input: Prerelease{
+				Product:      ReleaseProductOKD,
+				Architecture: "oops",
+				VersionBounds: VersionBounds{
+					Lower: "4.1.0",
+					Upper: "4.2.0",
+				},
+			},
+			output: []error{
+				errors.New("root.architecture: must be one of amd64, ppc64le, s390x"),
+			},
+		},
+		{
+			name: "invalid prerelease from product",
+			input: Prerelease{
+				Product:      "whoa",
+				Architecture: ReleaseArchitectureAMD64,
+				VersionBounds: VersionBounds{
+					Lower: "4.1.0",
+					Upper: "4.2.0",
+				},
+			},
+			output: []error{
+				errors.New("root.product: must be one of ocp, okd"),
+			},
+		},
+		{
+			name: "invalid prerelease from missing version bounds",
+			input: Prerelease{
+				Product:       ReleaseProductOCP,
+				Architecture:  ReleaseArchitectureAMD64,
+				VersionBounds: VersionBounds{},
+			},
+			output: []error{
+				errors.New("root.version_bounds.lower: must be set"),
+				errors.New("root.version_bounds.upper: must be set"),
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if actual, expected := validatePrerelease("root", testCase.input), testCase.output; !reflect.DeepEqual(actual, expected) {
+				t.Errorf("%s: got incorrect errors: %s", testCase.name, cmp.Diff(actual, expected, cmp.Comparer(func(x, y error) bool {
+					return x.Error() == y.Error()
+				})))
+			}
+		})
+	}
+}

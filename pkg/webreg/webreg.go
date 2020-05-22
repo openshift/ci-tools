@@ -552,11 +552,23 @@ publishes the following images:
 
 <p>
 <code>ci-operator</code> gives first-class support to repositories which need to
-run end-to-end tests in the context of an OpenShift cluster. With the <code>tag_specification</code>
-configuration option, a repository declares which version of OpenShift it is a
-part of by specifying the images that will be used to create an ephemeral OpenShift
-release payload for testing. Most commonly, the same integration <code>ImageStream</code>
-is specified for <code>tag_specification</code> as is for <code>promotion</code>.
+run end-to-end tests in the context of an OpenShift cluster. <code>ci-operator</code>
+supports two mechanisms for testing in the context of an OpenShift release. First, it
+is possible to use the container images built as part of the test to build an ephemeral
+release payload, allowing repositories that build parts of OpenShift to test versions
+that include components under test. Second, it is possible to reference existing release
+payloads that have already been created, in order to validate those releases or for
+repositories to test their functionality against published versions of OpenShift.
+</p>
+
+<h5 id="ephemeral-release"><a href="#ephemeral-release">Testing With an Ephemeral OpenShift Release</a></h5>
+
+<p>
+The <code>tag_specification</code> configuration option enables a repository to declare
+which version of OpenShift it is a part of by specifying the images that will be used to
+create an ephemeral OpenShift release payload for testing. Most commonly, the same integration
+<code>ImageStream</code> is specified for <code>tag_specification</code> as is for
+<code>promotion</code>.
 </p>
 
 <code>ci-operator</code> configuration:
@@ -571,6 +583,36 @@ ephemeral release payload is built from the resulting <code>ImageStream</code>,
 containing the latest published versions of all components and the proposed version
 of the component under test.
 </p>
+
+<h5 id="existing-release"><a href="#existing-release">Testing With an Existing OpenShift Release</a></h5>
+
+<p>
+The <code>releases</code> configuration option allows specification of an existing
+version of OpenShift that a component will be tested on. Three types of releases
+may be referenced: candidate release payloads from a release controller, pre-release
+payloads that have yet to be published to Cincinnati, and official releases as
+customers would see them.
+</p>
+
+<p>
+Releases may be named, with two names holding special meaning. In ordinary end-to-end
+tests, the <code>latest</code> release describes the version that will be installed
+before tests are run. For upgrade end-to-end tests, the <code>initial</code> release
+describes the version of OpenShift which is initially installed, after which an upgrade
+is executed to the <code>latest</code> release, after which tests are run. The full pull
+specification for a release payload is provided to test steps with the <code>${RELEASE_IMAGE_&lt;name&gt;}</code>
+environment variable. The following example exposes a the following release payload to tests:
+</p>
+
+<ul>
+  <li>the <code>release:initial</code> tag, holding a release candidate for OKD 4.3, exposed as <code>${RELEASE_IMAGE_INITIAL}</code></li>
+  <li>the <code>release:latest</code> tag, holding an officially-released payload for OCP 4.4, exposed as <code>${RELEASE_IMAGE_LATEST}</code></li>
+  <li>the <code>release:previous</code> tag, holding a previous release candidate for OCP 4.5, exposed as <code>${RELEASE_IMAGE_PREVIOUS}</code></li>
+  <li>the <code>release:custom</code> tag, holding the latest pre-release payload for OCP 4.4, exposed as <code>${RELEASE_IMAGE_CUSTOM}</code></li>
+</ul>
+
+<code>ci-operator</code> configuration:
+{{ yamlSyntax (index . "ciOperatorReleaseConfig") }}
 
 <h4 id="tests"><a href="#tests">Declaring Tests</a></h4>
 
@@ -705,6 +747,30 @@ const ciOperatorTagSpecificationConfig = `tag_specification:
   cluster: "https://api.ci.openshift.org"
   namespace: "ocp"
   name: "4.5"
+`
+
+const ciOperatorReleaseConfig = `releases:
+  initial:           # describes the 'initial' release
+    candidate:       # references a candidate release payload
+      product: okd
+      version: "4.3"
+  latest:
+    release   :       # references a version released to customers
+      channel: stable # configures the release channel to search
+      version: "4.4"
+  previous:
+    candidate:
+      product: ocp
+      architecture: amd64
+      stream: nightly     # specifies a candidate release stream
+      version: "4.5"
+      relative: 1         # resolves to the Nth latest payload in this stream
+  custom:
+    prerelease:       # references a version that may be published to customers, but is not yet
+      product: ocp
+      version_bounds: # bounds the version for the release chosen
+        lower: "4.4.0"
+        upper: "4.5.0-0"
 `
 
 const ciOperatorContainerTestConfig = `tests:
@@ -1674,6 +1740,7 @@ func helpHandler(subPath string, w http.ResponseWriter, req *http.Request) {
 		data["ciOperatorImageConfig"] = ciOperatorImageConfig
 		data["ciOperatorPromotionConfig"] = ciOperatorPromotionConfig
 		data["ciOperatorTagSpecificationConfig"] = ciOperatorTagSpecificationConfig
+		data["ciOperatorReleaseConfig"] = ciOperatorReleaseConfig
 		data["ciOperatorContainerTestConfig"] = ciOperatorContainerTestConfig
 		data["ciOperatorPeriodicTestConfig"] = ciOperatorPeriodicTestConfig
 	case "/leases":

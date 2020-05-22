@@ -59,6 +59,9 @@ import (
 	"github.com/openshift/ci-tools/pkg/junit"
 	"github.com/openshift/ci-tools/pkg/lease"
 	"github.com/openshift/ci-tools/pkg/load"
+	"github.com/openshift/ci-tools/pkg/release/candidate"
+	"github.com/openshift/ci-tools/pkg/release/official"
+	"github.com/openshift/ci-tools/pkg/release/prerelease"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/util"
@@ -409,6 +412,31 @@ func (o *options) Complete() error {
 		log.Printf("Resolved configuration:\n%s", string(config))
 		job, _ := json.Marshal(o.jobSpec)
 		log.Printf("Resolved job spec:\n%s", string(job))
+	}
+
+	// resolve releases we're asked to resolve and propagate their values
+	for name, release := range o.configSpec.Releases {
+		var value string
+		var err error
+		switch {
+		case release.Candidate != nil:
+			value, err = candidate.ResolvePullSpec(*release.Candidate)
+		case release.Release != nil:
+			value, err = official.ResolvePullSpec(*release.Release)
+		case release.Prerelease != nil:
+			value, err = prerelease.ResolvePullSpec(*release.Prerelease)
+		}
+		if err != nil {
+			return results.ForReason("resolving_release").ForError(fmt.Errorf("failed to resolve release %s: %v", name, err))
+		}
+		log.Printf("Resolved release %s to %s", name, value)
+		env := fmt.Sprintf("RELEASE_IMAGE_%s", strings.ToUpper(name))
+		if current := os.Getenv(env); current != "" {
+			return results.ForReason("exposing_release").ForError(fmt.Errorf("could not resolve release and set to %s, as that environment was already provided", env))
+		}
+		if err := os.Setenv(env, value); err != nil {
+			return results.ForReason("exposing_release").ForError(fmt.Errorf("failed to expose release %s as %s: %v", name, env, err))
+		}
 	}
 
 	var refs []prowapi.Refs

@@ -263,7 +263,7 @@ func TestMirror(t *testing.T) {
 			confirm:     true,
 			expectedGitCalls: []mockGitCall{
 				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo", output: "dest-sha refs/heads/branch"},
-				{call: "init --bare"},
+				{call: "init"},
 				{call: "remote get-url org-repo", exitCode: 1},
 				{call: "remote add org-repo https://github.com/org/repo"},
 				{call: "ls-remote --heads org-repo", output: "source-sha refs/heads/branch"},
@@ -277,7 +277,7 @@ func TestMirror(t *testing.T) {
 			dst:         location{org: destOrg, repo: repo, branch: branch},
 			expectedGitCalls: []mockGitCall{
 				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo", output: "dest-sha refs/heads/branch"},
-				{call: "init --bare"},
+				{call: "init"},
 				{call: "remote get-url org-repo", exitCode: 1},
 				{call: "remote add org-repo https://github.com/org/repo", exitCode: 1},
 			},
@@ -290,7 +290,7 @@ func TestMirror(t *testing.T) {
 			confirm:     true,
 			expectedGitCalls: []mockGitCall{
 				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo", output: "dest-sha refs/heads/branch"},
-				{call: "init --bare"},
+				{call: "init"},
 				{call: "remote get-url org-repo"},
 				{call: "ls-remote --heads org-repo", output: "source-sha refs/heads/branch"},
 				{call: "fetch --tags org-repo branch --depth=2"},
@@ -303,7 +303,7 @@ func TestMirror(t *testing.T) {
 			dst:         location{org: destOrg, repo: repo, branch: branch},
 			expectedGitCalls: []mockGitCall{
 				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo", output: "dest-sha refs/heads/branch"},
-				{call: "init --bare"},
+				{call: "init"},
 				{call: "remote get-url org-repo"},
 				{call: "ls-remote --heads org-repo", output: "source-sha refs/heads/branch"},
 				{call: "fetch --tags org-repo branch --depth=2"},
@@ -316,7 +316,7 @@ func TestMirror(t *testing.T) {
 			dst:         location{org: destOrg, repo: repo, branch: branch},
 			expectedGitCalls: []mockGitCall{
 				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo", output: "dest-sha refs/heads/branch"},
-				{call: "init --bare"},
+				{call: "init"},
 				{call: "remote get-url org-repo"},
 				{call: "ls-remote --heads org-repo", output: "source-sha refs/heads/branch\nanother-sha refs/heads/another-branch"},
 				{call: "fetch --tags org-repo branch --depth=2"},
@@ -329,7 +329,7 @@ func TestMirror(t *testing.T) {
 			dst:         location{org: destOrg, repo: repo, branch: branch},
 			expectedGitCalls: []mockGitCall{
 				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo", output: "dest-sha refs/heads/branch"},
-				{call: "init --bare"},
+				{call: "init"},
 				{call: "remote get-url org-repo"},
 				{call: "ls-remote --heads org-repo", output: "source-sha refs/heads/branch"},
 				{call: "fetch --tags org-repo branch --depth=2", exitCode: 1},
@@ -342,7 +342,7 @@ func TestMirror(t *testing.T) {
 			dst:         location{org: destOrg, repo: repo, branch: branch},
 			expectedGitCalls: []mockGitCall{
 				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo", output: "dest-sha refs/heads/branch"},
-				{call: "init --bare"},
+				{call: "init"},
 				{call: "remote get-url org-repo"},
 				{call: "ls-remote --heads org-repo", output: "source-sha refs/heads/branch"},
 				{call: "fetch --tags org-repo branch --depth=2"},
@@ -356,7 +356,7 @@ func TestMirror(t *testing.T) {
 			dst:         location{org: destOrg, repo: repo, branch: branch},
 			expectedGitCalls: []mockGitCall{
 				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo", output: "source-sha refs/heads/branch"},
-				{call: "init --bare"},
+				{call: "init"},
 				{call: "remote get-url org-repo"},
 				{call: "ls-remote --heads org-repo", output: "source-sha refs/heads/branch"},
 			},
@@ -367,7 +367,7 @@ func TestMirror(t *testing.T) {
 			dst:         location{org: destOrg, repo: repo, branch: branch},
 			expectedGitCalls: []mockGitCall{
 				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo", output: "source-sha refs/heads/branch"},
-				{call: "init --bare"},
+				{call: "init"},
 				{call: "remote get-url org-repo"},
 				{call: "ls-remote --heads org-repo", exitCode: 1},
 			},
@@ -379,7 +379,7 @@ func TestMirror(t *testing.T) {
 			dst:         location{org: destOrg, repo: repo, branch: branch},
 			expectedGitCalls: []mockGitCall{
 				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo", output: "source-sha refs/heads/branch"},
-				{call: "init --bare"},
+				{call: "init"},
 				{call: "remote get-url org-repo"},
 				{call: "ls-remote --heads org-repo", output: "some-sha refs/heads/not-the-branch"},
 			},
@@ -413,7 +413,7 @@ func TestMirror(t *testing.T) {
 			dst:         location{org: destOrg, repo: repo, branch: branch},
 			expectedGitCalls: []mockGitCall{
 				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo"},
-				{call: "init --bare"},
+				{call: "init"},
 				{call: "remote get-url org-repo"},
 				{call: "ls-remote --heads org-repo", output: "source-sha refs/heads/branch"},
 				{call: "fetch --tags org-repo branch"},
@@ -425,7 +425,7 @@ func TestMirror(t *testing.T) {
 			dst:         location{org: destOrg, repo: repo, branch: branch},
 			expectedGitCalls: []mockGitCall{
 				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo", output: "dest-sha refs/heads/branch"},
-				{call: "init --bare"},
+				{call: "init"},
 				{call: "remote get-url org-repo"},
 				{call: "ls-remote --heads org-repo", output: "source-sha refs/heads/branch"},
 				{call: "fetch --tags org-repo branch --depth=2"},

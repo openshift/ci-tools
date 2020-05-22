@@ -237,7 +237,7 @@ func (g gitSyncer) makeGitDir(org, repo string) (string, error) {
 // mirror syncs content from source location to destination one, using a local
 // repository in the given path. The `repoDir` directory must exist and be
 // either empty, or previously used in a `mirror()` call. If it is empty,
-// a bare git repository will be initialized in it. The git content from
+// a git repository will be initialized in it. The git content from
 // the `src` location will be fetched to this local repository and then
 // pushed to the `dst` location. Multiple `mirror` calls over the same `repoDir`
 // will reuse the content fetched in previous calls, acting like a cache.
@@ -275,7 +275,7 @@ func (g gitSyncer) mirror(repoDir string, src, dst location) error {
 	dstCommitHash := dstHeads[dst.branch]
 
 	logger.Debug("Initializing git repository")
-	if _, exitCode, err := g.git(logger, repoDir, "init", "--bare"); err != nil || exitCode != 0 {
+	if _, exitCode, err := g.git(logger, repoDir, "init"); err != nil || exitCode != 0 {
 		logger.WithField("exit-code", exitCode).WithError(err).Error("Failed to initialize local git directory")
 		return fmt.Errorf("failed to initialize local git directory")
 	}

@@ -93,9 +93,13 @@ func main() {
 		logger.WithError(err).Fatal("failed to unmarshal peribolos config")
 	}
 
-	userV1Client, err := getUserV1Client()
-	if err != nil {
-		logger.WithError(err).Fatal("could not get user client")
+	var userV1Client *userV1.UserV1Client
+	if !o.dryRun {
+		client, err := getUserV1Client()
+		if err != nil {
+			logger.WithError(err).Fatal("could not get user client")
+		}
+		userV1Client = client
 	}
 
 	users := sets.NewString()
@@ -103,25 +107,34 @@ func main() {
 	users.Insert(peribolosConfig.Orgs[o.org].Members...)
 
 	var action func(*v1.Group) (*v1.Group, error)
-	var group *v1.Group
+	group := &v1.Group{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: o.group,
+		},
+	}
 
-	if existing, err := userV1Client.Groups().Get(o.group, metav1.GetOptions{}); err == nil {
-		group = existing
-		action = userV1Client.Groups().Update
-	} else if err != nil && (kerrors.IsNotFound(err) || kerrors.IsForbidden(err) && o.dryRun) {
-		group = &v1.Group{ObjectMeta: metav1.ObjectMeta{Name: o.group}}
-		action = userV1Client.Groups().Create
+	if o.dryRun {
+		action = func(g *v1.Group) (*v1.Group, error) {
+			dryLogger.AddObject(group.DeepCopyObject())
+			if err := dryLogger.Log(); err != nil {
+				return g, fmt.Errorf("error while parsing dry logger's objects: %v", err)
+			}
+			return g, nil
+		}
 	} else {
-		logger.WithError(err).Fatal("couldn't get group from cluster")
+		if existing, err := userV1Client.Groups().Get(o.group, metav1.GetOptions{}); err == nil {
+			group = existing
+			action = userV1Client.Groups().Update
+		} else if err != nil && (kerrors.IsNotFound(err) || kerrors.IsForbidden(err) && o.dryRun) {
+			group = &v1.Group{ObjectMeta: metav1.ObjectMeta{Name: o.group}}
+			action = userV1Client.Groups().Create
+		} else {
+			logger.WithError(err).Fatal("couldn't get group from cluster")
+		}
 	}
 
 	group.Users = users.List()
-	if o.dryRun {
-		dryLogger.AddObject(group.DeepCopyObject())
-		if err := dryLogger.Log(); err != nil {
-			logger.WithError(err).Fatal("error while parsing dry logger's objects")
-		}
-	} else if _, err := action(group); err != nil {
+	if _, err := action(group); err != nil {
 		logger.WithError(err).Fatal("couldn't sync group to the cluster")
 	}
 }

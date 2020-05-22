@@ -223,11 +223,12 @@ func (s *stringSlice) Set(value string) error {
 }
 
 type options struct {
-	configSpecPath    string
-	templatePaths     stringSlice
-	secretDirectories stringSlice
-	sshKeyPath        string
-	oauthTokenPath    string
+	configSpecPath       string
+	unresolvedConfigPath string
+	templatePaths        stringSlice
+	secretDirectories    stringSlice
+	sshKeyPath           string
+	oauthTokenPath       string
 
 	targets stringSlice
 	promote bool
@@ -303,6 +304,7 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.StringVar(&opt.leaseServerPasswordFile, "lease-server-password-file", "", "The path to password file used to access the lease server")
 	flag.StringVar(&opt.registryPath, "registry", "", "Path to the step registry directory")
 	flag.StringVar(&opt.configSpecPath, "config", "", "The configuration file. If not specified the CONFIG_SPEC environment variable or the configresolver will be used.")
+	flag.StringVar(&opt.unresolvedConfigPath, "unresolved-config", "", "The configuration file, before resolution. If not specified the UNRESOLVED_CONFIG environment variable will be used, if set.")
 	flag.Var(&opt.targets, "target", "One or more targets in the configuration to build. Only steps that are required for this target will be run.")
 	flag.BoolVar(&opt.dry, "dry-run", opt.dry, "Print the steps that would be run and the objects that would be created without executing any steps")
 	flag.BoolVar(&opt.print, "print-graph", opt.print, "Print a directed graph of the build steps and exit. Intended for use with the golang digraph utility.")
@@ -385,7 +387,14 @@ func (o *options) Complete() error {
 
 	info := o.getResolverInfo(jobSpec)
 
-	config, err := load.Config(o.configSpecPath, o.registryPath, info)
+	if o.unresolvedConfigPath != "" && o.configSpecPath != "" {
+		return errors.New("cannot set --config and --unresolved-config at the same time")
+	}
+	if o.unresolvedConfigPath != "" && o.resolverAddress == "" {
+		return errors.New("cannot request resolved config with --unresolved-config unless providing --resolver-address")
+	}
+
+	config, err := load.Config(o.configSpecPath, o.unresolvedConfigPath, o.registryPath, info)
 	if err != nil {
 		return results.ForReason("loading_config").WithError(err).Errorf("failed to load configuration: %v", err)
 	}

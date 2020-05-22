@@ -15,7 +15,7 @@ trap "cleanup" EXIT
 
 os::cleanup::tmpdir
 
-for test in $(find "${OS_ROOT}/test/e2e" -name '*.sh'); do
+for test in $(find "${OS_ROOT}/test/e2e" -maxdepth 1 -name '*.sh'); do
   if ! ${test}; then
     failed="true"
     os::log::error "e2e suite ${test} failed"

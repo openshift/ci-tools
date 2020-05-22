@@ -1,6 +1,7 @@
 package load
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -81,7 +82,7 @@ func fromPath(path string) (filenameToConfig, error) {
 		}
 		ext := filepath.Ext(path)
 		if info != nil && !info.IsDir() && (ext == ".yml" || ext == ".yaml") {
-			configSpec, err := Config(path, "", nil)
+			configSpec, err := Config(path, "", "", nil)
 			if err != nil {
 				return fmt.Errorf("failed to load ci-operator config (%v)", err)
 			}
@@ -98,7 +99,7 @@ func fromPath(path string) (filenameToConfig, error) {
 	return configs, err
 }
 
-func Config(path, registryPath string, info *ResolverInfo) (*api.ReleaseBuildConfiguration, error) {
+func Config(path, unresolvedPath, registryPath string, info *ResolverInfo) (*api.ReleaseBuildConfiguration, error) {
 	// Load the standard configuration path, env, or configresolver (in that order of priority)
 	var raw string
 	if len(path) > 0 {
@@ -112,6 +113,18 @@ func Config(path, registryPath string, info *ResolverInfo) (*api.ReleaseBuildCon
 			return nil, errors.New("CONFIG_SPEC environment variable cannot be set to an empty string")
 		}
 		raw = spec
+	} else if len(unresolvedPath) > 0 {
+		data, err := ioutil.ReadFile(unresolvedPath)
+		if err != nil {
+			return nil, fmt.Errorf("--unresolved-config error: %v", err)
+		}
+		configSpec, err := literalConfigFromResolver(data, info.Address)
+		err = results.ForReason("config_resolver_literal").ForError(err)
+		return configSpec, err
+	} else if data, ok := os.LookupEnv("UNRESOLVED_CONFIG"); ok {
+		configSpec, err := literalConfigFromResolver([]byte(data), info.Address)
+		err = results.ForReason("config_resolver_literal").ForError(err)
+		return configSpec, err
 	} else {
 		configSpec, err := configFromResolver(info)
 		err = results.ForReason("config_resolver").ForError(err)
@@ -173,6 +186,34 @@ func configFromResolver(info *ResolverInfo) (*api.ReleaseBuildConfiguration, err
 		return nil, fmt.Errorf("failed to unmarshal config from configresolver: invalid configuration: %v\nvalue:\n%s", err, string(data))
 	}
 	return configSpecHTTP, nil
+}
+
+func literalConfigFromResolver(raw []byte, address string) (*api.ReleaseBuildConfiguration, error) {
+	// check that the user has sent us something reasonable
+	unresolvedConfig := &api.ReleaseBuildConfiguration{}
+	if err := yaml.UnmarshalStrict(raw, unresolvedConfig); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal unresolved config: invalid configuration: %v", err)
+	}
+	encoded, err := json.Marshal(unresolvedConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal unresolved config: invalid configuration: %v", err)
+	}
+	resp, err := http.Post(fmt.Sprintf("%s/resolve", address), "application/json", bytes.NewReader(encoded))
+	if err != nil {
+		return nil, fmt.Errorf("failed to request resolved config: %s", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("response from configresolver == %d (%s)", resp.StatusCode, http.StatusText(resp.StatusCode))
+	}
+	resolved, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read configresolver response body: %s", err)
+	}
+	resolvedConfig := &api.ReleaseBuildConfiguration{}
+	if err = json.Unmarshal(resolved, resolvedConfig); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal resolved config: invalid configuration: %v\n", err)
+	}
+	return resolvedConfig, nil
 }
 
 // Registry takes the path to a registry config directory and returns the full set of references, chains,

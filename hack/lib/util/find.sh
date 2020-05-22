@@ -33,7 +33,7 @@ function os::util::find::gopath_binary() {
 
     local old_ifs="${IFS}"
     IFS=":"
-    for part in ${GOPATH}; do
+    for part in $(go env GOPATH); do
         local binary_path="${part}/bin/${binary_name}"
         # we need to check that the path leads to a file
         # as directories also have the executable bit set

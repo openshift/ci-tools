@@ -72,7 +72,7 @@ tests:
       credentials:
         - namespace: "ns"
           name: "name"
-          mountPath: "/tmp"
+          mount_path: "/tmp"
     - as: test1
       from: bin
       commands: test1 command

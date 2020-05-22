@@ -452,11 +452,11 @@ type LiteralTestStep struct {
 // CredentialReference defines a secret to mount into a step and where to mount it.
 type CredentialReference struct {
 	// Namespace is where the source secret exists.
-	Namespace string
+	Namespace string `json:"namespace"`
 	// Names is which source secret to mount.
-	Name string
+	Name string `json:"name"`
 	// MountPath is where the secret should be mounted.
-	MountPath string
+	MountPath string `json:"mount_path"`
 }
 
 // TestStep is the struct that a user's configuration gets unmarshalled into.

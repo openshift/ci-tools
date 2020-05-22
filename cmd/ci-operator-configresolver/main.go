@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/openshift/ci-tools/pkg/api"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"strconv"
@@ -190,25 +191,53 @@ func resolveConfig(configAgent agents.ConfigAgent, registryAgent agents.Registry
 			logger.WithError(err).Warning("failed to get config")
 			return
 		}
-		config, err = registryAgent.ResolveConfig(config)
-		if err != nil {
-			recordError("failed to resolve config with registry")
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "failed to resolve config with registry: %v", err)
-			logger.WithError(err).Warning("failed to resolve config with registry")
-			return
-		}
-		jsonConfig, err := json.MarshalIndent(config, "", "  ")
-		if err != nil {
-			recordError("failed to marshal config")
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "failed to marshal config to JSON: %v", err)
-			logger.WithError(err).Errorf("failed to marshal config to JSON")
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-		w.Write(jsonConfig)
+		resolveAndRespond(registryAgent, config, w, logger)
 	}
+}
+
+func resolveLiteralConfig(registryAgent agents.RegistryAgent) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			w.WriteHeader(http.StatusNotImplemented)
+			w.Write([]byte(http.StatusText(http.StatusNotImplemented)))
+			return
+		}
+
+		encoded, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Could not read unresolved config from request body."))
+			return
+		}
+		unresolvedConfig := api.ReleaseBuildConfiguration{}
+		if err = json.Unmarshal(encoded, &unresolvedConfig); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Could not parse request body as unresolved config."))
+			return
+		}
+		resolveAndRespond(registryAgent, unresolvedConfig, w, &log.Entry{})
+	}
+}
+
+func resolveAndRespond(registryAgent agents.RegistryAgent, config api.ReleaseBuildConfiguration, w http.ResponseWriter, logger *log.Entry) {
+	config, err := registryAgent.ResolveConfig(config)
+	if err != nil {
+		recordError("failed to resolve config with registry")
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "failed to resolve config with registry: %v", err)
+		logger.WithError(err).Warning("failed to resolve config with registry")
+		return
+	}
+	jsonConfig, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		recordError("failed to marshal config")
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "failed to marshal config to JSON: %v", err)
+		logger.WithError(err).Errorf("failed to marshal config to JSON")
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Write(jsonConfig)
 }
 
 func getConfigGeneration(agent agents.ConfigAgent) http.HandlerFunc {
@@ -259,6 +288,7 @@ func main() {
 	// add handler func for incorrect paths as well; can help with identifying errors/404s caused by incorrect paths
 	http.HandleFunc("/", handleWithMetrics(genericHandler()))
 	http.HandleFunc("/config", handleWithMetrics(resolveConfig(configAgent, registryAgent)))
+	http.HandleFunc("/resolve", handleWithMetrics(resolveLiteralConfig(registryAgent)))
 	http.HandleFunc("/configGeneration", handleWithMetrics(getConfigGeneration(configAgent)))
 	http.HandleFunc("/registryGeneration", handleWithMetrics(getRegistryGeneration(registryAgent)))
 	interrupts.ListenAndServe(&http.Server{Addr: o.address}, o.gracePeriod)

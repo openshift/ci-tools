@@ -22,6 +22,9 @@ os::integration::configresolver::start "${BASETMPDIR}/configs" "${BASETMPDIR}/mu
 os::cmd::expect_success "curl 'http://127.0.0.1:8080/config?org=openshift&repo=installer&branch=release-4.2' >${actual}/openshift-installer-release-4.2.json"
 os::integration::compare "${actual}/openshift-installer-release-4.2.json" "${expected}/openshift-installer-release-4.2.json"
 os::integration::configresolver::check_log
+os::cmd::expect_success "curl -X POST -H 'Content-Type: application/json' --data @${BASETMPDIR}/unresolved-config.json 'http://127.0.0.1:8080/resolve' >${actual}/resolved-config.json"
+os::integration::compare "${actual}/resolved-config.json" "${expected}/resolved-config.json"
+os::integration::configresolver::check_log
 
 generation="$( os::integration::configresolver::generation::config )"
 mv "${BASETMPDIR}/configs2/release-4.2/openshift-installer-release-4.2-golang111.yaml" "${BASETMPDIR}/configs/release-4.2/openshift-installer-release-4.2.yaml"

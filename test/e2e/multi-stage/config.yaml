@@ -1,0 +1,38 @@
+base_images:
+  os:
+    cluster: https://api.ci.openshift.org
+    name: centos
+    namespace: openshift
+    tag: '7'
+resources:
+  '*':
+    limits:
+      cpu: 500m
+    requests:
+      cpu: 10m
+tests:
+  - as: without-references
+    steps:
+      test:
+        - as: produce-content
+          commands: echo -n "message" > ${SHARED_DIR}/file
+          from: os
+          resources:
+            requests:
+              cpu: 100m
+              memory: 200Mi
+        - as: consume-and-validate
+          commands: test $( cat ${SHARED_DIR}/file ) = message
+          from: os
+          resources:
+            requests:
+              cpu: 100m
+              memory: 200Mi
+  - as: with-references
+    steps:
+      test:
+        - ref: step
+zz_generated_metadata:
+  branch: master
+  org: test
+  repo: test

@@ -1,0 +1,55 @@
+{
+  "base_images": {
+    "os": {
+      "cluster": "https://api.ci.openshift.org",
+      "name": "centos",
+      "namespace": "openshift",
+      "tag": "7"
+    }
+  },
+  "resources": {
+    "*": {
+      "limits": {
+        "cpu": "500m"
+      },
+      "requests": {
+        "cpu": "10m"
+      }
+    }
+  },
+  "tests": [
+  {
+    "as": "without-references",
+    "steps": {
+      "test": [
+      {
+        "as": "test",
+        "commands": "yes",
+        "from": "os",
+        "resources": {
+          "requests": {
+            "cpu": "100m",
+            "memory": "200Mi"
+          }
+        }
+      }
+      ]
+    }
+  },
+  {
+    "as": "with-references",
+    "steps": {
+      "test": [
+      {
+        "ref": "ipi-deprovision-deprovision"
+      }
+      ]
+    }
+  }
+  ],
+  "zz_generated_metadata": {
+    "branch": "master",
+    "org": "test",
+    "repo": "test"
+  }
+}

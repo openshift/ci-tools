@@ -1,0 +1,10 @@
+ref:
+  as: step
+  from: os
+  commands: step-commands.sh
+  resources:
+    requests:
+      cpu: 10m
+      memory: 10Mi
+  documentation: |-
+    A simple step

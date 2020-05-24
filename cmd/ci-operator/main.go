@@ -416,6 +416,10 @@ func (o *options) Complete() error {
 
 	// resolve releases we're asked to resolve and propagate their values
 	for name, release := range o.configSpec.Releases {
+		env := fmt.Sprintf("RELEASE_IMAGE_%s", strings.ToUpper(name))
+		if current := os.Getenv(env); current != "" {
+			return results.ForReason("exposing_release").ForError(fmt.Errorf("could not resolve release and set to %s, as that environment was already provided", env))
+		}
 		var value string
 		var err error
 		switch {
@@ -430,10 +434,6 @@ func (o *options) Complete() error {
 			return results.ForReason("resolving_release").ForError(fmt.Errorf("failed to resolve release %s: %v", name, err))
 		}
 		log.Printf("Resolved release %s to %s", name, value)
-		env := fmt.Sprintf("RELEASE_IMAGE_%s", strings.ToUpper(name))
-		if current := os.Getenv(env); current != "" {
-			return results.ForReason("exposing_release").ForError(fmt.Errorf("could not resolve release and set to %s, as that environment was already provided", env))
-		}
 		if err := os.Setenv(env, value); err != nil {
 			return results.ForReason("exposing_release").ForError(fmt.Errorf("failed to expose release %s as %s: %v", name, env, err))
 		}

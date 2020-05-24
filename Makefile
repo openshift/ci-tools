@@ -166,9 +166,9 @@ update-integration:
 .PHONY: update-integration
 
 pr-deploy:
-	oc process -p USER=$(USER) -p BRANCH=$(BRANCH) -p PULL_REQUEST=$(PULL_REQUEST) -f hack/pr-deploy.yaml --as system:admin | oc apply -f - --as system:admin
-	for cm in ci-operator-master-configs step-registry config; do oc get --export configmap $${cm} -n ci -o json | oc create -f - -n ci-tools-$(PULL_REQUEST) --as system:admin; done
-	echo "server is at https://$$( oc get route server -n ci-tools-$(PULL_REQUEST) -o jsonpath={.spec.host} )"
+	oc --context app.ci --as system:admin process -p USER=$(USER) -p BRANCH=$(BRANCH) -p PULL_REQUEST=$(PULL_REQUEST) -f hack/pr-deploy.yaml | oc  --context app.ci --as system:admin apply -f -
+	for cm in ci-operator-master-configs step-registry config; do oc  --context app.ci --as system:admin get --export configmap $${cm} -n ci -o json | oc  --context app.ci --as system:admin create -f - -n ci-tools-$(PULL_REQUEST); done
+	echo "server is at https://$$( oc  --context app.ci --as system:admin get route server -n ci-tools-$(PULL_REQUEST) -o jsonpath={.spec.host} )"
 .PHONY: pr-deploy
 
 check-breaking-changes:

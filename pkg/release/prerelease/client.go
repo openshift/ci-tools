@@ -16,13 +16,10 @@ func endpoint(prerelease api.Prerelease) string {
 }
 
 func defaultFields(prerelease api.Prerelease) api.Prerelease {
-	out := prerelease
-
-	if out.Architecture == "" {
-		out.Architecture = api.ReleaseArchitectureAMD64
+	if prerelease.Architecture == "" {
+		prerelease.Architecture = api.ReleaseArchitectureAMD64
 	}
-
-	return out
+	return prerelease
 }
 
 // ResolvePullSpec determines the pull spec for the candidate release

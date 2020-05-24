@@ -12,7 +12,7 @@ import (
 
 const serviceDomain = "ci.openshift.org"
 
-func ServiceHost(product api.ReleaseProduct, architecture api.ReleaseArchitecture) string {
+func ServiceHost(product api.ReleaseProduct, arch api.ReleaseArchitecture) string {
 	var prefix string
 	switch product {
 	case api.ReleaseProductOCP:
@@ -21,11 +21,11 @@ func ServiceHost(product api.ReleaseProduct, architecture api.ReleaseArchitectur
 		prefix = "origin-"
 	}
 
-	postfix := arcitecture(architecture)
+	postfix := architecture(arch)
 	return fmt.Sprintf("https://%srelease%s.svc.%s/api/v1/releasestream", prefix, postfix, serviceDomain)
 }
 
-func arcitecture(architecture api.ReleaseArchitecture) string {
+func architecture(architecture api.ReleaseArchitecture) string {
 	switch architecture {
 	case api.ReleaseArchitectureAMD64:
 		// default, no postfix
@@ -38,20 +38,19 @@ func arcitecture(architecture api.ReleaseArchitecture) string {
 
 // endpoint determines the API endpoint to use for a candidate release
 func endpoint(candidate api.Candidate) string {
-	return fmt.Sprintf("%s/%s.0-0.%s%s/latest", ServiceHost(candidate.Product, candidate.Architecture), candidate.Version, candidate.Stream, arcitecture(candidate.Architecture))
+	return fmt.Sprintf("%s/%s.0-0.%s%s/latest", ServiceHost(candidate.Product, candidate.Architecture), candidate.Version, candidate.Stream, architecture(candidate.Architecture))
 }
 
 func defaultFields(candidate api.Candidate) api.Candidate {
-	out := candidate
-	if out.Product == api.ReleaseProductOKD && out.Stream == "" {
-		out.Stream = api.ReleaseStreamOKD
+	if candidate.Product == api.ReleaseProductOKD && candidate.Stream == "" {
+		candidate.Stream = api.ReleaseStreamOKD
 	}
 
-	if out.Architecture == "" {
-		out.Architecture = api.ReleaseArchitectureAMD64
+	if candidate.Architecture == "" {
+		candidate.Architecture = api.ReleaseArchitectureAMD64
 	}
 
-	return out
+	return candidate
 }
 
 // ResolvePullSpec determines the pull spec for the candidate release

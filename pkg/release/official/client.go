@@ -15,11 +15,10 @@ import (
 const cincinnatiAddress = "https://api.openshift.com/api/upgrades_info/v1/graph"
 
 func defaultFields(release api.Release) api.Release {
-	out := release
-	if out.Architecture == "" {
-		out.Architecture = api.ReleaseArchitectureAMD64
+	if release.Architecture == "" {
+		release.Architecture = api.ReleaseArchitectureAMD64
 	}
-	return out
+	return release
 }
 
 // ResolvePullSpec determines the pull spec for the official release

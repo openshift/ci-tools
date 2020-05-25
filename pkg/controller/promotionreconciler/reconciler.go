@@ -13,7 +13,6 @@ import (
 	"github.com/sirupsen/logrus"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/sets"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/github"
@@ -33,11 +32,10 @@ import (
 )
 
 type Options struct {
-	DryRun                     bool
-	CIOperatorConfigAgent      agents.ConfigAgent
-	ConfigGetter               config.Getter
-	GitHubClient               github.Client
-	IgnoredGitHubOrganizations []string
+	DryRun                bool
+	CIOperatorConfigAgent agents.ConfigAgent
+	ConfigGetter          config.Getter
+	GitHubClient          github.Client
 	// The registryManager is set up to talk to the cluster
 	// that contains our imageRegistry. This cluster is
 	// most likely not the one the normal manager talks to.
@@ -71,13 +69,12 @@ func AddToManager(mgr controllerruntime.Manager, opts Options) error {
 
 	log := logrus.WithField("controller", controllerName)
 	r := &reconciler{
-		ctx:                        context.Background(),
-		log:                        log,
-		client:                     imagestreamtagwrapper.New(opts.RegistryManager.GetClient()),
-		releaseBuildConfigs:        opts.CIOperatorConfigAgent,
-		gitHubClient:               opts.GitHubClient,
-		ignoredGitHubOrganizations: sets.NewString(opts.IgnoredGitHubOrganizations...),
-		enqueueJob:                 prowJobEnqueuer,
+		ctx:                 context.Background(),
+		log:                 log,
+		client:              imagestreamtagwrapper.New(opts.RegistryManager.GetClient()),
+		releaseBuildConfigs: opts.CIOperatorConfigAgent,
+		gitHubClient:        opts.GitHubClient,
+		enqueueJob:          prowJobEnqueuer,
 	}
 	c, err := controller.New(controllerName, opts.RegistryManager, controller.Options{
 		// Since we watch ImageStreams and not ImageStreamTags as the latter do not support
@@ -123,13 +120,12 @@ func AddToManager(mgr controllerruntime.Manager, opts Options) error {
 }
 
 type reconciler struct {
-	ctx                        context.Context
-	log                        *logrus.Entry
-	client                     ctrlruntimeclient.Client
-	releaseBuildConfigs        agents.ConfigAgent
-	gitHubClient               github.Client
-	ignoredGitHubOrganizations sets.String
-	enqueueJob                 prowjobreconciler.Enqueuer
+	ctx                 context.Context
+	log                 *logrus.Entry
+	client              ctrlruntimeclient.Client
+	releaseBuildConfigs agents.ConfigAgent
+	gitHubClient        github.Client
+	enqueueJob          prowjobreconciler.Enqueuer
 }
 
 func (r *reconciler) Reconcile(req controllerruntime.Request) (controllerruntime.Result, error) {
@@ -178,14 +174,13 @@ func (r *reconciler) reconcile(req controllerruntime.Request, log *logrus.Entry)
 		return controllerutil.TerminalError(fmt.Errorf("failed to get ref for imageStreamTag: %w", err))
 	}
 	log = log.WithField("org", istRef.org).WithField("repo", istRef.repo).WithField("branch", istRef.branch)
-	if r.ignoredGitHubOrganizations.Has(istRef.org) {
-		log.WithField("github-organization", istRef.org).Debug("Ignoring ImageStreamTag because its source organization is configured to be ignored")
-		return nil
-	}
 
-	currentHEAD, err := r.currentHEADForBranch(istRef, log)
+	currentHEAD, found, err := r.currentHEADForBranch(istRef, log)
 	if err != nil {
 		return fmt.Errorf("failed to get current git head for imageStreamTag: %w", err)
+	}
+	if !found {
+		return controllerutil.TerminalError(fmt.Errorf("got 404 for %s/%s/%s from github, this likely means the repo or branch got deleted or we are not allowed to access it", istRef.org, istRef.repo, istRef.branch))
 	}
 	// ImageStreamTag is current, nothing to do
 	if currentHEAD == istRef.commit {
@@ -256,14 +251,17 @@ func refForIST(ist *imagev1.ImageStreamTag) (*branchReference, error) {
 	}, nil
 }
 
-func (r *reconciler) currentHEADForBranch(br *branchReference, log *logrus.Entry) (string, error) {
+func (r *reconciler) currentHEADForBranch(br *branchReference, log *logrus.Entry) (string, bool, error) {
 	// We attempted for some time to use the gitClient for this, but we do so many reconciliations that
 	// it results in a massive performance issues that can easely kill the developers laptop.
 	ref, err := r.gitHubClient.GetRef(br.org, br.repo, "heads/"+br.branch)
 	if err != nil {
-		return "", fmt.Errorf("failed to get sha for ref %s/%s/heads/%s from github: %w", br.org, br.repo, br.branch, err)
+		if github.IsNotFound(err) {
+			return "", false, nil
+		}
+		return "", false, fmt.Errorf("failed to get sha for ref %s/%s/heads/%s from github: %w", br.org, br.repo, br.branch, err)
 	}
-	return ref, nil
+	return ref, true, nil
 }
 
 const configIndexName = "release-build-config-by-image-stream-tag"

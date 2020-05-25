@@ -261,7 +261,7 @@ func (r *reconciler) currentHEADForBranch(br *branchReference, log *logrus.Entry
 	// it results in a massive performance issues that can easely kill the developers laptop.
 	ref, err := r.gitHubClient.GetRef(br.org, br.repo, "heads/"+br.branch)
 	if err != nil {
-		return "", fmt.Errorf("failed to get ref: %w", err)
+		return "", fmt.Errorf("failed to get sha for ref %s/%s/heads/%s from github: %w", br.org, br.repo, br.branch, err)
 	}
 	return ref, nil
 }

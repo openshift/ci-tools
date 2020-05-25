@@ -263,7 +263,7 @@ func TestMirror(t *testing.T) {
 			confirm:     true,
 			expectedGitCalls: []mockGitCall{
 				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo", output: "dest-sha refs/heads/branch"},
-				{call: "init --bare"},
+				{call: "init"},
 				{call: "remote get-url org-repo", exitCode: 1},
 				{call: "remote add org-repo https://github.com/org/repo"},
 				{call: "ls-remote --heads org-repo", output: "source-sha refs/heads/branch"},
@@ -277,7 +277,7 @@ func TestMirror(t *testing.T) {
 			dst:         location{org: destOrg, repo: repo, branch: branch},
 			expectedGitCalls: []mockGitCall{
 				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo", output: "dest-sha refs/heads/branch"},
-				{call: "init --bare"},
+				{call: "init"},
 				{call: "remote get-url org-repo", exitCode: 1},
 				{call: "remote add org-repo https://github.com/org/repo", exitCode: 1},
 			},
@@ -290,7 +290,7 @@ func TestMirror(t *testing.T) {
 			confirm:     true,
 			expectedGitCalls: []mockGitCall{
 				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo", output: "dest-sha refs/heads/branch"},
-				{call: "init --bare"},
+				{call: "init"},
 				{call: "remote get-url org-repo"},
 				{call: "ls-remote --heads org-repo", output: "source-sha refs/heads/branch"},
 				{call: "fetch --tags org-repo branch --depth=2"},
@@ -303,7 +303,7 @@ func TestMirror(t *testing.T) {
 			dst:         location{org: destOrg, repo: repo, branch: branch},
 			expectedGitCalls: []mockGitCall{
 				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo", output: "dest-sha refs/heads/branch"},
-				{call: "init --bare"},
+				{call: "init"},
 				{call: "remote get-url org-repo"},
 				{call: "ls-remote --heads org-repo", output: "source-sha refs/heads/branch"},
 				{call: "fetch --tags org-repo branch --depth=2"},
@@ -316,7 +316,7 @@ func TestMirror(t *testing.T) {
 			dst:         location{org: destOrg, repo: repo, branch: branch},
 			expectedGitCalls: []mockGitCall{
 				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo", output: "dest-sha refs/heads/branch"},
-				{call: "init --bare"},
+				{call: "init"},
 				{call: "remote get-url org-repo"},
 				{call: "ls-remote --heads org-repo", output: "source-sha refs/heads/branch\nanother-sha refs/heads/another-branch"},
 				{call: "fetch --tags org-repo branch --depth=2"},
@@ -329,7 +329,7 @@ func TestMirror(t *testing.T) {
 			dst:         location{org: destOrg, repo: repo, branch: branch},
 			expectedGitCalls: []mockGitCall{
 				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo", output: "dest-sha refs/heads/branch"},
-				{call: "init --bare"},
+				{call: "init"},
 				{call: "remote get-url org-repo"},
 				{call: "ls-remote --heads org-repo", output: "source-sha refs/heads/branch"},
 				{call: "fetch --tags org-repo branch --depth=2", exitCode: 1},
@@ -342,7 +342,7 @@ func TestMirror(t *testing.T) {
 			dst:         location{org: destOrg, repo: repo, branch: branch},
 			expectedGitCalls: []mockGitCall{
 				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo", output: "dest-sha refs/heads/branch"},
-				{call: "init --bare"},
+				{call: "init"},
 				{call: "remote get-url org-repo"},
 				{call: "ls-remote --heads org-repo", output: "source-sha refs/heads/branch"},
 				{call: "fetch --tags org-repo branch --depth=2"},
@@ -356,7 +356,7 @@ func TestMirror(t *testing.T) {
 			dst:         location{org: destOrg, repo: repo, branch: branch},
 			expectedGitCalls: []mockGitCall{
 				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo", output: "source-sha refs/heads/branch"},
-				{call: "init --bare"},
+				{call: "init"},
 				{call: "remote get-url org-repo"},
 				{call: "ls-remote --heads org-repo", output: "source-sha refs/heads/branch"},
 			},
@@ -367,7 +367,7 @@ func TestMirror(t *testing.T) {
 			dst:         location{org: destOrg, repo: repo, branch: branch},
 			expectedGitCalls: []mockGitCall{
 				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo", output: "source-sha refs/heads/branch"},
-				{call: "init --bare"},
+				{call: "init"},
 				{call: "remote get-url org-repo"},
 				{call: "ls-remote --heads org-repo", exitCode: 1},
 			},
@@ -379,7 +379,7 @@ func TestMirror(t *testing.T) {
 			dst:         location{org: destOrg, repo: repo, branch: branch},
 			expectedGitCalls: []mockGitCall{
 				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo", output: "source-sha refs/heads/branch"},
-				{call: "init --bare"},
+				{call: "init"},
 				{call: "remote get-url org-repo"},
 				{call: "ls-remote --heads org-repo", output: "some-sha refs/heads/not-the-branch"},
 			},
@@ -413,19 +413,20 @@ func TestMirror(t *testing.T) {
 			dst:         location{org: destOrg, repo: repo, branch: branch},
 			expectedGitCalls: []mockGitCall{
 				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo"},
-				{call: "init --bare"},
+				{call: "init"},
 				{call: "remote get-url org-repo"},
 				{call: "ls-remote --heads org-repo", output: "source-sha refs/heads/branch"},
 				{call: "fetch --tags org-repo branch"},
 				{call: "push --tags --dry-run https://TOKEN@github.com/dest/repo FETCH_HEAD:refs/heads/branch"},
 			},
-		}, {
+		},
+		{
 			description: "warm cache, destination needs 50 commits -> retries deepening fetches, then success",
 			src:         location{org: org, repo: repo, branch: branch},
 			dst:         location{org: destOrg, repo: repo, branch: branch},
 			expectedGitCalls: []mockGitCall{
 				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo", output: "dest-sha refs/heads/branch"},
-				{call: "init --bare"},
+				{call: "init"},
 				{call: "remote get-url org-repo"},
 				{call: "ls-remote --heads org-repo", output: "source-sha refs/heads/branch"},
 				{call: "fetch --tags org-repo branch --depth=2"},
@@ -465,6 +466,69 @@ func TestMirror(t *testing.T) {
 				{call: "rev-parse --is-shallow-repository", output: "true"},
 				{call: "fetch --tags org-repo branch --depth=64"},
 				{call: "push --tags --dry-run https://TOKEN@github.com/dest/repo FETCH_HEAD:refs/heads/branch"},
+			},
+		},
+		{
+			description: "warm cache, destination needs to merge with source -> retries exceeded, then perform merge after fetching --unshallow",
+			src:         location{org: org, repo: repo, branch: branch},
+			dst:         location{org: destOrg, repo: repo, branch: branch},
+			expectedGitCalls: []mockGitCall{
+				{call: "ls-remote --heads https://TOKEN@github.com/dest/repo", output: "dest-sha refs/heads/branch"},
+				{call: "init"},
+				{call: "remote get-url org-repo"},
+				{call: "ls-remote --heads org-repo", output: "source-sha refs/heads/branch"},
+				{call: "fetch --tags org-repo branch --depth=2"},
+				{
+					call:     "push --tags --dry-run https://TOKEN@github.com/dest/repo FETCH_HEAD:refs/heads/branch",
+					exitCode: 1,
+					output:   "...Updates were rejected because the remote contains work that you do...",
+				},
+				{call: "rev-parse --is-shallow-repository", output: "true"},
+				{call: "fetch --tags org-repo branch --depth=4"},
+				{
+					call:     "push --tags --dry-run https://TOKEN@github.com/dest/repo FETCH_HEAD:refs/heads/branch",
+					exitCode: 1,
+					output:   "...Updates were rejected because the remote contains work that you do...",
+				},
+				{call: "rev-parse --is-shallow-repository", output: "true"},
+				{call: "fetch --tags org-repo branch --depth=8"},
+				{
+					call:     "push --tags --dry-run https://TOKEN@github.com/dest/repo FETCH_HEAD:refs/heads/branch",
+					exitCode: 1,
+					output:   "...Updates were rejected because the remote contains work that you do...",
+				},
+				{call: "rev-parse --is-shallow-repository", output: "true"},
+				{call: "fetch --tags org-repo branch --depth=16"},
+				{
+					call:     "push --tags --dry-run https://TOKEN@github.com/dest/repo FETCH_HEAD:refs/heads/branch",
+					exitCode: 1,
+					output:   "...Updates were rejected because the remote contains work that you do...",
+				},
+				{call: "rev-parse --is-shallow-repository", output: "true"},
+				{call: "fetch --tags org-repo branch --depth=32"},
+				{
+					call:     "push --tags --dry-run https://TOKEN@github.com/dest/repo FETCH_HEAD:refs/heads/branch",
+					exitCode: 1,
+					output:   "...Updates were rejected because the remote contains work that you do...",
+				},
+				{call: "rev-parse --is-shallow-repository", output: "true"},
+				{call: "fetch --tags org-repo branch --depth=64"},
+				{
+					call:     "push --tags --dry-run https://TOKEN@github.com/dest/repo FETCH_HEAD:refs/heads/branch",
+					exitCode: 1,
+					output:   "...Updates were rejected because the remote contains work that you do...",
+				},
+				{call: "rev-parse --is-shallow-repository", output: "true"},
+				{call: "fetch --tags org-repo branch --unshallow"},
+				{
+					call:     "push --tags --dry-run https://TOKEN@github.com/dest/repo FETCH_HEAD:refs/heads/branch",
+					exitCode: 1,
+					output:   "...Updates were rejected because the remote contains work that you do...",
+				},
+				{call: "fetch https://TOKEN@github.com/dest/repo branch"},
+				{call: "checkout FETCH_HEAD"},
+				{call: "merge org-repo/branch -m 'Periodic merge from DPTP; pub->priv'"},
+				{call: "push --tags --dry-run https://TOKEN@github.com/dest/repo HEAD:branch"},
 			},
 		},
 	}

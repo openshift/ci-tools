@@ -237,7 +237,7 @@ func (g gitSyncer) makeGitDir(org, repo string) (string, error) {
 // mirror syncs content from source location to destination one, using a local
 // repository in the given path. The `repoDir` directory must exist and be
 // either empty, or previously used in a `mirror()` call. If it is empty,
-// a bare git repository will be initialized in it. The git content from
+// a git repository will be initialized in it. The git content from
 // the `src` location will be fetched to this local repository and then
 // pushed to the `dst` location. Multiple `mirror` calls over the same `repoDir`
 // will reuse the content fetched in previous calls, acting like a cache.
@@ -275,7 +275,7 @@ func (g gitSyncer) mirror(repoDir string, src, dst location) error {
 	dstCommitHash := dstHeads[dst.branch]
 
 	logger.Debug("Initializing git repository")
-	if _, exitCode, err := g.git(logger, repoDir, "init", "--bare"); err != nil || exitCode != 0 {
+	if _, exitCode, err := g.git(logger, repoDir, "init"); err != nil || exitCode != 0 {
 		logger.WithField("exit-code", exitCode).WithError(err).Error("Failed to initialize local git directory")
 		return fmt.Errorf("failed to initialize local git directory")
 	}
@@ -289,19 +289,10 @@ func (g gitSyncer) mirror(repoDir string, src, dst location) error {
 		logger.WithError(err).Error("Failed to query local git repository for remotes")
 		return fmt.Errorf("failed to query local git repository for remotes")
 	}
+
 	if exitCode != 0 {
-		remoteSetupLogger := logger.WithField("remote-name", srcRemote)
-		remoteSetupLogger.Debug("Remote does not exist, setting up")
-		srcUrl, err := url.Parse(fmt.Sprintf("https://github.com/%s/%s", src.org, src.repo))
-		if err != nil {
-			remoteSetupLogger.WithError(err).Error("Failed to construct URL for the source remote")
-			return fmt.Errorf("failed to construct URL for the source remote")
-		}
-		remoteSetupLogger = remoteSetupLogger.WithField("remote-url", srcUrl.String())
-		remoteSetupLogger.Debug("Adding remote")
-		if _, exitCode, err := g.git(logger, repoDir, "remote", "add", srcRemote, srcUrl.String()); err != nil || exitCode != 0 {
-			remoteSetupLogger.WithField("exit-code", exitCode).WithError(err).Error("Failed to set up source remote")
-			return fmt.Errorf("failed to set up source remote")
+		if err := addGitRemote(logger, g.git, src.org, src.repo, repoDir, srcRemote); err != nil {
+			return err
 		}
 	}
 
@@ -351,9 +342,11 @@ func (g gitSyncer) mirror(repoDir string, src, dst location) error {
 		}
 
 		if depth == unshallow {
-			message := "failed to push to destination, no retry possible (already fetched full history)"
-			logger.Error(message)
-			return nil, fmt.Errorf(message)
+			logger.Info("Trying to fetch source and destination full history and perform a merge")
+			if err := mergeRemotesAndPush(logger, g.git, repoDir, srcRemote, dst.branch, destUrl.String(), g.confirm); err != nil {
+				return nil, fmt.Errorf("failed to fetch remote and merge: %v", err)
+			}
+			return nil, nil
 		}
 
 		shallowOut, shallowExitCode, shallowErr := g.git(logger, repoDir, "rev-parse", "--is-shallow-repository")
@@ -395,6 +388,56 @@ func (g gitSyncer) mirror(repoDir string, src, dst location) error {
 		}
 	}
 
+	return nil
+}
+
+func addGitRemote(logger *logrus.Entry, git gitFunc, org, repo, repoDir, remoteName string) error {
+	remoteSetupLogger := logger.WithField("remote-name", remoteName)
+	remoteSetupLogger.Debug("Remote does not exist, setting up")
+
+	srcURL, err := url.Parse(fmt.Sprintf("https://github.com/%s/%s", org, repo))
+	if err != nil {
+		remoteSetupLogger.WithError(err).Error("Failed to construct URL for the source remote")
+		return fmt.Errorf("failed to construct URL for the source remote")
+	}
+
+	remoteSetupLogger = remoteSetupLogger.WithField("remote-url", srcURL.String())
+	remoteSetupLogger.Debug("Adding remote")
+
+	if _, exitCode, err := git(logger, repoDir, "remote", "add", remoteName, srcURL.String()); err != nil || exitCode != 0 {
+		remoteSetupLogger.WithField("exit-code", exitCode).WithError(err).Error("Failed to set up source remote")
+		return fmt.Errorf("failed to set up source remote")
+	}
+
+	return nil
+}
+
+func mergeRemotesAndPush(logger *logrus.Entry, git gitFunc, repoDir, srcRemote, branch, destURL string, confirm bool) error {
+	if _, _, err := git(logger, repoDir, []string{"fetch", destURL, branch}...); err != nil {
+		return fmt.Errorf("failed to fetch remote %s: %v", destURL, err)
+	}
+
+	if _, _, err := git(logger, repoDir, []string{"checkout", "FETCH_HEAD"}...); err != nil {
+		return fmt.Errorf("failed to checkout to FETCH_HEAD: %v", err)
+	}
+
+	sourceBranch := fmt.Sprintf("%s/%s", srcRemote, branch)
+	if _, _, err := git(logger, repoDir, []string{"merge", sourceBranch, "-m", "'Periodic merge from DPTP; pub->priv'"}...); err != nil {
+		return fmt.Errorf("failed to merge %s: %v", sourceBranch, err)
+	}
+
+	cmd := []string{"push", "--tags"}
+	if !confirm {
+		cmd = append(cmd, "--dry-run")
+	}
+	cmd = append(cmd, destURL, fmt.Sprintf("HEAD:%s", branch))
+
+	_, _, err := git(logger, repoDir, cmd...)
+	if err != nil {
+		return fmt.Errorf("failed to push to destination: %v", err)
+	}
+
+	logger.Info("Successfully pushed to destination")
 	return nil
 }
 

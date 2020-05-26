@@ -429,8 +429,20 @@ func validateLiteralTestStep(fieldRoot string, step LiteralTestStep, seen sets.S
 	} else {
 		seen.Insert(step.As)
 	}
-	if len(step.From) == 0 {
-		ret = append(ret, fmt.Errorf("%s: `from` is required", fieldRoot))
+	if len(step.From) == 0 && step.FromImage == nil {
+		ret = append(ret, fmt.Errorf("%s: `from` or `from_image` is required", fieldRoot))
+	} else if len(step.From) != 0 && step.FromImage != nil {
+		ret = append(ret, fmt.Errorf("%s: `from` and `from_image` cannot be set together", fieldRoot))
+	} else if step.FromImage != nil {
+		if step.FromImage.Namespace == "" {
+			ret = append(ret, fmt.Errorf("%s.from_image: `namespace` is required", fieldRoot))
+		}
+		if step.FromImage.Name == "" {
+			ret = append(ret, fmt.Errorf("%s.from_image: `name` is required", fieldRoot))
+		}
+		if step.FromImage.Tag == "" {
+			ret = append(ret, fmt.Errorf("%s.from_image: `tag` is required", fieldRoot))
+		}
 	} else if len(validation.IsDNS1123Subdomain(step.From)) != 0 {
 		ret = append(ret, fmt.Errorf("%s.from: '%s' is not a valid Kubernetes object name", fieldRoot, step.From))
 	}

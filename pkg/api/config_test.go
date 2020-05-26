@@ -554,7 +554,61 @@ func TestValidateTestSteps(t *testing.T) {
 				Commands:  "commands",
 				Resources: resources},
 		}},
-		errs: []error{errors.New("test[0]: `from` is required")},
+		errs: []error{errors.New("test[0]: `from` or `from_image` is required")},
+	}, {
+		name: "two images",
+		steps: []TestStep{{
+			LiteralTestStep: &LiteralTestStep{
+				As:   "no_image",
+				From: "something",
+				FromImage: &ImageStreamTagReference{
+					Namespace: "ns",
+					Name:      "name",
+					Tag:       "tag",
+				},
+				Commands:  "commands",
+				Resources: resources},
+		}},
+		errs: []error{errors.New("test[0]: `from` and `from_image` cannot be set together")},
+	}, {
+		name: "from_image missing namespace",
+		steps: []TestStep{{
+			LiteralTestStep: &LiteralTestStep{
+				As: "no_image",
+				FromImage: &ImageStreamTagReference{
+					Name: "name",
+					Tag:  "tag",
+				},
+				Commands:  "commands",
+				Resources: resources},
+		}},
+		errs: []error{errors.New("test[0].from_image: `namespace` is required")},
+	}, {
+		name: "from_image missing name",
+		steps: []TestStep{{
+			LiteralTestStep: &LiteralTestStep{
+				As: "no_image",
+				FromImage: &ImageStreamTagReference{
+					Namespace: "ns",
+					Tag:       "tag",
+				},
+				Commands:  "commands",
+				Resources: resources},
+		}},
+		errs: []error{errors.New("test[0].from_image: `name` is required")},
+	}, {
+		name: "from_image missing tag",
+		steps: []TestStep{{
+			LiteralTestStep: &LiteralTestStep{
+				As: "no_image",
+				FromImage: &ImageStreamTagReference{
+					Namespace: "ns",
+					Name:      "name",
+				},
+				Commands:  "commands",
+				Resources: resources},
+		}},
+		errs: []error{errors.New("test[0].from_image: `tag` is required")},
 	}, {
 		name: "invalid image 0",
 		steps: []TestStep{{

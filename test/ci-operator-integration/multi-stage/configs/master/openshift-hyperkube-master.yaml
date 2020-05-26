@@ -106,6 +106,17 @@ tests:
           memory: "7"
         requests:
           memory: "7"
+    - as: post2
+      from_image:
+        namespace: "ns"
+        name: "image"
+        tag: "latest"
+      commands: post2 command
+      resources:
+        limits:
+          memory: "8"
+        requests:
+          memory: "8"
 zz_generated_metadata:
   org: openshift
   repo: hyperkube

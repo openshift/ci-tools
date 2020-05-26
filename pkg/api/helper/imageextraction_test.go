@@ -30,9 +30,12 @@ func TestGetAllImageStreamTagReturnsAllImageStreamTags(t *testing.T) {
 				// fuzzer a bit from creating unreadable output.
 				func(_ *string, _ fuzz.Continue) {},
 				func(_ *api.ClusterProfile, _ fuzz.Continue) {},
+				// These methods are for reading config from disk, so we can ignore fields
+				// that are only set once the configuration has been resolved by a server
+				func(_ *api.MultiStageTestConfigurationLiteral, _ fuzz.Continue) {},
 			).
 				// Using something else messes up the result, apparently the fuzzer sometimes overwrites the whole
-				// map/slice after insering into it.
+				// map/slice after inserting into it.
 				NumElements(1, 1)
 
 			cfg := load.ByOrgRepo{}

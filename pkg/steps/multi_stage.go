@@ -170,12 +170,20 @@ func (s *multiStageTestStep) Description() string {
 
 func (s *multiStageTestStep) Requires() (ret []api.StepLink) {
 	var needsRelease bool
+	internalLinks := map[api.PipelineImageStreamTagReference]struct{}{}
 	for _, step := range append(append(s.pre, s.test...), s.post...) {
 		if s.config.IsPipelineImage(step.From) || s.config.BuildsImage(step.From) {
-			ret = append(ret, api.InternalImageLink(api.PipelineImageStreamTagReference(step.From)))
+			internalLinks[api.PipelineImageStreamTagReference(step.From)] = struct{}{}
 		} else {
 			needsRelease = true
 		}
+
+		if link, ok := step.FromImageTag(); ok {
+			internalLinks[link] = struct{}{}
+		}
+	}
+	for link := range internalLinks {
+		ret = append(ret, api.InternalImageLink(link))
 	}
 	if s.profile != "" {
 		needsRelease = true
@@ -326,10 +334,14 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep) ([]coreap
 	var errs []error
 	for _, step := range steps {
 		image := step.From
-		if s.config.IsPipelineImage(image) || s.config.BuildsImage(image) {
-			image = fmt.Sprintf("%s:%s", api.PipelineImageStream, image)
+		if link, ok := step.FromImageTag(); ok {
+			image = fmt.Sprintf("%s:%s", api.PipelineImageStream, link)
 		} else {
-			image = fmt.Sprintf("%s:%s", api.StableImageStream, image)
+			if s.config.IsPipelineImage(image) || s.config.BuildsImage(image) {
+				image = fmt.Sprintf("%s:%s", api.PipelineImageStream, image)
+			} else {
+				image = fmt.Sprintf("%s:%s", api.StableImageStream, image)
+			}
 		}
 		resources, err := resourcesFor(step.Resources)
 		if err != nil {

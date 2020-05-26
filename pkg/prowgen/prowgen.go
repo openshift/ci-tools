@@ -2,6 +2,7 @@ package prowgen
 
 import (
 	"fmt"
+	"github.com/openshift/ci-tools/pkg/util"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -333,9 +334,10 @@ func generatePodSpecTemplate(info *ProwgenInfo, release string, test *cioperator
 		}
 	}
 	if needsReleaseRpms && (info.Org != "openshift" || info.Repo != "origin") {
-		var repoPath = fmt.Sprintf("https://rpms.svc.ci.openshift.org/openshift-origin-v%s/", release)
+		url := util.URLForService("rpms")
+		var repoPath = fmt.Sprintf("%s/openshift-origin-v%s/", url, release)
 		if strings.HasPrefix(release, "origin-v") {
-			repoPath = fmt.Sprintf("https://rpms.svc.ci.openshift.org/openshift-%s/", release)
+			repoPath = fmt.Sprintf("%s/openshift-%s/", url, release)
 		}
 		container.Env = append(container.Env, corev1.EnvVar{
 			Name:  "RPM_REPO_OPENSHIFT_ORIGIN",
@@ -360,7 +362,7 @@ func generatePodSpecTemplate(info *ProwgenInfo, release string, test *cioperator
 			corev1.EnvVar{Name: "PREVIOUS_RPM_DEPENDENCIES_REPO",
 				Value: conf.PreviousRPMDeps},
 			corev1.EnvVar{Name: "PREVIOUS_RPM_REPO",
-				Value: fmt.Sprintf("https://rpms.svc.ci.openshift.org/openshift-origin-v%s/", conf.PreviousVersion)})
+				Value: fmt.Sprintf("%s/openshift-origin-v%s/", util.URLForService("rpms"), conf.PreviousVersion)})
 	}
 	if conf := test.OpenshiftInstallerCustomTestImageClusterTestConfiguration; conf != nil {
 		if conf.EnableNestedVirt {

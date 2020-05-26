@@ -3,14 +3,13 @@ package candidate
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/openshift/ci-tools/pkg/util"
 	"io/ioutil"
 	"net/http"
 	"strconv"
 
 	"github.com/openshift/ci-tools/pkg/api"
 )
-
-const serviceDomain = "ci.openshift.org"
 
 func ServiceHost(product api.ReleaseProduct, arch api.ReleaseArchitecture) string {
 	var prefix string
@@ -22,7 +21,7 @@ func ServiceHost(product api.ReleaseProduct, arch api.ReleaseArchitecture) strin
 	}
 
 	postfix := architecture(arch)
-	return fmt.Sprintf("https://%srelease%s.svc.%s/api/v1/releasestream", prefix, postfix, serviceDomain)
+	return fmt.Sprintf("https://%srelease%s.%s/api/v1/releasestream", prefix, postfix, util.ServiceDomain)
 }
 
 func architecture(architecture api.ReleaseArchitecture) string {

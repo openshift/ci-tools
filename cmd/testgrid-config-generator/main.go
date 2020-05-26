@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/openshift/ci-tools/pkg/util"
 	"io/ioutil"
 	"math"
 	"os"
@@ -90,7 +91,7 @@ func dashboardTabFor(name, description string) *config.DashboardTab {
 		Description:      description,
 		TestGroupName:    name,
 		BaseOptions:      "width=10&exclude-filter-by-regex=Monitor%5Cscluster&exclude-filter-by-regex=%5Eoperator.Run%20template.*container%20test%24",
-		OpenTestTemplate: &config.LinkTemplate{Url: "https://prow.svc.ci.openshift.org/view/gcs/<gcs_prefix>/<changelist>"},
+		OpenTestTemplate: &config.LinkTemplate{Url: fmt.Sprintf("%s/view/gcs/<gcs_prefix>/<changelist>", util.URLForService("prow"))},
 		FileBugTemplate: &config.LinkTemplate{
 			Url: "https://bugzilla.redhat.com/enter_bug.cgi",
 			Options: []*config.LinkOptionsTemplate{
@@ -121,7 +122,7 @@ func dashboardTabFor(name, description string) *config.DashboardTab {
 			},
 		},
 		OpenBugTemplate:       &config.LinkTemplate{Url: "https://github.com/openshift/origin/issues/"},
-		ResultsUrlTemplate:    &config.LinkTemplate{Url: "https://prow.svc.ci.openshift.org/job-history/<gcs_prefix>"},
+		ResultsUrlTemplate:    &config.LinkTemplate{Url: fmt.Sprintf("%s/job-history/<gcs_prefix>", util.URLForService("prow"))},
 		CodeSearchPath:        "https://github.com/openshift/origin/search",
 		CodeSearchUrlTemplate: &config.LinkTemplate{Url: "https://github.com/openshift/origin/compare/<start-custom-0>...<end-custom-0>"},
 	}

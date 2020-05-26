@@ -163,7 +163,7 @@ const (
 
 var (
 	// leaseServerAddress is the default lease server in api.ci
-	leaseServerAddress = util.URLForService("boskos-ci")
+	leaseServerAddress = api.URLForService(api.ServiceBoskos)
 )
 
 // CustomProwMetadata the name of the custom prow metadata file that's expected to be found in the artifacts directory.

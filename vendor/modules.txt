@@ -962,7 +962,7 @@ knative.dev/pkg/configmap
 knative.dev/pkg/kmeta
 knative.dev/pkg/kmp
 knative.dev/pkg/tracker
-# sigs.k8s.io/controller-runtime v0.5.1
+# sigs.k8s.io/controller-runtime v0.5.4
 sigs.k8s.io/controller-runtime
 sigs.k8s.io/controller-runtime/pkg/builder
 sigs.k8s.io/controller-runtime/pkg/cache

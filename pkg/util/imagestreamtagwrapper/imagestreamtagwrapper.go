@@ -19,6 +19,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
+	cache "sigs.k8s.io/controller-runtime/pkg/cache"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -26,8 +27,24 @@ import (
 // as upstream, as it has to fetch multiple objects in order to construct
 // an imagestreamtag, which is more expensive than just getting it directly
 // when not using a cache.
-func New(upstream ctrlruntimeclient.Client) ctrlruntimeclient.Client {
-	return &imagestreamtagwrapper{Client: upstream}
+func New(upstream ctrlruntimeclient.Client, cache cache.Cache) (ctrlruntimeclient.Client, error) {
+	// Allocate the informers already so they are synced during startup not on first request
+	if _, err := cache.GetInformer(&imagev1.Image{}); err != nil {
+		return nil, fmt.Errorf("failed to get informer for image: %w", err)
+	}
+	if _, err := cache.GetInformer(&imagev1.ImageStream{}); err != nil {
+		return nil, fmt.Errorf("failed to get informer for imagestream: %w", err)
+	}
+	return &imagestreamtagwrapper{Client: upstream}, nil
+}
+
+// MustNew panics when there was an error during initialisation
+func MustNew(upstream ctrlruntimeclient.Client, cache cache.Cache) ctrlruntimeclient.Client {
+	client, err := New(upstream, cache)
+	if err != nil {
+		panic(err.Error())
+	}
+	return client
 }
 
 type imagestreamtagwrapper struct {

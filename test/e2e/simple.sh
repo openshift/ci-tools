@@ -18,3 +18,15 @@ os::cmd::expect_failure "ci-operator --target success --target failure --config 
 os::cmd::expect_failure "ci-operator --target failure --config ${suite_dir}/config.yaml"
 
 os::test::junit::declare_suite_end
+
+os::test::junit::declare_suite_start "e2e/simple/dynamic-release"
+# This test validates the ci-operator resolution of dynamic releases
+
+export JOB_SPEC='{"type":"postsubmit","job":"branch-ci-openshift-ci-tools-master-ci-operator-e2e","buildid":"0","prowjobid":"uuid","refs":{"org":"openshift","repo":"ci-tools","base_ref":"master","base_sha":"6d231cc37652e85e0f0e25c21088b73d644d89ad","pulls":[]}}'
+# TODO(skuznets): make this work when we can explicitly target release images
+#os::cmd::expect_success "ci-operator --target [release:initial] --config ${suite_dir}/dynamic-releases.yaml"
+#os::cmd::expect_failure "ci-operator --target [release:latest] --config ${suite_dir}/dynamic-releases.yaml"
+#os::cmd::expect_failure "ci-operator --target [release:custom] --config ${suite_dir}/dynamic-releases.yaml"
+#os::cmd::expect_failure "ci-operator --target [release:pre] --config ${suite_dir}/dynamic-releases.yaml"
+
+os::test::junit::declare_suite_end

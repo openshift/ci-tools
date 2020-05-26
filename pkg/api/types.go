@@ -185,7 +185,109 @@ type InputConfiguration struct {
 	// ReleaseTagConfiguration determines how the
 	// full release is assembled.
 	ReleaseTagConfiguration *ReleaseTagConfiguration `json:"tag_specification,omitempty"`
+
+	// Releases maps semantic release payload identifiers
+	// to the names that they will be exposed under. For
+	// instance, an 'initial' name will be exposed as
+	// $RELEASE_IMAGE_INITIAL. The 'latest' key is special
+	// and cannot co-exist with 'tag_specification', as
+	// they result in the same output.
+	Releases map[string]UnresolvedRelease `json:"releases,omitempty"`
 }
+
+// UnresolvedRelease describes a semantic release payload
+// identifier we need to resolve to a pull spec.
+type UnresolvedRelease struct {
+	// Candidate describes a candidate release payload
+	Candidate *Candidate `json:"candidate,omitempty"`
+	// Prerelease describes a yet-to-be released payload
+	Prerelease *Prerelease `json:"prerelease,omitempty"`
+	// Release describes a released payload
+	Release *Release `json:"release,omitempty"`
+}
+
+// Candidate describes a validated candidate release payload
+type Candidate struct {
+	// Product is the name of the product being released
+	Product ReleaseProduct `json:"product"`
+	// Architecture is the architecture for the product.
+	// Defaults to amd64.
+	Architecture ReleaseArchitecture `json:"architecture"`
+	// ReleaseStream is the stream from which we pick the latest candidate
+	Stream ReleaseStream `json:"stream"`
+	// Version is the minor version to search for
+	Version string `json:"version"`
+	// Relative optionally specifies how old of a release
+	// is requested from this stream. For instance, a value
+	// of 1 will resolve to the previous validated release
+	// for this stream.
+	Relative int `json:"relative,omitempty"`
+}
+
+// Prerelease describes a validated release payload before it is exposed
+type Prerelease struct {
+	// Product is the name of the product being released
+	Product ReleaseProduct `json:"product"`
+	// Architecture is the architecture for the product.
+	// Defaults to amd64.
+	Architecture ReleaseArchitecture `json:"architecture"`
+	// VersionBounds describe the allowable version bounds to search in
+	VersionBounds VersionBounds `json:"version_bounds"`
+}
+
+// VersionBounds describe the upper and lower bounds on a version search
+type VersionBounds struct {
+	Lower string `json:"lower"`
+	Upper string `json:"upper"`
+}
+
+func (b *VersionBounds) Query() string {
+	return fmt.Sprintf(">%s <%s", b.Lower, b.Upper)
+}
+
+// ReleaseProduct describes the product being released
+type ReleaseProduct string
+
+const (
+	ReleaseProductOCP ReleaseProduct = "ocp"
+	ReleaseProductOKD ReleaseProduct = "okd"
+)
+
+// ReleaseArchitecture describes the architecture for the product
+type ReleaseArchitecture string
+
+const (
+	ReleaseArchitectureAMD64   ReleaseArchitecture = "amd64"
+	ReleaseArchitecturePPC64le ReleaseArchitecture = "ppc64le"
+	ReleaseArchitectureS390x   ReleaseArchitecture = "s390x"
+)
+
+type ReleaseStream string
+
+const (
+	ReleaseStreamCI      ReleaseStream = "ci"
+	ReleaseStreamNightly ReleaseStream = "nightly"
+	ReleaseStreamOKD     ReleaseStream = "okd"
+)
+
+// Release describes a generally available release payload
+type Release struct {
+	// Version is the minor version to search for
+	Version string `json:"version"`
+	// Channel is the release channel to search in
+	Channel ReleaseChannel `json:"channel"`
+	// Architecture is the architecture for the release.
+	// Defaults to amd64.
+	Architecture ReleaseArchitecture `json:"architecture"`
+}
+
+type ReleaseChannel string
+
+const (
+	ReleaseChannelStable    ReleaseChannel = "stable"
+	ReleaseChannelFast      ReleaseChannel = "fast"
+	ReleaseChannelCandidate ReleaseChannel = "candidate"
+)
 
 // BuildRootImageConfiguration holds the two ways of using a base image
 // that the pipeline will caches on.

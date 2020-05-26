@@ -15,6 +15,7 @@ replace (
 require (
 	github.com/GoogleCloudPlatform/testgrid v0.0.7
 	github.com/alecthomas/chroma v0.7.1
+	github.com/blang/semver v3.5.1+incompatible
 	github.com/docker/distribution v2.7.1+incompatible
 	github.com/docker/spdystream v0.0.0-20181023171402-6480d4af844c // indirect
 	github.com/elazarl/goproxy v0.0.0-20190711103511-473e67f1d7d2 // indirect

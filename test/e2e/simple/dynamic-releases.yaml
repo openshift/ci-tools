@@ -1,0 +1,43 @@
+base_images:
+  os:
+    cluster: https://api.ci.openshift.org
+    name: centos
+    namespace: openshift
+    tag: '7'
+releases:
+  initial:
+    candidate:
+      product: okd
+      version: "4.3"
+  latest:
+    release:
+      channel: stable
+      version: "4.4"
+  custom:
+    candidate:
+      product: ocp
+      architecture: amd64
+      stream: nightly
+      version: "4.5"
+      relative: 1
+  pre:
+    prerelease:
+      product: ocp
+      version_bounds:
+        lower: "4.4.0"
+        upper: "4.5.0-0"
+resources:
+  '*':
+    limits:
+      cpu: 500m
+    requests:
+      cpu: 10m
+tests:
+  - as: success
+    commands: exit 0
+    container:
+      from: os
+zz_generated_metadata:
+  branch: master
+  org: test
+  repo: test

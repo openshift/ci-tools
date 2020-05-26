@@ -212,7 +212,7 @@ type Candidate struct {
 	Product ReleaseProduct `json:"product"`
 	// Architecture is the architecture for the product.
 	// Defaults to amd64.
-	Architecture ReleaseArchitecture `json:"architecture"`
+	Architecture ReleaseArchitecture `json:"architecture,omitempty"`
 	// ReleaseStream is the stream from which we pick the latest candidate
 	Stream ReleaseStream `json:"stream"`
 	// Version is the minor version to search for

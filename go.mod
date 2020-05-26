@@ -45,6 +45,6 @@ require (
 	k8s.io/client-go v9.0.0+incompatible
 	k8s.io/test-infra v0.0.0-20200518220536-8da074ad41b6
 	k8s.io/utils v0.0.0-20200324210504-a9aa75ae1b89
-	sigs.k8s.io/controller-runtime v0.5.1
+	sigs.k8s.io/controller-runtime v0.5.4
 	sigs.k8s.io/yaml v1.2.0
 )

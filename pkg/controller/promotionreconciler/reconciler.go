@@ -13,7 +13,6 @@ import (
 	"github.com/sirupsen/logrus"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
-	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/github"
 	"sigs.k8s.io/controller-runtime"
@@ -42,15 +41,9 @@ type Options struct {
 	RegistryManager controllerruntime.Manager
 }
 
-const controllerName = "promotionreconciler"
+const ControllerName = "promotionreconciler"
 
 func AddToManager(mgr controllerruntime.Manager, opts Options) error {
-	if err := imagev1.AddToScheme(mgr.GetScheme()); err != nil {
-		return fmt.Errorf("failed to add imagev1 to scheme: %w", err)
-	}
-	if err := prowv1.AddToScheme(mgr.GetScheme()); err != nil {
-		return fmt.Errorf("failed to add prowv1 to scheme: %w", err)
-	}
 	// Pre-Allocate the Image informer rather than letting it allocate on demand, because
 	// starting the watch takes very long (~2 minutes) and having that delay added to our
 	// first (# worker) reconciles skews the workqueue duration metric bigtimes.
@@ -67,16 +60,16 @@ func AddToManager(mgr controllerruntime.Manager, opts Options) error {
 		return fmt.Errorf("failed to construct prowjobreconciler: %w", err)
 	}
 
-	log := logrus.WithField("controller", controllerName)
+	log := logrus.WithField("controller", ControllerName)
 	r := &reconciler{
 		ctx:                 context.Background(),
 		log:                 log,
-		client:              imagestreamtagwrapper.New(opts.RegistryManager.GetClient()),
+		client:              imagestreamtagwrapper.MustNew(opts.RegistryManager.GetClient(), opts.RegistryManager.GetCache()),
 		releaseBuildConfigs: opts.CIOperatorConfigAgent,
 		gitHubClient:        opts.GitHubClient,
 		enqueueJob:          prowJobEnqueuer,
 	}
-	c, err := controller.New(controllerName, opts.RegistryManager, controller.Options{
+	c, err := controller.New(ControllerName, opts.RegistryManager, controller.Options{
 		// Since we watch ImageStreams and not ImageStreamTags as the latter do not support
 		// watch, we create a lot more events the needed. In order to decrease load, we coalesce
 		// and delay all requests after a successful reconciliation for up to an hour.

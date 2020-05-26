@@ -362,5 +362,5 @@ func indexConfigsByTestInputImageStramTag(cfg api.ReleaseBuildConfiguration) []s
 }
 
 func publicURLForImage(potentiallyPrivate string) string {
-	return strings.ReplaceAll(potentiallyPrivate, "docker-registry.default.svc:5000", "registry.svc.ci.openshift.org")
+	return strings.ReplaceAll(potentiallyPrivate, "docker-registry.default.svc:5000", api.DomainForService(api.ServiceRegistry))
 }

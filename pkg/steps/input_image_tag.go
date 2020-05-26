@@ -18,8 +18,8 @@ import (
 	"github.com/openshift/ci-tools/pkg/util"
 )
 
-const (
-	apiCIRegistry = "registry.svc.ci.openshift.org"
+var (
+	apiCIRegistry = util.DomainForService("registry")
 )
 
 // inputImageTagStep will ensure that a tag exists

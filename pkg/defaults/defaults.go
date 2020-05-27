@@ -125,6 +125,7 @@ func FromConfig(
 	var hasReleaseStep bool
 	for _, rawStep := range stepConfigsForBuild(config, jobSpec) {
 		var step api.Step
+		var isReleaseStep bool
 		var additional []api.Step
 		var stepLinks []api.StepLink
 		if rawStep.InputImageTagStepConfiguration != nil {
@@ -165,13 +166,28 @@ func FromConfig(
 
 			hasReleaseStep = true
 
-			releaseStep := release.AssembleReleaseStep(true, *rawStep.ReleaseImagesTagStepConfiguration, params, config.Resources, podClient, imageClient, saGetter, rbacClient, artifactDir, jobSpec, dryLogger)
+			releaseStep := release.AssembleReleaseStep("latest", *rawStep.ReleaseImagesTagStepConfiguration, params, config.Resources, podClient, imageClient, saGetter, rbacClient, artifactDir, jobSpec, dryLogger)
 			addProvidesForStep(releaseStep, params)
 			buildSteps = append(buildSteps, releaseStep)
 
-			initialReleaseStep := release.AssembleReleaseStep(false, *rawStep.ReleaseImagesTagStepConfiguration, params, config.Resources, podClient, imageClient, saGetter, rbacClient, artifactDir, jobSpec, dryLogger)
+			initialReleaseStep := release.AssembleReleaseStep("initial", *rawStep.ReleaseImagesTagStepConfiguration, params, config.Resources, podClient, imageClient, saGetter, rbacClient, artifactDir, jobSpec, dryLogger)
 			addProvidesForStep(initialReleaseStep, params)
 			buildSteps = append(buildSteps, initialReleaseStep)
+		} else if rawStep.ResolvedReleaseImagesStepConfiguration != nil {
+			// this is a disgusting hack but the simplest implementation until we
+			// factor release steps into something more reusable
+			hasReleaseStep = true
+			// we need to expose the release step as 'step' so that it's in the
+			// graph and can be targeted with '--target', but we can't let it get
+			// removed via env-var, since release steps are apparently not subject
+			// to that mechanism ...
+			isReleaseStep = true
+
+			// we can get away with passing a nil configuration as we know
+			// that we've resolved the release to a pull-spec and set the
+			// override env var already, so this step will be
+			step = release.AssembleReleaseStep(rawStep.ResolvedReleaseImagesStepConfiguration.Name, api.ReleaseTagConfiguration{}, params, config.Resources, podClient, imageClient, saGetter, rbacClient, artifactDir, jobSpec, dryLogger)
+			addProvidesForStep(step, params)
 		} else if testStep := rawStep.TestStepConfiguration; testStep != nil {
 			if test := testStep.MultiStageTestConfigurationLiteral; test != nil {
 				step = steps.MultiStageTestStep(*testStep, config, params, podClient, secretGetter, saGetter, rbacClient, artifactDir, jobSpec, dryLogger)
@@ -204,11 +220,13 @@ func FromConfig(
 				step = steps.TestStep(*testStep, config.Resources, podClient, artifactDir, jobSpec, dryLogger)
 			}
 		}
-		step, ok := checkForFullyQualifiedStep(step, params)
-		if ok {
-			log.Printf("Task %s is satisfied by environment variables and will be skipped", step.Name())
-		} else {
-			imageStepLinks = append(imageStepLinks, stepLinks...)
+		if !isReleaseStep {
+			step, ok := checkForFullyQualifiedStep(step, params)
+			if ok {
+				log.Printf("Task %s is satisfied by environment variables and will be skipped", step.Name())
+			} else {
+				imageStepLinks = append(imageStepLinks, stepLinks...)
+			}
 		}
 		buildSteps = append(buildSteps, step)
 		buildSteps = append(buildSteps, additional...)
@@ -478,6 +496,10 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.Job
 
 	if config.ReleaseTagConfiguration != nil {
 		buildSteps = append(buildSteps, api.StepConfiguration{ReleaseImagesTagStepConfiguration: config.ReleaseTagConfiguration})
+	} else if config.Releases != nil {
+		for name := range config.Releases {
+			buildSteps = append(buildSteps, api.StepConfiguration{ResolvedReleaseImagesStepConfiguration: &api.ReleaseConfiguration{Name: name}})
+		}
 	}
 
 	buildSteps = append(buildSteps, config.RawSteps...)

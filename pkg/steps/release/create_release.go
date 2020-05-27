@@ -52,7 +52,7 @@ import (
 // branches of those releases.
 type assembleReleaseStep struct {
 	config      api.ReleaseTagConfiguration
-	latest      bool
+	name        string
 	params      api.Parameters
 	releaseSpec string
 	resources   api.ResourceConfiguration
@@ -568,7 +568,7 @@ func (s *assembleReleaseStep) Requires() []api.StepLink {
 	if s.params.HasInput(s.envVar()) {
 		return []api.StepLink{api.ReleaseImagesLink()}
 	}
-	if s.latest {
+	if s.name == "latest" {
 		return []api.StepLink{api.ImagesReadyLink()}
 	}
 	return []api.StepLink{api.ReleaseImagesLink()}
@@ -579,17 +579,16 @@ func (s *assembleReleaseStep) Creates() []api.StepLink {
 }
 
 func (s *assembleReleaseStep) tag() string {
-	if s.latest {
-		return "latest"
-	}
-	return "initial"
+	return s.name
 }
 
 func (s *assembleReleaseStep) streamName() string {
-	if s.latest {
+	switch s.name {
+	case "latest":
 		return api.StableImageStream
+	default:
+		return fmt.Sprintf("%s-%s", api.StableImageStream, s.name)
 	}
-	return fmt.Sprintf("%s-initial", api.StableImageStream)
 }
 
 func (s *assembleReleaseStep) envVar() string {
@@ -629,20 +628,17 @@ func (s *assembleReleaseStep) Name() string {
 }
 
 func (s *assembleReleaseStep) Description() string {
-	if s.latest {
-		return "Create the release image containing all images built by this job"
-	}
-	return "Create initial release image from the images that were in the input tag_specification"
+	return "Create the release image containing all images built by this job"
 }
 
 // AssembleReleaseStep builds a new update payload image based on the cluster version operator
 // and the operators defined in the release configuration.
-func AssembleReleaseStep(latest bool, config api.ReleaseTagConfiguration, params api.Parameters, resources api.ResourceConfiguration,
+func AssembleReleaseStep(name string, config api.ReleaseTagConfiguration, params api.Parameters, resources api.ResourceConfiguration,
 	podClient steps.PodClient, imageClient imageclientset.ImageV1Interface, saGetter coreclientset.ServiceAccountsGetter,
 	rbacClient rbacclientset.RbacV1Interface, artifactDir string, jobSpec *api.JobSpec, dryLogger *steps.DryLogger) api.Step {
 	return &assembleReleaseStep{
 		config:      config,
-		latest:      latest,
+		name:        name,
 		params:      params,
 		resources:   resources,
 		podClient:   podClient,

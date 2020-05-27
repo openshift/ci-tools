@@ -346,6 +346,14 @@ type ReleaseTagConfiguration struct {
 	TagOverrides map[string]string `json:"tag_overrides,omitempty"`
 }
 
+// ReleaseConfiguration records a resolved release with its name.
+// We always expect this step to be preempted with an env var
+// that was set at startup. This will be cleaner when we refactor
+// release dependencies.
+type ReleaseConfiguration struct {
+	Name string `json:"name"`
+}
+
 // PromotionConfiguration describes where images created by this
 // config should be published to. The release tag configuration
 // defines the inputs, while this defines the outputs.
@@ -399,6 +407,7 @@ type StepConfiguration struct {
 	RPMServeStepConfiguration                   *RPMServeStepConfiguration                   `json:"rpm_serve_step,omitempty"`
 	OutputImageTagStepConfiguration             *OutputImageTagStepConfiguration             `json:"output_image_tag_step,omitempty"`
 	ReleaseImagesTagStepConfiguration           *ReleaseTagConfiguration                     `json:"release_images_tag_step,omitempty"`
+	ResolvedReleaseImagesStepConfiguration      *ReleaseConfiguration                        `json:"resolved_release_images_step,omitempty"`
 	TestStepConfiguration                       *TestStepConfiguration                       `json:"test_step,omitempty"`
 	ProjectDirectoryImageBuildInputs            *ProjectDirectoryImageBuildInputs            `json:"project_directory_image_build_inputs,omitempty"`
 }

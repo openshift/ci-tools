@@ -52,7 +52,7 @@ import (
 // branches of those releases.
 type assembleReleaseStep struct {
 	config      api.ReleaseTagConfiguration
-	latest      bool
+	name        string
 	params      api.Parameters
 	releaseSpec string
 	resources   api.ResourceConfiguration
@@ -67,37 +67,7 @@ type assembleReleaseStep struct {
 
 func (s *assembleReleaseStep) Inputs(dry bool) (api.InputDefinition, error) {
 	if val, _ := s.params.Get(s.envVar()); len(val) > 0 {
-		result, err := s.imageClient.ImageStreamImports(s.config.Namespace).Create(&imageapi.ImageStreamImport{
-			ObjectMeta: meta.ObjectMeta{
-				Name: "release-import",
-			},
-			Spec: imageapi.ImageStreamImportSpec{
-				Images: []imageapi.ImageImportSpec{
-					{
-						From: coreapi.ObjectReference{
-							Kind: "DockerImage",
-							Name: val,
-						},
-					},
-				},
-			},
-		})
-		if err != nil {
-			if errors.IsForbidden(err) {
-				// the ci-operator expects to have POST /imagestreamimports in the namespace of the tag spec
-				log.Printf("warning: Unable to lock %s to an image digest pull spec, you don't have permission to access the necessary API.", s.envVar())
-				return api.InputDefinition{val}, nil
-			}
-			return nil, err
-		}
-		image := result.Status.Images[0]
-		if image.Image == nil {
-			log.Printf("warning: Unable to lock %s to an image digest pull spec due to an import error (%s): %s.", s.envVar(), image.Status.Reason, image.Status.Message)
-			return api.InputDefinition{val}, nil
-		}
-		log.Printf("Resolved release:%s %s", s.tag(), image.Image.DockerImageReference)
-		s.releaseSpec = image.Image.DockerImageReference
-		return api.InputDefinition{image.Image.Name}, nil
+		return api.InputDefinition{val}, nil
 	}
 	return nil, nil
 }
@@ -329,7 +299,7 @@ func (s *assembleReleaseStep) importFromReleaseImage(ctx context.Context, dry bo
 				return false, nil
 			}
 			if errors.IsForbidden(err) {
-				// the ci-operator expects to have POST /imagestreamimports in the namespace of the tag spec
+				// the ci-operator expects to have POST /imagestreamimports in the namespace of the job
 				log.Printf("warning: Unable to lock %s to an image digest pull spec, you don't have permission to access the necessary API.", s.envVar())
 				return false, nil
 			}
@@ -563,12 +533,12 @@ func hasFailedImportCondition(conditions []imageapi.TagEventCondition, generatio
 }
 
 func (s *assembleReleaseStep) Requires() []api.StepLink {
-	// if our prereq is provided, we only depend on the stable and stable-initial
-	// image streams to be populated
+	// if our prereq is provided, we don't depend on anything as
+	// we will populate the stable streams with our images
 	if s.params.HasInput(s.envVar()) {
-		return []api.StepLink{api.ReleaseImagesLink()}
+		return []api.StepLink{}
 	}
-	if s.latest {
+	if s.name == "latest" {
 		return []api.StepLink{api.ImagesReadyLink()}
 	}
 	return []api.StepLink{api.ReleaseImagesLink()}
@@ -579,17 +549,16 @@ func (s *assembleReleaseStep) Creates() []api.StepLink {
 }
 
 func (s *assembleReleaseStep) tag() string {
-	if s.latest {
-		return "latest"
-	}
-	return "initial"
+	return s.name
 }
 
 func (s *assembleReleaseStep) streamName() string {
-	if s.latest {
+	switch s.name {
+	case "latest":
 		return api.StableImageStream
+	default:
+		return fmt.Sprintf("%s-%s", api.StableImageStream, s.name)
 	}
-	return fmt.Sprintf("%s-initial", api.StableImageStream)
 }
 
 func (s *assembleReleaseStep) envVar() string {
@@ -629,20 +598,17 @@ func (s *assembleReleaseStep) Name() string {
 }
 
 func (s *assembleReleaseStep) Description() string {
-	if s.latest {
-		return "Create the release image containing all images built by this job"
-	}
-	return "Create initial release image from the images that were in the input tag_specification"
+	return "Create the release image containing all images built by this job"
 }
 
 // AssembleReleaseStep builds a new update payload image based on the cluster version operator
 // and the operators defined in the release configuration.
-func AssembleReleaseStep(latest bool, config api.ReleaseTagConfiguration, params api.Parameters, resources api.ResourceConfiguration,
+func AssembleReleaseStep(name string, config api.ReleaseTagConfiguration, params api.Parameters, resources api.ResourceConfiguration,
 	podClient steps.PodClient, imageClient imageclientset.ImageV1Interface, saGetter coreclientset.ServiceAccountsGetter,
 	rbacClient rbacclientset.RbacV1Interface, artifactDir string, jobSpec *api.JobSpec, dryLogger *steps.DryLogger) api.Step {
 	return &assembleReleaseStep{
 		config:      config,
-		latest:      latest,
+		name:        name,
 		params:      params,
 		resources:   resources,
 		podClient:   podClient,

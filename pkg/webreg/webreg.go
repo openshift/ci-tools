@@ -198,7 +198,19 @@ const jobSearchPage = `
 
 const templateDefinitions = `
 {{ define "nameWithLink" }}
-	<nobr><a href="/registry/{{ . }}" style="font-family:monospace">{{ . }}</a></nobr>
+	<nobr><a href="/{{ .Type }}/{{ .Name }}" style="font-family:monospace">{{ .Name }}</a></nobr>
+{{ end }}
+
+{{ define "nameWithLinkReference" }}
+	<nobr><a href="/reference/{{ . }}" style="font-family:monospace">{{ . }}</a></nobr>
+{{ end }}
+
+{{ define "nameWithLinkChain" }}
+	<nobr><a href="/chain/{{ . }}" style="font-family:monospace">{{ . }}</a></nobr>
+{{ end }}
+
+{{ define "nameWithLinkWorkflow" }}
+	<nobr><a href="/workflow/{{ . }}" style="font-family:monospace">{{ . }}</a></nobr>
 {{ end }}
 
 {{ define "stepTable" }}
@@ -215,12 +227,12 @@ const templateDefinitions = `
 	<tbody>
 		{{ range $index, $step := . }}
 			<tr>
-				{{ $name := testStepName $step }}
-				{{ $doc := docsForName $name }}
+				{{ $nameAndType := testStepNameAndType $step }}
+				{{ $doc := docsForName $nameAndType.Name }}
 				{{ if not $step.LiteralTestStep }}
-					<td>{{ template "nameWithLink" $name }}</td>
+					<td>{{ template "nameWithLink" $nameAndType }}</td>
 				{{ else }}
-					<td>{{ $name }}</td>
+					<td>{{ $nameAndType.Name }}</td>
 				{{ end }}
 				<td>{{ noescape $doc }}</td>
 			</tr>
@@ -233,8 +245,8 @@ const templateDefinitions = `
 {{ define "stepList" }}
 	<ul>
 	{{ range $index, $step := .}}
-		{{ $name := testStepName $step }}
-		<li>{{ template "nameWithLink" $name }}</li>
+		{{ $nameAndType := testStepNameAndType $step }}
+		<li>{{ template "nameWithLink" $nameAndType }}</li>
 	{{ end }}
 	</ul>
 {{ end }}
@@ -252,7 +264,7 @@ const templateDefinitions = `
 		<tbody>
 			{{ range $name, $config := . }}
 				<tr>
-					<td><b>Name:</b> {{ template "nameWithLink" $name }}<p>
+					<td><b>Name:</b> {{ template "nameWithLinkWorkflow" $name }}<p>
 						<b>Description:</b><br>{{ docsForName $name }}
 					</td>
 					<td>{{ if gt (len $config.Pre) 0 }}<b>Pre:</b>{{ template "stepList" $config.Pre }}{{ end }}
@@ -279,7 +291,7 @@ const templateDefinitions = `
 		<tbody>
 			{{ range $name, $config := . }}
 				<tr>
-					<td>{{ template "nameWithLink" $name }}</td>
+					<td>{{ template "nameWithLinkChain" $name }}</td>
 					<td>{{ docsForName $name }}</td>
 					<td>{{ template "stepList" $config }}</td>
 				</tr>
@@ -301,7 +313,7 @@ const templateDefinitions = `
 		<tbody>
 			{{ range $name, $config := . }}
 				<tr>
-					<td>{{ template "nameWithLink" $name }}</td>
+					<td>{{ template "nameWithLinkReference" $name }}</td>
 					<td>{{ docsForName $name }}</td>
 				</tr>
 			{{ end }}
@@ -1595,7 +1607,7 @@ func getBaseTemplate(workflows registry.WorkflowByName, chains registry.ChainByN
 			"docsForName": func(name string) string {
 				return docs[name]
 			},
-			"testStepName": getTestStepName,
+			"testStepNameAndType": getTestStepNameAndType,
 			"noescape": func(str string) template.HTML {
 				return template.HTML(str)
 			},
@@ -1634,16 +1646,26 @@ func getBaseTemplate(workflows registry.WorkflowByName, chains registry.ChainByN
 	return base
 }
 
-func getTestStepName(step api.TestStep) string {
+type stepNameAndType struct {
+	Name string
+	Type string
+}
+
+func getTestStepNameAndType(step api.TestStep) stepNameAndType {
+	var name, typeName string
 	if step.LiteralTestStep != nil {
-		return step.As
+		name = step.As
 	} else if step.Reference != nil {
-		return *step.Reference
+		name = *step.Reference
+		typeName = "reference"
 	} else if step.Chain != nil {
-		return *step.Chain
+		name = *step.Chain
+		typeName = "chain"
 	}
-	// this case shouldn't happen
-	return ""
+	return stepNameAndType{
+		Name: name,
+		Type: typeName,
+	}
 }
 
 func jobToWorkflow(name string, config api.MultiStageTestConfiguration, workflows registry.WorkflowByName, docs map[string]string) (workflowJob, map[string]string) {
@@ -1848,22 +1870,21 @@ func WebRegHandler(regAgent agents.RegistryAgent, confAgent agents.ConfigAgent) 
 				writeErrorPage(w, errors.New("Invalid path"), http.StatusNotImplemented)
 			}
 			return
-		} else if len(splitURI) == 2 && splitURI[0] == "registry" {
-			refs, chains, workflows, _ := regAgent.GetRegistryComponents()
-			if _, ok := refs[splitURI[1]]; ok {
+		} else if len(splitURI) == 2 {
+			switch splitURI[0] {
+			case "reference":
 				referenceHandler(regAgent, w, req)
 				return
-			}
-			if _, ok := chains[splitURI[1]]; ok {
+			case "chain":
 				chainHandler(regAgent, w, req)
 				return
-			}
-			if _, ok := workflows[splitURI[1]]; ok {
+			case "workflow":
 				workflowHandler(regAgent, w, req)
 				return
+			default:
+				writeErrorPage(w, fmt.Errorf("Component type %s not found", splitURI[0]), http.StatusNotFound)
+				return
 			}
-			writeErrorPage(w, fmt.Errorf("Registry element %s not found", splitURI[1]), http.StatusNotFound)
-			return
 		}
 		writeErrorPage(w, errors.New("Invalid path"), http.StatusNotImplemented)
 	}
@@ -1920,6 +1941,10 @@ func referenceHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *ht
 		return
 	}
 	refs, _, _, docs := agent.GetRegistryComponents()
+	if _, ok := refs[name]; !ok {
+		writeErrorPage(w, fmt.Errorf("Could not find reference %s: %v", name, err), http.StatusNotFound)
+		return
+	}
 	ref := api.RegistryReference{
 		LiteralTestStep: api.LiteralTestStep{
 			As:       name,
@@ -1944,6 +1969,10 @@ func chainHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *http.R
 		writeErrorPage(w, fmt.Errorf("Failed to render page: %v", err), http.StatusInternalServerError)
 		return
 	}
+	if _, ok := chains[name]; !ok {
+		writeErrorPage(w, fmt.Errorf("Could not find chain %s: %v", name, err), http.StatusNotFound)
+		return
+	}
 	chain := api.RegistryChain{
 		As:            name,
 		Documentation: docs[name],
@@ -1963,6 +1992,10 @@ func workflowHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *htt
 	page, err := page.Parse(workflowJobPage)
 	if err != nil {
 		writeErrorPage(w, fmt.Errorf("Failed to render page: %v", err), http.StatusInternalServerError)
+		return
+	}
+	if _, ok := workflows[name]; !ok {
+		writeErrorPage(w, fmt.Errorf("Could not find workflow %s: %v", name, err), http.StatusNotFound)
 		return
 	}
 	workflow := workflowJob{

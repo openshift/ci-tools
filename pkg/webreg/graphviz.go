@@ -203,7 +203,7 @@ func writeSubgraph(mainGraph graph, sg subgraph, index int, indentPrefix string)
 	builder.WriteString(fmt.Sprintf("%slabel=\"%s\";\n", indentPrefix, html.EscapeString(sg.label)))
 	builder.WriteString(fmt.Sprint(indentPrefix, "labeljust=\"l\";\n"))
 	if sg.linkable {
-		builder.WriteString(fmt.Sprintf("%shref=\"/%s/%s\";\n", indentPrefix, "registry", html.EscapeString(sg.label)))
+		builder.WriteString(fmt.Sprintf("%shref=\"/%s/%s\";\n", indentPrefix, "chain", html.EscapeString(sg.label)))
 		builder.WriteString(fmt.Sprint(indentPrefix, bootstrap413monospace, ";\n"))
 	} else {
 		builder.WriteString(fmt.Sprint(indentPrefix, bootstrap413fonts, ";\n"))
@@ -235,7 +235,7 @@ func writeDotFile(mainGraph graph) string {
 	for index, node := range mainGraph.nodes {
 		href := ""
 		if node.linkable {
-			href = fmt.Sprintf(" href=\"/%s/%s\"", "registry", html.EscapeString(node.label))
+			href = fmt.Sprintf(" href=\"/%s/%s\"", "reference", html.EscapeString(node.label))
 		}
 		builder.WriteString(fmt.Sprintf("%s%d [label=\"%s\"%s];\n", indentPrefix, index, node.label, href))
 	}

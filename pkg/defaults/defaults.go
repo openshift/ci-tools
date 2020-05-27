@@ -219,6 +219,7 @@ func FromConfig(
 			} else {
 				step = steps.TestStep(*testStep, config.Resources, podClient, artifactDir, jobSpec, dryLogger)
 			}
+			addProvidesForStep(step, params)
 		}
 		if !isReleaseStep {
 			step, ok := checkForFullyQualifiedStep(step, params)

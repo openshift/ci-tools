@@ -560,6 +560,18 @@ type LiteralTestStep struct {
 	Resources ResourceRequirements `json:"resources,omitempty"`
 	// Credentials defines the credentials we'll mount into this step.
 	Credentials []CredentialReference `json:"credentials,omitempty"`
+	// Environment lists parameters that should be set by the test.
+	Environment []StepParameter `json:"env,omitempty"`
+}
+
+// StepParameter is a variable set by the test, with an optional default.
+type StepParameter struct {
+	// Name of the environment variable.
+	Name string `json:"name"`
+	// Default if not set, optional, makes the parameter not required if set.
+	Default string `json:"default,omitempty"`
+	// Documentation is a textual description of the parameter.
+	Documentation string `json:"documentation,omitempty"`
 }
 
 // CredentialReference defines a secret to mount into a step and where to mount it.
@@ -608,6 +620,8 @@ type MultiStageTestConfiguration struct {
 	// Workflow is the name of the workflow to be used for this configuration. For fields defined in both
 	// the config and the workflow, the fields from the config will override what is set in Workflow.
 	Workflow *string `json:"workflow,omitempty"`
+	// Environment has the values of parameters for the steps.
+	Environment TestEnvironment `json:"env,omitempty"`
 }
 
 // MultiStageTestConfigurationLiteral is a form of the MultiStageTestConfiguration that does not include
@@ -623,7 +637,12 @@ type MultiStageTestConfigurationLiteral struct {
 	// Post is the array of test steps run after the tests finish and teardown/deprovision resources.
 	// Post steps always run, even if previous steps fail.
 	Post []LiteralTestStep `json:"post,omitempty"`
+	// Environment has the values of parameters for the steps.
+	Environment TestEnvironment `json:"env,omitempty"`
 }
+
+// TestEnvironment has the values of parameters for multi-stage tests.
+type TestEnvironment map[string]string
 
 // Secret describes a secret to be mounted inside a test
 // container.

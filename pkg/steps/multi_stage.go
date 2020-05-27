@@ -50,6 +50,7 @@ type multiStageTestStep struct {
 	config  *api.ReleaseBuildConfiguration
 	// params exposes getters for variables created by other steps
 	params          api.Parameters
+	env             api.TestEnvironment
 	podClient       PodClient
 	secretClient    coreclientset.SecretsGetter
 	saClient        coreclientset.ServiceAccountsGetter
@@ -90,21 +91,23 @@ func newMultiStageTestStep(
 	if artifactDir != "" {
 		artifactDir = filepath.Join(artifactDir, testConfig.As)
 	}
+	ms := testConfig.MultiStageTestConfigurationLiteral
 	return &multiStageTestStep{
 		logger:       logger,
 		name:         testConfig.As,
-		profile:      testConfig.MultiStageTestConfigurationLiteral.ClusterProfile,
+		profile:      ms.ClusterProfile,
 		config:       config,
 		params:       params,
+		env:          ms.Environment,
 		podClient:    podClient,
 		secretClient: secretClient,
 		saClient:     saClient,
 		rbacClient:   rbacClient,
 		artifactDir:  artifactDir,
 		jobSpec:      jobSpec,
-		pre:          testConfig.MultiStageTestConfigurationLiteral.Pre,
-		test:         testConfig.MultiStageTestConfigurationLiteral.Test,
-		post:         testConfig.MultiStageTestConfigurationLiteral.Post,
+		pre:          ms.Pre,
+		test:         ms.Test,
+		post:         ms.Post,
 	}
 }
 
@@ -372,6 +375,7 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 			{Name: "JOB_NAME_HASH", Value: s.jobSpec.JobNameHash()},
 		}...)
 		container.Env = append(container.Env, env...)
+		container.Env = append(container.Env, s.generateParams(step.Environment)...)
 		if owner := s.jobSpec.Owner(); owner != nil {
 			pod.OwnerReferences = append(pod.OwnerReferences, *owner)
 		}
@@ -411,6 +415,18 @@ func addSecretWrapper(pod *coreapi.Pod) {
 	container.Args = append([]string{}, append(container.Command, container.Args...)...)
 	container.Command = []string{bin}
 	container.VolumeMounts = append(container.VolumeMounts, mount)
+}
+
+func (s *multiStageTestStep) generateParams(env []api.StepParameter) []coreapi.EnvVar {
+	var ret []coreapi.EnvVar
+	for _, env := range env {
+		value := env.Default
+		if v, ok := s.env[env.Name]; ok {
+			value = v
+		}
+		ret = append(ret, coreapi.EnvVar{Name: env.Name, Value: value})
+	}
+	return ret
 }
 
 func addSecret(secret string, pod *coreapi.Pod) {

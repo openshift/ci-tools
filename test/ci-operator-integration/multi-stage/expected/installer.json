@@ -287,6 +287,9 @@
               "value": "gcp-quota-slice0"
             },
             {
+              "name": "IMAGE_FORMAT"
+            },
+            {
               "name": "CLUSTER_TYPE",
               "value": "gcp"
             },
@@ -510,6 +513,9 @@
             {
               "name": "LEASED_RESOURCE",
               "value": "gcp-quota-slice0"
+            },
+            {
+              "name": "IMAGE_FORMAT"
             },
             {
               "name": "CLUSTER_TYPE",
@@ -737,6 +743,9 @@
               "value": "gcp-quota-slice0"
             },
             {
+              "name": "IMAGE_FORMAT"
+            },
+            {
               "name": "CLUSTER_TYPE",
               "value": "gcp"
             },
@@ -962,6 +971,9 @@
               "value": "gcp-quota-slice0"
             },
             {
+              "name": "IMAGE_FORMAT"
+            },
+            {
               "name": "CLUSTER_TYPE",
               "value": "gcp"
             },
@@ -1185,6 +1197,9 @@
             {
               "name": "LEASED_RESOURCE",
               "value": "gcp-quota-slice0"
+            },
+            {
+              "name": "IMAGE_FORMAT"
             },
             {
               "name": "CLUSTER_TYPE",

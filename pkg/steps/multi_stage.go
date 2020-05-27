@@ -22,23 +22,25 @@ import (
 )
 
 const (
-	//MultiStageTestLabel is a text placeholder
+	// MultiStageTestLabel is the label we use to mark a pod as part of a multi-stage test
 	MultiStageTestLabel = "ci.openshift.io/multi-stage-test"
-	//ClusterProfileMountPath is a text placeholder
+	// ClusterProfileMountPath is where we mount the cluster profile in a pod
 	ClusterProfileMountPath = "/var/run/secrets/ci.openshift.io/cluster-profile"
-	//SecretMountPath is a text placeholder
+	// SecretMountPath is where we mount the shared dir secret
 	SecretMountPath = "/var/run/secrets/ci.openshift.io/multi-stage"
-	//SecretMountEnv is a text placeholder
+	// SecretMountEnv is the env we use to expose the shared dir
 	SecretMountEnv = "SHARED_DIR"
-	//ClusterProfileMountEnv is a text placeholder
+	// ClusterProfileMountEnv is the env we use to expose the cluster profile dir
 	ClusterProfileMountEnv = "CLUSTER_PROFILE_DIR"
-	//InitialReleaseEnv is a text placeholder
+	// InitialReleaseEnv is the environment we use to expose the initial payload
 	InitialReleaseEnv = "RELEASE_IMAGE_INITIAL"
-	//LatestReleaseEnv is a text placeholder
+	// LatestReleaseEnv is the environment we use to expose the latest payload
 	LatestReleaseEnv = "RELEASE_IMAGE_LATEST"
+	// ImageFormatEnv is the environment we use to hold the base pull spec
+	ImageFormatEnv = "IMAGE_FORMAT"
 )
 
-var envForProfile = []string{InitialReleaseEnv, LatestReleaseEnv, leaseEnv}
+var envForProfile = []string{InitialReleaseEnv, LatestReleaseEnv, leaseEnv, ImageFormatEnv}
 
 type multiStageTestStep struct {
 	dry     bool

@@ -71,6 +71,8 @@ func newOpts() (*options, error) {
 	kubeconfigFlagDescription := "The kubeconfig to use. All contexts in it will be considered a build cluster. If it does not have a context named 'app.ci', loading in-cluster config will be attempted."
 	if f := flag.Lookup("kubeconfig"); f != nil {
 		f.Usage = kubeconfigFlagDescription
+		// https://i.kym-cdn.com/entries/icons/original/000/018/012/this_is_fine.jpeg
+		defer func() { opts.kubeconfig = f.Value.String() }()
 	} else {
 		flag.StringVar(&opts.kubeconfig, "kubeconfig", "", kubeconfigFlagDescription)
 	}

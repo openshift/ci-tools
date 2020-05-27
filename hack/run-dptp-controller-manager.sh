@@ -13,7 +13,8 @@ for additional_context in $(kubectl --kubeconfig $kubeconfig config get-contexts
   kubectl --kubeconfig $kubeconfig config delete-context "$additional_context"
   kubectl --kubeconfig $kubeconfig config delete-cluster "$additional_context" || true
 done
-export KUBECONFIG=$kubeconfig
+# Make sure user env var wont overrule
+unset KUBECONFIG
 
 # Steve will make this nicer at some point. We need to preserve the `auths[$registryName] = {"auth":"value" }
 # structure while still filtering out the other registries
@@ -32,4 +33,5 @@ go build  -v -o /tmp/dptp-cm ./cmd/dptp-controller-manager
   --leader-election-suffix="$USER" \
   --enable-controller=test_images_distributor \
   --testImagesDistributorOptions.imagePullSecretPath=$dockercfg \
+  --kubeconfig=$kubeconfig \
   --dry-run=true

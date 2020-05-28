@@ -322,13 +322,9 @@ objects:
         }
 
         function run-upgrade-tests() {
-          openshift-tests run-resourcewatch &
-          rw_pid=$!
           openshift-tests run-upgrade "${TEST_SUITE}" --to-image "${IMAGE:-${RELEASE_IMAGE_LATEST}}" \
             --options "${TEST_OPTIONS:-}" \
             --provider "${TEST_PROVIDER:-}" -o /tmp/artifacts/e2e.log --junit-dir /tmp/artifacts/junit
-          kill $rw_pid
-          tar -cf ${ARTIFACT_DIR}/resourcewatch.tar /repository
         }
 
         function run-tests() {

@@ -358,6 +358,11 @@ func TestGeneratePodSpecMultiStage(t *testing.T) {
 				Secret: &corev1.SecretVolumeSource{SecretName: "result-aggregator"},
 			},
 		}, {
+			Name: "ci-pull-credentials",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{SecretName: "ci-pull-credentials"},
+			},
+		}, {
 			Name: "cluster-profile",
 			VolumeSource: corev1.VolumeSource{
 				Projected: &corev1.ProjectedVolumeSource{
@@ -389,6 +394,7 @@ func TestGeneratePodSpecMultiStage(t *testing.T) {
 				"--report-username=ci",
 				"--report-password-file=/etc/report/password.txt",
 				"--target=test",
+				"--secret-dir=/secrets/ci-pull-credentials",
 				"--secret-dir=/usr/local/test-cluster-profile",
 				"--lease-server-password-file=/etc/boskos/password",
 			},
@@ -399,12 +405,13 @@ func TestGeneratePodSpecMultiStage(t *testing.T) {
 				{Name: "apici-ci-operator-credentials", ReadOnly: true, MountPath: "/etc/apici"},
 				{Name: "pull-secret", ReadOnly: true, MountPath: "/etc/pull-secret"},
 				{Name: "result-aggregator", ReadOnly: true, MountPath: "/etc/report"},
+				{Name: "ci-pull-credentials", ReadOnly: true, MountPath: "/secrets/ci-pull-credentials"},
 				{Name: "cluster-profile", MountPath: "/usr/local/test-cluster-profile"},
 				{Name: "boskos", ReadOnly: true, MountPath: "/etc/boskos"},
 			},
 		}},
 	}
-	podSpec := *generatePodSpecMultiStage(&info, &test)
+	podSpec := *generatePodSpecMultiStage(&info, &test, true)
 	if !equality.Semantic.DeepEqual(&podSpec, &expected) {
 		t.Errorf("expected PodSpec diff:\n%s", cmp.Diff(expected, podSpec, unexportedFields...))
 	}

@@ -249,6 +249,7 @@ func FromConfig(
 					return nil, nil, fmt.Errorf("cannot resolve lease type from cluster type: %v", err)
 				}
 				step = steps.LeaseStep(leaseClient, lease, step, jobSpec.Namespace, namespaceClient)
+				addProvidesForStep(step, params)
 				break
 			}
 		}

@@ -258,13 +258,15 @@ func (s *templateExecutionStep) SubTests() []*junit.TestCase {
 
 func (s *templateExecutionStep) Requires() []api.StepLink {
 	var links []api.StepLink
+	var needsRelease bool
 	for _, p := range s.template.Parameters {
+		needsRelease = strings.HasPrefix(p.Name, "RELEASE_IMAGE_") || needsRelease
 		if s.params.Has(p.Name) {
 			paramLinks := s.params.Links(p.Name)
 			links = append(links, paramLinks...)
 			continue
 		}
-		if strings.HasPrefix(p.Name, "IMAGE_") {
+		if strings.HasPrefix(p.Name, "IMAGE_") && !needsRelease {
 			links = append(links, api.ReleaseImagesLink())
 			continue
 		}

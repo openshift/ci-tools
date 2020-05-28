@@ -166,7 +166,7 @@ func (r *reconciler) reconcile(log *logrus.Entry, request controllerruntime.Requ
 		return fmt.Errorf("failed to create prowjob: %w", err)
 	}
 	r.createdJobsCounter.WithLabelValues(orbc.Org, orbc.Repo, orbc.Branch).Inc()
-	log.WithField("name", pj.Name).Info("Successfully created prowjob")
+	log.WithField("name", pj.Name).WithField("job", pj.Spec.Job).Info("Successfully created prowjob")
 
 	// There is some delay until it gets back to our cache, so block until we can retrieve
 	// it successfully.

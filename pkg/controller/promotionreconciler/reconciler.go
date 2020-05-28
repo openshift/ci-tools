@@ -166,7 +166,6 @@ func (r *reconciler) reconcile(req controllerruntime.Request, log *logrus.Entry)
 	if err != nil {
 		return controllerutil.TerminalError(fmt.Errorf("failed to get ref for imageStreamTag: %w", err))
 	}
-	log = log.WithField("org", istRef.org).WithField("repo", istRef.repo).WithField("branch", istRef.branch)
 
 	currentHEAD, found, err := r.currentHEADForBranch(istRef, log)
 	if err != nil {
@@ -179,7 +178,9 @@ func (r *reconciler) reconcile(req controllerruntime.Request, log *logrus.Entry)
 	if currentHEAD == istRef.commit {
 		return nil
 	}
+	log = log.WithField("org", istRef.org).WithField("repo", istRef.repo).WithField("branch", istRef.branch).WithField("currentHEAD", currentHEAD)
 
+	log.Info("Requesting prowjob creation")
 	r.enqueueJob(prowjobreconciler.OrgRepoBranchCommit{
 		Org:    istRef.org,
 		Repo:   istRef.repo,

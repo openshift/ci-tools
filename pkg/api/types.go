@@ -230,7 +230,7 @@ type Prerelease struct {
 	Product ReleaseProduct `json:"product"`
 	// Architecture is the architecture for the product.
 	// Defaults to amd64.
-	Architecture ReleaseArchitecture `json:"architecture"`
+	Architecture ReleaseArchitecture `json:"architecture,omitempty"`
 	// VersionBounds describe the allowable version bounds to search in
 	VersionBounds VersionBounds `json:"version_bounds"`
 }
@@ -278,7 +278,7 @@ type Release struct {
 	Channel ReleaseChannel `json:"channel"`
 	// Architecture is the architecture for the release.
 	// Defaults to amd64.
-	Architecture ReleaseArchitecture `json:"architecture"`
+	Architecture ReleaseArchitecture `json:"architecture,omitempty"`
 }
 
 type ReleaseChannel string

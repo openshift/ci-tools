@@ -416,16 +416,16 @@ func addGitRemote(logger *logrus.Entry, git gitFunc, org, repo, repoDir, remoteN
 }
 
 func mergeRemotesAndPush(logger *logrus.Entry, git gitFunc, repoDir, srcRemote, branch, destURL string, confirm bool) error {
-	if _, _, err := git(logger, repoDir, []string{"fetch", destURL, branch}...); err != nil {
+	if err := checkGitError(git(logger, repoDir, []string{"fetch", destURL, branch}...)); err != nil {
 		return fmt.Errorf("failed to fetch remote %s: %v", destURL, err)
 	}
 
-	if _, _, err := git(logger, repoDir, []string{"checkout", "FETCH_HEAD"}...); err != nil {
+	if err := checkGitError(git(logger, repoDir, []string{"checkout", "FETCH_HEAD"}...)); err != nil {
 		return fmt.Errorf("failed to checkout to FETCH_HEAD: %v", err)
 	}
 
 	sourceBranch := fmt.Sprintf("%s/%s", srcRemote, branch)
-	if _, _, err := git(logger, repoDir, []string{"merge", sourceBranch, "-m", "'Periodic merge from DPTP; pub->priv'"}...); err != nil {
+	if err := checkGitError(git(logger, repoDir, []string{"merge", sourceBranch, "-m", "'Periodic merge from DPTP; pub->priv'"}...)); err != nil {
 		return fmt.Errorf("failed to merge %s: %v", sourceBranch, err)
 	}
 
@@ -435,12 +435,24 @@ func mergeRemotesAndPush(logger *logrus.Entry, git gitFunc, repoDir, srcRemote, 
 	}
 	cmd = append(cmd, destURL, fmt.Sprintf("HEAD:%s", branch))
 
-	_, _, err := git(logger, repoDir, cmd...)
+	err := checkGitError(git(logger, repoDir, cmd...))
 	if err != nil {
 		return fmt.Errorf("failed to push to destination: %v", err)
 	}
 
 	logger.Info("Successfully pushed to destination")
+	return nil
+}
+
+func checkGitError(out string, exitCode int, err error) error {
+	if err != nil {
+		return err
+	}
+
+	if exitCode != 0 {
+		return fmt.Errorf("failed with %d exit-code: %s", exitCode, out)
+	}
+
 	return nil
 }
 

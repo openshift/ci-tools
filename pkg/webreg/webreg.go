@@ -351,6 +351,14 @@ const templateDefinitions = `
 									<li><nobr><a href="/job?org={{$org.Name}}&repo={{$repo.Name}}&branch={{$branch.Name}}&test={{$test}}" style="font-family:monospace">{{$test}}</a></nobr></li>
 								{{ end }}
 								</ul>
+								{{ range $index, $variant := $branch.Variants }}
+									<b>Variant: {{ $variant.Name }}</b>
+									<ul>
+										{{ range $index, $test := $variant.Tests }}
+											<li><nobr><a href="/job?org={{$org.Name}}&repo={{$repo.Name}}&branch={{$branch.Name}}&test={{$test}}&variant={{$variant.Name}}" style="font-family:monospace">{{$test}}</a></nobr></li>
+										{{ end }}
+									</ul>
+								{{ end }}
 							</td>
 						</tr>
 					{{ end }}
@@ -1597,6 +1605,12 @@ type Repo struct {
 }
 
 type Branch struct {
+	Name     string
+	Tests    []string
+	Variants []Variant
+}
+
+type Variant struct {
 	Name  string
 	Tests []string
 }
@@ -2097,7 +2111,7 @@ func jobHandler(regAgent agents.RegistryAgent, confAgent agents.ConfigAgent, w h
 }
 
 // addJob adds a test to the specified org, repo, and branch in the Jobs struct in alphabetical order
-func (j *Jobs) addJob(orgName, repoName, branchName, testName string) {
+func (j *Jobs) addJob(orgName, repoName, branchName, variantName, testName string) {
 	orgIndex := 0
 	orgExists := false
 	for _, currOrg := range j.Orgs {
@@ -2145,10 +2159,36 @@ func (j *Jobs) addJob(orgName, repoName, branchName, testName string) {
 		branches := j.Orgs[orgIndex].Repos[repoIndex].Branches
 		j.Orgs[orgIndex].Repos[repoIndex].Branches = append(branches[:branchIndex], append([]Branch{newBranch}, branches[branchIndex:]...)...)
 	}
+	variantIndex := -1
+	if variantName != "" {
+		variantIndex = 0
+		variantExists := false
+		for _, currVariant := range j.Orgs[orgIndex].Repos[repoIndex].Branches[branchIndex].Variants {
+			if diff := strings.Compare(currVariant.Name, variantName); diff == 0 {
+				variantExists = true
+				break
+			} else if diff > 0 {
+				break
+			}
+			variantIndex++
+		}
+		if !variantExists {
+			newVariant := Variant{Name: variantName}
+			variants := j.Orgs[orgIndex].Repos[repoIndex].Branches[branchIndex].Variants
+			j.Orgs[orgIndex].Repos[repoIndex].Branches[branchIndex].Variants = append(variants[:variantIndex], append([]Variant{newVariant}, variants[variantIndex:]...)...)
+		}
+	}
 	// a single test shouldn't be added multiple times, but that case should be handled correctly just in case
 	testIndex := 0
 	testExists := false
-	for _, currTestName := range j.Orgs[orgIndex].Repos[repoIndex].Branches[branchIndex].Tests {
+	var testsArr []string
+	if variantIndex == -1 {
+		testsArr = j.Orgs[orgIndex].Repos[repoIndex].Branches[branchIndex].Tests
+	} else {
+
+		testsArr = j.Orgs[orgIndex].Repos[repoIndex].Branches[branchIndex].Variants[variantIndex].Tests
+	}
+	for _, currTestName := range testsArr {
 		if diff := strings.Compare(currTestName, testName); diff == 0 {
 			testExists = true
 			break
@@ -2158,8 +2198,11 @@ func (j *Jobs) addJob(orgName, repoName, branchName, testName string) {
 		testIndex++
 	}
 	if !testExists {
-		tests := j.Orgs[orgIndex].Repos[repoIndex].Branches[branchIndex].Tests
-		j.Orgs[orgIndex].Repos[repoIndex].Branches[branchIndex].Tests = append(tests[:testIndex], append([]string{testName}, tests[testIndex:]...)...)
+		if variantIndex == -1 {
+			j.Orgs[orgIndex].Repos[repoIndex].Branches[branchIndex].Tests = append(testsArr[:testIndex], append([]string{testName}, testsArr[testIndex:]...)...)
+		} else {
+			j.Orgs[orgIndex].Repos[repoIndex].Branches[branchIndex].Variants[variantIndex].Tests = append(testsArr[:testIndex], append([]string{testName}, testsArr[testIndex:]...)...)
+		}
 	}
 }
 
@@ -2172,8 +2215,7 @@ func getAllMultiStageTests(confAgent agents.ConfigAgent) *Jobs {
 			for _, releaseConfig := range repoConfigs {
 				for _, test := range releaseConfig.Tests {
 					if test.MultiStageTestConfiguration != nil {
-						// TODO(apavel): handle variant configs here
-						jobs.addJob(org, repo, releaseConfig.Metadata.Branch, test.As)
+						jobs.addJob(org, repo, releaseConfig.Metadata.Branch, releaseConfig.Metadata.Variant, test.As)
 					}
 				}
 			}
@@ -2210,7 +2252,15 @@ func searchJobs(jobs *Jobs, search string) *Jobs {
 				for _, test := range branch.Tests {
 					fullJobName := fmt.Sprintf("%s-%s-%s-%s", org.Name, repo.Name, branch.Name, test)
 					if strings.Contains(fullJobName, search) {
-						matches.addJob(org.Name, repo.Name, branch.Name, test)
+						matches.addJob(org.Name, repo.Name, branch.Name, "", test)
+					}
+				}
+				for _, variant := range branch.Variants {
+					for _, test := range variant.Tests {
+						fullJobName := fmt.Sprintf("%s-%s-%s-%s-%s", org.Name, repo.Name, branch.Name, variant.Name, test)
+						if strings.Contains(fullJobName, search) {
+							matches.addJob(org.Name, repo.Name, branch.Name, variant.Name, test)
+						}
 					}
 				}
 			}

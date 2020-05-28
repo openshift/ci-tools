@@ -36,6 +36,7 @@ type options struct {
 	gitDir               string
 	confirm              bool
 	failOnNonexistentDst bool
+	debug                bool
 }
 
 func (o *options) validate() []error {
@@ -88,6 +89,8 @@ func gatherOptions() options {
 	fs.StringVar(&o.gitDir, "git-dir", "", "Path to directory in which to perform Git operations")
 	fs.BoolVar(&o.confirm, "confirm", false, "Set true to actually execute all world-changing operations")
 	fs.BoolVar(&o.failOnNonexistentDst, "fail-on-missing-destination", false, "Set true to make the tool to consider missing sync destination as an error")
+
+	fs.BoolVar(&o.debug, "debug", false, "Set true to enable debug logging level")
 
 	o.WhitelistOptions.Bind(fs)
 	if err := fs.Parse(os.Args[1:]); err != nil {
@@ -466,6 +469,10 @@ func main() {
 			logrus.WithError(err).Error("Invalid option")
 		}
 		logrus.Fatal("Invalid options, exiting")
+	}
+
+	if o.debug {
+		logrus.SetLevel(logrus.DebugLevel)
 	}
 
 	go func() {

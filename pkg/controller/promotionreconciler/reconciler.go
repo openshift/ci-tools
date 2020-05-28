@@ -158,7 +158,7 @@ func (r *reconciler) reconcile(req controllerruntime.Request, log *logrus.Entry)
 	}
 	if ciOPConfig == nil {
 		// We don't know how to build this
-		log.Debug("No promotionConfig found")
+		log.Trace("No promotionConfig found")
 		return nil
 	}
 

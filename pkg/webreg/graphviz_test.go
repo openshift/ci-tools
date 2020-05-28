@@ -15,11 +15,11 @@ const ipiWorkflow = `digraph Webreg {
 	rankdir=TB;
 	label="Workflow &#34;ipi&#34;";
 
-	0 [label="ipi-install-rbac" href="/registry/ipi-install-rbac"];
-	1 [label="ipi-install-install" href="/registry/ipi-install-install"];
+	0 [label="ipi-install-rbac" href="/reference/ipi-install-rbac"];
+	1 [label="ipi-install-install" href="/reference/ipi-install-install"];
 	2 [label="Intentionally left blank"];
-	3 [label="ipi-deprovision-must-gather" href="/registry/ipi-deprovision-must-gather"];
-	4 [label="ipi-deprovision-deprovision" href="/registry/ipi-deprovision-deprovision"];
+	3 [label="ipi-deprovision-must-gather" href="/reference/ipi-deprovision-must-gather"];
+	4 [label="ipi-deprovision-deprovision" href="/reference/ipi-deprovision-deprovision"];
 
 	0 -> 1 ;
 	3 -> 4 ;
@@ -33,7 +33,7 @@ const ipiWorkflow = `digraph Webreg {
 		subgraph cluster_0 {
 			label="ipi-install";
 			labeljust="l";
-			href="/registry/ipi-install";
+			href="/chain/ipi-install";
 			fontname="SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace";
 			0;
 			1;
@@ -52,7 +52,7 @@ const ipiWorkflow = `digraph Webreg {
 		subgraph cluster_3 {
 			label="ipi-deprovision";
 			labeljust="l";
-			href="/registry/ipi-deprovision";
+			href="/chain/ipi-deprovision";
 			fontname="SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace";
 			3;
 			4;
@@ -67,8 +67,8 @@ const installChain = `digraph Webreg {
 	rankdir=TB;
 	label="Chain &#34;ipi-install&#34;";
 
-	0 [label="ipi-install-rbac" href="/registry/ipi-install-rbac"];
-	1 [label="ipi-install-install" href="/registry/ipi-install-install"];
+	0 [label="ipi-install-rbac" href="/reference/ipi-install-rbac"];
+	1 [label="ipi-install-install" href="/reference/ipi-install-install"];
 
 	0 -> 1 ;
 
@@ -81,8 +81,8 @@ const deprovisionChain = `digraph Webreg {
 	rankdir=TB;
 	label="Chain &#34;ipi-deprovision&#34;";
 
-	0 [label="ipi-deprovision-must-gather" href="/registry/ipi-deprovision-must-gather"];
-	1 [label="ipi-deprovision-deprovision" href="/registry/ipi-deprovision-deprovision"];
+	0 [label="ipi-deprovision-must-gather" href="/reference/ipi-deprovision-must-gather"];
+	1 [label="ipi-deprovision-deprovision" href="/reference/ipi-deprovision-deprovision"];
 
 	0 -> 1 ;
 

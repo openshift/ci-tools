@@ -16,6 +16,11 @@ images:
 promotion:
   name: other
   namespace: ocp
+releases:
+  initial:
+    candidate:
+      product: okd
+      version: "4.3"
 resources:
   '*':
     limits:
@@ -49,6 +54,16 @@ tests:
   cron: '@yearly'
   openshift_ansible:
     cluster_profile: aws
+- as: steps
+  steps:
+    test:
+      - as: do-nothing
+        commands: exit 0
+        from: base
+        resources:
+          requests:
+            cpu: 100m
+            memory: 200Mi
 zz_generated_metadata:
   branch: master
   org: super

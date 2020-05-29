@@ -324,43 +324,60 @@ const templateDefinitions = `
 {{ define "jobTable" }}
     <h2 id="jobs"><a href="#jobs">Jobs</a></h2>
 	<table class="table">
+	{{ $containsVariant := .ContainsVariant }}
 		<thead>
 			<tr>
 				<th title="GitHub organization that the job is from" class="info">Org</th>
 				<th title="GitHub repo that the job is from" class="info">Repo</th>
 				<th title="GitHub branch that the job is from" class="info">Branch</th>
+				{{ if $containsVariant }}
+					<th title="Variant of the ci-operator config" class="info">Variant</th>
+				{{ end }}
 				<th title="The multistage tests in the configuration" class="info">Tests</th>
 			</tr>
 		</thead>
 		<tbody>
 			{{ range $index, $org := .Orgs }}
 				<tr>
-					<td rowspan="{{ orgSpan $org }}" style="vertical-align: middle;">{{ $org.Name }}</td>
+					<td rowspan="{{ (orgSpan $org $containsVariant) }}" style="vertical-align: middle;">{{ $org.Name }}</td>
 				</tr>
 				{{ range $index, $repo := $org.Repos }}
-				    {{ $repoLen := len $repo.Branches }}
 					<tr>
-						<td rowspan="{{ inc $repoLen }}" style="vertical-align: middle;">{{ $repo.Name }}</td>
+						<td rowspan="{{ (repoSpan $repo $containsVariant) }}" style="vertical-align: middle;">{{ $repo.Name }}</td>
 					</tr>
 					{{ range $index, $branch := $repo.Branches }}
 						<tr>
-							<td style="vertical-align: middle;">{{ $branch.Name }}</td>
+							{{ $branchLen := len $branch.Variants }}
+							{{ if $containsVariant }}
+								<td rowspan="{{ doubleInc $branchLen }}" style="vertical-align: middle;">{{ $branch.Name }}</td>
+							{{ else }}
+								<td rowspan="{{ inc $branchLen }}" style="vertical-align: middle;">{{ $branch.Name }}</td>
+							{{ end }}
+						{{ if $containsVariant }}
+							</tr>
+							<tr>
+								<td style="vertical-align: middle;"></td>
+						{{ end }}
 							<td>
 								<ul>
 								{{ range $index, $test := $branch.Tests }}
 									<li><nobr><a href="/job?org={{$org.Name}}&repo={{$repo.Name}}&branch={{$branch.Name}}&test={{$test}}" style="font-family:monospace">{{$test}}</a></nobr></li>
 								{{ end }}
 								</ul>
-								{{ range $index, $variant := $branch.Variants }}
-									<b>Variant: {{ $variant.Name }}</b>
-									<ul>
-										{{ range $index, $test := $variant.Tests }}
-											<li><nobr><a href="/job?org={{$org.Name}}&repo={{$repo.Name}}&branch={{$branch.Name}}&test={{$test}}&variant={{$variant.Name}}" style="font-family:monospace">{{$test}}</a></nobr></li>
-										{{ end }}
-									</ul>
-								{{ end }}
 							</td>
 						</tr>
+						{{ range $index, $variant := $branch.Variants }}
+							<tr>
+								<td style="vertical-align: middle;">{{ $variant.Name }}</td>
+								<td>
+								<ul>
+									{{ range $index, $test := $variant.Tests }}
+										<li><nobr><a href="/job?org={{$org.Name}}&repo={{$repo.Name}}&branch={{$branch.Name}}&test={{$test}}&variant={{$variant.Name}}" style="font-family:monospace">{{$test}}</a></nobr></li>
+									{{ end }}
+								</ul>
+								</td>
+							</tr>
+						{{ end }}
 					{{ end }}
 				{{ end }}
 			{{ end }}
@@ -1591,7 +1608,8 @@ type workflowJob struct {
 }
 
 type Jobs struct {
-	Orgs []Org
+	ContainsVariant bool
+	Orgs            []Org
 }
 
 type Org struct {
@@ -1613,6 +1631,26 @@ type Branch struct {
 type Variant struct {
 	Name  string
 	Tests []string
+}
+
+func repoSpan(r Repo, containsVariant bool) int {
+	if !containsVariant {
+		return len(r.Branches) + 1
+	}
+	rowspan := 0
+	for _, branch := range r.Branches {
+		rowspan += len(branch.Variants) + 1
+		rowspan++
+	}
+	return rowspan + 1
+}
+
+func orgSpan(o Org, containsVariant bool) int {
+	rowspan := 0
+	for _, repo := range o.Repos {
+		rowspan += repoSpan(repo, containsVariant)
+	}
+	return rowspan + 1
 }
 
 func getBaseTemplate(workflows registry.WorkflowByName, chains registry.ChainByName, docs map[string]string) *template.Template {
@@ -1640,16 +1678,13 @@ func getBaseTemplate(workflows registry.WorkflowByName, chains registry.ChainByN
 				}
 				return template.HTML(svg)
 			},
-			"orgSpan": func(o Org) int {
-				rowspan := 0
-				for _, repo := range o.Repos {
-					rowspan += len(repo.Branches)
-					rowspan++
-				}
-				return rowspan + 1
-			},
+			"orgSpan":  orgSpan,
+			"repoSpan": repoSpan,
 			"inc": func(i int) int {
 				return i + 1
+			},
+			"doubleInc": func(i int) int {
+				return i + 2
 			},
 		},
 	)
@@ -2161,6 +2196,7 @@ func (j *Jobs) addJob(orgName, repoName, branchName, variantName, testName strin
 	}
 	variantIndex := -1
 	if variantName != "" {
+		j.ContainsVariant = true
 		variantIndex = 0
 		variantExists := false
 		for _, currVariant := range j.Orgs[orgIndex].Repos[repoIndex].Branches[branchIndex].Variants {

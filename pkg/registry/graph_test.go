@@ -241,8 +241,8 @@ func TestHasCycles(t *testing.T) {
 	}
 }
 
-func combineChains(map1, map2 map[string][]api.TestStep) map[string][]api.TestStep {
-	newMap := make(map[string][]api.TestStep)
+func combineChains(map1, map2 ChainByName) ChainByName {
+	newMap := make(ChainByName)
 	for k, v := range map1 {
 		newMap[k] = v
 	}

@@ -1100,10 +1100,6 @@ multistage test design:
 
 {{ yamlSyntax (index . "configExample1") }}
 
-Example of a <code>ci-operator</code> configuration that overrides a workflow field.
-
-{{ yamlSyntax (index . "configExample2") }}
-
 <p>
 In this example, the <code>ci-operator</code> configuration simply specifies the desired cluster
 profile and the <code>origin-e2e</code> workflow shown in the example for the
@@ -1116,6 +1112,15 @@ possible to override fields specified in a workflow. In cases where both the
 workflow and a <code>ci-operator</code> configuration specify the same field, the <code>ci-operator</code> configuration’s
 field has priority (i.e. the value from the <code>ci-operator</code> configuration is used).
 </p>
+
+Example of a <code>ci-operator</code> configuration that overrides a workflow field.
+
+{{ yamlSyntax (index . "configExample2") }}
+
+The configuration can also override a workflow field with a <a href="#step">full literal step</a>
+(not only a reference to a shared step):
+
+{{ yamlSyntax (index . "configExample3") }}
 
 <h3 id="layout"><a href="#layout">Registry Layout and Naming Convention</a></h3>
 <p>
@@ -1223,7 +1228,20 @@ const configExample2 = `tests:
     cluster_profile: aws
     workflow: origin-e2e
     test:                     # this chain will be run for "test" instead of the one in the origin-e2e workflow
-      ref: origin-e2e-minimal`
+    - ref: origin-e2e-minimal`
+const configExample3 = `tests:
+- as: e2e-steps # test name
+  steps:
+    cluster_profile: aws
+    workflow: origin-e2e
+    test:                     # this chain will be run for "test" instead of the one in the origin-e2e workflow
+    - as: e2e-test
+      commands: make e2e
+      from: src
+      resources:
+        requests:
+          cpu: 100m
+          memory: 200Mi`
 
 const addingComponentPage = `
 <h2>Adding and Changing Step Registry Content</h2>
@@ -1786,6 +1804,7 @@ func helpHandler(subPath string, w http.ResponseWriter, req *http.Request) {
 		data["workflowExample"] = workflowExample
 		data["configExample1"] = configExample1
 		data["configExample2"] = configExample2
+		data["configExample3"] = configExample3
 	case "/adding-components":
 		helpTemplate, err = helpFuncs.Parse(addingComponentPage)
 	case "/examples":

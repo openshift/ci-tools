@@ -12,7 +12,7 @@ type Resolver interface {
 }
 
 type ReferenceByName map[string]api.LiteralTestStep
-type ChainByName map[string][]api.TestStep
+type ChainByName map[string]api.RegistryChain
 type WorkflowByName map[string]api.MultiStageTestConfiguration
 
 // registry will hold all the registry information needed to convert between the
@@ -113,11 +113,12 @@ func (r *registry) unrollChains(input []api.TestStep) (unrolledSteps []api.TestS
 				return []api.TestStep{}, []error{fmt.Errorf("unknown step chain: %s", *step.Chain)}
 			}
 			// handle nested chains
-			chain, err := r.unrollChains(chain)
+			var err []error
+			chain.Steps, err = r.unrollChains(chain.Steps)
 			if err != nil {
 				errs = append(errs, err...)
 			}
-			unrolledSteps = append(unrolledSteps, chain...)
+			unrolledSteps = append(unrolledSteps, chain.Steps...)
 			continue
 		}
 		unrolledSteps = append(unrolledSteps, step)

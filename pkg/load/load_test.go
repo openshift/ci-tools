@@ -723,18 +723,24 @@ func TestRegistry(t *testing.T) {
 		installRBACRef       = `ipi-install-rbac`
 
 		expectedChains = registry.ChainByName{
-			"ipi-install": {
-				{
-					Reference: &installRBACRef,
-				}, {
-					Reference: &installRef,
+			"ipi-install": api.RegistryChain{
+				As: "ipi-install",
+				Steps: []api.TestStep{
+					{
+						Reference: &installRBACRef,
+					}, {
+						Reference: &installRef,
+					},
 				},
 			},
-			"ipi-deprovision": {
-				{
-					Reference: &deprovisionGatherRef,
-				}, {
-					Reference: &deprovisionRef,
+			"ipi-deprovision": api.RegistryChain{
+				As: "ipi-deprovision",
+				Steps: []api.TestStep{
+					{
+						Reference: &deprovisionGatherRef,
+					}, {
+						Reference: &deprovisionRef,
+					},
 				},
 			},
 		}

@@ -165,25 +165,27 @@ func TestResolve(t *testing.T) {
 			}},
 		},
 		chainMap: ChainByName{
-			fipsPreChain: {{
-				LiteralTestStep: &api.LiteralTestStep{
-					As:       "ipi-install",
-					From:     "installer",
-					Commands: "openshift-cluster install",
-					Resources: api.ResourceRequirements{
-						Requests: api.ResourceList{"cpu": "1000m"},
-						Limits:   api.ResourceList{"memory": "2Gi"},
-					}},
-			}, {
-				LiteralTestStep: &api.LiteralTestStep{
-					As:       "enable-fips",
-					From:     "fips-enabler",
-					Commands: "enable_fips",
-					Resources: api.ResourceRequirements{
-						Requests: api.ResourceList{"cpu": "1000m"},
-						Limits:   api.ResourceList{"memory": "2Gi"},
-					}},
-			}},
+			fipsPreChain: {
+				Steps: []api.TestStep{{
+					LiteralTestStep: &api.LiteralTestStep{
+						As:       "ipi-install",
+						From:     "installer",
+						Commands: "openshift-cluster install",
+						Resources: api.ResourceRequirements{
+							Requests: api.ResourceList{"cpu": "1000m"},
+							Limits:   api.ResourceList{"memory": "2Gi"},
+						}},
+				}, {
+					LiteralTestStep: &api.LiteralTestStep{
+						As:       "enable-fips",
+						From:     "fips-enabler",
+						Commands: "enable_fips",
+						Resources: api.ResourceRequirements{
+							Requests: api.ResourceList{"cpu": "1000m"},
+							Limits:   api.ResourceList{"memory": "2Gi"},
+						}},
+				}},
+			},
 		},
 		stepMap: ReferenceByName{
 			teardownRef: {
@@ -243,16 +245,18 @@ func TestResolve(t *testing.T) {
 			}},
 		},
 		chainMap: ChainByName{
-			"broken": {{
-				LiteralTestStep: &api.LiteralTestStep{
-					As:       "generic-unit-test-2",
-					From:     "my-image",
-					Commands: "make test/unit",
-					Resources: api.ResourceRequirements{
-						Requests: api.ResourceList{"cpu": "1000m"},
-						Limits:   api.ResourceList{"memory": "2Gi"},
-					}},
-			}},
+			"broken": {
+				Steps: []api.TestStep{{
+					LiteralTestStep: &api.LiteralTestStep{
+						As:       "generic-unit-test-2",
+						From:     "my-image",
+						Commands: "make test/unit",
+						Resources: api.ResourceRequirements{
+							Requests: api.ResourceList{"cpu": "1000m"},
+							Limits:   api.ResourceList{"memory": "2Gi"},
+						}},
+				}},
+			},
 		},
 		expectedRes: api.MultiStageTestConfigurationLiteral{},
 		expectErr:   true,
@@ -265,37 +269,41 @@ func TestResolve(t *testing.T) {
 			}},
 		},
 		chainMap: ChainByName{
-			nestedChains: {{
-				Chain: &chainInstall,
-			}, {
-				LiteralTestStep: &api.LiteralTestStep{
-					As:       "enable-fips",
-					From:     "fips-enabler",
-					Commands: "enable_fips",
-					Resources: api.ResourceRequirements{
-						Requests: api.ResourceList{"cpu": "1000m"},
-						Limits:   api.ResourceList{"memory": "2Gi"},
-					}},
-			}},
-			chainInstall: {{
-				LiteralTestStep: &api.LiteralTestStep{
-					As:       "ipi-lease",
-					From:     "installer",
-					Commands: "lease",
-					Resources: api.ResourceRequirements{
-						Requests: api.ResourceList{"cpu": "1000m"},
-						Limits:   api.ResourceList{"memory": "2Gi"},
-					}},
-			}, {
-				LiteralTestStep: &api.LiteralTestStep{
-					As:       "ipi-setup",
-					From:     "installer",
-					Commands: "openshift-cluster install",
-					Resources: api.ResourceRequirements{
-						Requests: api.ResourceList{"cpu": "1000m"},
-						Limits:   api.ResourceList{"memory": "2Gi"},
-					}},
-			}},
+			nestedChains: {
+				Steps: []api.TestStep{{
+					Chain: &chainInstall,
+				}, {
+					LiteralTestStep: &api.LiteralTestStep{
+						As:       "enable-fips",
+						From:     "fips-enabler",
+						Commands: "enable_fips",
+						Resources: api.ResourceRequirements{
+							Requests: api.ResourceList{"cpu": "1000m"},
+							Limits:   api.ResourceList{"memory": "2Gi"},
+						}},
+				}},
+			},
+			chainInstall: {
+				Steps: []api.TestStep{{
+					LiteralTestStep: &api.LiteralTestStep{
+						As:       "ipi-lease",
+						From:     "installer",
+						Commands: "lease",
+						Resources: api.ResourceRequirements{
+							Requests: api.ResourceList{"cpu": "1000m"},
+							Limits:   api.ResourceList{"memory": "2Gi"},
+						}},
+				}, {
+					LiteralTestStep: &api.LiteralTestStep{
+						As:       "ipi-setup",
+						From:     "installer",
+						Commands: "openshift-cluster install",
+						Resources: api.ResourceRequirements{
+							Requests: api.ResourceList{"cpu": "1000m"},
+							Limits:   api.ResourceList{"memory": "2Gi"},
+						}},
+				}},
+			},
 		},
 		expectedRes: api.MultiStageTestConfigurationLiteral{
 			ClusterProfile: api.ClusterProfileAWS,
@@ -335,37 +343,41 @@ func TestResolve(t *testing.T) {
 			}},
 		},
 		chainMap: ChainByName{
-			nestedChains: {{
-				Chain: &chainInstall,
-			}, {
-				LiteralTestStep: &api.LiteralTestStep{
-					As:       "ipi-setup",
-					From:     "installer",
-					Commands: "openshift-cluster install",
-					Resources: api.ResourceRequirements{
-						Requests: api.ResourceList{"cpu": "1000m"},
-						Limits:   api.ResourceList{"memory": "2Gi"},
-					}},
-			}},
-			chainInstall: {{
-				LiteralTestStep: &api.LiteralTestStep{
-					As:       "ipi-lease",
-					From:     "installer",
-					Commands: "lease",
-					Resources: api.ResourceRequirements{
-						Requests: api.ResourceList{"cpu": "1000m"},
-						Limits:   api.ResourceList{"memory": "2Gi"},
-					}},
-			}, {
-				LiteralTestStep: &api.LiteralTestStep{
-					As:       "ipi-setup",
-					From:     "installer",
-					Commands: "openshift-cluster install",
-					Resources: api.ResourceRequirements{
-						Requests: api.ResourceList{"cpu": "1000m"},
-						Limits:   api.ResourceList{"memory": "2Gi"},
-					}},
-			}},
+			nestedChains: {
+				Steps: []api.TestStep{{
+					Chain: &chainInstall,
+				}, {
+					LiteralTestStep: &api.LiteralTestStep{
+						As:       "ipi-setup",
+						From:     "installer",
+						Commands: "openshift-cluster install",
+						Resources: api.ResourceRequirements{
+							Requests: api.ResourceList{"cpu": "1000m"},
+							Limits:   api.ResourceList{"memory": "2Gi"},
+						}},
+				}},
+			},
+			chainInstall: {
+				Steps: []api.TestStep{{
+					LiteralTestStep: &api.LiteralTestStep{
+						As:       "ipi-lease",
+						From:     "installer",
+						Commands: "lease",
+						Resources: api.ResourceRequirements{
+							Requests: api.ResourceList{"cpu": "1000m"},
+							Limits:   api.ResourceList{"memory": "2Gi"},
+						}},
+				}, {
+					LiteralTestStep: &api.LiteralTestStep{
+						As:       "ipi-setup",
+						From:     "installer",
+						Commands: "openshift-cluster install",
+						Resources: api.ResourceRequirements{
+							Requests: api.ResourceList{"cpu": "1000m"},
+							Limits:   api.ResourceList{"memory": "2Gi"},
+						}},
+				}},
+			},
 		},
 		expectedRes: api.MultiStageTestConfigurationLiteral{},
 		expectErr:   true,
@@ -375,25 +387,27 @@ func TestResolve(t *testing.T) {
 			Workflow: &awsWorkflow,
 		},
 		chainMap: ChainByName{
-			fipsPreChain: {{
-				LiteralTestStep: &api.LiteralTestStep{
-					As:       "ipi-install",
-					From:     "installer",
-					Commands: "openshift-cluster install",
-					Resources: api.ResourceRequirements{
-						Requests: api.ResourceList{"cpu": "1000m"},
-						Limits:   api.ResourceList{"memory": "2Gi"},
-					}},
-			}, {
-				LiteralTestStep: &api.LiteralTestStep{
-					As:       "enable-fips",
-					From:     "fips-enabler",
-					Commands: "enable_fips",
-					Resources: api.ResourceRequirements{
-						Requests: api.ResourceList{"cpu": "1000m"},
-						Limits:   api.ResourceList{"memory": "2Gi"},
-					}},
-			}},
+			fipsPreChain: {
+				Steps: []api.TestStep{{
+					LiteralTestStep: &api.LiteralTestStep{
+						As:       "ipi-install",
+						From:     "installer",
+						Commands: "openshift-cluster install",
+						Resources: api.ResourceRequirements{
+							Requests: api.ResourceList{"cpu": "1000m"},
+							Limits:   api.ResourceList{"memory": "2Gi"},
+						}},
+				}, {
+					LiteralTestStep: &api.LiteralTestStep{
+						As:       "enable-fips",
+						From:     "fips-enabler",
+						Commands: "enable_fips",
+						Resources: api.ResourceRequirements{
+							Requests: api.ResourceList{"cpu": "1000m"},
+							Limits:   api.ResourceList{"memory": "2Gi"},
+						}},
+				}},
+			},
 		},
 		stepMap: ReferenceByName{
 			teardownRef: {

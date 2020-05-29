@@ -2048,7 +2048,7 @@ func chainHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *http.R
 	chain := api.RegistryChain{
 		As:            name,
 		Documentation: docs[name],
-		Steps:         chains[name],
+		Steps:         chains[name].Steps,
 	}
 	writePage(w, "Registry Chain Help Page", page, chain)
 }

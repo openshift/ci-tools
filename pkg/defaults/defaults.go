@@ -2,8 +2,13 @@ package defaults
 
 import (
 	"fmt"
+	"github.com/openshift/ci-tools/pkg/release/candidate"
+	"github.com/openshift/ci-tools/pkg/release/official"
+	"github.com/openshift/ci-tools/pkg/release/prerelease"
+	"github.com/openshift/ci-tools/pkg/results"
 	"log"
 	"net/url"
+	"os"
 	"strings"
 
 	templateapi "github.com/openshift/api/template/v1"
@@ -161,18 +166,33 @@ func FromConfig(
 			if err != nil {
 				return nil, nil, fmt.Errorf("unable to access release images on remote cluster: %v", err)
 			}
+			// if the user has specified a tag_specification we always
+			// will import those images to the stable stream
 			step = release.ReleaseImagesTagStep(*rawStep.ReleaseImagesTagStepConfiguration, srcClient, imageClient, routeGetter, configMapGetter, params, jobSpec, dryLogger)
 			stepLinks = append(stepLinks, step.Creates()...)
 
 			hasReleaseStep = true
 
-			releaseStep := release.AssembleReleaseStep("latest", rawStep.ReleaseImagesTagStepConfiguration, params, config.Resources, podClient, imageClient, saGetter, rbacClient, artifactDir, jobSpec, dryLogger)
-			addProvidesForStep(releaseStep, params)
-			buildSteps = append(buildSteps, releaseStep)
-
-			initialReleaseStep := release.AssembleReleaseStep("initial", rawStep.ReleaseImagesTagStepConfiguration, params, config.Resources, podClient, imageClient, saGetter, rbacClient, artifactDir, jobSpec, dryLogger)
-			addProvidesForStep(initialReleaseStep, params)
-			buildSteps = append(buildSteps, initialReleaseStep)
+			// However, this user may have specified $RELEASE_IMAGE_foo
+			// as well. For backwards compatibility, we explicitly support
+			// 'initial' and 'latest': if not provided, we will build them.
+			// If a pull spec was provided, however, it will be used.
+			for _, name := range []string{"initial", "latest"} {
+				var releaseStep api.Step
+				envVar := release.EnvVarFor(name)
+				if params.HasInput(envVar) {
+					pullSpec, err := params.Get(envVar)
+					if err != nil {
+						return nil, nil, results.ForReason("reading_release").ForError(fmt.Errorf("failed to read input release pullSpec %s: %v", name, err))
+					}
+					log.Printf("Resolved release %s to %s", name, pullSpec)
+					releaseStep = release.ImportReleaseStep(name, pullSpec, config.Resources, podClient, imageClient, saGetter, rbacClient, artifactDir, jobSpec, dryLogger)
+				} else {
+					releaseStep = release.AssembleReleaseStep(name, rawStep.ReleaseImagesTagStepConfiguration, config.Resources, podClient, imageClient, saGetter, rbacClient, artifactDir, jobSpec, dryLogger)
+				}
+				addProvidesForStep(releaseStep, params)
+				buildSteps = append(buildSteps, releaseStep)
+			}
 		} else if rawStep.ResolvedReleaseImagesStepConfiguration != nil {
 			// this is a disgusting hack but the simplest implementation until we
 			// factor release steps into something more reusable
@@ -183,10 +203,28 @@ func FromConfig(
 			// to that mechanism ...
 			isReleaseStep = true
 
-			// we can get away with passing a nil configuration as we know
-			// that we've resolved the release to a pull-spec and set the
-			// override env var already, so this step will be
-			step = release.AssembleReleaseStep(rawStep.ResolvedReleaseImagesStepConfiguration.Name, nil, params, config.Resources, podClient, imageClient, saGetter, rbacClient, artifactDir, jobSpec, dryLogger)
+			resolveConfig := rawStep.ResolvedReleaseImagesStepConfiguration
+			envVar := release.EnvVarFor(resolveConfig.Name)
+			if current := os.Getenv(envVar); current != "" {
+				return nil, nil, results.ForReason("resolving_release").ForError(fmt.Errorf("could not resolve release and set to %s, as that environment was already provided", envVar))
+			}
+
+			var value string
+			var err error
+			switch {
+			case resolveConfig.Candidate != nil:
+				value, err = candidate.ResolvePullSpec(*resolveConfig.Candidate)
+			case resolveConfig.Release != nil:
+				value, err = official.ResolvePullSpec(*resolveConfig.Release)
+			case resolveConfig.Prerelease != nil:
+				value, err = prerelease.ResolvePullSpec(*resolveConfig.Prerelease)
+			}
+			if err != nil {
+				return nil, nil, results.ForReason("resolving_release").ForError(fmt.Errorf("failed to resolve release %s: %v", resolveConfig.Name, err))
+			}
+			log.Printf("Resolved release %s to %s", resolveConfig.Name, value)
+
+			step = release.ImportReleaseStep(resolveConfig.Name, value, config.Resources, podClient, imageClient, saGetter, rbacClient, artifactDir, jobSpec, dryLogger)
 			addProvidesForStep(step, params)
 		} else if testStep := rawStep.TestStepConfiguration; testStep != nil {
 			if test := testStep.MultiStageTestConfigurationLiteral; test != nil {
@@ -498,10 +536,12 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.Job
 
 	if config.ReleaseTagConfiguration != nil {
 		buildSteps = append(buildSteps, api.StepConfiguration{ReleaseImagesTagStepConfiguration: config.ReleaseTagConfiguration})
-	} else if config.Releases != nil {
-		for name := range config.Releases {
-			buildSteps = append(buildSteps, api.StepConfiguration{ResolvedReleaseImagesStepConfiguration: &api.ReleaseConfiguration{Name: name}})
-		}
+	}
+	for name := range config.Releases {
+		buildSteps = append(buildSteps, api.StepConfiguration{ResolvedReleaseImagesStepConfiguration: &api.ReleaseConfiguration{
+			Name:              name,
+			UnresolvedRelease: config.Releases[name],
+		}})
 	}
 
 	buildSteps = append(buildSteps, config.RawSteps...)

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/openshift/api/image/docker10"
@@ -62,12 +61,14 @@ func AddToManager(mgr controllerruntime.Manager, opts Options) error {
 
 	log := logrus.WithField("controller", ControllerName)
 	r := &reconciler{
-		ctx:                 context.Background(),
-		log:                 log,
-		client:              imagestreamtagwrapper.MustNew(opts.RegistryManager.GetClient(), opts.RegistryManager.GetCache()),
-		releaseBuildConfigs: opts.CIOperatorConfigAgent,
-		gitHubClient:        opts.GitHubClient,
-		enqueueJob:          prowJobEnqueuer,
+		ctx:    context.Background(),
+		log:    log,
+		client: imagestreamtagwrapper.MustNew(opts.RegistryManager.GetClient(), opts.RegistryManager.GetCache()),
+		releaseBuildConfigs: func(identifier string) ([]*cioperatorapi.ReleaseBuildConfiguration, error) {
+			return opts.CIOperatorConfigAgent.GetFromIndex(configIndexName, identifier)
+		},
+		gitHubClient: opts.GitHubClient,
+		enqueueJob:   prowJobEnqueuer,
 	}
 	c, err := controller.New(ControllerName, opts.RegistryManager, controller.Options{
 		// Since we watch ImageStreams and not ImageStreamTags as the latter do not support
@@ -112,12 +113,20 @@ func AddToManager(mgr controllerruntime.Manager, opts Options) error {
 	return nil
 }
 
+// ciOperatorConfigGetter is needed to for testing. In non-test scenarios it is implemented
+// by using an index on the agents.ConfigAgent
+type ciOperatorConfigGetter func(identifier string) ([]*cioperatorapi.ReleaseBuildConfiguration, error)
+
+type githubClient interface {
+	GetRef(org, repo, ref string) (string, error)
+}
+
 type reconciler struct {
 	ctx                 context.Context
 	log                 *logrus.Entry
 	client              ctrlruntimeclient.Client
-	releaseBuildConfigs agents.ConfigAgent
-	gitHubClient        github.Client
+	releaseBuildConfigs ciOperatorConfigGetter
+	gitHubClient        githubClient
 	enqueueJob          prowjobreconciler.Enqueuer
 }
 
@@ -162,36 +171,36 @@ func (r *reconciler) reconcile(req controllerruntime.Request, log *logrus.Entry)
 		return nil
 	}
 
-	istRef, err := refForIST(ist)
+	istCommit, err := commitForIST(ist)
 	if err != nil {
-		return controllerutil.TerminalError(fmt.Errorf("failed to get ref for imageStreamTag: %w", err))
+		return controllerutil.TerminalError(fmt.Errorf("failed to get commit for imageStreamTag: %w", err))
 	}
 
-	currentHEAD, found, err := r.currentHEADForBranch(istRef, log)
+	currentHEAD, found, err := r.currentHEADForBranch(ciOPConfig.Metadata, log)
 	if err != nil {
 		return fmt.Errorf("failed to get current git head for imageStreamTag: %w", err)
 	}
 	if !found {
-		return controllerutil.TerminalError(fmt.Errorf("got 404 for %s/%s/%s from github, this likely means the repo or branch got deleted or we are not allowed to access it", istRef.org, istRef.repo, istRef.branch))
+		return controllerutil.TerminalError(fmt.Errorf("got 404 for %s/%s/%s from github, this likely means the repo or branch got deleted or we are not allowed to access it", ciOPConfig.Metadata.Org, ciOPConfig.Metadata.Repo, ciOPConfig.Metadata.Branch))
 	}
 	// ImageStreamTag is current, nothing to do
-	if currentHEAD == istRef.commit {
+	if currentHEAD == istCommit {
 		return nil
 	}
-	log = log.WithField("org", istRef.org).WithField("repo", istRef.repo).WithField("branch", istRef.branch).WithField("currentHEAD", currentHEAD)
+	log = log.WithField("org", ciOPConfig.Metadata.Org).WithField("repo", ciOPConfig.Metadata.Repo).WithField("branch", ciOPConfig.Metadata.Branch).WithField("currentHEAD", currentHEAD)
 
 	log.Info("Requesting prowjob creation")
 	r.enqueueJob(prowjobreconciler.OrgRepoBranchCommit{
-		Org:    istRef.org,
-		Repo:   istRef.repo,
-		Branch: istRef.branch,
+		Org:    ciOPConfig.Metadata.Org,
+		Repo:   ciOPConfig.Metadata.Repo,
+		Branch: ciOPConfig.Metadata.Branch,
 		Commit: currentHEAD,
 	})
 	return nil
 }
 
 func (r *reconciler) promotionConfig(ist *imagev1.ImageStreamTag) (*cioperatorapi.ReleaseBuildConfiguration, error) {
-	results, err := r.releaseBuildConfigs.GetFromIndex(configIndexName, configIndexKeyForIST(ist))
+	results, err := r.releaseBuildConfigs(configIndexKeyForIST(ist))
 	if err != nil {
 		return nil, fmt.Errorf("query index: %w", err)
 	}
@@ -206,54 +215,29 @@ func (r *reconciler) promotionConfig(ist *imagev1.ImageStreamTag) (*cioperatorap
 	}
 }
 
-type branchReference struct {
-	org    string
-	repo   string
-	branch string
-	commit string
-}
-
-func refForIST(ist *imagev1.ImageStreamTag) (*branchReference, error) {
+func commitForIST(ist *imagev1.ImageStreamTag) (string, error) {
 	metadata := &docker10.DockerImage{}
 	if err := json.Unmarshal(ist.Image.DockerImageMetadata.Raw, metadata); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal imagestream.image.dockerImageMetadata: %w", err)
+		return "", fmt.Errorf("failed to unmarshal imagestream.image.dockerImageMetadata: %w", err)
 	}
 
-	branch := metadata.Config.Labels["io.openshift.build.commit.ref"]
 	commit := metadata.Config.Labels["io.openshift.build.commit.id"]
-	sourceLocation := metadata.Config.Labels["io.openshift.build.source-location"]
-	if branch == "" {
-		return nil, controllerutil.TerminalError(errors.New("imageStreamTag has no `io.openshift.build.commit.ref` label, can't find out source branch"))
-	}
 	if commit == "" {
-		return nil, controllerutil.TerminalError(errors.New("ImageStreamTag has no `io.openshift.build.commit.id` label, can't find out source commit"))
-	}
-	if sourceLocation == "" {
-		return nil, controllerutil.TerminalError(errors.New("imageStreamTag has no `io.openshift.build.source-location` label, can't find out source repo"))
-	}
-	sourceLocation = strings.TrimPrefix(sourceLocation, "https://github.com/")
-	splitSourceLocation := strings.Split(sourceLocation, "/")
-	if n := len(splitSourceLocation); n != 2 {
-		return nil, controllerutil.TerminalError(fmt.Errorf("sourceLocation %q split by `/` does not return 2 but %d results, can not find out org/repo", sourceLocation, n))
+		return "", controllerutil.TerminalError(errors.New("ImageStreamTag has no `io.openshift.build.commit.id` label, can't find out source commit"))
 	}
 
-	return &branchReference{
-		org:    splitSourceLocation[0],
-		repo:   strings.TrimSuffix(splitSourceLocation[1], ".git"),
-		branch: branch,
-		commit: commit,
-	}, nil
+	return commit, nil
 }
 
-func (r *reconciler) currentHEADForBranch(br *branchReference, log *logrus.Entry) (string, bool, error) {
+func (r *reconciler) currentHEADForBranch(metadata cioperatorapi.Metadata, log *logrus.Entry) (string, bool, error) {
 	// We attempted for some time to use the gitClient for this, but we do so many reconciliations that
 	// it results in a massive performance issues that can easely kill the developers laptop.
-	ref, err := r.gitHubClient.GetRef(br.org, br.repo, "heads/"+br.branch)
+	ref, err := r.gitHubClient.GetRef(metadata.Org, metadata.Repo, "heads/"+metadata.Branch)
 	if err != nil {
 		if github.IsNotFound(err) {
 			return "", false, nil
 		}
-		return "", false, fmt.Errorf("failed to get sha for ref %s/%s/heads/%s from github: %w", br.org, br.repo, br.branch, err)
+		return "", false, fmt.Errorf("failed to get sha for ref %s/%s/heads/%s from github: %w", metadata.Org, metadata.Repo, metadata.Branch, err)
 	}
 	return ref, true, nil
 }

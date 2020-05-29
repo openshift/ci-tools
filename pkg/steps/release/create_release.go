@@ -51,7 +51,7 @@ import (
 // inject the images from a known historic release for the purposes of building
 // branches of those releases.
 type assembleReleaseStep struct {
-	config      api.ReleaseTagConfiguration
+	config      *api.ReleaseTagConfiguration
 	name        string
 	params      api.Parameters
 	releaseSpec string
@@ -534,8 +534,10 @@ func hasFailedImportCondition(conditions []imageapi.TagEventCondition, generatio
 
 func (s *assembleReleaseStep) Requires() []api.StepLink {
 	// if our prereq is provided, we don't depend on anything as
-	// we will populate the stable streams with our images
-	if s.params.HasInput(s.envVar()) {
+	// we will populate the stable streams with our images. However,
+	// if there is a tag_specification, we currently allow carry-forward
+	// images from that stream to exist, so we need to wait on them
+	if s.params.HasInput(s.envVar()) && s.config == nil {
 		return []api.StepLink{}
 	}
 	if s.name == "latest" {
@@ -603,7 +605,7 @@ func (s *assembleReleaseStep) Description() string {
 
 // AssembleReleaseStep builds a new update payload image based on the cluster version operator
 // and the operators defined in the release configuration.
-func AssembleReleaseStep(name string, config api.ReleaseTagConfiguration, params api.Parameters, resources api.ResourceConfiguration,
+func AssembleReleaseStep(name string, config *api.ReleaseTagConfiguration, params api.Parameters, resources api.ResourceConfiguration,
 	podClient steps.PodClient, imageClient imageclientset.ImageV1Interface, saGetter coreclientset.ServiceAccountsGetter,
 	rbacClient rbacclientset.RbacV1Interface, artifactDir string, jobSpec *api.JobSpec, dryLogger *steps.DryLogger) api.Step {
 	return &assembleReleaseStep{

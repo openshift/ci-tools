@@ -346,18 +346,21 @@ const templateDefinitions = `
 						<td rowspan="{{ (repoSpan $repo $containsVariant) }}" style="vertical-align: middle;">{{ $repo.Name }}</td>
 					</tr>
 					{{ range $index, $branch := $repo.Branches }}
-						<tr>
-							{{ $branchLen := len $branch.Variants }}
-							{{ if $containsVariant }}
-								<td rowspan="{{ doubleInc $branchLen }}" style="vertical-align: middle;">{{ $branch.Name }}</td>
-							{{ else }}
-								<td rowspan="{{ inc $branchLen }}" style="vertical-align: middle;">{{ $branch.Name }}</td>
-							{{ end }}
+						{{ $branchLen := len $branch.Variants }}
 						{{ if $containsVariant }}
-							</tr>
-							<tr>
-								<td style="vertical-align: middle;"></td>
+							{{ $branchLen = inc $branchLen}}
 						{{ end }}
+						{{ if gt (len $branch.Tests) 0 }}
+							{{ $branchLen = inc $branchLen}}
+						{{ end }}
+						<tr>
+							<td rowspan="{{ $branchLen }}" style="vertical-align: middle;">{{ $branch.Name }}</td>
+							{{ if gt (len $branch.Tests) 0 }}
+								{{ if $containsVariant }}
+						</tr>
+						<tr>
+							<td style="vertical-align: middle;"></td>
+								{{ end }} <!-- if $containsVariant -->
 							<td>
 								<ul>
 								{{ range $index, $test := $branch.Tests }}
@@ -365,6 +368,7 @@ const templateDefinitions = `
 								{{ end }}
 								</ul>
 							</td>
+							{{ end }} <!-- if gt (len $branch.Tests) 0 -->
 						</tr>
 						{{ range $index, $variant := $branch.Variants }}
 							<tr>

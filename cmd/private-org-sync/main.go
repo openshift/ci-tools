@@ -33,6 +33,9 @@ type options struct {
 	org  string
 	repo string
 
+	gitName  string
+	gitEmail string
+
 	gitDir               string
 	confirm              bool
 	failOnNonexistentDst bool
@@ -69,6 +72,14 @@ func (o *options) validate() []error {
 		errs = append(errs, fmt.Errorf("--token-path is required"))
 	}
 
+	if o.gitName == "" {
+		errs = append(errs, fmt.Errorf("--git-name is not specified."))
+	}
+
+	if o.gitEmail == "" {
+		errs = append(errs, fmt.Errorf("--git-email is not specified."))
+	}
+
 	if err := o.WhitelistOptions.Validate(); err != nil {
 		errs = append(errs, err)
 
@@ -87,6 +98,10 @@ func gatherOptions() options {
 	fs.StringVar(&o.org, "only-org", "", "Mirror only repos that belong to this org")
 	fs.StringVar(&o.repo, "only-repo", "", "Mirror only a single repo")
 	fs.StringVar(&o.gitDir, "git-dir", "", "Path to directory in which to perform Git operations")
+
+	fs.StringVar(&o.gitName, "git-name", "", "The name to use on the git merge command.")
+	fs.StringVar(&o.gitEmail, "git-email", "", "The email to use on the git merge command.")
+
 	fs.BoolVar(&o.confirm, "confirm", false, "Set true to actually execute all world-changing operations")
 	fs.BoolVar(&o.failOnNonexistentDst, "fail-on-missing-destination", false, "Set true to make the tool to consider missing sync destination as an error")
 
@@ -173,6 +188,9 @@ type gitSyncer struct {
 	failOnNonexistentDst bool
 
 	logger *logrus.Entry
+
+	gitName  string
+	gitEmail string
 
 	// wrapper for `git` execution: it is a member of the struct for testability
 	git gitFunc
@@ -346,7 +364,7 @@ func (g gitSyncer) mirror(repoDir string, src, dst location) error {
 
 		if depth == unshallow {
 			logger.Info("Trying to fetch source and destination full history and perform a merge")
-			if err := mergeRemotesAndPush(logger, g.git, repoDir, srcRemote, dst.branch, destUrl.String(), g.confirm); err != nil {
+			if err := mergeRemotesAndPush(logger, g.git, repoDir, srcRemote, dst.branch, destUrl.String(), g.confirm, g.gitName, g.gitEmail); err != nil {
 				return nil, fmt.Errorf("failed to fetch remote and merge: %v", err)
 			}
 			return nil, nil
@@ -415,7 +433,7 @@ func addGitRemote(logger *logrus.Entry, git gitFunc, org, repo, repoDir, remoteN
 	return nil
 }
 
-func mergeRemotesAndPush(logger *logrus.Entry, git gitFunc, repoDir, srcRemote, branch, destURL string, confirm bool) error {
+func mergeRemotesAndPush(logger *logrus.Entry, git gitFunc, repoDir, srcRemote, branch, destURL string, confirm bool, gitName, gitEmail string) error {
 	if err := checkGitError(git(logger, repoDir, []string{"fetch", destURL, branch}...)); err != nil {
 		return fmt.Errorf("failed to fetch remote %s: %v", destURL, err)
 	}
@@ -425,7 +443,7 @@ func mergeRemotesAndPush(logger *logrus.Entry, git gitFunc, repoDir, srcRemote, 
 	}
 
 	sourceBranch := fmt.Sprintf("%s/%s", srcRemote, branch)
-	if err := checkGitError(git(logger, repoDir, []string{"merge", sourceBranch, "-m", "'Periodic merge from DPTP; pub->priv'"}...)); err != nil {
+	if err := checkGitError(git(logger, repoDir, []string{"-c", fmt.Sprintf("user.name=%s", gitName), "-c", fmt.Sprintf("user.email=%s", gitEmail), "merge", sourceBranch, "-m", "'Periodic merge from DPTP; pub->priv'"}...)); err != nil {
 		return fmt.Errorf("failed to merge %s: %v", sourceBranch, err)
 	}
 
@@ -521,6 +539,8 @@ func main() {
 		confirm:              o.confirm,
 		git:                  gitExec,
 		failOnNonexistentDst: o.failOnNonexistentDst,
+		gitName:              o.gitName,
+		gitEmail:             o.gitEmail,
 	}
 
 	var errs []error

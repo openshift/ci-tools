@@ -17,6 +17,8 @@ func TestOptionsValidate(t *testing.T) {
 		configDir: "path/to/dir",
 		tokenPath: "path/to/token",
 		targetOrg: "org",
+		gitName:   "openshift-bot",
+		gitEmail:  "opensthift-bot@redhat.com",
 	}
 	testcases := []struct {
 		description string
@@ -33,17 +35,17 @@ func TestOptionsValidate(t *testing.T) {
 		{
 			description:    "missing --config-dir does not pass validation",
 			bad:            &options{tokenPath: "path/to/token", targetOrg: "org"},
-			expectedErrors: 1,
+			expectedErrors: 3,
 		},
 		{
 			description:    "missing --token-path does not pass validation",
 			bad:            &options{configDir: "path/to/dir", targetOrg: "org"},
-			expectedErrors: 1,
+			expectedErrors: 3,
 		},
 		{
 			description:    "missing --target-org does not pass validation",
 			bad:            &options{configDir: "path/to/dir", tokenPath: "path/to/token"},
-			expectedErrors: 1,
+			expectedErrors: 3,
 		},
 		{
 			description: "--only-org different from --target-org passes validation",
@@ -527,7 +529,7 @@ func TestMirror(t *testing.T) {
 				},
 				{call: "fetch https://TOKEN@github.com/dest/repo branch"},
 				{call: "checkout FETCH_HEAD"},
-				{call: "merge org-repo/branch -m 'Periodic merge from DPTP; pub->priv'"},
+				{call: "-c user.name=openshift-bot -c user.email=openshift-bot@redhat.com merge org-repo/branch -m 'Periodic merge from DPTP; pub->priv'"},
 				{call: "push --tags --dry-run https://TOKEN@github.com/dest/repo HEAD:branch"},
 			},
 		},
@@ -545,6 +547,8 @@ func TestMirror(t *testing.T) {
 				confirm:              tc.confirm,
 				root:                 "git-dir",
 				git:                  git.exec,
+				gitName:              "openshift-bot",
+				gitEmail:             "openshift-bot@redhat.com",
 				failOnNonexistentDst: tc.failOnNonexistentDst,
 			}
 			err := m.mirror("repo-dir", tc.src, tc.dst)

@@ -166,11 +166,11 @@ func FromConfig(
 
 			hasReleaseStep = true
 
-			releaseStep := release.AssembleReleaseStep("latest", *rawStep.ReleaseImagesTagStepConfiguration, params, config.Resources, podClient, imageClient, saGetter, rbacClient, artifactDir, jobSpec, dryLogger)
+			releaseStep := release.AssembleReleaseStep("latest", rawStep.ReleaseImagesTagStepConfiguration, params, config.Resources, podClient, imageClient, saGetter, rbacClient, artifactDir, jobSpec, dryLogger)
 			addProvidesForStep(releaseStep, params)
 			buildSteps = append(buildSteps, releaseStep)
 
-			initialReleaseStep := release.AssembleReleaseStep("initial", *rawStep.ReleaseImagesTagStepConfiguration, params, config.Resources, podClient, imageClient, saGetter, rbacClient, artifactDir, jobSpec, dryLogger)
+			initialReleaseStep := release.AssembleReleaseStep("initial", rawStep.ReleaseImagesTagStepConfiguration, params, config.Resources, podClient, imageClient, saGetter, rbacClient, artifactDir, jobSpec, dryLogger)
 			addProvidesForStep(initialReleaseStep, params)
 			buildSteps = append(buildSteps, initialReleaseStep)
 		} else if rawStep.ResolvedReleaseImagesStepConfiguration != nil {
@@ -186,7 +186,7 @@ func FromConfig(
 			// we can get away with passing a nil configuration as we know
 			// that we've resolved the release to a pull-spec and set the
 			// override env var already, so this step will be
-			step = release.AssembleReleaseStep(rawStep.ResolvedReleaseImagesStepConfiguration.Name, api.ReleaseTagConfiguration{}, params, config.Resources, podClient, imageClient, saGetter, rbacClient, artifactDir, jobSpec, dryLogger)
+			step = release.AssembleReleaseStep(rawStep.ResolvedReleaseImagesStepConfiguration.Name, nil, params, config.Resources, podClient, imageClient, saGetter, rbacClient, artifactDir, jobSpec, dryLogger)
 			addProvidesForStep(step, params)
 		} else if testStep := rawStep.TestStepConfiguration; testStep != nil {
 			if test := testStep.MultiStageTestConfigurationLiteral; test != nil {

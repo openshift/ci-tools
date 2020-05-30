@@ -324,27 +324,43 @@ const templateDefinitions = `
 {{ define "jobTable" }}
     <h2 id="jobs"><a href="#jobs">Jobs</a></h2>
 	<table class="table">
+	{{ $containsVariant := .ContainsVariant }}
 		<thead>
 			<tr>
 				<th title="GitHub organization that the job is from" class="info">Org</th>
 				<th title="GitHub repo that the job is from" class="info">Repo</th>
 				<th title="GitHub branch that the job is from" class="info">Branch</th>
+				{{ if $containsVariant }}
+					<th title="Variant of the ci-operator config" class="info">Variant</th>
+				{{ end }}
 				<th title="The multistage tests in the configuration" class="info">Tests</th>
 			</tr>
 		</thead>
 		<tbody>
 			{{ range $index, $org := .Orgs }}
 				<tr>
-					<td rowspan="{{ orgSpan $org }}" style="vertical-align: middle;">{{ $org.Name }}</td>
+					<td rowspan="{{ (orgSpan $org $containsVariant) }}" style="vertical-align: middle;">{{ $org.Name }}</td>
 				</tr>
 				{{ range $index, $repo := $org.Repos }}
-				    {{ $repoLen := len $repo.Branches }}
 					<tr>
-						<td rowspan="{{ inc $repoLen }}" style="vertical-align: middle;">{{ $repo.Name }}</td>
+						<td rowspan="{{ (repoSpan $repo $containsVariant) }}" style="vertical-align: middle;">{{ $repo.Name }}</td>
 					</tr>
 					{{ range $index, $branch := $repo.Branches }}
+						{{ $branchLen := len $branch.Variants }}
+						{{ if $containsVariant }}
+							{{ $branchLen = inc $branchLen}}
+						{{ end }}
+						{{ if gt (len $branch.Tests) 0 }}
+							{{ $branchLen = inc $branchLen}}
+						{{ end }}
 						<tr>
-							<td style="vertical-align: middle;">{{ $branch.Name }}</td>
+							<td rowspan="{{ $branchLen }}" style="vertical-align: middle;">{{ $branch.Name }}</td>
+							{{ if gt (len $branch.Tests) 0 }}
+								{{ if $containsVariant }}
+						</tr>
+						<tr>
+							<td style="vertical-align: middle;"></td>
+								{{ end }} <!-- if $containsVariant -->
 							<td>
 								<ul>
 								{{ range $index, $test := $branch.Tests }}
@@ -352,7 +368,20 @@ const templateDefinitions = `
 								{{ end }}
 								</ul>
 							</td>
+							{{ end }} <!-- if gt (len $branch.Tests) 0 -->
 						</tr>
+						{{ range $index, $variant := $branch.Variants }}
+							<tr>
+								<td style="vertical-align: middle;">{{ $variant.Name }}</td>
+								<td>
+								<ul>
+									{{ range $index, $test := $variant.Tests }}
+										<li><nobr><a href="/job?org={{$org.Name}}&repo={{$repo.Name}}&branch={{$branch.Name}}&test={{$test}}&variant={{$variant.Name}}" style="font-family:monospace">{{$test}}</a></nobr></li>
+									{{ end }}
+								</ul>
+								</td>
+							</tr>
+						{{ end }}
 					{{ end }}
 				{{ end }}
 			{{ end }}
@@ -1601,7 +1630,8 @@ type workflowJob struct {
 }
 
 type Jobs struct {
-	Orgs []Org
+	ContainsVariant bool
+	Orgs            []Org
 }
 
 type Org struct {
@@ -1615,8 +1645,34 @@ type Repo struct {
 }
 
 type Branch struct {
+	Name     string
+	Tests    []string
+	Variants []Variant
+}
+
+type Variant struct {
 	Name  string
 	Tests []string
+}
+
+func repoSpan(r Repo, containsVariant bool) int {
+	if !containsVariant {
+		return len(r.Branches) + 1
+	}
+	rowspan := 0
+	for _, branch := range r.Branches {
+		rowspan += len(branch.Variants) + 1
+		rowspan++
+	}
+	return rowspan + 1
+}
+
+func orgSpan(o Org, containsVariant bool) int {
+	rowspan := 0
+	for _, repo := range o.Repos {
+		rowspan += repoSpan(repo, containsVariant)
+	}
+	return rowspan + 1
 }
 
 func getBaseTemplate(workflows registry.WorkflowByName, chains registry.ChainByName, docs map[string]string) *template.Template {
@@ -1644,16 +1700,13 @@ func getBaseTemplate(workflows registry.WorkflowByName, chains registry.ChainByN
 				}
 				return template.HTML(svg)
 			},
-			"orgSpan": func(o Org) int {
-				rowspan := 0
-				for _, repo := range o.Repos {
-					rowspan += len(repo.Branches)
-					rowspan++
-				}
-				return rowspan + 1
-			},
+			"orgSpan":  orgSpan,
+			"repoSpan": repoSpan,
 			"inc": func(i int) int {
 				return i + 1
+			},
+			"doubleInc": func(i int) int {
+				return i + 2
 			},
 		},
 	)
@@ -2116,7 +2169,7 @@ func jobHandler(regAgent agents.RegistryAgent, confAgent agents.ConfigAgent, w h
 }
 
 // addJob adds a test to the specified org, repo, and branch in the Jobs struct in alphabetical order
-func (j *Jobs) addJob(orgName, repoName, branchName, testName string) {
+func (j *Jobs) addJob(orgName, repoName, branchName, variantName, testName string) {
 	orgIndex := 0
 	orgExists := false
 	for _, currOrg := range j.Orgs {
@@ -2164,10 +2217,37 @@ func (j *Jobs) addJob(orgName, repoName, branchName, testName string) {
 		branches := j.Orgs[orgIndex].Repos[repoIndex].Branches
 		j.Orgs[orgIndex].Repos[repoIndex].Branches = append(branches[:branchIndex], append([]Branch{newBranch}, branches[branchIndex:]...)...)
 	}
+	variantIndex := -1
+	if variantName != "" {
+		j.ContainsVariant = true
+		variantIndex = 0
+		variantExists := false
+		for _, currVariant := range j.Orgs[orgIndex].Repos[repoIndex].Branches[branchIndex].Variants {
+			if diff := strings.Compare(currVariant.Name, variantName); diff == 0 {
+				variantExists = true
+				break
+			} else if diff > 0 {
+				break
+			}
+			variantIndex++
+		}
+		if !variantExists {
+			newVariant := Variant{Name: variantName}
+			variants := j.Orgs[orgIndex].Repos[repoIndex].Branches[branchIndex].Variants
+			j.Orgs[orgIndex].Repos[repoIndex].Branches[branchIndex].Variants = append(variants[:variantIndex], append([]Variant{newVariant}, variants[variantIndex:]...)...)
+		}
+	}
 	// a single test shouldn't be added multiple times, but that case should be handled correctly just in case
 	testIndex := 0
 	testExists := false
-	for _, currTestName := range j.Orgs[orgIndex].Repos[repoIndex].Branches[branchIndex].Tests {
+	var testsArr []string
+	if variantIndex == -1 {
+		testsArr = j.Orgs[orgIndex].Repos[repoIndex].Branches[branchIndex].Tests
+	} else {
+
+		testsArr = j.Orgs[orgIndex].Repos[repoIndex].Branches[branchIndex].Variants[variantIndex].Tests
+	}
+	for _, currTestName := range testsArr {
 		if diff := strings.Compare(currTestName, testName); diff == 0 {
 			testExists = true
 			break
@@ -2177,8 +2257,11 @@ func (j *Jobs) addJob(orgName, repoName, branchName, testName string) {
 		testIndex++
 	}
 	if !testExists {
-		tests := j.Orgs[orgIndex].Repos[repoIndex].Branches[branchIndex].Tests
-		j.Orgs[orgIndex].Repos[repoIndex].Branches[branchIndex].Tests = append(tests[:testIndex], append([]string{testName}, tests[testIndex:]...)...)
+		if variantIndex == -1 {
+			j.Orgs[orgIndex].Repos[repoIndex].Branches[branchIndex].Tests = append(testsArr[:testIndex], append([]string{testName}, testsArr[testIndex:]...)...)
+		} else {
+			j.Orgs[orgIndex].Repos[repoIndex].Branches[branchIndex].Variants[variantIndex].Tests = append(testsArr[:testIndex], append([]string{testName}, testsArr[testIndex:]...)...)
+		}
 	}
 }
 
@@ -2191,8 +2274,7 @@ func getAllMultiStageTests(confAgent agents.ConfigAgent) *Jobs {
 			for _, releaseConfig := range repoConfigs {
 				for _, test := range releaseConfig.Tests {
 					if test.MultiStageTestConfiguration != nil {
-						// TODO(apavel): handle variant configs here
-						jobs.addJob(org, repo, releaseConfig.Metadata.Branch, test.As)
+						jobs.addJob(org, repo, releaseConfig.Metadata.Branch, releaseConfig.Metadata.Variant, test.As)
 					}
 				}
 			}
@@ -2229,7 +2311,15 @@ func searchJobs(jobs *Jobs, search string) *Jobs {
 				for _, test := range branch.Tests {
 					fullJobName := fmt.Sprintf("%s-%s-%s-%s", org.Name, repo.Name, branch.Name, test)
 					if strings.Contains(fullJobName, search) {
-						matches.addJob(org.Name, repo.Name, branch.Name, test)
+						matches.addJob(org.Name, repo.Name, branch.Name, "", test)
+					}
+				}
+				for _, variant := range branch.Variants {
+					for _, test := range variant.Tests {
+						fullJobName := fmt.Sprintf("%s-%s-%s-%s-%s", org.Name, repo.Name, branch.Name, variant.Name, test)
+						if strings.Contains(fullJobName, search) {
+							matches.addJob(org.Name, repo.Name, branch.Name, variant.Name, test)
+						}
 					}
 				}
 			}

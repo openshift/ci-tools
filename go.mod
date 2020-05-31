@@ -34,6 +34,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/pmezard/go-difflib v1.0.0
 	github.com/prometheus/client_golang v1.5.0
+	github.com/prometheus/common v0.9.1
 	github.com/shurcooL/githubv4 v0.0.0-20191102174205-af46314aec7b
 	github.com/sirupsen/logrus v1.4.2
 	github.com/spf13/afero v1.2.2

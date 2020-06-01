@@ -523,6 +523,8 @@ type RegistryChain struct {
 	Steps []TestStep `json:"steps"`
 	// Documentation describes what the chain does.
 	Documentation string `json:"documentation,omitempty"`
+	// Environment lists parameters that should be set by the test.
+	Environment []StepParameter `json:"env,omitempty"`
 }
 
 // RegistryWorkflowConfig is the struct that workflow references are unmarshalled into.

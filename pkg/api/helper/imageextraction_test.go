@@ -10,10 +10,9 @@ import (
 	"github.com/google/gofuzz"
 
 	"github.com/openshift/ci-tools/pkg/api"
-	"github.com/openshift/ci-tools/pkg/load"
 )
 
-func TestGetAllImageStreamTagReturnsAllImageStreamTags(t *testing.T) {
+func TestTestInputImageStreamTagsFromResolvedConfigReturnsAllImageStreamTags(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			t.Parallel()
@@ -30,31 +29,28 @@ func TestGetAllImageStreamTagReturnsAllImageStreamTags(t *testing.T) {
 				// fuzzer a bit from creating unreadable output.
 				func(_ *string, _ fuzz.Continue) {},
 				func(_ *api.ClusterProfile, _ fuzz.Continue) {},
-				// These methods are for reading config from disk, so we can ignore fields
-				// that are only set once the configuration has been resolved by a server
-				func(_ *api.MultiStageTestConfigurationLiteral, _ fuzz.Continue) {},
+				// TestInputImageStreamTagsFromResolvedConfig assumes that the config is already
+				// resolved and will error if thats not the case (MultiStageTestConfiguration != nil && MultiStageTestConfigurationLiteral == nil)
+				func(_ **api.MultiStageTestConfiguration, _ fuzz.Continue) {},
 			).
 				// Using something else messes up the result, apparently the fuzzer sometimes overwrites the whole
 				// map/slice after inserting into it.
 				NumElements(1, 1)
 
-			cfg := load.ByOrgRepo{}
+			cfg := api.ReleaseBuildConfiguration{}
 			f.Fuzz(&cfg)
-			for _, org := range cfg {
-				for _, repo := range org {
-					for _, cfg := range repo {
-						for _, rawStep := range cfg.RawSteps {
-							// These are output ImageStreamTags
-							if rawStep.OutputImageTagStepConfiguration != nil {
-								rawStep.OutputImageTagStepConfiguration = nil
-								numberInsertedElements--
-							}
-						}
-					}
+			for _, rawStep := range cfg.RawSteps {
+				// These are output ImageStreamTags
+				if rawStep.OutputImageTagStepConfiguration != nil {
+					rawStep.OutputImageTagStepConfiguration = nil
+					numberInsertedElements--
 				}
 			}
 
-			res := GetAllTestInputImageStreamTags(cfg)
+			res, err := TestInputImageStreamTagsFromResolvedConfig(cfg)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 			if n := len(res); n != numberInsertedElements {
 				serialized, _ := json.Marshal(cfg)
 				tmpFile, err := ioutil.TempFile("", "imagestream-extration-fuzzing")
@@ -70,7 +66,7 @@ func TestGetAllImageStreamTagReturnsAllImageStreamTags(t *testing.T) {
 	}
 }
 
-func TestGetAllImageStreamTagsParsing(t *testing.T) {
+func TestTestInputImageStreamTagsFromConfigParsing(t *testing.T) {
 	t.Parallel()
 	testCases := []struct {
 		name           string
@@ -91,10 +87,13 @@ func TestGetAllImageStreamTagsParsing(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			config := load.ByOrgRepo{"org": {"repo": []api.ReleaseBuildConfiguration{{
+			config := api.ReleaseBuildConfiguration{
 				InputConfiguration: api.InputConfiguration{BaseImages: map[string]api.ImageStreamTagReference{"": tc.istr}},
-			}}}}
-			result := GetAllTestInputImageStreamTags(config)
+			}
+			result, err := TestInputImageStreamTagsFromResolvedConfig(config)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 			if n := len(result); n != 1 {
 				t.Fatalf("expected one result, got %d", n)
 			}
@@ -102,6 +101,43 @@ func TestGetAllImageStreamTagsParsing(t *testing.T) {
 				if item.String() != tc.expectedResult {
 					t.Errorf("expected result %s, got result %s", tc.expectedResult, item.String())
 				}
+			}
+		})
+	}
+}
+
+func TestTestInputImageStreamTagsFromResolvedConfigErrorsOnUnresolvedConfig(t *testing.T) {
+	t.Parallel()
+	testCases := []struct {
+		name          string
+		config        api.ReleaseBuildConfiguration
+		expectedError string
+	}{
+		{
+			name:          "Unresolved, error",
+			config:        api.ReleaseBuildConfiguration{Tests: []api.TestStepConfiguration{{MultiStageTestConfiguration: &api.MultiStageTestConfiguration{}}}},
+			expectedError: "got unresolved config",
+		},
+		{
+			name: "Resolved, no error",
+			config: api.ReleaseBuildConfiguration{Tests: []api.TestStepConfiguration{{
+				MultiStageTestConfiguration:        &api.MultiStageTestConfiguration{},
+				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{},
+			}}},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+
+			var errStr string
+			_, err := TestInputImageStreamTagsFromResolvedConfig(tc.config)
+			if err != nil {
+				errStr = err.Error()
+			}
+
+			if errStr != tc.expectedError {
+				t.Errorf("expected error: %q, got error: %q", tc.expectedError, errStr)
 			}
 		})
 	}

@@ -135,6 +135,7 @@ func main() {
 		if err != nil {
 			logrus.WithError(err).Fatalf("--kubeconfig had no context for '%s' and loading InClusterConfig failed", appCIContextName)
 		}
+		logrus.Infof("Loaded %q context from in-cluster config", appCIContextName)
 	}
 
 	ciOPConfigAgent, err := agents.NewConfigAgent(opts.ciOperatorconfigPath, 2*time.Minute, prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"error"}))

@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"errors"
 	"reflect"
 	"testing"
 
@@ -22,7 +23,7 @@ func TestResolve(t *testing.T) {
 		chainMap    ChainByName
 		workflowMap WorkflowByName
 		expectedRes api.MultiStageTestConfigurationLiteral
-		expectErr   bool
+		expectedErr error
 	}{{
 		// This is a full config that should not change (other than struct) when passed to the Resolver
 		name: "Full AWS IPI",
@@ -89,7 +90,6 @@ func TestResolve(t *testing.T) {
 				},
 			}},
 		},
-		expectErr: false,
 	}, {
 		name: "Test with reference",
 		config: api.MultiStageTestConfiguration{
@@ -121,7 +121,6 @@ func TestResolve(t *testing.T) {
 				},
 			}},
 		},
-		expectErr: false,
 	}, {
 		name: "Test with broken reference",
 		config: api.MultiStageTestConfiguration{
@@ -142,7 +141,7 @@ func TestResolve(t *testing.T) {
 			},
 		},
 		expectedRes: api.MultiStageTestConfigurationLiteral{},
-		expectErr:   true,
+		expectedErr: errors.New("invalid step reference: generic-unit-test"),
 	}, {
 		name: "Test with chain and reference",
 		config: api.MultiStageTestConfiguration{
@@ -235,7 +234,6 @@ func TestResolve(t *testing.T) {
 				},
 			}},
 		},
-		expectErr: false,
 	}, {
 		name: "Test with broken chain",
 		config: api.MultiStageTestConfiguration{
@@ -259,7 +257,7 @@ func TestResolve(t *testing.T) {
 			},
 		},
 		expectedRes: api.MultiStageTestConfigurationLiteral{},
-		expectErr:   true,
+		expectedErr: errors.New("invalid step reference: install-fips"),
 	}, {
 		name: "Test with nested chains",
 		config: api.MultiStageTestConfiguration{
@@ -333,7 +331,6 @@ func TestResolve(t *testing.T) {
 				}},
 			},
 		},
-		expectErr: false,
 	}, {
 		name: "Test with duplicate names after unrolling chains",
 		config: api.MultiStageTestConfiguration{
@@ -380,7 +377,7 @@ func TestResolve(t *testing.T) {
 			},
 		},
 		expectedRes: api.MultiStageTestConfigurationLiteral{},
-		expectErr:   true,
+		expectedErr: errors.New("duplicate name: ipi-setup"),
 	}, {
 		name: "Full AWS Workflow",
 		config: api.MultiStageTestConfiguration{
@@ -477,7 +474,6 @@ func TestResolve(t *testing.T) {
 				},
 			}},
 		},
-		expectErr: false,
 	}, {
 		name: "Workflow with Test and ClusterProfile overridden",
 		config: api.MultiStageTestConfiguration{
@@ -559,15 +555,20 @@ func TestResolve(t *testing.T) {
 				},
 			}},
 		},
-		expectErr: false,
 	}} {
 		t.Run(testCase.name, func(t *testing.T) {
 			ret, err := NewResolver(testCase.stepMap, testCase.chainMap, testCase.workflowMap).Resolve(testCase.config)
-			if !testCase.expectErr && err != nil {
-				t.Errorf("%s: expected no error but got: %s", testCase.name, err)
-			}
-			if testCase.expectErr && err == nil {
-				t.Errorf("%s: expected error but got none", testCase.name)
+			if testCase.expectedErr == nil {
+				if err != nil {
+					t.Fatalf("%s: expected no error but got: %s", testCase.name, err)
+				}
+			} else {
+				if err == nil {
+					t.Fatalf("%s: expected error but got none", testCase.name)
+				}
+				if testCase.expectedErr.Error() != err.Error() {
+					t.Fatalf("%s: got incorrect error: %s", testCase.name, diff.ObjectReflectDiff(testCase.expectedErr, err))
+				}
 			}
 			if !reflect.DeepEqual(ret, testCase.expectedRes) {
 				t.Errorf("%s: got incorrect output: %s", testCase.name, diff.ObjectReflectDiff(ret, testCase.expectedRes))

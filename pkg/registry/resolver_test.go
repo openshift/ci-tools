@@ -377,7 +377,7 @@ func TestResolve(t *testing.T) {
 			},
 		},
 		expectedRes: api.MultiStageTestConfigurationLiteral{},
-		expectedErr: errors.New("duplicate name: ipi-setup"),
+		expectedErr: errors.New("nested-chains: duplicate name: ipi-setup"),
 	}, {
 		name: "Full AWS Workflow",
 		config: api.MultiStageTestConfiguration{

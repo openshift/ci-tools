@@ -2,9 +2,11 @@ package registry
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 type Resolver interface {
@@ -39,8 +41,6 @@ func (r *registry) Resolve(config api.MultiStageTestConfiguration) (api.MultiSta
 		if !ok {
 			return api.MultiStageTestConfigurationLiteral{}, fmt.Errorf("no workflow named %s", *config.Workflow)
 		}
-		// is "" a valid cluster profile (for instance, can a user specify this for a random profile)?
-		// if yes, we should change ClusterProfile to a pointer
 		if config.ClusterProfile == "" {
 			config.ClusterProfile = workflow.ClusterProfile
 		}
@@ -57,15 +57,15 @@ func (r *registry) Resolve(config api.MultiStageTestConfiguration) (api.MultiSta
 	expandedFlow := api.MultiStageTestConfigurationLiteral{
 		ClusterProfile: config.ClusterProfile,
 	}
-	pre, errs := r.process(config.Pre)
+	pre, errs := r.process(config.Pre, sets.NewString(), nil)
 	expandedFlow.Pre = append(expandedFlow.Pre, pre...)
 	resolveErrors = append(resolveErrors, errs...)
 
-	test, errs := r.process(config.Test)
+	test, errs := r.process(config.Test, sets.NewString(), nil)
 	expandedFlow.Test = append(expandedFlow.Test, test...)
 	resolveErrors = append(resolveErrors, errs...)
 
-	post, errs := r.process(config.Post)
+	post, errs := r.process(config.Post, sets.NewString(), nil)
 	expandedFlow.Post = append(expandedFlow.Post, post...)
 	resolveErrors = append(resolveErrors, errs...)
 
@@ -75,75 +75,61 @@ func (r *registry) Resolve(config api.MultiStageTestConfiguration) (api.MultiSta
 	return expandedFlow, nil
 }
 
-func (r *registry) process(steps []api.TestStep) (literalSteps []api.LiteralTestStep, errs []error) {
-	// unroll chains
-	var unrolledSteps []api.TestStep
-	unrolledSteps, err := r.unrollChains(steps)
-	if err != nil {
-		errs = append(errs, err...)
+type stackRecord string
+
+func stackErrorf(s []stackRecord, format string, args ...interface{}) error {
+	var b strings.Builder
+	for i := range s {
+		b.WriteString(string(s[i]))
+		b.WriteString(": ")
 	}
-	// process steps
-	for _, external := range unrolledSteps {
-		var step api.LiteralTestStep
-		if external.Reference != nil {
-			var err error
-			step, err = r.dereference(external)
-			if err != nil {
-				errs = append(errs, err)
-			}
-		} else if external.LiteralTestStep != nil {
-			step = *external.LiteralTestStep
-		} else {
-			errs = append(errs, fmt.Errorf("encountered TestStep where both `Reference` and `LiteralTestStep` are nil"))
-			continue
-		}
-		literalSteps = append(literalSteps, step)
-	}
-	if err := checkForDuplicates(literalSteps); err != nil {
-		errs = append(errs, err...)
-	}
-	return
+	args = append([]interface{}{b.String()}, args...)
+	return fmt.Errorf("%s"+format, args...)
 }
 
-func (r *registry) unrollChains(input []api.TestStep) (unrolledSteps []api.TestStep, errs []error) {
-	for _, step := range input {
+func (r *registry) process(steps []api.TestStep, seen sets.String, stack []stackRecord) (ret []api.LiteralTestStep, errs []error) {
+	for _, step := range steps {
 		if step.Chain != nil {
-			chain, ok := r.chainsByName[*step.Chain]
-			if !ok {
-				return []api.TestStep{}, []error{fmt.Errorf("unknown step chain: %s", *step.Chain)}
+			steps, err := r.processChain(&step, seen, stack)
+			errs = append(errs, err...)
+			ret = append(ret, steps...)
+		} else {
+			if step, err := r.processStep(&step, seen, stack); err != nil {
+				errs = append(errs, err)
+			} else {
+				ret = append(ret, step)
 			}
-			// handle nested chains
-			var err []error
-			chain.Steps, err = r.unrollChains(chain.Steps)
-			if err != nil {
-				errs = append(errs, err...)
-			}
-			unrolledSteps = append(unrolledSteps, chain.Steps...)
-			continue
 		}
-		unrolledSteps = append(unrolledSteps, step)
 	}
 	return
 }
 
-func (r *registry) dereference(input api.TestStep) (api.LiteralTestStep, error) {
-	step, ok := r.stepsByName[*input.Reference]
+func (r *registry) processChain(step *api.TestStep, seen sets.String, stack []stackRecord) ([]api.LiteralTestStep, []error) {
+	name := *step.Chain
+	chain, ok := r.chainsByName[name]
 	if !ok {
-		return api.LiteralTestStep{}, fmt.Errorf("invalid step reference: %s", *input.Reference)
+		return nil, []error{stackErrorf(stack, "unknown step chain: %s", name)}
 	}
-	return step, nil
+	return r.process(chain.Steps, seen, append(stack, stackRecord(name)))
 }
 
-func checkForDuplicates(input []api.LiteralTestStep) (errs []error) {
-	seen := make(map[string]bool)
-	for _, step := range input {
-		_, ok := seen[step.As]
-		if ok {
-			errs = append(errs, fmt.Errorf("duplicate name: %s", step.As))
+func (r *registry) processStep(step *api.TestStep, seen sets.String, stack []stackRecord) (ret api.LiteralTestStep, err error) {
+	if ref := step.Reference; ref != nil {
+		var ok bool
+		ret, ok = r.stepsByName[*ref]
+		if !ok {
+			return api.LiteralTestStep{}, stackErrorf(stack, "invalid step reference: %s", *ref)
 		}
-		seen[step.As] = true
+	} else if step.LiteralTestStep != nil {
+		ret = *step.LiteralTestStep
+	} else {
+		return api.LiteralTestStep{}, stackErrorf(stack, "encountered TestStep where both `Reference` and `LiteralTestStep` are nil")
 	}
-	return
+	if seen.Has(ret.As) {
+		return api.LiteralTestStep{}, stackErrorf(stack, "duplicate name: %s", ret.As)
+	}
+	seen.Insert(ret.As)
+	return ret, nil
 }
 
 // ResolveConfig uses a resolver to resolve an entire ci-operator config

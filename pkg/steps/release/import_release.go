@@ -371,7 +371,7 @@ func (s *importReleaseStep) Creates() []api.StepLink {
 }
 
 func (s *importReleaseStep) Provides() (api.ParameterMap, api.StepLink) {
-	return providesFor(s.name, s.imageClient, s.jobSpec.Namespace)
+	return providesFor(s.name, s.imageClient, s.jobSpec)
 }
 
 func (s *importReleaseStep) Name() string {

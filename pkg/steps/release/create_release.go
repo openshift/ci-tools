@@ -248,13 +248,13 @@ func EnvVarFor(name string) string {
 }
 
 func (s *assembleReleaseStep) Provides() (api.ParameterMap, api.StepLink) {
-	return providesFor(s.name, s.imageClient, s.jobSpec.Namespace)
+	return providesFor(s.name, s.imageClient, s.jobSpec)
 }
 
-func providesFor(name string, imageClient imageclientset.ImageV1Interface, namespace string) (api.ParameterMap, api.StepLink) {
+func providesFor(name string, imageClient imageclientset.ImageV1Interface, spec *api.JobSpec) (api.ParameterMap, api.StepLink) {
 	return api.ParameterMap{
 		EnvVarFor(name): func() (string, error) {
-			is, err := imageClient.ImageStreams(namespace).Get("release", meta.GetOptions{})
+			is, err := imageClient.ImageStreams(spec.Namespace).Get("release", meta.GetOptions{})
 			if err != nil {
 				return "", fmt.Errorf("could not retrieve output imagestream: %v", err)
 			}

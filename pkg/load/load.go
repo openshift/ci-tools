@@ -268,18 +268,20 @@ func Registry(root string, flat bool) (references registry.ReferenceByName, chai
 				references[name] = ref
 				documentation[name] = doc
 			} else if strings.HasSuffix(path, chainSuffix) {
-				name, doc, chain, err := loadChain(bytes)
+				var chain api.RegistryChainConfig
+				err := yaml.UnmarshalStrict(bytes, &chain)
 				if err != nil {
 					return fmt.Errorf("Failed to load registry file %s: %v", path, err)
 				}
-				if !flat && name != prefix {
+				if !flat && chain.Chain.As != prefix {
 					return fmt.Errorf("name of chain in file %s should be %s", path, prefix)
 				}
-				if strings.TrimSuffix(filepath.Base(path), chainSuffix) != name {
+				if strings.TrimSuffix(filepath.Base(path), chainSuffix) != chain.Chain.As {
 					return fmt.Errorf("filename %s does not match name of chain; filename should be %s", filepath.Base(path), fmt.Sprint(prefix, chainSuffix))
 				}
-				chains[name] = chain
-				documentation[name] = doc
+				documentation[chain.Chain.As] = chain.Chain.Documentation
+				chain.Chain.Documentation = ""
+				chains[chain.Chain.As] = chain.Chain
 			} else if strings.HasSuffix(path, workflowSuffix) {
 				name, doc, workflow, err := loadWorkflow(bytes)
 				if err != nil {
@@ -324,15 +326,6 @@ func loadReference(bytes []byte, baseDir, prefix string, flat bool) (string, str
 	}
 	step.Reference.Commands = string(command)
 	return step.Reference.As, step.Reference.Documentation, step.Reference.LiteralTestStep, nil
-}
-
-func loadChain(bytes []byte) (string, string, []api.TestStep, error) {
-	chain := api.RegistryChainConfig{}
-	err := yaml.UnmarshalStrict(bytes, &chain)
-	if err != nil {
-		return "", "", []api.TestStep{}, err
-	}
-	return chain.Chain.As, chain.Chain.Documentation, chain.Chain.Steps, nil
 }
 
 func loadWorkflow(bytes []byte) (string, string, api.MultiStageTestConfiguration, error) {

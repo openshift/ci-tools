@@ -246,7 +246,7 @@ func NewGraph(stepsByName ReferenceByName, chainsByName ChainByName, workflowsBy
 		}
 		chainNodes[name] = node
 		nodesByName.Chains[name] = node
-		for _, step := range chain {
+		for _, step := range chain.Steps {
 			if step.Reference != nil {
 				if _, exists := referenceNodes[*step.Reference]; !exists {
 					return nodesByName, fmt.Errorf("Chain %s contains non-existent reference %s", name, *step.Reference)

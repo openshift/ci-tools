@@ -70,7 +70,7 @@ func addSubgraph(mainGraph graph, name string, root []api.TestStep, chains regis
 		} else if step.Reference != nil {
 			currNode = &node{label: *step.Reference, linkable: true}
 		} else if step.Chain != nil {
-			mainGraph, currSG = addSubgraph(mainGraph, *step.Chain, chains[*step.Chain], chains, !isRoot, true, false)
+			mainGraph, currSG = addSubgraph(mainGraph, *step.Chain, chains[*step.Chain].Steps, chains, !isRoot, true, false)
 		}
 		// create new edge
 		var newIndex int
@@ -172,7 +172,7 @@ func WorkflowGraph(name string, workflows registry.WorkflowByName, chains regist
 }
 
 func chainDotFile(name string, chains registry.ChainByName) string {
-	mainGraph, _ := addSubgraph(graph{}, name, chains[name], chains, false, true, true)
+	mainGraph, _ := addSubgraph(graph{}, name, chains[name].Steps, chains, false, true, true)
 	mainGraph.label = fmt.Sprintf("Chain \"%s\"", name)
 	return writeDotFile(mainGraph)
 }

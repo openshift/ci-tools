@@ -28,26 +28,34 @@ var referenceMap = ReferenceByName{
 	ipiConfAWS:                {},
 }
 var chainMap = ChainByName{
-	ipiConfAWS: {{
-		Reference: &ipiConf,
-	}, {
-		Reference: &ipiConfAWS,
-	}},
-	ipiInstall: {{
-		Reference: &ipiInstallInstall,
-	}, {
-		Reference: &ipiInstallRBAC,
-	}},
-	ipiDeprovision: {{
-		Reference: &ipiDeprovisionMustGather,
-	}, {
-		Reference: &ipiDeprovisionDeprovision,
-	}},
-	nested: {{
-		Chain: &ipiInstall,
-	}, {
-		Chain: &ipiDeprovision,
-	}},
+	ipiConfAWS: {
+		Steps: []api.TestStep{{
+			Reference: &ipiConf,
+		}, {
+			Reference: &ipiConfAWS,
+		}},
+	},
+	ipiInstall: {
+		Steps: []api.TestStep{{
+			Reference: &ipiInstallInstall,
+		}, {
+			Reference: &ipiInstallRBAC,
+		}},
+	},
+	ipiDeprovision: {
+		Steps: []api.TestStep{{
+			Reference: &ipiDeprovisionMustGather,
+		}, {
+			Reference: &ipiDeprovisionDeprovision,
+		}},
+	},
+	nested: {
+		Steps: []api.TestStep{{
+			Chain: &ipiInstall,
+		}, {
+			Chain: &ipiDeprovision,
+		}},
+	},
 }
 var workflowMap = WorkflowByName{
 	ipi: {
@@ -241,8 +249,8 @@ func TestHasCycles(t *testing.T) {
 	}
 }
 
-func combineChains(map1, map2 map[string][]api.TestStep) map[string][]api.TestStep {
-	newMap := make(map[string][]api.TestStep)
+func combineChains(map1, map2 ChainByName) ChainByName {
+	newMap := make(ChainByName)
 	for k, v := range map1 {
 		newMap[k] = v
 	}
@@ -294,17 +302,21 @@ func TestNewGraph(t *testing.T) {
 		name:      "Invalid reference in chain",
 		workflows: WorkflowByName{},
 		chains: ChainByName{
-			"ipi-install-2": []api.TestStep{{
-				Reference: &ipiInstall,
-			}},
+			"ipi-install-2": {
+				Steps: []api.TestStep{{
+					Reference: &ipiInstall,
+				}},
+			},
 		},
 	}, {
 		name:      "Invalid chain in chain",
 		workflows: WorkflowByName{},
 		chains: ChainByName{
-			"ipi-install-2": []api.TestStep{{
-				Chain: &ipiInstallInstall,
-			}},
+			"ipi-install-2": {
+				Steps: []api.TestStep{{
+					Chain: &ipiInstallInstall,
+				}},
+			},
 		},
 	}}
 

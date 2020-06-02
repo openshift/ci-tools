@@ -1,12 +1,12 @@
 package defaults
 
 import (
-	"bytes"
+	"encoding/json"
 	"fmt"
-	"reflect"
+	"sort"
 	"testing"
 
-	"k8s.io/apimachinery/pkg/util/diff"
+	"github.com/google/go-cmp/cmp"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 
@@ -14,7 +14,7 @@ import (
 )
 
 func addCloneRefs(cfg *api.SourceStepConfiguration) *api.SourceStepConfiguration {
-	cfg.ClonerefsImage = api.ImageStreamTagReference{Cluster: "https://api.ci.openshift.org", Namespace: "ci", Name: "clonerefs", Tag: "latest"}
+	cfg.ClonerefsImage = api.ImageStreamTagReference{Namespace: "ci", Name: "clonerefs", Tag: "latest"}
 	cfg.ClonerefsPath = "/app/prow/cmd/clonerefs/app.binary.runfiles/io_k8s_test_infra/prow/cmd/clonerefs/linux_amd64_pure_stripped/app.binary"
 	return cfg
 }
@@ -418,74 +418,27 @@ func TestStepConfigsForBuild(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			if configs := stepConfigsForBuild(testCase.input, testCase.jobSpec); !stepListsEqual(configs, testCase.output) {
-				t.Logf("%s", diff.ObjectReflectDiff(testCase.output, configs))
-				t.Errorf("incorrect defaulted step configurations,\n\tgot:\n%s\n\texpected:\n%s", formatSteps(configs), formatSteps(testCase.output))
+			actual := sortStepConfig(stepConfigsForBuild(testCase.input, testCase.jobSpec))
+			expected := sortStepConfig(testCase.output)
+			if diff := cmp.Diff(actual, expected); diff != "" {
+				t.Errorf("actual differs from expected: %s", diff)
 			}
+
 		})
 	}
 }
 
-// stepListsEqual determines if the two lists of step configs
-// contain the same elements, but is not interested
-// in ordering
-func stepListsEqual(first, second []api.StepConfiguration) bool {
-	if len(first) != len(second) {
-		return false
-	}
-
-	for _, item := range first {
-		otherContains := false
-		for _, other := range second {
-			if reflect.DeepEqual(item, other) {
-				otherContains = true
-			}
+func sortStepConfig(in []api.StepConfiguration) []api.StepConfiguration {
+	sort.Slice(in, func(i, j int) bool {
+		iMarshalled, err := json.Marshal(in[i])
+		if err != nil {
+			panic(fmt.Sprintf("iMarshal: %v", err))
 		}
-		if !otherContains {
-			return false
+		jMarshalled, err := json.Marshal(in[j])
+		if err != nil {
+			panic(fmt.Sprintf("jMarshal: %v", err))
 		}
-	}
-
-	return true
-}
-
-func formatSteps(steps []api.StepConfiguration) string {
-	output := bytes.Buffer{}
-	for _, step := range steps {
-		output.WriteString(formatStep(step))
-		output.WriteString("\n")
-	}
-	return output.String()
-}
-
-func formatStep(step api.StepConfiguration) string {
-	if step.InputImageTagStepConfiguration != nil {
-		return fmt.Sprintf("Tag %s to pipeline:%s", formatReference(step.InputImageTagStepConfiguration.BaseImage), step.InputImageTagStepConfiguration.To)
-	}
-
-	if step.PipelineImageCacheStepConfiguration != nil {
-		return fmt.Sprintf("Run %v in pipeline:%s to cache in pipeline:%s", step.PipelineImageCacheStepConfiguration.Commands, step.PipelineImageCacheStepConfiguration.From, step.PipelineImageCacheStepConfiguration.To)
-	}
-
-	if step.SourceStepConfiguration != nil {
-		return fmt.Sprintf("Clone source into pipeline:%s to cache in pipline:%s", step.SourceStepConfiguration.From, step.SourceStepConfiguration.To)
-	}
-
-	if step.ProjectDirectoryImageBuildStepConfiguration != nil {
-		return fmt.Sprintf("Build project image from %s in pipeline:%s to cache in pipline:%s", step.ProjectDirectoryImageBuildStepConfiguration.ContextDir, step.ProjectDirectoryImageBuildStepConfiguration.From, step.ProjectDirectoryImageBuildStepConfiguration.To)
-	}
-
-	if step.RPMImageInjectionStepConfiguration != nil {
-		return fmt.Sprintf("Inject RPM repos into pipeline:%s to cache in pipline:%s", step.RPMImageInjectionStepConfiguration.From, step.RPMImageInjectionStepConfiguration.To)
-	}
-
-	if step.RPMServeStepConfiguration != nil {
-		return fmt.Sprintf("Serve RPMs from pipeline:%s", step.RPMServeStepConfiguration.From)
-	}
-
-	return ""
-}
-
-func formatReference(ref api.ImageStreamTagReference) string {
-	return fmt.Sprintf("%s/%s:%s (as:%s)", ref.Namespace, ref.Name, ref.Tag, ref.As)
+		return string(iMarshalled) < string(jMarshalled)
+	})
+	return in
 }

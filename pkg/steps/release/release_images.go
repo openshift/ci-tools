@@ -91,8 +91,7 @@ func (s *stableImagesTagStep) Description() string {
 // a later point, selectively
 type releaseImagesTagStep struct {
 	config          api.ReleaseTagConfiguration
-	srcClient       imageclientset.ImageV1Interface
-	dstClient       imageclientset.ImageV1Interface
+	client          imageclientset.ImageV1Interface
 	routeClient     routeclientset.RoutesGetter
 	configMapClient coreclientset.ConfigMapsGetter
 	params          *api.DeferredParameters
@@ -156,27 +155,9 @@ func (s *releaseImagesTagStep) run(ctx context.Context, dry bool) error {
 		}
 	}
 
-	is, err := s.srcClient.ImageStreams(s.config.Namespace).Get(s.config.Name, meta.GetOptions{})
+	is, err := s.client.ImageStreams(s.config.Namespace).Get(s.config.Name, meta.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("could not resolve stable imagestream: %v", err)
-	}
-
-	// check to see if the src and dst are the same cluster, in which case we can use a more efficient tagging path
-	if len(s.config.Cluster) > 0 {
-		if dstIs, err := s.dstClient.ImageStreams(is.Namespace).Get(is.Name, meta.GetOptions{}); err == nil && dstIs.UID == is.UID {
-			s.config.Cluster = ""
-		}
-	}
-
-	var repo string
-	if len(s.config.Cluster) > 0 {
-		if len(is.Status.PublicDockerImageRepository) > 0 {
-			repo = is.Status.PublicDockerImageRepository
-		} else if len(is.Status.DockerImageRepository) > 0 {
-			repo = is.Status.DockerImageRepository
-		} else {
-			return fmt.Errorf("remote image stream %s has no accessible image registry value", s.config.Name)
-		}
 	}
 
 	is.UID = ""
@@ -191,14 +172,7 @@ func (s *releaseImagesTagStep) run(ctx context.Context, dry bool) error {
 		},
 	}
 	for _, tag := range is.Spec.Tags {
-		if valid, image := findStatusTag(is, tag.Name); valid != nil {
-			if len(s.config.Cluster) > 0 {
-				if len(image) > 0 {
-					valid = &coreapi.ObjectReference{Kind: "DockerImage", Name: fmt.Sprintf("%s@%s", repo, image)}
-				} else {
-					valid = &coreapi.ObjectReference{Kind: "DockerImage", Name: fmt.Sprintf("%s:%s", repo, tag.Name)}
-				}
-			}
+		if valid, _ := findStatusTag(is, tag.Name); valid != nil {
 			newIS.Spec.Tags = append(newIS.Spec.Tags, imageapi.TagReference{
 				Name: tag.Name,
 				From: valid,
@@ -214,12 +188,12 @@ func (s *releaseImagesTagStep) run(ctx context.Context, dry bool) error {
 	initialIS := newIS.DeepCopy()
 	initialIS.Name = fmt.Sprintf("%s-initial", api.StableImageStream)
 
-	_, err = s.dstClient.ImageStreams(s.jobSpec.Namespace()).Create(newIS)
+	_, err = s.client.ImageStreams(s.jobSpec.Namespace()).Create(newIS)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		return fmt.Errorf("could not copy stable imagestreamtag: %v", err)
 	}
 
-	is, err = s.dstClient.ImageStreams(s.jobSpec.Namespace()).Create(initialIS)
+	is, err = s.client.ImageStreams(s.jobSpec.Namespace()).Create(initialIS)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		return fmt.Errorf("could not copy stable-initial imagestreamtag: %v", err)
 	}
@@ -260,7 +234,7 @@ func (s *releaseImagesTagStep) imageFormat() (string, error) {
 }
 
 func (s *releaseImagesTagStep) repositoryPullSpec() (string, error) {
-	is, err := s.dstClient.ImageStreams(s.jobSpec.Namespace()).Get(api.PipelineImageStream, meta.GetOptions{})
+	is, err := s.client.ImageStreams(s.jobSpec.Namespace()).Get(api.PipelineImageStream, meta.GetOptions{})
 	if err != nil {
 		return "", err
 	}
@@ -279,15 +253,10 @@ func (s *releaseImagesTagStep) Description() string {
 	return fmt.Sprintf("Find all of the input images from %s and tag them into the output image stream", sourceName(s.config))
 }
 
-func ReleaseImagesTagStep(config api.ReleaseTagConfiguration, srcClient, dstClient imageclientset.ImageV1Interface, routeClient routeclientset.RoutesGetter, configMapClient coreclientset.ConfigMapsGetter, params *api.DeferredParameters, jobSpec *api.JobSpec, dryLogger *steps.DryLogger) api.Step {
-	// when source and destination client are the same, we don't need to use external imports
-	if srcClient == dstClient {
-		config.Cluster = ""
-	}
+func ReleaseImagesTagStep(config api.ReleaseTagConfiguration, client imageclientset.ImageV1Interface, routeClient routeclientset.RoutesGetter, configMapClient coreclientset.ConfigMapsGetter, params *api.DeferredParameters, jobSpec *api.JobSpec, dryLogger *steps.DryLogger) api.Step {
 	return &releaseImagesTagStep{
 		config:          config,
-		srcClient:       srcClient,
-		dstClient:       dstClient,
+		client:          client,
 		routeClient:     routeClient,
 		configMapClient: configMapClient,
 		params:          params,

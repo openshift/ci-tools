@@ -362,7 +362,7 @@ func indexConfigsByTestInputImageStramTag(resolver registry.Resolver) agents.Ind
 			if testStep.MultiStageTestConfiguration != nil {
 				// TODO (alvaroalmean): Remove once the deployment was updated
 				if resolver != nil {
-					resolved, err := resolver.Resolve(*testStep.MultiStageTestConfiguration)
+					resolved, err := resolver.Resolve(testStep.As, *testStep.MultiStageTestConfiguration)
 					if err != nil {
 						log.WithError(err).Error("Failed to resolve MultiStageTestConfiguration")
 					}
@@ -376,7 +376,7 @@ func indexConfigsByTestInputImageStramTag(resolver registry.Resolver) agents.Ind
 			if rawStep.TestStepConfiguration != nil && rawStep.TestStepConfiguration.MultiStageTestConfiguration != nil {
 				// TODO (alvaroalmean): Remove once the deployment was updated
 				if resolver != nil {
-					resolved, err := resolver.Resolve(*rawStep.TestStepConfiguration.MultiStageTestConfiguration)
+					resolved, err := resolver.Resolve(rawStep.TestStepConfiguration.As, *rawStep.TestStepConfiguration.MultiStageTestConfiguration)
 					if err != nil {
 						log.WithError(err).Error("Failed to resolve MultiStageTestConfiguration")
 					}

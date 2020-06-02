@@ -141,7 +141,7 @@ func TestResolve(t *testing.T) {
 			},
 		},
 		expectedRes: api.MultiStageTestConfigurationLiteral{},
-		expectedErr: errors.New("invalid step reference: generic-unit-test"),
+		expectedErr: errors.New("test: invalid step reference: generic-unit-test"),
 	}, {
 		name: "Test with chain and reference",
 		config: api.MultiStageTestConfiguration{
@@ -257,7 +257,7 @@ func TestResolve(t *testing.T) {
 			},
 		},
 		expectedRes: api.MultiStageTestConfigurationLiteral{},
-		expectedErr: errors.New("invalid step reference: install-fips"),
+		expectedErr: errors.New("test: invalid step reference: install-fips"),
 	}, {
 		name: "Test with nested chains",
 		config: api.MultiStageTestConfiguration{
@@ -377,7 +377,7 @@ func TestResolve(t *testing.T) {
 			},
 		},
 		expectedRes: api.MultiStageTestConfigurationLiteral{},
-		expectedErr: errors.New("nested-chains: duplicate name: ipi-setup"),
+		expectedErr: errors.New("test: nested-chains: duplicate name: ipi-setup"),
 	}, {
 		name: "Full AWS Workflow",
 		config: api.MultiStageTestConfiguration{
@@ -557,7 +557,7 @@ func TestResolve(t *testing.T) {
 		},
 	}} {
 		t.Run(testCase.name, func(t *testing.T) {
-			ret, err := NewResolver(testCase.stepMap, testCase.chainMap, testCase.workflowMap).Resolve(testCase.config)
+			ret, err := NewResolver(testCase.stepMap, testCase.chainMap, testCase.workflowMap).Resolve("test", testCase.config)
 			if testCase.expectedErr == nil {
 				if err != nil {
 					t.Fatalf("%s: expected no error but got: %s", testCase.name, err)

@@ -10,7 +10,7 @@ import (
 )
 
 type Resolver interface {
-	Resolve(config api.MultiStageTestConfiguration) (api.MultiStageTestConfigurationLiteral, error)
+	Resolve(name string, config api.MultiStageTestConfiguration) (api.MultiStageTestConfigurationLiteral, error)
 }
 
 type ReferenceByName map[string]api.LiteralTestStep
@@ -34,7 +34,7 @@ func NewResolver(stepsByName ReferenceByName, chainsByName ChainByName, workflow
 	}
 }
 
-func (r *registry) Resolve(config api.MultiStageTestConfiguration) (api.MultiStageTestConfigurationLiteral, error) {
+func (r *registry) Resolve(name string, config api.MultiStageTestConfiguration) (api.MultiStageTestConfigurationLiteral, error) {
 	var resolveErrors []error
 	if config.Workflow != nil {
 		workflow, ok := r.workflowsByName[*config.Workflow]
@@ -57,15 +57,16 @@ func (r *registry) Resolve(config api.MultiStageTestConfiguration) (api.MultiSta
 	expandedFlow := api.MultiStageTestConfigurationLiteral{
 		ClusterProfile: config.ClusterProfile,
 	}
-	pre, errs := r.process(config.Pre, sets.NewString(), nil)
+	stack := []stackRecord{stackRecord(name)}
+	pre, errs := r.process(config.Pre, sets.NewString(), stack)
 	expandedFlow.Pre = append(expandedFlow.Pre, pre...)
 	resolveErrors = append(resolveErrors, errs...)
 
-	test, errs := r.process(config.Test, sets.NewString(), nil)
+	test, errs := r.process(config.Test, sets.NewString(), stack)
 	expandedFlow.Test = append(expandedFlow.Test, test...)
 	resolveErrors = append(resolveErrors, errs...)
 
-	post, errs := r.process(config.Post, sets.NewString(), nil)
+	post, errs := r.process(config.Post, sets.NewString(), stack)
 	expandedFlow.Post = append(expandedFlow.Post, post...)
 	resolveErrors = append(resolveErrors, errs...)
 
@@ -141,7 +142,7 @@ func ResolveConfig(resolver Resolver, config api.ReleaseBuildConfiguration) (api
 			resolvedTests = append(resolvedTests, step)
 			continue
 		}
-		resolvedConfig, err := resolver.Resolve(*step.MultiStageTestConfiguration)
+		resolvedConfig, err := resolver.Resolve(step.As, *step.MultiStageTestConfiguration)
 		if err != nil {
 			return api.ReleaseBuildConfiguration{}, fmt.Errorf("Failed resolve MultiStageTestConfiguration: %v", err)
 		}

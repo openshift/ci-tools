@@ -115,6 +115,6 @@ func (a *registryAgent) loadRegistry() error {
 	return nil
 }
 
-func (a *registryAgent) Resolve(config api.MultiStageTestConfiguration) (api.MultiStageTestConfigurationLiteral, error) {
-	return a.resolver.Resolve(config)
+func (a *registryAgent) Resolve(name string, config api.MultiStageTestConfiguration) (api.MultiStageTestConfigurationLiteral, error) {
+	return a.resolver.Resolve(name, config)
 }

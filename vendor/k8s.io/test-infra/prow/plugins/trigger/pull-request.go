@@ -71,7 +71,8 @@ func handlePR(c Client, trigger plugins.Trigger, pr github.PullRequestEvent) err
 		// When a PR is opened, if the author is in the org then build it.
 		// Otherwise, ask for "/ok-to-test". There's no need to look for previous
 		// "/ok-to-test" comments since the PR was just opened!
-		member, err := TrustedUser(c.GitHubClient, trigger.OnlyOrgMembers, trigger.TrustedOrg, author, org, repo)
+		trustedResponse, err := TrustedUser(c.GitHubClient, trigger.OnlyOrgMembers, trigger.TrustedOrg, author, org, repo)
+		member := trustedResponse.IsTrusted
 		if err != nil {
 			return fmt.Errorf("could not check membership: %s", err)
 		}
@@ -89,22 +90,7 @@ func handlePR(c Client, trigger plugins.Trigger, pr github.PullRequestEvent) err
 			return fmt.Errorf("could not welcome non-org member %q: %v", author, err)
 		}
 	case github.PullRequestActionReopened:
-		// When a PR is reopened, check that the user is in the org or that an org
-		// member had said "/ok-to-test" before building, resulting in label ok-to-test.
-		l, trusted, err := TrustedPullRequest(c.GitHubClient, trigger, author, org, repo, num, nil)
-		if err != nil {
-			return fmt.Errorf("could not validate PR: %s", err)
-		} else if trusted {
-			// Eventually remove need-ok-to-test
-			// Does not work for TrustedUser() == true since labels are not fetched in this case
-			if github.HasLabel(labels.NeedsOkToTest, l) {
-				if err := c.GitHubClient.RemoveLabel(org, repo, num, labels.NeedsOkToTest); err != nil {
-					return err
-				}
-			}
-			c.Logger.Info("Starting all jobs for updated PR.")
-			return buildAllButDrafts(c, &pr.PullRequest, pr.GUID, baseSHA, presubmits)
-		}
+		return buildAllIfTrusted(c, trigger, pr, baseSHA, presubmits)
 	case github.PullRequestActionEdited:
 		// if someone changes the base of their PR, we will get this
 		// event and the changes field will list that the base SHA and
@@ -159,7 +145,15 @@ func handlePR(c Client, trigger plugins.Trigger, pr github.PullRequestEvent) err
 			c.Logger.WithError(err).Error("Failed to abort jobs for closed pull request")
 			return err
 		}
+	case github.PullRequestActionReadyForReview:
+		return buildAllIfTrusted(c, trigger, pr, baseSHA, presubmits)
+	case github.PullRequestConvertedToDraft:
+		if err := abortAllJobs(c, &pr.PullRequest); err != nil {
+			c.Logger.WithError(err).Error("Failed to abort jobs for pull request converted to draft")
+			return err
+		}
 	}
+
 	return nil
 }
 
@@ -314,9 +308,9 @@ func draftMsg(ghc githubClient, pr github.PullRequest) error {
 // If already known, GitHub labels should be provided to save tokens. Otherwise, it fetches them.
 func TrustedPullRequest(tprc trustedPullRequestClient, trigger plugins.Trigger, author, org, repo string, num int, l []github.Label) ([]github.Label, bool, error) {
 	// First check if the author is a member of the org.
-	if orgMember, err := TrustedUser(tprc, trigger.OnlyOrgMembers, trigger.TrustedOrg, author, org, repo); err != nil {
+	if trustedResponse, err := TrustedUser(tprc, trigger.OnlyOrgMembers, trigger.TrustedOrg, author, org, repo); err != nil {
 		return l, false, fmt.Errorf("error checking %s for trust: %v", author, err)
-	} else if orgMember {
+	} else if trustedResponse.IsTrusted {
 		return l, true, nil
 	}
 	// Then check if PR has ok-to-test label

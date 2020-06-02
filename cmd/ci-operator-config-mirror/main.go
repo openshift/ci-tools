@@ -4,7 +4,9 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -26,6 +28,8 @@ type options struct {
 
 	configDir string
 	toOrg     string
+
+	clean bool
 }
 
 func gatherOptions() options {
@@ -34,6 +38,8 @@ func gatherOptions() options {
 
 	fs.StringVar(&o.configDir, "config-path", "", "Path to directory containing ci-operator configurations")
 	fs.StringVar(&o.toOrg, "to-org", "", "Name of the organization which the ci-operator configuration files will be mirrored")
+
+	fs.BoolVar(&o.clean, "clean", true, "If the `to-org` folder already exists, then delete all subdirectories")
 
 	o.WhitelistOptions.Bind(fs)
 	fs.Parse(os.Args[1:])
@@ -51,6 +57,38 @@ func (o *options) validate() error {
 	return o.WhitelistOptions.Validate()
 }
 
+type configsByRepo map[string][]config.DataWithInfo
+
+func (d configsByRepo) cleanDestinationSubdirs(destinationOrgPath string) error {
+	contents, err := ioutil.ReadDir(destinationOrgPath)
+	if err != nil {
+		return fmt.Errorf("failed to read directory %s: %v", destinationOrgPath, err)
+	}
+
+	for _, info := range contents {
+		if !info.IsDir() {
+			continue
+		}
+
+		if err := os.RemoveAll(filepath.Join(destinationOrgPath, info.Name())); err != nil {
+			return fmt.Errorf("couldn't delete dir: %v", err)
+		}
+	}
+
+	return nil
+}
+
+func (d configsByRepo) generateConfigs(configDir string) error {
+	for _, dataWithInfos := range d {
+		for _, dataWithInfo := range dataWithInfos {
+			if err := dataWithInfo.CommitTo(configDir); err != nil {
+				return fmt.Errorf("couldn't create the configuration file: %v", err)
+			}
+		}
+	}
+	return nil
+}
+
 func main() {
 	o := gatherOptions()
 	if err := o.validate(); err != nil {
@@ -61,6 +99,8 @@ func main() {
 		interrupts.WaitForGracefulShutdown()
 		os.Exit(1)
 	}()
+
+	configsByRepo := make(configsByRepo)
 
 	callback := func(rbc *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {
 		logger := logrus.WithFields(logrus.Fields{"org": repoInfo.Org, "repo": repoInfo.Repo, "branch": repoInfo.Branch})
@@ -106,20 +146,30 @@ func main() {
 
 		repoInfo.Org = o.toOrg
 		rbc.Metadata.Org = o.toOrg
-		dataWithInfo := config.DataWithInfo{
+		configsByRepo[repoInfo.Repo] = append(configsByRepo[repoInfo.Repo], config.DataWithInfo{
 			Configuration: *rbc,
 			Info:          *repoInfo,
-		}
-
-		if err := dataWithInfo.CommitTo(o.configDir); err != nil {
-			logger.WithError(err).Fatal("couldn't create the configuration file")
-		}
+		})
 
 		return nil
 	}
 
 	if err := config.OperateOnCIOperatorConfigDir(o.configDir, callback); err != nil {
-		logrus.WithError(err).Fatal("error while generating the ci-operator configuration files")
+		logrus.WithError(err).Fatal("error while operating in the ci-operator configuration files")
+	}
+
+	dest := filepath.Join(o.configDir, o.toOrg)
+	logger := logrus.WithField("destination", dest)
+	if o.clean {
+		logger.Info("Cleaning destination's sub directories")
+		if err := configsByRepo.cleanDestinationSubdirs(dest); err != nil {
+			logger.WithError(err).Fatal("couldn't cleanup destination's subdirectories")
+		}
+	}
+
+	logger.Info("Generating configurations...")
+	if err := configsByRepo.generateConfigs(o.configDir); err != nil {
+		logger.WithError(err).Fatal("couldn't generate configurations")
 	}
 }
 

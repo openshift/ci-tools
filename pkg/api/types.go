@@ -352,6 +352,7 @@ type ReleaseTagConfiguration struct {
 // release dependencies.
 type ReleaseConfiguration struct {
 	Name string `json:"name"`
+	UnresolvedRelease
 }
 
 // PromotionConfiguration describes where images created by this

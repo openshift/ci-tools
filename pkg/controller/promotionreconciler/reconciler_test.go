@@ -8,17 +8,19 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	imagev1 "github.com/openshift/api/image/v1"
-	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/test-infra/prow/github"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/yaml"
 
+	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/controller/promotionreconciler/prowjobreconciler"
+	controllerutil "github.com/openshift/ci-tools/pkg/controller/util"
 )
 
 func init() {
@@ -90,18 +92,16 @@ func TestReconcile(t *testing.T) {
 		githubClient func(owner, repo, ref string) (string, error)
 		verify       func(error, *prowjobreconciler.OrgRepoBranchCommit) error
 	}{
-		// IsNotFound is determined via an unexported typ -.-
-		// TODO(alvaroalmean): Export IsNotFound errors
-		//		{
-		//			name:         "Failure getting commit for IST returns terminal error",
-		//			githubClient: func(_, _, _ string) (string, error) { return "", errors.New("not today") },
-		//			verify: func(e error, _ *prowjobreconciler.OrgRepoBranchCommit) error {
-		//				if !controllerutil.IsTerminal(e) {
-		//					return fmt.Errorf("expected to get terminal error, got %v", e)
-		//				}
-		//				return nil
-		//			},
-		//		},
+		{
+			name:         "Failure getting commit for IST returns terminal error",
+			githubClient: func(_, _, _ string) (string, error) { return "", fmt.Errorf("wrapped: %w", github.NewNotFound()) },
+			verify: func(e error, _ *prowjobreconciler.OrgRepoBranchCommit) error {
+				if !controllerutil.IsTerminal(e) {
+					return fmt.Errorf("expected to get terminal error, got %v", e)
+				}
+				return nil
+			},
+		},
 		{
 			name:         "IST up to date, nothing to do",
 			githubClient: func(_, _, _ string) (string, error) { return commitOnIST, nil },

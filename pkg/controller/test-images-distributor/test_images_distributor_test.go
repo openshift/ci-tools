@@ -451,4 +451,4 @@ func (client *imageImportStatusSettingClient) Create(ctx context.Context, obj ru
 }
 
 // indexConfigsByTestInputImageStramTag must be an agents.IndexFn
-var _ agents.IndexFn = indexConfigsByTestInputImageStramTag
+var _ agents.IndexFn = indexConfigsByTestInputImageStramTag(nil)

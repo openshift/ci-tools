@@ -21,6 +21,7 @@ type RegistryAgent interface {
 	ResolveConfig(config api.ReleaseBuildConfiguration) (api.ReleaseBuildConfiguration, error)
 	GetRegistryComponents() (registry.ReferenceByName, registry.ChainByName, registry.WorkflowByName, map[string]string)
 	GetGeneration() int
+	registry.Resolver
 }
 
 type registryAgent struct {
@@ -112,4 +113,8 @@ func (a *registryAgent) loadRegistry() error {
 	configReloadTimeMetric.Observe(float64(duration.Seconds()))
 	log.WithField("duration", duration).Info("Registry reloaded")
 	return nil
+}
+
+func (a *registryAgent) Resolve(config api.MultiStageTestConfiguration) (api.MultiStageTestConfigurationLiteral, error) {
+	return a.resolver.Resolve(config)
 }

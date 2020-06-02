@@ -32,6 +32,7 @@ go build  -v -o /tmp/dptp-cm ./cmd/dptp-controller-manager
   --job-config-path="$(go env GOPATH)/src/github.com/openshift/release/ci-operator/jobs" \
   --leader-election-suffix="$USER" \
   --enable-controller=test_images_distributor \
+  --step-config-path="$(go env GOPATH)/src/github.com/openshift/release/ci-operator/step-registry" \
   --testImagesDistributorOptions.imagePullSecretPath=$dockercfg \
   --kubeconfig=$kubeconfig \
   --dry-run=true

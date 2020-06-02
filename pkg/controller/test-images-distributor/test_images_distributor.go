@@ -28,6 +28,7 @@ import (
 	apihelper "github.com/openshift/ci-tools/pkg/api/helper"
 	controllerutil "github.com/openshift/ci-tools/pkg/controller/util"
 	"github.com/openshift/ci-tools/pkg/load/agents"
+	"github.com/openshift/ci-tools/pkg/registry"
 )
 
 const ControllerName = "test_images_distributor"
@@ -37,6 +38,7 @@ func AddToManager(mgr manager.Manager,
 	buildClusterManagers map[string]manager.Manager,
 	configAgent agents.ConfigAgent,
 	pullSecretGetter func() []byte,
+	resolver registry.Resolver,
 	dryRun bool) error {
 	log := logrus.WithField("controller", ControllerName)
 
@@ -82,7 +84,7 @@ func AddToManager(mgr manager.Manager,
 		// TODO: Watch buildCluster ImageStreams as well. For now we assume no one will tamper with them.
 	}
 
-	objectFilter, err := testInputImageStreamTagFilterFactory(log, configAgent)
+	objectFilter, err := testInputImageStreamTagFilterFactory(log, configAgent, resolver)
 	if err != nil {
 		return fmt.Errorf("failed to get filter for ImageStreamTags: %w", err)
 	}
@@ -334,9 +336,9 @@ func (r *reconciler) generateReferencePullSecret(namespace string) *corev1.Secre
 	}
 }
 
-func testInputImageStreamTagFilterFactory(l *logrus.Entry, ca agents.ConfigAgent) (objectFilter, error) {
+func testInputImageStreamTagFilterFactory(l *logrus.Entry, ca agents.ConfigAgent, resolver registry.Resolver) (objectFilter, error) {
 	const indexName = "config-by-test-input-imagestreamtag"
-	if err := ca.AddIndex(indexName, indexConfigsByTestInputImageStramTag); err != nil {
+	if err := ca.AddIndex(indexName, indexConfigsByTestInputImageStramTag(resolver)); err != nil {
 		return nil, fmt.Errorf("failed to add %s index to configAgent: %w", indexName, err)
 	}
 	l = logrus.WithField("subcomponent", "test-input-image-stream-tag-filter")
@@ -352,13 +354,50 @@ func testInputImageStreamTagFilterFactory(l *logrus.Entry, ca agents.ConfigAgent
 	}, nil
 }
 
-func indexConfigsByTestInputImageStramTag(cfg api.ReleaseBuildConfiguration) []string {
-	m := apihelper.TestInputImageStreamTagsFromConfig(cfg)
-	var result []string
-	for key := range m {
-		result = append(result, key)
+func indexConfigsByTestInputImageStramTag(resolver registry.Resolver) agents.IndexFn {
+	return func(cfg api.ReleaseBuildConfiguration) []string {
+
+		log := logrus.WithFields(logrus.Fields{"org": cfg.Metadata.Org, "repo": cfg.Metadata.Repo, "branch": cfg.Metadata.Branch})
+		for idx, testStep := range cfg.Tests {
+			if testStep.MultiStageTestConfiguration != nil {
+				// TODO (alvaroalmean): Remove once the deployment was updated
+				if resolver != nil {
+					resolved, err := resolver.Resolve(*testStep.MultiStageTestConfiguration)
+					if err != nil {
+						log.WithError(err).Error("Failed to resolve MultiStageTestConfiguration")
+					}
+					cfg.Tests[idx].MultiStageTestConfigurationLiteral = &resolved
+				}
+				// We always need to set to nil or we will get another error later.
+				cfg.Tests[idx].MultiStageTestConfiguration = nil
+			}
+		}
+		for idx, rawStep := range cfg.RawSteps {
+			if rawStep.TestStepConfiguration != nil && rawStep.TestStepConfiguration.MultiStageTestConfiguration != nil {
+				// TODO (alvaroalmean): Remove once the deployment was updated
+				if resolver != nil {
+					resolved, err := resolver.Resolve(*rawStep.TestStepConfiguration.MultiStageTestConfiguration)
+					if err != nil {
+						log.WithError(err).Error("Failed to resolve MultiStageTestConfiguration")
+					}
+					// We always need to set to nil or we will get another error later.
+					cfg.RawSteps[idx].TestStepConfiguration.MultiStageTestConfigurationLiteral = &resolved
+				}
+				cfg.RawSteps[idx].TestStepConfiguration.MultiStageTestConfiguration = nil
+			}
+
+		}
+		m, err := apihelper.TestInputImageStreamTagsFromResolvedConfig(cfg)
+		if err != nil {
+			// Should never happen as we set it to nil above
+			log.WithError(err).Error("Got error from TestInputImageStreamTagsFromResolvedConfig. This is a software bug.")
+		}
+		var result []string
+		for key := range m {
+			result = append(result, key)
+		}
+		return result
 	}
-	return result
 }
 
 func publicURLForImage(potentiallyPrivate string) string {

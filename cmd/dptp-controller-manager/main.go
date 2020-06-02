@@ -23,6 +23,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/controller/promotionreconciler"
 	"github.com/openshift/ci-tools/pkg/controller/test-images-distributor"
 	"github.com/openshift/ci-tools/pkg/load/agents"
+	"github.com/openshift/ci-tools/pkg/registry"
 	"github.com/openshift/ci-tools/pkg/util"
 )
 
@@ -39,6 +40,7 @@ var allControllers = sets.NewString(
 type options struct {
 	leaderElectionNamespace      string
 	ciOperatorconfigPath         string
+	stepConfigPath               string
 	configPath                   string
 	jobConfigPath                string
 	kubeconfig                   string
@@ -77,6 +79,7 @@ func newOpts() (*options, error) {
 		flag.StringVar(&opts.kubeconfig, "kubeconfig", "", kubeconfigFlagDescription)
 	}
 	flag.StringVar(&opts.ciOperatorconfigPath, "ci-operator-config-path", "", "Path to the ci operator config")
+	flag.StringVar(&opts.stepConfigPath, "step-config-path", "", "Path to the registries step configuration")
 	flag.StringVar(&opts.configPath, "config-path", "", "Path to the prow config")
 	flag.StringVar(&opts.jobConfigPath, "job-config-path", "", "Path to the job config")
 	_ = flag.String("promotionreconcilerOptions.ignored-github-organization", "", "deprecated, doesn't do anything. Was used to ignore github organization. We instead attempt all repos and swallow 404 errors we get from github doing so.")
@@ -141,6 +144,15 @@ func main() {
 	ciOPConfigAgent, err := agents.NewConfigAgent(opts.ciOperatorconfigPath, 2*time.Minute, prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"error"}))
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to construct ci-opeartor config agent")
+	}
+	var registryResolver registry.Resolver
+	// Make conditional for now due to keep flag compatibility
+	if opts.stepConfigPath != "" {
+		registryConfigAgent, err := agents.NewRegistryAgent(opts.stepConfigPath, 2*time.Minute, prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"error"}), true)
+		if err != nil {
+			logrus.WithError(err).Fatal("failed to construct registryAgent")
+		}
+		registryResolver = registryConfigAgent
 	}
 	configAgent := &config.Agent{}
 	if err := configAgent.Start(opts.configPath, opts.jobConfigPath); err != nil {
@@ -245,6 +257,7 @@ func main() {
 			buildClusterManagers,
 			ciOPConfigAgent,
 			secretAgent.GetTokenGenerator(opts.testImagesDistributorOptions.imagePullSecretPath),
+			registryResolver,
 			opts.dryRun,
 		); err != nil {
 			logrus.WithError(err).Fatal("failed to add testimagesdistributor")

@@ -549,10 +549,9 @@ func defaultImageFromReleaseTag(base api.ImageStreamTagReference, release *api.R
 	if release == nil {
 		return base
 	}
-	if len(base.Tag) == 0 || len(base.Cluster) > 0 || len(base.Name) > 0 || len(base.Namespace) > 0 {
+	if len(base.Tag) == 0 || len(base.Name) > 0 || len(base.Namespace) > 0 {
 		return base
 	}
-	base.Cluster = release.Cluster
 	base.Name = release.Name
 	base.Namespace = release.Namespace
 	return base

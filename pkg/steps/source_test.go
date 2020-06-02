@@ -41,7 +41,6 @@ func TestCreateBuild(t *testing.T) {
 				From: api.PipelineImageStreamTagReferenceRoot,
 				To:   api.PipelineImageStreamTagReferenceSource,
 				ClonerefsImage: api.ImageStreamTagReference{
-					Cluster:   "https://api.ci.openshift.org",
 					Namespace: "ci",
 					Name:      "clonerefs",
 					Tag:       "latest",
@@ -140,7 +139,6 @@ RUN git submodule update --init
 				From: api.PipelineImageStreamTagReferenceRoot,
 				To:   api.PipelineImageStreamTagReferenceSource,
 				ClonerefsImage: api.ImageStreamTagReference{
-					Cluster:   "https://api.ci.openshift.org",
 					Namespace: "ci",
 					Name:      "clonerefs",
 					Tag:       "latest",
@@ -245,7 +243,6 @@ RUN git submodule update --init
 				From: api.PipelineImageStreamTagReferenceRoot,
 				To:   api.PipelineImageStreamTagReferenceSource,
 				ClonerefsImage: api.ImageStreamTagReference{
-					Cluster:   "https://api.ci.openshift.org",
 					Namespace: "ci",
 					Name:      "clonerefs",
 					Tag:       "latest",
@@ -345,7 +342,6 @@ RUN git submodule update --init
 				From: api.PipelineImageStreamTagReferenceRoot,
 				To:   api.PipelineImageStreamTagReferenceSource,
 				ClonerefsImage: api.ImageStreamTagReference{
-					Cluster:   "https://api.ci.openshift.org",
 					Namespace: "ci",
 					Name:      "clonerefs",
 					Tag:       "latest",
@@ -450,7 +446,6 @@ RUN git submodule update --init
 				From: api.PipelineImageStreamTagReferenceRoot,
 				To:   api.PipelineImageStreamTagReferenceSource,
 				ClonerefsImage: api.ImageStreamTagReference{
-					Cluster:   "https://api.ci.openshift.org",
 					Namespace: "ci",
 					Name:      "clonerefs",
 					Tag:       "latest",
@@ -563,7 +558,6 @@ RUN git submodule update --init
 				From: api.PipelineImageStreamTagReferenceRoot,
 				To:   api.PipelineImageStreamTagReferenceSource,
 				ClonerefsImage: api.ImageStreamTagReference{
-					Cluster:   "https://api.ci.openshift.org",
 					Namespace: "ci",
 					Name:      "clonerefs",
 					Tag:       "latest",
@@ -682,7 +676,6 @@ RUN rm -f /sshprivatekey
 				From: api.PipelineImageStreamTagReferenceRoot,
 				To:   api.PipelineImageStreamTagReferenceSource,
 				ClonerefsImage: api.ImageStreamTagReference{
-					Cluster:   "https://api.ci.openshift.org",
 					Namespace: "ci",
 					Name:      "clonerefs",
 					Tag:       "latest",

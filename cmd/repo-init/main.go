@@ -495,7 +495,6 @@ func generateCIOperatorConfig(config initConfig, originConfig *api.PromotionConf
 			Name:      originConfig.Name,
 		}
 		generated.Configuration.ReleaseTagConfiguration = &api.ReleaseTagConfiguration{
-			Cluster:   "https://api.ci.openshift.org",
 			Namespace: originConfig.Namespace,
 			Name:      originConfig.Name,
 		}
@@ -520,7 +519,6 @@ func generateCIOperatorConfig(config initConfig, originConfig *api.PromotionConf
 
 	if config.NeedsBase {
 		generated.Configuration.BaseImages["base"] = api.ImageStreamTagReference{
-			Cluster:   "https://api.ci.openshift.org",
 			Namespace: originConfig.Namespace,
 			Name:      originConfig.Name,
 			Tag:       "base",
@@ -529,7 +527,6 @@ func generateCIOperatorConfig(config initConfig, originConfig *api.PromotionConf
 
 	if config.NeedsOS {
 		generated.Configuration.BaseImages["os"] = api.ImageStreamTagReference{
-			Cluster:   "https://api.ci.openshift.org",
 			Namespace: "openshift",
 			Name:      "centos",
 			Tag:       "7",
@@ -538,7 +535,6 @@ func generateCIOperatorConfig(config initConfig, originConfig *api.PromotionConf
 
 	generated.Configuration.BuildRootImage = &api.BuildRootImageConfiguration{
 		ImageStreamTagReference: &api.ImageStreamTagReference{
-			Cluster:   "https://api.ci.openshift.org",
 			Namespace: "openshift",
 			Name:      "release",
 			Tag:       fmt.Sprintf("golang-%s", config.GoVersion),

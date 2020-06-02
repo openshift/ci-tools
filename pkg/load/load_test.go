@@ -36,7 +36,6 @@ base_images:
     namespace: ocp
     tag: base
   base-machine:
-    cluster: https://api.ci.openshift.org
     name: fedora
     namespace: openshift
     tag: '29'
@@ -194,7 +193,6 @@ resources:
 rpm_build_commands: make build-rpms
 build_root:
   image_stream_tag:
-    cluster: https://api.ci.openshift.org
     name: src-cache-origin
     namespace: ci
     tag: master
@@ -282,7 +280,6 @@ var parsedConfig = &api.ReleaseBuildConfiguration{
 				Tag:       "base",
 			},
 			"base-machine": {
-				Cluster:   "https://api.ci.openshift.org",
 				Name:      "fedora",
 				Namespace: "openshift",
 				Tag:       "29",
@@ -295,7 +292,6 @@ var parsedConfig = &api.ReleaseBuildConfiguration{
 		},
 		BuildRootImage: &api.BuildRootImageConfiguration{
 			ImageStreamTagReference: &api.ImageStreamTagReference{
-				Cluster:   "https://api.ci.openshift.org",
 				Name:      "src-cache-origin",
 				Namespace: "ci",
 				Tag:       "master",

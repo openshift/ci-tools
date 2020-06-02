@@ -298,14 +298,6 @@ type BuildRootImageConfiguration struct {
 
 // ImageStreamTagReference identifies an ImageStreamTag
 type ImageStreamTagReference struct {
-	// Cluster is an optional cluster string (host, host:port, or
-	// scheme://host:port) to connect to for this image stream. The
-	// referenced cluster must support anonymous access to retrieve
-	// image streams, image stream tags, and image stream images in
-	// the provided namespace.
-	// TODO: Deprecate this field once we enforce ImageStreamTags to be
-	// local.
-	Cluster   string `json:"cluster,omitempty"`
 	Namespace string `json:"namespace"`
 	Name      string `json:"name"`
 	Tag       string `json:"tag"`
@@ -319,13 +311,6 @@ type ImageStreamTagReference struct {
 // single stream with multiple tags (openshift/origin-v3.9:control-plane),
 // each tag being a unique and well defined name for a component.
 type ReleaseTagConfiguration struct {
-	// Cluster is an optional cluster string (host, host:port, or
-	// scheme://host:port) to connect to for this image stream. The
-	// referenced cluster must support anonymous access to retrieve
-	// image streams, image stream tags, and image stream images in
-	// the provided namespace.
-	Cluster string `json:"cluster,omitempty"`
-
 	// Namespace identifies the namespace from which
 	// all release artifacts not built in the current
 	// job are tagged from.

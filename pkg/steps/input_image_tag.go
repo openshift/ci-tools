@@ -57,11 +57,7 @@ func (s *inputImageTagStep) Run(ctx context.Context, dry bool) error {
 }
 
 func (s *inputImageTagStep) run(ctx context.Context, dry bool) error {
-	if len(s.config.BaseImage.Cluster) > 0 {
-		log.Printf("Tagging %s/%s/%s:%s into %s:%s", s.config.BaseImage.Cluster, s.config.BaseImage.Namespace, s.config.BaseImage.Name, s.config.BaseImage.Tag, api.PipelineImageStream, s.config.To)
-	} else {
-		log.Printf("Tagging %s/%s:%s into %s:%s", s.config.BaseImage.Namespace, s.config.BaseImage.Name, s.config.BaseImage.Tag, api.PipelineImageStream, s.config.To)
-	}
+	log.Printf("Tagging %s/%s:%s into %s:%s", s.config.BaseImage.Namespace, s.config.BaseImage.Name, s.config.BaseImage.Tag, api.PipelineImageStream, s.config.To)
 
 	_, err := s.Inputs(dry)
 	if err != nil {

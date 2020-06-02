@@ -78,11 +78,6 @@ func TestTestInputImageStreamTagsFromConfigParsing(t *testing.T) {
 			istr:           api.ImageStreamTagReference{Namespace: "foo", Name: "Baz", Tag: "Bar"},
 			expectedResult: "foo/Baz:Bar",
 		},
-		{
-			name:           "cluster field is ignored",
-			istr:           api.ImageStreamTagReference{Namespace: "foo", Name: "Baz", Tag: "Bar", Cluster: "Bee"},
-			expectedResult: "foo/Baz:Bar",
-		},
 	}
 
 	for _, tc := range testCases {

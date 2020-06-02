@@ -32,7 +32,6 @@ func TestGetChangedCiopConfigs(t *testing.T) {
 		Configuration: cioperatorapi.ReleaseBuildConfiguration{
 			InputConfiguration: cioperatorapi.InputConfiguration{
 				ReleaseTagConfiguration: &cioperatorapi.ReleaseTagConfiguration{
-					Cluster:   "kluster",
 					Namespace: "namespace",
 					Name:      "name",
 				},

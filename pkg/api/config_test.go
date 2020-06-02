@@ -382,7 +382,6 @@ func TestValidateBuildRoot(t *testing.T) {
 			id: "both project_image and image_stream_tag in build_root defined causes error",
 			buildRootImageConfig: &BuildRootImageConfiguration{
 				ImageStreamTagReference: &ImageStreamTagReference{
-					Cluster:   "https://test.org",
 					Namespace: "test_namespace",
 					Name:      "test_name",
 					Tag:       "test",
@@ -430,8 +429,8 @@ func TestValidateBaseImages(t *testing.T) {
 	}{
 		{
 			id: "base images",
-			baseImages: map[string]ImageStreamTagReference{"test": {Cluster: "test"},
-				"test2": {Tag: "test2"}, "test3": {Cluster: "test3"},
+			baseImages: map[string]ImageStreamTagReference{"test": {},
+				"test2": {Tag: "test2"}, "test3": {},
 			},
 			expectedValid: false,
 		},
@@ -454,8 +453,8 @@ func TestValidateBaseRpmImages(t *testing.T) {
 	}{
 		{
 			id: "base rpm images",
-			baseRpmImages: map[string]ImageStreamTagReference{"test": {Cluster: "test"},
-				"test2": {Tag: "test2"}, "test3": {Cluster: "test3"},
+			baseRpmImages: map[string]ImageStreamTagReference{"test": {},
+				"test2": {Tag: "test2"}, "test3": {},
 			},
 			expectedValid: false,
 		},
@@ -890,7 +889,7 @@ func TestValidateReleaseTagConfiguration(t *testing.T) {
 	}{
 		{
 			name:     "valid tag_specification",
-			input:    ReleaseTagConfiguration{Name: "test", Namespace: "test", Cluster: "https://test.com"},
+			input:    ReleaseTagConfiguration{Name: "test", Namespace: "test"},
 			expected: nil,
 		},
 	}

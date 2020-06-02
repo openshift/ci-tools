@@ -1,28 +1,23 @@
 base_images:
   base:
-    cluster: https://api.ci.openshift.org
     name: "4.3"
     namespace: ocp
     tag: base
   base-machine:
-    cluster: https://api.ci.openshift.org
     name: fedora
     namespace: openshift
     tag: "29"
   cli:
-    cluster: https://api.ci.openshift.org
     name: "4.3"
     namespace: ocp
     tag: cli
   machine-os-content-base:
-    cluster: https://api.ci.openshift.org
     name: "4.3"
     namespace: ocp
     tag: machine-os-content
 binary_build_commands: make build WHAT='vendor/k8s.io/kubernetes/cmd/hyperkube'
 build_root:
   image_stream_tag:
-    cluster: https://api.ci.openshift.org
     name: src-cache-origin
     namespace: ci
     tag: master
@@ -175,7 +170,6 @@ resources:
       memory: 30Gi
 rpm_build_commands: make build-rpms
 tag_specification:
-  cluster: https://api.ci.openshift.org
   name: "ci-operator-test"
   namespace: ci
 tests:

@@ -13,6 +13,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -190,12 +191,53 @@ func TestReconcile(t *testing.T) {
 		return copy
 	}
 
+	expectedRoleBindig := &rbacv1.RoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: referenceImageStreamTag.Namespace,
+			Name:      "ci-operator-image-puller",
+		},
+		Subjects: []rbacv1.Subject{{
+			Kind:      rbacv1.ServiceAccountKind,
+			Name:      "ci-operator",
+			Namespace: "ci",
+		}},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: rbacv1.GroupName,
+			Kind:     "Role",
+			Name:     "ci-operator-image-puller",
+		},
+	}
+	outdatedRoleBindig := func() *rbacv1.RoleBinding {
+		copy := expectedRoleBindig.DeepCopy()
+		copy.RoleRef.Kind = "not-a-clusterr-role"
+		return copy
+	}
+
+	expectedRole := &rbacv1.Role{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: referenceImageStreamTag.Namespace,
+			Name:      "ci-operator-image-puller",
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				APIGroups: []string{"image.openshift.io"},
+				Resources: []string{"imagestreamtags", "imagestreams", "imagestreams/layers"},
+				Verbs:     []string{"get", "list", "watch"},
+			},
+		},
+	}
+	outdatedRole := func() *rbacv1.Role {
+		copy := expectedRole.DeepCopy()
+		copy.Rules = append(copy.Rules, rbacv1.PolicyRule{})
+		return copy
+	}
+
 	expectedNamespace := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{Name: referenceImageStreamTag.Namespace},
 	}
 
 	ctx := context.Background()
-	verifyNamespacePullSecretAndImport := func(c ctrlruntimeclient.Client) error {
+	verifyEverythingCreated := func(c ctrlruntimeclient.Client) error {
 		if err := c.Get(ctx, types.NamespacedName{Name: expectedNamespace.Name}, &corev1.Namespace{}); err != nil {
 			return fmt.Errorf("expected namespace %s, but failed to get it: %w", referenceImageStreamTag.Name, err)
 		}
@@ -241,6 +283,30 @@ func TestReconcile(t *testing.T) {
 		}
 		if diff := cmp.Diff(imageStreamImport, actualImport, cmpopts.IgnoreFields(imagev1.ImageStreamImport{}, "ResourceVersion", "Kind", "APIVersion")); diff != "" {
 			return fmt.Errorf("actual import differs from expected: %s", diff)
+		}
+
+		actualRoleBinding := &rbacv1.RoleBinding{}
+		roleBindingName := types.NamespacedName{
+			Namespace: imageStreamImport.Namespace,
+			Name:      "ci-operator-image-puller",
+		}
+		if err := c.Get(ctx, roleBindingName, actualRoleBinding); err != nil {
+			return fmt.Errorf("failed to get rolebinding %s: %v", roleBindingName.String(), err)
+		}
+		if diff := cmp.Diff(expectedRoleBindig, actualRoleBinding, cmpopts.IgnoreFields(rbacv1.RoleBinding{}, "ResourceVersion", "Kind", "APIVersion")); diff != "" {
+			return fmt.Errorf("actual rolebinding differs from expected: %s", diff)
+		}
+
+		actualRole := &rbacv1.Role{}
+		roleName := types.NamespacedName{
+			Namespace: imageStreamImport.Namespace,
+			Name:      "ci-operator-image-puller",
+		}
+		if err := c.Get(ctx, roleName, actualRole); err != nil {
+			return fmt.Errorf("failed to get role %s: %w", roleName.String(), err)
+		}
+		if diff := cmp.Diff(expectedRole, actualRole, cmpopts.IgnoreFields(rbacv1.Role{}, "ResourceVersion", "Kind", "APIVersion")); diff != "" {
+			return fmt.Errorf("actual role differs from expected: %s", diff)
 		}
 		return nil
 	}
@@ -300,7 +366,7 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
-			name: "Outdated imageStreamtag, Namespace, pull secret and import are created",
+			name: "Outdated imageStreamtag, Namespace, pull secret and import and rbac are created",
 			request: types.NamespacedName{
 				Namespace: "01_" + referenceImageStreamTag.Namespace,
 				Name:      referenceImageStreamTag.Name,
@@ -311,11 +377,11 @@ func TestReconcile(t *testing.T) {
 				if err != nil {
 					return fmt.Errorf("unexpected error: %v", err)
 				}
-				return verifyNamespacePullSecretAndImport(bc["01"])
+				return verifyEverythingCreated(bc["01"])
 			},
 		},
 		{
-			name: "Outdated imageStreamtag, pull secret and import are created",
+			name: "Outdated imageStreamtag, pull secret, import and rbac are created",
 			request: types.NamespacedName{
 				Namespace: "01_" + referenceImageStreamTag.Namespace,
 				Name:      referenceImageStreamTag.Name,
@@ -329,11 +395,11 @@ func TestReconcile(t *testing.T) {
 				if err != nil {
 					return fmt.Errorf("unexpected error: %v", err)
 				}
-				return verifyNamespacePullSecretAndImport(bc["01"])
+				return verifyEverythingCreated(bc["01"])
 			},
 		},
 		{
-			name: "Outdated imageStreamtag and pull secret, pull secret is updated, import is created",
+			name: "Outdated imageStreamtag and pull secret, pull secret is updated, import and rbac created",
 			request: types.NamespacedName{
 				Namespace: "01_" + referenceImageStreamTag.Namespace,
 				Name:      referenceImageStreamTag.Name,
@@ -348,7 +414,28 @@ func TestReconcile(t *testing.T) {
 				if err != nil {
 					return fmt.Errorf("unexpected error: %v", err)
 				}
-				return verifyNamespacePullSecretAndImport(bc["01"])
+				return verifyEverythingCreated(bc["01"])
+			},
+		},
+		{
+			name: "Outdated imageStreamtag and rbac, rbac updated and import created",
+			request: types.NamespacedName{
+				Namespace: "01_" + referenceImageStreamTag.Namespace,
+				Name:      referenceImageStreamTag.Name,
+			},
+			registryClient: fakeclient.NewFakeClient(referenceImageStreamTag.DeepCopy()),
+			buildClusterClients: map[string]ctrlruntimeclient.Client{"01": bcc(fakeclient.NewFakeClient(
+				outdatedImageStreamTag(),
+				expectedNamespace.DeepCopy(),
+				outdatedRoleBindig(),
+				outdatedRole(),
+				expectedPullSecret.DeepCopy(),
+			))},
+			verify: func(rc ctrlruntimeclient.Client, bc map[string]ctrlruntimeclient.Client, err error) error {
+				if err != nil {
+					return fmt.Errorf("unexpected error: %v", err)
+				}
+				return verifyEverythingCreated(bc["01"])
 			},
 		},
 		{
@@ -367,7 +454,7 @@ func TestReconcile(t *testing.T) {
 				if err != nil {
 					return fmt.Errorf("unexpected error: %v", err)
 				}
-				return verifyNamespacePullSecretAndImport(bc["01"])
+				return verifyEverythingCreated(bc["01"])
 			},
 		},
 		{

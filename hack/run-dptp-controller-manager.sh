@@ -35,4 +35,5 @@ go build  -v -o /tmp/dptp-cm ./cmd/dptp-controller-manager
   --step-config-path="$(go env GOPATH)/src/github.com/openshift/release/ci-operator/step-registry" \
   --testImagesDistributorOptions.imagePullSecretPath=$dockercfg \
   --kubeconfig=$kubeconfig \
+  --testImagesDistributorOptions.additional-image-stream-tag=ci/clonerefs:latest \
   --dry-run=true

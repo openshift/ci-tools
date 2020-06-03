@@ -709,11 +709,12 @@ func TestResolveParameters(t *testing.T) {
 		test: api.MultiStageTestConfiguration{
 			Test: []api.TestStep{{
 				LiteralTestStep: &api.LiteralTestStep{
+					As:          "step",
 					Environment: []api.StepParameter{{Name: "UNRESOLVED"}},
 				},
 			}},
 		},
-		err: errors.New("test: unresolved parameter: UNRESOLVED"),
+		err: errors.New("test: step: unresolved parameter: UNRESOLVED"),
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			ret, err := NewResolver(refs, chains, workflows).Resolve("test", tc.test)

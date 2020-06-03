@@ -170,7 +170,7 @@ func (r *registry) processStep(step *api.TestStep, seen sets.String, stack []sta
 		if v := resolveVariable(e.Name, stack); v != nil {
 			ret.Environment[i].Default = *v
 		} else if e.Default == "" {
-			errs = append(errs, stackErrorf(stack, "unresolved parameter: %s", e.Name))
+			errs = append(errs, stackErrorf(stack, "%s: unresolved parameter: %s", ret.As, e.Name))
 		}
 
 	}

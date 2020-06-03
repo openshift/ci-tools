@@ -2,12 +2,13 @@ package prerelease
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
-	"github.com/openshift/ci-tools/pkg/release/candidate"
 	"io/ioutil"
 	"net/http"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/release/candidate"
 )
 
 // endpoint determines the API endpoint to use for a prerelease
@@ -40,6 +41,12 @@ func resolvePullSpec(endpoint string, bounds api.VersionBounds) (string, error) 
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("failed to request latest release: %v", err)
+	}
+	if resp == nil {
+		return "", errors.New("failed to request latest release: got a nil response")
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("failed to request latest release: server responded with %d: %s", resp.StatusCode, resp.Body)
 	}
 	data, err := ioutil.ReadAll(resp.Body)
 	if err != nil {

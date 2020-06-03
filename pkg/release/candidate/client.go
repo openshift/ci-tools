@@ -2,6 +2,7 @@ package candidate
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -71,6 +72,12 @@ func resolvePullSpec(endpoint string, relative int) (string, error) {
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("failed to request latest release: %v", err)
+	}
+	if resp == nil {
+		return "", errors.New("failed to request latest release: got a nil response")
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("failed to request latest release: server responded with %d: %s", resp.StatusCode, resp.Body)
 	}
 	data, err := ioutil.ReadAll(resp.Body)
 	if err != nil {

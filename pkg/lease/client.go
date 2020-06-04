@@ -11,8 +11,8 @@ import (
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 
-	boskos "k8s.io/test-infra/boskos/client"
-	"k8s.io/test-infra/boskos/common"
+	boskos "sigs.k8s.io/boskos/client"
+	"sigs.k8s.io/boskos/common"
 )
 
 const (

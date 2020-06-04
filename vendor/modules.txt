@@ -841,9 +841,6 @@ k8s.io/kube-openapi/pkg/util/proto
 # k8s.io/kubernetes v1.13.0
 k8s.io/kubernetes/pkg/apis/core
 # k8s.io/test-infra v0.0.0-20200602133615-44723bee4ba4
-k8s.io/test-infra/boskos/client
-k8s.io/test-infra/boskos/common
-k8s.io/test-infra/boskos/storage
 k8s.io/test-infra/experiment/autobumper/bumper
 k8s.io/test-infra/experiment/image-bumper/bumper
 k8s.io/test-infra/ghproxy/ghcache
@@ -962,6 +959,10 @@ knative.dev/pkg/configmap
 knative.dev/pkg/kmeta
 knative.dev/pkg/kmp
 knative.dev/pkg/tracker
+# sigs.k8s.io/boskos v0.0.0-20200530174753-71e795271860
+sigs.k8s.io/boskos/client
+sigs.k8s.io/boskos/common
+sigs.k8s.io/boskos/storage
 # sigs.k8s.io/controller-runtime v0.5.4
 sigs.k8s.io/controller-runtime
 sigs.k8s.io/controller-runtime/pkg/builder

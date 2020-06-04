@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"strings"
 	"time"
 
 	imagev1 "github.com/openshift/api/image/v1"
@@ -60,7 +61,9 @@ func (o *options) addDefaults() {
 }
 
 type testImagesDistributorOptions struct {
-	imagePullSecretPath string
+	imagePullSecretPath          string
+	additionalImageStreamTagsRaw flagutil.Strings
+	additionalImageStreamTags    sets.String
 }
 
 func newOpts() (*options, error) {
@@ -86,6 +89,7 @@ func newOpts() (*options, error) {
 	flag.StringVar(&opts.leaderElectionSuffix, "leader-election-suffix", "", "Suffix for the leader election lock. Useful for local testing. If set, --dry-run must be set as well")
 	flag.Var(&opts.enabledControllers, "enable-controller", fmt.Sprintf("Enabled controllers. Available controllers are: %v. Can be specified multiple times. Defaults to %v", allControllers.List(), opts.enabledControllers.Strings()))
 	flag.StringVar(&opts.testImagesDistributorOptions.imagePullSecretPath, "testImagesDistributorOptions.imagePullSecretPath", "", "A file to use for reading an ImagePullSecret that will be bound to all `default` ServiceAccounts in all namespaces that have a test ImageStream on all build clusters")
+	flag.Var(&opts.testImagesDistributorOptions.additionalImageStreamTagsRaw, "testImagesDistributorOptions.additional-image-stream-tag", "An imagestreamtag that will be distributed even if no test explicitly references it. It must be in namespace/name:tag format (e.G `ci/clonerefs:latest`). Can be passed multiple times.")
 	// TODO: rather than relying on humans implementing dry-run properly, we should switch
 	// to just do it on client-level once it becomes available: https://github.com/kubernetes-sigs/controller-runtime/pull/839
 	flag.BoolVar(&opts.dryRun, "dry-run", true, "Whether to run the controller-manager with dry-run")
@@ -108,6 +112,22 @@ func newOpts() (*options, error) {
 		opts.enabledControllersSet = sets.NewString(vals...)
 		if diff := opts.enabledControllersSet.Difference(allControllers); len(diff.UnsortedList()) > 0 {
 			errs = append(errs, fmt.Errorf("the following controllers are unknown but were disabled via --disable-controller: %v", diff.List()))
+		}
+	}
+
+	opts.testImagesDistributorOptions.additionalImageStreamTags = sets.String{}
+	if vals := opts.testImagesDistributorOptions.additionalImageStreamTagsRaw.Strings(); len(vals) > 0 {
+		for _, val := range vals {
+			slashSplit := strings.Split(val, "/")
+			if len(slashSplit) != 2 {
+				errs = append(errs, fmt.Errorf("--testImagesDistributorOptions.additional-image-stream-tag value %s was not in namespace/name:tag format", val))
+				continue
+			}
+			if dotSplit := strings.Split(slashSplit[1], ":"); len(dotSplit) != 2 {
+				errs = append(errs, fmt.Errorf("name in --testImagesDistributorOptions.additional-image-stream-tag must be of imagestreamname:tag format, wasn't the case for %s", slashSplit[1]))
+				continue
+			}
+			opts.testImagesDistributorOptions.additionalImageStreamTags.Insert(val)
 		}
 	}
 
@@ -258,6 +278,7 @@ func main() {
 			ciOPConfigAgent,
 			secretAgent.GetTokenGenerator(opts.testImagesDistributorOptions.imagePullSecretPath),
 			registryResolver,
+			opts.testImagesDistributorOptions.additionalImageStreamTags,
 			opts.dryRun,
 		); err != nil {
 			logrus.WithError(err).Fatal("failed to add testimagesdistributor")

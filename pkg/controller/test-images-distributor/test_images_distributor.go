@@ -39,6 +39,7 @@ func AddToManager(mgr manager.Manager,
 	configAgent agents.ConfigAgent,
 	pullSecretGetter func() []byte,
 	resolver registry.Resolver,
+	additionalImageStreamTags sets.String,
 	dryRun bool) error {
 	log := logrus.WithField("controller", ControllerName)
 
@@ -84,7 +85,7 @@ func AddToManager(mgr manager.Manager,
 		// TODO: Watch buildCluster ImageStreams as well. For now we assume no one will tamper with them.
 	}
 
-	objectFilter, err := testInputImageStreamTagFilterFactory(log, configAgent, resolver)
+	objectFilter, err := testInputImageStreamTagFilterFactory(log, configAgent, resolver, additionalImageStreamTags)
 	if err != nil {
 		return fmt.Errorf("failed to get filter for ImageStreamTags: %w", err)
 	}
@@ -185,6 +186,7 @@ func (r *reconciler) reconcile(req reconcile.Request, log *logrus.Entry) error {
 	if err != nil {
 		return fmt.Errorf("failed to decode request %s: %w", req, err)
 	}
+
 	// Propagate the cluster field back up
 	*log = *log.WithField("cluster", cluster)
 
@@ -336,13 +338,16 @@ func (r *reconciler) generateReferencePullSecret(namespace string) *corev1.Secre
 	}
 }
 
-func testInputImageStreamTagFilterFactory(l *logrus.Entry, ca agents.ConfigAgent, resolver registry.Resolver) (objectFilter, error) {
+func testInputImageStreamTagFilterFactory(l *logrus.Entry, ca agents.ConfigAgent, resolver registry.Resolver, additionalImageStreamTags sets.String) (objectFilter, error) {
 	const indexName = "config-by-test-input-imagestreamtag"
 	if err := ca.AddIndex(indexName, indexConfigsByTestInputImageStramTag(resolver)); err != nil {
 		return nil, fmt.Errorf("failed to add %s index to configAgent: %w", indexName, err)
 	}
 	l = logrus.WithField("subcomponent", "test-input-image-stream-tag-filter")
 	return func(nn types.NamespacedName) bool {
+		if additionalImageStreamTags.Has(nn.String()) {
+			return true
+		}
 		result, err := ca.GetFromIndex(indexName, nn.String())
 		// Today, GetFromIndex only errors if the index does not exist, so this should
 		// never happen.

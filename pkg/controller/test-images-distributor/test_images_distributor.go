@@ -11,13 +11,14 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
-	apiequality "k8s.io/apimachinery/pkg/api/equality"
+	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	crcontrollerutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
@@ -205,6 +206,13 @@ func (r *reconciler) reconcile(req reconcile.Request, log *logrus.Entry) error {
 		return fmt.Errorf("failed to get imageStreamTag %s from registry cluster: %w", decoded.String(), err)
 	}
 
+	if err := r.ensureCIOperatorRoleBinding(decoded.Namespace, client, log); err != nil {
+		return fmt.Errorf("failed to ensure rolebinding: %w", err)
+	}
+	if err := r.ensureCIOperatorRole(decoded.Namespace, client, log); err != nil {
+		return fmt.Errorf("failed to ensure role: %w", err)
+	}
+
 	isCurrent, err := r.isImageStreamTagCurrent(decoded, client, sourceImageStreamTag)
 	if err != nil {
 		return fmt.Errorf("failed to check if imageStreamTag %s on cluster %s is current: %w", decoded.String(), cluster, err)
@@ -223,7 +231,7 @@ func (r *reconciler) reconcile(req reconcile.Request, log *logrus.Entry) error {
 		}
 	}
 
-	if err := r.ensureImagePullSecret(decoded.Namespace, client); err != nil {
+	if err := r.ensureImagePullSecret(decoded.Namespace, client, log); err != nil {
 		return fmt.Errorf("failed to ensure imagePullSecret: %w", err)
 	}
 
@@ -298,43 +306,78 @@ func (r *reconciler) isImageStreamTagCurrent(
 
 const pullSecretName = "registry-cluster-pull-secret"
 
-func (r *reconciler) ensureImagePullSecret(namespace string, client ctrlruntimeclient.Client) error {
-	referenceSecret := r.generateReferencePullSecret(namespace)
-	name := types.NamespacedName{Namespace: namespace, Name: pullSecretName}
-	secret := &corev1.Secret{}
-	if err := client.Get(r.ctx, name, secret); err != nil {
-		if !apierrors.IsNotFound(err) {
-			return fmt.Errorf("failed to get secret %s: %w", name.String(), err)
-		}
-		// Tolerate IsAlreadyExist, another routine might have created it or our cache is stale
-		if err := client.Create(r.ctx, referenceSecret); err != nil && !apierrors.IsAlreadyExists(err) {
-			return fmt.Errorf("failed to create secret %s/%s: %v", referenceSecret.Namespace, referenceSecret.Name, err)
-		}
-	}
-
-	// Make it comparable by resetting the ObjectMeta fields the apiserver sets
-	resourceVersion := secret.ObjectMeta.ResourceVersion
-	secret.ObjectMeta = referenceSecret.ObjectMeta
-	if !apiequality.Semantic.DeepEqual(secret, referenceSecret) {
-		referenceSecret.ResourceVersion = resourceVersion
-		if err := client.Update(r.ctx, referenceSecret); err != nil {
-			return fmt.Errorf("failed to update secret %s/%s: %w", referenceSecret.Namespace, referenceSecret.Name, err)
-		}
-	}
-
-	return nil
+func (r *reconciler) ensureImagePullSecret(namespace string, client ctrlruntimeclient.Client, log *logrus.Entry) error {
+	secret, mutateFn := r.pullSecret(namespace)
+	return upsertObject(r.ctx, client, secret, mutateFn, log)
 }
 
-func (r *reconciler) generateReferencePullSecret(namespace string) *corev1.Secret {
-	return &corev1.Secret{
+const ciOperatorPullerRoleName = "ci-operator-image-puller"
+
+func ciOperatorRole(namespace string) (*rbacv1.Role, crcontrollerutil.MutateFn) {
+	r := &rbacv1.Role{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespace,
+			Name:      ciOperatorPullerRoleName,
+		},
+	}
+	return r, func() error {
+		r.Rules = []rbacv1.PolicyRule{
+			{
+				APIGroups: []string{"image.openshift.io"},
+				Resources: []string{"imagestreamtags", "imagestreams", "imagestreams/layers"},
+				Verbs:     []string{"get", "list", "watch"},
+			},
+		}
+		return nil
+	}
+}
+
+func (r *reconciler) ensureCIOperatorRole(namespace string, client ctrlruntimeclient.Client, log *logrus.Entry) error {
+	role, mutateFn := ciOperatorRole(namespace)
+	return upsertObject(r.ctx, client, role, mutateFn, log)
+}
+
+func ciOperatorRoleBinding(namespace string) (*rbacv1.RoleBinding, crcontrollerutil.MutateFn) {
+	rb := &rbacv1.RoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespace,
+			Name:      "ci-operator-image-puller",
+		},
+	}
+	return rb, func() error {
+		rb.Subjects = []rbacv1.Subject{{
+			Kind:      rbacv1.ServiceAccountKind,
+			Name:      "ci-operator",
+			Namespace: "ci",
+		}}
+		rb.RoleRef = rbacv1.RoleRef{
+			APIGroup: rbacv1.GroupName,
+			Kind:     "Role",
+			// system:image-puller is not enough, as we need get for imagestreamtags
+			Name: ciOperatorPullerRoleName,
+		}
+		return nil
+	}
+}
+
+func (r *reconciler) ensureCIOperatorRoleBinding(namespace string, client ctrlruntimeclient.Client, log *logrus.Entry) error {
+	roleBinding, mutateFn := ciOperatorRoleBinding(namespace)
+	return upsertObject(r.ctx, client, roleBinding, mutateFn, log)
+}
+
+func (r *reconciler) pullSecret(namespace string) (*corev1.Secret, crcontrollerutil.MutateFn) {
+	s := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: namespace,
 			Name:      pullSecretName,
 		},
-		Data: map[string][]byte{
+	}
+	return s, func() error {
+		s.Data = map[string][]byte{
 			corev1.DockerConfigJsonKey: r.pullSecretGetter(),
-		},
-		Type: corev1.SecretTypeDockerConfigJson,
+		}
+		s.Type = corev1.SecretTypeDockerConfigJson
+		return nil
 	}
 }
 
@@ -407,4 +450,17 @@ func indexConfigsByTestInputImageStramTag(resolver registry.Resolver) agents.Ind
 
 func publicURLForImage(potentiallyPrivate string) string {
 	return strings.ReplaceAll(potentiallyPrivate, "docker-registry.default.svc:5000", api.DomainForService(api.ServiceRegistry))
+}
+
+func upsertObject(ctx context.Context, c ctrlruntimeclient.Client, obj crcontrollerutil.Object, mutateFn crcontrollerutil.MutateFn, log *logrus.Entry) error {
+	// Create log here in case the operation fails and the obj is nil
+	log = log.WithFields(logrus.Fields{"namespace": obj.GetNamespace(), "name": obj.GetName(), "type": fmt.Sprintf("%T", obj)})
+	result, err := crcontrollerutil.CreateOrUpdate(ctx, c, obj, mutateFn)
+	log = log.WithField("operation", result)
+	if err != nil {
+		log.WithError(err).Error("Upsert failed")
+	} else if result != crcontrollerutil.OperationResultCreated {
+		log.Info("Upsert succeeded")
+	}
+	return err
 }

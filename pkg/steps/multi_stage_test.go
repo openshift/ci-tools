@@ -156,12 +156,12 @@ func TestGeneratePods(t *testing.T) {
 		Namespace: "namespace",
 	}
 	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, nil, nil, nil, "artifact_dir", &jobSpec, nil)
-	step.env = []coreapi.EnvVar{
+	env := []coreapi.EnvVar{
 		{Name: "RELEASE_IMAGE_INITIAL", Value: "release:initial"},
 		{Name: "RELEASE_IMAGE_LATEST", Value: "release:latest"},
 		{Name: "LEASED_RESOURCE", Value: "uuid"},
 	}
-	ret, err := step.generatePods(config.Tests[0].MultiStageTestConfigurationLiteral.Test)
+	ret, err := step.generatePods(config.Tests[0].MultiStageTestConfigurationLiteral.Test, env)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -339,6 +339,81 @@ done
 		if !equality.Semantic.DeepEqual(expected[i], ret[i]) {
 			t.Errorf("did not generate expected pod: %s", diff.ObjectReflectDiff(expected[i], ret[i]))
 		}
+	}
+}
+
+func TestGeneratePodsEnvironment(t *testing.T) {
+	value := "test"
+	defValue := "default"
+	for _, tc := range []struct {
+		name     string
+		env      api.TestEnvironment
+		test     api.LiteralTestStep
+		expected *string
+	}{{
+		name: "test environment is propagated to the step",
+		env:  api.TestEnvironment{"TEST": "test"},
+		test: api.LiteralTestStep{
+			Environment: []api.StepParameter{{Name: "TEST"}},
+		},
+		expected: &value,
+	}, {
+		name: "test environment is not propagated to the step",
+		env:  api.TestEnvironment{"TEST": "test"},
+		test: api.LiteralTestStep{
+			Environment: []api.StepParameter{{Name: "NOT_TEST"}},
+		},
+	}, {
+		name: "default value is overwritten",
+		env:  api.TestEnvironment{"TEST": "test"},
+		test: api.LiteralTestStep{
+			Environment: []api.StepParameter{{
+				Name:    "TEST",
+				Default: "default",
+			}},
+		},
+		expected: &value,
+	}, {
+		name: "default value is applied",
+		test: api.LiteralTestStep{
+			Environment: []api.StepParameter{{
+				Name:    "TEST",
+				Default: "default",
+			}},
+		},
+		expected: &defValue,
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			jobSpec := api.JobSpec{
+				Namespace: "ns",
+				JobSpec: prowdapi.JobSpec{
+					Job:       "job",
+					BuildID:   "build_id",
+					ProwJobID: "prow_job_id",
+					Type:      prowapi.PeriodicJob,
+				},
+			}
+			test := []api.LiteralTestStep{tc.test}
+			step := MultiStageTestStep(api.TestStepConfiguration{
+				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+					Test:        test,
+					Environment: tc.env,
+				},
+			}, &api.ReleaseBuildConfiguration{}, nil, nil, nil, nil, nil, "", &jobSpec, nil)
+			pods, err := step.(*multiStageTestStep).generatePods(test, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var env *string
+			for i, v := range pods[0].Spec.Containers[0].Env {
+				if v.Name == "TEST" {
+					env = &pods[0].Spec.Containers[0].Env[i].Value
+				}
+			}
+			if !reflect.DeepEqual(env, tc.expected) {
+				t.Errorf("incorrect environment:\n%s", diff.ObjectReflectDiff(env, tc.expected))
+			}
+		})
 	}
 }
 

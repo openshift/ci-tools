@@ -687,9 +687,48 @@ func TestValidateTestSteps(t *testing.T) {
 			if seen == nil {
 				seen = sets.NewString()
 			}
-			ret := validateTestSteps("test", tc.steps, seen)
+			ret := validateTestSteps("test", tc.steps, seen, nil)
 			if !reflect.DeepEqual(ret, tc.errs) {
 				t.Fatal(diff.ObjectReflectDiff(ret, tc.errs))
+			}
+		})
+	}
+}
+
+func TestValidateParameters(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		params []StepParameter
+		env    TestEnvironment
+		err    []error
+	}{{
+		name: "no parameters",
+	}, {
+		name:   "has parameter, parameter provided",
+		params: []StepParameter{{Name: "TEST"}},
+		env:    TestEnvironment{"TEST": "test"},
+	}, {
+		name:   "has parameter with default, no parameter provided",
+		params: []StepParameter{{Name: "TEST", Default: "default"}},
+	}, {
+		name:   "has parameters, some not provided",
+		params: []StepParameter{{Name: "TEST0"}, {Name: "TEST1"}},
+		env:    TestEnvironment{"TEST0": "test0"},
+		err:    []error{errors.New("test: unresolved parameter(s): [TEST1]")},
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateLiteralTestStep("test", LiteralTestStep{
+				As:       "as",
+				From:     "from",
+				Commands: "commands",
+				Resources: ResourceRequirements{
+					Requests: ResourceList{"cpu": "1"},
+					Limits:   ResourceList{"memory": "1m"},
+				},
+				Environment: tc.params,
+			}, sets.NewString(), tc.env)
+			if diff := diff.ObjectReflectDiff(err, tc.err); diff != "<no diffs>" {
+				t.Errorf("incorrect error: %s", diff)
 			}
 		})
 	}

@@ -347,9 +347,9 @@ func validateTestConfigurationType(fieldRoot string, test TestStepConfiguration,
 			validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 		}
 		seen := sets.NewString()
-		validationErrors = append(validationErrors, validateTestSteps(fmt.Sprintf("%s.Pre", fieldRoot), testConfig.Pre, seen)...)
-		validationErrors = append(validationErrors, validateTestSteps(fmt.Sprintf("%s.Test", fieldRoot), testConfig.Test, seen)...)
-		validationErrors = append(validationErrors, validateTestSteps(fmt.Sprintf("%s.Post", fieldRoot), testConfig.Post, seen)...)
+		validationErrors = append(validationErrors, validateTestSteps(fmt.Sprintf("%s.Pre", fieldRoot), testConfig.Pre, seen, testConfig.Environment)...)
+		validationErrors = append(validationErrors, validateTestSteps(fmt.Sprintf("%s.Test", fieldRoot), testConfig.Test, seen, testConfig.Environment)...)
+		validationErrors = append(validationErrors, validateTestSteps(fmt.Sprintf("%s.Post", fieldRoot), testConfig.Post, seen, testConfig.Environment)...)
 	}
 	if testConfig := test.MultiStageTestConfigurationLiteral; testConfig != nil {
 		typeCount++
@@ -359,15 +359,15 @@ func validateTestConfigurationType(fieldRoot string, test TestStepConfiguration,
 		seen := sets.NewString()
 		for i, s := range testConfig.Pre {
 			fieldRootI := fmt.Sprintf("%s.Pre[%d]", fieldRoot, i)
-			validationErrors = append(validationErrors, validateLiteralTestStep(fieldRootI, s, seen)...)
+			validationErrors = append(validationErrors, validateLiteralTestStep(fieldRootI, s, seen, testConfig.Environment)...)
 		}
 		for i, s := range testConfig.Test {
 			fieldRootI := fmt.Sprintf("%s.Test[%d]", fieldRoot, i)
-			validationErrors = append(validationErrors, validateLiteralTestStep(fieldRootI, s, seen)...)
+			validationErrors = append(validationErrors, validateLiteralTestStep(fieldRootI, s, seen, testConfig.Environment)...)
 		}
 		for i, s := range testConfig.Post {
 			fieldRootI := fmt.Sprintf("%s.Post[%d]", fieldRoot, i)
-			validationErrors = append(validationErrors, validateLiteralTestStep(fieldRootI, s, seen)...)
+			validationErrors = append(validationErrors, validateLiteralTestStep(fieldRootI, s, seen, testConfig.Environment)...)
 		}
 	}
 	if test.OpenshiftInstallerRandomClusterTestConfiguration != nil {
@@ -386,7 +386,7 @@ func validateTestConfigurationType(fieldRoot string, test TestStepConfiguration,
 	return validationErrors
 }
 
-func validateTestSteps(fieldRoot string, steps []TestStep, seen sets.String) (ret []error) {
+func validateTestSteps(fieldRoot string, steps []TestStep, seen sets.String, env TestEnvironment) (ret []error) {
 	for i, s := range steps {
 		fieldRootI := fmt.Sprintf("%s[%d]", fieldRoot, i)
 		if (s.LiteralTestStep != nil && s.Reference != nil) ||
@@ -418,13 +418,13 @@ func validateTestSteps(fieldRoot string, steps []TestStep, seen sets.String) (re
 			}
 		}
 		if s.LiteralTestStep != nil {
-			ret = append(ret, validateLiteralTestStep(fieldRootI, *s.LiteralTestStep, seen)...)
+			ret = append(ret, validateLiteralTestStep(fieldRootI, *s.LiteralTestStep, seen, env)...)
 		}
 	}
 	return
 }
 
-func validateLiteralTestStep(fieldRoot string, step LiteralTestStep, seen sets.String) (ret []error) {
+func validateLiteralTestStep(fieldRoot string, step LiteralTestStep, seen sets.String, env TestEnvironment) (ret []error) {
 	if len(step.As) == 0 {
 		ret = append(ret, fmt.Errorf("%s: `as` is required", fieldRoot))
 	} else if seen.Has(step.As) {
@@ -454,6 +454,9 @@ func validateLiteralTestStep(fieldRoot string, step LiteralTestStep, seen sets.S
 	}
 	ret = append(ret, validateResourceRequirements(fieldRoot+".resources", step.Resources)...)
 	ret = append(ret, validateCredentials(fieldRoot, step.Credentials)...)
+	if err := validateParameters(fieldRoot, step.Environment, env); err != nil {
+		ret = append(ret, err)
+	}
 	return
 }
 
@@ -500,6 +503,22 @@ func validateCredentials(fieldRoot string, credentials []CredentialReference) []
 		}
 	}
 	return errs
+}
+
+func validateParameters(fieldRoot string, params []StepParameter, env TestEnvironment) error {
+	var missing []string
+	for _, param := range params {
+		if param.Default != "" {
+			continue
+		}
+		if _, ok := env[param.Name]; !ok {
+			missing = append(missing, param.Name)
+		}
+	}
+	if missing != nil {
+		return fmt.Errorf("%s: unresolved parameter(s): %s", fieldRoot, missing)
+	}
+	return nil
 }
 
 func validateReleaseBuildConfiguration(input *ReleaseBuildConfiguration, org, repo string) []error {

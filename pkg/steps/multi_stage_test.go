@@ -153,8 +153,8 @@ func TestGeneratePods(t *testing.T) {
 			},
 			Type: "postsubmit",
 		},
-		Namespace: "namespace",
 	}
+	jobSpec.SetNamespace("namespace")
 	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, nil, nil, nil, "artifact_dir", &jobSpec, nil)
 	env := []coreapi.EnvVar{
 		{Name: "RELEASE_IMAGE_INITIAL", Value: "release:initial"},
@@ -385,7 +385,6 @@ func TestGeneratePodsEnvironment(t *testing.T) {
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			jobSpec := api.JobSpec{
-				Namespace: "ns",
 				JobSpec: prowdapi.JobSpec{
 					Job:       "job",
 					BuildID:   "build_id",
@@ -393,6 +392,7 @@ func TestGeneratePodsEnvironment(t *testing.T) {
 					Type:      prowapi.PeriodicJob,
 				},
 			}
+			jobSpec.SetNamespace("ns")
 			test := []api.LiteralTestStep{tc.test}
 			step := MultiStageTestStep(api.TestStepConfiguration{
 				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
@@ -507,7 +507,6 @@ func TestRun(t *testing.T) {
 			name := "test"
 			client := fakecs.CoreV1()
 			jobSpec := api.JobSpec{
-				Namespace: "ns",
 				JobSpec: prowdapi.JobSpec{
 					Job:       "job",
 					BuildID:   "build_id",
@@ -515,6 +514,7 @@ func TestRun(t *testing.T) {
 					Type:      prowapi.PeriodicJob,
 				},
 			}
+			jobSpec.SetNamespace("ns")
 			step := MultiStageTestStep(api.TestStepConfiguration{
 				As: name,
 				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
@@ -527,7 +527,7 @@ func TestRun(t *testing.T) {
 				t.Error(err)
 				return
 			}
-			secrets, err := client.Secrets(jobSpec.Namespace).List(meta.ListOptions{})
+			secrets, err := client.Secrets(jobSpec.Namespace()).List(meta.ListOptions{})
 			if err != nil {
 				t.Error(err)
 				return
@@ -558,7 +558,6 @@ func TestArtifacts(t *testing.T) {
 	executor.AddReactors(fakecs)
 	client := fakecs.CoreV1()
 	jobSpec := api.JobSpec{
-		Namespace: ns,
 		JobSpec: prowdapi.JobSpec{
 			Job:       "job",
 			BuildID:   "build_id",
@@ -566,6 +565,7 @@ func TestArtifacts(t *testing.T) {
 			Type:      prowapi.PeriodicJob,
 		},
 	}
+	jobSpec.SetNamespace(ns)
 	testName := "test"
 	step := MultiStageTestStep(api.TestStepConfiguration{
 		As: testName,

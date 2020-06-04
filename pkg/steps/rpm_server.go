@@ -58,7 +58,7 @@ func (s *rpmServerStep) run(ctx context.Context, dry bool) error {
 	if dry {
 		imageReference = "dry-fake"
 	} else {
-		ist, err := s.istClient.ImageStreamTags(s.jobSpec.Namespace).Get(fmt.Sprintf("%s:%s", api.PipelineImageStream, s.config.From), meta.GetOptions{})
+		ist, err := s.istClient.ImageStreamTags(s.jobSpec.Namespace()).Get(fmt.Sprintf("%s:%s", api.PipelineImageStream, s.config.From), meta.GetOptions{})
 		if err != nil {
 			return fmt.Errorf("could not find source ImageStreamTag for RPM repo deployment: %v", err)
 		}
@@ -73,7 +73,7 @@ func (s *rpmServerStep) run(ctx context.Context, dry bool) error {
 	}
 	commonMeta := meta.ObjectMeta{
 		Name:      RPMRepoName,
-		Namespace: s.jobSpec.Namespace,
+		Namespace: s.jobSpec.Namespace(),
 		Labels:    labelSet,
 	}
 
@@ -173,7 +173,7 @@ python /tmp/serve.py
 	if dry {
 		s.dryLogger.AddObject(deployment.DeepCopyObject())
 	} else {
-		if _, err := s.deploymentClient.Deployments(s.jobSpec.Namespace).Create(deployment); err != nil && !kerrors.IsAlreadyExists(err) {
+		if _, err := s.deploymentClient.Deployments(s.jobSpec.Namespace()).Create(deployment); err != nil && !kerrors.IsAlreadyExists(err) {
 			return fmt.Errorf("could not create RPM repo server deployment: %v", err)
 		}
 	}
@@ -195,7 +195,7 @@ python /tmp/serve.py
 
 	if dry {
 		s.dryLogger.AddObject(service.DeepCopyObject())
-	} else if _, err := s.serviceClient.Services(s.jobSpec.Namespace).Create(service); err != nil && !kerrors.IsAlreadyExists(err) {
+	} else if _, err := s.serviceClient.Services(s.jobSpec.Namespace()).Create(service); err != nil && !kerrors.IsAlreadyExists(err) {
 		return fmt.Errorf("could not create RPM repo server service: %v", err)
 	}
 	route := &routeapi.Route{
@@ -217,13 +217,13 @@ python /tmp/serve.py
 		s.dryLogger.AddObject(route.DeepCopyObject())
 		return nil
 	}
-	if _, err := s.routeClient.Routes(s.jobSpec.Namespace).Create(route); err != nil && !kerrors.IsAlreadyExists(err) {
+	if _, err := s.routeClient.Routes(s.jobSpec.Namespace()).Create(route); err != nil && !kerrors.IsAlreadyExists(err) {
 		return fmt.Errorf("could not create RPM repo server route: %v", err)
 	}
-	if err := waitForDeployment(ctx, s.deploymentClient.Deployments(s.jobSpec.Namespace), deployment.Name); err != nil {
+	if err := waitForDeployment(ctx, s.deploymentClient.Deployments(s.jobSpec.Namespace()), deployment.Name); err != nil {
 		return fmt.Errorf("could not wait for RPM repo server to deploy: %v", err)
 	}
-	return waitForRouteReachable(ctx, s.routeClient, s.jobSpec.Namespace, route.Name, "http")
+	return waitForRouteReachable(ctx, s.routeClient, s.jobSpec.Namespace(), route.Name, "http")
 }
 
 func waitForDeployment(ctx context.Context, client appsclientset.DeploymentInterface, name string) error {
@@ -374,7 +374,7 @@ func (s *rpmServerStep) Creates() []api.StepLink {
 }
 
 func (s *rpmServerStep) rpmRepoURL() (string, error) {
-	host, err := admittedHostForRoute(s.routeClient, s.jobSpec.Namespace, RPMRepoName, time.Minute)
+	host, err := admittedHostForRoute(s.routeClient, s.jobSpec.Namespace(), RPMRepoName, time.Minute)
 	if err != nil {
 		return "", fmt.Errorf("unable to calculate rpm repo URL: %v", err)
 	}

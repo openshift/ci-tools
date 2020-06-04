@@ -4,6 +4,8 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"log"
+	"runtime/debug"
 
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
@@ -17,11 +19,25 @@ type JobSpec struct {
 	rawSpec string
 
 	// these fields allow the job to be targeted at a location
-	Namespace     string
+	namespace     string
 	BaseNamespace string
 
 	// if set, any new artifacts will be a child of this object
 	owner *meta.OwnerReference
+}
+
+// Namespace returns the namespace of the job. Must not be evaluated
+// at step construction time because its unset there
+func (s *JobSpec) Namespace() string {
+	if s.namespace == "" {
+		log.Println("Warning, namespace accessed before it was set, this is a bug in ci-operator. Stack:")
+		debug.PrintStack()
+	}
+	return s.namespace
+}
+
+func (s *JobSpec) SetNamespace(namespace string) {
+	s.namespace = namespace
 }
 
 func (s *JobSpec) RawSpec() string {

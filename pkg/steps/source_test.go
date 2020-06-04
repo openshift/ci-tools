@@ -23,6 +23,7 @@ func strP(str string) *string {
 }
 
 func TestCreateBuild(t *testing.T) {
+	t.Parallel()
 	layer := buildapi.ImageOptimizationSkipLayers
 	var testCases = []struct {
 		name            string
@@ -63,7 +64,6 @@ func TestCreateBuild(t *testing.T) {
 						}},
 					},
 				},
-				Namespace: "namespace",
 			},
 			clonerefsRef: coreapi.ObjectReference{Kind: "ImageStreamTag", Name: "clonerefs:latest", Namespace: "ci"},
 			resources:    map[string]api.ResourceRequirements{"*": {Requests: map[string]string{"cpu": "200m"}}},
@@ -163,7 +163,6 @@ RUN git submodule update --init
 						}},
 					},
 				},
-				Namespace: "namespace",
 			},
 			clonerefsRef: coreapi.ObjectReference{Kind: "ImageStreamTag", Name: "clonerefs:latest", Namespace: "ci"},
 			resources:    map[string]api.ResourceRequirements{"*": {Requests: map[string]string{"cpu": "200m"}}},
@@ -270,7 +269,6 @@ RUN git submodule update --init
 						}},
 					},
 				},
-				Namespace: "namespace",
 			},
 			clonerefsRef: coreapi.ObjectReference{Kind: "ImageStreamTag", Name: "clonerefs:latest", Namespace: "ci"},
 			resources:    map[string]api.ResourceRequirements{"*": {Requests: map[string]string{"cpu": "200m"}}},
@@ -376,7 +374,6 @@ RUN git submodule update --init
 						BaseSHA: "masterSHA",
 					}},
 				},
-				Namespace: "namespace",
 			},
 			clonerefsRef: coreapi.ObjectReference{Kind: "ImageStreamTag", Name: "clonerefs:latest", Namespace: "ci"},
 			resources:    map[string]api.ResourceRequirements{"*": {Requests: map[string]string{"cpu": "200m"}}},
@@ -484,7 +481,6 @@ RUN git submodule update --init
 						PathAlias: "this/is/nuts",
 					}},
 				},
-				Namespace: "namespace",
 			},
 			clonerefsRef: coreapi.ObjectReference{Kind: "ImageStreamTag", Name: "clonerefs:latest", Namespace: "ci"},
 			resources:    map[string]api.ResourceRequirements{"*": {Requests: map[string]string{"cpu": "200m"}}},
@@ -590,7 +586,6 @@ RUN git submodule update --init
 						}},
 					},
 				},
-				Namespace: "namespace",
 			},
 			clonerefsRef: coreapi.ObjectReference{Kind: "ImageStreamTag", Name: "clonerefs:latest", Namespace: "ci"},
 			resources:    map[string]api.ResourceRequirements{"*": {Requests: map[string]string{"cpu": "200m"}}},
@@ -710,7 +705,6 @@ RUN rm -f /sshprivatekey
 						}},
 					},
 				},
-				Namespace: "namespace",
 			},
 			clonerefsRef: coreapi.ObjectReference{Kind: "ImageStreamTag", Name: "clonerefs:latest", Namespace: "ci"},
 			resources:    map[string]api.ResourceRequirements{"*": {Requests: map[string]string{"cpu": "200m"}}},
@@ -792,6 +786,7 @@ RUN rm -f /oauth-token
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
+			testCase.jobSpec.SetNamespace("namespace")
 			if actual, expected := createBuild(testCase.config, testCase.jobSpec, testCase.clonerefsRef, testCase.resources, testCase.cloneAuthConfig, testCase.pullSecret), testCase.expected; !equality.Semantic.DeepEqual(actual, expected) {
 				t.Errorf("%s: got incorrect build: %v", testCase.name, diff.ObjectReflectDiff(actual, expected))
 			}

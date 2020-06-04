@@ -129,7 +129,7 @@ func (s *multiStageTestStep) run(ctx context.Context, dry bool) error {
 	if s.profile != "" {
 		if !dry {
 			secret := s.profileSecretName()
-			if _, err := s.secretClient.Secrets(s.jobSpec.Namespace).Get(secret, meta.GetOptions{}); err != nil {
+			if _, err := s.secretClient.Secrets(s.jobSpec.Namespace()).Get(secret, meta.GetOptions{}); err != nil {
 				return fmt.Errorf("could not find secret %q: %v", secret, err)
 			}
 		}
@@ -243,13 +243,13 @@ func (s *multiStageTestStep) setupRBAC() error {
 	check := func(err error) bool {
 		return err == nil || errors.IsAlreadyExists(err)
 	}
-	if _, err := s.saClient.ServiceAccounts(s.jobSpec.Namespace).Create(sa); !check(err) {
+	if _, err := s.saClient.ServiceAccounts(s.jobSpec.Namespace()).Create(sa); !check(err) {
 		return err
 	}
-	if _, err := s.rbacClient.Roles(s.jobSpec.Namespace).Create(role); !check(err) {
+	if _, err := s.rbacClient.Roles(s.jobSpec.Namespace()).Create(role); !check(err) {
 		return err
 	}
-	if _, err := s.rbacClient.RoleBindings(s.jobSpec.Namespace).Create(binding); !check(err) {
+	if _, err := s.rbacClient.RoleBindings(s.jobSpec.Namespace()).Create(binding); !check(err) {
 		return err
 	}
 	return nil
@@ -262,7 +262,7 @@ func (s *multiStageTestStep) createSecret() error {
 		s.logger.AddObject(secret.DeepCopyObject())
 		return nil
 	}
-	client := s.secretClient.Secrets(s.jobSpec.Namespace)
+	client := s.secretClient.Secrets(s.jobSpec.Namespace())
 	if err := client.Delete(s.name, &meta.DeleteOptions{}); err != nil && !errors.IsNotFound(err) {
 		return fmt.Errorf("cannot delete secret %q: %v", s.name, err)
 	}
@@ -292,7 +292,7 @@ func (s *multiStageTestStep) createCredentials() error {
 				TypeMeta: raw.TypeMeta,
 				ObjectMeta: meta.ObjectMeta{
 					Name:      name,
-					Namespace: s.jobSpec.Namespace,
+					Namespace: s.jobSpec.Namespace(),
 				},
 				Type:       raw.Type,
 				Data:       raw.Data,
@@ -302,7 +302,7 @@ func (s *multiStageTestStep) createCredentials() error {
 	}
 
 	for name := range toCreate {
-		if _, err := s.secretClient.Secrets(s.jobSpec.Namespace).Create(toCreate[name]); err != nil && !errors.IsAlreadyExists(err) {
+		if _, err := s.secretClient.Secrets(s.jobSpec.Namespace()).Create(toCreate[name]); err != nil && !errors.IsAlreadyExists(err) {
 			return fmt.Errorf("could not create source credential: %v", err)
 		}
 	}
@@ -327,7 +327,7 @@ func (s *multiStageTestStep) runSteps(
 	case <-ctx.Done():
 		log.Printf("cleanup: Deleting pods with label %s=%s", MultiStageTestLabel, s.name)
 		if !s.dry {
-			if err := deletePods(s.podClient.Pods(s.jobSpec.Namespace), s.name); err != nil {
+			if err := deletePods(s.podClient.Pods(s.jobSpec.Namespace()), s.name); err != nil {
 				errs = append(errs, fmt.Errorf("failed to delete pods with label %s=%s: %v", MultiStageTestLabel, s.name, err))
 			}
 		}
@@ -370,7 +370,7 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 		addSecretWrapper(pod)
 		container := &pod.Spec.Containers[0]
 		container.Env = append(container.Env, []coreapi.EnvVar{
-			{Name: "NAMESPACE", Value: s.jobSpec.Namespace},
+			{Name: "NAMESPACE", Value: s.jobSpec.Namespace()},
 			{Name: "JOB_NAME_SAFE", Value: strings.Replace(s.name, "_", "-", -1)},
 			{Name: "JOB_NAME_HASH", Value: s.jobSpec.JobNameHash()},
 		}...)
@@ -497,7 +497,7 @@ func (s *multiStageTestStep) runPods(ctx context.Context, pods []coreapi.Pod, sh
 			if c.Name == "artifacts" {
 				container := pod.Spec.Containers[0].Name
 				dir := filepath.Join(s.artifactDir, strings.TrimPrefix(pod.Name, namePrefix))
-				artifacts := NewArtifactWorker(s.podClient, dir, s.jobSpec.Namespace)
+				artifacts := NewArtifactWorker(s.podClient, dir, s.jobSpec.Namespace())
 				artifacts.CollectFromPod(pod.Name, []string{container}, nil)
 				notifier = artifacts
 				break
@@ -524,10 +524,10 @@ func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notif
 		s.logger.AddObject(pod.DeepCopyObject())
 		return nil
 	}
-	if _, err := createOrRestartPod(s.podClient.Pods(s.jobSpec.Namespace), pod); err != nil {
+	if _, err := createOrRestartPod(s.podClient.Pods(s.jobSpec.Namespace()), pod); err != nil {
 		return fmt.Errorf("failed to create or restart %q pod: %v", pod.Name, err)
 	}
-	err := waitForPodCompletion(ctx, s.podClient.Pods(s.jobSpec.Namespace), pod.Name, notifier, false)
+	err := waitForPodCompletion(ctx, s.podClient.Pods(s.jobSpec.Namespace()), pod.Name, notifier, false)
 	s.subTests = append(s.subTests, notifier.SubTests(fmt.Sprintf("%s - %s ", s.Description(), pod.Name))...)
 	if err != nil {
 		return fmt.Errorf("%q pod %q failed: %v", s.name, pod.Name, err)

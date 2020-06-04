@@ -43,7 +43,7 @@ func (s *projectDirectoryImageBuildStep) run(ctx context.Context, dry bool) erro
 	if dry {
 		workingDir = "dry-fake"
 	} else {
-		ist, err := s.istClient.ImageStreamTags(s.jobSpec.Namespace).Get(source, meta.GetOptions{})
+		ist, err := s.istClient.ImageStreamTags(s.jobSpec.Namespace()).Get(source, meta.GetOptions{})
 		if err != nil {
 			return fmt.Errorf("could not fetch source ImageStreamTag: %v", err)
 		}
@@ -144,7 +144,7 @@ func (s *projectDirectoryImageBuildStep) Provides() (api.ParameterMap, api.StepL
 	}
 	return api.ParameterMap{
 		fmt.Sprintf("LOCAL_IMAGE_%s", strings.ToUpper(strings.Replace(string(s.config.To), "-", "_", -1))): func() (string, error) {
-			is, err := s.imageClient.ImageStreams(s.jobSpec.Namespace).Get(api.PipelineImageStream, meta.GetOptions{})
+			is, err := s.imageClient.ImageStreams(s.jobSpec.Namespace()).Get(api.PipelineImageStream, meta.GetOptions{})
 			if err != nil {
 				return "", fmt.Errorf("could not retrieve output imagestream: %v", err)
 			}

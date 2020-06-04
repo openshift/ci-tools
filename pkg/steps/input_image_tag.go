@@ -83,7 +83,7 @@ func (s *inputImageTagStep) run(ctx context.Context, dry bool) error {
 	ist := &imageapi.ImageStreamTag{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      fmt.Sprintf("%s:%s", api.PipelineImageStream, s.config.To),
-			Namespace: s.jobSpec.Namespace,
+			Namespace: s.jobSpec.Namespace(),
 		},
 		Tag: &imageapi.TagReference{
 			ReferencePolicy: imageapi.TagReferencePolicy{
@@ -114,14 +114,14 @@ func (s *inputImageTagStep) run(ctx context.Context, dry bool) error {
 		return nil
 	}
 
-	if _, err := s.dstClient.ImageStreamTags(s.jobSpec.Namespace).Create(ist); err != nil && !errors.IsAlreadyExists(err) {
+	if _, err := s.dstClient.ImageStreamTags(s.jobSpec.Namespace()).Create(ist); err != nil && !errors.IsAlreadyExists(err) {
 		return fmt.Errorf("failed to create imagestreamtag for input image: %v", err)
 	}
 	// Wait image is ready
 	importCtx, cancel := context.WithTimeout(ctx, 35*time.Minute)
 	defer cancel()
 	if err := wait.PollImmediateUntil(10*time.Second, func() (bool, error) {
-		pipeline, err := s.dstClient.ImageStreams(s.jobSpec.Namespace).Get(api.PipelineImageStream, meta.GetOptions{})
+		pipeline, err := s.dstClient.ImageStreams(s.jobSpec.Namespace()).Get(api.PipelineImageStream, meta.GetOptions{})
 		if err != nil {
 			return false, err
 		}

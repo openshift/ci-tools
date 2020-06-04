@@ -60,7 +60,7 @@ func (s *stableImagesTagStep) run(ctx context.Context, dry bool) error {
 		s.dryLogger.AddObject(newIS.DeepCopyObject())
 		return nil
 	}
-	_, err := s.dstClient.ImageStreams(s.jobSpec.Namespace).Create(newIS)
+	_, err := s.dstClient.ImageStreams(s.jobSpec.Namespace()).Create(newIS)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		return fmt.Errorf("could not create stable imagestreamtag: %v", err)
 	}
@@ -214,12 +214,12 @@ func (s *releaseImagesTagStep) run(ctx context.Context, dry bool) error {
 	initialIS := newIS.DeepCopy()
 	initialIS.Name = fmt.Sprintf("%s-initial", api.StableImageStream)
 
-	_, err = s.dstClient.ImageStreams(s.jobSpec.Namespace).Create(newIS)
+	_, err = s.dstClient.ImageStreams(s.jobSpec.Namespace()).Create(newIS)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		return fmt.Errorf("could not copy stable imagestreamtag: %v", err)
 	}
 
-	is, err = s.dstClient.ImageStreams(s.jobSpec.Namespace).Create(initialIS)
+	is, err = s.dstClient.ImageStreams(s.jobSpec.Namespace()).Create(initialIS)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		return fmt.Errorf("could not copy stable-initial imagestreamtag: %v", err)
 	}
@@ -255,12 +255,12 @@ func (s *releaseImagesTagStep) imageFormat() (string, error) {
 		return "REGISTRY", err
 	}
 	registry := strings.SplitN(spec, "/", 2)[0]
-	format := fmt.Sprintf("%s/%s/%s:%s", registry, s.jobSpec.Namespace, fmt.Sprintf("%s%s", s.config.NamePrefix, api.StableImageStream), api.ComponentFormatReplacement)
+	format := fmt.Sprintf("%s/%s/%s:%s", registry, s.jobSpec.Namespace(), fmt.Sprintf("%s%s", s.config.NamePrefix, api.StableImageStream), api.ComponentFormatReplacement)
 	return format, nil
 }
 
 func (s *releaseImagesTagStep) repositoryPullSpec() (string, error) {
-	is, err := s.dstClient.ImageStreams(s.jobSpec.Namespace).Get(api.PipelineImageStream, meta.GetOptions{})
+	is, err := s.dstClient.ImageStreams(s.jobSpec.Namespace()).Get(api.PipelineImageStream, meta.GetOptions{})
 	if err != nil {
 		return "", err
 	}

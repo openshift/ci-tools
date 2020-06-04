@@ -124,7 +124,7 @@ func FromConfig(
 	params.Add("JOB_NAME", nil, func() (string, error) { return jobSpec.Job, nil })
 	params.Add("JOB_NAME_HASH", nil, func() (string, error) { return jobSpec.JobNameHash(), nil })
 	params.Add("JOB_NAME_SAFE", nil, func() (string, error) { return strings.Replace(jobSpec.Job, "_", "-", -1), nil })
-	params.Add("NAMESPACE", nil, func() (string, error) { return jobSpec.Namespace, nil })
+	params.Add("NAMESPACE", nil, func() (string, error) { return jobSpec.Namespace(), nil })
 
 	var imageStepLinks []api.StepLink
 	var hasReleaseStep bool

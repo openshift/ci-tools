@@ -131,30 +131,30 @@ func (s *templateExecutionStep) run(ctx context.Context, dry bool) error {
 		opt := &meta.DeleteOptions{
 			PropagationPolicy: &policy,
 		}
-		if err := s.templateClient.TemplateInstances(s.jobSpec.Namespace).Delete(s.template.Name, opt); err != nil && !errors.IsNotFound(err) {
+		if err := s.templateClient.TemplateInstances(s.jobSpec.Namespace()).Delete(s.template.Name, opt); err != nil && !errors.IsNotFound(err) {
 			log.Printf("error: Could not delete template instance: %v", err)
 		}
 	}()
 
 	log.Printf("Creating or restarting template instance")
-	_, err := createOrRestartTemplateInstance(s.templateClient.TemplateInstances(s.jobSpec.Namespace), s.podClient.Pods(s.jobSpec.Namespace), instance)
+	_, err := createOrRestartTemplateInstance(s.templateClient.TemplateInstances(s.jobSpec.Namespace()), s.podClient.Pods(s.jobSpec.Namespace()), instance)
 	if err != nil {
 		return fmt.Errorf("could not create or restart template instance: %v", err)
 	}
 
 	log.Printf("Waiting for template instance to be ready")
-	instance, err = waitForTemplateInstanceReady(s.templateClient.TemplateInstances(s.jobSpec.Namespace), s.template.Name)
+	instance, err = waitForTemplateInstanceReady(s.templateClient.TemplateInstances(s.jobSpec.Namespace()), s.template.Name)
 	if err != nil {
 		return fmt.Errorf("could not wait for template instance to be ready: %v", err)
 	}
 
 	// now that the pods have been resolved by the template, add them to the artifact map
 	if len(s.artifactDir) > 0 {
-		artifacts := NewArtifactWorker(s.podClient, filepath.Join(s.artifactDir, s.template.Name), s.jobSpec.Namespace)
+		artifacts := NewArtifactWorker(s.podClient, filepath.Join(s.artifactDir, s.template.Name), s.jobSpec.Namespace())
 		for _, ref := range instance.Status.Objects {
 			switch {
 			case ref.Ref.Kind == "Pod" && ref.Ref.APIVersion == "v1":
-				pod, err := s.podClient.Pods(s.jobSpec.Namespace).Get(ref.Ref.Name, meta.GetOptions{})
+				pod, err := s.podClient.Pods(s.jobSpec.Namespace()).Get(ref.Ref.Name, meta.GetOptions{})
 				if err != nil {
 					return fmt.Errorf("unable to retrieve pod from template - possibly deleted: %v", err)
 				}
@@ -175,7 +175,7 @@ func (s *templateExecutionStep) run(ctx context.Context, dry bool) error {
 	for _, ref := range instance.Status.Objects {
 		switch {
 		case ref.Ref.Kind == "Pod" && ref.Ref.APIVersion == "v1":
-			err := waitForPodCompletion(context.TODO(), s.podClient.Pods(s.jobSpec.Namespace), ref.Ref.Name, testCaseNotifier, false)
+			err := waitForPodCompletion(context.TODO(), s.podClient.Pods(s.jobSpec.Namespace()), ref.Ref.Name, testCaseNotifier, false)
 			s.subTests = append(s.subTests, testCaseNotifier.SubTests(fmt.Sprintf("%s - %s ", s.Description(), ref.Ref.Name))...)
 			if err != nil {
 				return fmt.Errorf("template pod %q failed: %v", ref.Ref.Name, err)

@@ -3,6 +3,7 @@ package steps
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"time"
 
@@ -27,11 +28,11 @@ type leaseStep struct {
 	wrapped        api.Step
 
 	// for sending heartbeats during lease acquisition
-	namespace       string
+	namespace       func() string
 	namespaceClient coreclientset.NamespaceInterface
 }
 
-func LeaseStep(client *lease.Client, lease string, wrapped api.Step, namespace string, namespaceClient coreclientset.NamespaceInterface) api.Step {
+func LeaseStep(client *lease.Client, lease string, wrapped api.Step, namespace func() string, namespaceClient coreclientset.NamespaceInterface) api.Step {
 	return &leaseStep{
 		client:          client,
 		leaseType:       lease,
@@ -103,7 +104,7 @@ func (s *leaseStep) run(ctx context.Context, dry bool) error {
 	}
 }
 
-func heartbeatNamespace(namespace string, client coreclientset.NamespaceInterface, ctx context.Context) {
+func heartbeatNamespace(namespace func() string, client coreclientset.NamespaceInterface, ctx context.Context) {
 	ticker := time.NewTicker(10 * time.Minute)
 	defer ticker.Stop()
 	for {
@@ -114,9 +115,9 @@ func heartbeatNamespace(namespace string, client coreclientset.NamespaceInterfac
 		case <-ticker.C:
 			// do work
 			if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				ns, err := client.Get(namespace, meta.GetOptions{})
+				ns, err := client.Get(namespace(), meta.GetOptions{})
 				if err != nil {
-					return err
+					return fmt.Errorf("get failed: %w", err)
 				}
 
 				if ns.Annotations == nil {
@@ -124,8 +125,11 @@ func heartbeatNamespace(namespace string, client coreclientset.NamespaceInterfac
 				}
 				ns.ObjectMeta.Annotations["ci.openshift.io/active"] = time.Now().Format(time.RFC3339)
 
-				_, updateErr := client.Update(ns)
-				return updateErr
+				_, err = client.Update(ns)
+				if err != nil {
+					return fmt.Errorf("update failed: %w", err)
+				}
+				return nil
 			}); err != nil {
 				log.Printf("warning: Could not sent heart-beat while acquiring lease, will retry (details: %v)", err)
 			}

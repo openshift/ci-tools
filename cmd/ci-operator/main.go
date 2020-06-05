@@ -279,9 +279,6 @@ type options struct {
 
 	metadataRevision int
 
-	kubeconfig  string
-	kubeconfigs map[string]*rest.Config
-
 	pullSecretPath string
 	pullSecret     *coreapi.Secret
 
@@ -345,7 +342,7 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.StringVar(&opt.branch, "branch", "", "Branch of the project (used by configresolver)")
 	flag.StringVar(&opt.variant, "variant", "", "Variant of the project's ci-operator config (used by configresolver)")
 
-	flag.StringVar(&opt.kubeconfig, "kubeconfig", "", "Path to .kube/config file. First config whose host matches the cluster is used to access imagestreamtags. If not set or no matching config , use the anonymous user")
+	flag.String("kubeconfig", "", "Legecay flag kept for compatibility reasons. Doesn't do anything.")
 
 	flag.StringVar(&opt.pullSecretPath, "image-import-pull-secret", "", "A set of dockercfg credentials used to import images for the tag_specification.")
 
@@ -504,12 +501,6 @@ func (o *options) Complete() error {
 		o.clusterConfig = clusterConfig
 	}
 
-	configs, _, err := util.LoadKubeConfigs(o.kubeconfig)
-	if err != nil {
-		return fmt.Errorf("failed to load kubeconfig from '%s': %v", o.kubeconfig, err)
-	}
-	o.kubeconfigs = configs
-
 	if len(o.pullSecretPath) > 0 {
 		o.pullSecret, err = getPullSecretFromFile(o.pullSecretPath)
 		if err != nil {
@@ -540,7 +531,7 @@ func (o *options) Run() []error {
 
 	dryLogger := steps.NewDryLogger(o.determinizeOutput)
 	// load the graph from the configuration
-	buildSteps, postSteps, err := defaults.FromConfig(o.configSpec, o.jobSpec, o.templates, o.writeParams, o.artifactDir, o.promote, o.clusterConfig, &o.leaseClient, o.targets.values, o.kubeconfigs, dryLogger, o.cloneAuthConfig, o.pullSecret)
+	buildSteps, postSteps, err := defaults.FromConfig(o.configSpec, o.jobSpec, o.templates, o.writeParams, o.artifactDir, o.promote, o.clusterConfig, &o.leaseClient, o.targets.values, dryLogger, o.cloneAuthConfig, o.pullSecret)
 	if err != nil {
 		return []error{results.ForReason("defaulting_config").WithError(err).Errorf("failed to generate steps from config: %v", err)}
 	}

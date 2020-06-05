@@ -142,16 +142,15 @@ func defaultPodLabels(jobSpec *api.JobSpec) map[string]string {
 }
 
 type sourceStep struct {
-	config             api.SourceStepConfiguration
-	resources          api.ResourceConfiguration
-	buildClient        BuildClient
-	imageClient        imageclientset.ImageV1Interface
-	clonerefsSrcClient imageclientset.ImageV1Interface
-	artifactDir        string
-	jobSpec            *api.JobSpec
-	dryLogger          *DryLogger
-	cloneAuthConfig    *CloneAuthConfig
-	pullSecret         *coreapi.Secret
+	config          api.SourceStepConfiguration
+	resources       api.ResourceConfiguration
+	buildClient     BuildClient
+	imageClient     imageclientset.ImageV1Interface
+	artifactDir     string
+	jobSpec         *api.JobSpec
+	dryLogger       *DryLogger
+	cloneAuthConfig *CloneAuthConfig
+	pullSecret      *coreapi.Secret
 }
 
 func (s *sourceStep) Inputs(dry bool) (api.InputDefinition, error) {
@@ -163,7 +162,7 @@ func (s *sourceStep) Run(ctx context.Context, dry bool) error {
 }
 
 func (s *sourceStep) run(ctx context.Context, dry bool) error {
-	clonerefsRef, err := istObjectReference(s.clonerefsSrcClient, s.config.ClonerefsImage)
+	clonerefsRef, err := istObjectReference(s.imageClient, s.config.ClonerefsImage)
 	if err != nil {
 		return fmt.Errorf("could not resolve clonerefs source: %v", err)
 	}
@@ -650,19 +649,18 @@ func (s *sourceStep) Description() string {
 }
 
 func SourceStep(config api.SourceStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient,
-	clonerefsSrcClient imageclientset.ImageV1Interface, imageClient imageclientset.ImageV1Interface,
+	imageClient imageclientset.ImageV1Interface,
 	artifactDir string, jobSpec *api.JobSpec, dryLogger *DryLogger, cloneAuthConfig *CloneAuthConfig, pullSecret *coreapi.Secret) api.Step {
 	return &sourceStep{
-		config:             config,
-		resources:          resources,
-		buildClient:        buildClient,
-		imageClient:        imageClient,
-		clonerefsSrcClient: clonerefsSrcClient,
-		artifactDir:        artifactDir,
-		jobSpec:            jobSpec,
-		dryLogger:          dryLogger,
-		cloneAuthConfig:    cloneAuthConfig,
-		pullSecret:         pullSecret,
+		config:          config,
+		resources:       resources,
+		buildClient:     buildClient,
+		imageClient:     imageClient,
+		artifactDir:     artifactDir,
+		jobSpec:         jobSpec,
+		dryLogger:       dryLogger,
+		cloneAuthConfig: cloneAuthConfig,
+		pullSecret:      pullSecret,
 	}
 }
 

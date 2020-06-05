@@ -2,12 +2,7 @@ package defaults
 
 import (
 	"fmt"
-	"github.com/openshift/ci-tools/pkg/release/candidate"
-	"github.com/openshift/ci-tools/pkg/release/official"
-	"github.com/openshift/ci-tools/pkg/release/prerelease"
-	"github.com/openshift/ci-tools/pkg/results"
 	"log"
-	"net/url"
 	"os"
 	"strings"
 
@@ -25,6 +20,10 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/lease"
+	"github.com/openshift/ci-tools/pkg/release/candidate"
+	"github.com/openshift/ci-tools/pkg/release/official"
+	"github.com/openshift/ci-tools/pkg/release/prerelease"
+	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/steps/clusterinstall"
 	"github.com/openshift/ci-tools/pkg/steps/release"
@@ -44,7 +43,6 @@ func FromConfig(
 	clusterConfig *rest.Config,
 	leaseClient *lease.Client,
 	requiredTargets []string,
-	kubeconfigs map[string]*rest.Config,
 	dryLogger *steps.DryLogger,
 	cloneAuthConfig *steps.CloneAuthConfig,
 	pullSecret *coreapi.Secret,
@@ -78,7 +76,16 @@ func FromConfig(
 		}
 		buildClient = steps.NewBuildClient(buildGetter, buildGetter.RESTClient())
 
-		imageGetter, err := imageclientset.NewForConfig(clusterConfig)
+		var imageConfig *rest.Config
+		// Hack for integration test
+		if clusterConfig.Host == "" {
+			imageConfig = rest.AnonymousClientConfig(clusterConfig)
+			imageConfig.TLSClientConfig = rest.TLSClientConfig{}
+			imageConfig.Host = "https://api.ci.openshift.org"
+		} else {
+			imageConfig = clusterConfig
+		}
+		imageGetter, err := imageclientset.NewForConfig(imageConfig)
 		if err != nil {
 			return nil, nil, fmt.Errorf("could not get image client for cluster config: %v", err)
 		}
@@ -134,19 +141,11 @@ func FromConfig(
 		var additional []api.Step
 		var stepLinks []api.StepLink
 		if rawStep.InputImageTagStepConfiguration != nil {
-			srcClient, err := clusterImageStreamClient(imageClient, clusterConfig, rawStep.InputImageTagStepConfiguration.BaseImage.Cluster, kubeconfigs)
-			if err != nil {
-				return nil, nil, fmt.Errorf("unable to access image stream tag on remote cluster: %v", err)
-			}
-			step = steps.InputImageTagStep(*rawStep.InputImageTagStepConfiguration, srcClient, imageClient, jobSpec, dryLogger)
+			step = steps.InputImageTagStep(*rawStep.InputImageTagStepConfiguration, imageClient, jobSpec, dryLogger)
 		} else if rawStep.PipelineImageCacheStepConfiguration != nil {
 			step = steps.PipelineImageCacheStep(*rawStep.PipelineImageCacheStepConfiguration, config.Resources, buildClient, imageClient, artifactDir, jobSpec, dryLogger, pullSecret)
 		} else if rawStep.SourceStepConfiguration != nil {
-			srcClient, err := clusterImageStreamClient(imageClient, clusterConfig, rawStep.SourceStepConfiguration.ClonerefsImage.Cluster, kubeconfigs)
-			if err != nil {
-				return nil, nil, fmt.Errorf("unable to access image stream tag on remote cluster: %v", err)
-			}
-			step = steps.SourceStep(*rawStep.SourceStepConfiguration, config.Resources, buildClient, srcClient, imageClient, artifactDir, jobSpec, dryLogger, cloneAuthConfig, pullSecret)
+			step = steps.SourceStep(*rawStep.SourceStepConfiguration, config.Resources, buildClient, imageClient, artifactDir, jobSpec, dryLogger, cloneAuthConfig, pullSecret)
 		} else if rawStep.ProjectDirectoryImageBuildStepConfiguration != nil {
 			step = steps.ProjectDirectoryImageBuildStep(*rawStep.ProjectDirectoryImageBuildStepConfiguration, config.Resources, buildClient, imageClient, imageClient, artifactDir, jobSpec, dryLogger, pullSecret)
 		} else if rawStep.ProjectDirectoryImageBuildInputs != nil {
@@ -162,13 +161,9 @@ func FromConfig(
 				stepLinks = append(stepLinks, step.Creates()...)
 			}
 		} else if rawStep.ReleaseImagesTagStepConfiguration != nil {
-			srcClient, err := clusterImageStreamClient(imageClient, clusterConfig, rawStep.ReleaseImagesTagStepConfiguration.Cluster, kubeconfigs)
-			if err != nil {
-				return nil, nil, fmt.Errorf("unable to access release images on remote cluster: %v", err)
-			}
 			// if the user has specified a tag_specification we always
 			// will import those images to the stable stream
-			step = release.ReleaseImagesTagStep(*rawStep.ReleaseImagesTagStepConfiguration, srcClient, imageClient, routeGetter, configMapGetter, params, jobSpec, dryLogger)
+			step = release.ReleaseImagesTagStep(*rawStep.ReleaseImagesTagStepConfiguration, imageClient, routeGetter, configMapGetter, params, jobSpec, dryLogger)
 			stepLinks = append(stepLinks, step.Creates()...)
 
 			hasReleaseStep = true
@@ -238,11 +233,7 @@ func FromConfig(
 							BaseImage: *subStep.FromImage,
 							To:        link,
 						}
-						srcClient, err := clusterImageStreamClient(imageClient, clusterConfig, config.BaseImage.Cluster, kubeconfigs)
-						if err != nil {
-							return nil, nil, fmt.Errorf("unable to access image stream tag on remote cluster: %v", err)
-						}
-						additional = append(additional, steps.InputImageTagStep(config, srcClient, imageClient, jobSpec, dryLogger))
+						additional = append(additional, steps.InputImageTagStep(config, imageClient, jobSpec, dryLogger))
 					}
 				}
 			} else if test := testStep.OpenshiftInstallerClusterTestConfiguration; test != nil {
@@ -352,49 +343,6 @@ func promotionDefaults(configSpec *api.ReleaseBuildConfiguration) (*api.Promotio
 	return config, nil
 }
 
-func clusterImageStreamClient(client imageclientset.ImageV1Interface, config *rest.Config, overrideClusterHost string, kubeconfigs map[string]*rest.Config) (imageclientset.ImageV1Interface, error) {
-	if config == nil || len(overrideClusterHost) == 0 {
-		return client, nil
-	}
-	if equivalentHosts(config.Host, overrideClusterHost) {
-		return client, nil
-	}
-
-	for _, c := range kubeconfigs {
-		if equivalentHosts(c.Host, overrideClusterHost) {
-			return imageclientset.NewForConfig(c)
-		}
-	}
-
-	newConfig := rest.AnonymousClientConfig(config)
-	newConfig.TLSClientConfig = rest.TLSClientConfig{}
-	newConfig.Host = overrideClusterHost
-	return imageclientset.NewForConfig(newConfig)
-}
-
-func equivalentHosts(a, b string) bool {
-	a = normalizeURL(a)
-	b = normalizeURL(b)
-	return a == b
-}
-
-func normalizeURL(s string) string {
-	u, err := url.Parse(s)
-	if err != nil {
-		return s
-	}
-	if u.Scheme == "https" {
-		u.Scheme = ""
-	}
-	if strings.HasSuffix(u.Host, ":443") {
-		u.Host = strings.TrimSuffix(u.Host, ":443")
-	}
-	if u.Scheme == "" && u.Path == "" && u.Fragment == "" && u.RawQuery == "" {
-		return u.Host
-	}
-	return s
-}
-
 func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.JobSpec) []api.StepConfiguration {
 	var buildSteps []api.StepConfiguration
 
@@ -428,7 +376,6 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.Job
 			From: api.PipelineImageStreamTagReferenceRoot,
 			To:   api.PipelineImageStreamTagReferenceSource,
 			ClonerefsImage: api.ImageStreamTagReference{
-				Cluster:   "https://api.ci.openshift.org",
 				Namespace: "ci",
 				Name:      "clonerefs",
 				Tag:       "latest",

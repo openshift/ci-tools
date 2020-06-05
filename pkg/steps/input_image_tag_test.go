@@ -64,10 +64,9 @@ func TestInputImageTagStep(t *testing.T) {
 		t: t,
 	}
 
-	srcClient := fakecs.ImageV1()
-	dstClient := srcClient
+	client := fakecs.ImageV1()
 
-	if _, err := srcClient.ImageStreamTags(baseImage.Namespace).Create(istag); err != nil {
+	if _, err := client.ImageStreamTags(baseImage.Namespace).Create(istag); err != nil {
 		t.Errorf("Could not set up testing ImageStreamTag: %v", err)
 	}
 
@@ -75,7 +74,7 @@ func TestInputImageTagStep(t *testing.T) {
 	jobspec := &api.JobSpec{}
 	jobspec.SetNamespace("target-namespace")
 	dryLogger := &DryLogger{}
-	iits := InputImageTagStep(config, srcClient, dstClient, jobspec, dryLogger)
+	iits := InputImageTagStep(config, client, jobspec, dryLogger)
 
 	// Set up expectations for the step methods
 	specification := stepExpectation{
@@ -127,7 +126,7 @@ func TestInputImageTagStep(t *testing.T) {
 		},
 	}
 
-	targetImageStreamTag, err := dstClient.ImageStreamTags(jobspec.Namespace()).Get("pipeline:TO", meta.GetOptions{})
+	targetImageStreamTag, err := client.ImageStreamTags(jobspec.Namespace()).Get("pipeline:TO", meta.GetOptions{})
 	if !equality.Semantic.DeepEqual(expectedImageStreamTag, targetImageStreamTag) {
 		t.Errorf("Different ImageStreamTag 'pipeline:TO' after step execution:\n%s", diff.ObjectReflectDiff(expectedImageStreamTag, targetImageStreamTag))
 	}

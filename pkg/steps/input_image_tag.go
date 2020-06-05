@@ -10,7 +10,7 @@ import (
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -27,8 +27,7 @@ var (
 // the base image
 type inputImageTagStep struct {
 	config    api.InputImageTagStepConfiguration
-	srcClient imageclientset.ImageV1Interface
-	dstClient imageclientset.ImageV1Interface
+	client    imageclientset.ImageV1Interface
 	jobSpec   *api.JobSpec
 	dryLogger *DryLogger
 
@@ -43,23 +42,12 @@ func (s *inputImageTagStep) Inputs(dry bool) (api.InputDefinition, error) {
 	if len(s.imageName) > 0 {
 		return api.InputDefinition{s.imageName}, nil
 	}
-	from, err := s.srcClient.ImageStreamTags(s.config.BaseImage.Namespace).Get(fmt.Sprintf("%s:%s", s.config.BaseImage.Name, s.config.BaseImage.Tag), meta.GetOptions{})
+	from, err := s.client.ImageStreamTags(s.config.BaseImage.Namespace).Get(fmt.Sprintf("%s:%s", s.config.BaseImage.Name, s.config.BaseImage.Tag), metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("could not resolve base image: %v", err)
 	}
 
-	// check to see if the src and dst are the same cluster, in which case we can use a more efficient tagging path
-	if len(s.config.BaseImage.Cluster) > 0 {
-		if dstFrom, err := s.dstClient.ImageStreamTags(from.Namespace).Get(from.Name, meta.GetOptions{}); err == nil && dstFrom.UID == from.UID {
-			s.config.BaseImage.Cluster = ""
-		}
-	}
-
-	if len(s.config.BaseImage.Cluster) > 0 {
-		log.Printf("Resolved %s/%s/%s:%s to %s", s.config.BaseImage.Cluster, s.config.BaseImage.Namespace, s.config.BaseImage.Name, s.config.BaseImage.Tag, from.Image.Name)
-	} else {
-		log.Printf("Resolved %s/%s:%s to %s", s.config.BaseImage.Namespace, s.config.BaseImage.Name, s.config.BaseImage.Tag, from.Image.Name)
-	}
+	log.Printf("Resolved %s/%s:%s to %s", s.config.BaseImage.Namespace, s.config.BaseImage.Name, s.config.BaseImage.Tag, from.Image.Name)
 	s.imageName = from.Image.Name
 	return api.InputDefinition{from.Image.Name}, nil
 }
@@ -81,7 +69,7 @@ func (s *inputImageTagStep) run(ctx context.Context, dry bool) error {
 	}
 
 	ist := &imageapi.ImageStreamTag{
-		ObjectMeta: meta.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s:%s", api.PipelineImageStream, s.config.To),
 			Namespace: s.jobSpec.Namespace(),
 		},
@@ -97,31 +85,19 @@ func (s *inputImageTagStep) run(ctx context.Context, dry bool) error {
 		},
 	}
 
-	if len(s.config.BaseImage.Cluster) > 0 && s.srcClient != s.dstClient {
-		from := coreapi.ObjectReference{Kind: "DockerImage", Name: fmt.Sprintf("%s/%s/%s@sha256:SHA",
-			apiCIRegistry, s.config.BaseImage.Namespace, s.config.BaseImage.Name)}
-		if !dry {
-			from, err = istObjectReference(s.srcClient, s.config.BaseImage)
-			if err != nil {
-				return fmt.Errorf("failed to reference source image stream tag: %v", err)
-			}
-		}
-		ist.Tag.From = &from
-	}
-
 	if dry {
 		s.dryLogger.AddImageStreamTag(ist)
 		return nil
 	}
 
-	if _, err := s.dstClient.ImageStreamTags(s.jobSpec.Namespace()).Create(ist); err != nil && !errors.IsAlreadyExists(err) {
+	if _, err := s.client.ImageStreamTags(s.jobSpec.Namespace()).Create(ist); err != nil && !errors.IsAlreadyExists(err) {
 		return fmt.Errorf("failed to create imagestreamtag for input image: %v", err)
 	}
 	// Wait image is ready
 	importCtx, cancel := context.WithTimeout(ctx, 35*time.Minute)
 	defer cancel()
 	if err := wait.PollImmediateUntil(10*time.Second, func() (bool, error) {
-		pipeline, err := s.dstClient.ImageStreams(s.jobSpec.Namespace()).Get(api.PipelineImageStream, meta.GetOptions{})
+		pipeline, err := s.client.ImageStreams(s.jobSpec.Namespace()).Get(api.PipelineImageStream, metav1.GetOptions{})
 		if err != nil {
 			return false, err
 		}
@@ -138,7 +114,7 @@ func (s *inputImageTagStep) run(ctx context.Context, dry bool) error {
 }
 
 func istObjectReference(client imageclientset.ImageV1Interface, reference api.ImageStreamTagReference) (coreapi.ObjectReference, error) {
-	is, err := client.ImageStreams(reference.Namespace).Get(reference.Name, meta.GetOptions{})
+	is, err := client.ImageStreams(reference.Namespace).Get(reference.Name, metav1.GetOptions{})
 	if err != nil {
 		return coreapi.ObjectReference{}, fmt.Errorf("could not resolve remote image stream: %v", err)
 	}
@@ -150,7 +126,7 @@ func istObjectReference(client imageclientset.ImageV1Interface, reference api.Im
 	} else {
 		return coreapi.ObjectReference{}, fmt.Errorf("remote image stream %s has no accessible image registry value", reference.Name)
 	}
-	ist, err := client.ImageStreamTags(reference.Namespace).Get(fmt.Sprintf("%s:%s", reference.Name, reference.Tag), meta.GetOptions{})
+	ist, err := client.ImageStreamTags(reference.Namespace).Get(fmt.Sprintf("%s:%s", reference.Name, reference.Tag), metav1.GetOptions{})
 	if err != nil {
 		return coreapi.ObjectReference{}, fmt.Errorf("could not resolve remote image stream tag: %v", err)
 	}
@@ -175,15 +151,11 @@ func (s *inputImageTagStep) Description() string {
 	return fmt.Sprintf("Find the input image %s and tag it into the pipeline", s.config.To)
 }
 
-func InputImageTagStep(config api.InputImageTagStepConfiguration, srcClient, dstClient imageclientset.ImageV1Interface, jobSpec *api.JobSpec, dryLogger *DryLogger) api.Step {
+func InputImageTagStep(config api.InputImageTagStepConfiguration, client imageclientset.ImageV1Interface, jobSpec *api.JobSpec, dryLogger *DryLogger) api.Step {
 	// when source and destination client are the same, we don't need to use external imports
-	if srcClient == dstClient {
-		config.BaseImage.Cluster = ""
-	}
 	return &inputImageTagStep{
 		config:    config,
-		srcClient: srcClient,
-		dstClient: dstClient,
+		client:    client,
 		jobSpec:   jobSpec,
 		dryLogger: dryLogger,
 	}

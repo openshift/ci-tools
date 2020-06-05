@@ -50,7 +50,9 @@ type importReleaseStep struct {
 	// name is the name of the release we're importing, like 'latest'
 	name string
 	// pullSpec is the fully-resolved pull spec of the release payload image we are importing
-	pullSpec    string
+	pullSpec string
+	// append determines if we wait for other processes to create images first
+	append      bool
 	resources   api.ResourceConfiguration
 	imageClient imageclientset.ImageV1Interface
 	podClient   steps.PodClient
@@ -361,6 +363,16 @@ func hasFailedImportCondition(conditions []imageapi.TagEventCondition, generatio
 }
 
 func (s *importReleaseStep) Requires() []api.StepLink {
+	// TODO: remove this, we need it for backwards compat
+	// but should provide a separate, direct means for
+	// users to import images they care about rather than
+	// having two steps overwrite each other on import
+	if s.append {
+		if s.name == "latest" {
+			return []api.StepLink{api.ImagesReadyLink()}
+		}
+		return []api.StepLink{api.ReleaseImagesLink()}
+	}
 	// we don't depend on anything as we will populate
 	// the stable streams with our images.
 	return []api.StepLink{}
@@ -383,12 +395,13 @@ func (s *importReleaseStep) Description() string {
 }
 
 // ImportReleaseStep imports an existing update payload image
-func ImportReleaseStep(name, pullSpec string, resources api.ResourceConfiguration,
+func ImportReleaseStep(name, pullSpec string, append bool, resources api.ResourceConfiguration,
 	podClient steps.PodClient, imageClient imageclientset.ImageV1Interface, saGetter coreclientset.ServiceAccountsGetter,
 	rbacClient rbacclientset.RbacV1Interface, artifactDir string, jobSpec *api.JobSpec, dryLogger *steps.DryLogger) api.Step {
 	return &importReleaseStep{
 		name:        name,
 		pullSpec:    pullSpec,
+		append:      append,
 		resources:   resources,
 		podClient:   podClient,
 		imageClient: imageClient,

@@ -186,7 +186,7 @@ func FromConfig(
 						return nil, nil, results.ForReason("reading_release").ForError(fmt.Errorf("failed to read input release pullSpec %s: %v", name, err))
 					}
 					log.Printf("Resolved release %s to %s", name, pullSpec)
-					releaseStep = release.ImportReleaseStep(name, pullSpec, config.Resources, podClient, imageClient, saGetter, rbacClient, artifactDir, jobSpec, dryLogger)
+					releaseStep = release.ImportReleaseStep(name, pullSpec, true, config.Resources, podClient, imageClient, saGetter, rbacClient, artifactDir, jobSpec, dryLogger)
 				} else {
 					releaseStep = release.AssembleReleaseStep(name, rawStep.ReleaseImagesTagStepConfiguration, config.Resources, podClient, imageClient, saGetter, rbacClient, artifactDir, jobSpec, dryLogger)
 				}
@@ -224,7 +224,7 @@ func FromConfig(
 			}
 			log.Printf("Resolved release %s to %s", resolveConfig.Name, value)
 
-			step = release.ImportReleaseStep(resolveConfig.Name, value, config.Resources, podClient, imageClient, saGetter, rbacClient, artifactDir, jobSpec, dryLogger)
+			step = release.ImportReleaseStep(resolveConfig.Name, value, false, config.Resources, podClient, imageClient, saGetter, rbacClient, artifactDir, jobSpec, dryLogger)
 			addProvidesForStep(step, params)
 		} else if testStep := rawStep.TestStepConfiguration; testStep != nil {
 			if test := testStep.MultiStageTestConfigurationLiteral; test != nil {

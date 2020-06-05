@@ -691,7 +691,7 @@ func (o *options) resolveInputs(steps []api.Step) error {
 	o.namespace = strings.Replace(o.namespace, "{id}", o.inputHash, -1)
 	// TODO: instead of mutating this here, we should pass the parts of graph execution that are resolved
 	// after the graph is created but before it is run down into the run step.
-	o.jobSpec.Namespace = o.namespace
+	o.jobSpec.SetNamespace(o.namespace)
 
 	//If we can resolve the field, use it. If not, don't.
 	if routeGetter, err := routeclientset.NewForConfig(o.clusterConfig); err != nil {
@@ -855,9 +855,9 @@ func (o *options) initializeNamespace() error {
 	}
 
 	// create the image stream or read it to get its uid
-	is, err := imageGetter.ImageStreams(o.jobSpec.Namespace).Create(&imageapi.ImageStream{
+	is, err := imageGetter.ImageStreams(o.jobSpec.Namespace()).Create(&imageapi.ImageStream{
 		ObjectMeta: meta.ObjectMeta{
-			Namespace: o.jobSpec.Namespace,
+			Namespace: o.jobSpec.Namespace(),
 			Name:      api.PipelineImageStream,
 		},
 		Spec: imageapi.ImageStreamSpec{
@@ -869,7 +869,7 @@ func (o *options) initializeNamespace() error {
 		if !kerrors.IsAlreadyExists(err) {
 			return fmt.Errorf("could not set up pipeline imagestream for test: %v", err)
 		}
-		is, _ = imageGetter.ImageStreams(o.jobSpec.Namespace).Get(api.PipelineImageStream, meta.GetOptions{})
+		is, _ = imageGetter.ImageStreams(o.jobSpec.Namespace()).Get(api.PipelineImageStream, meta.GetOptions{})
 	}
 	if is != nil {
 		isTrue := true

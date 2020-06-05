@@ -25,7 +25,8 @@ func TestOutputImageStep(t *testing.T) {
 			Tag:       "configToTag",
 		},
 	}
-	jobspec := &api.JobSpec{Namespace: "job-namespace"}
+	jobspec := &api.JobSpec{}
+	jobspec.SetNamespace("job-namespace")
 	stepSpec := stepExpectation{
 		name: "configToAs",
 		requires: []api.StepLink{
@@ -44,7 +45,7 @@ func TestOutputImageStep(t *testing.T) {
 	}
 
 	pipelineRoot := &imagev1.ImageStreamTag{
-		ObjectMeta: meta.ObjectMeta{Name: "pipeline:root", Namespace: jobspec.Namespace},
+		ObjectMeta: meta.ObjectMeta{Name: "pipeline:root", Namespace: jobspec.Namespace()},
 		Image:      imagev1.Image{ObjectMeta: meta.ObjectMeta{Name: "fromImageName"}},
 	}
 

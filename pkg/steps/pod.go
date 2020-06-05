@@ -85,7 +85,7 @@ func (s *podStep) run(ctx context.Context, dry bool) error {
 	// when the test container terminates and artifact directory has been set, grab everything under the directory
 	var notifier ContainerNotifier = NopNotifier
 	if s.gatherArtifacts() {
-		artifacts := NewArtifactWorker(s.podClient, filepath.Join(s.artifactDir, s.config.As), s.jobSpec.Namespace)
+		artifacts := NewArtifactWorker(s.podClient, filepath.Join(s.artifactDir, s.config.As), s.jobSpec.Namespace())
 		artifacts.CollectFromPod(pod.Name, []string{s.name}, nil)
 		notifier = artifacts
 	}
@@ -104,12 +104,12 @@ func (s *podStep) run(ctx context.Context, dry bool) error {
 		<-ctx.Done()
 		notifier.Cancel()
 		log.Printf("cleanup: Deleting %s pod %s", s.name, s.config.As)
-		if err := s.podClient.Pods(s.jobSpec.Namespace).Delete(s.config.As, nil); err != nil && !errors.IsNotFound(err) {
+		if err := s.podClient.Pods(s.jobSpec.Namespace()).Delete(s.config.As, nil); err != nil && !errors.IsNotFound(err) {
 			log.Printf("error: Could not delete %s pod: %v", s.name, err)
 		}
 	}()
 
-	pod, err = createOrRestartPod(s.podClient.Pods(s.jobSpec.Namespace), pod)
+	pod, err = createOrRestartPod(s.podClient.Pods(s.jobSpec.Namespace()), pod)
 	if err != nil {
 		return fmt.Errorf("failed to create or restart %s pod: %v", s.name, err)
 	}
@@ -118,7 +118,7 @@ func (s *podStep) run(ctx context.Context, dry bool) error {
 		s.subTests = testCaseNotifier.SubTests(s.Description() + " - ")
 	}()
 
-	if err := waitForPodCompletion(context.TODO(), s.podClient.Pods(s.jobSpec.Namespace), pod.Name, testCaseNotifier, s.config.SkipLogs); err != nil {
+	if err := waitForPodCompletion(context.TODO(), s.podClient.Pods(s.jobSpec.Namespace()), pod.Name, testCaseNotifier, s.config.SkipLogs); err != nil {
 		return fmt.Errorf("%s %q failed: %v", s.name, pod.Name, err)
 	}
 	return nil

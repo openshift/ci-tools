@@ -127,7 +127,7 @@ func (s *e2eTestStep) run(ctx context.Context, dry bool) error {
 	if dry {
 		return nil
 	}
-	if _, err := s.secretClient.Secrets(s.jobSpec.Namespace).Get(fmt.Sprintf("%s-cluster-profile", s.testConfig.As), meta.GetOptions{}); err != nil {
+	if _, err := s.secretClient.Secrets(s.jobSpec.Namespace()).Get(fmt.Sprintf("%s-cluster-profile", s.testConfig.As), meta.GetOptions{}); err != nil {
 		return results.ForReason("missing_cluster_profile").WithError(err).Errorf("could not find required secret: %v", err)
 	}
 	return s.step.Run(ctx, dry)

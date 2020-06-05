@@ -141,7 +141,7 @@ func setupReleaseImageStream(namespace string, saGetter coreclientset.ServiceAcc
 }
 
 func (s *assembleReleaseStep) run(ctx context.Context, dry bool) error {
-	releaseImageStreamRepo, err := setupReleaseImageStream(s.jobSpec.Namespace, s.saGetter, s.rbacClient, s.imageClient, s.dryLogger, dry)
+	releaseImageStreamRepo, err := setupReleaseImageStream(s.jobSpec.Namespace(), s.saGetter, s.rbacClient, s.imageClient, s.dryLogger, dry)
 	if err != nil {
 		return err
 	}
@@ -159,7 +159,7 @@ func (s *assembleReleaseStep) run(ctx context.Context, dry bool) error {
 	importCtx, cancel := context.WithTimeout(ctx, 15*time.Minute)
 	defer cancel()
 	if err := wait.PollImmediateUntil(10*time.Second, func() (bool, error) {
-		stable, err = s.imageClient.ImageStreams(s.jobSpec.Namespace).Get(streamName, meta.GetOptions{})
+		stable, err = s.imageClient.ImageStreams(s.jobSpec.Namespace()).Get(streamName, meta.GetOptions{})
 		if err != nil {
 			return false, err
 		}
@@ -203,7 +203,7 @@ export HOME=/tmp
 oc registry login
 oc adm release new --max-per-registry=32 -n %q --from-image-stream %q --to-image-base %q --to-image %q
 oc adm release extract --from=%q --to=/tmp/artifacts/release-payload-%s
-`, s.jobSpec.Namespace, streamName, cvo, destination, destination, s.name),
+`, s.jobSpec.Namespace(), streamName, cvo, destination, destination, s.name),
 	}
 
 	// set an explicit default for release-latest resources, but allow customization if necessary
@@ -254,7 +254,7 @@ func (s *assembleReleaseStep) Provides() (api.ParameterMap, api.StepLink) {
 func providesFor(name string, imageClient imageclientset.ImageV1Interface, spec *api.JobSpec) (api.ParameterMap, api.StepLink) {
 	return api.ParameterMap{
 		EnvVarFor(name): func() (string, error) {
-			is, err := imageClient.ImageStreams(spec.Namespace).Get("release", meta.GetOptions{})
+			is, err := imageClient.ImageStreams(spec.Namespace()).Get("release", meta.GetOptions{})
 			if err != nil {
 				return "", fmt.Errorf("could not retrieve output imagestream: %v", err)
 			}

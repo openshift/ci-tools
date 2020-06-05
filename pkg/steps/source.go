@@ -258,7 +258,7 @@ func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStrea
 	if len(fromTag) > 0 {
 		from = &coreapi.ObjectReference{
 			Kind:      "ImageStreamTag",
-			Namespace: jobSpec.Namespace,
+			Namespace: jobSpec.Namespace(),
 			Name:      fmt.Sprintf("%s:%s", api.PipelineImageStream, fromTag),
 		}
 	}
@@ -269,7 +269,7 @@ func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStrea
 	build := &buildapi.Build{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      string(toTag),
-			Namespace: jobSpec.Namespace,
+			Namespace: jobSpec.Namespace(),
 			Labels:    labels,
 			Annotations: map[string]string{
 				JobSpecAnnotation: jobSpec.RawSpec(),
@@ -294,7 +294,7 @@ func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStrea
 				Output: buildapi.BuildOutput{
 					To: &coreapi.ObjectReference{
 						Kind:      "ImageStreamTag",
-						Namespace: jobSpec.Namespace,
+						Namespace: jobSpec.Namespace(),
 						Name:      fmt.Sprintf("%s:%s", api.PipelineImageStream, toTag),
 					},
 				},
@@ -626,7 +626,7 @@ func (s *sourceStep) Creates() []api.StepLink {
 func (s *sourceStep) Provides() (api.ParameterMap, api.StepLink) {
 	return api.ParameterMap{
 		"LOCAL_IMAGE_SRC": func() (string, error) {
-			is, err := s.imageClient.ImageStreams(s.jobSpec.Namespace).Get(api.PipelineImageStream, meta.GetOptions{})
+			is, err := s.imageClient.ImageStreams(s.jobSpec.Namespace()).Get(api.PipelineImageStream, meta.GetOptions{})
 			if err != nil {
 				return "", fmt.Errorf("could not get output imagestream: %v", err)
 			}

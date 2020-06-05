@@ -52,8 +52,8 @@ func preparePodStep(t *testing.T, namespace string) (*podStep, stepExpectation, 
 				BaseSHA: "base-sha",
 			},
 		},
-		Namespace: namespace,
 	}
+	jobSpec.SetNamespace(namespace)
 
 	fakecs := ciopTestingClient{
 		kubecs:  fake.NewSimpleClientset(),
@@ -85,7 +85,7 @@ func makeExpectedPod(step *podStep, phaseAfterRun v1.PodPhase) *v1.Pod {
 	return &v1.Pod{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      step.config.As,
-			Namespace: step.jobSpec.Namespace,
+			Namespace: step.jobSpec.Namespace(),
 			Labels: map[string]string{
 				"build-id":                    step.jobSpec.BuildID,
 				"created-by-ci":               "true",

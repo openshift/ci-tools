@@ -70,7 +70,7 @@ func (s *importReleaseStep) Run(ctx context.Context, dry bool) error {
 }
 
 func (s *importReleaseStep) run(ctx context.Context, dry bool) error {
-	_, err := setupReleaseImageStream(s.jobSpec.Namespace, s.saGetter, s.rbacClient, s.imageClient, s.dryLogger, dry)
+	_, err := setupReleaseImageStream(s.jobSpec.Namespace(), s.saGetter, s.rbacClient, s.imageClient, s.dryLogger, dry)
 	if err != nil {
 		return err
 	}
@@ -84,7 +84,7 @@ func (s *importReleaseStep) run(ctx context.Context, dry bool) error {
 	log.Printf("Importing release image %s", s.name)
 
 	// create the stable image stream with lookup policy so we have a place to put our imported images
-	_, err = s.imageClient.ImageStreams(s.jobSpec.Namespace).Create(&imageapi.ImageStream{
+	_, err = s.imageClient.ImageStreams(s.jobSpec.Namespace()).Create(&imageapi.ImageStream{
 		ObjectMeta: meta.ObjectMeta{
 			Name: streamName,
 		},
@@ -103,7 +103,7 @@ func (s *importReleaseStep) run(ctx context.Context, dry bool) error {
 	// retry importing the image a few times because we might race against establishing credentials/roles
 	// and be unable to import images on the same cluster
 	if err := wait.ExponentialBackoff(wait.Backoff{Steps: 4, Duration: 1 * time.Second, Factor: 2}, func() (bool, error) {
-		result, err := s.imageClient.ImageStreamImports(s.jobSpec.Namespace).Create(&imageapi.ImageStreamImport{
+		result, err := s.imageClient.ImageStreamImports(s.jobSpec.Namespace()).Create(&imageapi.ImageStreamImport{
 			ObjectMeta: meta.ObjectMeta{
 				Name: "release",
 			},
@@ -160,7 +160,7 @@ func (s *importReleaseStep) run(ctx context.Context, dry bool) error {
 	if err := steps.RunPod(context.TODO(), s.podClient, &coreapi.Pod{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      targetCLI,
-			Namespace: s.jobSpec.Namespace,
+			Namespace: s.jobSpec.Namespace(),
 		},
 		Spec: coreapi.PodSpec{
 			RestartPolicy: coreapi.RestartPolicyNever,
@@ -175,7 +175,7 @@ func (s *importReleaseStep) run(ctx context.Context, dry bool) error {
 	}); err != nil {
 		return fmt.Errorf("unable to find the 'cli' image in the provided release image: %v", err)
 	}
-	pod, err := s.podClient.Pods(s.jobSpec.Namespace).Get(targetCLI, meta.GetOptions{})
+	pod, err := s.podClient.Pods(s.jobSpec.Namespace()).Get(targetCLI, meta.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("unable to extract the 'cli' image from the release image: %v", err)
 	}
@@ -186,7 +186,7 @@ func (s *importReleaseStep) run(ctx context.Context, dry bool) error {
 
 	// tag the cli image into stable so we use the correct pull secrets from the namespace
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		_, err := s.imageClient.ImageStreamTags(s.jobSpec.Namespace).Update(&imageapi.ImageStreamTag{
+		_, err := s.imageClient.ImageStreamTags(s.jobSpec.Namespace()).Update(&imageapi.ImageStreamTag{
 			ObjectMeta: meta.ObjectMeta{
 				Name: fmt.Sprintf("%s:cli", streamName),
 			},
@@ -254,7 +254,7 @@ oc adm release extract --from=%q --file=image-references > /tmp/artifacts/%s
 
 	// update the stable image stream to have all of the tags from the payload
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		stable, err := s.imageClient.ImageStreams(s.jobSpec.Namespace).Get(streamName, meta.GetOptions{})
+		stable, err := s.imageClient.ImageStreams(s.jobSpec.Namespace()).Get(streamName, meta.GetOptions{})
 		if err != nil {
 			return fmt.Errorf("could not resolve imagestream %s: %v", streamName, err)
 		}
@@ -276,7 +276,7 @@ oc adm release extract --from=%q --file=image-references > /tmp/artifacts/%s
 		}
 		stable.Spec.Tags = tags
 
-		_, err = s.imageClient.ImageStreams(s.jobSpec.Namespace).Update(stable)
+		_, err = s.imageClient.ImageStreams(s.jobSpec.Namespace()).Update(stable)
 		return err
 	}); err != nil {
 		return fmt.Errorf("unable to update stable image stream with release tags: %v", err)
@@ -286,7 +286,7 @@ oc adm release extract --from=%q --file=image-references > /tmp/artifacts/%s
 	// tag fails
 	var waiting map[string]int64
 	if err := wait.Poll(3*time.Second, 15*time.Minute, func() (bool, error) {
-		stable, err := s.imageClient.ImageStreams(s.jobSpec.Namespace).Get(streamName, meta.GetOptions{})
+		stable, err := s.imageClient.ImageStreams(s.jobSpec.Namespace()).Get(streamName, meta.GetOptions{})
 		if err != nil {
 			return false, fmt.Errorf("could not resolve imagestream %s: %v", streamName, err)
 		}
@@ -314,7 +314,7 @@ oc adm release extract --from=%q --file=image-references > /tmp/artifacts/%s
 			}
 		}
 		if updates {
-			_, err = s.imageClient.ImageStreams(s.jobSpec.Namespace).Update(stable)
+			_, err = s.imageClient.ImageStreams(s.jobSpec.Namespace()).Update(stable)
 			if err != nil {
 				log.Printf("error requesting re-import of failed release image stream: %v", err)
 			}

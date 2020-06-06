@@ -118,16 +118,16 @@ func registryClusterHandlerFactory(buildClusters sets.String, filter objectFilte
 				return nil
 			}
 			var requests []reconcile.Request
-			for _, imageStreamTag := range imageStream.Spec.Tags {
+			for _, imageStreamTag := range imageStream.Status.Tags {
 				// Not sure why this happens but seems to be a thing
-				if imageStreamTag.Name == "" {
+				if imageStreamTag.Tag == "" {
 					serialized, err := json.Marshal(imageStreamTag)
 					logrus.WithField("imagestreamtag", string(serialized)).WithField("serialization error", err).Debug("got imagestreamtag with empty name")
 					continue
 				}
 				name := types.NamespacedName{
 					Namespace: mo.Meta.GetNamespace(),
-					Name:      fmt.Sprintf("%s:%s", mo.Meta.GetName(), imageStreamTag.Name),
+					Name:      fmt.Sprintf("%s:%s", mo.Meta.GetName(), imageStreamTag.Tag),
 				}
 				if !filter(name) {
 					continue
@@ -206,6 +206,15 @@ func (r *reconciler) reconcile(req reconcile.Request, log *logrus.Entry) error {
 		return fmt.Errorf("failed to get imageStreamTag %s from registry cluster: %w", decoded.String(), err)
 	}
 
+	if err := client.Get(r.ctx, types.NamespacedName{Name: decoded.Namespace}, &corev1.Namespace{}); err != nil {
+		if !apierrors.IsNotFound(err) {
+			return fmt.Errorf("failed to check if namespace %s exists: %w", decoded.Namespace, err)
+		}
+		if err := client.Create(r.ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: decoded.Namespace}}); err != nil && !apierrors.IsAlreadyExists(err) {
+			return fmt.Errorf("failed to create namespace %s: %w", decoded.Namespace, err)
+		}
+	}
+
 	if err := r.ensureCIOperatorRoleBinding(decoded.Namespace, client, log); err != nil {
 		return fmt.Errorf("failed to ensure rolebinding: %w", err)
 	}
@@ -220,15 +229,6 @@ func (r *reconciler) reconcile(req reconcile.Request, log *logrus.Entry) error {
 	if isCurrent {
 		log.Debug("ImageStreamTag is current")
 		return nil
-	}
-
-	if err := client.Get(r.ctx, types.NamespacedName{Name: decoded.Namespace}, &corev1.Namespace{}); err != nil {
-		if !apierrors.IsNotFound(err) {
-			return fmt.Errorf("failed to check if namespace %s exists: %w", decoded.Namespace, err)
-		}
-		if err := client.Create(r.ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: decoded.Namespace}}); err != nil && !apierrors.IsAlreadyExists(err) {
-			return fmt.Errorf("failed to create namespace %s: %w", decoded.Namespace, err)
-		}
 	}
 
 	if err := r.ensureImagePullSecret(decoded.Namespace, client, log); err != nil {

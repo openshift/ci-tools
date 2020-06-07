@@ -105,8 +105,8 @@ func TestRegistryClusterHandlerFactory(t *testing.T) {
 					Name:      streamName,
 					Namespace: namespace,
 				},
-				Spec: imagev1.ImageStreamSpec{
-					Tags: []imagev1.TagReference{{Name: tagName}},
+				Status: imagev1.ImageStreamStatus{
+					Tags: []imagev1.NamedTagEventList{{Tag: tagName}},
 				},
 			}
 			event := event.CreateEvent{Meta: obj, Object: obj}

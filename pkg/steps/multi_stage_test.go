@@ -73,7 +73,7 @@ func TestRequires(t *testing.T) {
 			if len(ret) == len(tc.req) {
 				matches := true
 				for i := range ret {
-					if !ret[i].Matches(tc.req[i]) {
+					if !ret[i].SatisfiedBy(tc.req[i]) {
 						matches = false
 						break
 					}

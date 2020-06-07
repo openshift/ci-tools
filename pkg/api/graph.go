@@ -29,7 +29,10 @@ type ParameterMap map[string]func() (string, error)
 // StepLink abstracts the types of links that steps
 // require and create.
 type StepLink interface {
-	Matches(other StepLink) bool
+	// SatisfiedBy determines if the other link satisfies
+	// the requirements of this one, either partially or
+	// fully. If so, the other step will be executed first.
+	SatisfiedBy(other StepLink) bool
 }
 
 func AllStepsLink() StepLink {
@@ -38,7 +41,7 @@ func AllStepsLink() StepLink {
 
 type allStepsLink struct{}
 
-func (_ allStepsLink) Matches(other StepLink) bool {
+func (_ allStepsLink) SatisfiedBy(other StepLink) bool {
 	return true
 }
 
@@ -50,7 +53,7 @@ type externalImageLink struct {
 	image ImageStreamTagReference
 }
 
-func (l *externalImageLink) Matches(other StepLink) bool {
+func (l *externalImageLink) SatisfiedBy(other StepLink) bool {
 	switch link := other.(type) {
 	case *externalImageLink:
 		return l.image.Name == link.image.Name &&
@@ -69,7 +72,7 @@ type internalImageLink struct {
 	image PipelineImageStreamTagReference
 }
 
-func (l *internalImageLink) Matches(other StepLink) bool {
+func (l *internalImageLink) SatisfiedBy(other StepLink) bool {
 	switch link := other.(type) {
 	case *internalImageLink:
 		return l.image == link.image
@@ -86,7 +89,7 @@ type releasePayloadImageLink struct {
 	image PipelineImageStreamTagReference
 }
 
-func (l *releasePayloadImageLink) Matches(other StepLink) bool {
+func (l *releasePayloadImageLink) SatisfiedBy(other StepLink) bool {
 	switch link := other.(type) {
 	case *releasePayloadImageLink:
 		return l.image == link.image
@@ -101,7 +104,7 @@ func ImagesReadyLink() StepLink {
 
 type imagesReadyLink struct{}
 
-func (l *imagesReadyLink) Matches(other StepLink) bool {
+func (l *imagesReadyLink) SatisfiedBy(other StepLink) bool {
 	switch other.(type) {
 	case *imagesReadyLink:
 		return true
@@ -116,7 +119,7 @@ func RPMRepoLink() StepLink {
 
 type rpmRepoLink struct{}
 
-func (l *rpmRepoLink) Matches(other StepLink) bool {
+func (l *rpmRepoLink) SatisfiedBy(other StepLink) bool {
 	switch other.(type) {
 	case *rpmRepoLink:
 		return true
@@ -131,7 +134,7 @@ func ReleaseImagesLink() StepLink {
 
 type releaseImagesLink struct{}
 
-func (l *releaseImagesLink) Matches(other StepLink) bool {
+func (l *releaseImagesLink) SatisfiedBy(other StepLink) bool {
 	switch other.(type) {
 	case *releaseImagesLink:
 		return true
@@ -160,7 +163,7 @@ func BuildGraph(steps []Step) []*StepNode {
 		for _, other := range allNodes {
 			for _, nodeRequires := range node.Step.Requires() {
 				for _, otherCreates := range other.Step.Creates() {
-					if nodeRequires.Matches(otherCreates) {
+					if nodeRequires.SatisfiedBy(otherCreates) {
 						isRoot = false
 						addToNode(other, node)
 					}
@@ -241,7 +244,7 @@ func addToNode(parent, child *StepNode) bool {
 func HasAnyLinks(steps, candidates []StepLink) bool {
 	for _, candidate := range candidates {
 		for _, step := range steps {
-			if step.Matches(candidate) {
+			if step.SatisfiedBy(candidate) {
 				return true
 			}
 		}
@@ -253,7 +256,7 @@ func HasAllLinks(needles, haystack []StepLink) bool {
 	for _, needle := range needles {
 		contains := false
 		for _, hay := range haystack {
-			if hay.Matches(needle) {
+			if hay.SatisfiedBy(needle) {
 				contains = true
 			}
 		}

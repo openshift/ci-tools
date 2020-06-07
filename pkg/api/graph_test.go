@@ -88,7 +88,7 @@ func TestMatches(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		if actual, expected := testCase.first.Matches(testCase.second), testCase.matches; actual != expected {
+		if actual, expected := testCase.first.SatisfiedBy(testCase.second), testCase.matches; actual != expected {
 			message := "not match"
 			if testCase.matches {
 				message = "match"

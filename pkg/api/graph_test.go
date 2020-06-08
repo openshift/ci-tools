@@ -33,8 +33,8 @@ func TestMatches(t *testing.T) {
 		},
 		{
 			name:    "release images matches itself",
-			first:   ReleaseImagesLink(),
-			second:  ReleaseImagesLink(),
+			first:   StableImagesLink(LatestStableName),
+			second:  StableImagesLink(LatestStableName),
 			matches: true,
 		},
 		{
@@ -64,7 +64,7 @@ func TestMatches(t *testing.T) {
 		{
 			name:    "internal does not match release images",
 			first:   InternalImageLink(PipelineImageStreamTagReferenceRPMs),
-			second:  ReleaseImagesLink(),
+			second:  StableImagesLink(LatestStableName),
 			matches: false,
 		},
 		{
@@ -76,13 +76,13 @@ func TestMatches(t *testing.T) {
 		{
 			name:    "external does not match release images",
 			first:   ExternalImageLink(ImageStreamTagReference{Namespace: "ns", Name: "name", Tag: "latest"}),
-			second:  ReleaseImagesLink(),
+			second:  StableImagesLink(LatestStableName),
 			matches: false,
 		},
 		{
 			name:    "RPM does not match release images",
 			first:   RPMRepoLink(),
-			second:  ReleaseImagesLink(),
+			second:  StableImagesLink(LatestStableName),
 			matches: false,
 		},
 	}

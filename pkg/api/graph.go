@@ -35,66 +35,88 @@ type StepLink interface {
 	SatisfiedBy(other StepLink) bool
 }
 
+// internalImageStreamLink describes all tags in
+// an ImageStream in the test's namespace
+type internalImageStreamLink struct {
+	name string
+}
+
+func (l *internalImageStreamLink) SatisfiedBy(other StepLink) bool {
+	// an ImageStream in an internal namespace may only
+	// be provided by a literal link for that stream
+	switch link := other.(type) {
+	case *internalImageStreamLink:
+		return l.name == link.name
+	default:
+		return false
+	}
+}
+
+// internalImageStreamTagLink describes a specific tag in
+// an ImageStream in the test's namespace
+type internalImageStreamTagLink struct {
+	name, tag string
+}
+
+func (l *internalImageStreamTagLink) SatisfiedBy(other StepLink) bool {
+	// an ImageStreamTag in an internal namespace may
+	// either be provided by a literal link for that tag
+	// or by a link that provides the full stream
+	switch link := other.(type) {
+	case *internalImageStreamTagLink:
+		return l.name == link.name && l.tag == link.tag
+	case *internalImageStreamLink:
+		return l.name == link.name
+	default:
+		return false
+	}
+}
+
 func AllStepsLink() StepLink {
 	return allStepsLink{}
 }
 
 type allStepsLink struct{}
 
-func (_ allStepsLink) SatisfiedBy(other StepLink) bool {
+func (_ allStepsLink) SatisfiedBy(_ StepLink) bool {
 	return true
 }
 
 func ExternalImageLink(ref ImageStreamTagReference) StepLink {
-	return &externalImageLink{image: ref}
+	return &externalImageLink{
+		namespace: ref.Namespace,
+		name:      ref.Name,
+		tag:       ref.Tag,
+	}
 }
 
 type externalImageLink struct {
-	image ImageStreamTagReference
+	namespace, name, tag string
 }
 
 func (l *externalImageLink) SatisfiedBy(other StepLink) bool {
 	switch link := other.(type) {
 	case *externalImageLink:
-		return l.image.Name == link.image.Name &&
-			l.image.Namespace == link.image.Namespace &&
-			l.image.Tag == link.image.Tag
+		return l.name == link.name &&
+			l.namespace == link.namespace &&
+			l.tag == link.tag
 	default:
 		return false
 	}
 }
 
-func InternalImageLink(ref PipelineImageStreamTagReference) StepLink {
-	return &internalImageLink{image: ref}
-}
-
-type internalImageLink struct {
-	image PipelineImageStreamTagReference
-}
-
-func (l *internalImageLink) SatisfiedBy(other StepLink) bool {
-	switch link := other.(type) {
-	case *internalImageLink:
-		return l.image == link.image
-	default:
-		return false
+// InternalImageLink describes a dependency on a tag in the pipeline stream
+func InternalImageLink(tag PipelineImageStreamTagReference) StepLink {
+	return &internalImageStreamTagLink{
+		name: PipelineImageStream,
+		tag:  string(tag),
 	}
 }
 
-func ReleasePayloadImageLink(ref PipelineImageStreamTagReference) StepLink {
-	return &releasePayloadImageLink{image: ref}
-}
-
-type releasePayloadImageLink struct {
-	image PipelineImageStreamTagReference
-}
-
-func (l *releasePayloadImageLink) SatisfiedBy(other StepLink) bool {
-	switch link := other.(type) {
-	case *releasePayloadImageLink:
-		return l.image == link.image
-	default:
-		return false
+func ReleasePayloadImageLink(tag string) StepLink {
+	return &internalImageStreamTagLink{
+		name: ReleaseImageStream,
+		tag:  tag,
 	}
 }
 
@@ -128,18 +150,23 @@ func (l *rpmRepoLink) SatisfiedBy(other StepLink) bool {
 	}
 }
 
-func ReleaseImagesLink() StepLink {
-	return &releaseImagesLink{}
+// StableImagesLink describes the content of a stable(-foo)?
+// ImageStream in the test namespace.
+func StableImagesLink(name string) StepLink {
+	return &internalImageStreamLink{
+		name: StableStreamFor(name),
+	}
 }
 
-type releaseImagesLink struct{}
+// StableImageTagLink describes a specific tag in a stable(-foo)?
+// ImageStream in the test namespace.
+func StableImageTagLink(name, tag string) StepLink {
+	return &internalImageStreamTagLink{
+		name: StableStreamFor(name),
+		tag:  tag,
+	}
+}
 
-func (l *releaseImagesLink) SatisfiedBy(other StepLink) bool {
-	switch other.(type) {
-	case *releaseImagesLink:
-		return true
-	default:
-		return false
 func StableStreamFor(name string) string {
 	if name == LatestStableName {
 		return StableImageStream

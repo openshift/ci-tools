@@ -31,7 +31,6 @@ func TestOutputImageStep(t *testing.T) {
 		name: "configToAs",
 		requires: []api.StepLink{
 			api.InternalImageLink(config.From),
-			api.ReleaseImagesLink(),
 		},
 		creates: []api.StepLink{
 			api.ExternalImageLink(config.To),

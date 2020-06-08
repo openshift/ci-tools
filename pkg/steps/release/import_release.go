@@ -371,7 +371,7 @@ func (s *importReleaseStep) Requires() []api.StepLink {
 		if s.name == api.LatestStableName {
 			return []api.StepLink{api.ImagesReadyLink()}
 		}
-		return []api.StepLink{api.ReleaseImagesLink()}
+		return []api.StepLink{api.StableImagesLink(api.LatestStableName)}
 	}
 	// we don't depend on anything as we will populate
 	// the stable streams with our images.
@@ -379,7 +379,7 @@ func (s *importReleaseStep) Requires() []api.StepLink {
 }
 
 func (s *importReleaseStep) Creates() []api.StepLink {
-	return []api.StepLink{api.ReleasePayloadImageLink(api.PipelineImageStreamTagReference(s.name))}
+	return []api.StepLink{api.ReleasePayloadImageLink(s.name)}
 }
 
 func (s *importReleaseStep) Provides() (api.ParameterMap, api.StepLink) {

@@ -74,7 +74,8 @@ func (s *stableImagesTagStep) Inputs(dry bool) (api.InputDefinition, error) {
 func (s *stableImagesTagStep) Requires() []api.StepLink { return []api.StepLink{} }
 
 func (s *stableImagesTagStep) Creates() []api.StepLink {
-	return []api.StepLink{api.ReleaseImagesLink()}
+	// we can only ever create the latest stable image stream with this step
+	return []api.StepLink{api.StableImagesLink(api.LatestStableName)}
 }
 
 func (s *stableImagesTagStep) Provides() (api.ParameterMap, api.StepLink) { return nil, nil }
@@ -214,7 +215,10 @@ func (s *releaseImagesTagStep) Requires() []api.StepLink {
 }
 
 func (s *releaseImagesTagStep) Creates() []api.StepLink {
-	return []api.StepLink{api.ReleaseImagesLink()}
+	return []api.StepLink{
+		api.StableImagesLink(api.InitialStableName),
+		api.StableImagesLink(api.LatestStableName),
+	}
 }
 
 func (s *releaseImagesTagStep) Provides() (api.ParameterMap, api.StepLink) {

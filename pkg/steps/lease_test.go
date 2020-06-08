@@ -29,10 +29,12 @@ func (s *stepNeedsLease) Run(ctx context.Context, dry bool) error {
 	return nil
 }
 
-func (stepNeedsLease) Name() string             { return "needs_lease" }
-func (stepNeedsLease) Description() string      { return "this step needs a lease" }
-func (stepNeedsLease) Requires() []api.StepLink { return []api.StepLink{api.ReleaseImagesLink()} }
-func (stepNeedsLease) Creates() []api.StepLink  { return []api.StepLink{api.ImagesReadyLink()} }
+func (stepNeedsLease) Name() string        { return "needs_lease" }
+func (stepNeedsLease) Description() string { return "this step needs a lease" }
+func (stepNeedsLease) Requires() []api.StepLink {
+	return []api.StepLink{api.StableImagesLink(api.LatestStableName)}
+}
+func (stepNeedsLease) Creates() []api.StepLink { return []api.StepLink{api.ImagesReadyLink()} }
 
 func (stepNeedsLease) Provides() (api.ParameterMap, api.StepLink) {
 	return api.ParameterMap{

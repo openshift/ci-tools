@@ -196,7 +196,7 @@ func (s *multiStageTestStep) Requires() (ret []api.StepLink) {
 		}
 	}
 	if needsReleaseImage && !needsReleasePayload {
-		ret = append(ret, api.ReleaseImagesLink())
+		ret = append(ret, api.StableImagesLink(api.LatestStableName))
 	}
 	return
 }

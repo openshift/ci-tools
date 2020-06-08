@@ -267,7 +267,7 @@ func (s *templateExecutionStep) Requires() []api.StepLink {
 			continue
 		}
 		if strings.HasPrefix(p.Name, "IMAGE_") && !needsRelease {
-			links = append(links, api.ReleaseImagesLink())
+			links = append(links, api.StableImagesLink(api.LatestStableName))
 			continue
 		}
 	}

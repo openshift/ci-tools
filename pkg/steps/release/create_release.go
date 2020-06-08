@@ -149,7 +149,7 @@ func (s *assembleReleaseStep) run(ctx context.Context, dry bool) error {
 		return nil
 	}
 
-	streamName := streamNameFor(s.name)
+	streamName := api.StableStreamFor(s.name)
 	var stable *imageapi.ImageStream
 	var cvo string
 	cvoExists := false
@@ -224,23 +224,14 @@ oc adm release extract --from=%q --to=/tmp/artifacts/release-payload-%s
 }
 
 func (s *assembleReleaseStep) Requires() []api.StepLink {
-	if s.name == "latest" {
+	if s.name == api.LatestStableName {
 		return []api.StepLink{api.ImagesReadyLink()}
 	}
-	return []api.StepLink{api.ReleaseImagesLink()}
+	return []api.StepLink{api.StableImagesLink(s.name)}
 }
 
 func (s *assembleReleaseStep) Creates() []api.StepLink {
-	return []api.StepLink{api.ReleasePayloadImageLink(api.PipelineImageStreamTagReference(s.name))}
-}
-
-func streamNameFor(name string) string {
-	switch name {
-	case "latest":
-		return api.StableImageStream
-	default:
-		return fmt.Sprintf("%s-%s", api.StableImageStream, name)
-	}
+	return []api.StepLink{api.ReleasePayloadImageLink(s.name)}
 }
 
 func EnvVarFor(name string) string {
@@ -275,7 +266,7 @@ func providesFor(name string, imageClient imageclientset.ImageV1Interface, spec 
 			}
 			return fmt.Sprintf("%s:%s", registry, name), nil
 		},
-	}, api.ReleasePayloadImageLink(api.PipelineImageStreamTagReference(name))
+	}, api.ReleasePayloadImageLink(name)
 }
 
 func (s *assembleReleaseStep) Name() string {

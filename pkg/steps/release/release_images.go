@@ -74,7 +74,8 @@ func (s *stableImagesTagStep) Inputs(dry bool) (api.InputDefinition, error) {
 func (s *stableImagesTagStep) Requires() []api.StepLink { return []api.StepLink{} }
 
 func (s *stableImagesTagStep) Creates() []api.StepLink {
-	return []api.StepLink{api.ReleaseImagesLink()}
+	// we can only ever create the latest stable image stream with this step
+	return []api.StepLink{api.StableImagesLink(api.LatestStableName)}
 }
 
 func (s *stableImagesTagStep) Provides() (api.ParameterMap, api.StepLink) { return nil, nil }
@@ -163,7 +164,7 @@ func (s *releaseImagesTagStep) run(ctx context.Context, dry bool) error {
 	is.UID = ""
 	newIS := &imageapi.ImageStream{
 		ObjectMeta: meta.ObjectMeta{
-			Name: api.StableImageStream,
+			Name: api.StableStreamFor(api.LatestStableName),
 		},
 		Spec: imageapi.ImageStreamSpec{
 			LookupPolicy: imageapi.ImageLookupPolicy{
@@ -186,7 +187,7 @@ func (s *releaseImagesTagStep) run(ctx context.Context, dry bool) error {
 	}
 
 	initialIS := newIS.DeepCopy()
-	initialIS.Name = fmt.Sprintf("%s-initial", api.StableImageStream)
+	initialIS.Name = api.StableStreamFor(api.InitialStableName)
 
 	_, err = s.client.ImageStreams(s.jobSpec.Namespace()).Create(newIS)
 	if err != nil && !errors.IsAlreadyExists(err) {
@@ -214,7 +215,10 @@ func (s *releaseImagesTagStep) Requires() []api.StepLink {
 }
 
 func (s *releaseImagesTagStep) Creates() []api.StepLink {
-	return []api.StepLink{api.ReleaseImagesLink()}
+	return []api.StepLink{
+		api.StableImagesLink(api.InitialStableName),
+		api.StableImagesLink(api.LatestStableName),
+	}
 }
 
 func (s *releaseImagesTagStep) Provides() (api.ParameterMap, api.StepLink) {

@@ -72,7 +72,7 @@ func (s *outputImageTagStep) run(ctx context.Context, dry bool) error {
 }
 
 func (s *outputImageTagStep) Requires() []api.StepLink {
-	return []api.StepLink{api.InternalImageLink(s.config.From), api.ReleaseImagesLink()}
+	return []api.StepLink{api.InternalImageLink(s.config.From)}
 }
 
 func (s *outputImageTagStep) Creates() []api.StepLink {

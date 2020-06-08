@@ -32,18 +32,18 @@ func TestRequires(t *testing.T) {
 		steps  api.MultiStageTestConfigurationLiteral
 		req    []api.StepLink
 	}{{
-		name: "step has a cluster profile and requires a release image, should not have ReleaseImagesLink",
+		name: "step has a cluster profile and requires a release image, should not have StableImagesLink",
 		steps: api.MultiStageTestConfigurationLiteral{
 			ClusterProfile: api.ClusterProfileAWS,
 			Test:           []api.LiteralTestStep{{From: "from-release"}},
 		},
 		req: []api.StepLink{},
 	}, {
-		name: "step needs release images, should have ReleaseImagesLink",
+		name: "step needs release images, should have StableImagesLink",
 		steps: api.MultiStageTestConfigurationLiteral{
 			Test: []api.LiteralTestStep{{From: "from-release"}},
 		},
-		req: []api.StepLink{api.ReleaseImagesLink()},
+		req: []api.StepLink{api.StableImagesLink(api.LatestStableName)},
 	}, {
 		name: "step needs images, should have InternalImageLink",
 		config: api.ReleaseBuildConfiguration{
@@ -73,7 +73,7 @@ func TestRequires(t *testing.T) {
 			if len(ret) == len(tc.req) {
 				matches := true
 				for i := range ret {
-					if !ret[i].Matches(tc.req[i]) {
+					if !ret[i].SatisfiedBy(tc.req[i]) {
 						matches = false
 						break
 					}

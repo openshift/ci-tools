@@ -1054,7 +1054,23 @@ const (
 	// we will serve RPMs after they are built.
 	RPMServeLocation = "/srv/repo"
 
+	// StableImageStream is the ImageStream used to hold
+	// build outputs from the repository under test and
+	// the associated images imported from integration streams
 	StableImageStream = "stable"
+	// LatestStableName is the name of the special latest
+	// stable stream, images in this stream are held in
+	// the StableImageStream. Images for other versions of
+	// the stream are held in similarly-named streams.
+	LatestStableName = "latest"
+	// InitialStableName is the name of the special stable
+	// stream we copy at import to keep for upgrade tests.
+	// TODO(skuznets): remove these when they're not implicit
+	InitialStableName = "initial"
+
+	// ReleaseImageStream is the name of the ImageStream
+	// used to hold built or imported release payload images
+	ReleaseImageStream = "release"
 
 	ComponentFormatReplacement = "${component}"
 )

@@ -3,7 +3,6 @@ package api
 import (
 	"errors"
 	"fmt"
-	"net/url"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -118,10 +117,6 @@ func validateBuildRootImageConfiguration(fieldRoot string, input *BuildRootImage
 	}
 
 	var validationErrors []error
-	if input.ImageStreamTagReference != nil && len(input.ImageStreamTagReference.Cluster) == 0 {
-		validationErrors = append(validationErrors, fmt.Errorf("%s.image_stream_tag: no cluster defined", fieldRoot))
-	}
-
 	if input.ProjectImageBuild != nil && input.ImageStreamTagReference != nil {
 		validationErrors = append(validationErrors, fmt.Errorf("%s: both image_stream_tag and project_image cannot be set", fieldRoot))
 	} else if input.ProjectImageBuild == nil && input.ImageStreamTagReference == nil {
@@ -189,10 +184,6 @@ func validateTestStepConfiguration(fieldRoot string, input []TestStepConfigurati
 func validateImageStreamTagReference(fieldRoot string, input ImageStreamTagReference) []error {
 	var validationErrors []error
 
-	if _, err := url.ParseRequestURI(input.Cluster); err != nil && len(input.Cluster) != 0 {
-		validationErrors = append(validationErrors, fmt.Errorf("%s.cluster invalid URL given: %s", fieldRoot, err))
-	}
-
 	if len(input.Tag) == 0 {
 		validationErrors = append(validationErrors, fmt.Errorf("%s.tag: value required but not provided", fieldRoot))
 	}
@@ -242,9 +233,6 @@ func validateReleaseTagConfiguration(fieldRoot string, input ReleaseTagConfigura
 		validationErrors = append(validationErrors, fmt.Errorf("%s: no name defined", fieldRoot))
 	}
 
-	if len(input.Cluster) == 0 {
-		return append(validationErrors, fmt.Errorf("%s: no cluster defined", fieldRoot))
-	}
 	return validationErrors
 }
 

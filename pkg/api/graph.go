@@ -140,7 +140,12 @@ func (l *releaseImagesLink) SatisfiedBy(other StepLink) bool {
 		return true
 	default:
 		return false
+func StableStreamFor(name string) string {
+	if name == LatestStableName {
+		return StableImageStream
 	}
+
+	return fmt.Sprintf("%s-%s", StableImageStream, name)
 }
 
 type StepNode struct {

@@ -163,7 +163,7 @@ func (s *releaseImagesTagStep) run(ctx context.Context, dry bool) error {
 	is.UID = ""
 	newIS := &imageapi.ImageStream{
 		ObjectMeta: meta.ObjectMeta{
-			Name: api.StableImageStream,
+			Name: api.StableStreamFor(api.LatestStableName),
 		},
 		Spec: imageapi.ImageStreamSpec{
 			LookupPolicy: imageapi.ImageLookupPolicy{
@@ -186,7 +186,7 @@ func (s *releaseImagesTagStep) run(ctx context.Context, dry bool) error {
 	}
 
 	initialIS := newIS.DeepCopy()
-	initialIS.Name = fmt.Sprintf("%s-initial", api.StableImageStream)
+	initialIS.Name = api.StableStreamFor(api.InitialStableName)
 
 	_, err = s.client.ImageStreams(s.jobSpec.Namespace()).Create(newIS)
 	if err != nil && !errors.IsAlreadyExists(err) {

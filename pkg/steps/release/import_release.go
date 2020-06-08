@@ -77,7 +77,7 @@ func (s *importReleaseStep) run(ctx context.Context, dry bool) error {
 		return err
 	}
 
-	streamName := streamNameFor(s.name)
+	streamName := api.StableStreamFor(s.name)
 
 	if dry {
 		return nil
@@ -368,7 +368,7 @@ func (s *importReleaseStep) Requires() []api.StepLink {
 	// users to import images they care about rather than
 	// having two steps overwrite each other on import
 	if s.append {
-		if s.name == "latest" {
+		if s.name == api.LatestStableName {
 			return []api.StepLink{api.ImagesReadyLink()}
 		}
 		return []api.StepLink{api.ReleaseImagesLink()}

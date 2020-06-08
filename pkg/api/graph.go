@@ -30,7 +30,6 @@ type ParameterMap map[string]func() (string, error)
 // require and create.
 type StepLink interface {
 	Matches(other StepLink) bool
-	Same(other StepLink) bool
 }
 
 func AllStepsLink() StepLink {
@@ -38,11 +37,6 @@ func AllStepsLink() StepLink {
 }
 
 type allStepsLink struct{}
-
-func (_ allStepsLink) Same(other StepLink) bool {
-	_, ok := other.(allStepsLink)
-	return ok
-}
 
 func (_ allStepsLink) Matches(other StepLink) bool {
 	return true
@@ -54,14 +48,6 @@ func ExternalImageLink(ref ImageStreamTagReference) StepLink {
 
 type externalImageLink struct {
 	image ImageStreamTagReference
-}
-
-func (l *externalImageLink) Same(other StepLink) bool {
-	o, ok := other.(*externalImageLink)
-	if !ok {
-		return false
-	}
-	return o.image == l.image
 }
 
 func (l *externalImageLink) Matches(other StepLink) bool {
@@ -83,14 +69,6 @@ type internalImageLink struct {
 	image PipelineImageStreamTagReference
 }
 
-func (l *internalImageLink) Same(other StepLink) bool {
-	o, ok := other.(*internalImageLink)
-	if !ok {
-		return false
-	}
-	return o.image == l.image
-}
-
 func (l *internalImageLink) Matches(other StepLink) bool {
 	switch link := other.(type) {
 	case *internalImageLink:
@@ -108,14 +86,6 @@ type releasePayloadImageLink struct {
 	image PipelineImageStreamTagReference
 }
 
-func (l *releasePayloadImageLink) Same(other StepLink) bool {
-	o, ok := other.(*releasePayloadImageLink)
-	if !ok {
-		return false
-	}
-	return o.image == l.image
-}
-
 func (l *releasePayloadImageLink) Matches(other StepLink) bool {
 	switch link := other.(type) {
 	case *releasePayloadImageLink:
@@ -130,11 +100,6 @@ func ImagesReadyLink() StepLink {
 }
 
 type imagesReadyLink struct{}
-
-func (l *imagesReadyLink) Same(other StepLink) bool {
-	_, ok := other.(*imagesReadyLink)
-	return ok
-}
 
 func (l *imagesReadyLink) Matches(other StepLink) bool {
 	switch other.(type) {
@@ -151,11 +116,6 @@ func RPMRepoLink() StepLink {
 
 type rpmRepoLink struct{}
 
-func (l *rpmRepoLink) Same(other StepLink) bool {
-	_, ok := other.(*rpmRepoLink)
-	return ok
-}
-
 func (l *rpmRepoLink) Matches(other StepLink) bool {
 	switch other.(type) {
 	case *rpmRepoLink:
@@ -170,11 +130,6 @@ func ReleaseImagesLink() StepLink {
 }
 
 type releaseImagesLink struct{}
-
-func (l *releaseImagesLink) Same(other StepLink) bool {
-	_, ok := other.(*releaseImagesLink)
-	return ok
-}
 
 func (l *releaseImagesLink) Matches(other StepLink) bool {
 	switch other.(type) {

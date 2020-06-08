@@ -20,5 +20,7 @@ os::integration::compare "${actual}" "${expected}"
 os::cmd::expect_success "ci-operator-config-mirror --to-org super-priv --config-path ${actual_to_clean} --clean=true --whitelist-file ${suite_dir}/whitelist.yaml"
 os::integration::compare "${actual_to_clean}" "${expected}"
 
+os::cmd::expect_success "ci-operator-config-mirror --only-org super --to-org super-priv --config-path ${actual_to_clean} --clean=true --whitelist-file ${suite_dir}/whitelist.yaml"
+os::integration::compare "${actual_to_clean}" "${suite_dir}/output-only-super"
 
 os::test::junit::declare_suite_end

@@ -28,6 +28,7 @@ type options struct {
 
 	configDir string
 	toOrg     string
+	onlyOrg   string
 
 	clean bool
 }
@@ -38,6 +39,7 @@ func gatherOptions() options {
 
 	fs.StringVar(&o.configDir, "config-path", "", "Path to directory containing ci-operator configurations")
 	fs.StringVar(&o.toOrg, "to-org", "", "Name of the organization which the ci-operator configuration files will be mirrored")
+	fs.StringVar(&o.onlyOrg, "only-org", "", "Mirror only ci-operator configuration from this organization")
 
 	fs.BoolVar(&o.clean, "clean", true, "If the `to-org` folder already exists, then delete all subdirectories")
 
@@ -106,6 +108,11 @@ func main() {
 		logger := logrus.WithFields(logrus.Fields{"org": repoInfo.Org, "repo": repoInfo.Repo, "branch": repoInfo.Branch})
 
 		if repoInfo.Org == o.toOrg {
+			return nil
+		}
+
+		if len(o.onlyOrg) > 0 && repoInfo.Org != o.onlyOrg {
+			logger.Warnf("Skipping... This repo doesn't belong in %s organization", o.onlyOrg)
 			return nil
 		}
 

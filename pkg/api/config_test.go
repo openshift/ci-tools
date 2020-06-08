@@ -2,7 +2,6 @@ package api
 
 import (
 	"errors"
-	"fmt"
 	"reflect"
 	"testing"
 
@@ -410,11 +409,6 @@ func TestValidateBuildRoot(t *testing.T) {
 			id:                   "nil build root is not allowed when images defined",
 			buildRootImageConfig: nil,
 			hasImages:            true,
-			expectedValid:        false,
-		},
-		{
-			id:                   "build root without cluster",
-			buildRootImageConfig: &BuildRootImageConfiguration{ImageStreamTagReference: &ImageStreamTagReference{}},
 			expectedValid:        false,
 		},
 	} {
@@ -899,11 +893,6 @@ func TestValidateReleaseTagConfiguration(t *testing.T) {
 		input    ReleaseTagConfiguration
 		expected []error
 	}{
-		{
-			name:     "no cluster defined error",
-			input:    ReleaseTagConfiguration{Name: "test", Namespace: "test"},
-			expected: []error{fmt.Errorf("tag_specification: no cluster defined")},
-		},
 		{
 			name:     "valid tag_specification",
 			input:    ReleaseTagConfiguration{Name: "test", Namespace: "test", Cluster: "https://test.com"},

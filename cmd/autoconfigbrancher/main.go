@@ -151,7 +151,7 @@ func main() {
 		{
 			command: "/usr/bin/ci-operator-config-mirror",
 			arguments: func() []string {
-				args := []string{"--config-path", o.ConfigDir, "--to-org", "openshift-priv"}
+				args := []string{"--config-path", o.ConfigDir, "--to-org", "openshift-priv", "--only-org", "openshift"}
 				if o.whitelist != "" {
 					args = append(args, []string{"--whitelist-file", o.whitelist}...)
 				}

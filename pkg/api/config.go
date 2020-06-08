@@ -197,9 +197,6 @@ func validateImageStreamTagReferenceMap(fieldRoot string, input map[string]Image
 		if k == "root" {
 			validationErrors = append(validationErrors, fmt.Errorf("%s.%s can't be named 'root'", fieldRoot, k))
 		}
-		if len(v.Cluster) == 0 {
-			validationErrors = append(validationErrors, fmt.Errorf("%s[%s]: no cluster defined", fieldRoot, k))
-		}
 		validationErrors = append(validationErrors, validateImageStreamTagReference(fmt.Sprintf("%s.%s", fieldRoot, k), v)...)
 	}
 	return validationErrors

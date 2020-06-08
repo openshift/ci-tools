@@ -435,11 +435,6 @@ func TestValidateBaseImages(t *testing.T) {
 			},
 			expectedValid: false,
 		},
-		{
-			id:            "no cluster error",
-			baseImages:    map[string]ImageStreamTagReference{"test": {Name: "test", Tag: "test"}},
-			expectedValid: false,
-		},
 	} {
 		t.Run(tc.id, func(t *testing.T) {
 			if errs := validateImageStreamTagReferenceMap("base_images", tc.baseImages); len(errs) > 0 && tc.expectedValid {

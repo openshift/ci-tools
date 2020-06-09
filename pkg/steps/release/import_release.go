@@ -391,7 +391,7 @@ func (s *importReleaseStep) Name() string {
 }
 
 func (s *importReleaseStep) Description() string {
-	return "Import a release payload from an external source"
+	return fmt.Sprintf("Import the release payload %q from an external source", s.name)
 }
 
 // ImportReleaseStep imports an existing update payload image

@@ -60,7 +60,13 @@
                 "cpu": "1000m",
                 "memory": "2Gi"
               }
-            }
+            },
+            "env": [
+              {
+                "name": "TEST_PARAMETER",
+                "default": "test parameter default"
+              }
+            ]
           }
         ],
         "test": [
@@ -127,7 +133,13 @@
                 "cpu": "1000m",
                 "memory": "2Gi"
               }
-            }
+            },
+            "env": [
+              {
+                "name": "TEST_PARAMETER",
+                "default": "test parameter default"
+              }
+            ]
           }
         ],
         "test": [

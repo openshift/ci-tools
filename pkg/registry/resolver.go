@@ -166,13 +166,17 @@ func (r *registry) processStep(step *api.TestStep, seen sets.String, stack []sta
 	}
 	seen.Insert(ret.As)
 	var errs []error
-	for i, e := range ret.Environment {
-		if v := resolveVariable(e.Name, stack); v != nil {
-			ret.Environment[i].Default = *v
-		} else if e.Default == "" {
-			errs = append(errs, stackErrorf(stack, "%s: unresolved parameter: %s", ret.As, e.Name))
+	if ret.Environment != nil {
+		env := make([]api.StepParameter, 0, len(ret.Environment))
+		for _, e := range ret.Environment {
+			if v := resolveVariable(e.Name, stack); v != nil {
+				e.Default = *v
+			} else if e.Default == "" {
+				errs = append(errs, stackErrorf(stack, "%s: unresolved parameter: %s", ret.As, e.Name))
+			}
+			env = append(env, e)
 		}
-
+		ret.Environment = env
 	}
 	return ret, errs
 }

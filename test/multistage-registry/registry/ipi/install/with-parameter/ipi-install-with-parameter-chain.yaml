@@ -1,0 +1,7 @@
+chain:
+  as: ipi-install-with-parameter
+  steps:
+  - chain: ipi-install
+  env:
+  - name: TEST_PARAMETER
+    default: test parameter set by chain

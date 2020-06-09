@@ -706,6 +706,9 @@ func TestRegistry(t *testing.T) {
 				Resources: api.ResourceRequirements{
 					Requests: api.ResourceList{"cpu": "1000m", "memory": "2Gi"},
 				},
+				Environment: []api.StepParameter{
+					{Name: "TEST_PARAMETER", Default: "test parameter default"},
+				},
 			},
 			"ipi-install-rbac": {
 				As:       "ipi-install-rbac",
@@ -721,6 +724,7 @@ func TestRegistry(t *testing.T) {
 		deprovisionGatherRef = `ipi-deprovision-must-gather`
 		installRef           = `ipi-install-install`
 		installRBACRef       = `ipi-install-rbac`
+		installChain         = `ipi-install`
 
 		expectedChains = registry.ChainByName{
 			"ipi-install": api.RegistryChain{
@@ -732,6 +736,14 @@ func TestRegistry(t *testing.T) {
 						Reference: &installRef,
 					},
 				},
+			},
+			"ipi-install-with-parameter": api.RegistryChain{
+				As:    "ipi-install-with-parameter",
+				Steps: []api.TestStep{{Chain: &installChain}},
+				Environment: []api.StepParameter{{
+					Name:    "TEST_PARAMETER",
+					Default: "test parameter set by chain",
+				}},
 			},
 			"ipi-deprovision": api.RegistryChain{
 				As: "ipi-deprovision",
@@ -745,7 +757,6 @@ func TestRegistry(t *testing.T) {
 			},
 		}
 
-		installChain     = `ipi-install`
 		deprovisionChain = `ipi-deprovision`
 
 		expectedWorkflows = registry.WorkflowByName{

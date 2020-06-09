@@ -24,7 +24,7 @@ export JOB_SPEC='{"type":"presubmit","job":"pull-ci-openshift-release-master-ci-
 unset BUILD_ID
 
 check() {
-    if grep "level=error" "${ERR}"; then
+    if grep --quiet "level=error" "${ERR}"; then
         echo "ERROR: ci-operator stderr contains error level messages"
         cat "${ERR}"
         return 1

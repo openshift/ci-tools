@@ -38,6 +38,20 @@ tests:
     post:
     - ref: ipi-deprovision-must-gather
     - ref: ipi-deprovision-deprovision
+- as: e2e-default
+  steps:
+    test:
+    - chain: ipi-install
+- as: e2e-parameter
+  steps:
+    test:
+    - chain: ipi-install-with-parameter
+- as: e2e-override-parameter
+  steps:
+    test:
+    - chain: ipi-install-with-parameter
+    env:
+      TEST_PARAMETER: test parameter set by test
 zz_generated_metadata:
   org: openshift
   repo: installer

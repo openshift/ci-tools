@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -24,6 +25,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/load"
 	"github.com/openshift/ci-tools/pkg/registry"
 	"github.com/openshift/ci-tools/pkg/rehearse"
+	"github.com/openshift/ci-tools/pkg/util"
 )
 
 type options struct {
@@ -136,15 +138,26 @@ func rehearseMain() error {
 	org, repo, prNumber := jobSpec.Refs.Org, jobSpec.Refs.Repo, jobSpec.Refs.Pulls[0].Number
 	logger.Infof("Rehearsing Prow jobs for configuration PR %s/%s#%d", org, repo, prNumber)
 
-	var clusterConfig *rest.Config
+	buildClusterConfigs := map[string]*rest.Config{}
 	var prowJobConfig *rest.Config
 	if !o.dryRun {
-		clusterConfig, err = clientconfig.GetConfig()
-		if err != nil {
-			logger.WithError(err).Error("could not load cluster clusterConfig")
-			return fmt.Errorf(misconfigurationOutput)
+		// Only the env var allows to supply multiple kubeconfigs
+		if _, exists := os.LookupEnv("KUBECONFIG"); exists {
+			buildClusterConfigs, _, err = util.LoadKubeConfigs("")
+			if err != nil {
+				logger.WithError(err).Error("failed to read kubeconfigs")
+				return errors.New(misconfigurationOutput)
+			}
 		}
-		prowJobConfig, err = pjKubeconfig(o.prowjobKubeconfig, clusterConfig)
+		if _, hasAPICIKubeconfig := buildClusterConfigs["api.ci"]; !hasAPICIKubeconfig {
+			apiCIConfig, err := clientconfig.GetConfig()
+			if err != nil {
+				logger.WithError(err).Error("could not load cluster clusterConfig")
+				return fmt.Errorf(misconfigurationOutput)
+			}
+			buildClusterConfigs["api.ci"] = apiCIConfig
+		}
+		prowJobConfig, err = pjKubeconfig(o.prowjobKubeconfig, buildClusterConfigs["api.ci"])
 		if err != nil {
 			logger.WithError(err).Error("Could not load prowjob kubeconfig")
 			return fmt.Errorf(misconfigurationOutput)
@@ -248,27 +261,6 @@ func rehearseMain() error {
 		prConfig.Prow.ProwJobNamespace = config.StagingNamespace
 	}
 
-	cmClient, err := rehearse.NewCMClient(clusterConfig, prConfig.Prow.PodNamespace, o.dryRun)
-	if err != nil {
-		logger.WithError(err).Error("could not create a configMap client")
-		return fmt.Errorf(misconfigurationOutput)
-	}
-
-	cmManager := config.NewTemplateCMManager(prConfig.Prow.ProwJobNamespace, cmClient, pluginConfig, prNumber, o.releaseRepoPath, logger)
-	defer func() {
-		if err := cmManager.CleanupCMTemplates(); err != nil {
-			logger.WithError(err).Error("failed to clean up temporary template CM")
-		}
-	}()
-	if err := cmManager.CreateCMTemplates(changedTemplates); err != nil {
-		logger.WithError(err).Error("couldn't create template configMap")
-		return fmt.Errorf(failedSetupOutput)
-	}
-	if err := cmManager.CreateClusterProfiles(changedClusterProfiles); err != nil {
-		logger.WithError(err).Error("couldn't create cluster profile ConfigMaps")
-		return fmt.Errorf(failedSetupOutput)
-	}
-
 	pjclient, err := rehearse.NewProwJobClient(prowJobConfig, o.dryRun)
 	if err != nil {
 		logger.WithError(err).Error("could not create a ProwJob client")
@@ -339,6 +331,24 @@ func rehearseMain() error {
 		return fmt.Errorf(jobValidationOutput)
 	}
 
+	cleanup, err := setupDependencies(
+		presubmitsToRehearse,
+		prNumber,
+		buildClusterConfigs,
+		logger,
+		prConfig.Prow.ProwJobNamespace,
+		prConfig.Prow.PodNamespace,
+		pluginConfig,
+		o.releaseRepoPath,
+		o.dryRun,
+		changedTemplates,
+		changedClusterProfiles)
+	if err != nil {
+		logger.WithError(err).Error("Failed to set up dependencies")
+		return errors.New(failedSetupOutput)
+	}
+	defer cleanup()
+
 	executor := rehearse.NewExecutor(presubmitsToRehearse, prNumber, o.releaseRepoPath, jobSpec.Refs, o.dryRun, loggers, pjclient, prConfig.Prow.ProwJobNamespace)
 	success, err := executor.ExecuteJobs()
 	if err != nil {
@@ -368,4 +378,68 @@ func pjKubeconfig(path string, defaultKubeconfig *rest.Config) (*rest.Config, er
 		&clientcmd.ClientConfigLoadingRules{ExplicitPath: path},
 		&clientcmd.ConfigOverrides{},
 	).ClientConfig()
+}
+
+type cleanup func()
+type cleanups []cleanup
+
+func (c cleanups) cleanup() {
+	for _, cleanup := range c {
+		cleanup()
+	}
+}
+
+func setupDependencies(
+	jobs []*prowconfig.Presubmit,
+	prNumber int,
+	configs map[string]*rest.Config,
+	log *logrus.Entry,
+	prowJobNamespace string,
+	podNamespace string,
+	pluginConfig prowplugins.ConfigUpdater,
+	releaseRepoPath string,
+	dryRun bool,
+	changedTemplates []config.ConfigMapSource,
+	changedClusterProfiles []config.ConfigMapSource,
+) (_ cleanup, retErr error) {
+	buildClusters := sets.String{}
+	for _, job := range jobs {
+		if _, ok := configs[job.Cluster]; !ok && !dryRun {
+			return nil, fmt.Errorf("no config for buildcluster %s provided", job.Cluster)
+		}
+		buildClusters.Insert(job.Cluster)
+	}
+
+	var cleanups cleanups
+	defer func() {
+		if retErr != nil {
+			cleanups.cleanup()
+		}
+	}()
+
+	for _, buildCluster := range buildClusters.UnsortedList() {
+		log := log.WithField("buildCluster", buildCluster)
+		cmClient, err := rehearse.NewCMClient(configs[buildCluster], podNamespace, dryRun)
+		if err != nil {
+			log.WithError(err).Error("could not create a configMap client")
+			return nil, fmt.Errorf(misconfigurationOutput)
+		}
+
+		cmManager := config.NewTemplateCMManager(prowJobNamespace, cmClient, pluginConfig, prNumber, releaseRepoPath, log)
+		cleanups = append(cleanups, func() {
+			if err := cmManager.CleanupCMTemplates(); err != nil {
+				log.WithError(err).Error("failed to clean up temporary template CM")
+			}
+		})
+		if err := cmManager.CreateCMTemplates(changedTemplates); err != nil {
+			log.WithError(err).Error("couldn't create template configMap")
+			return nil, fmt.Errorf(failedSetupOutput)
+		}
+		if err := cmManager.CreateClusterProfiles(changedClusterProfiles); err != nil {
+			log.WithError(err).Error("couldn't create cluster profile ConfigMaps")
+			return nil, fmt.Errorf(failedSetupOutput)
+		}
+	}
+
+	return cleanups.cleanup, nil
 }

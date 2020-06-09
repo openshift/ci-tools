@@ -274,7 +274,7 @@ func (s *assembleReleaseStep) Name() string {
 }
 
 func (s *assembleReleaseStep) Description() string {
-	return "Create the release image containing all images built by this job"
+	return fmt.Sprintf("Create the release image %q containing all images built by this job", s.name)
 }
 
 // AssembleReleaseStep builds a new update payload image based on the cluster version operator

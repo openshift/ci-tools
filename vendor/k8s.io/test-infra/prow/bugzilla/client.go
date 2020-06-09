@@ -74,6 +74,7 @@ type Client interface {
 	// https://bugzilla.redhat.com/docs/en/html/integrating/api/Bugzilla/Extension/ExternalBugs/WebService.html#remove-external-bug
 	RemovePullRequestAsExternalBug(id int, org, repo string, num int) (bool, error)
 <<<<<<< HEAD
+<<<<<<< HEAD
 	// GetAllClones returns all the clones of the bug including itself
 	// Differs from GetClones as GetClones only gets the child clones which are one level lower
 	GetAllClones(bug *Bug) ([]*Bug, error)
@@ -83,6 +84,8 @@ type Client interface {
 	GetImmediateParents(bug *Bug) ([]*Bug, error)
 	GetAllClones(bug *Bug) ([]*Bug, error)
 >>>>>>> add0b22d... add functionality for getting multi level clones
+=======
+>>>>>>> 2e9833ea... Revert "add functionality for getting multi level clones"
 }
 
 func NewClient(getAPIKey func() []byte, endpoint string) Client {
@@ -153,6 +156,7 @@ func (c *client) GetClones(bug *Bug) ([]*Bug, error) {
 	return getClones(c, bug)
 }
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 // Gets children clones recursively using a mechanism similar to bfs
 func getRecursiveClones(c Client, root *Bug) ([]*Bug, error) {
@@ -320,6 +324,8 @@ func (c *client) GetAllClones(bug *Bug) ([]*Bug, error) {
 >>>>>>> add0b22d... add functionality for getting multi level clones
 }
 
+=======
+>>>>>>> 2e9833ea... Revert "add functionality for getting multi level clones"
 // GetSubComponentsOnBug retrieves a the list of SubComponents of the bug.
 // SubComponents are a Red Hat bugzilla specific extra field.
 func (c *client) GetSubComponentsOnBug(id int) (map[string][]string, error) {

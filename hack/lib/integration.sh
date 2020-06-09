@@ -105,7 +105,7 @@ readonly -f os::integration::configresolver::wait_for_registry_update
 # os::integration::configresolver::check_log searches for errors in the log.
 function os::integration::configresolver::check_log() {
     if grep -qE "level=(error|fatal)" "${LOG_DIR}/configresolver.log"; then
-        grep "level=(error|fatal)" "${LOG_DIR}/configresolver.log"
+        grep -E "level=(error|fatal)" "${LOG_DIR}/configresolver.log"
         os::log::fatal "Detected errors in the ci-operator-configresolver log!"
     fi
 }

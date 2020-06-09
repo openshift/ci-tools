@@ -765,6 +765,7 @@ func NewExecutor(presubmits []*prowconfig.Presubmit, prNumber int, prRepo string
 		refs:       refs,
 		loggers:    loggers,
 		pjclient:   pjclient,
+		namespace:  namespace,
 		pollFunc:   wait.Poll,
 	}
 }

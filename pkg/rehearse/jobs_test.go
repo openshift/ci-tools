@@ -1,6 +1,8 @@
 package rehearse
 
 import (
+	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -10,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/getlantern/deepcopy"
 	"github.com/ghodss/yaml"
@@ -21,17 +24,16 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 
+	"k8s.io/apimachinery/pkg/util/wait"
 	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
-	"k8s.io/test-infra/prow/client/clientset/versioned/fake"
 	prowconfig "k8s.io/test-infra/prow/config"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/apimachinery/pkg/watch"
-
-	clientgoTesting "k8s.io/client-go/testing"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
@@ -479,21 +481,10 @@ func makeTestData() (int, string, string, *pjapi.Refs) {
 	return testPrNumber, testNamespace, testReleasePath, testRefs
 }
 
-func makeSuccessfulFinishReactor(watcher watch.Interface, jobs map[string][]prowconfig.Presubmit) func(clientgoTesting.Action) (bool, watch.Interface, error) {
-	return func(clientgoTesting.Action) (bool, watch.Interface, error) {
-		watcher.Stop()
-		n := 0
-		for _, jobs := range jobs {
-			n += len(jobs)
-		}
-		ret := watch.NewFakeWithChanSize(n, true)
-		for event := range watcher.ResultChan() {
-			pj := event.Object.(*pjapi.ProwJob).DeepCopy()
-			pj.Status.State = pjapi.SuccessState
-			ret.Modify(pj)
-		}
-		return true, ret, nil
-	}
+func setSuccessCreateRactor(in runtime.Object) error {
+	pj := in.(*pjapi.ProwJob)
+	pj.Status.State = pjapi.SuccessState
+	return nil
 }
 
 func TestExecuteJobsErrors(t *testing.T) {
@@ -528,21 +519,17 @@ func TestExecuteJobsErrors(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
 			testLoggers := Loggers{logrus.New(), logrus.New()}
-			fakecs := fake.NewSimpleClientset()
-			fakeclient := fakecs.ProwV1().ProwJobs(testNamespace)
-			watcher, err := fakeclient.Watch(metav1.ListOptions{})
-			if err != nil {
-				t.Fatalf("Failed to setup watch: %v", err)
-			}
-			fakecs.Fake.PrependWatchReactor("prowjobs", makeSuccessfulFinishReactor(watcher, tc.jobs))
-			fakecs.Fake.PrependReactor("create", "prowjobs", func(action clientgoTesting.Action) (bool, runtime.Object, error) {
-				createAction := action.(clientgoTesting.CreateAction)
-				pj := createAction.GetObject().(*pjapi.ProwJob)
-				if tc.failToCreate.Has(pj.Spec.Job) {
-					return true, nil, fmt.Errorf("fail")
-				}
-				return false, nil, nil
-			})
+			client := newTC()
+			client.createReactors = append(client.createReactors,
+				func(in runtime.Object) error {
+					pj := in.(*pjapi.ProwJob)
+					if tc.failToCreate.Has(pj.Spec.Job) {
+						return errors.New("fail")
+					}
+					return nil
+				},
+				setSuccessCreateRactor,
+			)
 
 			jc := NewJobConfigurer(testCiopConfigs, resolver, testPrNumber, testLoggers, nil, nil, makeBaseRefs())
 
@@ -550,7 +537,8 @@ func TestExecuteJobsErrors(t *testing.T) {
 			if err != nil {
 				t.Errorf("Expected to get no error, but got one: %v", err)
 			}
-			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, true, testLoggers, fakeclient)
+			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, true, testLoggers, client, testNamespace)
+			executor.pollFunc = threetimesTryingPoller
 			_, err = executor.ExecuteJobs()
 
 			if err == nil {
@@ -601,33 +589,22 @@ func TestExecuteJobsUnsuccessful(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
 			testLoggers := Loggers{logrus.New(), logrus.New()}
-			fakecs := fake.NewSimpleClientset()
-			fakeclient := fakecs.ProwV1().ProwJobs(testNamespace)
-			watcher, err := fakeclient.Watch(metav1.ListOptions{})
-			if err != nil {
-				t.Fatalf("Failed to setup watch: %v", err)
-			}
-			fakecs.Fake.PrependWatchReactor("prowjobs", func(clientgoTesting.Action) (bool, watch.Interface, error) {
-				watcher.Stop()
-				n := 0
-				for _, jobs := range tc.jobs {
-					n += len(jobs)
-				}
-				ret := watch.NewFakeWithChanSize(n, true)
-				for event := range watcher.ResultChan() {
-					pj := event.Object.(*pjapi.ProwJob).DeepCopy()
+			client := newTC()
+			client.createReactors = append(client.createReactors,
+				func(in runtime.Object) error {
+					pj := in.(*pjapi.ProwJob)
 					pj.Status.State = tc.results[pj.Spec.Job]
-					ret.Modify(pj)
-				}
-				return true, ret, nil
-			})
+					return nil
+				},
+			)
 
 			jc := NewJobConfigurer(testCiopConfigs, resolver, testPrNumber, testLoggers, nil, nil, makeBaseRefs())
 			presubmits, err := jc.ConfigurePresubmitRehearsals(tc.jobs)
 			if err != nil {
 				t.Errorf("Expected to get no error, but got one: %v", err)
 			}
-			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, false, testLoggers, fakeclient)
+			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, false, testLoggers, client, testNamespace)
+			executor.pollFunc = threetimesTryingPoller
 			success, _ := executor.ExecuteJobs()
 
 			if success {
@@ -714,20 +691,15 @@ func TestExecuteJobsPositive(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
 			testLoggers := Loggers{logrus.New(), logrus.New()}
-			fakecs := fake.NewSimpleClientset()
-			fakeclient := fakecs.ProwV1().ProwJobs(testNamespace)
-			watcher, err := fakeclient.Watch(metav1.ListOptions{})
-			if err != nil {
-				t.Fatalf("Failed to setup watch: %v", err)
-			}
-			fakecs.Fake.PrependWatchReactor("prowjobs", makeSuccessfulFinishReactor(watcher, tc.jobs))
+			client := newTC()
+			client.createReactors = append(client.createReactors, setSuccessCreateRactor)
 
 			jc := NewJobConfigurer(testCiopConfigs, resolver, testPrNumber, testLoggers, nil, nil, makeBaseRefs())
 			presubmits, err := jc.ConfigurePresubmitRehearsals(tc.jobs)
 			if err != nil {
 				t.Errorf("Expected to get no error, but got one: %v", err)
 			}
-			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, true, testLoggers, fakeclient)
+			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, true, testLoggers, client, testNamespace)
 			success, err := executor.ExecuteJobs()
 
 			if err != nil {
@@ -739,10 +711,9 @@ func TestExecuteJobsPositive(t *testing.T) {
 				t.Errorf("Expected ExecuteJobs() to return success=true, got false")
 			}
 
-			createdJobs, err := fakeclient.List(metav1.ListOptions{})
-			if err != nil {
-				t.Errorf("Failed to get expected ProwJobs from fake client")
-				return
+			createdJobs := &pjapi.ProwJobList{}
+			if err := client.List(context.Background(), createdJobs); err != nil {
+				t.Fatalf("failed to list prowjobs from client: %v", err)
 			}
 
 			var createdJobSpecs []pjapi.ProwJobSpec
@@ -794,7 +765,7 @@ func TestWaitForJobs(t *testing.T) {
 	testCases := []struct {
 		id      string
 		pjs     sets.String
-		events  []*pjapi.ProwJob
+		events  []runtime.Object
 		success bool
 		err     error
 	}{{
@@ -804,11 +775,11 @@ func TestWaitForJobs(t *testing.T) {
 		id:      "one successful job",
 		success: true,
 		pjs:     sets.NewString("success0"),
-		events:  []*pjapi.ProwJob{&pjSuccess0},
+		events:  []runtime.Object{&pjSuccess0},
 	}, {
 		id:  "mixed states",
 		pjs: sets.NewString("failure", "success0", "aborted", "error"),
-		events: []*pjapi.ProwJob{
+		events: []runtime.Object{
 			&pjFailure, &pjPending, &pjSuccess0,
 			&pjTriggered, &pjAborted, &pjError,
 		},
@@ -816,42 +787,26 @@ func TestWaitForJobs(t *testing.T) {
 		id:      "ignored states",
 		success: true,
 		pjs:     sets.NewString("success0"),
-		events:  []*pjapi.ProwJob{&pjPending, &pjSuccess0, &pjTriggered},
-	}, {
-		id:      "repeated events",
-		success: true,
-		pjs:     sets.NewString("success0", "success1"),
-		events:  []*pjapi.ProwJob{&pjSuccess0, &pjSuccess0, &pjSuccess1},
-	}, {
-		id:  "repeated events with failure",
-		pjs: sets.NewString("success0", "success1", "failure"),
-		events: []*pjapi.ProwJob{
-			&pjSuccess0, &pjSuccess0,
-			&pjSuccess1, &pjFailure,
-		},
+		events:  []runtime.Object{&pjPending, &pjSuccess0, &pjTriggered},
 	}, {
 		id:      "not watched",
 		success: true,
 		pjs:     sets.NewString("success1"),
-		events:  []*pjapi.ProwJob{&pjSuccess0, &pjFailure, &pjSuccess1},
+		events:  []runtime.Object{&pjSuccess0, &pjFailure, &pjSuccess1},
 	}, {
 		id:     "not watched failure",
 		pjs:    sets.NewString("failure"),
-		events: []*pjapi.ProwJob{&pjSuccess0, &pjFailure},
+		events: []runtime.Object{&pjSuccess0, &pjFailure},
 	}}
-	for _, tc := range testCases {
+	for idx := range testCases {
+		tc := testCases[idx]
 		t.Run(tc.id, func(t *testing.T) {
-			w := watch.NewFakeWithChanSize(len(tc.events), true)
-			for _, j := range tc.events {
-				w.Modify(j)
-			}
-			cs := fake.NewSimpleClientset()
-			cs.Fake.PrependWatchReactor("prowjobs", func(clientgoTesting.Action) (bool, watch.Interface, error) {
-				return true, w, nil
-			})
+			t.Parallel()
+			client := newTC(tc.events...)
 
-			executor := NewExecutor(nil, 0, "", &pjapi.Refs{}, true, loggers, cs.ProwV1().ProwJobs("test"))
-			success, err := executor.waitForJobs(tc.pjs, "")
+			executor := NewExecutor(nil, 0, "", &pjapi.Refs{}, true, loggers, client, "")
+			executor.pollFunc = threetimesTryingPoller
+			success, err := executor.waitForJobs(tc.pjs, &ctrlruntimeclient.ListOptions{})
 			if err != tc.err {
 				t.Fatalf("want `err` == %v, got %v", tc.err, err)
 			}
@@ -863,26 +818,29 @@ func TestWaitForJobs(t *testing.T) {
 }
 
 func TestWaitForJobsRetries(t *testing.T) {
-	empty := watch.NewEmptyWatch()
-	mod := watch.NewFakeWithChanSize(1, true)
-	mod.Modify(&pjapi.ProwJob{
-		ObjectMeta: metav1.ObjectMeta{Name: "j"},
-		Status:     pjapi.ProwJobStatus{State: pjapi.SuccessState},
-	})
-	ws := []watch.Interface{empty, mod}
-	cs := fake.NewSimpleClientset()
-	cs.Fake.PrependWatchReactor("prowjobs", func(clientgoTesting.Action) (_ bool, ret watch.Interface, _ error) {
-		ret, ws = ws[0], ws[1:]
-		return true, ret, nil
+	client := newTC()
+	var try int
+	client.postListReactors = append(client.postListReactors, func(in runtime.Object) error {
+		if try < 1 {
+			try++
+		} else {
+			pjList := in.(*pjapi.ProwJobList)
+			pjList.Items = append(pjList.Items, pjapi.ProwJob{
+				ObjectMeta: metav1.ObjectMeta{Name: "j"},
+				Status:     pjapi.ProwJobStatus{State: pjapi.SuccessState},
+			})
+		}
+		return nil
 	})
 
-	executor := NewExecutor(nil, 0, "", &pjapi.Refs{}, true, Loggers{logrus.New(), logrus.New()}, cs.ProwV1().ProwJobs("test"))
-	success, err := executor.waitForJobs(sets.String{"j": {}}, "")
+	executor := NewExecutor(nil, 0, "", &pjapi.Refs{}, true, Loggers{logrus.New(), logrus.New()}, client, "")
+	executor.pollFunc = threetimesTryingPoller
+	success, err := executor.waitForJobs(sets.String{"j": {}}, &ctrlruntimeclient.ListOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !success {
-		t.Fail()
+		t.Error("expected success, didn't get it")
 	}
 }
 
@@ -890,21 +848,19 @@ func TestWaitForJobsLog(t *testing.T) {
 	jobLogger, jobHook := logrustest.NewNullLogger()
 	dbgLogger, dbgHook := logrustest.NewNullLogger()
 	dbgLogger.SetLevel(logrus.DebugLevel)
-	w := watch.NewFakeWithChanSize(2, true)
-	w.Modify(&pjapi.ProwJob{
-		ObjectMeta: metav1.ObjectMeta{Name: "success"},
-		Status:     pjapi.ProwJobStatus{State: pjapi.SuccessState}})
-	w.Modify(&pjapi.ProwJob{
-		ObjectMeta: metav1.ObjectMeta{Name: "failure"},
-		Status:     pjapi.ProwJobStatus{State: pjapi.FailureState}})
-	cs := fake.NewSimpleClientset()
-	cs.Fake.PrependWatchReactor("prowjobs", func(clientgoTesting.Action) (bool, watch.Interface, error) {
-		return true, w, nil
-	})
+	client := fakectrlruntimeclient.NewFakeClient(
+		&pjapi.ProwJob{
+			ObjectMeta: metav1.ObjectMeta{Name: "success"},
+			Status:     pjapi.ProwJobStatus{State: pjapi.SuccessState}},
+		&pjapi.ProwJob{
+			ObjectMeta: metav1.ObjectMeta{Name: "failure"},
+			Status:     pjapi.ProwJobStatus{State: pjapi.FailureState}},
+	)
 	loggers := Loggers{jobLogger, dbgLogger}
 
-	executor := NewExecutor(nil, 0, "", &pjapi.Refs{}, true, loggers, cs.ProwV1().ProwJobs("test"))
-	_, err := executor.waitForJobs(sets.NewString("success", "failure"), "")
+	executor := NewExecutor(nil, 0, "", &pjapi.Refs{}, true, loggers, client, "")
+	executor.pollFunc = threetimesTryingPoller
+	_, err := executor.waitForJobs(sets.NewString("success", "failure"), &ctrlruntimeclient.ListOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1322,4 +1278,49 @@ func TestVariantFromLabels(t *testing.T) {
 			t.Errorf("%s: variantFromLabels returned %s, expected %s", testCase.name, variant, testCase.expected)
 		}
 	}
+}
+
+func newTC(initObjs ...runtime.Object) *tc {
+	return &tc{Client: fakectrlruntimeclient.NewFakeClient(initObjs...)}
+}
+
+type tc struct {
+	ctrlruntimeclient.Client
+	createReactors   []func(runtime.Object) error
+	postListReactors []func(runtime.Object) error
+}
+
+func (tc *tc) Create(ctx context.Context, obj runtime.Object, opts ...ctrlruntimeclient.CreateOption) error {
+	for _, createReactor := range tc.createReactors {
+		if err := createReactor(obj); err != nil {
+			return err
+		}
+	}
+
+	return tc.Client.Create(ctx, obj, opts...)
+}
+
+func (tc *tc) List(ctx context.Context, obj runtime.Object, opts ...ctrlruntimeclient.ListOption) error {
+	if err := tc.Client.List(ctx, obj, opts...); err != nil {
+		return err
+	}
+	for _, listReactor := range tc.postListReactors {
+		if err := listReactor(obj); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func threetimesTryingPoller(_, _ time.Duration, cf wait.ConditionFunc) error {
+	for i := 0; i < 3; i++ {
+		success, err := cf()
+		if err != nil {
+			return err
+		}
+		if success {
+			return nil
+		}
+	}
+	return wait.ErrWaitTimeout
 }

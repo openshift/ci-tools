@@ -47,6 +47,9 @@ make_testing_repository() {
 compare_to_expected() {
   local expected="${TEST_ROOT}/expected.yaml"
   local rehearsed="$1"
+  if [[ "${UPDATE:-}" = true ]]; then
+    cat $rehearsed > $expected
+  fi
   diff -u "$expected" "$rehearsed"  \
     --ignore-matching-lines 'startTime' \
     --ignore-matching-lines 'name: \w\{8\}\(-\w\{4\}\)\{3\}-\w\{12\}' \

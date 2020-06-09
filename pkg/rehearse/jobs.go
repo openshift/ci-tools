@@ -1,25 +1,27 @@
 package rehearse
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"reflect"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/getlantern/deepcopy"
 	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
 
-	v1 "k8s.io/api/core/v1"
+	"k8s.io/api/core/v1"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/selection"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	"k8s.io/client-go/kubernetes/fake"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -27,11 +29,10 @@ import (
 	coretesting "k8s.io/client-go/testing"
 
 	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
-	pjclientset "k8s.io/test-infra/prow/client/clientset/versioned"
-	pjclientsetfake "k8s.io/test-infra/prow/client/clientset/versioned/fake"
-	pj "k8s.io/test-infra/prow/client/clientset/versioned/typed/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/pjutil"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
@@ -56,16 +57,11 @@ type Loggers struct {
 }
 
 // NewProwJobClient creates a ProwJob client with a dry run capability
-func NewProwJobClient(clusterConfig *rest.Config, namespace string, dry bool) (pj.ProwJobInterface, error) {
+func NewProwJobClient(clusterConfig *rest.Config, dry bool) (ctrlruntimeclient.Client, error) {
 	if dry {
-		pjcset := pjclientsetfake.NewSimpleClientset()
-		return pjcset.ProwV1().ProwJobs(namespace), nil
+		return fakectrlruntimeclient.NewFakeClient(), nil
 	}
-	pjcset, err := pjclientset.NewForConfig(clusterConfig)
-	if err != nil {
-		return nil, err
-	}
-	return pjcset.ProwV1().ProwJobs(namespace), nil
+	return ctrlruntimeclient.New(clusterConfig, ctrlruntimeclient.Options{})
 }
 
 // NewCMClient creates a configMap client with a dry run capability
@@ -752,12 +748,15 @@ type Executor struct {
 	prRepo     string
 	refs       *pjapi.Refs
 	loggers    Loggers
-	pjclient   pj.ProwJobInterface
+	pjclient   ctrlruntimeclient.Client
+	namespace  string
+	// Allow faking this in tests
+	pollFunc func(interval, timeout time.Duration, condition wait.ConditionFunc) error
 }
 
 // NewExecutor creates an executor. It also confgures the rehearsal jobs as a list of presubmits.
 func NewExecutor(presubmits []*prowconfig.Presubmit, prNumber int, prRepo string, refs *pjapi.Refs,
-	dryRun bool, loggers Loggers, pjclient pj.ProwJobInterface) *Executor {
+	dryRun bool, loggers Loggers, pjclient ctrlruntimeclient.Client, namespace string) *Executor {
 	return &Executor{
 		dryRun:     dryRun,
 		presubmits: presubmits,
@@ -766,6 +765,7 @@ func NewExecutor(presubmits []*prowconfig.Presubmit, prNumber int, prRepo string
 		refs:       refs,
 		loggers:    loggers,
 		pjclient:   pjclient,
+		pollFunc:   wait.Poll,
 	}
 }
 
@@ -800,11 +800,7 @@ func (e *Executor) ExecuteJobs() (bool, error) {
 		return true, fmt.Errorf("failed to submit all rehearsal jobs")
 	}
 
-	req, err := labels.NewRequirement(rehearseLabel, selection.Equals, []string{strconv.Itoa(e.prNumber)})
-	if err != nil {
-		return false, fmt.Errorf("failed to create label selector: %v", err)
-	}
-	selector := labels.NewSelector().Add(*req).String()
+	selector := ctrlruntimeclient.MatchingLabels{rehearseLabel: strconv.Itoa(e.prNumber)}
 
 	names := sets.NewString()
 	for _, job := range pjs {
@@ -817,29 +813,34 @@ func (e *Executor) ExecuteJobs() (bool, error) {
 	return waitSuccess, err
 }
 
-func (e *Executor) waitForJobs(jobs sets.String, selector string) (bool, error) {
+func (e *Executor) waitForJobs(jobs sets.String, selector ctrlruntimeclient.ListOption) (bool, error) {
 	if len(jobs) == 0 {
 		return true, nil
 	}
 	success := true
-	for {
-		w, err := e.pjclient.Watch(metav1.ListOptions{LabelSelector: selector})
-		if err != nil {
-			return false, fmt.Errorf("failed to create watch for ProwJobs: %v", err)
-		}
-		defer w.Stop()
-		for event := range w.ResultChan() {
-			prowJob, ok := event.Object.(*pjapi.ProwJob)
-			if !ok {
-				return false, fmt.Errorf("received a %T from watch", event.Object)
+	var listErrors []error
+	if err := e.pollFunc(10*time.Second, 4*time.Hour, func() (bool, error) {
+		result := &pjapi.ProwJobList{}
+		// Don't bail out just because one LIST failed
+		if err := e.pjclient.List(context.Background(), result, selector, ctrlruntimeclient.InNamespace(e.namespace)); err != nil {
+			if len(listErrors) > 2 {
+				return false, utilerrors.NewAggregate(append(listErrors, err, errors.New("encountered three subsequent errors trying to list")))
 			}
-			fields := pjutil.ProwJobFields(prowJob)
-			fields["state"] = prowJob.Status.State
+			listErrors = append(listErrors, err)
+			return false, nil
+		}
+		// Reset the errors after a successful list
+		listErrors = nil
+
+		for _, pj := range result.Items {
+			fields := pjutil.ProwJobFields(&pj)
+			fields["state"] = pj.Status.State
 			e.loggers.Debug.WithFields(fields).Debug("Processing ProwJob")
-			if !jobs.Has(prowJob.Name) {
+			if !jobs.Has(pj.Name) {
 				continue
 			}
-			switch prowJob.Status.State {
+
+			switch pj.Status.State {
 			case pjapi.FailureState, pjapi.AbortedState, pjapi.ErrorState:
 				e.loggers.Job.WithFields(fields).Error("Job failed")
 				success = false
@@ -848,12 +849,21 @@ func (e *Executor) waitForJobs(jobs sets.String, selector string) (bool, error) 
 			default:
 				continue
 			}
-			jobs.Delete(prowJob.Name)
+			jobs.Delete(pj.Name)
 			if jobs.Len() == 0 {
 				return success, nil
 			}
 		}
+
+		return false, nil
+	}); err != nil {
+		if err == wait.ErrWaitTimeout {
+			return false, nil
+		}
+		return false, fmt.Errorf("failed waiting for prowjobs to finish: %w", err)
 	}
+
+	return success, nil
 }
 
 func removeConfigResolverFlags(args []string) ([]string, api.Metadata) {
@@ -930,6 +940,7 @@ func (e *Executor) submitRehearsals() ([]*pjapi.ProwJob, error) {
 
 func (e *Executor) submitPresubmit(job *prowconfig.Presubmit) (*pjapi.ProwJob, error) {
 	prowJob := pjutil.NewProwJob(pjutil.PresubmitSpec(*job, *e.refs), job.Labels, job.Annotations)
+	prowJob.Namespace = e.namespace
 	e.loggers.Job.WithFields(pjutil.ProwJobFields(&prowJob)).Info("Submitting a new prowjob.")
-	return e.pjclient.Create(&prowJob)
+	return &prowJob, e.pjclient.Create(context.Background(), &prowJob)
 }

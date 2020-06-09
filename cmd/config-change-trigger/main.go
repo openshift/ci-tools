@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -18,10 +19,11 @@ import (
 	prowgithub "k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/pjutil"
 	pjdwapi "k8s.io/test-infra/prow/pod-utils/downwardapi"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/diffs"
-	"github.com/openshift/ci-tools/pkg/rehearse"
 )
 
 type options struct {
@@ -114,7 +116,12 @@ func main() {
 		namespace = config.StagingNamespace
 	}
 
-	pjclient, err := rehearse.NewProwJobClient(clusterConfig, namespace, o.dryRun)
+	var pjclient ctrlruntimeclient.Client
+	if o.dryRun {
+		pjclient = fakectrlruntimeclient.NewFakeClient()
+	} else {
+		pjclient, err = ctrlruntimeclient.New(clusterConfig, ctrlruntimeclient.Options{})
+	}
 	if err != nil {
 		logger.WithError(err).Fatal("could not create a ProwJob client")
 	}
@@ -125,8 +132,9 @@ func main() {
 		jobs = jobs[:o.limit]
 	}
 	for _, job := range jobs {
+		job.Namespace = namespace
 		logger = logger.WithFields(pjutil.ProwJobFields(&job))
-		if _, err := pjclient.Create(&job); err != nil {
+		if err := pjclient.Create(context.Background(), &job); err != nil {
 			errs = append(errs, err)
 			logger.WithError(err).Warn("failed to start ProwJob")
 			continue

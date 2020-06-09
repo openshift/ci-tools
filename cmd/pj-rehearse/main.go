@@ -269,7 +269,7 @@ func rehearseMain() error {
 		return fmt.Errorf(failedSetupOutput)
 	}
 
-	pjclient, err := rehearse.NewProwJobClient(prowJobConfig, prConfig.Prow.ProwJobNamespace, o.dryRun)
+	pjclient, err := rehearse.NewProwJobClient(prowJobConfig, o.dryRun)
 	if err != nil {
 		logger.WithError(err).Error("could not create a ProwJob client")
 		return fmt.Errorf(failedSetupOutput)
@@ -339,7 +339,7 @@ func rehearseMain() error {
 		return fmt.Errorf(jobValidationOutput)
 	}
 
-	executor := rehearse.NewExecutor(presubmitsToRehearse, prNumber, o.releaseRepoPath, jobSpec.Refs, o.dryRun, loggers, pjclient)
+	executor := rehearse.NewExecutor(presubmitsToRehearse, prNumber, o.releaseRepoPath, jobSpec.Refs, o.dryRun, loggers, pjclient, prConfig.Prow.ProwJobNamespace)
 	success, err := executor.ExecuteJobs()
 	if err != nil {
 		logger.WithError(err).Error("Failed to rehearse jobs")

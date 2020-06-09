@@ -46,13 +46,11 @@ func TestFromCIOperatorConfigToProwYaml(t *testing.T) {
 			branch:    "branch",
 			configYAML: []byte(`base_images:
   base:
-    cluster: https://api.ci.openshift.org
     name: origin-v3.11
     namespace: openshift
     tag: base
 build_root:
   image_stream_tag:
-    cluster: https://api.ci.openshift.org
     name: release
     namespace: openshift
     tag: golang-1.10
@@ -66,7 +64,6 @@ resources:
     requests:
       cpu: 10Mi
 tag_specification:
-  cluster: https://api.ci.openshift.org
   name: origin-v3.11
   namespace: openshift
   tag: ''
@@ -88,13 +85,11 @@ tests:
 			variant:   "rhel",
 			configYAML: []byte(`base_images:
   base:
-    cluster: https://api.ci.openshift.org
     name: origin-v3.11
     namespace: openshift
     tag: base
 build_root:
   image_stream_tag:
-    cluster: https://api.ci.openshift.org
     name: release
     namespace: openshift
     tag: golang-1.10
@@ -108,7 +103,6 @@ resources:
     requests:
       cpu: 10Mi
 tag_specification:
-  cluster: https://api.ci.openshift.org
   name: origin-v3.11
   namespace: openshift
   tag: ''
@@ -153,7 +147,6 @@ tests:
 			branch:    "branch",
 			configYAML: []byte(`base_images:
   base:
-    cluster: https://api.ci.openshift.org
     name: origin-v3.11
     namespace: openshift
     tag: base
@@ -167,7 +160,6 @@ resources:
     requests:
       cpu: 10Mi
 tag_specification:
-  cluster: https://api.ci.openshift.org
   name: origin-v3.11
   namespace: openshift
   tag: ''
@@ -176,7 +168,6 @@ promotion:
   namespace: ci
 build_root:
   image_stream_tag:
-    cluster: https://api.ci.openshift.org
     namespace: openshift
     name: release
     tag: golang-1.10

@@ -25,10 +25,9 @@ func preparePodStep(t *testing.T, namespace string) (*podStep, stepExpectation, 
 	config := PodStepConfiguration{
 		As: podName,
 		From: api.ImageStreamTagReference{
-			Cluster: "kluster",
-			Name:    "somename",
-			Tag:     "sometag",
-			As:      "FromName",
+			Name: "somename",
+			Tag:  "sometag",
+			As:   "FromName",
 		},
 		Commands:           "launch-tests",
 		ArtifactDir:        artifactDir,

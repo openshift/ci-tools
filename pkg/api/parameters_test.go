@@ -9,7 +9,6 @@ import (
 
 func someStepLink(as string) StepLink {
 	return ExternalImageLink(ImageStreamTagReference{
-		Cluster:   "cluster.com",
 		Namespace: "namespace",
 		Name:      "name",
 		Tag:       "tag",

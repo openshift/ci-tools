@@ -6,7 +6,6 @@
   },
   "base_images": {
     "os": {
-      "cluster": "https://api.ci.openshift.org",
       "namespace": "openshift",
       "name": "centos",
       "tag": "7"

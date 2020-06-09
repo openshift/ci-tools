@@ -46,7 +46,6 @@ There are two ways to specify the base image:
 ```yaml
 build_root:
   image_stream_tag:
-    cluster: https://api.ci.openshift.org
     namespace: openshift
     name: release
     tag: golang-1.10

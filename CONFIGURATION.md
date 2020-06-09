@@ -99,7 +99,6 @@ use the following specification:
 
 ```yaml
 tag_specification:
-  cluster: https://api.ci.openshift.org
   name: origin-v3.11
   namespace: openshift
   tag_overrides: {}
@@ -137,7 +136,6 @@ streams and one tag are used to assemble a release.
 ```yaml
 base_images:
   os:
-    cluster: https://api.ci.openshift.org
     name: centos
     namespace: openshift
     tag: '7'
@@ -165,7 +163,6 @@ Commonly, the `openshift/release` image is used:
 ```yaml
 build_root:
   image_stream_tag:
-    cluster: https://api.ci.openshift.org
     name: release
     namespace: openshift
     tag: golang-1.10

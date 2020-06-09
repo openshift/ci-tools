@@ -267,7 +267,6 @@ type executionExpectation struct {
 
 func someStepLink(as string) api.StepLink {
 	return api.ExternalImageLink(api.ImageStreamTagReference{
-		Cluster:   "cluster.com",
 		Namespace: "namespace",
 		Name:      "name",
 		Tag:       "tag",

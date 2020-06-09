@@ -1,12 +1,10 @@
 base_images:
   base:
-    cluster: https://api.ci.openshift.org
     name: origin-v4.0
     namespace: openshift
     tag: base
 build_root:
   image_stream_tag:
-    cluster: https://api.ci.openshift.org
     name: release
     namespace: openshift
     tag: golang-1.10
@@ -20,7 +18,6 @@ resources:
     requests:
       cpu: 10Mi
 tag_specification:
-  cluster: https://api.ci.openshift.org
   name: origin-v4.0
   namespace: openshift
 tests:

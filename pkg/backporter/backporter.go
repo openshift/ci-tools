@@ -222,7 +222,7 @@ func GetBugHandler(client bugzilla.Client) HandlerFuncWithErrorReturn {
 		}
 		bugInfo, err := client.GetBug(bugID)
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
+			w.WriteHeader(http.StatusNotFound)
 			w.Write([]byte("Bug ID not found"))
 			return err
 		}
@@ -251,7 +251,7 @@ func GetClonesHandler(client bugzilla.Client) HandlerFuncWithErrorReturn {
 		}
 		bug, err := client.GetBug(bugID)
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
+			w.WriteHeader(http.StatusNotFound)
 			writePage(w, "Not Found", emptyTemplate, fmt.Sprintf("Bug#%d not found", bugID))
 			return err
 		}
@@ -261,7 +261,7 @@ func GetClonesHandler(client bugzilla.Client) HandlerFuncWithErrorReturn {
 			writePage(w, "Error!", emptyTemplate, fmt.Sprintf("Bug#%d - error occured while retreiving list of PRs : %v", bugID, err))
 			return err
 		}
-		parent, err := client.GetRoot(bug)
+		parent, err := client.GetRootForClone(bug)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			writePage(w, "Error!", emptyTemplate, fmt.Sprintf("Bug#%d Details of parent could not be retrieved : %v", bugID, err))

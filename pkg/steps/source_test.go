@@ -1,30 +1,29 @@
 package steps
 
 import (
+	"flag"
+	"io/ioutil"
+	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
-	"k8s.io/apimachinery/pkg/api/resource"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 
+	"github.com/pmezard/go-difflib/difflib"
 	coreapi "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/equality"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/diff"
-
-	buildapi "github.com/openshift/api/build/v1"
+	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
 )
 
-func strP(str string) *string {
-	return &str
-}
+var update = flag.Bool("update", false, "Whether to update the test fixtures")
 
 func TestCreateBuild(t *testing.T) {
 	t.Parallel()
-	layer := buildapi.ImageOptimizationSkipLayers
 	var testCases = []struct {
 		name            string
 		config          api.SourceStepConfiguration
@@ -33,7 +32,6 @@ func TestCreateBuild(t *testing.T) {
 		resources       api.ResourceConfiguration
 		cloneAuthConfig *CloneAuthConfig
 		pullSecret      *coreapi.Secret
-		expected        *buildapi.Build
 	}{
 		{
 			name: "basic options for a presubmit",
@@ -66,72 +64,6 @@ func TestCreateBuild(t *testing.T) {
 			},
 			clonerefsRef: coreapi.ObjectReference{Kind: "ImageStreamTag", Name: "clonerefs:latest", Namespace: "ci"},
 			resources:    map[string]api.ResourceRequirements{"*": {Requests: map[string]string{"cpu": "200m"}}},
-
-			expected: &buildapi.Build{
-				ObjectMeta: meta.ObjectMeta{
-					Name:      "src",
-					Namespace: "namespace",
-					Labels: map[string]string{
-						"job":                         "job",
-						"build-id":                    "buildId",
-						"prow.k8s.io/id":              "prowJobId",
-						"creates":                     "src",
-						"created-by-ci":               "true",
-						"ci.openshift.io/refs.org":    "org",
-						"ci.openshift.io/refs.repo":   "repo",
-						"ci.openshift.io/refs.branch": "master",
-					},
-					Annotations: map[string]string{
-						"ci.openshift.io/job-spec": ``, // set via unexported fields so will be empty
-					},
-				},
-				Spec: buildapi.BuildSpec{
-					CommonSpec: buildapi.CommonSpec{
-						Resources:      coreapi.ResourceRequirements{Requests: map[coreapi.ResourceName]resource.Quantity{"cpu": resource.MustParse("200m")}},
-						ServiceAccount: "builder",
-						Source: buildapi.BuildSource{
-							Type: buildapi.BuildSourceDockerfile,
-							Dockerfile: strP(`
-FROM pipeline:root
-ADD ./app.binary /clonerefs
-RUN umask 0002 && /clonerefs && find /go/src -type d -not -perm -0775 | xargs -r chmod g+xw
-WORKDIR /go/src/github.com/org/repo/
-ENV GOPATH=/go
-RUN git submodule update --init
-`),
-							Images: []buildapi.ImageSource{
-								{
-									From: coreapi.ObjectReference{Kind: "ImageStreamTag", Name: "clonerefs:latest", Namespace: "ci"},
-									Paths: []buildapi.ImageSourcePath{
-										{
-											SourcePath:     "/app/prow/cmd/clonerefs/app.binary.runfiles/io_k8s_test_infra/prow/cmd/clonerefs/linux_amd64_pure_stripped/app.binary",
-											DestinationDir: ".",
-										},
-									},
-								},
-							},
-						},
-						Strategy: buildapi.BuildStrategy{
-							Type: buildapi.DockerBuildStrategyType,
-							DockerStrategy: &buildapi.DockerBuildStrategy{
-								DockerfilePath:          "",
-								From:                    &coreapi.ObjectReference{Kind: "ImageStreamTag", Namespace: "namespace", Name: "pipeline:root"},
-								ForcePull:               true,
-								NoCache:                 true,
-								Env:                     []coreapi.EnvVar{{Name: "foo", Value: "bar"}, {Name: "CLONEREFS_OPTIONS", Value: `{"src_root":"/go","log":"/dev/null","git_user_name":"ci-robot","git_user_email":"ci-robot@openshift.io","refs":[{"org":"org","repo":"repo","base_ref":"master","base_sha":"masterSHA","pulls":[{"number":1,"author":"","sha":"pullSHA"}]}],"fail":true}`}},
-								ImageOptimizationPolicy: &layer,
-							},
-						},
-						Output: buildapi.BuildOutput{
-							To: &coreapi.ObjectReference{
-								Kind:      "ImageStreamTag",
-								Namespace: "namespace",
-								Name:      "pipeline:src",
-							},
-						},
-					},
-				},
-			},
 		},
 		{
 			name: "with a pull secret",
@@ -169,73 +101,6 @@ RUN git submodule update --init
 				ObjectMeta: meta.ObjectMeta{Name: PullSecretName},
 				Type:       coreapi.SecretTypeDockerConfigJson,
 			},
-
-			expected: &buildapi.Build{
-				ObjectMeta: meta.ObjectMeta{
-					Name:      "src",
-					Namespace: "namespace",
-					Labels: map[string]string{
-						"job":                         "job",
-						"build-id":                    "buildId",
-						"prow.k8s.io/id":              "prowJobId",
-						"creates":                     "src",
-						"created-by-ci":               "true",
-						"ci.openshift.io/refs.org":    "org",
-						"ci.openshift.io/refs.repo":   "repo",
-						"ci.openshift.io/refs.branch": "master",
-					},
-					Annotations: map[string]string{
-						"ci.openshift.io/job-spec": ``, // set via unexported fields so will be empty
-					},
-				},
-				Spec: buildapi.BuildSpec{
-					CommonSpec: buildapi.CommonSpec{
-						Resources:      coreapi.ResourceRequirements{Requests: map[coreapi.ResourceName]resource.Quantity{"cpu": resource.MustParse("200m")}},
-						ServiceAccount: "builder",
-						Source: buildapi.BuildSource{
-							Type: buildapi.BuildSourceDockerfile,
-							Dockerfile: strP(`
-FROM pipeline:root
-ADD ./app.binary /clonerefs
-RUN umask 0002 && /clonerefs && find /go/src -type d -not -perm -0775 | xargs -r chmod g+xw
-WORKDIR /go/src/github.com/org/repo/
-ENV GOPATH=/go
-RUN git submodule update --init
-`),
-							Images: []buildapi.ImageSource{
-								{
-									From: coreapi.ObjectReference{Kind: "ImageStreamTag", Name: "clonerefs:latest", Namespace: "ci"},
-									Paths: []buildapi.ImageSourcePath{
-										{
-											SourcePath:     "/app/prow/cmd/clonerefs/app.binary.runfiles/io_k8s_test_infra/prow/cmd/clonerefs/linux_amd64_pure_stripped/app.binary",
-											DestinationDir: ".",
-										},
-									},
-								},
-							},
-						},
-						Strategy: buildapi.BuildStrategy{
-							Type: buildapi.DockerBuildStrategyType,
-							DockerStrategy: &buildapi.DockerBuildStrategy{
-								DockerfilePath:          "",
-								From:                    &coreapi.ObjectReference{Kind: "ImageStreamTag", Namespace: "namespace", Name: "pipeline:root"},
-								PullSecret:              &coreapi.LocalObjectReference{Name: "regcred"},
-								ForcePull:               true,
-								NoCache:                 true,
-								Env:                     []coreapi.EnvVar{{Name: "foo", Value: "bar"}, {Name: "CLONEREFS_OPTIONS", Value: `{"src_root":"/go","log":"/dev/null","git_user_name":"ci-robot","git_user_email":"ci-robot@openshift.io","refs":[{"org":"org","repo":"repo","base_ref":"master","base_sha":"masterSHA","pulls":[{"number":1,"author":"","sha":"pullSHA"}]}],"fail":true}`}},
-								ImageOptimizationPolicy: &layer,
-							},
-						},
-						Output: buildapi.BuildOutput{
-							To: &coreapi.ObjectReference{
-								Kind:      "ImageStreamTag",
-								Namespace: "namespace",
-								Name:      "pipeline:src",
-							},
-						},
-					},
-				},
-			},
 		},
 		{
 			name: "with a path alias",
@@ -269,72 +134,6 @@ RUN git submodule update --init
 			},
 			clonerefsRef: coreapi.ObjectReference{Kind: "ImageStreamTag", Name: "clonerefs:latest", Namespace: "ci"},
 			resources:    map[string]api.ResourceRequirements{"*": {Requests: map[string]string{"cpu": "200m"}}},
-
-			expected: &buildapi.Build{
-				ObjectMeta: meta.ObjectMeta{
-					Name:      "src",
-					Namespace: "namespace",
-					Labels: map[string]string{
-						"job":                         "job",
-						"build-id":                    "buildId",
-						"prow.k8s.io/id":              "prowJobId",
-						"creates":                     "src",
-						"created-by-ci":               "true",
-						"ci.openshift.io/refs.org":    "org",
-						"ci.openshift.io/refs.repo":   "repo",
-						"ci.openshift.io/refs.branch": "master",
-					},
-					Annotations: map[string]string{
-						"ci.openshift.io/job-spec": ``, // set via unexported fields so will be empty
-					},
-				},
-				Spec: buildapi.BuildSpec{
-					CommonSpec: buildapi.CommonSpec{
-						Resources:      coreapi.ResourceRequirements{Requests: map[coreapi.ResourceName]resource.Quantity{"cpu": resource.MustParse("200m")}},
-						ServiceAccount: "builder",
-						Source: buildapi.BuildSource{
-							Type: buildapi.BuildSourceDockerfile,
-							Dockerfile: strP(`
-FROM pipeline:root
-ADD ./app.binary /clonerefs
-RUN umask 0002 && /clonerefs && find /go/src -type d -not -perm -0775 | xargs -r chmod g+xw
-WORKDIR /go/src/somewhere/else/
-ENV GOPATH=/go
-RUN git submodule update --init
-`),
-							Images: []buildapi.ImageSource{
-								{
-									From: coreapi.ObjectReference{Kind: "ImageStreamTag", Name: "clonerefs:latest", Namespace: "ci"},
-									Paths: []buildapi.ImageSourcePath{
-										{
-											SourcePath:     "/app/prow/cmd/clonerefs/app.binary.runfiles/io_k8s_test_infra/prow/cmd/clonerefs/linux_amd64_pure_stripped/app.binary",
-											DestinationDir: ".",
-										},
-									},
-								},
-							},
-						},
-						Strategy: buildapi.BuildStrategy{
-							Type: buildapi.DockerBuildStrategyType,
-							DockerStrategy: &buildapi.DockerBuildStrategy{
-								DockerfilePath:          "",
-								From:                    &coreapi.ObjectReference{Kind: "ImageStreamTag", Namespace: "namespace", Name: "pipeline:root"},
-								ForcePull:               true,
-								NoCache:                 true,
-								Env:                     []coreapi.EnvVar{{Name: "foo", Value: "bar"}, {Name: "CLONEREFS_OPTIONS", Value: `{"src_root":"/go","log":"/dev/null","git_user_name":"ci-robot","git_user_email":"ci-robot@openshift.io","refs":[{"org":"org","repo":"repo","base_ref":"master","base_sha":"masterSHA","pulls":[{"number":1,"author":"","sha":"pullSHA"}],"path_alias":"somewhere/else"}],"fail":true}`}},
-								ImageOptimizationPolicy: &layer,
-							},
-						},
-						Output: buildapi.BuildOutput{
-							To: &coreapi.ObjectReference{
-								Kind:      "ImageStreamTag",
-								Namespace: "namespace",
-								Name:      "pipeline:src",
-							},
-						},
-					},
-				},
-			},
 		},
 		{
 			name: "with extra refs",
@@ -373,72 +172,6 @@ RUN git submodule update --init
 			},
 			clonerefsRef: coreapi.ObjectReference{Kind: "ImageStreamTag", Name: "clonerefs:latest", Namespace: "ci"},
 			resources:    map[string]api.ResourceRequirements{"*": {Requests: map[string]string{"cpu": "200m"}}},
-
-			expected: &buildapi.Build{
-				ObjectMeta: meta.ObjectMeta{
-					Name:      "src",
-					Namespace: "namespace",
-					Labels: map[string]string{
-						"job":                         "job",
-						"build-id":                    "buildId",
-						"prow.k8s.io/id":              "prowJobId",
-						"creates":                     "src",
-						"created-by-ci":               "true",
-						"ci.openshift.io/refs.org":    "org",
-						"ci.openshift.io/refs.repo":   "repo",
-						"ci.openshift.io/refs.branch": "master",
-					},
-					Annotations: map[string]string{
-						"ci.openshift.io/job-spec": ``, // set via unexported fields so will be empty
-					},
-				},
-				Spec: buildapi.BuildSpec{
-					CommonSpec: buildapi.CommonSpec{
-						Resources:      coreapi.ResourceRequirements{Requests: map[coreapi.ResourceName]resource.Quantity{"cpu": resource.MustParse("200m")}},
-						ServiceAccount: "builder",
-						Source: buildapi.BuildSource{
-							Type: buildapi.BuildSourceDockerfile,
-							Dockerfile: strP(`
-FROM pipeline:root
-ADD ./app.binary /clonerefs
-RUN umask 0002 && /clonerefs && find /go/src -type d -not -perm -0775 | xargs -r chmod g+xw
-WORKDIR /go/src/github.com/org/repo/
-ENV GOPATH=/go
-RUN git submodule update --init
-`),
-							Images: []buildapi.ImageSource{
-								{
-									From: coreapi.ObjectReference{Kind: "ImageStreamTag", Name: "clonerefs:latest", Namespace: "ci"},
-									Paths: []buildapi.ImageSourcePath{
-										{
-											SourcePath:     "/app/prow/cmd/clonerefs/app.binary.runfiles/io_k8s_test_infra/prow/cmd/clonerefs/linux_amd64_pure_stripped/app.binary",
-											DestinationDir: ".",
-										},
-									},
-								},
-							},
-						},
-						Strategy: buildapi.BuildStrategy{
-							Type: buildapi.DockerBuildStrategyType,
-							DockerStrategy: &buildapi.DockerBuildStrategy{
-								DockerfilePath:          "",
-								From:                    &coreapi.ObjectReference{Kind: "ImageStreamTag", Namespace: "namespace", Name: "pipeline:root"},
-								ForcePull:               true,
-								NoCache:                 true,
-								Env:                     []coreapi.EnvVar{{Name: "foo", Value: "bar"}, {Name: "CLONEREFS_OPTIONS", Value: `{"src_root":"/go","log":"/dev/null","git_user_name":"ci-robot","git_user_email":"ci-robot@openshift.io","refs":[{"org":"org","repo":"repo","base_ref":"master","base_sha":"masterSHA","pulls":[{"number":1,"author":"","sha":"pullSHA"}]},{"org":"org","repo":"other","base_ref":"master","base_sha":"masterSHA"}],"fail":true}`}},
-								ImageOptimizationPolicy: &layer,
-							},
-						},
-						Output: buildapi.BuildOutput{
-							To: &coreapi.ObjectReference{
-								Kind:      "ImageStreamTag",
-								Namespace: "namespace",
-								Name:      "pipeline:src",
-							},
-						},
-					},
-				},
-			},
 		},
 		{
 			name: "with extra refs setting workdir and path alias",
@@ -479,72 +212,6 @@ RUN git submodule update --init
 			},
 			clonerefsRef: coreapi.ObjectReference{Kind: "ImageStreamTag", Name: "clonerefs:latest", Namespace: "ci"},
 			resources:    map[string]api.ResourceRequirements{"*": {Requests: map[string]string{"cpu": "200m"}}},
-
-			expected: &buildapi.Build{
-				ObjectMeta: meta.ObjectMeta{
-					Name:      "src",
-					Namespace: "namespace",
-					Labels: map[string]string{
-						"job":                         "job",
-						"build-id":                    "buildId",
-						"prow.k8s.io/id":              "prowJobId",
-						"creates":                     "src",
-						"created-by-ci":               "true",
-						"ci.openshift.io/refs.org":    "org",
-						"ci.openshift.io/refs.repo":   "repo",
-						"ci.openshift.io/refs.branch": "master",
-					},
-					Annotations: map[string]string{
-						"ci.openshift.io/job-spec": ``, // set via unexported fields so will be empty
-					},
-				},
-				Spec: buildapi.BuildSpec{
-					CommonSpec: buildapi.CommonSpec{
-						Resources:      coreapi.ResourceRequirements{Requests: map[coreapi.ResourceName]resource.Quantity{"cpu": resource.MustParse("200m")}},
-						ServiceAccount: "builder",
-						Source: buildapi.BuildSource{
-							Type: buildapi.BuildSourceDockerfile,
-							Dockerfile: strP(`
-FROM pipeline:root
-ADD ./app.binary /clonerefs
-RUN umask 0002 && /clonerefs && find /go/src -type d -not -perm -0775 | xargs -r chmod g+xw
-WORKDIR /go/src/this/is/nuts/
-ENV GOPATH=/go
-RUN git submodule update --init
-`),
-							Images: []buildapi.ImageSource{
-								{
-									From: coreapi.ObjectReference{Kind: "ImageStreamTag", Name: "clonerefs:latest", Namespace: "ci"},
-									Paths: []buildapi.ImageSourcePath{
-										{
-											SourcePath:     "/app/prow/cmd/clonerefs/app.binary.runfiles/io_k8s_test_infra/prow/cmd/clonerefs/linux_amd64_pure_stripped/app.binary",
-											DestinationDir: ".",
-										},
-									},
-								},
-							},
-						},
-						Strategy: buildapi.BuildStrategy{
-							Type: buildapi.DockerBuildStrategyType,
-							DockerStrategy: &buildapi.DockerBuildStrategy{
-								DockerfilePath:          "",
-								From:                    &coreapi.ObjectReference{Kind: "ImageStreamTag", Namespace: "namespace", Name: "pipeline:root"},
-								ForcePull:               true,
-								NoCache:                 true,
-								Env:                     []coreapi.EnvVar{{Name: "foo", Value: "bar"}, {Name: "CLONEREFS_OPTIONS", Value: `{"src_root":"/go","log":"/dev/null","git_user_name":"ci-robot","git_user_email":"ci-robot@openshift.io","refs":[{"org":"org","repo":"repo","base_ref":"master","base_sha":"masterSHA","pulls":[{"number":1,"author":"","sha":"pullSHA"}]},{"org":"org","repo":"other","base_ref":"master","base_sha":"masterSHA","path_alias":"this/is/nuts","workdir":true}],"fail":true}`}},
-								ImageOptimizationPolicy: &layer,
-							},
-						},
-						Output: buildapi.BuildOutput{
-							To: &coreapi.ObjectReference{
-								Kind:      "ImageStreamTag",
-								Namespace: "namespace",
-								Name:      "pipeline:src",
-							},
-						},
-					},
-				},
-			},
 		},
 		{
 			name: "with ssh key",
@@ -583,84 +250,6 @@ RUN git submodule update --init
 			},
 			clonerefsRef: coreapi.ObjectReference{Kind: "ImageStreamTag", Name: "clonerefs:latest", Namespace: "ci"},
 			resources:    map[string]api.ResourceRequirements{"*": {Requests: map[string]string{"cpu": "200m"}}},
-
-			expected: &buildapi.Build{
-				ObjectMeta: meta.ObjectMeta{
-					Name:      "src",
-					Namespace: "namespace",
-					Labels: map[string]string{
-						"job":                         "job",
-						"build-id":                    "buildId",
-						"prow.k8s.io/id":              "prowJobId",
-						"creates":                     "src",
-						"created-by-ci":               "true",
-						"ci.openshift.io/refs.org":    "org",
-						"ci.openshift.io/refs.repo":   "repo",
-						"ci.openshift.io/refs.branch": "master",
-					},
-					Annotations: map[string]string{
-						"ci.openshift.io/job-spec": ``, // set via unexported fields so will be empty
-					},
-				},
-				Spec: buildapi.BuildSpec{
-					CommonSpec: buildapi.CommonSpec{
-						Resources:      coreapi.ResourceRequirements{Requests: map[coreapi.ResourceName]resource.Quantity{"cpu": resource.MustParse("200m")}},
-						ServiceAccount: "builder",
-						Source: buildapi.BuildSource{
-							Type: buildapi.BuildSourceDockerfile,
-							Dockerfile: strP(`
-FROM pipeline:root
-ADD ./app.binary /clonerefs
-ADD /ssh_config /etc/ssh/ssh_config
-COPY ./ssh-privatekey /sshprivatekey
-RUN umask 0002 && /clonerefs && find /go/src -type d -not -perm -0775 | xargs -r chmod g+xw
-WORKDIR /go/src/github.com/org/repo/
-ENV GOPATH=/go
-RUN git submodule update --init
-RUN rm -f /sshprivatekey
-`),
-							Images: []buildapi.ImageSource{
-								{
-									From: coreapi.ObjectReference{Kind: "ImageStreamTag", Name: "clonerefs:latest", Namespace: "ci"},
-									Paths: []buildapi.ImageSourcePath{
-										{
-											SourcePath:     "/app/prow/cmd/clonerefs/app.binary.runfiles/io_k8s_test_infra/prow/cmd/clonerefs/linux_amd64_pure_stripped/app.binary",
-											DestinationDir: ".",
-										},
-										{
-											SourcePath:     "/ssh_config",
-											DestinationDir: ".",
-										},
-									},
-								},
-							},
-							Secrets: []buildapi.SecretBuildSource{
-								{
-									Secret: coreapi.LocalObjectReference{Name: "ssh-nykd6bfg"},
-								},
-							},
-						},
-						Strategy: buildapi.BuildStrategy{
-							Type: buildapi.DockerBuildStrategyType,
-							DockerStrategy: &buildapi.DockerBuildStrategy{
-								DockerfilePath:          "",
-								From:                    &coreapi.ObjectReference{Kind: "ImageStreamTag", Namespace: "namespace", Name: "pipeline:root"},
-								ForcePull:               true,
-								NoCache:                 true,
-								Env:                     []coreapi.EnvVar{{Name: "foo", Value: "bar"}, {Name: "CLONEREFS_OPTIONS", Value: `{"src_root":"/go","log":"/dev/null","git_user_name":"ci-robot","git_user_email":"ci-robot@openshift.io","refs":[{"org":"org","repo":"repo","base_ref":"master","base_sha":"masterSHA","pulls":[{"number":1,"author":"","sha":"pullSHA"}],"clone_uri":"ssh://git@github.com/org/repo.git"}],"key_files":["/sshprivatekey"],"fail":true}`}},
-								ImageOptimizationPolicy: &layer,
-							},
-						},
-						Output: buildapi.BuildOutput{
-							To: &coreapi.ObjectReference{
-								Kind:      "ImageStreamTag",
-								Namespace: "namespace",
-								Name:      "pipeline:src",
-							},
-						},
-					},
-				},
-			},
 		},
 
 		{
@@ -701,89 +290,51 @@ RUN rm -f /sshprivatekey
 			},
 			clonerefsRef: coreapi.ObjectReference{Kind: "ImageStreamTag", Name: "clonerefs:latest", Namespace: "ci"},
 			resources:    map[string]api.ResourceRequirements{"*": {Requests: map[string]string{"cpu": "200m"}}},
-
-			expected: &buildapi.Build{
-				ObjectMeta: meta.ObjectMeta{
-					Name:      "src",
-					Namespace: "namespace",
-					Labels: map[string]string{
-						"job":                         "job",
-						"build-id":                    "buildId",
-						"prow.k8s.io/id":              "prowJobId",
-						"creates":                     "src",
-						"created-by-ci":               "true",
-						"ci.openshift.io/refs.org":    "org",
-						"ci.openshift.io/refs.repo":   "repo",
-						"ci.openshift.io/refs.branch": "master",
-					},
-					Annotations: map[string]string{
-						"ci.openshift.io/job-spec": ``, // set via unexported fields so will be empty
-					},
-				},
-				Spec: buildapi.BuildSpec{
-					CommonSpec: buildapi.CommonSpec{
-						Resources:      coreapi.ResourceRequirements{Requests: map[coreapi.ResourceName]resource.Quantity{"cpu": resource.MustParse("200m")}},
-						ServiceAccount: "builder",
-						Source: buildapi.BuildSource{
-							Type: buildapi.BuildSourceDockerfile,
-							Dockerfile: strP(`
-FROM pipeline:root
-ADD ./app.binary /clonerefs
-COPY ./oauth-token /oauth-token
-RUN umask 0002 && /clonerefs && find /go/src -type d -not -perm -0775 | xargs -r chmod g+xw
-WORKDIR /go/src/github.com/org/repo/
-ENV GOPATH=/go
-RUN git submodule update --init
-RUN rm -f /oauth-token
-`),
-							Images: []buildapi.ImageSource{
-								{
-									From: coreapi.ObjectReference{Kind: "ImageStreamTag", Name: "clonerefs:latest", Namespace: "ci"},
-									Paths: []buildapi.ImageSourcePath{
-										{
-											SourcePath:     "/app/prow/cmd/clonerefs/app.binary.runfiles/io_k8s_test_infra/prow/cmd/clonerefs/linux_amd64_pure_stripped/app.binary",
-											DestinationDir: ".",
-										},
-									},
-								},
-							},
-							Secrets: []buildapi.SecretBuildSource{
-								{
-									Secret: coreapi.LocalObjectReference{Name: "oauth-nykd6bfg"},
-								},
-							},
-						},
-						Strategy: buildapi.BuildStrategy{
-							Type: buildapi.DockerBuildStrategyType,
-							DockerStrategy: &buildapi.DockerBuildStrategy{
-								DockerfilePath:          "",
-								From:                    &coreapi.ObjectReference{Kind: "ImageStreamTag", Namespace: "namespace", Name: "pipeline:root"},
-								ForcePull:               true,
-								NoCache:                 true,
-								Env:                     []coreapi.EnvVar{{Name: "foo", Value: "bar"}, {Name: "CLONEREFS_OPTIONS", Value: `{"src_root":"/go","log":"/dev/null","git_user_name":"ci-robot","git_user_email":"ci-robot@openshift.io","refs":[{"org":"org","repo":"repo","base_ref":"master","base_sha":"masterSHA","pulls":[{"number":1,"author":"","sha":"pullSHA"}],"clone_uri":"https://github.com/org/repo.git"}],"oauth_token_file":"/oauth-token","fail":true}`}},
-								ImageOptimizationPolicy: &layer,
-							},
-						},
-						Output: buildapi.BuildOutput{
-							To: &coreapi.ObjectReference{
-								Kind:      "ImageStreamTag",
-								Namespace: "namespace",
-								Name:      "pipeline:src",
-							},
-						},
-					},
-				},
-			},
 		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			testCase.jobSpec.SetNamespace("namespace")
-			if actual, expected := createBuild(testCase.config, testCase.jobSpec, testCase.clonerefsRef, testCase.resources, testCase.cloneAuthConfig, testCase.pullSecret), testCase.expected; !equality.Semantic.DeepEqual(actual, expected) {
-				t.Errorf("%s: got incorrect build: %v", testCase.name, diff.ObjectReflectDiff(actual, expected))
-			}
+			actual := createBuild(testCase.config, testCase.jobSpec, testCase.clonerefsRef, testCase.resources, testCase.cloneAuthConfig, testCase.pullSecret)
+			compareWithFixture(t, actual, *update)
 		})
+	}
+}
+
+func compareWithFixture(t *testing.T, actual interface{}, update bool) {
+	actualYAML, err := yaml.Marshal(actual)
+	if err != nil {
+		t.Fatalf("failed to marshal actual object: %v", err)
+	}
+	golden, err := filepath.Abs(filepath.Join("testdata", strings.ReplaceAll(t.Name(), "/", "_")+".yaml"))
+	if err != nil {
+		t.Fatalf("failed to get absolute path to testdata file: %v", err)
+	}
+	if update {
+		if err := ioutil.WriteFile(golden, actualYAML, 0644); err != nil {
+			t.Fatalf("failed to write updated fixture: %v", err)
+		}
+	}
+	expected, err := ioutil.ReadFile(golden)
+	if err != nil {
+		t.Fatalf("failed to read testdata file: %v", err)
+	}
+
+	diff := difflib.UnifiedDiff{
+		A:        difflib.SplitLines(string(expected)),
+		B:        difflib.SplitLines(string(actualYAML)),
+		FromFile: "Fixture",
+		ToFile:   "Current",
+		Context:  3,
+	}
+	diffStr, err := difflib.GetUnifiedDiffString(diff)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if diffStr != "" {
+		t.Errorf("got diff between expected and actual result: \n%s\n\nIf this is expected, re-run the test with `-update` flag to update the fixture.", diffStr)
 	}
 }
 

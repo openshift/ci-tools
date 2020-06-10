@@ -1,0 +1,65 @@
+metadata:
+  annotations:
+    ci.openshift.io/job-spec: ""
+  creationTimestamp: null
+  labels:
+    build-id: buildId
+    ci.openshift.io/refs.branch: master
+    ci.openshift.io/refs.org: org
+    ci.openshift.io/refs.repo: repo
+    created-by-ci: "true"
+    creates: src
+    job: job
+    prow.k8s.io/id: prowJobId
+  name: src
+  namespace: namespace
+spec:
+  nodeSelector: null
+  output:
+    to:
+      kind: ImageStreamTag
+      name: pipeline:src
+      namespace: namespace
+  postCommit: {}
+  resources:
+    requests:
+      cpu: 200m
+  serviceAccount: builder
+  source:
+    dockerfile: |2
+
+      FROM pipeline:root
+      ADD ./app.binary /clonerefs
+      RUN umask 0002 && /clonerefs && find /go/src -type d -not -perm -0775 | xargs -r chmod g+xw
+      WORKDIR /go/src/github.com/org/repo/
+      ENV GOPATH=/go
+      RUN git submodule update --init
+    images:
+    - as: null
+      from:
+        kind: ImageStreamTag
+        name: clonerefs:latest
+        namespace: ci
+      paths:
+      - destinationDir: .
+        sourcePath: /app/prow/cmd/clonerefs/app.binary.runfiles/io_k8s_test_infra/prow/cmd/clonerefs/linux_amd64_pure_stripped/app.binary
+    type: Dockerfile
+  strategy:
+    dockerStrategy:
+      env:
+      - name: foo
+        value: bar
+      - name: CLONEREFS_OPTIONS
+        value: '{"src_root":"/go","log":"/dev/null","git_user_name":"ci-robot","git_user_email":"ci-robot@openshift.io","refs":[{"org":"org","repo":"repo","base_ref":"master","base_sha":"masterSHA","pulls":[{"number":1,"author":"","sha":"pullSHA"}]}],"fail":true}'
+      forcePull: true
+      from:
+        kind: ImageStreamTag
+        name: pipeline:root
+        namespace: namespace
+      imageOptimizationPolicy: SkipLayers
+      noCache: true
+    type: Docker
+  triggeredBy: null
+status:
+  output: {}
+  phase: ""

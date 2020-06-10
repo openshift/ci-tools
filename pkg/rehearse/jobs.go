@@ -35,6 +35,7 @@ import (
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	apihelper "github.com/openshift/ci-tools/pkg/api/helper"
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/diffs"
 	"github.com/openshift/ci-tools/pkg/jobconfig"
@@ -224,11 +225,12 @@ func hasRehearsableLabel(labels map[string]string) bool {
 }
 
 // getResolverConfigForTest returns a resolved ci-operator based on the provided filename and only includes the specified test in the
-// `tests` section of the config
-func getResolvedConfigForTest(ciopConfigs config.DataByFilename, resolver registry.Resolver, filename, testname string) (string, error) {
+// `tests` section of the config.
+// The ImageStreamTagMap contains all imagestreamtags used within this config and is used to ensure they exist on all target clusters.
+func getResolvedConfigForTest(ciopConfigs config.DataByFilename, resolver registry.Resolver, filename, testname string) (string, apihelper.ImageStreamTagMap, error) {
 	ciopConfig, ok := ciopConfigs[filename]
 	if !ok {
-		return "", fmt.Errorf("ci-operator config file %s was not found", filename)
+		return "", nil, fmt.Errorf("ci-operator config file %s was not found", filename)
 	}
 	// make copy so we don't change in-memory config
 	ciopCopy := config.DataWithInfo{
@@ -245,14 +247,19 @@ func getResolvedConfigForTest(ciopConfigs config.DataByFilename, resolver regist
 	}
 	ciopConfigResolved, err := registry.ResolveConfig(resolver, ciopCopy.Configuration)
 	if err != nil {
-		return "", fmt.Errorf("%v: Failed resolve ReleaseBuildConfiguration", err)
+		return "", nil, fmt.Errorf("failed resolve ReleaseBuildConfiguration: %w", err)
 	}
 
 	ciOpConfigContent, err := yaml.Marshal(ciopConfigResolved)
 	if err != nil {
-		return "", fmt.Errorf("%v: Failed to marshal ci-operator config file", err)
+		return "", nil, fmt.Errorf("failed to marshal ci-operator config file: %w", err)
 	}
-	return string(ciOpConfigContent), nil
+
+	imageStreamTags, err := apihelper.TestInputImageStreamTagsFromResolvedConfig(ciopConfigResolved)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to resolve test imagestreamtags: %w", err)
+	}
+	return string(ciOpConfigContent), imageStreamTags, nil
 }
 
 // inlineCiOpConfig detects whether a job needs a ci-operator config file
@@ -261,7 +268,8 @@ func getResolvedConfigForTest(ciopConfigs config.DataByFilename, resolver regist
 // of the needed config file passed to the job as a direct value. This needs
 // to happen because the rehearsed Prow jobs may depend on these config files
 // being also changed by the tested PR.
-func inlineCiOpConfig(container *v1.Container, ciopConfigs config.DataByFilename, resolver registry.Resolver, metadata api.Metadata, testname string, loggers Loggers) error {
+func inlineCiOpConfig(container *v1.Container, ciopConfigs config.DataByFilename, resolver registry.Resolver, metadata api.Metadata, testname string, loggers Loggers) (apihelper.ImageStreamTagMap, error) {
+	allImageStreamTags := apihelper.ImageStreamTagMap{}
 	configSpecSet := false
 	// replace all ConfigMapKeyRef mounts with inline config maps
 	for index := range container.Env {
@@ -279,11 +287,12 @@ func inlineCiOpConfig(container *v1.Container, ciopConfigs config.DataByFilename
 			filename := env.ValueFrom.ConfigMapKeyRef.Key
 
 			loggers.Debug.WithField(logCiopConfigFile, filename).Debug("Rehearsal job uses ci-operator config ConfigMap, needed content will be inlined")
-			ciOpConfigContent, err := getResolvedConfigForTest(ciopConfigs, resolver, filename, testname)
+			ciOpConfigContent, imageStreamTags, err := getResolvedConfigForTest(ciopConfigs, resolver, filename, testname)
 			if err != nil {
 				loggers.Job.WithError(err).Error("Failed to get resolved config for test")
-				return err
+				return nil, err
 			}
+			apihelper.MergeImageStreamTagMaps(allImageStreamTags, imageStreamTags)
 
 			env.Value = string(ciOpConfigContent)
 			env.ValueFrom = nil
@@ -291,20 +300,21 @@ func inlineCiOpConfig(container *v1.Container, ciopConfigs config.DataByFilename
 	}
 	// if CONFIG_SPEC has already been set, do not add new CONFIG_SPEC section
 	if configSpecSet {
-		return nil
+		return allImageStreamTags, nil
 	}
 	// inline CONFIG_SPEC for all ci-operator jobs
 	if container.Command != nil && container.Command[0] == "ci-operator" {
 		if err := metadata.IsComplete(); err != nil {
-			return fmt.Errorf("could not infer which ci-operator config this job uses: %v", err)
+			return nil, fmt.Errorf("could not infer which ci-operator config this job uses: %v", err)
 		}
 		filename := metadata.Basename()
 		loggers.Debug.WithField(logCiopConfigFile, filename).Debug("Rehearsal job uses ci-operator config ConfigMap, needed content will be inlined")
-		ciOpConfigContent, err := getResolvedConfigForTest(ciopConfigs, resolver, filename, testname)
+		ciOpConfigContent, imageStreamTags, err := getResolvedConfigForTest(ciopConfigs, resolver, filename, testname)
 		if err != nil {
 			loggers.Job.WithError(err).Error("Failed to get resolved config for test")
-			return err
+			return nil, err
 		}
+		apihelper.MergeImageStreamTagMaps(allImageStreamTags, imageStreamTags)
 
 		envs := container.Env
 		env := v1.EnvVar{
@@ -314,7 +324,7 @@ func inlineCiOpConfig(container *v1.Container, ciopConfigs config.DataByFilename
 		envs = append(envs, env)
 		container.Env = envs
 	}
-	return nil
+	return allImageStreamTags, nil
 }
 
 // JobConfigurer holds all the information that is needed for the configuration of the jobs.
@@ -358,8 +368,9 @@ func variantFromLabels(labels map[string]string) string {
 }
 
 // ConfigurePeriodicRehearsals adds the required configuration for the periodics to be rehearsed.
-func (jc *JobConfigurer) ConfigurePeriodicRehearsals(periodics config.Periodics) ([]prowconfig.Periodic, error) {
+func (jc *JobConfigurer) ConfigurePeriodicRehearsals(periodics config.Periodics) (apihelper.ImageStreamTagMap, []prowconfig.Periodic, error) {
 	var rehearsals []prowconfig.Periodic
+	allImageStreamTags := apihelper.ImageStreamTagMap{}
 
 	filteredPeriodics := filterPeriodics(periodics, jc.loggers.Job)
 	for _, job := range filteredPeriodics {
@@ -373,21 +384,24 @@ func (jc *JobConfigurer) ConfigurePeriodicRehearsals(periodics config.Periodics)
 			metadata.Branch = job.ExtraRefs[0].BaseRef
 		}
 		testname := metadata.TestNameFromJobName(job.Name, jobconfig.PeriodicPrefix)
-		if err := jc.configureJobSpec(job.Spec, metadata, testname, jc.loggers.Debug.WithField("name", job.Name)); err != nil {
+		imageStreamTags, err := jc.configureJobSpec(job.Spec, metadata, testname, jc.loggers.Debug.WithField("name", job.Name))
+		if err != nil {
 			jobLogger.WithError(err).Warn("Failed to inline ci-operator-config into rehearsal periodic job")
-			return nil, err
+			return nil, nil, err
 		}
+		apihelper.MergeImageStreamTagMaps(allImageStreamTags, imageStreamTags)
 
 		jobLogger.WithField(logRehearsalJob, job.Name).Info("Created a rehearsal job to be submitted")
 		rehearsals = append(rehearsals, job)
 	}
 
-	return rehearsals, nil
+	return allImageStreamTags, rehearsals, nil
 }
 
 // ConfigurePresubmitRehearsals adds the required configuration for the presubmits to be rehearsed.
-func (jc *JobConfigurer) ConfigurePresubmitRehearsals(presubmits config.Presubmits) ([]*prowconfig.Presubmit, error) {
+func (jc *JobConfigurer) ConfigurePresubmitRehearsals(presubmits config.Presubmits) (apihelper.ImageStreamTagMap, []*prowconfig.Presubmit, error) {
 	var rehearsals []*prowconfig.Presubmit
+	allImageStreamTags := apihelper.ImageStreamTagMap{}
 
 	presubmitsFiltered := filterPresubmits(presubmits, jc.loggers.Job)
 	for orgrepo, jobs := range presubmitsFiltered {
@@ -411,19 +425,21 @@ func (jc *JobConfigurer) ConfigurePresubmitRehearsals(presubmits config.Presubmi
 			}
 			testname := metadata.TestNameFromJobName(job.Name, jobconfig.PresubmitPrefix)
 
-			if err := jc.configureJobSpec(rehearsal.Spec, metadata, testname, jc.loggers.Debug.WithField("name", job.Name)); err != nil {
+			imageStreamTags, err := jc.configureJobSpec(rehearsal.Spec, metadata, testname, jc.loggers.Debug.WithField("name", job.Name))
+			if err != nil {
 				jobLogger.WithError(err).Warn("Failed to inline ci-operator-config into rehearsal presubmit job")
-				return nil, err
+				return nil, nil, err
 			}
+			apihelper.MergeImageStreamTagMaps(allImageStreamTags, imageStreamTags)
 
 			jobLogger.WithField(logRehearsalJob, rehearsal.Name).Info("Created a rehearsal job to be submitted")
 			rehearsals = append(rehearsals, rehearsal)
 		}
 	}
-	return rehearsals, nil
+	return allImageStreamTags, rehearsals, nil
 }
 
-func (jc *JobConfigurer) configureJobSpec(spec *v1.PodSpec, metadata api.Metadata, testName string, logger *logrus.Entry) error {
+func (jc *JobConfigurer) configureJobSpec(spec *v1.PodSpec, metadata api.Metadata, testName string, logger *logrus.Entry) (apihelper.ImageStreamTagMap, error) {
 	// Remove configresolver flags from ci-operator jobs
 	var metadataFromFlags api.Metadata
 	if len(spec.Containers[0].Command) > 0 && spec.Containers[0].Command[0] == "ci-operator" {
@@ -436,14 +452,15 @@ func (jc *JobConfigurer) configureJobSpec(spec *v1.PodSpec, metadata api.Metadat
 		metadata = metadataFromFlags
 	}
 
-	if err := inlineCiOpConfig(&spec.Containers[0], jc.ciopConfigs, jc.registryResolver, metadata, testName, jc.loggers); err != nil {
-		return err
+	imageStreamTags, err := inlineCiOpConfig(&spec.Containers[0], jc.ciopConfigs, jc.registryResolver, metadata, testName, jc.loggers)
+	if err != nil {
+		return nil, err
 	}
 
 	replaceCMTemplateName(spec.Containers[0].VolumeMounts, spec.Volumes, jc.templateMap)
 	replaceClusterProfiles(spec.Volumes, jc.profiles, logger)
 
-	return nil
+	return imageStreamTags, nil
 }
 
 // ConvertPeriodicsToPresubmits converts periodic jobs to presubmits by using the same JobBase and filling up

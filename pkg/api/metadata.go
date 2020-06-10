@@ -75,9 +75,11 @@ func (m *Metadata) ConfigMapName() string {
 	return fmt.Sprintf("ci-operator-%s-configs", FlavorForBranch(m.Branch))
 }
 
+var ciOPConfigRegex = regexp.MustCompile(`^ci-operator-.+-configs$`)
+
 // IsCiopConfigCM returns true if a given name is a valid ci-operator config ConfigMap
 func IsCiopConfigCM(name string) bool {
-	return regexp.MustCompile(`^ci-operator-.+-configs$`).MatchString(name)
+	return ciOPConfigRegex.MatchString(name)
 }
 
 var threeXBranches = regexp.MustCompile(`^(release|enterprise|openshift)-3\.[0-9]+$`)

@@ -9,12 +9,25 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 )
 
+// ImageStreamTagMap is a map [types.NamespacedName.String()]types.NamespacedName of
+// ImagestreamTags
+type ImageStreamTagMap map[string]types.NamespacedName
+
+// MergeImageStramTagMaps merges multiple ImageStreamTagMaps together
+func MergeImageStreamTagMaps(target ImageStreamTagMap, toMerge ...ImageStreamTagMap) {
+	for _, toMerge := range toMerge {
+		for k, v := range toMerge {
+			target[k] = v
+		}
+	}
+}
+
 // TestInputImageStreamTagsFromResolvedConfig returns all ImageStreamTags referenced anywhere in the config as input.
 // It only returns their namespace and name and drops the cluster field, as we plan to remove that.
 // The key is in namespace/name format.
 // It assumes that the config is already resolved, i.E. that MultiStageTestConfiguration is always nil
 // and MultiStageTestConfigurationLiteral gets set instead
-func TestInputImageStreamTagsFromResolvedConfig(cfg api.ReleaseBuildConfiguration) (map[string]types.NamespacedName, error) {
+func TestInputImageStreamTagsFromResolvedConfig(cfg api.ReleaseBuildConfiguration) (ImageStreamTagMap, error) {
 	result := map[string]types.NamespacedName{}
 
 	imageStreamTagReferenceMapIntoMap(cfg.BaseImages, result)
@@ -50,7 +63,7 @@ func TestInputImageStreamTagsFromResolvedConfig(cfg api.ReleaseBuildConfiguratio
 		}
 	}
 
-	return result, utilerrors.NewAggregate(errs)
+	return ImageStreamTagMap(result), utilerrors.NewAggregate(errs)
 }
 
 func imageStreamTagReferenceMapIntoMap(i map[string]api.ImageStreamTagReference, m map[string]types.NamespacedName) {

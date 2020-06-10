@@ -545,6 +545,10 @@ type LiteralTestStep struct {
 	Credentials []CredentialReference `json:"credentials,omitempty"`
 	// Environment lists parameters that should be set by the test.
 	Environment []StepParameter `json:"env,omitempty"`
+	// OptionalOnSuccess defines if this step should be skipped as long
+	// as all `pre` and `test` steps were successful and AllowSkipOnSuccess
+	// flag is set to true in MultiStageTestConfiguration.
+	OptionalOnSuccess bool `json:"optional_on_success,omitempty"`
 }
 
 // StepParameter is a variable set by the test, with an optional default.
@@ -598,7 +602,8 @@ type MultiStageTestConfiguration struct {
 	// Test is the array of test steps that define the actual test.
 	Test []TestStep `json:"test,omitempty"`
 	// Post is the array of test steps run after the tests finish and teardown/deprovision resources.
-	// Post steps always run, even if previous steps fail.
+	// Post steps always run, even if previous steps fail. However, they have an option to skip
+	// execution if previous Pre and Test steps passed.
 	Post []TestStep `json:"post,omitempty"`
 	// Workflow is the name of the workflow to be used for this configuration. For fields defined in both
 	// the config and the workflow, the fields from the config will override what is set in Workflow.
@@ -622,6 +627,10 @@ type MultiStageTestConfigurationLiteral struct {
 	Post []LiteralTestStep `json:"post,omitempty"`
 	// Environment has the values of parameters for the steps.
 	Environment TestEnvironment `json:"env,omitempty"`
+	// AllowSkipOnSuccess defines if any steps can be skipped when
+	// all previous `pre` and `test` steps were successful. The given step must explicitly
+	// ask for being skipped by setting the OptionalOnSuccess flag to true.
+	AllowSkipOnSuccess bool `json:"allow_skip_on_success,omitempty"`
 }
 
 // TestEnvironment has the values of parameters for multi-stage tests.

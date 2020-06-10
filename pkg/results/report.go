@@ -121,6 +121,7 @@ func (r *reporter) Report(err error) {
 	if err != nil {
 		logrus.Tracef("could not marshal request: %v", err)
 	}
+	logrus.Infof("Reporting job state %q with reason %q", request.State, request.Reason)
 	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/result", r.address), bytes.NewReader(data))
 	if err != nil {
 		logrus.Tracef("could not create report request: %v", err)

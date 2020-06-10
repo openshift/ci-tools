@@ -10,7 +10,6 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/backporter"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/test-infra/pkg/flagutil"
 	prowConfig "k8s.io/test-infra/prow/config"
@@ -71,7 +70,7 @@ type traceResponseWriter struct {
 	size       int
 }
 
-func handleWithMetrics(h bugzilla.HandlerFuncWithErrorReturn) http.HandlerFunc {
+func handleWithMetrics(h backporter.HandlerFuncWithErrorReturn) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t := time.Now()
 		// Initialize the status to 200 in case WriteHeader is not called
@@ -103,7 +102,7 @@ func gatherOptions() options {
 func processOptions(o options) error {
 	level, err := log.ParseLevel(o.logLevel)
 	if err != nil {
-		return fmt.Errorf("invalid --log-level: %v", err)
+		return fmt.Errorf("invalid --log-level '%s': %v", o.logLevel, err)
 	}
 	log.SetLevel(level)
 	return nil
@@ -118,11 +117,11 @@ func main() {
 	tokens := []string{o.bugzilla.ApiKeyPath}
 	secretAgent := &secret.Agent{}
 	if err := secretAgent.Start(tokens); err != nil {
-		logrus.WithError(err).Fatal("Error starting secrets agent.")
+		log.WithError(err).Fatal("Error starting secrets agent.")
 	}
 	bugzillaClient, err := o.bugzilla.BugzillaClient(secretAgent)
 	if err != nil {
-		logrus.WithError(err).Fatal("Error getting Bugzilla client.")
+		log.WithError(err).Fatal("Error getting Bugzilla client.")
 	}
 	health := pjutil.NewHealth()
 	metrics.ExposeMetrics("ci-operator-bugzilla-backporter", prowConfig.PushGateway{})

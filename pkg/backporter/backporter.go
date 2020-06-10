@@ -168,6 +168,11 @@ const clonesTemplateConstructor = `
 		</tbody>
 	</table>`
 
+var (
+	clonesTemplate = template.Must(template.New("clones").Parse(clonesTemplateConstructor))
+	emptyTemplate  = template.Must(template.New("empty").Parse(emptyTemplateConstructor))
+)
+
 // HandlerFuncWithErrorReturn allows returning errors to be logged
 type HandlerFuncWithErrorReturn func(http.ResponseWriter, *http.Request) error
 
@@ -178,24 +183,10 @@ type wrapper struct {
 	PRs    []bugzilla.ExternalBug
 }
 
-func getTemplate(tConstructor string) (*template.Template, error) {
-	tmpl, err := template.New("").Parse(tConstructor)
-	if err != nil {
-		return nil, fmt.Errorf("Incorrect template for page %s", tConstructor)
-	}
-	return tmpl, nil
-}
-
 //Writes an HTML page, prepends header in htmlPageStart and appends header from htmlPageEnd around tConstructor.
-func writePage(w http.ResponseWriter, title string, tConstructor string, data interface{}) error {
+func writePage(w http.ResponseWriter, title string, body *template.Template, data interface{}) error {
 	fmt.Fprintf(w, htmlPageStart, title)
-	body, err := template.New(title).Parse(tConstructor)
 
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, "Incorrect template %s: %v", tConstructor, err)
-		return err
-	}
 	if err := body.Execute(w, data); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		fmt.Fprintf(w, "%s: %v", http.StatusText(http.StatusInternalServerError), err)
@@ -208,7 +199,7 @@ func writePage(w http.ResponseWriter, title string, tConstructor string, data in
 // GetLandingHandler will return a simple bug search page
 func GetLandingHandler() HandlerFuncWithErrorReturn {
 	return func(w http.ResponseWriter, req *http.Request) error {
-		writePage(w, "Home", emptyTemplateConstructor, nil)
+		writePage(w, "Home", emptyTemplate, nil)
 		return nil
 	}
 }
@@ -217,34 +208,33 @@ func GetLandingHandler() HandlerFuncWithErrorReturn {
 // Returns bug details in JSON format
 func GetBugHandler(client bugzilla.Client) HandlerFuncWithErrorReturn {
 	return func(w http.ResponseWriter, r *http.Request) error {
-		if r.Method == "GET" {
-			bugIDStr := r.URL.Query().Get(BugIDQuery)
-			bugID, err := strconv.Atoi(bugIDStr)
-			if bugIDStr == "" || err != nil {
-				w.WriteHeader(http.StatusBadRequest)
-				fmt.Fprintf(w, "%s query missing or incorrect", BugIDQuery)
-				return err
-			}
-			bugInfo, err := client.GetBug(bugID)
-			if err != nil {
-				w.WriteHeader(http.StatusBadRequest)
-				w.Write([]byte("Bug ID not found"))
-				return err
-			}
-			jsonBugInfo, err := json.MarshalIndent(*bugInfo, "", "  ")
-			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				fmt.Fprintf(w, "failed to marshal bugInfo to JSON: %v", err)
-				// logger.WithError(err).Errorf("failed to marshal bugInfo to JSON")
-				return err
-			}
-			w.WriteHeader(http.StatusOK)
-			w.Write(jsonBugInfo)
-		} else {
+		if r.Method != "GET" {
 			w.WriteHeader(http.StatusNotImplemented)
 			w.Write([]byte(http.StatusText(http.StatusNotImplemented)))
 			return fmt.Errorf("Not a GET request")
 		}
+		bugIDStr := r.URL.Query().Get(BugIDQuery)
+		bugID, err := strconv.Atoi(bugIDStr)
+		if bugIDStr == "" || err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprintf(w, "%s query missing or incorrect", BugIDQuery)
+			return err
+		}
+		bugInfo, err := client.GetBug(bugID)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bug ID not found"))
+			return err
+		}
+		jsonBugInfo, err := json.MarshalIndent(*bugInfo, "", "  ")
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "failed to marshal bugInfo to JSON: %v", err)
+			// logger.WithError(err).Errorf("failed to marshal bugInfo to JSON")
+			return err
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write(jsonBugInfo)
 		return nil
 	}
 }
@@ -256,39 +246,39 @@ func GetClonesHandler(client bugzilla.Client) HandlerFuncWithErrorReturn {
 		bugID, err := strconv.Atoi(bugIDStr)
 		if bugIDStr == "" || err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			writePage(w, "Error!", emptyTemplateConstructor, fmt.Sprintf("%s - query incorrect", BugIDQuery))
+			writePage(w, "Error!", emptyTemplate, fmt.Sprintf("%s - query incorrect", BugIDQuery))
 			return err
 		}
 		bug, err := client.GetBug(bugID)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			writePage(w, "Not Found", emptyTemplateConstructor, fmt.Sprintf("Bug#%d not found", bugID))
+			writePage(w, "Not Found", emptyTemplate, fmt.Sprintf("Bug#%d not found", bugID))
 			return err
 		}
 		prs, err := client.GetExternalBugPRsOnBug(bugID)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			writePage(w, "Error!", emptyTemplateConstructor, fmt.Sprintf("Bug#%d - error occured while retreiving list of PRs : %v", bugID, err))
+			writePage(w, "Error!", emptyTemplate, fmt.Sprintf("Bug#%d - error occured while retreiving list of PRs : %v", bugID, err))
 			return err
 		}
 		parent, err := client.GetRoot(bug)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			writePage(w, "Error!", emptyTemplateConstructor, fmt.Sprintf("Bug#%d Details of parent could not be retrieved : %v", bugID, err))
+			writePage(w, "Error!", emptyTemplate, fmt.Sprintf("Bug#%d Details of parent could not be retrieved : %v", bugID, err))
 			return err
 		}
 
 		clones, err := client.GetAllClones(bug)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			writePage(w, "Not Found", emptyTemplateConstructor, err.Error())
+			writePage(w, "Not Found", emptyTemplate, err.Error())
 			return err
 		}
 		for _, clone := range clones {
 			clonePRs, err := client.GetExternalBugPRsOnBug(clone.ID)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
-				writePage(w, "Error!", emptyTemplateConstructor, fmt.Sprintf("Bug#%d - error occured while retreiving list of PRs : %v", clone.ID, err))
+				writePage(w, "Error!", emptyTemplate, fmt.Sprintf("Bug#%d - error occured while retreiving list of PRs : %v", clone.ID, err))
 				return err
 			}
 			clone.PRs = clonePRs
@@ -300,7 +290,7 @@ func GetClonesHandler(client bugzilla.Client) HandlerFuncWithErrorReturn {
 			PRs:    prs,
 		}
 
-		writePage(w, "Clones", clonesTemplateConstructor, wrpr)
+		writePage(w, "Clones", clonesTemplate, wrpr)
 		return nil
 	}
 }

@@ -365,14 +365,14 @@ func (o *options) Complete() error {
 			return fmt.Errorf("failed to determine job spec: no --git-ref passed and failed to resolve job spec from env: %v", err)
 		}
 		// Failed to read $JOB_SPEC but --git-ref was passed, so try that instead
-		spec, refErr := jobSpecFromGitRef(o.gitRef, o.configSpec.CanonicalGoRepository)
+		spec, refErr := jobSpecFromGitRef(o.gitRef)
 		if refErr != nil {
 			return fmt.Errorf("failed to determine job spec: failed to resolve --git-ref: %v", refErr)
 		}
 		jobSpec = spec
 	} else if len(o.gitRef) > 0 {
 		// Read from $JOB_SPEC but --git-ref was also passed, so merge them
-		spec, err := jobSpecFromGitRef(o.gitRef, o.configSpec.CanonicalGoRepository)
+		spec, err := jobSpecFromGitRef(o.gitRef)
 		if err != nil {
 			return fmt.Errorf("failed to determine job spec: failed to resolve --git-ref: %v", err)
 		}
@@ -398,8 +398,10 @@ func (o *options) Complete() error {
 	if err != nil {
 		return results.ForReason("loading_config").WithError(err).Errorf("failed to load configuration: %v", err)
 	}
+	if config.CanonicalGoRepository != nil {
+		o.jobSpec.Refs.PathAlias = *config.CanonicalGoRepository
+	}
 	o.configSpec = config
-
 	if err := o.configSpec.ValidateResolved(); err != nil {
 		return results.ForReason("validating_config").ForError(err)
 	}
@@ -1230,7 +1232,7 @@ func jobDescription(job *api.JobSpec, config *api.ReleaseBuildConfiguration) str
 	return fmt.Sprintf("%s on https://github.com/%s/%s ref=%s commit=%s", job.Job, job.Refs.Org, job.Refs.Repo, job.Refs.BaseRef, job.Refs.BaseSHA)
 }
 
-func jobSpecFromGitRef(ref string, pathAlias *string) (*api.JobSpec, error) {
+func jobSpecFromGitRef(ref string) (*api.JobSpec, error) {
 	parts := strings.Split(ref, "@")
 	if len(parts) != 2 {
 		return nil, fmt.Errorf("must be ORG/NAME@REF")
@@ -1269,10 +1271,6 @@ func jobSpecFromGitRef(ref string, pathAlias *string) (*api.JobSpec, error) {
 				BaseSHA: sha,
 			},
 		}}
-	if pathAlias != nil {
-		spec.Refs.PathAlias = *pathAlias
-	}
-
 	return spec, nil
 }
 

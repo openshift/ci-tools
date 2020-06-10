@@ -46,3 +46,25 @@ func TestError(t *testing.T) {
 		t.Errorf("got incorrect reason for unchanged error; expected %s, got %v", expected, actual)
 	}
 }
+
+func TestComplexError(t *testing.T) {
+	work := func() error {
+		return errors.New("root error")
+	}
+
+	do := func() error {
+		if err := work(); err != nil {
+			return ForReason("root_thing").WithError(err).Errorf("failed to do root thing: %v", err)
+		}
+		return nil
+	}
+
+	run := func() error {
+		return ForReason("higher_level_thing").ForError(do())
+	}
+
+	err := run()
+	if actual, expected := FullReason(err), "higher_level_thing:root_thing"; actual != expected {
+		t.Errorf("got incorrect reason for top-level error; expected %s, got %v", expected, actual)
+	}
+}

@@ -104,6 +104,7 @@ func (e *BuilderWithReason) ForError(err error) error {
 	if err == nil {
 		return nil
 	}
+	e.wrapped = err
 	e.message = err.Error()
 	return &e.Error
 }

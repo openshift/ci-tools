@@ -1,0 +1,37 @@
+base_images:
+  tools:
+    name: "4.5"
+    namespace: ocp
+    tag: tools
+base_rpm_images:
+  installer:
+    name: "4.5"
+    namespace: ocp
+    tag: installer
+build_root:
+  image_stream_tag:
+    name: "4.5"
+    namespace: ocp
+    tag: base
+promotion:
+  name: "4.5"
+  namespace: ocp
+resources:
+  '*':
+    limits:
+      cpu: 500Mi
+    requests:
+      cpu: 10Mi
+rpm_build_commands: make rpms
+tag_specification:
+  name: "4.5"
+  namespace: ocp
+tests:
+- as: unit
+  commands: make test-unit
+  container:
+    from: src
+zz_generated_metadata:
+  branch: release-4.5
+  org: org
+  repo: bump

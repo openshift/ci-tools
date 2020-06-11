@@ -10,6 +10,7 @@ replace (
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.17.3
 	k8s.io/apimachinery => k8s.io/apimachinery v0.17.3
 	k8s.io/client-go => k8s.io/client-go v0.17.3
+	k8s.io/code-generator => k8s.io/code-generator v0.17.3
 )
 
 require (
@@ -41,12 +42,13 @@ require (
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
 	gopkg.in/fsnotify.v1 v1.4.7
-	k8s.io/api v0.18.0
-	k8s.io/apimachinery v0.18.0
+	k8s.io/api v0.18.2
+	k8s.io/apimachinery v0.18.2
 	k8s.io/client-go v9.0.0+incompatible
 	k8s.io/test-infra v0.0.0-20200602133615-44723bee4ba4
 	k8s.io/utils v0.0.0-20200324210504-a9aa75ae1b89
 	sigs.k8s.io/boskos v0.0.0-20200530174753-71e795271860
 	sigs.k8s.io/controller-runtime v0.5.4
+	sigs.k8s.io/controller-tools v0.3.0
 	sigs.k8s.io/yaml v1.2.0
 )

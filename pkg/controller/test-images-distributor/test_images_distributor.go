@@ -27,6 +27,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	apihelper "github.com/openshift/ci-tools/pkg/api/helper"
+	testimagestreamtagimportv1 "github.com/openshift/ci-tools/pkg/api/testimagestreamtagimport/v1"
 	controllerutil "github.com/openshift/ci-tools/pkg/controller/util"
 	"github.com/openshift/ci-tools/pkg/load/agents"
 	"github.com/openshift/ci-tools/pkg/registry"
@@ -84,6 +85,14 @@ func AddToManager(mgr manager.Manager,
 		buildClusters.Insert(buildClusterName)
 		r.buildClusterClients[buildClusterName] = imagestreamtagwrapper.MustNew(buildClusterManager.GetClient(), buildClusterManager.GetCache())
 		// TODO: Watch buildCluster ImageStreams as well. For now we assume no one will tamper with them.
+		if buildClusterName == "app.ci" {
+			if err := c.Watch(
+				source.NewKindWithCache(&testimagestreamtagimportv1.TestImageStreamTagImport{}, buildClusterManager.GetCache()),
+				testImageStreamTagImportHandler(),
+			); err != nil {
+				return fmt.Errorf("failed to create watch for testimagestreamtagimports: %w", err)
+			}
+		}
 	}
 
 	objectFilter, err := testInputImageStreamTagFilterFactory(log, configAgent, resolver, additionalImageStreamTags)
@@ -99,6 +108,22 @@ func AddToManager(mgr manager.Manager,
 
 	r.log.Info("Successfully added reconciler to manager")
 	return nil
+}
+
+func testImageStreamTagImportHandler() handler.EventHandler {
+	return &handler.EnqueueRequestsFromMapFunc{ToRequests: handler.ToRequestsFunc(
+		func(mo handler.MapObject) []reconcile.Request {
+			testimagestreamtagimport, ok := mo.Object.(*testimagestreamtagimportv1.TestImageStreamTagImport)
+			if !ok {
+				logrus.WithField("type", fmt.Sprintf("%T", mo.Object)).Error("Got object that was not an ImageStram")
+				return nil
+			}
+			return []reconcile.Request{{NamespacedName: types.NamespacedName{
+				Namespace: testimagestreamtagimport.Spec.ClusterName + clusterAndNamespaceDelimiter + testimagestreamtagimport.Spec.Namespace,
+				Name:      testimagestreamtagimport.Spec.Name,
+			}}}
+		},
+	)}
 }
 
 type objectFilter func(types.NamespacedName) bool

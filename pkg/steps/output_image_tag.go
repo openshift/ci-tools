@@ -72,7 +72,17 @@ func (s *outputImageTagStep) run(ctx context.Context, dry bool) error {
 }
 
 func (s *outputImageTagStep) Requires() []api.StepLink {
-	return []api.StepLink{api.InternalImageLink(s.config.From)}
+	return []api.StepLink{
+		api.InternalImageLink(s.config.From),
+		// Release input and import steps do not handle the
+		// case when other steps are publishing tags to the
+		// stable stream. Generally, this is not an issue as
+		// the former run at the start of execution and the
+		// latter only once images are built. However, in
+		// specific configurations, authors may create an
+		// execution graph where we race.
+		api.StableImagesLink(api.LatestStableName),
+	}
 }
 
 func (s *outputImageTagStep) Creates() []api.StepLink {

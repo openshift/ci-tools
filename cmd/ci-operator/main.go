@@ -398,7 +398,7 @@ func (o *options) Complete() error {
 	if err != nil {
 		return results.ForReason("loading_config").WithError(err).Errorf("failed to load configuration: %v", err)
 	}
-	if config.CanonicalGoRepository != nil {
+	if len(o.gitRef) != 0 && config.CanonicalGoRepository != nil {
 		o.jobSpec.Refs.PathAlias = *config.CanonicalGoRepository
 	}
 	o.configSpec = config

@@ -27,7 +27,7 @@ func (o *options) Validate() error {
 		return fmt.Errorf("future releases %v do not contain bump release %v", futureReleases.List(), o.BumpRelease)
 	}
 
-	return o.Options.Validate()
+	return o.FutureOptions.Validate()
 }
 
 func (o *options) Bind(fs *flag.FlagSet) {

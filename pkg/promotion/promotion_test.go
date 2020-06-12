@@ -2,6 +2,7 @@ package promotion
 
 import (
 	"flag"
+	"github.com/google/go-cmp/cmp"
 	"reflect"
 	"testing"
 
@@ -186,26 +187,13 @@ func TestOptions_Bind(t *testing.T) {
 	}
 }
 
-func TestFutureOptions_Bind(t *testing.T) {
+func TestFutureOptions(t *testing.T) {
 	var testCases = []struct {
 		name               string
 		input              []string
 		expected           FutureOptions
 		expectedFutureOpts []string
 	}{
-		{
-			name:  "nothing set has defaults",
-			input: []string{},
-			expected: FutureOptions{
-				Options: Options{
-					ConfirmableOptions: config.ConfirmableOptions{
-						Options: config.Options{
-							LogLevel: "info",
-						},
-					},
-				},
-			},
-		},
 		{
 			name: "everything set",
 			input: []string{
@@ -231,7 +219,7 @@ func TestFutureOptions_Bind(t *testing.T) {
 				},
 				FutureReleases: flagutil.Strings{},
 			},
-			expectedFutureOpts: []string{"two"},
+			expectedFutureOpts: []string{"two", "one"},
 		},
 		{
 			name: "many future releases set",
@@ -259,7 +247,7 @@ func TestFutureOptions_Bind(t *testing.T) {
 				},
 				FutureReleases: flagutil.Strings{},
 			},
-			expectedFutureOpts: []string{"two", "three"},
+			expectedFutureOpts: []string{"two", "three", "one"},
 		},
 	}
 
@@ -271,13 +259,16 @@ func TestFutureOptions_Bind(t *testing.T) {
 			if err := fs.Parse(testCase.input); err != nil {
 				t.Fatalf("%s: cannot parse args: %v", testCase.name, err)
 			}
+			if err := o.Validate(); err != nil {
+				t.Fatalf("%s: options did not validate: %v", testCase.name, err)
+			}
 			expected := testCase.expected
 			// this is not exposed for testing
 			for _, opt := range testCase.expectedFutureOpts {
 				expected.FutureReleases.Set(opt)
 			}
 			if actual, expected := o, expected; !reflect.DeepEqual(actual, expected) {
-				t.Errorf("%s: got incorrect options: expected %v, got %v", testCase.name, expected, actual)
+				t.Errorf("%s: got incorrect options: %s", testCase.name, cmp.Diff(expected, actual, cmp.AllowUnexported(flagutil.Strings{})))
 			}
 		})
 	}

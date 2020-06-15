@@ -186,3 +186,7 @@ verify-gen: generate
 		git diff; \
 		echo "generated files are out of date, run make generate"; exit 1; \
 	fi
+
+update-unit:
+	UPDATE=true go test ./...
+.PHONY: update-unit

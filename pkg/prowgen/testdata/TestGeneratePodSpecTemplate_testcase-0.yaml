@@ -1,0 +1,65 @@
+containers:
+- args:
+  - --kubeconfig=/etc/apici/kubeconfig
+  - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
+  - --report-username=ci
+  - --report-password-file=/etc/report/password.txt
+  - --target=test
+  - --secret-dir=/usr/local/test-cluster-profile
+  - --template=/usr/local/test
+  command:
+  - ci-operator
+  env:
+  - name: CLUSTER_TYPE
+    value: gcp
+  - name: JOB_NAME_SAFE
+    value: test
+  - name: TEST_COMMAND
+    value: commands
+  - name: RPM_REPO_OPENSHIFT_ORIGIN
+    value: https://rpms.svc.ci.openshift.org/openshift-origin-v4.0/
+  image: ci-operator:latest
+  imagePullPolicy: Always
+  name: ""
+  resources:
+    requests:
+      cpu: 10m
+  volumeMounts:
+  - mountPath: /etc/apici
+    name: apici-ci-operator-credentials
+    readOnly: true
+  - mountPath: /etc/pull-secret
+    name: pull-secret
+    readOnly: true
+  - mountPath: /etc/report
+    name: result-aggregator
+    readOnly: true
+  - mountPath: /usr/local/test-cluster-profile
+    name: cluster-profile
+  - mountPath: /usr/local/test
+    name: job-definition
+    subPath: cluster-launch-e2e.yaml
+serviceAccountName: ci-operator
+volumes:
+- name: apici-ci-operator-credentials
+  secret:
+    items:
+    - key: sa.ci-operator.apici.config
+      path: kubeconfig
+    secretName: apici-ci-operator-credentials
+- name: pull-secret
+  secret:
+    secretName: regcred
+- name: result-aggregator
+  secret:
+    secretName: result-aggregator
+- configMap:
+    name: prow-job-cluster-launch-e2e
+  name: job-definition
+- name: cluster-profile
+  projected:
+    sources:
+    - secret:
+        name: cluster-secrets-gcp
+    - configMap:
+        name: cluster-profile-gcp

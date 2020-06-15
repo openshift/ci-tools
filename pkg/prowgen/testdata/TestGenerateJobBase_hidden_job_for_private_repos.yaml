@@ -1,0 +1,12 @@
+agent: kubernetes
+decorate: true
+decoration_config:
+  skip_cloning: true
+hidden: true
+labels:
+  ci-operator.openshift.io/prowgen-controlled: "true"
+name: pull-ci-org-repo-branch-test
+spec:
+  containers:
+  - name: test
+    resources: {}

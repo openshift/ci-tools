@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -12,14 +11,12 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/pmezard/go-difflib/difflib"
 	prowconfig "k8s.io/test-infra/prow/config"
 
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/jobconfig"
+	"github.com/openshift/ci-tools/pkg/testhelper"
 )
-
-var update = flag.Bool("update", false, "update fixtures")
 
 var unexportedFields = []cmp.Option{
 	cmpopts.IgnoreUnexported(prowconfig.Presubmit{}),
@@ -248,13 +245,13 @@ tests:
 			if err != nil {
 				t.Fatalf("Unexpected error reading generated presubmits: %v", err)
 			}
-			compareWithFixture(t, "presubmit-", string(presubmitData))
+			testhelper.CompareWithFixture(t, presubmitData, testhelper.WithPrefix("presubmit-"))
 
 			postsubmitData, err := ioutil.ReadFile(postsubmitPath)
 			if err != nil {
 				t.Fatalf("Unexpected error reading generated postsubmits: %v", err)
 			}
-			compareWithFixture(t, "postsubmit-", string(postsubmitData))
+			testhelper.CompareWithFixture(t, postsubmitData, testhelper.WithPrefix("postsubmit-"))
 		})
 	}
 }
@@ -340,37 +337,5 @@ func TestPruneStaleJobs(t *testing.T) {
 				t.Errorf("Pruned config differs:\n%s", cmp.Diff(expected, pruned, unexportedFields...))
 			}
 		})
-	}
-}
-
-func compareWithFixture(t *testing.T, prefix, output string) {
-	golden, err := filepath.Abs(filepath.Join("testdata", strings.ReplaceAll(prefix+t.Name(), "/", "_")+".yaml"))
-	if err != nil {
-		t.Fatalf("failed to get absolute path to testdata file: %v", err)
-	}
-	if *update {
-		if err := ioutil.WriteFile(golden, []byte(output), 0644); err != nil {
-			t.Fatalf("failed to write updated fixture: %v", err)
-		}
-	}
-	expected, err := ioutil.ReadFile(golden)
-	if err != nil {
-		t.Fatalf("failed to read testdata file: %v", err)
-	}
-
-	diff := difflib.UnifiedDiff{
-		A:        difflib.SplitLines(string(expected)),
-		B:        difflib.SplitLines(output),
-		FromFile: "Fixture",
-		ToFile:   "Current",
-		Context:  3,
-	}
-	diffStr, err := difflib.GetUnifiedDiffString(diff)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if diffStr != "" {
-		t.Errorf("got diff between expected and actual result: \n%s\n\nIf this is expected, re-run the test with `-update` flag to update the fixture.", diffStr)
 	}
 }

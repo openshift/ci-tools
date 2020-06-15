@@ -1,26 +1,19 @@
 package steps
 
 import (
-	"flag"
-	"io/ioutil"
-	"path/filepath"
 	"reflect"
-	"strings"
 	"testing"
 
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 
-	"github.com/pmezard/go-difflib/difflib"
 	coreapi "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/diff"
-	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/testhelper"
 )
-
-var update = flag.Bool("update", false, "Whether to update the test fixtures")
 
 func TestCreateBuild(t *testing.T) {
 	t.Parallel()
@@ -297,44 +290,8 @@ func TestCreateBuild(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			testCase.jobSpec.SetNamespace("namespace")
 			actual := createBuild(testCase.config, testCase.jobSpec, testCase.clonerefsRef, testCase.resources, testCase.cloneAuthConfig, testCase.pullSecret)
-			compareWithFixture(t, actual, *update)
+			testhelper.CompareWithFixture(t, actual)
 		})
-	}
-}
-
-func compareWithFixture(t *testing.T, actual interface{}, update bool) {
-	actualYAML, err := yaml.Marshal(actual)
-	if err != nil {
-		t.Fatalf("failed to marshal actual object: %v", err)
-	}
-	golden, err := filepath.Abs(filepath.Join("testdata", strings.ReplaceAll(t.Name(), "/", "_")+".yaml"))
-	if err != nil {
-		t.Fatalf("failed to get absolute path to testdata file: %v", err)
-	}
-	if update {
-		if err := ioutil.WriteFile(golden, actualYAML, 0644); err != nil {
-			t.Fatalf("failed to write updated fixture: %v", err)
-		}
-	}
-	expected, err := ioutil.ReadFile(golden)
-	if err != nil {
-		t.Fatalf("failed to read testdata file: %v", err)
-	}
-
-	diff := difflib.UnifiedDiff{
-		A:        difflib.SplitLines(string(expected)),
-		B:        difflib.SplitLines(string(actualYAML)),
-		FromFile: "Fixture",
-		ToFile:   "Current",
-		Context:  3,
-	}
-	diffStr, err := difflib.GetUnifiedDiffString(diff)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if diffStr != "" {
-		t.Errorf("got diff between expected and actual result: \n%s\n\nIf this is expected, re-run the test with `-update` flag to update the fixture.", diffStr)
 	}
 }
 

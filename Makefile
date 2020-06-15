@@ -41,6 +41,7 @@ verify:
 	{ \
 	hack/verify-gofmt.sh ||r=1;\
 	hack/verify-govet.sh ||r=1;\
+	make verify-gen || rc=1;\
 	exit $$r ;\
 	}
 .PHONY: verify
@@ -174,3 +175,14 @@ pr-deploy:
 check-breaking-changes:
 	test/validate-prowgen-breaking-changes.sh
 .PHONY: check-breaking-changes
+
+.PHONY: generate
+generate:
+	hack/update-codegen.sh
+
+.PHONY: verify-gen
+verify-gen: generate
+	@if !(git diff --quiet HEAD); then \
+		git diff; \
+		echo "generated files are out of date, run make generate"; exit 1; \
+	fi

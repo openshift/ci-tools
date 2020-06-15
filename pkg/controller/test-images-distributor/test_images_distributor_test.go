@@ -26,6 +26,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	testimagestreamtagimportv1 "github.com/openshift/ci-tools/pkg/api/testimagestreamtagimport/v1"
 	controllerutil "github.com/openshift/ci-tools/pkg/controller/util"
 	"github.com/openshift/ci-tools/pkg/load/agents"
 )
@@ -539,3 +540,36 @@ func (client *imageImportStatusSettingClient) Create(ctx context.Context, obj ru
 
 // indexConfigsByTestInputImageStramTag must be an agents.IndexFn
 var _ agents.IndexFn = indexConfigsByTestInputImageStramTag(nil)
+
+func TestTestImageStramTagImportHandlerRoundTrips(t *testing.T) {
+	const cluster, namespace, name = "cluster", "namespace", "name"
+	obj := &testimagestreamtagimportv1.TestImageStreamTagImport{
+		Spec: testimagestreamtagimportv1.TestImageStreamTagImportSpec{
+			ClusterName: cluster,
+			Namespace:   namespace,
+			Name:        name,
+		},
+	}
+	queue := &hijackingQueue{}
+
+	event := event.CreateEvent{Meta: obj, Object: obj}
+	testImageStreamTagImportHandler().Create(event, queue)
+
+	if n := len(queue.received); n != 1 {
+		t.Fatalf("expected exactly one reconcile request, got %d(%v)", n, queue.received)
+	}
+
+	actualCluster, namespacedName, err := decodeRequest(queue.received[0])
+	if err != nil {
+		t.Fatalf("error decoding request: %v", err)
+	}
+	if actualCluster != cluster {
+		t.Errorf("expected cluster to be %s, was %s", cluster, actualCluster)
+	}
+	if namespacedName.Namespace != namespace {
+		t.Errorf("expected namespace to be %s, was %s", namespace, namespacedName.Namespace)
+	}
+	if namespacedName.Name != name {
+		t.Errorf("expected name to be %s, was %s", name, namespacedName.Name)
+	}
+}

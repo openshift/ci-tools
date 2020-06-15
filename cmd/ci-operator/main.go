@@ -279,6 +279,9 @@ type options struct {
 
 	metadataRevision int
 
+	pullSecretPath string
+	pullSecret     *coreapi.Secret
+
 	cloneAuthConfig *steps.CloneAuthConfig
 
 	resultsOptions results.Options
@@ -341,7 +344,7 @@ func bindOptions(flag *flag.FlagSet) *options {
 
 	flag.String("kubeconfig", "", "Legecay flag kept for compatibility reasons. Doesn't do anything.")
 
-	flag.String("image-import-pull-secret", "", "legacy flag kept for compatibility reasons. Doesn't do anything")
+	flag.StringVar(&opt.pullSecretPath, "image-import-pull-secret", "", "A set of dockercfg credentials used to import images for the tag_specification.")
 
 	opt.resultsOptions.Bind(flag)
 	return opt
@@ -500,6 +503,12 @@ func (o *options) Complete() error {
 		o.clusterConfig = clusterConfig
 	}
 
+	if len(o.pullSecretPath) > 0 {
+		o.pullSecret, err = getPullSecretFromFile(o.pullSecretPath)
+		if err != nil {
+			return fmt.Errorf("could not get pull secret from path %s: %v", o.pullSecretPath, err)
+		}
+	}
 	return nil
 }
 
@@ -524,7 +533,7 @@ func (o *options) Run() []error {
 
 	dryLogger := steps.NewDryLogger(o.determinizeOutput)
 	// load the graph from the configuration
-	buildSteps, postSteps, err := defaults.FromConfig(o.configSpec, o.jobSpec, o.templates, o.writeParams, o.artifactDir, o.promote, o.clusterConfig, &o.leaseClient, o.targets.values, dryLogger, o.cloneAuthConfig)
+	buildSteps, postSteps, err := defaults.FromConfig(o.configSpec, o.jobSpec, o.templates, o.writeParams, o.artifactDir, o.promote, o.clusterConfig, &o.leaseClient, o.targets.values, dryLogger, o.cloneAuthConfig, o.pullSecret)
 	if err != nil {
 		return []error{results.ForReason("defaulting_config").WithError(err).Errorf("failed to generate steps from config: %v", err)}
 	}
@@ -769,6 +778,12 @@ func (o *options) initializeNamespace() error {
 	client, err := coreclientset.NewForConfig(o.clusterConfig)
 	if err != nil {
 		return fmt.Errorf("could not get core client for cluster config: %v", err)
+	}
+
+	if o.pullSecret != nil {
+		if _, err := client.Secrets(o.namespace).Create(o.pullSecret); err != nil && !kerrors.IsAlreadyExists(err) {
+			return fmt.Errorf("couldn't create pull secret %s: %v", o.pullSecret.Name, err)
+		}
 	}
 
 	updates := map[string]string{}
@@ -1420,6 +1435,23 @@ func getHashFromBytes(b []byte) string {
 	hash := sha256.New()
 	hash.Write(b)
 	return oneWayNameEncoding.EncodeToString(hash.Sum(nil)[:5])
+}
+
+func getPullSecretFromFile(filename string) (*coreapi.Secret, error) {
+	secret := &coreapi.Secret{
+		Data: make(map[string][]byte),
+		ObjectMeta: meta.ObjectMeta{
+			Name: steps.PullSecretName,
+		},
+		Type: coreapi.SecretTypeDockerConfigJson,
+	}
+
+	src, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return nil, fmt.Errorf("could not read file %s for secret: %v", filename, err)
+	}
+	secret.Data[coreapi.DockerConfigJsonKey] = src
+	return secret, nil
 }
 
 func (o *options) getResolverInfo(jobSpec *api.JobSpec) *load.ResolverInfo {

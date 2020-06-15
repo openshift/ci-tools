@@ -31,6 +31,7 @@ func TestCreateBuild(t *testing.T) {
 		clonerefsRef    coreapi.ObjectReference
 		resources       api.ResourceConfiguration
 		cloneAuthConfig *CloneAuthConfig
+		pullSecret      *coreapi.Secret
 	}{
 		{
 			name: "basic options for a presubmit",
@@ -63,6 +64,43 @@ func TestCreateBuild(t *testing.T) {
 			},
 			clonerefsRef: coreapi.ObjectReference{Kind: "ImageStreamTag", Name: "clonerefs:latest", Namespace: "ci"},
 			resources:    map[string]api.ResourceRequirements{"*": {Requests: map[string]string{"cpu": "200m"}}},
+		},
+		{
+			name: "with a pull secret",
+			config: api.SourceStepConfiguration{
+				From: api.PipelineImageStreamTagReferenceRoot,
+				To:   api.PipelineImageStreamTagReferenceSource,
+				ClonerefsImage: api.ImageStreamTagReference{
+					Namespace: "ci",
+					Name:      "clonerefs",
+					Tag:       "latest",
+				},
+				ClonerefsPath: "/app/prow/cmd/clonerefs/app.binary.runfiles/io_k8s_test_infra/prow/cmd/clonerefs/linux_amd64_pure_stripped/app.binary",
+			},
+			jobSpec: &api.JobSpec{
+				JobSpec: downwardapi.JobSpec{
+					Job:       "job",
+					BuildID:   "buildId",
+					ProwJobID: "prowJobId",
+					Refs: &prowapi.Refs{
+						Org:     "org",
+						Repo:    "repo",
+						BaseRef: "master",
+						BaseSHA: "masterSHA",
+						Pulls: []prowapi.Pull{{
+							Number: 1,
+							SHA:    "pullSHA",
+						}},
+					},
+				},
+			},
+			clonerefsRef: coreapi.ObjectReference{Kind: "ImageStreamTag", Name: "clonerefs:latest", Namespace: "ci"},
+			resources:    map[string]api.ResourceRequirements{"*": {Requests: map[string]string{"cpu": "200m"}}},
+			pullSecret: &coreapi.Secret{
+				Data:       map[string][]byte{coreapi.DockerConfigJsonKey: []byte("secret")},
+				ObjectMeta: meta.ObjectMeta{Name: PullSecretName},
+				Type:       coreapi.SecretTypeDockerConfigJson,
+			},
 		},
 		{
 			name: "with a path alias",
@@ -258,7 +296,7 @@ func TestCreateBuild(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			testCase.jobSpec.SetNamespace("namespace")
-			actual := createBuild(testCase.config, testCase.jobSpec, testCase.clonerefsRef, testCase.resources, testCase.cloneAuthConfig)
+			actual := createBuild(testCase.config, testCase.jobSpec, testCase.clonerefsRef, testCase.resources, testCase.cloneAuthConfig, testCase.pullSecret)
 			compareWithFixture(t, actual, *update)
 		})
 	}

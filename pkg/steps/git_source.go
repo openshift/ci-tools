@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	coreapi "k8s.io/api/core/v1"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 
 	buildapi "github.com/openshift/api/build/v1"
@@ -22,6 +23,7 @@ type gitSourceStep struct {
 	jobSpec         *api.JobSpec
 	dryLogger       *DryLogger
 	cloneAuthConfig *CloneAuthConfig
+	pullSecret      *coreapi.Secret
 }
 
 func (s *gitSourceStep) Inputs(dry bool) (api.InputDefinition, error) {
@@ -49,7 +51,7 @@ func (s *gitSourceStep) run(ctx context.Context, dry bool) error {
 				URI: cloneURI,
 				Ref: refs.BaseRef,
 			},
-		}, s.config.DockerfilePath, s.resources), dry, s.artifactDir, s.dryLogger)
+		}, s.config.DockerfilePath, s.resources, s.pullSecret), dry, s.artifactDir, s.dryLogger)
 	}
 
 	return fmt.Errorf("nothing to build source image from, no refs")
@@ -93,7 +95,7 @@ func determineRefsWorkdir(refs *prowapi.Refs, extraRefs []prowapi.Refs) *prowapi
 }
 
 // GitSourceStep returns gitSourceStep that holds all the required information to create a build from a git source.
-func GitSourceStep(config api.ProjectDirectoryImageBuildInputs, resources api.ResourceConfiguration, buildClient BuildClient, imageClient imageclientset.ImageV1Interface, artifactDir string, jobSpec *api.JobSpec, dryLogger *DryLogger, cloneAuthConfig *CloneAuthConfig) api.Step {
+func GitSourceStep(config api.ProjectDirectoryImageBuildInputs, resources api.ResourceConfiguration, buildClient BuildClient, imageClient imageclientset.ImageV1Interface, artifactDir string, jobSpec *api.JobSpec, dryLogger *DryLogger, cloneAuthConfig *CloneAuthConfig, pullSecret *coreapi.Secret) api.Step {
 	return &gitSourceStep{
 		config:          config,
 		resources:       resources,
@@ -103,5 +105,6 @@ func GitSourceStep(config api.ProjectDirectoryImageBuildInputs, resources api.Re
 		jobSpec:         jobSpec,
 		dryLogger:       dryLogger,
 		cloneAuthConfig: cloneAuthConfig,
+		pullSecret:      pullSecret,
 	}
 }

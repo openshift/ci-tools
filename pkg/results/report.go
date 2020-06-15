@@ -55,7 +55,7 @@ func (o *Options) Reporter(spec *api.JobSpec, consoleHost string) (Reporter, err
 	}
 	raw, err := ioutil.ReadFile(o.password)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to read file %q: %w", o.password, err)
 	}
 	return &reporter{
 		spec:        spec,

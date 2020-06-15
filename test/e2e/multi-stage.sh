@@ -20,6 +20,7 @@ os::cmd::expect_success "ci-operator --artifact-dir ${BASETMPDIR} --resolver-add
 UNRESOLVED_CONFIG="$( cat "${suite_dir}/config.yaml" )"
 export UNRESOLVED_CONFIG
 os::cmd::expect_success "ci-operator --artifact-dir ${BASETMPDIR} --resolver-address http://127.0.0.1:8080 --target with-references"
+os::cmd::expect_success "ci-operator --artifact-dir ${BASETMPDIR} --resolver-address http://127.0.0.1:8080 --target skip-on-success"
 unset UNRESOLVED_CONFIG
 os::integration::configresolver::check_log
 

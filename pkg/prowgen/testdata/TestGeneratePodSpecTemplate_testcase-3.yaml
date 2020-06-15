@@ -1,6 +1,5 @@
 containers:
 - args:
-  - --kubeconfig=/etc/apici/kubeconfig
   - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
   - --report-username=ci
   - --report-password-file=/etc/report/password.txt
@@ -28,9 +27,6 @@ containers:
     requests:
       cpu: 10m
   volumeMounts:
-  - mountPath: /etc/apici
-    name: apici-ci-operator-credentials
-    readOnly: true
   - mountPath: /etc/pull-secret
     name: pull-secret
     readOnly: true
@@ -47,12 +43,6 @@ containers:
     subPath: cluster-launch-installer-custom-test-image.yaml
 serviceAccountName: ci-operator
 volumes:
-- name: apici-ci-operator-credentials
-  secret:
-    items:
-    - key: sa.ci-operator.apici.config
-      path: kubeconfig
-    secretName: apici-ci-operator-credentials
 - name: pull-secret
   secret:
     secretName: regcred

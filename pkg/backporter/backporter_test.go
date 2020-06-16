@@ -92,43 +92,47 @@ func TestGetBugHandler(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	testCases := map[string]struct {
+	testCases := []struct {
+		name       string
 		params     map[string]int
 		statusCode int
 	}{
-		"good_params": {
+		{
+			"good_params",
 			map[string]int{
 				"ID": bug1ID,
 			},
 			http.StatusOK,
 		},
-		"no_params": {
+		{
+			"no_params",
 			map[string]int{},
 			http.StatusBadRequest,
 		},
-		"bad_params": {
+		{
+			"bad_params",
 			map[string]int{
 				"ID": 1000,
 			},
 			http.StatusNotFound,
 		},
 	}
-	for tc, tp := range testCases {
-		t.Run(tc, func(t *testing.T) {
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
 			req, err := http.NewRequest("GET", "/getbug", nil)
 			if err != nil {
 				t.Fatal(err)
 			}
 			q := req.URL.Query()
-			for k, v := range tp.params {
+			for k, v := range tc.params {
 				q.Add(k, strconv.Itoa(v))
 			}
 			req.URL.RawQuery = q.Encode()
 			rr := httptest.NewRecorder()
 			handler := http.HandlerFunc(unwrapper(GetBugHandler(fake)))
 			handler.ServeHTTP(rr, req)
-			if status := rr.Code; status != tp.statusCode {
-				t.Errorf("testcase '%v' failed: getbug returned wrong status code - got %v, want %v", tc, status, tp.statusCode)
+			if status := rr.Code; status != tc.statusCode {
+				t.Errorf("testcase '%v' failed: getbug returned wrong status code - got %v, want %v", tc.name, status, tc.statusCode)
 			}
 		})
 	}
@@ -159,11 +163,13 @@ func TestGetClonesHandler(t *testing.T) {
 		t.Errorf("Error while cloning bug: %v", err)
 	}
 	fmt.Println(cloneID)
-	testCases := map[string]struct {
+	testCases := []struct {
+		name    string
 		params  map[string]int
 		results ResCheck
 	}{
-		"get_clone": {
+		{
+			"valid_parameters",
 			map[string]int{
 				"ID": cloneID,
 			},
@@ -172,8 +178,8 @@ func TestGetClonesHandler(t *testing.T) {
 				clonesHTMLPage,
 			},
 		},
-
-		"bad_params": {
+		{
+			"bad_params",
 			map[string]int{
 				"ID": 1000,
 			},
@@ -183,25 +189,25 @@ func TestGetClonesHandler(t *testing.T) {
 			},
 		},
 	}
-	for tc, tp := range testCases {
-		t.Run(tc, func(t *testing.T) {
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
 			req, err := http.NewRequest("GET", "/getclones", nil)
 			if err != nil {
 				t.Fatal(err)
 			}
 			q := req.URL.Query()
-			for k, v := range tp.params {
+			for k, v := range tc.params {
 				q.Add(k, strconv.Itoa(v))
 			}
 			req.URL.RawQuery = q.Encode()
 			rr := httptest.NewRecorder()
 			handler := http.HandlerFunc(unwrapper(GetClonesHandler(fake)))
 			handler.ServeHTTP(rr, req)
-			if status := rr.Code; status != tp.results.statusCode {
-				t.Errorf("testcase '%v' failed: getbug returned wrong status code - got %v, want %v", tc, status, tp.results.statusCode)
+			if status := rr.Code; status != tc.results.statusCode {
+				t.Errorf("testcase '%v' failed: getbug returned wrong status code - got %v, want %v", tc, status, tc.results.statusCode)
 			}
-			if resp := rr.Body.String(); resp != tp.results.htmlPage {
-				t.Errorf("Response differs from expected by: %s", diff.StringDiff(resp, tp.results.htmlPage))
+			if resp := rr.Body.String(); resp != tc.results.htmlPage {
+				t.Errorf("Response differs from expected by: %s", diff.StringDiff(resp, tc.results.htmlPage))
 			}
 		})
 	}

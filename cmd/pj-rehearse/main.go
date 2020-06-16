@@ -18,7 +18,6 @@ import (
 	prowgithub "k8s.io/test-infra/prow/github"
 	prowplugins "k8s.io/test-infra/prow/plugins"
 	pjdwapi "k8s.io/test-infra/prow/pod-utils/downwardapi"
-	clientconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/diffs"
@@ -150,11 +149,12 @@ func rehearseMain() error {
 			}
 		}
 		if _, hasAPICIKubeconfig := buildClusterConfigs["api.ci"]; !hasAPICIKubeconfig {
-			apiCIConfig, err := clientconfig.GetConfig()
+			apiCIConfig, err := rest.InClusterConfig()
 			if err != nil {
 				logger.WithError(err).Error("could not load cluster clusterConfig")
 				return fmt.Errorf(misconfigurationOutput)
 			}
+			logger.Info("Got api.ci kubeconfig via in-cluster")
 			buildClusterConfigs["api.ci"] = apiCIConfig
 		}
 		prowJobConfig, err = pjKubeconfig(o.prowjobKubeconfig, buildClusterConfigs["api.ci"])

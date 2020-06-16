@@ -92,4 +92,9 @@ PULL_SECRET_PATH="${WORKDIR}/pull_secret"
 readonly PULL_SECRET_PATH
 touch "${PULL_SECRET_PATH}"
 
+echo "[INFO] Running ci-operator with a pull secret"
+run_test --image-import-pull-secret "${PULL_SECRET_PATH}" > "${DRY_RUN_WITH_PULL_SECRET}"
+if [[ ${UPDATE:-false} = true ]]; then cat $DRY_RUN_WITH_PULL_SECRET > $EXPECTED_WITH_PULL_SECRET; fi
+check "${EXPECTED_WITH_PULL_SECRET}" "${DRY_RUN_WITH_PULL_SECRET}"
+
 echo "[INFO] Success"

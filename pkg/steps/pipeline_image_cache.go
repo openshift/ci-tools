@@ -8,6 +8,7 @@ import (
 
 	buildapi "github.com/openshift/api/build/v1"
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
+	coreapi "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -27,6 +28,7 @@ type pipelineImageCacheStep struct {
 	artifactDir string
 	jobSpec     *api.JobSpec
 	dryLogger   *DryLogger
+	pullSecret  *coreapi.Secret
 }
 
 func (s *pipelineImageCacheStep) Inputs(dry bool) (api.InputDefinition, error) {
@@ -47,6 +49,7 @@ func (s *pipelineImageCacheStep) run(ctx context.Context, dry bool) error {
 		},
 		"",
 		s.resources,
+		s.pullSecret,
 	), dry, s.artifactDir, s.dryLogger)
 }
 
@@ -87,7 +90,7 @@ func (s *pipelineImageCacheStep) Description() string {
 	return fmt.Sprintf("Store build results into a layer on top of %s and save as %s", s.config.From, s.config.To)
 }
 
-func PipelineImageCacheStep(config api.PipelineImageCacheStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, imageClient imageclientset.ImageV1Interface, artifactDir string, jobSpec *api.JobSpec, dryLogger *DryLogger) api.Step {
+func PipelineImageCacheStep(config api.PipelineImageCacheStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, imageClient imageclientset.ImageV1Interface, artifactDir string, jobSpec *api.JobSpec, dryLogger *DryLogger, pullSecret *coreapi.Secret) api.Step {
 	return &pipelineImageCacheStep{
 		config:      config,
 		resources:   resources,
@@ -96,5 +99,6 @@ func PipelineImageCacheStep(config api.PipelineImageCacheStepConfiguration, reso
 		artifactDir: artifactDir,
 		jobSpec:     jobSpec,
 		dryLogger:   dryLogger,
+		pullSecret:  pullSecret,
 	}
 }

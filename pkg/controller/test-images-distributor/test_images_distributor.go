@@ -433,29 +433,23 @@ func indexConfigsByTestInputImageStramTag(resolver registry.Resolver) agents.Ind
 		log := logrus.WithFields(logrus.Fields{"org": cfg.Metadata.Org, "repo": cfg.Metadata.Repo, "branch": cfg.Metadata.Branch})
 		for idx, testStep := range cfg.Tests {
 			if testStep.MultiStageTestConfiguration != nil {
-				// TODO (alvaroalmean): Remove once the deployment was updated
-				if resolver != nil {
-					resolved, err := resolver.Resolve(testStep.As, *testStep.MultiStageTestConfiguration)
-					if err != nil {
-						log.WithError(err).Error("Failed to resolve MultiStageTestConfiguration")
-					}
-					cfg.Tests[idx].MultiStageTestConfigurationLiteral = &resolved
+				resolved, err := resolver.Resolve(testStep.As, *testStep.MultiStageTestConfiguration)
+				if err != nil {
+					log.WithError(err).Error("Failed to resolve MultiStageTestConfiguration")
 				}
+				cfg.Tests[idx].MultiStageTestConfigurationLiteral = &resolved
 				// We always need to set to nil or we will get another error later.
 				cfg.Tests[idx].MultiStageTestConfiguration = nil
 			}
 		}
 		for idx, rawStep := range cfg.RawSteps {
 			if rawStep.TestStepConfiguration != nil && rawStep.TestStepConfiguration.MultiStageTestConfiguration != nil {
-				// TODO (alvaroalmean): Remove once the deployment was updated
-				if resolver != nil {
-					resolved, err := resolver.Resolve(rawStep.TestStepConfiguration.As, *rawStep.TestStepConfiguration.MultiStageTestConfiguration)
-					if err != nil {
-						log.WithError(err).Error("Failed to resolve MultiStageTestConfiguration")
-					}
-					// We always need to set to nil or we will get another error later.
-					cfg.RawSteps[idx].TestStepConfiguration.MultiStageTestConfigurationLiteral = &resolved
+				resolved, err := resolver.Resolve(rawStep.TestStepConfiguration.As, *rawStep.TestStepConfiguration.MultiStageTestConfiguration)
+				if err != nil {
+					log.WithError(err).Error("Failed to resolve MultiStageTestConfiguration")
 				}
+				// We always need to set to nil or we will get another error later.
+				cfg.RawSteps[idx].TestStepConfiguration.MultiStageTestConfigurationLiteral = &resolved
 				cfg.RawSteps[idx].TestStepConfiguration.MultiStageTestConfiguration = nil
 			}
 

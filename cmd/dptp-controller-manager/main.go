@@ -24,7 +24,6 @@ import (
 	"github.com/openshift/ci-tools/pkg/controller/promotionreconciler"
 	"github.com/openshift/ci-tools/pkg/controller/test-images-distributor"
 	"github.com/openshift/ci-tools/pkg/load/agents"
-	"github.com/openshift/ci-tools/pkg/registry"
 	"github.com/openshift/ci-tools/pkg/util"
 )
 
@@ -85,7 +84,6 @@ func newOpts() (*options, error) {
 	flag.StringVar(&opts.stepConfigPath, "step-config-path", "", "Path to the registries step configuration")
 	flag.StringVar(&opts.configPath, "config-path", "", "Path to the prow config")
 	flag.StringVar(&opts.jobConfigPath, "job-config-path", "", "Path to the job config")
-	_ = flag.String("promotionreconcilerOptions.ignored-github-organization", "", "deprecated, doesn't do anything. Was used to ignore github organization. We instead attempt all repos and swallow 404 errors we get from github doing so.")
 	flag.StringVar(&opts.leaderElectionSuffix, "leader-election-suffix", "", "Suffix for the leader election lock. Useful for local testing. If set, --dry-run must be set as well")
 	flag.Var(&opts.enabledControllers, "enable-controller", fmt.Sprintf("Enabled controllers. Available controllers are: %v. Can be specified multiple times. Defaults to %v", allControllers.List(), opts.enabledControllers.Strings()))
 	flag.StringVar(&opts.testImagesDistributorOptions.imagePullSecretPath, "testImagesDistributorOptions.imagePullSecretPath", "", "A file to use for reading an ImagePullSecret that will be bound to all `default` ServiceAccounts in all namespaces that have a test ImageStream on all build clusters")
@@ -131,6 +129,10 @@ func newOpts() (*options, error) {
 		}
 	}
 
+	if opts.enabledControllersSet.Has(testimagesdistributor.ControllerName) && opts.stepConfigPath == "" {
+		errs = append(errs, fmt.Errorf("--step-config-path is required when the %s controller is enabled", testimagesdistributor.ControllerName))
+	}
+
 	if err := opts.GitHubOptions.Validate(opts.dryRun); err != nil {
 		errs = append(errs, err)
 	}
@@ -164,15 +166,6 @@ func main() {
 	ciOPConfigAgent, err := agents.NewConfigAgent(opts.ciOperatorconfigPath, 2*time.Minute, prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"error"}))
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to construct ci-opeartor config agent")
-	}
-	var registryResolver registry.Resolver
-	// Make conditional for now due to keep flag compatibility
-	if opts.stepConfigPath != "" {
-		registryConfigAgent, err := agents.NewRegistryAgent(opts.stepConfigPath, 2*time.Minute, prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"error"}), true)
-		if err != nil {
-			logrus.WithError(err).Fatal("failed to construct registryAgent")
-		}
-		registryResolver = registryConfigAgent
 	}
 	configAgent := &config.Agent{}
 	if err := configAgent.Start(opts.configPath, opts.jobConfigPath); err != nil {
@@ -255,6 +248,10 @@ func main() {
 		if opts.testImagesDistributorOptions.imagePullSecretPath == "" {
 			logrus.Fatal("The testImagesDistributor requires the --testImagesDistributorOptions.imagePullSecretPath flag to be set ")
 		}
+		registryConfigAgent, err := agents.NewRegistryAgent(opts.stepConfigPath, 2*time.Minute, prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"error"}), true)
+		if err != nil {
+			logrus.WithError(err).Fatal("failed to construct registryAgent")
+		}
 
 		buildClusterManagers := map[string]controllerruntime.Manager{}
 		var errs []error
@@ -282,7 +279,7 @@ func main() {
 			buildClusterManagers,
 			ciOPConfigAgent,
 			secretAgent.GetTokenGenerator(opts.testImagesDistributorOptions.imagePullSecretPath),
-			registryResolver,
+			registryConfigAgent,
 			opts.testImagesDistributorOptions.additionalImageStreamTags,
 			opts.dryRun,
 		); err != nil {

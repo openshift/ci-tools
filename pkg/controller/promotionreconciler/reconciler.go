@@ -237,6 +237,10 @@ func (r *reconciler) currentHEADForBranch(metadata cioperatorapi.Metadata, log *
 		if github.IsNotFound(err) {
 			return "", false, nil
 		}
+		if errors.Is(err, github.GetRefTooManyResultsError{}) {
+			log.WithError(err).Debug("got multiple refs back")
+			return "", false, nil
+		}
 		return "", false, fmt.Errorf("failed to get sha for ref %s/%s/heads/%s from github: %w", metadata.Org, metadata.Repo, metadata.Branch, err)
 	}
 	return ref, true, nil

@@ -93,8 +93,20 @@ func TestReconcile(t *testing.T) {
 		verify       func(error, *prowjobreconciler.OrgRepoBranchCommit) error
 	}{
 		{
-			name:         "Failure getting commit for IST returns terminal error",
+			name:         "404 getting commit for IST returns terminal error",
 			githubClient: func(_, _, _ string) (string, error) { return "", fmt.Errorf("wrapped: %w", github.NewNotFound()) },
+			verify: func(e error, _ *prowjobreconciler.OrgRepoBranchCommit) error {
+				if !controllerutil.IsTerminal(e) {
+					return fmt.Errorf("expected to get terminal error, got %v", e)
+				}
+				return nil
+			},
+		},
+		{
+			name: "ErrTooManyRefs getting commit for IST returns terminal error",
+			githubClient: func(_, _, _ string) (string, error) {
+				return "", fmt.Errorf("wrapped: %w", github.GetRefTooManyResultsError{})
+			},
 			verify: func(e error, _ *prowjobreconciler.OrgRepoBranchCommit) error {
 				if !controllerutil.IsTerminal(e) {
 					return fmt.Errorf("expected to get terminal error, got %v", e)

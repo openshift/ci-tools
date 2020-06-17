@@ -14,6 +14,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	prowConfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/config/secret"
+	"k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/interrupts"
 	"k8s.io/test-infra/prow/logrusutil"
 	"k8s.io/test-infra/prow/metrics"
@@ -167,7 +168,7 @@ func main() {
 
 	http.HandleFunc("/", genericHandler())
 	http.HandleFunc("/result", handleCIOperatorResult(o.username, secretAgent.GetTokenGenerator(o.password)))
-	metrics.ExposeMetrics("result-aggregator", prowConfig.PushGateway{})
+	metrics.ExposeMetrics("result-aggregator", prowConfig.PushGateway{}, flagutil.DefaultMetricsPort)
 
 	interrupts.ListenAndServe(&http.Server{Addr: o.address}, o.gracePeriod)
 	health.ServeReady()

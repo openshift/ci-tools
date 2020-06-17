@@ -37,7 +37,7 @@ require (
 	github.com/prometheus/client_golang v1.5.0
 	github.com/prometheus/common v0.9.1
 	github.com/shurcooL/githubv4 v0.0.0-20191102174205-af46314aec7b
-	github.com/sirupsen/logrus v1.4.2
+	github.com/sirupsen/logrus v1.6.0
 	github.com/spf13/afero v1.2.2
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
@@ -45,7 +45,7 @@ require (
 	k8s.io/api v0.18.2
 	k8s.io/apimachinery v0.18.2
 	k8s.io/client-go v9.0.0+incompatible
-	k8s.io/test-infra v0.0.0-20200602133615-44723bee4ba4
+	k8s.io/test-infra v0.0.0-20200616221604-356025b92359
 	k8s.io/utils v0.0.0-20200324210504-a9aa75ae1b89
 	sigs.k8s.io/boskos v0.0.0-20200530174753-71e795271860
 	sigs.k8s.io/controller-runtime v0.5.4

@@ -19,10 +19,10 @@ import (
 	"k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/logrusutil"
 	"k8s.io/test-infra/prow/pjutil"
-	"sigs.k8s.io/controller-runtime"
+	controllerruntime "sigs.k8s.io/controller-runtime"
 
 	"github.com/openshift/ci-tools/pkg/controller/promotionreconciler"
-	"github.com/openshift/ci-tools/pkg/controller/test-images-distributor"
+	testimagesdistributor "github.com/openshift/ci-tools/pkg/controller/test-images-distributor"
 	"github.com/openshift/ci-tools/pkg/load/agents"
 	"github.com/openshift/ci-tools/pkg/util"
 )
@@ -187,7 +187,7 @@ func main() {
 	if err := prowv1.AddToScheme(mgr.GetScheme()); err != nil {
 		logrus.WithError(err).Fatal("Failed to add prowv1 to scheme")
 	}
-	pjutil.ServePProf()
+	pjutil.ServePProf(flagutil.DefaultPProfPort)
 
 	// Needed by the ImageStreamTagReconciler. This is a setting on the SharedInformer
 	// so its applied for all watches for all controllers in this manager. If needed,

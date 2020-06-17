@@ -81,6 +81,8 @@ type HookClient interface {
 	EditOrgHook(org string, id int, req HookRequest) error
 	CreateOrgHook(org string, req HookRequest) (int, error)
 	CreateRepoHook(org, repo string, req HookRequest) (int, error)
+	DeleteOrgHook(org string, id int, req HookRequest) error
+	DeleteRepoHook(org, repo string, id int, req HookRequest) error
 }
 
 // CommentClient interface for comment related API actions
@@ -157,7 +159,7 @@ type RepositoryClient interface {
 	GetFile(org, repo, filepath, commit string) ([]byte, error)
 	IsCollaborator(org, repo, user string) (bool, error)
 	ListCollaborators(org, repo string) ([]User, error)
-	CreateFork(owner, repo string) error
+	CreateFork(owner, repo string) (string, error)
 	ListRepoTeams(org, repo string) ([]Team, error)
 	CreateRepo(owner string, isUser bool, repo RepoCreateRequest) (*FullRepo, error)
 	UpdateRepo(owner, name string, repo RepoUpdateRequest) (*FullRepo, error)
@@ -1030,6 +1032,35 @@ func (c *client) CreateOrgHook(org string, req HookRequest) (int, error) {
 func (c *client) CreateRepoHook(org, repo string, req HookRequest) (int, error) {
 	c.log("CreateRepoHook", org, repo)
 	return c.createHook(org, &repo, req)
+}
+
+func (c *client) deleteHook(path string) error {
+	if c.dry {
+		return nil
+	}
+
+	_, err := c.request(&request{
+		method:    http.MethodDelete,
+		path:      path,
+		exitCodes: []int{204},
+	}, nil)
+	return err
+}
+
+// DeleteRepoHook deletes an existing repo level webhook.
+// https://developer.github.com/v3/repos/hooks/#delete-a-hook
+func (c *client) DeleteRepoHook(org, repo string, id int, req HookRequest) error {
+	c.log("DeleteRepoHook", org, repo, id)
+	path := fmt.Sprintf("/repos/%s/%s/hooks/%d", org, repo, id)
+	return c.deleteHook(path)
+}
+
+// DeleteOrgHook deletes and existing org level webhook.
+// https://developer.github.com/v3/orgs/hooks/#edit-a-hook
+func (c *client) DeleteOrgHook(org string, id int, req HookRequest) error {
+	c.log("DeleteOrgHook", org, id)
+	path := fmt.Sprintf("/orgs/%s/hooks/%d", org, id)
+	return c.deleteHook(path)
 }
 
 // GetOrg returns current metadata for the org
@@ -2567,19 +2598,77 @@ func (c *client) ReopenPR(org, repo string, number int) error {
 // GetRef returns the SHA of the given ref, such as "heads/master".
 //
 // See https://developer.github.com/v3/git/refs/#get-a-reference
+// The gitbub api does prefix matching and might return multiple results,
+// in which case we will return a GetRefTooManyResultsError
 func (c *client) GetRef(org, repo, ref string) (string, error) {
 	durationLogger := c.log("GetRef", org, repo, ref)
 	defer durationLogger()
 
-	var res struct {
-		Object map[string]string `json:"object"`
-	}
+	res := GetRefResponse{}
 	_, err := c.request(&request{
 		method:    http.MethodGet,
 		path:      fmt.Sprintf("/repos/%s/%s/git/refs/%s", org, repo, ref),
 		exitCodes: []int{200},
 	}, &res)
-	return res.Object["sha"], err
+	if err != nil {
+		return "", nil
+	}
+
+	if n := len(res); n > 1 {
+		return "", GetRefTooManyResultsError{org: org, repo: repo, ref: ref, resultsRefs: res.RefNames()}
+	}
+	return res[0].Object.SHA, nil
+}
+
+type GetRefTooManyResultsError struct {
+	org, repo, ref string
+	resultsRefs    []string
+}
+
+func (GetRefTooManyResultsError) Is(err error) bool {
+	_, ok := err.(GetRefTooManyResultsError)
+	return ok
+}
+
+func (e GetRefTooManyResultsError) Error() string {
+	return fmt.Sprintf("query for %s/%s ref %q didn't match one but multiple refs: %v", e.org, e.repo, e.ref, e.resultsRefs)
+}
+
+type GetRefResponse []GetRefResult
+
+// We need a custom unmarshaler because the GetRefResult may either be a
+// single GetRefResponse or multiple
+func (grr *GetRefResponse) UnmarshalJSON(data []byte) error {
+	result := &GetRefResult{}
+	if err := json.Unmarshal(data, result); err == nil {
+		*(grr) = GetRefResponse{*result}
+		return nil
+	}
+	var response []GetRefResult
+	if err := json.Unmarshal(data, &response); err != nil {
+		return fmt.Errorf("failed to unmarshal response %s: %w", string(data), err)
+	}
+	*grr = GetRefResponse(response)
+	return nil
+}
+
+func (grr *GetRefResponse) RefNames() []string {
+	var result []string
+	for _, item := range *grr {
+		result = append(result, item.Ref)
+	}
+	return result
+}
+
+type GetRefResult struct {
+	Ref    string `json:"ref,omitempty"`
+	NodeID string `json:"node_id,omitempty"`
+	URL    string `json:"url,omitempty"`
+	Object struct {
+		Type string `json:"type,omitempty"`
+		SHA  string `json:"sha,omitempty"`
+		URL  string `json:"url,omitempty"`
+	} `json:"object,omitempty"`
 }
 
 // DeleteRef deletes the given ref
@@ -3159,16 +3248,24 @@ func (c *client) ListCollaborators(org, repo string) ([]User, error) {
 // recommends contacting their support.
 //
 // See https://developer.github.com/v3/repos/forks/#create-a-fork
-func (c *client) CreateFork(owner, repo string) error {
+func (c *client) CreateFork(owner, repo string) (string, error) {
 	durationLogger := c.log("CreateFork", owner, repo)
 	defer durationLogger()
+
+	resp := struct {
+		Name string `json:"name"`
+	}{}
 
 	_, err := c.request(&request{
 		method:    http.MethodPost,
 		path:      fmt.Sprintf("/repos/%s/%s/forks", owner, repo),
 		exitCodes: []int{202},
-	}, nil)
-	return err
+	}, &resp)
+
+	// there are many reasons why GitHub may end up forking the
+	// repo under a different name -- the repo got re-named, the
+	// bot account already has a fork with that name, etc
+	return resp.Name, err
 }
 
 // ListRepoTeams gets a list of all the teams with access to a repository

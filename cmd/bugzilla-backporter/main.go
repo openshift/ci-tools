@@ -124,7 +124,7 @@ func main() {
 		log.WithError(err).Fatal("Error getting Bugzilla client.")
 	}
 	health := pjutil.NewHealth()
-	metrics.ExposeMetrics("ci-operator-bugzilla-backporter", prowConfig.PushGateway{})
+	metrics.ExposeMetrics("ci-operator-bugzilla-backporter", prowConfig.PushGateway{}, prowflagutil.DefaultMetricsPort)
 
 	http.HandleFunc("/", handleWithMetrics(backporter.GetLandingHandler()))
 	http.HandleFunc("/getclones", handleWithMetrics(backporter.GetClonesHandler(bugzillaClient)))

@@ -154,6 +154,9 @@ func TestGetClonesHandler(t *testing.T) {
 		Summary:    "Sample bug to test implementation of clones handler",
 	}
 	bug1ID, err := fake.CreateBug(bug1Create)
+	if err != nil {
+		t.Errorf("Error creating bug: %v", err)
+	}
 	bug1, err := fake.GetBug(bug1ID)
 	if err != nil {
 		t.Errorf("Error retreiving bug: %v", err)

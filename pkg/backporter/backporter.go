@@ -192,7 +192,7 @@ func writePage(w http.ResponseWriter, title string, body *template.Template, dat
 		fmt.Fprintf(w, "%s: %v", http.StatusText(http.StatusInternalServerError), err)
 		return err
 	}
-	fmt.Fprintf(w, htmlPageEnd)
+	fmt.Fprint(w, htmlPageEnd)
 	return nil
 }
 

@@ -16,7 +16,6 @@ periodics:
     containers:
     - args:
       - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
-      - --kubeconfig=/etc/apici/kubeconfig
       - --report-password-file=/etc/report/password.txt
       - --report-username=ci
       - --secret-dir=/usr/local/e2e-aws-nightly-cluster-profile
@@ -40,9 +39,6 @@ periodics:
         requests:
           cpu: 10m
       volumeMounts:
-      - mountPath: /etc/apici
-        name: apici-ci-operator-credentials
-        readOnly: true
       - mountPath: /usr/local/e2e-aws-nightly-cluster-profile
         name: cluster-profile
       - mountPath: /usr/local/e2e-aws-nightly
@@ -56,12 +52,6 @@ periodics:
         readOnly: true
     serviceAccountName: ci-operator
     volumes:
-    - name: apici-ci-operator-credentials
-      secret:
-        items:
-        - key: sa.ci-operator.apici.config
-          path: kubeconfig
-        secretName: apici-ci-operator-credentials
     - name: cluster-profile
       projected:
         sources:
@@ -93,7 +83,6 @@ periodics:
     containers:
     - args:
       - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
-      - --kubeconfig=/etc/apici/kubeconfig
       - --report-password-file=/etc/report/password.txt
       - --report-username=ci
       - --secret-dir=/usr/local/e2e-nightly-cluster-profile
@@ -117,9 +106,6 @@ periodics:
         requests:
           cpu: 10m
       volumeMounts:
-      - mountPath: /etc/apici
-        name: apici-ci-operator-credentials
-        readOnly: true
       - mountPath: /usr/local/e2e-nightly-cluster-profile
         name: cluster-profile
       - mountPath: /usr/local/e2e-nightly
@@ -133,12 +119,6 @@ periodics:
         readOnly: true
     serviceAccountName: ci-operator
     volumes:
-    - name: apici-ci-operator-credentials
-      secret:
-        items:
-        - key: sa.ci-operator.apici.config
-          path: kubeconfig
-        secretName: apici-ci-operator-credentials
     - name: cluster-profile
       projected:
         sources:

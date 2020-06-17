@@ -35,11 +35,6 @@ type ProwgenInfo struct {
 func generatePodSpec(info *ProwgenInfo, secrets []*cioperatorapi.Secret) *corev1.PodSpec {
 	volumeMounts := []corev1.VolumeMount{
 		{
-			Name:      "apici-ci-operator-credentials",
-			MountPath: "/etc/apici",
-			ReadOnly:  true,
-		},
-		{
 			Name:      "pull-secret",
 			MountPath: "/etc/pull-secret",
 			ReadOnly:  true,
@@ -52,20 +47,6 @@ func generatePodSpec(info *ProwgenInfo, secrets []*cioperatorapi.Secret) *corev1
 	}
 
 	volumes := []corev1.Volume{
-		{
-			Name: "apici-ci-operator-credentials",
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{
-					SecretName: "apici-ci-operator-credentials",
-					Items: []corev1.KeyToPath{
-						{
-							Key:  "sa.ci-operator.apici.config",
-							Path: "kubeconfig",
-						},
-					},
-				},
-			},
-		},
 		{
 			Name: "pull-secret",
 			VolumeSource: corev1.VolumeSource{
@@ -214,7 +195,6 @@ func generateCiOperatorPodSpec(info *ProwgenInfo, secrets []*cioperatorapi.Secre
 	ret := generatePodSpec(info, secrets)
 	ret.Containers[0].Command = []string{"ci-operator"}
 	ret.Containers[0].Args = append([]string{
-		"--kubeconfig=/etc/apici/kubeconfig",
 		"--image-import-pull-secret=/etc/pull-secret/.dockerconfigjson",
 		"--report-username=ci",
 		"--report-password-file=/etc/report/password.txt",

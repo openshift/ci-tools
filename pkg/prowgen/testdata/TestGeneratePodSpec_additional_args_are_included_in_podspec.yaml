@@ -1,0 +1,31 @@
+containers:
+- args:
+  - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
+  - --report-username=ci
+  - --report-password-file=/etc/report/password.txt
+  - --promote
+  - --some=thing
+  - --target=target
+  command:
+  - ci-operator
+  image: ci-operator:latest
+  imagePullPolicy: Always
+  name: ""
+  resources:
+    requests:
+      cpu: 10m
+  volumeMounts:
+  - mountPath: /etc/pull-secret
+    name: pull-secret
+    readOnly: true
+  - mountPath: /etc/report
+    name: result-aggregator
+    readOnly: true
+serviceAccountName: ci-operator
+volumes:
+- name: pull-secret
+  secret:
+    secretName: regcred
+- name: result-aggregator
+  secret:
+    secretName: result-aggregator

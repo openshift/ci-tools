@@ -1,0 +1,15 @@
+agent: kubernetes
+always_run: true
+branches:
+- branch
+context: ci/prow/also-testname
+decorate: true
+decoration_config:
+  skip_cloning: true
+labels:
+  ci-operator.openshift.io/prowgen-controlled: "true"
+  ci-operator.openshift.io/variant: also
+  pj-rehearse.openshift.io/can-be-rehearsed: "true"
+name: pull-ci-org-repo-branch-also-testname
+rerun_command: /test also-testname
+trigger: (?m)^/test( | .* )also-testname,?($|\s.*)

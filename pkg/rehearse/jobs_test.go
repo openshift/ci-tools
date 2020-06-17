@@ -3,14 +3,11 @@ package rehearse
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
-	"io/ioutil"
 	"path/filepath"
 	"reflect"
 	"sort"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -18,7 +15,6 @@ import (
 	"github.com/ghodss/yaml"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/pmezard/go-difflib/difflib"
 	"github.com/sirupsen/logrus"
 	logrustest "github.com/sirupsen/logrus/hooks/test"
 
@@ -40,6 +36,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/jobconfig"
 	"github.com/openshift/ci-tools/pkg/load"
 	"github.com/openshift/ci-tools/pkg/registry"
+	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
 const testingRegistry = "../../test/multistage-registry/registry"
@@ -97,8 +94,6 @@ func generateTestConfigFiles() config.DataByFilename {
 		},
 	}
 }
-
-var update = flag.Bool("update", false, "update fixtures")
 
 var ignoreUnexported = cmpopts.IgnoreUnexported(prowconfig.Presubmit{}, prowconfig.Brancher{}, prowconfig.RegexpChangeMatcher{})
 
@@ -414,7 +409,7 @@ func TestMakeRehearsalPresubmit(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to serialize job: %v", err)
 			}
-			compareWithFixture(t, string(serializedResult), *update)
+			testhelper.CompareWithFixture(t, string(serializedResult))
 		})
 	}
 }
@@ -1192,38 +1187,6 @@ func TestRemoveConfigResolverFlags(t *testing.T) {
 				t.Fatalf("ci-operator config info differs from expected: %v", cmp.Diff(testCase.expectedInfo, info))
 			}
 		})
-	}
-}
-
-func compareWithFixture(t *testing.T, output string, update bool) {
-	golden, err := filepath.Abs(filepath.Join("testdata", strings.ReplaceAll(t.Name(), "/", "_")+".yaml"))
-	if err != nil {
-		t.Fatalf("failed to get absolute path to testdata file: %v", err)
-	}
-	if update {
-		if err := ioutil.WriteFile(golden, []byte(output), 0644); err != nil {
-			t.Fatalf("failed to write updated fixture: %v", err)
-		}
-	}
-	expected, err := ioutil.ReadFile(golden)
-	if err != nil {
-		t.Fatalf("failed to read testdata file: %v", err)
-	}
-
-	diff := difflib.UnifiedDiff{
-		A:        difflib.SplitLines(string(expected)),
-		B:        difflib.SplitLines(output),
-		FromFile: "Fixture",
-		ToFile:   "Current",
-		Context:  3,
-	}
-	diffStr, err := difflib.GetUnifiedDiffString(diff)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if diffStr != "" {
-		t.Errorf("got diff between expected and actual result: \n%s\n\nIf this is expected, re-run the test with `-update` flag to update the fixture.", diffStr)
 	}
 }
 

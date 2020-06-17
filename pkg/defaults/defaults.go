@@ -185,7 +185,6 @@ func FromConfig(
 				} else {
 					releaseStep = release.AssembleReleaseStep(name, rawStep.ReleaseImagesTagStepConfiguration, config.Resources, podClient, imageClient, saGetter, rbacClient, artifactDir, jobSpec, dryLogger)
 				}
-				addProvidesForStep(releaseStep, params)
 				buildSteps = append(buildSteps, releaseStep)
 			}
 		} else if rawStep.ResolvedReleaseImagesStepConfiguration != nil {
@@ -220,7 +219,6 @@ func FromConfig(
 			log.Printf("Resolved release %s to %s", resolveConfig.Name, value)
 
 			step = release.ImportReleaseStep(resolveConfig.Name, value, false, config.Resources, podClient, imageClient, saGetter, rbacClient, artifactDir, jobSpec, dryLogger)
-			addProvidesForStep(step, params)
 		} else if testStep := rawStep.TestStepConfiguration; testStep != nil {
 			if test := testStep.MultiStageTestConfigurationLiteral; test != nil {
 				step = steps.MultiStageTestStep(*testStep, config, params, podClient, secretGetter, saGetter, rbacClient, artifactDir, jobSpec, dryLogger)
@@ -248,7 +246,6 @@ func FromConfig(
 			} else {
 				step = steps.TestStep(*testStep, config.Resources, podClient, artifactDir, jobSpec, dryLogger)
 			}
-			addProvidesForStep(step, params)
 		}
 		if !isReleaseStep {
 			step, ok := checkForFullyQualifiedStep(step, params)
@@ -278,7 +275,6 @@ func FromConfig(
 					return nil, nil, fmt.Errorf("cannot resolve lease type from cluster type: %v", err)
 				}
 				step = steps.LeaseStep(leaseClient, lease, step, jobSpec.Namespace, namespaceClient)
-				addProvidesForStep(step, params)
 				break
 			}
 		}
@@ -294,6 +290,10 @@ func FromConfig(
 	}
 
 	buildSteps = append(buildSteps, steps.ImagesReadyStep(imageStepLinks))
+
+	for _, step := range buildSteps {
+		addProvidesForStep(step, params)
+	}
 
 	if promote {
 		cfg, err := promotionDefaults(config)

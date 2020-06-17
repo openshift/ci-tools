@@ -18,6 +18,9 @@ in_repo_config:
     '*':
     - default
 log_level: info
+managed_webhooks:
+  org_repo_config: null
+  respect_legacy_global_token: false
 owners_dir_blacklist: {}
 plank:
   max_goroutines: 20

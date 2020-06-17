@@ -5,16 +5,18 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/openshift/ci-tools/pkg/api"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"strconv"
 	"time"
 
+	"github.com/openshift/ci-tools/pkg/api"
+
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	prowConfig "k8s.io/test-infra/prow/config"
+	"k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/interrupts"
 	"k8s.io/test-infra/prow/metrics"
 	"k8s.io/test-infra/prow/pjutil"
@@ -269,7 +271,7 @@ func main() {
 	level, _ := log.ParseLevel(o.logLevel)
 	log.SetLevel(level)
 	health := pjutil.NewHealth()
-	metrics.ExposeMetrics("ci-operator-configresolver", prowConfig.PushGateway{})
+	metrics.ExposeMetrics("ci-operator-configresolver", prowConfig.PushGateway{}, flagutil.DefaultMetricsPort)
 
 	configAgent, err := agents.NewConfigAgent(o.configPath, o.cycle, configresolverMetrics.errorRate)
 	if err != nil {

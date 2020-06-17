@@ -312,7 +312,7 @@ func (g gitSyncer) mirror(repoDir string, src, dst location) error {
 	}
 
 	if exitCode != 0 {
-		if err := addGitRemote(logger, g.git, src.org, src.repo, repoDir, srcRemote); err != nil {
+		if err := addGitRemote(logger, g.git, g.token, src.org, src.repo, repoDir, srcRemote); err != nil {
 			return err
 		}
 	}
@@ -412,7 +412,7 @@ func (g gitSyncer) mirror(repoDir string, src, dst location) error {
 	return nil
 }
 
-func addGitRemote(logger *logrus.Entry, git gitFunc, org, repo, repoDir, remoteName string) error {
+func addGitRemote(logger *logrus.Entry, git gitFunc, token, org, repo, repoDir, remoteName string) error {
 	remoteSetupLogger := logger.WithField("remote-name", remoteName)
 	remoteSetupLogger.Debug("Remote does not exist, setting up")
 
@@ -420,6 +420,9 @@ func addGitRemote(logger *logrus.Entry, git gitFunc, org, repo, repoDir, remoteN
 	if err != nil {
 		remoteSetupLogger.WithError(err).Error("Failed to construct URL for the source remote")
 		return fmt.Errorf("failed to construct URL for the source remote")
+	}
+	if token != "" {
+		srcURL.User = url.User(token)
 	}
 
 	remoteSetupLogger = remoteSetupLogger.WithField("remote-url", srcURL.String())
@@ -545,7 +548,7 @@ func main() {
 
 	var errs []error
 
-	locations, whitelistErrors := getWhitelistedLocations(o.WhitelistOptions.WhitelistConfig.Whitelist, syncer.git)
+	locations, whitelistErrors := getWhitelistedLocations(o.WhitelistOptions.WhitelistConfig.Whitelist, syncer.git, token)
 	errs = append(errs, whitelistErrors...)
 
 	callback := func(_ *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {
@@ -589,16 +592,25 @@ func main() {
 	}
 }
 
-func getWhitelistedLocations(whitelist map[string][]string, git gitFunc) (map[location]struct{}, []error) {
+func getWhitelistedLocations(whitelist map[string][]string, git gitFunc, token string) (map[location]struct{}, []error) {
 	var errs []error
 	locations := make(map[location]struct{})
 
 	for org, repos := range whitelist {
 		for _, repo := range repos {
-			remote := fmt.Sprintf("https://github.com/%s/%s", org, repo)
-			logger := logrus.WithField("remote", remote)
-
-			branches, err := getRemoteBranchHeads(logger, git, "", remote)
+			remoteURL, err := url.Parse(fmt.Sprintf("https://github.com/%s/%s", org, repo))
+			if err != nil {
+				logrus.WithError(err).Error("Failed to construct URL for the remote")
+				if err != nil {
+					errs = append(errs, err)
+					continue
+				}
+			}
+			if token != "" {
+				remoteURL.User = url.User(token)
+			}
+			logger := logrus.WithField("remote", remoteURL.String())
+			branches, err := getRemoteBranchHeads(logger, git, "", remoteURL.String())
 			if err != nil {
 				errs = append(errs, err)
 				continue

@@ -478,7 +478,7 @@ type loadRepoTestData struct {
 	ConfigSubDirs []string
 	GitHubOrg     string
 	GitHubRepo    string
-	BlackList     sets.String
+	Blocklist     blocklist
 	ExpectedRepos []orgRepo
 }
 
@@ -507,7 +507,7 @@ func TestLoadRepos(t *testing.T) {
 			ConfigSubDirs: []string{"jobs", "config", "templates"},
 			GitHubOrg:     "openshift",
 			GitHubRepo:    "release",
-			BlackList:     sets.NewString("testdata/test2/templates/openshift/installer"),
+			Blocklist:     blocklist{directories: sets.NewString("testdata/test2/templates/openshift/installer")},
 			ExpectedRepos: []orgRepo{
 				{
 					Directories: []string{
@@ -521,7 +521,25 @@ func TestLoadRepos(t *testing.T) {
 					Directories: []string{
 						"testdata/test2/jobs/openshift/installer",
 						"testdata/test2/config/openshift/installer",
-						//"testdata/test2/templates/openshift/installer", // not present due to blacklist
+						// "testdata/test2/templates/openshift/installer", // not present due to blocklist
+					},
+					Organization: "openshift",
+					Repository:   "installer",
+				},
+			},
+		},
+		{
+			TestDirectory: "testdata/test2",
+			ConfigSubDirs: []string{"jobs", "config", "templates"},
+			GitHubOrg:     "openshift",
+			GitHubRepo:    "release",
+			Blocklist:     blocklist{orgs: sets.NewString("kubevirt")},
+			ExpectedRepos: []orgRepo{
+				{
+					Directories: []string{
+						"testdata/test2/jobs/openshift/installer",
+						"testdata/test2/config/openshift/installer",
+						"testdata/test2/templates/openshift/installer",
 					},
 					Organization: "openshift",
 					Repository:   "installer",
@@ -530,7 +548,7 @@ func TestLoadRepos(t *testing.T) {
 		},
 	}
 	for _, data := range loadRepoTestData {
-		repos, err := loadRepos(data.TestDirectory, data.BlackList, data.ConfigSubDirs, data.GitHubOrg, data.GitHubRepo)
+		repos, err := loadRepos(data.TestDirectory, data.Blocklist, data.ConfigSubDirs, data.GitHubOrg, data.GitHubRepo)
 		if err != nil {
 			t.Fatalf("%s: failed to load repos: %v", data.TestDirectory, err)
 		}

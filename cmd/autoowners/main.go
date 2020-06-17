@@ -52,7 +52,7 @@ func (orgRepo orgRepo) repoString() string {
 	return fmt.Sprintf("%s/%s", orgRepo.Organization, orgRepo.Repository)
 }
 
-func loadRepos(configRootDir string, blacklist sets.String, configSubDirs []string, githubOrg string, githubRepo string) ([]orgRepo, error) {
+func loadRepos(configRootDir string, blocked blocklist, configSubDirs []string, githubOrg string, githubRepo string) ([]orgRepo, error) {
 	var orgRepos []orgRepo
 	configSubDirectories := make([]string, 0, len(configSubDirs))
 	for _, sourceSubDir := range configSubDirs {
@@ -69,6 +69,10 @@ func loadRepos(configRootDir string, blacklist sets.String, configSubDirs []stri
 		}
 		logrus.WithField("orgDir.Name()", orgDir.Name()).Debug("loading orgDir ...")
 		org := filepath.Base(orgDir.Name())
+		if blocked.orgs.Has(org) {
+			logrus.WithField("org", org).Info("org is on organization blocklist, skipping")
+			continue
+		}
 		repoDirs, err := ioutil.ReadDir(filepath.Join(configSubDirectories[0], orgDir.Name()))
 		if err != nil {
 			return nil, err
@@ -90,10 +94,10 @@ func loadRepos(configRootDir string, blacklist sets.String, configSubDirs []stri
 				fileInfo, err := os.Stat(d)
 				logrus.WithField("err", err).Debug("os.Stat(d): checking error ...")
 				if !os.IsNotExist(err) && fileInfo.IsDir() {
-					logrus.WithField("d", d).WithField("blacklist", blacklist.List()).
-						Debug("trying to determine if the directory is in the blacklist")
-					if blacklist.Has(d) {
-						logrus.WithField("directory", d).Info("Ignoring the directory in the blacklist.")
+					logrus.WithField("d", d).WithField("blocked-directories", blocked.directories).
+						Debug("trying to determine if the directory is in the repo blocklist")
+					if blocked.directories.Has(d) {
+						logrus.WithField("repository", d).Info("repository is on repository blocklist, skipping")
 						continue
 					}
 					dirs = append(dirs, d)
@@ -243,8 +247,8 @@ func writeOwners(orgRepo orgRepo, httpResult httpResult, cleaner ownersCleaner) 
 	return nil
 }
 
-func pullOwners(gc github.Client, configRootDir string, blacklist sets.String, configSubDirs []string, githubOrg string, githubRepo string) error {
-	orgRepos, err := loadRepos(configRootDir, blacklist, configSubDirs, githubOrg, githubRepo)
+func pullOwners(gc github.Client, configRootDir string, blocklist blocklist, configSubDirs []string, githubOrg string, githubRepo string) error {
+	orgRepos, err := loadRepos(configRootDir, blocklist, configSubDirs, githubOrg, githubRepo)
 	if err != nil {
 		return err
 	}
@@ -285,7 +289,8 @@ type options struct {
 	targetDir          string
 	targetSubDirectory string
 	configSubDirs      flagutil.Strings
-	blacklist          flagutil.Strings
+	blockedRepos       flagutil.Strings
+	blockedOrgs        flagutil.Strings
 	debugMode          bool
 	selfApprove        bool
 	flagutil.GitHubOptions
@@ -293,7 +298,7 @@ type options struct {
 
 func parseOptions() options {
 	var o options
-	//To avoid flag from dependencies such as https://github.com/openshift/ci-tools/blob/5b5410293f7cd318540d1fb333c68b93ddab2b60/vendor/github.com/tektoncd/pipeline/pkg/apis/pipeline/v1alpha1/artifact_pvc.go#L30
+	// To avoid flag from dependencies such as https://github.com/openshift/ci-tools/blob/5b5410293f7cd318540d1fb333c68b93ddab2b60/vendor/github.com/tektoncd/pipeline/pkg/apis/pipeline/v1alpha1/artifact_pvc.go#L30
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	fs.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually create the pull request with github client")
 	fs.StringVar(&o.githubLogin, "github-login", githubLogin, "The GitHub username to use.")
@@ -305,7 +310,8 @@ func parseOptions() options {
 	fs.StringVar(&o.targetDir, "target-dir", "", "The directory containing the target repo.")
 	fs.StringVar(&o.targetSubDirectory, "target-subdir", targetSubDirectory, "The sub-directory of the target repo where the configurations are stored.")
 	fs.Var(&o.configSubDirs, "config-subdir", "The sub-directory where configuration is stored. (Default list of directories: "+configSubDirs+")")
-	fs.Var(&o.blacklist, "ignore-repo", "The repo for which syncing OWNERS file is disabled.")
+	fs.Var(&o.blockedRepos, "ignore-repo", "The repo for which syncing OWNERS file is disabled.")
+	fs.Var(&o.blockedOrgs, "ignore-org", "The orgs for which syncing OWNERS file is disabled.")
 	fs.BoolVar(&o.debugMode, "debug-mode", false, "Enable the DEBUG level of logs if true.")
 	fs.BoolVar(&o.selfApprove, "self-approve", false, "Self-approve the PR by adding the `approved` and `lgtm` labels. Requires write permissions on the repo.")
 	o.AddFlags(fs)
@@ -380,6 +386,11 @@ func listUpdatedDirectoriesFromGitStatusOutput(s string) ([]string, error) {
 	return directories, nil
 }
 
+type blocklist struct {
+	directories sets.String
+	orgs        sets.String
+}
+
 func main() {
 	o := parseOptions()
 	if err := validateOptions(o); err != nil {
@@ -411,8 +422,10 @@ func main() {
 		configSubDirectories = strings.Split(configSubDirs, ",")
 	}
 	configRootDirectory := filepath.Join(o.targetDir, o.targetSubDirectory)
-	blackListDirectories := sets.NewString(o.blacklist.Strings()...)
-	if err := pullOwners(gc, configRootDirectory, blackListDirectories, configSubDirectories, o.githubOrg, o.githubRepo); err != nil {
+	var blocked blocklist
+	blocked.directories = sets.NewString(o.blockedRepos.Strings()...)
+	blocked.orgs = sets.NewString(o.blockedOrgs.Strings()...)
+	if err := pullOwners(gc, configRootDirectory, blocked, configSubDirectories, o.githubOrg, o.githubRepo); err != nil {
 		logrus.WithError(err).Fatal("Error occurred when walking through the target dir.")
 	}
 

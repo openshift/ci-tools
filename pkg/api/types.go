@@ -323,12 +323,6 @@ type ReleaseTagConfiguration struct {
 	// NamePrefix is prepended to the final output image name
 	// if specified.
 	NamePrefix string `json:"name_prefix,omitempty"`
-
-	// TagOverrides is map of ImageStream name to
-	// tag, allowing for specific components in the
-	// above namespace to be tagged in at a different
-	// level than the rest.
-	TagOverrides map[string]string `json:"tag_overrides,omitempty"`
 }
 
 // ReleaseConfiguration records a resolved release with its name.

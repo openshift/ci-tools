@@ -56,6 +56,25 @@ func init() {
 	prometheus.MustRegister(configReloadTimeMetric)
 }
 
+// NewFakeConfigAgent returns a new static config agent
+// that can be used for tests
+func NewFakeConfigAgent(configs load.ByOrgRepo) ConfigAgent {
+	a := &configAgent{
+		lock:         &sync.RWMutex{},
+		configs:      configs,
+		errorMetrics: prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"error"}),
+	}
+	a.reloadConfig = func() error {
+		indexes := a.buildIndexes(a.configs)
+		a.lock.Lock()
+		a.indexes = indexes
+		a.lock.Unlock()
+		return nil
+	}
+
+	return a
+}
+
 // NewConfigAgent returns a ConfigAgent interface that automatically reloads when
 // configs are changed on disk as well as on a period specified with a time.Duration.
 func NewConfigAgent(configPath string, cycle time.Duration, errorMetrics *prometheus.CounterVec) (ConfigAgent, error) {
@@ -185,15 +204,17 @@ func (a *configAgent) loadFilenameToConfig() error {
 func (a *configAgent) buildIndexes(orgRepoConfigs load.ByOrgRepo) map[string]configIndex {
 	indexes := map[string]configIndex{}
 	for indexName, indexFunc := range a.indexFuncs {
+		// Make sure the index always exists even if empty, otherwise we return a confusing
+		// "index does not exist error" in case its empty
+		if _, exists := indexes[indexName]; !exists {
+			indexes[indexName] = configIndex{}
+		}
 		for _, orgConfigs := range orgRepoConfigs {
 			for _, repoConfigs := range orgConfigs {
 				for _, config := range repoConfigs {
 					var resusableConfigPtr *api.ReleaseBuildConfiguration
 
 					for _, indexKey := range indexFunc(config) {
-						if _, exists := indexes[indexName]; !exists {
-							indexes[indexName] = configIndex{}
-						}
 						if resusableConfigPtr == nil {
 							config := config
 							resusableConfigPtr = &config

@@ -26,6 +26,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	testimagestreamtagimportv1 "github.com/openshift/ci-tools/pkg/api/testimagestreamtagimport/v1"
 	controllerutil "github.com/openshift/ci-tools/pkg/controller/util"
 	"github.com/openshift/ci-tools/pkg/load/agents"
@@ -572,4 +573,64 @@ func TestTestImageStramTagImportHandlerRoundTrips(t *testing.T) {
 	if namespacedName.Name != name {
 		t.Errorf("expected name to be %s, was %s", name, namespacedName.Name)
 	}
+}
+
+func TestTestInputImageStreamTagFilterFactory(t *testing.T) {
+	t.Parallel()
+	const namespace, streamName, tagName = "namespace", "streamName", "streamTag"
+	testCases := []struct {
+		name                      string
+		config                    api.ReleaseBuildConfiguration
+		additionalImageStreamTags sets.String
+		expectedResult            bool
+	}{
+		{
+			name:                      "imagestreamtag is explicitly allowed",
+			additionalImageStreamTags: sets.NewString(namespace + "/" + streamName + ":" + tagName),
+			expectedResult:            true,
+		},
+		{
+			name: "imagestreamtag is referenced by config",
+			config: api.ReleaseBuildConfiguration{RawSteps: []api.StepConfiguration{{
+				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
+					BaseImage: api.ImageStreamTagReference{Namespace: namespace, Name: streamName, Tag: tagName},
+				},
+			}}},
+			expectedResult: true,
+		},
+		{
+			name: "imagestream is referenced by config",
+			config: api.ReleaseBuildConfiguration{InputConfiguration: api.InputConfiguration{
+				ReleaseTagConfiguration: &api.ReleaseTagConfiguration{Namespace: namespace, Name: streamName},
+			}},
+			expectedResult: true,
+		},
+		{
+			name: "no reference, imagestreatag gets denied",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			configAgent := agents.NewFakeConfigAgent(map[string]map[string][]api.ReleaseBuildConfiguration{"": {"": []api.ReleaseBuildConfiguration{tc.config}}})
+			filter, err := testInputImageStreamTagFilterFactory(
+				logrus.NewEntry(logrus.New()),
+				configAgent,
+				noOpRegistryResolver{},
+				tc.additionalImageStreamTags,
+			)
+			if err != nil {
+				t.Fatalf("failed to construct filter: %v", err)
+			}
+			if result := filter(types.NamespacedName{Namespace: namespace, Name: streamName + ":" + tagName}); result != tc.expectedResult {
+				t.Errorf("expected result %t, got result %t", tc.expectedResult, result)
+			}
+		})
+	}
+}
+
+type noOpRegistryResolver struct{}
+
+func (noOpRegistryResolver) Resolve(_ string, _ api.MultiStageTestConfiguration) (api.MultiStageTestConfigurationLiteral, error) {
+	return api.MultiStageTestConfigurationLiteral{}, nil
 }

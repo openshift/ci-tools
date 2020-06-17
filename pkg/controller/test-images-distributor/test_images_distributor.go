@@ -416,15 +416,34 @@ func testInputImageStreamTagFilterFactory(l *logrus.Entry, ca agents.ConfigAgent
 		if additionalImageStreamTags.Has(nn.String()) {
 			return true
 		}
-		result, err := ca.GetFromIndex(indexName, nn.String())
-		// Today, GetFromIndex only errors if the index does not exist, so this should
-		// never happen.
+		imageStreamTagResult, err := ca.GetFromIndex(indexName, nn.String())
 		if err != nil {
-			l.WithField("name", nn.String()).WithError(err).Error("Failed to get configs from index")
+			l.WithField("name", nn.String()).WithError(err).Error("Failed to get imagestreamtag configs from index")
 			return false
 		}
-		return len(result) > 0
+		if len(imageStreamTagResult) > 0 {
+			return true
+		}
+		imageStreamName, err := imageStreamNameFromImageStreamTagName(nn)
+		if err != nil {
+			l.WithField("name", nn.String()).WithError(err).Error("Failed to get imagestreamname for imagestreamtag")
+			return false
+		}
+		imageStreamResult, err := ca.GetFromIndex(indexName, indexKeyForImageStream(imageStreamName.Namespace, imageStreamName.Name))
+		if err != nil {
+			l.WithField("name", imageStreamName.String()).WithError(err).Error("Failed to get imagestream configs from index")
+			return false
+		}
+		return len(imageStreamResult) > 0
 	}, nil
+}
+
+func imageStreamNameFromImageStreamTagName(nn types.NamespacedName) (types.NamespacedName, error) {
+	colonSplit := strings.Split(nn.Name, ":")
+	if n := len(colonSplit); n != 2 {
+		return types.NamespacedName{}, fmt.Errorf("splitting %s by `:` didn't yield two but %d results", nn.Name, n)
+	}
+	return types.NamespacedName{Namespace: nn.Namespace, Name: colonSplit[0]}, nil
 }
 
 func indexConfigsByTestInputImageStramTag(resolver registry.Resolver) agents.IndexFn {
@@ -463,8 +482,16 @@ func indexConfigsByTestInputImageStramTag(resolver registry.Resolver) agents.Ind
 		for key := range m {
 			result = append(result, key)
 		}
+
+		if cfg.ReleaseTagConfiguration != nil {
+			result = append(result, indexKeyForImageStream(cfg.ReleaseTagConfiguration.Namespace, cfg.ReleaseTagConfiguration.Name))
+		}
 		return result
 	}
+}
+
+func indexKeyForImageStream(namespace, name string) string {
+	return "imagestream_" + namespace + name
 }
 
 func publicURLForImage(potentiallyPrivate string) string {

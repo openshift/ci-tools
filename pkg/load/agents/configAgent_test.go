@@ -162,7 +162,7 @@ func TestBuildIndexes(t *testing.T) {
 				},
 			},
 			configs:  load.ByOrgRepo{"org": {"repo": []api.ReleaseBuildConfiguration{cfg}}},
-			expected: map[string]configIndex{},
+			expected: map[string]configIndex{"index-a": {}},
 		},
 	}
 

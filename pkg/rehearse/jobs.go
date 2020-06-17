@@ -106,7 +106,7 @@ func getTrimmedBranch(branches []string) string {
 
 }
 
-func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber int, refs *pjapi.Refs) (*prowconfig.Presubmit, error) {
+func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber int, refs *pjapi.Refs) *prowconfig.Presubmit {
 	var rehearsal prowconfig.Presubmit
 	deepcopy.Copy(&rehearsal, source)
 
@@ -161,7 +161,7 @@ func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber 
 	}
 	rehearsal.Labels[rehearseLabel] = strconv.Itoa(prNumber)
 
-	return &rehearsal, nil
+	return &rehearsal
 }
 
 func filterPresubmits(changedPresubmits map[string][]prowconfig.Presubmit, logger logrus.FieldLogger) config.Presubmits {
@@ -393,11 +393,7 @@ func (jc *JobConfigurer) ConfigurePresubmitRehearsals(presubmits config.Presubmi
 	for orgrepo, jobs := range presubmitsFiltered {
 		for _, job := range jobs {
 			jobLogger := jc.loggers.Job.WithFields(logrus.Fields{"target-repo": orgrepo, "target-job": job.Name})
-			rehearsal, err := makeRehearsalPresubmit(&job, orgrepo, jc.prNumber, jc.refs)
-			if err != nil {
-				jobLogger.WithError(err).Warn("Failed to make a rehearsal presubmit")
-				continue
-			}
+			rehearsal := makeRehearsalPresubmit(&job, orgrepo, jc.prNumber, jc.refs)
 
 			splitOrgRepo := strings.Split(orgrepo, "/")
 			if len(splitOrgRepo) != 2 {
@@ -452,12 +448,7 @@ func (jc *JobConfigurer) ConvertPeriodicsToPresubmits(periodics []prowconfig.Per
 	var presubmits []*prowconfig.Presubmit
 
 	for _, periodic := range periodics {
-		jobLogger := jc.loggers.Job.WithField("target-job", periodic.Name)
-		p, err := makeRehearsalPresubmit(&prowconfig.Presubmit{JobBase: periodic.JobBase}, "", jc.prNumber, jc.refs)
-		if err != nil {
-			jobLogger.WithError(err).Warn("Failed to make a rehearsal presubmit")
-			continue
-		}
+		p := makeRehearsalPresubmit(&prowconfig.Presubmit{JobBase: periodic.JobBase}, "", jc.prNumber, jc.refs)
 
 		if len(p.ExtraRefs) > 0 {
 			// we aren't injecting this as we do for presubmits, but we need it to be set

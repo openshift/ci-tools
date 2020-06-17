@@ -1,0 +1,19 @@
+run:
+  deadline: 10m
+
+linters:
+  enable:
+    - unused
+    - deadcode
+    - gosimple
+    - gofmt
+    - govet
+    - staticcheck
+    - unparam
+  disable-all: true
+
+issues:
+  exclude-rules:
+  - linters:
+    - unparam
+    text: \(\*leaseStep\)\.Provides\$1 - result 1 \(error\) is always nil

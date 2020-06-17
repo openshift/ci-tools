@@ -32,11 +32,11 @@ func (s *outputImageTagStep) Inputs(dry bool) (api.InputDefinition, error) {
 	return nil, nil
 }
 
-func (s *outputImageTagStep) Run(ctx context.Context, dry bool) error {
-	return results.ForReason("tagging_output_image").ForError(s.run(ctx, dry))
+func (s *outputImageTagStep) Run(_ context.Context, dry bool) error {
+	return results.ForReason("tagging_output_image").ForError(s.run(dry))
 }
 
-func (s *outputImageTagStep) run(ctx context.Context, dry bool) error {
+func (s *outputImageTagStep) run(dry bool) error {
 	toNamespace := s.namespace()
 	if string(s.config.From) == s.config.To.Tag && toNamespace == s.jobSpec.Namespace() && s.config.To.Name == api.StableImageStream {
 		log.Printf("Tagging %s into %s", s.config.From, s.config.To.Name)

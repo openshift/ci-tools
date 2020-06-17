@@ -367,7 +367,7 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.Job
 		if isTagRef := target.ImageStreamTagReference; isTagRef != nil {
 			buildSteps = append(buildSteps, createStepConfigForTagRefImage(*isTagRef, jobSpec))
 		} else if gitSourceRef := target.ProjectImageBuild; gitSourceRef != nil {
-			buildSteps = append(buildSteps, createStepConfigForGitSource(*gitSourceRef, jobSpec))
+			buildSteps = append(buildSteps, createStepConfigForGitSource(*gitSourceRef))
 		}
 	}
 
@@ -515,7 +515,7 @@ func createStepConfigForTagRefImage(target api.ImageStreamTagReference, jobSpec 
 		}}
 }
 
-func createStepConfigForGitSource(target api.ProjectDirectoryImageBuildInputs, jobSpec *api.JobSpec) api.StepConfiguration {
+func createStepConfigForGitSource(target api.ProjectDirectoryImageBuildInputs) api.StepConfiguration {
 	return api.StepConfiguration{
 		ProjectDirectoryImageBuildInputs: &api.ProjectDirectoryImageBuildInputs{
 			DockerfilePath: target.DockerfilePath,

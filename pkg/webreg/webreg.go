@@ -293,7 +293,7 @@ const templateDefinitions = `
 				<tr>
 					<td>{{ template "nameWithLinkChain" $name }}</td>
 					<td>{{ docsForName $name }}</td>
-					<td>{{ template "stepList" $config }}</td>
+					<td>{{ template "stepList" $config.Steps }}</td>
 				</tr>
 			{{ end }}
 		</tbody>

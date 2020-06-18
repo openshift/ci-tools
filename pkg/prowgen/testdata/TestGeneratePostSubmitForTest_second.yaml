@@ -1,9 +1,9 @@
 agent: kubernetes
 branches:
-- ^branch$
+- ^Branch$
 decorate: true
 decoration_config:
   skip_cloning: true
 labels:
   ci-operator.openshift.io/prowgen-controlled: "true"
-name: branch-ci-organization-repository-branch-name
+name: branch-ci-Organization-Repository-Branch-second

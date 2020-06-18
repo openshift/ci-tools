@@ -47,7 +47,7 @@ func CompareWithFixture(t *testing.T, output interface{}, opts ...Option) {
 		serializedOutput = serialized
 	}
 
-	golden, err := filepath.Abs(filepath.Join("testdata", strings.ReplaceAll(options.Prefix+t.Name(), "/", "_")+".yaml"))
+	golden, err := filepath.Abs(filepath.Join("testdata", sanitizeFilename(options.Prefix+t.Name())) + ".yaml")
 	if err != nil {
 		t.Fatalf("failed to get absolute path to testdata file: %v", err)
 	}
@@ -76,4 +76,19 @@ func CompareWithFixture(t *testing.T, output interface{}, opts ...Option) {
 	if diffStr != "" {
 		t.Errorf("got diff between expected and actual result: \n%s\n\nIf this is expected, re-run the test with `UPDATE=true go test ./...` to update the fixtures.", diffStr)
 	}
+}
+
+func sanitizeFilename(s string) string {
+	result := strings.Builder{}
+	for _, r := range s {
+		if (r >= 'a' && r < 'z') || (r >= 'A' && r < 'Z') || r == '_' || r == '.' || (r >= '0' && r <= '9') {
+			// The thing is documented as returning a nil error so lets just drop it
+			_, _ = result.WriteRune(r)
+			continue
+		}
+		if !strings.HasSuffix(result.String(), "_") {
+			result.WriteRune('_')
+		}
+	}
+	return result.String()
 }

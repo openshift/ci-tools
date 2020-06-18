@@ -13,7 +13,7 @@ import (
 
 var (
 	landingPage = fmt.Sprintf(htmlPageStart, "Home") + `
-<no value>
+
 ` + htmlPageEnd
 	clonesHTMLPage = fmt.Sprintf(htmlPageStart, "Clones") + clonesHTMLSubPage + htmlPageEnd
 	errorPage      = fmt.Sprintf(htmlPageStart, "Not Found") + errorSubPage + htmlPageEnd
@@ -26,7 +26,7 @@ const clonesHTMLSubPage = `
 		<p> No linked PRs! </p>
 	
 	
-		<p> Cloned From: <a href = /getclones?ID=0> Bug 0: Sample bug to test implementation of clones handler</a> | Status: 
+		<p> Cloned From: <a href = "/getclones?ID=0"> Bug 0: Sample bug to test implementation of clones handler</a> | Status: 
 	
 	<h4 id="clones"> <a href ="#clones"> Clones</a> </h4>
 	<table class="table">
@@ -43,7 +43,7 @@ const clonesHTMLSubPage = `
 			
 				<tr>
 					<td style="vertical-align: middle;">[]</td>
-					<td style="vertical-align: middle;"><a href = /getclones?ID=0>0</a></td>
+					<td style="vertical-align: middle;"><a href = "/getclones?ID=0">0</a></td>
 					<td style="vertical-align: middle;"></td>
 					<td style="vertical-align: middle;">
 						

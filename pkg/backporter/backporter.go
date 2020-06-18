@@ -3,9 +3,9 @@ package backporter
 import (
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"net/http"
 	"strconv"
-	"text/template"
 
 	"k8s.io/test-infra/prow/bugzilla"
 )
@@ -125,7 +125,7 @@ const clonesTemplateConstructor = `
 		{{ if .PRs }}
 			{{ range $index, $pr := .PRs }}
 				{{ if $index}}|{{end}} 
-				<a href={{ $pr.Type.URL }}/{{ $pr.Org}}/{{ $pr.Repo}}/pull/{{ $pr.Num}}>{{ $pr.Org}}/{{ $pr.Repo}}#{{ $pr.Num}}</a>
+				<a href="{{ $pr.Type.URL }}/{{ $pr.Org}}/{{ $pr.Repo}}/pull/{{ $pr.Num}}">{{ $pr.Org}}/{{ $pr.Repo}}#{{ $pr.Num}}</a>
 			{{ end }}
 		{{ end }}
 		</p>
@@ -133,7 +133,7 @@ const clonesTemplateConstructor = `
 		<p> No linked PRs! </p>
 	{{ end }}
 	{{ if ne .Parent.ID .Bug.ID}}
-		<p> Cloned From: <a href = /getclones?ID={{.Parent.ID}}> Bug {{.Parent.ID}}: {{.Parent.Summary}}</a> | Status: {{.Parent.Status}}
+		<p> Cloned From: <a href = "/getclones?ID={{.Parent.ID}}"> Bug {{.Parent.ID}}: {{.Parent.Summary}}</a> | Status: {{.Parent.Status}}
 	{{ else }}
 		<p> Cloned From: This is the original! </p>
 	{{ end }}
@@ -152,12 +152,12 @@ const clonesTemplateConstructor = `
 			{{ range $clone := .Clones }}
 				<tr>
 					<td style="vertical-align: middle;">{{ $clone.TargetRelease }}</td>
-					<td style="vertical-align: middle;"><a href = /getclones?ID={{$clone.ID}}>{{ $clone.ID }}</a></td>
+					<td style="vertical-align: middle;"><a href = "/getclones?ID={{$clone.ID}}">{{ $clone.ID }}</a></td>
 					<td style="vertical-align: middle;">{{ $clone.Status }}</td>
 					<td style="vertical-align: middle;">
 						{{range $index, $pr := $clone.PRs }}
 							{{ if $index}},{{end}}
-							<a href = {{ $pr.Type.URL }}/{{$pr.Org}}/{{$pr.Repo}}/pull/{{$pr.Num}} target="_blank"> {{$pr.Org}}/{{$pr.Repo}}#{{$pr.Num}}</a>
+							<a href = "{{ $pr.Type.URL }}/{{$pr.Org}}/{{$pr.Repo}}/pull/{{$pr.Num}}" target="_blank"> {{$pr.Org}}/{{$pr.Repo}}#{{$pr.Num}}</a>
 						{{end}}
 					</td>
 				</tr>
@@ -209,8 +209,8 @@ func GetLandingHandler() HandlerFuncWithErrorReturn {
 func GetBugHandler(client bugzilla.Client) HandlerFuncWithErrorReturn {
 	return func(w http.ResponseWriter, r *http.Request) error {
 		if r.Method != "GET" {
-			w.WriteHeader(http.StatusNotImplemented)
-			w.Write([]byte(http.StatusText(http.StatusNotImplemented)))
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(http.StatusText(http.StatusBadRequest)))
 			return fmt.Errorf("Not a GET request")
 		}
 		bugIDStr := r.URL.Query().Get(BugIDQuery)

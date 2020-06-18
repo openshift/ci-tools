@@ -113,10 +113,6 @@ const htmlPageEnd = `
 </html>
 `
 
-const emptyTemplateConstructor = `
-{{.}}
-`
-
 const clonesTemplateConstructor = `
 	<h2 id="bugid"> <a href = "#bugid"> {{.Bug.ID}}: {{.Bug.Summary}} </a> | Status: {{.Bug.Status}} </h2>
 	<p> Target Release: {{ .Bug.TargetRelease }} </p>
@@ -170,7 +166,7 @@ const clonesTemplateConstructor = `
 
 var (
 	clonesTemplate = template.Must(template.New("clones").Parse(clonesTemplateConstructor))
-	emptyTemplate  = template.Must(template.New("empty").Parse(emptyTemplateConstructor))
+	emptyTemplate  = template.Must(template.New("empty").Parse("{{.}}"))
 )
 
 // HandlerFuncWithErrorReturn allows returning errors to be logged

@@ -12,9 +12,7 @@ import (
 )
 
 var (
-	landingPage = fmt.Sprintf(htmlPageStart, "Home") + `
-
-` + htmlPageEnd
+	landingPage    = fmt.Sprintf(htmlPageStart, "Home") + htmlPageEnd
 	clonesHTMLPage = fmt.Sprintf(htmlPageStart, "Clones") + clonesHTMLSubPage + htmlPageEnd
 	errorPage      = fmt.Sprintf(htmlPageStart, "Not Found") + errorSubPage + htmlPageEnd
 )
@@ -54,9 +52,7 @@ const clonesHTMLSubPage = `
 		</tbody>
 	</table>`
 
-const errorSubPage = `
-Bug#1000 not found
-`
+const errorSubPage = `Bug#1000 not found`
 
 func unwrapper(h HandlerFuncWithErrorReturn) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

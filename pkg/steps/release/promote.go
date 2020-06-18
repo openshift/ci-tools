@@ -51,11 +51,11 @@ var promotionRetry = wait.Backoff{
 	Jitter:   0.1,
 }
 
-func (s *promotionStep) Run(ctx context.Context, dry bool) error {
-	return results.ForReason("promoting_images").ForError(s.run(ctx, dry))
+func (s *promotionStep) Run(_ context.Context, dry bool) error {
+	return results.ForReason("promoting_images").ForError(s.run(dry))
 }
 
-func (s *promotionStep) run(ctx context.Context, dry bool) error {
+func (s *promotionStep) run(dry bool) error {
 	tags, names := toPromote(s.config, s.images, s.requiredImages)
 	if len(names) == 0 {
 		log.Println("Nothing to promote, skipping...")

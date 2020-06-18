@@ -401,10 +401,7 @@ func TestMakeRehearsalPresubmit(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.testID, func(t *testing.T) {
-			rehearsal, err := makeRehearsalPresubmit(tc.original, testRepo, testPrNumber, tc.refs)
-			if err != nil {
-				t.Fatalf("Unexpected error in makeRehearsalPresubmit: %v", err)
-			}
+			rehearsal := makeRehearsalPresubmit(tc.original, testRepo, testPrNumber, tc.refs)
 			serializedResult, err := yaml.Marshal(rehearsal)
 			if err != nil {
 				t.Fatalf("failed to serialize job: %v", err)

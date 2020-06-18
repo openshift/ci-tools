@@ -1915,7 +1915,7 @@ func writePage(w http.ResponseWriter, title string, body *template.Template, dat
 	fmt.Fprintln(w, htmlPageEnd)
 }
 
-func helpHandler(subPath string, w http.ResponseWriter, req *http.Request) {
+func helpHandler(subPath string, w http.ResponseWriter, _ *http.Request) {
 	start := time.Now()
 	defer func() { logrus.Infof("rendered in %s", time.Since(start)) }()
 	helpFuncs := template.New("helpPage").Funcs(
@@ -2001,7 +2001,7 @@ func helpHandler(subPath string, w http.ResponseWriter, req *http.Request) {
 	writePage(w, "Step Registry Help Page", helpTemplate, data)
 }
 
-func mainPageHandler(agent agents.RegistryAgent, templateString string, w http.ResponseWriter, req *http.Request) {
+func mainPageHandler(agent agents.RegistryAgent, templateString string, w http.ResponseWriter, _ *http.Request) {
 	start := time.Now()
 	defer func() { logrus.Infof("rendered in %s", time.Since(start)) }()
 

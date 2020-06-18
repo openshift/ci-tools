@@ -589,7 +589,7 @@ func containerHasVolumeName(container coreapi.Container, name string) bool {
 			return true
 		}
 	}
-	return true
+	return false
 }
 
 func addArtifactsToPod(pod *coreapi.Pod) {

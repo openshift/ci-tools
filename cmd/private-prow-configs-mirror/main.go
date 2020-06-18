@@ -351,7 +351,7 @@ func getCommonPlugins(privateRepoPlugins map[string][]string) sets.String {
 	return ret
 }
 
-func getAllConfigs(releaseRepoPath string, logger *logrus.Entry) (*config.ReleaseRepoConfig, error) {
+func getAllConfigs(releaseRepoPath string) (*config.ReleaseRepoConfig, error) {
 	c := &config.ReleaseRepoConfig{}
 	var err error
 	ciopConfigPath := filepath.Join(releaseRepoPath, config.CiopConfigInRepoPath)
@@ -388,7 +388,7 @@ func main() {
 		os.Exit(1)
 	}()
 
-	configs, err := getAllConfigs(o.releaseRepoPath, logrus.NewEntry(logrus.New()))
+	configs, err := getAllConfigs(o.releaseRepoPath)
 	if err != nil {
 		logrus.Fatal("couldn't get the prow and ci-operator configs")
 	}

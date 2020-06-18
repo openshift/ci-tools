@@ -723,7 +723,7 @@ func (o *options) initializeNamespace() error {
 				Name: o.namespace,
 			},
 			DisplayName: fmt.Sprintf("%s - %s", o.namespace, o.jobSpec.Job),
-			Description: jobDescription(o.jobSpec, o.configSpec),
+			Description: jobDescription(o.jobSpec),
 		})
 		if err != nil && !kerrors.IsAlreadyExists(err) {
 			return fmt.Errorf("could not set up namespace for test: %v", err)
@@ -1218,7 +1218,7 @@ func eventJobDescription(jobSpec *api.JobSpec, namespace string) string {
 }
 
 // jobDescription returns a string representing the job's description.
-func jobDescription(job *api.JobSpec, config *api.ReleaseBuildConfiguration) string {
+func jobDescription(job *api.JobSpec) string {
 	if job.Refs == nil {
 		return job.Job
 	}

@@ -297,11 +297,13 @@ func rehearseMain() error {
 
 	resolver := registry.NewResolver(refs, chains, workflows)
 	jobConfigurer := rehearse.NewJobConfigurer(prConfig.CiOperator, resolver, prNumber, loggers, changedTemplates, changedClusterProfiles, jobSpec.Refs)
-	presubmitsToRehearse, err := jobConfigurer.ConfigurePresubmitRehearsals(toRehearse)
+	// TODO: Distribute the returned imagestreamtags
+	_, presubmitsToRehearse, err := jobConfigurer.ConfigurePresubmitRehearsals(toRehearse)
 	if err != nil {
 		return err
 	}
-	periodicsToRehearse, err := jobConfigurer.ConfigurePeriodicRehearsals(changedPeriodics)
+	// TODO: Distribute the returned imagestreamtags
+	_, periodicsToRehearse, err := jobConfigurer.ConfigurePeriodicRehearsals(changedPeriodics)
 	if err != nil {
 		return err
 	}

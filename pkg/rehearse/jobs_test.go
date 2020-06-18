@@ -17,6 +17,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/sirupsen/logrus"
 	logrustest "github.com/sirupsen/logrus/hooks/test"
+	"k8s.io/apimachinery/pkg/types"
 
 	v1 "k8s.io/api/core/v1"
 
@@ -32,6 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	apihelper "github.com/openshift/ci-tools/pkg/api/helper"
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/jobconfig"
 	"github.com/openshift/ci-tools/pkg/load"
@@ -41,7 +43,21 @@ import (
 
 const testingRegistry = "../../test/multistage-registry/registry"
 
-const testingCiOpCfgJob1YAML = "tests:\n- as: job1\nzz_generated_metadata:\n  branch: \"\"\n  org: \"\"\n  repo: \"\"\n"
+const testingCiOpCfgJob1YAML = `tests:
+- as: job1
+  literal_steps:
+    cluster_profile: ""
+    pre:
+    - from_image:
+        name: willem
+        namespace: fancy
+        tag: first
+      resources: {}
+zz_generated_metadata:
+  branch: ""
+  org: ""
+  repo: ""
+`
 const testingCiOpCfgJob2YAML = "tests:\n- as: job2\nzz_generated_metadata:\n  branch: \"\"\n  org: \"\"\n  repo: \"\"\n"
 
 // configFiles contains the info needed to allow inlineCiOpConfig to successfully inline
@@ -51,7 +67,12 @@ func generateTestConfigFiles() config.DataByFilename {
 		"targetOrg-targetRepo-master.yaml": config.DataWithInfo{
 			Configuration: api.ReleaseBuildConfiguration{
 				Tests: []api.TestStepConfiguration{
-					{As: "job1"},
+					{
+						As: "job1",
+						MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+							Pre: []api.LiteralTestStep{{FromImage: &api.ImageStreamTagReference{Namespace: "fancy", Name: "willem", Tag: "first"}}},
+						},
+					},
 					{As: "job2"},
 				},
 			},
@@ -220,24 +241,24 @@ func makeCMReference(cmName, key string) *v1.EnvVarSource {
 	}
 }
 
+var testCiopConfigInfo = api.Metadata{
+	Org:    "targetOrg",
+	Repo:   "targetRepo",
+	Branch: "master",
+}
+
 func TestInlineCiopConfig(t *testing.T) {
-	testCiopConfigInfo := api.Metadata{
-		Org:    "targetOrg",
-		Repo:   "targetRepo",
-		Branch: "master",
-	}
 	testCiopConfig := api.ReleaseBuildConfiguration{
 		Tests: []api.TestStepConfiguration{{
 			As: "test1",
+			MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
+				Pre: []api.LiteralTestStep{{FromImage: &api.ImageStreamTagReference{Namespace: "fancy", Name: "willem", Tag: "first"}}},
+			},
 		}, {
 			As: "test2",
 		}},
 	}
-	testCiopConfigTest1 := api.ReleaseBuildConfiguration{
-		Tests: []api.TestStepConfiguration{{
-			As: "test1",
-		}},
-	}
+	testCiopConfigTest1 := api.ReleaseBuildConfiguration{Tests: []api.TestStepConfiguration{testCiopConfig.Tests[0]}}
 	testCiopConfigContentTest1, err := yaml.Marshal(&testCiopConfigTest1)
 	if err != nil {
 		t.Fatal("Failed to marshal ci-operator config")
@@ -253,12 +274,13 @@ func TestInlineCiopConfig(t *testing.T) {
 	}
 
 	testCases := []struct {
-		description   string
-		testname      string
-		sourceEnv     []v1.EnvVar
-		configs       config.DataByFilename
-		expectedEnv   []v1.EnvVar
-		expectedError bool
+		description              string
+		testname                 string
+		sourceEnv                []v1.EnvVar
+		configs                  config.DataByFilename
+		expectedEnv              []v1.EnvVar
+		expectedError            bool
+		expectedImageStramTagMap apihelper.ImageStreamTagMap
 	}{{
 		description: "empty env -> no changes",
 		configs:     config.DataByFilename{},
@@ -278,11 +300,12 @@ func TestInlineCiopConfig(t *testing.T) {
 		configs:     config.DataByFilename{},
 		expectedEnv: []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference("test-cm", "key")}},
 	}, {
-		description: "CM reference to ci-operator-configs -> cm content inlined; test1",
-		testname:    "test1",
-		sourceEnv:   []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference(testCiopConfigInfo.ConfigMapName(), "filename")}},
-		configs:     config.DataByFilename{"filename": {Info: config.Info{Metadata: testCiopConfigInfo}, Configuration: testCiopConfig}},
-		expectedEnv: []v1.EnvVar{{Name: "T", Value: string(testCiopConfigContentTest1)}},
+		description:              "CM reference to ci-operator-configs -> cm content inlined; test1",
+		testname:                 "test1",
+		sourceEnv:                []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference(testCiopConfigInfo.ConfigMapName(), "filename")}},
+		configs:                  config.DataByFilename{"filename": {Info: config.Info{Metadata: testCiopConfigInfo}, Configuration: testCiopConfig}},
+		expectedEnv:              []v1.EnvVar{{Name: "T", Value: string(testCiopConfigContentTest1)}},
+		expectedImageStramTagMap: apihelper.ImageStreamTagMap{"fancy/willem:first": types.NamespacedName{Namespace: "fancy", Name: "willem:first"}},
 	}, {
 		description: "CM reference to ci-operator-configs -> cm content inlined; test2",
 		testname:    "test2",
@@ -307,17 +330,19 @@ func TestInlineCiopConfig(t *testing.T) {
 			job := makeTestingPresubmitForEnv(tc.sourceEnv)
 			expectedJob := makeTestingPresubmitForEnv(tc.expectedEnv)
 
-			err := inlineCiOpConfig(&job.Spec.Containers[0], tc.configs, resolver, testCiopConfigInfo, tc.testname, testLoggers)
+			imageStreamTags, err := inlineCiOpConfig(&job.Spec.Containers[0], tc.configs, resolver, testCiopConfigInfo, tc.testname, testLoggers)
 
 			if tc.expectedError && err == nil {
-				t.Errorf("Expected inlineCiopConfig() to return an error, none returned")
-				return
+				t.Fatalf("Expected inlineCiopConfig() to return an error, none returned")
 			}
 
 			if !tc.expectedError {
 				if err != nil {
-					t.Errorf("Unexpected error returned by inlineCiOpConfig(): %v", err)
-					return
+					t.Fatalf("Unexpected error returned by inlineCiOpConfig(): %v", err)
+				}
+
+				if diff := cmp.Diff(imageStreamTags, tc.expectedImageStramTagMap, cmpopts.EquateEmpty()); diff != "" {
+					t.Errorf("returned imageStreamTags differ from expected: %s", diff)
 				}
 
 				if !equality.Semantic.DeepEqual(expectedJob, job) {
@@ -525,7 +550,7 @@ func TestExecuteJobsErrors(t *testing.T) {
 
 			jc := NewJobConfigurer(testCiopConfigs, resolver, testPrNumber, testLoggers, nil, nil, makeBaseRefs())
 
-			presubmits, err := jc.ConfigurePresubmitRehearsals(tc.jobs)
+			_, presubmits, err := jc.ConfigurePresubmitRehearsals(tc.jobs)
 			if err != nil {
 				t.Errorf("Expected to get no error, but got one: %v", err)
 			}
@@ -591,7 +616,7 @@ func TestExecuteJobsUnsuccessful(t *testing.T) {
 			)
 
 			jc := NewJobConfigurer(testCiopConfigs, resolver, testPrNumber, testLoggers, nil, nil, makeBaseRefs())
-			presubmits, err := jc.ConfigurePresubmitRehearsals(tc.jobs)
+			_, presubmits, err := jc.ConfigurePresubmitRehearsals(tc.jobs)
 			if err != nil {
 				t.Errorf("Expected to get no error, but got one: %v", err)
 			}
@@ -618,40 +643,46 @@ func TestExecuteJobsPositive(t *testing.T) {
 	testCiopConfigs := generateTestConfigFiles()
 
 	testCases := []struct {
-		description  string
-		jobs         map[string][]prowconfig.Presubmit
-		expectedJobs []pjapi.ProwJobSpec
-	}{{
-		description: "two jobs in a single repo",
-		jobs: map[string][]prowconfig.Presubmit{targetOrgRepo: {
-			*makeTestingPresubmit("job1", "ci/prow/job1", "master"),
-			*makeTestingPresubmit("job2", "ci/prow/job2", "master"),
-		}},
-		expectedJobs: []pjapi.ProwJobSpec{
-			makeTestingProwJob(testNamespace,
-				"rehearse-123-job1",
-				fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "master", "job1"),
-				testRefs, targetOrg, targetRepo, "master", testingCiOpCfgJob1YAML).Spec,
-			makeTestingProwJob(testNamespace,
-				"rehearse-123-job2",
-				fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "master", "job2"),
-				testRefs, targetOrg, targetRepo, "master", testingCiOpCfgJob2YAML).Spec,
-		}}, {
-		description: "two jobs in a single repo, same context but different branch",
-		jobs: map[string][]prowconfig.Presubmit{targetOrgRepo: {
-			*makeTestingPresubmit("job1", "ci/prow/job1", "master"),
-			*makeTestingPresubmit("job2", "ci/prow/job2", "not-master"),
-		}},
-		expectedJobs: []pjapi.ProwJobSpec{
-			makeTestingProwJob(testNamespace,
-				"rehearse-123-job1",
-				fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "master", "job1"),
-				testRefs, targetOrg, targetRepo, "master", testingCiOpCfgJob1YAML).Spec,
-			makeTestingProwJob(testNamespace,
-				"rehearse-123-job2",
-				fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "not-master", "job2"),
-				testRefs, targetOrg, targetRepo, "not-master", testingCiOpCfgJob2YAML).Spec,
-		}},
+		description              string
+		jobs                     map[string][]prowconfig.Presubmit
+		expectedJobs             []pjapi.ProwJobSpec
+		expectedImageStramTagMap apihelper.ImageStreamTagMap
+	}{
+		{
+			description: "two jobs in a single repo",
+			jobs: map[string][]prowconfig.Presubmit{targetOrgRepo: {
+				*makeTestingPresubmit("job1", "ci/prow/job1", "master"),
+				*makeTestingPresubmit("job2", "ci/prow/job2", "master"),
+			}},
+			expectedJobs: []pjapi.ProwJobSpec{
+				makeTestingProwJob(testNamespace,
+					"rehearse-123-job1",
+					fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "master", "job1"),
+					testRefs, targetOrg, targetRepo, "master", testingCiOpCfgJob1YAML).Spec,
+				makeTestingProwJob(testNamespace,
+					"rehearse-123-job2",
+					fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "master", "job2"),
+					testRefs, targetOrg, targetRepo, "master", testingCiOpCfgJob2YAML).Spec,
+			},
+			expectedImageStramTagMap: apihelper.ImageStreamTagMap{"fancy/willem:first": types.NamespacedName{Namespace: "fancy", Name: "willem:first"}},
+		}, {
+			description: "two jobs in a single repo, same context but different branch",
+			jobs: map[string][]prowconfig.Presubmit{targetOrgRepo: {
+				*makeTestingPresubmit("job1", "ci/prow/job1", "master"),
+				*makeTestingPresubmit("job2", "ci/prow/job2", "not-master"),
+			}},
+			expectedJobs: []pjapi.ProwJobSpec{
+				makeTestingProwJob(testNamespace,
+					"rehearse-123-job1",
+					fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "master", "job1"),
+					testRefs, targetOrg, targetRepo, "master", testingCiOpCfgJob1YAML).Spec,
+				makeTestingProwJob(testNamespace,
+					"rehearse-123-job2",
+					fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "not-master", "job2"),
+					testRefs, targetOrg, targetRepo, "not-master", testingCiOpCfgJob2YAML).Spec,
+			},
+			expectedImageStramTagMap: apihelper.ImageStreamTagMap{"fancy/willem:first": types.NamespacedName{Namespace: "fancy", Name: "willem:first"}},
+		},
 		{
 			description: "two jobs in a separate repos",
 			jobs: map[string][]prowconfig.Presubmit{
@@ -668,6 +699,7 @@ func TestExecuteJobsPositive(t *testing.T) {
 					fmt.Sprintf(rehearseJobContextTemplate, anotherTargetOrgRepo, "master", "job2"),
 					testRefs, anotherTargetOrg, anotherTargetRepo, "master", testingCiOpCfgJob2YAML).Spec,
 			},
+			expectedImageStramTagMap: apihelper.ImageStreamTagMap{"fancy/willem:first": types.NamespacedName{Namespace: "fancy", Name: "willem:first"}},
 		}, {
 			description:  "no jobs",
 			jobs:         map[string][]prowconfig.Presubmit{},
@@ -687,9 +719,12 @@ func TestExecuteJobsPositive(t *testing.T) {
 			client.createReactors = append(client.createReactors, setSuccessCreateRactor)
 
 			jc := NewJobConfigurer(testCiopConfigs, resolver, testPrNumber, testLoggers, nil, nil, makeBaseRefs())
-			presubmits, err := jc.ConfigurePresubmitRehearsals(tc.jobs)
+			imageStreamTags, presubmits, err := jc.ConfigurePresubmitRehearsals(tc.jobs)
 			if err != nil {
 				t.Errorf("Expected to get no error, but got one: %v", err)
+			}
+			if diff := cmp.Diff(imageStreamTags, tc.expectedImageStramTagMap, cmpopts.EquateEmpty()); diff != "" {
+				t.Errorf("returned imageStreamTags do not match expected: %s", diff)
 			}
 			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, true, testLoggers, client, testNamespace)
 			success, err := executor.ExecuteJobs()

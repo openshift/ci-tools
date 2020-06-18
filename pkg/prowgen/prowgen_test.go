@@ -219,7 +219,7 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 		repoInfo *ProwgenInfo
 	}{
 		{
-			name: "name",
+			name: "first",
 			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
 				Org:    "organization",
 				Repo:   "repository",
@@ -227,7 +227,7 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 			}},
 		},
 		{
-			name: "Name",
+			name: "second",
 			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
 				Org:    "Organization",
 				Repo:   "Repository",
@@ -235,7 +235,7 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 			}},
 		},
 		{
-			name: "name",
+			name: "third",
 			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
 				Org:    "Organization",
 				Repo:   "Repository",

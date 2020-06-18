@@ -6,4 +6,4 @@ decoration_config:
   skip_cloning: true
 labels:
   ci-operator.openshift.io/prowgen-controlled: "true"
-name: branch-ci-Organization-Repository-Branch-name
+name: branch-ci-Organization-Repository-Branch-third

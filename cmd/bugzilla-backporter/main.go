@@ -136,6 +136,7 @@ func main() {
 	http.HandleFunc("/getclones", handleWithMetrics(backporter.GetClonesHandler(bugzillaClient)))
 	// Leaving this in here to help with future debugging. This will return bug details in JSON format
 	http.HandleFunc("/getbug", handleWithMetrics(backporter.GetBugHandler(bugzillaClient)))
+	http.HandleFunc("/createclone", handleWithMetrics(backporter.CreateCloneHandler(bugzillaClient)))
 	interrupts.ListenAndServe(&http.Server{Addr: o.address}, o.gracePeriod)
 
 	health.ServeReady()

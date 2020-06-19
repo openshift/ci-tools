@@ -96,8 +96,14 @@ td {
 
   <div class="collapse navbar-collapse" id="navbarSupportedContent">
     <form class="form-inline my-2 my-lg-0" role="search" action="/getclones" method="get">
-      <input class="form-control mr-sm-2" type="search" placeholder="Bug ID" aria-label="Search" name="ID">
-      <button class="btn btn-outline-success my-2 my-sm-0" type="submit">Find Clones</button>
+	  <input class="form-control mr-sm-2" type="search" placeholder="Bug ID" aria-label="Search" name="ID">
+		<select name="cars" id="cars">
+			<option value="volvo">Volvo</option>
+			<option value="saab">Saab</option>
+			<option value="mercedes">Mercedes</option>
+			<option value="audi">Audi</option>
+		</select>
+      <button class="btn btn-outline-success my-2 my-sm-0" id="create-clone-btn" type="submit">Find Clones</button>
     </form>
   </div>
 </nav>
@@ -111,7 +117,11 @@ const htmlPageEnd = `
 </footer>
 </body>
 </html>
-`
+<script>
+$("#create-clone-btn").click(function(){
+
+})
+</script>`
 
 const clonesTemplateConstructor = `
 	<h2 id="bugid"> <a href = "#bugid"> {{.Bug.ID}}: {{.Bug.Summary}} </a> | Status: {{.Bug.Status}} </h2>
@@ -162,7 +172,11 @@ const clonesTemplateConstructor = `
 			<tr> <td colspan=4 style="text-align:center;"> No clones found! </td></tr>
 		{{ end }}
 		</tbody>
-	</table>`
+	</table>
+	<form class="form-inline my-2 my-lg-0" role="search" action="/createclone" method="get">
+      <input class="form-control mr-sm-2" type="" placeholder="Target Version" aria-label="Search" name="version">
+      <button class="btn btn-outline-success my-2 my-sm-0" type="submit">Create Clone</button>
+    </form>`
 
 var (
 	clonesTemplate = template.Must(template.New("clones").Parse(clonesTemplateConstructor))

@@ -37,6 +37,7 @@ type options struct {
 	peribolosConfig string
 	releaseRepoPath string
 	whitelist       string
+	onlyOrg         string
 
 	flagutil.GitHubOptions
 }
@@ -54,6 +55,7 @@ func parseOptions() options {
 	fs.StringVar(&o.peribolosConfig, "peribolos-config", "", "The peribolos configuration to be updated. Assuming that the file exists in the working directory.")
 	fs.StringVar(&o.releaseRepoPath, "release-repo-path", "", "Path to a openshift/release repository directory")
 	fs.StringVar(&o.whitelist, "whitelist-file", "", "Path to a whitelisted repositories file")
+	fs.StringVar(&o.onlyOrg, "only-org", "", "Only dump config of repos belonging to this organization.")
 
 	o.AddFlags(fs)
 	o.AllowAnonymous = true
@@ -106,6 +108,10 @@ func main() {
 	if o.whitelist != "" {
 		args = append(args, "--whitelist-file")
 		args = append(args, o.whitelist)
+	}
+
+	if o.onlyOrg != "" {
+		args = append(args, "--only-org", o.onlyOrg)
 	}
 
 	stdout := bumper.HideSecretsWriter{Delegate: os.Stdout, Censor: sa}

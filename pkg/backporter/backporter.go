@@ -172,7 +172,7 @@ var (
 // HandlerFuncWithErrorReturn allows returning errors to be logged
 type HandlerFuncWithErrorReturn func(http.ResponseWriter, *http.Request) error
 
-type wrapper struct {
+type clonesTemplateData struct {
 	Bug    *bugzilla.Bug
 	Clones []*bugzilla.Bug
 	Parent *bugzilla.Bug
@@ -200,8 +200,7 @@ func GetLandingHandler() HandlerFuncWithErrorReturn {
 	}
 }
 
-// GetBugHandler returns a function which populates the response with the details of the bug
-// Returns bug details in JSON format
+// GetBugHandler returns a function with bug details  in JSON format
 func GetBugHandler(client bugzilla.Client) HandlerFuncWithErrorReturn {
 	return func(w http.ResponseWriter, r *http.Request) error {
 		if r.Method != "GET" {
@@ -279,7 +278,7 @@ func GetClonesHandler(client bugzilla.Client) HandlerFuncWithErrorReturn {
 			}
 			clone.PRs = clonePRs
 		}
-		wrpr := wrapper{
+		wrpr := clonesTemplateData{
 			Bug:    bug,
 			Clones: clones,
 			Parent: parent,

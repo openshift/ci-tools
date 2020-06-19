@@ -796,7 +796,7 @@ const ciOperatorReleaseConfig = `releases:
       product: okd
       version: "4.3"
   latest:
-    release   :       # references a version released to customers
+    release:          # references a version released to customers
       channel: stable # configures the release channel to search
       version: "4.4"
   previous:

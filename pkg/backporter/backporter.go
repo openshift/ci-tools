@@ -172,11 +172,12 @@ var (
 // HandlerFuncWithErrorReturn allows returning errors to be logged
 type HandlerFuncWithErrorReturn func(http.ResponseWriter, *http.Request) error
 
+// Class to hold the UI data for the clones page
 type clonesTemplateData struct {
-	Bug    *bugzilla.Bug
-	Clones []*bugzilla.Bug
-	Parent *bugzilla.Bug
-	PRs    []bugzilla.ExternalBug
+	Bug    *bugzilla.Bug          //bug details
+	Clones []*bugzilla.Bug        // List of clones for the bug
+	Parent *bugzilla.Bug          // Root bug if it is a a bug, otherwise holds itself
+	PRs    []bugzilla.ExternalBug // Details of linked PR
 }
 
 //Writes an HTML page, prepends header in htmlPageStart and appends header from htmlPageEnd around tConstructor.

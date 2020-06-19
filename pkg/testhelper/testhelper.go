@@ -90,5 +90,5 @@ func sanitizeFilename(s string) string {
 			result.WriteRune('_')
 		}
 	}
-	return result.String()
+	return "zz_fixture_" + result.String()
 }

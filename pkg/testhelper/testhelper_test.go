@@ -13,22 +13,22 @@ func TestSanitizeString(t *testing.T) {
 		{
 			name:     "simple, no changes",
 			in:       "my_golden.yaml",
-			expected: "my_golden.yaml",
+			expected: "zz_fixture_my_golden.yaml",
 		},
 		{
 			name:     "complex",
 			in:       "my_Go\\l'de`n.yaml",
-			expected: "my_Go_l_de_n.yaml",
+			expected: "zz_fixture_my_Go_l_de_n.yaml",
 		},
 		{
 			name:     "no double underscores",
 			in:       "a_|",
-			expected: "a_",
+			expected: "zz_fixture_a_",
 		},
 		{
 			name:     "numbers are kept",
 			in:       "0123456789.yaml",
-			expected: "0123456789.yaml",
+			expected: "zz_fixture_0123456789.yaml",
 		},
 	}
 

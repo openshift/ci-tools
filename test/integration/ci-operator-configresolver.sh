@@ -1,7 +1,9 @@
 #!/bin/bash
 source "$(dirname "${BASH_SOURCE}")/../../hack/lib/init.sh"
 
+rsync_tmp_dir=$(mktemp -d)
 function cleanup() {
+    rm -rf $rsync_tmp_dir
     os::test::junit::reconcile_output
     os::integration::configresolver::check_log
     os::cleanup::processes
@@ -34,7 +36,7 @@ os::integration::compare "${actual}/openshift-installer-release-4.2-golang111.js
 os::integration::configresolver::check_log
 
 generation="$( os::integration::configresolver::generation::registry )"
-rsync -avh --quiet --delete --inplace "${BASETMPDIR}/multistage-registry/registry2/" "${BASETMPDIR}/multistage-registry/registry/"
+rsync -avh --quiet --delete --temp-dir=$rsync_tmp_dir "${BASETMPDIR}/multistage-registry/registry2/" "${BASETMPDIR}/multistage-registry/registry/"
 os::integration::configresolver::wait_for_registry_update "${generation}"
 os::cmd::expect_success "curl 'http://127.0.0.1:8080/config?org=openshift&repo=installer&branch=release-4.2' >${actual}/openshift-installer-release-4.2-regChange.json"
 os::integration::compare "${actual}/openshift-installer-release-4.2-regChange.json" "${expected}/openshift-installer-release-4.2-regChange.json"

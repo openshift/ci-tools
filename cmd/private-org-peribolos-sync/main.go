@@ -34,6 +34,7 @@ type options struct {
 
 	peribolosConfig string
 	destOrg         string
+	onlyOrg         string
 	releaseRepoPath string
 	github          flagutil.GitHubOptions
 }
@@ -45,6 +46,7 @@ func gatherOptions() options {
 	fs.StringVar(&o.peribolosConfig, "peribolos-config", "", "Peribolos configuration file")
 	fs.StringVar(&o.releaseRepoPath, "release-repo-path", "", "Path to a openshift/release repository directory")
 	fs.StringVar(&o.destOrg, "destination-org", "", "Destination name of the peribolos configuration organzation")
+	fs.StringVar(&o.onlyOrg, "only-org", "", "Only dump config of the repos belonging to this org.")
 
 	o.github.AddFlags(fs)
 	o.WhitelistOptions.Bind(fs)
@@ -106,7 +108,7 @@ func main() {
 		logger.WithError(err).Fatal("Error getting GitHub client.")
 	}
 
-	orgRepos, err := getReposForPrivateOrg(o.releaseRepoPath, o.WhitelistOptions.WhitelistConfig.Whitelist)
+	orgRepos, err := getReposForPrivateOrg(o.releaseRepoPath, o.WhitelistOptions.WhitelistConfig.Whitelist, o.onlyOrg)
 	if err != nil {
 		logger.WithError(err).Fatal("couldn't get the list of org/repos that promote official images")
 	}
@@ -159,10 +161,13 @@ func generateRepositories(gc gitHubClient, orgRepos map[string]sets.String, logg
 
 // getReposForPrivateOrg itterates through the release repository directory and creates a map of
 // repository sets by organization that promote official images.
-func getReposForPrivateOrg(releaseRepoPath string, whitelist map[string][]string) (map[string]sets.String, error) {
+func getReposForPrivateOrg(releaseRepoPath string, whitelist map[string][]string, onlyOrg string) (map[string]sets.String, error) {
 	ret := make(map[string]sets.String)
 
 	for org, repos := range whitelist {
+		if onlyOrg != "" && onlyOrg != org {
+			continue
+		}
 		for _, repo := range repos {
 			if _, ok := ret[org]; !ok {
 				ret[org] = sets.NewString(repo)
@@ -174,6 +179,10 @@ func getReposForPrivateOrg(releaseRepoPath string, whitelist map[string][]string
 
 	callback := func(c *api.ReleaseBuildConfiguration, i *config.Info) error {
 		if !promotion.BuildsOfficialImages(c) {
+			return nil
+		}
+
+		if onlyOrg != "" && onlyOrg != i.Org {
 			return nil
 		}
 

@@ -52,7 +52,7 @@ var (
 	}
 )
 
-func recordError(label string, path string) {
+func recordError(label string) {
 	labels := prometheus.Labels{"error": label}
 	bzbpMetrics.errorRate.With(labels).Inc()
 }

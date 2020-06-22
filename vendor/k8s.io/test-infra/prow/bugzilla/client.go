@@ -73,19 +73,11 @@ type Client interface {
 	// This will be done via JSONRPC:
 	// https://bugzilla.redhat.com/docs/en/html/integrating/api/Bugzilla/Extension/ExternalBugs/WebService.html#remove-external-bug
 	RemovePullRequestAsExternalBug(id int, org, repo string, num int) (bool, error)
-<<<<<<< HEAD
-<<<<<<< HEAD
 	// GetAllClones returns all the clones of the bug including itself
 	// Differs from GetClones as GetClones only gets the child clones which are one level lower
 	GetAllClones(bug *Bug) ([]*Bug, error)
 	// GetRootForClone returns the original bug.
 	GetRootForClone(bug *Bug) (*Bug, error)
-=======
-	GetImmediateParents(bug *Bug) ([]*Bug, error)
-	GetAllClones(bug *Bug) ([]*Bug, error)
->>>>>>> add0b22d... add functionality for getting multi level clones
-=======
->>>>>>> 2e9833ea... Revert "add functionality for getting multi level clones"
 }
 
 func NewClient(getAPIKey func() []byte, endpoint string) Client {
@@ -156,8 +148,6 @@ func (c *client) GetClones(bug *Bug) ([]*Bug, error) {
 	return getClones(c, bug)
 }
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 // Gets children clones recursively using a mechanism similar to bfs
 func getRecursiveClones(c Client, root *Bug) ([]*Bug, error) {
 	var errs []error
@@ -165,19 +155,10 @@ func getRecursiveClones(c Client, root *Bug) ([]*Bug, error) {
 	clones := []*Bug{}
 	childrenQ := []*Bug{}
 	childrenQ = append(childrenQ, root)
-=======
-func (c *client) getRecursiveClones(root *Bug, error) {
-	var errs []error
-	clones := []*Bug{}
-	var clone *Bug
-	childrenQ = []*Bug{}
-	childrenQ.append(root)
->>>>>>> add0b22d... add functionality for getting multi level clones
 	// FYI Cannot think of any situation for circular clones
 	// But might need to revisit in case there are infinite loops at any point
 	for len(childrenQ) > 0 {
 		bug, childrenQ = childrenQ[0], childrenQ[1:]
-<<<<<<< HEAD
 		clones = append(clones, bug)
 		children, err := getClones(c, bug)
 		if err != nil {
@@ -185,35 +166,17 @@ func (c *client) getRecursiveClones(root *Bug, error) {
 		}
 		if len(children) > 0 {
 			childrenQ = append(childrenQ, children...)
-=======
-		children, err := getClones(bug)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("Error finding clones Bug#%d: %v",bug.ID, err))
-		}
-		if len(children)>0{
-			childrenQ = append(childrenQ, children...)
-			clones = append(clones, children...)
->>>>>>> add0b22d... add functionality for getting multi level clones
 		}
 	}
 	return clones, utilerrors.NewAggregate(errs)
 }
 
-<<<<<<< HEAD
 // getImmediateParents gets the Immediate parents of bugs with a matching summary
 func getImmediateParents(c Client, bug *Bug) ([]*Bug, error) {
 	var errs []error
 	parents := []*Bug{}
 	// One option would be to return as soon as the first parent is found
 	// ideally that should be enough, although there is a check in the getRootForClone function to verify this
-=======
-// GetImmediateParents gets the Immediate parents of bugs with a matching summary
-func (c *client) GetImmediateParents(bug *Bug) ([]*Bug, error) {
-	var errs []error
-	parents := []*Bug{}
-	// One option would be to return as soon as the first parent is found
-	// ideally that should be enough, although there is a check in the getRoot function to verify this
->>>>>>> add0b22d... add functionality for getting multi level clones
 	// Logs would need to be monitored to verify this behavior
 	for _, parentID := range bug.DependsOn {
 		parent, err := c.GetBug(parentID)
@@ -228,7 +191,6 @@ func (c *client) GetImmediateParents(bug *Bug) ([]*Bug, error) {
 	return parents, utilerrors.NewAggregate(errs)
 }
 
-<<<<<<< HEAD
 func getRootForClone(c Client, bug *Bug) (*Bug, error) {
 	curr := bug
 	var errs []error
@@ -245,30 +207,11 @@ func getRootForClone(c Client, bug *Bug) (*Bug, error) {
 		case l > 1:
 			curr = parent[0]
 			errs = append(errs, fmt.Errorf("More than one parent found for bug #%d", curr.ID))
-=======
-func getRoot(bug *Bug) (Bug, error) {
-	curr := bug
-	var errs []error
-	for len(bug.DependsOn) > 0 {
-		parent, err := GetImmediateParents(curr)
-		if err != nil {
-			errs = append(errs, err)
-		}
-		if len(parent) > 0 {
-			// Might be a good idea to keep this check - since we dont expect more than 1 parent
-			if len(parent) > 1 {
-				errs = append(errs, fmt.Errorf("More than one parent found for bug #%d", curr.ID))
-			}
-			curr = parent[0]
-		} else {
-			break
->>>>>>> add0b22d... add functionality for getting multi level clones
 		}
 	}
 	return curr, utilerrors.NewAggregate(errs)
 }
 
-<<<<<<< HEAD
 // GetRootForClone returns the original bug.
 func (c *client) GetRootForClone(bug *Bug) (*Bug, error) {
 	return getRootForClone(c, bug)
@@ -285,24 +228,11 @@ func getAllClones(c Client, bug *Bug) ([]*Bug, error) {
 		return nil, err
 	}
 	clones, err := getRecursiveClones(c, root)
-=======
-// GetAllClones returns all the clones of the bug including itself
-func (c *client) GetAllClones(bug *Bug) ([]*Bug, error) {
-	root, err := getRoot(bug)
-	if err != nil {
-		return nil, err
-	}
-	clones, err := getRecursiveClones(root)
->>>>>>> add0b22d... add functionality for getting multi level clones
 	if err != nil {
 		return nil, err
 	}
 	// Getting rid of the bug whose clones we are searching for
-<<<<<<< HEAD
 	// we could optimize this (maybe?) if the list turns out to be too long
-=======
-	// This might be an expensive operation which we could skip if the list turns out to be too long
->>>>>>> add0b22d... add functionality for getting multi level clones
 	indexOfOriginal := -1
 	for index, clone := range clones {
 		if clone.ID == bug.ID {
@@ -311,21 +241,12 @@ func (c *client) GetAllClones(bug *Bug) ([]*Bug, error) {
 		}
 	}
 	if indexOfOriginal == -1 {
-<<<<<<< HEAD
 		return nil, fmt.Errorf("Original bug not found in list of clones. Error in logic for getRecursiveClones/getRootForClone")
 	}
 	clones = append(clones[:indexOfOriginal], clones[indexOfOriginal+1:]...)
 	return clones, nil
-=======
-		return nil, fmt.Errorf("Original bug not found in list of clones. Error in logic for getRecursiveClones/getRoot")
-	}
-	clones = append(clones[:indexOfOriginal], clones[indexOfOriginal+1:]...)
-	return clones, utilerrors.NewAggregate(errs)
->>>>>>> add0b22d... add functionality for getting multi level clones
 }
 
-=======
->>>>>>> 2e9833ea... Revert "add functionality for getting multi level clones"
 // GetSubComponentsOnBug retrieves a the list of SubComponents of the bug.
 // SubComponents are a Red Hat bugzilla specific extra field.
 func (c *client) GetSubComponentsOnBug(id int) (map[string][]string, error) {

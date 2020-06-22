@@ -34,7 +34,7 @@ func (rc *reconcileRequestCoalescer) Reconcile(r reconcile.Request) (reconcile.R
 	rc.lock.RUnlock()
 
 	if expiredTime := rc.timeSince(lastSuccessfulReconciliation); expiredTime < rc.coalesceWindow {
-		return reconcile.Result{RequeueAfter: time.Duration(rc.coalesceWindow - expiredTime)}, nil
+		return reconcile.Result{RequeueAfter: rc.coalesceWindow - expiredTime}, nil
 	}
 
 	result, err := rc.upstream.Reconcile(r)

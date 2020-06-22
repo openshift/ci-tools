@@ -294,7 +294,7 @@ func inlineCiOpConfig(container *v1.Container, ciopConfigs config.DataByFilename
 			}
 			apihelper.MergeImageStreamTagMaps(allImageStreamTags, imageStreamTags)
 
-			env.Value = string(ciOpConfigContent)
+			env.Value = ciOpConfigContent
 			env.ValueFrom = nil
 		}
 	}

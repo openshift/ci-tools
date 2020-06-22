@@ -110,7 +110,7 @@ func (a *registryAgent) loadRegistry() error {
 	a.generation++
 	a.lock.Unlock()
 	duration := time.Since(startTime)
-	configReloadTimeMetric.Observe(float64(duration.Seconds()))
+	configReloadTimeMetric.Observe(duration.Seconds())
 	log.WithField("duration", duration).Info("Registry reloaded")
 	return nil
 }

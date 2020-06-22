@@ -77,7 +77,7 @@ func handleWithMetrics(h backporter.HandlerFuncWithErrorReturn) http.HandlerFunc
 		trw := &traceResponseWriter{ResponseWriter: w, statusCode: http.StatusOK}
 		err := h(trw, r)
 		if err != nil {
-			recordError(err.Error(), r.URL.EscapedPath())
+			recordError(err.Error())
 		}
 		latency := time.Since(t)
 		labels := prometheus.Labels{"status": strconv.Itoa(trw.statusCode), "path": r.URL.EscapedPath()}

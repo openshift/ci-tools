@@ -1303,24 +1303,9 @@ k8s.io/kubernetes v1.13.0 h1:qTfB+u5M92k2fCCCVP2iuhgwwSOv1EkAkvQY1tQODD8=
 k8s.io/kubernetes v1.13.0/go.mod h1:ocZa8+6APFNC2tX1DZASIbocyYT5jHzqFVsY5aoB7Jk=
 k8s.io/legacy-cloud-providers v0.17.0/go.mod h1:DdzaepJ3RtRy+e5YhNtrCYwlgyK87j/5+Yfp0L9Syp8=
 k8s.io/metrics v0.17.2/go.mod h1:3TkNHET4ROd+NfzNxkjoVfQ0Ob4iZnaHmSEA4vYpwLw=
-<<<<<<< HEAD
-k8s.io/test-infra v0.0.0-20200602133615-44723bee4ba4 h1:O4OEE//SoHqU0Lg/sYfBp7D1QvhAQU3fodzW0Y0wtII=
-k8s.io/test-infra v0.0.0-20200602133615-44723bee4ba4/go.mod h1:H7MY80154xNMm40VE+SzEWVHc3wo/aPbnIyT47Qexl0=
-k8s.io/test-infra v0.0.0-20200603205243-8231b82dce55 h1:J4PZAhwT8dmz7qOR6NvYd5JWPKUTgOGCBPYcJk/1mOI=
-k8s.io/test-infra v0.0.0-20200603224044-a82eed463300 h1:Sllal1asnSe7uLDcWL6noDCGE8U2oJXN0E0KhXqNfDw=
-=======
 k8s.io/test-infra v0.0.0-20200514184223-ba32c8aae783/go.mod h1:bW6thaPZfL2hW7ecjx2WYwlP9KQLM47/xIJyttkVk5s=
-k8s.io/test-infra v0.0.0-20200616221604-356025b92359 h1:J/84DkcaDnz6A6lDmYcBD1wHYPi/SIcZgCB55hWBLKI=
-k8s.io/test-infra v0.0.0-20200616221604-356025b92359/go.mod h1:L3+cRvwftUq8IW1TrHji5m3msnc4uck/7LsE/GR/aZk=
-<<<<<<< HEAD
-<<<<<<< HEAD
-k8s.io/test-infra v0.0.0-20200617182040-c68834a35762 h1:A3M4oPfpJXD/5V1d4FCxMOTorqyMQPKuewvzgEKOkcI=
->>>>>>> ed7af7ea... Fix linting errors
-=======
->>>>>>> bba09aa2... changes for integration, and validate errors
-=======
-k8s.io/test-infra v0.0.0-20200619141959-18c165f000e7 h1:9gPSi6UnktLTrfJdETCgGQXklsttF+teDVJvaxrp3m4=
->>>>>>> 84380804... Handle errors returned by writepage and fprintf
+k8s.io/test-infra v0.0.0-20200617215805-1781951555bd h1:7ekeXr3YVOIimUdxkWO0h2vYMFGUahoGFCCH4rnO2XY=
+k8s.io/test-infra v0.0.0-20200617215805-1781951555bd/go.mod h1:L3+cRvwftUq8IW1TrHji5m3msnc4uck/7LsE/GR/aZk=
 k8s.io/utils v0.0.0-20191114184206-e782cd3c129f h1:GiPwtSzdP43eI1hpPCbROQCCIgCuiMMNF8YUVLF3vJo=
 k8s.io/utils v0.0.0-20191114184206-e782cd3c129f/go.mod h1:sZAwmy6armz5eXlNoLmJcl4F1QuKu7sr+mFQ0byX7Ew=
 k8s.io/utils v0.0.0-20200229041039-0a110f9eb7ab/go.mod h1:sZAwmy6armz5eXlNoLmJcl4F1QuKu7sr+mFQ0byX7Ew=

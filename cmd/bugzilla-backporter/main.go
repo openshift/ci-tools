@@ -53,7 +53,7 @@ var (
 )
 
 func recordError(label string, path string) {
-	labels := prometheus.Labels{"error": label, "path": path}
+	labels := prometheus.Labels{"error": label}
 	bzbpMetrics.errorRate.With(labels).Inc()
 }
 
@@ -71,7 +71,7 @@ type traceResponseWriter struct {
 }
 
 func handleWithMetrics(h backporter.HandlerFuncWithErrorReturn) http.HandlerFunc {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
 		t := time.Now()
 		// Initialize the status to 200 in case WriteHeader is not called
 		trw := &traceResponseWriter{ResponseWriter: w, statusCode: http.StatusOK}
@@ -83,7 +83,7 @@ func handleWithMetrics(h backporter.HandlerFuncWithErrorReturn) http.HandlerFunc
 		labels := prometheus.Labels{"status": strconv.Itoa(trw.statusCode), "path": r.URL.EscapedPath()}
 		bzbpMetrics.httpRequestDuration.With(labels).Observe(latency.Seconds())
 		bzbpMetrics.httpResponseSize.With(labels).Observe(float64(trw.size))
-	})
+	}
 }
 
 func gatherOptions() options {
@@ -128,7 +128,7 @@ func main() {
 
 	http.HandleFunc("/", handleWithMetrics(backporter.GetLandingHandler()))
 	http.HandleFunc("/getclones", handleWithMetrics(backporter.GetClonesHandler(bugzillaClient)))
-	//Leaving this in here to help with future debugging. This will return bug details in JSON format
+	// Leaving this in here to help with future debugging. This will return bug details in JSON format
 	http.HandleFunc("/getbug", handleWithMetrics(backporter.GetBugHandler(bugzillaClient)))
 	interrupts.ListenAndServe(&http.Server{Addr: o.address}, o.gracePeriod)
 

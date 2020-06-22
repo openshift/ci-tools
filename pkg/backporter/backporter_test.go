@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 
 	"k8s.io/test-infra/prow/bugzilla"
@@ -137,7 +138,7 @@ func TestGetBugHandler(t *testing.T) {
 
 type ResCheck struct {
 	statusCode int
-	htmlPage   string
+	response   string
 }
 
 func TestGetClonesHandler(t *testing.T) {
@@ -204,10 +205,72 @@ func TestGetClonesHandler(t *testing.T) {
 			if status := rr.Code; status != tc.results.statusCode {
 				t.Errorf("testcase '%v' failed: getbug returned wrong status code - got %v, want %v", tc, status, tc.results.statusCode)
 			}
-			if resp := rr.Body.String(); resp != tc.results.htmlPage {
-				t.Errorf("Response differs from expected by: %s", diff.StringDiff(resp, tc.results.htmlPage))
+			if resp := rr.Body.String(); resp != tc.results.response {
+				t.Errorf("Response differs from expected by: %s", diff.StringDiff(resp, tc.results.response))
 			}
 		})
 	}
 
+}
+
+func TestCreateCloneHandler(t *testing.T) {
+	fake := &bugzilla.Fake{}
+	fake.Bugs = map[int]bugzilla.Bug{}
+	fake.BugComments = map[int][]bugzilla.Comment{}
+
+	bug1Create := &bugzilla.BugCreate{
+		AssignedTo: "UnitTest",
+		Summary:    "Sample bug to test implementation of clones handler",
+	}
+	bug1ID, err := fake.CreateBug(bug1Create)
+	if err != nil {
+		t.Errorf("Error creating bug: %v", err)
+	}
+	expectedCloneID := bug1ID + 1
+	testcases := []struct {
+		name    string
+		params  map[string]int
+		results ResCheck
+	}{
+		{
+			"valid_parameters",
+			map[string]int{
+				"ID": bug1ID,
+			},
+			ResCheck{
+				http.StatusOK,
+				fmt.Sprintf("{\"ID\":%d}", expectedCloneID),
+			},
+		},
+		{
+			"bad_params",
+			map[string]int{
+				"ID": 1000,
+			},
+			ResCheck{
+				http.StatusNotFound,
+				"",
+			},
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+
+			req, err := http.NewRequest("POST", "/createclone", strings.NewReader(fmt.Sprintf("{\"ID\":%d", tc.params["ID"])))
+			if err != nil {
+				t.Fatal(err)
+			}
+			rr := httptest.NewRecorder()
+			handler := http.HandlerFunc(unwrapper(CreateCloneHandler(fake)))
+			handler.ServeHTTP(rr, req)
+			if status := rr.Code; status != tc.results.statusCode {
+				t.Errorf("testcase '%v' failed: clonebug returned wrong status code - got %v, want %v", tc, status, tc.results.statusCode)
+			}
+			if rr.Code == http.StatusOK {
+				if resp := rr.Body.String(); resp != tc.results.response {
+					t.Errorf("Response differs from expected by: %s", diff.StringDiff(resp, tc.results.response))
+				}
+			}
+		})
+	}
 }

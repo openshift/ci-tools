@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/prow/bugzilla"
 )
 
@@ -21,7 +22,7 @@ const htmlPageStart = `
 <head>
 <meta charset="UTF-8"><title>%s</title>
 <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css" integrity="sha384-MCw98/SFnGE8fJT3GXwEOngsV7Zt27NXFoaoApmYm81iuXoPkFOJwJ8ERdknLPMO" crossorigin="anonymous">
-<script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
+<script src="https://code.jquery.com/jquery-3.3.1.min.js" crossorigin="anonymous"></script>
 <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/js/bootstrap.min.js" integrity="sha384-ChfqqxuZUCnJSK3+MXmPNIyE6ZbWh2IMqE241rYiqJxyMiZ6OW/JmZQ5stwEULTy" crossorigin="anonymous"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <style>
@@ -37,7 +38,7 @@ text svg|a {
   background-color: transparent;
   -webkit-text-decoration-skip: objects;
 }
-
+select:invalid { color: gray; }
 svg|a:hover text, svg|a:active text {
   fill: #0056b3;
   text-decoration: underline;
@@ -97,16 +98,18 @@ td {
   <div class="collapse navbar-collapse" id="navbarSupportedContent">
     <form class="form-inline my-2 my-lg-0" role="search" action="/getclones" method="get">
 	  <input class="form-control mr-sm-2" type="search" placeholder="Bug ID" aria-label="Search" name="ID">
-		<select name="cars" id="cars">
-			<option value="volvo">Volvo</option>
-			<option value="saab">Saab</option>
-			<option value="mercedes">Mercedes</option>
-			<option value="audi">Audi</option>
-		</select>
-      <button class="btn btn-outline-success my-2 my-sm-0" id="create-clone-btn" type="submit">Find Clones</button>
+      <button class="btn btn-outline-success my-2 my-sm-0" type="submit">Find Clones</button>
     </form>
   </div>
 </nav>
+<div class="alert alert-success alert-dismissible d-none" id="success-banner">
+  <a href="#" class="close" data-dismiss="alert" aria-label="close">&times;</a>
+  <strong>Success!</strong> Clone created - <a href="/getclones?ID=" >Bug#</a>.
+</div>
+<div class="alert alert-danger alert-dismissible d-none" id="error-banner">
+  <a href="#" class="close" data-dismiss="alert" aria-label="close">&times;</a>
+  <strong>Error! </strong> <label id ="error-text"></label>
+</div>
 <div class="container">
 `
 
@@ -119,15 +122,25 @@ const htmlPageEnd = `
 </html>
 <script>
 $("#create-clone-btn").click(function(){
-
+	var selectedTarget = $("#target_version").val();
+	$.post( "createclone", { ID:$("#bugid").attr("value"), version:$("#target_version").val()})
+	.done(function(data){
+		$("#success-banner").addClass("d-flex");
+		var optionID = "#opt_"+selectedTarget;
+		$(optionID).remove();
+	})
+	.fail(function(xhr, status, error){
+		$("#error-banner").addClass("d-flex");
+		$("#error-text").text(xhr.responseText);
+	});
 })
 </script>`
 
 const clonesTemplateConstructor = `
-	<h2 id="bugid"> <a href = "#bugid"> {{.Bug.ID}}: {{.Bug.Summary}} </a> | Status: {{.Bug.Status}} </h2>
-	<p> Target Release: {{ .Bug.TargetRelease }} </p>
+	<h2> <a href = "#bugid" id="bugid" value="{{.Bug.ID}}"> {{.Bug.ID}}: {{.Bug.Summary}} </a> | Status: {{.Bug.Status}} </h2>
+	<p><label> Target Release:</label> {{ .Bug.TargetRelease }} </p>
 	{{ if .PRs }}
-		<p> GitHub PR: 
+		<p> <label>GitHub PR: </label>
 		{{ if .PRs }}
 			{{ range $index, $pr := .PRs }}
 				{{ if $index}}|{{end}} 
@@ -139,9 +152,9 @@ const clonesTemplateConstructor = `
 		<p> No linked PRs! </p>
 	{{ end }}
 	{{ if ne .Parent.ID .Bug.ID}}
-		<p> Cloned From: <a href = "/getclones?ID={{.Parent.ID}}"> Bug {{.Parent.ID}}: {{.Parent.Summary}}</a> | Status: {{.Parent.Status}}
+		<p> <label>Cloned From: </label><a href = "/getclones?ID={{.Parent.ID}}"> Bug {{.Parent.ID}}: {{.Parent.Summary}}</a> | Status: {{.Parent.Status}}
 	{{ else }}
-		<p> Cloned From: This is the original! </p>
+		<p> <label>Cloned From: </label>This is the original! </p>
 	{{ end }}
 	<h4 id="clones"> <a href ="#clones"> Clones</a> </h4>
 	<table class="table">
@@ -173,14 +186,29 @@ const clonesTemplateConstructor = `
 		{{ end }}
 		</tbody>
 	</table>
-	<form class="form-inline my-2 my-lg-0" role="search" action="/createclone" method="get">
-      <input class="form-control mr-sm-2" type="" placeholder="Target Version" aria-label="Search" name="version">
-      <button class="btn btn-outline-success my-2 my-sm-0" type="submit">Create Clone</button>
-    </form>`
+	<div class="form-group row">
+		<div class ="form-inline my-2 my-lg-0">
+			<select class="form-control mr-sm-2" aria-label="Search" name="version" id="target_version" required>
+				<option value="" disabled selected hidden>Target Version</option>
+				{{ range $version := .CloneTargets }}
+				<option value="{{$version}}" id="opt_{{$version}}">{{$version}}</option>
+				{{end}}
+			</select>
+			<button class="btn btn-outline-success my-2 my-sm-0" id="create-clone-btn">Create Clone</button>
+		</div>
+	</div>
+`
 
 var (
 	clonesTemplate = template.Must(template.New("clones").Parse(clonesTemplateConstructor))
 	emptyTemplate  = template.Must(template.New("empty").Parse("{{.}}"))
+	targetVersions = sets.NewString(
+		"4.7.0",
+		"4.6.0",
+		"4.5.0",
+		"3.0",
+		"2.0",
+	)
 )
 
 // HandlerFuncWithErrorReturn allows returning errors to be logged
@@ -188,10 +216,11 @@ type HandlerFuncWithErrorReturn func(http.ResponseWriter, *http.Request) error
 
 // Class to hold the UI data for the clones page
 type clonesTemplateData struct {
-	Bug    *bugzilla.Bug          // bug details
-	Clones []*bugzilla.Bug        // List of clones for the bug
-	Parent *bugzilla.Bug          // Root bug if it is a a bug, otherwise holds itself
-	PRs    []bugzilla.ExternalBug // Details of linked PR
+	Bug          *bugzilla.Bug          // bug details
+	Clones       []*bugzilla.Bug        // List of clones for the bug
+	Parent       *bugzilla.Bug          // Root bug if it is a a bug, otherwise holds itself
+	PRs          []bugzilla.ExternalBug // Details of linked PR
+	CloneTargets []string
 }
 
 // Writes an HTML page, prepends header in htmlPageStart and appends header from htmlPageEnd around tConstructor.
@@ -358,6 +387,13 @@ func GetClonesHandler(client bugzilla.Client) HandlerFuncWithErrorReturn {
 		}
 		for _, clone := range clones {
 			clonePRs, err := client.GetExternalBugPRsOnBug(clone.ID)
+			for _, release := range clone.TargetRelease {
+				_, ok := targetVersions[release]
+				if ok {
+					targetVersions.Delete(release)
+				}
+			}
+
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				wpErr := writePage(w, "Error!", emptyTemplate, fmt.Sprintf("Bug#%d - error occured while retreiving list of PRs : %v", clone.ID, err))
@@ -370,10 +406,11 @@ func GetClonesHandler(client bugzilla.Client) HandlerFuncWithErrorReturn {
 			clone.PRs = clonePRs
 		}
 		wrpr := clonesTemplateData{
-			Bug:    bug,
-			Clones: clones,
-			Parent: parent,
-			PRs:    prs,
+			Bug:          bug,
+			Clones:       clones,
+			Parent:       parent,
+			PRs:          prs,
+			CloneTargets: targetVersions.List(),
 		}
 
 		wpErr := writePage(w, "Clones", clonesTemplate, wrpr)
@@ -381,6 +418,34 @@ func GetClonesHandler(client bugzilla.Client) HandlerFuncWithErrorReturn {
 			http.Error(w, "Error building page!", http.StatusInternalServerError)
 			return wpErr
 		}
+		return nil
+	}
+}
+
+// CreateCloneHandler will create a clone of the specified ID and return success/error
+func CreateCloneHandler(client bugzilla.Client) HandlerFuncWithErrorReturn {
+	return func(w http.ResponseWriter, req *http.Request) error {
+		req.ParseForm()
+		bugID, err := strconv.Atoi(req.FormValue("ID"))
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprintf(w, "Invalid bug id! - Bug#%d : %v", bugID, err)
+			return err
+		}
+		bug, err := client.GetBug(bugID)
+		if err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			w.Write([]byte(fmt.Sprintf("Unable to fetch bug details- Bug#%d : %v", bugID, err)))
+			return err
+		}
+		cloneID, err := client.CloneBug(bug)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Clone creation failed! %v", err), http.StatusInternalServerError)
+			// w.WriteHeader(http.StatusInternalServerError)
+			// w.Write([]byte(fmt.Sprintf("Clone creation failed! %v", err)))
+			return err
+		}
+		fmt.Fprintf(w, "CloneID:%d", cloneID)
 		return nil
 	}
 }

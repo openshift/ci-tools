@@ -107,9 +107,11 @@ func getTrimmedBranch(branches []string) string {
 
 }
 
-func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber int, refs *pjapi.Refs) *prowconfig.Presubmit {
+func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber int, refs *pjapi.Refs) (*prowconfig.Presubmit, error) {
 	var rehearsal prowconfig.Presubmit
-	deepcopy.Copy(&rehearsal, source)
+	if err := deepcopy.Copy(&rehearsal, source); err != nil {
+		return nil, fmt.Errorf("deepCopy failed: %v", err)
+	}
 
 	rehearsal.Name = fmt.Sprintf("rehearse-%d-%s", prNumber, source.Name)
 
@@ -162,7 +164,7 @@ func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber 
 	}
 	rehearsal.Labels[rehearseLabel] = strconv.Itoa(prNumber)
 
-	return &rehearsal
+	return &rehearsal, nil
 }
 
 func filterPresubmits(changedPresubmits map[string][]prowconfig.Presubmit, logger logrus.FieldLogger) config.Presubmits {
@@ -407,7 +409,10 @@ func (jc *JobConfigurer) ConfigurePresubmitRehearsals(presubmits config.Presubmi
 	for orgrepo, jobs := range presubmitsFiltered {
 		for _, job := range jobs {
 			jobLogger := jc.loggers.Job.WithFields(logrus.Fields{"target-repo": orgrepo, "target-job": job.Name})
-			rehearsal := makeRehearsalPresubmit(&job, orgrepo, jc.prNumber, jc.refs)
+			rehearsal, err := makeRehearsalPresubmit(&job, orgrepo, jc.prNumber, jc.refs)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to make rehearsal presubmit: %w", err)
+			}
 
 			splitOrgRepo := strings.Split(orgrepo, "/")
 			if len(splitOrgRepo) != 2 {
@@ -461,11 +466,14 @@ func (jc *JobConfigurer) configureJobSpec(spec *v1.PodSpec, metadata api.Metadat
 
 // ConvertPeriodicsToPresubmits converts periodic jobs to presubmits by using the same JobBase and filling up
 // the rest of the presubmit's required fields.
-func (jc *JobConfigurer) ConvertPeriodicsToPresubmits(periodics []prowconfig.Periodic) []*prowconfig.Presubmit {
+func (jc *JobConfigurer) ConvertPeriodicsToPresubmits(periodics []prowconfig.Periodic) ([]*prowconfig.Presubmit, error) {
 	var presubmits []*prowconfig.Presubmit
 
 	for _, periodic := range periodics {
-		p := makeRehearsalPresubmit(&prowconfig.Presubmit{JobBase: periodic.JobBase}, "", jc.prNumber, jc.refs)
+		p, err := makeRehearsalPresubmit(&prowconfig.Presubmit{JobBase: periodic.JobBase}, "", jc.prNumber, jc.refs)
+		if err != nil {
+			return nil, fmt.Errorf("makeRehearsalPresubmit failed: %w", err)
+		}
 
 		if len(p.ExtraRefs) > 0 {
 			// we aren't injecting this as we do for presubmits, but we need it to be set
@@ -474,7 +482,7 @@ func (jc *JobConfigurer) ConvertPeriodicsToPresubmits(periodics []prowconfig.Per
 
 		presubmits = append(presubmits, p)
 	}
-	return presubmits
+	return presubmits, nil
 }
 
 // AddRandomJobsForChangedTemplates finds jobs from the PR config that are using a specific template with a specific cluster type.
@@ -801,7 +809,9 @@ func (e *Executor) ExecuteJobs() (bool, error) {
 	}
 
 	if e.dryRun {
-		printAsYaml(pjs)
+		if err := printAsYaml(pjs); err != nil {
+			return false, fmt.Errorf("printing yaml failed: %w", err)
+		}
 
 		if submitSuccess {
 			return true, nil

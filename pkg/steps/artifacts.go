@@ -233,14 +233,20 @@ func copyArtifacts(podClient PodClient, into, ns, name, containerName string, pa
 		return err
 	}
 	r, w := io.Pipe()
-	defer w.CloseWithError(fmt.Errorf("cancelled"))
+	defer func() {
+		if err := w.CloseWithError(fmt.Errorf("cancelled")); err != nil {
+			logrus.WithError(err).Error("CloseWithError failed")
+		}
+	}()
 	go func() {
 		err := e.Stream(remotecommand.StreamOptions{
 			Stdout: w,
 			Stdin:  nil,
 			Stderr: os.Stderr,
 		})
-		w.CloseWithError(err)
+		if err := w.CloseWithError(err); err != nil {
+			logrus.WithError(err).Error("CloseWithError failed")
+		}
 	}()
 
 	size := int64(0)
@@ -518,7 +524,9 @@ func (w *ArtifactWorker) Cancel() {
 			continue
 		}
 		go func(podName string) {
-			removeFile(w.podClient, w.namespace, podName, "artifacts", []string{"/tmp/done"})
+			if err := removeFile(w.podClient, w.namespace, podName, "artifacts", []string{"/tmp/done"}); err != nil {
+				logrus.WithError(err).Error("failed to remove file")
+			}
 		}(podName)
 	}
 }

@@ -11,6 +11,7 @@ linters:
     - staticcheck
     - unparam
     - unconvert
+    - errcheck
   disable-all: true
 
 issues:

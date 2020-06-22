@@ -41,7 +41,7 @@ type options struct {
 	rehearsalLimit  int
 }
 
-func gatherOptions() options {
+func gatherOptions() (options, error) {
 	o := options{}
 	fs := flag.CommandLine
 
@@ -58,8 +58,10 @@ func gatherOptions() options {
 
 	fs.IntVar(&o.rehearsalLimit, "rehearsal-limit", 15, "Upper limit of jobs attempted to rehearse (if more jobs would be rehearsed, none will)")
 
-	fs.Parse(os.Args[1:])
-	return o
+	if err := fs.Parse(os.Args[1:]); err != nil {
+		return o, fmt.Errorf("failed to parse flags: %v", err)
+	}
+	return o, nil
 }
 
 func validateOptions(o options) error {
@@ -102,9 +104,11 @@ func loadPluginConfig(releaseRepoPath string) (ret prowplugins.ConfigUpdater, er
 }
 
 func rehearseMain() error {
-	o := gatherOptions()
-	err := validateOptions(o)
+	o, err := gatherOptions()
 	if err != nil {
+		logrus.WithError(err).Fatal("failed to gather options")
+	}
+	if err := validateOptions(o); err != nil {
 		logrus.WithError(err).Fatal("invalid options")
 	}
 
@@ -321,7 +325,11 @@ func rehearseMain() error {
 		return nil
 	}
 
-	presubmitsToRehearse = append(presubmitsToRehearse, jobConfigurer.ConvertPeriodicsToPresubmits(periodicsToRehearse)...)
+	periodicPresubmits, err := jobConfigurer.ConvertPeriodicsToPresubmits(periodicsToRehearse)
+	if err != nil {
+		return err
+	}
+	presubmitsToRehearse = append(presubmitsToRehearse, periodicPresubmits...)
 	if prConfig.Prow.JobConfig.PresubmitsStatic == nil {
 		prConfig.Prow.JobConfig.PresubmitsStatic = map[string][]prowconfig.Presubmit{}
 	}

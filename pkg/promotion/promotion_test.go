@@ -265,7 +265,9 @@ func TestFutureOptions(t *testing.T) {
 			expected := testCase.expected
 			// this is not exposed for testing
 			for _, opt := range testCase.expectedFutureOpts {
-				expected.FutureReleases.Set(opt)
+				if err := expected.FutureReleases.Set(opt); err != nil {
+					t.Errorf("failed to set future release: %v", err)
+				}
 			}
 			if actual, expected := o, expected; !reflect.DeepEqual(actual, expected) {
 				t.Errorf("%s: got incorrect options: %s", testCase.name, cmp.Diff(expected, actual, cmp.AllowUnexported(flagutil.Strings{})))

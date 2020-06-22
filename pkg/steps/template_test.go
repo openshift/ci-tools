@@ -557,7 +557,9 @@ func TestInjectResourcesToPod(t *testing.T) {
 			pod := tc.pod
 			expectedPod := tc.expected
 
-			injectResourcesToPod(pod, testTemplateName, tc.resources)
+			if err := injectResourcesToPod(pod, testTemplateName, tc.resources); err != nil {
+				t.Fatalf("injectResourcesToPod failed: %v", err)
+			}
 			if !equality.Semantic.DeepEqual(expectedPod, pod) {
 				t.Fatal(diff.ObjectDiff(expectedPod, pod))
 			}

@@ -2078,7 +2078,9 @@ func syntax(source string, lexer chroma.Lexer) (string, error) {
 		return "", fmt.Errorf("failed to tokenise source: %v", err)
 	}
 	output.WriteString("<style>")
-	formatter.WriteCSS(&output, style)
+	if err := formatter.WriteCSS(&output, style); err != nil {
+		return "", fmt.Errorf("failed to write css: %w", err)
+	}
 	output.WriteString("</style>")
 	err = formatter.Format(&output, style, iterator)
 	return output.String(), err
@@ -2201,8 +2203,11 @@ func findConfigForJob(testName string, config api.ReleaseBuildConfiguration) (ap
 func MetadataFromQuery(w http.ResponseWriter, r *http.Request) (api.Metadata, error) {
 	if r.Method != "GET" {
 		w.WriteHeader(http.StatusNotImplemented)
-		w.Write([]byte(http.StatusText(http.StatusNotImplemented)))
-		return api.Metadata{}, fmt.Errorf("expected GET, got %s", r.Method)
+		err := fmt.Errorf("expected GET, got %s", r.Method)
+		if _, errWrite := w.Write([]byte(http.StatusText(http.StatusNotImplemented))); errWrite != nil {
+			return api.Metadata{}, fmt.Errorf("%s and writing the response body failed with %v", err.Error(), errWrite)
+		}
+		return api.Metadata{}, err
 	}
 	org := r.URL.Query().Get(OrgQuery)
 	if org == "" {

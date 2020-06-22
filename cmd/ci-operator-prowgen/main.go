@@ -224,7 +224,9 @@ func pruneStaleJobs(jobDir, subDir string) error {
 func main() {
 	flagSet := flag.NewFlagSet("", flag.ExitOnError)
 	opt := bindOptions(flagSet)
-	flagSet.Parse(os.Args[1:])
+	if err := flagSet.Parse(os.Args[1:]); err != nil {
+		logrus.WithError(err).Fatal("Failed to parse flags")
+	}
 
 	if opt.help {
 		flagSet.Usage()
@@ -233,7 +235,6 @@ func main() {
 
 	if err := opt.process(); err != nil {
 		logrus.WithError(err).Fatal("Failed to process arguments")
-		os.Exit(1)
 	}
 
 	args := flagSet.Args()

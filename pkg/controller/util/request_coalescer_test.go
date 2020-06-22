@@ -93,7 +93,7 @@ func TestReconcileRequestCoalescer_threadSafety(t *testing.T) {
 
 	wg := &sync.WaitGroup{}
 	wg.Add(2)
-	go func() { reconciler.Reconcile(reconcile.Request{}); wg.Done() }()
-	go func() { reconciler.Reconcile(reconcile.Request{}); wg.Done() }()
+	go func() { _, _ = reconciler.Reconcile(reconcile.Request{}); wg.Done() }()
+	go func() { _, _ = reconciler.Reconcile(reconcile.Request{}); wg.Done() }()
 	wg.Wait()
 }

@@ -197,26 +197,27 @@ func FromConfig(
 			// to that mechanism ...
 			isReleaseStep = true
 
+			var value string
 			resolveConfig := rawStep.ResolvedReleaseImagesStepConfiguration
 			envVar := release.EnvVarFor(resolveConfig.Name)
 			if current := os.Getenv(envVar); current != "" {
-				return nil, nil, results.ForReason("resolving_release").ForError(fmt.Errorf("could not resolve release and set to %s, as that environment was already provided", envVar))
+				value = current
+				log.Printf("Using explicitly provided pull-spec for release %s (%s)", resolveConfig.Name, value)
+			} else {
+				var err error
+				switch {
+				case resolveConfig.Candidate != nil:
+					value, err = candidate.ResolvePullSpec(*resolveConfig.Candidate)
+				case resolveConfig.Release != nil:
+					value, err = official.ResolvePullSpec(*resolveConfig.Release)
+				case resolveConfig.Prerelease != nil:
+					value, err = prerelease.ResolvePullSpec(*resolveConfig.Prerelease)
+				}
+				if err != nil {
+					return nil, nil, results.ForReason("resolving_release").ForError(fmt.Errorf("failed to resolve release %s: %v", resolveConfig.Name, err))
+				}
+				log.Printf("Resolved release %s to %s", resolveConfig.Name, value)
 			}
-
-			var value string
-			var err error
-			switch {
-			case resolveConfig.Candidate != nil:
-				value, err = candidate.ResolvePullSpec(*resolveConfig.Candidate)
-			case resolveConfig.Release != nil:
-				value, err = official.ResolvePullSpec(*resolveConfig.Release)
-			case resolveConfig.Prerelease != nil:
-				value, err = prerelease.ResolvePullSpec(*resolveConfig.Prerelease)
-			}
-			if err != nil {
-				return nil, nil, results.ForReason("resolving_release").ForError(fmt.Errorf("failed to resolve release %s: %v", resolveConfig.Name, err))
-			}
-			log.Printf("Resolved release %s to %s", resolveConfig.Name, value)
 
 			step = release.ImportReleaseStep(resolveConfig.Name, value, false, config.Resources, podClient, imageClient, saGetter, rbacClient, artifactDir, jobSpec, dryLogger)
 		} else if testStep := rawStep.TestStepConfiguration; testStep != nil {

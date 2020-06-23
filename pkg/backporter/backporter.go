@@ -222,7 +222,11 @@ func GetBugHandler(client bugzilla.Client) HandlerFuncWithErrorReturn {
 	return func(w http.ResponseWriter, r *http.Request) error {
 		if r.Method != "GET" {
 			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte(http.StatusText(http.StatusBadRequest)))
+			_, writeErr := w.Write([]byte(http.StatusText(http.StatusBadRequest)))
+			if writeErr != nil {
+				http.Error(w, "Error while building page", http.StatusInternalServerError)
+				return writeErr
+			}
 			return fmt.Errorf("Not a GET request")
 		}
 		bugIDStr := r.URL.Query().Get(BugIDQuery)
@@ -246,7 +250,11 @@ func GetBugHandler(client bugzilla.Client) HandlerFuncWithErrorReturn {
 		bugInfo, err := client.GetBug(bugID)
 		if err != nil {
 			w.WriteHeader(http.StatusNotFound)
-			w.Write([]byte("Bug ID not found"))
+			_, writeErr := w.Write([]byte("Bug ID not found"))
+			if writeErr != nil {
+				http.Error(w, "Error while building page", http.StatusInternalServerError)
+				return writeErr
+			}
 			return err
 		}
 		jsonBugInfo, err := json.MarshalIndent(*bugInfo, "", "  ")
@@ -261,7 +269,11 @@ func GetBugHandler(client bugzilla.Client) HandlerFuncWithErrorReturn {
 			return err
 		}
 		w.WriteHeader(http.StatusOK)
-		w.Write(jsonBugInfo)
+		_, err = w.Write(jsonBugInfo)
+		if err != nil {
+			http.Error(w, "Error while building page", http.StatusInternalServerError)
+			return err
+		}
 		return nil
 	}
 }
@@ -277,7 +289,7 @@ func GetClonesHandler(client bugzilla.Client) HandlerFuncWithErrorReturn {
 				http.Error(w, "Error building page!", http.StatusInternalServerError)
 				return wpErr
 			}
-			return error(fmt.Errorf("%s - query incorrect", BugIDQuery))
+			return fmt.Errorf("%s - query incorrect", BugIDQuery)
 		}
 		bugID, err := strconv.Atoi(bugIDStr)
 		if err != nil {

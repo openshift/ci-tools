@@ -86,7 +86,7 @@ func handleWithMetrics(h backporter.HandlerFuncWithErrorReturn) http.HandlerFunc
 	}
 }
 
-func gatherOptions() options {
+func gatherOptions() (options, error) {
 	o := options{}
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	fs.StringVar(&o.logLevel, "log-level", "info", "Level at which to log output.")
@@ -95,8 +95,11 @@ func gatherOptions() options {
 	for _, group := range []flagutil.OptionGroup{&o.bugzilla} {
 		group.AddFlags(fs)
 	}
-	fs.Parse(os.Args[1:])
-	return o
+	err := fs.Parse(os.Args[1:])
+	if err != nil {
+		return o, err
+	}
+	return o, nil
 }
 
 func processOptions(o options) error {
@@ -109,8 +112,11 @@ func processOptions(o options) error {
 }
 
 func main() {
-	o := gatherOptions()
-	err := processOptions(o)
+	o, err := gatherOptions()
+	if err != nil {
+		log.Fatalf("invalid options: %v", err)
+	}
+	err = processOptions(o)
 	if err != nil {
 		log.Fatalf("invalid options: %v", err)
 	}

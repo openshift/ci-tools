@@ -54,7 +54,7 @@ const clonesHTMLSubPage = `
 
 const errorSubPage = `Bug#1000 not found`
 
-func unwrapper(h HandlerFuncWithErrorReturn, t *testing.T) http.HandlerFunc {
+func unwrapper(h HandlerFuncWithErrorReturn) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = h(w, r)
 	})
@@ -65,7 +65,7 @@ func TestGetLandingHandler(t *testing.T) {
 		t.Fatal(err)
 	}
 	rr := httptest.NewRecorder()
-	handler := unwrapper(GetLandingHandler(), t)
+	handler := unwrapper(GetLandingHandler())
 	handler.ServeHTTP(rr, req)
 	if status := rr.Code; status != http.StatusOK {
 		t.Errorf("Error fetching landing page for bugzilla backporter tool!")
@@ -125,7 +125,7 @@ func TestGetBugHandler(t *testing.T) {
 			}
 			req.URL.RawQuery = q.Encode()
 			rr := httptest.NewRecorder()
-			handler := unwrapper(GetBugHandler(fake), t)
+			handler := unwrapper(GetBugHandler(fake))
 			handler.ServeHTTP(rr, req)
 			if status := rr.Code; status != tc.statusCode {
 				t.Errorf("testcase '%v' failed: getbug returned wrong status code - got %v, want %v", tc.name, status, tc.statusCode)
@@ -199,7 +199,7 @@ func TestGetClonesHandler(t *testing.T) {
 			}
 			req.URL.RawQuery = q.Encode()
 			rr := httptest.NewRecorder()
-			handler := unwrapper(GetClonesHandler(fake), t)
+			handler := unwrapper(GetClonesHandler(fake))
 			handler.ServeHTTP(rr, req)
 			if status := rr.Code; status != tc.results.statusCode {
 				t.Errorf("testcase '%v' failed: getbug returned wrong status code - got %v, want %v", tc, status, tc.results.statusCode)

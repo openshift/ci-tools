@@ -102,41 +102,26 @@ td {
     </form>
   </div>
 </nav>
-<div class="alert alert-success alert-dismissible d-none" id="success-banner">
-  <a href="#" class="close" data-dismiss="alert" aria-label="close">&times;</a>
-  <strong>Success!</strong> Clone created - <a href="/getclones?ID=" >Bug#</a>.
-</div>
-<div class="alert alert-danger alert-dismissible d-none" id="error-banner">
-  <a href="#" class="close" data-dismiss="alert" aria-label="close">&times;</a>
-  <strong>Error! </strong> <label id ="error-text"></label>
-</div>
-<div class="container">
 `
 
 const htmlPageEnd = `
-</div>
 <footer>
 <p class="small">Source code for this page located on <a href="https://github.com/openshift/ci-tools">GitHub</a></p>
 </footer>
 </body>
 </html>
-<script>
-$("#create-clone-btn").click(function(){
-	var selectedTarget = $("#target_version").val();
-	$.post( "createclone", { ID:$("#bugid").attr("value"), version:$("#target_version").val()})
-	.done(function(data){
-		$("#success-banner").addClass("d-flex");
-		var optionID = "#opt_"+selectedTarget;
-		$(optionID).remove();
-	})
-	.fail(function(xhr, status, error){
-		$("#error-banner").addClass("d-flex");
-		$("#error-text").text(xhr.responseText);
-	});
-})
-</script>`
+`
 
 const clonesTemplateConstructor = `
+<div class="alert alert-success alert-dismissible" id="success-banner">
+  <a href="#" class="close" data-dismiss="alert" aria-label="close">&times;</a>
+  <strong>Success!</strong> Clone created - <a href="/getclones?ID=" >Bug#</a>.
+</div>
+<div class="alert alert-danger alert-dismissible" id="error-banner">
+  <a href="#" class="close" data-dismiss="alert" aria-label="close">&times;</a>
+  <strong>Error! </strong> <label id ="error-text"></label>
+</div>
+<div class="container">
 	<h2> <a href = "#bugid" id="bugid" value="{{.Bug.ID}}"> {{.Bug.ID}}: {{.Bug.Summary}} </a> | Status: {{.Bug.Status}} </h2>
 	<p><label> Target Release:</label> {{ .Bug.TargetRelease }} </p>
 	{{ if .PRs }}
@@ -186,22 +171,27 @@ const clonesTemplateConstructor = `
 		{{ end }}
 		</tbody>
 	</table>
-	<div class="form-group row">
-		<div class ="form-inline my-2 my-lg-0">
-			<select class="form-control mr-sm-2" aria-label="Search" name="version" id="target_version" required>
-				<option value="" disabled selected hidden>Target Version</option>
-				{{ range $version := .CloneTargets }}
+	<form class="form-inline my-2 my-lg-0" role="search" action="/createclone" method="post">
+		<input type="hidden" name="ID" value="{{.Bug.ID}}">
+		<select class="form-control mr-sm-2" aria-label="Search" name="version" id="target_version" required>
+			<option value="" disabled selected hidden>Target Version</option>
+			{{ range $version := .CloneTargets }}
 				<option value="{{$version}}" id="opt_{{$version}}">{{$version}}</option>
-				{{end}}
-			</select>
-			<button class="btn btn-outline-success my-2 my-sm-0" id="create-clone-btn">Create Clone</button>
-		</div>
-	</div>
-`
+			{{end}}
+		</select>
+		<button class="btn btn-outline-success my-2 my-sm-0" type="submit">Create Clone</button>
+    </form>
+</div>`
 
+const errorTemplateConstructor := `
+<div class="alert alert-danger" id="error-banner">
+<a href="#" class="close" data-dismiss="alert" aria-label="close">&times;</a>
+<strong>Error! </strong> <label id ="error-text">{{.}}</label>
+</div>`
 var (
 	clonesTemplate = template.Must(template.New("clones").Parse(clonesTemplateConstructor))
 	emptyTemplate  = template.Must(template.New("empty").Parse("{{.}}"))
+	errorTemplate = template.Must(template.New("error").Parse(errorTemplateConstructor))
 	targetVersions = sets.NewString(
 		"4.7.0",
 		"4.6.0",
@@ -221,6 +211,8 @@ type clonesTemplateData struct {
 	Parent       *bugzilla.Bug          // Root bug if it is a a bug, otherwise holds itself
 	PRs          []bugzilla.ExternalBug // Details of linked PR
 	CloneTargets []string
+	ErrorMessage   string
+	SuccessMessage string
 }
 
 // Writes an HTML page, prepends header in htmlPageStart and appends header from htmlPageEnd around tConstructor.
@@ -428,17 +420,35 @@ func CreateCloneHandler(client bugzilla.Client) HandlerFuncWithErrorReturn {
 		req.ParseForm()
 		bugID, err := strconv.Atoi(req.FormValue("ID"))
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Invalid bug id! - Bug#%d : %v", bugID, err), http.StatusBadRequest)
+			w.WriteHeader(http.StatusBadRequest)
+			wpErr := writePage(w, "Error", errorTemplate, fmt.Sprintf("Invalid bug id! - Bug#%d : %v", bugID, err))
+			if wpErr != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				fmt.Fprint(w, "Error building page!")
+				return wpErr
+			}
 			return err
 		}
 		bug, err := client.GetBug(bugID)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Unable to fetch bug details- Bug#%d : %v", bugID, err), http.StatusNotFound)
+			w.WriteHeader(http.StatusBadRequest)
+			wpErr := writePage(w, "Error", errorTemplate, fmt.Sprintf("Unable to fetch bug details- Bug#%d : %v", bugID, err))
+			if wpErr != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				fmt.Fprint(w, "Error building page!")
+				return wpErr
+			}
 			return err
 		}
 		cloneID, err := client.CloneBug(bug)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Clone creation failed! %v", err), http.StatusInternalServerError)
+			w.WriteHeader(http.StatusInternalServerError)
+			wpErr := writePage(w, "Error", errorTemplate, fmt.Sprintf("Clone creation failed! %v", err))
+			if wpErr != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				fmt.Fprint(w, "Error building page!")
+				return wpErr
+			}
 			return err
 		}
 		targetRelease := bugzilla.BugUpdate{
@@ -446,8 +456,37 @@ func CreateCloneHandler(client bugzilla.Client) HandlerFuncWithErrorReturn {
 				req.FormValue("version"),
 			},
 		}
-		client.UpdateBug(cloneID, targetRelease)
-		fmt.Fprintf(w, "CloneID:%d", cloneID)
+		err = client.UpdateBug(cloneID, targetRelease)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			wpErr := writePage(w, "Error", errorTemplate, fmt.Sprintf("Failed to change version for the cloned bug! %v", err))
+			if wpErr != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				fmt.Fprint(w, "Error building page!")
+				return wpErr
+			}
+			return err
+		}
+		clones, err := client.GetClones(bug)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			wpErr := writePage(w, "Error", errorTemplate, fmt.Sprintf("Failed to get clones for the bug! %v", err))
+			if wpErr != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				fmt.Fprint(w, "Error building page!")
+				return wpErr
+			}
+			return err
+		}
+		data := &wrapper{
+			Bug : bug,
+			Clones : clones,
+
+		}
+		err = writePage(w, "Clones", clonesTemplate, data)
+		if err != nil {
+			return err
+		}
 		return nil
 	}
 }

@@ -56,11 +56,7 @@ const errorSubPage = `Bug#1000 not found`
 
 func unwrapper(h HandlerFuncWithErrorReturn, t *testing.T) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		err := h(w, r)
-		if err != nil {
-			// Error needs to be checked for the linter, but cant be ignored since the tescases check for error states
-			t.Log("Error while fetching HTTP request")
-		}
+		_ = h(w, r)
 	})
 }
 func TestGetLandingHandler(t *testing.T) {

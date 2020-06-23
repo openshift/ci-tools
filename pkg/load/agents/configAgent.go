@@ -196,7 +196,7 @@ func (a *configAgent) loadFilenameToConfig() error {
 	a.indexes = indexes
 	a.lock.Unlock()
 	duration := time.Since(startTime)
-	configReloadTimeMetric.Observe(float64(duration.Seconds()))
+	configReloadTimeMetric.Observe(duration.Seconds())
 	log.WithField("duration", duration).Info("Configs reloaded")
 	return nil
 }

@@ -33,7 +33,7 @@ type options struct {
 	clean bool
 }
 
-func gatherOptions() options {
+func gatherOptions() (options, error) {
 	o := options{}
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 
@@ -44,8 +44,10 @@ func gatherOptions() options {
 	fs.BoolVar(&o.clean, "clean", true, "If the `to-org` folder already exists, then delete all subdirectories")
 
 	o.WhitelistOptions.Bind(fs)
-	fs.Parse(os.Args[1:])
-	return o
+	if err := fs.Parse(os.Args[1:]); err != nil {
+		return o, fmt.Errorf("failed to parse flags: %w", err)
+	}
+	return o, nil
 }
 
 func (o *options) validate() error {
@@ -92,7 +94,10 @@ func (d configsByRepo) generateConfigs(configDir string) error {
 }
 
 func main() {
-	o := gatherOptions()
+	o, err := gatherOptions()
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to gather options")
+	}
 	if err := o.validate(); err != nil {
 		logrus.WithError(err).Fatal("Invalid option")
 	}

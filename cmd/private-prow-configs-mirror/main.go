@@ -55,15 +55,17 @@ func (o *orgReposWithOfficialImages) isOfficialRepoFull(orgRepo string) bool {
 	return false
 }
 
-func gatherOptions() options {
+func gatherOptions() (options, error) {
 	o := options{}
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 
 	fs.StringVar(&o.releaseRepoPath, "release-repo-path", "", "Path to a openshift/release repository directory")
 
 	o.WhitelistOptions.Bind(fs)
-	fs.Parse(os.Args[1:])
-	return o
+	if err := fs.Parse(os.Args[1:]); err != nil {
+		return o, fmt.Errorf("failed to parrse flags: %w", err)
+	}
+	return o, nil
 }
 
 func (o *options) validate() error {
@@ -378,7 +380,10 @@ func main() {
 		},
 	})
 
-	o := gatherOptions()
+	o, err := gatherOptions()
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to gather options")
+	}
 	if err := o.validate(); err != nil {
 		logrus.WithError(err).Fatal("Invalid option")
 	}

@@ -39,7 +39,7 @@ type options struct {
 	github          flagutil.GitHubOptions
 }
 
-func gatherOptions() options {
+func gatherOptions() (options, error) {
 	o := options{}
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 
@@ -50,9 +50,11 @@ func gatherOptions() options {
 
 	o.github.AddFlags(fs)
 	o.WhitelistOptions.Bind(fs)
-	fs.Parse(os.Args[1:])
+	if err := fs.Parse(os.Args[1:]); err != nil {
+		return o, fmt.Errorf("faild to parse flags: %w", err)
+	}
 
-	return o
+	return o, nil
 }
 
 func validateOptions(o *options) error {
@@ -77,9 +79,11 @@ func validateOptions(o *options) error {
 }
 
 func main() {
-	o := gatherOptions()
-	err := validateOptions(&o)
+	o, err := gatherOptions()
 	if err != nil {
+		logrus.WithError(err).Fatal("failed to gather options")
+	}
+	if err := validateOptions(&o); err != nil {
 		logrus.WithError(err).Fatal("invalid options")
 	}
 	logger := logrus.WithField("destination-org", o.destOrg)

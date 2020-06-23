@@ -623,13 +623,17 @@ func TestConfigFromResolver(t *testing.T) {
 				t.Errorf("%s: Branch should equal master, but was %s", t.Name(), r.URL.Query().Get("branch"))
 			}
 			w.WriteHeader(http.StatusOK)
-			w.Write(jsonConfig)
+			if _, err := w.Write(jsonConfig); err != nil {
+				t.Errorf("failed to write data: %v", err)
+			}
 		})
 	}
 	failingHandler := func(t *testing.T, jsonConfig []byte) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusBadRequest)
-			w.Write(jsonConfig)
+			if _, err := w.Write(jsonConfig); err != nil {
+				t.Errorf("failed to write: %v", err)
+			}
 		})
 	}
 	var testCases = []struct {

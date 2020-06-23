@@ -48,6 +48,8 @@ func main() {
 	}
 
 	for _, output := range toCommit {
-		output.CommitTo(o.ConfigDir)
+		if err := output.CommitTo(o.ConfigDir); err != nil {
+			logrus.WithError(err).Fatal("commitTo failed")
+		}
 	}
 }

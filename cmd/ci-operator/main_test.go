@@ -143,7 +143,7 @@ func verifyMetadata(jobSpec *api.JobSpec, namespace string, customMetadata map[s
 		if err != nil {
 			return fmt.Errorf("error marshalling custom metadata: %v", err)
 		}
-		err = ioutil.WriteFile(filepath.Join(testArtifactDirectory, "custom-prow-metadata.json"), []byte(testJSON), os.FileMode(0644))
+		err = ioutil.WriteFile(filepath.Join(testArtifactDirectory, "custom-prow-metadata.json"), testJSON, os.FileMode(0644))
 		if err != nil {
 			return fmt.Errorf("unable to create custom metadata file: %v", err)
 		}

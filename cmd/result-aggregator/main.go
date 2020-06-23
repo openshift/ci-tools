@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	prowConfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/config/secret"
@@ -45,7 +46,7 @@ type options struct {
 	password    string
 }
 
-func gatherOptions() options {
+func gatherOptions() (options, error) {
 	o := options{}
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	fs.StringVar(&o.logLevel, "log-level", "info", "Level at which to log output.")
@@ -53,8 +54,10 @@ func gatherOptions() options {
 	fs.DurationVar(&o.gracePeriod, "gracePeriod", time.Second*10, "Grace period for server shutdown")
 	fs.StringVar(&o.username, "username", "", "Username to trust for clients.")
 	fs.StringVar(&o.password, "password-file", "", "File holding the password for clients.")
-	fs.Parse(os.Args[1:])
-	return o
+	if err := fs.Parse(os.Args[1:]); err != nil {
+		return o, fmt.Errorf("failed to parse flags: %w", err)
+	}
+	return o, nil
 }
 
 func validateOptions(o options) error {
@@ -93,14 +96,6 @@ func validateRequest(request *results.Request) error {
 func handleError(w http.ResponseWriter, err error) {
 	w.WriteHeader(http.StatusBadRequest)
 	fmt.Fprint(w, err)
-}
-
-func genericHandler() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		log.Debug("got invalid request")
-		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte(http.StatusText(http.StatusNotFound)))
-	}
 }
 
 func withErrorRate(request *results.Request) {
@@ -150,9 +145,11 @@ func handleCIOperatorResult(username string, password func() []byte) http.Handle
 }
 
 func main() {
-	o := gatherOptions()
-	err := validateOptions(o)
+	o, err := gatherOptions()
 	if err != nil {
+		logrus.WithError(err).Fatal("failed to gather options")
+	}
+	if err := validateOptions(o); err != nil {
 		log.Fatalf("invalid options: %v", err)
 	}
 
@@ -166,7 +163,7 @@ func main() {
 		log.WithError(err).Fatal("Could not load secrets.")
 	}
 
-	http.HandleFunc("/", genericHandler())
+	http.HandleFunc("/", http.NotFound)
 	http.HandleFunc("/result", handleCIOperatorResult(o.username, secretAgent.GetTokenGenerator(o.password)))
 	metrics.ExposeMetrics("result-aggregator", prowConfig.PushGateway{}, flagutil.DefaultMetricsPort)
 

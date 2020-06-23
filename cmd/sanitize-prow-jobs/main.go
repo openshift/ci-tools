@@ -118,7 +118,9 @@ func defaultJobConfig(jc *prowconfig.JobConfig, path string, config *dispatcher.
 func main() {
 	flagSet := flag.NewFlagSet("", flag.ExitOnError)
 	opt := bindOptions(flagSet)
-	flagSet.Parse(os.Args[1:])
+	if err := flagSet.Parse(os.Args[1:]); err != nil {
+		logrus.WithError(err).Fatal("Failed to parse flags")
+	}
 
 	if opt.help {
 		flagSet.Usage()

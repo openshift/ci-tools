@@ -519,7 +519,9 @@ func TestOptions_Bind(t *testing.T) {
 			expected := testCase.expected
 			// this is not exposed for testing
 			for _, opt := range testCase.expectedFutureOpts {
-				expected.FutureReleases.Set(opt)
+				if err := expected.FutureReleases.Set(opt); err != nil {
+					t.Errorf("setting future release failed: %v", err)
+				}
 			}
 			if actual, expected := o, expected; !reflect.DeepEqual(actual, expected) {
 				t.Errorf("%s: got incorrect options: expected %v, got %v", testCase.name, expected, actual)

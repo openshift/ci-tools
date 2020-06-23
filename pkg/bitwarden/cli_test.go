@@ -463,7 +463,9 @@ func TestGetAttachmentOnItemToFile(t *testing.T) {
 			t.Errorf("Failed to remove tmp file: %q", file.Name())
 		}
 	}()
-	ioutil.WriteFile(file.Name(), []byte(`bla`), 0755)
+	if err := ioutil.WriteFile(file.Name(), []byte(`bla`), 0755); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
 	client := &cliClient{
 		session: "abc",
 		savedItems: []Item{

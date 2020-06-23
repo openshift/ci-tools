@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"syscall"
 
+	"github.com/sirupsen/logrus"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
@@ -22,7 +23,9 @@ import (
 func main() {
 	flagSet := flag.NewFlagSet("", flag.ExitOnError)
 	opt := bindOptions(flagSet)
-	flagSet.Parse(os.Args[1:])
+	if err := flagSet.Parse(os.Args[1:]); err != nil {
+		logrus.WithError(err).Fatal("Failed to parsse flagset")
+	}
 	opt.cmd = flagSet.Args()
 	if err := opt.complete(); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
@@ -152,7 +155,9 @@ func execCmd(argv []string) error {
 				break
 			case s := <-sig:
 				fmt.Fprintf(os.Stderr, "received signal %d, forwarding\n", s)
-				proc.Process.Signal(s)
+				if err := proc.Process.Signal(s); err != nil {
+					logrus.WithError(err).Error("Failed to forward signal")
+				}
 			}
 		}
 	}()

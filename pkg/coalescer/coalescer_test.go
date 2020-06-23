@@ -19,7 +19,9 @@ func TestRun(t *testing.T) {
 	for n := 0; n < 10; n++ {
 		wg.Add(1)
 		go func() {
-			c.Run()
+			if err := c.Run(); err != nil {
+				t.Errorf("runing coalescer failed: %v", err)
+			}
 			wg.Done()
 		}()
 	}

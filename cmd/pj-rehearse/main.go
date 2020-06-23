@@ -1,16 +1,24 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
+	imagev1 "github.com/openshift/api/image/v1"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
@@ -18,7 +26,10 @@ import (
 	prowgithub "k8s.io/test-infra/prow/github"
 	prowplugins "k8s.io/test-infra/prow/plugins"
 	pjdwapi "k8s.io/test-infra/prow/pod-utils/downwardapi"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
+	apihelper "github.com/openshift/ci-tools/pkg/api/helper"
+	testimagestreamtagimportv1 "github.com/openshift/ci-tools/pkg/api/testimagestreamtagimport/v1"
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/diffs"
 	"github.com/openshift/ci-tools/pkg/load"
@@ -41,7 +52,7 @@ type options struct {
 	rehearsalLimit  int
 }
 
-func gatherOptions() options {
+func gatherOptions() (options, error) {
 	o := options{}
 	fs := flag.CommandLine
 
@@ -58,8 +69,10 @@ func gatherOptions() options {
 
 	fs.IntVar(&o.rehearsalLimit, "rehearsal-limit", 15, "Upper limit of jobs attempted to rehearse (if more jobs would be rehearsed, none will)")
 
-	fs.Parse(os.Args[1:])
-	return o
+	if err := fs.Parse(os.Args[1:]); err != nil {
+		return o, fmt.Errorf("failed to parse flags: %v", err)
+	}
+	return o, nil
 }
 
 func validateOptions(o options) error {
@@ -102,10 +115,15 @@ func loadPluginConfig(releaseRepoPath string) (ret prowplugins.ConfigUpdater, er
 }
 
 func rehearseMain() error {
-	o := gatherOptions()
-	err := validateOptions(o)
+	o, err := gatherOptions()
 	if err != nil {
+		logrus.WithError(err).Fatal("failed to gather options")
+	}
+	if err := validateOptions(o); err != nil {
 		logrus.WithError(err).Fatal("invalid options")
+	}
+	if err := imagev1.AddToScheme(scheme.Scheme); err != nil {
+		logrus.WithError(err).Fatal("failed to register imagev1 scheme")
 	}
 
 	var jobSpec *pjdwapi.JobSpec
@@ -297,16 +315,15 @@ func rehearseMain() error {
 
 	resolver := registry.NewResolver(refs, chains, workflows)
 	jobConfigurer := rehearse.NewJobConfigurer(prConfig.CiOperator, resolver, prNumber, loggers, changedTemplates, changedClusterProfiles, jobSpec.Refs)
-	// TODO: Distribute the returned imagestreamtags
-	_, presubmitsToRehearse, err := jobConfigurer.ConfigurePresubmitRehearsals(toRehearse)
+	imagestreamtags, presubmitsToRehearse, err := jobConfigurer.ConfigurePresubmitRehearsals(toRehearse)
 	if err != nil {
 		return err
 	}
-	// TODO: Distribute the returned imagestreamtags
-	_, periodicsToRehearse, err := jobConfigurer.ConfigurePeriodicRehearsals(changedPeriodics)
+	periodicImageStreamTags, periodicsToRehearse, err := jobConfigurer.ConfigurePeriodicRehearsals(changedPeriodics)
 	if err != nil {
 		return err
 	}
+	apihelper.MergeImageStreamTagMaps(imagestreamtags, periodicImageStreamTags)
 
 	rehearsals := len(presubmitsToRehearse) + len(periodicsToRehearse)
 	if rehearsals == 0 {
@@ -321,7 +338,11 @@ func rehearseMain() error {
 		return nil
 	}
 
-	presubmitsToRehearse = append(presubmitsToRehearse, jobConfigurer.ConvertPeriodicsToPresubmits(periodicsToRehearse)...)
+	periodicPresubmits, err := jobConfigurer.ConvertPeriodicsToPresubmits(periodicsToRehearse)
+	if err != nil {
+		return err
+	}
+	presubmitsToRehearse = append(presubmitsToRehearse, periodicPresubmits...)
 	if prConfig.Prow.JobConfig.PresubmitsStatic == nil {
 		prConfig.Prow.JobConfig.PresubmitsStatic = map[string][]prowconfig.Presubmit{}
 	}
@@ -339,12 +360,14 @@ func rehearseMain() error {
 		buildClusterConfigs,
 		logger,
 		prConfig.Prow.ProwJobNamespace,
+		pjclient,
 		prConfig.Prow.PodNamespace,
 		pluginConfig,
 		o.releaseRepoPath,
 		o.dryRun,
 		changedTemplates,
-		changedClusterProfiles)
+		changedClusterProfiles,
+		imagestreamtags)
 	if err != nil {
 		logger.WithError(err).Error("Failed to set up dependencies")
 		return errors.New(failedSetupOutput)
@@ -397,12 +420,14 @@ func setupDependencies(
 	configs map[string]*rest.Config,
 	log *logrus.Entry,
 	prowJobNamespace string,
+	prowJobClient ctrlruntimeclient.Client,
 	podNamespace string,
 	pluginConfig prowplugins.ConfigUpdater,
 	releaseRepoPath string,
 	dryRun bool,
 	changedTemplates []config.ConfigMapSource,
 	changedClusterProfiles []config.ConfigMapSource,
+	requiredImageStreamTags apihelper.ImageStreamTagMap,
 ) (_ cleanup, retErr error) {
 	buildClusters := sets.String{}
 	for _, job := range jobs {
@@ -413,35 +438,106 @@ func setupDependencies(
 	}
 
 	var cleanups cleanups
+	cleanupsLock := &sync.Mutex{}
 	defer func() {
 		if retErr != nil {
 			cleanups.cleanup()
 		}
 	}()
 
+	g, ctx := errgroup.WithContext(context.Background())
 	for _, buildCluster := range buildClusters.UnsortedList() {
-		log := log.WithField("buildCluster", buildCluster)
-		cmClient, err := rehearse.NewCMClient(configs[buildCluster], podNamespace, dryRun)
-		if err != nil {
-			log.WithError(err).Error("could not create a configMap client")
-			return nil, fmt.Errorf(misconfigurationOutput)
-		}
-
-		cmManager := config.NewTemplateCMManager(prowJobNamespace, cmClient, pluginConfig, prNumber, releaseRepoPath, log)
-		cleanups = append(cleanups, func() {
-			if err := cmManager.CleanupCMTemplates(); err != nil {
-				log.WithError(err).Error("failed to clean up temporary template CM")
+		g.Go(func() error {
+			log := log.WithField("buildCluster", buildCluster)
+			cmClient, err := rehearse.NewCMClient(configs[buildCluster], podNamespace, dryRun)
+			if err != nil {
+				log.WithError(err).Error("could not create a configMap client")
+				return errors.New(misconfigurationOutput)
 			}
+
+			cmManager := config.NewTemplateCMManager(prowJobNamespace, cmClient, pluginConfig, prNumber, releaseRepoPath, log)
+
+			cleanupsLock.Lock()
+			cleanups = append(cleanups, func() {
+				if err := cmManager.CleanupCMTemplates(); err != nil {
+					log.WithError(err).Error("failed to clean up temporary template CM")
+				}
+			})
+			cleanupsLock.Unlock()
+
+			if err := cmManager.CreateCMTemplates(changedTemplates); err != nil {
+				log.WithError(err).Error("couldn't create template configMap")
+				return errors.New(failedSetupOutput)
+			}
+			if err := cmManager.CreateClusterProfiles(changedClusterProfiles); err != nil {
+				log.WithError(err).Error("couldn't create cluster profile ConfigMaps")
+				return errors.New(failedSetupOutput)
+			}
+
+			if dryRun {
+				return nil
+			}
+
+			client, err := ctrlruntimeclient.New(configs[buildCluster], ctrlruntimeclient.Options{})
+			if err != nil {
+				return fmt.Errorf("failed to construct client for cluster %s: %w", buildCluster, err)
+			}
+
+			if err := ensureImageStreamTags(ctx, client, requiredImageStreamTags, buildCluster, prowJobNamespace, prowJobClient); err != nil {
+				return fmt.Errorf("failed to ensure imagestreamtags in cluster %s: %w", buildCluster, err)
+			}
+
+			return nil
 		})
-		if err := cmManager.CreateCMTemplates(changedTemplates); err != nil {
-			log.WithError(err).Error("couldn't create template configMap")
-			return nil, fmt.Errorf(failedSetupOutput)
-		}
-		if err := cmManager.CreateClusterProfiles(changedClusterProfiles); err != nil {
-			log.WithError(err).Error("couldn't create cluster profile ConfigMaps")
-			return nil, fmt.Errorf(failedSetupOutput)
-		}
 	}
 
-	return cleanups.cleanup, nil
+	return cleanups.cleanup, g.Wait()
+}
+
+// Allow manipulating the speed of time for tests
+var second = time.Second
+
+func ensureImageStreamTags(ctx context.Context, client ctrlruntimeclient.Client, ists apihelper.ImageStreamTagMap, clusterName, namespace string, istImportClient ctrlruntimeclient.Client) error {
+
+	g, ctx := errgroup.WithContext(ctx)
+
+	for _, requiredImageStreamTag := range ists {
+		g.Go(func() error {
+			requiredImageStreamTag := requiredImageStreamTag
+			err := client.Get(ctx, requiredImageStreamTag, &imagev1.ImageStreamTag{})
+			if err == nil {
+				return nil
+			}
+			if !apierrors.IsNotFound(err) {
+				return fmt.Errorf("failed to check if imagestreamtag %s exists: %w", requiredImageStreamTag, err)
+			}
+			istImport := &testimagestreamtagimportv1.TestImageStreamTagImport{
+				ObjectMeta: metav1.ObjectMeta{Namespace: namespace},
+				Spec: testimagestreamtagimportv1.TestImageStreamTagImportSpec{
+					ClusterName: clusterName,
+					Namespace:   requiredImageStreamTag.Namespace,
+					Name:        requiredImageStreamTag.Name,
+				},
+			}
+			istImport.SetDeterministicName()
+			if err := istImportClient.Create(ctx, istImport); err != nil && !apierrors.IsAlreadyExists(err) {
+				return fmt.Errorf("failed to create imagestreamtag %s: %w", requiredImageStreamTag, err)
+			}
+			if err := wait.Poll(5*second, 30*second, func() (bool, error) {
+				if err := client.Get(ctx, requiredImageStreamTag, &imagev1.ImageStreamTag{}); err != nil {
+					if apierrors.IsNotFound(err) {
+						return false, nil
+					}
+					return false, fmt.Errorf("get failed: %w", err)
+				}
+				return true, nil
+			}); err != nil {
+				return fmt.Errorf("failed waiting for imagestreamtag %s to appear: %w", requiredImageStreamTag, err)
+			}
+
+			return nil
+		})
+	}
+
+	return g.Wait()
 }

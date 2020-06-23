@@ -32,7 +32,7 @@ type options struct {
 	dryRun bool
 }
 
-func gatherOptions() options {
+func gatherOptions() (options, error) {
 	o := options{}
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 
@@ -42,8 +42,10 @@ func gatherOptions() options {
 
 	fs.BoolVar(&o.dryRun, "dry-run", false, "Print the generated group without updating it")
 
-	fs.Parse(os.Args[1:])
-	return o
+	if err := fs.Parse(os.Args[1:]); err != nil {
+		return o, fmt.Errorf("failed to parse flags: %w", err)
+	}
+	return o, nil
 }
 
 func validateOptions(o options) error {
@@ -74,9 +76,11 @@ func getUserV1Client() (*userV1.UserV1Client, error) {
 }
 
 func main() {
-	o := gatherOptions()
-	err := validateOptions(o)
+	o, err := gatherOptions()
 	if err != nil {
+		logrus.WithError(err).Fatal("Failed to gather options")
+	}
+	if err := validateOptions(o); err != nil {
 		logrus.WithError(err).Fatal("invalid options")
 	}
 

@@ -394,7 +394,9 @@ func TestMakeRehearsalPresubmit(t *testing.T) {
 		Brancher:     prowconfig.Brancher{Branches: []string{"^branch$"}},
 	}
 	hiddenPresubmit := &prowconfig.Presubmit{}
-	deepcopy.Copy(hiddenPresubmit, sourcePresubmit)
+	if err := deepcopy.Copy(hiddenPresubmit, sourcePresubmit); err != nil {
+		t.Fatalf("deepcopy failed: %v", err)
+	}
 	hiddenPresubmit.Hidden = true
 
 	testCases := []struct {
@@ -426,7 +428,10 @@ func TestMakeRehearsalPresubmit(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.testID, func(t *testing.T) {
-			rehearsal := makeRehearsalPresubmit(tc.original, testRepo, testPrNumber, tc.refs)
+			rehearsal, err := makeRehearsalPresubmit(tc.original, testRepo, testPrNumber, tc.refs)
+			if err != nil {
+				t.Fatalf("failed to make rehearsal presubmit: %v", err)
+			}
 			serializedResult, err := yaml.Marshal(rehearsal)
 			if err != nil {
 				t.Fatalf("failed to serialize job: %v", err)

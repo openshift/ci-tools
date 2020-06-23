@@ -14,7 +14,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 
 	"github.com/prometheus/client_golang/prometheus"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	prowConfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/interrupts"
@@ -88,7 +88,7 @@ var (
 	}
 )
 
-func gatherOptions() options {
+func gatherOptions() (options, error) {
 	o := options{}
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	fs.StringVar(&o.configPath, "config", "", "Path to config dirs")
@@ -102,12 +102,14 @@ func gatherOptions() options {
 	fs.DurationVar(&o.cycle, "cycle", time.Minute*2, "Cycle duration for config reload")
 	fs.BoolVar(&o.validateOnly, "validate-only", false, "Load the config and registry, validate them and exit.")
 	fs.BoolVar(&o.flatRegistry, "flat-registry", false, "Disable directory structure based registry validation")
-	fs.Parse(os.Args[1:])
-	return o
+	if err := fs.Parse(os.Args[1:]); err != nil {
+		return o, fmt.Errorf("failed to parse flags: %w", err)
+	}
+	return o, nil
 }
 
 func validateOptions(o options) error {
-	_, err := log.ParseLevel(o.logLevel)
+	_, err := logrus.ParseLevel(o.logLevel)
 	if err != nil {
 		return fmt.Errorf("invalid --log-level: %v", err)
 	}
@@ -165,25 +167,18 @@ func handleWithMetrics(h http.HandlerFunc) http.HandlerFunc {
 	})
 }
 
-func genericHandler() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte(http.StatusText(http.StatusNotFound)))
-	}
-}
-
 func resolveConfig(configAgent agents.ConfigAgent, registryAgent agents.RegistryAgent) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "GET" {
 			w.WriteHeader(http.StatusNotImplemented)
-			w.Write([]byte(http.StatusText(http.StatusNotImplemented)))
+			_, _ = w.Write([]byte(http.StatusText(http.StatusNotImplemented)))
 			return
 		}
 		metadata, err := webreg.MetadataFromQuery(w, r)
 		if err != nil {
 			recordError("invalid query")
 		}
-		logger := log.WithFields(api.LogFieldsFor(metadata))
+		logger := logrus.WithFields(api.LogFieldsFor(metadata))
 
 		config, err := configAgent.GetMatchingConfig(metadata)
 		if err != nil {
@@ -201,27 +196,27 @@ func resolveLiteralConfig(registryAgent agents.RegistryAgent) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
 			w.WriteHeader(http.StatusNotImplemented)
-			w.Write([]byte(http.StatusText(http.StatusNotImplemented)))
+			_, _ = w.Write([]byte(http.StatusText(http.StatusNotImplemented)))
 			return
 		}
 
 		encoded, err := ioutil.ReadAll(r.Body)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Could not read unresolved config from request body."))
+			_, _ = w.Write([]byte("Could not read unresolved config from request body."))
 			return
 		}
 		unresolvedConfig := api.ReleaseBuildConfiguration{}
 		if err = json.Unmarshal(encoded, &unresolvedConfig); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Could not parse request body as unresolved config."))
+			_, _ = w.Write([]byte("Could not parse request body as unresolved config."))
 			return
 		}
-		resolveAndRespond(registryAgent, unresolvedConfig, w, &log.Entry{})
+		resolveAndRespond(registryAgent, unresolvedConfig, w, &logrus.Entry{})
 	}
 }
 
-func resolveAndRespond(registryAgent agents.RegistryAgent, config api.ReleaseBuildConfiguration, w http.ResponseWriter, logger *log.Entry) {
+func resolveAndRespond(registryAgent agents.RegistryAgent, config api.ReleaseBuildConfiguration, w http.ResponseWriter, logger *logrus.Entry) {
 	config, err := registryAgent.ResolveConfig(config)
 	if err != nil {
 		recordError("failed to resolve config with registry")
@@ -239,7 +234,9 @@ func resolveAndRespond(registryAgent agents.RegistryAgent, config api.ReleaseBui
 		return
 	}
 	w.WriteHeader(http.StatusOK)
-	w.Write(jsonConfig)
+	if _, err := w.Write(jsonConfig); err != nil {
+		logrus.WithError(err).Error("Failed to write response")
+	}
 }
 
 func getConfigGeneration(agent agents.ConfigAgent) http.HandlerFunc {
@@ -263,24 +260,26 @@ func init() {
 }
 
 func main() {
-	o := gatherOptions()
-	err := validateOptions(o)
+	o, err := gatherOptions()
 	if err != nil {
-		log.Fatalf("invalid options: %v", err)
+		logrus.WithError(err).Fatal("failed go gather options")
 	}
-	level, _ := log.ParseLevel(o.logLevel)
-	log.SetLevel(level)
+	if err := validateOptions(o); err != nil {
+		logrus.Fatalf("invalid options: %v", err)
+	}
+	level, _ := logrus.ParseLevel(o.logLevel)
+	logrus.SetLevel(level)
 	health := pjutil.NewHealth()
 	metrics.ExposeMetrics("ci-operator-configresolver", prowConfig.PushGateway{}, flagutil.DefaultMetricsPort)
 
 	configAgent, err := agents.NewConfigAgent(o.configPath, o.cycle, configresolverMetrics.errorRate)
 	if err != nil {
-		log.Fatalf("Failed to get config agent: %v", err)
+		logrus.Fatalf("Failed to get config agent: %v", err)
 	}
 
 	registryAgent, err := agents.NewRegistryAgent(o.registryPath, o.cycle, configresolverMetrics.errorRate, o.flatRegistry)
 	if err != nil {
-		log.Fatalf("Failed to get registry agent: %v", err)
+		logrus.Fatalf("Failed to get registry agent: %v", err)
 	}
 
 	if o.validateOnly {
@@ -288,7 +287,7 @@ func main() {
 	}
 
 	// add handler func for incorrect paths as well; can help with identifying errors/404s caused by incorrect paths
-	http.HandleFunc("/", handleWithMetrics(genericHandler()))
+	http.HandleFunc("/", handleWithMetrics(http.NotFound))
 	http.HandleFunc("/config", handleWithMetrics(resolveConfig(configAgent, registryAgent)))
 	http.HandleFunc("/resolve", handleWithMetrics(resolveLiteralConfig(registryAgent)))
 	http.HandleFunc("/configGeneration", handleWithMetrics(getConfigGeneration(configAgent)))

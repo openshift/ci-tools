@@ -155,7 +155,9 @@ func TestResolvePullSpec(t *testing.T) {
 					http.Error(w, "400 Bad Request", http.StatusBadRequest)
 					return
 				}
-				w.Write(testCase.raw)
+				if _, err := w.Write(testCase.raw); err != nil {
+					t.Errorf("failed to write response: %v", err)
+				}
 			}))
 			defer testServer.Close()
 			actual, err := resolvePullSpec(testServer.URL, testCase.versionBounds)

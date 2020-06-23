@@ -10,6 +10,8 @@ linters:
     - govet
     - staticcheck
     - unparam
+    - unconvert
+    - errcheck
   disable-all: true
 
 issues:

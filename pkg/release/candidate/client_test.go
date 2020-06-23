@@ -221,7 +221,9 @@ func TestResolvePullSpec(t *testing.T) {
 						return
 					}
 				}
-				w.Write(testCase.raw)
+				if _, err := w.Write(testCase.raw); err != nil {
+					t.Fatalf("http server Write failed: %v", err)
+				}
 			}))
 			defer testServer.Close()
 			actual, err := resolvePullSpec(testServer.URL, testCase.relative)

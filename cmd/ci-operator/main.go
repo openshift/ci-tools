@@ -170,10 +170,16 @@ func main() {
 	log.Printf("%s version %s", version.Name, version.Version)
 	flagSet := flag.NewFlagSet("", flag.ExitOnError)
 	opt := bindOptions(flagSet)
-	flagSet.Parse(os.Args[1:])
+	if err := flagSet.Parse(os.Args[1:]); err != nil {
+		logrus.WithError(err).Fatal("failed to parse flags")
+	}
 	if opt.verbose {
-		flag.CommandLine.Set("alsologtostderr", "true")
-		flag.CommandLine.Set("v", "10")
+		if err := flag.CommandLine.Set("alsologtostderr", "true"); err != nil {
+			logrus.WithError(err).Error("failed to set flags -alsologtostderr=true")
+		}
+		if err := flag.CommandLine.Set("v", "10"); err != nil {
+			logrus.WithError(err).Error("Failed to set flag -v=10")
+		}
 	}
 	if opt.help {
 		fmt.Print(usage)
@@ -1118,7 +1124,9 @@ func inputHash(inputs api.InputDefinition) string {
 
 	// the inputs form a part of the hash
 	for _, s := range inputs {
-		hash.Write([]byte(s))
+		if _, err := hash.Write([]byte(s)); err != nil {
+			logrus.WithError(err).Error("Failed to write hash")
+		}
 	}
 
 	// Object names can't be too long so we truncate
@@ -1144,31 +1152,43 @@ func (o *options) saveNamespaceArtifacts() {
 	if kubeClient, err := coreclientset.NewForConfig(o.clusterConfig); err == nil {
 		pods, _ := kubeClient.Pods(o.namespace).List(meta.ListOptions{})
 		data, _ := json.MarshalIndent(pods, "", "  ")
-		ioutil.WriteFile(filepath.Join(namespaceDir, "pods.json"), data, 0644)
+		path := filepath.Join(namespaceDir, "pods.json")
+		if err := ioutil.WriteFile(path, data, 0644); err != nil {
+			logrus.WithError(err).Errorf("Failed to write %s", path)
+		}
 		events, _ := kubeClient.Events(o.namespace).List(meta.ListOptions{})
 		data, _ = json.MarshalIndent(events, "", "  ")
-		ioutil.WriteFile(filepath.Join(namespaceDir, "events.json"), data, 0644)
+		path = filepath.Join(namespaceDir, "events.json")
+		if err := ioutil.WriteFile(path, data, 0644); err != nil {
+			logrus.WithError(err).Errorf("Failed to write %s", path)
+		}
 	}
 
 	if buildClient, err := buildclientset.NewForConfig(o.clusterConfig); err == nil {
 		builds, _ := buildClient.Builds(o.namespace).List(meta.ListOptions{})
 		data, _ := json.MarshalIndent(builds, "", "  ")
-		ioutil.WriteFile(filepath.Join(namespaceDir, "builds.json"), data, 0644)
+		path := filepath.Join(namespaceDir, "builds.json")
+		if err := ioutil.WriteFile(path, data, 0644); err != nil {
+			logrus.WithError(err).Errorf("Failed to write %s", path)
+		}
 	}
 
 	if imageClient, err := imageclientset.NewForConfig(o.clusterConfig); err == nil {
-		if err != nil {
-			return
-		}
 		imagestreams, _ := imageClient.ImageStreams(o.namespace).List(meta.ListOptions{})
 		data, _ := json.MarshalIndent(imagestreams, "", "  ")
-		ioutil.WriteFile(filepath.Join(namespaceDir, "imagestreams.json"), data, 0644)
+		path := filepath.Join(namespaceDir, "imagestreams.json")
+		if err := ioutil.WriteFile(path, data, 0644); err != nil {
+			logrus.WithError(err).Errorf("Failed to write %s", path)
+		}
 	}
 
 	if templateClient, err := templateclientset.NewForConfig(o.clusterConfig); err == nil {
 		templateInstances, _ := templateClient.TemplateInstances(o.namespace).List(meta.ListOptions{})
 		data, _ := json.MarshalIndent(templateInstances, "", "  ")
-		ioutil.WriteFile(filepath.Join(namespaceDir, "templateinstances.json"), data, 0644)
+		path := filepath.Join(namespaceDir, "templateinstances.json")
+		if err := ioutil.WriteFile(path, data, 0644); err != nil {
+			logrus.WithError(err).Errorf("Failed to write %s", path)
+		}
 	}
 }
 
@@ -1433,7 +1453,9 @@ func getCloneSecretFromPath(cloneAuthType steps.CloneAuthType, secretPath string
 
 func getHashFromBytes(b []byte) string {
 	hash := sha256.New()
-	hash.Write(b)
+	if _, err := hash.Write(b); err != nil {
+		logrus.WithError(err).Error("failed to write hash")
+	}
 	return oneWayNameEncoding.EncodeToString(hash.Sum(nil)[:5])
 }
 

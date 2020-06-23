@@ -428,23 +428,25 @@ func CreateCloneHandler(client bugzilla.Client) HandlerFuncWithErrorReturn {
 		req.ParseForm()
 		bugID, err := strconv.Atoi(req.FormValue("ID"))
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprintf(w, "Invalid bug id! - Bug#%d : %v", bugID, err)
+			http.Error(w, fmt.Sprintf("Invalid bug id! - Bug#%d : %v", bugID, err), http.StatusBadRequest)
 			return err
 		}
 		bug, err := client.GetBug(bugID)
 		if err != nil {
-			w.WriteHeader(http.StatusNotFound)
-			w.Write([]byte(fmt.Sprintf("Unable to fetch bug details- Bug#%d : %v", bugID, err)))
+			http.Error(w, fmt.Sprintf("Unable to fetch bug details- Bug#%d : %v", bugID, err), http.StatusNotFound)
 			return err
 		}
 		cloneID, err := client.CloneBug(bug)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Clone creation failed! %v", err), http.StatusInternalServerError)
-			// w.WriteHeader(http.StatusInternalServerError)
-			// w.Write([]byte(fmt.Sprintf("Clone creation failed! %v", err)))
 			return err
 		}
+		targetRelease := bugzilla.BugUpdate{
+			TargetRelease: []string{
+				req.FormValue("version"),
+			},
+		}
+		client.UpdateBug(cloneID, targetRelease)
 		fmt.Fprintf(w, "CloneID:%d", cloneID)
 		return nil
 	}

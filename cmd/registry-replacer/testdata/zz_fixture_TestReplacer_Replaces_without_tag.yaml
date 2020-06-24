@@ -1,0 +1,17 @@
+base_images:
+  org_repo_latest:
+    name: repo
+    namespace: org
+    tag: latest
+images:
+- dockerfile_path: dockerfile
+  inputs:
+    org_repo_latest:
+      as:
+      - registry.svc.ci.openshift.org/org/repo
+      paths: null
+  to: ""
+zz_generated_metadata:
+  branch: ""
+  org: ""
+  repo: ""

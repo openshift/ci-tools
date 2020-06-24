@@ -582,12 +582,18 @@ func TestTestInputImageStreamTagFilterFactory(t *testing.T) {
 		name                      string
 		config                    api.ReleaseBuildConfiguration
 		additionalImageStreamTags sets.String
+		additionalImageStreams    sets.String
 		expectedResult            bool
 	}{
 		{
 			name:                      "imagestreamtag is explicitly allowed",
 			additionalImageStreamTags: sets.NewString(namespace + "/" + streamName + ":" + tagName),
 			expectedResult:            true,
+		},
+		{
+			name:                   "imagestream is explicitly allowed",
+			additionalImageStreams: sets.NewString(namespace + "/" + streamName),
+			expectedResult:         true,
 		},
 		{
 			name: "imagestreamtag is referenced by config",
@@ -618,6 +624,7 @@ func TestTestInputImageStreamTagFilterFactory(t *testing.T) {
 				configAgent,
 				noOpRegistryResolver{},
 				tc.additionalImageStreamTags,
+				tc.additionalImageStreams,
 			)
 			if err != nil {
 				t.Fatalf("failed to construct filter: %v", err)

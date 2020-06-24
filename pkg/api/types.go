@@ -953,7 +953,7 @@ type SourceStepConfiguration struct {
 // ProjectDirectoryImageBuildStepConfiguration describes an
 // image build from a directory in a component project.
 type ProjectDirectoryImageBuildStepConfiguration struct {
-	From PipelineImageStreamTagReference `json:"from"`
+	From PipelineImageStreamTagReference `json:"from,omitempty"`
 	To   PipelineImageStreamTagReference `json:"to"`
 
 	ProjectDirectoryImageBuildInputs `json:",inline"`

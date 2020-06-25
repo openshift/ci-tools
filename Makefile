@@ -143,7 +143,6 @@ integration:
 	test/secret-wrapper-integration.sh
 	test/group-auto-updater-integration/run.sh
 	test/pj-rehearse-integration/run.sh
-	test/cvp-trigger-integration/run.sh
 	hack/test-integration.sh
 .PHONY: integration
 

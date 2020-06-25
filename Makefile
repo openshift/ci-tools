@@ -141,7 +141,6 @@ integration:
 	test/ci-operator-integration/multi-stage/run.sh
 	test/ci-operator-integration/base/run.sh
 	test/secret-wrapper-integration.sh
-	test/group-auto-updater-integration/run.sh
 	test/pj-rehearse-integration/run.sh
 	hack/test-integration.sh
 .PHONY: integration

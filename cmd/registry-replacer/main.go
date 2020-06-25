@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -119,7 +120,7 @@ func ensureReplacement(image *api.ProjectDirectoryImageBuildStepConfiguration, g
 		dockerFilePath = image.DockerfilePath
 	}
 
-	data, err := getter(dockerFilePath)
+	data, err := getter(filepath.Join(image.ContextDir, dockerFilePath))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get dockerfile %s: %w", image.DockerfilePath, err)
 	}

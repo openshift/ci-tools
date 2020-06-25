@@ -31,6 +31,14 @@ func TestReplacer(t *testing.T) {
 			expectWrite: true,
 		},
 		{
+			name: "ContextDir is respected",
+			config: &api.ReleaseBuildConfiguration{
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{ContextDir: "my-dir"}}},
+			},
+			files:       map[string][]byte{"my-dir/Dockerfile": []byte("FROM registry.svc.ci.openshift.org/org/repo:tag")},
+			expectWrite: true,
+		},
+		{
 			name: "Replaces with tag",
 			config: &api.ReleaseBuildConfiguration{
 				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{

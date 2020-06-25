@@ -144,7 +144,6 @@ integration:
 	test/group-auto-updater-integration/run.sh
 	test/testgrid-config-generator/run.sh
 	test/pj-rehearse-integration/run.sh
-	test/cvp-trigger-integration/run.sh
 	hack/test-integration.sh
 .PHONY: integration
 

@@ -82,7 +82,6 @@ func TestInputImageTagStep(t *testing.T) {
 		creates:  []api.StepLink{api.InternalImageLink("TO")},
 		provides: providesExpectation{
 			params: nil,
-			link:   nil,
 		},
 		inputs: inputsExpectation{
 			values: api.InputDefinition{"ddc0de"},

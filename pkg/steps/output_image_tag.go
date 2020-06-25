@@ -3,15 +3,14 @@ package steps
 import (
 	"context"
 	"fmt"
-	"log"
-	"strings"
-
 	imageapi "github.com/openshift/api/image/v1"
+	"github.com/openshift/ci-tools/pkg/steps/utils"
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/retry"
+	"log"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/results"
@@ -83,27 +82,15 @@ func (s *outputImageTagStep) Creates() []api.StepLink {
 	return []api.StepLink{api.ExternalImageLink(s.config.To)}
 }
 
-func (s *outputImageTagStep) Provides() (api.ParameterMap, api.StepLink) {
+func (s *outputImageTagStep) Provides() api.ParameterMap {
 	if len(s.config.To.As) == 0 {
-		return nil, nil
+		return nil
 	}
 	return api.ParameterMap{
-		fmt.Sprintf("IMAGE_%s", strings.ToUpper(strings.Replace(s.config.To.As, "-", "_", -1))): func() (string, error) {
-			is, err := s.isClient.ImageStreams(s.namespace()).Get(s.config.To.Name, meta.GetOptions{})
-			if err != nil {
-				return "", fmt.Errorf("could not retrieve output imagestream: %w", err)
-			}
-			var registry string
-			if len(is.Status.PublicDockerImageRepository) > 0 {
-				registry = is.Status.PublicDockerImageRepository
-			} else if len(is.Status.DockerImageRepository) > 0 {
-				registry = is.Status.DockerImageRepository
-			} else {
-				return "", fmt.Errorf("image stream %s has no accessible image registry value", s.config.To.As)
-			}
-			return fmt.Sprintf("%s:%s", registry, s.config.To.Tag), nil
-		},
-	}, api.ExternalImageLink(s.config.To)
+		utils.StableImageEnv(s.config.To.As): utils.ImageDigestFor(s.isClient, func() string {
+			return s.config.To.Namespace
+		}, s.config.To.Name, s.config.To.Tag),
+	}
 }
 
 func (s *outputImageTagStep) Name() string {

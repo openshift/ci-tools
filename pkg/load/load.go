@@ -81,7 +81,7 @@ func fromPath(path string) (filenameToConfig, error) {
 			return nil
 		}
 		ext := filepath.Ext(path)
-		if info != nil && !info.IsDir() && (ext == ".yml" || ext == ".yaml") {
+		if !info.IsDir() && (ext == ".yml" || ext == ".yaml") {
 			configSpec, err := Config(path, "", "", nil)
 			if err != nil {
 				return fmt.Errorf("failed to load ci-operator config (%v)", err)
@@ -102,18 +102,23 @@ func fromPath(path string) (filenameToConfig, error) {
 func Config(path, unresolvedPath, registryPath string, info *ResolverInfo) (*api.ReleaseBuildConfiguration, error) {
 	// Load the standard configuration path, env, or configresolver (in that order of priority)
 	var raw string
-	if len(path) > 0 {
+
+	configSpecEnv, configSpecSet := os.LookupEnv("CONFIG_SPEC")
+	unresolvedConfigEnv, unresolvedConfigSet := os.LookupEnv("UNRESOLVED_CONFIG")
+
+	switch {
+	case len(path) > 0:
 		data, err := ioutil.ReadFile(path)
 		if err != nil {
 			return nil, fmt.Errorf("--config error: %v", err)
 		}
 		raw = string(data)
-	} else if spec, ok := os.LookupEnv("CONFIG_SPEC"); ok {
-		if len(spec) == 0 {
+	case configSpecSet:
+		if len(configSpecEnv) == 0 {
 			return nil, errors.New("CONFIG_SPEC environment variable cannot be set to an empty string")
 		}
-		raw = spec
-	} else if len(unresolvedPath) > 0 {
+		raw = configSpecEnv
+	case len(unresolvedPath) > 0:
 		data, err := ioutil.ReadFile(unresolvedPath)
 		if err != nil {
 			return nil, fmt.Errorf("--unresolved-config error: %v", err)
@@ -121,11 +126,11 @@ func Config(path, unresolvedPath, registryPath string, info *ResolverInfo) (*api
 		configSpec, err := literalConfigFromResolver(data, info.Address)
 		err = results.ForReason("config_resolver_literal").ForError(err)
 		return configSpec, err
-	} else if data, ok := os.LookupEnv("UNRESOLVED_CONFIG"); ok {
-		configSpec, err := literalConfigFromResolver([]byte(data), info.Address)
+	case unresolvedConfigSet:
+		configSpec, err := literalConfigFromResolver([]byte(unresolvedConfigEnv), info.Address)
 		err = results.ForReason("config_resolver_literal").ForError(err)
 		return configSpec, err
-	} else {
+	default:
 		configSpec, err := configFromResolver(info)
 		err = results.ForReason("config_resolver").ForError(err)
 		return configSpec, err
@@ -158,7 +163,7 @@ func configFromResolver(info *ResolverInfo) (*api.ReleaseBuildConfiguration, err
 	log.Printf("Loading configuration from %s for %s", info.Address, identifier)
 	req, err := http.NewRequest("GET", fmt.Sprintf("%s/config", info.Address), nil)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to create request for configresolver: %s", err)
+		return nil, fmt.Errorf("failed to create request for configresolver: %s", err)
 	}
 	query := req.URL.Query()
 	query.Add("org", info.Org)
@@ -171,14 +176,14 @@ func configFromResolver(info *ResolverInfo) (*api.ReleaseBuildConfiguration, err
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to make request to configresolver: %s", err)
+		return nil, fmt.Errorf("failed to make request to configresolver: %s", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Response from configresolver == %d (%s)", resp.StatusCode, http.StatusText(resp.StatusCode))
+		return nil, fmt.Errorf("response from configresolver == %d (%s)", resp.StatusCode, http.StatusText(resp.StatusCode))
 	}
 	data, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to read configresolver response body: %s", err)
+		return nil, fmt.Errorf("failed to read configresolver response body: %s", err)
 	}
 	configSpecHTTP := &api.ReleaseBuildConfiguration{}
 	err = json.Unmarshal(data, configSpecHTTP)
@@ -237,7 +242,7 @@ func Registry(root string, flat bool) (references registry.ReferenceByName, chai
 			if filepath.Ext(info.Name()) == ".md" || info.Name() == "OWNERS" {
 				return nil
 			}
-			bytes, err := ioutil.ReadFile(path)
+			raw, err := ioutil.ReadFile(path)
 			if err != nil {
 				return err
 			}
@@ -246,18 +251,18 @@ func Registry(root string, flat bool) (references registry.ReferenceByName, chai
 			if !flat {
 				relpath, err := filepath.Rel(root, path)
 				if err != nil {
-					return fmt.Errorf("Failed to determine relative path for %s: %v", path, err)
+					return fmt.Errorf("failed to determine relative path for %s: %v", path, err)
 				}
 				prefix = strings.ReplaceAll(filepath.Dir(relpath), "/", "-")
 				// Verify that file prefix is correct based on directory path
 				if !strings.HasPrefix(filepath.Base(relpath), prefix) {
-					return fmt.Errorf("File %s has incorrect prefix. Prefix should be %s", path, prefix)
+					return fmt.Errorf("ile %s has incorrect prefix. Prefix should be %s", path, prefix)
 				}
 			}
 			if strings.HasSuffix(path, refSuffix) {
-				name, doc, ref, err := loadReference(bytes, dir, prefix, flat)
+				name, doc, ref, err := loadReference(raw, dir, prefix, flat)
 				if err != nil {
-					return fmt.Errorf("Failed to load registry file %s: %v", path, err)
+					return fmt.Errorf("failed to load registry file %s: %v", path, err)
 				}
 				if !flat && name != prefix {
 					return fmt.Errorf("name of reference in file %s should be %s", path, prefix)
@@ -269,9 +274,9 @@ func Registry(root string, flat bool) (references registry.ReferenceByName, chai
 				documentation[name] = doc
 			} else if strings.HasSuffix(path, chainSuffix) {
 				var chain api.RegistryChainConfig
-				err := yaml.UnmarshalStrict(bytes, &chain)
+				err := yaml.UnmarshalStrict(raw, &chain)
 				if err != nil {
-					return fmt.Errorf("Failed to load registry file %s: %v", path, err)
+					return fmt.Errorf("failed to load registry file %s: %v", path, err)
 				}
 				if !flat && chain.Chain.As != prefix {
 					return fmt.Errorf("name of chain in file %s should be %s", path, prefix)
@@ -283,9 +288,9 @@ func Registry(root string, flat bool) (references registry.ReferenceByName, chai
 				chain.Chain.Documentation = ""
 				chains[chain.Chain.As] = chain.Chain
 			} else if strings.HasSuffix(path, workflowSuffix) {
-				name, doc, workflow, err := loadWorkflow(bytes)
+				name, doc, workflow, err := loadWorkflow(raw)
 				if err != nil {
-					return fmt.Errorf("Failed to load registry file %s: %v", path, err)
+					return fmt.Errorf("failed to load registry file %s: %v", path, err)
 				}
 				if !flat && name != prefix {
 					return fmt.Errorf("name of workflow in file %s should be %s", path, prefix)
@@ -318,7 +323,7 @@ func loadReference(bytes []byte, baseDir, prefix string, flat bool) (string, str
 		return "", "", api.LiteralTestStep{}, err
 	}
 	if !flat && step.Reference.Commands != fmt.Sprintf("%s%s", prefix, commandsSuffix) {
-		return "", "", api.LiteralTestStep{}, fmt.Errorf("Reference %s has invalid command file path; command should be set to %s", step.Reference.As, fmt.Sprintf("%s%s", prefix, commandsSuffix))
+		return "", "", api.LiteralTestStep{}, fmt.Errorf("reference %s has invalid command file path; command should be set to %s", step.Reference.As, fmt.Sprintf("%s%s", prefix, commandsSuffix))
 	}
 	command, err := ioutil.ReadFile(filepath.Join(baseDir, step.Reference.Commands))
 	if err != nil {

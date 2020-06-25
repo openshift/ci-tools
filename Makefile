@@ -138,7 +138,6 @@ production-install:
 #   make integration
 integration:
 	# legacy, so we don't break them
-	test/repo-init-integration/run.sh
 	test/ci-operator-integration/multi-stage/run.sh
 	test/ci-operator-integration/base/run.sh
 	test/secret-wrapper-integration.sh

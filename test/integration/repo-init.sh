@@ -1,19 +1,22 @@
 #!/bin/bash
+source "$(dirname "${BASH_SOURCE}")/../../hack/lib/init.sh"
 
+function cleanup() {
+    os::test::junit::reconcile_output
+    os::cleanup::processes
+}
+trap "cleanup" EXIT
+
+suite_dir="${OS_ROOT}/test/integration/repo-init/"
+tempdir="${BASETMPDIR}/repo-init"
+mkdir -p "${tempdir}"
+cp -a "${suite_dir}"/* "${tempdir}"
+actual="${tempdir}/input"
+expected="${suite_dir}/expected"
+
+os::test::junit::declare_suite_start "integration/ci-operator-configresolver"
 # This test runs the repo-init utility and verifies that it generates
 # correct CI Operator configs and edits Prow config as expected
-
-set -o errexit
-set -o nounset
-set -o pipefail
-
-ROOTDIR=$(pwd)
-WORKDIR="$( mktemp -d )"
-trap 'rm -rf ${WORKDIR}' EXIT
-
-cd "$WORKDIR"
-# copy config to tmpdir to allow tester to modify config
-cp -a "$ROOTDIR"/test/repo-init-integration/input/* .
 
 # this test case will copy-cat origin
 inputs=(
@@ -49,7 +52,8 @@ inputs=(
               "e2e" # What commands in the repository run the test (e.g. "make test-e2e")?  make test-e2e
                "no" # Are there any more end-to-end test scripts to configure?  [default: no] no
 )
-for input in "${inputs[@]}"; do echo "${input}"; done | repo-init -release-repo .
+export inputs
+os::cmd::expect_success 'for input in "${inputs[@]}"; do echo "${input}"; done | repo-init -release-repo "${actual}"'
 
 # this test case will copy-cat ci-tools
 inputs=(
@@ -70,19 +74,11 @@ inputs=(
                "no" # Are there any more test scripts to configure?  [default: no] yes
                  "" # Are there any end-to-end test scripts to configure?  [default: no] no
 )
-for input in "${inputs[@]}"; do echo "${input}"; done | repo-init -release-repo .
-ci-operator-prowgen --from-dir ./ci-operator/config --to-dir ./ci-operator/jobs
-sanitize-prow-jobs --prow-jobs-dir ./ci-operator/jobs --config-path ./core-services/sanitize-prow-jobs/_config.yaml
-determinize-ci-operator --config-dir ./ci-operator/config --confirm
+export inputs
+os::cmd::expect_success 'for input in "${inputs[@]}"; do echo "${input}"; done | repo-init -release-repo "${actual}"'
+os::cmd::expect_success 'ci-operator-prowgen --from-dir "${actual}/ci-operator/config" --to-dir "${actual}/ci-operator/jobs"'
+os::cmd::expect_success 'sanitize-prow-jobs --prow-jobs-dir "${actual}/ci-operator/jobs" --config-path "${actual}/core-services/sanitize-prow-jobs/_config.yaml"'
+os::cmd::expect_success 'determinize-ci-operator --config-dir "${actual}/ci-operator/config" --confirm'
+os::integration::compare "${actual}" "${expected}"
 
-if [[  "${UPDATE:-}" = true ]]; then
-  rm -rf  "$ROOTDIR"/test/repo-init-integration/expected/*
-  cp -ar "$WORKDIR"/* "$ROOTDIR"/test/repo-init-integration/expected/
-fi
-
-if ! diff -Naupr "$ROOTDIR"/test/repo-init-integration/expected .> "$WORKDIR/diff"; then
-    echo "[ERROR] Got incorrect output state after running repo-init:"
-    cat "$WORKDIR/diff"
-    echo "If this is expected, run \`make integration-repo-init-update\`"
-    exit 1
-fi
+os::test::junit::declare_suite_end

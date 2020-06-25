@@ -23,6 +23,14 @@ func TestReplacer(t *testing.T) {
 			},
 		},
 		{
+			name: "Default to dockerfile",
+			config: &api.ReleaseBuildConfiguration{
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{}},
+			},
+			files:       map[string][]byte{"Dockerfile": []byte("FROM registry.svc.ci.openshift.org/org/repo:tag")},
+			expectWrite: true,
+		},
+		{
 			name: "Replaces with tag",
 			config: &api.ReleaseBuildConfiguration{
 				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{

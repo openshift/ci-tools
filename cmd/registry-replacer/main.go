@@ -61,7 +61,7 @@ func replacer(
 	writer func(name string, data []byte, mode os.FileMode) error,
 ) func(*api.ReleaseBuildConfiguration, *config.Info) error {
 	return func(config *api.ReleaseBuildConfiguration, info *config.Info) error {
-		if !referencesDockerfile(config.Images) {
+		if len(config.Images) == 0 {
 			return nil
 		}
 
@@ -105,16 +105,6 @@ func replacer(
 	}
 }
 
-func referencesDockerfile(images []api.ProjectDirectoryImageBuildStepConfiguration) bool {
-	for _, image := range images {
-		if image.DockerfilePath != "" {
-			return true
-		}
-	}
-
-	return false
-}
-
 var registryRegex = regexp.MustCompile(`registry\.svc\.ci\.openshift\.org\/[^\s]+`)
 
 type orgRepoTag struct{ org, repo, tag string }
@@ -124,11 +114,12 @@ func (ort orgRepoTag) String() string {
 }
 
 func ensureReplacement(image *api.ProjectDirectoryImageBuildStepConfiguration, getter githubFileGetter) ([]orgRepoTag, error) {
-	if image.DockerfilePath == "" {
-		return nil, nil
+	dockerFilePath := "Dockerfile"
+	if image.DockerfilePath != "" {
+		dockerFilePath = image.DockerfilePath
 	}
 
-	data, err := getter(image.DockerfilePath)
+	data, err := getter(dockerFilePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get dockerfile %s: %w", image.DockerfilePath, err)
 	}

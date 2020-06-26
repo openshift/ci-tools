@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"strconv"
@@ -11,6 +12,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/backporter"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/pkg/flagutil"
 	prowConfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/config/secret"
@@ -18,6 +20,8 @@ import (
 	"k8s.io/test-infra/prow/interrupts"
 	"k8s.io/test-infra/prow/metrics"
 	"k8s.io/test-infra/prow/pjutil"
+	"k8s.io/test-infra/prow/plugins"
+	"sigs.k8s.io/yaml"
 )
 
 var (
@@ -58,10 +62,11 @@ func recordError(label string) {
 }
 
 type options struct {
-	logLevel    string
-	address     string
-	gracePeriod time.Duration
-	bugzilla    prowflagutil.BugzillaOptions
+	logLevel     string
+	address      string
+	gracePeriod  time.Duration
+	bugzilla     prowflagutil.BugzillaOptions
+	pluginConfig string
 }
 
 type traceResponseWriter struct {
@@ -92,6 +97,7 @@ func gatherOptions() (options, error) {
 	fs.StringVar(&o.logLevel, "log-level", "info", "Level at which to log output.")
 	fs.StringVar(&o.address, "address", ":8080", "Address to run server on")
 	fs.DurationVar(&o.gracePeriod, "gracePeriod", time.Second*10, "Grace period for server shutdown")
+	fs.StringVar(&o.pluginConfig, "plugin-config", "/etc/plugins/plugins.yaml", "Path to plugin config file.")
 	for _, group := range []flagutil.OptionGroup{&o.bugzilla} {
 		group.AddFlags(fs)
 	}
@@ -132,11 +138,42 @@ func main() {
 	health := pjutil.NewHealth()
 	metrics.ExposeMetrics("ci-operator-bugzilla-backporter", prowConfig.PushGateway{}, prowflagutil.DefaultMetricsPort)
 
+	// pluginAgent := &plugins.ConfigAgent{}
+	// if err := pluginAgent.Start(o.pluginConfig, true); err != nil {
+	// 	logrus.WithError(err).Fatal("Error starting plugins.")
+	// }
+	b, err := ioutil.ReadFile(o.pluginConfig)
+	if err != nil {
+		log.Fatalf("invalid options: %v", err)
+		// return err
+	}
+	np := &plugins.Configuration{}
+	if err := yaml.Unmarshal(b, np); err != nil {
+		log.Fatalf("invalid options: %v", err)
+		// return err
+	}
+
+	np.ApplyDefaults()
+
+	if err := np.Validate(); err != nil {
+		log.Fatalf("invalid options: %v", err)
+		// return err
+	}
+	allTargetVersions := sets.NewString()
+	options := np.Bugzilla.OptionsForRepo("openshift", "")
+	for _, val := range options {
+		if val.TargetRelease != nil {
+			if _, ok := allTargetVersions[*val.TargetRelease]; !ok {
+				allTargetVersions.Insert(*val.TargetRelease)
+			}
+		}
+	}
+
 	http.HandleFunc("/", handleWithMetrics(backporter.GetLandingHandler()))
-	http.HandleFunc("/getclones", handleWithMetrics(backporter.GetClonesHandler(bugzillaClient)))
+	http.HandleFunc("/getclones", handleWithMetrics(backporter.GetClonesHandler(bugzillaClient, allTargetVersions)))
 	// Leaving this in here to help with future debugging. This will return bug details in JSON format
 	http.HandleFunc("/getbug", handleWithMetrics(backporter.GetBugHandler(bugzillaClient)))
-	http.HandleFunc("/createclone", handleWithMetrics(backporter.CreateCloneHandler(bugzillaClient)))
+	http.HandleFunc("/createclone", handleWithMetrics(backporter.CreateCloneHandler(bugzillaClient, allTargetVersions)))
 	interrupts.ListenAndServe(&http.Server{Addr: o.address}, o.gracePeriod)
 
 	health.ServeReady()

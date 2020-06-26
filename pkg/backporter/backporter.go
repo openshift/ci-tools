@@ -22,7 +22,7 @@ const htmlPageStart = `
 <head>
 <meta charset="UTF-8"><title>%s</title>
 <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css" integrity="sha384-MCw98/SFnGE8fJT3GXwEOngsV7Zt27NXFoaoApmYm81iuXoPkFOJwJ8ERdknLPMO" crossorigin="anonymous">
-<script src="https://code.jquery.com/jquery-3.3.1.min.js" crossorigin="anonymous"></script>
+<script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
 <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/js/bootstrap.min.js" integrity="sha384-ChfqqxuZUCnJSK3+MXmPNIyE6ZbWh2IMqE241rYiqJxyMiZ6OW/JmZQ5stwEULTy" crossorigin="anonymous"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <style>
@@ -96,8 +96,8 @@ td {
   </button>
 
   <div class="collapse navbar-collapse" id="navbarSupportedContent">
-    <form class="form-inline my-2 my-lg-0" role="search" action="/getclones" method="get">
-	  <input class="form-control mr-sm-2" type="search" placeholder="Bug ID" aria-label="Search" name="ID">
+    <form class="form-inline my-2 my-lg-0 needs-validation" role="search" action="/getclones" method="get">
+	  <input class="form-control mr-sm-2" type="text" placeholder="Bug ID" aria-label="Search" name="ID" required>
       <button class="btn btn-outline-success my-2 my-sm-0" type="submit">Find Clones</button>
     </form>
   </div>
@@ -113,14 +113,12 @@ const htmlPageEnd = `
 `
 
 const clonesTemplateConstructor = `
-<div class="alert alert-success alert-dismissible" id="success-banner">
-  <a href="#" class="close" data-dismiss="alert" aria-label="close">&times;</a>
-  <strong>Success!</strong> Clone created - <a href="/getclones?ID=" >Bug#</a>.
-</div>
-<div class="alert alert-danger alert-dismissible" id="error-banner">
-  <a href="#" class="close" data-dismiss="alert" aria-label="close">&times;</a>
-  <strong>Error! </strong> <label id ="error-text"></label>
-</div>
+{{if .NewCloneID }}
+	<div class="alert alert-success alert-dismissible" id="success-banner">
+	<a href="#" class="close" data-dismiss="alert" aria-label="close">&times;</a>
+	<strong>Success!</strong> Clone created - <a href="/getclones?ID={{ .NewCloneID }}" >Bug#{{ .NewCloneID }}</a>.
+	</div>
+{{ end }}
 <div class="container">
 	<h2> <a href = "#bugid" id="bugid" value="{{.Bug.ID}}"> {{.Bug.ID}}: {{.Bug.Summary}} </a> | Status: {{.Bug.Status}} </h2>
 	<p><label> Target Release:</label> {{ .Bug.TargetRelease }} </p>
@@ -134,12 +132,12 @@ const clonesTemplateConstructor = `
 		{{ end }}
 		</p>
 	{{ else }}
-		<p> No linked PRs! </p>
+		<p> No linked PRs. </p>
 	{{ end }}
 	{{ if ne .Parent.ID .Bug.ID}}
 		<p> <label>Cloned From: </label><a href = "/getclones?ID={{.Parent.ID}}"> Bug {{.Parent.ID}}: {{.Parent.Summary}}</a> | Status: {{.Parent.Status}}
 	{{ else }}
-		<p> <label>Cloned From: </label>This is the original! </p>
+		<p> <label>Cloned From: </label>This is the original. </p>
 	{{ end }}
 	<h4 id="clones"> <a href ="#clones"> Clones</a> </h4>
 	<table class="table">
@@ -167,7 +165,7 @@ const clonesTemplateConstructor = `
 				</tr>
 			{{ end }}
 		{{ else }}
-			<tr> <td colspan=4 style="text-align:center;"> No clones found! </td></tr>
+			<tr> <td colspan=4 style="text-align:center;"> No clones found. </td></tr>
 		{{ end }}
 		</tbody>
 	</table>
@@ -183,22 +181,16 @@ const clonesTemplateConstructor = `
     </form>
 </div>`
 
-const errorTemplateConstructor := `
+const errorTemplateConstructor = `
 <div class="alert alert-danger" id="error-banner">
 <a href="#" class="close" data-dismiss="alert" aria-label="close">&times;</a>
-<strong>Error! </strong> <label id ="error-text">{{.}}</label>
+<strong>Error. </strong> <label id ="error-text">{{.}}</label>
 </div>`
+
 var (
 	clonesTemplate = template.Must(template.New("clones").Parse(clonesTemplateConstructor))
 	emptyTemplate  = template.Must(template.New("empty").Parse("{{.}}"))
-	errorTemplate = template.Must(template.New("error").Parse(errorTemplateConstructor))
-	targetVersions = sets.NewString(
-		"4.7.0",
-		"4.6.0",
-		"4.5.0",
-		"3.0",
-		"2.0",
-	)
+	errorTemplate  = template.Must(template.New("error").Parse(errorTemplateConstructor))
 )
 
 // HandlerFuncWithErrorReturn allows returning errors to be logged
@@ -211,8 +203,7 @@ type clonesTemplateData struct {
 	Parent       *bugzilla.Bug          // Root bug if it is a a bug, otherwise holds itself
 	PRs          []bugzilla.ExternalBug // Details of linked PR
 	CloneTargets []string
-	ErrorMessage   string
-	SuccessMessage string
+	NewCloneID   int
 }
 
 // Writes an HTML page, prepends header in htmlPageStart and appends header from htmlPageEnd around tConstructor.
@@ -222,7 +213,7 @@ func writePage(w http.ResponseWriter, title string, body *template.Template, dat
 		w.WriteHeader(http.StatusInternalServerError)
 		_, fprintfErr := fmt.Fprintf(w, "%s: %v", http.StatusText(http.StatusInternalServerError), err)
 		if fprintfErr != nil {
-			http.Error(w, "Error building page!", http.StatusInternalServerError)
+			http.Error(w, "Error building page.", http.StatusInternalServerError)
 			return fprintfErr
 		}
 		return err
@@ -231,14 +222,14 @@ func writePage(w http.ResponseWriter, title string, body *template.Template, dat
 		w.WriteHeader(http.StatusInternalServerError)
 		_, fprintfErr := fmt.Fprintf(w, "%s: %v", http.StatusText(http.StatusInternalServerError), err)
 		if fprintfErr != nil {
-			http.Error(w, "Error building page!", http.StatusInternalServerError)
+			http.Error(w, "Error building page.", http.StatusInternalServerError)
 			return fprintfErr
 		}
 		return err
 	}
 	_, fprintfErr := fmt.Fprint(w, htmlPageEnd)
 	if fprintfErr != nil {
-		http.Error(w, "Error building page!", http.StatusInternalServerError)
+		http.Error(w, "Error building page.", http.StatusInternalServerError)
 		return fprintfErr
 	}
 	return nil
@@ -297,7 +288,7 @@ func GetBugHandler(client bugzilla.Client) HandlerFuncWithErrorReturn {
 			w.WriteHeader(http.StatusInternalServerError)
 			_, fprintfErr := fmt.Fprintf(w, "failed to marshal bugInfo to JSON: %v", err)
 			if fprintfErr != nil {
-				http.Error(w, "Error building page!", http.StatusInternalServerError)
+				http.Error(w, "Error building page.", http.StatusInternalServerError)
 				return fprintfErr
 			}
 			// logger.WithError(err).Errorf("failed to marshal bugInfo to JSON")
@@ -313,15 +304,88 @@ func GetBugHandler(client bugzilla.Client) HandlerFuncWithErrorReturn {
 	}
 }
 
+func getClonesTemplateData(bug *bugzilla.Bug, w http.ResponseWriter, client bugzilla.Client, allTargetVersions sets.String) (*clonesTemplateData, error) {
+
+	prs, err := client.GetExternalBugPRsOnBug(bug.ID)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		wpErr := writePage(w, "Error.", errorTemplate, fmt.Sprintf("Bug#%d - error occured while retreiving list of PRs : %v", bug.ID, err))
+		if wpErr != nil {
+			http.Error(w, "Error building page.", http.StatusInternalServerError)
+			return nil, wpErr
+		}
+		return nil, err
+	}
+	parent, err := client.GetRootForClone(bug)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		wpErr := writePage(w, "Error.", errorTemplate, fmt.Sprintf("Bug#%d Details of parent could not be retrieved : %v", bug.ID, err))
+		if wpErr != nil {
+			http.Error(w, "Error building page.", http.StatusInternalServerError)
+			return nil, wpErr
+		}
+		return nil, err
+	}
+
+	clones, err := client.GetAllClones(bug)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		wpErr := writePage(w, "Not Found", errorTemplate, err.Error())
+		if wpErr != nil {
+			http.Error(w, "Error building page.", http.StatusInternalServerError)
+			return nil, wpErr
+		}
+		return nil, err
+	}
+	// Target versions would be used to populate the CreateClone dropdown
+	targetVersions := sets.NewString(allTargetVersions.List()...)
+	// Remove target versions of the original bug
+	for _, release := range bug.TargetRelease {
+		_, ok := targetVersions[release]
+		if ok {
+			targetVersions.Delete(release)
+		}
+	}
+	for _, clone := range clones {
+		clonePRs, err := client.GetExternalBugPRsOnBug(clone.ID)
+		// Remove target releases which already have clones
+		for _, release := range clone.TargetRelease {
+			_, ok := targetVersions[release]
+			if ok {
+				targetVersions.Delete(release)
+			}
+		}
+
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			wpErr := writePage(w, "Error.", errorTemplate, fmt.Sprintf("Bug#%d - error occured while retreiving list of PRs : %v", clone.ID, err))
+			if wpErr != nil {
+				http.Error(w, "Error building page.", http.StatusInternalServerError)
+				return nil, wpErr
+			}
+			return nil, err
+		}
+		clone.PRs = clonePRs
+	}
+	wrpr := clonesTemplateData{
+		Bug:          bug,
+		Clones:       clones,
+		Parent:       parent,
+		PRs:          prs,
+		CloneTargets: targetVersions.List(),
+	}
+	return &wrpr, nil
+}
+
 // GetClonesHandler returns an HTML page with detais about the bug and its clones
-func GetClonesHandler(client bugzilla.Client) HandlerFuncWithErrorReturn {
+func GetClonesHandler(client bugzilla.Client, allTargetVersions sets.String) HandlerFuncWithErrorReturn {
 	return func(w http.ResponseWriter, req *http.Request) error {
 		bugIDStr := req.URL.Query().Get(BugIDQuery)
 		if bugIDStr == "" {
 			w.WriteHeader(http.StatusBadRequest)
-			wpErr := writePage(w, "Error!", emptyTemplate, fmt.Sprintf("%s - query incorrect", BugIDQuery))
+			wpErr := writePage(w, "Error.", errorTemplate, fmt.Sprintf("%s - query incorrect", BugIDQuery))
 			if wpErr != nil {
-				http.Error(w, "Error building page!", http.StatusInternalServerError)
+				http.Error(w, "Error building page.", http.StatusInternalServerError)
 				return wpErr
 			}
 			return fmt.Errorf("%s - query incorrect", BugIDQuery)
@@ -329,9 +393,9 @@ func GetClonesHandler(client bugzilla.Client) HandlerFuncWithErrorReturn {
 		bugID, err := strconv.Atoi(bugIDStr)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			wpErr := writePage(w, "Error!", emptyTemplate, fmt.Sprintf("Unable to parse bug id: %v", err))
+			wpErr := writePage(w, "Error.", errorTemplate, fmt.Sprintf("Unable to parse bug id: %v", err))
 			if wpErr != nil {
-				http.Error(w, "Error building page!", http.StatusInternalServerError)
+				http.Error(w, "Error building page.", http.StatusInternalServerError)
 				return wpErr
 			}
 			return err
@@ -339,75 +403,20 @@ func GetClonesHandler(client bugzilla.Client) HandlerFuncWithErrorReturn {
 		bug, err := client.GetBug(bugID)
 		if err != nil {
 			w.WriteHeader(http.StatusNotFound)
-			wpErr := writePage(w, "Not Found", emptyTemplate, fmt.Sprintf("Bug#%d not found", bugID))
+			wpErr := writePage(w, "Not Found", errorTemplate, fmt.Sprintf("Bug#%d not found", bugID))
 			if wpErr != nil {
-				http.Error(w, "Error building page!", http.StatusInternalServerError)
+				http.Error(w, "Error building page.", http.StatusInternalServerError)
 				return wpErr
 			}
 			return err
 		}
-		prs, err := client.GetExternalBugPRsOnBug(bugID)
+		wrpr, err := getClonesTemplateData(bug, w, client, allTargetVersions)
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			wpErr := writePage(w, "Error!", emptyTemplate, fmt.Sprintf("Bug#%d - error occured while retreiving list of PRs : %v", bugID, err))
-			if wpErr != nil {
-				http.Error(w, "Error building page!", http.StatusInternalServerError)
-				return wpErr
-			}
 			return err
 		}
-		parent, err := client.GetRootForClone(bug)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			wpErr := writePage(w, "Error!", emptyTemplate, fmt.Sprintf("Bug#%d Details of parent could not be retrieved : %v", bugID, err))
-			if wpErr != nil {
-				http.Error(w, "Error building page!", http.StatusInternalServerError)
-				return wpErr
-			}
-			return err
-		}
-
-		clones, err := client.GetAllClones(bug)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			wpErr := writePage(w, "Not Found", emptyTemplate, err.Error())
-			if wpErr != nil {
-				http.Error(w, "Error building page!", http.StatusInternalServerError)
-				return wpErr
-			}
-			return err
-		}
-		for _, clone := range clones {
-			clonePRs, err := client.GetExternalBugPRsOnBug(clone.ID)
-			for _, release := range clone.TargetRelease {
-				_, ok := targetVersions[release]
-				if ok {
-					targetVersions.Delete(release)
-				}
-			}
-
-			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				wpErr := writePage(w, "Error!", emptyTemplate, fmt.Sprintf("Bug#%d - error occured while retreiving list of PRs : %v", clone.ID, err))
-				if wpErr != nil {
-					http.Error(w, "Error building page!", http.StatusInternalServerError)
-					return wpErr
-				}
-				return err
-			}
-			clone.PRs = clonePRs
-		}
-		wrpr := clonesTemplateData{
-			Bug:          bug,
-			Clones:       clones,
-			Parent:       parent,
-			PRs:          prs,
-			CloneTargets: targetVersions.List(),
-		}
-
 		wpErr := writePage(w, "Clones", clonesTemplate, wrpr)
 		if wpErr != nil {
-			http.Error(w, "Error building page!", http.StatusInternalServerError)
+			http.Error(w, "Error building page.", http.StatusInternalServerError)
 			return wpErr
 		}
 		return nil
@@ -415,16 +424,16 @@ func GetClonesHandler(client bugzilla.Client) HandlerFuncWithErrorReturn {
 }
 
 // CreateCloneHandler will create a clone of the specified ID and return success/error
-func CreateCloneHandler(client bugzilla.Client) HandlerFuncWithErrorReturn {
+func CreateCloneHandler(client bugzilla.Client, allTargetVersions sets.String) HandlerFuncWithErrorReturn {
 	return func(w http.ResponseWriter, req *http.Request) error {
 		req.ParseForm()
 		bugID, err := strconv.Atoi(req.FormValue("ID"))
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			wpErr := writePage(w, "Error", errorTemplate, fmt.Sprintf("Invalid bug id! - Bug#%d : %v", bugID, err))
+			wpErr := writePage(w, "Error", errorTemplate, fmt.Sprintf("Invalid bug id. - Bug#%d : %v", bugID, err))
 			if wpErr != nil {
 				w.WriteHeader(http.StatusInternalServerError)
-				fmt.Fprint(w, "Error building page!")
+				fmt.Fprint(w, "Error building page.")
 				return wpErr
 			}
 			return err
@@ -435,56 +444,45 @@ func CreateCloneHandler(client bugzilla.Client) HandlerFuncWithErrorReturn {
 			wpErr := writePage(w, "Error", errorTemplate, fmt.Sprintf("Unable to fetch bug details- Bug#%d : %v", bugID, err))
 			if wpErr != nil {
 				w.WriteHeader(http.StatusInternalServerError)
-				fmt.Fprint(w, "Error building page!")
+				fmt.Fprint(w, "Error building page.")
 				return wpErr
 			}
 			return err
 		}
-		cloneID, err := client.CloneBug(bug)
-		if err != nil {
+		cloneID, cloneBugErr := client.CloneBug(bug)
+		if cloneBugErr != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			wpErr := writePage(w, "Error", errorTemplate, fmt.Sprintf("Clone creation failed! %v", err))
-			if wpErr != nil {
+
+			if wpErr := writePage(w, "Error", errorTemplate, fmt.Sprintf("Clone creation failed. %v", cloneBugErr)); wpErr != nil {
 				w.WriteHeader(http.StatusInternalServerError)
-				fmt.Fprint(w, "Error building page!")
+				fmt.Fprint(w, "Error building page.")
 				return wpErr
 			}
-			return err
+			return cloneBugErr
 		}
 		targetRelease := bugzilla.BugUpdate{
 			TargetRelease: []string{
 				req.FormValue("version"),
 			},
 		}
-		err = client.UpdateBug(cloneID, targetRelease)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			wpErr := writePage(w, "Error", errorTemplate, fmt.Sprintf("Failed to change version for the cloned bug! %v", err))
-			if wpErr != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				fmt.Fprint(w, "Error building page!")
-				return wpErr
-			}
-			return err
-		}
-		clones, err := client.GetClones(bug)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			wpErr := writePage(w, "Error", errorTemplate, fmt.Sprintf("Failed to get clones for the bug! %v", err))
-			if wpErr != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				fmt.Fprint(w, "Error building page!")
-				return wpErr
-			}
-			return err
-		}
-		data := &wrapper{
-			Bug : bug,
-			Clones : clones,
 
+		if updateBugErr := client.UpdateBug(cloneID, targetRelease); updateBugErr != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			wpErr := writePage(w, "Error", errorTemplate, fmt.Sprintf("Clone created - Bug#%d, but failed to specify version for the cloned bug. %v", cloneID, updateBugErr))
+			if wpErr != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				fmt.Fprint(w, "Error building page.")
+				return wpErr
+			}
+			return updateBugErr
 		}
-		err = writePage(w, "Clones", clonesTemplate, data)
+		data, err := getClonesTemplateData(bug, w, client, allTargetVersions)
 		if err != nil {
+			return err
+		}
+		data.NewCloneID = cloneID
+
+		if err = writePage(w, "Clones", clonesTemplate, *data); err != nil {
 			return err
 		}
 		return nil

@@ -14,7 +14,7 @@ cp -a "${suite_dir}"/* "${tempdir}"
 actual="${tempdir}/input"
 expected="${suite_dir}/expected"
 
-os::test::junit::declare_suite_start "integration/ci-operator-configresolver"
+os::test::junit::declare_suite_start "integration/repo-init"
 # This test runs the repo-init utility and verifies that it generates
 # correct CI Operator configs and edits Prow config as expected
 

@@ -16,7 +16,6 @@ os::test::junit::declare_suite_start "integration/testgrid-config-generator"
 # This test validates the testgrid-config-generator tool
 
 os::cmd::expect_success "testgrid-config-generator --release-config ${suite_dir}/config/release --testgrid-config ${workdir} --prow-jobs-dir ${suite_dir}/config/jobs"
-ls "${workdir}"
 os::integration::compare "${workdir}" "${suite_dir}/expected"
 
 os::test::junit::declare_suite_end

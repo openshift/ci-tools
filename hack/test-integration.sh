@@ -16,9 +16,13 @@ trap "cleanup" EXIT
 os::cleanup::tmpdir
 
 for test in $(find "${OS_ROOT}/test/integration" -name '*.sh'); do
+  suite="$( basename "${test}" ".sh" )"
+  os::log::info "running integration suite ${suite}"
   if ! ${test}; then
     failed="true"
-    os::log::error "integration suite ${test} failed"
+    os::log::error "integration suite ${suite} failed"
+  else
+    os::log::info "integration suite ${suite} succeeded"
   fi
 done
 

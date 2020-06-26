@@ -55,7 +55,8 @@ func TestValidateConfigMaps(t *testing.T) {
 }
 
 func TestCreateCleanupCMTemplates(t *testing.T) {
-	testRepoPath := "../../test/pj-rehearse-integration/master"
+	// TODO(nmoraitis,bbcaro): this is an integration test and should be factored better
+	testRepoPath := "../../test/integration/pj-rehearse/master"
 	testTemplatePath := filepath.Join(TemplatesPath, "subdir/test-template.yaml")
 	ns := "test-namespace"
 	ciTemplates := []ConfigMapSource{{

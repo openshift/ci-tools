@@ -83,6 +83,9 @@ func replacer(
 				if config.BaseImages == nil {
 					config.BaseImages = map[string]api.ImageStreamTagReference{}
 				}
+				if _, exists := config.BaseImages[foundTag.String()]; exists {
+					continue
+				}
 				config.BaseImages[foundTag.String()] = api.ImageStreamTagReference{
 					Namespace: foundTag.org,
 					Name:      foundTag.repo,

@@ -30,6 +30,19 @@ func TestReplacer(t *testing.T) {
 			expectWrite: true,
 		},
 		{
+			name: "Existing base_image is not overwritten",
+			config: &api.ReleaseBuildConfiguration{
+				InputConfiguration: api.InputConfiguration{
+					BaseImages: map[string]api.ImageStreamTagReference{
+						"org_repo_tag": {Namespace: "other_org", Name: "other_repo", Tag: "other_tag"},
+					},
+				},
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{}},
+			},
+			files:       map[string][]byte{"Dockerfile": []byte("FROM registry.svc.ci.openshift.org/org/repo:tag")},
+			expectWrite: true,
+		},
+		{
 			name: "ContextDir is respected",
 			config: &api.ReleaseBuildConfiguration{
 				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{ContextDir: "my-dir"}}},

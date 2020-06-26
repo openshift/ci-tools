@@ -29,6 +29,8 @@ func URLForService(service Service) string {
 func DomainForService(service Service) string {
 	var serviceDomain string
 	switch service {
+	case ServiceBoskos:
+		serviceDomain = ServiceDomainAPPCI
 	default:
 		serviceDomain = ServiceDomainAPICI
 	}

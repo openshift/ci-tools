@@ -25,9 +25,17 @@ function os::integration::compare() {
         fi
     fi
 
-    os::cmd::expect_success "diff -Naupr --ignore-matching-lines 'startTime' --ignore-matching-lines 'name: \w\{8\}\(-\w\{4\}\)\{3\}-\w\{12\}' --ignore-matching-lines 'sha: \w\{40\}' ${actual} ${expected}"
+    os::cmd::expect_success "diff -Naupr ${actual} ${expected}"
 }
 readonly -f os::integration::compare
+
+# os::integration::sanitize_prowjob_yaml replaces known variable fields in
+# Kubernetes YAML with static strings in order to make comparisons easy.
+function os::integration::sanitize_prowjob_yaml() {
+    local data="$1"
+    sed -i -E -e 's/sha: .+/sha: test_sha/g' -e 's/[a-z0-9]{8}-([a-z0-9]{4}-){3}[a-z0-9]{12}/test-prowjob/g' -e 's/startTime: .+/startTime: 2020-06-22T22:25:00Z/g' "${data}"
+}
+readonly -f os::integration::sanitize_prowjob_yaml
 
 __os_integration_configresolver_pid=""
 

@@ -8,7 +8,7 @@ metadata:
     created-by-prow: "true"
     prow.k8s.io/job: periodic-ipi-deprovision
     prow.k8s.io/type: periodic
-  name: d9ee396d-ba30-11ea-9009-8c16450d6013
+  name: test-prowjob
 spec:
   agent: kubernetes
   cluster: default
@@ -89,6 +89,6 @@ spec:
   report: true
   type: periodic
 status:
-  startTime: "2020-06-29T17:49:16Z"
+  startTime: 2020-06-22T22:25:00Z
   state: triggered
 

@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	"k8s.io/client-go/kubernetes/scheme"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -214,6 +215,28 @@ func (c podClient) Exec(namespace, pod string, opts *coreapi.PodExecOptions) (re
 type PodClient interface {
 	coreclientset.PodsGetter
 	podCmdExecutor
+}
+
+func waitForContainer(podClient PodClient, ns, name, containerName string) error {
+	logrus.Tracef("Waiting for container %s in pod %s in namespace %s", containerName, name, ns)
+	return wait.PollImmediateInfinite(time.Second, func() (bool, error) {
+		pod, err := podClient.Pods(ns).Get(name, meta.GetOptions{})
+		if err != nil {
+			logrus.WithError(err).Errorf("Waiting for container %s in pod %s in namespace %s", containerName, name, ns)
+			return false, nil
+		}
+
+		for _, container := range pod.Status.ContainerStatuses {
+			if container.Name == containerName {
+				if container.State.Running != nil || container.State.Terminated != nil {
+					return true, nil
+				}
+				break
+			}
+		}
+
+		return false, nil
+	})
 }
 
 func copyArtifacts(podClient PodClient, into, ns, name, containerName string, paths []string) error {
@@ -458,6 +481,10 @@ func (w *ArtifactWorker) downloadArtifacts(podName string, hasArtifacts bool) er
 
 		// give up, expect another process to clean up the pods
 	}()
+
+	if err := waitForContainer(w.podClient, w.namespace, podName, "artifacts"); err != nil {
+		return fmt.Errorf("artifacts container for pod %s unready: %v", podName, err)
+	}
 
 	if err := copyArtifacts(w.podClient, w.dir, w.namespace, podName, "artifacts", []string{"/tmp/artifacts"}); err != nil {
 		return fmt.Errorf("unable to retrieve artifacts from pod %s: %v", podName, err)

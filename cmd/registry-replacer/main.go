@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -35,14 +34,18 @@ func main() {
 		*configDir,
 		func(config *api.ReleaseBuildConfiguration, info *config.Info) error {
 			wg.Add(1)
-			go func() {
+			go func(filename string) {
 				defer wg.Done()
-				if err := replacer(githubFileGetterFactory, ioutil.WriteFile)(config, info); err != nil {
+				if err := replacer(
+					githubFileGetterFactory,
+					func(data []byte) error {
+						return ioutil.WriteFile(filename, data, 0644)
+					})(config, info); err != nil {
 					errLock.Lock()
 					errs = append(errs, err)
 					errLock.Unlock()
 				}
-			}()
+			}(info.Filename)
 			return nil
 		},
 	); err != nil {
@@ -59,7 +62,7 @@ func main() {
 // bounds.
 func replacer(
 	githubFileGetterFactory func(org, repo, branch string) githubFileGetter,
-	writer func(name string, data []byte, mode os.FileMode) error,
+	writer func([]byte) error,
 ) func(*api.ReleaseBuildConfiguration, *config.Info) error {
 	return func(config *api.ReleaseBuildConfiguration, info *config.Info) error {
 		if len(config.Images) == 0 {
@@ -98,7 +101,7 @@ func replacer(
 			return nil
 		}
 
-		if err := writer(info.Filename, newConfig, 0644); err != nil {
+		if err := writer(newConfig); err != nil {
 			return fmt.Errorf("faild to write %s: %w", info.Filename, err)
 		}
 

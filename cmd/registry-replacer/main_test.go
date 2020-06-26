@@ -1,7 +1,6 @@
 package main
 
 import (
-	"os"
 	"testing"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -101,7 +100,7 @@ type fakeWriter struct {
 	data []byte
 }
 
-func (fw *fakeWriter) Write(_ string, data []byte, _ os.FileMode) error {
+func (fw *fakeWriter) Write(data []byte) error {
 	fw.data = data
 	return nil
 }

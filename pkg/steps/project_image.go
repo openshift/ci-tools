@@ -43,18 +43,11 @@ func (s *projectDirectoryImageBuildStep) run(ctx context.Context, dry bool) erro
 	if dry {
 		workingDir = "dry-fake"
 	} else {
-		ist, err := s.istClient.ImageStreamTags(s.jobSpec.Namespace()).Get(source, meta.GetOptions{})
+		var err error
+		workingDir, err = getWorkingDir(s.istClient, source, s.jobSpec.Namespace())
 		if err != nil {
-			return fmt.Errorf("could not fetch source ImageStreamTag: %w", err)
+			return fmt.Errorf("failed to get workingDir: %w", err)
 		}
-		metadata := &docker10.DockerImage{}
-		if len(ist.Image.DockerImageMetadata.Raw) == 0 {
-			return fmt.Errorf("could not fetch Docker image metadata for ImageStreamTag %s", source)
-		}
-		if err := json.Unmarshal(ist.Image.DockerImageMetadata.Raw, metadata); err != nil {
-			return fmt.Errorf("malformed Docker image metadata on ImageStreamTag: %w", err)
-		}
-		workingDir = metadata.Config.WorkingDir
 	}
 
 	labels := make(map[string]string)
@@ -90,7 +83,19 @@ func (s *projectDirectoryImageBuildStep) run(ctx context.Context, dry bool) erro
 	}
 
 	images := buildInputsFromStep(s.config.Inputs)
-	if _, ok := s.config.Inputs["src"]; !ok {
+	// If image being built is an operator bundle, use the bundle source instead of original source
+	if s.config.OperatorManifests != "" {
+		images = append(images, buildapi.ImageSource{
+			From: coreapi.ObjectReference{
+				Kind: "ImageStreamTag",
+				Name: fmt.Sprintf("%s:%s", api.PipelineImageStream, BundleSourceName(s.config.To)),
+			},
+			Paths: []buildapi.ImageSourcePath{{
+				SourcePath:     fmt.Sprintf("%s/%s/.", workingDir, s.config.ContextDir),
+				DestinationDir: ".",
+			}},
+		})
+	} else if _, ok := s.config.Inputs["src"]; !ok {
 		images = append(images, buildapi.ImageSource{
 			From: coreapi.ObjectReference{
 				Kind: "ImageStreamTag",
@@ -121,12 +126,30 @@ func (s *projectDirectoryImageBuildStep) run(ctx context.Context, dry bool) erro
 	return handleBuild(ctx, s.buildClient, build, dry, s.artifactDir, s.dryLogger)
 }
 
+func getWorkingDir(istClient imageclientset.ImageStreamTagsGetter, source, namespace string) (string, error) {
+	ist, err := istClient.ImageStreamTags(namespace).Get(source, meta.GetOptions{})
+	if err != nil {
+		return "", fmt.Errorf("could not fetch source ImageStreamTag: %w", err)
+	}
+	metadata := &docker10.DockerImage{}
+	if len(ist.Image.DockerImageMetadata.Raw) == 0 {
+		return "", fmt.Errorf("could not fetch Docker image metadata for ImageStreamTag %s", source)
+	}
+	if err := json.Unmarshal(ist.Image.DockerImageMetadata.Raw, metadata); err != nil {
+		return "", fmt.Errorf("malformed Docker image metadata on ImageStreamTag: %w", err)
+	}
+	return metadata.Config.WorkingDir, nil
+}
+
 func (s *projectDirectoryImageBuildStep) Requires() []api.StepLink {
 	links := []api.StepLink{
 		api.InternalImageLink(api.PipelineImageStreamTagReferenceSource),
 	}
 	if len(s.config.From) > 0 {
 		links = append(links, api.InternalImageLink(s.config.From))
+	}
+	if s.config.OperatorManifests != "" {
+		links = append(links, api.InternalImageLink(BundleSourceName(s.config.To)))
 	}
 	for name := range s.config.Inputs {
 		links = append(links, api.InternalImageLink(api.PipelineImageStreamTagReference(name)))

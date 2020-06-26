@@ -382,6 +382,7 @@ type StepConfiguration struct {
 	InputImageTagStepConfiguration              *InputImageTagStepConfiguration              `json:"input_image_tag_step,omitempty"`
 	PipelineImageCacheStepConfiguration         *PipelineImageCacheStepConfiguration         `json:"pipeline_image_cache_step,omitempty"`
 	SourceStepConfiguration                     *SourceStepConfiguration                     `json:"source_step,omitempty"`
+	BundleSourceStepConfiguration               *BundleSourceStepConfiguration               `json:"bundle_source_step,omitempty"`
 	ProjectDirectoryImageBuildStepConfiguration *ProjectDirectoryImageBuildStepConfiguration `json:"project_directory_image_build_step,omitempty"`
 	RPMImageInjectionStepConfiguration          *RPMImageInjectionStepConfiguration          `json:"rpm_image_injection_step,omitempty"`
 	RPMServeStepConfiguration                   *RPMServeStepConfiguration                   `json:"rpm_serve_step,omitempty"`
@@ -950,6 +951,26 @@ type SourceStepConfiguration struct {
 	ClonerefsPath string `json:"clonerefs_path"`
 }
 
+// BundleSourceStepConfiguration describes a step that performs a set of
+// substitutions on operator manifests in the `src` image so that the
+// pullspecs in the operator manifests point to images inside the CI registry.
+// It is intended to be used as the source image for bundle image builds.
+type BundleSourceStepConfiguration struct {
+	To PipelineImageStreamTagReference `json:"to,omitempty"`
+
+	// ContextDir is the directory in the project
+	// from which this build should be run.
+	ContextDir string `json:"context_dir,omitempty"`
+
+	// OperatorManifests is the subdir of context_dir where optional
+	// operator manifests are stored for operator bundle images.
+	OperatorManifests string `json:"operator_manifests,omitempty"`
+
+	// Substitute contains pullspecs that need to be replaced by images
+	// in the CI cluster for operator bundle images
+	Substitute []PullSpecSubstitution `json:"substitute,omitempty"`
+}
+
 // ProjectDirectoryImageBuildStepConfiguration describes an
 // image build from a directory in a component project.
 type ProjectDirectoryImageBuildStepConfiguration struct {
@@ -974,10 +995,28 @@ type ProjectDirectoryImageBuildInputs struct {
 	// project to run relative to the context_dir.
 	DockerfilePath string `json:"dockerfile_path,omitempty"`
 
+	// OperatorManifests is the subdir of context_dir where optional
+	// operator manifests are stored for operator bundle images.
+	OperatorManifests string `json:"operator_manifests,omitempty"`
+
+	// Substitute contains pullspecs that need to be replaced by images
+	// in the CI cluster for operator bundle images
+	Substitute []PullSpecSubstitution `json:"substitute,omitempty"`
+
 	// Inputs is a map of tag reference name to image input changes
 	// that will populate the build context for the Dockerfile or
 	// alter the input image for a multi-stage build.
 	Inputs map[string]ImageBuildInputs `json:"inputs,omitempty"`
+}
+
+// PullSpecSubstitution contains a name of a pullspec that needs to
+// be substituted with the name of a different pullspec. This is used
+// for generated operator bundle images.
+type PullSpecSubstitution struct {
+	// PullSpec is the pullspec that needs to be replaced
+	PullSpec string `json:"pullspec,omitempty"`
+	// With is the string that the PullSpec is being replaced by
+	With string `json:"with,omitempty"`
 }
 
 // ImageBuildInputs is a subset of the v1 OpenShift Build API object

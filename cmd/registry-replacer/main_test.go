@@ -38,6 +38,15 @@ func TestReplacer(t *testing.T) {
 			expectWrite: true,
 		},
 		{
+			name: "Existing replace is respected",
+			config: &api.ReleaseBuildConfiguration{
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+					Inputs: map[string]api.ImageBuildInputs{"some-image": {As: []string{"registry.svc.ci.openshift.org/org/repo:tag"}}}}},
+				},
+			},
+			files: map[string][]byte{"Dockerfile": []byte("FROM registry.svc.ci.openshift.org/org/repo:tag")},
+		},
+		{
 			name: "Replaces with tag",
 			config: &api.ReleaseBuildConfiguration{
 				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{

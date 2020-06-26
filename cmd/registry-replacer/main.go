@@ -150,6 +150,12 @@ func ensureReplacement(image *api.ProjectDirectoryImageBuildStepConfiguration, g
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse string %s as pullspec: %w", toReplace, err)
 		}
+
+		// Assume ppl know what they are doing
+		if hasReplacementFor(image, toReplace) {
+			continue
+		}
+
 		if image.Inputs == nil {
 			image.Inputs = map[string]api.ImageBuildInputs{}
 		}
@@ -161,6 +167,16 @@ func ensureReplacement(image *api.ProjectDirectoryImageBuildStepConfiguration, g
 	}
 
 	return result, nil
+}
+
+func hasReplacementFor(image *api.ProjectDirectoryImageBuildStepConfiguration, target string) bool {
+	for _, input := range image.Inputs {
+		if sets.NewString(input.As...).Has(target) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func orgRepoTagFromPullString(pullString string) (orgRepoTag, error) {

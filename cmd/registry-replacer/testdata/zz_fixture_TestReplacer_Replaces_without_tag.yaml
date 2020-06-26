@@ -9,7 +9,6 @@ images:
     org_repo_latest:
       as:
       - registry.svc.ci.openshift.org/org/repo
-      paths: null
   to: ""
 zz_generated_metadata:
   branch: ""

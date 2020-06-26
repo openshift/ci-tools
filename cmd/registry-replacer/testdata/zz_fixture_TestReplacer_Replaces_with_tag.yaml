@@ -9,7 +9,6 @@ images:
     org_repo_tag:
       as:
       - registry.svc.ci.openshift.org/org/repo:tag
-      paths: null
   to: ""
 zz_generated_metadata:
   branch: ""

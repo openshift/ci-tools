@@ -1,6 +1,17 @@
 #!/bin/bash
 
-# This script runs all of the integration test suites.
+# This script runs one or many of the integration test suites.
+# To run the full test suite, use:
+#
+#  $ hack/test-cmd.sh
+#
+# To run a single test suite, use:
+#
+#  $ hack/test-cmd.sh <name>
+#
+# To run a set of suites matching some regex, use:
+#
+#  $ hack/test-cmd.sh <regex>
 source "$(dirname "${BASH_SOURCE}")/lib/init.sh"
 os::util::environment::setup_time_vars
 
@@ -13,9 +24,29 @@ function cleanup() {
 }
 trap "cleanup" EXIT
 
+function find_tests() {
+    local test_regex="${1}"
+    local full_test_list=()
+    local selected_tests=()
+
+    full_test_list=( $(find "${OS_ROOT}/test/integration" -name '*.sh') )
+    for test in "${full_test_list[@]}"; do
+        if grep -q -E "${test_regex}" <<< "${test}"; then
+            selected_tests+=( "${test}" )
+        fi
+    done
+
+    if [[ "${#selected_tests[@]}" -eq 0 ]]; then
+        os::log::fatal "No tests were selected due to invalid regex."
+    else
+        echo "${selected_tests[@]}"
+    fi
+}
+tests=( $(find_tests ${1:-.*}) )
+
 os::cleanup::tmpdir
 
-for test in $(find "${OS_ROOT}/test/integration" -name '*.sh'); do
+for test in "${tests[@]}"; do
   suite="$( basename "${test}" ".sh" )"
   os::log::info "running integration suite ${suite}"
   if ! ${test}; then

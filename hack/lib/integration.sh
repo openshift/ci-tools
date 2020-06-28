@@ -59,6 +59,7 @@ function os::integration::configresolver::stop() {
     os::log::info "Stopping the config resolver..."
     if [[ -n "${__os_integration_configresolver_pid}" ]]; then
         ${USE_SUDO:+sudo} kill "${__os_integration_configresolver_pid}" &> /dev/null
+        wait "${__os_integration_configresolver_pid}"
     fi
 }
 readonly -f os::integration::configresolver::stop

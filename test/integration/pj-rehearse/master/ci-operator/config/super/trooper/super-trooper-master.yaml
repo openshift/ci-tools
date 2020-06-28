@@ -51,7 +51,7 @@ tests:
     workflow: ipi
 - as: multistage3
   steps:
-    cluster_profile: azure
+    cluster_profile: azure4
     test:
     - as: e2e
       commands: make integration

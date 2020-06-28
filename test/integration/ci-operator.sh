@@ -11,6 +11,8 @@ suite_dir="${OS_ROOT}/test/integration/ci-operator/"
 workdir="${BASETMPDIR}/ci-operator"
 mkdir -p "${workdir}"
 cp -a "${suite_dir}/"* "${workdir}"
+artifact_dir="${workdir}/artifacts"
+mkdir -p "${artifact_dir}"
 
 function run_test() {
   local expected="$1"
@@ -52,15 +54,15 @@ run_test "${expected_dir}/expected.json" "--config=${config_dir}/test-config.yam
 
 # this invocation tests running with a template
 export IMAGE_FORMAT="test" CLUSTER_TYPE="aws" TEST_COMMAND="test command"
-run_test "${expected_dir}/expected_with_template.json" "--config=${config_dir}/test-config.yaml --template=${config_dir}/test-template.yaml --target=test-template --artifact-dir=${workdir}/artifacts"
+run_test "${expected_dir}/expected_with_template.json" "--config=${config_dir}/test-config.yaml --template=${config_dir}/test-template.yaml --target=test-template --artifact-dir=${artifact_dir}"
 unset IMAGE_FORMAT CLUSTER_TYPE TEST_COMMAND
 
 auth_dir="${base_dir}/auth_files"
 # this invocation tests running a source build with OAuth fetching
-run_test "${expected_dir}/expected_src_oauth.json" "--config=${config_dir}/test-config.yaml --oauth-token-path=${auth_dir}/oauth-token --target=src --artifact-dir=${workdir}/artifacts"
+run_test "${expected_dir}/expected_src_oauth.json" "--config=${config_dir}/test-config.yaml --oauth-token-path=${auth_dir}/oauth-token --target=src --artifact-dir=${artifact_dir}"
 
 # this invocation tests running a source build with SSH fetching
-run_test "${expected_dir}/expected_src_ssh.json" "--config=${config_dir}/test-config.yaml --oauth-token-path=${auth_dir}/id_rsa --target=src --artifact-dir=${workdir}/artifacts"
+run_test "${expected_dir}/expected_src_ssh.json" "--config=${config_dir}/test-config.yaml --oauth-token-path=${auth_dir}/id_rsa --target=src --artifact-dir=${artifact_dir}"
 
 # this invocation tests running a with a pull secret
 pull_secret="${workdir}/pull_secret"

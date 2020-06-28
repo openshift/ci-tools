@@ -1937,7 +1937,7 @@
             tests:
             - as: multistage3
               literal_steps:
-                cluster_profile: azure
+                cluster_profile: azure4
                 post:
                 - as: ipi-deprovision-must-gather
                   commands: |

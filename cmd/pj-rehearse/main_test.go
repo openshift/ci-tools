@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -53,7 +54,7 @@ func TestEnsureImageStreamTags(t *testing.T) {
 				&testimagestreamtagimportv1.TestImageStreamTagImport{
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: importNamespace,
-						Name:      fmt.Sprintf("%s-%s-%s", clusterName, imageStreamTagNamespace, imageStreamTagName),
+						Name:      fmt.Sprintf("%s-%s-%s", clusterName, imageStreamTagNamespace, strings.Replace(imageStreamTagName, ":", ".", 1)),
 					},
 					Spec: testimagestreamtagimportv1.TestImageStreamTagImportSpec{
 						ClusterName: clusterName,
@@ -119,7 +120,7 @@ func TestEnsureImageStreamTags(t *testing.T) {
 			created := &testimagestreamtagimportv1.TestImageStreamTagImport{}
 			name := types.NamespacedName{
 				Namespace: importNamespace,
-				Name:      fmt.Sprintf("%s-%s-%s", clusterName, imageStreamTagNamespace, imageStreamTagName),
+				Name:      fmt.Sprintf("%s-%s-%s", clusterName, imageStreamTagNamespace, strings.Replace(imageStreamTagName, ":", ".", 1)),
 			}
 			if err := tc.istImportClient.Get(ctx, name, created); err != nil {
 				t.Fatalf("failed to get imagestreamtagimport %s: %v", name, err)

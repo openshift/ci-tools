@@ -175,6 +175,7 @@ func main() {
 	}
 	http.HandleFunc("/", handleWithMetrics(backporter.GetLandingHandler()))
 	http.HandleFunc("/clones", handleWithMetrics(backporter.ClonesHandler(bugzillaClient, allTargetVersions)))
+	http.HandleFunc("/clones/create", handleWithMetrics(backporter.CreateCloneHandler(bugzillaClient, allTargetVersions)))
 	// Leaving this in here to help with future debugging. This will return bug details in JSON format
 	http.HandleFunc("/bug", handleWithMetrics(backporter.GetBugHandler(bugzillaClient)))
 	interrupts.ListenAndServe(&http.Server{Addr: o.address}, o.gracePeriod)

@@ -169,7 +169,7 @@ const clonesTemplateConstructor = `
 		{{ end }}
 		</tbody>
 	</table>
-	<form class="form-inline my-2 my-lg-0" role="search" action="/clones" method="post">
+	<form class="form-inline my-2 my-lg-0" role="search" action="/clones/create" method="post">
 		<input type="hidden" name="ID" value="{{.Bug.ID}}">
 		<select class="form-control mr-sm-2" aria-label="Search" name="release" id="target_version" required>
 			<option value="" disabled selected hidden>Target Version</option>
@@ -389,18 +389,16 @@ func getClonesTemplateData(bugID int, w http.ResponseWriter, client bugzilla.Cli
 // ClonesHandler acts as a router for the RESTish calls to clones
 func ClonesHandler(client bugzilla.Client, allTargetVersions sets.String) HandlerFuncWithErrorReturn {
 	return func(w http.ResponseWriter, r *http.Request) error {
-		if r.Method == "GET" {
-			return GetClonesHandler(client, allTargetVersions, w, r)
-		} else if r.Method == "POST" {
-			return CreateCloneHandler(client, allTargetVersions, w, r)
+		if r.Method != "GET" {
+			w.WriteHeader(http.StatusBadRequest)
+			wpErr := writePage(w, "Error.", errorTemplate, fmt.Sprintf("%s - query incorrect", BugIDQuery))
+			if wpErr != nil {
+				http.Error(w, "Error building page.", http.StatusInternalServerError)
+				return wpErr
+			}
+			return fmt.Errorf("Bad request - clones can handle only GET requests")
 		}
-		w.WriteHeader(http.StatusBadRequest)
-		wpErr := writePage(w, "Error.", errorTemplate, fmt.Sprintf("%s - query incorrect", BugIDQuery))
-		if wpErr != nil {
-			http.Error(w, "Error building page.", http.StatusInternalServerError)
-			return wpErr
-		}
-		return fmt.Errorf("Bad request - clones can handle only GET or POST requests")
+		return GetClonesHandler(client, allTargetVersions, w, r)
 	}
 }
 
@@ -440,74 +438,85 @@ func GetClonesHandler(client bugzilla.Client, allTargetVersions sets.String, w h
 }
 
 // CreateCloneHandler will create a clone of the specified ID and return success/error
-func CreateCloneHandler(client bugzilla.Client, allTargetVersions sets.String, w http.ResponseWriter, req *http.Request) error {
-	// Parse the parameters passed in the POST request
-	err := req.ParseForm()
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		wpErr := writePage(w, "Error", errorTemplate, fmt.Sprintf("Unable to parse request : %v", err))
-		if wpErr != nil {
-			http.Error(w, "Error building page.", http.StatusInternalServerError)
-			return wpErr
+func CreateCloneHandler(client bugzilla.Client, allTargetVersions sets.String) HandlerFuncWithErrorReturn {
+	return func(w http.ResponseWriter, req *http.Request) error {
+		if req.Method != "POST" {
+			w.WriteHeader(http.StatusBadRequest)
+			wpErr := writePage(w, "Error.", errorTemplate, fmt.Sprintf("%s - query incorrect", BugIDQuery))
+			if wpErr != nil {
+				http.Error(w, "Error building page.", http.StatusInternalServerError)
+				return wpErr
+			}
+			return fmt.Errorf("Bad request - clones/create can handle only POST requests")
 		}
-		return err
-	}
-	bugID, err := strconv.Atoi(req.FormValue("ID"))
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		wpErr := writePage(w, "Error", errorTemplate, fmt.Sprintf("Invalid bug id. - Bug#%d : %v", bugID, err))
-		if wpErr != nil {
-			http.Error(w, "Error building page.", http.StatusInternalServerError)
-			return wpErr
+		// Parse the parameters passed in the POST request
+		err := req.ParseForm()
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			wpErr := writePage(w, "Error", errorTemplate, fmt.Sprintf("Unable to parse request : %v", err))
+			if wpErr != nil {
+				http.Error(w, "Error building page.", http.StatusInternalServerError)
+				return wpErr
+			}
+			return err
 		}
-		return err
-	}
-	// Get the details of the bug
-	bug, err := client.GetBug(bugID)
-	if err != nil {
-		w.WriteHeader(http.StatusNotFound)
-		wpErr := writePage(w, "Not Found", errorTemplate, fmt.Sprintf("Unable to fetch bug details- Bug#%d : %v", bugID, err))
-		if wpErr != nil {
-			http.Error(w, "Error building page.", http.StatusInternalServerError)
-			return wpErr
+		bugID, err := strconv.Atoi(req.FormValue("ID"))
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			wpErr := writePage(w, "Error", errorTemplate, fmt.Sprintf("Invalid bug id. - Bug#%d : %v", bugID, err))
+			if wpErr != nil {
+				http.Error(w, "Error building page.", http.StatusInternalServerError)
+				return wpErr
+			}
+			return err
 		}
-		return err
-	}
-	// Create a clone of the bug
-	cloneID, cloneBugErr := client.CloneBug(bug)
-	if cloneBugErr != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		if wpErr := writePage(w, "Error", errorTemplate, fmt.Sprintf("Clone creation failed. %v", cloneBugErr)); wpErr != nil {
-			http.Error(w, "Error building page.", http.StatusInternalServerError)
-			return wpErr
+		// Get the details of the bug
+		bug, err := client.GetBug(bugID)
+		if err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			wpErr := writePage(w, "Not Found", errorTemplate, fmt.Sprintf("Unable to fetch bug details- Bug#%d : %v", bugID, err))
+			if wpErr != nil {
+				http.Error(w, "Error building page.", http.StatusInternalServerError)
+				return wpErr
+			}
+			return err
 		}
-		return cloneBugErr
-	}
-	targetRelease := bugzilla.BugUpdate{
-		TargetRelease: []string{
-			req.FormValue("release"),
-		},
-	}
-	// Updating the cloned bug with the right target version
-	if updateBugErr := client.UpdateBug(cloneID, targetRelease); updateBugErr != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		wpErr := writePage(w, "Error", errorTemplate, fmt.Sprintf("Clone created - Bug#%d, but failed to specify version for the cloned bug. %v", cloneID, updateBugErr))
-		if wpErr != nil {
-			http.Error(w, "Error building page.", http.StatusInternalServerError)
-			return wpErr
+		// Create a clone of the bug
+		cloneID, cloneBugErr := client.CloneBug(bug)
+		if cloneBugErr != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			if wpErr := writePage(w, "Error", errorTemplate, fmt.Sprintf("Clone creation failed. %v", cloneBugErr)); wpErr != nil {
+				http.Error(w, "Error building page.", http.StatusInternalServerError)
+				return wpErr
+			}
+			return cloneBugErr
 		}
-		return updateBugErr
+		targetRelease := bugzilla.BugUpdate{
+			TargetRelease: []string{
+				req.FormValue("release"),
+			},
+		}
+		// Updating the cloned bug with the right target version
+		if updateBugErr := client.UpdateBug(cloneID, targetRelease); updateBugErr != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			wpErr := writePage(w, "Error", errorTemplate, fmt.Sprintf("Clone created - Bug#%d, but failed to specify version for the cloned bug. %v", cloneID, updateBugErr))
+			if wpErr != nil {
+				http.Error(w, "Error building page.", http.StatusInternalServerError)
+				return wpErr
+			}
+			return updateBugErr
+		}
+		// Repopulate the fields of the page with the right data
+		data, err := getClonesTemplateData(bugID, w, client, allTargetVersions)
+		if err != nil {
+			return err
+		}
+		// Populating the NewCloneId which is used to show the success info banner
+		data.NewCloneID = cloneID
+		if err = writePage(w, "Clones", clonesTemplate, *data); err != nil {
+			http.Error(w, "Error building page.", http.StatusInternalServerError)
+			return err
+		}
+		return nil
 	}
-	// Repopulate the fields of the page with the right data
-	data, err := getClonesTemplateData(bugID, w, client, allTargetVersions)
-	if err != nil {
-		return err
-	}
-	// Populating the NewCloneId which is used to show the success info banner
-	data.NewCloneID = cloneID
-	if err = writePage(w, "Clones", clonesTemplate, *data); err != nil {
-		http.Error(w, "Error building page.", http.StatusInternalServerError)
-		return err
-	}
-	return nil
 }

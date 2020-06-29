@@ -270,13 +270,13 @@ func TestCreateCloneHandler(t *testing.T) {
 			formData := url.Values{}
 			formData.Set("ID", tc.params["ID"])
 			formData.Add("release", tc.params["release"])
-			req, err := http.NewRequest("POST", "/clones", bytes.NewBufferString(formData.Encode()))
+			req, err := http.NewRequest("POST", "/clones/create", bytes.NewBufferString(formData.Encode()))
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded; param=value")
 			if err != nil {
 				t.Fatal(err)
 			}
 			rr := httptest.NewRecorder()
-			handler := unwrapper(ClonesHandler(fake, allTargetVersions))
+			handler := unwrapper(CreateCloneHandler(fake, allTargetVersions))
 			handler.ServeHTTP(rr, req)
 			if status := rr.Code; status != tc.results.statusCode {
 				t.Errorf("testcase '%v' failed: clonebug returned wrong status code - got %v, want %v", tc, status, tc.results.statusCode)

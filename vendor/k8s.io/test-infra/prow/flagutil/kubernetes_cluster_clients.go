@@ -163,6 +163,11 @@ func (o *KubernetesOptions) InfrastructureClusterConfig(dryRun bool) (*rest.Conf
 
 // InfrastructureClusterClient returns a Kubernetes client for the infrastructure cluster.
 func (o *KubernetesOptions) InfrastructureClusterClient(dryRun bool) (kubernetesClient kubernetes.Interface, err error) {
+	return o.ClusterClientForContext(kube.InClusterContext, dryRun)
+}
+
+// ClusterClientForContext returns a Kubernetes client for the given context name.
+func (o *KubernetesOptions) ClusterClientForContext(context string, dryRun bool) (kubernetesClient kubernetes.Interface, err error) {
 	if err := o.resolve(dryRun); err != nil {
 		return nil, err
 	}
@@ -171,7 +176,11 @@ func (o *KubernetesOptions) InfrastructureClusterClient(dryRun bool) (kubernetes
 		return nil, errors.New("no dry-run kubernetes client is supported in dry-run mode")
 	}
 
-	return o.kubernetesClientsByContext[kube.InClusterContext], nil
+	client, exists := o.kubernetesClientsByContext[context]
+	if !exists {
+		return nil, fmt.Errorf("context %q does not exist in the provided config", context)
+	}
+	return client, nil
 }
 
 // BuildClusterClients returns Pod clients for build clusters.

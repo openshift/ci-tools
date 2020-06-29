@@ -253,6 +253,7 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 func TestGenerateJobs(t *testing.T) {
 	tests := []struct {
 		id       string
+		keep     bool
 		config   *ciop.ReleaseBuildConfiguration
 		repoInfo *ProwgenInfo
 	}{
@@ -329,6 +330,27 @@ func TestGenerateJobs(t *testing.T) {
 				Branch: "branch",
 			}},
 		}, {
+			id:   "Promotion configuration causes --promote job with unique targets",
+			keep: true,
+			config: &ciop.ReleaseBuildConfiguration{
+				Tests: []ciop.TestStepConfiguration{},
+				Images: []ciop.ProjectDirectoryImageBuildStepConfiguration{
+					{To: "out-1", From: "base"},
+					{To: "out-2", From: "base"},
+				},
+				PromotionConfiguration: &ciop.PromotionConfiguration{
+					Namespace: "ci",
+					AdditionalImages: map[string]string{
+						"out": "out-1",
+					},
+				},
+			},
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
+				Org:    "organization",
+				Repo:   "repository",
+				Branch: "branch",
+			}},
+		}, {
 			id: "no Promotion configuration has no branch job",
 			config: &ciop.ReleaseBuildConfiguration{
 				Tests:  []ciop.TestStepConfiguration{},
@@ -349,7 +371,9 @@ func TestGenerateJobs(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.id, func(t *testing.T) {
 			jobConfig := GenerateJobs(tc.config, tc.repoInfo, jobconfig.Generated)
-			pruneForTests(jobConfig) // prune the fields that are tested in TestGeneratePre/PostsubmitForTest
+			if !tc.keep {
+				pruneForTests(jobConfig) // prune the fields that are tested in TestGeneratePre/PostsubmitForTest
+			}
 			testhelper.CompareWithFixture(t, jobConfig)
 		})
 	}

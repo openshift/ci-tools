@@ -10,6 +10,7 @@ import (
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/util/sets"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
 
@@ -146,20 +147,20 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 		}
 	}
 
-	var imageTargets []string
+	imageTargets := sets.NewString()
 	if configSpec.PromotionConfiguration != nil {
 		for additional := range configSpec.PromotionConfiguration.AdditionalImages {
-			imageTargets = append(imageTargets, configSpec.PromotionConfiguration.AdditionalImages[additional])
+			imageTargets.Insert(configSpec.PromotionConfiguration.AdditionalImages[additional])
 		}
 	}
 
-	if len(configSpec.Images) > 0 || len(imageTargets) > 0 {
-		imageTargets = append(imageTargets, "[images]")
+	if len(configSpec.Images) > 0 || imageTargets.Len() > 0 {
+		imageTargets.Insert("[images]")
 	}
 
 	if len(imageTargets) > 0 {
 		// Identify which jobs need a to have a release payload explicitly requested
-		var presubmitTargets = imageTargets
+		var presubmitTargets = imageTargets.List()
 		if promotion.PromotesOfficialImages(configSpec) {
 			presubmitTargets = append(presubmitTargets, "[release:latest]")
 		}
@@ -167,7 +168,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest("images", info, label, podSpec, true, configSpec.CanonicalGoRepository))
 
 		if configSpec.PromotionConfiguration != nil {
-			podSpec := generateCiOperatorPodSpec(info, nil, imageTargets, []string{"--promote"}...)
+			podSpec := generateCiOperatorPodSpec(info, nil, imageTargets.List(), []string{"--promote"}...)
 			postsubmit := generatePostsubmitForTest("images", info, label, podSpec, configSpec.CanonicalGoRepository)
 			postsubmit.MaxConcurrency = 1
 			if postsubmit.Labels == nil {

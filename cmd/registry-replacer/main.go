@@ -2,10 +2,12 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -14,24 +16,73 @@ import (
 	"github.com/sirupsen/logrus"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/test-infra/experiment/autobumper/bumper"
+	"k8s.io/test-infra/prow/config/secret"
+	"k8s.io/test-infra/prow/flagutil"
+	"k8s.io/test-infra/prow/github"
+	"k8s.io/test-infra/prow/labels"
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
 )
 
-func main() {
-	configDir := flag.String("config-dir", "", "The directory with the ci-operator configs")
+type options struct {
+	configDir      string
+	createPR       bool
+	githubUserName string
+	selfApprove    bool
+	flagutil.GitHubOptions
+}
+
+func gatherOptions() (*options, error) {
+	o := &options{}
+	flag.StringVar(&o.configDir, "config-dir", "", "The directory with the ci-operator configs")
+	flag.BoolVar(&o.createPR, "create-pr", false, "If the tool should automatically create a PR. Requires --token-file")
+	flag.StringVar(&o.githubUserName, "github-user-name", "openshift-bot", "Name of the github user. Required when --create-pr is set. Does nothing otherwise")
+	flag.BoolVar(&o.selfApprove, "self-approve", false, "If the bot should self-approve its PR.")
 	flag.Parse()
-	if *configDir == "" {
-		logrus.Fatal("--config-dir arg is required")
+
+	var errs []error
+	if o.configDir == "" {
+		errs = append(errs, errors.New("--config-dir is mandatory"))
+	}
+
+	if o.createPR {
+		if o.githubUserName == "" {
+			errs = append(errs, errors.New("--github-user-name was unset, it is required when --create-pr is set"))
+		}
+		errs = append(errs, o.GitHubOptions.Validate(false))
+	}
+
+	return o, utilerrors.NewAggregate(errs)
+}
+
+func main() {
+	opts, err := gatherOptions()
+	if err != nil {
+		logrus.WithError(err).Fatal("failed to gather options")
+	}
+
+	// Already create the client here if needed to make sure we fail asap if there is an issue
+	var githubClient github.Client
+	if opts.createPR {
+		secretAgent := &secret.Agent{}
+		var err error
+		githubClient, err = opts.GitHubClient(secretAgent, false)
+		if err != nil {
+			logrus.WithError(err).Fatal("Failed to construct githubClient")
+		}
+		if err := secretAgent.Start(nil); err != nil {
+			logrus.WithError(err).Fatal("Failed to load github token")
+		}
 	}
 
 	var errs []error
 	errLock := &sync.Mutex{}
 	wg := sync.WaitGroup{}
 	if err := config.OperateOnCIOperatorConfigDir(
-		*configDir,
+		opts.configDir,
 		func(config *api.ReleaseBuildConfiguration, info *config.Info) error {
 			wg.Add(1)
 			go func(filename string) {
@@ -54,6 +105,14 @@ func main() {
 	wg.Wait()
 	if err := utilerrors.NewAggregate(errs); err != nil {
 		logrus.WithError(err).Fatal("Encountered errors")
+	}
+
+	if !opts.createPR {
+		return
+	}
+
+	if err := upsertPR(githubClient, opts.configDir, opts.githubUserName, opts.TokenPath, opts.selfApprove); err != nil {
+		logrus.WithError(err).Fatal("Failed to create PR")
 	}
 }
 
@@ -221,4 +280,74 @@ func githubFileGetterFactory(org, repo, branch string) githubFileGetter {
 		}
 		return body, nil
 	}
+}
+
+func upsertPR(gc github.Client, dir, githubUsername, tokenFilePath string, selfApprove bool) error {
+	if err := os.Chdir(dir); err != nil {
+		return fmt.Errorf("failed to chdir into %s: %w", dir, err)
+	}
+
+	changed, err := bumper.HasChanges()
+	if err != nil {
+		return fmt.Errorf("failed to check for changes: %w", err)
+	}
+
+	if !changed {
+		logrus.Info("No changes, not upserting PR")
+		return nil
+	}
+
+	token, err := ioutil.ReadFile(tokenFilePath)
+	if err != nil {
+		return fmt.Errorf("failed to read tokenfile from %s: %w", tokenFilePath, err)
+	}
+
+	censor := censor{secret: token}
+	stdout := bumper.HideSecretsWriter{Delegate: os.Stdout, Censor: &censor}
+	stderr := bumper.HideSecretsWriter{Delegate: os.Stderr, Censor: &censor}
+
+	const targetBranch = "registry-replacer"
+	if err := bumper.GitCommitAndPush(
+		fmt.Sprintf("https://%s:%s@github.com/%s/release.git", githubUsername, string(token), githubUsername),
+		targetBranch,
+		githubUsername,
+		fmt.Sprintf("%s@users.noreply.github.com", githubUsername),
+		"Registry-replacer autocommit",
+		stdout,
+		stderr,
+	); err != nil {
+		return fmt.Errorf("failed to push changes: %w", err)
+	}
+
+	var labelsToAdd []string
+	if selfApprove {
+		logrus.Infof("Self-aproving PR by adding the %q and %q labels", labels.Approved, labels.LGTM)
+		labelsToAdd = append(labelsToAdd, labels.Approved, labels.LGTM)
+	}
+	if err := bumper.UpdatePullRequestWithLabels(
+		gc,
+		"openshift",
+		"release",
+		prTitle,
+		"",
+		prTitle,
+		githubUsername+":"+targetBranch,
+		"master",
+		true,
+		labelsToAdd,
+	); err != nil {
+		return fmt.Errorf("failed to create PR: %w", err)
+	}
+
+	return nil
+}
+
+const prTitle = "Registry-Replacer autoupdate"
+
+type censor struct {
+	secret []byte
+}
+
+func (c *censor) Censor(data []byte) []byte {
+	return bytes.ReplaceAll(data, c.secret, []byte("<< REDACTED >>"))
 }

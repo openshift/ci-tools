@@ -2,6 +2,7 @@ package v1
 
 import (
 	"fmt"
+	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -19,7 +20,7 @@ type TestImageStreamTagImport struct {
 // SetDeterministicName sets the name of an TestImageStreamTagImport. Using it allows to avoid
 // creating multiple objects for the same import.
 func (t *TestImageStreamTagImport) SetDeterministicName() {
-	t.Name = fmt.Sprintf("%s-%s-%s", t.Spec.ClusterName, t.Spec.Namespace, t.Spec.Name)
+	t.Name = fmt.Sprintf("%s-%s-%s", t.Spec.ClusterName, t.Spec.Namespace, strings.ReplaceAll(t.Spec.Name, ":", "."))
 }
 
 type TestImageStreamTagImportSpec struct {

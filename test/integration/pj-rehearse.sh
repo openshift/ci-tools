@@ -42,6 +42,7 @@ export JOB_SPEC='{"type":"presubmit","job":"pull-ci-openshift-release-master-reh
 
 actual="${workdir}/rehearsals.yaml"
 os::cmd::expect_success "pj-rehearse --dry-run=true --candidate-path ${repo} --rehearsal-limit 20 > ${actual}"
+os::integration::sanitize_prowjob_yaml ${actual}
 os::integration::compare "${actual}" "${suite_dir}/expected.yaml"
 
 os::test::junit::declare_suite_end

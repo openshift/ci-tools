@@ -10,7 +10,6 @@ images:
     bin:
       as:
       - registry.svc.ci.openshift.org/ocp/builder:golang-1.12
-      paths: null
   to: tests
 promotion:
   additional_images:

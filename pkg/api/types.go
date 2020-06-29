@@ -985,7 +985,7 @@ type ProjectDirectoryImageBuildInputs struct {
 type ImageBuildInputs struct {
 	// Paths is a list of paths to copy out of this image and into the
 	// context directory.
-	Paths []ImageSourcePath `json:"paths"`
+	Paths []ImageSourcePath `json:"paths,omitempty"`
 	// As is a list of multi-stage step names or image names that will
 	// be replaced by the image reference from this step. For instance,
 	// if the Dockerfile defines FROM nginx:latest AS base, specifying

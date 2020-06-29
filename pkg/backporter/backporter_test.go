@@ -82,7 +82,7 @@ func TestGetBugHandler(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			req, err := http.NewRequest("GET", "/getbug", nil)
+			req, err := http.NewRequest("GET", "/bug", nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -172,7 +172,7 @@ func TestGetClonesHandler(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			req, err := http.NewRequest("GET", "/getclones", nil)
+			req, err := http.NewRequest("GET", "/clones", nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -182,7 +182,7 @@ func TestGetClonesHandler(t *testing.T) {
 			}
 			req.URL.RawQuery = q.Encode()
 			rr := httptest.NewRecorder()
-			handler := unwrapper(GetClonesHandler(fake, allTargetVersions))
+			handler := unwrapper(ClonesHandler(fake, allTargetVersions))
 			handler.ServeHTTP(rr, req)
 			if status := rr.Code; status != tc.results.statusCode {
 				t.Errorf("testcase '%v' failed: getbug returned wrong status code - got %v, want %v", tc, status, tc.results.statusCode)
@@ -270,13 +270,13 @@ func TestCreateCloneHandler(t *testing.T) {
 			formData := url.Values{}
 			formData.Set("ID", tc.params["ID"])
 			formData.Add("release", tc.params["release"])
-			req, err := http.NewRequest("POST", "/createclone", bytes.NewBufferString(formData.Encode()))
+			req, err := http.NewRequest("POST", "/clones", bytes.NewBufferString(formData.Encode()))
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded; param=value")
 			if err != nil {
 				t.Fatal(err)
 			}
 			rr := httptest.NewRecorder()
-			handler := unwrapper(CreateCloneHandler(fake, allTargetVersions))
+			handler := unwrapper(ClonesHandler(fake, allTargetVersions))
 			handler.ServeHTTP(rr, req)
 			if status := rr.Code; status != tc.results.statusCode {
 				t.Errorf("testcase '%v' failed: clonebug returned wrong status code - got %v, want %v", tc, status, tc.results.statusCode)

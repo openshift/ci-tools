@@ -174,10 +174,9 @@ func main() {
 		log.WithError(err).Fatal("Error parsing plugins configuration.")
 	}
 	http.HandleFunc("/", handleWithMetrics(backporter.GetLandingHandler()))
-	http.HandleFunc("/getclones", handleWithMetrics(backporter.GetClonesHandler(bugzillaClient, allTargetVersions)))
-	http.HandleFunc("/createclone", handleWithMetrics(backporter.CreateCloneHandler(bugzillaClient, allTargetVersions)))
+	http.HandleFunc("/clones", handleWithMetrics(backporter.ClonesHandler(bugzillaClient, allTargetVersions)))
 	// Leaving this in here to help with future debugging. This will return bug details in JSON format
-	http.HandleFunc("/getbug", handleWithMetrics(backporter.GetBugHandler(bugzillaClient)))
+	http.HandleFunc("/bug", handleWithMetrics(backporter.GetBugHandler(bugzillaClient)))
 	interrupts.ListenAndServe(&http.Server{Addr: o.address}, o.gracePeriod)
 
 	health.ServeReady()

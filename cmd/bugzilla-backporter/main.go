@@ -108,6 +108,36 @@ func gatherOptions() (options, error) {
 	return o, nil
 }
 
+func getAllTargetVersions(configFile string) (sets.String, error) {
+	// Get the versions from the plugins.yaml file to populate the Target Versions dropdown
+	// for the CreateClone functionality
+	b, err := ioutil.ReadFile(configFile)
+	if err != nil {
+		return nil, err
+	}
+	np := &plugins.Configuration{}
+	if err := yaml.Unmarshal(b, np); err != nil {
+		return nil, err
+	}
+
+	if err := np.Validate(); err != nil {
+		return nil, err
+	}
+	allTargetVersions := sets.NewString()
+	// Hardcoding with just the "openshift" org here
+	// Could be extended to be configurable in the future to support multiple products
+	// In which case this would have to be moved to the CreateClones function.
+	options := np.Bugzilla.OptionsForRepo("openshift", "")
+	for _, val := range options {
+		if val.TargetRelease != nil {
+			if _, ok := allTargetVersions[*val.TargetRelease]; !ok {
+				allTargetVersions.Insert(*val.TargetRelease)
+			}
+		}
+	}
+	return allTargetVersions, nil
+}
+
 func processOptions(o options) error {
 	level, err := log.ParseLevel(o.logLevel)
 	if err != nil {
@@ -126,6 +156,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("invalid options: %v", err)
 	}
+
+	// Start the bugzilla secrets agent
 	tokens := []string{o.bugzilla.ApiKeyPath}
 	secretAgent := &secret.Agent{}
 	if err := secretAgent.Start(tokens); err != nil {
@@ -137,43 +169,15 @@ func main() {
 	}
 	health := pjutil.NewHealth()
 	metrics.ExposeMetrics("ci-operator-bugzilla-backporter", prowConfig.PushGateway{}, prowflagutil.DefaultMetricsPort)
-
-	// pluginAgent := &plugins.ConfigAgent{}
-	// if err := pluginAgent.Start(o.pluginConfig, true); err != nil {
-	// 	logrus.WithError(err).Fatal("Error starting plugins.")
-	// }
-	b, err := ioutil.ReadFile(o.pluginConfig)
+	allTargetVersions, err := getAllTargetVersions(o.pluginConfig)
 	if err != nil {
-		log.Fatalf("invalid options: %v", err)
-		// return err
+		log.WithError(err).Fatal("Error parsing plugins configuration.")
 	}
-	np := &plugins.Configuration{}
-	if err := yaml.Unmarshal(b, np); err != nil {
-		log.Fatalf("invalid options: %v", err)
-		// return err
-	}
-
-	np.ApplyDefaults()
-
-	if err := np.Validate(); err != nil {
-		log.Fatalf("invalid options: %v", err)
-		// return err
-	}
-	allTargetVersions := sets.NewString()
-	options := np.Bugzilla.OptionsForRepo("openshift", "")
-	for _, val := range options {
-		if val.TargetRelease != nil {
-			if _, ok := allTargetVersions[*val.TargetRelease]; !ok {
-				allTargetVersions.Insert(*val.TargetRelease)
-			}
-		}
-	}
-
 	http.HandleFunc("/", handleWithMetrics(backporter.GetLandingHandler()))
 	http.HandleFunc("/getclones", handleWithMetrics(backporter.GetClonesHandler(bugzillaClient, allTargetVersions)))
+	http.HandleFunc("/createclone", handleWithMetrics(backporter.CreateCloneHandler(bugzillaClient, allTargetVersions)))
 	// Leaving this in here to help with future debugging. This will return bug details in JSON format
 	http.HandleFunc("/getbug", handleWithMetrics(backporter.GetBugHandler(bugzillaClient)))
-	http.HandleFunc("/createclone", handleWithMetrics(backporter.CreateCloneHandler(bugzillaClient, allTargetVersions)))
 	interrupts.ListenAndServe(&http.Server{Addr: o.address}, o.gracePeriod)
 
 	health.ServeReady()

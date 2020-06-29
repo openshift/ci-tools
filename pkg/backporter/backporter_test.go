@@ -1,59 +1,25 @@
 package backporter
 
 import (
+	"bytes"
 	"fmt"
+	"html/template"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
-	"strings"
 	"testing"
 
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/prow/bugzilla"
 	"k8s.io/utils/diff"
 )
 
 var (
-	landingPage    = fmt.Sprintf(htmlPageStart, "Home") + htmlPageEnd
-	clonesHTMLPage = fmt.Sprintf(htmlPageStart, "Clones") + clonesHTMLSubPage + htmlPageEnd
-	errorPage      = fmt.Sprintf(htmlPageStart, "Not Found") + errorSubPage + htmlPageEnd
+	landingPage = fmt.Sprintf(htmlPageStart, "Home") + htmlPageEnd
 )
 
-const clonesHTMLSubPage = `
-	<h2 id="bugid"> <a href = "#bugid"> 1: Sample bug to test implementation of clones handler </a> | Status:  </h2>
-	<p> Target Release: [] </p>
-	
-		<p> No linked PRs! </p>
-	
-	
-		<p> Cloned From: <a href = "/getclones?ID=0"> Bug 0: Sample bug to test implementation of clones handler</a> | Status: 
-	
-	<h4 id="clones"> <a href ="#clones"> Clones</a> </h4>
-	<table class="table">
-		<thead>
-			<tr>
-				<th title="Targeted version to release fix" class="info">Target Release</th>
-				<th title="ID of the cloned bug" class="info">Bug ID</th>
-				<th title="Status of the cloned bug" class="info">Status</th>
-				<th title="PR associated with this bug" class="info">PR</th>
-			</tr>
-		</thead>
-		<tbody>
-		
-			
-				<tr>
-					<td style="vertical-align: middle;">[]</td>
-					<td style="vertical-align: middle;"><a href = "/getclones?ID=0">0</a></td>
-					<td style="vertical-align: middle;"></td>
-					<td style="vertical-align: middle;">
-						
-					</td>
-				</tr>
-			
-		
-		</tbody>
-	</table>`
-
-const errorSubPage = `Bug#1000 not found`
+var allTargetVersions = sets.NewString("4.0.0", "4.1.0", "4.4.z")
 
 func unwrapper(h HandlerFuncWithErrorReturn) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -138,7 +104,8 @@ func TestGetBugHandler(t *testing.T) {
 
 type ResCheck struct {
 	statusCode int
-	response   string
+	data       interface{}
+	tmplt      *template.Template
 }
 
 func TestGetClonesHandler(t *testing.T) {
@@ -162,6 +129,10 @@ func TestGetClonesHandler(t *testing.T) {
 	if err != nil {
 		t.Errorf("Error while cloning bug: %v", err)
 	}
+	clone, err := fake.GetBug(cloneID)
+	if err != nil {
+		t.Errorf("Error retreiving clone: %v", err)
+	}
 	testCases := []struct {
 		name    string
 		params  map[string]int
@@ -174,7 +145,17 @@ func TestGetClonesHandler(t *testing.T) {
 			},
 			ResCheck{
 				http.StatusOK,
-				clonesHTMLPage,
+				ClonesTemplateData{
+					clone,
+					[]*bugzilla.Bug{
+						bug1,
+					},
+					bug1,
+					nil,
+					allTargetVersions.List(),
+					0,
+				},
+				clonesTemplate,
 			},
 		},
 		{
@@ -184,7 +165,8 @@ func TestGetClonesHandler(t *testing.T) {
 			},
 			ResCheck{
 				http.StatusNotFound,
-				errorPage,
+				"Bug#1000 not found",
+				errorTemplate,
 			},
 		},
 	}
@@ -200,13 +182,24 @@ func TestGetClonesHandler(t *testing.T) {
 			}
 			req.URL.RawQuery = q.Encode()
 			rr := httptest.NewRecorder()
-			handler := unwrapper(GetClonesHandler(fake))
+			handler := unwrapper(GetClonesHandler(fake, allTargetVersions))
 			handler.ServeHTTP(rr, req)
 			if status := rr.Code; status != tc.results.statusCode {
 				t.Errorf("testcase '%v' failed: getbug returned wrong status code - got %v, want %v", tc, status, tc.results.statusCode)
 			}
-			if resp := rr.Body.String(); resp != tc.results.response {
-				t.Errorf("Response differs from expected by: %s", diff.StringDiff(resp, tc.results.response))
+			var buf bytes.Buffer
+			if err := tc.results.tmplt.Execute(&buf, tc.results.data); err != nil {
+				t.Errorf("Unable to render template: %v", err)
+			}
+			subPage := buf.String()
+			var expResponse string
+			if tc.results.statusCode == http.StatusOK {
+				expResponse = fmt.Sprintf(htmlPageStart, "Clones") + subPage + htmlPageEnd
+			} else {
+				expResponse = fmt.Sprintf(htmlPageStart, "Not Found") + subPage + htmlPageEnd
+			}
+			if resp := rr.Body.String(); resp != expResponse {
+				t.Errorf("Response differs from expected by: %s", diff.StringDiff(resp, expResponse))
 			}
 		})
 	}
@@ -226,50 +219,99 @@ func TestCreateCloneHandler(t *testing.T) {
 	if err != nil {
 		t.Errorf("Error creating bug: %v", err)
 	}
+	clonedRelease := "4.4.z"
+	prunedReleaseSet := sets.NewString(allTargetVersions.List()...)
+	prunedReleaseSet.Delete(clonedRelease)
+
+	bug1, err := fake.GetBug(bug1ID)
+	if err != nil {
+		t.Errorf("Error getting bug details from Fake.")
+	}
 	expectedCloneID := bug1ID + 1
 	testcases := []struct {
 		name    string
-		params  map[string]int
+		params  map[string]string
 		results ResCheck
 	}{
 		{
 			"valid_parameters",
-			map[string]int{
-				"ID": bug1ID,
+			map[string]string{
+				"ID":      strconv.Itoa(bug1ID),
+				"release": clonedRelease,
 			},
 			ResCheck{
 				http.StatusOK,
-				fmt.Sprintf("{\"ID\":%d}", expectedCloneID),
+				ClonesTemplateData{
+					bug1,
+					[]*bugzilla.Bug{},
+					bug1,
+					nil,
+					prunedReleaseSet.List(),
+					expectedCloneID,
+				},
+				clonesTemplate,
 			},
 		},
 		{
 			"bad_params",
-			map[string]int{
-				"ID": 1000,
+			map[string]string{
+				"ID":      "1000",
+				"release": "",
 			},
 			ResCheck{
 				http.StatusNotFound,
-				"",
+				"Unable to fetch bug details- Bug#1000 : bug not registered in the fake",
+				errorTemplate,
 			},
 		},
 	}
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-
-			req, err := http.NewRequest("POST", "/createclone", strings.NewReader(fmt.Sprintf("{\"ID\":%d", tc.params["ID"])))
+			formData := url.Values{}
+			formData.Set("ID", tc.params["ID"])
+			formData.Add("release", tc.params["release"])
+			req, err := http.NewRequest("POST", "/createclone", bytes.NewBufferString(formData.Encode()))
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded; param=value")
 			if err != nil {
 				t.Fatal(err)
 			}
 			rr := httptest.NewRecorder()
-			handler := http.HandlerFunc(unwrapper(CreateCloneHandler(fake)))
+			handler := unwrapper(CreateCloneHandler(fake, allTargetVersions))
 			handler.ServeHTTP(rr, req)
 			if status := rr.Code; status != tc.results.statusCode {
 				t.Errorf("testcase '%v' failed: clonebug returned wrong status code - got %v, want %v", tc, status, tc.results.statusCode)
 			}
-			if rr.Code == http.StatusOK {
-				if resp := rr.Body.String(); resp != tc.results.response {
-					t.Errorf("Response differs from expected by: %s", diff.StringDiff(resp, tc.results.response))
+
+			var buf bytes.Buffer
+			var pageStart string
+			if tc.results.statusCode == http.StatusOK {
+				pageStart = fmt.Sprintf(htmlPageStart, "Clones")
+				newClone, err := fake.GetBug(expectedCloneID)
+				if err != nil {
+					t.Fatalf("Error while fetching clone details from mocked endpoint")
 				}
+				newClone.TargetRelease = []string{
+					tc.params["release"],
+				}
+				data, ok := tc.results.data.(ClonesTemplateData)
+				if ok {
+					data.Clones = []*bugzilla.Bug{
+						newClone,
+					}
+				}
+				tc.results.data = data
+
+			} else {
+				pageStart = fmt.Sprintf(htmlPageStart, "Not Found")
+			}
+			if err := tc.results.tmplt.Execute(&buf, tc.results.data); err != nil {
+				t.Errorf("Unable to render template: %v", err)
+			}
+			subPage := buf.String()
+			expResponse := pageStart + subPage + htmlPageEnd
+
+			if resp := rr.Body.String(); resp != expResponse {
+				t.Errorf("Response differs from expected by: %s", diff.StringDiff(resp, expResponse))
 			}
 		})
 	}

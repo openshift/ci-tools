@@ -87,7 +87,7 @@ var fourXBranches = regexp.MustCompile(`^(release|enterprise|openshift)-(4\.[0-9
 
 func FlavorForBranch(branch string) string {
 	var flavor string
-	if branch == "master" {
+	if branch == "master" || branch == "main" {
 		flavor = "master"
 	} else if threeXBranches.MatchString(branch) {
 		flavor = "3.x"

@@ -586,6 +586,15 @@ func TestResolveParameters(t *testing.T) {
 	invalidEnv := "invalid-env"
 	notChanged := "not changed"
 	changed := "changed"
+	defaultGrandGrand := "grand grand parent"
+	defaultGrand := "grand parent"
+	defaultParent := "parent"
+	defaultNotDeclared := "not declared"
+	defaultNotChanged := "not changed"
+	defaultStr := "default"
+	defaultWorkflow := "workflow"
+	defaultTest := "test"
+	defaultEmpty := ""
 	workflows := WorkflowByName{
 		workflow: api.MultiStageTestConfiguration{
 			Test:        []api.TestStep{{Chain: &grandGrandParent}},
@@ -596,13 +605,13 @@ func TestResolveParameters(t *testing.T) {
 		grandGrandParent: {
 			Steps: []api.TestStep{{Chain: &grandParent}},
 			Environment: []api.StepParameter{
-				{Name: "CHANGED", Default: "grand grand parent"},
+				{Name: "CHANGED", Default: &defaultGrandGrand},
 			},
 		},
 		grandParent: {
 			Steps: []api.TestStep{{Chain: &parent}},
 			Environment: []api.StepParameter{
-				{Name: "CHANGED", Default: "grand parent"},
+				{Name: "CHANGED", Default: &defaultGrand},
 			},
 		},
 		parent: {
@@ -611,13 +620,13 @@ func TestResolveParameters(t *testing.T) {
 				{Reference: &changed},
 			},
 			Environment: []api.StepParameter{
-				{Name: "CHANGED", Default: "parent"},
+				{Name: "CHANGED", Default: &defaultParent},
 			},
 		},
 		invalidEnv: {
 			Steps: []api.TestStep{{LiteralTestStep: &api.LiteralTestStep{}}},
 			Environment: []api.StepParameter{
-				{Name: "NOT_DECLARED", Default: "not declared"},
+				{Name: "NOT_DECLARED", Default: &defaultNotDeclared},
 			},
 		},
 	}
@@ -625,7 +634,7 @@ func TestResolveParameters(t *testing.T) {
 		notChanged: api.LiteralTestStep{
 			As: notChanged,
 			Environment: []api.StepParameter{
-				{Name: "NOT_CHANGED", Default: "not changed"},
+				{Name: "NOT_CHANGED", Default: &defaultNotChanged},
 			},
 		},
 		changed: api.LiteralTestStep{
@@ -645,25 +654,41 @@ func TestResolveParameters(t *testing.T) {
 		},
 		expected: [][]api.StepParameter{nil},
 	}, {
+		name: "leaf, empty default",
+		test: api.MultiStageTestConfiguration{
+			Test: []api.TestStep{{
+				LiteralTestStep: &api.LiteralTestStep{
+					Environment: []api.StepParameter{
+						{Name: "TEST", Default: &defaultEmpty},
+					},
+				},
+			}},
+		},
+		expected: [][]api.StepParameter{{{
+			Name: "TEST", Default: &defaultEmpty,
+		}}},
+	}, {
 		name: "leaf, parameters",
 		test: api.MultiStageTestConfiguration{
 			Test: []api.TestStep{{
 				LiteralTestStep: &api.LiteralTestStep{
 					Environment: []api.StepParameter{
-						{Name: "TEST", Default: "default"},
+						{Name: "TEST", Default: &defaultStr},
 					},
 				},
 			}},
 		},
-		expected: [][]api.StepParameter{{{Name: "TEST", Default: "default"}}},
+		expected: [][]api.StepParameter{{{
+			Name: "TEST", Default: &defaultStr,
+		}}},
 	}, {
 		name: "chain propagates to sub-steps",
 		test: api.MultiStageTestConfiguration{
 			Test: []api.TestStep{{Chain: &parent}},
 		},
 		expected: [][]api.StepParameter{
-			{{Name: "NOT_CHANGED", Default: "not changed"}},
-			{{Name: "CHANGED", Default: "parent"}},
+			{{Name: "NOT_CHANGED", Default: &defaultNotChanged}},
+			{{Name: "CHANGED", Default: &defaultParent}},
 		},
 	}, {
 		name: "change propagates to sub-chains",
@@ -671,15 +696,15 @@ func TestResolveParameters(t *testing.T) {
 			Test: []api.TestStep{{Chain: &grandGrandParent}},
 		},
 		expected: [][]api.StepParameter{
-			{{Name: "NOT_CHANGED", Default: "not changed"}},
-			{{Name: "CHANGED", Default: "grand grand parent"}},
+			{{Name: "NOT_CHANGED", Default: &defaultNotChanged}},
+			{{Name: "CHANGED", Default: &defaultGrandGrand}},
 		},
 	}, {
 		name: "workflow parameter",
 		test: api.MultiStageTestConfiguration{Workflow: &workflow},
 		expected: [][]api.StepParameter{
-			{{Name: "NOT_CHANGED", Default: "not changed"}},
-			{{Name: "CHANGED", Default: "workflow"}},
+			{{Name: "NOT_CHANGED", Default: &defaultNotChanged}},
+			{{Name: "CHANGED", Default: &defaultWorkflow}},
 		},
 	}, {
 		name: "test parameter",
@@ -688,8 +713,8 @@ func TestResolveParameters(t *testing.T) {
 			Environment: api.TestEnvironment{"CHANGED": "test"},
 		},
 		expected: [][]api.StepParameter{
-			{{Name: "NOT_CHANGED", Default: "not changed"}},
-			{{Name: "CHANGED", Default: "test"}},
+			{{Name: "NOT_CHANGED", Default: &defaultNotChanged}},
+			{{Name: "CHANGED", Default: &defaultTest}},
 		},
 	}, {
 		name: "invalid chain parameter",

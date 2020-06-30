@@ -102,7 +102,8 @@ func stackRecordForStep(name string, env []api.StepParameter) stackRecord {
 func stackRecordForTest(name string, env api.TestEnvironment) stackRecord {
 	params := make([]api.StepParameter, 0, len(env))
 	for k, v := range env {
-		params = append(params, api.StepParameter{Name: k, Default: v})
+		unique := v
+		params = append(params, api.StepParameter{Name: k, Default: &unique})
 	}
 	return stackRecordForStep(name, params)
 }
@@ -170,8 +171,8 @@ func (r *registry) processStep(step *api.TestStep, seen sets.String, stack []sta
 		env := make([]api.StepParameter, 0, len(ret.Environment))
 		for _, e := range ret.Environment {
 			if v := resolveVariable(e.Name, stack); v != nil {
-				e.Default = *v
-			} else if e.Default == "" {
+				e.Default = v
+			} else if e.Default == nil {
 				errs = append(errs, stackErrorf(stack, "%s: unresolved parameter: %s", ret.As, e.Name))
 			}
 			env = append(env, e)
@@ -188,7 +189,7 @@ func resolveVariable(name string, stack []stackRecord) *string {
 				for _, r := range stack {
 					r.unused.Delete(e.Name)
 				}
-				return &r.env[j].Default
+				return r.env[j].Default
 			}
 		}
 	}

@@ -493,7 +493,7 @@ func validateCredentials(fieldRoot string, credentials []CredentialReference) []
 func validateParameters(fieldRoot string, params []StepParameter, env TestEnvironment) error {
 	var missing []string
 	for _, param := range params {
-		if param.Default != "" {
+		if param.Default != nil {
 			continue
 		}
 		if _, ok := env[param.Name]; !ok {

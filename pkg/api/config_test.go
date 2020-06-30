@@ -684,6 +684,7 @@ func TestValidateTestSteps(t *testing.T) {
 }
 
 func TestValidateParameters(t *testing.T) {
+	defaultStr := "default"
 	for _, tc := range []struct {
 		name   string
 		params []StepParameter
@@ -697,7 +698,7 @@ func TestValidateParameters(t *testing.T) {
 		env:    TestEnvironment{"TEST": "test"},
 	}, {
 		name:   "has parameter with default, no parameter provided",
-		params: []StepParameter{{Name: "TEST", Default: "default"}},
+		params: []StepParameter{{Name: "TEST", Default: &defaultStr}},
 	}, {
 		name:   "has parameters, some not provided",
 		params: []StepParameter{{Name: "TEST0"}, {Name: "TEST1"}},

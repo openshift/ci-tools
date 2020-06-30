@@ -369,7 +369,7 @@ func TestGeneratePodsEnvironment(t *testing.T) {
 		test: api.LiteralTestStep{
 			Environment: []api.StepParameter{{
 				Name:    "TEST",
-				Default: "default",
+				Default: &defValue,
 			}},
 		},
 		expected: &value,
@@ -378,7 +378,7 @@ func TestGeneratePodsEnvironment(t *testing.T) {
 		test: api.LiteralTestStep{
 			Environment: []api.StepParameter{{
 				Name:    "TEST",
-				Default: "default",
+				Default: &defValue,
 			}},
 		},
 		expected: &defValue,

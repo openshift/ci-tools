@@ -681,6 +681,7 @@ func TestConfigFromResolver(t *testing.T) {
 }
 
 func TestRegistry(t *testing.T) {
+	defaultStr := "test parameter default"
 	var (
 		expectedReferences = registry.ReferenceByName{
 			"ipi-deprovision-deprovision": {
@@ -707,7 +708,7 @@ func TestRegistry(t *testing.T) {
 					Requests: api.ResourceList{"cpu": "1000m", "memory": "2Gi"},
 				},
 				Environment: []api.StepParameter{
-					{Name: "TEST_PARAMETER", Default: "test parameter default"},
+					{Name: "TEST_PARAMETER", Default: &defaultStr},
 				},
 			},
 			"ipi-install-rbac": {
@@ -726,6 +727,7 @@ func TestRegistry(t *testing.T) {
 		installRBACRef       = `ipi-install-rbac`
 		installChain         = `ipi-install`
 
+		chainDefault   = "test parameter set by chain"
 		expectedChains = registry.ChainByName{
 			"ipi-install": api.RegistryChain{
 				As: "ipi-install",
@@ -742,7 +744,7 @@ func TestRegistry(t *testing.T) {
 				Steps: []api.TestStep{{Chain: &installChain}},
 				Environment: []api.StepParameter{{
 					Name:    "TEST_PARAMETER",
-					Default: "test parameter set by chain",
+					Default: &chainDefault,
 				}},
 			},
 			"ipi-deprovision": api.RegistryChain{

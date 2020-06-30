@@ -117,11 +117,11 @@ func getAllTargetVersions(configFile string) (sets.String, error) {
 	}
 	np := &plugins.Configuration{}
 	if err := yaml.Unmarshal(b, np); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to unmarshal %s : %v", configFile, err)
 	}
 
 	if err := np.Validate(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to validate file %s : %v", configFile, err)
 	}
 	allTargetVersions := sets.NewString()
 	// Hardcoding with just the "openshift" org here

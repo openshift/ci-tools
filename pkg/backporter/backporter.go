@@ -430,7 +430,7 @@ func CreateCloneHandler(client bugzilla.Client, allTargetVersions sets.String) H
 			if wpErr != nil {
 				_, innerFprintErr = fmt.Fprint(w, "error occurred while building page")
 			}
-			return utilerrors.NewAggregate([]error{fmt.Errorf("bad request - clones/create can handle only POST requests"), wpErr})
+			return utilerrors.NewAggregate([]error{fmt.Errorf("bad request - clones/create can handle only POST requests"), wpErr, innerFprintErr})
 		}
 		// Parse the parameters passed in the POST request
 		err := req.ParseForm()

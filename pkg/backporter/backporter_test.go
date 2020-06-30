@@ -181,7 +181,7 @@ func TestGetClonesHandler(t *testing.T) {
 			}
 			var buf bytes.Buffer
 			if err := tc.tmplt.Execute(&buf, tc.data); err != nil {
-				t.Errorf("unable to render template: %v", err)
+				t.Fatalf("unable to render template: %v", err)
 			}
 			subPage := buf.String()
 			var expResponse string
@@ -263,7 +263,7 @@ func TestCreateCloneHandler(t *testing.T) {
 			req, err := http.NewRequest("POST", "/clones/create", bytes.NewBufferString(formData.Encode()))
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded; param=value")
 			if err != nil {
-				t.Error(err)
+				t.Fatal(err)
 			}
 			rr := httptest.NewRecorder()
 			handler := unwrapper(CreateCloneHandler(fake, allTargetVersions))
@@ -278,7 +278,7 @@ func TestCreateCloneHandler(t *testing.T) {
 				pageStart = fmt.Sprintf(htmlPageStart, "Clones")
 				newClone, err := fake.GetBug(expectedCloneID)
 				if err != nil {
-					t.Error("error while fetching clone details from mocked endpoint")
+					t.Fatalf("error while fetching clone details from mocked endpoint")
 				}
 				newClone.TargetRelease = []string{
 					tc.params["release"],
@@ -295,7 +295,7 @@ func TestCreateCloneHandler(t *testing.T) {
 				pageStart = fmt.Sprintf(htmlPageStart, "Not Found")
 			}
 			if err := tc.tmplt.Execute(&buf, tc.data); err != nil {
-				t.Errorf("unable to render template: %v", err)
+				t.Fatalf("unable to render template: %v", err)
 			}
 			subPage := buf.String()
 			expResponse := pageStart + subPage + htmlPageEnd

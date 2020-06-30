@@ -50,6 +50,10 @@ tests:
     - chain: ipi-install-with-parameter
     env:
       TEST_PARAMETER: test parameter set by test
+- as: e2e-empty-parameter
+  steps:
+    test:
+    - chain: ipi-install-empty-parameter
 zz_generated_metadata:
   org: openshift
   repo: installer

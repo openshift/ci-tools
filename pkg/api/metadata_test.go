@@ -102,6 +102,11 @@ func TestMetadata_ConfigMapName(t *testing.T) {
 			expected: "ci-operator-master-configs",
 		},
 		{
+			name:     "main branch goes to master configmap",
+			branch:   "main",
+			expected: "ci-operator-master-configs",
+		},
+		{
 			name:     "enterprise 3.6 branch goes to 3.x configmap",
 			branch:   "enterprise-3.6",
 			expected: "ci-operator-3.x-configs",

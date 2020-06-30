@@ -445,6 +445,16 @@ func setupDependencies(
 		}
 	}()
 
+	// Otherwise we flake in integration tests because we just capture stdout. Its not
+	// really possible to sort this as we use a client per cluster. Furthermore the output
+	// doesn't even contain the info which cluster was used.
+	// TODO: Remove the whole dry-run concept and write tests that just pass in a fakeclient.
+	if dryRun {
+		if len(buildClusters) > 1 {
+			buildClusters = sets.NewString("default")
+		}
+	}
+
 	g, ctx := errgroup.WithContext(context.Background())
 	for _, buildCluster := range buildClusters.UnsortedList() {
 		g.Go(func() error {

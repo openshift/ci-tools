@@ -27,7 +27,7 @@ require (
 	github.com/golang/protobuf v1.3.5 // indirect
 	github.com/google/go-cmp v0.4.0
 	github.com/google/gofuzz v1.1.0
-	github.com/mattn/go-zglob v0.0.1
+	github.com/mattn/go-zglob v0.0.2
 	github.com/openshift/api v0.0.0-20200326160804-ecb9283fe820
 	github.com/openshift/client-go v0.0.0-20200116152001-92a2713fa240
 	github.com/openshift/library-go v0.0.0-00010101000000-000000000000

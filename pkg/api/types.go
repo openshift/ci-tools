@@ -551,7 +551,7 @@ type StepParameter struct {
 	// Name of the environment variable.
 	Name string `json:"name"`
 	// Default if not set, optional, makes the parameter not required if set.
-	Default string `json:"default,omitempty"`
+	Default *string `json:"default,omitempty"`
 	// Documentation is a textual description of the parameter.
 	Documentation string `json:"documentation,omitempty"`
 }

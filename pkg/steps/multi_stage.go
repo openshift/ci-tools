@@ -420,7 +420,10 @@ func addSecretWrapper(pod *coreapi.Pod) {
 func (s *multiStageTestStep) generateParams(env []api.StepParameter) []coreapi.EnvVar {
 	var ret []coreapi.EnvVar
 	for _, env := range env {
-		value := env.Default
+		value := ""
+		if env.Default != nil {
+			value = *env.Default
+		}
 		if v, ok := s.env[env.Name]; ok {
 			value = v
 		}

@@ -728,6 +728,7 @@ func TestRegistry(t *testing.T) {
 		installChain         = `ipi-install`
 
 		chainDefault   = "test parameter set by chain"
+		defaultEmpty   = ""
 		expectedChains = registry.ChainByName{
 			"ipi-install": api.RegistryChain{
 				As: "ipi-install",
@@ -738,6 +739,11 @@ func TestRegistry(t *testing.T) {
 						Reference: &installRef,
 					},
 				},
+			},
+			"ipi-install-empty-parameter": {
+				As:          "ipi-install-empty-parameter",
+				Steps:       []api.TestStep{{Chain: &installChain}},
+				Environment: []api.StepParameter{{Name: "TEST_PARAMETER", Default: &defaultEmpty}},
 			},
 			"ipi-install-with-parameter": api.RegistryChain{
 				As:    "ipi-install-with-parameter",

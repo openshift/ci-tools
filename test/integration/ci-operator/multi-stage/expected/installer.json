@@ -575,6 +575,395 @@
       "creationTimestamp": null,
       "labels": {
         "build-id": "0",
+        "ci.openshift.io/multi-stage-test": "e2e-empty-parameter",
+        "ci.openshift.io/refs.branch": "release-4.2",
+        "ci.openshift.io/refs.org": "openshift",
+        "ci.openshift.io/refs.repo": "installer",
+        "created-by-ci": "true",
+        "job": "pull-ci-openshift-release-master-ci-operator-integration"
+      },
+      "name": "e2e-empty-parameter-ipi-install-install"
+    },
+    "spec": {
+      "containers": [
+        {
+          "args": [
+            "/bin/bash",
+            "-c",
+            "#!/bin/bash\nset -eu\nopenshift-cluster install\n"
+          ],
+          "command": [
+            "/tmp/secret-wrapper/secret-wrapper"
+          ],
+          "env": [
+            {
+              "name": "BUILD_ID",
+              "value": "0"
+            },
+            {
+              "name": "CI",
+              "value": "true"
+            },
+            {
+              "name": "JOB_NAME",
+              "value": "pull-ci-openshift-release-master-ci-operator-integration"
+            },
+            {
+              "name": "JOB_SPEC",
+              "value": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"installer\",\"base_ref\":\"release-4.2\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+            },
+            {
+              "name": "JOB_TYPE",
+              "value": "presubmit"
+            },
+            {
+              "name": "OPENSHIFT_CI",
+              "value": "true"
+            },
+            {
+              "name": "PROW_JOB_ID",
+              "value": "uuid"
+            },
+            {
+              "name": "PULL_BASE_REF",
+              "value": "release-4.2"
+            },
+            {
+              "name": "PULL_BASE_SHA",
+              "value": "af8a90a2faf965eeda949dc1c607c48d3ffcda3e"
+            },
+            {
+              "name": "PULL_NUMBER",
+              "value": "1234"
+            },
+            {
+              "name": "PULL_PULL_SHA",
+              "value": "538680dfd2f6cff3b3506c80ca182dcb0dd22a58"
+            },
+            {
+              "name": "PULL_REFS",
+              "value": "release-4.2:af8a90a2faf965eeda949dc1c607c48d3ffcda3e,1234:538680dfd2f6cff3b3506c80ca182dcb0dd22a58"
+            },
+            {
+              "name": "REPO_NAME",
+              "value": "installer"
+            },
+            {
+              "name": "REPO_OWNER",
+              "value": "openshift"
+            },
+            {
+              "name": "ARTIFACT_DIR",
+              "value": "/tmp/artifacts"
+            },
+            {
+              "name": "NAMESPACE",
+              "value": "testns"
+            },
+            {
+              "name": "JOB_NAME_SAFE",
+              "value": "e2e-empty-parameter"
+            },
+            {
+              "name": "JOB_NAME_HASH",
+              "value": "41093"
+            },
+            {
+              "name": "TEST_PARAMETER"
+            },
+            {
+              "name": "SHARED_DIR",
+              "value": "/var/run/secrets/ci.openshift.io/multi-stage"
+            }
+          ],
+          "image": "stable:installer",
+          "name": "test",
+          "resources": {
+            "requests": {
+              "cpu": "1",
+              "memory": "2Gi"
+            }
+          },
+          "terminationMessagePolicy": "FallbackToLogsOnError",
+          "volumeMounts": [
+            {
+              "mountPath": "/tmp/artifacts",
+              "name": "artifacts"
+            },
+            {
+              "mountPath": "/tmp/secret-wrapper",
+              "name": "secret-wrapper"
+            },
+            {
+              "mountPath": "/var/run/secrets/ci.openshift.io/multi-stage",
+              "name": "e2e-empty-parameter"
+            }
+          ]
+        },
+        {
+          "command": [
+            "/bin/sh",
+            "-c",
+            "#!/bin/sh\nset -euo pipefail\ntrap 'kill $(jobs -p); exit 0' TERM\n\ntouch /tmp/done\necho \"Waiting for artifacts to be extracted\"\nwhile true; do\n\tif [[ ! -f /tmp/done ]]; then\n\t\techo \"Artifacts extracted, will terminate after 30s\"\n\t\tsleep 30\n\t\techo \"Exiting\"\n\t\texit 0\n\tfi\n\tsleep 5 & wait\ndone\n"
+          ],
+          "image": "busybox",
+          "name": "artifacts",
+          "resources": {},
+          "volumeMounts": [
+            {
+              "mountPath": "/tmp/artifacts",
+              "name": "artifacts"
+            }
+          ]
+        }
+      ],
+      "initContainers": [
+        {
+          "args": [
+            "/bin/secret-wrapper",
+            "/tmp/secret-wrapper/secret-wrapper"
+          ],
+          "command": [
+            "cp"
+          ],
+          "image": "registry.svc.ci.openshift.org/ci/secret-wrapper:latest",
+          "name": "cp-secret-wrapper",
+          "resources": {},
+          "terminationMessagePolicy": "FallbackToLogsOnError",
+          "volumeMounts": [
+            {
+              "mountPath": "/tmp/secret-wrapper",
+              "name": "secret-wrapper"
+            }
+          ]
+        }
+      ],
+      "restartPolicy": "Never",
+      "serviceAccountName": "e2e-empty-parameter",
+      "volumes": [
+        {
+          "emptyDir": {},
+          "name": "artifacts"
+        },
+        {
+          "emptyDir": {},
+          "name": "secret-wrapper"
+        },
+        {
+          "name": "e2e-empty-parameter",
+          "secret": {
+            "secretName": "e2e-empty-parameter"
+          }
+        }
+      ]
+    },
+    "status": {}
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Pod",
+    "metadata": {
+      "annotations": {
+        "ci-operator.openshift.io/container-sub-tests": "test",
+        "ci-operator.openshift.io/save-container-logs": "true",
+        "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"installer\",\"base_ref\":\"release-4.2\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+      },
+      "creationTimestamp": null,
+      "labels": {
+        "build-id": "0",
+        "ci.openshift.io/multi-stage-test": "e2e-empty-parameter",
+        "ci.openshift.io/refs.branch": "release-4.2",
+        "ci.openshift.io/refs.org": "openshift",
+        "ci.openshift.io/refs.repo": "installer",
+        "created-by-ci": "true",
+        "job": "pull-ci-openshift-release-master-ci-operator-integration"
+      },
+      "name": "e2e-empty-parameter-ipi-install-rbac"
+    },
+    "spec": {
+      "containers": [
+        {
+          "args": [
+            "/bin/bash",
+            "-c",
+            "#!/bin/bash\nset -eu\nsetup-rbac\n"
+          ],
+          "command": [
+            "/tmp/secret-wrapper/secret-wrapper"
+          ],
+          "env": [
+            {
+              "name": "BUILD_ID",
+              "value": "0"
+            },
+            {
+              "name": "CI",
+              "value": "true"
+            },
+            {
+              "name": "JOB_NAME",
+              "value": "pull-ci-openshift-release-master-ci-operator-integration"
+            },
+            {
+              "name": "JOB_SPEC",
+              "value": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"installer\",\"base_ref\":\"release-4.2\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+            },
+            {
+              "name": "JOB_TYPE",
+              "value": "presubmit"
+            },
+            {
+              "name": "OPENSHIFT_CI",
+              "value": "true"
+            },
+            {
+              "name": "PROW_JOB_ID",
+              "value": "uuid"
+            },
+            {
+              "name": "PULL_BASE_REF",
+              "value": "release-4.2"
+            },
+            {
+              "name": "PULL_BASE_SHA",
+              "value": "af8a90a2faf965eeda949dc1c607c48d3ffcda3e"
+            },
+            {
+              "name": "PULL_NUMBER",
+              "value": "1234"
+            },
+            {
+              "name": "PULL_PULL_SHA",
+              "value": "538680dfd2f6cff3b3506c80ca182dcb0dd22a58"
+            },
+            {
+              "name": "PULL_REFS",
+              "value": "release-4.2:af8a90a2faf965eeda949dc1c607c48d3ffcda3e,1234:538680dfd2f6cff3b3506c80ca182dcb0dd22a58"
+            },
+            {
+              "name": "REPO_NAME",
+              "value": "installer"
+            },
+            {
+              "name": "REPO_OWNER",
+              "value": "openshift"
+            },
+            {
+              "name": "ARTIFACT_DIR",
+              "value": "/tmp/artifacts"
+            },
+            {
+              "name": "NAMESPACE",
+              "value": "testns"
+            },
+            {
+              "name": "JOB_NAME_SAFE",
+              "value": "e2e-empty-parameter"
+            },
+            {
+              "name": "JOB_NAME_HASH",
+              "value": "41093"
+            },
+            {
+              "name": "SHARED_DIR",
+              "value": "/var/run/secrets/ci.openshift.io/multi-stage"
+            }
+          ],
+          "image": "stable:installer",
+          "name": "test",
+          "resources": {
+            "requests": {
+              "cpu": "1",
+              "memory": "2Gi"
+            }
+          },
+          "terminationMessagePolicy": "FallbackToLogsOnError",
+          "volumeMounts": [
+            {
+              "mountPath": "/tmp/artifacts",
+              "name": "artifacts"
+            },
+            {
+              "mountPath": "/tmp/secret-wrapper",
+              "name": "secret-wrapper"
+            },
+            {
+              "mountPath": "/var/run/secrets/ci.openshift.io/multi-stage",
+              "name": "e2e-empty-parameter"
+            }
+          ]
+        },
+        {
+          "command": [
+            "/bin/sh",
+            "-c",
+            "#!/bin/sh\nset -euo pipefail\ntrap 'kill $(jobs -p); exit 0' TERM\n\ntouch /tmp/done\necho \"Waiting for artifacts to be extracted\"\nwhile true; do\n\tif [[ ! -f /tmp/done ]]; then\n\t\techo \"Artifacts extracted, will terminate after 30s\"\n\t\tsleep 30\n\t\techo \"Exiting\"\n\t\texit 0\n\tfi\n\tsleep 5 & wait\ndone\n"
+          ],
+          "image": "busybox",
+          "name": "artifacts",
+          "resources": {},
+          "volumeMounts": [
+            {
+              "mountPath": "/tmp/artifacts",
+              "name": "artifacts"
+            }
+          ]
+        }
+      ],
+      "initContainers": [
+        {
+          "args": [
+            "/bin/secret-wrapper",
+            "/tmp/secret-wrapper/secret-wrapper"
+          ],
+          "command": [
+            "cp"
+          ],
+          "image": "registry.svc.ci.openshift.org/ci/secret-wrapper:latest",
+          "name": "cp-secret-wrapper",
+          "resources": {},
+          "terminationMessagePolicy": "FallbackToLogsOnError",
+          "volumeMounts": [
+            {
+              "mountPath": "/tmp/secret-wrapper",
+              "name": "secret-wrapper"
+            }
+          ]
+        }
+      ],
+      "restartPolicy": "Never",
+      "serviceAccountName": "e2e-empty-parameter",
+      "volumes": [
+        {
+          "emptyDir": {},
+          "name": "artifacts"
+        },
+        {
+          "emptyDir": {},
+          "name": "secret-wrapper"
+        },
+        {
+          "name": "e2e-empty-parameter",
+          "secret": {
+            "secretName": "e2e-empty-parameter"
+          }
+        }
+      ]
+    },
+    "status": {}
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Pod",
+    "metadata": {
+      "annotations": {
+        "ci-operator.openshift.io/container-sub-tests": "test",
+        "ci-operator.openshift.io/save-container-logs": "true",
+        "ci.openshift.io/job-spec": "{\"type\":\"presubmit\",\"job\":\"pull-ci-openshift-release-master-ci-operator-integration\",\"buildid\":\"0\",\"prowjobid\":\"uuid\",\"refs\":{\"org\":\"openshift\",\"repo\":\"installer\",\"base_ref\":\"release-4.2\",\"base_sha\":\"af8a90a2faf965eeda949dc1c607c48d3ffcda3e\",\"pulls\":[{\"number\":1234,\"author\":\"droslean\",\"sha\":\"538680dfd2f6cff3b3506c80ca182dcb0dd22a58\"}]}}"
+      },
+      "creationTimestamp": null,
+      "labels": {
+        "build-id": "0",
         "ci.openshift.io/multi-stage-test": "e2e-gcp",
         "ci.openshift.io/refs.branch": "release-4.2",
         "ci.openshift.io/refs.org": "openshift",
@@ -2619,6 +3008,28 @@
     "metadata": {
       "creationTimestamp": null,
       "labels": {
+        "ci.openshift.io/multi-stage-test": "e2e-empty-parameter"
+      },
+      "name": "e2e-empty-parameter"
+    },
+    "roleRef": {
+      "apiGroup": "",
+      "kind": "Role",
+      "name": "e2e-empty-parameter"
+    },
+    "subjects": [
+      {
+        "kind": "ServiceAccount",
+        "name": "e2e-empty-parameter"
+      }
+    ]
+  },
+  {
+    "apiVersion": "rbac.authorization.k8s.io/v1",
+    "kind": "RoleBinding",
+    "metadata": {
+      "creationTimestamp": null,
+      "labels": {
         "ci.openshift.io/multi-stage-test": "e2e-gcp"
       },
       "name": "e2e-gcp"
@@ -2708,6 +3119,58 @@
         ],
         "resourceNames": [
           "e2e-default"
+        ],
+        "resources": [
+          "secrets"
+        ],
+        "verbs": [
+          "get",
+          "update"
+        ]
+      },
+      {
+        "apiGroups": [
+          "",
+          "image.openshift.io"
+        ],
+        "resources": [
+          "imagestreams/layers"
+        ],
+        "verbs": [
+          "get"
+        ]
+      }
+    ]
+  },
+  {
+    "apiVersion": "rbac.authorization.k8s.io/v1",
+    "kind": "Role",
+    "metadata": {
+      "creationTimestamp": null,
+      "labels": {
+        "ci.openshift.io/multi-stage-test": "e2e-empty-parameter"
+      },
+      "name": "e2e-empty-parameter"
+    },
+    "rules": [
+      {
+        "apiGroups": [
+          "rbac.authorization.k8s.io"
+        ],
+        "resources": [
+          "rolebindings"
+        ],
+        "verbs": [
+          "create",
+          "list"
+        ]
+      },
+      {
+        "apiGroups": [
+          ""
+        ],
+        "resourceNames": [
+          "e2e-empty-parameter"
         ],
         "resources": [
           "secrets"
@@ -2900,6 +3363,14 @@
     "kind": "Secret",
     "metadata": {
       "creationTimestamp": null,
+      "name": "e2e-empty-parameter"
+    }
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Secret",
+    "metadata": {
+      "creationTimestamp": null,
       "name": "e2e-gcp"
     }
   },
@@ -2928,6 +3399,17 @@
         "ci.openshift.io/multi-stage-test": "e2e-default"
       },
       "name": "e2e-default"
+    }
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "ServiceAccount",
+    "metadata": {
+      "creationTimestamp": null,
+      "labels": {
+        "ci.openshift.io/multi-stage-test": "e2e-empty-parameter"
+      },
+      "name": "e2e-empty-parameter"
     }
   },
   {

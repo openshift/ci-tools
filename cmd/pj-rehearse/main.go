@@ -456,7 +456,8 @@ func setupDependencies(
 	}
 
 	g, ctx := errgroup.WithContext(context.Background())
-	for _, buildCluster := range buildClusters.UnsortedList() {
+	for _, cluster := range buildClusters.UnsortedList() {
+		buildCluster := cluster
 		g.Go(func() error {
 			log := log.WithField("buildCluster", buildCluster)
 			cmClient, err := rehearse.NewCMClient(configs[buildCluster], podNamespace, dryRun)
@@ -511,9 +512,9 @@ func ensureImageStreamTags(ctx context.Context, client ctrlruntimeclient.Client,
 
 	g, ctx := errgroup.WithContext(ctx)
 
-	for _, requiredImageStreamTag := range ists {
+	for _, ist := range ists {
+		requiredImageStreamTag := ist
 		g.Go(func() error {
-			requiredImageStreamTag := requiredImageStreamTag
 			err := client.Get(ctx, requiredImageStreamTag, &imagev1.ImageStreamTag{})
 			if err == nil {
 				return nil

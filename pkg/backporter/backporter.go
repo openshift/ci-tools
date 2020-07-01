@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/sirupsen/logrus"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -195,6 +196,26 @@ var (
 	errorTemplate  = template.Must(template.New("error").Parse(errorTemplateConstructor))
 )
 
+func leanErrorHandler(w http.ResponseWriter, err error, shortErrorMessage string, statusCode int, endpoint string, bugID int) {
+	w.WriteHeader(statusCode)
+	_, fprintfErr := fmt.Fprintf(w, "%s: %v", shortErrorMessage, err)
+	logrus.WithFields(logFieldsFor(endpoint, bugID)).WithError(fmt.Errorf("%s: %v", shortErrorMessage, utilerrors.NewAggregate([]error{err, fprintfErr})))
+}
+
+func errorPageHandler(w http.ResponseWriter, err error, shortErrorMessage string, statusCode int, endpoint string, bugID int) {
+	w.WriteHeader(statusCode)
+	var wpErrWrapper, innerErrWrapper error
+	writePage(w, http.StatusText(statusCode), errorTemplate, shortErrorMessage, endpoint, bugID)
+	logrus.WithFields(logFieldsFor(endpoint, bugID)).WithError(fmt.Errorf("%s: %v", shortErrorMessage, utilerrors.NewAggregate([]error{err, wpErrWrapper, innerErrWrapper})))
+}
+
+func logFieldsFor(endpoint string, bugID int) logrus.Fields {
+	return logrus.Fields{
+		"endpoint": endpoint,
+		"bugID":    bugID,
+	}
+}
+
 // HandlerFuncWithErrorReturn allows returning errors to be logged
 type HandlerFuncWithErrorReturn func(http.ResponseWriter, *http.Request) error
 
@@ -209,137 +230,93 @@ type ClonesTemplateData struct {
 }
 
 // Writes an HTML page, prepends header in htmlPageStart and appends header from htmlPageEnd around tConstructor.
-func writePage(w http.ResponseWriter, title string, body *template.Template, data interface{}) error {
+func writePage(w http.ResponseWriter, title string, body *template.Template, data interface{}, endpoint string, bugID int) {
 	_, err := fmt.Fprintf(w, htmlPageStart, title)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		_, fprintfErr := fmt.Fprintf(w, "%s: %v", http.StatusText(http.StatusInternalServerError), err)
-		if fprintfErr != nil {
-			_, innerFprintErr := fmt.Fprint(w, "error occurred while building page")
-			return utilerrors.NewAggregate([]error{err, fprintfErr, innerFprintErr})
-		}
-		return fmt.Errorf("error generating page: %v", err)
+		leanErrorHandler(w, err, "error generating HTML page", http.StatusInternalServerError, endpoint, bugID)
+		return
 	}
 	if err := body.Execute(w, data); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		_, fprintfErr := fmt.Fprintf(w, "%s: %v", http.StatusText(http.StatusInternalServerError), err)
-		if fprintfErr != nil {
-			_, innerFprintErr := fmt.Fprint(w, "error occurred while building page")
-			return fmt.Errorf("error generating page: %v", utilerrors.NewAggregate([]error{err, fprintfErr, innerFprintErr}))
-		}
-		return fmt.Errorf("error generating page: %v", err)
+		leanErrorHandler(w, err, "error generating HTML page", http.StatusInternalServerError, endpoint, bugID)
+		return
 	}
 	_, fprintfErr := fmt.Fprint(w, htmlPageEnd)
 	if fprintfErr != nil {
-		_, innerFprintErr := fmt.Fprint(w, "error occurred while building page")
-		return fmt.Errorf("error generating page: %v", utilerrors.NewAggregate([]error{fprintfErr, innerFprintErr}))
+		leanErrorHandler(w, fprintfErr, "error generating HTML page", http.StatusInternalServerError, endpoint, bugID)
+		return
 	}
-	return nil
 }
 
 // GetLandingHandler will return a simple bug search page
-func GetLandingHandler() HandlerFuncWithErrorReturn {
-	return func(w http.ResponseWriter, req *http.Request) error {
-		err := writePage(w, "Home", emptyTemplate, nil)
-		return fmt.Errorf("error building landing page: %v", err)
+func GetLandingHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		writePage(w, "Home", emptyTemplate, nil, req.URL.RawPath, 0)
 	}
 }
 
 // GetBugHandler returns a function with bug details  in JSON format
-func GetBugHandler(client bugzilla.Client) HandlerFuncWithErrorReturn {
-	return func(w http.ResponseWriter, r *http.Request) error {
-		var innerFprintErr error
+func GetBugHandler(client bugzilla.Client) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		endpoint := r.URL.Path
 		if r.Method != "GET" {
-			w.WriteHeader(http.StatusBadRequest)
-			_, writeErr := w.Write([]byte(http.StatusText(http.StatusBadRequest)))
-			if writeErr != nil {
-				_, innerFprintErr = fmt.Fprint(w, "error occurred while building page")
-			}
-			return fmt.Errorf("not a valid request method: %v", utilerrors.NewAggregate([]error{fmt.Errorf("not a GET request"), writeErr, innerFprintErr}))
+			leanErrorHandler(w, fmt.Errorf("not a valid request method: expected GET got %s", r.Method), "invalid request method", http.StatusBadRequest, endpoint, 0)
+			return
 		}
 		bugIDStr := r.URL.Query().Get(BugIDQuery)
 		if bugIDStr == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			_, fprintfErr := fmt.Fprintf(w, "missing mandatory query arg: %s", BugIDQuery)
-			return utilerrors.NewAggregate([]error{fmt.Errorf("missing mandatory query arg: %s", BugIDQuery), fprintfErr})
+			leanErrorHandler(w, fmt.Errorf("missing mandatory query arg: \"ID\""), "missing mandatory query arg: \"ID\"", http.StatusBadRequest, endpoint, 0)
+			return
 		}
 		bugID, err := strconv.Atoi(bugIDStr)
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			_, fprintfErr := fmt.Fprintf(w, "format of %s arg incorrect - %s : %v", BugIDQuery, bugIDStr, err)
-			return fmt.Errorf("unable to convert \"ID\" from string to int: %v", utilerrors.NewAggregate([]error{err, fprintfErr}))
+			leanErrorHandler(w, err, "unable to convert \"ID\" from string to int", http.StatusBadRequest, endpoint, 0)
+			return
 		}
 
 		bugInfo, err := client.GetBug(bugID)
 		if err != nil {
-			w.WriteHeader(http.StatusNotFound)
-			_, writeErr := w.Write([]byte("bug ID not found"))
-			if writeErr != nil {
-				_, innerFprintErr = fmt.Fprint(w, "error occurred while building page")
-			}
-			return fmt.Errorf("bug not found: %v", utilerrors.NewAggregate([]error{err, writeErr, innerFprintErr}))
+			leanErrorHandler(w, err, fmt.Sprintf("Bug#%d not found", bugID), http.StatusNotFound, endpoint, bugID)
+			return
 		}
 
 		jsonBugInfo, err := json.MarshalIndent(*bugInfo, "", "  ")
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			_, fprintfErr := fmt.Fprintf(w, "failed to marshal bugInfo to JSON: %v", err)
-			if fprintfErr != nil {
-				_, innerFprintErr = fmt.Fprint(w, "error occurred while building page")
-			}
-			return fmt.Errorf("failed to marshal bugdetails to JSON: %v", utilerrors.NewAggregate([]error{err, fprintfErr, innerFprintErr}))
+			leanErrorHandler(w, err, "failed to marshal bugInfo to JSON", http.StatusInternalServerError, endpoint, bugID)
+			return
 		}
 
 		w.WriteHeader(http.StatusOK)
 		_, err = w.Write(jsonBugInfo)
 		if err != nil {
-			_, innerFprintErr = fmt.Fprint(w, "error occurred while building page")
-			return fmt.Errorf("unable to generate HTML for getBugHandler: %v", utilerrors.NewAggregate([]error{err, innerFprintErr}))
+			leanErrorHandler(w, err, "unable to write to responsewriter for getBugHandler", http.StatusInternalServerError, endpoint, bugID)
+			return
 		}
-		return nil
 	}
 }
 
-func getClonesTemplateData(bugID int, w http.ResponseWriter, client bugzilla.Client, allTargetVersions sets.String) (*ClonesTemplateData, error) {
-	var innerFprintErr error
+func getClonesTemplateData(bugID int, w http.ResponseWriter, client bugzilla.Client, allTargetVersions sets.String, endpoint string) (*ClonesTemplateData, error) {
 	bug, err := client.GetBug(bugID)
 	if err != nil {
-		w.WriteHeader(http.StatusNotFound)
-		wpErr := writePage(w, "Not Found", errorTemplate, fmt.Sprintf("Bug#%d not found", bugID))
-		if wpErr != nil {
-			_, innerFprintErr = fmt.Fprint(w, "error occurred while building page")
-		}
-		return nil, fmt.Errorf("Bug#%d not found: %v", bugID, utilerrors.NewAggregate([]error{err, wpErr, innerFprintErr}))
+		errorPageHandler(w, err, fmt.Sprintf("Bug#%d not found", bugID), http.StatusNotFound, endpoint, bugID)
+		return nil, err
 	}
 
 	prs, err := client.GetExternalBugPRsOnBug(bug.ID)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		wpErr := writePage(w, http.StatusText(http.StatusInternalServerError), errorTemplate, fmt.Sprintf("Bug#%d - error occured while retreiving list of PRs : %v", bug.ID, err))
-		if wpErr != nil {
-			_, innerFprintErr = fmt.Fprint(w, "error occurred while building page")
-		}
-		return nil, fmt.Errorf("Bug#%d - error occured while retreiving list of PRs : %v", bug.ID, utilerrors.NewAggregate([]error{err, wpErr, innerFprintErr}))
+		errorPageHandler(w, err, fmt.Sprintf("Bug#%d - error occured while retreiving list of PRs", bug.ID), http.StatusInternalServerError, endpoint, bugID)
+		return nil, err
 	}
 
 	parent, err := client.GetRootForClone(bug)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		wpErr := writePage(w, http.StatusText(http.StatusInternalServerError), errorTemplate, fmt.Sprintf("Bug#%d Details of parent could not be retrieved : %v", bug.ID, err))
-		if wpErr != nil {
-			_, innerFprintErr = fmt.Fprint(w, "error occurred while building page")
-		}
-		return nil, fmt.Errorf("unable to fetch root bug: %v", utilerrors.NewAggregate([]error{err, wpErr, innerFprintErr}))
+		errorPageHandler(w, err, "unable to fetch root bug", http.StatusInternalServerError, endpoint, bugID)
+		return nil, err
 	}
 
 	clones, err := client.GetAllClones(bug)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		wpErr := writePage(w, http.StatusText(http.StatusInternalServerError), errorTemplate, err.Error())
-		if wpErr != nil {
-			_, innerFprintErr = fmt.Fprint(w, "error occurred while building page")
-		}
-		return nil, fmt.Errorf("unable to get clones: %v", utilerrors.NewAggregate([]error{err, wpErr, innerFprintErr}))
+		errorPageHandler(w, err, "unable to get clones", http.StatusInternalServerError, endpoint, bugID)
+		return nil, err
 	}
 	// Target versions would be used to populate the CreateClone dropdown
 	targetVersions := sets.NewString(allTargetVersions.List()...)
@@ -351,12 +328,8 @@ func getClonesTemplateData(bugID int, w http.ResponseWriter, client bugzilla.Cli
 		targetVersions.Delete(clone.TargetRelease...)
 
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			wpErr := writePage(w, http.StatusText(http.StatusInternalServerError), errorTemplate, fmt.Sprintf("Bug#%d - error occured while retreiving list of PRs : %v", clone.ID, err))
-			if wpErr != nil {
-				_, innerFprintErr = fmt.Fprint(w, "error occurred while building page")
-			}
-			return nil, fmt.Errorf("Bug#%d - error occured while retreiving list of PRs : %v", clone.ID, utilerrors.NewAggregate([]error{err, wpErr, innerFprintErr}))
+			errorPageHandler(w, err, fmt.Sprintf("Bug#%d - error occured while retreiving list of PRs", clone.ID), http.StatusInternalServerError, endpoint, bugID)
+			return nil, fmt.Errorf("Bug#%d - error occured while retreiving list of PRs : %v", clone.ID, err)
 		}
 		clone.PRs = clonePRs
 	}
@@ -371,113 +344,70 @@ func getClonesTemplateData(bugID int, w http.ResponseWriter, client bugzilla.Cli
 }
 
 // ClonesHandler acts as a router for the RESTish calls to clones
-func ClonesHandler(client bugzilla.Client, allTargetVersions sets.String) HandlerFuncWithErrorReturn {
-	return func(w http.ResponseWriter, r *http.Request) error {
-		var innerFprintErr error
+func ClonesHandler(client bugzilla.Client, allTargetVersions sets.String) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "GET" {
-			w.WriteHeader(http.StatusBadRequest)
-			wpErr := writePage(w, http.StatusText(http.StatusBadRequest), errorTemplate, fmt.Sprintf(" %s - query incorrect", BugIDQuery))
-			if wpErr != nil {
-				_, innerFprintErr = fmt.Fprint(w, "error occurred while building page")
-			}
-			return utilerrors.NewAggregate([]error{fmt.Errorf("bad request - /clones can handle only GET requests"), wpErr, innerFprintErr})
+			errorPageHandler(w, fmt.Errorf("invalid request method, expected GET got %s", r.Method), "invalid request method", http.StatusBadRequest, r.URL.Path, 0)
+			return
 		}
-		return GetClonesHandler(client, allTargetVersions, w, r)
+		GetClonesHandler(client, allTargetVersions, w, r)
 	}
 }
 
 // GetClonesHandler returns an HTML page with detais about the bug and its clones
-func GetClonesHandler(client bugzilla.Client, allTargetVersions sets.String, w http.ResponseWriter, req *http.Request) error {
-	var innerFprintErr error
+func GetClonesHandler(client bugzilla.Client, allTargetVersions sets.String, w http.ResponseWriter, req *http.Request) {
 	bugIDStr := req.URL.Query().Get(BugIDQuery)
 	if bugIDStr == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		wpErr := writePage(w, http.StatusText(http.StatusBadRequest), errorTemplate, fmt.Sprintf("%s - query incorrect", BugIDQuery))
-		if wpErr != nil {
-			_, innerFprintErr = fmt.Fprint(w, "error occurred while building page", http.StatusInternalServerError)
-		}
-		return utilerrors.NewAggregate([]error{fmt.Errorf("\"ID\" parameter is required"), wpErr, innerFprintErr})
+		errorPageHandler(w, fmt.Errorf("missing mandatory query arg: \"ID\""), "missing mandatory query arg: \"ID\"", http.StatusBadRequest, req.URL.Path, 0)
+		return
 	}
 	bugID, err := strconv.Atoi(bugIDStr)
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		wpErr := writePage(w, http.StatusText(http.StatusBadRequest), errorTemplate, fmt.Sprintf("unable to parse bug id: %v", err))
-		if wpErr != nil {
-			_, innerFprintErr = fmt.Fprint(w, "error occurred while building page", http.StatusInternalServerError)
-		}
-		return fmt.Errorf("unable to convert \"ID\" from string to int: %v", utilerrors.NewAggregate([]error{err, wpErr, innerFprintErr}))
+		errorPageHandler(w, err, "unable to convert \"ID\" from string to int", http.StatusBadRequest, req.URL.Path, 0)
+		return
 	}
 
-	wrpr, err := getClonesTemplateData(bugID, w, client, allTargetVersions)
+	wrpr, err := getClonesTemplateData(bugID, w, client, allTargetVersions, req.URL.Path)
 	if err != nil {
-		return fmt.Errorf("Error getting bug details: %v", err)
+		return
 	}
-	wpErr := writePage(w, "Clones", clonesTemplate, wrpr)
-	if wpErr != nil {
-		http.Error(w, "error occurred while building page", http.StatusInternalServerError)
-		return fmt.Errorf("failed to build page: %v", wpErr)
-	}
-	return nil
+	writePage(w, "Clones", clonesTemplate, wrpr, req.URL.Path, bugID)
 }
 
 // CreateCloneHandler will create a clone of the specified ID and return success/error
-func CreateCloneHandler(client bugzilla.Client, allTargetVersions sets.String) HandlerFuncWithErrorReturn {
-	return func(w http.ResponseWriter, req *http.Request) error {
-		var innerFprintErr error
+func CreateCloneHandler(client bugzilla.Client, allTargetVersions sets.String) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		endpoint := req.URL.Path
 		if req.Method != "POST" {
-			w.WriteHeader(http.StatusBadRequest)
-			wpErr := writePage(w, http.StatusText(http.StatusBadRequest), errorTemplate, fmt.Sprintf("%s - query incorrect", BugIDQuery))
-			if wpErr != nil {
-				_, innerFprintErr = fmt.Fprint(w, "error occurred while building page")
-			}
-			return utilerrors.NewAggregate([]error{fmt.Errorf("bad request - clones/create can handle only POST requests"), wpErr, innerFprintErr})
+			errorPageHandler(w, fmt.Errorf("invalid request method, expected POST got %s", req.Method), "invalid request method", http.StatusBadRequest, req.URL.Path, 0)
+			return
 		}
 		// Parse the parameters passed in the POST request
 		err := req.ParseForm()
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			wpErr := writePage(w, http.StatusText(http.StatusBadRequest), errorTemplate, fmt.Sprintf("unable to parse request : %v", err))
-			if wpErr != nil {
-				_, innerFprintErr = fmt.Fprint(w, "error occurred while building page")
-			}
-			return utilerrors.NewAggregate([]error{err, wpErr, innerFprintErr})
+			errorPageHandler(w, err, "unable to parse request", http.StatusBadRequest, req.URL.Path, 0)
+			return
 		}
 		if req.FormValue("ID") == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			wpErr := writePage(w, http.StatusText(http.StatusBadRequest), errorTemplate, "\"ID\" parameter is required")
-			if wpErr != nil {
-				_, innerFprintErr = fmt.Fprint(w, "error occurred while building page")
-			}
-			return utilerrors.NewAggregate([]error{fmt.Errorf("\"ID\" parameter is required"), wpErr, innerFprintErr})
+			errorPageHandler(w, fmt.Errorf("missing mandatory query arg: \"ID\""), "missing mandatory query arg: \"ID\"", http.StatusBadRequest, req.URL.Path, 0)
+			return
 		}
 		bugID, err := strconv.Atoi(req.FormValue("ID"))
 		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			wpErr := writePage(w, http.StatusText(http.StatusBadRequest), errorTemplate, fmt.Sprintf("unable to parse \"ID\" (%s) from string to int - Bug#%d : %v", req.FormValue("ID"), bugID, err))
-			if wpErr != nil {
-				_, innerFprintErr = fmt.Fprint(w, "error occurred while building page")
-			}
-			return utilerrors.NewAggregate([]error{fmt.Errorf("unable to parse \"ID\" (%s) from string to int - Bug#%d : %v", req.FormValue("ID"), bugID, err), wpErr, innerFprintErr})
+			errorPageHandler(w, err, fmt.Sprintf("unable to convert \"ID\" parameter from string to int: %s", req.FormValue("ID")), http.StatusBadRequest, req.URL.Path, 0)
+			return
 		}
 		// Get the details of the bug
 		bug, err := client.GetBug(bugID)
 		if err != nil {
-			w.WriteHeader(http.StatusNotFound)
-			wpErr := writePage(w, http.StatusText(http.StatusNotFound), errorTemplate, fmt.Sprintf("unable to fetch bug details- Bug#%d : %v", bugID, err))
-			if wpErr != nil {
-				_, innerFprintErr = fmt.Fprint(w, "error occurred while building page")
-			}
-			return fmt.Errorf("unable to fetch bug details- Bug#%d : %v", bugID, utilerrors.NewAggregate([]error{err, wpErr, innerFprintErr}))
+			errorPageHandler(w, err, fmt.Sprintf("unable to fetch bug details- Bug#%d", bugID), http.StatusNotFound, endpoint, bugID)
+			return
 		}
 		// Create a clone of the bug
-		cloneID, cloneBugErr := client.CloneBug(bug)
-		if cloneBugErr != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			wpErr := writePage(w, http.StatusText(http.StatusInternalServerError), errorTemplate, fmt.Sprintf("clone creation failed. %v", cloneBugErr))
-			if wpErr != nil {
-				_, innerFprintErr = fmt.Fprint(w, "error occurred while building page")
-			}
-			return fmt.Errorf("clone creation failed. %v", utilerrors.NewAggregate([]error{cloneBugErr, wpErr, innerFprintErr}))
+		cloneID, err := client.CloneBug(bug)
+		if err != nil {
+			errorPageHandler(w, err, "clone creation failed", http.StatusInternalServerError, endpoint, bugID)
+			return
 		}
 		targetRelease := bugzilla.BugUpdate{
 			TargetRelease: []string{
@@ -485,25 +415,17 @@ func CreateCloneHandler(client bugzilla.Client, allTargetVersions sets.String) H
 			},
 		}
 		// Updating the cloned bug with the right target version
-		if updateBugErr := client.UpdateBug(cloneID, targetRelease); updateBugErr != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			wpErr := writePage(w, http.StatusText(http.StatusInternalServerError), errorTemplate, fmt.Sprintf("clone created - Bug#%d, but failed to specify version for the cloned bug. %v", cloneID, updateBugErr))
-			if wpErr != nil {
-				_, innerFprintErr = fmt.Fprint(w, "error occurred while building page")
-			}
-			return fmt.Errorf("clone created - Bug#%d, but failed to specify version for the cloned bug. %v", cloneID, utilerrors.NewAggregate([]error{updateBugErr, wpErr, innerFprintErr}))
+		if err := client.UpdateBug(cloneID, targetRelease); err != nil {
+			errorPageHandler(w, err, fmt.Sprintf("clone created - Bug#%d, but failed to specify version for the cloned bug.", cloneID), http.StatusInternalServerError, endpoint, bugID)
+			return
 		}
 		// Repopulate the fields of the page with the right data
-		data, err := getClonesTemplateData(bugID, w, client, allTargetVersions)
+		data, err := getClonesTemplateData(bugID, w, client, allTargetVersions, endpoint)
 		if err != nil {
-			return fmt.Errorf("failed to get bug details: %v", err)
+			return
 		}
 		// Populating the NewCloneId which is used to show the success info banner
 		data.NewCloneID = cloneID
-		if err = writePage(w, "Clones", clonesTemplate, *data); err != nil {
-			http.Error(w, "error occurred while building page", http.StatusInternalServerError)
-			return err
-		}
-		return nil
+		writePage(w, "Clones", clonesTemplate, *data, endpoint, bugID)
 	}
 }

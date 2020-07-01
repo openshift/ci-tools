@@ -21,18 +21,13 @@ var (
 
 var allTargetVersions = sets.NewString("4.0.0", "4.1.0", "4.4.z")
 
-func unwrapper(h HandlerFuncWithErrorReturn) http.HandlerFunc {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_ = h(w, r)
-	})
-}
 func TestGetLandingHandler(t *testing.T) {
 	req, err := http.NewRequest("GET", "/", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	rr := httptest.NewRecorder()
-	handler := unwrapper(GetLandingHandler())
+	handler := GetLandingHandler()
 	handler.ServeHTTP(rr, req)
 	if status := rr.Code; status != http.StatusOK {
 		t.Errorf("error fetching landing page for bugzilla backporter tool!")
@@ -92,7 +87,7 @@ func TestGetBugHandler(t *testing.T) {
 			}
 			req.URL.RawQuery = q.Encode()
 			rr := httptest.NewRecorder()
-			handler := unwrapper(GetBugHandler(fake))
+			handler := GetBugHandler(fake)
 			handler.ServeHTTP(rr, req)
 			if status := rr.Code; status != tc.statusCode {
 				t.Errorf("testcase '%v' failed: getbug returned wrong status code - got %v, want %v", tc.name, status, tc.statusCode)
@@ -174,7 +169,7 @@ func TestGetClonesHandler(t *testing.T) {
 			}
 			req.URL.RawQuery = q.Encode()
 			rr := httptest.NewRecorder()
-			handler := unwrapper(ClonesHandler(fake, allTargetVersions))
+			handler := ClonesHandler(fake, allTargetVersions)
 			handler.ServeHTTP(rr, req)
 			if status := rr.Code; status != tc.statusCode {
 				t.Errorf("testcase '%v' failed: getbug returned wrong status code - got %v, want %v", tc, status, tc.statusCode)
@@ -251,7 +246,7 @@ func TestCreateCloneHandler(t *testing.T) {
 				"release": "",
 			},
 			http.StatusNotFound,
-			"unable to fetch bug details- Bug#1000 : bug not registered in the fake",
+			"unable to fetch bug details- Bug#1000",
 			errorTemplate,
 		},
 	}
@@ -266,7 +261,7 @@ func TestCreateCloneHandler(t *testing.T) {
 				t.Fatal(err)
 			}
 			rr := httptest.NewRecorder()
-			handler := unwrapper(CreateCloneHandler(fake, allTargetVersions))
+			handler := CreateCloneHandler(fake, allTargetVersions)
 			handler.ServeHTTP(rr, req)
 			if status := rr.Code; status != tc.statusCode {
 				t.Errorf("testcase '%v' failed: clonebug returned wrong status code - got %v, want %v", tc, status, tc.statusCode)

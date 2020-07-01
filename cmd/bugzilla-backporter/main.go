@@ -11,7 +11,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/backporter"
 	"github.com/prometheus/client_golang/prometheus"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/pkg/flagutil"
 	prowConfig "k8s.io/test-infra/prow/config"
@@ -56,11 +56,6 @@ var (
 	}
 )
 
-func recordError(label string) {
-	labels := prometheus.Labels{"error": label}
-	bzbpMetrics.errorRate.With(labels).Inc()
-}
-
 type options struct {
 	logLevel     string
 	address      string
@@ -75,15 +70,12 @@ type traceResponseWriter struct {
 	size       int
 }
 
-func handleWithMetrics(h backporter.HandlerFuncWithErrorReturn) http.HandlerFunc {
+func handleWithMetrics(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		t := time.Now()
 		// Initialize the status to 200 in case WriteHeader is not called
 		trw := &traceResponseWriter{ResponseWriter: w, statusCode: http.StatusOK}
-		err := h(trw, r)
-		if err != nil {
-			recordError(err.Error())
-		}
+		h(trw, r)
 		latency := time.Since(t)
 		labels := prometheus.Labels{"status": strconv.Itoa(trw.statusCode), "path": r.URL.EscapedPath()}
 		bzbpMetrics.httpRequestDuration.With(labels).Observe(latency.Seconds())
@@ -139,39 +131,39 @@ func getAllTargetVersions(configFile string) (sets.String, error) {
 }
 
 func processOptions(o options) error {
-	level, err := log.ParseLevel(o.logLevel)
+	level, err := logrus.ParseLevel(o.logLevel)
 	if err != nil {
 		return fmt.Errorf("invalid --log-level '%s': %w", o.logLevel, err)
 	}
-	log.SetLevel(level)
+	logrus.SetLevel(level)
 	return nil
 }
 
 func main() {
 	o, err := gatherOptions()
 	if err != nil {
-		log.Fatalf("invalid options: %v", err)
+		logrus.Fatalf("invalid options: %v", err)
 	}
 	err = processOptions(o)
 	if err != nil {
-		log.Fatalf("invalid options: %v", err)
+		logrus.Fatalf("invalid options: %v", err)
 	}
 
 	// Start the bugzilla secrets agent
 	tokens := []string{o.bugzilla.ApiKeyPath}
 	secretAgent := &secret.Agent{}
 	if err := secretAgent.Start(tokens); err != nil {
-		log.WithError(err).Fatal("Error starting secrets agent.")
+		logrus.WithError(err).Fatal("Error starting secrets agent.")
 	}
 	bugzillaClient, err := o.bugzilla.BugzillaClient(secretAgent)
 	if err != nil {
-		log.WithError(err).Fatal("Error getting Bugzilla client.")
+		logrus.WithError(err).Fatal("Error getting Bugzilla client.")
 	}
 	health := pjutil.NewHealth()
 	metrics.ExposeMetrics("ci-operator-bugzilla-backporter", prowConfig.PushGateway{}, prowflagutil.DefaultMetricsPort)
 	allTargetVersions, err := getAllTargetVersions(o.pluginConfig)
 	if err != nil {
-		log.WithError(err).Fatal("Error parsing plugins configuration.")
+		logrus.WithError(err).Fatal("Error parsing plugins configuration.")
 	}
 	http.HandleFunc("/", handleWithMetrics(backporter.GetLandingHandler()))
 	http.HandleFunc("/clones", handleWithMetrics(backporter.ClonesHandler(bugzillaClient, allTargetVersions)))

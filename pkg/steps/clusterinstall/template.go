@@ -322,9 +322,13 @@ objects:
         }
 
         function run-upgrade-tests() {
+          REPOSITORY_PATH=/resourcewatch openshift-tests run-resourcewatch --kubeconfig=${KUBECONFIG} --namespace=ci-operator-monitor &
+          rw_pid=$!
           openshift-tests run-upgrade "${TEST_SUITE}" --to-image "${IMAGE:-${RELEASE_IMAGE_LATEST}}" \
             --options "${TEST_OPTIONS:-}" \
             --provider "${TEST_PROVIDER:-}" -o /tmp/artifacts/e2e.log --junit-dir /tmp/artifacts/junit
+          kill $rw_pid
+          tar -cf ${ARTIFACT_DIR}/resourcewatch.tar /resourcewatch
         }
 
         function run-tests() {

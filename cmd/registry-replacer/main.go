@@ -57,6 +57,8 @@ func main() {
 	}
 }
 
+var replacementCandidateMatchRegex = regexp.MustCompile(".+_.+_.+")
+
 // replacer ensures replace directives are in place. It fetches the files via http because using git
 // en masse easily kills a developer laptop whereas the http calls are cheap and can be parallelized without
 // bounds.
@@ -74,25 +76,47 @@ func replacer(
 			return fmt.Errorf("failed to marshal config for comparison: %w", err)
 		}
 
+		deletedBases := sets.NewString()
 		for idx := range config.Images {
-			foundTags, err := ensureReplacement(&config.Images[idx], githubFileGetterFactory(info.Org, info.Repo, info.Branch))
-			if err != nil {
-				return fmt.Errorf("failed to ensure replacements: %w", err)
-			}
-			for _, foundTag := range foundTags {
-				if config.BaseImages == nil {
-					config.BaseImages = map[string]api.ImageStreamTagReference{}
-				}
-				if _, exists := config.BaseImages[foundTag.String()]; exists {
+			for input := range config.Images[idx].Inputs {
+				if !replacementCandidateMatchRegex.MatchString(input) {
 					continue
 				}
-				config.BaseImages[foundTag.String()] = api.ImageStreamTagReference{
-					Namespace: foundTag.org,
-					Name:      foundTag.repo,
-					Tag:       foundTag.tag,
+				for _, str := range config.Images[idx].Inputs[input].As {
+					if !strings.Contains(str, "registry.svc.ci.openshift.org") {
+						continue
+					}
 				}
+				delete(config.Images[idx].Inputs, input)
+				deletedBases.Insert(input)
 			}
 		}
+
+		for baseImage := range config.BaseImages {
+			if deletedBases.Has(baseImage) {
+				delete(config.BaseImages, baseImage)
+			}
+		}
+
+		//		for idx := range config.Images {
+		//			foundTags, err := ensureReplacement(&config.Images[idx], githubFileGetterFactory(info.Org, info.Repo, info.Branch))
+		//			if err != nil {
+		//				return fmt.Errorf("failed to ensure replacements: %w", err)
+		//			}
+		//			for _, foundTag := range foundTags {
+		//				if config.BaseImages == nil {
+		//					config.BaseImages = map[string]api.ImageStreamTagReference{}
+		//				}
+		//				if _, exists := config.BaseImages[foundTag.String()]; exists {
+		//					continue
+		//				}
+		//				config.BaseImages[foundTag.String()] = api.ImageStreamTagReference{
+		//					Namespace: foundTag.org,
+		//					Name:      foundTag.repo,
+		//					Tag:       foundTag.tag,
+		//				}
+		//			}
+		//		}
 
 		newConfig, err := yaml.Marshal(config)
 		if err != nil {

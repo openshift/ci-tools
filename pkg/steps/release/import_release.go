@@ -64,7 +64,7 @@ type importReleaseStep struct {
 }
 
 func (s *importReleaseStep) Inputs(dry bool) (api.InputDefinition, error) {
-	return nil, nil
+	return api.InputDefinition{s.pullSpec}, nil
 }
 
 func (s *importReleaseStep) Run(ctx context.Context, dry bool) error {

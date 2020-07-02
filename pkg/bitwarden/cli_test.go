@@ -107,6 +107,7 @@ func TestLoginAndListItems(t *testing.T) {
 				{
 					ID:   "id1",
 					Name: "unsplash.com",
+					Type: 2,
 					Fields: []Field{
 						{
 							Name:  "API Key",
@@ -117,6 +118,7 @@ func TestLoginAndListItems(t *testing.T) {
 				{
 					ID:    "id2",
 					Name:  "my-credentials",
+					Type:  2,
 					Login: &Login{Password: "yyy"},
 					Attachments: []Attachment{
 						{

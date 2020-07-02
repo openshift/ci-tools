@@ -94,6 +94,19 @@ func TestReplacer(t *testing.T) {
 			},
 			files: map[string][]byte{"dockerfile": []byte("FROM registry.svc2.ci.openshift.org/org/repo")},
 		},
+		{
+			name: "Build APIs replacement is executed first",
+			config: &api.ReleaseBuildConfiguration{
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+					From: "base",
+					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+						DockerfilePath: "dockerfile",
+					},
+				}},
+			},
+			files:       map[string][]byte{"dockerfile": []byte("FROM registry.svc.ci.openshift.org/org/repo as repo\nFROM registry.svc.ci.openshift.org/org/repo2")},
+			expectWrite: true,
+		},
 	}
 
 	for _, tc := range testCases {

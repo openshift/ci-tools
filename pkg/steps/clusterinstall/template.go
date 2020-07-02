@@ -322,9 +322,11 @@ objects:
         }
 
         function run-upgrade-tests() {
-          openshift-tests run-resourcewatch --help > /dev/null 2>&1
-          rwsupported=$?
+          rwsupported=0
+          openshift-tests run-resourcewatch --help > /dev/null 2>&1 || rwsupported=$?
           if [[ $rwsupported -eq 0 ]]; then
+            # need to create namespace for lease acquisition
+            oc --kubeconfig=${KUBECONFIG} create namespace ci-operator-monitor || true
             REPOSITORY_PATH=/resourcewatch openshift-tests run-resourcewatch --kubeconfig=${KUBECONFIG} --namespace=ci-operator-monitor &
             rw_pid=$!
           fi
@@ -333,7 +335,7 @@ objects:
             --provider "${TEST_PROVIDER:-}" -o /tmp/artifacts/e2e.log --junit-dir /tmp/artifacts/junit
           if [[ $rwsupported -eq 0 ]]; then 
             kill $rw_pid || true
-            tar -cf ${ARTIFACT_DIR}/resourcewatch.tar /resourcewatch
+            tar -cf ${ARTIFACT_DIR}/resourcewatch.tar /resourcewatch || true
           fi
         }
 

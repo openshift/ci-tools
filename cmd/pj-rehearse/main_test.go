@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	imagev1 "github.com/openshift/api/image/v1"
+	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -109,7 +110,7 @@ func TestEnsureImageStreamTags(t *testing.T) {
 					Name:      imageStreamTagName,
 				},
 			}
-			if err := ensureImageStreamTags(ctx, tc.clusterClient, m, clusterName, importNamespace, tc.istImportClient); err != nil {
+			if err := ensureImageStreamTags(ctx, tc.clusterClient, m, clusterName, importNamespace, tc.istImportClient, logrus.NewEntry(logrus.StandardLogger())); err != nil {
 				t.Fatalf("ensureImageStreamTags errored: %v", err)
 			}
 

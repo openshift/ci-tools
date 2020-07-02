@@ -456,7 +456,8 @@ func setupDependencies(
 	}
 
 	g, ctx := errgroup.WithContext(context.Background())
-	for _, buildCluster := range buildClusters.UnsortedList() {
+	for _, cluster := range buildClusters.UnsortedList() {
+		buildCluster := cluster
 		g.Go(func() error {
 			log := log.WithField("buildCluster", buildCluster)
 			cmClient, err := rehearse.NewCMClient(configs[buildCluster], podNamespace, dryRun)
@@ -493,7 +494,7 @@ func setupDependencies(
 				return fmt.Errorf("failed to construct client for cluster %s: %w", buildCluster, err)
 			}
 
-			if err := ensureImageStreamTags(ctx, client, requiredImageStreamTags, buildCluster, prowJobNamespace, prowJobClient); err != nil {
+			if err := ensureImageStreamTags(ctx, client, requiredImageStreamTags, buildCluster, prowJobNamespace, prowJobClient, log); err != nil {
 				return fmt.Errorf("failed to ensure imagestreamtags in cluster %s: %w", buildCluster, err)
 			}
 
@@ -507,15 +508,17 @@ func setupDependencies(
 // Allow manipulating the speed of time for tests
 var second = time.Second
 
-func ensureImageStreamTags(ctx context.Context, client ctrlruntimeclient.Client, ists apihelper.ImageStreamTagMap, clusterName, namespace string, istImportClient ctrlruntimeclient.Client) error {
+func ensureImageStreamTags(ctx context.Context, client ctrlruntimeclient.Client, ists apihelper.ImageStreamTagMap, clusterName, namespace string, istImportClient ctrlruntimeclient.Client, log *logrus.Entry) error {
 
 	g, ctx := errgroup.WithContext(ctx)
 
-	for _, requiredImageStreamTag := range ists {
+	for _, ist := range ists {
+		requiredImageStreamTag := ist
 		g.Go(func() error {
-			requiredImageStreamTag := requiredImageStreamTag
+			istLog := log.WithFields(logrus.Fields{"ist-namespace": requiredImageStreamTag.Namespace, "ist-name": requiredImageStreamTag.Name})
 			err := client.Get(ctx, requiredImageStreamTag, &imagev1.ImageStreamTag{})
 			if err == nil {
+				istLog.Info("ImageStreamTag already exists in the build cluster")
 				return nil
 			}
 			if !apierrors.IsNotFound(err) {
@@ -530,6 +533,7 @@ func ensureImageStreamTags(ctx context.Context, client ctrlruntimeclient.Client,
 				},
 			}
 			istImport.SetDeterministicName()
+			istLog.Info("Creating ImageStreamTagImport in the build cluster")
 			if err := istImportClient.Create(ctx, istImport); err != nil && !apierrors.IsAlreadyExists(err) {
 				return fmt.Errorf("failed to create imagestreamtag %s: %w", requiredImageStreamTag, err)
 			}

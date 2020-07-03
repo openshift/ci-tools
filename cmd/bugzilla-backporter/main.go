@@ -109,11 +109,11 @@ func getAllTargetVersions(configFile string) (sets.String, error) {
 	}
 	np := &plugins.Configuration{}
 	if err := yaml.Unmarshal(b, np); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal %s : %v", configFile, err)
+		return nil, fmt.Errorf("failed to unmarshal %s : %w", configFile, err)
 	}
 
 	if err := np.Validate(); err != nil {
-		return nil, fmt.Errorf("failed to validate file %s : %v", configFile, err)
+		return nil, fmt.Errorf("failed to validate file %s : %w", configFile, err)
 	}
 	allTargetVersions := sets.NewString()
 	// Hardcoding with just the "openshift" org here
@@ -122,9 +122,7 @@ func getAllTargetVersions(configFile string) (sets.String, error) {
 	options := np.Bugzilla.OptionsForRepo("openshift", "")
 	for _, val := range options {
 		if val.TargetRelease != nil {
-			if _, ok := allTargetVersions[*val.TargetRelease]; !ok {
-				allTargetVersions.Insert(*val.TargetRelease)
-			}
+			allTargetVersions.Insert(*val.TargetRelease)
 		}
 	}
 	return allTargetVersions, nil
@@ -166,7 +164,7 @@ func main() {
 		logrus.WithError(err).Fatal("Error parsing plugins configuration.")
 	}
 	http.HandleFunc("/", handleWithMetrics(backporter.GetLandingHandler()))
-	http.HandleFunc("/clones", handleWithMetrics(backporter.ClonesHandler(bugzillaClient, allTargetVersions)))
+	http.HandleFunc("/clones", handleWithMetrics(backporter.GetClonesHandler(bugzillaClient, allTargetVersions)))
 	http.HandleFunc("/clones/create", handleWithMetrics(backporter.CreateCloneHandler(bugzillaClient, allTargetVersions)))
 	// Leaving this in here to help with future debugging. This will return bug details in JSON format
 	http.HandleFunc("/bug", handleWithMetrics(backporter.GetBugHandler(bugzillaClient)))

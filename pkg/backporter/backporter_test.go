@@ -130,12 +130,12 @@ func TestGetClonesHandler(t *testing.T) {
 		tmplt      *template.Template
 	}{
 		{
-			"valid_parameters",
-			map[string]int{
+			name: "valid_parameters",
+			params: map[string]int{
 				"ID": cloneID,
 			},
-			http.StatusOK,
-			ClonesTemplateData{
+			statusCode: http.StatusOK,
+			data: ClonesTemplateData{
 				clone,
 				[]*bugzilla.Bug{
 					toBeCloned,
@@ -145,16 +145,16 @@ func TestGetClonesHandler(t *testing.T) {
 				allTargetVersions.List(),
 				0,
 			},
-			clonesTemplate,
+			tmplt: clonesTemplate,
 		},
 		{
-			"bad_params",
-			map[string]int{
+			name: "bad_params",
+			params: map[string]int{
 				"ID": 1000,
 			},
-			http.StatusNotFound,
-			"Bug#1000 not found",
-			errorTemplate,
+			statusCode: http.StatusNotFound,
+			data:       "unable to get get bug details",
+			tmplt:      errorTemplate,
 		},
 	}
 	for _, tc := range testCases {
@@ -169,7 +169,7 @@ func TestGetClonesHandler(t *testing.T) {
 			}
 			req.URL.RawQuery = q.Encode()
 			rr := httptest.NewRecorder()
-			handler := ClonesHandler(fake, allTargetVersions)
+			handler := GetClonesHandler(fake, allTargetVersions)
 			handler.ServeHTTP(rr, req)
 			if status := rr.Code; status != tc.statusCode {
 				t.Errorf("testcase '%v' failed: getbug returned wrong status code - got %v, want %v", tc, status, tc.statusCode)
@@ -215,39 +215,45 @@ func TestCreateCloneHandler(t *testing.T) {
 		t.Fatalf("error getting bug details from Fake.")
 	}
 	expectedCloneID := toBeClonedID + 1
+	expectedClone := *toBeCloned
+	expectedClone.ID = expectedCloneID
+	expectedClone.TargetRelease = []string{clonedRelease}
 	testcases := []struct {
 		name       string
 		params     map[string]string
 		statusCode int
 		data       interface{}
 		tmplt      *template.Template
+		pageTitle  string
 	}{
 		{
-			"valid_parameters",
-			map[string]string{
+			name: "Valid parameter proper response expected",
+			params: map[string]string{
 				"ID":      strconv.Itoa(toBeClonedID),
 				"release": clonedRelease,
 			},
-			http.StatusOK,
-			ClonesTemplateData{
-				toBeCloned,
-				[]*bugzilla.Bug{},
-				toBeCloned,
-				nil,
-				prunedReleaseSet.List(),
-				expectedCloneID,
+			statusCode: http.StatusOK,
+			data: ClonesTemplateData{
+				Bug:          toBeCloned,
+				Clones:       []*bugzilla.Bug{&expectedClone},
+				Parent:       toBeCloned,
+				PRs:          nil,
+				CloneTargets: prunedReleaseSet.List(),
+				NewCloneID:   expectedCloneID,
 			},
-			clonesTemplate,
+			tmplt:     clonesTemplate,
+			pageTitle: "Clones",
 		},
 		{
-			"bad_params",
-			map[string]string{
+			name: "Bad params- Non-existent bug ID ",
+			params: map[string]string{
 				"ID":      "1000",
 				"release": "",
 			},
-			http.StatusNotFound,
-			"unable to fetch bug details- Bug#1000",
-			errorTemplate,
+			statusCode: http.StatusNotFound,
+			data:       "unable to fetch bug details- Bug#1000",
+			tmplt:      errorTemplate,
+			pageTitle:  "Not Found",
 		},
 	}
 	for _, tc := range testcases {
@@ -268,27 +274,8 @@ func TestCreateCloneHandler(t *testing.T) {
 			}
 
 			var buf bytes.Buffer
-			var pageStart string
-			if tc.statusCode == http.StatusOK {
-				pageStart = fmt.Sprintf(htmlPageStart, "Clones")
-				newClone, err := fake.GetBug(expectedCloneID)
-				if err != nil {
-					t.Fatalf("error while fetching clone details from mocked endpoint")
-				}
-				newClone.TargetRelease = []string{
-					tc.params["release"],
-				}
-				data, ok := tc.data.(ClonesTemplateData)
-				if ok {
-					data.Clones = []*bugzilla.Bug{
-						newClone,
-					}
-				}
-				tc.data = data
+			pageStart := fmt.Sprintf(htmlPageStart, tc.pageTitle)
 
-			} else {
-				pageStart = fmt.Sprintf(htmlPageStart, "Not Found")
-			}
 			if err := tc.tmplt.Execute(&buf, tc.data); err != nil {
 				t.Fatalf("unable to render template: %v", err)
 			}

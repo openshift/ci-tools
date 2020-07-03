@@ -41,7 +41,7 @@ func FromConfig(
 	paramFile, artifactDir string,
 	promote bool,
 	clusterConfig *rest.Config,
-	leaseClient *lease.Client,
+	leaseClient lease.Client,
 	requiredTargets []string,
 	dryLogger *steps.DryLogger,
 	cloneAuthConfig *steps.CloneAuthConfig,

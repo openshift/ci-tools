@@ -22,7 +22,7 @@ const leaseEnv = "LEASED_RESOURCE"
 
 // leaseStep wraps another step and acquires/releases a lease.
 type leaseStep struct {
-	client         *lease.Client
+	client         lease.Client
 	leaseType      string
 	leasedResource string
 	wrapped        api.Step
@@ -32,7 +32,7 @@ type leaseStep struct {
 	namespaceClient coreclientset.NamespaceInterface
 }
 
-func LeaseStep(client *lease.Client, lease string, wrapped api.Step, namespace func() string, namespaceClient coreclientset.NamespaceInterface) api.Step {
+func LeaseStep(client lease.Client, lease string, wrapped api.Step, namespace func() string, namespaceClient coreclientset.NamespaceInterface) api.Step {
 	return &leaseStep{
 		client:          client,
 		leaseType:       lease,
@@ -74,7 +74,7 @@ func (s *leaseStep) Run(ctx context.Context, dry bool) error {
 
 func (s *leaseStep) run(ctx context.Context, dry bool) error {
 	log.Printf("Acquiring lease for %q", s.leaseType)
-	client := *s.client
+	client := s.client
 	if client == nil {
 		return results.ForReason("initializing_client").ForError(errors.New("step needs a lease but no lease client provided"))
 	}

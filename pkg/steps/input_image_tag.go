@@ -44,7 +44,7 @@ func (s *inputImageTagStep) Inputs(dry bool) (api.InputDefinition, error) {
 	}
 	from, err := s.client.ImageStreamTags(s.config.BaseImage.Namespace).Get(fmt.Sprintf("%s:%s", s.config.BaseImage.Name, s.config.BaseImage.Tag), metav1.GetOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("could not resolve base image: %v", err)
+		return nil, fmt.Errorf("could not resolve base image: %w", err)
 	}
 
 	log.Printf("Resolved %s/%s:%s to %s", s.config.BaseImage.Namespace, s.config.BaseImage.Name, s.config.BaseImage.Tag, from.Image.Name)
@@ -61,7 +61,7 @@ func (s *inputImageTagStep) run(ctx context.Context, dry bool) error {
 
 	_, err := s.Inputs(dry)
 	if err != nil {
-		return fmt.Errorf("could not resolve inputs for image tag step: %v", err)
+		return fmt.Errorf("could not resolve inputs for image tag step: %w", err)
 	}
 
 	ist := &imageapi.ImageStreamTag{
@@ -87,7 +87,7 @@ func (s *inputImageTagStep) run(ctx context.Context, dry bool) error {
 	}
 
 	if _, err := s.client.ImageStreamTags(s.jobSpec.Namespace()).Create(ist); err != nil && !errors.IsAlreadyExists(err) {
-		return fmt.Errorf("failed to create imagestreamtag for input image: %v", err)
+		return fmt.Errorf("failed to create imagestreamtag for input image: %w", err)
 	}
 	// Wait image is ready
 	importCtx, cancel := context.WithTimeout(ctx, 35*time.Minute)
@@ -112,7 +112,7 @@ func (s *inputImageTagStep) run(ctx context.Context, dry bool) error {
 func istObjectReference(client imageclientset.ImageV1Interface, reference api.ImageStreamTagReference) (coreapi.ObjectReference, error) {
 	is, err := client.ImageStreams(reference.Namespace).Get(reference.Name, metav1.GetOptions{})
 	if err != nil {
-		return coreapi.ObjectReference{}, fmt.Errorf("could not resolve remote image stream: %v", err)
+		return coreapi.ObjectReference{}, fmt.Errorf("could not resolve remote image stream: %w", err)
 	}
 	var repo string
 	if len(is.Status.PublicDockerImageRepository) > 0 {
@@ -124,7 +124,7 @@ func istObjectReference(client imageclientset.ImageV1Interface, reference api.Im
 	}
 	ist, err := client.ImageStreamTags(reference.Namespace).Get(fmt.Sprintf("%s:%s", reference.Name, reference.Tag), metav1.GetOptions{})
 	if err != nil {
-		return coreapi.ObjectReference{}, fmt.Errorf("could not resolve remote image stream tag: %v", err)
+		return coreapi.ObjectReference{}, fmt.Errorf("could not resolve remote image stream tag: %w", err)
 	}
 	return coreapi.ObjectReference{Kind: "DockerImage", Name: fmt.Sprintf("%s@%s", repo, ist.Image.Name)}, nil
 }

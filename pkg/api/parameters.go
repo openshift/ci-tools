@@ -74,7 +74,7 @@ func (p *DeferredParameters) Map() (map[string]string, error) {
 		}
 		v, err := fn()
 		if err != nil {
-			return nil, fmt.Errorf("could not lazily evaluate deferred parameter %q: %v", k, err)
+			return nil, fmt.Errorf("could not lazily evaluate deferred parameter %q: %w", k, err)
 		}
 		p.values[k] = v
 		m[k] = v
@@ -154,7 +154,7 @@ func (p *DeferredParameters) Get(name string) (string, error) {
 	if fn, ok := p.fns[name]; ok {
 		value, err := fn()
 		if err != nil {
-			return "", fmt.Errorf("could not lazily evaluate deferred parameter %q: %v", name, err)
+			return "", fmt.Errorf("could not lazily evaluate deferred parameter %q: %w", name, err)
 		}
 		p.values[name] = value
 		return value, nil

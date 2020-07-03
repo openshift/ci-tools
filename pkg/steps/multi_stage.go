@@ -130,7 +130,7 @@ func (s *multiStageTestStep) run(ctx context.Context, dry bool) error {
 		if !dry {
 			secret := s.profileSecretName()
 			if _, err := s.secretClient.Secrets(s.jobSpec.Namespace()).Get(secret, meta.GetOptions{}); err != nil {
-				return fmt.Errorf("could not find secret %q: %v", secret, err)
+				return fmt.Errorf("could not find secret %q: %w", secret, err)
 			}
 		}
 		for _, e := range envForProfile {
@@ -147,22 +147,22 @@ func (s *multiStageTestStep) run(ctx context.Context, dry bool) error {
 		}
 	}
 	if err := s.createSecret(); err != nil {
-		return fmt.Errorf("failed to create secret: %v", err)
+		return fmt.Errorf("failed to create secret: %w", err)
 	}
 	if err := s.createCredentials(); err != nil {
-		return fmt.Errorf("failed to create credentials: %v", err)
+		return fmt.Errorf("failed to create credentials: %w", err)
 	}
 	if err := s.setupRBAC(); err != nil {
-		return fmt.Errorf("failed to create RBAC objects: %v", err)
+		return fmt.Errorf("failed to create RBAC objects: %w", err)
 	}
 	var errs []error
 	if err := s.runSteps(ctx, s.pre, env, true); err != nil {
-		errs = append(errs, fmt.Errorf("%q pre steps failed: %v", s.name, err))
+		errs = append(errs, fmt.Errorf("%q pre steps failed: %w", s.name, err))
 	} else if err := s.runSteps(ctx, s.test, env, true); err != nil {
-		errs = append(errs, fmt.Errorf("%q test steps failed: %v", s.name, err))
+		errs = append(errs, fmt.Errorf("%q test steps failed: %w", s.name, err))
 	}
 	if err := s.runSteps(context.Background(), s.post, env, false); err != nil {
-		errs = append(errs, fmt.Errorf("%q post steps failed: %v", s.name, err))
+		errs = append(errs, fmt.Errorf("%q post steps failed: %w", s.name, err))
 	}
 	return utilerrors.NewAggregate(errs)
 }
@@ -264,7 +264,7 @@ func (s *multiStageTestStep) createSecret() error {
 	}
 	client := s.secretClient.Secrets(s.jobSpec.Namespace())
 	if err := client.Delete(s.name, &meta.DeleteOptions{}); err != nil && !errors.IsNotFound(err) {
-		return fmt.Errorf("cannot delete secret %q: %v", s.name, err)
+		return fmt.Errorf("cannot delete secret %q: %w", s.name, err)
 	}
 	_, err := client.Create(&secret)
 	return err
@@ -286,7 +286,7 @@ func (s *multiStageTestStep) createCredentials() error {
 			}
 			raw, err := s.secretClient.Secrets(credential.Namespace).Get(credential.Name, meta.GetOptions{})
 			if err != nil {
-				return fmt.Errorf("could not read source credential: %v", err)
+				return fmt.Errorf("could not read source credential: %w", err)
 			}
 			toCreate[name] = &coreapi.Secret{
 				TypeMeta: raw.TypeMeta,
@@ -303,7 +303,7 @@ func (s *multiStageTestStep) createCredentials() error {
 
 	for name := range toCreate {
 		if _, err := s.secretClient.Secrets(s.jobSpec.Namespace()).Create(toCreate[name]); err != nil && !errors.IsAlreadyExists(err) {
-			return fmt.Errorf("could not create source credential: %v", err)
+			return fmt.Errorf("could not create source credential: %w", err)
 		}
 	}
 	return nil
@@ -328,7 +328,7 @@ func (s *multiStageTestStep) runSteps(
 		log.Printf("cleanup: Deleting pods with label %s=%s", MultiStageTestLabel, s.name)
 		if !s.dry {
 			if err := deletePods(s.podClient.Pods(s.jobSpec.Namespace()), s.name); err != nil {
-				errs = append(errs, fmt.Errorf("failed to delete pods with label %s=%s: %v", MultiStageTestLabel, s.name, err))
+				errs = append(errs, fmt.Errorf("failed to delete pods with label %s=%s: %w", MultiStageTestLabel, s.name, err))
 			}
 		}
 		errs = append(errs, fmt.Errorf("cancelled"))
@@ -528,12 +528,12 @@ func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notif
 		return nil
 	}
 	if _, err := createOrRestartPod(s.podClient.Pods(s.jobSpec.Namespace()), pod); err != nil {
-		return fmt.Errorf("failed to create or restart %q pod: %v", pod.Name, err)
+		return fmt.Errorf("failed to create or restart %q pod: %w", pod.Name, err)
 	}
 	err := waitForPodCompletion(ctx, s.podClient.Pods(s.jobSpec.Namespace()), pod.Name, notifier, false)
 	s.subTests = append(s.subTests, notifier.SubTests(fmt.Sprintf("%s - %s ", s.Description(), pod.Name))...)
 	if err != nil {
-		return fmt.Errorf("%q pod %q failed: %v", s.name, pod.Name, err)
+		return fmt.Errorf("%q pod %q failed: %w", s.name, pod.Name, err)
 	}
 	return nil
 }

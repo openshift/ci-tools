@@ -64,12 +64,12 @@ func validateOptions(o options) error {
 func getUserV1Client() (*userV1.UserV1Client, error) {
 	clusterConfig, err := util.LoadClusterConfig()
 	if err != nil {
-		return nil, fmt.Errorf("could not load cluster clusterConfig: %v", err)
+		return nil, fmt.Errorf("could not load cluster clusterConfig: %w", err)
 	}
 
 	userV1Client, err := userV1.NewForConfig(clusterConfig)
 	if err != nil {
-		return nil, fmt.Errorf("could not create user openshift client: %v", err)
+		return nil, fmt.Errorf("could not create user openshift client: %w", err)
 	}
 
 	return userV1Client, nil
@@ -121,7 +121,7 @@ func main() {
 		action = func(g *v1.Group) (*v1.Group, error) {
 			dryLogger.AddObject(group.DeepCopyObject())
 			if err := dryLogger.Log(); err != nil {
-				return g, fmt.Errorf("error while parsing dry logger's objects: %v", err)
+				return g, fmt.Errorf("error while parsing dry logger's objects: %w", err)
 			}
 			return g, nil
 		}

@@ -91,7 +91,7 @@ func (o *FutureOptions) Validate() error {
 	// branch that tracks the current release, but we don't need the user to provide
 	// the value twice in flags
 	if err := o.FutureReleases.Set(o.CurrentRelease); err != nil {
-		return fmt.Errorf("could not add current release to future releases: %v", err)
+		return fmt.Errorf("could not add current release to future releases: %w", err)
 	}
 
 	return o.Options.Validate()

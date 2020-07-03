@@ -60,7 +60,7 @@ func (s *rpmServerStep) run(ctx context.Context, dry bool) error {
 	} else {
 		ist, err := s.istClient.ImageStreamTags(s.jobSpec.Namespace()).Get(fmt.Sprintf("%s:%s", api.PipelineImageStream, s.config.From), meta.GetOptions{})
 		if err != nil {
-			return fmt.Errorf("could not find source ImageStreamTag for RPM repo deployment: %v", err)
+			return fmt.Errorf("could not find source ImageStreamTag for RPM repo deployment: %w", err)
 		}
 		imageReference = ist.Image.DockerImageReference
 	}
@@ -174,7 +174,7 @@ python /tmp/serve.py
 		s.dryLogger.AddObject(deployment.DeepCopyObject())
 	} else {
 		if _, err := s.deploymentClient.Deployments(s.jobSpec.Namespace()).Create(deployment); err != nil && !kerrors.IsAlreadyExists(err) {
-			return fmt.Errorf("could not create RPM repo server deployment: %v", err)
+			return fmt.Errorf("could not create RPM repo server deployment: %w", err)
 		}
 	}
 
@@ -196,7 +196,7 @@ python /tmp/serve.py
 	if dry {
 		s.dryLogger.AddObject(service.DeepCopyObject())
 	} else if _, err := s.serviceClient.Services(s.jobSpec.Namespace()).Create(service); err != nil && !kerrors.IsAlreadyExists(err) {
-		return fmt.Errorf("could not create RPM repo server service: %v", err)
+		return fmt.Errorf("could not create RPM repo server service: %w", err)
 	}
 	route := &routeapi.Route{
 		ObjectMeta: commonMeta,
@@ -218,10 +218,10 @@ python /tmp/serve.py
 		return nil
 	}
 	if _, err := s.routeClient.Routes(s.jobSpec.Namespace()).Create(route); err != nil && !kerrors.IsAlreadyExists(err) {
-		return fmt.Errorf("could not create RPM repo server route: %v", err)
+		return fmt.Errorf("could not create RPM repo server route: %w", err)
 	}
 	if err := waitForDeployment(ctx, s.deploymentClient.Deployments(s.jobSpec.Namespace()), deployment.Name); err != nil {
-		return fmt.Errorf("could not wait for RPM repo server to deploy: %v", err)
+		return fmt.Errorf("could not wait for RPM repo server to deploy: %w", err)
 	}
 	return waitForRouteReachable(ctx, s.routeClient, s.jobSpec.Namespace(), route.Name, "http")
 }
@@ -230,7 +230,7 @@ func waitForDeployment(ctx context.Context, client appsclientset.DeploymentInter
 	for {
 		retry, err := waitForDeploymentOrTimeout(ctx, client, name)
 		if err != nil {
-			return fmt.Errorf("could not wait for deployment: %v", err)
+			return fmt.Errorf("could not wait for deployment: %w", err)
 		}
 		if !retry {
 			break
@@ -275,13 +275,13 @@ func waitForDeploymentOrTimeout(ctx context.Context, client appsclientset.Deploy
 		Watch:         true,
 	})
 	if err != nil {
-		return false, fmt.Errorf("could not create watcher for deploymentconfig %s: %v", name, err)
+		return false, fmt.Errorf("could not create watcher for deploymentconfig %s: %w", name, err)
 	}
 	defer watcher.Stop()
 
 	done, err := currentDeploymentStatus(client, name)
 	if err != nil {
-		return false, fmt.Errorf("could not determine current deployment status: %v", err)
+		return false, fmt.Errorf("could not determine current deployment status: %w", err)
 	}
 	if done {
 		return false, nil
@@ -313,7 +313,7 @@ func waitForDeploymentOrTimeout(ctx context.Context, client appsclientset.Deploy
 func currentDeploymentStatus(client appsclientset.DeploymentInterface, name string) (bool, error) {
 	list, err := client.List(meta.ListOptions{FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String()})
 	if err != nil {
-		return false, fmt.Errorf("could not list DeploymentConfigs: %v", err)
+		return false, fmt.Errorf("could not list DeploymentConfigs: %w", err)
 	}
 	if len(list.Items) != 1 {
 		return false, fmt.Errorf("could not find DeploymentConfig %s", name)
@@ -331,14 +331,14 @@ func currentDeploymentStatus(client appsclientset.DeploymentInterface, name stri
 func waitForRouteReachable(ctx context.Context, client routeclientset.RoutesGetter, namespace, name, scheme string, pathSegments ...string) error {
 	host, err := admittedHostForRoute(client, namespace, name, 5*time.Minute)
 	if err != nil {
-		return fmt.Errorf("could not determine admitted host for route: %v", err)
+		return fmt.Errorf("could not determine admitted host for route: %w", err)
 	}
 	done := ctx.Done()
 	for {
 		u := &url.URL{Scheme: scheme, Host: host, Path: "/" + path.Join(pathSegments...)}
 		req, err := http.NewRequest("GET", u.String(), nil)
 		if err != nil {
-			return fmt.Errorf("could not create HTTP request: %v", err)
+			return fmt.Errorf("could not create HTTP request: %w", err)
 		}
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
@@ -376,7 +376,7 @@ func (s *rpmServerStep) Creates() []api.StepLink {
 func (s *rpmServerStep) rpmRepoURL() (string, error) {
 	host, err := admittedHostForRoute(s.routeClient, s.jobSpec.Namespace(), RPMRepoName, time.Minute)
 	if err != nil {
-		return "", fmt.Errorf("unable to calculate rpm repo URL: %v", err)
+		return "", fmt.Errorf("unable to calculate rpm repo URL: %w", err)
 	}
 	return fmt.Sprintf("http://%s", host), nil
 }
@@ -402,7 +402,7 @@ func admittedHostForRoute(routeClient routeclientset.RoutesGetter, namespace, na
 	if err := wait.PollImmediate(time.Second, timeout, func() (bool, error) {
 		route, err := routeClient.Routes(namespace).Get(name, meta.GetOptions{})
 		if err != nil {
-			return false, fmt.Errorf("could not get route %s: %v", name, err)
+			return false, fmt.Errorf("could not get route %s: %w", name, err)
 		}
 		if host, ok := admittedRoute(route); ok {
 			repoHost = host
@@ -410,7 +410,7 @@ func admittedHostForRoute(routeClient routeclientset.RoutesGetter, namespace, na
 		}
 		return false, nil
 	}); err != nil {
-		return "", fmt.Errorf("could not retrieve route host: %v", err)
+		return "", fmt.Errorf("could not retrieve route host: %w", err)
 	}
 	return repoHost, nil
 }

@@ -164,7 +164,7 @@ func (s *sourceStep) Run(ctx context.Context, dry bool) error {
 func (s *sourceStep) run(ctx context.Context, dry bool) error {
 	clonerefsRef, err := istObjectReference(s.imageClient, s.config.ClonerefsImage)
 	if err != nil {
-		return fmt.Errorf("could not resolve clonerefs source: %v", err)
+		return fmt.Errorf("could not resolve clonerefs source: %w", err)
 	}
 
 	return handleBuild(ctx, s.buildClient, createBuild(s.config, s.jobSpec, clonerefsRef, s.resources, s.cloneAuthConfig, s.pullSecret), dry, s.artifactDir, s.dryLogger)
@@ -235,7 +235,7 @@ func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clone
 
 	optionsJSON, err := clonerefs.Encode(optionsSpec)
 	if err != nil {
-		panic(fmt.Errorf("couldn't create JSON spec for clonerefs: %v", err))
+		panic(fmt.Errorf("couldn't create JSON spec for clonerefs: %w", err))
 	}
 
 	build := buildFromSource(jobSpec, config.From, config.To, buildSource, "", resources, pullSecret)
@@ -251,7 +251,7 @@ func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStrea
 	log.Printf("Building %s", toTag)
 	buildResources, err := resourcesFor(resources.RequirementsForStep(string(toTag)))
 	if err != nil {
-		panic(fmt.Errorf("unable to parse resource requirement for build %s: %v", toTag, err))
+		panic(fmt.Errorf("unable to parse resource requirement for build %s: %w", toTag, err))
 	}
 	var from *coreapi.ObjectReference
 	if len(fromTag) > 0 {
@@ -356,11 +356,11 @@ func handleBuild(ctx context.Context, buildClient BuildClient, build *buildapi.B
 
 	if _, err := buildClient.Builds(build.Namespace).Create(build); err != nil {
 		if !errors.IsAlreadyExists(err) {
-			return fmt.Errorf("could not create build %s: %v", build.Name, err)
+			return fmt.Errorf("could not create build %s: %w", build.Name, err)
 		}
 		b, err := buildClient.Builds(build.Namespace).Get(build.Name, meta.GetOptions{})
 		if err != nil {
-			return fmt.Errorf("could not get build %s: %v", build.Name, err)
+			return fmt.Errorf("could not get build %s: %w", build.Name, err)
 		}
 
 		if isBuildPhaseTerminated(b.Status.Phase) &&
@@ -374,13 +374,13 @@ func handleBuild(ctx context.Context, buildClient BuildClient, build *buildapi.B
 				PropagationPolicy:  &foreground,
 			}
 			if err := buildClient.Builds(build.Namespace).Delete(build.Name, opts); err != nil && !errors.IsNotFound(err) && !errors.IsConflict(err) {
-				return fmt.Errorf("could not delete build %s: %v", build.Name, err)
+				return fmt.Errorf("could not delete build %s: %w", build.Name, err)
 			}
 			if err := waitForBuildDeletion(ctx, buildClient, build.Namespace, build.Name); err != nil {
-				return fmt.Errorf("could not wait for build %s to be deleted: %v", build.Name, err)
+				return fmt.Errorf("could not wait for build %s to be deleted: %w", build.Name, err)
 			}
 			if _, err := buildClient.Builds(build.Namespace).Create(build); err != nil && !errors.IsAlreadyExists(err) {
-				return fmt.Errorf("could not recreate build %s: %v", build.Name, err)
+				return fmt.Errorf("could not recreate build %s: %w", build.Name, err)
 			}
 		}
 	}
@@ -454,7 +454,7 @@ func waitForBuild(ctx context.Context, buildClient BuildClient, namespace, name 
 	for {
 		retry, err := waitForBuildOrTimeout(ctx, buildClient, namespace, name)
 		if err != nil {
-			return fmt.Errorf("could not wait for build: %v", err)
+			return fmt.Errorf("could not wait for build: %w", err)
 		}
 		if !retry {
 			break
@@ -480,13 +480,13 @@ func waitForBuildOrTimeout(ctx context.Context, buildClient BuildClient, namespa
 		Watch:         true,
 	})
 	if err != nil {
-		return false, fmt.Errorf("could not create watcher for build %s: %v", name, err)
+		return false, fmt.Errorf("could not create watcher for build %s: %w", name, err)
 	}
 	defer watcher.Stop()
 
 	list, err := buildClient.Builds(namespace).List(meta.ListOptions{FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String()})
 	if err != nil {
-		return false, fmt.Errorf("could not list builds: %v", err)
+		return false, fmt.Errorf("could not list builds: %w", err)
 	}
 	if len(list.Items) != 1 {
 		return false, fmt.Errorf("could not find build %s", name)
@@ -596,7 +596,7 @@ func resourcesFor(req api.ResourceRequirements) (coreapi.ResourceRequirements, e
 	for name, value := range req.Requests {
 		q, err := resource.ParseQuantity(value)
 		if err != nil {
-			return coreapi.ResourceRequirements{}, fmt.Errorf("invalid resource request: %v", err)
+			return coreapi.ResourceRequirements{}, fmt.Errorf("invalid resource request: %w", err)
 		}
 		if apireq.Requests == nil {
 			apireq.Requests = make(coreapi.ResourceList)
@@ -606,7 +606,7 @@ func resourcesFor(req api.ResourceRequirements) (coreapi.ResourceRequirements, e
 	for name, value := range req.Limits {
 		q, err := resource.ParseQuantity(value)
 		if err != nil {
-			return coreapi.ResourceRequirements{}, fmt.Errorf("invalid resource limit: %v", err)
+			return coreapi.ResourceRequirements{}, fmt.Errorf("invalid resource limit: %w", err)
 		}
 		if apireq.Limits == nil {
 			apireq.Limits = make(coreapi.ResourceList)
@@ -629,7 +629,7 @@ func (s *sourceStep) Provides() (api.ParameterMap, api.StepLink) {
 		"LOCAL_IMAGE_SRC": func() (string, error) {
 			is, err := s.imageClient.ImageStreams(s.jobSpec.Namespace()).Get(api.PipelineImageStream, meta.GetOptions{})
 			if err != nil {
-				return "", fmt.Errorf("could not get output imagestream: %v", err)
+				return "", fmt.Errorf("could not get output imagestream: %w", err)
 			}
 			var registry string
 			if len(is.Status.PublicDockerImageRepository) > 0 {

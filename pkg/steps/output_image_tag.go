@@ -47,7 +47,7 @@ func (s *outputImageTagStep) run(dry bool) error {
 	if !dry {
 		from, err := s.istClient.ImageStreamTags(s.jobSpec.Namespace()).Get(fmt.Sprintf("%s:%s", api.PipelineImageStream, s.config.From), meta.GetOptions{})
 		if err != nil {
-			return fmt.Errorf("could not resolve base image: %v", err)
+			return fmt.Errorf("could not resolve base image: %w", err)
 		}
 		fromImage = from.Image.Name
 	}
@@ -66,7 +66,7 @@ func (s *outputImageTagStep) run(dry bool) error {
 		}
 		return err
 	}); err != nil && !errors.IsAlreadyExists(err) {
-		return fmt.Errorf("could not update output imagestreamtag: %v", err)
+		return fmt.Errorf("could not update output imagestreamtag: %w", err)
 	}
 	return nil
 }
@@ -100,7 +100,7 @@ func (s *outputImageTagStep) Provides() (api.ParameterMap, api.StepLink) {
 		fmt.Sprintf("IMAGE_%s", strings.ToUpper(strings.Replace(s.config.To.As, "-", "_", -1))): func() (string, error) {
 			is, err := s.isClient.ImageStreams(s.namespace()).Get(s.config.To.Name, meta.GetOptions{})
 			if err != nil {
-				return "", fmt.Errorf("could not retrieve output imagestream: %v", err)
+				return "", fmt.Errorf("could not retrieve output imagestream: %w", err)
 			}
 			var registry string
 			if len(is.Status.PublicDockerImageRepository) > 0 {

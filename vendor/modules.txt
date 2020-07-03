@@ -294,6 +294,9 @@ github.com/peterbourgon/diskv
 github.com/pkg/errors
 # github.com/pmezard/go-difflib v1.0.0
 github.com/pmezard/go-difflib/difflib
+# github.com/polyfloyd/go-errorlint v0.0.0-20200429095719-920be198a950
+github.com/polyfloyd/go-errorlint
+github.com/polyfloyd/go-errorlint/errorlint
 # github.com/prometheus/client_golang v1.5.0
 github.com/prometheus/client_golang/api
 github.com/prometheus/client_golang/api/prometheus/v1

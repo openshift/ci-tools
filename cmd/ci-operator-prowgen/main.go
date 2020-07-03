@@ -47,13 +47,13 @@ func (o *options) process() error {
 
 	if o.fromReleaseRepo {
 		if o.fromDir, err = getReleaseRepoDir("ci-operator/config"); err != nil {
-			return fmt.Errorf("--from-release-repo error: %v", err)
+			return fmt.Errorf("--from-release-repo error: %w", err)
 		}
 	}
 
 	if o.toReleaseRepo {
 		if o.toDir, err = getReleaseRepoDir("ci-operator/jobs"); err != nil {
-			return fmt.Errorf("--to-release-repo error: %v", err)
+			return fmt.Errorf("--to-release-repo error: %w", err)
 		}
 	}
 
@@ -72,12 +72,12 @@ func readProwgenConfig(path string) (*config.Prowgen, error) {
 	var pConfig *config.Prowgen
 	b, err := ioutil.ReadFile(path)
 	if err != nil && !os.IsNotExist(err) {
-		return nil, fmt.Errorf("prowgen config found in path %s but couldn't read the file: %v", path, err)
+		return nil, fmt.Errorf("prowgen config found in path %s but couldn't read the file: %w", path, err)
 	}
 
 	if err == nil {
 		if err := yaml.Unmarshal(b, &pConfig); err != nil {
-			return nil, fmt.Errorf("prowgen config found in path %sbut couldn't unmarshal it: %v", path, err)
+			return nil, fmt.Errorf("prowgen config found in path %sbut couldn't unmarshal it: %w", path, err)
 		}
 	}
 

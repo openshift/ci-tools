@@ -275,11 +275,11 @@ func main() {
 			}
 			buildClusterMgr, err := controllerruntime.NewManager(cfg, controllerruntime.Options{MetricsBindAddress: "0", LeaderElection: false})
 			if err != nil {
-				errs = append(errs, fmt.Errorf("failed to construct manager for cluster %s: %v", cluster, err))
+				errs = append(errs, fmt.Errorf("failed to construct manager for cluster %s: %w", cluster, err))
 				continue
 			}
 			if err := mgr.Add(buildClusterMgr); err != nil {
-				errs = append(errs, fmt.Errorf("failed to add buildClusterMgr for cluster %s to main mgr: %v", cluster, err))
+				errs = append(errs, fmt.Errorf("failed to add buildClusterMgr for cluster %s to main mgr: %w", cluster, err))
 				continue
 			}
 			buildClusterManagers[cluster] = buildClusterMgr

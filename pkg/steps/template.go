@@ -79,7 +79,7 @@ func (s *templateExecutionStep) run(ctx context.Context, dry bool) error {
 			value, err := s.params.Get(p.Name)
 			if err != nil {
 				if !dry {
-					return fmt.Errorf("cannot resolve parameter %s into template %s: %v", p.Name, s.template.Name, err)
+					return fmt.Errorf("cannot resolve parameter %s into template %s: %w", p.Name, s.template.Name, err)
 				}
 			}
 			if len(value) > 0 {
@@ -93,7 +93,7 @@ func (s *templateExecutionStep) run(ctx context.Context, dry bool) error {
 				component = strings.Replace(component, "_", "-", -1)
 				format, err := s.params.Get("IMAGE_FORMAT")
 				if err != nil {
-					return fmt.Errorf("could not resolve image format: %v", err)
+					return fmt.Errorf("could not resolve image format: %w", err)
 				}
 				s.template.Parameters[i].Value = strings.Replace(format, api.ComponentFormatReplacement, component, -1)
 			}
@@ -139,13 +139,13 @@ func (s *templateExecutionStep) run(ctx context.Context, dry bool) error {
 	log.Printf("Creating or restarting template instance")
 	_, err := createOrRestartTemplateInstance(s.templateClient.TemplateInstances(s.jobSpec.Namespace()), s.podClient.Pods(s.jobSpec.Namespace()), instance)
 	if err != nil {
-		return fmt.Errorf("could not create or restart template instance: %v", err)
+		return fmt.Errorf("could not create or restart template instance: %w", err)
 	}
 
 	log.Printf("Waiting for template instance to be ready")
 	instance, err = waitForTemplateInstanceReady(s.templateClient.TemplateInstances(s.jobSpec.Namespace()), s.template.Name)
 	if err != nil {
-		return fmt.Errorf("could not wait for template instance to be ready: %v", err)
+		return fmt.Errorf("could not wait for template instance to be ready: %w", err)
 	}
 
 	// now that the pods have been resolved by the template, add them to the artifact map
@@ -156,7 +156,7 @@ func (s *templateExecutionStep) run(ctx context.Context, dry bool) error {
 			case ref.Ref.Kind == "Pod" && ref.Ref.APIVersion == "v1":
 				pod, err := s.podClient.Pods(s.jobSpec.Namespace()).Get(ref.Ref.Name, meta.GetOptions{})
 				if err != nil {
-					return fmt.Errorf("unable to retrieve pod from template - possibly deleted: %v", err)
+					return fmt.Errorf("unable to retrieve pod from template - possibly deleted: %w", err)
 				}
 				addArtifactContainersFromPod(pod, artifacts)
 			}
@@ -178,7 +178,7 @@ func (s *templateExecutionStep) run(ctx context.Context, dry bool) error {
 			err := waitForPodCompletion(context.TODO(), s.podClient.Pods(s.jobSpec.Namespace()), ref.Ref.Name, testCaseNotifier, false)
 			s.subTests = append(s.subTests, testCaseNotifier.SubTests(fmt.Sprintf("%s - %s ", s.Description(), ref.Ref.Name))...)
 			if err != nil {
-				return fmt.Errorf("template pod %q failed: %v", ref.Ref.Name, err)
+				return fmt.Errorf("template pod %q failed: %w", ref.Ref.Name, err)
 			}
 		}
 	}
@@ -220,7 +220,7 @@ func hasContainerResources(container coreapi.Container) bool {
 func injectResourcesToPod(pod *coreapi.Pod, templateName string, resources api.ResourceConfiguration) error {
 	containerResources, err := resourcesFor(resources.RequirementsForStep(templateName))
 	if err != nil {
-		return fmt.Errorf("unable to calculate resources for %s: %s", pod.Name, err)
+		return fmt.Errorf("unable to calculate resources for %s: %w", pod.Name, err)
 	}
 
 	for index, container := range pod.Spec.Containers {
@@ -326,7 +326,7 @@ func (c *templateClient) Process(namespace string, template *templateapi.Templat
 		Body(template).
 		Do().
 		Into(processed)
-	return processed, fmt.Errorf("could not process template: %v", err)
+	return processed, fmt.Errorf("could not process template: %w", err)
 }
 
 func waitForTemplateInstanceReady(templateClient templateclientset.TemplateInstanceInterface, name string) (*templateapi.TemplateInstance, error) {
@@ -345,16 +345,16 @@ func waitForTemplateInstanceReady(templateClient templateclientset.TemplateInsta
 
 func createOrRestartTemplateInstance(templateClient templateclientset.TemplateInstanceInterface, podClient coreclientset.PodInterface, instance *templateapi.TemplateInstance) (*templateapi.TemplateInstance, error) {
 	if err := waitForCompletedTemplateInstanceDeletion(templateClient, podClient, instance.Name); err != nil {
-		return nil, fmt.Errorf("unable to delete completed template instance: %v", err)
+		return nil, fmt.Errorf("unable to delete completed template instance: %w", err)
 	}
 	created, err := templateClient.Create(instance)
 	if err != nil && !errors.IsAlreadyExists(err) {
-		return nil, fmt.Errorf("unable to create template instance: %v", err)
+		return nil, fmt.Errorf("unable to create template instance: %w", err)
 	}
 	if err != nil {
 		created, err = templateClient.Get(instance.Name, meta.GetOptions{})
 		if err != nil {
-			return nil, fmt.Errorf("unable to retrieve pod: %v", err)
+			return nil, fmt.Errorf("unable to retrieve pod: %w", err)
 		}
 		log.Printf("Waiting for running template %s to finish", instance.Name)
 	}
@@ -381,7 +381,7 @@ func waitForCompletedTemplateInstanceDeletion(templateClient templateclientset.T
 		return nil
 	}
 	if err != nil {
-		return fmt.Errorf("could not delete completed template instance: %v", err)
+		return fmt.Errorf("could not delete completed template instance: %w", err)
 	}
 
 	for i := 0; ; i++ {
@@ -390,7 +390,7 @@ func waitForCompletedTemplateInstanceDeletion(templateClient templateclientset.T
 			break
 		}
 		if err != nil {
-			return fmt.Errorf("could not retrieve deleting template instance: %v", err)
+			return fmt.Errorf("could not retrieve deleting template instance: %w", err)
 		}
 		if instance.UID != uid {
 			return nil
@@ -418,7 +418,7 @@ func waitForCompletedTemplateInstanceDeletion(templateClient templateclientset.T
 
 func createOrRestartPod(podClient coreclientset.PodInterface, pod *coreapi.Pod) (*coreapi.Pod, error) {
 	if err := waitForCompletedPodDeletion(podClient, pod.Name); err != nil {
-		return nil, fmt.Errorf("unable to delete completed pod: %v", err)
+		return nil, fmt.Errorf("unable to delete completed pod: %w", err)
 	}
 	var created *coreapi.Pod
 	// creating a pod in close proximity to namespace creation can result in forbidden errors due to
@@ -441,7 +441,7 @@ func createOrRestartPod(podClient coreclientset.PodInterface, pod *coreapi.Pod) 
 		created = newPod
 		return true, nil
 	}); err != nil {
-		return nil, fmt.Errorf("unable to create pod: %v", err)
+		return nil, fmt.Errorf("unable to create pod: %w", err)
 	}
 	return created, nil
 }
@@ -454,7 +454,7 @@ func waitForPodDeletion(podClient coreclientset.PodInterface, name string, uid t
 			return nil
 		}
 		if err != nil {
-			return fmt.Errorf("could not retrieve deleting pod: %v", err)
+			return fmt.Errorf("could not retrieve deleting pod: %w", err)
 		}
 		if pod.UID != uid {
 			return nil
@@ -483,7 +483,7 @@ func waitForCompletedPodDeletion(podClient coreclientset.PodInterface, name stri
 		return nil
 	}
 	if err != nil {
-		return fmt.Errorf("could not delete completed pod: %v", err)
+		return fmt.Errorf("could not delete completed pod: %w", err)
 	}
 
 	return waitForPodDeletion(podClient, name, uid)
@@ -529,13 +529,13 @@ func waitForPodCompletionOrTimeout(ctx context.Context, podClient coreclientset.
 		Watch:         true,
 	})
 	if err != nil {
-		return false, fmt.Errorf("could not create watcher for pod: %v", err)
+		return false, fmt.Errorf("could not create watcher for pod: %w", err)
 	}
 	defer watcher.Stop()
 
 	list, err := podClient.List(meta.ListOptions{FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String()})
 	if err != nil {
-		return false, fmt.Errorf("could not list pod: %v", err)
+		return false, fmt.Errorf("could not list pod: %w", err)
 	}
 	if len(list.Items) != 1 {
 		notifier.Complete(name)

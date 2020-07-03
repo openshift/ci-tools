@@ -207,7 +207,7 @@ func ResolveConfig(resolver Resolver, config api.ReleaseBuildConfiguration) (api
 		}
 		resolvedConfig, err := resolver.Resolve(step.As, *step.MultiStageTestConfiguration)
 		if err != nil {
-			return api.ReleaseBuildConfiguration{}, fmt.Errorf("Failed resolve MultiStageTestConfiguration: %v", err)
+			return api.ReleaseBuildConfiguration{}, fmt.Errorf("Failed resolve MultiStageTestConfiguration: %w", err)
 		}
 		step.MultiStageTestConfigurationLiteral = &resolvedConfig
 		// remove old multi stage config

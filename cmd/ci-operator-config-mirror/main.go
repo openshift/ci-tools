@@ -66,7 +66,7 @@ type configsByRepo map[string][]config.DataWithInfo
 func (d configsByRepo) cleanDestinationSubdirs(destinationOrgPath string) error {
 	contents, err := ioutil.ReadDir(destinationOrgPath)
 	if err != nil {
-		return fmt.Errorf("failed to read directory %s: %v", destinationOrgPath, err)
+		return fmt.Errorf("failed to read directory %s: %w", destinationOrgPath, err)
 	}
 
 	for _, info := range contents {
@@ -75,7 +75,7 @@ func (d configsByRepo) cleanDestinationSubdirs(destinationOrgPath string) error 
 		}
 
 		if err := os.RemoveAll(filepath.Join(destinationOrgPath, info.Name())); err != nil {
-			return fmt.Errorf("couldn't delete dir: %v", err)
+			return fmt.Errorf("couldn't delete dir: %w", err)
 		}
 	}
 
@@ -86,7 +86,7 @@ func (d configsByRepo) generateConfigs(configDir string) error {
 	for _, dataWithInfos := range d {
 		for _, dataWithInfo := range dataWithInfos {
 			if err := dataWithInfo.CommitTo(configDir); err != nil {
-				return fmt.Errorf("couldn't create the configuration file: %v", err)
+				return fmt.Errorf("couldn't create the configuration file: %w", err)
 			}
 		}
 	}

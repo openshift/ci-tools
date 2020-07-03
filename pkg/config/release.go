@@ -52,7 +52,7 @@ func git(repoPath string, args ...string) (string, error) {
 	cmd.Dir = repoPath
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("'%s' failed with error=%v, output:\n%s", cmd.Args, err, out)
+		return "", fmt.Errorf("'%s' failed with error=%w, output:\n%s", cmd.Args, err, out)
 	}
 	return string(out), nil
 }
@@ -70,7 +70,7 @@ func gitCheckout(candidatePath, baseSHA string) error {
 	cmd.Dir = candidatePath
 	stdoutStderr, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("'%s' failed with out: %s and error %v", cmd.Args, stdoutStderr, err)
+		return fmt.Errorf("'%s' failed with out: %s and error %w", cmd.Args, stdoutStderr, err)
 	}
 	return nil
 }
@@ -85,17 +85,17 @@ func NewLocalJobSpec(path string) (*pjdwapi.JobSpec, error) {
 	}
 	var err error
 	if refs.Pulls[0].Ref, err = revParse(path, "--abbrev-ref", "HEAD"); err != nil {
-		return nil, fmt.Errorf("could not get current branch: %v", err)
+		return nil, fmt.Errorf("could not get current branch: %w", err)
 	}
 	if refs.BaseRef, err = revParse(path, "--abbrev-ref", refs.Pulls[0].Ref+"@{upstream}"); err != nil {
 		logrus.WithError(err).Info("current branch has no upstream, using `master`")
 		refs.BaseRef = "master"
 	}
 	if refs.BaseSHA, err = revParse(path, refs.BaseRef); err != nil {
-		return nil, fmt.Errorf("could not parse base revision: %v", err)
+		return nil, fmt.Errorf("could not parse base revision: %w", err)
 	}
 	if refs.Pulls[0].SHA, err = revParse(path, refs.Pulls[0].Ref); err != nil {
-		return nil, fmt.Errorf("could not parse pull revision: %v", err)
+		return nil, fmt.Errorf("could not parse pull revision: %w", err)
 	}
 	return &pjdwapi.JobSpec{Type: pjapi.PresubmitJob, Refs: &refs}, nil
 }
@@ -130,23 +130,23 @@ func GetAllConfigs(releaseRepoPath string, logger *logrus.Entry) *ReleaseRepoCon
 func GetAllConfigsFromSHA(releaseRepoPath, sha string, logger *logrus.Entry) (*ReleaseRepoConfig, error) {
 	currentSHA, err := revParse(releaseRepoPath, "HEAD")
 	if err != nil {
-		return nil, fmt.Errorf("failed to get SHA of current HEAD: %v", err)
+		return nil, fmt.Errorf("failed to get SHA of current HEAD: %w", err)
 	}
 	restoreRev, err := revParse(releaseRepoPath, "--abbrev-ref", "HEAD")
 	if err != nil {
-		return nil, fmt.Errorf("failed to get current branch: %v", err)
+		return nil, fmt.Errorf("failed to get current branch: %w", err)
 	}
 	if restoreRev == "HEAD" {
 		restoreRev = currentSHA
 	}
 	if err := gitCheckout(releaseRepoPath, sha); err != nil {
-		return nil, fmt.Errorf("could not checkout worktree: %v", err)
+		return nil, fmt.Errorf("could not checkout worktree: %w", err)
 	}
 
 	config := GetAllConfigs(releaseRepoPath, logger)
 
 	if err := gitCheckout(releaseRepoPath, restoreRev); err != nil {
-		return config, fmt.Errorf("failed to check out tested revision back: %v", err)
+		return config, fmt.Errorf("failed to check out tested revision back: %w", err)
 	}
 
 	return config, nil

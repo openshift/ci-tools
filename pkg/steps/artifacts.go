@@ -206,7 +206,7 @@ func (c podClient) Exec(namespace, pod string, opts *coreapi.PodExecOptions) (re
 	u := c.client.Post().Resource("pods").Namespace(namespace).Name(pod).SubResource("exec").VersionedParams(opts, scheme.ParameterCodec).URL()
 	e, err := remotecommand.NewSPDYExecutor(c.config, "POST", u)
 	if err != nil {
-		return nil, fmt.Errorf("could not initialize a new SPDY executor: %v", err)
+		return nil, fmt.Errorf("could not initialize a new SPDY executor: %w", err)
 	}
 	return e, nil
 }
@@ -252,7 +252,7 @@ func copyArtifacts(podClient PodClient, into, ns, name, containerName string, pa
 	size := int64(0)
 	gr, err := gzip.NewReader(r)
 	if err != nil {
-		return fmt.Errorf("could not read gzipped artifacts: %v", err)
+		return fmt.Errorf("could not read gzipped artifacts: %w", err)
 	}
 	tr := tar.NewReader(gr)
 	for {
@@ -261,7 +261,7 @@ func copyArtifacts(podClient PodClient, into, ns, name, containerName string, pa
 			if err == io.EOF {
 				break
 			}
-			return fmt.Errorf("could not read artifact tarball: %v", err)
+			return fmt.Errorf("could not read artifact tarball: %w", err)
 		}
 		name := path.Clean(h.Name)
 		if name == "." || name == ".." || strings.HasPrefix(name, "../") {
@@ -270,7 +270,7 @@ func copyArtifacts(podClient PodClient, into, ns, name, containerName string, pa
 		p := filepath.Join(into, name)
 		if h.FileInfo().IsDir() {
 			if err := os.MkdirAll(p, 0750); err != nil {
-				return fmt.Errorf("could not create target directory %s for artifacts: %v", p, err)
+				return fmt.Errorf("could not create target directory %s for artifacts: %w", p, err)
 			}
 			continue
 		}
@@ -280,14 +280,14 @@ func copyArtifacts(podClient PodClient, into, ns, name, containerName string, pa
 		}
 		f, err := os.Create(p)
 		if err != nil {
-			return fmt.Errorf("could not create target file %s for artifact: %v", p, err)
+			return fmt.Errorf("could not create target file %s for artifact: %w", p, err)
 		}
 		if _, err := io.Copy(f, tr); err != nil {
 			f.Close()
-			return fmt.Errorf("could not copy contents of file %s: %v", p, err)
+			return fmt.Errorf("could not copy contents of file %s: %w", p, err)
 		}
 		if err := f.Close(); err != nil {
-			return fmt.Errorf("could not close copied file %s: %v", p, err)
+			return fmt.Errorf("could not close copied file %s: %w", p, err)
 		}
 		size += h.Size
 	}
@@ -317,7 +317,7 @@ func removeFile(podClient PodClient, ns, name, containerName string, paths []str
 		Stdin:  nil,
 		Stderr: os.Stderr,
 	}); err != nil {
-		return fmt.Errorf("could not run remote command: %v", err)
+		return fmt.Errorf("could not run remote command: %w", err)
 	}
 
 	return nil
@@ -430,7 +430,7 @@ func (w *ArtifactWorker) run() {
 
 func (w *ArtifactWorker) downloadArtifacts(podName string, hasArtifacts bool) error {
 	if err := os.MkdirAll(w.dir, 0750); err != nil {
-		return fmt.Errorf("unable to create artifact directory %s: %v", w.dir, err)
+		return fmt.Errorf("unable to create artifact directory %s: %w", w.dir, err)
 	}
 	if err := gatherContainerLogsOutput(w.podClient, filepath.Join(w.dir, "container-logs"), w.namespace, podName); err != nil {
 		log.Printf("error: unable to gather container logs: %v", err)
@@ -460,7 +460,7 @@ func (w *ArtifactWorker) downloadArtifacts(podName string, hasArtifacts bool) er
 	}()
 
 	if err := copyArtifacts(w.podClient, w.dir, w.namespace, podName, "artifacts", []string{"/tmp/artifacts"}); err != nil {
-		return fmt.Errorf("unable to retrieve artifacts from pod %s: %v", podName, err)
+		return fmt.Errorf("unable to retrieve artifacts from pod %s: %w", podName, err)
 	}
 	return nil
 }
@@ -639,7 +639,7 @@ func gatherContainerLogsOutput(podClient PodClient, artifactDir, namespace, podN
 	var validationErrors []error
 	list, err := podClient.Pods(namespace).List(meta.ListOptions{FieldSelector: fields.Set{"metadata.name": podName}.AsSelector().String()})
 	if err != nil {
-		return fmt.Errorf("could not list pod: %v", err)
+		return fmt.Errorf("could not list pod: %w", err)
 	}
 	if len(list.Items) == 0 {
 		return nil
@@ -651,7 +651,7 @@ func gatherContainerLogsOutput(podClient PodClient, artifactDir, namespace, podN
 	}
 
 	if err := os.MkdirAll(artifactDir, 0750); err != nil {
-		return fmt.Errorf("unable to create directory %s: %v", artifactDir, err)
+		return fmt.Errorf("unable to create directory %s: %w", artifactDir, err)
 	}
 
 	statuses := getContainerStatuses(pod)
@@ -659,7 +659,7 @@ func gatherContainerLogsOutput(podClient PodClient, artifactDir, namespace, podN
 		if status.State.Terminated != nil {
 			file, err := os.Create(fmt.Sprintf("%s/%s.log.gz", artifactDir, status.Name))
 			if err != nil {
-				validationErrors = append(validationErrors, fmt.Errorf("cannot create file: %v", err))
+				validationErrors = append(validationErrors, fmt.Errorf("cannot create file: %w", err))
 				continue
 			}
 			defer file.Close()
@@ -667,11 +667,11 @@ func gatherContainerLogsOutput(podClient PodClient, artifactDir, namespace, podN
 			w := gzip.NewWriter(file)
 			if s, err := podClient.Pods(namespace).GetLogs(podName, &coreapi.PodLogOptions{Container: status.Name}).Stream(); err == nil {
 				if _, err := io.Copy(w, s); err != nil {
-					validationErrors = append(validationErrors, fmt.Errorf("error: Unable to copy log output from pod container %s: %v", status.Name, err))
+					validationErrors = append(validationErrors, fmt.Errorf("error: Unable to copy log output from pod container %s: %w", status.Name, err))
 				}
 				s.Close()
 			} else {
-				validationErrors = append(validationErrors, fmt.Errorf("error: Unable to retrieve logs from pod container %s: %v", status.Name, err))
+				validationErrors = append(validationErrors, fmt.Errorf("error: Unable to retrieve logs from pod container %s: %w", status.Name, err))
 			}
 			w.Close()
 		}
@@ -688,11 +688,11 @@ func gatherSuccessfulBuildLog(buildClient BuildClient, artifactDir, namespace, b
 	// adding a subdir to the artifactDir path similar to downloadArtifacts adding the container-logs subdir
 	dir := filepath.Join(artifactDir, "build-logs")
 	if err := os.MkdirAll(dir, 0750); err != nil {
-		return fmt.Errorf("unable to create directory %s: %v", dir, err)
+		return fmt.Errorf("unable to create directory %s: %w", dir, err)
 	}
 	file, err := os.Create(fmt.Sprintf("%s/%s.log.gz", dir, buildName))
 	if err != nil {
-		return fmt.Errorf("cannot create file: %v", err)
+		return fmt.Errorf("cannot create file: %w", err)
 	}
 	defer file.Close()
 	w := gzip.NewWriter(file)
@@ -700,10 +700,10 @@ func gatherSuccessfulBuildLog(buildClient BuildClient, artifactDir, namespace, b
 	if rc, err := buildClient.Logs(namespace, buildName, &buildapi.BuildLogOptions{}); err == nil {
 		defer rc.Close()
 		if _, err := io.Copy(w, rc); err != nil {
-			return fmt.Errorf("error: Unable to copy log output from pod container %s: %v", buildName, err)
+			return fmt.Errorf("error: Unable to copy log output from pod container %s: %w", buildName, err)
 		}
 	} else {
-		return fmt.Errorf("error: Unable to retrieve logs for build %s: %v", buildName, err)
+		return fmt.Errorf("error: Unable to retrieve logs for build %s: %w", buildName, err)
 	}
 	return nil
 }

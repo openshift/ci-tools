@@ -62,7 +62,7 @@ func (s *stableImagesTagStep) run(dry bool) error {
 	}
 	_, err := s.dstClient.ImageStreams(s.jobSpec.Namespace()).Create(newIS)
 	if err != nil && !errors.IsAlreadyExists(err) {
-		return fmt.Errorf("could not create stable imagestreamtag: %v", err)
+		return fmt.Errorf("could not create stable imagestreamtag: %w", err)
 	}
 	return nil
 }
@@ -158,7 +158,7 @@ func (s *releaseImagesTagStep) run(dry bool) error {
 
 	is, err := s.client.ImageStreams(s.config.Namespace).Get(s.config.Name, meta.GetOptions{})
 	if err != nil {
-		return fmt.Errorf("could not resolve stable imagestream: %v", err)
+		return fmt.Errorf("could not resolve stable imagestream: %w", err)
 	}
 
 	is.UID = ""
@@ -191,12 +191,12 @@ func (s *releaseImagesTagStep) run(dry bool) error {
 
 	_, err = s.client.ImageStreams(s.jobSpec.Namespace()).Create(newIS)
 	if err != nil && !errors.IsAlreadyExists(err) {
-		return fmt.Errorf("could not copy stable imagestreamtag: %v", err)
+		return fmt.Errorf("could not copy stable imagestreamtag: %w", err)
 	}
 
 	is, err = s.client.ImageStreams(s.jobSpec.Namespace()).Create(initialIS)
 	if err != nil && !errors.IsAlreadyExists(err) {
-		return fmt.Errorf("could not copy stable-initial imagestreamtag: %v", err)
+		return fmt.Errorf("could not copy stable-initial imagestreamtag: %w", err)
 	}
 
 	for _, tag := range is.Spec.Tags {

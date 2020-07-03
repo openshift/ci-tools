@@ -48,7 +48,7 @@ func gatherOptions() (options, error) {
 	o.AllowAnonymous = true
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
-		return o, fmt.Errorf("failed to parse flags: %v", err)
+		return o, fmt.Errorf("failed to parse flags: %w", err)
 	}
 	return o, nil
 }

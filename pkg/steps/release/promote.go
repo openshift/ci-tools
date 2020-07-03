@@ -66,7 +66,7 @@ func (s *promotionStep) run(dry bool) error {
 
 	pipeline, err := s.srcClient.ImageStreams(s.jobSpec.Namespace()).Get(api.PipelineImageStream, meta.GetOptions{})
 	if err != nil {
-		return fmt.Errorf("could not resolve pipeline imagestream: %v", err)
+		return fmt.Errorf("could not resolve pipeline imagestream: %w", err)
 	}
 
 	if len(s.config.Name) > 0 {
@@ -81,7 +81,7 @@ func (s *promotionStep) run(dry bool) error {
 				})
 			}
 			if err != nil {
-				return fmt.Errorf("could not retrieve target imagestream: %v", err)
+				return fmt.Errorf("could not retrieve target imagestream: %w", err)
 			}
 
 			for dst, src := range tags {
@@ -101,7 +101,7 @@ func (s *promotionStep) run(dry bool) error {
 				if errors.IsConflict(err) {
 					return err
 				}
-				return fmt.Errorf("could not promote image streams: %v", err)
+				return fmt.Errorf("could not promote image streams: %w", err)
 			}
 			return nil
 		})
@@ -130,7 +130,7 @@ func (s *promotionStep) run(dry bool) error {
 				})
 			}
 			if err != nil {
-				return fmt.Errorf("could not ensure target imagestream: %v", err)
+				return fmt.Errorf("could not ensure target imagestream: %w", err)
 			}
 
 			ist := &imageapi.ImageStreamTag{
@@ -151,7 +151,7 @@ func (s *promotionStep) run(dry bool) error {
 				if errors.IsConflict(err) {
 					return err
 				}
-				return fmt.Errorf("could not promote imagestreamtag %s: %v", dst, err)
+				return fmt.Errorf("could not promote imagestreamtag %s: %w", dst, err)
 			}
 			return nil
 		})

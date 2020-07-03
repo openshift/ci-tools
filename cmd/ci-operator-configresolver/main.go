@@ -111,7 +111,7 @@ func gatherOptions() (options, error) {
 func validateOptions(o options) error {
 	_, err := logrus.ParseLevel(o.logLevel)
 	if err != nil {
-		return fmt.Errorf("invalid --log-level: %v", err)
+		return fmt.Errorf("invalid --log-level: %w", err)
 	}
 	if o.cycle == 0 {
 		return fmt.Errorf("invalid cycle: duration cannot equal 0")
@@ -121,27 +121,27 @@ func validateOptions(o options) error {
 	}
 	if _, err := os.Stat(o.configPath); err != nil {
 		if os.IsNotExist(err) {
-			return fmt.Errorf("--config points to a nonexistent directory: %v", err)
+			return fmt.Errorf("--config points to a nonexistent directory: %w", err)
 		}
-		return fmt.Errorf("Error getting stat info for --config directory: %v", err)
+		return fmt.Errorf("Error getting stat info for --config directory: %w", err)
 	}
 	if o.registryPath == "" {
 		return fmt.Errorf("--registry is required")
 	}
 	if _, err := os.Stat(o.registryPath); err != nil {
 		if os.IsNotExist(err) {
-			return fmt.Errorf("--registry points to a nonexistent directory: %v", err)
+			return fmt.Errorf("--registry points to a nonexistent directory: %w", err)
 		}
-		return fmt.Errorf("Error getting stat info for --registry directory: %v", err)
+		return fmt.Errorf("Error getting stat info for --registry directory: %w", err)
 	}
 	if o.prowPath == "" {
 		return fmt.Errorf("--prow-config is required")
 	}
 	if _, err := os.Stat(o.prowPath); err != nil {
 		if os.IsNotExist(err) {
-			return fmt.Errorf("--prow-config points to a nonexistent file: %v", err)
+			return fmt.Errorf("--prow-config points to a nonexistent file: %w", err)
 		}
-		return fmt.Errorf("Error getting stat info for --prow-config file: %v", err)
+		return fmt.Errorf("Error getting stat info for --prow-config file: %w", err)
 	}
 	if o.validateOnly && o.flatRegistry {
 		return errors.New("--validate-only and --flat-registry flags cannot be set simultaneously")

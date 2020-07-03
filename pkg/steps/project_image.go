@@ -45,14 +45,14 @@ func (s *projectDirectoryImageBuildStep) run(ctx context.Context, dry bool) erro
 	} else {
 		ist, err := s.istClient.ImageStreamTags(s.jobSpec.Namespace()).Get(source, meta.GetOptions{})
 		if err != nil {
-			return fmt.Errorf("could not fetch source ImageStreamTag: %v", err)
+			return fmt.Errorf("could not fetch source ImageStreamTag: %w", err)
 		}
 		metadata := &docker10.DockerImage{}
 		if len(ist.Image.DockerImageMetadata.Raw) == 0 {
 			return fmt.Errorf("could not fetch Docker image metadata for ImageStreamTag %s", source)
 		}
 		if err := json.Unmarshal(ist.Image.DockerImageMetadata.Raw, metadata); err != nil {
-			return fmt.Errorf("malformed Docker image metadata on ImageStreamTag: %v", err)
+			return fmt.Errorf("malformed Docker image metadata on ImageStreamTag: %w", err)
 		}
 		workingDir = metadata.Config.WorkingDir
 	}
@@ -146,7 +146,7 @@ func (s *projectDirectoryImageBuildStep) Provides() (api.ParameterMap, api.StepL
 		fmt.Sprintf("LOCAL_IMAGE_%s", strings.ToUpper(strings.Replace(string(s.config.To), "-", "_", -1))): func() (string, error) {
 			is, err := s.imageClient.ImageStreams(s.jobSpec.Namespace()).Get(api.PipelineImageStream, meta.GetOptions{})
 			if err != nil {
-				return "", fmt.Errorf("could not retrieve output imagestream: %v", err)
+				return "", fmt.Errorf("could not retrieve output imagestream: %w", err)
 			}
 			var registry string
 			if len(is.Status.PublicDockerImageRepository) > 0 {

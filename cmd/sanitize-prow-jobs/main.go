@@ -63,13 +63,13 @@ func determinizeJobs(prowJobConfigDir string, config *dispatcher.Config) error {
 
 			data, err := ioutil.ReadFile(path)
 			if err != nil {
-				errChan <- fmt.Errorf("failed to read file %q: %v", path, err)
+				errChan <- fmt.Errorf("failed to read file %q: %w", path, err)
 				return
 			}
 
 			jobConfig := &prowconfig.JobConfig{}
 			if err := yaml.Unmarshal(data, jobConfig); err != nil {
-				errChan <- fmt.Errorf("failed to unmarshal file %q: %v", err, path)
+				errChan <- fmt.Errorf("failed to unmarshal file %q: %w", path, err)
 				return
 			}
 
@@ -77,19 +77,19 @@ func determinizeJobs(prowJobConfigDir string, config *dispatcher.Config) error {
 
 			serialized, err := yaml.Marshal(jobConfig)
 			if err != nil {
-				errChan <- fmt.Errorf("failed to marshal file %q: %v", err, path)
+				errChan <- fmt.Errorf("failed to marshal file %q: %w", path, err)
 				return
 			}
 
 			if err := ioutil.WriteFile(path, serialized, 0644); err != nil {
-				errChan <- fmt.Errorf("failed to write file %q: %v", path, err)
+				errChan <- fmt.Errorf("failed to write file %q: %w", path, err)
 				return
 			}
 		}(path)
 
 		return nil
 	}); err != nil {
-		return fmt.Errorf("failed to determinize all Prow jobs: %v", err)
+		return fmt.Errorf("failed to determinize all Prow jobs: %w", err)
 	}
 
 	wg.Wait()

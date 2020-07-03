@@ -365,7 +365,7 @@ func (g gitSyncer) mirror(repoDir string, src, dst location) error {
 		if depth == unshallow {
 			logger.Info("Trying to fetch source and destination full history and perform a merge")
 			if err := mergeRemotesAndPush(logger, g.git, repoDir, srcRemote, dst.branch, destUrl.String(), g.confirm, g.gitName, g.gitEmail); err != nil {
-				return nil, fmt.Errorf("failed to fetch remote and merge: %v", err)
+				return nil, fmt.Errorf("failed to fetch remote and merge: %w", err)
 			}
 			return nil, nil
 		}
@@ -438,16 +438,16 @@ func addGitRemote(logger *logrus.Entry, git gitFunc, token, org, repo, repoDir, 
 
 func mergeRemotesAndPush(logger *logrus.Entry, git gitFunc, repoDir, srcRemote, branch, destURL string, confirm bool, gitName, gitEmail string) error {
 	if err := checkGitError(git(logger, repoDir, []string{"fetch", destURL, branch}...)); err != nil {
-		return fmt.Errorf("failed to fetch remote %s: %v", destURL, err)
+		return fmt.Errorf("failed to fetch remote %s: %w", destURL, err)
 	}
 
 	if err := checkGitError(git(logger, repoDir, []string{"checkout", "FETCH_HEAD"}...)); err != nil {
-		return fmt.Errorf("failed to checkout to FETCH_HEAD: %v", err)
+		return fmt.Errorf("failed to checkout to FETCH_HEAD: %w", err)
 	}
 
 	sourceBranch := fmt.Sprintf("%s/%s", srcRemote, branch)
 	if err := checkGitError(git(logger, repoDir, []string{"-c", fmt.Sprintf("user.name=%s", gitName), "-c", fmt.Sprintf("user.email=%s", gitEmail), "merge", sourceBranch, "-m", "'Periodic merge from DPTP; pub->priv'"}...)); err != nil {
-		return fmt.Errorf("failed to merge %s: %v", sourceBranch, err)
+		return fmt.Errorf("failed to merge %s: %w", sourceBranch, err)
 	}
 
 	cmd := []string{"push", "--tags"}
@@ -458,7 +458,7 @@ func mergeRemotesAndPush(logger *logrus.Entry, git gitFunc, repoDir, srcRemote, 
 
 	err := checkGitError(git(logger, repoDir, cmd...))
 	if err != nil {
-		return fmt.Errorf("failed to push to destination: %v", err)
+		return fmt.Errorf("failed to push to destination: %w", err)
 	}
 
 	logger.Info("Successfully pushed to destination")
@@ -578,12 +578,12 @@ func main() {
 		destination.org = o.targetOrg
 		gitDir, err := syncer.makeGitDir(source.org, source.repo)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("%s->%s: %v", source.String(), destination.String(), err))
+			errs = append(errs, fmt.Errorf("%s->%s: %w", source.String(), destination.String(), err))
 			continue
 		}
 
 		if err := syncer.mirror(gitDir, source, destination); err != nil {
-			errs = append(errs, fmt.Errorf("%s->%s: %v", source.String(), destination.String(), err))
+			errs = append(errs, fmt.Errorf("%s->%s: %w", source.String(), destination.String(), err))
 		}
 	}
 

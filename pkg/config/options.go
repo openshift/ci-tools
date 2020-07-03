@@ -28,7 +28,7 @@ func (o *Options) Validate() error {
 
 	level, err := logrus.ParseLevel(o.LogLevel)
 	if err != nil {
-		return fmt.Errorf("invalid --log-level: %v", err)
+		return fmt.Errorf("invalid --log-level: %w", err)
 	}
 	logrus.SetLevel(level)
 	return nil

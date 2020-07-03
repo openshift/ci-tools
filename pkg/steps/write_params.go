@@ -34,7 +34,7 @@ func (s *writeParametersStep) run(dry bool) error {
 
 	values, err := s.params.Map()
 	if err != nil {
-		return fmt.Errorf("failed to resolve parameters: %v", err)
+		return fmt.Errorf("failed to resolve parameters: %w", err)
 	}
 	for k, v := range values {
 		if safeEnv.MatchString(v) {

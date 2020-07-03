@@ -683,3 +683,29 @@ func getSourceSecretFromName(secretName string) *coreapi.LocalObjectReference {
 	}
 	return &coreapi.LocalObjectReference{Name: secretName}
 }
+
+func getReasonsForUnreadyContainers(p *coreapi.Pod) string {
+	builder := &strings.Builder{}
+	for _, c := range p.Status.ContainerStatuses {
+		if c.Ready {
+			continue
+		}
+		var reason, message string
+		switch {
+		case c.State.Waiting != nil:
+			reason = c.State.Waiting.Reason
+			message = c.State.Waiting.Message
+		case c.State.Running != nil:
+			reason = c.State.Waiting.Reason
+			message = c.State.Waiting.Message
+		case c.State.Terminated != nil:
+			reason = c.State.Terminated.Reason
+			message = c.State.Terminated.Message
+		default:
+			reason = "unknown"
+			message = "unknown"
+		}
+		_, _ = builder.WriteString(fmt.Sprintf("\n* Container %s is not ready with reason %s and message %s", c.Name, reason, message))
+	}
+	return builder.String()
+}

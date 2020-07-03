@@ -588,6 +588,9 @@ func waitForPodCompletionOrTimeout(ctx context.Context, podClient coreclientset.
 		if event.Type == watch.Deleted {
 			return false, appendLogToError(fmt.Errorf("the pod %s/%s was deleted without completing after %s (failed containers: %s)", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", ")), podMessages(pod))
 		}
+		if !isPodRunning(pod) && time.Since(pod.CreationTimestamp.Time) > 30*time.Minute {
+			return false, fmt.Errorf("pod didn't start running within 30 minutes: %s", getReasonsForUnreadyContainers(pod))
+		}
 	}
 }
 
@@ -723,6 +726,15 @@ func podJobIsFailed(pod *coreapi.Pod) bool {
 			if s.ExitCode != 0 {
 				return true
 			}
+		}
+	}
+	return false
+}
+
+func isPodRunning(pod *coreapi.Pod) bool {
+	for _, condition := range pod.Status.Conditions {
+		if condition.Type == coreapi.PodReady {
+			return condition.Status == coreapi.ConditionTrue
 		}
 	}
 	return false

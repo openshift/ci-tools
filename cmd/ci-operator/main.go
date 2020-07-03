@@ -198,7 +198,7 @@ func main() {
 
 	if err := opt.Complete(); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		opt.Report([]error{results.ForReason("loading_args").ForError(err)})
+		opt.Report(results.ForReason("loading_args").ForError(err))
 		os.Exit(1)
 	}
 
@@ -213,9 +213,10 @@ func main() {
 			message.WriteString(fmt.Sprintf("\n  * %s", err.Error()))
 		}
 		fmt.Fprintf(os.Stderr, "error: some steps failed:%s\n", message.String())
-		opt.Report(defaulted)
+		opt.Report(defaulted...)
 		os.Exit(1)
 	}
+	opt.Report()
 }
 
 type stringSlice struct {
@@ -518,16 +519,22 @@ func (o *options) Complete() error {
 	return nil
 }
 
-func (o *options) Report(errs []error) {
-	o.writeFailingJUnit(errs)
+func (o *options) Report(errs ...error) {
+	if len(errs) > 0 {
+		o.writeFailingJUnit(errs)
+	}
 
 	reporter, loadErr := o.resultsOptions.Reporter(o.jobSpec, o.consoleHost)
 	if loadErr != nil {
 		log.Printf("could not load result reporting options: %v", loadErr)
 		return
 	}
+
 	for _, err := range errs {
 		reporter.Report(err)
+	}
+	if len(errs) == 0 {
+		reporter.Report(nil)
 	}
 }
 

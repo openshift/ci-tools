@@ -287,8 +287,10 @@ oc adm release extract --from=%q --file=image-references > /tmp/artifacts/%s
 	// loop until we observe all images have successfully imported, kicking import if a particular
 	// tag fails
 	var waiting map[string]int64
+	var stable *imageapi.ImageStream
 	if err := wait.Poll(3*time.Second, 15*time.Minute, func() (bool, error) {
-		stable, err := s.imageClient.ImageStreams(s.jobSpec.Namespace()).Get(streamName, meta.GetOptions{})
+		var err error
+		stable, err = s.imageClient.ImageStreams(s.jobSpec.Namespace()).Get(streamName, meta.GetOptions{})
 		if err != nil {
 			return false, fmt.Errorf("could not resolve imagestream %s: %v", streamName, err)
 		}
@@ -316,7 +318,7 @@ oc adm release extract --from=%q --file=image-references > /tmp/artifacts/%s
 			}
 		}
 		if updates {
-			_, err = s.imageClient.ImageStreams(s.jobSpec.Namespace()).Update(stable)
+			stable, err = s.imageClient.ImageStreams(s.jobSpec.Namespace()).Update(stable)
 			if err != nil {
 				log.Printf("error requesting re-import of failed release image stream: %v", err)
 			}
@@ -331,12 +333,16 @@ oc adm release extract --from=%q --file=image-references > /tmp/artifacts/%s
 		if len(waiting) == 0 || err != wait.ErrWaitTimeout {
 			return fmt.Errorf("unable to import image stream %s: %v", streamName, err)
 		}
-		var tags []string
+		var tagImportErrorMessages []string
 		for tag := range waiting {
-			tags = append(tags, tag)
+			msg := "- " + tag
+			if tagRef := findSpecTagReference(stable, tag); tagRef != nil && tagRef.From != nil {
+				msg = msg + " from " + tagRef.From.Name
+			}
+			tagImportErrorMessages = append(tagImportErrorMessages, msg)
 		}
-		sort.Strings(tags)
-		return fmt.Errorf("the following tags from the release could not be imported to %s after five minutes: %s", streamName, strings.Join(tags, ", "))
+		sort.Strings(tagImportErrorMessages)
+		return fmt.Errorf("the following tags from the release could not be imported to %s after five minutes:\n%s", streamName, strings.Join(tagImportErrorMessages, "\n"))
 	}
 
 	log.Printf("Imported release %s created at %s with %d images to tag release:%s", releaseIS.Name, releaseIS.CreationTimestamp, len(releaseIS.Spec.Tags), s.name)

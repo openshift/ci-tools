@@ -119,26 +119,22 @@ func latestTaggedImage(stream *imagev1.ImageStream, tag string) *imagev1.TagEven
 	return nil
 }
 
-func namedTagEventListToMap(list []imagev1.NamedTagEventList) map[string]imagev1.NamedTagEventList {
-	if list == nil {
-		return nil
-	}
-	result := map[string]imagev1.NamedTagEventList{}
+func tagByNameFromTagEventList(tag string, list []imagev1.NamedTagEventList) imagev1.NamedTagEventList {
 	for _, item := range list {
-		result[item.Tag] = item
+		if item.Tag == tag {
+			return item
+		}
 	}
-	return result
+	return imagev1.NamedTagEventList{}
 }
 
-func tagReferenceListToMap(list []imagev1.TagReference) map[string]imagev1.TagReference {
-	if list == nil {
-		return nil
-	}
-	result := map[string]imagev1.TagReference{}
+func tagReferenceByNameFromList(tag string, list []imagev1.TagReference) (imagev1.TagReference, bool) {
 	for _, item := range list {
-		result[item.Name] = item
+		if item.Name == tag {
+			return item, true
+		}
 	}
-	return result
+	return imagev1.TagReference{}, false
 }
 
 // newISTag initializes an image stream tag from an image stream and image. The allowEmptyEvent will create a tag even
@@ -168,13 +164,13 @@ func newISTag(tag string, imageStream *imagev1.ImageStream, image *imagev1.Image
 			UID:               imageStream.UID,
 		},
 		Generation: event.Generation,
-		Conditions: namedTagEventListToMap(imageStream.Status.Tags)[tag].Conditions,
+		Conditions: tagByNameFromTagEventList(tag, imageStream.Status.Tags).Conditions,
 
 		LookupPolicy: imageStream.Spec.LookupPolicy,
 	}
 
 	if imageStream.Spec.Tags != nil {
-		if tagRef, ok := tagReferenceListToMap(imageStream.Spec.Tags)[tag]; ok {
+		if tagRef, ok := tagReferenceByNameFromList(tag, imageStream.Spec.Tags); ok {
 			// copy the spec tag
 			ist.Tag = &tagRef
 			if from := ist.Tag.From; from != nil {
@@ -223,7 +219,7 @@ func newISTag(tag string, imageStream *imagev1.ImageStream, image *imagev1.Image
 // that tag.
 func resolveReferenceForTagEvent(stream *imagev1.ImageStream, tag string, latest *imagev1.TagEvent) string {
 	// retrieve spec policy - if not found, we use the latest spec
-	ref, ok := tagReferenceListToMap(stream.Spec.Tags)[tag]
+	ref, ok := tagReferenceByNameFromList(tag, stream.Spec.Tags)
 	if !ok {
 		return latest.DockerImageReference
 	}

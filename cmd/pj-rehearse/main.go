@@ -509,6 +509,10 @@ func setupDependencies(
 var second = time.Second
 
 func ensureImageStreamTags(ctx context.Context, client ctrlruntimeclient.Client, ists apihelper.ImageStreamTagMap, clusterName, namespace string, istImportClient ctrlruntimeclient.Client, log *logrus.Entry) error {
+	if clusterName == "api.ci" {
+		log.Info("Not creating imports on api.ci cluster as its authoritative source for all imagestreams")
+		return nil
+	}
 
 	g, ctx := errgroup.WithContext(ctx)
 

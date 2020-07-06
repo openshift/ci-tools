@@ -36,7 +36,11 @@ os::integration::compare "${actual}/openshift-installer-release-4.2-golang111.js
 os::integration::configresolver::check_log
 
 generation="$( os::integration::configresolver::generation::registry )"
-rsync -avh --quiet --delete --temp-dir=$rsync_tmp_dir "${BASETMPDIR}/multistage-registry/registry2/" "${BASETMPDIR}/multistage-registry/registry/"
+rm "${BASETMPDIR}/multistage-registry/registry/ipi/install/empty-parameter/ipi-install-empty-parameter-chain.yaml"
+mv "${BASETMPDIR}/multistage-registry/registry2/ipi/install/install/ipi-install-install-commands.sh"  "${BASETMPDIR}/multistage-registry/registry/ipi/install/install/ipi-install-install-commands.sh"
+mv "${BASETMPDIR}/multistage-registry/registry2/ipi/install/install/ipi-install-install-ref.yaml"  "${BASETMPDIR}/multistage-registry/registry/ipi/install/install/ipi-install-install-ref.yaml"
+mv "${BASETMPDIR}/multistage-registry/registry2/ipi/install/rbac/ipi-install-rbac-commands.sh"  "${BASETMPDIR}/multistage-registry/registry/ipi/install/rbac/ipi-install-rbac-commands.sh"
+rm "${BASETMPDIR}/multistage-registry/registry/ipi/install/with-parameter/ipi-install-with-parameter-chain.yaml"
 os::integration::configresolver::wait_for_registry_update "${generation}"
 os::cmd::expect_success "curl 'http://127.0.0.1:8080/config?org=openshift&repo=installer&branch=release-4.2' >${actual}/openshift-installer-release-4.2-regChange.json"
 os::integration::compare "${actual}/openshift-installer-release-4.2-regChange.json" "${expected}/openshift-installer-release-4.2-regChange.json"

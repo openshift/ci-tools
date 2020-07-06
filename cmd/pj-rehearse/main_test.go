@@ -10,10 +10,12 @@ import (
 	"github.com/google/go-cmp/cmp"
 	imagev1 "github.com/openshift/api/image/v1"
 	"github.com/sirupsen/logrus"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
+	utilpointer "k8s.io/utils/pointer"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -34,7 +36,9 @@ func TestEnsureImageStreamTags(t *testing.T) {
 	importNamespace := "imports"
 	clusterName := "cluster"
 	testCases := []struct {
-		name                 string
+		name string
+		// Optional, defaults to the clusterName variable
+		targetCluster        *string
 		clusterClient        ctrlruntimeclient.Client
 		istImportClient      ctrlruntimeclient.Client
 		expectedErrorMessage string
@@ -78,6 +82,10 @@ func TestEnsureImageStreamTags(t *testing.T) {
 				Name:        imageStreamTagName,
 			},
 		},
+		{
+			name:          "Api.ci cluster imports are skipped",
+			targetCluster: utilpointer.StringPtr("api.ci"),
+		},
 	}
 
 	ctx := context.Background()
@@ -89,6 +97,9 @@ func TestEnsureImageStreamTags(t *testing.T) {
 			}
 			if tc.istImportClient == nil {
 				tc.istImportClient = fakectrlruntimeclient.NewFakeClient()
+			}
+			if tc.targetCluster == nil {
+				tc.targetCluster = utilpointer.StringPtr(clusterName)
 			}
 			tc.istImportClient = &creatingClientWithCallBack{
 				Client: tc.istImportClient,
@@ -110,20 +121,22 @@ func TestEnsureImageStreamTags(t *testing.T) {
 					Name:      imageStreamTagName,
 				},
 			}
-			if err := ensureImageStreamTags(ctx, tc.clusterClient, m, clusterName, importNamespace, tc.istImportClient, logrus.NewEntry(logrus.StandardLogger())); err != nil {
+			if err := ensureImageStreamTags(ctx, tc.clusterClient, m, *tc.targetCluster, importNamespace, tc.istImportClient, logrus.NewEntry(logrus.StandardLogger())); err != nil {
 				t.Fatalf("ensureImageStreamTags errored: %v", err)
-			}
-
-			if tc.expectedImport == nil {
-				return
 			}
 
 			created := &testimagestreamtagimportv1.TestImageStreamTagImport{}
 			name := types.NamespacedName{
 				Namespace: importNamespace,
-				Name:      fmt.Sprintf("%s-%s-%s", clusterName, imageStreamTagNamespace, strings.Replace(imageStreamTagName, ":", ".", 1)),
+				Name:      fmt.Sprintf("%s-%s-%s", *tc.targetCluster, imageStreamTagNamespace, strings.Replace(imageStreamTagName, ":", ".", 1)),
 			}
 			if err := tc.istImportClient.Get(ctx, name, created); err != nil {
+				if tc.expectedImport == nil {
+					if !apierrors.IsNotFound(err) {
+						t.Fatalf("expected not found error, got %v", err)
+					}
+					return
+				}
 				t.Fatalf("failed to get imagestreamtagimport %s: %v", name, err)
 			}
 

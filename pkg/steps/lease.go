@@ -84,7 +84,7 @@ func (s *leaseStep) run(ctx context.Context, dry bool) error {
 	lease, err := client.Acquire(s.leaseType, ctx, cancel)
 	if err != nil {
 		heartbeatCancel()
-		return results.ForReason("acquiring_lease").WithError(err).Errorf("failed to acquire lease: %v", err)
+		return results.ForReason(results.Reason("acquiring_lease:"+s.leaseType)).WithError(err).Errorf("failed to acquire lease: %v", err)
 	}
 	heartbeatCancel()
 	log.Printf("Acquired lease %q for %q", lease, s.leaseType)

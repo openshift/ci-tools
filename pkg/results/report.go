@@ -87,6 +87,9 @@ const (
 )
 
 type Reporter interface {
+	// Report sends a report for this error to an aggregation server.
+	// This action is best-effort and errors are logged but not exposed.
+	// Err may be nil in which case a success is reported.
 	Report(err error)
 }
 
@@ -103,8 +106,6 @@ type reporter struct {
 	consoleHost string
 }
 
-// Report sends a report for this error to an aggregation server.
-// This action is best-effort and errors are logged but not exposed.
 func (r *reporter) Report(err error) {
 	state := StateSucceeded
 	if err != nil {

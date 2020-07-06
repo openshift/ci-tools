@@ -79,14 +79,14 @@ func (o *options) complete() error {
 
 func (o *options) run() error {
 	if err := copyDir(o.dstPath, o.srcPath); err != nil {
-		return fmt.Errorf("failed to copy secret mount: %v", err)
+		return fmt.Errorf("failed to copy secret mount: %w", err)
 	}
 	var errs []error
 	if err := execCmd(o.cmd); err != nil {
-		errs = append(errs, fmt.Errorf("failed to execute wrapped command: %v", err))
+		errs = append(errs, fmt.Errorf("failed to execute wrapped command: %w", err))
 	}
 	if err := createSecret(o.client, o.name, o.dstPath, o.dry); err != nil {
-		errs = append(errs, fmt.Errorf("failed to create/update secret: %v", err))
+		errs = append(errs, fmt.Errorf("failed to create/update secret: %w", err))
 	}
 	return utilerrors.NewAggregate(errs)
 }
@@ -94,11 +94,11 @@ func (o *options) run() error {
 func loadClient(namespace string) (coreclientset.SecretInterface, error) {
 	config, err := rest.InClusterConfig()
 	if err != nil {
-		return nil, fmt.Errorf("failed to load cluster config: %v", err)
+		return nil, fmt.Errorf("failed to load cluster config: %w", err)
 	}
 	client, err := coreclientset.NewForConfig(config)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create client: %v", err)
+		return nil, fmt.Errorf("failed to create client: %w", err)
 	}
 	return client.Secrets(namespace), nil
 }
@@ -169,21 +169,21 @@ func createSecret(client coreclientset.SecretInterface, name, dir string, dry bo
 		if os.IsNotExist(err) {
 			return nil
 		}
-		return fmt.Errorf("failed to stat directory %q: %v", dir, err)
+		return fmt.Errorf("failed to stat directory %q: %w", dir, err)
 	}
 	secret, err := util.SecretFromDir(dir)
 	if err != nil {
-		return fmt.Errorf("failed to generate secret: %v", err)
+		return fmt.Errorf("failed to generate secret: %w", err)
 	}
 	secret.Name = name
 	if dry {
 		logger := steps.DryLogger{}
 		logger.AddObject(secret)
 		if err := logger.Log(); err != nil {
-			return fmt.Errorf("failed to log secret: %v", err)
+			return fmt.Errorf("failed to log secret: %w", err)
 		}
 	} else if _, err := client.Update(secret); err != nil {
-		return fmt.Errorf("failed to update secret: %v", err)
+		return fmt.Errorf("failed to update secret: %w", err)
 	}
 	return nil
 }

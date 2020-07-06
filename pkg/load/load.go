@@ -84,11 +84,11 @@ func fromPath(path string) (filenameToConfig, error) {
 		if !info.IsDir() && (ext == ".yml" || ext == ".yaml") {
 			configSpec, err := Config(path, "", "", nil)
 			if err != nil {
-				return fmt.Errorf("failed to load ci-operator config (%v)", err)
+				return fmt.Errorf("failed to load ci-operator config (%w)", err)
 			}
 
 			if err := configSpec.ValidateAtRuntime(); err != nil {
-				return fmt.Errorf("invalid ci-operator config: %v", err)
+				return fmt.Errorf("invalid ci-operator config: %w", err)
 			}
 			logrus.Tracef("Adding %s to filenameToConfig", filepath.Base(path))
 			configs[filepath.Base(path)] = *configSpec
@@ -110,7 +110,7 @@ func Config(path, unresolvedPath, registryPath string, info *ResolverInfo) (*api
 	case len(path) > 0:
 		data, err := ioutil.ReadFile(path)
 		if err != nil {
-			return nil, fmt.Errorf("--config error: %v", err)
+			return nil, fmt.Errorf("--config error: %w", err)
 		}
 		raw = string(data)
 	case configSpecSet:
@@ -121,7 +121,7 @@ func Config(path, unresolvedPath, registryPath string, info *ResolverInfo) (*api
 	case len(unresolvedPath) > 0:
 		data, err := ioutil.ReadFile(unresolvedPath)
 		if err != nil {
-			return nil, fmt.Errorf("--unresolved-config error: %v", err)
+			return nil, fmt.Errorf("--unresolved-config error: %w", err)
 		}
 		configSpec, err := literalConfigFromResolver(data, info.Address)
 		err = results.ForReason("config_resolver_literal").ForError(err)
@@ -138,18 +138,18 @@ func Config(path, unresolvedPath, registryPath string, info *ResolverInfo) (*api
 	configSpec := api.ReleaseBuildConfiguration{}
 	if err := yaml.UnmarshalStrict([]byte(raw), &configSpec); err != nil {
 		if len(path) > 0 {
-			return nil, fmt.Errorf("invalid configuration in file %s: %v\nvalue:\n%s", path, err, raw)
+			return nil, fmt.Errorf("invalid configuration in file %s: %w\nvalue:\n%s", path, err, raw)
 		}
-		return nil, fmt.Errorf("invalid configuration: %v\nvalue:\n%s", err, raw)
+		return nil, fmt.Errorf("invalid configuration: %w\nvalue:\n%s", err, raw)
 	}
 	if registryPath != "" {
 		refs, chains, workflows, _, err := Registry(registryPath, false)
 		if err != nil {
-			return nil, fmt.Errorf("failed to load registry: %v", err)
+			return nil, fmt.Errorf("failed to load registry: %w", err)
 		}
 		configSpec, err = registry.ResolveConfig(registry.NewResolver(refs, chains, workflows), configSpec)
 		if err != nil {
-			return nil, fmt.Errorf("failed to resolve configuration: %v", err)
+			return nil, fmt.Errorf("failed to resolve configuration: %w", err)
 		}
 	}
 	return &configSpec, nil
@@ -163,7 +163,7 @@ func configFromResolver(info *ResolverInfo) (*api.ReleaseBuildConfiguration, err
 	log.Printf("Loading configuration from %s for %s", info.Address, identifier)
 	req, err := http.NewRequest("GET", fmt.Sprintf("%s/config", info.Address), nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request for configresolver: %s", err)
+		return nil, fmt.Errorf("failed to create request for configresolver: %w", err)
 	}
 	query := req.URL.Query()
 	query.Add("org", info.Org)
@@ -176,19 +176,19 @@ func configFromResolver(info *ResolverInfo) (*api.ReleaseBuildConfiguration, err
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to make request to configresolver: %s", err)
+		return nil, fmt.Errorf("failed to make request to configresolver: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("response from configresolver == %d (%s)", resp.StatusCode, http.StatusText(resp.StatusCode))
 	}
 	data, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read configresolver response body: %s", err)
+		return nil, fmt.Errorf("failed to read configresolver response body: %w", err)
 	}
 	configSpecHTTP := &api.ReleaseBuildConfiguration{}
 	err = json.Unmarshal(data, configSpecHTTP)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal config from configresolver: invalid configuration: %v\nvalue:\n%s", err, string(data))
+		return nil, fmt.Errorf("failed to unmarshal config from configresolver: invalid configuration: %w\nvalue:\n%s", err, string(data))
 	}
 	return configSpecHTTP, nil
 }
@@ -197,26 +197,26 @@ func literalConfigFromResolver(raw []byte, address string) (*api.ReleaseBuildCon
 	// check that the user has sent us something reasonable
 	unresolvedConfig := &api.ReleaseBuildConfiguration{}
 	if err := yaml.UnmarshalStrict(raw, unresolvedConfig); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal unresolved config: invalid configuration: %v", err)
+		return nil, fmt.Errorf("failed to unmarshal unresolved config: invalid configuration: %w", err)
 	}
 	encoded, err := json.Marshal(unresolvedConfig)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal unresolved config: invalid configuration: %v", err)
+		return nil, fmt.Errorf("failed to marshal unresolved config: invalid configuration: %w", err)
 	}
 	resp, err := http.Post(fmt.Sprintf("%s/resolve", address), "application/json", bytes.NewReader(encoded))
 	if err != nil {
-		return nil, fmt.Errorf("failed to request resolved config: %s", err)
+		return nil, fmt.Errorf("failed to request resolved config: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("response from configresolver == %d (%s)", resp.StatusCode, http.StatusText(resp.StatusCode))
 	}
 	resolved, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read configresolver response body: %s", err)
+		return nil, fmt.Errorf("failed to read configresolver response body: %w", err)
 	}
 	resolvedConfig := &api.ReleaseBuildConfiguration{}
 	if err = json.Unmarshal(resolved, resolvedConfig); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal resolved config: invalid configuration: %v\n", err)
+		return nil, fmt.Errorf("failed to unmarshal resolved config: invalid configuration: %w\n", err)
 	}
 	return resolvedConfig, nil
 }
@@ -251,7 +251,7 @@ func Registry(root string, flat bool) (references registry.ReferenceByName, chai
 			if !flat {
 				relpath, err := filepath.Rel(root, path)
 				if err != nil {
-					return fmt.Errorf("failed to determine relative path for %s: %v", path, err)
+					return fmt.Errorf("failed to determine relative path for %s: %w", path, err)
 				}
 				prefix = strings.ReplaceAll(filepath.Dir(relpath), "/", "-")
 				// Verify that file prefix is correct based on directory path
@@ -262,7 +262,7 @@ func Registry(root string, flat bool) (references registry.ReferenceByName, chai
 			if strings.HasSuffix(path, refSuffix) {
 				name, doc, ref, err := loadReference(raw, dir, prefix, flat)
 				if err != nil {
-					return fmt.Errorf("failed to load registry file %s: %v", path, err)
+					return fmt.Errorf("failed to load registry file %s: %w", path, err)
 				}
 				if !flat && name != prefix {
 					return fmt.Errorf("name of reference in file %s should be %s", path, prefix)
@@ -276,7 +276,7 @@ func Registry(root string, flat bool) (references registry.ReferenceByName, chai
 				var chain api.RegistryChainConfig
 				err := yaml.UnmarshalStrict(raw, &chain)
 				if err != nil {
-					return fmt.Errorf("failed to load registry file %s: %v", path, err)
+					return fmt.Errorf("failed to load registry file %s: %w", path, err)
 				}
 				if !flat && chain.Chain.As != prefix {
 					return fmt.Errorf("name of chain in file %s should be %s", path, prefix)
@@ -290,7 +290,7 @@ func Registry(root string, flat bool) (references registry.ReferenceByName, chai
 			} else if strings.HasSuffix(path, workflowSuffix) {
 				name, doc, workflow, err := loadWorkflow(raw)
 				if err != nil {
-					return fmt.Errorf("failed to load registry file %s: %v", path, err)
+					return fmt.Errorf("failed to load registry file %s: %w", path, err)
 				}
 				if !flat && name != prefix {
 					return fmt.Errorf("name of workflow in file %s should be %s", path, prefix)

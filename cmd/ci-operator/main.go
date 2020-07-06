@@ -369,19 +369,19 @@ func (o *options) Complete() error {
 	jobSpec, err := api.ResolveSpecFromEnv()
 	if err != nil {
 		if len(o.gitRef) == 0 {
-			return fmt.Errorf("failed to determine job spec: no --git-ref passed and failed to resolve job spec from env: %v", err)
+			return fmt.Errorf("failed to determine job spec: no --git-ref passed and failed to resolve job spec from env: %w", err)
 		}
 		// Failed to read $JOB_SPEC but --git-ref was passed, so try that instead
 		spec, refErr := jobSpecFromGitRef(o.gitRef)
 		if refErr != nil {
-			return fmt.Errorf("failed to determine job spec: failed to resolve --git-ref: %v", refErr)
+			return fmt.Errorf("failed to determine job spec: failed to resolve --git-ref: %w", refErr)
 		}
 		jobSpec = spec
 	} else if len(o.gitRef) > 0 {
 		// Read from $JOB_SPEC but --git-ref was also passed, so merge them
 		spec, err := jobSpecFromGitRef(o.gitRef)
 		if err != nil {
-			return fmt.Errorf("failed to determine job spec: failed to resolve --git-ref: %v", err)
+			return fmt.Errorf("failed to determine job spec: failed to resolve --git-ref: %w", err)
 		}
 		jobSpec.Refs = spec.Refs
 	}
@@ -389,7 +389,7 @@ func (o *options) Complete() error {
 	o.jobSpec = jobSpec
 
 	if err := o.resultsOptions.Validate(); err != nil {
-		return fmt.Errorf("invalid result reporting options: %v", err)
+		return fmt.Errorf("invalid result reporting options: %w", err)
 	}
 
 	info := o.getResolverInfo(jobSpec)
@@ -453,7 +453,7 @@ func (o *options) Complete() error {
 	if len(cloneAuthSecretPath) > 0 {
 		o.cloneAuthConfig.Secret, err = getCloneSecretFromPath(o.cloneAuthConfig.Type, cloneAuthSecretPath)
 		if err != nil {
-			return fmt.Errorf("could not get secret from path %s: %v", cloneAuthSecretPath, err)
+			return fmt.Errorf("could not get secret from path %s: %w", cloneAuthSecretPath, err)
 		}
 	}
 
@@ -461,7 +461,7 @@ func (o *options) Complete() error {
 		secret, err := util.SecretFromDir(path)
 		name := filepath.Base(path)
 		if err != nil {
-			return fmt.Errorf("failed to generate secret %s: %v", name, err)
+			return fmt.Errorf("failed to generate secret %s: %w", name, err)
 		}
 		secret.Name = name
 		if len(secret.Data) == 1 {
@@ -478,11 +478,11 @@ func (o *options) Complete() error {
 	for _, path := range o.templatePaths.values {
 		contents, err := ioutil.ReadFile(path)
 		if err != nil {
-			return fmt.Errorf("could not read dir %s for template: %v", path, err)
+			return fmt.Errorf("could not read dir %s for template: %w", path, err)
 		}
 		obj, gvk, err := templatescheme.Codecs.UniversalDeserializer().Decode(contents, nil, nil)
 		if err != nil {
-			return fmt.Errorf("unable to parse template %s: %v", path, err)
+			return fmt.Errorf("unable to parse template %s: %w", path, err)
 		}
 		template, ok := obj.(*templateapi.Template)
 		if !ok {
@@ -500,7 +500,7 @@ func (o *options) Complete() error {
 
 		clusterConfig, err := util.LoadClusterConfig()
 		if err != nil {
-			return fmt.Errorf("failed to load cluster config: %v", err)
+			return fmt.Errorf("failed to load cluster config: %w", err)
 		}
 
 		if len(o.impersonateUser) > 0 {
@@ -513,7 +513,7 @@ func (o *options) Complete() error {
 	if len(o.pullSecretPath) > 0 {
 		o.pullSecret, err = getPullSecretFromFile(o.pullSecretPath)
 		if err != nil {
-			return fmt.Errorf("could not get pull secret from path %s: %v", o.pullSecretPath, err)
+			return fmt.Errorf("could not get pull secret from path %s: %w", o.pullSecretPath, err)
 		}
 	}
 	return nil
@@ -559,11 +559,11 @@ func (o *options) Run() []error {
 	}
 
 	if err := o.writeMetadataJSON(); err != nil {
-		return []error{fmt.Errorf("unable to write metadata.json for build: %v", err)}
+		return []error{fmt.Errorf("unable to write metadata.json for build: %w", err)}
 	}
 	if o.print {
 		if err := printDigraph(os.Stdout, buildSteps); err != nil {
-			return []error{fmt.Errorf("could not print graph: %v", err)}
+			return []error{fmt.Errorf("could not print graph: %w", err)}
 		}
 		return nil
 	}
@@ -575,7 +575,7 @@ func (o *options) Run() []error {
 	}
 
 	if err := printExecutionOrder(nodes); err != nil {
-		return []error{fmt.Errorf("could not print execution order: %v", err)}
+		return []error{fmt.Errorf("could not print execution order: %w", err)}
 	}
 
 	// initialize the namespace if necessary and create any resources that must
@@ -592,23 +592,23 @@ func (o *options) Run() []error {
 	return interrupt.New(handler, o.saveNamespaceArtifacts).Run(func() []error {
 		if o.leaseServer != "" && o.leaseServerUsername != "" && o.leaseServerPasswordFile != "" {
 			if err := o.initializeLeaseClient(); err != nil {
-				return []error{fmt.Errorf("failed to create the lease client: %v", err)}
+				return []error{fmt.Errorf("failed to create the lease client: %w", err)}
 			}
 		}
 		client, err := coreclientset.NewForConfig(o.clusterConfig)
 		if err != nil {
-			return []error{fmt.Errorf("could not get core client for cluster config: %v", err)}
+			return []error{fmt.Errorf("could not get core client for cluster config: %w", err)}
 		}
 		if !o.dry {
 			go monitorNamespace(ctx, cancel, o.namespace, client.Namespaces())
 		}
 		authClient, err := authclientset.NewForConfig(o.clusterConfig)
 		if err != nil {
-			return []error{fmt.Errorf("could not get auth client for cluster config: %v", err)}
+			return []error{fmt.Errorf("could not get auth client for cluster config: %w", err)}
 		}
 		eventRecorder, err := eventRecorder(client, authClient, o.namespace, o.dry)
 		if err != nil {
-			return []error{fmt.Errorf("could not create event recorder: %v", err)}
+			return []error{fmt.Errorf("could not create event recorder: %w", err)}
 		}
 		runtimeObject := &coreapi.ObjectReference{Namespace: o.namespace}
 		eventRecorder.Event(runtimeObject, coreapi.EventTypeNormal, "CiJobStarted", eventJobDescription(o.jobSpec, o.namespace))
@@ -660,7 +660,7 @@ func (o *options) resolveInputs(steps []api.Step) error {
 	for _, step := range steps {
 		definition, err := step.Inputs(o.dry)
 		if err != nil {
-			return fmt.Errorf("could not determine inputs for step %s: %v", step.Name(), err)
+			return fmt.Errorf("could not determine inputs for step %s: %w", step.Name(), err)
 		}
 		inputs = append(inputs, definition...)
 	}
@@ -725,7 +725,7 @@ func (o *options) initializeNamespace() error {
 	}
 	projectGetter, err := projectclientset.NewForConfig(o.clusterConfig)
 	if err != nil {
-		return fmt.Errorf("could not get project client for cluster config: %v", err)
+		return fmt.Errorf("could not get project client for cluster config: %w", err)
 	}
 
 	log.Printf("Creating namespace %s", o.namespace)
@@ -739,7 +739,7 @@ func (o *options) initializeNamespace() error {
 			Description: jobDescription(o.jobSpec),
 		})
 		if err != nil && !kerrors.IsAlreadyExists(err) {
-			return fmt.Errorf("could not set up namespace for test: %v", err)
+			return fmt.Errorf("could not set up namespace for test: %w", err)
 		}
 		if err != nil {
 			project, err = projectGetter.ProjectV1().Projects().Get(o.namespace, meta.GetOptions{})
@@ -753,7 +753,7 @@ func (o *options) initializeNamespace() error {
 					time.Sleep(time.Second)
 					continue
 				}
-				return fmt.Errorf("cannot retrieve test namespace: %v", err)
+				return fmt.Errorf("cannot retrieve test namespace: %w", err)
 			}
 		}
 		if project.Status.Phase == coreapi.NamespaceTerminating {
@@ -768,7 +768,7 @@ func (o *options) initializeNamespace() error {
 		// Generate rolebinding for all the PR Authors.
 		rbacClient, err := rbacclientset.NewForConfig(o.clusterConfig)
 		if err != nil {
-			return fmt.Errorf("could not get RBAC client for cluster config: %v", err)
+			return fmt.Errorf("could not get RBAC client for cluster config: %w", err)
 		}
 		for _, author := range o.authors {
 			log.Printf("Creating rolebinding for user %s in namespace %s", author, o.namespace)
@@ -783,19 +783,19 @@ func (o *options) initializeNamespace() error {
 					Name: "admin",
 				},
 			}); err != nil && !kerrors.IsAlreadyExists(err) {
-				return fmt.Errorf("could not create role binding for: %v", err)
+				return fmt.Errorf("could not create role binding for: %w", err)
 			}
 		}
 	}
 
 	client, err := coreclientset.NewForConfig(o.clusterConfig)
 	if err != nil {
-		return fmt.Errorf("could not get core client for cluster config: %v", err)
+		return fmt.Errorf("could not get core client for cluster config: %w", err)
 	}
 
 	if o.pullSecret != nil {
 		if _, err := client.Secrets(o.namespace).Create(o.pullSecret); err != nil && !kerrors.IsAlreadyExists(err) {
-			return fmt.Errorf("couldn't create pull secret %s: %v", o.pullSecret.Name, err)
+			return fmt.Errorf("couldn't create pull secret %s: %w", o.pullSecret.Name, err)
 		}
 	}
 
@@ -850,14 +850,14 @@ func (o *options) initializeNamespace() error {
 			}
 			return updateErr
 		}); err != nil {
-			return fmt.Errorf("could not update namespace to add TTLs and active annotations: %v", err)
+			return fmt.Errorf("could not update namespace to add TTLs and active annotations: %w", err)
 		}
 	}
 
 	log.Printf("Setting up pipeline imagestream for the test")
 	imageGetter, err := imageclientset.NewForConfig(o.clusterConfig)
 	if err != nil {
-		return fmt.Errorf("could not get image client for cluster config: %v", err)
+		return fmt.Errorf("could not get image client for cluster config: %w", err)
 	}
 
 	// create the image stream or read it to get its uid
@@ -873,7 +873,7 @@ func (o *options) initializeNamespace() error {
 	})
 	if err != nil {
 		if !kerrors.IsAlreadyExists(err) {
-			return fmt.Errorf("could not set up pipeline imagestream for test: %v", err)
+			return fmt.Errorf("could not set up pipeline imagestream for test: %w", err)
 		}
 		is, _ = imageGetter.ImageStreams(o.jobSpec.Namespace()).Get(api.PipelineImageStream, meta.GetOptions{})
 	}
@@ -890,14 +890,14 @@ func (o *options) initializeNamespace() error {
 
 	if o.cloneAuthConfig != nil && o.cloneAuthConfig.Secret != nil {
 		if _, err := client.Secrets(o.namespace).Create(o.cloneAuthConfig.Secret); err != nil && !kerrors.IsAlreadyExists(err) {
-			return fmt.Errorf("couldn't create secret %s for %s authentication: %v", o.cloneAuthConfig.Secret.Name, o.cloneAuthConfig.Type, err)
+			return fmt.Errorf("couldn't create secret %s for %s authentication: %w", o.cloneAuthConfig.Secret.Name, o.cloneAuthConfig.Type, err)
 		}
 	}
 
 	for _, secret := range o.secrets {
 		created, err := util.UpdateSecret(client.Secrets(o.namespace), secret)
 		if err != nil {
-			return fmt.Errorf("could not update secret %s: %v", secret.Name, err)
+			return fmt.Errorf("could not update secret %s: %w", secret.Name, err)
 		}
 		if created {
 			log.Printf("Created secret %s", secret.Name)
@@ -1116,7 +1116,7 @@ func (o *options) writeJUnit(suites *junit.TestSuites, name string) error {
 	suites.Suites[0].Name = name
 	out, err := xml.MarshalIndent(suites, "", "  ")
 	if err != nil {
-		return fmt.Errorf("could not marshal jUnit XML: %v", err)
+		return fmt.Errorf("could not marshal jUnit XML: %w", err)
 	}
 	return ioutil.WriteFile(filepath.Join(o.artifactDir, fmt.Sprintf("junit_%s.xml", name)), out, 0640)
 }
@@ -1205,7 +1205,7 @@ func (o *options) initializeLeaseClient() error {
 	if o.dry {
 		o.leaseClient = lease.NewFakeClient(owner, o.leaseServer, 0, nil, nil)
 	} else if o.leaseClient, err = lease.NewClient(owner, o.leaseServer, o.leaseServerUsername, o.leaseServerPasswordFile, 60); err != nil {
-		return fmt.Errorf("failed to create the lease client: %v", err)
+		return fmt.Errorf("failed to create the lease client: %w", err)
 	}
 	t := time.NewTicker(30 * time.Second)
 	go func() {
@@ -1271,7 +1271,7 @@ func jobSpecFromGitRef(ref string) (*api.JobSpec, error) {
 	repo := fmt.Sprintf("https://github.com/%s/%s.git", prefix[0], prefix[1])
 	out, err := exec.Command("git", "ls-remote", repo, parts[1]).Output()
 	if err != nil {
-		return nil, fmt.Errorf("'git ls-remote %s %s' failed with '%s'", repo, parts[1], err)
+		return nil, fmt.Errorf("'git ls-remote %s %s' failed with '%w'", repo, parts[1], err)
 	}
 	resolved := strings.Split(strings.Split(string(out), "\n")[0], "\t")
 	sha := resolved[0]
@@ -1374,7 +1374,7 @@ func printDigraph(w io.Writer, steps []api.Step) error {
 func printExecutionOrder(nodes []*api.StepNode) error {
 	ordered, err := topologicalSort(nodes)
 	if err != nil {
-		return fmt.Errorf("could not sort nodes: %v", err)
+		return fmt.Errorf("could not sort nodes: %w", err)
 	}
 	log.Printf("Running %s", strings.Join(nodeNames(ordered), ", "))
 	return nil
@@ -1417,7 +1417,7 @@ func eventRecorder(kubeClient *coreclientset.CoreV1Client, authClient *authclien
 		},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("could not check permission to create events: %v", err)
+		return nil, fmt.Errorf("could not check permission to create events: %w", err)
 	}
 	if !res.Status.Allowed {
 		log.Println("warning: Events will not be created because of lack of permission")
@@ -1434,7 +1434,7 @@ func getCloneSecretFromPath(cloneAuthType steps.CloneAuthType, secretPath string
 	secret := &coreapi.Secret{Data: make(map[string][]byte)}
 	data, err := ioutil.ReadFile(secretPath)
 	if err != nil {
-		return nil, fmt.Errorf("could not read file %s for secret: %v", secretPath, err)
+		return nil, fmt.Errorf("could not read file %s for secret: %w", secretPath, err)
 	}
 	hash := getHashFromBytes(data)
 	data = bytes.TrimSpace(data)
@@ -1477,7 +1477,7 @@ func getPullSecretFromFile(filename string) (*coreapi.Secret, error) {
 
 	src, err := ioutil.ReadFile(filename)
 	if err != nil {
-		return nil, fmt.Errorf("could not read file %s for secret: %v", filename, err)
+		return nil, fmt.Errorf("could not read file %s for secret: %w", filename, err)
 	}
 	secret.Data[coreapi.DockerConfigJsonKey] = src
 	return secret, nil

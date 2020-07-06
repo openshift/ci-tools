@@ -32,16 +32,16 @@ type Prowgen struct {
 func readCiOperatorConfig(configFilePath string, info Info) (*cioperatorapi.ReleaseBuildConfiguration, error) {
 	data, err := ioutil.ReadFile(configFilePath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read ci-operator config (%v)", err)
+		return nil, fmt.Errorf("failed to read ci-operator config (%w)", err)
 	}
 
 	var configSpec *cioperatorapi.ReleaseBuildConfiguration
 	if err := yaml.Unmarshal(data, &configSpec); err != nil {
-		return nil, fmt.Errorf("failed to load ci-operator config (%v)", err)
+		return nil, fmt.Errorf("failed to load ci-operator config (%w)", err)
 	}
 
 	if err := configSpec.Validate(info.Org, info.Repo); err != nil {
-		return nil, fmt.Errorf("invalid ci-operator config: %v", err)
+		return nil, fmt.Errorf("invalid ci-operator config: %w", err)
 	}
 
 	return configSpec, nil

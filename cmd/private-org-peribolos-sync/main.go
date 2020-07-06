@@ -200,7 +200,7 @@ func getReposForPrivateOrg(releaseRepoPath string, whitelist map[string][]string
 	}
 
 	if err := config.OperateOnCIOperatorConfigDir(filepath.Join(releaseRepoPath, config.CiopConfigInRepoPath), callback); err != nil {
-		return ret, fmt.Errorf("error while operating in ci-operator configuration files: %v", err)
+		return ret, fmt.Errorf("error while operating in ci-operator configuration files: %w", err)
 	}
 
 	return ret, nil

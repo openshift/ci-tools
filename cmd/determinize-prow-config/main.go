@@ -58,11 +58,11 @@ func updateProwConfig(configDir string) error {
 	configPath := path.Join(configDir, config.ProwConfigFile)
 	agent := prowconfig.Agent{}
 	if err := agent.Start(configPath, ""); err != nil {
-		return fmt.Errorf("could not load Prow configuration: %v", err)
+		return fmt.Errorf("could not load Prow configuration: %w", err)
 	}
 	data, err := yaml.Marshal(agent.Config())
 	if err != nil {
-		return fmt.Errorf("could not marshal Prow configuration: %v", err)
+		return fmt.Errorf("could not marshal Prow configuration: %w", err)
 	}
 
 	return ioutil.WriteFile(configPath, data, 0644)
@@ -72,11 +72,11 @@ func updatePluginConfig(configDir string) error {
 	configPath := path.Join(configDir, config.PluginConfigFile)
 	agent := plugins.ConfigAgent{}
 	if err := agent.Load(configPath, false); err != nil {
-		return fmt.Errorf("could not load Prow plugin configuration: %v", err)
+		return fmt.Errorf("could not load Prow plugin configuration: %w", err)
 	}
 	data, err := yaml.Marshal(agent.Config())
 	if err != nil {
-		return fmt.Errorf("could not marshal Prow plugin configuration: %v", err)
+		return fmt.Errorf("could not marshal Prow plugin configuration: %w", err)
 	}
 
 	return ioutil.WriteFile(configPath, data, 0644)

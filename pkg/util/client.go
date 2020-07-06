@@ -14,12 +14,12 @@ func LoadClusterConfig() (*rest.Config, error) {
 	if env := os.Getenv(clientcmd.RecommendedConfigPathEnvVar); env != "" {
 		credentials, err := clientcmd.NewDefaultClientConfigLoadingRules().Load()
 		if err != nil {
-			return nil, fmt.Errorf("could not load credentials from config: %v", err)
+			return nil, fmt.Errorf("could not load credentials from config: %w", err)
 		}
 
 		clusterConfig, err := clientcmd.NewDefaultClientConfig(*credentials, &clientcmd.ConfigOverrides{}).ClientConfig()
 		if err != nil {
-			return nil, fmt.Errorf("could not load client configuration: %v", err)
+			return nil, fmt.Errorf("could not load client configuration: %w", err)
 		}
 		return clusterConfig, nil
 	}
@@ -41,7 +41,7 @@ func LoadKubeConfigs(kubeconfig string) (map[string]*rest.Config, string, error)
 		contextCfg, err := clientcmd.NewNonInteractiveClientConfig(*cfg, context, &clientcmd.ConfigOverrides{}, loader).ClientConfig()
 		if err != nil {
 			// Let the caller decide if they want to handle errors
-			errs = append(errs, fmt.Errorf("create %s client: %v", context, err))
+			errs = append(errs, fmt.Errorf("create %s client: %w", context, err))
 			continue
 		}
 		configs[context] = contextCfg

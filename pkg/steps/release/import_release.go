@@ -97,7 +97,7 @@ func (s *importReleaseStep) run(ctx context.Context, dry bool) error {
 		},
 	})
 	if err != nil && !errors.IsAlreadyExists(err) {
-		return fmt.Errorf("could not create stable imagestreamtag: %v", err)
+		return fmt.Errorf("could not create stable imagestreamtag: %w", err)
 	}
 	// tag the release image in and let it import
 	var pullSpec string
@@ -142,7 +142,7 @@ func (s *importReleaseStep) run(ctx context.Context, dry bool) error {
 		pullSpec = result.Status.Images[0].Image.DockerImageReference
 		return true, nil
 	}); err != nil {
-		return fmt.Errorf("unable to import %s release image: %v", s.name, err)
+		return fmt.Errorf("unable to import %s release image: %w", s.name, err)
 	}
 
 	// override anything in stable with the contents of the release image
@@ -175,14 +175,14 @@ func (s *importReleaseStep) run(ctx context.Context, dry bool) error {
 			},
 		},
 	}); err != nil {
-		return fmt.Errorf("unable to find the 'cli' image in the provided release image: %v", err)
+		return fmt.Errorf("unable to find the 'cli' image in the provided release image: %w", err)
 	}
 	pod, err := s.podClient.Pods(s.jobSpec.Namespace()).Get(targetCLI, meta.GetOptions{})
 	if err != nil {
-		return fmt.Errorf("unable to extract the 'cli' image from the release image: %v", err)
+		return fmt.Errorf("unable to extract the 'cli' image from the release image: %w", err)
 	}
 	if len(pod.Status.ContainerStatuses) == 0 || pod.Status.ContainerStatuses[0].State.Terminated == nil {
-		return fmt.Errorf("unable to extract the 'cli' image from the release image: %v", err)
+		return fmt.Errorf("unable to extract the 'cli' image from the release image: %w", err)
 	}
 	cliImage := pod.Status.ContainerStatuses[0].State.Terminated.Message
 
@@ -204,7 +204,7 @@ func (s *importReleaseStep) run(ctx context.Context, dry bool) error {
 		})
 		return err
 	}); err != nil {
-		return fmt.Errorf("unable to tag the 'cli' image into the stable stream: %v", err)
+		return fmt.Errorf("unable to tag the 'cli' image into the stable stream: %w", err)
 	}
 
 	// run adm release extract and grab the raw image-references from the payload
@@ -244,21 +244,21 @@ oc adm release extract --from=%q --file=image-references > /tmp/artifacts/%s
 	// read the contents from the artifacts directory
 	isContents, err := ioutil.ReadFile(filepath.Join(artifactDir, podConfig.As, target))
 	if err != nil {
-		return fmt.Errorf("unable to read release image stream: %v", err)
+		return fmt.Errorf("unable to read release image stream: %w", err)
 	}
 	var releaseIS imageapi.ImageStream
 	if err := json.Unmarshal(isContents, &releaseIS); err != nil {
-		return fmt.Errorf("unable to decode release image stream: %v", err)
+		return fmt.Errorf("unable to decode release image stream: %w", err)
 	}
 	if releaseIS.Kind != "ImageStream" || releaseIS.APIVersion != "image.openshift.io/v1" {
-		return fmt.Errorf("unexpected image stream contents: %v", err)
+		return fmt.Errorf("unexpected image stream contents: %w", err)
 	}
 
 	// update the stable image stream to have all of the tags from the payload
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		stable, err := s.imageClient.ImageStreams(s.jobSpec.Namespace()).Get(streamName, meta.GetOptions{})
 		if err != nil {
-			return fmt.Errorf("could not resolve imagestream %s: %v", streamName, err)
+			return fmt.Errorf("could not resolve imagestream %s: %w", streamName, err)
 		}
 
 		existing := sets.NewString()
@@ -281,7 +281,7 @@ oc adm release extract --from=%q --file=image-references > /tmp/artifacts/%s
 		_, err = s.imageClient.ImageStreams(s.jobSpec.Namespace()).Update(stable)
 		return err
 	}); err != nil {
-		return fmt.Errorf("unable to update stable image stream with release tags: %v", err)
+		return fmt.Errorf("unable to update stable image stream with release tags: %w", err)
 	}
 
 	// loop until we observe all images have successfully imported, kicking import if a particular
@@ -292,7 +292,7 @@ oc adm release extract --from=%q --file=image-references > /tmp/artifacts/%s
 		var err error
 		stable, err = s.imageClient.ImageStreams(s.jobSpec.Namespace()).Get(streamName, meta.GetOptions{})
 		if err != nil {
-			return false, fmt.Errorf("could not resolve imagestream %s: %v", streamName, err)
+			return false, fmt.Errorf("could not resolve imagestream %s: %w", streamName, err)
 		}
 		generations := make(map[string]int64)
 		for _, tag := range stable.Spec.Tags {
@@ -331,7 +331,7 @@ oc adm release extract --from=%q --file=image-references > /tmp/artifacts/%s
 		return false, nil
 	}); err != nil {
 		if len(waiting) == 0 || err != wait.ErrWaitTimeout {
-			return fmt.Errorf("unable to import image stream %s: %v", streamName, err)
+			return fmt.Errorf("unable to import image stream %s: %w", streamName, err)
 		}
 		var tagImportErrorMessages []string
 		for tag := range waiting {

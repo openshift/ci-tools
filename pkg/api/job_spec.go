@@ -76,7 +76,7 @@ func (s JobSpec) JobNameHash() string {
 func ResolveSpecFromEnv() (*JobSpec, error) {
 	apiSpec, err := downwardapi.ResolveSpecFromEnv()
 	if err != nil {
-		return nil, fmt.Errorf("malformed $JOB_SPEC: %v", err)
+		return nil, fmt.Errorf("malformed $JOB_SPEC: %w", err)
 	}
 	raw, err := json.Marshal(apiSpec)
 	if err != nil {

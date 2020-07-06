@@ -676,7 +676,7 @@ func TestValidateTestSteps(t *testing.T) {
 				seen = sets.NewString()
 			}
 			ret := validateTestSteps("test", tc.steps, seen, nil)
-			if !reflect.DeepEqual(ret, tc.errs) {
+			if !errListMessagesEqual(ret, tc.errs) {
 				t.Fatal(diff.ObjectReflectDiff(ret, tc.errs))
 			}
 		})
@@ -1420,4 +1420,19 @@ func TestValidatePrerelease(t *testing.T) {
 			}
 		})
 	}
+}
+
+func errListMessagesEqual(a, b []error) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for idx := range a {
+		if (a[idx] == nil) != (b[idx] == nil) {
+			return false
+		}
+		if a[idx].Error() != b[idx].Error() {
+			return false
+		}
+	}
+	return true
 }

@@ -20,7 +20,7 @@ func SecretFromDir(path string) (*coreapi.Secret, error) {
 	}
 	files, err := ioutil.ReadDir(path)
 	if err != nil {
-		return nil, fmt.Errorf("could not read dir %s: %v", path, err)
+		return nil, fmt.Errorf("could not read dir %s: %w", path, err)
 	}
 	for _, f := range files {
 		if f.IsDir() {
@@ -33,7 +33,7 @@ func SecretFromDir(path string) (*coreapi.Secret, error) {
 		}
 		ret.Data[f.Name()], err = ioutil.ReadFile(path)
 		if err != nil {
-			return nil, fmt.Errorf("could not read file %s: %v", path, err)
+			return nil, fmt.Errorf("could not read file %s: %w", path, err)
 		}
 	}
 	return ret, nil

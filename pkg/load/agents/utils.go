@@ -47,7 +47,7 @@ func startWatchers(path string, c coalescer.Coalescer, recordError func(string))
 			for dir := range dirs {
 				// Adding a file or directory that already exists in fsnotify is a no-op, so it is safe to always run Add
 				if err := w.Add(dir); err != nil {
-					return fmt.Errorf("Failed to update watcher: %v", err)
+					return fmt.Errorf("Failed to update watcher: %w", err)
 				}
 			}
 			return nil

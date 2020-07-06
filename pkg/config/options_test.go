@@ -1,11 +1,12 @@
 package config
 
 import (
-	"errors"
 	"flag"
-	"github.com/openshift/ci-tools/pkg/api"
+	"fmt"
 	"reflect"
 	"testing"
+
+	"github.com/openshift/ci-tools/pkg/api"
 )
 
 func TestOptions_Bind(t *testing.T) {
@@ -108,12 +109,12 @@ func TestOptions_Validate(t *testing.T) {
 	var testCases = []struct {
 		name     string
 		input    Options
-		expected error
+		expected string
 	}{
 		{
 			name:     "nothing set errors",
 			input:    Options{},
-			expected: errors.New("required flag --config-dir was unset"),
+			expected: "required flag --config-dir was unset",
 		},
 		{
 			name: "invalid log level errors",
@@ -121,7 +122,7 @@ func TestOptions_Validate(t *testing.T) {
 				ConfigDir: "/somewhere",
 				LogLevel:  "whoa",
 			},
-			expected: errors.New("invalid --log-level: not a valid logrus Level: \"whoa\""),
+			expected: "invalid --log-level: not a valid logrus Level: \"whoa\"",
 		},
 		{
 			name: "valid config has no errors",
@@ -129,13 +130,13 @@ func TestOptions_Validate(t *testing.T) {
 				ConfigDir: "/somewhere",
 				LogLevel:  "debug",
 			},
-			expected: nil,
+			expected: "<nil>",
 		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			if actual, expected := testCase.input.Validate(), testCase.expected; !reflect.DeepEqual(actual, expected) {
+			if actual, expected := testCase.input.Validate(), testCase.expected; expected != fmt.Sprintf("%v", actual) {
 				t.Errorf("%s: got incorrect error from validate: expected %v, got %v", testCase.name, expected, actual)
 			}
 		})

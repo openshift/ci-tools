@@ -63,7 +63,7 @@ func gatherOptions() (options, error) {
 func validateOptions(o options) error {
 	_, err := log.ParseLevel(o.logLevel)
 	if err != nil {
-		return fmt.Errorf("invalid --log-level: %v", err)
+		return fmt.Errorf("invalid --log-level: %w", err)
 	}
 	if o.username == "" {
 		return errors.New("--username is required")
@@ -121,13 +121,13 @@ func handleCIOperatorResult(username string, password func() []byte) http.Handle
 
 		bytes, err := ioutil.ReadAll(r.Body)
 		if err != nil {
-			handleError(w, fmt.Errorf("unable to ready request body: %v", err))
+			handleError(w, fmt.Errorf("unable to ready request body: %w", err))
 			return
 		}
 
 		request := &results.Request{}
 		if err := json.Unmarshal(bytes, request); err != nil {
-			handleError(w, fmt.Errorf("unable to decode request body: %v", err))
+			handleError(w, fmt.Errorf("unable to decode request body: %w", err))
 			return
 		}
 

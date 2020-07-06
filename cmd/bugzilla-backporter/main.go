@@ -105,7 +105,7 @@ func gatherOptions() (options, error) {
 func processOptions(o options) error {
 	level, err := log.ParseLevel(o.logLevel)
 	if err != nil {
-		return fmt.Errorf("invalid --log-level '%s': %v", o.logLevel, err)
+		return fmt.Errorf("invalid --log-level '%s': %w", o.logLevel, err)
 	}
 	log.SetLevel(level)
 	return nil

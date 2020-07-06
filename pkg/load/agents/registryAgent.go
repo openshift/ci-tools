@@ -57,7 +57,7 @@ func NewRegistryAgent(registryPath string, cycle time.Duration, errorMetrics *pr
 	registryCoalescer := coalescer.NewCoalescer(a.loadRegistry)
 	err := registryCoalescer.Run()
 	if err != nil {
-		return nil, fmt.Errorf("Failed to load registry: %v", err)
+		return nil, fmt.Errorf("Failed to load registry: %w", err)
 	}
 
 	// periodic reload
@@ -99,7 +99,7 @@ func (a *registryAgent) loadRegistry() error {
 	references, chains, workflows, documentation, err := load.Registry(a.registryPath, a.flatRegistry)
 	if err != nil {
 		a.recordError("failed to load ci-operator registry")
-		return fmt.Errorf("failed to load ci-operator registry (%v)", err)
+		return fmt.Errorf("failed to load ci-operator registry (%w)", err)
 	}
 	a.lock.Lock()
 	a.references = references

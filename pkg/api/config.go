@@ -266,7 +266,7 @@ func validateTestConfigurationType(fieldRoot string, test TestStepConfiguration,
 		typeCount++
 		if testConfig.MemoryBackedVolume != nil {
 			if _, err := resource.ParseQuantity(testConfig.MemoryBackedVolume.Size); err != nil {
-				validationErrors = append(validationErrors, fmt.Errorf("%s.memory_backed_volume: 'size' must be a Kubernetes quantity: %v", fieldRoot, err))
+				validationErrors = append(validationErrors, fmt.Errorf("%s.memory_backed_volume: 'size' must be a Kubernetes quantity: %w", fieldRoot, err))
 			}
 		}
 		if len(testConfig.From) == 0 {
@@ -471,7 +471,7 @@ func validateCredentials(fieldRoot string, credentials []CredentialReference) []
 			//    never contain '..' if B is a subdirectory of A
 			relPath, err := filepath.Rel(other.MountPath, credential.MountPath)
 			if err != nil {
-				errs = append(errs, fmt.Errorf("%s.credentials[%d] could not check relative path to credentials[%d] (%s)", fieldRoot, i, index, err))
+				errs = append(errs, fmt.Errorf("%s.credentials[%d] could not check relative path to credentials[%d] (%w)", fieldRoot, i, index, err))
 				continue
 			}
 			if !strings.Contains(relPath, "..") {
@@ -479,7 +479,7 @@ func validateCredentials(fieldRoot string, credentials []CredentialReference) []
 			}
 			relPath, err = filepath.Rel(credential.MountPath, other.MountPath)
 			if err != nil {
-				errs = append(errs, fmt.Errorf("%s.credentials[%d] could not check relative path to credentials[%d] (%s)", fieldRoot, index, i, err))
+				errs = append(errs, fmt.Errorf("%s.credentials[%d] could not check relative path to credentials[%d] (%w)", fieldRoot, index, i, err))
 				continue
 			}
 			if !strings.Contains(relPath, "..") {
@@ -568,7 +568,7 @@ func validateResourceList(fieldRoot string, list ResourceList) []error {
 		switch key {
 		case "cpu", "memory":
 			if quantity, err := resource.ParseQuantity(list[key]); err != nil {
-				validationErrors = append(validationErrors, fmt.Errorf("%s.%s: invalid quantity: %v", fieldRoot, key, err))
+				validationErrors = append(validationErrors, fmt.Errorf("%s.%s: invalid quantity: %w", fieldRoot, key, err))
 			} else {
 				if quantity.IsZero() {
 					validationErrors = append(validationErrors, fmt.Errorf("%s.%s: quantity cannot be zero", fieldRoot, key))

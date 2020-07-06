@@ -86,7 +86,7 @@ func loadProwPlugins(pluginsPath string) (*plugins.Configuration, error) {
 func updateProwConfig(configFile string, config prowconfig.ProwConfig) error {
 	data, err := yaml.Marshal(config)
 	if err != nil {
-		return fmt.Errorf("could not marshal Prow configuration: %v", err)
+		return fmt.Errorf("could not marshal Prow configuration: %w", err)
 	}
 
 	return ioutil.WriteFile(configFile, data, 0644)
@@ -95,7 +95,7 @@ func updateProwConfig(configFile string, config prowconfig.ProwConfig) error {
 func updateProwPlugins(pluginsFile string, config *plugins.Configuration) error {
 	data, err := yaml.Marshal(config)
 	if err != nil {
-		return fmt.Errorf("could not marshal Prow configuration: %v", err)
+		return fmt.Errorf("could not marshal Prow configuration: %w", err)
 	}
 
 	return ioutil.WriteFile(pluginsFile, data, 0644)
@@ -133,7 +133,7 @@ func getOrgReposWithOfficialImages(releaseRepoPath string, whitelist map[string]
 	}
 
 	if err := config.OperateOnCIOperatorConfigDir(filepath.Join(releaseRepoPath, config.CiopConfigInRepoPath), callback); err != nil {
-		return ret, fmt.Errorf("error while operating in ci-operator configuration files: %v", err)
+		return ret, fmt.Errorf("error while operating in ci-operator configuration files: %w", err)
 	}
 
 	return ret, nil
@@ -359,14 +359,14 @@ func getAllConfigs(releaseRepoPath string) (*config.ReleaseRepoConfig, error) {
 	ciopConfigPath := filepath.Join(releaseRepoPath, config.CiopConfigInRepoPath)
 	c.CiOperator, err = config.LoadDataByFilename(ciopConfigPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load ci-operator configuration from release repo: %v", err)
+		return nil, fmt.Errorf("failed to load ci-operator configuration from release repo: %w", err)
 	}
 
 	prowConfigPath := filepath.Join(releaseRepoPath, config.ConfigInRepoPath)
 	prowJobConfigPath := filepath.Join(releaseRepoPath, config.JobConfigInRepoPath)
 	c.Prow, err = prowconfig.Load(prowConfigPath, prowJobConfigPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load Prow configuration from release repo: %v", err)
+		return nil, fmt.Errorf("failed to load Prow configuration from release repo: %w", err)
 	}
 
 	return c, nil

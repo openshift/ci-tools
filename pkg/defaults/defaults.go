@@ -72,7 +72,7 @@ func FromConfig(
 	if clusterConfig != nil {
 		buildGetter, err := buildclientset.NewForConfig(clusterConfig)
 		if err != nil {
-			return nil, nil, fmt.Errorf("could not get build client for cluster config: %v", err)
+			return nil, nil, fmt.Errorf("could not get build client for cluster config: %w", err)
 		}
 		buildClient = steps.NewBuildClient(buildGetter, buildGetter.RESTClient())
 
@@ -87,30 +87,30 @@ func FromConfig(
 		}
 		imageGetter, err := imageclientset.NewForConfig(imageConfig)
 		if err != nil {
-			return nil, nil, fmt.Errorf("could not get image client for cluster config: %v", err)
+			return nil, nil, fmt.Errorf("could not get image client for cluster config: %w", err)
 		}
 		imageClient = imageGetter
 
 		routeGetter, err = routeclientset.NewForConfig(clusterConfig)
 		if err != nil {
-			return nil, nil, fmt.Errorf("could not get route client for cluster config: %v", err)
+			return nil, nil, fmt.Errorf("could not get route client for cluster config: %w", err)
 		}
 
 		templateGetter, err := templateclientset.NewForConfig(clusterConfig)
 		if err != nil {
-			return nil, nil, fmt.Errorf("could not get template client for cluster config: %v", err)
+			return nil, nil, fmt.Errorf("could not get template client for cluster config: %w", err)
 		}
 		templateClient = steps.NewTemplateClient(templateGetter, templateGetter.RESTClient())
 
 		appsGetter, err := appsclientset.NewForConfig(clusterConfig)
 		if err != nil {
-			return nil, nil, fmt.Errorf("could not get apps client for cluster config: %v", err)
+			return nil, nil, fmt.Errorf("could not get apps client for cluster config: %w", err)
 		}
 		deploymentGetter = appsGetter
 
 		coreGetter, err := coreclientset.NewForConfig(clusterConfig)
 		if err != nil {
-			return nil, nil, fmt.Errorf("could not get core client for cluster config: %v", err)
+			return nil, nil, fmt.Errorf("could not get core client for cluster config: %w", err)
 		}
 		serviceGetter = coreGetter
 		configMapGetter = coreGetter
@@ -121,7 +121,7 @@ func FromConfig(
 
 		rbacGetter, err := rbacclientset.NewForConfig(clusterConfig)
 		if err != nil {
-			return nil, nil, fmt.Errorf("could not get RBAC client for cluster config: %v", err)
+			return nil, nil, fmt.Errorf("could not get RBAC client for cluster config: %w", err)
 		}
 		rbacClient = rbacGetter
 		saGetter = coreGetter
@@ -178,7 +178,7 @@ func FromConfig(
 				if params.HasInput(envVar) {
 					pullSpec, err := params.Get(envVar)
 					if err != nil {
-						return nil, nil, results.ForReason("reading_release").ForError(fmt.Errorf("failed to read input release pullSpec %s: %v", name, err))
+						return nil, nil, results.ForReason("reading_release").ForError(fmt.Errorf("failed to read input release pullSpec %s: %w", name, err))
 					}
 					log.Printf("Resolved release %s to %s", name, pullSpec)
 					releaseStep = release.ImportReleaseStep(name, pullSpec, true, config.Resources, podClient, imageClient, saGetter, rbacClient, artifactDir, jobSpec, dryLogger)
@@ -214,7 +214,7 @@ func FromConfig(
 					value, err = prerelease.ResolvePullSpec(*resolveConfig.Prerelease)
 				}
 				if err != nil {
-					return nil, nil, results.ForReason("resolving_release").ForError(fmt.Errorf("failed to resolve release %s: %v", resolveConfig.Name, err))
+					return nil, nil, results.ForReason("resolving_release").ForError(fmt.Errorf("failed to resolve release %s: %w", resolveConfig.Name, err))
 				}
 				log.Printf("Resolved release %s to %s", resolveConfig.Name, value)
 			}
@@ -240,7 +240,7 @@ func FromConfig(
 					var err error
 					step, err = clusterinstall.E2ETestStep(*testStep.OpenshiftInstallerClusterTestConfiguration, *testStep, params, podClient, templateClient, secretGetter, artifactDir, jobSpec, dryLogger, config.Resources)
 					if err != nil {
-						return nil, nil, fmt.Errorf("unable to create end to end test step: %v", err)
+						return nil, nil, fmt.Errorf("unable to create end to end test step: %w", err)
 					}
 					step = steps.LeaseStep(leaseClient, test.ClusterProfile.LeaseType(), step, jobSpec.Namespace, namespaceClient)
 				}
@@ -269,11 +269,11 @@ func FromConfig(
 			if hasClusterType && hasUseLease {
 				clusterType, err := params.Get("CLUSTER_TYPE")
 				if err != nil {
-					return nil, nil, fmt.Errorf("failed to get \"CLUSTER_TYPE\" parameter: %v", err)
+					return nil, nil, fmt.Errorf("failed to get \"CLUSTER_TYPE\" parameter: %w", err)
 				}
 				lease, err := api.LeaseTypeFromClusterType(clusterType)
 				if err != nil {
-					return nil, nil, fmt.Errorf("cannot resolve lease type from cluster type: %v", err)
+					return nil, nil, fmt.Errorf("cannot resolve lease type from cluster type: %w", err)
 				}
 				step = steps.LeaseStep(leaseClient, lease, step, jobSpec.Namespace, namespaceClient)
 				break
@@ -299,7 +299,7 @@ func FromConfig(
 	if promote {
 		cfg, err := promotionDefaults(config)
 		if err != nil {
-			return nil, nil, fmt.Errorf("could not determine promotion defaults: %v", err)
+			return nil, nil, fmt.Errorf("could not determine promotion defaults: %w", err)
 		}
 		postSteps = append(postSteps, release.PromotionStep(*cfg, config.Images, requiredNames, imageClient, imageClient, jobSpec, dryLogger))
 	}

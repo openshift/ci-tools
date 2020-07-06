@@ -306,7 +306,7 @@ func internalImageWithMetadata(image *imagev1.Image) error {
 
 		config := dockerapi10.DockerImageConfig{}
 		if err := json.Unmarshal([]byte(image.DockerImageConfig), &config); err != nil {
-			return fmt.Errorf("failed to parse dockerImageConfig: %v", err)
+			return fmt.Errorf("failed to parse dockerImageConfig: %w", err)
 		}
 
 		if err := imageapi.Convert_imageconfig_to_api_DockerImage(&config, &imageDockerImageMetadata); err != nil {

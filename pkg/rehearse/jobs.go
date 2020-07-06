@@ -73,7 +73,7 @@ func NewCMClient(clusterConfig *rest.Config, namespace string, dry bool) (corecl
 			cm := action.(coretesting.UpdateAction).GetObject().(*v1.ConfigMap)
 			y, err := yaml.Marshal([]*v1.ConfigMap{cm})
 			if err != nil {
-				return true, nil, fmt.Errorf("failed to convert ConfigMap to YAML: %v", err)
+				return true, nil, fmt.Errorf("failed to convert ConfigMap to YAML: %w", err)
 			}
 			fmt.Print(string(y))
 			return false, nil, nil
@@ -83,7 +83,7 @@ func NewCMClient(clusterConfig *rest.Config, namespace string, dry bool) (corecl
 
 	cmClient, err := coreclientset.NewForConfig(clusterConfig)
 	if err != nil {
-		return nil, fmt.Errorf("could not get core client for cluster config: %v", err)
+		return nil, fmt.Errorf("could not get core client for cluster config: %w", err)
 	}
 
 	return cmClient.ConfigMaps(namespace), nil
@@ -110,7 +110,7 @@ func getTrimmedBranch(branches []string) string {
 func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber int, refs *pjapi.Refs) (*prowconfig.Presubmit, error) {
 	var rehearsal prowconfig.Presubmit
 	if err := deepcopy.Copy(&rehearsal, source); err != nil {
-		return nil, fmt.Errorf("deepCopy failed: %v", err)
+		return nil, fmt.Errorf("deepCopy failed: %w", err)
 	}
 
 	rehearsal.Name = fmt.Sprintf("rehearse-%d-%s", prNumber, source.Name)
@@ -307,7 +307,7 @@ func inlineCiOpConfig(container *v1.Container, ciopConfigs config.DataByFilename
 	// inline CONFIG_SPEC for all ci-operator jobs
 	if container.Command != nil && container.Command[0] == "ci-operator" {
 		if err := metadata.IsComplete(); err != nil {
-			return nil, fmt.Errorf("could not infer which ci-operator config this job uses: %v", err)
+			return nil, fmt.Errorf("could not infer which ci-operator config this job uses: %w", err)
 		}
 		filename := metadata.Basename()
 		loggers.Debug.WithField(logCiopConfigFile, filename).Debug("Rehearsal job uses ci-operator config ConfigMap, needed content will be inlined")

@@ -247,7 +247,7 @@ func providesFor(name string, imageClient imageclientset.ImageV1Interface, spec 
 		EnvVarFor(name): func() (string, error) {
 			is, err := imageClient.ImageStreams(spec.Namespace()).Get("release", meta.GetOptions{})
 			if err != nil {
-				return "", fmt.Errorf("could not retrieve output imagestream: %v", err)
+				return "", fmt.Errorf("could not retrieve output imagestream: %w", err)
 			}
 			var registry string
 			if len(is.Status.PublicDockerImageRepository) > 0 {

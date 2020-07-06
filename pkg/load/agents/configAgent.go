@@ -82,7 +82,7 @@ func NewConfigAgent(configPath string, cycle time.Duration, errorMetrics *promet
 	configCoalescer := coalescer.NewCoalescer(a.loadFilenameToConfig)
 	err := configCoalescer.Run()
 	if err != nil {
-		return nil, fmt.Errorf("Failed to load configs: %v", err)
+		return nil, fmt.Errorf("Failed to load configs: %w", err)
 	}
 
 	// periodic reload
@@ -118,7 +118,7 @@ func (a *configAgent) GetMatchingConfig(metadata api.Metadata) (api.ReleaseBuild
 	for _, config := range repoConfigs {
 		r, err := regexp.Compile(config.Metadata.Branch)
 		if err != nil {
-			return api.ReleaseBuildConfiguration{}, fmt.Errorf("could not compile regex for %s/%s@%s: %v", metadata.Org, metadata.Repo, config.Metadata.Branch, err)
+			return api.ReleaseBuildConfiguration{}, fmt.Errorf("could not compile regex for %s/%s@%s: %w", metadata.Org, metadata.Repo, config.Metadata.Branch, err)
 		}
 		if r.MatchString(metadata.Branch) && config.Metadata.Variant == metadata.Variant {
 			matchingConfigs = append(matchingConfigs, config)

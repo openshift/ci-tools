@@ -69,7 +69,7 @@ func (s *podStep) run(ctx context.Context, dry bool) error {
 	}
 	containerResources, err := resourcesFor(s.resources.RequirementsForStep(s.config.As))
 	if err != nil {
-		return fmt.Errorf("unable to calculate %s pod resources for %s: %s", s.name, s.config.As, err)
+		return fmt.Errorf("unable to calculate %s pod resources for %s: %w", s.name, s.config.As, err)
 	}
 
 	if len(s.config.From.Namespace) > 0 {
@@ -79,7 +79,7 @@ func (s *podStep) run(ctx context.Context, dry bool) error {
 
 	pod, err := s.generatePodForStep(image, containerResources)
 	if err != nil {
-		return fmt.Errorf("pod step was invalid: %v", err)
+		return fmt.Errorf("pod step was invalid: %w", err)
 	}
 
 	// when the test container terminates and artifact directory has been set, grab everything under the directory
@@ -111,7 +111,7 @@ func (s *podStep) run(ctx context.Context, dry bool) error {
 
 	pod, err = createOrRestartPod(s.podClient.Pods(s.jobSpec.Namespace()), pod)
 	if err != nil {
-		return fmt.Errorf("failed to create or restart %s pod: %v", s.name, err)
+		return fmt.Errorf("failed to create or restart %s pod: %w", s.name, err)
 	}
 
 	defer func() {
@@ -119,7 +119,7 @@ func (s *podStep) run(ctx context.Context, dry bool) error {
 	}()
 
 	if err := waitForPodCompletion(context.TODO(), s.podClient.Pods(s.jobSpec.Namespace()), pod.Name, testCaseNotifier, s.config.SkipLogs); err != nil {
-		return fmt.Errorf("%s %q failed: %v", s.name, pod.Name, err)
+		return fmt.Errorf("%s %q failed: %w", s.name, pod.Name, err)
 	}
 	return nil
 }

@@ -141,7 +141,7 @@ func OperateOnJobConfigSubdir(configDir, subDir string, callback func(*prowconfi
 		}
 		return nil
 	}); err != nil {
-		return fmt.Errorf("failed to operator on Prow job configs: %v", err)
+		return fmt.Errorf("failed to operator on Prow job configs: %w", err)
 	}
 	return nil
 }
@@ -157,7 +157,7 @@ func ReadFromDir(dir string) (*prowconfig.JobConfig, error) {
 		mergeConfigs(jobConfig, config)
 		return nil
 	}); err != nil {
-		return nil, fmt.Errorf("failed to load all Prow jobs: %v", err)
+		return nil, fmt.Errorf("failed to load all Prow jobs: %w", err)
 	}
 
 	return jobConfig, nil
@@ -196,12 +196,12 @@ func mergeConfigs(dest, part *prowconfig.JobConfig) {
 func readFromFile(path string) (*prowconfig.JobConfig, error) {
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read Prow job config (%v)", err)
+		return nil, fmt.Errorf("failed to read Prow job config (%w)", err)
 	}
 
 	var jobConfig *prowconfig.JobConfig
 	if err := yaml.Unmarshal(data, &jobConfig); err != nil {
-		return nil, fmt.Errorf("failed to load Prow job config (%v)", err)
+		return nil, fmt.Errorf("failed to load Prow job config (%w)", err)
 	}
 	if jobConfig == nil { // happens when `data` is empty
 		return nil, fmt.Errorf("failed to load Prow job config")
@@ -522,7 +522,7 @@ func sortPodSpec(spec *v1.PodSpec) {
 func WriteToFile(path string, jobConfig *prowconfig.JobConfig) error {
 	jobConfigAsYaml, err := yaml.Marshal(*jobConfig)
 	if err != nil {
-		return fmt.Errorf("failed to marshal the job config (%v)", err)
+		return fmt.Errorf("failed to marshal the job config (%w)", err)
 	}
 	if err := ioutil.WriteFile(path, jobConfigAsYaml, 0664); err != nil {
 		return err

@@ -70,7 +70,7 @@ func gatherOptions() (options, error) {
 	fs.IntVar(&o.rehearsalLimit, "rehearsal-limit", 15, "Upper limit of jobs attempted to rehearse (if more jobs would be rehearsed, none will)")
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
-		return o, fmt.Errorf("failed to parse flags: %v", err)
+		return o, fmt.Errorf("failed to parse flags: %w", err)
 	}
 	return o, nil
 }

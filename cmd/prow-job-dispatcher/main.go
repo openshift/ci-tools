@@ -277,7 +277,7 @@ func dispatchJobs(ctx context.Context, prowJobConfigDir string, maxConcurrency i
 		}
 
 		if err := sem.Acquire(ctx, 1); err != nil {
-			objChan <- fmt.Errorf("failed to acquire semaphore for path %s: %v", path, err)
+			objChan <- fmt.Errorf("failed to acquire semaphore for path %s: %w", path, err)
 			return nil
 		}
 		go func(path string) {
@@ -285,13 +285,13 @@ func dispatchJobs(ctx context.Context, prowJobConfigDir string, maxConcurrency i
 
 			data, err := ioutil.ReadFile(path)
 			if err != nil {
-				objChan <- fmt.Errorf("failed to read file %q: %v", path, err)
+				objChan <- fmt.Errorf("failed to read file %q: %w", path, err)
 				return
 			}
 
 			jobConfig := &prowconfig.JobConfig{}
 			if err := yaml.Unmarshal(data, jobConfig); err != nil {
-				objChan <- fmt.Errorf("failed to unmarshal file %q: %v", err, path)
+				objChan <- fmt.Errorf("failed to unmarshal file %q: %w", path, err)
 				return
 			}
 
@@ -301,11 +301,11 @@ func dispatchJobs(ctx context.Context, prowJobConfigDir string, maxConcurrency i
 
 		return nil
 	}); err != nil {
-		return fmt.Errorf("failed to dispatch all Prow jobs: %v", err)
+		return fmt.Errorf("failed to dispatch all Prow jobs: %w", err)
 	}
 
 	if err := sem.Acquire(ctx, int64(maxConcurrency)); err != nil {
-		objChan <- fmt.Errorf("failed to acquire semaphore while wating all workers to finish: %v", err)
+		objChan <- fmt.Errorf("failed to acquire semaphore while wating all workers to finish: %w", err)
 	}
 	close(objChan)
 	<-readingDone

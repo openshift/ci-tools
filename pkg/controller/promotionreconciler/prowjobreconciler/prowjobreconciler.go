@@ -74,7 +74,7 @@ func AddToManager(mgr controllerruntime.Manager, config config.Getter, dryRun bo
 		return nil, fmt.Errorf("failed to create watch: %w", err)
 	}
 	if err := mgr.Add(ctrl); err != nil {
-		return nil, fmt.Errorf("failed to add controller to manager: %v", err)
+		return nil, fmt.Errorf("failed to add controller to manager: %w", err)
 	}
 
 	return enqueuer, nil

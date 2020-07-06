@@ -75,7 +75,7 @@ func parseOptions() options {
 func (o *options) validateOptions() error {
 	level, err := logrus.ParseLevel(o.logLevel)
 	if err != nil {
-		return fmt.Errorf("invalid log level specified: %v", err)
+		return fmt.Errorf("invalid log level specified: %w", err)
 	}
 	logrus.SetLevel(level)
 	if o.bwUser == "" {
@@ -282,7 +282,7 @@ func constructSecrets(ctx context.Context, config []secretConfig, bwClient bitwa
 
 			for _, key := range keys {
 				if err := sem.Acquire(ctx, 1); err != nil {
-					errChan <- fmt.Errorf("failed to acquire semaphore for key %s: %v", key, err)
+					errChan <- fmt.Errorf("failed to acquire semaphore for key %s: %w", key, err)
 					continue
 				}
 
@@ -336,7 +336,7 @@ func constructSecrets(ctx context.Context, config []secretConfig, bwClient bitwa
 	}
 	secretConfigWG.Wait()
 	if err := sem.Acquire(ctx, int64(maxConcurrency)); err != nil {
-		errChan <- fmt.Errorf("failed to acquire semaphore while wating all workers to finish: %v", err)
+		errChan <- fmt.Errorf("failed to acquire semaphore while wating all workers to finish: %w", err)
 	}
 	close(errChan)
 	var errs []error
@@ -367,18 +367,18 @@ func updateSecrets(secretsGetters map[string]coreclientset.SecretsGetter, secret
 					continue
 				}
 				if _, err := secretsGetter.Secrets(secret.Namespace).Update(secret); err != nil {
-					errs = append(errs, fmt.Errorf("error updating secret %s:%s/%s: %v", cluster, secret.Namespace, secret.Name, err))
+					errs = append(errs, fmt.Errorf("error updating secret %s:%s/%s: %w", cluster, secret.Namespace, secret.Name, err))
 					continue
 				}
 				logrus.Debugf("updated secret: %s:%s/%s", cluster, secret.Namespace, secret.Name)
 			} else if kerrors.IsNotFound(err) {
 				if _, err := secretsGetter.Secrets(secret.Namespace).Create(secret); err != nil {
-					errs = append(errs, fmt.Errorf("error creating secret %s:%s/%s: %v", cluster, secret.Namespace, secret.Name, err))
+					errs = append(errs, fmt.Errorf("error creating secret %s:%s/%s: %w", cluster, secret.Namespace, secret.Name, err))
 					continue
 				}
 				logrus.Debugf("created secret: %s:%s/%s", cluster, secret.Namespace, secret.Name)
 			} else {
-				errs = append(errs, fmt.Errorf("error reading secret %s:%s/%s: %v", cluster, secret.Namespace, secret.Name, err))
+				errs = append(errs, fmt.Errorf("error reading secret %s:%s/%s: %w", cluster, secret.Namespace, secret.Name, err))
 			}
 		}
 	}

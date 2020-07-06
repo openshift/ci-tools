@@ -40,7 +40,7 @@ func resolvePullSpec(endpoint string, bounds api.VersionBounds) (string, error) 
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("failed to request latest release: %v", err)
+		return "", fmt.Errorf("failed to request latest release: %w", err)
 	}
 	if resp == nil {
 		return "", errors.New("failed to request latest release: got a nil response")
@@ -50,12 +50,12 @@ func resolvePullSpec(endpoint string, bounds api.VersionBounds) (string, error) 
 	}
 	data, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("failed to read response body: %s", err)
+		return "", fmt.Errorf("failed to read response body: %w", err)
 	}
 	release := candidate.Release{}
 	err = json.Unmarshal(data, &release)
 	if err != nil {
-		return "", fmt.Errorf("failed to unmarshal release: %s (%s)", err, data)
+		return "", fmt.Errorf("failed to unmarshal release: %w (%s)", err, data)
 	}
 	return release.PullSpec, nil
 }

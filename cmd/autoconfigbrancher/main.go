@@ -86,12 +86,12 @@ func runAndCommitIfNeeded(stdout, stderr io.Writer, author, cmd string, args []s
 
 	logrus.Infof("Running: %s", fullCommand)
 	if err := bumper.Call(stdout, stderr, cmd, args...); err != nil {
-		return false, fmt.Errorf("failed to run %s: %v", fullCommand, err)
+		return false, fmt.Errorf("failed to run %s: %w", fullCommand, err)
 	}
 
 	changed, err := bumper.HasChanges()
 	if err != nil {
-		return false, fmt.Errorf("error occurred when checking changes: %v", err)
+		return false, fmt.Errorf("error occurred when checking changes: %w", err)
 	}
 
 	if !changed {
@@ -101,12 +101,12 @@ func runAndCommitIfNeeded(stdout, stderr io.Writer, author, cmd string, args []s
 
 	gitCmd := "git"
 	if err := bumper.Call(stdout, stderr, gitCmd, []string{"add", "."}...); err != nil {
-		return false, fmt.Errorf("failed to 'git add .': %v", err)
+		return false, fmt.Errorf("failed to 'git add .': %w", err)
 	}
 
 	commitArgs := []string{"commit", "-m", fullCommand, "--author", author}
 	if err := bumper.Call(stdout, stderr, gitCmd, commitArgs...); err != nil {
-		return false, fmt.Errorf("fail to %s %s: %v", gitCmd, strings.Join(commitArgs, " "), err)
+		return false, fmt.Errorf("fail to %s %s: %w", gitCmd, strings.Join(commitArgs, " "), err)
 	}
 
 	return true, nil

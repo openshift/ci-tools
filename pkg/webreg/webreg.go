@@ -2075,7 +2075,7 @@ func syntax(source string, lexer chroma.Lexer) (string, error) {
 	formatter := html.New(html.Standalone(false), html.LinkableLineNumbers(true, "line"), html.WithLineNumbers(true), html.WithClasses(true))
 	iterator, err := lexer.Tokenise(nil, source)
 	if err != nil {
-		return "", fmt.Errorf("failed to tokenise source: %v", err)
+		return "", fmt.Errorf("failed to tokenise source: %w", err)
 	}
 	output.WriteString("<style>")
 	if err := formatter.WriteCSS(&output, style); err != nil {
@@ -2117,12 +2117,12 @@ func referenceHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *ht
 		},
 	).Parse(referencePage)
 	if err != nil {
-		writeErrorPage(w, fmt.Errorf("Failed to render page: %v", err), http.StatusInternalServerError)
+		writeErrorPage(w, fmt.Errorf("Failed to render page: %w", err), http.StatusInternalServerError)
 		return
 	}
 	refs, _, _, docs := agent.GetRegistryComponents()
 	if _, ok := refs[name]; !ok {
-		writeErrorPage(w, fmt.Errorf("Could not find reference %s: %v", name, err), http.StatusNotFound)
+		writeErrorPage(w, fmt.Errorf("Could not find reference %s: %w", name, err), http.StatusNotFound)
 		return
 	}
 	ref := api.RegistryReference{
@@ -2146,11 +2146,11 @@ func chainHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *http.R
 	page := getBaseTemplate(wfs, chains, docs)
 	page, err := page.Parse(chainPage)
 	if err != nil {
-		writeErrorPage(w, fmt.Errorf("Failed to render page: %v", err), http.StatusInternalServerError)
+		writeErrorPage(w, fmt.Errorf("Failed to render page: %w", err), http.StatusInternalServerError)
 		return
 	}
 	if _, ok := chains[name]; !ok {
-		writeErrorPage(w, fmt.Errorf("Could not find chain %s: %v", name, err), http.StatusNotFound)
+		writeErrorPage(w, fmt.Errorf("Could not find chain %s: %w", name, err), http.StatusNotFound)
 		return
 	}
 	chain := api.RegistryChain{
@@ -2171,11 +2171,11 @@ func workflowHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *htt
 	page := getBaseTemplate(workflows, chains, docs)
 	page, err := page.Parse(workflowJobPage)
 	if err != nil {
-		writeErrorPage(w, fmt.Errorf("Failed to render page: %v", err), http.StatusInternalServerError)
+		writeErrorPage(w, fmt.Errorf("Failed to render page: %w", err), http.StatusInternalServerError)
 		return
 	}
 	if _, ok := workflows[name]; !ok {
-		writeErrorPage(w, fmt.Errorf("Could not find workflow %s: %v", name, err), http.StatusNotFound)
+		writeErrorPage(w, fmt.Errorf("Could not find workflow %s: %w", name, err), http.StatusNotFound)
 		return
 	}
 	workflow := workflowJob{
@@ -2205,7 +2205,7 @@ func MetadataFromQuery(w http.ResponseWriter, r *http.Request) (api.Metadata, er
 		w.WriteHeader(http.StatusNotImplemented)
 		err := fmt.Errorf("expected GET, got %s", r.Method)
 		if _, errWrite := w.Write([]byte(http.StatusText(http.StatusNotImplemented))); errWrite != nil {
-			return api.Metadata{}, fmt.Errorf("%s and writing the response body failed with %v", err.Error(), errWrite)
+			return api.Metadata{}, fmt.Errorf("%s and writing the response body failed with %w", err.Error(), errWrite)
 		}
 		return api.Metadata{}, err
 	}
@@ -2273,7 +2273,7 @@ func jobHandler(regAgent agents.RegistryAgent, confAgent agents.ConfigAgent, w h
 	page := getBaseTemplate(updatedWorkflows, chains, docs)
 	page, err = page.Parse(workflowJobPage)
 	if err != nil {
-		writeErrorPage(w, fmt.Errorf("Failed to render page: %v", err), http.StatusInternalServerError)
+		writeErrorPage(w, fmt.Errorf("Failed to render page: %w", err), http.StatusInternalServerError)
 		return
 	}
 	writePage(w, "Job Test Workflow Help Page", page, workflow)
@@ -2406,7 +2406,7 @@ func searchHandler(confAgent agents.ConfigAgent, w http.ResponseWriter, req *htt
 	page := getBaseTemplate(nil, nil, nil)
 	page, err := page.Parse(jobSearchPage)
 	if err != nil {
-		writeErrorPage(w, fmt.Errorf("Failed to render page: %v", err), http.StatusInternalServerError)
+		writeErrorPage(w, fmt.Errorf("Failed to render page: %w", err), http.StatusInternalServerError)
 		return
 	}
 	writePage(w, "Job Search Page", page, matches)

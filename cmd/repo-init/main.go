@@ -333,7 +333,7 @@ func updateProwConfig(config initConfig, releaseRepo string) error {
 	configPath := path.Join(releaseRepo, ciopconfig.ConfigInRepoPath)
 	agent := prowconfig.Agent{}
 	if err := agent.Start(configPath, ""); err != nil {
-		return fmt.Errorf("could not load Prow configuration: %v", err)
+		return fmt.Errorf("could not load Prow configuration: %w", err)
 	}
 
 	prowConfig := agent.Config()
@@ -341,7 +341,7 @@ func updateProwConfig(config initConfig, releaseRepo string) error {
 
 	data, err := yaml.Marshal(prowConfig)
 	if err != nil {
-		return fmt.Errorf("could not marshal Prow configuration: %v", err)
+		return fmt.Errorf("could not marshal Prow configuration: %w", err)
 	}
 
 	return ioutil.WriteFile(configPath, data, 0644)
@@ -393,7 +393,7 @@ Updating Prow plugin configuration ...`)
 	configPath := path.Join(releaseRepo, ciopconfig.PluginConfigInRepoPath)
 	agent := plugins.ConfigAgent{}
 	if err := agent.Load(configPath, false); err != nil {
-		return fmt.Errorf("could not load Prow plugin configuration: %v", err)
+		return fmt.Errorf("could not load Prow plugin configuration: %w", err)
 	}
 
 	pluginConfig := agent.Config()
@@ -401,7 +401,7 @@ Updating Prow plugin configuration ...`)
 
 	data, err := yaml.Marshal(pluginConfig)
 	if err != nil {
-		return fmt.Errorf("could not marshal Prow plugin configuration: %v", err)
+		return fmt.Errorf("could not marshal Prow plugin configuration: %w", err)
 	}
 
 	return ioutil.WriteFile(configPath, data, 0644)
@@ -458,7 +458,7 @@ Generating CI Operator configuration ...`)
 		originConfig = configuration
 		return nil
 	}); err != nil {
-		return fmt.Errorf("failed to load configuration for openshift/origin: %v", err)
+		return fmt.Errorf("failed to load configuration for openshift/origin: %w", err)
 	}
 
 	generated := generateCIOperatorConfig(config, originConfig.PromotionConfiguration)

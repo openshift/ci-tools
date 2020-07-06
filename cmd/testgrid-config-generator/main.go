@@ -185,12 +185,12 @@ func main() {
 		}
 		data, err := ioutil.ReadFile(path)
 		if err != nil {
-			return fmt.Errorf("could not read release controller config at %s: %v", path, err)
+			return fmt.Errorf("could not read release controller config at %s: %w", path, err)
 		}
 
 		var releaseConfig release
 		if err := json.Unmarshal(data, &releaseConfig); err != nil {
-			return fmt.Errorf("could not unmarshal release controller config at %s: %v", path, err)
+			return fmt.Errorf("could not unmarshal release controller config at %s: %w", path, err)
 		}
 
 		for _, job := range releaseConfig.Verify {

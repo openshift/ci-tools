@@ -158,11 +158,11 @@ func (dl *DryLogger) Log() error {
 		sort.Slice(objects, func(i, j int) bool {
 			iAccessor, err := meta.Accessor(objects[i])
 			if err != nil {
-				errors = append(errors, fmt.Errorf("couldn't create accessor: %v", err))
+				errors = append(errors, fmt.Errorf("couldn't create accessor: %w", err))
 			}
 			jAccessor, err := meta.Accessor(objects[j])
 			if err != nil {
-				errors = append(errors, fmt.Errorf("couldn't create accessor: %v", err))
+				errors = append(errors, fmt.Errorf("couldn't create accessor: %w", err))
 			}
 
 			iKind := objects[i].GetObjectKind().GroupVersionKind().Kind

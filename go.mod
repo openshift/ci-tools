@@ -4,6 +4,11 @@ go 1.13
 
 replace (
 	github.com/Azure/go-autorest => github.com/Azure/go-autorest v12.2.0+incompatible
+	github.com/Sirupsen/logrus => github.com/sirupsen/logrus v1.6.0
+	github.com/containerd/containerd => github.com/containerd/containerd v0.2.10-0.20180716142608-408d13de2fbb
+
+	github.com/docker/docker => github.com/openshift/moby-moby v1.4.2-0.20190308215630-da810a85109d
+	github.com/moby/buildkit => github.com/dmcgowan/buildkit v0.0.0-20170731200553-da2b9dc7dab9
 	github.com/openshift/client-go => github.com/openshift/client-go v0.0.0-20200116152001-92a2713fa240
 	github.com/openshift/library-go => github.com/openshift/library-go v0.0.0-20200316194709-c2d07ed650c4
 	k8s.io/api => k8s.io/api v0.17.3
@@ -11,6 +16,8 @@ replace (
 	k8s.io/apimachinery => k8s.io/apimachinery v0.17.3
 	k8s.io/client-go => k8s.io/client-go v0.17.3
 	k8s.io/code-generator => k8s.io/code-generator v0.17.3
+	k8s.io/component-base => k8s.io/component-base v0.0.0-20191122220729-2684fb322cb9
+	k8s.io/kubectl => k8s.io/kubectl v0.0.0-20191122225023-1e3c8b70f494
 )
 
 require (
@@ -18,9 +25,8 @@ require (
 	github.com/alecthomas/chroma v0.7.1
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/docker/distribution v2.7.1+incompatible
+	github.com/docker/docker v1.13.1 // indirect
 	github.com/docker/spdystream v0.0.0-20181023171402-6480d4af844c // indirect
-	github.com/elazarl/goproxy v0.0.0-20190711103511-473e67f1d7d2 // indirect
-	github.com/elazarl/goproxy/ext v0.0.0-20190711103511-473e67f1d7d2 // indirect
 	github.com/fsnotify/fsnotify v1.4.9 // indirect
 	github.com/getlantern/deepcopy v0.0.0-20160317154340-7f45deb8130a
 	github.com/ghodss/yaml v1.0.0
@@ -29,8 +35,10 @@ require (
 	github.com/google/gofuzz v1.1.0
 	github.com/mattn/go-zglob v0.0.2
 	github.com/openshift/api v0.0.0-20200326160804-ecb9283fe820
+	github.com/openshift/builder v0.0.0-20200325182657-6a52122d21e0
 	github.com/openshift/client-go v0.0.0-20200116152001-92a2713fa240
-	github.com/openshift/library-go v0.0.0-00010101000000-000000000000
+	github.com/openshift/imagebuilder v1.1.1
+	github.com/openshift/library-go v0.0.0-20190904120025-7d4acc018c61
 	github.com/openshift/openshift-apiserver v0.0.0-alpha.0
 	github.com/pkg/errors v0.9.1
 	github.com/pmezard/go-difflib v1.0.0

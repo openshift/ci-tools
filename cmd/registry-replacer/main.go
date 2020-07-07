@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/openshift/builder/pkg/build/builder/util/dockerfile"
+	"github.com/openshift/imagebuilder"
 	"github.com/sirupsen/logrus"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -190,6 +192,11 @@ func ensureReplacement(image *api.ProjectDirectoryImageBuildStepConfiguration, g
 		return nil, fmt.Errorf("failed to get dockerfile %s: %w", image.DockerfilePath, err)
 	}
 
+	data, err = applyReplacementsToDockerfile(data, image)
+	if err != nil {
+		return nil, fmt.Errorf("failed to apply replacements to Dockerfile: %w", err)
+	}
+
 	var toReplace []string
 	for _, line := range bytes.Split(data, []byte("\n")) {
 		if !bytes.Contains(line, []byte("FROM")) {
@@ -350,4 +357,21 @@ type censor struct {
 
 func (c *censor) Censor(data []byte) []byte {
 	return bytes.ReplaceAll(data, c.secret, []byte("<< REDACTED >>"))
+}
+
+// applyReplacementsToDockerfile duplicates what the build tools would do
+func applyReplacementsToDockerfile(in []byte, image *api.ProjectDirectoryImageBuildStepConfiguration) ([]byte, error) {
+	node, err := imagebuilder.ParseDockerfile(bytes.NewBuffer(in))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse Dockerfile: %w", err)
+	}
+
+	if image.From != "" {
+		// https://github.com/openshift/builder/blob/6a52122d21e0528fbf014097d70770429fbc4448/pkg/build/builder/common.go#L402
+		replaceLastFrom(node, string(image.From), "")
+	}
+
+	// We do not need to expand the inputs because they are forced already to point to a
+	// base_image which must be in the same cluster.
+	return dockerfile.Write(node), nil
 }

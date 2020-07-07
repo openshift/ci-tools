@@ -56,7 +56,10 @@ func TestWrite(t *testing.T) {
 			rr := httptest.NewRecorder()
 			trw := &TraceResponseWriter{ResponseWriter: rr, statusCode: http.StatusOK}
 			resp := []byte(tc.responseBody)
-			trw.Write(resp)
+			_, err := trw.Write(resp)
+			if err != nil {
+				t.Fatalf("failed to write to TraceResponseWriter")
+			}
 			if rr.Body.String() != tc.responseBody {
 				t.Errorf("mismatch between expected and actual response body: expected %s, got %s", tc.responseBody, rr.Body.String())
 			}
@@ -98,10 +101,16 @@ func TestRecordError(t *testing.T) {
 		})
 	}
 }
-func oneByteWriter(w http.ResponseWriter, r *http.Request) {
-	oneByteLength := []byte{'1'}
-	w.Write(oneByteLength)
+func wrapperOneByteWriter(t *testing.T) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		oneByteLength := []byte{'1'}
+		_, err := w.Write(oneByteLength)
+		if err != nil {
+			t.Fatalf("failed to write to TraceResponseWriter: %v", err)
+		}
+	}
 }
+
 func halfSecLatency(_ time.Time) time.Duration {
 	return time.Millisecond * 500
 }
@@ -116,7 +125,7 @@ func TestHandleWithMetricsCustomTimer(t *testing.T) {
 		{
 			name:        "Simple Error String",
 			customTimer: halfSecLatency,
-			dummyWriter: oneByteWriter,
+			dummyWriter: wrapperOneByteWriter(t),
 			expectedResponseTimeOut: `# HELP testnamespace_http_request_duration_seconds http request duration in seconds
             # TYPE testnamespace_http_request_duration_seconds histogram
             testnamespace_http_request_duration_seconds_bucket{path="",status="200",le="0.0005"} 0

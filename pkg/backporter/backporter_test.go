@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/openshift/ci-tools/pkg/httphelper"
+
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/prow/bugzilla"
 	"k8s.io/utils/diff"
@@ -21,13 +23,15 @@ var (
 
 var allTargetVersions = sets.NewString("4.0.0", "4.1.0", "4.4.z")
 
+var fakebzbpMetrics = httphelper.NewMetrics("fakebzbp")
+
 func TestGetLandingHandler(t *testing.T) {
 	req, err := http.NewRequest("GET", "/", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	rr := httptest.NewRecorder()
-	handler := GetLandingHandler()
+	handler := GetLandingHandler(fakebzbpMetrics)
 	handler.ServeHTTP(rr, req)
 	if status := rr.Code; status != http.StatusOK {
 		t.Errorf("error fetching landing page for bugzilla backporter tool!")
@@ -87,7 +91,7 @@ func TestGetBugHandler(t *testing.T) {
 			}
 			req.URL.RawQuery = q.Encode()
 			rr := httptest.NewRecorder()
-			handler := GetBugHandler(fake)
+			handler := GetBugHandler(fake, fakebzbpMetrics)
 			handler.ServeHTTP(rr, req)
 			if status := rr.Code; status != tc.statusCode {
 				t.Errorf("testcase '%v' failed: getbug returned wrong status code - got %v, want %v", tc.name, status, tc.statusCode)
@@ -170,7 +174,7 @@ func TestGetClonesHandler(t *testing.T) {
 			}
 			req.URL.RawQuery = q.Encode()
 			rr := httptest.NewRecorder()
-			handler := GetClonesHandler(fake, allTargetVersions)
+			handler := GetClonesHandler(fake, allTargetVersions, fakebzbpMetrics)
 			handler.ServeHTTP(rr, req)
 			if status := rr.Code; status != tc.statusCode {
 				t.Errorf("testcase '%v' failed: getbug returned wrong status code - got %v, want %v", tc, status, tc.statusCode)
@@ -268,7 +272,7 @@ func TestCreateCloneHandler(t *testing.T) {
 				t.Fatal(err)
 			}
 			rr := httptest.NewRecorder()
-			handler := CreateCloneHandler(fake, allTargetVersions)
+			handler := CreateCloneHandler(fake, allTargetVersions, fakebzbpMetrics)
 			handler.ServeHTTP(rr, req)
 			if status := rr.Code; status != tc.statusCode {
 				t.Errorf("testcase '%v' failed: clonebug returned wrong status code - got %v, want %v", tc, status, tc.statusCode)

@@ -6,11 +6,10 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/openshift/ci-tools/pkg/backporter"
-	"github.com/prometheus/client_golang/prometheus"
+	"github.com/openshift/ci-tools/pkg/httphelper"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/pkg/flagutil"
@@ -25,35 +24,7 @@ import (
 )
 
 var (
-	bzbpMetrics = struct {
-		httpRequestDuration *prometheus.HistogramVec
-		httpResponseSize    *prometheus.HistogramVec
-		errorRate           *prometheus.CounterVec
-	}{
-		httpRequestDuration: prometheus.NewHistogramVec(
-			prometheus.HistogramOpts{
-				Name:    "bugzilla_backporter_http_request_duration_seconds",
-				Help:    "http request duration in seconds",
-				Buckets: []float64{0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2},
-			},
-			[]string{"status", "path"},
-		),
-		httpResponseSize: prometheus.NewHistogramVec(
-			prometheus.HistogramOpts{
-				Name:    "bugzilla_backporter_http_response_size_bytes",
-				Help:    "http response size in bytes",
-				Buckets: []float64{256, 512, 1024, 2048, 4096, 6144, 8192, 10240, 12288, 16384, 24576, 32768, 40960, 49152, 57344, 65536},
-			},
-			[]string{"status", "path"},
-		),
-		errorRate: prometheus.NewCounterVec(
-			prometheus.CounterOpts{
-				Name: "bugzilla_backporter_error_rate",
-				Help: "number of errors, sorted by label/type",
-			},
-			[]string{"error"},
-		),
-	}
+	bzbpMetrics = httphelper.NewMetrics("bugzillabackporter")
 )
 
 type options struct {
@@ -62,25 +33,6 @@ type options struct {
 	gracePeriod  time.Duration
 	bugzilla     prowflagutil.BugzillaOptions
 	pluginConfig string
-}
-
-type traceResponseWriter struct {
-	http.ResponseWriter
-	statusCode int
-	size       int
-}
-
-func handleWithMetrics(h http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		t := time.Now()
-		// Initialize the status to 200 in case WriteHeader is not called
-		trw := &traceResponseWriter{ResponseWriter: w, statusCode: http.StatusOK}
-		h(trw, r)
-		latency := time.Since(t)
-		labels := prometheus.Labels{"status": strconv.Itoa(trw.statusCode), "path": r.URL.EscapedPath()}
-		bzbpMetrics.httpRequestDuration.With(labels).Observe(latency.Seconds())
-		bzbpMetrics.httpResponseSize.With(labels).Observe(float64(trw.size))
-	}
 }
 
 func gatherOptions() (options, error) {
@@ -163,11 +115,11 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("Error parsing plugins configuration.")
 	}
-	http.HandleFunc("/", handleWithMetrics(backporter.GetLandingHandler()))
-	http.HandleFunc("/clones", handleWithMetrics(backporter.GetClonesHandler(bugzillaClient, allTargetVersions)))
-	http.HandleFunc("/clones/create", handleWithMetrics(backporter.CreateCloneHandler(bugzillaClient, allTargetVersions)))
+	http.HandleFunc("/", bzbpMetrics.HandleWithMetrics(backporter.GetLandingHandler(bzbpMetrics)))
+	http.HandleFunc("/clones", bzbpMetrics.HandleWithMetrics(backporter.GetClonesHandler(bugzillaClient, allTargetVersions, bzbpMetrics)))
+	http.HandleFunc("/clones/create", bzbpMetrics.HandleWithMetrics(backporter.CreateCloneHandler(bugzillaClient, allTargetVersions, bzbpMetrics)))
 	// Leaving this in here to help with future debugging. This will return bug details in JSON format
-	http.HandleFunc("/bug", handleWithMetrics(backporter.GetBugHandler(bugzillaClient)))
+	http.HandleFunc("/bug", bzbpMetrics.HandleWithMetrics(backporter.GetBugHandler(bugzillaClient, bzbpMetrics)))
 	interrupts.ListenAndServe(&http.Server{Addr: o.address}, o.gracePeriod)
 
 	health.ServeReady()

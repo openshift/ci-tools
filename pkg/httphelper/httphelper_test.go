@@ -1,8 +1,10 @@
 package httphelper
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -72,6 +74,9 @@ func TestWrite(t *testing.T) {
 
 var metrics = NewMetrics("testnamespace")
 
+var handleMetricsCalls = 0
+var recordErrorCalls = 0
+
 func TestRecordError(t *testing.T) {
 	testcases := []struct {
 		name          string
@@ -84,7 +89,7 @@ func TestRecordError(t *testing.T) {
 			expectedError: "sample error message to ensure proper working",
 			expectedOut: `# HELP testnamespace_error_rate number of errors, sorted by label/type
 					   # TYPE testnamespace_error_rate counter
-					   testnamespace_error_rate{error="sample error message to ensure proper working"} 1
+					   testnamespace_error_rate{error="sample error message to ensure proper working"} %d
 					   `,
 		},
 	}
@@ -94,7 +99,9 @@ func TestRecordError(t *testing.T) {
 				t.Errorf("errorRate not initialized")
 			}
 			metrics.RecordError(tc.expectedError)
-			if err := testutil.CollectAndCompare(metrics.ErrorRate, strings.NewReader(tc.expectedOut)); err != nil {
+			recordErrorCalls++
+			expectedOut := fmt.Sprintf(tc.expectedOut, recordErrorCalls)
+			if err := testutil.CollectAndCompare(metrics.ErrorRate, strings.NewReader(expectedOut)); err != nil {
 				t.Errorf("unexpected metrics for ErrorRate:\n%s", err)
 			}
 
@@ -123,7 +130,7 @@ func TestHandleWithMetricsCustomTimer(t *testing.T) {
 		expectedResponseSizeOut string
 	}{
 		{
-			name:        "Simple Error String",
+			name:        "Simple call to dummy handler with 0.5 sec latency and 1 byte response",
 			customTimer: halfSecLatency,
 			dummyWriter: wrapperOneByteWriter(t),
 			expectedResponseTimeOut: `# HELP testnamespace_http_request_duration_seconds http request duration in seconds
@@ -137,35 +144,35 @@ func TestHandleWithMetricsCustomTimer(t *testing.T) {
             testnamespace_http_request_duration_seconds_bucket{path="",status="200",le="0.05"} 0
             testnamespace_http_request_duration_seconds_bucket{path="",status="200",le="0.1"} 0
             testnamespace_http_request_duration_seconds_bucket{path="",status="200",le="0.25"} 0
-            testnamespace_http_request_duration_seconds_bucket{path="",status="200",le="0.5"} 1
-            testnamespace_http_request_duration_seconds_bucket{path="",status="200",le="1"} 1
-            testnamespace_http_request_duration_seconds_bucket{path="",status="200",le="2"} 1
-            testnamespace_http_request_duration_seconds_bucket{path="",status="200",le="+Inf"} 1
-            testnamespace_http_request_duration_seconds_sum{path="",status="200"} 0.5
-            testnamespace_http_request_duration_seconds_count{path="",status="200"} 1
+            testnamespace_http_request_duration_seconds_bucket{path="",status="200",le="0.5"} %d
+            testnamespace_http_request_duration_seconds_bucket{path="",status="200",le="1"} %d
+            testnamespace_http_request_duration_seconds_bucket{path="",status="200",le="2"} %d
+            testnamespace_http_request_duration_seconds_bucket{path="",status="200",le="+Inf"} %d
+            testnamespace_http_request_duration_seconds_sum{path="",status="200"} %f
+            testnamespace_http_request_duration_seconds_count{path="",status="200"} %d
 					  `,
 			expectedResponseSizeOut: `
 			# HELP testnamespace_http_response_size_bytes http response size in bytes
             # TYPE testnamespace_http_response_size_bytes histogram
-            testnamespace_http_response_size_bytes_bucket{path="",status="200",le="256"} 1
-            testnamespace_http_response_size_bytes_bucket{path="",status="200",le="512"} 1
-            testnamespace_http_response_size_bytes_bucket{path="",status="200",le="1024"} 1
-            testnamespace_http_response_size_bytes_bucket{path="",status="200",le="2048"} 1
-            testnamespace_http_response_size_bytes_bucket{path="",status="200",le="4096"} 1
-            testnamespace_http_response_size_bytes_bucket{path="",status="200",le="6144"} 1
-            testnamespace_http_response_size_bytes_bucket{path="",status="200",le="8192"} 1
-            testnamespace_http_response_size_bytes_bucket{path="",status="200",le="10240"} 1
-            testnamespace_http_response_size_bytes_bucket{path="",status="200",le="12288"} 1
-            testnamespace_http_response_size_bytes_bucket{path="",status="200",le="16384"} 1
-            testnamespace_http_response_size_bytes_bucket{path="",status="200",le="24576"} 1
-            testnamespace_http_response_size_bytes_bucket{path="",status="200",le="32768"} 1
-            testnamespace_http_response_size_bytes_bucket{path="",status="200",le="40960"} 1
-            testnamespace_http_response_size_bytes_bucket{path="",status="200",le="49152"} 1
-            testnamespace_http_response_size_bytes_bucket{path="",status="200",le="57344"} 1
-            testnamespace_http_response_size_bytes_bucket{path="",status="200",le="65536"} 1
-            testnamespace_http_response_size_bytes_bucket{path="",status="200",le="+Inf"} 1
-            testnamespace_http_response_size_bytes_sum{path="",status="200"} 1
-            testnamespace_http_response_size_bytes_count{path="",status="200"} 1
+            testnamespace_http_response_size_bytes_bucket{path="",status="200",le="256"} %d
+            testnamespace_http_response_size_bytes_bucket{path="",status="200",le="512"} %d
+            testnamespace_http_response_size_bytes_bucket{path="",status="200",le="1024"} %d
+            testnamespace_http_response_size_bytes_bucket{path="",status="200",le="2048"} %d
+            testnamespace_http_response_size_bytes_bucket{path="",status="200",le="4096"} %d
+            testnamespace_http_response_size_bytes_bucket{path="",status="200",le="6144"} %d
+            testnamespace_http_response_size_bytes_bucket{path="",status="200",le="8192"} %d
+            testnamespace_http_response_size_bytes_bucket{path="",status="200",le="10240"} %d
+            testnamespace_http_response_size_bytes_bucket{path="",status="200",le="12288"} %d
+            testnamespace_http_response_size_bytes_bucket{path="",status="200",le="16384"} %d
+            testnamespace_http_response_size_bytes_bucket{path="",status="200",le="24576"} %d
+            testnamespace_http_response_size_bytes_bucket{path="",status="200",le="32768"} %d
+            testnamespace_http_response_size_bytes_bucket{path="",status="200",le="40960"} %d
+            testnamespace_http_response_size_bytes_bucket{path="",status="200",le="49152"} %d
+            testnamespace_http_response_size_bytes_bucket{path="",status="200",le="57344"} %d
+            testnamespace_http_response_size_bytes_bucket{path="",status="200",le="65536"} %d
+            testnamespace_http_response_size_bytes_bucket{path="",status="200",le="+Inf"} %d
+            testnamespace_http_response_size_bytes_sum{path="",status="200"} %d
+            testnamespace_http_response_size_bytes_count{path="",status="200"} %d
 			`,
 		},
 	}
@@ -184,10 +191,14 @@ func TestHandleWithMetricsCustomTimer(t *testing.T) {
 				t.Errorf("error while creating dummy request: %w", err)
 			}
 			handler(rr, req)
-			if err := testutil.CollectAndCompare(metrics.HTTPResponseSize, strings.NewReader(tc.expectedResponseSizeOut)); err != nil {
+			handleMetricsCalls++
+			expectedResponseSizeOut := strings.Replace(tc.expectedResponseSizeOut, "%d", strconv.Itoa(handleMetricsCalls), -1)
+			if err := testutil.CollectAndCompare(metrics.HTTPResponseSize, strings.NewReader(expectedResponseSizeOut)); err != nil {
 				t.Errorf("unexpected metrics for HTTPResponseSize:\n%s", err)
 			}
-			if err := testutil.CollectAndCompare(metrics.HTTPRequestDuration, strings.NewReader(tc.expectedResponseTimeOut)); err != nil {
+			expectedResponseTimeOut := strings.Replace(tc.expectedResponseTimeOut, "%d", strconv.Itoa(handleMetricsCalls), -1)
+			expectedResponseTimeOut = fmt.Sprintf(expectedResponseTimeOut, float64(handleMetricsCalls)*0.5)
+			if err := testutil.CollectAndCompare(metrics.HTTPRequestDuration, strings.NewReader(expectedResponseTimeOut)); err != nil {
 				t.Errorf("unexpected metrics for HTTPRequestDuration:\n%s", err)
 			}
 		})

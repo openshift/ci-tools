@@ -39,6 +39,7 @@ type options struct {
 
 func gatherOptions() (*options, error) {
 	o := &options{}
+	o.AddFlags(flag.CommandLine)
 	flag.StringVar(&o.configDir, "config-dir", "", "The directory with the ci-operator configs")
 	flag.BoolVar(&o.createPR, "create-pr", false, "If the tool should automatically create a PR. Requires --token-file")
 	flag.StringVar(&o.githubUserName, "github-user-name", "openshift-bot", "Name of the github user. Required when --create-pr is set. Does nothing otherwise")

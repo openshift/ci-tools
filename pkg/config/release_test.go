@@ -100,20 +100,20 @@ git mv renameme/file renamed/file
 > dir/dir/file
 `
 	expected := []ConfigMapSource{{
-		SHA:  "df2b8fc99e1c1d4dbc0a854d9f72157f1d6ea078",
-		Path: filepath.Join(ClusterProfilesPath, "changeme"),
+		SHA:  "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+		Path: filepath.Join(ClusterProfilesPath, "changeme/file"),
 	}, {
-		SHA:  "b4c3cc91598b6469bf7036502b8ca2bd563b0d0a",
-		Path: filepath.Join(ClusterProfilesPath, "dir"),
+		SHA:  "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+		Path: filepath.Join(ClusterProfilesPath, "dir/dir/file"),
 	}, {
-		SHA:  "03b9d461447abb84264053a440b4c715842566bb",
-		Path: filepath.Join(ClusterProfilesPath, "moveme"),
+		SHA:  "94fda9fd4f507887694a2d6d035822d216c9f132",
+		Path: filepath.Join(ClusterProfilesPath, "moveme/moved"),
 	}, {
-		SHA:  "df2b8fc99e1c1d4dbc0a854d9f72157f1d6ea078",
-		Path: filepath.Join(ClusterProfilesPath, "new"),
+		SHA:  "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+		Path: filepath.Join(ClusterProfilesPath, "new/file"),
 	}, {
-		SHA:  "9bbab5dcf83793f9edc258136426678cccce940e",
-		Path: filepath.Join(ClusterProfilesPath, "renamed"),
+		SHA:  "044d81d2c66ac45eb4c167c311b910e9e768b574",
+		Path: filepath.Join(ClusterProfilesPath, "renamed/file"),
 	}}
 	compareChanges(t, ClusterProfilesPath, files, cmd, GetChangedClusterProfiles, expected)
 }

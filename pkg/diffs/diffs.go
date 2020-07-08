@@ -202,12 +202,7 @@ func getTestsByName(tests []cioperatorapi.TestStepConfiguration) map[string]ciop
 
 // GetPresubmitsForClusterProfiles returns a filtered list of jobs from the
 // Prow configuration, with only presubmits that use certain cluster profiles.
-func GetPresubmitsForClusterProfiles(prowConfig *prowconfig.Config, profiles []config.ConfigMapSource, logger *logrus.Entry) config.Presubmits {
-	names := make(sets.String, len(profiles))
-	// TODO(muller): This is incorrect and needs to be fixed in a followup commit
-	// for _, p := range profiles {
-	//	names.Insert(p.CMName(config.ClusterProfilePrefix))
-	// }
+func GetPresubmitsForClusterProfiles(prowConfig *prowconfig.Config, profiles sets.String, logger *logrus.Entry) config.Presubmits {
 	matches := func(job *prowconfig.Presubmit) bool {
 		if job.Agent != string(pjapi.KubernetesAgent) {
 			return false
@@ -217,7 +212,7 @@ func GetPresubmitsForClusterProfiles(prowConfig *prowconfig.Config, profiles []c
 				continue
 			}
 			for _, s := range v.Projected.Sources {
-				if s.ConfigMap != nil && names.Has(s.ConfigMap.Name) {
+				if s.ConfigMap != nil && profiles.Has(s.ConfigMap.Name) {
 					return true
 				}
 			}

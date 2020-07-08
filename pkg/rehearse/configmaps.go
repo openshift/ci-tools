@@ -9,6 +9,7 @@ import (
 
 	"github.com/mattn/go-zglob"
 	"github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"k8s.io/api/core/v1"
 
@@ -27,18 +28,47 @@ import (
 	"github.com/openshift/ci-tools/pkg/config"
 )
 
-func TempCMName(prefix string, source config.ConfigMapSource) string {
+type RehearsalConfigMaps struct {
+	// Names is a mapping from production ConfigMap names to rehearsal names
+	Names map[string]string
+	// Patterns is the set of config-updater patterns that cover at least one changed file
+	Patterns sets.String
+}
+
+func NewRehearsalConfigMaps(sources []config.ConfigMapSource, purpose string, configUpdaterCfg prowplugins.ConfigUpdater) (RehearsalConfigMaps, error) {
+	cms := RehearsalConfigMaps{
+		Names:    map[string]string{},
+		Patterns: sets.NewString(),
+	}
+
+	var errs []error
+	for _, source := range sources {
+		cmName, pattern, err := source.CMName(configUpdaterCfg)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+
+		cms.Names[cmName] = RehearsalCMName(purpose, cmName, source.SHA)
+		cms.Patterns.Insert(pattern)
+	}
+	return cms, kutilerrors.NewAggregate(errs)
+}
+
+func RehearsalCMName(purpose, source, SHA string) string {
 	// Object names can't be too long so we truncate the hash. This increases
 	// chances of collision but we can tolerate it as our input space is tiny.
-	return fmt.Sprintf("rehearse-%s-%s-%s", prefix, source.Name(), source.SHA[:8])
+	maxLen := 253 - len("rehearse") - len(purpose) - 8 - 3 // SHA fragment + 3 separators
+	if len(source) > maxLen {
+		source = source[:maxLen]
+	}
+	return fmt.Sprintf("rehearse-%s-%s-%s", purpose, source, SHA[:8])
 }
 
 const (
 	createByRehearse  = "created-by-pj-rehearse"
 	rehearseLabelPull = "ci.openshift.org/rehearse-pull"
 
-	// TemplatePrefix is the prefix added to ConfigMap names
-	TemplatePrefix = "prow-job-"
 	// ClusterProfilePrefix is the prefix added to ConfigMap names
 	ClusterProfilePrefix = "cluster-profile-"
 )
@@ -99,48 +129,35 @@ func (c *TemplateCMManager) createCM(name string, data []updateconfig.ConfigMapU
 	return nil
 }
 
-func genChanges(root string, sources []config.ConfigMapSource) ([]prowgithub.PullRequestChange, error) {
+func genChanges(root string, patterns sets.String) ([]prowgithub.PullRequestChange, error) {
 	var ret []prowgithub.PullRequestChange
-	for _, f := range sources {
-		err := filepath.Walk(filepath.Join(root, f.Path), func(path string, info os.FileInfo, err error) error {
-			if err != nil || info.IsDir() {
-				return err
-			}
-			// Failure is impossible per filepath.Walk's API.
-			path, err = filepath.Rel(root, path)
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return err
+		}
+		// Failure is impossible per filepath.Walk's API.
+		path, err = filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		for pattern := range patterns {
+			match, err := zglob.Match(pattern, path)
 			if err != nil {
 				return err
 			}
-			ret = append(ret, prowgithub.PullRequestChange{
-				Filename: path,
-				Status:   string(prowgithub.PullRequestFileModified),
-			})
-			return nil
-		})
-		if err != nil {
-			return nil, err
-		}
-	}
-	return ret, nil
-}
-
-func (c *TemplateCMManager) validateChanges(changes []prowgithub.PullRequestChange) error {
-	var errs []error
-	for _, change := range changes {
-		found := false
-		for glob := range c.configUpdaterCfg.Maps {
-			var err error
-			if found, err = zglob.Match(glob, change.Filename); err != nil {
-				errs = append(errs, err)
-			} else if found {
-				break
+			if match {
+				ret = append(ret, prowgithub.PullRequestChange{
+					Filename: path,
+					Status:   string(prowgithub.PullRequestFileModified),
+				})
 			}
 		}
-		if !found {
-			errs = append(errs, fmt.Errorf("no entry in `updateconfig` matches %q", change.Filename))
-		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
-	return kutilerrors.NewAggregate(errs)
+	return ret, nil
 }
 
 func replaceSpecNames(namespace string, cfg prowplugins.ConfigUpdater, mapping map[string]string) (ret prowplugins.ConfigUpdater) {
@@ -152,46 +169,27 @@ func replaceSpecNames(namespace string, cfg prowplugins.ConfigUpdater, mapping m
 		}
 		if name, ok := mapping[v.Name]; ok {
 			v.Name = name
+			v.Namespaces = []string{""}
+			ret.Maps[k] = v
 		}
-		v.Namespaces = []string{""}
-		ret.Maps[k] = v
 	}
 	return
 }
 
-func (c *TemplateCMManager) createCMs(sources []config.ConfigMapSource, mapping map[string]string) error {
-	changes, err := genChanges(c.releaseRepoPath, sources)
+func (c *TemplateCMManager) CreateCMs(cms RehearsalConfigMaps) error {
+	changes, err := genChanges(c.releaseRepoPath, cms.Patterns)
 	if err != nil {
 		return err
 	}
-	if err := c.validateChanges(changes); err != nil {
-		return err
-	}
+
 	var errs []error
-	for cm, data := range updateconfig.FilterChanges(replaceSpecNames(c.namespace, c.configUpdaterCfg, mapping), changes, c.namespace, c.logger) {
+	for cm, data := range updateconfig.FilterChanges(replaceSpecNames(c.namespace, c.configUpdaterCfg, cms.Names), changes, c.namespace, c.logger) {
 		c.logger.WithFields(logrus.Fields{"cm-name": cm.Name}).Info("creating rehearsal configMap")
 		if err := c.createCM(cm.Name, data); err != nil {
 			errs = append(errs, err)
 		}
 	}
 	return kutilerrors.NewAggregate(errs)
-}
-
-// CreateCMTemplates creates configMaps for all the changed templates.
-func (c *TemplateCMManager) CreateCMTemplates(templates []config.ConfigMapSource) error {
-	nameMap := make(map[string]string, len(templates))
-	for _, t := range templates {
-		nameMap[t.CMName(TemplatePrefix)] = TempCMName("template", t)
-	}
-	return c.createCMs(templates, nameMap)
-}
-
-func (c *TemplateCMManager) CreateClusterProfiles(profiles []config.ConfigMapSource) error {
-	nameMap := make(map[string]string, len(profiles))
-	for _, p := range profiles {
-		nameMap[p.CMName(ClusterProfilePrefix)] = TempCMName("cluster-profile", p)
-	}
-	return c.createCMs(profiles, nameMap)
 }
 
 // CleanupCMTemplates deletes all the configMaps that have been created for the changed templates.

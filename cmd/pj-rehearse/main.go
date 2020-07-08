@@ -106,7 +106,7 @@ pj-rehearse created invalid rehearsal jobs.This is either a pj-rehearse bug, or
 the rehearsed jobs themselves are invalid.`
 )
 
-func loadPluginConfig(releaseRepoPath string) (ret prowplugins.ConfigUpdater, err error) {
+func loadConfigUpdaterConfig(releaseRepoPath string) (ret prowplugins.ConfigUpdater, err error) {
 	agent := prowplugins.ConfigAgent{}
 	if err = agent.Load(filepath.Join(releaseRepoPath, config.PluginConfigInRepoPath), true); err == nil {
 		ret = agent.Config().ConfigUpdater
@@ -183,7 +183,7 @@ func rehearseMain() error {
 	}
 
 	prConfig := config.GetAllConfigs(o.releaseRepoPath, logger)
-	pluginConfig, err := loadPluginConfig(o.releaseRepoPath)
+	configUpdaterConfig, err := loadConfigUpdaterConfig(o.releaseRepoPath)
 	if err != nil {
 		logger.WithError(err).Error("could not load plugin configuration from tested revision of release repo")
 		return fmt.Errorf(misconfigurationOutput)
@@ -251,28 +251,37 @@ func rehearseMain() error {
 		logger.Infof("found %d changed registry steps: %s", len(changedRegistrySteps), strings.Join(names, ", "))
 	}
 
-	var changedTemplates []config.ConfigMapSource
+	var changedTemplates rehearse.RehearsalConfigMaps
 	if !o.noTemplates {
-		changedTemplates, err = config.GetChangedTemplates(o.releaseRepoPath, jobSpec.Refs.BaseSHA)
+		changedTemplateSources, err := config.GetChangedTemplates(o.releaseRepoPath, jobSpec.Refs.BaseSHA)
 		if err != nil {
 			logger.WithError(err).Error("could not get template differences")
 			return fmt.Errorf(misconfigurationOutput)
 		}
+		changedTemplates, err = rehearse.NewRehearsalConfigMaps(changedTemplateSources, "template", configUpdaterConfig)
+		if err != nil {
+			logger.WithError(err).Error("could not match changed cluster profiles with cluster ConfigMaps")
+		}
+
 	}
-	if len(changedTemplates) != 0 {
-		logger.WithField("templates", changedTemplates).Info("templates changed")
+	if len(changedTemplates.Names) != 0 {
+		logger.WithField("templates", changedTemplates.Names).Info("templates changed")
 	}
 
-	var changedClusterProfiles []config.ConfigMapSource
+	var changedClusterProfiles rehearse.RehearsalConfigMaps
 	if !o.noClusterProfiles {
-		changedClusterProfiles, err = config.GetChangedClusterProfiles(o.releaseRepoPath, jobSpec.Refs.BaseSHA)
+		changedClusterProfileSources, err := config.GetChangedClusterProfiles(o.releaseRepoPath, jobSpec.Refs.BaseSHA)
 		if err != nil {
 			logger.WithError(err).Error("could not get cluster profile differences")
 			return fmt.Errorf(misconfigurationOutput)
 		}
+		changedClusterProfiles, err = rehearse.NewRehearsalConfigMaps(changedClusterProfileSources, "cluster-profile", configUpdaterConfig)
+		if err != nil {
+			logger.WithError(err).Error("could not match changed cluster profiles with cluster ConfigMaps")
+		}
 	}
-	if len(changedClusterProfiles) != 0 {
-		logger.WithField("profiles", changedClusterProfiles).Info("cluster profiles changed")
+	if len(changedClusterProfiles.Names) != 0 {
+		logger.WithField("profiles", changedClusterProfiles.Names).Info("cluster profiles changed")
 	}
 
 	if o.local {
@@ -304,17 +313,25 @@ func rehearseMain() error {
 	presubmitsWithChangedCiopConfigs := diffs.GetPresubmitsForCiopConfigs(prConfig.Prow, changedCiopConfigData, affectedJobs, logger)
 	toRehearse.AddAll(presubmitsWithChangedCiopConfigs)
 
-	presubmitsWithChangedTemplates := rehearse.AddRandomJobsForChangedTemplates(changedTemplates, toRehearse, prConfig.Prow.JobConfig.PresubmitsStatic, loggers)
+	templateCMNames := sets.NewString()
+	for name := range changedTemplates.Names {
+		templateCMNames.Insert(name)
+	}
+	presubmitsWithChangedTemplates := rehearse.AddRandomJobsForChangedTemplates(templateCMNames, toRehearse, prConfig.Prow.JobConfig.PresubmitsStatic, loggers)
 	toRehearse.AddAll(presubmitsWithChangedTemplates)
 
-	toRehearseClusterProfiles := diffs.GetPresubmitsForClusterProfiles(prConfig.Prow, changedClusterProfiles, logger)
+	clusterProfileCMNames := sets.NewString()
+	for name := range changedClusterProfiles.Names {
+		clusterProfileCMNames.Insert(name)
+	}
+	toRehearseClusterProfiles := diffs.GetPresubmitsForClusterProfiles(prConfig.Prow, clusterProfileCMNames, logger)
 	toRehearse.AddAll(toRehearseClusterProfiles)
 
 	presubmitsWithChangedRegistry := rehearse.AddRandomJobsForChangedRegistry(changedRegistrySteps, graph, prConfig.Prow.JobConfig.PresubmitsStatic, filepath.Join(o.releaseRepoPath, config.CiopConfigInRepoPath), loggers)
 	toRehearse.AddAll(presubmitsWithChangedRegistry)
 
 	resolver := registry.NewResolver(refs, chains, workflows)
-	jobConfigurer := rehearse.NewJobConfigurer(prConfig.CiOperator, resolver, prNumber, loggers, changedTemplates, changedClusterProfiles, jobSpec.Refs)
+	jobConfigurer := rehearse.NewJobConfigurer(prConfig.CiOperator, resolver, changedTemplates.Names, changedClusterProfiles.Names, prNumber, loggers, jobSpec.Refs)
 	imagestreamtags, presubmitsToRehearse, err := jobConfigurer.ConfigurePresubmitRehearsals(toRehearse)
 	if err != nil {
 		return err
@@ -362,7 +379,7 @@ func rehearseMain() error {
 		prConfig.Prow.ProwJobNamespace,
 		pjclient,
 		prConfig.Prow.PodNamespace,
-		pluginConfig,
+		configUpdaterConfig,
 		o.releaseRepoPath,
 		o.dryRun,
 		changedTemplates,
@@ -425,8 +442,8 @@ func setupDependencies(
 	pluginConfig prowplugins.ConfigUpdater,
 	releaseRepoPath string,
 	dryRun bool,
-	changedTemplates []config.ConfigMapSource,
-	changedClusterProfiles []config.ConfigMapSource,
+	changedTemplates rehearse.RehearsalConfigMaps,
+	changedClusterProfiles rehearse.RehearsalConfigMaps,
 	requiredImageStreamTags apihelper.ImageStreamTagMap,
 ) (_ cleanup, retErr error) {
 	buildClusters := sets.String{}
@@ -476,11 +493,11 @@ func setupDependencies(
 			})
 			cleanupsLock.Unlock()
 
-			if err := cmManager.CreateCMTemplates(changedTemplates); err != nil {
+			if err := cmManager.CreateCMs(changedTemplates); err != nil {
 				log.WithError(err).Error("couldn't create template configMap")
 				return errors.New(failedSetupOutput)
 			}
-			if err := cmManager.CreateClusterProfiles(changedClusterProfiles); err != nil {
+			if err := cmManager.CreateCMs(changedClusterProfiles); err != nil {
 				log.WithError(err).Error("couldn't create cluster profile ConfigMaps")
 				return errors.New(failedSetupOutput)
 			}

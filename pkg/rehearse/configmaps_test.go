@@ -21,47 +21,17 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	coretesting "k8s.io/client-go/testing"
 
-	prowgithub "k8s.io/test-infra/prow/github"
 	prowplugins "k8s.io/test-infra/prow/plugins"
 
 	"github.com/openshift/ci-tools/pkg/config"
 )
-
-func TestValidateConfigMaps(t *testing.T) {
-	config := prowplugins.ConfigUpdater{
-		Maps: map[string]prowplugins.ConfigMapSpec{
-			"templates/dir/file":           {Namespace: "ns", Name: "cm0"},
-			"cluster/test-deploy/dir/file": {Namespace: "ns", Name: "cm1"},
-		},
-	}
-	changes := []prowgithub.PullRequestChange{
-		{Filename: "templates/dir/file", SHA: "00000000"},
-		{Filename: "cluster/test-deploy/dir/file", SHA: "11111111"},
-	}
-	client := fake.NewSimpleClientset().CoreV1().ConfigMaps("ns")
-	config.SetDefaults()
-	manager := NewTemplateCMManager("ns", client, config, 0, "/", logrus.NewEntry(logrus.New()))
-	if err := manager.validateChanges(changes); err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-	err := manager.validateChanges(append(changes, prowgithub.PullRequestChange{
-		Filename: "404", SHA: "11111111",
-	}))
-	if err == nil {
-		t.Fatal("unexpected success")
-	}
-	expected := "no entry in `updateconfig` matches \"404\""
-	if err.Error() != expected {
-		t.Errorf("unexpected error: %v", diff.ObjectDiff(expected, err.Error()))
-	}
-}
 
 func TestCreateCleanupCMTemplates(t *testing.T) {
 	// TODO(nmoraitis,bbcaro): this is an integration test and should be factored better
 	testRepoPath := "../../test/integration/pj-rehearse/master"
 	testTemplatePath := filepath.Join(config.TemplatesPath, "subdir/test-template.yaml")
 	ns := "test-namespace"
-	ciTemplates := []config.ConfigMapSource{{
+	ciTemplateSources := []config.ConfigMapSource{{
 		Path: testTemplatePath,
 		SHA:  "hd9sxk615lkcwx2kj226g3r3lvwkftyjif2pczm5dq3l0h13p35t",
 	}}
@@ -78,6 +48,10 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 		},
 	}
 	configUpdaterCfg.SetDefaults()
+	ciTemplates, err := NewRehearsalConfigMaps(ciTemplateSources, "template", configUpdaterCfg)
+	if err != nil {
+		t.Fatal(err)
+	}
 	createByRehearseReq, err := labels.NewRequirement(createByRehearse, selection.Equals, []string{"true"})
 	if err != nil {
 		t.Fatal(err)
@@ -90,7 +64,7 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 
 	selector := labels.NewSelector().Add(*createByRehearseReq).Add(*rehearseLabelPullReq)
 
-	expectedListRestricitons := coretesting.ListRestrictions{
+	expectedListRestrictions := coretesting.ListRestrictions{
 		Labels: selector,
 	}
 
@@ -99,15 +73,15 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 		deleteAction := action.(coretesting.DeleteCollectionAction)
 		listRestricitons := deleteAction.GetListRestrictions()
 
-		if !reflect.DeepEqual(listRestricitons.Labels, expectedListRestricitons.Labels) {
-			t.Fatalf("Labels:\nExpected:%#v\nFound: %#v", expectedListRestricitons.Labels, listRestricitons.Labels)
+		if !reflect.DeepEqual(listRestricitons.Labels, expectedListRestrictions.Labels) {
+			t.Fatalf("Labels:\nExpected:%#v\nFound: %#v", expectedListRestrictions.Labels, listRestricitons.Labels)
 		}
 
 		return true, nil, nil
 	})
 	client := cs.CoreV1().ConfigMaps(ns)
 	cmManager := NewTemplateCMManager(ns, client, configUpdaterCfg, 1234, testRepoPath, logrus.NewEntry(logrus.New()))
-	if err := cmManager.CreateCMTemplates(ciTemplates); err != nil {
+	if err := cmManager.CreateCMs(ciTemplates); err != nil {
 		t.Fatalf("CreateCMTemplates() returned error: %v", err)
 	}
 	cms, err := client.List(metav1.ListOptions{})
@@ -116,7 +90,7 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 	}
 	expected := []v1.ConfigMap{{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "rehearse-template-test-template-hd9sxk61",
+			Name:      "rehearse-template-prow-job-test-template-hd9sxk61",
 			Namespace: ns,
 			Labels: map[string]string{
 				createByRehearse:  "true",
@@ -141,59 +115,64 @@ func TestCreateClusterProfiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(dir)
-	profiles := []config.ConfigMapSource{{
+	profileSources := []config.ConfigMapSource{{
 		SHA:  "e92d4a5996a8a977bd7916b65488371331681f9d",
-		Path: filepath.Join(config.ClusterProfilesPath, "profile0"),
+		Path: filepath.Join(config.ClusterProfilesPath, "profile0", "file"),
 	}, {
 		SHA:  "a8c99ffc996128417ef1062f9783730a8c864586",
-		Path: filepath.Join(config.ClusterProfilesPath, "profile1"),
+		Path: filepath.Join(config.ClusterProfilesPath, "profile1", "file"),
 	}, {
 		SHA:  "8012ff51a005eaa8ed8f4c08ccdce580f462fff6",
-		Path: filepath.Join(config.ClusterProfilesPath, "unchanged"),
+		Path: filepath.Join(config.ClusterProfilesPath, "unchanged", "file"),
 	}}
-	for _, p := range profiles {
+	for _, p := range profileSources {
 		path := filepath.Join(dir, p.Path)
-		if err := os.MkdirAll(path, 0775); err != nil {
+		if err := os.MkdirAll(filepath.Dir(path), 0775); err != nil {
 			t.Fatal(err)
 		}
-		content := []byte(filepath.Base(p.Path) + " content")
-		if err := ioutil.WriteFile(filepath.Join(path, "file"), content, 0664); err != nil {
+		content := []byte(p.Path + " content")
+		if err := ioutil.WriteFile(path, content, 0664); err != nil {
 			t.Fatal(err)
 		}
 	}
-	profiles = profiles[:2]
+	profileSources = profileSources[:2]
 	ns := "test"
 	pr := 1234
 	configUpdaterCfg := prowplugins.ConfigUpdater{
 		Maps: map[string]prowplugins.ConfigMapSpec{
 			filepath.Join(config.ClusterProfilesPath, "profile0", "file"): {
-				Name:       ClusterProfilePrefix + "profile0",
+				Name:       "profile0",
 				Namespaces: []string{ns},
 			},
 			filepath.Join(config.ClusterProfilesPath, "profile1", "file"): {
-				Name:       ClusterProfilePrefix + "profile1",
+				Name:       "profile1",
 				Namespaces: []string{ns},
 			},
 			filepath.Join(config.ClusterProfilesPath, "unchanged", "file"): {
-				Name:       ClusterProfilePrefix + "unchanged",
+				Name:       "unchanged",
 				Namespaces: []string{ns},
 			},
 		},
 	}
 	configUpdaterCfg.SetDefaults()
-	cs := fake.NewSimpleClientset()
-	client := cs.CoreV1().ConfigMaps(ns)
-	m := NewTemplateCMManager(ns, client, configUpdaterCfg, pr, dir, logrus.NewEntry(logrus.New()))
-	if err := m.CreateClusterProfiles(profiles); err != nil {
-		t.Fatal(err)
-	}
-	cms, err := client.List(metav1.ListOptions{})
-	sort.Slice(cms.Items, func(i, j int) bool {
-		return cms.Items[i].Name < cms.Items[j].Name
-	})
+	profiles, err := NewRehearsalConfigMaps(profileSources, "cluster-profile", configUpdaterCfg)
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	cs := fake.NewSimpleClientset()
+	client := cs.CoreV1().ConfigMaps(ns)
+	m := NewTemplateCMManager(ns, client, configUpdaterCfg, pr, dir, logrus.NewEntry(logrus.New()))
+	if err := m.CreateCMs(profiles); err != nil {
+		t.Fatal(err)
+	}
+	cms, err := client.List(metav1.ListOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sort.Slice(cms.Items, func(i, j int) bool {
+		return cms.Items[i].Name < cms.Items[j].Name
+	})
 	expected := []v1.ConfigMap{{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "rehearse-cluster-profile-profile0-e92d4a59",
@@ -203,7 +182,7 @@ func TestCreateClusterProfiles(t *testing.T) {
 				rehearseLabelPull: strconv.Itoa(pr),
 			},
 		},
-		Data: map[string]string{"file": "profile0 content"},
+		Data: map[string]string{"file": "cluster/test-deploy/profile0/file content"},
 	}, {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "rehearse-cluster-profile-profile1-a8c99ffc",
@@ -213,7 +192,7 @@ func TestCreateClusterProfiles(t *testing.T) {
 				rehearseLabelPull: strconv.Itoa(pr),
 			},
 		},
-		Data: map[string]string{"file": "profile1 content"},
+		Data: map[string]string{"file": "cluster/test-deploy/profile1/file content"},
 	}}
 	if !equality.Semantic.DeepEqual(expected, cms.Items) {
 		t.Fatal(diff.ObjectDiff(expected, cms.Items))

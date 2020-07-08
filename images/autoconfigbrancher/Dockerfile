@@ -8,8 +8,8 @@ ADD ci-operator-config-mirror /usr/bin/ci-operator-config-mirror
 ADD private-prow-configs-mirror /usr/bin/private-prow-configs-mirror
 ADD sanitize-prow-jobs /usr/bin/sanitize-prow-jobs
 
-RUN yum install -y git && \
-    yum clean all && \
-    rm -rf /var/cache/yum
+RUN dnf install -y git && \
+    dnf clean all && \
+    rm -rf /var/cache/dnf
 
 ENTRYPOINT ["/usr/bin/autoconfigbrancher"]

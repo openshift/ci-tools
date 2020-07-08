@@ -347,6 +347,17 @@ func rehearseMain() error {
 		prConfig.Prow.JobConfig.PresubmitsStatic = map[string][]prowconfig.Presubmit{}
 	}
 	for _, presubmit := range presubmitsToRehearse {
+
+		// We can only have a given repo once, so remove whats in Refs from ExtraRefs
+		var cleanExtraRefs []pjapi.Refs
+		for _, extraRef := range presubmit.ExtraRefs {
+			if extraRef.Org == org && extraRef.Repo == repo {
+				continue
+			}
+			cleanExtraRefs = append(cleanExtraRefs, extraRef)
+		}
+		presubmit.ExtraRefs = cleanExtraRefs
+
 		prConfig.Prow.JobConfig.PresubmitsStatic[org+"/"+repo] = append(prConfig.Prow.JobConfig.PresubmitsStatic[org+"/"+repo], *presubmit)
 	}
 	if err := prConfig.Prow.ValidateJobConfig(); err != nil {

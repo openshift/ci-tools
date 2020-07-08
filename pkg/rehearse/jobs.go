@@ -356,7 +356,7 @@ func NewJobConfigurer(ciopConfigs config.DataByFilename, resolver registry.Resol
 func fillTemplateMap(templates []config.ConfigMapSource) map[string]string {
 	templateMap := make(map[string]string, len(templates))
 	for _, t := range templates {
-		templateMap[filepath.Base(t.Filename)] = TempCMName("template", t)
+		templateMap[filepath.Base(t.Path)] = TempCMName("template", t)
 	}
 	return templateMap
 }
@@ -493,7 +493,7 @@ func AddRandomJobsForChangedTemplates(templates []config.ConfigMapSource, toBeRe
 	rehearsals := make(config.Presubmits)
 
 	for _, template := range templates {
-		templateFile := filepath.Base(template.Filename)
+		templateFile := filepath.Base(template.Path)
 		for _, clusterType := range clusterTypes {
 			if isAlreadyRehearsed(toBeRehearsed, clusterType, templateFile) {
 				continue

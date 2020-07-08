@@ -38,11 +38,11 @@ const (
 )
 
 type ConfigMapSource struct {
-	Filename, SHA string
+	Path, SHA string
 }
 
 func (s ConfigMapSource) Name() string {
-	base := filepath.Base(s.Filename)
+	base := filepath.Base(s.Path)
 	return strings.TrimSuffix(base, filepath.Ext(base))
 }
 
@@ -168,7 +168,7 @@ func GetChangedTemplates(path, baseRev string) ([]ConfigMapSource, error) {
 	}
 	var ret []ConfigMapSource
 	for _, c := range changes {
-		if filepath.Ext(c.Filename) == ".yaml" {
+		if filepath.Ext(c.Path) == ".yaml" {
 			ret = append(ret, c)
 		}
 	}
@@ -204,8 +204,8 @@ func GetChangedRegistrySteps(path, baseRev string, graph registry.NodeByName) ([
 		return changes, err
 	}
 	for _, c := range revChanges {
-		if filepath.Ext(c.Filename) == ".yaml" || strings.HasSuffix(c.Filename, "-commands.sh") {
-			node, err := loadRegistryStep(filepath.Base(c.Filename), graph)
+		if filepath.Ext(c.Path) == ".yaml" || strings.HasSuffix(c.Path, "-commands.sh") {
+			node, err := loadRegistryStep(filepath.Base(c.Path), graph)
 			if err != nil {
 				return changes, err
 			}
@@ -236,8 +236,8 @@ func getRevChanges(root, path, base string, rec bool) ([]ConfigMapSource, error)
 	var ret []ConfigMapSource
 	for _, l := range strings.Split(strings.TrimSpace(diff), "\n") {
 		ret = append(ret, ConfigMapSource{
-			Filename: filepath.Join(path, l[99:]),
-			SHA:      l[56:96],
+			Path: filepath.Join(path, l[99:]),
+			SHA:  l[56:96],
 		})
 	}
 	return ret, nil

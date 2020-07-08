@@ -75,11 +75,11 @@ func TestGetChangedTemplates(t *testing.T) {
 > org/repo/README.md
 `
 	expected := []ConfigMapSource{{
-		SHA:      "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
-		Filename: filepath.Join(TemplatesPath, "cluster-launch-top-level.yaml"),
+		SHA:  "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+		Path: filepath.Join(TemplatesPath, "cluster-launch-top-level.yaml"),
 	}, {
-		SHA:      "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
-		Filename: filepath.Join(TemplatesPath, "org/repo/cluster-launch-subdir.yaml"),
+		SHA:  "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+		Path: filepath.Join(TemplatesPath, "org/repo/cluster-launch-subdir.yaml"),
 	}}
 	compareChanges(t, TemplatesPath, files, cmd, GetChangedTemplates, expected)
 }
@@ -100,20 +100,20 @@ git mv renameme/file renamed/file
 > dir/dir/file
 `
 	expected := []ConfigMapSource{{
-		SHA:      "df2b8fc99e1c1d4dbc0a854d9f72157f1d6ea078",
-		Filename: filepath.Join(ClusterProfilesPath, "changeme"),
+		SHA:  "df2b8fc99e1c1d4dbc0a854d9f72157f1d6ea078",
+		Path: filepath.Join(ClusterProfilesPath, "changeme"),
 	}, {
-		SHA:      "b4c3cc91598b6469bf7036502b8ca2bd563b0d0a",
-		Filename: filepath.Join(ClusterProfilesPath, "dir"),
+		SHA:  "b4c3cc91598b6469bf7036502b8ca2bd563b0d0a",
+		Path: filepath.Join(ClusterProfilesPath, "dir"),
 	}, {
-		SHA:      "03b9d461447abb84264053a440b4c715842566bb",
-		Filename: filepath.Join(ClusterProfilesPath, "moveme"),
+		SHA:  "03b9d461447abb84264053a440b4c715842566bb",
+		Path: filepath.Join(ClusterProfilesPath, "moveme"),
 	}, {
-		SHA:      "df2b8fc99e1c1d4dbc0a854d9f72157f1d6ea078",
-		Filename: filepath.Join(ClusterProfilesPath, "new"),
+		SHA:  "df2b8fc99e1c1d4dbc0a854d9f72157f1d6ea078",
+		Path: filepath.Join(ClusterProfilesPath, "new"),
 	}, {
-		SHA:      "9bbab5dcf83793f9edc258136426678cccce940e",
-		Filename: filepath.Join(ClusterProfilesPath, "renamed"),
+		SHA:  "9bbab5dcf83793f9edc258136426678cccce940e",
+		Path: filepath.Join(ClusterProfilesPath, "renamed"),
 	}}
 	compareChanges(t, ClusterProfilesPath, files, cmd, GetChangedClusterProfiles, expected)
 }

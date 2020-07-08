@@ -102,7 +102,7 @@ func (c *TemplateCMManager) createCM(name string, data []updateconfig.ConfigMapU
 func genChanges(root string, sources []config.ConfigMapSource) ([]prowgithub.PullRequestChange, error) {
 	var ret []prowgithub.PullRequestChange
 	for _, f := range sources {
-		err := filepath.Walk(filepath.Join(root, f.Filename), func(path string, info os.FileInfo, err error) error {
+		err := filepath.Walk(filepath.Join(root, f.Path), func(path string, info os.FileInfo, err error) error {
 			if err != nil || info.IsDir() {
 				return err
 			}

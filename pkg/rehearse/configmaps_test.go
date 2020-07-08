@@ -62,8 +62,8 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 	testTemplatePath := filepath.Join(config.TemplatesPath, "subdir/test-template.yaml")
 	ns := "test-namespace"
 	ciTemplates := []config.ConfigMapSource{{
-		Filename: testTemplatePath,
-		SHA:      "hd9sxk615lkcwx2kj226g3r3lvwkftyjif2pczm5dq3l0h13p35t",
+		Path: testTemplatePath,
+		SHA:  "hd9sxk615lkcwx2kj226g3r3lvwkftyjif2pczm5dq3l0h13p35t",
 	}}
 	contents, err := ioutil.ReadFile(filepath.Join(testRepoPath, testTemplatePath))
 	if err != nil {
@@ -142,21 +142,21 @@ func TestCreateClusterProfiles(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 	profiles := []config.ConfigMapSource{{
-		SHA:      "e92d4a5996a8a977bd7916b65488371331681f9d",
-		Filename: filepath.Join(config.ClusterProfilesPath, "profile0"),
+		SHA:  "e92d4a5996a8a977bd7916b65488371331681f9d",
+		Path: filepath.Join(config.ClusterProfilesPath, "profile0"),
 	}, {
-		SHA:      "a8c99ffc996128417ef1062f9783730a8c864586",
-		Filename: filepath.Join(config.ClusterProfilesPath, "profile1"),
+		SHA:  "a8c99ffc996128417ef1062f9783730a8c864586",
+		Path: filepath.Join(config.ClusterProfilesPath, "profile1"),
 	}, {
-		SHA:      "8012ff51a005eaa8ed8f4c08ccdce580f462fff6",
-		Filename: filepath.Join(config.ClusterProfilesPath, "unchanged"),
+		SHA:  "8012ff51a005eaa8ed8f4c08ccdce580f462fff6",
+		Path: filepath.Join(config.ClusterProfilesPath, "unchanged"),
 	}}
 	for _, p := range profiles {
-		path := filepath.Join(dir, p.Filename)
+		path := filepath.Join(dir, p.Path)
 		if err := os.MkdirAll(path, 0775); err != nil {
 			t.Fatal(err)
 		}
-		content := []byte(filepath.Base(p.Filename) + " content")
+		content := []byte(filepath.Base(p.Path) + " content")
 		if err := ioutil.WriteFile(filepath.Join(path, "file"), content, 0664); err != nil {
 			t.Fatal(err)
 		}

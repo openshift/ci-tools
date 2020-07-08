@@ -50,6 +50,17 @@ images:
       - registry.svc.ci.openshift.org/openshift/origin-v4.0:machine-os-content
       paths: null
   to: machine-os-content
+- dockerfile_path: Dockerfile.bundle
+  context_dir: manifests/deploy/openshift/olm/
+  operator_manifests: "4.6" # this is subdir of context_dir
+  to: metering-reporting-operator-bundle
+  substitute:
+  - pullspec: quay.io/openshift/origin-metering-reporting-operator:4.6
+    with: metering-reporting-operator
+  - pullspec: quay.io/openshift/origin-oauth-proxy:4.6
+    with: oauth-proxy
+  - pullspec: quay.io/openshift/origin-hive:4.6
+    with: hive
 promotion:
   additional_images:
     artifacts: artifacts

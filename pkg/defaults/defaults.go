@@ -146,6 +146,8 @@ func FromConfig(
 			step = steps.PipelineImageCacheStep(*rawStep.PipelineImageCacheStepConfiguration, config.Resources, buildClient, imageClient, artifactDir, jobSpec, dryLogger, pullSecret)
 		} else if rawStep.SourceStepConfiguration != nil {
 			step = steps.SourceStep(*rawStep.SourceStepConfiguration, config.Resources, buildClient, imageClient, artifactDir, jobSpec, dryLogger, cloneAuthConfig, pullSecret)
+		} else if rawStep.BundleSourceStepConfiguration != nil {
+			step = steps.BundleSourceStep(*rawStep.BundleSourceStepConfiguration, config.Resources, buildClient, imageClient, imageClient, artifactDir, jobSpec, dryLogger, pullSecret)
 		} else if rawStep.ProjectDirectoryImageBuildStepConfiguration != nil {
 			step = steps.ProjectDirectoryImageBuildStep(*rawStep.ProjectDirectoryImageBuildStepConfiguration, config.Resources, buildClient, imageClient, imageClient, artifactDir, jobSpec, dryLogger, pullSecret)
 		} else if rawStep.ProjectDirectoryImageBuildInputs != nil {
@@ -450,6 +452,15 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.Job
 
 	for i := range config.Images {
 		image := &config.Images[i]
+		// If current image is operator bundle, add build step for its operator bundle source
+		if image.OperatorManifests != "" {
+			buildSteps = append(buildSteps, api.StepConfiguration{BundleSourceStepConfiguration: &api.BundleSourceStepConfiguration{
+				To:                steps.BundleSourceName(image.To),
+				ContextDir:        image.ContextDir,
+				OperatorManifests: image.OperatorManifests,
+				Substitute:        image.Substitute,
+			}})
+		}
 		buildSteps = append(buildSteps, api.StepConfiguration{ProjectDirectoryImageBuildStepConfiguration: image})
 		if config.ReleaseTagConfiguration != nil {
 			buildSteps = append(buildSteps, api.StepConfiguration{OutputImageTagStepConfiguration: &api.OutputImageTagStepConfiguration{

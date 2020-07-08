@@ -70,13 +70,13 @@ func main() {
 	var githubClient github.Client
 	if opts.createPR {
 		secretAgent := &secret.Agent{}
+		if err := secretAgent.Start([]string{opts.TokenPath}); err != nil {
+			logrus.WithError(err).Fatal("Failed to load github token")
+		}
 		var err error
 		githubClient, err = opts.GitHubClient(secretAgent, false)
 		if err != nil {
 			logrus.WithError(err).Fatal("Failed to construct githubClient")
-		}
-		if err := secretAgent.Start(nil); err != nil {
-			logrus.WithError(err).Fatal("Failed to load github token")
 		}
 	}
 

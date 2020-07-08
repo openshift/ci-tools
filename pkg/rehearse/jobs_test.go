@@ -148,15 +148,15 @@ func TestReplaceClusterProfiles(t *testing.T) {
 			id: "unchanged-profile",
 			spec: v1.PodSpec{
 				Containers: []v1.Container{{}},
-				Volumes:    []v1.Volume{makeVolume(config.ClusterProfilePrefix + "unchanged")},
+				Volumes:    []v1.Volume{makeVolume(ClusterProfilePrefix + "unchanged")},
 			},
-			expected: []string{config.ClusterProfilePrefix + "unchanged"},
+			expected: []string{ClusterProfilePrefix + "unchanged"},
 		},
 		{
 			id: "changed-profile0",
 			spec: v1.PodSpec{
 				Containers: []v1.Container{{}},
-				Volumes:    []v1.Volume{makeVolume(config.ClusterProfilePrefix + "changed-profile0")},
+				Volumes:    []v1.Volume{makeVolume(ClusterProfilePrefix + "changed-profile0")},
 			},
 			expected: []string{"rehearse-cluster-profile-changed-profile0-47f520ef"},
 		},
@@ -164,7 +164,7 @@ func TestReplaceClusterProfiles(t *testing.T) {
 			id: "changed-profile1",
 			spec: v1.PodSpec{
 				Containers: []v1.Container{{}},
-				Volumes:    []v1.Volume{makeVolume(config.ClusterProfilePrefix + "changed-profile1")},
+				Volumes:    []v1.Volume{makeVolume(ClusterProfilePrefix + "changed-profile1")},
 			},
 			expected: []string{"rehearse-cluster-profile-changed-profile1-85c62707"},
 		},
@@ -173,10 +173,10 @@ func TestReplaceClusterProfiles(t *testing.T) {
 			spec: v1.PodSpec{
 				Containers: []v1.Container{{}},
 				Volumes: []v1.Volume{
-					makeVolume(config.ClusterProfilePrefix + "unchanged"),
-					makeVolume(config.ClusterProfilePrefix + "changed-profile0"),
-					makeVolume(config.ClusterProfilePrefix + "changed-profile1"),
-					makeVolume(config.ClusterProfilePrefix + "unchanged"),
+					makeVolume(ClusterProfilePrefix + "unchanged"),
+					makeVolume(ClusterProfilePrefix + "changed-profile0"),
+					makeVolume(ClusterProfilePrefix + "changed-profile1"),
+					makeVolume(ClusterProfilePrefix + "unchanged"),
 				},
 			},
 			expected: []string{

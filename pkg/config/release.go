@@ -29,17 +29,26 @@ const (
 	CiopConfigInRepoPath = "ci-operator/config"
 	// TemplatesPath is the path of the templates from release repo
 	TemplatesPath = "ci-operator/templates"
-	// TemplatePrefix is the prefix added to ConfigMap names
-	TemplatePrefix = "prow-job-"
 	// ClusterProfilesPath is where profiles are stored in the release repo
 	ClusterProfilesPath = "cluster/test-deploy"
-	// ClusterProfilePrefix is the prefix added to ConfigMap names
-	ClusterProfilePrefix = "cluster-profile-"
 	// StagingNamespace is the staging namespace in api.ci
 	StagingNamespace = "ci-stg"
 	// RegistryPath is the path to the multistage step registry
 	RegistryPath = "ci-operator/step-registry"
 )
+
+type ConfigMapSource struct {
+	Filename, SHA string
+}
+
+func (s ConfigMapSource) Name() string {
+	base := filepath.Base(s.Filename)
+	return strings.TrimSuffix(base, filepath.Ext(base))
+}
+
+func (s ConfigMapSource) CMName(prefix string) string {
+	return prefix + s.Name()
+}
 
 // ReleaseRepoConfig contains all configuration present in release repo (usually openshift/release)
 type ReleaseRepoConfig struct {

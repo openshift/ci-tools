@@ -1,4 +1,4 @@
-package config
+package rehearse
 
 import (
 	"io/ioutil"
@@ -23,6 +23,8 @@ import (
 
 	prowgithub "k8s.io/test-infra/prow/github"
 	prowplugins "k8s.io/test-infra/prow/plugins"
+
+	"github.com/openshift/ci-tools/pkg/config"
 )
 
 func TestValidateConfigMaps(t *testing.T) {
@@ -57,9 +59,9 @@ func TestValidateConfigMaps(t *testing.T) {
 func TestCreateCleanupCMTemplates(t *testing.T) {
 	// TODO(nmoraitis,bbcaro): this is an integration test and should be factored better
 	testRepoPath := "../../test/integration/pj-rehearse/master"
-	testTemplatePath := filepath.Join(TemplatesPath, "subdir/test-template.yaml")
+	testTemplatePath := filepath.Join(config.TemplatesPath, "subdir/test-template.yaml")
 	ns := "test-namespace"
-	ciTemplates := []ConfigMapSource{{
+	ciTemplates := []config.ConfigMapSource{{
 		Filename: testTemplatePath,
 		SHA:      "hd9sxk615lkcwx2kj226g3r3lvwkftyjif2pczm5dq3l0h13p35t",
 	}}
@@ -139,15 +141,15 @@ func TestCreateClusterProfiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(dir)
-	profiles := []ConfigMapSource{{
+	profiles := []config.ConfigMapSource{{
 		SHA:      "e92d4a5996a8a977bd7916b65488371331681f9d",
-		Filename: filepath.Join(ClusterProfilesPath, "profile0"),
+		Filename: filepath.Join(config.ClusterProfilesPath, "profile0"),
 	}, {
 		SHA:      "a8c99ffc996128417ef1062f9783730a8c864586",
-		Filename: filepath.Join(ClusterProfilesPath, "profile1"),
+		Filename: filepath.Join(config.ClusterProfilesPath, "profile1"),
 	}, {
 		SHA:      "8012ff51a005eaa8ed8f4c08ccdce580f462fff6",
-		Filename: filepath.Join(ClusterProfilesPath, "unchanged"),
+		Filename: filepath.Join(config.ClusterProfilesPath, "unchanged"),
 	}}
 	for _, p := range profiles {
 		path := filepath.Join(dir, p.Filename)
@@ -164,15 +166,15 @@ func TestCreateClusterProfiles(t *testing.T) {
 	pr := 1234
 	configUpdaterCfg := prowplugins.ConfigUpdater{
 		Maps: map[string]prowplugins.ConfigMapSpec{
-			filepath.Join(ClusterProfilesPath, "profile0", "file"): {
+			filepath.Join(config.ClusterProfilesPath, "profile0", "file"): {
 				Name:       ClusterProfilePrefix + "profile0",
 				Namespaces: []string{ns},
 			},
-			filepath.Join(ClusterProfilesPath, "profile1", "file"): {
+			filepath.Join(config.ClusterProfilesPath, "profile1", "file"): {
 				Name:       ClusterProfilePrefix + "profile1",
 				Namespaces: []string{ns},
 			},
-			filepath.Join(ClusterProfilesPath, "unchanged", "file"): {
+			filepath.Join(config.ClusterProfilesPath, "unchanged", "file"): {
 				Name:       ClusterProfilePrefix + "unchanged",
 				Namespaces: []string{ns},
 			},

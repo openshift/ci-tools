@@ -204,9 +204,10 @@ func getTestsByName(tests []cioperatorapi.TestStepConfiguration) map[string]ciop
 // Prow configuration, with only presubmits that use certain cluster profiles.
 func GetPresubmitsForClusterProfiles(prowConfig *prowconfig.Config, profiles []config.ConfigMapSource, logger *logrus.Entry) config.Presubmits {
 	names := make(sets.String, len(profiles))
-	for _, p := range profiles {
-		names.Insert(p.CMName(config.ClusterProfilePrefix))
-	}
+	// TODO(muller): This is incorrect and needs to be fixed in a followup commit
+	// for _, p := range profiles {
+	//	names.Insert(p.CMName(config.ClusterProfilePrefix))
+	// }
 	matches := func(job *prowconfig.Presubmit) bool {
 		if job.Agent != string(pjapi.KubernetesAgent) {
 			return false

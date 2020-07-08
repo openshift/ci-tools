@@ -356,7 +356,7 @@ func NewJobConfigurer(ciopConfigs config.DataByFilename, resolver registry.Resol
 func fillTemplateMap(templates []config.ConfigMapSource) map[string]string {
 	templateMap := make(map[string]string, len(templates))
 	for _, t := range templates {
-		templateMap[filepath.Base(t.Filename)] = t.TempCMName("template")
+		templateMap[filepath.Base(t.Filename)] = TempCMName("template", t)
 	}
 	return templateMap
 }
@@ -732,7 +732,7 @@ func hasTemplateFile(job prowconfig.Presubmit, templateFile string) bool {
 func replaceClusterProfiles(volumes []v1.Volume, profiles []config.ConfigMapSource, logger *logrus.Entry) {
 	nameMap := make(map[string]string, len(profiles))
 	for _, p := range profiles {
-		nameMap[p.CMName(config.ClusterProfilePrefix)] = p.TempCMName("cluster-profile")
+		nameMap[p.CMName(ClusterProfilePrefix)] = TempCMName("cluster-profile", p)
 	}
 	replace := func(s *v1.VolumeProjection) {
 		if s.ConfigMap == nil {

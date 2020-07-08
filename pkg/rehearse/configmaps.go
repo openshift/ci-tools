@@ -1,4 +1,4 @@
-package config
+package rehearse
 
 import (
 	"fmt"
@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 
 	"github.com/mattn/go-zglob"
 	"github.com/sirupsen/logrus"
@@ -24,30 +23,24 @@ import (
 	_ "k8s.io/test-infra/prow/hook"
 	prowplugins "k8s.io/test-infra/prow/plugins"
 	"k8s.io/test-infra/prow/plugins/updateconfig"
+
+	"github.com/openshift/ci-tools/pkg/config"
 )
 
-type ConfigMapSource struct {
-	Filename, SHA string
-}
-
-func (s ConfigMapSource) Name() string {
-	base := filepath.Base(s.Filename)
-	return strings.TrimSuffix(base, filepath.Ext(base))
-}
-
-func (s ConfigMapSource) CMName(prefix string) string {
-	return prefix + s.Name()
-}
-
-func (s ConfigMapSource) TempCMName(prefix string) string {
+func TempCMName(prefix string, source config.ConfigMapSource) string {
 	// Object names can't be too long so we truncate the hash. This increases
 	// chances of collision but we can tolerate it as our input space is tiny.
-	return fmt.Sprintf("rehearse-%s-%s-%s", prefix, s.Name(), s.SHA[:8])
+	return fmt.Sprintf("rehearse-%s-%s-%s", prefix, source.Name(), source.SHA[:8])
 }
 
 const (
 	createByRehearse  = "created-by-pj-rehearse"
 	rehearseLabelPull = "ci.openshift.org/rehearse-pull"
+
+	// TemplatePrefix is the prefix added to ConfigMap names
+	TemplatePrefix = "prow-job-"
+	// ClusterProfilePrefix is the prefix added to ConfigMap names
+	ClusterProfilePrefix = "cluster-profile-"
 )
 
 // TemplateCMManager holds the details needed for the configmap controller
@@ -106,7 +99,7 @@ func (c *TemplateCMManager) createCM(name string, data []updateconfig.ConfigMapU
 	return nil
 }
 
-func genChanges(root string, sources []ConfigMapSource) ([]prowgithub.PullRequestChange, error) {
+func genChanges(root string, sources []config.ConfigMapSource) ([]prowgithub.PullRequestChange, error) {
 	var ret []prowgithub.PullRequestChange
 	for _, f := range sources {
 		err := filepath.Walk(filepath.Join(root, f.Filename), func(path string, info os.FileInfo, err error) error {
@@ -166,7 +159,7 @@ func replaceSpecNames(namespace string, cfg prowplugins.ConfigUpdater, mapping m
 	return
 }
 
-func (c *TemplateCMManager) createCMs(sources []ConfigMapSource, mapping map[string]string) error {
+func (c *TemplateCMManager) createCMs(sources []config.ConfigMapSource, mapping map[string]string) error {
 	changes, err := genChanges(c.releaseRepoPath, sources)
 	if err != nil {
 		return err
@@ -185,18 +178,18 @@ func (c *TemplateCMManager) createCMs(sources []ConfigMapSource, mapping map[str
 }
 
 // CreateCMTemplates creates configMaps for all the changed templates.
-func (c *TemplateCMManager) CreateCMTemplates(templates []ConfigMapSource) error {
+func (c *TemplateCMManager) CreateCMTemplates(templates []config.ConfigMapSource) error {
 	nameMap := make(map[string]string, len(templates))
 	for _, t := range templates {
-		nameMap[t.CMName(TemplatePrefix)] = t.TempCMName("template")
+		nameMap[t.CMName(TemplatePrefix)] = TempCMName("template", t)
 	}
 	return c.createCMs(templates, nameMap)
 }
 
-func (c *TemplateCMManager) CreateClusterProfiles(profiles []ConfigMapSource) error {
+func (c *TemplateCMManager) CreateClusterProfiles(profiles []config.ConfigMapSource) error {
 	nameMap := make(map[string]string, len(profiles))
 	for _, p := range profiles {
-		nameMap[p.CMName(ClusterProfilePrefix)] = p.TempCMName("cluster-profile")
+		nameMap[p.CMName(ClusterProfilePrefix)] = TempCMName("cluster-profile", p)
 	}
 	return c.createCMs(profiles, nameMap)
 }

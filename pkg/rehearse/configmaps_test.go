@@ -1,4 +1,4 @@
-package config
+package rehearse
 
 import (
 	"io/ioutil"
@@ -23,10 +23,12 @@ import (
 
 	prowgithub "k8s.io/test-infra/prow/github"
 	prowplugins "k8s.io/test-infra/prow/plugins"
+
+	"github.com/openshift/ci-tools/pkg/config"
 )
 
 func TestValidateConfigMaps(t *testing.T) {
-	config := prowplugins.ConfigUpdater{
+	configUpdaterCfg := prowplugins.ConfigUpdater{
 		Maps: map[string]prowplugins.ConfigMapSpec{
 			"templates/dir/file":           {Namespace: "ns", Name: "cm0"},
 			"cluster/test-deploy/dir/file": {Namespace: "ns", Name: "cm1"},
@@ -37,8 +39,8 @@ func TestValidateConfigMaps(t *testing.T) {
 		{Filename: "cluster/test-deploy/dir/file", SHA: "11111111"},
 	}
 	client := fake.NewSimpleClientset().CoreV1().ConfigMaps("ns")
-	config.SetDefaults()
-	manager := NewRehearsalCMManager("ns", client, config, 0, "/", logrus.NewEntry(logrus.New()))
+	configUpdaterCfg.SetDefaults()
+	manager := NewCMManager("ns", client, configUpdaterCfg, 0, "/", logrus.NewEntry(logrus.New()))
 	if err := manager.validateChanges(changes); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -57,9 +59,9 @@ func TestValidateConfigMaps(t *testing.T) {
 func TestCreateCleanupCMTemplates(t *testing.T) {
 	// TODO(nmoraitis,bbcaro): this is an integration test and should be factored better
 	testRepoPath := "../../test/integration/pj-rehearse/master"
-	testTemplatePath := filepath.Join(TemplatesPath, "subdir/test-template.yaml")
+	testTemplatePath := filepath.Join(config.TemplatesPath, "subdir/test-template.yaml")
 	ns := "test-namespace"
-	ciTemplates := []ConfigMapSource{{
+	ciTemplates := []config.ConfigMapSource{{
 		PathInRepo: testTemplatePath,
 		SHA:        "hd9sxk615lkcwx2kj226g3r3lvwkftyjif2pczm5dq3l0h13p35t",
 	}}
@@ -104,8 +106,8 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 		return true, nil, nil
 	})
 	client := cs.CoreV1().ConfigMaps(ns)
-	cmManager := NewRehearsalCMManager(ns, client, configUpdaterCfg, 1234, testRepoPath, logrus.NewEntry(logrus.New()))
-	if err := cmManager.CreateCMTemplates(ciTemplates); err != nil {
+	cmManager := NewCMManager(ns, client, configUpdaterCfg, 1234, testRepoPath, logrus.NewEntry(logrus.New()))
+	if err := cmManager.CreateTemplates(ciTemplates); err != nil {
 		t.Fatalf("CreateCMTemplates() returned error: %v", err)
 	}
 	cms, err := client.List(metav1.ListOptions{})
@@ -128,8 +130,8 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 	if !equality.Semantic.DeepEqual(expected, cms.Items) {
 		t.Fatal(diff.ObjectDiff(expected, cms.Items))
 	}
-	if err := cmManager.CleanupCMTemplates(); err != nil {
-		t.Fatalf("CleanupCMTemplates() returned error: %v", err)
+	if err := cmManager.Clean(); err != nil {
+		t.Fatalf("Clean() returned error: %v", err)
 	}
 }
 
@@ -139,15 +141,15 @@ func TestCreateClusterProfiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(dir)
-	profiles := []ConfigMapSource{{
+	profiles := []config.ConfigMapSource{{
 		SHA:        "e92d4a5996a8a977bd7916b65488371331681f9d",
-		PathInRepo: filepath.Join(ClusterProfilesPath, "profile0"),
+		PathInRepo: filepath.Join(config.ClusterProfilesPath, "profile0"),
 	}, {
 		SHA:        "a8c99ffc996128417ef1062f9783730a8c864586",
-		PathInRepo: filepath.Join(ClusterProfilesPath, "profile1"),
+		PathInRepo: filepath.Join(config.ClusterProfilesPath, "profile1"),
 	}, {
 		SHA:        "8012ff51a005eaa8ed8f4c08ccdce580f462fff6",
-		PathInRepo: filepath.Join(ClusterProfilesPath, "unchanged"),
+		PathInRepo: filepath.Join(config.ClusterProfilesPath, "unchanged"),
 	}}
 	for _, p := range profiles {
 		path := filepath.Join(dir, p.PathInRepo)
@@ -164,16 +166,16 @@ func TestCreateClusterProfiles(t *testing.T) {
 	pr := 1234
 	configUpdaterCfg := prowplugins.ConfigUpdater{
 		Maps: map[string]prowplugins.ConfigMapSpec{
-			filepath.Join(ClusterProfilesPath, "profile0", "file"): {
-				Name:       ClusterProfilePrefix + "profile0",
+			filepath.Join(config.ClusterProfilesPath, "profile0", "file"): {
+				Name:       config.ClusterProfilePrefix + "profile0",
 				Namespaces: []string{ns},
 			},
-			filepath.Join(ClusterProfilesPath, "profile1", "file"): {
-				Name:       ClusterProfilePrefix + "profile1",
+			filepath.Join(config.ClusterProfilesPath, "profile1", "file"): {
+				Name:       config.ClusterProfilePrefix + "profile1",
 				Namespaces: []string{ns},
 			},
-			filepath.Join(ClusterProfilesPath, "unchanged", "file"): {
-				Name:       ClusterProfilePrefix + "unchanged",
+			filepath.Join(config.ClusterProfilesPath, "unchanged", "file"): {
+				Name:       config.ClusterProfilePrefix + "unchanged",
 				Namespaces: []string{ns},
 			},
 		},
@@ -181,7 +183,7 @@ func TestCreateClusterProfiles(t *testing.T) {
 	configUpdaterCfg.SetDefaults()
 	cs := fake.NewSimpleClientset()
 	client := cs.CoreV1().ConfigMaps(ns)
-	m := NewRehearsalCMManager(ns, client, configUpdaterCfg, pr, dir, logrus.NewEntry(logrus.New()))
+	m := NewCMManager(ns, client, configUpdaterCfg, pr, dir, logrus.NewEntry(logrus.New()))
 	if err := m.CreateClusterProfiles(profiles); err != nil {
 		t.Fatal(err)
 	}

@@ -738,7 +738,7 @@ func TestGetPresubmitsForClusterProfiles(t *testing.T) {
 		id:  "empty",
 		cfg: &prowconfig.Config{},
 		profiles: []config.ConfigMapSource{{
-			Filename: filepath.Join(config.ClusterProfilesPath, "test-profile"),
+			PathInRepo: filepath.Join(config.ClusterProfilesPath, "test-profile"),
 		}},
 	}, {
 		id: "not a kubernetes job",
@@ -752,7 +752,7 @@ func TestGetPresubmitsForClusterProfiles(t *testing.T) {
 			},
 		},
 		profiles: []config.ConfigMapSource{{
-			Filename: filepath.Join(config.ClusterProfilesPath, "test-profile"),
+			PathInRepo: filepath.Join(config.ClusterProfilesPath, "test-profile"),
 		}},
 	}, {
 		id: "job doesn't use cluster profiles",
@@ -766,7 +766,7 @@ func TestGetPresubmitsForClusterProfiles(t *testing.T) {
 			},
 		},
 		profiles: []config.ConfigMapSource{{
-			Filename: filepath.Join(config.ClusterProfilesPath, "test-profile"),
+			PathInRepo: filepath.Join(config.ClusterProfilesPath, "test-profile"),
 		}},
 	}, {
 		id: "job doesn't use the cluster profile",
@@ -780,7 +780,7 @@ func TestGetPresubmitsForClusterProfiles(t *testing.T) {
 			},
 		},
 		profiles: []config.ConfigMapSource{{
-			Filename: filepath.Join(config.ClusterProfilesPath, "test-profile"),
+			PathInRepo: filepath.Join(config.ClusterProfilesPath, "test-profile"),
 		}},
 	}, {
 		id: "multiple jobs, one uses cluster the profile",
@@ -798,7 +798,7 @@ func TestGetPresubmitsForClusterProfiles(t *testing.T) {
 			},
 		},
 		profiles: []config.ConfigMapSource{{
-			Filename: filepath.Join(config.ClusterProfilesPath, "test-profile"),
+			PathInRepo: filepath.Join(config.ClusterProfilesPath, "test-profile"),
 		}},
 		expected: []string{"uses-cluster-profile"},
 	}} {

@@ -106,7 +106,7 @@ pj-rehearse created invalid rehearsal jobs.This is either a pj-rehearse bug, or
 the rehearsed jobs themselves are invalid.`
 )
 
-func loadPluginConfig(releaseRepoPath string) (ret prowplugins.ConfigUpdater, err error) {
+func loadConfigUpdaterCfg(releaseRepoPath string) (ret prowplugins.ConfigUpdater, err error) {
 	agent := prowplugins.ConfigAgent{}
 	if err = agent.Load(filepath.Join(releaseRepoPath, config.PluginConfigInRepoPath), true); err == nil {
 		ret = agent.Config().ConfigUpdater
@@ -183,7 +183,7 @@ func rehearseMain() error {
 	}
 
 	prConfig := config.GetAllConfigs(o.releaseRepoPath, logger)
-	pluginConfig, err := loadPluginConfig(o.releaseRepoPath)
+	configUpdaterCfg, err := loadConfigUpdaterCfg(o.releaseRepoPath)
 	if err != nil {
 		logger.WithError(err).Error("could not load plugin configuration from tested revision of release repo")
 		return fmt.Errorf(misconfigurationOutput)
@@ -310,7 +310,7 @@ func rehearseMain() error {
 	toRehearseClusterProfiles := diffs.GetPresubmitsForClusterProfiles(prConfig.Prow, changedClusterProfiles, logger)
 	toRehearse.AddAll(toRehearseClusterProfiles)
 
-	presubmitsWithChangedRegistry := rehearse.AddRandomJobsForChangedRegistry(changedRegistrySteps, graph, prConfig.Prow.JobConfig.PresubmitsStatic, filepath.Join(o.releaseRepoPath, config.CiopConfigInRepoPath), loggers)
+	presubmitsWithChangedRegistry := rehearse.AddRandomJobsForChangedRegistry(changedRegistrySteps, prConfig.Prow.JobConfig.PresubmitsStatic, filepath.Join(o.releaseRepoPath, config.CiopConfigInRepoPath), loggers)
 	toRehearse.AddAll(presubmitsWithChangedRegistry)
 
 	resolver := registry.NewResolver(refs, chains, workflows)
@@ -373,7 +373,7 @@ func rehearseMain() error {
 		prConfig.Prow.ProwJobNamespace,
 		pjclient,
 		prConfig.Prow.PodNamespace,
-		pluginConfig,
+		configUpdaterCfg,
 		o.releaseRepoPath,
 		o.dryRun,
 		changedTemplates,
@@ -433,7 +433,7 @@ func setupDependencies(
 	prowJobNamespace string,
 	prowJobClient ctrlruntimeclient.Client,
 	podNamespace string,
-	pluginConfig prowplugins.ConfigUpdater,
+	configUpdaterCfg prowplugins.ConfigUpdater,
 	releaseRepoPath string,
 	dryRun bool,
 	changedTemplates []config.ConfigMapSource,
@@ -477,7 +477,7 @@ func setupDependencies(
 				return errors.New(misconfigurationOutput)
 			}
 
-			cmManager := config.NewTemplateCMManager(prowJobNamespace, cmClient, pluginConfig, prNumber, releaseRepoPath, log)
+			cmManager := config.NewRehearsalCMManager(prowJobNamespace, cmClient, configUpdaterCfg, prNumber, releaseRepoPath, log)
 
 			cleanupsLock.Lock()
 			cleanups = append(cleanups, func() {

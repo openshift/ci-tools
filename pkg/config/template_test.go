@@ -38,7 +38,7 @@ func TestValidateConfigMaps(t *testing.T) {
 	}
 	client := fake.NewSimpleClientset().CoreV1().ConfigMaps("ns")
 	config.SetDefaults()
-	manager := NewTemplateCMManager("ns", client, config, 0, "/", logrus.NewEntry(logrus.New()))
+	manager := NewRehearsalCMManager("ns", client, config, 0, "/", logrus.NewEntry(logrus.New()))
 	if err := manager.validateChanges(changes); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -60,8 +60,8 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 	testTemplatePath := filepath.Join(TemplatesPath, "subdir/test-template.yaml")
 	ns := "test-namespace"
 	ciTemplates := []ConfigMapSource{{
-		Filename: testTemplatePath,
-		SHA:      "hd9sxk615lkcwx2kj226g3r3lvwkftyjif2pczm5dq3l0h13p35t",
+		PathInRepo: testTemplatePath,
+		SHA:        "hd9sxk615lkcwx2kj226g3r3lvwkftyjif2pczm5dq3l0h13p35t",
 	}}
 	contents, err := ioutil.ReadFile(filepath.Join(testRepoPath, testTemplatePath))
 	if err != nil {
@@ -95,16 +95,16 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 	cs := fake.NewSimpleClientset()
 	cs.Fake.PrependReactor("delete-collection", "configmaps", func(action coretesting.Action) (bool, runtime.Object, error) {
 		deleteAction := action.(coretesting.DeleteCollectionAction)
-		listRestricitons := deleteAction.GetListRestrictions()
+		listRestrictions := deleteAction.GetListRestrictions()
 
-		if !reflect.DeepEqual(listRestricitons.Labels, expectedListRestricitons.Labels) {
-			t.Fatalf("Labels:\nExpected:%#v\nFound: %#v", expectedListRestricitons.Labels, listRestricitons.Labels)
+		if !reflect.DeepEqual(listRestrictions.Labels, expectedListRestricitons.Labels) {
+			t.Fatalf("Labels:\nExpected:%#v\nFound: %#v", expectedListRestricitons.Labels, listRestrictions.Labels)
 		}
 
 		return true, nil, nil
 	})
 	client := cs.CoreV1().ConfigMaps(ns)
-	cmManager := NewTemplateCMManager(ns, client, configUpdaterCfg, 1234, testRepoPath, logrus.NewEntry(logrus.New()))
+	cmManager := NewRehearsalCMManager(ns, client, configUpdaterCfg, 1234, testRepoPath, logrus.NewEntry(logrus.New()))
 	if err := cmManager.CreateCMTemplates(ciTemplates); err != nil {
 		t.Fatalf("CreateCMTemplates() returned error: %v", err)
 	}
@@ -140,21 +140,21 @@ func TestCreateClusterProfiles(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 	profiles := []ConfigMapSource{{
-		SHA:      "e92d4a5996a8a977bd7916b65488371331681f9d",
-		Filename: filepath.Join(ClusterProfilesPath, "profile0"),
+		SHA:        "e92d4a5996a8a977bd7916b65488371331681f9d",
+		PathInRepo: filepath.Join(ClusterProfilesPath, "profile0"),
 	}, {
-		SHA:      "a8c99ffc996128417ef1062f9783730a8c864586",
-		Filename: filepath.Join(ClusterProfilesPath, "profile1"),
+		SHA:        "a8c99ffc996128417ef1062f9783730a8c864586",
+		PathInRepo: filepath.Join(ClusterProfilesPath, "profile1"),
 	}, {
-		SHA:      "8012ff51a005eaa8ed8f4c08ccdce580f462fff6",
-		Filename: filepath.Join(ClusterProfilesPath, "unchanged"),
+		SHA:        "8012ff51a005eaa8ed8f4c08ccdce580f462fff6",
+		PathInRepo: filepath.Join(ClusterProfilesPath, "unchanged"),
 	}}
 	for _, p := range profiles {
-		path := filepath.Join(dir, p.Filename)
+		path := filepath.Join(dir, p.PathInRepo)
 		if err := os.MkdirAll(path, 0775); err != nil {
 			t.Fatal(err)
 		}
-		content := []byte(filepath.Base(p.Filename) + " content")
+		content := []byte(filepath.Base(p.PathInRepo) + " content")
 		if err := ioutil.WriteFile(filepath.Join(path, "file"), content, 0664); err != nil {
 			t.Fatal(err)
 		}
@@ -181,17 +181,17 @@ func TestCreateClusterProfiles(t *testing.T) {
 	configUpdaterCfg.SetDefaults()
 	cs := fake.NewSimpleClientset()
 	client := cs.CoreV1().ConfigMaps(ns)
-	m := NewTemplateCMManager(ns, client, configUpdaterCfg, pr, dir, logrus.NewEntry(logrus.New()))
+	m := NewRehearsalCMManager(ns, client, configUpdaterCfg, pr, dir, logrus.NewEntry(logrus.New()))
 	if err := m.CreateClusterProfiles(profiles); err != nil {
 		t.Fatal(err)
 	}
 	cms, err := client.List(metav1.ListOptions{})
-	sort.Slice(cms.Items, func(i, j int) bool {
-		return cms.Items[i].Name < cms.Items[j].Name
-	})
 	if err != nil {
 		t.Fatal(err)
 	}
+	sort.Slice(cms.Items, func(i, j int) bool {
+		return cms.Items[i].Name < cms.Items[j].Name
+	})
 	expected := []v1.ConfigMap{{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "rehearse-cluster-profile-profile0-e92d4a59",

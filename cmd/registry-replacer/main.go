@@ -15,6 +15,7 @@ import (
 
 	"github.com/openshift/builder/pkg/build/builder/util/dockerfile"
 	"github.com/openshift/imagebuilder"
+	dockercmd "github.com/openshift/imagebuilder/dockerfile/command"
 	"github.com/sirupsen/logrus"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -30,10 +31,11 @@ import (
 )
 
 type options struct {
-	configDir      string
-	createPR       bool
-	githubUserName string
-	selfApprove    bool
+	configDir               string
+	createPR                bool
+	githubUserName          string
+	selfApprove             bool
+	pruneUnusedReplacements bool
 	flagutil.GitHubOptions
 }
 
@@ -44,6 +46,7 @@ func gatherOptions() (*options, error) {
 	flag.BoolVar(&o.createPR, "create-pr", false, "If the tool should automatically create a PR. Requires --token-file")
 	flag.StringVar(&o.githubUserName, "github-user-name", "openshift-bot", "Name of the github user. Required when --create-pr is set. Does nothing otherwise")
 	flag.BoolVar(&o.selfApprove, "self-approve", false, "If the bot should self-approve its PR.")
+	flag.BoolVar(&o.pruneUnusedReplacements, "prune-unused-replacements", false, "If replacements that match nothing should get pruned from the config")
 	flag.Parse()
 
 	var errs []error
@@ -94,7 +97,9 @@ func main() {
 					githubFileGetterFactory,
 					func(data []byte) error {
 						return ioutil.WriteFile(filename, data, 0644)
-					})(config, info); err != nil {
+					},
+					opts.pruneUnusedReplacements,
+				)(config, info); err != nil {
 					errLock.Lock()
 					errs = append(errs, err)
 					errLock.Unlock()
@@ -125,6 +130,7 @@ func main() {
 func replacer(
 	githubFileGetterFactory func(org, repo, branch string) githubFileGetter,
 	writer func([]byte) error,
+	pruneUnusedReplacementsEnabled bool,
 ) func(*api.ReleaseBuildConfiguration, *config.Info) error {
 	return func(config *api.ReleaseBuildConfiguration, info *config.Info) error {
 		if len(config.Images) == 0 {
@@ -136,8 +142,26 @@ func replacer(
 			return fmt.Errorf("failed to marshal config for comparison: %w", err)
 		}
 
-		for idx := range config.Images {
-			foundTags, err := ensureReplacement(&config.Images[idx], githubFileGetterFactory(info.Org, info.Repo, info.Branch))
+		getter := githubFileGetterFactory(info.Org, info.Repo, info.Branch)
+		allSourceImages := sets.String{}
+
+		for idx, image := range config.Images {
+			dockerFilePath := "Dockerfile"
+			if image.DockerfilePath != "" {
+				dockerFilePath = image.DockerfilePath
+			}
+
+			dockerfile, err := getter(filepath.Join(image.ContextDir, dockerFilePath))
+			if err != nil {
+				return fmt.Errorf("failed to get dockerfile %s: %w", image.DockerfilePath, err)
+			}
+
+			dockerfile, err = applyReplacementsToDockerfile(dockerfile, &image)
+			if err != nil {
+				return fmt.Errorf("failed to apply replacements to Dockerfile: %w", err)
+			}
+
+			foundTags, err := ensureReplacement(&config.Images[idx], dockerfile)
 			if err != nil {
 				return fmt.Errorf("failed to ensure replacements: %w", err)
 			}
@@ -154,6 +178,16 @@ func replacer(
 					Tag:       foundTag.tag,
 				}
 			}
+
+			sourceImages, err := extractAllSourceImagesFromDockerfile(dockerfile)
+			if err != nil {
+				return fmt.Errorf("failed to extract source images from dockerfile: %w", err)
+			}
+			allSourceImages.Insert(sourceImages.UnsortedList()...)
+		}
+
+		if pruneUnusedReplacementsEnabled {
+			pruneUnusedReplacements(config, allSourceImages)
 		}
 
 		newConfig, err := yaml.Marshal(config)
@@ -182,24 +216,9 @@ func (ort orgRepoTag) String() string {
 	return ort.org + "_" + ort.repo + "_" + ort.tag
 }
 
-func ensureReplacement(image *api.ProjectDirectoryImageBuildStepConfiguration, getter githubFileGetter) ([]orgRepoTag, error) {
-	dockerFilePath := "Dockerfile"
-	if image.DockerfilePath != "" {
-		dockerFilePath = image.DockerfilePath
-	}
-
-	data, err := getter(filepath.Join(image.ContextDir, dockerFilePath))
-	if err != nil {
-		return nil, fmt.Errorf("failed to get dockerfile %s: %w", image.DockerfilePath, err)
-	}
-
-	data, err = applyReplacementsToDockerfile(data, image)
-	if err != nil {
-		return nil, fmt.Errorf("failed to apply replacements to Dockerfile: %w", err)
-	}
-
+func ensureReplacement(image *api.ProjectDirectoryImageBuildStepConfiguration, dockerfile []byte) ([]orgRepoTag, error) {
 	var toReplace []string
-	for _, line := range bytes.Split(data, []byte("\n")) {
+	for _, line := range bytes.Split(dockerfile, []byte("\n")) {
 		if !bytes.Contains(line, []byte("FROM")) {
 			continue
 		}
@@ -362,17 +381,71 @@ func (c *censor) Censor(data []byte) []byte {
 
 // applyReplacementsToDockerfile duplicates what the build tools would do
 func applyReplacementsToDockerfile(in []byte, image *api.ProjectDirectoryImageBuildStepConfiguration) ([]byte, error) {
+	if image.From == "" {
+		return in, nil
+	}
 	node, err := imagebuilder.ParseDockerfile(bytes.NewBuffer(in))
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse Dockerfile: %w", err)
 	}
 
-	if image.From != "" {
-		// https://github.com/openshift/builder/blob/6a52122d21e0528fbf014097d70770429fbc4448/pkg/build/builder/common.go#L402
-		replaceLastFrom(node, string(image.From), "")
-	}
+	// https://github.com/openshift/builder/blob/6a52122d21e0528fbf014097d70770429fbc4448/pkg/build/builder/common.go#L402
+	replaceLastFrom(node, string(image.From), "")
 
 	// We do not need to expand the inputs because they are forced already to point to a
 	// base_image which must be in the same cluster.
 	return dockerfile.Write(node), nil
+}
+
+func extractAllSourceImagesFromDockerfile(dockerfile []byte) (sets.String, error) {
+	result := sets.String{}
+	aliases := sets.String{}
+	node, err := imagebuilder.ParseDockerfile(bytes.NewBuffer(dockerfile))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse Dockerfile: %w", err)
+	}
+
+	for _, child := range node.Children {
+		if child.Value != dockercmd.From {
+			continue
+		}
+		if child.Next == nil {
+			continue
+		}
+		if !aliases.Has(child.Next.Value) {
+			result.Insert(child.Next.Value)
+		}
+		if child.Next.Next == nil || strings.ToLower(child.Next.Next.Value) != "as" || child.Next.Next.Next == nil {
+			continue
+		}
+		aliases.Insert(child.Next.Next.Next.Value)
+	}
+
+	return result, nil
+}
+
+func pruneUnusedReplacements(config *api.ReleaseBuildConfiguration, allSourceImages sets.String) {
+	var prunedImages []api.ProjectDirectoryImageBuildStepConfiguration
+	for _, image := range config.Images {
+		for k, sourceImage := range image.Inputs {
+			var newAs []string
+			for _, sourceImage := range sourceImage.As {
+				if allSourceImages.Has(sourceImage) {
+					newAs = append(newAs, sourceImage)
+				}
+			}
+			if len(newAs) == 0 && len(sourceImage.Paths) == 0 {
+				delete(image.Inputs, k)
+			} else {
+				copy := image.Inputs[k]
+				copy.As = newAs
+				image.Inputs[k] = copy
+			}
+		}
+		if len(image.Inputs) > 0 || image.From != "" || image.To != "" {
+			prunedImages = append(prunedImages, image)
+		}
+	}
+
+	config.Images = prunedImages
 }

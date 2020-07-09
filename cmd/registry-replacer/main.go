@@ -119,7 +119,7 @@ func main() {
 		return
 	}
 
-	if err := upsertPR(githubClient, opts.configDir, opts.githubUserName, opts.TokenPath, opts.selfApprove); err != nil {
+	if err := upsertPR(githubClient, opts.configDir, opts.githubUserName, opts.TokenPath, opts.selfApprove, opts.pruneUnusedReplacements); err != nil {
 		logrus.WithError(err).Fatal("Failed to create PR")
 	}
 }
@@ -309,7 +309,7 @@ func githubFileGetterFactory(org, repo, branch string) githubFileGetter {
 	}
 }
 
-func upsertPR(gc github.Client, dir, githubUsername, tokenFilePath string, selfApprove bool) error {
+func upsertPR(gc github.Client, dir, githubUsername, tokenFilePath string, pruneUnusedReplacements, selfApprove bool) error {
 	if err := os.Chdir(dir); err != nil {
 		return fmt.Errorf("failed to chdir into %s: %w", dir, err)
 	}
@@ -351,12 +351,20 @@ func upsertPR(gc github.Client, dir, githubUsername, tokenFilePath string, selfA
 		logrus.Infof("Self-aproving PR by adding the %q and %q labels", labels.Approved, labels.LGTM)
 		labelsToAdd = append(labelsToAdd, labels.Approved, labels.LGTM)
 	}
+
+	prBody := `This PR:
+* Adds a replacement of all FROM registry.svc.ci.openshift.org/anything directives found in any Dockerfile
+  to make sure all images are pulled from the build cluster registry`
+
+	if pruneUnusedReplacements {
+		prBody += "\n* Prunes existing replacements that do not match any FROM dircetive in the Dockerfile"
+	}
 	if err := bumper.UpdatePullRequestWithLabels(
 		gc,
 		"openshift",
 		"release",
 		prTitle,
-		"",
+		prBody,
 		prTitle,
 		githubUsername+":"+targetBranch,
 		"master",

@@ -186,12 +186,12 @@ func TestCreateClusterProfiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	cms, err := client.List(metav1.ListOptions{})
-	sort.Slice(cms.Items, func(i, j int) bool {
-		return cms.Items[i].Name < cms.Items[j].Name
-	})
 	if err != nil {
 		t.Fatal(err)
 	}
+	sort.Slice(cms.Items, func(i, j int) bool {
+		return cms.Items[i].Name < cms.Items[j].Name
+	})
 	expected := []v1.ConfigMap{{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "rehearse-cluster-profile-profile0-e92d4a59",

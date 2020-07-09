@@ -614,7 +614,7 @@ func getAllAncestors(changed []registry.Node) []registry.Node {
 	return ancestors
 }
 
-func AddRandomJobsForChangedRegistry(regSteps []registry.Node, graph registry.NodeByName, prConfigPresubmits map[string][]prowconfig.Presubmit, configPath string, loggers Loggers) config.Presubmits {
+func AddRandomJobsForChangedRegistry(regSteps []registry.Node, prConfigPresubmits map[string][]prowconfig.Presubmit, configPath string, loggers Loggers) config.Presubmits {
 	configsByFilename, err := config.LoadDataByFilename(configPath)
 	if err != nil {
 		loggers.Debug.Errorf("Failed to load config by filename in AddRandomJobsForChangedRegistry: %v", err)

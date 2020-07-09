@@ -188,10 +188,10 @@ func TestReplaceClusterProfiles(t *testing.T) {
 	}
 
 	profiles := []config.ConfigMapSource{{
-		SHA:      "47f520ef9c2662fc9a2675f1dd4f02d5082b2776",
+		SHA:        "47f520ef9c2662fc9a2675f1dd4f02d5082b2776",
 		PathInRepo: filepath.Join(config.ClusterProfilesPath, "changed-profile0"),
 	}, {
-		SHA:      "85c627078710b8beee65d06d0cf157094fc46b03",
+		SHA:        "85c627078710b8beee65d06d0cf157094fc46b03",
 		PathInRepo: filepath.Join(config.ClusterProfilesPath, "changed-profile1"),
 	}}
 

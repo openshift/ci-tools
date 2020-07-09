@@ -27,11 +27,11 @@ import (
 )
 
 type ConfigMapSource struct {
-	Filename, SHA string
+	PathInRepo, SHA string
 }
 
 func (s ConfigMapSource) Name() string {
-	base := filepath.Base(s.Filename)
+	base := filepath.Base(s.PathInRepo)
 	return strings.TrimSuffix(base, filepath.Ext(base))
 }
 
@@ -50,8 +50,8 @@ const (
 	rehearseLabelPull = "ci.openshift.org/rehearse-pull"
 )
 
-// TemplateCMManager holds the details needed for the configmap controller
-type TemplateCMManager struct {
+// RehearsalCMManager holds the details needed for the configmap controller
+type RehearsalCMManager struct {
 	namespace        string
 	cmclient         corev1.ConfigMapInterface
 	configUpdaterCfg prowplugins.ConfigUpdater
@@ -60,16 +60,16 @@ type TemplateCMManager struct {
 	logger           *logrus.Entry
 }
 
-// NewTemplateCMManager creates a new TemplateCMManager
-func NewTemplateCMManager(
+// NewRehearsalCMManager creates a new RehearsalCMManager
+func NewRehearsalCMManager(
 	namespace string,
 	cmclient corev1.ConfigMapInterface,
 	configUpdaterCfg prowplugins.ConfigUpdater,
 	prNumber int,
 	releaseRepoPath string,
 	logger *logrus.Entry,
-) *TemplateCMManager {
-	return &TemplateCMManager{
+) *RehearsalCMManager {
+	return &RehearsalCMManager{
 		namespace:        namespace,
 		cmclient:         cmclient,
 		configUpdaterCfg: configUpdaterCfg,
@@ -87,7 +87,7 @@ func (g osFileGetter) GetFile(filename string) ([]byte, error) {
 	return ioutil.ReadFile(filepath.Join(g.root, filename))
 }
 
-func (c *TemplateCMManager) createCM(name string, data []updateconfig.ConfigMapUpdate) error {
+func (c *RehearsalCMManager) createCM(name string, data []updateconfig.ConfigMapUpdate) error {
 	cm := &v1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
@@ -109,7 +109,7 @@ func (c *TemplateCMManager) createCM(name string, data []updateconfig.ConfigMapU
 func genChanges(root string, sources []ConfigMapSource) ([]prowgithub.PullRequestChange, error) {
 	var ret []prowgithub.PullRequestChange
 	for _, f := range sources {
-		err := filepath.Walk(filepath.Join(root, f.Filename), func(path string, info os.FileInfo, err error) error {
+		err := filepath.Walk(filepath.Join(root, f.PathInRepo), func(path string, info os.FileInfo, err error) error {
 			if err != nil || info.IsDir() {
 				return err
 			}
@@ -131,7 +131,7 @@ func genChanges(root string, sources []ConfigMapSource) ([]prowgithub.PullReques
 	return ret, nil
 }
 
-func (c *TemplateCMManager) validateChanges(changes []prowgithub.PullRequestChange) error {
+func (c *RehearsalCMManager) validateChanges(changes []prowgithub.PullRequestChange) error {
 	var errs []error
 	for _, change := range changes {
 		found := false
@@ -166,7 +166,7 @@ func replaceSpecNames(namespace string, cfg prowplugins.ConfigUpdater, mapping m
 	return
 }
 
-func (c *TemplateCMManager) createCMs(sources []ConfigMapSource, mapping map[string]string) error {
+func (c *RehearsalCMManager) createCMs(sources []ConfigMapSource, mapping map[string]string) error {
 	changes, err := genChanges(c.releaseRepoPath, sources)
 	if err != nil {
 		return err
@@ -185,7 +185,7 @@ func (c *TemplateCMManager) createCMs(sources []ConfigMapSource, mapping map[str
 }
 
 // CreateCMTemplates creates configMaps for all the changed templates.
-func (c *TemplateCMManager) CreateCMTemplates(templates []ConfigMapSource) error {
+func (c *RehearsalCMManager) CreateCMTemplates(templates []ConfigMapSource) error {
 	nameMap := make(map[string]string, len(templates))
 	for _, t := range templates {
 		nameMap[t.CMName(TemplatePrefix)] = t.TempCMName("template")
@@ -193,7 +193,7 @@ func (c *TemplateCMManager) CreateCMTemplates(templates []ConfigMapSource) error
 	return c.createCMs(templates, nameMap)
 }
 
-func (c *TemplateCMManager) CreateClusterProfiles(profiles []ConfigMapSource) error {
+func (c *RehearsalCMManager) CreateClusterProfiles(profiles []ConfigMapSource) error {
 	nameMap := make(map[string]string, len(profiles))
 	for _, p := range profiles {
 		nameMap[p.CMName(ClusterProfilePrefix)] = p.TempCMName("cluster-profile")
@@ -202,7 +202,7 @@ func (c *TemplateCMManager) CreateClusterProfiles(profiles []ConfigMapSource) er
 }
 
 // CleanupCMTemplates deletes all the configMaps that have been created for the changed templates.
-func (c *TemplateCMManager) CleanupCMTemplates() error {
+func (c *RehearsalCMManager) CleanupCMTemplates() error {
 	c.logger.Info("deleting temporary template configMaps")
 	if err := c.cmclient.DeleteCollection(&metav1.DeleteOptions{},
 		metav1.ListOptions{LabelSelector: fields.Set{

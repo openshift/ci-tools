@@ -159,7 +159,7 @@ func GetChangedTemplates(path, baseRev string) ([]ConfigMapSource, error) {
 	}
 	var ret []ConfigMapSource
 	for _, c := range changes {
-		if filepath.Ext(c.Filename) == ".yaml" {
+		if filepath.Ext(c.PathInRepo) == ".yaml" {
 			ret = append(ret, c)
 		}
 	}
@@ -195,8 +195,8 @@ func GetChangedRegistrySteps(path, baseRev string, graph registry.NodeByName) ([
 		return changes, err
 	}
 	for _, c := range revChanges {
-		if filepath.Ext(c.Filename) == ".yaml" || strings.HasSuffix(c.Filename, "-commands.sh") {
-			node, err := loadRegistryStep(filepath.Base(c.Filename), graph)
+		if filepath.Ext(c.PathInRepo) == ".yaml" || strings.HasSuffix(c.PathInRepo, "-commands.sh") {
+			node, err := loadRegistryStep(filepath.Base(c.PathInRepo), graph)
 			if err != nil {
 				return changes, err
 			}
@@ -227,8 +227,8 @@ func getRevChanges(root, path, base string, rec bool) ([]ConfigMapSource, error)
 	var ret []ConfigMapSource
 	for _, l := range strings.Split(strings.TrimSpace(diff), "\n") {
 		ret = append(ret, ConfigMapSource{
-			Filename: filepath.Join(path, l[99:]),
-			SHA:      l[56:96],
+			PathInRepo: filepath.Join(path, l[99:]),
+			SHA:        l[56:96],
 		})
 	}
 	return ret, nil

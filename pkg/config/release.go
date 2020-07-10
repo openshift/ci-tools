@@ -41,6 +41,25 @@ const (
 	RegistryPath = "ci-operator/step-registry"
 )
 
+type ConfigMapSource struct {
+	PathInRepo, SHA string
+}
+
+func (s ConfigMapSource) Name() string {
+	base := filepath.Base(s.PathInRepo)
+	return strings.TrimSuffix(base, filepath.Ext(base))
+}
+
+func (s ConfigMapSource) CMName(prefix string) string {
+	return prefix + s.Name()
+}
+
+func (s ConfigMapSource) TempCMName(prefix string) string {
+	// Object names can't be too long so we truncate the hash. This increases
+	// chances of collision but we can tolerate it as our input space is tiny.
+	return fmt.Sprintf("rehearse-%s-%s-%s", prefix, s.Name(), s.SHA[:8])
+}
+
 // ReleaseRepoConfig contains all configuration present in release repo (usually openshift/release)
 type ReleaseRepoConfig struct {
 	Prow       *prowconfig.Config

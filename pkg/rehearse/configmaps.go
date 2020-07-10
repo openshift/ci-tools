@@ -1,4 +1,4 @@
-package config
+package rehearse
 
 import (
 	"fmt"
@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 
 	"github.com/mattn/go-zglob"
 	"github.com/sirupsen/logrus"
@@ -24,34 +23,20 @@ import (
 	_ "k8s.io/test-infra/prow/hook"
 	prowplugins "k8s.io/test-infra/prow/plugins"
 	"k8s.io/test-infra/prow/plugins/updateconfig"
+
+	"github.com/openshift/ci-tools/pkg/config"
 )
-
-type ConfigMapSource struct {
-	PathInRepo, SHA string
-}
-
-func (s ConfigMapSource) Name() string {
-	base := filepath.Base(s.PathInRepo)
-	return strings.TrimSuffix(base, filepath.Ext(base))
-}
-
-func (s ConfigMapSource) CMName(prefix string) string {
-	return prefix + s.Name()
-}
-
-func (s ConfigMapSource) TempCMName(prefix string) string {
-	// Object names can't be too long so we truncate the hash. This increases
-	// chances of collision but we can tolerate it as our input space is tiny.
-	return fmt.Sprintf("rehearse-%s-%s-%s", prefix, s.Name(), s.SHA[:8])
-}
 
 const (
 	createByRehearse  = "created-by-pj-rehearse"
 	rehearseLabelPull = "ci.openshift.org/rehearse-pull"
 )
 
-// RehearsalCMManager holds the details needed for the configmap controller
-type RehearsalCMManager struct {
+// CMManager manages temporary ConfigMaps created on build clusters to be
+// consumed by rehearsals. This is necessary when a content of a ConfigMap, such
+// as a template or cluster profile, is changed in a pull request. In such case
+// the rehearsals that use that ConfigMap must have access to the updated content.
+type CMManager struct {
 	namespace        string
 	cmclient         corev1.ConfigMapInterface
 	configUpdaterCfg prowplugins.ConfigUpdater
@@ -60,16 +45,16 @@ type RehearsalCMManager struct {
 	logger           *logrus.Entry
 }
 
-// NewRehearsalCMManager creates a new RehearsalCMManager
-func NewRehearsalCMManager(
+// NewCMManager creates a new CMManager
+func NewCMManager(
 	namespace string,
 	cmclient corev1.ConfigMapInterface,
 	configUpdaterCfg prowplugins.ConfigUpdater,
 	prNumber int,
 	releaseRepoPath string,
 	logger *logrus.Entry,
-) *RehearsalCMManager {
-	return &RehearsalCMManager{
+) *CMManager {
+	return &CMManager{
 		namespace:        namespace,
 		cmclient:         cmclient,
 		configUpdaterCfg: configUpdaterCfg,
@@ -87,7 +72,7 @@ func (g osFileGetter) GetFile(filename string) ([]byte, error) {
 	return ioutil.ReadFile(filepath.Join(g.root, filename))
 }
 
-func (c *RehearsalCMManager) createCM(name string, data []updateconfig.ConfigMapUpdate) error {
+func (c *CMManager) createCM(name string, data []updateconfig.ConfigMapUpdate) error {
 	cm := &v1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
@@ -106,7 +91,7 @@ func (c *RehearsalCMManager) createCM(name string, data []updateconfig.ConfigMap
 	return nil
 }
 
-func genChanges(root string, sources []ConfigMapSource) ([]prowgithub.PullRequestChange, error) {
+func genChanges(root string, sources []config.ConfigMapSource) ([]prowgithub.PullRequestChange, error) {
 	var ret []prowgithub.PullRequestChange
 	for _, f := range sources {
 		err := filepath.Walk(filepath.Join(root, f.PathInRepo), func(path string, info os.FileInfo, err error) error {
@@ -131,7 +116,7 @@ func genChanges(root string, sources []ConfigMapSource) ([]prowgithub.PullReques
 	return ret, nil
 }
 
-func (c *RehearsalCMManager) validateChanges(changes []prowgithub.PullRequestChange) error {
+func (c *CMManager) validateChanges(changes []prowgithub.PullRequestChange) error {
 	var errs []error
 	for _, change := range changes {
 		found := false
@@ -166,7 +151,7 @@ func replaceSpecNames(namespace string, cfg prowplugins.ConfigUpdater, mapping m
 	return
 }
 
-func (c *RehearsalCMManager) createCMs(sources []ConfigMapSource, mapping map[string]string) error {
+func (c *CMManager) create(sources []config.ConfigMapSource, mapping map[string]string) error {
 	changes, err := genChanges(c.releaseRepoPath, sources)
 	if err != nil {
 		return err
@@ -184,25 +169,26 @@ func (c *RehearsalCMManager) createCMs(sources []ConfigMapSource, mapping map[st
 	return kutilerrors.NewAggregate(errs)
 }
 
-// CreateCMTemplates creates configMaps for all the changed templates.
-func (c *RehearsalCMManager) CreateCMTemplates(templates []ConfigMapSource) error {
+// CreateTemplates creates configMaps for all changed templates
+func (c *CMManager) CreateTemplates(templates []config.ConfigMapSource) error {
 	nameMap := make(map[string]string, len(templates))
 	for _, t := range templates {
-		nameMap[t.CMName(TemplatePrefix)] = t.TempCMName("template")
+		nameMap[t.CMName(config.TemplatePrefix)] = t.TempCMName("template")
 	}
-	return c.createCMs(templates, nameMap)
+	return c.create(templates, nameMap)
 }
 
-func (c *RehearsalCMManager) CreateClusterProfiles(profiles []ConfigMapSource) error {
+// CreateClusterProfiles creates configMaps for all changed cluster profiles
+func (c *CMManager) CreateClusterProfiles(profiles []config.ConfigMapSource) error {
 	nameMap := make(map[string]string, len(profiles))
 	for _, p := range profiles {
-		nameMap[p.CMName(ClusterProfilePrefix)] = p.TempCMName("cluster-profile")
+		nameMap[p.CMName(config.ClusterProfilePrefix)] = p.TempCMName("cluster-profile")
 	}
-	return c.createCMs(profiles, nameMap)
+	return c.create(profiles, nameMap)
 }
 
-// CleanupCMTemplates deletes all the configMaps that have been created for the changed templates.
-func (c *RehearsalCMManager) CleanupCMTemplates() error {
+// Clean deletes all the configMaps that have been created for this PR
+func (c *CMManager) Clean() error {
 	c.logger.Info("deleting temporary template configMaps")
 	if err := c.cmclient.DeleteCollection(&metav1.DeleteOptions{},
 		metav1.ListOptions{LabelSelector: fields.Set{

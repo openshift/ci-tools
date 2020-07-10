@@ -477,22 +477,22 @@ func setupDependencies(
 				return errors.New(misconfigurationOutput)
 			}
 
-			cmManager := config.NewRehearsalCMManager(prowJobNamespace, cmClient, configUpdaterCfg, prNumber, releaseRepoPath, log)
+			cmManager := rehearse.NewCMManager(prowJobNamespace, cmClient, configUpdaterCfg, prNumber, releaseRepoPath, log)
 
 			cleanupsLock.Lock()
 			cleanups = append(cleanups, func() {
-				if err := cmManager.CleanupCMTemplates(); err != nil {
-					log.WithError(err).Error("failed to clean up temporary template CM")
+				if err := cmManager.Clean(); err != nil {
+					log.WithError(err).Error("failed to clean up temporary ConfigMaps")
 				}
 			})
 			cleanupsLock.Unlock()
 
-			if err := cmManager.CreateCMTemplates(changedTemplates); err != nil {
-				log.WithError(err).Error("couldn't create template configMap")
+			if err := cmManager.CreateTemplates(changedTemplates); err != nil {
+				log.WithError(err).Error("couldn't create temporary template ConfigMaps for rehearsals")
 				return errors.New(failedSetupOutput)
 			}
 			if err := cmManager.CreateClusterProfiles(changedClusterProfiles); err != nil {
-				log.WithError(err).Error("couldn't create cluster profile ConfigMaps")
+				log.WithError(err).Error("couldn't create temporary cluster profile ConfigMaps for rehearsals")
 				return errors.New(failedSetupOutput)
 			}
 

@@ -143,7 +143,11 @@ func replacer(
 		}
 
 		getter := githubFileGetterFactory(info.Org, info.Repo, info.Branch)
-		allSourceImages := sets.String{}
+		allReplacementCandidates := sets.String{}
+
+		// We have to skip pruning if we only get empty dockerfiles because it might mean
+		// that we do not have the appropriate permissions.
+		var hasNonEmptyDockerfile bool
 
 		for idx, image := range config.Images {
 			dockerFilePath := "Dockerfile"
@@ -155,6 +159,8 @@ func replacer(
 			if err != nil {
 				return fmt.Errorf("failed to get dockerfile %s: %w", image.DockerfilePath, err)
 			}
+
+			hasNonEmptyDockerfile = hasNonEmptyDockerfile || len(dockerfile) > 0
 
 			dockerfile, err = applyReplacementsToDockerfile(dockerfile, &image)
 			if err != nil {
@@ -179,15 +185,17 @@ func replacer(
 				}
 			}
 
-			sourceImages, err := extractAllSourceImagesFromDockerfile(dockerfile)
+			replacementCandidates, err := extractReplacementCandidatesFromDockerfile(dockerfile)
 			if err != nil {
 				return fmt.Errorf("failed to extract source images from dockerfile: %w", err)
 			}
-			allSourceImages.Insert(sourceImages.UnsortedList()...)
+			allReplacementCandidates.Insert(replacementCandidates.UnsortedList()...)
 		}
 
-		if pruneUnusedReplacementsEnabled {
-			pruneUnusedReplacements(config, allSourceImages)
+		if pruneUnusedReplacementsEnabled && hasNonEmptyDockerfile {
+			pruneUnusedReplacements(config, allReplacementCandidates)
+		} else if pruneUnusedReplacementsEnabled {
+			logrus.WithField("org", info.Org).WithField("repo", info.Repo).WithField("branch", info.Branch).Info("Not purging unused replacements because we got an empty dockerfile")
 		}
 
 		newConfig, err := yaml.Marshal(config)
@@ -405,40 +413,49 @@ func applyReplacementsToDockerfile(in []byte, image *api.ProjectDirectoryImageBu
 	return dockerfile.Write(node), nil
 }
 
-func extractAllSourceImagesFromDockerfile(dockerfile []byte) (sets.String, error) {
-	result := sets.String{}
-	aliases := sets.String{}
+func extractReplacementCandidatesFromDockerfile(dockerfile []byte) (sets.String, error) {
+	replacementCandidates := sets.String{}
 	node, err := imagebuilder.ParseDockerfile(bytes.NewBuffer(dockerfile))
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse Dockerfile: %w", err)
 	}
 
-	for _, child := range node.Children {
-		if child.Value != dockercmd.From {
-			continue
+	// copied from https://github.com/openshift/builder/blob/1205194b1d67f2b68c163add5ae17e4b81962ec3/pkg/build/builder/common.go#L472-L497
+	// only difference: We collect the replacement source values rather than doing the replacements
+	names := make(map[string]string)
+	stages, err := imagebuilder.NewStages(node, imagebuilder.NewBuilder(nil))
+	if err != nil {
+		return nil, fmt.Errorf("failed to construt imagebuilder stages: %w", err)
+	}
+	for _, stage := range stages {
+		for _, child := range stage.Node.Children {
+			switch {
+			case child.Value == dockercmd.From && child.Next != nil:
+				image := child.Next.Value
+				replacementCandidates.Insert(image)
+				names[stage.Name] = image
+			case child.Value == dockercmd.Copy:
+				if ref, ok := nodeHasFromRef(child); ok {
+					if len(ref) > 0 {
+						if _, ok := names[ref]; !ok {
+							replacementCandidates.Insert(ref)
+						}
+					}
+				}
+			}
 		}
-		if child.Next == nil {
-			continue
-		}
-		if !aliases.Has(child.Next.Value) {
-			result.Insert(child.Next.Value)
-		}
-		if child.Next.Next == nil || strings.ToLower(child.Next.Next.Value) != "as" || child.Next.Next.Next == nil {
-			continue
-		}
-		aliases.Insert(child.Next.Next.Next.Value)
 	}
 
-	return result, nil
+	return replacementCandidates, nil
 }
 
-func pruneUnusedReplacements(config *api.ReleaseBuildConfiguration, allSourceImages sets.String) {
+func pruneUnusedReplacements(config *api.ReleaseBuildConfiguration, replacementCandidates sets.String) {
 	var prunedImages []api.ProjectDirectoryImageBuildStepConfiguration
 	for _, image := range config.Images {
 		for k, sourceImage := range image.Inputs {
 			var newAs []string
 			for _, sourceImage := range sourceImage.As {
-				if allSourceImages.Has(sourceImage) {
+				if replacementCandidates.Has(sourceImage) {
 					newAs = append(newAs, sourceImage)
 				}
 			}

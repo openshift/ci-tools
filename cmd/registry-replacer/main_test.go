@@ -112,6 +112,21 @@ func TestReplacer(t *testing.T) {
 			files:       map[string][]byte{"dockerfile": []byte("FROM registry.svc.ci.openshift.org/org/repo as repo\nFROM registry.svc.ci.openshift.org/org/repo2")},
 			expectWrite: true,
 		},
+		{
+			name: "No pruning on empty Dockerfile",
+			config: &api.ReleaseBuildConfiguration{
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+					From: "base",
+					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+						DockerfilePath: "dockerfile",
+						Inputs: map[string]api.ImageBuildInputs{
+							"root": {As: []string{"builder"}},
+						},
+					},
+				}},
+			},
+			pruneUnusedReplacementsEnabled: true,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -153,46 +168,57 @@ func fakeGithubFileGetterFactory(data map[string][]byte) func(string, string, st
 	}
 }
 
-func TestExtractAllSourceImagesFromDockerfile(t *testing.T) {
+func TestExtractReplacementCandidatesFromDockerfile(t *testing.T) {
 	testCases := []struct {
 		name           string
 		in             string
 		expectedResult sets.String
 	}{
 		{
-			name:           "simple",
+			name:           "Simple",
 			in:             "FROM capetown/center:1",
 			expectedResult: sets.NewString("capetown/center:1"),
 		},
 		{
-			name:           "multi-stage, alias is not returned",
-			in:             "from capetown/center:1 as builder\nFROM builder",
-			expectedResult: sets.NewString("capetown/center:1"),
+			name:           "Copy --from",
+			in:             "FROM centos:7\nCOPY --from=builder /go/src/github.com/code-ready/crc /opt/crc",
+			expectedResult: sets.NewString("centos:7", "builder"),
 		},
 		{
-			name:           "multi-stage, alias with uppercase as is not returned",
-			in:             "from capetown/center:1 AS builder\nFROM builder",
-			expectedResult: sets.NewString("capetown/center:1"),
+			name: "Multiple from and copy --from",
+			in: `FROM registry.svc.ci.openshift.org/openshift/release:golang-1.13 AS builder
+WORKDIR /go/src/github.com/kubernetes-sigs/aws-ebs-csi-driver
+COPY . .
+RUN make
+
+FROM registry.svc.ci.openshift.org/openshift/origin-v4.0:base
+# Get mkfs & blkid
+RUN yum update -y && \
+    yum install --setopt=tsflags=nodocs -y e2fsprogs xfsprogs util-linux && \
+    yum clean all && rm -rf /var/cache/yum/*
+COPY --from=builder /go/src/github.com/kubernetes-sigs/aws-ebs-csi-driver/bin/aws-ebs-csi-driver /usr/bin/
+ENTRYPOINT ["/usr/bin/aws-ebs-csi-driver"]`,
+			expectedResult: sets.NewString("registry.svc.ci.openshift.org/openshift/release:golang-1.13", "registry.svc.ci.openshift.org/openshift/origin-v4.0:base"),
 		},
 		{
-			name: "unrelated directives",
+			name: "Unrelated directives",
 			in:   "RUN somestuff\n\n\n ENV var=val",
 		},
 		{
-			name: "defunct from",
+			name: "Defunct from",
 			in:   "from\n\n",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := extractAllSourceImagesFromDockerfile([]byte(tc.in))
+			result, err := extractReplacementCandidatesFromDockerfile([]byte(tc.in))
 			if err != nil {
 				t.Fatalf("error: %v", err)
 			}
 
-			if diff := result.Difference(tc.expectedResult); len(diff) > 0 {
-				t.Errorf("result differs from expected: %v", diff.List())
+			if !result.Equal(tc.expectedResult) {
+				t.Errorf("result does not match expected, wanted: %v, got: %v", tc.expectedResult.List(), result.List())
 			}
 		})
 	}
@@ -341,6 +367,34 @@ func TestPruneUnusedReplacements(t *testing.T) {
 				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
 					To: "some-when",
 				}},
+			},
+		},
+		{
+			name:            "cnc",
+			allSourceImages: sets.NewString("scratch", "centos:7", "builder"),
+			in: &api.ReleaseBuildConfiguration{
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+					From: "base",
+					To:   "snc",
+					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+						DockerfilePath: "images/openshift-ci/Dockerfile",
+						Inputs: map[string]api.ImageBuildInputs{
+							"root": {As: []string{"builder"}},
+						},
+					}},
+				},
+			},
+			expected: &api.ReleaseBuildConfiguration{
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+					From: "base",
+					To:   "snc",
+					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+						DockerfilePath: "images/openshift-ci/Dockerfile",
+						Inputs: map[string]api.ImageBuildInputs{
+							"root": {As: []string{"builder"}},
+						},
+					}},
+				},
 			},
 		},
 	}

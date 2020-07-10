@@ -1,6 +1,8 @@
 package main
 
 import (
+	"strings"
+
 	dockercmd "github.com/openshift/imagebuilder/dockerfile/command"
 	"github.com/openshift/imagebuilder/dockerfile/parser"
 )
@@ -32,4 +34,15 @@ func replaceLastFrom(node *parser.Node, image string, alias string) {
 			return
 		}
 	}
+}
+
+func nodeHasFromRef(node *parser.Node) (string, bool) {
+	for _, arg := range node.Flags {
+		switch {
+		case strings.HasPrefix(arg, "--from="):
+			from := strings.TrimPrefix(arg, "--from=")
+			return from, true
+		}
+	}
+	return "", false
 }

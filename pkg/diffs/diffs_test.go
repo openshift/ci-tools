@@ -1,7 +1,6 @@
 package diffs
 
 import (
-	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -719,7 +718,7 @@ func TestGetPresubmitsForClusterProfiles(t *testing.T) {
 						Sources: []v1.VolumeProjection{{
 							ConfigMap: &v1.ConfigMapProjection{
 								LocalObjectReference: v1.LocalObjectReference{
-									Name: config.ClusterProfilePrefix + p,
+									Name: p,
 								},
 							},
 						}},
@@ -732,14 +731,12 @@ func TestGetPresubmitsForClusterProfiles(t *testing.T) {
 	for _, tc := range []struct {
 		id       string
 		cfg      *prowconfig.Config
-		profiles []config.ConfigMapSource
+		profiles sets.String
 		expected []string
 	}{{
-		id:  "empty",
-		cfg: &prowconfig.Config{},
-		profiles: []config.ConfigMapSource{{
-			PathInRepo: filepath.Join(config.ClusterProfilesPath, "test-profile"),
-		}},
+		id:       "empty",
+		cfg:      &prowconfig.Config{},
+		profiles: sets.NewString("test-profile"),
 	}, {
 		id: "not a kubernetes job",
 		cfg: &prowconfig.Config{
@@ -751,9 +748,7 @@ func TestGetPresubmitsForClusterProfiles(t *testing.T) {
 				},
 			},
 		},
-		profiles: []config.ConfigMapSource{{
-			PathInRepo: filepath.Join(config.ClusterProfilesPath, "test-profile"),
-		}},
+		profiles: sets.NewString("test-profile"),
 	}, {
 		id: "job doesn't use cluster profiles",
 		cfg: &prowconfig.Config{
@@ -765,9 +760,7 @@ func TestGetPresubmitsForClusterProfiles(t *testing.T) {
 				},
 			},
 		},
-		profiles: []config.ConfigMapSource{{
-			PathInRepo: filepath.Join(config.ClusterProfilesPath, "test-profile"),
-		}},
+		profiles: sets.NewString("test-profile"),
 	}, {
 		id: "job doesn't use the cluster profile",
 		cfg: &prowconfig.Config{
@@ -779,9 +772,7 @@ func TestGetPresubmitsForClusterProfiles(t *testing.T) {
 				},
 			},
 		},
-		profiles: []config.ConfigMapSource{{
-			PathInRepo: filepath.Join(config.ClusterProfilesPath, "test-profile"),
-		}},
+		profiles: sets.NewString("test-profile"),
 	}, {
 		id: "multiple jobs, one uses cluster the profile",
 		cfg: &prowconfig.Config{
@@ -797,9 +788,7 @@ func TestGetPresubmitsForClusterProfiles(t *testing.T) {
 				},
 			},
 		},
-		profiles: []config.ConfigMapSource{{
-			PathInRepo: filepath.Join(config.ClusterProfilesPath, "test-profile"),
-		}},
+		profiles: sets.NewString("test-profile"),
 		expected: []string{"uses-cluster-profile"},
 	}} {
 		t.Run(tc.id, func(t *testing.T) {

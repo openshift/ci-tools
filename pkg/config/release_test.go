@@ -18,8 +18,8 @@ func compareChanges(
 	path string,
 	files []string,
 	cmd string,
-	f func(string, string) ([]ConfigMapSource, error),
-	expected []ConfigMapSource,
+	f func(string, string) ([]string, error),
+	expected []string,
 ) {
 	t.Helper()
 	tmp, err := ioutil.TempDir("", "")
@@ -74,13 +74,10 @@ func TestGetChangedTemplates(t *testing.T) {
 > org/repo/OWNERS
 > org/repo/README.md
 `
-	expected := []ConfigMapSource{{
-		SHA:        "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
-		PathInRepo: filepath.Join(TemplatesPath, "cluster-launch-top-level.yaml"),
-	}, {
-		SHA:        "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
-		PathInRepo: filepath.Join(TemplatesPath, "org/repo/cluster-launch-subdir.yaml"),
-	}}
+	expected := []string{
+		filepath.Join(TemplatesPath, "cluster-launch-top-level.yaml"),
+		filepath.Join(TemplatesPath, "org/repo/cluster-launch-subdir.yaml"),
+	}
 	compareChanges(t, TemplatesPath, files, cmd, GetChangedTemplates, expected)
 }
 
@@ -99,21 +96,12 @@ git mv moveme/file moveme/moved
 git mv renameme/file renamed/file
 > dir/dir/file
 `
-	expected := []ConfigMapSource{{
-		SHA:        "df2b8fc99e1c1d4dbc0a854d9f72157f1d6ea078",
-		PathInRepo: filepath.Join(ClusterProfilesPath, "changeme"),
-	}, {
-		SHA:        "b4c3cc91598b6469bf7036502b8ca2bd563b0d0a",
-		PathInRepo: filepath.Join(ClusterProfilesPath, "dir"),
-	}, {
-		SHA:        "03b9d461447abb84264053a440b4c715842566bb",
-		PathInRepo: filepath.Join(ClusterProfilesPath, "moveme"),
-	}, {
-		SHA:        "df2b8fc99e1c1d4dbc0a854d9f72157f1d6ea078",
-		PathInRepo: filepath.Join(ClusterProfilesPath, "new"),
-	}, {
-		SHA:        "9bbab5dcf83793f9edc258136426678cccce940e",
-		PathInRepo: filepath.Join(ClusterProfilesPath, "renamed"),
-	}}
+	expected := []string{
+		filepath.Join(ClusterProfilesPath, "changeme", "file"),
+		filepath.Join(ClusterProfilesPath, "dir", "dir", "file"),
+		filepath.Join(ClusterProfilesPath, "moveme", "moved"),
+		filepath.Join(ClusterProfilesPath, "new", "file"),
+		filepath.Join(ClusterProfilesPath, "renamed", "file"),
+	}
 	compareChanges(t, ClusterProfilesPath, files, cmd, GetChangedClusterProfiles, expected)
 }

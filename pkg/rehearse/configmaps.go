@@ -9,6 +9,7 @@ import (
 
 	"github.com/mattn/go-zglob"
 	"github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"k8s.io/api/core/v1"
 
@@ -31,6 +32,53 @@ const (
 	createByRehearse  = "created-by-pj-rehearse"
 	rehearseLabelPull = "ci.openshift.org/rehearse-pull"
 )
+
+// ConfigMaps holds the data about the ConfigMaps affected by a rehearse run
+type ConfigMaps struct {
+	// Paths is a set of repo paths that changed content and belong to some ConfigMap
+	Paths sets.String
+	// Names is a mapping from production ConfigMap names to rehearse-specific ones
+	Names map[string]string
+	// ProductionNames is a set of production ConfigMap names
+	ProductionNames sets.String
+	// Patterns is the set of config-updater patterns that cover at least one changed file
+	Patterns sets.String
+}
+
+// NewConfigMaps populates a ConfigMaps instance
+func NewConfigMaps(paths []string, purpose string, prNumber int, configUpdaterCfg prowplugins.ConfigUpdater) (ConfigMaps, error) {
+	cms := ConfigMaps{
+		Paths:           sets.NewString(paths...),
+		Names:           map[string]string{},
+		ProductionNames: sets.NewString(),
+		Patterns:        sets.NewString(),
+	}
+
+	var errs []error
+	for _, path := range paths {
+		cmName, pattern, err := config.ConfigMapName(path, configUpdaterCfg)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		cms.Names[cmName] = tempConfigMapName(purpose, cmName, prNumber)
+		cms.ProductionNames.Insert(cmName)
+		cms.Patterns.Insert(pattern)
+	}
+
+	return cms, kutilerrors.NewAggregate(errs)
+}
+
+func tempConfigMapName(purpose, source string, prNumber int) string {
+	// Object names can't be too long so we truncate the hash. This increases
+	// chances of collision but we can tolerate it as our input space is tiny.
+	pr := strconv.Itoa(prNumber)
+	maxLen := 253 - len("rehearse---") - len(purpose) - len(pr)
+	if len(source) > maxLen {
+		source = source[:maxLen]
+	}
+	return fmt.Sprintf("rehearse-%s-%s-%s", pr, purpose, source)
+}
 
 // CMManager manages temporary ConfigMaps created on build clusters to be
 // consumed by rehearsals. This is necessary when a content of a ConfigMap, such
@@ -91,48 +139,34 @@ func (c *CMManager) createCM(name string, data []updateconfig.ConfigMapUpdate) e
 	return nil
 }
 
-func genChanges(root string, sources []config.ConfigMapSource) ([]prowgithub.PullRequestChange, error) {
+func genChanges(root string, patterns sets.String) ([]prowgithub.PullRequestChange, error) {
 	var ret []prowgithub.PullRequestChange
-	for _, f := range sources {
-		err := filepath.Walk(filepath.Join(root, f.PathInRepo), func(path string, info os.FileInfo, err error) error {
-			if err != nil || info.IsDir() {
-				return err
-			}
-			// Failure is impossible per filepath.Walk's API.
-			path, err = filepath.Rel(root, path)
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return err
+		}
+		// Failure is impossible per filepath.Walk's API.
+		path, err = filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		for pattern := range patterns {
+			match, err := zglob.Match(pattern, path)
 			if err != nil {
 				return err
 			}
-			ret = append(ret, prowgithub.PullRequestChange{
-				Filename: path,
-				Status:   string(prowgithub.PullRequestFileModified),
-			})
-			return nil
-		})
-		if err != nil {
-			return nil, err
-		}
-	}
-	return ret, nil
-}
-
-func (c *CMManager) validateChanges(changes []prowgithub.PullRequestChange) error {
-	var errs []error
-	for _, change := range changes {
-		found := false
-		for glob := range c.configUpdaterCfg.Maps {
-			var err error
-			if found, err = zglob.Match(glob, change.Filename); err != nil {
-				errs = append(errs, err)
-			} else if found {
-				break
+			if match {
+				ret = append(ret, prowgithub.PullRequestChange{
+					Filename: path,
+					Status:   string(prowgithub.PullRequestFileModified),
+				})
 			}
 		}
-		if !found {
-			errs = append(errs, fmt.Errorf("no entry in `updateconfig` matches %q", change.Filename))
-		}
-	}
-	return kutilerrors.NewAggregate(errs)
+
+		return nil
+	})
+
+	return ret, err
 }
 
 func replaceSpecNames(namespace string, cfg prowplugins.ConfigUpdater, mapping map[string]string) (ret prowplugins.ConfigUpdater) {
@@ -144,47 +178,26 @@ func replaceSpecNames(namespace string, cfg prowplugins.ConfigUpdater, mapping m
 		}
 		if name, ok := mapping[v.Name]; ok {
 			v.Name = name
+			v.Namespaces = []string{""}
+			ret.Maps[k] = v
 		}
-		v.Namespaces = []string{""}
-		ret.Maps[k] = v
 	}
 	return
 }
 
-func (c *CMManager) create(sources []config.ConfigMapSource, mapping map[string]string) error {
-	changes, err := genChanges(c.releaseRepoPath, sources)
+func (c *CMManager) Create(cms ConfigMaps) error {
+	changes, err := genChanges(c.releaseRepoPath, cms.Patterns)
 	if err != nil {
 		return err
 	}
-	if err := c.validateChanges(changes); err != nil {
-		return err
-	}
 	var errs []error
-	for cm, data := range updateconfig.FilterChanges(replaceSpecNames(c.namespace, c.configUpdaterCfg, mapping), changes, c.namespace, c.logger) {
+	for cm, data := range updateconfig.FilterChanges(replaceSpecNames(c.namespace, c.configUpdaterCfg, cms.Names), changes, c.namespace, c.logger) {
 		c.logger.WithFields(logrus.Fields{"cm-name": cm.Name}).Info("creating rehearsal configMap")
 		if err := c.createCM(cm.Name, data); err != nil {
 			errs = append(errs, err)
 		}
 	}
 	return kutilerrors.NewAggregate(errs)
-}
-
-// CreateTemplates creates configMaps for all changed templates
-func (c *CMManager) CreateTemplates(templates []config.ConfigMapSource) error {
-	nameMap := make(map[string]string, len(templates))
-	for _, t := range templates {
-		nameMap[t.CMName(config.TemplatePrefix)] = t.TempCMName("template")
-	}
-	return c.create(templates, nameMap)
-}
-
-// CreateClusterProfiles creates configMaps for all changed cluster profiles
-func (c *CMManager) CreateClusterProfiles(profiles []config.ConfigMapSource) error {
-	nameMap := make(map[string]string, len(profiles))
-	for _, p := range profiles {
-		nameMap[p.CMName(config.ClusterProfilePrefix)] = p.TempCMName("cluster-profile")
-	}
-	return c.create(profiles, nameMap)
 }
 
 // Clean deletes all the configMaps that have been created for this PR

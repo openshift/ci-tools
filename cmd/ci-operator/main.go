@@ -31,6 +31,7 @@ import (
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/util/sets"
 	authclientset "k8s.io/client-go/kubernetes/typed/authorization/v1"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	rbacclientset "k8s.io/client-go/kubernetes/typed/rbac/v1"
@@ -576,6 +577,10 @@ func (o *options) Run() []error {
 
 	if err := printExecutionOrder(nodes); err != nil {
 		return []error{fmt.Errorf("could not print execution order: %w", err)}
+	}
+
+	if err := dumpGraph(o.artifactDir, nodes); err != nil {
+		return []error{fmt.Errorf("failed to dump graph to artifacts dir: %w", err)}
 	}
 
 	// initialize the namespace if necessary and create any resources that must
@@ -1378,6 +1383,66 @@ func printExecutionOrder(nodes []*api.StepNode) error {
 	}
 	log.Printf("Running %s", strings.Join(nodeNames(ordered), ", "))
 	return nil
+}
+
+type stepWithDependencies struct {
+	StepName     string
+	Dependencies []string
+}
+
+func dumpGraph(artifactsDir string, nodes []*api.StepNode) error {
+	// No target to dump to, so lets just skip this
+	if artifactsDir == "" {
+		return nil
+	}
+
+	var result []stepWithDependencies
+	iterateAllEdges(nodes, sets.String{}, func(n *api.StepNode) {
+		r := stepWithDependencies{StepName: n.Step.Name()}
+		for _, requiment := range n.Step.Requires() {
+			iterateAllEdges(nodes, sets.String{}, func(inner *api.StepNode) {
+				if satisfiedBy(requiment, inner.Step) {
+					r.Dependencies = append(r.Dependencies, inner.Step.Name())
+				}
+			})
+		}
+		result = append(result, r)
+	})
+
+	serialized, err := json.Marshal(result)
+	if err != nil {
+		return fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	dest := filepath.Join(artifactsDir, "ci-operator-step-graph.json")
+	if err := ioutil.WriteFile(dest, serialized, 0644); err != nil {
+		return fmt.Errorf("failed to write %s: %w", dest, err)
+	}
+
+	return nil
+}
+
+func satisfiedBy(requirement api.StepLink, step api.Step) bool {
+	for _, creates := range step.Creates() {
+		if requirement.SatisfiedBy(creates) {
+			return true
+		}
+	}
+	return false
+}
+
+func iterateAllEdges(nodes []*api.StepNode, alreadyIterated sets.String, f func(*api.StepNode)) {
+	for _, node := range nodes {
+		if alreadyIterated.Has(node.Step.Name()) {
+			continue
+		}
+		iterateAllEdges(node.Children, alreadyIterated, f)
+		if alreadyIterated.Has(node.Step.Name()) {
+			continue
+		}
+		f(node)
+		alreadyIterated.Insert(node.Step.Name())
+	}
 }
 
 var shaRegex = regexp.MustCompile(`^[0-9a-fA-F]+$`)

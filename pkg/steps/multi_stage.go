@@ -159,12 +159,12 @@ func (s *multiStageTestStep) run(ctx context.Context, dry bool) error {
 	}
 	var errs []error
 	if err := s.runSteps(ctx, s.pre, env, true, errs); err != nil {
-		errs = append(errs, fmt.Errorf("%q pre steps failed: %v", s.name, err))
+		errs = append(errs, fmt.Errorf("%q pre steps failed: %w", s.name, err))
 	} else if err := s.runSteps(ctx, s.test, env, true, errs); err != nil {
-		errs = append(errs, fmt.Errorf("%q test steps failed: %v", s.name, err))
+		errs = append(errs, fmt.Errorf("%q test steps failed: %w", s.name, err))
 	}
 	if err := s.runSteps(context.Background(), s.post, env, false, errs); err != nil {
-		errs = append(errs, fmt.Errorf("%q post steps failed: %v", s.name, err))
+		errs = append(errs, fmt.Errorf("%q post steps failed: %w", s.name, err))
 	}
 	return utilerrors.NewAggregate(errs)
 }

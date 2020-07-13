@@ -21,7 +21,7 @@ replace (
 )
 
 require (
-	github.com/GoogleCloudPlatform/testgrid v0.0.7
+	github.com/GoogleCloudPlatform/testgrid v0.0.13
 	github.com/alecthomas/chroma v0.7.1
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/docker/distribution v2.7.1+incompatible
@@ -30,8 +30,7 @@ require (
 	github.com/fsnotify/fsnotify v1.4.9 // indirect
 	github.com/getlantern/deepcopy v0.0.0-20160317154340-7f45deb8130a
 	github.com/ghodss/yaml v1.0.0
-	github.com/golang/protobuf v1.3.5 // indirect
-	github.com/google/go-cmp v0.4.0
+	github.com/google/go-cmp v0.5.0
 	github.com/google/gofuzz v1.1.0
 	github.com/mattn/go-zglob v0.0.2
 	github.com/openshift/api v0.0.0-20200326160804-ecb9283fe820
@@ -49,12 +48,12 @@ require (
 	github.com/sirupsen/logrus v1.6.0
 	github.com/spf13/afero v1.2.2
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
-	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
+	golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208
 	gopkg.in/fsnotify.v1 v1.4.7
 	k8s.io/api v0.18.2
 	k8s.io/apimachinery v0.18.2
 	k8s.io/client-go v9.0.0+incompatible
-	k8s.io/test-infra v0.0.0-20200629124324-605ceec5b025
+	k8s.io/test-infra v0.0.0-20200713094034-e3f5b3e092e7
 	k8s.io/utils v0.0.0-20200324210504-a9aa75ae1b89
 	sigs.k8s.io/boskos v0.0.0-20200530174753-71e795271860
 	sigs.k8s.io/controller-runtime v0.5.4

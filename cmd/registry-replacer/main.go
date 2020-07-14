@@ -317,7 +317,7 @@ func githubFileGetterFactory(org, repo, branch string) githubFileGetter {
 	}
 }
 
-func upsertPR(gc github.Client, dir, githubUsername, tokenFilePath string, pruneUnusedReplacements, selfApprove bool) error {
+func upsertPR(gc github.Client, dir, githubUsername, tokenFilePath string, selfApprove, pruneUnusedReplacements bool) error {
 	if err := os.Chdir(dir); err != nil {
 		return fmt.Errorf("failed to chdir into %s: %w", dir, err)
 	}

@@ -109,6 +109,7 @@ func main() {
 	users := sets.NewString()
 	users.Insert(peribolosConfig.Orgs[o.org].Admins...)
 	users.Insert(peribolosConfig.Orgs[o.org].Members...)
+	logger.WithField("users", fmt.Sprintf("%s", users.List())).Info("Users found")
 
 	var action func(*v1.Group) (*v1.Group, error)
 	group := &v1.Group{
@@ -129,8 +130,11 @@ func main() {
 		if existing, err := userV1Client.Groups().Get(o.group, metav1.GetOptions{}); err == nil {
 			group = existing
 			action = userV1Client.Groups().Update
+			logger = logger.WithField("action", "update")
 		} else if err != nil && (kerrors.IsNotFound(err) || kerrors.IsForbidden(err) && o.dryRun) {
 			group = &v1.Group{ObjectMeta: metav1.ObjectMeta{Name: o.group}}
+			logger.Info("Group is missing. Creating...")
+			logger = logger.WithField("action", "create")
 			action = userV1Client.Groups().Create
 		} else {
 			logger.WithError(err).Fatal("couldn't get group from cluster")
@@ -138,7 +142,11 @@ func main() {
 	}
 
 	group.Users = users.List()
+
+	logger.Info("Processing group")
 	if _, err := action(group); err != nil {
 		logger.WithError(err).Fatal("couldn't sync group to the cluster")
 	}
+
+	logger.Info("Group successfully processed")
 }

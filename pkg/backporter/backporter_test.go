@@ -10,10 +10,9 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/openshift/ci-tools/pkg/httphelper"
-
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/prow/bugzilla"
+	"k8s.io/test-infra/prow/metrics"
 	"k8s.io/utils/diff"
 )
 
@@ -23,7 +22,7 @@ var (
 
 var allTargetVersions = sets.NewString("4.0.0", "4.1.0", "4.4.z")
 
-var fakebzbpMetrics = httphelper.NewMetrics("fakebzbp")
+var fakebzbpMetrics = metrics.NewMetrics("fakebzbp")
 
 func TestGetLandingHandler(t *testing.T) {
 	req, err := http.NewRequest("GET", "/", nil)

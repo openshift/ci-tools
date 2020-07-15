@@ -18,8 +18,8 @@ import (
 	"k8s.io/test-infra/prow/interrupts"
 	"k8s.io/test-infra/prow/metrics"
 	"k8s.io/test-infra/prow/pjutil"
+	"k8s.io/test-infra/prow/simplifypath"
 
-	"github.com/openshift/ci-tools/pkg/httphelper"
 	"github.com/openshift/ci-tools/pkg/load/agents"
 	"github.com/openshift/ci-tools/pkg/webreg"
 )
@@ -39,7 +39,7 @@ type options struct {
 }
 
 var (
-	configresolverMetrics = httphelper.NewMetrics("configresolver")
+	configresolverMetrics = metrics.NewMetrics("configresolver")
 )
 
 func gatherOptions() (options, error) {
@@ -112,13 +112,13 @@ func resolveConfig(configAgent agents.ConfigAgent, registryAgent agents.Registry
 		}
 		metadata, err := webreg.MetadataFromQuery(w, r)
 		if err != nil {
-			configresolverMetrics.RecordError("invalid query")
+			metrics.RecordError("invalid query", configresolverMetrics.ErrorRate)
 		}
 		logger := logrus.WithFields(api.LogFieldsFor(metadata))
 
 		config, err := configAgent.GetMatchingConfig(metadata)
 		if err != nil {
-			configresolverMetrics.RecordError("config not found")
+			metrics.RecordError("config not found", configresolverMetrics.ErrorRate)
 			w.WriteHeader(http.StatusNotFound)
 			fmt.Fprintf(w, "failed to get config: %v", err)
 			logger.WithError(err).Warning("failed to get config")
@@ -155,7 +155,7 @@ func resolveLiteralConfig(registryAgent agents.RegistryAgent) http.HandlerFunc {
 func resolveAndRespond(registryAgent agents.RegistryAgent, config api.ReleaseBuildConfiguration, w http.ResponseWriter, logger *logrus.Entry) {
 	config, err := registryAgent.ResolveConfig(config)
 	if err != nil {
-		configresolverMetrics.RecordError("failed to resolve config with registry")
+		metrics.RecordError("failed to resolve config with registry", configresolverMetrics.ErrorRate)
 		w.WriteHeader(http.StatusInternalServerError)
 		fmt.Fprintf(w, "failed to resolve config with registry: %v", err)
 		logger.WithError(err).Warning("failed to resolve config with registry")
@@ -163,7 +163,7 @@ func resolveAndRespond(registryAgent agents.RegistryAgent, config api.ReleaseBui
 	}
 	jsonConfig, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
-		configresolverMetrics.RecordError("failed to marshal config")
+		metrics.RecordError("failed to marshal config", configresolverMetrics.ErrorRate)
 		w.WriteHeader(http.StatusInternalServerError)
 		fmt.Fprintf(w, "failed to marshal config to JSON: %v", err)
 		logger.WithError(err).Errorf("failed to marshal config to JSON")
@@ -187,6 +187,11 @@ func getRegistryGeneration(agent agents.RegistryAgent) http.HandlerFunc {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintf(w, "%d", agent.GetGeneration())
 	}
+}
+
+// l and v keep the tree legible
+func l(fragment string, children ...simplifypath.Node) simplifypath.Node {
+	return simplifypath.L(fragment, children...)
 }
 
 func main() {
@@ -216,16 +221,38 @@ func main() {
 		os.Exit(0)
 	}
 
+	simplifier := simplifypath.NewSimplifier(l("", // shadow element mimicing the root
+		l("config"),
+		l("resolve"),
+		l("configGeneration"),
+		l("registryGeneration"),
+	))
+
+	uisimplifier := simplifypath.NewSimplifier(l("", // shadow element mimicing the root
+		l("help",
+			l("adding-components"),
+			l("examples"),
+			l("ci-operator"),
+			l("leases"),
+		),
+		l("search"),
+		l("job"),
+		l("reference"),
+		l("chain"),
+		l("workflow"),
+	))
+	handler := metrics.TraceHandler(simplifier, configresolverMetrics.HTTPRequestDuration, configresolverMetrics.HTTPResponseSize)
+	uihandler := metrics.TraceHandler(uisimplifier, configresolverMetrics.HTTPRequestDuration, configresolverMetrics.HTTPResponseSize)
 	// add handler func for incorrect paths as well; can help with identifying errors/404s caused by incorrect paths
-	http.HandleFunc("/", configresolverMetrics.HandleWithMetrics(http.NotFound))
-	http.HandleFunc("/config", configresolverMetrics.HandleWithMetrics(resolveConfig(configAgent, registryAgent)))
-	http.HandleFunc("/resolve", configresolverMetrics.HandleWithMetrics(resolveLiteralConfig(registryAgent)))
-	http.HandleFunc("/configGeneration", configresolverMetrics.HandleWithMetrics(getConfigGeneration(configAgent)))
-	http.HandleFunc("/registryGeneration", configresolverMetrics.HandleWithMetrics(getRegistryGeneration(registryAgent)))
+	http.HandleFunc("/", handler(http.HandlerFunc(http.NotFound)).ServeHTTP)
+	http.HandleFunc("/config", handler(resolveConfig(configAgent, registryAgent)).ServeHTTP)
+	http.HandleFunc("/resolve", handler(resolveLiteralConfig(registryAgent)).ServeHTTP)
+	http.HandleFunc("/configGeneration", handler(getConfigGeneration(configAgent)).ServeHTTP)
+	http.HandleFunc("/registryGeneration", handler(getRegistryGeneration(registryAgent)).ServeHTTP)
 	interrupts.ListenAndServe(&http.Server{Addr: o.address}, o.gracePeriod)
 	uiServer := &http.Server{
 		Addr:    o.uiAddress,
-		Handler: configresolverMetrics.HandleWithMetrics(webreg.WebRegHandler(registryAgent, configAgent)),
+		Handler: uihandler(webreg.WebRegHandler(registryAgent, configAgent)),
 	}
 	interrupts.ListenAndServe(uiServer, o.gracePeriod)
 	health.ServeReady()

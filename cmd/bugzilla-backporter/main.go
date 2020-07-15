@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/openshift/ci-tools/pkg/backporter"
-	"github.com/openshift/ci-tools/pkg/httphelper"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/pkg/flagutil"
@@ -20,11 +19,12 @@ import (
 	"k8s.io/test-infra/prow/metrics"
 	"k8s.io/test-infra/prow/pjutil"
 	"k8s.io/test-infra/prow/plugins"
+	"k8s.io/test-infra/prow/simplifypath"
 	"sigs.k8s.io/yaml"
 )
 
 var (
-	bzbpMetrics = httphelper.NewMetrics("bugzillabackporter")
+	bzbpMetrics = metrics.NewMetrics("bugzillabackporter")
 )
 
 type options struct {
@@ -89,6 +89,15 @@ func processOptions(o options) error {
 	return nil
 }
 
+// l and v keep the simplifier tree legible
+func l(fragment string, children ...simplifypath.Node) simplifypath.Node {
+	return simplifypath.L(fragment, children...)
+}
+
+func v(fragment string, children ...simplifypath.Node) simplifypath.Node {
+	return simplifypath.V(fragment, children...)
+}
+
 func main() {
 	o, err := gatherOptions()
 	if err != nil {
@@ -115,11 +124,19 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("Error parsing plugins configuration.")
 	}
-	http.HandleFunc("/", bzbpMetrics.HandleWithMetrics(backporter.GetLandingHandler(bzbpMetrics)))
-	http.HandleFunc("/clones", bzbpMetrics.HandleWithMetrics(backporter.GetClonesHandler(bugzillaClient, allTargetVersions, bzbpMetrics)))
-	http.HandleFunc("/clones/create", bzbpMetrics.HandleWithMetrics(backporter.CreateCloneHandler(bugzillaClient, allTargetVersions, bzbpMetrics)))
+	simplifier := simplifypath.NewSimplifier(l("", // shadow element mimicing the root
+		l("clones",
+			v("ID"),
+			l("create"),
+		),
+		l("bug"),
+	))
+	handler := metrics.TraceHandler(simplifier, bzbpMetrics.HTTPRequestDuration, bzbpMetrics.HTTPResponseSize)
+	http.HandleFunc("/", handler(backporter.GetLandingHandler(bzbpMetrics)).ServeHTTP)
+	http.HandleFunc("/clones", handler(backporter.GetClonesHandler(bugzillaClient, allTargetVersions, bzbpMetrics)).ServeHTTP)
+	http.HandleFunc("/clones/create", handler(backporter.CreateCloneHandler(bugzillaClient, allTargetVersions, bzbpMetrics)).ServeHTTP)
 	// Leaving this in here to help with future debugging. This will return bug details in JSON format
-	http.HandleFunc("/bug", bzbpMetrics.HandleWithMetrics(backporter.GetBugHandler(bugzillaClient, bzbpMetrics)))
+	http.HandleFunc("/bug", handler(backporter.GetBugHandler(bugzillaClient, bzbpMetrics)).ServeHTTP)
 	interrupts.ListenAndServe(&http.Server{Addr: o.address}, o.gracePeriod)
 
 	health.ServeReady()

@@ -7,13 +7,12 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/openshift/ci-tools/pkg/httphelper"
-
 	"github.com/sirupsen/logrus"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/prow/bugzilla"
+	"k8s.io/test-infra/prow/metrics"
 )
 
 const (
@@ -205,14 +204,14 @@ func logFieldsFor(endpoint string, bugID int) logrus.Fields {
 	}
 }
 
-func handleError(w http.ResponseWriter, err error, shortErrorMessage string, statusCode int, endpoint string, bugID int, metrics *httphelper.Metrics) {
+func handleError(w http.ResponseWriter, err error, shortErrorMessage string, statusCode int, endpoint string, bugID int, m *metrics.Metrics) {
 	var fprintfErr error
 	w.WriteHeader(statusCode)
 	wpErr := writePage(w, http.StatusText(statusCode), errorTemplate, shortErrorMessage)
 	if wpErr != nil {
 		_, fprintfErr = fmt.Fprintf(w, "failed while building error page")
 	}
-	metrics.RecordError(shortErrorMessage)
+	metrics.RecordError(shortErrorMessage, m.ErrorRate)
 	logrus.WithFields(logFieldsFor(endpoint, bugID)).WithError(fmt.Errorf("%s: %v", shortErrorMessage, utilerrors.NewAggregate([]error{err, wpErr, fprintfErr})))
 }
 
@@ -246,7 +245,7 @@ func writePage(w http.ResponseWriter, title string, body *template.Template, dat
 }
 
 // GetLandingHandler will return a simple bug search page
-func GetLandingHandler(metrics *httphelper.Metrics) http.HandlerFunc {
+func GetLandingHandler(metrics *metrics.Metrics) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		err := writePage(w, "Home", emptyTemplate, nil)
 		if err != nil {
@@ -256,26 +255,26 @@ func GetLandingHandler(metrics *httphelper.Metrics) http.HandlerFunc {
 }
 
 // GetBugHandler returns a function with bug details  in JSON format
-func GetBugHandler(client bugzilla.Client, metrics *httphelper.Metrics) http.HandlerFunc {
+func GetBugHandler(client bugzilla.Client, m *metrics.Metrics) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		endpoint := r.URL.Path
 		if r.Method != "GET" {
 			http.Error(w, "not a valid request method: expected GET", http.StatusBadRequest)
-			metrics.RecordError("not a valid request method: expected GET")
+			metrics.RecordError("not a valid request method: expected GET", m.ErrorRate)
 			logrus.WithFields(logFieldsFor(endpoint, 0)).WithError(fmt.Errorf("not a valid request method: expected GET"))
 			return
 		}
 		bugIDStr := r.URL.Query().Get(BugIDQuery)
 		if bugIDStr == "" {
 			http.Error(w, "missing mandatory query arg: \"ID\"", http.StatusBadRequest)
-			metrics.RecordError("missing mandatory query arg: \"ID\"")
+			metrics.RecordError("missing mandatory query arg: \"ID\"", m.ErrorRate)
 			logrus.WithFields(logFieldsFor(endpoint, 0)).WithError(fmt.Errorf("missing mandatory query arg: \"ID\""))
 			return
 		}
 		bugID, err := strconv.Atoi(bugIDStr)
 		if err != nil {
 			http.Error(w, "unable to convert \"ID\" from string to int", http.StatusBadRequest)
-			metrics.RecordError("unable to convert \"ID\" from string to int")
+			metrics.RecordError("unable to convert \"ID\" from string to int", m.ErrorRate)
 			logrus.WithFields(logFieldsFor(endpoint, 0)).WithError(fmt.Errorf("unable to convert \"ID\" from string to int"))
 			return
 		}
@@ -283,7 +282,7 @@ func GetBugHandler(client bugzilla.Client, metrics *httphelper.Metrics) http.Han
 		bugInfo, err := client.GetBug(bugID)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Bug#%d not found", bugID), http.StatusNotFound)
-			metrics.RecordError("BugID not found")
+			metrics.RecordError("BugID not found", m.ErrorRate)
 			logrus.WithFields(logFieldsFor(endpoint, bugID)).WithError(fmt.Errorf("Bug#%d not found: %w", bugID, err))
 			return
 		}
@@ -291,7 +290,7 @@ func GetBugHandler(client bugzilla.Client, metrics *httphelper.Metrics) http.Han
 		jsonBugInfo, err := json.MarshalIndent(*bugInfo, "", "  ")
 		if err != nil {
 			http.Error(w, "failed to marshal bugInfo to JSON", http.StatusInternalServerError)
-			metrics.RecordError("failed to marshal bugInfo to JSON")
+			metrics.RecordError("failed to marshal bugInfo to JSON", m.ErrorRate)
 			logrus.WithFields(logFieldsFor(endpoint, bugID)).WithError(fmt.Errorf("failed to marshal bugInfo to JSON: %w", err))
 			return
 		}
@@ -300,7 +299,7 @@ func GetBugHandler(client bugzilla.Client, metrics *httphelper.Metrics) http.Han
 		_, err = w.Write(jsonBugInfo)
 		if err != nil {
 			http.Error(w, "unable to write to responsewriter for getBugHandler", http.StatusInternalServerError)
-			metrics.RecordError("unable to write to responsewriter")
+			metrics.RecordError("unable to write to responsewriter", m.ErrorRate)
 			logrus.WithFields(logFieldsFor(endpoint, bugID)).WithError(fmt.Errorf("unable to write to responsewriter for getBugHandler: %w", err))
 			return
 		}
@@ -353,69 +352,69 @@ func getClonesTemplateData(bugID int, client bugzilla.Client, allTargetVersions 
 }
 
 // GetClonesHandler returns an HTML page with detais about the bug and its clones
-func GetClonesHandler(client bugzilla.Client, allTargetVersions sets.String, metrics *httphelper.Metrics) http.HandlerFunc {
+func GetClonesHandler(client bugzilla.Client, allTargetVersions sets.String, m *metrics.Metrics) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		if req.Method != "GET" {
-			handleError(w, fmt.Errorf("invalid request method, expected GET got %s", req.Method), "invalid request method", http.StatusBadRequest, req.URL.Path, 0, metrics)
+			handleError(w, fmt.Errorf("invalid request method, expected GET got %s", req.Method), "invalid request method", http.StatusBadRequest, req.URL.Path, 0, m)
 			return
 		}
 
 		bugIDStr := req.URL.Query().Get(BugIDQuery)
 		if bugIDStr == "" {
-			handleError(w, fmt.Errorf("missing mandatory query arg: \"ID\""), "missing mandatory query arg: \"ID\"", http.StatusBadRequest, req.URL.Path, 0, metrics)
+			handleError(w, fmt.Errorf("missing mandatory query arg: \"ID\""), "missing mandatory query arg: \"ID\"", http.StatusBadRequest, req.URL.Path, 0, m)
 			return
 		}
 		bugID, err := strconv.Atoi(bugIDStr)
 		if err != nil {
-			handleError(w, err, "unable to convert \"ID\" from string to int", http.StatusBadRequest, req.URL.Path, 0, metrics)
+			handleError(w, err, "unable to convert \"ID\" from string to int", http.StatusBadRequest, req.URL.Path, 0, m)
 			return
 		}
 
 		wrpr, statusCode, err := getClonesTemplateData(bugID, client, allTargetVersions)
 		if err != nil {
-			handleError(w, err, "unable to get get bug details", statusCode, req.URL.Path, bugID, metrics)
+			handleError(w, err, "unable to get get bug details", statusCode, req.URL.Path, bugID, m)
 			return
 		}
 		err = writePage(w, "Clones", clonesTemplate, wrpr)
 		if err != nil {
-			handleError(w, err, "failed to build Clones page", http.StatusInternalServerError, req.URL.Path, bugID, metrics)
+			handleError(w, err, "failed to build Clones page", http.StatusInternalServerError, req.URL.Path, bugID, m)
 		}
 	}
 }
 
 // CreateCloneHandler will create a clone of the specified ID and return success/error
-func CreateCloneHandler(client bugzilla.Client, allTargetVersions sets.String, metrics *httphelper.Metrics) http.HandlerFunc {
+func CreateCloneHandler(client bugzilla.Client, allTargetVersions sets.String, m *metrics.Metrics) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		endpoint := req.URL.Path
 		if req.Method != "POST" {
-			handleError(w, fmt.Errorf("invalid request method, expected POST got %s", req.Method), "invalid request method", http.StatusBadRequest, req.URL.Path, 0, metrics)
+			handleError(w, fmt.Errorf("invalid request method, expected POST got %s", req.Method), "invalid request method", http.StatusBadRequest, req.URL.Path, 0, m)
 			return
 		}
 		// Parse the parameters passed in the POST request
 		err := req.ParseForm()
 		if err != nil {
-			handleError(w, err, "unable to parse request", http.StatusBadRequest, req.URL.Path, 0, metrics)
+			handleError(w, err, "unable to parse request", http.StatusBadRequest, req.URL.Path, 0, m)
 			return
 		}
 		if req.FormValue("ID") == "" {
-			handleError(w, fmt.Errorf("missing mandatory query arg: \"ID\""), "missing mandatory query arg: \"ID\"", http.StatusBadRequest, req.URL.Path, 0, metrics)
+			handleError(w, fmt.Errorf("missing mandatory query arg: \"ID\""), "missing mandatory query arg: \"ID\"", http.StatusBadRequest, req.URL.Path, 0, m)
 			return
 		}
 		bugID, err := strconv.Atoi(req.FormValue("ID"))
 		if err != nil {
-			handleError(w, err, fmt.Sprintf("unable to convert \"ID\" parameter from string to int: %s", req.FormValue("ID")), http.StatusBadRequest, req.URL.Path, 0, metrics)
+			handleError(w, err, fmt.Sprintf("unable to convert \"ID\" parameter from string to int: %s", req.FormValue("ID")), http.StatusBadRequest, req.URL.Path, 0, m)
 			return
 		}
 		// Get the details of the bug
 		bug, err := client.GetBug(bugID)
 		if err != nil {
-			handleError(w, err, fmt.Sprintf("unable to fetch bug details- Bug#%d", bugID), http.StatusNotFound, endpoint, bugID, metrics)
+			handleError(w, err, fmt.Sprintf("unable to fetch bug details- Bug#%d", bugID), http.StatusNotFound, endpoint, bugID, m)
 			return
 		}
 		// Create a clone of the bug
 		cloneID, err := client.CloneBug(bug)
 		if err != nil {
-			handleError(w, err, "clone creation failed", http.StatusInternalServerError, endpoint, bugID, metrics)
+			handleError(w, err, "clone creation failed", http.StatusInternalServerError, endpoint, bugID, m)
 			return
 		}
 		targetRelease := bugzilla.BugUpdate{
@@ -425,20 +424,20 @@ func CreateCloneHandler(client bugzilla.Client, allTargetVersions sets.String, m
 		}
 		// Updating the cloned bug with the right target version
 		if err := client.UpdateBug(cloneID, targetRelease); err != nil {
-			handleError(w, err, fmt.Sprintf("clone created - Bug#%d, but failed to specify version for the cloned bug.", cloneID), http.StatusInternalServerError, endpoint, bugID, metrics)
+			handleError(w, err, fmt.Sprintf("clone created - Bug#%d, but failed to specify version for the cloned bug.", cloneID), http.StatusInternalServerError, endpoint, bugID, m)
 			return
 		}
 		// Repopulate the fields of the page with the right data
 		data, statusCode, err := getClonesTemplateData(bugID, client, allTargetVersions)
 		if err != nil {
-			handleError(w, err, "unable to get get bug details", statusCode, endpoint, bugID, metrics)
+			handleError(w, err, "unable to get get bug details", statusCode, endpoint, bugID, m)
 			return
 		}
 		// Populating the NewCloneId which is used to show the success info banner
 		data.NewCloneID = cloneID
 		err = writePage(w, "Clones", clonesTemplate, *data)
 		if err != nil {
-			handleError(w, err, "failed to build CreateClones response page", http.StatusInternalServerError, req.URL.Path, bugID, metrics)
+			handleError(w, err, "failed to build CreateClones response page", http.StatusInternalServerError, req.URL.Path, bugID, m)
 		}
 	}
 }

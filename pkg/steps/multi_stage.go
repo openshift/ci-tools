@@ -158,12 +158,12 @@ func (s *multiStageTestStep) run(ctx context.Context, dry bool) error {
 		return fmt.Errorf("failed to create RBAC objects: %w", err)
 	}
 	var errs []error
-	if err := s.runSteps(ctx, s.pre, env, true, errs); err != nil {
+	if err := s.runSteps(ctx, s.pre, env, true, false); err != nil {
 		errs = append(errs, fmt.Errorf("%q pre steps failed: %w", s.name, err))
-	} else if err := s.runSteps(ctx, s.test, env, true, errs); err != nil {
+	} else if err := s.runSteps(ctx, s.test, env, true, len(errs) != 0); err != nil {
 		errs = append(errs, fmt.Errorf("%q test steps failed: %w", s.name, err))
 	}
-	if err := s.runSteps(context.Background(), s.post, env, false, errs); err != nil {
+	if err := s.runSteps(context.Background(), s.post, env, false, len(errs) != 0); err != nil {
 		errs = append(errs, fmt.Errorf("%q post steps failed: %w", s.name, err))
 	}
 	return utilerrors.NewAggregate(errs)
@@ -316,9 +316,9 @@ func (s *multiStageTestStep) runSteps(
 	steps []api.LiteralTestStep,
 	env []coreapi.EnvVar,
 	shortCircuit bool,
-	prevErrs []error,
+	hasPrevErrs bool,
 ) error {
-	pods, err := s.generatePods(steps, env, prevErrs)
+	pods, err := s.generatePods(steps, env, hasPrevErrs)
 	if err != nil {
 		return err
 	}
@@ -342,11 +342,11 @@ func (s *multiStageTestStep) runSteps(
 }
 
 func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []coreapi.EnvVar,
-	prevErrs []error) ([]coreapi.Pod, error) {
+	hasPrevErrs bool) ([]coreapi.Pod, error) {
 	var ret []coreapi.Pod
 	var errs []error
 	for _, step := range steps {
-		if s.allowSkipOnSuccess && step.OptionalOnSuccess && len(prevErrs) == 0 {
+		if s.allowSkipOnSuccess && step.OptionalOnSuccess && !hasPrevErrs {
 			continue
 		}
 		image := step.From

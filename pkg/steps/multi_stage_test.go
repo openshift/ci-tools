@@ -161,7 +161,7 @@ func TestGeneratePods(t *testing.T) {
 		{Name: "RELEASE_IMAGE_LATEST", Value: "release:latest"},
 		{Name: "LEASED_RESOURCE", Value: "uuid"},
 	}
-	ret, err := step.generatePods(config.Tests[0].MultiStageTestConfigurationLiteral.Test, env, []error{})
+	ret, err := step.generatePods(config.Tests[0].MultiStageTestConfigurationLiteral.Test, env, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -400,7 +400,7 @@ func TestGeneratePodsEnvironment(t *testing.T) {
 					Environment: tc.env,
 				},
 			}, &api.ReleaseBuildConfiguration{}, nil, nil, nil, nil, nil, "", &jobSpec, nil)
-			pods, err := step.(*multiStageTestStep).generatePods(test, nil, []error{})
+			pods, err := step.(*multiStageTestStep).generatePods(test, nil, false)
 			if err != nil {
 				t.Fatal(err)
 			}

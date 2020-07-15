@@ -447,6 +447,7 @@ func mergePeriodics(old, new *prowconfig.Periodic) prowconfig.Periodic {
 	merged := *new
 
 	merged.MaxConcurrency = old.MaxConcurrency
+	merged.ReporterConfig = old.ReporterConfig
 	if old.Cluster != "" {
 		merged.Cluster = old.Cluster
 	}

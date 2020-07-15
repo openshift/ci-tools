@@ -448,8 +448,8 @@ func (jc *JobConfigurer) configureJobSpec(spec *v1.PodSpec, metadata api.Metadat
 		return nil, err
 	}
 
-	replaceTemplates(spec.Volumes, jc.templateCMNames)
-	replaceClusterProfiles(spec.Volumes, jc.clusterProfileCMNames, logger)
+	replaceConfigMaps(spec.Volumes, jc.templateCMNames, logger)
+	replaceConfigMaps(spec.Volumes, jc.clusterProfileCMNames, logger)
 
 	return imageStreamTags, nil
 }
@@ -660,31 +660,12 @@ func getClusterTypes(jobs map[string][]prowconfig.Presubmit) []string {
 func isAlreadyRehearsed(toBeRehearsed config.Presubmits, clusterType, templateFile string) bool {
 	for _, jobs := range toBeRehearsed {
 		for _, job := range jobs {
-			if hasClusterType(job, clusterType) && usesTemplate(job, templateFile) {
+			if hasClusterType(job, clusterType) && usesConfigMap(job, templateFile) {
 				return true
 			}
 		}
 	}
 	return false
-}
-
-func replaceTemplates(volumes []v1.Volume, names map[string]string) {
-	for vi, volume := range volumes {
-		switch {
-		case volume.Projected != nil:
-			for si, source := range volume.Projected.Sources {
-				if source.ConfigMap != nil {
-					if replacement, ok := names[source.ConfigMap.Name]; ok {
-						volumes[vi].Projected.Sources[si].ConfigMap.Name = replacement
-					}
-				}
-			}
-		case volume.ConfigMap != nil:
-			if replacement, ok := names[volume.ConfigMap.Name]; ok {
-				volumes[vi].ConfigMap.Name = replacement
-			}
-		}
-	}
 }
 
 func pickTemplateJob(presubmits map[string][]prowconfig.Presubmit, templateFile, clusterType string) (string, *prowconfig.Presubmit) {
@@ -699,7 +680,7 @@ func pickTemplateJob(presubmits map[string][]prowconfig.Presubmit, templateFile,
 				continue
 			}
 
-			if hasClusterType(job, clusterType) && usesTemplate(job, templateFile) {
+			if hasClusterType(job, clusterType) && usesConfigMap(job, templateFile) {
 				return repo, &job
 			}
 		}
@@ -716,17 +697,17 @@ func hasClusterType(job prowconfig.Presubmit, clusterType string) bool {
 	return false
 }
 
-func usesTemplate(job prowconfig.Presubmit, template string) bool {
+func usesConfigMap(job prowconfig.Presubmit, cm string) bool {
 	if job.Spec.Volumes != nil {
 		for _, volume := range job.Spec.Volumes {
 			switch {
 			case volume.Projected != nil:
 				for _, source := range volume.Projected.Sources {
-					if source.ConfigMap != nil && source.ConfigMap.Name == template {
+					if source.ConfigMap != nil && source.ConfigMap.Name == cm {
 						return true
 					}
 				}
-			case volume.ConfigMap != nil && volume.ConfigMap.Name == template:
+			case volume.ConfigMap != nil && volume.ConfigMap.Name == cm:
 				return true
 			}
 		}
@@ -735,25 +716,27 @@ func usesTemplate(job prowconfig.Presubmit, template string) bool {
 	return false
 }
 
-func replaceClusterProfiles(volumes []v1.Volume, profiles map[string]string, logger *logrus.Entry) {
-	replace := func(s *v1.VolumeProjection) {
-		if s.ConfigMap == nil {
-			return
-		}
-		tmp, ok := profiles[s.ConfigMap.Name]
+func replaceConfigMaps(volumes []v1.Volume, cms map[string]string, logger *logrus.Entry) {
+	replace := func(cm *string) {
+		tmp, ok := cms[*cm]
 		if !ok {
 			return
 		}
-		fields := logrus.Fields{"profile": s.ConfigMap.Name, "tmp": tmp}
-		logger.WithFields(fields).Debug("Rehearsal job uses cluster profile, will be replaced by temporary")
-		s.ConfigMap.Name = tmp
+		fields := logrus.Fields{"profile": *cm, "tmp": tmp}
+		logger.WithFields(fields).Debug("Rehearsal job uses a changed ConfigMap, will be replaced by temporary")
+		*cm = tmp
 	}
 	for _, v := range volumes {
-		if v.Name != "cluster-profile" || v.Projected == nil {
-			continue
-		}
-		for _, s := range v.Projected.Sources {
-			replace(&s)
+		switch {
+		case v.Projected != nil:
+			for _, s := range v.Projected.Sources {
+				if s.ConfigMap == nil {
+					continue
+				}
+				replace(&s.ConfigMap.Name)
+			}
+		case v.ConfigMap != nil:
+			replace(&v.ConfigMap.Name)
 		}
 	}
 }

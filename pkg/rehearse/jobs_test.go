@@ -196,7 +196,7 @@ func TestReplaceClusterProfiles(t *testing.T) {
 		t.Run(tc.id, func(t *testing.T) {
 
 			logger := logrus.WithField("testId", tc.id)
-			replaceClusterProfiles(tc.spec.Volumes, profiles, logger)
+			replaceConfigMaps(tc.spec.Volumes, profiles, logger)
 
 			var names []string
 			if len(tc.spec.Volumes) > 0 {
@@ -1028,7 +1028,8 @@ func TestReplaceCMTemplateName(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.description, func(t *testing.T) {
-			replaceTemplates(testCase.jobVolumes, templates)
+			logger := logrus.WithField("testId", testCase.description)
+			replaceConfigMaps(testCase.jobVolumes, templates, logger)
 			expected := testCase.expectedToFind()
 			if !reflect.DeepEqual(expected, testCase.jobVolumes) {
 				t.Fatalf("Diff found %v", cmp.Diff(expected, testCase.jobVolumes))

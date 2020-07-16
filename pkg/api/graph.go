@@ -298,3 +298,18 @@ func HasAllLinks(needles, haystack []StepLink) bool {
 	}
 	return true
 }
+
+type CIOperatorStepGraph []CIOperatorStepWithDependencies
+
+type CIOperatorStepWithDependencies struct {
+	StepName     string
+	Dependencies []string
+}
+
+const CIOperatorStepGraphJSONFilename = "ci-operator-step-graph.json"
+
+// StepGraphJSONURL takes a base url like https://storage.googleapis.com/origin-ci-test/pr-logs/pull/openshift_ci-tools/999/pull-ci-openshift-ci-tools-master-validate-vendor/1283812971092381696
+// and returns the full url for the step graph json document.
+func StepGraphJSONURL(baseJobURL string) string {
+	return strings.Join([]string{baseJobURL, "artifacts", CIOperatorStepGraphJSONFilename}, "/")
+}

@@ -8,6 +8,8 @@ function cleanup() {
 trap "cleanup" EXIT
 
 suite_dir="${OS_ROOT}/test/e2e/simple"
+workdir="${BASETMPDIR}/e2e/simple"
+mkdir -p "${workdir}"
 
 os::test::junit::declare_suite_start "e2e/simple"
 # This test validates the ci-operator exit codes
@@ -16,6 +18,21 @@ export JOB_SPEC='{"type":"postsubmit","job":"branch-ci-openshift-ci-tools-master
 os::cmd::expect_success "ci-operator --target success --config ${suite_dir}/config.yaml"
 os::cmd::expect_failure "ci-operator --target success --target failure --config ${suite_dir}/config.yaml"
 os::cmd::expect_failure "ci-operator --target failure --config ${suite_dir}/config.yaml"
+
+cluster_profile="${workdir}/cluster-profile"
+mkdir -p "${cluster_profile}"
+touch "${cluster_profile}/data"
+artifact_dir="${workdir}/artifacts"
+mkdir -p "${artifact_dir}"
+export CLUSTER_TYPE="something"
+export TEST_COMMAND="executable"
+unset NAMESPACE JOB_NAME_SAFE # set by the job running us, override
+os::cmd::expect_success "ci-operator --template ${suite_dir}/template.yaml --target template --config ${suite_dir}/template-config.yaml --secret-dir ${cluster_profile} --artifact-dir=${artifact_dir}"
+os::integration::compare "${artifact_dir}/template" "${suite_dir}/artifacts/template"
+sed -i 's/time=".*"/time="whatever"/g' "${artifact_dir}/junit_operator.xml"
+os::integration::compare "${artifact_dir}/junit_operator.xml" "${suite_dir}/artifacts/junit_operator.xml"
+unset CLUSTER_TYPE
+unset TEST_COMMAND
 
 os::test::junit::declare_suite_end
 

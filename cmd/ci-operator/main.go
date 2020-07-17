@@ -1385,20 +1385,15 @@ func printExecutionOrder(nodes []*api.StepNode) error {
 	return nil
 }
 
-type stepWithDependencies struct {
-	StepName     string
-	Dependencies []string
-}
-
 func dumpGraph(artifactsDir string, nodes []*api.StepNode) error {
 	// No target to dump to, so lets just skip this
 	if artifactsDir == "" {
 		return nil
 	}
 
-	var result []stepWithDependencies
+	var result api.CIOperatorStepGraph
 	iterateAllEdges(nodes, sets.String{}, func(n *api.StepNode) {
-		r := stepWithDependencies{StepName: n.Step.Name()}
+		r := api.CIOperatorStepWithDependencies{StepName: n.Step.Name()}
 		for _, requiment := range n.Step.Requires() {
 			iterateAllEdges(nodes, sets.String{}, func(inner *api.StepNode) {
 				if satisfiedBy(requiment, inner.Step) {
@@ -1414,7 +1409,7 @@ func dumpGraph(artifactsDir string, nodes []*api.StepNode) error {
 		return fmt.Errorf("failed to marshal: %w", err)
 	}
 
-	dest := filepath.Join(artifactsDir, "ci-operator-step-graph.json")
+	dest := filepath.Join(artifactsDir, api.CIOperatorStepGraphJSONFilename)
 	if err := ioutil.WriteFile(dest, serialized, 0644); err != nil {
 		return fmt.Errorf("failed to write %s: %w", dest, err)
 	}

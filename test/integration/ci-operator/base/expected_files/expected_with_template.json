@@ -1522,7 +1522,7 @@
         "kind": "Pod",
         "metadata": {
           "annotations": {
-            "ci-operator.openshift.io/container-sub-tests": "lease,setup,test,teardown",
+            "ci-operator.openshift.io/container-sub-tests": "setup,test,teardown",
             "ci-operator.openshift.io/save-container-logs": "true",
             "ci-operator.openshift.io/wait-for-container-artifacts": "teardown"
           },
@@ -1535,77 +1535,26 @@
           "containers": [
             {
               "command": [
-                "echo TEST"
+                "/bin/bash",
+                "-c",
+                "#!/bin/bash\nset -euo pipefail\n\nif [[ -z $IMAGE_FORMAT ]]; then\n  echo \"ERROR: IMAGE_FORMAT unset!\"\n  exit 1\nfi\nif [[ -z $RELEASE_IMAGE_LATEST ]]; then\n  echo \"ERROR: RELEASE_IMAGE_LATEST unset!\"\n  exit 1\nfi\nif [[ -z $CLUSTER_TYPE ]]; then\n  echo \"ERROR: CLUSTER_TYPE unset!\"\n  exit 1\nfi\nif [[ -z $TEST_COMMAND ]]; then\n  echo \"ERROR: TEST_COMMAND unset!\"\n  exit 1\nfi\nif ! test -f CI_OPERATOR.md; then\n  echo \"ERROR: CI_OPERATOR.md not found, expected to exist from the container image.\"\n  exit 1\nfi\nif ! test -f /tmp/profile/data; then\n  echo \"ERROR: /tmp/profile/data not found, expected to exist from the cluster profile mount.\"\n  exit 1\nfi\nif ! test -f /tmp/shared/oc; then\n  echo \"ERROR: /tmp/shared/oc not found, expected to exist from the init-container.\"\n  exit 1\nfi\necho \"test\" # to create a log\necho \"test\" > /tmp/artifacts/test # to output an artifact\n"
               ],
               "env": [
-                {
-                  "name": "CLUSTER_TYPE",
-                  "value": "${CLUSTER_TYPE}"
-                },
-                {
-                  "name": "CLUSTER_NAME",
-                  "value": "${NAMESPACE}-${JOB_NAME_HASH}"
-                }
-              ],
-              "image": "registry.svc.ci.openshift.org/ci/boskoscli:latest",
-              "name": "lease",
-              "resources": {
-                "limits": {
-                  "memory": "200Mi"
-                },
-                "requests": {
-                  "cpu": "10m",
-                  "memory": "10Mi"
-                }
-              },
-              "terminationMessagePolicy": "FallbackToLogsOnError",
-              "volumeMounts": [
-                {
-                  "mountPath": "/tmp/shared",
-                  "name": "shared-tmp"
-                },
-                {
-                  "mountPath": "/tmp/cluster",
-                  "name": "cluster-profile"
-                },
-                {
-                  "mountPath": "/tmp/artifacts",
-                  "name": "artifacts"
-                }
-              ]
-            },
-            {
-              "command": [
-                "echo TEST"
-              ],
-              "env": [
-                {
-                  "name": "AWS_SHARED_CREDENTIALS_FILE",
-                  "value": "/tmp/cluster/.awscred"
-                },
-                {
-                  "name": "AZURE_AUTH_LOCATION",
-                  "value": "/tmp/cluster/osServicePrincipal.json"
-                },
-                {
-                  "name": "GCP_SHARED_CREDENTIALS_FILE",
-                  "value": "/tmp/cluster/gce.json"
-                },
-                {
-                  "name": "ARTIFACT_DIR",
-                  "value": "/tmp/artifacts"
-                },
-                {
-                  "name": "HOME",
-                  "value": "/tmp/home"
-                },
                 {
                   "name": "IMAGE_FORMAT",
                   "value": "${IMAGE_FORMAT}"
                 },
                 {
-                  "name": "KUBECONFIG",
-                  "value": "/tmp/artifacts/installer/auth/kubeconfig"
+                  "name": "RELEASE_IMAGE_LATEST",
+                  "value": "${RELEASE_IMAGE_LATEST}"
+                },
+                {
+                  "name": "CLUSTER_TYPE",
+                  "value": "${CLUSTER_TYPE}"
+                },
+                {
+                  "name": "TEST_COMMAND",
+                  "value": "${TEST_COMMAND}"
                 }
               ],
               "image": "${LOCAL_IMAGE_SRC}",
@@ -1626,7 +1575,7 @@
                   "name": "shared-tmp"
                 },
                 {
-                  "mountPath": "/tmp/cluster",
+                  "mountPath": "/tmp/profile",
                   "name": "cluster-profile"
                 },
                 {
@@ -1637,178 +1586,13 @@
             },
             {
               "command": [
-                "echo TEST"
-              ],
-              "env": [
-                {
-                  "name": "TYPE",
-                  "value": "${CLUSTER_TYPE}"
-                },
-                {
-                  "name": "AWS_SHARED_CREDENTIALS_FILE",
-                  "value": "/etc/openshift-installer/.awscred"
-                },
-                {
-                  "name": "AWS_REGION",
-                  "value": "us-east-1"
-                },
-                {
-                  "name": "AZURE_AUTH_LOCATION",
-                  "value": "/etc/openshift-installer/osServicePrincipal.json"
-                },
-                {
-                  "name": "AZURE_REGION",
-                  "value": "centralus"
-                },
-                {
-                  "name": "GCP_REGION",
-                  "value": "us-east1"
-                },
-                {
-                  "name": "GCP_PROJECT",
-                  "value": "openshift-gce-devel-ci"
-                },
-                {
-                  "name": "GOOGLE_CLOUD_KEYFILE_JSON",
-                  "value": "/etc/openshift-installer/gce.json"
-                },
-                {
-                  "name": "CLUSTER_NAME",
-                  "value": "${NAMESPACE}-${JOB_NAME_HASH}"
-                },
-                {
-                  "name": "BASE_DOMAIN",
-                  "value": "${BASE_DOMAIN}"
-                },
-                {
-                  "name": "SSH_PRIV_KEY_PATH",
-                  "value": "/etc/openshift-installer/ssh-privatekey"
-                },
-                {
-                  "name": "SSH_PUB_KEY_PATH",
-                  "value": "/etc/openshift-installer/ssh-publickey"
-                },
-                {
-                  "name": "PULL_SECRET_PATH",
-                  "value": "/etc/openshift-installer/pull-secret"
-                },
-                {
-                  "name": "OPENSHIFT_INSTALL_RELEASE_IMAGE_OVERRIDE",
-                  "value": "${RELEASE_IMAGE_LATEST}"
-                },
-                {
-                  "name": "OPENSHIFT_INSTALL_INVOKER",
-                  "value": "openshift-internal-ci/${JOB_NAME_SAFE}/${BUILD_ID}"
-                },
-                {
-                  "name": "OPENSTACK_IMAGE",
-                  "value": "rhcos"
-                },
-                {
-                  "name": "OPENSTACK_REGION",
-                  "value": "moc-kzn"
-                },
-                {
-                  "name": "OPENSTACK_FLAVOR",
-                  "value": "m1.medium"
-                },
-                {
-                  "name": "OPENSTACK_EXTERNAL_NETWORK",
-                  "value": "external"
-                },
-                {
-                  "name": "OS_CLOUD",
-                  "value": "openstack-cloud"
-                },
-                {
-                  "name": "OS_CLIENT_CONFIG_FILE",
-                  "value": "/etc/openshift-installer/clouds.yaml"
-                },
-                {
-                  "name": "USER",
-                  "value": "test"
-                },
-                {
-                  "name": "HOME",
-                  "value": "/tmp"
-                }
+                "/bin/bash",
+                "-c",
+                "#!/bin/bash\nset -euo pipefail\n\nif ! command -v openshift-install; then\n  echo \"ERROR: openshift-install not found, expected to exist from the container image.\"\n  exit 1\nfi\nif ! test -f /tmp/profile/data; then\n  echo \"ERROR: /tmp/profile/data not found, expected to exist from the cluster profile mount.\"\n  exit 1\nfi\nif ! test -f /tmp/shared/oc; then\n  echo \"ERROR: /tmp/shared/oc not found, expected to exist from the init-container.\"\n  exit 1\nfi\necho \"setup\" # to create a log\necho \"setup\" > /tmp/artifacts/setup # to output an artifact\n"
               ],
               "image": "${IMAGE_INSTALLER}",
               "name": "setup",
-              "resources": {
-                "limits": {
-                  "memory": "200Mi"
-                },
-                "requests": {
-                  "cpu": "10m",
-                  "memory": "10Mi"
-                }
-              },
-              "terminationMessagePolicy": "FallbackToLogsOnError",
-              "volumeMounts": [
-                {
-                  "mountPath": "/tmp",
-                  "name": "shared-tmp"
-                },
-                {
-                  "mountPath": "/etc/openshift-installer",
-                  "name": "cluster-profile"
-                },
-                {
-                  "mountPath": "/tmp/artifacts",
-                  "name": "artifacts"
-                }
-              ]
-            },
-            {
-              "command": [
-                "echo TEST"
-              ],
-              "env": [
-                {
-                  "name": "INSTANCE_PREFIX",
-                  "value": "${NAMESPACE}-${JOB_NAME_HASH}"
-                },
-                {
-                  "name": "TYPE",
-                  "value": "${CLUSTER_TYPE}"
-                },
-                {
-                  "name": "AWS_SHARED_CREDENTIALS_FILE",
-                  "value": "/etc/openshift-installer/.awscred"
-                },
-                {
-                  "name": "AWS_REGION",
-                  "value": "us-east-1"
-                },
-                {
-                  "name": "AZURE_AUTH_LOCATION",
-                  "value": "/etc/openshift-installer/osServicePrincipal.json"
-                },
-                {
-                  "name": "AZURE_REGION",
-                  "value": "centralus"
-                },
-                {
-                  "name": "GOOGLE_CLOUD_KEYFILE_JSON",
-                  "value": "/etc/openshift-installer/gce.json"
-                },
-                {
-                  "name": "KUBECONFIG",
-                  "value": "/tmp/artifacts/installer/auth/kubeconfig"
-                }
-              ],
-              "image": "${IMAGE_TESTS}",
-              "name": "teardown",
-              "resources": {
-                "limits": {
-                  "memory": "200Mi"
-                },
-                "requests": {
-                  "cpu": "10m",
-                  "memory": "10Mi"
-                }
-              },
+              "resources": {},
               "terminationMessagePolicy": "FallbackToLogsOnError",
               "volumeMounts": [
                 {
@@ -1816,7 +1600,32 @@
                   "name": "shared-tmp"
                 },
                 {
-                  "mountPath": "/etc/openshift-installer",
+                  "mountPath": "/tmp/profile",
+                  "name": "cluster-profile"
+                },
+                {
+                  "mountPath": "/tmp/artifacts",
+                  "name": "artifacts"
+                }
+              ]
+            },
+            {
+              "command": [
+                "/bin/bash",
+                "-c",
+                "#!/bin/bash\nset -euo pipefail\n\nif ! command -v openshift-tests; then\n  echo \"ERROR: openshift-tests not found, expected to exist from the container image.\"\n  exit 1\nfi\nif ! test -f /tmp/profile/data; then\n  echo \"ERROR: /tmp/profile/data not found, expected to exist from the cluster profile mount.\"\n  exit 1\nfi\nif ! test -f /tmp/shared/oc; then\n  echo \"ERROR: /tmp/shared/oc not found, expected to exist from the init-container.\"\n  exit 1\nfi\necho \"teardown\" # to create a log\necho \"teardown\" > /tmp/artifacts/teardown # to output an artifact\n"
+              ],
+              "image": "${IMAGE_TESTS}",
+              "name": "teardown",
+              "resources": {},
+              "terminationMessagePolicy": "FallbackToLogsOnError",
+              "volumeMounts": [
+                {
+                  "mountPath": "/tmp/shared",
+                  "name": "shared-tmp"
+                },
+                {
+                  "mountPath": "/tmp/profile",
                   "name": "cluster-profile"
                 },
                 {
@@ -1874,7 +1683,7 @@
             {
               "name": "cluster-profile",
               "secret": {
-                "secretName": "${JOB_NAME_SAFE}-cluster-profile"
+                "secretName": "cluster-profile"
               }
             }
           ]
@@ -1935,9 +1744,6 @@
       {
         "name": "RELEASE_IMAGE_LATEST",
         "required": true
-      },
-      {
-        "name": "BASE_DOMAIN"
       },
       {
         "name": "BUILD_ID"

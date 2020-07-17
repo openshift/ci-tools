@@ -20,18 +20,14 @@ parameters:
   required: true
 - name: CLUSTER_TYPE
   required: true
-# Ensures the release image is created and tested
 - name: TEST_COMMAND
   required: true
 - name: RELEASE_IMAGE_LATEST
   required: true
-- name: BASE_DOMAIN
 - name: BUILD_ID
   required: false
 
 objects:
-
-# We want the cluster to be able to access these images
 - kind: RoleBinding
   apiVersion: authorization.openshift.io/v1
   metadata:
@@ -44,18 +40,15 @@ objects:
     name: system:unauthenticated
   - kind: SystemGroup
     name: system:authenticated
-
-# The e2e pod spins up a cluster, runs e2e tests, and then cleans up the cluster.
 - kind: Pod
   apiVersion: v1
   metadata:
     name: ${JOB_NAME_SAFE}
     namespace: ${NAMESPACE}
     annotations:
-      # we want to gather the teardown logs no matter what
       ci-operator.openshift.io/wait-for-container-artifacts: teardown
       ci-operator.openshift.io/save-container-logs: "true"
-      ci-operator.openshift.io/container-sub-tests: "lease,setup,test,teardown"
+      ci-operator.openshift.io/container-sub-tests: "setup,test,teardown"
   spec:
     restartPolicy: Never
     activeDeadlineSeconds: 14400
@@ -67,7 +60,7 @@ objects:
       emptyDir: {}
     - name: cluster-profile
       secret:
-        secretName: ${JOB_NAME_SAFE}-cluster-profile
+        secretName: cluster-profile
     initContainers:
     - name: cli
       image: ${IMAGE_CLI}
@@ -80,33 +73,6 @@ objects:
       - /tmp/shared/oc
 
     containers:
-
-
-    - name: lease
-      image: registry.svc.ci.openshift.org/ci/boskoscli:latest
-      terminationMessagePolicy: FallbackToLogsOnError
-      resources:
-        requests:
-          cpu: 10m
-          memory: 10Mi
-        limits:
-          memory: 200Mi
-      volumeMounts:
-      - name: shared-tmp
-        mountPath: /tmp/shared
-      - name: cluster-profile
-        mountPath: /tmp/cluster
-      - name: artifacts
-        mountPath: /tmp/artifacts
-      env:
-      - name: CLUSTER_TYPE
-        value: ${CLUSTER_TYPE}
-      - name: CLUSTER_NAME
-        value: ${NAMESPACE}-${JOB_NAME_HASH}
-      command:
-      - echo TEST
-
-    # Once the cluster is up, executes shared tests
     - name: test
       image: ${LOCAL_IMAGE_SRC}
       terminationMessagePolicy: FallbackToLogsOnError
@@ -114,127 +80,118 @@ objects:
       - name: shared-tmp
         mountPath: /tmp/shared
       - name: cluster-profile
-        mountPath: /tmp/cluster
+        mountPath: /tmp/profile
       - name: artifacts
         mountPath: /tmp/artifacts
       env:
-      - name: AWS_SHARED_CREDENTIALS_FILE
-        value: /tmp/cluster/.awscred
-      - name: AZURE_AUTH_LOCATION
-        value: /tmp/cluster/osServicePrincipal.json
-      - name: GCP_SHARED_CREDENTIALS_FILE
-        value: /tmp/cluster/gce.json
-      - name: ARTIFACT_DIR
-        value: /tmp/artifacts
-      - name: HOME
-        value: /tmp/home
       - name: IMAGE_FORMAT
         value: ${IMAGE_FORMAT}
-      - name: KUBECONFIG
-        value: /tmp/artifacts/installer/auth/kubeconfig
+      - name: RELEASE_IMAGE_LATEST
+        value: ${RELEASE_IMAGE_LATEST}
+      - name: CLUSTER_TYPE
+        value: ${CLUSTER_TYPE}
+      - name: TEST_COMMAND
+        value: ${TEST_COMMAND}
       command:
-      - echo TEST
+      - /bin/bash
+      - -c
+      - |
+        #!/bin/bash
+        set -euo pipefail
+
+        if [[ -z $IMAGE_FORMAT ]]; then
+          echo "ERROR: IMAGE_FORMAT unset!"
+          exit 1
+        fi
+        if [[ -z $RELEASE_IMAGE_LATEST ]]; then
+          echo "ERROR: RELEASE_IMAGE_LATEST unset!"
+          exit 1
+        fi
+        if [[ -z $CLUSTER_TYPE ]]; then
+          echo "ERROR: CLUSTER_TYPE unset!"
+          exit 1
+        fi
+        if [[ -z $TEST_COMMAND ]]; then
+          echo "ERROR: TEST_COMMAND unset!"
+          exit 1
+        fi
+        if ! test -f CI_OPERATOR.md; then
+          echo "ERROR: CI_OPERATOR.md not found, expected to exist from the container image."
+          exit 1
+        fi
+        if ! test -f /tmp/profile/data; then
+          echo "ERROR: /tmp/profile/data not found, expected to exist from the cluster profile mount."
+          exit 1
+        fi
+        if ! test -f /tmp/shared/oc; then
+          echo "ERROR: /tmp/shared/oc not found, expected to exist from the init-container."
+          exit 1
+        fi
+        echo "test" # to create a log
+        echo "test" > /tmp/artifacts/test # to output an artifact
 
     # Runs an install
     - name: setup
       image: ${IMAGE_INSTALLER}
       terminationMessagePolicy: FallbackToLogsOnError
-      resources:
-        requests:
-          cpu: 10m
-          memory: 10Mi
-        limits:
-          memory: 200Mi      
       volumeMounts:
       - name: shared-tmp
-        mountPath: /tmp
+        mountPath: /tmp/shared
       - name: cluster-profile
-        mountPath: /etc/openshift-installer
+        mountPath: /tmp/profile
       - name: artifacts
         mountPath: /tmp/artifacts
-      env:
-      - name: TYPE
-        value: ${CLUSTER_TYPE}
-      - name: AWS_SHARED_CREDENTIALS_FILE
-        value: /etc/openshift-installer/.awscred
-      - name: AWS_REGION
-        value: us-east-1
-      - name: AZURE_AUTH_LOCATION
-        value: /etc/openshift-installer/osServicePrincipal.json
-      - name: AZURE_REGION
-        value: centralus
-      - name: GCP_REGION
-        value: us-east1
-      - name: GCP_PROJECT
-        value: openshift-gce-devel-ci
-      - name: GOOGLE_CLOUD_KEYFILE_JSON
-        value: /etc/openshift-installer/gce.json
-      - name: CLUSTER_NAME
-        value: ${NAMESPACE}-${JOB_NAME_HASH}
-      - name: BASE_DOMAIN
-        value: ${BASE_DOMAIN}
-      - name: SSH_PRIV_KEY_PATH
-        value: /etc/openshift-installer/ssh-privatekey
-      - name: SSH_PUB_KEY_PATH
-        value: /etc/openshift-installer/ssh-publickey
-      - name: PULL_SECRET_PATH
-        value: /etc/openshift-installer/pull-secret
-      - name: OPENSHIFT_INSTALL_RELEASE_IMAGE_OVERRIDE
-        value: ${RELEASE_IMAGE_LATEST}
-      - name: OPENSHIFT_INSTALL_INVOKER
-        value: openshift-internal-ci/${JOB_NAME_SAFE}/${BUILD_ID}
-      - name: OPENSTACK_IMAGE
-        value: rhcos
-      - name: OPENSTACK_REGION
-        value: moc-kzn
-      - name: OPENSTACK_FLAVOR
-        value: m1.medium
-      - name: OPENSTACK_EXTERNAL_NETWORK
-        value: external
-      - name: OS_CLOUD
-        value: openstack-cloud
-      - name: OS_CLIENT_CONFIG_FILE
-        value: /etc/openshift-installer/clouds.yaml
-      - name: USER
-        value: test
-      - name: HOME
-        value: /tmp
       command:
-      - echo TEST
+      - /bin/bash
+      - -c
+      - |
+        #!/bin/bash
+        set -euo pipefail
+
+        if ! command -v openshift-install; then
+          echo "ERROR: openshift-install not found, expected to exist from the container image."
+          exit 1
+        fi
+        if ! test -f /tmp/profile/data; then
+          echo "ERROR: /tmp/profile/data not found, expected to exist from the cluster profile mount."
+          exit 1
+        fi
+        if ! test -f /tmp/shared/oc; then
+          echo "ERROR: /tmp/shared/oc not found, expected to exist from the init-container."
+          exit 1
+        fi
+        echo "setup" # to create a log
+        echo "setup" > /tmp/artifacts/setup # to output an artifact
 
     # Performs cleanup of all created resources
     - name: teardown
       image: ${IMAGE_TESTS}
       terminationMessagePolicy: FallbackToLogsOnError
-      resources:
-        requests:
-          cpu: 10m
-          memory: 10Mi
-        limits:
-          memory: 200Mi      
       volumeMounts:
       - name: shared-tmp
         mountPath: /tmp/shared
       - name: cluster-profile
-        mountPath: /etc/openshift-installer
+        mountPath: /tmp/profile
       - name: artifacts
         mountPath: /tmp/artifacts
-      env:
-      - name: INSTANCE_PREFIX
-        value: ${NAMESPACE}-${JOB_NAME_HASH}
-      - name: TYPE
-        value: ${CLUSTER_TYPE}
-      - name: AWS_SHARED_CREDENTIALS_FILE
-        value: /etc/openshift-installer/.awscred
-      - name: AWS_REGION
-        value: us-east-1
-      - name: AZURE_AUTH_LOCATION
-        value: /etc/openshift-installer/osServicePrincipal.json
-      - name: AZURE_REGION
-        value: centralus
-      - name: GOOGLE_CLOUD_KEYFILE_JSON
-        value: /etc/openshift-installer/gce.json
-      - name: KUBECONFIG
-        value: /tmp/artifacts/installer/auth/kubeconfig
       command:
-      - echo TEST
+      - /bin/bash
+      - -c
+      - |
+        #!/bin/bash
+        set -euo pipefail
+
+        if ! command -v openshift-tests; then
+          echo "ERROR: openshift-tests not found, expected to exist from the container image."
+          exit 1
+        fi
+        if ! test -f /tmp/profile/data; then
+          echo "ERROR: /tmp/profile/data not found, expected to exist from the cluster profile mount."
+          exit 1
+        fi
+        if ! test -f /tmp/shared/oc; then
+          echo "ERROR: /tmp/shared/oc not found, expected to exist from the init-container."
+          exit 1
+        fi
+        echo "teardown" # to create a log
+        echo "teardown" > /tmp/artifacts/teardown # to output an artifact

@@ -3,6 +3,7 @@ package main
 type ocpImageConfig struct {
 	Content        ocpImageConfigContent `json:"content"`
 	From           ocpImageConfigFrom    `json:"from"`
+	Push           ocpImageConfigPush    `json:"push"`
 	SourceFileName string                `json:"-"`
 }
 
@@ -23,6 +24,11 @@ type ocpImageConfigFromStream struct {
 	Stream string `json:"stream"`
 }
 
+type ocpImageConfigPush struct {
+	Also           []string `json:"also,omitempty"`
+	AdditionalTags []string `json:"additional_tags,omitempty"`
+}
+
 func (oic ocpImageConfig) dockerfile() string {
 	if oic.Content.Source.Dockerfile != "" {
 		return oic.Content.Source.Dockerfile
@@ -36,4 +42,10 @@ func (oic ocpImageConfig) stages() []string {
 		result = append(result, builder.Stream)
 	}
 	return append(result, oic.From.Stream.Stream)
+}
+
+type streamMap map[string]streamElement
+
+type streamElement struct {
+	Image string `json:"image"`
 }

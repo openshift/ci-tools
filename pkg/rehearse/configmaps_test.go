@@ -72,8 +72,10 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 		return true, nil, nil
 	})
 	client := cs.CoreV1().ConfigMaps(ns)
-	cmManager := NewCMManager(ns, client, configUpdaterCfg, 1234, testRepoPath, logrus.NewEntry(logrus.New()))
-	ciTemplates, err := NewConfigMaps([]string{testTemplatePath}, "template", 1234, configUpdaterCfg)
+	pr := 1234
+	buildId := "1234567890"
+	cmManager := NewCMManager(ns, client, configUpdaterCfg, pr, testRepoPath, logrus.NewEntry(logrus.New()))
+	ciTemplates, err := NewConfigMaps([]string{testTemplatePath}, "template", buildId, pr, configUpdaterCfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +89,7 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 	}
 	expected := []v1.ConfigMap{{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "rehearse-1234-template-prow-job-test-template",
+			Name:      "rehearse-1234-1234567890-template-prow-job-test-template",
 			Namespace: ns,
 			Labels: map[string]string{
 				createByRehearse:  "true",
@@ -130,6 +132,7 @@ func TestCreateClusterProfiles(t *testing.T) {
 	profiles = profiles[:2]
 	ns := "test"
 	pr := 1234
+	buildId := "1234567890"
 	configUpdaterCfg := prowplugins.ConfigUpdater{
 		Maps: map[string]prowplugins.ConfigMapSpec{
 			filepath.Join(config.ClusterProfilesPath, "profile0", "file"): {
@@ -150,7 +153,7 @@ func TestCreateClusterProfiles(t *testing.T) {
 	cs := fake.NewSimpleClientset()
 	client := cs.CoreV1().ConfigMaps(ns)
 	m := NewCMManager(ns, client, configUpdaterCfg, pr, dir, logrus.NewEntry(logrus.New()))
-	ciProfiles, err := NewConfigMaps(profiles, "cluster-profile", 1234, configUpdaterCfg)
+	ciProfiles, err := NewConfigMaps(profiles, "cluster-profile", buildId, pr, configUpdaterCfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,7 +169,7 @@ func TestCreateClusterProfiles(t *testing.T) {
 	})
 	expected := []v1.ConfigMap{{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "rehearse-1234-cluster-profile-profile0",
+			Name:      "rehearse-1234-1234567890-cluster-profile-profile0",
 			Namespace: ns,
 			Labels: map[string]string{
 				createByRehearse:  "true",
@@ -176,7 +179,7 @@ func TestCreateClusterProfiles(t *testing.T) {
 		Data: map[string]string{"file": "cluster/test-deploy/profile0/file content"},
 	}, {
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "rehearse-1234-cluster-profile-profile1",
+			Name:      "rehearse-1234-1234567890-cluster-profile-profile1",
 			Namespace: ns,
 			Labels: map[string]string{
 				createByRehearse:  "true",

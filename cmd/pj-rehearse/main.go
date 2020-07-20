@@ -258,7 +258,7 @@ func rehearseMain() error {
 			logger.WithError(err).Error("could not get template differences")
 			return fmt.Errorf(misconfigurationOutput)
 		}
-		rehearsalTemplates, err = rehearse.NewConfigMaps(changedTemplates, "template", prNumber, configUpdaterCfg)
+		rehearsalTemplates, err = rehearse.NewConfigMaps(changedTemplates, "template", jobSpec.BuildID, prNumber, configUpdaterCfg)
 		if err != nil {
 			logger.WithError(err).Error("could not match changed cluster profiles with cluster configmaps")
 			return fmt.Errorf(misconfigurationOutput)
@@ -276,7 +276,7 @@ func rehearseMain() error {
 			logger.WithError(err).Error("could not get cluster profile differences")
 			return fmt.Errorf(misconfigurationOutput)
 		}
-		rehearsalClusterProfiles, err = rehearse.NewConfigMaps(changedClusterProfiles, "cluster-profile", prNumber, configUpdaterCfg)
+		rehearsalClusterProfiles, err = rehearse.NewConfigMaps(changedClusterProfiles, "cluster-profile", jobSpec.BuildID, prNumber, configUpdaterCfg)
 		if err != nil {
 			logger.WithError(err).Error("could not match changed cluster profiles with cluster configmaps")
 			return fmt.Errorf(misconfigurationOutput)

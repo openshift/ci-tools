@@ -46,7 +46,7 @@ type ConfigMaps struct {
 }
 
 // NewConfigMaps populates a ConfigMaps instance
-func NewConfigMaps(paths []string, purpose string, prNumber int, configUpdaterCfg prowplugins.ConfigUpdater) (ConfigMaps, error) {
+func NewConfigMaps(paths []string, purpose, buildId string, prNumber int, configUpdaterCfg prowplugins.ConfigUpdater) (ConfigMaps, error) {
 	cms := ConfigMaps{
 		Paths:           sets.NewString(paths...),
 		Names:           map[string]string{},
@@ -61,7 +61,7 @@ func NewConfigMaps(paths []string, purpose string, prNumber int, configUpdaterCf
 			errs = append(errs, err)
 			continue
 		}
-		cms.Names[cmName] = tempConfigMapName(purpose, cmName, prNumber)
+		cms.Names[cmName] = tempConfigMapName(purpose, cmName, buildId, prNumber)
 		cms.ProductionNames.Insert(cmName)
 		cms.Patterns.Insert(pattern)
 	}
@@ -69,15 +69,15 @@ func NewConfigMaps(paths []string, purpose string, prNumber int, configUpdaterCf
 	return cms, kutilerrors.NewAggregate(errs)
 }
 
-func tempConfigMapName(purpose, source string, prNumber int) string {
+func tempConfigMapName(purpose, source, buildId string, prNumber int) string {
 	// Object names can't be too long so we truncate the hash. This increases
 	// chances of collision but we can tolerate it as our input space is tiny.
 	pr := strconv.Itoa(prNumber)
-	maxLen := 253 - len("rehearse---") - len(purpose) - len(pr)
+	maxLen := 253 - len("rehearse----") - len(purpose) - len(pr) - len(buildId)
 	if len(source) > maxLen {
 		source = source[:maxLen]
 	}
-	return fmt.Sprintf("rehearse-%s-%s-%s", pr, purpose, source)
+	return fmt.Sprintf("rehearse-%s-%s-%s-%s", pr, buildId, purpose, source)
 }
 
 // CMManager manages temporary ConfigMaps created on build clusters to be

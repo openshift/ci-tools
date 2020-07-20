@@ -922,7 +922,7 @@ k8s.io/klog
 k8s.io/kube-openapi/pkg/util/proto
 # k8s.io/kubernetes v1.13.0
 k8s.io/kubernetes/pkg/apis/core
-# k8s.io/test-infra v0.0.0-20200717191651-2d13d8065278
+# k8s.io/test-infra v0.0.0-20200717234250-96f632166e02
 k8s.io/test-infra/experiment/autobumper/bumper
 k8s.io/test-infra/experiment/image-bumper/bumper
 k8s.io/test-infra/ghproxy/ghcache

@@ -10,7 +10,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"k8s.io/apimachinery/pkg/util/diff"
+	"k8s.io/test-infra/prow/plugins"
 )
 
 func compareChanges(
@@ -104,4 +106,78 @@ git mv renameme/file renamed/file
 		filepath.Join(ClusterProfilesPath, "renamed", "file"),
 	}
 	compareChanges(t, ClusterProfilesPath, files, cmd, GetChangedClusterProfiles, expected)
+}
+
+func TestConfigMapName(t *testing.T) {
+	path := "path/to/a-file.yaml"
+	dnfError := fmt.Errorf("path not covered by any config-updater pattern: path/to/a-file.yaml")
+	cm := "a-config-map"
+
+	testCases := []struct {
+		description string
+		maps        map[string]string
+
+		expectName    string
+		expectPattern string
+		expectError   error
+	}{
+		{
+			description: "empty config",
+			expectError: dnfError,
+		},
+		{
+			description: "no pattern applies",
+			maps:        map[string]string{"path/to/different/a-file.yaml": cm},
+			expectError: dnfError,
+		},
+		{
+			description:   "direct path",
+			maps:          map[string]string{path: cm},
+			expectPattern: path,
+			expectName:    cm,
+		},
+		{
+			description:   "glob",
+			maps:          map[string]string{"path/to/*.yaml": cm},
+			expectPattern: "path/to/*.yaml",
+			expectName:    cm,
+		},
+		{
+			description: "brace",
+			// zglob is buggy: https://github.com/mattn/go-zglob/pull/31
+			// maps:          map[string]string{"path/to/a-{file,dir}.yaml": cm},
+			maps:          map[string]string{"path/to/*-{file,dir}.yaml": cm},
+			expectPattern: "path/to/*-{file,dir}.yaml",
+			expectName:    cm,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			cuCfg := plugins.ConfigUpdater{
+				Maps: map[string]plugins.ConfigMapSpec{},
+			}
+			for k, v := range tc.maps {
+				cuCfg.Maps[k] = plugins.ConfigMapSpec{
+					Name: v,
+				}
+			}
+
+			name, pattern, err := ConfigMapName(path, cuCfg)
+			if (tc.expectError == nil) != (err == nil) {
+				t.Fatalf("Did not return error as expected:\n%s", cmp.Diff(tc.expectError, err))
+			} else if tc.expectError != nil && err != nil && tc.expectError.Error() != err.Error() {
+				t.Fatalf("Expected different error:\n%s", cmp.Diff(tc.expectError.Error(), err.Error()))
+			}
+
+			if err == nil {
+				if diffName := cmp.Diff(tc.expectName, name); diffName != "" {
+					t.Errorf("ConfigMap name differs:\n%s", diffName)
+				}
+				if diffPattern := cmp.Diff(tc.expectPattern, pattern); diffPattern != "" {
+					t.Errorf("Pattern differs:\n%s", diffPattern)
+				}
+			}
+		})
+	}
 }

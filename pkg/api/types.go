@@ -547,7 +547,8 @@ type LiteralTestStep struct {
 	Environment []StepParameter `json:"env,omitempty"`
 	// OptionalOnSuccess defines if this step should be skipped as long
 	// as all `pre` and `test` steps were successful and AllowSkipOnSuccess
-	// flag is set to true in MultiStageTestConfiguration.
+	// flag is set to true in MultiStageTestConfiguration. This option is
+	// applicable to `post` steps.
 	OptionalOnSuccess *bool `json:"optional_on_success,omitempty"`
 }
 

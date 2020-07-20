@@ -669,13 +669,62 @@ func TestValidateTestSteps(t *testing.T) {
 		errs: []error{
 			errors.New("test[1].ref: duplicated name \"as\""),
 		},
+	}, {
+		name: "Test step with forbidden parameter",
+
+		steps: []TestStep{{
+			LiteralTestStep: &LiteralTestStep{
+				As:                "as",
+				From:              "from",
+				Commands:          "commands",
+				Resources:         resources,
+				OptionalOnSuccess: func(b bool) *bool { return &b }(true)},
+		}},
+		errs: []error{
+			errors.New("test[0]: `optional_on_success` is only allowed for Post steps"),
+		},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			seen := tc.seen
 			if seen == nil {
 				seen = sets.NewString()
 			}
-			ret := validateTestSteps("test", tc.steps, seen, nil)
+			ret := validateTestStepsTest("test", tc.steps, seen, nil)
+			if !errListMessagesEqual(ret, tc.errs) {
+				t.Fatal(diff.ObjectReflectDiff(ret, tc.errs))
+			}
+		})
+	}
+}
+
+func TestValidatePostSteps(t *testing.T) {
+	resources := ResourceRequirements{
+		Requests: ResourceList{"cpu": "1"},
+		Limits:   ResourceList{"memory": "1m"},
+	}
+	for _, tc := range []struct {
+		name  string
+		steps []TestStep
+		seen  sets.String
+		errs  []error
+	}{{
+		name: "Valid Post steps",
+
+		steps: []TestStep{{
+			LiteralTestStep: &LiteralTestStep{
+				As:                "as",
+				From:              "from",
+				Commands:          "commands",
+				Resources:         resources,
+				OptionalOnSuccess: func(b bool) *bool { return &b }(true)},
+		}},
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			seen := tc.seen
+			if seen == nil {
+				seen = sets.NewString()
+			}
+			ret := validateTestStepsPost("test", tc.steps, seen, nil)
 			if !errListMessagesEqual(ret, tc.errs) {
 				t.Fatal(diff.ObjectReflectDiff(ret, tc.errs))
 			}
@@ -706,7 +755,7 @@ func TestValidateParameters(t *testing.T) {
 		err:    []error{errors.New("test: unresolved parameter(s): [TEST1]")},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			err := validateLiteralTestStep("test", LiteralTestStep{
+			err := validateLiteralTestStepTest("test", LiteralTestStep{
 				As:       "as",
 				From:     "from",
 				Commands: "commands",

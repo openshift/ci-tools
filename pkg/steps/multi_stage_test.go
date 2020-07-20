@@ -520,7 +520,7 @@ func TestRun(t *testing.T) {
 				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
 					Pre:                []api.LiteralTestStep{{As: "pre0"}, {As: "pre1"}},
 					Test:               []api.LiteralTestStep{{As: "test0"}, {As: "test1"}},
-					Post:               []api.LiteralTestStep{{As: "post0"}, {As: "post1", OptionalOnSuccess: true}},
+					Post:               []api.LiteralTestStep{{As: "post0"}, {As: "post1", OptionalOnSuccess: func(b bool) *bool { return &b }(true)}},
 					AllowSkipOnSuccess: true,
 				},
 			}, &api.ReleaseBuildConfiguration{}, nil, &fakePodClient{NewPodClient(client, nil, nil)}, client, client, fakecs.RbacV1(), "", &jobSpec, nil)

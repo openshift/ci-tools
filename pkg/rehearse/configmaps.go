@@ -49,7 +49,7 @@ type ConfigMaps struct {
 func NewConfigMaps(paths []string, purpose, buildId string, prNumber int, configUpdaterCfg prowplugins.ConfigUpdater) (ConfigMaps, error) {
 	cms := ConfigMaps{
 		Paths:           sets.NewString(paths...),
-		Names:           map[string]string{},
+		Names:           nil,
 		ProductionNames: sets.NewString(),
 		Patterns:        sets.NewString(),
 	}
@@ -60,6 +60,9 @@ func NewConfigMaps(paths []string, purpose, buildId string, prNumber int, config
 		if err != nil {
 			errs = append(errs, err)
 			continue
+		}
+		if cms.Names == nil {
+			cms.Names = make(map[string]string)
 		}
 		cms.Names[cmName] = tempConfigMapName(purpose, cmName, buildId, prNumber)
 		cms.ProductionNames.Insert(cmName)

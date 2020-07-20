@@ -9,6 +9,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
+	"github.com/openshift/ci-tools/pkg/github"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
@@ -160,8 +161,8 @@ func (fw *fakeWriter) Write(data []byte) error {
 	return nil
 }
 
-func fakeGithubFileGetterFactory(data map[string][]byte) func(string, string, string) githubFileGetter {
-	return func(_, _, _ string) githubFileGetter {
+func fakeGithubFileGetterFactory(data map[string][]byte) func(string, string, string) github.FileGetter {
+	return func(_, _, _ string) github.FileGetter {
 		return func(path string) ([]byte, error) {
 			return data[path], nil
 		}

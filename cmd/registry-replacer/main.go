@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
-	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -22,12 +21,13 @@ import (
 	"k8s.io/test-infra/experiment/autobumper/bumper"
 	"k8s.io/test-infra/prow/config/secret"
 	"k8s.io/test-infra/prow/flagutil"
-	"k8s.io/test-infra/prow/github"
+	pgithub "k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/labels"
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
+	"github.com/openshift/ci-tools/pkg/github"
 )
 
 type options struct {
@@ -71,7 +71,7 @@ func main() {
 	}
 
 	// Already create the client here if needed to make sure we fail asap if there is an issue
-	var githubClient github.Client
+	var githubClient pgithub.Client
 	if opts.createPR {
 		secretAgent := &secret.Agent{}
 		if err := secretAgent.Start([]string{opts.TokenPath}); err != nil {
@@ -94,7 +94,7 @@ func main() {
 			go func(filename string) {
 				defer wg.Done()
 				if err := replacer(
-					githubFileGetterFactory,
+					github.FileGetterFactory,
 					func(data []byte) error {
 						return ioutil.WriteFile(filename, data, 0644)
 					},
@@ -128,7 +128,7 @@ func main() {
 // en masse easily kills a developer laptop whereas the http calls are cheap and can be parallelized without
 // bounds.
 func replacer(
-	githubFileGetterFactory func(org, repo, branch string) githubFileGetter,
+	githubFileGetterFactory func(org, repo, branch string) github.FileGetter,
 	writer func([]byte) error,
 	pruneUnusedReplacementsEnabled bool,
 ) func(*api.ReleaseBuildConfiguration, *config.Info) error {
@@ -294,30 +294,7 @@ func orgRepoTagFromPullString(pullString string) (orgRepoTag, error) {
 	return res, nil
 }
 
-type githubFileGetter func(path string) ([]byte, error)
-
-func githubFileGetterFactory(org, repo, branch string) githubFileGetter {
-	return func(path string) ([]byte, error) {
-		url := fmt.Sprintf("https://raw.githubusercontent.com/%s/%s/%s/%s", org, repo, branch, path)
-		resp, err := http.DefaultClient.Get(url)
-		if err != nil {
-			return nil, fmt.Errorf("failed to GET %s: %w", url, err)
-		}
-		if resp.StatusCode == http.StatusNotFound {
-			return nil, nil
-		}
-		body, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read response body: %w", err)
-		}
-		if resp.StatusCode != http.StatusOK {
-			return nil, fmt.Errorf("got unexpected http status code %d, response body: %s", resp.StatusCode, string(body))
-		}
-		return body, nil
-	}
-}
-
-func upsertPR(gc github.Client, dir, githubUsername, tokenFilePath string, selfApprove, pruneUnusedReplacements bool) error {
+func upsertPR(gc pgithub.Client, dir, githubUsername, tokenFilePath string, selfApprove, pruneUnusedReplacements bool) error {
 	if err := os.Chdir(dir); err != nil {
 		return fmt.Errorf("failed to chdir into %s: %w", dir, err)
 	}

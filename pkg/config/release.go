@@ -11,6 +11,7 @@ import (
 	prowconfig "k8s.io/test-infra/prow/config"
 	pjdwapi "k8s.io/test-infra/prow/pod-utils/downwardapi"
 
+	"github.com/openshift/ci-tools/pkg/load"
 	"github.com/openshift/ci-tools/pkg/registry"
 )
 
@@ -187,16 +188,16 @@ func GetChangedTemplates(path, baseRev string) ([]ConfigMapSource, error) {
 
 func loadRegistryStep(filename string, graph registry.NodeByName) (registry.Node, error) {
 	// if a commands script changed, mark reference as changed
-	filename = strings.ReplaceAll(filename, "-commands.sh", "-ref.yaml")
+	filename = strings.ReplaceAll(filename, load.CommandsSuffix, load.ReferenceSuffix)
 	var node registry.Node
 	var ok bool
 	switch {
-	case strings.HasSuffix(filename, "-ref.yaml"):
-		node, ok = graph.References[strings.TrimSuffix(filename, "-ref.yaml")]
-	case strings.HasSuffix(filename, "-chain.yaml"):
-		node, ok = graph.Chains[strings.TrimSuffix(filename, "-chain.yaml")]
-	case strings.HasSuffix(filename, "-workflow.yaml"):
-		node, ok = graph.Workflows[strings.TrimSuffix(filename, "-workflow.yaml")]
+	case strings.HasSuffix(filename, load.ReferenceSuffix):
+		node, ok = graph.References[strings.TrimSuffix(filename, load.ReferenceSuffix)]
+	case strings.HasSuffix(filename, load.ChainSuffix):
+		node, ok = graph.Chains[strings.TrimSuffix(filename, load.ChainSuffix)]
+	case strings.HasSuffix(filename, load.WorkflowSuffix):
+		node, ok = graph.Workflows[strings.TrimSuffix(filename, load.WorkflowSuffix)]
 	default:
 		return nil, fmt.Errorf("invalid step filename: %s", filename)
 	}
@@ -214,7 +215,7 @@ func GetChangedRegistrySteps(path, baseRev string, graph registry.NodeByName) ([
 		return changes, err
 	}
 	for _, c := range revChanges {
-		if filepath.Ext(c.PathInRepo) == ".yaml" || strings.HasSuffix(c.PathInRepo, "-commands.sh") {
+		if filepath.Ext(c.PathInRepo) == ".yaml" || strings.HasSuffix(c.PathInRepo, load.CommandsSuffix) {
 			node, err := loadRegistryStep(filepath.Base(c.PathInRepo), graph)
 			if err != nil {
 				return changes, err

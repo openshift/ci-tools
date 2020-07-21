@@ -1,10 +1,11 @@
 ref:
   as: ipi-install-rbac
-  from: installer
   commands: ipi-install-rbac-commands.sh
+  documentation: The IPI install rbac step
+  from: installer
   resources:
     requests:
       cpu: 1000m
       memory: 2Gi
-  documentation: |-
-    The IPI install rbac step
+  zz_generated_metadata:
+    component_path: ipi/install/rbac/ipi-install-rbac-ref.yaml

@@ -1,4 +1,7 @@
 ref:
   as: ipi-install
-  from: installer
   commands: ipi-install-commands.sh
+  from: installer
+  resources: {}
+  zz_generated_metadata:
+    component_path: ipi/install/ipi-install-install-ref.yaml

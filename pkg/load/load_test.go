@@ -739,11 +739,13 @@ func TestRegistry(t *testing.T) {
 						Reference: &installRef,
 					},
 				},
+				Metadata: api.RegistryMetadata{ComponentPath: "ipi/install/ipi-install-chain.yaml"},
 			},
 			"ipi-install-empty-parameter": {
 				As:          "ipi-install-empty-parameter",
 				Steps:       []api.TestStep{{Chain: &installChain}},
 				Environment: []api.StepParameter{{Name: "TEST_PARAMETER", Default: &defaultEmpty}},
+				Metadata:    api.RegistryMetadata{ComponentPath: "ipi/install/empty-parameter/ipi-install-empty-parameter-chain.yaml"},
 			},
 			"ipi-install-with-parameter": api.RegistryChain{
 				As:    "ipi-install-with-parameter",
@@ -752,6 +754,7 @@ func TestRegistry(t *testing.T) {
 					Name:    "TEST_PARAMETER",
 					Default: &chainDefault,
 				}},
+				Metadata: api.RegistryMetadata{ComponentPath: "ipi/install/with-parameter/ipi-install-with-parameter-chain.yaml"},
 			},
 			"ipi-deprovision": api.RegistryChain{
 				As: "ipi-deprovision",
@@ -762,6 +765,7 @@ func TestRegistry(t *testing.T) {
 						Reference: &deprovisionRef,
 					},
 				},
+				Metadata: api.RegistryMetadata{ComponentPath: "ipi/deprovision/ipi-deprovision-chain.yaml"},
 			},
 		}
 

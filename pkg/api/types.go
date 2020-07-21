@@ -488,6 +488,8 @@ type RegistryReference struct {
 	LiteralTestStep `json:",inline"`
 	// Documentation describes what the step being referenced does.
 	Documentation string `json:"documentation,omitempty"`
+	// Metadata contains the RegistryMetadata structure for this component
+	Metadata RegistryMetadata `json:"zz_generated_metadata,omitempty"`
 }
 
 // RegistryChainConfig is the struct that chain references are unmarshalled into.
@@ -506,6 +508,8 @@ type RegistryChain struct {
 	Documentation string `json:"documentation,omitempty"`
 	// Environment lists parameters that should be set by the test.
 	Environment []StepParameter `json:"env,omitempty"`
+	// Metadata contains the RegistryMetadata structure for this component
+	Metadata RegistryMetadata `json:"zz_generated_metadata,omitempty"`
 }
 
 // RegistryWorkflowConfig is the struct that workflow references are unmarshalled into.
@@ -522,6 +526,13 @@ type RegistryWorkflow struct {
 	Steps MultiStageTestConfiguration `json:"steps,omitempty"`
 	// Documentation describes what the workflow does.
 	Documentation string `json:"documentation,omitempty"`
+	// Metadata contains the RegistryMetadata structure for this component
+	Metadata RegistryMetadata `json:"zz_generated_metadata,omitempty"`
+}
+
+type RegistryMetadata struct {
+	// ComponentPath is the relative path of the registry component in the step_registry directory
+	ComponentPath string `json:"component_path,omitempty"`
 }
 
 // LiteralTestStep is the external representation of a test step allowing users

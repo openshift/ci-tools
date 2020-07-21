@@ -1,7 +1,9 @@
 chain:
   as: ipi-install-empty-parameter
+  env:
+  - default: ""
+    name: TEST_PARAMETER
   steps:
   - chain: ipi-install
-  env:
-  - name: TEST_PARAMETER
-    default: ""
+  zz_generated_metadata:
+    component_path: ipi/install/empty-parameter/ipi-install-empty-parameter-chain.yaml

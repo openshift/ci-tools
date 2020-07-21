@@ -1,7 +1,9 @@
 chain:
   as: ipi-install-with-parameter
+  env:
+  - default: test parameter set by chain
+    name: TEST_PARAMETER
   steps:
   - chain: ipi-install
-  env:
-  - name: TEST_PARAMETER
-    default: test parameter set by chain
+  zz_generated_metadata:
+    component_path: ipi/install/with-parameter/ipi-install-with-parameter-chain.yaml

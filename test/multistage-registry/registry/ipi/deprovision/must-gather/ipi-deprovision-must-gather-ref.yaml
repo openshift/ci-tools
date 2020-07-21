@@ -1,10 +1,11 @@
 ref:
   as: ipi-deprovision-must-gather
-  from: installer
   commands: ipi-deprovision-must-gather-commands.sh
+  documentation: The IPI deprovision gather step
+  from: installer
   resources:
     requests:
       cpu: 1000m
       memory: 2Gi
-  documentation: |-
-    The IPI deprovision gather step
+  zz_generated_metadata:
+    component_path: ipi/deprovision/must-gather/ipi-deprovision-must-gather-ref.yaml

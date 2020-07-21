@@ -1,7 +1,9 @@
 chain:
   as: ipi-install
+  documentation: The IPI install step chain contains all the individual steps necessary
+    to install an OpenShift cluster.
   steps:
   - ref: ipi-install-rbac
   - ref: ipi-install-install
-  documentation: |-
-    The IPI install step chain contains all the individual steps necessary to install an OpenShift cluster.
+  zz_generated_metadata:
+    component_path: ipi/install/ipi-install-chain.yaml

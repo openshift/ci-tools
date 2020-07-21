@@ -1,13 +1,16 @@
 ref:
   as: ipi-install-install
-  from: installer
   commands: ipi-install-install-commands.sh
+  documentation: The IPI install step runs the OpenShift Installer in order to bring
+    up an OpenShift cluster, using the provided cluster profile to choose a target
+    IaaS platform.
+  env:
+  - default: test parameter default
+    name: TEST_PARAMETER
+  from: installer
   resources:
     requests:
       cpu: 1000m
       memory: 2Gi
-  env:
-  - name: TEST_PARAMETER
-    default: test parameter default
-  documentation: |-
-    The IPI install step runs the OpenShift Installer in order to bring up an OpenShift cluster, using the provided cluster profile to choose a target IaaS platform.
+  zz_generated_metadata:
+    component_path: ipi/install/install/ipi-install-install-ref.yaml

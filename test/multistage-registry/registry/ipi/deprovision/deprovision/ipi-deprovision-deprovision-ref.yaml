@@ -1,10 +1,11 @@
 ref:
   as: ipi-deprovision-deprovision
-  from: installer
   commands: ipi-deprovision-deprovision-commands.sh
+  documentation: The IPI deprovision step
+  from: installer
   resources:
     requests:
       cpu: 1000m
       memory: 2Gi
-  documentation: |-
-    The IPI deprovision step
+  zz_generated_metadata:
+    component_path: ipi/deprovision/deprovision/ipi-deprovision-deprovision-ref.yaml

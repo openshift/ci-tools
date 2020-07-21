@@ -2122,7 +2122,7 @@ func referenceHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *ht
 	}
 	refs, _, _, docs := agent.GetRegistryComponents()
 	if _, ok := refs[name]; !ok {
-		writeErrorPage(w, fmt.Errorf("Could not find reference %s: %w", name, err), http.StatusNotFound)
+		writeErrorPage(w, fmt.Errorf("Could not find reference `%s`. If you reached this page via a link provided in the logs of a failed test, the failed step may be a literal defined step, which does not exist in the step registry. Please look at the job info page for the failed test instead.", name), http.StatusNotFound)
 		return
 	}
 	ref := api.RegistryReference{
@@ -2150,7 +2150,7 @@ func chainHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *http.R
 		return
 	}
 	if _, ok := chains[name]; !ok {
-		writeErrorPage(w, fmt.Errorf("Could not find chain %s: %w", name, err), http.StatusNotFound)
+		writeErrorPage(w, fmt.Errorf("Could not find chain %s", name), http.StatusNotFound)
 		return
 	}
 	chain := api.RegistryChain{
@@ -2175,7 +2175,7 @@ func workflowHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *htt
 		return
 	}
 	if _, ok := workflows[name]; !ok {
-		writeErrorPage(w, fmt.Errorf("Could not find workflow %s: %w", name, err), http.StatusNotFound)
+		writeErrorPage(w, fmt.Errorf("Could not find workflow %s", name), http.StatusNotFound)
 		return
 	}
 	workflow := workflowJob{

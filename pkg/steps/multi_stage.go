@@ -533,7 +533,13 @@ func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notif
 	err := waitForPodCompletion(ctx, s.podClient.Pods(s.jobSpec.Namespace()), pod.Name, notifier, false)
 	s.subTests = append(s.subTests, notifier.SubTests(fmt.Sprintf("%s - %s ", s.Description(), pod.Name))...)
 	if err != nil {
-		return fmt.Errorf("%q pod %q failed: %w", s.name, pod.Name, err)
+		linksText := strings.Builder{}
+		linksText.WriteString(fmt.Sprintf("Link to step on registry info site: https://steps.ci.openshift.org/reference/%s", strings.TrimPrefix(pod.Name, s.name+"-")))
+		linksText.WriteString(fmt.Sprintf("\nLink to job on registry info site: https://steps.ci.openshift.org/job?org=%s&repo=%s&branch=%s&test=%s", s.config.Metadata.Org, s.config.Metadata.Repo, s.config.Metadata.Branch, s.name))
+		if s.config.Metadata.Variant != "" {
+			linksText.WriteString(fmt.Sprintf("&variant=%s", s.config.Metadata.Variant))
+		}
+		return fmt.Errorf("%q pod %q failed: %w\n%s", s.name, pod.Name, err, linksText.String())
 	}
 	return nil
 }

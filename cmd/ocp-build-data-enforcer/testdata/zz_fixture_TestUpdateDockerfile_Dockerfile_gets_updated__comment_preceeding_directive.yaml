@@ -1,0 +1,3 @@
+# This dockerfile is used for building for OpenShift
+FROM replaced as rhel8
+FROM replacement-2

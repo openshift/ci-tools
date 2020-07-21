@@ -70,6 +70,9 @@ name: openshift/ose-cluster-autoscaler
 owners:
 - avagarwa@redhat.com
 `),
+			expectedGitURL: "git@github.com:openshift-priv/kubernetes-autoscaler.git",
+			expectedStream: "rhel",
+			expectedName:   "openshift/ose-cluster-autoscaler",
 		},
 	}
 

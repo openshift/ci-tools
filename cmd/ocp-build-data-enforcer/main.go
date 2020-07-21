@@ -52,7 +52,9 @@ func main() {
 	}
 
 	errGroup := &errgroup.Group{}
+	var counter int
 	for _, config := range configs {
+		counter++
 		config := config
 		errGroup.Go(func() error {
 			processDockerfile(config)
@@ -62,6 +64,7 @@ func main() {
 	if err := errGroup.Wait(); err != nil {
 		logrus.WithError(err).Fatal("Processing failed")
 	}
+	logrus.Infof("Processed %d configs", counter)
 }
 
 func dereferenceStreams(config *ocpImageConfig, streamMap streamMap) {
@@ -155,7 +158,7 @@ func gatherAllOCPImageConfigs(ocpBuildDataDir string) ([]ocpImageConfig, error) 
 			if err := yaml.Unmarshal(data, config); err != nil {
 				return fmt.Errorf("failed to unmarshal data from %s(`%s`) into ocpImageConfig: %w", path, string(data), err)
 			}
-			config.SourceFileName = strings.TrimLeft(path, ocpBuildDataDir)
+			config.SourceFileName = strings.TrimPrefix(path, ocpBuildDataDir+"/")
 			resultLock.Lock()
 			result = append(result, *config)
 			resultLock.Unlock()
@@ -203,9 +206,9 @@ func updateDockerfile(dockerfile []byte, config ocpImageConfig) ([]byte, bool, e
 			}
 			if child.Next.Value != cfgStages[stageIdx] {
 				replacements = append(replacements, dockerFileReplacment{
-					lineIndex: child.Next.StartLine,
-					from:      []byte(child.Next.Value),
-					to:        []byte(cfgStages[stageIdx]),
+					startLineIndex: child.Next.StartLine,
+					from:           []byte(child.Next.Value),
+					to:             []byte(cfgStages[stageIdx]),
 				})
 			}
 		}
@@ -214,18 +217,31 @@ func updateDockerfile(dockerfile []byte, config ocpImageConfig) ([]byte, bool, e
 	var errs []error
 	lines := bytes.Split(dockerfile, []byte("\n"))
 	for _, replacement := range replacements {
-		if n := len(lines); n <= replacement.lineIndex {
-			errs = append(errs, fmt.Errorf("found a replacement for line index %d which is not in the Dockerfile (has %d lines). This is a bug in the replacing tool", replacement.lineIndex, n))
+		if n := len(lines); n <= replacement.startLineIndex {
+			errs = append(errs, fmt.Errorf("found a replacement for line index %d which is not in the Dockerfile (has %d lines). This is a bug in the replacing tool", replacement.startLineIndex, n))
 			continue
 		}
-		lines[replacement.lineIndex] = bytes.Replace(lines[replacement.lineIndex], replacement.from, replacement.to, 1)
+
+		// The Node has an EndLine but its always zero. So we just search forward until we replaced something
+		// and error if we couldn't replace anything
+		var hasReplaced bool
+		for candidateLine := replacement.startLineIndex; candidateLine < len(lines); candidateLine++ {
+			if replaced := bytes.Replace(lines[candidateLine], replacement.from, replacement.to, 1); !bytes.Equal(replaced, lines[candidateLine]) {
+				hasReplaced = true
+				lines[candidateLine] = replaced
+				break
+			}
+		}
+		if !hasReplaced {
+			errs = append(errs, fmt.Errorf("replacement from %s to %s did not match anything in the following Dockerfile snippet:\n%s. This is a bug in the replacing tool", replacement.from, replacement.to, string(dockerfile[replacement.startLineIndex])))
+		}
 	}
 
 	return bytes.Join(lines, []byte("\n")), len(replacements) > 0, utilerrors.NewAggregate(errs)
 }
 
 type dockerFileReplacment struct {
-	lineIndex int
-	from      []byte
-	to        []byte
+	startLineIndex int
+	from           []byte
+	to             []byte
 }

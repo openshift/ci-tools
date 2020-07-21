@@ -139,6 +139,7 @@ func TestGetClonesHandler(t *testing.T) {
 				clone,
 				[]*bugzilla.Bug{
 					toBeCloned,
+					clone,
 				},
 				toBeCloned,
 				nil,
@@ -235,7 +236,7 @@ func TestCreateCloneHandler(t *testing.T) {
 			statusCode: http.StatusOK,
 			data: ClonesTemplateData{
 				Bug:          toBeCloned,
-				Clones:       []*bugzilla.Bug{&expectedClone},
+				Clones:       []*bugzilla.Bug{toBeCloned, &expectedClone},
 				Parent:       toBeCloned,
 				PRs:          nil,
 				CloneTargets: prunedReleaseSet.List(),

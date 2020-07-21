@@ -93,12 +93,12 @@ format:
 update-vendor:
 	docker run --rm \
 		--user=$$UID \
-		-v $$(go env GOCACHE):/.cache \
-		-v $$PWD:/go/src/github.com/openshift/ci-tools \
+		-v $$(go env GOCACHE):/.cache:Z \
+		-v $$PWD:/go/src/github.com/openshift/ci-tools:Z \
 		-w /go/src/github.com/openshift/ci-tools \
 		-e GO111MODULE=on \
 		-e GOPROXY=https://proxy.golang.org \
-		golang:1.13 \
+		golang:1.14 \
 		/bin/bash -c "go mod tidy && go mod vendor"
 .PHONY: update-vendor
 SHELL=/usr/bin/env bash -o pipefail

@@ -8,6 +8,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/openshift/ci-tools/pkg/api"
 	"k8s.io/apimachinery/pkg/util/diff"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 )
 
 func TestResolve(t *testing.T) {
@@ -559,20 +560,11 @@ func TestResolve(t *testing.T) {
 	}} {
 		t.Run(testCase.name, func(t *testing.T) {
 			ret, err := NewResolver(testCase.stepMap, testCase.chainMap, testCase.workflowMap).Resolve("test", testCase.config)
-			if testCase.expectedErr == nil {
-				if err != nil {
-					t.Fatalf("%s: expected no error but got: %s", testCase.name, err)
-				}
-			} else {
-				if err == nil {
-					t.Fatalf("%s: expected error but got none", testCase.name)
-				}
-				if testCase.expectedErr.Error() != err.Error() {
-					t.Fatalf("%s: got incorrect error: %s", testCase.name, diff.ObjectReflectDiff(testCase.expectedErr, err))
-				}
+			if !reflect.DeepEqual(err, utilerrors.NewAggregate([]error{testCase.expectedErr})) {
+				t.Errorf("got incorrect error: %s", cmp.Diff(err, testCase.expectedErr))
 			}
 			if !reflect.DeepEqual(ret, testCase.expectedRes) {
-				t.Errorf("%s: got incorrect output: %s", testCase.name, diff.ObjectReflectDiff(ret, testCase.expectedRes))
+				t.Errorf("got incorrect output: %s", diff.ObjectReflectDiff(ret, testCase.expectedRes))
 			}
 		})
 	}

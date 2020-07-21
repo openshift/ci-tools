@@ -49,7 +49,7 @@ LABEL io.k8s.display-name="Whereabouts CNI" \
       maintainer="CTO Networking <nfvpe-container@redhat.com>"`),
 			config: ocpImageConfig{From: ocpImageConfigFrom{
 				Builder: []ocpImageConfigFromStream{{"rhel-8-golang"}, {"golang"}},
-				Stream:  ocpImageConfigFromStream{"rhel"},
+				Stream:  "rhel",
 			}},
 		},
 		{
@@ -87,7 +87,7 @@ LABEL io.k8s.display-name="Whereabouts CNI" \
       maintainer="CTO Networking <nfvpe-container@redhat.com>"`),
 			config: ocpImageConfig{From: ocpImageConfigFrom{
 				Builder: []ocpImageConfigFromStream{{"rhel-8-golang"}, {"golang"}},
-				Stream:  ocpImageConfigFromStream{"rhel"},
+				Stream:  "rhel",
 			}},
 			expectUpdate: true,
 		},

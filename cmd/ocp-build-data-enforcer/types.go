@@ -1,9 +1,14 @@
 package main
 
+import (
+	"strings"
+)
+
 type ocpImageConfig struct {
 	Content        ocpImageConfigContent `json:"content"`
 	From           ocpImageConfigFrom    `json:"from"`
 	Push           ocpImageConfigPush    `json:"push"`
+	Name           string                `json:"name"`
 	SourceFileName string                `json:"-"`
 }
 
@@ -12,12 +17,17 @@ type ocpImageConfigContent struct {
 }
 
 type ocpImageConfigSource struct {
-	Dockerfile string `json:"dockerfile"`
+	Dockerfile string                  `json:"dockerfile"`
+	Git        ocpImageConfigSourceGit `json:"git"`
+}
+
+type ocpImageConfigSourceGit struct {
+	URL string `json:"url"`
 }
 
 type ocpImageConfigFrom struct {
 	Builder []ocpImageConfigFromStream `json:"builder"`
-	Stream  ocpImageConfigFromStream   `json:"stream"`
+	Stream  string                     `json:"stream"`
 }
 
 type ocpImageConfigFromStream struct {
@@ -41,11 +51,29 @@ func (oic ocpImageConfig) stages() []string {
 	for _, builder := range oic.From.Builder {
 		result = append(result, builder.Stream)
 	}
-	return append(result, oic.From.Stream.Stream)
+	return append(result, oic.From.Stream)
+}
+
+func (oic ocpImageConfig) orgRepo() string {
+	if oic.Content.Source.Git.URL == "" {
+		return oic.Name
+	}
+	return strings.TrimRight(strings.TrimLeft(oic.Content.Source.Git.URL, "git@github.com:"), ".git")
 }
 
 type streamMap map[string]streamElement
 
 type streamElement struct {
 	Image string `json:"image"`
+	// Ref: https://gist.github.com/jupierce/d337bd555ed2ca9fe4fd5ede24c06b92
+	UpstreamImage string `json:"upstream_image"`
+}
+
+// TODO: Remove, this is a hack
+func (sm streamMap) defaultImages() {
+	for k, v := range sm {
+		if v.UpstreamImage == "" {
+			sm[k].UpstreamImage = v.Image
+		}
+	}
 }

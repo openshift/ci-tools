@@ -14,11 +14,13 @@ import (
 	"github.com/openshift/builder/pkg/build/builder/util/dockerfile"
 	"github.com/openshift/imagebuilder"
 	dockercmd "github.com/openshift/imagebuilder/dockerfile/command"
+	"github.com/pmezard/go-difflib/difflib"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/github"
 )
 
 type options struct {
@@ -51,6 +53,67 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to extract build cluster imagestreamtag references")
 	}
+
+	for cfgIdx := range config {
+		dereferenceStreams(&configs[cfgIdx], streamMap)
+	}
+	_ = buildClusterMapping
+	errGroup := &errgroup.Group{}
+}
+
+func dereferenceStreams(config *ocpImageConfig, streamMap streamMap) {
+	if replacement, hasReplacement := streamMap[config.From.Stream]; hasReplacement {
+		config.From.Stream = replacement
+	}
+	for blder := range config.From.Builder {
+		if replacement, hasReplacement := streamMap[config.From.Builder[blder].Stream]; hasReplacement {
+			streamMap[config.From.Builder[blder].Stream] = replacement
+		}
+	}
+}
+
+func processDockerfile(config ocpImageConfig) {
+	log := logrus.WithField("file", config.SourceFileName)
+	orgRepo := config.orgRepo()
+	split := strings.Split(orgRepo, "/")
+	if n := len(split); n != 2 {
+		log.Errorf("splitting orgRepo didn't yield 2 but %d results", n)
+		return
+	}
+	org, repo := split[0], split[1]
+	getter := github.FileGetterFactory(org, repo, "release-4.5")
+
+	log = log.WithField("dockerfile", config.dockerfile())
+	data, err := getter(config.dockerfile())
+	if err != nil {
+		log.WithError(err).Error("Failed to get dockerfile")
+		return
+	}
+	if len(data) == 0 {
+		log.Error("dockerfile is empty")
+		return
+	}
+
+	updated, hasDiff, err := updateDockerfile(data, config)
+	if err != nil {
+		log.WithError(err).Error("Failed to update Dockerfile")
+		return
+	}
+	if !hasDiff {
+		return
+	}
+	diff := difflib.UnifiedDiff{
+		A:        difflib.SplitLines(string(data)),
+		B:        difflib.SplitLines(string(updated)),
+		FromFile: "original",
+		ToFile:   "updated",
+		Context:  3,
+	}
+	diffStr, err := difflib.GetUnifiedDiffString(diff)
+	if err != nil {
+		log.WithError(err).Error("Failed to construct diff")
+	}
+	log.Infof("Diff:\n---\n%s\n---\n", diffStr)
 }
 
 func extractBuildClusterImageStreamTagsForMapping(streamMap streamMap, imageConfigs []ocpImageConfig) (map[string]api.ImageStreamTagReference, error) {
@@ -110,8 +173,9 @@ func readStreamMap(ocpBuildDataDir string) (streamMap, error) {
 	}
 	streamMap := streamMap{}
 	if err := json.Unmarshal(data, &streamMap); err != nil {
-		return nil, fmt.Errorf("fauiled to unmarshal %s into streamMap: %w", path, err)
+		return nil, fmt.Errorf("failed to unmarshal %s into streamMap: %w", path, err)
 	}
+	streamMap.defaultImages()
 	return streamMap, nil
 }
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -79,15 +80,15 @@ func dereferenceStreams(config *ocpImageConfig, streamMap streamMap) {
 }
 
 func processDockerfile(config ocpImageConfig) {
-	log := logrus.WithField("file", config.SourceFileName)
 	orgRepo := config.orgRepo()
+	log := logrus.WithField("file", config.SourceFileName).WithField("org/repo", orgRepo)
 	split := strings.Split(orgRepo, "/")
 	if n := len(split); n != 2 {
 		log.Errorf("splitting orgRepo didn't yield 2 but %d results", n)
 		return
 	}
 	org, repo := split[0], split[1]
-	getter := github.FileGetterFactory(org, repo, "release-4.5")
+	getter := github.FileGetterFactory(org, repo, "release-4.6")
 
 	log = log.WithField("dockerfile", config.dockerfile())
 	data, err := getter(config.dockerfile())
@@ -203,6 +204,9 @@ func updateDockerfile(dockerfile []byte, config ocpImageConfig) ([]byte, bool, e
 			}
 			if child.Next == nil {
 				return nil, false, fmt.Errorf("dockerfile has FROM directive without value on line %d", child.StartLine)
+			}
+			if cfgStages[stageIdx] == "" {
+				return nil, false, errors.New("replacement target is empty")
 			}
 			if child.Next.Value != cfgStages[stageIdx] {
 				replacements = append(replacements, dockerFileReplacment{

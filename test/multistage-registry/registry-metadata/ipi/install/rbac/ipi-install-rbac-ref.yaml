@@ -1,0 +1,10 @@
+ref:
+  as: ipi-install-rbac
+  from: installer
+  commands: ipi-install-rbac-commands.sh
+  resources:
+    requests:
+      cpu: 1000m
+      memory: 2Gi
+  documentation: |-
+    The IPI install rbac step

@@ -2,6 +2,8 @@ package api
 
 import (
 	"fmt"
+
+	"k8s.io/test-infra/prow/repoowners"
 )
 
 const (
@@ -522,6 +524,22 @@ type RegistryWorkflow struct {
 	Steps MultiStageTestConfiguration `json:"steps,omitempty"`
 	// Documentation describes what the workflow does.
 	Documentation string `json:"documentation,omitempty"`
+}
+
+// RegistryMetadataPath is the path to the registry metadata file relative to the step registry base directory
+const RegistryMetadataPath = "metadata.json"
+
+// RegistryMetadata contains the metadata for all registry components by name
+type RegistryMetadata struct {
+	Metadata map[string]RegistryInfo `json:"metadata,omitempty"`
+}
+
+// RegistryInfo contains metadata about a registry component that is useful for the web UI of the step registry
+type RegistryInfo struct {
+	// Path is the path of the directoryfor the registry component relative to the registry's base directory
+	Path string `json:"path,omitempty"`
+	// Owners is the OWNERS config for the registry component
+	Owners repoowners.Config `json:"owners,omitempty"`
 }
 
 // LiteralTestStep is the external representation of a test step allowing users

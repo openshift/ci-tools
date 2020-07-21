@@ -58,7 +58,7 @@ func (oic ocpImageConfig) orgRepo() string {
 	if oic.Content.Source.Git.URL == "" {
 		return oic.Name
 	}
-	return strings.TrimRight(strings.TrimLeft(oic.Content.Source.Git.URL, "git@github.com:"), ".git")
+	return strings.TrimSuffix(strings.TrimPrefix(oic.Content.Source.Git.URL, "git@github.com:"), ".git")
 }
 
 type streamMap map[string]streamElement

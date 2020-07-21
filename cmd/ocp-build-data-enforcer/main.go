@@ -87,6 +87,10 @@ func processDockerfile(config ocpImageConfig) {
 		log.Errorf("splitting orgRepo didn't yield 2 but %d results", n)
 		return
 	}
+	if split[0] == "openshift-priv" {
+		log.Warn("Ignoring repo in openshift-priv org")
+		return
+	}
 	org, repo := split[0], split[1]
 	getter := github.FileGetterFactory(org, repo, "release-4.6")
 
@@ -97,13 +101,13 @@ func processDockerfile(config ocpImageConfig) {
 		return
 	}
 	if len(data) == 0 {
-		//log.Error("dockerfile is empty")
+		log.Error("dockerfile is empty")
 		return
 	}
 
 	updated, hasDiff, err := updateDockerfile(data, config)
 	if err != nil {
-		log.WithError(err).Error("Failed to update Dockerfile")
+		//log.WithError(err).Error("Failed to update Dockerfile")
 		return
 	}
 	if !hasDiff {

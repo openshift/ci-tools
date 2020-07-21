@@ -136,14 +136,15 @@ func TestGetClonesHandler(t *testing.T) {
 			},
 			statusCode: http.StatusOK,
 			data: ClonesTemplateData{
-				clone,
-				[]*bugzilla.Bug{
+				Bug: clone,
+				Clones: []*bugzilla.Bug{
+					clone,
 					toBeCloned,
 				},
-				toBeCloned,
-				nil,
-				allTargetVersions.List(),
-				0,
+				Parent:       toBeCloned,
+				PRs:          nil,
+				CloneTargets: allTargetVersions.List(),
+				NewCloneID:   0,
 			},
 			tmplt: clonesTemplate,
 		},
@@ -235,7 +236,7 @@ func TestCreateCloneHandler(t *testing.T) {
 			statusCode: http.StatusOK,
 			data: ClonesTemplateData{
 				Bug:          toBeCloned,
-				Clones:       []*bugzilla.Bug{&expectedClone},
+				Clones:       []*bugzilla.Bug{toBeCloned, &expectedClone},
 				Parent:       toBeCloned,
 				PRs:          nil,
 				CloneTargets: prunedReleaseSet.List(),

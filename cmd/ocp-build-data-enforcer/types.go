@@ -66,14 +66,20 @@ type streamMap map[string]streamElement
 type streamElement struct {
 	Image string `json:"image"`
 	// Ref: https://gist.github.com/jupierce/d337bd555ed2ca9fe4fd5ede24c06b92
-	UpstreamImage string `json:"upstream_image"`
+	// UpstreamImage contains the UpstreamImage. No omitempty to guarantee non-nilness.
+	// It is a pointer so we can manipulate the field even when its a map
+	// member
+	UpstreamImage *string `json:"upstream_image"`
 }
 
 // TODO: Remove, this is a hack
 func (sm streamMap) defaultImages() {
 	for k, v := range sm {
-		if v.UpstreamImage == "" {
-			sm[k].UpstreamImage = v.Image
+		if v.UpstreamImage == nil {
+			continue
+		}
+		if *v.UpstreamImage == "" {
+			*sm[k].UpstreamImage = v.Image
 		}
 	}
 }

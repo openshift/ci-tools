@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -11,15 +10,14 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/openshift/builder/pkg/build/builder/util/dockerfile"
 	"github.com/openshift/imagebuilder"
 	dockercmd "github.com/openshift/imagebuilder/dockerfile/command"
 	"github.com/pmezard/go-difflib/difflib"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"sigs.k8s.io/yaml"
 
-	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/github"
 )
 
@@ -49,25 +47,30 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to read streamMap")
 	}
 
-	buildClusterMapping, err := extractBuildClusterImageStreamTagsForMapping(streamMap, configs)
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to extract build cluster imagestreamtag references")
-	}
-
-	for cfgIdx := range config {
+	for cfgIdx := range configs {
 		dereferenceStreams(&configs[cfgIdx], streamMap)
 	}
-	_ = buildClusterMapping
+
 	errGroup := &errgroup.Group{}
+	for _, config := range configs {
+		config := config
+		errGroup.Go(func() error {
+			processDockerfile(config)
+			return nil
+		})
+	}
+	if err := errGroup.Wait(); err != nil {
+		logrus.WithError(err).Fatal("Processing failed")
+	}
 }
 
 func dereferenceStreams(config *ocpImageConfig, streamMap streamMap) {
-	if replacement, hasReplacement := streamMap[config.From.Stream]; hasReplacement {
-		config.From.Stream = replacement
+	if replacement, hasReplacement := streamMap[config.From.Stream]; hasReplacement && replacement.UpstreamImage != nil {
+		config.From.Stream = *replacement.UpstreamImage
 	}
 	for blder := range config.From.Builder {
-		if replacement, hasReplacement := streamMap[config.From.Builder[blder].Stream]; hasReplacement {
-			streamMap[config.From.Builder[blder].Stream] = replacement
+		if replacement, hasReplacement := streamMap[config.From.Builder[blder].Stream]; hasReplacement && replacement.UpstreamImage != nil {
+			config.From.Builder[blder].Stream = *replacement.UpstreamImage
 		}
 	}
 }
@@ -90,7 +93,7 @@ func processDockerfile(config ocpImageConfig) {
 		return
 	}
 	if len(data) == 0 {
-		log.Error("dockerfile is empty")
+		//log.Error("dockerfile is empty")
 		return
 	}
 
@@ -116,63 +119,14 @@ func processDockerfile(config ocpImageConfig) {
 	log.Infof("Diff:\n---\n%s\n---\n", diffStr)
 }
 
-func extractBuildClusterImageStreamTagsForMapping(streamMap streamMap, imageConfigs []ocpImageConfig) (map[string]api.ImageStreamTagReference, error) {
-
-	result := map[string]api.ImageStreamTagReference{}
-	// Search the imageConfigs once and not once per alias we care about, as its pretty big.
-	// We check for missing aliases in the end and don't care about superfluous results.
-	for _, imageConfig := range imageConfigs {
-		if len(imageConfig.Push.Also) < 1 {
-			continue
-		}
-
-		var matchingImagePushAlso []string
-		for _, also := range imageConfig.Push.Also {
-			if strings.HasPrefix(also, "registry.svc.ci.openshift.org") {
-				matchingImagePushAlso = append(matchingImagePushAlso, also)
-			}
-		}
-
-		if n := len(matchingImagePushAlso); n == 0 {
-			continue
-		} else if n > 1 {
-			// Better complain than getting weird to debug results
-			return nil, fmt.Errorf("imageConfigPushAlso in file %s doesn't have zero or one elements that match api.ci but %d", imageConfig.SourceFileName, n)
-		}
-
-		slashSplitRegistryString := strings.Split(matchingImagePushAlso[0], "/")
-		if n := len(slashSplitRegistryString); n != 3 {
-			return nil, fmt.Errorf("api.ci reference %q found in file %s split by '/' doesn't have three but %d elements", matchingImagePushAlso[0], imageConfig.SourceFileName, n)
-		}
-
-		imageStreamNamespace, imageStreamName := slashSplitRegistryString[1], slashSplitRegistryString[2]
-		for _, additionalTag := range imageConfig.Push.AdditionalTags {
-			result[additionalTag] = api.ImageStreamTagReference{
-				Namespace: imageStreamNamespace,
-				Name:      imageStreamName,
-				Tag:       additionalTag,
-			}
-		}
-	}
-
-	var errs []error
-	for alias := range streamMap {
-		if _, exists := result[alias]; !exists {
-			errs = append(errs, fmt.Errorf("couldn't resolve alias %s", alias))
-		}
-	}
-
-	return result, utilerrors.NewAggregate(errs)
-}
-
 func readStreamMap(ocpBuildDataDir string) (streamMap, error) {
-	path := filepath.Join(ocpBuildDataDir, "streams.yaml")
+	path := filepath.Join(ocpBuildDataDir, "streams.yml")
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read %s: %w", path, err)
 	}
 	streamMap := streamMap{}
-	if err := json.Unmarshal(data, &streamMap); err != nil {
+	if err := yaml.Unmarshal(data, &streamMap); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal %s into streamMap: %w", path, err)
 	}
 	streamMap.defaultImages()
@@ -197,13 +151,13 @@ func gatherAllOCPImageConfigs(ocpBuildDataDir string) ([]ocpImageConfig, error) 
 			if err != nil {
 				return fmt.Errorf("failed to read file from %s: %w", path, err)
 			}
-			var config ocpImageConfig
-			if err := json.Unmarshal(data, &config); err != nil {
-				return fmt.Errorf("failed to unmarshal data from %s intp ocpImageConfig: %w", path, err)
+			config := &ocpImageConfig{}
+			if err := yaml.Unmarshal(data, config); err != nil {
+				return fmt.Errorf("failed to unmarshal data from %s(`%s`) into ocpImageConfig: %w", path, string(data), err)
 			}
 			config.SourceFileName = strings.TrimLeft(path, ocpBuildDataDir)
 			resultLock.Lock()
-			result = append(result, config)
+			result = append(result, *config)
 			resultLock.Unlock()
 
 			return nil
@@ -221,8 +175,8 @@ func gatherAllOCPImageConfigs(ocpBuildDataDir string) ([]ocpImageConfig, error) 
 	return result, nil
 }
 
-func updateDockerfile(initialDockerfile []byte, config ocpImageConfig) ([]byte, bool, error) {
-	rootNode, err := imagebuilder.ParseDockerfile(bytes.NewBuffer(initialDockerfile))
+func updateDockerfile(dockerfile []byte, config ocpImageConfig) ([]byte, bool, error) {
+	rootNode, err := imagebuilder.ParseDockerfile(bytes.NewBuffer(dockerfile))
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to parse Dockerfile: %w", err)
 	}
@@ -237,8 +191,8 @@ func updateDockerfile(initialDockerfile []byte, config ocpImageConfig) ([]byte, 
 		return nil, false, fmt.Errorf("expected %d stages based on ocp config %s but got %d", expected, config.SourceFileName, len(stages))
 	}
 
-	// The parsing strips off comments so we have to track this manually
-	var hasChanges bool
+	// We don't want to strip off comments so we have to do our own "smart" replacement mechanism
+	var replacements []dockerFileReplacment
 	for stageIdx, stage := range stages {
 		for _, child := range stage.Node.Children {
 			if child.Value != dockercmd.From {
@@ -248,12 +202,30 @@ func updateDockerfile(initialDockerfile []byte, config ocpImageConfig) ([]byte, 
 				return nil, false, fmt.Errorf("dockerfile has FROM directive without value on line %d", child.StartLine)
 			}
 			if child.Next.Value != cfgStages[stageIdx] {
-				hasChanges = true
-				child.Next.Value = cfgStages[stageIdx]
+				replacements = append(replacements, dockerFileReplacment{
+					lineIndex: child.Next.StartLine,
+					from:      []byte(child.Next.Value),
+					to:        []byte(cfgStages[stageIdx]),
+				})
 			}
 		}
 	}
 
-	updatedDockerfile := dockerfile.Write(rootNode)
-	return updatedDockerfile, hasChanges, nil
+	var errs []error
+	lines := bytes.Split(dockerfile, []byte("\n"))
+	for _, replacement := range replacements {
+		if n := len(lines); n <= replacement.lineIndex {
+			errs = append(errs, fmt.Errorf("found a replacement for line index %d which is not in the Dockerfile (has %d lines). This is a bug in the replacing tool", replacement.lineIndex, n))
+			continue
+		}
+		lines[replacement.lineIndex] = bytes.Replace(lines[replacement.lineIndex], replacement.from, replacement.to, 1)
+	}
+
+	return bytes.Join(lines, []byte("\n")), len(replacements) > 0, utilerrors.NewAggregate(errs)
+}
+
+type dockerFileReplacment struct {
+	lineIndex int
+	from      []byte
+	to        []byte
 }

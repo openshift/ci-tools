@@ -19,6 +19,7 @@ import (
 
 	docker "github.com/fsouza/go-dockerclient"
 
+	"github.com/containerd/containerd/platforms"
 	"github.com/openshift/imagebuilder/signal"
 	"github.com/openshift/imagebuilder/strslice"
 )
@@ -26,6 +27,27 @@ import (
 var (
 	obRgex = regexp.MustCompile(`(?i)^\s*ONBUILD\s*`)
 )
+
+var localspec = platforms.DefaultSpec()
+
+// https://docs.docker.com/engine/reference/builder/#automatic-platform-args-in-the-global-scope
+var builtinBuildArgs = map[string]string{
+	"TARGETPLATFORM": localspec.OS + "/" + localspec.Architecture,
+	"TARGETOS":       localspec.OS,
+	"TARGETARCH":     localspec.Architecture,
+	"TARGETVARIANT":  localspec.Variant,
+	"BUILDPLATFORM":  localspec.OS + "/" + localspec.Architecture,
+	"BUILDOS":        localspec.OS,
+	"BUILDARCH":      localspec.Architecture,
+	"BUILDVARIANT":   localspec.Variant,
+}
+
+func init() {
+	if localspec.Variant != "" {
+		builtinBuildArgs["TARGETPLATFORM"] = builtinBuildArgs["TARGETPLATFORM"] + "/" + localspec.Variant
+		builtinBuildArgs["BUILDPLATFORM"] = builtinBuildArgs["BUILDPLATFORM"] + "/" + localspec.Variant
+	}
+}
 
 // ENV foo bar
 //
@@ -61,21 +83,9 @@ func env(b *Builder, args []string, attributes map[string]bool, flagArgs []strin
 	for j := 0; j < len(args); j++ {
 		// name  ==> args[j]
 		// value ==> args[j+1]
-		newVar := args[j] + "=" + args[j+1] + ""
-		gotOne := false
-		for i, envVar := range b.RunConfig.Env {
-			envParts := strings.SplitN(envVar, "=", 2)
-			if envParts[0] == args[j] {
-				b.RunConfig.Env[i] = newVar
-				b.Env = append([]string{newVar}, b.Env...)
-				gotOne = true
-				break
-			}
-		}
-		if !gotOne {
-			b.RunConfig.Env = append(b.RunConfig.Env, newVar)
-			b.Env = append([]string{newVar}, b.Env...)
-		}
+		newVar := []string{args[j] + "=" + args[j+1]}
+		b.RunConfig.Env = mergeEnv(b.RunConfig.Env, newVar)
+		b.Env = mergeEnv(b.RunConfig.Env, newVar)
 		j++
 	}
 
@@ -131,14 +141,17 @@ func add(b *Builder, args []string, attributes map[string]bool, flagArgs []strin
 	var chown string
 	last := len(args) - 1
 	dest := makeAbsolute(args[last], b.RunConfig.WorkingDir)
-	if len(flagArgs) > 0 {
-		for _, arg := range flagArgs {
-			switch {
-			case strings.HasPrefix(arg, "--chown="):
-				chown = strings.TrimPrefix(arg, "--chown=")
-			default:
-				return fmt.Errorf("ADD only supports the --chown=<uid:gid> flag")
-			}
+	userArgs := mergeEnv(envMapAsSlice(b.Args), b.Env)
+	for _, a := range flagArgs {
+		arg, err := ProcessWord(a, userArgs)
+		if err != nil {
+			return err
+		}
+		switch {
+		case strings.HasPrefix(arg, "--chown="):
+			chown = strings.TrimPrefix(arg, "--chown=")
+		default:
+			return fmt.Errorf("ADD only supports the --chown=<uid:gid> flag")
 		}
 	}
 	b.PendingCopies = append(b.PendingCopies, Copy{Src: args[0:last], Dest: dest, Download: true, Chown: chown})
@@ -157,16 +170,19 @@ func dispatchCopy(b *Builder, args []string, attributes map[string]bool, flagArg
 	dest := makeAbsolute(args[last], b.RunConfig.WorkingDir)
 	var chown string
 	var from string
-	if len(flagArgs) > 0 {
-		for _, arg := range flagArgs {
-			switch {
-			case strings.HasPrefix(arg, "--chown="):
-				chown = strings.TrimPrefix(arg, "--chown=")
-			case strings.HasPrefix(arg, "--from="):
-				from = strings.TrimPrefix(arg, "--from=")
-			default:
-				return fmt.Errorf("COPY only supports the --chown=<uid:gid> and the --from=<image|stage> flags")
-			}
+	userArgs := mergeEnv(envMapAsSlice(b.Args), b.Env)
+	for _, a := range flagArgs {
+		arg, err := ProcessWord(a, userArgs)
+		if err != nil {
+			return err
+		}
+		switch {
+		case strings.HasPrefix(arg, "--chown="):
+			chown = strings.TrimPrefix(arg, "--chown=")
+		case strings.HasPrefix(arg, "--from="):
+			from = strings.TrimPrefix(arg, "--from=")
+		default:
+			return fmt.Errorf("COPY only supports the --chown=<uid:gid> and the --from=<image|stage> flags")
 		}
 	}
 	b.PendingCopies = append(b.PendingCopies, Copy{From: from, Src: args[0:last], Dest: dest, Download: false, Chown: chown})
@@ -190,7 +206,7 @@ func from(b *Builder, args []string, attributes map[string]bool, flagArgs []stri
 
 	// Support ARG before from
 	argStrs := []string{}
-	for n, v := range b.Args {
+	for n, v := range b.HeadingArgs {
 		argStrs = append(argStrs, n+"="+v)
 	}
 	var err error
@@ -516,6 +532,8 @@ func healthcheck(b *Builder, args []string, attributes map[string]bool, flagArgs
 	return nil
 }
 
+var targetArgs = []string{"TARGETOS", "TARGETARCH", "TARGETVARIANT"}
+
 // ARG name[=value]
 //
 // Adds the variable foo to the trusted list of variables that can be passed
@@ -543,6 +561,26 @@ func arg(b *Builder, args []string, attributes map[string]bool, flagArgs []strin
 		name = parts[0]
 		value = parts[1]
 		hasDefault = true
+		if name == "TARGETPLATFORM" {
+			p, err := platforms.Parse(value)
+			if err != nil {
+				return fmt.Errorf("error parsing TARGETPLATFORM argument")
+			}
+			for _, val := range targetArgs {
+				b.AllowedArgs[val] = true
+			}
+			b.Args["TARGETPLATFORM"] = p.OS + "/" + p.Architecture
+			b.Args["TARGETOS"] = p.OS
+			b.Args["TARGETARCH"] = p.Architecture
+			b.Args["TARGETVARIANT"] = p.Variant
+			if p.Variant != "" {
+				b.Args["TARGETPLATFORM"] = b.Args["TARGETPLATFORM"] + "/" + p.Variant
+			}
+		}
+	} else if val, ok := builtinBuildArgs[arg]; ok {
+		name = arg
+		value = val
+		hasDefault = true
 	} else {
 		name = arg
 		hasDefault = false
@@ -550,10 +588,16 @@ func arg(b *Builder, args []string, attributes map[string]bool, flagArgs []strin
 	// add the arg to allowed list of build-time args from this step on.
 	b.AllowedArgs[name] = true
 
+	// If there is still no default value, a value can be assigned from the heading args
+	if val, ok := b.HeadingArgs[name]; ok && !hasDefault {
+		b.Args[name] = val
+	}
+
 	// If there is a default value associated with this arg then add it to the
-	// b.buildArgs if one is not already passed to the builder. The args passed
-	// to builder override the default value of 'arg'.
-	if _, ok := b.Args[name]; !ok && hasDefault {
+	// b.buildArgs, later default values for the same arg override earlier ones.
+	// The args passed to builder (UserArgs) override the default value of 'arg'
+	// Don't add them here as they were already set in NewBuilder.
+	if _, ok := b.UserArgs[name]; !ok && hasDefault {
 		b.Args[name] = value
 	}
 

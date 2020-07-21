@@ -5,7 +5,7 @@ go 1.13
 replace (
 	github.com/Azure/go-autorest => github.com/Azure/go-autorest v12.2.0+incompatible
 	github.com/Sirupsen/logrus => github.com/sirupsen/logrus v1.6.0
-	github.com/containerd/containerd => github.com/containerd/containerd v0.2.10-0.20180716142608-408d13de2fbb
+	github.com/containerd/containerd => github.com/containerd/containerd v1.3.0
 
 	github.com/docker/docker => github.com/openshift/moby-moby v1.4.2-0.20190308215630-da810a85109d
 	github.com/moby/buildkit => github.com/dmcgowan/buildkit v0.0.0-20170731200553-da2b9dc7dab9
@@ -38,7 +38,7 @@ require (
 	github.com/openshift/api v0.0.0-20200326160804-ecb9283fe820
 	github.com/openshift/builder v0.0.0-20200325182657-6a52122d21e0
 	github.com/openshift/client-go v0.0.0-20200116152001-92a2713fa240
-	github.com/openshift/imagebuilder v1.1.1
+	github.com/openshift/imagebuilder v1.1.7-0.20200721215719-ac4334598b95
 	github.com/openshift/library-go v0.0.0-20190904120025-7d4acc018c61
 	github.com/openshift/openshift-apiserver v0.0.0-alpha.0
 	github.com/pkg/errors v0.9.1

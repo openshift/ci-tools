@@ -231,8 +231,8 @@ github.com/cncf/udpa/go v0.0.0-20191209042840-269d4d468f6f/go.mod h1:M8M6+tZqaGX
 github.com/cockroachdb/datadriven v0.0.0-20190809214429-80d97fb3cbaa/go.mod h1:zn76sxSg3SzpJ0PPJaLDCu+Bu0Lg3sKTORVIj19EIF8=
 github.com/containerd/cgroups v0.0.0-20190919134610-bf292b21730f/go.mod h1:OApqhQ4XNSNC13gXIwDjhOQxjWa/NxkwZXJ1EvqT0ko=
 github.com/containerd/console v0.0.0-20180822173158-c12b1e7919c1/go.mod h1:Tj/on1eG8kiEhd0+fhSDzsPAFESxzBBvdyEgyryXffw=
-github.com/containerd/containerd v0.2.10-0.20180716142608-408d13de2fbb h1:M/Hk6QosqrEbLDLMtAoDt7foOHrjI/NcSJVuVDvfy8w=
-github.com/containerd/containerd v0.2.10-0.20180716142608-408d13de2fbb/go.mod h1:bC6axHOhabU15QhwfG7w5PipXdVtMXFTttgp+kVtyUA=
+github.com/containerd/containerd v1.3.0 h1:xjvXQWABwS2uiv3TWgQt5Uth60Gu86LTGZXMJkjc7rY=
+github.com/containerd/containerd v1.3.0/go.mod h1:bC6axHOhabU15QhwfG7w5PipXdVtMXFTttgp+kVtyUA=
 github.com/containerd/continuity v0.0.0-20181001140422-bd77b46c8352/go.mod h1:GL3xCUCBDV3CZiTSEKksMWbLE66hEyuu9qyDOOqM47Y=
 github.com/containerd/continuity v0.0.0-20190426062206-aaeac12a7ffc/go.mod h1:GL3xCUCBDV3CZiTSEKksMWbLE66hEyuu9qyDOOqM47Y=
 github.com/containerd/continuity v0.0.0-20190827140505-75bee3e2ccb6/go.mod h1:GL3xCUCBDV3CZiTSEKksMWbLE66hEyuu9qyDOOqM47Y=
@@ -880,6 +880,8 @@ github.com/openshift/client-go v0.0.0-20200116152001-92a2713fa240 h1:XYfJWv2Ch+q
 github.com/openshift/client-go v0.0.0-20200116152001-92a2713fa240/go.mod h1:4riOwdj99Hd/q+iAcJZfNCsQQQMwURnZV6RL4WHYS5w=
 github.com/openshift/imagebuilder v1.1.1 h1:KAUR31p8UBJdfVO42azWgb+LeMAed2zaKQ19e0C0X2I=
 github.com/openshift/imagebuilder v1.1.1/go.mod h1:9aJRczxCH0mvT6XQ+5STAQaPWz7OsWcU5/mRkt8IWeo=
+github.com/openshift/imagebuilder v1.1.7-0.20200721215719-ac4334598b95 h1:IoVsSBMYiVzdMfhrCpq7q7cng/MEP3r1xjffQYnwJ/I=
+github.com/openshift/imagebuilder v1.1.7-0.20200721215719-ac4334598b95/go.mod h1:9aJRczxCH0mvT6XQ+5STAQaPWz7OsWcU5/mRkt8IWeo=
 github.com/openshift/library-go v0.0.0-20200316194709-c2d07ed650c4 h1:/Zxe5PGqQi8R3JKZEoxoe3L3rs4m1mSBF0170BSsox0=
 github.com/openshift/library-go v0.0.0-20200316194709-c2d07ed650c4/go.mod h1:+isG354jmVDOw8lA64rphi/XUu9N71Gi1yPEGJJF8cE=
 github.com/openshift/moby-moby v1.4.2-0.20190308215630-da810a85109d h1:1LuQzDKgiXj1omPNDcY1E/mEOE/90jdobR+7WBfBQYA=

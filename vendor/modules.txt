@@ -126,6 +126,10 @@ github.com/bwmarrin/snowflake
 github.com/cespare/xxhash/v2
 # github.com/clarketm/json v1.13.4
 github.com/clarketm/json
+# github.com/containerd/containerd v1.3.3 => github.com/containerd/containerd v1.3.0
+github.com/containerd/containerd/errdefs
+github.com/containerd/containerd/log
+github.com/containerd/containerd/platforms
 # github.com/danwakefield/fnmatch v0.0.0-20160403171240-cbb64ac3d964
 github.com/danwakefield/fnmatch
 # github.com/davecgh/go-spew v1.1.1
@@ -324,7 +328,7 @@ github.com/openshift/client-go/template/clientset/versioned/scheme
 github.com/openshift/client-go/template/clientset/versioned/typed/template/v1
 github.com/openshift/client-go/user/clientset/versioned/scheme
 github.com/openshift/client-go/user/clientset/versioned/typed/user/v1
-# github.com/openshift/imagebuilder v1.1.1
+# github.com/openshift/imagebuilder v1.1.7-0.20200721215719-ac4334598b95
 github.com/openshift/imagebuilder
 github.com/openshift/imagebuilder/dockerfile/command
 github.com/openshift/imagebuilder/dockerfile/parser

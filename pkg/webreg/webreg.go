@@ -1156,13 +1156,15 @@ The configuration can also override a workflow field with a <a href="#step">full
 
 {{ yamlSyntax (index . "configExample3") }}
 
-<h3 id="allow-skip-on-success"><a href="#allow-skip-on-success">Optional skipping of post steps</a></h3>
+<h2 id="allow-skip-on-success"><a href="#allow-skip-on-success">Options to Change Control Flow</a></h2>
 <p>
-There is an option to skip arbitrary <code>post</code> steps when all <code>test</code>
-steps pass. For example, it might be useful to skip gathering artifacts when all tests have passed and save 
-some time at the end of the multistage test. In order to skip a <code>post</code> step, the individual step
-has to define an <code>optional_on_success</code> field. Skipping the step is then enabled by adding
-an <code>allow_skip_on_success</code> field to the <code>steps</code> configuration. This is an example:
+<code>ci-operator</code> can be configured to skip some or all <code>post</code> steps
+when all <code>test</code> steps pass.
+Skipping a <code>post</code> step when all tests have passed may be useful to skip
+gathering artifacts and save some time at the end of the multistage test.
+In order to allow steps to be skipped in a test, the <code>allow_skip_on_success</code> field must
+be set in the <code>steps</code> configuration. Individual <code>post</code> steps opt
+into being skipped by setting the <code>optional_on_success</code> field. This is an example:
 </p>
 
 {{ yamlSyntax (index . "configExample4") }}
@@ -1349,7 +1351,7 @@ const configExample3 = `tests:
 const configExample4 = `tests:
 - as: e2e-steps # test name
   steps:
-    allow_skip_on_success: true
+    allow_skip_on_success: true      # allows steps to be skipped in this test
     test:
     - as: successful-test-step
       commands: echo Success

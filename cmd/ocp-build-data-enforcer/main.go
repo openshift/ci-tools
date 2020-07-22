@@ -107,7 +107,7 @@ func processDockerfile(config ocpImageConfig) {
 
 	updated, hasDiff, err := updateDockerfile(data, config)
 	if err != nil {
-		//log.WithError(err).Error("Failed to update Dockerfile")
+		log.WithError(err).Error("Failed to update Dockerfile")
 		return
 	}
 	if !hasDiff {

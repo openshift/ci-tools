@@ -24,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	appsclientset "k8s.io/client-go/kubernetes/typed/apps/v1"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
+	v1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/results"
@@ -382,8 +383,14 @@ func (s *rpmServerStep) rpmRepoURL() (string, error) {
 }
 
 func (s *rpmServerStep) Provides() (api.ParameterMap, api.StepLink) {
+	var refs *v1.Refs
 	if s.jobSpec.Refs != nil {
-		rpmByOrgAndRepo := strings.Replace(fmt.Sprintf("RPM_REPO_%s_%s", strings.ToUpper(s.jobSpec.Refs.Org), strings.ToUpper(s.jobSpec.Refs.Repo)), "-", "_", -1)
+		refs = s.jobSpec.Refs
+	} else if len(s.jobSpec.ExtraRefs) > 0 {
+		refs = &s.jobSpec.ExtraRefs[0]
+	}
+	if refs != nil {
+		rpmByOrgAndRepo := strings.Replace(fmt.Sprintf("RPM_REPO_%s_%s", strings.ToUpper(refs.Org), strings.ToUpper(refs.Repo)), "-", "_", -1)
 		return api.ParameterMap{
 			rpmByOrgAndRepo: s.rpmRepoURL,
 		}, api.RPMRepoLink()

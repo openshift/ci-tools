@@ -46,7 +46,6 @@ func gatherOptions() (options, error) {
 	for _, group := range []flagutil.OptionGroup{&o.bugzilla} {
 		group.AddFlags(fs)
 	}
-	o.bugzilla.HTTPClient = backporter.NewCachedTransport().Client()
 	err := fs.Parse(os.Args[1:])
 	if err != nil {
 		return o, err
@@ -120,6 +119,7 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("Error getting Bugzilla client.")
 	}
+	bugzillaClient.SetRoundTripper(backporter.NewCachingTransport())
 	health := pjutil.NewHealth()
 	metrics.ExposeMetrics("ci-operator-bugzilla-backporter", prowConfig.PushGateway{}, prowflagutil.DefaultMetricsPort)
 	allTargetVersions, err := getAllTargetVersions(o.pluginConfig)

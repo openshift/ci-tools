@@ -477,6 +477,7 @@ func TestValidateTestSteps(t *testing.T) {
 	// string pointers in golang are annoying
 	myReference := "my-reference"
 	asReference := "as"
+	yes := true
 	for _, tc := range []struct {
 		name  string
 		steps []TestStep
@@ -678,7 +679,7 @@ func TestValidateTestSteps(t *testing.T) {
 				From:              "from",
 				Commands:          "commands",
 				Resources:         resources,
-				OptionalOnSuccess: func(b bool) *bool { return &b }(true)},
+				OptionalOnSuccess: &yes},
 		}},
 		errs: []error{
 			errors.New("test[0]: `optional_on_success` is only allowed for Post steps"),
@@ -702,6 +703,7 @@ func TestValidatePostSteps(t *testing.T) {
 		Requests: ResourceList{"cpu": "1"},
 		Limits:   ResourceList{"memory": "1m"},
 	}
+	yes := true
 	for _, tc := range []struct {
 		name  string
 		steps []TestStep
@@ -716,7 +718,7 @@ func TestValidatePostSteps(t *testing.T) {
 				From:              "from",
 				Commands:          "commands",
 				Resources:         resources,
-				OptionalOnSuccess: func(b bool) *bool { return &b }(true)},
+				OptionalOnSuccess: &yes},
 		}},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {

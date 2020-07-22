@@ -32,10 +32,14 @@ go: downloading ...
 $ ls
 main.go  README.md  testgrid-config-generator
 ```
-Now run testgrid-config-generator.  You must first clone: https://github.com/kubernetes/test-infra/ locally.
+Ensure you have cloned and updated https://github.com/kubernetes/test-infra locally, along with https://github.com/openshift/release
+
+Now run testgrid-config-generator.  
+
+Assuming you have all your repos rooted at the same toplevel dir, you can run the following command from the `github.com/openshift/ci-tools/cmd/testgrid-config-generator` directory, otherwise you will need to specify the correct paths to the repos/subdirs:
 ```console
-$ testgrid-config-generator -testgrid-config path/to/github.com/kubernetes/test-infra/config/testgrids/openshift -release-config path/to/openshift/release/core-services/release-controller/_releases -prow-jobs-dir path/to/openshift/release/ci-operator/jobs
-```
+$ ./testgrid-config-generator -testgrid-config ../../../../kubernetes/test-infra/config/testgrids/openshift -release-config ../../../release/core-services/release-controller/_releases -prow-jobs-dir ../../../release/ci-operator/jobs
+````
 Verify that changes were made by checking your local `test-infra` repo. For example:
 ```console
 $ cd path/to/github.com/kubernetes/test-infra/config/testgrids/openshift

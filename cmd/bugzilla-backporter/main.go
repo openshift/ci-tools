@@ -42,9 +42,11 @@ func gatherOptions() (options, error) {
 	fs.StringVar(&o.address, "address", ":8080", "Address to run server on")
 	fs.DurationVar(&o.gracePeriod, "gracePeriod", time.Second*10, "Grace period for server shutdown")
 	fs.StringVar(&o.pluginConfig, "plugin-config", "/etc/plugins/plugins.yaml", "Path to plugin config file.")
+
 	for _, group := range []flagutil.OptionGroup{&o.bugzilla} {
 		group.AddFlags(fs)
 	}
+	o.bugzilla.HTTPClient = backporter.NewCachedTransport().Client()
 	err := fs.Parse(os.Args[1:])
 	if err != nil {
 		return o, err

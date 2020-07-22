@@ -1082,6 +1082,21 @@ func (e *errWroteJUnit) Is(target error) bool {
 	return is
 }
 
+func sortSuite(suite *junit.TestSuite) {
+	sort.Slice(suite.Properties, func(i, j int) bool {
+		return suite.Properties[i].Name < suite.Properties[j].Name
+	})
+	sort.Slice(suite.Children, func(i, j int) bool {
+		return suite.Children[i].Name < suite.Children[j].Name
+	})
+	sort.Slice(suite.TestCases, func(i, j int) bool {
+		return suite.TestCases[i].Name < suite.TestCases[j].Name
+	})
+	for i := range suite.Children {
+		sortSuite(suite.Children[i])
+	}
+}
+
 // writeFailingJUnit attempts to write a JUnit artifact when the graph could not be
 // initialized in order to capture the result for higher level automation.
 func (o *options) writeFailingJUnit(errs []error) {
@@ -1119,6 +1134,12 @@ func (o *options) writeJUnit(suites *junit.TestSuites, name string) error {
 		return nil
 	}
 	suites.Suites[0].Name = name
+	sort.Slice(suites.Suites, func(i, j int) bool {
+		return suites.Suites[i].Name < suites.Suites[j].Name
+	})
+	for i := range suites.Suites {
+		sortSuite(suites.Suites[i])
+	}
 	out, err := xml.MarshalIndent(suites, "", "  ")
 	if err != nil {
 		return fmt.Errorf("could not marshal jUnit XML: %w", err)

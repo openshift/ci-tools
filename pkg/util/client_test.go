@@ -50,11 +50,12 @@ func TestLoadKubeConfigs(t *testing.T) {
 	}
 
 	var testCases = []struct {
-		name            string
-		kubeconfig      string
-		expectedConfigs map[string]*rest.Config
-		expectedContext string
-		expectedError   error
+		name             string
+		kubeconfig       string
+		kubeconfigEnvVar string
+		expectedConfigs  map[string]*rest.Config
+		expectedContext  string
+		expectedError    error
 	}{
 		{
 			name:          "file not exist",
@@ -75,21 +76,44 @@ func TestLoadKubeConfigs(t *testing.T) {
 			},
 			expectedContext: "ci/api-build01-ci-devcluster-openshift-com:6443",
 		},
+		{
+			name:             "env kubeconfig that does not exist",
+			kubeconfigEnvVar: "/tmp/does-not-exist",
+			expectedError:    fmt.Errorf("KUBECONFIG env var with value /tmp/does-not-exist had 1 elements but only got 0 kubeconfigs"),
+		},
+		{
+			name:             "env kubeconfig exists",
+			kubeconfigEnvVar: filename1,
+			expectedConfigs: map[string]*rest.Config{
+				"ci/api-build01-ci-devcluster-openshift-com:6443": {
+					Host:        "https://api.build01.ci.devcluster.openshift.com:6443",
+					BearerToken: "TOKEN",
+					TLSClientConfig: rest.TLSClientConfig{
+						Insecure: true,
+					},
+				},
+			},
+			expectedContext: "ci/api-build01-ci-devcluster-openshift-com:6443",
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			os.Setenv("KUBECONFIG", tc.kubeconfigEnvVar)
 			configs, context, err := LoadKubeConfigs(tc.kubeconfig)
+			if err == nil && tc.expectedError != nil || err != nil && tc.expectedError == nil {
+				t.Errorf("actual error differs from expected:\n%s", cmp.Diff(err, tc.expectedError))
+			} else if err != nil && tc.expectedError != nil && !reflect.DeepEqual(err.Error(), tc.expectedError.Error()) {
+				t.Errorf("actual error differs from expected:\n%s", cmp.Diff(err.Error(), tc.expectedError.Error()))
+			}
+			if tc.expectedError != nil {
+				return
+			}
 			if !reflect.DeepEqual(configs, tc.expectedConfigs) {
 				t.Errorf("actual configs differ from expected:\n%s", cmp.Diff(configs, tc.expectedConfigs))
 			}
 			if !reflect.DeepEqual(context, tc.expectedContext) {
 				t.Errorf("actual context differs from expected:\n%s", cmp.Diff(context, tc.expectedContext))
-			}
-			if err == nil && tc.expectedError != nil || err != nil && tc.expectedError == nil {
-				t.Errorf("actual error differs from expected:\n%s", cmp.Diff(err, tc.expectedError))
-			} else if err != nil && tc.expectedError != nil && !reflect.DeepEqual(err.Error(), tc.expectedError.Error()) {
-				t.Errorf("actual error differs from expected:\n%s", cmp.Diff(err.Error(), tc.expectedError.Error()))
 			}
 		})
 	}

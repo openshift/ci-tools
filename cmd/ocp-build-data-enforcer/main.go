@@ -26,17 +26,14 @@ type options struct {
 	ocpBuildDataRepoDir string
 }
 
-func gatherOptions() (*options, error) {
+func gatherOptions() *options {
 	o := &options{}
 	flag.StringVar(&o.ocpBuildDataRepoDir, "ocp-build-data-repo-dir", "../ocp-build-data", "The directory in which the ocp-build-data reposity is")
 	flag.Parse()
-	return o, nil
+	return o
 }
 func main() {
-	opts, err := gatherOptions()
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to gather options")
-	}
+	opts := gatherOptions()
 
 	configs, err := gatherAllOCPImageConfigs(opts.ocpBuildDataRepoDir)
 	if err != nil {
@@ -53,19 +50,16 @@ func main() {
 	}
 
 	errGroup := &errgroup.Group{}
-	var counter int
-	for _, config := range configs {
-		counter++
-		config := config
+	for idx := range configs {
 		errGroup.Go(func() error {
-			processDockerfile(config)
+			processDockerfile(configs[idx])
 			return nil
 		})
 	}
 	if err := errGroup.Wait(); err != nil {
 		logrus.WithError(err).Fatal("Processing failed")
 	}
-	logrus.Infof("Processed %d configs", counter)
+	logrus.Infof("Processed %d configs", len(configs))
 }
 
 func dereferenceStreams(config *ocpImageConfig, streamMap streamMap) {
@@ -88,7 +82,7 @@ func processDockerfile(config ocpImageConfig) {
 		return
 	}
 	if split[0] == "openshift-priv" {
-		log.Warn("Ignoring repo in openshift-priv org")
+		log.Trace("Ignoring repo in openshift-priv org")
 		return
 	}
 	org, repo := split[0], split[1]
@@ -199,7 +193,8 @@ func updateDockerfile(dockerfile []byte, config ocpImageConfig) ([]byte, bool, e
 		return nil, false, fmt.Errorf("expected %d stages based on ocp config %s but got %d", expected, config.SourceFileName, len(stages))
 	}
 
-	// We don't want to strip off comments so we have to do our own "smart" replacement mechanism
+	// We don't want to strip off comments so we have to do our own "smart" replacement mechanism because
+	// this is the basis for PRs we create on ppls repos and we should keep their comments and whitespaces
 	var replacements []dockerFileReplacment
 	for stageIdx, stage := range stages {
 		for _, child := range stage.Node.Children {

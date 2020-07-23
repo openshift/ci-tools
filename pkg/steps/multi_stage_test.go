@@ -161,7 +161,7 @@ func TestGeneratePods(t *testing.T) {
 		{Name: "RELEASE_IMAGE_LATEST", Value: "release:latest"},
 		{Name: "LEASED_RESOURCE", Value: "uuid"},
 	}
-	ret, err := step.generatePods(config.Tests[0].MultiStageTestConfigurationLiteral.Test, env)
+	ret, err := step.generatePods(config.Tests[0].MultiStageTestConfigurationLiteral.Test, env, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -400,7 +400,7 @@ func TestGeneratePodsEnvironment(t *testing.T) {
 					Environment: tc.env,
 				},
 			}, &api.ReleaseBuildConfiguration{}, nil, nil, nil, nil, nil, "", &jobSpec, nil)
-			pods, err := step.(*multiStageTestStep).generatePods(test, nil)
+			pods, err := step.(*multiStageTestStep).generatePods(test, nil, false)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -474,7 +474,7 @@ func TestRun(t *testing.T) {
 		expected: []string{
 			"test-pre0", "test-pre1",
 			"test-test0", "test-test1",
-			"test-post0", "test-post1",
+			"test-post0",
 		},
 	}, {
 		name:     "failure in a pre step, test should not run, post should",
@@ -497,7 +497,7 @@ func TestRun(t *testing.T) {
 		expected: []string{
 			"test-pre0", "test-pre1",
 			"test-test0", "test-test1",
-			"test-post0", "test-post1",
+			"test-post0",
 		},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -518,9 +518,10 @@ func TestRun(t *testing.T) {
 			step := MultiStageTestStep(api.TestStepConfiguration{
 				As: name,
 				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
-					Pre:  []api.LiteralTestStep{{As: "pre0"}, {As: "pre1"}},
-					Test: []api.LiteralTestStep{{As: "test0"}, {As: "test1"}},
-					Post: []api.LiteralTestStep{{As: "post0"}, {As: "post1"}},
+					Pre:                []api.LiteralTestStep{{As: "pre0"}, {As: "pre1"}},
+					Test:               []api.LiteralTestStep{{As: "test0"}, {As: "test1"}},
+					Post:               []api.LiteralTestStep{{As: "post0"}, {As: "post1", OptionalOnSuccess: func(b bool) *bool { return &b }(true)}},
+					AllowSkipOnSuccess: true,
 				},
 			}, &api.ReleaseBuildConfiguration{}, nil, &fakePodClient{NewPodClient(client, nil, nil)}, client, client, fakecs.RbacV1(), "", &jobSpec, nil)
 			if err := step.Run(context.Background(), false); tc.failures == nil && err != nil {

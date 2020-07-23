@@ -17,6 +17,7 @@ os::integration::configresolver::start "${suite_dir}/configs" "${suite_dir}/regi
 os::cmd::expect_success "ci-operator --artifact-dir ${BASETMPDIR} --resolver-address http://127.0.0.1:8080 --target success"
 os::cmd::expect_success "ci-operator --artifact-dir ${BASETMPDIR} --resolver-address http://127.0.0.1:8080 --target without-references --unresolved-config ${suite_dir}/config.yaml"
 os::cmd::expect_success "ci-operator --artifact-dir ${BASETMPDIR} --resolver-address http://127.0.0.1:8080 --target with-references --unresolved-config ${suite_dir}/config.yaml"
+os::cmd::expect_success "ci-operator --artifact-dir ${BASETMPDIR} --resolver-address http://127.0.0.1:8080 --target skip-on-success --unresolved-config ${suite_dir}/config.yaml"
 UNRESOLVED_CONFIG="$( cat "${suite_dir}/config.yaml" )"
 export UNRESOLVED_CONFIG
 os::cmd::expect_success "ci-operator --artifact-dir ${BASETMPDIR} --resolver-address http://127.0.0.1:8080 --target with-references"

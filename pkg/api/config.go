@@ -332,9 +332,9 @@ func validateTestConfigurationType(fieldRoot string, test TestStepConfiguration,
 			validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 		}
 		seen := sets.NewString()
-		validationErrors = append(validationErrors, validateTestSteps(fmt.Sprintf("%s.Pre", fieldRoot), testConfig.Pre, seen, testConfig.Environment)...)
-		validationErrors = append(validationErrors, validateTestSteps(fmt.Sprintf("%s.Test", fieldRoot), testConfig.Test, seen, testConfig.Environment)...)
-		validationErrors = append(validationErrors, validateTestSteps(fmt.Sprintf("%s.Post", fieldRoot), testConfig.Post, seen, testConfig.Environment)...)
+		validationErrors = append(validationErrors, validateTestStepsPre(fmt.Sprintf("%s.Pre", fieldRoot), testConfig.Pre, seen, testConfig.Environment)...)
+		validationErrors = append(validationErrors, validateTestStepsTest(fmt.Sprintf("%s.Test", fieldRoot), testConfig.Test, seen, testConfig.Environment)...)
+		validationErrors = append(validationErrors, validateTestStepsPost(fmt.Sprintf("%s.Post", fieldRoot), testConfig.Post, seen, testConfig.Environment)...)
 	}
 	if testConfig := test.MultiStageTestConfigurationLiteral; testConfig != nil {
 		typeCount++
@@ -344,15 +344,15 @@ func validateTestConfigurationType(fieldRoot string, test TestStepConfiguration,
 		seen := sets.NewString()
 		for i, s := range testConfig.Pre {
 			fieldRootI := fmt.Sprintf("%s.Pre[%d]", fieldRoot, i)
-			validationErrors = append(validationErrors, validateLiteralTestStep(fieldRootI, s, seen, testConfig.Environment)...)
+			validationErrors = append(validationErrors, validateLiteralTestStepPre(fieldRootI, s, seen, testConfig.Environment)...)
 		}
 		for i, s := range testConfig.Test {
 			fieldRootI := fmt.Sprintf("%s.Test[%d]", fieldRoot, i)
-			validationErrors = append(validationErrors, validateLiteralTestStep(fieldRootI, s, seen, testConfig.Environment)...)
+			validationErrors = append(validationErrors, validateLiteralTestStepTest(fieldRootI, s, seen, testConfig.Environment)...)
 		}
 		for i, s := range testConfig.Post {
 			fieldRootI := fmt.Sprintf("%s.Post[%d]", fieldRoot, i)
-			validationErrors = append(validationErrors, validateLiteralTestStep(fieldRootI, s, seen, testConfig.Environment)...)
+			validationErrors = append(validationErrors, validateLiteralTestStepPost(fieldRootI, s, seen, testConfig.Environment)...)
 		}
 	}
 	if test.OpenshiftInstallerRandomClusterTestConfiguration != nil {
@@ -371,45 +371,72 @@ func validateTestConfigurationType(fieldRoot string, test TestStepConfiguration,
 	return validationErrors
 }
 
-func validateTestSteps(fieldRoot string, steps []TestStep, seen sets.String, env TestEnvironment) (ret []error) {
+func validateTestStepsPre(fieldRoot string, steps []TestStep, seen sets.String, env TestEnvironment) (ret []error) {
 	for i, s := range steps {
 		fieldRootI := fmt.Sprintf("%s[%d]", fieldRoot, i)
-		if (s.LiteralTestStep != nil && s.Reference != nil) ||
-			(s.LiteralTestStep != nil && s.Chain != nil) ||
-			(s.Reference != nil && s.Chain != nil) {
-			ret = append(ret, fmt.Errorf("%s: only one of `ref`, `chain`, or a literal test step can be set", fieldRootI))
-			continue
-		}
-		if s.LiteralTestStep == nil && s.Reference == nil && s.Chain == nil {
-			ret = append(ret, fmt.Errorf("%s: a reference, chain, or literal test step is required", fieldRootI))
-			continue
-		}
-		if s.Reference != nil {
-			if len(*s.Reference) == 0 {
-				ret = append(ret, fmt.Errorf("%s.ref: length cannot be 0", fieldRootI))
-			} else if seen.Has(*s.Reference) {
-				ret = append(ret, fmt.Errorf("%s.ref: duplicated name %q", fieldRootI, *s.Reference))
-			} else {
-				seen.Insert(*s.Reference)
-			}
-		}
-		if s.Chain != nil {
-			if len(*s.Chain) == 0 {
-				ret = append(ret, fmt.Errorf("%s.chain: length cannot be 0", fieldRootI))
-			} else if seen.Has(*s.Chain) {
-				ret = append(ret, fmt.Errorf("%s.chain: duplicated name %q", fieldRootI, *s.Chain))
-			} else {
-				seen.Insert(*s.Chain)
-			}
-		}
+		ret = validateTestStep(fieldRootI, s, seen)
 		if s.LiteralTestStep != nil {
-			ret = append(ret, validateLiteralTestStep(fieldRootI, *s.LiteralTestStep, seen, env)...)
+			ret = append(ret, validateLiteralTestStepPre(fieldRootI, *s.LiteralTestStep, seen, env)...)
 		}
 	}
 	return
 }
 
-func validateLiteralTestStep(fieldRoot string, step LiteralTestStep, seen sets.String, env TestEnvironment) (ret []error) {
+func validateTestStepsTest(fieldRoot string, steps []TestStep, seen sets.String, env TestEnvironment) (ret []error) {
+	for i, s := range steps {
+		fieldRootI := fmt.Sprintf("%s[%d]", fieldRoot, i)
+		ret = validateTestStep(fieldRootI, s, seen)
+		if s.LiteralTestStep != nil {
+			ret = append(ret, validateLiteralTestStepTest(fieldRootI, *s.LiteralTestStep, seen, env)...)
+		}
+	}
+	return
+}
+
+func validateTestStepsPost(fieldRoot string, steps []TestStep, seen sets.String, env TestEnvironment) (ret []error) {
+	for i, s := range steps {
+		fieldRootI := fmt.Sprintf("%s[%d]", fieldRoot, i)
+		ret = validateTestStep(fieldRootI, s, seen)
+		if s.LiteralTestStep != nil {
+			ret = append(ret, validateLiteralTestStepPost(fieldRootI, *s.LiteralTestStep, seen, env)...)
+		}
+	}
+	return
+}
+
+func validateTestStep(fieldRootI string, step TestStep, seen sets.String) (ret []error) {
+	if (step.LiteralTestStep != nil && step.Reference != nil) ||
+		(step.LiteralTestStep != nil && step.Chain != nil) ||
+		(step.Reference != nil && step.Chain != nil) {
+		ret = append(ret, fmt.Errorf("%s: only one of `ref`, `chain`, or a literal test step can be set", fieldRootI))
+		return
+	}
+	if step.LiteralTestStep == nil && step.Reference == nil && step.Chain == nil {
+		ret = append(ret, fmt.Errorf("%s: a reference, chain, or literal test step is required", fieldRootI))
+		return
+	}
+	if step.Reference != nil {
+		if len(*step.Reference) == 0 {
+			ret = append(ret, fmt.Errorf("%s.ref: length cannot be 0", fieldRootI))
+		} else if seen.Has(*step.Reference) {
+			ret = append(ret, fmt.Errorf("%s.ref: duplicated name %q", fieldRootI, *step.Reference))
+		} else {
+			seen.Insert(*step.Reference)
+		}
+	}
+	if step.Chain != nil {
+		if len(*step.Chain) == 0 {
+			ret = append(ret, fmt.Errorf("%s.chain: length cannot be 0", fieldRootI))
+		} else if seen.Has(*step.Chain) {
+			ret = append(ret, fmt.Errorf("%s.chain: duplicated name %q", fieldRootI, *step.Chain))
+		} else {
+			seen.Insert(*step.Chain)
+		}
+	}
+	return
+}
+
+func validateLiteralTestStepCommon(fieldRoot string, step LiteralTestStep, seen sets.String, env TestEnvironment) (ret []error) {
 	if len(step.As) == 0 {
 		ret = append(ret, fmt.Errorf("%s: `as` is required", fieldRoot))
 	} else if seen.Has(step.As) {
@@ -442,6 +469,24 @@ func validateLiteralTestStep(fieldRoot string, step LiteralTestStep, seen sets.S
 	if err := validateParameters(fieldRoot, step.Environment, env); err != nil {
 		ret = append(ret, err)
 	}
+	return
+}
+
+func validateLiteralTestStepPre(fieldRoot string, step LiteralTestStep, seen sets.String, env TestEnvironment) (ret []error) {
+	ret = validateLiteralTestStepCommon(fieldRoot, step, seen, env)
+	if step.OptionalOnSuccess != nil {
+		ret = append(ret, fmt.Errorf("%s: `optional_on_success` is only allowed for Post steps", fieldRoot))
+	}
+	return
+}
+
+func validateLiteralTestStepTest(fieldRoot string, step LiteralTestStep, seen sets.String, env TestEnvironment) (ret []error) {
+	ret = validateLiteralTestStepPre(fieldRoot, step, seen, env)
+	return
+}
+
+func validateLiteralTestStepPost(fieldRoot string, step LiteralTestStep, seen sets.String, env TestEnvironment) (ret []error) {
+	ret = validateLiteralTestStepCommon(fieldRoot, step, seen, env)
 	return
 }
 

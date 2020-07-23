@@ -31,6 +31,34 @@ tests:
     steps:
       test:
         - ref: step
+  - as: skip-on-success
+    steps:
+      allow_skip_on_success: true
+      test:
+        - as: successful-test-step
+          commands: echo Success
+          from: os
+          resources:
+            requests:
+              cpu: 100m
+              memory: 200Mi
+      post:
+        - as: skip-on-success-post-step
+          optional_on_success: true
+          commands: touch ${ARTIFACT_DIR}/file
+          from: os
+          resources:
+            requests:
+              cpu: 100m
+              memory: 200Mi
+        - as: check-skipped-step
+          commands: test ! -f ${ARTIFACT_DIR}/file
+          from: os
+          resources:
+            requests:
+              cpu: 100m
+              memory: 200Mi
+
 zz_generated_metadata:
   branch: master
   org: test

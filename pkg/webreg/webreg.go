@@ -1156,6 +1156,19 @@ The configuration can also override a workflow field with a <a href="#step">full
 
 {{ yamlSyntax (index . "configExample3") }}
 
+<h2 id="allow-skip-on-success"><a href="#allow-skip-on-success">Options to Change Control Flow</a></h2>
+<p>
+<code>ci-operator</code> can be configured to skip some or all <code>post</code> steps
+when all <code>test</code> steps pass.
+Skipping a <code>post</code> step when all tests have passed may be useful to skip
+gathering artifacts and save some time at the end of the multistage test.
+In order to allow steps to be skipped in a test, the <code>allow_skip_on_success</code> field must
+be set in the <code>steps</code> configuration. Individual <code>post</code> steps opt
+into being skipped by setting the <code>optional_on_success</code> field. This is an example:
+</p>
+
+{{ yamlSyntax (index . "configExample4") }}
+
 <h3 id="layout"><a href="#layout">Registry Layout and Naming Convention</a></h3>
 <p>
 To prevent naming collisions between all the registry components, the step
@@ -1335,6 +1348,27 @@ const configExample3 = `tests:
         requests:
           cpu: 100m
           memory: 200Mi`
+const configExample4 = `tests:
+- as: e2e-steps # test name
+  steps:
+    allow_skip_on_success: true      # allows steps to be skipped in this test
+    test:
+    - as: successful-test-step
+      commands: echo Success
+      from: os
+      resources:
+        requests:
+          cpu: 100m
+          memory: 200Mi
+    post:
+    - as: gather-must-gather         # this step will be skipped as the successful-test-step passes
+      optional_on_success: true
+      from: cli
+      commands: gather-must-gather-commands.sh
+      resources:
+        requests:
+          cpu: 300m
+          memory: 300Mi`
 const paramsExample = `ref:
   as: openshift-e2e-test
   from: tests
@@ -1960,6 +1994,7 @@ func helpHandler(subPath string, w http.ResponseWriter, _ *http.Request) {
 		data["configExample1"] = configExample1
 		data["configExample2"] = configExample2
 		data["configExample3"] = configExample3
+		data["configExample4"] = configExample4
 		data["paramsExample"] = paramsExample
 		data["paramsPropagation"] = paramsPropagation
 		data["paramsRequired"] = paramsRequired

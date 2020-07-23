@@ -15,11 +15,12 @@ import (
 
 func TestReplacer(t *testing.T) {
 	testCases := []struct {
-		name                           string
-		config                         *api.ReleaseBuildConfiguration
-		pruneUnusedReplacementsEnabled bool
-		files                          map[string][]byte
-		expectWrite                    bool
+		name                               string
+		config                             *api.ReleaseBuildConfiguration
+		pruneUnusedReplacementsEnabled     bool
+		pruneOCPBuilderReplacementsEnabled bool
+		files                              map[string][]byte
+		expectWrite                        bool
 	}{
 		{
 			name: "No dockerfile, does nothing",
@@ -128,6 +129,20 @@ func TestReplacer(t *testing.T) {
 			},
 			pruneUnusedReplacementsEnabled: true,
 		},
+		{
+			name: "OCP builder pruning happens",
+			config: &api.ReleaseBuildConfiguration{
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+						Inputs: map[string]api.ImageBuildInputs{
+							"root": {As: []string{"ocp/builder:something"}},
+						},
+					},
+				}},
+			},
+			pruneOCPBuilderReplacementsEnabled: true,
+			expectWrite:                        true,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -136,7 +151,7 @@ func TestReplacer(t *testing.T) {
 			t.Parallel()
 
 			fakeWriter := &fakeWriter{}
-			if err := replacer(fakeGithubFileGetterFactory(tc.files), fakeWriter.Write, tc.pruneUnusedReplacementsEnabled)(tc.config, &config.Info{}); err != nil {
+			if err := replacer(fakeGithubFileGetterFactory(tc.files), fakeWriter.Write, tc.pruneUnusedReplacementsEnabled, tc.pruneOCPBuilderReplacementsEnabled)(tc.config, &config.Info{}); err != nil {
 				t.Errorf("replacer failed: %v", err)
 			}
 			if (fakeWriter.data != nil) != tc.expectWrite {
@@ -402,9 +417,101 @@ func TestPruneUnusedReplacements(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			pruneUnusedReplacements(tc.in, tc.allSourceImages)
+			if err := pruneUnusedReplacements(tc.in, tc.allSourceImages); err != nil {
+				t.Fatalf("pruneUnusedReplacements failed: %v", err)
+			}
 			if diff := cmp.Diff(tc.in, tc.expected, cmpopts.EquateEmpty()); diff != "" {
 				t.Errorf("result differs from expected: %s", diff)
+			}
+		})
+	}
+}
+
+func TestPruneOCPBuilderReplacements(t *testing.T) {
+	testCases := []struct {
+		name     string
+		in       *api.ReleaseBuildConfiguration
+		expected *api.ReleaseBuildConfiguration
+	}{
+		{
+			name: "Non-OCP builder replacement is left",
+			in: &api.ReleaseBuildConfiguration{
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+						Inputs: map[string]api.ImageBuildInputs{
+							"root": {As: []string{"builder"}},
+						},
+					}},
+				},
+			},
+			expected: &api.ReleaseBuildConfiguration{
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+						Inputs: map[string]api.ImageBuildInputs{
+							"root": {As: []string{"builder"}},
+						},
+					}},
+				},
+			},
+		},
+		{
+			name: "OCP builder replacement is removed",
+			in: &api.ReleaseBuildConfiguration{
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+						Inputs: map[string]api.ImageBuildInputs{
+							"root": {As: []string{"ocp/builder:blub"}},
+						},
+					}},
+				},
+			},
+			expected: &api.ReleaseBuildConfiguration{},
+		},
+		{
+			name: "OCP builder that directly references api.ci is left",
+			in: &api.ReleaseBuildConfiguration{
+				InputConfiguration: api.InputConfiguration{
+					BaseImages: map[string]api.ImageStreamTagReference{"ocp_builder_go-1.13": {
+						Namespace: "ocp",
+						Name:      "builder",
+						Tag:       "go-1.13",
+					}},
+				},
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+						Inputs: map[string]api.ImageBuildInputs{
+							"ocp_builder_go-1.13": {As: []string{"registry.svc.ci.openshift.org/ocp/builder:go-1.13"}},
+						},
+					}},
+				},
+			},
+			expected: &api.ReleaseBuildConfiguration{
+				InputConfiguration: api.InputConfiguration{
+					BaseImages: map[string]api.ImageStreamTagReference{"ocp_builder_go-1.13": {
+						Namespace: "ocp",
+						Name:      "builder",
+						Tag:       "go-1.13",
+					}},
+				},
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+						Inputs: map[string]api.ImageBuildInputs{
+							"ocp_builder_go-1.13": {As: []string{"registry.svc.ci.openshift.org/ocp/builder:go-1.13"}},
+						},
+					}},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := pruneOCPBuilderReplacements(tc.in); err != nil {
+				t.Fatalf("pruning failed: %v", err)
+			}
+
+			if diff := cmp.Diff(tc.in, tc.expected); diff != "" {
+				t.Errorf("actual differs from expected: %s", diff)
 			}
 		})
 	}

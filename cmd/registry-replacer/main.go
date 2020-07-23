@@ -31,11 +31,12 @@ import (
 )
 
 type options struct {
-	configDir               string
-	createPR                bool
-	githubUserName          string
-	selfApprove             bool
-	pruneUnusedReplacements bool
+	configDir                   string
+	createPR                    bool
+	githubUserName              string
+	selfApprove                 bool
+	pruneUnusedReplacements     bool
+	pruneOCPBuilderReplacements bool
 	flagutil.GitHubOptions
 }
 
@@ -47,6 +48,7 @@ func gatherOptions() (*options, error) {
 	flag.StringVar(&o.githubUserName, "github-user-name", "openshift-bot", "Name of the github user. Required when --create-pr is set. Does nothing otherwise")
 	flag.BoolVar(&o.selfApprove, "self-approve", false, "If the bot should self-approve its PR.")
 	flag.BoolVar(&o.pruneUnusedReplacements, "prune-unused-replacements", false, "If replacements that match nothing should get pruned from the config")
+	flag.BoolVar(&o.pruneOCPBuilderReplacements, "prune-ocp-builder-replacements", false, "If all replacements that target the ocp/builder imagestream should be removed")
 	flag.Parse()
 
 	var errs []error
@@ -99,6 +101,7 @@ func main() {
 						return ioutil.WriteFile(filename, data, 0644)
 					},
 					opts.pruneUnusedReplacements,
+					opts.pruneOCPBuilderReplacements,
 				)(config, info); err != nil {
 					errLock.Lock()
 					errs = append(errs, err)
@@ -131,6 +134,7 @@ func replacer(
 	githubFileGetterFactory func(org, repo, branch string) github.FileGetter,
 	writer func([]byte) error,
 	pruneUnusedReplacementsEnabled bool,
+	pruneOCPBuilderReplacementsEnabled bool,
 ) func(*api.ReleaseBuildConfiguration, *config.Info) error {
 	return func(config *api.ReleaseBuildConfiguration, info *config.Info) error {
 		if len(config.Images) == 0 {
@@ -193,9 +197,17 @@ func replacer(
 		}
 
 		if pruneUnusedReplacementsEnabled && hasNonEmptyDockerfile {
-			pruneUnusedReplacements(config, allReplacementCandidates)
+			if err := pruneUnusedReplacements(config, allReplacementCandidates); err != nil {
+				return fmt.Errorf("failed to prune unused replacements: %w", err)
+			}
 		} else if pruneUnusedReplacementsEnabled {
 			logrus.WithField("org", info.Org).WithField("repo", info.Repo).WithField("branch", info.Branch).Info("Not purging unused replacements because we got an empty dockerfile")
+		}
+
+		if pruneOCPBuilderReplacementsEnabled {
+			if err := pruneOCPBuilderReplacements(config); err != nil {
+				return fmt.Errorf("failed to prune ocp builder replacements: %w", err)
+			}
 		}
 
 		newConfig, err := yaml.Marshal(config)
@@ -277,18 +289,24 @@ func hasReplacementFor(image *api.ProjectDirectoryImageBuildStepConfiguration, t
 }
 
 func orgRepoTagFromPullString(pullString string) (orgRepoTag, error) {
-	res := orgRepoTag{}
+	res := orgRepoTag{tag: "latest"}
 	slashSplit := strings.Split(pullString, "/")
-	if n := len(slashSplit); n != 3 {
-		return res, fmt.Errorf("expected three elements when splitting string %q by '/', got %d", pullString, n)
+	switch n := len(slashSplit); n {
+	case 1:
+		res.org = "_"
+		res.repo = slashSplit[0]
+	case 2:
+		res.org = slashSplit[0]
+		res.repo = slashSplit[1]
+	case 3:
+		res.org = slashSplit[1]
+		res.repo = slashSplit[2]
+	default:
+		return res, fmt.Errorf("pull stringe %q couldn't be parsed, expected to get between one and three elements after slashsplitting, got %d", pullString, n)
 	}
-	res.org = slashSplit[1]
-	if repoTag := strings.Split(slashSplit[2], ":"); len(repoTag) == 2 {
+	if repoTag := strings.Split(res.repo, ":"); len(repoTag) == 2 {
 		res.repo = repoTag[0]
 		res.tag = repoTag[1]
-	} else {
-		res.repo = slashSplit[2]
-		res.tag = "latest"
 	}
 
 	return res, nil
@@ -426,13 +444,51 @@ func extractReplacementCandidatesFromDockerfile(dockerfile []byte) (sets.String,
 	return replacementCandidates, nil
 }
 
-func pruneUnusedReplacements(config *api.ReleaseBuildConfiguration, replacementCandidates sets.String) {
+func pruneUnusedReplacements(config *api.ReleaseBuildConfiguration, replacementCandidates sets.String) error {
+	return pruneReplacements(config, func(asDirective string, _ string) (bool, error) {
+		return replacementCandidates.Has(asDirective), nil
+	})
+}
+
+func pruneOCPBuilderReplacements(config *api.ReleaseBuildConfiguration) error {
+	return pruneReplacements(config, func(asDirective string, imageKey string) (bool, error) {
+		orgRepoTag, err := orgRepoTagFromPullString(asDirective)
+		if err != nil {
+			return false, fmt.Errorf("failed to extract org and tag from pull spec %s: %w", asDirective, err)
+		}
+		if orgRepoTag.org != "ocp" || orgRepoTag.repo != "builder" {
+			return true, nil
+		}
+		imagestreamTagReference, imageStreamTagReferenceExists := config.BaseImages[imageKey]
+		if !imageStreamTagReferenceExists {
+			return false, nil
+		}
+
+		// Fun special case: We set up a replacement for this ourselves to prevent direct references to api.ci
+		if imagestreamTagReference.Namespace == orgRepoTag.org && imagestreamTagReference.Name == orgRepoTag.repo && imagestreamTagReference.Tag == orgRepoTag.tag {
+			return true, nil
+		}
+
+		return false, nil
+	})
+}
+
+type asDirectiveFilter func(asDirectiveValue string, inputKey string) (keep bool, err error)
+
+func pruneReplacements(config *api.ReleaseBuildConfiguration, filter asDirectiveFilter) error {
 	var prunedImages []api.ProjectDirectoryImageBuildStepConfiguration
+	var errs []error
+
 	for _, image := range config.Images {
 		for k, sourceImage := range image.Inputs {
 			var newAs []string
 			for _, sourceImage := range sourceImage.As {
-				if replacementCandidates.Has(sourceImage) {
+				keep, err := filter(sourceImage, k)
+				if err != nil {
+					errs = append(errs, err)
+					continue
+				}
+				if keep {
 					newAs = append(newAs, sourceImage)
 				}
 			}
@@ -450,4 +506,6 @@ func pruneUnusedReplacements(config *api.ReleaseBuildConfiguration, replacementC
 	}
 
 	config.Images = prunedImages
+
+	return utilerrors.NewAggregate(errs)
 }

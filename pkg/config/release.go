@@ -6,9 +6,11 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/mattn/go-zglob"
 	"github.com/sirupsen/logrus"
 	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
+	"k8s.io/test-infra/prow/plugins"
 	pjdwapi "k8s.io/test-infra/prow/pod-utils/downwardapi"
 
 	"github.com/openshift/ci-tools/pkg/registry"
@@ -29,35 +31,25 @@ const (
 	CiopConfigInRepoPath = "ci-operator/config"
 	// TemplatesPath is the path of the templates from release repo
 	TemplatesPath = "ci-operator/templates"
-	// TemplatePrefix is the prefix added to ConfigMap names
-	TemplatePrefix = "prow-job-"
 	// ClusterProfilesPath is where profiles are stored in the release repo
 	ClusterProfilesPath = "cluster/test-deploy"
-	// ClusterProfilePrefix is the prefix added to ConfigMap names
-	ClusterProfilePrefix = "cluster-profile-"
 	// StagingNamespace is the staging namespace in api.ci
 	StagingNamespace = "ci-stg"
 	// RegistryPath is the path to the multistage step registry
 	RegistryPath = "ci-operator/step-registry"
 )
 
-type ConfigMapSource struct {
-	PathInRepo, SHA string
-}
+// ConfigMapName returns the name of the ConfigMap to which config-updater would
+// put the content, and the config-updater config pattern that covers the path
+// of the ConfigMap source.
+func ConfigMapName(path string, updater plugins.ConfigUpdater) (name, pattern string, err error) {
+	for pattern, cfg := range updater.Maps {
+		if match, err := zglob.Match(pattern, path); match || err != nil {
+			return cfg.Name, pattern, err
+		}
+	}
 
-func (s ConfigMapSource) Name() string {
-	base := filepath.Base(s.PathInRepo)
-	return strings.TrimSuffix(base, filepath.Ext(base))
-}
-
-func (s ConfigMapSource) CMName(prefix string) string {
-	return prefix + s.Name()
-}
-
-func (s ConfigMapSource) TempCMName(prefix string) string {
-	// Object names can't be too long so we truncate the hash. This increases
-	// chances of collision but we can tolerate it as our input space is tiny.
-	return fmt.Sprintf("rehearse-%s-%s-%s", prefix, s.Name(), s.SHA[:8])
+	return "", "", fmt.Errorf("path not covered by any config-updater pattern: %s", path)
 }
 
 // ReleaseRepoConfig contains all configuration present in release repo (usually openshift/release)
@@ -171,18 +163,18 @@ func GetAllConfigsFromSHA(releaseRepoPath, sha string, logger *logrus.Entry) (*R
 	return config, nil
 }
 
-func GetChangedTemplates(path, baseRev string) ([]ConfigMapSource, error) {
-	changes, err := getRevChanges(path, TemplatesPath, baseRev, true)
+func GetChangedTemplates(path, baseRev string) ([]string, error) {
+	changes, err := getRevChanges(path, TemplatesPath, baseRev)
 	if err != nil {
 		return nil, err
 	}
-	var ret []ConfigMapSource
+	var changedTemplates []string
 	for _, c := range changes {
-		if filepath.Ext(c.PathInRepo) == ".yaml" {
-			ret = append(ret, c)
+		if filepath.Ext(c) == ".yaml" {
+			changedTemplates = append(changedTemplates, c)
 		}
 	}
-	return ret, nil
+	return changedTemplates, nil
 }
 
 func loadRegistryStep(filename string, graph registry.NodeByName) (registry.Node, error) {
@@ -209,13 +201,13 @@ func loadRegistryStep(filename string, graph registry.NodeByName) (registry.Node
 // GetChangedRegistrySteps identifies all registry components (refs, chains, and workflows) that changed.
 func GetChangedRegistrySteps(path, baseRev string, graph registry.NodeByName) ([]registry.Node, error) {
 	var changes []registry.Node
-	revChanges, err := getRevChanges(path, RegistryPath, baseRev, true)
+	revChanges, err := getRevChanges(path, RegistryPath, baseRev)
 	if err != nil {
 		return changes, err
 	}
 	for _, c := range revChanges {
-		if filepath.Ext(c.PathInRepo) == ".yaml" || strings.HasSuffix(c.PathInRepo, "-commands.sh") {
-			node, err := loadRegistryStep(filepath.Base(c.PathInRepo), graph)
+		if filepath.Ext(c) == ".yaml" || strings.HasSuffix(c, "-commands.sh") {
+			node, err := loadRegistryStep(filepath.Base(c), graph)
 			if err != nil {
 				return changes, err
 			}
@@ -225,30 +217,24 @@ func GetChangedRegistrySteps(path, baseRev string, graph registry.NodeByName) ([
 	return changes, nil
 }
 
-func GetChangedClusterProfiles(path, baseRev string) ([]ConfigMapSource, error) {
-	return getRevChanges(path, ClusterProfilesPath, baseRev, false)
+func GetChangedClusterProfiles(path, baseRev string) ([]string, error) {
+	return getRevChanges(path, ClusterProfilesPath, baseRev)
 }
 
 // getRevChanges returns the name and a hash of the contents of files under
 // `path` that were added/modified since revision `base` in the repository at
 // `root`.  Paths are relative to `root`.
-func getRevChanges(root, path, base string, rec bool) ([]ConfigMapSource, error) {
+func getRevChanges(root, path, base string) ([]string, error) {
 	// Sample output (with abbreviated hashes) from git-diff-tree(1):
 	// :100644 100644 bcd1234 0123456 M file0
-	cmd := []string{"diff-tree", "--diff-filter=ABCMRTUX", base + ":" + path, "HEAD:" + path}
-	if rec {
-		cmd = append(cmd, "-r")
-	}
+	cmd := []string{"diff-tree", "-r", "--diff-filter=ABCMRTUX", base + ":" + path, "HEAD:" + path}
 	diff, err := git(root, cmd...)
 	if err != nil || diff == "" {
 		return nil, err
 	}
-	var ret []ConfigMapSource
+	var ret []string
 	for _, l := range strings.Split(strings.TrimSpace(diff), "\n") {
-		ret = append(ret, ConfigMapSource{
-			PathInRepo: filepath.Join(path, l[99:]),
-			SHA:        l[56:96],
-		})
+		ret = append(ret, filepath.Join(path, l[99:]))
 	}
 	return ret, nil
 }

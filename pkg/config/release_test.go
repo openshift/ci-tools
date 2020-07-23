@@ -10,7 +10,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"k8s.io/apimachinery/pkg/util/diff"
+	"k8s.io/test-infra/prow/plugins"
 )
 
 func compareChanges(
@@ -18,8 +20,8 @@ func compareChanges(
 	path string,
 	files []string,
 	cmd string,
-	f func(string, string) ([]ConfigMapSource, error),
-	expected []ConfigMapSource,
+	f func(string, string) ([]string, error),
+	expected []string,
 ) {
 	t.Helper()
 	tmp, err := ioutil.TempDir("", "")
@@ -74,13 +76,10 @@ func TestGetChangedTemplates(t *testing.T) {
 > org/repo/OWNERS
 > org/repo/README.md
 `
-	expected := []ConfigMapSource{{
-		SHA:        "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
-		PathInRepo: filepath.Join(TemplatesPath, "cluster-launch-top-level.yaml"),
-	}, {
-		SHA:        "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
-		PathInRepo: filepath.Join(TemplatesPath, "org/repo/cluster-launch-subdir.yaml"),
-	}}
+	expected := []string{
+		filepath.Join(TemplatesPath, "cluster-launch-top-level.yaml"),
+		filepath.Join(TemplatesPath, "org/repo/cluster-launch-subdir.yaml"),
+	}
 	compareChanges(t, TemplatesPath, files, cmd, GetChangedTemplates, expected)
 }
 
@@ -99,21 +98,86 @@ git mv moveme/file moveme/moved
 git mv renameme/file renamed/file
 > dir/dir/file
 `
-	expected := []ConfigMapSource{{
-		SHA:        "df2b8fc99e1c1d4dbc0a854d9f72157f1d6ea078",
-		PathInRepo: filepath.Join(ClusterProfilesPath, "changeme"),
-	}, {
-		SHA:        "b4c3cc91598b6469bf7036502b8ca2bd563b0d0a",
-		PathInRepo: filepath.Join(ClusterProfilesPath, "dir"),
-	}, {
-		SHA:        "03b9d461447abb84264053a440b4c715842566bb",
-		PathInRepo: filepath.Join(ClusterProfilesPath, "moveme"),
-	}, {
-		SHA:        "df2b8fc99e1c1d4dbc0a854d9f72157f1d6ea078",
-		PathInRepo: filepath.Join(ClusterProfilesPath, "new"),
-	}, {
-		SHA:        "9bbab5dcf83793f9edc258136426678cccce940e",
-		PathInRepo: filepath.Join(ClusterProfilesPath, "renamed"),
-	}}
+	expected := []string{
+		filepath.Join(ClusterProfilesPath, "changeme", "file"),
+		filepath.Join(ClusterProfilesPath, "dir", "dir", "file"),
+		filepath.Join(ClusterProfilesPath, "moveme", "moved"),
+		filepath.Join(ClusterProfilesPath, "new", "file"),
+		filepath.Join(ClusterProfilesPath, "renamed", "file"),
+	}
 	compareChanges(t, ClusterProfilesPath, files, cmd, GetChangedClusterProfiles, expected)
+}
+
+func TestConfigMapName(t *testing.T) {
+	path := "path/to/a-file.yaml"
+	dnfError := fmt.Errorf("path not covered by any config-updater pattern: path/to/a-file.yaml")
+	cm := "a-config-map"
+
+	testCases := []struct {
+		description string
+		maps        map[string]string
+
+		expectName    string
+		expectPattern string
+		expectError   error
+	}{
+		{
+			description: "empty config",
+			expectError: dnfError,
+		},
+		{
+			description: "no pattern applies",
+			maps:        map[string]string{"path/to/different/a-file.yaml": cm},
+			expectError: dnfError,
+		},
+		{
+			description:   "direct path",
+			maps:          map[string]string{path: cm},
+			expectPattern: path,
+			expectName:    cm,
+		},
+		{
+			description:   "glob",
+			maps:          map[string]string{"path/to/*.yaml": cm},
+			expectPattern: "path/to/*.yaml",
+			expectName:    cm,
+		},
+		{
+			description: "brace",
+			// zglob is buggy: https://github.com/mattn/go-zglob/pull/31
+			// maps:          map[string]string{"path/to/a-{file,dir}.yaml": cm},
+			maps:          map[string]string{"path/to/*-{file,dir}.yaml": cm},
+			expectPattern: "path/to/*-{file,dir}.yaml",
+			expectName:    cm,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			cuCfg := plugins.ConfigUpdater{
+				Maps: map[string]plugins.ConfigMapSpec{},
+			}
+			for k, v := range tc.maps {
+				cuCfg.Maps[k] = plugins.ConfigMapSpec{
+					Name: v,
+				}
+			}
+
+			name, pattern, err := ConfigMapName(path, cuCfg)
+			if (tc.expectError == nil) != (err == nil) {
+				t.Fatalf("Did not return error as expected:\n%s", cmp.Diff(tc.expectError, err))
+			} else if tc.expectError != nil && err != nil && tc.expectError.Error() != err.Error() {
+				t.Fatalf("Expected different error:\n%s", cmp.Diff(tc.expectError.Error(), err.Error()))
+			}
+
+			if err == nil {
+				if diffName := cmp.Diff(tc.expectName, name); diffName != "" {
+					t.Errorf("ConfigMap name differs:\n%s", diffName)
+				}
+				if diffPattern := cmp.Diff(tc.expectPattern, pattern); diffPattern != "" {
+					t.Errorf("Pattern differs:\n%s", diffPattern)
+				}
+			}
+		})
+	}
 }

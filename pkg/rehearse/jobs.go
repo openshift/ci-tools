@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"reflect"
 	"sort"
 	"strconv"
@@ -14,7 +13,6 @@ import (
 	"github.com/getlantern/deepcopy"
 	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
-
 	"k8s.io/api/core/v1"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -331,34 +329,26 @@ func inlineCiOpConfig(container *v1.Container, ciopConfigs config.DataByFilename
 
 // JobConfigurer holds all the information that is needed for the configuration of the jobs.
 type JobConfigurer struct {
-	ciopConfigs      config.DataByFilename
-	registryResolver registry.Resolver
-	profiles         []config.ConfigMapSource
-	prNumber         int
-	refs             *pjapi.Refs
-	loggers          Loggers
-	templateMap      map[string]string
+	ciopConfigs           config.DataByFilename
+	registryResolver      registry.Resolver
+	clusterProfileCMNames map[string]string
+	templateCMNames       map[string]string
+	prNumber              int
+	refs                  *pjapi.Refs
+	loggers               Loggers
 }
 
 // NewJobConfigurer filters the jobs and returns a new JobConfigurer.
-func NewJobConfigurer(ciopConfigs config.DataByFilename, resolver registry.Resolver, prNumber int, loggers Loggers, templates []config.ConfigMapSource, profiles []config.ConfigMapSource, refs *pjapi.Refs) *JobConfigurer {
+func NewJobConfigurer(ciopConfigs config.DataByFilename, resolver registry.Resolver, prNumber int, loggers Loggers, templates, profiles map[string]string, refs *pjapi.Refs) *JobConfigurer {
 	return &JobConfigurer{
-		ciopConfigs:      ciopConfigs,
-		registryResolver: resolver,
-		profiles:         profiles,
-		prNumber:         prNumber,
-		refs:             refs,
-		loggers:          loggers,
-		templateMap:      fillTemplateMap(templates),
+		ciopConfigs:           ciopConfigs,
+		registryResolver:      resolver,
+		clusterProfileCMNames: profiles,
+		templateCMNames:       templates,
+		prNumber:              prNumber,
+		refs:                  refs,
+		loggers:               loggers,
 	}
-}
-
-func fillTemplateMap(templates []config.ConfigMapSource) map[string]string {
-	templateMap := make(map[string]string, len(templates))
-	for _, t := range templates {
-		templateMap[filepath.Base(t.PathInRepo)] = t.TempCMName("template")
-	}
-	return templateMap
 }
 
 func variantFromLabels(labels map[string]string) string {
@@ -458,8 +448,8 @@ func (jc *JobConfigurer) configureJobSpec(spec *v1.PodSpec, metadata api.Metadat
 		return nil, err
 	}
 
-	replaceCMTemplateName(spec.Containers[0].VolumeMounts, spec.Volumes, jc.templateMap)
-	replaceClusterProfiles(spec.Volumes, jc.profiles, logger)
+	replaceConfigMaps(spec.Volumes, jc.templateCMNames, logger)
+	replaceConfigMaps(spec.Volumes, jc.clusterProfileCMNames, logger)
 
 	return imageStreamTags, nil
 }
@@ -488,19 +478,18 @@ func (jc *JobConfigurer) ConvertPeriodicsToPresubmits(periodics []prowconfig.Per
 // AddRandomJobsForChangedTemplates finds jobs from the PR config that are using a specific template with a specific cluster type.
 // The job selection is done by iterating in an unspecified order, which avoids picking the same job
 // So if a template will be changed, find the jobs that are using a template in combination with the `aws`,`openstack`,`gcs` and `libvirt` cluster types.
-func AddRandomJobsForChangedTemplates(templates []config.ConfigMapSource, toBeRehearsed config.Presubmits, prConfigPresubmits map[string][]prowconfig.Presubmit, loggers Loggers) config.Presubmits {
+func AddRandomJobsForChangedTemplates(templates sets.String, toBeRehearsed config.Presubmits, prConfigPresubmits map[string][]prowconfig.Presubmit, loggers Loggers) config.Presubmits {
 	clusterTypes := getClusterTypes(prConfigPresubmits)
 	rehearsals := make(config.Presubmits)
 
-	for _, template := range templates {
-		templateFile := filepath.Base(template.PathInRepo)
+	for template := range templates {
 		for _, clusterType := range clusterTypes {
-			if isAlreadyRehearsed(toBeRehearsed, clusterType, templateFile) {
+			if isAlreadyRehearsed(toBeRehearsed, clusterType, template) {
 				continue
 			}
 
-			if repo, job := pickTemplateJob(prConfigPresubmits, templateFile, clusterType); job != nil {
-				selectionFields := logrus.Fields{diffs.LogRepo: repo, diffs.LogJobName: job.Name, diffs.LogReasons: fmt.Sprintf("template %s changed", templateFile)}
+			if repo, job := pickTemplateJob(prConfigPresubmits, template, clusterType); job != nil {
+				selectionFields := logrus.Fields{diffs.LogRepo: repo, diffs.LogJobName: job.Name, diffs.LogReasons: fmt.Sprintf("template %s changed", template)}
 				loggers.Job.WithFields(selectionFields).Info(diffs.ChosenJob)
 				rehearsals[repo] = append(rehearsals[repo], *job)
 			}
@@ -671,22 +660,12 @@ func getClusterTypes(jobs map[string][]prowconfig.Presubmit) []string {
 func isAlreadyRehearsed(toBeRehearsed config.Presubmits, clusterType, templateFile string) bool {
 	for _, jobs := range toBeRehearsed {
 		for _, job := range jobs {
-			if hasClusterType(job, clusterType) && hasTemplateFile(job, templateFile) {
+			if hasClusterType(job, clusterType) && usesConfigMap(job, templateFile) {
 				return true
 			}
 		}
 	}
 	return false
-}
-
-func replaceCMTemplateName(volumeMounts []v1.VolumeMount, volumes []v1.Volume, mapping map[string]string) {
-	for _, volume := range volumes {
-		for _, volumeMount := range volumeMounts {
-			if name, ok := mapping[volumeMount.SubPath]; ok && volumeMount.Name == volume.Name {
-				volume.VolumeSource.ConfigMap.Name = name
-			}
-		}
-	}
 }
 
 func pickTemplateJob(presubmits map[string][]prowconfig.Presubmit, templateFile, clusterType string) (string, *prowconfig.Presubmit) {
@@ -701,7 +680,7 @@ func pickTemplateJob(presubmits map[string][]prowconfig.Presubmit, templateFile,
 				continue
 			}
 
-			if hasClusterType(job, clusterType) && hasTemplateFile(job, templateFile) {
+			if hasClusterType(job, clusterType) && usesConfigMap(job, templateFile) {
 				return repo, &job
 			}
 		}
@@ -718,40 +697,46 @@ func hasClusterType(job prowconfig.Presubmit, clusterType string) bool {
 	return false
 }
 
-func hasTemplateFile(job prowconfig.Presubmit, templateFile string) bool {
-	if job.Spec.Containers[0].VolumeMounts != nil {
-		for _, volumeMount := range job.Spec.Containers[0].VolumeMounts {
-			if volumeMount.SubPath == templateFile {
+func usesConfigMap(job prowconfig.Presubmit, cm string) bool {
+	if job.Spec.Volumes != nil {
+		for _, volume := range job.Spec.Volumes {
+			switch {
+			case volume.Projected != nil:
+				for _, source := range volume.Projected.Sources {
+					if source.ConfigMap != nil && source.ConfigMap.Name == cm {
+						return true
+					}
+				}
+			case volume.ConfigMap != nil && volume.ConfigMap.Name == cm:
 				return true
 			}
 		}
 	}
+
 	return false
 }
 
-func replaceClusterProfiles(volumes []v1.Volume, profiles []config.ConfigMapSource, logger *logrus.Entry) {
-	nameMap := make(map[string]string, len(profiles))
-	for _, p := range profiles {
-		nameMap[p.CMName(config.ClusterProfilePrefix)] = p.TempCMName("cluster-profile")
-	}
-	replace := func(s *v1.VolumeProjection) {
-		if s.ConfigMap == nil {
-			return
-		}
-		tmp, ok := nameMap[s.ConfigMap.Name]
+func replaceConfigMaps(volumes []v1.Volume, cms map[string]string, logger *logrus.Entry) {
+	replace := func(cm *string) {
+		tmp, ok := cms[*cm]
 		if !ok {
 			return
 		}
-		fields := logrus.Fields{"profile": s.ConfigMap.Name, "tmp": tmp}
-		logger.WithFields(fields).Debug("Rehearsal job uses cluster profile, will be replaced by temporary")
-		s.ConfigMap.Name = tmp
+		fields := logrus.Fields{"profile": *cm, "tmp": tmp}
+		logger.WithFields(fields).Debug("Rehearsal job uses a changed ConfigMap, will be replaced by temporary")
+		*cm = tmp
 	}
 	for _, v := range volumes {
-		if v.Name != "cluster-profile" || v.Projected == nil {
-			continue
-		}
-		for _, s := range v.Projected.Sources {
-			replace(&s)
+		switch {
+		case v.Projected != nil:
+			for _, s := range v.Projected.Sources {
+				if s.ConfigMap == nil {
+					continue
+				}
+				replace(&s.ConfigMap.Name)
+			}
+		case v.ConfigMap != nil:
+			replace(&v.ConfigMap.Name)
 		}
 	}
 }

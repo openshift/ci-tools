@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"reflect"
 	"sort"
 	"strconv"
@@ -117,103 +116,6 @@ func generateTestConfigFiles() config.DataByFilename {
 }
 
 var ignoreUnexported = cmpopts.IgnoreUnexported(prowconfig.Presubmit{}, prowconfig.Brancher{}, prowconfig.RegexpChangeMatcher{})
-
-func TestReplaceClusterProfiles(t *testing.T) {
-	makeVolume := func(name string) v1.Volume {
-		return v1.Volume{
-			Name: "cluster-profile",
-			VolumeSource: v1.VolumeSource{
-				Projected: &v1.ProjectedVolumeSource{
-					Sources: []v1.VolumeProjection{{
-						ConfigMap: &v1.ConfigMapProjection{
-							LocalObjectReference: v1.LocalObjectReference{
-								Name: name,
-							},
-						},
-					}},
-				},
-			},
-		}
-	}
-	testCases := []struct {
-		id       string
-		spec     v1.PodSpec
-		expected []string
-	}{
-		{
-			id:   "no-profile",
-			spec: v1.PodSpec{Containers: []v1.Container{{}}},
-		},
-		{
-			id: "unchanged-profile",
-			spec: v1.PodSpec{
-				Containers: []v1.Container{{}},
-				Volumes:    []v1.Volume{makeVolume(config.ClusterProfilePrefix + "unchanged")},
-			},
-			expected: []string{config.ClusterProfilePrefix + "unchanged"},
-		},
-		{
-			id: "changed-profile0",
-			spec: v1.PodSpec{
-				Containers: []v1.Container{{}},
-				Volumes:    []v1.Volume{makeVolume(config.ClusterProfilePrefix + "changed-profile0")},
-			},
-			expected: []string{"rehearse-cluster-profile-changed-profile0-47f520ef"},
-		},
-		{
-			id: "changed-profile1",
-			spec: v1.PodSpec{
-				Containers: []v1.Container{{}},
-				Volumes:    []v1.Volume{makeVolume(config.ClusterProfilePrefix + "changed-profile1")},
-			},
-			expected: []string{"rehearse-cluster-profile-changed-profile1-85c62707"},
-		},
-		{
-			id: "changed-profiles in multiple volumes",
-			spec: v1.PodSpec{
-				Containers: []v1.Container{{}},
-				Volumes: []v1.Volume{
-					makeVolume(config.ClusterProfilePrefix + "unchanged"),
-					makeVolume(config.ClusterProfilePrefix + "changed-profile0"),
-					makeVolume(config.ClusterProfilePrefix + "changed-profile1"),
-					makeVolume(config.ClusterProfilePrefix + "unchanged"),
-				},
-			},
-			expected: []string{
-				"cluster-profile-unchanged",
-				"rehearse-cluster-profile-changed-profile0-47f520ef",
-				"rehearse-cluster-profile-changed-profile1-85c62707",
-				"cluster-profile-unchanged"},
-		},
-	}
-
-	profiles := []config.ConfigMapSource{{
-		SHA:        "47f520ef9c2662fc9a2675f1dd4f02d5082b2776",
-		PathInRepo: filepath.Join(config.ClusterProfilesPath, "changed-profile0"),
-	}, {
-		SHA:        "85c627078710b8beee65d06d0cf157094fc46b03",
-		PathInRepo: filepath.Join(config.ClusterProfilesPath, "changed-profile1"),
-	}}
-
-	for _, tc := range testCases {
-		t.Run(tc.id, func(t *testing.T) {
-
-			logger := logrus.WithField("testId", tc.id)
-			replaceClusterProfiles(tc.spec.Volumes, profiles, logger)
-
-			var names []string
-			if len(tc.spec.Volumes) > 0 {
-				for _, volume := range tc.spec.Volumes {
-					names = append(names, volume.VolumeSource.Projected.Sources[0].ConfigMap.Name)
-				}
-			}
-
-			if !reflect.DeepEqual(tc.expected, names) {
-				t.Fatal(cmp.Diff(tc.expected, names))
-			}
-		})
-	}
-}
 
 func makeTestingPresubmitForEnv(env []v1.EnvVar) *prowconfig.Presubmit {
 	return &prowconfig.Presubmit{
@@ -990,136 +892,99 @@ func makeBasePresubmit() *prowconfig.Presubmit {
 	}
 }
 
-func TestReplaceCMTemplateName(t *testing.T) {
-	templates := map[string]string{
-		"test-template.yaml":  "rehearse-template-test-template-00000000",
-		"test-template2.yaml": "rehearse-template-test-template-11111111",
-		"test-template3.yaml": "rehearse-template-test-template-22222222",
+func TestReplaceConfigMaps(t *testing.T) {
+	replacedConfigMaps := map[string]string{
+		"changed-template":        "rehearse-template-test-template-00000000",
+		"changed-cluster-profile": "rehearse-cluster-profile-test-cp-00000000",
 	}
 
 	testCases := []struct {
-		description     string
-		jobVolumeMounts []v1.VolumeMount
-		jobVolumes      []v1.Volume
-		expectedToFind  func() []v1.Volume
+		description string
+		jobVolumes  []v1.Volume
+		expected    []v1.Volume
 	}{
 		{
-			description:     "no volumes",
-			jobVolumeMounts: []v1.VolumeMount{},
-			jobVolumes:      []v1.Volume{},
-			expectedToFind:  func() []v1.Volume { return []v1.Volume{} },
+			description: "no volumes",
+			jobVolumes:  []v1.Volume{},
+			expected:    []v1.Volume{},
 		},
 		{
-			description: "find one in multiple volumes",
-			jobVolumeMounts: []v1.VolumeMount{
-				{
-					Name:      "non-template",
-					MountPath: "/tmp/test",
-				},
-				{
-					Name:      "job-definition",
-					MountPath: "/tmp/test",
-					SubPath:   "test-template.yaml",
-				},
-			},
-			jobVolumes: createVolumesHelper("job-definition", "test-template.yaml"),
-			expectedToFind: func() []v1.Volume {
-				volumes := createVolumesHelper("job-definition", "test-template.yaml")
-				for _, volume := range volumes {
-					if volume.Name == "job-definition" {
-						volume.VolumeSource.ConfigMap.Name = "rehearse-template-test-template-00000000"
-					}
-				}
-				return volumes
-			},
+			description: "replace a configmap name in configmap-backed volume",
+			jobVolumes:  []v1.Volume{cmVolume("volume-name", "changed-template")},
+			expected:    []v1.Volume{cmVolume("volume-name", "rehearse-template-test-template-00000000")},
 		},
 		{
-			description: "find one in multiple volumes that for some reason use two templates",
-			jobVolumeMounts: []v1.VolumeMount{
-				{
-					Name:      "non-template",
-					MountPath: "/tmp/test",
-				},
-				{
-					Name:      "job-definition",
-					MountPath: "/tmp/test",
-					SubPath:   "test-template.yaml",
-				},
-			},
-			jobVolumes: append(createVolumesHelper("job-definition", "test-template.yaml"), createVolumesHelper("job-definition2", "test-template2.yaml")...),
-			expectedToFind: func() []v1.Volume {
-				volumes := append(createVolumesHelper("job-definition", "test-template.yaml"), createVolumesHelper("job-definition2", "test-template2.yaml")...)
-				volumes[2].VolumeSource.ConfigMap.Name = "rehearse-template-test-template-00000000"
-				return volumes
-			},
+			description: "replace a configmap name in projected configmap-backed volume",
+			jobVolumes:  []v1.Volume{projectedCmVolume("volume-name", "changed-template")},
+			expected:    []v1.Volume{projectedCmVolume("volume-name", "rehearse-template-test-template-00000000")},
 		},
 		{
-			description: "find nothing in multiple volumes that use a template that is not changed",
-			jobVolumeMounts: []v1.VolumeMount{
-				{
-					Name:      "non-template",
-					MountPath: "/tmp/test",
-				},
-				{
-					Name:      "job-definition",
-					MountPath: "/tmp/test",
-					SubPath:   "test-template5.yaml",
-				},
+			description: "do not replace a configmap name in configmap-backed volume",
+			jobVolumes:  []v1.Volume{cmVolume("volume-name", "unchanged-template")},
+			expected:    []v1.Volume{cmVolume("volume-name", "unchanged-template")},
+		},
+		{
+			description: "do not replace a configmap name in projected configmap-backed volume",
+			jobVolumes:  []v1.Volume{projectedCmVolume("volume-name", "unchanged-template")},
+			expected:    []v1.Volume{projectedCmVolume("volume-name", "unchanged-template")},
+		},
+		{
+			description: "replace multiple configmap names in many volumes",
+			jobVolumes: []v1.Volume{
+				cmVolume("first-volume", "changed-template"),
+				projectedCmVolume("second-volume", "unchanged-cluster-profile"),
+				projectedCmVolume("third-volume", "irrelevant-configmap"),
+				cmVolume("fourth-volume", "another-irrelevant-template"),
+				projectedCmVolume("fifth-volume", "changed-cluster-profile"),
 			},
-			jobVolumes: createVolumesHelper("job-definition", "test-template5.yaml"),
-			expectedToFind: func() []v1.Volume {
-				return createVolumesHelper("job-definition", "test-template5.yaml")
+			expected: []v1.Volume{
+				cmVolume("first-volume", "rehearse-template-test-template-00000000"),
+				projectedCmVolume("second-volume", "unchanged-cluster-profile"),
+				projectedCmVolume("third-volume", "irrelevant-configmap"),
+				cmVolume("fourth-volume", "another-irrelevant-template"),
+				projectedCmVolume("fifth-volume", "rehearse-cluster-profile-test-cp-00000000"),
 			},
 		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.description, func(t *testing.T) {
-			replaceCMTemplateName(testCase.jobVolumeMounts, testCase.jobVolumes, templates)
-			expected := testCase.expectedToFind()
-			if !reflect.DeepEqual(expected, testCase.jobVolumes) {
-				t.Fatalf("Diff found %v", cmp.Diff(expected, testCase.jobVolumes))
+			logger := logrus.WithField("testId", testCase.description)
+			replaceConfigMaps(testCase.jobVolumes, replacedConfigMaps, logger)
+			if !reflect.DeepEqual(testCase.expected, testCase.jobVolumes) {
+				t.Fatalf("Volumes differ:\n%v", cmp.Diff(testCase.expected, testCase.jobVolumes))
 			}
 		})
+
 	}
 }
 
-func createVolumesHelper(name, key string) []v1.Volume {
-	volumes := []v1.Volume{
-		{
-			Name: "test-volume",
-			VolumeSource: v1.VolumeSource{
-				Projected: &v1.ProjectedVolumeSource{
-					Sources: []v1.VolumeProjection{
-						{
-							Secret: &v1.SecretProjection{
-								LocalObjectReference: v1.LocalObjectReference{Name: "test-secret"},
-							},
+func cmVolume(name, cmName string) v1.Volume {
+	return v1.Volume{
+		Name: name,
+		VolumeSource: v1.VolumeSource{
+			ConfigMap: &v1.ConfigMapVolumeSource{
+				LocalObjectReference: v1.LocalObjectReference{Name: cmName},
+			},
+		},
+	}
+}
+
+func projectedCmVolume(name, cmName string) v1.Volume {
+	return v1.Volume{
+		Name: name,
+		VolumeSource: v1.VolumeSource{
+			Projected: &v1.ProjectedVolumeSource{
+				Sources: []v1.VolumeProjection{
+					{
+						ConfigMap: &v1.ConfigMapProjection{
+							LocalObjectReference: v1.LocalObjectReference{Name: cmName},
 						},
 					},
 				},
 			},
 		},
-		{
-			Name: "test-volume2",
-			VolumeSource: v1.VolumeSource{
-				EmptyDir: &v1.EmptyDirVolumeSource{},
-			},
-		},
 	}
-	volumes = append(volumes, v1.Volume{
-		Name: name,
-		VolumeSource: v1.VolumeSource{
-			ConfigMap: &v1.ConfigMapVolumeSource{
-				LocalObjectReference: v1.LocalObjectReference{Name: "cluster-e2e-test-template"},
-				Items: []v1.KeyToPath{
-					{Key: key},
-				},
-			},
-		},
-	})
-
-	return volumes
 }
 
 func TestGetClusterTypes(t *testing.T) {

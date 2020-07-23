@@ -329,7 +329,10 @@ func Registry(root string, flat bool) (registry.ReferenceByName, registry.ChainB
 		logrus.WithError(err).Warn("failed to parse metadata file")
 	}
 	// create graph to verify that there are no cycles
-	_, err = registry.NewGraph(references, chains, workflows)
+	if _, err = registry.NewGraph(references, chains, workflows); err != nil {
+		return nil, nil, nil, nil, nil, err
+	}
+	err = registry.Validate(references, chains, workflows)
 	return references, chains, workflows, documentation, metadata, err
 }
 

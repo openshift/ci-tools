@@ -18,15 +18,18 @@ func TestResolve(t *testing.T) {
 	nestedChains := "nested-chains"
 	chainInstall := "install-chain"
 	awsWorkflow := "ipi-aws"
+	nonExistentEnv := "NON_EXISTENT"
+	stepEnv := "STEP_ENV"
 	yes := true
 	for _, testCase := range []struct {
-		name        string
-		config      api.MultiStageTestConfiguration
-		stepMap     ReferenceByName
-		chainMap    ChainByName
-		workflowMap WorkflowByName
-		expectedRes api.MultiStageTestConfigurationLiteral
-		expectedErr error
+		name                  string
+		config                api.MultiStageTestConfiguration
+		stepMap               ReferenceByName
+		chainMap              ChainByName
+		workflowMap           WorkflowByName
+		expectedRes           api.MultiStageTestConfigurationLiteral
+		expectedErr           error
+		expectedValidationErr error
 	}{{
 		// This is a full config that should not change (other than struct) when passed to the Resolver
 		name: "Full AWS IPI",
@@ -264,6 +267,33 @@ func TestResolve(t *testing.T) {
 		expectedRes: api.MultiStageTestConfigurationLiteral{},
 		expectedErr: errors.New("test: invalid step reference: install-fips"),
 	}, {
+		name: "Test with chain and reference, invalid parameter",
+		config: api.MultiStageTestConfiguration{
+			ClusterProfile: api.ClusterProfileAWS,
+			Pre:            []api.TestStep{{Chain: &fipsPreChain}},
+		},
+		chainMap: ChainByName{
+			fipsPreChain: {
+				Steps: []api.TestStep{{Reference: &reference1}},
+				Environment: []api.StepParameter{
+					{Name: nonExistentEnv, Default: &nonExistentEnv},
+				},
+			},
+		},
+		stepMap: ReferenceByName{
+			reference1: {
+				As:       reference1,
+				From:     "from",
+				Commands: "commands",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				},
+			},
+		},
+		expectedErr:           errors.New(`test: install-fips: no step declares parameter "NON_EXISTENT"`),
+		expectedValidationErr: errors.New(`install-fips: no step declares parameter "NON_EXISTENT"`),
+	}, {
 		name: "Test with nested chains",
 		config: api.MultiStageTestConfiguration{
 			ClusterProfile: api.ClusterProfileAWS,
@@ -381,8 +411,9 @@ func TestResolve(t *testing.T) {
 				}},
 			},
 		},
-		expectedRes: api.MultiStageTestConfigurationLiteral{},
-		expectedErr: errors.New("test: nested-chains: duplicate name: ipi-setup"),
+		expectedRes:           api.MultiStageTestConfigurationLiteral{},
+		expectedErr:           errors.New("test: nested-chains: duplicate name: ipi-setup"),
+		expectedValidationErr: errors.New("nested-chains: duplicate name: ipi-setup"),
 	}, {
 		name: "Full AWS Workflow",
 		config: api.MultiStageTestConfiguration{
@@ -560,8 +591,41 @@ func TestResolve(t *testing.T) {
 				},
 			}},
 		},
+	}, {
+		name: "Workflow with invalid parameter",
+		config: api.MultiStageTestConfiguration{
+			ClusterProfile: api.ClusterProfileAWS,
+			Workflow:       &awsWorkflow,
+		},
+		workflowMap: WorkflowByName{
+			awsWorkflow: {
+				ClusterProfile: api.ClusterProfileAWS,
+				Pre: []api.TestStep{{
+					LiteralTestStep: &api.LiteralTestStep{
+						As:       "ipi-install",
+						From:     "installer",
+						Commands: "openshift-cluster install",
+						Resources: api.ResourceRequirements{
+							Requests: api.ResourceList{"cpu": "1000m"},
+							Limits:   api.ResourceList{"memory": "2Gi"},
+						},
+						Environment: []api.StepParameter{
+							{Name: "STEP_ENV", Default: &stepEnv},
+						}},
+				}},
+				Environment: api.TestEnvironment{
+					"NOT_THE_STEP_ENV": "NOT_THE_STEP_ENV",
+				},
+			},
+		},
+		expectedErr:           errors.New(`test: no step declares parameter "NOT_THE_STEP_ENV"`),
+		expectedValidationErr: errors.New(`ipi-aws: no step declares parameter "NOT_THE_STEP_ENV"`),
 	}} {
 		t.Run(testCase.name, func(t *testing.T) {
+			err := Validate(testCase.stepMap, testCase.chainMap, testCase.workflowMap)
+			if !reflect.DeepEqual(err, utilerrors.NewAggregate([]error{testCase.expectedValidationErr})) {
+				t.Errorf("got incorrect validation error: %s", cmp.Diff(err, testCase.expectedValidationErr))
+			}
 			ret, err := NewResolver(testCase.stepMap, testCase.chainMap, testCase.workflowMap).Resolve("test", testCase.config)
 			if !reflect.DeepEqual(err, utilerrors.NewAggregate([]error{testCase.expectedErr})) {
 				t.Errorf("got incorrect error: %s", cmp.Diff(err, testCase.expectedErr))

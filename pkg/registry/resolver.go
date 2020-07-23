@@ -17,6 +17,29 @@ type ReferenceByName map[string]api.LiteralTestStep
 type ChainByName map[string]api.RegistryChain
 type WorkflowByName map[string]api.MultiStageTestConfiguration
 
+// Validate verifies the internal consistency of steps, chains, and workflows.
+// A superset of this validation is performed later when actual test
+// configurations are resolved.
+func Validate(stepsByName ReferenceByName, chainsByName ChainByName, workflowsByName WorkflowByName) error {
+	reg := registry{stepsByName, chainsByName, workflowsByName}
+	var ret []error
+	for k := range chainsByName {
+		if _, err := reg.process([]api.TestStep{{Chain: &k}}, sets.NewString(), stackForChain()); err != nil {
+			ret = append(ret, err...)
+		}
+	}
+	for k, v := range workflowsByName {
+		stack := stackForWorkflow(k, v.Environment)
+		for _, s := range [][]api.TestStep{v.Pre, v.Test, v.Post} {
+			if _, err := reg.process(s, sets.NewString(), stack); err != nil {
+				ret = append(ret, err...)
+			}
+		}
+		ret = append(ret, stack.records[0].checkUnused(&stack)...)
+	}
+	return errors.NewAggregate(ret)
+}
+
 // registry will hold all the registry information needed to convert between the
 // user provided configs referencing the registry and the internal, complete
 // representation
@@ -88,6 +111,18 @@ func (r *registry) Resolve(name string, config api.MultiStageTestConfiguration) 
 
 type stack struct {
 	records []stackRecord
+	partial bool
+}
+
+func stackForChain() stack {
+	return stack{partial: true}
+}
+
+func stackForWorkflow(name string, env api.TestEnvironment) stack {
+	return stack{
+		records: []stackRecord{stackRecordForTest(name, env)},
+		partial: true,
+	}
 }
 
 func stackForTest(name string, env api.TestEnvironment) stack {
@@ -209,7 +244,7 @@ func (r *registry) processStep(step *api.TestStep, seen sets.String, stack stack
 		for _, e := range ret.Environment {
 			if v := stack.resolve(e.Name); v != nil {
 				e.Default = v
-			} else if e.Default == nil {
+			} else if e.Default == nil && !stack.partial {
 				errs = append(errs, stack.errorf("%s: unresolved parameter: %s", ret.As, e.Name))
 			}
 			env = append(env, e)

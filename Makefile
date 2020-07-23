@@ -165,11 +165,18 @@ update-integration:
 	UPDATE=true make integration
 .PHONY: update-integration
 
-pr-deploy:
+pr-deploy-configresolver:
 	oc --context app.ci --as system:admin process -p USER=$(USER) -p BRANCH=$(BRANCH) -p PULL_REQUEST=$(PULL_REQUEST) -f hack/pr-deploy.yaml | oc  --context app.ci --as system:admin apply -f -
 	for cm in ci-operator-master-configs step-registry config; do oc  --context app.ci --as system:admin get --export configmap $${cm} -n ci -o json | oc  --context app.ci --as system:admin create -f - -n ci-tools-$(PULL_REQUEST); done
 	echo "server is at https://$$( oc  --context app.ci --as system:admin get route server -n ci-tools-$(PULL_REQUEST) -o jsonpath={.spec.host} )"
 .PHONY: pr-deploy
+
+pr-deploy-backporter:
+	oc --context app.ci --as system:admin process -p USER=$(USER) -p BRANCH=$(BRANCH) -p PULL_REQUEST=$(PULL_REQUEST) -f hack/pr-deploy-backporter.yaml | oc  --context app.ci --as system:admin apply -f -
+	oc  --context app.ci --as system:admin get --export configmap plugins -n ci -o json | oc  --context app.ci --as system:admin create -f - -n ci-tools-$(PULL_REQUEST)
+	oc  --context app.ci --as system:admin get --export secret bugzilla-credentials-openshift-bugzilla-robot -n ci -o json | oc  --context app.ci --as system:admin create -f - -n ci-tools-$(PULL_REQUEST)
+	echo "server is at https://$$( oc  --context app.ci --as system:admin get route bp-server -n ci-tools-$(PULL_REQUEST) -o jsonpath={.spec.host} )"
+.PHONY: pr-deploy-backporter
 
 check-breaking-changes:
 	test/validate-prowgen-breaking-changes.sh

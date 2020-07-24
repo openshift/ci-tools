@@ -12,13 +12,33 @@ import (
 	"syscall"
 
 	"github.com/sirupsen/logrus"
+	coreapi "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
 
-	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/util"
 )
+
+var (
+	coreScheme   = runtime.NewScheme()
+	codecFactory = serializer.NewCodecFactory(coreScheme)
+	corev1Codec  = codecFactory.LegacyCodec(coreapi.SchemeGroupVersion)
+	rbacv1Codec  = codecFactory.LegacyCodec(rbacv1.SchemeGroupVersion)
+
+	encoder runtime.Encoder
+	decoder runtime.Decoder
+)
+
+func init() {
+	utilruntime.Must(coreapi.AddToScheme(coreScheme))
+	encoder = codecFactory.LegacyCodec(coreapi.SchemeGroupVersion)
+	decoder = codecFactory.UniversalDecoder(coreapi.SchemeGroupVersion)
+}
 
 func main() {
 	flagSet := flag.NewFlagSet("", flag.ExitOnError)
@@ -177,9 +197,8 @@ func createSecret(client coreclientset.SecretInterface, name, dir string, dry bo
 	}
 	secret.Name = name
 	if dry {
-		logger := steps.DryLogger{}
-		logger.AddObject(secret)
-		if err := logger.Log(); err != nil {
+		err := encoder.Encode(secret, os.Stdout)
+		if err != nil {
 			return fmt.Errorf("failed to log secret: %w", err)
 		}
 	} else if _, err := client.Update(secret); err != nil {

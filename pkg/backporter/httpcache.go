@@ -3,14 +3,22 @@ package backporter
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httputil"
 	"sync"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
+	"golang.org/x/sync/semaphore"
+)
+
+const (
+	xFromCache       = "X-From-Cache"
+	cacheRefreshFreq = 10 * time.Minute
 )
 
 type bugzillaCache struct {
@@ -18,24 +26,19 @@ type bugzillaCache struct {
 	cache map[string][]byte
 }
 
-func (bc *bugzillaCache) Get(key string) ([]byte, bool) {
+func (bc *bugzillaCache) get(key string) ([]byte, bool) {
 	bc.lock.Lock()
 	defer bc.lock.Unlock()
 	cachedVal, ok := bc.cache[key]
 	return cachedVal, ok
 }
 
-func (bc *bugzillaCache) Set(key string, respBytes []byte) {
+func (bc *bugzillaCache) set(key string, respBytes []byte) {
 	bc.lock.Lock()
 	defer bc.lock.Unlock()
 	bc.cache[key] = respBytes
 }
 
-func (bc *bugzillaCache) Delete(key string) {
-	bc.lock.Lock()
-	defer bc.lock.Unlock()
-	delete(bc.cache, key)
-}
 func newBugzillaCache() *bugzillaCache {
 	return &bugzillaCache{cache: map[string][]byte{}}
 }
@@ -59,25 +62,27 @@ func (t *cachingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 	g.Go(func() error {
 		resp, err = t.transport.RoundTrip(req)
 		if err != nil {
-			t.cache.Delete(req.URL.String())
 			return err
 		}
-		body, err := httputil.DumpResponse(resp, true)
-		if err != nil {
-			t.cache.Delete(req.URL.String())
-			return fmt.Errorf("err while prepping response to cache: %w", err)
-		}
 		if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusNotFound {
-			t.cache.Set(req.URL.String(), body)
-		} else {
-			t.cache.Delete(req.URL.String())
+			body, err := httputil.DumpResponse(resp, true)
+			if err != nil {
+				return fmt.Errorf("err while serializing response to cache: %w", err)
+			}
+			t.cache.set(req.URL.String(), body)
 		}
+
 		return nil
 	})
 
-	if cachedVal, isCached := t.cache.Get(req.URL.String()); isCached {
+	if cachedVal, isCached := t.cache.get(req.URL.String()); isCached {
 		b := bytes.NewBuffer(cachedVal)
-		return http.ReadResponse(bufio.NewReader(b), req)
+		cachedResp, err := http.ReadResponse(bufio.NewReader(b), req)
+		if err != nil {
+			return nil, err
+		}
+		cachedResp.Header.Set(xFromCache, "1")
+		return cachedResp, nil
 	}
 	if err := g.Wait(); err != nil {
 		return nil, err
@@ -85,29 +90,31 @@ func (t *cachingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 	return resp, nil
 }
 
-func refreshCache(bc *bugzillaCache) {
-	concurrencyLimiter := make(chan string, 10)
+func refreshCache(bc *bugzillaCache, m prometheus.Gauge) {
+	var sem = semaphore.NewWeighted(int64(10))
+	ctx := context.Background()
+	logrus.WithField("cache_entries", len(bc.cache)).Info("Refreshing cache")
+	m.Set(float64(len(bc.cache)))
 	for url := range bc.cache {
-		concurrencyLimiter <- url
+		if err := sem.Acquire(ctx, 1); err != nil {
+			logrus.WithError(fmt.Errorf("failed to acquire semaphore for key %s: %w", url, err))
+		}
+		url := url
 		go func() {
-			url := <-concurrencyLimiter
+			defer sem.Release(1)
 			resp, err := http.Get(url)
 			if err != nil {
-				bc.Delete(url)
 				logrus.WithError(fmt.Errorf("cache refresh error - failed to fetch %s: %w", url, err))
 				return
 			}
 			defer resp.Body.Close()
-			body, err := httputil.DumpResponse(resp, true)
-			if err != nil {
-				bc.Delete(url)
-				logrus.WithError(fmt.Errorf("cache refresh error - DumpResponse failed %s: %w", url, err))
-				return
-			}
 			if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusNotFound {
-				bc.Set(url, body)
-			} else {
-				bc.Delete(url)
+				body, err := httputil.DumpResponse(resp, true)
+				if err != nil {
+					logrus.WithError(fmt.Errorf("cache refresh error - DumpResponse failed %s: %w", url, err))
+					return
+				}
+				bc.set(url, body)
 			}
 		}()
 	}
@@ -124,12 +131,19 @@ func NewCachingTransport() http.RoundTripper {
 		cache:     newBugzillaCache(),
 		transport: http.DefaultTransport,
 	}
-	ticker := time.NewTicker(10 * time.Minute)
+	cacheRefreshMetrics := prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "bugzilla_backporter_cached_bugs",
+			Help: "bugs in cache to be refreshed",
+		},
+	)
+	prometheus.MustRegister(cacheRefreshMetrics)
+	ticker := time.NewTicker(cacheRefreshFreq)
 	go func() {
 		defer ticker.Stop()
 		for {
 			<-ticker.C
-			refreshCache(t.cache)
+			refreshCache(t.cache, cacheRefreshMetrics)
 		}
 	}()
 	return &t

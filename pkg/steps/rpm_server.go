@@ -43,27 +43,20 @@ type rpmServerStep struct {
 	serviceClient    coreclientset.ServicesGetter
 	istClient        imageclientset.ImageStreamTagsGetter
 	jobSpec          *api.JobSpec
-	dryLogger        *DryLogger
 }
 
-func (s *rpmServerStep) Inputs(dry bool) (api.InputDefinition, error) {
+func (s *rpmServerStep) Inputs() (api.InputDefinition, error) {
 	return nil, nil
 }
 
-func (s *rpmServerStep) Run(ctx context.Context, dry bool) error {
-	return results.ForReason("serving_rpms").ForError(s.run(ctx, dry))
+func (s *rpmServerStep) Run(ctx context.Context) error {
+	return results.ForReason("serving_rpms").ForError(s.run(ctx))
 }
 
-func (s *rpmServerStep) run(ctx context.Context, dry bool) error {
-	var imageReference string
-	if dry {
-		imageReference = "dry-fake"
-	} else {
-		ist, err := s.istClient.ImageStreamTags(s.jobSpec.Namespace()).Get(fmt.Sprintf("%s:%s", api.PipelineImageStream, s.config.From), meta.GetOptions{})
-		if err != nil {
-			return fmt.Errorf("could not find source ImageStreamTag for RPM repo deployment: %w", err)
-		}
-		imageReference = ist.Image.DockerImageReference
+func (s *rpmServerStep) run(ctx context.Context) error {
+	ist, err := s.istClient.ImageStreamTags(s.jobSpec.Namespace()).Get(fmt.Sprintf("%s:%s", api.PipelineImageStream, s.config.From), meta.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("could not find source ImageStreamTag for RPM repo deployment: %w", err)
 	}
 
 	labelSet := defaultPodLabels(s.jobSpec)
@@ -107,7 +100,7 @@ func (s *rpmServerStep) run(ctx context.Context, dry bool) error {
 				Spec: coreapi.PodSpec{
 					Containers: []coreapi.Container{{
 						Name:            RPMRepoName,
-						Image:           imageReference,
+						Image:           ist.Image.DockerImageReference,
 						ImagePullPolicy: coreapi.PullAlways,
 
 						// SimpleHTTPServer is too simple - it can't handle threading. Use a threaded implementation
@@ -171,12 +164,8 @@ python /tmp/serve.py
 		deployment.OwnerReferences = append(deployment.OwnerReferences, *owner)
 	}
 
-	if dry {
-		s.dryLogger.AddObject(deployment.DeepCopyObject())
-	} else {
-		if _, err := s.deploymentClient.Deployments(s.jobSpec.Namespace()).Create(deployment); err != nil && !kerrors.IsAlreadyExists(err) {
-			return fmt.Errorf("could not create RPM repo server deployment: %w", err)
-		}
+	if _, err := s.deploymentClient.Deployments(s.jobSpec.Namespace()).Create(deployment); err != nil && !kerrors.IsAlreadyExists(err) {
+		return fmt.Errorf("could not create RPM repo server deployment: %w", err)
 	}
 
 	service := &coreapi.Service{
@@ -194,9 +183,7 @@ python /tmp/serve.py
 		service.OwnerReferences = append(service.OwnerReferences, *owner)
 	}
 
-	if dry {
-		s.dryLogger.AddObject(service.DeepCopyObject())
-	} else if _, err := s.serviceClient.Services(s.jobSpec.Namespace()).Create(service); err != nil && !kerrors.IsAlreadyExists(err) {
+	if _, err := s.serviceClient.Services(s.jobSpec.Namespace()).Create(service); err != nil && !kerrors.IsAlreadyExists(err) {
 		return fmt.Errorf("could not create RPM repo server service: %w", err)
 	}
 	route := &routeapi.Route{
@@ -214,10 +201,6 @@ python /tmp/serve.py
 		route.OwnerReferences = append(route.OwnerReferences, *owner)
 	}
 
-	if dry {
-		s.dryLogger.AddObject(route.DeepCopyObject())
-		return nil
-	}
 	if _, err := s.routeClient.Routes(s.jobSpec.Namespace()).Create(route); err != nil && !kerrors.IsAlreadyExists(err) {
 		return fmt.Errorf("could not create RPM repo server route: %w", err)
 	}
@@ -442,7 +425,7 @@ func RPMServerStep(
 	routeClient routeclientset.RoutesGetter,
 	serviceClient coreclientset.ServicesGetter,
 	istClient imageclientset.ImageStreamTagsGetter,
-	jobSpec *api.JobSpec, dryLogger *DryLogger) api.Step {
+	jobSpec *api.JobSpec) api.Step {
 	return &rpmServerStep{
 		config:           config,
 		deploymentClient: deploymentClient,
@@ -450,6 +433,5 @@ func RPMServerStep(
 		serviceClient:    serviceClient,
 		istClient:        istClient,
 		jobSpec:          jobSpec,
-		dryLogger:        dryLogger,
 	}
 }

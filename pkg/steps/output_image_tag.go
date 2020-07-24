@@ -25,37 +25,28 @@ type outputImageTagStep struct {
 	istClient imageclientset.ImageStreamTagsGetter
 	isClient  imageclientset.ImageStreamsGetter
 	jobSpec   *api.JobSpec
-	dryLogger *DryLogger
 }
 
-func (s *outputImageTagStep) Inputs(dry bool) (api.InputDefinition, error) {
+func (s *outputImageTagStep) Inputs() (api.InputDefinition, error) {
 	return nil, nil
 }
 
-func (s *outputImageTagStep) Run(_ context.Context, dry bool) error {
-	return results.ForReason("tagging_output_image").ForError(s.run(dry))
+func (s *outputImageTagStep) Run(_ context.Context) error {
+	return results.ForReason("tagging_output_image").ForError(s.run())
 }
 
-func (s *outputImageTagStep) run(dry bool) error {
+func (s *outputImageTagStep) run() error {
 	toNamespace := s.namespace()
 	if string(s.config.From) == s.config.To.Tag && toNamespace == s.jobSpec.Namespace() && s.config.To.Name == api.StableImageStream {
 		log.Printf("Tagging %s into %s", s.config.From, s.config.To.Name)
 	} else {
 		log.Printf("Tagging %s into %s/%s:%s", s.config.From, toNamespace, s.config.To.Name, s.config.To.Tag)
 	}
-	fromImage := "dry-fake"
-	if !dry {
-		from, err := s.istClient.ImageStreamTags(s.jobSpec.Namespace()).Get(fmt.Sprintf("%s:%s", api.PipelineImageStream, s.config.From), meta.GetOptions{})
-		if err != nil {
-			return fmt.Errorf("could not resolve base image: %w", err)
-		}
-		fromImage = from.Image.Name
+	from, err := s.istClient.ImageStreamTags(s.jobSpec.Namespace()).Get(fmt.Sprintf("%s:%s", api.PipelineImageStream, s.config.From), meta.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("could not resolve base image: %w", err)
 	}
-	ist := s.imageStreamTag(fromImage)
-	if dry {
-		s.dryLogger.AddImageStreamTag(ist)
-		return nil
-	}
+	ist := s.imageStreamTag(from.Image.Name)
 
 	// ensure that the image stream tag points to the correct input, retry
 	// on conflict, and do nothing if another user creates before us
@@ -155,12 +146,11 @@ func (s *outputImageTagStep) imageStreamTag(fromImage string) *imageapi.ImageStr
 	}
 }
 
-func OutputImageTagStep(config api.OutputImageTagStepConfiguration, istClient imageclientset.ImageStreamTagsGetter, isClient imageclientset.ImageStreamsGetter, jobSpec *api.JobSpec, dryLogger *DryLogger) api.Step {
+func OutputImageTagStep(config api.OutputImageTagStepConfiguration, istClient imageclientset.ImageStreamTagsGetter, isClient imageclientset.ImageStreamsGetter, jobSpec *api.JobSpec) api.Step {
 	return &outputImageTagStep{
 		config:    config,
 		istClient: istClient,
 		isClient:  isClient,
 		jobSpec:   jobSpec,
-		dryLogger: dryLogger,
 	}
 }

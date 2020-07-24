@@ -3,10 +3,11 @@ package release
 import (
 	"context"
 	"fmt"
-	"github.com/openshift/ci-tools/pkg/results"
 	"log"
 	"strings"
 	"time"
+
+	"github.com/openshift/ci-tools/pkg/results"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -18,7 +19,6 @@ import (
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
-	"github.com/openshift/ci-tools/pkg/steps"
 )
 
 // promotionStep will tag a full release suite
@@ -30,7 +30,6 @@ type promotionStep struct {
 	srcClient      imageclientset.ImageV1Interface
 	dstClient      imageclientset.ImageV1Interface
 	jobSpec        *api.JobSpec
-	dryLogger      *steps.DryLogger
 }
 
 func targetName(config api.PromotionConfiguration) string {
@@ -40,7 +39,7 @@ func targetName(config api.PromotionConfiguration) string {
 	return fmt.Sprintf("%s/${component}:%s", config.Namespace, config.Tag)
 }
 
-func (s *promotionStep) Inputs(dry bool) (api.InputDefinition, error) {
+func (s *promotionStep) Inputs() (api.InputDefinition, error) {
 	return nil, nil
 }
 
@@ -51,11 +50,11 @@ var promotionRetry = wait.Backoff{
 	Jitter:   0.1,
 }
 
-func (s *promotionStep) Run(_ context.Context, dry bool) error {
-	return results.ForReason("promoting_images").ForError(s.run(dry))
+func (s *promotionStep) Run(_ context.Context) error {
+	return results.ForReason("promoting_images").ForError(s.run())
 }
 
-func (s *promotionStep) run(dry bool) error {
+func (s *promotionStep) run() error {
 	tags, names := toPromote(s.config, s.images, s.requiredImages)
 	if len(names) == 0 {
 		log.Println("Nothing to promote, skipping...")
@@ -93,10 +92,6 @@ func (s *promotionStep) run(dry bool) error {
 				}
 			}
 
-			if dry {
-				s.dryLogger.AddObject(is.DeepCopyObject())
-				return nil
-			}
 			if _, err := s.dstClient.ImageStreams(s.config.Namespace).Update(is); err != nil {
 				if errors.IsConflict(err) {
 					return err
@@ -142,10 +137,6 @@ func (s *promotionStep) run(dry bool) error {
 					Name: s.config.Tag,
 					From: valid,
 				},
-			}
-			if dry {
-				s.dryLogger.AddObject(ist.DeepCopyObject())
-				return nil
 			}
 			if _, err := client.Update(ist); err != nil {
 				if errors.IsConflict(err) {
@@ -250,7 +241,7 @@ func (s *promotionStep) Description() string {
 
 // PromotionStep copies tags from the pipeline image stream to the destination defined in the promotion config.
 // If the source tag does not exist it is silently skipped.
-func PromotionStep(config api.PromotionConfiguration, images []api.ProjectDirectoryImageBuildStepConfiguration, requiredImages sets.String, srcClient, dstClient imageclientset.ImageV1Interface, jobSpec *api.JobSpec, dryLogger *steps.DryLogger) api.Step {
+func PromotionStep(config api.PromotionConfiguration, images []api.ProjectDirectoryImageBuildStepConfiguration, requiredImages sets.String, srcClient, dstClient imageclientset.ImageV1Interface, jobSpec *api.JobSpec) api.Step {
 	return &promotionStep{
 		config:         config,
 		images:         images,
@@ -258,6 +249,5 @@ func PromotionStep(config api.PromotionConfiguration, images []api.ProjectDirect
 		srcClient:      srcClient,
 		dstClient:      dstClient,
 		jobSpec:        jobSpec,
-		dryLogger:      dryLogger,
 	}
 }

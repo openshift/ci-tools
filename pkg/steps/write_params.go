@@ -20,15 +20,15 @@ type writeParametersStep struct {
 
 var safeEnv = regexp.MustCompile(`^[a-zA-Z0-9_\-\.]*$`)
 
-func (s *writeParametersStep) Inputs(dry bool) (api.InputDefinition, error) {
+func (s *writeParametersStep) Inputs() (api.InputDefinition, error) {
 	return nil, nil
 }
 
-func (s *writeParametersStep) Run(_ context.Context, dry bool) error {
-	return results.ForReason("writing_parameters").ForError(s.run(dry))
+func (s *writeParametersStep) Run(_ context.Context) error {
+	return results.ForReason("writing_parameters").ForError(s.run())
 }
 
-func (s *writeParametersStep) run(dry bool) error {
+func (s *writeParametersStep) run() error {
 	log.Printf("Writing parameters to %s", s.paramFile)
 	var params []string
 
@@ -46,10 +46,6 @@ func (s *writeParametersStep) run(dry bool) error {
 
 	sort.Strings(params)
 
-	if dry {
-		log.Printf("\n%s", strings.Join(params, "\n"))
-		return nil
-	}
 	params = append(params, "")
 	return ioutil.WriteFile(s.paramFile, []byte(strings.Join(params, "\n")), 0640)
 }

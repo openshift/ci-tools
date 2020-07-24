@@ -60,28 +60,23 @@ type importReleaseStep struct {
 	rbacClient  rbacclientset.RbacV1Interface
 	artifactDir string
 	jobSpec     *api.JobSpec
-	dryLogger   *steps.DryLogger
 }
 
-func (s *importReleaseStep) Inputs(dry bool) (api.InputDefinition, error) {
+func (s *importReleaseStep) Inputs() (api.InputDefinition, error) {
 	return api.InputDefinition{s.pullSpec}, nil
 }
 
-func (s *importReleaseStep) Run(ctx context.Context, dry bool) error {
-	return results.ForReason("importing_release").ForError(s.run(ctx, dry))
+func (s *importReleaseStep) Run(ctx context.Context) error {
+	return results.ForReason("importing_release").ForError(s.run(ctx))
 }
 
-func (s *importReleaseStep) run(ctx context.Context, dry bool) error {
-	_, err := setupReleaseImageStream(s.jobSpec.Namespace(), s.saGetter, s.rbacClient, s.imageClient, s.dryLogger, dry)
+func (s *importReleaseStep) run(ctx context.Context) error {
+	_, err := setupReleaseImageStream(s.jobSpec.Namespace(), s.saGetter, s.rbacClient, s.imageClient)
 	if err != nil {
 		return err
 	}
 
 	streamName := api.StableStreamFor(s.name)
-
-	if dry {
-		return nil
-	}
 
 	log.Printf("Importing release image %s", s.name)
 
@@ -236,8 +231,8 @@ oc adm release extract --from=%q --file=image-references > /tmp/artifacts/%s
 		copied[podConfig.As] = api.ResourceRequirements{Requests: api.ResourceList{"cpu": "50m", "memory": "400Mi"}}
 		resources = copied
 	}
-	step := steps.PodStep("release", podConfig, resources, s.podClient, artifactDir, s.jobSpec, s.dryLogger)
-	if err := step.Run(ctx, false); err != nil {
+	step := steps.PodStep("release", podConfig, resources, s.podClient, artifactDir, s.jobSpec)
+	if err := step.Run(ctx); err != nil {
 		return err
 	}
 
@@ -403,7 +398,7 @@ func (s *importReleaseStep) Description() string {
 // ImportReleaseStep imports an existing update payload image
 func ImportReleaseStep(name, pullSpec string, append bool, resources api.ResourceConfiguration,
 	podClient steps.PodClient, imageClient imageclientset.ImageV1Interface, saGetter coreclientset.ServiceAccountsGetter,
-	rbacClient rbacclientset.RbacV1Interface, artifactDir string, jobSpec *api.JobSpec, dryLogger *steps.DryLogger) api.Step {
+	rbacClient rbacclientset.RbacV1Interface, artifactDir string, jobSpec *api.JobSpec) api.Step {
 	return &importReleaseStep{
 		name:        name,
 		pullSpec:    pullSpec,
@@ -415,6 +410,5 @@ func ImportReleaseStep(name, pullSpec string, append bool, resources api.Resourc
 		rbacClient:  rbacClient,
 		artifactDir: artifactDir,
 		jobSpec:     jobSpec,
-		dryLogger:   dryLogger,
 	}
 }

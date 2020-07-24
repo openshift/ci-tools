@@ -43,7 +43,6 @@ func E2ETestStep(
 	secretClient coreclientset.SecretsGetter,
 	artifactDir string,
 	jobSpec *api.JobSpec,
-	dryLogger *steps.DryLogger,
 	resources api.ResourceConfiguration,
 ) (api.Step, error) {
 	var template *templateapi.Template
@@ -97,7 +96,7 @@ func E2ETestStep(
 		params = api.NewOverrideParameters(params, overrides)
 	}
 
-	step := steps.TemplateExecutionStep(template, params, podClient, templateClient, artifactDir, jobSpec, dryLogger, resources)
+	step := steps.TemplateExecutionStep(template, params, podClient, templateClient, artifactDir, jobSpec, resources)
 	subTests, ok := step.(nestedSubTests)
 	if !ok {
 		return nil, fmt.Errorf("unexpected %T", step)
@@ -115,22 +114,19 @@ func E2ETestStep(
 	}, nil
 }
 
-func (s *e2eTestStep) Inputs(dry bool) (api.InputDefinition, error) {
+func (s *e2eTestStep) Inputs() (api.InputDefinition, error) {
 	return nil, nil
 }
 
-func (s *e2eTestStep) Run(ctx context.Context, dry bool) error {
-	return results.ForReason("installing_cluster").ForError(s.run(ctx, dry))
+func (s *e2eTestStep) Run(ctx context.Context) error {
+	return results.ForReason("installing_cluster").ForError(s.run(ctx))
 }
 
-func (s *e2eTestStep) run(ctx context.Context, dry bool) error {
-	if dry {
-		return nil
-	}
+func (s *e2eTestStep) run(ctx context.Context) error {
 	if _, err := s.secretClient.Secrets(s.jobSpec.Namespace()).Get(fmt.Sprintf("%s-cluster-profile", s.testConfig.As), meta.GetOptions{}); err != nil {
 		return results.ForReason("missing_cluster_profile").WithError(err).Errorf("could not find required secret: %v", err)
 	}
-	return s.step.Run(ctx, dry)
+	return s.step.Run(ctx)
 }
 
 func (s *e2eTestStep) Requires() []api.StepLink {

@@ -246,7 +246,6 @@ type options struct {
 
 	verbose bool
 	help    bool
-	dry     bool
 	print   bool
 
 	writeParams string
@@ -274,7 +273,6 @@ type options struct {
 	leaseClient             lease.Client
 
 	givePrAuthorAccessToNamespace bool
-	determinizeOutput             bool
 	impersonateUser               string
 	authors                       []string
 
@@ -296,6 +294,8 @@ type options struct {
 }
 
 func bindOptions(flag *flag.FlagSet) *options {
+	// for backwards compatibility
+	var dry, determinize bool
 	opt := &options{
 		idleCleanupDuration: 1 * time.Hour,
 		cleanupDuration:     12 * time.Hour,
@@ -314,7 +314,7 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.StringVar(&opt.configSpecPath, "config", "", "The configuration file. If not specified the CONFIG_SPEC environment variable or the configresolver will be used.")
 	flag.StringVar(&opt.unresolvedConfigPath, "unresolved-config", "", "The configuration file, before resolution. If not specified the UNRESOLVED_CONFIG environment variable will be used, if set.")
 	flag.Var(&opt.targets, "target", "One or more targets in the configuration to build. Only steps that are required for this target will be run.")
-	flag.BoolVar(&opt.dry, "dry-run", opt.dry, "Print the steps that would be run and the objects that would be created without executing any steps")
+	flag.BoolVar(&dry, "dry-run", dry, "DEPRECATED: DO NOT USE")
 	flag.BoolVar(&opt.print, "print-graph", opt.print, "Print a directed graph of the build steps and exit. Intended for use with the golang digraph utility.")
 
 	// add to the graph of things we run or create
@@ -341,7 +341,7 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.StringVar(&opt.gitRef, "git-ref", "", "Populate the job spec from this local Git reference. If JOB_SPEC is set, the refs field will be overwritten.")
 	flag.BoolVar(&opt.givePrAuthorAccessToNamespace, "give-pr-author-access-to-namespace", true, "Give view access to the temporarily created namespace to the PR author.")
 	flag.StringVar(&opt.impersonateUser, "as", "", "Username to impersonate")
-	flag.BoolVar(&opt.determinizeOutput, "determinize-output", false, "Determinize dry run's output by ordering the created objects.")
+	flag.BoolVar(&determinize, "determinize-output", false, "DEPRECATED: DO NOT USE")
 
 	// flags needed for the configresolver
 	flag.StringVar(&opt.resolverAddress, "resolver-address", configResolverAddress, "Address of configresolver")
@@ -414,7 +414,7 @@ func (o *options) Complete() error {
 		return results.ForReason("validating_config").ForError(err)
 	}
 
-	if o.dry && o.verbose {
+	if o.verbose {
 		config, _ := yaml.Marshal(o.configSpec)
 		log.Printf("Resolved configuration:\n%s", string(config))
 		job, _ := json.Marshal(o.jobSpec)
@@ -496,20 +496,16 @@ func (o *options) Complete() error {
 		o.templates = append(o.templates, template)
 	}
 
-	o.clusterConfig = &rest.Config{}
-	if !o.dry {
-
-		clusterConfig, err := util.LoadClusterConfig()
-		if err != nil {
-			return fmt.Errorf("failed to load cluster config: %w", err)
-		}
-
-		if len(o.impersonateUser) > 0 {
-			clusterConfig.Impersonate = rest.ImpersonationConfig{UserName: o.impersonateUser}
-		}
-
-		o.clusterConfig = clusterConfig
+	clusterConfig, err := util.LoadClusterConfig()
+	if err != nil {
+		return fmt.Errorf("failed to load cluster config: %w", err)
 	}
+
+	if len(o.impersonateUser) > 0 {
+		clusterConfig.Impersonate = rest.ImpersonationConfig{UserName: o.impersonateUser}
+	}
+
+	o.clusterConfig = clusterConfig
 
 	if len(o.pullSecretPath) > 0 {
 		o.pullSecret, err = getPullSecretFromFile(o.pullSecretPath)
@@ -545,9 +541,8 @@ func (o *options) Run() []error {
 		log.Printf("Ran for %s", time.Since(start).Truncate(time.Second))
 	}()
 
-	dryLogger := steps.NewDryLogger(o.determinizeOutput)
 	// load the graph from the configuration
-	buildSteps, postSteps, err := defaults.FromConfig(o.configSpec, o.jobSpec, o.templates, o.writeParams, o.artifactDir, o.promote, o.clusterConfig, &o.leaseClient, o.targets.values, dryLogger, o.cloneAuthConfig, o.pullSecret)
+	buildSteps, postSteps, err := defaults.FromConfig(o.configSpec, o.jobSpec, o.templates, o.writeParams, o.artifactDir, o.promote, o.clusterConfig, &o.leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret)
 	if err != nil {
 		return []error{results.ForReason("defaulting_config").WithError(err).Errorf("failed to generate steps from config: %v", err)}
 	}
@@ -604,21 +599,19 @@ func (o *options) Run() []error {
 		if err != nil {
 			return []error{fmt.Errorf("could not get core client for cluster config: %w", err)}
 		}
-		if !o.dry {
-			go monitorNamespace(ctx, cancel, o.namespace, client.Namespaces())
-		}
+		go monitorNamespace(ctx, cancel, o.namespace, client.Namespaces())
 		authClient, err := authclientset.NewForConfig(o.clusterConfig)
 		if err != nil {
 			return []error{fmt.Errorf("could not get auth client for cluster config: %w", err)}
 		}
-		eventRecorder, err := eventRecorder(client, authClient, o.namespace, o.dry)
+		eventRecorder, err := eventRecorder(client, authClient, o.namespace)
 		if err != nil {
 			return []error{fmt.Errorf("could not create event recorder: %w", err)}
 		}
 		runtimeObject := &coreapi.ObjectReference{Namespace: o.namespace}
 		eventRecorder.Event(runtimeObject, coreapi.EventTypeNormal, "CiJobStarted", eventJobDescription(o.jobSpec, o.namespace))
 		// execute the graph
-		suites, errs := steps.Run(ctx, nodes, o.dry)
+		suites, errs := steps.Run(ctx, nodes)
 		if err := o.writeJUnit(suites, "operator"); err != nil {
 			log.Printf("warning: Unable to write JUnit result: %v", err)
 		}
@@ -628,9 +621,6 @@ func (o *options) Run() []error {
 		}
 		if len(errs) > 0 {
 			eventRecorder.Event(runtimeObject, coreapi.EventTypeWarning, "CiJobFailed", eventJobDescription(o.jobSpec, o.namespace))
-			if !o.dry {
-				time.Sleep(time.Second)
-			}
 			var wrapped []error
 			for _, err := range errs {
 				wrapped = append(wrapped, &errWroteJUnit{wrapped: results.ForReason("executing_graph").WithError(err).Errorf("could not run steps: %v", err)})
@@ -639,23 +629,14 @@ func (o *options) Run() []error {
 		}
 
 		for _, step := range postSteps {
-			if err := step.Run(ctx, o.dry); err != nil {
+			if err := step.Run(ctx); err != nil {
 				eventRecorder.Event(runtimeObject, coreapi.EventTypeWarning, "PostStepFailed",
 					fmt.Sprintf("Post step %s failed while %s", step.Name(), eventJobDescription(o.jobSpec, o.namespace)))
-				if !o.dry {
-					time.Sleep(time.Second)
-				}
 				return []error{results.ForReason("executing_post").WithError(err).Errorf("could not run post step %s: %v", step.Name(), err)}
 			}
 		}
 
 		eventRecorder.Event(runtimeObject, coreapi.EventTypeNormal, "CiJobSucceeded", eventJobDescription(o.jobSpec, o.namespace))
-		if !o.dry {
-			time.Sleep(time.Second)
-		} else if err := dryLogger.Log(); err != nil {
-			fmt.Println(err)
-		}
-
 		return nil
 	})
 }
@@ -663,7 +644,7 @@ func (o *options) Run() []error {
 func (o *options) resolveInputs(steps []api.Step) error {
 	var inputs api.InputDefinition
 	for _, step := range steps {
-		definition, err := step.Inputs(o.dry)
+		definition, err := step.Inputs()
 		if err != nil {
 			return fmt.Errorf("could not determine inputs for step %s: %w", step.Name(), err)
 		}
@@ -725,9 +706,6 @@ func (o *options) resolveInputs(steps []api.Step) error {
 }
 
 func (o *options) initializeNamespace() error {
-	if o.dry {
-		return nil
-	}
 	projectGetter, err := projectclientset.NewForConfig(o.clusterConfig)
 	if err != nil {
 		return fmt.Errorf("could not get project client for cluster config: %w", err)
@@ -978,11 +956,6 @@ func (o *options) writeMetadataJSON() error {
 	}
 
 	data, _ := json.MarshalIndent(m, "", "")
-
-	if o.dry {
-		log.Printf("metadata.json:\n%s", string(data))
-		return nil
-	}
 	err = ioutil.WriteFile(metadataJSONPath, data, 0640)
 
 	if err != nil {
@@ -1228,9 +1201,7 @@ func (o *options) saveNamespaceArtifacts() {
 func (o *options) initializeLeaseClient() error {
 	var err error
 	owner := o.namespace + "-" + o.jobSpec.JobNameHash()
-	if o.dry {
-		o.leaseClient = lease.NewFakeClient(owner, o.leaseServer, 0, nil, nil)
-	} else if o.leaseClient, err = lease.NewClient(owner, o.leaseServer, o.leaseServerUsername, o.leaseServerPasswordFile, 60); err != nil {
+	if o.leaseClient, err = lease.NewClient(owner, o.leaseServer, o.leaseServerUsername, o.leaseServerPasswordFile, 60); err != nil {
 		return fmt.Errorf("failed to create the lease client: %w", err)
 	}
 	t := time.NewTicker(30 * time.Second)
@@ -1484,10 +1455,7 @@ func summarizeRef(refs prowapi.Refs) string {
 	return fmt.Sprintf("Resolved source https://github.com/%s/%s to %s@%s", refs.Org, refs.Repo, refs.BaseRef, shorten(refs.BaseSHA, 8))
 }
 
-func eventRecorder(kubeClient *coreclientset.CoreV1Client, authClient *authclientset.AuthorizationV1Client, namespace string, dry bool) (record.EventRecorder, error) {
-	if dry {
-		return &record.FakeRecorder{}, nil
-	}
+func eventRecorder(kubeClient *coreclientset.CoreV1Client, authClient *authclientset.AuthorizationV1Client, namespace string) (record.EventRecorder, error) {
 	res, err := authClient.SelfSubjectAccessReviews().Create(&authapi.SelfSubjectAccessReview{
 		Spec: authapi.SelfSubjectAccessReviewSpec{
 			ResourceAttributes: &authapi.ResourceAttributes{

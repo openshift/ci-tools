@@ -21,20 +21,19 @@ type gitSourceStep struct {
 	buildClient     BuildClient
 	artifactDir     string
 	jobSpec         *api.JobSpec
-	dryLogger       *DryLogger
 	cloneAuthConfig *CloneAuthConfig
 	pullSecret      *coreapi.Secret
 }
 
-func (s *gitSourceStep) Inputs(dry bool) (api.InputDefinition, error) {
+func (s *gitSourceStep) Inputs() (api.InputDefinition, error) {
 	return s.jobSpec.Inputs(), nil
 }
 
-func (s *gitSourceStep) Run(ctx context.Context, dry bool) error {
-	return results.ForReason("building_image_from_source").ForError(s.run(ctx, dry))
+func (s *gitSourceStep) Run(ctx context.Context) error {
+	return results.ForReason("building_image_from_source").ForError(s.run(ctx))
 }
 
-func (s *gitSourceStep) run(ctx context.Context, dry bool) error {
+func (s *gitSourceStep) run(ctx context.Context) error {
 	if refs := determineRefsWorkdir(s.jobSpec.Refs, s.jobSpec.ExtraRefs); refs != nil {
 		cloneURI := fmt.Sprintf("https://github.com/%s/%s.git", refs.Org, refs.Repo)
 		var secretName string
@@ -51,7 +50,7 @@ func (s *gitSourceStep) run(ctx context.Context, dry bool) error {
 				URI: cloneURI,
 				Ref: refs.BaseRef,
 			},
-		}, s.config.DockerfilePath, s.resources, s.pullSecret), dry, s.artifactDir, s.dryLogger)
+		}, s.config.DockerfilePath, s.resources, s.pullSecret), s.artifactDir)
 	}
 
 	return fmt.Errorf("nothing to build source image from, no refs")
@@ -95,7 +94,7 @@ func determineRefsWorkdir(refs *prowapi.Refs, extraRefs []prowapi.Refs) *prowapi
 }
 
 // GitSourceStep returns gitSourceStep that holds all the required information to create a build from a git source.
-func GitSourceStep(config api.ProjectDirectoryImageBuildInputs, resources api.ResourceConfiguration, buildClient BuildClient, imageClient imageclientset.ImageV1Interface, artifactDir string, jobSpec *api.JobSpec, dryLogger *DryLogger, cloneAuthConfig *CloneAuthConfig, pullSecret *coreapi.Secret) api.Step {
+func GitSourceStep(config api.ProjectDirectoryImageBuildInputs, resources api.ResourceConfiguration, buildClient BuildClient, imageClient imageclientset.ImageV1Interface, artifactDir string, jobSpec *api.JobSpec, cloneAuthConfig *CloneAuthConfig, pullSecret *coreapi.Secret) api.Step {
 	return &gitSourceStep{
 		config:          config,
 		resources:       resources,
@@ -103,7 +102,6 @@ func GitSourceStep(config api.ProjectDirectoryImageBuildInputs, resources api.Re
 		imageClient:     imageClient,
 		artifactDir:     artifactDir,
 		jobSpec:         jobSpec,
-		dryLogger:       dryLogger,
 		cloneAuthConfig: cloneAuthConfig,
 		pullSecret:      pullSecret,
 	}

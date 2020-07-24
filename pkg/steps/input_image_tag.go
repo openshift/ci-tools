@@ -26,19 +26,14 @@ var (
 // in the pipeline ImageStream that resolves to
 // the base image
 type inputImageTagStep struct {
-	config    api.InputImageTagStepConfiguration
-	client    imageclientset.ImageV1Interface
-	jobSpec   *api.JobSpec
-	dryLogger *DryLogger
+	config  api.InputImageTagStepConfiguration
+	client  imageclientset.ImageV1Interface
+	jobSpec *api.JobSpec
 
 	imageName string
 }
 
-func (s *inputImageTagStep) Inputs(dry bool) (api.InputDefinition, error) {
-	if dry {
-		return api.InputDefinition{s.imageName}, nil
-	}
-
+func (s *inputImageTagStep) Inputs() (api.InputDefinition, error) {
 	if len(s.imageName) > 0 {
 		return api.InputDefinition{s.imageName}, nil
 	}
@@ -52,15 +47,14 @@ func (s *inputImageTagStep) Inputs(dry bool) (api.InputDefinition, error) {
 	return api.InputDefinition{from.Image.Name}, nil
 }
 
-func (s *inputImageTagStep) Run(ctx context.Context, dry bool) error {
-	return results.ForReason("tagging_input_image").ForError(s.run(ctx, dry))
+func (s *inputImageTagStep) Run(ctx context.Context) error {
+	return results.ForReason("tagging_input_image").ForError(s.run(ctx))
 }
 
-func (s *inputImageTagStep) run(ctx context.Context, dry bool) error {
+func (s *inputImageTagStep) run(ctx context.Context) error {
 	log.Printf("Tagging %s/%s:%s into %s:%s", s.config.BaseImage.Namespace, s.config.BaseImage.Name, s.config.BaseImage.Tag, api.PipelineImageStream, s.config.To)
 
-	_, err := s.Inputs(dry)
-	if err != nil {
+	if _, err := s.Inputs(); err != nil {
 		return fmt.Errorf("could not resolve inputs for image tag step: %w", err)
 	}
 
@@ -79,11 +73,6 @@ func (s *inputImageTagStep) run(ctx context.Context, dry bool) error {
 				Namespace: s.config.BaseImage.Namespace,
 			},
 		},
-	}
-
-	if dry {
-		s.dryLogger.AddImageStreamTag(ist)
-		return nil
 	}
 
 	if _, err := s.client.ImageStreamTags(s.jobSpec.Namespace()).Create(ist); err != nil && !errors.IsAlreadyExists(err) {
@@ -147,12 +136,11 @@ func (s *inputImageTagStep) Description() string {
 	return fmt.Sprintf("Find the input image %s and tag it into the pipeline", s.config.To)
 }
 
-func InputImageTagStep(config api.InputImageTagStepConfiguration, client imageclientset.ImageV1Interface, jobSpec *api.JobSpec, dryLogger *DryLogger) api.Step {
+func InputImageTagStep(config api.InputImageTagStepConfiguration, client imageclientset.ImageV1Interface, jobSpec *api.JobSpec) api.Step {
 	// when source and destination client are the same, we don't need to use external imports
 	return &inputImageTagStep{
-		config:    config,
-		client:    client,
-		jobSpec:   jobSpec,
-		dryLogger: dryLogger,
+		config:  config,
+		client:  client,
+		jobSpec: jobSpec,
 	}
 }

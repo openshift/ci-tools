@@ -3,9 +3,10 @@ package release
 import (
 	"context"
 	"fmt"
-	"github.com/openshift/ci-tools/pkg/results"
 	"log"
 	"strings"
+
+	"github.com/openshift/ci-tools/pkg/results"
 
 	coreapi "k8s.io/api/core/v1"
 
@@ -20,7 +21,6 @@ import (
 	routeclientset "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
-	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/util"
 )
 
@@ -28,22 +28,20 @@ import (
 type stableImagesTagStep struct {
 	jobSpec   *api.JobSpec
 	dstClient imageclientset.ImageV1Interface
-	dryLogger *steps.DryLogger
 }
 
-func StableImagesTagStep(dstClient imageclientset.ImageV1Interface, jobSpec *api.JobSpec, dryLogger *steps.DryLogger) api.Step {
+func StableImagesTagStep(dstClient imageclientset.ImageV1Interface, jobSpec *api.JobSpec) api.Step {
 	return &stableImagesTagStep{
 		dstClient: dstClient,
 		jobSpec:   jobSpec,
-		dryLogger: dryLogger,
 	}
 }
 
-func (s *stableImagesTagStep) Run(_ context.Context, dry bool) error {
-	return results.ForReason("creating_stable_images").ForError(s.run(dry))
+func (s *stableImagesTagStep) Run(_ context.Context) error {
+	return results.ForReason("creating_stable_images").ForError(s.run())
 }
 
-func (s *stableImagesTagStep) run(dry bool) error {
+func (s *stableImagesTagStep) run() error {
 	log.Printf("Will output images to %s:%s", api.StableImageStream, api.ComponentFormatReplacement)
 
 	newIS := &imageapi.ImageStream{
@@ -56,10 +54,6 @@ func (s *stableImagesTagStep) run(dry bool) error {
 			},
 		},
 	}
-	if dry {
-		s.dryLogger.AddObject(newIS.DeepCopyObject())
-		return nil
-	}
 	_, err := s.dstClient.ImageStreams(s.jobSpec.Namespace()).Create(newIS)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		return fmt.Errorf("could not create stable imagestreamtag: %w", err)
@@ -67,7 +61,7 @@ func (s *stableImagesTagStep) run(dry bool) error {
 	return nil
 }
 
-func (s *stableImagesTagStep) Inputs(dry bool) (api.InputDefinition, error) {
+func (s *stableImagesTagStep) Inputs() (api.InputDefinition, error) {
 	return nil, nil
 }
 
@@ -97,7 +91,6 @@ type releaseImagesTagStep struct {
 	configMapClient coreclientset.ConfigMapsGetter
 	params          *api.DeferredParameters
 	jobSpec         *api.JobSpec
-	dryLogger       *steps.DryLogger
 }
 
 func findSpecTag(is *imageapi.ImageStream, tag string) *coreapi.ObjectReference {
@@ -133,7 +126,7 @@ func findStatusTag(is *imageapi.ImageStream, tag string) (*coreapi.ObjectReferen
 	return nil, ""
 }
 
-func (s *releaseImagesTagStep) Inputs(dry bool) (api.InputDefinition, error) {
+func (s *releaseImagesTagStep) Inputs() (api.InputDefinition, error) {
 	return nil, nil
 }
 
@@ -141,19 +134,15 @@ func sourceName(config api.ReleaseTagConfiguration) string {
 	return fmt.Sprintf("%s/%s:%s", config.Namespace, config.Name, api.ComponentFormatReplacement)
 }
 
-func (s *releaseImagesTagStep) Run(_ context.Context, dry bool) error {
-	return results.ForReason("creating_release_images").ForError(s.run(dry))
+func (s *releaseImagesTagStep) Run(_ context.Context) error {
+	return results.ForReason("creating_release_images").ForError(s.run())
 }
 
-func (s *releaseImagesTagStep) run(dry bool) error {
-	if dry {
-		log.Printf("Tagging shared images from %s", sourceName(s.config))
+func (s *releaseImagesTagStep) run() error {
+	if format, err := s.imageFormat(); err == nil {
+		log.Printf("Tagged shared images from %s, images will be pullable from %s", sourceName(s.config), format)
 	} else {
-		if format, err := s.imageFormat(); err == nil {
-			log.Printf("Tagged shared images from %s, images will be pullable from %s", sourceName(s.config), format)
-		} else {
-			log.Printf("Tagged shared images from %s", sourceName(s.config))
-		}
+		log.Printf("Tagged shared images from %s", sourceName(s.config))
 	}
 
 	is, err := s.client.ImageStreams(s.config.Namespace).Get(s.config.Name, meta.GetOptions{})
@@ -179,11 +168,6 @@ func (s *releaseImagesTagStep) run(dry bool) error {
 				From: valid,
 			})
 		}
-	}
-
-	if dry {
-		s.dryLogger.AddObject(newIS.DeepCopyObject())
-		return nil
 	}
 
 	initialIS := newIS.DeepCopy()
@@ -257,7 +241,7 @@ func (s *releaseImagesTagStep) Description() string {
 	return fmt.Sprintf("Find all of the input images from %s and tag them into the output image stream", sourceName(s.config))
 }
 
-func ReleaseImagesTagStep(config api.ReleaseTagConfiguration, client imageclientset.ImageV1Interface, routeClient routeclientset.RoutesGetter, configMapClient coreclientset.ConfigMapsGetter, params *api.DeferredParameters, jobSpec *api.JobSpec, dryLogger *steps.DryLogger) api.Step {
+func ReleaseImagesTagStep(config api.ReleaseTagConfiguration, client imageclientset.ImageV1Interface, routeClient routeclientset.RoutesGetter, configMapClient coreclientset.ConfigMapsGetter, params *api.DeferredParameters, jobSpec *api.JobSpec) api.Step {
 	return &releaseImagesTagStep{
 		config:          config,
 		client:          client,
@@ -265,7 +249,6 @@ func ReleaseImagesTagStep(config api.ReleaseTagConfiguration, client imageclient
 		configMapClient: configMapClient,
 		params:          params,
 		jobSpec:         jobSpec,
-		dryLogger:       dryLogger,
 	}
 }
 

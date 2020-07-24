@@ -148,26 +148,25 @@ type sourceStep struct {
 	imageClient     imageclientset.ImageV1Interface
 	artifactDir     string
 	jobSpec         *api.JobSpec
-	dryLogger       *DryLogger
 	cloneAuthConfig *CloneAuthConfig
 	pullSecret      *coreapi.Secret
 }
 
-func (s *sourceStep) Inputs(dry bool) (api.InputDefinition, error) {
+func (s *sourceStep) Inputs() (api.InputDefinition, error) {
 	return s.jobSpec.Inputs(), nil
 }
 
-func (s *sourceStep) Run(ctx context.Context, dry bool) error {
-	return results.ForReason("cloning_source").ForError(s.run(ctx, dry))
+func (s *sourceStep) Run(ctx context.Context) error {
+	return results.ForReason("cloning_source").ForError(s.run(ctx))
 }
 
-func (s *sourceStep) run(ctx context.Context, dry bool) error {
+func (s *sourceStep) run(ctx context.Context) error {
 	clonerefsRef, err := istObjectReference(s.imageClient, s.config.ClonerefsImage)
 	if err != nil {
 		return fmt.Errorf("could not resolve clonerefs source: %w", err)
 	}
 
-	return handleBuild(ctx, s.buildClient, createBuild(s.config, s.jobSpec, clonerefsRef, s.resources, s.cloneAuthConfig, s.pullSecret), dry, s.artifactDir, s.dryLogger)
+	return handleBuild(ctx, s.buildClient, createBuild(s.config, s.jobSpec, clonerefsRef, s.resources, s.cloneAuthConfig, s.pullSecret), s.artifactDir)
 }
 
 func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clonerefsRef coreapi.ObjectReference, resources api.ResourceConfiguration, cloneAuthConfig *CloneAuthConfig, pullSecret *coreapi.Secret) *buildapi.Build {
@@ -348,12 +347,7 @@ func isBuildPhaseTerminated(phase buildapi.BuildPhase) bool {
 	return true
 }
 
-func handleBuild(ctx context.Context, buildClient BuildClient, build *buildapi.Build, dry bool, artifactDir string, dryLogger *DryLogger) error {
-	if dry {
-		dryLogger.AddBuild(build)
-		return nil
-	}
-
+func handleBuild(ctx context.Context, buildClient BuildClient, build *buildapi.Build, artifactDir string) error {
 	if _, err := buildClient.Builds(build.Namespace).Create(build); err != nil {
 		if !errors.IsAlreadyExists(err) {
 			return fmt.Errorf("could not create build %s: %w", build.Name, err)
@@ -653,7 +647,7 @@ func (s *sourceStep) Description() string {
 
 func SourceStep(config api.SourceStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient,
 	imageClient imageclientset.ImageV1Interface,
-	artifactDir string, jobSpec *api.JobSpec, dryLogger *DryLogger, cloneAuthConfig *CloneAuthConfig, pullSecret *coreapi.Secret) api.Step {
+	artifactDir string, jobSpec *api.JobSpec, cloneAuthConfig *CloneAuthConfig, pullSecret *coreapi.Secret) api.Step {
 	return &sourceStep{
 		config:          config,
 		resources:       resources,
@@ -661,7 +655,6 @@ func SourceStep(config api.SourceStepConfiguration, resources api.ResourceConfig
 		imageClient:     imageClient,
 		artifactDir:     artifactDir,
 		jobSpec:         jobSpec,
-		dryLogger:       dryLogger,
 		cloneAuthConfig: cloneAuthConfig,
 		pullSecret:      pullSecret,
 	}

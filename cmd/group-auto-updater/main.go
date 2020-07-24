@@ -14,15 +14,31 @@ import (
 
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/test-infra/prow/config/org"
 
+	userv1 "github.com/openshift/api/user/v1"
 	v1 "github.com/openshift/api/user/v1"
 	userV1 "github.com/openshift/client-go/user/clientset/versioned/typed/user/v1"
 
-	"github.com/openshift/ci-tools/pkg/steps"
+	"k8s.io/test-infra/prow/config/org"
+
 	"github.com/openshift/ci-tools/pkg/util"
 )
+
+var (
+	coreScheme   = runtime.NewScheme()
+	codecFactory = serializer.NewCodecFactory(coreScheme)
+
+	encoder runtime.Encoder
+)
+
+func init() {
+	utilruntime.Must(userv1.AddToScheme(coreScheme))
+	encoder = codecFactory.LegacyCodec(userv1.SchemeGroupVersion)
+}
 
 type options struct {
 	group           string
@@ -85,7 +101,6 @@ func main() {
 	}
 
 	logger := logrus.WithField("group", o.group)
-	dryLogger := steps.NewDryLogger(false)
 
 	b, err := ioutil.ReadFile(o.peribolosConfig)
 	if err != nil {
@@ -120,9 +135,10 @@ func main() {
 
 	if o.dryRun {
 		action = func(g *v1.Group) (*v1.Group, error) {
-			dryLogger.AddObject(group.DeepCopyObject())
-			if err := dryLogger.Log(); err != nil {
-				return g, fmt.Errorf("error while parsing dry logger's objects: %w", err)
+			err := encoder.Encode(g, os.Stdout)
+			if err != nil {
+				fmt.Printf("failed to log group: %v\n", err)
+				return g, err
 			}
 			return g, nil
 		}

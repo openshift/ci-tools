@@ -18,10 +18,10 @@ type stepNeedsLease struct {
 	fail, ran bool
 }
 
-func (stepNeedsLease) Inputs(dry bool) (api.InputDefinition, error) {
+func (stepNeedsLease) Inputs() (api.InputDefinition, error) {
 	return api.InputDefinition{"step", "inputs"}, nil
 }
-func (s *stepNeedsLease) Run(ctx context.Context, dry bool) error {
+func (s *stepNeedsLease) Run(ctx context.Context) error {
 	s.ran = true
 	if s.fail {
 		return errors.New("injected failure")
@@ -52,11 +52,11 @@ func TestLeaseStepForward(t *testing.T) {
 	step := stepNeedsLease{}
 	withLease := LeaseStep(nil, name, &step, func() string { return "" }, nil)
 	t.Run("Inputs", func(t *testing.T) {
-		s, err := step.Inputs(false)
+		s, err := step.Inputs()
 		if err != nil {
 			t.Fatal(err)
 		}
-		l, err := withLease.Inputs(false)
+		l, err := withLease.Inputs()
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -140,7 +140,7 @@ func TestError(t *testing.T) {
 			var calls []string
 			client := lease.NewFakeClient("owner", "url", 0, tc.failures, &calls)
 			s := stepNeedsLease{fail: tc.runFails}
-			if LeaseStep(&client, "rtype", &s, func() string { return "" }, nil).Run(ctx, false) == nil {
+			if LeaseStep(&client, "rtype", &s, func() string { return "" }, nil).Run(ctx) == nil {
 				t.Fatalf("unexpected success, calls: %#v", calls)
 			}
 			if !reflect.DeepEqual(calls, tc.expected) {
@@ -155,7 +155,7 @@ func TestAcquireRelease(t *testing.T) {
 	client := lease.NewFakeClient("owner", "url", 0, nil, &calls)
 	step := stepNeedsLease{}
 	withLease := LeaseStep(&client, "rtype", &step, func() string { return "" }, nil)
-	if err := withLease.Run(context.Background(), false); err != nil {
+	if err := withLease.Run(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	if !step.ran {

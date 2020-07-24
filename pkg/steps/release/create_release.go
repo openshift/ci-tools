@@ -53,18 +53,17 @@ type assembleReleaseStep struct {
 	rbacClient  rbacclientset.RbacV1Interface
 	artifactDir string
 	jobSpec     *api.JobSpec
-	dryLogger   *steps.DryLogger
 }
 
-func (s *assembleReleaseStep) Inputs(dry bool) (api.InputDefinition, error) {
+func (s *assembleReleaseStep) Inputs() (api.InputDefinition, error) {
 	return nil, nil
 }
 
-func (s *assembleReleaseStep) Run(ctx context.Context, dry bool) error {
-	return results.ForReason("assembling_release").ForError(s.run(ctx, dry))
+func (s *assembleReleaseStep) Run(ctx context.Context) error {
+	return results.ForReason("assembling_release").ForError(s.run(ctx))
 }
 
-func setupReleaseImageStream(namespace string, saGetter coreclientset.ServiceAccountsGetter, rbacClient rbacclientset.RbacV1Interface, imageClient imageclientset.ImageV1Interface, dryLogger *steps.DryLogger, dry bool) (string, error) {
+func setupReleaseImageStream(namespace string, saGetter coreclientset.ServiceAccountsGetter, rbacClient rbacclientset.RbacV1Interface, imageClient imageclientset.ImageV1Interface) (string, error) {
 	sa := &coreapi.ServiceAccount{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      "ci-operator",
@@ -103,13 +102,6 @@ func setupReleaseImageStream(namespace string, saGetter coreclientset.ServiceAcc
 		},
 	}
 
-	if dry {
-		dryLogger.AddObject(sa.DeepCopyObject())
-		dryLogger.AddObject(role.DeepCopyObject())
-		dryLogger.AddObject(roleBinding.DeepCopyObject())
-		return "", nil
-	}
-
 	if _, err := saGetter.ServiceAccounts(namespace).Create(sa); err != nil && !errors.IsAlreadyExists(err) {
 		return "", results.ForReason("creating_service_account").WithError(err).Errorf("could not create service account 'ci-operator' for: %v", err)
 	}
@@ -140,13 +132,10 @@ func setupReleaseImageStream(namespace string, saGetter coreclientset.ServiceAcc
 	return release.Status.PublicDockerImageRepository, nil
 }
 
-func (s *assembleReleaseStep) run(ctx context.Context, dry bool) error {
-	releaseImageStreamRepo, err := setupReleaseImageStream(s.jobSpec.Namespace(), s.saGetter, s.rbacClient, s.imageClient, s.dryLogger, dry)
+func (s *assembleReleaseStep) run(ctx context.Context) error {
+	releaseImageStreamRepo, err := setupReleaseImageStream(s.jobSpec.Namespace(), s.saGetter, s.rbacClient, s.imageClient)
 	if err != nil {
 		return err
-	}
-	if dry {
-		return nil
 	}
 
 	streamName := api.StableStreamFor(s.name)
@@ -218,9 +207,9 @@ oc adm release extract --from=%q --to=/tmp/artifacts/release-payload-%s
 		resources = copied
 	}
 
-	step := steps.PodStep("release", podConfig, resources, s.podClient, s.artifactDir, s.jobSpec, s.dryLogger)
+	step := steps.PodStep("release", podConfig, resources, s.podClient, s.artifactDir, s.jobSpec)
 
-	return results.ForReason("creating_release").ForError(step.Run(ctx, dry))
+	return results.ForReason("creating_release").ForError(step.Run(ctx))
 }
 
 func (s *assembleReleaseStep) Requires() []api.StepLink {
@@ -281,7 +270,7 @@ func (s *assembleReleaseStep) Description() string {
 // and the operators defined in the release configuration.
 func AssembleReleaseStep(name string, config *api.ReleaseTagConfiguration, resources api.ResourceConfiguration,
 	podClient steps.PodClient, imageClient imageclientset.ImageV1Interface, saGetter coreclientset.ServiceAccountsGetter,
-	rbacClient rbacclientset.RbacV1Interface, artifactDir string, jobSpec *api.JobSpec, dryLogger *steps.DryLogger) api.Step {
+	rbacClient rbacclientset.RbacV1Interface, artifactDir string, jobSpec *api.JobSpec) api.Step {
 	return &assembleReleaseStep{
 		config:      config,
 		name:        name,
@@ -292,6 +281,5 @@ func AssembleReleaseStep(name string, config *api.ReleaseTagConfiguration, resou
 		rbacClient:  rbacClient,
 		artifactDir: artifactDir,
 		jobSpec:     jobSpec,
-		dryLogger:   dryLogger,
 	}
 }

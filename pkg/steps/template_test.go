@@ -4,8 +4,6 @@ import (
 	"testing"
 
 	coreapi "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
-
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 
@@ -29,22 +27,6 @@ func TestGetPodFromObject(t *testing.T) {
 		{
 			testID: "empty object, expect nothing",
 			object: runtime.RawExtension{},
-		},
-		{
-			testID: "object different than pod, expect nothing",
-			object: func() runtime.RawExtension {
-				rolebinding := &rbacv1.RoleBinding{
-					ObjectMeta: meta.ObjectMeta{
-						Name:      "image-puller",
-						Namespace: "test-namespace",
-					},
-				}
-
-				return runtime.RawExtension{
-					Raw:    []byte(runtime.EncodeOrDie(rbacv1Codec, rolebinding)),
-					Object: rolebinding.DeepCopyObject(),
-				}
-			}(),
 		},
 		{
 			testID: "object is a Pod, expect to get a pod struct",

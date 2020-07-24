@@ -27,30 +27,24 @@ type rpmImageInjectionStep struct {
 	istClient   imageclientset.ImageStreamTagsGetter
 	artifactDir string
 	jobSpec     *api.JobSpec
-	dryLogger   *DryLogger
 	pullSecret  *coreapi.Secret
 }
 
-func (s *rpmImageInjectionStep) Inputs(dry bool) (api.InputDefinition, error) {
+func (s *rpmImageInjectionStep) Inputs() (api.InputDefinition, error) {
 	return nil, nil
 }
 
-func (s *rpmImageInjectionStep) Run(ctx context.Context, dry bool) error {
-	return results.ForReason("injecting_rpms").ForError(s.run(ctx, dry))
+func (s *rpmImageInjectionStep) Run(ctx context.Context) error {
+	return results.ForReason("injecting_rpms").ForError(s.run(ctx))
 }
 
-func (s *rpmImageInjectionStep) run(ctx context.Context, dry bool) error {
-	var host string
-	if dry {
-		host = "dry-fake"
-	} else {
-		route, err := s.routeClient.Routes(s.jobSpec.Namespace()).Get(RPMRepoName, meta.GetOptions{})
-		if err != nil {
-			return fmt.Errorf("could not get Route for RPM server: %w", err)
-		}
-		host = route.Spec.Host
+func (s *rpmImageInjectionStep) run(ctx context.Context) error {
+	route, err := s.routeClient.Routes(s.jobSpec.Namespace()).Get(RPMRepoName, meta.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("could not get Route for RPM server: %w", err)
 	}
-	dockerfile := rpmInjectionDockerfile(s.config.From, host)
+
+	dockerfile := rpmInjectionDockerfile(s.config.From, route.Spec.Host)
 	return handleBuild(ctx, s.buildClient, buildFromSource(
 		s.jobSpec, s.config.From, s.config.To,
 		buildapi.BuildSource{
@@ -60,7 +54,7 @@ func (s *rpmImageInjectionStep) run(ctx context.Context, dry bool) error {
 		"",
 		s.resources,
 		s.pullSecret,
-	), dry, s.artifactDir, s.dryLogger)
+	), s.artifactDir)
 }
 
 func (s *rpmImageInjectionStep) Requires() []api.StepLink {
@@ -81,7 +75,7 @@ func (s *rpmImageInjectionStep) Description() string {
 	return "Inject an RPM repository that will point at the RPM server"
 }
 
-func RPMImageInjectionStep(config api.RPMImageInjectionStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, routeClient routeclientset.RoutesGetter, istClient imageclientset.ImageStreamTagsGetter, artifactDir string, jobSpec *api.JobSpec, dryLogger *DryLogger, pullSecret *coreapi.Secret) api.Step {
+func RPMImageInjectionStep(config api.RPMImageInjectionStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, routeClient routeclientset.RoutesGetter, istClient imageclientset.ImageStreamTagsGetter, artifactDir string, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
 	return &rpmImageInjectionStep{
 		config:      config,
 		resources:   resources,
@@ -90,7 +84,6 @@ func RPMImageInjectionStep(config api.RPMImageInjectionStepConfiguration, resour
 		istClient:   istClient,
 		artifactDir: artifactDir,
 		jobSpec:     jobSpec,
-		dryLogger:   dryLogger,
 		pullSecret:  pullSecret,
 	}
 }

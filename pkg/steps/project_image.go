@@ -24,30 +24,23 @@ type projectDirectoryImageBuildStep struct {
 	istClient   imageclientset.ImageStreamTagsGetter
 	jobSpec     *api.JobSpec
 	artifactDir string
-	dryLogger   *DryLogger
 	pullSecret  *coreapi.Secret
 }
 
-func (s *projectDirectoryImageBuildStep) Inputs(dry bool) (api.InputDefinition, error) {
+func (s *projectDirectoryImageBuildStep) Inputs() (api.InputDefinition, error) {
 	return nil, nil
 }
 
-func (s *projectDirectoryImageBuildStep) Run(ctx context.Context, dry bool) error {
-	return results.ForReason("building_project_image").ForError(s.run(ctx, dry))
+func (s *projectDirectoryImageBuildStep) Run(ctx context.Context) error {
+	return results.ForReason("building_project_image").ForError(s.run(ctx))
 }
 
-func (s *projectDirectoryImageBuildStep) run(ctx context.Context, dry bool) error {
+func (s *projectDirectoryImageBuildStep) run(ctx context.Context) error {
 	source := fmt.Sprintf("%s:%s", api.PipelineImageStream, api.PipelineImageStreamTagReferenceSource)
 
-	var workingDir string
-	if dry {
-		workingDir = "dry-fake"
-	} else {
-		var err error
-		workingDir, err = getWorkingDir(s.istClient, source, s.jobSpec.Namespace())
-		if err != nil {
-			return fmt.Errorf("failed to get workingDir: %w", err)
-		}
+	workingDir, err := getWorkingDir(s.istClient, source, s.jobSpec.Namespace())
+	if err != nil {
+		return fmt.Errorf("failed to get workingDir: %w", err)
 	}
 
 	labels := make(map[string]string)
@@ -123,7 +116,7 @@ func (s *projectDirectoryImageBuildStep) run(ctx context.Context, dry bool) erro
 			Value: v,
 		})
 	}
-	return handleBuild(ctx, s.buildClient, build, dry, s.artifactDir, s.dryLogger)
+	return handleBuild(ctx, s.buildClient, build, s.artifactDir)
 }
 
 func getWorkingDir(istClient imageclientset.ImageStreamTagsGetter, source, namespace string) (string, error) {
@@ -190,7 +183,7 @@ func (s *projectDirectoryImageBuildStep) Description() string {
 	return fmt.Sprintf("Build image %s from the repository", s.config.To)
 }
 
-func ProjectDirectoryImageBuildStep(config api.ProjectDirectoryImageBuildStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, imageClient imageclientset.ImageStreamsGetter, istClient imageclientset.ImageStreamTagsGetter, artifactDir string, jobSpec *api.JobSpec, dryLogger *DryLogger, pullSecret *coreapi.Secret) api.Step {
+func ProjectDirectoryImageBuildStep(config api.ProjectDirectoryImageBuildStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, imageClient imageclientset.ImageStreamsGetter, istClient imageclientset.ImageStreamTagsGetter, artifactDir string, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
 	return &projectDirectoryImageBuildStep{
 		config:      config,
 		resources:   resources,
@@ -199,7 +192,6 @@ func ProjectDirectoryImageBuildStep(config api.ProjectDirectoryImageBuildStepCon
 		istClient:   istClient,
 		artifactDir: artifactDir,
 		jobSpec:     jobSpec,
-		dryLogger:   dryLogger,
 		pullSecret:  pullSecret,
 	}
 }

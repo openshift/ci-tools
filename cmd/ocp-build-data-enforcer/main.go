@@ -38,7 +38,7 @@ func main() {
 	opts := gatherOptions()
 	opts.majorMinor.major = "4"
 
-	configs, err := gatherAllOCPImageConfigs(opts.ocpBuildDataRepoDir, opts.majorMinor)
+	configsUnverified, err := gatherAllOCPImageConfigs(opts.ocpBuildDataRepoDir, opts.majorMinor)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to gather all ocp image configs")
 	}
@@ -54,17 +54,17 @@ func main() {
 	}
 
 	var errs []error
-	for cfgIdx := range configs {
-		if err := configs[cfgIdx].validate(); err != nil {
-			errs = append(errs, fmt.Errorf("error validating %s: %w", configs[cfgIdx].SourceFileName, err))
+	var configs []ocpImageConfig
+	for _, cfg := range configsUnverified {
+		if err := cfg.validate(); err != nil {
+			errs = append(errs, fmt.Errorf("error validating %s: %w", cfg.SourceFileName, err))
 			continue
 		}
-		if err := dereferenceConfig(&configs[cfgIdx], streamMap, groupYAML); err != nil {
-			errs = append(errs, fmt.Errorf("failed dereferencing config for %s: %w", configs[cfgIdx].SourceFileName, err))
+		if err := dereferenceConfig(&cfg, streamMap, groupYAML); err != nil {
+			errs = append(errs, fmt.Errorf("failed dereferencing config for %s: %w", cfg.SourceFileName, err))
+			continue
 		}
-	}
-	if err := utilerrors.NewAggregate(errs); err != nil {
-		logrus.WithError(err).Fatal("Config validation failed")
+		configs = append(configs, cfg)
 	}
 
 	errGroup := &errgroup.Group{}
@@ -77,6 +77,13 @@ func main() {
 	}
 	if err := errGroup.Wait(); err != nil {
 		logrus.WithError(err).Fatal("Processing failed")
+	}
+
+	if err := utilerrors.NewAggregate(errs); err != nil {
+		for _, err := range err.Errors() {
+			logrus.WithError(err).Error("Encountered error")
+		}
+		logrus.Fatal("Encountered errors")
 	}
 	logrus.Infof("Processed %d configs", len(configs))
 }
@@ -238,6 +245,7 @@ func updateDockerfile(dockerfile []byte, config ocpImageConfig) ([]byte, bool, e
 	// this is the basis for PRs we create on ppls repos and we should keep their comments and whitespaces
 	var replacements []dockerFileReplacment
 	for stageIdx, stage := range stages {
+
 		for _, child := range stage.Node.Children {
 			if child.Value != dockercmd.From {
 				continue
@@ -255,6 +263,10 @@ func updateDockerfile(dockerfile []byte, config ocpImageConfig) ([]byte, bool, e
 					to:             []byte(cfgStages[stageIdx]),
 				})
 			}
+
+			// Avoid matching anything after the first from was found, otherwise we match
+			// copy --from directives
+			break
 		}
 	}
 

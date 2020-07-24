@@ -3,6 +3,8 @@ package main
 import (
 	"errors"
 	"strings"
+
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 )
 
 type ocpImageConfig struct {
@@ -14,13 +16,15 @@ type ocpImageConfig struct {
 }
 
 func (o ocpImageConfig) validate() error {
-	if o.Content == nil {
-		return nil
+	var errs []error
+	if o.Content != nil && o.Content.Source.Alias != "" && o.Content.Source.Git != nil {
+		errs = append(errs, errors.New("both content.source.alias and content.source.git are set"))
 	}
-	if o.Content.Source.Alias != "" && o.Content.Source.Git != nil {
-		return errors.New("both content.source.alias and content.source.git are set")
+
+	if o.From.Stream == "" {
+		errs = append(errs, errors.New(".from.stream was unset"))
 	}
-	return nil
+	return utilerrors.NewAggregate(errs)
 }
 
 type ocpImageConfigContent struct {

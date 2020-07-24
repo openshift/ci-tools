@@ -24,28 +24,31 @@ import (
 
 type options struct {
 	ocpBuildDataRepoDir string
+	majorMinor          majorMinor
 }
 
 func gatherOptions() *options {
 	o := &options{}
 	flag.StringVar(&o.ocpBuildDataRepoDir, "ocp-build-data-repo-dir", "../ocp-build-data", "The directory in which the ocp-build-data reposity is")
+	flag.StringVar(&o.majorMinor.minor, "minor", "6", "The minor version to target")
 	flag.Parse()
 	return o
 }
 func main() {
 	opts := gatherOptions()
+	opts.majorMinor.major = "4"
 
-	configs, err := gatherAllOCPImageConfigs(opts.ocpBuildDataRepoDir)
+	configs, err := gatherAllOCPImageConfigs(opts.ocpBuildDataRepoDir, opts.majorMinor)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to gather all ocp image configs")
 	}
 
-	streamMap, err := readStreamMap(opts.ocpBuildDataRepoDir)
+	streamMap, err := readStreamMap(opts.ocpBuildDataRepoDir, opts.majorMinor)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to read streamMap")
 	}
 
-	groupYAML, err := readGroupYAML(opts.ocpBuildDataRepoDir)
+	groupYAML, err := readGroupYAML(opts.ocpBuildDataRepoDir, opts.majorMinor)
 	if err != nil {
 		logrus.WithError(err).Fatal("Faild to read groupYAML")
 	}
@@ -146,28 +149,32 @@ func processDockerfile(config ocpImageConfig) {
 	log.Infof("Diff:\n---\n%s\n---\n", diffStr)
 }
 
-func readStreamMap(ocpBuildDataDir string) (streamMap, error) {
+func readStreamMap(ocpBuildDataDir string, majorMinor majorMinor) (streamMap, error) {
 	streamMap := &streamMap{}
-	return *streamMap, readYAML(filepath.Join(ocpBuildDataDir, "streams.yml"), streamMap)
+	return *streamMap, readYAML(filepath.Join(ocpBuildDataDir, "streams.yml"), streamMap, majorMinor)
 }
 
-func readGroupYAML(ocpBuildDataDir string) (groupYAML, error) {
+func readGroupYAML(ocpBuildDataDir string, majorMinor majorMinor) (groupYAML, error) {
 	groupYAML := &groupYAML{}
-	return *groupYAML, readYAML(filepath.Join(ocpBuildDataDir, "group.yml"), groupYAML)
+	return *groupYAML, readYAML(filepath.Join(ocpBuildDataDir, "group.yml"), groupYAML, majorMinor)
 }
 
-func readYAML(path string, unmarshalTarget interface{}) error {
+type majorMinor struct{ major, minor string }
+
+func readYAML(path string, unmarshalTarget interface{}, majorMinor majorMinor) error {
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("failed to read %s: %w", path, err)
 	}
+	data = bytes.ReplaceAll(data, []byte("{MAJOR}"), []byte(majorMinor.major))
+	data = bytes.ReplaceAll(data, []byte("{MINOR}"), []byte(majorMinor.minor))
 	if err := yaml.Unmarshal(data, unmarshalTarget); err != nil {
 		return fmt.Errorf("unmarshaling failed: %w", err)
 	}
 	return nil
 }
 
-func gatherAllOCPImageConfigs(ocpBuildDataDir string) ([]ocpImageConfig, error) {
+func gatherAllOCPImageConfigs(ocpBuildDataDir string, majorMinor majorMinor) ([]ocpImageConfig, error) {
 	var result []ocpImageConfig
 	resultLock := &sync.Mutex{}
 	errGroup := &errgroup.Group{}
@@ -182,7 +189,7 @@ func gatherAllOCPImageConfigs(ocpBuildDataDir string) ([]ocpImageConfig, error) 
 		}
 		errGroup.Go(func() error {
 			config := &ocpImageConfig{}
-			if err := readYAML(path, config); err != nil {
+			if err := readYAML(path, config, majorMinor); err != nil {
 				return err
 			}
 

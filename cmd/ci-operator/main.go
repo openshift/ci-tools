@@ -34,13 +34,13 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	authclientset "k8s.io/client-go/kubernetes/typed/authorization/v1"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
-	rbacclientset "k8s.io/client-go/kubernetes/typed/rbac/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 	"k8s.io/test-infra/prow/version"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/ghodss/yaml"
 
@@ -63,6 +63,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/util"
+	"github.com/openshift/ci-tools/pkg/util/namespacewrapper"
 )
 
 const usage = `Orchestrate multi-stage image-based builds
@@ -710,6 +711,12 @@ func (o *options) initializeNamespace() error {
 	if err != nil {
 		return fmt.Errorf("could not get project client for cluster config: %w", err)
 	}
+	client, err := ctrlruntimeclient.New(o.clusterConfig, ctrlruntimeclient.Options{})
+	if err != nil {
+		return fmt.Errorf("failed to construct client: %w", err)
+	}
+	client = namespacewrapper.New(client, o.namespace)
+	ctx := context.Background()
 
 	log.Printf("Creating namespace %s", o.namespace)
 	retries := 5
@@ -749,13 +756,9 @@ func (o *options) initializeNamespace() error {
 
 	if o.givePrAuthorAccessToNamespace {
 		// Generate rolebinding for all the PR Authors.
-		rbacClient, err := rbacclientset.NewForConfig(o.clusterConfig)
-		if err != nil {
-			return fmt.Errorf("could not get RBAC client for cluster config: %w", err)
-		}
 		for _, author := range o.authors {
 			log.Printf("Creating rolebinding for user %s in namespace %s", author, o.namespace)
-			if _, err := rbacClient.RoleBindings(o.namespace).Create(&rbacapi.RoleBinding{
+			if err := client.Create(ctx, &rbacapi.RoleBinding{
 				ObjectMeta: meta.ObjectMeta{
 					Name:      "ci-op-author-access",
 					Namespace: o.namespace,
@@ -771,13 +774,8 @@ func (o *options) initializeNamespace() error {
 		}
 	}
 
-	client, err := coreclientset.NewForConfig(o.clusterConfig)
-	if err != nil {
-		return fmt.Errorf("could not get core client for cluster config: %w", err)
-	}
-
 	if o.pullSecret != nil {
-		if _, err := client.Secrets(o.namespace).Create(o.pullSecret); err != nil && !kerrors.IsAlreadyExists(err) {
+		if err := client.Create(ctx, o.pullSecret); err != nil && !kerrors.IsAlreadyExists(err) {
 			return fmt.Errorf("couldn't create pull secret %s: %w", o.pullSecret.Name, err)
 		}
 	}
@@ -803,8 +801,8 @@ func (o *options) initializeNamespace() error {
 
 	if len(updates) > 0 {
 		if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-			ns, err := client.Namespaces().Get(o.namespace, meta.GetOptions{})
-			if err != nil {
+			ns := &coreapi.Namespace{}
+			if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Name: o.namespace}, ns); err != nil {
 				return err
 			}
 
@@ -826,7 +824,7 @@ func (o *options) initializeNamespace() error {
 				ns.ObjectMeta.Annotations[key] = value
 			}
 
-			_, updateErr := client.Namespaces().Update(ns)
+			updateErr := client.Update(ctx, ns)
 			if kerrors.IsForbidden(updateErr) {
 				log.Printf("warning: Could not add annotations because you do not have permission to update the namespace (details: %v)", updateErr)
 				return nil
@@ -838,13 +836,9 @@ func (o *options) initializeNamespace() error {
 	}
 
 	log.Printf("Setting up pipeline imagestream for the test")
-	imageGetter, err := imageclientset.NewForConfig(o.clusterConfig)
-	if err != nil {
-		return fmt.Errorf("could not get image client for cluster config: %w", err)
-	}
 
 	// create the image stream or read it to get its uid
-	is, err := imageGetter.ImageStreams(o.jobSpec.Namespace()).Create(&imageapi.ImageStream{
+	is := &imageapi.ImageStream{
 		ObjectMeta: meta.ObjectMeta{
 			Namespace: o.jobSpec.Namespace(),
 			Name:      api.PipelineImageStream,
@@ -853,12 +847,14 @@ func (o *options) initializeNamespace() error {
 			// pipeline:* will now be directly referenceable
 			LookupPolicy: imageapi.ImageLookupPolicy{Local: true},
 		},
-	})
-	if err != nil {
+	}
+	if err := client.Create(ctx, is); err != nil {
 		if !kerrors.IsAlreadyExists(err) {
 			return fmt.Errorf("could not set up pipeline imagestream for test: %w", err)
 		}
-		is, _ = imageGetter.ImageStreams(o.jobSpec.Namespace()).Get(api.PipelineImageStream, meta.GetOptions{})
+		if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Name: api.PipelineImageStream}, is); err != nil {
+			return fmt.Errorf("failed to get pipeline imagestream: %w", err)
+		}
 	}
 	if is != nil {
 		isTrue := true
@@ -872,13 +868,13 @@ func (o *options) initializeNamespace() error {
 	}
 
 	if o.cloneAuthConfig != nil && o.cloneAuthConfig.Secret != nil {
-		if _, err := client.Secrets(o.namespace).Create(o.cloneAuthConfig.Secret); err != nil && !kerrors.IsAlreadyExists(err) {
+		if err := client.Create(ctx, o.cloneAuthConfig.Secret); err != nil && !kerrors.IsAlreadyExists(err) {
 			return fmt.Errorf("couldn't create secret %s for %s authentication: %w", o.cloneAuthConfig.Secret.Name, o.cloneAuthConfig.Type, err)
 		}
 	}
 
 	for _, secret := range o.secrets {
-		created, err := util.UpdateSecret(client.Secrets(o.namespace), secret)
+		created, err := util.UpdateSecret(ctx, client, secret)
 		if err != nil {
 			return fmt.Errorf("could not update secret %s: %w", secret.Name, err)
 		}

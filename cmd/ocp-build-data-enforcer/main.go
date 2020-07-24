@@ -63,12 +63,12 @@ func main() {
 }
 
 func dereferenceStreams(config *ocpImageConfig, streamMap streamMap) {
-	if replacement, hasReplacement := streamMap[config.From.Stream]; hasReplacement && replacement.UpstreamImage != nil {
-		config.From.Stream = *replacement.UpstreamImage
+	if replacement, hasReplacement := streamMap[config.From.Stream]; hasReplacement {
+		config.From.Stream = replacement.UpstreamImage
 	}
 	for blder := range config.From.Builder {
-		if replacement, hasReplacement := streamMap[config.From.Builder[blder].Stream]; hasReplacement && replacement.UpstreamImage != nil {
-			config.From.Builder[blder].Stream = *replacement.UpstreamImage
+		if replacement, hasReplacement := streamMap[config.From.Builder[blder].Stream]; hasReplacement {
+			config.From.Builder[blder].Stream = replacement.UpstreamImage
 		}
 	}
 }
@@ -131,7 +131,6 @@ func readStreamMap(ocpBuildDataDir string) (streamMap, error) {
 	if err := yaml.Unmarshal(data, &streamMap); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal %s into streamMap: %w", path, err)
 	}
-	streamMap.defaultImages()
 	return streamMap, nil
 }
 

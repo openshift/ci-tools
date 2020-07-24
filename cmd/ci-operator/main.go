@@ -30,8 +30,11 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	policyv1beta1 "k8s.io/api/policy/v1beta1"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/client-go/kubernetes/scheme"
 	authclientset "k8s.io/client-go/kubernetes/typed/authorization/v1"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
@@ -41,6 +44,7 @@ import (
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 	"k8s.io/test-infra/prow/version"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	crcontrollerutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"github.com/ghodss/yaml"
 
@@ -707,6 +711,12 @@ func (o *options) resolveInputs(steps []api.Step) error {
 }
 
 func (o *options) initializeNamespace() error {
+
+	if err := imageapi.AddToScheme(scheme.Scheme); err != nil {
+		return fmt.Errorf("failed to add imageapi to scheme: %w", err)
+	}
+
+	// We have to keep the project client because it return a project for a projectCreationRequest, ctrlruntimeclient can not do dark magic like that
 	projectGetter, err := projectclientset.NewForConfig(o.clusterConfig)
 	if err != nil {
 		return fmt.Errorf("could not get project client for cluster config: %w", err)
@@ -884,7 +894,38 @@ func (o *options) initializeNamespace() error {
 			log.Printf("Updated secret %s", secret.Name)
 		}
 	}
+
+	for _, pdbLabelKey := range []string{"openshift.io/build.name", "created-by-ci"} {
+		pdb, mutateFn := pdb(pdbLabelKey, o.namespace)
+		if _, err := crcontrollerutil.CreateOrUpdate(ctx, client, pdb, mutateFn); err != nil {
+			return fmt.Errorf("failed to create pdb for label key %s: %w", pdbLabelKey, err)
+		}
+		log.Printf("Created PDB for pods with %s label", pdbLabelKey)
+	}
+
 	return nil
+}
+
+func pdb(labelKey, namespace string) (*policyv1beta1.PodDisruptionBudget, crcontrollerutil.MutateFn) {
+	pdb := &policyv1beta1.PodDisruptionBudget{
+		ObjectMeta: meta.ObjectMeta{
+			Name:      fmt.Sprintf("ci-operator-%s", strings.ReplaceAll(labelKey, "/", "-")),
+			Namespace: namespace,
+		},
+	}
+	return pdb, func() error {
+		pdb.Spec.MaxUnavailable = &intstr.IntOrString{
+			Type:   intstr.Int,
+			IntVal: 0,
+		}
+		pdb.Spec.Selector = &meta.LabelSelector{
+			MatchExpressions: []meta.LabelSelectorRequirement{{
+				Key:      labelKey,
+				Operator: meta.LabelSelectorOpExists,
+			}},
+		}
+		return nil
+	}
 }
 
 // prowResultMetadata is the set of metadata consumed by testgrid and

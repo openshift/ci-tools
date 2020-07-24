@@ -66,6 +66,7 @@ func main() {
 
 	errGroup := &errgroup.Group{}
 	for idx := range configs {
+		idx := idx
 		errGroup.Go(func() error {
 			processDockerfile(configs[idx])
 			return nil

@@ -91,6 +91,9 @@ func (r *registry) Resolve(name string, config api.MultiStageTestConfiguration) 
 		AllowSkipOnSuccess: config.AllowSkipOnSuccess,
 	}
 	stack := stackForTest(name, config.Environment)
+	if config.Workflow != nil {
+		stack.push(stackRecordForTest(*config.Workflow, nil))
+	}
 	pre, errs := r.process(config.Pre, sets.NewString(), stack)
 	expandedFlow.Pre = append(expandedFlow.Pre, pre...)
 	resolveErrors = append(resolveErrors, errs...)

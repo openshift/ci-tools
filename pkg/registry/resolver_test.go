@@ -618,7 +618,7 @@ func TestResolve(t *testing.T) {
 				},
 			},
 		},
-		expectedErr:           errors.New(`test: no step declares parameter "NOT_THE_STEP_ENV"`),
+		expectedErr:           errors.New(`test: ipi-aws: no step declares parameter "NOT_THE_STEP_ENV"`),
 		expectedValidationErr: errors.New(`ipi-aws: no step declares parameter "NOT_THE_STEP_ENV"`),
 	}} {
 		t.Run(testCase.name, func(t *testing.T) {

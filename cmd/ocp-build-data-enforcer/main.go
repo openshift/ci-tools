@@ -45,8 +45,23 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to read streamMap")
 	}
 
+	groupYAML, err := readGroupYAML(opts.ocpBuildDataRepoDir)
+	if err != nil {
+		logrus.WithError(err).Fatal("Faild to read groupYAML")
+	}
+
+	var errs []error
 	for cfgIdx := range configs {
-		dereferenceStreams(&configs[cfgIdx], streamMap)
+		if err := configs[cfgIdx].validate(); err != nil {
+			errs = append(errs, fmt.Errorf("error validating %s: %w", configs[cfgIdx].SourceFileName, err))
+			continue
+		}
+		if err := dereferenceConfig(&configs[cfgIdx], streamMap, groupYAML); err != nil {
+			errs = append(errs, fmt.Errorf("failed dereferencing config for %s: %w", configs[cfgIdx].SourceFileName, err))
+		}
+	}
+	if err := utilerrors.NewAggregate(errs); err != nil {
+		logrus.WithError(err).Fatal("Config validation failed")
 	}
 
 	errGroup := &errgroup.Group{}
@@ -62,7 +77,7 @@ func main() {
 	logrus.Infof("Processed %d configs", len(configs))
 }
 
-func dereferenceStreams(config *ocpImageConfig, streamMap streamMap) {
+func dereferenceConfig(config *ocpImageConfig, streamMap streamMap, groupYAML groupYAML) error {
 	if replacement, hasReplacement := streamMap[config.From.Stream]; hasReplacement {
 		config.From.Stream = replacement.UpstreamImage
 	}
@@ -71,6 +86,15 @@ func dereferenceStreams(config *ocpImageConfig, streamMap streamMap) {
 			config.From.Builder[blder].Stream = replacement.UpstreamImage
 		}
 	}
+	if config.Content.Source.Alias != "" {
+		if _, hasReplacement := groupYAML.Sources[config.Content.Source.Alias]; !hasReplacement {
+			return fmt.Errorf("groups.yaml has no replacement for alias %s", config.Content.Source.Alias)
+		}
+		config.Content.Source.Git = &ocpImageConfigSourceGit{}
+		*config.Content.Source.Git = groupYAML.Sources[config.Content.Source.Alias]
+	}
+
+	return nil
 }
 
 func processDockerfile(config ocpImageConfig) {
@@ -122,16 +146,24 @@ func processDockerfile(config ocpImageConfig) {
 }
 
 func readStreamMap(ocpBuildDataDir string) (streamMap, error) {
-	path := filepath.Join(ocpBuildDataDir, "streams.yml")
+	streamMap := &streamMap{}
+	return *streamMap, readYAML(filepath.Join(ocpBuildDataDir, "streams.yml"), streamMap)
+}
+
+func readGroupYAML(ocpBuildDataDir string) (groupYAML, error) {
+	groupYAML := &groupYAML{}
+	return *groupYAML, readYAML(filepath.Join(ocpBuildDataDir, "group.yml"), groupYAML)
+}
+
+func readYAML(path string, unmarshalTarget interface{}) error {
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read %s: %w", path, err)
+		return fmt.Errorf("failed to read %s: %w", path, err)
 	}
-	streamMap := streamMap{}
-	if err := yaml.Unmarshal(data, &streamMap); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal %s into streamMap: %w", path, err)
+	if err := yaml.Unmarshal(data, unmarshalTarget); err != nil {
+		return fmt.Errorf("unmarshaling failed: %w", err)
 	}
-	return streamMap, nil
+	return nil
 }
 
 func gatherAllOCPImageConfigs(ocpBuildDataDir string) ([]ocpImageConfig, error) {
@@ -148,14 +180,16 @@ func gatherAllOCPImageConfigs(ocpBuildDataDir string) ([]ocpImageConfig, error) 
 			return nil
 		}
 		errGroup.Go(func() error {
-			data, err := ioutil.ReadFile(path)
-			if err != nil {
-				return fmt.Errorf("failed to read file from %s: %w", path, err)
-			}
 			config := &ocpImageConfig{}
-			if err := yaml.Unmarshal(data, config); err != nil {
-				return fmt.Errorf("failed to unmarshal data from %s(`%s`) into ocpImageConfig: %w", path, string(data), err)
+			if err := readYAML(path, config); err != nil {
+				return err
 			}
+
+			// Distgit only repositories
+			if config.Content == nil {
+				return nil
+			}
+
 			config.SourceFileName = strings.TrimPrefix(path, ocpBuildDataDir+"/")
 			resultLock.Lock()
 			result = append(result, *config)

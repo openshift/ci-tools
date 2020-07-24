@@ -1,15 +1,26 @@
 package main
 
 import (
+	"errors"
 	"strings"
 )
 
 type ocpImageConfig struct {
-	Content        ocpImageConfigContent `json:"content"`
-	From           ocpImageConfigFrom    `json:"from"`
-	Push           ocpImageConfigPush    `json:"push"`
-	Name           string                `json:"name"`
-	SourceFileName string                `json:"-"`
+	Content        *ocpImageConfigContent `json:"content"`
+	From           ocpImageConfigFrom     `json:"from"`
+	Push           ocpImageConfigPush     `json:"push"`
+	Name           string                 `json:"name"`
+	SourceFileName string                 `json:"-"`
+}
+
+func (o ocpImageConfig) validate() error {
+	if o.Content == nil {
+		return nil
+	}
+	if o.Content.Source.Alias != "" && o.Content.Source.Git != nil {
+		return errors.New("both content.source.alias and content.source.git are set")
+	}
+	return nil
 }
 
 type ocpImageConfigContent struct {
@@ -17,12 +28,19 @@ type ocpImageConfigContent struct {
 }
 
 type ocpImageConfigSource struct {
-	Dockerfile string                  `json:"dockerfile"`
-	Git        ocpImageConfigSourceGit `json:"git"`
+	Dockerfile string `json:"dockerfile"`
+	Alias      string `json:"alias"`
+	// +Optional, mutually exclusive with alias
+	Git *ocpImageConfigSourceGit `json:"git,omitempty"`
 }
 
 type ocpImageConfigSourceGit struct {
-	URL string `json:"url"`
+	URL    string                        `json:"url"`
+	Branch ocpImageConfigSourceGitBranch `json:"branch"`
+}
+
+type ocpImageConfigSourceGitBranch struct {
+	Taget string `json:"target"`
 }
 
 type ocpImageConfigFrom struct {
@@ -66,4 +84,8 @@ type streamMap map[string]streamElement
 type streamElement struct {
 	Image         string `json:"image"`
 	UpstreamImage string `json:"upstream_image"`
+}
+
+type groupYAML struct {
+	Sources map[string]ocpImageConfigSourceGit `json:"sources"`
 }

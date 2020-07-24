@@ -20,9 +20,9 @@ type fakeStep struct {
 	numRuns int
 }
 
-func (f *fakeStep) Inputs(dry bool) (api.InputDefinition, error) { return nil, nil }
+func (f *fakeStep) Inputs() (api.InputDefinition, error) { return nil, nil }
 
-func (f *fakeStep) Run(ctx context.Context, dry bool) error {
+func (f *fakeStep) Run(ctx context.Context) error {
 	defer f.lock.Unlock()
 	f.lock.Lock()
 	f.numRuns = f.numRuns + 1
@@ -86,7 +86,7 @@ func TestRunNormalCase(t *testing.T) {
 		creates:   []api.StepLink{api.InternalImageLink("final")},
 	}
 
-	if _, err := Run(context.Background(), api.BuildGraph([]api.Step{root, other, src, bin, testBin, rpm, unrelated, final}), false); err != nil {
+	if _, err := Run(context.Background(), api.BuildGraph([]api.Step{root, other, src, bin, testBin, rpm, unrelated, final})); err != nil {
 		t.Errorf("got an error but expected none: %v", err)
 	}
 
@@ -151,7 +151,7 @@ func TestRunFailureCase(t *testing.T) {
 		creates:   []api.StepLink{api.InternalImageLink("final")},
 	}
 
-	suites, err := Run(context.Background(), api.BuildGraph([]api.Step{root, other, src, bin, testBin, rpm, unrelated, final}), false)
+	suites, err := Run(context.Background(), api.BuildGraph([]api.Step{root, other, src, bin, testBin, rpm, unrelated, final}))
 	if err == nil {
 		t.Error("got no error but expected one")
 	}

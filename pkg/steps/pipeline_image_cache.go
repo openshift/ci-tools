@@ -27,19 +27,18 @@ type pipelineImageCacheStep struct {
 	imageClient imageclientset.ImageV1Interface
 	artifactDir string
 	jobSpec     *api.JobSpec
-	dryLogger   *DryLogger
 	pullSecret  *coreapi.Secret
 }
 
-func (s *pipelineImageCacheStep) Inputs(dry bool) (api.InputDefinition, error) {
+func (s *pipelineImageCacheStep) Inputs() (api.InputDefinition, error) {
 	return nil, nil
 }
 
-func (s *pipelineImageCacheStep) Run(ctx context.Context, dry bool) error {
-	return results.ForReason("building_cache_image").ForError(s.run(ctx, dry))
+func (s *pipelineImageCacheStep) Run(ctx context.Context) error {
+	return results.ForReason("building_cache_image").ForError(s.run(ctx))
 }
 
-func (s *pipelineImageCacheStep) run(ctx context.Context, dry bool) error {
+func (s *pipelineImageCacheStep) run(ctx context.Context) error {
 	dockerfile := rawCommandDockerfile(s.config.From, s.config.Commands)
 	return handleBuild(ctx, s.buildClient, buildFromSource(
 		s.jobSpec, s.config.From, s.config.To,
@@ -50,7 +49,7 @@ func (s *pipelineImageCacheStep) run(ctx context.Context, dry bool) error {
 		"",
 		s.resources,
 		s.pullSecret,
-	), dry, s.artifactDir, s.dryLogger)
+	), s.artifactDir)
 }
 
 func (s *pipelineImageCacheStep) Requires() []api.StepLink {
@@ -90,7 +89,7 @@ func (s *pipelineImageCacheStep) Description() string {
 	return fmt.Sprintf("Store build results into a layer on top of %s and save as %s", s.config.From, s.config.To)
 }
 
-func PipelineImageCacheStep(config api.PipelineImageCacheStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, imageClient imageclientset.ImageV1Interface, artifactDir string, jobSpec *api.JobSpec, dryLogger *DryLogger, pullSecret *coreapi.Secret) api.Step {
+func PipelineImageCacheStep(config api.PipelineImageCacheStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, imageClient imageclientset.ImageV1Interface, artifactDir string, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
 	return &pipelineImageCacheStep{
 		config:      config,
 		resources:   resources,
@@ -98,7 +97,6 @@ func PipelineImageCacheStep(config api.PipelineImageCacheStepConfiguration, reso
 		imageClient: imageClient,
 		artifactDir: artifactDir,
 		jobSpec:     jobSpec,
-		dryLogger:   dryLogger,
 		pullSecret:  pullSecret,
 	}
 }

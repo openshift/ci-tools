@@ -60,8 +60,7 @@ func preparePodStep(t *testing.T, namespace string) (*podStep, stepExpectation, 
 		t:       t,
 	}
 	client := NewPodClient(fakecs.Core(), nil, nil)
-	dryLogger := &DryLogger{}
-	ps := PodStep(stepName, config, resources, client, artifactDir, jobSpec, dryLogger)
+	ps := PodStep(stepName, config, resources, client, artifactDir, jobSpec)
 
 	specification := stepExpectation{
 		name:     podName,

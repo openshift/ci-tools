@@ -12,8 +12,6 @@ import (
 	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
 
-	coreapi "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -33,17 +31,13 @@ import (
 var (
 	coreScheme   = runtime.NewScheme()
 	codecFactory = serializer.NewCodecFactory(coreScheme)
-	corev1Codec  = codecFactory.LegacyCodec(coreapi.SchemeGroupVersion)
-	rbacv1Codec  = codecFactory.LegacyCodec(rbacv1.SchemeGroupVersion)
 
 	encoder runtime.Encoder
-	decoder runtime.Decoder
 )
 
 func init() {
 	utilruntime.Must(userv1.AddToScheme(coreScheme))
 	encoder = codecFactory.LegacyCodec(userv1.SchemeGroupVersion)
-	decoder = codecFactory.UniversalDecoder(userv1.SchemeGroupVersion)
 }
 
 type options struct {

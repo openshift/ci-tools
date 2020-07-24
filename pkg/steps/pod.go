@@ -50,20 +50,19 @@ type podStep struct {
 	podClient   PodClient
 	artifactDir string
 	jobSpec     *api.JobSpec
-	dryLogger   *DryLogger
 
 	subTests []*junit.TestCase
 }
 
-func (s *podStep) Inputs(dry bool) (api.InputDefinition, error) {
+func (s *podStep) Inputs() (api.InputDefinition, error) {
 	return nil, nil
 }
 
-func (s *podStep) Run(ctx context.Context, dry bool) error {
-	return results.ForReason("running_pod").ForError(s.run(ctx, dry))
+func (s *podStep) Run(ctx context.Context) error {
+	return results.ForReason("running_pod").ForError(s.run(ctx))
 }
 
-func (s *podStep) run(ctx context.Context, dry bool) error {
+func (s *podStep) run(ctx context.Context) error {
 	if !s.config.SkipLogs {
 		log.Printf("Executing %s %s", s.name, s.config.As)
 	}
@@ -93,11 +92,6 @@ func (s *podStep) run(ctx context.Context, dry bool) error {
 
 	if owner := s.jobSpec.Owner(); owner != nil {
 		pod.OwnerReferences = append(pod.OwnerReferences, *owner)
-	}
-
-	if dry {
-		s.dryLogger.AddObject(pod.DeepCopyObject())
-		return nil
 	}
 
 	go func() {
@@ -153,7 +147,7 @@ func (s *podStep) Description() string {
 	return fmt.Sprintf("Run test %s", s.config.As)
 }
 
-func TestStep(config api.TestStepConfiguration, resources api.ResourceConfiguration, podClient PodClient, artifactDir string, jobSpec *api.JobSpec, dryLogger *DryLogger) api.Step {
+func TestStep(config api.TestStepConfiguration, resources api.ResourceConfiguration, podClient PodClient, artifactDir string, jobSpec *api.JobSpec) api.Step {
 	return PodStep(
 		"test",
 		PodStepConfiguration{
@@ -168,11 +162,10 @@ func TestStep(config api.TestStepConfiguration, resources api.ResourceConfigurat
 		podClient,
 		artifactDir,
 		jobSpec,
-		dryLogger,
 	)
 }
 
-func PodStep(name string, config PodStepConfiguration, resources api.ResourceConfiguration, podClient PodClient, artifactDir string, jobSpec *api.JobSpec, dryLogger *DryLogger) api.Step {
+func PodStep(name string, config PodStepConfiguration, resources api.ResourceConfiguration, podClient PodClient, artifactDir string, jobSpec *api.JobSpec) api.Step {
 	return &podStep{
 		name:        name,
 		config:      config,
@@ -180,7 +173,6 @@ func PodStep(name string, config PodStepConfiguration, resources api.ResourceCon
 		podClient:   podClient,
 		artifactDir: artifactDir,
 		jobSpec:     jobSpec,
-		dryLogger:   dryLogger,
 	}
 }
 

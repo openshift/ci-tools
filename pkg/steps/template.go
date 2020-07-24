@@ -49,20 +49,19 @@ type templateExecutionStep struct {
 	podClient      PodClient
 	artifactDir    string
 	jobSpec        *api.JobSpec
-	dryLogger      *DryLogger
 
 	subTests []*junit.TestCase
 }
 
-func (s *templateExecutionStep) Inputs(dry bool) (api.InputDefinition, error) {
+func (s *templateExecutionStep) Inputs() (api.InputDefinition, error) {
 	return nil, nil
 }
 
-func (s *templateExecutionStep) Run(ctx context.Context, dry bool) error {
-	return results.ForReason("executing_template").ForError(s.run(ctx, dry))
+func (s *templateExecutionStep) Run(ctx context.Context) error {
+	return results.ForReason("executing_template").ForError(s.run(ctx))
 }
 
-func (s *templateExecutionStep) run(ctx context.Context, dry bool) error {
+func (s *templateExecutionStep) run(ctx context.Context) error {
 	log.Printf("Executing template %s", s.template.Name)
 
 	if len(s.template.Objects) == 0 {
@@ -78,9 +77,7 @@ func (s *templateExecutionStep) run(ctx context.Context, dry bool) error {
 		if s.params.Has(p.Name) {
 			value, err := s.params.Get(p.Name)
 			if err != nil {
-				if !dry {
-					return fmt.Errorf("cannot resolve parameter %s into template %s: %w", p.Name, s.template.Name, err)
-				}
+				return fmt.Errorf("cannot resolve parameter %s into template %s: %w", p.Name, s.template.Name, err)
 			}
 			if len(value) > 0 {
 				s.template.Parameters[i].Value = value
@@ -102,11 +99,6 @@ func (s *templateExecutionStep) run(ctx context.Context, dry bool) error {
 
 	operateOnTemplatePods(s.template, s.artifactDir, s.resources)
 	injectLabelsToTemplate(s.jobSpec, s.template)
-
-	if dry {
-		s.dryLogger.AddObject(s.template.DeepCopyObject())
-		return nil
-	}
 
 	// TODO: enforce single namespace behavior
 	instance := &templateapi.TemplateInstance{
@@ -288,7 +280,7 @@ func (s *templateExecutionStep) Description() string {
 	return fmt.Sprintf("Run template %s", s.template.Name)
 }
 
-func TemplateExecutionStep(template *templateapi.Template, params api.Parameters, podClient PodClient, templateClient TemplateClient, artifactDir string, jobSpec *api.JobSpec, dryLogger *DryLogger, resources api.ResourceConfiguration) api.Step {
+func TemplateExecutionStep(template *templateapi.Template, params api.Parameters, podClient PodClient, templateClient TemplateClient, artifactDir string, jobSpec *api.JobSpec, resources api.ResourceConfiguration) api.Step {
 	return &templateExecutionStep{
 		template:       template,
 		resources:      resources,
@@ -297,7 +289,6 @@ func TemplateExecutionStep(template *templateapi.Template, params api.Parameters
 		templateClient: templateClient,
 		artifactDir:    artifactDir,
 		jobSpec:        jobSpec,
-		dryLogger:      dryLogger,
 	}
 }
 

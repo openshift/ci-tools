@@ -7,6 +7,10 @@ import (
 	"path/filepath"
 	"testing"
 
+	apiimagev1 "github.com/openshift/api/image/v1"
+	fakeimageclientset "github.com/openshift/client-go/image/clientset/versioned/fake"
+	"k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"github.com/openshift/ci-tools/pkg/api"
 )
 
@@ -74,13 +78,26 @@ func TestReplaceCommand(t *testing.T) {
 func TestBundleSourceDockerfile(t *testing.T) {
 	var expectedDockerfile = `
 FROM pipeline:src
-RUN ["bash", "-c", "find manifests/deploy/4.6 -type f -exec sed -i 's?quay.io/openshift/origin-metering-ansible-operator:4.6?dry-registry.ci.openshift.org/namespace/stable:metering-ansible-operator?g' {} +"]
-RUN ["bash", "-c", "find manifests/deploy/4.6 -type f -exec sed -i 's?quay.io/openshift/origin-metering-reporting-operator:4.6?dry-registry.ci.openshift.org/namespace/stable:metering-reporting-operator?g' {} +"]
-RUN ["bash", "-c", "find manifests/deploy/4.6 -type f -exec sed -i 's?quay.io/openshift/origin-metering-presto:4.6?dry-registry.ci.openshift.org/namespace/stable:metering-presto?g' {} +"]
-RUN ["bash", "-c", "find manifests/deploy/4.6 -type f -exec sed -i 's?quay.io/openshift/origin-metering-hive:4.6?dry-registry.ci.openshift.org/namespace/stable:metering-hive?g' {} +"]
-RUN ["bash", "-c", "find manifests/deploy/4.6 -type f -exec sed -i 's?quay.io/openshift/origin-metering-hadoop:4.6?dry-registry.ci.openshift.org/namespace/stable:metering-hadoop?g' {} +"]
-RUN ["bash", "-c", "find manifests/deploy/4.6 -type f -exec sed -i 's?quay.io/openshift/origin-ghostunnel:4.6?dry-registry.ci.openshift.org/namespace/stable:ghostunnel?g' {} +"]
+RUN ["bash", "-c", "find manifests/deploy/4.6 -type f -exec sed -i 's?quay.io/openshift/origin-metering-ansible-operator:4.6?some-reg/target-namespace/stable:metering-ansible-operator?g' {} +"]
+RUN ["bash", "-c", "find manifests/deploy/4.6 -type f -exec sed -i 's?quay.io/openshift/origin-metering-reporting-operator:4.6?some-reg/target-namespace/stable:metering-reporting-operator?g' {} +"]
+RUN ["bash", "-c", "find manifests/deploy/4.6 -type f -exec sed -i 's?quay.io/openshift/origin-metering-presto:4.6?some-reg/target-namespace/stable:metering-presto?g' {} +"]
+RUN ["bash", "-c", "find manifests/deploy/4.6 -type f -exec sed -i 's?quay.io/openshift/origin-metering-hive:4.6?some-reg/target-namespace/stable:metering-hive?g' {} +"]
+RUN ["bash", "-c", "find manifests/deploy/4.6 -type f -exec sed -i 's?quay.io/openshift/origin-metering-hadoop:4.6?some-reg/target-namespace/stable:metering-hadoop?g' {} +"]
+RUN ["bash", "-c", "find manifests/deploy/4.6 -type f -exec sed -i 's?quay.io/openshift/origin-ghostunnel:4.6?some-reg/target-namespace/stable:ghostunnel?g' {} +"]
 `
+
+	fakeClientSet := ciopTestingClient{
+		imagecs: fakeimageclientset.NewSimpleClientset(&apiimagev1.ImageStream{
+			ObjectMeta: v1.ObjectMeta{
+				Namespace: "target-namespace",
+				Name:      api.StableImageStream,
+			},
+			Status: apiimagev1.ImageStreamStatus{
+				PublicDockerImageRepository: "some-reg/target-namespace/stable",
+			},
+		}),
+		t: t,
+	}
 
 	s := bundleSourceStep{
 		config: api.BundleSourceStepConfiguration{
@@ -88,8 +105,11 @@ RUN ["bash", "-c", "find manifests/deploy/4.6 -type f -exec sed -i 's?quay.io/op
 			OperatorManifests: "4.6",
 			Substitute:        subs,
 		},
+		jobSpec:     &api.JobSpec{},
+		imageClient: fakeClientSet.ImageV1(),
 	}
-	generatedDockerfile, err := s.bundleSourceDockerfile(true)
+	s.jobSpec.SetNamespace("target-namespace")
+	generatedDockerfile, err := s.bundleSourceDockerfile()
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}

@@ -44,7 +44,6 @@ var envForProfile = []string{InitialReleaseEnv, LatestReleaseEnv, leaseEnv, Imag
 
 type multiStageTestStep struct {
 	dry     bool
-	logger  *DryLogger
 	name    string
 	profile api.ClusterProfile
 	config  *api.ReleaseBuildConfiguration
@@ -72,9 +71,8 @@ func MultiStageTestStep(
 	rbacClient rbacclientset.RbacV1Interface,
 	artifactDir string,
 	jobSpec *api.JobSpec,
-	logger *DryLogger,
 ) api.Step {
-	return newMultiStageTestStep(testConfig, config, params, podClient, secretClient, saClient, rbacClient, artifactDir, jobSpec, logger)
+	return newMultiStageTestStep(testConfig, config, params, podClient, secretClient, saClient, rbacClient, artifactDir, jobSpec)
 }
 
 func newMultiStageTestStep(
@@ -87,14 +85,12 @@ func newMultiStageTestStep(
 	rbacClient rbacclientset.RbacV1Interface,
 	artifactDir string,
 	jobSpec *api.JobSpec,
-	logger *DryLogger,
 ) *multiStageTestStep {
 	if artifactDir != "" {
 		artifactDir = filepath.Join(artifactDir, testConfig.As)
 	}
 	ms := testConfig.MultiStageTestConfigurationLiteral
 	return &multiStageTestStep{
-		logger:             logger,
 		name:               testConfig.As,
 		profile:            ms.ClusterProfile,
 		config:             config,
@@ -117,23 +113,20 @@ func (s *multiStageTestStep) profileSecretName() string {
 	return s.name + "-cluster-profile"
 }
 
-func (s *multiStageTestStep) Inputs(dry bool) (api.InputDefinition, error) {
+func (s *multiStageTestStep) Inputs() (api.InputDefinition, error) {
 	return nil, nil
 }
 
-func (s *multiStageTestStep) Run(ctx context.Context, dry bool) error {
-	return results.ForReason("executing_multi_stage_test").ForError(s.run(ctx, dry))
+func (s *multiStageTestStep) Run(ctx context.Context) error {
+	return results.ForReason("executing_multi_stage_test").ForError(s.run(ctx))
 }
 
-func (s *multiStageTestStep) run(ctx context.Context, dry bool) error {
-	s.dry = dry
+func (s *multiStageTestStep) run(ctx context.Context) error {
 	var env []coreapi.EnvVar
 	if s.profile != "" {
-		if !dry {
-			secret := s.profileSecretName()
-			if _, err := s.secretClient.Secrets(s.jobSpec.Namespace()).Get(secret, meta.GetOptions{}); err != nil {
-				return fmt.Errorf("could not find secret %q: %w", secret, err)
-			}
+		secret := s.profileSecretName()
+		if _, err := s.secretClient.Secrets(s.jobSpec.Namespace()).Get(secret, meta.GetOptions{}); err != nil {
+			return fmt.Errorf("could not find secret %q: %w", secret, err)
 		}
 		for _, e := range envForProfile {
 			val, err := s.params.Get(e)
@@ -236,12 +229,6 @@ func (s *multiStageTestStep) setupRBAC() error {
 		RoleRef:    rbacapi.RoleRef{Kind: "Role", Name: s.name},
 		Subjects:   subj,
 	}
-	if s.dry {
-		s.logger.AddObject(sa.DeepCopyObject())
-		s.logger.AddObject(role.DeepCopyObject())
-		s.logger.AddObject(binding.DeepCopyObject())
-		return nil
-	}
 	check := func(err error) bool {
 		return err == nil || errors.IsAlreadyExists(err)
 	}
@@ -260,10 +247,6 @@ func (s *multiStageTestStep) setupRBAC() error {
 func (s *multiStageTestStep) createSecret() error {
 	log.Printf("Creating multi-stage test secret %q", s.name)
 	secret := coreapi.Secret{ObjectMeta: meta.ObjectMeta{Name: s.name}}
-	if s.dry {
-		s.logger.AddObject(secret.DeepCopyObject())
-		return nil
-	}
 	client := s.secretClient.Secrets(s.jobSpec.Namespace())
 	if err := client.Delete(s.name, &meta.DeleteOptions{}); err != nil && !errors.IsNotFound(err) {
 		return fmt.Errorf("cannot delete secret %q: %w", s.name, err)
@@ -282,10 +265,6 @@ func (s *multiStageTestStep) createCredentials() error {
 			// chance we get a second-level collision (ns-a, name) and (ns, a-name) is
 			// small, so we can get away with this string prefixing
 			name := fmt.Sprintf("%s-%s", credential.Namespace, credential.Name)
-			if s.dry {
-				s.logger.AddObject(&coreapi.Secret{ObjectMeta: meta.ObjectMeta{Name: name}})
-				continue
-			}
 			raw, err := s.secretClient.Secrets(credential.Namespace).Get(credential.Name, meta.GetOptions{})
 			if err != nil {
 				return fmt.Errorf("could not read source credential: %w", err)
@@ -530,10 +509,6 @@ func (s *multiStageTestStep) runPods(ctx context.Context, pods []coreapi.Pod, sh
 }
 
 func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notifier *TestCaseNotifier) error {
-	if s.dry {
-		s.logger.AddObject(pod.DeepCopyObject())
-		return nil
-	}
 	if _, err := createOrRestartPod(s.podClient.Pods(s.jobSpec.Namespace()), pod); err != nil {
 		return fmt.Errorf("failed to create or restart %q pod: %w", pod.Name, err)
 	}

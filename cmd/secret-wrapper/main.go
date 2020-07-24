@@ -13,7 +13,6 @@ import (
 
 	"github.com/sirupsen/logrus"
 	coreapi "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -27,17 +26,13 @@ import (
 var (
 	coreScheme   = runtime.NewScheme()
 	codecFactory = serializer.NewCodecFactory(coreScheme)
-	corev1Codec  = codecFactory.LegacyCodec(coreapi.SchemeGroupVersion)
-	rbacv1Codec  = codecFactory.LegacyCodec(rbacv1.SchemeGroupVersion)
 
 	encoder runtime.Encoder
-	decoder runtime.Decoder
 )
 
 func init() {
 	utilruntime.Must(coreapi.AddToScheme(coreScheme))
 	encoder = codecFactory.LegacyCodec(coreapi.SchemeGroupVersion)
-	decoder = codecFactory.UniversalDecoder(coreapi.SchemeGroupVersion)
 }
 
 func main() {

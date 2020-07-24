@@ -42,8 +42,8 @@ func LeaseStep(client *lease.Client, lease string, wrapped api.Step, namespace f
 	}
 }
 
-func (s *leaseStep) Inputs(dry bool) (api.InputDefinition, error) {
-	return s.wrapped.Inputs(dry)
+func (s *leaseStep) Inputs() (api.InputDefinition, error) {
+	return s.wrapped.Inputs()
 }
 
 func (s *leaseStep) Name() string             { return s.wrapped.Name() }
@@ -68,11 +68,11 @@ func (s *leaseStep) SubTests() []*junit.TestCase {
 	return nil
 }
 
-func (s *leaseStep) Run(ctx context.Context, dry bool) error {
-	return results.ForReason("utilizing_lease").ForError(s.run(ctx, dry))
+func (s *leaseStep) Run(ctx context.Context) error {
+	return results.ForReason("utilizing_lease").ForError(s.run(ctx))
 }
 
-func (s *leaseStep) run(ctx context.Context, dry bool) error {
+func (s *leaseStep) run(ctx context.Context) error {
 	log.Printf("Acquiring lease for %q", s.leaseType)
 	client := *s.client
 	if client == nil {
@@ -89,7 +89,7 @@ func (s *leaseStep) run(ctx context.Context, dry bool) error {
 	heartbeatCancel()
 	log.Printf("Acquired lease %q for %q", lease, s.leaseType)
 	s.leasedResource = lease
-	wrappedErr := results.ForReason("executing_test").ForError(s.wrapped.Run(ctx, dry))
+	wrappedErr := results.ForReason("executing_test").ForError(s.wrapped.Run(ctx))
 	log.Printf("Releasing lease for %q", s.leaseType)
 	releaseErr := results.ForReason("releasing_lease").ForError(client.Release(lease))
 

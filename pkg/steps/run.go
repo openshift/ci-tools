@@ -18,7 +18,7 @@ type message struct {
 	additionalTests []*junit.TestCase
 }
 
-func Run(ctx context.Context, graph []*api.StepNode, dry bool) (*junit.TestSuites, []error) {
+func Run(ctx context.Context, graph []*api.StepNode) (*junit.TestSuites, []error) {
 	var seen []api.StepLink
 	executionResults := make(chan message)
 	done := make(chan bool)
@@ -33,7 +33,7 @@ func Run(ctx context.Context, graph []*api.StepNode, dry bool) (*junit.TestSuite
 
 	start := time.Now()
 	for _, root := range graph {
-		go runStep(ctx, root, executionResults, dry)
+		go runStep(ctx, root, executionResults)
 	}
 
 	suites := &junit.TestSuites{
@@ -55,9 +55,6 @@ func Run(ctx context.Context, graph []*api.StepNode, dry bool) (*junit.TestSuite
 				testCase.FailureOutput = &junit.FailureOutput{Output: out.err.Error()}
 				executionErrors = append(executionErrors, results.ForReason("step_failed").WithError(out.err).Errorf("step %s failed: %v", out.node.Step.Name(), out.err))
 			} else {
-				if dry {
-					testCase.SkipMessage = &junit.SkipMessage{Message: "Dry run"}
-				}
 				seen = append(seen, out.node.Step.Creates()...)
 				if !interrupted {
 					for _, child := range out.node.Children {
@@ -68,7 +65,7 @@ func Run(ctx context.Context, graph []*api.StepNode, dry bool) (*junit.TestSuite
 						// when the last of its parents finishes.
 						if api.HasAllLinks(child.Step.Requires(), seen) {
 							wg.Add(1)
-							go runStep(ctx, child, executionResults, dry)
+							go runStep(ctx, child, executionResults)
 						}
 					}
 				}
@@ -108,9 +105,9 @@ type subtestReporter interface {
 	SubTests() []*junit.TestCase
 }
 
-func runStep(ctx context.Context, node *api.StepNode, out chan<- message, dry bool) {
+func runStep(ctx context.Context, node *api.StepNode, out chan<- message) {
 	start := time.Now()
-	err := node.Step.Run(ctx, dry)
+	err := node.Step.Run(ctx)
 	var additionalTests []*junit.TestCase
 	if reporter, ok := node.Step.(subtestReporter); ok {
 		additionalTests = reporter.SubTests()

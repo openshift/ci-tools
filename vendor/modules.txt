@@ -922,7 +922,7 @@ k8s.io/klog
 k8s.io/kube-openapi/pkg/util/proto
 # k8s.io/kubernetes v1.13.0
 k8s.io/kubernetes/pkg/apis/core
-# k8s.io/test-infra v0.0.0-20200723180140-4e866c62eb5d
+# k8s.io/test-infra v0.0.0-20200725055416-2388ca759f42
 k8s.io/test-infra/experiment/autobumper/bumper
 k8s.io/test-infra/experiment/image-bumper/bumper
 k8s.io/test-infra/ghproxy/ghcache
@@ -991,6 +991,7 @@ k8s.io/test-infra/prow/plugins/invalidcommitmsg
 k8s.io/test-infra/prow/plugins/label
 k8s.io/test-infra/prow/plugins/lgtm
 k8s.io/test-infra/prow/plugins/lifecycle
+k8s.io/test-infra/prow/plugins/merge-method-comment
 k8s.io/test-infra/prow/plugins/mergecommitblocker
 k8s.io/test-infra/prow/plugins/milestone
 k8s.io/test-infra/prow/plugins/milestoneapplier

@@ -56,6 +56,6 @@ func (s *inputEnvironmentStep) Creates() []api.StepLink {
 	return s.links
 }
 
-func (s *inputEnvironmentStep) Provides() (api.ParameterMap, api.StepLink) {
-	return nil, nil
+func (s *inputEnvironmentStep) Provides() api.ParameterMap {
+	return nil
 }

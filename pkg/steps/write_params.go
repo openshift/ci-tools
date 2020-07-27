@@ -51,15 +51,15 @@ func (s *writeParametersStep) run() error {
 }
 
 func (s *writeParametersStep) Requires() []api.StepLink {
-	return s.params.AllLinks()
+	return []api.StepLink{api.AllStepsLink()}
 }
 
 func (s *writeParametersStep) Creates() []api.StepLink {
 	return nil
 }
 
-func (s *writeParametersStep) Provides() (api.ParameterMap, api.StepLink) {
-	return nil, nil
+func (s *writeParametersStep) Provides() api.ParameterMap {
+	return nil
 }
 
 func (s *writeParametersStep) Name() string { return "parameters/write" }

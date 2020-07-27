@@ -217,9 +217,17 @@ type PodClient interface {
 	podCmdExecutor
 }
 
+// Allow tests to accelerate time
+var timeSecond = time.Second
+
 func waitForContainer(podClient PodClient, ns, name, containerName string) error {
-	logrus.Tracef("Waiting for container %s in pod %s in namespace %s", containerName, name, ns)
-	return wait.PollImmediateInfinite(time.Second, func() (bool, error) {
+	logrus.WithFields(logrus.Fields{
+		"namespace": ns,
+		"name":      name,
+		"container": containerName,
+	}).Trace("Waiting for container to be running.")
+
+	return wait.PollImmediate(time.Second, 30*timeSecond, func() (bool, error) {
 		pod, err := podClient.Pods(ns).Get(name, meta.GetOptions{})
 		if err != nil {
 			logrus.WithError(err).Errorf("Waiting for container %s in pod %s in namespace %s", containerName, name, ns)
@@ -483,11 +491,11 @@ func (w *ArtifactWorker) downloadArtifacts(podName string, hasArtifacts bool) er
 	}()
 
 	if err := waitForContainer(w.podClient, w.namespace, podName, "artifacts"); err != nil {
-		return fmt.Errorf("artifacts container for pod %s unready: %v", podName, err)
+		return fmt.Errorf("artifacts container for pod %s unready: %w", podName, err)
 	}
 
 	if err := copyArtifacts(w.podClient, w.dir, w.namespace, podName, "artifacts", []string{"/tmp/artifacts"}); err != nil {
-		return fmt.Errorf("unable to retrieve artifacts from pod %s: %v", podName, err)
+		return fmt.Errorf("unable to retrieve artifacts from pod %s: %w", podName, err)
 	}
 	return nil
 }

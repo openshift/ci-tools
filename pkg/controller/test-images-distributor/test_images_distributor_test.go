@@ -579,11 +579,12 @@ func TestTestInputImageStreamTagFilterFactory(t *testing.T) {
 	t.Parallel()
 	const namespace, streamName, tagName = "namespace", "streamName", "streamTag"
 	testCases := []struct {
-		name                      string
-		config                    api.ReleaseBuildConfiguration
-		additionalImageStreamTags sets.String
-		additionalImageStreams    sets.String
-		expectedResult            bool
+		name                            string
+		config                          api.ReleaseBuildConfiguration
+		additionalImageStreamTags       sets.String
+		additionalImageStreams          sets.String
+		additionalImageStreamNamespaces sets.String
+		expectedResult                  bool
 	}{
 		{
 			name:                      "imagestreamtag is explicitly allowed",
@@ -594,6 +595,11 @@ func TestTestInputImageStreamTagFilterFactory(t *testing.T) {
 			name:                   "imagestream is explicitly allowed",
 			additionalImageStreams: sets.NewString(namespace + "/" + streamName),
 			expectedResult:         true,
+		},
+		{
+			name:                            "imagestream_namespace is explicitly allowed",
+			additionalImageStreamNamespaces: sets.NewString(namespace),
+			expectedResult:                  true,
 		},
 		{
 			name: "imagestreamtag is referenced by config",
@@ -625,6 +631,7 @@ func TestTestInputImageStreamTagFilterFactory(t *testing.T) {
 				noOpRegistryResolver{},
 				tc.additionalImageStreamTags,
 				tc.additionalImageStreams,
+				tc.additionalImageStreamNamespaces,
 			)
 			if err != nil {
 				t.Fatalf("failed to construct filter: %v", err)

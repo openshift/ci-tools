@@ -43,6 +43,7 @@ func AddToManager(mgr manager.Manager,
 	resolver registry.Resolver,
 	additionalImageStreamTags sets.String,
 	additionalImageStreams sets.String,
+	additionalImageStreamNamespaces sets.String,
 	dryRun bool) error {
 	log := logrus.WithField("controller", ControllerName)
 
@@ -96,7 +97,7 @@ func AddToManager(mgr manager.Manager,
 		}
 	}
 
-	objectFilter, err := testInputImageStreamTagFilterFactory(log, configAgent, resolver, additionalImageStreamTags, additionalImageStreams)
+	objectFilter, err := testInputImageStreamTagFilterFactory(log, configAgent, resolver, additionalImageStreamTags, additionalImageStreams, additionalImageStreamNamespaces)
 	if err != nil {
 		return fmt.Errorf("failed to get filter for ImageStreamTags: %w", err)
 	}
@@ -407,7 +408,7 @@ func (r *reconciler) pullSecret(namespace string) (*corev1.Secret, crcontrolleru
 	}
 }
 
-func testInputImageStreamTagFilterFactory(l *logrus.Entry, ca agents.ConfigAgent, resolver registry.Resolver, additionalImageStreamTags, additionalImageStrams sets.String) (objectFilter, error) {
+func testInputImageStreamTagFilterFactory(l *logrus.Entry, ca agents.ConfigAgent, resolver registry.Resolver, additionalImageStreamTags, additionalImageStreams, additionalImageStreamNamespaces sets.String) (objectFilter, error) {
 	const indexName = "config-by-test-input-imagestreamtag"
 	if err := ca.AddIndex(indexName, indexConfigsByTestInputImageStramTag(resolver)); err != nil {
 		return nil, fmt.Errorf("failed to add %s index to configAgent: %w", indexName, err)
@@ -415,6 +416,9 @@ func testInputImageStreamTagFilterFactory(l *logrus.Entry, ca agents.ConfigAgent
 	l = logrus.WithField("subcomponent", "test-input-image-stream-tag-filter")
 	return func(nn types.NamespacedName) bool {
 		if additionalImageStreamTags.Has(nn.String()) {
+			return true
+		}
+		if additionalImageStreamNamespaces.Has(nn.Namespace) {
 			return true
 		}
 		imageStreamTagResult, err := ca.GetFromIndex(indexName, nn.String())
@@ -430,7 +434,7 @@ func testInputImageStreamTagFilterFactory(l *logrus.Entry, ca agents.ConfigAgent
 			l.WithField("name", nn.String()).WithError(err).Error("Failed to get imagestreamname for imagestreamtag")
 			return false
 		}
-		if additionalImageStrams.Has(imageStreamName.String()) {
+		if additionalImageStreams.Has(imageStreamName.String()) {
 			return true
 		}
 		imageStreamResult, err := ca.GetFromIndex(indexName, indexKeyForImageStream(imageStreamName.Namespace, imageStreamName.Name))

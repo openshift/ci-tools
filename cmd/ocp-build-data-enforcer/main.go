@@ -128,7 +128,7 @@ func dereferenceConfig(config ocpImageConfig, allConfigs map[string]ocpImageConf
 	if config.From.Member != "" {
 		streamName, err := derefenceMember(config.From.Member, allConfigs, -1)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("failed to dereference config.from.member: %s", err))
+			errs = append(errs, fmt.Errorf("failed to dereference config.from.member: %w", err))
 		} else {
 			config.From.Member = ""
 			config.From.Stream = streamName

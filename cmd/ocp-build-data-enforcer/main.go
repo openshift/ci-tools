@@ -56,15 +56,16 @@ func main() {
 	var errs []error
 	var configs []ocpImageConfig
 	for _, cfg := range configsUnverified {
-		if err := cfg.validate(); err != nil {
-			errs = append(errs, fmt.Errorf("error validating %s: %w", cfg.SourceFileName, err))
-			continue
-		}
-		if err := dereferenceConfig(&cfg, streamMap, groupYAML); err != nil {
+		dereferenced, err := dereferenceConfig(cfg, configsUnverified, streamMap, groupYAML)
+		if err != nil {
 			errs = append(errs, fmt.Errorf("failed dereferencing config for %s: %w", cfg.SourceFileName, err))
 			continue
 		}
-		configs = append(configs, cfg)
+		if err := dereferenced.validate(); err != nil {
+			errs = append(errs, fmt.Errorf("error validating %s: %w", cfg.SourceFileName, err))
+			continue
+		}
+		configs = append(configs, *dereferenced)
 	}
 
 	errGroup := &errgroup.Group{}
@@ -88,24 +89,124 @@ func main() {
 	logrus.Infof("Processed %d configs", len(configs))
 }
 
-func dereferenceConfig(config *ocpImageConfig, streamMap streamMap, groupYAML groupYAML) error {
-	if replacement, hasReplacement := streamMap[config.From.Stream]; hasReplacement {
-		config.From.Stream = replacement.UpstreamImage
+// derefenceMember is used to recursively derefenrence .from.member and .from.builder[idx].member
+// attributes. Use an idx < 0 to dereference .from.member
+func derefenceMember(memberString string, allConfigs map[string]ocpImageConfig, idx int) (string, error) {
+	cfgFile := configFileNamberForMemberString(memberString)
+	memberConfig, memberConfigExists := allConfigs[cfgFile]
+	if !memberConfigExists {
+		return "", fmt.Errorf("no configfile %s found", cfgFile)
 	}
-	for blder := range config.From.Builder {
-		if replacement, hasReplacement := streamMap[config.From.Builder[blder].Stream]; hasReplacement {
-			config.From.Builder[blder].Stream = replacement.UpstreamImage
+	member, stream, err := getFromConfigForIndex(memberConfig, idx)
+	if err != nil {
+		return "", err
+	}
+	if stream != "" {
+		return stream, nil
+	}
+	if member == "" {
+		return "", fmt.Errorf("configfile %s defines neither .from.stream nor .from.member", cfgFile)
+	}
+	return derefenceMember(memberConfig.From.Member, allConfigs, idx)
+}
+
+// getFromConfigForIndex returns the .from{member,stream} attributes. If index < 0, the base image
+// config is returned, otherwise the builder image config
+func getFromConfigForIndex(cfg ocpImageConfig, idx int) (memberValue, streamValue string, err error) {
+	if idx < 0 {
+		return cfg.From.Member, cfg.From.Stream, nil
+	}
+	if n := len(cfg.From.Builder) - 1; n < idx {
+		return "", "", fmt.Errorf("file %s has no from.builder.%d element", cfg.SourceFileName, idx)
+	}
+	return cfg.From.Builder[idx].Member, cfg.From.Builder[idx].Stream, nil
+}
+
+func dereferenceConfig(config ocpImageConfig, allConfigs map[string]ocpImageConfig, streamMap streamMap, groupYAML groupYAML) (*ocpImageConfig, error) {
+	var errs []error
+
+	if config.From.Member != "" {
+		streamName, err := derefenceMember(config.From.Member, allConfigs, -1)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("failed to dereference config.from.member: %s", err))
+		} else {
+			config.From.Member = ""
+			config.From.Stream = streamName
 		}
 	}
-	if config.Content.Source.Alias != "" {
-		if _, hasReplacement := groupYAML.Sources[config.Content.Source.Alias]; !hasReplacement {
-			return fmt.Errorf("groups.yaml has no replacement for alias %s", config.Content.Source.Alias)
+	for blderIdx := range config.From.Builder {
+		if config.From.Builder[blderIdx].Member == "" {
+			continue
 		}
-		config.Content.Source.Git = &ocpImageConfigSourceGit{}
-		*config.Content.Source.Git = groupYAML.Sources[config.Content.Source.Alias]
+		streamName, err := derefenceMember(config.From.Builder[blderIdx].Member, allConfigs, blderIdx)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("failed to dereference config.from.builder.%d: %w", blderIdx, err))
+			continue
+		}
+		config.From.Builder[blderIdx].Stream = streamName
+		config.From.Builder[blderIdx].Member = ""
 	}
 
-	return nil
+	// No point in continuing here if we had an error, it will just result in useless follow-up errors
+	if err := utilerrors.NewAggregate(errs); err != nil {
+		return nil, err
+	}
+
+	fromStreamReplacement, err := getReplacementFromStream(config.From.Stream, streamMap)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("failed to replace config.from.stream: %w", err))
+	} else {
+		config.From.Stream = fromStreamReplacement
+	}
+
+	for blderIdx := range config.From.Builder {
+		builderReplacement, err := getReplacementFromStream(config.From.Builder[blderIdx].Stream, streamMap)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("failed to derefence config.from.builder.%d.stream: %w", blderIdx, err))
+			continue
+		}
+		config.From.Builder[blderIdx].Stream = builderReplacement
+	}
+
+	if config.Content.Source.Alias != "" {
+		replacement, err := replaceContentSourceAlias(config.Content.Source.Alias, groupYAML)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("failed to replace based on config.content.source.alias: %w", err))
+		} else {
+			config.Content.Source.Git = replacement
+			config.Content.Source.Alias = ""
+		}
+	}
+
+	return &config, utilerrors.NewAggregate(errs)
+}
+
+func configFileNamberForMemberString(memberString string) string {
+	return "images/" + memberString + ".yml"
+}
+
+func getReplacementFromStream(streamName string, streamMap streamMap) (string, error) {
+	if streamName == "" {
+		return "", errors.New("stream has no name")
+	}
+	replacement, hasReplacement := streamMap[streamName]
+	if !hasReplacement {
+		return "", fmt.Errorf("streammap has no entry for %s", streamName)
+	}
+	if replacement.UpstreamImage == "" {
+		return "", fmt.Errorf("streamMap has no upstream_image for entry %s", streamName)
+	}
+	return replacement.UpstreamImage, nil
+}
+
+func replaceContentSourceAlias(alias string, groupYAML groupYAML) (*ocpImageConfigSourceGit, error) {
+	replacement, hasReplacement := groupYAML.Sources[alias]
+	if !hasReplacement {
+		return nil, fmt.Errorf("group.yaml has no entry for %s", alias)
+	}
+	ret := &ocpImageConfigSourceGit{}
+	*ret = replacement
+	return ret, nil
 }
 
 func processDockerfile(config ocpImageConfig) {
@@ -181,8 +282,8 @@ func readYAML(path string, unmarshalTarget interface{}, majorMinor majorMinor) e
 	return nil
 }
 
-func gatherAllOCPImageConfigs(ocpBuildDataDir string, majorMinor majorMinor) ([]ocpImageConfig, error) {
-	var result []ocpImageConfig
+func gatherAllOCPImageConfigs(ocpBuildDataDir string, majorMinor majorMinor) (map[string]ocpImageConfig, error) {
+	result := map[string]ocpImageConfig{}
 	resultLock := &sync.Mutex{}
 	errGroup := &errgroup.Group{}
 
@@ -207,7 +308,7 @@ func gatherAllOCPImageConfigs(ocpBuildDataDir string, majorMinor majorMinor) ([]
 
 			config.SourceFileName = strings.TrimPrefix(path, ocpBuildDataDir+"/")
 			resultLock.Lock()
-			result = append(result, *config)
+			result[config.SourceFileName] = *config
 			resultLock.Unlock()
 
 			return nil

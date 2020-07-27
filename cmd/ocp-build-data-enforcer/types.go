@@ -50,10 +50,12 @@ type ocpImageConfigSourceGitBranch struct {
 type ocpImageConfigFrom struct {
 	Builder []ocpImageConfigFromStream `json:"builder"`
 	Stream  string                     `json:"stream"`
+	Member  string                     `json:"member"`
 }
 
 type ocpImageConfigFromStream struct {
 	Stream string `json:"stream"`
+	Member string `json:"member"`
 }
 
 type ocpImageConfigPush struct {

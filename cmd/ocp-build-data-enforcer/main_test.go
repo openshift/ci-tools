@@ -49,7 +49,7 @@ LABEL io.k8s.display-name="Whereabouts CNI" \
       io.openshift.tags="openshift" \
       maintainer="CTO Networking <nfvpe-container@redhat.com>"`),
 			config: ocpImageConfig{From: ocpImageConfigFrom{
-				Builder: []ocpImageConfigFromStream{{"rhel-8-golang"}, {"golang"}},
+				Builder: []ocpImageConfigFromStream{{Stream: "rhel-8-golang"}, {Stream: "golang"}},
 				Stream:  "rhel",
 			}},
 			expectdDockerfile: []byte(`# This dockerfile is used for building for OpenShift
@@ -91,7 +91,7 @@ FROM openshift/origin-release:rhel-8-golang-1.12 as rhel8
 FROM something
 `),
 			config: ocpImageConfig{From: ocpImageConfigFrom{
-				Builder: []ocpImageConfigFromStream{{"replaced"}},
+				Builder: []ocpImageConfigFromStream{{Stream: "replaced"}},
 				Stream:  "replacement-2",
 			}},
 			expectUpdate: true,
@@ -106,7 +106,7 @@ FROM replacement-2
 FROM something
 `),
 			config: ocpImageConfig{From: ocpImageConfigFrom{
-				Builder: []ocpImageConfigFromStream{{"replaced"}},
+				Builder: []ocpImageConfigFromStream{{Stream: "replaced"}},
 				Stream:  "replacement-2",
 			}},
 			expectUpdate: true,

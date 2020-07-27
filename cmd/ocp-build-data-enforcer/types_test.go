@@ -12,6 +12,7 @@ func TestOCPImageConfig(t *testing.T) {
 		in             []byte
 		expectedGitURL string
 		expectedStream string
+		expectedMember string
 		expectedName   string
 	}{
 		{
@@ -74,6 +75,39 @@ owners:
 			expectedStream: "rhel",
 			expectedName:   "openshift/ose-cluster-autoscaler",
 		},
+		{
+			name: "with member attribute",
+			in: []byte(`container_yaml:
+  go:
+    modules:
+    - module: github.com/openshift/containernetworking-plugins
+content:
+  source:
+    dockerfile: Dockerfile
+    git:
+      branch:
+        target: release-{MAJOR}.{MINOR}
+      url: git@github.com:openshift-priv/containernetworking-plugins.git
+enabled_repos:
+- rhel-8-baseos-rpms
+- rhel-8-appstream-rpms
+from:
+  builder:
+  - stream: golang
+  - stream: rhel-7-golang
+  member: openshift-enterprise-base
+name: openshift/ose-container-networking-plugins
+owners:
+- nfvpe-container@redhat.com
+- dosmith@redhat.com
+- fpan@redhat.com
+- tohayash@redhat.com
+- dcbw@redhat.com
+`),
+			expectedGitURL: "git@github.com:openshift-priv/containernetworking-plugins.git",
+			expectedMember: "openshift-enterprise-base",
+			expectedName:   "openshift/ose-container-networking-plugins",
+		},
 	}
 
 	for _, tc := range testcases {
@@ -89,6 +123,9 @@ owners:
 
 			if ocpImageConfig.From.Stream != tc.expectedStream {
 				t.Errorf("expected ocpImageConfig.From.Stream to be %s, was %s", tc.expectedStream, ocpImageConfig.From.Stream)
+			}
+			if ocpImageConfig.From.Member != tc.expectedMember {
+				t.Errorf("expected ocpImageConfig.from.member to be %s, was %s", tc.expectedMember, ocpImageConfig.From.Member)
 			}
 			if ocpImageConfig.Name != tc.expectedName {
 				t.Errorf("expected name to be %s, was %s", tc.expectedName, ocpImageConfig.Name)

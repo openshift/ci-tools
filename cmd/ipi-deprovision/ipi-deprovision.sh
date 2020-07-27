@@ -36,8 +36,7 @@ for network in $( gcloud --project=openshift-gce-devel-ci compute networks list 
   infraID="${network%"-network"}"
   region="$( gcloud --project=openshift-gce-devel-ci compute networks describe "${network}" --format="value(subnetworks[0])" | grep -Po "(?<=regions/)[^/]+" || true )"
   if [[ -z "${region:-}" ]]; then
-    echo "could not determine region for cluster ${infraID}, ignoring ..."
-    continue
+    region=us-east1
   fi
   workdir="/tmp/deprovision/${infraID}"
   mkdir -p "${workdir}"

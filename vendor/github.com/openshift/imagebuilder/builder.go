@@ -209,8 +209,12 @@ func NewStages(node *parser.Node, b *Builder) (Stages, error) {
 		stages = append(stages, Stage{
 			Position: i,
 			Name:     name,
-			Builder:  b.builderForStage(),
-			Node:     root,
+			Builder: &Builder{
+				Args:        b.Args,
+				AllowedArgs: b.AllowedArgs,
+				Env:         b.Env,
+			},
+			Node: root,
 		})
 	}
 	return stages, nil
@@ -231,30 +235,17 @@ func (b *Builder) extractHeadingArgsFromNode(node *parser.Node) error {
 		}
 	}
 
-	// Set children equal to everything except the leading ARG nodes
-	node.Children = children
-
-	// Use a separate builder to evaluate the heading args
-	tempBuilder := NewBuilder(b.UserArgs)
-
-	// Evaluate all the heading arg commands
 	for _, c := range args {
-		step := tempBuilder.Step()
+		step := b.Step()
 		if err := step.Resolve(c); err != nil {
 			return err
 		}
-		if err := tempBuilder.Run(step, NoopExecutor, false); err != nil {
+		if err := b.Run(step, NoopExecutor, false); err != nil {
 			return err
 		}
 	}
 
-	// Add all of the defined heading args to the original builder's HeadingArgs map
-	for k, v := range tempBuilder.Args {
-		if _, ok := tempBuilder.AllowedArgs[k]; ok {
-			b.HeadingArgs[k] = v
-		}
-	}
-
+	node.Children = children
 	return nil
 }
 
@@ -273,23 +264,13 @@ func extractNameFromNode(node *parser.Node) (string, bool) {
 	return n.Next.Value, true
 }
 
-func (b *Builder) builderForStage() *Builder {
-	stageBuilder := NewBuilder(b.UserArgs)
-	for k, v := range b.HeadingArgs {
-		stageBuilder.HeadingArgs[k] = v
-	}
-	return stageBuilder
-}
-
 type Builder struct {
 	RunConfig docker.Config
 
-	Env         []string
-	Args        map[string]string
-	HeadingArgs map[string]string
-	UserArgs    map[string]string
-	CmdSet      bool
-	Author      string
+	Env    []string
+	Args   map[string]string
+	CmdSet bool
+	Author string
 
 	AllowedArgs map[string]bool
 	Volumes     VolumeSet
@@ -307,16 +288,8 @@ func NewBuilder(args map[string]string) *Builder {
 	for k, v := range builtinAllowedBuildArgs {
 		allowed[k] = v
 	}
-	userArgs := make(map[string]string)
-	initialArgs := make(map[string]string)
-	for k, v := range args {
-		userArgs[k] = v
-		initialArgs[k] = v
-	}
 	return &Builder{
-		Args:        initialArgs,
-		UserArgs:    userArgs,
-		HeadingArgs: make(map[string]string),
+		Args:        args,
 		AllowedArgs: allowed,
 	}
 }
@@ -332,10 +305,11 @@ func ParseFile(path string) (*parser.Node, error) {
 
 // Step creates a new step from the current state.
 func (b *Builder) Step() *Step {
-	// Include build arguments in the table of variables that we'll use in
-	// Resolve(), but override them with values from the actual
-	// environment in case there's any conflict.
-	return &Step{Env: mergeEnv(b.Arguments(), mergeEnv(b.Env, b.RunConfig.Env))}
+	dst := make([]string, len(b.Env)+len(b.RunConfig.Env))
+	copy(dst, b.Env)
+	dst = append(dst, b.RunConfig.Env...)
+	dst = append(dst, b.Arguments()...)
+	return &Step{Env: dst}
 }
 
 // Run executes a step, transforming the current builder and
@@ -463,7 +437,7 @@ func (b *Builder) FromImage(image *docker.Image, node *parser.Node) error {
 	SplitChildren(node, command.From)
 
 	b.RunConfig = *image.Config
-	b.Env = mergeEnv(b.Env, b.RunConfig.Env)
+	b.Env = append(b.Env, b.RunConfig.Env...)
 	b.RunConfig.Env = nil
 
 	// Check to see if we have a default PATH, note that windows won't

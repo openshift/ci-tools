@@ -215,6 +215,12 @@ func TestInlineCiopConfig(t *testing.T) {
 		configs:     config.DataByFilename{"filename": {Info: config.Info{Metadata: testCiopConfigInfo}, Configuration: testCiopConfig}},
 		expectedEnv: []v1.EnvVar{{Name: "T", Value: string(testCiopConfigContentTest2)}},
 	}, {
+		description:   "CM reference to ci-operator-configs with invalid test",
+		testname:      "non-existent",
+		sourceEnv:     []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference(testCiopConfigInfo.ConfigMapName(), "filename")}},
+		configs:       config.DataByFilename{"filename": {Info: config.Info{Metadata: testCiopConfigInfo}, Configuration: testCiopConfig}},
+		expectedError: true,
+	}, {
 		description:   "bad CM key is handled",
 		sourceEnv:     []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference(testCiopConfigInfo.ConfigMapName(), "filename")}},
 		configs:       config.DataByFilename{},

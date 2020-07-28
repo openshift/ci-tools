@@ -245,6 +245,9 @@ func getResolvedConfigForTest(ciopConfigs config.DataByFilename, resolver regist
 			break
 		}
 	}
+	if len(ciopCopy.Configuration.Tests) == 0 {
+		return "", nil, fmt.Errorf("test %q not found in the ci-operator configuration file: %s", testname, filename)
+	}
 	ciopConfigResolved, err := registry.ResolveConfig(resolver, ciopCopy.Configuration)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed resolve ReleaseBuildConfiguration: %w", err)

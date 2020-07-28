@@ -93,5 +93,11 @@ type streamElement struct {
 }
 
 type groupYAML struct {
-	Sources map[string]ocpImageConfigSourceGit `json:"sources"`
+	Sources         map[string]ocpImageConfigSourceGit `json:"sources"`
+	PublicUpstreams []publicPrivateMapping             `json:"public_upstreams,omitempty"`
+}
+
+type publicPrivateMapping struct {
+	Private string `json:"private"`
+	Public  string `json:"public"`
 }

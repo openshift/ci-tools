@@ -121,17 +121,20 @@ func (r *reporter) Report(err error) {
 	data, err := json.Marshal(request)
 	if err != nil {
 		logrus.Tracef("could not marshal request: %v", err)
+		return
 	}
 	logrus.Infof("Reporting job state %q with reason %q", request.State, request.Reason)
 	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/result", r.address), bytes.NewReader(data))
 	if err != nil {
 		logrus.Tracef("could not create report request: %v", err)
+		return
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.SetBasicAuth(r.username, r.password)
 	resp, err := r.client.Do(req)
 	if err != nil {
 		logrus.Tracef("could not send report request: %v", err)
+		return
 	}
 	defer func() {
 		if err := resp.Body.Close(); err != nil {

@@ -42,6 +42,7 @@ func gatherOptions() (options, error) {
 	fs.StringVar(&o.address, "address", ":8080", "Address to run server on")
 	fs.DurationVar(&o.gracePeriod, "gracePeriod", time.Second*10, "Grace period for server shutdown")
 	fs.StringVar(&o.pluginConfig, "plugin-config", "/etc/plugins/plugins.yaml", "Path to plugin config file.")
+
 	for _, group := range []flagutil.OptionGroup{&o.bugzilla} {
 		group.AddFlags(fs)
 	}
@@ -118,6 +119,7 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("Error getting Bugzilla client.")
 	}
+	bugzillaClient.SetRoundTripper(backporter.NewCachingTransport())
 	health := pjutil.NewHealth()
 	metrics.ExposeMetrics("ci-operator-bugzilla-backporter", prowConfig.PushGateway{}, prowflagutil.DefaultMetricsPort)
 	allTargetVersions, err := getAllTargetVersions(o.pluginConfig)

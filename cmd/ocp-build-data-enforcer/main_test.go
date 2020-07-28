@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"github.com/pmezard/go-difflib/difflib"
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestUpdateDockerfile(t *testing.T) {
@@ -136,19 +136,8 @@ FROM replacement-2
 			if !tc.expectUpdate {
 				return
 			}
-			diff := difflib.UnifiedDiff{
-				A:        difflib.SplitLines(string(result)),
-				B:        difflib.SplitLines(string(tc.expectdDockerfile)),
-				FromFile: "original",
-				ToFile:   "updated",
-				Context:  3,
-			}
-			diffStr, err := difflib.GetUnifiedDiffString(diff)
-			if err != nil {
-				t.Fatalf("failed to produce diff: %v", err)
-			}
-			if diffStr != "" {
-				t.Errorf("actual result differs from expcted: %s", diffStr)
+			if diff := cmp.Diff(string(result), string(tc.expectdDockerfile)); diff != "" {
+				t.Errorf("result difers from expected: %s", diff)
 			}
 		})
 	}

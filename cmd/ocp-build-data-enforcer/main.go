@@ -88,6 +88,7 @@ func main() {
 	logrus.Infof("Processed %d configs", len(configs))
 }
 
+// TODO (alvaroaleman): This is incomplete
 func dereferenceConfig(config *ocpImageConfig, streamMap streamMap, groupYAML groupYAML) error {
 	if replacement, hasReplacement := streamMap[config.From.Stream]; hasReplacement {
 		config.From.Stream = replacement.UpstreamImage

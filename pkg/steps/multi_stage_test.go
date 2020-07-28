@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+	"time"
 
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -554,6 +555,9 @@ func TestRun(t *testing.T) {
 }
 
 func TestArtifacts(t *testing.T) {
+	timeSecond = time.Nanosecond
+	defer func() { timeSecond = time.Second }()
+
 	tmp, err := ioutil.TempDir("", "")
 	if err != nil {
 		t.Fatal(err)

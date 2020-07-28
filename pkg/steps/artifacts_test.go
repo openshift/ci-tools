@@ -536,9 +536,24 @@ func TestArtifactWorker(t *testing.T) {
 	}()
 	pod := "pod"
 	podClient := testPodClient{
-		PodsGetter: fake.NewSimpleClientset().CoreV1(),
-		namespace:  "namespace",
-		name:       pod,
+		PodsGetter: fake.NewSimpleClientset(&coreapi.Pod{
+			ObjectMeta: meta.ObjectMeta{
+				Name:      pod,
+				Namespace: "namespace",
+			},
+			Status: coreapi.PodStatus{
+				ContainerStatuses: []coreapi.ContainerStatus{
+					{
+						Name: "artifacts",
+						State: coreapi.ContainerState{
+							Running: &coreapi.ContainerStateRunning{},
+						},
+					},
+				},
+			},
+		}).CoreV1(),
+		namespace: "namespace",
+		name:      pod,
 	}
 	w := NewArtifactWorker(podClient, tmp, podClient.namespace)
 	w.CollectFromPod(pod, []string{"container"}, nil)
@@ -560,6 +575,7 @@ func TestArtifactWorker(t *testing.T) {
 		t.Fatalf("unexpected content in the artifact directory: %v", names)
 	}
 }
+
 func TestAddArtifactsToPod(t *testing.T) {
 	testCases := []struct {
 		testID   string

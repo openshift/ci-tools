@@ -158,8 +158,8 @@ func processDockerfile(config ocpImageConfig) {
 }
 
 func readStreamMap(ocpBuildDataDir string, majorMinor majorMinor) (streamMap, error) {
-	streamMap := &streamMap{}
-	return *streamMap, readYAML(filepath.Join(ocpBuildDataDir, "streams.yml"), streamMap, majorMinor)
+	streamMap := streamMap{}
+	return streamMap, readYAML(filepath.Join(ocpBuildDataDir, "streams.yml"), &streamMap, majorMinor)
 }
 
 func readGroupYAML(ocpBuildDataDir string, majorMinor majorMinor) (groupYAML, error) {

@@ -151,7 +151,7 @@ const clonesTemplateConstructor = `
 				<th title="Targeted version to release fix" class="info">Target Release</th>
 				<th title="ID of the cloned bug" class="info">Bug ID</th>
 				<th title="Status of the cloned bug" class="info">Status</th>
-				<th title="PR associated with this bug" class="info">PR</th>
+				<th title="PR associated with this bug" class="info">PRs</th>
 			</tr>
 		</thead>
 		<tbody>
@@ -208,7 +208,7 @@ It also allows the user to create clones targeting a specific release.
 Enter the BugID for the bug whose clones need to be found in the input field on the top right 
 corner and click "Find Clones".
 This would present the user with a list of all the clones of that bug with the relevant release 
-and associated PRs.
+and associated PRs. The highlighted bug is the bug which is being searched for.
 </p>
 
 <h2 id="title"><a href="#title">How to create a clone?</a></h2>
@@ -237,7 +237,6 @@ const errorTemplateConstructor = `
 
 var (
 	clonesTemplate = template.Must(template.New("clones").Parse(clonesTemplateConstructor))
-	emptyTemplate  = template.Must(template.New("empty").Parse("{{.}}"))
 	errorTemplate  = template.Must(template.New("error").Parse(errorTemplateConstructor))
 	helpTemplate   = template.Must(template.New("help").Parse(helpTemplateConstructor))
 )
@@ -292,7 +291,7 @@ func writePage(w http.ResponseWriter, title string, body *template.Template, dat
 // GetLandingHandler will return a simple bug search page
 func GetLandingHandler(metrics *metrics.Metrics) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
-		err := writePage(w, "Home", emptyTemplate, nil)
+		err := writePage(w, "Home", helpTemplate, nil)
 		if err != nil {
 			handleError(w, err, "failed to build Landing page", http.StatusInternalServerError, req.URL.Path, 0, metrics)
 		}

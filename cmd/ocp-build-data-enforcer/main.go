@@ -102,6 +102,8 @@ func dereferenceConfig(config *ocpImageConfig, streamMap streamMap, groupYAML gr
 		if _, hasReplacement := groupYAML.Sources[config.Content.Source.Alias]; !hasReplacement {
 			return fmt.Errorf("groups.yaml has no replacement for alias %s", config.Content.Source.Alias)
 		}
+		// Create a new pointer and set its value to groupYAML.Sources[config.Content.Source.Alias]
+		// rather than directly creating a pointer to the latter.
 		config.Content.Source.Git = &ocpImageConfigSourceGit{}
 		*config.Content.Source.Git = groupYAML.Sources[config.Content.Source.Alias]
 	}

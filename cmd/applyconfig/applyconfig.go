@@ -208,6 +208,28 @@ func applyConfig(rootDir string, o *options) error {
 			return err
 		}
 
+		// oc-cli works with the symlinks targeting files
+		// here we need to handle symlinks targeting folders recursively
+		if info.Mode()&os.ModeSymlink != 0 {
+			target, err := os.Readlink(path)
+			if err != nil {
+				logrus.WithError(err).Errorf("failed to readlink: %s", path)
+				failures = true
+			}
+			targetFileInfo, err := os.Stat(target)
+			if err != nil {
+				logrus.WithError(err).Errorf("failed to Stat: %s", target)
+				failures = true
+			}
+			if targetFileInfo.IsDir() {
+				logrus.Infof("replace the symlink folder %s with the target %s", path, target)
+				if err := applyConfig(target, o); err != nil {
+					failures = true
+				}
+				return nil
+			}
+		}
+
 		if skip, err := fileFilter(info, path); skip || err != nil {
 			return err
 		}

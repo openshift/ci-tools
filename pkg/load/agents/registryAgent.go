@@ -19,7 +19,7 @@ import (
 // memory and resolve ReleaseBuildConfigurations using the registry
 type RegistryAgent interface {
 	ResolveConfig(config api.ReleaseBuildConfiguration) (api.ReleaseBuildConfiguration, error)
-	GetRegistryComponents() (registry.ReferenceByName, registry.ChainByName, registry.WorkflowByName, map[string]string)
+	GetRegistryComponents() (registry.ReferenceByName, registry.ChainByName, registry.WorkflowByName, map[string]string, *api.RegistryMetadata)
 	GetGeneration() int
 	registry.Resolver
 }
@@ -36,6 +36,7 @@ type registryAgent struct {
 	chains        registry.ChainByName
 	workflows     registry.WorkflowByName
 	documentation map[string]string
+	metadata      *api.RegistryMetadata
 }
 
 var registryReloadTimeMetric = prometheus.NewHistogram(
@@ -89,14 +90,14 @@ func (a *registryAgent) GetGeneration() int {
 	return a.generation
 }
 
-func (a *registryAgent) GetRegistryComponents() (registry.ReferenceByName, registry.ChainByName, registry.WorkflowByName, map[string]string) {
-	return a.references, a.chains, a.workflows, a.documentation
+func (a *registryAgent) GetRegistryComponents() (registry.ReferenceByName, registry.ChainByName, registry.WorkflowByName, map[string]string, *api.RegistryMetadata) {
+	return a.references, a.chains, a.workflows, a.documentation, a.metadata
 }
 
 func (a *registryAgent) loadRegistry() error {
 	log.Debug("Reloading registry")
 	startTime := time.Now()
-	references, chains, workflows, documentation, err := load.Registry(a.registryPath, a.flatRegistry)
+	references, chains, workflows, documentation, metadata, err := load.Registry(a.registryPath, a.flatRegistry)
 	if err != nil {
 		a.recordError("failed to load ci-operator registry")
 		return fmt.Errorf("failed to load ci-operator registry (%w)", err)
@@ -106,6 +107,7 @@ func (a *registryAgent) loadRegistry() error {
 	a.chains = chains
 	a.workflows = workflows
 	a.documentation = documentation
+	a.metadata = metadata
 	a.resolver = registry.NewResolver(references, chains, workflows)
 	a.generation++
 	a.lock.Unlock()

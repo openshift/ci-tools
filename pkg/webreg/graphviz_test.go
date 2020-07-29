@@ -89,7 +89,7 @@ const deprovisionChain = `digraph Webreg {
 }`
 
 func TestChainDotFile(t *testing.T) {
-	_, chains, _, _, err := load.Registry("../../test/multistage-registry/registry", false)
+	_, chains, _, _, _, err := load.Registry("../../test/multistage-registry/registry", false)
 	if err != nil {
 		t.Fatalf("Failed to load registry: %v", err)
 	}
@@ -104,7 +104,7 @@ func TestChainDotFile(t *testing.T) {
 }
 
 func TestWorkflowDotFile(t *testing.T) {
-	_, chains, workflows, _, err := load.Registry("../../test/multistage-registry/registry", false)
+	_, chains, workflows, _, _, err := load.Registry("../../test/multistage-registry/registry", false)
 	if err != nil {
 		t.Fatalf("Failed to load registry: %v", err)
 	}

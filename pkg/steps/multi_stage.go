@@ -58,7 +58,7 @@ type multiStageTestStep struct {
 	jobSpec            *api.JobSpec
 	pre, test, post    []api.LiteralTestStep
 	subTests           []*junit.TestCase
-	allowSkipOnSuccess bool
+	allowSkipOnSuccess *bool
 }
 
 func MultiStageTestStep(
@@ -327,7 +327,9 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 	var ret []coreapi.Pod
 	var errs []error
 	for _, step := range steps {
-		if s.allowSkipOnSuccess && step.OptionalOnSuccess != nil && *step.OptionalOnSuccess && !hasPrevErrs {
+		if s.allowSkipOnSuccess != nil && *s.allowSkipOnSuccess &&
+			step.OptionalOnSuccess != nil && *step.OptionalOnSuccess &&
+			!hasPrevErrs {
 			continue
 		}
 		image := step.From

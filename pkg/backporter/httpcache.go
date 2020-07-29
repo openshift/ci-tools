@@ -39,14 +39,21 @@ func (bc *bugzillaCache) set(key string, respBytes []byte) {
 	bc.cache[key] = respBytes
 }
 
+var _ cache = &bugzillaCache{}
+
 func newBugzillaCache() *bugzillaCache {
 	return &bugzillaCache{cache: map[string][]byte{}}
+}
+
+type cache interface {
+	get(string) ([]byte, bool)
+	set(string, []byte)
 }
 
 // cachingTransport is an implementation http.RoundTripper
 // which first checks for cached values
 type cachingTransport struct {
-	cache     *bugzillaCache
+	cache     cache
 	transport http.RoundTripper
 }
 
@@ -56,10 +63,10 @@ func (t *cachingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 	if req.Method != "GET" {
 		return t.transport.RoundTrip(req)
 	}
-	var err error
 	var resp *http.Response
-	g := new(errgroup.Group)
+	g := errgroup.Group{}
 	g.Go(func() error {
+		var err error
 		resp, err = t.transport.RoundTrip(req)
 		if err != nil {
 			return err
@@ -143,7 +150,7 @@ func NewCachingTransport() http.RoundTripper {
 		defer ticker.Stop()
 		for {
 			<-ticker.C
-			refreshCache(t.cache, cacheRefreshMetrics)
+			refreshCache(t.cache.(*bugzillaCache), cacheRefreshMetrics)
 		}
 	}()
 	return &t

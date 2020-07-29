@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httputil"
+	"sync"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -88,10 +89,15 @@ func TestBugzillaCacheGet(t *testing.T) {
 
 type fakeTransport struct {
 	response *http.Response
+	wait     func()
 	err      error
 }
 
 func (t fakeTransport) RoundTrip(req *http.Request) (resp *http.Response, err error) {
+	// We must guarantee that we don't return until after the cache request in order to keep tests stable
+	if t.wait != nil {
+		t.wait()
+	}
 	return t.response, t.err
 }
 
@@ -143,10 +149,22 @@ func TestRoundTrip(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to make request to fake server: %v", err)
 			}
-			bc := newBugzillaCache()
-			bc.cache = tc.cache
+			cache := &accessTrackingCache{
+				lock:  &sync.Mutex{},
+				cache: &bugzillaCache{cache: tc.cache},
+			}
+			tc.fake.wait = func() {
+				for {
+					cache.lock.Lock()
+					hadAccess := cache.accessCounter > 0
+					cache.lock.Unlock()
+					if hadAccess {
+						return
+					}
+				}
+			}
 			tp := cachingTransport{
-				cache:     bc,
+				cache:     cache,
 				transport: tc.fake,
 			}
 			resp, err := tp.RoundTrip(r)
@@ -175,4 +193,17 @@ func TestRoundTrip(t *testing.T) {
 		})
 	}
 
+}
+
+type accessTrackingCache struct {
+	cache
+	lock          *sync.Mutex
+	accessCounter int
+}
+
+func (c *accessTrackingCache) get(key string) ([]byte, bool) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.accessCounter++
+	return c.cache.get(key)
 }

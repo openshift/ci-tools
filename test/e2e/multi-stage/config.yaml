@@ -58,8 +58,15 @@ tests:
             requests:
               cpu: 100m
               memory: 200Mi
-        - as: check-skipped-and-always-run-steps
-          commands: test ! -f ${ARTIFACT_DIR}/skipped -a -f ${ARTIFACT_DIR}/alwaysrun
+        - as: check-skipped-step
+          commands: test ! -f ${ARTIFACT_DIR}/skipped
+          from: os
+          resources:
+            requests:
+              cpu: 100m
+              memory: 200Mi
+        - as: check-always-run-step
+          commands: test -f ${ARTIFACT_DIR}/alwaysrun
           from: os
           resources:
             requests:

@@ -8,12 +8,12 @@ import (
 
 func TestUpdateDockerfile(t *testing.T) {
 	testCases := []struct {
-		name              string
-		dockerfile        []byte
-		config            ocpImageConfig
-		expectedErrMsg    string
-		expectUpdate      bool
-		expectdDockerfile []byte
+		name                string
+		dockerfile          []byte
+		config              ocpImageConfig
+		expectededErrMsg    string
+		expectedUpdate      bool
+		expecteddDockerfile []byte
 	}{
 		{
 			name: "No changes",
@@ -52,7 +52,7 @@ LABEL io.k8s.display-name="Whereabouts CNI" \
 				Builder: []ocpImageConfigFromStream{{"rhel-8-golang"}, {"golang"}},
 				Stream:  "rhel",
 			}},
-			expectdDockerfile: []byte(`# This dockerfile is used for building for OpenShift
+			expecteddDockerfile: []byte(`# This dockerfile is used for building for OpenShift
 FROM rhel-8-golang as rhel8
 ADD . /go/src/github.com/dougbtv/whereabouts
 WORKDIR /go/src/github.com/dougbtv/whereabouts
@@ -94,8 +94,8 @@ FROM something
 				Builder: []ocpImageConfigFromStream{{"replaced"}},
 				Stream:  "replacement-2",
 			}},
-			expectUpdate: true,
-			expectdDockerfile: []byte(`# This dockerfile is used for building for OpenShift
+			expectedUpdate: true,
+			expecteddDockerfile: []byte(`# This dockerfile is used for building for OpenShift
 FROM replaced as rhel8
 FROM replacement-2
 `),
@@ -109,8 +109,8 @@ FROM something
 				Builder: []ocpImageConfigFromStream{{"replaced"}},
 				Stream:  "replacement-2",
 			}},
-			expectUpdate: true,
-			expectdDockerfile: []byte(`FROM replaced as rhel8
+			expectedUpdate: true,
+			expecteddDockerfile: []byte(`FROM replaced as rhel8
 FROM replacement-2
 `),
 		},
@@ -123,21 +123,21 @@ FROM replacement-2
 			if err != nil {
 				actualErrMsg = err.Error()
 			}
-			if actualErrMsg != tc.expectedErrMsg {
-				t.Fatalf("expected error to be %q, was %q", tc.expectedErrMsg, actualErrMsg)
+			if actualErrMsg != tc.expectededErrMsg {
+				t.Fatalf("expecteded error to be %q, was %q", tc.expectededErrMsg, actualErrMsg)
 			}
 			if actualErrMsg != "" {
 				return
 			}
 
-			if tc.expectUpdate != changed {
-				t.Errorf("expected change: %t, got change: %t", tc.expectUpdate, changed)
+			if tc.expectedUpdate != changed {
+				t.Errorf("expecteded change: %t, got change: %t", tc.expectedUpdate, changed)
 			}
-			if !tc.expectUpdate {
+			if !tc.expectedUpdate {
 				return
 			}
-			if diff := cmp.Diff(string(result), string(tc.expectdDockerfile)); diff != "" {
-				t.Errorf("result difers from expected: %s", diff)
+			if diff := cmp.Diff(string(result), string(tc.expecteddDockerfile)); diff != "" {
+				t.Errorf("result difers from expecteded: %s", diff)
 			}
 		})
 	}

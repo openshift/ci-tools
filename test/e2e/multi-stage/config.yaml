@@ -45,14 +45,21 @@ tests:
       post:
         - as: skip-on-success-post-step
           optional_on_success: true
-          commands: touch ${ARTIFACT_DIR}/file
+          commands: touch ${ARTIFACT_DIR}/skipped
           from: os
           resources:
             requests:
               cpu: 100m
               memory: 200Mi
-        - as: check-skipped-step
-          commands: test ! -f ${ARTIFACT_DIR}/file
+        - as: always-run-post-step
+          commands: touch ${ARTIFACT_DIR}/alwaysrun
+          from: os
+          resources:
+            requests:
+              cpu: 100m
+              memory: 200Mi
+        - as: check-skipped-and-always-run-steps
+          commands: test ! -f ${ARTIFACT_DIR}/skipped -a -f ${ARTIFACT_DIR}/alwaysrun
           from: os
           resources:
             requests:

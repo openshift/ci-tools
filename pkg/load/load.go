@@ -239,7 +239,7 @@ func Registry(root string, flat bool) (references registry.ReferenceByName, chai
 			return err
 		}
 		if info != nil && !info.IsDir() {
-			if filepath.Ext(info.Name()) == ".md" || info.Name() == "OWNERS" {
+			if filepath.Ext(info.Name()) == ".md" || filepath.Ext(info.Name()) == ".json" || info.Name() == "OWNERS" {
 				return nil
 			}
 			raw, err := ioutil.ReadFile(path)

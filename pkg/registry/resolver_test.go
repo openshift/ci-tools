@@ -18,6 +18,7 @@ func TestResolve(t *testing.T) {
 	nestedChains := "nested-chains"
 	chainInstall := "install-chain"
 	awsWorkflow := "ipi-aws"
+	yes := true
 	for _, testCase := range []struct {
 		name        string
 		config      api.MultiStageTestConfiguration
@@ -30,7 +31,8 @@ func TestResolve(t *testing.T) {
 		// This is a full config that should not change (other than struct) when passed to the Resolver
 		name: "Full AWS IPI",
 		config: api.MultiStageTestConfiguration{
-			ClusterProfile: api.ClusterProfileAWS,
+			ClusterProfile:     api.ClusterProfileAWS,
+			AllowSkipOnSuccess: &yes,
 			Pre: []api.TestStep{{
 				LiteralTestStep: &api.LiteralTestStep{
 					As:       "ipi-install",
@@ -63,7 +65,8 @@ func TestResolve(t *testing.T) {
 			}},
 		},
 		expectedRes: api.MultiStageTestConfigurationLiteral{
-			ClusterProfile: api.ClusterProfileAWS,
+			ClusterProfile:     api.ClusterProfileAWS,
+			AllowSkipOnSuccess: &yes,
 			Pre: []api.LiteralTestStep{{
 				As:       "ipi-install",
 				From:     "installer",

@@ -472,6 +472,7 @@ func (e *fakePodExecutor) AddReactors(cs *fake.Clientset) {
 }
 
 func TestRun(t *testing.T) {
+	yes := true
 	for _, tc := range []struct {
 		name     string
 		failures sets.String
@@ -527,8 +528,8 @@ func TestRun(t *testing.T) {
 				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
 					Pre:                []api.LiteralTestStep{{As: "pre0"}, {As: "pre1"}},
 					Test:               []api.LiteralTestStep{{As: "test0"}, {As: "test1"}},
-					Post:               []api.LiteralTestStep{{As: "post0"}, {As: "post1", OptionalOnSuccess: func(b bool) *bool { return &b }(true)}},
-					AllowSkipOnSuccess: true,
+					Post:               []api.LiteralTestStep{{As: "post0"}, {As: "post1", OptionalOnSuccess: &yes}},
+					AllowSkipOnSuccess: &yes,
 				},
 			}, &api.ReleaseBuildConfiguration{}, nil, &fakePodClient{NewPodClient(client, nil, nil)}, client, client, fakecs.RbacV1(), "", &jobSpec)
 			if err := step.Run(context.Background()); tc.failures == nil && err != nil {

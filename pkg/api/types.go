@@ -614,7 +614,7 @@ type MultiStageTestConfiguration struct {
 	// AllowSkipOnSuccess defines if any steps can be skipped when
 	// all previous `pre` and `test` steps were successful. The given step must explicitly
 	// ask for being skipped by setting the OptionalOnSuccess flag to true.
-	AllowSkipOnSuccess bool `json:"allow_skip_on_success,omitempty"`
+	AllowSkipOnSuccess *bool `json:"allow_skip_on_success,omitempty"`
 }
 
 // MultiStageTestConfigurationLiteral is a form of the MultiStageTestConfiguration that does not include
@@ -635,7 +635,7 @@ type MultiStageTestConfigurationLiteral struct {
 	// AllowSkipOnSuccess defines if any steps can be skipped when
 	// all previous `pre` and `test` steps were successful. The given step must explicitly
 	// ask for being skipped by setting the OptionalOnSuccess flag to true.
-	AllowSkipOnSuccess bool `json:"allow_skip_on_success,omitempty"`
+	AllowSkipOnSuccess *bool `json:"allow_skip_on_success,omitempty"`
 }
 
 // TestEnvironment has the values of parameters for multi-stage tests.

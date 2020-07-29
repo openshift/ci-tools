@@ -89,15 +89,44 @@ func main() {
 }
 
 // TODO (alvaroaleman): This is incomplete
-func dereferenceConfig(config *ocpImageConfig, streamMap streamMap, groupYAML groupYAML) error {
-	if replacement, hasReplacement := streamMap[config.From.Stream]; hasReplacement {
-		config.From.Stream = replacement.UpstreamImage
-	}
-	for blder := range config.From.Builder {
-		if replacement, hasReplacement := streamMap[config.From.Builder[blder].Stream]; hasReplacement {
-			config.From.Builder[blder].Stream = replacement.UpstreamImage
+func dereferenceConfig(
+	config *ocpImageConfig,
+	branch string,
+	allConfigs map[string]ocpImageConfig,
+	streamMap streamMap,
+	groupYAML groupYAML,
+	pullSpecGetter pullSpecForOrgRepoBranchDockerfileGetter,
+) error {
+	var errs []error
+
+	var err error
+	if config.From.Stream != "" {
+		config.From.Stream, err = replaceStream(config.From.Stream, streamMap)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("failed to replace .from.stream: %w", err))
 		}
 	}
+	if config.From.Member != "" {
+		config.From.Member, err = streamForMember(config.From.Member, branch, allConfigs, groupYAML, pullSpecGetter)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("failed to replace .from.member: %w", err))
+		}
+	}
+	for blder := range config.From.Builder {
+		if config.From.Builder[blder].Stream != "" {
+			config.From.Builder[blder].Stream, err = replaceStream(config.From.Builder[blder].Stream, streamMap)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("failed to replace .from.%d.stream: %w", blder, err))
+			}
+		}
+		if config.From.Builder[blder].Member != "" {
+			config.From.Builder[blder].Member, err = streamForMember(config.From.Builder[blder].Member, branch, allConfigs, groupYAML, pullSpecGetter)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("failed to replace .from.%d.member: %w", blder, err))
+			}
+		}
+	}
+
 	if config.Content.Source.Alias != "" {
 		if _, hasReplacement := groupYAML.Sources[config.Content.Source.Alias]; !hasReplacement {
 			return fmt.Errorf("groups.yaml has no replacement for alias %s", config.Content.Source.Alias)
@@ -109,6 +138,66 @@ func dereferenceConfig(config *ocpImageConfig, streamMap streamMap, groupYAML gr
 	}
 
 	return nil
+}
+
+func streamForMember(
+	memberName string,
+	branch string,
+	allConfigs map[string]ocpImageConfig,
+	groupYAML groupYAML,
+	pullSpecGetter pullSpecForOrgRepoBranchDockerfileGetter,
+) (string, error) {
+	cfgFile := configFileNamberForMemberString(memberName)
+	cfg, cfgExists := allConfigs[cfgFile]
+	if !cfgExists {
+		return "", fmt.Errorf("no config %s found", cfgFile)
+	}
+	orgRepo, err := getPublicRepo(cfg.orgRepo(), groupYAML.PublicUpstreams)
+	if err != nil {
+		return "", fmt.Errorf("failed to replace %s with its public upstream: %w", cfg.orgRepo(), err)
+	}
+	orgRepoSplit := strings.Split(orgRepo, "/")
+	if n := len(orgRepoSplit); n != 2 {
+		return "", fmt.Errorf("splitting orgRepo string %s by / did not yield two but %d results", orgRepo, n)
+	}
+	result, err := pullSpecGetter(orgRepoSplit[0], orgRepoSplit[1], branch, cfg.dockerfile())
+	if err != nil {
+		return "", fmt.Errorf("failed to get pullspec: %w", err)
+	}
+
+	return result, nil
+}
+
+func configFileNamberForMemberString(memberString string) string {
+	return "images/" + memberString + ".yml"
+}
+
+func getPublicRepo(orgRepo string, mappings []publicPrivateMapping) (string, error) {
+	orgRepo = "https://github.com/" + orgRepo
+	var replacement string
+	for _, mapping := range mappings {
+		if !strings.HasPrefix(orgRepo, mapping.Private) {
+			continue
+		}
+		if len(replacement) > len(mapping.Private) {
+			continue
+		}
+		replacement = mapping.Public
+	}
+
+	if replacement == "" {
+		return "", errors.New("no matching replacement found")
+	}
+
+	return strings.TrimPrefix(replacement, "https://github.com/"), nil
+}
+
+func replaceStream(streamName string, streamMap streamMap) (string, error) {
+	replacement, hasReplacement := streamMap[streamName]
+	if !hasReplacement {
+		return "", fmt.Errorf("streamMap has no replacement for stream %s", streamName)
+	}
+	return replacement.UpstreamImage, nil
 }
 
 func processDockerfile(config ocpImageConfig) {

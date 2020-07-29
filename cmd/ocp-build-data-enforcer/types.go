@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -20,10 +21,15 @@ func (o ocpImageConfig) validate() error {
 	if o.Content != nil && o.Content.Source.Alias != "" && o.Content.Source.Git != nil {
 		errs = append(errs, errors.New("both content.source.alias and content.source.git are set"))
 	}
-
-	if o.From.Stream == "" {
-		errs = append(errs, errors.New(".from.stream was unset"))
+	if err := o.From.validate(); err != nil {
+		errs = append(errs, fmt.Errorf(".from failed validation: %w", err))
 	}
+	for idx, cfg := range o.From.Builder {
+		if err := cfg.validate(); err != nil {
+			errs = append(errs, fmt.Errorf(".from.%d failed validation: %w", idx, err))
+		}
+	}
+
 	return utilerrors.NewAggregate(errs)
 }
 
@@ -48,12 +54,23 @@ type ocpImageConfigSourceGitBranch struct {
 }
 
 type ocpImageConfigFrom struct {
-	Builder []ocpImageConfigFromStream `json:"builder"`
-	Stream  string                     `json:"stream"`
+	Builder                  []ocpImageConfigFromStream `json:"builder"`
+	ocpImageConfigFromStream `json:",inline"`
 }
 
 type ocpImageConfigFromStream struct {
 	Stream string `json:"stream"`
+	Member string `json:"member"`
+}
+
+func (icfs ocpImageConfigFromStream) validate() error {
+	if icfs.Stream == "" && icfs.Member == "" {
+		return errors.New("both stream and member were unset")
+	}
+	if icfs.Stream != "" && icfs.Member != "" {
+		return fmt.Errorf("both stream(%s) and member(%s) were set", icfs.Stream, icfs.Member)
+	}
+	return nil
 }
 
 type ocpImageConfigPush struct {

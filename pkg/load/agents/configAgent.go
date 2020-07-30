@@ -188,9 +188,8 @@ func (a *configAgent) loadFilenameToConfig() error {
 		return fmt.Errorf("loading config failed: %w", err)
 	}
 
-	indexes := a.buildIndexes(configs)
-
 	a.lock.Lock()
+	indexes := a.buildIndexes(configs)
 	a.configs = configs
 	a.generation++
 	a.indexes = indexes

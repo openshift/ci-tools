@@ -1836,13 +1836,15 @@ func githubLink(path string) template.HTML {
 	return template.HTML(fmt.Sprintf("<a href=\"%s\">%s</a>", link, link))
 }
 
-func createHTMLList(items []string) string {
+func createGitHubUserList(items []string) string {
 	var builder strings.Builder
 	builder.WriteString("<ul>")
 	for _, item := range items {
-		builder.WriteString("\n<li>")
+		builder.WriteString("\n<li><a href=\"https://github.com/")
 		builder.WriteString(item)
-		builder.WriteString("</li>")
+		builder.WriteString("\">")
+		builder.WriteString(item)
+		builder.WriteString("</a></li>")
 	}
 	builder.WriteString("</ul>")
 	return builder.String()
@@ -1853,19 +1855,19 @@ func ownersBlock(owners repoowners.Config) template.HTML {
 	builder.WriteString("<h2 id=\"owners\"><a href=\"#owners\">Owners:</a></h2>")
 	if len(owners.Approvers) > 0 {
 		builder.WriteString("<h4 id=\"approvers\"><a href=\"#approvers\">Approvers:</a></h4>\n")
-		builder.WriteString(createHTMLList(owners.Approvers))
+		builder.WriteString(createGitHubUserList(owners.Approvers))
 	}
 	if len(owners.Reviewers) > 0 {
 		builder.WriteString("<h4 id=\"reviewers\"><a href=\"#reviewers\">Reviewers:</a></h4>\n")
-		builder.WriteString(createHTMLList(owners.Reviewers))
+		builder.WriteString(createGitHubUserList(owners.Reviewers))
 	}
 	if len(owners.RequiredReviewers) > 0 {
 		builder.WriteString("<h4 id=\"required_reviewers\"><a href=\"#required_reviewers\">Required Reviewers:</a></h4>\n")
-		builder.WriteString(createHTMLList(owners.RequiredReviewers))
+		builder.WriteString(createGitHubUserList(owners.RequiredReviewers))
 	}
 	if len(owners.Labels) > 0 {
 		builder.WriteString("<h4 id=\"labels\"><a href\"#labels\">Labels:</a></h4>\n")
-		builder.WriteString(createHTMLList(owners.Labels))
+		builder.WriteString(createGitHubUserList(owners.Labels))
 	}
 	return template.HTML(builder.String())
 }

@@ -15,7 +15,10 @@ import (
 // * Fetching the matching config for the request
 // * Iterate through the .images field, find the config by matchin on the dockerfile and use that tag
 // * Returning a pull spec pointing to api for the imagestreamtag
-func pullSpecForOrgRepoBranchDockerfileFactory(agent agents.ConfigAgent) pullSpecForOrgRepoBranchDockerfileGetter {
+func pullSpecForOrgRepoBranchDockerfileFactory(agent agents.ConfigAgent) (pullSpecForOrgRepoBranchDockerfileGetter, error) {
+	if err := agent.AddIndex(orgRepoBranchDockerfileConfigIndexName, indexPromotingConfigsByOrgRepoBranchDockerfile); err != nil {
+		return nil, fmt.Errorf("failed to add %s index: %w", orgRepoBranchDockerfileConfigIndexName, err)
+	}
 	return func(org, repo, branch, dockerfile string) (string, error) {
 		cfgs, err := agent.GetFromIndex(
 			orgRepoBranchDockerfileConfigIndexName,
@@ -43,7 +46,7 @@ func pullSpecForOrgRepoBranchDockerfileFactory(agent agents.ConfigAgent) pullSpe
 		}
 
 		return fmt.Sprintf("registry.svc.ci.openshift.org/%s/%s:%s", cfg.PromotionConfiguration.Namespace, cfg.PromotionConfiguration.Name, imageBuildConfig.To), nil
-	}
+	}, nil
 
 }
 

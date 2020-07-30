@@ -18,7 +18,6 @@ func TestInputEnvironmentStep(t *testing.T) {
 		creates:  links,
 		provides: providesExpectation{
 			params: nil,
-			link:   nil,
 		},
 		inputs: inputsExpectation{
 			values: api.InputDefinition{"another value", "value"},

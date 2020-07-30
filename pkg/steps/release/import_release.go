@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/openshift/ci-tools/pkg/steps/utils"
 	"io/ioutil"
 	"log"
 	"path/filepath"
@@ -125,7 +126,7 @@ func (s *importReleaseStep) run(ctx context.Context) error {
 			}
 			if errors.IsForbidden(err) {
 				// the ci-operator expects to have POST /imagestreamimports in the namespace of the job
-				log.Printf("warning: Unable to lock %s to an image digest pull spec, you don't have permission to access the necessary API.", EnvVarFor(s.name))
+				log.Printf("warning: Unable to lock %s to an image digest pull spec, you don't have permission to access the necessary API.", utils.ReleaseImageEnv(s.name))
 				return false, nil
 			}
 			return false, err
@@ -383,8 +384,10 @@ func (s *importReleaseStep) Creates() []api.StepLink {
 	return []api.StepLink{api.ReleasePayloadImageLink(s.name)}
 }
 
-func (s *importReleaseStep) Provides() (api.ParameterMap, api.StepLink) {
-	return providesFor(s.name, s.imageClient, s.jobSpec)
+func (s *importReleaseStep) Provides() api.ParameterMap {
+	return api.ParameterMap{
+		utils.ReleaseImageEnv(s.name): utils.ImageDigestFor(s.imageClient, s.jobSpec.Namespace, api.ReleaseImageStream, s.name),
+	}
 }
 
 func (s *importReleaseStep) Name() string {

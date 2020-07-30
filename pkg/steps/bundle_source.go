@@ -113,8 +113,8 @@ func (s *bundleSourceStep) Creates() []api.StepLink {
 	return []api.StepLink{api.InternalImageLink(s.config.To)}
 }
 
-func (s *bundleSourceStep) Provides() (api.ParameterMap, api.StepLink) {
-	return api.ParameterMap{}, api.InternalImageLink(s.config.To)
+func (s *bundleSourceStep) Provides() api.ParameterMap {
+	return api.ParameterMap{}
 }
 
 func (s *bundleSourceStep) Name() string { return string(s.config.To) }

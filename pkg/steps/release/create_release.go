@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"github.com/openshift/ci-tools/pkg/results"
+	"github.com/openshift/ci-tools/pkg/steps/utils"
 	"log"
-	"strings"
 	"time"
 
 	imageapi "github.com/openshift/api/image/v1"
@@ -223,39 +223,10 @@ func (s *assembleReleaseStep) Creates() []api.StepLink {
 	return []api.StepLink{api.ReleasePayloadImageLink(s.name)}
 }
 
-func EnvVarFor(name string) string {
-	return fmt.Sprintf("RELEASE_IMAGE_%s", strings.ToUpper(name))
-}
-
-func (s *assembleReleaseStep) Provides() (api.ParameterMap, api.StepLink) {
-	return providesFor(s.name, s.imageClient, s.jobSpec)
-}
-
-func providesFor(name string, imageClient imageclientset.ImageV1Interface, spec *api.JobSpec) (api.ParameterMap, api.StepLink) {
+func (s *assembleReleaseStep) Provides() api.ParameterMap {
 	return api.ParameterMap{
-		EnvVarFor(name): func() (string, error) {
-			is, err := imageClient.ImageStreams(spec.Namespace()).Get("release", meta.GetOptions{})
-			if err != nil {
-				return "", fmt.Errorf("could not retrieve output imagestream: %w", err)
-			}
-			var registry string
-			if len(is.Status.PublicDockerImageRepository) > 0 {
-				registry = is.Status.PublicDockerImageRepository
-			} else if len(is.Status.DockerImageRepository) > 0 {
-				registry = is.Status.DockerImageRepository
-			} else {
-				return "", fmt.Errorf("image stream %s has no accessible image registry value", "release")
-			}
-			ref, image := findStatusTag(is, name)
-			if len(image) > 0 {
-				return fmt.Sprintf("%s@%s", registry, image), nil
-			}
-			if ref == nil && findSpecTag(is, name) == nil {
-				return "", nil
-			}
-			return fmt.Sprintf("%s:%s", registry, name), nil
-		},
-	}, api.ReleasePayloadImageLink(name)
+		utils.ReleaseImageEnv(s.name): utils.ImageDigestFor(s.imageClient, s.jobSpec.Namespace, api.ReleaseImageStream, s.name),
+	}
 }
 
 func (s *assembleReleaseStep) Name() string {

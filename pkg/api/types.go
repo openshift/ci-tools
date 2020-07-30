@@ -1113,10 +1113,10 @@ const (
 	// the StableImageStream. Images for other versions of
 	// the stream are held in similarly-named streams.
 	LatestStableName = "latest"
-	// InitialStableName is the name of the special stable
+	// InitialImageStream is the name of the special stable
 	// stream we copy at import to keep for upgrade tests.
 	// TODO(skuznets): remove these when they're not implicit
-	InitialStableName = "initial"
+	InitialImageStream = "initial"
 
 	// ReleaseImageStream is the name of the ImageStream
 	// used to hold built or imported release payload images

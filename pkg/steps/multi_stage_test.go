@@ -38,13 +38,19 @@ func TestRequires(t *testing.T) {
 			ClusterProfile: api.ClusterProfileAWS,
 			Test:           []api.LiteralTestStep{{From: "from-release"}},
 		},
-		req: []api.StepLink{},
+		req: []api.StepLink{
+			api.ReleasePayloadImageLink(api.InitialImageStream),
+			api.ReleasePayloadImageLink(api.LatestStableName),
+			api.ImagesReadyLink(),
+		},
 	}, {
 		name: "step needs release images, should have StableImagesLink",
 		steps: api.MultiStageTestConfigurationLiteral{
 			Test: []api.LiteralTestStep{{From: "from-release"}},
 		},
-		req: []api.StepLink{api.StableImagesLink(api.LatestStableName)},
+		req: []api.StepLink{
+			api.StableImagesLink(api.LatestStableName),
+		},
 	}, {
 		name: "step needs images, should have InternalImageLink",
 		config: api.ReleaseBuildConfiguration{
@@ -83,7 +89,7 @@ func TestRequires(t *testing.T) {
 					return
 				}
 			}
-			t.Errorf("incorrect requirements: %s", diff.ObjectReflectDiff(ret, tc.req))
+			t.Errorf("incorrect requirements: %s", cmp.Diff(ret, tc.req, api.Comparer()))
 		})
 	}
 }

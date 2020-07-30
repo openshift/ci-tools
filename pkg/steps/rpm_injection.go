@@ -65,8 +65,8 @@ func (s *rpmImageInjectionStep) Creates() []api.StepLink {
 	return []api.StepLink{api.InternalImageLink(s.config.To)}
 }
 
-func (s *rpmImageInjectionStep) Provides() (api.ParameterMap, api.StepLink) {
-	return nil, nil
+func (s *rpmImageInjectionStep) Provides() api.ParameterMap {
+	return nil
 }
 
 func (s *rpmImageInjectionStep) Name() string { return string(s.config.To) }

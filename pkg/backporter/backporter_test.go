@@ -17,7 +17,7 @@ import (
 )
 
 var (
-	landingPage = fmt.Sprintf(htmlPageStart, "Home") + htmlPageEnd
+	landingPage = fmt.Sprintf(htmlPageStart, "Home") + helpTemplateConstructor + htmlPageEnd
 )
 
 var allTargetVersions = sets.NewString("4.0.0", "4.1.0", "4.4.z")

@@ -10,26 +10,31 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/openshift/imagebuilder"
 	dockercmd "github.com/openshift/imagebuilder/dockerfile/command"
 	"github.com/pmezard/go-difflib/difflib"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/github"
+	"github.com/openshift/ci-tools/pkg/load/agents"
 )
 
 type options struct {
 	ocpBuildDataRepoDir string
+	configDir           string
 	majorMinor          majorMinor
 }
 
 func gatherOptions() *options {
 	o := &options{}
 	flag.StringVar(&o.ocpBuildDataRepoDir, "ocp-build-data-repo-dir", "../ocp-build-data", "The directory in which the ocp-build-data reposity is")
+	flag.StringVar(&o.configDir, "config-dir", "../release/ci-operator/config", "The CI-Operator config directory")
 	flag.StringVar(&o.majorMinor.minor, "minor", "6", "The minor version to target")
 	flag.Parse()
 	return o
@@ -37,6 +42,15 @@ func gatherOptions() *options {
 func main() {
 	opts := gatherOptions()
 	opts.majorMinor.major = "4"
+
+	configAgent, err := agents.NewConfigAgent(opts.configDir, 2*time.Minute, prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"error"}))
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to construct config agent")
+	}
+	pullSpecForOrgRepoBranchDockerfileGetter, err := pullSpecForOrgRepoBranchDockerfileFactory(configAgent)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to get pullSpecForOrgRepoBranchDockerfileGetter")
+	}
 
 	configsUnverified, err := gatherAllOCPImageConfigs(opts.ocpBuildDataRepoDir, opts.majorMinor)
 	if err != nil {
@@ -60,7 +74,7 @@ func main() {
 			errs = append(errs, fmt.Errorf("error validating %s: %w", cfg.SourceFileName, err))
 			continue
 		}
-		if err := dereferenceConfig(&cfg, streamMap, groupYAML); err != nil {
+		if err := dereferenceConfig(&cfg, fmt.Sprintf("release-%d.%d", opts.majorMinor.major, opts.majorMinor.minor), configsUnverified, streamMap, groupYAML, pullSpecForOrgRepoBranchDockerfileGetter); err != nil {
 			errs = append(errs, fmt.Errorf("failed dereferencing config for %s: %w", cfg.SourceFileName, err))
 			continue
 		}
@@ -273,8 +287,8 @@ func readYAML(path string, unmarshalTarget interface{}, majorMinor majorMinor) e
 	return nil
 }
 
-func gatherAllOCPImageConfigs(ocpBuildDataDir string, majorMinor majorMinor) ([]ocpImageConfig, error) {
-	var result []ocpImageConfig
+func gatherAllOCPImageConfigs(ocpBuildDataDir string, majorMinor majorMinor) (map[string]ocpImageConfig, error) {
+	result := map[string]ocpImageConfig{}
 	resultLock := &sync.Mutex{}
 	errGroup := &errgroup.Group{}
 
@@ -299,7 +313,7 @@ func gatherAllOCPImageConfigs(ocpBuildDataDir string, majorMinor majorMinor) ([]
 
 			config.SourceFileName = strings.TrimPrefix(path, ocpBuildDataDir+"/")
 			resultLock.Lock()
-			result = append(result, *config)
+			result[config.SourceFileName] = *config
 			resultLock.Unlock()
 
 			return nil

@@ -221,7 +221,7 @@ func rehearseMain() error {
 	var graph registry.NodeByName
 
 	if !o.noRegistry {
-		refs, chains, workflows, _, err = load.Registry(filepath.Join(o.releaseRepoPath, config.RegistryPath), false)
+		refs, chains, workflows, _, _, err = load.Registry(filepath.Join(o.releaseRepoPath, config.RegistryPath), false)
 		if err != nil {
 			logger.WithError(err).Error("could not load step registry")
 			return fmt.Errorf(misconfigurationOutput)

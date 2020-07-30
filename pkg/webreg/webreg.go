@@ -15,8 +15,10 @@ import (
 	"github.com/alecthomas/chroma/lexers"
 	"github.com/alecthomas/chroma/styles"
 	"github.com/sirupsen/logrus"
+	"k8s.io/test-infra/prow/repoowners"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/load"
 	"github.com/openshift/ci-tools/pkg/load/agents"
 	"github.com/openshift/ci-tools/pkg/registry"
 )
@@ -157,40 +159,48 @@ const mainPage = `
 `
 
 const referencePage = `
-<h2 id="title"><a href="#title">Step: <nobr style="font-family:monospace">{{ .As }}</nobr></a></h2>
-<p id="documentation">{{ .Documentation }}</p>
-<h2 id="image"><a href="#image">Container image used for this step: <span style="font-family:monospace">{{ .From }}</span></a></h2>
+<h2 id="title"><a href="#title">Step:</a> <nobr style="font-family:monospace">{{ .Reference.As }}</nobr></h2>
+<p id="documentation">{{ .Reference.Documentation }}</p>
+<h2 id="image"><a href="#image">Container image used for this step:</a> <span style="font-family:monospace">{{ .Reference.From }}</span></h2>
 <h2 id="source"><a href="#source">Source Code</a></h2>
-{{ syntaxedSource .Commands }}
+{{ syntaxedSource .Reference.Commands }}
+<h2 id="github"><a href="#github">GitHub Link:</a></h2>{{ githubLink .Metadata.Path }}
+{{ ownersBlock .Metadata.Owners }}
 `
 
 const chainPage = `
-<h2 id="title"><a href="#title">Chains: <nobr style="font-family:monospace">{{ .As }}</nobr></a></h2>
-<p id="documentation">{{ .Documentation }}</p>
+<h2 id="title"><a href="#title">Chains:</a> <nobr style="font-family:monospace">{{ .Chain.As }}</nobr></h2>
+<p id="documentation">{{ .Chain.Documentation }}</p>
 <h2 id="steps" title="Step run by the chain, in runtime order"><a href="#steps">Steps</a></h2>
-{{ template "stepTable" .Steps}}
+{{ template "stepTable" .Chain.Steps}}
 <h2 id="graph" title="Visual representation of steps run by this chain"><a href="#graph">Step Graph</a></h2>
-{{ chainGraph .As }}
+{{ chainGraph .Chain.As }}
+<h2 id="github"><a href="#github">GitHub Link:</a></h2>{{ githubLink .Metadata.Path }}
+{{ ownersBlock .Metadata.Owners }}
 `
 
 // workflowJobPage defines the template for both jobs and workflows
 const workflowJobPage = `
-{{ $type := .Type }}
-<h2 id="title"><a href="#title">{{ $type }}: <nobr style="font-family:monospace">{{ .As }}</nobr></a></h2>
-{{ if .Documentation }}
-	<p id="documentation">{{ .Documentation }}</p>
+{{ $type := .Workflow.Type }}
+<h2 id="title"><a href="#title">{{ $type }}:</a> <nobr style="font-family:monospace">{{ .Workflow.As }}</nobr></h2>
+{{ if .Workflow.Documentation }}
+	<p id="documentation">{{ .Workflow.Documentation }}</p>
 {{ end }}
-{{ if .Steps.ClusterProfile }}
-	<h2 id="cluster_profile"><a href="#cluster_profile">Cluster Profile: <span style="font-family:monospace">{{ .Steps.ClusterProfile }}</span></a></h2>
+{{ if .Workflow.Steps.ClusterProfile }}
+	<h2 id="cluster_profile"><a href="#cluster_profile">Cluster Profile:</a> <span style="font-family:monospace">{{ .Workflow.Steps.ClusterProfile }}</span></h2>
 {{ end }}
 <h2 id="pre" title="Steps run by this {{ toLower $type }} to set up and configure the tests, in runtime order"><a href="#pre">Pre Steps</a></h2>
-{{ template "stepTable" .Steps.Pre }}
+{{ template "stepTable" .Workflow.Steps.Pre }}
 <h2 id="test" title="Steps in the {{ toLower $type }} that run actual tests, in runtime order"><a href="#test">Test Steps</a></h2>
-{{ template "stepTable" .Steps.Test }}
+{{ template "stepTable" .Workflow.Steps.Test }}
 <h2 id="post" title="Steps run by this {{ toLower $type }} to clean up and teardown test resources, in runtime order"><a href="#post">Post Steps</a></h2>
-{{ template "stepTable" .Steps.Post }}
+{{ template "stepTable" .Workflow.Steps.Post }}
 <h2 id="graph" title="Visual representation of steps run by this {{ toLower $type }}"><a href="#graph">Step Graph</a></h2>
-{{ workflowGraph .As .Type }}
+{{ workflowGraph .Workflow.As .Workflow.Type }}
+{{ if eq $type "Workflow" }}
+<h2 id="github"><a href="#github">GitHub Link:</a></h2>{{ githubLink .Metadata.Path }}
+{{ ownersBlock .Metadata.Owners }}
+{{ end }}
 `
 
 const jobSearchPage = `
@@ -1821,6 +1831,47 @@ func orgSpan(o Org, containsVariant bool) int {
 	return rowspan + 1
 }
 
+func githubLink(path string) template.HTML {
+	link := fmt.Sprintf("https://github.com/openshift/release/blob/master/ci-operator/step-registry/%s", path)
+	return template.HTML(fmt.Sprintf("<a href=\"%s\">%s</a>", link, link))
+}
+
+func createGitHubUserList(items []string) string {
+	var builder strings.Builder
+	builder.WriteString("<ul>")
+	for _, item := range items {
+		builder.WriteString("\n<li><a href=\"https://github.com/")
+		builder.WriteString(item)
+		builder.WriteString("\">")
+		builder.WriteString(item)
+		builder.WriteString("</a></li>")
+	}
+	builder.WriteString("</ul>")
+	return builder.String()
+}
+
+func ownersBlock(owners repoowners.Config) template.HTML {
+	var builder strings.Builder
+	builder.WriteString("<h2 id=\"owners\"><a href=\"#owners\">Owners:</a></h2>")
+	if len(owners.Approvers) > 0 {
+		builder.WriteString("<h4 id=\"approvers\"><a href=\"#approvers\">Approvers:</a></h4>\n")
+		builder.WriteString(createGitHubUserList(owners.Approvers))
+	}
+	if len(owners.Reviewers) > 0 {
+		builder.WriteString("<h4 id=\"reviewers\"><a href=\"#reviewers\">Reviewers:</a></h4>\n")
+		builder.WriteString(createGitHubUserList(owners.Reviewers))
+	}
+	if len(owners.RequiredReviewers) > 0 {
+		builder.WriteString("<h4 id=\"required_reviewers\"><a href=\"#required_reviewers\">Required Reviewers:</a></h4>\n")
+		builder.WriteString(createGitHubUserList(owners.RequiredReviewers))
+	}
+	if len(owners.Labels) > 0 {
+		builder.WriteString("<h4 id=\"labels\"><a href\"#labels\">Labels:</a></h4>\n")
+		builder.WriteString(createGitHubUserList(owners.Labels))
+	}
+	return template.HTML(builder.String())
+}
+
 func getBaseTemplate(workflows registry.WorkflowByName, chains registry.ChainByName, docs map[string]string) *template.Template {
 	base := template.New("baseTemplate").Funcs(
 		template.FuncMap{
@@ -1854,6 +1905,8 @@ func getBaseTemplate(workflows registry.WorkflowByName, chains registry.ChainByN
 			"doubleInc": func(i int) int {
 				return i + 2
 			},
+			"githubLink":  githubLink,
+			"ownersBlock": ownersBlock,
 		},
 	)
 	base, err := base.Parse(templateDefinitions)
@@ -2053,7 +2106,7 @@ func mainPageHandler(agent agents.RegistryAgent, templateString string, w http.R
 	defer func() { logrus.Infof("rendered in %s", time.Since(start)) }()
 
 	w.Header().Set("Content-Type", "text/html;charset=UTF-8")
-	refs, chains, wfs, docs := agent.GetRegistryComponents()
+	refs, chains, wfs, docs, _ := agent.GetRegistryComponents()
 	page := getBaseTemplate(wfs, chains, docs)
 	page, err := page.Parse(templateString)
 	if err != nil {
@@ -2161,24 +2214,37 @@ func referenceHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *ht
 				}
 				return template.HTML(formatted)
 			},
+			"githubLink":  githubLink,
+			"ownersBlock": ownersBlock,
 		},
 	).Parse(referencePage)
 	if err != nil {
 		writeErrorPage(w, fmt.Errorf("Failed to render page: %w", err), http.StatusInternalServerError)
 		return
 	}
-	refs, _, _, docs := agent.GetRegistryComponents()
+	refs, _, _, docs, metadata := agent.GetRegistryComponents()
 	if _, ok := refs[name]; !ok {
 		writeErrorPage(w, fmt.Errorf("Could not find reference `%s`. If you reached this page via a link provided in the logs of a failed test, the failed step may be a literal defined step, which does not exist in the step registry. Please look at the job info page for the failed test instead.", name), http.StatusNotFound)
 		return
 	}
-	ref := api.RegistryReference{
-		LiteralTestStep: api.LiteralTestStep{
-			As:       name,
-			Commands: refs[name].Commands,
-			From:     refs[name].From,
+	refMetadataName := fmt.Sprint(name, load.RefSuffix)
+	if _, ok := metadata.Metadata[refMetadataName]; !ok {
+		writeErrorPage(w, fmt.Errorf("Could not find metadata for file `%s`. Please contact the Developer Productivity Test Platform.", refMetadataName), http.StatusInternalServerError)
+		return
+	}
+	ref := struct {
+		Reference api.RegistryReference
+		Metadata  api.RegistryInfo
+	}{
+		Reference: api.RegistryReference{
+			LiteralTestStep: api.LiteralTestStep{
+				As:       name,
+				Commands: refs[name].Commands,
+				From:     refs[name].From,
+			},
+			Documentation: docs[name],
 		},
-		Documentation: docs[name],
+		Metadata: metadata.Metadata[refMetadataName],
 	}
 	writePage(w, "Registry Step Help Page", page, ref)
 }
@@ -2189,8 +2255,8 @@ func chainHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *http.R
 	w.Header().Set("Content-Type", "text/html;charset=UTF-8")
 	name := path.Base(req.URL.Path)
 
-	_, chains, wfs, docs := agent.GetRegistryComponents()
-	page := getBaseTemplate(wfs, chains, docs)
+	_, chains, _, docs, metadata := agent.GetRegistryComponents()
+	page := getBaseTemplate(nil, chains, docs)
 	page, err := page.Parse(chainPage)
 	if err != nil {
 		writeErrorPage(w, fmt.Errorf("Failed to render page: %w", err), http.StatusInternalServerError)
@@ -2200,10 +2266,21 @@ func chainHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *http.R
 		writeErrorPage(w, fmt.Errorf("Could not find chain %s", name), http.StatusNotFound)
 		return
 	}
-	chain := api.RegistryChain{
-		As:            name,
-		Documentation: docs[name],
-		Steps:         chains[name].Steps,
+	chainMetadataName := fmt.Sprint(name, load.ChainSuffix)
+	if _, ok := metadata.Metadata[chainMetadataName]; !ok {
+		writeErrorPage(w, fmt.Errorf("Could not find metadata for file `%s`. Please contact the Developer Productivity Test Platform.", chainMetadataName), http.StatusInternalServerError)
+		return
+	}
+	chain := struct {
+		Chain    api.RegistryChain
+		Metadata api.RegistryInfo
+	}{
+		Chain: api.RegistryChain{
+			As:            name,
+			Documentation: docs[name],
+			Steps:         chains[name].Steps,
+		},
+		Metadata: metadata.Metadata[chainMetadataName],
 	}
 	writePage(w, "Registry Chain Help Page", page, chain)
 }
@@ -2214,7 +2291,7 @@ func workflowHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *htt
 	w.Header().Set("Content-Type", "text/html;charset=UTF-8")
 	name := path.Base(req.URL.Path)
 
-	_, chains, workflows, docs := agent.GetRegistryComponents()
+	_, chains, workflows, docs, metadata := agent.GetRegistryComponents()
 	page := getBaseTemplate(workflows, chains, docs)
 	page, err := page.Parse(workflowJobPage)
 	if err != nil {
@@ -2225,13 +2302,24 @@ func workflowHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *htt
 		writeErrorPage(w, fmt.Errorf("Could not find workflow %s", name), http.StatusNotFound)
 		return
 	}
-	workflow := workflowJob{
-		RegistryWorkflow: api.RegistryWorkflow{
-			As:            name,
-			Documentation: docs[name],
-			Steps:         workflows[name],
-		},
-		Type: workflowType}
+	workflowMetadataName := fmt.Sprint(name, load.WorkflowSuffix)
+	if _, ok := metadata.Metadata[workflowMetadataName]; !ok {
+		writeErrorPage(w, fmt.Errorf("Could not find metadata for file `%s`. Please contact the Developer Productivity Test Platform.", workflowMetadataName), http.StatusInternalServerError)
+		return
+	}
+	workflow := struct {
+		Workflow workflowJob
+		Metadata api.RegistryInfo
+	}{
+		Workflow: workflowJob{
+			RegistryWorkflow: api.RegistryWorkflow{
+				As:            name,
+				Documentation: docs[name],
+				Steps:         workflows[name],
+			},
+			Type: workflowType},
+		Metadata: metadata.Metadata[workflowMetadataName],
+	}
 	writePage(w, "Registry Workflow Help Page", page, workflow)
 }
 
@@ -2310,18 +2398,25 @@ func jobHandler(regAgent agents.RegistryAgent, confAgent agents.ConfigAgent, w h
 	}
 	// TODO(apavel): support jobs other than presubmits
 	name := metadata.JobName("pull", test)
-	_, chains, workflows, docs := regAgent.GetRegistryComponents()
-	workflow, docs := jobToWorkflow(name, config, workflows, docs)
+	_, chains, workflows, docs, _ := regAgent.GetRegistryComponents()
+	jobWorkflow, docs := jobToWorkflow(name, config, workflows, docs)
 	updatedWorkflows := make(registry.WorkflowByName)
 	for k, v := range workflows {
 		updatedWorkflows[k] = v
 	}
-	updatedWorkflows[name] = workflow.Steps
+	updatedWorkflows[name] = jobWorkflow.Steps
 	page := getBaseTemplate(updatedWorkflows, chains, docs)
 	page, err = page.Parse(workflowJobPage)
 	if err != nil {
 		writeErrorPage(w, fmt.Errorf("Failed to render page: %w", err), http.StatusInternalServerError)
 		return
+	}
+	workflow := struct {
+		Workflow workflowJob
+		Metadata api.RegistryInfo
+	}{
+		Workflow: jobWorkflow,
+		Metadata: api.RegistryInfo{},
 	}
 	writePage(w, "Job Test Workflow Help Page", page, workflow)
 }

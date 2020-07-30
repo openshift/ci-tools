@@ -155,8 +155,6 @@ const (
 	annotationIdleCleanupDurationTTL = "ci.openshift.io/ttl.soft"
 	// annotationCleanupDurationTTL is the annotation for requesting namespace cleanup after the namespace has been active
 	annotationCleanupDurationTTL = "ci.openshift.io/ttl.hard"
-	// configResolverAddress is the default configresolver address in app.ci
-	configResolverAddress = "http://ci-operator-configresolver-ci.apps.ci.l2s4.p1.openshiftapps.com"
 	// leaseServerUsername is the default lease server username in api.ci
 	leaseServerUsername = "ci"
 
@@ -167,6 +165,8 @@ const (
 var (
 	// leaseServerAddress is the default lease server in api.ci
 	leaseServerAddress = api.URLForService(api.ServiceBoskos)
+	// configResolverAddress is the default configresolver address in app.ci
+	configResolverAddress = api.URLForService(api.ServiceConfig)
 )
 
 // CustomProwMetadata the name of the custom prow metadata file that's expected to be found in the artifacts directory.

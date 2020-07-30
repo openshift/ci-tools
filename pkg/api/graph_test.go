@@ -113,7 +113,7 @@ func (f *fakeStep) Creates() []StepLink  { return f.creates }
 func (f *fakeStep) Name() string         { return f.name }
 func (f *fakeStep) Description() string  { return f.name }
 
-func (f *fakeStep) Provides() ParameterMap { return nil }
+func (f *fakeStep) Provides() (ParameterMap, StepLink) { return nil, nil }
 
 func TestBuildGraph(t *testing.T) {
 	root := &fakeStep{

@@ -137,8 +137,8 @@ func (s *podStep) Creates() []api.StepLink {
 	return []api.StepLink{}
 }
 
-func (s *podStep) Provides() api.ParameterMap {
-	return nil
+func (s *podStep) Provides() (api.ParameterMap, api.StepLink) {
+	return nil, nil
 }
 
 func (s *podStep) Name() string { return s.config.As }

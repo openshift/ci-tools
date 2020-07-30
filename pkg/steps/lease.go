@@ -50,15 +50,15 @@ func (s *leaseStep) Name() string             { return s.wrapped.Name() }
 func (s *leaseStep) Description() string      { return s.wrapped.Description() }
 func (s *leaseStep) Requires() []api.StepLink { return s.wrapped.Requires() }
 func (s *leaseStep) Creates() []api.StepLink  { return s.wrapped.Creates() }
-func (s *leaseStep) Provides() api.ParameterMap {
-	parameters := s.wrapped.Provides()
+func (s *leaseStep) Provides() (api.ParameterMap, api.StepLink) {
+	parameters, links := s.wrapped.Provides()
 	if parameters == nil {
 		parameters = api.ParameterMap{}
 	}
 	parameters[leaseEnv] = func() (string, error) {
 		return s.leasedResource, nil
 	}
-	return parameters
+	return parameters, links
 }
 
 func (s *leaseStep) SubTests() []*junit.TestCase {

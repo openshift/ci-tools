@@ -26,8 +26,8 @@ func (s *imagesReadyStep) Creates() []api.StepLink {
 	return []api.StepLink{api.ImagesReadyLink()}
 }
 
-func (s *imagesReadyStep) Provides() api.ParameterMap {
-	return nil
+func (s *imagesReadyStep) Provides() (api.ParameterMap, api.StepLink) {
+	return nil, nil
 }
 
 func (s *imagesReadyStep) Name() string { return "[images]" }

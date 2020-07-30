@@ -15,6 +15,7 @@ func TestImagesReadyStep(t *testing.T) {
 		creates:  []api.StepLink{api.ImagesReadyLink()},
 		provides: providesExpectation{
 			params: nil,
+			link:   nil,
 		},
 		inputs: inputsExpectation{
 			values: nil,

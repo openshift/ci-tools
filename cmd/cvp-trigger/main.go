@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/openshift/ci-tools/pkg/api"
-	"github.com/openshift/ci-tools/pkg/steps/utils"
 	"os"
 	"path/filepath"
 	"strings"
@@ -212,7 +210,7 @@ func main() {
 		steps.OOChannel: o.channel,
 	}
 	if o.releaseImageRef != "" {
-		envVars[utils.ReleaseImageEnv(api.LatestStableName)] = o.releaseImageRef
+		envVars[steps.LatestReleaseEnv] = o.releaseImageRef
 	}
 	if o.installNamespace != "" {
 		envVars[steps.OOInstallNamespace] = o.installNamespace

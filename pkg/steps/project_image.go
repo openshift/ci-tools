@@ -4,9 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
+
 	buildapi "github.com/openshift/api/build/v1"
 	"github.com/openshift/api/image/docker10"
-	"github.com/openshift/ci-tools/pkg/steps/utils"
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 	coreapi "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -153,13 +154,27 @@ func (s *projectDirectoryImageBuildStep) Creates() []api.StepLink {
 	return []api.StepLink{api.InternalImageLink(s.config.To)}
 }
 
-func (s *projectDirectoryImageBuildStep) Provides() api.ParameterMap {
+func (s *projectDirectoryImageBuildStep) Provides() (api.ParameterMap, api.StepLink) {
 	if len(s.config.To) == 0 {
-		return nil
+		return nil, nil
 	}
 	return api.ParameterMap{
-		utils.PipelineImageEnvFor(s.config.To): utils.ImageDigestFor(s.imageClient, s.jobSpec.Namespace, api.PipelineImageStream, string(s.config.To)),
-	}
+		fmt.Sprintf("LOCAL_IMAGE_%s", strings.ToUpper(strings.Replace(string(s.config.To), "-", "_", -1))): func() (string, error) {
+			is, err := s.imageClient.ImageStreams(s.jobSpec.Namespace()).Get(api.PipelineImageStream, meta.GetOptions{})
+			if err != nil {
+				return "", fmt.Errorf("could not retrieve output imagestream: %w", err)
+			}
+			var registry string
+			if len(is.Status.PublicDockerImageRepository) > 0 {
+				registry = is.Status.PublicDockerImageRepository
+			} else if len(is.Status.DockerImageRepository) > 0 {
+				registry = is.Status.DockerImageRepository
+			} else {
+				return "", fmt.Errorf("image stream %s has no accessible image registry value", s.config.To)
+			}
+			return fmt.Sprintf("%s:%s", registry, s.config.To), nil
+		},
+	}, api.InternalImageLink(s.config.To)
 }
 
 func (s *projectDirectoryImageBuildStep) Name() string { return string(s.config.To) }

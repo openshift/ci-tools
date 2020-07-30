@@ -94,6 +94,7 @@ type doneExpectation struct {
 
 type providesExpectation struct {
 	params map[string]string
+	link   api.StepLink
 }
 
 type inputsExpectation struct {
@@ -150,12 +151,11 @@ func examineStep(t *testing.T, step api.Step, expected stepExpectation) {
 		t.Errorf("step.Creates() returned different links:\n%s", diff.ObjectReflectDiff(expected.creates, creates))
 	}
 
-	params := step.Provides()
+	params, link := step.Provides()
 	for expectedKey, expectedValue := range expected.provides.params {
 		getFunc, ok := params[expectedKey]
 		if !ok {
 			t.Errorf("step.Provides: Parameters do not contain '%s' key (expected to return value '%s')", expectedKey, expectedValue)
-			continue
 		}
 		value, err := getFunc()
 		if err != nil {
@@ -163,6 +163,9 @@ func examineStep(t *testing.T, step api.Step, expected stepExpectation) {
 		} else if value != expectedValue {
 			t.Errorf("step.Provides: params[%s]() returned '%s', expected to return '%s'", expectedKey, value, expectedValue)
 		}
+	}
+	if !reflect.DeepEqual(expected.provides.link, link) {
+		t.Errorf("step.Provides returned different link\n%s", diff.ObjectReflectDiff(expected.provides.link, link))
 	}
 
 	inputs, err := step.Inputs()

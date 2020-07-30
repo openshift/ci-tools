@@ -68,6 +68,7 @@ func preparePodStep(t *testing.T, namespace string) (*podStep, stepExpectation, 
 		creates:  []api.StepLink{},
 		provides: providesExpectation{
 			params: nil,
+			link:   nil,
 		},
 		inputs: inputsExpectation{
 			values: nil,

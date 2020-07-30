@@ -38,7 +38,8 @@ func TestOutputImageStep(t *testing.T) {
 			api.InternalImageLink("configToAs"),
 		},
 		provides: providesExpectation{
-			params: map[string]string{"IMAGE_CONFIGTOAS": "uri://somewhere@fromImageName"},
+			params: map[string]string{"IMAGE_CONFIGTOAS": "uri://somewhere:configToTag"},
+			link:   api.ExternalImageLink(config.To),
 		},
 		inputs: inputsExpectation{values: nil, err: false},
 	}
@@ -50,15 +51,7 @@ func TestOutputImageStep(t *testing.T) {
 
 	outputImageStream := &imagev1.ImageStream{
 		ObjectMeta: meta.ObjectMeta{Name: config.To.Name, Namespace: config.To.Namespace},
-		Status: imagev1.ImageStreamStatus{
-			PublicDockerImageRepository: "uri://somewhere",
-			Tags: []imagev1.NamedTagEventList{{
-				Tag: "configToTag",
-				Items: []imagev1.TagEvent{{
-					Image: "fromImageName",
-				}},
-			}},
-		},
+		Status:     imagev1.ImageStreamStatus{PublicDockerImageRepository: "uri://somewhere"},
 	}
 	outputImageStreamTag := &imagev1.ImageStreamTag{
 		ObjectMeta: meta.ObjectMeta{

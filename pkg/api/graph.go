@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"fmt"
-	"github.com/google/go-cmp/cmp"
 	"strings"
 )
 
@@ -20,7 +19,7 @@ type Step interface {
 	Description() string
 	Requires() []StepLink
 	Creates() []StepLink
-	Provides() ParameterMap
+	Provides() (ParameterMap, StepLink)
 }
 
 type InputDefinition []string
@@ -166,14 +165,6 @@ func StableImageTagLink(name, tag string) StepLink {
 		name: StableStreamFor(name),
 		tag:  tag,
 	}
-}
-
-func Comparer() cmp.Option {
-	return cmp.AllowUnexported(
-		internalImageStreamLink{},
-		internalImageStreamTagLink{},
-		externalImageLink{},
-	)
 }
 
 func StableStreamFor(name string) string {

@@ -36,10 +36,10 @@ func (stepNeedsLease) Requires() []api.StepLink {
 }
 func (stepNeedsLease) Creates() []api.StepLink { return []api.StepLink{api.ImagesReadyLink()} }
 
-func (stepNeedsLease) Provides() api.ParameterMap {
+func (stepNeedsLease) Provides() (api.ParameterMap, api.StepLink) {
 	return api.ParameterMap{
 		"parameter": func() (string, error) { return "map", nil },
-	}
+	}, api.ExternalImageLink(api.ImageStreamTagReference{Name: "test"})
 }
 
 func (stepNeedsLease) SubTests() []*junit.TestCase {
@@ -85,18 +85,21 @@ func TestLeaseStepForward(t *testing.T) {
 		}
 	})
 	t.Run("Provides", func(t *testing.T) {
-		sParam := step.Provides()
+		sParam, sLinks := step.Provides()
 		sRet, err := sParam["parameter"]()
 		if err != nil {
 			t.Fatal(err)
 		}
-		lParam := withLease.Provides()
+		lParam, lLinks := withLease.Provides()
 		lRet, err := lParam["parameter"]()
 		if err != nil {
 			t.Fatal(err)
 		}
 		if !reflect.DeepEqual(lRet, sRet) {
 			t.Errorf("not properly forwarded (param): %s", diff.ObjectDiff(lParam, sParam))
+		}
+		if !reflect.DeepEqual(lLinks, sLinks) {
+			t.Errorf("not properly forwarded (links): %s", diff.ObjectDiff(lLinks, sLinks))
 		}
 	})
 	t.Run("SubTests", func(T *testing.T) {

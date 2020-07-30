@@ -36,7 +36,6 @@ const (
 )
 
 var envForProfile = []string{
-	utils.ReleaseImageEnv(api.InitialImageStream),
 	utils.ReleaseImageEnv(api.LatestStableName),
 	leaseEnv,
 	utils.ImageFormatEnv,

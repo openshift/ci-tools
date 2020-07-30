@@ -39,7 +39,6 @@ func TestRequires(t *testing.T) {
 			Test:           []api.LiteralTestStep{{From: "from-release"}},
 		},
 		req: []api.StepLink{
-			api.ReleasePayloadImageLink(api.InitialImageStream),
 			api.ReleasePayloadImageLink(api.LatestStableName),
 			api.ImagesReadyLink(),
 		},

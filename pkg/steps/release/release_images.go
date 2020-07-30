@@ -8,10 +8,10 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/results"
 
+	coreapi "k8s.io/api/core/v1"
+
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"github.com/openshift/ci-tools/pkg/steps/utils"
 
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 
@@ -72,7 +72,7 @@ func (s *stableImagesTagStep) Creates() []api.StepLink {
 	return []api.StepLink{api.StableImagesLink(api.LatestStableName)}
 }
 
-func (s *stableImagesTagStep) Provides() api.ParameterMap { return nil }
+func (s *stableImagesTagStep) Provides() (api.ParameterMap, api.StepLink) { return nil, nil }
 
 func (s *stableImagesTagStep) Name() string { return "[output-images]" }
 
@@ -91,6 +91,39 @@ type releaseImagesTagStep struct {
 	configMapClient coreclientset.ConfigMapsGetter
 	params          *api.DeferredParameters
 	jobSpec         *api.JobSpec
+}
+
+func findSpecTag(is *imageapi.ImageStream, tag string) *coreapi.ObjectReference {
+	for _, t := range is.Spec.Tags {
+		if t.Name != tag {
+			continue
+		}
+		return t.From
+	}
+	return nil
+}
+
+func findStatusTag(is *imageapi.ImageStream, tag string) (*coreapi.ObjectReference, string) {
+	for _, t := range is.Status.Tags {
+		if t.Tag != tag {
+			continue
+		}
+		if len(t.Items) == 0 {
+			return nil, ""
+		}
+		if len(t.Items[0].Image) == 0 {
+			return &coreapi.ObjectReference{
+				Kind: "DockerImage",
+				Name: t.Items[0].DockerImageReference,
+			}, ""
+		}
+		return &coreapi.ObjectReference{
+			Kind:      "ImageStreamImage",
+			Namespace: is.Namespace,
+			Name:      fmt.Sprintf("%s@%s", is.Name, t.Items[0].Image),
+		}, t.Items[0].Image
+	}
+	return nil, ""
 }
 
 func (s *releaseImagesTagStep) Inputs() (api.InputDefinition, error) {
@@ -129,7 +162,7 @@ func (s *releaseImagesTagStep) run() error {
 		},
 	}
 	for _, tag := range is.Spec.Tags {
-		if valid, _ := utils.FindStatusTag(is, tag.Name); valid != nil {
+		if valid, _ := findStatusTag(is, tag.Name); valid != nil {
 			newIS.Spec.Tags = append(newIS.Spec.Tags, imageapi.TagReference{
 				Name: tag.Name,
 				From: valid,
@@ -138,7 +171,7 @@ func (s *releaseImagesTagStep) run() error {
 	}
 
 	initialIS := newIS.DeepCopy()
-	initialIS.Name = api.StableStreamFor(api.InitialImageStream)
+	initialIS.Name = api.StableStreamFor(api.InitialStableName)
 
 	_, err = s.client.ImageStreams(s.jobSpec.Namespace()).Create(newIS)
 	if err != nil && !errors.IsAlreadyExists(err) {
@@ -155,7 +188,7 @@ func (s *releaseImagesTagStep) run() error {
 		if !ok {
 			continue
 		}
-		s.params.Set(utils.StableImageEnv(tag.Name), spec)
+		s.params.Set("IMAGE_"+componentToParamName(tag.Name), spec)
 	}
 
 	return nil
@@ -167,15 +200,15 @@ func (s *releaseImagesTagStep) Requires() []api.StepLink {
 
 func (s *releaseImagesTagStep) Creates() []api.StepLink {
 	return []api.StepLink{
-		api.StableImagesLink(api.InitialImageStream),
+		api.StableImagesLink(api.InitialStableName),
 		api.StableImagesLink(api.LatestStableName),
 	}
 }
 
-func (s *releaseImagesTagStep) Provides() api.ParameterMap {
+func (s *releaseImagesTagStep) Provides() (api.ParameterMap, api.StepLink) {
 	return api.ParameterMap{
-		utils.ImageFormatEnv: s.imageFormat,
-	}
+		"IMAGE_FORMAT": s.imageFormat,
+	}, api.ImagesReadyLink()
 }
 
 func (s *releaseImagesTagStep) imageFormat() (string, error) {
@@ -217,4 +250,8 @@ func ReleaseImagesTagStep(config api.ReleaseTagConfiguration, client imageclient
 		params:          params,
 		jobSpec:         jobSpec,
 	}
+}
+
+func componentToParamName(component string) string {
+	return strings.ToUpper(strings.Replace(component, "-", "_", -1))
 }

@@ -126,8 +126,8 @@ func (s *inputImageTagStep) Creates() []api.StepLink {
 	return []api.StepLink{api.InternalImageLink(s.config.To)}
 }
 
-func (s *inputImageTagStep) Provides() api.ParameterMap {
-	return nil
+func (s *inputImageTagStep) Provides() (api.ParameterMap, api.StepLink) {
+	return nil, nil
 }
 
 func (s *inputImageTagStep) Name() string { return fmt.Sprintf("[input:%s]", s.config.To) }

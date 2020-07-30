@@ -2,7 +2,6 @@ package defaults
 
 import (
 	"fmt"
-	"github.com/openshift/ci-tools/pkg/steps/utils"
 	"log"
 	"os"
 	"strings"
@@ -128,10 +127,10 @@ func FromConfig(
 	}
 
 	params := api.NewDeferredParameters()
-	params.Add("JOB_NAME", func() (string, error) { return jobSpec.Job, nil })
-	params.Add("JOB_NAME_HASH", func() (string, error) { return jobSpec.JobNameHash(), nil })
-	params.Add("JOB_NAME_SAFE", func() (string, error) { return strings.Replace(jobSpec.Job, "_", "-", -1), nil })
-	params.Add("NAMESPACE", func() (string, error) { return jobSpec.Namespace(), nil })
+	params.Add("JOB_NAME", nil, func() (string, error) { return jobSpec.Job, nil })
+	params.Add("JOB_NAME_HASH", nil, func() (string, error) { return jobSpec.JobNameHash(), nil })
+	params.Add("JOB_NAME_SAFE", nil, func() (string, error) { return strings.Replace(jobSpec.Job, "_", "-", -1), nil })
+	params.Add("NAMESPACE", nil, func() (string, error) { return jobSpec.Namespace(), nil })
 
 	var imageStepLinks []api.StepLink
 	var hasReleaseStep bool
@@ -174,9 +173,9 @@ func FromConfig(
 			// as well. For backwards compatibility, we explicitly support
 			// 'initial' and 'latest': if not provided, we will build them.
 			// If a pull spec was provided, however, it will be used.
-			for _, name := range []string{api.InitialImageStream, api.LatestStableName} {
+			for _, name := range []string{api.InitialStableName, api.LatestStableName} {
 				var releaseStep api.Step
-				envVar := utils.ReleaseImageEnv(name)
+				envVar := release.EnvVarFor(name)
 				if params.HasInput(envVar) {
 					pullSpec, err := params.Get(envVar)
 					if err != nil {
@@ -201,7 +200,7 @@ func FromConfig(
 
 			var value string
 			resolveConfig := rawStep.ResolvedReleaseImagesStepConfiguration
-			envVar := utils.ReleaseImageEnv(resolveConfig.Name)
+			envVar := release.EnvVarFor(resolveConfig.Name)
 			if current := os.Getenv(envVar); current != "" {
 				value = current
 				log.Printf("Using explicitly provided pull-spec for release %s (%s)", resolveConfig.Name, value)
@@ -313,8 +312,9 @@ func FromConfig(
 // Use this when a step may still need to run even if all parameters are provided
 // by the caller as environment variables.
 func addProvidesForStep(step api.Step, params *api.DeferredParameters) {
-	for name, fn := range step.Provides() {
-		params.Add(name, fn)
+	provides, link := step.Provides()
+	for name, fn := range provides {
+		params.Add(name, link, fn)
 	}
 }
 
@@ -322,7 +322,7 @@ func addProvidesForStep(step api.Step, params *api.DeferredParameters) {
 // environment, replace the step with a shim that automatically provides those variables.
 // Returns true if the step was replaced.
 func checkForFullyQualifiedStep(step api.Step, params *api.DeferredParameters) (api.Step, bool) {
-	provides := step.Provides()
+	provides, link := step.Provides()
 
 	if values, ok := paramsHasAllParametersAsInput(params, provides); ok {
 		step = steps.NewInputEnvironmentStep(step.Name(), values, step.Creates())
@@ -332,7 +332,7 @@ func checkForFullyQualifiedStep(step api.Step, params *api.DeferredParameters) (
 		return step, true
 	}
 	for name, fn := range provides {
-		params.Add(name, fn)
+		params.Add(name, link, fn)
 	}
 	return step, false
 }

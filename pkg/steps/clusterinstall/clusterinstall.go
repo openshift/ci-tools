@@ -3,7 +3,6 @@ package clusterinstall
 import (
 	"context"
 	"fmt"
-	"github.com/openshift/ci-tools/pkg/steps/utils"
 	"strings"
 
 	"github.com/ghodss/yaml"
@@ -70,14 +69,14 @@ func E2ETestStep(
 		}
 
 		// ensure we depend on the release image
-		name := utils.ReleaseImageEnv(api.InitialImageStream)
+		name := "RELEASE_IMAGE_INITIAL"
 		template.Parameters = append(template.Parameters, templateapi.Parameter{
 			Required: true,
 			Name:     name,
 		})
 
 		// ensure the installer image points to the initial state
-		name = utils.StableImageEnv("installer")
+		name = "IMAGE_INSTALLER"
 		if !params.HasInput(name) {
 			overrides[name] = "stable-initial:installer"
 		}
@@ -142,8 +141,8 @@ func (s *e2eTestStep) Creates() []api.StepLink {
 	return nil
 }
 
-func (s *e2eTestStep) Provides() api.ParameterMap {
-	return nil
+func (s *e2eTestStep) Provides() (api.ParameterMap, api.StepLink) {
+	return nil, nil
 }
 
 func (s *e2eTestStep) Name() string { return s.testConfig.As }

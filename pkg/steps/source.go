@@ -3,7 +3,6 @@ package steps
 import (
 	"context"
 	"fmt"
-	"github.com/openshift/ci-tools/pkg/steps/utils"
 	"io"
 	"log"
 	"os"
@@ -620,10 +619,24 @@ func (s *sourceStep) Creates() []api.StepLink {
 	return []api.StepLink{api.InternalImageLink(s.config.To)}
 }
 
-func (s *sourceStep) Provides() api.ParameterMap {
+func (s *sourceStep) Provides() (api.ParameterMap, api.StepLink) {
 	return api.ParameterMap{
-		utils.PipelineImageEnvFor(s.config.To): utils.ImageDigestFor(s.imageClient, s.jobSpec.Namespace, api.PipelineImageStream, string(s.config.To)),
-	}
+		"LOCAL_IMAGE_SRC": func() (string, error) {
+			is, err := s.imageClient.ImageStreams(s.jobSpec.Namespace()).Get(api.PipelineImageStream, meta.GetOptions{})
+			if err != nil {
+				return "", fmt.Errorf("could not get output imagestream: %w", err)
+			}
+			var registry string
+			if len(is.Status.PublicDockerImageRepository) > 0 {
+				registry = is.Status.PublicDockerImageRepository
+			} else if len(is.Status.DockerImageRepository) > 0 {
+				registry = is.Status.DockerImageRepository
+			} else {
+				return "", fmt.Errorf("image stream %s has no accessible image registry value", s.config.To)
+			}
+			return fmt.Sprintf("%s:%s", registry, s.config.To), nil
+		},
+	}, api.InternalImageLink("src")
 }
 
 func (s *sourceStep) Name() string { return string(s.config.To) }

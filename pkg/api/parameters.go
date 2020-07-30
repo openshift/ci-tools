@@ -11,6 +11,7 @@ type Parameters interface {
 	Has(name string) bool
 	HasInput(name string) bool
 	Get(name string) (string, error)
+	Links(name string) []StepLink
 }
 
 type overrideParameters struct {
@@ -36,6 +37,10 @@ func (p *overrideParameters) Get(name string) (string, error) {
 	return p.params.Get(name)
 }
 
+func (p *overrideParameters) Links(name string) []StepLink {
+	return p.params.Links(name)
+}
+
 func NewOverrideParameters(params Parameters, overrides map[string]string) Parameters {
 	return &overrideParameters{
 		params:    params,
@@ -47,12 +52,14 @@ type DeferredParameters struct {
 	lock   sync.Mutex
 	fns    ParameterMap
 	values map[string]string
+	links  map[string][]StepLink
 }
 
 func NewDeferredParameters() *DeferredParameters {
 	return &DeferredParameters{
 		fns:    make(ParameterMap),
 		values: make(map[string]string),
+		links:  make(map[string][]StepLink),
 	}
 }
 
@@ -87,10 +94,13 @@ func (p *DeferredParameters) Set(name, value string) {
 	p.values[name] = value
 }
 
-func (p *DeferredParameters) Add(name string, fn func() (string, error)) {
+func (p *DeferredParameters) Add(name string, link StepLink, fn func() (string, error)) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 	p.fns[name] = fn
+	if link != nil {
+		p.links[name] = []StepLink{link}
+	}
 }
 
 // HasInput returns true if the named parameter is an input from outside the graph, rather
@@ -113,6 +123,22 @@ func (p *DeferredParameters) Has(name string) bool {
 	}
 	_, ok = os.LookupEnv(name)
 	return ok
+}
+
+func (p *DeferredParameters) Links(name string) []StepLink {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+	return p.links[name]
+}
+
+func (p *DeferredParameters) AllLinks() []StepLink {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+	var links []StepLink
+	for _, v := range p.links {
+		links = append(links, v...)
+	}
+	return links
 }
 
 func (p *DeferredParameters) Get(name string) (string, error) {

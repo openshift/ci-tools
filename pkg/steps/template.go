@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/openshift/ci-tools/pkg/steps/utils"
 	"io"
 	"log"
 	"os"
@@ -71,7 +70,7 @@ func (s *templateExecutionStep) run(ctx context.Context) error {
 
 	for i, p := range s.template.Parameters {
 		if len(p.Value) == 0 {
-			if !s.params.Has(p.Name) && !utils.IsStableImageEnv(p.Name) && p.Required {
+			if !s.params.Has(p.Name) && !strings.HasPrefix(p.Name, "IMAGE_") && p.Required {
 				return fmt.Errorf("template %s has required parameter %s which is not defined", s.template.Name, p.Name)
 			}
 		}
@@ -85,13 +84,16 @@ func (s *templateExecutionStep) run(ctx context.Context) error {
 			}
 			continue
 		}
-		if utils.IsStableImageEnv(p.Name) {
-			component := utils.StableImageNameFrom(p.Name)
-			format, err := s.params.Get(utils.ImageFormatEnv)
-			if err != nil {
-				return fmt.Errorf("could not resolve image format: %w", err)
+		if strings.HasPrefix(p.Name, "IMAGE_") {
+			component := strings.ToLower(strings.TrimPrefix(p.Name, "IMAGE_"))
+			if len(component) > 0 {
+				component = strings.Replace(component, "_", "-", -1)
+				format, err := s.params.Get("IMAGE_FORMAT")
+				if err != nil {
+					return fmt.Errorf("could not resolve image format: %w", err)
+				}
+				s.template.Parameters[i].Value = strings.Replace(format, api.ComponentFormatReplacement, component, -1)
 			}
-			s.template.Parameters[i].Value = strings.Replace(format, api.ComponentFormatReplacement, component, -1)
 		}
 	}
 
@@ -248,9 +250,17 @@ func (s *templateExecutionStep) SubTests() []*junit.TestCase {
 
 func (s *templateExecutionStep) Requires() []api.StepLink {
 	var links []api.StepLink
+	var needsRelease bool
 	for _, p := range s.template.Parameters {
-		if link, ok := utils.LinkForEnv(p.Name); ok {
-			links = append(links, link)
+		needsRelease = strings.HasPrefix(p.Name, "RELEASE_IMAGE_") || needsRelease
+		if s.params.Has(p.Name) {
+			paramLinks := s.params.Links(p.Name)
+			links = append(links, paramLinks...)
+			continue
+		}
+		if strings.HasPrefix(p.Name, "IMAGE_") && !needsRelease {
+			links = append(links, api.StableImagesLink(api.LatestStableName))
+			continue
 		}
 	}
 	return links
@@ -260,8 +270,8 @@ func (s *templateExecutionStep) Creates() []api.StepLink {
 	return []api.StepLink{}
 }
 
-func (s *templateExecutionStep) Provides() api.ParameterMap {
-	return nil
+func (s *templateExecutionStep) Provides() (api.ParameterMap, api.StepLink) {
+	return nil, nil
 }
 
 func (s *templateExecutionStep) Name() string { return s.template.Name }

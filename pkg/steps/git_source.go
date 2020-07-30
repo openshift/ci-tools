@@ -68,8 +68,8 @@ func (s *gitSourceStep) Creates() []api.StepLink {
 	return []api.StepLink{api.InternalImageLink(api.PipelineImageStreamTagReferenceRoot)}
 }
 
-func (s *gitSourceStep) Provides() api.ParameterMap {
-	return nil
+func (s *gitSourceStep) Provides() (api.ParameterMap, api.StepLink) {
+	return nil, nil
 }
 
 func determineRefsWorkdir(refs *prowapi.Refs, extraRefs []prowapi.Refs) *prowapi.Refs {

@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/openshift/ci-tools/pkg/results"
+
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -17,8 +19,6 @@ import (
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
-	"github.com/openshift/ci-tools/pkg/results"
-	"github.com/openshift/ci-tools/pkg/steps/utils"
 )
 
 // promotionStep will tag a full release suite
@@ -84,7 +84,7 @@ func (s *promotionStep) run() error {
 			}
 
 			for dst, src := range tags {
-				if valid, _ := utils.FindStatusTag(pipeline, src); valid != nil {
+				if valid, _ := findStatusTag(pipeline, src); valid != nil {
 					is.Spec.Tags = append(is.Spec.Tags, imageapi.TagReference{
 						Name: dst,
 						From: valid,
@@ -104,7 +104,7 @@ func (s *promotionStep) run() error {
 
 	client := s.dstClient.ImageStreamTags(s.config.Namespace)
 	for dst, src := range tags {
-		valid, _ := utils.FindStatusTag(pipeline, src)
+		valid, _ := findStatusTag(pipeline, src)
 		if valid == nil {
 			continue
 		}
@@ -229,8 +229,8 @@ func (s *promotionStep) Creates() []api.StepLink {
 	return []api.StepLink{}
 }
 
-func (s *promotionStep) Provides() api.ParameterMap {
-	return nil
+func (s *promotionStep) Provides() (api.ParameterMap, api.StepLink) {
+	return nil, nil
 }
 
 func (s *promotionStep) Name() string { return "" }

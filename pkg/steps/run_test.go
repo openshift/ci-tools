@@ -34,7 +34,7 @@ func (f *fakeStep) Creates() []api.StepLink  { return f.creates }
 func (f *fakeStep) Name() string             { return f.name }
 func (f *fakeStep) Description() string      { return f.name }
 
-func (f *fakeStep) Provides() api.ParameterMap { return nil }
+func (f *fakeStep) Provides() (api.ParameterMap, api.StepLink) { return nil, nil }
 
 func TestRunNormalCase(t *testing.T) {
 	root := &fakeStep{

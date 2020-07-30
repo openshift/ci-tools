@@ -11,8 +11,8 @@ import (
 
 func TestWriteParamsStep(t *testing.T) {
 	params := api.NewDeferredParameters()
-	params.Add("K1", func() (string, error) { return "V1", nil })
-	params.Add("K2", func() (string, error) { return "V:2", nil })
+	params.Add("K1", someStepLink("another-step"), func() (string, error) { return "V1", nil })
+	params.Add("K2", someStepLink("another-step"), func() (string, error) { return "V:2", nil })
 	paramFile, err := ioutil.TempFile("", "")
 	if err != nil {
 		t.Errorf("Failed to create temporary file: %v", err)
@@ -23,10 +23,11 @@ func TestWriteParamsStep(t *testing.T) {
 
 	specification := stepExpectation{
 		name:     "parameters/write",
-		requires: []api.StepLink{api.AllStepsLink()},
+		requires: []api.StepLink{someStepLink("another-step"), someStepLink("another-step")},
 		creates:  nil,
 		provides: providesExpectation{
 			params: nil,
+			link:   nil,
 		},
 		inputs: inputsExpectation{
 			values: nil,

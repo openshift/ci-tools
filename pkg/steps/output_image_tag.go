@@ -71,7 +71,7 @@ func (s *outputImageTagStep) Requires() []api.StepLink {
 		// latter only once images are built. However, in
 		// specific configurations, authors may create an
 		// execution graph where we race.
-		api.StableImagesLink(api.LatestReleaseName),
+		api.ReleaseImagesLink(api.LatestReleaseName),
 	}
 }
 

@@ -77,7 +77,7 @@ func (s *importReleaseStep) run(ctx context.Context) error {
 		return err
 	}
 
-	streamName := api.StableStreamFor(s.name)
+	streamName := api.ReleaseStreamFor(s.name)
 
 	log.Printf("Importing release image %s", s.name)
 
@@ -373,7 +373,7 @@ func (s *importReleaseStep) Requires() []api.StepLink {
 		if s.name == api.LatestReleaseName {
 			return []api.StepLink{api.ImagesReadyLink()}
 		}
-		return []api.StepLink{api.StableImagesLink(api.LatestReleaseName)}
+		return []api.StepLink{api.ReleaseImagesLink(api.LatestReleaseName)}
 	}
 	// we don't depend on anything as we will populate
 	// the stable streams with our images.

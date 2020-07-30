@@ -81,12 +81,12 @@ func TestLinkForEnv(t *testing.T) {
 		},
 		{
 			input:  "IMAGE_COMPONENT",
-			output: api.StableImagesLink(api.LatestReleaseName),
+			output: api.ReleaseImagesLink(api.LatestReleaseName),
 			valid:  true,
 		},
 		{
 			input:  "INITIAL_IMAGE_COMPONENT",
-			output: api.StableImagesLink(api.InitialReleaseName),
+			output: api.ReleaseImagesLink(api.InitialReleaseName),
 			valid:  true,
 		},
 		{

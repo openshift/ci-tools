@@ -32,7 +32,7 @@ func (s *stepNeedsLease) Run(ctx context.Context) error {
 func (stepNeedsLease) Name() string        { return "needs_lease" }
 func (stepNeedsLease) Description() string { return "this step needs a lease" }
 func (stepNeedsLease) Requires() []api.StepLink {
-	return []api.StepLink{api.StableImagesLink(api.LatestReleaseName)}
+	return []api.StepLink{api.ReleaseImagesLink(api.LatestReleaseName)}
 }
 func (stepNeedsLease) Creates() []api.StepLink { return []api.StepLink{api.ImagesReadyLink()} }
 

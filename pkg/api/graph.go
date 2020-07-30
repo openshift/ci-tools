@@ -151,19 +151,19 @@ func (l *rpmRepoLink) SatisfiedBy(other StepLink) bool {
 	}
 }
 
-// StableImagesLink describes the content of a stable(-foo)?
+// ReleaseImagesLink describes the content of a stable(-foo)?
 // ImageStream in the test namespace.
-func StableImagesLink(name string) StepLink {
+func ReleaseImagesLink(name string) StepLink {
 	return &internalImageStreamLink{
-		name: StableStreamFor(name),
+		name: ReleaseStreamFor(name),
 	}
 }
 
-// StableImageTagLink describes a specific tag in a stable(-foo)?
+// ReleaseImageTagLink describes a specific tag in a stable(-foo)?
 // ImageStream in the test namespace.
-func StableImageTagLink(name, tag string) StepLink {
+func ReleaseImageTagLink(name, tag string) StepLink {
 	return &internalImageStreamTagLink{
-		name: StableStreamFor(name),
+		name: ReleaseStreamFor(name),
 		tag:  tag,
 	}
 }
@@ -176,9 +176,9 @@ func Comparer() cmp.Option {
 	)
 }
 
-// StableStreamFor determines the ImageStream into which a named
+// ReleaseStreamFor determines the ImageStream into which a named
 // release will be imported or assembled.
-func StableStreamFor(name string) string {
+func ReleaseStreamFor(name string) string {
 	if name == LatestReleaseName {
 		return StableImageStream
 	}

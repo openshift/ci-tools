@@ -33,8 +33,8 @@ func TestMatches(t *testing.T) {
 		},
 		{
 			name:    "release images matches itself",
-			first:   StableImagesLink(LatestReleaseName),
-			second:  StableImagesLink(LatestReleaseName),
+			first:   ReleaseImagesLink(LatestReleaseName),
+			second:  ReleaseImagesLink(LatestReleaseName),
 			matches: true,
 		},
 		{
@@ -64,7 +64,7 @@ func TestMatches(t *testing.T) {
 		{
 			name:    "internal does not match release images",
 			first:   InternalImageLink(PipelineImageStreamTagReferenceRPMs),
-			second:  StableImagesLink(LatestReleaseName),
+			second:  ReleaseImagesLink(LatestReleaseName),
 			matches: false,
 		},
 		{
@@ -76,13 +76,13 @@ func TestMatches(t *testing.T) {
 		{
 			name:    "external does not match release images",
 			first:   ExternalImageLink(ImageStreamTagReference{Namespace: "ns", Name: "name", Tag: "latest"}),
-			second:  StableImagesLink(LatestReleaseName),
+			second:  ReleaseImagesLink(LatestReleaseName),
 			matches: false,
 		},
 		{
 			name:    "RPM does not match release images",
 			first:   RPMRepoLink(),
-			second:  StableImagesLink(LatestReleaseName),
+			second:  ReleaseImagesLink(LatestReleaseName),
 			matches: false,
 		},
 	}
@@ -228,7 +228,7 @@ func TestReleaseNames(t *testing.T) {
 		"foo",
 	}
 	for _, name := range testCases {
-		stream := StableStreamFor(name)
+		stream := ReleaseStreamFor(name)
 		if !IsReleaseStream(stream) {
 			t.Errorf("stream %s for name %s was not identified as a release stream", stream, name)
 		}

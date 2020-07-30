@@ -74,7 +74,7 @@ func main() {
 			errs = append(errs, fmt.Errorf("error validating %s: %w", cfg.SourceFileName, err))
 			continue
 		}
-		if err := dereferenceConfig(&cfg, fmt.Sprintf("release-%d.%d", opts.majorMinor.major, opts.majorMinor.minor), configsUnverified, streamMap, groupYAML, pullSpecForOrgRepoBranchDockerfileGetter); err != nil {
+		if err := dereferenceConfig(&cfg, fmt.Sprintf("release-%s.%s", opts.majorMinor.major, opts.majorMinor.minor), configsUnverified, streamMap, groupYAML, pullSpecForOrgRepoBranchDockerfileGetter); err != nil {
 			errs = append(errs, fmt.Errorf("failed dereferencing config for %s: %w", cfg.SourceFileName, err))
 			continue
 		}
@@ -192,7 +192,7 @@ func streamForMember(
 	}
 	result, err := pullSpecGetter(orgRepoSplit[0], orgRepoSplit[1], branch, cfg.dockerfile())
 	if err != nil {
-		return "", fmt.Errorf("failed to get pullspec: %w", err)
+		return "", fmt.Errorf("failed to get pullspec for promotiontarget for %s/%s#%s:%s: %w", orgRepoSplit[0], orgRepoSplit[1], branch, cfg.dockerfile(), err)
 	}
 
 	return result, nil

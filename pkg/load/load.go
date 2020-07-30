@@ -11,8 +11,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -70,6 +73,9 @@ type filenameToConfig map[string]api.ReleaseBuildConfiguration
 // FromPath returns all configs found at or below the given path
 func fromPath(path string) (filenameToConfig, error) {
 	configs := filenameToConfig{}
+	lock := &sync.Mutex{}
+	errGroup := &errgroup.Group{}
+
 	err := filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
 		if info == nil || err != nil {
 			return err
@@ -80,23 +86,28 @@ func fromPath(path string) (filenameToConfig, error) {
 			}
 			return nil
 		}
-		ext := filepath.Ext(path)
-		if !info.IsDir() && (ext == ".yml" || ext == ".yaml") {
-			configSpec, err := Config(path, "", "", nil)
-			if err != nil {
-				return fmt.Errorf("failed to load ci-operator config (%w)", err)
-			}
+		errGroup.Go(func() error {
+			ext := filepath.Ext(path)
+			if !info.IsDir() && (ext == ".yml" || ext == ".yaml") {
+				configSpec, err := Config(path, "", "", nil)
+				if err != nil {
+					return fmt.Errorf("failed to load ci-operator config (%w)", err)
+				}
 
-			if err := configSpec.ValidateAtRuntime(); err != nil {
-				return fmt.Errorf("invalid ci-operator config: %w", err)
+				if err := configSpec.ValidateAtRuntime(); err != nil {
+					return fmt.Errorf("invalid ci-operator config: %w", err)
+				}
+				logrus.Tracef("Adding %s to filenameToConfig", filepath.Base(path))
+				lock.Lock()
+				configs[filepath.Base(path)] = *configSpec
+				lock.Unlock()
 			}
-			logrus.Tracef("Adding %s to filenameToConfig", filepath.Base(path))
-			configs[filepath.Base(path)] = *configSpec
-		}
+			return nil
+		})
 		return nil
 	})
 
-	return configs, err
+	return configs, utilerrors.NewAggregate([]error{err, errGroup.Wait()})
 }
 
 func Config(path, unresolvedPath, registryPath string, info *ResolverInfo) (*api.ReleaseBuildConfiguration, error) {

@@ -176,12 +176,30 @@ func Comparer() cmp.Option {
 	)
 }
 
+// StableStreamFor determines the ImageStream into which a named
+// release will be imported or assembled.
 func StableStreamFor(name string) string {
-	if name == LatestStableName {
+	if name == LatestReleaseName {
 		return StableImageStream
 	}
 
 	return fmt.Sprintf("%s-%s", StableImageStream, name)
+}
+
+// ReleaseNameFrom determines the named release that was imported
+// or assembled into an ImageStream.
+func ReleaseNameFrom(stream string) string {
+	if stream == StableImageStream {
+		return LatestReleaseName
+	}
+
+	return strings.TrimPrefix(stream, fmt.Sprintf("%s-", StableImageStream))
+}
+
+// IsReleaseStream determines if the ImageStream was created from
+// an import or assembly of a release.
+func IsReleaseStream(stream string) bool {
+	return strings.HasPrefix(stream, StableImageStream)
 }
 
 type StepNode struct {

@@ -36,7 +36,7 @@ const (
 )
 
 var envForProfile = []string{
-	utils.ReleaseImageEnv(api.LatestStableName),
+	utils.ReleaseImageEnv(api.LatestReleaseName),
 	leaseEnv,
 	utils.ImageFormatEnv,
 }
@@ -192,7 +192,7 @@ func (s *multiStageTestStep) Requires() (ret []api.StepLink) {
 		}
 	}
 	if needsReleaseImage && !needsReleasePayload {
-		ret = append(ret, api.StableImagesLink(api.LatestStableName))
+		ret = append(ret, api.StableImagesLink(api.LatestReleaseName))
 	}
 	return
 }

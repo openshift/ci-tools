@@ -174,7 +174,7 @@ func FromConfig(
 			// as well. For backwards compatibility, we explicitly support
 			// 'initial' and 'latest': if not provided, we will build them.
 			// If a pull spec was provided, however, it will be used.
-			for _, name := range []string{api.InitialImageStream, api.LatestStableName} {
+			for _, name := range []string{api.InitialReleaseName, api.LatestReleaseName} {
 				var releaseStep api.Step
 				envVar := utils.ReleaseImageEnv(name)
 				if params.HasInput(envVar) {

@@ -213,7 +213,7 @@ func main() {
 		steps.OOChannel: o.channel,
 	}
 	if o.releaseImageRef != "" {
-		envVars[utils.ReleaseImageEnv(api.LatestStableName)] = o.releaseImageRef
+		envVars[utils.ReleaseImageEnv(api.LatestReleaseName)] = o.releaseImageRef
 	}
 	if o.installNamespace != "" {
 		envVars[steps.OOInstallNamespace] = o.installNamespace

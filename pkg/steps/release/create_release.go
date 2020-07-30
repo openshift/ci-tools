@@ -229,7 +229,7 @@ oc adm release extract --from=%q --to=/tmp/artifacts/release-payload-%s
 }
 
 func (s *assembleReleaseStep) Requires() []api.StepLink {
-	if s.name == api.LatestStableName {
+	if s.name == api.LatestReleaseName {
 		return []api.StepLink{api.ImagesReadyLink()}
 	}
 	return []api.StepLink{api.StableImagesLink(s.name)}

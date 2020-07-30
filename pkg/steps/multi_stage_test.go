@@ -40,7 +40,7 @@ func TestRequires(t *testing.T) {
 			Test:           []api.LiteralTestStep{{From: "from-release"}},
 		},
 		req: []api.StepLink{
-			api.ReleasePayloadImageLink(api.LatestStableName),
+			api.ReleasePayloadImageLink(api.LatestReleaseName),
 			api.ImagesReadyLink(),
 		},
 	}, {
@@ -49,7 +49,7 @@ func TestRequires(t *testing.T) {
 			Test: []api.LiteralTestStep{{From: "from-release"}},
 		},
 		req: []api.StepLink{
-			api.StableImagesLink(api.LatestStableName),
+			api.StableImagesLink(api.LatestReleaseName),
 		},
 	}, {
 		name: "step needs images, should have InternalImageLink",

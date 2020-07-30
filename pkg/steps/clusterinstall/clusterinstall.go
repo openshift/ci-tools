@@ -70,7 +70,7 @@ func E2ETestStep(
 		}
 
 		// ensure we depend on the release image
-		name := utils.ReleaseImageEnv(api.InitialImageStream)
+		name := utils.ReleaseImageEnv(api.InitialReleaseName)
 		template.Parameters = append(template.Parameters, templateapi.Parameter{
 			Required: true,
 			Name:     name,

@@ -18,10 +18,10 @@ const (
 )
 
 var knownPrefixes = map[string]string{
-	api.PipelineImageStream: pipelineEnvPrefix + imageEnvPrefix,
-	api.InitialImageStream:  initialEnvPrefix + imageEnvPrefix,
-	api.StableImageStream:   imageEnvPrefix,
-	api.ReleaseImageStream:  releaseEnvPrefix + imageEnvPrefix,
+	api.PipelineImageStream:                     pipelineEnvPrefix + imageEnvPrefix,
+	api.StableStreamFor(api.InitialReleaseName): initialEnvPrefix + imageEnvPrefix,
+	api.StableStreamFor(api.LatestReleaseName):  imageEnvPrefix,
+	api.ReleaseImageStream:                      releaseEnvPrefix + imageEnvPrefix,
 }
 
 func escapedImageName(name string) string {
@@ -62,9 +62,9 @@ func LinkForEnv(envVar string) (api.StepLink, bool) {
 	case IsStableImageEnv(envVar):
 		// we don't know what will produce this parameter,
 		// so we assume it will come from the release import
-		return api.StableImagesLink(api.LatestStableName), true
+		return api.StableImagesLink(api.LatestReleaseName), true
 	case IsInitialImageEnv(envVar):
-		return api.StableImagesLink(api.InitialImageStream), true
+		return api.StableImagesLink(api.InitialReleaseName), true
 	case IsReleaseImageEnv(envVar):
 		return api.ReleasePayloadImageLink(ReleaseNameFrom(envVar)), true
 	default:
@@ -105,19 +105,19 @@ func IsPipelineImageEnv(envVar string) bool {
 // used to expose a pull spec for a stable ImageStreamTag
 // in the test namespace to test workloads.
 func StableImageEnv(name string) string {
-	return validatedEnvVarFor(api.StableImageStream, name)
+	return validatedEnvVarFor(api.StableStreamFor(api.LatestReleaseName), name)
 }
 
 // IsStableImageEnv determines if an env var holds a pull
 // spec for a tag under the stable image stream
 func IsStableImageEnv(envVar string) bool {
-	return strings.HasPrefix(envVar, knownPrefixes[api.StableImageStream])
+	return strings.HasPrefix(envVar, knownPrefixes[api.StableStreamFor(api.LatestReleaseName)])
 }
 
 // StableImageNameFrom gets an image name from an env name
 func StableImageNameFrom(envVar string) string {
 	// we know that we will be able to unfurl
-	name, _ := imageFromEnv(api.StableImageStream, envVar)
+	name, _ := imageFromEnv(api.StableStreamFor(api.LatestReleaseName), envVar)
 	return name
 }
 
@@ -125,13 +125,13 @@ func StableImageNameFrom(envVar string) string {
 // used to expose a pull spec for a initial ImageStreamTag
 // in the test namespace to test workloads.
 func InitialImageEnv(name string) string {
-	return validatedEnvVarFor(api.InitialImageStream, name)
+	return validatedEnvVarFor(api.StableStreamFor(api.InitialReleaseName), name)
 }
 
 // IsInitialImageEnv determines if an env var holds a pull
 // spec for a tag under the initial image stream
 func IsInitialImageEnv(envVar string) bool {
-	return strings.HasPrefix(envVar, knownPrefixes[api.InitialImageStream])
+	return strings.HasPrefix(envVar, knownPrefixes[api.StableStreamFor(api.InitialReleaseName)])
 }
 
 // ReleaseImageEnv determines the environment variable

@@ -33,8 +33,8 @@ func TestMatches(t *testing.T) {
 		},
 		{
 			name:    "release images matches itself",
-			first:   StableImagesLink(LatestStableName),
-			second:  StableImagesLink(LatestStableName),
+			first:   StableImagesLink(LatestReleaseName),
+			second:  StableImagesLink(LatestReleaseName),
 			matches: true,
 		},
 		{
@@ -64,7 +64,7 @@ func TestMatches(t *testing.T) {
 		{
 			name:    "internal does not match release images",
 			first:   InternalImageLink(PipelineImageStreamTagReferenceRPMs),
-			second:  StableImagesLink(LatestStableName),
+			second:  StableImagesLink(LatestReleaseName),
 			matches: false,
 		},
 		{
@@ -76,13 +76,13 @@ func TestMatches(t *testing.T) {
 		{
 			name:    "external does not match release images",
 			first:   ExternalImageLink(ImageStreamTagReference{Namespace: "ns", Name: "name", Tag: "latest"}),
-			second:  StableImagesLink(LatestStableName),
+			second:  StableImagesLink(LatestReleaseName),
 			matches: false,
 		},
 		{
 			name:    "RPM does not match release images",
 			first:   RPMRepoLink(),
-			second:  StableImagesLink(LatestStableName),
+			second:  StableImagesLink(LatestReleaseName),
 			matches: false,
 		},
 	}
@@ -219,4 +219,22 @@ func TestBuildGraph(t *testing.T) {
 			t.Errorf("%s: did not generate step graph as expected:\nwant:\n\t%v\nhave:\n\t%v", testCase.name, expected, actual)
 		}
 	}
+}
+
+func TestReleaseNames(t *testing.T) {
+	var testCases = []string{
+		LatestReleaseName,
+		InitialReleaseName,
+		"foo",
+	}
+	for _, name := range testCases {
+		stream := StableStreamFor(name)
+		if !IsReleaseStream(stream) {
+			t.Errorf("stream %s for name %s was not identified as a release stream", stream, name)
+		}
+		if actual, expected := ReleaseNameFrom(stream), name; actual != expected {
+			t.Errorf("parsed name %s from stream %s, but it was created for name %s", actual, stream, expected)
+		}
+	}
+
 }

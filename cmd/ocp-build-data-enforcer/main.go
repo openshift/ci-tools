@@ -81,6 +81,14 @@ func main() {
 		configs = append(configs, cfg)
 	}
 
+	// No point in continuing, that will only result in weird to understand follow-up errors
+	if err := utilerrors.NewAggregate(errs); err != nil {
+		for _, err := range err.Errors() {
+			logrus.WithError(err).Error("Encountered error")
+		}
+		logrus.Fatal("Encountered errors")
+	}
+
 	errGroup := &errgroup.Group{}
 	for idx := range configs {
 		idx := idx
@@ -102,7 +110,6 @@ func main() {
 	logrus.Infof("Processed %d configs", len(configs))
 }
 
-// TODO (alvaroaleman): This is incomplete
 func dereferenceConfig(
 	config *ocpImageConfig,
 	branch string,
@@ -121,11 +128,16 @@ func dereferenceConfig(
 		}
 	}
 	if config.From.Member != "" {
-		config.From.Member, err = streamForMember(config.From.Member, branch, allConfigs, groupYAML, pullSpecGetter)
+		config.From.Stream, err = streamForMember(config.From.Member, branch, allConfigs, groupYAML, pullSpecGetter)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("failed to replace .from.member: %w", err))
 		}
+		config.From.Member = ""
 	}
+	if config.From.Stream == "" {
+		errs = append(errs, errors.New("failed to find replacement for .from.stream"))
+	}
+
 	for blder := range config.From.Builder {
 		if config.From.Builder[blder].Stream != "" {
 			config.From.Builder[blder].Stream, err = replaceStream(config.From.Builder[blder].Stream, streamMap)
@@ -134,10 +146,14 @@ func dereferenceConfig(
 			}
 		}
 		if config.From.Builder[blder].Member != "" {
-			config.From.Builder[blder].Member, err = streamForMember(config.From.Builder[blder].Member, branch, allConfigs, groupYAML, pullSpecGetter)
+			config.From.Builder[blder].Stream, err = streamForMember(config.From.Builder[blder].Member, branch, allConfigs, groupYAML, pullSpecGetter)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("failed to replace .from.%d.member: %w", blder, err))
 			}
+			config.From.Builder[blder].Member = ""
+		}
+		if config.From.Builder[blder].Stream == "" {
+			errs = append(errs, fmt.Errorf("failed to dereference from.builder.%d", blder))
 		}
 	}
 
@@ -151,7 +167,7 @@ func dereferenceConfig(
 		*config.Content.Source.Git = groupYAML.Sources[config.Content.Source.Alias]
 	}
 
-	return nil
+	return utilerrors.NewAggregate(errs)
 }
 
 func streamForMember(
@@ -172,7 +188,7 @@ func streamForMember(
 	}
 	orgRepoSplit := strings.Split(orgRepo, "/")
 	if n := len(orgRepoSplit); n != 2 {
-		return "", fmt.Errorf("splitting orgRepo string %s by / did not yield two but %d results", orgRepo, n)
+		return "", fmt.Errorf("splitting orgRepo string %s by / did not yield two but %d results. %s", orgRepo, n, cfg.orgRepo())
 	}
 	result, err := pullSpecGetter(orgRepoSplit[0], orgRepoSplit[1], branch, cfg.dockerfile())
 	if err != nil {
@@ -188,28 +204,32 @@ func configFileNamberForMemberString(memberString string) string {
 
 func getPublicRepo(orgRepo string, mappings []publicPrivateMapping) (string, error) {
 	orgRepo = "https://github.com/" + orgRepo
-	var replacement string
+	var replacementFrom, replacementTo string
 	for _, mapping := range mappings {
 		if !strings.HasPrefix(orgRepo, mapping.Private) {
 			continue
 		}
-		if len(replacement) > len(mapping.Private) {
+		if len(replacementFrom) > len(mapping.Private) {
 			continue
 		}
-		replacement = mapping.Public
+		replacementFrom = mapping.Private
+		replacementTo = mapping.Public
 	}
 
-	if replacement == "" {
+	if replacementTo == "" {
 		return "", errors.New("no matching replacement found")
 	}
 
-	return strings.TrimPrefix(replacement, "https://github.com/"), nil
+	return strings.TrimPrefix(strings.Replace(orgRepo, replacementFrom, replacementTo, 1), "https://github.com/"), nil
 }
 
 func replaceStream(streamName string, streamMap streamMap) (string, error) {
 	replacement, hasReplacement := streamMap[streamName]
 	if !hasReplacement {
 		return "", fmt.Errorf("streamMap has no replacement for stream %s", streamName)
+	}
+	if replacement.UpstreamImage == "" {
+		return "", fmt.Errorf("stream.yml.%s.upstream_image is an empty string", streamName)
 	}
 	return replacement.UpstreamImage, nil
 }
@@ -342,7 +362,10 @@ func updateDockerfile(dockerfile []byte, config ocpImageConfig) ([]byte, bool, e
 		return nil, false, fmt.Errorf("failed to construct imagebuilder stages: %w", err)
 	}
 
-	cfgStages := config.stages()
+	cfgStages, err := config.stages()
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to get stages: %w", err)
+	}
 	if expected := len(cfgStages); expected != len(stages) {
 		return nil, false, fmt.Errorf("expected %d stages based on ocp config %s but got %d", expected, config.SourceFileName, len(stages))
 	}
@@ -360,7 +383,7 @@ func updateDockerfile(dockerfile []byte, config ocpImageConfig) ([]byte, bool, e
 				return nil, false, fmt.Errorf("dockerfile has FROM directive without value on line %d", child.StartLine)
 			}
 			if cfgStages[stageIdx] == "" {
-				return nil, false, errors.New("replacement target is empty")
+				return nil, false, errors.New("")
 			}
 			if child.Next.Value != cfgStages[stageIdx] {
 				replacements = append(replacements, dockerFileReplacment{

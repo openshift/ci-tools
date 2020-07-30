@@ -85,12 +85,19 @@ func (oic ocpImageConfig) dockerfile() string {
 	return "Dockerfile"
 }
 
-func (oic ocpImageConfig) stages() []string {
+func (oic ocpImageConfig) stages() ([]string, error) {
 	var result []string
-	for _, builder := range oic.From.Builder {
+	var errs []error
+	for idx, builder := range oic.From.Builder {
+		if builder.Stream == "" {
+			errs = append(errs, fmt.Errorf("couldn't dereference from.builder.%d", idx))
+		}
 		result = append(result, builder.Stream)
 	}
-	return append(result, oic.From.Stream)
+	if oic.From.Stream == "" {
+		errs = append(errs, errors.New("couldn't dereference from.stream"))
+	}
+	return append(result, oic.From.Stream), utilerrors.NewAggregate(errs)
 }
 
 func (oic ocpImageConfig) orgRepo() string {

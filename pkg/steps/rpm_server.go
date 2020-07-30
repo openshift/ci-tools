@@ -365,7 +365,7 @@ func (s *rpmServerStep) rpmRepoURL() (string, error) {
 	return fmt.Sprintf("http://%s", host), nil
 }
 
-func (s *rpmServerStep) Provides() (api.ParameterMap, api.StepLink) {
+func (s *rpmServerStep) Provides() api.ParameterMap {
 	var refs *v1.Refs
 	if s.jobSpec.Refs != nil {
 		refs = s.jobSpec.Refs
@@ -376,9 +376,9 @@ func (s *rpmServerStep) Provides() (api.ParameterMap, api.StepLink) {
 		rpmByOrgAndRepo := strings.Replace(fmt.Sprintf("RPM_REPO_%s_%s", strings.ToUpper(refs.Org), strings.ToUpper(refs.Repo)), "-", "_", -1)
 		return api.ParameterMap{
 			rpmByOrgAndRepo: s.rpmRepoURL,
-		}, api.RPMRepoLink()
+		}
 	}
-	return nil, nil
+	return nil
 }
 
 func (s *rpmServerStep) Name() string { return "[serve:rpms]" }

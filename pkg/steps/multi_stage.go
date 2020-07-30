@@ -19,6 +19,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/junit"
 	"github.com/openshift/ci-tools/pkg/results"
+	"github.com/openshift/ci-tools/pkg/steps/utils"
 )
 
 const (
@@ -32,15 +33,13 @@ const (
 	SecretMountEnv = "SHARED_DIR"
 	// ClusterProfileMountEnv is the env we use to expose the cluster profile dir
 	ClusterProfileMountEnv = "CLUSTER_PROFILE_DIR"
-	// InitialReleaseEnv is the environment we use to expose the initial payload
-	InitialReleaseEnv = "RELEASE_IMAGE_INITIAL"
-	// LatestReleaseEnv is the environment we use to expose the latest payload
-	LatestReleaseEnv = "RELEASE_IMAGE_LATEST"
-	// ImageFormatEnv is the environment we use to hold the base pull spec
-	ImageFormatEnv = "IMAGE_FORMAT"
 )
 
-var envForProfile = []string{InitialReleaseEnv, LatestReleaseEnv, leaseEnv, ImageFormatEnv}
+var envForProfile = []string{
+	utils.ReleaseImageEnv(api.LatestStableName),
+	leaseEnv,
+	utils.ImageFormatEnv,
+}
 
 type multiStageTestStep struct {
 	dry     bool
@@ -187,7 +186,9 @@ func (s *multiStageTestStep) Requires() (ret []api.StepLink) {
 	if s.profile != "" {
 		needsReleasePayload = true
 		for _, env := range envForProfile {
-			ret = append(ret, s.params.Links(env)...)
+			if link, ok := utils.LinkForEnv(env); ok {
+				ret = append(ret, link)
+			}
 		}
 	}
 	if needsReleaseImage && !needsReleasePayload {
@@ -197,8 +198,8 @@ func (s *multiStageTestStep) Requires() (ret []api.StepLink) {
 }
 
 func (s *multiStageTestStep) Creates() []api.StepLink { return nil }
-func (s *multiStageTestStep) Provides() (api.ParameterMap, api.StepLink) {
-	return nil, nil
+func (s *multiStageTestStep) Provides() api.ParameterMap {
+	return nil
 }
 func (s *multiStageTestStep) SubTests() []*junit.TestCase { return s.subTests }
 

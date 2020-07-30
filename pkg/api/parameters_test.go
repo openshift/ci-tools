@@ -7,43 +7,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/diff"
 )
 
-func someStepLink(as string) StepLink {
-	return ExternalImageLink(ImageStreamTagReference{
-		Namespace: "namespace",
-		Name:      "name",
-		Tag:       "tag",
-		As:        as,
-	})
-}
-
-func TestDeferredParametersAllLinks(t *testing.T) {
-	var testCases = []struct {
-		purpose       string
-		dp            *DeferredParameters
-		expectedItems int
-	}{{
-		purpose: "AllLinks should return a slice with all links for all names",
-		dp: &DeferredParameters{
-			links: map[string][]StepLink{
-				"K1": {someStepLink("ONE"), someStepLink("TWO")},
-				"K2": {someStepLink("THREE")},
-			},
-		},
-		// only compare count of returned items because AllLinks can return links
-		// in any order and StepLink instances cannot be sorted unless the interface
-		// is extended to provide something by which to sort
-		expectedItems: 3,
-	}}
-
-	for _, tc := range testCases {
-		links := tc.dp.AllLinks()
-
-		if len(links) != tc.expectedItems {
-			t.Errorf("%s: %v.AllLinks() returned %v, expected %d items", tc.purpose, tc.dp, links, tc.expectedItems)
-		}
-	}
-}
-
 func TestDeferredParametersMap(t *testing.T) {
 	var testCases = []struct {
 		purpose  string
@@ -93,74 +56,6 @@ func TestDeferredParametersMap(t *testing.T) {
 	}
 }
 
-func TestDeferredParametersAddHasLinksGet(t *testing.T) {
-	var testCases = []struct {
-		purpose string
-
-		dp      *DeferredParameters
-		callAdd bool
-		name    string
-		link    StepLink
-		fn      func() (string, error)
-
-		expectedHas   bool
-		expectedLinks []StepLink
-		expectedGet   string
-	}{{
-		purpose: "After `Add(key, link, f)`: Has(key)->true, Links(key)->{link}, Get(key)->f()",
-		dp:      NewDeferredParameters(),
-		callAdd: true,
-		name:    "key",
-		link:    someStepLink("name"),
-		fn:      func() (string, error) { return "value", nil },
-
-		expectedHas:   true,
-		expectedLinks: []StepLink{someStepLink("name")},
-		expectedGet:   "value",
-	}, {
-		purpose: "Without Add(): Has(key)->false and Links(key)->nil",
-		dp:      NewDeferredParameters(),
-		callAdd: false,
-		name:    "key",
-		link:    nil,
-		fn:      nil,
-
-		expectedHas:   false,
-		expectedLinks: nil,
-		expectedGet:   "",
-	}, {
-		purpose: "After `Add(key, new-link)` when `key` already present: Has(key)->true and Links(key)->{new-link}",
-		dp: &DeferredParameters{
-			fns:    ParameterMap{"key": func() (string, error) { return "old", nil }},
-			values: map[string]string{},
-			links:  map[string][]StepLink{"key": {someStepLink("old-link")}},
-		},
-		callAdd: true,
-		name:    "key",
-		link:    someStepLink("new-link"),
-		fn:      func() (string, error) { return "new", nil },
-
-		expectedHas:   true,
-		expectedLinks: []StepLink{someStepLink("new-link")},
-		expectedGet:   "new",
-	}}
-	for _, tc := range testCases {
-		if tc.callAdd {
-			tc.dp.Add(tc.name, tc.link, tc.fn)
-		}
-
-		if has := tc.dp.Has(tc.name); has != tc.expectedHas {
-			t.Errorf("%s\n Has(%s) returned %t, expected %t", tc.purpose, tc.name, has, tc.expectedHas)
-		}
-		if links := tc.dp.Links(tc.name); !reflect.DeepEqual(tc.expectedLinks, links) {
-			t.Errorf("%s\n Links(%s) returned different links:\n%s", tc.purpose, tc.name, diff.ObjectReflectDiff(tc.expectedLinks, links))
-		}
-		if get, _ := tc.dp.Get(tc.name); get != tc.expectedGet {
-			t.Errorf("%s\n Get(%s) returned %s, expected %s", tc.purpose, tc.name, get, tc.expectedGet)
-		}
-	}
-}
-
 func TestDeferredParametersGetSet(t *testing.T) {
 	var testCases = []struct {
 		purpose  string
@@ -184,7 +79,6 @@ func TestDeferredParametersGetSet(t *testing.T) {
 		dp: &DeferredParameters{
 			fns:    make(ParameterMap),
 			values: map[string]string{"key": "oldValue"},
-			links:  map[string][]StepLink{},
 		},
 		name:     "key",
 		callSet:  true,
@@ -199,7 +93,6 @@ func TestDeferredParametersGetSet(t *testing.T) {
 				"key": func() (string, error) { return "lazyValue", nil },
 			},
 			values: map[string]string{},
-			links:  map[string][]StepLink{},
 		},
 		name:     "key",
 		callSet:  true,

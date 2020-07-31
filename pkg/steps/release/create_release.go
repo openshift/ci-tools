@@ -115,16 +115,16 @@ func setupReleaseImageStream(namespace string, saGetter coreclientset.ServiceAcc
 	}
 
 	// ensure the image stream exists
-	release, err := imageClient.ImageStreams(namespace).Create(&imageapi.ImageStream{
+	release, err := imageClient.ImageStreams(namespace).Create(context.TODO(), &imageapi.ImageStream{
 		ObjectMeta: meta.ObjectMeta{
 			Name: "release",
 		},
-	})
+	}, meta.CreateOptions{})
 	if err != nil {
 		if !errors.IsAlreadyExists(err) {
 			return "", err
 		}
-		release, err = imageClient.ImageStreams(namespace).Get("release", meta.GetOptions{})
+		release, err = imageClient.ImageStreams(namespace).Get(context.TODO(), "release", meta.GetOptions{})
 		if err != nil {
 			return "", results.ForReason("creating_release_stream").ForError(err)
 		}
@@ -148,7 +148,7 @@ func (s *assembleReleaseStep) run(ctx context.Context) error {
 	importCtx, cancel := context.WithTimeout(ctx, 15*time.Minute)
 	defer cancel()
 	if err := wait.PollImmediateUntil(10*time.Second, func() (bool, error) {
-		stable, err = s.imageClient.ImageStreams(s.jobSpec.Namespace()).Get(streamName, meta.GetOptions{})
+		stable, err = s.imageClient.ImageStreams(s.jobSpec.Namespace()).Get(ctx, streamName, meta.GetOptions{})
 		if err != nil {
 			return false, err
 		}

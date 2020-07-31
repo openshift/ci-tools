@@ -37,8 +37,7 @@ spec:
       RUN git submodule update --init
       RUN rm -f /oauth-token
     images:
-    - as: null
-      from:
+    - from:
         kind: ImageStreamTag
         name: clonerefs:latest
         namespace: ci
@@ -64,7 +63,6 @@ spec:
       imageOptimizationPolicy: SkipLayers
       noCache: true
     type: Docker
-  triggeredBy: null
 status:
   output: {}
   phase: ""

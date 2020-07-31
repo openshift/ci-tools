@@ -118,10 +118,10 @@ func (s *templateExecutionStep) run(ctx context.Context) error {
 		notifier.Cancel()
 		log.Printf("cleanup: Deleting template %s", s.template.Name)
 		policy := meta.DeletePropagationForeground
-		opt := &meta.DeleteOptions{
+		opt := meta.DeleteOptions{
 			PropagationPolicy: &policy,
 		}
-		if err := s.templateClient.TemplateInstances(s.jobSpec.Namespace()).Delete(s.template.Name, opt); err != nil && !errors.IsNotFound(err) {
+		if err := s.templateClient.TemplateInstances(s.jobSpec.Namespace()).Delete(ctx, s.template.Name, opt); err != nil && !errors.IsNotFound(err) {
 			log.Printf("error: Could not delete template instance: %v", err)
 		}
 	}()
@@ -314,7 +314,7 @@ func waitForTemplateInstanceReady(templateClient templateclientset.TemplateInsta
 	var instance *templateapi.TemplateInstance
 	err := wait.PollImmediate(2*time.Second, 10*time.Minute, func() (bool, error) {
 		var getErr error
-		if instance, getErr = templateClient.Get(name, meta.GetOptions{}); getErr != nil {
+		if instance, getErr = templateClient.Get(context.TODO(), name, meta.GetOptions{}); getErr != nil {
 			return false, nil
 		}
 
@@ -328,12 +328,12 @@ func createOrRestartTemplateInstance(templateClient templateclientset.TemplateIn
 	if err := waitForCompletedTemplateInstanceDeletion(templateClient, podClient, instance.Name); err != nil {
 		return nil, fmt.Errorf("unable to delete completed template instance: %w", err)
 	}
-	created, err := templateClient.Create(instance)
+	created, err := templateClient.Create(context.TODO(), instance, meta.CreateOptions{})
 	if err != nil && !errors.IsAlreadyExists(err) {
 		return nil, fmt.Errorf("unable to create template instance: %w", err)
 	}
 	if err != nil {
-		created, err = templateClient.Get(instance.Name, meta.GetOptions{})
+		created, err = templateClient.Get(context.TODO(), instance.Name, meta.GetOptions{})
 		if err != nil {
 			return nil, fmt.Errorf("unable to retrieve pod: %w", err)
 		}
@@ -343,7 +343,7 @@ func createOrRestartTemplateInstance(templateClient templateclientset.TemplateIn
 }
 
 func waitForCompletedTemplateInstanceDeletion(templateClient templateclientset.TemplateInstanceInterface, podClient coreclientset.PodInterface, name string) error {
-	instance, err := templateClient.Get(name, meta.GetOptions{})
+	instance, err := templateClient.Get(context.TODO(), name, meta.GetOptions{})
 	if errors.IsNotFound(err) {
 		log.Printf("Template instance %s already deleted, do not need to wait any longer", name)
 		return nil
@@ -352,7 +352,7 @@ func waitForCompletedTemplateInstanceDeletion(templateClient templateclientset.T
 	// delete the instance we had before, otherwise another user has relaunched this template
 	uid := instance.UID
 	policy := meta.DeletePropagationForeground
-	err = templateClient.Delete(name, &meta.DeleteOptions{
+	err = templateClient.Delete(context.TODO(), name, meta.DeleteOptions{
 		PropagationPolicy: &policy,
 		Preconditions:     &meta.Preconditions{UID: &uid},
 	})
@@ -366,7 +366,7 @@ func waitForCompletedTemplateInstanceDeletion(templateClient templateclientset.T
 	}
 
 	for i := 0; ; i++ {
-		instance, err := templateClient.Get(name, meta.GetOptions{})
+		instance, err := templateClient.Get(context.TODO(), name, meta.GetOptions{})
 		if errors.IsNotFound(err) {
 			break
 		}

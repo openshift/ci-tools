@@ -50,11 +50,11 @@ var promotionRetry = wait.Backoff{
 	Jitter:   0.1,
 }
 
-func (s *promotionStep) Run(_ context.Context) error {
-	return results.ForReason("promoting_images").ForError(s.run())
+func (s *promotionStep) Run(ctx context.Context) error {
+	return results.ForReason("promoting_images").ForError(s.run(ctx))
 }
 
-func (s *promotionStep) run() error {
+func (s *promotionStep) run(ctx context.Context) error {
 	tags, names := toPromote(s.config, s.images, s.requiredImages)
 	if len(names) == 0 {
 		log.Println("Nothing to promote, skipping...")
@@ -63,21 +63,21 @@ func (s *promotionStep) run() error {
 
 	log.Printf("Promoting tags to %s: %s", targetName(s.config), strings.Join(names.List(), ", "))
 
-	pipeline, err := s.srcClient.ImageStreams(s.jobSpec.Namespace()).Get(api.PipelineImageStream, meta.GetOptions{})
+	pipeline, err := s.srcClient.ImageStreams(s.jobSpec.Namespace()).Get(ctx, api.PipelineImageStream, meta.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("could not resolve pipeline imagestream: %w", err)
 	}
 
 	if len(s.config.Name) > 0 {
 		return retry.RetryOnConflict(promotionRetry, func() error {
-			is, err := s.dstClient.ImageStreams(s.config.Namespace).Get(s.config.Name, meta.GetOptions{})
+			is, err := s.dstClient.ImageStreams(s.config.Namespace).Get(ctx, s.config.Name, meta.GetOptions{})
 			if errors.IsNotFound(err) {
-				is, err = s.dstClient.ImageStreams(s.config.Namespace).Create(&imageapi.ImageStream{
+				is, err = s.dstClient.ImageStreams(s.config.Namespace).Create(ctx, &imageapi.ImageStream{
 					ObjectMeta: meta.ObjectMeta{
 						Name:      s.config.Name,
 						Namespace: s.config.Namespace,
 					},
-				})
+				}, meta.CreateOptions{})
 			}
 			if err != nil {
 				return fmt.Errorf("could not retrieve target imagestream: %w", err)
@@ -92,7 +92,7 @@ func (s *promotionStep) run() error {
 				}
 			}
 
-			if _, err := s.dstClient.ImageStreams(s.config.Namespace).Update(is); err != nil {
+			if _, err := s.dstClient.ImageStreams(s.config.Namespace).Update(ctx, is, meta.UpdateOptions{}); err != nil {
 				if errors.IsConflict(err) {
 					return err
 				}
@@ -110,9 +110,9 @@ func (s *promotionStep) run() error {
 		}
 
 		err := retry.RetryOnConflict(promotionRetry, func() error {
-			_, err := s.dstClient.ImageStreams(s.config.Namespace).Get(dst, meta.GetOptions{})
+			_, err := s.dstClient.ImageStreams(s.config.Namespace).Get(ctx, dst, meta.GetOptions{})
 			if errors.IsNotFound(err) {
-				_, err = s.dstClient.ImageStreams(s.config.Namespace).Create(&imageapi.ImageStream{
+				_, err = s.dstClient.ImageStreams(s.config.Namespace).Create(ctx, &imageapi.ImageStream{
 					ObjectMeta: meta.ObjectMeta{
 						Name:      dst,
 						Namespace: s.config.Namespace,
@@ -122,7 +122,7 @@ func (s *promotionStep) run() error {
 							Local: true,
 						},
 					},
-				})
+				}, meta.CreateOptions{})
 			}
 			if err != nil {
 				return fmt.Errorf("could not ensure target imagestream: %w", err)
@@ -138,7 +138,7 @@ func (s *promotionStep) run() error {
 					From: valid,
 				},
 			}
-			if _, err := client.Update(ist); err != nil {
+			if _, err := client.Update(ctx, ist, meta.UpdateOptions{}); err != nil {
 				if errors.IsConflict(err) {
 					return err
 				}

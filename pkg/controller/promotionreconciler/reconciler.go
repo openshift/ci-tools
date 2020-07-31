@@ -46,7 +46,7 @@ func AddToManager(mgr controllerruntime.Manager, opts Options) error {
 	// Pre-Allocate the Image informer rather than letting it allocate on demand, because
 	// starting the watch takes very long (~2 minutes) and having that delay added to our
 	// first (# worker) reconciles skews the workqueue duration metric bigtimes.
-	if _, err := opts.RegistryManager.GetCache().GetInformer(&imagev1.Image{}); err != nil {
+	if _, err := opts.RegistryManager.GetCache().GetInformer(context.TODO(), &imagev1.Image{}); err != nil {
 		return fmt.Errorf("failed to get informer for image: %w", err)
 	}
 

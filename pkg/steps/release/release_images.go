@@ -37,11 +37,11 @@ func StableImagesTagStep(dstClient imageclientset.ImageV1Interface, jobSpec *api
 	}
 }
 
-func (s *stableImagesTagStep) Run(_ context.Context) error {
-	return results.ForReason("creating_stable_images").ForError(s.run())
+func (s *stableImagesTagStep) Run(ctx context.Context) error {
+	return results.ForReason("creating_stable_images").ForError(s.run(ctx))
 }
 
-func (s *stableImagesTagStep) run() error {
+func (s *stableImagesTagStep) run(ctx context.Context) error {
 	log.Printf("Will output images to %s:%s", api.StableImageStream, api.ComponentFormatReplacement)
 
 	newIS := &imageapi.ImageStream{
@@ -54,7 +54,7 @@ func (s *stableImagesTagStep) run() error {
 			},
 		},
 	}
-	_, err := s.dstClient.ImageStreams(s.jobSpec.Namespace()).Create(newIS)
+	_, err := s.dstClient.ImageStreams(s.jobSpec.Namespace()).Create(ctx, newIS, meta.CreateOptions{})
 	if err != nil && !errors.IsAlreadyExists(err) {
 		return fmt.Errorf("could not create stable imagestreamtag: %w", err)
 	}
@@ -101,18 +101,18 @@ func sourceName(config api.ReleaseTagConfiguration) string {
 	return fmt.Sprintf("%s/%s:%s", config.Namespace, config.Name, api.ComponentFormatReplacement)
 }
 
-func (s *releaseImagesTagStep) Run(_ context.Context) error {
-	return results.ForReason("creating_release_images").ForError(s.run())
+func (s *releaseImagesTagStep) Run(ctx context.Context) error {
+	return results.ForReason("creating_release_images").ForError(s.run(ctx))
 }
 
-func (s *releaseImagesTagStep) run() error {
+func (s *releaseImagesTagStep) run(ctx context.Context) error {
 	if format, err := s.imageFormat(); err == nil {
 		log.Printf("Tagged shared images from %s, images will be pullable from %s", sourceName(s.config), format)
 	} else {
 		log.Printf("Tagged shared images from %s", sourceName(s.config))
 	}
 
-	is, err := s.client.ImageStreams(s.config.Namespace).Get(s.config.Name, meta.GetOptions{})
+	is, err := s.client.ImageStreams(s.config.Namespace).Get(ctx, s.config.Name, meta.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("could not resolve stable imagestream: %w", err)
 	}
@@ -140,12 +140,12 @@ func (s *releaseImagesTagStep) run() error {
 	initialIS := newIS.DeepCopy()
 	initialIS.Name = api.StableStreamFor(api.InitialImageStream)
 
-	_, err = s.client.ImageStreams(s.jobSpec.Namespace()).Create(newIS)
+	_, err = s.client.ImageStreams(s.jobSpec.Namespace()).Create(ctx, newIS, meta.CreateOptions{})
 	if err != nil && !errors.IsAlreadyExists(err) {
 		return fmt.Errorf("could not copy stable imagestreamtag: %w", err)
 	}
 
-	is, err = s.client.ImageStreams(s.jobSpec.Namespace()).Create(initialIS)
+	is, err = s.client.ImageStreams(s.jobSpec.Namespace()).Create(ctx, initialIS, meta.CreateOptions{})
 	if err != nil && !errors.IsAlreadyExists(err) {
 		return fmt.Errorf("could not copy stable-initial imagestreamtag: %w", err)
 	}
@@ -189,7 +189,7 @@ func (s *releaseImagesTagStep) imageFormat() (string, error) {
 }
 
 func (s *releaseImagesTagStep) repositoryPullSpec() (string, error) {
-	is, err := s.client.ImageStreams(s.jobSpec.Namespace()).Get(api.PipelineImageStream, meta.GetOptions{})
+	is, err := s.client.ImageStreams(s.jobSpec.Namespace()).Get(context.TODO(), api.PipelineImageStream, meta.GetOptions{})
 	if err != nil {
 		return "", err
 	}

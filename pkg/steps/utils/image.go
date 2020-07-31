@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"context"
 	"fmt"
 
 	coreapi "k8s.io/api/core/v1"
@@ -12,7 +13,7 @@ import (
 
 func ImageDigestFor(client imageclientset.ImageStreamsGetter, namespace func() string, name, tag string) func() (string, error) {
 	return func() (string, error) {
-		is, err := client.ImageStreams(namespace()).Get(name, meta.GetOptions{})
+		is, err := client.ImageStreams(namespace()).Get(context.TODO(), name, meta.GetOptions{})
 		if err != nil {
 			return "", fmt.Errorf("could not retrieve output imagestream: %w", err)
 		}

@@ -54,7 +54,7 @@ func (s *rpmServerStep) Run(ctx context.Context) error {
 }
 
 func (s *rpmServerStep) run(ctx context.Context) error {
-	ist, err := s.istClient.ImageStreamTags(s.jobSpec.Namespace()).Get(fmt.Sprintf("%s:%s", api.PipelineImageStream, s.config.From), meta.GetOptions{})
+	ist, err := s.istClient.ImageStreamTags(s.jobSpec.Namespace()).Get(ctx, fmt.Sprintf("%s:%s", api.PipelineImageStream, s.config.From), meta.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("could not find source ImageStreamTag for RPM repo deployment: %w", err)
 	}
@@ -201,7 +201,7 @@ python /tmp/serve.py
 		route.OwnerReferences = append(route.OwnerReferences, *owner)
 	}
 
-	if _, err := s.routeClient.Routes(s.jobSpec.Namespace()).Create(route); err != nil && !kerrors.IsAlreadyExists(err) {
+	if _, err := s.routeClient.Routes(s.jobSpec.Namespace()).Create(ctx, route, meta.CreateOptions{}); err != nil && !kerrors.IsAlreadyExists(err) {
 		return fmt.Errorf("could not create RPM repo server route: %w", err)
 	}
 	if err := waitForDeployment(ctx, s.deploymentClient.Deployments(s.jobSpec.Namespace()), deployment.Name); err != nil {
@@ -390,7 +390,7 @@ func (s *rpmServerStep) Description() string {
 func admittedHostForRoute(routeClient routeclientset.RoutesGetter, namespace, name string, timeout time.Duration) (string, error) {
 	var repoHost string
 	if err := wait.PollImmediate(time.Second, timeout, func() (bool, error) {
-		route, err := routeClient.Routes(namespace).Get(name, meta.GetOptions{})
+		route, err := routeClient.Routes(namespace).Get(context.TODO(), name, meta.GetOptions{})
 		if err != nil {
 			return false, fmt.Errorf("could not get route %s: %w", name, err)
 		}

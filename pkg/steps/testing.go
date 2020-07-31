@@ -79,13 +79,13 @@ type ciopTestingPods struct {
 // they would be created without any sensible Phase, which causes problems in
 // the ci-operator code. Therefore, our fake Create() always creates Pods with
 // a `Pending` phase if it does not carry phase already.
-func (c *ciopTestingPods) Create(pod *v1.Pod) (*v1.Pod, error) {
+func (c *ciopTestingPods) Create(ctx context.Context, pod *v1.Pod, o metav1.CreateOptions) (*v1.Pod, error) {
 	c.t.Logf("FakePods.Create(): ObjectMeta.Name=%s Status.Phase=%s", pod.ObjectMeta.Name, pod.Status.Phase)
 	if pod.Status.Phase == "" {
 		pod.Status.Phase = v1.PodPending
 		c.t.Logf("FakePods.Create(): Setting Status.Phase to '%s'", v1.PodPending)
 	}
-	return c.FakePods.Create(context.TODO(), pod, metav1.CreateOptions{})
+	return c.FakePods.Create(ctx, pod, o)
 }
 
 type doneExpectation struct {

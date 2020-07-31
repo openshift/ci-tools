@@ -4,6 +4,7 @@ package steps
 
 import (
 	"context"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"reflect"
 	"testing"
 
@@ -84,7 +85,7 @@ func (c *ciopTestingPods) Create(pod *v1.Pod) (*v1.Pod, error) {
 		pod.Status.Phase = v1.PodPending
 		c.t.Logf("FakePods.Create(): Setting Status.Phase to '%s'", v1.PodPending)
 	}
-	return c.FakePods.Create(pod)
+	return c.FakePods.Create(context.TODO(), pod, metav1.CreateOptions{})
 }
 
 type doneExpectation struct {

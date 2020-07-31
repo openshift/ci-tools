@@ -124,7 +124,7 @@ func (s *multiStageTestStep) run(ctx context.Context) error {
 	var env []coreapi.EnvVar
 	if s.profile != "" {
 		secret := s.profileSecretName()
-		if _, err := s.secretClient.Secrets(s.jobSpec.Namespace()).Get(secret, meta.GetOptions{}); err != nil {
+		if _, err := s.secretClient.Secrets(s.jobSpec.Namespace()).Get(context.TODO(), secret, meta.GetOptions{}); err != nil {
 			return fmt.Errorf("could not find secret %q: %w", secret, err)
 		}
 		for _, e := range envForProfile {
@@ -233,13 +233,13 @@ func (s *multiStageTestStep) setupRBAC() error {
 	check := func(err error) bool {
 		return err == nil || errors.IsAlreadyExists(err)
 	}
-	if _, err := s.saClient.ServiceAccounts(s.jobSpec.Namespace()).Create(sa); !check(err) {
+	if _, err := s.saClient.ServiceAccounts(s.jobSpec.Namespace()).Create(context.TODO(), sa, meta.CreateOptions{}); !check(err) {
 		return err
 	}
-	if _, err := s.rbacClient.Roles(s.jobSpec.Namespace()).Create(role); !check(err) {
+	if _, err := s.rbacClient.Roles(s.jobSpec.Namespace()).Create(context.TODO(), role, meta.CreateOptions{}); !check(err) {
 		return err
 	}
-	if _, err := s.rbacClient.RoleBindings(s.jobSpec.Namespace()).Create(binding); !check(err) {
+	if _, err := s.rbacClient.RoleBindings(s.jobSpec.Namespace()).Create(context.TODO(), binding, meta.CreateOptions{}); !check(err) {
 		return err
 	}
 	return nil
@@ -249,10 +249,10 @@ func (s *multiStageTestStep) createSecret() error {
 	log.Printf("Creating multi-stage test secret %q", s.name)
 	secret := coreapi.Secret{ObjectMeta: meta.ObjectMeta{Name: s.name}}
 	client := s.secretClient.Secrets(s.jobSpec.Namespace())
-	if err := client.Delete(s.name, &meta.DeleteOptions{}); err != nil && !errors.IsNotFound(err) {
+	if err := client.Delete(context.TODO(), s.name, meta.DeleteOptions{}); err != nil && !errors.IsNotFound(err) {
 		return fmt.Errorf("cannot delete secret %q: %w", s.name, err)
 	}
-	_, err := client.Create(&secret)
+	_, err := client.Create(context.TODO(), &secret, meta.CreateOptions{})
 	return err
 }
 
@@ -266,7 +266,7 @@ func (s *multiStageTestStep) createCredentials() error {
 			// chance we get a second-level collision (ns-a, name) and (ns, a-name) is
 			// small, so we can get away with this string prefixing
 			name := fmt.Sprintf("%s-%s", credential.Namespace, credential.Name)
-			raw, err := s.secretClient.Secrets(credential.Namespace).Get(credential.Name, meta.GetOptions{})
+			raw, err := s.secretClient.Secrets(credential.Namespace).Get(context.TODO(), credential.Name, meta.GetOptions{})
 			if err != nil {
 				return fmt.Errorf("could not read source credential: %w", err)
 			}
@@ -284,7 +284,7 @@ func (s *multiStageTestStep) createCredentials() error {
 	}
 
 	for name := range toCreate {
-		if _, err := s.secretClient.Secrets(s.jobSpec.Namespace()).Create(toCreate[name]); err != nil && !errors.IsAlreadyExists(err) {
+		if _, err := s.secretClient.Secrets(s.jobSpec.Namespace()).Create(context.TODO(), toCreate[name], meta.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
 			return fmt.Errorf("could not create source credential: %w", err)
 		}
 	}
@@ -531,7 +531,8 @@ func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notif
 
 func deletePods(client coreclientset.PodInterface, test string) error {
 	err := client.DeleteCollection(
-		&meta.DeleteOptions{},
+		context.TODO(),
+		meta.DeleteOptions{},
 		meta.ListOptions{
 			LabelSelector: fields.Set{
 				MultiStageTestLabel: test,

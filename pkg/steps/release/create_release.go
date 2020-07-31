@@ -102,15 +102,15 @@ func setupReleaseImageStream(namespace string, saGetter coreclientset.ServiceAcc
 		},
 	}
 
-	if _, err := saGetter.ServiceAccounts(namespace).Create(sa); err != nil && !errors.IsAlreadyExists(err) {
+	if _, err := saGetter.ServiceAccounts(namespace).Create(context.TODO(), sa, meta.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
 		return "", results.ForReason("creating_service_account").WithError(err).Errorf("could not create service account 'ci-operator' for: %v", err)
 	}
 
-	if _, err := rbacClient.Roles(namespace).Create(role); err != nil && !errors.IsAlreadyExists(err) {
+	if _, err := rbacClient.Roles(namespace).Create(context.TODO(), role, meta.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
 		return "", results.ForReason("creating_roles").WithError(err).Errorf("could not create role 'ci-operator-image' for: %v", err)
 	}
 
-	if _, err := rbacClient.RoleBindings(namespace).Create(roleBinding); err != nil && !errors.IsAlreadyExists(err) {
+	if _, err := rbacClient.RoleBindings(namespace).Create(context.TODO(), roleBinding, meta.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
 		return "", results.ForReason("binding_roles").WithError(err).Errorf("could not create role binding 'ci-operator-image' for: %v", err)
 	}
 

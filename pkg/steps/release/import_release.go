@@ -173,7 +173,7 @@ func (s *importReleaseStep) run(ctx context.Context) error {
 	}); err != nil {
 		return fmt.Errorf("unable to find the 'cli' image in the provided release image: %w", err)
 	}
-	pod, err := s.podClient.Pods(s.jobSpec.Namespace()).Get(targetCLI, meta.GetOptions{})
+	pod, err := s.podClient.Pods(s.jobSpec.Namespace()).Get(context.TODO(), targetCLI, meta.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("unable to extract the 'cli' image from the release image: %w", err)
 	}

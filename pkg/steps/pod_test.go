@@ -1,6 +1,7 @@
 package steps
 
 import (
+	"context"
 	"testing"
 
 	"k8s.io/api/core/v1"
@@ -169,7 +170,7 @@ func TestPodStepExecution(t *testing.T) {
 				},
 			}
 
-			watcher, err := client.Pods(namespace).Watch(meta.ListOptions{})
+			watcher, err := client.Pods(namespace).Watch(context.TODO(), meta.ListOptions{})
 			if err != nil {
 				t.Errorf("Failed to create a watcher over pods in namespace")
 			}
@@ -191,7 +192,7 @@ func TestPodStepExecution(t *testing.T) {
 						// make a copy to avoid a race
 						newPod := pod.DeepCopy()
 						newPod.Status.Phase = tc.podStatus
-						if _, err := client.Pods(namespace).UpdateStatus(newPod); err != nil {
+						if _, err := client.Pods(namespace).UpdateStatus(context.TODO(), newPod, meta.UpdateOptions{}); err != nil {
 							t.Errorf("Fake cluster: UpdateStatus() returned an error: %v", err)
 						}
 						break
@@ -202,7 +203,7 @@ func TestPodStepExecution(t *testing.T) {
 
 			executeStep(t, ps, executionExpectation, clusterBehavior)
 
-			if pod, err := client.Pods(namespace).Get(ps.Name(), meta.GetOptions{}); !equality.Semantic.DeepEqual(expectedPod, pod) {
+			if pod, err := client.Pods(namespace).Get(context.TODO(), ps.Name(), meta.GetOptions{}); !equality.Semantic.DeepEqual(expectedPod, pod) {
 				t.Errorf("Pod is different than expected:\n%s", diff.ObjectReflectDiff(expectedPod, pod))
 			} else if err != nil {
 				t.Errorf("Could not Get() expected Pod, err=%v", err)

@@ -164,7 +164,7 @@ python /tmp/serve.py
 		deployment.OwnerReferences = append(deployment.OwnerReferences, *owner)
 	}
 
-	if _, err := s.deploymentClient.Deployments(s.jobSpec.Namespace()).Create(deployment); err != nil && !kerrors.IsAlreadyExists(err) {
+	if _, err := s.deploymentClient.Deployments(s.jobSpec.Namespace()).Create(context.TODO(), deployment, meta.CreateOptions{}); err != nil && !kerrors.IsAlreadyExists(err) {
 		return fmt.Errorf("could not create RPM repo server deployment: %w", err)
 	}
 
@@ -183,7 +183,7 @@ python /tmp/serve.py
 		service.OwnerReferences = append(service.OwnerReferences, *owner)
 	}
 
-	if _, err := s.serviceClient.Services(s.jobSpec.Namespace()).Create(service); err != nil && !kerrors.IsAlreadyExists(err) {
+	if _, err := s.serviceClient.Services(s.jobSpec.Namespace()).Create(context.TODO(), service, meta.CreateOptions{}); err != nil && !kerrors.IsAlreadyExists(err) {
 		return fmt.Errorf("could not create RPM repo server service: %w", err)
 	}
 	route := &routeapi.Route{
@@ -254,7 +254,7 @@ func deploymentReason(b *appsapi.Deployment) string {
 func waitForDeploymentOrTimeout(ctx context.Context, client appsclientset.DeploymentInterface, name string) (bool, error) {
 	// First we set up a watcher to catch all events that happen while we check
 	// the deployment status
-	watcher, err := client.Watch(meta.ListOptions{
+	watcher, err := client.Watch(context.TODO(), meta.ListOptions{
 		FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String(),
 		Watch:         true,
 	})
@@ -295,7 +295,7 @@ func waitForDeploymentOrTimeout(ctx context.Context, client appsclientset.Deploy
 }
 
 func currentDeploymentStatus(client appsclientset.DeploymentInterface, name string) (bool, error) {
-	list, err := client.List(meta.ListOptions{FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String()})
+	list, err := client.List(context.TODO(), meta.ListOptions{FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String()})
 	if err != nil {
 		return false, fmt.Errorf("could not list DeploymentConfigs: %w", err)
 	}

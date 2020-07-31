@@ -1193,13 +1193,13 @@ func (o *options) saveNamespaceArtifacts() {
 	}
 
 	if kubeClient, err := coreclientset.NewForConfig(o.clusterConfig); err == nil {
-		pods, _ := kubeClient.Pods(o.namespace).List(meta.ListOptions{})
+		pods, _ := kubeClient.Pods(o.namespace).List(context.TODO(), meta.ListOptions{})
 		data, _ := json.MarshalIndent(pods, "", "  ")
 		path := filepath.Join(namespaceDir, "pods.json")
 		if err := ioutil.WriteFile(path, data, 0644); err != nil {
 			logrus.WithError(err).Errorf("Failed to write %s", path)
 		}
-		events, _ := kubeClient.Events(o.namespace).List(meta.ListOptions{})
+		events, _ := kubeClient.Events(o.namespace).List(context.TODO(), meta.ListOptions{})
 		data, _ = json.MarshalIndent(events, "", "  ")
 		path = filepath.Join(namespaceDir, "events.json")
 		if err := ioutil.WriteFile(path, data, 0644); err != nil {
@@ -1493,7 +1493,7 @@ func summarizeRef(refs prowapi.Refs) string {
 }
 
 func eventRecorder(kubeClient *coreclientset.CoreV1Client, authClient *authclientset.AuthorizationV1Client, namespace string) (record.EventRecorder, error) {
-	res, err := authClient.SelfSubjectAccessReviews().Create(&authapi.SelfSubjectAccessReview{
+	res, err := authClient.SelfSubjectAccessReviews().Create(context.TODO(), &authapi.SelfSubjectAccessReview{
 		Spec: authapi.SelfSubjectAccessReviewSpec{
 			ResourceAttributes: &authapi.ResourceAttributes{
 				Namespace: namespace,
@@ -1501,7 +1501,7 @@ func eventRecorder(kubeClient *coreclientset.CoreV1Client, authClient *authclien
 				Resource:  "events",
 			},
 		},
-	})
+	}, meta.CreateOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("could not check permission to create events: %w", err)
 	}
@@ -1606,7 +1606,7 @@ func (o *options) getResolverInfo(jobSpec *api.JobSpec) *load.ResolverInfo {
 
 func monitorNamespace(ctx context.Context, cancel func(), namespace string, client coreclientset.NamespaceInterface) {
 	for {
-		watcher, err := client.Watch(meta.ListOptions{
+		watcher, err := client.Watch(context.TODO(), meta.ListOptions{
 			TypeMeta:      meta.TypeMeta{},
 			FieldSelector: fields.Set{"metadata.name": namespace}.AsSelector().String(),
 			Watch:         true,

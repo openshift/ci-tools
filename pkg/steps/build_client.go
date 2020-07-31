@@ -1,6 +1,7 @@
 package steps
 
 import (
+	"context"
 	"io"
 
 	"k8s.io/client-go/rest"
@@ -35,5 +36,5 @@ func (c *buildClient) Logs(namespace, name string, options *buildapi.BuildLogOpt
 		Resource("builds").
 		SubResource("log").
 		VersionedParams(options, scheme.ParameterCodec).
-		Stream()
+		Stream(context.TODO())
 }

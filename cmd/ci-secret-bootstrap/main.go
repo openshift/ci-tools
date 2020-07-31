@@ -400,7 +400,7 @@ func writeSecrets(secretsMap map[string][]*coreapi.Secret, w io.Writer) error {
 	}
 	sort.Strings(clusters)
 	for _, cluster := range clusters {
-		if _, err := fmt.Fprintln(w, fmt.Sprintf("###%s###", cluster)); err != nil {
+		if _, err := fmt.Fprintf(w, "###%s###\n", cluster); err != nil {
 			return err
 		}
 		for _, secret := range secretsMap[cluster] {

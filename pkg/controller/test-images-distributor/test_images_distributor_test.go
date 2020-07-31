@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 
@@ -238,6 +239,23 @@ func TestReconcile(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: referenceImageStreamTag.Namespace},
 	}
 
+	expectedImageStream := &imagev1.ImageStream{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: referenceImageStreamTag.Namespace,
+			Name:      strings.Split(referenceImageStreamTag.Name, ":")[0],
+		},
+		Spec: imagev1.ImageStreamSpec{
+			LookupPolicy: imagev1.ImageLookupPolicy{
+				Local: true,
+			},
+		},
+	}
+	outdatedImageStream := func() *imagev1.ImageStream {
+		copy := expectedImageStream.DeepCopy()
+		copy.Spec.LookupPolicy.Local = false
+		return copy
+	}
+
 	ctx := context.Background()
 	verifyEverythingCreated := func(c ctrlruntimeclient.Client) error {
 		if err := c.Get(ctx, types.NamespacedName{Name: expectedNamespace.Name}, &corev1.Namespace{}); err != nil {
@@ -310,6 +328,18 @@ func TestReconcile(t *testing.T) {
 		if diff := cmp.Diff(expectedRole, actualRole, cmpopts.IgnoreFields(rbacv1.Role{}, "ResourceVersion", "Kind", "APIVersion")); diff != "" {
 			return fmt.Errorf("actual role differs from expected: %s", diff)
 		}
+
+		actualImageStream := &imagev1.ImageStream{}
+		imageStreamName := types.NamespacedName{
+			Namespace: imageStreamImport.Namespace,
+			Name:      strings.Split(imageStreamImport.Name, ":")[0],
+		}
+		if err := c.Get(ctx, imageStreamName, actualImageStream); err != nil {
+			return fmt.Errorf("failed to get imagestream %s: %w", imageStreamName.String(), err)
+		}
+		if diff := cmp.Diff(expectedImageStream, actualImageStream, cmpopts.IgnoreFields(imagev1.ImageStream{}, "ResourceVersion", "Kind", "APIVersion")); diff != "" {
+			return fmt.Errorf("actual imagestream differs from expected: %s", diff)
+		}
 		return nil
 	}
 
@@ -368,7 +398,7 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
-			name: "Outdated imageStreamtag, Namespace, pull secret and import and rbac are created",
+			name: "Outdated imageStreamtag, Namespace, pull secret, imagestream and import and rbac are created",
 			request: types.NamespacedName{
 				Namespace: "01_" + referenceImageStreamTag.Namespace,
 				Name:      referenceImageStreamTag.Name,
@@ -383,7 +413,7 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
-			name: "Outdated imageStreamtag, pull secret, import and rbac are created",
+			name: "Outdated imageStreamtag, pull secret, imagestream, import and rbac are created",
 			request: types.NamespacedName{
 				Namespace: "01_" + referenceImageStreamTag.Namespace,
 				Name:      referenceImageStreamTag.Name,
@@ -401,7 +431,7 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
-			name: "Outdated imageStreamtag and pull secret, pull secret is updated, import and rbac created",
+			name: "Outdated imageStreamtag and pull secret, pull secret is updated, imagestream import and rbac created",
 			request: types.NamespacedName{
 				Namespace: "01_" + referenceImageStreamTag.Namespace,
 				Name:      referenceImageStreamTag.Name,
@@ -420,7 +450,7 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
-			name: "Outdated imageStreamtag and rbac, rbac updated and import created",
+			name: "Outdated imageStreamtag and rbac, rbac updated, imagestream and import created",
 			request: types.NamespacedName{
 				Namespace: "01_" + referenceImageStreamTag.Namespace,
 				Name:      referenceImageStreamTag.Name,
@@ -441,6 +471,26 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
+			name: "Outdated Imagestream is updated, import is created",
+			request: types.NamespacedName{
+				Namespace: "01_" + referenceImageStreamTag.Namespace,
+				Name:      referenceImageStreamTag.Name,
+			},
+			registryClient: fakeclient.NewFakeClient(referenceImageStreamTag.DeepCopy()),
+			buildClusterClients: map[string]ctrlruntimeclient.Client{"01": bcc(fakeclient.NewFakeClient(
+				expectedNamespace.DeepCopy(),
+				expectedPullSecret.DeepCopy(),
+				outdatedImageStream(),
+				outdatedImageStreamTag(),
+			))},
+			verify: func(rc ctrlruntimeclient.Client, bc map[string]ctrlruntimeclient.Client, err error) error {
+				if err != nil {
+					return fmt.Errorf("unexpected error: %v", err)
+				}
+				return verifyEverythingCreated(bc["01"])
+			},
+		},
+		{
 			name: "Outdated imageStreamtag, import is created",
 			request: types.NamespacedName{
 				Namespace: "01_" + referenceImageStreamTag.Namespace,
@@ -451,6 +501,7 @@ func TestReconcile(t *testing.T) {
 				outdatedImageStreamTag(),
 				expectedNamespace.DeepCopy(),
 				expectedPullSecret.DeepCopy(),
+				expectedImageStream.DeepCopy(),
 			))},
 			verify: func(rc ctrlruntimeclient.Client, bc map[string]ctrlruntimeclient.Client, err error) error {
 				if err != nil {
@@ -470,6 +521,7 @@ func TestReconcile(t *testing.T) {
 				outdatedImageStreamTag(),
 				expectedNamespace.DeepCopy(),
 				expectedPullSecret.DeepCopy(),
+				expectedImageStream.DeepCopy(),
 			), func(c *imageImportStatusSettingClient) { c.failure = true },
 			)},
 			verify: func(rc ctrlruntimeclient.Client, bc map[string]ctrlruntimeclient.Client, err error) error {

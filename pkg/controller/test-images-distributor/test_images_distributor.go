@@ -248,6 +248,9 @@ func (r *reconciler) reconcile(req reconcile.Request, log *logrus.Entry) error {
 	if err := r.ensureCIOperatorRole(decoded.Namespace, client, log); err != nil {
 		return fmt.Errorf("failed to ensure role: %w", err)
 	}
+	if err := r.ensureImageStream(decoded, client, log); err != nil {
+		return fmt.Errorf("failed to ensure imagestream: %w", err)
+	}
 
 	isCurrent, err := r.isImageStreamTagCurrent(decoded, client, sourceImageStreamTag)
 	if err != nil {
@@ -390,6 +393,29 @@ func ciOperatorRoleBinding(namespace string) (*rbacv1.RoleBinding, crcontrolleru
 func (r *reconciler) ensureCIOperatorRoleBinding(namespace string, client ctrlruntimeclient.Client, log *logrus.Entry) error {
 	roleBinding, mutateFn := ciOperatorRoleBinding(namespace)
 	return upsertObject(r.ctx, client, roleBinding, mutateFn, log)
+}
+
+func imagestream(namespace, name string) (*imagev1.ImageStream, crcontrollerutil.MutateFn) {
+	stream := &imagev1.ImageStream{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespace,
+			Name:      name,
+		},
+	}
+	return stream, func() error {
+		stream.Spec.LookupPolicy.Local = true
+		return nil
+	}
+}
+
+func (r *reconciler) ensureImageStream(imagestreamTagName types.NamespacedName, client ctrlruntimeclient.Client, log *logrus.Entry) error {
+	colonSplit := strings.Split(imagestreamTagName.Name, ":")
+	if n := len(colonSplit); n != 2 {
+		return fmt.Errorf("when splitting imagestreamtagname %s by : expected two results, got %d", imagestreamTagName.Name, n)
+	}
+	namespace, name := imagestreamTagName.Namespace, colonSplit[0]
+	stream, mutateFn := imagestream(namespace, name)
+	return upsertObject(r.ctx, client, stream, mutateFn, log)
 }
 
 func (r *reconciler) pullSecret(namespace string) (*corev1.Secret, crcontrollerutil.MutateFn) {

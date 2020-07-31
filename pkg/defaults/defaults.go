@@ -224,7 +224,7 @@ func FromConfig(
 			step = release.ImportReleaseStep(resolveConfig.Name, value, false, config.Resources, podClient, imageClient, saGetter, rbacClient, artifactDir, jobSpec)
 		} else if testStep := rawStep.TestStepConfiguration; testStep != nil {
 			if test := testStep.MultiStageTestConfigurationLiteral; test != nil {
-				step = steps.MultiStageTestStep(*testStep, config, params, podClient, secretGetter, saGetter, rbacClient, artifactDir, jobSpec)
+				step = steps.MultiStageTestStep(*testStep, config, params, podClient, secretGetter, saGetter, rbacClient, imageClient, artifactDir, jobSpec)
 				if test.ClusterProfile != "" {
 					step = steps.LeaseStep(leaseClient, test.ClusterProfile.LeaseType(), step, jobSpec.Namespace, namespaceClient)
 				}

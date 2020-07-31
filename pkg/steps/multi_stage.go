@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 	coreapi "k8s.io/api/core/v1"
 	rbacapi "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -53,6 +54,7 @@ type multiStageTestStep struct {
 	secretClient       coreclientset.SecretsGetter
 	saClient           coreclientset.ServiceAccountsGetter
 	rbacClient         rbacclientset.RbacV1Interface
+	isClient           imageclientset.ImageStreamsGetter
 	artifactDir        string
 	jobSpec            *api.JobSpec
 	pre, test, post    []api.LiteralTestStep
@@ -68,10 +70,11 @@ func MultiStageTestStep(
 	secretClient coreclientset.SecretsGetter,
 	saClient coreclientset.ServiceAccountsGetter,
 	rbacClient rbacclientset.RbacV1Interface,
+	isClient imageclientset.ImageStreamsGetter,
 	artifactDir string,
 	jobSpec *api.JobSpec,
 ) api.Step {
-	return newMultiStageTestStep(testConfig, config, params, podClient, secretClient, saClient, rbacClient, artifactDir, jobSpec)
+	return newMultiStageTestStep(testConfig, config, params, podClient, secretClient, saClient, rbacClient, isClient, artifactDir, jobSpec)
 }
 
 func newMultiStageTestStep(
@@ -82,6 +85,7 @@ func newMultiStageTestStep(
 	secretClient coreclientset.SecretsGetter,
 	saClient coreclientset.ServiceAccountsGetter,
 	rbacClient rbacclientset.RbacV1Interface,
+	isClient imageclientset.ImageStreamsGetter,
 	artifactDir string,
 	jobSpec *api.JobSpec,
 ) *multiStageTestStep {
@@ -99,6 +103,7 @@ func newMultiStageTestStep(
 		secretClient:       secretClient,
 		saClient:           saClient,
 		rbacClient:         rbacClient,
+		isClient:           isClient,
 		artifactDir:        artifactDir,
 		jobSpec:            jobSpec,
 		pre:                ms.Pre,
@@ -179,6 +184,13 @@ func (s *multiStageTestStep) Requires() (ret []api.StepLink) {
 		if link, ok := step.FromImageTag(); ok {
 			internalLinks[link] = struct{}{}
 		}
+
+		for _, dependency := range step.Dependencies {
+			imageStream, name := s.parts(dependency)
+			if link, ok := utils.LinkForImage(imageStream, name); ok {
+				ret = append(ret, link)
+			}
+		}
 	}
 	for link := range internalLinks {
 		ret = append(ret, api.InternalImageLink(link))
@@ -195,6 +207,17 @@ func (s *multiStageTestStep) Requires() (ret []api.StepLink) {
 		ret = append(ret, api.ReleaseImagesLink(api.LatestReleaseName))
 	}
 	return
+}
+
+// parts returns the imageStream and tag name from a user-provided
+// reference to an image in the test namespace
+func (s multiStageTestStep) parts(dependency api.StepDependency) (string, string) {
+	if !strings.Contains(dependency.Name, ":") {
+		return s.imageStreamFor(dependency.Name), dependency.Name
+	} else {
+		parts := strings.Split(dependency.Name, ":")
+		return parts[0], parts[1]
+	}
 }
 
 func (s *multiStageTestStep) Creates() []api.StepLink { return nil }
@@ -321,6 +344,21 @@ func (s *multiStageTestStep) runSteps(
 	return utilerrors.NewAggregate(errs)
 }
 
+// imageStreamFor guesses at the ImageStream that will hold a tag.
+// We use this to decipher the user's intent when they provide a
+// naked tag in configuration; we support such behavior in order to
+// allow users a simpler workflow for the most common cases, like
+// referring to `pipeline:src`. If they refer to an ambiguous image,
+// however, they will get bad behavior and will need to specify an
+// ImageStrem as well, for instance release-initial:installer.
+func (s *multiStageTestStep) imageStreamFor(image string) string {
+	if s.config.IsPipelineImage(image) || s.config.BuildsImage(image) {
+		return api.PipelineImageStream
+	} else {
+		return api.StableImageStream
+	}
+}
+
 func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []coreapi.EnvVar,
 	hasPrevErrs bool) ([]coreapi.Pod, error) {
 	var ret []coreapi.Pod
@@ -335,11 +373,7 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 		if link, ok := step.FromImageTag(); ok {
 			image = fmt.Sprintf("%s:%s", api.PipelineImageStream, link)
 		} else {
-			if s.config.IsPipelineImage(image) || s.config.BuildsImage(image) {
-				image = fmt.Sprintf("%s:%s", api.PipelineImageStream, image)
-			} else {
-				image = fmt.Sprintf("%s:%s", api.StableImageStream, image)
-			}
+			image = fmt.Sprintf("%s:%s", s.imageStreamFor(image), image)
 		}
 		resources, err := resourcesFor(step.Resources)
 		if err != nil {
@@ -365,6 +399,12 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 		}...)
 		container.Env = append(container.Env, env...)
 		container.Env = append(container.Env, s.generateParams(step.Environment)...)
+		depEnv, depErrs := s.envForDependencies(step)
+		if len(depErrs) != 0 {
+			errs = append(errs, depErrs...)
+			continue
+		}
+		container.Env = append(container.Env, depEnv...)
 		if owner := s.jobSpec.Owner(); owner != nil {
 			pod.OwnerReferences = append(pod.OwnerReferences, *owner)
 		}
@@ -379,6 +419,23 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 		ret = append(ret, *pod)
 	}
 	return ret, utilerrors.NewAggregate(errs)
+}
+
+func (s *multiStageTestStep) envForDependencies(step api.LiteralTestStep) ([]coreapi.EnvVar, []error) {
+	var env []coreapi.EnvVar
+	var errs []error
+	for _, dependency := range step.Dependencies {
+		imageStream, name := s.parts(dependency)
+		ref, err := utils.ImageDigestFor(s.isClient, s.jobSpec.Namespace, imageStream, name)()
+		if err != nil {
+			errs = append(errs, fmt.Errorf("could not determine image pull spec for image %s on step %s", dependency.Name, step.As))
+			continue
+		}
+		env = append(env, coreapi.EnvVar{
+			Name: dependency.Env, Value: ref,
+		})
+	}
+	return env, errs
 }
 
 func addSecretWrapper(pod *coreapi.Pod) {

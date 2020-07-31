@@ -202,6 +202,12 @@ func IsReleaseStream(stream string) bool {
 	return strings.HasPrefix(stream, StableImageStream)
 }
 
+// IsReleasePayloadStream determines if the ImageStream holds
+// release paylaod images.
+func IsReleasePayloadStream(stream string) bool {
+	return stream == ReleaseImageStream
+}
+
 type StepNode struct {
 	Step     Step
 	Children []*StepNode

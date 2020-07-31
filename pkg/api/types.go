@@ -563,6 +563,9 @@ type LiteralTestStep struct {
 	Credentials []CredentialReference `json:"credentials,omitempty"`
 	// Environment lists parameters that should be set by the test.
 	Environment []StepParameter `json:"env,omitempty"`
+	// Dependencies lists images which must be available before the test runs
+	// and the environment variables which are used to expose their pull specs.
+	Dependencies []StepDependency `json:"dependencies,omitempty"`
 	// OptionalOnSuccess defines if this step should be skipped as long
 	// as all `pre` and `test` steps were successful and AllowSkipOnSuccess
 	// flag is set to true in MultiStageTestConfiguration. This option is
@@ -588,6 +591,15 @@ type CredentialReference struct {
 	Name string `json:"name"`
 	// MountPath is where the secret should be mounted.
 	MountPath string `json:"mount_path"`
+}
+
+// StepDependency defines a dependency on an image and the environment variable
+// used to expose the image's pull spec to the step.
+type StepDependency struct {
+	// Name is the tag or stream:tag that this dependency references
+	Name string `json:"name"`
+	// Env is the environment variable that the image's pull spec is exposed with
+	Env string `json:"env"`
 }
 
 // FromImageTag returns the internal name for the image tag that will be used

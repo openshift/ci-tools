@@ -469,6 +469,7 @@ func validateLiteralTestStepCommon(fieldRoot string, step LiteralTestStep, seen 
 	if err := validateParameters(fieldRoot, step.Environment, env); err != nil {
 		ret = append(ret, err)
 	}
+	ret = append(ret, validateDependencies(fieldRoot, step.Dependencies)...)
 	return
 }
 
@@ -549,6 +550,26 @@ func validateParameters(fieldRoot string, params []StepParameter, env TestEnviro
 		return fmt.Errorf("%s: unresolved parameter(s): %s", fieldRoot, missing)
 	}
 	return nil
+}
+
+func validateDependencies(fieldRoot string, dependencies []StepDependency) []error {
+	var errs []error
+	env := sets.NewString()
+	for i, dependency := range dependencies {
+		if dependency.Name == "" {
+			errs = append(errs, fmt.Errorf("%s.dependencies[%d].name must be set", fieldRoot, i))
+		} else if strings.Contains(dependency.Name, ":") && len(strings.Split(dependency.Name, ":")) != 2 {
+			errs = append(errs, fmt.Errorf("%s.dependencies[%d].name must take the `tag` or `stream:tag` form, not %q", fieldRoot, i, dependency.Name))
+		}
+		if dependency.Env == "" {
+			errs = append(errs, fmt.Errorf("%s.dependencies[%d].env must be set", fieldRoot, i))
+		} else if env.Has(dependency.Env) {
+			errs = append(errs, fmt.Errorf("%s.dependencies[%d].env targets an environment variable that is already set by another dependency", fieldRoot, i))
+		} else {
+			env.Insert(dependency.Env)
+		}
+	}
+	return errs
 }
 
 func validateReleaseBuildConfiguration(input *ReleaseBuildConfiguration, org, repo string) []error {

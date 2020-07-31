@@ -160,3 +160,62 @@ func TestEnvVarFor(t *testing.T) {
 		}
 	}
 }
+
+func TestLinkForImage(t *testing.T) {
+	var testCases = []struct {
+		stream, tag string
+		expected    api.StepLink
+		ok          bool
+	}{
+		{
+			stream:   "pipeline",
+			tag:      "src",
+			expected: api.InternalImageLink(api.PipelineImageStreamTagReferenceSource),
+			ok:       true,
+		},
+		{
+			stream:   "pipeline",
+			tag:      "rpms",
+			expected: api.InternalImageLink(api.PipelineImageStreamTagReferenceRPMs),
+			ok:       true,
+		},
+		{
+			stream:   "stable",
+			tag:      "installer",
+			expected: api.ReleaseImagesLink(api.LatestReleaseName),
+			ok:       true,
+		},
+		{
+			stream:   "stable-initial",
+			tag:      "cli",
+			expected: api.ReleaseImagesLink(api.InitialReleaseName),
+			ok:       true,
+		},
+		{
+			stream:   "stable-whatever",
+			tag:      "hyperconverged-cluster-operator",
+			expected: api.ReleaseImagesLink("whatever"),
+			ok:       true,
+		},
+		{
+			stream:   "release",
+			tag:      "latest",
+			expected: api.ReleasePayloadImageLink(api.LatestReleaseName),
+			ok:       true,
+		},
+		{
+			stream: "crazy",
+			tag:    "tag",
+			ok:     false,
+		},
+	}
+	for _, testCase := range testCases {
+		link, ok := LinkForImage(testCase.stream, testCase.tag)
+		if ok != testCase.ok {
+			t.Errorf("incorrect stream validity check for %s:%s", testCase.stream, testCase.tag)
+		}
+		if diff := cmp.Diff(link, testCase.expected, api.Comparer()); diff != "" {
+			t.Errorf("got incorrect link for %s:%s: %v", testCase.stream, testCase.tag, diff)
+		}
+	}
+}

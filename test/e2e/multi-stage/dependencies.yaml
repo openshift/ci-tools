@@ -1,0 +1,76 @@
+base_images:
+  os:
+    name: centos
+    namespace: openshift
+    tag: '7'
+build_root:
+  image_stream_tag:
+    name: release
+    namespace: openshift
+    tag: golang-1.14
+resources:
+  '*':
+    limits:
+      cpu: 500m
+    requests:
+      cpu: 10m
+tag_specification:
+  namespace: ocp
+  name: "4.5"
+releases:
+  custom:
+    candidate:
+      product: okd
+      version: "4.3"
+tests:
+  - as: with-dependencies
+    steps:
+      test:
+        - as: depend-on-stuff
+          commands: |
+            if [[ -z $SOURCE ]]; then
+              echo "ERROR: $SOURCE unset!"
+              exit 1
+            elif [[ ! $SOURCE =~ *pipeline@* ]]; then
+              echo "ERROR: SOURCE set to something unexpected: $SOURCE!"
+              exit 1
+            fi
+            if [[ -z $INSTALLER ]]; then
+              echo "ERROR: INSTALLER unset!"
+              exit 1
+            elif [[ ! $INSTALLER =~ *stable@* ]]; then
+              echo "ERROR: INSTALLER set to something unexpected: $INSTALLER!"
+              exit 1
+            fi
+            if [[ -z $COMMAND ]]; then
+              echo "ERROR: COMMAND unset!"
+              exit 1
+            elif [[ ! $COMMAND =~ *stable-initial@* ]]; then
+              echo "ERROR: COMMAND set to something unexpected: $COMMAND!"
+              exit 1
+            fi
+            if [[ -z $RELEASE ]]; then
+              echo "ERROR: RELEASE unset!"
+              exit 1
+            elif [[ ! $RELEASE =~ *release@* ]]; then
+              echo "ERROR: RELEASE set to something unexpected: $RELEASE!"
+              exit 1
+            fi
+          from: os
+          resources:
+            requests:
+              cpu: 100m
+              memory: 200Mi
+          dependencies:
+          - name: "src"
+            env: "SOURCE"
+          - name: "stable:installer"
+            env: "INSTALLER"
+          - name: "stable-initial:cli"
+            env: "COMMAND"
+          - name: "release:custom"
+            env: "RELEASE"
+zz_generated_metadata:
+  branch: master
+  org: test
+  repo: test

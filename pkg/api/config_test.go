@@ -1487,3 +1487,48 @@ func errListMessagesEqual(a, b []error) bool {
 	}
 	return true
 }
+
+func TestValidateDependencies(t *testing.T) {
+	var testCases = []struct {
+		name   string
+		input  []StepDependency
+		output []error
+	}{
+		{
+			name:  "no dependencies",
+			input: nil,
+		},
+		{
+			name: "valid dependencies",
+			input: []StepDependency{
+				{Name: "src", Env: "SOURCE"},
+				{Name: "stable:installer", Env: "INSTALLER"},
+			},
+		},
+		{
+			name: "invalid dependencies",
+			input: []StepDependency{
+				{Name: "", Env: ""},
+				{Name: "src", Env: "SOURCE"},
+				{Name: "src", Env: "SOURCE"},
+				{Name: "src:lol:oops", Env: "WHOA"},
+			},
+			output: []error{
+				errors.New("root.dependencies[0].name must be set"),
+				errors.New("root.dependencies[0].env must be set"),
+				errors.New("root.dependencies[2].env targets an environment variable that is already set by another dependency"),
+				errors.New("root.dependencies[3].name must take the `tag` or `stream:tag` form, not \"src:lol:oops\""),
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if actual, expected := validateDependencies("root", testCase.input), testCase.output; !reflect.DeepEqual(actual, expected) {
+				t.Errorf("%s: got incorrect errors: %s", testCase.name, cmp.Diff(actual, expected, cmp.Comparer(func(x, y error) bool {
+					return x.Error() == y.Error()
+				})))
+			}
+		})
+	}
+}

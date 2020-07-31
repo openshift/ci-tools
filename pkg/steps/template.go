@@ -539,38 +539,45 @@ func waitForPodCompletionOrTimeout(ctx context.Context, podClient coreclientset.
 		return false, appendLogToError(fmt.Errorf("the pod %s/%s failed after %s (failed containers: %s): %s", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", "), podReason(pod)), podMessages(pod))
 	}
 	done := ctx.Done()
+	podCheckTicker := time.NewTicker(time.Minute)
+	defer podCheckTicker.Stop()
 	for {
-		var event watch.Event
-		var ok bool
 		select {
 		case <-done:
 			return false, ctx.Err()
-		case event, ok = <-watcher.ResultChan():
-		}
-		if !ok {
-			// restart
-			return true, nil
-		}
-		pod, ok := event.Object.(*coreapi.Pod)
-		if !ok {
-			log.Printf("error: Unrecognized event in watch: %v %#v", event.Type, event.Object)
-			continue
-		}
-		podLogNewFailedContainers(podClient, pod, completed, notifier, skipLogs)
-		if podJobIsOK(pod) {
-			if !skipLogs {
-				log.Printf("Pod %s succeeded after %s", pod.Name, podDuration(pod).Truncate(time.Second))
+		// Check minutely if we ran into the pod timeout
+		case <-podCheckTicker.C:
+			pod, err := podClient.Get(name, meta.GetOptions{})
+			if err != nil {
+				log.Printf("warning: failed to get pod %s: %v", name, err)
+				continue
 			}
-			return false, nil
-		}
-		if podJobIsFailed(pod) {
-			return false, appendLogToError(fmt.Errorf("the pod %s/%s failed after %s (failed containers: %s): %s", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", "), podReason(pod)), podMessages(pod))
-		}
-		if event.Type == watch.Deleted {
-			return false, appendLogToError(fmt.Errorf("the pod %s/%s was deleted without completing after %s (failed containers: %s)", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", ")), podMessages(pod))
-		}
-		if !isPodRunning(pod) && time.Since(pod.CreationTimestamp.Time) > 30*time.Minute {
-			return false, fmt.Errorf("pod didn't start running within 30 minutes: %s", getReasonsForUnreadyContainers(pod))
+			if !isPodRunning(pod) && time.Since(pod.CreationTimestamp.Time) > 30*time.Minute {
+				return false, fmt.Errorf("pod didn't start running within 30 minutes: %s", getReasonsForUnreadyContainers(pod))
+			}
+		case event, ok := <-watcher.ResultChan():
+			if !ok {
+				// restart
+				return true, nil
+			}
+			pod, ok := event.Object.(*coreapi.Pod)
+			if !ok {
+				log.Printf("error: Unrecognized event in watch: %v %#v", event.Type, event.Object)
+				continue
+			}
+			podLogNewFailedContainers(podClient, pod, completed, notifier, skipLogs)
+			if podJobIsOK(pod) {
+				if !skipLogs {
+					log.Printf("Pod %s succeeded after %s", pod.Name, podDuration(pod).Truncate(time.Second))
+				}
+				return false, nil
+			}
+			if podJobIsFailed(pod) {
+				return false, appendLogToError(fmt.Errorf("the pod %s/%s failed after %s (failed containers: %s): %s", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", "), podReason(pod)), podMessages(pod))
+			}
+			if event.Type == watch.Deleted {
+				return false, appendLogToError(fmt.Errorf("the pod %s/%s was deleted without completing after %s (failed containers: %s)", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", ")), podMessages(pod))
+			}
 		}
 	}
 }

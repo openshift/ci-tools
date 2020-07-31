@@ -922,7 +922,7 @@ k8s.io/klog
 k8s.io/kube-openapi/pkg/util/proto
 # k8s.io/kubernetes v1.13.0
 k8s.io/kubernetes/pkg/apis/core
-# k8s.io/test-infra v0.0.0-20200725055416-2388ca759f42
+# k8s.io/test-infra v0.0.0-20200731144508-66a683361db8
 k8s.io/test-infra/experiment/autobumper/bumper
 k8s.io/test-infra/experiment/image-bumper/bumper
 k8s.io/test-infra/ghproxy/ghcache
@@ -947,6 +947,7 @@ k8s.io/test-infra/prow/gcsupload
 k8s.io/test-infra/prow/genfiles
 k8s.io/test-infra/prow/gerrit/client
 k8s.io/test-infra/prow/git
+k8s.io/test-infra/prow/git/localgit
 k8s.io/test-infra/prow/git/v2
 k8s.io/test-infra/prow/gitattributes
 k8s.io/test-infra/prow/github

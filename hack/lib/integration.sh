@@ -93,20 +93,21 @@ function os::integration::configresolver::generation::registry() {
 readonly -f os::integration::configresolver::generation::registry
 
 # os::integration::configresolver::wait_for_config_update polls until the config
-# resolver has updated to a newer generation than the provided one.
+# resolver has updated to the specified revision.
 function os::integration::configresolver::wait_for_config_update() {
-    local generation="$1"
-    os::log::info "Waiting for the config resolver to update..."
-    os::cmd::try_until_success "test \$( os::integration::configresolver::generation::config ) -gt ${generation}"
+    local expected_revision="$1"
+    os::log::info "Waiting for the config resolver to update to revision $expected_revision..."
+    os::cmd::try_until_success "test \$( os::integration::configresolver::generation::config ) -eq ${expected_revision}"
 }
 readonly -f os::integration::configresolver::wait_for_config_update
 
 # os::integration::configresolver::wait_for_registry_update polls until the config
-# resolver has updated to a newer generation than the provided one.
+# resolver has updated to the specified revision.
 function os::integration::configresolver::wait_for_registry_update() {
     local generation="$1"
-    os::log::info "Waiting for the config resolver to update..."
-    os::cmd::try_until_success "test \$( os::integration::configresolver::generation::registry ) -gt ${generation}"
+    local expected_revision="$1"
+    os::log::info "Waiting for the config resolver to update to revision $expected_revision..."
+    os::cmd::try_until_success "test \$( os::integration::configresolver::generation::registry ) -eq $expected_revision"
 }
 readonly -f os::integration::configresolver::wait_for_registry_update
 

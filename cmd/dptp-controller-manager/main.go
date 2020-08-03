@@ -8,7 +8,6 @@ import (
 	"time"
 
 	imagev1 "github.com/openshift/api/image/v1"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -186,7 +185,7 @@ func main() {
 		logrus.Infof("Loaded %q context from in-cluster config", appCIContextName)
 	}
 
-	ciOPConfigAgent, err := agents.NewConfigAgent(opts.ciOperatorconfigPath, prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"error"}))
+	ciOPConfigAgent, err := agents.NewConfigAgent(opts.ciOperatorconfigPath)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to construct ci-opeartor config agent")
 	}

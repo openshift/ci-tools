@@ -72,10 +72,31 @@ func NewFakeConfigAgent(configs load.ByOrgRepo) ConfigAgent {
 	return a
 }
 
+type ConfigAgentOptions struct {
+	// ErrorMetric holds the CounterVec to count errors on. It must include a `error` label
+	// or the agent panics on the first error.
+	ErrorMetric *prometheus.CounterVec
+}
+
+type ConfigAgentOption func(*ConfigAgentOptions)
+
+func WithConfigMetrics(m *prometheus.CounterVec) ConfigAgentOption {
+	return func(o *ConfigAgentOptions) {
+		o.ErrorMetric = m
+	}
+}
+
 // NewConfigAgent returns a ConfigAgent interface that automatically reloads when
 // configs are changed on disk.
-func NewConfigAgent(configPath string, errorMetrics *prometheus.CounterVec) (ConfigAgent, error) {
-	a := &configAgent{configPath: configPath, lock: &sync.RWMutex{}, errorMetrics: errorMetrics}
+func NewConfigAgent(configPath string, opts ...ConfigAgentOption) (ConfigAgent, error) {
+	opt := &ConfigAgentOptions{}
+	for _, o := range opts {
+		o(opt)
+	}
+	if opt.ErrorMetric == nil {
+		opt.ErrorMetric = prometheus.NewCounterVec(prometheus.CounterOpts{Name: "config_agent_errors_total"}, []string{"error"})
+	}
+	a := &configAgent{configPath: configPath, lock: &sync.RWMutex{}, errorMetrics: opt.ErrorMetric}
 	a.reloadConfig = a.loadFilenameToConfig
 	// Load config once so we fail early if that doesn't work and are ready as soon as we return
 	if err := a.reloadConfig(); err != nil {

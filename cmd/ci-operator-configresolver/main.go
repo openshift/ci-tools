@@ -203,7 +203,7 @@ func main() {
 	health := pjutil.NewHealth()
 	metrics.ExposeMetrics("ci-operator-configresolver", prowConfig.PushGateway{}, flagutil.DefaultMetricsPort)
 
-	configAgent, err := agents.NewConfigAgent(o.configPath, configresolverMetrics.ErrorRate)
+	configAgent, err := agents.NewConfigAgent(o.configPath, agents.WithConfigMetrics(configresolverMetrics.ErrorRate))
 	if err != nil {
 		logrus.Fatalf("Failed to get config agent: %v", err)
 	}

@@ -10,19 +10,16 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/openshift/imagebuilder"
 	dockercmd "github.com/openshift/imagebuilder/dockerfile/command"
 	"github.com/pmezard/go-difflib/difflib"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/github"
-	"github.com/openshift/ci-tools/pkg/load/agents"
 )
 
 type options struct {
@@ -42,15 +39,6 @@ func gatherOptions() *options {
 func main() {
 	opts := gatherOptions()
 	opts.majorMinor.major = "4"
-
-	configAgent, err := agents.NewConfigAgent(opts.configDir, 2*time.Minute, prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"error"}))
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to construct config agent")
-	}
-	pullSpecForOrgRepoBranchDockerfileGetter, err := pullSpecForOrgRepoBranchDockerfileFactory(configAgent)
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to get pullSpecForOrgRepoBranchDockerfileGetter")
-	}
 
 	configsUnverified, err := gatherAllOCPImageConfigs(opts.ocpBuildDataRepoDir, opts.majorMinor)
 	if err != nil {
@@ -74,7 +62,7 @@ func main() {
 			errs = append(errs, fmt.Errorf("error validating %s: %w", cfg.SourceFileName, err))
 			continue
 		}
-		if err := dereferenceConfig(&cfg, fmt.Sprintf("release-%s.%s", opts.majorMinor.major, opts.majorMinor.minor), configsUnverified, streamMap, groupYAML, pullSpecForOrgRepoBranchDockerfileGetter); err != nil {
+		if err := dereferenceConfig(&cfg, opts.majorMinor, configsUnverified, streamMap, groupYAML); err != nil {
 			errs = append(errs, fmt.Errorf("failed dereferencing config for %s: %w", cfg.SourceFileName, err))
 			continue
 		}
@@ -112,11 +100,10 @@ func main() {
 
 func dereferenceConfig(
 	config *ocpImageConfig,
-	branch string,
+	majorMinor majorMinor,
 	allConfigs map[string]ocpImageConfig,
 	streamMap streamMap,
 	groupYAML groupYAML,
-	pullSpecGetter pullSpecForOrgRepoBranchDockerfileGetter,
 ) error {
 	var errs []error
 
@@ -128,7 +115,7 @@ func dereferenceConfig(
 		}
 	}
 	if config.From.Member != "" {
-		config.From.Stream, err = streamForMember(config.From.Member, branch, allConfigs, groupYAML, pullSpecGetter)
+		config.From.Stream, err = streamForMember(config.From.Member, majorMinor, allConfigs)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("failed to replace .from.member: %w", err))
 		}
@@ -146,7 +133,7 @@ func dereferenceConfig(
 			}
 		}
 		if config.From.Builder[blder].Member != "" {
-			config.From.Builder[blder].Stream, err = streamForMember(config.From.Builder[blder].Member, branch, allConfigs, groupYAML, pullSpecGetter)
+			config.From.Builder[blder].Stream, err = streamForMember(config.From.Builder[blder].Member, majorMinor, allConfigs)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("failed to replace .from.%d.member: %w", blder, err))
 			}
@@ -172,55 +159,20 @@ func dereferenceConfig(
 
 func streamForMember(
 	memberName string,
-	branch string,
+	majorMinor majorMinor,
 	allConfigs map[string]ocpImageConfig,
-	groupYAML groupYAML,
-	pullSpecGetter pullSpecForOrgRepoBranchDockerfileGetter,
 ) (string, error) {
 	cfgFile := configFileNamberForMemberString(memberName)
 	cfg, cfgExists := allConfigs[cfgFile]
 	if !cfgExists {
 		return "", fmt.Errorf("no config %s found", cfgFile)
 	}
-	orgRepo, err := getPublicRepo(cfg.orgRepo(), groupYAML.PublicUpstreams)
-	if err != nil {
-		return "", fmt.Errorf("failed to replace %s with its public upstream: %w", cfg.orgRepo(), err)
-	}
-	orgRepoSplit := strings.Split(orgRepo, "/")
-	if n := len(orgRepoSplit); n != 2 {
-		return "", fmt.Errorf("splitting orgRepo string %s by / did not yield two but %d results. %s", orgRepo, n, cfg.orgRepo())
-	}
-	result, err := pullSpecGetter(orgRepoSplit[0], orgRepoSplit[1], branch, cfg.dockerfile())
-	if err != nil {
-		return "", fmt.Errorf("failed to get pullspec for promotiontarget for %s/%s#%s:%s: %w", orgRepoSplit[0], orgRepoSplit[1], branch, cfg.dockerfile(), err)
-	}
-
-	return result, nil
+	streamTagName := strings.TrimPrefix(cfg.Name, "openshift/ose-")
+	return fmt.Sprintf("registry.svc.ci.openshift.org/ocp/%s.%s:%s", majorMinor.major, majorMinor.minor, streamTagName), nil
 }
 
 func configFileNamberForMemberString(memberString string) string {
 	return "images/" + memberString + ".yml"
-}
-
-func getPublicRepo(orgRepo string, mappings []publicPrivateMapping) string {
-	orgRepo = "https://github.com/" + orgRepo
-	var replacementFrom, replacementTo string
-	for _, mapping := range mappings {
-		if !strings.HasPrefix(orgRepo, mapping.Private) {
-			continue
-		}
-		if len(replacementFrom) > len(mapping.Private) {
-			continue
-		}
-		replacementFrom = mapping.Private
-		replacementTo = mapping.Public
-	}
-
-	if replacementTo == "" {
-		return strings.TrimPrefix(orgRepo, "https://github.com/")
-	}
-
-	return strings.TrimPrefix(strings.Replace(orgRepo, replacementFrom, replacementTo, 1), "https://github.com/")
 }
 
 func replaceStream(streamName string, streamMap streamMap) (string, error) {

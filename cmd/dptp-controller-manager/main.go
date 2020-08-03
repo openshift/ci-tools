@@ -271,7 +271,7 @@ func main() {
 		if opts.testImagesDistributorOptions.imagePullSecretPath == "" {
 			logrus.Fatal("The testImagesDistributor requires the --testImagesDistributorOptions.imagePullSecretPath flag to be set ")
 		}
-		registryConfigAgent, err := agents.NewRegistryAgent(opts.stepConfigPath, prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"error"}), true)
+		registryConfigAgent, err := agents.NewRegistryAgent(opts.stepConfigPath)
 		if err != nil {
 			logrus.WithError(err).Fatal("failed to construct registryAgent")
 		}

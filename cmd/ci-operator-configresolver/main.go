@@ -208,7 +208,7 @@ func main() {
 		logrus.Fatalf("Failed to get config agent: %v", err)
 	}
 
-	registryAgent, err := agents.NewRegistryAgent(o.registryPath, configresolverMetrics.ErrorRate, o.flatRegistry)
+	registryAgent, err := agents.NewRegistryAgent(o.registryPath, agents.WithRegistryMetrics(configresolverMetrics.ErrorRate), agents.WithRegistryFlat(o.flatRegistry))
 	if err != nil {
 		logrus.Fatalf("Failed to get registry agent: %v", err)
 	}

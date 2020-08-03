@@ -7,6 +7,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
+	utilpointer "k8s.io/utils/pointer"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/load"
@@ -48,10 +49,44 @@ func init() {
 	prometheus.MustRegister(registryReloadTimeMetric)
 }
 
+type RegistryAgentOptions struct {
+	// ErrorMetric holds the CounterVec to count errors on. It must include a `error` label
+	// or the agent panics on the first error.
+	ErrorMetric *prometheus.CounterVec
+	// FlatRegistry describes if the registry is flat, which means org/repo/branch info can not be inferred
+	// from the filepath. Defaults to true.
+	FlatRegistry *bool
+}
+
+type RegistryAgentOption func(*RegistryAgentOptions)
+
+func WithRegistryMetrics(m *prometheus.CounterVec) RegistryAgentOption {
+	return func(o *RegistryAgentOptions) {
+		o.ErrorMetric = m
+	}
+}
+
+func WithRegistryFlat(v bool) RegistryAgentOption {
+	return func(o *RegistryAgentOptions) {
+		o.FlatRegistry = &v
+	}
+}
+
 // NewRegistryAgent returns a RegistryAgent interface that automatically reloads when
 // the registry is changed on disk.
-func NewRegistryAgent(registryPath string, errorMetrics *prometheus.CounterVec, flatRegistry bool) (RegistryAgent, error) {
-	a := &registryAgent{registryPath: registryPath, lock: &sync.RWMutex{}, errorMetrics: errorMetrics, flatRegistry: flatRegistry}
+func NewRegistryAgent(registryPath string, opts ...RegistryAgentOption) (RegistryAgent, error) {
+	opt := &RegistryAgentOptions{}
+	for _, o := range opts {
+		o(opt)
+	}
+	if opt.ErrorMetric == nil {
+		opt.ErrorMetric = prometheus.NewCounterVec(prometheus.CounterOpts{Name: "registry_agent_errors_total"}, []string{"error"})
+	}
+	if opt.FlatRegistry == nil {
+		opt.FlatRegistry = utilpointer.BoolPtr(true)
+	}
+
+	a := &registryAgent{registryPath: registryPath, lock: &sync.RWMutex{}, errorMetrics: opt.ErrorMetric, flatRegistry: *opt.FlatRegistry}
 	// Load config once so we fail early if that doesn't work and are ready as soon as we return
 	if err := a.loadRegistry(); err != nil {
 		return nil, fmt.Errorf("failed to load registry: %w", err)

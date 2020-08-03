@@ -217,7 +217,7 @@ func getPublicRepo(orgRepo string, mappings []publicPrivateMapping) (string, err
 	}
 
 	if replacementTo == "" {
-		return "", errors.New("no matching replacement found")
+		return strings.TrimPrefix(orgRepo, "https://github.com/"), nil
 	}
 
 	return strings.TrimPrefix(strings.Replace(orgRepo, replacementFrom, replacementTo, 1), "https://github.com/"), nil

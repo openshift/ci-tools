@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"sort"
 	"strconv"
 
 	"github.com/sirupsen/logrus"
@@ -391,6 +392,16 @@ func getClonesTemplateData(bugID int, client bugzilla.Client, allTargetVersions 
 	if err := g.Wait(); err != nil {
 		return nil, http.StatusInternalServerError, err
 	}
+	sort.SliceStable(clones, func(i, j int) bool {
+		if clones[i].TargetRelease == nil && clones[j].TargetRelease == nil {
+			return false
+		} else if clones[i].TargetRelease == nil {
+			return true
+		} else if clones[j].TargetRelease == nil {
+			return false
+		}
+		return clones[i].TargetRelease[0] < clones[j].TargetRelease[0]
+	})
 	wrpr := ClonesTemplateData{
 		Bug:          bug,
 		Clones:       clones,

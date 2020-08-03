@@ -186,7 +186,7 @@ func main() {
 		logrus.Infof("Loaded %q context from in-cluster config", appCIContextName)
 	}
 
-	ciOPConfigAgent, err := agents.NewConfigAgent(opts.ciOperatorconfigPath, 2*time.Minute, prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"error"}))
+	ciOPConfigAgent, err := agents.NewConfigAgent(opts.ciOperatorconfigPath, prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"error"}))
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to construct ci-opeartor config agent")
 	}
@@ -271,7 +271,7 @@ func main() {
 		if opts.testImagesDistributorOptions.imagePullSecretPath == "" {
 			logrus.Fatal("The testImagesDistributor requires the --testImagesDistributorOptions.imagePullSecretPath flag to be set ")
 		}
-		registryConfigAgent, err := agents.NewRegistryAgent(opts.stepConfigPath, 2*time.Minute, prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"error"}), true)
+		registryConfigAgent, err := agents.NewRegistryAgent(opts.stepConfigPath, prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"error"}), true)
 		if err != nil {
 			logrus.WithError(err).Fatal("failed to construct registryAgent")
 		}

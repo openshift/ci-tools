@@ -73,8 +73,8 @@ func NewFakeConfigAgent(configs load.ByOrgRepo) ConfigAgent {
 }
 
 // NewConfigAgent returns a ConfigAgent interface that automatically reloads when
-// configs are changed on disk. The second argument does nothing.
-func NewConfigAgent(configPath string, _ time.Duration, errorMetrics *prometheus.CounterVec) (ConfigAgent, error) {
+// configs are changed on disk.
+func NewConfigAgent(configPath string, errorMetrics *prometheus.CounterVec) (ConfigAgent, error) {
 	a := &configAgent{configPath: configPath, lock: &sync.RWMutex{}, errorMetrics: errorMetrics}
 	a.reloadConfig = a.loadFilenameToConfig
 	// Load config once so we fail early if that doesn't work and are ready as soon as we return

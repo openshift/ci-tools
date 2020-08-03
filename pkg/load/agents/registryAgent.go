@@ -49,8 +49,8 @@ func init() {
 }
 
 // NewRegistryAgent returns a RegistryAgent interface that automatically reloads when
-// the registry is changed on disk. The second argument does nothing.
-func NewRegistryAgent(registryPath string, _ time.Duration, errorMetrics *prometheus.CounterVec, flatRegistry bool) (RegistryAgent, error) {
+// the registry is changed on disk.
+func NewRegistryAgent(registryPath string, errorMetrics *prometheus.CounterVec, flatRegistry bool) (RegistryAgent, error) {
 	a := &registryAgent{registryPath: registryPath, lock: &sync.RWMutex{}, errorMetrics: errorMetrics, flatRegistry: flatRegistry}
 	// Load config once so we fail early if that doesn't work and are ready as soon as we return
 	if err := a.loadRegistry(); err != nil {

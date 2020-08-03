@@ -30,7 +30,7 @@ os::integration::configresolver::check_log
 
 generation="$( os::integration::configresolver::generation::config )"
 mv "${BASETMPDIR}/configs2/release-4.2/openshift-installer-release-4.2-golang111.yaml" "${BASETMPDIR}/configs/release-4.2/openshift-installer-release-4.2.yaml"
-os::integration::configresolver::wait_for_config_update "${generation}"
+os::integration::configresolver::wait_for_config_update "$(($generation+1))"
 os::cmd::expect_success "curl 'http://127.0.0.1:8080/config?org=openshift&repo=installer&branch=release-4.2' >${actual}/openshift-installer-release-4.2-golang111.json"
 os::integration::compare "${actual}/openshift-installer-release-4.2-golang111.json" "${expected}/openshift-installer-release-4.2-golang111.json"
 os::integration::configresolver::check_log
@@ -41,7 +41,7 @@ mv "${BASETMPDIR}/multistage-registry/registry2/ipi/install/install/ipi-install-
 mv "${BASETMPDIR}/multistage-registry/registry2/ipi/install/install/ipi-install-install-ref.yaml"  "${BASETMPDIR}/multistage-registry/registry/ipi/install/install/ipi-install-install-ref.yaml"
 mv "${BASETMPDIR}/multistage-registry/registry2/ipi/install/rbac/ipi-install-rbac-commands.sh"  "${BASETMPDIR}/multistage-registry/registry/ipi/install/rbac/ipi-install-rbac-commands.sh"
 rm "${BASETMPDIR}/multistage-registry/registry/ipi/install/with-parameter/ipi-install-with-parameter-chain.yaml"
-os::integration::configresolver::wait_for_registry_update "${generation}"
+os::integration::configresolver::wait_for_registry_update "$(($generation+5))"
 os::cmd::expect_success "curl 'http://127.0.0.1:8080/config?org=openshift&repo=installer&branch=release-4.2' >${actual}/openshift-installer-release-4.2-regChange.json"
 os::integration::compare "${actual}/openshift-installer-release-4.2-regChange.json" "${expected}/openshift-installer-release-4.2-regChange.json"
 os::integration::configresolver::check_log
@@ -54,13 +54,13 @@ rm "${BASETMPDIR}/ci-op-configmaps/master/..data"
 os::integration::configresolver::generation::config
 ln -s "${BASETMPDIR}/ci-op-configmaps/master/..2019_11_15_19_57_20.547184898" "${BASETMPDIR}/ci-op-configmaps/master/..data"
 os::integration::configresolver::generation::config
-os::integration::configresolver::wait_for_config_update "${generation}"
+os::integration::configresolver::wait_for_config_update "$(($generation+1))"
 os::integration::configresolver::check_log
 
 generation="$( os::integration::configresolver::generation::registry )"
 rm "${BASETMPDIR}/multistage-registry/configmap/..data"
 ln -s "${BASETMPDIR}/multistage-registry/configmap/..2019_11_15_19_57_20.547184898" "${BASETMPDIR}/multistage-registry/configmap/..data"
-os::integration::configresolver::wait_for_registry_update "${generation}"
+os::integration::configresolver::wait_for_registry_update "$((generation+1))"
 os::integration::configresolver::check_log
 
 os::test::junit::declare_suite_end

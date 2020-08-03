@@ -9,11 +9,9 @@ import (
 	"gopkg.in/fsnotify.v1"
 	"k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/interrupts"
-
-	"github.com/openshift/ci-tools/pkg/coalescer"
 )
 
-func startWatchers(path string, c coalescer.Coalescer, recordError func(string)) error {
+func startWatchers(path string, callback func() error, recordError func(string)) error {
 	cms, dirs, err := config.ListCMsAndDirs(path)
 	if err != nil {
 		return err
@@ -24,7 +22,7 @@ func startWatchers(path string, c coalescer.Coalescer, recordError func(string))
 	}
 	var watchers []func(context.Context)
 	for cm := range cms {
-		watcher, err := config.GetCMMountWatcher(c.Run, errFunc, cm)
+		watcher, err := config.GetCMMountWatcher(callback, errFunc, cm)
 		if err != nil {
 			return err
 		}
@@ -33,7 +31,7 @@ func startWatchers(path string, c coalescer.Coalescer, recordError func(string))
 	if len(dirs) != 0 {
 		eventFunc := func(w *fsnotify.Watcher) error {
 			go func() {
-				err := c.Run()
+				err := callback()
 				if err != nil {
 					logrus.WithError(err).Errorf("Coalescer function failed")
 				}

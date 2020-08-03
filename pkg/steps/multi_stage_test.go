@@ -535,7 +535,7 @@ func TestRun(t *testing.T) {
 				t.Error(err)
 				return
 			}
-			secrets, err := client.Secrets(jobSpec.Namespace()).List(meta.ListOptions{})
+			secrets, err := client.Secrets(jobSpec.Namespace()).List(context.TODO(), meta.ListOptions{})
 			if err != nil {
 				t.Error(err)
 				return

@@ -39,7 +39,7 @@ func (s *rpmImageInjectionStep) Run(ctx context.Context) error {
 }
 
 func (s *rpmImageInjectionStep) run(ctx context.Context) error {
-	route, err := s.routeClient.Routes(s.jobSpec.Namespace()).Get(RPMRepoName, meta.GetOptions{})
+	route, err := s.routeClient.Routes(s.jobSpec.Namespace()).Get(ctx, RPMRepoName, meta.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("could not get Route for RPM server: %w", err)
 	}

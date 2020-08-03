@@ -119,7 +119,7 @@ func (s *projectDirectoryImageBuildStep) run(ctx context.Context) error {
 }
 
 func getWorkingDir(istClient imageclientset.ImageStreamTagsGetter, source, namespace string) (string, error) {
-	ist, err := istClient.ImageStreamTags(namespace).Get(source, meta.GetOptions{})
+	ist, err := istClient.ImageStreamTags(namespace).Get(context.TODO(), source, meta.GetOptions{})
 	if err != nil {
 		return "", fmt.Errorf("could not fetch source ImageStreamTag: %w", err)
 	}

@@ -1,6 +1,7 @@
 package steps
 
 import (
+	"context"
 	"testing"
 
 	imagev1 "github.com/openshift/api/image/v1"
@@ -130,13 +131,13 @@ func TestOutputImageStep(t *testing.T) {
 			client := fakecs.imagecs.ImageV1()
 
 			for _, is := range tt.imageStreams {
-				if _, err := client.ImageStreams(is.Namespace).Create(is); err != nil {
+				if _, err := client.ImageStreams(is.Namespace).Create(context.TODO(), is, meta.CreateOptions{}); err != nil {
 					t.Errorf("Could not set up testing ImageStream: %v", err)
 				}
 			}
 
 			for _, ist := range tt.imageStreamTags {
-				if _, err := client.ImageStreamTags(ist.Namespace).Create(ist); err != nil {
+				if _, err := client.ImageStreamTags(ist.Namespace).Create(context.TODO(), ist, meta.CreateOptions{}); err != nil {
 					t.Errorf("Could not set up testing ImageStreamTag: %v", err)
 				}
 			}
@@ -146,7 +147,7 @@ func TestOutputImageStep(t *testing.T) {
 			examineStep(t, oits, stepSpec)
 			executeStep(t, oits, tt.execSpecification, nil)
 
-			targetImageStreamTag, err := client.ImageStreamTags(tt.expectedImageStreamTag.Namespace).Get(tt.expectedImageStreamTag.Name, meta.GetOptions{})
+			targetImageStreamTag, err := client.ImageStreamTags(tt.expectedImageStreamTag.Namespace).Get(context.TODO(), tt.expectedImageStreamTag.Name, meta.GetOptions{})
 			if err != nil {
 				t.Errorf("Failed to get ImageStreamTag '%s/%s' after step execution: %v", tt.expectedImageStreamTag.Namespace, tt.expectedImageStreamTag, err)
 			}

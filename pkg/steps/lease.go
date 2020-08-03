@@ -115,7 +115,7 @@ func heartbeatNamespace(namespace func() string, client coreclientset.NamespaceI
 		case <-ticker.C:
 			// do work
 			if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				ns, err := client.Get(namespace(), meta.GetOptions{})
+				ns, err := client.Get(context.TODO(), namespace(), meta.GetOptions{})
 				if err != nil {
 					return fmt.Errorf("get failed: %w", err)
 				}
@@ -125,7 +125,7 @@ func heartbeatNamespace(namespace func() string, client coreclientset.NamespaceI
 				}
 				ns.ObjectMeta.Annotations["ci.openshift.io/active"] = time.Now().Format(time.RFC3339)
 
-				_, err = client.Update(ns)
+				_, err = client.Update(context.TODO(), ns, meta.UpdateOptions{})
 				if err != nil {
 					return fmt.Errorf("update failed: %w", err)
 				}

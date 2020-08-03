@@ -3,6 +3,7 @@ package steps
 import (
 	"archive/tar"
 	"compress/gzip"
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -228,7 +229,7 @@ func waitForContainer(podClient PodClient, ns, name, containerName string) error
 	}).Trace("Waiting for container to be running.")
 
 	return wait.PollImmediate(time.Second, 30*timeSecond, func() (bool, error) {
-		pod, err := podClient.Pods(ns).Get(name, meta.GetOptions{})
+		pod, err := podClient.Pods(ns).Get(context.TODO(), name, meta.GetOptions{})
 		if err != nil {
 			logrus.WithError(err).Errorf("Waiting for container %s in pod %s in namespace %s", containerName, name, ns)
 			return false, nil
@@ -481,7 +482,7 @@ func (w *ArtifactWorker) downloadArtifacts(podName string, hasArtifacts bool) er
 		log.Printf("error: unable to signal to artifacts container to terminate in pod %s, triggering deletion: %v", podName, err)
 
 		// attempt to delete the pod
-		err = w.podClient.Pods(w.namespace).Delete(podName, nil)
+		err = w.podClient.Pods(w.namespace).Delete(context.TODO(), podName, meta.DeleteOptions{})
 		if err == nil || errors.IsNotFound(err) {
 			return
 		}
@@ -672,7 +673,7 @@ func hasMountsArtifactsVolume(pod *coreapi.Pod) bool {
 
 func gatherContainerLogsOutput(podClient PodClient, artifactDir, namespace, podName string) error {
 	var validationErrors []error
-	list, err := podClient.Pods(namespace).List(meta.ListOptions{FieldSelector: fields.Set{"metadata.name": podName}.AsSelector().String()})
+	list, err := podClient.Pods(namespace).List(context.TODO(), meta.ListOptions{FieldSelector: fields.Set{"metadata.name": podName}.AsSelector().String()})
 	if err != nil {
 		return fmt.Errorf("could not list pod: %w", err)
 	}
@@ -700,7 +701,7 @@ func gatherContainerLogsOutput(podClient PodClient, artifactDir, namespace, podN
 			defer file.Close()
 
 			w := gzip.NewWriter(file)
-			if s, err := podClient.Pods(namespace).GetLogs(podName, &coreapi.PodLogOptions{Container: status.Name}).Stream(); err == nil {
+			if s, err := podClient.Pods(namespace).GetLogs(podName, &coreapi.PodLogOptions{Container: status.Name}).Stream(context.TODO()); err == nil {
 				if _, err := io.Copy(w, s); err != nil {
 					validationErrors = append(validationErrors, fmt.Errorf("error: Unable to copy log output from pod container %s: %w", status.Name, err))
 				}

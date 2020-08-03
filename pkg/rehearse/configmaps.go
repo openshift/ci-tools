@@ -1,6 +1,7 @@
 package rehearse
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -134,7 +135,7 @@ func (c *CMManager) createCM(name string, data []updateconfig.ConfigMapUpdate) e
 		},
 		Data: map[string]string{},
 	}
-	if _, err := c.cmclient.Create(cm); err != nil && !kerrors.IsAlreadyExists(err) {
+	if _, err := c.cmclient.Create(context.TODO(), cm, metav1.CreateOptions{}); err != nil && !kerrors.IsAlreadyExists(err) {
 		return err
 	} else if err := updateconfig.Update(osFileGetter{root: c.releaseRepoPath}, c.cmclient, cm.Name, "", data, true, nil, c.logger); err != nil {
 		return err
@@ -206,7 +207,8 @@ func (c *CMManager) Create(cms ConfigMaps) error {
 // Clean deletes all the configMaps that have been created for this PR
 func (c *CMManager) Clean() error {
 	c.logger.Info("deleting temporary template configMaps")
-	if err := c.cmclient.DeleteCollection(&metav1.DeleteOptions{},
+	if err := c.cmclient.DeleteCollection(context.TODO(),
+		metav1.DeleteOptions{},
 		metav1.ListOptions{LabelSelector: fields.Set{
 			createByRehearse:  "true",
 			rehearseLabelPull: strconv.Itoa(c.prNumber),

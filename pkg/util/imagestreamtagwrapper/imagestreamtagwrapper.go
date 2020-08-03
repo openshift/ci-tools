@@ -29,10 +29,10 @@ import (
 // when not using a cache.
 func New(upstream ctrlruntimeclient.Client, cache cache.Cache) (ctrlruntimeclient.Client, error) {
 	// Allocate the informers already so they are synced during startup not on first request
-	if _, err := cache.GetInformer(&imagev1.Image{}); err != nil {
+	if _, err := cache.GetInformer(context.TODO(), &imagev1.Image{}); err != nil {
 		return nil, fmt.Errorf("failed to get informer for image: %w", err)
 	}
-	if _, err := cache.GetInformer(&imagev1.ImageStream{}); err != nil {
+	if _, err := cache.GetInformer(context.TODO(), &imagev1.ImageStream{}); err != nil {
 		return nil, fmt.Errorf("failed to get informer for imagestream: %w", err)
 	}
 	return &imagestreamtagwrapper{Client: upstream}, nil

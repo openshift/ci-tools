@@ -90,7 +90,7 @@ func (s *bundleSourceStep) bundleSourceDockerfile() (string, error) {
 }
 
 func (s *bundleSourceStep) getFullPullSpec(tag string) (string, error) {
-	is, err := s.imageClient.ImageStreams(s.jobSpec.Namespace()).Get(api.StableImageStream, meta.GetOptions{})
+	is, err := s.imageClient.ImageStreams(s.jobSpec.Namespace()).Get(context.TODO(), api.StableImageStream, meta.GetOptions{})
 	if err != nil {
 		return "", err
 	}

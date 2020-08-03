@@ -694,7 +694,7 @@ func (o *options) resolveInputs(steps []api.Step) error {
 	if routeGetter, err := routeclientset.NewForConfig(o.clusterConfig); err != nil {
 		log.Printf("could not get route client for cluster config")
 	} else {
-		if consoleRoute, err := routeGetter.Routes("openshift-console").Get("console", meta.GetOptions{}); err != nil {
+		if consoleRoute, err := routeGetter.Routes("openshift-console").Get(context.TODO(), "console", meta.GetOptions{}); err != nil {
 			log.Printf("could not get route console in namespace openshift-console")
 		} else {
 			o.consoleHost = consoleRoute.Spec.Host
@@ -731,18 +731,18 @@ func (o *options) initializeNamespace() error {
 	log.Printf("Creating namespace %s", o.namespace)
 	retries := 5
 	for {
-		project, err := projectGetter.ProjectV1().ProjectRequests().Create(&projectapi.ProjectRequest{
+		project, err := projectGetter.ProjectV1().ProjectRequests().Create(context.TODO(), &projectapi.ProjectRequest{
 			ObjectMeta: meta.ObjectMeta{
 				Name: o.namespace,
 			},
 			DisplayName: fmt.Sprintf("%s - %s", o.namespace, o.jobSpec.Job),
 			Description: jobDescription(o.jobSpec),
-		})
+		}, meta.CreateOptions{})
 		if err != nil && !kerrors.IsAlreadyExists(err) {
 			return fmt.Errorf("could not set up namespace for test: %w", err)
 		}
 		if err != nil {
-			project, err = projectGetter.ProjectV1().Projects().Get(o.namespace, meta.GetOptions{})
+			project, err = projectGetter.ProjectV1().Projects().Get(context.TODO(), o.namespace, meta.GetOptions{})
 			if err != nil {
 				if kerrors.IsNotFound(err) {
 					continue
@@ -1193,13 +1193,13 @@ func (o *options) saveNamespaceArtifacts() {
 	}
 
 	if kubeClient, err := coreclientset.NewForConfig(o.clusterConfig); err == nil {
-		pods, _ := kubeClient.Pods(o.namespace).List(meta.ListOptions{})
+		pods, _ := kubeClient.Pods(o.namespace).List(context.TODO(), meta.ListOptions{})
 		data, _ := json.MarshalIndent(pods, "", "  ")
 		path := filepath.Join(namespaceDir, "pods.json")
 		if err := ioutil.WriteFile(path, data, 0644); err != nil {
 			logrus.WithError(err).Errorf("Failed to write %s", path)
 		}
-		events, _ := kubeClient.Events(o.namespace).List(meta.ListOptions{})
+		events, _ := kubeClient.Events(o.namespace).List(context.TODO(), meta.ListOptions{})
 		data, _ = json.MarshalIndent(events, "", "  ")
 		path = filepath.Join(namespaceDir, "events.json")
 		if err := ioutil.WriteFile(path, data, 0644); err != nil {
@@ -1208,7 +1208,7 @@ func (o *options) saveNamespaceArtifacts() {
 	}
 
 	if buildClient, err := buildclientset.NewForConfig(o.clusterConfig); err == nil {
-		builds, _ := buildClient.Builds(o.namespace).List(meta.ListOptions{})
+		builds, _ := buildClient.Builds(o.namespace).List(context.TODO(), meta.ListOptions{})
 		data, _ := json.MarshalIndent(builds, "", "  ")
 		path := filepath.Join(namespaceDir, "builds.json")
 		if err := ioutil.WriteFile(path, data, 0644); err != nil {
@@ -1217,7 +1217,7 @@ func (o *options) saveNamespaceArtifacts() {
 	}
 
 	if imageClient, err := imageclientset.NewForConfig(o.clusterConfig); err == nil {
-		imagestreams, _ := imageClient.ImageStreams(o.namespace).List(meta.ListOptions{})
+		imagestreams, _ := imageClient.ImageStreams(o.namespace).List(context.TODO(), meta.ListOptions{})
 		data, _ := json.MarshalIndent(imagestreams, "", "  ")
 		path := filepath.Join(namespaceDir, "imagestreams.json")
 		if err := ioutil.WriteFile(path, data, 0644); err != nil {
@@ -1226,7 +1226,7 @@ func (o *options) saveNamespaceArtifacts() {
 	}
 
 	if templateClient, err := templateclientset.NewForConfig(o.clusterConfig); err == nil {
-		templateInstances, _ := templateClient.TemplateInstances(o.namespace).List(meta.ListOptions{})
+		templateInstances, _ := templateClient.TemplateInstances(o.namespace).List(context.TODO(), meta.ListOptions{})
 		data, _ := json.MarshalIndent(templateInstances, "", "  ")
 		path := filepath.Join(namespaceDir, "templateinstances.json")
 		if err := ioutil.WriteFile(path, data, 0644); err != nil {
@@ -1493,7 +1493,7 @@ func summarizeRef(refs prowapi.Refs) string {
 }
 
 func eventRecorder(kubeClient *coreclientset.CoreV1Client, authClient *authclientset.AuthorizationV1Client, namespace string) (record.EventRecorder, error) {
-	res, err := authClient.SelfSubjectAccessReviews().Create(&authapi.SelfSubjectAccessReview{
+	res, err := authClient.SelfSubjectAccessReviews().Create(context.TODO(), &authapi.SelfSubjectAccessReview{
 		Spec: authapi.SelfSubjectAccessReviewSpec{
 			ResourceAttributes: &authapi.ResourceAttributes{
 				Namespace: namespace,
@@ -1501,7 +1501,7 @@ func eventRecorder(kubeClient *coreclientset.CoreV1Client, authClient *authclien
 				Resource:  "events",
 			},
 		},
-	})
+	}, meta.CreateOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("could not check permission to create events: %w", err)
 	}
@@ -1606,7 +1606,7 @@ func (o *options) getResolverInfo(jobSpec *api.JobSpec) *load.ResolverInfo {
 
 func monitorNamespace(ctx context.Context, cancel func(), namespace string, client coreclientset.NamespaceInterface) {
 	for {
-		watcher, err := client.Watch(meta.ListOptions{
+		watcher, err := client.Watch(context.TODO(), meta.ListOptions{
 			TypeMeta:      meta.TypeMeta{},
 			FieldSelector: fields.Set{"metadata.name": namespace}.AsSelector().String(),
 			Watch:         true,

@@ -1,6 +1,7 @@
 package steps
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -66,7 +67,7 @@ func TestInputImageTagStep(t *testing.T) {
 
 	client := fakecs.ImageV1()
 
-	if _, err := client.ImageStreamTags(baseImage.Namespace).Create(istag); err != nil {
+	if _, err := client.ImageStreamTags(baseImage.Namespace).Create(context.TODO(), istag, meta.CreateOptions{}); err != nil {
 		t.Errorf("Could not set up testing ImageStreamTag: %v", err)
 	}
 
@@ -124,7 +125,7 @@ func TestInputImageTagStep(t *testing.T) {
 		},
 	}
 
-	targetImageStreamTag, err := client.ImageStreamTags(jobspec.Namespace()).Get("pipeline:TO", meta.GetOptions{})
+	targetImageStreamTag, err := client.ImageStreamTags(jobspec.Namespace()).Get(context.TODO(), "pipeline:TO", meta.GetOptions{})
 	if !equality.Semantic.DeepEqual(expectedImageStreamTag, targetImageStreamTag) {
 		t.Errorf("Different ImageStreamTag 'pipeline:TO' after step execution:\n%s", diff.ObjectReflectDiff(expectedImageStreamTag, targetImageStreamTag))
 	}

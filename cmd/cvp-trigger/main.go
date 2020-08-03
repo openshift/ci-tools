@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -247,7 +248,7 @@ func main() {
 	pjclient := pjcset.ProwV1().ProwJobs(config.ProwJobNamespace)
 
 	logrus.WithFields(pjutil.ProwJobFields(prowjob)).Info("submitting a new prowjob")
-	created, err := pjclient.Create(prowjob)
+	created, err := pjclient.Create(context.TODO(), prowjob, metav1.CreateOptions{})
 	if err != nil {
 		logrus.WithError(err).Fatal("failed to submit the prowjob")
 	}
@@ -258,7 +259,7 @@ func main() {
 	selector := fields.SelectorFromSet(map[string]string{"metadata.name": created.Name})
 
 	for {
-		w, err := pjclient.Watch(metav1.ListOptions{FieldSelector: selector.String()})
+		w, err := pjclient.Watch(context.TODO(), metav1.ListOptions{FieldSelector: selector.String()})
 		if err != nil {
 			logrus.WithError(err).Fatal("failed to create watch for ProwJobs")
 		}

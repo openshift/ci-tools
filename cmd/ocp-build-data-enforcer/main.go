@@ -202,7 +202,7 @@ func configFileNamberForMemberString(memberString string) string {
 	return "images/" + memberString + ".yml"
 }
 
-func getPublicRepo(orgRepo string, mappings []publicPrivateMapping) (string, error) {
+func getPublicRepo(orgRepo string, mappings []publicPrivateMapping) string {
 	orgRepo = "https://github.com/" + orgRepo
 	var replacementFrom, replacementTo string
 	for _, mapping := range mappings {
@@ -217,10 +217,10 @@ func getPublicRepo(orgRepo string, mappings []publicPrivateMapping) (string, err
 	}
 
 	if replacementTo == "" {
-		return strings.TrimPrefix(orgRepo, "https://github.com/"), nil
+		return strings.TrimPrefix(orgRepo, "https://github.com/")
 	}
 
-	return strings.TrimPrefix(strings.Replace(orgRepo, replacementFrom, replacementTo, 1), "https://github.com/"), nil
+	return strings.TrimPrefix(strings.Replace(orgRepo, replacementFrom, replacementTo, 1), "https://github.com/")
 }
 
 func replaceStream(streamName string, streamMap streamMap) (string, error) {

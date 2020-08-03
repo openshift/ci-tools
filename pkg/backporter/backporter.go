@@ -180,8 +180,15 @@ const clonesTemplateConstructor = `
 		{{ end }}
 		</tbody>
 	</table>
-	<form class="form-inline my-2 my-lg-0" role="search" action="/clones/create" method="post">
-		<input type="hidden" name="ID" value="{{.Bug.ID}}">
+	<form class="form-inline my-4 my-lg-0" role="search" action="/clones/create" method="post">
+		<label class = "pr-2" > Clone From </label>
+		<select class="form-control mr-sm-2" aria-label="Search" name="ID" id="source_bug" required>
+			<option value="" disabled selected hidden>Source Bug</option>
+			{{ range $source := .Clones }}
+				<option value="{{$source.ID}}">{{$source.ID}} {{$source.TargetRelease}}</option>
+			{{end}}
+		</select>
+		<label class = "p-3" > Target Release  </label>
 		<select class="form-control mr-sm-2" aria-label="Search" name="release" id="target_version" required>
 			<option value="" disabled selected hidden>Target Version</option>
 			{{ range $release := .CloneTargets }}
@@ -214,10 +221,12 @@ and associated PRs. The highlighted bug is the bug which is being searched for.
 <h2 id="title"><a href="#title">How to create a clone?</a></h2>
 
 <p>
-Select the target release from the dropdown and click the "Create Clone" button 
-which can be found after the clones table.
+Select the bug from which the new bug would be cloned from from the dropdown marked "Clone From"
+Select the target release from the second dropdown marked "Target Release" 
+and click the "Create Clone" button which can be found after the clones table.
 If clone creation is successful you will be shown a success banner at the top of the page 
 otherwise you will be redirected to an error page.
+Click the link in the success banner to reach the view for the new clone.
 Please note - Do not refresh the page once the clone has been created since this would cause another clone to be created.
 </p>
 

@@ -71,7 +71,7 @@ func parseOptions() options {
 	return o
 }
 
-func validateOptions(o options) error {
+func defaultAndValidateOptions(o *options) error {
 	if o.githubLogin == "" {
 		return errors.New("--github-login is not specified")
 	}
@@ -96,7 +96,7 @@ type Config struct {
 
 func main() {
 	o := parseOptions()
-	if err := validateOptions(o); err != nil {
+	if err := defaultAndValidateOptions(&o); err != nil {
 		logrus.WithError(err).Fatal("Invalid arguments.")
 	}
 

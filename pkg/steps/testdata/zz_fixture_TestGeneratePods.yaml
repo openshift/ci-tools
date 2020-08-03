@@ -1,0 +1,230 @@
+- metadata:
+    annotations:
+      ci-operator.openshift.io/container-sub-tests: test
+      ci-operator.openshift.io/save-container-logs: "true"
+      ci.openshift.io/job-spec: ""
+    creationTimestamp: null
+    labels:
+      build-id: build id
+      ci.openshift.io/multi-stage-test: test
+      ci.openshift.io/refs.branch: base ref
+      ci.openshift.io/refs.org: org
+      ci.openshift.io/refs.repo: repo
+      created-by-ci: "true"
+      job: job
+    name: test-step0
+  spec:
+    containers:
+    - args:
+      - /bin/bash
+      - -c
+      - |-
+        #!/bin/bash
+        set -eu
+        command0
+      command:
+      - /tmp/secret-wrapper/secret-wrapper
+      env:
+      - name: BUILD_ID
+        value: build id
+      - name: CI
+        value: "true"
+      - name: JOB_NAME
+        value: job
+      - name: JOB_SPEC
+        value: '{"type":"postsubmit","job":"job","buildid":"build id","prowjobid":"prow job id","refs":{"org":"org","repo":"repo","base_ref":"base ref","base_sha":"base sha"}}'
+      - name: JOB_TYPE
+        value: postsubmit
+      - name: OPENSHIFT_CI
+        value: "true"
+      - name: PROW_JOB_ID
+        value: prow job id
+      - name: PULL_BASE_REF
+        value: base ref
+      - name: PULL_BASE_SHA
+        value: base sha
+      - name: PULL_REFS
+        value: base ref:base sha
+      - name: REPO_NAME
+        value: repo
+      - name: REPO_OWNER
+        value: org
+      - name: NAMESPACE
+        value: namespace
+      - name: JOB_NAME_SAFE
+        value: test
+      - name: JOB_NAME_HASH
+        value: 5e8c9
+      - name: RELEASE_IMAGE_INITIAL
+        value: release:initial
+      - name: RELEASE_IMAGE_LATEST
+        value: release:latest
+      - name: LEASED_RESOURCE
+        value: uuid
+      - name: CLUSTER_TYPE
+        value: aws
+      - name: CLUSTER_PROFILE_DIR
+        value: /var/run/secrets/ci.openshift.io/cluster-profile
+      - name: KUBECONFIG
+        value: /var/run/secrets/ci.openshift.io/multi-stage/kubeconfig
+      - name: SHARED_DIR
+        value: /var/run/secrets/ci.openshift.io/multi-stage
+      image: pipeline:src
+      name: test
+      resources: {}
+      terminationMessagePolicy: FallbackToLogsOnError
+      volumeMounts:
+      - mountPath: /tmp/secret-wrapper
+        name: secret-wrapper
+      - mountPath: /var/run/secrets/ci.openshift.io/cluster-profile
+        name: cluster-profile
+      - mountPath: /var/run/secrets/ci.openshift.io/multi-stage
+        name: test
+    initContainers:
+    - args:
+      - /bin/secret-wrapper
+      - /tmp/secret-wrapper/secret-wrapper
+      command:
+      - cp
+      image: registry.svc.ci.openshift.org/ci/secret-wrapper:latest
+      name: cp-secret-wrapper
+      resources: {}
+      terminationMessagePolicy: FallbackToLogsOnError
+      volumeMounts:
+      - mountPath: /tmp/secret-wrapper
+        name: secret-wrapper
+    restartPolicy: Never
+    serviceAccountName: test
+    volumes:
+    - emptyDir: {}
+      name: secret-wrapper
+    - name: cluster-profile
+      secret:
+        secretName: test-cluster-profile
+    - name: test
+      secret:
+        secretName: test
+  status: {}
+- metadata:
+    annotations:
+      ci-operator.openshift.io/container-sub-tests: test
+      ci-operator.openshift.io/save-container-logs: "true"
+      ci.openshift.io/job-spec: ""
+    creationTimestamp: null
+    labels:
+      build-id: build id
+      ci.openshift.io/multi-stage-test: test
+      ci.openshift.io/refs.branch: base ref
+      ci.openshift.io/refs.org: org
+      ci.openshift.io/refs.repo: repo
+      created-by-ci: "true"
+      job: job
+    name: test-step1
+  spec:
+    containers:
+    - args:
+      - /bin/bash
+      - -c
+      - |-
+        #!/bin/bash
+        set -eu
+        command1
+      command:
+      - /tmp/secret-wrapper/secret-wrapper
+      env:
+      - name: BUILD_ID
+        value: build id
+      - name: CI
+        value: "true"
+      - name: JOB_NAME
+        value: job
+      - name: JOB_SPEC
+        value: '{"type":"postsubmit","job":"job","buildid":"build id","prowjobid":"prow job id","refs":{"org":"org","repo":"repo","base_ref":"base ref","base_sha":"base sha"}}'
+      - name: JOB_TYPE
+        value: postsubmit
+      - name: OPENSHIFT_CI
+        value: "true"
+      - name: PROW_JOB_ID
+        value: prow job id
+      - name: PULL_BASE_REF
+        value: base ref
+      - name: PULL_BASE_SHA
+        value: base sha
+      - name: PULL_REFS
+        value: base ref:base sha
+      - name: REPO_NAME
+        value: repo
+      - name: REPO_OWNER
+        value: org
+      - name: ARTIFACT_DIR
+        value: /artifact/dir
+      - name: NAMESPACE
+        value: namespace
+      - name: JOB_NAME_SAFE
+        value: test
+      - name: JOB_NAME_HASH
+        value: 5e8c9
+      - name: RELEASE_IMAGE_INITIAL
+        value: release:initial
+      - name: RELEASE_IMAGE_LATEST
+        value: release:latest
+      - name: LEASED_RESOURCE
+        value: uuid
+      - name: CLUSTER_TYPE
+        value: aws
+      - name: CLUSTER_PROFILE_DIR
+        value: /var/run/secrets/ci.openshift.io/cluster-profile
+      - name: KUBECONFIG
+        value: /var/run/secrets/ci.openshift.io/multi-stage/kubeconfig
+      - name: SHARED_DIR
+        value: /var/run/secrets/ci.openshift.io/multi-stage
+      image: stable:image1
+      name: test
+      resources: {}
+      terminationMessagePolicy: FallbackToLogsOnError
+      volumeMounts:
+      - mountPath: /artifact/dir
+        name: artifacts
+      - mountPath: /tmp/secret-wrapper
+        name: secret-wrapper
+      - mountPath: /var/run/secrets/ci.openshift.io/cluster-profile
+        name: cluster-profile
+      - mountPath: /var/run/secrets/ci.openshift.io/multi-stage
+        name: test
+    - command:
+      - /bin/sh
+      - -c
+      - "#!/bin/sh\nset -euo pipefail\ntrap 'kill $(jobs -p); exit 0' TERM\n\ntouch /tmp/done\necho \"Waiting for artifacts to be extracted\"\nwhile true; do\n\tif [[ ! -f /tmp/done ]]; then\n\t\techo \"Artifacts extracted, will terminate after 30s\"\n\t\tsleep 30\n\t\techo \"Exiting\"\n\t\texit 0\n\tfi\n\tsleep 5 & wait\ndone\n"
+      image: busybox
+      name: artifacts
+      resources: {}
+      volumeMounts:
+      - mountPath: /tmp/artifacts
+        name: artifacts
+    initContainers:
+    - args:
+      - /bin/secret-wrapper
+      - /tmp/secret-wrapper/secret-wrapper
+      command:
+      - cp
+      image: registry.svc.ci.openshift.org/ci/secret-wrapper:latest
+      name: cp-secret-wrapper
+      resources: {}
+      terminationMessagePolicy: FallbackToLogsOnError
+      volumeMounts:
+      - mountPath: /tmp/secret-wrapper
+        name: secret-wrapper
+    restartPolicy: Never
+    serviceAccountName: test
+    volumes:
+    - emptyDir: {}
+      name: artifacts
+    - emptyDir: {}
+      name: secret-wrapper
+    - name: cluster-profile
+      secret:
+        secretName: test-cluster-profile
+    - name: test
+      secret:
+        secretName: test
+  status: {}

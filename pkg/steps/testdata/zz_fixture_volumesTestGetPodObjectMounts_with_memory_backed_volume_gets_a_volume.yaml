@@ -1,0 +1,4 @@
+- emptyDir:
+    medium: Memory
+    sizeLimit: 1Gi
+  name: memory-backed

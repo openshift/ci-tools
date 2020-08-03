@@ -5,16 +5,13 @@ import (
 	"testing"
 
 	"k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/equality"
-	"k8s.io/apimachinery/pkg/api/resource"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/client-go/kubernetes/fake"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
-	"k8s.io/test-infra/prow/pod-utils/decorate"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
 func preparePodStep(t *testing.T, namespace string) (*podStep, stepExpectation, PodClient) {
@@ -79,56 +76,6 @@ func preparePodStep(t *testing.T, namespace string) (*podStep, stepExpectation, 
 	return ps.(*podStep), specification, client
 }
 
-func makeExpectedPod(step *podStep, phaseAfterRun v1.PodPhase) *v1.Pod {
-	return &v1.Pod{
-		ObjectMeta: meta.ObjectMeta{
-			Name:      step.config.As,
-			Namespace: step.jobSpec.Namespace(),
-			Labels: map[string]string{
-				"build-id":                    step.jobSpec.BuildID,
-				"created-by-ci":               "true",
-				"job":                         step.jobSpec.Job,
-				"prow.k8s.io/id":              step.jobSpec.ProwJobID,
-				"ci.openshift.io/refs.org":    step.jobSpec.JobSpec.Refs.Org,
-				"ci.openshift.io/refs.repo":   step.jobSpec.JobSpec.Refs.Repo,
-				"ci.openshift.io/refs.branch": step.jobSpec.JobSpec.Refs.BaseRef,
-			},
-			Annotations: map[string]string{
-				"ci.openshift.io/job-spec":                     "",
-				"ci-operator.openshift.io/container-sub-tests": step.name,
-			},
-		},
-		Spec: v1.PodSpec{
-			Containers: []v1.Container{
-				{
-					Name:                     step.name,
-					Image:                    "somename:sometag",
-					Command:                  []string{"/bin/bash", "-c", "#!/bin/bash\nset -eu\nlaunch-tests"},
-					TerminationMessagePolicy: v1.TerminationMessageFallbackToLogsOnError,
-					Env: decorate.KubeEnv(map[string]string{
-						"BUILD_ID":      "test-build-id",
-						"CI":            "true",
-						"JOB_NAME":      "very-cool-prow-job",
-						"JOB_SPEC":      `{"type":"presubmit","job":"very-cool-prow-job","buildid":"test-build-id","prowjobid":"prow-job-id","refs":{"org":"org","repo":"repo","base_ref":"base-ref","base_sha":"base-sha","pulls":[{"number":123,"author":"","sha":"72532003f9e01e89f455187dd92c275204bc9781"}]}}`,
-						"JOB_TYPE":      string(prowapi.PresubmitJob),
-						"OPENSHIFT_CI":  "true",
-						"PROW_JOB_ID":   "prow-job-id",
-						"PULL_BASE_REF": "base-ref",
-						"PULL_BASE_SHA": "base-sha",
-						"PULL_NUMBER":   "123",
-						"PULL_PULL_SHA": "72532003f9e01e89f455187dd92c275204bc9781",
-						"PULL_REFS":     step.jobSpec.JobSpec.Refs.String(),
-						"REPO_NAME":     "repo",
-						"REPO_OWNER":    "org",
-					}),
-				},
-			},
-			RestartPolicy: v1.RestartPolicyNever,
-		},
-		Status: v1.PodStatus{Phase: phaseAfterRun},
-	}
-}
-
 func TestPodStepMethods(t *testing.T) {
 	namespace := "TestNamespace"
 	ps, spec, _ := preparePodStep(t, namespace)
@@ -156,7 +103,6 @@ func TestPodStepExecution(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.purpose, func(t *testing.T) {
 			ps, _, client := preparePodStep(t, namespace)
-			expectedPod := makeExpectedPod(ps, tc.podStatus)
 
 			executionExpectation := executionExpectation{
 				prerun: doneExpectation{
@@ -203,65 +149,28 @@ func TestPodStepExecution(t *testing.T) {
 
 			executeStep(t, ps, executionExpectation, clusterBehavior)
 
-			if pod, err := client.Pods(namespace).Get(context.TODO(), ps.Name(), meta.GetOptions{}); !equality.Semantic.DeepEqual(expectedPod, pod) {
-				t.Errorf("Pod is different than expected:\n%s", diff.ObjectReflectDiff(expectedPod, pod))
-			} else if err != nil {
-				t.Errorf("Could not Get() expected Pod, err=%v", err)
+			pod, err := client.Pods(namespace).Get(context.TODO(), ps.Name(), meta.GetOptions{})
+			if err != nil {
+				t.Fatalf("failed to get pod: %v", err)
 			}
+			testhelper.CompareWithFixture(t, pod)
 		})
 	}
 }
 
 func TestGetPodObjectMounts(t *testing.T) {
-	oneGi := resource.MustParse("1Gi")
 	testCases := []struct {
-		name                 string
-		podStep              func(*podStep)
-		expectedVolumeConfig *v1.Pod
+		name    string
+		podStep func(*podStep)
 	}{
 		{
 			name:    "no secret results in no mounted secrets",
 			podStep: func(expectedPodStepTemplate *podStep) {},
-			expectedVolumeConfig: &v1.Pod{
-				Spec: v1.PodSpec{
-					Containers: []v1.Container{
-						{
-							VolumeMounts: []v1.VolumeMount{},
-						},
-					},
-					Volumes: []v1.Volume{},
-				},
-			},
 		},
 		{
 			name: "with secret name results in secret mounted with default path",
 			podStep: func(expectedPodStepTemplate *podStep) {
 				expectedPodStepTemplate.config.Secrets = []*api.Secret{{Name: testSecretName}}
-			},
-			expectedVolumeConfig: &v1.Pod{
-				Spec: v1.PodSpec{
-					Containers: []v1.Container{
-						{
-							VolumeMounts: []v1.VolumeMount{
-								{
-									Name:      testSecretName,
-									MountPath: testSecretDefaultPath,
-									ReadOnly:  true,
-								},
-							},
-						},
-					},
-					Volumes: []v1.Volume{
-						{
-							Name: testSecretName,
-							VolumeSource: v1.VolumeSource{
-								Secret: &v1.SecretVolumeSource{
-									SecretName: testSecretName,
-								},
-							},
-						},
-					},
-				},
 			},
 		},
 		{
@@ -273,31 +182,6 @@ func TestGetPodObjectMounts(t *testing.T) {
 						MountPath: "/usr/local/secrets",
 					},
 				}
-			},
-			expectedVolumeConfig: &v1.Pod{
-				Spec: v1.PodSpec{
-					Containers: []v1.Container{
-						{
-							VolumeMounts: []v1.VolumeMount{
-								{
-									Name:      testSecretName,
-									MountPath: "/usr/local/secrets",
-									ReadOnly:  true,
-								},
-							},
-						},
-					},
-					Volumes: []v1.Volume{
-						{
-							Name: testSecretName,
-							VolumeSource: v1.VolumeSource{
-								Secret: &v1.SecretVolumeSource{
-									SecretName: testSecretName,
-								},
-							},
-						},
-					},
-				},
 			},
 		},
 		{
@@ -312,71 +196,11 @@ func TestGetPodObjectMounts(t *testing.T) {
 				expectedPodStepTemplate.artifactDir = "/tmp/artifacts"
 				expectedPodStepTemplate.config.ArtifactDir = "/tmp/artifacts"
 			},
-			expectedVolumeConfig: &v1.Pod{
-				Spec: v1.PodSpec{
-					Containers: []v1.Container{
-						{
-							VolumeMounts: []v1.VolumeMount{
-								{
-									Name:      "artifacts",
-									MountPath: "/tmp/artifacts",
-								},
-								{
-									Name:      testSecretName,
-									MountPath: "/usr/local/secrets",
-									ReadOnly:  true,
-								},
-							},
-						},
-					},
-					Volumes: []v1.Volume{
-						{
-							Name: "artifacts",
-							VolumeSource: v1.VolumeSource{
-								EmptyDir: &v1.EmptyDirVolumeSource{},
-							},
-						},
-						{
-							Name: testSecretName,
-							VolumeSource: v1.VolumeSource{
-								Secret: &v1.SecretVolumeSource{
-									SecretName: testSecretName,
-								},
-							},
-						},
-					},
-				},
-			},
 		},
 		{
 			name: "with memory backed volume gets a volume",
 			podStep: func(expectedPodStepTemplate *podStep) {
 				expectedPodStepTemplate.config.MemoryBackedVolume = &api.MemoryBackedVolume{Size: "1Gi"}
-			},
-			expectedVolumeConfig: &v1.Pod{
-				Spec: v1.PodSpec{
-					Containers: []v1.Container{
-						{
-							VolumeMounts: []v1.VolumeMount{
-								{
-									Name:      "memory-backed",
-									MountPath: "/tmp/volume",
-								},
-							},
-						},
-					},
-					Volumes: []v1.Volume{
-						{
-							Name: "memory-backed",
-							VolumeSource: v1.VolumeSource{
-								EmptyDir: &v1.EmptyDirVolumeSource{
-									Medium:    v1.StorageMediumMemory,
-									SizeLimit: &oneGi,
-								},
-							},
-						},
-					},
-				},
 			},
 		},
 	}
@@ -391,15 +215,8 @@ func TestGetPodObjectMounts(t *testing.T) {
 				t.Fatalf("unexpected err: %v", err)
 			}
 
-			if !equality.Semantic.DeepEqual(pod.Spec.Volumes, tc.expectedVolumeConfig.Spec.Volumes) {
-				t.Errorf("test %s failed. generated pod.Spec.Volumes was not as expected", tc.name)
-				t.Error(diff.ObjectReflectDiff(pod.Spec.Volumes, tc.expectedVolumeConfig.Spec.Volumes))
-			}
-			if !equality.Semantic.DeepEqual(pod.Spec.Containers[0].VolumeMounts, tc.expectedVolumeConfig.Spec.Containers[0].VolumeMounts) {
-				t.Errorf("test %s failed. generated pod.Spec.Container[0].VolumeMounts was not as expected", tc.name)
-				t.Error(diff.ObjectReflectDiff(pod.Spec.Containers[0].VolumeMounts, tc.expectedVolumeConfig.Spec.Containers[0].VolumeMounts))
-			}
-
+			testhelper.CompareWithFixture(t, pod.Spec.Volumes, testhelper.WithPrefix("volumes"))
+			testhelper.CompareWithFixture(t, pod.Spec.Containers[0].VolumeMounts, testhelper.WithPrefix("mounts"))
 		})
 	}
 

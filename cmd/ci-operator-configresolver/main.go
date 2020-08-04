@@ -33,7 +33,6 @@ type options struct {
 	address      string
 	uiAddress    string
 	gracePeriod  time.Duration
-	cycle        time.Duration
 	validateOnly bool
 	flatRegistry bool
 }
@@ -53,7 +52,7 @@ func gatherOptions() (options, error) {
 	fs.StringVar(&o.address, "address", ":8080", "Address to run server on")
 	fs.StringVar(&o.uiAddress, "ui-address", ":8082", "Address to run the registry UI on")
 	fs.DurationVar(&o.gracePeriod, "gracePeriod", time.Second*10, "Grace period for server shutdown")
-	fs.DurationVar(&o.cycle, "cycle", time.Minute*2, "Cycle duration for config reload")
+	_ = fs.Duration("cycle", time.Minute*2, "Legacy flag kept for compatibility. Does nothing")
 	fs.BoolVar(&o.validateOnly, "validate-only", false, "Load the config and registry, validate them and exit.")
 	fs.BoolVar(&o.flatRegistry, "flat-registry", false, "Disable directory structure based registry validation")
 	if err := fs.Parse(os.Args[1:]); err != nil {
@@ -66,9 +65,6 @@ func validateOptions(o options) error {
 	_, err := logrus.ParseLevel(o.logLevel)
 	if err != nil {
 		return fmt.Errorf("invalid --log-level: %w", err)
-	}
-	if o.cycle == 0 {
-		return fmt.Errorf("invalid cycle: duration cannot equal 0")
 	}
 	if o.configPath == "" {
 		return fmt.Errorf("--config is required")
@@ -207,12 +203,12 @@ func main() {
 	health := pjutil.NewHealth()
 	metrics.ExposeMetrics("ci-operator-configresolver", prowConfig.PushGateway{}, flagutil.DefaultMetricsPort)
 
-	configAgent, err := agents.NewConfigAgent(o.configPath, o.cycle, configresolverMetrics.ErrorRate)
+	configAgent, err := agents.NewConfigAgent(o.configPath, agents.WithConfigMetrics(configresolverMetrics.ErrorRate))
 	if err != nil {
 		logrus.Fatalf("Failed to get config agent: %v", err)
 	}
 
-	registryAgent, err := agents.NewRegistryAgent(o.registryPath, o.cycle, configresolverMetrics.ErrorRate, o.flatRegistry)
+	registryAgent, err := agents.NewRegistryAgent(o.registryPath, agents.WithRegistryMetrics(configresolverMetrics.ErrorRate), agents.WithRegistryFlat(o.flatRegistry))
 	if err != nil {
 		logrus.Fatalf("Failed to get registry agent: %v", err)
 	}

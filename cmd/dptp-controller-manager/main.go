@@ -8,7 +8,6 @@ import (
 	"time"
 
 	imagev1 "github.com/openshift/api/image/v1"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -186,7 +185,7 @@ func main() {
 		logrus.Infof("Loaded %q context from in-cluster config", appCIContextName)
 	}
 
-	ciOPConfigAgent, err := agents.NewConfigAgent(opts.ciOperatorconfigPath, 2*time.Minute, prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"error"}))
+	ciOPConfigAgent, err := agents.NewConfigAgent(opts.ciOperatorconfigPath)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to construct ci-opeartor config agent")
 	}
@@ -271,7 +270,7 @@ func main() {
 		if opts.testImagesDistributorOptions.imagePullSecretPath == "" {
 			logrus.Fatal("The testImagesDistributor requires the --testImagesDistributorOptions.imagePullSecretPath flag to be set ")
 		}
-		registryConfigAgent, err := agents.NewRegistryAgent(opts.stepConfigPath, 2*time.Minute, prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"error"}), true)
+		registryConfigAgent, err := agents.NewRegistryAgent(opts.stepConfigPath)
 		if err != nil {
 			logrus.WithError(err).Fatal("failed to construct registryAgent")
 		}

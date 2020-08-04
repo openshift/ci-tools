@@ -76,7 +76,7 @@ func AddToManager(mgr manager.Manager,
 	}
 	c, err := controller.New(ControllerName, mgr, controller.Options{
 		Reconciler:              r,
-		MaxConcurrentReconciles: 1,
+		MaxConcurrentReconciles: 20,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to construct controller: %w", err)
@@ -172,8 +172,7 @@ func registryClusterHandlerFactory(buildClusters sets.String, filter objectFilte
 			}
 			return requests
 		},
-	),
-	}
+	)}
 }
 
 const clusterAndNamespaceDelimiter = "_"

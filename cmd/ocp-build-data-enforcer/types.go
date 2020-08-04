@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -40,6 +41,7 @@ type ocpImageConfigContent struct {
 type ocpImageConfigSource struct {
 	Dockerfile string `json:"dockerfile"`
 	Alias      string `json:"alias"`
+	Path       string `json:"path"`
 	// +Optional, mutually exclusive with alias
 	Git *ocpImageConfigSourceGit `json:"git,omitempty"`
 }
@@ -79,10 +81,10 @@ type ocpImageConfigPush struct {
 }
 
 func (oic ocpImageConfig) dockerfile() string {
-	if oic.Content.Source.Dockerfile != "" {
-		return oic.Content.Source.Dockerfile
+	if oic.Content.Source.Dockerfile == "" {
+		oic.Content.Source.Dockerfile = "Dockerfile"
 	}
-	return "Dockerfile"
+	return filepath.Join(oic.Content.Source.Path, oic.Content.Source.Dockerfile)
 }
 
 func (oic ocpImageConfig) stages() ([]string, error) {
@@ -100,11 +102,15 @@ func (oic ocpImageConfig) stages() ([]string, error) {
 	return append(result, oic.From.Stream), utilerrors.NewAggregate(errs)
 }
 
-func (oic ocpImageConfig) orgRepo() string {
+func (oic ocpImageConfig) orgRepo(mappings []publicPrivateMapping) string {
+	var name string
 	if oic.Content.Source.Git.URL == "" {
-		return oic.Name
+		name = oic.Name
 	}
-	return strings.TrimSuffix(strings.TrimPrefix(oic.Content.Source.Git.URL, "git@github.com:"), ".git")
+	if name == "" {
+		name = strings.TrimSuffix(strings.TrimPrefix(oic.Content.Source.Git.URL, "git@github.com:"), ".git")
+	}
+	return getPublicRepo(name, mappings)
 }
 
 type streamMap map[string]streamElement
@@ -122,4 +128,25 @@ type groupYAML struct {
 type publicPrivateMapping struct {
 	Private string `json:"private"`
 	Public  string `json:"public"`
+}
+
+func getPublicRepo(orgRepo string, mappings []publicPrivateMapping) string {
+	orgRepo = "https://github.com/" + orgRepo
+	var replacementFrom, replacementTo string
+	for _, mapping := range mappings {
+		if !strings.HasPrefix(orgRepo, mapping.Private) {
+			continue
+		}
+		if len(replacementFrom) > len(mapping.Private) {
+			continue
+		}
+		replacementFrom = mapping.Private
+		replacementTo = mapping.Public
+	}
+
+	if replacementTo == "" {
+		return strings.TrimPrefix(orgRepo, "https://github.com/")
+	}
+
+	return strings.TrimPrefix(strings.Replace(orgRepo, replacementFrom, replacementTo, 1), "https://github.com/")
 }

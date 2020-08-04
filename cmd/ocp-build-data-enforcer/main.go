@@ -81,7 +81,7 @@ func main() {
 	for idx := range configs {
 		idx := idx
 		errGroup.Go(func() error {
-			processDockerfile(configs[idx])
+			processDockerfile(configs[idx], groupYAML.PublicUpstreams)
 			return nil
 		})
 	}
@@ -186,8 +186,8 @@ func replaceStream(streamName string, streamMap streamMap) (string, error) {
 	return replacement.UpstreamImage, nil
 }
 
-func processDockerfile(config ocpImageConfig) {
-	orgRepo := config.orgRepo()
+func processDockerfile(config ocpImageConfig, mappings []publicPrivateMapping) {
+	orgRepo := config.orgRepo(mappings)
 	log := logrus.WithField("file", config.SourceFileName).WithField("org/repo", orgRepo)
 	split := strings.Split(orgRepo, "/")
 	if n := len(split); n != 2 {

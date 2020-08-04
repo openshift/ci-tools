@@ -24,14 +24,12 @@ import (
 
 type options struct {
 	ocpBuildDataRepoDir string
-	configDir           string
 	majorMinor          majorMinor
 }
 
 func gatherOptions() *options {
 	o := &options{}
 	flag.StringVar(&o.ocpBuildDataRepoDir, "ocp-build-data-repo-dir", "../ocp-build-data", "The directory in which the ocp-build-data reposity is")
-	flag.StringVar(&o.configDir, "config-dir", "../release/ci-operator/config", "The CI-Operator config directory")
 	flag.StringVar(&o.majorMinor.minor, "minor", "6", "The minor version to target")
 	flag.Parse()
 	return o

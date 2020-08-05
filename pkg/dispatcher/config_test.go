@@ -363,3 +363,40 @@ func TestMatchingPathRegEx(t *testing.T) {
 		})
 	}
 }
+
+func TestIsSSHBastionJob(t *testing.T) {
+	testCases := []struct {
+		name     string
+		base     prowconfig.JobBase
+		expected bool
+	}{
+		{
+			name: "matching label: false",
+			base: prowconfig.JobBase{
+				Name: "some-job",
+				Labels: map[string]string{
+					"dptp.openshift.io/non-ssh-bastion": "true",
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "matching label: true",
+			base: prowconfig.JobBase{
+				Name: "some-job",
+				Labels: map[string]string{
+					"dptp.openshift.io/ssh-bastion": "true",
+				},
+			},
+			expected: true,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := isSSHBastionJob(tc.base)
+			if !reflect.DeepEqual(tc.expected, actual) {
+				t.Errorf("%s: actual differs from expected:\n%s", t.Name(), cmp.Diff(tc.expected, actual))
+			}
+		})
+	}
+}

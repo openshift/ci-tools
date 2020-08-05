@@ -8,6 +8,8 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	prowconfig "k8s.io/test-infra/prow/config"
 	"sigs.k8s.io/yaml"
+
+	"github.com/openshift/ci-tools/pkg/jobconfig"
 )
 
 // CloudProvider define cloud providers
@@ -26,6 +28,8 @@ type Config struct {
 	Default ClusterName `json:"default"`
 	// the cluster cluster name for non Kubernetes jobs
 	NonKubernetes ClusterName `json:"nonKubernetes"`
+	// the cluster cluster name for ssh bastion jobs
+	SSHBastion ClusterName `json:"sshBastion"`
 	// Groups maps a group of jobs to a cluster
 	Groups JobGroups `json:"groups"`
 	// BuildFarm maps groups of jobs to a cloud provider, like GCP
@@ -70,6 +74,9 @@ func (config *Config) DetermineClusterForJob(jobBase prowconfig.JobBase, path st
 	if jobBase.Agent != "kubernetes" {
 		return config.NonKubernetes, false
 	}
+	if isSSHBastionJob(jobBase) {
+		return config.SSHBastion, false
+	}
 	for cluster, group := range config.Groups {
 		for _, job := range group.Jobs {
 			if jobBase.Name == job {
@@ -102,6 +109,15 @@ func (config *Config) DetermineClusterForJob(jobBase prowconfig.JobBase, path st
 	}
 
 	return config.Default, true
+}
+
+func isSSHBastionJob(base prowconfig.JobBase) bool {
+	for k := range base.Labels {
+		if k == jobconfig.SSHBastionLabel {
+			return true
+		}
+	}
+	return false
 }
 
 // IsInBuildFarm returns the cloudProvider if the cluster is in the build farm; empty string otherwise.

@@ -175,6 +175,11 @@ func (s *assembleReleaseStep) run(ctx context.Context) error {
 		return results.ForReason("missing_release").WithError(err).Errorf("could not resolve imagestream %s: %v", streamName, err)
 	}
 
+	// we want to expose the release payload as a CI version that looks just like
+	// the release versions for nightlies and CI release candidates
+	now := time.Now().UTC().Truncate(time.Second)
+	version := fmt.Sprintf("%s.0-0.test-%s-%s", s.config.Name, now.Format("2006-01-02-150405"), s.jobSpec.Namespace())
+
 	destination := fmt.Sprintf("%s:%s", releaseImageStreamRepo, s.name)
 	log.Printf("Create release image %s", destination)
 	podConfig := steps.PodStepConfiguration{
@@ -190,9 +195,9 @@ func (s *assembleReleaseStep) run(ctx context.Context) error {
 set -euo pipefail
 export HOME=/tmp
 oc registry login
-oc adm release new --max-per-registry=32 -n %q --from-image-stream %q --to-image-base %q --to-image %q
+oc adm release new --max-per-registry=32 -n %q --from-image-stream %q --to-image-base %q --to-image %q --name %q
 oc adm release extract --from=%q --to=/tmp/artifacts/release-payload-%s
-`, s.jobSpec.Namespace(), streamName, cvo, destination, destination, s.name),
+`, s.jobSpec.Namespace(), streamName, cvo, destination, version, destination, s.name),
 	}
 
 	// set an explicit default for release-latest resources, but allow customization if necessary

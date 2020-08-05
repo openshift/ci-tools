@@ -200,7 +200,7 @@ func TestValidateTests(t *testing.T) {
 					},
 				},
 			},
-			release:       &ReleaseTagConfiguration{Name: "4.1"},
+			release:       &ReleaseTagConfiguration{Name: "origin-v3.11"},
 			expectedValid: true,
 		},
 		{
@@ -941,28 +941,8 @@ func TestValidateReleaseTagConfiguration(t *testing.T) {
 	}{
 		{
 			name:     "valid tag_specification",
-			input:    ReleaseTagConfiguration{Name: "4.3", Namespace: "ocp"},
+			input:    ReleaseTagConfiguration{Name: "test", Namespace: "test"},
 			expected: nil,
-		},
-		{
-			name:     "missing namespace",
-			input:    ReleaseTagConfiguration{Name: "4.3"},
-			expected: []error{errors.New("tag_specification.namespace: must be set")},
-		},
-		{
-			name:     "missing name",
-			input:    ReleaseTagConfiguration{Namespace: "ocp"},
-			expected: []error{errors.New("tag_specification.name: must be set")},
-		},
-		{
-			name:     "missing all",
-			input:    ReleaseTagConfiguration{},
-			expected: []error{errors.New("tag_specification.namespace: must be set"), errors.New("tag_specification.name: must be set")},
-		},
-		{
-			name:     "invalid name",
-			input:    ReleaseTagConfiguration{Name: "test", Namespace: "ocp"},
-			expected: []error{errors.New("tag_specification.name: must be of the form 4.<minor>, not \"test\"")},
 		},
 	}
 	for _, testCase := range testCases {

@@ -43,7 +43,7 @@ func TestFromCIOperatorConfigToProwYaml(t *testing.T) {
 			branch:    "branch",
 			configYAML: []byte(`base_images:
   base:
-    name: "4.1"
+    name: origin-v3.11
     namespace: openshift
     tag: base
 build_root:
@@ -61,7 +61,7 @@ resources:
     requests:
       cpu: 10Mi
 tag_specification:
-  name: "4.1"
+  name: origin-v3.11
   namespace: openshift
   tag: ''
 promotion:
@@ -82,7 +82,7 @@ tests:
 			variant:   "rhel",
 			configYAML: []byte(`base_images:
   base:
-    name: "4.1"
+    name: origin-v3.11
     namespace: openshift
     tag: base
 build_root:
@@ -100,7 +100,7 @@ resources:
     requests:
       cpu: 10Mi
 tag_specification:
-  name: "4.1"
+  name: origin-v3.11
   namespace: openshift
   tag: ''
 promotion:
@@ -144,7 +144,7 @@ tests:
 			branch:    "branch",
 			configYAML: []byte(`base_images:
   base:
-    name: "4.1"
+    name: origin-v3.11
     namespace: openshift
     tag: base
 images:
@@ -157,7 +157,7 @@ resources:
     requests:
       cpu: 10Mi
 tag_specification:
-  name: "4.1"
+  name: origin-v3.11
   namespace: openshift
   tag: ''
 promotion:

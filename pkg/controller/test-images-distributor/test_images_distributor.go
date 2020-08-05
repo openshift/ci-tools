@@ -44,7 +44,7 @@ func AddToManager(mgr manager.Manager,
 	additionalImageStreamTags sets.String,
 	additionalImageStreams sets.String,
 	additionalImageStreamNamespaces sets.String,
-	dryRun bool) error {
+) error {
 	log := logrus.WithField("controller", ControllerName)
 
 	successfulImportsCounter := prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -72,7 +72,6 @@ func AddToManager(mgr manager.Manager,
 		pullSecretGetter:         pullSecretGetter,
 		successfulImportsCounter: successfulImportsCounter,
 		failedImportsCounter:     failedImportsCounter,
-		dryRun:                   dryRun,
 	}
 	c, err := controller.New(ControllerName, mgr, controller.Options{
 		Reconciler:              r,
@@ -193,7 +192,6 @@ type reconciler struct {
 	pullSecretGetter         func() []byte
 	successfulImportsCounter *prometheus.CounterVec
 	failedImportsCounter     *prometheus.CounterVec
-	dryRun                   bool
 }
 
 func (r *reconciler) Reconcile(req reconcile.Request) (reconcile.Result, error) {
@@ -292,15 +290,6 @@ func (r *reconciler) reconcile(req reconcile.Request, log *logrus.Entry) error {
 		},
 	}
 
-	if r.dryRun {
-		serialized, err := json.Marshal(imageStreamImport)
-		if err != nil {
-			log.WithError(err).Error("failed to marshal ImageStreamImport")
-		}
-		log.WithField("imagestreamtagimport", string(serialized)).Info("Not creating imagestreamimport because dry-run is enabled")
-		r.successfulImportsCounter.WithLabelValues(cluster, decoded.Namespace).Inc()
-		return nil
-	}
 	// ImageStreamImport is not an ordinary api but a virtual one that does the import synchronously
 	if err := client.Create(r.ctx, imageStreamImport); err != nil {
 		r.failedImportsCounter.WithLabelValues(cluster, decoded.Namespace).Inc()

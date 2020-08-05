@@ -99,8 +99,6 @@ func newOpts() (*options, error) {
 	flag.Var(&opts.testImagesDistributorOptions.additionalImageStreamsRaw, "testImagesDistributorOptions.additional-image-stream", "An imagestream that will be distributed even if no test explicitly references it. It must be in namespace/name format (e.G `ci/clonerefs`). Can be passed multiple times.")
 	flag.Var(&opts.testImagesDistributorOptions.additionalImageStreamNamespacesRaw, "testImagesDistributorOptions.additional-image-stream-namespace", "A namespace in which imagestreams will be distributed even if no test explicitly references them (e.G `ci`). Can be passed multiple times.")
 	flag.StringVar(&opts.secretSyncerConfigOptions.configFile, "secretSyncerConfigOptions.config", "", "The config file for the secret syncer controller")
-	// TODO: rather than relying on humans implementing dry-run properly, we should switch
-	// to just do it on client-level once it becomes available: https://github.com/kubernetes-sigs/controller-runtime/pull/839
 	flag.BoolVar(&opts.dryRun, "dry-run", true, "Whether to run the controller-manager with dry-run")
 	flag.Parse()
 
@@ -208,6 +206,7 @@ func main() {
 		LeaderElection:          true,
 		LeaderElectionNamespace: opts.leaderElectionNamespace,
 		LeaderElectionID:        fmt.Sprintf("dptp-controller-manager%s", opts.leaderElectionSuffix),
+		DryRunClient:            opts.dryRun,
 	})
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to construct manager")
@@ -234,6 +233,7 @@ func main() {
 		// get an error when attempting to create the second listener on the same address.
 		MetricsBindAddress: "0",
 		SyncPeriod:         &resyncInterval,
+		DryRunClient:       opts.dryRun,
 	})
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to construct manager for registry")
@@ -288,7 +288,7 @@ func main() {
 		if _, alreadyExists := allManagers[cluster]; alreadyExists {
 			logrus.Fatalf("attempted duplicate creation of manager for cluster %s", cluster)
 		}
-		buildClusterMgr, err := controllerruntime.NewManager(cfg, controllerruntime.Options{MetricsBindAddress: "0", LeaderElection: false})
+		buildClusterMgr, err := controllerruntime.NewManager(cfg, controllerruntime.Options{MetricsBindAddress: "0", LeaderElection: false, DryRunClient: opts.dryRun})
 		if err != nil {
 			errs = append(errs, fmt.Errorf("failed to construct manager for cluster %s: %w", cluster, err))
 			continue
@@ -330,7 +330,6 @@ func main() {
 			opts.testImagesDistributorOptions.additionalImageStreamTags,
 			opts.testImagesDistributorOptions.additionalImageStreams,
 			opts.testImagesDistributorOptions.additionalImageStreamNamespaces,
-			opts.dryRun,
 		); err != nil {
 			logrus.WithError(err).Fatal("failed to add testimagesdistributor")
 		}

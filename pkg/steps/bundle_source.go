@@ -90,7 +90,7 @@ func (s *bundleSourceStep) bundleSourceDockerfile() (string, error) {
 }
 
 func (s *bundleSourceStep) getFullPullSpec(tag string) (string, error) {
-	is, err := s.imageClient.ImageStreams(s.jobSpec.Namespace()).Get(api.StableImageStream, meta.GetOptions{})
+	is, err := s.imageClient.ImageStreams(s.jobSpec.Namespace()).Get(context.TODO(), api.StableImageStream, meta.GetOptions{})
 	if err != nil {
 		return "", err
 	}
@@ -113,8 +113,8 @@ func (s *bundleSourceStep) Creates() []api.StepLink {
 	return []api.StepLink{api.InternalImageLink(s.config.To)}
 }
 
-func (s *bundleSourceStep) Provides() (api.ParameterMap, api.StepLink) {
-	return api.ParameterMap{}, api.InternalImageLink(s.config.To)
+func (s *bundleSourceStep) Provides() api.ParameterMap {
+	return api.ParameterMap{}
 }
 
 func (s *bundleSourceStep) Name() string { return string(s.config.To) }

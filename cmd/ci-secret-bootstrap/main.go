@@ -355,7 +355,7 @@ func updateSecrets(secretsGetters map[string]coreclientset.SecretsGetter, secret
 		for _, secret := range secrets {
 			logrus.Debugf("handling secret: %s:%s/%s", cluster, secret.Namespace, secret.Name)
 			secretsGetter := secretsGetters[cluster]
-			if existingSecret, err := secretsGetter.Secrets(secret.Namespace).Get(secret.Name, meta.GetOptions{}); err == nil {
+			if existingSecret, err := secretsGetter.Secrets(secret.Namespace).Get(context.TODO(), secret.Name, meta.GetOptions{}); err == nil {
 				if secret.Type != existingSecret.Type {
 					errs = append(errs, fmt.Errorf("cannot change secret type from %q to %q (immutable field): %s:%s/%s", existingSecret.Type, secret.Type, cluster, secret.Namespace, secret.Name))
 					continue
@@ -366,13 +366,13 @@ func updateSecrets(secretsGetters map[string]coreclientset.SecretsGetter, secret
 					errs = append(errs, fmt.Errorf("secret %s:%s/%s needs updating in place, use --force to do so", cluster, secret.Namespace, secret.Name))
 					continue
 				}
-				if _, err := secretsGetter.Secrets(secret.Namespace).Update(secret); err != nil {
+				if _, err := secretsGetter.Secrets(secret.Namespace).Update(context.TODO(), secret, meta.UpdateOptions{}); err != nil {
 					errs = append(errs, fmt.Errorf("error updating secret %s:%s/%s: %w", cluster, secret.Namespace, secret.Name, err))
 					continue
 				}
 				logrus.Debugf("updated secret: %s:%s/%s", cluster, secret.Namespace, secret.Name)
 			} else if kerrors.IsNotFound(err) {
-				if _, err := secretsGetter.Secrets(secret.Namespace).Create(secret); err != nil {
+				if _, err := secretsGetter.Secrets(secret.Namespace).Create(context.TODO(), secret, meta.CreateOptions{}); err != nil {
 					errs = append(errs, fmt.Errorf("error creating secret %s:%s/%s: %w", cluster, secret.Namespace, secret.Name, err))
 					continue
 				}
@@ -400,7 +400,7 @@ func writeSecrets(secretsMap map[string][]*coreapi.Secret, w io.Writer) error {
 	}
 	sort.Strings(clusters)
 	for _, cluster := range clusters {
-		if _, err := fmt.Fprintln(w, fmt.Sprintf("###%s###", cluster)); err != nil {
+		if _, err := fmt.Fprintf(w, "###%s###\n", cluster); err != nil {
 			return err
 		}
 		for _, secret := range secretsMap[cluster] {

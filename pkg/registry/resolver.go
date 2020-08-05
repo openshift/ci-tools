@@ -59,9 +59,13 @@ func (r *registry) Resolve(name string, config api.MultiStageTestConfiguration) 
 				config.Environment[k] = v
 			}
 		}
+		if config.AllowSkipOnSuccess == nil {
+			config.AllowSkipOnSuccess = workflow.AllowSkipOnSuccess
+		}
 	}
 	expandedFlow := api.MultiStageTestConfigurationLiteral{
-		ClusterProfile: config.ClusterProfile,
+		ClusterProfile:     config.ClusterProfile,
+		AllowSkipOnSuccess: config.AllowSkipOnSuccess,
 	}
 	rec := stackRecordForTest(name, config.Environment)
 	stack := []stackRecord{rec}

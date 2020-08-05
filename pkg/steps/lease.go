@@ -50,15 +50,15 @@ func (s *leaseStep) Name() string             { return s.wrapped.Name() }
 func (s *leaseStep) Description() string      { return s.wrapped.Description() }
 func (s *leaseStep) Requires() []api.StepLink { return s.wrapped.Requires() }
 func (s *leaseStep) Creates() []api.StepLink  { return s.wrapped.Creates() }
-func (s *leaseStep) Provides() (api.ParameterMap, api.StepLink) {
-	parameters, links := s.wrapped.Provides()
+func (s *leaseStep) Provides() api.ParameterMap {
+	parameters := s.wrapped.Provides()
 	if parameters == nil {
 		parameters = api.ParameterMap{}
 	}
 	parameters[leaseEnv] = func() (string, error) {
 		return s.leasedResource, nil
 	}
-	return parameters, links
+	return parameters
 }
 
 func (s *leaseStep) SubTests() []*junit.TestCase {
@@ -115,7 +115,7 @@ func heartbeatNamespace(namespace func() string, client coreclientset.NamespaceI
 		case <-ticker.C:
 			// do work
 			if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				ns, err := client.Get(namespace(), meta.GetOptions{})
+				ns, err := client.Get(context.TODO(), namespace(), meta.GetOptions{})
 				if err != nil {
 					return fmt.Errorf("get failed: %w", err)
 				}
@@ -125,7 +125,7 @@ func heartbeatNamespace(namespace func() string, client coreclientset.NamespaceI
 				}
 				ns.ObjectMeta.Annotations["ci.openshift.io/active"] = time.Now().Format(time.RFC3339)
 
-				_, err = client.Update(ns)
+				_, err = client.Update(context.TODO(), ns, meta.UpdateOptions{})
 				if err != nil {
 					return fmt.Errorf("update failed: %w", err)
 				}

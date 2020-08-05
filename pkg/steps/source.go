@@ -3,6 +3,7 @@ package steps
 import (
 	"context"
 	"fmt"
+	"github.com/openshift/ci-tools/pkg/steps/utils"
 	"io"
 	"log"
 	"os"
@@ -348,11 +349,11 @@ func isBuildPhaseTerminated(phase buildapi.BuildPhase) bool {
 }
 
 func handleBuild(ctx context.Context, buildClient BuildClient, build *buildapi.Build, artifactDir string) error {
-	if _, err := buildClient.Builds(build.Namespace).Create(build); err != nil {
+	if _, err := buildClient.Builds(build.Namespace).Create(ctx, build, meta.CreateOptions{}); err != nil {
 		if !errors.IsAlreadyExists(err) {
 			return fmt.Errorf("could not create build %s: %w", build.Name, err)
 		}
-		b, err := buildClient.Builds(build.Namespace).Get(build.Name, meta.GetOptions{})
+		b, err := buildClient.Builds(build.Namespace).Get(ctx, build.Name, meta.GetOptions{})
 		if err != nil {
 			return fmt.Errorf("could not get build %s: %w", build.Name, err)
 		}
@@ -362,18 +363,18 @@ func handleBuild(ctx context.Context, buildClient BuildClient, build *buildapi.B
 			log.Printf("Build %s previously failed from an infrastructure error (%s), retrying...\n", b.Name, b.Status.Reason)
 			zero := int64(0)
 			foreground := meta.DeletePropagationForeground
-			opts := &meta.DeleteOptions{
+			opts := meta.DeleteOptions{
 				GracePeriodSeconds: &zero,
 				Preconditions:      &meta.Preconditions{UID: &b.UID},
 				PropagationPolicy:  &foreground,
 			}
-			if err := buildClient.Builds(build.Namespace).Delete(build.Name, opts); err != nil && !errors.IsNotFound(err) && !errors.IsConflict(err) {
+			if err := buildClient.Builds(build.Namespace).Delete(ctx, build.Name, opts); err != nil && !errors.IsNotFound(err) && !errors.IsConflict(err) {
 				return fmt.Errorf("could not delete build %s: %w", build.Name, err)
 			}
 			if err := waitForBuildDeletion(ctx, buildClient, build.Namespace, build.Name); err != nil {
 				return fmt.Errorf("could not wait for build %s to be deleted: %w", build.Name, err)
 			}
-			if _, err := buildClient.Builds(build.Namespace).Create(build); err != nil && !errors.IsAlreadyExists(err) {
+			if _, err := buildClient.Builds(build.Namespace).Create(ctx, build, meta.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
 				return fmt.Errorf("could not recreate build %s: %w", build.Name, err)
 			}
 		}
@@ -396,7 +397,7 @@ func waitForBuildDeletion(ctx context.Context, client BuildClient, ns, name stri
 		ch <- wait.ExponentialBackoff(wait.Backoff{
 			Duration: 10 * time.Millisecond, Factor: 2, Steps: 10,
 		}, func() (done bool, err error) {
-			if _, err := client.Builds(ns).Get(name, meta.GetOptions{}); err != nil {
+			if _, err := client.Builds(ns).Get(ctx, name, meta.GetOptions{}); err != nil {
 				if errors.IsNotFound(err) {
 					return true, nil
 				}
@@ -470,7 +471,7 @@ func waitForBuildOrTimeout(ctx context.Context, buildClient BuildClient, namespa
 
 	// First we set up a watcher to catch all events that happen while we check
 	// the build status
-	watcher, err := buildClient.Builds(namespace).Watch(meta.ListOptions{
+	watcher, err := buildClient.Builds(namespace).Watch(ctx, meta.ListOptions{
 		FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String(),
 		Watch:         true,
 	})
@@ -479,7 +480,7 @@ func waitForBuildOrTimeout(ctx context.Context, buildClient BuildClient, namespa
 	}
 	defer watcher.Stop()
 
-	list, err := buildClient.Builds(namespace).List(meta.ListOptions{FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String()})
+	list, err := buildClient.Builds(namespace).List(ctx, meta.ListOptions{FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String()})
 	if err != nil {
 		return false, fmt.Errorf("could not list builds: %w", err)
 	}
@@ -619,24 +620,10 @@ func (s *sourceStep) Creates() []api.StepLink {
 	return []api.StepLink{api.InternalImageLink(s.config.To)}
 }
 
-func (s *sourceStep) Provides() (api.ParameterMap, api.StepLink) {
+func (s *sourceStep) Provides() api.ParameterMap {
 	return api.ParameterMap{
-		"LOCAL_IMAGE_SRC": func() (string, error) {
-			is, err := s.imageClient.ImageStreams(s.jobSpec.Namespace()).Get(api.PipelineImageStream, meta.GetOptions{})
-			if err != nil {
-				return "", fmt.Errorf("could not get output imagestream: %w", err)
-			}
-			var registry string
-			if len(is.Status.PublicDockerImageRepository) > 0 {
-				registry = is.Status.PublicDockerImageRepository
-			} else if len(is.Status.DockerImageRepository) > 0 {
-				registry = is.Status.DockerImageRepository
-			} else {
-				return "", fmt.Errorf("image stream %s has no accessible image registry value", s.config.To)
-			}
-			return fmt.Sprintf("%s:%s", registry, s.config.To), nil
-		},
-	}, api.InternalImageLink("src")
+		utils.PipelineImageEnvFor(s.config.To): utils.ImageDigestFor(s.imageClient, s.jobSpec.Namespace, api.PipelineImageStream, string(s.config.To)),
+	}
 }
 
 func (s *sourceStep) Name() string { return string(s.config.To) }

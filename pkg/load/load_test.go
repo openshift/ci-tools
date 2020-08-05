@@ -808,23 +808,23 @@ func TestRegistry(t *testing.T) {
 			name:          "Read registry with ref where name and filename don't match",
 			registryDir:   "../../test/multistage-registry/invalid-filename",
 			flatRegistry:  false,
-			references:    registry.ReferenceByName{},
-			chains:        registry.ChainByName{},
-			workflows:     registry.WorkflowByName{},
+			references:    nil,
+			chains:        nil,
+			workflows:     nil,
 			expectedError: true,
 		}, {
 			name:          "Read registry where ref has an extra, invalid field",
 			registryDir:   "../../test/multistage-registry/invalid-field",
 			flatRegistry:  false,
-			references:    registry.ReferenceByName{},
-			chains:        registry.ChainByName{},
-			workflows:     registry.WorkflowByName{},
+			references:    nil,
+			chains:        nil,
+			workflows:     nil,
 			expectedError: true,
 		}}
 	)
 
 	for _, testCase := range testCases {
-		references, chains, workflows, _, err := Registry(testCase.registryDir, testCase.flatRegistry)
+		references, chains, workflows, _, _, err := Registry(testCase.registryDir, testCase.flatRegistry)
 		if err == nil && testCase.expectedError == true {
 			t.Errorf("%s: got no error when error was expected", testCase.name)
 		}
@@ -866,7 +866,7 @@ func TestRegistry(t *testing.T) {
 	if err := ioutil.WriteFile(filepath.Join(path, deprovisionGatherRef), fileData, 0664); err != nil {
 		t.Fatalf("failed to populate temp reference file: %v", err)
 	}
-	_, _, _, _, err = Registry(temp, false)
+	_, _, _, _, _, err = Registry(temp, false)
 	if err == nil {
 		t.Error("got no error when expecting error on incorrect reference name")
 	}

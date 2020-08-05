@@ -57,17 +57,12 @@ lint:
 # Run unit tests.
 #
 # Args:
-#   WHAT: Directory names to test.  All *_test.go files under these
-#     directories will be run.  If not specified, "everything" will be tested.
-#   TESTS: Same as WHAT.
 #   GOFLAGS: Extra flags to pass to 'go' when building.
-#   TESTFLAGS: Extra flags that should only be passed to hack/test-go.sh
 #
 # Example:
 #   make test
-#   make test WHAT=pkg/build TESTFLAGS=-v
 test:
-	GOTEST_FLAGS="$(TESTFLAGS)" hack/test-go.sh $(WHAT) $(TESTS)
+	GOTEST_FLAGS="$(TESTFLAGS)" hack/test-go.sh
 .PHONY: test
 
 # Remove all build artifacts.

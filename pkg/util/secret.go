@@ -1,6 +1,7 @@
 package util
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -8,8 +9,7 @@ import (
 
 	coreapi "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
-	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
-	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // SecretFromDir creates a secret with the contents of files in a directory.
@@ -42,16 +42,16 @@ func SecretFromDir(path string) (*coreapi.Secret, error) {
 // UpdateSecret adds new values to an existing secret.
 // New values are added, existing values are overwritten. The secret will be
 // created if it doesn't already exist.
-func UpdateSecret(client coreclientset.SecretInterface, secret *coreapi.Secret) (created bool, err error) {
-	_, err = client.Create(secret)
+func UpdateSecret(ctx context.Context, client ctrlruntimeclient.Client, secret *coreapi.Secret) (created bool, err error) {
+	err = client.Create(ctx, secret)
 	if err == nil {
 		return true, nil
 	}
 	if !kerrors.IsAlreadyExists(err) {
 		return false, err
 	}
-	existing, err := client.Get(secret.Name, meta.GetOptions{})
-	if err != nil {
+	existing := &coreapi.Secret{}
+	if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Name: secret.Name}, existing); err != nil {
 		return false, err
 	}
 	if l := len(secret.Data); l != 0 && existing.Data == nil {
@@ -60,6 +60,5 @@ func UpdateSecret(client coreclientset.SecretInterface, secret *coreapi.Secret) 
 	for k, v := range secret.Data {
 		existing.Data[k] = v
 	}
-	_, err = client.Update(existing)
-	return false, err
+	return false, client.Update(ctx, existing)
 }

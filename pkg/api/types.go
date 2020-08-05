@@ -2,6 +2,8 @@ package api
 
 import (
 	"fmt"
+
+	"k8s.io/test-infra/prow/repoowners"
 )
 
 const (
@@ -524,6 +526,22 @@ type RegistryWorkflow struct {
 	Documentation string `json:"documentation,omitempty"`
 }
 
+// RegistryMetadataPath is the path to the registry metadata file relative to the step registry base directory
+const RegistryMetadataPath = "metadata.json"
+
+// RegistryMetadata contains the metadata for all registry components by name
+type RegistryMetadata struct {
+	Metadata map[string]RegistryInfo `json:"metadata,omitempty"`
+}
+
+// RegistryInfo contains metadata about a registry component that is useful for the web UI of the step registry
+type RegistryInfo struct {
+	// Path is the path of the directoryfor the registry component relative to the registry's base directory
+	Path string `json:"path,omitempty"`
+	// Owners is the OWNERS config for the registry component
+	Owners repoowners.Config `json:"owners,omitempty"`
+}
+
 // LiteralTestStep is the external representation of a test step allowing users
 // to define new test steps. It gets converted to an internal LiteralTestStep
 // struct that represents the full configuration that ci-operator can use.
@@ -614,7 +632,7 @@ type MultiStageTestConfiguration struct {
 	// AllowSkipOnSuccess defines if any steps can be skipped when
 	// all previous `pre` and `test` steps were successful. The given step must explicitly
 	// ask for being skipped by setting the OptionalOnSuccess flag to true.
-	AllowSkipOnSuccess bool `json:"allow_skip_on_success,omitempty"`
+	AllowSkipOnSuccess *bool `json:"allow_skip_on_success,omitempty"`
 }
 
 // MultiStageTestConfigurationLiteral is a form of the MultiStageTestConfiguration that does not include
@@ -635,7 +653,7 @@ type MultiStageTestConfigurationLiteral struct {
 	// AllowSkipOnSuccess defines if any steps can be skipped when
 	// all previous `pre` and `test` steps were successful. The given step must explicitly
 	// ask for being skipped by setting the OptionalOnSuccess flag to true.
-	AllowSkipOnSuccess bool `json:"allow_skip_on_success,omitempty"`
+	AllowSkipOnSuccess *bool `json:"allow_skip_on_success,omitempty"`
 }
 
 // TestEnvironment has the values of parameters for multi-stage tests.
@@ -1095,10 +1113,10 @@ const (
 	// the StableImageStream. Images for other versions of
 	// the stream are held in similarly-named streams.
 	LatestStableName = "latest"
-	// InitialStableName is the name of the special stable
+	// InitialImageStream is the name of the special stable
 	// stream we copy at import to keep for upgrade tests.
 	// TODO(skuznets): remove these when they're not implicit
-	InitialStableName = "initial"
+	InitialImageStream = "initial"
 
 	// ReleaseImageStream is the name of the ImageStream
 	// used to hold built or imported release payload images

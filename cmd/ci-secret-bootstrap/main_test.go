@@ -1463,11 +1463,11 @@ func TestUpdateSecrets(t *testing.T) {
 			actual := updateSecrets(clients, tc.secretsMap, tc.force)
 			equalError(t, tc.expected, actual)
 
-			actualSecretsOnDefault, err := fkcDefault.CoreV1().Secrets("").List(metav1.ListOptions{})
+			actualSecretsOnDefault, err := fkcDefault.CoreV1().Secrets("").List(context.TODO(), metav1.ListOptions{})
 			equalError(t, nil, err)
 			equal(t, tc.expectedSecretsOnDefault, actualSecretsOnDefault.Items)
 
-			actualSecretsOnBuild01, err := fkcBuild01.CoreV1().Secrets("").List(metav1.ListOptions{})
+			actualSecretsOnBuild01, err := fkcBuild01.CoreV1().Secrets("").List(context.TODO(), metav1.ListOptions{})
 			equalError(t, nil, err)
 			equal(t, tc.expectedSecretsOnBuild01, actualSecretsOnBuild01.Items)
 		})

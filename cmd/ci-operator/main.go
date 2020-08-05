@@ -30,17 +30,21 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	policyv1beta1 "k8s.io/api/policy/v1beta1"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/client-go/kubernetes/scheme"
 	authclientset "k8s.io/client-go/kubernetes/typed/authorization/v1"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
-	rbacclientset "k8s.io/client-go/kubernetes/typed/rbac/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 	"k8s.io/test-infra/prow/version"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	crcontrollerutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"github.com/ghodss/yaml"
 
@@ -63,6 +67,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/util"
+	"github.com/openshift/ci-tools/pkg/util/namespacewrapper"
 )
 
 const usage = `Orchestrate multi-stage image-based builds
@@ -150,8 +155,6 @@ const (
 	annotationIdleCleanupDurationTTL = "ci.openshift.io/ttl.soft"
 	// annotationCleanupDurationTTL is the annotation for requesting namespace cleanup after the namespace has been active
 	annotationCleanupDurationTTL = "ci.openshift.io/ttl.hard"
-	// configResolverAddress is the default configresolver address in app.ci
-	configResolverAddress = "http://ci-operator-configresolver-ci.apps.ci.l2s4.p1.openshiftapps.com"
 	// leaseServerUsername is the default lease server username in api.ci
 	leaseServerUsername = "ci"
 
@@ -162,6 +165,8 @@ const (
 var (
 	// leaseServerAddress is the default lease server in api.ci
 	leaseServerAddress = api.URLForService(api.ServiceBoskos)
+	// configResolverAddress is the default configresolver address in app.ci
+	configResolverAddress = api.URLForService(api.ServiceConfig)
 )
 
 // CustomProwMetadata the name of the custom prow metadata file that's expected to be found in the artifacts directory.
@@ -689,7 +694,7 @@ func (o *options) resolveInputs(steps []api.Step) error {
 	if routeGetter, err := routeclientset.NewForConfig(o.clusterConfig); err != nil {
 		log.Printf("could not get route client for cluster config")
 	} else {
-		if consoleRoute, err := routeGetter.Routes("openshift-console").Get("console", meta.GetOptions{}); err != nil {
+		if consoleRoute, err := routeGetter.Routes("openshift-console").Get(context.TODO(), "console", meta.GetOptions{}); err != nil {
 			log.Printf("could not get route console in namespace openshift-console")
 		} else {
 			o.consoleHost = consoleRoute.Spec.Host
@@ -706,26 +711,38 @@ func (o *options) resolveInputs(steps []api.Step) error {
 }
 
 func (o *options) initializeNamespace() error {
+
+	if err := imageapi.AddToScheme(scheme.Scheme); err != nil {
+		return fmt.Errorf("failed to add imageapi to scheme: %w", err)
+	}
+
+	// We have to keep the project client because it return a project for a projectCreationRequest, ctrlruntimeclient can not do dark magic like that
 	projectGetter, err := projectclientset.NewForConfig(o.clusterConfig)
 	if err != nil {
 		return fmt.Errorf("could not get project client for cluster config: %w", err)
 	}
+	client, err := ctrlruntimeclient.New(o.clusterConfig, ctrlruntimeclient.Options{})
+	if err != nil {
+		return fmt.Errorf("failed to construct client: %w", err)
+	}
+	client = namespacewrapper.New(client, o.namespace)
+	ctx := context.Background()
 
 	log.Printf("Creating namespace %s", o.namespace)
 	retries := 5
 	for {
-		project, err := projectGetter.ProjectV1().ProjectRequests().Create(&projectapi.ProjectRequest{
+		project, err := projectGetter.ProjectV1().ProjectRequests().Create(context.TODO(), &projectapi.ProjectRequest{
 			ObjectMeta: meta.ObjectMeta{
 				Name: o.namespace,
 			},
 			DisplayName: fmt.Sprintf("%s - %s", o.namespace, o.jobSpec.Job),
 			Description: jobDescription(o.jobSpec),
-		})
+		}, meta.CreateOptions{})
 		if err != nil && !kerrors.IsAlreadyExists(err) {
 			return fmt.Errorf("could not set up namespace for test: %w", err)
 		}
 		if err != nil {
-			project, err = projectGetter.ProjectV1().Projects().Get(o.namespace, meta.GetOptions{})
+			project, err = projectGetter.ProjectV1().Projects().Get(context.TODO(), o.namespace, meta.GetOptions{})
 			if err != nil {
 				if kerrors.IsNotFound(err) {
 					continue
@@ -749,13 +766,9 @@ func (o *options) initializeNamespace() error {
 
 	if o.givePrAuthorAccessToNamespace {
 		// Generate rolebinding for all the PR Authors.
-		rbacClient, err := rbacclientset.NewForConfig(o.clusterConfig)
-		if err != nil {
-			return fmt.Errorf("could not get RBAC client for cluster config: %w", err)
-		}
 		for _, author := range o.authors {
 			log.Printf("Creating rolebinding for user %s in namespace %s", author, o.namespace)
-			if _, err := rbacClient.RoleBindings(o.namespace).Create(&rbacapi.RoleBinding{
+			if err := client.Create(ctx, &rbacapi.RoleBinding{
 				ObjectMeta: meta.ObjectMeta{
 					Name:      "ci-op-author-access",
 					Namespace: o.namespace,
@@ -771,13 +784,8 @@ func (o *options) initializeNamespace() error {
 		}
 	}
 
-	client, err := coreclientset.NewForConfig(o.clusterConfig)
-	if err != nil {
-		return fmt.Errorf("could not get core client for cluster config: %w", err)
-	}
-
 	if o.pullSecret != nil {
-		if _, err := client.Secrets(o.namespace).Create(o.pullSecret); err != nil && !kerrors.IsAlreadyExists(err) {
+		if err := client.Create(ctx, o.pullSecret); err != nil && !kerrors.IsAlreadyExists(err) {
 			return fmt.Errorf("couldn't create pull secret %s: %w", o.pullSecret.Name, err)
 		}
 	}
@@ -803,8 +811,8 @@ func (o *options) initializeNamespace() error {
 
 	if len(updates) > 0 {
 		if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-			ns, err := client.Namespaces().Get(o.namespace, meta.GetOptions{})
-			if err != nil {
+			ns := &coreapi.Namespace{}
+			if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Name: o.namespace}, ns); err != nil {
 				return err
 			}
 
@@ -826,7 +834,7 @@ func (o *options) initializeNamespace() error {
 				ns.ObjectMeta.Annotations[key] = value
 			}
 
-			_, updateErr := client.Namespaces().Update(ns)
+			updateErr := client.Update(ctx, ns)
 			if kerrors.IsForbidden(updateErr) {
 				log.Printf("warning: Could not add annotations because you do not have permission to update the namespace (details: %v)", updateErr)
 				return nil
@@ -838,13 +846,9 @@ func (o *options) initializeNamespace() error {
 	}
 
 	log.Printf("Setting up pipeline imagestream for the test")
-	imageGetter, err := imageclientset.NewForConfig(o.clusterConfig)
-	if err != nil {
-		return fmt.Errorf("could not get image client for cluster config: %w", err)
-	}
 
 	// create the image stream or read it to get its uid
-	is, err := imageGetter.ImageStreams(o.jobSpec.Namespace()).Create(&imageapi.ImageStream{
+	is := &imageapi.ImageStream{
 		ObjectMeta: meta.ObjectMeta{
 			Namespace: o.jobSpec.Namespace(),
 			Name:      api.PipelineImageStream,
@@ -853,12 +857,14 @@ func (o *options) initializeNamespace() error {
 			// pipeline:* will now be directly referenceable
 			LookupPolicy: imageapi.ImageLookupPolicy{Local: true},
 		},
-	})
-	if err != nil {
+	}
+	if err := client.Create(ctx, is); err != nil {
 		if !kerrors.IsAlreadyExists(err) {
 			return fmt.Errorf("could not set up pipeline imagestream for test: %w", err)
 		}
-		is, _ = imageGetter.ImageStreams(o.jobSpec.Namespace()).Get(api.PipelineImageStream, meta.GetOptions{})
+		if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Name: api.PipelineImageStream}, is); err != nil {
+			return fmt.Errorf("failed to get pipeline imagestream: %w", err)
+		}
 	}
 	if is != nil {
 		isTrue := true
@@ -872,13 +878,13 @@ func (o *options) initializeNamespace() error {
 	}
 
 	if o.cloneAuthConfig != nil && o.cloneAuthConfig.Secret != nil {
-		if _, err := client.Secrets(o.namespace).Create(o.cloneAuthConfig.Secret); err != nil && !kerrors.IsAlreadyExists(err) {
+		if err := client.Create(ctx, o.cloneAuthConfig.Secret); err != nil && !kerrors.IsAlreadyExists(err) {
 			return fmt.Errorf("couldn't create secret %s for %s authentication: %w", o.cloneAuthConfig.Secret.Name, o.cloneAuthConfig.Type, err)
 		}
 	}
 
 	for _, secret := range o.secrets {
-		created, err := util.UpdateSecret(client.Secrets(o.namespace), secret)
+		created, err := util.UpdateSecret(ctx, client, secret)
 		if err != nil {
 			return fmt.Errorf("could not update secret %s: %w", secret.Name, err)
 		}
@@ -888,7 +894,38 @@ func (o *options) initializeNamespace() error {
 			log.Printf("Updated secret %s", secret.Name)
 		}
 	}
+
+	for _, pdbLabelKey := range []string{"openshift.io/build.name", "created-by-ci"} {
+		pdb, mutateFn := pdb(pdbLabelKey, o.namespace)
+		if _, err := crcontrollerutil.CreateOrUpdate(ctx, client, pdb, mutateFn); err != nil {
+			return fmt.Errorf("failed to create pdb for label key %s: %w", pdbLabelKey, err)
+		}
+		log.Printf("Created PDB for pods with %s label", pdbLabelKey)
+	}
+
 	return nil
+}
+
+func pdb(labelKey, namespace string) (*policyv1beta1.PodDisruptionBudget, crcontrollerutil.MutateFn) {
+	pdb := &policyv1beta1.PodDisruptionBudget{
+		ObjectMeta: meta.ObjectMeta{
+			Name:      fmt.Sprintf("ci-operator-%s", strings.ReplaceAll(labelKey, "/", "-")),
+			Namespace: namespace,
+		},
+	}
+	return pdb, func() error {
+		pdb.Spec.MaxUnavailable = &intstr.IntOrString{
+			Type:   intstr.Int,
+			IntVal: 0,
+		}
+		pdb.Spec.Selector = &meta.LabelSelector{
+			MatchExpressions: []meta.LabelSelectorRequirement{{
+				Key:      labelKey,
+				Operator: meta.LabelSelectorOpExists,
+			}},
+		}
+		return nil
+	}
 }
 
 // prowResultMetadata is the set of metadata consumed by testgrid and
@@ -1156,13 +1193,13 @@ func (o *options) saveNamespaceArtifacts() {
 	}
 
 	if kubeClient, err := coreclientset.NewForConfig(o.clusterConfig); err == nil {
-		pods, _ := kubeClient.Pods(o.namespace).List(meta.ListOptions{})
+		pods, _ := kubeClient.Pods(o.namespace).List(context.TODO(), meta.ListOptions{})
 		data, _ := json.MarshalIndent(pods, "", "  ")
 		path := filepath.Join(namespaceDir, "pods.json")
 		if err := ioutil.WriteFile(path, data, 0644); err != nil {
 			logrus.WithError(err).Errorf("Failed to write %s", path)
 		}
-		events, _ := kubeClient.Events(o.namespace).List(meta.ListOptions{})
+		events, _ := kubeClient.Events(o.namespace).List(context.TODO(), meta.ListOptions{})
 		data, _ = json.MarshalIndent(events, "", "  ")
 		path = filepath.Join(namespaceDir, "events.json")
 		if err := ioutil.WriteFile(path, data, 0644); err != nil {
@@ -1171,7 +1208,7 @@ func (o *options) saveNamespaceArtifacts() {
 	}
 
 	if buildClient, err := buildclientset.NewForConfig(o.clusterConfig); err == nil {
-		builds, _ := buildClient.Builds(o.namespace).List(meta.ListOptions{})
+		builds, _ := buildClient.Builds(o.namespace).List(context.TODO(), meta.ListOptions{})
 		data, _ := json.MarshalIndent(builds, "", "  ")
 		path := filepath.Join(namespaceDir, "builds.json")
 		if err := ioutil.WriteFile(path, data, 0644); err != nil {
@@ -1180,7 +1217,7 @@ func (o *options) saveNamespaceArtifacts() {
 	}
 
 	if imageClient, err := imageclientset.NewForConfig(o.clusterConfig); err == nil {
-		imagestreams, _ := imageClient.ImageStreams(o.namespace).List(meta.ListOptions{})
+		imagestreams, _ := imageClient.ImageStreams(o.namespace).List(context.TODO(), meta.ListOptions{})
 		data, _ := json.MarshalIndent(imagestreams, "", "  ")
 		path := filepath.Join(namespaceDir, "imagestreams.json")
 		if err := ioutil.WriteFile(path, data, 0644); err != nil {
@@ -1189,7 +1226,7 @@ func (o *options) saveNamespaceArtifacts() {
 	}
 
 	if templateClient, err := templateclientset.NewForConfig(o.clusterConfig); err == nil {
-		templateInstances, _ := templateClient.TemplateInstances(o.namespace).List(meta.ListOptions{})
+		templateInstances, _ := templateClient.TemplateInstances(o.namespace).List(context.TODO(), meta.ListOptions{})
 		data, _ := json.MarshalIndent(templateInstances, "", "  ")
 		path := filepath.Join(namespaceDir, "templateinstances.json")
 		if err := ioutil.WriteFile(path, data, 0644); err != nil {
@@ -1456,7 +1493,7 @@ func summarizeRef(refs prowapi.Refs) string {
 }
 
 func eventRecorder(kubeClient *coreclientset.CoreV1Client, authClient *authclientset.AuthorizationV1Client, namespace string) (record.EventRecorder, error) {
-	res, err := authClient.SelfSubjectAccessReviews().Create(&authapi.SelfSubjectAccessReview{
+	res, err := authClient.SelfSubjectAccessReviews().Create(context.TODO(), &authapi.SelfSubjectAccessReview{
 		Spec: authapi.SelfSubjectAccessReviewSpec{
 			ResourceAttributes: &authapi.ResourceAttributes{
 				Namespace: namespace,
@@ -1464,7 +1501,7 @@ func eventRecorder(kubeClient *coreclientset.CoreV1Client, authClient *authclien
 				Resource:  "events",
 			},
 		},
-	})
+	}, meta.CreateOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("could not check permission to create events: %w", err)
 	}
@@ -1569,7 +1606,7 @@ func (o *options) getResolverInfo(jobSpec *api.JobSpec) *load.ResolverInfo {
 
 func monitorNamespace(ctx context.Context, cancel func(), namespace string, client coreclientset.NamespaceInterface) {
 	for {
-		watcher, err := client.Watch(meta.ListOptions{
+		watcher, err := client.Watch(context.TODO(), meta.ListOptions{
 			TypeMeta:      meta.TypeMeta{},
 			FieldSelector: fields.Set{"metadata.name": namespace}.AsSelector().String(),
 			Watch:         true,

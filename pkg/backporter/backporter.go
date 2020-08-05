@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"sort"
 	"strconv"
 
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -98,12 +100,24 @@ td {
   <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
     <span class="navbar-toggler-icon"></span>
   </button>
-
   <div class="collapse navbar-collapse" id="navbarSupportedContent">
-    <form class="form-inline my-2 my-lg-0 needs-validation" role="search" action="/clones" method="get">
-	  <input class="form-control mr-sm-2" type="text" placeholder="Bug ID" aria-label="Search" name="ID" required>
-      <button class="btn btn-outline-success my-2 my-sm-0" type="submit">Find Clones</button>
-    </form>
+	<ul class="navbar-nav mr-auto">
+		<li class="nav-item">
+			<a class="nav-link" href="/">Home <span class="sr-only">(current)</span></a>
+		</li>
+		<li class="nav-item dropdown">
+			<a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+			Help
+			</a>
+			<div class="dropdown-menu" aria-labelledby="navbarDropdown">
+			<a class="dropdown-item" href="/help">Getting Started</a>
+			</div>
+		</li>
+	</ul>
+		<form class="form-inline my-2 my-lg-0 needs-validation" role="search" action="/clones" method="get">
+		<input class="form-control mr-sm-2" type="text" placeholder="Bug ID" aria-label="Search" name="ID" required>
+		<button class="btn btn-outline-success my-2 my-sm-0" type="submit">Find Clones</button>
+		</form>
   </div>
 </nav>
 `
@@ -124,22 +138,10 @@ const clonesTemplateConstructor = `
 	</div>
 {{ end }}
 <div class="container">
-	<h2> <a href = "#bugid" id="bugid" value="{{.Bug.ID}}"> {{.Bug.ID}}: {{.Bug.Summary}} </a> | Status: {{.Bug.Status}} </h2>
-	<p><label> Target Release:</label> {{ .Bug.TargetRelease }} </p>
-	{{ if .PRs }}
-		<p> <label>GitHub PR: </label>
-		{{ if .PRs }}
-			{{ range $index, $pr := .PRs }}
-				{{ if $index}}|{{end}} 
-				<a href="{{ $pr.Type.URL }}/{{ $pr.Org}}/{{ $pr.Repo}}/pull/{{ $pr.Num}}">{{ $pr.Org}}/{{ $pr.Repo}}#{{ $pr.Num}}</a>
-			{{ end }}
-		{{ end }}
-		</p>
-	{{ else }}
-		<p> No linked PRs. </p>
-	{{ end }}
+	<h2> {{.Bug.Summary}} </h2>
+	
 	{{ if ne .Parent.ID .Bug.ID}}
-		<p> <label>Cloned From: </label><a href = "/clones?ID={{.Parent.ID}}"> Bug {{.Parent.ID}}: {{.Parent.Summary}}</a> | Status: {{.Parent.Status}}
+		<p> <label>Cloned From: </label><a href = "/clones?ID={{.Parent.ID}}" > Bug {{.Parent.ID}}: {{.Parent.Summary}}</a> | Status: {{.Parent.Status}}
 	{{ else }}
 		<p> <label>Cloned From: </label>This is the original. </p>
 	{{ end }}
@@ -150,15 +152,21 @@ const clonesTemplateConstructor = `
 				<th title="Targeted version to release fix" class="info">Target Release</th>
 				<th title="ID of the cloned bug" class="info">Bug ID</th>
 				<th title="Status of the cloned bug" class="info">Status</th>
-				<th title="PR associated with this bug" class="info">PR</th>
+				<th title="PR associated with this bug" class="info">PRs</th>
 			</tr>
 		</thead>
 		<tbody>
 		{{ if .Clones }}
 			{{ range $clone := .Clones }}
-				<tr>
-					<td style="vertical-align: middle;">{{ $clone.TargetRelease }}</td>
-					<td style="vertical-align: middle;"><a href = "/clones?ID={{$clone.ID}}">{{ $clone.ID }}</a></td>
+				<tr {{if eq $clone.ID $.Bug.ID }}class="table-active"{{ end }}>
+					<td style="vertical-align: middle;">
+					{{ if $clone.TargetRelease }} 
+						{{ index $clone.TargetRelease 0 }}
+					{{ else }}
+						---
+					{{ end }}
+					</td>
+					<td style="vertical-align: middle;"><a href = "https://bugzilla.redhat.com/show_bug.cgi?id={{$clone.ID}}" target="_blank">{{ $clone.ID }}</a></td>
 					<td style="vertical-align: middle;">{{ $clone.Status }}</td>
 					<td style="vertical-align: middle;">
 						{{range $index, $pr := $clone.PRs }}
@@ -185,6 +193,43 @@ const clonesTemplateConstructor = `
     </form>
 </div>`
 
+const helpTemplateConstructor = `
+<div class="container">
+
+<h2 id="title"><a href="#title">Why Bugzilla Backporter?</a></h2>
+
+<p>
+The <code>Bugzilla Backporter</code> allows the user to easily understand how different clones
+are related to each other and which release they are targeted for.
+It also allows the user to create clones targeting a specific release.
+</p>
+<h2 id="title"><a href="#title">How to find clones?</a></h2>
+
+<p>
+Enter the BugID for the bug whose clones need to be found in the input field on the top right 
+corner and click "Find Clones".
+This would present the user with a list of all the clones of that bug with the relevant release 
+and associated PRs. The highlighted bug is the bug which is being searched for.
+</p>
+
+<h2 id="title"><a href="#title">How to create a clone?</a></h2>
+
+<p>
+Select the target release from the dropdown and click the "Create Clone" button 
+which can be found after the clones table.
+If clone creation is successful you will be shown a success banner at the top of the page 
+otherwise you will be redirected to an error page.
+Please note - Do not refresh the page once the clone has been created since this would cause another clone to be created.
+</p>
+
+<h2 id="title"><a href="#title">Getting the latest changes</a></h2>
+
+<p>
+If there are changes which have been made to the clones relationships, it will take upto 10 minutes for the changes to 
+be reflected in the backporter tool. To force a refresh of the cache for those bug IDs - refresh the page twice.
+</p>
+</div>
+`
 const errorTemplateConstructor = `
 <div class="alert alert-danger" id="error-banner">
 <a href="#" class="close" data-dismiss="alert" aria-label="close">&times;</a>
@@ -193,8 +238,8 @@ const errorTemplateConstructor = `
 
 var (
 	clonesTemplate = template.Must(template.New("clones").Parse(clonesTemplateConstructor))
-	emptyTemplate  = template.Must(template.New("empty").Parse("{{.}}"))
 	errorTemplate  = template.Must(template.New("error").Parse(errorTemplateConstructor))
+	helpTemplate   = template.Must(template.New("help").Parse(helpTemplateConstructor))
 )
 
 func logFieldsFor(endpoint string, bugID int) logrus.Fields {
@@ -247,7 +292,7 @@ func writePage(w http.ResponseWriter, title string, body *template.Template, dat
 // GetLandingHandler will return a simple bug search page
 func GetLandingHandler(metrics *metrics.Metrics) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
-		err := writePage(w, "Home", emptyTemplate, nil)
+		err := writePage(w, "Home", helpTemplate, nil)
 		if err != nil {
 			handleError(w, err, "failed to build Landing page", http.StatusInternalServerError, req.URL.Path, 0, metrics)
 		}
@@ -311,40 +356,56 @@ func getClonesTemplateData(bugID int, client bugzilla.Client, allTargetVersions 
 	if err != nil {
 		return nil, http.StatusNotFound, fmt.Errorf("Bug#%d not found: %w", bugID, err)
 	}
-
-	prs, err := client.GetExternalBugPRsOnBug(bug.ID)
-	if err != nil {
-		return nil, http.StatusInternalServerError, fmt.Errorf("Bug#%d - error occured while retreiving list of PRs: %w", bug.ID, err)
-	}
-
-	parent, err := client.GetRootForClone(bug)
-	if err != nil {
-		return nil, http.StatusInternalServerError, fmt.Errorf("unable to fetch root bug: %w", err)
-	}
-
 	clones, err := client.GetAllClones(bug)
 	if err != nil {
 		return nil, http.StatusInternalServerError, fmt.Errorf("unable to get clones: %w", err)
 	}
+	if len(clones) < 1 {
+		return nil, http.StatusInternalServerError, fmt.Errorf("clones list empty")
+	}
+	root := clones[0]
 	// Target versions would be used to populate the CreateClone dropdown
 	targetVersions := sets.NewString(allTargetVersions.List()...)
 	// Remove target versions of the original bug
 	targetVersions.Delete(bug.TargetRelease...)
-	for _, clone := range clones {
-		clonePRs, err := client.GetExternalBugPRsOnBug(clone.ID)
-		if err != nil {
-			return nil, http.StatusInternalServerError, fmt.Errorf("Bug#%d - error occured while retreiving list of PRs : %w", clone.ID, err)
-		}
+	g := new(errgroup.Group)
+	var prs []bugzilla.ExternalBug
 
+	g.Go(func() error {
+		prs, err = client.GetExternalBugPRsOnBug(bugID)
+		return err
+	})
+
+	for _, clone := range clones {
+		clone := clone
 		// Remove target releases which already have clones
 		targetVersions.Delete(clone.TargetRelease...)
-
-		clone.PRs = clonePRs
+		g.Go(func() error {
+			clonePRs, err := client.GetExternalBugPRsOnBug(clone.ID)
+			if err != nil {
+				return fmt.Errorf("Bug#%d - error occured while retreiving list of PRs : %w", clone.ID, err)
+			}
+			clone.PRs = clonePRs
+			return nil
+		})
 	}
+	if err := g.Wait(); err != nil {
+		return nil, http.StatusInternalServerError, err
+	}
+	sort.SliceStable(clones, func(i, j int) bool {
+		if clones[i].TargetRelease == nil && clones[j].TargetRelease == nil {
+			return false
+		} else if clones[i].TargetRelease == nil {
+			return true
+		} else if clones[j].TargetRelease == nil {
+			return false
+		}
+		return clones[i].TargetRelease[0] < clones[j].TargetRelease[0]
+	})
 	wrpr := ClonesTemplateData{
 		Bug:          bug,
 		Clones:       clones,
-		Parent:       parent,
+		Parent:       root,
 		PRs:          prs,
 		CloneTargets: targetVersions.List(),
 	}
@@ -438,6 +499,20 @@ func CreateCloneHandler(client bugzilla.Client, allTargetVersions sets.String, m
 		err = writePage(w, "Clones", clonesTemplate, *data)
 		if err != nil {
 			handleError(w, err, "failed to build CreateClones response page", http.StatusInternalServerError, req.URL.Path, bugID, m)
+		}
+	}
+}
+
+// GetHelpHandler returns the help page
+func GetHelpHandler(m *metrics.Metrics) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != "GET" {
+			handleError(w, fmt.Errorf("invalid request method, expected GET got %s", req.Method), "invalid request method", http.StatusBadRequest, req.URL.Path, 0, m)
+			return
+		}
+		err := writePage(w, "Help", helpTemplate, nil)
+		if err != nil {
+			handleError(w, err, "failed to build response page", http.StatusInternalServerError, req.URL.Path, 0, m)
 		}
 	}
 }

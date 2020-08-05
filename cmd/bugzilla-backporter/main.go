@@ -42,6 +42,7 @@ func gatherOptions() (options, error) {
 	fs.StringVar(&o.address, "address", ":8080", "Address to run server on")
 	fs.DurationVar(&o.gracePeriod, "gracePeriod", time.Second*10, "Grace period for server shutdown")
 	fs.StringVar(&o.pluginConfig, "plugin-config", "/etc/plugins/plugins.yaml", "Path to plugin config file.")
+
 	for _, group := range []flagutil.OptionGroup{&o.bugzilla} {
 		group.AddFlags(fs)
 	}
@@ -118,6 +119,7 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("Error getting Bugzilla client.")
 	}
+	bugzillaClient.SetRoundTripper(backporter.NewCachingTransport())
 	health := pjutil.NewHealth()
 	metrics.ExposeMetrics("ci-operator-bugzilla-backporter", prowConfig.PushGateway{}, prowflagutil.DefaultMetricsPort)
 	allTargetVersions, err := getAllTargetVersions(o.pluginConfig)
@@ -136,6 +138,7 @@ func main() {
 	http.HandleFunc("/clones", handler(backporter.GetClonesHandler(bugzillaClient, allTargetVersions, bzbpMetrics)).ServeHTTP)
 	http.HandleFunc("/clones/create", handler(backporter.CreateCloneHandler(bugzillaClient, allTargetVersions, bzbpMetrics)).ServeHTTP)
 	// Leaving this in here to help with future debugging. This will return bug details in JSON format
+	http.HandleFunc("/help", handler(backporter.GetHelpHandler(bzbpMetrics)).ServeHTTP)
 	http.HandleFunc("/bug", handler(backporter.GetBugHandler(bugzillaClient, bzbpMetrics)).ServeHTTP)
 	interrupts.ListenAndServe(&http.Server{Addr: o.address}, o.gracePeriod)
 

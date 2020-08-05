@@ -7,11 +7,9 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	log "github.com/sirupsen/logrus"
-	"k8s.io/test-infra/prow/interrupts"
+	"github.com/sirupsen/logrus"
 
 	"github.com/openshift/ci-tools/pkg/api"
-	"github.com/openshift/ci-tools/pkg/coalescer"
 	"github.com/openshift/ci-tools/pkg/load"
 )
 
@@ -34,7 +32,6 @@ type configAgent struct {
 	lock         *sync.RWMutex
 	configs      load.ByOrgRepo
 	configPath   string
-	cycle        time.Duration
 	generation   int
 	errorMetrics *prometheus.CounterVec
 	indexFuncs   map[string]IndexFn
@@ -75,25 +72,38 @@ func NewFakeConfigAgent(configs load.ByOrgRepo) ConfigAgent {
 	return a
 }
 
+type ConfigAgentOptions struct {
+	// ErrorMetric holds the CounterVec to count errors on. It must include a `error` label
+	// or the agent panics on the first error.
+	ErrorMetric *prometheus.CounterVec
+}
+
+type ConfigAgentOption func(*ConfigAgentOptions)
+
+func WithConfigMetrics(m *prometheus.CounterVec) ConfigAgentOption {
+	return func(o *ConfigAgentOptions) {
+		o.ErrorMetric = m
+	}
+}
+
 // NewConfigAgent returns a ConfigAgent interface that automatically reloads when
-// configs are changed on disk as well as on a period specified with a time.Duration.
-func NewConfigAgent(configPath string, cycle time.Duration, errorMetrics *prometheus.CounterVec) (ConfigAgent, error) {
-	a := &configAgent{configPath: configPath, cycle: cycle, lock: &sync.RWMutex{}, errorMetrics: errorMetrics}
-	configCoalescer := coalescer.NewCoalescer(a.loadFilenameToConfig)
-	err := configCoalescer.Run()
-	if err != nil {
-		return nil, fmt.Errorf("Failed to load configs: %w", err)
+// configs are changed on disk.
+func NewConfigAgent(configPath string, opts ...ConfigAgentOption) (ConfigAgent, error) {
+	opt := &ConfigAgentOptions{}
+	for _, o := range opts {
+		o(opt)
+	}
+	if opt.ErrorMetric == nil {
+		opt.ErrorMetric = prometheus.NewCounterVec(prometheus.CounterOpts{Name: "config_agent_errors_total"}, []string{"error"})
+	}
+	a := &configAgent{configPath: configPath, lock: &sync.RWMutex{}, errorMetrics: opt.ErrorMetric}
+	a.reloadConfig = a.loadFilenameToConfig
+	// Load config once so we fail early if that doesn't work and are ready as soon as we return
+	if err := a.reloadConfig(); err != nil {
+		return nil, fmt.Errorf("failed to laod config: %w", err)
 	}
 
-	// periodic reload
-	interrupts.TickLiteral(func() {
-		if err := configCoalescer.Run(); err != nil {
-			log.WithError(err).Error("Failed to reload configs")
-		}
-	}, a.cycle)
-
-	a.reloadConfig = configCoalescer.Run
-	return a, startWatchers(a.configPath, configCoalescer, a.recordError)
+	return a, startWatchers(a.configPath, a.reloadConfig, a.recordError)
 }
 
 func (a *configAgent) recordError(label string) {
@@ -181,23 +191,22 @@ func (a *configAgent) AddIndex(indexName string, indexFunc IndexFn) error {
 
 // loadFilenameToConfig generates a new filenameToConfig map.
 func (a *configAgent) loadFilenameToConfig() error {
-	log.Debug("Reloading configs")
+	logrus.Debug("Reloading configs")
 	startTime := time.Now()
 	configs, err := load.FromPathByOrgRepo(a.configPath)
 	if err != nil {
 		return fmt.Errorf("loading config failed: %w", err)
 	}
 
-	indexes := a.buildIndexes(configs)
-
 	a.lock.Lock()
+	indexes := a.buildIndexes(configs)
 	a.configs = configs
 	a.generation++
 	a.indexes = indexes
 	a.lock.Unlock()
 	duration := time.Since(startTime)
 	configReloadTimeMetric.Observe(duration.Seconds())
-	log.WithField("duration", duration).Info("Configs reloaded")
+	logrus.WithField("duration", duration).Info("Configs reloaded")
 	return nil
 }
 

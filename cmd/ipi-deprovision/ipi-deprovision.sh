@@ -36,8 +36,7 @@ for network in $( gcloud --project=openshift-gce-devel-ci compute networks list 
   infraID="${network%"-network"}"
   region="$( gcloud --project=openshift-gce-devel-ci compute networks describe "${network}" --format="value(subnetworks[0])" | grep -Po "(?<=regions/)[^/]+" || true )"
   if [[ -z "${region:-}" ]]; then
-    echo "could not determine region for cluster ${infraID}, ignoring ..."
-    continue
+    region=us-east1
   fi
   workdir="/tmp/deprovision/${infraID}"
   mkdir -p "${workdir}"
@@ -54,7 +53,7 @@ EOF
 done
 
 for workdir in $( find /tmp/deprovision -mindepth 1 -type d | shuf ); do
-  timeout 30m openshift-install --dir "${workdir}" --log-level debug destroy cluster
+  timeout --signal=SIGQUIT 30m openshift-install --dir "${workdir}" --log-level debug destroy cluster
 done
 
 gcs_bucket_age_cutoff="$(TZ="GMT" date --date="${CLUSTER_TTL}-4 hours" '+%a, %d %b %Y %H:%M:%S GMT')"

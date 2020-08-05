@@ -37,7 +37,7 @@ func (s *inputImageTagStep) Inputs() (api.InputDefinition, error) {
 	if len(s.imageName) > 0 {
 		return api.InputDefinition{s.imageName}, nil
 	}
-	from, err := s.client.ImageStreamTags(s.config.BaseImage.Namespace).Get(fmt.Sprintf("%s:%s", s.config.BaseImage.Name, s.config.BaseImage.Tag), metav1.GetOptions{})
+	from, err := s.client.ImageStreamTags(s.config.BaseImage.Namespace).Get(context.TODO(), fmt.Sprintf("%s:%s", s.config.BaseImage.Name, s.config.BaseImage.Tag), metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("could not resolve base image: %w", err)
 	}
@@ -75,14 +75,14 @@ func (s *inputImageTagStep) run(ctx context.Context) error {
 		},
 	}
 
-	if _, err := s.client.ImageStreamTags(s.jobSpec.Namespace()).Create(ist); err != nil && !errors.IsAlreadyExists(err) {
+	if _, err := s.client.ImageStreamTags(s.jobSpec.Namespace()).Create(context.TODO(), ist, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
 		return fmt.Errorf("failed to create imagestreamtag for input image: %w", err)
 	}
 	// Wait image is ready
 	importCtx, cancel := context.WithTimeout(ctx, 35*time.Minute)
 	defer cancel()
 	if err := wait.PollImmediateUntil(10*time.Second, func() (bool, error) {
-		pipeline, err := s.client.ImageStreams(s.jobSpec.Namespace()).Get(api.PipelineImageStream, metav1.GetOptions{})
+		pipeline, err := s.client.ImageStreams(s.jobSpec.Namespace()).Get(context.TODO(), api.PipelineImageStream, metav1.GetOptions{})
 		if err != nil {
 			return false, err
 		}
@@ -99,7 +99,7 @@ func (s *inputImageTagStep) run(ctx context.Context) error {
 }
 
 func istObjectReference(client imageclientset.ImageV1Interface, reference api.ImageStreamTagReference) (coreapi.ObjectReference, error) {
-	is, err := client.ImageStreams(reference.Namespace).Get(reference.Name, metav1.GetOptions{})
+	is, err := client.ImageStreams(reference.Namespace).Get(context.TODO(), reference.Name, metav1.GetOptions{})
 	if err != nil {
 		return coreapi.ObjectReference{}, fmt.Errorf("could not resolve remote image stream: %w", err)
 	}
@@ -111,7 +111,7 @@ func istObjectReference(client imageclientset.ImageV1Interface, reference api.Im
 	} else {
 		return coreapi.ObjectReference{}, fmt.Errorf("remote image stream %s has no accessible image registry value", reference.Name)
 	}
-	ist, err := client.ImageStreamTags(reference.Namespace).Get(fmt.Sprintf("%s:%s", reference.Name, reference.Tag), metav1.GetOptions{})
+	ist, err := client.ImageStreamTags(reference.Namespace).Get(context.TODO(), fmt.Sprintf("%s:%s", reference.Name, reference.Tag), metav1.GetOptions{})
 	if err != nil {
 		return coreapi.ObjectReference{}, fmt.Errorf("could not resolve remote image stream tag: %w", err)
 	}
@@ -126,8 +126,8 @@ func (s *inputImageTagStep) Creates() []api.StepLink {
 	return []api.StepLink{api.InternalImageLink(s.config.To)}
 }
 
-func (s *inputImageTagStep) Provides() (api.ParameterMap, api.StepLink) {
-	return nil, nil
+func (s *inputImageTagStep) Provides() api.ParameterMap {
+	return nil
 }
 
 func (s *inputImageTagStep) Name() string { return fmt.Sprintf("[input:%s]", s.config.To) }

@@ -43,6 +43,7 @@ func AddToManager(mgr manager.Manager,
 	resolver registry.Resolver,
 	additionalImageStreamTags sets.String,
 	additionalImageStreams sets.String,
+	additionalImageStreamNamespaces sets.String,
 	dryRun bool) error {
 	log := logrus.WithField("controller", ControllerName)
 
@@ -75,7 +76,7 @@ func AddToManager(mgr manager.Manager,
 	}
 	c, err := controller.New(ControllerName, mgr, controller.Options{
 		Reconciler:              r,
-		MaxConcurrentReconciles: 1,
+		MaxConcurrentReconciles: 20,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to construct controller: %w", err)
@@ -96,7 +97,7 @@ func AddToManager(mgr manager.Manager,
 		}
 	}
 
-	objectFilter, err := testInputImageStreamTagFilterFactory(log, configAgent, resolver, additionalImageStreamTags, additionalImageStreams)
+	objectFilter, err := testInputImageStreamTagFilterFactory(log, configAgent, resolver, additionalImageStreamTags, additionalImageStreams, additionalImageStreamNamespaces)
 	if err != nil {
 		return fmt.Errorf("failed to get filter for ImageStreamTags: %w", err)
 	}
@@ -171,8 +172,7 @@ func registryClusterHandlerFactory(buildClusters sets.String, filter objectFilte
 			}
 			return requests
 		},
-	),
-	}
+	)}
 }
 
 const clusterAndNamespaceDelimiter = "_"
@@ -226,10 +226,15 @@ func (r *reconciler) reconcile(req reconcile.Request, log *logrus.Entry) error {
 	sourceImageStreamTag := &imagev1.ImageStreamTag{}
 	if err := r.registryClient.Get(r.ctx, decoded, sourceImageStreamTag); err != nil {
 		if apierrors.IsNotFound(err) {
-			log.Debug("Source imageStreamTag not found")
+			log.Trace("Source imageStreamTag not found")
 			return nil
 		}
 		return fmt.Errorf("failed to get imageStreamTag %s from registry cluster: %w", decoded.String(), err)
+	}
+	*log = *log.WithField("docker_image_reference", sourceImageStreamTag.Image.DockerImageReference)
+	if !isImportAllowed(sourceImageStreamTag.Image.DockerImageReference) {
+		log.Debug("Import not allowed, ignoring")
+		return nil
 	}
 
 	if err := client.Get(r.ctx, types.NamespacedName{Name: decoded.Namespace}, &corev1.Namespace{}); err != nil {
@@ -246,6 +251,9 @@ func (r *reconciler) reconcile(req reconcile.Request, log *logrus.Entry) error {
 	}
 	if err := r.ensureCIOperatorRole(decoded.Namespace, client, log); err != nil {
 		return fmt.Errorf("failed to ensure role: %w", err)
+	}
+	if err := r.ensureImageStream(decoded, client, log); err != nil {
+		return fmt.Errorf("failed to ensure imagestream: %w", err)
 	}
 
 	isCurrent, err := r.isImageStreamTagCurrent(decoded, client, sourceImageStreamTag)
@@ -391,6 +399,29 @@ func (r *reconciler) ensureCIOperatorRoleBinding(namespace string, client ctrlru
 	return upsertObject(r.ctx, client, roleBinding, mutateFn, log)
 }
 
+func imagestream(namespace, name string) (*imagev1.ImageStream, crcontrollerutil.MutateFn) {
+	stream := &imagev1.ImageStream{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespace,
+			Name:      name,
+		},
+	}
+	return stream, func() error {
+		stream.Spec.LookupPolicy.Local = true
+		return nil
+	}
+}
+
+func (r *reconciler) ensureImageStream(imagestreamTagName types.NamespacedName, client ctrlruntimeclient.Client, log *logrus.Entry) error {
+	colonSplit := strings.Split(imagestreamTagName.Name, ":")
+	if n := len(colonSplit); n != 2 {
+		return fmt.Errorf("when splitting imagestreamtagname %s by : expected two results, got %d", imagestreamTagName.Name, n)
+	}
+	namespace, name := imagestreamTagName.Namespace, colonSplit[0]
+	stream, mutateFn := imagestream(namespace, name)
+	return upsertObject(r.ctx, client, stream, mutateFn, log)
+}
+
 func (r *reconciler) pullSecret(namespace string) (*corev1.Secret, crcontrollerutil.MutateFn) {
 	s := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -407,7 +438,7 @@ func (r *reconciler) pullSecret(namespace string) (*corev1.Secret, crcontrolleru
 	}
 }
 
-func testInputImageStreamTagFilterFactory(l *logrus.Entry, ca agents.ConfigAgent, resolver registry.Resolver, additionalImageStreamTags, additionalImageStrams sets.String) (objectFilter, error) {
+func testInputImageStreamTagFilterFactory(l *logrus.Entry, ca agents.ConfigAgent, resolver registry.Resolver, additionalImageStreamTags, additionalImageStreams, additionalImageStreamNamespaces sets.String) (objectFilter, error) {
 	const indexName = "config-by-test-input-imagestreamtag"
 	if err := ca.AddIndex(indexName, indexConfigsByTestInputImageStramTag(resolver)); err != nil {
 		return nil, fmt.Errorf("failed to add %s index to configAgent: %w", indexName, err)
@@ -415,6 +446,9 @@ func testInputImageStreamTagFilterFactory(l *logrus.Entry, ca agents.ConfigAgent
 	l = logrus.WithField("subcomponent", "test-input-image-stream-tag-filter")
 	return func(nn types.NamespacedName) bool {
 		if additionalImageStreamTags.Has(nn.String()) {
+			return true
+		}
+		if additionalImageStreamNamespaces.Has(nn.Namespace) {
 			return true
 		}
 		imageStreamTagResult, err := ca.GetFromIndex(indexName, nn.String())
@@ -430,7 +464,7 @@ func testInputImageStreamTagFilterFactory(l *logrus.Entry, ca agents.ConfigAgent
 			l.WithField("name", nn.String()).WithError(err).Error("Failed to get imagestreamname for imagestreamtag")
 			return false
 		}
-		if additionalImageStrams.Has(imageStreamName.String()) {
+		if additionalImageStreams.Has(imageStreamName.String()) {
 			return true
 		}
 		imageStreamResult, err := ca.GetFromIndex(indexName, indexKeyForImageStream(imageStreamName.Namespace, imageStreamName.Name))
@@ -513,4 +547,20 @@ func upsertObject(ctx context.Context, c ctrlruntimeclient.Client, obj crcontrol
 		log.Info("Upsert succeeded")
 	}
 	return err
+}
+
+var allowedRegistries = sets.NewString("registry.svc.ci.openshift.org",
+	"docker-registry.default.svc:5000",
+	"registry.access.redhat.com",
+	"quay.io",
+	"gcr.io",
+	"docker.io",
+)
+
+func isImportAllowed(pullSpec string) bool {
+	i := strings.Index(pullSpec, "/")
+	if i == -1 {
+		return false
+	}
+	return allowedRegistries.Has(pullSpec[:i])
 }

@@ -11,8 +11,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -31,10 +34,10 @@ type ResolverInfo struct {
 }
 
 const (
-	refSuffix      = "-ref.yaml"
-	chainSuffix    = "-chain.yaml"
-	workflowSuffix = "-workflow.yaml"
-	commandsSuffix = "-commands.sh"
+	RefSuffix      = "-ref.yaml"
+	ChainSuffix    = "-chain.yaml"
+	WorkflowSuffix = "-workflow.yaml"
+	CommandsSuffix = "-commands.sh"
 )
 
 // ByOrgRepo maps org --> repo --> list of branched and variant configs
@@ -70,6 +73,9 @@ type filenameToConfig map[string]api.ReleaseBuildConfiguration
 // FromPath returns all configs found at or below the given path
 func fromPath(path string) (filenameToConfig, error) {
 	configs := filenameToConfig{}
+	lock := &sync.Mutex{}
+	errGroup := &errgroup.Group{}
+
 	err := filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
 		if info == nil || err != nil {
 			return err
@@ -80,23 +86,28 @@ func fromPath(path string) (filenameToConfig, error) {
 			}
 			return nil
 		}
-		ext := filepath.Ext(path)
-		if !info.IsDir() && (ext == ".yml" || ext == ".yaml") {
-			configSpec, err := Config(path, "", "", nil)
-			if err != nil {
-				return fmt.Errorf("failed to load ci-operator config (%w)", err)
-			}
+		errGroup.Go(func() error {
+			ext := filepath.Ext(path)
+			if !info.IsDir() && (ext == ".yml" || ext == ".yaml") {
+				configSpec, err := Config(path, "", "", nil)
+				if err != nil {
+					return fmt.Errorf("failed to load ci-operator config (%w)", err)
+				}
 
-			if err := configSpec.ValidateAtRuntime(); err != nil {
-				return fmt.Errorf("invalid ci-operator config: %w", err)
+				if err := configSpec.ValidateAtRuntime(); err != nil {
+					return fmt.Errorf("invalid ci-operator config: %w", err)
+				}
+				logrus.Tracef("Adding %s to filenameToConfig", filepath.Base(path))
+				lock.Lock()
+				configs[filepath.Base(path)] = *configSpec
+				lock.Unlock()
 			}
-			logrus.Tracef("Adding %s to filenameToConfig", filepath.Base(path))
-			configs[filepath.Base(path)] = *configSpec
-		}
+			return nil
+		})
 		return nil
 	})
 
-	return configs, err
+	return configs, utilerrors.NewAggregate([]error{err, errGroup.Wait()})
 }
 
 func Config(path, unresolvedPath, registryPath string, info *ResolverInfo) (*api.ReleaseBuildConfiguration, error) {
@@ -143,7 +154,7 @@ func Config(path, unresolvedPath, registryPath string, info *ResolverInfo) (*api
 		return nil, fmt.Errorf("invalid configuration: %w\nvalue:\n%s", err, raw)
 	}
 	if registryPath != "" {
-		refs, chains, workflows, _, err := Registry(registryPath, false)
+		refs, chains, workflows, _, _, err := Registry(registryPath, false)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load registry: %w", err)
 		}
@@ -223,12 +234,12 @@ func literalConfigFromResolver(raw []byte, address string) (*api.ReleaseBuildCon
 
 // Registry takes the path to a registry config directory and returns the full set of references, chains,
 // and workflows that the registry's Resolver needs to resolve a user's MultiStageTestConfiguration
-func Registry(root string, flat bool) (references registry.ReferenceByName, chains registry.ChainByName, workflows registry.WorkflowByName, documentation map[string]string, err error) {
-	references = registry.ReferenceByName{}
-	chains = registry.ChainByName{}
-	workflows = registry.WorkflowByName{}
-	documentation = map[string]string{}
-	err = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+func Registry(root string, flat bool) (registry.ReferenceByName, registry.ChainByName, registry.WorkflowByName, map[string]string, *api.RegistryMetadata, error) {
+	references := registry.ReferenceByName{}
+	chains := registry.ChainByName{}
+	workflows := registry.WorkflowByName{}
+	documentation := map[string]string{}
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if info != nil && strings.HasPrefix(info.Name(), "..") {
 			if info.IsDir() {
 				return filepath.SkipDir
@@ -239,7 +250,7 @@ func Registry(root string, flat bool) (references registry.ReferenceByName, chai
 			return err
 		}
 		if info != nil && !info.IsDir() {
-			if filepath.Ext(info.Name()) == ".md" || info.Name() == "OWNERS" {
+			if filepath.Ext(info.Name()) == ".md" || filepath.Ext(info.Name()) == ".json" || info.Name() == "OWNERS" {
 				return nil
 			}
 			raw, err := ioutil.ReadFile(path)
@@ -259,7 +270,7 @@ func Registry(root string, flat bool) (references registry.ReferenceByName, chai
 					return fmt.Errorf("ile %s has incorrect prefix. Prefix should be %s", path, prefix)
 				}
 			}
-			if strings.HasSuffix(path, refSuffix) {
+			if strings.HasSuffix(path, RefSuffix) {
 				name, doc, ref, err := loadReference(raw, dir, prefix, flat)
 				if err != nil {
 					return fmt.Errorf("failed to load registry file %s: %w", path, err)
@@ -267,12 +278,12 @@ func Registry(root string, flat bool) (references registry.ReferenceByName, chai
 				if !flat && name != prefix {
 					return fmt.Errorf("name of reference in file %s should be %s", path, prefix)
 				}
-				if strings.TrimSuffix(filepath.Base(path), refSuffix) != name {
-					return fmt.Errorf("filename %s does not match name of reference; filename should be %s", filepath.Base(path), fmt.Sprint(prefix, refSuffix))
+				if strings.TrimSuffix(filepath.Base(path), RefSuffix) != name {
+					return fmt.Errorf("filename %s does not match name of reference; filename should be %s", filepath.Base(path), fmt.Sprint(prefix, RefSuffix))
 				}
 				references[name] = ref
 				documentation[name] = doc
-			} else if strings.HasSuffix(path, chainSuffix) {
+			} else if strings.HasSuffix(path, ChainSuffix) {
 				var chain api.RegistryChainConfig
 				err := yaml.UnmarshalStrict(raw, &chain)
 				if err != nil {
@@ -281,13 +292,13 @@ func Registry(root string, flat bool) (references registry.ReferenceByName, chai
 				if !flat && chain.Chain.As != prefix {
 					return fmt.Errorf("name of chain in file %s should be %s", path, prefix)
 				}
-				if strings.TrimSuffix(filepath.Base(path), chainSuffix) != chain.Chain.As {
-					return fmt.Errorf("filename %s does not match name of chain; filename should be %s", filepath.Base(path), fmt.Sprint(prefix, chainSuffix))
+				if strings.TrimSuffix(filepath.Base(path), ChainSuffix) != chain.Chain.As {
+					return fmt.Errorf("filename %s does not match name of chain; filename should be %s", filepath.Base(path), fmt.Sprint(prefix, ChainSuffix))
 				}
 				documentation[chain.Chain.As] = chain.Chain.Documentation
 				chain.Chain.Documentation = ""
 				chains[chain.Chain.As] = chain.Chain
-			} else if strings.HasSuffix(path, workflowSuffix) {
+			} else if strings.HasSuffix(path, WorkflowSuffix) {
 				name, doc, workflow, err := loadWorkflow(raw)
 				if err != nil {
 					return fmt.Errorf("failed to load registry file %s: %w", path, err)
@@ -295,12 +306,12 @@ func Registry(root string, flat bool) (references registry.ReferenceByName, chai
 				if !flat && name != prefix {
 					return fmt.Errorf("name of workflow in file %s should be %s", path, prefix)
 				}
-				if strings.TrimSuffix(filepath.Base(path), workflowSuffix) != name {
-					return fmt.Errorf("filename %s does not match name of workflow; filename should be %s", filepath.Base(path), fmt.Sprint(prefix, workflowSuffix))
+				if strings.TrimSuffix(filepath.Base(path), WorkflowSuffix) != name {
+					return fmt.Errorf("filename %s does not match name of workflow; filename should be %s", filepath.Base(path), fmt.Sprint(prefix, WorkflowSuffix))
 				}
 				workflows[name] = workflow
 				documentation[name] = doc
-			} else if strings.HasSuffix(path, commandsSuffix) {
+			} else if strings.HasSuffix(path, CommandsSuffix) {
 				// ignore
 			} else {
 				return fmt.Errorf("invalid file name: %s", path)
@@ -309,11 +320,17 @@ func Registry(root string, flat bool) (references registry.ReferenceByName, chai
 		return nil
 	})
 	if err != nil {
-		return references, chains, workflows, documentation, err
+		return nil, nil, nil, nil, nil, err
+	}
+	metadata := &api.RegistryMetadata{}
+	if metadataRaw, err := ioutil.ReadFile(filepath.Join(root, api.RegistryMetadataPath)); err != nil {
+		logrus.WithError(err).Warn("failed to load metadata file")
+	} else if err := json.Unmarshal(metadataRaw, metadata); err != nil {
+		logrus.WithError(err).Warn("failed to parse metadata file")
 	}
 	// create graph to verify that there are no cycles
 	_, err = registry.NewGraph(references, chains, workflows)
-	return references, chains, workflows, documentation, err
+	return references, chains, workflows, documentation, metadata, err
 }
 
 func loadReference(bytes []byte, baseDir, prefix string, flat bool) (string, string, api.LiteralTestStep, error) {
@@ -322,8 +339,8 @@ func loadReference(bytes []byte, baseDir, prefix string, flat bool) (string, str
 	if err != nil {
 		return "", "", api.LiteralTestStep{}, err
 	}
-	if !flat && step.Reference.Commands != fmt.Sprintf("%s%s", prefix, commandsSuffix) {
-		return "", "", api.LiteralTestStep{}, fmt.Errorf("reference %s has invalid command file path; command should be set to %s", step.Reference.As, fmt.Sprintf("%s%s", prefix, commandsSuffix))
+	if !flat && step.Reference.Commands != fmt.Sprintf("%s%s", prefix, CommandsSuffix) {
+		return "", "", api.LiteralTestStep{}, fmt.Errorf("reference %s has invalid command file path; command should be set to %s", step.Reference.As, fmt.Sprintf("%s%s", prefix, CommandsSuffix))
 	}
 	command, err := ioutil.ReadFile(filepath.Join(baseDir, step.Reference.Commands))
 	if err != nil {

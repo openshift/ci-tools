@@ -1,6 +1,7 @@
 package rehearse
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -86,7 +87,7 @@ func TestCreateCleanupCMTemplates(t *testing.T) {
 	if err := cmManager.Create(ciTemplates); err != nil {
 		t.Fatalf("CreateCMTemplates() returned error: %v", err)
 	}
-	cms, err := client.List(metav1.ListOptions{})
+	cms, err := client.List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -163,7 +164,7 @@ func TestCreateClusterProfiles(t *testing.T) {
 	if err := m.Create(ciProfiles); err != nil {
 		t.Fatal(err)
 	}
-	cms, err := client.List(metav1.ListOptions{})
+	cms, err := client.List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

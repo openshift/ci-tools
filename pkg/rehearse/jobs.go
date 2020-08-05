@@ -855,15 +855,12 @@ func (e *Executor) waitForJobs(jobs sets.String, selector ctrlruntimeclient.List
 			}
 			jobs.Delete(pj.Name)
 			if jobs.Len() == 0 {
-				return success, nil
+				return true, nil
 			}
 		}
 
 		return false, nil
 	}); err != nil {
-		if err == wait.ErrWaitTimeout {
-			return false, nil
-		}
 		return false, fmt.Errorf("failed waiting for prowjobs to finish: %w", err)
 	}
 

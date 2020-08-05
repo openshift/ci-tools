@@ -4,6 +4,7 @@ package steps
 
 import (
 	"context"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"reflect"
 	"testing"
 
@@ -78,13 +79,13 @@ type ciopTestingPods struct {
 // they would be created without any sensible Phase, which causes problems in
 // the ci-operator code. Therefore, our fake Create() always creates Pods with
 // a `Pending` phase if it does not carry phase already.
-func (c *ciopTestingPods) Create(pod *v1.Pod) (*v1.Pod, error) {
+func (c *ciopTestingPods) Create(ctx context.Context, pod *v1.Pod, o metav1.CreateOptions) (*v1.Pod, error) {
 	c.t.Logf("FakePods.Create(): ObjectMeta.Name=%s Status.Phase=%s", pod.ObjectMeta.Name, pod.Status.Phase)
 	if pod.Status.Phase == "" {
 		pod.Status.Phase = v1.PodPending
 		c.t.Logf("FakePods.Create(): Setting Status.Phase to '%s'", v1.PodPending)
 	}
-	return c.FakePods.Create(pod)
+	return c.FakePods.Create(ctx, pod, o)
 }
 
 type doneExpectation struct {
@@ -94,7 +95,6 @@ type doneExpectation struct {
 
 type providesExpectation struct {
 	params map[string]string
-	link   api.StepLink
 }
 
 type inputsExpectation struct {
@@ -151,11 +151,12 @@ func examineStep(t *testing.T, step api.Step, expected stepExpectation) {
 		t.Errorf("step.Creates() returned different links:\n%s", diff.ObjectReflectDiff(expected.creates, creates))
 	}
 
-	params, link := step.Provides()
+	params := step.Provides()
 	for expectedKey, expectedValue := range expected.provides.params {
 		getFunc, ok := params[expectedKey]
 		if !ok {
 			t.Errorf("step.Provides: Parameters do not contain '%s' key (expected to return value '%s')", expectedKey, expectedValue)
+			continue
 		}
 		value, err := getFunc()
 		if err != nil {
@@ -163,9 +164,6 @@ func examineStep(t *testing.T, step api.Step, expected stepExpectation) {
 		} else if value != expectedValue {
 			t.Errorf("step.Provides: params[%s]() returned '%s', expected to return '%s'", expectedKey, value, expectedValue)
 		}
-	}
-	if !reflect.DeepEqual(expected.provides.link, link) {
-		t.Errorf("step.Provides returned different link\n%s", diff.ObjectReflectDiff(expected.provides.link, link))
 	}
 
 	inputs, err := step.Inputs()

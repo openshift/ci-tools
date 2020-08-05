@@ -39,7 +39,7 @@ func (s *rpmImageInjectionStep) Run(ctx context.Context) error {
 }
 
 func (s *rpmImageInjectionStep) run(ctx context.Context) error {
-	route, err := s.routeClient.Routes(s.jobSpec.Namespace()).Get(RPMRepoName, meta.GetOptions{})
+	route, err := s.routeClient.Routes(s.jobSpec.Namespace()).Get(ctx, RPMRepoName, meta.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("could not get Route for RPM server: %w", err)
 	}
@@ -65,8 +65,8 @@ func (s *rpmImageInjectionStep) Creates() []api.StepLink {
 	return []api.StepLink{api.InternalImageLink(s.config.To)}
 }
 
-func (s *rpmImageInjectionStep) Provides() (api.ParameterMap, api.StepLink) {
-	return nil, nil
+func (s *rpmImageInjectionStep) Provides() api.ParameterMap {
+	return nil
 }
 
 func (s *rpmImageInjectionStep) Name() string { return string(s.config.To) }

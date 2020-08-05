@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+	"time"
 
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -23,6 +24,7 @@ import (
 	prowdapi "k8s.io/test-infra/prow/pod-utils/downwardapi"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
 func TestRequires(t *testing.T) {
@@ -37,13 +39,18 @@ func TestRequires(t *testing.T) {
 			ClusterProfile: api.ClusterProfileAWS,
 			Test:           []api.LiteralTestStep{{From: "from-release"}},
 		},
-		req: []api.StepLink{},
+		req: []api.StepLink{
+			api.ReleasePayloadImageLink(api.LatestStableName),
+			api.ImagesReadyLink(),
+		},
 	}, {
 		name: "step needs release images, should have StableImagesLink",
 		steps: api.MultiStageTestConfigurationLiteral{
 			Test: []api.LiteralTestStep{{From: "from-release"}},
 		},
-		req: []api.StepLink{api.StableImagesLink(api.LatestStableName)},
+		req: []api.StepLink{
+			api.StableImagesLink(api.LatestStableName),
+		},
 	}, {
 		name: "step needs images, should have InternalImageLink",
 		config: api.ReleaseBuildConfiguration{
@@ -82,7 +89,7 @@ func TestRequires(t *testing.T) {
 					return
 				}
 			}
-			t.Errorf("incorrect requirements: %s", diff.ObjectReflectDiff(ret, tc.req))
+			t.Errorf("incorrect requirements: %s", cmp.Diff(ret, tc.req, api.Comparer()))
 		})
 	}
 }
@@ -103,41 +110,6 @@ func TestGeneratePods(t *testing.T) {
 				}},
 			},
 		}},
-	}
-	labels := map[string]string{
-		"job":                              "job",
-		"build-id":                         "build id",
-		"created-by-ci":                    "true",
-		"ci.openshift.io/refs.branch":      "base ref",
-		"ci.openshift.io/refs.org":         "org",
-		"ci.openshift.io/refs.repo":        "repo",
-		"ci.openshift.io/multi-stage-test": "test",
-	}
-	coreEnv := []coreapi.EnvVar{
-		{Name: "BUILD_ID", Value: "build id"},
-		{Name: "CI", Value: "true"},
-		{Name: "JOB_NAME", Value: "job"},
-		{Name: "JOB_SPEC", Value: `{"type":"postsubmit","job":"job","buildid":"build id","prowjobid":"prow job id","refs":{"org":"org","repo":"repo","base_ref":"base ref","base_sha":"base sha"}}`},
-		{Name: "JOB_TYPE", Value: "postsubmit"},
-		{Name: "OPENSHIFT_CI", Value: "true"},
-		{Name: "PROW_JOB_ID", Value: "prow job id"},
-		{Name: "PULL_BASE_REF", Value: "base ref"},
-		{Name: "PULL_BASE_SHA", Value: "base sha"},
-		{Name: "PULL_REFS", Value: "base ref:base sha"},
-		{Name: "REPO_NAME", Value: "repo"},
-		{Name: "REPO_OWNER", Value: "org"},
-	}
-	customEnv := []coreapi.EnvVar{
-		{Name: "NAMESPACE", Value: "namespace"},
-		{Name: "JOB_NAME_SAFE", Value: "test"},
-		{Name: "JOB_NAME_HASH", Value: "5e8c9"},
-		{Name: "RELEASE_IMAGE_INITIAL", Value: "release:initial"},
-		{Name: "RELEASE_IMAGE_LATEST", Value: "release:latest"},
-		{Name: "LEASED_RESOURCE", Value: "uuid"},
-		{Name: "CLUSTER_TYPE", Value: "aws"},
-		{Name: "CLUSTER_PROFILE_DIR", Value: "/var/run/secrets/ci.openshift.io/cluster-profile"},
-		{Name: "KUBECONFIG", Value: "/var/run/secrets/ci.openshift.io/multi-stage/kubeconfig"},
-		{Name: "SHARED_DIR", Value: "/var/run/secrets/ci.openshift.io/multi-stage"},
 	}
 
 	jobSpec := api.JobSpec{
@@ -165,181 +137,7 @@ func TestGeneratePods(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected := []coreapi.Pod{{
-		ObjectMeta: meta.ObjectMeta{
-			Name:   "test-step0",
-			Labels: labels,
-			Annotations: map[string]string{
-				"ci.openshift.io/job-spec":                     "",
-				"ci-operator.openshift.io/container-sub-tests": "test",
-				"ci-operator.openshift.io/save-container-logs": "true",
-			},
-		},
-		Spec: coreapi.PodSpec{
-			RestartPolicy:      "Never",
-			ServiceAccountName: "test",
-			InitContainers: []coreapi.Container{{
-				Name:    "cp-secret-wrapper",
-				Image:   "registry.svc.ci.openshift.org/ci/secret-wrapper:latest",
-				Command: []string{"cp"},
-				Args: []string{
-					"/bin/secret-wrapper",
-					"/tmp/secret-wrapper/secret-wrapper",
-				},
-				VolumeMounts: []coreapi.VolumeMount{{
-					Name:      "secret-wrapper",
-					MountPath: "/tmp/secret-wrapper",
-				}},
-				TerminationMessagePolicy: coreapi.TerminationMessageFallbackToLogsOnError,
-			}},
-			Containers: []coreapi.Container{{
-				Name:                     "test",
-				Image:                    "pipeline:src",
-				Command:                  []string{"/tmp/secret-wrapper/secret-wrapper"},
-				Args:                     []string{"/bin/bash", "-c", "#!/bin/bash\nset -eu\ncommand0"},
-				Env:                      append(coreEnv, customEnv...),
-				Resources:                coreapi.ResourceRequirements{},
-				TerminationMessagePolicy: "FallbackToLogsOnError",
-				VolumeMounts: []coreapi.VolumeMount{{
-					Name:      "secret-wrapper",
-					MountPath: "/tmp/secret-wrapper",
-				}, {
-					Name:      "cluster-profile",
-					MountPath: "/var/run/secrets/ci.openshift.io/cluster-profile",
-				}, {
-					Name:      "test",
-					MountPath: "/var/run/secrets/ci.openshift.io/multi-stage",
-				}},
-			}},
-			Volumes: []coreapi.Volume{{
-				Name: "secret-wrapper",
-				VolumeSource: coreapi.VolumeSource{
-					EmptyDir: &coreapi.EmptyDirVolumeSource{},
-				},
-			}, {
-				Name: "cluster-profile",
-				VolumeSource: coreapi.VolumeSource{
-					Secret: &coreapi.SecretVolumeSource{
-						SecretName: "test-cluster-profile",
-					},
-				},
-			}, {
-				Name: "test",
-				VolumeSource: coreapi.VolumeSource{
-					Secret: &coreapi.SecretVolumeSource{
-						SecretName: "test",
-					},
-				},
-			}},
-		},
-	}, {
-		ObjectMeta: meta.ObjectMeta{
-			Name:   "test-step1",
-			Labels: labels,
-			Annotations: map[string]string{
-				"ci.openshift.io/job-spec":                     "",
-				"ci-operator.openshift.io/container-sub-tests": "test",
-				"ci-operator.openshift.io/save-container-logs": "true",
-			},
-		},
-		Spec: coreapi.PodSpec{
-			RestartPolicy:      "Never",
-			ServiceAccountName: "test",
-			InitContainers: []coreapi.Container{{
-				Name:    "cp-secret-wrapper",
-				Image:   "registry.svc.ci.openshift.org/ci/secret-wrapper:latest",
-				Command: []string{"cp"},
-				Args: []string{
-					"/bin/secret-wrapper",
-					"/tmp/secret-wrapper/secret-wrapper",
-				},
-				VolumeMounts: []coreapi.VolumeMount{{
-					Name:      "secret-wrapper",
-					MountPath: "/tmp/secret-wrapper",
-				}},
-				TerminationMessagePolicy: coreapi.TerminationMessageFallbackToLogsOnError,
-			}},
-			Containers: []coreapi.Container{{
-				Name:                     "test",
-				Image:                    "stable:image1",
-				Command:                  []string{"/tmp/secret-wrapper/secret-wrapper"},
-				Args:                     []string{"/bin/bash", "-c", "#!/bin/bash\nset -eu\ncommand1"},
-				Env:                      append(append(coreEnv, coreapi.EnvVar{Name: "ARTIFACT_DIR", Value: "/artifact/dir"}), customEnv...),
-				Resources:                coreapi.ResourceRequirements{},
-				TerminationMessagePolicy: "FallbackToLogsOnError",
-				VolumeMounts: []coreapi.VolumeMount{{
-					Name:      "artifacts",
-					MountPath: "/artifact/dir",
-				}, {
-					Name:      "secret-wrapper",
-					MountPath: "/tmp/secret-wrapper",
-				}, {
-					Name:      "cluster-profile",
-					MountPath: "/var/run/secrets/ci.openshift.io/cluster-profile",
-				}, {
-					Name:      "test",
-					MountPath: "/var/run/secrets/ci.openshift.io/multi-stage",
-				}},
-			}, {
-				Name:  "artifacts",
-				Image: "busybox",
-				Command: []string{
-					"/bin/sh", "-c", `#!/bin/sh
-set -euo pipefail
-trap 'kill $(jobs -p); exit 0' TERM
-
-touch /tmp/done
-echo "Waiting for artifacts to be extracted"
-while true; do
-	if [[ ! -f /tmp/done ]]; then
-		echo "Artifacts extracted, will terminate after 30s"
-		sleep 30
-		echo "Exiting"
-		exit 0
-	fi
-	sleep 5 & wait
-done
-`},
-				VolumeMounts: []coreapi.VolumeMount{{
-					Name:      "artifacts",
-					MountPath: "/tmp/artifacts",
-				}},
-			}},
-			Volumes: []coreapi.Volume{{
-				Name: "artifacts",
-				VolumeSource: coreapi.VolumeSource{
-					EmptyDir: &coreapi.EmptyDirVolumeSource{},
-				},
-			}, {
-				Name: "secret-wrapper",
-				VolumeSource: coreapi.VolumeSource{
-					EmptyDir: &coreapi.EmptyDirVolumeSource{},
-				},
-			}, {
-				Name: "cluster-profile",
-				VolumeSource: coreapi.VolumeSource{
-					Secret: &coreapi.SecretVolumeSource{
-						SecretName: "test-cluster-profile",
-					},
-				},
-			}, {
-				Name: "test",
-				VolumeSource: coreapi.VolumeSource{
-					Secret: &coreapi.SecretVolumeSource{
-						SecretName: "test",
-					},
-				},
-			}},
-		},
-	}}
-	if len(expected) != len(ret) {
-		t.Fatalf("did not generate %d pods, but %d: %s", len(expected), len(ret), diff.ObjectReflectDiff(expected, ret))
-	}
-	for i := range expected {
-		if !equality.Semantic.DeepEqual(expected[i], ret[i]) {
-			t.Errorf("did not generate expected pod: %s", diff.ObjectReflectDiff(expected[i], ret[i]))
-		}
-	}
+	testhelper.CompareWithFixture(t, ret)
 }
 
 func TestGeneratePodsEnvironment(t *testing.T) {
@@ -465,6 +263,7 @@ func (e *fakePodExecutor) AddReactors(cs *fake.Clientset) {
 }
 
 func TestRun(t *testing.T) {
+	yes := true
 	for _, tc := range []struct {
 		name     string
 		failures sets.String
@@ -520,15 +319,15 @@ func TestRun(t *testing.T) {
 				MultiStageTestConfigurationLiteral: &api.MultiStageTestConfigurationLiteral{
 					Pre:                []api.LiteralTestStep{{As: "pre0"}, {As: "pre1"}},
 					Test:               []api.LiteralTestStep{{As: "test0"}, {As: "test1"}},
-					Post:               []api.LiteralTestStep{{As: "post0"}, {As: "post1", OptionalOnSuccess: func(b bool) *bool { return &b }(true)}},
-					AllowSkipOnSuccess: true,
+					Post:               []api.LiteralTestStep{{As: "post0"}, {As: "post1", OptionalOnSuccess: &yes}},
+					AllowSkipOnSuccess: &yes,
 				},
 			}, &api.ReleaseBuildConfiguration{}, nil, &fakePodClient{NewPodClient(client, nil, nil)}, client, client, fakecs.RbacV1(), "", &jobSpec)
 			if err := step.Run(context.Background()); tc.failures == nil && err != nil {
 				t.Error(err)
 				return
 			}
-			secrets, err := client.Secrets(jobSpec.Namespace()).List(meta.ListOptions{})
+			secrets, err := client.Secrets(jobSpec.Namespace()).List(context.TODO(), meta.ListOptions{})
 			if err != nil {
 				t.Error(err)
 				return
@@ -548,6 +347,9 @@ func TestRun(t *testing.T) {
 }
 
 func TestArtifacts(t *testing.T) {
+	timeSecond = time.Nanosecond
+	defer func() { timeSecond = time.Second }()
+
 	tmp, err := ioutil.TempDir("", "")
 	if err != nil {
 		t.Fatal(err)

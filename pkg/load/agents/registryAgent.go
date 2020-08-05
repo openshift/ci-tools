@@ -6,11 +6,10 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	log "github.com/sirupsen/logrus"
-	"k8s.io/test-infra/prow/interrupts"
+	"github.com/sirupsen/logrus"
+	utilpointer "k8s.io/utils/pointer"
 
 	"github.com/openshift/ci-tools/pkg/api"
-	"github.com/openshift/ci-tools/pkg/coalescer"
 	"github.com/openshift/ci-tools/pkg/load"
 	"github.com/openshift/ci-tools/pkg/registry"
 )
@@ -19,7 +18,7 @@ import (
 // memory and resolve ReleaseBuildConfigurations using the registry
 type RegistryAgent interface {
 	ResolveConfig(config api.ReleaseBuildConfiguration) (api.ReleaseBuildConfiguration, error)
-	GetRegistryComponents() (registry.ReferenceByName, registry.ChainByName, registry.WorkflowByName, map[string]string)
+	GetRegistryComponents() (registry.ReferenceByName, registry.ChainByName, registry.WorkflowByName, map[string]string, *api.RegistryMetadata)
 	GetGeneration() int
 	registry.Resolver
 }
@@ -28,7 +27,6 @@ type registryAgent struct {
 	lock          *sync.RWMutex
 	resolver      registry.Resolver
 	registryPath  string
-	cycle         time.Duration
 	generation    int
 	errorMetrics  *prometheus.CounterVec
 	flatRegistry  bool
@@ -36,6 +34,7 @@ type registryAgent struct {
 	chains        registry.ChainByName
 	workflows     registry.WorkflowByName
 	documentation map[string]string
+	metadata      *api.RegistryMetadata
 }
 
 var registryReloadTimeMetric = prometheus.NewHistogram(
@@ -50,25 +49,50 @@ func init() {
 	prometheus.MustRegister(registryReloadTimeMetric)
 }
 
+type RegistryAgentOptions struct {
+	// ErrorMetric holds the CounterVec to count errors on. It must include a `error` label
+	// or the agent panics on the first error.
+	ErrorMetric *prometheus.CounterVec
+	// FlatRegistry describes if the registry is flat, which means org/repo/branch info can not be inferred
+	// from the filepath. Defaults to true.
+	FlatRegistry *bool
+}
+
+type RegistryAgentOption func(*RegistryAgentOptions)
+
+func WithRegistryMetrics(m *prometheus.CounterVec) RegistryAgentOption {
+	return func(o *RegistryAgentOptions) {
+		o.ErrorMetric = m
+	}
+}
+
+func WithRegistryFlat(v bool) RegistryAgentOption {
+	return func(o *RegistryAgentOptions) {
+		o.FlatRegistry = &v
+	}
+}
+
 // NewRegistryAgent returns a RegistryAgent interface that automatically reloads when
-// the registry is changed on disk as well as on a period specified with a time.Duration.
-func NewRegistryAgent(registryPath string, cycle time.Duration, errorMetrics *prometheus.CounterVec, flatRegistry bool) (RegistryAgent, error) {
-	a := &registryAgent{registryPath: registryPath, cycle: cycle, lock: &sync.RWMutex{}, errorMetrics: errorMetrics, flatRegistry: flatRegistry}
-	registryCoalescer := coalescer.NewCoalescer(a.loadRegistry)
-	err := registryCoalescer.Run()
-	if err != nil {
-		return nil, fmt.Errorf("Failed to load registry: %w", err)
+// the registry is changed on disk.
+func NewRegistryAgent(registryPath string, opts ...RegistryAgentOption) (RegistryAgent, error) {
+	opt := &RegistryAgentOptions{}
+	for _, o := range opts {
+		o(opt)
+	}
+	if opt.ErrorMetric == nil {
+		opt.ErrorMetric = prometheus.NewCounterVec(prometheus.CounterOpts{Name: "registry_agent_errors_total"}, []string{"error"})
+	}
+	if opt.FlatRegistry == nil {
+		opt.FlatRegistry = utilpointer.BoolPtr(true)
 	}
 
-	// periodic reload
-	interrupts.TickLiteral(func() {
-		if err := registryCoalescer.Run(); err != nil {
-			log.WithError(err).Error("Failed to reload registry")
-		}
-	}, a.cycle)
+	a := &registryAgent{registryPath: registryPath, lock: &sync.RWMutex{}, errorMetrics: opt.ErrorMetric, flatRegistry: *opt.FlatRegistry}
+	// Load config once so we fail early if that doesn't work and are ready as soon as we return
+	if err := a.loadRegistry(); err != nil {
+		return nil, fmt.Errorf("failed to load registry: %w", err)
+	}
 
-	err = startWatchers(a.registryPath, registryCoalescer, a.recordError)
-	return a, err
+	return a, startWatchers(a.registryPath, a.loadRegistry, a.recordError)
 }
 
 func (a *registryAgent) recordError(label string) {
@@ -89,14 +113,14 @@ func (a *registryAgent) GetGeneration() int {
 	return a.generation
 }
 
-func (a *registryAgent) GetRegistryComponents() (registry.ReferenceByName, registry.ChainByName, registry.WorkflowByName, map[string]string) {
-	return a.references, a.chains, a.workflows, a.documentation
+func (a *registryAgent) GetRegistryComponents() (registry.ReferenceByName, registry.ChainByName, registry.WorkflowByName, map[string]string, *api.RegistryMetadata) {
+	return a.references, a.chains, a.workflows, a.documentation, a.metadata
 }
 
 func (a *registryAgent) loadRegistry() error {
-	log.Debug("Reloading registry")
+	logrus.Debug("Reloading registry")
 	startTime := time.Now()
-	references, chains, workflows, documentation, err := load.Registry(a.registryPath, a.flatRegistry)
+	references, chains, workflows, documentation, metadata, err := load.Registry(a.registryPath, a.flatRegistry)
 	if err != nil {
 		a.recordError("failed to load ci-operator registry")
 		return fmt.Errorf("failed to load ci-operator registry (%w)", err)
@@ -106,12 +130,13 @@ func (a *registryAgent) loadRegistry() error {
 	a.chains = chains
 	a.workflows = workflows
 	a.documentation = documentation
+	a.metadata = metadata
 	a.resolver = registry.NewResolver(references, chains, workflows)
 	a.generation++
 	a.lock.Unlock()
 	duration := time.Since(startTime)
 	configReloadTimeMetric.Observe(duration.Seconds())
-	log.WithField("duration", duration).Info("Registry reloaded")
+	logrus.WithField("duration", duration).Info("Registry reloaded")
 	return nil
 }
 

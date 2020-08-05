@@ -3,6 +3,7 @@ package steps
 import (
 	"archive/tar"
 	"compress/gzip"
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -23,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	"k8s.io/client-go/kubernetes/scheme"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -214,6 +216,36 @@ func (c podClient) Exec(namespace, pod string, opts *coreapi.PodExecOptions) (re
 type PodClient interface {
 	coreclientset.PodsGetter
 	podCmdExecutor
+}
+
+// Allow tests to accelerate time
+var timeSecond = time.Second
+
+func waitForContainer(podClient PodClient, ns, name, containerName string) error {
+	logrus.WithFields(logrus.Fields{
+		"namespace": ns,
+		"name":      name,
+		"container": containerName,
+	}).Trace("Waiting for container to be running.")
+
+	return wait.PollImmediate(time.Second, 30*timeSecond, func() (bool, error) {
+		pod, err := podClient.Pods(ns).Get(context.TODO(), name, meta.GetOptions{})
+		if err != nil {
+			logrus.WithError(err).Errorf("Waiting for container %s in pod %s in namespace %s", containerName, name, ns)
+			return false, nil
+		}
+
+		for _, container := range pod.Status.ContainerStatuses {
+			if container.Name == containerName {
+				if container.State.Running != nil || container.State.Terminated != nil {
+					return true, nil
+				}
+				break
+			}
+		}
+
+		return false, nil
+	})
 }
 
 func copyArtifacts(podClient PodClient, into, ns, name, containerName string, paths []string) error {
@@ -450,7 +482,7 @@ func (w *ArtifactWorker) downloadArtifacts(podName string, hasArtifacts bool) er
 		log.Printf("error: unable to signal to artifacts container to terminate in pod %s, triggering deletion: %v", podName, err)
 
 		// attempt to delete the pod
-		err = w.podClient.Pods(w.namespace).Delete(podName, nil)
+		err = w.podClient.Pods(w.namespace).Delete(context.TODO(), podName, meta.DeleteOptions{})
 		if err == nil || errors.IsNotFound(err) {
 			return
 		}
@@ -458,6 +490,10 @@ func (w *ArtifactWorker) downloadArtifacts(podName string, hasArtifacts bool) er
 
 		// give up, expect another process to clean up the pods
 	}()
+
+	if err := waitForContainer(w.podClient, w.namespace, podName, "artifacts"); err != nil {
+		return fmt.Errorf("artifacts container for pod %s unready: %w", podName, err)
+	}
 
 	if err := copyArtifacts(w.podClient, w.dir, w.namespace, podName, "artifacts", []string{"/tmp/artifacts"}); err != nil {
 		return fmt.Errorf("unable to retrieve artifacts from pod %s: %w", podName, err)
@@ -637,7 +673,7 @@ func hasMountsArtifactsVolume(pod *coreapi.Pod) bool {
 
 func gatherContainerLogsOutput(podClient PodClient, artifactDir, namespace, podName string) error {
 	var validationErrors []error
-	list, err := podClient.Pods(namespace).List(meta.ListOptions{FieldSelector: fields.Set{"metadata.name": podName}.AsSelector().String()})
+	list, err := podClient.Pods(namespace).List(context.TODO(), meta.ListOptions{FieldSelector: fields.Set{"metadata.name": podName}.AsSelector().String()})
 	if err != nil {
 		return fmt.Errorf("could not list pod: %w", err)
 	}
@@ -665,7 +701,7 @@ func gatherContainerLogsOutput(podClient PodClient, artifactDir, namespace, podN
 			defer file.Close()
 
 			w := gzip.NewWriter(file)
-			if s, err := podClient.Pods(namespace).GetLogs(podName, &coreapi.PodLogOptions{Container: status.Name}).Stream(); err == nil {
+			if s, err := podClient.Pods(namespace).GetLogs(podName, &coreapi.PodLogOptions{Container: status.Name}).Stream(context.TODO()); err == nil {
 				if _, err := io.Copy(w, s); err != nil {
 					validationErrors = append(validationErrors, fmt.Errorf("error: Unable to copy log output from pod container %s: %w", status.Name, err))
 				}

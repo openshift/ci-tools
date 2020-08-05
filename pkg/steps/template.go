@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/openshift/ci-tools/pkg/steps/utils"
 	"io"
 	"log"
 	"os"
@@ -70,7 +71,7 @@ func (s *templateExecutionStep) run(ctx context.Context) error {
 
 	for i, p := range s.template.Parameters {
 		if len(p.Value) == 0 {
-			if !s.params.Has(p.Name) && !strings.HasPrefix(p.Name, "IMAGE_") && p.Required {
+			if !s.params.Has(p.Name) && !utils.IsStableImageEnv(p.Name) && p.Required {
 				return fmt.Errorf("template %s has required parameter %s which is not defined", s.template.Name, p.Name)
 			}
 		}
@@ -84,16 +85,13 @@ func (s *templateExecutionStep) run(ctx context.Context) error {
 			}
 			continue
 		}
-		if strings.HasPrefix(p.Name, "IMAGE_") {
-			component := strings.ToLower(strings.TrimPrefix(p.Name, "IMAGE_"))
-			if len(component) > 0 {
-				component = strings.Replace(component, "_", "-", -1)
-				format, err := s.params.Get("IMAGE_FORMAT")
-				if err != nil {
-					return fmt.Errorf("could not resolve image format: %w", err)
-				}
-				s.template.Parameters[i].Value = strings.Replace(format, api.ComponentFormatReplacement, component, -1)
+		if utils.IsStableImageEnv(p.Name) {
+			component := utils.StableImageNameFrom(p.Name)
+			format, err := s.params.Get(utils.ImageFormatEnv)
+			if err != nil {
+				return fmt.Errorf("could not resolve image format: %w", err)
 			}
+			s.template.Parameters[i].Value = strings.Replace(format, api.ComponentFormatReplacement, component, -1)
 		}
 	}
 
@@ -120,10 +118,10 @@ func (s *templateExecutionStep) run(ctx context.Context) error {
 		notifier.Cancel()
 		log.Printf("cleanup: Deleting template %s", s.template.Name)
 		policy := meta.DeletePropagationForeground
-		opt := &meta.DeleteOptions{
+		opt := meta.DeleteOptions{
 			PropagationPolicy: &policy,
 		}
-		if err := s.templateClient.TemplateInstances(s.jobSpec.Namespace()).Delete(s.template.Name, opt); err != nil && !errors.IsNotFound(err) {
+		if err := s.templateClient.TemplateInstances(s.jobSpec.Namespace()).Delete(ctx, s.template.Name, opt); err != nil && !errors.IsNotFound(err) {
 			log.Printf("error: Could not delete template instance: %v", err)
 		}
 	}()
@@ -146,7 +144,7 @@ func (s *templateExecutionStep) run(ctx context.Context) error {
 		for _, ref := range instance.Status.Objects {
 			switch {
 			case ref.Ref.Kind == "Pod" && ref.Ref.APIVersion == "v1":
-				pod, err := s.podClient.Pods(s.jobSpec.Namespace()).Get(ref.Ref.Name, meta.GetOptions{})
+				pod, err := s.podClient.Pods(s.jobSpec.Namespace()).Get(context.TODO(), ref.Ref.Name, meta.GetOptions{})
 				if err != nil {
 					return fmt.Errorf("unable to retrieve pod from template - possibly deleted: %w", err)
 				}
@@ -250,17 +248,9 @@ func (s *templateExecutionStep) SubTests() []*junit.TestCase {
 
 func (s *templateExecutionStep) Requires() []api.StepLink {
 	var links []api.StepLink
-	var needsRelease bool
 	for _, p := range s.template.Parameters {
-		needsRelease = strings.HasPrefix(p.Name, "RELEASE_IMAGE_") || needsRelease
-		if s.params.Has(p.Name) {
-			paramLinks := s.params.Links(p.Name)
-			links = append(links, paramLinks...)
-			continue
-		}
-		if strings.HasPrefix(p.Name, "IMAGE_") && !needsRelease {
-			links = append(links, api.StableImagesLink(api.LatestStableName))
-			continue
+		if link, ok := utils.LinkForEnv(p.Name); ok {
+			links = append(links, link)
 		}
 	}
 	return links
@@ -270,8 +260,8 @@ func (s *templateExecutionStep) Creates() []api.StepLink {
 	return []api.StepLink{}
 }
 
-func (s *templateExecutionStep) Provides() (api.ParameterMap, api.StepLink) {
-	return nil, nil
+func (s *templateExecutionStep) Provides() api.ParameterMap {
+	return nil
 }
 
 func (s *templateExecutionStep) Name() string { return s.template.Name }
@@ -315,7 +305,7 @@ func (c *templateClient) Process(namespace string, template *templateapi.Templat
 		Namespace(namespace).
 		Resource("processedtemplates").
 		Body(template).
-		Do().
+		Do(context.TODO()).
 		Into(processed)
 	return processed, fmt.Errorf("could not process template: %w", err)
 }
@@ -324,7 +314,7 @@ func waitForTemplateInstanceReady(templateClient templateclientset.TemplateInsta
 	var instance *templateapi.TemplateInstance
 	err := wait.PollImmediate(2*time.Second, 10*time.Minute, func() (bool, error) {
 		var getErr error
-		if instance, getErr = templateClient.Get(name, meta.GetOptions{}); getErr != nil {
+		if instance, getErr = templateClient.Get(context.TODO(), name, meta.GetOptions{}); getErr != nil {
 			return false, nil
 		}
 
@@ -338,12 +328,12 @@ func createOrRestartTemplateInstance(templateClient templateclientset.TemplateIn
 	if err := waitForCompletedTemplateInstanceDeletion(templateClient, podClient, instance.Name); err != nil {
 		return nil, fmt.Errorf("unable to delete completed template instance: %w", err)
 	}
-	created, err := templateClient.Create(instance)
+	created, err := templateClient.Create(context.TODO(), instance, meta.CreateOptions{})
 	if err != nil && !errors.IsAlreadyExists(err) {
 		return nil, fmt.Errorf("unable to create template instance: %w", err)
 	}
 	if err != nil {
-		created, err = templateClient.Get(instance.Name, meta.GetOptions{})
+		created, err = templateClient.Get(context.TODO(), instance.Name, meta.GetOptions{})
 		if err != nil {
 			return nil, fmt.Errorf("unable to retrieve pod: %w", err)
 		}
@@ -353,7 +343,7 @@ func createOrRestartTemplateInstance(templateClient templateclientset.TemplateIn
 }
 
 func waitForCompletedTemplateInstanceDeletion(templateClient templateclientset.TemplateInstanceInterface, podClient coreclientset.PodInterface, name string) error {
-	instance, err := templateClient.Get(name, meta.GetOptions{})
+	instance, err := templateClient.Get(context.TODO(), name, meta.GetOptions{})
 	if errors.IsNotFound(err) {
 		log.Printf("Template instance %s already deleted, do not need to wait any longer", name)
 		return nil
@@ -362,7 +352,7 @@ func waitForCompletedTemplateInstanceDeletion(templateClient templateclientset.T
 	// delete the instance we had before, otherwise another user has relaunched this template
 	uid := instance.UID
 	policy := meta.DeletePropagationForeground
-	err = templateClient.Delete(name, &meta.DeleteOptions{
+	err = templateClient.Delete(context.TODO(), name, meta.DeleteOptions{
 		PropagationPolicy: &policy,
 		Preconditions:     &meta.Preconditions{UID: &uid},
 	})
@@ -376,7 +366,7 @@ func waitForCompletedTemplateInstanceDeletion(templateClient templateclientset.T
 	}
 
 	for i := 0; ; i++ {
-		instance, err := templateClient.Get(name, meta.GetOptions{})
+		instance, err := templateClient.Get(context.TODO(), name, meta.GetOptions{})
 		if errors.IsNotFound(err) {
 			break
 		}
@@ -415,7 +405,7 @@ func createOrRestartPod(podClient coreclientset.PodInterface, pod *coreapi.Pod) 
 	// creating a pod in close proximity to namespace creation can result in forbidden errors due to
 	// initializing secrets or policy - use a short backoff to mitigate flakes
 	if err := wait.ExponentialBackoff(wait.Backoff{Steps: 4, Factor: 2, Duration: time.Second}, func() (bool, error) {
-		newPod, err := podClient.Create(pod)
+		newPod, err := podClient.Create(context.TODO(), pod, meta.CreateOptions{})
 		if err != nil {
 			if errors.IsForbidden(err) {
 				log.Printf("Unable to create pod %s, may be temporary: %v", pod.Name, err)
@@ -424,7 +414,7 @@ func createOrRestartPod(podClient coreclientset.PodInterface, pod *coreapi.Pod) 
 			if !errors.IsAlreadyExists(err) {
 				return false, err
 			}
-			newPod, err = podClient.Get(pod.Name, meta.GetOptions{})
+			newPod, err = podClient.Get(context.TODO(), pod.Name, meta.GetOptions{})
 			if err != nil {
 				return false, err
 			}
@@ -440,7 +430,7 @@ func createOrRestartPod(podClient coreclientset.PodInterface, pod *coreapi.Pod) 
 func waitForPodDeletion(podClient coreclientset.PodInterface, name string, uid types.UID) error {
 	timeout := 600
 	for i := 0; i < timeout; i += 2 {
-		pod, err := podClient.Get(name, meta.GetOptions{})
+		pod, err := podClient.Get(context.TODO(), name, meta.GetOptions{})
 		if errors.IsNotFound(err) {
 			return nil
 		}
@@ -458,7 +448,7 @@ func waitForPodDeletion(podClient coreclientset.PodInterface, name string, uid t
 }
 
 func waitForCompletedPodDeletion(podClient coreclientset.PodInterface, name string) error {
-	pod, err := podClient.Get(name, meta.GetOptions{})
+	pod, err := podClient.Get(context.TODO(), name, meta.GetOptions{})
 	if errors.IsNotFound(err) {
 		return nil
 	}
@@ -469,7 +459,7 @@ func waitForCompletedPodDeletion(podClient coreclientset.PodInterface, name stri
 
 	// delete the pod we expect, otherwise another user has relaunched this pod
 	uid := pod.UID
-	err = podClient.Delete(name, &meta.DeleteOptions{Preconditions: &meta.Preconditions{UID: &uid}})
+	err = podClient.Delete(context.TODO(), name, meta.DeleteOptions{Preconditions: &meta.Preconditions{UID: &uid}})
 	if errors.IsNotFound(err) {
 		return nil
 	}
@@ -515,7 +505,7 @@ func waitForPodCompletion(ctx context.Context, podClient coreclientset.PodInterf
 }
 
 func waitForPodCompletionOrTimeout(ctx context.Context, podClient coreclientset.PodInterface, name string, completed map[string]time.Time, notifier ContainerNotifier, skipLogs bool) (bool, error) {
-	watcher, err := podClient.Watch(meta.ListOptions{
+	watcher, err := podClient.Watch(context.TODO(), meta.ListOptions{
 		FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String(),
 		Watch:         true,
 	})
@@ -524,7 +514,7 @@ func waitForPodCompletionOrTimeout(ctx context.Context, podClient coreclientset.
 	}
 	defer watcher.Stop()
 
-	list, err := podClient.List(meta.ListOptions{FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String()})
+	list, err := podClient.List(context.TODO(), meta.ListOptions{FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String()})
 	if err != nil {
 		return false, fmt.Errorf("could not list pod: %w", err)
 	}
@@ -549,38 +539,45 @@ func waitForPodCompletionOrTimeout(ctx context.Context, podClient coreclientset.
 		return false, appendLogToError(fmt.Errorf("the pod %s/%s failed after %s (failed containers: %s): %s", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", "), podReason(pod)), podMessages(pod))
 	}
 	done := ctx.Done()
+	podCheckTicker := time.NewTicker(time.Minute)
+	defer podCheckTicker.Stop()
 	for {
-		var event watch.Event
-		var ok bool
 		select {
 		case <-done:
 			return false, ctx.Err()
-		case event, ok = <-watcher.ResultChan():
-		}
-		if !ok {
-			// restart
-			return true, nil
-		}
-		pod, ok := event.Object.(*coreapi.Pod)
-		if !ok {
-			log.Printf("error: Unrecognized event in watch: %v %#v", event.Type, event.Object)
-			continue
-		}
-		podLogNewFailedContainers(podClient, pod, completed, notifier, skipLogs)
-		if podJobIsOK(pod) {
-			if !skipLogs {
-				log.Printf("Pod %s succeeded after %s", pod.Name, podDuration(pod).Truncate(time.Second))
+		// Check minutely if we ran into the pod timeout
+		case <-podCheckTicker.C:
+			pod, err := podClient.Get(context.TODO(), name, meta.GetOptions{})
+			if err != nil {
+				log.Printf("warning: failed to get pod %s: %v", name, err)
+				continue
 			}
-			return false, nil
-		}
-		if podJobIsFailed(pod) {
-			return false, appendLogToError(fmt.Errorf("the pod %s/%s failed after %s (failed containers: %s): %s", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", "), podReason(pod)), podMessages(pod))
-		}
-		if event.Type == watch.Deleted {
-			return false, appendLogToError(fmt.Errorf("the pod %s/%s was deleted without completing after %s (failed containers: %s)", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", ")), podMessages(pod))
-		}
-		if !isPodRunning(pod) && time.Since(pod.CreationTimestamp.Time) > 30*time.Minute {
-			return false, fmt.Errorf("pod didn't start running within 30 minutes: %s", getReasonsForUnreadyContainers(pod))
+			if !isPodRunning(pod) && time.Since(pod.CreationTimestamp.Time) > 30*time.Minute {
+				return false, fmt.Errorf("pod didn't start running within 30 minutes: %s", getReasonsForUnreadyContainers(pod))
+			}
+		case event, ok := <-watcher.ResultChan():
+			if !ok {
+				// restart
+				return true, nil
+			}
+			pod, ok := event.Object.(*coreapi.Pod)
+			if !ok {
+				log.Printf("error: Unrecognized event in watch: %v %#v", event.Type, event.Object)
+				continue
+			}
+			podLogNewFailedContainers(podClient, pod, completed, notifier, skipLogs)
+			if podJobIsOK(pod) {
+				if !skipLogs {
+					log.Printf("Pod %s succeeded after %s", pod.Name, podDuration(pod).Truncate(time.Second))
+				}
+				return false, nil
+			}
+			if podJobIsFailed(pod) {
+				return false, appendLogToError(fmt.Errorf("the pod %s/%s failed after %s (failed containers: %s): %s", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", "), podReason(pod)), podMessages(pod))
+			}
+			if event.Type == watch.Deleted {
+				return false, appendLogToError(fmt.Errorf("the pod %s/%s was deleted without completing after %s (failed containers: %s)", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", ")), podMessages(pod))
+			}
 		}
 	}
 }
@@ -769,7 +766,7 @@ func podLogNewFailedContainers(podClient coreclientset.PodInterface, pod *coreap
 
 		if s, err := podClient.GetLogs(pod.Name, &coreapi.PodLogOptions{
 			Container: status.Name,
-		}).Stream(); err == nil {
+		}).Stream(context.TODO()); err == nil {
 			if _, err := io.Copy(os.Stdout, s); err != nil {
 				log.Printf("error: Unable to copy log output from failed pod container %s: %v", status.Name, err)
 			}

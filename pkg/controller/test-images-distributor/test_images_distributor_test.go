@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 
@@ -169,6 +170,12 @@ func TestReconcile(t *testing.T) {
 		},
 	}
 
+	imageStreamTagWithBuild01PullSpec := func() *imagev1.ImageStreamTag {
+		copy := referenceImageStreamTag.DeepCopy()
+		copy.Image.DockerImageReference = "registry.build01.ci.openshift.org/ci-op-hbtwhrrm/pipeline@sha256:328d0a90295ef5f5932807bcab8f230007afeb1572d1d7878ab8bdae671dfa8b"
+		return copy
+	}
+
 	outdatedImageStreamTag := func() *imagev1.ImageStreamTag {
 		copy := referenceImageStreamTag.DeepCopy()
 		copy.Image.Name = "old"
@@ -236,6 +243,23 @@ func TestReconcile(t *testing.T) {
 
 	expectedNamespace := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{Name: referenceImageStreamTag.Namespace},
+	}
+
+	expectedImageStream := &imagev1.ImageStream{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: referenceImageStreamTag.Namespace,
+			Name:      strings.Split(referenceImageStreamTag.Name, ":")[0],
+		},
+		Spec: imagev1.ImageStreamSpec{
+			LookupPolicy: imagev1.ImageLookupPolicy{
+				Local: true,
+			},
+		},
+	}
+	outdatedImageStream := func() *imagev1.ImageStream {
+		copy := expectedImageStream.DeepCopy()
+		copy.Spec.LookupPolicy.Local = false
+		return copy
 	}
 
 	ctx := context.Background()
@@ -310,6 +334,18 @@ func TestReconcile(t *testing.T) {
 		if diff := cmp.Diff(expectedRole, actualRole, cmpopts.IgnoreFields(rbacv1.Role{}, "ResourceVersion", "Kind", "APIVersion")); diff != "" {
 			return fmt.Errorf("actual role differs from expected: %s", diff)
 		}
+
+		actualImageStream := &imagev1.ImageStream{}
+		imageStreamName := types.NamespacedName{
+			Namespace: imageStreamImport.Namespace,
+			Name:      strings.Split(imageStreamImport.Name, ":")[0],
+		}
+		if err := c.Get(ctx, imageStreamName, actualImageStream); err != nil {
+			return fmt.Errorf("failed to get imagestream %s: %w", imageStreamName.String(), err)
+		}
+		if diff := cmp.Diff(expectedImageStream, actualImageStream, cmpopts.IgnoreFields(imagev1.ImageStream{}, "ResourceVersion", "Kind", "APIVersion")); diff != "" {
+			return fmt.Errorf("actual imagestream differs from expected: %s", diff)
+		}
 		return nil
 	}
 
@@ -346,6 +382,28 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
+			name: "ImageStreamTag with build01 reference, no import is created",
+			request: types.NamespacedName{
+				Namespace: "01_" + referenceImageStreamTag.Namespace,
+				Name:      referenceImageStreamTag.Name,
+			},
+			registryClient:      fakeclient.NewFakeClient(imageStreamTagWithBuild01PullSpec()),
+			buildClusterClients: map[string]ctrlruntimeclient.Client{"01": fakeclient.NewFakeClient()},
+			verify: func(rc ctrlruntimeclient.Client, bc map[string]ctrlruntimeclient.Client, err error) error {
+				if err != nil {
+					return fmt.Errorf("unexpected error: %w", err)
+				}
+				name := types.NamespacedName{
+					Namespace: referenceImageStreamTag.Namespace,
+					Name:      referenceImageStreamTag.Name,
+				}
+				if err := bc["01"].Get(ctx, name, &imagev1.ImageStreamImport{}); !apierrors.IsNotFound(err) {
+					return fmt.Errorf("expected to get not found err, but got %v", err)
+				}
+				return nil
+			},
+		},
+		{
 			name: "ImageStreamTag is current, no import created",
 			request: types.NamespacedName{
 				Namespace: "01_" + referenceImageStreamTag.Namespace,
@@ -368,7 +426,7 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
-			name: "Outdated imageStreamtag, Namespace, pull secret and import and rbac are created",
+			name: "Outdated imageStreamtag, Namespace, pull secret, imagestream and import and rbac are created",
 			request: types.NamespacedName{
 				Namespace: "01_" + referenceImageStreamTag.Namespace,
 				Name:      referenceImageStreamTag.Name,
@@ -383,7 +441,7 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
-			name: "Outdated imageStreamtag, pull secret, import and rbac are created",
+			name: "Outdated imageStreamtag, pull secret, imagestream, import and rbac are created",
 			request: types.NamespacedName{
 				Namespace: "01_" + referenceImageStreamTag.Namespace,
 				Name:      referenceImageStreamTag.Name,
@@ -401,7 +459,7 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
-			name: "Outdated imageStreamtag and pull secret, pull secret is updated, import and rbac created",
+			name: "Outdated imageStreamtag and pull secret, pull secret is updated, imagestream import and rbac created",
 			request: types.NamespacedName{
 				Namespace: "01_" + referenceImageStreamTag.Namespace,
 				Name:      referenceImageStreamTag.Name,
@@ -420,7 +478,7 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
-			name: "Outdated imageStreamtag and rbac, rbac updated and import created",
+			name: "Outdated imageStreamtag and rbac, rbac updated, imagestream and import created",
 			request: types.NamespacedName{
 				Namespace: "01_" + referenceImageStreamTag.Namespace,
 				Name:      referenceImageStreamTag.Name,
@@ -441,6 +499,26 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
+			name: "Outdated Imagestream is updated, import is created",
+			request: types.NamespacedName{
+				Namespace: "01_" + referenceImageStreamTag.Namespace,
+				Name:      referenceImageStreamTag.Name,
+			},
+			registryClient: fakeclient.NewFakeClient(referenceImageStreamTag.DeepCopy()),
+			buildClusterClients: map[string]ctrlruntimeclient.Client{"01": bcc(fakeclient.NewFakeClient(
+				expectedNamespace.DeepCopy(),
+				expectedPullSecret.DeepCopy(),
+				outdatedImageStream(),
+				outdatedImageStreamTag(),
+			))},
+			verify: func(rc ctrlruntimeclient.Client, bc map[string]ctrlruntimeclient.Client, err error) error {
+				if err != nil {
+					return fmt.Errorf("unexpected error: %v", err)
+				}
+				return verifyEverythingCreated(bc["01"])
+			},
+		},
+		{
 			name: "Outdated imageStreamtag, import is created",
 			request: types.NamespacedName{
 				Namespace: "01_" + referenceImageStreamTag.Namespace,
@@ -451,6 +529,7 @@ func TestReconcile(t *testing.T) {
 				outdatedImageStreamTag(),
 				expectedNamespace.DeepCopy(),
 				expectedPullSecret.DeepCopy(),
+				expectedImageStream.DeepCopy(),
 			))},
 			verify: func(rc ctrlruntimeclient.Client, bc map[string]ctrlruntimeclient.Client, err error) error {
 				if err != nil {
@@ -470,6 +549,7 @@ func TestReconcile(t *testing.T) {
 				outdatedImageStreamTag(),
 				expectedNamespace.DeepCopy(),
 				expectedPullSecret.DeepCopy(),
+				expectedImageStream.DeepCopy(),
 			), func(c *imageImportStatusSettingClient) { c.failure = true },
 			)},
 			verify: func(rc ctrlruntimeclient.Client, bc map[string]ctrlruntimeclient.Client, err error) error {
@@ -579,11 +659,12 @@ func TestTestInputImageStreamTagFilterFactory(t *testing.T) {
 	t.Parallel()
 	const namespace, streamName, tagName = "namespace", "streamName", "streamTag"
 	testCases := []struct {
-		name                      string
-		config                    api.ReleaseBuildConfiguration
-		additionalImageStreamTags sets.String
-		additionalImageStreams    sets.String
-		expectedResult            bool
+		name                            string
+		config                          api.ReleaseBuildConfiguration
+		additionalImageStreamTags       sets.String
+		additionalImageStreams          sets.String
+		additionalImageStreamNamespaces sets.String
+		expectedResult                  bool
 	}{
 		{
 			name:                      "imagestreamtag is explicitly allowed",
@@ -594,6 +675,11 @@ func TestTestInputImageStreamTagFilterFactory(t *testing.T) {
 			name:                   "imagestream is explicitly allowed",
 			additionalImageStreams: sets.NewString(namespace + "/" + streamName),
 			expectedResult:         true,
+		},
+		{
+			name:                            "imagestream_namespace is explicitly allowed",
+			additionalImageStreamNamespaces: sets.NewString(namespace),
+			expectedResult:                  true,
 		},
 		{
 			name: "imagestreamtag is referenced by config",
@@ -625,6 +711,7 @@ func TestTestInputImageStreamTagFilterFactory(t *testing.T) {
 				noOpRegistryResolver{},
 				tc.additionalImageStreamTags,
 				tc.additionalImageStreams,
+				tc.additionalImageStreamNamespaces,
 			)
 			if err != nil {
 				t.Fatalf("failed to construct filter: %v", err)

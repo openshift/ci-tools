@@ -2,7 +2,6 @@ package steps
 
 import (
 	"context"
-	"fmt"
 	"sort"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -45,7 +44,7 @@ func (s *inputEnvironmentStep) Name() string {
 }
 
 func (s *inputEnvironmentStep) Description() string {
-	return fmt.Sprintf("Used to stub out another step in the graph when the outputs are already known.")
+	return "Used to stub out another step in the graph when the outputs are already known."
 }
 
 func (s *inputEnvironmentStep) Requires() []api.StepLink {
@@ -56,6 +55,6 @@ func (s *inputEnvironmentStep) Creates() []api.StepLink {
 	return s.links
 }
 
-func (s *inputEnvironmentStep) Provides() (api.ParameterMap, api.StepLink) {
-	return nil, nil
+func (s *inputEnvironmentStep) Provides() api.ParameterMap {
+	return nil
 }

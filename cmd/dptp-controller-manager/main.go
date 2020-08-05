@@ -8,7 +8,6 @@ import (
 	"time"
 
 	imagev1 "github.com/openshift/api/image/v1"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -60,11 +59,13 @@ func (o *options) addDefaults() {
 }
 
 type testImagesDistributorOptions struct {
-	imagePullSecretPath          string
-	additionalImageStreamTagsRaw flagutil.Strings
-	additionalImageStreamTags    sets.String
-	additionalImageStreamsRaw    flagutil.Strings
-	additionalImageStreams       sets.String
+	imagePullSecretPath                string
+	additionalImageStreamTagsRaw       flagutil.Strings
+	additionalImageStreamTags          sets.String
+	additionalImageStreamsRaw          flagutil.Strings
+	additionalImageStreams             sets.String
+	additionalImageStreamNamespacesRaw flagutil.Strings
+	additionalImageStreamNamespaces    sets.String
 }
 
 func newOpts() (*options, error) {
@@ -91,6 +92,7 @@ func newOpts() (*options, error) {
 	flag.StringVar(&opts.testImagesDistributorOptions.imagePullSecretPath, "testImagesDistributorOptions.imagePullSecretPath", "", "A file to use for reading an ImagePullSecret that will be bound to all `default` ServiceAccounts in all namespaces that have a test ImageStream on all build clusters")
 	flag.Var(&opts.testImagesDistributorOptions.additionalImageStreamTagsRaw, "testImagesDistributorOptions.additional-image-stream-tag", "An imagestreamtag that will be distributed even if no test explicitly references it. It must be in namespace/name:tag format (e.G `ci/clonerefs:latest`). Can be passed multiple times.")
 	flag.Var(&opts.testImagesDistributorOptions.additionalImageStreamsRaw, "testImagesDistributorOptions.additional-image-stream", "An imagestream that will be distributed even if no test explicitly references it. It must be in namespace/name format (e.G `ci/clonerefs`). Can be passed multiple times.")
+	flag.Var(&opts.testImagesDistributorOptions.additionalImageStreamNamespacesRaw, "testImagesDistributorOptions.additional-image-stream-namespace", "A namespace in which imagestreams will be distributed even if no test explicitly references them (e.G `ci`). Can be passed multiple times.")
 	// TODO: rather than relying on humans implementing dry-run properly, we should switch
 	// to just do it on client-level once it becomes available: https://github.com/kubernetes-sigs/controller-runtime/pull/839
 	flag.BoolVar(&opts.dryRun, "dry-run", true, "Whether to run the controller-manager with dry-run")
@@ -142,6 +144,12 @@ func newOpts() (*options, error) {
 			opts.testImagesDistributorOptions.additionalImageStreams.Insert(val)
 		}
 	}
+	opts.testImagesDistributorOptions.additionalImageStreamNamespaces = sets.String{}
+	if vals := opts.testImagesDistributorOptions.additionalImageStreamNamespacesRaw.Strings(); len(vals) > 0 {
+		for _, val := range vals {
+			opts.testImagesDistributorOptions.additionalImageStreamNamespaces.Insert(val)
+		}
+	}
 
 	if opts.enabledControllersSet.Has(testimagesdistributor.ControllerName) && opts.stepConfigPath == "" {
 		errs = append(errs, fmt.Errorf("--step-config-path is required when the %s controller is enabled", testimagesdistributor.ControllerName))
@@ -177,7 +185,7 @@ func main() {
 		logrus.Infof("Loaded %q context from in-cluster config", appCIContextName)
 	}
 
-	ciOPConfigAgent, err := agents.NewConfigAgent(opts.ciOperatorconfigPath, 2*time.Minute, prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"error"}))
+	ciOPConfigAgent, err := agents.NewConfigAgent(opts.ciOperatorconfigPath)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to construct ci-opeartor config agent")
 	}
@@ -262,7 +270,7 @@ func main() {
 		if opts.testImagesDistributorOptions.imagePullSecretPath == "" {
 			logrus.Fatal("The testImagesDistributor requires the --testImagesDistributorOptions.imagePullSecretPath flag to be set ")
 		}
-		registryConfigAgent, err := agents.NewRegistryAgent(opts.stepConfigPath, 2*time.Minute, prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"error"}), true)
+		registryConfigAgent, err := agents.NewRegistryAgent(opts.stepConfigPath)
 		if err != nil {
 			logrus.WithError(err).Fatal("failed to construct registryAgent")
 		}
@@ -296,6 +304,7 @@ func main() {
 			registryConfigAgent,
 			opts.testImagesDistributorOptions.additionalImageStreamTags,
 			opts.testImagesDistributorOptions.additionalImageStreams,
+			opts.testImagesDistributorOptions.additionalImageStreamNamespaces,
 			opts.dryRun,
 		); err != nil {
 			logrus.WithError(err).Fatal("failed to add testimagesdistributor")

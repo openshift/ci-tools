@@ -4,6 +4,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -143,15 +144,19 @@ func main() {
 			return g, nil
 		}
 	} else {
-		if existing, err := userV1Client.Groups().Get(o.group, metav1.GetOptions{}); err == nil {
+		if existing, err := userV1Client.Groups().Get(context.TODO(), o.group, metav1.GetOptions{}); err == nil {
 			group = existing
-			action = userV1Client.Groups().Update
+			action = func(g *v1.Group) (*v1.Group, error) {
+				return userV1Client.Groups().Update(context.TODO(), g, metav1.UpdateOptions{})
+			}
 			logger = logger.WithField("action", "update")
 		} else if err != nil && (kerrors.IsNotFound(err) || kerrors.IsForbidden(err) && o.dryRun) {
 			group = &v1.Group{ObjectMeta: metav1.ObjectMeta{Name: o.group}}
 			logger.Info("Group is missing. Creating...")
 			logger = logger.WithField("action", "create")
-			action = userV1Client.Groups().Create
+			action = func(g *v1.Group) (*v1.Group, error) {
+				return userV1Client.Groups().Create(context.TODO(), g, metav1.CreateOptions{})
+			}
 		} else {
 			logger.WithError(err).Fatal("couldn't get group from cluster")
 		}

@@ -1,0 +1,60 @@
+metadata:
+  annotations:
+    ci-operator.openshift.io/container-sub-tests: StepName
+    ci.openshift.io/job-spec: ""
+  creationTimestamp: null
+  labels:
+    build-id: test-build-id
+    ci.openshift.io/refs.branch: base-ref
+    ci.openshift.io/refs.org: org
+    ci.openshift.io/refs.repo: repo
+    created-by-ci: "true"
+    job: very-cool-prow-job
+    prow.k8s.io/id: prow-job-id
+  name: TestName
+  namespace: TestNamespace
+spec:
+  containers:
+  - command:
+    - /bin/bash
+    - -c
+    - |-
+      #!/bin/bash
+      set -eu
+      launch-tests
+    env:
+    - name: BUILD_ID
+      value: test-build-id
+    - name: CI
+      value: "true"
+    - name: JOB_NAME
+      value: very-cool-prow-job
+    - name: JOB_SPEC
+      value: '{"type":"presubmit","job":"very-cool-prow-job","buildid":"test-build-id","prowjobid":"prow-job-id","refs":{"org":"org","repo":"repo","base_ref":"base-ref","base_sha":"base-sha","pulls":[{"number":123,"author":"","sha":"72532003f9e01e89f455187dd92c275204bc9781"}]}}'
+    - name: JOB_TYPE
+      value: presubmit
+    - name: OPENSHIFT_CI
+      value: "true"
+    - name: PROW_JOB_ID
+      value: prow-job-id
+    - name: PULL_BASE_REF
+      value: base-ref
+    - name: PULL_BASE_SHA
+      value: base-sha
+    - name: PULL_NUMBER
+      value: "123"
+    - name: PULL_PULL_SHA
+      value: 72532003f9e01e89f455187dd92c275204bc9781
+    - name: PULL_REFS
+      value: base-ref:base-sha,123:72532003f9e01e89f455187dd92c275204bc9781
+    - name: REPO_NAME
+      value: repo
+    - name: REPO_OWNER
+      value: org
+    image: somename:sometag
+    name: StepName
+    resources: {}
+    terminationMessagePolicy: FallbackToLogsOnError
+  restartPolicy: Never
+status:
+  phase: Failed

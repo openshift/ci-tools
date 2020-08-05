@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -196,7 +197,7 @@ func createSecret(client coreclientset.SecretInterface, name, dir string, dry bo
 		if err != nil {
 			return fmt.Errorf("failed to log secret: %w", err)
 		}
-	} else if _, err := client.Update(secret); err != nil {
+	} else if _, err := client.Update(context.TODO(), secret, metav1.UpdateOptions{}); err != nil {
 		return fmt.Errorf("failed to update secret: %w", err)
 	}
 	return nil

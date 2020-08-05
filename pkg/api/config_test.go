@@ -1314,6 +1314,59 @@ func TestValidateCandidate(t *testing.T) {
 	}
 }
 
+func TestValidateImages(t *testing.T) {
+	var testCases = []struct {
+		name   string
+		input  []ProjectDirectoryImageBuildStepConfiguration
+		output []error
+	}{
+		{
+			name: "no images",
+		},
+		{
+			name: "valid images",
+			input: []ProjectDirectoryImageBuildStepConfiguration{
+				{ProjectDirectoryImageBuildInputs: ProjectDirectoryImageBuildInputs{DockerfilePath: "Dockerfile"}},
+				{ProjectDirectoryImageBuildInputs: ProjectDirectoryImageBuildInputs{DockerfilePath: "Dockerfile.rhel7"}},
+			},
+		},
+		{
+			name: "reuse of literal Dockerfile",
+			input: []ProjectDirectoryImageBuildStepConfiguration{
+				{ProjectDirectoryImageBuildInputs: ProjectDirectoryImageBuildInputs{DockerfilePath: "Dockerfile"}},
+				{ProjectDirectoryImageBuildInputs: ProjectDirectoryImageBuildInputs{DockerfilePath: "Dockerfile"}},
+			},
+			output: []error{errors.New("root[1]: this image build uses a Dockerfile at Dockerfile, which is already used to build another image - not two images may be built from one Dockerfile")},
+		},
+		{
+			name: "reuse of Dockerfile via context dir",
+			input: []ProjectDirectoryImageBuildStepConfiguration{
+				{ProjectDirectoryImageBuildInputs: ProjectDirectoryImageBuildInputs{DockerfilePath: "path/Dockerfile"}},
+				{ProjectDirectoryImageBuildInputs: ProjectDirectoryImageBuildInputs{DockerfilePath: "Dockerfile", ContextDir: "path"}},
+			},
+			output: []error{errors.New("root[1]: this image build uses a Dockerfile at path/Dockerfile, which is already used to build another image - not two images may be built from one Dockerfile")},
+		},
+		{
+			name: "reuse of Dockerfile via context dir without explicit paths",
+			input: []ProjectDirectoryImageBuildStepConfiguration{
+				{ProjectDirectoryImageBuildInputs: ProjectDirectoryImageBuildInputs{ContextDir: "path"}},
+				{ProjectDirectoryImageBuildInputs: ProjectDirectoryImageBuildInputs{ContextDir: "path"}},
+			},
+			output: []error{errors.New("root[1]: this image build uses a Dockerfile at path/Dockerfile, which is already used to build another image - not two images may be built from one Dockerfile")},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if actual, expected := validateImages("root", testCase.input), testCase.output; !reflect.DeepEqual(actual, expected) {
+				t.Errorf("%s: got incorrect errors: %s", testCase.name, cmp.Diff(actual, expected, cmp.Comparer(func(x, y error) bool {
+					return x.Error() == y.Error()
+				})))
+			}
+		})
+	}
+}
+
 func TestValidateRelease(t *testing.T) {
 	var testCases = []struct {
 		name   string

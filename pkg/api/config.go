@@ -3,6 +3,7 @@ package api
 import (
 	"errors"
 	"fmt"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -90,6 +91,8 @@ func (config *ReleaseBuildConfiguration) validate(org, repo string, resolved boo
 	}
 
 	validationErrors = append(validationErrors, validateReleases("releases", config.Releases, config.ReleaseTagConfiguration != nil)...)
+
+	validationErrors = append(validationErrors, validateImages("images", config.Images)...)
 
 	var lines []string
 	for _, err := range validationErrors {
@@ -665,6 +668,35 @@ func validateReleases(fieldRoot string, releases map[string]UnresolvedRelease, h
 		} else if release.Prerelease != nil {
 			validationErrors = append(validationErrors, validatePrerelease(fmt.Sprintf("%s.%s", fieldRoot, name), *release.Prerelease)...)
 		}
+	}
+	return validationErrors
+}
+
+func validateImages(fieldRoot string, images []ProjectDirectoryImageBuildStepConfiguration) []error {
+	var validationErrors []error
+	seen := sets.NewString()
+	for imageIndex, image := range images {
+		dockerfile := "Dockerfile"
+		if image.DockerfilePath != "" {
+			dockerfile = image.DockerfilePath
+		}
+		if image.ContextDir != "" {
+			dockerfile = path.Join(image.ContextDir, dockerfile)
+		}
+		if seen.Has(dockerfile) {
+			// We cannot allow two unique image names to be promoted after
+			// being built from the same Dockerfile, as that would make it
+			// impossible to take the build configuration in ocp-build-data
+			// and determine the image build in CI that corresponds with it.
+			// Technically, the validation we do here is more stringent --
+			// in the most specific case it could be possible to build two
+			// images from one Dockerfile if both were not promoted. However,
+			// there is no real utility to that complex analysis and it's
+			// easy and simple to enforce the stronger restriction that no
+			// two images are built from the same Dockerfile at all.
+			validationErrors = append(validationErrors, fmt.Errorf("%s[%d]: this image build uses a Dockerfile at %s, which is already used to build another image - not two images may be built from one Dockerfile", fieldRoot, imageIndex, dockerfile))
+		}
+		seen.Insert(dockerfile)
 	}
 	return validationErrors
 }

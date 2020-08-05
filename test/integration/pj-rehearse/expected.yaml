@@ -219,7 +219,8 @@
             images:
             - from: base
               to: test-image
-            - from: base
+            - context_dir: somewhere
+              from: base
               to: change-should-cause-rehearsal-of-all-jobs-that-use-this-cfg
             resources:
               '*':
@@ -339,7 +340,8 @@
             images:
             - from: base
               to: test-image
-            - from: base
+            - context_dir: somewhere
+              from: base
               to: change-should-cause-rehearsal-of-all-jobs-that-use-this-cfg
             resources:
               '*':
@@ -448,7 +450,8 @@
             images:
             - from: base
               to: test-image
-            - from: base
+            - context_dir: somewhere
+              from: base
               to: change-should-cause-rehearsal-of-all-jobs-that-use-this-cfg
             resources:
               '*':
@@ -556,7 +559,8 @@
             images:
             - from: base
               to: test-image
-            - from: base
+            - context_dir: somewhere
+              from: base
               to: change-should-cause-rehearsal-of-all-jobs-that-use-this-cfg
             resources:
               '*':

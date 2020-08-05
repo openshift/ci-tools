@@ -13,6 +13,7 @@ images:
   to: test-image
 - from: base
   to: change-should-cause-rehearsal-of-all-jobs-that-use-this-cfg
+  context_dir: somewhere
 resources:
   '*':
     limits:

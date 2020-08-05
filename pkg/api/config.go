@@ -228,7 +228,7 @@ func validateReleaseTagConfiguration(fieldRoot string, input ReleaseTagConfigura
 
 	if len(input.Name) == 0 {
 		validationErrors = append(validationErrors, fmt.Errorf("%s.name: must be set", fieldRoot))
-	} else {
+	} else if !strings.HasPrefix(input.Name, "origin-v3.1") { // we have these legacy behaviors we need to support
 		ok, err := regexp.MatchString(`4\.[0-9]+`, input.Name)
 		if err != nil {
 			validationErrors = append(validationErrors, fmt.Errorf("%s.name: must be of the form 4.x, failed to parse %q: %w", fieldRoot, input.Name, err))

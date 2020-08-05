@@ -200,7 +200,7 @@ func TestValidateTests(t *testing.T) {
 					},
 				},
 			},
-			release:       &ReleaseTagConfiguration{Name: "4.1"},
+			release:       &ReleaseTagConfiguration{Name: "origin-v3.11"},
 			expectedValid: true,
 		},
 		{
@@ -942,6 +942,16 @@ func TestValidateReleaseTagConfiguration(t *testing.T) {
 		{
 			name:     "valid tag_specification",
 			input:    ReleaseTagConfiguration{Name: "4.3", Namespace: "ocp"},
+			expected: nil,
+		},
+		{
+			name:     "valid tag_specification with 3.11 style",
+			input:    ReleaseTagConfiguration{Name: "origin-v3.11", Namespace: "openshift"},
+			expected: nil,
+		},
+		{
+			name:     "valid tag_specification with 3.10 style",
+			input:    ReleaseTagConfiguration{Name: "origin-v3.10", Namespace: "openshift"},
 			expected: nil,
 		},
 		{

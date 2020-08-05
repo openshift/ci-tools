@@ -168,7 +168,8 @@ func TestBuildIndexes(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			tc.agent.indexes = tc.agent.buildIndexes(tc.configs)
+			tc.agent.configs = tc.configs
+			tc.agent.buildIndexes()
 			if diff := cmp.Diff(tc.agent.indexes, tc.expected); diff != "" {
 				t.Errorf("indexes are not as expected, diff: %v", diff)
 			}

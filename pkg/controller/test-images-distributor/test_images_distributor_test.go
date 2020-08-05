@@ -170,6 +170,12 @@ func TestReconcile(t *testing.T) {
 		},
 	}
 
+	imageStreamTagWithBuild01PullSpec := func() *imagev1.ImageStreamTag {
+		copy := referenceImageStreamTag.DeepCopy()
+		copy.Image.DockerImageReference = "registry.build01.ci.openshift.org/ci-op-hbtwhrrm/pipeline@sha256:328d0a90295ef5f5932807bcab8f230007afeb1572d1d7878ab8bdae671dfa8b"
+		return copy
+	}
+
 	outdatedImageStreamTag := func() *imagev1.ImageStreamTag {
 		copy := referenceImageStreamTag.DeepCopy()
 		copy.Image.Name = "old"
@@ -371,6 +377,28 @@ func TestReconcile(t *testing.T) {
 				}
 				if err := controllerutil.SwallowIfTerminal(err); err != nil {
 					return fmt.Errorf("error %v is not terminal", err)
+				}
+				return nil
+			},
+		},
+		{
+			name: "ImageStreamTag with build01 reference, no import is created",
+			request: types.NamespacedName{
+				Namespace: "01_" + referenceImageStreamTag.Namespace,
+				Name:      referenceImageStreamTag.Name,
+			},
+			registryClient:      fakeclient.NewFakeClient(imageStreamTagWithBuild01PullSpec()),
+			buildClusterClients: map[string]ctrlruntimeclient.Client{"01": fakeclient.NewFakeClient()},
+			verify: func(rc ctrlruntimeclient.Client, bc map[string]ctrlruntimeclient.Client, err error) error {
+				if err != nil {
+					return fmt.Errorf("unexpected error: %w", err)
+				}
+				name := types.NamespacedName{
+					Namespace: referenceImageStreamTag.Namespace,
+					Name:      referenceImageStreamTag.Name,
+				}
+				if err := bc["01"].Get(ctx, name, &imagev1.ImageStreamImport{}); !apierrors.IsNotFound(err) {
+					return fmt.Errorf("expected to get not found err, but got %v", err)
 				}
 				return nil
 			},

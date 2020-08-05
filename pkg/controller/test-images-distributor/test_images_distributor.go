@@ -226,10 +226,15 @@ func (r *reconciler) reconcile(req reconcile.Request, log *logrus.Entry) error {
 	sourceImageStreamTag := &imagev1.ImageStreamTag{}
 	if err := r.registryClient.Get(r.ctx, decoded, sourceImageStreamTag); err != nil {
 		if apierrors.IsNotFound(err) {
-			log.Debug("Source imageStreamTag not found")
+			log.Trace("Source imageStreamTag not found")
 			return nil
 		}
 		return fmt.Errorf("failed to get imageStreamTag %s from registry cluster: %w", decoded.String(), err)
+	}
+	*log = *log.WithField("docker_image_reference", sourceImageStreamTag.Image.DockerImageReference)
+	if !isImportAllowed(sourceImageStreamTag.Image.DockerImageReference) {
+		log.Debug("Import not allowed, ignoring")
+		return nil
 	}
 
 	if err := client.Get(r.ctx, types.NamespacedName{Name: decoded.Namespace}, &corev1.Namespace{}); err != nil {
@@ -542,4 +547,20 @@ func upsertObject(ctx context.Context, c ctrlruntimeclient.Client, obj crcontrol
 		log.Info("Upsert succeeded")
 	}
 	return err
+}
+
+var allowedRegistries = sets.NewString("registry.svc.ci.openshift.org",
+	"docker-registry.default.svc:5000",
+	"registry.access.redhat.com",
+	"quay.io",
+	"gcr.io",
+	"docker.io",
+)
+
+func isImportAllowed(pullSpec string) bool {
+	i := strings.Index(pullSpec, "/")
+	if i == -1 {
+		return false
+	}
+	return allowedRegistries.Has(pullSpec[:i])
 }

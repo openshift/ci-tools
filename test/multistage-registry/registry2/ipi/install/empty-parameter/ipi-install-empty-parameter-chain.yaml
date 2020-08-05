@@ -1,0 +1,7 @@
+chain:
+  as: ipi-install-empty-parameter
+  steps:
+  - chain: ipi-install
+  env:
+  - name: TEST_PARAMETER
+    default: ""

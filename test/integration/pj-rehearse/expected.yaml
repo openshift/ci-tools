@@ -1404,6 +1404,9 @@
                 - as: ipi-install-install
                   commands: |
                     openshift-cluster install --newFlag
+                  env:
+                  - default: test parameter default
+                    name: TEST_PARAMETER
                   from: installer
                   resources:
                     requests:
@@ -1566,6 +1569,9 @@
                 - as: ipi-install-install
                   commands: |
                     openshift-cluster install --newFlag
+                  env:
+                  - default: test parameter default
+                    name: TEST_PARAMETER
                   from: installer
                   resources:
                     requests:

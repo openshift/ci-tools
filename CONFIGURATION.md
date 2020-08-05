@@ -99,7 +99,7 @@ use the following specification:
 
 ```yaml
 tag_specification:
-  name: origin-v3.11
+  name: "4.1"
   namespace: openshift
   tag_overrides: {}
 ```

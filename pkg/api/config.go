@@ -223,11 +223,18 @@ func validateReleaseTagConfiguration(fieldRoot string, input ReleaseTagConfigura
 	var validationErrors []error
 
 	if len(input.Namespace) == 0 {
-		validationErrors = append(validationErrors, fmt.Errorf("%s: no namespace defined", fieldRoot))
+		validationErrors = append(validationErrors, fmt.Errorf("%s.namespace: must be set", fieldRoot))
 	}
 
 	if len(input.Name) == 0 {
-		validationErrors = append(validationErrors, fmt.Errorf("%s: no name defined", fieldRoot))
+		validationErrors = append(validationErrors, fmt.Errorf("%s.name: must be set", fieldRoot))
+	} else if !strings.HasPrefix(input.Name, "origin-v3.1") { // we have these legacy behaviors we need to support
+		ok, err := regexp.MatchString(`4\.[0-9]+`, input.Name)
+		if err != nil {
+			validationErrors = append(validationErrors, fmt.Errorf("%s.name: must be of the form 4.x, failed to parse %q: %w", fieldRoot, input.Name, err))
+		} else if !ok {
+			validationErrors = append(validationErrors, fmt.Errorf("%s.name: must be of the form 4.<minor>, not %q", fieldRoot, input.Name))
+		}
 	}
 
 	return validationErrors

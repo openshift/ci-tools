@@ -191,6 +191,7 @@ func (a *configAgent) AddIndex(indexName string, indexFunc IndexFn) error {
 
 // loadFilenameToConfig generates a new filenameToConfig map.
 func (a *configAgent) loadFilenameToConfig() error {
+	a.lock.Lock()
 	logrus.Debug("Reloading configs")
 	startTime := time.Now()
 	configs, err := load.FromPathByOrgRepo(a.configPath)
@@ -198,7 +199,6 @@ func (a *configAgent) loadFilenameToConfig() error {
 		return fmt.Errorf("loading config failed: %w", err)
 	}
 
-	a.lock.Lock()
 	indexes := a.buildIndexes(configs)
 	a.configs = configs
 	a.generation++

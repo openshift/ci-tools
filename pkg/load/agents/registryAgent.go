@@ -118,6 +118,7 @@ func (a *registryAgent) GetRegistryComponents() (registry.ReferenceByName, regis
 }
 
 func (a *registryAgent) loadRegistry() error {
+	a.lock.Lock()
 	logrus.Debug("Reloading registry")
 	startTime := time.Now()
 	references, chains, workflows, documentation, metadata, err := load.Registry(a.registryPath, a.flatRegistry)
@@ -125,7 +126,6 @@ func (a *registryAgent) loadRegistry() error {
 		a.recordError("failed to load ci-operator registry")
 		return fmt.Errorf("failed to load ci-operator registry (%w)", err)
 	}
-	a.lock.Lock()
 	a.references = references
 	a.chains = chains
 	a.workflows = workflows

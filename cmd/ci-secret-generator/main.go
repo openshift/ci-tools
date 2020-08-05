@@ -145,48 +145,47 @@ func processItem(w io.Writer, cmd string, entryType string, dryRun bool, proceso
 }
 
 func updateSecrets(bwItems []bitWardenItem, bwClient bitwarden.Client, dryRun bool) error {
-	var tmpFile *os.File
 	if dryRun {
-		var err error
-		tmpFile, err = ioutil.TempFile("", "ci-secret-generator")
-		if err != nil {
-			logrus.WithError(err).Fatal("failed to create tempfile")
-		}
-		defer tmpFile.Close()
-		logrus.Infof("Dry-Run enabled, writing secrets to %s", tmpFile.Name())
-		if _, err := fmt.Fprintln(tmpFile, "---"); err != nil {
+		logrus.Infof("Dry-Run enabled, writing secrets to stdout")
+		if _, err := fmt.Fprintln(os.Stdout, "---"); err != nil {
 			return err
 		}
 	}
 	for _, bwItem := range bwItems {
 		if dryRun {
-			if _, err := fmt.Fprintf(tmpFile, "Item: %s", bwItem.ItemName); err != nil {
+			if _, err := fmt.Fprintf(os.Stdout, "Item: %s", bwItem.ItemName); err != nil {
 				return err
 			}
 		}
 		if bwItem.Field.Name != "" {
-			processItem(tmpFile, bwItem.Field.Cmd, "Field", dryRun, func(out []byte) error {
+			if err := processItem(os.Stdout, bwItem.Field.Cmd, "Field", dryRun, func(out []byte) error {
 				if err := bwClient.SetFieldOnItem(bwItem.ItemName, bwItem.Field.Name, out); err != nil {
 					return fmt.Errorf("failed to set field item: %s, field: %s - %w", bwItem.ItemName, bwItem.Field.Name, err)
 				}
 				return nil
-			})
+			}); err != nil {
+				return err
+			}
 		}
 		if bwItem.Attachment.Name != "" {
-			processItem(tmpFile, bwItem.Attachment.Cmd, "Attachment", dryRun, func(out []byte) error {
+			if err := processItem(os.Stdout, bwItem.Attachment.Cmd, "Attachment", dryRun, func(out []byte) error {
 				if err := bwClient.SetAttachmentOnItem(bwItem.ItemName, bwItem.Attachment.Name, out); err != nil {
 					return fmt.Errorf("failed to set attachment, item: %s, attachment: %s - %w", bwItem.ItemName, bwItem.Attachment.Name, err)
 				}
 				return nil
-			})
+			}); err != nil {
+				return err
+			}
 		}
 		if bwItem.Attribute.Name != "" {
-			processItem(tmpFile, bwItem.Attribute.Cmd, "Password", dryRun, func(out []byte) error {
+			if err := processItem(os.Stdout, bwItem.Attribute.Cmd, "Password", dryRun, func(out []byte) error {
 				if err := bwClient.SetPassword(bwItem.ItemName, out); err != nil {
 					return fmt.Errorf("failed to set password, item: %s - %w", bwItem.ItemName, err)
 				}
 				return nil
-			})
+			}); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

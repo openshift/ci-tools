@@ -135,8 +135,8 @@ func (c fakeClient) SetPassword(itemName string, password []byte) error {
 	for index, item := range c.items {
 		if itemName == item.Name {
 			targetItem = &c.items[index]
+			break
 		}
-		break
 	}
 	if targetItem == nil {
 		newItemID, err := getNewUUID()

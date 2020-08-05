@@ -102,7 +102,7 @@ func (s *server) handleIssueComment(l *logrus.Entry, ic github.IssueCommentEvent
 		return
 	}
 
-	destOrgRepoLink := fmt.Sprintf("https:///%s/tree/%s", destOrgRepo, baseBranch)
+	destOrgRepoLink := fmt.Sprintf("https://%s/%s/tree/%s", s.githubHost, destOrgRepo, baseBranch)
 	s.createComment(ic, fmt.Sprintf("A merge commit [%s/%s@%s](%s) was created in the upstream repository to publish this work.",
 		destOrg, destRepo, baseBranch, destOrgRepoLink), logger)
 }

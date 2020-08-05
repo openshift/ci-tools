@@ -1111,6 +1111,8 @@ github.com/openshift/build-machinery-go v0.0.0-20200211121458-5e3d6e570160/go.mo
 github.com/openshift/build-machinery-go v0.0.0-20200424080330-082bf86082cc/go.mod h1:1CkcsT3aVebzRBzVTSbiKSkJMsC/CASqxesfqEMfJEc=
 github.com/openshift/builder v0.0.0-20200325182657-6a52122d21e0 h1:sl7XRcZyQARNkkC0LBbUsSTWPh9nKIVFvi8dUTJ3w/U=
 github.com/openshift/builder v0.0.0-20200325182657-6a52122d21e0/go.mod h1:DE+EEa9c2Bv/B4eQ64cYqTiarVTl9Kf5EQsUyEsZ2iU=
+github.com/openshift/ci-secret-mirroring-controller v0.0.0-20191206230054-2d1f35e6dcbc h1:cqlYqMwizQQFC/L066hcwDbe1F+v3VVK2virru3cWes=
+github.com/openshift/ci-secret-mirroring-controller v0.0.0-20191206230054-2d1f35e6dcbc/go.mod h1:4gsVk3OZoevJ4a3Z3WkGXaPgeJoPILPrDtYHHpcuefQ=
 github.com/openshift/client-go v0.0.0-20200521150516-05eb9880269c h1:l7CmbzzkyWl4Y6qHmy6m4FvbH4iLnIXGrXqOfE5IFNA=
 github.com/openshift/client-go v0.0.0-20200521150516-05eb9880269c/go.mod h1:kCMeo6IE4o4qvnepM9lgHQ4j/ZFfvY/N/2G/jpJdwm4=
 github.com/openshift/imagebuilder v1.1.1 h1:KAUR31p8UBJdfVO42azWgb+LeMAed2zaKQ19e0C0X2I=

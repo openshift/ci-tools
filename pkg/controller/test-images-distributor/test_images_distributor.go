@@ -543,7 +543,7 @@ func upsertObject(ctx context.Context, c ctrlruntimeclient.Client, obj crcontrol
 	log = log.WithField("operation", result)
 	if err != nil {
 		log.WithError(err).Error("Upsert failed")
-	} else if result != crcontrollerutil.OperationResultCreated {
+	} else if result != crcontrollerutil.OperationResultNone {
 		log.Info("Upsert succeeded")
 	}
 	return err

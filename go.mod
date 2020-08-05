@@ -35,6 +35,7 @@ require (
 	github.com/montanaflynn/stats v0.6.3
 	github.com/openshift/api v0.0.0-20200521101457-60c476765272
 	github.com/openshift/builder v0.0.0-20200325182657-6a52122d21e0
+	github.com/openshift/ci-secret-mirroring-controller v0.0.0-20191206230054-2d1f35e6dcbc
 	github.com/openshift/client-go v0.0.0-20200521150516-05eb9880269c
 	github.com/openshift/imagebuilder v1.1.1
 	github.com/openshift/library-go v0.0.0-20190904120025-7d4acc018c61

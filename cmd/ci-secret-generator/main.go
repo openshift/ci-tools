@@ -9,9 +9,10 @@ import (
 	"os/exec"
 	"strings"
 
+	"sigs.k8s.io/yaml"
+
 	"github.com/openshift/ci-tools/pkg/bitwarden"
 	"github.com/sirupsen/logrus"
-	"gopkg.in/yaml.v2"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/prow/logrusutil"
 )
@@ -29,15 +30,15 @@ type options struct {
 }
 
 type bitWardenItem struct {
-	ItemName   string         `yaml:"item_name"`
-	Field      fieldGenerator `yaml:"field,omitempty"`
-	Attachment fieldGenerator `yaml:"attachment,omitempty"`
-	Attribute  fieldGenerator `yaml:"attribute,omitempty"`
+	ItemName   string         `json:"item_name"`
+	Field      fieldGenerator `json:"field,omitempty"`
+	Attachment fieldGenerator `json:"attachment,omitempty"`
+	Attribute  fieldGenerator `json:"attribute,omitempty"`
 }
 
 type fieldGenerator struct {
-	Name string `yaml:"name,omitempty"`
-	Cmd  string `yaml:"cmd,omitempty"`
+	Name string `json:"name,omitempty"`
+	Cmd  string `json:"cmd,omitempty"`
 }
 
 const (

@@ -164,7 +164,10 @@ func (c *cliClient) createItem(itemTemplate string, targetItem *Item) error {
 
 func (c *cliClient) createAttachment(fileContents []byte, fileName string, itemID string, newAttachment *Attachment) error {
 	// Not tested
-	tempDir := os.TempDir()
+	tempDir, err := ioutil.TempDir("", "attachment")
+	if err != nil {
+		return fmt.Errorf("failed to create temporary file for new attachment: %w", err)
+	}
 	defer os.RemoveAll(tempDir)
 	filePath := filepath.Join(tempDir, fileName)
 	if err := ioutil.WriteFile(filePath, fileContents, 0644); err != nil {
@@ -295,9 +298,13 @@ func (c *cliClient) SetAttachmentOnItem(itemName, attachmentName string, fileCon
 	attachmentChanged := true
 	if targetAttachment != nil {
 		// read the attachment file
-		tempDir := os.TempDir()
+		tempDir, err := ioutil.TempDir("", "attachment")
+		if err != nil {
+			return fmt.Errorf("failed to create temporary file for getting: %w", err)
+		}
 		defer os.RemoveAll(tempDir)
-		existingFileContents, err := c.getAttachmentOnItemToFile(itemName, attachmentName, filepath.Join(tempDir, attachmentName))
+		filePath := filepath.Join(tempDir, attachmentName)
+		existingFileContents, err := c.getAttachmentOnItemToFile(itemName, attachmentName, filePath)
 		if err != nil {
 			return fmt.Errorf("error reading attachment: %w", err)
 		}

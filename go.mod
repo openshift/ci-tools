@@ -50,14 +50,6 @@ require (
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
 	golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208
 	gopkg.in/fsnotify.v1 v1.4.7
-	k8s.io/api v0.18.2
-	k8s.io/apimachinery v0.18.2
-	k8s.io/client-go v9.0.0+incompatible
-	k8s.io/test-infra v0.0.0-20200725055416-2388ca759f42
-	k8s.io/utils v0.0.0-20200324210504-a9aa75ae1b89
-	sigs.k8s.io/boskos v0.0.0-20200530174753-71e795271860
-	sigs.k8s.io/controller-runtime v0.5.4
-	gopkg.in/yaml.v2 v2.2.8
 	k8s.io/api v0.18.7-rc.0
 	k8s.io/apimachinery v0.18.7-rc.0
 	k8s.io/client-go v11.0.1-0.20190805182717-6502b5e7b1b5+incompatible

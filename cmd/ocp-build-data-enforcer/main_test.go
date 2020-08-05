@@ -1,9 +1,12 @@
 package main
 
 import (
+	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 )
 
 func TestUpdateDockerfile(t *testing.T) {
@@ -138,6 +141,133 @@ FROM replacement-2
 			}
 			if diff := cmp.Diff(string(result), string(tc.expecteddDockerfile)); diff != "" {
 				t.Errorf("result difers from expecteded: %s", diff)
+			}
+		})
+	}
+}
+
+func TestDereferenceConfig(t *testing.T) {
+	testCases := []struct {
+		name           string
+		config         ocpImageConfig
+		majorMinor     majorMinor
+		allConfigs     map[string]ocpImageConfig
+		streamMap      streamMap
+		groupYAML      groupYAML
+		expectedConfig ocpImageConfig
+		expectedError  error
+	}{
+		{
+			name: "config.from.stream gets replaced",
+			config: ocpImageConfig{
+				From: ocpImageConfigFrom{
+					ocpImageConfigFromStream: ocpImageConfigFromStream{Stream: "golang"},
+				},
+			},
+			streamMap: streamMap{"golang": {UpstreamImage: "openshift/golang-builder:rhel_8_golang_1.14"}},
+			expectedConfig: ocpImageConfig{
+				From: ocpImageConfigFrom{
+					ocpImageConfigFromStream: ocpImageConfigFromStream{Stream: "openshift/golang-builder:rhel_8_golang_1.14"},
+				},
+			},
+		},
+		{
+			name: "config.from.member gets replaced",
+			config: ocpImageConfig{
+				From: ocpImageConfigFrom{
+					ocpImageConfigFromStream: ocpImageConfigFromStream{Member: "openshift-enterprise-base"},
+				},
+			},
+			majorMinor: majorMinor{major: "4", minor: "6"},
+			allConfigs: map[string]ocpImageConfig{
+				"images/openshift-enterprise-base.yml": {Name: "openshift/ose-base"},
+			},
+			expectedConfig: ocpImageConfig{
+				From: ocpImageConfigFrom{
+					ocpImageConfigFromStream: ocpImageConfigFromStream{
+						Stream: "registry.svc.ci.openshift.org/ocp/4.6:base"},
+				},
+			},
+		},
+		{
+			name:          "both config from.stream and config.from.member are empty, error",
+			expectedError: errors.New("failed to find replacement for .from.stream"),
+		},
+		{
+			name: "config.from.builder.stream gets replaced",
+			config: ocpImageConfig{
+				From: ocpImageConfigFrom{
+					Builder:                  []ocpImageConfigFromStream{{Stream: "golang"}},
+					ocpImageConfigFromStream: ocpImageConfigFromStream{Stream: "golang"},
+				},
+			},
+			streamMap: streamMap{"golang": {UpstreamImage: "openshift/golang-builder:rhel_8_golang_1.14"}},
+			expectedConfig: ocpImageConfig{
+				From: ocpImageConfigFrom{
+					Builder:                  []ocpImageConfigFromStream{{Stream: "openshift/golang-builder:rhel_8_golang_1.14"}},
+					ocpImageConfigFromStream: ocpImageConfigFromStream{Stream: "openshift/golang-builder:rhel_8_golang_1.14"},
+				},
+			},
+		},
+		{
+			name: "config.from.builder.member gets replaced",
+			config: ocpImageConfig{
+				From: ocpImageConfigFrom{
+					Builder:                  []ocpImageConfigFromStream{{Member: "openshift-enterprise-base"}},
+					ocpImageConfigFromStream: ocpImageConfigFromStream{Member: "openshift-enterprise-base"},
+				},
+			},
+			majorMinor: majorMinor{major: "4", minor: "6"},
+			allConfigs: map[string]ocpImageConfig{
+				"images/openshift-enterprise-base.yml": {Name: "openshift/ose-base"},
+			},
+			expectedConfig: ocpImageConfig{
+				From: ocpImageConfigFrom{
+					Builder: []ocpImageConfigFromStream{{Stream: "registry.svc.ci.openshift.org/ocp/4.6:base"}},
+					ocpImageConfigFromStream: ocpImageConfigFromStream{
+						Stream: "registry.svc.ci.openshift.org/ocp/4.6:base"},
+				},
+			},
+		},
+		{
+			name: "both config.from.builder.stream and config.from.builder.member are empty, error",
+			config: ocpImageConfig{
+				From: ocpImageConfigFrom{
+					Builder: []ocpImageConfigFromStream{{}},
+				},
+			},
+			expectedError: utilerrors.NewAggregate([]error{
+				errors.New("failed to find replacement for .from.stream"),
+				fmt.Errorf("failed to dereference from.builder.%d", 0),
+			}),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.config.Content == nil {
+				tc.config.Content = &ocpImageConfigContent{}
+			}
+			if tc.expectedConfig.Content == nil {
+				tc.expectedConfig.Content = &ocpImageConfigContent{}
+			}
+			var actualErrMsg string
+			err := dereferenceConfig(&tc.config, tc.majorMinor, tc.allConfigs, tc.streamMap, tc.groupYAML)
+			if err != nil {
+				actualErrMsg = err.Error()
+			}
+			var expectedErrMsg string
+			if tc.expectedError != nil {
+				expectedErrMsg = tc.expectedError.Error()
+			}
+			if actualErrMsg != expectedErrMsg {
+				t.Fatalf("expected error %v, got error %v", tc.expectedError, err)
+			}
+			if err != nil {
+				return
+			}
+			if diff := cmp.Diff(tc.config, tc.expectedConfig, cmp.AllowUnexported(ocpImageConfigFrom{})); diff != "" {
+				t.Errorf("config differs from expectedConfig: %s", diff)
 			}
 		})
 	}

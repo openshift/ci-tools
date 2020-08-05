@@ -379,9 +379,11 @@ func (g gitSyncer) mirror(repoDir string, src, dst location) error {
 
 		switch strings.TrimSpace(shallowOut) {
 		case "false":
-			message := "failed to push to destination, no retry possible (already fetched full history)"
-			logger.Error(message)
-			return nil, fmt.Errorf(message)
+			logger.Info("Trying to fetch source and destination full history and perform a merge")
+			if err := mergeRemotesAndPush(logger, g.git, repoDir, srcRemote, dst.branch, destUrl.String(), g.confirm, g.gitName, g.gitEmail); err != nil {
+				return nil, fmt.Errorf("failed to fetch remote and merge: %w", err)
+			}
+			return nil, nil
 		case "true":
 			depth++
 			return makeFetch(logger, repoDir, g.git, srcRemote, src.branch, depth), nil

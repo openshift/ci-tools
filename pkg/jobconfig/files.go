@@ -24,6 +24,7 @@ type ProwgenLabel string
 const (
 	ProwJobLabelGenerated              = "ci-operator.openshift.io/prowgen-controlled"
 	CanBeRehearsedLabel                = "pj-rehearse.openshift.io/can-be-rehearsed"
+	SSHBastionLabel                    = "dptp.openshift.io/ssh-bastion"
 	ProwJobLabelVariant                = "ci-operator.openshift.io/variant"
 	Generated             ProwgenLabel = "true"
 	New                   ProwgenLabel = "newly-generated"

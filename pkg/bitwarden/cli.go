@@ -2,7 +2,7 @@ package bitwarden
 
 import (
 	"bytes"
-	b64 "encoding/base64"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -154,7 +154,7 @@ func (c *cliClient) Logout() ([]byte, error) {
 
 func (c *cliClient) createItem(itemTemplate string, targetItem *Item) error {
 	// the bitwarden cli expects the item to be base64 encoded
-	encItem := b64.StdEncoding.EncodeToString([]byte(itemTemplate))
+	encItem := base64.StdEncoding.EncodeToString([]byte(itemTemplate))
 	out, err := c.runWithSession("create", "item", encItem)
 	if err != nil {
 		return err
@@ -217,7 +217,7 @@ func (c *cliClient) editItem(targetItem Item) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal object: %w", err)
 	}
-	encodedItem := b64.StdEncoding.EncodeToString(targetJSON)
+	encodedItem := base64.StdEncoding.EncodeToString(targetJSON)
 	_, err = c.runWithSession("edit", "item", targetItem.ID, encodedItem)
 	if err != nil {
 		return err
@@ -275,17 +275,19 @@ func (c *cliClient) SetAttachmentOnItem(itemName, attachmentName string, fileCon
 	var targetAttachment *Attachment
 	var targetAttachmentIndex int
 	for index, item := range c.savedItems {
-		if itemName == item.Name {
-			targetItem = &c.savedItems[index]
-			for attachmentIndex, attachment := range item.Attachments {
-				if attachment.FileName == attachmentName {
-					targetAttachmentIndex = attachmentIndex
-					targetAttachment = &c.savedItems[index].Attachments[attachmentIndex]
-					break
-				}
-			}
-			break
+		if itemName != item.Name {
+			continue
 		}
+		targetItem = &c.savedItems[index]
+		for attachmentIndex, attachment := range item.Attachments {
+			if attachment.FileName == attachmentName {
+				targetAttachmentIndex = attachmentIndex
+				targetAttachment = &c.savedItems[index].Attachments[attachmentIndex]
+				break
+			}
+		}
+		break
+
 	}
 	if targetItem == nil {
 		newItem := &Item{}
@@ -354,3 +356,41 @@ func (c *cliClient) SetPassword(itemName string, password []byte) error {
 	}
 	return nil
 }
+
+type dryRunCliClient struct {
+	file *os.File
+}
+
+func (d *dryRunCliClient) GetFieldOnItem(itemName, fieldName string) ([]byte, error) {
+	return nil, nil
+}
+func (d *dryRunCliClient) GetAttachmentOnItem(itemName, attachmentName string) ([]byte, error) {
+	return nil, nil
+}
+func (d *dryRunCliClient) GetPassword(itemName string) ([]byte, error) {
+	return nil, nil
+}
+func (d *dryRunCliClient) Logout() ([]byte, error) {
+	d.file.Close()
+	return nil, nil
+}
+func (d *dryRunCliClient) SetFieldOnItem(itemName, fieldName string, fieldValue []byte) error {
+	fmt.Fprintf(d.file, "ItemName: %s\n\tField: \n\t\t %s: %s\n", itemName, fieldName, string(fieldValue))
+	return nil
+}
+func (d *dryRunCliClient) SetAttachmentOnItem(itemName, attachmentName string, fileContents []byte) error {
+	fmt.Fprintf(d.file, "ItemName: %s\n\tAttachment: \n\t\t %s: %s\n", itemName, attachmentName, string(fileContents))
+	return nil
+}
+func (d *dryRunCliClient) SetPassword(itemName string, password []byte) error {
+	fmt.Fprintf(d.file, "ItemName: %s\n\tAttribute: \n\t\t Password: %s\n", itemName, string(password))
+	return nil
+}
+
+func newDryRunClient(file *os.File) (Client, error) {
+	return &dryRunCliClient{
+		file: file,
+	}, nil
+}
+
+var _ Client = &dryRunCliClient{}

@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -47,14 +46,13 @@ const (
 
 func parseOptions() options {
 	var o options
-	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
-	fs.BoolVar(&o.dryRun, "dry-run", false, "Whether to actually create the secrets with oc command")
-	fs.StringVar(&o.configPath, "config", "", "Path to the config file to use for this tool.")
-	fs.StringVar(&o.bwUser, "bw-user", "", "Username to access BitWarden.")
-	fs.StringVar(&o.bwPasswordPath, "bw-password-path", "", "Path to a password file to access BitWarden.")
-	fs.StringVar(&o.logLevel, "log-level", "info", fmt.Sprintf("Log level is one of %v.", logrus.AllLevels))
-	fs.IntVar(&o.maxConcurrency, "concurrency", 1, "Maximum number of concurrent in-flight goroutines to BitWarden.")
-	if err := fs.Parse(os.Args[1:]); err != nil {
+	flag.CommandLine.BoolVar(&o.dryRun, "dry-run", false, "Whether to actually create the secrets with oc command")
+	flag.CommandLine.StringVar(&o.configPath, "config", "", "Path to the config file to use for this tool.")
+	flag.CommandLine.StringVar(&o.bwUser, "bw-user", "", "Username to access BitWarden.")
+	flag.CommandLine.StringVar(&o.bwPasswordPath, "bw-password-path", "", "Path to a password file to access BitWarden.")
+	flag.CommandLine.StringVar(&o.logLevel, "log-level", "info", fmt.Sprintf("Log level is one of %v.", logrus.AllLevels))
+	flag.CommandLine.IntVar(&o.maxConcurrency, "concurrency", 1, "Maximum number of concurrent in-flight goroutines to BitWarden.")
+	if err := flag.CommandLine.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Errorf("cannot parse args: %q", os.Args[1:])
 	}
 	return o
@@ -107,9 +105,7 @@ func (o *options) validateCompletedOptions() error {
 		if bwItem.ItemName == "" {
 			return fmt.Errorf("config[%d].itemName: empty key is not allowed", i)
 		}
-		switch bwItem.Attribute.Name {
-		case attributeTypePassword, "":
-		default:
+		if bwItem.Attribute.Name != attributeTypePassword && bwItem.Attribute.Name != "" {
 			return fmt.Errorf("config[%d].attribute: only the '%s' is supported, not %s", i, attributeTypePassword, bwItem.Attribute.Name)
 		}
 		if (bwItem.Field.Name != "" && bwItem.Field.Cmd == "") ||
@@ -125,67 +121,38 @@ func executeCommand(command string) ([]byte, error) {
 	cmd := strings.Fields(command)
 	out, err := exec.Command(cmd[0], cmd[1:]...).CombinedOutput()
 	if err != nil {
-		return nil, fmt.Errorf("bw cmd failed: %v", string(out))
+		return nil, fmt.Errorf("bw cmd '%s' failed: %v", command, string(out))
 	}
 	return out, nil
 }
 
-func processItem(w io.Writer, cmd string, entryType string, dryRun bool, procesor func([]byte) error) error {
-	out, err := executeCommand(cmd)
-	if err != nil {
-		return fmt.Errorf("failed to execute command: %w", err)
-	}
-	if dryRun {
-		if _, err := fmt.Fprintf(w, "\t%s: %s", entryType, string(out)); err != nil {
-			return err
-		}
-	} else {
-		return procesor(out)
-	}
-	return nil
-}
-
-func updateSecrets(bwItems []bitWardenItem, bwClient bitwarden.Client, dryRun bool) error {
-	if dryRun {
-		logrus.Infof("Dry-Run enabled, writing secrets to stdout")
-		if _, err := fmt.Fprintln(os.Stdout, "---"); err != nil {
-			return err
-		}
-	}
+func updateSecrets(bwItems []bitWardenItem, bwClient bitwarden.Client) error {
 	for _, bwItem := range bwItems {
-		if dryRun {
-			if _, err := fmt.Fprintf(os.Stdout, "Item: %s", bwItem.ItemName); err != nil {
-				return err
-			}
-		}
 		if bwItem.Field.Name != "" {
-			if err := processItem(os.Stdout, bwItem.Field.Cmd, "Field", dryRun, func(out []byte) error {
-				if err := bwClient.SetFieldOnItem(bwItem.ItemName, bwItem.Field.Name, out); err != nil {
-					return fmt.Errorf("failed to set field item: %s, field: %s - %w", bwItem.ItemName, bwItem.Field.Name, err)
-				}
-				return nil
-			}); err != nil {
-				return err
+			out, err := executeCommand(bwItem.Field.Cmd)
+			if err != nil {
+				return fmt.Errorf("failed to set field item: %s, field: %s - %w", bwItem.ItemName, bwItem.Field.Name, err)
+			}
+			if err := bwClient.SetFieldOnItem(bwItem.ItemName, bwItem.Field.Name, out); err != nil {
+				return fmt.Errorf("failed to set field item: %s, field: %s - %w", bwItem.ItemName, bwItem.Field.Name, err)
 			}
 		}
 		if bwItem.Attachment.Name != "" {
-			if err := processItem(os.Stdout, bwItem.Attachment.Cmd, "Attachment", dryRun, func(out []byte) error {
-				if err := bwClient.SetAttachmentOnItem(bwItem.ItemName, bwItem.Attachment.Name, out); err != nil {
-					return fmt.Errorf("failed to set attachment, item: %s, attachment: %s - %w", bwItem.ItemName, bwItem.Attachment.Name, err)
-				}
-				return nil
-			}); err != nil {
-				return err
+			out, err := executeCommand(bwItem.Field.Cmd)
+			if err != nil {
+				return fmt.Errorf("failed to set attachment, item: %s, attachment: %s - %w", bwItem.ItemName, bwItem.Attachment.Name, err)
+			}
+			if err := bwClient.SetAttachmentOnItem(bwItem.ItemName, bwItem.Attachment.Name, out); err != nil {
+				return fmt.Errorf("failed to set attachment, item: %s, attachment: %s - %w", bwItem.ItemName, bwItem.Attachment.Name, err)
 			}
 		}
 		if bwItem.Attribute.Name != "" {
-			if err := processItem(os.Stdout, bwItem.Attribute.Cmd, "Password", dryRun, func(out []byte) error {
-				if err := bwClient.SetPassword(bwItem.ItemName, out); err != nil {
-					return fmt.Errorf("failed to set password, item: %s - %w", bwItem.ItemName, err)
-				}
-				return nil
-			}); err != nil {
-				return err
+			out, err := executeCommand(bwItem.Field.Cmd)
+			if err != nil {
+				return fmt.Errorf("failed to set password, item: %s - %w", bwItem.ItemName, err)
+			}
+			if err := bwClient.SetPassword(bwItem.ItemName, out); err != nil {
+				return fmt.Errorf("failed to set password, item: %s - %w", bwItem.ItemName, err)
 			}
 		}
 	}
@@ -205,21 +172,35 @@ func main() {
 	if err := o.completeOptions(secrets); err != nil {
 		logrus.WithError(err).Fatal("failed to complete options.")
 	}
-	bwClient, err := bitwarden.NewClient(o.bwUser, o.bwPassword, func(s string) {
-		secrets.Insert(s)
-	})
-	if err != nil {
-		logrus.WithError(err).Fatal("failed to get Bitwarden client.")
+	var client bitwarden.Client
+	if o.dryRun {
+		tmpFile, err := ioutil.TempFile("", "ci-secret-generator")
+		if err != nil {
+			logrus.WithError(err).Fatal("failed to create tempfile")
+		}
+		client, err = bitwarden.NewDryRunClient(tmpFile)
+		if err != nil {
+			logrus.WithError(err).Fatal("failed to create dryRun client")
+		}
+		logrus.Infof("Dry-Run enabled, writing secrets to %s", tmpFile.Name())
+	} else {
+		var err error
+		client, err = bitwarden.NewClient(o.bwUser, o.bwPassword, func(s string) {
+			secrets.Insert(s)
+		})
+		if err != nil {
+			logrus.WithError(err).Fatal("failed to get Bitwarden client.")
+		}
 	}
 	logrus.RegisterExitHandler(func() {
-		if _, err := bwClient.Logout(); err != nil {
+		if _, err := client.Logout(); err != nil {
 			logrus.WithError(err).Fatal("failed to logout.")
 		}
 	})
 	defer logrus.Exit(0)
 
 	// Upload the output to bitwarden
-	if err := updateSecrets(o.config, bwClient, o.dryRun); err != nil {
+	if err := updateSecrets(o.config, client); err != nil {
 		logrus.WithError(err).Fatalf("Failed to update secrets.")
 	}
 	logrus.Info("Updated secrets.")

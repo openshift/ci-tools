@@ -68,16 +68,18 @@ func (c fakeClient) SetFieldOnItem(itemName, fieldName string, fieldValue []byte
 	var targetItem *Item
 	var targetField *Field
 	for index, item := range c.items {
-		if itemName == item.Name {
-			targetItem = &c.items[index]
-			for fieldIndex, field := range item.Fields {
-				if field.Name == fieldName {
-					targetField = &c.items[index].Fields[fieldIndex]
-					break
-				}
-			}
-			break
+		if itemName != item.Name {
+			continue
 		}
+		targetItem = &c.items[index]
+		for fieldIndex, field := range item.Fields {
+			if field.Name == fieldName {
+				targetField = &c.items[index].Fields[fieldIndex]
+				break
+			}
+		}
+		break
+
 	}
 	if targetItem == nil {
 		newItemID, err := getNewUUID()
@@ -99,16 +101,17 @@ func (c fakeClient) SetAttachmentOnItem(itemName, attachmentName string, fileCon
 	var targetItem *Item
 	var targetAttachment *Attachment
 	for index, item := range c.items {
-		if itemName == item.Name {
-			targetItem = &c.items[index]
-			for attachmentIndex, attachment := range item.Attachments {
-				if attachment.FileName == attachmentName {
-					targetAttachment = &c.items[index].Attachments[attachmentIndex]
-					break
-				}
-			}
-			break
+		if itemName != item.Name {
+			continue
 		}
+		targetItem = &c.items[index]
+		for attachmentIndex, attachment := range item.Attachments {
+			if attachment.FileName == attachmentName {
+				targetAttachment = &c.items[index].Attachments[attachmentIndex]
+				break
+			}
+		}
+		break
 	}
 	if targetItem == nil {
 		newItemID, err := getNewUUID()

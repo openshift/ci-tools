@@ -119,22 +119,27 @@ func (a *registryAgent) GetRegistryComponents() (registry.ReferenceByName, regis
 
 func (a *registryAgent) loadRegistry() error {
 	logrus.Debug("Reloading registry")
-	startTime := time.Now()
-	references, chains, workflows, documentation, metadata, err := load.Registry(a.registryPath, a.flatRegistry)
+	duration, err := func() (time.Duration, error) {
+		a.lock.Lock()
+		defer a.lock.Unlock()
+		startTime := time.Now()
+		references, chains, workflows, documentation, metadata, err := load.Registry(a.registryPath, a.flatRegistry)
+		if err != nil {
+			a.recordError("failed to load ci-operator registry")
+			return time.Duration(0), fmt.Errorf("failed to load ci-operator registry (%w)", err)
+		}
+		a.references = references
+		a.chains = chains
+		a.workflows = workflows
+		a.documentation = documentation
+		a.metadata = metadata
+		a.resolver = registry.NewResolver(references, chains, workflows)
+		a.generation++
+		return time.Since(startTime), nil
+	}()
 	if err != nil {
-		a.recordError("failed to load ci-operator registry")
-		return fmt.Errorf("failed to load ci-operator registry (%w)", err)
+		return err
 	}
-	a.lock.Lock()
-	a.references = references
-	a.chains = chains
-	a.workflows = workflows
-	a.documentation = documentation
-	a.metadata = metadata
-	a.resolver = registry.NewResolver(references, chains, workflows)
-	a.generation++
-	a.lock.Unlock()
-	duration := time.Since(startTime)
 	configReloadTimeMetric.Observe(duration.Seconds())
 	logrus.WithField("duration", duration).Info("Registry reloaded")
 	return nil

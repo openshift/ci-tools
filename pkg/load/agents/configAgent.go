@@ -62,10 +62,9 @@ func NewFakeConfigAgent(configs load.ByOrgRepo) ConfigAgent {
 		errorMetrics: prometheus.NewCounterVec(prometheus.CounterOpts{}, []string{"error"}),
 	}
 	a.reloadConfig = func() error {
-		indexes := a.buildIndexes(a.configs)
 		a.lock.Lock()
-		a.indexes = indexes
-		a.lock.Unlock()
+		defer a.lock.Unlock()
+		a.buildIndexes()
 		return nil
 	}
 
@@ -192,33 +191,36 @@ func (a *configAgent) AddIndex(indexName string, indexFunc IndexFn) error {
 // loadFilenameToConfig generates a new filenameToConfig map.
 func (a *configAgent) loadFilenameToConfig() error {
 	logrus.Debug("Reloading configs")
-	startTime := time.Now()
-	configs, err := load.FromPathByOrgRepo(a.configPath)
+	duration, err := func() (time.Duration, error) {
+		a.lock.Lock()
+		defer a.lock.Unlock()
+		startTime := time.Now()
+		configs, err := load.FromPathByOrgRepo(a.configPath)
+		if err != nil {
+			return time.Duration(0), fmt.Errorf("loading config failed: %w", err)
+		}
+		a.configs = configs
+		a.buildIndexes()
+		a.generation++
+		return time.Since(startTime), nil
+	}()
 	if err != nil {
-		return fmt.Errorf("loading config failed: %w", err)
+		return err
 	}
-
-	a.lock.Lock()
-	indexes := a.buildIndexes(configs)
-	a.configs = configs
-	a.generation++
-	a.indexes = indexes
-	a.lock.Unlock()
-	duration := time.Since(startTime)
 	configReloadTimeMetric.Observe(duration.Seconds())
 	logrus.WithField("duration", duration).Info("Configs reloaded")
 	return nil
 }
 
-func (a *configAgent) buildIndexes(orgRepoConfigs load.ByOrgRepo) map[string]configIndex {
-	indexes := map[string]configIndex{}
+func (a *configAgent) buildIndexes() {
+	a.indexes = map[string]configIndex{}
 	for indexName, indexFunc := range a.indexFuncs {
 		// Make sure the index always exists even if empty, otherwise we return a confusing
 		// "index does not exist error" in case its empty
-		if _, exists := indexes[indexName]; !exists {
-			indexes[indexName] = configIndex{}
+		if _, exists := a.indexes[indexName]; !exists {
+			a.indexes[indexName] = configIndex{}
 		}
-		for _, orgConfigs := range orgRepoConfigs {
+		for _, orgConfigs := range a.configs {
 			for _, repoConfigs := range orgConfigs {
 				for _, config := range repoConfigs {
 					var resusableConfigPtr *api.ReleaseBuildConfiguration
@@ -228,16 +230,14 @@ func (a *configAgent) buildIndexes(orgRepoConfigs load.ByOrgRepo) map[string]con
 							config := config
 							resusableConfigPtr = &config
 						}
-						if _, exists := indexes[indexName][indexKey]; !exists {
-							indexes[indexName][indexKey] = []*api.ReleaseBuildConfiguration{}
+						if _, exists := a.indexes[indexName][indexKey]; !exists {
+							a.indexes[indexName][indexKey] = []*api.ReleaseBuildConfiguration{}
 						}
 
-						indexes[indexName][indexKey] = append(indexes[indexName][indexKey], resusableConfigPtr)
+						a.indexes[indexName][indexKey] = append(a.indexes[indexName][indexKey], resusableConfigPtr)
 					}
 				}
 			}
 		}
 	}
-
-	return indexes
 }

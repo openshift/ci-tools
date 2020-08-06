@@ -8,7 +8,7 @@ import (
 	"time"
 
 	imagev1 "github.com/openshift/api/image/v1"
-	secretsyncerconfig "github.com/openshift/ci-secret-mirroring-controller/pkg/controller/config"
+	secretsyncerconfig "github.com/openshift/ci-tools/pkg/controller/secretsyncer/config"
 	"github.com/sirupsen/logrus"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"

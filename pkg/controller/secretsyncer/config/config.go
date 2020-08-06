@@ -26,13 +26,8 @@ type MirrorConfig struct {
 
 func (c *MirrorConfig) validate(parent string) []string {
 	var messages []string
-	for _, msg := range c.From.validate(fmt.Sprintf("%s.from", parent)) {
-		messages = append(messages, msg)
-	}
-	for _, msg := range c.To.validate(fmt.Sprintf("%s.to", parent)) {
-		messages = append(messages, msg)
-	}
-	return messages
+	messages = append(messages, c.From.validate(fmt.Sprintf("%s.from", parent))...)
+	return append(messages, c.To.validate(fmt.Sprintf("%s.to", parent))...)
 }
 
 func (c *MirrorConfig) String() string {
@@ -165,11 +160,11 @@ func Load(configLocation string) (c *Configuration, err error) {
 func yamlToConfig(path string, c interface{}) error {
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
-		return fmt.Errorf("error opening configuration file: %v", err)
+		return fmt.Errorf("error opening configuration file: %w", err)
 	}
 
-	if err := yaml.Unmarshal([]byte(data), &c); err != nil {
-		return fmt.Errorf("invalid configuration: %v", err)
+	if err := yaml.Unmarshal(data, &c); err != nil {
+		return fmt.Errorf("invalid configuration: %w", err)
 	}
 
 	return nil

@@ -14,7 +14,7 @@ import (
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	"github.com/openshift/ci-secret-mirroring-controller/pkg/controller/config"
+	"github.com/openshift/ci-tools/pkg/controller/secretsyncer/config"
 )
 
 func TestMirrorSecret(t *testing.T) {

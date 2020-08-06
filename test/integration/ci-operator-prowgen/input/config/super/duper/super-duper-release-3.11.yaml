@@ -1,6 +1,6 @@
 base_images:
   base:
-    name: "4.1"
+    name: origin-v3.11
     namespace: openshift
     tag: base
 build_root:

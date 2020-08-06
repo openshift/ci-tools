@@ -10,6 +10,7 @@ trap "cleanup" EXIT
 suite_dir="${OS_ROOT}/test/e2e/simple"
 workdir="${BASETMPDIR}/e2e/simple"
 mkdir -p "${workdir}"
+JOB_SPEC_TEST="${JOB_SPEC}"
 
 os::test::junit::declare_suite_start "e2e/simple"
 # This test validates the ci-operator exit codes
@@ -47,5 +48,12 @@ RELEASE_IMAGE_LATEST="$( curl -s -H "Accept: application/json"  "https://api.ope
 export RELEASE_IMAGE_LATEST
 os::cmd::expect_success "ci-operator --secret-dir ${PULL_SECRET_DIR} --target [release:latest] --config ${suite_dir}/dynamic-releases.yaml"
 unset RELEASE_IMAGE_LATEST
+os::test::junit::declare_suite_end
 
+os::test::junit::declare_suite_start "e2e/simple/optional-operator"
+export JOB_SPEC="${JOB_SPEC_TEST}"
+if [[ -z "${JOB_SPEC:-}" ]]; then
+  os::log::fatal "\$JOB_SPEC must be set for this test"
+fi
+os::cmd::expect_success "ci-operator --image-import-pull-secret ${PULL_SECRET_DIR}/.dockerconfigjson --target [images] --config ${suite_dir}/optional-operators.yaml"
 os::test::junit::declare_suite_end

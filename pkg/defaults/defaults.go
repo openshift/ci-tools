@@ -2,7 +2,6 @@ package defaults
 
 import (
 	"fmt"
-	"github.com/openshift/ci-tools/pkg/steps/utils"
 	"log"
 	"os"
 	"strings"
@@ -28,6 +27,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/steps/clusterinstall"
 	"github.com/openshift/ci-tools/pkg/steps/release"
+	"github.com/openshift/ci-tools/pkg/steps/utils"
 )
 
 // FromConfig interprets the human-friendly fields in
@@ -148,6 +148,8 @@ func FromConfig(
 			step = steps.SourceStep(*rawStep.SourceStepConfiguration, config.Resources, buildClient, imageClient, artifactDir, jobSpec, cloneAuthConfig, pullSecret)
 		} else if rawStep.BundleSourceStepConfiguration != nil {
 			step = steps.BundleSourceStep(*rawStep.BundleSourceStepConfiguration, config.Resources, buildClient, imageClient, imageClient, artifactDir, jobSpec, pullSecret)
+		} else if rawStep.IndexGeneratorStepConfiguration != nil {
+			step = steps.IndexGeneratorStep(*rawStep.IndexGeneratorStepConfiguration, config.Resources, buildClient, imageClient, imageClient, artifactDir, jobSpec, pullSecret)
 		} else if rawStep.ProjectDirectoryImageBuildStepConfiguration != nil {
 			step = steps.ProjectDirectoryImageBuildStep(*rawStep.ProjectDirectoryImageBuildStepConfiguration, config.Resources, buildClient, imageClient, imageClient, artifactDir, jobSpec, pullSecret)
 		} else if rawStep.ProjectDirectoryImageBuildInputs != nil {
@@ -449,10 +451,12 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.Job
 		}})
 	}
 
+	var bundles []string
 	for i := range config.Images {
 		image := &config.Images[i]
 		// If current image is operator bundle, add build step for its operator bundle source
 		if image.OperatorManifests != "" {
+			bundles = append(bundles, string(image.To))
 			buildSteps = append(buildSteps, api.StepConfiguration{BundleSourceStepConfiguration: &api.BundleSourceStepConfiguration{
 				To:                steps.BundleSourceName(image.To),
 				ContextDir:        image.ContextDir,
@@ -461,25 +465,35 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.Job
 			}})
 		}
 		buildSteps = append(buildSteps, api.StepConfiguration{ProjectDirectoryImageBuildStepConfiguration: image})
+		var outputImageName string
 		if config.ReleaseTagConfiguration != nil {
-			buildSteps = append(buildSteps, api.StepConfiguration{OutputImageTagStepConfiguration: &api.OutputImageTagStepConfiguration{
-				From: image.To,
-				To: api.ImageStreamTagReference{
-					Name: fmt.Sprintf("%s%s", config.ReleaseTagConfiguration.NamePrefix, api.StableImageStream),
-					Tag:  string(image.To),
-				},
-				Optional: image.Optional,
-			}})
+			outputImageName = fmt.Sprintf("%s%s", config.ReleaseTagConfiguration.NamePrefix, api.StableImageStream)
 		} else {
+			outputImageName = api.StableImageStream
+		}
+		if image.OperatorManifests == "" {
 			buildSteps = append(buildSteps, api.StepConfiguration{OutputImageTagStepConfiguration: &api.OutputImageTagStepConfiguration{
 				From: image.To,
 				To: api.ImageStreamTagReference{
-					Name: api.StableImageStream,
+					Name: outputImageName,
 					Tag:  string(image.To),
 				},
 				Optional: image.Optional,
 			}})
 		}
+	}
+	if len(bundles) > 0 {
+		buildSteps = append(buildSteps, api.StepConfiguration{IndexGeneratorStepConfiguration: &api.IndexGeneratorStepConfiguration{
+			To:            steps.IndexGeneratorName(steps.IndexImageName),
+			OperatorIndex: bundles,
+		}})
+		image := &api.ProjectDirectoryImageBuildStepConfiguration{
+			To: steps.IndexImageName,
+			ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+				DockerfilePath: steps.IndexDockerfileName,
+			},
+		}
+		buildSteps = append(buildSteps, api.StepConfiguration{ProjectDirectoryImageBuildStepConfiguration: image})
 	}
 
 	for i := range config.Tests {

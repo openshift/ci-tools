@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
 	buildapi "github.com/openshift/api/build/v1"
 	"github.com/openshift/api/image/docker10"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
@@ -35,12 +36,6 @@ func (s *projectDirectoryImageBuildStep) Run(ctx context.Context) error {
 }
 
 func (s *projectDirectoryImageBuildStep) run(ctx context.Context) error {
-	source := fmt.Sprintf("%s:%s", api.PipelineImageStream, api.PipelineImageStreamTagReferenceSource)
-
-	workingDir, err := getWorkingDir(s.istClient, source, s.jobSpec.Namespace())
-	if err != nil {
-		return fmt.Errorf("failed to get workingDir: %w", err)
-	}
 
 	labels := make(map[string]string)
 	// reset all labels that may be set by a lower level
@@ -77,17 +72,43 @@ func (s *projectDirectoryImageBuildStep) run(ctx context.Context) error {
 	images := buildInputsFromStep(s.config.Inputs)
 	// If image being built is an operator bundle, use the bundle source instead of original source
 	if s.config.OperatorManifests != "" {
+		source := fmt.Sprintf("%s:%s", api.PipelineImageStream, BundleSourceName(s.config.To))
+		workingDir, err := getWorkingDir(s.istClient, source, s.jobSpec.Namespace())
+		if err != nil {
+			return fmt.Errorf("failed to get workingDir: %w", err)
+		}
 		images = append(images, buildapi.ImageSource{
 			From: coreapi.ObjectReference{
 				Kind: "ImageStreamTag",
-				Name: fmt.Sprintf("%s:%s", api.PipelineImageStream, BundleSourceName(s.config.To)),
+				Name: source,
 			},
 			Paths: []buildapi.ImageSourcePath{{
 				SourcePath:     fmt.Sprintf("%s/%s/.", workingDir, s.config.ContextDir),
 				DestinationDir: ".",
 			}},
 		})
+	} else if s.config.To == IndexImageName {
+		source := fmt.Sprintf("%s:%s", api.PipelineImageStream, IndexGeneratorName(s.config.To))
+		workingDir, err := getWorkingDir(s.istClient, source, s.jobSpec.Namespace())
+		if err != nil {
+			return fmt.Errorf("failed to get workingDir: %w", err)
+		}
+		images = append(images, buildapi.ImageSource{
+			From: coreapi.ObjectReference{
+				Kind: "ImageStreamTag",
+				Name: source,
+			},
+			Paths: []buildapi.ImageSourcePath{{
+				SourcePath:     fmt.Sprintf("%s/.", workingDir),
+				DestinationDir: ".",
+			}},
+		})
 	} else if _, ok := s.config.Inputs["src"]; !ok {
+		source := fmt.Sprintf("%s:%s", api.PipelineImageStream, api.PipelineImageStreamTagReferenceSource)
+		workingDir, err := getWorkingDir(s.istClient, source, s.jobSpec.Namespace())
+		if err != nil {
+			return fmt.Errorf("failed to get workingDir: %w", err)
+		}
 		images = append(images, buildapi.ImageSource{
 			From: coreapi.ObjectReference{
 				Kind: "ImageStreamTag",
@@ -142,6 +163,9 @@ func (s *projectDirectoryImageBuildStep) Requires() []api.StepLink {
 	}
 	if s.config.OperatorManifests != "" {
 		links = append(links, api.InternalImageLink(BundleSourceName(s.config.To)))
+	}
+	if s.config.To == IndexImageName {
+		links = append(links, api.InternalImageLink(IndexGeneratorName(s.config.To)))
 	}
 	for name := range s.config.Inputs {
 		links = append(links, api.InternalImageLink(api.PipelineImageStreamTagReference(name)))

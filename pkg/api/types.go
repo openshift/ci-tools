@@ -394,6 +394,7 @@ type StepConfiguration struct {
 	PipelineImageCacheStepConfiguration         *PipelineImageCacheStepConfiguration         `json:"pipeline_image_cache_step,omitempty"`
 	SourceStepConfiguration                     *SourceStepConfiguration                     `json:"source_step,omitempty"`
 	BundleSourceStepConfiguration               *BundleSourceStepConfiguration               `json:"bundle_source_step,omitempty"`
+	IndexGeneratorStepConfiguration             *IndexGeneratorStepConfiguration             `json:"index_generator_step,omitempty"`
 	ProjectDirectoryImageBuildStepConfiguration *ProjectDirectoryImageBuildStepConfiguration `json:"project_directory_image_build_step,omitempty"`
 	RPMImageInjectionStepConfiguration          *RPMImageInjectionStepConfiguration          `json:"rpm_image_injection_step,omitempty"`
 	RPMServeStepConfiguration                   *RPMServeStepConfiguration                   `json:"rpm_serve_step,omitempty"`
@@ -1002,6 +1003,17 @@ type SourceStepConfiguration struct {
 	// ClonerefsPath is the path in the above image where the
 	// clonerefs tool is placed
 	ClonerefsPath string `json:"clonerefs_path"`
+}
+
+// IndexGeneratorStepConfiguration describes a step that creates an index database and
+// Dockerfile to build an operator index that uses the generated database based on
+// bundle names provided in OperatorIndex
+type IndexGeneratorStepConfiguration struct {
+	To PipelineImageStreamTagReference `json:"to,omitempty"`
+
+	// OperatorIndex is a list of the names of the bundle images that the
+	// index will contain in its database.
+	OperatorIndex []string `json:"operator_index,omitempty"`
 }
 
 // BundleSourceStepConfiguration describes a step that performs a set of

@@ -1473,6 +1473,71 @@ func TestValidatePrerelease(t *testing.T) {
 	}
 }
 
+func TestValidateImages(t *testing.T) {
+	var testCases = []struct {
+		name   string
+		input  []ProjectDirectoryImageBuildStepConfiguration
+		output []error
+	}{{
+		name: "`to` must be set",
+		input: []ProjectDirectoryImageBuildStepConfiguration{{
+			ProjectDirectoryImageBuildInputs: ProjectDirectoryImageBuildInputs{
+				OperatorManifests: "manifests",
+				Substitute: []PullSpecSubstitution{{
+					PullSpec: "original",
+					With:     "substitute",
+				}},
+			},
+		}},
+		output: []error{
+			errors.New("images[0]: `to` must be set"),
+		},
+	}, {
+		name: "missing a substitution.pullspec and a substitution.with",
+		input: []ProjectDirectoryImageBuildStepConfiguration{{
+			To: "test",
+			ProjectDirectoryImageBuildInputs: ProjectDirectoryImageBuildInputs{
+				OperatorManifests: "manifests",
+				Substitute: []PullSpecSubstitution{{
+					PullSpec: "original",
+					With:     "substitute",
+				}, {
+					PullSpec: "original2",
+				}, {
+					With: "subsitute2",
+				}},
+			}},
+		},
+		output: []error{
+			errors.New("images[0].substitute[1].with: must be set"),
+			errors.New("images[0].substitute[2].pullspec: must be set"),
+		},
+	}, {
+		name: "substitution set without manifests",
+		input: []ProjectDirectoryImageBuildStepConfiguration{{
+			To: "test",
+			ProjectDirectoryImageBuildInputs: ProjectDirectoryImageBuildInputs{
+				Substitute: []PullSpecSubstitution{{
+					PullSpec: "original",
+					With:     "substitute",
+				}},
+			}},
+		},
+		output: []error{
+			errors.New("images[0].substitute: images[0].operator_manifests must also be set"),
+		},
+	}}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if actual, expected := validateImages("images", testCase.input), testCase.output; !reflect.DeepEqual(actual, expected) {
+				t.Errorf("%s: got incorrect errors: %s", testCase.name, cmp.Diff(actual, expected, cmp.Comparer(func(x, y error) bool {
+					return x.Error() == y.Error()
+				})))
+			}
+		})
+	}
+}
+
 func errListMessagesEqual(a, b []error) bool {
 	if len(a) != len(b) {
 		return false

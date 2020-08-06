@@ -75,6 +75,10 @@ func (config *ReleaseBuildConfiguration) validate(org, repo string, resolved boo
 	// parts of the configuration, so it's written as a standalone method
 	validationErrors = append(validationErrors, config.validateTestStepDependencies()...)
 
+	if config.Images != nil {
+		validationErrors = append(validationErrors, validateImages("images", config.Images)...)
+	}
+
 	if config.InputConfiguration.BaseImages != nil {
 		validationErrors = append(validationErrors, validateImageStreamTagReferenceMap("base_images", config.InputConfiguration.BaseImages)...)
 	}
@@ -265,6 +269,31 @@ func validateBuildRootImageConfiguration(fieldRoot string, input *BuildRootImage
 		validationErrors = append(validationErrors, fmt.Errorf("%s: both image_stream_tag and project_image cannot be set", fieldRoot))
 	} else if input.ProjectImageBuild == nil && input.ImageStreamTagReference == nil {
 		validationErrors = append(validationErrors, fmt.Errorf("%s: you have to specify either image_stream_tag or project_image", fieldRoot))
+	}
+	return validationErrors
+}
+
+func validateImages(fieldRoot string, input []ProjectDirectoryImageBuildStepConfiguration) []error {
+	var validationErrors []error
+	for num, image := range input {
+		fieldRootN := fmt.Sprintf("%s[%d]", fieldRoot, num)
+		if image.To == "" {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: `to` must be set", fieldRootN))
+		}
+		if len(image.Substitute) > 0 {
+			if image.OperatorManifests == "" {
+				validationErrors = append(validationErrors, fmt.Errorf("%s.substitute: %s.operator_manifests must also be set", fieldRootN, fieldRootN))
+			}
+			for num, sub := range image.Substitute {
+				fieldRootN2 := fmt.Sprintf("%s.substitute[%d]", fieldRootN, num)
+				if sub.PullSpec == "" {
+					validationErrors = append(validationErrors, fmt.Errorf("%s.pullspec: must be set", fieldRootN2))
+				}
+				if sub.With == "" {
+					validationErrors = append(validationErrors, fmt.Errorf("%s.with: must be set", fieldRootN2))
+				}
+			}
+		}
 	}
 	return validationErrors
 }

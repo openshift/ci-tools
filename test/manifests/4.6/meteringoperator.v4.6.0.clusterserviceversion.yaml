@@ -1,0 +1,347 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  name: metering-operator.v4.6.0
+  namespace: placeholder
+  annotations:
+    olm.skipRange: ">=4.3.0 <4.6.0"
+    capabilities: Seamless Upgrades
+    categories: OpenShift Optional, Monitoring
+    certified: "false"
+    containerImage: quay.io/openshift/origin-metering-ansible-operator:4.6
+    createdAt: 2019-01-01T11:59:59Z
+    description: Chargeback and reporting tool to provide accountability for how resources
+      are used across a cluster
+    operatorframework.io/cluster-monitoring: "true"
+    operatorframework.io/suggested-namespace: openshift-metering
+    operators.openshift.io/capability: '["fips", "cluster-proxy"]'
+    repository: https://github.com/kube-reporting/metering-operator
+    support: Red Hat, Inc.
+
+spec:
+  displayName: Metering
+  description: |
+    The Metering Operator is a chargeback and reporting tool to provide accountability for how resources are used across a cluster. Cluster admins can schedule reports based on historical usage data by Pod, Namespace, and Cluster wide. The Metering Operator is a part of the [Kubernetes Reporting organization](https://coreos.com/blog/introducing-operator-framework-metering).
+
+    Read the user guide for more details on [running and viewing your first report](https://docs.openshift.com/container-platform/4.6/metering/metering-using-metering.html).
+  keywords: [metering metrics reporting prometheus chargeback]
+  version: "4.6.0"
+  minKubeVersion: "1.18.0"
+  maturity: stable
+  maintainers:
+    - email: sd-operator-metering@redhat.com
+      name: Red Hat
+
+  links:
+    - name: Documentation
+      url: https://docs.openshift.com/container-platform/4.6/metering/metering-about-metering.html
+
+  provider:
+    name: Red Hat
+
+  labels:
+    operator-metering: "true"
+
+  selector:
+    matchLabels:
+      operator-metering: "true"
+
+  installModes:
+  - supported: true
+    type: OwnNamespace
+  - supported: true
+    type: SingleNamespace
+  - supported: false
+    type: MultiNamespace
+  - supported: false
+    type: AllNamespaces
+
+  install:
+    strategy: deployment
+    spec:
+      clusterPermissions:
+        - serviceAccountName: metering-operator
+          rules:
+          - apiGroups:
+            - ""
+            resources:
+            - services/finalizers
+            - deployments/finalizers
+            verbs:
+            - update
+          - apiGroups:
+            - ""
+            resources:
+            - namespaces
+            verbs:
+            - get
+            - list
+          - apiGroups:
+            - config.openshift.io
+            resources:
+            - proxies
+            verbs:
+            - list
+            - get
+          - apiGroups:
+            - config.openshift.io
+            resources:
+            - networks
+            verbs:
+            - list
+            - get
+          - apiGroups:
+            - authorization.k8s.io
+            resources:
+            - subjectaccessreviews
+            verbs:
+            - create
+          - apiGroups:
+            - authentication.k8s.io
+            resources:
+            - tokenreviews
+            verbs:
+            - create
+          - apiGroups:
+            - rbac.authorization.k8s.io
+            resources:
+            - clusterrolebindings
+            - clusterroles
+            verbs:
+            - '*'
+
+      permissions:
+        - serviceAccountName: metering-operator
+          rules:
+          - apiGroups:
+            - metering.openshift.io
+            resources:
+            - '*'
+            verbs:
+            - '*'
+          - apiGroups:
+            - monitoring.coreos.com
+            resources:
+            - servicemonitors
+            verbs:
+            - '*'
+          - apiGroups:
+            - ""
+            resources:
+            - pods
+            - pods/attach
+            - pods/exec
+            - pods/portforward
+            - pods/proxy
+            verbs:
+            - '*'
+          - apiGroups:
+            - ""
+            resources:
+            - configmaps
+            - endpoints
+            - persistentvolumeclaims
+            - secrets
+            - serviceaccounts
+            - services
+            - services/proxy
+            verbs:
+            - '*'
+          - apiGroups:
+            - ""
+            resources:
+            - events
+            - namespaces/status
+            - pods/log
+            - pods/status
+            verbs:
+            - get
+            - list
+            - watch
+          - apiGroups:
+            - ""
+            resources:
+            - events
+            verbs:
+            - create
+            - update
+            - patch
+          - apiGroups:
+            - ""
+            resources:
+            - namespaces
+            verbs:
+            - get
+            - list
+            - watch
+          - apiGroups:
+            - apps
+            resources:
+            - daemonsets
+            - deployments
+            - deployments/finalizers
+            - deployments/rollback
+            - deployments/scale
+            - replicasets
+            - replicasets/scale
+            - statefulsets
+            verbs:
+            - '*'
+          - apiGroups:
+            - batch
+            resources:
+            - cronjobs
+            - jobs
+            verbs:
+            - '*'
+          - apiGroups:
+            - extensions
+            resources:
+            - daemonsets
+            - deployments
+            - deployments/rollback
+            - deployments/scale
+            - replicasets
+            - replicasets/scale
+            verbs:
+            - '*'
+          - apiGroups:
+            - rbac.authorization.k8s.io
+            - authorization.openshift.io
+            resources:
+            - rolebindings
+            - roles
+            verbs:
+            - '*'
+          - apiGroups:
+            - route.openshift.io
+            resources:
+            - routes
+            verbs:
+            - '*'
+
+      deployments:
+        - name: metering-operator
+          spec:
+            replicas: 1
+            strategy:
+              type: RollingUpdate
+            selector:
+              matchLabels:
+                app: metering-operator
+            template:
+              metadata:
+                labels:
+                  app: metering-operator
+                  name: metering-operator
+              spec:
+                securityContext:
+                  runAsNonRoot: true
+                containers:
+                - name: ansible
+                  command:
+                  - /opt/ansible/scripts/ansible-logs.sh
+                  - /tmp/ansible-operator/runner
+                  - stdout
+                  image: "quay.io/openshift/origin-metering-ansible-operator:4.6"
+                  imagePullPolicy: Always
+                  volumeMounts:
+                  - mountPath: /tmp/ansible-operator/runner
+                    name: runner
+                    readOnly: true
+                - name: operator
+                  image: "quay.io/openshift/origin-metering-ansible-operator:4.6"
+                  imagePullPolicy: Always
+                  env:
+                  - name: OPERATOR_NAME
+                    value: "metering-operator"
+                  - name: DISABLE_OCP_FEATURES
+                    value: "false"
+                  - name: WATCH_NAMESPACE
+                    valueFrom:
+                      fieldRef:
+                        fieldPath: metadata.annotations['olm.targetNamespaces']
+                  - name: POD_NAME
+                    valueFrom:
+                      fieldRef:
+                        fieldPath: metadata.name
+                  - name: METERING_ANSIBLE_OPERATOR_IMAGE
+                    value: "quay.io/openshift/origin-metering-ansible-operator:4.6"
+                  - name: METERING_REPORTING_OPERATOR_IMAGE
+                    value: "quay.io/openshift/origin-metering-reporting-operator:4.6"
+                  - name: METERING_PRESTO_IMAGE
+                    value: "quay.io/openshift/origin-metering-presto:4.6"
+                  - name: METERING_HIVE_IMAGE
+                    value: "quay.io/openshift/origin-metering-hive:4.6"
+                  - name: METERING_HADOOP_IMAGE
+                    value: "quay.io/openshift/origin-metering-hadoop:4.6"
+                  - name: GHOSTUNNEL_IMAGE
+                    value: "quay.io/openshift/origin-ghostunnel:4.6"
+                  - name: OAUTH_PROXY_IMAGE
+                    value: "quay.io/openshift/origin-oauth-proxy:4.6"
+                  ports:
+                  - name: http-metrics
+                    containerPort: 8383
+                  - name: cr-metrics
+                    containerPort: 8686
+                  volumeMounts:
+                  - mountPath: /tmp/ansible-operator/runner
+                    name: runner
+                  resources:
+                    limits:
+                      cpu: 1500m
+                      memory: 500Mi
+                    requests:
+                      cpu: 750m
+                      memory: 400Mi
+
+                volumes:
+                  - name: runner
+                    emptyDir: {}
+                restartPolicy: Always
+                terminationGracePeriodSeconds: 30
+                serviceAccount: metering-operator
+
+  customresourcedefinitions:
+    owned:
+    - description: An instance of Metering with high-level configuration
+      displayName: Metering Configuration
+      kind: MeteringConfig
+      name: meteringconfigs.metering.openshift.io
+      version: v1
+    - description: A scheduled or on-off Metering Report summarizes data based on the
+        query specified.
+      displayName: Metering Report
+      kind: Report
+      name: reports.metering.openshift.io
+      version: v1
+    - description: A SQL query used by Metering to generate reports.
+      displayName: Metering Report Query
+      kind: ReportQuery
+      name: reportqueries.metering.openshift.io
+      version: v1
+    - description: Used under-the-hood. A resource representing a database table in Presto.
+        Used by ReportQueries to determine what tables exist, and by the HTTP API to determine
+        how to query a table.
+      displayName: Metering Data Source
+      kind: ReportDataSource
+      name: reportdatasources.metering.openshift.io
+      version: v1
+    - description: Represents a configurable storage location for Metering to store metering
+        and report data.
+      displayName: Metering Storage Location
+      kind: StorageLocation
+      name: storagelocations.metering.openshift.io
+      version: v1
+    - description: Used under-the-hood. A resource describing a source of data for usage
+        by Report Queries.
+      displayName: Metering Presto Table
+      kind: PrestoTable
+      name: prestotables.metering.openshift.io
+      version: v1
+    - description: Used under-the-hood. A resource representing a database table in Hive.
+      displayName: Metering Hive Table
+      kind: HiveTable
+      name: hivetables.metering.openshift.io
+      version: v1
+

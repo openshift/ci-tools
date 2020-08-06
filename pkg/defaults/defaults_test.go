@@ -414,6 +414,64 @@ func TestStepConfigsForBuild(t *testing.T) {
 				},
 			}},
 		},
+		{
+			name: "including an operator bundle creates the bundle-sub and the index-gen and index images",
+			input: &api.ReleaseBuildConfiguration{
+				InputConfiguration: api.InputConfiguration{
+					BuildRootImage: &api.BuildRootImageConfiguration{
+						ImageStreamTagReference: &api.ImageStreamTagReference{Tag: "manual"},
+					},
+				},
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+					To: "operator-bundle",
+					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+						OperatorManifests: "4.6",
+					},
+				}},
+			},
+			jobSpec: &api.JobSpec{
+				JobSpec: downwardapi.JobSpec{
+					Refs: &prowapi.Refs{
+						Org:  "org",
+						Repo: "repo",
+					},
+				},
+				BaseNamespace: "base-1",
+			},
+			output: []api.StepConfiguration{{
+				BundleSourceStepConfiguration: &api.BundleSourceStepConfiguration{
+					To:                "operator-bundle-sub",
+					OperatorManifests: "4.6",
+				},
+			}, {
+				IndexGeneratorStepConfiguration: &api.IndexGeneratorStepConfiguration{
+					To:            "ci-index-gen",
+					OperatorIndex: []string{"operator-bundle"},
+				},
+			}, {
+				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
+					BaseImage: api.ImageStreamTagReference{Namespace: "base-1", Name: "repo-test-base", Tag: "manual"},
+					To:        "root",
+				},
+			}, {
+				ProjectDirectoryImageBuildStepConfiguration: &api.ProjectDirectoryImageBuildStepConfiguration{
+					To:                               "ci-index",
+					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{DockerfilePath: "index.Dockerfile"},
+				},
+			}, {
+				ProjectDirectoryImageBuildStepConfiguration: &api.ProjectDirectoryImageBuildStepConfiguration{
+					To:                               "operator-bundle",
+					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{OperatorManifests: "4.6"},
+				},
+			}, {
+				SourceStepConfiguration: &api.SourceStepConfiguration{
+					From:           "root",
+					To:             "src",
+					ClonerefsImage: api.ImageStreamTagReference{Namespace: "ci", Name: "clonerefs", Tag: "latest"},
+					ClonerefsPath:  "/app/prow/cmd/clonerefs/app.binary.runfiles/io_k8s_test_infra/prow/cmd/clonerefs/linux_amd64_pure_stripped/app.binary",
+				},
+			}},
+		},
 	}
 
 	for _, testCase := range testCases {

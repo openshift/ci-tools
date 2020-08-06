@@ -13,6 +13,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/results"
+	"github.com/openshift/ci-tools/pkg/util"
 )
 
 type bundleSourceStep struct {
@@ -78,29 +79,19 @@ func (s *bundleSourceStep) bundleSourceDockerfile() (string, error) {
 	dockerCommands = append(dockerCommands, "")
 	dockerCommands = append(dockerCommands, fmt.Sprintf("FROM %s:%s", api.PipelineImageStream, api.PipelineImageStreamTagReferenceSource))
 	manifestDir := filepath.Join(s.config.ContextDir, s.config.OperatorManifests)
+	is, err := s.imageClient.ImageStreams(s.jobSpec.Namespace()).Get(context.TODO(), api.StableImageStream, meta.GetOptions{})
+	if err != nil {
+		return "", fmt.Errorf("failed to get stable imagestream: %w", err)
+	}
 	for _, sub := range s.config.Substitute {
-		replaceSpec, err := s.getFullPullSpec(sub.With)
-		if err != nil {
+		replaceSpec, exists := util.ResolvePullSpec(is, sub.With, false)
+		if !exists {
 			return "", fmt.Errorf("failed to get replacement imagestream for image tag `%s`", sub.With)
 		}
 		dockerCommands = append(dockerCommands, fmt.Sprintf(`RUN ["bash", "-c", "%s"]`, replaceCommand(manifestDir, sub.PullSpec, replaceSpec)))
 	}
 	dockerCommands = append(dockerCommands, "")
 	return strings.Join(dockerCommands, "\n"), nil
-}
-
-func (s *bundleSourceStep) getFullPullSpec(tag string) (string, error) {
-	is, err := s.imageClient.ImageStreams(s.jobSpec.Namespace()).Get(context.TODO(), api.StableImageStream, meta.GetOptions{})
-	if err != nil {
-		return "", err
-	}
-	if len(is.Status.PublicDockerImageRepository) > 0 {
-		return is.Status.PublicDockerImageRepository + ":" + tag, nil
-	}
-	if len(is.Status.DockerImageRepository) > 0 {
-		return is.Status.DockerImageRepository + ":" + tag, nil
-	}
-	return "", fmt.Errorf("no pull spec available for image stream %s", api.StableImageStream)
 }
 
 func (s *bundleSourceStep) Requires() []api.StepLink {

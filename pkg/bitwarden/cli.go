@@ -2,7 +2,7 @@ package bitwarden
 
 import (
 	"bytes"
-	b64 "encoding/base64"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -154,7 +154,7 @@ func (c *cliClient) Logout() ([]byte, error) {
 
 func (c *cliClient) createItem(itemTemplate string, targetItem *Item) error {
 	// the bitwarden cli expects the item to be base64 encoded
-	encItem := b64.StdEncoding.EncodeToString([]byte(itemTemplate))
+	encItem := base64.StdEncoding.EncodeToString([]byte(itemTemplate))
 	out, err := c.runWithSession("create", "item", encItem)
 	if err != nil {
 		return err
@@ -162,13 +162,17 @@ func (c *cliClient) createItem(itemTemplate string, targetItem *Item) error {
 	return json.Unmarshal(out, targetItem)
 }
 
-func (c *cliClient) createAttachment(fileContents []byte, fileName string, itemID string, newAttachment *Attachment) error {
+func (c *cliClient) createAttachment(fileContents []byte, fileName string, itemID string, newAttachment *Attachment) (retError error) {
 	// Not tested
 	tempDir, err := ioutil.TempDir("", "attachment")
 	if err != nil {
 		return fmt.Errorf("failed to create temporary file for new attachment: %w", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			retError = fmt.Errorf("failed to delete temporary file after use: %w", err)
+		}
+	}()
 	filePath := filepath.Join(tempDir, fileName)
 	if err := ioutil.WriteFile(filePath, fileContents, 0644); err != nil {
 		return fmt.Errorf("failed to create temporary file for new attachment: %w", err)
@@ -217,7 +221,7 @@ func (c *cliClient) editItem(targetItem Item) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal object: %w", err)
 	}
-	encodedItem := b64.StdEncoding.EncodeToString(targetJSON)
+	encodedItem := base64.StdEncoding.EncodeToString(targetJSON)
 	_, err = c.runWithSession("edit", "item", targetItem.ID, encodedItem)
 	if err != nil {
 		return err
@@ -270,22 +274,24 @@ func (c *cliClient) SetFieldOnItem(itemName, fieldName string, fieldValue []byte
 	return nil
 }
 
-func (c *cliClient) SetAttachmentOnItem(itemName, attachmentName string, fileContents []byte) error {
+func (c *cliClient) SetAttachmentOnItem(itemName, attachmentName string, fileContents []byte) (errorMsg error) {
 	var targetItem *Item
 	var targetAttachment *Attachment
 	var targetAttachmentIndex int
 	for index, item := range c.savedItems {
-		if itemName == item.Name {
-			targetItem = &c.savedItems[index]
-			for attachmentIndex, attachment := range item.Attachments {
-				if attachment.FileName == attachmentName {
-					targetAttachmentIndex = attachmentIndex
-					targetAttachment = &c.savedItems[index].Attachments[attachmentIndex]
-					break
-				}
-			}
-			break
+		if itemName != item.Name {
+			continue
 		}
+		targetItem = &c.savedItems[index]
+		for attachmentIndex, attachment := range item.Attachments {
+			if attachment.FileName == attachmentName {
+				targetAttachmentIndex = attachmentIndex
+				targetAttachment = &c.savedItems[index].Attachments[attachmentIndex]
+				break
+			}
+		}
+		break
+
 	}
 	if targetItem == nil {
 		newItem := &Item{}
@@ -295,38 +301,38 @@ func (c *cliClient) SetAttachmentOnItem(itemName, attachmentName string, fileCon
 		c.savedItems = append(c.savedItems, *newItem)
 		targetItem = &c.savedItems[len(c.savedItems)-1]
 	}
-	attachmentChanged := true
 	if targetAttachment != nil {
 		// read the attachment file
 		tempDir, err := ioutil.TempDir("", "attachment")
 		if err != nil {
 			return fmt.Errorf("failed to create temporary file for getting: %w", err)
 		}
-		defer os.RemoveAll(tempDir)
+		defer func() {
+			if err := os.RemoveAll(tempDir); err != nil {
+				errorMsg = fmt.Errorf("failed to delete temporary file after use: %w", err)
+			}
+		}()
 		filePath := filepath.Join(tempDir, attachmentName)
 		existingFileContents, err := c.getAttachmentOnItemToFile(itemName, attachmentName, filePath)
 		if err != nil {
 			return fmt.Errorf("error reading attachment: %w", err)
 		}
 		if bytes.Equal(fileContents, existingFileContents) {
-			attachmentChanged = false
+			return nil
 		} else {
 			targetItem.Attachments = append(targetItem.Attachments[:targetAttachmentIndex], targetItem.Attachments[targetAttachmentIndex+1:]...)
 			// If attachment exists delete it
 			if err := c.deleteAttachment(targetAttachment.ID, targetItem.ID); err != nil {
 				return fmt.Errorf("failed to set new attachment on item")
 			}
-
 		}
 	}
 	newAttachment := &Attachment{}
 	// attachment is also considered to be changed if it hadnt existed earlier
-	if attachmentChanged {
-		if err := c.createAttachment(fileContents, attachmentName, targetItem.ID, newAttachment); err != nil {
-			return fmt.Errorf("error creating attachment: %w", err)
-		}
-		targetItem.Attachments = append(targetItem.Attachments, *newAttachment)
+	if err := c.createAttachment(fileContents, attachmentName, targetItem.ID, newAttachment); err != nil {
+		return fmt.Errorf("error creating attachment: %w", err)
 	}
+	targetItem.Attachments = append(targetItem.Attachments, *newAttachment)
 	return nil
 }
 
@@ -344,13 +350,51 @@ func (c *cliClient) SetPassword(itemName string, password []byte) error {
 			return fmt.Errorf("failed to create new	 bw entry: %w", err)
 		}
 		c.savedItems = append(c.savedItems, *newItem)
-	} else {
-		if targetItem.Login.Password != string(password) {
-			targetItem.Login.Password = string(password)
-			if err := c.editItem(*targetItem); err != nil {
-				return fmt.Errorf("failed to set password for %s: %w", itemName, err)
-			}
+		return nil
+	}
+	if targetItem.Login.Password != string(password) {
+		targetItem.Login.Password = string(password)
+		if err := c.editItem(*targetItem); err != nil {
+			return fmt.Errorf("failed to set password for %s: %w", itemName, err)
 		}
 	}
 	return nil
 }
+
+type dryRunCliClient struct {
+	file *os.File
+}
+
+func (d *dryRunCliClient) GetFieldOnItem(itemName, fieldName string) ([]byte, error) {
+	return nil, nil
+}
+func (d *dryRunCliClient) GetAttachmentOnItem(itemName, attachmentName string) ([]byte, error) {
+	return nil, nil
+}
+func (d *dryRunCliClient) GetPassword(itemName string) ([]byte, error) {
+	return nil, nil
+}
+func (d *dryRunCliClient) Logout() ([]byte, error) {
+	d.file.Close()
+	return nil, nil
+}
+func (d *dryRunCliClient) SetFieldOnItem(itemName, fieldName string, fieldValue []byte) error {
+	fmt.Fprintf(d.file, "ItemName: %s\n\tField: \n\t\t %s: %s\n", itemName, fieldName, string(fieldValue))
+	return nil
+}
+func (d *dryRunCliClient) SetAttachmentOnItem(itemName, attachmentName string, fileContents []byte) error {
+	fmt.Fprintf(d.file, "ItemName: %s\n\tAttachment: \n\t\t %s: %s\n", itemName, attachmentName, string(fileContents))
+	return nil
+}
+func (d *dryRunCliClient) SetPassword(itemName string, password []byte) error {
+	fmt.Fprintf(d.file, "ItemName: %s\n\tAttribute: \n\t\t Password: %s\n", itemName, string(password))
+	return nil
+}
+
+func newDryRunClient(file *os.File) (Client, error) {
+	return &dryRunCliClient{
+		file: file,
+	}, nil
+}
+
+var _ Client = &dryRunCliClient{}

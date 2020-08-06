@@ -1,5 +1,7 @@
 package bitwarden
 
+import "os"
+
 // Field represents a field in BitWarden
 type Field struct {
 	Name  string `json:"name"`
@@ -43,4 +45,9 @@ type Client interface {
 // NewClient generates a BitWarden client
 func NewClient(username, password string, addSecret func(s string)) (Client, error) {
 	return newCliClient(username, password, addSecret)
+}
+
+// NewDryRunClient generates a BitWarden client
+func NewDryRunClient(outputFile *os.File) (Client, error) {
+	return newDryRunClient(outputFile)
 }

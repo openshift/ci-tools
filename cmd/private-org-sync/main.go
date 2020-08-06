@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
+
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 
@@ -449,7 +450,14 @@ func mergeRemotesAndPush(logger *logrus.Entry, git gitFunc, repoDir, srcRemote, 
 
 	sourceBranch := fmt.Sprintf("%s/%s", srcRemote, branch)
 	if err := checkGitError(git(logger, repoDir, []string{"-c", fmt.Sprintf("user.name=%s", gitName), "-c", fmt.Sprintf("user.email=%s", gitEmail), "merge", sourceBranch, "-m", "'Periodic merge from DPTP; pub->priv'"}...)); err != nil {
-		return fmt.Errorf("failed to merge %s: %w", sourceBranch, err)
+		var mergeErrs []error
+		mergeErrs = append(mergeErrs, fmt.Errorf("failed to merge %s: %w", sourceBranch, err))
+
+		if err := checkGitError(git(logger, repoDir, []string{"merge", "--abort"}...)); err != nil {
+			mergeErrs = append(mergeErrs, fmt.Errorf("failed to perform merge --abort: %w", err))
+		}
+
+		return utilerrors.NewAggregate(mergeErrs)
 	}
 
 	cmd := []string{"push", "--tags"}

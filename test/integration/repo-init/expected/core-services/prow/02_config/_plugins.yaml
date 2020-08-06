@@ -1,10 +1,10 @@
 approve:
-- commandHelpLink: https://go.k8s.io/bot-commands
+- commandHelpLink: ""
   lgtm_acts_as_approve: true
   repos:
   - openshift
   require_self_approval: false
-- commandHelpLink: https://go.k8s.io/bot-commands
+- commandHelpLink: ""
   repos:
   - org/repo
   require_self_approval: false

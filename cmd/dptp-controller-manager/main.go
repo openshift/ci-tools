@@ -187,7 +187,7 @@ func main() {
 
 	ciOPConfigAgent, err := agents.NewConfigAgent(opts.ciOperatorconfigPath)
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to construct ci-opeartor config agent")
+		logrus.WithError(err).Fatal("Failed to construct ci-operator config agent")
 	}
 	configAgent := &config.Agent{}
 	if err := configAgent.Start(opts.configPath, opts.jobConfigPath); err != nil {

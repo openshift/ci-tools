@@ -166,8 +166,13 @@ func (s *server) mergeAndPushToRemote(destOrg, destRepo string, sourceRemoteReso
 		return fmt.Errorf("couldn't set config user.name=%s: %w", s.gitEmail, err)
 	}
 
-	if merged, err := repoClient.MergeWithStrategy("FETCH_HEAD", "merge", git.MergeOpt{CommitMessage: mergeMsg}); err != nil && !merged {
-		return fmt.Errorf("couldn't merge FETCH_HEAD: %w", err)
+	merged, err := repoClient.MergeWithStrategy("FETCH_HEAD", "merge", git.MergeOpt{CommitMessage: mergeMsg})
+	if err != nil {
+		return fmt.Errorf("couldn't merge %s/%s, merge --abort failed with reason: %w", destOrg, destRepo, err)
+	}
+
+	if !merged {
+		return fmt.Errorf("couldn't merge %s/%s, possible because of a merge conflict", destOrg, destRepo)
 	}
 
 	if !dry {

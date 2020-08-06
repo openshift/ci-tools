@@ -148,6 +148,7 @@ func TestGetClonesHandler(t *testing.T) {
 				nil,
 				allTargetVersions.List(),
 				0,
+				[]string{},
 			},
 			tmplt: clonesTemplate,
 		},

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
@@ -137,6 +138,16 @@ const clonesTemplateConstructor = `
 	<strong>Success!</strong> Clone created - <a href="/clones?ID={{ .NewCloneID }}" >Bug#{{ .NewCloneID }}</a>.
 	</div>
 {{ end }}
+{{if .MissingReleases }}
+	<div class="alert alert-info alert-dismissible" id="success-banner">
+	<a href="#" class="close" data-dismiss="alert" aria-label="close">&times;</a>
+	Missing clones for the following Target Releases - 
+	{{range $index, $release := .MissingReleases }}
+		{{ if $index}},{{end}}
+		{{ $release }}
+	{{end}}
+	</div>
+{{ end }}
 <div class="container">
 	<h2> {{.Bug.Summary}} </h2>
 	
@@ -265,12 +276,13 @@ type HandlerFuncWithErrorReturn func(http.ResponseWriter, *http.Request) error
 
 // ClonesTemplateData holds the UI data for the clones page
 type ClonesTemplateData struct {
-	Bug          *bugzilla.Bug          // bug details
-	Clones       []*bugzilla.Bug        // List of clones for the bug
-	Parent       *bugzilla.Bug          // Root bug if it is a a bug, otherwise holds itself
-	PRs          []bugzilla.ExternalBug // Details of linked PR
-	CloneTargets []string
-	NewCloneID   int
+	Bug             *bugzilla.Bug          // bug details
+	Clones          []*bugzilla.Bug        // List of clones for the bug
+	Parent          *bugzilla.Bug          // Root bug if it is a a bug, otherwise holds itself
+	PRs             []bugzilla.ExternalBug // Details of linked PR
+	CloneTargets    []string
+	NewCloneID      int
+	MissingReleases []string
 }
 
 // Writes an HTML page, prepends header in htmlPageStart and appends header from htmlPageEnd around tConstructor.
@@ -351,6 +363,14 @@ func GetBugHandler(client bugzilla.Client, m *metrics.Metrics) http.HandlerFunc 
 	}
 }
 
+func getMajorRelease(release string) (string, error) {
+	periodIndex := strings.LastIndex(release, ".")
+	if periodIndex == -1 {
+		return "", fmt.Errorf("invalid release - must be of the form x.y.z")
+	}
+	return release[:periodIndex], nil
+}
+
 func getClonesTemplateData(bugID int, client bugzilla.Client, allTargetVersions sets.String) (*ClonesTemplateData, int, error) {
 	bug, err := client.GetBug(bugID)
 	if err != nil {
@@ -375,9 +395,16 @@ func getClonesTemplateData(bugID int, client bugzilla.Client, allTargetVersions 
 		prs, err = client.GetExternalBugPRsOnBug(bugID)
 		return err
 	})
-
+	clonedReleases := sets.NewString()
 	for _, clone := range clones {
 		clone := clone
+		if len(clone.TargetRelease) > 0 {
+			majorRelease, err := getMajorRelease(clone.TargetRelease[0])
+			if err != nil {
+				return nil, http.StatusInternalServerError, err
+			}
+			clonedReleases.Insert(majorRelease)
+		}
 		// Remove target releases which already have clones
 		targetVersions.Delete(clone.TargetRelease...)
 		g.Go(func() error {
@@ -402,12 +429,66 @@ func getClonesTemplateData(bugID int, client bugzilla.Client, allTargetVersions 
 		}
 		return clones[i].TargetRelease[0] < clones[j].TargetRelease[0]
 	})
+	sortedTargets := allTargetVersions.List()
+	sort.SliceStable(sortedTargets, func(i, j int) bool {
+		return sortedTargets[i] < sortedTargets[j]
+	})
+	firstClone := ""
+	lastClone := ""
+	// find the major release of the clone targeting the first release
+	for _, clone := range clones {
+		var err error
+		if len(clone.TargetRelease) > 0 {
+			firstClone, err = getMajorRelease(clone.TargetRelease[0])
+			if err != nil {
+				return nil, http.StatusInternalServerError, err
+			}
+			break
+		}
+	}
+	if len(clones[len(clones)-1].TargetRelease) > 0 {
+		lastClone, err = getMajorRelease(clones[len(clones)-1].TargetRelease[0])
+		if err != nil {
+			return nil, http.StatusInternalServerError, err
+		}
+	}
+
+	// find this release in the sorted array of all releases
+	firstCloneIndex := -1
+	lastCloneIndex := -1
+	firstCloneNotFound := true
+	lastCloneNotFound := true
+	for i, release := range sortedTargets {
+		majRel, err := getMajorRelease(release)
+		if err != nil {
+			return nil, http.StatusInternalServerError, err
+		}
+		if majRel == firstClone && firstCloneNotFound {
+			firstCloneIndex = i
+			firstCloneNotFound = false
+		}
+		if majRel == lastClone && lastCloneNotFound {
+			lastCloneIndex = i
+			lastCloneNotFound = false
+		}
+	}
+	missingReleases := []string{}
+	for i := firstCloneIndex; i < lastCloneIndex; i++ {
+		majorRel, err := getMajorRelease(sortedTargets[i])
+		if err != nil {
+			return nil, http.StatusInternalServerError, err
+		}
+		if !clonedReleases.Has(majorRel) {
+			missingReleases = append(missingReleases, sortedTargets[i])
+		}
+	}
 	wrpr := ClonesTemplateData{
-		Bug:          bug,
-		Clones:       clones,
-		Parent:       root,
-		PRs:          prs,
-		CloneTargets: targetVersions.List(),
+		Bug:             bug,
+		Clones:          clones,
+		Parent:          root,
+		PRs:             prs,
+		CloneTargets:    targetVersions.List(),
+		MissingReleases: missingReleases,
 	}
 	return &wrpr, http.StatusOK, nil
 }

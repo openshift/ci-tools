@@ -154,25 +154,3 @@ func ReleaseNameFrom(envVar string) string {
 	name, _ := imageFromEnv(api.ReleaseImageStream, envVar)
 	return name
 }
-
-// LinkForImage determines what dependent link is required
-// for the user's image dependency
-func LinkForImage(imageStream, tag string) (api.StepLink, bool) {
-	switch {
-	case imageStream == api.PipelineImageStream:
-		// the user needs an image we're building
-		return api.InternalImageLink(api.PipelineImageStreamTagReference(tag)), true
-	case api.IsReleaseStream(imageStream):
-		// the user needs a tag that's a component of some release;
-		// we cant' rely on a specific tag, as they are implicit in
-		// the import process and won't be present in the build graph,
-		// so we wait for the whole import to succeed
-		return api.ReleaseImagesLink(api.ReleaseNameFrom(imageStream)), true
-	case api.IsReleasePayloadStream(imageStream):
-		// the user needs a release payload
-		return api.ReleasePayloadImageLink(tag), true
-	default:
-		// we have no idea what the user's configured
-		return nil, false
-	}
-}

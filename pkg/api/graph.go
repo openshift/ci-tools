@@ -346,3 +346,25 @@ const CIOperatorStepGraphJSONFilename = "ci-operator-step-graph.json"
 func StepGraphJSONURL(baseJobURL string) string {
 	return strings.Join([]string{baseJobURL, "artifacts", CIOperatorStepGraphJSONFilename}, "/")
 }
+
+// LinkForImage determines what dependent link is required
+// for the user's image dependency
+func LinkForImage(imageStream, tag string) StepLink {
+	switch {
+	case imageStream == PipelineImageStream:
+		// the user needs an image we're building
+		return InternalImageLink(PipelineImageStreamTagReference(tag))
+	case IsReleaseStream(imageStream):
+		// the user needs a tag that's a component of some release;
+		// we cant' rely on a specific tag, as they are implicit in
+		// the import process and won't be present in the build graph,
+		// so we wait for the whole import to succeed
+		return ReleaseImagesLink(ReleaseNameFrom(imageStream))
+	case IsReleasePayloadStream(imageStream):
+		// the user needs a release payload
+		return ReleasePayloadImageLink(tag)
+	default:
+		// we have no idea what the user's configured
+		return nil
+	}
+}

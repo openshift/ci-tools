@@ -104,8 +104,9 @@ func (c ReleaseBuildConfiguration) BuildsImage(name string) bool {
 	return false
 }
 
-// IsPipelineImage checks if `name` will be a tag in the pipeline image stream.
-func (c ReleaseBuildConfiguration) IsPipelineImage(name string) bool {
+// IsBaseImage checks if `name` will be a tag in the pipeline image stream
+// by virtue of being imported as a base image
+func (c ReleaseBuildConfiguration) IsBaseImage(name string) bool {
 	for i := range c.BaseImages {
 		if i == name {
 			return true
@@ -115,6 +116,14 @@ func (c ReleaseBuildConfiguration) IsPipelineImage(name string) bool {
 		if i == name {
 			return true
 		}
+	}
+	return false
+}
+
+// IsPipelineImage checks if `name` will be a tag in the pipeline image stream.
+func (c ReleaseBuildConfiguration) IsPipelineImage(name string) bool {
+	if c.IsBaseImage(name) {
+		return true
 	}
 	switch name {
 	case string(PipelineImageStreamTagReferenceRoot),

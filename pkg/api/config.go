@@ -71,6 +71,10 @@ func (config *ReleaseBuildConfiguration) validate(org, repo string, resolved boo
 	validationErrors = append(validationErrors, validateBuildRootImageConfiguration("build_root", config.InputConfiguration.BuildRootImage, len(config.Images) > 0)...)
 	validationErrors = append(validationErrors, validateTestStepConfiguration("tests", config.Tests, config.ReleaseTagConfiguration, resolved)...)
 
+	// this validation brings together a large amount of data from separate
+	// parts of the configuration, so it's written as a standalone method
+	validationErrors = append(validationErrors, config.validateTestStepDependencies()...)
+
 	if config.InputConfiguration.BaseImages != nil {
 		validationErrors = append(validationErrors, validateImageStreamTagReferenceMap("base_images", config.InputConfiguration.BaseImages)...)
 	}
@@ -105,6 +109,146 @@ func (config *ReleaseBuildConfiguration) validate(org, repo string, resolved boo
 		return fmt.Errorf("invalid configuration: %s", lines[0])
 	default:
 		return fmt.Errorf("configuration has %d errors:\n\n  * %s\n", len(lines), strings.Join(lines, "\n  * "))
+	}
+}
+
+// validateTestStepDependencies ensures that users have referenced valid dependencies
+func (config *ReleaseBuildConfiguration) validateTestStepDependencies() []error {
+	dependencyErrors := func(step LiteralTestStep, testIdx int, stageField, stepField string, stepIdx int) []error {
+		var errs []error
+		for dependencyIdx, dependency := range step.Dependencies {
+			validationError := func(message string) error {
+				return fmt.Errorf("tests[%d].%s.%s[%d].dependencies[%d]: cannot determine source for dependency %q - %s", testIdx, stageField, stepField, stepIdx, dependencyIdx, dependency.Name, message)
+			}
+			stream, name, explicit := config.DependencyParts(dependency)
+			if link := LinkForImage(stream, name); link == nil {
+				errs = append(errs, validationError("ensure the correct ImageStream name was provided"))
+			}
+			if explicit {
+				// the user has asked us for something specific, and we can
+				// do some best-effort analysis of that input to see if it's
+				// possible that it will resolve at run-time. We could just
+				// let the step graph fail when this input is used to run a
+				// job, but this validation will catch things faster and be
+				// overall more useful, so we do both.
+				var releaseName string
+				switch {
+				case IsReleaseStream(stream):
+					releaseName = ReleaseNameFrom(stream)
+				case IsReleasePayloadStream(stream):
+					releaseName = name
+				}
+
+				if releaseName != "" {
+					implictlyConfigured := (releaseName == InitialReleaseName || releaseName == LatestReleaseName) && config.InputConfiguration.ReleaseTagConfiguration != nil
+					_, explicitlyConfigured := config.InputConfiguration.Releases[releaseName]
+					if !(implictlyConfigured || explicitlyConfigured) {
+						errs = append(errs, validationError(fmt.Sprintf("this dependency requires a %q release, which is not configured", releaseName)))
+					}
+				}
+
+				if stream == PipelineImageStream {
+					switch name {
+					case string(PipelineImageStreamTagReferenceRoot):
+						if config.InputConfiguration.BuildRootImage == nil {
+							errs = append(errs, validationError("this dependency requires a build root, which is not configured"))
+						}
+					case string(PipelineImageStreamTagReferenceSource):
+						// always present
+					case string(PipelineImageStreamTagReferenceBinaries):
+						if config.BinaryBuildCommands == "" {
+							errs = append(errs, validationError("this dependency requires built binaries, which are not configured"))
+						}
+					case string(PipelineImageStreamTagReferenceTestBinaries):
+						if config.TestBinaryBuildCommands == "" {
+							errs = append(errs, validationError("this dependency requires built test binaries, which are not configured"))
+						}
+					case string(PipelineImageStreamTagReferenceRPMs):
+						if config.RpmBuildCommands == "" {
+							errs = append(errs, validationError("this dependency requires built RPMs, which are not configured"))
+						}
+					default:
+						// this could be a base image, or a project image
+						if !config.IsBaseImage(name) && !config.BuildsImage(name) {
+							errs = append(errs, validationError("no base image import or project image build is configured to provide this dependency"))
+						}
+					}
+				}
+			}
+		}
+		return errs
+	}
+	processSteps := func(steps []TestStep, testIdx int, stageField, stepField string) []error {
+		var errs []error
+		for stepIdx, test := range steps {
+			if test.LiteralTestStep != nil {
+				errs = append(errs, dependencyErrors(*test.LiteralTestStep, testIdx, stageField, stepField, stepIdx)...)
+			}
+		}
+		return errs
+	}
+	processLiteralSteps := func(steps []LiteralTestStep, testIdx int, stageField, stepField string) []error {
+		var errs []error
+		for stepIdx, test := range steps {
+			errs = append(errs, dependencyErrors(test, testIdx, stageField, stepField, stepIdx)...)
+		}
+		return errs
+	}
+	var errs []error
+	for testIdx, test := range config.Tests {
+		if test.MultiStageTestConfiguration != nil {
+			for _, item := range []struct {
+				field string
+				list  []TestStep
+			}{
+				{field: "pre", list: test.MultiStageTestConfiguration.Pre},
+				{field: "test", list: test.MultiStageTestConfiguration.Test},
+				{field: "post", list: test.MultiStageTestConfiguration.Post},
+			} {
+				errs = append(errs, processSteps(item.list, testIdx, "steps", item.field)...)
+			}
+		}
+		if test.MultiStageTestConfigurationLiteral != nil {
+			for _, item := range []struct {
+				field string
+				list  []LiteralTestStep
+			}{
+				{field: "pre", list: test.MultiStageTestConfigurationLiteral.Pre},
+				{field: "test", list: test.MultiStageTestConfigurationLiteral.Test},
+				{field: "post", list: test.MultiStageTestConfigurationLiteral.Post},
+			} {
+				errs = append(errs, processLiteralSteps(item.list, testIdx, "literal_steps", item.field)...)
+			}
+		}
+	}
+	return errs
+}
+
+// ImageStreamFor guesses at the ImageStream that will hold a tag.
+// We use this to decipher the user's intent when they provide a
+// naked tag in configuration; we support such behavior in order to
+// allow users a simpler workflow for the most common cases, like
+// referring to `pipeline:src`. If they refer to an ambiguous image,
+// however, they will get bad behavior and will need to specify an
+// ImageStreem as well, for instance release-initial:installer.
+// We also return whether the stream is explicit or inferred.
+func (config *ReleaseBuildConfiguration) ImageStreamFor(image string) (string, bool) {
+	if config.IsPipelineImage(image) || config.BuildsImage(image) {
+		return PipelineImageStream, true
+	} else {
+		return StableImageStream, false
+	}
+}
+
+// DependencyParts returns the imageStream and tag name from a user-provided
+// reference to an image in the test namespace
+func (config *ReleaseBuildConfiguration) DependencyParts(dependency StepDependency) (string, string, bool) {
+	if !strings.Contains(dependency.Name, ":") {
+		stream, explicit := config.ImageStreamFor(dependency.Name)
+		return stream, dependency.Name, explicit
+	} else {
+		parts := strings.Split(dependency.Name, ":")
+		return parts[0], parts[1], true
 	}
 }
 
@@ -558,7 +702,7 @@ func validateDependencies(fieldRoot string, dependencies []StepDependency) []err
 	for i, dependency := range dependencies {
 		if dependency.Name == "" {
 			errs = append(errs, fmt.Errorf("%s.dependencies[%d].name must be set", fieldRoot, i))
-		} else if strings.Contains(dependency.Name, ":") && len(strings.Split(dependency.Name, ":")) != 2 {
+		} else if numColons := strings.Count(dependency.Name, ":"); !(numColons == 0 || numColons == 1) {
 			errs = append(errs, fmt.Errorf("%s.dependencies[%d].name must take the `tag` or `stream:tag` form, not %q", fieldRoot, i, dependency.Name))
 		}
 		if dependency.Env == "" {

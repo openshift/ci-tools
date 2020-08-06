@@ -186,10 +186,10 @@ func (s *multiStageTestStep) Requires() (ret []api.StepLink) {
 		}
 
 		for _, dependency := range step.Dependencies {
-			imageStream, name := s.parts(dependency)
-			if link, ok := utils.LinkForImage(imageStream, name); ok {
-				ret = append(ret, link)
-			}
+			// we validate that the link will exist at config load time
+			// so we can safely ignore the case where !ok
+			imageStream, name, _ := s.config.DependencyParts(dependency)
+			ret = append(ret, api.LinkForImage(imageStream, name))
 		}
 	}
 	for link := range internalLinks {
@@ -207,17 +207,6 @@ func (s *multiStageTestStep) Requires() (ret []api.StepLink) {
 		ret = append(ret, api.ReleaseImagesLink(api.LatestReleaseName))
 	}
 	return
-}
-
-// parts returns the imageStream and tag name from a user-provided
-// reference to an image in the test namespace
-func (s multiStageTestStep) parts(dependency api.StepDependency) (string, string) {
-	if !strings.Contains(dependency.Name, ":") {
-		return s.imageStreamFor(dependency.Name), dependency.Name
-	} else {
-		parts := strings.Split(dependency.Name, ":")
-		return parts[0], parts[1]
-	}
 }
 
 func (s *multiStageTestStep) Creates() []api.StepLink { return nil }
@@ -344,21 +333,6 @@ func (s *multiStageTestStep) runSteps(
 	return utilerrors.NewAggregate(errs)
 }
 
-// imageStreamFor guesses at the ImageStream that will hold a tag.
-// We use this to decipher the user's intent when they provide a
-// naked tag in configuration; we support such behavior in order to
-// allow users a simpler workflow for the most common cases, like
-// referring to `pipeline:src`. If they refer to an ambiguous image,
-// however, they will get bad behavior and will need to specify an
-// ImageStrem as well, for instance release-initial:installer.
-func (s *multiStageTestStep) imageStreamFor(image string) string {
-	if s.config.IsPipelineImage(image) || s.config.BuildsImage(image) {
-		return api.PipelineImageStream
-	} else {
-		return api.StableImageStream
-	}
-}
-
 func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []coreapi.EnvVar,
 	hasPrevErrs bool) ([]coreapi.Pod, error) {
 	var ret []coreapi.Pod
@@ -373,7 +347,8 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 		if link, ok := step.FromImageTag(); ok {
 			image = fmt.Sprintf("%s:%s", api.PipelineImageStream, link)
 		} else {
-			image = fmt.Sprintf("%s:%s", s.imageStreamFor(image), image)
+			stream, _ := s.config.ImageStreamFor(image)
+			image = fmt.Sprintf("%s:%s", stream, image)
 		}
 		resources, err := resourcesFor(step.Resources)
 		if err != nil {
@@ -425,7 +400,7 @@ func (s *multiStageTestStep) envForDependencies(step api.LiteralTestStep) ([]cor
 	var env []coreapi.EnvVar
 	var errs []error
 	for _, dependency := range step.Dependencies {
-		imageStream, name := s.parts(dependency)
+		imageStream, name, _ := s.config.DependencyParts(dependency)
 		ref, err := utils.ImageDigestFor(s.isClient, s.jobSpec.Namespace, imageStream, name)()
 		if err != nil {
 			errs = append(errs, fmt.Errorf("could not determine image pull spec for image %s on step %s", dependency.Name, step.As))

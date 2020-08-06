@@ -4,6 +4,8 @@ import (
 	"context"
 	"reflect"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestMatches(t *testing.T) {
@@ -237,4 +239,51 @@ func TestReleaseNames(t *testing.T) {
 		}
 	}
 
+}
+
+func TestLinkForImage(t *testing.T) {
+	var testCases = []struct {
+		stream, tag string
+		expected    StepLink
+	}{
+		{
+			stream:   "pipeline",
+			tag:      "src",
+			expected: InternalImageLink(PipelineImageStreamTagReferenceSource),
+		},
+		{
+			stream:   "pipeline",
+			tag:      "rpms",
+			expected: InternalImageLink(PipelineImageStreamTagReferenceRPMs),
+		},
+		{
+			stream:   "stable",
+			tag:      "installer",
+			expected: ReleaseImagesLink(LatestReleaseName),
+		},
+		{
+			stream:   "stable-initial",
+			tag:      "cli",
+			expected: ReleaseImagesLink(InitialReleaseName),
+		},
+		{
+			stream:   "stable-whatever",
+			tag:      "hyperconverged-cluster-operator",
+			expected: ReleaseImagesLink("whatever"),
+		},
+		{
+			stream:   "release",
+			tag:      "latest",
+			expected: ReleasePayloadImageLink(LatestReleaseName),
+		},
+		{
+			stream: "crazy",
+			tag:    "tag",
+		},
+	}
+	for _, testCase := range testCases {
+		if diff := cmp.Diff(LinkForImage(testCase.stream, testCase.tag), testCase.expected, Comparer()); diff != "" {
+			t.Errorf("got incorrect link for %s:%s: %v", testCase.stream, testCase.tag, diff)
+		}
+	}
 }

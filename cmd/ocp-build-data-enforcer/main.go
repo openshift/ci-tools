@@ -127,7 +127,7 @@ func dereferenceConfig(
 		if config.From.Builder[blder].Stream != "" {
 			config.From.Builder[blder].Stream, err = replaceStream(config.From.Builder[blder].Stream, streamMap)
 			if err != nil {
-				errs = append(errs, fmt.Errorf("failed to replace .from.%d.stream: %w", blder, err))
+				errs = append(errs, fmt.Errorf("failed to replace .from[%d].stream: %w", blder, err))
 			}
 		}
 		if config.From.Builder[blder].Member != "" {
@@ -160,7 +160,7 @@ func streamForMember(
 	majorMinor majorMinor,
 	allConfigs map[string]ocpImageConfig,
 ) (string, error) {
-	cfgFile := configFileNamberForMemberString(memberName)
+	cfgFile := configFileNameForMemberString(memberName)
 	cfg, cfgExists := allConfigs[cfgFile]
 	if !cfgExists {
 		return "", fmt.Errorf("no config %s found", cfgFile)
@@ -169,7 +169,7 @@ func streamForMember(
 	return fmt.Sprintf("registry.svc.ci.openshift.org/ocp/%s.%s:%s", majorMinor.major, majorMinor.minor, streamTagName), nil
 }
 
-func configFileNamberForMemberString(memberString string) string {
+func configFileNameForMemberString(memberString string) string {
 	return "images/" + memberString + ".yml"
 }
 

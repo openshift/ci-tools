@@ -21,6 +21,7 @@ import (
 	"k8s.io/test-infra/prow/logrusutil"
 	"k8s.io/test-infra/prow/pjutil"
 	controllerruntime "sigs.k8s.io/controller-runtime"
+	ctrlruntimelog "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
@@ -217,6 +218,7 @@ func main() {
 		LeaderElectionNamespace: opts.leaderElectionNamespace,
 		LeaderElectionID:        fmt.Sprintf("dptp-controller-manager%s", opts.leaderElectionSuffix),
 		DryRunClient:            opts.dryRun,
+		Logger:                  ctrlruntimelog.NullLogger{},
 	})
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to construct manager")
@@ -244,6 +246,7 @@ func main() {
 		MetricsBindAddress: "0",
 		SyncPeriod:         &resyncInterval,
 		DryRunClient:       opts.dryRun,
+		Logger:             ctrlruntimelog.NullLogger{},
 	})
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to construct manager for registry")
@@ -298,7 +301,7 @@ func main() {
 		if _, alreadyExists := allManagers[cluster]; alreadyExists {
 			logrus.Fatalf("attempted duplicate creation of manager for cluster %s", cluster)
 		}
-		buildClusterMgr, err := controllerruntime.NewManager(cfg, controllerruntime.Options{MetricsBindAddress: "0", LeaderElection: false, DryRunClient: opts.dryRun})
+		buildClusterMgr, err := controllerruntime.NewManager(cfg, controllerruntime.Options{MetricsBindAddress: "0", LeaderElection: false, DryRunClient: opts.dryRun, Logger: ctrlruntimelog.NullLogger{}})
 		if err != nil {
 			errs = append(errs, fmt.Errorf("failed to construct manager for cluster %s: %w", cluster, err))
 			continue

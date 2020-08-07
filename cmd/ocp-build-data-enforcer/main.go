@@ -5,11 +5,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
-	"os"
-	"path/filepath"
-	"strings"
-	"sync"
 
 	"github.com/openshift/imagebuilder"
 	dockercmd "github.com/openshift/imagebuilder/dockerfile/command"
@@ -17,59 +12,35 @@ import (
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
-	"sigs.k8s.io/yaml"
 
+	"github.com/openshift/ci-tools/pkg/api/ocpbuilddata"
 	"github.com/openshift/ci-tools/pkg/github"
 )
 
 type options struct {
 	ocpBuildDataRepoDir string
-	majorMinor          majorMinor
+	majorMinor          ocpbuilddata.MajorMinor
 }
 
 func gatherOptions() *options {
 	o := &options{}
 	flag.StringVar(&o.ocpBuildDataRepoDir, "ocp-build-data-repo-dir", "../ocp-build-data", "The directory in which the ocp-build-data reposity is")
-	flag.StringVar(&o.majorMinor.minor, "minor", "6", "The minor version to target")
+	flag.StringVar(&o.majorMinor.Minor, "minor", "6", "The minor version to target")
 	flag.Parse()
 	return o
 }
 func main() {
 	opts := gatherOptions()
-	opts.majorMinor.major = "4"
+	opts.majorMinor.Major = "4"
 
-	configsUnverified, err := gatherAllOCPImageConfigs(opts.ocpBuildDataRepoDir, opts.majorMinor)
+	configs, err := ocpbuilddata.LoadImageConfigs(opts.ocpBuildDataRepoDir, opts.majorMinor)
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to gather all ocp image configs")
-	}
-
-	streamMap, err := readStreamMap(opts.ocpBuildDataRepoDir, opts.majorMinor)
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to read streamMap")
-	}
-
-	groupYAML, err := readGroupYAML(opts.ocpBuildDataRepoDir, opts.majorMinor)
-	if err != nil {
-		logrus.WithError(err).Fatal("Faild to read groupYAML")
-	}
-
-	var errs []error
-	var configs []ocpImageConfig
-	for _, cfg := range configsUnverified {
-		if err := cfg.validate(); err != nil {
-			errs = append(errs, fmt.Errorf("error validating %s: %w", cfg.SourceFileName, err))
-			continue
-		}
-		if err := dereferenceConfig(&cfg, opts.majorMinor, configsUnverified, streamMap, groupYAML); err != nil {
-			errs = append(errs, fmt.Errorf("failed dereferencing config for %s: %w", cfg.SourceFileName, err))
-			continue
-		}
-		configs = append(configs, cfg)
-	}
-
-	// No point in continuing, that will only result in weird to understand follow-up errors
-	if err := utilerrors.NewAggregate(errs); err != nil {
-		for _, err := range err.Errors() {
+		switch err := err.(type) {
+		case utilerrors.Aggregate:
+			for _, err := range err.Errors() {
+				logrus.WithError(err).Error("Encountered error")
+			}
+		default:
 			logrus.WithError(err).Error("Encountered error")
 		}
 		logrus.Fatal("Encountered errors")
@@ -79,7 +50,7 @@ func main() {
 	for idx := range configs {
 		idx := idx
 		errGroup.Go(func() error {
-			processDockerfile(configs[idx], groupYAML.PublicUpstreams)
+			processDockerfile(configs[idx])
 			return nil
 		})
 	}
@@ -87,120 +58,19 @@ func main() {
 		logrus.WithError(err).Fatal("Processing failed")
 	}
 
-	if err := utilerrors.NewAggregate(errs); err != nil {
-		for _, err := range err.Errors() {
-			logrus.WithError(err).Error("Encountered error")
-		}
-		logrus.Fatal("Encountered errors")
-	}
 	logrus.Infof("Processed %d configs", len(configs))
 }
 
-func dereferenceConfig(
-	config *ocpImageConfig,
-	majorMinor majorMinor,
-	allConfigs map[string]ocpImageConfig,
-	streamMap streamMap,
-	groupYAML groupYAML,
-) error {
-	var errs []error
-
-	var err error
-	if config.From.Stream != "" {
-		config.From.Stream, err = replaceStream(config.From.Stream, streamMap)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("failed to replace .from.stream: %w", err))
-		}
-	}
-	if config.From.Member != "" {
-		config.From.Stream, err = streamForMember(config.From.Member, majorMinor, allConfigs)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("failed to replace .from.member: %w", err))
-		}
-		config.From.Member = ""
-	}
-	if config.From.Stream == "" {
-		errs = append(errs, errors.New("failed to find replacement for .from.stream"))
-	}
-
-	for blder := range config.From.Builder {
-		if config.From.Builder[blder].Stream != "" {
-			config.From.Builder[blder].Stream, err = replaceStream(config.From.Builder[blder].Stream, streamMap)
-			if err != nil {
-				errs = append(errs, fmt.Errorf("failed to replace .from[%d].stream: %w", blder, err))
-			}
-		}
-		if config.From.Builder[blder].Member != "" {
-			config.From.Builder[blder].Stream, err = streamForMember(config.From.Builder[blder].Member, majorMinor, allConfigs)
-			if err != nil {
-				errs = append(errs, fmt.Errorf("failed to replace .from.%d.member: %w", blder, err))
-			}
-			config.From.Builder[blder].Member = ""
-		}
-		if config.From.Builder[blder].Stream == "" {
-			errs = append(errs, fmt.Errorf("failed to dereference from.builder.%d", blder))
-		}
-	}
-
-	if config.Content.Source.Alias != "" {
-		if _, hasReplacement := groupYAML.Sources[config.Content.Source.Alias]; !hasReplacement {
-			return fmt.Errorf("groups.yaml has no replacement for alias %s", config.Content.Source.Alias)
-		}
-		// Create a new pointer and set its value to groupYAML.Sources[config.Content.Source.Alias]
-		// rather than directly creating a pointer to the latter.
-		config.Content.Source.Git = &ocpImageConfigSourceGit{}
-		*config.Content.Source.Git = groupYAML.Sources[config.Content.Source.Alias]
-	}
-
-	return utilerrors.NewAggregate(errs)
-}
-
-func streamForMember(
-	memberName string,
-	majorMinor majorMinor,
-	allConfigs map[string]ocpImageConfig,
-) (string, error) {
-	cfgFile := configFileNameForMemberString(memberName)
-	cfg, cfgExists := allConfigs[cfgFile]
-	if !cfgExists {
-		return "", fmt.Errorf("no config %s found", cfgFile)
-	}
-	streamTagName := strings.TrimPrefix(cfg.Name, "openshift/ose-")
-	return fmt.Sprintf("registry.svc.ci.openshift.org/ocp/%s.%s:%s", majorMinor.major, majorMinor.minor, streamTagName), nil
-}
-
-func configFileNameForMemberString(memberString string) string {
-	return "images/" + memberString + ".yml"
-}
-
-func replaceStream(streamName string, streamMap streamMap) (string, error) {
-	replacement, hasReplacement := streamMap[streamName]
-	if !hasReplacement {
-		return "", fmt.Errorf("streamMap has no replacement for stream %s", streamName)
-	}
-	if replacement.UpstreamImage == "" {
-		return "", fmt.Errorf("stream.yml.%s.upstream_image is an empty string", streamName)
-	}
-	return replacement.UpstreamImage, nil
-}
-
-func processDockerfile(config ocpImageConfig, mappings []publicPrivateMapping) {
-	orgRepo := config.orgRepo(mappings)
-	log := logrus.WithField("file", config.SourceFileName).WithField("org/repo", orgRepo)
-	split := strings.Split(orgRepo, "/")
-	if n := len(split); n != 2 {
-		log.Errorf("splitting orgRepo didn't yield 2 but %d results", n)
-		return
-	}
-	if split[0] == "openshift-priv" {
+func processDockerfile(config ocpbuilddata.OCPImageConfig) {
+	log := logrus.WithField("file", config.SourceFileName).WithField("org/repo", config.PublicRepo.String())
+	if config.PublicRepo.Org == "openshift-priv" {
 		log.Trace("Ignoring repo in openshift-priv org")
 		return
 	}
-	org, repo := split[0], split[1]
-	getter := github.FileGetterFactory(org, repo, "release-4.6")
+	getter := github.FileGetterFactory(config.PublicRepo.Org, config.PublicRepo.Repo, "release-4.6")
 
-	log = log.WithField("dockerfile", config.dockerfile())
-	data, err := getter(config.dockerfile())
+	log = log.WithField("dockerfile", config.Dockerfile())
+	data, err := getter(config.Dockerfile())
 	if err != nil {
 		log.WithError(err).Error("Failed to get dockerfile")
 		return
@@ -232,76 +102,7 @@ func processDockerfile(config ocpImageConfig, mappings []publicPrivateMapping) {
 	log.Infof("Diff:\n---\n%s\n---\n", diffStr)
 }
 
-func readStreamMap(ocpBuildDataDir string, majorMinor majorMinor) (streamMap, error) {
-	streamMap := streamMap{}
-	return streamMap, readYAML(filepath.Join(ocpBuildDataDir, "streams.yml"), &streamMap, majorMinor)
-}
-
-func readGroupYAML(ocpBuildDataDir string, majorMinor majorMinor) (groupYAML, error) {
-	groupYAML := &groupYAML{}
-	return *groupYAML, readYAML(filepath.Join(ocpBuildDataDir, "group.yml"), groupYAML, majorMinor)
-}
-
-type majorMinor struct{ major, minor string }
-
-func readYAML(path string, unmarshalTarget interface{}, majorMinor majorMinor) error {
-	data, err := ioutil.ReadFile(path)
-	if err != nil {
-		return fmt.Errorf("failed to read %s: %w", path, err)
-	}
-	data = bytes.ReplaceAll(data, []byte("{MAJOR}"), []byte(majorMinor.major))
-	data = bytes.ReplaceAll(data, []byte("{MINOR}"), []byte(majorMinor.minor))
-	if err := yaml.Unmarshal(data, unmarshalTarget); err != nil {
-		return fmt.Errorf("unmarshaling failed: %w", err)
-	}
-	return nil
-}
-
-func gatherAllOCPImageConfigs(ocpBuildDataDir string, majorMinor majorMinor) (map[string]ocpImageConfig, error) {
-	result := map[string]ocpImageConfig{}
-	resultLock := &sync.Mutex{}
-	errGroup := &errgroup.Group{}
-
-	path := filepath.Join(ocpBuildDataDir, "images")
-	if err := filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if info.IsDir() {
-			return nil
-		}
-		errGroup.Go(func() error {
-			config := &ocpImageConfig{}
-			if err := readYAML(path, config, majorMinor); err != nil {
-				return err
-			}
-
-			// Distgit only repositories
-			if config.Content == nil {
-				return nil
-			}
-
-			config.SourceFileName = strings.TrimPrefix(path, ocpBuildDataDir+"/")
-			resultLock.Lock()
-			result[config.SourceFileName] = *config
-			resultLock.Unlock()
-
-			return nil
-		})
-
-		return nil
-	}); err != nil {
-		return nil, fmt.Errorf("failed to walk")
-	}
-
-	if err := errGroup.Wait(); err != nil {
-		return nil, fmt.Errorf("failed to read all files: %w", err)
-	}
-
-	return result, nil
-}
-
-func updateDockerfile(dockerfile []byte, config ocpImageConfig) ([]byte, bool, error) {
+func updateDockerfile(dockerfile []byte, config ocpbuilddata.OCPImageConfig) ([]byte, bool, error) {
 	rootNode, err := imagebuilder.ParseDockerfile(bytes.NewBuffer(dockerfile))
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to parse Dockerfile: %w", err)
@@ -312,7 +113,7 @@ func updateDockerfile(dockerfile []byte, config ocpImageConfig) ([]byte, bool, e
 		return nil, false, fmt.Errorf("failed to construct imagebuilder stages: %w", err)
 	}
 
-	cfgStages, err := config.stages()
+	cfgStages, err := config.Stages()
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to get stages: %w", err)
 	}

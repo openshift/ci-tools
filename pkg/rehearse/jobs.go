@@ -892,11 +892,15 @@ func removeConfigResolverFlags(args []string) ([]string, api.Metadata) {
 
 		for _, ignored := range []string{"resolver-address", "org", "repo", "branch", "variant"} {
 			for _, form := range []string{"-%s=", "--%s=", "-%s", "--%s"} {
-				// TrimPrefix returns unchanged string when it does not match the prefix,
-				// so if it returns anything else, we found an ignored param.
-				if value := strings.TrimPrefix(current, fmt.Sprintf(form, ignored)); value != current {
-					// If this is not a --%s= form, consume next item, if possible
-					if !strings.HasSuffix(form, "=") && len(args) > 0 {
+				containsValue := strings.HasSuffix(form, "=")
+				flag := fmt.Sprintf(form, ignored)
+				if (containsValue && strings.HasPrefix(current, flag)) || (!containsValue && current == flag) {
+					var value string
+					if containsValue {
+						// If this is a --%s= form, grab the value from the arg itself
+						value = strings.TrimPrefix(current, flag)
+					} else if len(args) > 0 {
+						// If this is not a --%s= form, consume next item, if possible
 						value = consumeOne()
 					}
 					// Fill the config.Info with the value

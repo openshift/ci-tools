@@ -1078,6 +1078,11 @@ func TestRemoveConfigResolverFlags(t *testing.T) {
 		input:        []string{"--artifact-dir=$(ARTIFACTS)", "--resolver-address=http://ci-operator-resolver", "--org", "openshift", "--target=target", "--repo", "origin", "--branch", "master", "--variant=v2"},
 		expectedArgs: []string{"--artifact-dir=$(ARTIFACTS)", "--target=target"},
 		expectedInfo: api.Metadata{Org: "openshift", Repo: "origin", Branch: "master", Variant: "v2"},
+	}, {
+		description:  "reporting flags",
+		input:        []string{"--report-password-file=/etc/report/password.txt", "--report-username=ci", "--artifact-dir=$(ARTIFACTS)", "--resolver-address=http://ci-operator-resolver", "--org", "openshift", "--target=target", "--repo", "origin", "--branch", "master", "--variant=v2"},
+		expectedArgs: []string{"--report-password-file=/etc/report/password.txt", "--report-username=ci", "--artifact-dir=$(ARTIFACTS)", "--target=target"},
+		expectedInfo: api.Metadata{Org: "openshift", Repo: "origin", Branch: "master", Variant: "v2"},
 	}}
 	for _, testCase := range testCases {
 		t.Run(testCase.description, func(t *testing.T) {

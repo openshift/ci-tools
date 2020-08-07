@@ -2,6 +2,8 @@ package main
 
 import (
 	"errors"
+	"fmt"
+	"path"
 	"reflect"
 	"testing"
 
@@ -167,5 +169,281 @@ func TestCheckPrerequisites(t *testing.T) {
 				t.Fatalf(cmp.Diff(actualErr.Error(), tc.expectedError.Error()))
 			}
 		})
+	}
+}
+
+func TestMergeAndPushToRemote(t *testing.T) {
+	publicOrg, publicRepo := "openshift", "test"
+	privateOrg, privateRepo := "openshift-priv", "test"
+
+	localgit, gc, err := localgit.NewV2()
+	if err != nil {
+		t.Fatalf("couldn't create localgit: %v", err)
+	}
+
+	defer func() {
+		if err := gc.Clean(); err != nil {
+			t.Fatalf("couldn't clean git cache: %v", err)
+		}
+	}()
+
+	testCases := []struct {
+		id             string
+		branch         string
+		remoteResolver func() (string, error)
+		privateGitRepo func() error
+		publicGitRepo  func() error
+		errExpectedMsg string
+	}{
+		{
+			id:     "wrong branch, error expected",
+			branch: "whatever",
+			remoteResolver: func() (string, error) {
+				return path.Join(localgit.Dir, privateOrg, privateRepo), nil
+			},
+			privateGitRepo: func() error {
+				if err := localgit.MakeFakeRepo(privateOrg, privateRepo); err != nil {
+					return fmt.Errorf("couldn't create fake repo: %v", err)
+				}
+				return nil
+			},
+			publicGitRepo: func() error {
+				if err := localgit.MakeFakeRepo(publicOrg, publicRepo); err != nil {
+					return fmt.Errorf("couldn't create fake repo: %v", err)
+				}
+				return nil
+			},
+			errExpectedMsg: "couldn't checkout to branch whatever: error checking out \"whatever\": exit status 1 error: pathspec 'whatever' did not match any file(s) known to git.\n",
+		},
+		{
+			id:     "wrong remote resolver, error expected",
+			branch: "refs/heads/master",
+			remoteResolver: func() (string, error) {
+				return path.Join(localgit.Dir, "wrongOrg", "wrongRepo"), nil
+			},
+			privateGitRepo: func() error {
+				if err := localgit.MakeFakeRepo(privateOrg, privateRepo); err != nil {
+					return fmt.Errorf("couldn't create fake repo: %v", err)
+				}
+				return nil
+			},
+			publicGitRepo: func() error {
+				if err := localgit.MakeFakeRepo(publicOrg, publicRepo); err != nil {
+					return fmt.Errorf("couldn't create fake repo: %v", err)
+				}
+				return nil
+			},
+			errExpectedMsg: fmt.Sprintf(`couldn't fetch from the downstream repository: error fetching refs/heads/master from %s/wrongOrg/wrongRepo: exit status 128 fatal: '%s/wrongOrg/wrongRepo' does not appear to be a git repository
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+`, localgit.Dir, localgit.Dir),
+		},
+		{
+			id:     "nothing to merge, no error expected",
+			branch: "refs/heads/master",
+			remoteResolver: func() (string, error) {
+				return path.Join(localgit.Dir, privateOrg, privateRepo), nil
+			},
+			privateGitRepo: func() error {
+				if err := localgit.MakeFakeRepo(privateOrg, privateRepo); err != nil {
+					return fmt.Errorf("couldn't create fake repo: %v", err)
+				}
+				return nil
+			},
+			publicGitRepo: func() error {
+				if err := localgit.MakeFakeRepo(publicOrg, publicRepo); err != nil {
+					return fmt.Errorf("couldn't create fake repo: %v", err)
+				}
+				return nil
+			},
+		},
+		{
+			id:     "one commit to publicize, no error expected",
+			branch: "refs/heads/master",
+			remoteResolver: func() (string, error) {
+				return path.Join(localgit.Dir, privateOrg, privateRepo), nil
+			},
+			privateGitRepo: func() error {
+				if err := localgit.MakeFakeRepo(privateOrg, privateRepo); err != nil {
+					return fmt.Errorf("couldn't create fake repo: %v", err)
+				}
+
+				filesToCommit := map[string][]byte{"test-file": []byte("TEST")}
+				if err := localgit.AddCommit(privateOrg, privateRepo, filesToCommit); err != nil {
+					return fmt.Errorf("couldn't add commit: %v", err)
+				}
+				return nil
+			},
+			publicGitRepo: func() error {
+				if err := localgit.MakeFakeRepo(publicOrg, publicRepo); err != nil {
+					return fmt.Errorf("couldn't create fake repo: %v", err)
+				}
+				return nil
+			},
+		},
+		{
+			id:     "multiple commits to publicize, no error expected",
+			branch: "refs/heads/master",
+			remoteResolver: func() (string, error) {
+				return path.Join(localgit.Dir, privateOrg, privateRepo), nil
+			},
+			privateGitRepo: func() error {
+				if err := localgit.MakeFakeRepo(privateOrg, privateRepo); err != nil {
+					return fmt.Errorf("couldn't create fake repo: %v", err)
+				}
+
+				filesToCommit := map[string][]byte{
+					"test-file":  []byte("TEST"),
+					"test-file2": []byte("TEST"),
+					"test-file3": []byte("TEST"),
+				}
+				if err := localgit.AddCommit(privateOrg, privateRepo, filesToCommit); err != nil {
+					return fmt.Errorf("couldn't add commit: %v", err)
+				}
+				return nil
+			},
+			publicGitRepo: func() error {
+				if err := localgit.MakeFakeRepo(publicOrg, publicRepo); err != nil {
+					return fmt.Errorf("couldn't create fake repo: %v", err)
+				}
+				return nil
+			},
+		},
+		{
+			id:     "different histories without conflict, no error expected",
+			branch: "refs/heads/master",
+			remoteResolver: func() (string, error) {
+				return path.Join(localgit.Dir, privateOrg, privateRepo), nil
+			},
+			privateGitRepo: func() error {
+				if err := localgit.MakeFakeRepo(privateOrg, privateRepo); err != nil {
+					return fmt.Errorf("couldn't create fake repo: %v", err)
+				}
+
+				filesToCommit := map[string][]byte{
+					"test-file":  []byte("TEST"),
+					"test-file2": []byte("TEST"),
+					"test-file3": []byte("TEST"),
+				}
+				if err := localgit.AddCommit(privateOrg, privateRepo, filesToCommit); err != nil {
+					return fmt.Errorf("couldn't add commit: %v", err)
+				}
+				return nil
+			},
+			publicGitRepo: func() error {
+				if err := localgit.MakeFakeRepo(publicOrg, publicRepo); err != nil {
+					return fmt.Errorf("couldn't create fake repo: %v", err)
+				}
+
+				filesToCommit := map[string][]byte{
+					"test-file4": []byte("TEST"),
+					"test-file5": []byte("TEST"),
+					"test-file6": []byte("TEST"),
+				}
+				if err := localgit.AddCommit(publicOrg, publicRepo, filesToCommit); err != nil {
+					return fmt.Errorf("couldn't add commit: %v", err)
+				}
+				return nil
+			},
+		},
+		{
+			id:     "one commit to publicize with conflict, error expected",
+			branch: "refs/heads/master",
+			remoteResolver: func() (string, error) {
+				return path.Join(localgit.Dir, privateOrg, privateRepo), nil
+			},
+			privateGitRepo: func() error {
+				if err := localgit.MakeFakeRepo(privateOrg, privateRepo); err != nil {
+					return fmt.Errorf("couldn't create fake repo: %v", err)
+				}
+
+				filesToCommit := map[string][]byte{"test-file": []byte("CONFLICT")}
+				if err := localgit.AddCommit(privateOrg, privateRepo, filesToCommit); err != nil {
+					return fmt.Errorf("couldn't add commit: %v", err)
+				}
+				return nil
+			},
+			publicGitRepo: func() error {
+				if err := localgit.MakeFakeRepo(publicOrg, publicRepo); err != nil {
+					return fmt.Errorf("couldn't create fake repo: %v", err)
+				}
+
+				filesToCommit := map[string][]byte{"test-file": []byte("TEST")}
+				if err := localgit.AddCommit(publicOrg, publicRepo, filesToCommit); err != nil {
+					return fmt.Errorf("couldn't add commit: %v", err)
+				}
+				return nil
+			},
+			errExpectedMsg: "couldn't merge openshift/test, possible because of a merge conflict",
+		},
+		{
+			id:     "multiple commits with one conflict, error expected",
+			branch: "refs/heads/master",
+			remoteResolver: func() (string, error) {
+				return path.Join(localgit.Dir, privateOrg, privateRepo), nil
+			},
+			privateGitRepo: func() error {
+				if err := localgit.MakeFakeRepo(privateOrg, privateRepo); err != nil {
+					return fmt.Errorf("couldn't create fake repo: %v", err)
+				}
+
+				filesToCommit := map[string][]byte{
+					"test-file":  []byte("CONFLICT"),
+					"test-file2": []byte("TEST"),
+					"test-file3": []byte("TEST"),
+				}
+				if err := localgit.AddCommit(privateOrg, privateRepo, filesToCommit); err != nil {
+					return fmt.Errorf("couldn't add commit: %v", err)
+				}
+				return nil
+			},
+			publicGitRepo: func() error {
+				if err := localgit.MakeFakeRepo(publicOrg, publicRepo); err != nil {
+					return fmt.Errorf("couldn't create fake repo: %v", err)
+				}
+
+				filesToCommit := map[string][]byte{
+					"test-file":  []byte("TEST"),
+					"test-file5": []byte("TEST"),
+					"test-file6": []byte("TEST"),
+				}
+				if err := localgit.AddCommit(publicOrg, publicRepo, filesToCommit); err != nil {
+					return fmt.Errorf("couldn't add commit: %v", err)
+				}
+				return nil
+			},
+			errExpectedMsg: "couldn't merge openshift/test, possible because of a merge conflict",
+		},
+	}
+
+	s := &server{
+		gc:       gc,
+		gitName:  "Foo Bar",
+		gitEmail: "foobar@redhat.com",
+	}
+
+	for _, tc := range testCases {
+		if err := tc.privateGitRepo(); err != nil {
+			t.Fatalf("test id: %s: %v", tc.id, err)
+		}
+
+		if err := tc.publicGitRepo(); err != nil {
+			t.Fatalf("test id: %s: %v", tc.id, err)
+		}
+
+		err := s.mergeAndPushToRemote(publicOrg, publicRepo, tc.remoteResolver, tc.branch, "merge message", false)
+		if err != nil && tc.errExpectedMsg == "" {
+			t.Fatalf("test id: %s\nerror not expected: %v", tc.id, err)
+		}
+
+		if err != nil && !reflect.DeepEqual(err.Error(), tc.errExpectedMsg) {
+			t.Fatal(cmp.Diff(err.Error(), tc.errExpectedMsg))
+		}
+
+		if err := localgit.Clean(); err != nil {
+			t.Fatalf("couldn't clean temporary folders: %v", err)
+		}
 	}
 }

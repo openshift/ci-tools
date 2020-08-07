@@ -14,6 +14,7 @@ import (
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
 	"github.com/openshift/ci-tools/pkg/controller/secretsyncer/config"
 )
 
@@ -31,27 +32,37 @@ func TestMirrorSecret(t *testing.T) {
 		Data:       map[string][]byte{"test_key": []byte("test_value")},
 	}
 	for _, tc := range []struct {
-		id                    string
+		name                  string
 		config                config.Configuration
 		src                   corev1.Secret
+		targetFilter          filter
 		shouldCopy, shouldErr bool
 	}{
 		{
-			id:  "empty src is ignored",
-			src: corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: "test-ns", Name: "src"}},
+			name: "empty src is ignored",
+			src:  corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: "test-ns", Name: "src"}},
 		},
 		{
-			id:         "normal secret is copied",
+			name:       "normal secret is copied",
 			src:        defaultSecret,
 			shouldCopy: true,
 		},
 		{
-			id:        "error is reported",
+			name:         "filter is respected",
+			src:          defaultSecret,
+			targetFilter: func(_ string, _ types.NamespacedName) bool { return false },
+			shouldCopy:   false,
+		},
+		{
+			name:      "error is reported",
 			src:       defaultSecret,
 			shouldErr: true,
 		},
 	} {
-		t.Run(tc.id, func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.targetFilter == nil {
+				tc.targetFilter = func(_ string, _ types.NamespacedName) bool { return true }
+			}
 			targetClient := &potentiallyCreateErroringClient{Client: fakectrlruntimeclient.NewFakeClient()}
 			if tc.shouldErr {
 				targetClient.err = errors.New("injected error")
@@ -64,6 +75,7 @@ func TestMirrorSecret(t *testing.T) {
 				config:                 ca.Config,
 				referenceClusterClient: fakectrlruntimeclient.NewFakeClient(&tc.src),
 				clients:                map[string]ctrlruntimeclient.Client{"some-cluster": targetClient},
+				targetFilter:           tc.targetFilter,
 			}
 			if err := r.reconcile(logrus.NewEntry(logrus.New()), req); err != nil != tc.shouldErr {
 				t.Fatalf("shouldErr is %t, got %v", tc.shouldErr, err)
@@ -86,4 +98,35 @@ func (pcec *potentiallyCreateErroringClient) Create(ctx context.Context, obj run
 		return pcec.err
 	}
 	return pcec.Client.Create(ctx, obj, opts...)
+}
+
+func TestFilter(t *testing.T) {
+	const cluster = "cluster"
+	request := types.NamespacedName{Namespace: "namespace", Name: "Name"}
+	testCases := []struct {
+		name string
+		cfg  secretbootstrap.Config
+
+		expectedResult bool
+	}{
+		{
+			name: "forbidden",
+			cfg: secretbootstrap.Config{{To: []secretbootstrap.SecretContext{
+				{Cluster: cluster, Namespace: request.Namespace, Name: request.Name},
+			}}},
+			expectedResult: false,
+		},
+		{
+			name:           "allowed",
+			expectedResult: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if result := filterFromConfig(tc.cfg)(cluster, request); result != tc.expectedResult {
+				t.Errorf("expected result %t, got result %t", tc.expectedResult, result)
+			}
+		})
+	}
 }

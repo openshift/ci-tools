@@ -20,6 +20,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
+	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
 	"github.com/openshift/ci-tools/pkg/controller/secretsyncer/config"
 	controllerutil "github.com/openshift/ci-tools/pkg/controller/util"
 )
@@ -33,13 +34,16 @@ func AddToManager(mgr manager.Manager,
 	referenceCluster manager.Manager,
 	otherBuildClusters map[string]manager.Manager,
 	config config.Getter,
+	secretbootstrapConfig secretbootstrap.Config,
 ) error {
+
 	r := &reconciler{
 		ctx:                    context.Background(),
 		log:                    logrus.WithField("controller", ControllerName),
 		config:                 config,
 		referenceClusterClient: referenceCluster.GetClient(),
 		clients:                map[string]ctrlruntimeclient.Client{referenceClusterName: referenceCluster.GetClient()},
+		targetFilter:           filterFromConfig(secretbootstrapConfig),
 	}
 	c, err := controller.New(ControllerName, mgr, controller.Options{
 		Reconciler:              r,
@@ -78,12 +82,15 @@ func AddToManager(mgr manager.Manager,
 	return nil
 }
 
+type filter func(cluster string, target types.NamespacedName) bool
+
 type reconciler struct {
 	ctx                    context.Context
 	log                    *logrus.Entry
 	config                 config.Getter
 	referenceClusterClient ctrlruntimeclient.Client
 	clients                map[string]ctrlruntimeclient.Client
+	targetFilter           filter
 }
 
 func (r *reconciler) Reconcile(request reconcile.Request) (reconcile.Result, error) {
@@ -129,6 +136,13 @@ func (r *reconciler) reconcile(log *logrus.Entry, encodedRequest reconcile.Reque
 	var mirrorErrors []error
 	for _, mirrorConfig := range r.config().Secrets {
 		if mirrorConfig.From.Namespace != sourceSecretName.Namespace || mirrorConfig.From.Name != sourceSecretName.Name {
+			continue
+		}
+
+		// Verify this doesn't target anything managed by ci-secret-boostrap
+		if allowed := r.targetFilter(cluster, types.NamespacedName{Namespace: mirrorConfig.To.Namespace, Name: mirrorConfig.To.Name}); !allowed {
+			// Log a big fat error, but don't return it as that would result in retrying.
+			log.WithField("target", mirrorConfig.String()).Error("Ignoring secret, its target is managed by ci-secret-boostrap")
 			continue
 		}
 		// TODO: Ideally we would would create one reconcile.Request per target. This here means
@@ -202,4 +216,16 @@ func decodeRequest(req reconcile.Request) (string, types.NamespacedName, error) 
 		return "", types.NamespacedName{}, fmt.Errorf("didn't get two but %d segments when trying to extract cluster and namespace", n)
 	}
 	return clusterAndNamespace[0], types.NamespacedName{Namespace: clusterAndNamespace[1], Name: req.Name}, nil
+}
+
+func filterFromConfig(cfg secretbootstrap.Config) filter {
+	forbidden := sets.String{}
+	for _, cfg := range cfg {
+		for _, target := range cfg.To {
+			forbidden.Insert(fmt.Sprintf("%s/%s/%s", target.Cluster, target.Namespace, target.Name))
+		}
+	}
+	return func(cluster string, secretName types.NamespacedName) bool {
+		return !forbidden.Has(fmt.Sprintf("%s/%s/%s", cluster, secretName.Namespace, secretName.Name))
+	}
 }

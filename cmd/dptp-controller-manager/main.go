@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"strings"
 	"time"
 
@@ -20,7 +21,9 @@ import (
 	"k8s.io/test-infra/prow/logrusutil"
 	"k8s.io/test-infra/prow/pjutil"
 	controllerruntime "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/yaml"
 
+	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
 	"github.com/openshift/ci-tools/pkg/controller/promotionreconciler"
 	"github.com/openshift/ci-tools/pkg/controller/secretsyncer"
 	testimagesdistributor "github.com/openshift/ci-tools/pkg/controller/test-images-distributor"
@@ -70,7 +73,8 @@ type testImagesDistributorOptions struct {
 }
 
 type secretSyncerConfigOptions struct {
-	configFile string
+	configFile               string
+	secretBoostrapConfigFile string
 }
 
 func newOpts() (*options, error) {
@@ -99,6 +103,7 @@ func newOpts() (*options, error) {
 	flag.Var(&opts.testImagesDistributorOptions.additionalImageStreamsRaw, "testImagesDistributorOptions.additional-image-stream", "An imagestream that will be distributed even if no test explicitly references it. It must be in namespace/name format (e.G `ci/clonerefs`). Can be passed multiple times.")
 	flag.Var(&opts.testImagesDistributorOptions.additionalImageStreamNamespacesRaw, "testImagesDistributorOptions.additional-image-stream-namespace", "A namespace in which imagestreams will be distributed even if no test explicitly references them (e.G `ci`). Can be passed multiple times.")
 	flag.StringVar(&opts.secretSyncerConfigOptions.configFile, "secretSyncerConfigOptions.config", "", "The config file for the secret syncer controller")
+	flag.StringVar(&opts.secretSyncerConfigOptions.secretBoostrapConfigFile, "secretSyncerConfigOptions.secretBoostrapConfigFile", "", "The config file for ci-secret-boostrap")
 	flag.BoolVar(&opts.dryRun, "dry-run", true, "Whether to run the controller-manager with dry-run")
 	flag.Parse()
 
@@ -159,8 +164,13 @@ func newOpts() (*options, error) {
 		errs = append(errs, fmt.Errorf("--step-config-path is required when the %s controller is enabled", testimagesdistributor.ControllerName))
 	}
 
-	if opts.enabledControllersSet.Has(secretsyncer.ControllerName) && opts.secretSyncerConfigOptions.configFile == "" {
-		errs = append(errs, fmt.Errorf("--secretSyncerConfigOptions.config is required when the %s controller is enabled", secretsyncer.ControllerName))
+	if opts.enabledControllersSet.Has(secretsyncer.ControllerName) {
+		if opts.secretSyncerConfigOptions.configFile == "" {
+			errs = append(errs, fmt.Errorf("--secretSyncerConfigOptions.config is required when the %s controller is enabled", secretsyncer.ControllerName))
+		}
+		if opts.secretSyncerConfigOptions.secretBoostrapConfigFile == "" {
+			errs = append(errs, fmt.Errorf("--secretSyncerConfigOptions.secretBoostrapConfigFile is required when the %s controller is enabled", secretsyncer.ControllerName))
+		}
 	}
 
 	if err := opts.GitHubOptions.Validate(opts.dryRun); err != nil {
@@ -340,7 +350,15 @@ func main() {
 		if err := secretSyncerConfigAgent.Start(opts.secretSyncerConfigOptions.configFile); err != nil {
 			logrus.WithError(err).Fatal("failed to start secretSyncerConfigAgent")
 		}
-		if err := secretsyncer.AddToManager(mgr, allManagers[apiCIContextName], allClustersExceptAPICI, secretSyncerConfigAgent.Config); err != nil {
+		rawConfig, err := ioutil.ReadFile(opts.secretSyncerConfigOptions.secretBoostrapConfigFile)
+		if err != nil {
+			logrus.WithError(err).Fatal("Failed to read ci-secret-boostrap config")
+		}
+		secretBootstrapConfig := secretbootstrap.Config{}
+		if err := yaml.Unmarshal(rawConfig, &secretBootstrapConfig); err != nil {
+			logrus.WithError(err).Fatal("Failed to unmarshal ci-secret-boostrap config")
+		}
+		if err := secretsyncer.AddToManager(mgr, allManagers[apiCIContextName], allClustersExceptAPICI, secretSyncerConfigAgent.Config, secretBootstrapConfig); err != nil {
 			logrus.WithError(err).Fatal("failed to add secret syncer controller")
 		}
 	}

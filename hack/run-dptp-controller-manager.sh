@@ -37,4 +37,5 @@ go build  -v -o /tmp/dptp-cm ./cmd/dptp-controller-manager
   --kubeconfig=$kubeconfig \
   --testImagesDistributorOptions.additional-image-stream-tag=ci/clonerefs:latest \
   --secretSyncerConfigOptions.config="$(go env GOPATH)/src/github.com/openshift/release/core-services/secret-mirroring/_mapping.yaml" \
+  --secretSyncerConfigOptions.secretBoostrapConfigFile="$(go env GOPATH)/src/github.com/openshift/release/core-services/ci-secret-bootstrap/_config.yaml" \
   --dry-run=true

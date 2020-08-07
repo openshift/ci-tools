@@ -346,6 +346,13 @@ func main() {
 	}
 
 	if opts.enabledControllersSet.Has(secretsyncer.ControllerName) {
+		targetClusters := map[string]controllerruntime.Manager{}
+		for cluster, manager := range allManagers {
+			if cluster == apiCIContextName {
+				continue
+			}
+			targetClusters[cluster] = manager
+		}
 		secretSyncerConfigAgent := &secretsyncerconfig.Agent{}
 		if err := secretSyncerConfigAgent.Start(opts.secretSyncerConfigOptions.configFile); err != nil {
 			logrus.WithError(err).Fatal("failed to start secretSyncerConfigAgent")
@@ -358,7 +365,7 @@ func main() {
 		if err := yaml.Unmarshal(rawConfig, &secretBootstrapConfig); err != nil {
 			logrus.WithError(err).Fatal("Failed to unmarshal ci-secret-boostrap config")
 		}
-		if err := secretsyncer.AddToManager(mgr, allManagers[apiCIContextName], allClustersExceptAPICI, secretSyncerConfigAgent.Config, secretBootstrapConfig); err != nil {
+		if err := secretsyncer.AddToManager(mgr, allManagers[apiCIContextName], targetClusters, secretSyncerConfigAgent.Config, secretBootstrapConfig); err != nil {
 			logrus.WithError(err).Fatal("failed to add secret syncer controller")
 		}
 	}

@@ -132,10 +132,15 @@ const htmlPageEnd = `
 `
 
 const clonesTemplateConstructor = `
-{{if .NewCloneID }}
+{{if .NewCloneIDs }}
 	<div class="alert alert-success alert-dismissible" id="success-banner">
 	<a href="#" class="close" data-dismiss="alert" aria-label="close">&times;</a>
-	<strong>Success!</strong> Clone created - <a href="/clones?ID={{ .NewCloneID }}" >Bug#{{ .NewCloneID }}</a>.
+	<strong>Success!</strong> Clone created - 
+	{{range $index, $bug := .NewCloneIDs }}
+		{{ if $index}}, {{end}}
+		<a href="/clones?ID={{ $bug }}" >Bug#{{ $bug }}</a>
+	{{end}}
+	.
 	</div>
 {{ end }}
 {{if .MissingReleases }}
@@ -169,7 +174,15 @@ const clonesTemplateConstructor = `
 		<tbody>
 		{{ if .Clones }}
 			{{ range $clone := .Clones }}
-				<tr {{if eq $clone.ID $.Bug.ID }}class="table-active"{{ end }}>
+				<tr class=" {{if gt (len $clone.TargetRelease) 0 }} 
+								{{if eq (index $clone.TargetRelease 0) "---"}}
+									table-danger 
+								{{else}}
+									{{if eq $clone.ID $.Bug.ID }}table-active{{ end }}
+								{{end}}
+							{{else}}
+								{{if eq $clone.ID $.Bug.ID }}table-active{{ end }}
+							{{ end }}">
 					<td style="vertical-align: middle;">
 					{{ if $clone.TargetRelease }} 
 						{{ index $clone.TargetRelease 0 }}
@@ -281,7 +294,7 @@ type ClonesTemplateData struct {
 	Parent          *bugzilla.Bug          // Root bug if it is a a bug, otherwise holds itself
 	PRs             []bugzilla.ExternalBug // Details of linked PR
 	CloneTargets    []string
-	NewCloneID      int
+	NewCloneIDs     []string
 	MissingReleases []string
 }
 
@@ -299,6 +312,19 @@ func writePage(w http.ResponseWriter, title string, body *template.Template, dat
 		return err
 	}
 	return nil
+}
+
+func sortByTargetRelease(clones []*bugzilla.Bug) {
+	sort.SliceStable(clones, func(i, j int) bool {
+		if len(clones[i].TargetRelease) == 0 && len(clones[j].TargetRelease) == 0 {
+			return false
+		} else if len(clones[i].TargetRelease) == 0 {
+			return true
+		} else if len(clones[j].TargetRelease) == 0 {
+			return false
+		}
+		return clones[i].TargetRelease[0] < clones[j].TargetRelease[0]
+	})
 }
 
 // GetLandingHandler will return a simple bug search page
@@ -363,7 +389,11 @@ func GetBugHandler(client bugzilla.Client, m *metrics.Metrics) http.HandlerFunc 
 	}
 }
 
-func getMajorRelease(release string) (string, error) {
+func isTargetReleaseSet(bug *bugzilla.Bug) bool {
+	return len(bug.TargetRelease) > 0 && bug.TargetRelease[0] != "---"
+}
+
+func getMajorMinorRelease(release string) (string, error) {
 	periodIndex := strings.LastIndex(release, ".")
 	if periodIndex == -1 {
 		return "", fmt.Errorf("invalid release - must be of the form x.y.z")
@@ -371,7 +401,7 @@ func getMajorRelease(release string) (string, error) {
 	return release[:periodIndex], nil
 }
 
-func getClonesTemplateData(bugID int, client bugzilla.Client, allTargetVersions sets.String) (*ClonesTemplateData, int, error) {
+func getClonesTemplateData(bugID int, client bugzilla.Client, allTargetVersions []string) (*ClonesTemplateData, int, error) {
 	bug, err := client.GetBug(bugID)
 	if err != nil {
 		return nil, http.StatusNotFound, fmt.Errorf("Bug#%d not found: %w", bugID, err)
@@ -385,7 +415,7 @@ func getClonesTemplateData(bugID int, client bugzilla.Client, allTargetVersions 
 	}
 	root := clones[0]
 	// Target versions would be used to populate the CreateClone dropdown
-	targetVersions := sets.NewString(allTargetVersions.List()...)
+	targetVersions := sets.NewString(allTargetVersions...)
 	// Remove target versions of the original bug
 	targetVersions.Delete(bug.TargetRelease...)
 	g := new(errgroup.Group)
@@ -398,15 +428,16 @@ func getClonesTemplateData(bugID int, client bugzilla.Client, allTargetVersions 
 	clonedReleases := sets.NewString()
 	for _, clone := range clones {
 		clone := clone
-		if len(clone.TargetRelease) > 0 {
-			majorRelease, err := getMajorRelease(clone.TargetRelease[0])
+		if isTargetReleaseSet(clone) {
+			majorMinorRelease, err := getMajorMinorRelease(clone.TargetRelease[0])
 			if err != nil {
 				return nil, http.StatusInternalServerError, err
 			}
-			clonedReleases.Insert(majorRelease)
+			clonedReleases.Insert(majorMinorRelease)
+			// Remove target releases which already have clones
+			targetVersions.Delete(majorMinorRelease + ".z").Delete(majorMinorRelease + ".0")
 		}
-		// Remove target releases which already have clones
-		targetVersions.Delete(clone.TargetRelease...)
+
 		g.Go(func() error {
 			clonePRs, err := client.GetExternalBugPRsOnBug(clone.ID)
 			if err != nil {
@@ -419,35 +450,23 @@ func getClonesTemplateData(bugID int, client bugzilla.Client, allTargetVersions 
 	if err := g.Wait(); err != nil {
 		return nil, http.StatusInternalServerError, err
 	}
-	sort.SliceStable(clones, func(i, j int) bool {
-		if clones[i].TargetRelease == nil && clones[j].TargetRelease == nil {
-			return false
-		} else if clones[i].TargetRelease == nil {
-			return true
-		} else if clones[j].TargetRelease == nil {
-			return false
-		}
-		return clones[i].TargetRelease[0] < clones[j].TargetRelease[0]
-	})
-	sortedTargets := allTargetVersions.List()
-	sort.SliceStable(sortedTargets, func(i, j int) bool {
-		return sortedTargets[i] < sortedTargets[j]
-	})
+	sortByTargetRelease(clones)
+
 	firstClone := ""
 	lastClone := ""
 	// find the major release of the clone targeting the first release
 	for _, clone := range clones {
 		var err error
-		if len(clone.TargetRelease) > 0 {
-			firstClone, err = getMajorRelease(clone.TargetRelease[0])
+		if isTargetReleaseSet(clone) {
+			firstClone, err = getMajorMinorRelease(clone.TargetRelease[0])
 			if err != nil {
 				return nil, http.StatusInternalServerError, err
 			}
 			break
 		}
 	}
-	if len(clones[len(clones)-1].TargetRelease) > 0 {
-		lastClone, err = getMajorRelease(clones[len(clones)-1].TargetRelease[0])
+	if isTargetReleaseSet(clones[len(clones)-1]) {
+		lastClone, err = getMajorMinorRelease(clones[len(clones)-1].TargetRelease[0])
 		if err != nil {
 			return nil, http.StatusInternalServerError, err
 		}
@@ -458,28 +477,34 @@ func getClonesTemplateData(bugID int, client bugzilla.Client, allTargetVersions 
 	lastCloneIndex := -1
 	firstCloneNotFound := true
 	lastCloneNotFound := true
-	for i, release := range sortedTargets {
-		majRel, err := getMajorRelease(release)
+	for i, release := range allTargetVersions {
+		majorMinorRelease, err := getMajorMinorRelease(release)
 		if err != nil {
 			return nil, http.StatusInternalServerError, err
 		}
-		if majRel == firstClone && firstCloneNotFound {
+		if majorMinorRelease == firstClone && firstCloneNotFound {
 			firstCloneIndex = i
 			firstCloneNotFound = false
 		}
-		if majRel == lastClone && lastCloneNotFound {
+		if majorMinorRelease == lastClone && lastCloneNotFound {
 			lastCloneIndex = i
 			lastCloneNotFound = false
 		}
 	}
+
 	missingReleases := []string{}
 	for i := firstCloneIndex; i < lastCloneIndex; i++ {
-		majorRel, err := getMajorRelease(sortedTargets[i])
+		majorMinorRelease, err := getMajorMinorRelease(allTargetVersions[i])
 		if err != nil {
 			return nil, http.StatusInternalServerError, err
 		}
-		if !clonedReleases.Has(majorRel) {
-			missingReleases = append(missingReleases, sortedTargets[i])
+		if !clonedReleases.Has(majorMinorRelease) {
+			missingReleases = append(missingReleases, allTargetVersions[i])
+		}
+	}
+	if lastCloneIndex != -1 {
+		for i := lastCloneIndex; i < len(allTargetVersions); i++ {
+			targetVersions.Delete(allTargetVersions[i])
 		}
 	}
 	wrpr := ClonesTemplateData{
@@ -494,7 +519,7 @@ func getClonesTemplateData(bugID int, client bugzilla.Client, allTargetVersions 
 }
 
 // GetClonesHandler returns an HTML page with detais about the bug and its clones
-func GetClonesHandler(client bugzilla.Client, allTargetVersions sets.String, m *metrics.Metrics) http.HandlerFunc {
+func GetClonesHandler(client bugzilla.Client, allTargetVersions []string, m *metrics.Metrics) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		if req.Method != "GET" {
 			handleError(w, fmt.Errorf("invalid request method, expected GET got %s", req.Method), "invalid request method", http.StatusBadRequest, req.URL.Path, 0, m)
@@ -524,8 +549,12 @@ func GetClonesHandler(client bugzilla.Client, allTargetVersions sets.String, m *
 	}
 }
 
+func releaseInvalidErrorMsg(release string) string {
+	return fmt.Sprintf("%s cannot be parsed as release, must be of the form X.X.X", release)
+}
+
 // CreateCloneHandler will create a clone of the specified ID and return success/error
-func CreateCloneHandler(client bugzilla.Client, allTargetVersions sets.String, m *metrics.Metrics) http.HandlerFunc {
+func CreateCloneHandler(client bugzilla.Client, sortedTargetReleases []string, m *metrics.Metrics) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		endpoint := req.URL.Path
 		if req.Method != "POST" {
@@ -553,30 +582,107 @@ func CreateCloneHandler(client bugzilla.Client, allTargetVersions sets.String, m
 			handleError(w, err, fmt.Sprintf("unable to fetch bug details- Bug#%d", bugID), http.StatusNotFound, endpoint, bugID, m)
 			return
 		}
-		// Create a clone of the bug
-		cloneID, err := client.CloneBug(bug)
+		allTargetVersions := sets.NewString(sortedTargetReleases...)
+		if !allTargetVersions.Has(req.FormValue("release")) {
+			absentReleaseErrMsg := fmt.Sprintf("invalid argument - %s is not a valid TargetRelease, must be one of %v", req.FormValue("release"), allTargetVersions.List())
+			handleError(w, fmt.Errorf(absentReleaseErrMsg), absentReleaseErrMsg, http.StatusBadRequest, endpoint, bugID, m)
+			return
+		}
+
+		// Get clones and sort them
+		clones, err := client.GetAllClones(bug)
 		if err != nil {
-			handleError(w, err, "clone creation failed", http.StatusInternalServerError, endpoint, bugID, m)
+			handleError(w, err, fmt.Sprintf("unable to convert \"ID\" parameter from string to int: %s", req.FormValue("ID")), http.StatusBadRequest, req.URL.Path, 0, m)
 			return
 		}
-		targetRelease := bugzilla.BugUpdate{
-			TargetRelease: []string{
-				req.FormValue("release"),
-			},
-		}
-		// Updating the cloned bug with the right target version
-		if err := client.UpdateBug(cloneID, targetRelease); err != nil {
-			handleError(w, err, fmt.Sprintf("clone created - Bug#%d, but failed to specify version for the cloned bug.", cloneID), http.StatusInternalServerError, endpoint, bugID, m)
+		sortByTargetRelease(clones)
+		toCloneMajorMinorRelease, err := getMajorMinorRelease(req.FormValue("release"))
+		if err != nil {
+			handleError(w, err, releaseInvalidErrorMsg(req.FormValue("release")), http.StatusBadRequest, endpoint, bugID, m)
 			return
 		}
+		var sourceBug *bugzilla.Bug
+		var sourceBugMajorMinorRel string
+		for _, clone := range clones {
+			if !isTargetReleaseSet(clone) {
+				continue
+			}
+			cloneMajorMinorRel, err := getMajorMinorRelease(clone.TargetRelease[0])
+			if err != nil {
+				handleError(w, err, releaseInvalidErrorMsg(clone.TargetRelease[0]), http.StatusBadRequest, endpoint, bugID, m)
+				return
+			}
+			if toCloneMajorMinorRelease == cloneMajorMinorRel {
+				handleError(w, err, fmt.Sprintf("clone for major release %s already exists", clone.TargetRelease[0]), http.StatusBadRequest, endpoint, bugID, m)
+				return
+			}
+			if cloneMajorMinorRel > toCloneMajorMinorRelease {
+				sourceBug = clone
+				sourceBugMajorMinorRel = cloneMajorMinorRel
+				break
+			}
+		}
+		if sourceBug == nil {
+			handleError(w, err, fmt.Sprintf("one bug with greater release needs to be present to clone from (highest release present is %s)", clones[len(clones)-1].TargetRelease[0]), http.StatusBadRequest, endpoint, bugID, m)
+			return
+		}
+		var descMajorMinorRelease []string
+		for i := len(sortedTargetReleases) - 1; i >= 0; i-- {
+			mRel, err := getMajorMinorRelease(sortedTargetReleases[i])
+			if err != nil {
+				handleError(w, err, releaseInvalidErrorMsg(sortedTargetReleases[i]), http.StatusInternalServerError, endpoint, bugID, m)
+				return
+			}
+			descMajorMinorRelease = append(descMajorMinorRelease, mRel)
+		}
+
+		var targetRelease int
+		for i, rel := range descMajorMinorRelease {
+			if rel == sourceBugMajorMinorRel {
+				targetRelease = i + 1
+				break
+			}
+		}
+		if targetRelease >= len(descMajorMinorRelease) {
+			errMsg := "failed to determine source while creating clone"
+			handleError(w, fmt.Errorf(errMsg), errMsg, http.StatusInternalServerError, endpoint, bugID, m)
+			return
+		}
+		var newClones []string
+		// Find source bug and keep iterating till we hit the target release
+		for i := targetRelease; descMajorMinorRelease[i] >= toCloneMajorMinorRelease; i++ {
+			// Create a clone of the bug
+			cloneID, err := client.CloneBug(sourceBug)
+			if err != nil {
+				handleError(w, err, "clone creation failed", http.StatusInternalServerError, endpoint, bugID, m)
+				return
+			}
+			updateTargetRelease := bugzilla.BugUpdate{
+				TargetRelease: []string{
+					descMajorMinorRelease[i] + ".z",
+				},
+			}
+			// Updating the cloned bug with the right target version
+			if err = client.UpdateBug(cloneID, updateTargetRelease); err != nil {
+				handleError(w, err, fmt.Sprintf("failed to update version for bug %d after creating it", cloneID), http.StatusInternalServerError, endpoint, bugID, m)
+				return
+			}
+			sourceBug, err = client.GetBug(cloneID)
+			if err != nil {
+				handleError(w, err, fmt.Sprintf("failed to get bug details: %d", cloneID), http.StatusInternalServerError, endpoint, bugID, m)
+				return
+			}
+			newClones = append(newClones, strconv.Itoa(cloneID))
+		}
+
 		// Repopulate the fields of the page with the right data
-		data, statusCode, err := getClonesTemplateData(bugID, client, allTargetVersions)
+		data, statusCode, err := getClonesTemplateData(bugID, client, sortedTargetReleases)
 		if err != nil {
 			handleError(w, err, "unable to get get bug details", statusCode, endpoint, bugID, m)
 			return
 		}
 		// Populating the NewCloneId which is used to show the success info banner
-		data.NewCloneID = cloneID
+		data.NewCloneIDs = newClones
 		err = writePage(w, "Clones", clonesTemplate, *data)
 		if err != nil {
 			handleError(w, err, "failed to build CreateClones response page", http.StatusInternalServerError, req.URL.Path, bugID, m)

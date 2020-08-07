@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"sort"
 	"time"
 
 	"github.com/openshift/ci-tools/pkg/backporter"
@@ -53,7 +54,7 @@ func gatherOptions() (options, error) {
 	return o, nil
 }
 
-func getAllTargetVersions(configFile string) (sets.String, error) {
+func getAllTargetVersions(configFile string) ([]string, error) {
 	// Get the versions from the plugins.yaml file to populate the Target Versions dropdown
 	// for the CreateClone functionality
 	b, err := ioutil.ReadFile(configFile)
@@ -68,16 +69,20 @@ func getAllTargetVersions(configFile string) (sets.String, error) {
 	if err := np.Validate(); err != nil {
 		return nil, fmt.Errorf("failed to validate file %s : %w", configFile, err)
 	}
-	allTargetVersions := sets.NewString()
+	allTargetVersionsSet := sets.NewString()
 	// Hardcoding with just the "openshift" org here
 	// Could be extended to be configurable in the future to support multiple products
 	// In which case this would have to be moved to the CreateClones function.
 	options := np.Bugzilla.OptionsForRepo("openshift", "")
 	for _, val := range options {
 		if val.TargetRelease != nil {
-			allTargetVersions.Insert(*val.TargetRelease)
+			allTargetVersionsSet.Insert(*val.TargetRelease)
 		}
 	}
+	allTargetVersions := allTargetVersionsSet.List()
+	sort.SliceStable(allTargetVersions, func(i, j int) bool {
+		return allTargetVersions[i] < allTargetVersions[j]
+	})
 	return allTargetVersions, nil
 }
 

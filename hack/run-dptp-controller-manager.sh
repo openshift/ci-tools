@@ -9,7 +9,7 @@ dockercfg=$(mktemp)
 trap 'rm -f $kubeconfig $dockercfg' EXIT
 kubectl config view >$kubeconfig
 IFS=$'\n'
-for additional_context in $(kubectl --kubeconfig $kubeconfig config get-contexts -o name|egrep -v 'app\.ci|api\.ci|build01'); do
+for additional_context in $(kubectl --kubeconfig $kubeconfig config get-contexts -o name|egrep -v 'app\.ci|api\.ci|build01|build02'); do
   kubectl --kubeconfig $kubeconfig config delete-context "$additional_context"
   kubectl --kubeconfig $kubeconfig config delete-cluster "$additional_context" || true
 done
@@ -31,9 +31,11 @@ go build  -v -o /tmp/dptp-cm ./cmd/dptp-controller-manager
   --config-path="$(go env GOPATH)/src/github.com/openshift/release/core-services/prow/02_config/_config.yaml" \
   --job-config-path="$(go env GOPATH)/src/github.com/openshift/release/ci-operator/jobs" \
   --leader-election-suffix="$USER" \
-  --enable-controller=test_images_distributor \
+  --enable-controller=secret_syncer \
   --step-config-path="$(go env GOPATH)/src/github.com/openshift/release/ci-operator/step-registry" \
   --testImagesDistributorOptions.imagePullSecretPath=$dockercfg \
   --kubeconfig=$kubeconfig \
   --testImagesDistributorOptions.additional-image-stream-tag=ci/clonerefs:latest \
+  --secretSyncerConfigOptions.config="$(go env GOPATH)/src/github.com/openshift/release/core-services/secret-mirroring/_mapping.yaml" \
+  --secretSyncerConfigOptions.secretBoostrapConfigFile="$(go env GOPATH)/src/github.com/openshift/release/core-services/ci-secret-bootstrap/_config.yaml" \
   --dry-run=true

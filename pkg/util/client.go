@@ -48,7 +48,7 @@ func LoadKubeConfigs(kubeconfig string) (map[string]*rest.Config, string, error)
 		configs[context] = contextCfg
 		logrus.Infof("Parsed kubeconfig context: %s", context)
 	}
-	if kubeconfigsFromEnv := strings.Split(os.Getenv("KUBECONFIG"), ":"); len(kubeconfigsFromEnv) > 0 && len(kubeconfigsFromEnv) != len(configs) {
+	if kubeconfigsFromEnv := strings.Split(os.Getenv("KUBECONFIG"), ":"); len(kubeconfigsFromEnv) > 0 && len(kubeconfigsFromEnv) > len(configs) {
 		errs = append(errs, fmt.Errorf("KUBECONFIG env var with value %s had %d elements but only got %d kubeconfigs", os.Getenv("KUBECONFIG"), len(kubeconfigsFromEnv), len(configs)))
 	}
 	return configs, cfg.CurrentContext, utilerrors.NewAggregate(errs)

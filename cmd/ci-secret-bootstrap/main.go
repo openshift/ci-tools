@@ -30,6 +30,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/test-infra/prow/logrusutil"
 
+	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
 	"github.com/openshift/ci-tools/pkg/bitwarden"
 	"github.com/openshift/ci-tools/pkg/util"
 )
@@ -48,7 +49,7 @@ type options struct {
 
 	bwPassword     string
 	secretsGetters map[string]coreclientset.SecretsGetter
-	config         []secretConfig
+	config         secretbootstrap.Config
 
 	maxConcurrency int
 }
@@ -113,7 +114,7 @@ func (o *options) completeOptions(secrets *sets.String) error {
 	if err != nil {
 		return err
 	}
-	var config []secretConfig
+	var config secretbootstrap.Config
 	err = yaml.Unmarshal(bytes, &config)
 	if err != nil {
 		return err
@@ -121,7 +122,7 @@ func (o *options) completeOptions(secrets *sets.String) error {
 
 	o.secretsGetters = map[string]coreclientset.SecretsGetter{}
 	for i, secretConfig := range config {
-		var to []secretContext
+		var to []secretbootstrap.SecretContext
 
 		for j, secretContext := range secretConfig.To {
 			if o.cluster != "" && o.cluster != secretContext.Cluster {
@@ -185,9 +186,9 @@ func (o *options) validateCompletedOptions() error {
 				return fmt.Errorf("config[%d].from[%s]: empty value is not allowed", i, key)
 			}
 			switch bwContext.Attribute {
-			case attributeTypePassword, "":
+			case secretbootstrap.AttributeTypePassword, "":
 			default:
-				return fmt.Errorf("config[%d].from[%s].attribute: only the '%s' is supported, not %s", i, key, attributeTypePassword, bwContext.Attribute)
+				return fmt.Errorf("config[%d].from[%s].attribute: only the '%s' is supported, not %s", i, key, secretbootstrap.AttributeTypePassword, bwContext.Attribute)
 			}
 			nonEmptyFields := 0
 			if bwContext.Field != "" {
@@ -229,32 +230,7 @@ func (o *options) validateCompletedOptions() error {
 	return nil
 }
 
-type attributeType string
-
-const (
-	attributeTypePassword attributeType = "password"
-)
-
-type bitWardenContext struct {
-	BWItem     string        `json:"bw_item"`
-	Field      string        `json:"field,omitempty"`
-	Attachment string        `json:"attachment,omitempty"`
-	Attribute  attributeType `json:"attribute,omitempty"`
-}
-
-type secretContext struct {
-	Cluster   string             `json:"cluster"`
-	Namespace string             `json:"namespace"`
-	Name      string             `json:"name"`
-	Type      coreapi.SecretType `json:"type,omitempty"`
-}
-
-type secretConfig struct {
-	From map[string]bitWardenContext `json:"from"`
-	To   []secretContext             `json:"to"`
-}
-
-func constructSecrets(ctx context.Context, config []secretConfig, bwClient bitwarden.Client, maxConcurrency int) (map[string][]*coreapi.Secret, error) {
+func constructSecrets(ctx context.Context, config secretbootstrap.Config, bwClient bitwarden.Client, maxConcurrency int) (map[string][]*coreapi.Secret, error) {
 	sem := semaphore.NewWeighted(int64(maxConcurrency))
 	secretsMap := map[string][]*coreapi.Secret{}
 	secretsMapLock := &sync.Mutex{}
@@ -269,7 +245,7 @@ func constructSecrets(ctx context.Context, config []secretConfig, bwClient bitwa
 	for _, cfg := range config {
 		secretConfigWG.Add(1)
 
-		go func(secretConfig secretConfig) {
+		go func(secretConfig secretbootstrap.SecretConfig) {
 			defer secretConfigWG.Done()
 
 			data := make(map[string][]byte)
@@ -297,11 +273,11 @@ func constructSecrets(ctx context.Context, config []secretConfig, bwClient bitwa
 						value, err = bwClient.GetAttachmentOnItem(bwContext.BWItem, bwContext.Attachment)
 					} else {
 						switch bwContext.Attribute {
-						case attributeTypePassword:
+						case secretbootstrap.AttributeTypePassword:
 							value, err = bwClient.GetPassword(bwContext.BWItem)
 						default:
 							// should never happen since we have validated the config
-							errChan <- fmt.Errorf("invalid attribute: only the '%s' is supported, not %s", attributeTypePassword, bwContext.Attribute)
+							errChan <- fmt.Errorf("invalid attribute: only the '%s' is supported, not %s", secretbootstrap.AttributeTypePassword, bwContext.Attribute)
 							return
 						}
 					}

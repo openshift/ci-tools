@@ -195,6 +195,10 @@ func secret(nn types.NamespacedName, data map[string][]byte, tp corev1.SecretTyp
 		},
 	}
 	return s, func() error {
+		if s.Labels == nil {
+			s.Labels = map[string]string{}
+		}
+		s.Labels["ci.openshift.org/secret-syncer-controller-managed"] = "true"
 		s.Data = data
 		s.Type = tp
 		return nil

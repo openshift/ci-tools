@@ -312,6 +312,10 @@ type MajorMinor struct {
 	Minor string
 }
 
+func (mm MajorMinor) String() string {
+	return mm.Major + "." + mm.Minor
+}
+
 func gatherAllOCPImageConfigs(ocpBuildDataDir string, majorMinor MajorMinor) (map[string]OCPImageConfig, error) {
 	result := map[string]OCPImageConfig{}
 	resultLock := &sync.Mutex{}

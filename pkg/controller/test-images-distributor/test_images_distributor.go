@@ -2,7 +2,6 @@ package testimagesdistributor
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -31,6 +30,7 @@ import (
 	controllerutil "github.com/openshift/ci-tools/pkg/controller/util"
 	"github.com/openshift/ci-tools/pkg/load/agents"
 	"github.com/openshift/ci-tools/pkg/registry"
+	"github.com/openshift/ci-tools/pkg/util/imagestreamtagmapper"
 )
 
 const ControllerName = "test_images_distributor"
@@ -136,42 +136,24 @@ type objectFilter func(types.NamespacedName) bool
 // Note: We can not use a predicate because that is directly applied on the source and the source yields ImageStreams, not ImageStreamTags
 // * Creates a reconcile.Request per cluster and ImageStreamTag
 func registryClusterHandlerFactory(buildClusters sets.String, filter objectFilter) handler.EventHandler {
-	return &handler.EnqueueRequestsFromMapFunc{ToRequests: handler.ToRequestsFunc(
-		func(mo handler.MapObject) []reconcile.Request {
-			imageStream, ok := mo.Object.(*imagev1.ImageStream)
-			if !ok {
-				logrus.WithField("type", fmt.Sprintf("%T", mo.Object)).Error("Got object that was not an ImageStram")
-				return nil
+	return imagestreamtagmapper.New(func(in reconcile.Request) []reconcile.Request {
+		if !filter(in.NamespacedName) {
+			return nil
+		}
+
+		var requests []reconcile.Request
+		// We have to squeeze both the target cluster name and the imageStreamTag name into a reconcile.Request
+		// Internally, this gets put onto the workqueue as a single string in namespace/name notation and split
+		// later on. This means that we can not use a slash as delimiter for the cluster and the namespace.
+		for _, buildCluster := range buildClusters.List() {
+			name := types.NamespacedName{
+				Namespace: buildCluster + clusterAndNamespaceDelimiter + in.Namespace,
+				Name:      in.Name,
 			}
-			var requests []reconcile.Request
-			for _, imageStreamTag := range imageStream.Status.Tags {
-				// Not sure why this happens but seems to be a thing
-				if imageStreamTag.Tag == "" {
-					serialized, err := json.Marshal(imageStreamTag)
-					logrus.WithField("imagestreamtag", string(serialized)).WithField("serialization error", err).Debug("got imagestreamtag with empty name")
-					continue
-				}
-				name := types.NamespacedName{
-					Namespace: mo.Meta.GetNamespace(),
-					Name:      fmt.Sprintf("%s:%s", mo.Meta.GetName(), imageStreamTag.Tag),
-				}
-				if !filter(name) {
-					continue
-				}
-				// We have to squeeze both the target cluster name and the imageStreamTag name into a reconcile.Request
-				// Internally, this gets put onto the workqueue as a single string in namespace/name notation and split
-				// later on. This means that we can not use a slash as delimiter for the cluster and the namespace.
-				for _, buildCluster := range buildClusters.List() {
-					name := types.NamespacedName{
-						Namespace: buildCluster + clusterAndNamespaceDelimiter + name.Namespace,
-						Name:      name.Name,
-					}
-					requests = append(requests, reconcile.Request{NamespacedName: name})
-				}
-			}
-			return requests
-		},
-	)}
+			requests = append(requests, reconcile.Request{NamespacedName: name})
+		}
+		return requests
+	})
 }
 
 const clusterAndNamespaceDelimiter = "_"

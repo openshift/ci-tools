@@ -11,13 +11,11 @@ import (
 	imagev1 "github.com/openshift/api/image/v1"
 	"github.com/sirupsen/logrus"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/github"
 	"sigs.k8s.io/controller-runtime"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
@@ -26,6 +24,7 @@ import (
 	controllerutil "github.com/openshift/ci-tools/pkg/controller/util"
 	"github.com/openshift/ci-tools/pkg/load/agents"
 	"github.com/openshift/ci-tools/pkg/steps/release"
+	"github.com/openshift/ci-tools/pkg/util/imagestreamtagmapper"
 	"github.com/openshift/ci-tools/pkg/util/imagestreamtagwrapper"
 )
 
@@ -71,10 +70,7 @@ func AddToManager(mgr controllerruntime.Manager, opts Options) error {
 		enqueueJob:   prowJobEnqueuer,
 	}
 	c, err := controller.New(ControllerName, opts.RegistryManager, controller.Options{
-		// Since we watch ImageStreams and not ImageStreamTags as the latter do not support
-		// watch, we create a lot more events the needed. In order to decrease load, we coalesce
-		// and delay all requests after a successful reconciliation for up to an hour.
-		Reconciler: controllerutil.NewReconcileRequestCoalescer(r, 10*time.Minute),
+		Reconciler: r,
 		// We currently have 50k ImageStreamTags in the OCP namespace and need to periodically reconcile all of them,
 		// so don't be stingy with the workers
 		MaxConcurrentReconciles: 100,
@@ -85,27 +81,8 @@ func AddToManager(mgr controllerruntime.Manager, opts Options) error {
 
 	if err := c.Watch(
 		&source.Kind{Type: &imagev1.ImageStream{}},
-		&handler.EnqueueRequestsFromMapFunc{ToRequests: handler.ToRequestsFunc(
-			func(mo handler.MapObject) []reconcile.Request {
-				imageStream, ok := mo.Object.(*imagev1.ImageStream)
-				if !ok {
-					logrus.WithField("type", fmt.Sprintf("%T", mo.Object)).Error("Got object that was not an ImageStram")
-					return nil
-				}
-				var requests []reconcile.Request
-				for _, imageStreamTag := range imageStream.Spec.Tags {
-					// Not sure why this happens but seems to be a thing
-					if imageStreamTag.Name == "" {
-						continue
-					}
-					requests = append(requests, reconcile.Request{NamespacedName: types.NamespacedName{
-						Namespace: mo.Meta.GetNamespace(),
-						Name:      fmt.Sprintf("%s:%s", mo.Meta.GetName(), imageStreamTag.Name),
-					}})
-				}
-				return requests
-			},
-		)}); err != nil {
+		imagestreamtagmapper.New(func(r reconcile.Request) []reconcile.Request { return []reconcile.Request{r} }),
+	); err != nil {
 		return fmt.Errorf("failed to create watch for ImageStreams: %w", err)
 	}
 	r.log.Info("Successfully added reconciler to manager")

@@ -181,6 +181,12 @@ func recreateSecret(ctx context.Context, c ctrlruntimeclient.Client, s *corev1.S
 	if err := c.Delete(ctx, s.DeepCopy()); err != nil {
 		return fmt.Errorf("failed to delete secret: %w", err)
 	}
+	s.ObjectMeta = metav1.ObjectMeta{
+		Namespace:   s.Namespace,
+		Name:        s.Name,
+		Labels:      s.Labels,
+		Annotations: s.Annotations,
+	}
 	if err := c.Create(ctx, s); err != nil {
 		return fmt.Errorf("failed to create secret: %w", err)
 	}

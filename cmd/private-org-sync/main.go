@@ -449,7 +449,7 @@ func mergeRemotesAndPush(logger *logrus.Entry, git gitFunc, repoDir, srcRemote, 
 	}
 
 	sourceBranch := fmt.Sprintf("%s/%s", srcRemote, branch)
-	if err := checkGitError(git(logger, repoDir, []string{"-c", fmt.Sprintf("user.name=%s", gitName), "-c", fmt.Sprintf("user.email=%s", gitEmail), "merge", sourceBranch, "-m", "'Periodic merge from DPTP; pub->priv'"}...)); err != nil {
+	if err := checkGitError(git(logger, repoDir, []string{"-c", fmt.Sprintf("user.name=%s", gitName), "-c", fmt.Sprintf("user.email=%s", gitEmail), "merge", sourceBranch, "-m", "DPTP reconciliation from upstream"}...)); err != nil {
 		var mergeErrs []error
 		mergeErrs = append(mergeErrs, fmt.Errorf("failed to merge %s: %w", sourceBranch, err))
 

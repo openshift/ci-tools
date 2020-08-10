@@ -2,6 +2,8 @@ package main
 
 import (
 	"errors"
+	"fmt"
+	"path/filepath"
 	"strings"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -20,10 +22,15 @@ func (o ocpImageConfig) validate() error {
 	if o.Content != nil && o.Content.Source.Alias != "" && o.Content.Source.Git != nil {
 		errs = append(errs, errors.New("both content.source.alias and content.source.git are set"))
 	}
-
-	if o.From.Stream == "" {
-		errs = append(errs, errors.New(".from.stream was unset"))
+	if err := o.From.validate(); err != nil {
+		errs = append(errs, fmt.Errorf(".from failed validation: %w", err))
 	}
+	for idx, cfg := range o.From.Builder {
+		if err := cfg.validate(); err != nil {
+			errs = append(errs, fmt.Errorf(".from.%d failed validation: %w", idx, err))
+		}
+	}
+
 	return utilerrors.NewAggregate(errs)
 }
 
@@ -34,6 +41,7 @@ type ocpImageConfigContent struct {
 type ocpImageConfigSource struct {
 	Dockerfile string `json:"dockerfile"`
 	Alias      string `json:"alias"`
+	Path       string `json:"path"`
 	// +Optional, mutually exclusive with alias
 	Git *ocpImageConfigSourceGit `json:"git,omitempty"`
 }
@@ -48,12 +56,23 @@ type ocpImageConfigSourceGitBranch struct {
 }
 
 type ocpImageConfigFrom struct {
-	Builder []ocpImageConfigFromStream `json:"builder"`
-	Stream  string                     `json:"stream"`
+	Builder                  []ocpImageConfigFromStream `json:"builder"`
+	ocpImageConfigFromStream `json:",inline"`
 }
 
 type ocpImageConfigFromStream struct {
 	Stream string `json:"stream"`
+	Member string `json:"member"`
+}
+
+func (icfs ocpImageConfigFromStream) validate() error {
+	if icfs.Stream == "" && icfs.Member == "" {
+		return errors.New("both stream and member were unset")
+	}
+	if icfs.Stream != "" && icfs.Member != "" {
+		return fmt.Errorf("both stream(%s) and member(%s) were set", icfs.Stream, icfs.Member)
+	}
+	return nil
 }
 
 type ocpImageConfigPush struct {
@@ -62,25 +81,36 @@ type ocpImageConfigPush struct {
 }
 
 func (oic ocpImageConfig) dockerfile() string {
-	if oic.Content.Source.Dockerfile != "" {
-		return oic.Content.Source.Dockerfile
+	if oic.Content.Source.Dockerfile == "" {
+		oic.Content.Source.Dockerfile = "Dockerfile"
 	}
-	return "Dockerfile"
+	return filepath.Join(oic.Content.Source.Path, oic.Content.Source.Dockerfile)
 }
 
-func (oic ocpImageConfig) stages() []string {
+func (oic ocpImageConfig) stages() ([]string, error) {
 	var result []string
-	for _, builder := range oic.From.Builder {
+	var errs []error
+	for idx, builder := range oic.From.Builder {
+		if builder.Stream == "" {
+			errs = append(errs, fmt.Errorf("couldn't dereference from.builder.%d", idx))
+		}
 		result = append(result, builder.Stream)
 	}
-	return append(result, oic.From.Stream)
+	if oic.From.Stream == "" {
+		errs = append(errs, errors.New("couldn't dereference from.stream"))
+	}
+	return append(result, oic.From.Stream), utilerrors.NewAggregate(errs)
 }
 
-func (oic ocpImageConfig) orgRepo() string {
+func (oic ocpImageConfig) orgRepo(mappings []publicPrivateMapping) string {
+	var name string
 	if oic.Content.Source.Git.URL == "" {
-		return oic.Name
+		name = oic.Name
 	}
-	return strings.TrimSuffix(strings.TrimPrefix(oic.Content.Source.Git.URL, "git@github.com:"), ".git")
+	if name == "" {
+		name = strings.TrimSuffix(strings.TrimPrefix(oic.Content.Source.Git.URL, "git@github.com:"), ".git")
+	}
+	return getPublicRepo(name, mappings)
 }
 
 type streamMap map[string]streamElement
@@ -98,4 +128,25 @@ type groupYAML struct {
 type publicPrivateMapping struct {
 	Private string `json:"private"`
 	Public  string `json:"public"`
+}
+
+func getPublicRepo(orgRepo string, mappings []publicPrivateMapping) string {
+	orgRepo = "https://github.com/" + orgRepo
+	var replacementFrom, replacementTo string
+	for _, mapping := range mappings {
+		if !strings.HasPrefix(orgRepo, mapping.Private) {
+			continue
+		}
+		if len(replacementFrom) > len(mapping.Private) {
+			continue
+		}
+		replacementFrom = mapping.Private
+		replacementTo = mapping.Public
+	}
+
+	if replacementTo == "" {
+		return strings.TrimPrefix(orgRepo, "https://github.com/")
+	}
+
+	return strings.TrimPrefix(strings.Replace(orgRepo, replacementFrom, replacementTo, 1), "https://github.com/")
 }

@@ -97,3 +97,49 @@ owners:
 
 	}
 }
+
+func TestGetPublicRepo(t *testing.T) {
+	testCases := []struct {
+		name      string
+		orgRepoIn string
+		mappings  []publicPrivateMapping
+
+		expected string
+	}{
+		{
+			name:      "no match, original string is returned",
+			orgRepoIn: "kubeflow/kubeflow",
+			mappings: []publicPrivateMapping{
+				{Private: "https://github.com/openshift-priv", Public: "https://github.com/openshift"},
+				{Private: "https://github.com/openshift/ose", Public: "https://github.com/openshift/origin"},
+			},
+			expected: "kubeflow/kubeflow",
+		},
+		{
+			name:      "single match is used",
+			orgRepoIn: "kubeflow-priv/kubeflow",
+			mappings: []publicPrivateMapping{
+				{Private: "https://github.com/kubeflow-priv", Public: "https://github.com/kubeflow"},
+				{Private: "https://github.com/openshift/ose", Public: "https://github.com/openshift/origin"},
+			},
+			expected: "kubeflow/kubeflow",
+		},
+		{
+			name:      "multiple matches, longest prefix match is used",
+			orgRepoIn: "kubeflow-priv/kubeflow",
+			mappings: []publicPrivateMapping{
+				{Private: "https://github.com/kubeflow-priv", Public: "https://github.com/kubeflow"},
+				{Private: "https://github.com/kubeflow-priv/kubeflow", Public: "https://github.com/openshift/origin"},
+			},
+			expected: "openshift/origin",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if actual := getPublicRepo(tc.orgRepoIn, tc.mappings); actual != tc.expected {
+				t.Errorf("expected %s, got %s", tc.expected, actual)
+			}
+		})
+	}
+}

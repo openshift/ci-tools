@@ -60,18 +60,26 @@ func main() {
 			errs = append(errs, fmt.Errorf("error validating %s: %w", cfg.SourceFileName, err))
 			continue
 		}
-		if err := dereferenceConfig(&cfg, streamMap, groupYAML); err != nil {
+		if err := dereferenceConfig(&cfg, opts.majorMinor, configsUnverified, streamMap, groupYAML); err != nil {
 			errs = append(errs, fmt.Errorf("failed dereferencing config for %s: %w", cfg.SourceFileName, err))
 			continue
 		}
 		configs = append(configs, cfg)
 	}
 
+	// No point in continuing, that will only result in weird to understand follow-up errors
+	if err := utilerrors.NewAggregate(errs); err != nil {
+		for _, err := range err.Errors() {
+			logrus.WithError(err).Error("Encountered error")
+		}
+		logrus.Fatal("Encountered errors")
+	}
+
 	errGroup := &errgroup.Group{}
 	for idx := range configs {
 		idx := idx
 		errGroup.Go(func() error {
-			processDockerfile(configs[idx])
+			processDockerfile(configs[idx], groupYAML.PublicUpstreams)
 			return nil
 		})
 	}
@@ -88,16 +96,52 @@ func main() {
 	logrus.Infof("Processed %d configs", len(configs))
 }
 
-// TODO (alvaroaleman): This is incomplete
-func dereferenceConfig(config *ocpImageConfig, streamMap streamMap, groupYAML groupYAML) error {
-	if replacement, hasReplacement := streamMap[config.From.Stream]; hasReplacement {
-		config.From.Stream = replacement.UpstreamImage
-	}
-	for blder := range config.From.Builder {
-		if replacement, hasReplacement := streamMap[config.From.Builder[blder].Stream]; hasReplacement {
-			config.From.Builder[blder].Stream = replacement.UpstreamImage
+func dereferenceConfig(
+	config *ocpImageConfig,
+	majorMinor majorMinor,
+	allConfigs map[string]ocpImageConfig,
+	streamMap streamMap,
+	groupYAML groupYAML,
+) error {
+	var errs []error
+
+	var err error
+	if config.From.Stream != "" {
+		config.From.Stream, err = replaceStream(config.From.Stream, streamMap)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("failed to replace .from.stream: %w", err))
 		}
 	}
+	if config.From.Member != "" {
+		config.From.Stream, err = streamForMember(config.From.Member, majorMinor, allConfigs)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("failed to replace .from.member: %w", err))
+		}
+		config.From.Member = ""
+	}
+	if config.From.Stream == "" {
+		errs = append(errs, errors.New("failed to find replacement for .from.stream"))
+	}
+
+	for blder := range config.From.Builder {
+		if config.From.Builder[blder].Stream != "" {
+			config.From.Builder[blder].Stream, err = replaceStream(config.From.Builder[blder].Stream, streamMap)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("failed to replace .from[%d].stream: %w", blder, err))
+			}
+		}
+		if config.From.Builder[blder].Member != "" {
+			config.From.Builder[blder].Stream, err = streamForMember(config.From.Builder[blder].Member, majorMinor, allConfigs)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("failed to replace .from.%d.member: %w", blder, err))
+			}
+			config.From.Builder[blder].Member = ""
+		}
+		if config.From.Builder[blder].Stream == "" {
+			errs = append(errs, fmt.Errorf("failed to dereference from.builder.%d", blder))
+		}
+	}
+
 	if config.Content.Source.Alias != "" {
 		if _, hasReplacement := groupYAML.Sources[config.Content.Source.Alias]; !hasReplacement {
 			return fmt.Errorf("groups.yaml has no replacement for alias %s", config.Content.Source.Alias)
@@ -108,11 +152,40 @@ func dereferenceConfig(config *ocpImageConfig, streamMap streamMap, groupYAML gr
 		*config.Content.Source.Git = groupYAML.Sources[config.Content.Source.Alias]
 	}
 
-	return nil
+	return utilerrors.NewAggregate(errs)
 }
 
-func processDockerfile(config ocpImageConfig) {
-	orgRepo := config.orgRepo()
+func streamForMember(
+	memberName string,
+	majorMinor majorMinor,
+	allConfigs map[string]ocpImageConfig,
+) (string, error) {
+	cfgFile := configFileNameForMemberString(memberName)
+	cfg, cfgExists := allConfigs[cfgFile]
+	if !cfgExists {
+		return "", fmt.Errorf("no config %s found", cfgFile)
+	}
+	streamTagName := strings.TrimPrefix(cfg.Name, "openshift/ose-")
+	return fmt.Sprintf("registry.svc.ci.openshift.org/ocp/%s.%s:%s", majorMinor.major, majorMinor.minor, streamTagName), nil
+}
+
+func configFileNameForMemberString(memberString string) string {
+	return "images/" + memberString + ".yml"
+}
+
+func replaceStream(streamName string, streamMap streamMap) (string, error) {
+	replacement, hasReplacement := streamMap[streamName]
+	if !hasReplacement {
+		return "", fmt.Errorf("streamMap has no replacement for stream %s", streamName)
+	}
+	if replacement.UpstreamImage == "" {
+		return "", fmt.Errorf("stream.yml.%s.upstream_image is an empty string", streamName)
+	}
+	return replacement.UpstreamImage, nil
+}
+
+func processDockerfile(config ocpImageConfig, mappings []publicPrivateMapping) {
+	orgRepo := config.orgRepo(mappings)
 	log := logrus.WithField("file", config.SourceFileName).WithField("org/repo", orgRepo)
 	split := strings.Split(orgRepo, "/")
 	if n := len(split); n != 2 {
@@ -184,8 +257,8 @@ func readYAML(path string, unmarshalTarget interface{}, majorMinor majorMinor) e
 	return nil
 }
 
-func gatherAllOCPImageConfigs(ocpBuildDataDir string, majorMinor majorMinor) ([]ocpImageConfig, error) {
-	var result []ocpImageConfig
+func gatherAllOCPImageConfigs(ocpBuildDataDir string, majorMinor majorMinor) (map[string]ocpImageConfig, error) {
+	result := map[string]ocpImageConfig{}
 	resultLock := &sync.Mutex{}
 	errGroup := &errgroup.Group{}
 
@@ -210,7 +283,7 @@ func gatherAllOCPImageConfigs(ocpBuildDataDir string, majorMinor majorMinor) ([]
 
 			config.SourceFileName = strings.TrimPrefix(path, ocpBuildDataDir+"/")
 			resultLock.Lock()
-			result = append(result, *config)
+			result[config.SourceFileName] = *config
 			resultLock.Unlock()
 
 			return nil
@@ -239,7 +312,10 @@ func updateDockerfile(dockerfile []byte, config ocpImageConfig) ([]byte, bool, e
 		return nil, false, fmt.Errorf("failed to construct imagebuilder stages: %w", err)
 	}
 
-	cfgStages := config.stages()
+	cfgStages, err := config.stages()
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to get stages: %w", err)
+	}
 	if expected := len(cfgStages); expected != len(stages) {
 		return nil, false, fmt.Errorf("expected %d stages based on ocp config %s but got %d", expected, config.SourceFileName, len(stages))
 	}
@@ -257,7 +333,7 @@ func updateDockerfile(dockerfile []byte, config ocpImageConfig) ([]byte, bool, e
 				return nil, false, fmt.Errorf("dockerfile has FROM directive without value on line %d", child.StartLine)
 			}
 			if cfgStages[stageIdx] == "" {
-				return nil, false, errors.New("replacement target is empty")
+				return nil, false, errors.New("")
 			}
 			if child.Next.Value != cfgStages[stageIdx] {
 				replacements = append(replacements, dockerFileReplacment{

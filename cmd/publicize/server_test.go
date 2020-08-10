@@ -376,7 +376,7 @@ and the repository exists.
 				}
 				return nil
 			},
-			errExpectedMsg: "couldn't merge openshift/test, possible because of a merge conflict",
+			errExpectedMsg: "couldn't merge openshift/test, due to merge conflict. You will need to create a new PR in openshift-priv/test which merges/resolves from openshift/test. Once this PR merges, you can then use /publicize there to merge all changes into the the public repository.",
 		},
 		{
 			id:     "multiple commits with one conflict, error expected",
@@ -414,7 +414,7 @@ and the repository exists.
 				}
 				return nil
 			},
-			errExpectedMsg: "couldn't merge openshift/test, possible because of a merge conflict",
+			errExpectedMsg: "couldn't merge openshift/test, due to merge conflict. You will need to create a new PR in openshift-priv/test which merges/resolves from openshift/test. Once this PR merges, you can then use /publicize there to merge all changes into the the public repository.",
 		},
 	}
 
@@ -433,7 +433,7 @@ and the repository exists.
 			t.Fatalf("test id: %s: %v", tc.id, err)
 		}
 
-		err := s.mergeAndPushToRemote(publicOrg, publicRepo, tc.remoteResolver, tc.branch, "merge message", false)
+		err := s.mergeAndPushToRemote(privateOrg, privateRepo, publicOrg, publicRepo, tc.remoteResolver, tc.branch, false)
 		if err != nil && tc.errExpectedMsg == "" {
 			t.Fatalf("test id: %s\nerror not expected: %v", tc.id, err)
 		}

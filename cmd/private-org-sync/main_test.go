@@ -529,7 +529,7 @@ func TestMirror(t *testing.T) {
 				},
 				{call: "fetch https://TOKEN@github.com/dest/repo branch"},
 				{call: "checkout FETCH_HEAD"},
-				{call: "-c user.name=openshift-bot -c user.email=openshift-bot@redhat.com merge org-repo/branch -m 'Periodic merge from DPTP; pub->priv'"},
+				{call: "-c user.name=openshift-bot -c user.email=openshift-bot@redhat.com merge org-repo/branch -m DPTP reconciliation from upstream"},
 				{call: "push --tags --dry-run https://TOKEN@github.com/dest/repo HEAD:branch"},
 			},
 		},
@@ -593,7 +593,7 @@ func TestMirror(t *testing.T) {
 				{call: "fetch https://TOKEN@github.com/dest/repo branch"},
 				{call: "checkout FETCH_HEAD"},
 				{
-					call:     "-c user.name=openshift-bot -c user.email=openshift-bot@redhat.com merge org-repo/branch -m 'Periodic merge from DPTP; pub->priv'",
+					call:     "-c user.name=openshift-bot -c user.email=openshift-bot@redhat.com merge org-repo/branch -m DPTP reconciliation from upstream",
 					exitCode: 1,
 				},
 				{call: "merge --abort"},

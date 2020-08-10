@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"runtime"
 	"strings"
 	"time"
 
@@ -54,6 +55,7 @@ type options struct {
 	enabledControllers           flagutil.Strings
 	enabledControllersSet        sets.String
 	dryRun                       bool
+	blockProfileRate             time.Duration
 	testImagesDistributorOptions testImagesDistributorOptions
 	secretSyncerConfigOptions    secretSyncerConfigOptions
 	*flagutil.GitHubOptions
@@ -105,6 +107,7 @@ func newOpts() (*options, error) {
 	flag.Var(&opts.testImagesDistributorOptions.additionalImageStreamNamespacesRaw, "testImagesDistributorOptions.additional-image-stream-namespace", "A namespace in which imagestreams will be distributed even if no test explicitly references them (e.G `ci`). Can be passed multiple times.")
 	flag.StringVar(&opts.secretSyncerConfigOptions.configFile, "secretSyncerConfigOptions.config", "", "The config file for the secret syncer controller")
 	flag.StringVar(&opts.secretSyncerConfigOptions.secretBoostrapConfigFile, "secretSyncerConfigOptions.secretBoostrapConfigFile", "", "The config file for ci-secret-boostrap")
+	flag.DurationVar(&opts.blockProfileRate, "block-profile-rate", time.Duration(0), "The block profile rate. Set to non-zero to enable.")
 	flag.BoolVar(&opts.dryRun, "dry-run", true, "Whether to run the controller-manager with dry-run")
 	flag.Parse()
 
@@ -187,6 +190,10 @@ func main() {
 	opts, err := newOpts()
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get options")
+	}
+	if val := int(opts.blockProfileRate.Nanoseconds()); val != 0 {
+		logrus.WithField("rate", opts.blockProfileRate.String()).Info("Setting block profile rate")
+		runtime.SetBlockProfileRate(val)
 	}
 
 	kubeconfigs, _, err := util.LoadKubeConfigs(opts.kubeconfig)

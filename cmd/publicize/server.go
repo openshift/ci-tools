@@ -95,8 +95,7 @@ func (s *server) handleIssueComment(l *logrus.Entry, ic github.IssueCommentEvent
 	}, func() (login string, err error) { return s.githubLogin, nil }, s.githubTokenGenerator)
 
 	logger.Infof("Trying to merge the PR to destination: %s/%s@%s", destOrg, destRepo, baseBranch)
-	mergeMsg := fmt.Sprintf("merge history from %s/%s", org, repo)
-	if err := s.mergeAndPushToRemote(destOrg, destRepo, sourceRemoteResolver, baseBranch, mergeMsg, s.dry); err != nil {
+	if err := s.mergeAndPushToRemote(org, repo, destOrg, destRepo, sourceRemoteResolver, baseBranch, s.dry); err != nil {
 		logger.WithError(err).Warnf("couldn't merge the pull request and push to the destination: %v", err)
 		s.createComment(ic, fmt.Sprintf("Publicize failed with error: %v", err), logger)
 		return
@@ -138,7 +137,7 @@ func (s *server) checkPrerequisites(logger *logrus.Entry, pr *github.PullRequest
 	return nil
 }
 
-func (s *server) mergeAndPushToRemote(destOrg, destRepo string, sourceRemoteResolver func() (string, error), branch string, mergeMsg string, dry bool) error {
+func (s *server) mergeAndPushToRemote(sourceOrg, sourceRepo, destOrg, destRepo string, sourceRemoteResolver func() (string, error), branch string, dry bool) error {
 	repoClient, err := s.gc.ClientFor(destOrg, destRepo)
 	if err != nil {
 		return fmt.Errorf("couldn't create repoclient for repository %s/%s: %w", destOrg, destRepo, err)
@@ -166,13 +165,13 @@ func (s *server) mergeAndPushToRemote(destOrg, destRepo string, sourceRemoteReso
 		return fmt.Errorf("couldn't set config user.name=%s: %w", s.gitEmail, err)
 	}
 
-	merged, err := repoClient.MergeWithStrategy("FETCH_HEAD", "merge", git.MergeOpt{CommitMessage: mergeMsg})
+	merged, err := repoClient.MergeWithStrategy("FETCH_HEAD", "merge", git.MergeOpt{CommitMessage: "DPTP reconciliation from downstream"})
 	if err != nil {
 		return fmt.Errorf("couldn't merge %s/%s, merge --abort failed with reason: %w", destOrg, destRepo, err)
 	}
 
 	if !merged {
-		return fmt.Errorf("couldn't merge %s/%s, possible because of a merge conflict", destOrg, destRepo)
+		return fmt.Errorf("couldn't merge %s/%s, due to merge conflict. You will need to create a new PR in %s/%s which merges/resolves from %s/%s. Once this PR merges, you can then use /publicize there to merge all changes into the the public repository.", destOrg, destRepo, sourceOrg, sourceRepo, destOrg, destRepo)
 	}
 
 	if !dry {
@@ -186,7 +185,7 @@ func (s *server) mergeAndPushToRemote(destOrg, destRepo string, sourceRemoteReso
 
 func (s *server) createComment(ic github.IssueCommentEvent, message string, logger *logrus.Entry) {
 	censored := s.secretAgent.Censor([]byte(message))
-	if err := s.ghc.CreateComment(ic.Repo.Owner.Login, ic.Repo.Name, ic.Issue.Number, fmt.Sprintf("@%s: %s", ic.Issue.User.Login, censored)); err != nil {
+	if err := s.ghc.CreateComment(ic.Repo.Owner.Login, ic.Repo.Name, ic.Issue.Number, fmt.Sprintf("@%s: %s", ic.Comment.User.Login, censored)); err != nil {
 		logger.WithError(err).Warn("coulnd't create comment")
 	}
 }

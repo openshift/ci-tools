@@ -433,13 +433,17 @@ and the repository exists.
 			t.Fatalf("test id: %s: %v", tc.id, err)
 		}
 
-		err := s.mergeAndPushToRemote(privateOrg, privateRepo, publicOrg, publicRepo, tc.remoteResolver, tc.branch, false)
+		headCommitRef, err := s.mergeAndPushToRemote(privateOrg, privateRepo, publicOrg, publicRepo, tc.remoteResolver, tc.branch, false)
 		if err != nil && tc.errExpectedMsg == "" {
 			t.Fatalf("test id: %s\nerror not expected: %v", tc.id, err)
 		}
 
 		if err != nil && !reflect.DeepEqual(err.Error(), tc.errExpectedMsg) {
 			t.Fatal(cmp.Diff(err.Error(), tc.errExpectedMsg))
+		}
+
+		if err == nil && len(headCommitRef) != 40 {
+			t.Fatalf("expected a head commit ref to be 40 chars long: %s", headCommitRef)
 		}
 
 		if err := localgit.Clean(); err != nil {

@@ -102,7 +102,6 @@ func TestGetClonesHandler(t *testing.T) {
 	fake := &bugzilla.Fake{}
 	fake.Bugs = map[int]bugzilla.Bug{}
 	fake.BugComments = map[int][]bugzilla.Comment{}
-
 	toBeClonedCreate := &bugzilla.BugCreate{
 		AssignedTo: "UnitTest",
 		Summary:    "Sample bug to test implementation of clones handler",
@@ -111,6 +110,11 @@ func TestGetClonesHandler(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error creating bug: %v", err)
 	}
+	if err := fake.UpdateBug(toBeClonedID, bugzilla.BugUpdate{
+		TargetRelease: []string{"4.4.0"},
+	}); err != nil {
+		t.Fatalf("error while updating bug: %v", err)
+	}
 	toBeCloned, err := fake.GetBug(toBeClonedID)
 	if err != nil {
 		t.Fatalf("error retreiving bug: %v", err)
@@ -118,6 +122,11 @@ func TestGetClonesHandler(t *testing.T) {
 	cloneID, err := fake.CloneBug(toBeCloned)
 	if err != nil {
 		t.Fatalf("error while cloning bug: %v", err)
+	}
+	if err := fake.UpdateBug(cloneID, bugzilla.BugUpdate{
+		TargetRelease: []string{"4.3.z"},
+	}); err != nil {
+		t.Fatalf("error while updating bug: %v", err)
 	}
 	clone, err := fake.GetBug(cloneID)
 	if err != nil {
@@ -140,17 +149,18 @@ func TestGetClonesHandler(t *testing.T) {
 			data: ClonesTemplateData{
 				clone,
 				[]*bugzilla.Bug{
-					toBeCloned,
 					clone,
+					toBeCloned,
 				},
 				toBeCloned,
 				nil,
-				[]string{"4.4.z", "4.5.z", "4.6.0"},
+				[]string{"4.2.z"},
 				[]string{},
 				[]string{},
+				&dependenceNode{toBeClonedID, "4.4.0", []*dependenceNode{{cloneID, "4.3.z", nil}}},
 			},
 			tmplt:             clonesTemplate,
-			allTargetVersions: []string{"4.4.z", "4.5.z", "4.6.0"},
+			allTargetVersions: []string{"4.2.z", "4.3.z", "4.4.z", "4.5.z", "4.6.0"},
 		},
 		{
 			name: "bad_params",
@@ -214,6 +224,13 @@ func TestCreateCloneHandler(t *testing.T) {
 	}
 	clonedRelease := "4.3.z"
 	intermediateRelease := "4.4.z"
+	originalTargetRelease := "4.5.0"
+	if err := fake.UpdateBug(toBeClonedID, bugzilla.BugUpdate{
+		TargetRelease: []string{originalTargetRelease},
+	}); err != nil {
+		t.Fatalf("error while updating bug: %v", err)
+	}
+
 	toBeCloned, err := fake.GetBug(toBeClonedID)
 	if err != nil {
 		t.Fatalf("error getting bug details from Fake.")
@@ -244,12 +261,13 @@ func TestCreateCloneHandler(t *testing.T) {
 			},
 			statusCode: http.StatusOK,
 			data: ClonesTemplateData{
-				Bug:          toBeCloned,
-				Clones:       []*bugzilla.Bug{&intermediateClone, toBeCloned},
-				Parent:       toBeCloned,
-				PRs:          nil,
-				CloneTargets: []string{"4.2.z", "4.3.z"},
-				NewCloneIDs:  []string{strconv.Itoa(toBeClonedID + 1)},
+				Bug:            toBeCloned,
+				Clones:         []*bugzilla.Bug{&intermediateClone, toBeCloned},
+				Parent:         toBeCloned,
+				PRs:            nil,
+				CloneTargets:   []string{"4.2.z", "4.3.z"},
+				NewCloneIDs:    []string{strconv.Itoa(toBeClonedID + 1)},
+				DependenceTree: &dependenceNode{toBeClonedID, originalTargetRelease, []*dependenceNode{{intermediateClone.ID, intermediateRelease, nil}}},
 			},
 			tmplt:     clonesTemplate,
 			pageTitle: "Clones",
@@ -278,12 +296,13 @@ func TestCreateCloneHandler(t *testing.T) {
 			},
 			statusCode: http.StatusOK,
 			data: ClonesTemplateData{
-				Bug:          toBeCloned,
-				Clones:       []*bugzilla.Bug{&expectedClone, &intermediateClone, toBeCloned},
-				Parent:       toBeCloned,
-				PRs:          nil,
-				CloneTargets: []string{"4.2.z"},
-				NewCloneIDs:  []string{strconv.Itoa(toBeClonedID + 1), strconv.Itoa(toBeClonedID + 2)},
+				Bug:            toBeCloned,
+				Clones:         []*bugzilla.Bug{&expectedClone, &intermediateClone, toBeCloned},
+				Parent:         toBeCloned,
+				PRs:            nil,
+				CloneTargets:   []string{"4.2.z"},
+				NewCloneIDs:    []string{strconv.Itoa(toBeClonedID + 1), strconv.Itoa(toBeClonedID + 2)},
+				DependenceTree: &dependenceNode{toBeClonedID, originalTargetRelease, []*dependenceNode{{intermediateClone.ID, intermediateRelease, []*dependenceNode{{expectedClone.ID, clonedRelease, nil}}}}},
 			},
 			tmplt:     clonesTemplate,
 			pageTitle: "Clones",

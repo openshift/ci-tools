@@ -74,8 +74,12 @@ func AddToManager(mgr manager.Manager,
 		failedImportsCounter:     failedImportsCounter,
 	}
 	c, err := controller.New(ControllerName, mgr, controller.Options{
-		Reconciler:              r,
-		MaxConcurrentReconciles: 20,
+		Reconciler: r,
+		// We conflict on ImageStream level which means multiple request for imagestreamtags
+		// of the same imagestream will conflict so stay at one worker in order to reduce the
+		// number of errors we see. If we hit performance issues, we will probably need cluster
+		// and/or imagestream level locking.
+		MaxConcurrentReconciles: 1,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to construct controller: %w", err)

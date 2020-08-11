@@ -230,7 +230,7 @@ func (config *ReleaseBuildConfiguration) validateTestStepDependencies() []error 
 // allow users a simpler workflow for the most common cases, like
 // referring to `pipeline:src`. If they refer to an ambiguous image,
 // however, they will get bad behavior and will need to specify an
-// ImageStreem as well, for instance release-initial:installer.
+// ImageStream as well, for instance release-initial:installer.
 // We also return whether the stream is explicit or inferred.
 func (config *ReleaseBuildConfiguration) ImageStreamFor(image string) (string, bool) {
 	if config.IsPipelineImage(image) || config.BuildsImage(image) {

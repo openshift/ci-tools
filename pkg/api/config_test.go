@@ -1621,9 +1621,124 @@ func TestReleaseBuildConfiguration_validateTestStepDependencies(t *testing.T) {
 }
 
 func TestReleaseBuildConfiguration_ImageStreamFor(t *testing.T) {
+	var testCases = []struct {
+		name     string
+		config   *ReleaseBuildConfiguration
+		image    string
+		expected string
+		explicit bool
+	}{
+		{
+			name: "explicit, is a base image",
+			config: &ReleaseBuildConfiguration{InputConfiguration: InputConfiguration{
+				BaseImages: map[string]ImageStreamTagReference{"thebase": {}},
+			}},
+			image:    "thebase",
+			expected: PipelineImageStream,
+			explicit: true,
+		},
+		{
+			name: "explicit, is an RPM base image",
+			config: &ReleaseBuildConfiguration{InputConfiguration: InputConfiguration{
+				BaseRPMImages: map[string]ImageStreamTagReference{"thebase": {}},
+			}},
+			image:    "thebase",
+			expected: PipelineImageStream,
+			explicit: true,
+		},
+		{
+			name:     "explicit, is a known pipeline image",
+			config:   &ReleaseBuildConfiguration{},
+			image:    "src",
+			expected: PipelineImageStream,
+			explicit: true,
+		},
+		{
+			name:     "explicit, is a known built image",
+			config:   &ReleaseBuildConfiguration{Images: []ProjectDirectoryImageBuildStepConfiguration{{To: "myimage"}}},
+			image:    "myimage",
+			expected: PipelineImageStream,
+			explicit: true,
+		},
+		{
+			name:     "implicit, is random",
+			config:   &ReleaseBuildConfiguration{},
+			image:    "something",
+			expected: StableImageStream,
+			explicit: false,
+		},
+	}
 
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			actual, explicit := testCase.config.ImageStreamFor(testCase.image)
+			if explicit != testCase.explicit {
+				t.Errorf("%s: did not correctly determine if ImageStream was explicit (should be %v)", testCase.name, testCase.explicit)
+			}
+			if actual != testCase.expected {
+				t.Errorf("%s: did not correctly determine ImageStream wanted %s, got %s", testCase.name, testCase.expected, actual)
+			}
+		})
+	}
 }
 
 func TestReleaseBuildConfiguration_DependencyParts(t *testing.T) {
+	var testCases = []struct {
+		name           string
+		config         *ReleaseBuildConfiguration
+		dependency     StepDependency
+		expectedStream string
+		expectedTag    string
+		explicit       bool
+	}{
+		{
+			name: "explicit, short-hand for base image",
+			config: &ReleaseBuildConfiguration{InputConfiguration: InputConfiguration{
+				BaseImages: map[string]ImageStreamTagReference{"thebase": {}},
+			}},
+			dependency:     StepDependency{Name: "thebase"},
+			expectedStream: PipelineImageStream,
+			expectedTag:    "thebase",
+			explicit:       true,
+		},
+		{
+			name:           "implicit, short-hand for random",
+			config:         &ReleaseBuildConfiguration{},
+			dependency:     StepDependency{Name: "whatever"},
+			expectedStream: StableImageStream,
+			expectedTag:    "whatever",
+			explicit:       false,
+		},
+		{
+			name:           "explicit, long-form for stable",
+			config:         &ReleaseBuildConfiguration{},
+			dependency:     StepDependency{Name: "stable:installer"},
+			expectedStream: StableImageStream,
+			expectedTag:    "installer",
+			explicit:       true,
+		},
+		{
+			name:           "explicit, long-form for something crazy",
+			config:         &ReleaseBuildConfiguration{},
+			dependency:     StepDependency{Name: "whoa:really"},
+			expectedStream: "whoa",
+			expectedTag:    "really",
+			explicit:       true,
+		},
+	}
 
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			actualStream, actualTag, explicit := testCase.config.DependencyParts(testCase.dependency)
+			if explicit != testCase.explicit {
+				t.Errorf("%s: did not correctly determine if ImageStream was explicit (should be %v)", testCase.name, testCase.explicit)
+			}
+			if actualStream != testCase.expectedStream {
+				t.Errorf("%s: did not correctly determine ImageStream wanted %s, got %s", testCase.name, testCase.expectedStream, actualStream)
+			}
+			if actualTag != testCase.expectedTag {
+				t.Errorf("%s: did not correctly determine ImageTag wanted %s, got %s", testCase.name, testCase.expectedTag, actualTag)
+			}
+		})
+	}
 }

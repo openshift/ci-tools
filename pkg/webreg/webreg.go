@@ -733,8 +733,8 @@ Note that the build farms used to execute jobs run on UTC time, so time-of-day b
 <h3 id="image-references"><a href="#image-references">Referencing Images</a></h3>
 <p>
 As <code>ci-operator</code> is OpenShift-native, all images used in a test workflow
-are stored as <code>ImageStreamTags</code>. Inside of the <code>Namespace</code> which
-contains a test workflow, the following <code>ImageStreams</code> will exist:
+are stored as <code>ImageStreamTags</code>. The following <code>ImageStreams</code>
+will exist in the <code>Namespace</code> executing a test workflow:
 </p>
 
 <table>
@@ -743,19 +743,19 @@ contains a test workflow, the following <code>ImageStreams</code> will exist:
     <th>Description</th>
   </tr>
   <tr>
-    <td style="white-space: nowrap"><code>pipeline<code></td>
-    <td>Input images described with <code>base_images</code> and <code>build_root</code> as well as images holding built artifacts and output images as defined in <code>images</code>.</td>
+    <td style="white-space: nowrap"><code>pipeline</code></td>
+    <td>Input images described with <code>base_images</code> and <code>build_root</code> as well as images holding built artifacts (such as <code>src</code> or <code>bin</code>) and output images as defined in <code>images</code>.</td>
   </tr>
   <tr>
-    <td style="white-space: nowrap"><code>release<code></td>
-    <td>Tags of this <code>ImageStreams</code> hold OpenShift release payload images for installing and upgrading ephemeral OpenShift clusters for testing; a tag will be present for every named release configured in <code>releases<code>. If a <code>tag_specification<code> is provided, two tags will be present, <code>:initial</code> and <code>:latest</code>.</td>
+    <td style="white-space: nowrap"><code>release</code></td>
+    <td>Tags of this <code>ImageStreams</code> hold OpenShift release payload images for installing and upgrading ephemeral OpenShift clusters for testing; a tag will be present for every named release configured in <code>releases</code>. If a <code>tag_specification</code> is provided, two tags will be present, <code>:initial</code> and <code>:latest</code>.</td>
   </tr>
   <tr>
-    <td style="white-space: nowrap"><code>stable-&lt;name&gt;<code></td>
+    <td style="white-space: nowrap"><code>stable-&lt;name&gt;</code></td>
     <td>Images composing the <code>release:name</code> release payload, present when <code>&lt;name&gt;<code> is configured in <code>releases<code>.</td>
   </tr>
   <tr>
-    <td style="white-space: nowrap"><code>stable<code></td>
+    <td style="white-space: nowrap"><code>stable</code></td>
     <td>Same as above, but for the <code>release:latest</code> release payload. Appropriate tags are overridden using the container images built during the test.</td>
   </tr>
 </table>
@@ -783,20 +783,26 @@ use this defaulting mechanism:
 
 <h4 id="literal-references"><a href="#literal-references">Referring to Images in Tests</a></h4>
 <p>
-In some cases, it is necessary for a test command to refer to an image that
-was built during the test workflow. Test workloads can declare that they require
+<code>ci-operator</code> will run every part of a test as soon as possible, including
+imports of external releases, builds of container images and test workflow steps. If a
+workflow step runs in a container image that's imported or built in an earlier part of
+a test, <code>ci-operator</code> will wait to schedule that test step until the image is
+present. In some cases, however, it is necessary for a test command to refer to an image
+that was built during the test workflow but not run inside of that container image itself.
+In this case, the default scheduling algorithm needs to know that the step requires a
+valid reference to exist before running. Test workloads can declare that they require
 fully resolved pull specification as a digest for any image from the <code>pipeline</code>,
-<code>stable-&lt;name&gt;</code> or <code>release</code> <code>ImageStreams</code>. 
+<code>stable-&lt;name&gt;</code> or <code>release</code> <code>ImageStreams</code>.
 Tests may opt into having these environment variables present by declaring
-<code>dependencies</code> in the <code>ci-operator</code> configuration for the
-test. For instance, the example container test will be able to access the following
+<code>dependencies</code> in the <code>ci-operator</code> configuration for the test.
+For instance, the example container test will be able to access the following
 environment variables:
 </p>
 
 <ul>
-  <li><code>${MACHINE_CONFIG_OPERATOR}</code>: exposing an the pull specification of the <code>stable:machine-config-operator</code> <code>ImageStreamTag</code></li>
-  <li><code>${BINARIES}</code>: exposing an the pull specification of the <code>pipeline:test-bin</code> <code>ImageStreamTag</code></li>
-  <li><code>${LATEST_RELEASE}</code>: exposing an the pull specification of the <code>release:latest</code> release payload <code>ImageStreamTag</code></li>
+  <li><code>${MACHINE_CONFIG_OPERATOR}</code>: exposing the pull specification of the <code>stable:machine-config-operator</code> <code>ImageStreamTag</code></li>
+  <li><code>${BINARIES}</code>: exposing the pull specification of the <code>pipeline:bin</code> <code>ImageStreamTag</code></li>
+  <li><code>${LATEST_RELEASE}</code>: exposing the pull specification of the <code>release:latest</code> payload <code>ImageStreamTag</code></li>
 </ul>
 
 <code>ci-operator</code> configuration:

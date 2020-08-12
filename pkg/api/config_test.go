@@ -1487,3 +1487,258 @@ func errListMessagesEqual(a, b []error) bool {
 	}
 	return true
 }
+
+func TestValidateDependencies(t *testing.T) {
+	var testCases = []struct {
+		name   string
+		input  []StepDependency
+		output []error
+	}{
+		{
+			name:  "no dependencies",
+			input: nil,
+		},
+		{
+			name: "valid dependencies",
+			input: []StepDependency{
+				{Name: "src", Env: "SOURCE"},
+				{Name: "stable:installer", Env: "INSTALLER"},
+			},
+		},
+		{
+			name: "invalid dependencies",
+			input: []StepDependency{
+				{Name: "", Env: ""},
+				{Name: "src", Env: "SOURCE"},
+				{Name: "src", Env: "SOURCE"},
+				{Name: "src:lol:oops", Env: "WHOA"},
+			},
+			output: []error{
+				errors.New("root.dependencies[0].name must be set"),
+				errors.New("root.dependencies[0].env must be set"),
+				errors.New("root.dependencies[2].env targets an environment variable that is already set by another dependency"),
+				errors.New("root.dependencies[3].name must take the `tag` or `stream:tag` form, not \"src:lol:oops\""),
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if actual, expected := validateDependencies("root", testCase.input), testCase.output; !reflect.DeepEqual(actual, expected) {
+				t.Errorf("%s: got incorrect errors: %s", testCase.name, cmp.Diff(actual, expected, cmp.Comparer(func(x, y error) bool {
+					return x.Error() == y.Error()
+				})))
+			}
+		})
+	}
+}
+
+func TestReleaseBuildConfiguration_validateTestStepDependencies(t *testing.T) {
+	var testCases = []struct {
+		name     string
+		config   ReleaseBuildConfiguration
+		expected []error
+	}{
+		{
+			name: "no tests",
+		},
+		{
+			name: "valid dependencies",
+			config: ReleaseBuildConfiguration{
+				InputConfiguration: InputConfiguration{
+					// tag_spec provides stable, initial
+					ReleaseTagConfiguration: &ReleaseTagConfiguration{Namespace: "ocp", Name: "4.5"},
+					// releases provides custom
+					Releases: map[string]UnresolvedRelease{
+						"custom": {Release: &Release{Version: "4.7", Channel: ReleaseChannelStable}},
+					},
+				},
+				BinaryBuildCommands: "whoa",
+				Images:              []ProjectDirectoryImageBuildStepConfiguration{{To: "image"}},
+				Tests: []TestStepConfiguration{
+					{MultiStageTestConfiguration: &MultiStageTestConfiguration{
+						Pre: []TestStep{
+							{LiteralTestStep: &LiteralTestStep{Dependencies: []StepDependency{{Name: "src"}, {Name: "bin"}, {Name: "installer"}}}},
+							{LiteralTestStep: &LiteralTestStep{Dependencies: []StepDependency{{Name: "stable:installer"}, {Name: "stable-initial:installer"}}}},
+						},
+						Test: []TestStep{{LiteralTestStep: &LiteralTestStep{Dependencies: []StepDependency{{Name: "pipeline:bin"}}}}},
+						Post: []TestStep{{LiteralTestStep: &LiteralTestStep{Dependencies: []StepDependency{{Name: "image"}}}}},
+					}},
+					{MultiStageTestConfigurationLiteral: &MultiStageTestConfigurationLiteral{
+						Pre:  []LiteralTestStep{{Dependencies: []StepDependency{{Name: "stable-custom:cli"}}}},
+						Test: []LiteralTestStep{{Dependencies: []StepDependency{{Name: "release:custom"}, {Name: "release:initial"}}}},
+						Post: []LiteralTestStep{{Dependencies: []StepDependency{{Name: "pipeline:image"}}}},
+					}},
+				},
+			},
+		},
+		{
+			name: "invalid dependencies",
+			config: ReleaseBuildConfiguration{
+				Tests: []TestStepConfiguration{
+					{MultiStageTestConfiguration: &MultiStageTestConfiguration{
+						Pre: []TestStep{
+							{LiteralTestStep: &LiteralTestStep{Dependencies: []StepDependency{{Name: "stable:installer"}, {Name: "stable:grafana"}}}},
+							{LiteralTestStep: &LiteralTestStep{Dependencies: []StepDependency{{Name: "stable-custom:cli"}, {Name: "totally-invalid:cli"}}}},
+						},
+						Test: []TestStep{
+							{LiteralTestStep: &LiteralTestStep{Dependencies: []StepDependency{{Name: "pipeline:bin"}}}},
+							{LiteralTestStep: &LiteralTestStep{Dependencies: []StepDependency{{Name: "pipeline:test-bin"}}}},
+						},
+						Post: []TestStep{{LiteralTestStep: &LiteralTestStep{Dependencies: []StepDependency{{Name: "pipeline:image"}}}}},
+					}},
+					{MultiStageTestConfigurationLiteral: &MultiStageTestConfigurationLiteral{
+						Pre:  []LiteralTestStep{{Dependencies: []StepDependency{{Name: "release:custom"}}}},
+						Test: []LiteralTestStep{{Dependencies: []StepDependency{{Name: "pipeline:root"}}}},
+						Post: []LiteralTestStep{{Dependencies: []StepDependency{{Name: "pipeline:rpms"}}}},
+					}},
+				},
+			},
+			expected: []error{
+				errors.New(`tests[0].steps.pre[0].dependencies[0]: cannot determine source for dependency "stable:installer" - this dependency requires a "latest" release, which is not configured`),
+				errors.New(`tests[0].steps.pre[0].dependencies[1]: cannot determine source for dependency "stable:grafana" - this dependency requires a "latest" release, which is not configured`),
+				errors.New(`tests[0].steps.pre[1].dependencies[0]: cannot determine source for dependency "stable-custom:cli" - this dependency requires a "custom" release, which is not configured`),
+				errors.New(`tests[0].steps.pre[1].dependencies[1]: cannot determine source for dependency "totally-invalid:cli" - ensure the correct ImageStream name was provided`),
+				errors.New(`tests[0].steps.test[0].dependencies[0]: cannot determine source for dependency "pipeline:bin" - this dependency requires built binaries, which are not configured`),
+				errors.New(`tests[0].steps.test[1].dependencies[0]: cannot determine source for dependency "pipeline:test-bin" - this dependency requires built test binaries, which are not configured`),
+				errors.New(`tests[0].steps.post[0].dependencies[0]: cannot determine source for dependency "pipeline:image" - no base image import or project image build is configured to provide this dependency`),
+				errors.New(`tests[1].literal_steps.pre[0].dependencies[0]: cannot determine source for dependency "release:custom" - this dependency requires a "custom" release, which is not configured`),
+				errors.New(`tests[1].literal_steps.test[0].dependencies[0]: cannot determine source for dependency "pipeline:root" - this dependency requires a build root, which is not configured`),
+				errors.New(`tests[1].literal_steps.post[0].dependencies[0]: cannot determine source for dependency "pipeline:rpms" - this dependency requires built RPMs, which are not configured`),
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if actual, expected := testCase.config.validateTestStepDependencies(), testCase.expected; !reflect.DeepEqual(actual, expected) {
+				t.Errorf("%s: got incorrect errors: %s", testCase.name, cmp.Diff(actual, expected, cmp.Comparer(func(x, y error) bool {
+					return x.Error() == y.Error()
+				})))
+			}
+		})
+	}
+}
+
+func TestReleaseBuildConfiguration_ImageStreamFor(t *testing.T) {
+	var testCases = []struct {
+		name     string
+		config   *ReleaseBuildConfiguration
+		image    string
+		expected string
+		explicit bool
+	}{
+		{
+			name: "explicit, is a base image",
+			config: &ReleaseBuildConfiguration{InputConfiguration: InputConfiguration{
+				BaseImages: map[string]ImageStreamTagReference{"thebase": {}},
+			}},
+			image:    "thebase",
+			expected: PipelineImageStream,
+			explicit: true,
+		},
+		{
+			name: "explicit, is an RPM base image",
+			config: &ReleaseBuildConfiguration{InputConfiguration: InputConfiguration{
+				BaseRPMImages: map[string]ImageStreamTagReference{"thebase": {}},
+			}},
+			image:    "thebase",
+			expected: PipelineImageStream,
+			explicit: true,
+		},
+		{
+			name:     "explicit, is a known pipeline image",
+			config:   &ReleaseBuildConfiguration{},
+			image:    "src",
+			expected: PipelineImageStream,
+			explicit: true,
+		},
+		{
+			name:     "explicit, is a known built image",
+			config:   &ReleaseBuildConfiguration{Images: []ProjectDirectoryImageBuildStepConfiguration{{To: "myimage"}}},
+			image:    "myimage",
+			expected: PipelineImageStream,
+			explicit: true,
+		},
+		{
+			name:     "implicit, is random",
+			config:   &ReleaseBuildConfiguration{},
+			image:    "something",
+			expected: StableImageStream,
+			explicit: false,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			actual, explicit := testCase.config.ImageStreamFor(testCase.image)
+			if explicit != testCase.explicit {
+				t.Errorf("%s: did not correctly determine if ImageStream was explicit (should be %v)", testCase.name, testCase.explicit)
+			}
+			if actual != testCase.expected {
+				t.Errorf("%s: did not correctly determine ImageStream wanted %s, got %s", testCase.name, testCase.expected, actual)
+			}
+		})
+	}
+}
+
+func TestReleaseBuildConfiguration_DependencyParts(t *testing.T) {
+	var testCases = []struct {
+		name           string
+		config         *ReleaseBuildConfiguration
+		dependency     StepDependency
+		expectedStream string
+		expectedTag    string
+		explicit       bool
+	}{
+		{
+			name: "explicit, short-hand for base image",
+			config: &ReleaseBuildConfiguration{InputConfiguration: InputConfiguration{
+				BaseImages: map[string]ImageStreamTagReference{"thebase": {}},
+			}},
+			dependency:     StepDependency{Name: "thebase"},
+			expectedStream: PipelineImageStream,
+			expectedTag:    "thebase",
+			explicit:       true,
+		},
+		{
+			name:           "implicit, short-hand for random",
+			config:         &ReleaseBuildConfiguration{},
+			dependency:     StepDependency{Name: "whatever"},
+			expectedStream: StableImageStream,
+			expectedTag:    "whatever",
+			explicit:       false,
+		},
+		{
+			name:           "explicit, long-form for stable",
+			config:         &ReleaseBuildConfiguration{},
+			dependency:     StepDependency{Name: "stable:installer"},
+			expectedStream: StableImageStream,
+			expectedTag:    "installer",
+			explicit:       true,
+		},
+		{
+			name:           "explicit, long-form for something crazy",
+			config:         &ReleaseBuildConfiguration{},
+			dependency:     StepDependency{Name: "whoa:really"},
+			expectedStream: "whoa",
+			expectedTag:    "really",
+			explicit:       true,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			actualStream, actualTag, explicit := testCase.config.DependencyParts(testCase.dependency)
+			if explicit != testCase.explicit {
+				t.Errorf("%s: did not correctly determine if ImageStream was explicit (should be %v)", testCase.name, testCase.explicit)
+			}
+			if actualStream != testCase.expectedStream {
+				t.Errorf("%s: did not correctly determine ImageStream wanted %s, got %s", testCase.name, testCase.expectedStream, actualStream)
+			}
+			if actualTag != testCase.expectedTag {
+				t.Errorf("%s: did not correctly determine ImageTag wanted %s, got %s", testCase.name, testCase.expectedTag, actualTag)
+			}
+		})
+	}
+}

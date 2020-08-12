@@ -104,8 +104,9 @@ func (c ReleaseBuildConfiguration) BuildsImage(name string) bool {
 	return false
 }
 
-// IsPipelineImage checks if `name` will be a tag in the pipeline image stream.
-func (c ReleaseBuildConfiguration) IsPipelineImage(name string) bool {
+// IsBaseImage checks if `name` will be a tag in the pipeline image stream
+// by virtue of being imported as a base image
+func (c ReleaseBuildConfiguration) IsBaseImage(name string) bool {
 	for i := range c.BaseImages {
 		if i == name {
 			return true
@@ -115,6 +116,14 @@ func (c ReleaseBuildConfiguration) IsPipelineImage(name string) bool {
 		if i == name {
 			return true
 		}
+	}
+	return false
+}
+
+// IsPipelineImage checks if `name` will be a tag in the pipeline image stream.
+func (c ReleaseBuildConfiguration) IsPipelineImage(name string) bool {
+	if c.IsBaseImage(name) {
+		return true
 	}
 	switch name {
 	case string(PipelineImageStreamTagReferenceRoot),
@@ -563,6 +572,9 @@ type LiteralTestStep struct {
 	Credentials []CredentialReference `json:"credentials,omitempty"`
 	// Environment lists parameters that should be set by the test.
 	Environment []StepParameter `json:"env,omitempty"`
+	// Dependencies lists images which must be available before the test runs
+	// and the environment variables which are used to expose their pull specs.
+	Dependencies []StepDependency `json:"dependencies,omitempty"`
 	// OptionalOnSuccess defines if this step should be skipped as long
 	// as all `pre` and `test` steps were successful and AllowSkipOnSuccess
 	// flag is set to true in MultiStageTestConfiguration. This option is
@@ -588,6 +600,15 @@ type CredentialReference struct {
 	Name string `json:"name"`
 	// MountPath is where the secret should be mounted.
 	MountPath string `json:"mount_path"`
+}
+
+// StepDependency defines a dependency on an image and the environment variable
+// used to expose the image's pull spec to the step.
+type StepDependency struct {
+	// Name is the tag or stream:tag that this dependency references
+	Name string `json:"name"`
+	// Env is the environment variable that the image's pull spec is exposed with
+	Env string `json:"env"`
 }
 
 // FromImageTag returns the internal name for the image tag that will be used
@@ -1108,15 +1129,15 @@ const (
 	// build outputs from the repository under test and
 	// the associated images imported from integration streams
 	StableImageStream = "stable"
-	// LatestStableName is the name of the special latest
+	// LatestReleaseName is the name of the special latest
 	// stable stream, images in this stream are held in
 	// the StableImageStream. Images for other versions of
 	// the stream are held in similarly-named streams.
-	LatestStableName = "latest"
-	// InitialImageStream is the name of the special stable
+	LatestReleaseName = "latest"
+	// LatestReleaseName is the name of the special stable
 	// stream we copy at import to keep for upgrade tests.
 	// TODO(skuznets): remove these when they're not implicit
-	InitialImageStream = "initial"
+	InitialReleaseName = "initial"
 
 	// ReleaseImageStream is the name of the ImageStream
 	// used to hold built or imported release payload images

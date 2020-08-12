@@ -174,7 +174,7 @@ func FromConfig(
 			// as well. For backwards compatibility, we explicitly support
 			// 'initial' and 'latest': if not provided, we will build them.
 			// If a pull spec was provided, however, it will be used.
-			for _, name := range []string{api.InitialImageStream, api.LatestStableName} {
+			for _, name := range []string{api.InitialReleaseName, api.LatestReleaseName} {
 				var releaseStep api.Step
 				envVar := utils.ReleaseImageEnv(name)
 				if params.HasInput(envVar) {
@@ -224,7 +224,7 @@ func FromConfig(
 			step = release.ImportReleaseStep(resolveConfig.Name, value, false, config.Resources, podClient, imageClient, saGetter, rbacClient, artifactDir, jobSpec)
 		} else if testStep := rawStep.TestStepConfiguration; testStep != nil {
 			if test := testStep.MultiStageTestConfigurationLiteral; test != nil {
-				step = steps.MultiStageTestStep(*testStep, config, params, podClient, secretGetter, saGetter, rbacClient, artifactDir, jobSpec)
+				step = steps.MultiStageTestStep(*testStep, config, params, podClient, secretGetter, saGetter, rbacClient, imageClient, artifactDir, jobSpec)
 				if test.ClusterProfile != "" {
 					step = steps.LeaseStep(leaseClient, test.ClusterProfile.LeaseType(), step, jobSpec.Namespace, namespaceClient)
 				}

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 	coreapi "k8s.io/api/core/v1"
 	rbacapi "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -36,7 +37,7 @@ const (
 )
 
 var envForProfile = []string{
-	utils.ReleaseImageEnv(api.LatestStableName),
+	utils.ReleaseImageEnv(api.LatestReleaseName),
 	leaseEnv,
 	utils.ImageFormatEnv,
 }
@@ -53,6 +54,7 @@ type multiStageTestStep struct {
 	secretClient       coreclientset.SecretsGetter
 	saClient           coreclientset.ServiceAccountsGetter
 	rbacClient         rbacclientset.RbacV1Interface
+	isClient           imageclientset.ImageStreamsGetter
 	artifactDir        string
 	jobSpec            *api.JobSpec
 	pre, test, post    []api.LiteralTestStep
@@ -68,10 +70,11 @@ func MultiStageTestStep(
 	secretClient coreclientset.SecretsGetter,
 	saClient coreclientset.ServiceAccountsGetter,
 	rbacClient rbacclientset.RbacV1Interface,
+	isClient imageclientset.ImageStreamsGetter,
 	artifactDir string,
 	jobSpec *api.JobSpec,
 ) api.Step {
-	return newMultiStageTestStep(testConfig, config, params, podClient, secretClient, saClient, rbacClient, artifactDir, jobSpec)
+	return newMultiStageTestStep(testConfig, config, params, podClient, secretClient, saClient, rbacClient, isClient, artifactDir, jobSpec)
 }
 
 func newMultiStageTestStep(
@@ -82,6 +85,7 @@ func newMultiStageTestStep(
 	secretClient coreclientset.SecretsGetter,
 	saClient coreclientset.ServiceAccountsGetter,
 	rbacClient rbacclientset.RbacV1Interface,
+	isClient imageclientset.ImageStreamsGetter,
 	artifactDir string,
 	jobSpec *api.JobSpec,
 ) *multiStageTestStep {
@@ -99,6 +103,7 @@ func newMultiStageTestStep(
 		secretClient:       secretClient,
 		saClient:           saClient,
 		rbacClient:         rbacClient,
+		isClient:           isClient,
 		artifactDir:        artifactDir,
 		jobSpec:            jobSpec,
 		pre:                ms.Pre,
@@ -179,6 +184,13 @@ func (s *multiStageTestStep) Requires() (ret []api.StepLink) {
 		if link, ok := step.FromImageTag(); ok {
 			internalLinks[link] = struct{}{}
 		}
+
+		for _, dependency := range step.Dependencies {
+			// we validate that the link will exist at config load time
+			// so we can safely ignore the case where !ok
+			imageStream, name, _ := s.config.DependencyParts(dependency)
+			ret = append(ret, api.LinkForImage(imageStream, name))
+		}
 	}
 	for link := range internalLinks {
 		ret = append(ret, api.InternalImageLink(link))
@@ -192,7 +204,7 @@ func (s *multiStageTestStep) Requires() (ret []api.StepLink) {
 		}
 	}
 	if needsReleaseImage && !needsReleasePayload {
-		ret = append(ret, api.StableImagesLink(api.LatestStableName))
+		ret = append(ret, api.ReleaseImagesLink(api.LatestReleaseName))
 	}
 	return
 }
@@ -335,11 +347,8 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 		if link, ok := step.FromImageTag(); ok {
 			image = fmt.Sprintf("%s:%s", api.PipelineImageStream, link)
 		} else {
-			if s.config.IsPipelineImage(image) || s.config.BuildsImage(image) {
-				image = fmt.Sprintf("%s:%s", api.PipelineImageStream, image)
-			} else {
-				image = fmt.Sprintf("%s:%s", api.StableImageStream, image)
-			}
+			stream, _ := s.config.ImageStreamFor(image)
+			image = fmt.Sprintf("%s:%s", stream, image)
 		}
 		resources, err := resourcesFor(step.Resources)
 		if err != nil {
@@ -365,6 +374,12 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 		}...)
 		container.Env = append(container.Env, env...)
 		container.Env = append(container.Env, s.generateParams(step.Environment)...)
+		depEnv, depErrs := s.envForDependencies(step)
+		if len(depErrs) != 0 {
+			errs = append(errs, depErrs...)
+			continue
+		}
+		container.Env = append(container.Env, depEnv...)
 		if owner := s.jobSpec.Owner(); owner != nil {
 			pod.OwnerReferences = append(pod.OwnerReferences, *owner)
 		}
@@ -379,6 +394,23 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 		ret = append(ret, *pod)
 	}
 	return ret, utilerrors.NewAggregate(errs)
+}
+
+func (s *multiStageTestStep) envForDependencies(step api.LiteralTestStep) ([]coreapi.EnvVar, []error) {
+	var env []coreapi.EnvVar
+	var errs []error
+	for _, dependency := range step.Dependencies {
+		imageStream, name, _ := s.config.DependencyParts(dependency)
+		ref, err := utils.ImageDigestFor(s.isClient, s.jobSpec.Namespace, imageStream, name)()
+		if err != nil {
+			errs = append(errs, fmt.Errorf("could not determine image pull spec for image %s on step %s", dependency.Name, step.As))
+			continue
+		}
+		env = append(env, coreapi.EnvVar{
+			Name: dependency.Env, Value: ref,
+		})
+	}
+	return env, errs
 }
 
 func addSecretWrapper(pod *coreapi.Pod) {

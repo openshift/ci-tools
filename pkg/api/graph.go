@@ -151,19 +151,19 @@ func (l *rpmRepoLink) SatisfiedBy(other StepLink) bool {
 	}
 }
 
-// StableImagesLink describes the content of a stable(-foo)?
+// ReleaseImagesLink describes the content of a stable(-foo)?
 // ImageStream in the test namespace.
-func StableImagesLink(name string) StepLink {
+func ReleaseImagesLink(name string) StepLink {
 	return &internalImageStreamLink{
-		name: StableStreamFor(name),
+		name: ReleaseStreamFor(name),
 	}
 }
 
-// StableImageTagLink describes a specific tag in a stable(-foo)?
+// ReleaseImageTagLink describes a specific tag in a stable(-foo)?
 // ImageStream in the test namespace.
-func StableImageTagLink(name, tag string) StepLink {
+func ReleaseImageTagLink(name, tag string) StepLink {
 	return &internalImageStreamTagLink{
-		name: StableStreamFor(name),
+		name: ReleaseStreamFor(name),
 		tag:  tag,
 	}
 }
@@ -176,12 +176,36 @@ func Comparer() cmp.Option {
 	)
 }
 
-func StableStreamFor(name string) string {
-	if name == LatestStableName {
+// ReleaseStreamFor determines the ImageStream into which a named
+// release will be imported or assembled.
+func ReleaseStreamFor(name string) string {
+	if name == LatestReleaseName {
 		return StableImageStream
 	}
 
 	return fmt.Sprintf("%s-%s", StableImageStream, name)
+}
+
+// ReleaseNameFrom determines the named release that was imported
+// or assembled into an ImageStream.
+func ReleaseNameFrom(stream string) string {
+	if stream == StableImageStream {
+		return LatestReleaseName
+	}
+
+	return strings.TrimPrefix(stream, fmt.Sprintf("%s-", StableImageStream))
+}
+
+// IsReleaseStream determines if the ImageStream was created from
+// an import or assembly of a release.
+func IsReleaseStream(stream string) bool {
+	return strings.HasPrefix(stream, StableImageStream)
+}
+
+// IsReleasePayloadStream determines if the ImageStream holds
+// release paylaod images.
+func IsReleasePayloadStream(stream string) bool {
+	return stream == ReleaseImageStream
 }
 
 type StepNode struct {
@@ -321,4 +345,26 @@ const CIOperatorStepGraphJSONFilename = "ci-operator-step-graph.json"
 // and returns the full url for the step graph json document.
 func StepGraphJSONURL(baseJobURL string) string {
 	return strings.Join([]string{baseJobURL, "artifacts", CIOperatorStepGraphJSONFilename}, "/")
+}
+
+// LinkForImage determines what dependent link is required
+// for the user's image dependency
+func LinkForImage(imageStream, tag string) StepLink {
+	switch {
+	case imageStream == PipelineImageStream:
+		// the user needs an image we're building
+		return InternalImageLink(PipelineImageStreamTagReference(tag))
+	case IsReleaseStream(imageStream):
+		// the user needs a tag that's a component of some release;
+		// we cant' rely on a specific tag, as they are implicit in
+		// the import process and won't be present in the build graph,
+		// so we wait for the whole import to succeed
+		return ReleaseImagesLink(ReleaseNameFrom(imageStream))
+	case IsReleasePayloadStream(imageStream):
+		// the user needs a release payload
+		return ReleasePayloadImageLink(tag)
+	default:
+		// we have no idea what the user's configured
+		return nil
+	}
 }

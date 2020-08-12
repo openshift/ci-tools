@@ -4,6 +4,8 @@ import (
 	"context"
 	"reflect"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestMatches(t *testing.T) {
@@ -33,8 +35,8 @@ func TestMatches(t *testing.T) {
 		},
 		{
 			name:    "release images matches itself",
-			first:   StableImagesLink(LatestStableName),
-			second:  StableImagesLink(LatestStableName),
+			first:   ReleaseImagesLink(LatestReleaseName),
+			second:  ReleaseImagesLink(LatestReleaseName),
 			matches: true,
 		},
 		{
@@ -64,7 +66,7 @@ func TestMatches(t *testing.T) {
 		{
 			name:    "internal does not match release images",
 			first:   InternalImageLink(PipelineImageStreamTagReferenceRPMs),
-			second:  StableImagesLink(LatestStableName),
+			second:  ReleaseImagesLink(LatestReleaseName),
 			matches: false,
 		},
 		{
@@ -76,13 +78,13 @@ func TestMatches(t *testing.T) {
 		{
 			name:    "external does not match release images",
 			first:   ExternalImageLink(ImageStreamTagReference{Namespace: "ns", Name: "name", Tag: "latest"}),
-			second:  StableImagesLink(LatestStableName),
+			second:  ReleaseImagesLink(LatestReleaseName),
 			matches: false,
 		},
 		{
 			name:    "RPM does not match release images",
 			first:   RPMRepoLink(),
-			second:  StableImagesLink(LatestStableName),
+			second:  ReleaseImagesLink(LatestReleaseName),
 			matches: false,
 		},
 	}
@@ -217,6 +219,71 @@ func TestBuildGraph(t *testing.T) {
 	for _, testCase := range testCases {
 		if actual, expected := BuildGraph(testCase.input), testCase.output; !reflect.DeepEqual(actual, expected) {
 			t.Errorf("%s: did not generate step graph as expected:\nwant:\n\t%v\nhave:\n\t%v", testCase.name, expected, actual)
+		}
+	}
+}
+
+func TestReleaseNames(t *testing.T) {
+	var testCases = []string{
+		LatestReleaseName,
+		InitialReleaseName,
+		"foo",
+	}
+	for _, name := range testCases {
+		stream := ReleaseStreamFor(name)
+		if !IsReleaseStream(stream) {
+			t.Errorf("stream %s for name %s was not identified as a release stream", stream, name)
+		}
+		if actual, expected := ReleaseNameFrom(stream), name; actual != expected {
+			t.Errorf("parsed name %s from stream %s, but it was created for name %s", actual, stream, expected)
+		}
+	}
+
+}
+
+func TestLinkForImage(t *testing.T) {
+	var testCases = []struct {
+		stream, tag string
+		expected    StepLink
+	}{
+		{
+			stream:   "pipeline",
+			tag:      "src",
+			expected: InternalImageLink(PipelineImageStreamTagReferenceSource),
+		},
+		{
+			stream:   "pipeline",
+			tag:      "rpms",
+			expected: InternalImageLink(PipelineImageStreamTagReferenceRPMs),
+		},
+		{
+			stream:   "stable",
+			tag:      "installer",
+			expected: ReleaseImagesLink(LatestReleaseName),
+		},
+		{
+			stream:   "stable-initial",
+			tag:      "cli",
+			expected: ReleaseImagesLink(InitialReleaseName),
+		},
+		{
+			stream:   "stable-whatever",
+			tag:      "hyperconverged-cluster-operator",
+			expected: ReleaseImagesLink("whatever"),
+		},
+		{
+			stream:   "release",
+			tag:      "latest",
+			expected: ReleasePayloadImageLink(LatestReleaseName),
+		},
+		{
+			stream: "crazy",
+			tag:    "tag",
+		},
+	}
+	for _, testCase := range testCases {
+		if diff := cmp.Diff(LinkForImage(testCase.stream, testCase.tag), testCase.expected, Comparer()); diff != "" {
+			t.Errorf("got incorrect link for %s:%s: %v", testCase.stream, testCase.tag, diff)
 		}
 	}
 }

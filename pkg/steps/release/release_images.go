@@ -24,6 +24,8 @@ import (
 	"github.com/openshift/ci-tools/pkg/util"
 )
 
+const releaseConfigAnnotation = "release.openshift.io/config"
+
 // stableImagesTagStep is used when no release configuration is necessary
 type stableImagesTagStep struct {
 	jobSpec   *api.JobSpec
@@ -120,13 +122,17 @@ func (s *releaseImagesTagStep) run(ctx context.Context) error {
 	is.UID = ""
 	newIS := &imageapi.ImageStream{
 		ObjectMeta: meta.ObjectMeta{
-			Name: api.StableStreamFor(api.LatestStableName),
+			Name:        api.StableStreamFor(api.LatestStableName),
+			Annotations: map[string]string{},
 		},
 		Spec: imageapi.ImageStreamSpec{
 			LookupPolicy: imageapi.ImageLookupPolicy{
 				Local: true,
 			},
 		},
+	}
+	if raw, ok := is.ObjectMeta.Annotations[releaseConfigAnnotation]; ok {
+		newIS.ObjectMeta.Annotations[releaseConfigAnnotation] = raw
 	}
 	for _, tag := range is.Spec.Tags {
 		if valid, _ := utils.FindStatusTag(is, tag.Name); valid != nil {

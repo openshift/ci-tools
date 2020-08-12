@@ -61,6 +61,7 @@ type importReleaseStep struct {
 	rbacClient  rbacclientset.RbacV1Interface
 	artifactDir string
 	jobSpec     *api.JobSpec
+	pullSecret  *coreapi.Secret
 }
 
 func (s *importReleaseStep) Inputs() (api.InputDefinition, error) {
@@ -203,6 +204,22 @@ func (s *importReleaseStep) run(ctx context.Context) error {
 		return fmt.Errorf("unable to tag the 'cli' image into the stable stream: %w", err)
 	}
 
+	var registryConfig string
+	var secrets []*api.Secret
+	if s.pullSecret != nil {
+		registryConfig = " --registry-config=/pull/.dockerconfigjson"
+		secrets = []*api.Secret{{
+			Name:      s.pullSecret.Name,
+			MountPath: "/pull",
+		}}
+	}
+	commands := fmt.Sprintf(`
+set -euo pipefail
+export HOME=/tmp
+oc registry login
+oc adm release extract%s --from=%q --file=image-references > /tmp/artifacts/%s
+`, registryConfig, pullSpec, target)
+
 	// run adm release extract and grab the raw image-references from the payload
 	podConfig := steps.PodStepConfiguration{
 		SkipLogs: true,
@@ -213,12 +230,8 @@ func (s *importReleaseStep) run(ctx context.Context) error {
 		},
 		ServiceAccountName: "ci-operator",
 		ArtifactDir:        "/tmp/artifacts",
-		Commands: fmt.Sprintf(`
-set -euo pipefail
-export HOME=/tmp
-oc registry login
-oc adm release extract --from=%q --file=image-references > /tmp/artifacts/%s
-`, pullSpec, target),
+		Secrets:            secrets,
+		Commands:           commands,
 	}
 
 	// set an explicit default for release-latest resources, but allow customization if necessary
@@ -401,7 +414,7 @@ func (s *importReleaseStep) Description() string {
 // ImportReleaseStep imports an existing update payload image
 func ImportReleaseStep(name, pullSpec string, append bool, resources api.ResourceConfiguration,
 	podClient steps.PodClient, imageClient imageclientset.ImageV1Interface, saGetter coreclientset.ServiceAccountsGetter,
-	rbacClient rbacclientset.RbacV1Interface, artifactDir string, jobSpec *api.JobSpec) api.Step {
+	rbacClient rbacclientset.RbacV1Interface, artifactDir string, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
 	return &importReleaseStep{
 		name:        name,
 		pullSpec:    pullSpec,
@@ -413,5 +426,6 @@ func ImportReleaseStep(name, pullSpec string, append bool, resources api.Resourc
 		rbacClient:  rbacClient,
 		artifactDir: artifactDir,
 		jobSpec:     jobSpec,
+		pullSecret:  pullSecret,
 	}
 }

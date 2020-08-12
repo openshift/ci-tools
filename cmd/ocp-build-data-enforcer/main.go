@@ -5,6 +5,10 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io/ioutil"
+	"path/filepath"
+	"strings"
+	"sync"
 
 	"github.com/openshift/imagebuilder"
 	dockercmd "github.com/openshift/imagebuilder/dockerfile/command"
@@ -12,25 +16,45 @@ import (
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	git "k8s.io/test-infra/prow/git/v2"
 
 	"github.com/openshift/ci-tools/pkg/api/ocpbuilddata"
 	"github.com/openshift/ci-tools/pkg/github"
+	"github.com/openshift/ci-tools/pkg/github/prcreation"
 )
 
 type options struct {
 	ocpBuildDataRepoDir string
 	majorMinor          ocpbuilddata.MajorMinor
+	createPRs           bool
+	prCreationCeiling   int
+	*prcreation.PRCreationOptions
 }
 
-func gatherOptions() *options {
-	o := &options{}
+func gatherOptions() (*options, error) {
+	o := &options{PRCreationOptions: &prcreation.PRCreationOptions{}}
+	o.PRCreationOptions.AddFlags(flag.CommandLine)
 	flag.StringVar(&o.ocpBuildDataRepoDir, "ocp-build-data-repo-dir", "../ocp-build-data", "The directory in which the ocp-build-data reposity is")
 	flag.StringVar(&o.majorMinor.Minor, "minor", "6", "The minor version to target")
+	flag.BoolVar(&o.createPRs, "create-prs", false, "If the tool should create PRs")
+	flag.IntVar(&o.prCreationCeiling, "pr-creation-ceiling", 5, "The maximum number of PRs to upsert")
 	flag.Parse()
-	return o
+
+	if o.createPRs {
+		if err := o.PRCreationOptions.Finalize(); err != nil {
+			return nil, fmt.Errorf("failed to finalize pr creation options: %w", err)
+		}
+	} else {
+		o.prCreationCeiling = 0
+	}
+	return o, nil
 }
+
 func main() {
-	opts := gatherOptions()
+	opts, err := gatherOptions()
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to gather options")
+	}
 	opts.majorMinor.Major = "4"
 
 	configs, err := ocpbuilddata.LoadImageConfigs(opts.ocpBuildDataRepoDir, opts.majorMinor)
@@ -46,60 +70,58 @@ func main() {
 		logrus.Fatal("Encountered errors")
 	}
 
+	clientFactory, err := git.NewClientFactory()
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to construct git client factory")
+	}
+	diffProcessor := dockerfileChangeProcessor(opts.prCreationCeiling, clientFactory, opts.PRCreationOptions)
+
 	errGroup := &errgroup.Group{}
 	for idx := range configs {
 		idx := idx
 		errGroup.Go(func() error {
-			processDockerfile(configs[idx])
-			return nil
+			return processDockerfile(configs[idx], diffProcessor)
 		})
 	}
 	if err := errGroup.Wait(); err != nil {
 		logrus.WithError(err).Fatal("Processing failed")
 	}
 
-	logrus.Infof("Processed %d configs", len(configs))
+	logrus.Infof("Successfully processed %d configs", len(configs))
 }
 
-func processDockerfile(config ocpbuilddata.OCPImageConfig) {
+type diffProcessor func(l *logrus.Entry, org, repo, path string, oldContent, newContent []byte) error
+
+func processDockerfile(config ocpbuilddata.OCPImageConfig, processor diffProcessor) error {
 	log := logrus.WithField("file", config.SourceFileName).WithField("org/repo", config.PublicRepo.String())
 	if config.PublicRepo.Org == "openshift-priv" {
 		log.Trace("Ignoring repo in openshift-priv org")
-		return
+		return nil
 	}
 	getter := github.FileGetterFactory(config.PublicRepo.Org, config.PublicRepo.Repo, "release-4.6")
 
 	log = log.WithField("dockerfile", config.Dockerfile())
 	data, err := getter(config.Dockerfile())
 	if err != nil {
-		log.WithError(err).Error("Failed to get dockerfile")
-		return
+		return fmt.Errorf("failed to get dockerfile: %w", err)
 	}
 	if len(data) == 0 {
-		log.Error("dockerfile is empty")
-		return
+		log.Info("dockerfile is empty")
+		return nil
 	}
 
 	updated, hasDiff, err := updateDockerfile(data, config)
 	if err != nil {
-		log.WithError(err).Error("Failed to update Dockerfile")
-		return
+		return fmt.Errorf("failed to update dockerfile: %w", err)
 	}
 	if !hasDiff {
-		return
+		return nil
 	}
-	diff := difflib.UnifiedDiff{
-		A:        difflib.SplitLines(string(data)),
-		B:        difflib.SplitLines(string(updated)),
-		FromFile: "original",
-		ToFile:   "updated",
-		Context:  3,
+	if err := processor(log, config.PublicRepo.Org, config.PublicRepo.Repo, config.Dockerfile(), data, updated); err != nil {
+		return fmt.Errorf("failed to process updated dockerfile: %w", err)
 	}
-	diffStr, err := difflib.GetUnifiedDiffString(diff)
-	if err != nil {
-		log.WithError(err).Error("Failed to construct diff")
-	}
-	log.Infof("Diff:\n---\n%s\n---\n", diffStr)
+
+	return nil
 }
 
 func updateDockerfile(dockerfile []byte, config ocpbuilddata.OCPImageConfig) ([]byte, bool, error) {
@@ -180,4 +202,71 @@ type dockerFileReplacment struct {
 	startLineIndex int
 	from           []byte
 	to             []byte
+}
+
+func dockerfileChangeProcessor(maxPRs int, gc git.ClientFactory, o *prcreation.PRCreationOptions) diffProcessor {
+	lock := &sync.Mutex{}
+	return func(l *logrus.Entry, org, repo, path string, oldContent, newContent []byte) error {
+		lock.Lock()
+		defer lock.Unlock()
+
+		// Just print the diff
+		if maxPRs == 0 {
+			diff := difflib.UnifiedDiff{
+				A:        difflib.SplitLines(string(oldContent)),
+				B:        difflib.SplitLines(string(newContent)),
+				FromFile: "original",
+				ToFile:   "updated",
+				Context:  3,
+			}
+			diffStr, err := difflib.GetUnifiedDiffString(diff)
+			if err != nil {
+				return fmt.Errorf("failed to construct diff: %w", err)
+			}
+			l.Infof("Diff:\n---\n%s\n---\n", diffStr)
+			return nil
+		}
+
+		// Create PR
+		maxPRs--
+		gitClient, err := gc.ClientFor(org, repo)
+		if err != nil {
+			return fmt.Errorf("Failed to get git client: %w", err)
+		}
+		defer func() {
+			if err := gitClient.Clean(); err != nil {
+				l.WithError(err).Error("Gitclient clean failed")
+			}
+		}()
+
+		if err := gitClient.Checkout("master"); err != nil {
+			return fmt.Errorf("failed to checkout master branch: %w", err)
+		}
+		if err := ioutil.WriteFile(filepath.Join(gitClient.Directory(), path), newContent, 0644); err != nil {
+			return fmt.Errorf("failed to write updated Dockerfile into repo: %w", err)
+		}
+		if err := o.UpsertPR(
+			gitClient.Directory(),
+			org,
+			repo,
+			"master",
+			fmt.Sprintf("Updating %s baseimages to mach ocp-build-data config", path),
+			strings.Join([]string{
+				"This PR is autogenerated by the [ocp-build-data-enforcer][1].",
+				"It updates the baseimages in the Dockerfile used for promotion in order to ensure it",
+				"matches the configuration in the [ocp-build-data repository][2] used",
+				"for producing release artifacts.",
+				"",
+				"If you believe the content of this PR is incorrect, please contact the dptp team in",
+				"#forum-testplatform.",
+				"",
+				"[1]: https://github.com/openshift/ci-tools/tree/master/cmd/ocp-build-data-enforcer",
+				"[2]: https://github.com/openshift/ocp-build-data/tree/openshift-4.6-rhel-8/images",
+			}, "\n"),
+		); err != nil {
+			return fmt.Errorf("failed to create PR: %w", err)
+		}
+
+		return nil
+	}
 }

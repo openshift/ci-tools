@@ -41,7 +41,7 @@ if [[ -z "${PULL_SECRET_DIR:-}" ]]; then
 fi
 os::cmd::expect_success "ci-operator --secret-dir ${PULL_SECRET_DIR} --target [release:initial] --config ${suite_dir}/dynamic-releases.yaml"
 os::cmd::expect_success "ci-operator --secret-dir ${PULL_SECRET_DIR} --target [release:latest] --config ${suite_dir}/dynamic-releases.yaml"
-# os::cmd::expect_success "ci-operator --secret-dir ${PULL_SECRET_DIR} --target [release:custom] --config ${suite_dir}/dynamic-releases.yaml"
+os::cmd::expect_success "ci-operator --image-import-pull-secret ${PULL_SECRET_DIR}/.dockerconfigjson --secret-dir ${PULL_SECRET_DIR} --target [release:custom] --config ${suite_dir}/dynamic-releases.yaml"
 os::cmd::expect_success "ci-operator --secret-dir ${PULL_SECRET_DIR} --target [release:pre] --config ${suite_dir}/dynamic-releases.yaml"
 RELEASE_IMAGE_LATEST="$( curl -s -H "Accept: application/json"  "https://api.openshift.com/api/upgrades_info/v1/graph?channel=stable-4.4&arch=amd64" | jq --raw-output ".nodes[0].payload" )"
 export RELEASE_IMAGE_LATEST

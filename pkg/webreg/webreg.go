@@ -401,6 +401,116 @@ const templateDefinitions = `
 {{ end }}
 `
 
+const optionalOperatorOverviewPage = `<h2 id="title"><a href="#title">Testing Operators Built With The Operator SDK and Deployed Through OLM</a></h2>
+
+<p>
+<code>ci-operator</code> has dedicated support for building, deploying and testing
+operator bundles, whether the operator repository uses the Operator SDK or not.
+This document outlines how to configure <code>ci-operator</code> to build a bundle
+and index image, and how to use those in end-to-end tests.
+</p>
+
+<p>
+Consult the <code>ci-operator</code> <a href="/help/ci-operator">overview</a> and
+the step environment <a href="/help">reference</a> for detailed descriptions of the
+broader test infrastructure that an operator test is defined in.
+</p>
+
+<h3 id="bundles"><a href="#bundles">Building Operator Bundles</a></h3>
+
+<p>
+Configuring <code>ci-operator</code> to build operator bundles from a repository
+is as simple as adding a new <code>operator</code> stanza, specifying the bundles
+that can be built from the repository and what sorts of container image pull
+specification substitutions are necessary during bundle build time. Substitutions
+allow for the operator manifests to refer to images that were built from the
+repository during the test or imported from other sources. The following example
+builds an operator, a bundle and replaces the operator's pull specification in
+manifests with the version built during the test:
+</p>
+
+<code>ci-operator</code> configuration:
+{{ yamlSyntax (index . "optionalOperatorBundleConfig") }}
+
+<p>
+When configuring a bundle build, two options are available:
+</p>
+
+<ul>
+  <li><code>dockerfile_path</code>: path to the Dockerfile that builds the bundle image, defaulting to <code>bundle.Dockerfile</code></li>
+  <li><code>context_dir</code>: base directory for the bundle image build, defaulting to the root of the source tree</li>
+</ul>
+
+<h3 id="index"><a href="#index">Building an Index</a></h3>
+
+<p>
+If <code>ci-operator</code> is configured to build operator bundles from a
+repository, an index image will automatically be built to package those bundles.
+</p>
+
+<h3 id="tests"><a href="#tests">Running Tests</a></h3>
+
+<p>
+Once <code>ci-operator</code> builds the operator bundle and index, they are
+available to be used as a <code>CatalogSource</code> by OLM for deploying and
+testing the operator. Today, the only style of testing that's supported is an
+end-to-end test, implemented with the <a href="/workflow/optional-operators-cvp-common-aws"><code>optional-operators-cvp-common-aws</code></a>
+workflow. This workflow takes the following steps to set up the test environment:
+</p>
+
+<ul>
+  <li>deploy an ephemeral OpenShift cluster to test against</li>
+  <li>create a <code>Namespace</code> to install into</li>
+  <li>create a <code>OperatorGroup</code> and <code>CatalogSource</code> to configure OLM</li>
+  <li>create a <code>Subscription</code> for the operator under test</li>
+  <li>wait for the operator under test to install and deploy</li>
+</ul>
+
+<p>
+A user-provided test can expect to have <code>${KUBECONFIG}</code> set, with
+administrative privileges, and for the operator under test to be fully deployed
+at the time that the test begins. The following example runs a test in this manner:
+</p>
+
+<code>ci-operator</code> configuration:
+{{ yamlSyntax (index . "optionalOperatorTestConfig") }}
+`
+
+const optionalOperatorBundleConfig = `base_images:
+  ubi:               # imports the UBI base image for building
+    namespace: "ocp"
+    name: "ubi"
+    tag: "8"
+  operand:           # imports the latest operand image
+    namespace: "ocp"
+    name: "operand"
+    tag: "latest"
+operator:
+  bundles: # entries create bundle images from Dockerfiles and an index containing all bundles
+  - dockerfile_path: path/to/Dockerfile # defaults to bundle.Dockerfile
+    context_dir: path/                  # defaults to .
+  substitutions:
+  - pullspec: "quay.io/openshift/operand:1.3"  # this will replace references to the operand with the imported version
+    with: "stable:operand"
+  - pullspec: "quay.io/openshift/operator:1.3" # this will replace references to the operator with the built version
+    with: "pipeline:ci-bundle-0"
+`
+
+const optionalOperatorTestConfig = `tests:
+- as: "operator-e2e"
+  steps:
+    workflow: "optional-operators-cvp-common-aws"
+    cluster_profile: "aws"
+    test:
+    - as: "e2e"
+      from: "src"               # the end-to-end tests run in the source repository
+      commands: "make test-e2e" # the commands to run end-to-end tests
+      resources:
+        requests:
+          cpu: 100m
+          memory: 200Mi
+`
+
 const ciOperatorOverviewPage = `<h2 id="title"><a href="#title">What is <code>ci-operator</code> and how does it work?</a></h2>
 
 <p>
@@ -2182,6 +2292,10 @@ func helpHandler(subPath string, w http.ResponseWriter, _ *http.Request) {
 		helpTemplate, err = helpFuncs.Parse(quotasAndLeasesPage)
 		data["dynamicBoskosConfig"] = dynamicBoskosConfig
 		data["staticBoskosConfig"] = staticBoskosConfig
+	case "/operators":
+		helpTemplate, err = helpFuncs.Parse(optionalOperatorOverviewPage)
+		data["optionalOperatorBundleConfig"] = optionalOperatorBundleConfig
+		data["optionalOperatorTestConfig"] = optionalOperatorTestConfig
 	default:
 		writeErrorPage(w, errors.New("Invalid path"), http.StatusNotImplemented)
 		return

@@ -457,7 +457,8 @@ func mergeRemotesAndPush(logger *logrus.Entry, git gitFunc, repoDir, srcRemote, 
 			mergeErrs = append(mergeErrs, fmt.Errorf("failed to perform merge --abort: %w", err))
 		}
 
-		return utilerrors.NewAggregate(mergeErrs)
+		logger.WithError(utilerrors.NewAggregate(mergeErrs)).Warn("error occured while fetching remote and merge")
+		return nil
 	}
 
 	cmd := []string{"push", "--tags"}

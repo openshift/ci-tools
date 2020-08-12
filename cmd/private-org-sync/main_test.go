@@ -598,7 +598,6 @@ func TestMirror(t *testing.T) {
 				},
 				{call: "merge --abort"},
 			},
-			expectError: true,
 		},
 	}
 	for _, tc := range testCases {

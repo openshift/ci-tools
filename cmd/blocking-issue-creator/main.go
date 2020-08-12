@@ -25,7 +25,7 @@ type options struct {
 }
 
 func (o *options) Validate() error {
-	if err := o.Options.Validate(); err != nil {
+	if err := o.FutureOptions.Validate(); err != nil {
 		return err
 	}
 	if o.username == "" {

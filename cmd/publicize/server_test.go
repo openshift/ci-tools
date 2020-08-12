@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -213,7 +214,7 @@ func TestMergeAndPushToRemote(t *testing.T) {
 				}
 				return nil
 			},
-			errExpectedMsg: "couldn't checkout to branch whatever: error checking out \"whatever\": exit status 1 error: pathspec 'whatever' did not match any file(s) known to git.\n",
+			errExpectedMsg: "couldn't checkout to branch whatever: error checking out \"whatever\": exit status 1 error: pathspec 'whatever' did not match any file(s) known to git",
 		},
 		{
 			id:     "wrong remote resolver, error expected",
@@ -438,7 +439,7 @@ and the repository exists.
 			t.Fatalf("test id: %s\nerror not expected: %v", tc.id, err)
 		}
 
-		if err != nil && !reflect.DeepEqual(err.Error(), tc.errExpectedMsg) {
+		if err != nil && !strings.HasPrefix(err.Error(), tc.errExpectedMsg) {
 			t.Fatal(cmp.Diff(err.Error(), tc.errExpectedMsg))
 		}
 

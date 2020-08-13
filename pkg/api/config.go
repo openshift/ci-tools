@@ -827,6 +827,25 @@ func validateReleaseBuildConfiguration(input *ReleaseBuildConfiguration, org, re
 	return validationErrors
 }
 
+func validateLeases(fieldRoot string, leases []StepLease) []error {
+	var ret []error
+	var dup []string
+	seen := sets.NewString()
+	for i, l := range leases {
+		if l.ResourceType == "" {
+			ret = append(ret, fmt.Errorf("%s[%d]: 'resource_type' cannot be empty", fieldRoot, i))
+		} else if seen.Has(l.ResourceType) {
+			dup = append(dup, l.ResourceType)
+		} else {
+			seen.Insert(l.ResourceType)
+		}
+	}
+	if dup != nil {
+		ret = append(ret, fmt.Errorf("%s: duplicate names: %s", fieldRoot, dup))
+	}
+	return ret
+}
+
 func validateResources(fieldRoot string, resources ResourceConfiguration) []error {
 	var validationErrors []error
 	if len(resources) == 0 {

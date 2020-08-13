@@ -1978,3 +1978,39 @@ func TestReleaseBuildConfiguration_DependencyParts(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateLeases(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		leases []StepLease
+		err    []error
+	}{{
+		name: "valid leases",
+		leases: []StepLease{
+			{ResourceType: "aws-quota-slice"},
+			{ResourceType: "gcp-quota-slice"},
+		},
+	}, {
+		name:   "invalid empty name",
+		leases: []StepLease{{ResourceType: ""}},
+		err: []error{
+			errors.New("test.leases[0]: 'resource_type' cannot be empty"),
+		},
+	}, {
+		name: "invalid duplicate names",
+		leases: []StepLease{
+			{ResourceType: "aws-quota-slice"},
+			{ResourceType: "aws-quota-slice"},
+		},
+		err: []error{
+			errors.New(`test.leases: duplicate names: [aws-quota-slice]`),
+		},
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateLeases("test.leases", tc.leases)
+			if diff := diff.ObjectReflectDiff(tc.err, err); diff != "<no diffs>" {
+				t.Errorf("incorrect: error: %s", diff)
+			}
+		})
+	}
+}

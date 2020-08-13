@@ -422,12 +422,10 @@ func TestStepConfigsForBuild(t *testing.T) {
 						ImageStreamTagReference: &api.ImageStreamTagReference{Tag: "manual"},
 					},
 				},
-				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
-					To: "operator-bundle",
-					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
-						OperatorManifests: "4.6",
-					},
-				}},
+				Operator: &api.OperatorStepConfiguration{
+					DockerfilePath: []string{"manifests/olm/bundle.Dockerfile"},
+					Manifests:      []string{"manifests/olm/4.6"},
+				},
 			},
 			jobSpec: &api.JobSpec{
 				JobSpec: downwardapi.JobSpec{
@@ -440,13 +438,12 @@ func TestStepConfigsForBuild(t *testing.T) {
 			},
 			output: []api.StepConfiguration{{
 				BundleSourceStepConfiguration: &api.BundleSourceStepConfiguration{
-					To:                "operator-bundle-sub",
-					OperatorManifests: "4.6",
+					Manifests: []string{"manifests/olm/4.6"},
 				},
 			}, {
 				IndexGeneratorStepConfiguration: &api.IndexGeneratorStepConfiguration{
 					To:            "ci-index-gen",
-					OperatorIndex: []string{"operator-bundle"},
+					OperatorIndex: []string{"ci-bundle0"},
 				},
 			}, {
 				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
@@ -460,8 +457,11 @@ func TestStepConfigsForBuild(t *testing.T) {
 				},
 			}, {
 				ProjectDirectoryImageBuildStepConfiguration: &api.ProjectDirectoryImageBuildStepConfiguration{
-					To:                               "operator-bundle",
-					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{OperatorManifests: "4.6"},
+					To: "ci-bundle0",
+					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+						ContextDir:     "manifests/olm",
+						DockerfilePath: "bundle.Dockerfile",
+					},
 				},
 			}, {
 				SourceStepConfiguration: &api.SourceStepConfiguration{

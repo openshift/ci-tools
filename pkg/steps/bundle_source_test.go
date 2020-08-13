@@ -9,7 +9,7 @@ import (
 
 	apiimagev1 "github.com/openshift/api/image/v1"
 	fakeimageclientset "github.com/openshift/client-go/image/clientset/versioned/fake"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 )
@@ -84,6 +84,12 @@ RUN ["bash", "-c", "find manifests/deploy/4.6 -type f -exec sed -i 's?quay.io/op
 RUN ["bash", "-c", "find manifests/deploy/4.6 -type f -exec sed -i 's?quay.io/openshift/origin-metering-hive:4.6?some-reg/target-namespace/stable:metering-hive?g' {} +"]
 RUN ["bash", "-c", "find manifests/deploy/4.6 -type f -exec sed -i 's?quay.io/openshift/origin-metering-hadoop:4.6?some-reg/target-namespace/stable:metering-hadoop?g' {} +"]
 RUN ["bash", "-c", "find manifests/deploy/4.6 -type f -exec sed -i 's?quay.io/openshift/origin-ghostunnel:4.6?some-reg/target-namespace/stable:ghostunnel?g' {} +"]
+RUN ["bash", "-c", "find manifests/deploy/4.6-alt -type f -exec sed -i 's?quay.io/openshift/origin-metering-ansible-operator:4.6?some-reg/target-namespace/stable:metering-ansible-operator?g' {} +"]
+RUN ["bash", "-c", "find manifests/deploy/4.6-alt -type f -exec sed -i 's?quay.io/openshift/origin-metering-reporting-operator:4.6?some-reg/target-namespace/stable:metering-reporting-operator?g' {} +"]
+RUN ["bash", "-c", "find manifests/deploy/4.6-alt -type f -exec sed -i 's?quay.io/openshift/origin-metering-presto:4.6?some-reg/target-namespace/stable:metering-presto?g' {} +"]
+RUN ["bash", "-c", "find manifests/deploy/4.6-alt -type f -exec sed -i 's?quay.io/openshift/origin-metering-hive:4.6?some-reg/target-namespace/stable:metering-hive?g' {} +"]
+RUN ["bash", "-c", "find manifests/deploy/4.6-alt -type f -exec sed -i 's?quay.io/openshift/origin-metering-hadoop:4.6?some-reg/target-namespace/stable:metering-hadoop?g' {} +"]
+RUN ["bash", "-c", "find manifests/deploy/4.6-alt -type f -exec sed -i 's?quay.io/openshift/origin-ghostunnel:4.6?some-reg/target-namespace/stable:ghostunnel?g' {} +"]
 `
 
 	fakeClientSet := ciopTestingClient{
@@ -101,9 +107,11 @@ RUN ["bash", "-c", "find manifests/deploy/4.6 -type f -exec sed -i 's?quay.io/op
 
 	s := bundleSourceStep{
 		config: api.BundleSourceStepConfiguration{
-			ContextDir:        "manifests/deploy",
-			OperatorManifests: "4.6",
-			Substitute:        subs,
+			Manifests: []string{
+				"manifests/deploy/4.6",
+				"manifests/deploy/4.6-alt",
+			},
+			Substitute: subs,
 		},
 		jobSpec:     &api.JobSpec{},
 		imageClient: fakeClientSet.ImageV1(),

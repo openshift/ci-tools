@@ -79,6 +79,10 @@ func (config *ReleaseBuildConfiguration) validate(org, repo string, resolved boo
 		validationErrors = append(validationErrors, validateImages("images", config.Images)...)
 	}
 
+	if config.Operator != nil {
+		validationErrors = append(validationErrors, validateOperator("operator", config.Operator)...)
+	}
+
 	if config.InputConfiguration.BaseImages != nil {
 		validationErrors = append(validationErrors, validateImageStreamTagReferenceMap("base_images", config.InputConfiguration.BaseImages)...)
 	}
@@ -280,18 +284,35 @@ func validateImages(fieldRoot string, input []ProjectDirectoryImageBuildStepConf
 		if image.To == "" {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: `to` must be set", fieldRootN))
 		}
-		if len(image.Substitute) > 0 {
-			if image.OperatorManifests == "" {
-				validationErrors = append(validationErrors, fmt.Errorf("%s.substitute: %s.operator_manifests must also be set", fieldRootN, fieldRootN))
+		if image.To == BundleSourceName {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: `to` cannot be %s", fieldRootN, BundleSourceName))
+		}
+		if strings.HasPrefix(string(image.To), BundlePrefix) {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: `to` cannot begin with `%s`", fieldRootN, BundlePrefix))
+		}
+		if image.To == IndexImageGeneratorName {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: `to` cannot be %s", fieldRootN, IndexImageGeneratorName))
+		}
+		if image.To == IndexImageName {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: `to` cannot be %s", fieldRootN, IndexImageName))
+		}
+	}
+	return validationErrors
+}
+
+func validateOperator(fieldRoot string, input *OperatorStepConfiguration) []error {
+	var validationErrors []error
+	if len(input.Substitutions) > 0 {
+		if len(input.Manifests) == 0 {
+			validationErrors = append(validationErrors, fmt.Errorf("%s.substitute: %s.operator_manifests must also be set", fieldRoot, fieldRoot))
+		}
+		for num, sub := range input.Substitutions {
+			fieldRootN := fmt.Sprintf("%s.substitute[%d]", fieldRoot, num)
+			if sub.PullSpec == "" {
+				validationErrors = append(validationErrors, fmt.Errorf("%s.pullspec: must be set", fieldRootN))
 			}
-			for num, sub := range image.Substitute {
-				fieldRootN2 := fmt.Sprintf("%s.substitute[%d]", fieldRootN, num)
-				if sub.PullSpec == "" {
-					validationErrors = append(validationErrors, fmt.Errorf("%s.pullspec: must be set", fieldRootN2))
-				}
-				if sub.With == "" {
-					validationErrors = append(validationErrors, fmt.Errorf("%s.with: must be set", fieldRootN2))
-				}
+			if sub.With == "" {
+				validationErrors = append(validationErrors, fmt.Errorf("%s.with: must be set", fieldRootN))
 			}
 		}
 	}

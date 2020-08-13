@@ -27,7 +27,6 @@ type indexGeneratorStep struct {
 
 const IndexDataDirectory = "/index-data"
 const IndexDockerfileName = "index.Dockerfile"
-const IndexImageName = "ci-index"
 
 func (s *indexGeneratorStep) Inputs() (api.InputDefinition, error) {
 	return nil, nil
@@ -140,9 +139,4 @@ func IndexGeneratorStep(config api.IndexGeneratorStepConfiguration, resources ap
 		jobSpec:     jobSpec,
 		pullSecret:  pullSecret,
 	}
-}
-
-// IndexGeneratorName returns the PipelineImageStreamTagReference for the generation image for the given index image tag reference
-func IndexGeneratorName(indexName api.PipelineImageStreamTagReference) api.PipelineImageStreamTagReference {
-	return api.PipelineImageStreamTagReference(fmt.Sprintf("%s-gen", indexName))
 }

@@ -10,7 +10,6 @@ trap "cleanup" EXIT
 suite_dir="${OS_ROOT}/test/e2e/simple"
 workdir="${BASETMPDIR}/e2e/simple"
 mkdir -p "${workdir}"
-JOB_SPEC_TEST="${JOB_SPEC}"
 
 os::test::junit::declare_suite_start "e2e/simple"
 # This test validates the ci-operator exit codes
@@ -51,9 +50,15 @@ unset RELEASE_IMAGE_LATEST
 os::test::junit::declare_suite_end
 
 os::test::junit::declare_suite_start "e2e/simple/optional-operator"
-export JOB_SPEC="${JOB_SPEC_TEST}"
-if [[ -z "${JOB_SPEC:-}" ]]; then
-  os::log::fatal "\$JOB_SPEC must be set for this test"
+if [[ -z "${PULL_BASE_SHA:-}" ]]; then
+  os::log::fatal "\$PULL_BASE_SHA must be set for this test"
 fi
-os::cmd::expect_success "ci-operator --image-import-pull-secret ${PULL_SECRET_DIR}/.dockerconfigjson --target [images] --config ${suite_dir}/optional-operators.yaml"
+if [[ -z "${PULL_NUMBER:-}" ]]; then
+  os::log::fatal "\$PULL_NUMBER must be set for this test"
+fi
+if [[ -z "${PULL_PULL_SHA:-}" ]]; then
+  os::log::fatal "\$PULL_PULL_SHA must be set for this test"
+fi
+export JOB_SPEC='{"type":"presubmit","job":"pull-ci-openshift-ci-tools-master-ci-operator-e2e","buildid":"0","prowjobid":"uuid","refs":{"org":"openshift","repo":"ci-tools","base_ref":"master","base_sha":"'${PULL_BASE_SHA}'","pulls":[{"number":'${PULL_NUMBER}',"author":"AlexNPavel","sha":"'${PULL_PULL_SHA}'"}]}}'
+os::cmd::expect_success "ci-operator --image-import-pull-secret ${PULL_SECRET_DIR}/.dockerconfigjson --target ci-index --config ${suite_dir}/optional-operators.yaml"
 os::test::junit::declare_suite_end

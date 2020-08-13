@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 
 	templateapi "github.com/openshift/api/template/v1"
@@ -451,19 +452,8 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.Job
 		}})
 	}
 
-	var bundles []string
 	for i := range config.Images {
 		image := &config.Images[i]
-		// If current image is operator bundle, add build step for its operator bundle source
-		if image.OperatorManifests != "" {
-			bundles = append(bundles, string(image.To))
-			buildSteps = append(buildSteps, api.StepConfiguration{BundleSourceStepConfiguration: &api.BundleSourceStepConfiguration{
-				To:                steps.BundleSourceName(image.To),
-				ContextDir:        image.ContextDir,
-				OperatorManifests: image.OperatorManifests,
-				Substitute:        image.Substitute,
-			}})
-		}
 		buildSteps = append(buildSteps, api.StepConfiguration{ProjectDirectoryImageBuildStepConfiguration: image})
 		var outputImageName string
 		if config.ReleaseTagConfiguration != nil {
@@ -471,24 +461,44 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.Job
 		} else {
 			outputImageName = api.StableImageStream
 		}
-		if image.OperatorManifests == "" {
-			buildSteps = append(buildSteps, api.StepConfiguration{OutputImageTagStepConfiguration: &api.OutputImageTagStepConfiguration{
-				From: image.To,
-				To: api.ImageStreamTagReference{
-					Name: outputImageName,
-					Tag:  string(image.To),
-				},
-				Optional: image.Optional,
-			}})
-		}
+		buildSteps = append(buildSteps, api.StepConfiguration{OutputImageTagStepConfiguration: &api.OutputImageTagStepConfiguration{
+			From: image.To,
+			To: api.ImageStreamTagReference{
+				Name: outputImageName,
+				Tag:  string(image.To),
+			},
+			Optional: image.Optional,
+		}})
 	}
-	if len(bundles) > 0 {
+
+	if config.Operator != nil {
+		// Build a bundle source image that substitutes all values in `substitutions` in all `manifests` directories
+		buildSteps = append(buildSteps, api.StepConfiguration{BundleSourceStepConfiguration: &api.BundleSourceStepConfiguration{
+			Manifests:  config.Operator.Manifests,
+			Substitute: config.Operator.Substitutions,
+		}})
+		// Build bundles
+		var bundles []string
+		for index, dockerfile := range config.Operator.DockerfilePath {
+			bundleName := fmt.Sprintf("%s%d", api.BundlePrefix, index)
+			bundles = append(bundles, bundleName)
+			image := &api.ProjectDirectoryImageBuildStepConfiguration{
+				To: api.PipelineImageStreamTagReference(bundleName),
+				ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+					ContextDir:     filepath.Dir(dockerfile),
+					DockerfilePath: filepath.Base(dockerfile),
+				},
+			}
+			buildSteps = append(buildSteps, api.StepConfiguration{ProjectDirectoryImageBuildStepConfiguration: image})
+		}
+		// Build index generator
 		buildSteps = append(buildSteps, api.StepConfiguration{IndexGeneratorStepConfiguration: &api.IndexGeneratorStepConfiguration{
-			To:            steps.IndexGeneratorName(steps.IndexImageName),
+			To:            api.IndexImageGeneratorName,
 			OperatorIndex: bundles,
 		}})
+		// Build the index
 		image := &api.ProjectDirectoryImageBuildStepConfiguration{
-			To: steps.IndexImageName,
+			To: api.IndexImageName,
 			ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
 				DockerfilePath: steps.IndexDockerfileName,
 			},

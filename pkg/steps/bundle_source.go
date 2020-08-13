@@ -3,10 +3,10 @@ package steps
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	buildapi "github.com/openshift/api/build/v1"
+	imageapi "github.com/openshift/api/image/v1"
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 	coreapi "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -46,7 +46,7 @@ func (s *bundleSourceStep) run(ctx context.Context) error {
 		return err
 	}
 	build := buildFromSource(
-		s.jobSpec, api.PipelineImageStreamTagReferenceSource, s.config.To,
+		s.jobSpec, api.PipelineImageStreamTagReferenceSource, api.BundleSourceName,
 		buildapi.BuildSource{
 			Type:       buildapi.BuildSourceDockerfile,
 			Dockerfile: &dockerfile,
@@ -57,7 +57,7 @@ func (s *bundleSourceStep) run(ctx context.Context) error {
 						Name: source,
 					},
 					Paths: []buildapi.ImageSourcePath{{
-						SourcePath:     fmt.Sprintf("%s/%s/.", workingDir, s.config.ContextDir),
+						SourcePath:     fmt.Sprintf("%s/.", workingDir),
 						DestinationDir: ".",
 					}},
 				},
@@ -78,20 +78,31 @@ func (s *bundleSourceStep) bundleSourceDockerfile() (string, error) {
 	var dockerCommands []string
 	dockerCommands = append(dockerCommands, "")
 	dockerCommands = append(dockerCommands, fmt.Sprintf("FROM %s:%s", api.PipelineImageStream, api.PipelineImageStreamTagReferenceSource))
-	manifestDir := filepath.Join(s.config.ContextDir, s.config.OperatorManifests)
 	is, err := s.imageClient.ImageStreams(s.jobSpec.Namespace()).Get(context.TODO(), api.StableImageStream, meta.GetOptions{})
 	if err != nil {
 		return "", fmt.Errorf("failed to get stable imagestream: %w", err)
 	}
-	for _, sub := range s.config.Substitute {
-		replaceSpec, exists := util.ResolvePullSpec(is, sub.With, false)
-		if !exists {
-			return "", fmt.Errorf("failed to get replacement imagestream for image tag `%s`", sub.With)
+	for _, manifestDir := range s.config.Manifests {
+		subCommands, err := substituteForDir(manifestDir, s.config.Substitute, is)
+		if err != nil {
+			return "", err
 		}
-		dockerCommands = append(dockerCommands, fmt.Sprintf(`RUN ["bash", "-c", "%s"]`, replaceCommand(manifestDir, sub.PullSpec, replaceSpec)))
+		dockerCommands = append(dockerCommands, subCommands...)
 	}
 	dockerCommands = append(dockerCommands, "")
 	return strings.Join(dockerCommands, "\n"), nil
+}
+
+func substituteForDir(manifestDir string, subs []api.PullSpecSubstitution, is *imageapi.ImageStream) ([]string, error) {
+	var dockerCommands []string
+	for _, sub := range subs {
+		replaceSpec, exists := util.ResolvePullSpec(is, sub.With, false)
+		if !exists {
+			return dockerCommands, fmt.Errorf("failed to get replacement imagestream for image tag `%s`", sub.With)
+		}
+		dockerCommands = append(dockerCommands, fmt.Sprintf(`RUN ["bash", "-c", "%s"]`, replaceCommand(manifestDir, sub.PullSpec, replaceSpec)))
+	}
+	return dockerCommands, nil
 }
 
 func (s *bundleSourceStep) Requires() []api.StepLink {
@@ -101,17 +112,17 @@ func (s *bundleSourceStep) Requires() []api.StepLink {
 }
 
 func (s *bundleSourceStep) Creates() []api.StepLink {
-	return []api.StepLink{api.InternalImageLink(s.config.To)}
+	return []api.StepLink{api.InternalImageLink(api.BundleSourceName)}
 }
 
 func (s *bundleSourceStep) Provides() api.ParameterMap {
 	return api.ParameterMap{}
 }
 
-func (s *bundleSourceStep) Name() string { return string(s.config.To) }
+func (s *bundleSourceStep) Name() string { return api.BundleSourceName }
 
 func (s *bundleSourceStep) Description() string {
-	return fmt.Sprintf("Build image %s from the repository", s.config.To)
+	return fmt.Sprintf("Build image %s from the repository", api.BundleSourceName)
 }
 
 func BundleSourceStep(config api.BundleSourceStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, imageClient imageclientset.ImageStreamsGetter, istClient imageclientset.ImageStreamTagsGetter, artifactDir string, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
@@ -125,9 +136,4 @@ func BundleSourceStep(config api.BundleSourceStepConfiguration, resources api.Re
 		jobSpec:     jobSpec,
 		pullSecret:  pullSecret,
 	}
-}
-
-// BundleSourceName returns the PipelineImageStreamTagReference for the source image for the given bundle image tag reference
-func BundleSourceName(bundleName api.PipelineImageStreamTagReference) api.PipelineImageStreamTagReference {
-	return api.PipelineImageStreamTagReference(fmt.Sprintf("%s-sub", bundleName))
 }

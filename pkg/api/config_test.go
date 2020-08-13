@@ -1479,57 +1479,92 @@ func TestValidateImages(t *testing.T) {
 		input  []ProjectDirectoryImageBuildStepConfiguration
 		output []error
 	}{{
-		name: "`to` must be set",
-		input: []ProjectDirectoryImageBuildStepConfiguration{{
-			ProjectDirectoryImageBuildInputs: ProjectDirectoryImageBuildInputs{
-				OperatorManifests: "manifests",
-				Substitute: []PullSpecSubstitution{{
-					PullSpec: "original",
-					With:     "substitute",
-				}},
-			},
-		}},
+		name:  "`to` must be set",
+		input: []ProjectDirectoryImageBuildStepConfiguration{{}},
 		output: []error{
 			errors.New("images[0]: `to` must be set"),
 		},
 	}, {
-		name: "missing a substitution.pullspec and a substitution.with",
+		name: "`to` cannot be src-bundle",
 		input: []ProjectDirectoryImageBuildStepConfiguration{{
-			To: "test",
-			ProjectDirectoryImageBuildInputs: ProjectDirectoryImageBuildInputs{
-				OperatorManifests: "manifests",
-				Substitute: []PullSpecSubstitution{{
-					PullSpec: "original",
-					With:     "substitute",
-				}, {
-					PullSpec: "original2",
-				}, {
-					With: "subsitute2",
-				}},
-			}},
-		},
+			To: "src-bundle",
+		}},
 		output: []error{
-			errors.New("images[0].substitute[1].with: must be set"),
-			errors.New("images[0].substitute[2].pullspec: must be set"),
+			errors.New("images[0]: `to` cannot be src-bundle"),
 		},
 	}, {
-		name: "substitution set without manifests",
+		name: "`to` cannot start with ci-bundle",
 		input: []ProjectDirectoryImageBuildStepConfiguration{{
-			To: "test",
-			ProjectDirectoryImageBuildInputs: ProjectDirectoryImageBuildInputs{
-				Substitute: []PullSpecSubstitution{{
-					PullSpec: "original",
-					With:     "substitute",
-				}},
-			}},
-		},
+			To: "ci-bundle0",
+		}},
 		output: []error{
-			errors.New("images[0].substitute: images[0].operator_manifests must also be set"),
+			errors.New("images[0]: `to` cannot begin with `ci-bundle`"),
+		},
+	}, {
+		name: "`to` cannot be ci-index-gen",
+		input: []ProjectDirectoryImageBuildStepConfiguration{{
+			To: "ci-index-gen",
+		}},
+		output: []error{
+			errors.New("images[0]: `to` cannot be ci-index-gen"),
+		},
+	}, {
+		name: "`to` cannot be ci-index",
+		input: []ProjectDirectoryImageBuildStepConfiguration{{
+			To: "ci-index",
+		}},
+		output: []error{
+			errors.New("images[0]: `to` cannot be ci-index"),
 		},
 	}}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			if actual, expected := validateImages("images", testCase.input), testCase.output; !reflect.DeepEqual(actual, expected) {
+				t.Errorf("%s: got incorrect errors: %s", testCase.name, cmp.Diff(actual, expected, cmp.Comparer(func(x, y error) bool {
+					return x.Error() == y.Error()
+				})))
+			}
+		})
+	}
+}
+
+func TestValidateOperator(t *testing.T) {
+	var testCases = []struct {
+		name   string
+		input  *OperatorStepConfiguration
+		output []error
+	}{{
+		name: "missing a substitution.pullspec and a substitution.with",
+		input: &OperatorStepConfiguration{
+			Manifests: []string{"manifests"},
+			Substitutions: []PullSpecSubstitution{{
+				PullSpec: "original",
+				With:     "substitute",
+			}, {
+				PullSpec: "original2",
+			}, {
+				With: "subsitute2",
+			}},
+		},
+		output: []error{
+			errors.New("operator.substitute[1].with: must be set"),
+			errors.New("operator.substitute[2].pullspec: must be set"),
+		},
+	}, {
+		name: "substitution set without manifests",
+		input: &OperatorStepConfiguration{
+			Substitutions: []PullSpecSubstitution{{
+				PullSpec: "original",
+				With:     "substitute",
+			}},
+		},
+		output: []error{
+			errors.New("operator.substitute: operator.operator_manifests must also be set"),
+		},
+	}}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if actual, expected := validateOperator("operator", testCase.input), testCase.output; !reflect.DeepEqual(actual, expected) {
 				t.Errorf("%s: got incorrect errors: %s", testCase.name, cmp.Diff(actual, expected, cmp.Comparer(func(x, y error) bool {
 					return x.Error() == y.Error()
 				})))

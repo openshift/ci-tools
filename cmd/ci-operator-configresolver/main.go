@@ -200,8 +200,6 @@ func main() {
 	}
 	level, _ := logrus.ParseLevel(o.logLevel)
 	logrus.SetLevel(level)
-	health := pjutil.NewHealth()
-	metrics.ExposeMetrics("ci-operator-configresolver", prowConfig.PushGateway{}, flagutil.DefaultMetricsPort)
 
 	configAgent, err := agents.NewConfigAgent(o.configPath, agents.WithConfigMetrics(configresolverMetrics.ErrorRate))
 	if err != nil {
@@ -216,7 +214,8 @@ func main() {
 	if o.validateOnly {
 		os.Exit(0)
 	}
-
+	health := pjutil.NewHealth()
+	metrics.ExposeMetrics("ci-operator-configresolver", prowConfig.PushGateway{}, flagutil.DefaultMetricsPort)
 	simplifier := simplifypath.NewSimplifier(l("", // shadow element mimicing the root
 		l("config"),
 		l("resolve"),

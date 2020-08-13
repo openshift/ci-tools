@@ -1,9 +1,7 @@
 #!/bin/bash
 source "$(dirname "${BASH_SOURCE}")/../../hack/lib/init.sh"
 
-rsync_tmp_dir=$(mktemp -d)
 function cleanup() {
-    rm -rf $rsync_tmp_dir
     os::test::junit::reconcile_output
     os::integration::configresolver::check_log
     os::cleanup::processes

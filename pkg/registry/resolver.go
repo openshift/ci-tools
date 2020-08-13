@@ -17,6 +17,29 @@ type ReferenceByName map[string]api.LiteralTestStep
 type ChainByName map[string]api.RegistryChain
 type WorkflowByName map[string]api.MultiStageTestConfiguration
 
+// Validate verifies the internal consistency of steps, chains, and workflows.
+// A superset of this validation is performed later when actual test
+// configurations are resolved.
+func Validate(stepsByName ReferenceByName, chainsByName ChainByName, workflowsByName WorkflowByName) error {
+	reg := registry{stepsByName, chainsByName, workflowsByName}
+	var ret []error
+	for k := range chainsByName {
+		if _, err := reg.process([]api.TestStep{{Chain: &k}}, sets.NewString(), stackForChain()); err != nil {
+			ret = append(ret, err...)
+		}
+	}
+	for k, v := range workflowsByName {
+		stack := stackForWorkflow(k, v.Environment)
+		for _, s := range [][]api.TestStep{v.Pre, v.Test, v.Post} {
+			if _, err := reg.process(s, sets.NewString(), stack); err != nil {
+				ret = append(ret, err...)
+			}
+		}
+		ret = append(ret, stack.records[0].checkUnused(&stack)...)
+	}
+	return errors.NewAggregate(ret)
+}
+
 // registry will hold all the registry information needed to convert between the
 // user provided configs referencing the registry and the internal, complete
 // representation
@@ -67,8 +90,10 @@ func (r *registry) Resolve(name string, config api.MultiStageTestConfiguration) 
 		ClusterProfile:     config.ClusterProfile,
 		AllowSkipOnSuccess: config.AllowSkipOnSuccess,
 	}
-	rec := stackRecordForTest(name, config.Environment)
-	stack := []stackRecord{rec}
+	stack := stackForTest(name, config.Environment)
+	if config.Workflow != nil {
+		stack.push(stackRecordForTest(*config.Workflow, nil))
+	}
 	pre, errs := r.process(config.Pre, sets.NewString(), stack)
 	expandedFlow.Pre = append(expandedFlow.Pre, pre...)
 	resolveErrors = append(resolveErrors, errs...)
@@ -80,13 +105,63 @@ func (r *registry) Resolve(name string, config api.MultiStageTestConfiguration) 
 	post, errs := r.process(config.Post, sets.NewString(), stack)
 	expandedFlow.Post = append(expandedFlow.Post, post...)
 	resolveErrors = append(resolveErrors, errs...)
-	for u := range rec.unused {
-		resolveErrors = append(resolveErrors, stackErrorf(stack, "no step declares parameter %q", u))
-	}
+	resolveErrors = append(resolveErrors, stack.records[0].checkUnused(&stack)...)
 	if resolveErrors != nil {
 		return api.MultiStageTestConfigurationLiteral{}, errors.NewAggregate(resolveErrors)
 	}
 	return expandedFlow, nil
+}
+
+type stack struct {
+	records []stackRecord
+	partial bool
+}
+
+func stackForChain() stack {
+	return stack{partial: true}
+}
+
+func stackForWorkflow(name string, env api.TestEnvironment) stack {
+	return stack{
+		records: []stackRecord{stackRecordForTest(name, env)},
+		partial: true,
+	}
+}
+
+func stackForTest(name string, env api.TestEnvironment) stack {
+	return stack{records: []stackRecord{stackRecordForTest(name, env)}}
+}
+
+func (s *stack) push(r stackRecord) {
+	s.records = append(s.records, r)
+}
+
+func (s *stack) pop() {
+	s.records = s.records[:len(s.records)-1]
+}
+
+func (s *stack) errorf(format string, args ...interface{}) error {
+	var b strings.Builder
+	for i := range s.records {
+		b.WriteString(s.records[i].name)
+		b.WriteString(": ")
+	}
+	args = append([]interface{}{b.String()}, args...)
+	return fmt.Errorf("%s"+format, args...)
+}
+
+func (s *stack) resolve(name string) *string {
+	for _, r := range s.records {
+		for j, e := range r.env {
+			if e.Name == name {
+				for _, r := range s.records {
+					r.unused.Delete(e.Name)
+				}
+				return r.env[j].Default
+			}
+		}
+	}
+	return nil
 }
 
 type stackRecord struct {
@@ -112,17 +187,14 @@ func stackRecordForTest(name string, env api.TestEnvironment) stackRecord {
 	return stackRecordForStep(name, params)
 }
 
-func stackErrorf(s []stackRecord, format string, args ...interface{}) error {
-	var b strings.Builder
-	for i := range s {
-		b.WriteString(s[i].name)
-		b.WriteString(": ")
+func (r *stackRecord) checkUnused(s *stack) (ret []error) {
+	for u := range r.unused {
+		ret = append(ret, s.errorf("no step declares parameter %q", u))
 	}
-	args = append([]interface{}{b.String()}, args...)
-	return fmt.Errorf("%s"+format, args...)
+	return
 }
 
-func (r *registry) process(steps []api.TestStep, seen sets.String, stack []stackRecord) (ret []api.LiteralTestStep, errs []error) {
+func (r *registry) process(steps []api.TestStep, seen sets.String, stack stack) (ret []api.LiteralTestStep, errs []error) {
 	for _, step := range steps {
 		if step.Chain != nil {
 			steps, err := r.processChain(&step, seen, stack)
@@ -139,65 +211,50 @@ func (r *registry) process(steps []api.TestStep, seen sets.String, stack []stack
 	return
 }
 
-func (r *registry) processChain(step *api.TestStep, seen sets.String, stack []stackRecord) ([]api.LiteralTestStep, []error) {
+func (r *registry) processChain(step *api.TestStep, seen sets.String, stack stack) ([]api.LiteralTestStep, []error) {
 	name := *step.Chain
 	chain, ok := r.chainsByName[name]
 	if !ok {
-		return nil, []error{stackErrorf(stack, "unknown step chain: %s", name)}
+		return nil, []error{stack.errorf("unknown step chain: %s", name)}
 	}
 	rec := stackRecordForStep(name, chain.Environment)
-	stack = append(stack, rec)
+	stack.push(rec)
+	defer stack.pop()
 	ret, err := r.process(chain.Steps, seen, stack)
-	for u := range rec.unused {
-		err = append(err, stackErrorf(stack, "no step declares parameter %q", u))
-	}
+	err = append(err, rec.checkUnused(&stack)...)
 	return ret, err
 }
 
-func (r *registry) processStep(step *api.TestStep, seen sets.String, stack []stackRecord) (ret api.LiteralTestStep, err []error) {
+func (r *registry) processStep(step *api.TestStep, seen sets.String, stack stack) (ret api.LiteralTestStep, err []error) {
 	if ref := step.Reference; ref != nil {
 		var ok bool
 		ret, ok = r.stepsByName[*ref]
 		if !ok {
-			return api.LiteralTestStep{}, []error{stackErrorf(stack, "invalid step reference: %s", *ref)}
+			return api.LiteralTestStep{}, []error{stack.errorf("invalid step reference: %s", *ref)}
 		}
 	} else if step.LiteralTestStep != nil {
 		ret = *step.LiteralTestStep
 	} else {
-		return api.LiteralTestStep{}, []error{stackErrorf(stack, "encountered TestStep where both `Reference` and `LiteralTestStep` are nil")}
+		return api.LiteralTestStep{}, []error{stack.errorf("encountered TestStep where both `Reference` and `LiteralTestStep` are nil")}
 	}
 	if seen.Has(ret.As) {
-		return api.LiteralTestStep{}, []error{stackErrorf(stack, "duplicate name: %s", ret.As)}
+		return api.LiteralTestStep{}, []error{stack.errorf("duplicate name: %s", ret.As)}
 	}
 	seen.Insert(ret.As)
 	var errs []error
 	if ret.Environment != nil {
 		env := make([]api.StepParameter, 0, len(ret.Environment))
 		for _, e := range ret.Environment {
-			if v := resolveVariable(e.Name, stack); v != nil {
+			if v := stack.resolve(e.Name); v != nil {
 				e.Default = v
-			} else if e.Default == nil {
-				errs = append(errs, stackErrorf(stack, "%s: unresolved parameter: %s", ret.As, e.Name))
+			} else if e.Default == nil && !stack.partial {
+				errs = append(errs, stack.errorf("%s: unresolved parameter: %s", ret.As, e.Name))
 			}
 			env = append(env, e)
 		}
 		ret.Environment = env
 	}
 	return ret, errs
-}
-
-func resolveVariable(name string, stack []stackRecord) *string {
-	for _, r := range stack {
-		for j, e := range r.env {
-			if e.Name == name {
-				for _, r := range stack {
-					r.unused.Delete(e.Name)
-				}
-				return r.env[j].Default
-			}
-		}
-	}
-	return nil
 }
 
 // ResolveConfig uses a resolver to resolve an entire ci-operator config

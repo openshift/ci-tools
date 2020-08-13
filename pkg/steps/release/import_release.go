@@ -394,7 +394,7 @@ func (s *importReleaseStep) Requires() []api.StepLink {
 }
 
 func (s *importReleaseStep) Creates() []api.StepLink {
-	return []api.StepLink{api.ReleasePayloadImageLink(s.name)}
+	return []api.StepLink{api.ReleasePayloadImageLink(s.name), api.ReleaseImagesLink(s.name)}
 }
 
 func (s *importReleaseStep) Provides() api.ParameterMap {

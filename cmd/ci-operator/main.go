@@ -867,13 +867,11 @@ func (o *options) initializeNamespace() error {
 		}
 	}
 	if is != nil {
-		isTrue := true
 		o.jobSpec.SetOwner(&meta.OwnerReference{
 			APIVersion: "image.openshift.io/v1",
 			Kind:       "ImageStream",
 			Name:       api.PipelineImageStream,
 			UID:        is.UID,
-			Controller: &isTrue,
 		})
 	}
 

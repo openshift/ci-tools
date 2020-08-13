@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 	"strings"
 
 	templateapi "github.com/openshift/api/template/v1"
@@ -455,16 +454,16 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.Job
 	for i := range config.Images {
 		image := &config.Images[i]
 		buildSteps = append(buildSteps, api.StepConfiguration{ProjectDirectoryImageBuildStepConfiguration: image})
-		var outputImageName string
+		var outputImageStreamName string
 		if config.ReleaseTagConfiguration != nil {
-			outputImageName = fmt.Sprintf("%s%s", config.ReleaseTagConfiguration.NamePrefix, api.StableImageStream)
+			outputImageStreamName = fmt.Sprintf("%s%s", config.ReleaseTagConfiguration.NamePrefix, api.StableImageStream)
 		} else {
-			outputImageName = api.StableImageStream
+			outputImageStreamName = api.StableImageStream
 		}
 		buildSteps = append(buildSteps, api.StepConfiguration{OutputImageTagStepConfiguration: &api.OutputImageTagStepConfiguration{
 			From: image.To,
 			To: api.ImageStreamTagReference{
-				Name: outputImageName,
+				Name: outputImageStreamName,
 				Tag:  string(image.To),
 			},
 			Optional: image.Optional,
@@ -474,19 +473,18 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.Job
 	if config.Operator != nil {
 		// Build a bundle source image that substitutes all values in `substitutions` in all `manifests` directories
 		buildSteps = append(buildSteps, api.StepConfiguration{BundleSourceStepConfiguration: &api.BundleSourceStepConfiguration{
-			Manifests:  config.Operator.Manifests,
-			Substitute: config.Operator.Substitutions,
+			Substitutions: config.Operator.Substitutions,
 		}})
 		// Build bundles
 		var bundles []string
-		for index, dockerfile := range config.Operator.DockerfilePath {
+		for index, bundle := range config.Operator.Bundles {
 			bundleName := fmt.Sprintf("%s%d", api.BundlePrefix, index)
 			bundles = append(bundles, bundleName)
 			image := &api.ProjectDirectoryImageBuildStepConfiguration{
 				To: api.PipelineImageStreamTagReference(bundleName),
 				ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
-					ContextDir:     filepath.Dir(dockerfile),
-					DockerfilePath: filepath.Base(dockerfile),
+					ContextDir:     bundle.ContextDir,
+					DockerfilePath: bundle.DockerfilePath,
 				},
 			}
 			buildSteps = append(buildSteps, api.StepConfiguration{ProjectDirectoryImageBuildStepConfiguration: image})

@@ -1012,15 +1012,17 @@ type SourceStepConfiguration struct {
 // bundle build dockerfiles, and images the operator(s) depends on that must
 // be substituted to run in a CI test cluster
 type OperatorStepConfiguration struct {
-	// DockerfilePath describes the path(s) to the dockerfile(s) that builds the operator bundle
-	DockerfilePath []string `json:"dockerfile_path,omitempty"`
-
-	// Manifests describes the path(s) of the operator manifests that the bundle(s) requires
-	Manifests []string `json:"manifests,omitempty"`
+	// Bundles define a dockerfile and build context to build a bundle
+	Bundles []Bundle `json:"bundles,omitempty"`
 
 	// Substitutions describes the pullspecs in the operator manifests that must be subsituted
 	// with the pull specs of the images in the CI registry
 	Substitutions []PullSpecSubstitution `json:"substitutions,omitempty"`
+}
+
+type Bundle struct {
+	DockerfilePath string `json:"dockerfile_path,omitempty"`
+	ContextDir     string `json:"context_dir,omitempty"`
 }
 
 // IndexGeneratorStepConfiguration describes a step that creates an index database and
@@ -1041,17 +1043,13 @@ const IndexImageGeneratorName = "ci-index-gen"
 const IndexImageName = "ci-index"
 
 // BundleSourceStepConfiguration describes a step that performs a set of
-// substitutions on operator manifests in the `src` image so that the
+// substitutions on all yaml files in the `src` image so that the
 // pullspecs in the operator manifests point to images inside the CI registry.
 // It is intended to be used as the source image for bundle image builds.
 type BundleSourceStepConfiguration struct {
-	// Manifests is the subdir of context_dir where optional
-	// operator manifests are stored for operator bundle images.
-	Manifests []string `json:"operator_manifests,omitempty"`
-
-	// Substitute contains pullspecs that need to be replaced by images
+	// Substitutions contains pullspecs that need to be replaced by images
 	// in the CI cluster for operator bundle images
-	Substitute []PullSpecSubstitution `json:"substitute,omitempty"`
+	Substitutions []PullSpecSubstitution `json:"substitutions,omitempty"`
 }
 
 // BundleSourceName is the name of the bundle source image built by the CI

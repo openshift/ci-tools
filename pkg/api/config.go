@@ -302,18 +302,13 @@ func validateImages(fieldRoot string, input []ProjectDirectoryImageBuildStepConf
 
 func validateOperator(fieldRoot string, input *OperatorStepConfiguration) []error {
 	var validationErrors []error
-	if len(input.Substitutions) > 0 {
-		if len(input.Manifests) == 0 {
-			validationErrors = append(validationErrors, fmt.Errorf("%s.substitute: %s.operator_manifests must also be set", fieldRoot, fieldRoot))
+	for num, sub := range input.Substitutions {
+		fieldRootN := fmt.Sprintf("%s.substitute[%d]", fieldRoot, num)
+		if sub.PullSpec == "" {
+			validationErrors = append(validationErrors, fmt.Errorf("%s.pullspec: must be set", fieldRootN))
 		}
-		for num, sub := range input.Substitutions {
-			fieldRootN := fmt.Sprintf("%s.substitute[%d]", fieldRoot, num)
-			if sub.PullSpec == "" {
-				validationErrors = append(validationErrors, fmt.Errorf("%s.pullspec: must be set", fieldRootN))
-			}
-			if sub.With == "" {
-				validationErrors = append(validationErrors, fmt.Errorf("%s.with: must be set", fieldRootN))
-			}
+		if sub.With == "" {
+			validationErrors = append(validationErrors, fmt.Errorf("%s.with: must be set", fieldRootN))
 		}
 	}
 	return validationErrors

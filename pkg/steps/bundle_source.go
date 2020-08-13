@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	buildapi "github.com/openshift/api/build/v1"
-	imageapi "github.com/openshift/api/image/v1"
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 	coreapi "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -70,8 +69,8 @@ func (s *bundleSourceStep) run(ctx context.Context) error {
 	return handleBuild(ctx, s.buildClient, build, s.artifactDir)
 }
 
-func replaceCommand(manifestDir, pullSpec, with string) string {
-	return fmt.Sprintf("find %s -type f -exec sed -i 's?%s?%s?g' {} +", manifestDir, pullSpec, with)
+func replaceCommand(pullSpec, with string) string {
+	return fmt.Sprintf("find . -type f -name \\*.yaml -exec sed -i 's?%s?%s?g' {} +", pullSpec, with)
 }
 
 func (s *bundleSourceStep) bundleSourceDockerfile() (string, error) {
@@ -82,27 +81,17 @@ func (s *bundleSourceStep) bundleSourceDockerfile() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to get stable imagestream: %w", err)
 	}
-	for _, manifestDir := range s.config.Manifests {
-		subCommands, err := substituteForDir(manifestDir, s.config.Substitute, is)
-		if err != nil {
-			return "", err
+	for _, sub := range s.config.Substitutions {
+		replaceSpec, exists := util.ResolvePullSpec(is, sub.With, false)
+		if !exists {
+			return "", fmt.Errorf("failed to get replacement imagestream for image tag `%s`", sub.With)
 		}
-		dockerCommands = append(dockerCommands, subCommands...)
+		// The \ character has to be escaped in the dockerfile to run correctly
+		replace := strings.ReplaceAll(replaceCommand(sub.PullSpec, replaceSpec), `\`, `\\`)
+		dockerCommands = append(dockerCommands, fmt.Sprintf(`RUN ["bash", "-c", "%s"]`, replace))
 	}
 	dockerCommands = append(dockerCommands, "")
 	return strings.Join(dockerCommands, "\n"), nil
-}
-
-func substituteForDir(manifestDir string, subs []api.PullSpecSubstitution, is *imageapi.ImageStream) ([]string, error) {
-	var dockerCommands []string
-	for _, sub := range subs {
-		replaceSpec, exists := util.ResolvePullSpec(is, sub.With, false)
-		if !exists {
-			return dockerCommands, fmt.Errorf("failed to get replacement imagestream for image tag `%s`", sub.With)
-		}
-		dockerCommands = append(dockerCommands, fmt.Sprintf(`RUN ["bash", "-c", "%s"]`, replaceCommand(manifestDir, sub.PullSpec, replaceSpec)))
-	}
-	return dockerCommands, nil
 }
 
 func (s *bundleSourceStep) Requires() []api.StepLink {

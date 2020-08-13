@@ -60,5 +60,5 @@ if [[ -z "${PULL_PULL_SHA:-}" ]]; then
   os::log::fatal "\$PULL_PULL_SHA must be set for this test"
 fi
 export JOB_SPEC='{"type":"presubmit","job":"pull-ci-openshift-ci-tools-master-ci-operator-e2e","buildid":"0","prowjobid":"uuid","refs":{"org":"openshift","repo":"ci-tools","base_ref":"master","base_sha":"'${PULL_BASE_SHA}'","pulls":[{"number":'${PULL_NUMBER}',"author":"AlexNPavel","sha":"'${PULL_PULL_SHA}'"}]}}'
-os::cmd::expect_success "ci-operator --image-import-pull-secret ${PULL_SECRET_DIR}/.dockerconfigjson --target ci-index --config ${suite_dir}/optional-operators.yaml"
+os::cmd::expect_success "ci-operator --image-import-pull-secret ${PULL_SECRET_DIR}/.dockerconfigjson --target [images] --target ci-index --config ${suite_dir}/optional-operators.yaml"
 os::test::junit::declare_suite_end

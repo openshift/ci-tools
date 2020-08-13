@@ -3,6 +3,7 @@ package steps
 import (
 	"bytes"
 	"io/ioutil"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
@@ -49,10 +50,20 @@ func TestReplaceCommand(t *testing.T) {
 	if err := exec.Command("cp", "-a", "testdata/4.6", temp).Run(); err != nil {
 		t.Fatalf("Failed to copy testdata to tempdir: %v", err)
 	}
+	originalDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Failed to get current directory: %v", err)
+	}
+	if err := os.Chdir(temp); err != nil {
+		t.Fatalf("Failed to change directory to temporary directory %s: %v", temp, err)
+	}
 	for _, sub := range subs {
-		if err := exec.Command("bash", "-c", replaceCommand(temp, sub.PullSpec, "stable:"+sub.With)).Run(); err != nil {
-			t.Fatalf("Failed to run replace command `bash -c \"%s\"`: %v", replaceCommand(temp, sub.PullSpec, sub.With), err)
+		if err := exec.Command("bash", "-c", replaceCommand(sub.PullSpec, "stable:"+sub.With)).Run(); err != nil {
+			t.Fatalf("Failed to run replace command `bash -c \"%s\"`: %v", replaceCommand(sub.PullSpec, sub.With), err)
 		}
+	}
+	if err := os.Chdir(originalDir); err != nil {
+		t.Fatalf("Failed to change directory to temporary directory %s: %v", temp, err)
 	}
 	files, err := ioutil.ReadDir(filepath.Join(temp, "4.6"))
 	if err != nil {
@@ -78,18 +89,12 @@ func TestReplaceCommand(t *testing.T) {
 func TestBundleSourceDockerfile(t *testing.T) {
 	var expectedDockerfile = `
 FROM pipeline:src
-RUN ["bash", "-c", "find manifests/deploy/4.6 -type f -exec sed -i 's?quay.io/openshift/origin-metering-ansible-operator:4.6?some-reg/target-namespace/stable:metering-ansible-operator?g' {} +"]
-RUN ["bash", "-c", "find manifests/deploy/4.6 -type f -exec sed -i 's?quay.io/openshift/origin-metering-reporting-operator:4.6?some-reg/target-namespace/stable:metering-reporting-operator?g' {} +"]
-RUN ["bash", "-c", "find manifests/deploy/4.6 -type f -exec sed -i 's?quay.io/openshift/origin-metering-presto:4.6?some-reg/target-namespace/stable:metering-presto?g' {} +"]
-RUN ["bash", "-c", "find manifests/deploy/4.6 -type f -exec sed -i 's?quay.io/openshift/origin-metering-hive:4.6?some-reg/target-namespace/stable:metering-hive?g' {} +"]
-RUN ["bash", "-c", "find manifests/deploy/4.6 -type f -exec sed -i 's?quay.io/openshift/origin-metering-hadoop:4.6?some-reg/target-namespace/stable:metering-hadoop?g' {} +"]
-RUN ["bash", "-c", "find manifests/deploy/4.6 -type f -exec sed -i 's?quay.io/openshift/origin-ghostunnel:4.6?some-reg/target-namespace/stable:ghostunnel?g' {} +"]
-RUN ["bash", "-c", "find manifests/deploy/4.6-alt -type f -exec sed -i 's?quay.io/openshift/origin-metering-ansible-operator:4.6?some-reg/target-namespace/stable:metering-ansible-operator?g' {} +"]
-RUN ["bash", "-c", "find manifests/deploy/4.6-alt -type f -exec sed -i 's?quay.io/openshift/origin-metering-reporting-operator:4.6?some-reg/target-namespace/stable:metering-reporting-operator?g' {} +"]
-RUN ["bash", "-c", "find manifests/deploy/4.6-alt -type f -exec sed -i 's?quay.io/openshift/origin-metering-presto:4.6?some-reg/target-namespace/stable:metering-presto?g' {} +"]
-RUN ["bash", "-c", "find manifests/deploy/4.6-alt -type f -exec sed -i 's?quay.io/openshift/origin-metering-hive:4.6?some-reg/target-namespace/stable:metering-hive?g' {} +"]
-RUN ["bash", "-c", "find manifests/deploy/4.6-alt -type f -exec sed -i 's?quay.io/openshift/origin-metering-hadoop:4.6?some-reg/target-namespace/stable:metering-hadoop?g' {} +"]
-RUN ["bash", "-c", "find manifests/deploy/4.6-alt -type f -exec sed -i 's?quay.io/openshift/origin-ghostunnel:4.6?some-reg/target-namespace/stable:ghostunnel?g' {} +"]
+RUN ["bash", "-c", "find . -type f -name \\*.yaml -exec sed -i 's?quay.io/openshift/origin-metering-ansible-operator:4.6?some-reg/target-namespace/stable:metering-ansible-operator?g' {} +"]
+RUN ["bash", "-c", "find . -type f -name \\*.yaml -exec sed -i 's?quay.io/openshift/origin-metering-reporting-operator:4.6?some-reg/target-namespace/stable:metering-reporting-operator?g' {} +"]
+RUN ["bash", "-c", "find . -type f -name \\*.yaml -exec sed -i 's?quay.io/openshift/origin-metering-presto:4.6?some-reg/target-namespace/stable:metering-presto?g' {} +"]
+RUN ["bash", "-c", "find . -type f -name \\*.yaml -exec sed -i 's?quay.io/openshift/origin-metering-hive:4.6?some-reg/target-namespace/stable:metering-hive?g' {} +"]
+RUN ["bash", "-c", "find . -type f -name \\*.yaml -exec sed -i 's?quay.io/openshift/origin-metering-hadoop:4.6?some-reg/target-namespace/stable:metering-hadoop?g' {} +"]
+RUN ["bash", "-c", "find . -type f -name \\*.yaml -exec sed -i 's?quay.io/openshift/origin-ghostunnel:4.6?some-reg/target-namespace/stable:ghostunnel?g' {} +"]
 `
 
 	fakeClientSet := ciopTestingClient{
@@ -107,11 +112,7 @@ RUN ["bash", "-c", "find manifests/deploy/4.6-alt -type f -exec sed -i 's?quay.i
 
 	s := bundleSourceStep{
 		config: api.BundleSourceStepConfiguration{
-			Manifests: []string{
-				"manifests/deploy/4.6",
-				"manifests/deploy/4.6-alt",
-			},
-			Substitute: subs,
+			Substitutions: subs,
 		},
 		jobSpec:     &api.JobSpec{},
 		imageClient: fakeClientSet.ImageV1(),

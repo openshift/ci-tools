@@ -15,10 +15,9 @@ resources:
     requests:
       cpu: 10m
 operator:
-  dockerfile_path:
-  - "test/manifests/bundle.Dockerfile"
-  manifests:
-  - "test/manifests/4.6"
+  bundles:
+  - context_dir: "test/manifests"
+    dockerfile_path: "bundle.Dockerfile"
   substitutions:
   - pullspec: quay.io/openshift/origin-metering-reporting-operator:4.5
     with: metering-reporting-operator # another `images:` list item
@@ -26,6 +25,9 @@ operator:
     with: oauth-proxy # OCP component
   - pullspec: quay.io/openshift/origin-hive:4.5
     with: hive # operand image, must be present in `stable` imagestream
+tag_specification:
+  namespace: ocp
+  name: "4.6"
 # need a test or image field to be valid ci-operator config
 tests:
 - as: success

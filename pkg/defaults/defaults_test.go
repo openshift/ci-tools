@@ -423,8 +423,14 @@ func TestStepConfigsForBuild(t *testing.T) {
 					},
 				},
 				Operator: &api.OperatorStepConfiguration{
-					DockerfilePath: []string{"manifests/olm/bundle.Dockerfile"},
-					Manifests:      []string{"manifests/olm/4.6"},
+					Bundles: []api.Bundle{{
+						ContextDir:     "manifests/olm",
+						DockerfilePath: "bundle.Dockerfile",
+					}},
+					Substitutions: []api.PullSpecSubstitution{{
+						PullSpec: "quay.io/origin/oc",
+						With:     "pipeline:oc",
+					}},
 				},
 			},
 			jobSpec: &api.JobSpec{
@@ -438,7 +444,10 @@ func TestStepConfigsForBuild(t *testing.T) {
 			},
 			output: []api.StepConfiguration{{
 				BundleSourceStepConfiguration: &api.BundleSourceStepConfiguration{
-					Manifests: []string{"manifests/olm/4.6"},
+					Substitutions: []api.PullSpecSubstitution{{
+						PullSpec: "quay.io/origin/oc",
+						With:     "pipeline:oc",
+					}},
 				},
 			}, {
 				IndexGeneratorStepConfiguration: &api.IndexGeneratorStepConfiguration{

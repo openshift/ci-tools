@@ -1536,7 +1536,6 @@ func TestValidateOperator(t *testing.T) {
 	}{{
 		name: "missing a substitution.pullspec and a substitution.with",
 		input: &OperatorStepConfiguration{
-			Manifests: []string{"manifests"},
 			Substitutions: []PullSpecSubstitution{{
 				PullSpec: "original",
 				With:     "substitute",
@@ -1549,17 +1548,6 @@ func TestValidateOperator(t *testing.T) {
 		output: []error{
 			errors.New("operator.substitute[1].with: must be set"),
 			errors.New("operator.substitute[2].pullspec: must be set"),
-		},
-	}, {
-		name: "substitution set without manifests",
-		input: &OperatorStepConfiguration{
-			Substitutions: []PullSpecSubstitution{{
-				PullSpec: "original",
-				With:     "substitute",
-			}},
-		},
-		output: []error{
-			errors.New("operator.substitute: operator.operator_manifests must also be set"),
 		},
 	}}
 	for _, testCase := range testCases {

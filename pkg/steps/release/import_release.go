@@ -394,7 +394,14 @@ func (s *importReleaseStep) Requires() []api.StepLink {
 }
 
 func (s *importReleaseStep) Creates() []api.StepLink {
-	return []api.StepLink{api.ReleasePayloadImageLink(s.name), api.ReleaseImagesLink(s.name)}
+	creates := []api.StepLink{api.ReleasePayloadImageLink(s.name)}
+	// TODO: remove this, we need it for the collision case
+	// so that only one step creates this link and we don't
+	// create a cyclic graph
+	if !s.append {
+		creates = append(creates, api.ReleaseImagesLink(s.name))
+	}
+	return creates
 }
 
 func (s *importReleaseStep) Provides() api.ParameterMap {

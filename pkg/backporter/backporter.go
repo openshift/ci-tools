@@ -93,6 +93,8 @@ button {
 td {
   vertical-align: middle;
 }
+.treeview span.indent{margin-left:10px;margin-right:10px}
+.treeview span.icon{width:12px;margin-right:5px}
 </style>
 </head>
 <body>
@@ -214,7 +216,16 @@ const clonesTemplateConstructor = `
 			{{end}}
 		</select>
 		<button class="btn btn-outline-success my-2 my-sm-0" type="submit">Create Clone</button>
-    </form>
+	</form>
+	<br>
+	<div class="col-sm-4">
+	<h4 id="clones"> <a href ="#clones"> Dependence Tree</a> </h4>
+	<div class="treeview">
+		<ul class = list-group>
+		{{ renderTree .DependenceTree }}
+		</ul>
+	</div>
+	</div>
 </div>`
 
 const helpTemplateConstructor = `
@@ -260,10 +271,28 @@ const errorTemplateConstructor = `
 <strong>Error </strong> <label id ="error-text">{{.}}</label>
 </div>`
 
+func renderTree(node *dependenceNode, height int) string {
+	var resultList string
+	resultList += `<li class="list-group-item">`
+	for i := 0; i < height; i++ {
+		resultList += `<span class="indent"></span>`
+	}
+	resultList += fmt.Sprintf(`<span> %d (%s)</span></li>`, node.BugID, node.TargetRelease)
+	for _, childNode := range node.Children {
+		resultList += renderTree(childNode, height+1)
+	}
+	return resultList
+}
+
 var (
-	clonesTemplate = template.Must(template.New("clones").Parse(clonesTemplateConstructor))
-	errorTemplate  = template.Must(template.New("error").Parse(errorTemplateConstructor))
-	helpTemplate   = template.Must(template.New("help").Parse(helpTemplateConstructor))
+	clonesTemplate = template.Must(template.New("clones").Funcs(template.FuncMap{
+		"renderTree": func(node *dependenceNode) template.HTML {
+			return template.HTML(renderTree(node, 0))
+		},
+	}).Parse(clonesTemplateConstructor))
+
+	errorTemplate = template.Must(template.New("error").Parse(errorTemplateConstructor))
+	helpTemplate  = template.Must(template.New("help").Parse(helpTemplateConstructor))
 )
 
 func logFieldsFor(endpoint string, bugID int) logrus.Fields {
@@ -296,6 +325,13 @@ type ClonesTemplateData struct {
 	CloneTargets    []string
 	NewCloneIDs     []string
 	MissingReleases []string
+	DependenceTree  *dependenceNode
+}
+
+type dependenceNode struct {
+	BugID         int
+	TargetRelease string
+	Children      []*dependenceNode
 }
 
 // Writes an HTML page, prepends header in htmlPageStart and appends header from htmlPageEnd around tConstructor.
@@ -399,6 +435,35 @@ func getMajorMinorRelease(release string) (string, error) {
 		return "", fmt.Errorf("invalid release - must be of the form x.y.z")
 	}
 	return release[:periodIndex], nil
+}
+
+func buildDependenceTree(root *bugzilla.Bug, client bugzilla.Client) (*dependenceNode, error) {
+	// build the dependence tree
+	traversalStack := []*bugzilla.Bug{root}
+	rootNode := &dependenceNode{BugID: root.ID, TargetRelease: root.TargetRelease[0]}
+	dependenceNodeStack := []*dependenceNode{rootNode}
+	for len(traversalStack) > 0 {
+		currBug := traversalStack[0]
+		traversalStack = traversalStack[1:]
+		children, err := client.GetClones(currBug)
+		if err != nil {
+			return nil, err
+		}
+		currentNode := dependenceNodeStack[0]
+		dependenceNodeStack = dependenceNodeStack[1:]
+		if len(children) > 0 {
+			traversalStack = append(traversalStack, children...)
+			for _, child := range children {
+				if len(child.TargetRelease) == 0 {
+					return nil, fmt.Errorf("TargetRelease not populated, BugID: %d", child.ID)
+				}
+				childNode := &dependenceNode{BugID: child.ID, TargetRelease: child.TargetRelease[0]}
+				currentNode.Children = append(currentNode.Children, childNode)
+				dependenceNodeStack = append(dependenceNodeStack, childNode)
+			}
+		}
+	}
+	return rootNode, nil
 }
 
 func getClonesTemplateData(bugID int, client bugzilla.Client, allTargetVersions []string) (*ClonesTemplateData, int, error) {
@@ -507,6 +572,10 @@ func getClonesTemplateData(bugID int, client bugzilla.Client, allTargetVersions 
 			targetVersions.Delete(allTargetVersions[i])
 		}
 	}
+	rootNode, err := buildDependenceTree(root, client)
+	if err != nil {
+		return nil, http.StatusInternalServerError, fmt.Errorf("error building dependence tree: %w", err)
+	}
 	wrpr := ClonesTemplateData{
 		Bug:             bug,
 		Clones:          clones,
@@ -514,6 +583,7 @@ func getClonesTemplateData(bugID int, client bugzilla.Client, allTargetVersions 
 		PRs:             prs,
 		CloneTargets:    targetVersions.List(),
 		MissingReleases: missingReleases,
+		DependenceTree:  rootNode,
 	}
 	return &wrpr, http.StatusOK, nil
 }

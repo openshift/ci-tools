@@ -26,27 +26,37 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/api/ocpbuilddata"
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/github"
+	"github.com/openshift/ci-tools/pkg/steps/release"
 )
 
 type options struct {
-	configDir                   string
-	createPR                    bool
-	githubUserName              string
-	selfApprove                 bool
-	pruneUnusedReplacements     bool
-	pruneOCPBuilderReplacements bool
+	configDir                                    string
+	createPR                                     bool
+	githubUserName                               string
+	selfApprove                                  bool
+	ensureCorrectPromotionDockerfile             bool
+	ocpBuildDataRepoDir                          string
+	currentRelease                               ocpbuilddata.MajorMinor
+	pruneUnusedReplacements                      bool
+	pruneOCPBuilderReplacements                  bool
+	ensureCorrectPromotionDockerfileIngoredRepos *flagutil.Strings
 	flagutil.GitHubOptions
 }
 
 func gatherOptions() (*options, error) {
-	o := &options{}
+	o := &options{ensureCorrectPromotionDockerfileIngoredRepos: &flagutil.Strings{}}
 	o.AddFlags(flag.CommandLine)
 	flag.StringVar(&o.configDir, "config-dir", "", "The directory with the ci-operator configs")
 	flag.BoolVar(&o.createPR, "create-pr", false, "If the tool should automatically create a PR. Requires --token-file")
 	flag.StringVar(&o.githubUserName, "github-user-name", "openshift-bot", "Name of the github user. Required when --create-pr is set. Does nothing otherwise")
 	flag.BoolVar(&o.selfApprove, "self-approve", false, "If the bot should self-approve its PR.")
+	flag.BoolVar(&o.ensureCorrectPromotionDockerfile, "ensure-correct-promotion-dockerfile", false, "If Dockerfiles used for promotion should get updated to match whats in the ocp-build-data repo")
+	flag.Var(o.ensureCorrectPromotionDockerfileIngoredRepos, "ensure-correct-promotion-dockerfile-ignored-repos", "Repos that are being ignored when ensuring the correct promotion dockerfile in org/repo notation. Can be passed multiple times.")
+	flag.StringVar(&o.ocpBuildDataRepoDir, "ocp-build-data-repo-dir", "../ocp-build-data", "The directory in which the ocp-build-data reposity is")
+	flag.StringVar(&o.currentRelease.Minor, "current-release-minor", "6", "The minor version of the current release that is getting forwarded to from the master branch")
 	flag.BoolVar(&o.pruneUnusedReplacements, "prune-unused-replacements", false, "If replacements that match nothing should get pruned from the config")
 	flag.BoolVar(&o.pruneOCPBuilderReplacements, "prune-ocp-builder-replacements", false, "If all replacements that target the ocp/builder imagestream should be removed")
 	flag.Parse()
@@ -61,6 +71,16 @@ func gatherOptions() (*options, error) {
 			errs = append(errs, errors.New("--github-user-name was unset, it is required when --create-pr is set"))
 		}
 		errs = append(errs, o.GitHubOptions.Validate(false))
+	}
+
+	if o.ensureCorrectPromotionDockerfile {
+		if o.ocpBuildDataRepoDir == "" {
+			errs = append(errs, errors.New("--ocp-build-data-repo-dir must be set when --ensure-correct-promotion-dockerfile is set"))
+		}
+		if o.currentRelease.Minor == "" {
+			errs = append(errs, errors.New("--current-release must be set when --ensure-correct-promotion-dockerfile is set"))
+		}
+		o.currentRelease.Major = "4"
 	}
 
 	return o, utilerrors.NewAggregate(errs)
@@ -86,6 +106,15 @@ func main() {
 		}
 	}
 
+	var promotionTargetToDockerfileMapping map[string]dockerfileLocation
+	if opts.ensureCorrectPromotionDockerfile {
+		var err error
+		promotionTargetToDockerfileMapping, err = getPromotionTargetToDockerfileMapping(opts.ocpBuildDataRepoDir, opts.currentRelease)
+		if err != nil {
+			logrus.WithError(err).Fatal("Failed to construct promotion target to dockerfile mapping")
+		}
+	}
+
 	var errs []error
 	errLock := &sync.Mutex{}
 	wg := sync.WaitGroup{}
@@ -102,6 +131,10 @@ func main() {
 					},
 					opts.pruneUnusedReplacements,
 					opts.pruneOCPBuilderReplacements,
+					opts.ensureCorrectPromotionDockerfile,
+					sets.NewString(opts.ensureCorrectPromotionDockerfileIngoredRepos.Strings()...),
+					promotionTargetToDockerfileMapping,
+					opts.currentRelease,
 				)(config, info); err != nil {
 					errLock.Lock()
 					errs = append(errs, err)
@@ -135,6 +168,10 @@ func replacer(
 	writer func([]byte) error,
 	pruneUnusedReplacementsEnabled bool,
 	pruneOCPBuilderReplacementsEnabled bool,
+	ensureCorrectPromotionDockerfile bool,
+	ensureCorrectPromotionDockerfileIgnoredrepos sets.String,
+	promotionTargetToDockerfileMapping map[string]dockerfileLocation,
+	majorMinor ocpbuilddata.MajorMinor,
 ) func(*api.ReleaseBuildConfiguration, *config.Info) error {
 	return func(config *api.ReleaseBuildConfiguration, info *config.Info) error {
 		if len(config.Images) == 0 {
@@ -144,6 +181,12 @@ func replacer(
 		originalConfig, err := yaml.Marshal(config)
 		if err != nil {
 			return fmt.Errorf("failed to marshal config for comparison: %w", err)
+		}
+
+		// We have to do this first because the result of the following operations might
+		// change based on what we do here.
+		if ensureCorrectPromotionDockerfile {
+			updateDockerfilesToMatchOCPBuildData(config, promotionTargetToDockerfileMapping, majorMinor.String(), ensureCorrectPromotionDockerfileIgnoredrepos)
 		}
 
 		getter := githubFileGetterFactory(info.Org, info.Repo, info.Branch)
@@ -508,4 +551,68 @@ func pruneReplacements(config *api.ReleaseBuildConfiguration, filter asDirective
 	config.Images = prunedImages
 
 	return utilerrors.NewAggregate(errs)
+}
+
+type dockerfileLocation struct {
+	contextDir string
+	dockerfile string
+}
+
+func getPromotionTargetToDockerfileMapping(ocpBuildDataDir string, majorMinor ocpbuilddata.MajorMinor) (map[string]dockerfileLocation, error) {
+	configs, err := ocpbuilddata.LoadImageConfigs(ocpBuildDataDir, majorMinor)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read image configs from ocp-build-data: %w", err)
+	}
+	result := map[string]dockerfileLocation{}
+	for _, config := range configs {
+		result[config.PromotesTo()] = dockerfileLocation{contextDir: config.Content.Source.Path, dockerfile: config.Content.Source.Dockerfile}
+	}
+	return result, nil
+}
+
+func updateDockerfilesToMatchOCPBuildData(
+	config *api.ReleaseBuildConfiguration,
+	promotionTargetToDockerfileMapping map[string]dockerfileLocation,
+	majorMinorVersion string,
+	ignoredRepos sets.String,
+) {
+
+	// The tool only works for the current release
+	if config.Metadata.Branch != "master" {
+		return
+	}
+	if ignoredRepos.Has(config.Metadata.Org + "/" + config.Metadata.Repo) {
+		return
+	}
+
+	// Configs indexed by tag
+	promotedTags := map[string]api.ImageStreamTagReference{}
+	for _, promotedTag := range release.PromotedTags(config) {
+		if promotedTag.Namespace != "ocp" || promotedTag.Name != majorMinorVersion {
+			continue
+		}
+		promotedTags[promotedTag.Tag] = promotedTag
+	}
+	if len(promotedTags) == 0 {
+		return
+	}
+
+	for idx, image := range config.Images {
+		promotionTarget, ok := promotedTags[string(image.To)]
+		if !ok {
+			continue
+		}
+		stringifiedPromotionTarget := fmt.Sprintf("registry.svc.ci.openshift.org/%s/%s:%s", promotionTarget.Namespace, promotionTarget.Name, image.To)
+		dockerfilePath, ok := promotionTargetToDockerfileMapping[stringifiedPromotionTarget]
+		if !ok {
+			logrus.WithField("promotiontarget", stringifiedPromotionTarget).Info("Ignoring promotion target for which we have no ocp-build-data config")
+			continue
+		}
+		if image.ContextDir != dockerfilePath.contextDir {
+			config.Images[idx].ContextDir = dockerfilePath.contextDir
+		}
+		if image.DockerfilePath != dockerfilePath.dockerfile {
+			config.Images[idx].DockerfilePath = dockerfilePath.dockerfile
+		}
+	}
 }

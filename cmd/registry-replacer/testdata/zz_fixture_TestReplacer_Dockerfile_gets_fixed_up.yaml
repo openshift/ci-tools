@@ -1,0 +1,14 @@
+images:
+- dockerfile_path: Dockerfile.rhel
+  inputs:
+    root:
+      as:
+      - ocp/builder:something
+  to: promotionTarget
+promotion:
+  name: "4.6"
+  namespace: ocp
+zz_generated_metadata:
+  branch: master
+  org: ""
+  repo: ""

@@ -100,7 +100,7 @@ func AddToManager(mgr manager.Manager,
 		}
 	}
 
-	objectFilter, err := testInputImageStreamTagFilterFactory(log, configAgent, resolver, additionalImageStreamTags, additionalImageStreams, additionalImageStreamNamespaces)
+	objectFilter, err := testInputImageStreamTagFilterFactory(log, configAgent, r.buildClusterClients["app.ci"], resolver, additionalImageStreamTags, additionalImageStreams, additionalImageStreamNamespaces)
 	if err != nil {
 		return fmt.Errorf("failed to get filter for ImageStreamTags: %w", err)
 	}
@@ -413,7 +413,7 @@ func (r *reconciler) pullSecret(namespace string) (*corev1.Secret, crcontrolleru
 	}
 }
 
-func testInputImageStreamTagFilterFactory(l *logrus.Entry, ca agents.ConfigAgent, resolver registry.Resolver, additionalImageStreamTags, additionalImageStreams, additionalImageStreamNamespaces sets.String) (objectFilter, error) {
+func testInputImageStreamTagFilterFactory(l *logrus.Entry, ca agents.ConfigAgent, client ctrlruntimeclient.Client, resolver registry.Resolver, additionalImageStreamTags, additionalImageStreams, additionalImageStreamNamespaces sets.String) (objectFilter, error) {
 	const indexName = "config-by-test-input-imagestreamtag"
 	if err := ca.AddIndex(indexName, indexConfigsByTestInputImageStramTag(resolver)); err != nil {
 		return nil, fmt.Errorf("failed to add %s index to configAgent: %w", indexName, err)
@@ -447,7 +447,30 @@ func testInputImageStreamTagFilterFactory(l *logrus.Entry, ca agents.ConfigAgent
 			l.WithField("name", imageStreamName.String()).WithError(err).Error("Failed to get imagestream configs from index")
 			return false
 		}
-		return len(imageStreamResult) > 0
+		if len(imageStreamResult) > 0 {
+			return true
+		}
+
+		// We have to consider testimagestreamtagimports to cover the case of:
+		// * rehearsal is created, references outdated/inexistent streamtag
+		// * rehearsal fails
+		// * streamtag gets fixed up
+		// * rehearsal is re-executed
+		// * If we don't re-consider the list here every time, we won't distribute
+		//   the fixed up version of the streamtag
+		// Because we don't know for which cluster the request is, this results in
+		// us importing it into all clusters which is an acceptable trade-off.
+		imports := &testimagestreamtagimportv1.TestImageStreamTagImportList{}
+		if err := client.List(context.TODO(), imports); err != nil {
+			l.WithError(err).Error("Failed to list testimagestreamtagimport")
+		}
+		for _, imp := range imports.Items {
+			if imp.Spec.Name == nn.Name && imp.Spec.Namespace == nn.Namespace {
+				return true
+			}
+		}
+
+		return false
 	}, nil
 }
 

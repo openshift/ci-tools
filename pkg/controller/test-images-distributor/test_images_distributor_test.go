@@ -661,6 +661,7 @@ func TestTestInputImageStreamTagFilterFactory(t *testing.T) {
 	testCases := []struct {
 		name                            string
 		config                          api.ReleaseBuildConfiguration
+		client                          ctrlruntimeclient.Client
 		additionalImageStreamTags       sets.String
 		additionalImageStreams          sets.String
 		additionalImageStreamNamespaces sets.String
@@ -698,16 +699,28 @@ func TestTestInputImageStreamTagFilterFactory(t *testing.T) {
 			expectedResult: true,
 		},
 		{
+			name: "imagestreamtag is referenced by imagestreatag import",
+			client: fakeclient.NewFakeClient(&testimagestreamtagimportv1.TestImageStreamTagImport{Spec: testimagestreamtagimportv1.TestImageStreamTagImportSpec{
+				Namespace: namespace,
+				Name:      streamName + ":" + tagName,
+			}}),
+			expectedResult: true,
+		},
+		{
 			name: "no reference, imagestreatag gets denied",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			if tc.client == nil {
+				tc.client = fakeclient.NewFakeClient()
+			}
 			configAgent := agents.NewFakeConfigAgent(map[string]map[string][]api.ReleaseBuildConfiguration{"": {"": []api.ReleaseBuildConfiguration{tc.config}}})
 			filter, err := testInputImageStreamTagFilterFactory(
 				logrus.NewEntry(logrus.New()),
 				configAgent,
+				tc.client,
 				noOpRegistryResolver{},
 				tc.additionalImageStreamTags,
 				tc.additionalImageStreams,

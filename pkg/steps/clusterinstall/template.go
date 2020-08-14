@@ -129,7 +129,7 @@ objects:
       env:
       - name: RELEASE_IMAGE_INITIAL
       - name: RELEASE_IMAGE_LATEST
-      - name: BRANCH
+      - name: RELEASE_SOURCE
       - name: PROW_JOB_ID
       command:
       - /bin/bash
@@ -137,7 +137,7 @@ objects:
       - |
         #!/bin/bash
         set -euo pipefail
-        oc --kubeconfig /etc/appci/sa.release-bot.app.ci.config annotate pj/${PROW_JOB_ID} "release.openshift.io/from-tag=${RELEASE_IMAGE_INITIAL}" "release.openshift.io/tag=${RELEASE_IMAGE_LATEST}" "release.openshift.io/source=ocp/${BRANCH}"
+        oc --kubeconfig /etc/appci/sa.release-bot.app.ci.config annotate pj/${PROW_JOB_ID} "release.openshift.io/from-tag=${RELEASE_IMAGE_INITIAL}" "release.openshift.io/tag=${RELEASE_IMAGE_LATEST}" "release.openshift.io/source=ocp/${RELEASE_SOURCE}"
       volumeMounts:
       - mountPath: /etc/appci
         name: appci-release-bot-credentials

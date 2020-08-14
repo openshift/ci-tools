@@ -64,6 +64,9 @@ type ReleaseBuildConfiguration struct {
 	// and can be used to build only a specific image.
 	Images []ProjectDirectoryImageBuildStepConfiguration `json:"images,omitempty"`
 
+	// Operator describes the operator bundle(s) that is built by the project
+	Operator *OperatorStepConfiguration `json:"operator,omitempty"`
+
 	// Tests describes the tests to run inside of built images.
 	// The images launched as pods but have no explicit access to
 	// the cluster they are running on.
@@ -394,6 +397,7 @@ type StepConfiguration struct {
 	PipelineImageCacheStepConfiguration         *PipelineImageCacheStepConfiguration         `json:"pipeline_image_cache_step,omitempty"`
 	SourceStepConfiguration                     *SourceStepConfiguration                     `json:"source_step,omitempty"`
 	BundleSourceStepConfiguration               *BundleSourceStepConfiguration               `json:"bundle_source_step,omitempty"`
+	IndexGeneratorStepConfiguration             *IndexGeneratorStepConfiguration             `json:"index_generator_step,omitempty"`
 	ProjectDirectoryImageBuildStepConfiguration *ProjectDirectoryImageBuildStepConfiguration `json:"project_directory_image_build_step,omitempty"`
 	RPMImageInjectionStepConfiguration          *RPMImageInjectionStepConfiguration          `json:"rpm_image_injection_step,omitempty"`
 	RPMServeStepConfiguration                   *RPMServeStepConfiguration                   `json:"rpm_serve_step,omitempty"`
@@ -1004,25 +1008,55 @@ type SourceStepConfiguration struct {
 	ClonerefsPath string `json:"clonerefs_path"`
 }
 
+// OperatorStepConfiguration describes the locations of operator bundle information,
+// bundle build dockerfiles, and images the operator(s) depends on that must
+// be substituted to run in a CI test cluster
+type OperatorStepConfiguration struct {
+	// Bundles define a dockerfile and build context to build a bundle
+	Bundles []Bundle `json:"bundles,omitempty"`
+
+	// Substitutions describes the pullspecs in the operator manifests that must be subsituted
+	// with the pull specs of the images in the CI registry
+	Substitutions []PullSpecSubstitution `json:"substitutions,omitempty"`
+}
+
+type Bundle struct {
+	DockerfilePath string `json:"dockerfile_path,omitempty"`
+	ContextDir     string `json:"context_dir,omitempty"`
+}
+
+// IndexGeneratorStepConfiguration describes a step that creates an index database and
+// Dockerfile to build an operator index that uses the generated database based on
+// bundle names provided in OperatorIndex
+type IndexGeneratorStepConfiguration struct {
+	To PipelineImageStreamTagReference `json:"to,omitempty"`
+
+	// OperatorIndex is a list of the names of the bundle images that the
+	// index will contain in its database.
+	OperatorIndex []string `json:"operator_index,omitempty"`
+}
+
+// IndexImageGeneratorName is the name of the index image generator built by ci-operator
+const IndexImageGeneratorName = "ci-index-gen"
+
+// IndexImageName is the name of the index image built by ci-operator
+const IndexImageName = "ci-index"
+
 // BundleSourceStepConfiguration describes a step that performs a set of
-// substitutions on operator manifests in the `src` image so that the
+// substitutions on all yaml files in the `src` image so that the
 // pullspecs in the operator manifests point to images inside the CI registry.
 // It is intended to be used as the source image for bundle image builds.
 type BundleSourceStepConfiguration struct {
-	To PipelineImageStreamTagReference `json:"to,omitempty"`
-
-	// ContextDir is the directory in the project
-	// from which this build should be run.
-	ContextDir string `json:"context_dir,omitempty"`
-
-	// OperatorManifests is the subdir of context_dir where optional
-	// operator manifests are stored for operator bundle images.
-	OperatorManifests string `json:"operator_manifests,omitempty"`
-
-	// Substitute contains pullspecs that need to be replaced by images
+	// Substitutions contains pullspecs that need to be replaced by images
 	// in the CI cluster for operator bundle images
-	Substitute []PullSpecSubstitution `json:"substitute,omitempty"`
+	Substitutions []PullSpecSubstitution `json:"substitutions,omitempty"`
 }
+
+// BundleSourceName is the name of the bundle source image built by the CI
+const BundleSourceName = "src-bundle"
+
+// BundlePrefix is the prefix used by ci-operator for bundle images
+const BundlePrefix = "ci-bundle"
 
 // ProjectDirectoryImageBuildStepConfiguration describes an
 // image build from a directory in a component project.
@@ -1047,14 +1081,6 @@ type ProjectDirectoryImageBuildInputs struct {
 	// DockerfilePath is the path to a Dockerfile in the
 	// project to run relative to the context_dir.
 	DockerfilePath string `json:"dockerfile_path,omitempty"`
-
-	// OperatorManifests is the subdir of context_dir where optional
-	// operator manifests are stored for operator bundle images.
-	OperatorManifests string `json:"operator_manifests,omitempty"`
-
-	// Substitute contains pullspecs that need to be replaced by images
-	// in the CI cluster for operator bundle images
-	Substitute []PullSpecSubstitution `json:"substitute,omitempty"`
 
 	// Inputs is a map of tag reference name to image input changes
 	// that will populate the build context for the Dockerfile or

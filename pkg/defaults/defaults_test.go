@@ -414,6 +414,73 @@ func TestStepConfigsForBuild(t *testing.T) {
 				},
 			}},
 		},
+		{
+			name: "including an operator bundle creates the bundle-sub and the index-gen and index images",
+			input: &api.ReleaseBuildConfiguration{
+				InputConfiguration: api.InputConfiguration{
+					BuildRootImage: &api.BuildRootImageConfiguration{
+						ImageStreamTagReference: &api.ImageStreamTagReference{Tag: "manual"},
+					},
+				},
+				Operator: &api.OperatorStepConfiguration{
+					Bundles: []api.Bundle{{
+						ContextDir:     "manifests/olm",
+						DockerfilePath: "bundle.Dockerfile",
+					}},
+					Substitutions: []api.PullSpecSubstitution{{
+						PullSpec: "quay.io/origin/oc",
+						With:     "pipeline:oc",
+					}},
+				},
+			},
+			jobSpec: &api.JobSpec{
+				JobSpec: downwardapi.JobSpec{
+					Refs: &prowapi.Refs{
+						Org:  "org",
+						Repo: "repo",
+					},
+				},
+				BaseNamespace: "base-1",
+			},
+			output: []api.StepConfiguration{{
+				BundleSourceStepConfiguration: &api.BundleSourceStepConfiguration{
+					Substitutions: []api.PullSpecSubstitution{{
+						PullSpec: "quay.io/origin/oc",
+						With:     "pipeline:oc",
+					}},
+				},
+			}, {
+				IndexGeneratorStepConfiguration: &api.IndexGeneratorStepConfiguration{
+					To:            "ci-index-gen",
+					OperatorIndex: []string{"ci-bundle0"},
+				},
+			}, {
+				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
+					BaseImage: api.ImageStreamTagReference{Namespace: "base-1", Name: "repo-test-base", Tag: "manual"},
+					To:        "root",
+				},
+			}, {
+				ProjectDirectoryImageBuildStepConfiguration: &api.ProjectDirectoryImageBuildStepConfiguration{
+					To:                               "ci-index",
+					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{DockerfilePath: "index.Dockerfile"},
+				},
+			}, {
+				ProjectDirectoryImageBuildStepConfiguration: &api.ProjectDirectoryImageBuildStepConfiguration{
+					To: "ci-bundle0",
+					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+						ContextDir:     "manifests/olm",
+						DockerfilePath: "bundle.Dockerfile",
+					},
+				},
+			}, {
+				SourceStepConfiguration: &api.SourceStepConfiguration{
+					From:           "root",
+					To:             "src",
+					ClonerefsImage: api.ImageStreamTagReference{Namespace: "ci", Name: "clonerefs", Tag: "latest"},
+					ClonerefsPath:  "/app/prow/cmd/clonerefs/app.binary.runfiles/io_k8s_test_infra/prow/cmd/clonerefs/linux_amd64_pure_stripped/app.binary",
+				},
+			}},
+		},
 	}
 
 	for _, testCase := range testCases {

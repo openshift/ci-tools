@@ -1,0 +1,36 @@
+base_images:
+  os:
+    name: centos
+    namespace: openshift
+    tag: '7'
+build_root:
+  image_stream_tag:
+    name: release
+    namespace: openshift
+    tag: golang-1.14
+resources:
+  '*':
+    limits:
+      cpu: 500m
+    requests:
+      cpu: 10m
+operator:
+  bundles:
+  - context_dir: "test/manifests"
+    dockerfile_path: "bundle.Dockerfile"
+  substitutions:
+  - pullspec: quay.io/openshift/origin-metering-reporting-operator:4.5
+    with: metering-reporting-operator # another `images:` list item
+  - pullspec: quay.io/openshift/origin-oauth-proxy:4.5
+    with: oauth-proxy # OCP component
+  - pullspec: quay.io/openshift/origin-hive:4.5
+    with: hive # operand image, must be present in `stable` imagestream
+tag_specification:
+  namespace: ocp
+  name: "4.6"
+# need a test or image field to be valid ci-operator config
+tests:
+- as: success
+  commands: exit 0
+  container:
+    from: os

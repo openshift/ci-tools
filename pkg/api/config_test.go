@@ -1473,6 +1473,94 @@ func TestValidatePrerelease(t *testing.T) {
 	}
 }
 
+func TestValidateImages(t *testing.T) {
+	var testCases = []struct {
+		name   string
+		input  []ProjectDirectoryImageBuildStepConfiguration
+		output []error
+	}{{
+		name:  "`to` must be set",
+		input: []ProjectDirectoryImageBuildStepConfiguration{{}},
+		output: []error{
+			errors.New("images[0]: `to` must be set"),
+		},
+	}, {
+		name: "`to` cannot be src-bundle",
+		input: []ProjectDirectoryImageBuildStepConfiguration{{
+			To: "src-bundle",
+		}},
+		output: []error{
+			errors.New("images[0]: `to` cannot be src-bundle"),
+		},
+	}, {
+		name: "`to` cannot start with ci-bundle",
+		input: []ProjectDirectoryImageBuildStepConfiguration{{
+			To: "ci-bundle0",
+		}},
+		output: []error{
+			errors.New("images[0]: `to` cannot begin with `ci-bundle`"),
+		},
+	}, {
+		name: "`to` cannot be ci-index-gen",
+		input: []ProjectDirectoryImageBuildStepConfiguration{{
+			To: "ci-index-gen",
+		}},
+		output: []error{
+			errors.New("images[0]: `to` cannot be ci-index-gen"),
+		},
+	}, {
+		name: "`to` cannot be ci-index",
+		input: []ProjectDirectoryImageBuildStepConfiguration{{
+			To: "ci-index",
+		}},
+		output: []error{
+			errors.New("images[0]: `to` cannot be ci-index"),
+		},
+	}}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if actual, expected := validateImages("images", testCase.input), testCase.output; !reflect.DeepEqual(actual, expected) {
+				t.Errorf("%s: got incorrect errors: %s", testCase.name, cmp.Diff(actual, expected, cmp.Comparer(func(x, y error) bool {
+					return x.Error() == y.Error()
+				})))
+			}
+		})
+	}
+}
+
+func TestValidateOperator(t *testing.T) {
+	var testCases = []struct {
+		name   string
+		input  *OperatorStepConfiguration
+		output []error
+	}{{
+		name: "missing a substitution.pullspec and a substitution.with",
+		input: &OperatorStepConfiguration{
+			Substitutions: []PullSpecSubstitution{{
+				PullSpec: "original",
+				With:     "substitute",
+			}, {
+				PullSpec: "original2",
+			}, {
+				With: "subsitute2",
+			}},
+		},
+		output: []error{
+			errors.New("operator.substitute[1].with: must be set"),
+			errors.New("operator.substitute[2].pullspec: must be set"),
+		},
+	}}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			if actual, expected := validateOperator("operator", testCase.input), testCase.output; !reflect.DeepEqual(actual, expected) {
+				t.Errorf("%s: got incorrect errors: %s", testCase.name, cmp.Diff(actual, expected, cmp.Comparer(func(x, y error) bool {
+					return x.Error() == y.Error()
+				})))
+			}
+		})
+	}
+}
+
 func errListMessagesEqual(a, b []error) bool {
 	if len(a) != len(b) {
 		return false

@@ -33,10 +33,6 @@ parameters:
   required: false
 - name: CLUSTER_VARIANT
 - name: USE_LEASE_CLIENT
-- name: BRANCH
-  required: true
-- name: PROW_JOB_ID
-  required: true
 
 objects:
 
@@ -130,6 +126,11 @@ objects:
     # annotate the information about this job so that the release controller adds it to the upgrade graph
     - name: annotate	
       image: ${IMAGE_CLI}
+      env:
+      - name: RELEASE_IMAGE_INITIAL
+      - name: RELEASE_IMAGE_LATEST
+      - name: BRANCH
+      - name: PROW_JOB_ID
       command:
       - /bin/bash
       - -c

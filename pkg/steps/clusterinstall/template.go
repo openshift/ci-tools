@@ -18,8 +18,6 @@ parameters:
   required: true
 - name: IMAGE_TESTS
   required: true
-- name: IMAGE_CLI
-  required: true
 - name: CLUSTER_TYPE
   required: true
 - name: TEST_COMMAND
@@ -115,33 +113,6 @@ objects:
     - name: cluster-profile
       secret:
         secretName: ${JOB_NAME_SAFE}-cluster-profile
-    - name: appci-release-bot-credentials
-      secret:
-        items:
-        - key: sa.release-bot.app.ci.config
-          path: sa.release-bot.app.ci.config
-        secretName: appci
-
-    initContainers:
-    # annotate the information about this job so that the release controller adds it to the upgrade graph
-    - name: annotate	
-      image: ${IMAGE_CLI}
-      env:
-      - name: RELEASE_IMAGE_INITIAL
-      - name: RELEASE_IMAGE_LATEST
-      - name: RELEASE_SOURCE
-      - name: PROW_JOB_ID
-      command:
-      - /bin/bash
-      - -c
-      - |
-        #!/bin/bash
-        set -euo pipefail
-        oc --kubeconfig /etc/appci/sa.release-bot.app.ci.config annotate pj/${PROW_JOB_ID} "release.openshift.io/from-tag=${RELEASE_IMAGE_INITIAL}" "release.openshift.io/tag=${RELEASE_IMAGE_LATEST}" "release.openshift.io/source=ocp/${RELEASE_SOURCE}"
-      volumeMounts:
-      - mountPath: /etc/appci
-        name: appci-release-bot-credentials
-        readOnly: true
 
     containers:
     # Once the cluster is up, executes shared tests

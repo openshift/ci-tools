@@ -4,6 +4,7 @@ metadata:
     ci.openshift.io/job-spec: ""
   creationTimestamp: null
   labels:
+    OPENSHIFT_CI: "true"
     build-id: test-build-id
     ci.openshift.io/refs.branch: base-ref
     ci.openshift.io/refs.org: org

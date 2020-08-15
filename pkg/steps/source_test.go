@@ -313,6 +313,7 @@ func TestDefaultPodLabels(t *testing.T) {
 				},
 			},
 			expectedLabels: map[string]string{
+				"OPENSHIFT_CI":                "true",
 				"created-by-ci":               "true",
 				"prow.k8s.io/id":              "",
 				"build-id":                    "",
@@ -330,6 +331,7 @@ func TestDefaultPodLabels(t *testing.T) {
 				},
 			},
 			expectedLabels: map[string]string{
+				"OPENSHIFT_CI":   "true",
 				"created-by-ci":  "true",
 				"prow.k8s.io/id": "",
 				"build-id":       "",
@@ -351,6 +353,7 @@ func TestDefaultPodLabels(t *testing.T) {
 				},
 			},
 			expectedLabels: map[string]string{
+				"OPENSHIFT_CI":                "true",
 				"created-by-ci":               "true",
 				"prow.k8s.io/id":              "",
 				"build-id":                    "",
@@ -379,6 +382,7 @@ func TestDefaultPodLabels(t *testing.T) {
 				},
 			},
 			expectedLabels: map[string]string{
+				"OPENSHIFT_CI":                "true",
 				"created-by-ci":               "true",
 				"prow.k8s.io/id":              "",
 				"build-id":                    "",

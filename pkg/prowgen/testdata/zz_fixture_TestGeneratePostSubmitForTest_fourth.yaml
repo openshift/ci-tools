@@ -1,0 +1,10 @@
+agent: kubernetes
+branches:
+- ^branch$
+decorate: true
+decoration_config:
+  skip_cloning: true
+labels:
+  ci-operator.openshift.io/prowgen-controlled: "true"
+  job-release: "4.6"
+name: branch-ci-organization-repository-branch-fourth

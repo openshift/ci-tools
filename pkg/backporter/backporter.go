@@ -137,7 +137,7 @@ const clonesTemplateConstructor = `
 {{if .NewCloneIDs }}
 	<div class="alert alert-success alert-dismissible" id="success-banner">
 	<a href="#" class="close" data-dismiss="alert" aria-label="close">&times;</a>
-	<strong>Success!</strong> Clone created - 
+	<strong>Success!</strong> Clone created -
 	{{range $index, $bug := .NewCloneIDs }}
 		{{ if $index}}, {{end}}
 		<a href="/clones?ID={{ $bug }}" >Bug#{{ $bug }}</a>
@@ -148,7 +148,7 @@ const clonesTemplateConstructor = `
 {{if .MissingReleases }}
 	<div class="alert alert-info alert-dismissible" id="success-banner">
 	<a href="#" class="close" data-dismiss="alert" aria-label="close">&times;</a>
-	Missing clones for the following Target Releases - 
+	Missing clones for the following Target Releases -
 	{{range $index, $release := .MissingReleases }}
 		{{ if $index}},{{end}}
 		{{ $release }}
@@ -157,7 +157,7 @@ const clonesTemplateConstructor = `
 {{ end }}
 <div class="container">
 	<h2> {{.Bug.Summary}} </h2>
-	
+
 	{{ if ne .Parent.ID .Bug.ID}}
 		<p> <label>Cloned From: </label><a href = "/clones?ID={{.Parent.ID}}" > Bug {{.Parent.ID}}: {{.Parent.Summary}}</a> | Status: {{.Parent.Status}}
 	{{ else }}
@@ -176,9 +176,9 @@ const clonesTemplateConstructor = `
 		<tbody>
 		{{ if .Clones }}
 			{{ range $clone := .Clones }}
-				<tr class=" {{if gt (len $clone.TargetRelease) 0 }} 
+				<tr class=" {{if gt (len $clone.TargetRelease) 0 }}
 								{{if eq (index $clone.TargetRelease 0) "---"}}
-									table-danger 
+									table-danger
 								{{else}}
 									{{if eq $clone.ID $.Bug.ID }}table-active{{ end }}
 								{{end}}
@@ -186,7 +186,7 @@ const clonesTemplateConstructor = `
 								{{if eq $clone.ID $.Bug.ID }}table-active{{ end }}
 							{{ end }}">
 					<td style="vertical-align: middle;">
-					{{ if $clone.TargetRelease }} 
+					{{ if $clone.TargetRelease }}
 						{{ index $clone.TargetRelease 0 }}
 					{{ else }}
 						---
@@ -241,18 +241,18 @@ It also allows the user to create clones targeting a specific release.
 <h2 id="title"><a href="#title">How to find clones?</a></h2>
 
 <p>
-Enter the BugID for the bug whose clones need to be found in the input field on the top right 
+Enter the BugID for the bug whose clones need to be found in the input field on the top right
 corner and click "Find Clones".
-This would present the user with a list of all the clones of that bug with the relevant release 
+This would present the user with a list of all the clones of that bug with the relevant release
 and associated PRs. The highlighted bug is the bug which is being searched for.
 </p>
 
 <h2 id="title"><a href="#title">How to create a clone?</a></h2>
 
 <p>
-Select the target release from the dropdown and click the "Create Clone" button 
+Select the target release from the dropdown and click the "Create Clone" button
 which can be found after the clones table.
-If clone creation is successful you will be shown a success banner at the top of the page 
+If clone creation is successful you will be shown a success banner at the top of the page
 otherwise you will be redirected to an error page.
 Please note - Do not refresh the page once the clone has been created since this would cause another clone to be created.
 </p>
@@ -260,7 +260,7 @@ Please note - Do not refresh the page once the clone has been created since this
 <h2 id="title"><a href="#title">Getting the latest changes</a></h2>
 
 <p>
-If there are changes which have been made to the clones relationships, it will take upto 10 minutes for the changes to 
+If there are changes which have been made to the clones relationships, it will take upto 10 minutes for the changes to
 be reflected in the backporter tool. To force a refresh of the cache for those bug IDs - refresh the page twice.
 </p>
 </div>
@@ -506,7 +506,7 @@ func getClonesTemplateData(bugID int, client bugzilla.Client, allTargetVersions 
 		g.Go(func() error {
 			clonePRs, err := client.GetExternalBugPRsOnBug(clone.ID)
 			if err != nil {
-				return fmt.Errorf("Bug#%d - error occured while retreiving list of PRs : %w", clone.ID, err)
+				return fmt.Errorf("Bug#%d - error occurred while retreiving list of PRs : %w", clone.ID, err)
 			}
 			clone.PRs = clonePRs
 			return nil

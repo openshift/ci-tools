@@ -189,12 +189,12 @@ func main() {
 	commitsCounter := 0
 
 	for _, step := range steps {
-		commited, err := runAndCommitIfNeeded(stdout, stderr, author, step.command, step.arguments)
+		committed, err := runAndCommitIfNeeded(stdout, stderr, author, step.command, step.arguments)
 		if err != nil {
 			logrus.WithError(err).Fatal("failed to run command and commit the changes")
 		}
 
-		if commited {
+		if committed {
 			commitsCounter++
 		}
 	}

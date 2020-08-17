@@ -13,9 +13,9 @@ import (
 
 func TestDefaultFields(t *testing.T) {
 	var testCases = []struct {
-		name  string
-		input api.Release
-		ouput api.Release
+		name   string
+		input  api.Release
+		output api.Release
 	}{
 		{
 			name: "nothing to do",
@@ -24,7 +24,7 @@ func TestDefaultFields(t *testing.T) {
 				Channel:      api.ReleaseChannelStable,
 				Version:      "4.4",
 			},
-			ouput: api.Release{
+			output: api.Release{
 				Architecture: api.ReleaseArchitectureAMD64,
 				Channel:      api.ReleaseChannelStable,
 				Version:      "4.4",
@@ -36,7 +36,7 @@ func TestDefaultFields(t *testing.T) {
 				Channel: api.ReleaseChannelStable,
 				Version: "4.4",
 			},
-			ouput: api.Release{
+			output: api.Release{
 				Architecture: api.ReleaseArchitectureAMD64,
 				Channel:      api.ReleaseChannelStable,
 				Version:      "4.4",
@@ -45,7 +45,7 @@ func TestDefaultFields(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		actual, expected := defaultFields(testCase.input), testCase.ouput
+		actual, expected := defaultFields(testCase.input), testCase.output
 		if diff := cmp.Diff(actual, expected); diff != "" {
 			t.Errorf("%s: got incorrect candidate: %v", testCase.name, cmp.Diff(actual, expected))
 		}

@@ -340,7 +340,7 @@ func main() {
 
 	promClient, err := dispatcher.NewPrometheusClient(o.prometheusURL, o.prometheusUsername, o.prometheusPassword)
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create promethues client.")
+		logrus.WithError(err).Fatal("Failed to create prometheus client.")
 	}
 
 	v1api := prometheusapi.NewAPI(promClient)

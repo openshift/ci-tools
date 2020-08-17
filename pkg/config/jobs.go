@@ -40,7 +40,7 @@ type Periodics map[string]prowconfig.Periodic
 // AddAll adds all jobs from a different instance.
 // The method assumes two jobs with a matching name are identical,
 // so if a periodic with a given name already exists, it
-// is overriden.
+// is overridden.
 func (p Periodics) AddAll(jobs Periodics) {
 	for name, periodic := range jobs {
 		p[name] = periodic
@@ -50,7 +50,7 @@ func (p Periodics) AddAll(jobs Periodics) {
 // Add adds a job from a different instance.
 // The method assumes two jobs with a matching name are identical,
 // so if a periodic with a given name already exists, it
-// is overriden.
+// is overridden.
 func (p Periodics) Add(job prowconfig.Periodic) {
 	p[job.Name] = job
 }

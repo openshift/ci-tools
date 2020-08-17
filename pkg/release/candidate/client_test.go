@@ -15,41 +15,41 @@ func TestServiceHost(t *testing.T) {
 	var testCases = []struct {
 		product      api.ReleaseProduct
 		architecture api.ReleaseArchitecture
-		ouput        string
+		output       string
 	}{
 		{
 			product:      api.ReleaseProductOKD,
 			architecture: api.ReleaseArchitectureAMD64,
-			ouput:        "https://origin-release.svc.ci.openshift.org/api/v1/releasestream",
+			output:       "https://origin-release.svc.ci.openshift.org/api/v1/releasestream",
 		},
 		{
 
 			product:      api.ReleaseProductOCP,
 			architecture: api.ReleaseArchitectureAMD64,
-			ouput:        "https://openshift-release.svc.ci.openshift.org/api/v1/releasestream",
+			output:       "https://openshift-release.svc.ci.openshift.org/api/v1/releasestream",
 		},
 		{
 
 			product:      api.ReleaseProductOCP,
 			architecture: api.ReleaseArchitectureAMD64,
-			ouput:        "https://openshift-release.svc.ci.openshift.org/api/v1/releasestream",
+			output:       "https://openshift-release.svc.ci.openshift.org/api/v1/releasestream",
 		},
 		{
 
 			product:      api.ReleaseProductOCP,
 			architecture: api.ReleaseArchitecturePPC64le,
-			ouput:        "https://openshift-release-ppc64le.svc.ci.openshift.org/api/v1/releasestream",
+			output:       "https://openshift-release-ppc64le.svc.ci.openshift.org/api/v1/releasestream",
 		},
 		{
 
 			product:      api.ReleaseProductOCP,
 			architecture: api.ReleaseArchitectureS390x,
-			ouput:        "https://openshift-release-s390x.svc.ci.openshift.org/api/v1/releasestream",
+			output:       "https://openshift-release-s390x.svc.ci.openshift.org/api/v1/releasestream",
 		},
 	}
 
 	for _, testCase := range testCases {
-		if actual, expected := ServiceHost(testCase.product, testCase.architecture), testCase.ouput; actual != expected {
+		if actual, expected := ServiceHost(testCase.product, testCase.architecture), testCase.output; actual != expected {
 			t.Errorf("got incorrect service host: %v", cmp.Diff(actual, expected))
 		}
 	}
@@ -57,8 +57,8 @@ func TestServiceHost(t *testing.T) {
 
 func TestEndpoint(t *testing.T) {
 	var testCases = []struct {
-		input api.Candidate
-		ouput string
+		input  api.Candidate
+		output string
 	}{
 		{
 			input: api.Candidate{
@@ -67,7 +67,7 @@ func TestEndpoint(t *testing.T) {
 				Stream:       api.ReleaseStreamOKD,
 				Version:      "4.4",
 			},
-			ouput: "https://origin-release.svc.ci.openshift.org/api/v1/releasestream/4.4.0-0.okd/latest",
+			output: "https://origin-release.svc.ci.openshift.org/api/v1/releasestream/4.4.0-0.okd/latest",
 		},
 		{
 			input: api.Candidate{
@@ -76,7 +76,7 @@ func TestEndpoint(t *testing.T) {
 				Stream:       api.ReleaseStreamCI,
 				Version:      "4.5",
 			},
-			ouput: "https://openshift-release.svc.ci.openshift.org/api/v1/releasestream/4.5.0-0.ci/latest",
+			output: "https://openshift-release.svc.ci.openshift.org/api/v1/releasestream/4.5.0-0.ci/latest",
 		},
 		{
 			input: api.Candidate{
@@ -85,7 +85,7 @@ func TestEndpoint(t *testing.T) {
 				Stream:       api.ReleaseStreamNightly,
 				Version:      "4.6",
 			},
-			ouput: "https://openshift-release.svc.ci.openshift.org/api/v1/releasestream/4.6.0-0.nightly/latest",
+			output: "https://openshift-release.svc.ci.openshift.org/api/v1/releasestream/4.6.0-0.nightly/latest",
 		},
 		{
 			input: api.Candidate{
@@ -94,7 +94,7 @@ func TestEndpoint(t *testing.T) {
 				Stream:       api.ReleaseStreamCI,
 				Version:      "4.7",
 			},
-			ouput: "https://openshift-release-ppc64le.svc.ci.openshift.org/api/v1/releasestream/4.7.0-0.ci-ppc64le/latest",
+			output: "https://openshift-release-ppc64le.svc.ci.openshift.org/api/v1/releasestream/4.7.0-0.ci-ppc64le/latest",
 		},
 		{
 			input: api.Candidate{
@@ -103,12 +103,12 @@ func TestEndpoint(t *testing.T) {
 				Stream:       api.ReleaseStreamNightly,
 				Version:      "4.8",
 			},
-			ouput: "https://openshift-release-s390x.svc.ci.openshift.org/api/v1/releasestream/4.8.0-0.nightly-s390x/latest",
+			output: "https://openshift-release-s390x.svc.ci.openshift.org/api/v1/releasestream/4.8.0-0.nightly-s390x/latest",
 		},
 	}
 
 	for _, testCase := range testCases {
-		if actual, expected := endpoint(testCase.input), testCase.ouput; actual != expected {
+		if actual, expected := endpoint(testCase.input), testCase.output; actual != expected {
 			t.Errorf("got incorrect endpoint: %v", cmp.Diff(actual, expected))
 		}
 	}
@@ -116,9 +116,9 @@ func TestEndpoint(t *testing.T) {
 
 func TestDefaultFields(t *testing.T) {
 	var testCases = []struct {
-		name  string
-		input api.Candidate
-		ouput api.Candidate
+		name   string
+		input  api.Candidate
+		output api.Candidate
 	}{
 		{
 			name: "nothing to do",
@@ -128,7 +128,7 @@ func TestDefaultFields(t *testing.T) {
 				Stream:       api.ReleaseStreamOKD,
 				Version:      "4.4",
 			},
-			ouput: api.Candidate{
+			output: api.Candidate{
 				Product:      api.ReleaseProductOKD,
 				Architecture: api.ReleaseArchitectureAMD64,
 				Stream:       api.ReleaseStreamOKD,
@@ -142,7 +142,7 @@ func TestDefaultFields(t *testing.T) {
 				Architecture: api.ReleaseArchitectureAMD64,
 				Version:      "4.4",
 			},
-			ouput: api.Candidate{
+			output: api.Candidate{
 				Product:      api.ReleaseProductOKD,
 				Architecture: api.ReleaseArchitectureAMD64,
 				Stream:       api.ReleaseStreamOKD,
@@ -156,7 +156,7 @@ func TestDefaultFields(t *testing.T) {
 				Stream:  api.ReleaseStreamOKD,
 				Version: "4.4",
 			},
-			ouput: api.Candidate{
+			output: api.Candidate{
 				Product:      api.ReleaseProductOKD,
 				Architecture: api.ReleaseArchitectureAMD64,
 				Stream:       api.ReleaseStreamOKD,
@@ -166,7 +166,7 @@ func TestDefaultFields(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		actual, expected := defaultFields(testCase.input), testCase.ouput
+		actual, expected := defaultFields(testCase.input), testCase.output
 		if diff := cmp.Diff(actual, expected); diff != "" {
 			t.Errorf("%s: got incorrect candidate: %v", testCase.name, cmp.Diff(actual, expected))
 		}

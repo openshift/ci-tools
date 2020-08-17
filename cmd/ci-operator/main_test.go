@@ -213,7 +213,7 @@ func TestGetResolverInfo(t *testing.T) {
 			Branch:  "testBranch",
 		},
 	}, {
-		name: "JobSpec Refs w/ vairant set via flag",
+		name: "JobSpec Refs w/ variant set via flag",
 		opt: &options{
 			resolverAddress: configResolverAddress,
 			variant:         "v2",

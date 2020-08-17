@@ -218,7 +218,6 @@ func rehearseMain() error {
 	var refs registry.ReferenceByName
 	var chains registry.ChainByName
 	var workflows registry.WorkflowByName
-	var graph registry.NodeByName
 
 	if !o.noRegistry {
 		refs, chains, workflows, _, _, err = load.Registry(filepath.Join(o.releaseRepoPath, config.RegistryPath), false)
@@ -226,7 +225,7 @@ func rehearseMain() error {
 			logger.WithError(err).Error("could not load step registry")
 			return fmt.Errorf(misconfigurationOutput)
 		}
-		graph, err = registry.NewGraph(refs, chains, workflows)
+		graph, err := registry.NewGraph(refs, chains, workflows)
 		if err != nil {
 			logger.WithError(err).Error("could not create step registry graph")
 			return fmt.Errorf(misconfigurationOutput)
@@ -234,12 +233,6 @@ func rehearseMain() error {
 		changedRegistrySteps, err = config.GetChangedRegistrySteps(o.releaseRepoPath, jobSpec.Refs.BaseSHA, graph)
 		if err != nil {
 			logger.WithError(err).Error("could not get step registry differences")
-			return fmt.Errorf(misconfigurationOutput)
-		}
-	} else {
-		graph, err = registry.NewGraph(refs, chains, workflows)
-		if err != nil {
-			logger.WithError(err).Error("could not create step registry graph")
 			return fmt.Errorf(misconfigurationOutput)
 		}
 	}

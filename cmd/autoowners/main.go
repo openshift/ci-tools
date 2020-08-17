@@ -225,7 +225,6 @@ func writeOwners(orgRepo orgRepo, httpResult httpResult, cleaner ownersCleaner) 
 		}
 
 		logrus.WithField("path", path).Debug("Writing to path ...")
-		err = nil
 		config := httpResult.resolveOwnerAliases(cleaner)
 		switch cfg := config.(type) {
 		case SimpleConfig:

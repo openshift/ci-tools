@@ -12,6 +12,7 @@ linters:
     - unparam
     - unconvert
     - errcheck
+    - ineffassign
   disable-all: true
 
 issues:

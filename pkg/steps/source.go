@@ -116,6 +116,7 @@ func defaultPodLabels(jobSpec *api.JobSpec) map[string]string {
 			BuildIdLabel:     jobSpec.BuildID,
 			ProwJobIdLabel:   jobSpec.ProwJobID,
 			CreatedByCILabel: "true",
+			openshiftCIEnv:   "true",
 			RefsOrgLabel:     refs.Org,
 			RefsRepoLabel:    refs.Repo,
 			RefsBranchLabel:  refs.BaseRef,
@@ -128,6 +129,7 @@ func defaultPodLabels(jobSpec *api.JobSpec) map[string]string {
 			BuildIdLabel:     jobSpec.BuildID,
 			ProwJobIdLabel:   jobSpec.ProwJobID,
 			CreatedByCILabel: "true",
+			openshiftCIEnv:   "true",
 			RefsOrgLabel:     extraRefs[0].Org,
 			RefsRepoLabel:    extraRefs[0].Repo,
 			RefsBranchLabel:  extraRefs[0].BaseRef,
@@ -139,6 +141,7 @@ func defaultPodLabels(jobSpec *api.JobSpec) map[string]string {
 		BuildIdLabel:     jobSpec.BuildID,
 		ProwJobIdLabel:   jobSpec.ProwJobID,
 		CreatedByCILabel: "true",
+		openshiftCIEnv:   "true",
 	})
 }
 

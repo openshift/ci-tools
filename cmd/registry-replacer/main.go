@@ -155,7 +155,7 @@ func main() {
 		return
 	}
 
-	if err := upsertPR(githubClient, opts.configDir, opts.githubUserName, opts.TokenPath, opts.selfApprove, opts.pruneUnusedReplacements); err != nil {
+	if err := upsertPR(githubClient, opts.configDir, opts.githubUserName, opts.TokenPath, opts.selfApprove, opts.pruneUnusedReplacements, opts.ensureCorrectPromotionDockerfile); err != nil {
 		logrus.WithError(err).Fatal("Failed to create PR")
 	}
 }
@@ -355,7 +355,7 @@ func orgRepoTagFromPullString(pullString string) (orgRepoTag, error) {
 	return res, nil
 }
 
-func upsertPR(gc pgithub.Client, dir, githubUsername, tokenFilePath string, selfApprove, pruneUnusedReplacements bool) error {
+func upsertPR(gc pgithub.Client, dir, githubUsername, tokenFilePath string, selfApprove, pruneUnusedReplacements, ensureCorrectPromotionDockerfile bool) error {
 	if err := os.Chdir(dir); err != nil {
 		return fmt.Errorf("failed to chdir into %s: %w", dir, err)
 	}
@@ -404,6 +404,9 @@ func upsertPR(gc pgithub.Client, dir, githubUsername, tokenFilePath string, self
 
 	if pruneUnusedReplacements {
 		prBody += "\n* Prunes existing replacements that do not match any FROM dircetive in the Dockerfile"
+	}
+	if ensureCorrectPromotionDockerfile {
+		prBody += "\n* Ensures the Dockerfiles used for promotion jobs matches the ones configured in [ocp-build-data](https://github.com/openshift/ocp-build-data/tree/openshift-4.6-rhel-8/images)"
 	}
 	if err := bumper.UpdatePullRequestWithLabels(
 		gc,

@@ -52,7 +52,7 @@ func GetJobVolumesFromPrometheus(ctx context.Context, prometheusAPI PrometheusAP
 	return jobVolumes, nil
 }
 
-// NewPrometheusClient return a Promethues client
+// NewPrometheusClient return a Prometheus client
 func NewPrometheusClient(prometheusURL, username, password string) (api.Client, error) {
 	roundTripper := api.DefaultRoundTripper
 	if username != "" {

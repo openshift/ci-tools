@@ -457,7 +457,7 @@ func mergeRemotesAndPush(logger *logrus.Entry, git gitFunc, repoDir, srcRemote, 
 			mergeErrs = append(mergeErrs, fmt.Errorf("failed to perform merge --abort: %w", err))
 		}
 
-		logger.WithError(utilerrors.NewAggregate(mergeErrs)).Warn("error occured while fetching remote and merge")
+		logger.WithError(utilerrors.NewAggregate(mergeErrs)).Warn("error occurred while fetching remote and merge")
 		return nil
 	}
 

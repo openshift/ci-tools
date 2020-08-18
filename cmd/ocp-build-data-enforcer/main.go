@@ -34,7 +34,7 @@ type options struct {
 func gatherOptions() (*options, error) {
 	o := &options{PRCreationOptions: &prcreation.PRCreationOptions{}}
 	o.PRCreationOptions.AddFlags(flag.CommandLine)
-	flag.StringVar(&o.ocpBuildDataRepoDir, "ocp-build-data-repo-dir", "../ocp-build-data", "The directory in which the ocp-build-data reposity is")
+	flag.StringVar(&o.ocpBuildDataRepoDir, "ocp-build-data-repo-dir", "../ocp-build-data", "The directory in which the ocp-build-data repository is")
 	flag.StringVar(&o.majorMinor.Minor, "minor", "6", "The minor version to target")
 	flag.BoolVar(&o.createPRs, "create-prs", false, "If the tool should create PRs")
 	flag.IntVar(&o.prCreationCeiling, "pr-creation-ceiling", 5, "The maximum number of PRs to upsert")

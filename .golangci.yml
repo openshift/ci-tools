@@ -12,6 +12,8 @@ linters:
     - unparam
     - unconvert
     - errcheck
+    - ineffassign
+    - misspell
   disable-all: true
 
 issues:

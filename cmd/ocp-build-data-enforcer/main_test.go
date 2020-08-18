@@ -87,7 +87,7 @@ LABEL io.k8s.display-name="Whereabouts CNI" \
       maintainer="CTO Networking <nfvpe-container@redhat.com>"`),
 		},
 		{
-			name: "Dockerfile gets updated, comment preceeding directive",
+			name: "Dockerfile gets updated, comment preceding directive",
 			dockerfile: []byte(`# This dockerfile is used for building for OpenShift
 FROM openshift/origin-release:rhel-8-golang-1.12 as rhel8
 FROM something
@@ -103,7 +103,7 @@ FROM replacement-2
 `),
 		},
 		{
-			name: "Dockerfile gets updated, no comment preceeding directive",
+			name: "Dockerfile gets updated, no comment preceding directive",
 			dockerfile: []byte(`FROM openshift/origin-release:rhel-8-golang-1.12 as rhel8
 FROM something
 `),

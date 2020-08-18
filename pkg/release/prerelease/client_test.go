@@ -12,48 +12,48 @@ import (
 
 func TestEndpoint(t *testing.T) {
 	var testCases = []struct {
-		input api.Prerelease
-		ouput string
+		input  api.Prerelease
+		output string
 	}{
 		{
 			input: api.Prerelease{
 				Product:      api.ReleaseProductOKD,
 				Architecture: api.ReleaseArchitectureAMD64,
 			},
-			ouput: "https://origin-release.svc.ci.openshift.org/api/v1/releasestream/4-stable/latest",
+			output: "https://origin-release.svc.ci.openshift.org/api/v1/releasestream/4-stable/latest",
 		},
 		{
 			input: api.Prerelease{
 				Product:      api.ReleaseProductOCP,
 				Architecture: api.ReleaseArchitectureAMD64,
 			},
-			ouput: "https://openshift-release.svc.ci.openshift.org/api/v1/releasestream/4-stable/latest",
+			output: "https://openshift-release.svc.ci.openshift.org/api/v1/releasestream/4-stable/latest",
 		},
 		{
 			input: api.Prerelease{
 				Product:      api.ReleaseProductOCP,
 				Architecture: api.ReleaseArchitectureAMD64,
 			},
-			ouput: "https://openshift-release.svc.ci.openshift.org/api/v1/releasestream/4-stable/latest",
+			output: "https://openshift-release.svc.ci.openshift.org/api/v1/releasestream/4-stable/latest",
 		},
 		{
 			input: api.Prerelease{
 				Product:      api.ReleaseProductOCP,
 				Architecture: api.ReleaseArchitecturePPC64le,
 			},
-			ouput: "https://openshift-release-ppc64le.svc.ci.openshift.org/api/v1/releasestream/4-stable/latest",
+			output: "https://openshift-release-ppc64le.svc.ci.openshift.org/api/v1/releasestream/4-stable/latest",
 		},
 		{
 			input: api.Prerelease{
 				Product:      api.ReleaseProductOCP,
 				Architecture: api.ReleaseArchitectureS390x,
 			},
-			ouput: "https://openshift-release-s390x.svc.ci.openshift.org/api/v1/releasestream/4-stable/latest",
+			output: "https://openshift-release-s390x.svc.ci.openshift.org/api/v1/releasestream/4-stable/latest",
 		},
 	}
 
 	for _, testCase := range testCases {
-		if actual, expected := endpoint(testCase.input), testCase.ouput; actual != expected {
+		if actual, expected := endpoint(testCase.input), testCase.output; actual != expected {
 			t.Errorf("got incorrect endpoint: %v", cmp.Diff(actual, expected))
 		}
 	}
@@ -61,9 +61,9 @@ func TestEndpoint(t *testing.T) {
 
 func TestDefaultFields(t *testing.T) {
 	var testCases = []struct {
-		name  string
-		input api.Prerelease
-		ouput api.Prerelease
+		name   string
+		input  api.Prerelease
+		output api.Prerelease
 	}{
 		{
 			name: "nothing to do",
@@ -75,7 +75,7 @@ func TestDefaultFields(t *testing.T) {
 					Upper: "4.5.0-0",
 				},
 			},
-			ouput: api.Prerelease{
+			output: api.Prerelease{
 				Product:      api.ReleaseProductOKD,
 				Architecture: api.ReleaseArchitectureAMD64,
 				VersionBounds: api.VersionBounds{
@@ -93,7 +93,7 @@ func TestDefaultFields(t *testing.T) {
 					Upper: "4.5.0-0",
 				},
 			},
-			ouput: api.Prerelease{
+			output: api.Prerelease{
 				Product:      api.ReleaseProductOKD,
 				Architecture: api.ReleaseArchitectureAMD64,
 				VersionBounds: api.VersionBounds{
@@ -105,7 +105,7 @@ func TestDefaultFields(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		actual, expected := defaultFields(testCase.input), testCase.ouput
+		actual, expected := defaultFields(testCase.input), testCase.output
 		if diff := cmp.Diff(actual, expected); diff != "" {
 			t.Errorf("%s: got incorrect prerelease: %v", testCase.name, cmp.Diff(actual, expected))
 		}

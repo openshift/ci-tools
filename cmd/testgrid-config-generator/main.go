@@ -164,7 +164,7 @@ var reVersion = regexp.MustCompile(`-(\d+\.\d+)(-|$)`)
 // release-gating and release-informing tests simple.
 //
 // We read all jobs that are annotated for the grid. The release controller's configuration
-// is used to default those roles but they can be overriden per job. We partition by overall
+// is used to default those roles but they can be overridden per job. We partition by overall
 // type (blocking, informing, broken), version or generic (generic have no version), and by
 // release type (ocp or okd). If the job is blocking on a release definition it will be
 // upgraded from informing to blocking if the job is set to informing.

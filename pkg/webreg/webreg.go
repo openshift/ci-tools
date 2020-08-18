@@ -762,7 +762,7 @@ will exist in the <code>Namespace</code> executing a test workflow:
 
 <h4 id="config-references"><a href="#config-references">Referring to Images in <code>ci-operator</code> Configuration</a></h4>
 <p>
-Inside of any <code>ci-operator</code> configuration file all images must be 
+Inside of any <code>ci-operator</code> configuration file all images must be
 referenced as an <code>ImageStreamTag</code> (<code>stream:tag</code>), but
 may be referenced simply with the tag name. When an image is referenced with
 a tag name, the tag will be resolved on the <code>pipeline</code> <code>ImageStream</code>,
@@ -1628,7 +1628,7 @@ that we have the <code>ipi</code> workflow available to use.
 <h5 id="adding-step"><a href="#adding-step">Adding a Reusable Test Step</a></h4>
 
 <p>
-Full directions for adding a new resuable test step can be found in the overview for
+Full directions for adding a new reusable test step can be found in the overview for
 <a href="./adding-components#adding-content">new registry content</a>. An example of the process
 is provided here. First, make directory for the test step in the registry:
 <code>ci-operator/step-registry/org/repo/e2e</code>.

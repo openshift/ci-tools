@@ -8,7 +8,7 @@ import (
 )
 
 // NewReconcileRequestCoalescer returns a reconcile wrapper that will delay new reconcile.Requests
-// after a sucessful reconciliation for coalesceWindow time.
+// after a successful reconciliation for coalesceWindow time.
 // A successful reconciliation is defined as as one where all returned values are empty or nil
 func NewReconcileRequestCoalescer(upstream reconcile.Reconciler, coalesceWindow time.Duration) reconcile.Reconciler {
 	return &reconcileRequestCoalescer{

@@ -55,7 +55,7 @@ func gatherOptions() (*options, error) {
 	flag.BoolVar(&o.selfApprove, "self-approve", false, "If the bot should self-approve its PR.")
 	flag.BoolVar(&o.ensureCorrectPromotionDockerfile, "ensure-correct-promotion-dockerfile", false, "If Dockerfiles used for promotion should get updated to match whats in the ocp-build-data repo")
 	flag.Var(o.ensureCorrectPromotionDockerfileIngoredRepos, "ensure-correct-promotion-dockerfile-ignored-repos", "Repos that are being ignored when ensuring the correct promotion dockerfile in org/repo notation. Can be passed multiple times.")
-	flag.StringVar(&o.ocpBuildDataRepoDir, "ocp-build-data-repo-dir", "../ocp-build-data", "The directory in which the ocp-build-data reposity is")
+	flag.StringVar(&o.ocpBuildDataRepoDir, "ocp-build-data-repo-dir", "../ocp-build-data", "The directory in which the ocp-build-data repository is")
 	flag.StringVar(&o.currentRelease.Minor, "current-release-minor", "6", "The minor version of the current release that is getting forwarded to from the master branch")
 	flag.BoolVar(&o.pruneUnusedReplacements, "prune-unused-replacements", false, "If replacements that match nothing should get pruned from the config")
 	flag.BoolVar(&o.pruneOCPBuilderReplacements, "prune-ocp-builder-replacements", false, "If all replacements that target the ocp/builder imagestream should be removed")
@@ -466,7 +466,7 @@ func extractReplacementCandidatesFromDockerfile(dockerfile []byte) (sets.String,
 	names := make(map[string]string)
 	stages, err := imagebuilder.NewStages(node, imagebuilder.NewBuilder(nil))
 	if err != nil {
-		return nil, fmt.Errorf("failed to construt imagebuilder stages: %w", err)
+		return nil, fmt.Errorf("failed to construct imagebuilder stages: %w", err)
 	}
 	for _, stage := range stages {
 		for _, child := range stage.Node.Children {

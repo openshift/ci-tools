@@ -1,8 +1,8 @@
 package bitwarden
 
 import (
-	"crypto/rand"
 	"fmt"
+	"time"
 )
 
 type fakeClient struct {
@@ -53,15 +53,9 @@ func (c fakeClient) GetPassword(itemName string) ([]byte, error) {
 	return nil, fmt.Errorf("failed to find password in item %s", itemName)
 }
 
-func getNewUUID() (string, error) {
-	b := make([]byte, 16)
-	_, err := rand.Read(b)
-	if err != nil {
-		return "", err
-	}
-	return fmt.Sprintf("%x-%x-%x-%x-%x",
-		b[0:4], b[4:6], b[6:8], b[8:10], b[10:]), nil
-
+func getNewUUID() string {
+	nanoTime := time.Now().Nanosecond()
+	return fmt.Sprintf("%d", nanoTime)
 }
 
 func (c fakeClient) SetFieldOnItem(itemName, fieldName string, fieldValue []byte) error {
@@ -82,10 +76,7 @@ func (c fakeClient) SetFieldOnItem(itemName, fieldName string, fieldValue []byte
 
 	}
 	if targetItem == nil {
-		newItemID, err := getNewUUID()
-		if err != nil {
-			return fmt.Errorf("failed to generate UUID: %w", err)
-		}
+		newItemID := getNewUUID()
 		c.items = append(c.items, Item{ID: newItemID, Name: itemName, Type: 1})
 		targetItem = &c.items[len(c.items)-1]
 	}
@@ -114,20 +105,15 @@ func (c fakeClient) SetAttachmentOnItem(itemName, attachmentName string, fileCon
 		break
 	}
 	if targetItem == nil {
-		newItemID, err := getNewUUID()
-		if err != nil {
-			return fmt.Errorf("failed to generate UUID: %w", err)
-		}
+		newItemID := getNewUUID()
 		c.items = append(c.items, Item{ID: newItemID, Name: itemName, Type: 1})
 		targetItem = &c.items[len(c.items)-1]
 	}
 	if targetAttachment == nil {
-		newAttachmentID, err := getNewUUID()
-		if err != nil {
-			return fmt.Errorf("failed to generate UUID: %w", err)
-		}
+		newAttachmentID := getNewUUID()
 		c.attachments[newAttachmentID] = string(fileContents)
-		targetItem.Attachments = append(targetItem.Attachments, Attachment{newAttachmentID, attachmentName})
+		targetAttachment = &Attachment{newAttachmentID, attachmentName}
+		targetItem.Attachments = append(targetItem.Attachments, *targetAttachment)
 	}
 	c.attachments[targetAttachment.ID] = string(fileContents)
 	return nil
@@ -142,10 +128,7 @@ func (c fakeClient) SetPassword(itemName string, password []byte) error {
 		}
 	}
 	if targetItem == nil {
-		newItemID, err := getNewUUID()
-		if err != nil {
-			return fmt.Errorf("failed to generate UUID: %w", err)
-		}
+		newItemID := getNewUUID()
 		c.items = append(c.items, Item{ID: newItemID, Name: itemName, Type: 1, Login: &Login{Password: string(password)}})
 		targetItem = &c.items[len(c.items)-1]
 	}

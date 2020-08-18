@@ -30,9 +30,9 @@ type options struct {
 
 type bitWardenItem struct {
 	ItemName   string         `json:"item_name"`
-	Field      fieldGenerator `json:"field,omitempty"`
-	Attachment fieldGenerator `json:"attachment,omitempty"`
-	Attribute  fieldGenerator `json:"attribute,omitempty"`
+	Field      fieldGenerator `json:"field"`
+	Attachment fieldGenerator `json:"attachment"`
+	Attribute  fieldGenerator `json:"attribute"`
 }
 
 type fieldGenerator struct {
@@ -121,7 +121,7 @@ func executeCommand(command string) ([]byte, error) {
 	cmd := strings.Fields(command)
 	out, err := exec.Command(cmd[0], cmd[1:]...).CombinedOutput()
 	if err != nil {
-		return nil, fmt.Errorf("bw cmd '%s' failed: %v", command, string(out))
+		return nil, fmt.Errorf("bw cmd '%s' failed, output- %s : %w", command, string(out), err)
 	}
 	return out, nil
 }
@@ -138,7 +138,7 @@ func updateSecrets(bwItems []bitWardenItem, bwClient bitwarden.Client) error {
 			}
 		}
 		if bwItem.Attachment.Name != "" {
-			out, err := executeCommand(bwItem.Field.Cmd)
+			out, err := executeCommand(bwItem.Attachment.Cmd)
 			if err != nil {
 				return fmt.Errorf("failed to set attachment, item: %s, attachment: %s - %w", bwItem.ItemName, bwItem.Attachment.Name, err)
 			}
@@ -147,7 +147,7 @@ func updateSecrets(bwItems []bitWardenItem, bwClient bitwarden.Client) error {
 			}
 		}
 		if bwItem.Attribute.Name != "" {
-			out, err := executeCommand(bwItem.Field.Cmd)
+			out, err := executeCommand(bwItem.Attribute.Cmd)
 			if err != nil {
 				return fmt.Errorf("failed to set password, item: %s - %w", bwItem.ItemName, err)
 			}

@@ -121,17 +121,17 @@ func TestError(t *testing.T) {
 		expected: []string{"acquire owner rtype free leased random"},
 	}, {
 		name:     "release fails",
-		failures: sets.NewString("releaseone owner rtype0 free"),
+		failures: sets.NewString("releaseone owner rtype_0 free"),
 		expected: []string{
 			"acquire owner rtype free leased random",
-			"releaseone owner rtype0 free",
+			"releaseone owner rtype_0 free",
 		},
 	}, {
 		name:     "run fails",
 		runFails: true,
 		expected: []string{
 			"acquire owner rtype free leased random",
-			"releaseone owner rtype0 free",
+			"releaseone owner rtype_0 free",
 		},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -160,8 +160,8 @@ func TestAcquireRelease(t *testing.T) {
 		t.Fatal("step was not executed")
 	}
 	expected := []string{
-		"acquire owner rtype free leased random",
-		"releaseone owner rtype0 free",
+		"acquire owner rtype0 free leased random",
+		"releaseone owner rtype0_0 free",
 	}
 	if !reflect.DeepEqual(calls, expected) {
 		t.Fatalf("wrong calls to the lease client: %s", diff.ObjectDiff(calls, expected))

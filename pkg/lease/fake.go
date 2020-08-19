@@ -45,7 +45,7 @@ func (c *fakeClient) addCall(call string, args ...string) error {
 
 func (c *fakeClient) AcquireWaitWithPriority(ctx context.Context, rtype, state, dest, requestID string) (*common.Resource, error) {
 	err := c.addCall("acquire", rtype, state, dest, requestID)
-	return &common.Resource{Name: fmt.Sprintf("%s%d", rtype, len(*c.calls)-1)}, err
+	return &common.Resource{Name: fmt.Sprintf("%s_%d", rtype, len(*c.calls)-1)}, err
 }
 
 func (c *fakeClient) UpdateOne(name, dest string, _ *common.UserData) error {

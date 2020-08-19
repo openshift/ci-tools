@@ -25,7 +25,7 @@ func TestAcquire(t *testing.T) {
 	}
 	expected = []string{
 		"acquire owner rtype free leased random",
-		"updateone owner rtype0 leased 0",
+		"updateone owner rtype_0 leased 0",
 	}
 	if !reflect.DeepEqual(calls, expected) {
 		t.Fatalf("wrong calls to the boskos client: %v", diff.ObjectDiff(calls, expected))
@@ -34,7 +34,7 @@ func TestAcquire(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected = []string{"rtype0"}
+	expected = []string{"rtype_0"}
 	if !reflect.DeepEqual(list, expected) {
 		t.Fatalf("wrong list: %v", diff.ObjectDiff(list, expected))
 	}
@@ -43,7 +43,7 @@ func TestAcquire(t *testing.T) {
 func TestHeartbeatCancel(t *testing.T) {
 	ctx := context.Background()
 	var calls []string
-	client := NewFakeClient("owner", "url", 0, sets.NewString("updateone owner rtype0 leased 0"), &calls)
+	client := NewFakeClient("owner", "url", 0, sets.NewString("updateone owner rtype_0 leased 0"), &calls)
 	var called bool
 	if _, err := client.Acquire("rtype", ctx, func() { called = true }); err != nil {
 		t.Fatal(err)
@@ -67,36 +67,36 @@ func TestHeartbeatRetries(t *testing.T) {
 		requests: 3,
 		success:  true,
 		failures: []string{
-			"updateone owner rtype0 leased 0",
-			"updateone owner rtype0 leased 1",
+			"updateone owner rtype_0 leased 0",
+			"updateone owner rtype_0 leased 1",
 		},
 	}, {
 		name:     "requests < retries, should fail",
 		requests: 3,
 		failures: []string{
-			"updateone owner rtype0 leased 0",
-			"updateone owner rtype0 leased 1",
-			"updateone owner rtype0 leased 2",
+			"updateone owner rtype_0 leased 0",
+			"updateone owner rtype_0 leased 1",
+			"updateone owner rtype_0 leased 2",
 		},
 	}, {
 		name:     "requests > retries with intermittent failures, should succeed",
 		success:  true,
 		requests: 6,
 		failures: []string{
-			"updateone owner rtype0 leased 0",
-			"updateone owner rtype0 leased 1",
-			"updateone owner rtype0 leased 3",
-			"updateone owner rtype0 leased 4",
+			"updateone owner rtype_0 leased 0",
+			"updateone owner rtype_0 leased 1",
+			"updateone owner rtype_0 leased 3",
+			"updateone owner rtype_0 leased 4",
 		},
 	}, {
 		name:     "requests <= retries with intermittent failures, should fail",
 		requests: 6,
 		failures: []string{
-			"updateone owner rtype0 leased 0",
-			"updateone owner rtype0 leased 1",
-			"updateone owner rtype0 leased 3",
-			"updateone owner rtype0 leased 4",
-			"updateone owner rtype0 leased 5",
+			"updateone owner rtype_0 leased 0",
+			"updateone owner rtype_0 leased 1",
+			"updateone owner rtype_0 leased 3",
+			"updateone owner rtype_0 leased 4",
+			"updateone owner rtype_0 leased 5",
 		},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {

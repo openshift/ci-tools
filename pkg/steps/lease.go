@@ -3,6 +3,7 @@ package steps
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"strings"
 
@@ -15,30 +16,37 @@ import (
 	"github.com/openshift/ci-tools/pkg/results"
 )
 
-const leaseEnv = "LEASED_RESOURCE"
+const DefaultLeaseEnv = "LEASED_RESOURCE"
 
 var NoLeaseClientErr = errors.New("step needs a lease but no lease client provided")
 
-// leaseStep wraps another step and acquires/releases a lease.
+type stepLease struct {
+	api.StepLease
+	resource string
+}
+
+// leaseStep wraps another step and acquires/releases one or more leases.
 type leaseStep struct {
-	client         *lease.Client
-	leaseType      string
-	leasedResource string
-	wrapped        api.Step
+	client  *lease.Client
+	leases  []stepLease
+	wrapped api.Step
 
 	// for sending heartbeats during lease acquisition
 	namespace       func() string
 	namespaceClient coreclientset.NamespaceInterface
 }
 
-func LeaseStep(client *lease.Client, lease string, wrapped api.Step, namespace func() string, namespaceClient coreclientset.NamespaceInterface) api.Step {
-	return &leaseStep{
+func LeaseStep(client *lease.Client, leases []api.StepLease, wrapped api.Step, namespace func() string, namespaceClient coreclientset.NamespaceInterface) api.Step {
+	ret := leaseStep{
 		client:          client,
-		leaseType:       lease,
 		wrapped:         wrapped,
 		namespace:       namespace,
 		namespaceClient: namespaceClient,
 	}
+	for _, l := range leases {
+		ret.leases = append(ret.leases, stepLease{StepLease: l})
+	}
+	return &ret
 }
 
 func (s *leaseStep) Inputs() (api.InputDefinition, error) {
@@ -61,9 +69,12 @@ func (s *leaseStep) Provides() api.ParameterMap {
 	if parameters == nil {
 		parameters = api.ParameterMap{}
 	}
-	parameters[leaseEnv] = func() (string, error) {
-		chunks := strings.SplitN(s.leasedResource, "--", 2)
-		return chunks[0], nil
+	for i := range s.leases {
+		l := &s.leases[i]
+		parameters[l.Env] = func() (string, error) {
+			chunks := strings.SplitN(l.resource, "--", 2)
+			return chunks[0], nil
+		}
 	}
 	return parameters
 }
@@ -80,21 +91,15 @@ func (s *leaseStep) Run(ctx context.Context) error {
 }
 
 func (s *leaseStep) run(ctx context.Context) error {
-	log.Printf("Acquiring lease for %q", s.leaseType)
+	log.Printf("Acquiring leases for %q", s.Name())
 	client := *s.client
 	ctx, cancel := context.WithCancel(ctx)
-	resource, err := client.Acquire(s.leaseType, ctx, cancel)
-	if err != nil {
-		if err == lease.ErrNotFound {
-			printResourceMetrics(client, s.leaseType)
-		}
-		return results.ForReason(results.Reason("acquiring_lease:"+s.leaseType)).WithError(err).Errorf("failed to acquire lease: %v", err)
+	if err := acquireLeases(client, ctx, cancel, s.leases); err != nil {
+		return err
 	}
-	log.Printf("Acquired lease %q for %q", resource, s.leaseType)
-	s.leasedResource = resource
 	wrappedErr := results.ForReason("executing_test").ForError(s.wrapped.Run(ctx))
-	log.Printf("Releasing lease for %q", s.leaseType)
-	releaseErr := results.ForReason("releasing_lease").ForError(client.Release(resource))
+	log.Printf("Releasing leases for %q", s.Name())
+	releaseErr := results.ForReason("releasing_lease").ForError(releaseLeases(client, s.leases))
 
 	// we want a sensible output error for reporting, so we bubble up these individually
 	//if we can, as this is the only step that can have multiple errors
@@ -105,6 +110,48 @@ func (s *leaseStep) run(ctx context.Context) error {
 	} else {
 		return utilerrors.NewAggregate([]error{wrappedErr, releaseErr})
 	}
+}
+
+func acquireLeases(
+	client lease.Client,
+	ctx context.Context,
+	cancel context.CancelFunc,
+	leases []stepLease,
+) error {
+	var errs []error
+	for i, l := range leases {
+		log.Printf("Acquiring lease for %q", l.ResourceType)
+		name, err := client.Acquire(l.ResourceType, ctx, cancel)
+		if err != nil {
+			if err == lease.ErrNotFound {
+				printResourceMetrics(client, l.ResourceType)
+			}
+			errs = append(errs, results.ForReason(results.Reason("acquiring_lease:"+l.ResourceType)).WithError(err).Errorf("failed to acquire lease: %v", err))
+			break
+		}
+		log.Printf("Acquired lease %q for %q", name, l.ResourceType)
+		leases[i].resource = name
+	}
+	if errs != nil {
+		if err := releaseLeases(client, leases); err != nil {
+			errs = append(errs, fmt.Errorf("failed to release leases after acquisition failure: %w", err))
+		}
+	}
+	return utilerrors.NewAggregate(errs)
+}
+
+func releaseLeases(client lease.Client, leases []stepLease) error {
+	var errs []error
+	for _, l := range leases {
+		if l.resource == "" {
+			continue
+		}
+		log.Printf("Releasing lease %q for %q", l.resource, l.ResourceType)
+		if err := client.Release(l.resource); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return utilerrors.NewAggregate(errs)
 }
 
 func printResourceMetrics(client lease.Client, rtype string) {

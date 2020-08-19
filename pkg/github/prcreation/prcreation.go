@@ -22,6 +22,7 @@ type PRCreationOptions struct {
 }
 
 func (o *PRCreationOptions) AddFlags(fs *flag.FlagSet) {
+	fs.BoolVar(&o.SelfApprove, "self-approve", false, "If the created PR should be self-approved by adding the lgtm+approved labels")
 	o.GitHubOptions.AddFlags(fs)
 }
 

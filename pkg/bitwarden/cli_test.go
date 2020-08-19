@@ -3,6 +3,7 @@ package bitwarden
 import (
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"reflect"
 	"strings"
@@ -107,6 +108,7 @@ func TestLoginAndListItems(t *testing.T) {
 				{
 					ID:   "id1",
 					Name: "unsplash.com",
+					Type: 2,
 					Fields: []Field{
 						{
 							Name:  "API Key",
@@ -117,6 +119,7 @@ func TestLoginAndListItems(t *testing.T) {
 				{
 					ID:    "id2",
 					Name:  "my-credentials",
+					Type:  2,
 					Login: &Login{Password: "yyy"},
 					Attachments: []Attachment{
 						{
@@ -591,6 +594,426 @@ func TestLogout(t *testing.T) {
 	}
 }
 
+func TestSetFieldOnItem(t *testing.T) {
+	client := &cliClient{}
+	testCases := []struct {
+		name               string
+		client             *cliClient
+		bwCliResponses     map[string]execResponse
+		expectedCalls      [][]string
+		itemName           string
+		fieldName          string
+		fieldValue         []byte
+		expectedSavedItems []Item
+		expectedErr        error
+	}{
+		{
+			name: "edit an existing record",
+			client: &cliClient{
+				savedItems: []Item{
+					{
+						ID:   "id1",
+						Name: "unsplash.com",
+						Type: 1,
+						Fields: []Field{
+							{
+								Name:  "API Key",
+								Value: "value1",
+							},
+							{
+								Name:  "no name",
+								Value: "value2",
+							},
+						},
+					},
+					{
+						ID:   "id2",
+						Name: "my-credentials",
+						Type: 1,
+						Attachments: []Attachment{
+							{
+								ID:       "a-id1",
+								FileName: "secret.auto.vars",
+							},
+						},
+					},
+				},
+				session: "my-session",
+			},
+			bwCliResponses: map[string]execResponse{
+				// below is the encoding for the JSON object for id1
+				"--session my-session edit item id1 eyJpZCI6ImlkMSIsIm5hbWUiOiJ1bnNwbGFzaC5jb20iLCJ0eXBlIjoxLCJmaWVsZHMiOlt7Im5hbWUiOiJBUEkgS2V5IiwidmFsdWUiOiJuZXdfZmllbGRfdmFsdWUifSx7Im5hbWUiOiJubyBuYW1lIiwidmFsdWUiOiJ2YWx1ZTIifV0sImF0dGFjaG1lbnRzIjpudWxsfQ==": {
+					out: []byte(`{"object":"item","id":"id3","type":1,"name":"autogen_item","login":{"password":null},"collectionIds":[],"revisionDate":"2020-07-31T19:45:56.746Z"}`),
+				},
+			},
+			expectedCalls: [][]string{
+				{"--session", "my-session", "edit", "item", "id1", "eyJpZCI6ImlkMSIsIm5hbWUiOiJ1bnNwbGFzaC5jb20iLCJ0eXBlIjoxLCJmaWVsZHMiOlt7Im5hbWUiOiJBUEkgS2V5IiwidmFsdWUiOiJuZXdfZmllbGRfdmFsdWUifSx7Im5hbWUiOiJubyBuYW1lIiwidmFsdWUiOiJ2YWx1ZTIifV0sImF0dGFjaG1lbnRzIjpudWxsfQ=="},
+			},
+			itemName:   "unsplash.com",
+			fieldName:  "API Key",
+			fieldValue: []byte("new_field_value"),
+			expectedSavedItems: []Item{
+				{
+					ID:   "id1",
+					Name: "unsplash.com",
+					Type: 1,
+					Fields: []Field{
+						{
+							Name:  "API Key",
+							Value: "new_field_value",
+						},
+						{
+							Name:  "no name",
+							Value: "value2",
+						},
+					},
+				},
+				{
+					ID:   "id2",
+					Name: "my-credentials",
+					Type: 1,
+					Attachments: []Attachment{
+						{
+							ID:       "a-id1",
+							FileName: "secret.auto.vars",
+						},
+					},
+				},
+			},
+			expectedErr: nil,
+		},
+		{
+			name: "add a new item",
+			client: &cliClient{
+				savedItems: []Item{
+					{
+						ID:   "id2",
+						Name: "my-credentials",
+						Type: 1,
+						Attachments: []Attachment{
+							{
+								ID:       "a-id1",
+								FileName: "secret.auto.vars",
+							},
+						},
+					},
+				},
+				session: "my-session",
+			},
+			bwCliResponses: map[string]execResponse{
+				"--session my-session create item eyJuYW1lIjoidW5zcGxhc2guY29tIiwidHlwZSI6MSwibG9naW4iOnt9LCJmaWVsZHMiOm51bGwsImF0dGFjaG1lbnRzIjpudWxsfQ==": {
+					out: []byte(`{"id":"id1","type":1,"name":"unsplash.com","login":{"password":null}}`),
+				},
+				"--session my-session edit item id1 eyJpZCI6ImlkMSIsIm5hbWUiOiJ1bnNwbGFzaC5jb20iLCJ0eXBlIjoxLCJsb2dpbiI6e30sImZpZWxkcyI6W3sibmFtZSI6IkFQSSBLZXkiLCJ2YWx1ZSI6InZhbHVlMSJ9XSwiYXR0YWNobWVudHMiOm51bGx9": {
+					out: []byte(`{"id":"id1","type":1,"name":"unsplash.com","login":{"password":null},"fields":[{"name":"API Key","value":"new_field_value"}]}`),
+				},
+			},
+			expectedCalls: [][]string{
+				{"--session", "my-session", "create", "item", "eyJuYW1lIjoidW5zcGxhc2guY29tIiwidHlwZSI6MSwibG9naW4iOnt9LCJmaWVsZHMiOm51bGwsImF0dGFjaG1lbnRzIjpudWxsfQ=="},
+				{"--session", "my-session", "edit", "item", "id1", "eyJpZCI6ImlkMSIsIm5hbWUiOiJ1bnNwbGFzaC5jb20iLCJ0eXBlIjoxLCJsb2dpbiI6e30sImZpZWxkcyI6W3sibmFtZSI6IkFQSSBLZXkiLCJ2YWx1ZSI6InZhbHVlMSJ9XSwiYXR0YWNobWVudHMiOm51bGx9"},
+			},
+			itemName:   "unsplash.com",
+			fieldName:  "API Key",
+			fieldValue: []byte("value1"),
+			expectedSavedItems: []Item{
+				{
+					ID:   "id2",
+					Name: "my-credentials",
+					Type: 1,
+					Attachments: []Attachment{
+						{
+							ID:       "a-id1",
+							FileName: "secret.auto.vars",
+						},
+					},
+				},
+				{
+					ID:    "id1",
+					Name:  "unsplash.com",
+					Type:  1,
+					Login: &Login{},
+					Fields: []Field{
+						{
+							Name:  "API Key",
+							Value: "value1",
+						},
+					},
+				},
+			},
+			expectedErr: nil,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			e := fakeExecutor{
+				records:   [][]string{},
+				responses: tc.bwCliResponses,
+			}
+			client = tc.client
+			client.run = e.Run
+			actualErr := client.SetFieldOnItem(tc.itemName, tc.fieldName, tc.fieldValue)
+			equalError(t, tc.expectedErr, actualErr)
+			equal(t, tc.expectedSavedItems, client.savedItems)
+			equal(t, tc.expectedCalls, e.records)
+		})
+	}
+
+}
+
+func TestSetPassword(t *testing.T) {
+	client := &cliClient{}
+	testCases := []struct {
+		name               string
+		client             *cliClient
+		bwCliResponses     map[string]execResponse
+		expectedCalls      [][]string
+		itemName           string
+		newPassword        []byte
+		expectedSavedItems []Item
+		expectedErr        error
+	}{
+		{
+			name: "edit an existing record",
+			client: &cliClient{
+				savedItems: []Item{
+					{
+						ID:    "id1",
+						Name:  "unsplash.com",
+						Type:  1,
+						Login: &Login{Password: "old_password"},
+					},
+				},
+				session: "my-session",
+			},
+			bwCliResponses: map[string]execResponse{
+				// below is the encoding for the JSON object for id1
+				"--session my-session edit item id1 eyJpZCI6ImlkMSIsIm5hbWUiOiJ1bnNwbGFzaC5jb20iLCJ0eXBlIjoxLCJsb2dpbiI6eyJwYXNzd29yZCI6Im5ld19wYXNzd29yZCJ9LCJmaWVsZHMiOm51bGwsImF0dGFjaG1lbnRzIjpudWxsfQ==": {
+					out: []byte(`{"object":"item","id":"id3","type":1,"name":"autogen_item","login":{"password":null},"collectionIds":[],"revisionDate":"2020-07-31T19:45:56.746Z"}`),
+				},
+			},
+			expectedCalls: [][]string{
+				{"--session", "my-session", "edit", "item", "id1", "eyJpZCI6ImlkMSIsIm5hbWUiOiJ1bnNwbGFzaC5jb20iLCJ0eXBlIjoxLCJsb2dpbiI6eyJwYXNzd29yZCI6Im5ld19wYXNzd29yZCJ9LCJmaWVsZHMiOm51bGwsImF0dGFjaG1lbnRzIjpudWxsfQ=="},
+			},
+			itemName:    "unsplash.com",
+			newPassword: []byte("new_password"),
+			expectedSavedItems: []Item{
+				{
+					ID:    "id1",
+					Name:  "unsplash.com",
+					Type:  1,
+					Login: &Login{Password: "new_password"},
+				},
+			},
+			expectedErr: nil,
+		},
+		{
+			name: "add a new item",
+			client: &cliClient{
+				savedItems: []Item{
+					{
+						ID:   "id2",
+						Name: "my-credentials",
+						Type: 1,
+						Attachments: []Attachment{
+							{
+								ID:       "a-id1",
+								FileName: "secret.auto.vars",
+							},
+						},
+					},
+				},
+				session: "my-session",
+			},
+			bwCliResponses: map[string]execResponse{
+				"--session my-session create item eyJuYW1lIjoidW5zcGxhc2guY29tIiwidHlwZSI6MSwibG9naW4iOnsicGFzc3dvcmQiOiJuZXdfcGFzc3dvcmQifSwiZmllbGRzIjpudWxsLCJhdHRhY2htZW50cyI6bnVsbH0=": {
+					out: []byte(`{"id":"id1","type":1,"name":"unsplash.com","login":{"password":"new_password"}}`),
+				},
+			},
+			expectedCalls: [][]string{
+				{"--session", "my-session", "create", "item", "eyJuYW1lIjoidW5zcGxhc2guY29tIiwidHlwZSI6MSwibG9naW4iOnsicGFzc3dvcmQiOiJuZXdfcGFzc3dvcmQifSwiZmllbGRzIjpudWxsLCJhdHRhY2htZW50cyI6bnVsbH0="},
+			},
+			itemName:    "unsplash.com",
+			newPassword: []byte("new_password"),
+			expectedSavedItems: []Item{
+				{
+					ID:   "id2",
+					Name: "my-credentials",
+					Type: 1,
+					Attachments: []Attachment{
+						{
+							ID:       "a-id1",
+							FileName: "secret.auto.vars",
+						},
+					},
+				},
+				{
+					ID:    "id1",
+					Name:  "unsplash.com",
+					Type:  1,
+					Login: &Login{Password: "new_password"},
+				},
+			},
+			expectedErr: nil,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			e := fakeExecutor{
+				records:   [][]string{},
+				responses: tc.bwCliResponses,
+			}
+			client = tc.client
+			client.run = e.Run
+			actualErr := client.SetPassword(tc.itemName, tc.newPassword)
+			equalError(t, tc.expectedErr, actualErr)
+			equal(t, tc.expectedSavedItems, client.savedItems)
+			equal(t, tc.expectedCalls, e.records)
+		})
+	}
+
+}
+
+func TestSetAttachment(t *testing.T) {
+	client := &cliClient{}
+	testCases := []struct {
+		name               string
+		client             *cliClient
+		bwCliResponses     map[string]execResponse
+		expectedCalls      [][]string
+		itemName           string
+		fileName           string
+		fileContents       []byte
+		expectedSavedItems []Item
+		expectedErr        error
+	}{
+		{
+			name: "edit an existing record",
+			client: &cliClient{
+				savedItems: []Item{
+					{
+						ID:   "id1",
+						Name: "unsplash.com",
+						Type: 1,
+						Attachments: []Attachment{
+							{
+								ID:       "attachmentID1",
+								FileName: "File1",
+							},
+						},
+					},
+				},
+				session: "my-session",
+			},
+			bwCliResponses: map[string]execResponse{
+				"--session my-session get attachment attachmentID1 --itemid id1 --output ": {
+					out: []byte(`dont-care`),
+				},
+				"--session my-session delete attachment attachmentID1 --itemid id1": {
+					out: []byte(`{result:"true"}`),
+				},
+				"--session my-session create attachment --itemid id1 --file ": {
+					out: []byte(`{"object":"attachment","id":"attachmentID2","filename":"File1"}`),
+				},
+			},
+			expectedCalls: [][]string{
+				{"--session", "my-session", "get", "attachment", "attachmentID1", "--itemid", "id1", "--output"},
+				{"--session", "my-session", "delete", "attachment", "attachmentID1", "--itemid", "id1"},
+				{"--session", "my-session", "create", "attachment", "--itemid", "id1", "--file"},
+			},
+			itemName:     "unsplash.com",
+			fileName:     "File1",
+			fileContents: []byte("new_file_contents"),
+			expectedSavedItems: []Item{
+				{
+					ID:   "id1",
+					Name: "unsplash.com",
+					Type: 1,
+					Attachments: []Attachment{
+						{
+							ID:       "attachmentID2",
+							FileName: "File1",
+						},
+					},
+				},
+			},
+			expectedErr: nil,
+		},
+		{
+			name: "add a new item",
+			client: &cliClient{
+				savedItems: []Item{
+					{
+						ID:   "id2",
+						Name: "my-credentials",
+						Type: 1,
+						Attachments: []Attachment{
+							{
+								ID:       "a-id1",
+								FileName: "secret.auto.vars",
+							},
+						},
+					},
+				},
+				session: "my-session",
+			},
+			bwCliResponses: map[string]execResponse{
+				"--session my-session create item eyJuYW1lIjoidW5zcGxhc2guY29tIiwidHlwZSI6MSwibG9naW4iOnt9LCJmaWVsZHMiOm51bGwsImF0dGFjaG1lbnRzIjpudWxsfQ==": {
+					out: []byte(`{"id":"id1","type":1,"name":"unsplash.com"}`),
+				},
+				"--session my-session create attachment --itemid id1 --file ": {
+					out: []byte(`{"object":"attachment","id":"attachmentID2","filename":"File1"}`),
+				},
+			},
+			expectedCalls: [][]string{
+				{"--session", "my-session", "create", "item", "eyJuYW1lIjoidW5zcGxhc2guY29tIiwidHlwZSI6MSwibG9naW4iOnt9LCJmaWVsZHMiOm51bGwsImF0dGFjaG1lbnRzIjpudWxsfQ=="},
+				{"--session", "my-session", "create", "attachment", "--itemid", "id1", "--file"},
+			},
+			itemName:     "unsplash.com",
+			fileName:     "file2",
+			fileContents: []byte("new_file_contents"),
+			expectedSavedItems: []Item{
+				{
+					ID:   "id2",
+					Name: "my-credentials",
+					Type: 1,
+					Attachments: []Attachment{
+						{
+							ID:       "a-id1",
+							FileName: "secret.auto.vars",
+						},
+					},
+				},
+				{
+					ID:   "id1",
+					Name: "unsplash.com",
+					Type: 1,
+					Attachments: []Attachment{
+						{
+							ID:       "attachmentID2",
+							FileName: "File1",
+						},
+					},
+				},
+			},
+			expectedErr: nil,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			e := fakeExecutor{
+				records:   [][]string{},
+				responses: tc.bwCliResponses,
+			}
+			client = tc.client
+			client.run = e.RunIgnoringFiles
+			actualErr := client.SetAttachmentOnItem(tc.itemName, tc.fileName, tc.fileContents)
+			equalError(t, tc.expectedErr, actualErr)
+			equal(t, tc.expectedSavedItems, client.savedItems)
+			equal(t, tc.expectedCalls, e.records)
+		})
+	}
+}
+
 type execResponse struct {
 	out []byte
 	err error
@@ -600,6 +1023,25 @@ type execResponse struct {
 type fakeExecutor struct {
 	records   [][]string
 	responses map[string]execResponse
+}
+
+func (e *fakeExecutor) RunIgnoringFiles(args ...string) ([]byte, error) {
+
+	key := strings.Join(args, " ")
+	slashIndex := strings.Index(key, "/")
+	if slashIndex != -1 {
+		if err := ioutil.WriteFile(key[slashIndex:], []byte("attachment_contents"), 0644); err != nil {
+			log.Fatalf("failed to create temporary file attachment: %v", err)
+		}
+		key = key[:slashIndex]
+		e.records = append(e.records, args[:len(args)-1])
+	} else {
+		e.records = append(e.records, args)
+	}
+	if response, ok := e.responses[key]; ok {
+		return response.out, response.err
+	}
+	return []byte{}, fmt.Errorf("no response configured for %s", key)
 }
 
 func (e *fakeExecutor) Run(args ...string) ([]byte, error) {

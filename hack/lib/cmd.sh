@@ -2,6 +2,15 @@
 # This utility file contains functions that wrap commands to be tested. All wrapper functions run commands
 # in a sub-shell and redirect all output. Tests in test-cmd *must* use these functions for testing.
 
+function os::cmd::redirect-to-stdout-wrapper() {
+    echo "$@ &>/dev/stdout"
+}
+
+function os::cmd::expect_success_print_output() {
+  cmd="$(os::cmd::redirect-to-stdout-wrapper $@)"
+  os::cmd::expect_success "$cmd"
+}
+
 # expect_success runs the cmd and expects an exit code of 0
 function os::cmd::expect_success() {
     if [[ $# -ne 1 ]]; then echo "os::cmd::expect_success expects only one argument, got $#"; return 1; fi
@@ -10,6 +19,11 @@ function os::cmd::expect_success() {
     os::cmd::internal::expect_exit_code_run_grep "${cmd}"
 }
 readonly -f os::cmd::expect_success
+
+function os::cmd::expect_failure_print_output(){
+  cmd="$(os::cmd::redirect-to-stdout-wrapper $@)"
+  os::cmd::expect_failure "$cmd"
+}
 
 # expect_failure runs the cmd and expects a non-zero exit code
 function os::cmd::expect_failure() {

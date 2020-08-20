@@ -553,6 +553,7 @@ func waitForPodCompletionOrTimeout(ctx context.Context, podClient coreclientset.
 				continue
 			}
 			if !isPodRunning(pod) && time.Since(pod.CreationTimestamp.Time) > 30*time.Minute {
+				notifier.Complete(name)
 				return false, fmt.Errorf("pod didn't start running within 30 minutes: %s", getReasonsForUnreadyContainers(pod))
 			}
 		case event, ok := <-watcher.ResultChan():

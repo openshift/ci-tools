@@ -98,7 +98,7 @@ objects:
     namespace: ${NAMESPACE}
     annotations:
       # we want to gather the teardown logs no matter what
-      ci-operator.openshift.io/wait-for-container-artifacts: teardown
+      ci-operator.openshift.io/wait-for-container-artifacts: resourcewatch,teardown
       ci-operator.openshift.io/save-container-logs: "true"
       ci-operator.openshift.io/container-sub-tests: "setup,test,teardown"
   spec:
@@ -115,6 +115,47 @@ objects:
         secretName: ${JOB_NAME_SAFE}-cluster-profile
 
     containers:
+    - name: resourcewatch
+      image: ${IMAGE_TESTS}
+      terminationMessagePolicy: FallbackToLogsOnError
+      volumeMounts:
+      - name: shared-tmp
+        mountPath: /tmp/shared
+      - name: artifacts
+        mountPath: /tmp/artifacts
+      env:
+      - name: ARTIFACT_DIR
+        value: /tmp/artifacts
+      - name: HOME
+        value: /tmp/home
+      - name: KUBECONFIG
+        value: /tmp/artifacts/installer/auth/kubeconfig
+      command:
+      - /bin/bash
+      - -c
+      - |
+        #!/bin/bash
+        set -uo pipefail
+
+        function runwatcher() {
+          while true; do
+            [[ ! -f "${KUBECONFIG}" ]] && sleep 1s && continue # make sure we have KUBECONFIG
+            echo "== $(date) =="
+            oc get clusteroperators --request-timeout=5s --insecure-skip-tls-verify --ignore-not-found -o jsonpath='{range .items[*]}{"\n"}{.metadata.name} {range .status.conditions[*]}{" "}{.type}={.status}({.reason}[{.message}])
+            sleep 5s
+          done
+        }
+
+        trap 'jobs -p | xargs -r kill || true; exit 0' TERM
+        
+        runwatcher &
+
+        for i in $(seq 1 220); do
+          [[ -f /tmp/shared/exit ]] && exit 0
+          sleep 60 & wait
+        done
+		
+	  
     # Once the cluster is up, executes shared tests
     - name: test
       image: ${IMAGE_TESTS}

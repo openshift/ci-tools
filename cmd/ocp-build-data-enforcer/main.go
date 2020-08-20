@@ -52,6 +52,7 @@ func gatherOptions() (*options, error) {
 }
 
 func main() {
+	logrus.StandardLogger().SetFormatter(&logrus.TextFormatter{EnvironmentOverrideColors: true})
 	opts, err := gatherOptions()
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to gather options")

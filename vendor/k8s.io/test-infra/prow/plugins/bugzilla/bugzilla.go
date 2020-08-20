@@ -253,6 +253,16 @@ func digestPR(log *logrus.Entry, pre github.PullRequestEvent, validateByDefault 
 	)
 
 	e := &event{org: org, repo: repo, baseRef: baseRef, number: number, merged: pre.PullRequest.Merged, closed: pre.Action == github.PullRequestActionClosed, opened: pre.Action == github.PullRequestActionOpened, state: pre.PullRequest.State, body: title, htmlUrl: pre.PullRequest.HTMLURL, login: pre.PullRequest.User.Login}
+	// Make sure the PR title is referencing a bug
+	var err error
+	e.bugId, e.missing, err = bugIDFromTitle(title)
+	// in the case that the title used to reference a bug and no longer does we
+	// want to handle this to remove labels
+	if err != nil {
+		log.WithError(err).Debug("Failed to get bug ID from title")
+		return nil, err
+	}
+
 	// Check if PR is a cherrypick
 	cherrypick, cherrypickFromPRNum, cherrypickTo, err := getCherryPickMatch(pre)
 	if err != nil {
@@ -265,14 +275,6 @@ func digestPR(log *logrus.Entry, pre github.PullRequestEvent, validateByDefault 
 			e.cherrypickTo = cherrypickTo
 			return e, nil
 		}
-	}
-	// Make sure the PR title is referencing a bug
-	e.bugId, e.missing, err = bugIDFromTitle(title)
-	// in the case that the title used to reference a bug and no longer does we
-	// want to handle this to remove labels
-	if err != nil {
-		log.WithError(err).Debug("Failed to get bug ID from title")
-		return nil, err
 	}
 
 	if e.closed && !e.merged {
@@ -860,7 +862,8 @@ func handleMerge(e event, gc githubClient, bc bugzilla.Client, options plugins.B
 	for bug, state := range unmergedPrStates {
 		statements = append(statements, fmt.Sprintf("\n * %s is %s", link(bug), state))
 	}
-	unmergedMessage := fmt.Sprintf(`The following pull requests linked via external trackers have not merged:%s`, strings.Join(statements, "\n"))
+	unmergedMessage := fmt.Sprintf(`The following pull requests linked via external trackers have not merged:%s
+`, strings.Join(statements, "\n"))
 
 	outcomeMessage := func(action string) string {
 		return fmt.Sprintf(bugLink+" has %sbeen moved to the %s state.", e.bugId, bc.Endpoint(), e.bugId, action, options.StateAfterMerge)

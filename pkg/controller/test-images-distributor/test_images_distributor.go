@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	imagev1 "github.com/openshift/api/image/v1"
-	"github.com/openshift/ci-tools/pkg/util/imagestreamtagwrapper"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
@@ -23,6 +22,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+
+	"github.com/openshift/ci-tools/pkg/util/imagestreamtagwrapper"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	apihelper "github.com/openshift/ci-tools/pkg/api/helper"
@@ -272,6 +273,9 @@ func (r *reconciler) reconcile(req reconcile.Request, log *logrus.Entry) error {
 					Name: publicURLForImage(sourceImageStreamTag.Image.DockerImageReference),
 				},
 				To: &corev1.LocalObjectReference{Name: imageTag},
+				ReferencePolicy: imagev1.TagReferencePolicy{
+					Type: imagev1.LocalTagReferencePolicy,
+				},
 			}},
 		},
 	}
@@ -383,6 +387,9 @@ func imagestream(namespace, name string) (*imagev1.ImageStream, crcontrollerutil
 	}
 	return stream, func() error {
 		stream.Spec.LookupPolicy.Local = true
+		for i := range stream.Spec.Tags {
+			stream.Spec.Tags[i].ReferencePolicy.Type = imagev1.LocalTagReferencePolicy
+		}
 		return nil
 	}
 }

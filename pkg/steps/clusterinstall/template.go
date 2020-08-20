@@ -147,15 +147,15 @@ objects:
         }
 
         trap 'jobs -p | xargs -r kill || true; exit 0' TERM
-        
+
         runwatcher &
 
         for i in $(seq 1 220); do
           [[ -f /tmp/shared/exit ]] && exit 0
           sleep 60 & wait
         done
-		
-	  
+
+
     # Once the cluster is up, executes shared tests
     - name: test
       image: ${IMAGE_TESTS}

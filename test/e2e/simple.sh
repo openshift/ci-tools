@@ -1,13 +1,23 @@
 #!/bin/bash
 source "$(dirname "${BASH_SOURCE}")/../../hack/lib/init.sh"
 
+if [[ -z "${PULL_SECRET_DIR:-}" ]]; then
+  os::log::fatal "\$PULL_SECRET_DIR must point to a valid registry pull secret dir. Get the data with: oc --context api.ci --as system:admin --namespace ci get secret registry-pull-credentials -o jsonpath={.data.\.dockerconfigjson} | base64 --decode "
+fi
+if [[ -z "${IMPORT_SECRET_DIR:-}" ]]; then
+  os::log::fatal "\$IMPORT_SECRET_DIR must point to a valid registry pull secret dir. Get the data with: oc --context api.ci --as system:admin --namespace ci get secret ci-pull-credentials -o jsonpath={.data.\.dockerconfigjson} | base64 --decode "
+fi
+PARENT_JOBSPEC="${JOB_SPEC}"
+if [[ -z "${PARENT_JOBSPEC:-}" ]]; then
+  os::log::fatal "\$JOB_SPEC must be set for this test"
+fi
+
 function cleanup() {
     os::test::junit::reconcile_output
     os::cleanup::processes
 }
 trap "cleanup" EXIT
 
-PARENT_JOBSPEC="${JOB_SPEC}"
 suite_dir="${OS_ROOT}/test/e2e/simple"
 workdir="${BASETMPDIR}/e2e/simple"
 mkdir -p "${workdir}"
@@ -37,12 +47,6 @@ os::test::junit::declare_suite_start "e2e/simple/dynamic-release"
 # This test validates the ci-operator resolution of dynamic releases
 
 export JOB_SPEC='{"type":"postsubmit","job":"branch-ci-openshift-ci-tools-master-ci-operator-e2e","buildid":"0","prowjobid":"uuid","refs":{"org":"openshift","repo":"ci-tools","base_ref":"master","base_sha":"6d231cc37652e85e0f0e25c21088b73d644d89ad","pulls":[]}}'
-if [[ -z "${PULL_SECRET_DIR:-}" ]]; then
-  os::log::fatal "\$PULL_SECRET_DIR must point to a valid registry pull secret dir. Get the data with: oc --context api.ci --as system:admin --namespace ci get secret registry-pull-credentials -o jsonpath={.data.\.dockerconfigjson} | base64 --decode "
-fi
-if [[ -z "${IMPORT_SECRET_DIR:-}" ]]; then
-  os::log::fatal "\$IMPORT_SECRET_DIR must point to a valid registry pull secret dir. Get the data with: oc --context api.ci --as system:admin --namespace ci get secret ci-pull-credentials -o jsonpath={.data.\.dockerconfigjson} | base64 --decode "
-fi
 os::cmd::expect_success "ci-operator --image-import-pull-secret ${IMPORT_SECRET_DIR}/.dockerconfigjson --secret-dir ${PULL_SECRET_DIR} --target [release:initial] --config ${suite_dir}/dynamic-releases.yaml"
 os::cmd::expect_success "ci-operator --image-import-pull-secret ${IMPORT_SECRET_DIR}/.dockerconfigjson --secret-dir ${PULL_SECRET_DIR} --target [release:latest] --config ${suite_dir}/dynamic-releases.yaml"
 os::cmd::expect_success "ci-operator --image-import-pull-secret ${IMPORT_SECRET_DIR}/.dockerconfigjson --secret-dir ${PULL_SECRET_DIR} --target [release:custom] --config ${suite_dir}/dynamic-releases.yaml"
@@ -54,9 +58,6 @@ unset RELEASE_IMAGE_LATEST
 os::test::junit::declare_suite_end
 
 os::test::junit::declare_suite_start "e2e/simple/optional-operator"
-if [[ -z "${PARENT_JOBSPEC:-}" ]]; then
-  os::log::fatal "\$JOB_SPEC must be set for this test"
-fi
 JOB_SPEC=$(NEW_UUID=$(uuidgen); echo "${PARENT_JOBSPEC}" | jq --arg uuid "${NEW_UUID}" '.prowjobid = $uuid')
 export JOB_SPEC
 os::cmd::expect_success "ci-operator --image-import-pull-secret ${PULL_SECRET_DIR}/.dockerconfigjson --target [images] --target ci-index --config ${suite_dir}/optional-operators.yaml"

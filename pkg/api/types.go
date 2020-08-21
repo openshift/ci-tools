@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"strings"
 
 	"k8s.io/test-infra/prow/repoowners"
 )
@@ -1027,6 +1028,7 @@ type OperatorStepConfiguration struct {
 	Substitutions []PullSpecSubstitution `json:"substitutions,omitempty"`
 }
 
+// Bundle contains the data needed to build a bundle from the bundle source image
 type Bundle struct {
 	DockerfilePath string `json:"dockerfile_path,omitempty"`
 	ContextDir     string `json:"context_dir,omitempty"`
@@ -1062,8 +1064,16 @@ type BundleSourceStepConfiguration struct {
 // BundleSourceName is the name of the bundle source image built by the CI
 const BundleSourceName = "src-bundle"
 
-// BundlePrefix is the prefix used by ci-operator for bundle images
-const BundlePrefix = "ci-bundle"
+// bundlePrefix is the prefix used by ci-operator for bundle images
+const bundlePrefix = "ci-bundle"
+
+func IsBundleImage(imageName string) bool {
+	return strings.HasPrefix(imageName, bundlePrefix)
+}
+
+func BundleName(index int) string {
+	return fmt.Sprintf("%s%d", bundlePrefix, index)
+}
 
 // ProjectDirectoryImageBuildStepConfiguration describes an
 // image build from a directory in a component project.

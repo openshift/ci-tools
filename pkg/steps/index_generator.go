@@ -80,7 +80,6 @@ func (s *indexGeneratorStep) run(ctx context.Context) error {
 
 func (s *indexGeneratorStep) indexGenDockerfile() (string, error) {
 	var dockerCommands []string
-	dockerCommands = append(dockerCommands, "")
 	dockerCommands = append(dockerCommands, "FROM quay.io/operator-framework/upstream-opm-builder AS builder")
 	// pull secret is needed for opm command
 	dockerCommands = append(dockerCommands, "COPY .dockerconfigjson .")
@@ -101,8 +100,7 @@ func (s *indexGeneratorStep) indexGenDockerfile() (string, error) {
 	dockerCommands = append(dockerCommands, fmt.Sprintf("FROM %s:%s", api.PipelineImageStream, api.PipelineImageStreamTagReferenceSource))
 	dockerCommands = append(dockerCommands, fmt.Sprintf("WORKDIR %s", IndexDataDirectory))
 	dockerCommands = append(dockerCommands, fmt.Sprintf("COPY --from=builder %s %s", IndexDockerfileName, IndexDockerfileName))
-	dockerCommands = append(dockerCommands, ("COPY --from=builder /database/ database"))
-	dockerCommands = append(dockerCommands, "")
+	dockerCommands = append(dockerCommands, "COPY --from=builder /database/ database")
 	return strings.Join(dockerCommands, "\n"), nil
 }
 

@@ -287,8 +287,8 @@ func validateImages(fieldRoot string, input []ProjectDirectoryImageBuildStepConf
 		if image.To == BundleSourceName {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: `to` cannot be %s", fieldRootN, BundleSourceName))
 		}
-		if strings.HasPrefix(string(image.To), BundlePrefix) {
-			validationErrors = append(validationErrors, fmt.Errorf("%s: `to` cannot begin with `%s`", fieldRootN, BundlePrefix))
+		if IsBundleImage(string(image.To)) {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: `to` cannot begin with `%s`", fieldRootN, bundlePrefix))
 		}
 		if image.To == IndexImageGeneratorName {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: `to` cannot be %s", fieldRootN, IndexImageGeneratorName))

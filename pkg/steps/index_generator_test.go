@@ -23,16 +23,14 @@ func TestIndexGenDockerfile(t *testing.T) {
 		t: t,
 	}
 
-	var expectedDockerfileSingleBundle = `
-FROM quay.io/operator-framework/upstream-opm-builder AS builder
+	var expectedDockerfileSingleBundle = `FROM quay.io/operator-framework/upstream-opm-builder AS builder
 COPY .dockerconfigjson .
 RUN mkdir $HOME/.docker && mv .dockerconfigjson $HOME/.docker/config.json
 RUN ["opm", "index", "add", "--bundles", "some-reg/target-namespace/stable:ci-bundle0", "--out-dockerfile", "index.Dockerfile", "--generate"]
 FROM pipeline:src
 WORKDIR /index-data
 COPY --from=builder index.Dockerfile index.Dockerfile
-COPY --from=builder /database/ database
-`
+COPY --from=builder /database/ database`
 	stepSingleBundle := indexGeneratorStep{
 		config: api.IndexGeneratorStepConfiguration{
 			OperatorIndex: []string{"ci-bundle0"},
@@ -49,16 +47,14 @@ COPY --from=builder /database/ database
 		t.Errorf("Generated opm index dockerfile does not equal expected; generated dockerfile: %s", generatedDockerfile)
 	}
 
-	var expectedDockerfileMultiBundle = `
-FROM quay.io/operator-framework/upstream-opm-builder AS builder
+	var expectedDockerfileMultiBundle = `FROM quay.io/operator-framework/upstream-opm-builder AS builder
 COPY .dockerconfigjson .
 RUN mkdir $HOME/.docker && mv .dockerconfigjson $HOME/.docker/config.json
 RUN ["opm", "index", "add", "--bundles", "some-reg/target-namespace/stable:ci-bundle0,some-reg/target-namespace/stable:ci-bundle1", "--out-dockerfile", "index.Dockerfile", "--generate"]
 FROM pipeline:src
 WORKDIR /index-data
 COPY --from=builder index.Dockerfile index.Dockerfile
-COPY --from=builder /database/ database
-`
+COPY --from=builder /database/ database`
 	stepMultiBundle := indexGeneratorStep{
 		config: api.IndexGeneratorStepConfiguration{
 			OperatorIndex: []string{"ci-bundle0", "ci-bundle1"},

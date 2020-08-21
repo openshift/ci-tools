@@ -196,3 +196,27 @@ func TestIsPipelineImage(t *testing.T) {
 		})
 	}
 }
+
+func TestBundleName(t *testing.T) {
+	if BundleName(0) != "ci-bundle0" {
+		t.Errorf("Expected %s, got %s", "ci-bundle0", BundleName(0))
+	}
+	if BundleName(1) != "ci-bundle1" {
+		t.Errorf("Expected %s, got %s", "ci-bundle1", BundleName(1))
+	}
+}
+
+func TestIsBundleImage(t *testing.T) {
+	if !IsBundleImage("ci-bundle0") {
+		t.Errorf("Expected true, got false for `ci-bundle0`")
+	}
+	if !IsBundleImage("ci-bundle1") {
+		t.Errorf("Expected true, got false for `ci-bundle1`")
+	}
+	if !IsBundleImage(BundleName(0)) {
+		t.Errorf("Expected true, got false for func BundleName(0)")
+	}
+	if !IsBundleImage(BundleName(1)) {
+		t.Errorf("Expected true, got false for func BundleName(1)")
+	}
+}

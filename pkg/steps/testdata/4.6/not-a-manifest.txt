@@ -1,0 +1,3 @@
+This file should not contain substitutions
+"quay.io/openshift/origin-metering-reporting-operator:4.6"
+"quay.io/openshift/origin-metering-hive:4.6"

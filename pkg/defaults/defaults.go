@@ -478,7 +478,7 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.Job
 		// Build bundles
 		var bundles []string
 		for index, bundle := range config.Operator.Bundles {
-			bundleName := fmt.Sprintf("%s%d", api.BundlePrefix, index)
+			bundleName := api.BundleName(index)
 			bundles = append(bundles, bundleName)
 			image := &api.ProjectDirectoryImageBuildStepConfiguration{
 				To: api.PipelineImageStreamTagReference(bundleName),

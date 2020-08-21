@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	buildapi "github.com/openshift/api/build/v1"
 	"github.com/openshift/api/image/docker10"
@@ -72,7 +71,7 @@ func (s *projectDirectoryImageBuildStep) run(ctx context.Context) error {
 
 	images := buildInputsFromStep(s.config.Inputs)
 	// If image being built is an operator bundle, use the bundle source instead of original source
-	if strings.HasPrefix(string(s.config.To), api.BundlePrefix) {
+	if api.IsBundleImage(string(s.config.To)) {
 		source := fmt.Sprintf("%s:%s", api.PipelineImageStream, api.BundleSourceName)
 		workingDir, err := getWorkingDir(s.istClient, source, s.jobSpec.Namespace())
 		if err != nil {
@@ -162,7 +161,7 @@ func (s *projectDirectoryImageBuildStep) Requires() []api.StepLink {
 	if len(s.config.From) > 0 {
 		links = append(links, api.InternalImageLink(s.config.From))
 	}
-	if strings.HasPrefix(string(s.config.To), api.BundlePrefix) {
+	if api.IsBundleImage(string(s.config.To)) {
 		links = append(links, api.InternalImageLink(api.BundleSourceName))
 	}
 	if s.config.To == api.IndexImageName {

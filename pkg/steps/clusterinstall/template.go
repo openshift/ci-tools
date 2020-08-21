@@ -141,7 +141,7 @@ objects:
           while true; do
             [[ ! -f "${KUBECONFIG}" ]] && sleep 1s && continue # make sure we have KUBECONFIG
             echo "== $(date) =="
-            oc get clusteroperators --request-timeout=5s --insecure-skip-tls-verify --ignore-not-found -o jsonpath='{range .items[*]}{"\n"}{.metadata.name} {range .status.conditions[*]}{" "}{.type}={.status}({.reason}[{.message}])
+            oc get clusteroperators --request-timeout=5s --insecure-skip-tls-verify --ignore-not-found -o jsonpath='{range .items[*]}{"\n"}{.metadata.name} {range .status.conditions[*]}{" "}{.type}={.status}({.reason}[{.message}])'
             sleep 5s
           done
         }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"k8s.io/test-infra/experiment/autobumper/bumper"
@@ -55,8 +56,10 @@ func (o *PRCreationOptions) UpsertPR(localSourceDir, org, repo, branch, prTitle,
 		return fmt.Errorf("failed to check for changes: %w", err)
 	}
 
+	l := logrus.WithFields(logrus.Fields{"org": org, "repo": repo})
+
 	if !changed {
-		logrus.Info("No changes, not upserting PR")
+		l.Info("No changes, not upserting PR")
 		return nil
 	}
 
@@ -69,6 +72,22 @@ func (o *PRCreationOptions) UpsertPR(localSourceDir, org, repo, branch, prTitle,
 	stderr := bumper.HideSecretsWriter{Delegate: os.Stderr, Censor: o.secretAgent}
 
 	sourceBranchName := strings.ReplaceAll(strings.ToLower(prTitle), " ", "-")
+	o.GithubClient.SetMax404Retries(0)
+	if _, err := o.GithubClient.GetRepo(username, repo); err != nil {
+		// Somehow github.IsNotFound doesn't recognize this?
+		if !strings.Contains(err.Error(), "status code 404") {
+			return fmt.Errorf("unexpected error when getting repo %s/%s: %w", username, repo, err)
+		}
+		l.Info("Creating fork")
+		forkName, err := o.GithubClient.CreateFork(org, repo)
+		if err != nil {
+			return fmt.Errorf("failed to fork %s/%s: %w", org, repo, err)
+		}
+		repo = forkName
+		if err := waitForRepo(username, repo, o.GithubClient); err != nil {
+			return fmt.Errorf("failed to wait for repo %s/%s: %w", username, repo, err)
+		}
+	}
 
 	// Even when --author is passed on committing, a committer is needed, and that one can not be passed as flag.
 	if err := bumper.Call(stdout, stderr, "git", "config", "--local", "user.email", fmt.Sprintf("%s@users.noreply.github.com", username)); err != nil {
@@ -79,7 +98,7 @@ func (o *PRCreationOptions) UpsertPR(localSourceDir, org, repo, branch, prTitle,
 	}
 
 	if err := bumper.GitCommitAndPush(
-		fmt.Sprintf("https://%s:%s@github.com/%s/%s.git", username, string(token), org, repo),
+		fmt.Sprintf("https://%s:%s@github.com/%s/%s.git", username, string(token), username, repo),
 		sourceBranchName,
 		username,
 		fmt.Sprintf("%s@users.noreply.github.com", username),
@@ -92,7 +111,7 @@ func (o *PRCreationOptions) UpsertPR(localSourceDir, org, repo, branch, prTitle,
 
 	var labelsToAdd []string
 	if o.SelfApprove {
-		logrus.Infof("Self-aproving PR by adding the %q and %q labels", labels.Approved, labels.LGTM)
+		l.Infof("Self-aproving PR by adding the %q and %q labels", labels.Approved, labels.LGTM)
 		labelsToAdd = append(labelsToAdd, labels.Approved, labels.LGTM)
 	}
 
@@ -112,4 +131,44 @@ func (o *PRCreationOptions) UpsertPR(localSourceDir, org, repo, branch, prTitle,
 	}
 
 	return nil
+}
+
+func waitForRepo(owner, name string, ghc github.Client) error {
+	// Wait for at most 5 minutes for the fork to appear on GitHub.
+	// The documentation instructs us to contact support if this
+	// takes longer than five minutes.
+	after := time.After(6 * time.Minute)
+	tick := time.NewTicker(30 * time.Second)
+	defer tick.Stop()
+
+	var ghErr string
+	for {
+		select {
+		case <-tick.C:
+			repo, err := ghc.GetRepo(owner, name)
+			if err != nil {
+				ghErr = fmt.Sprintf(": %v", err)
+				logrus.WithError(err).Warn("Error getting bot repository.")
+				continue
+			}
+			ghErr = ""
+			if repoExists(owner+"/"+name, []github.Repo{repo.Repo}) {
+				return nil
+			}
+		case <-after:
+			return fmt.Errorf("timed out waiting for %s to appear on GitHub%s", owner+"/"+name, ghErr)
+		}
+	}
+}
+
+func repoExists(repo string, repos []github.Repo) bool {
+	for _, r := range repos {
+		if !r.Fork {
+			continue
+		}
+		if r.FullName == repo {
+			return true
+		}
+	}
+	return false
 }

@@ -28,9 +28,9 @@ func newCliClient(username, password string, addSecret func(s string)) (Client, 
 	return newCliClientWithRun(username, password, addSecret, func(args ...string) ([]byte, error) {
 		// bw-password is protected, session in args is not
 		logrus.WithField("args", args).Debug("running bw command ...")
-		out, err := exec.Command("bw", args...).CombinedOutput()
+		out, err := exec.Command("bw", args...).Output()
 		if err != nil {
-			logrus.WithError(err).Errorf("bw cmd failed: %v", string(out))
+			logrus.WithError(err).Errorf("bw cmd failed: %v, %v", string(out), err)
 		}
 		return out, err
 	})
@@ -68,7 +68,7 @@ func (c *cliClient) loginAndListItems() error {
 	}
 	r := bwLoginResponse{}
 	if err := json.Unmarshal(output, &r); err != nil {
-		return err
+		return fmt.Errorf("failed to parse bw login output %s: %w", output, err)
 	}
 	if r.Success {
 		raw := r.Data.Raw
@@ -82,7 +82,7 @@ func (c *cliClient) loginAndListItems() error {
 			}
 			err = json.Unmarshal(out, &items)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to parse bw item list output %s: %w", out, err)
 			}
 			c.savedItems = items
 			return nil
@@ -185,7 +185,7 @@ func (c *cliClient) createAttachment(fileContents []byte, fileName string, itemI
 		return fmt.Errorf("failed to delete file %s: %w", filePath, err)
 	}
 	if err = json.Unmarshal(out, newAttachment); err != nil {
-		return fmt.Errorf("failed to parse bw output: %w", err)
+		return fmt.Errorf("failed to parse bw output %s: %w", out, err)
 	}
 	return nil
 }
@@ -347,7 +347,7 @@ func (c *cliClient) SetPassword(itemName string, password []byte) error {
 	if targetItem == nil {
 		newItem := &Item{}
 		if err := c.createItemWithPassword(itemName, password, newItem); err != nil {
-			return fmt.Errorf("failed to create new	 bw entry: %w", err)
+			return fmt.Errorf("failed to create new bw entry: %w", err)
 		}
 		c.savedItems = append(c.savedItems, *newItem)
 		return nil

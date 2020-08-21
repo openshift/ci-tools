@@ -71,7 +71,7 @@ func (o *PRCreationOptions) UpsertPR(localSourceDir, org, repo, branch, prTitle,
 	sourceBranchName := strings.ReplaceAll(strings.ToLower(prTitle), " ", "-")
 
 	// The --author arg on commit only works if there is an author already, but will then use the explicitly configured one?
-	if err := bumper.Call(stdout, stderr, "git", "config", "--local", fmt.Sprintf(`user.email "%s@users.noreply.github.com"`, username)); err != nil {
+	if err := bumper.Call(stdout, stderr, "git", "config", "--local", "user.email", fmt.Sprintf("%s@users.noreply.github.com", username)); err != nil {
 		return fmt.Errorf("failed to configure email address: %w", err)
 	}
 

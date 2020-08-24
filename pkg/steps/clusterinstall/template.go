@@ -148,11 +148,18 @@ objects:
 
         trap 'jobs -p | xargs -r kill || true; exit 0' TERM
 
-        runwatcher &
+        runwatcher &> /tmp/artifacts/resourcewatch.log &
+        watcherpid=$!
 
         for i in $(seq 1 220); do
-          [[ -f /tmp/shared/exit ]] && exit 0
-          sleep 60 & wait
+          if [[ -f /tmp/shared/exit ]]; then
+            echo "== watch terminated at $(date)" >>/tmp/artifacts/resourcewatch.log
+            kill $watcherpid
+            exit 0
+          fi
+          sleep 60 & 
+          sleeppid=$!
+          wait $sleeppid
         done
 
 

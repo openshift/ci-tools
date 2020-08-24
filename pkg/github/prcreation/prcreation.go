@@ -1,8 +1,11 @@
 package prcreation
 
 import (
+	"bytes"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -97,16 +100,41 @@ func (o *PRCreationOptions) UpsertPR(localSourceDir, org, repo, branch, prTitle,
 		return fmt.Errorf("failed to configure email address: %w", err)
 	}
 
-	if err := bumper.GitCommitAndPush(
-		fmt.Sprintf("https://%s:%s@github.com/%s/%s.git", username, string(token), username, repo),
-		sourceBranchName,
-		username,
-		fmt.Sprintf("%s@users.noreply.github.com", username),
-		prTitle+"\n\n"+prBody,
-		stdout,
-		stderr,
-	); err != nil {
-		return fmt.Errorf("failed to push changes: %w", err)
+	if err := bumper.Call(stdout, stderr, "git", "remote", "add", "fork", fmt.Sprintf("https://%s:%s@github.com/%s/%s.git", username, string(token), username, repo)); err != nil {
+		return fmt.Errorf("failed to add remote for fork: %w", err)
+	}
+
+	fetchStderr := &bytes.Buffer{}
+	var remoteTreeRef string
+	if err := bumper.Call(stdout, fetchStderr, "git", "fetch", "fork", sourceBranchName); err != nil && !strings.Contains(fetchStderr.String(), fmt.Sprintf("couldn't find remote ref %s", sourceBranchName)) {
+		return fmt.Errorf("failed to fetch from fork: %w", err)
+	} else {
+		var err error
+		remoteTreeRef, err = getTreeRef(stderr, fmt.Sprintf("refs/remotes/fork/%s", sourceBranchName))
+		if err != nil {
+			return fmt.Errorf("failed to get remote tree ref: %w", err)
+		}
+	}
+
+	if err := bumper.Call(stdout, stderr, "git", "add", "-A"); err != nil {
+		return fmt.Errorf("failed to git add: %w", err)
+	}
+	if err := bumper.Call(stdout, stderr, "git", "commit", "-m", prTitle, "--author", fmt.Sprintf("%s <%s@users.noreply.github.com>", username, username)); err != nil {
+		return fmt.Errorf("failed to git commit: %v", err)
+	}
+	localTreeRef, err := getTreeRef(stderr, "HEAD")
+	if err != nil {
+		return fmt.Errorf("failed to get local tree ref: %w", err)
+	}
+
+	// Avoid doing metadata-only pushes that re-trigger tests and remove lgtm
+	if localTreeRef != remoteTreeRef {
+		if err := bumper.GitPush("fork", sourceBranchName, stdout, stderr); err != nil {
+			return fmt.Errorf("%v", err)
+		}
+		l.Info("Updated remote branch")
+	} else {
+		l.Info("Not pushing as up-to-date remote branch already exists")
 	}
 
 	var labelsToAdd []string
@@ -171,4 +199,16 @@ func repoExists(repo string, repos []github.Repo) bool {
 		}
 	}
 	return false
+}
+
+func getTreeRef(stderr io.Writer, refname string) (string, error) {
+	revParseStdout := &bytes.Buffer{}
+	if err := bumper.Call(revParseStdout, stderr, "git", "rev-parse", refname+":"); err != nil {
+		return "", fmt.Errorf("failed to parse ref: %w", err)
+	}
+	fields := strings.Fields(revParseStdout.String())
+	if n := len(fields); n < 1 {
+		return "", errors.New("got no otput when trying to rev-parse")
+	}
+	return fields[0], nil
 }

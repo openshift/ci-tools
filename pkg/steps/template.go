@@ -552,7 +552,8 @@ func waitForPodCompletionOrTimeout(ctx context.Context, podClient coreclientset.
 				log.Printf("warning: failed to get pod %s: %v", name, err)
 				continue
 			}
-			if !isPodRunning(pod) && time.Since(pod.CreationTimestamp.Time) > 30*time.Minute {
+			if pod.Status.Phase != coreapi.PodRunning && time.Since(pod.CreationTimestamp.Time) > 30*time.Minute {
+				notifier.Complete(name)
 				return false, fmt.Errorf("pod didn't start running within 30 minutes: %s", getReasonsForUnreadyContainers(pod))
 			}
 		case event, ok := <-watcher.ResultChan():
@@ -714,15 +715,6 @@ func podJobIsFailed(pod *coreapi.Pod) bool {
 			if s.ExitCode != 0 {
 				return true
 			}
-		}
-	}
-	return false
-}
-
-func isPodRunning(pod *coreapi.Pod) bool {
-	for _, condition := range pod.Status.Conditions {
-		if condition.Type == coreapi.PodReady {
-			return condition.Status == coreapi.ConditionTrue
 		}
 	}
 	return false

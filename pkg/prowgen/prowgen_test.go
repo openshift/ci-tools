@@ -169,8 +169,9 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 	tests := []struct {
 		description string
 
-		test     string
-		repoInfo *ProwgenInfo
+		test       string
+		repoInfo   *ProwgenInfo
+		jobRelease string
 	}{{
 		description: "presubmit for standard test",
 		test:        "testname",
@@ -181,10 +182,16 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 			test:        "testname",
 			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch", Variant: "also"}},
 		},
+		{
+			description: "presubmit with job release specified",
+			test:        "testname",
+			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
+			jobRelease:  "4.6",
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.description, func(t *testing.T) {
-			testhelper.CompareWithFixture(t, generatePresubmitForTest(tc.test, tc.repoInfo, jobconfig.Generated, nil, true, nil)) // podSpec tested in generatePodSpec
+			testhelper.CompareWithFixture(t, generatePresubmitForTest(tc.test, tc.repoInfo, jobconfig.Generated, nil, true, nil, tc.jobRelease)) // podSpec tested in generatePodSpec
 		})
 	}
 }
@@ -193,8 +200,9 @@ func TestGeneratePeriodicForTest(t *testing.T) {
 	tests := []struct {
 		description string
 
-		test     string
-		repoInfo *ProwgenInfo
+		test       string
+		repoInfo   *ProwgenInfo
+		jobRelease string
 	}{{
 		description: "periodic for standard test",
 		test:        "testname",
@@ -205,18 +213,25 @@ func TestGeneratePeriodicForTest(t *testing.T) {
 			test:        "testname",
 			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch", Variant: "also"}},
 		},
+		{
+			description: "periodic for specific release",
+			test:        "testname",
+			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
+			jobRelease:  "4.6",
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.description, func(t *testing.T) {
-			testhelper.CompareWithFixture(t, generatePeriodicForTest(tc.test, tc.repoInfo, jobconfig.Generated, nil, true, "@yearly", nil)) // podSpec tested in generatePodSpec
+			testhelper.CompareWithFixture(t, generatePeriodicForTest(tc.test, tc.repoInfo, jobconfig.Generated, nil, true, "@yearly", nil, tc.jobRelease)) // podSpec tested in generatePodSpec
 		})
 	}
 }
 
 func TestGeneratePostSubmitForTest(t *testing.T) {
 	tests := []struct {
-		name     string
-		repoInfo *ProwgenInfo
+		name       string
+		repoInfo   *ProwgenInfo
+		jobRelease string
 	}{
 		{
 			name: "first",
@@ -242,10 +257,19 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 				Branch: "Branch",
 			}},
 		},
+		{
+			name: "fourth",
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
+				Org:    "organization",
+				Repo:   "repository",
+				Branch: "branch",
+			}},
+			jobRelease: "4.6",
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			testhelper.CompareWithFixture(t, generatePostsubmitForTest(tc.name, tc.repoInfo, jobconfig.Generated, nil, nil)) // podSpec tested in TestGeneratePodSpec
+			testhelper.CompareWithFixture(t, generatePostsubmitForTest(tc.name, tc.repoInfo, jobconfig.Generated, nil, nil, tc.jobRelease)) // podSpec tested in TestGeneratePodSpec
 		})
 	}
 }
@@ -462,7 +486,7 @@ func TestGenerateJobBase(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.testName, func(t *testing.T) {
-			testhelper.CompareWithFixture(t, generateJobBase(testCase.name, testCase.prefix, testCase.info, testCase.label, testCase.podSpec, testCase.rehearsable, testCase.pathAlias))
+			testhelper.CompareWithFixture(t, generateJobBase(testCase.name, testCase.prefix, testCase.info, testCase.label, testCase.podSpec, testCase.rehearsable, testCase.pathAlias, ""))
 		})
 	}
 }

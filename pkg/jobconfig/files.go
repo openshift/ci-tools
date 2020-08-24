@@ -26,6 +26,7 @@ const (
 	CanBeRehearsedLabel                = "pj-rehearse.openshift.io/can-be-rehearsed"
 	SSHBastionLabel                    = "dptp.openshift.io/ssh-bastion"
 	ProwJobLabelVariant                = "ci-operator.openshift.io/variant"
+	JobReleaseKey                      = "job-release"
 	Generated             ProwgenLabel = "true"
 	New                   ProwgenLabel = "newly-generated"
 	PresubmitPrefix                    = "pull"

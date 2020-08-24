@@ -10,10 +10,11 @@ import (
 
 	"sigs.k8s.io/yaml"
 
-	"github.com/openshift/ci-tools/pkg/bitwarden"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/prow/logrusutil"
+
+	"github.com/openshift/ci-tools/pkg/bitwarden"
 )
 
 type options struct {
@@ -46,7 +47,7 @@ const (
 
 func parseOptions() options {
 	var o options
-	flag.CommandLine.BoolVar(&o.dryRun, "dry-run", false, "Whether to actually create the secrets with oc command")
+	flag.CommandLine.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually create the secrets with bw command")
 	flag.CommandLine.StringVar(&o.configPath, "config", "", "Path to the config file to use for this tool.")
 	flag.CommandLine.StringVar(&o.bwUser, "bw-user", "", "Username to access BitWarden.")
 	flag.CommandLine.StringVar(&o.bwPasswordPath, "bw-password-path", "", "Path to a password file to access BitWarden.")
@@ -121,38 +122,60 @@ func executeCommand(command string) ([]byte, error) {
 	cmd := strings.Fields(command)
 	out, err := exec.Command(cmd[0], cmd[1:]...).CombinedOutput()
 	if err != nil {
-		return nil, fmt.Errorf("bw cmd '%s' failed, output- %s : %w", command, string(out), err)
+		return nil, fmt.Errorf("command %q failed, output- %s : %w", command, string(out), err)
 	}
 	return out, nil
 }
 
 func updateSecrets(bwItems []bitWardenItem, bwClient bitwarden.Client) error {
 	for _, bwItem := range bwItems {
+		logger := logrus.WithField("item", bwItem.ItemName)
 		if bwItem.Field.Name != "" {
+			logger = logger.WithFields(logrus.Fields{
+				"field":   bwItem.Field.Name,
+				"command": bwItem.Field.Cmd,
+			})
+			logger.Info("processing field")
 			out, err := executeCommand(bwItem.Field.Cmd)
 			if err != nil {
-				return fmt.Errorf("failed to set field item: %s, field: %s - %w", bwItem.ItemName, bwItem.Field.Name, err)
+				logrus.WithError(err).Error("failed to generate field")
+				return err
 			}
 			if err := bwClient.SetFieldOnItem(bwItem.ItemName, bwItem.Field.Name, out); err != nil {
-				return fmt.Errorf("failed to set field item: %s, field: %s - %w", bwItem.ItemName, bwItem.Field.Name, err)
+				logrus.WithError(err).Error("failed to upload field")
+				return err
 			}
 		}
 		if bwItem.Attachment.Name != "" {
+			logger = logger.WithFields(logrus.Fields{
+				"attachment": bwItem.Attachment.Name,
+				"command":    bwItem.Attachment.Cmd,
+			})
+			logger.Info("processing attachment")
 			out, err := executeCommand(bwItem.Attachment.Cmd)
 			if err != nil {
-				return fmt.Errorf("failed to set attachment, item: %s, attachment: %s - %w", bwItem.ItemName, bwItem.Attachment.Name, err)
+				logrus.WithError(err).Error("failed to generate attachment")
+				return err
 			}
 			if err := bwClient.SetAttachmentOnItem(bwItem.ItemName, bwItem.Attachment.Name, out); err != nil {
-				return fmt.Errorf("failed to set attachment, item: %s, attachment: %s - %w", bwItem.ItemName, bwItem.Attachment.Name, err)
+				logrus.WithError(err).Error("failed to upload attachment")
+				return err
 			}
 		}
 		if bwItem.Attribute.Name != "" {
+			logger = logger.WithFields(logrus.Fields{
+				"attribute": bwItem.Attribute.Name,
+				"command":   bwItem.Attribute.Cmd,
+			})
+			logger.Info("processing attribute")
 			out, err := executeCommand(bwItem.Attribute.Cmd)
 			if err != nil {
-				return fmt.Errorf("failed to set password, item: %s - %w", bwItem.ItemName, err)
+				logrus.WithError(err).Error("failed to generate attribute")
+				return err
 			}
 			if err := bwClient.SetPassword(bwItem.ItemName, out); err != nil {
-				return fmt.Errorf("failed to set password, item: %s - %w", bwItem.ItemName, err)
+				logrus.WithError(err).Error("failed to upload attribute")
+				return err
 			}
 		}
 	}

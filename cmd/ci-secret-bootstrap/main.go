@@ -13,7 +13,6 @@ import (
 	"sync"
 
 	"github.com/ghodss/yaml"
-	"github.com/google/go-cmp/cmp"
 	"github.com/sirupsen/logrus"
 
 	"golang.org/x/sync/semaphore"
@@ -336,9 +335,14 @@ func updateSecrets(secretsGetters map[string]coreclientset.SecretsGetter, secret
 					errs = append(errs, fmt.Errorf("cannot change secret type from %q to %q (immutable field): %s:%s/%s", existingSecret.Type, secret.Type, cluster, secret.Namespace, secret.Name))
 					continue
 				}
+				for k, v := range existingSecret.Data {
+					if _, exists := secret.Data[k]; exists {
+						continue
+					}
+					secret.Data[k] = v
+				}
 				if !force && !equality.Semantic.DeepEqual(secret.Data, existingSecret.Data) {
-					logrus.Errorf("actual %s:%s/%s differs the expected:\n%s", cluster, secret.Namespace, secret.Name,
-						cmp.Diff(bytesMapToStringMap(secret.Data), bytesMapToStringMap(existingSecret.Data)))
+					logrus.Errorf("actual %s:%s/%s differs the expected:\n", cluster, secret.Namespace, secret.Name)
 					errs = append(errs, fmt.Errorf("secret %s:%s/%s needs updating in place, use --force to do so", cluster, secret.Namespace, secret.Name))
 					continue
 				}
@@ -359,14 +363,6 @@ func updateSecrets(secretsGetters map[string]coreclientset.SecretsGetter, secret
 		}
 	}
 	return utilerrors.NewAggregate(errs)
-}
-
-func bytesMapToStringMap(bytesMap map[string][]byte) map[string]string {
-	strMap := map[string]string{}
-	for k, v := range bytesMap {
-		strMap[k] = string(v)
-	}
-	return strMap
 }
 
 func writeSecrets(secretsMap map[string][]*coreapi.Secret, w io.Writer) error {

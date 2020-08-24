@@ -417,13 +417,13 @@ func main() {
 		}
 	})
 	defer logrus.Exit(0)
-
 	ctx := context.TODO()
+	var errs []error
+	// errors returned by constructSecrets will be handled once the rest of the secrets have been uploaded
 	secretsMap, err := constructSecrets(ctx, o.config, bwClient, o.maxConcurrency)
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to get secrets.")
+		errs = append(errs, err)
 	}
-
 	if o.dryRun {
 		tmpFile, err := ioutil.TempFile("", "ci-secret-bootstrapper")
 		if err != nil {
@@ -432,12 +432,15 @@ func main() {
 		defer tmpFile.Close()
 		logrus.Infof("Dry-Run enabled, writing secrets to %s", tmpFile.Name())
 		if err := writeSecrets(secretsMap, tmpFile); err != nil {
-			logrus.WithError(err).Fatalf("Failed to write secrets on dry run.")
+			errs = append(errs, fmt.Errorf("failed to write secrets on dry run: %w", err))
 		}
 	} else {
 		if err := updateSecrets(o.secretsGetters, secretsMap, o.force); err != nil {
-			logrus.WithError(err).Fatalf("Failed to update secrets.")
+			errs = append(errs, fmt.Errorf("failed to update secrets: %w", err))
 		}
 		logrus.Info("Updated secrets.")
+	}
+	if len(errs) > 0 {
+		logrus.WithError(utilerrors.NewAggregate(errs)).Fatalf("errors while updating secrets")
 	}
 }

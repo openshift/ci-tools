@@ -253,7 +253,7 @@ func rehearseMain() error {
 		}
 		rehearsalTemplates, err = rehearse.NewConfigMaps(changedTemplates, "template", jobSpec.BuildID, prNumber, configUpdaterCfg)
 		if err != nil {
-			logger.WithError(err).Error("could not match changed cluster profiles with cluster configmaps")
+			logger.WithError(err).Error("could not match changed templates with cluster configmaps")
 			return fmt.Errorf(misconfigurationOutput)
 		}
 

@@ -73,6 +73,8 @@ type testImagesDistributorOptions struct {
 	additionalImageStreams             sets.String
 	additionalImageStreamNamespacesRaw flagutil.Strings
 	additionalImageStreamNamespaces    sets.String
+	forbiddenRegistriesRaw             flagutil.Strings
+	forbiddenRegistries                sets.String
 }
 
 type secretSyncerConfigOptions struct {
@@ -105,6 +107,7 @@ func newOpts() (*options, error) {
 	flag.Var(&opts.testImagesDistributorOptions.additionalImageStreamTagsRaw, "testImagesDistributorOptions.additional-image-stream-tag", "An imagestreamtag that will be distributed even if no test explicitly references it. It must be in namespace/name:tag format (e.G `ci/clonerefs:latest`). Can be passed multiple times.")
 	flag.Var(&opts.testImagesDistributorOptions.additionalImageStreamsRaw, "testImagesDistributorOptions.additional-image-stream", "An imagestream that will be distributed even if no test explicitly references it. It must be in namespace/name format (e.G `ci/clonerefs`). Can be passed multiple times.")
 	flag.Var(&opts.testImagesDistributorOptions.additionalImageStreamNamespacesRaw, "testImagesDistributorOptions.additional-image-stream-namespace", "A namespace in which imagestreams will be distributed even if no test explicitly references them (e.G `ci`). Can be passed multiple times.")
+	flag.Var(&opts.testImagesDistributorOptions.forbiddenRegistriesRaw, "testImagesDistributorOptions.forbidden-registry", "The hostname of an image registry from which there is no synchronization of its images. Can be passed multiple times.")
 	flag.StringVar(&opts.secretSyncerConfigOptions.configFile, "secretSyncerConfigOptions.config", "", "The config file for the secret syncer controller")
 	flag.StringVar(&opts.secretSyncerConfigOptions.secretBoostrapConfigFile, "secretSyncerConfigOptions.secretBoostrapConfigFile", "", "The config file for ci-secret-boostrap")
 	flag.DurationVar(&opts.blockProfileRate, "block-profile-rate", time.Duration(0), "The block profile rate. Set to non-zero to enable.")
@@ -162,6 +165,11 @@ func newOpts() (*options, error) {
 		for _, val := range vals {
 			opts.testImagesDistributorOptions.additionalImageStreamNamespaces.Insert(val)
 		}
+	}
+
+	opts.testImagesDistributorOptions.forbiddenRegistries = sets.String{}
+	if vals := opts.testImagesDistributorOptions.forbiddenRegistriesRaw.Strings(); len(vals) > 0 {
+		opts.testImagesDistributorOptions.forbiddenRegistries.Insert(vals...)
 	}
 
 	if opts.enabledControllersSet.Has(testimagesdistributor.ControllerName) && opts.stepConfigPath == "" {
@@ -350,6 +358,7 @@ func main() {
 			opts.testImagesDistributorOptions.additionalImageStreamTags,
 			opts.testImagesDistributorOptions.additionalImageStreams,
 			opts.testImagesDistributorOptions.additionalImageStreamNamespaces,
+			opts.testImagesDistributorOptions.forbiddenRegistries,
 		); err != nil {
 			logrus.WithError(err).Fatal("failed to add testimagesdistributor")
 		}

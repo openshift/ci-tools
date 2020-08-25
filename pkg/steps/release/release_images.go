@@ -137,8 +137,9 @@ func (s *releaseImagesTagStep) run(ctx context.Context) error {
 	for _, tag := range is.Spec.Tags {
 		if valid, _ := utils.FindStatusTag(is, tag.Name); valid != nil {
 			newIS.Spec.Tags = append(newIS.Spec.Tags, imageapi.TagReference{
-				Name: tag.Name,
-				From: valid,
+				Name:            tag.Name,
+				From:            valid,
+				ReferencePolicy: imageapi.TagReferencePolicy{Type: imageapi.LocalTagReferencePolicy},
 			})
 		}
 	}

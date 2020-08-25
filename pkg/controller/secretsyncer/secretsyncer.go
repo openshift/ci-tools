@@ -205,7 +205,12 @@ func secret(nn types.NamespacedName, data map[string][]byte, tp corev1.SecretTyp
 			s.Labels = map[string]string{}
 		}
 		s.Labels["ci.openshift.org/secret-syncer-controller-managed"] = "true"
-		s.Data = data
+		if s.Data == nil {
+			s.Data = map[string][]byte{}
+		}
+		for k, v := range data {
+			s.Data[k] = v
+		}
 		s.Type = tp
 		return nil
 	}

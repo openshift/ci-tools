@@ -5,9 +5,9 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -32,31 +32,43 @@ func TestMirrorSecret(t *testing.T) {
 		Data:       map[string][]byte{"test_key": []byte("test_value")},
 	}
 	for _, tc := range []struct {
-		name                  string
-		config                config.Configuration
-		src                   corev1.Secret
-		targetFilter          filter
-		shouldCopy, shouldErr bool
+		name         string
+		config       config.Configuration
+		src          corev1.Secret
+		targetFilter filter
+		expectedData map[string][]byte
+		shouldErr    bool
 	}{
 		{
 			name: "empty src is ignored",
 			src:  corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: "test-ns", Name: "src"}},
 		},
 		{
-			name:       "normal secret is copied",
-			src:        defaultSecret,
-			shouldCopy: true,
+			name:         "normal secret is copied",
+			src:          defaultSecret,
+			expectedData: map[string][]byte{"test_key": []byte("test_value")},
 		},
 		{
 			name:         "filter is respected",
 			src:          defaultSecret,
 			targetFilter: func(_ string, _ types.NamespacedName) bool { return false },
-			shouldCopy:   false,
 		},
 		{
 			name:      "error is reported",
 			src:       defaultSecret,
 			shouldErr: true,
+		},
+		{
+			name: "Other fields not present in source secret are kept",
+			src: func() corev1.Secret {
+				s := defaultSecret.DeepCopy()
+				s.Data["something-else"] = []byte("some-val")
+				return *s
+			}(),
+			expectedData: map[string][]byte{
+				"test_key":       []byte("test_value"),
+				"something-else": []byte("some-val"),
+			},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -80,9 +92,15 @@ func TestMirrorSecret(t *testing.T) {
 			if err := r.reconcile(logrus.NewEntry(logrus.New()), req); err != nil != tc.shouldErr {
 				t.Fatalf("shouldErr is %t, got %v", tc.shouldErr, err)
 			}
-			exists := !apierrors.IsNotFound(targetClient.Get(r.ctx, types.NamespacedName{Namespace: "test-ns", Name: "dst"}, &corev1.Secret{}))
-			if exists != tc.shouldCopy {
-				t.Errorf("expected secret to exist: %t did exist: %t", tc.shouldCopy, exists)
+			if len(tc.expectedData) == 0 {
+				return
+			}
+			var actualResult corev1.Secret
+			if err := targetClient.Get(context.Background(), types.NamespacedName{Namespace: "test-ns", Name: "dst"}, &actualResult); err != nil {
+				t.Fatalf("failed to get secret: %v", err)
+			}
+			if diff := cmp.Diff(tc.expectedData, actualResult.Data); diff != "" {
+				t.Errorf("expected data differs from actual data: %s", diff)
 			}
 		})
 	}

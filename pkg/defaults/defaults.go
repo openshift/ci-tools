@@ -249,7 +249,7 @@ func FromConfig(
 					step = steps.LeaseStep(leaseClient, test.ClusterProfile.LeaseType(), step, jobSpec.Namespace, namespaceClient)
 				}
 			} else {
-				step = steps.TestStep(*testStep, config.Resources, podClient, imageClient, artifactDir, jobSpec)
+				step = steps.TestStep(*testStep, config.Resources, podClient, artifactDir, jobSpec)
 			}
 		}
 		if !isReleaseStep {

@@ -52,7 +52,7 @@ spec:
       value: repo
     - name: REPO_OWNER
       value: org
-    image: some-reg/TestNamespace/somename@sha256:47e2f82dbede8ff990e6e240f82d78830e7558f7b30df7bd8c0693992018b1e3
+    image: somename:sometag
     name: StepName
     resources: {}
     terminationMessagePolicy: FallbackToLogsOnError

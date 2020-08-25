@@ -245,7 +245,7 @@ oc adm release extract%s --from=%q --file=image-references > /tmp/artifacts/%s
 		copied[podConfig.As] = api.ResourceRequirements{Requests: api.ResourceList{"cpu": "50m", "memory": "400Mi"}}
 		resources = copied
 	}
-	step := steps.PodStep("release", podConfig, resources, s.podClient, s.imageClient, artifactDir, s.jobSpec)
+	step := steps.PodStep("release", podConfig, resources, s.podClient, artifactDir, s.jobSpec)
 	if err := step.Run(ctx); err != nil {
 		return err
 	}

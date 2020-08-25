@@ -3,10 +3,10 @@ package steps
 import (
 	"context"
 	"fmt"
+	"github.com/openshift/ci-tools/pkg/results"
 	"log"
 	"path/filepath"
 
-	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -16,8 +16,6 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/junit"
-	"github.com/openshift/ci-tools/pkg/results"
-	"github.com/openshift/ci-tools/pkg/steps/utils"
 )
 
 const (
@@ -50,7 +48,6 @@ type podStep struct {
 	config      PodStepConfiguration
 	resources   api.ResourceConfiguration
 	podClient   PodClient
-	imageClient imageclientset.ImageV1Interface
 	artifactDir string
 	jobSpec     *api.JobSpec
 
@@ -77,10 +74,7 @@ func (s *podStep) run(ctx context.Context) error {
 	if len(s.config.From.Namespace) > 0 {
 		return fmt.Errorf("pod step does not support an image stream tag reference outside the namespace")
 	}
-	image, err := utils.ImageDigestFor(s.imageClient, s.jobSpec.Namespace, s.config.From.Name, s.config.From.Tag)()
-	if err != nil {
-		return results.ForReason("resolving_image").ForError(err)
-	}
+	image := fmt.Sprintf("%s:%s", s.config.From.Name, s.config.From.Tag)
 
 	pod, err := s.generatePodForStep(image, containerResources)
 	if err != nil {
@@ -153,7 +147,7 @@ func (s *podStep) Description() string {
 	return fmt.Sprintf("Run test %s", s.config.As)
 }
 
-func TestStep(config api.TestStepConfiguration, resources api.ResourceConfiguration, podClient PodClient, imageClient imageclientset.ImageV1Interface, artifactDir string, jobSpec *api.JobSpec) api.Step {
+func TestStep(config api.TestStepConfiguration, resources api.ResourceConfiguration, podClient PodClient, artifactDir string, jobSpec *api.JobSpec) api.Step {
 	return PodStep(
 		"test",
 		PodStepConfiguration{
@@ -166,19 +160,17 @@ func TestStep(config api.TestStepConfiguration, resources api.ResourceConfigurat
 		},
 		resources,
 		podClient,
-		imageClient,
 		artifactDir,
 		jobSpec,
 	)
 }
 
-func PodStep(name string, config PodStepConfiguration, resources api.ResourceConfiguration, podClient PodClient, imageClient imageclientset.ImageV1Interface, artifactDir string, jobSpec *api.JobSpec) api.Step {
+func PodStep(name string, config PodStepConfiguration, resources api.ResourceConfiguration, podClient PodClient, artifactDir string, jobSpec *api.JobSpec) api.Step {
 	return &podStep{
 		name:        name,
 		config:      config,
 		resources:   resources,
 		podClient:   podClient,
-		imageClient: imageClient,
 		artifactDir: artifactDir,
 		jobSpec:     jobSpec,
 	}

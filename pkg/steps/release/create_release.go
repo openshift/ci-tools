@@ -223,7 +223,7 @@ oc adm release extract --from=%q --to=/tmp/artifacts/release-payload-%s
 		resources = copied
 	}
 
-	step := steps.PodStep("release", podConfig, resources, s.podClient, s.imageClient, s.artifactDir, s.jobSpec)
+	step := steps.PodStep("release", podConfig, resources, s.podClient, s.artifactDir, s.jobSpec)
 
 	return results.ForReason("creating_release").ForError(step.Run(ctx))
 }

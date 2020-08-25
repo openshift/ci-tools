@@ -128,6 +128,7 @@ td {
           <a class="dropdown-item" href="/help/leases">Leases and Quota</a>
           <a class="dropdown-item" href="/help/private-repositories">Private Repositories</a>
           <a class="dropdown-item" href="/help/adding-components">Adding and Changing Content</a>
+          <a class="dropdown-item" href="/help/release"><code>openshift/release</code></a>
           <a class="dropdown-item" href="/help/examples">Examples</a>
         </div>
       </li>
@@ -1548,6 +1549,40 @@ the <code>OWNERS</code> file for the component, located in the same directory
 as the component.
 </p>
 `
+const releasePage = `
+<h2>The <code>openshift/release</code> repository</h2>
+
+<h3 id="sharding"><a href="#sharding"><code>ci-operator</code> configuration sharding</a></h3>
+
+<p>
+The configuration files under <code>ci-operator/config</code> need to be stored
+in the CI cluster before they can used by jobs.  That is done using the
+<a href="https://github.com/kubernetes/test-infra/tree/master/prow/plugins/updateconfig"><code>updateconfig</code></a>
+Prow plugin, which maps file path globs to <code>ConfigMap</code>s.
+</p>
+
+<p>
+Because of size constraints, files are distributed across several
+<code>ConfigMap</code>s based on the name of the branch they target.  Patterns
+for the most common names already exist in the configuration for the plugin,
+but it may be necessary to add entries when adding a file for a branch with an
+unusual name.  The
+<a href="https://prow.ci.openshift.org/job-history/gs/origin-ci-test/pr-logs/directory/pull-ci-openshift-release-master-correctly-sharded-config"><code>correctly-sharded-config</code></a>
+pre-submit job guarantees that each file is added to one (and only one)
+<code>ConfigMap</code>, and will fail in case a new entry is necessary.  To add
+one, edit the top-level <code>config_updater</code> key in the
+<a href="https://github.com/openshift/release/blob/master/core-services/prow/02_config/_plugins.yaml">plugin configuration</a>.
+Most likely, the new entry will be in the format:
+</p>
+
+{{ yamlSyntax (index . "updateconfigExample") }}
+
+<p>
+The surrounding entries that add files to <code>ci-operator-misc-configs</code>
+can be used as reference.  When adding a new glob, be careful that it does not
+unintentionally match other files by being too generic.
+</p>
+`
 const examplesPage = `
 <h2 id="examples"><a href="#examples">Available Examples</a></h2>
 <ul>
@@ -1655,6 +1690,17 @@ not reusable by other tests:
 </p>
 <code>ci-operator</code> configuration:
 {{ yamlSyntax (index . "imageExampleLiteral") }}
+`
+
+const updateconfigExample = `config_updater:
+  # …
+  maps:
+    # …
+    ci-operator/config/path/to/files-*-branch-name*.yaml:
+      clusters:
+        app.ci:
+        - ci
+      name: ci-operator-misc-configs
 `
 
 const awsExample = `- as: e2e-steps
@@ -2155,6 +2201,9 @@ func helpHandler(subPath string, w http.ResponseWriter, _ *http.Request) {
 		data["paramsRequiredTest"] = paramsRequiredTest
 	case "/adding-components":
 		helpTemplate, err = helpFuncs.Parse(addingComponentPage)
+	case "/release":
+		data["updateconfigExample"] = updateconfigExample
+		helpTemplate, err = helpFuncs.Parse(releasePage)
 	case "/private-repositories":
 		helpTemplate, err = helpFuncs.Parse(privateRepositoriesPage)
 	case "/examples":

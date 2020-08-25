@@ -48,6 +48,7 @@ func gatherOptions() (*options, error) {
 	} else {
 		o.prCreationCeiling = 0
 	}
+	o.ocpBuildDataRepoDir = filepath.Clean(o.ocpBuildDataRepoDir)
 	return o, nil
 }
 

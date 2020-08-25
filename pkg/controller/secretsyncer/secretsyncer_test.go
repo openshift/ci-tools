@@ -51,7 +51,7 @@ func TestMirrorSecret(t *testing.T) {
 		{
 			name:         "filter is respected",
 			src:          defaultSecret,
-			targetFilter: func(_ string, _ types.NamespacedName) bool { return false },
+			targetFilter: func(_ *boostrapSecretConfigTarget) bool { return false },
 		},
 		{
 			name:      "error is reported",
@@ -73,7 +73,7 @@ func TestMirrorSecret(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.targetFilter == nil {
-				tc.targetFilter = func(_ string, _ types.NamespacedName) bool { return true }
+				tc.targetFilter = func(_ *boostrapSecretConfigTarget) bool { return true }
 			}
 			targetClient := &potentiallyCreateErroringClient{Client: fakectrlruntimeclient.NewFakeClient()}
 			if tc.shouldErr {
@@ -119,8 +119,7 @@ func (pcec *potentiallyCreateErroringClient) Create(ctx context.Context, obj run
 }
 
 func TestFilter(t *testing.T) {
-	const cluster = "cluster"
-	request := types.NamespacedName{Namespace: "namespace", Name: "Name"}
+	target := boostrapSecretConfigTarget{cluster: "cluster", namespace: "namespace", name: "name", key: "key"}
 	testCases := []struct {
 		name string
 		cfg  secretbootstrap.Config
@@ -129,9 +128,12 @@ func TestFilter(t *testing.T) {
 	}{
 		{
 			name: "forbidden",
-			cfg: secretbootstrap.Config{{To: []secretbootstrap.SecretContext{
-				{Cluster: cluster, Namespace: request.Namespace, Name: request.Name},
-			}}},
+			cfg: secretbootstrap.Config{{
+				From: map[string]secretbootstrap.BitWardenContext{target.key: {}},
+				To: []secretbootstrap.SecretContext{
+					{Cluster: target.cluster, Namespace: target.namespace, Name: target.name},
+				},
+			}},
 			expectedResult: false,
 		},
 		{
@@ -142,7 +144,7 @@ func TestFilter(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			if result := filterFromConfig(tc.cfg)(cluster, request); result != tc.expectedResult {
+			if result := filterFromConfig(tc.cfg)(&target); result != tc.expectedResult {
 				t.Errorf("expected result %t, got result %t", tc.expectedResult, result)
 			}
 		})

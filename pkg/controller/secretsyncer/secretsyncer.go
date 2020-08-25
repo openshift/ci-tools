@@ -82,7 +82,7 @@ func AddToManager(mgr manager.Manager,
 	return nil
 }
 
-type filter func(cluster string, target types.NamespacedName) bool
+type filter func(target *boostrapSecretConfigTarget) bool
 
 type reconciler struct {
 	ctx                    context.Context
@@ -139,26 +139,30 @@ func (r *reconciler) reconcile(log *logrus.Entry, encodedRequest reconcile.Reque
 			continue
 		}
 
-		// Verify this doesn't target anything managed by ci-secret-boostrap
-		if allowed := r.targetFilter(cluster, types.NamespacedName{Namespace: mirrorConfig.To.Namespace, Name: mirrorConfig.To.Name}); !allowed {
-			// Log a big fat error, but don't return it as that would result in retrying.
-			log.WithField("target", mirrorConfig.String()).Error("Ignoring secret, its target is managed by ci-secret-boostrap")
-			continue
-		}
 		// TODO: Ideally we would would create one reconcile.Request per target. This here means
 		// that if a single target is broken, it will send all targets into exponential backoff.
-		mirrorErrors = append(mirrorErrors, r.mirrorSecret(log, client, source, mirrorConfig.To))
+		mirrorErrors = append(mirrorErrors, r.mirrorSecret(log, cluster, client, source, mirrorConfig.To))
 	}
 
 	return utilerrors.NewAggregate(mirrorErrors)
 }
 
-func (r *reconciler) mirrorSecret(log *logrus.Entry, c ctrlruntimeclient.Client, source *corev1.Secret, to config.SecretLocation) error {
+func (r *reconciler) mirrorSecret(log *logrus.Entry, cluster string, c ctrlruntimeclient.Client, source *corev1.Secret, to config.SecretLocation) error {
 	*log = *log.WithFields(logrus.Fields{"target-namespace": to.Namespace, "target-secret": to.Name})
 
+	data := map[string][]byte{}
+	for k := range source.Data {
+		target := &boostrapSecretConfigTarget{cluster: cluster, namespace: to.Namespace, name: to.Name, key: k}
+		if !r.targetFilter(target) {
+			// Log a big fat error, but don't return it as that would result in retrying.
+			log.WithField("target", target.String()).Error("Ignoring secret key, its target is managed by ci-secret-boostrap")
+			continue
+		}
+		data[k] = source.Data[k]
+	}
 	secret, mutateFn := secret(
 		types.NamespacedName{Namespace: to.Namespace, Name: to.Name},
-		source.Data,
+		data,
 		source.Type,
 	)
 	result, err := crcontrollerutil.CreateOrUpdate(r.ctx, c, secret, mutateFn)
@@ -233,14 +237,27 @@ func decodeRequest(req reconcile.Request) (string, types.NamespacedName, error) 
 	return clusterAndNamespace[0], types.NamespacedName{Namespace: clusterAndNamespace[1], Name: req.Name}, nil
 }
 
+type boostrapSecretConfigTarget struct {
+	cluster   string
+	namespace string
+	name      string
+	key       string
+}
+
+func (s boostrapSecretConfigTarget) String() string {
+	return s.cluster + "/" + s.namespace + "/" + s.name + "/" + s.key
+}
+
 func filterFromConfig(cfg secretbootstrap.Config) filter {
 	forbidden := sets.String{}
 	for _, cfg := range cfg {
 		for _, target := range cfg.To {
-			forbidden.Insert(fmt.Sprintf("%s/%s/%s", target.Cluster, target.Namespace, target.Name))
+			for from := range cfg.From {
+				forbidden.Insert(boostrapSecretConfigTarget{cluster: target.Cluster, namespace: target.Namespace, name: target.Name, key: from}.String())
+			}
 		}
 	}
-	return func(cluster string, secretName types.NamespacedName) bool {
-		return !forbidden.Has(fmt.Sprintf("%s/%s/%s", cluster, secretName.Namespace, secretName.Name))
+	return func(s *boostrapSecretConfigTarget) bool {
+		return !forbidden.Has(s.String())
 	}
 }

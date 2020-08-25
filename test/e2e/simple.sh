@@ -53,15 +53,6 @@ unset RELEASE_IMAGE_LATEST
 os::test::junit::declare_suite_end
 
 os::test::junit::declare_suite_start "e2e/simple/optional-operator"
-if [[ -z "${PULL_BASE_SHA:-}" ]]; then
-  os::log::fatal "\$PULL_BASE_SHA must be set for this test"
-fi
-if [[ -z "${PULL_NUMBER:-}" ]]; then
-  os::log::fatal "\$PULL_NUMBER must be set for this test"
-fi
-if [[ -z "${PULL_PULL_SHA:-}" ]]; then
-  os::log::fatal "\$PULL_PULL_SHA must be set for this test"
-fi
-export JOB_SPEC='{"type":"presubmit","job":"pull-ci-openshift-ci-tools-master-ci-operator-e2e","buildid":"0","prowjobid":"uuid","refs":{"org":"openshift","repo":"ci-tools","base_ref":"master","base_sha":"'${PULL_BASE_SHA}'","pulls":[{"number":'${PULL_NUMBER}',"author":"AlexNPavel","sha":"'${PULL_PULL_SHA}'"}]}}'
+export JOB_SPEC='{"type":"presubmit","job":"pull-ci-openshift-ci-tools-master-ci-operator-e2e","buildid":"0","prowjobid":"uuid","refs":{"org":"openshift","repo":"ci-tools","base_ref":"master","base_sha":"682d29287394d6990f2d311c85f9c75121a0c191","pulls":[]}}'
 os::cmd::expect_success "ci-operator --image-import-pull-secret ${PULL_SECRET_DIR}/.dockerconfigjson --target [images] --target ci-index --config ${suite_dir}/optional-operators.yaml"
 os::test::junit::declare_suite_end

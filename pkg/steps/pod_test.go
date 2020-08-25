@@ -2,8 +2,11 @@ package steps
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
+	apiimagev1 "github.com/openshift/api/image/v1"
+	fakeimageclientset "github.com/openshift/client-go/image/clientset/versioned/fake"
 	"k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
@@ -53,12 +56,30 @@ func preparePodStep(t *testing.T, namespace string) (*podStep, stepExpectation, 
 	jobSpec.SetNamespace(namespace)
 
 	fakecs := ciopTestingClient{
-		kubecs:  fake.NewSimpleClientset(),
-		imagecs: nil,
-		t:       t,
+		kubecs: fake.NewSimpleClientset(),
+		imagecs: fakeimageclientset.NewSimpleClientset(&apiimagev1.ImageStream{
+			ObjectMeta: meta.ObjectMeta{
+				Namespace: namespace,
+				Name:      "somename",
+			},
+			Status: apiimagev1.ImageStreamStatus{
+				PublicDockerImageRepository: fmt.Sprintf("some-reg/%s/somename", namespace),
+				Tags: []apiimagev1.NamedTagEventList{
+					{
+						Tag: "sometag",
+						Items: []apiimagev1.TagEvent{
+							{
+								Image: "sha256:47e2f82dbede8ff990e6e240f82d78830e7558f7b30df7bd8c0693992018b1e3",
+							},
+						},
+					},
+				},
+			},
+		}),
+		t: t,
 	}
-	client := NewPodClient(fakecs.Core(), nil, nil)
-	ps := PodStep(stepName, config, resources, client, artifactDir, jobSpec)
+	podClient := NewPodClient(fakecs.Core(), nil, nil)
+	ps := PodStep(stepName, config, resources, podClient, fakecs.ImageV1(), artifactDir, jobSpec)
 
 	specification := stepExpectation{
 		name:     podName,
@@ -73,7 +94,7 @@ func preparePodStep(t *testing.T, namespace string) (*podStep, stepExpectation, 
 		},
 	}
 
-	return ps.(*podStep), specification, client
+	return ps.(*podStep), specification, podClient
 }
 
 func TestPodStepMethods(t *testing.T) {

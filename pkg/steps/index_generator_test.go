@@ -17,7 +17,18 @@ func TestIndexGenDockerfile(t *testing.T) {
 				Name:      api.PipelineImageStream,
 			},
 			Status: apiimagev1.ImageStreamStatus{
-				PublicDockerImageRepository: "some-reg/target-namespace/stable",
+				PublicDockerImageRepository: "some-reg/target-namespace/pipeline",
+				Tags: []apiimagev1.NamedTagEventList{{
+					Tag: "ci-bundle0",
+					Items: []apiimagev1.TagEvent{{
+						Image: "ci-bundle0",
+					}},
+				}, {
+					Tag: "ci-bundle1",
+					Items: []apiimagev1.TagEvent{{
+						Image: "ci-bundle1",
+					}},
+				}},
 			},
 		}),
 		t: t,
@@ -26,7 +37,7 @@ func TestIndexGenDockerfile(t *testing.T) {
 	var expectedDockerfileSingleBundle = `FROM quay.io/operator-framework/upstream-opm-builder AS builder
 COPY .dockerconfigjson .
 RUN mkdir $HOME/.docker && mv .dockerconfigjson $HOME/.docker/config.json
-RUN ["opm", "index", "add", "--bundles", "some-reg/target-namespace/stable:ci-bundle0", "--out-dockerfile", "index.Dockerfile", "--generate"]
+RUN ["opm", "index", "add", "--bundles", "some-reg/target-namespace/pipeline@ci-bundle0", "--out-dockerfile", "index.Dockerfile", "--generate"]
 FROM pipeline:src
 WORKDIR /index-data
 COPY --from=builder index.Dockerfile index.Dockerfile
@@ -50,7 +61,7 @@ COPY --from=builder /database/ database`
 	var expectedDockerfileMultiBundle = `FROM quay.io/operator-framework/upstream-opm-builder AS builder
 COPY .dockerconfigjson .
 RUN mkdir $HOME/.docker && mv .dockerconfigjson $HOME/.docker/config.json
-RUN ["opm", "index", "add", "--bundles", "some-reg/target-namespace/stable:ci-bundle0,some-reg/target-namespace/stable:ci-bundle1", "--out-dockerfile", "index.Dockerfile", "--generate"]
+RUN ["opm", "index", "add", "--bundles", "some-reg/target-namespace/pipeline@ci-bundle0,some-reg/target-namespace/pipeline@ci-bundle1", "--out-dockerfile", "index.Dockerfile", "--generate"]
 FROM pipeline:src
 WORKDIR /index-data
 COPY --from=builder index.Dockerfile index.Dockerfile

@@ -26,9 +26,9 @@ os::test::junit::declare_suite_start "e2e/simple"
 # This test validates the ci-operator exit codes
 
 export JOB_SPEC='{"type":"postsubmit","job":"branch-ci-openshift-ci-tools-master-ci-operator-e2e","buildid":"0","prowjobid":"uuid","refs":{"org":"openshift","repo":"ci-tools","base_ref":"master","base_sha":"6d231cc37652e85e0f0e25c21088b73d644d89ad","pulls":[]}}'
-os::cmd::expect_success "ci-operator --target success --config ${suite_dir}/config.yaml"
-os::cmd::expect_failure "ci-operator --target success --target failure --config ${suite_dir}/config.yaml"
-os::cmd::expect_failure "ci-operator --target failure --config ${suite_dir}/config.yaml"
+os::cmd::expect_success "ci-operator --config ${suite_dir}/config.yaml --target success"
+os::cmd::expect_failure "ci-operator --config ${suite_dir}/config.yaml --target success --target failure"
+os::cmd::expect_failure "ci-operator --config ${suite_dir}/config.yaml --target failure"
 
 cluster_profile="${workdir}/cluster-profile"
 mkdir -p "${cluster_profile}"
@@ -47,13 +47,13 @@ os::test::junit::declare_suite_start "e2e/simple/dynamic-release"
 # This test validates the ci-operator resolution of dynamic releases
 
 export JOB_SPEC='{"type":"postsubmit","job":"branch-ci-openshift-ci-tools-master-ci-operator-e2e","buildid":"0","prowjobid":"uuid","refs":{"org":"openshift","repo":"ci-tools","base_ref":"master","base_sha":"6d231cc37652e85e0f0e25c21088b73d644d89ad","pulls":[]}}'
-os::cmd::expect_success "ci-operator --image-import-pull-secret ${IMPORT_SECRET_DIR}/.dockerconfigjson --secret-dir ${PULL_SECRET_DIR} --target [release:initial] --config ${suite_dir}/dynamic-releases.yaml"
-os::cmd::expect_success "ci-operator --image-import-pull-secret ${IMPORT_SECRET_DIR}/.dockerconfigjson --secret-dir ${PULL_SECRET_DIR} --target [release:latest] --config ${suite_dir}/dynamic-releases.yaml"
-os::cmd::expect_success "ci-operator --image-import-pull-secret ${IMPORT_SECRET_DIR}/.dockerconfigjson --secret-dir ${PULL_SECRET_DIR} --target [release:custom] --config ${suite_dir}/dynamic-releases.yaml"
-os::cmd::expect_success "ci-operator --image-import-pull-secret ${IMPORT_SECRET_DIR}/.dockerconfigjson --secret-dir ${PULL_SECRET_DIR} --target [release:pre] --config ${suite_dir}/dynamic-releases.yaml"
+os::cmd::expect_success "ci-operator --image-import-pull-secret ${IMPORT_SECRET_DIR}/.dockerconfigjson --secret-dir ${PULL_SECRET_DIR} --config ${suite_dir}/dynamic-releases.yaml --target [release:initial]"
+os::cmd::expect_success "ci-operator --image-import-pull-secret ${IMPORT_SECRET_DIR}/.dockerconfigjson --secret-dir ${PULL_SECRET_DIR} --config ${suite_dir}/dynamic-releases.yaml --target [release:latest]"
+os::cmd::expect_success "ci-operator --image-import-pull-secret ${IMPORT_SECRET_DIR}/.dockerconfigjson --secret-dir ${PULL_SECRET_DIR} --config ${suite_dir}/dynamic-releases.yaml --target [release:custom]"
+os::cmd::expect_success "ci-operator --image-import-pull-secret ${IMPORT_SECRET_DIR}/.dockerconfigjson --secret-dir ${PULL_SECRET_DIR} --config ${suite_dir}/dynamic-releases.yaml --target [release:pre]"
 RELEASE_IMAGE_LATEST="$( curl -s -H "Accept: application/json"  "https://api.openshift.com/api/upgrades_info/v1/graph?channel=stable-4.4&arch=amd64" | jq --raw-output ".nodes[0].payload" )"
 export RELEASE_IMAGE_LATEST
-os::cmd::expect_success "ci-operator --image-import-pull-secret ${IMPORT_SECRET_DIR}/.dockerconfigjson --secret-dir ${PULL_SECRET_DIR} --target [release:latest] --config ${suite_dir}/dynamic-releases.yaml"
+os::cmd::expect_success "ci-operator --image-import-pull-secret ${IMPORT_SECRET_DIR}/.dockerconfigjson --secret-dir ${PULL_SECRET_DIR} --config ${suite_dir}/dynamic-releases.yaml --target [release:latest]"
 unset RELEASE_IMAGE_LATEST
 os::test::junit::declare_suite_end
 

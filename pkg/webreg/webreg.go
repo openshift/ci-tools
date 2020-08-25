@@ -808,6 +808,18 @@ environment variables:
 
 <code>ci-operator</code> configuration:
 {{ yamlSyntax (index . "ciOperatorContainerTestWithDependenciesConfig") }}
+
+<h5 id="dependency-overrides"><a href="#dependency-overrides">Dependency Overrides</a></h5>
+<p>
+Dependencies can be defined at the workflows and test level in the registry,
+overwriting the source for the pull specification that will populate an environment
+variable in a step. These definitions will be propagated from the top-level definition
+to individual steps. The following example overrides the content of the <code>${DEP}</code>
+environment variable in the <code>test</code> step to point to the pull specification of
+<code>pipeline:src</code> instead of the original <code>pipeline:bin</code>.
+</p>
+
+{{ yamlSyntax (index . "depsPropagation") }}
 `
 
 const ciOperatorInputConfig = `base_images:
@@ -922,6 +934,19 @@ const ciOperatorContainerTestWithDependenciesConfig = `tests:
     env: "BINARIES"
   - name: "release:latest"
     env: "LATEST_RELEASE"
+`
+const depsPropagation = `tests:
+- as: "example"
+  steps:
+    dependencies:
+      DEP: "pipeline:src" # the override for the definition of ${DEP}
+    test:
+    - as: "test"
+      commands: "make test"
+      from: "src"
+      dependencies:
+      - name: "pipeline:bin" # the original definition of ${DEP}
+        env: "DEP"
 `
 
 const ciOperatorPeriodicTestConfig = `tests:
@@ -2227,6 +2252,7 @@ func helpHandler(subPath string, w http.ResponseWriter, _ *http.Request) {
 		data["ciOperatorContainerTestConfig"] = ciOperatorContainerTestConfig
 		data["ciOperatorPeriodicTestConfig"] = ciOperatorPeriodicTestConfig
 		data["ciOperatorContainerTestWithDependenciesConfig"] = ciOperatorContainerTestWithDependenciesConfig
+		data["depsPropagation"] = depsPropagation
 	case "/leases":
 		helpTemplate, err = helpFuncs.Parse(quotasAndLeasesPage)
 		data["dynamicBoskosConfig"] = dynamicBoskosConfig

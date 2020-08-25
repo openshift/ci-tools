@@ -656,8 +656,9 @@ func TestResolveParameters(t *testing.T) {
 	defaultEmpty := ""
 	workflows := WorkflowByName{
 		workflow: api.MultiStageTestConfiguration{
-			Test:        []api.TestStep{{Chain: &grandGrandParent}},
-			Environment: api.TestEnvironment{"CHANGED": "workflow"},
+			Test:         []api.TestStep{{Chain: &grandGrandParent}},
+			Environment:  api.TestEnvironment{"CHANGED": "workflow"},
+			Dependencies: api.TestDependencies{"CHANGED": "workflow"},
 		},
 	}
 	chains := ChainByName{
@@ -695,23 +696,31 @@ func TestResolveParameters(t *testing.T) {
 			Environment: []api.StepParameter{
 				{Name: "NOT_CHANGED", Default: &defaultNotChanged},
 			},
+			Dependencies: []api.StepDependency{
+				{Env: "NOT_CHANGED", Name: defaultNotChanged},
+			},
 		},
 		changed: api.LiteralTestStep{
 			As:          changed,
 			Environment: []api.StepParameter{{Name: "CHANGED"}},
+			Dependencies: []api.StepDependency{
+				{Env: "CHANGED", Name: defaultNotChanged},
+			},
 		},
 	}
 	for _, tc := range []struct {
-		name     string
-		test     api.MultiStageTestConfiguration
-		expected [][]api.StepParameter
-		err      error
+		name           string
+		test           api.MultiStageTestConfiguration
+		expectedParams [][]api.StepParameter
+		expectedDeps   [][]api.StepDependency
+		err            error
 	}{{
 		name: "leaf, no parameters",
 		test: api.MultiStageTestConfiguration{
 			Test: []api.TestStep{{LiteralTestStep: &api.LiteralTestStep{}}},
 		},
-		expected: [][]api.StepParameter{nil},
+		expectedParams: [][]api.StepParameter{nil},
+		expectedDeps:   [][]api.StepDependency{nil},
 	}, {
 		name: "leaf, empty default",
 		test: api.MultiStageTestConfiguration{
@@ -723,57 +732,81 @@ func TestResolveParameters(t *testing.T) {
 				},
 			}},
 		},
-		expected: [][]api.StepParameter{{{
+		expectedParams: [][]api.StepParameter{{{
 			Name: "TEST", Default: &defaultEmpty,
 		}}},
+		expectedDeps: [][]api.StepDependency{nil},
 	}, {
-		name: "leaf, parameters",
+		name: "leaf, parameters, deps",
 		test: api.MultiStageTestConfiguration{
 			Test: []api.TestStep{{
 				LiteralTestStep: &api.LiteralTestStep{
 					Environment: []api.StepParameter{
 						{Name: "TEST", Default: &defaultStr},
 					},
+					Dependencies: []api.StepDependency{
+						{Name: "test", Env: "WHOA"},
+					},
 				},
 			}},
 		},
-		expected: [][]api.StepParameter{{{
+		expectedParams: [][]api.StepParameter{{{
 			Name: "TEST", Default: &defaultStr,
+		}}},
+		expectedDeps: [][]api.StepDependency{{{
+			Name: "test", Env: "WHOA",
 		}}},
 	}, {
 		name: "chain propagates to sub-steps",
 		test: api.MultiStageTestConfiguration{
 			Test: []api.TestStep{{Chain: &parent}},
 		},
-		expected: [][]api.StepParameter{
+		expectedParams: [][]api.StepParameter{
 			{{Name: "NOT_CHANGED", Default: &defaultNotChanged}},
 			{{Name: "CHANGED", Default: &defaultParent}},
+		},
+		expectedDeps: [][]api.StepDependency{
+			{{Env: "NOT_CHANGED", Name: defaultNotChanged}},
+			{{Env: "CHANGED", Name: defaultNotChanged}},
 		},
 	}, {
 		name: "change propagates to sub-chains",
 		test: api.MultiStageTestConfiguration{
 			Test: []api.TestStep{{Chain: &grandGrandParent}},
 		},
-		expected: [][]api.StepParameter{
+		expectedParams: [][]api.StepParameter{
 			{{Name: "NOT_CHANGED", Default: &defaultNotChanged}},
 			{{Name: "CHANGED", Default: &defaultGrandGrand}},
 		},
+		expectedDeps: [][]api.StepDependency{
+			{{Env: "NOT_CHANGED", Name: defaultNotChanged}},
+			{{Env: "CHANGED", Name: defaultNotChanged}},
+		},
 	}, {
-		name: "workflow parameter",
+		name: "workflow parameter and dep",
 		test: api.MultiStageTestConfiguration{Workflow: &workflow},
-		expected: [][]api.StepParameter{
+		expectedParams: [][]api.StepParameter{
 			{{Name: "NOT_CHANGED", Default: &defaultNotChanged}},
 			{{Name: "CHANGED", Default: &defaultWorkflow}},
 		},
-	}, {
-		name: "test parameter",
-		test: api.MultiStageTestConfiguration{
-			Test:        []api.TestStep{{Chain: &grandGrandParent}},
-			Environment: api.TestEnvironment{"CHANGED": "test"},
+		expectedDeps: [][]api.StepDependency{
+			{{Env: "NOT_CHANGED", Name: defaultNotChanged}},
+			{{Env: "CHANGED", Name: defaultWorkflow}},
 		},
-		expected: [][]api.StepParameter{
+	}, {
+		name: "test parameter and dep",
+		test: api.MultiStageTestConfiguration{
+			Test:         []api.TestStep{{Chain: &grandGrandParent}},
+			Environment:  api.TestEnvironment{"CHANGED": "test"},
+			Dependencies: api.TestDependencies{"CHANGED": "test"},
+		},
+		expectedParams: [][]api.StepParameter{
 			{{Name: "NOT_CHANGED", Default: &defaultNotChanged}},
 			{{Name: "CHANGED", Default: &defaultTest}},
+		},
+		expectedDeps: [][]api.StepDependency{
+			{{Env: "NOT_CHANGED", Name: defaultNotChanged}},
+			{{Env: "CHANGED", Name: defaultTest}},
 		},
 	}, {
 		name: "invalid chain parameter",
@@ -788,6 +821,13 @@ func TestResolveParameters(t *testing.T) {
 			Environment: api.TestEnvironment{"NOT_DECLARED": "not declared"},
 		},
 		err: errors.New(`test: no step declares parameter "NOT_DECLARED"`),
+	}, {
+		name: "invalid test dep",
+		test: api.MultiStageTestConfiguration{
+			Test:         []api.TestStep{{Reference: &notChanged}},
+			Dependencies: api.TestDependencies{"NOT_DECLARED": "not declared"},
+		},
+		err: errors.New(`test: no step declares dependency "NOT_DECLARED"`),
 	}, {
 		name: "unresolved test",
 		test: api.MultiStageTestConfiguration{
@@ -817,7 +857,14 @@ func TestResolveParameters(t *testing.T) {
 				for _, s := range append(ret.Pre, append(ret.Test, ret.Post...)...) {
 					params = append(params, s.Environment)
 				}
-				if diff := cmp.Diff(params, tc.expected); diff != "" {
+				if diff := cmp.Diff(params, tc.expectedParams); diff != "" {
+					t.Error(diff)
+				}
+				var deps [][]api.StepDependency
+				for _, s := range append(ret.Pre, append(ret.Test, ret.Post...)...) {
+					deps = append(deps, s.Dependencies)
+				}
+				if diff := cmp.Diff(deps, tc.expectedDeps); diff != "" {
 					t.Error(diff)
 				}
 			}

@@ -29,7 +29,7 @@ func Validate(stepsByName ReferenceByName, chainsByName ChainByName, workflowsBy
 		}
 	}
 	for k, v := range workflowsByName {
-		stack := stackForWorkflow(k, v.Environment)
+		stack := stackForWorkflow(k, v.Environment, v.Dependencies)
 		for _, s := range [][]api.TestStep{v.Pre, v.Test, v.Post} {
 			if _, err := reg.process(s, sets.NewString(), stack); err != nil {
 				ret = append(ret, err...)
@@ -82,6 +82,12 @@ func (r *registry) Resolve(name string, config api.MultiStageTestConfiguration) 
 				config.Environment[k] = v
 			}
 		}
+		if config.Dependencies == nil {
+			config.Dependencies = make(api.TestDependencies, len(workflow.Dependencies))
+			for k, v := range workflow.Dependencies {
+				config.Dependencies[k] = v
+			}
+		}
 		if config.AllowSkipOnSuccess == nil {
 			config.AllowSkipOnSuccess = workflow.AllowSkipOnSuccess
 		}
@@ -90,9 +96,9 @@ func (r *registry) Resolve(name string, config api.MultiStageTestConfiguration) 
 		ClusterProfile:     config.ClusterProfile,
 		AllowSkipOnSuccess: config.AllowSkipOnSuccess,
 	}
-	stack := stackForTest(name, config.Environment)
+	stack := stackForTest(name, config.Environment, config.Dependencies)
 	if config.Workflow != nil {
-		stack.push(stackRecordForTest(*config.Workflow, nil))
+		stack.push(stackRecordForTest(*config.Workflow, nil, nil))
 	}
 	pre, errs := r.process(config.Pre, sets.NewString(), stack)
 	expandedFlow.Pre = append(expandedFlow.Pre, pre...)
@@ -121,15 +127,15 @@ func stackForChain() stack {
 	return stack{partial: true}
 }
 
-func stackForWorkflow(name string, env api.TestEnvironment) stack {
+func stackForWorkflow(name string, env api.TestEnvironment, deps api.TestDependencies) stack {
 	return stack{
-		records: []stackRecord{stackRecordForTest(name, env)},
+		records: []stackRecord{stackRecordForTest(name, env, deps)},
 		partial: true,
 	}
 }
 
-func stackForTest(name string, env api.TestEnvironment) stack {
-	return stack{records: []stackRecord{stackRecordForTest(name, env)}}
+func stackForTest(name string, env api.TestEnvironment, deps api.TestDependencies) stack {
+	return stack{records: []stackRecord{stackRecordForTest(name, env, deps)}}
 }
 
 func (s *stack) push(r stackRecord) {
@@ -155,7 +161,7 @@ func (s *stack) resolve(name string) *string {
 		for j, e := range r.env {
 			if e.Name == name {
 				for _, r := range s.records {
-					r.unused.Delete(e.Name)
+					r.unusedEnv.Delete(e.Name)
 				}
 				return r.env[j].Default
 			}
@@ -164,32 +170,59 @@ func (s *stack) resolve(name string) *string {
 	return nil
 }
 
-type stackRecord struct {
-	name   string
-	env    []api.StepParameter
-	unused sets.String
-}
-
-func stackRecordForStep(name string, env []api.StepParameter) stackRecord {
-	unused := sets.NewString()
-	for _, x := range env {
-		unused.Insert(x.Name)
+func (s *stack) resolveDep(env string) string {
+	for _, r := range s.records {
+		for j, e := range r.deps {
+			if e.Env == env {
+				for _, r := range s.records {
+					r.unusedDeps.Delete(e.Env)
+				}
+				return r.deps[j].Name
+			}
+		}
 	}
-	return stackRecord{name: name, env: env, unused: unused}
+	return ""
 }
 
-func stackRecordForTest(name string, env api.TestEnvironment) stackRecord {
+type stackRecord struct {
+	name       string
+	env        []api.StepParameter
+	unusedEnv  sets.String
+	deps       []api.StepDependency
+	unusedDeps sets.String
+}
+
+func stackRecordForStep(name string, env []api.StepParameter, deps []api.StepDependency) stackRecord {
+	unusedEnv := sets.NewString()
+	for _, x := range env {
+		unusedEnv.Insert(x.Name)
+	}
+	unusedDeps := sets.NewString()
+	for _, x := range deps {
+		unusedDeps.Insert(x.Env)
+	}
+	return stackRecord{name: name, env: env, unusedEnv: unusedEnv, deps: deps, unusedDeps: unusedDeps}
+}
+
+func stackRecordForTest(name string, env api.TestEnvironment, deps api.TestDependencies) stackRecord {
 	params := make([]api.StepParameter, 0, len(env))
 	for k, v := range env {
 		unique := v
 		params = append(params, api.StepParameter{Name: k, Default: &unique})
 	}
-	return stackRecordForStep(name, params)
+	dependencies := make([]api.StepDependency, 0, len(deps))
+	for k, v := range deps {
+		dependencies = append(dependencies, api.StepDependency{Name: v, Env: k})
+	}
+	return stackRecordForStep(name, params, dependencies)
 }
 
 func (r *stackRecord) checkUnused(s *stack) (ret []error) {
-	for u := range r.unused {
+	for u := range r.unusedEnv {
 		ret = append(ret, s.errorf("no step declares parameter %q", u))
+	}
+	for u := range r.unusedDeps {
+		ret = append(ret, s.errorf("no step declares dependency %q", u))
 	}
 	return
 }
@@ -217,7 +250,7 @@ func (r *registry) processChain(step *api.TestStep, seen sets.String, stack stac
 	if !ok {
 		return nil, []error{stack.errorf("unknown step chain: %s", name)}
 	}
-	rec := stackRecordForStep(name, chain.Environment)
+	rec := stackRecordForStep(name, chain.Environment, nil)
 	stack.push(rec)
 	defer stack.pop()
 	ret, err := r.process(chain.Steps, seen, stack)
@@ -253,6 +286,16 @@ func (r *registry) processStep(step *api.TestStep, seen sets.String, stack stack
 			env = append(env, e)
 		}
 		ret.Environment = env
+	}
+	if ret.Dependencies != nil {
+		deps := make([]api.StepDependency, 0, len(ret.Dependencies))
+		for _, e := range ret.Dependencies {
+			if v := stack.resolveDep(e.Env); v != "" {
+				e.Name = v
+			}
+			deps = append(deps, e)
+		}
+		ret.Dependencies = deps
 	}
 	return ret, errs
 }

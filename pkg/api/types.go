@@ -654,6 +654,8 @@ type MultiStageTestConfiguration struct {
 	Workflow *string `json:"workflow,omitempty"`
 	// Environment has the values of parameters for the steps.
 	Environment TestEnvironment `json:"env,omitempty"`
+	// Dependencies holds override values for dependency parameters.
+	Dependencies TestDependencies `json:"dependencies,omitempty"`
 	// AllowSkipOnSuccess defines if any steps can be skipped when
 	// all previous `pre` and `test` steps were successful. The given step must explicitly
 	// ask for being skipped by setting the OptionalOnSuccess flag to true.
@@ -675,6 +677,8 @@ type MultiStageTestConfigurationLiteral struct {
 	Post []LiteralTestStep `json:"post,omitempty"`
 	// Environment has the values of parameters for the steps.
 	Environment TestEnvironment `json:"env,omitempty"`
+	// Dependencies holds override values for dependency parameters.
+	Dependencies TestDependencies `json:"dependencies,omitempty"`
 	// AllowSkipOnSuccess defines if any steps can be skipped when
 	// all previous `pre` and `test` steps were successful. The given step must explicitly
 	// ask for being skipped by setting the OptionalOnSuccess flag to true.
@@ -683,6 +687,9 @@ type MultiStageTestConfigurationLiteral struct {
 
 // TestEnvironment has the values of parameters for multi-stage tests.
 type TestEnvironment map[string]string
+
+// TestDependencies has the values of dependency overrides for multi-stage tests.
+type TestDependencies map[string]string
 
 // Secret describes a secret to be mounted inside a test
 // container.

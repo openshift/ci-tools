@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"strings"
 
 	"k8s.io/test-infra/prow/repoowners"
 )
@@ -133,10 +134,13 @@ func (c ReleaseBuildConfiguration) IsPipelineImage(name string) bool {
 		string(PipelineImageStreamTagReferenceSource),
 		string(PipelineImageStreamTagReferenceBinaries),
 		string(PipelineImageStreamTagReferenceTestBinaries),
-		string(PipelineImageStreamTagReferenceRPMs):
+		string(PipelineImageStreamTagReferenceRPMs),
+		string(PipelineImageStreamTagReferenceBundleSource),
+		string(PipelineImageStreamTagReferenceIndexImageGenerator),
+		string(PipelineImageStreamTagReferenceIndexImage):
 		return true
 	}
-	return false
+	return IsBundleImage(name)
 }
 
 // ResourceConfiguration defines resource overrides for jobs run
@@ -1027,6 +1031,7 @@ type OperatorStepConfiguration struct {
 	Substitutions []PullSpecSubstitution `json:"substitutions,omitempty"`
 }
 
+// Bundle contains the data needed to build a bundle from the bundle source image
 type Bundle struct {
 	DockerfilePath string `json:"dockerfile_path,omitempty"`
 	ContextDir     string `json:"context_dir,omitempty"`
@@ -1043,11 +1048,11 @@ type IndexGeneratorStepConfiguration struct {
 	OperatorIndex []string `json:"operator_index,omitempty"`
 }
 
-// IndexImageGeneratorName is the name of the index image generator built by ci-operator
-const IndexImageGeneratorName = "ci-index-gen"
+// PipelineImageStreamTagReferenceIndexImageGenerator is the name of the index image generator built by ci-operator
+const PipelineImageStreamTagReferenceIndexImageGenerator PipelineImageStreamTagReference = "ci-index-gen"
 
-// IndexImageName is the name of the index image built by ci-operator
-const IndexImageName = "ci-index"
+// PipelineImageStreamTagReferenceIndexImage is the name of the index image built by ci-operator
+const PipelineImageStreamTagReferenceIndexImage PipelineImageStreamTagReference = "ci-index"
 
 // BundleSourceStepConfiguration describes a step that performs a set of
 // substitutions on all yaml files in the `src` image so that the
@@ -1059,11 +1064,19 @@ type BundleSourceStepConfiguration struct {
 	Substitutions []PullSpecSubstitution `json:"substitutions,omitempty"`
 }
 
-// BundleSourceName is the name of the bundle source image built by the CI
-const BundleSourceName = "src-bundle"
+// PipelineImageStreamTagReferenceBundleSourceName is the name of the bundle source image built by the CI
+const PipelineImageStreamTagReferenceBundleSource PipelineImageStreamTagReference = "src-bundle"
 
-// BundlePrefix is the prefix used by ci-operator for bundle images
-const BundlePrefix = "ci-bundle"
+// bundlePrefix is the prefix used by ci-operator for bundle images
+const bundlePrefix = "ci-bundle"
+
+func IsBundleImage(imageName string) bool {
+	return strings.HasPrefix(imageName, bundlePrefix)
+}
+
+func BundleName(index int) string {
+	return fmt.Sprintf("%s%d", bundlePrefix, index)
+}
 
 // ProjectDirectoryImageBuildStepConfiguration describes an
 // image build from a directory in a component project.

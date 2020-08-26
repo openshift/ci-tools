@@ -24,7 +24,7 @@ operator:
   - pullspec: quay.io/openshift/origin-oauth-proxy:4.5
     with: oauth-proxy # OCP component
   - pullspec: quay.io/openshift/origin-hive:4.5
-    with: hive # operand image, must be present in `stable` imagestream
+    with: metering-hive # operand image, must be present in `stable` imagestream
 tag_specification:
   namespace: ocp
   name: "4.6"

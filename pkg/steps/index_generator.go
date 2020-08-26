@@ -8,21 +8,21 @@ import (
 	buildapi "github.com/openshift/api/build/v1"
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/results"
-	"github.com/openshift/ci-tools/pkg/util"
+	"github.com/openshift/ci-tools/pkg/steps/utils"
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 	coreapi "k8s.io/api/core/v1"
-	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type indexGeneratorStep struct {
-	config      api.IndexGeneratorStepConfiguration
-	resources   api.ResourceConfiguration
-	buildClient BuildClient
-	imageClient imageclientset.ImageStreamsGetter
-	istClient   imageclientset.ImageStreamTagsGetter
-	jobSpec     *api.JobSpec
-	artifactDir string
-	pullSecret  *coreapi.Secret
+	config             api.IndexGeneratorStepConfiguration
+	releaseBuildConfig *api.ReleaseBuildConfiguration
+	resources          api.ResourceConfiguration
+	buildClient        BuildClient
+	imageClient        imageclientset.ImageStreamsGetter
+	istClient          imageclientset.ImageStreamTagsGetter
+	jobSpec            *api.JobSpec
+	artifactDir        string
+	pullSecret         *coreapi.Secret
 }
 
 const IndexDataDirectory = "/index-data"
@@ -80,20 +80,15 @@ func (s *indexGeneratorStep) run(ctx context.Context) error {
 
 func (s *indexGeneratorStep) indexGenDockerfile() (string, error) {
 	var dockerCommands []string
-	dockerCommands = append(dockerCommands, "")
 	dockerCommands = append(dockerCommands, "FROM quay.io/operator-framework/upstream-opm-builder AS builder")
 	// pull secret is needed for opm command
 	dockerCommands = append(dockerCommands, "COPY .dockerconfigjson .")
 	dockerCommands = append(dockerCommands, "RUN mkdir $HOME/.docker && mv .dockerconfigjson $HOME/.docker/config.json")
 	var bundles []string
-	is, err := s.imageClient.ImageStreams(s.jobSpec.Namespace()).Get(context.TODO(), api.PipelineImageStream, meta.GetOptions{})
-	if err != nil {
-		return "", fmt.Errorf("failed to get pipeline imagestream: %w", err)
-	}
 	for _, bundleName := range s.config.OperatorIndex {
-		fullSpec, exists := util.ResolvePullSpec(is, bundleName, false)
-		if !exists {
-			return "", fmt.Errorf("failed to get full pull spec for bundle `%s`", bundleName)
+		fullSpec, err := utils.ImageDigestFor(s.imageClient, s.jobSpec.Namespace, api.PipelineImageStream, bundleName)()
+		if err != nil {
+			return "", fmt.Errorf("failed to get image digest for bundle `%s`: %w", bundleName, err)
 		}
 		bundles = append(bundles, fullSpec)
 	}
@@ -101,15 +96,15 @@ func (s *indexGeneratorStep) indexGenDockerfile() (string, error) {
 	dockerCommands = append(dockerCommands, fmt.Sprintf("FROM %s:%s", api.PipelineImageStream, api.PipelineImageStreamTagReferenceSource))
 	dockerCommands = append(dockerCommands, fmt.Sprintf("WORKDIR %s", IndexDataDirectory))
 	dockerCommands = append(dockerCommands, fmt.Sprintf("COPY --from=builder %s %s", IndexDockerfileName, IndexDockerfileName))
-	dockerCommands = append(dockerCommands, ("COPY --from=builder /database/ database"))
-	dockerCommands = append(dockerCommands, "")
+	dockerCommands = append(dockerCommands, "COPY --from=builder /database/ database")
 	return strings.Join(dockerCommands, "\n"), nil
 }
 
 func (s *indexGeneratorStep) Requires() []api.StepLink {
 	var links []api.StepLink
 	for _, bundle := range s.config.OperatorIndex {
-		links = append(links, api.InternalImageLink(api.PipelineImageStreamTagReference(bundle)))
+		imageStream, name, _ := s.releaseBuildConfig.DependencyParts(api.StepDependency{Name: bundle})
+		links = append(links, api.LinkForImage(imageStream, name))
 	}
 	return links
 }
@@ -128,15 +123,16 @@ func (s *indexGeneratorStep) Description() string {
 	return fmt.Sprintf("Build image %s from the repository", s.config.To)
 }
 
-func IndexGeneratorStep(config api.IndexGeneratorStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, imageClient imageclientset.ImageStreamsGetter, istClient imageclientset.ImageStreamTagsGetter, artifactDir string, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
+func IndexGeneratorStep(config api.IndexGeneratorStepConfiguration, releaseBuildConfig *api.ReleaseBuildConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, imageClient imageclientset.ImageStreamsGetter, istClient imageclientset.ImageStreamTagsGetter, artifactDir string, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
 	return &indexGeneratorStep{
-		config:      config,
-		resources:   resources,
-		buildClient: buildClient,
-		imageClient: imageClient,
-		istClient:   istClient,
-		artifactDir: artifactDir,
-		jobSpec:     jobSpec,
-		pullSecret:  pullSecret,
+		config:             config,
+		releaseBuildConfig: releaseBuildConfig,
+		resources:          resources,
+		buildClient:        buildClient,
+		imageClient:        imageClient,
+		istClient:          istClient,
+		artifactDir:        artifactDir,
+		jobSpec:            jobSpec,
+		pullSecret:         pullSecret,
 	}
 }

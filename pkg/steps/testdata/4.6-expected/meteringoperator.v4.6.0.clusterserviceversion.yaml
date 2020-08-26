@@ -7,7 +7,7 @@ metadata:
     capabilities: Seamless Upgrades
     categories: OpenShift Optional, Monitoring
     certified: "false"
-    containerImage: stable:metering-ansible-operator
+    containerImage: pipeline@metering-ansible-operator
     createdAt: 2019-01-01T11:59:59Z
     description: Chargeback and reporting tool to provide accountability for how resources
       are used across a cluster
@@ -56,14 +56,14 @@ spec:
                   - /opt/ansible/scripts/ansible-logs.sh
                   - /tmp/ansible-operator/runner
                   - stdout
-                  image: "stable:metering-ansible-operator"
+                  image: "pipeline@metering-ansible-operator"
                   imagePullPolicy: Always
                   volumeMounts:
                   - mountPath: /tmp/ansible-operator/runner
                     name: runner
                     readOnly: true
                 - name: operator
-                  image: "stable:metering-ansible-operator"
+                  image: "pipeline@metering-ansible-operator"
                   imagePullPolicy: Always
                   env:
                   - name: OPERATOR_NAME
@@ -79,17 +79,17 @@ spec:
                       fieldRef:
                         fieldPath: metadata.name
                   - name: METERING_ANSIBLE_OPERATOR_IMAGE
-                    value: "stable:metering-ansible-operator"
+                    value: "pipeline@metering-ansible-operator"
                   - name: METERING_REPORTING_OPERATOR_IMAGE
-                    value: "stable:metering-reporting-operator"
+                    value: "pipeline@metering-reporting-operator"
                   - name: METERING_PRESTO_IMAGE
-                    value: "stable:metering-presto"
+                    value: "stable@metering-presto"
                   - name: METERING_HIVE_IMAGE
-                    value: "stable:metering-hive"
+                    value: "stable@metering-hive"
                   - name: METERING_HADOOP_IMAGE
-                    value: "stable:metering-hadoop"
+                    value: "stable@metering-hadoop"
                   - name: GHOSTUNNEL_IMAGE
-                    value: "stable:ghostunnel"
+                    value: "stable@ghostunnel"
                   ports:
                   - name: http-metrics
                     containerPort: 8383

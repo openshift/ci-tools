@@ -1,0 +1,13 @@
+images:
+  - name: METERING_ANSIBLE_OPERATOR_IMAGE
+    value: "pipeline@metering-ansible-operator"
+  - name: METERING_REPORTING_OPERATOR_IMAGE
+    value: "pipeline@metering-reporting-operator"
+  - name: METERING_PRESTO_IMAGE
+    value: "stable@metering-presto"
+  - name: METERING_HIVE_IMAGE
+    value: "stable@metering-hive"
+  - name: METERING_HADOOP_IMAGE
+    value: "stable@metering-hadoop"
+  - name: GHOSTUNNEL_IMAGE
+    value: "stable@ghostunnel"

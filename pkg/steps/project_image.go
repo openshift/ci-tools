@@ -72,7 +72,7 @@ func (s *projectDirectoryImageBuildStep) run(ctx context.Context) error {
 	images := buildInputsFromStep(s.config.Inputs)
 	// If image being built is an operator bundle, use the bundle source instead of original source
 	if api.IsBundleImage(string(s.config.To)) {
-		source := fmt.Sprintf("%s:%s", api.PipelineImageStream, api.BundleSourceName)
+		source := fmt.Sprintf("%s:%s", api.PipelineImageStream, api.PipelineImageStreamTagReferenceBundleSource)
 		workingDir, err := getWorkingDir(s.istClient, source, s.jobSpec.Namespace())
 		if err != nil {
 			return fmt.Errorf("failed to get workingDir: %w", err)
@@ -87,8 +87,8 @@ func (s *projectDirectoryImageBuildStep) run(ctx context.Context) error {
 				DestinationDir: ".",
 			}},
 		})
-	} else if s.config.To == api.IndexImageName {
-		source := fmt.Sprintf("%s:%s", api.PipelineImageStream, api.IndexImageGeneratorName)
+	} else if s.config.To == api.PipelineImageStreamTagReferenceIndexImage {
+		source := fmt.Sprintf("%s:%s", api.PipelineImageStream, api.PipelineImageStreamTagReferenceIndexImageGenerator)
 		workingDir, err := getWorkingDir(s.istClient, source, s.jobSpec.Namespace())
 		if err != nil {
 			return fmt.Errorf("failed to get workingDir: %w", err)
@@ -162,10 +162,10 @@ func (s *projectDirectoryImageBuildStep) Requires() []api.StepLink {
 		links = append(links, api.InternalImageLink(s.config.From))
 	}
 	if api.IsBundleImage(string(s.config.To)) {
-		links = append(links, api.InternalImageLink(api.BundleSourceName))
+		links = append(links, api.InternalImageLink(api.PipelineImageStreamTagReferenceBundleSource))
 	}
-	if s.config.To == api.IndexImageName {
-		links = append(links, api.InternalImageLink(api.IndexImageGeneratorName))
+	if s.config.To == api.PipelineImageStreamTagReferenceIndexImage {
+		links = append(links, api.InternalImageLink(api.PipelineImageStreamTagReferenceIndexImageGenerator))
 	}
 	for name := range s.config.Inputs {
 		links = append(links, api.InternalImageLink(api.PipelineImageStreamTagReference(name)))

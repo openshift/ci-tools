@@ -491,12 +491,12 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.Job
 		}
 		// Build index generator
 		buildSteps = append(buildSteps, api.StepConfiguration{IndexGeneratorStepConfiguration: &api.IndexGeneratorStepConfiguration{
-			To:            api.IndexImageGeneratorName,
+			To:            api.PipelineImageStreamTagReferenceIndexImageGenerator,
 			OperatorIndex: bundles,
 		}})
 		// Build the index
 		image := &api.ProjectDirectoryImageBuildStepConfiguration{
-			To: api.IndexImageName,
+			To: api.PipelineImageStreamTagReferenceIndexImage,
 			ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
 				DockerfilePath: steps.IndexDockerfileName,
 			},

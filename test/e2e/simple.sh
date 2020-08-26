@@ -59,6 +59,5 @@ if [[ -z "${PARENT_JOBSPEC:-}" ]]; then
 fi
 JOB_SPEC=$(NEW_UUID=$(uuidgen); echo "${PARENT_JOBSPEC}" | jq --arg uuid "${NEW_UUID}" '.prowjobid = $uuid')
 export JOB_SPEC
-echo "${JOB_SPEC}"
 os::cmd::expect_success "ci-operator --image-import-pull-secret ${PULL_SECRET_DIR}/.dockerconfigjson --target [images] --target ci-index --config ${suite_dir}/optional-operators.yaml"
 os::test::junit::declare_suite_end

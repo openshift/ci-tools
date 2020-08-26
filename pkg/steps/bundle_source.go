@@ -45,7 +45,7 @@ func (s *bundleSourceStep) run(ctx context.Context) error {
 		return err
 	}
 	build := buildFromSource(
-		s.jobSpec, api.PipelineImageStreamTagReferenceSource, api.BundleSourceName,
+		s.jobSpec, api.PipelineImageStreamTagReferenceSource, api.PipelineImageStreamTagReferenceBundleSource,
 		buildapi.BuildSource{
 			Type:       buildapi.BuildSourceDockerfile,
 			Dockerfile: &dockerfile,
@@ -98,17 +98,19 @@ func (s *bundleSourceStep) Requires() []api.StepLink {
 }
 
 func (s *bundleSourceStep) Creates() []api.StepLink {
-	return []api.StepLink{api.InternalImageLink(api.BundleSourceName)}
+	return []api.StepLink{api.InternalImageLink(api.PipelineImageStreamTagReferenceBundleSource)}
 }
 
 func (s *bundleSourceStep) Provides() api.ParameterMap {
 	return api.ParameterMap{}
 }
 
-func (s *bundleSourceStep) Name() string { return api.BundleSourceName }
+func (s *bundleSourceStep) Name() string {
+	return string(api.PipelineImageStreamTagReferenceBundleSource)
+}
 
 func (s *bundleSourceStep) Description() string {
-	return fmt.Sprintf("Build image %s from the repository", api.BundleSourceName)
+	return fmt.Sprintf("Build image %s from the repository", api.PipelineImageStreamTagReferenceBundleSource)
 }
 
 func BundleSourceStep(config api.BundleSourceStepConfiguration, releaseBuildConfig *api.ReleaseBuildConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, imageClient imageclientset.ImageStreamsGetter, istClient imageclientset.ImageStreamTagsGetter, artifactDir string, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {

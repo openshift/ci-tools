@@ -284,17 +284,17 @@ func validateImages(fieldRoot string, input []ProjectDirectoryImageBuildStepConf
 		if image.To == "" {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: `to` must be set", fieldRootN))
 		}
-		if image.To == BundleSourceName {
-			validationErrors = append(validationErrors, fmt.Errorf("%s: `to` cannot be %s", fieldRootN, BundleSourceName))
+		if image.To == PipelineImageStreamTagReferenceBundleSource {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: `to` cannot be %s", fieldRootN, PipelineImageStreamTagReferenceBundleSource))
 		}
 		if IsBundleImage(string(image.To)) {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: `to` cannot begin with `%s`", fieldRootN, bundlePrefix))
 		}
-		if image.To == IndexImageGeneratorName {
-			validationErrors = append(validationErrors, fmt.Errorf("%s: `to` cannot be %s", fieldRootN, IndexImageGeneratorName))
+		if image.To == PipelineImageStreamTagReferenceIndexImageGenerator {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: `to` cannot be %s", fieldRootN, PipelineImageStreamTagReferenceIndexImageGenerator))
 		}
-		if image.To == IndexImageName {
-			validationErrors = append(validationErrors, fmt.Errorf("%s: `to` cannot be %s", fieldRootN, IndexImageName))
+		if image.To == PipelineImageStreamTagReferenceIndexImage {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: `to` cannot be %s", fieldRootN, PipelineImageStreamTagReferenceIndexImage))
 		}
 	}
 	return validationErrors

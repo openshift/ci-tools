@@ -1243,6 +1243,97 @@ func TestUpdateSecrets(t *testing.T) {
 			},
 		},
 		{
+			name: "basic case with force, unrelated keys are kept",
+			existSecretsOnDefault: []runtime.Object{
+				&coreapi.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "prod-secret-1",
+						Namespace: "namespace-1",
+					},
+					Data: map[string][]byte{
+						"key-name-1": []byte("abc"),
+						"unmanaged":  []byte("data"),
+					},
+				},
+			},
+			secretsMap: map[string][]*coreapi.Secret{
+				"default": {
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "prod-secret-1",
+							Namespace: "namespace-1",
+							Labels:    map[string]string{"ci.openshift.org/auto-managed": "true"},
+						},
+						Data: map[string][]byte{
+							"key-name-1": []byte("value1"),
+							"key-name-2": []byte("value2"),
+							"key-name-3": []byte("attachment-name-1-1-value"),
+							"key-name-4": []byte("value3"),
+							"key-name-5": []byte("attachment-name-2-1-value"),
+							"key-name-6": []byte("attachment-name-3-2-value"),
+							"key-name-7": []byte("yyy"),
+						},
+					},
+				},
+				"build01": {
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "prod-secret-2",
+							Namespace: "namespace-2",
+							Labels:    map[string]string{"ci.openshift.org/auto-managed": "true"},
+						},
+						Data: map[string][]byte{
+							"key-name-1": []byte("value1"),
+							"key-name-2": []byte("value2"),
+							"key-name-3": []byte("attachment-name-1-1-value"),
+							"key-name-4": []byte("value3"),
+							"key-name-5": []byte("attachment-name-2-1-value"),
+							"key-name-6": []byte("attachment-name-3-2-value"),
+							"key-name-7": []byte("yyy"),
+						},
+					},
+				},
+			},
+			force: true,
+			expectedSecretsOnDefault: []coreapi.Secret{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "prod-secret-1",
+						Namespace: "namespace-1",
+						Labels:    map[string]string{"ci.openshift.org/auto-managed": "true"},
+					},
+					Data: map[string][]byte{
+						"key-name-1": []byte("value1"),
+						"key-name-2": []byte("value2"),
+						"key-name-3": []byte("attachment-name-1-1-value"),
+						"key-name-4": []byte("value3"),
+						"key-name-5": []byte("attachment-name-2-1-value"),
+						"key-name-6": []byte("attachment-name-3-2-value"),
+						"key-name-7": []byte("yyy"),
+						"unmanaged":  []byte("data"),
+					},
+				},
+			},
+			expectedSecretsOnBuild01: []coreapi.Secret{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "prod-secret-2",
+						Namespace: "namespace-2",
+						Labels:    map[string]string{"ci.openshift.org/auto-managed": "true"},
+					},
+					Data: map[string][]byte{
+						"key-name-1": []byte("value1"),
+						"key-name-2": []byte("value2"),
+						"key-name-3": []byte("attachment-name-1-1-value"),
+						"key-name-4": []byte("value3"),
+						"key-name-5": []byte("attachment-name-2-1-value"),
+						"key-name-6": []byte("attachment-name-3-2-value"),
+						"key-name-7": []byte("yyy"),
+					},
+				},
+			},
+		},
+		{
 			name: "basic case without force: not semantically equal",
 			existSecretsOnDefault: []runtime.Object{
 				&coreapi.Secret{

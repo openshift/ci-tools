@@ -135,13 +135,13 @@ func (r *reconciler) reconcile(log *logrus.Entry, encodedRequest reconcile.Reque
 
 	var mirrorErrors []error
 	for _, mirrorConfig := range r.config().Secrets {
-		if mirrorConfig.From.Namespace != sourceSecretName.Namespace || mirrorConfig.From.Name != sourceSecretName.Name {
+		if mirrorConfig.From.Namespace != sourceSecretName.Namespace || mirrorConfig.From.Name != sourceSecretName.Name || (mirrorConfig.To.Cluster != nil && *mirrorConfig.To.Cluster != cluster) {
 			continue
 		}
 
 		// TODO: Ideally we would would create one reconcile.Request per target. This here means
 		// that if a single target is broken, it will send all targets into exponential backoff.
-		mirrorErrors = append(mirrorErrors, r.mirrorSecret(log, cluster, client, source, mirrorConfig.To))
+		mirrorErrors = append(mirrorErrors, r.mirrorSecret(log, cluster, client, source, mirrorConfig.To.SecretLocation))
 	}
 
 	return utilerrors.NewAggregate(mirrorErrors)

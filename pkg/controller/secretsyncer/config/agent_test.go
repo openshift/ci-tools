@@ -81,7 +81,7 @@ func TestConfig(t *testing.T) {
 		Secrets: []MirrorConfig{
 			{
 				From: SecretLocation{Namespace: "source-namespace-1", Name: "dev-secret-1"},
-				To:   SecretLocation{Namespace: "target-namespace-2", Name: "prod-secret-1"},
+				To:   SecretLocationWithCluster{SecretLocation: SecretLocation{Namespace: "target-namespace-2", Name: "prod-secret-1"}},
 			},
 		},
 	}
@@ -99,11 +99,11 @@ func TestConfig(t *testing.T) {
 		Secrets: []MirrorConfig{
 			{
 				From: SecretLocation{Namespace: "source-namespace-1", Name: "dev-secret-1"},
-				To:   SecretLocation{Namespace: "target-namespace-2", Name: "prod-secret-1"},
+				To:   SecretLocationWithCluster{SecretLocation: SecretLocation{Namespace: "target-namespace-2", Name: "prod-secret-1"}},
 			},
 			{
 				From: SecretLocation{Namespace: "source-namespace-3", Name: "dev-secret-1"},
-				To:   SecretLocation{Namespace: "target-namespace-4", Name: "prod-secret-1"},
+				To:   SecretLocationWithCluster{SecretLocation: SecretLocation{Namespace: "target-namespace-4", Name: "prod-secret-1"}},
 			},
 		},
 	}

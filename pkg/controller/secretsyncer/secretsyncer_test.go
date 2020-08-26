@@ -11,6 +11,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	utilpointer "k8s.io/utils/pointer"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -19,14 +20,7 @@ import (
 )
 
 func TestMirrorSecret(t *testing.T) {
-	configuration := config.Configuration{
-		Secrets: []config.MirrorConfig{
-			{
-				From: config.SecretLocation{Namespace: "test-ns", Name: "src"},
-				To:   config.SecretLocation{Namespace: "test-ns", Name: "dst"},
-			},
-		},
-	}
+	const cluster = "some-cluster"
 	defaultSecret := corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Namespace: "test-ns", Name: "src"},
 		Data:       map[string][]byte{"test_key": []byte("test_value")},
@@ -36,6 +30,7 @@ func TestMirrorSecret(t *testing.T) {
 		config       config.Configuration
 		src          corev1.Secret
 		targetFilter filter
+		configMutate func(*config.Configuration)
 		expectedData map[string][]byte
 		shouldErr    bool
 	}{
@@ -70,6 +65,17 @@ func TestMirrorSecret(t *testing.T) {
 				"something-else": []byte("some-val"),
 			},
 		},
+		{
+			name:         "Secret with matching cluster is copied",
+			src:          defaultSecret,
+			configMutate: func(c *config.Configuration) { c.Secrets[0].To.Cluster = utilpointer.StringPtr(cluster) },
+			expectedData: map[string][]byte{"test_key": []byte("test_value")},
+		},
+		{
+			name:         "Secret with non-matching cluster is not copied",
+			src:          defaultSecret,
+			configMutate: func(c *config.Configuration) { c.Secrets[0].To.Cluster = utilpointer.StringPtr("something else") },
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.targetFilter == nil {
@@ -79,9 +85,22 @@ func TestMirrorSecret(t *testing.T) {
 			if tc.shouldErr {
 				targetClient.err = errors.New("injected error")
 			}
+			configuration := config.Configuration{
+
+				Secrets: []config.MirrorConfig{
+					{
+						From: config.SecretLocation{Namespace: "test-ns", Name: "src"},
+						To:   config.SecretLocationWithCluster{SecretLocation: config.SecretLocation{Namespace: "test-ns", Name: "dst"}},
+					},
+				},
+			}
+			if tc.configMutate != nil {
+				tc.configMutate(&configuration)
+			}
 			ca := &config.Agent{}
 			ca.Set(&configuration)
-			req := requestForCluster("some-cluster", "test-ns", "src")
+
+			req := requestForCluster(cluster, "test-ns", "src")
 			r := &reconciler{
 				ctx:                    context.Background(),
 				config:                 ca.Config,

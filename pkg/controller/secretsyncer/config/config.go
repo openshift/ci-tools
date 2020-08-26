@@ -21,7 +21,7 @@ type MirrorConfig struct {
 	From SecretLocation `json:"from"`
 
 	// To is the destination of mirrored secret data
-	To SecretLocation `json:"to"`
+	To SecretLocationWithCluster `json:"to"`
 }
 
 func (c *MirrorConfig) validate(parent string) []string {
@@ -32,6 +32,15 @@ func (c *MirrorConfig) validate(parent string) []string {
 
 func (c *MirrorConfig) String() string {
 	return fmt.Sprintf("(%s -> %s)", c.From.String(), c.To.String())
+}
+
+// SecretLocationWithCluster unambiguously identifies a secret on the cluster
+type SecretLocationWithCluster struct {
+	// Cluster optionally specifies the cluster. If unset, the secret
+	// will get copied to all clusters.
+	Cluster *string `json:"cluster"`
+
+	SecretLocation
 }
 
 // SecretLocation unambiguously identifies a secret on the cluster
@@ -72,11 +81,11 @@ func (c *Configuration) Validate() error {
 	nodes, edges := map[SecretLocation]bool{}, map[SecretLocation][]SecretLocation{}
 	for i, mapping := range c.Secrets {
 		nodes[mapping.From] = false
-		nodes[mapping.To] = false
+		nodes[mapping.To.SecretLocation] = false
 		if destinations, exists := edges[mapping.From]; !exists {
-			edges[mapping.From] = []SecretLocation{mapping.To}
+			edges[mapping.From] = []SecretLocation{mapping.To.SecretLocation}
 		} else {
-			edges[mapping.From] = append(destinations, mapping.To)
+			edges[mapping.From] = append(destinations, mapping.To.SecretLocation)
 		}
 		messages = append(messages, mapping.validate(fmt.Sprintf("secrets[%d]", i))...)
 	}

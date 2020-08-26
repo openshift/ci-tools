@@ -18,7 +18,7 @@ func TestValidate(t *testing.T) {
 			config: Configuration{Secrets: []MirrorConfig{
 				{
 					From: SecretLocation{Namespace: "from-ns", Name: "from-name"},
-					To:   SecretLocation{Namespace: "to-ns", Name: "to-name"},
+					To:   SecretLocationWithCluster{SecretLocation: SecretLocation{Namespace: "to-ns", Name: "to-name"}},
 				},
 			}},
 			expectedErr: false,
@@ -28,7 +28,7 @@ func TestValidate(t *testing.T) {
 			config: Configuration{Secrets: []MirrorConfig{
 				{
 					From: SecretLocation{Name: "from-name"},
-					To:   SecretLocation{Namespace: "to-ns", Name: "to-name"},
+					To:   SecretLocationWithCluster{SecretLocation: SecretLocation{Namespace: "to-ns", Name: "to-name"}},
 				},
 			}},
 			expectedErr: true,
@@ -38,7 +38,7 @@ func TestValidate(t *testing.T) {
 			config: Configuration{Secrets: []MirrorConfig{
 				{
 					From: SecretLocation{Namespace: "from-ns"},
-					To:   SecretLocation{Namespace: "to-ns", Name: "to-name"},
+					To:   SecretLocationWithCluster{SecretLocation: SecretLocation{Namespace: "to-ns", Name: "to-name"}},
 				},
 			}},
 			expectedErr: true,
@@ -48,7 +48,7 @@ func TestValidate(t *testing.T) {
 			config: Configuration{Secrets: []MirrorConfig{
 				{
 					From: SecretLocation{Namespace: "from-ns", Name: "from-name"},
-					To:   SecretLocation{Name: "to-name"},
+					To:   SecretLocationWithCluster{SecretLocation: SecretLocation{Name: "to-name"}},
 				},
 			}},
 			expectedErr: true,
@@ -58,7 +58,7 @@ func TestValidate(t *testing.T) {
 			config: Configuration{Secrets: []MirrorConfig{
 				{
 					From: SecretLocation{Namespace: "from-ns", Name: "from-name"},
-					To:   SecretLocation{Namespace: "to-ns"},
+					To:   SecretLocationWithCluster{SecretLocation: SecretLocation{Namespace: "to-ns"}},
 				},
 			}},
 			expectedErr: true,
@@ -68,11 +68,11 @@ func TestValidate(t *testing.T) {
 			config: Configuration{Secrets: []MirrorConfig{
 				{
 					From: SecretLocation{Namespace: "from-ns", Name: "from-name"},
-					To:   SecretLocation{Namespace: "to-ns", Name: "to-name"},
+					To:   SecretLocationWithCluster{SecretLocation: SecretLocation{Namespace: "to-ns", Name: "to-name"}},
 				},
 				{
 					From: SecretLocation{Namespace: "to-ns", Name: "to-name"},
-					To:   SecretLocation{Namespace: "from-ns", Name: "from-name"},
+					To:   SecretLocationWithCluster{SecretLocation: SecretLocation{Namespace: "from-ns", Name: "from-name"}},
 				},
 			}},
 			expectedErr: true,

@@ -147,12 +147,12 @@ func TestFilter(t *testing.T) {
 	}{
 		{
 			name: "forbidden",
-			cfg: secretbootstrap.Config{{
+			cfg: secretbootstrap.Config{Secrets: []secretbootstrap.SecretConfig{{
 				From: map[string]secretbootstrap.BitWardenContext{target.key: {}},
 				To: []secretbootstrap.SecretContext{
 					{Cluster: target.cluster, Namespace: target.namespace, Name: target.name},
 				},
-			}},
+			}}},
 			expectedResult: false,
 		},
 		{

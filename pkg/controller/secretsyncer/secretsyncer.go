@@ -250,7 +250,7 @@ func (s boostrapSecretConfigTarget) String() string {
 
 func filterFromConfig(cfg secretbootstrap.Config) filter {
 	forbidden := sets.String{}
-	for _, cfg := range cfg {
+	for _, cfg := range cfg.Secrets {
 		for _, target := range cfg.To {
 			for from := range cfg.From {
 				forbidden.Insert(boostrapSecretConfigTarget{cluster: target.Cluster, namespace: target.Namespace, name: target.Name, key: from}.String())

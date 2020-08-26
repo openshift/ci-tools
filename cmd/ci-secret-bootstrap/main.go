@@ -120,7 +120,7 @@ func (o *options) completeOptions(secrets *sets.String) error {
 	}
 
 	o.secretsGetters = map[string]coreclientset.SecretsGetter{}
-	for i, secretConfig := range config {
+	for i, secretConfig := range config.Secrets {
 		var to []secretbootstrap.SecretContext
 
 		for j, secretContext := range secretConfig.To {
@@ -146,7 +146,7 @@ func (o *options) completeOptions(secrets *sets.String) error {
 
 		if len(to) > 0 {
 			secretConfig.To = to
-			o.config = append(o.config, secretConfig)
+			o.config.Secrets = append(o.config.Secrets, secretConfig)
 		}
 	}
 
@@ -162,7 +162,7 @@ func (o *options) validateCompletedOptions() error {
 	if o.bwPassword == "" {
 		return fmt.Errorf("--bw-password-file was empty")
 	}
-	if len(o.config) == 0 {
+	if len(o.config.Secrets) == 0 {
 		msg := "no secrets found to sync"
 		if o.cluster != "" {
 			msg = msg + " for --cluster=" + o.cluster
@@ -170,7 +170,7 @@ func (o *options) validateCompletedOptions() error {
 		return fmt.Errorf(msg)
 	}
 	toMap := map[string]map[string]string{}
-	for i, secretConfig := range o.config {
+	for i, secretConfig := range o.config.Secrets {
 		if len(secretConfig.From) == 0 {
 			return fmt.Errorf("config[%d].from is empty", i)
 		}
@@ -222,7 +222,7 @@ func (o *options) validateCompletedOptions() error {
 			} else if toMap[secretContext.Cluster][secretContext.Namespace] != secretContext.Name {
 				toMap[secretContext.Cluster][secretContext.Namespace] = secretContext.Name
 			} else {
-				return fmt.Errorf("config[%d].to[%d]: secret %v listed more than once in the config", i, j, secretContext)
+				return fmt.Errorf("config[%d].to[%d]: secret %s listed more than once in the config", i, j, secretContext)
 			}
 		}
 	}
@@ -235,13 +235,13 @@ func constructSecrets(ctx context.Context, config secretbootstrap.Config, bwClie
 	secretsMapLock := &sync.Mutex{}
 
 	var potentialErrors int
-	for _, item := range config {
+	for _, item := range config.Secrets {
 		potentialErrors = potentialErrors + len(item.From)
 	}
 	errChan := make(chan error, potentialErrors)
 
 	secretConfigWG := &sync.WaitGroup{}
-	for _, cfg := range config {
+	for _, cfg := range config.Secrets {
 		secretConfigWG.Add(1)
 
 		go func(secretConfig secretbootstrap.SecretConfig) {

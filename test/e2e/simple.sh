@@ -7,6 +7,7 @@ function cleanup() {
 }
 trap "cleanup" EXIT
 
+PARENT_JOBSPEC="${JOB_SPEC}"
 suite_dir="${OS_ROOT}/test/e2e/simple"
 workdir="${BASETMPDIR}/e2e/simple"
 mkdir -p "${workdir}"
@@ -53,6 +54,11 @@ unset RELEASE_IMAGE_LATEST
 os::test::junit::declare_suite_end
 
 os::test::junit::declare_suite_start "e2e/simple/optional-operator"
-export JOB_SPEC='{"type":"presubmit","job":"pull-ci-openshift-ci-tools-master-ci-operator-e2e","buildid":"0","prowjobid":"uuid","refs":{"org":"openshift","repo":"ci-tools","base_ref":"master","base_sha":"682d29287394d6990f2d311c85f9c75121a0c191","pulls":[]}}'
+if [[ -z "${PARENT_JOBSPEC:-}" ]]; then
+  os::log::fatal "\$JOB_SPEC must be set for this test"
+fi
+JOB_SPEC=$(NEW_UUID=$(uuidgen); echo "${PARENT_JOBSPEC}" | jq --arg uuid "${NEW_UUID}" '.prowjobid = $uuid')
+export JOB_SPEC
+echo "${JOB_SPEC}"
 os::cmd::expect_success "ci-operator --image-import-pull-secret ${PULL_SECRET_DIR}/.dockerconfigjson --target [images] --target ci-index --config ${suite_dir}/optional-operators.yaml"
 os::test::junit::declare_suite_end

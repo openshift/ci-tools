@@ -170,6 +170,12 @@ func TestReconcile(t *testing.T) {
 		},
 	}
 
+	imageStreamTagWithBuild01PullSpec := func() *imagev1.ImageStreamTag {
+		copy := referenceImageStreamTag.DeepCopy()
+		copy.Image.DockerImageReference = "registry.build01.ci.openshift.org/ci-op-hbtwhrrm/pipeline@sha256:328d0a90295ef5f5932807bcab8f230007afeb1572d1d7878ab8bdae671dfa8b"
+		return copy
+	}
+
 	outdatedImageStreamTag := func() *imagev1.ImageStreamTag {
 		copy := referenceImageStreamTag.DeepCopy()
 		copy.Image.Name = "old"
@@ -377,6 +383,28 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
+			name: "ImageStreamTag with build01 reference, no import is created",
+			request: types.NamespacedName{
+				Namespace: "01_" + referenceImageStreamTag.Namespace,
+				Name:      referenceImageStreamTag.Name,
+			},
+			registryClient:      fakeclient.NewFakeClient(imageStreamTagWithBuild01PullSpec()),
+			buildClusterClients: map[string]ctrlruntimeclient.Client{"01": fakeclient.NewFakeClient()},
+			verify: func(rc ctrlruntimeclient.Client, bc map[string]ctrlruntimeclient.Client, err error) error {
+				if err != nil {
+					return fmt.Errorf("unexpected error: %w", err)
+				}
+				name := types.NamespacedName{
+					Namespace: referenceImageStreamTag.Namespace,
+					Name:      referenceImageStreamTag.Name,
+				}
+				if err := bc["01"].Get(ctx, name, &imagev1.ImageStreamImport{}); !apierrors.IsNotFound(err) {
+					return fmt.Errorf("expected to get not found err, but got %v", err)
+				}
+				return nil
+			},
+		},
+		{
 			name: "ImageStreamTag is current, no import created",
 			request: types.NamespacedName{
 				Namespace: "01_" + referenceImageStreamTag.Namespace,
@@ -553,6 +581,10 @@ func TestReconcile(t *testing.T) {
 				failedImportsCounter: prometheus.NewCounterVec(
 					prometheus.CounterOpts{},
 					[]string{"cluster", "ns"},
+				),
+				forbiddenRegistries: sets.NewString("default-route-openshift-image-registry.apps.build01.ci.devcluster.openshift.com",
+					"registry.build01.ci.openshift.org",
+					"registry.build02.ci.openshift.org",
 				),
 			}
 

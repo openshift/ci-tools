@@ -45,6 +45,7 @@ func AddToManager(mgr manager.Manager,
 	additionalImageStreamTags sets.String,
 	additionalImageStreams sets.String,
 	additionalImageStreamNamespaces sets.String,
+	forbiddenRegistries sets.String,
 ) error {
 	log := logrus.WithField("controller", ControllerName)
 
@@ -73,6 +74,7 @@ func AddToManager(mgr manager.Manager,
 		pullSecretGetter:         pullSecretGetter,
 		successfulImportsCounter: successfulImportsCounter,
 		failedImportsCounter:     failedImportsCounter,
+		forbiddenRegistries:      forbiddenRegistries,
 	}
 	c, err := controller.New(ControllerName, mgr, controller.Options{
 		Reconciler: r,
@@ -179,6 +181,7 @@ type reconciler struct {
 	pullSecretGetter         func() []byte
 	successfulImportsCounter *prometheus.CounterVec
 	failedImportsCounter     *prometheus.CounterVec
+	forbiddenRegistries      sets.String
 }
 
 func (r *reconciler) Reconcile(req reconcile.Request) (reconcile.Result, error) {
@@ -215,6 +218,12 @@ func (r *reconciler) reconcile(req reconcile.Request, log *logrus.Entry) error {
 			return nil
 		}
 		return fmt.Errorf("failed to get imageStreamTag %s from registry cluster: %w", decoded.String(), err)
+	}
+
+	*log = *log.WithField("docker_image_reference", sourceImageStreamTag.Image.DockerImageReference)
+	if isImportForbidden(sourceImageStreamTag.Image.DockerImageReference, r.forbiddenRegistries) {
+		log.Debugf("Import from any cluster in %s is forbidden, ignoring", r.forbiddenRegistries)
+		return nil
 	}
 
 	if err := client.Get(r.ctx, types.NamespacedName{Name: decoded.Namespace}, &corev1.Namespace{}); err != nil {
@@ -547,4 +556,13 @@ func upsertObject(ctx context.Context, c ctrlruntimeclient.Client, obj crcontrol
 		log.Info("Upsert succeeded")
 	}
 	return err
+}
+
+func isImportForbidden(pullSpec string, forbiddenRegistries sets.String) bool {
+	for _, reg := range forbiddenRegistries.List() {
+		if strings.HasPrefix(pullSpec, reg) {
+			return true
+		}
+	}
+	return false
 }

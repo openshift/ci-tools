@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
 	"k8s.io/test-infra/prow/flagutil"
@@ -14,6 +15,14 @@ const (
 	okd40Imagestream      = "origin-v4.0"
 	ocpPromotionNamespace = "ocp"
 )
+
+// PromotesImagesInto determines if a configuration will result in images being promoted.
+func PromotesImagesInto(configSpec *cioperatorapi.ReleaseBuildConfiguration, promotionNamespace string) bool {
+	if promotionNamespace == "" {
+		return false
+	}
+	return !isDisabled(configSpec) && promotionNamespace == extractPromotionNamespace(configSpec)
+}
 
 // PromotesOfficialImages determines if a configuration will result in official images
 // being promoted. This is a proxy for determining if a configuration contributes to
@@ -108,7 +117,8 @@ func (o *FutureOptions) Bind(fs *flag.FlagSet) {
 type Options struct {
 	config.ConfirmableOptions
 
-	CurrentRelease string
+	CurrentRelease            string
+	CurrentPromotionNamespace string
 }
 
 func (o *Options) Validate() error {
@@ -121,11 +131,18 @@ func (o *Options) Validate() error {
 
 func (o *Options) Bind(fs *flag.FlagSet) {
 	fs.StringVar(&o.CurrentRelease, "current-release", "", "Configurations targeting this release will get branched.")
+	fs.StringVar(&o.CurrentPromotionNamespace, "current-promotion-namespace", "", "The promotion namespace of the current release.")
 	o.ConfirmableOptions.Bind(fs)
 }
 
 func (o *Options) matches(configuration *cioperatorapi.ReleaseBuildConfiguration) bool {
-	return PromotesOfficialImages(configuration) && configuration.PromotionConfiguration.Name == o.CurrentRelease
+	var imagesMatch bool
+	if o.CurrentPromotionNamespace == "" {
+		imagesMatch = PromotesOfficialImages(configuration)
+	} else {
+		imagesMatch = PromotesImagesInto(configuration, o.CurrentPromotionNamespace)
+	}
+	return imagesMatch && configuration.PromotionConfiguration.Name == o.CurrentRelease
 }
 
 // OperateOnCIOperatorConfigDir filters the full set of configurations

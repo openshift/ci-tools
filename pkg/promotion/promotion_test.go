@@ -2,14 +2,14 @@ package promotion
 
 import (
 	"flag"
-	"github.com/google/go-cmp/cmp"
 	"reflect"
 	"testing"
 
-	"k8s.io/test-infra/prow/flagutil"
+	"github.com/google/go-cmp/cmp"
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
+	"k8s.io/test-infra/prow/flagutil"
 )
 
 func TestPromotesOfficialImages(t *testing.T) {
@@ -157,6 +157,7 @@ func TestOptions_Bind(t *testing.T) {
 				"--log-level=debug",
 				"--confirm",
 				"--current-release=one",
+				"--current-promotion-namespace=promotionns",
 			},
 			expected: Options{
 				ConfirmableOptions: config.ConfirmableOptions{
@@ -167,7 +168,8 @@ func TestOptions_Bind(t *testing.T) {
 						LogLevel:  "debug",
 					},
 					Confirm: true},
-				CurrentRelease: "one",
+				CurrentRelease:            "one",
+				CurrentPromotionNamespace: "promotionns",
 			},
 		},
 	}
@@ -203,6 +205,7 @@ func TestFutureOptions(t *testing.T) {
 				"--log-level=debug",
 				"--confirm",
 				"--current-release=one",
+				"--current-promotion-namespace=promotionns",
 				"--future-release=two",
 			},
 			expected: FutureOptions{
@@ -215,7 +218,8 @@ func TestFutureOptions(t *testing.T) {
 							LogLevel:  "debug",
 						},
 						Confirm: true},
-					CurrentRelease: "one",
+					CurrentRelease:            "one",
+					CurrentPromotionNamespace: "promotionns",
 				},
 				FutureReleases: flagutil.Strings{},
 			},
@@ -273,5 +277,80 @@ func TestFutureOptions(t *testing.T) {
 				t.Errorf("%s: got incorrect options: %s", testCase.name, cmp.Diff(expected, actual, cmp.AllowUnexported(flagutil.Strings{})))
 			}
 		})
+	}
+}
+
+func TestOptionsMatche(t *testing.T) {
+	var testCases = []struct {
+		name       string
+		input      []string
+		configSpec *cioperatorapi.ReleaseBuildConfiguration
+		expected   bool
+	}{
+		{
+			name: "promotion is disabled",
+			input: []string{
+				"--current-release=4.6",
+			},
+			configSpec: &cioperatorapi.ReleaseBuildConfiguration{
+				PromotionConfiguration: &cioperatorapi.PromotionConfiguration{
+					Disabled:  true,
+					Name:      "4.6",
+					Namespace: "ocp",
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "with default promotion namespace",
+			input: []string{
+				"--current-release=one",
+			},
+			configSpec: &cioperatorapi.ReleaseBuildConfiguration{
+				PromotionConfiguration: &cioperatorapi.PromotionConfiguration{
+					Name:      "one",
+					Namespace: "ocp",
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "for okd4.0",
+			input: []string{
+				"--current-release=origin-v4.0",
+			},
+			configSpec: &cioperatorapi.ReleaseBuildConfiguration{
+				PromotionConfiguration: &cioperatorapi.PromotionConfiguration{
+					Name:      "origin-v4.0",
+					Namespace: "openshift",
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "with user defined promotion namespace",
+			input: []string{
+				"--current-release=one",
+				"--current-promotion-namespace=promotionns",
+			},
+			configSpec: &cioperatorapi.ReleaseBuildConfiguration{
+				PromotionConfiguration: &cioperatorapi.PromotionConfiguration{
+					Name:      "one",
+					Namespace: "promotionns",
+				},
+			},
+			expected: true,
+		},
+	}
+	for _, testCase := range testCases {
+		var o Options
+		fs := flag.NewFlagSet(testCase.name, flag.PanicOnError)
+		o.Bind(fs)
+		if err := fs.Parse(testCase.input); err != nil {
+			t.Fatalf("%s: cannot parse args: %v", testCase.name, err)
+		}
+		if actual, expected := o.matches(testCase.configSpec), testCase.expected; actual != expected {
+			t.Errorf("expected matches, but failed, input_args=%v, promation_config=%v.", testCase.input, testCase.configSpec)
+		}
 	}
 }

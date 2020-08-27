@@ -175,6 +175,10 @@ func (config *ReleaseBuildConfiguration) validateTestStepDependencies() []error 
 						if config.RpmBuildCommands == "" {
 							errs = append(errs, validationError("this dependency requires built RPMs, which are not configured"))
 						}
+					case string(PipelineImageStreamTagReferenceIndexImage):
+						if config.Operator == nil {
+							errs = append(errs, validationError("this dependency requires an operator bundle configuration, which is not configured"))
+						}
 					default:
 						// this could be a base image, or a project image
 						if !config.IsBaseImage(name) && !config.BuildsImage(name) {

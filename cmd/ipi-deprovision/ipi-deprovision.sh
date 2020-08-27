@@ -52,8 +52,11 @@ EOF
   echo "will deprovision GCE cluster ${infraID} in region ${region}"
 done
 
+failed=""
 for workdir in $( find /tmp/deprovision -mindepth 1 -type d | shuf ); do
-  timeout --signal=SIGQUIT 30m openshift-install --dir "${workdir}" --log-level debug destroy cluster
+  if ! timeout --signal=SIGQUIT 30m openshift-install --dir "${workdir}" --log-level debug destroy cluster; then
+    failed+=",$( basename "${workdir}" )"
+  fi
 done
 
 gcs_bucket_age_cutoff="$(TZ="GMT" date --date="${CLUSTER_TTL}-4 hours" '+%a, %d %b %Y %H:%M:%S GMT')"
@@ -70,4 +73,9 @@ if [[ "${#buckets[@]}" -gt 0 ]]; then
   timeout 30m gsutil -m rm -r "${buckets[@]}"
 fi
 
-echo "Deprovision finished successfully"
+if [[ -n "${failed}" ]]; then
+  echo "Deprovision failed on the following clusters: ${failed:1}"
+  exit 1
+else
+  echo "Deprovision finished successfully"
+fi

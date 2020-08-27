@@ -127,6 +127,7 @@ func TestLoginAndListItems(t *testing.T) {
 							FileName: "secret.auto.vars",
 						},
 					},
+					Notes: "important notes",
 				},
 			},
 		},

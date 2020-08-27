@@ -22,9 +22,10 @@ type Login struct {
 // Item represents an item in BitWarden
 // It has only fields we are interested in
 type Item struct {
-	ID   string `json:"id,omitempty"`
-	Name string `json:"name"`
-	Type int    `json:"type"`
+	ID    string `json:"id,omitempty"`
+	Name  string `json:"name"`
+	Type  int    `json:"type"`
+	Notes string `json:"notes,omitempty"`
 	//Login does NOT exist on some BitWarden entries, e.g, secure notes.
 	Login       *Login       `json:"login,omitempty"`
 	Fields      []Field      `json:"fields"`
@@ -40,6 +41,7 @@ type Client interface {
 	SetFieldOnItem(itemName, fieldName string, fieldValue []byte) error
 	SetAttachmentOnItem(itemName, attachmentName string, fileContents []byte) error
 	SetPassword(itemName string, password []byte) error
+	UpdateNotesOnItem(itemName string, notes string) error
 }
 
 // NewClient generates a BitWarden client

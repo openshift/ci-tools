@@ -498,6 +498,28 @@ either:
   </li>
 </ul>
 
+<h4 id="buildroot"><a href="#buildroot">Build Root Image</a></h4>
+<p>
+The build root image must contain all dependencies for building executables and
+non-image artifacts. Additionally, <code>ci-operator</code> requires this image
+to include a <code>git</code> executable in <code>$PATH</code>. Most repositories
+will want to use an image already present in the cluster, using the <code>image_stream_tag</code>
+stanza like described in <a href="#inputs">Configuring Inputs</a>.
+</p>
+
+<p>
+Alternatively, a project can be configured to build a build root image using
+a <code>Dockerfile</code> in the repository:
+</p>
+
+{{ yamlSyntax (index . "ciOperatorProjectImageBuildroot") }}
+
+<p>
+In this case, the <code>Dockerfile</code> will <b>always</b> be obtained from
+current <code>HEAD</code> of the given branch, even if ci-operator runs in the
+context of a PR that updates that <code>Dockerfile</code>.
+</p>
+
 <h4 id="artifacts"><a href="#artifacts">Building Artifacts</a></h4>
 
 <p>
@@ -511,7 +533,7 @@ can be configured for building artifacts to support test execution. The followin
 <code>ImageStreamTags</code> are created in the test's <code>Namespace</code>:
 </p>
 <ul>
-  <li><code>pipeline:root</code>: imports the <code>build_root</code></li>
+  <li><code>pipeline:root</code>: imports or builds the <code>build_root</code> image</li>
   <li><code>pipeline:src</code>: clones the code under test <code>FROM pipeline:root</code></li>
   <li><code>pipeline:bin</code>: runs commands in the cloned repository to build artifacts <code>FROM pipeline:src</code></li>
   <li><code>pipeline:test-bin</code>: runs a separate set of commands in the cloned repository to build test artifacts <code>FROM pipeline:src</code></li>
@@ -955,6 +977,11 @@ const ciOperatorPeriodicTestConfig = `tests:
   container:
     from: "src"              # runs the commands in "pipeline:src"
   cron: "0 */6 * * *"        # schedule a run on the hour, every six hours
+`
+
+const ciOperatorProjectImageBuildroot = `build_root:
+  project_image:
+    dockerfile_path: images/build-root/Dockerfile # Dockerfile for building the build root image
 `
 
 const gettingStartedPage = `
@@ -2256,6 +2283,7 @@ func helpHandler(subPath string, w http.ResponseWriter, _ *http.Request) {
 		data["ciOperatorReleaseConfig"] = ciOperatorReleaseConfig
 		data["ciOperatorContainerTestConfig"] = ciOperatorContainerTestConfig
 		data["ciOperatorPeriodicTestConfig"] = ciOperatorPeriodicTestConfig
+		data["ciOperatorProjectImageBuildroot"] = ciOperatorProjectImageBuildroot
 		data["ciOperatorContainerTestWithDependenciesConfig"] = ciOperatorContainerTestWithDependenciesConfig
 		data["depsPropagation"] = depsPropagation
 	case "/leases":

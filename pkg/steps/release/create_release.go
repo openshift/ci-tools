@@ -203,7 +203,7 @@ func (s *assembleReleaseStep) run(ctx context.Context) error {
 		ServiceAccountName: "ci-operator",
 		ArtifactDir:        "/tmp/artifacts",
 		Commands: fmt.Sprintf(`
-set -euo pipefail
+set -xeuo pipefail
 export HOME=/tmp
 oc registry login
 oc adm release new --max-per-registry=32 -n %q --from-image-stream %q --to-image-base %q --to-image %q --name %q

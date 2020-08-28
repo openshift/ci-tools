@@ -1643,17 +1643,23 @@ func TestReleaseBuildConfiguration_validateTestStepDependencies(t *testing.T) {
 				},
 				BinaryBuildCommands: "whoa",
 				Images:              []ProjectDirectoryImageBuildStepConfiguration{{To: "image"}},
+				Operator: &OperatorStepConfiguration{
+					Bundles: []Bundle{{
+						DockerfilePath: "bundle.Dockerfile",
+						ContextDir:     "manifests",
+					}},
+				},
 				Tests: []TestStepConfiguration{
 					{MultiStageTestConfiguration: &MultiStageTestConfiguration{
 						Pre: []TestStep{
-							{LiteralTestStep: &LiteralTestStep{Dependencies: []StepDependency{{Name: "src"}, {Name: "bin"}, {Name: "installer"}}}},
+							{LiteralTestStep: &LiteralTestStep{Dependencies: []StepDependency{{Name: "src"}, {Name: "bin"}, {Name: "installer"}, {Name: "pipeline:ci-index"}}}},
 							{LiteralTestStep: &LiteralTestStep{Dependencies: []StepDependency{{Name: "stable:installer"}, {Name: "stable-initial:installer"}}}},
 						},
 						Test: []TestStep{{LiteralTestStep: &LiteralTestStep{Dependencies: []StepDependency{{Name: "pipeline:bin"}}}}},
 						Post: []TestStep{{LiteralTestStep: &LiteralTestStep{Dependencies: []StepDependency{{Name: "image"}}}}},
 					}},
 					{MultiStageTestConfigurationLiteral: &MultiStageTestConfigurationLiteral{
-						Pre:  []LiteralTestStep{{Dependencies: []StepDependency{{Name: "stable-custom:cli"}}}},
+						Pre:  []LiteralTestStep{{Dependencies: []StepDependency{{Name: "stable-custom:cli"}, {Name: "ci-index"}}}},
 						Test: []LiteralTestStep{{Dependencies: []StepDependency{{Name: "release:custom"}, {Name: "release:initial"}}}},
 						Post: []LiteralTestStep{{Dependencies: []StepDependency{{Name: "pipeline:image"}}}},
 					}},
@@ -1676,7 +1682,7 @@ func TestReleaseBuildConfiguration_validateTestStepDependencies(t *testing.T) {
 						Post: []TestStep{{LiteralTestStep: &LiteralTestStep{Dependencies: []StepDependency{{Name: "pipeline:image"}}}}},
 					}},
 					{MultiStageTestConfigurationLiteral: &MultiStageTestConfigurationLiteral{
-						Pre:  []LiteralTestStep{{Dependencies: []StepDependency{{Name: "release:custom"}}}},
+						Pre:  []LiteralTestStep{{Dependencies: []StepDependency{{Name: "release:custom"}, {Name: "pipeline:ci-index"}}}},
 						Test: []LiteralTestStep{{Dependencies: []StepDependency{{Name: "pipeline:root"}}}},
 						Post: []LiteralTestStep{{Dependencies: []StepDependency{{Name: "pipeline:rpms"}}}},
 					}},
@@ -1691,6 +1697,7 @@ func TestReleaseBuildConfiguration_validateTestStepDependencies(t *testing.T) {
 				errors.New(`tests[0].steps.test[1].dependencies[0]: cannot determine source for dependency "pipeline:test-bin" - this dependency requires built test binaries, which are not configured`),
 				errors.New(`tests[0].steps.post[0].dependencies[0]: cannot determine source for dependency "pipeline:image" - no base image import or project image build is configured to provide this dependency`),
 				errors.New(`tests[1].literal_steps.pre[0].dependencies[0]: cannot determine source for dependency "release:custom" - this dependency requires a "custom" release, which is not configured`),
+				errors.New(`tests[1].literal_steps.pre[0].dependencies[1]: cannot determine source for dependency "pipeline:ci-index" - this dependency requires an operator bundle configuration, which is not configured`),
 				errors.New(`tests[1].literal_steps.test[0].dependencies[0]: cannot determine source for dependency "pipeline:root" - this dependency requires a build root, which is not configured`),
 				errors.New(`tests[1].literal_steps.post[0].dependencies[0]: cannot determine source for dependency "pipeline:rpms" - this dependency requires built RPMs, which are not configured`),
 			},

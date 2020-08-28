@@ -1391,7 +1391,10 @@ resolved, tests that do not satisfy this requirement will generate a validation
 failure.
 </p>
 
+Step definition:
 {{ yamlSyntax (index . "paramsRequired") }}
+
+<code>ci-operator</code> configuration:
 {{ yamlSyntax (index . "paramsRequiredTest") }}
 `
 
@@ -1528,18 +1531,20 @@ const paramsRequired = `ref:
 const paramsRequiredTest = `tests:
 - as: valid
   steps:
-  - ref: some-ref
-  env:
-    REQUIRED_VARIABLE: value
+    env:
+      REQUIRED_VARIABLE: value
+    test:
+    - some-ref
 - as: invalid
   steps:
-  - ref: some-ref
+    test:
+    - some-ref
 `
 
 const addingComponentPage = `
 <h2>Adding and Changing Step Registry Content</h2>
 
-<h3 id="adding-content"><a href="#adding-contnet">Adding Content</a></h3>
+<h3 id="adding-content"><a href="#adding-content">Adding Content</a></h3>
 <p>
 Adding a new component (step, chain, or workflow) to the registry is
 quite simple. Descriptions of each of the components as well as the naming
@@ -1563,7 +1568,7 @@ If a new test is added that uses the new component as well,
 <code>pj-rehearse</code> will test the new job with the new component.
 </p>
 
-<h3 id="changing-content"><a href="#changing-contnet">Changing Content</a></h3>
+<h3 id="changing-content"><a href="#changing-content">Changing Content</a></h3>
 <p>
 To change registry content, make the changes in
 <code>openshift/release</code> and open a new PR. Prow will run all of the

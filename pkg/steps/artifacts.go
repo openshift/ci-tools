@@ -19,7 +19,6 @@ import (
 
 	coreapi "k8s.io/api/core/v1"
 
-	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -476,19 +475,10 @@ func (w *ArtifactWorker) downloadArtifacts(podName string, hasArtifacts bool) er
 	defer func() {
 		// signal to artifacts container to gracefully shut down
 		err := removeFile(w.podClient, w.namespace, podName, "artifacts", []string{"/tmp/done"})
-		if err == nil {
+		if err == nil || strings.Contains(err.Error(), `unable to upgrade connection: container not found ("artifacts")`) {
 			return
 		}
-		log.Printf("error: unable to signal to artifacts container to terminate in pod %s, triggering deletion: %v", podName, err)
-
-		// attempt to delete the pod
-		err = w.podClient.Pods(w.namespace).Delete(context.TODO(), podName, meta.DeleteOptions{})
-		if err == nil || errors.IsNotFound(err) {
-			return
-		}
-		log.Printf("error: unable to retrieve artifacts from pod %s and the pod could not be deleted: %v", podName, err)
-
-		// give up, expect another process to clean up the pods
+		log.Printf("error: unable to signal to artifacts container to terminate in pod %s, %v", podName, err)
 	}()
 
 	if err := waitForContainer(w.podClient, w.namespace, podName, "artifacts"); err != nil {

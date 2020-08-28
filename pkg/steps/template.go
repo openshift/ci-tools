@@ -3,6 +3,7 @@ package steps
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -553,8 +554,10 @@ func waitForPodCompletionOrTimeout(ctx context.Context, podClient coreclientset.
 				continue
 			}
 			if pod.Status.Phase != coreapi.PodRunning && time.Since(pod.CreationTimestamp.Time) > 30*time.Minute {
+				message := fmt.Sprintf("pod didn't start running within 30 minutes: %s", getReasonsForUnreadyContainers(pod))
+				log.Print(message)
 				notifier.Complete(name)
-				return false, fmt.Errorf("pod didn't start running within 30 minutes: %s", getReasonsForUnreadyContainers(pod))
+				return false, errors.New(message)
 			}
 		case event, ok := <-watcher.ResultChan():
 			if !ok {

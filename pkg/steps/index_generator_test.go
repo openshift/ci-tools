@@ -38,7 +38,7 @@ func TestIndexGenDockerfile(t *testing.T) {
 	var expectedDockerfileSingleBundle = `FROM quay.io/operator-framework/upstream-opm-builder AS builder
 COPY .dockerconfigjson .
 RUN mkdir $HOME/.docker && mv .dockerconfigjson $HOME/.docker/config.json
-RUN ["opm", "index", "add", "--bundles", "some-reg/target-namespace/pipeline@ci-bundle0", "--out-dockerfile", "index.Dockerfile", "--generate"]
+RUN ["opm", "index", "add", "--mode", "semver", "--bundles", "some-reg/target-namespace/pipeline@ci-bundle0", "--out-dockerfile", "index.Dockerfile", "--generate"]
 FROM pipeline:src
 WORKDIR /index-data
 COPY --from=builder index.Dockerfile index.Dockerfile
@@ -62,7 +62,7 @@ COPY --from=builder /database/ database`
 	var expectedDockerfileMultiBundle = `FROM quay.io/operator-framework/upstream-opm-builder AS builder
 COPY .dockerconfigjson .
 RUN mkdir $HOME/.docker && mv .dockerconfigjson $HOME/.docker/config.json
-RUN ["opm", "index", "add", "--bundles", "some-reg/target-namespace/pipeline@ci-bundle0,some-reg/target-namespace/pipeline@ci-bundle1", "--out-dockerfile", "index.Dockerfile", "--generate"]
+RUN ["opm", "index", "add", "--mode", "semver", "--bundles", "some-reg/target-namespace/pipeline@ci-bundle0,some-reg/target-namespace/pipeline@ci-bundle1", "--out-dockerfile", "index.Dockerfile", "--generate"]
 FROM pipeline:src
 WORKDIR /index-data
 COPY --from=builder index.Dockerfile index.Dockerfile

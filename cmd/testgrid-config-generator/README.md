@@ -38,7 +38,7 @@ Now run testgrid-config-generator.
 
 Assuming you have all your repos rooted at the same toplevel dir, you can run the following command from the `github.com/openshift/ci-tools/cmd/testgrid-config-generator` directory, otherwise you will need to specify the correct paths to the repos/subdirs:
 ```console
-$ ./testgrid-config-generator -testgrid-config ../../../../kubernetes/test-infra/config/testgrids/openshift -release-config ../../../release/core-services/release-controller/_releases -prow-jobs-dir ../../../release/ci-operator/jobs
+$ ./testgrid-config-generator -testgrid-config ../../../../kubernetes/test-infra/config/testgrids/openshift -release-config ../../../release/core-services/release-controller/_releases -prow-jobs-dir ../../../release/ci-operator/jobs -allow-list=../../../release/core-services/testgrid-config-generator/_allow-list.yaml
 ````
 Verify that changes were made by checking your local `test-infra` repo. For example:
 ```console

@@ -28,6 +28,7 @@ type options struct {
 	releaseConfigDir  string
 	testGridConfigDir string
 	prowJobConfigDir  string
+	jobsAllowListFile string
 }
 
 func (o *options) Validate() error {
@@ -40,6 +41,7 @@ func (o *options) Validate() error {
 	if o.testGridConfigDir == "" {
 		return errors.New("--testgrid-config is required")
 	}
+
 	return nil
 }
 
@@ -49,6 +51,7 @@ func gatherOptions() options {
 	fs.StringVar(&o.prowJobConfigDir, "prow-jobs-dir", "", "Path to a root of directory structure with Prow job config files (ci-operator/jobs in openshift/release)")
 	fs.StringVar(&o.releaseConfigDir, "release-config", "", "Path to Release Controller configuration directory.")
 	fs.StringVar(&o.testGridConfigDir, "testgrid-config", "", "Path to TestGrid configuration directory.")
+	fs.StringVar(&o.jobsAllowListFile, "allow-list", "", "Path to file containing jobs to be overridden to informing jobs")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("could not parse input")
 	}
@@ -145,6 +148,21 @@ func (d *dashboard) add(name string, description string, daysOfResults int32) {
 	d.testGroups = append(d.testGroups, testGroupFor(name, daysOfResults))
 }
 
+func getAllowList(data []byte) (map[string]string, error) {
+	var allowList map[string]string
+	if err := yaml.Unmarshal(data, &allowList); err != nil {
+		return nil, fmt.Errorf("could not unmarshal allow-list: %w", err)
+	}
+	// Validate that there is no entry in the allow-list marked as blocking
+	// since blocking jobs must be in the release controller configuration
+	for jobName, releaseType := range allowList {
+		if releaseType == "blocking" {
+			return nil, fmt.Errorf("release_type \"blocking\" not permitted in the allow-list for %s, blocking jobs must be in the release controller configuration", jobName)
+		}
+	}
+	return allowList, nil
+}
+
 // release is a subset of fields from the release controller's config
 type release struct {
 	Name   string
@@ -223,12 +241,29 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatalf("Failed to load Prow jobs %s", o.prowJobConfigDir)
 	}
+
+	// read the list of jobs from the allow list along with its release-type
+	var allowList map[string]string
+	if o.jobsAllowListFile != "" {
+		data, err := ioutil.ReadFile(o.jobsAllowListFile)
+		if err != nil {
+			logrus.WithError(err).Fatalf("could not read allow-list at %s", o.jobsAllowListFile)
+		}
+		allowList, err = getAllowList(data)
+		if err != nil {
+			logrus.WithError(err).Fatalf("failed to build allow-list dictionary")
+		}
+	}
 	for _, p := range jobConfig.Periodics {
 		name := p.Name
 		calculateDays := len(p.Cron) > 0 || len(p.Interval) > 0
-
 		var dashboardType string
-		switch label := p.Labels["ci.openshift.io/release-type"]; label {
+		var label string
+		var exists bool
+		if label, exists = allowList[name]; !exists {
+			label = p.Labels["ci.openshift.io/release-type"]
+		}
+		switch label {
 		case "informing", "blocking", "broken", "generic-informing":
 			dashboardType = label
 			if label == "informing" && configuredJobs[p.Name] == "blocking" {

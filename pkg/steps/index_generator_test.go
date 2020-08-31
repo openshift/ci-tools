@@ -4,9 +4,10 @@ import (
 	"testing"
 
 	apiimagev1 "github.com/openshift/api/image/v1"
-	"github.com/openshift/ci-tools/pkg/api"
 	fakeimageclientset "github.com/openshift/client-go/image/clientset/versioned/fake"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/openshift/ci-tools/pkg/api"
 )
 
 func TestIndexGenDockerfile(t *testing.T) {

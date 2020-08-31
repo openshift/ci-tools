@@ -6,11 +6,12 @@ import (
 	"strings"
 
 	buildapi "github.com/openshift/api/build/v1"
+	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
+	coreapi "k8s.io/api/core/v1"
+
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
-	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
-	coreapi "k8s.io/api/core/v1"
 )
 
 type indexGeneratorStep struct {
@@ -92,7 +93,7 @@ func (s *indexGeneratorStep) indexGenDockerfile() (string, error) {
 		}
 		bundles = append(bundles, fullSpec)
 	}
-	dockerCommands = append(dockerCommands, fmt.Sprintf(`RUN ["opm", "index", "add", "--bundles", "%s", "--out-dockerfile", "%s", "--generate"]`, strings.Join(bundles, ","), IndexDockerfileName))
+	dockerCommands = append(dockerCommands, fmt.Sprintf(`RUN ["opm", "index", "add", "--mode", "semver", "--bundles", "%s", "--out-dockerfile", "%s", "--generate"]`, strings.Join(bundles, ","), IndexDockerfileName))
 	dockerCommands = append(dockerCommands, fmt.Sprintf("FROM %s:%s", api.PipelineImageStream, api.PipelineImageStreamTagReferenceSource))
 	dockerCommands = append(dockerCommands, fmt.Sprintf("WORKDIR %s", IndexDataDirectory))
 	dockerCommands = append(dockerCommands, fmt.Sprintf("COPY --from=builder %s %s", IndexDockerfileName, IndexDockerfileName))

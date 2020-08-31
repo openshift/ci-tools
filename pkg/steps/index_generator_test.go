@@ -3,10 +3,12 @@ package steps
 import (
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	apiimagev1 "github.com/openshift/api/image/v1"
-	"github.com/openshift/ci-tools/pkg/api"
 	fakeimageclientset "github.com/openshift/client-go/image/clientset/versioned/fake"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/openshift/ci-tools/pkg/api"
 )
 
 func TestIndexGenDockerfile(t *testing.T) {
@@ -37,7 +39,7 @@ func TestIndexGenDockerfile(t *testing.T) {
 	var expectedDockerfileSingleBundle = `FROM quay.io/operator-framework/upstream-opm-builder AS builder
 COPY .dockerconfigjson .
 RUN mkdir $HOME/.docker && mv .dockerconfigjson $HOME/.docker/config.json
-RUN ["opm", "index", "add", "--bundles", "some-reg/target-namespace/pipeline@ci-bundle0", "--out-dockerfile", "index.Dockerfile", "--generate"]
+RUN ["opm", "index", "add", "--mode", "semver", "--bundles", "some-reg/target-namespace/pipeline@ci-bundle0", "--out-dockerfile", "index.Dockerfile", "--generate"]
 FROM pipeline:src
 WORKDIR /index-data
 COPY --from=builder index.Dockerfile index.Dockerfile
@@ -55,13 +57,13 @@ COPY --from=builder /database/ database`
 		t.Fatalf("Unexpected error: %v", err)
 	}
 	if expectedDockerfileSingleBundle != generatedDockerfile {
-		t.Errorf("Generated opm index dockerfile does not equal expected; generated dockerfile: %s", generatedDockerfile)
+		t.Errorf("Generated opm index dockerfile does not equal expected:\n%s", cmp.Diff(expectedDockerfileSingleBundle, generatedDockerfile))
 	}
 
 	var expectedDockerfileMultiBundle = `FROM quay.io/operator-framework/upstream-opm-builder AS builder
 COPY .dockerconfigjson .
 RUN mkdir $HOME/.docker && mv .dockerconfigjson $HOME/.docker/config.json
-RUN ["opm", "index", "add", "--bundles", "some-reg/target-namespace/pipeline@ci-bundle0,some-reg/target-namespace/pipeline@ci-bundle1", "--out-dockerfile", "index.Dockerfile", "--generate"]
+RUN ["opm", "index", "add", "--mode", "semver", "--bundles", "some-reg/target-namespace/pipeline@ci-bundle0,some-reg/target-namespace/pipeline@ci-bundle1", "--out-dockerfile", "index.Dockerfile", "--generate"]
 FROM pipeline:src
 WORKDIR /index-data
 COPY --from=builder index.Dockerfile index.Dockerfile
@@ -79,6 +81,6 @@ COPY --from=builder /database/ database`
 		t.Fatalf("Unexpected error: %v", err)
 	}
 	if expectedDockerfileMultiBundle != generatedDockerfile {
-		t.Errorf("Generated opm index dockerfile does not equal expected; generated dockerfile: %s", generatedDockerfile)
+		t.Errorf("Generated opm index dockerfile does not equal expected:\n%s", cmp.Diff(expectedDockerfileMultiBundle, generatedDockerfile))
 	}
 }

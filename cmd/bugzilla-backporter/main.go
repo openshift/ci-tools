@@ -132,6 +132,7 @@ func main() {
 		logrus.WithError(err).Fatal("Error parsing plugins configuration.")
 	}
 	simplifier := simplifypath.NewSimplifier(l("", // shadow element mimicing the root
+		l(""),
 		l("clones",
 			v("ID"),
 			l("create"),

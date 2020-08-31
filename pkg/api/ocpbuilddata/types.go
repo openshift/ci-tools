@@ -144,6 +144,7 @@ type StreamMap map[string]StreamElement
 type StreamElement struct {
 	Image         string `json:"image"`
 	UpstreamImage string `json:"upstream_image"`
+	Mirror        *bool  `json:"mirror"`
 }
 
 type GroupYAML struct {
@@ -277,6 +278,9 @@ func replaceStream(streamName string, streamMap StreamMap) (string, error) {
 	}
 	if replacement.UpstreamImage == "" {
 		return "", fmt.Errorf("stream.yml.%s.upstream_image is an empty string", streamName)
+	}
+	if replacement.Mirror == nil || !*replacement.Mirror {
+		return "", fmt.Errorf("stream.yaml.%s.mirror is set to false, can not dereference", streamName)
 	}
 	return replacement.UpstreamImage, nil
 }

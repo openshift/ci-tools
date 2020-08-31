@@ -446,7 +446,8 @@ func hintsAtInfraReason(logSnippet string) bool {
 		strings.Contains(logSnippet, "Error: Failed to synchronize cache for repo") ||
 		strings.Contains(logSnippet, "Could not resolve host: ") ||
 		strings.Contains(logSnippet, "net/http: TLS handshake timeout") ||
-		strings.Contains(logSnippet, "All mirrors were tried")
+		strings.Contains(logSnippet, "All mirrors were tried") ||
+		strings.Contains(logSnippet, "connection reset by peer")
 }
 
 func waitForBuild(ctx context.Context, buildClient BuildClient, namespace, name string) error {

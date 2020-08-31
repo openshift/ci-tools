@@ -3,6 +3,7 @@ package steps
 import (
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	apiimagev1 "github.com/openshift/api/image/v1"
 	fakeimageclientset "github.com/openshift/client-go/image/clientset/versioned/fake"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -56,7 +57,7 @@ COPY --from=builder /database/ database`
 		t.Fatalf("Unexpected error: %v", err)
 	}
 	if expectedDockerfileSingleBundle != generatedDockerfile {
-		t.Errorf("Generated opm index dockerfile does not equal expected; generated dockerfile: %s", generatedDockerfile)
+		t.Errorf("Generated opm index dockerfile does not equal expected:\n%s", cmp.Diff(expectedDockerfileSingleBundle, generatedDockerfile))
 	}
 
 	var expectedDockerfileMultiBundle = `FROM quay.io/operator-framework/upstream-opm-builder AS builder
@@ -80,6 +81,6 @@ COPY --from=builder /database/ database`
 		t.Fatalf("Unexpected error: %v", err)
 	}
 	if expectedDockerfileMultiBundle != generatedDockerfile {
-		t.Errorf("Generated opm index dockerfile does not equal expected; generated dockerfile: %s", generatedDockerfile)
+		t.Errorf("Generated opm index dockerfile does not equal expected:\n%s", cmp.Diff(expectedDockerfileMultiBundle, generatedDockerfile))
 	}
 }

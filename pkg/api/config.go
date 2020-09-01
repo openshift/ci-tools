@@ -330,6 +330,8 @@ func validateTestStepConfiguration(fieldRoot string, input []TestStepConfigurati
 			validationErrors = append(validationErrors, fmt.Errorf("%s.as: is required", fieldRootN))
 		} else if test.As == "images" {
 			validationErrors = append(validationErrors, fmt.Errorf("%s.as: should not be called 'images' because it gets confused with '[images]' target", fieldRootN))
+		} else if test.As == "ci-index" {
+			validationErrors = append(validationErrors, fmt.Errorf("%s.as: should not be called 'ci-index' because it gets confused with 'ci-index' target", fieldRootN))
 		} else if len(validation.IsDNS1123Subdomain(test.As)) != 0 {
 			validationErrors = append(validationErrors, fmt.Errorf("%s.as: '%s' is not a valid Kubernetes object name", fieldRootN, test.As))
 		}

@@ -41,6 +41,17 @@ func TestValidateTests(t *testing.T) {
 			expectedValid: false,
 		},
 		{
+			id: `ReleaseBuildConfiguration{Tests: {As: "ci-index"}}`,
+			tests: []TestStepConfiguration{
+				{
+					As:                         "ci-index",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &ContainerTestConfiguration{From: "ignored"},
+				},
+			},
+			expectedValid: false,
+		},
+		{
 			id: "No test type",
 			tests: []TestStepConfiguration{
 				{

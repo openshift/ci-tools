@@ -144,7 +144,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 		}
 
 		if element.Cron == nil {
-			presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(element.As, info, label, podSpec, true, configSpec.CanonicalGoRepository, jobRelease))
+			presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(element.As, info, label, podSpec, configSpec.CanonicalGoRepository, jobRelease))
 		} else {
 			periodics = append(periodics, *generatePeriodicForTest(element.As, info, label, podSpec, true, *element.Cron, configSpec.CanonicalGoRepository, jobRelease))
 		}
@@ -168,7 +168,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 			presubmitTargets = append(presubmitTargets, "[release:latest]")
 		}
 		podSpec := generateCiOperatorPodSpec(info, nil, presubmitTargets)
-		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest("images", info, label, podSpec, true, configSpec.CanonicalGoRepository, jobRelease))
+		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest("images", info, label, podSpec, configSpec.CanonicalGoRepository, jobRelease))
 
 		if configSpec.PromotionConfiguration != nil {
 
@@ -181,6 +181,11 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 			postsubmit.Labels[cioperatorapi.PromotionJobLabelKey] = "true"
 			postsubmits[orgrepo] = append(postsubmits[orgrepo], *postsubmit)
 		}
+	}
+
+	if configSpec.Operator != nil {
+		podSpec := generateCiOperatorPodSpec(info, nil, []string{"ci-index"})
+		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest("ci-index", info, label, podSpec, configSpec.CanonicalGoRepository, jobRelease))
 	}
 
 	return &prowconfig.JobConfig{
@@ -393,9 +398,9 @@ func addLeaseClient(s *corev1.PodSpec) {
 	})
 }
 
-func generatePresubmitForTest(name string, info *ProwgenInfo, label jc.ProwgenLabel, podSpec *corev1.PodSpec, rehearsable bool, pathAlias *string, jobRelease string) *prowconfig.Presubmit {
+func generatePresubmitForTest(name string, info *ProwgenInfo, label jc.ProwgenLabel, podSpec *corev1.PodSpec, pathAlias *string, jobRelease string) *prowconfig.Presubmit {
 	shortName := info.TestName(name)
-	base := generateJobBase(name, jc.PresubmitPrefix, info, label, podSpec, rehearsable, pathAlias, jobRelease)
+	base := generateJobBase(name, jc.PresubmitPrefix, info, label, podSpec, true, pathAlias, jobRelease)
 	return &prowconfig.Presubmit{
 		JobBase:   base,
 		AlwaysRun: true,

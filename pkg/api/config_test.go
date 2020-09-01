@@ -11,6 +11,7 @@ import (
 )
 
 func TestValidateTests(t *testing.T) {
+	cronString := "0 0 * * 1"
 	for _, tc := range []struct {
 		id            string
 		release       *ReleaseTagConfiguration
@@ -370,6 +371,19 @@ func TestValidateTests(t *testing.T) {
 					MultiStageTestConfiguration: &MultiStageTestConfiguration{},
 				},
 			},
+		},
+		{
+			id: "cron and postsubmit together are invalid",
+			tests: []TestStepConfiguration{
+				{
+					As:                         "unit",
+					Commands:                   "commands",
+					ContainerTestConfiguration: &ContainerTestConfiguration{From: "ignored"},
+					Cron:                       &cronString,
+					Postsubmit:                 true,
+				},
+			},
+			expectedValid: false,
 		},
 	} {
 		t.Run(tc.id, func(t *testing.T) {

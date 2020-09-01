@@ -117,7 +117,6 @@ func generatePodSpec(info *ProwgenInfo, secrets []*cioperatorapi.Secret) *corev1
 //   presubmit and postsubmit that has `--target=[images]`. This postsubmit
 //   will additionally pass `--promote` to ci-operator
 func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *ProwgenInfo, label jc.ProwgenLabel) *prowconfig.JobConfig {
-
 	orgrepo := fmt.Sprintf("%s/%s", info.Org, info.Repo)
 	presubmits := map[string][]prowconfig.Presubmit{}
 	postsubmits := map[string][]prowconfig.Postsubmit{}
@@ -143,10 +142,14 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 			podSpec = generatePodSpecTemplate(info, release, &element)
 		}
 
-		if element.Cron == nil {
-			presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(element.As, info, label, podSpec, configSpec.CanonicalGoRepository, jobRelease))
-		} else {
+		if element.Cron != nil {
 			periodics = append(periodics, *generatePeriodicForTest(element.As, info, label, podSpec, true, *element.Cron, configSpec.CanonicalGoRepository, jobRelease))
+		} else if element.Postsubmit {
+			postsubmit := generatePostsubmitForTest(element.As, info, label, podSpec, configSpec.CanonicalGoRepository, jobRelease)
+			postsubmit.MaxConcurrency = 1
+			postsubmits[orgrepo] = append(postsubmits[orgrepo], *postsubmit)
+		} else {
+			presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(element.As, info, label, podSpec, configSpec.CanonicalGoRepository, jobRelease))
 		}
 	}
 

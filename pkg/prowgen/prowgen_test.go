@@ -404,6 +404,18 @@ func TestGenerateJobs(t *testing.T) {
 				Repo:   "repository",
 				Branch: "branch",
 			}},
+		}, {
+			id: "two tests and empty Images with one test configured as a postsubmit",
+			config: &ciop.ReleaseBuildConfiguration{
+				Tests: []ciop.TestStepConfiguration{
+					{As: "derTest", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "from"}},
+					{As: "leTest", ContainerTestConfiguration: &ciop.ContainerTestConfiguration{From: "from"}, Postsubmit: true}},
+			},
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
+				Org:    "organization",
+				Repo:   "repository",
+				Branch: "branch",
+			}},
 		},
 	}
 

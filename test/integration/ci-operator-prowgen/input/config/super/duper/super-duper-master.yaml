@@ -37,6 +37,11 @@ tests:
   commands: make test-unit
   container:
     from: src
+- as: upload-results
+  commands: make upload-results
+  container:
+    from: src
+  postsubmit: true
 - as: lint
   commands: make test-lint
   container:

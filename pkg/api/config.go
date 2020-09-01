@@ -341,8 +341,11 @@ func validateTestStepConfiguration(fieldRoot string, input []TestStepConfigurati
 			validationErrors = append(validationErrors, fmt.Errorf("%s: `commands`, `steps`, and `literal_steps` are mutually exclusive", fieldRootN))
 		}
 
-		// Validate Secret/Secrets
+		if test.Postsubmit && test.Cron != nil {
+			validationErrors = append(validationErrors, fmt.Errorf("%s: `cron` and `postsubmit` are mututally exclusive", fieldRootN))
+		}
 
+		// Validate Secret/Secrets
 		if test.Secret != nil && test.Secrets != nil {
 			validationErrors = append(validationErrors, fmt.Errorf("test.Secret and test.Secrets cannot both be set"))
 		}

@@ -17,7 +17,9 @@ limitations under the License.
 package bumper
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -42,6 +44,7 @@ const (
 	testImagePrefix = "gcr.io/k8s-testimages/"
 	prowRepo        = "https://github.com/kubernetes/test-infra"
 	testImageRepo   = prowRepo
+	forkRemoteName  = "bumper-fork-remote"
 
 	latestVersion          = "latest"
 	upstreamVersion        = "upstream"
@@ -254,7 +257,11 @@ func (w HideSecretsWriter) Write(content []byte) (int, error) {
 // "images" contains the tag replacements that have been made which is returned from "updateReferences([]string{"."}, extraFiles)"
 // "images" and "extraLineInPRBody" are used to generate commit summary and body of the PR
 func UpdatePR(gc github.Client, org, repo string, images map[string]string, extraLineInPRBody string, matchTitle, source, branch string, allowMods bool) error {
-	return UpdatePullRequest(gc, org, repo, makeCommitSummary(images), generatePRBody(images, extraLineInPRBody), matchTitle, source, branch, allowMods)
+	summary, err := makeCommitSummary(images)
+	if err != nil {
+		return err
+	}
+	return UpdatePullRequest(gc, org, repo, summary, generatePRBody(images, extraLineInPRBody), matchTitle, source, branch, allowMods)
 }
 
 // UpdatePullRequest updates with github client "gc" the PR of github repo org/repo
@@ -396,13 +403,25 @@ func isUnderPath(name string, paths []string) bool {
 	return false
 }
 
-func getNewProwVersion(images map[string]string) string {
+func getNewProwVersion(images map[string]string) (string, error) {
+	found := map[string]bool{}
 	for k, v := range images {
 		if strings.HasPrefix(k, prowPrefix) {
-			return v
+			found[v] = true
 		}
 	}
-	return ""
+	switch len(found) {
+	case 0:
+		return "", nil
+	case 1:
+		for version := range found {
+			return version, nil
+		}
+	}
+	return "", fmt.Errorf(
+		"Expected a consistent version for all %q images, but found multiple: %v",
+		prowPrefix,
+		found)
 }
 
 // HasChanges checks if the current git repo contains any changes
@@ -418,8 +437,12 @@ func HasChanges() (bool, error) {
 	return len(strings.TrimSuffix(string(combinedOutput), "\n")) > 0, nil
 }
 
-func makeCommitSummary(images map[string]string) string {
-	return fmt.Sprintf("Update prow to %s, and other images as necessary.", getNewProwVersion(images))
+func makeCommitSummary(images map[string]string) (string, error) {
+	version, err := getNewProwVersion(images)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("Update prow to %s, and other images as necessary.", version), nil
 }
 
 // MakeGitCommit runs a sequence of git commands to
@@ -428,7 +451,11 @@ func makeCommitSummary(images map[string]string) string {
 // "images" contains the tag replacements that have been made which is returned from "updateReferences([]string{"."}, extraFiles)"
 // "images" is used to generate commit message
 func MakeGitCommit(remote, remoteBranch, name, email string, images map[string]string, stdout, stderr io.Writer) error {
-	return GitCommitAndPush(remote, remoteBranch, name, email, makeCommitSummary(images), stdout, stderr)
+	summary, err := makeCommitSummary(images)
+	if err != nil {
+		return err
+	}
+	return GitCommitAndPush(remote, remoteBranch, name, email, summary, stdout, stderr)
 }
 
 // GitCommitAndPush runs a sequence of git commands to commit.
@@ -446,9 +473,35 @@ func GitCommitAndPush(remote, remoteBranch, name, email, message string, stdout,
 	if err := Call(stdout, stderr, "git", commitArgs...); err != nil {
 		return fmt.Errorf("failed to git commit: %w", err)
 	}
-	if err := GitPush(remote, remoteBranch, stdout, stderr); err != nil {
-		return fmt.Errorf("%w", err)
+	if err := Call(stdout, stderr, "git", "remote", "add", forkRemoteName, remote); err != nil {
+		return fmt.Errorf("failed to add remote: %w", err)
 	}
+	fetchStderr := &bytes.Buffer{}
+	var remoteTreeRef string
+	if err := Call(stdout, fetchStderr, "git", "fetch", forkRemoteName, remoteBranch); err != nil && !strings.Contains(fetchStderr.String(), fmt.Sprintf("couldn't find remote ref %s", remoteBranch)) {
+		return fmt.Errorf("failed to fetch from fork: %w", err)
+	} else {
+		var err error
+		remoteTreeRef, err = getTreeRef(stderr, fmt.Sprintf("refs/remotes/%s/%s", forkRemoteName, remoteBranch))
+		if err != nil {
+			return fmt.Errorf("failed to get remote tree ref: %w", err)
+		}
+	}
+
+	localTreeRef, err := getTreeRef(stderr, "HEAD")
+	if err != nil {
+		return fmt.Errorf("failed to get local tree ref: %w", err)
+	}
+
+	// Avoid doing metadata-only pushes that re-trigger tests and remove lgtm
+	if localTreeRef != remoteTreeRef {
+		if err := GitPush(forkRemoteName, remoteBranch, stdout, stderr); err != nil {
+			return err
+		}
+	} else {
+		logrus.Info("Not pushing as up-to-date remote branch already exists")
+	}
+
 	return nil
 }
 
@@ -572,4 +625,16 @@ func getAssignment(oncallAddress string) string {
 		return "/cc @" + curtOncall
 	}
 	return noOncallMsg
+}
+
+func getTreeRef(stderr io.Writer, refname string) (string, error) {
+	revParseStdout := &bytes.Buffer{}
+	if err := Call(revParseStdout, stderr, "git", "rev-parse", refname+":"); err != nil {
+		return "", fmt.Errorf("failed to parse ref: %w", err)
+	}
+	fields := strings.Fields(revParseStdout.String())
+	if n := len(fields); n < 1 {
+		return "", errors.New("got no otput when trying to rev-parse")
+	}
+	return fields[0], nil
 }

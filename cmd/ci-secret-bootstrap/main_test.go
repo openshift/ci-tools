@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -126,6 +127,7 @@ func TestValidateOptions(t *testing.T) {
 
 const (
 	configContent = `---
+secret_configs:
 - from:
     key-name-1:
       bw_item: item-name-1
@@ -166,6 +168,7 @@ const (
       type: kubernetes.io/dockerconfigjson
 `
 	configContentWithTypo = `---
+secret_configs:
 - from:
     key-name-1:
       bw_item: item-name-1
@@ -194,6 +197,7 @@ const (
       name: prod-secret-2
 `
 	configContentWithNonPasswordAttribute = `---
+secret_configs:
 - from:
     key-name-1:
       bw_item: item-name-1
@@ -208,6 +212,22 @@ const (
     - cluster: build01
       namespace: namespace-2
       name: prod-secret-2
+`
+
+	configWithGroups = `
+cluster_groups:
+  group-a:
+  - default
+secret_configs:
+- from:
+    key-name-1:
+      bw_item: item-name-1
+      field: field-name-1
+  to:
+  - cluster_groups:
+    - group-a
+    namespace: ns
+    name: name
 `
 	kubeConfigContent = `---
 apiVersion: v1
@@ -253,104 +273,108 @@ var (
 	}
 
 	defaultConfig = secretbootstrap.Config{
-		{
-			From: map[string]secretbootstrap.BitWardenContext{
-				"key-name-1": {
-					BWItem: "item-name-1",
-					Field:  "field-name-1",
+		Secrets: []secretbootstrap.SecretConfig{
+			{
+				From: map[string]secretbootstrap.BitWardenContext{
+					"key-name-1": {
+						BWItem: "item-name-1",
+						Field:  "field-name-1",
+					},
+					"key-name-2": {
+						BWItem: "item-name-1",
+						Field:  "field-name-2",
+					},
+					"key-name-3": {
+						BWItem:     "item-name-1",
+						Attachment: "attachment-name-1",
+					},
+					"key-name-4": {
+						BWItem: "item-name-2",
+						Field:  "field-name-1",
+					},
+					"key-name-5": {
+						BWItem:     "item-name-2",
+						Attachment: "attachment-name-1",
+					},
+					"key-name-6": {
+						BWItem:     "item-name-3",
+						Attachment: "attachment-name-2",
+					},
+					"key-name-7": {
+						BWItem:    "item-name-3",
+						Attribute: "password",
+					},
 				},
-				"key-name-2": {
-					BWItem: "item-name-1",
-					Field:  "field-name-2",
-				},
-				"key-name-3": {
-					BWItem:     "item-name-1",
-					Attachment: "attachment-name-1",
-				},
-				"key-name-4": {
-					BWItem: "item-name-2",
-					Field:  "field-name-1",
-				},
-				"key-name-5": {
-					BWItem:     "item-name-2",
-					Attachment: "attachment-name-1",
-				},
-				"key-name-6": {
-					BWItem:     "item-name-3",
-					Attachment: "attachment-name-2",
-				},
-				"key-name-7": {
-					BWItem:    "item-name-3",
-					Attribute: "password",
-				},
-			},
-			To: []secretbootstrap.SecretContext{
-				{
-					Cluster:   "default",
-					Namespace: "namespace-1",
-					Name:      "prod-secret-1",
-				},
-				{
-					Cluster:   "build01",
-					Namespace: "namespace-2",
-					Name:      "prod-secret-2",
-				},
-			},
-		},
-		{
-			From: map[string]secretbootstrap.BitWardenContext{
-				".dockerconfigjson": {
-					BWItem: "quay.io",
-					Field:  "Pull Credentials",
+				To: []secretbootstrap.SecretContext{
+					{
+						Cluster:   "default",
+						Namespace: "namespace-1",
+						Name:      "prod-secret-1",
+					},
+					{
+						Cluster:   "build01",
+						Namespace: "namespace-2",
+						Name:      "prod-secret-2",
+					},
 				},
 			},
-			To: []secretbootstrap.SecretContext{
-				{
-					Cluster:   "default",
-					Namespace: "ci",
-					Name:      "ci-pull-credentials",
-					Type:      "kubernetes.io/dockerconfigjson",
+			{
+				From: map[string]secretbootstrap.BitWardenContext{
+					".dockerconfigjson": {
+						BWItem: "quay.io",
+						Field:  "Pull Credentials",
+					},
+				},
+				To: []secretbootstrap.SecretContext{
+					{
+						Cluster:   "default",
+						Namespace: "ci",
+						Name:      "ci-pull-credentials",
+						Type:      "kubernetes.io/dockerconfigjson",
+					},
 				},
 			},
 		},
 	}
 	defaultConfigWithoutDefaultCluster = secretbootstrap.Config{
-		{
-			From: map[string]secretbootstrap.BitWardenContext{
-				"key-name-1": {
-					BWItem: "item-name-1",
-					Field:  "field-name-1",
+		Secrets: []secretbootstrap.SecretConfig{
+			{
+				From: map[string]secretbootstrap.BitWardenContext{
+					"key-name-1": {
+						BWItem: "item-name-1",
+						Field:  "field-name-1",
+					},
+					"key-name-2": {
+						BWItem: "item-name-1",
+						Field:  "field-name-2",
+					},
+					"key-name-3": {
+						BWItem:     "item-name-1",
+						Attachment: "attachment-name-1",
+					},
+					"key-name-4": {
+						BWItem: "item-name-2",
+						Field:  "field-name-1",
+					},
+					"key-name-5": {
+						BWItem:     "item-name-2",
+						Attachment: "attachment-name-1",
+					},
+					"key-name-6": {
+						BWItem:     "item-name-3",
+						Attachment: "attachment-name-2",
+					},
+					"key-name-7": {
+						BWItem:    "item-name-3",
+						Attribute: "password",
+					},
 				},
-				"key-name-2": {
-					BWItem: "item-name-1",
-					Field:  "field-name-2",
-				},
-				"key-name-3": {
-					BWItem:     "item-name-1",
-					Attachment: "attachment-name-1",
-				},
-				"key-name-4": {
-					BWItem: "item-name-2",
-					Field:  "field-name-1",
-				},
-				"key-name-5": {
-					BWItem:     "item-name-2",
-					Attachment: "attachment-name-1",
-				},
-				"key-name-6": {
-					BWItem:     "item-name-3",
-					Attachment: "attachment-name-2",
-				},
-				"key-name-7": {
-					BWItem:    "item-name-3",
-					Attribute: "password",
-				},
-			},
-			To: []secretbootstrap.SecretContext{
-				{
-					Cluster:   "build01",
-					Namespace: "namespace-2",
-					Name:      "prod-secret-2",
+				To: []secretbootstrap.SecretContext{
+					{
+						Cluster:   "build01",
+						Namespace: "namespace-2",
+						Name:      "prod-secret-2",
+					},
 				},
 			},
 		},
@@ -372,6 +396,7 @@ func TestCompleteOptions(t *testing.T) {
 	configPath := filepath.Join(dir, "configPath")
 	kubeConfigPath := filepath.Join(dir, "kubeConfigPath")
 	configWithTypoPath := filepath.Join(dir, "configWithTypoPath")
+	configWithGroupsPath := filepath.Join(dir, "configWithGroups")
 	configWithNonPasswordAttributePath := filepath.Join(dir, "configContentWithNonPasswordAttribute")
 
 	fileMap := map[string][]byte{
@@ -379,6 +404,7 @@ func TestCompleteOptions(t *testing.T) {
 		configPath:                         []byte(configContent),
 		kubeConfigPath:                     []byte(kubeConfigContent),
 		configWithTypoPath:                 []byte(configContentWithTypo),
+		configWithGroupsPath:               []byte(configWithGroups),
 		configWithNonPasswordAttributePath: []byte(configContentWithNonPasswordAttribute),
 	}
 
@@ -447,6 +473,24 @@ func TestCompleteOptions(t *testing.T) {
 			expectedConfig: defaultConfig,
 			expectedError:  fmt.Errorf("config[0].from[key-name-2].attribute: only the 'password' is supported, not not-password"),
 		},
+		{
+			name: "group is resolved",
+			given: options{
+				logLevel:       "info",
+				bwUser:         "username",
+				bwPasswordPath: bwPasswordPath,
+				configPath:     configWithGroupsPath,
+				kubeConfigPath: kubeConfigPath,
+			},
+			expectedBWPassword: "topSecret",
+			expectedConfig: secretbootstrap.Config{
+				Secrets: []secretbootstrap.SecretConfig{{
+					From: map[string]secretbootstrap.BitWardenContext{"key-name-1": {BWItem: "item-name-1", Field: "field-name-1"}},
+					To:   []secretbootstrap.SecretContext{{Cluster: "default", Namespace: "ns", Name: "name"}},
+				}},
+			},
+			expectedClusters: []string{"default"},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -454,15 +498,15 @@ func TestCompleteOptions(t *testing.T) {
 			actualError := tc.given.completeOptions(&secrets)
 			equalError(t, tc.expectedError, actualError)
 			if tc.expectedError == nil {
-				equal(t, tc.expectedBWPassword, tc.given.bwPassword)
-				equal(t, tc.expectedConfig, tc.given.config)
+				equal(t, "bitwarden passowrd", tc.expectedBWPassword, tc.given.bwPassword)
+				equal(t, "config", tc.expectedConfig, tc.given.config)
 				var actualClusters []string
 				for k := range tc.given.secretsGetters {
 					actualClusters = append(actualClusters, k)
 				}
 				sort.Strings(actualClusters)
-				equal(t, tc.expectedClusters, actualClusters)
-				equal(t, sets.NewString("topSecret"), secrets)
+				equal(t, "clusters", tc.expectedClusters, actualClusters)
+				equal(t, "some set", sets.NewString("topSecret"), secrets)
 			}
 		})
 	}
@@ -508,11 +552,13 @@ func TestValidateCompletedOptions(t *testing.T) {
 				logLevel:   "info",
 				bwPassword: "topSecret",
 				config: secretbootstrap.Config{
-					{
-						From: map[string]secretbootstrap.BitWardenContext{
-							"key-name-1": {
-								BWItem: "item-name-1",
-								Field:  "field-name-1",
+					Secrets: []secretbootstrap.SecretConfig{
+						{
+							From: map[string]secretbootstrap.BitWardenContext{
+								"key-name-1": {
+									BWItem: "item-name-1",
+									Field:  "field-name-1",
+								},
 							},
 						},
 					},
@@ -526,7 +572,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 				logLevel:   "info",
 				bwPassword: "topSecret",
 				config: secretbootstrap.Config{
-					{},
+					Secrets: []secretbootstrap.SecretConfig{{}},
 				},
 			},
 			expected: fmt.Errorf("config[0].from is empty"),
@@ -537,18 +583,20 @@ func TestValidateCompletedOptions(t *testing.T) {
 				logLevel:   "info",
 				bwPassword: "topSecret",
 				config: secretbootstrap.Config{
-					{
-						From: map[string]secretbootstrap.BitWardenContext{
-							"": {
-								BWItem: "item-name-1",
-								Field:  "field-name-1",
+					Secrets: []secretbootstrap.SecretConfig{
+						{
+							From: map[string]secretbootstrap.BitWardenContext{
+								"": {
+									BWItem: "item-name-1",
+									Field:  "field-name-1",
+								},
 							},
-						},
-						To: []secretbootstrap.SecretContext{
-							{
-								Cluster:   "default",
-								Namespace: "namespace-1",
-								Name:      "prod-secret-1",
+							To: []secretbootstrap.SecretContext{
+								{
+									Cluster:   "default",
+									Namespace: "namespace-1",
+									Name:      "prod-secret-1",
+								},
 							},
 						},
 					},
@@ -562,17 +610,19 @@ func TestValidateCompletedOptions(t *testing.T) {
 				logLevel:   "info",
 				bwPassword: "topSecret",
 				config: secretbootstrap.Config{
-					{
-						From: map[string]secretbootstrap.BitWardenContext{
-							"key-name-1": {
-								Field: "field-name-1",
+					Secrets: []secretbootstrap.SecretConfig{
+						{
+							From: map[string]secretbootstrap.BitWardenContext{
+								"key-name-1": {
+									Field: "field-name-1",
+								},
 							},
-						},
-						To: []secretbootstrap.SecretContext{
-							{
-								Cluster:   "default",
-								Namespace: "namespace-1",
-								Name:      "prod-secret-1",
+							To: []secretbootstrap.SecretContext{
+								{
+									Cluster:   "default",
+									Namespace: "namespace-1",
+									Name:      "prod-secret-1",
+								},
 							},
 						},
 					},
@@ -586,17 +636,19 @@ func TestValidateCompletedOptions(t *testing.T) {
 				logLevel:   "info",
 				bwPassword: "topSecret",
 				config: secretbootstrap.Config{
-					{
-						From: map[string]secretbootstrap.BitWardenContext{
-							"key-name-1": {
-								BWItem: "item-name-1",
+					Secrets: []secretbootstrap.SecretConfig{
+						{
+							From: map[string]secretbootstrap.BitWardenContext{
+								"key-name-1": {
+									BWItem: "item-name-1",
+								},
 							},
-						},
-						To: []secretbootstrap.SecretContext{
-							{
-								Cluster:   "default",
-								Namespace: "namespace-1",
-								Name:      "prod-secret-1",
+							To: []secretbootstrap.SecretContext{
+								{
+									Cluster:   "default",
+									Namespace: "namespace-1",
+									Name:      "prod-secret-1",
+								},
 							},
 						},
 					},
@@ -610,19 +662,21 @@ func TestValidateCompletedOptions(t *testing.T) {
 				logLevel:   "info",
 				bwPassword: "topSecret",
 				config: secretbootstrap.Config{
-					{
-						From: map[string]secretbootstrap.BitWardenContext{
-							"key-name-1": {
-								BWItem:     "item-name-1",
-								Field:      "field-name-1",
-								Attachment: "attachment-name-1",
+					Secrets: []secretbootstrap.SecretConfig{
+						{
+							From: map[string]secretbootstrap.BitWardenContext{
+								"key-name-1": {
+									BWItem:     "item-name-1",
+									Field:      "field-name-1",
+									Attachment: "attachment-name-1",
+								},
 							},
-						},
-						To: []secretbootstrap.SecretContext{
-							{
-								Cluster:   "default",
-								Namespace: "namespace-1",
-								Name:      "prod-secret-1",
+							To: []secretbootstrap.SecretContext{
+								{
+									Cluster:   "default",
+									Namespace: "namespace-1",
+									Name:      "prod-secret-1",
+								},
 							},
 						},
 					},
@@ -636,17 +690,19 @@ func TestValidateCompletedOptions(t *testing.T) {
 				logLevel:   "info",
 				bwPassword: "topSecret",
 				config: secretbootstrap.Config{
-					{
-						From: map[string]secretbootstrap.BitWardenContext{
-							"key-name-1": {
-								BWItem: "item-name-1",
-								Field:  "field-name-1",
+					Secrets: []secretbootstrap.SecretConfig{
+						{
+							From: map[string]secretbootstrap.BitWardenContext{
+								"key-name-1": {
+									BWItem: "item-name-1",
+									Field:  "field-name-1",
+								},
 							},
-						},
-						To: []secretbootstrap.SecretContext{
-							{
-								Namespace: "namespace-1",
-								Name:      "prod-secret-1",
+							To: []secretbootstrap.SecretContext{
+								{
+									Namespace: "namespace-1",
+									Name:      "prod-secret-1",
+								},
 							},
 						},
 					},
@@ -660,17 +716,19 @@ func TestValidateCompletedOptions(t *testing.T) {
 				logLevel:   "info",
 				bwPassword: "topSecret",
 				config: secretbootstrap.Config{
-					{
-						From: map[string]secretbootstrap.BitWardenContext{
-							"key-name-1": {
-								BWItem:     "item-name-1",
-								Attachment: "attachment-name-1",
+					Secrets: []secretbootstrap.SecretConfig{
+						{
+							From: map[string]secretbootstrap.BitWardenContext{
+								"key-name-1": {
+									BWItem:     "item-name-1",
+									Attachment: "attachment-name-1",
+								},
 							},
-						},
-						To: []secretbootstrap.SecretContext{
-							{
-								Cluster: "default",
-								Name:    "prod-secret-1",
+							To: []secretbootstrap.SecretContext{
+								{
+									Cluster: "default",
+									Name:    "prod-secret-1",
+								},
 							},
 						},
 					},
@@ -684,17 +742,19 @@ func TestValidateCompletedOptions(t *testing.T) {
 				logLevel:   "info",
 				bwPassword: "topSecret",
 				config: secretbootstrap.Config{
-					{
-						From: map[string]secretbootstrap.BitWardenContext{
-							"key-name-1": {
-								BWItem: "item-name-1",
-								Field:  "field-name-1",
+					Secrets: []secretbootstrap.SecretConfig{
+						{
+							From: map[string]secretbootstrap.BitWardenContext{
+								"key-name-1": {
+									BWItem: "item-name-1",
+									Field:  "field-name-1",
+								},
 							},
-						},
-						To: []secretbootstrap.SecretContext{
-							{
-								Cluster:   "default",
-								Namespace: "namespace-1",
+							To: []secretbootstrap.SecretContext{
+								{
+									Cluster:   "default",
+									Namespace: "namespace-1",
+								},
 							},
 						},
 					},
@@ -708,30 +768,32 @@ func TestValidateCompletedOptions(t *testing.T) {
 				logLevel:   "info",
 				bwPassword: "topSecret",
 				config: secretbootstrap.Config{
-					{
-						From: map[string]secretbootstrap.BitWardenContext{
-							"key-name-1": {
-								BWItem: "item-name-1",
-								Field:  "field-name-1",
+					Secrets: []secretbootstrap.SecretConfig{
+						{
+							From: map[string]secretbootstrap.BitWardenContext{
+								"key-name-1": {
+									BWItem: "item-name-1",
+									Field:  "field-name-1",
+								},
 							},
-						},
-						To: []secretbootstrap.SecretContext{
-							{
-								Cluster:   "default",
-								Namespace: "namespace-1",
-								Name:      "prod-secret-1",
-								Type:      "kubernetes.io/dockerconfigjson",
-							},
-							{
-								Cluster:   "build01",
-								Namespace: "namespace-1",
-								Name:      "prod-secret-1",
-							},
-							{
-								Cluster:   "default",
-								Namespace: "namespace-1",
-								Name:      "prod-secret-1",
-								Type:      "kubernetes.io/dockerconfigjson",
+							To: []secretbootstrap.SecretContext{
+								{
+									Cluster:   "default",
+									Namespace: "namespace-1",
+									Name:      "prod-secret-1",
+									Type:      "kubernetes.io/dockerconfigjson",
+								},
+								{
+									Cluster:   "build01",
+									Namespace: "namespace-1",
+									Name:      "prod-secret-1",
+								},
+								{
+									Cluster:   "default",
+									Namespace: "namespace-1",
+									Name:      "prod-secret-1",
+									Type:      "kubernetes.io/dockerconfigjson",
+								},
 							},
 						},
 					},
@@ -741,7 +803,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 				"default": configDefault,
 				"build01": configBuild01,
 			},
-			expected: fmt.Errorf("config[0].to[2]: secret {default namespace-1 prod-secret-1 kubernetes.io/dockerconfigjson} listed more than once in the config"),
+			expected: errors.New("config[0].to[2]: secret namespace-1/prod-secret-1 in cluster default listed more than once in the config"),
 		},
 		{
 			name: "conflicting secrets in different TOs",
@@ -749,43 +811,45 @@ func TestValidateCompletedOptions(t *testing.T) {
 				logLevel:   "info",
 				bwPassword: "topSecret",
 				config: secretbootstrap.Config{
-					{
-						From: map[string]secretbootstrap.BitWardenContext{
-							"key-name-1": {
-								BWItem: "item-name-1",
-								Field:  "field-name-1",
+					Secrets: []secretbootstrap.SecretConfig{
+						{
+							From: map[string]secretbootstrap.BitWardenContext{
+								"key-name-1": {
+									BWItem: "item-name-1",
+									Field:  "field-name-1",
+								},
+							},
+							To: []secretbootstrap.SecretContext{
+								{
+									Cluster:   "build01",
+									Namespace: "namespace-1",
+									Name:      "prod-secret-1",
+								},
+								{
+									Cluster:   "default",
+									Namespace: "namespace-1",
+									Name:      "prod-secret-1",
+								},
 							},
 						},
-						To: []secretbootstrap.SecretContext{
-							{
-								Cluster:   "build01",
-								Namespace: "namespace-1",
-								Name:      "prod-secret-1",
+						{
+							From: map[string]secretbootstrap.BitWardenContext{
+								"key-name-1": {
+									BWItem: "item-name-1",
+									Field:  "field-name-1",
+								},
 							},
-							{
-								Cluster:   "default",
-								Namespace: "namespace-1",
-								Name:      "prod-secret-1",
-							},
-						},
-					},
-					{
-						From: map[string]secretbootstrap.BitWardenContext{
-							"key-name-1": {
-								BWItem: "item-name-1",
-								Field:  "field-name-1",
-							},
-						},
-						To: []secretbootstrap.SecretContext{
-							{
-								Cluster:   "default",
-								Namespace: "namespace-1",
-								Name:      "prod-secret-1",
-							},
-							{
-								Cluster:   "build01",
-								Namespace: "namespace-1",
-								Name:      "prod-secret-1",
+							To: []secretbootstrap.SecretContext{
+								{
+									Cluster:   "default",
+									Namespace: "namespace-1",
+									Name:      "prod-secret-1",
+								},
+								{
+									Cluster:   "build01",
+									Namespace: "namespace-1",
+									Name:      "prod-secret-1",
+								},
 							},
 						},
 					},
@@ -795,7 +859,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 				"default": configDefault,
 				"build01": configBuild01,
 			},
-			expected: fmt.Errorf("config[1].to[0]: secret {default namespace-1 prod-secret-1 } listed more than once in the config"),
+			expected: errors.New("config[1].to[0]: secret namespace-1/prod-secret-1 in cluster default listed more than once in the config"),
 		},
 	}
 	for _, tc := range testCases {
@@ -1137,7 +1201,7 @@ func TestConstructSecrets(t *testing.T) {
 					return tc.expected[key][i].Name < tc.expected[key][j].Name
 				})
 			}
-			equal(t, tc.expected, actual)
+			equal(t, "secrets", tc.expected, actual)
 		})
 	}
 }
@@ -1557,11 +1621,11 @@ func TestUpdateSecrets(t *testing.T) {
 
 			actualSecretsOnDefault, err := fkcDefault.CoreV1().Secrets("").List(context.TODO(), metav1.ListOptions{})
 			equalError(t, nil, err)
-			equal(t, tc.expectedSecretsOnDefault, actualSecretsOnDefault.Items)
+			equal(t, "secrets in default cluster", tc.expectedSecretsOnDefault, actualSecretsOnDefault.Items)
 
 			actualSecretsOnBuild01, err := fkcBuild01.CoreV1().Secrets("").List(context.TODO(), metav1.ListOptions{})
 			equalError(t, nil, err)
-			equal(t, tc.expectedSecretsOnBuild01, actualSecretsOnBuild01.Items)
+			equal(t, "secrets in build01 cluster", tc.expectedSecretsOnBuild01, actualSecretsOnBuild01.Items)
 		})
 	}
 }
@@ -1650,7 +1714,7 @@ metadata:
 		t.Run(tc.name, func(t *testing.T) {
 			actualError := writeSecrets(tc.secretsMap, tc.w)
 			equalError(t, tc.expectedError, actualError)
-			equal(t, tc.expected, tc.w.String())
+			equal(t, "result", tc.expected, tc.w.String())
 		})
 	}
 }
@@ -1664,8 +1728,8 @@ func equalError(t *testing.T, expected, actual error) {
 	}
 }
 
-func equal(t *testing.T, expected, actual interface{}) {
+func equal(t *testing.T, what string, expected, actual interface{}) {
 	if !reflect.DeepEqual(expected, actual) {
-		t.Errorf("actual differs from expected:\n%s", cmp.Diff(expected, actual))
+		t.Errorf("%s differs from expected:\n%s", what, cmp.Diff(expected, actual))
 	}
 }

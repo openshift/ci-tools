@@ -640,6 +640,9 @@ type Spyglass struct {
 	// If left empty, the link will be not be shown. Otherwise, a GCS path (with no
 	// prefix or scheme) will be appended to GCSBrowserPrefix and shown to the user.
 	GCSBrowserPrefix string `json:"gcs_browser_prefix,omitempty"`
+	// GCSBrowserPrefixes are used to generate a link to a human-usable GCS browser.
+	// They are mapped by org, org/repo or '*' which is the default value.
+	GCSBrowserPrefixes GCSBrowserPrefixes `json:"gcs_browser_prefixes,omitempty"`
 	// If set, Announcement is used as a Go HTML template string to be displayed at the top of
 	// each spyglass page. Using HTML in the template is acceptable.
 	// Currently the only variable available is .ArtifactPath, which contains the GCS path for the job artifacts.
@@ -651,6 +654,20 @@ type Spyglass struct {
 	// TestGridRoot is the root URL to the TestGrid frontend, e.g. "https://testgrid.k8s.io/".
 	// If left blank, TestGrid links will not appear.
 	TestGridRoot string `json:"testgrid_root,omitempty"`
+}
+
+type GCSBrowserPrefixes map[string]string
+
+func (p GCSBrowserPrefixes) GetGCSBrowserPrefix(org, repo string) string {
+	if prefix, exists := p[fmt.Sprintf("%s/%s", org, repo)]; exists {
+		return prefix
+	}
+
+	if prefix, exists := p[org]; exists {
+		return prefix
+	}
+
+	return p["*"]
 }
 
 // Deck holds config for deck.
@@ -1289,7 +1306,7 @@ func validateJobBase(v JobBase, jobType prowapi.ProwJobType, podNamespace string
 	if err := validateAgent(v, podNamespace); err != nil {
 		return err
 	}
-	if err := validatePodSpec(jobType, v.Spec); err != nil {
+	if err := validatePodSpec(jobType, v.Spec, v.DecorationConfig != nil); err != nil {
 		return err
 	}
 	if err := ValidatePipelineRunSpec(jobType, v.ExtraRefs, v.PipelineRunSpec); err != nil {
@@ -1307,7 +1324,12 @@ func validateJobBase(v JobBase, jobType prowapi.ProwJobType, podNamespace string
 	if err := v.UtilityConfig.Validate(); err != nil {
 		return err
 	}
-	return validateDecoration(v.Spec.Containers[0], v.DecorationConfig)
+	for i := range v.Spec.Containers {
+		if err := validateDecoration(v.Spec.Containers[i], v.DecorationConfig); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // validatePresubmits validates the presubmits for one repo
@@ -1595,6 +1617,19 @@ func parseProwConfig(c *Config) error {
 		}
 	}
 
+	if c.Deck.Spyglass.GCSBrowserPrefixes == nil {
+		c.Deck.Spyglass.GCSBrowserPrefixes = make(map[string]string)
+	}
+
+	_, exists := c.Deck.Spyglass.GCSBrowserPrefixes["*"]
+	if exists && c.Deck.Spyglass.GCSBrowserPrefix != "" {
+		return fmt.Errorf("both gcs_browser_prefixes and gcs_browser_prefix['*'] are specified.")
+	}
+
+	if !exists {
+		c.Deck.Spyglass.GCSBrowserPrefixes["*"] = c.Deck.Spyglass.GCSBrowserPrefix
+	}
+
 	if c.PushGateway.Interval == nil {
 		c.PushGateway.Interval = &metav1.Duration{Duration: time.Minute}
 	}
@@ -1877,7 +1912,7 @@ func ValidatePipelineRunSpec(jobType prowapi.ProwJobType, extraRefs []prowapi.Re
 	return nil
 }
 
-func validatePodSpec(jobType prowapi.ProwJobType, spec *v1.PodSpec) error {
+func validatePodSpec(jobType prowapi.ProwJobType, spec *v1.PodSpec, decorationEnabled bool) error {
 	if spec == nil {
 		return nil
 	}
@@ -1888,22 +1923,46 @@ func validatePodSpec(jobType prowapi.ProwJobType, spec *v1.PodSpec) error {
 		errs = append(errs, errors.New("pod spec may not use init containers"))
 	}
 
-	if n := len(spec.Containers); n != 1 {
+	if n := len(spec.Containers); n < 1 {
 		// We must return here to not cause an out of bounds panic in the remaining validation
-		return utilerrors.NewAggregate(append(errs, fmt.Errorf("pod spec must specify exactly 1 container, found: %d", n)))
+		return utilerrors.NewAggregate(append(errs, fmt.Errorf("pod spec must specify at least 1 container, found: %d", n)))
 	}
 
-	envNames := sets.String{}
-	for _, env := range spec.Containers[0].Env {
-		if envNames.Has(env.Name) {
-			errs = append(errs, fmt.Errorf("env var named %q is defined more than once", env.Name))
-		}
-		envNames.Insert(env.Name)
+	if n := len(spec.Containers); n > 1 && !decorationEnabled {
+		return utilerrors.NewAggregate(append(errs, fmt.Errorf("pod utility decoration must be enabled to use multiple containers: %d", n)))
+	}
 
-		for _, prowEnv := range downwardapi.EnvForType(jobType) {
-			if env.Name == prowEnv {
-				// TODO(fejta): consider allowing this
-				errs = append(errs, fmt.Errorf("env %s is reserved", env.Name))
+	if len(spec.Containers) > 1 {
+		containerNames := sets.String{}
+		for _, container := range spec.Containers {
+			if container.Name == "" {
+				errs = append(errs, fmt.Errorf("container does not have name. all containers must have names when defining multiple containers"))
+			}
+
+			if containerNames.Has(container.Name) {
+				errs = append(errs, fmt.Errorf("container named %q is defined more than once", container.Name))
+			}
+			containerNames.Insert(container.Name)
+
+			if decorate.PodUtilsContainerNames().Has(container.Name) {
+				errs = append(errs, fmt.Errorf("container name %s is a reserved for decoration. please specify a different container name that does not conflict with pod utility container names", container.Name))
+			}
+		}
+	}
+
+	for i := range spec.Containers {
+		envNames := sets.String{}
+		for _, env := range spec.Containers[i].Env {
+			if envNames.Has(env.Name) {
+				errs = append(errs, fmt.Errorf("env var named %q is defined more than once", env.Name))
+			}
+			envNames.Insert(env.Name)
+
+			for _, prowEnv := range downwardapi.EnvForType(jobType) {
+				if env.Name == prowEnv {
+					// TODO(fejta): consider allowing this
+					errs = append(errs, fmt.Errorf("env %s is reserved", env.Name))
+				}
 			}
 		}
 	}
@@ -1915,25 +1974,21 @@ func validatePodSpec(jobType prowapi.ProwJobType, spec *v1.PodSpec) error {
 		}
 		volumeNames.Insert(volume.Name)
 
-		for _, prowVolume := range decorate.VolumeMounts() {
-			if volume.Name == prowVolume {
-				errs = append(errs, fmt.Errorf("volume %s is a reserved for decoration", volume.Name))
-			}
+		if decorate.VolumeMounts().Has(volume.Name) {
+			errs = append(errs, fmt.Errorf("volume %s is a reserved for decoration", volume.Name))
 		}
 	}
 
-	for _, mount := range spec.Containers[0].VolumeMounts {
-		if !volumeNames.Has(mount.Name) {
-			errs = append(errs, fmt.Errorf("volumeMount named %q is undefined", mount.Name))
-		}
-		for _, prowMount := range decorate.VolumeMounts() {
-			if mount.Name == prowMount {
-				errs = append(errs, fmt.Errorf("volumeMount name %s is reserved for decoration", prowMount))
+	for i := range spec.Containers {
+		for _, mount := range spec.Containers[i].VolumeMounts {
+			if !volumeNames.Has(mount.Name) {
+				errs = append(errs, fmt.Errorf("volumeMount named %q is undefined", mount.Name))
 			}
-		}
-		for _, prowMountPath := range decorate.VolumeMountPaths() {
-			if mount.MountPath == prowMountPath {
-				errs = append(errs, fmt.Errorf("mount %s at %s conflicts with decoration mount at %s", mount.Name, mount.MountPath, prowMountPath))
+			if decorate.VolumeMounts().Has(mount.Name) {
+				errs = append(errs, fmt.Errorf("volumeMount name %s is reserved for decoration", mount.Name))
+			}
+			if decorate.VolumeMountPaths().Has(mount.MountPath) {
+				errs = append(errs, fmt.Errorf("mount %s at %s conflicts with decoration mount", mount.Name, mount.MountPath))
 			}
 		}
 	}

@@ -252,7 +252,17 @@ func digestPR(log *logrus.Entry, pre github.PullRequestEvent, validateByDefault 
 		title   = pre.PullRequest.Title
 	)
 
-	e := &event{org: org, repo: repo, baseRef: baseRef, number: number, merged: pre.PullRequest.Merged, closed: pre.Action == github.PullRequestActionClosed, state: pre.PullRequest.State, body: title, htmlUrl: pre.PullRequest.HTMLURL, login: pre.PullRequest.User.Login}
+	e := &event{org: org, repo: repo, baseRef: baseRef, number: number, merged: pre.PullRequest.Merged, closed: pre.Action == github.PullRequestActionClosed, opened: pre.Action == github.PullRequestActionOpened, state: pre.PullRequest.State, body: title, htmlUrl: pre.PullRequest.HTMLURL, login: pre.PullRequest.User.Login}
+	// Make sure the PR title is referencing a bug
+	var err error
+	e.bugId, e.missing, err = bugIDFromTitle(title)
+	// in the case that the title used to reference a bug and no longer does we
+	// want to handle this to remove labels
+	if err != nil {
+		log.WithError(err).Debug("Failed to get bug ID from title")
+		return nil, err
+	}
+
 	// Check if PR is a cherrypick
 	cherrypick, cherrypickFromPRNum, cherrypickTo, err := getCherryPickMatch(pre)
 	if err != nil {
@@ -265,14 +275,6 @@ func digestPR(log *logrus.Entry, pre github.PullRequestEvent, validateByDefault 
 			e.cherrypickTo = cherrypickTo
 			return e, nil
 		}
-	}
-	// Make sure the PR title is referencing a bug
-	e.bugId, e.missing, err = bugIDFromTitle(title)
-	// in the case that the title used to reference a bug and no longer does we
-	// want to handle this to remove labels
-	if err != nil {
-		log.WithError(err).Debug("Failed to get bug ID from title")
-		return nil, err
 	}
 
 	if e.closed && !e.merged {
@@ -370,15 +372,15 @@ func digestComment(gc githubClient, log *logrus.Entry, gce github.GenericComment
 }
 
 type event struct {
-	org, repo, baseRef      string
-	number, bugId           int
-	missing, merged, closed bool
-	state                   string
-	body, htmlUrl, login    string
-	assign, cc              bool
-	cherrypick              bool
-	cherrypickFromPRNum     int
-	cherrypickTo            string
+	org, repo, baseRef              string
+	number, bugId                   int
+	missing, merged, closed, opened bool
+	state                           string
+	body, htmlUrl, login            string
+	assign, cc                      bool
+	cherrypick                      bool
+	cherrypickFromPRNum             int
+	cherrypickTo                    string
 }
 
 func (e *event) comment(gc githubClient) func(body string) error {
@@ -446,7 +448,7 @@ func handle(e event, gc githubClient, bc bugzilla.Client, options plugins.Bugzil
 		}
 		if !isBugAllowed(bug, options.AllowedGroups) {
 			// ignore bugs that are in non-allowed groups for this repo
-			if refreshCommandMatch.MatchString(e.body) {
+			if e.opened || refreshCommandMatch.MatchString(e.body) {
 				response := fmt.Sprintf(bugLink+" is in a bug group that is not in the allowed groups for this repo.", e.bugId, bc.Endpoint(), e.bugId)
 				if len(options.AllowedGroups) > 0 {
 					response += "\nAllowed groups for this repo are:"
@@ -851,16 +853,24 @@ func handleMerge(e event, gc githubClient, bc bugzilla.Client, options plugins.B
 	mergedMessage := func(statement string) string {
 		var links []string
 		for _, bug := range mergedPRs {
-			links = append(links, link(bug))
+			links = append(links, fmt.Sprintf(" * %s", link(bug)))
 		}
-		return fmt.Sprintf(`%s pull requests linked via external trackers have merged: %s.`, statement, strings.Join(links, ", "))
+		return fmt.Sprintf(`%s pull requests linked via external trackers have merged:
+%s
+
+`, statement, strings.Join(links, "\n"))
 	}
 
 	var statements []string
 	for bug, state := range unmergedPrStates {
-		statements = append(statements, fmt.Sprintf("\n * %s is %s", link(bug), state))
+		statements = append(statements, fmt.Sprintf(" * %s is %s", link(bug), state))
 	}
-	unmergedMessage := fmt.Sprintf(`The following pull requests linked via external trackers have not merged:%s`, strings.Join(statements, "\n"))
+	unmergedMessage := fmt.Sprintf(`The following pull requests linked via external trackers have not merged:
+%s
+
+These pull request must merge or be unlinked from the Bugzilla bug in order for it to move to the next state.
+
+`, strings.Join(statements, "\n"))
 
 	outcomeMessage := func(action string) string {
 		return fmt.Sprintf(bugLink+" has %sbeen moved to the %s state.", e.bugId, bc.Endpoint(), e.bugId, action, options.StateAfterMerge)
@@ -877,9 +887,9 @@ func handleMerge(e event, gc githubClient, bc bugzilla.Client, options plugins.B
 			log.WithError(err).Warn("Unexpected error updating Bugzilla bug.")
 			return comment(formatError(fmt.Sprintf("updating to the %s state", options.StateAfterMerge), bc.Endpoint(), e.bugId, err))
 		}
-		return comment(fmt.Sprintf("%s %s", mergedMessage("All"), outcomeMessage("")))
+		return comment(fmt.Sprintf("%s%s", mergedMessage("All"), outcomeMessage("")))
 	}
-	return comment(fmt.Sprintf("%s %s\n%s", mergedMessage("Some"), unmergedMessage, outcomeMessage("")))
+	return comment(fmt.Sprintf("%s%s%s", mergedMessage("Some"), unmergedMessage, outcomeMessage("not ")))
 }
 
 func handleCherrypick(e event, gc githubClient, bc bugzilla.Client, options plugins.BugzillaBranchOptions, log *logrus.Entry) error {

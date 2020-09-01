@@ -25,9 +25,7 @@ require (
 	github.com/alecthomas/chroma v0.7.1
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/docker/distribution v2.7.1+incompatible
-	github.com/docker/docker v1.13.1 // indirect
 	github.com/docker/spdystream v0.0.0-20181023171402-6480d4af844c // indirect
-	github.com/fsnotify/fsnotify v1.4.9 // indirect
 	github.com/getlantern/deepcopy v0.0.0-20160317154340-7f45deb8130a
 	github.com/ghodss/yaml v1.0.0
 	github.com/google/go-cmp v0.5.0
@@ -44,7 +42,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/pmezard/go-difflib v1.0.0
 	github.com/polyfloyd/go-errorlint v0.0.0-20200429095719-920be198a950
-	github.com/prometheus/client_golang v1.5.0
+	github.com/prometheus/client_golang v1.6.0
 	github.com/prometheus/common v0.9.1
 	github.com/shurcooL/githubv4 v0.0.0-20191102174205-af46314aec7b
 	github.com/sirupsen/logrus v1.6.0
@@ -52,13 +50,13 @@ require (
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
 	golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208
 	gopkg.in/fsnotify.v1 v1.4.7
-	k8s.io/api v0.18.2
-	k8s.io/apimachinery v0.18.2
-	k8s.io/client-go v9.0.0+incompatible
-	k8s.io/test-infra v0.0.0-20200725055416-2388ca759f42
-	k8s.io/utils v0.0.0-20200324210504-a9aa75ae1b89
-	sigs.k8s.io/boskos v0.0.0-20200530174753-71e795271860
-	sigs.k8s.io/controller-runtime v0.5.4
+	k8s.io/api v0.18.7-rc.0
+	k8s.io/apimachinery v0.18.7-rc.0
+	k8s.io/client-go v11.0.1-0.20190805182717-6502b5e7b1b5+incompatible
+	k8s.io/test-infra v0.0.0-20200901052750-eeeadc56a1c9
+	k8s.io/utils v0.0.0-20200603063816-c1c6865ac451
+	sigs.k8s.io/boskos v0.0.0-20200617235605-f289ba6555ba
+	sigs.k8s.io/controller-runtime v0.6.1
 	sigs.k8s.io/controller-tools v0.3.0
 	sigs.k8s.io/yaml v1.2.0
 )

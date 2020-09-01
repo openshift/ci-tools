@@ -274,6 +274,10 @@ type Approve struct {
 	// The default value is "https://go.k8s.io/bot-commands". The command help page is served by Deck
 	// and available under https://<deck-url>/command-help, e.g. "https://prow.k8s.io/command-help"
 	CommandHelpLink string `json:"commandHelpLink"`
+
+	// PrProcessLink is the link to the help page which explains the code review process.
+	// The default value is "https://git.k8s.io/community/contributors/guide/owners.md#the-code-review-process".
+	PrProcessLink string `json:"pr_process_link,omitempty"`
 }
 
 var (
@@ -505,10 +509,14 @@ type MergeWarning struct {
 	Repos []string `json:"repos,omitempty"`
 	// List of channels on which a event is published.
 	Channels []string `json:"channels,omitempty"`
-	// A slack event is published if the user is not part of the WhiteList.
+	// Deprecated: Use ExemptUsers instead.
 	WhiteList []string `json:"whitelist,omitempty"`
-	// A slack event is published if the user is not on the branch whitelist
+	// A slack event is published if the user is not part of the ExemptUsers.
+	ExemptUsers []string `json:"exempt_users,omitempty"`
+	// Deprecated: Use ExemptBranches instead.
 	BranchWhiteList map[string][]string `json:"branch_whitelist,omitempty"`
+	// A slack event is published if the user is not on the exempt branches.
+	ExemptBranches map[string][]string `json:"exempt_branches,omitempty"`
 }
 
 // Welcome is config for the welcome plugin.
@@ -706,6 +714,12 @@ func (c *Configuration) ApproveFor(org, repo string) *Approve {
 		no := false
 		a.DeprecatedReviewActsAsApprove = &no
 	}
+	if a.CommandHelpLink == "" {
+		a.CommandHelpLink = "https://go.k8s.io/bot-commands"
+	}
+	if a.PrProcessLink == "" {
+		a.PrProcessLink = "https://git.k8s.io/community/contributors/guide/owners.md#the-code-review-process"
+	}
 	return a
 }
 
@@ -848,11 +862,6 @@ func (c *Configuration) setDefaults() {
 				continue
 			}
 			c.ExternalPlugins[repo][i].Endpoint = fmt.Sprintf("http://%s", p.Name)
-		}
-	}
-	for i, approve := range c.Approve {
-		if approve.CommandHelpLink == "" {
-			c.Approve[i].CommandHelpLink = "https://go.k8s.io/bot-commands"
 		}
 	}
 	if c.Blunderbuss.ReviewerCount == nil {
@@ -1071,6 +1080,34 @@ func validateTrigger(triggers []Trigger) error {
 	return nil
 }
 
+var (
+	warnSlackMergeWarningWhiteList       time.Time
+	warnSlackMergeWarningBranchWhiteList time.Time
+)
+
+func validateSlack(slack Slack) error {
+	for i := range slack.MergeWarnings {
+		if len(slack.MergeWarnings[i].WhiteList) > 0 {
+			if len(slack.MergeWarnings[i].ExemptUsers) > 0 {
+				return errors.New("invalid Slack merge warning configuration: both whitelist (deprecated) and exempt_users are set.")
+			}
+
+			warnDeprecated(&warnSlackMergeWarningWhiteList, 5*time.Minute, "whitelist field in Slack merge warning is deprecated and has been renamed to exempt_users. Please update your configuration.")
+			slack.MergeWarnings[i].ExemptUsers = slack.MergeWarnings[i].WhiteList
+		}
+
+		if len(slack.MergeWarnings[i].BranchWhiteList) > 0 {
+			if len(slack.MergeWarnings[i].ExemptBranches) > 0 {
+				return errors.New("invalid Slack merge warning configuration: both branch_whitelist (deprecated) and exempt_branches are set.")
+			}
+
+			warnDeprecated(&warnSlackMergeWarningBranchWhiteList, 5*time.Minute, "branch_whitelist field in Slack merge warning is deprecated and has been renamed to exempt_branches. Please update your configuration.")
+			slack.MergeWarnings[i].ExemptBranches = slack.MergeWarnings[i].BranchWhiteList
+		}
+	}
+	return nil
+}
+
 func compileRegexpsAndDurations(pc *Configuration) error {
 	cRe, err := regexp.Compile(pc.SigMention.Regexp)
 	if err != nil {
@@ -1142,6 +1179,9 @@ func (c *Configuration) Validate() error {
 		return err
 	}
 	if err := validateTrigger(c.Triggers); err != nil {
+		return err
+	}
+	if err := validateSlack(c.Slack); err != nil {
 		return err
 	}
 
@@ -1490,7 +1530,7 @@ func ResolveBugzillaOptions(parent, child BugzillaBranchOptions) BugzillaBranchO
 			output.StateAfterMerge = parent.StateAfterMerge
 		}
 		if parent.AllowedGroups != nil {
-			output.AllowedGroups = sets.NewString(output.AllowedGroups...).Insert(parent.AllowedGroups...).UnsortedList()
+			output.AllowedGroups = sets.NewString(output.AllowedGroups...).Insert(parent.AllowedGroups...).List()
 		}
 	}
 
@@ -1560,7 +1600,7 @@ func ResolveBugzillaOptions(parent, child BugzillaBranchOptions) BugzillaBranchO
 		output.StateAfterMerge = child.StateAfterMerge
 	}
 	if child.AllowedGroups != nil {
-		output.AllowedGroups = sets.NewString(output.AllowedGroups...).Insert(child.AllowedGroups...).UnsortedList()
+		output.AllowedGroups = sets.NewString(output.AllowedGroups...).Insert(child.AllowedGroups...).List()
 	}
 
 	// Status fields should not be used anywhere now when they were mirrored to states

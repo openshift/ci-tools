@@ -7,6 +7,7 @@ import (
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/prow/flagutil"
 )
 
@@ -22,6 +23,32 @@ func PromotesImagesInto(configSpec *cioperatorapi.ReleaseBuildConfiguration, pro
 		return false
 	}
 	return !isDisabled(configSpec) && promotionNamespace == extractPromotionNamespace(configSpec)
+}
+
+// AllPromotionImageStreamTags returns a set of all ImageStreamTags this config promotes to.
+func AllPromotionImageStreamTags(configSpec *cioperatorapi.ReleaseBuildConfiguration) sets.String {
+	result := sets.String{}
+
+	if isDisabled(configSpec) {
+		return result
+	}
+
+	namespace := extractPromotionNamespace(configSpec)
+	name := extractPromotionName(configSpec)
+
+	if namespace == "" || name == "" {
+		return result
+	}
+
+	for _, image := range configSpec.Images {
+		result.Insert(fmt.Sprintf("%s/%s:%s", namespace, name, image.To))
+	}
+
+	for additionalTagToPromote := range configSpec.PromotionConfiguration.AdditionalImages {
+		result.Insert(fmt.Sprintf("%s/%s:%s", namespace, name, additionalTagToPromote))
+	}
+
+	return result
 }
 
 // PromotesOfficialImages determines if a configuration will result in official images

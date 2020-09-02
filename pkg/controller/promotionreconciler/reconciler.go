@@ -23,6 +23,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/controller/promotionreconciler/prowjobreconciler"
 	controllerutil "github.com/openshift/ci-tools/pkg/controller/util"
 	"github.com/openshift/ci-tools/pkg/load/agents"
+	"github.com/openshift/ci-tools/pkg/promotion"
 	"github.com/openshift/ci-tools/pkg/steps/release"
 	"github.com/openshift/ci-tools/pkg/util/imagestreamtagmapper"
 	"github.com/openshift/ci-tools/pkg/util/imagestreamtagwrapper"
@@ -142,7 +143,7 @@ func (r *reconciler) reconcile(req controllerruntime.Request, log *logrus.Entry)
 	if err != nil {
 		return fmt.Errorf("failed to get promotionConfig: %w", err)
 	}
-	if ciOPConfig == nil {
+	if ciOPConfig == nil || !promotion.AllPromotionImageStreamTags(ciOPConfig).Has(req.String()) {
 		// We don't know how to build this
 		log.Trace("No promotionConfig found")
 		return nil

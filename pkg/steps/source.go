@@ -279,9 +279,8 @@ func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStrea
 		},
 		Spec: buildapi.BuildSpec{
 			CommonSpec: buildapi.CommonSpec{
-				Resources:      buildResources,
-				ServiceAccount: "builder", // TODO: remove when build cluster has https://github.com/openshift/origin/pull/17668
-				Source:         source,
+				Resources: buildResources,
+				Source:    source,
 				Strategy: buildapi.BuildStrategy{
 					Type: buildapi.DockerBuildStrategyType,
 					DockerStrategy: &buildapi.DockerBuildStrategy{

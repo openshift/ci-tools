@@ -22,7 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
-	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
+	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 
 	buildapi "github.com/openshift/api/build/v1"
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
@@ -174,7 +174,7 @@ func (s *sourceStep) run(ctx context.Context) error {
 }
 
 func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clonerefsRef coreapi.ObjectReference, resources api.ResourceConfiguration, cloneAuthConfig *CloneAuthConfig, pullSecret *coreapi.Secret) *buildapi.Build {
-	var refs []prowapi.Refs
+	var refs []prowv1.Refs
 	if jobSpec.Refs != nil {
 		r := *jobSpec.Refs
 		if cloneAuthConfig != nil {
@@ -310,6 +310,7 @@ func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStrea
 		build.OwnerReferences = append(build.OwnerReferences, *owner)
 	}
 
+	addLabelsToBuild(jobSpec.Refs, build, source.ContextDir)
 	return build
 }
 
@@ -693,4 +694,48 @@ func getReasonsForUnreadyContainers(p *coreapi.Pod) string {
 		_, _ = builder.WriteString(fmt.Sprintf("\n* Container %s is not ready with reason %s and message %s", c.Name, reason, message))
 	}
 	return builder.String()
+}
+
+func addLabelsToBuild(refs *prowv1.Refs, build *buildapi.Build, contextDir string) {
+	labels := make(map[string]string)
+	// reset all labels that may be set by a lower level
+	for _, key := range []string{
+		"vcs-type",
+		"vcs-ref",
+		"vcs-url",
+		"io.openshift.build.name",
+		"io.openshift.build.namespace",
+		"io.openshift.build.commit.id",
+		"io.openshift.build.commit.ref",
+		"io.openshift.build.commit.message",
+		"io.openshift.build.commit.author",
+		"io.openshift.build.commit.date",
+		"io.openshift.build.source-location",
+		"io.openshift.build.source-context-dir",
+	} {
+		labels[key] = ""
+	}
+	if refs != nil {
+		if len(refs.Pulls) == 0 {
+			labels["vcs-type"] = "git"
+			labels["vcs-ref"] = refs.BaseSHA
+			labels["io.openshift.build.commit.id"] = refs.BaseSHA
+			labels["io.openshift.build.commit.ref"] = refs.BaseRef
+			labels["vcs-url"] = fmt.Sprintf("https://github.com/%s/%s", refs.Org, refs.Repo)
+			labels["io.openshift.build.source-location"] = labels["vcs-url"]
+			labels["io.openshift.build.source-context-dir"] = contextDir
+		}
+		// TODO: we should consider setting enough info for a caller to reconstruct pulls to support
+		// oc adm release info tooling
+	}
+
+	for k, v := range labels {
+		build.Spec.Output.ImageLabels = append(build.Spec.Output.ImageLabels, buildapi.ImageLabel{
+			Name:  k,
+			Value: v,
+		})
+	}
+	sort.Slice(build.Spec.Output.ImageLabels, func(i, j int) bool {
+		return build.Spec.Output.ImageLabels[i].Name < build.Spec.Output.ImageLabels[j].Name
+	})
 }

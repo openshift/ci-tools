@@ -191,7 +191,7 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.description, func(t *testing.T) {
-			testhelper.CompareWithFixture(t, generatePresubmitForTest(tc.test, tc.repoInfo, jobconfig.Generated, nil, true, nil, tc.jobRelease)) // podSpec tested in generatePodSpec
+			testhelper.CompareWithFixture(t, generatePresubmitForTest(tc.test, tc.repoInfo, jobconfig.Generated, nil, nil, tc.jobRelease)) // podSpec tested in generatePodSpec
 		})
 	}
 }
@@ -381,6 +381,22 @@ func TestGenerateJobs(t *testing.T) {
 				Images: []ciop.ProjectDirectoryImageBuildStepConfiguration{{}},
 				InputConfiguration: ciop.InputConfiguration{
 					ReleaseTagConfiguration: &ciop.ReleaseTagConfiguration{Namespace: "openshift"},
+				},
+			},
+			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
+				Org:    "organization",
+				Repo:   "repository",
+				Branch: "branch",
+			}},
+		}, {
+			id: "operator section creates ci-index presubmit job",
+			config: &ciop.ReleaseBuildConfiguration{
+				Tests: []ciop.TestStepConfiguration{},
+				Operator: &ciop.OperatorStepConfiguration{
+					Bundles: []ciop.Bundle{{
+						DockerfilePath: "bundle.Dockerfile",
+						ContextDir:     "manifests",
+					}},
 				},
 			},
 			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{

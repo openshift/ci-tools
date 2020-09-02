@@ -147,11 +147,13 @@ func (r *reconciler) reconcile(req controllerruntime.Request, log *logrus.Entry)
 		log.Trace("No promotionConfig found")
 		return nil
 	}
+	log = log.WithField("org", ciOPConfig.Metadata.Org).WithField("repo", ciOPConfig.Metadata.Repo).WithField("branch", ciOPConfig.Metadata.Branch)
 
 	istCommit, err := commitForIST(ist)
 	if err != nil {
 		return controllerutil.TerminalError(fmt.Errorf("failed to get commit for imageStreamTag: %w", err))
 	}
+	log = log.WithField("istCommit", istCommit)
 
 	currentHEAD, found, err := r.currentHEADForBranch(ciOPConfig.Metadata, log)
 	if err != nil {
@@ -164,7 +166,7 @@ func (r *reconciler) reconcile(req controllerruntime.Request, log *logrus.Entry)
 	if currentHEAD == istCommit {
 		return nil
 	}
-	log = log.WithField("org", ciOPConfig.Metadata.Org).WithField("repo", ciOPConfig.Metadata.Repo).WithField("branch", ciOPConfig.Metadata.Branch).WithField("currentHEAD", currentHEAD)
+	log = log.WithField("currentHEAD", currentHEAD)
 
 	log.Info("Requesting prowjob creation")
 	r.enqueueJob(prowjobreconciler.OrgRepoBranchCommit{

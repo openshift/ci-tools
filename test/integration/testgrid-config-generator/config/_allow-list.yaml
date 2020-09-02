@@ -1,0 +1,4 @@
+release-openshift-origin-job-from-allow-list: informing
+release-openshift-origin-job: informing
+release-openshift-origin-job-without-release-label-broken: broken
+release-openshift-ocp-job: informing

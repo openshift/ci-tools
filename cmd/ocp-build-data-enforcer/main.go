@@ -299,7 +299,7 @@ func (dp *diffProcessor) process() error {
 					"Instead of merging this PR you can also create an alternate PR that includes the changes found here.",
 					"",
 					"If you believe the content of this PR is incorrect, please contact the dptp team in",
-					"#forum-testplatform.",
+					"#aos-art.",
 					"",
 					"[1]: https://github.com/openshift/ci-tools/tree/master/cmd/ocp-build-data-enforcer",
 					"[2]: https://github.com/openshift/ocp-build-data/tree/openshift-4.6-rhel-8/images",

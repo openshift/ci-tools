@@ -37,38 +37,6 @@ func (s *projectDirectoryImageBuildStep) Run(ctx context.Context) error {
 
 func (s *projectDirectoryImageBuildStep) run(ctx context.Context) error {
 
-	labels := make(map[string]string)
-	// reset all labels that may be set by a lower level
-	for _, key := range []string{
-		"vcs-type",
-		"vcs-ref",
-		"vcs-url",
-		"io.openshift.build.name",
-		"io.openshift.build.namespace",
-		"io.openshift.build.commit.id",
-		"io.openshift.build.commit.ref",
-		"io.openshift.build.commit.message",
-		"io.openshift.build.commit.author",
-		"io.openshift.build.commit.date",
-		"io.openshift.build.source-location",
-		"io.openshift.build.source-context-dir",
-	} {
-		labels[key] = ""
-	}
-	if refs := s.jobSpec.Refs; refs != nil {
-		if len(refs.Pulls) == 0 {
-			labels["vcs-type"] = "git"
-			labels["vcs-ref"] = refs.BaseSHA
-			labels["io.openshift.build.commit.id"] = refs.BaseSHA
-			labels["io.openshift.build.commit.ref"] = refs.BaseRef
-			labels["vcs-url"] = fmt.Sprintf("https://github.com/%s/%s", refs.Org, refs.Repo)
-			labels["io.openshift.build.source-location"] = labels["vcs-url"]
-			labels["io.openshift.build.source-context-dir"] = s.config.ContextDir
-		}
-		// TODO: we should consider setting enough info for a caller to reconstruct pulls to support
-		// oc adm release info tooling
-	}
-
 	images := buildInputsFromStep(s.config.Inputs)
 	// If image being built is an operator bundle, use the bundle source instead of original source
 	if api.IsBundleImage(string(s.config.To)) {
@@ -130,12 +98,6 @@ func (s *projectDirectoryImageBuildStep) run(ctx context.Context) error {
 		s.resources,
 		s.pullSecret,
 	)
-	for k, v := range labels {
-		build.Spec.Output.ImageLabels = append(build.Spec.Output.ImageLabels, buildapi.ImageLabel{
-			Name:  k,
-			Value: v,
-		})
-	}
 	return handleBuild(ctx, s.buildClient, build, s.artifactDir)
 }
 

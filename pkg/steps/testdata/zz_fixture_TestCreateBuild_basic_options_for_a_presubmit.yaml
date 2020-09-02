@@ -17,6 +17,19 @@ metadata:
 spec:
   nodeSelector: null
   output:
+    imageLabels:
+    - name: io.openshift.build.commit.author
+    - name: io.openshift.build.commit.date
+    - name: io.openshift.build.commit.id
+    - name: io.openshift.build.commit.message
+    - name: io.openshift.build.commit.ref
+    - name: io.openshift.build.name
+    - name: io.openshift.build.namespace
+    - name: io.openshift.build.source-context-dir
+    - name: io.openshift.build.source-location
+    - name: vcs-ref
+    - name: vcs-type
+    - name: vcs-url
     to:
       kind: ImageStreamTag
       name: pipeline:src
@@ -25,7 +38,6 @@ spec:
   resources:
     requests:
       cpu: 200m
-  serviceAccount: builder
   source:
     dockerfile: |2
 

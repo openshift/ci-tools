@@ -553,8 +553,8 @@ func waitForPodCompletionOrTimeout(ctx context.Context, podClient coreclientset.
 				log.Printf("warning: failed to get pod %s: %v", name, err)
 				continue
 			}
-			if pod.Status.Phase != coreapi.PodRunning && time.Since(pod.CreationTimestamp.Time) > 30*time.Minute {
-				message := fmt.Sprintf("pod didn't start running within 30 minutes: %s", getReasonsForUnreadyContainers(pod))
+			if !podHasStarted(pod) && time.Since(pod.CreationTimestamp.Time) > 10*time.Minute {
+				message := fmt.Sprintf("pod didn't start running within 10 minutes: %s", getReasonsForUnreadyContainers(pod))
 				log.Print(message)
 				notifier.Complete(name)
 				return false, errors.New(message)
@@ -584,6 +584,22 @@ func waitForPodCompletionOrTimeout(ctx context.Context, podClient coreclientset.
 			}
 		}
 	}
+}
+
+// podHasStarted checks if a test pod can be considered as "running".
+// Init containers are also checked because they can be declared in template
+// tests, but those added by the test infrastructure are ignored.
+func podHasStarted(pod *coreapi.Pod) bool {
+	if pod.Status.Phase == coreapi.PodRunning {
+		return true
+	}
+	// Status is still `Pending` while init containers are executed.
+	for _, s := range pod.Status.InitContainerStatuses {
+		if s.Name != "cp-secret-wrapper" && s.State.Running != nil {
+			return true
+		}
+	}
+	return false
 }
 
 // podReason returns the pod's reason and message for exit or tries to find one from the pod.

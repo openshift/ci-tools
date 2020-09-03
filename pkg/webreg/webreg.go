@@ -406,10 +406,10 @@ const templateDefinitions = `
 const optionalOperatorOverviewPage = `<h2 id="title"><a href="#title">Testing Operators Built With The Operator SDK and Deployed Through OLM</a></h2>
 
 <p>
-<code>ci-operator</code> has dedicated support for building, deploying and testing
-operator bundles, whether the operator repository uses the Operator SDK or not.
-This document outlines how to configure <code>ci-operator</code> to build a bundle
-and index image, and how to use those in end-to-end tests.
+<code>ci-operator</code> supports building, deploying and testing operator bundles,
+whether the operator repository uses the Operator SDK or not.
+This document outlines how to configure <code>ci-operator</code> to build bundle
+and index images and use those in end-to-end tests.
 </p>
 
 <p>
@@ -423,7 +423,7 @@ broader test infrastructure that an operator test is defined in.
 <p>
 Configuring <code>ci-operator</code> to build operator bundles from a repository
 is as simple as adding a new <code>operator</code> stanza, specifying the bundles
-that can be built from the repository and what sorts of container image pull
+that can be built from the repository, and what sorts of container image pull
 specification substitutions are necessary during bundle build time. Substitutions
 allow for the operator manifests to refer to images that were built from the
 repository during the test or imported from other sources. The following example
@@ -443,13 +443,28 @@ When configuring a bundle build, two options are available:
   <li><code>context_dir</code>: base directory for the bundle image build, defaulting to the root of the source tree</li>
 </ul>
 
+<p>The <code>.operator.bundles</code> stanza is a list, so building multiple bundle
+images is supported.</p>
+
 <h3 id="index"><a href="#index">Building an Index</a></h3>
 
 <p>
-If <code>ci-operator</code> is configured to build operator bundles from a
-repository, an index image will automatically be built to package those bundles.
+When <code>ci-operator</code> builds at least one operator bundle from a
+repository, it will also automatically build an ephemeral index image to package
+those bundles. The test workloads should consume the bundles via this index
+image. The index image is named <code>ci-index</code> and can be exposed to test
+steps via the <a href="/help/ci-operator#literal-references">dependencies</a> feature.
 </p>
 
+<h3 id="ci-index-jobs"><a href="#ci-index-jobs">Validating Bundle and Index Builds</a></h3>
+
+Similarly to how the job generator automatically creates a <code>pull-ci-$ORG-$REPO-$BRANCH-images</code>
+job to test image builds when <code>ci-operator</code> configuration has an
+<code>images</code> stanza, it will also make a separate job that attempts to
+build the configured bundle and index images. This job, named <code>pull-ci-$ORG-$REPO-$BRANCH-ci-index<code>,
+is created only when an <code>operator</code> stanza is present.
+
+<!-- TODO
 <h3 id="tests"><a href="#tests">Running Tests</a></h3>
 
 <p>
@@ -476,6 +491,7 @@ at the time that the test begins. The following example runs a test in this mann
 
 <code>ci-operator</code> configuration:
 {{ yamlSyntax (index . "optionalOperatorTestConfig") }}
+-->
 `
 
 const optionalOperatorBundleConfig = `base_images:
@@ -487,15 +503,20 @@ const optionalOperatorBundleConfig = `base_images:
     namespace: "ocp"
     name: "operand"
     tag: "latest"
+images:
+- from: "ubi"
+  to: "tested-operator"
 operator:
   bundles: # entries create bundle images from Dockerfiles and an index containing all bundles
   - dockerfile_path: path/to/Dockerfile # defaults to bundle.Dockerfile
     context_dir: path/                  # defaults to .
   substitutions:
-  - pullspec: "quay.io/openshift/operand:1.3"  # this will replace references to the operand with the imported version
+  # replace references to the operand with the imported version (base_images stanza)
+  - pullspec: "quay.io/openshift/operand:1.3"
     with: "stable:operand"
-  - pullspec: "quay.io/openshift/operator:1.3" # this will replace references to the operator with the built version
-    with: "pipeline:ci-bundle-0"
+  # replace references to the operator with the built version (images stanza)
+  - pullspec: "quay.io/openshift/tested-operator:1.3"
+    with: "pipeline:tested-operator"
 `
 
 const optionalOperatorTestConfig = `tests:

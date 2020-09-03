@@ -1,4 +1,4 @@
-FROM centos:7
+FROM centos:8
 LABEL maintainer="bbarcaro@redhat.com"
 
 ADD secret-wrapper /usr/bin/secret-wrapper

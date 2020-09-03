@@ -1,4 +1,4 @@
-FROM centos:7
+FROM centos:8
 LABEL maintainer="nmoraiti@redhat.com"
 
 RUN yum install -y git && yum clean all

@@ -1,4 +1,4 @@
-FROM centos:7
+FROM centos:8
 LABEL maintainer="nmoraiti@redhat.com"
 
 ADD group-auto-updater /usr/bin/group-auto-updater

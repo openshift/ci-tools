@@ -88,9 +88,10 @@ func TestReconcile(t *testing.T) {
 		ciOpBranch  = "ci-op-branch"
 	)
 	testCases := []struct {
-		name         string
-		githubClient func(owner, repo, ref string) (string, error)
-		verify       func(error, *prowjobreconciler.OrgRepoBranchCommit) error
+		name              string
+		githubClient      func(owner, repo, ref string) (string, error)
+		promotionDisabled bool
+		verify            func(error, *prowjobreconciler.OrgRepoBranchCommit) error
 	}{
 		{
 			name:         "404 getting commit for IST returns terminal error",
@@ -128,6 +129,20 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
+			name:              "Ist outdated, promotion disabled, no prowjob created",
+			githubClient:      func(_, _, _ string) (string, error) { return "newer", nil },
+			promotionDisabled: true,
+			verify: func(e error, req *prowjobreconciler.OrgRepoBranchCommit) error {
+				if e != nil {
+					return fmt.Errorf("expected error to be nil, was %w", e)
+				}
+				if req != nil {
+					return fmt.Errorf("expected no request, got %v", req)
+				}
+				return nil
+			},
+		},
+		{
 			name:         "Ist outdated, prowjob created",
 			githubClient: func(_, _, _ string) (string, error) { return "newer", nil },
 			verify: func(e error, req *prowjobreconciler.OrgRepoBranchCommit) error {
@@ -156,7 +171,7 @@ func TestReconcile(t *testing.T) {
 			imageStreamTag := &imagev1.ImageStreamTag{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "namespace",
-					Name:      "name",
+					Name:      "name:tag",
 				},
 				Image: imagev1.Image{
 					DockerImageMetadata: runtime.RawExtension{
@@ -275,11 +290,20 @@ func TestReconcile(t *testing.T) {
 				log:    logrus.NewEntry(logrus.New()),
 				client: fakectrlruntimeclient.NewFakeClient(imageStreamTag),
 				releaseBuildConfigs: func(_ string) ([]*cioperatorapi.ReleaseBuildConfiguration, error) {
-					return []*cioperatorapi.ReleaseBuildConfiguration{{Metadata: cioperatorapi.Metadata{
-						Org:    ciOPOrg,
-						Repo:   ciOpRepo,
-						Branch: ciOpBranch,
-					}}}, nil
+					return []*cioperatorapi.ReleaseBuildConfiguration{{
+						Metadata: cioperatorapi.Metadata{
+							Org:    ciOPOrg,
+							Repo:   ciOpRepo,
+							Branch: ciOpBranch,
+						},
+						PromotionConfiguration: &cioperatorapi.PromotionConfiguration{
+							Namespace:        "namespace",
+							Name:             "name",
+							AdditionalImages: map[string]string{"tag": ""},
+							Disabled:         tc.promotionDisabled,
+						},
+					},
+					}, nil
 				},
 				gitHubClient: fakeGithubClient{getGef: tc.githubClient},
 				enqueueJob:   func(orbc prowjobreconciler.OrgRepoBranchCommit) { req = &orbc },
@@ -287,7 +311,7 @@ func TestReconcile(t *testing.T) {
 
 			err := r.reconcile(reconcile.Request{NamespacedName: types.NamespacedName{
 				Namespace: "namespace",
-				Name:      "name",
+				Name:      "name:tag",
 			}}, r.log)
 
 			if err := tc.verify(err, req); err != nil {

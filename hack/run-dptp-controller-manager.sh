@@ -7,7 +7,7 @@ cd $(dirname $0)/..
 kubeconfig="$(mktemp)"
 dockercfg=$(mktemp)
 trap 'rm -f $kubeconfig $dockercfg' EXIT
-kubectl config view >$kubeconfig
+kubectl config view --raw>$kubeconfig
 IFS=$'\n'
 for additional_context in $(kubectl --kubeconfig $kubeconfig config get-contexts -o name|egrep -v 'app\.ci|api\.ci|build01|build02'); do
   kubectl --kubeconfig $kubeconfig config delete-context "$additional_context"
@@ -31,7 +31,7 @@ go build  -v -o /tmp/dptp-cm ./cmd/dptp-controller-manager
   --config-path="$(go env GOPATH)/src/github.com/openshift/release/core-services/prow/02_config/_config.yaml" \
   --job-config-path="$(go env GOPATH)/src/github.com/openshift/release/ci-operator/jobs" \
   --leader-election-suffix="$USER" \
-  --enable-controller=secret_syncer \
+  --enable-controller=promotionreconciler \
   --step-config-path="$(go env GOPATH)/src/github.com/openshift/release/ci-operator/step-registry" \
   --testImagesDistributorOptions.imagePullSecretPath=$dockercfg \
   --kubeconfig=$kubeconfig \

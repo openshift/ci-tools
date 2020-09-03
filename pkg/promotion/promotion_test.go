@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
@@ -69,6 +70,91 @@ func TestPromotesOfficialImages(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			if actual, expected := PromotesOfficialImages(testCase.configSpec), testCase.expected; actual != expected {
 				t.Errorf("%s: did not identify official promotion correctly, expected %v got %v", testCase.name, expected, actual)
+			}
+		})
+	}
+}
+
+func TestAllPromotionImageStreamTags(t *testing.T) {
+	t.Parallel()
+	testCases := []struct {
+		name     string
+		config   *cioperatorapi.ReleaseBuildConfiguration
+		expected sets.String
+	}{
+		{
+			name:   "nil promotionconfig",
+			config: &cioperatorapi.ReleaseBuildConfiguration{},
+		},
+		{
+			name: "disabled",
+			config: &cioperatorapi.ReleaseBuildConfiguration{
+				PromotionConfiguration: &cioperatorapi.PromotionConfiguration{
+					Disabled:  true,
+					Namespace: "ns",
+					Name:      "name",
+				},
+				Images: []cioperatorapi.ProjectDirectoryImageBuildStepConfiguration{{To: cioperatorapi.PipelineImageStreamTagReferenceSource}},
+			},
+		},
+		{
+			name: "empty namespace",
+			config: &cioperatorapi.ReleaseBuildConfiguration{
+				PromotionConfiguration: &cioperatorapi.PromotionConfiguration{
+					Name: "some-stream",
+				},
+				Images: []cioperatorapi.ProjectDirectoryImageBuildStepConfiguration{{To: cioperatorapi.PipelineImageStreamTagReferenceSource}},
+			},
+		},
+		{
+			name: "empty name",
+			config: &cioperatorapi.ReleaseBuildConfiguration{
+				PromotionConfiguration: &cioperatorapi.PromotionConfiguration{
+					Namespace: "some-stream",
+				},
+				Images: []cioperatorapi.ProjectDirectoryImageBuildStepConfiguration{{To: cioperatorapi.PipelineImageStreamTagReferenceSource}},
+			},
+		},
+		{
+			name: "images",
+			config: &cioperatorapi.ReleaseBuildConfiguration{
+				PromotionConfiguration: &cioperatorapi.PromotionConfiguration{
+					Namespace: "some-namespace",
+					Name:      "some-stream",
+				},
+				Images: []cioperatorapi.ProjectDirectoryImageBuildStepConfiguration{{To: cioperatorapi.PipelineImageStreamTagReferenceSource}},
+			},
+			expected: sets.NewString("some-namespace/some-stream:src"),
+		},
+		{
+			name: "additinal image",
+			config: &cioperatorapi.ReleaseBuildConfiguration{
+				PromotionConfiguration: &cioperatorapi.PromotionConfiguration{
+					Namespace:        "some-namespace",
+					Name:             "some-stream",
+					AdditionalImages: map[string]string{"expected": ""},
+				},
+			},
+			expected: sets.NewString("some-namespace/some-stream:expected"),
+		},
+		{
+			name: "image and additional image",
+			config: &cioperatorapi.ReleaseBuildConfiguration{
+				PromotionConfiguration: &cioperatorapi.PromotionConfiguration{
+					Namespace:        "some-namespace",
+					Name:             "some-stream",
+					AdditionalImages: map[string]string{"expected": ""},
+				},
+				Images: []cioperatorapi.ProjectDirectoryImageBuildStepConfiguration{{To: cioperatorapi.PipelineImageStreamTagReferenceSource}},
+			},
+			expected: sets.NewString("some-namespace/some-stream:expected", "some-namespace/some-stream:src"),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if diff := cmp.Diff(AllPromotionImageStreamTags(tc.config), tc.expected); diff != "" {
+				t.Errorf("result differs from expected: %s", diff)
 			}
 		})
 	}

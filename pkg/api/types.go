@@ -477,6 +477,9 @@ type TestStepConfiguration struct {
 	// create a periodic job instead of a presubmit
 	Cron *string `json:"cron,omitempty"`
 
+	// Postsubmit configures prowgen to generate the job as a postsubmit rather than a presubmit
+	Postsubmit bool `json:"postsubmit,omitempty"`
+
 	// Only one of the following can be not-null.
 	ContainerTestConfiguration                                *ContainerTestConfiguration                                `json:"container,omitempty"`
 	MultiStageTestConfiguration                               *MultiStageTestConfiguration                               `json:"steps,omitempty"`

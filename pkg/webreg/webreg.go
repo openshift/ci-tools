@@ -710,8 +710,23 @@ them (by declaring container image builds with <code>images</code> and the desti
 for them to be published with <code>promotion</code>), a <i>post-submit</i> test will
 exist. A post-submit test executes after code is merged to the target repository;
 this sort of test type is a good fit for publication of new artifacts after changes to
-source code. It is not possible to configure any additional post-submit tests
-at this time using <code>ci-operator</code> configuration.
+source code.
+</p>
+<p>
+Adding a custom postsubmit to a repository via the ci-operator config is
+supported. To do so, add the <code>postsubmit</code> field to a ci-operator
+test config and set it to <code>true</code>. The following example configures
+a ci-operator test to run as a postsubmit:
+</p>
+<code>ci-operator</code> configuration:
+{{ yamlSyntax (index . "ciOperatorPostsubmitTestConfig") }}
+
+<p>
+One important thing to note is that, unlike presubmit jobs, the postsubmit
+tests are configured to not be rehearsable. This means that when the test is
+being added or modified by a PR in the <code>openshift/release</code> repo,
+the job will not be automatically run against the change in the PR. This is
+done to prevent accidental publication of artifacts by rehearsals.
 </p>
 
 <h5 id="periodic"><a href="#periodic">Periodic Tests</a></h5>
@@ -947,6 +962,14 @@ const depsPropagation = `tests:
       dependencies:
       - name: "pipeline:bin" # the original definition of ${DEP}
         env: "DEP"
+`
+
+const ciOperatorPostsubmitTestConfig = `tests:
+- as: "upload-results"               # names this test "upload-results"
+  commands: "make upload-results"    # declares which commands to run
+  container:
+    from: "bin"                      # runs the commands in "pipeline:bin"
+  postsubmit: true                   # schedule the job to be run as a postsubmit
 `
 
 const ciOperatorPeriodicTestConfig = `tests:
@@ -2255,6 +2278,7 @@ func helpHandler(subPath string, w http.ResponseWriter, _ *http.Request) {
 		data["ciOperatorTagSpecificationConfig"] = ciOperatorTagSpecificationConfig
 		data["ciOperatorReleaseConfig"] = ciOperatorReleaseConfig
 		data["ciOperatorContainerTestConfig"] = ciOperatorContainerTestConfig
+		data["ciOperatorPostsubmitTestConfig"] = ciOperatorPostsubmitTestConfig
 		data["ciOperatorPeriodicTestConfig"] = ciOperatorPeriodicTestConfig
 		data["ciOperatorContainerTestWithDependenciesConfig"] = ciOperatorContainerTestWithDependenciesConfig
 		data["depsPropagation"] = depsPropagation

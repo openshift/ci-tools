@@ -1,4 +1,4 @@
-FROM centos:7
+FROM centos:8
 LABEL maintainer="skuznets@redhat.com"
 
 ADD determinize-prow-config /usr/bin/determinize-prow-config

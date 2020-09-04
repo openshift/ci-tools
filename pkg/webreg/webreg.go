@@ -1455,7 +1455,7 @@ const credentialExample = `ref:
   credentials:
   - namespace: test-credentials # this entry injects the custom credential
     name: my-data
-    mountPath: /var/run/my-data
+    mount_path: /var/run/my-data
   documentation: |-
 	The step runs with custom credentials injected.`
 const chainExample = `chain:

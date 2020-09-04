@@ -25,6 +25,13 @@ type boskosClient interface {
 	UpdateOne(name, dest string, _ *common.UserData) error
 	ReleaseOne(name, dest string) error
 	ReleaseAll(dest string) error
+	Metric(rtype string) (common.Metric, error)
+}
+
+var ErrNotFound = boskos.ErrNotFound
+
+type Metrics struct {
+	Free, Leased int
 }
 
 // Client manages resource leases, acquiring, releasing, and keeping them
@@ -43,6 +50,9 @@ type Client interface {
 	// ReleaseAll ends all leases and returns the names of those that were
 	// successfully released.
 	ReleaseAll() ([]string, error)
+	// Metrics queries the states of a particular resource, for informational
+	// purposes.
+	Metrics(rtype string) (Metrics, error)
 }
 
 // NewClient creates a client that leases resources with the specified owner.
@@ -144,4 +154,15 @@ func (c *client) ReleaseAll() ([]string, error) {
 		delete(c.leases, l)
 	}
 	return ret, utilerrors.NewAggregate(errs)
+}
+
+func (c *client) Metrics(rtype string) (Metrics, error) {
+	metrics, err := c.boskos.Metric(rtype)
+	if err != nil {
+		return Metrics{}, err
+	}
+	return Metrics{
+		Free:   metrics.Current[freeState],
+		Leased: metrics.Current[leasedState],
+	}, nil
 }

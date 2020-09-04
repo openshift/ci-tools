@@ -81,17 +81,20 @@ func (s *leaseStep) run(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	heartbeatCtx, heartbeatCancel := context.WithCancel(ctx)
 	go heartbeatNamespace(s.namespace, s.namespaceClient, heartbeatCtx)
-	lease, err := client.Acquire(s.leaseType, ctx, cancel)
+	resource, err := client.Acquire(s.leaseType, ctx, cancel)
 	if err != nil {
 		heartbeatCancel()
+		if err == lease.ErrNotFound {
+			printResourceMetrics(*s.client, s.leaseType)
+		}
 		return results.ForReason(results.Reason("acquiring_lease:"+s.leaseType)).WithError(err).Errorf("failed to acquire lease: %v", err)
 	}
 	heartbeatCancel()
-	log.Printf("Acquired lease %q for %q", lease, s.leaseType)
-	s.leasedResource = lease
+	log.Printf("Acquired lease %q for %q", resource, s.leaseType)
+	s.leasedResource = resource
 	wrappedErr := results.ForReason("executing_test").ForError(s.wrapped.Run(ctx))
 	log.Printf("Releasing lease for %q", s.leaseType)
-	releaseErr := results.ForReason("releasing_lease").ForError(client.Release(lease))
+	releaseErr := results.ForReason("releasing_lease").ForError(client.Release(resource))
 
 	// we want a sensible output error for reporting, so we bubble up these individually
 	//if we can, as this is the only step that can have multiple errors
@@ -135,4 +138,13 @@ func heartbeatNamespace(namespace func() string, client coreclientset.NamespaceI
 			}
 		}
 	}
+}
+
+func printResourceMetrics(client lease.Client, rtype string) {
+	m, err := client.Metrics(rtype)
+	if err != nil {
+		log.Printf("warning: Could not get resource metrics: %v", err)
+		return
+	}
+	log.Printf("error: Failed to acquire resource, current capacity: %d free, %d leased", m.Free, m.Leased)
 }

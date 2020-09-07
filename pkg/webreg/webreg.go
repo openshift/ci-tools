@@ -129,6 +129,7 @@ td {
           <a class="dropdown-item" href="/help/private-repositories">Private Repositories</a>
           <a class="dropdown-item" href="/help/adding-components">Adding and Changing Content</a>
           <a class="dropdown-item" href="/help/release"><code>openshift/release</code></a>
+          <a class="dropdown-item" href="/help/operators">OLM Operator Support</a>
           <a class="dropdown-item" href="/help/examples">Examples</a>
           <a class="dropdown-item" href="/help/links">Useful links</a>
         </div>
@@ -406,10 +407,10 @@ const templateDefinitions = `
 const optionalOperatorOverviewPage = `<h2 id="title"><a href="#title">Testing Operators Built With The Operator SDK and Deployed Through OLM</a></h2>
 
 <p>
-<code>ci-operator</code> supports building, deploying and testing operator bundles,
-whether the operator repository uses the Operator SDK or not.
-This document outlines how to configure <code>ci-operator</code> to build bundle
-and index images and use those in end-to-end tests.
+<code>ci-operator</code> supports building, deploying, and testing operator
+bundles, whether the operator repository uses the Operator SDK or not. This
+document outlines how to configure <code>ci-operator</code> to build bundle and
+index images and use those in end-to-end tests.
 </p>
 
 <p>
@@ -418,17 +419,30 @@ the step environment <a href="/help">reference</a> for detailed descriptions of 
 broader test infrastructure that an operator test is defined in.
 </p>
 
-<h3 id="bundles"><a href="#bundles">Building Operator Bundles</a></h3>
+<h3 id="operator-artifacts"><a href="#operator-artifacts">Building Artifacts for OLM Operators</a></h3>
 
 <p>
-Configuring <code>ci-operator</code> to build operator bundles from a repository
-is as simple as adding a new <code>operator</code> stanza, specifying the bundles
-that can be built from the repository, and what sorts of container image pull
-specification substitutions are necessary during bundle build time. Substitutions
-allow for the operator manifests to refer to images that were built from the
-repository during the test or imported from other sources. The following example
-builds an operator, a bundle and replaces the operator's pull specification in
-manifests with the version built during the test:
+Multiple different images are involved in installing and testing
+candidate versions of OLM-delivered operators: operand, operator, bundle, and
+index images. Operand and operator images are built normally using the
+<code>images</code> stanza in <a href="/help/ci-operator#images"><code>ci-operator</code> configuration</a>.
+OLM uses bundle and index images to install the desired version of an operator.
+<code>ci-operator</code> can build ephemeral versions of these images suitable
+for installation and testing, but not for production.
+</p>
+
+<h4 id="bundles"><a href="#bundles">Building Operator Bundles</a></h4>
+
+<p>
+Configuring <code>ci-operator</code> to build operator bundles from a
+repository is as simple as adding a new <code>operator</code> stanza,
+specifying the bundles built from the repository, and what sorts of
+container image pull specification substitutions are necessary during bundle
+build time. Substitutions allow for the operator manifests to refer to images
+that were built from the repository during the test or imported from other
+sources. The following example builds an operator and then a bundle. While building
+the bundle, the operator's pull specification in manifests are replaced with the
+operator version built during the test:
 </p>
 
 <code>ci-operator</code> configuration:
@@ -439,49 +453,123 @@ When configuring a bundle build, two options are available:
 </p>
 
 <ul>
-  <li><code>dockerfile_path</code>: path to the Dockerfile that builds the bundle image, defaulting to <code>bundle.Dockerfile</code></li>
+  <li><code>dockerfile_path</code>: a path to the Dockerfile that builds the bundle image, defaulting to <code>bundle.Dockerfile</code></li>
   <li><code>context_dir</code>: base directory for the bundle image build, defaulting to the root of the source tree</li>
 </ul>
 
-<p>The <code>.operator.bundles</code> stanza is a list, so building multiple bundle
-images is supported.</p>
+<p>
+The <code>operator.bundles</code> stanza is a list, so it is possible to build
+multiple bundle images from one repository.
+</p>
 
-<h3 id="index"><a href="#index">Building an Index</a></h3>
+<h4 id="index"><a href="#index">Building an Index</a></h4>
 
 <p>
 When <code>ci-operator</code> builds at least one operator bundle from a
 repository, it will also automatically build an ephemeral index image to package
-those bundles. The test workloads should consume the bundles via this index
+those bundles. Test workloads should consume the bundles via this index
 image. The index image is named <code>ci-index</code> and can be exposed to test
-steps via the <a href="/help/ci-operator#literal-references">dependencies</a> feature.
+steps via the <a href="/help/ci-operator#literal-references"><code>dependencies</code></a> feature.
 </p>
 
-<h3 id="ci-index-jobs"><a href="#ci-index-jobs">Validating Bundle and Index Builds</a></h3>
+<h4 id="ci-index-jobs"><a href="#ci-index-jobs">Validating Bundle and Index Builds</a></h4>
 
+<p>
 Similarly to how the job generator automatically creates a <code>pull-ci-$ORG-$REPO-$BRANCH-images</code>
 job to test image builds when <code>ci-operator</code> configuration has an
-<code>images</code> stanza, it will also make a separate job that attempts to
-build the configured bundle and index images. This job, named <code>pull-ci-$ORG-$REPO-$BRANCH-ci-index<code>,
+<code>images</code> stanza, it will also make a separate job that builds the
+configured bundle and index images. This job, named <code>pull-ci-$ORG-$REPO-$BRANCH-ci-index</code>,
 is created only when an <code>operator</code> stanza is present.
+</p>
 
-<!-- TODO
 <h3 id="tests"><a href="#tests">Running Tests</a></h3>
 
 <p>
 Once <code>ci-operator</code> builds the operator bundle and index, they are
 available to be used as a <code>CatalogSource</code> by OLM for deploying and
-testing the operator. Today, the only style of testing that's supported is an
-end-to-end test, implemented with the <a href="/workflow/optional-operators-cvp-common-aws"><code>optional-operators-cvp-common-aws</code></a>
-workflow. This workflow takes the following steps to set up the test environment:
+testing the operator. The index image is called <code>ci-index</code> and can
+be exposed to multi-stage test workloads via the <a href="/help/ci-operator#literal-references">
+<code>dependencies</code> feature</a>:
+</p>
+
+Step configuration example:
+{{ yamlSyntax (index . "optionalOperatorIndexConsumerStep") }}
+
+<p>
+Any test workflow involving such step will require <code>ci-operator</code> to
+build the index image before it executes the workflow. The <code>OO_INDEX</code>
+environmental variable set for the step will contain the pull specification of
+the index image.
+</p>
+
+<h3 id="oo-steps">Step Registry Content for Operators</h3>
+
+<p>
+The step registry contains several generic steps and workflows that implement the
+common operations involving operators. We encourage operator repositories to
+consider using (and possibly improving) these shared steps and workflows over
+implementing their own from scratch.
+</p>
+
+<h4>Simple Operator Installation</h4>
+
+<p>
+The <code>optional-operators-ci-$CLOUD</code> (<a href="/workflow/optional-operators-ci-aws">aws</a>
+, <a href="/workflow/optional-operators-ci-gcp">gcp</a>, <a href="/workflow/optional-operators-ci-azure">azure</a>)
+family of workflows take the following steps to set up the test environment:
 </p>
 
 <ul>
   <li>deploy an ephemeral OpenShift cluster to test against</li>
   <li>create a <code>Namespace</code> to install into</li>
-  <li>create a <code>OperatorGroup</code> and <code>CatalogSource</code> to configure OLM</li>
+  <li>create an <code>OperatorGroup</code> and <code>CatalogSource</code> (referring to built index) to configure OLM</li>
   <li>create a <code>Subscription</code> for the operator under test</li>
   <li>wait for the operator under test to install and deploy</li>
 </ul>
+
+<p>
+These workflows enhance the general installation workflows (like
+<a href="/workflow/ipi-aws">ipi-aws</a>) with an additional
+<a href="/reference/optional-operators-ci-subscribe">optional-operators-ci-subscribe</a>
+step. Tests using these workflows need to provide the following parameters:
+</p>
+
+<table class="table">
+  <tr>
+    <th style="white-space: nowrap">Parameter</th>
+    <th>Description</th>
+  </tr>
+  <tr>
+    <td style="white-space: nowrap"><code>OO_PACKAGE</code></td>
+    <td>The name of the operator package to be installed.</td>
+  </tr>
+  <tr>
+    <td style="white-space: nowrap"><code>OO_CHANNEL</code></td>
+    <td>The name of the operator channel to track.</td>
+  </tr>
+  <tr>
+    <td style="white-space: nowrap"><code>OO_INSTALL_NAMESPACE</code></td>
+    <td>The namespace into which the operator and catalog will be installed. Special, default value <code>!create</code> means that a new namespace will be created.</td>
+  </tr>
+  <tr>
+    <td style="white-space: nowrap"><code>OO_TARGET_NAMESPACES</code></td>
+    <td>A comma-separated list of namespaces the operator will target. Special,
+      default value <code>!all</code> means that all namespaces will be targeted.
+      If no <code>OperatorGroup</code> exists in <code>$OO_INSTALL_NAMESPACE</code>,
+      a new one will be created with its target namespaces set to <code>$OO_TARGET_NAMESPACES</code>.
+      Otherwise, the existing <code>OperatorGroup</code>'s target namespace set
+      will be replaced. The special value <code>!install</code> will set the
+      target namespace to the operator's installation namespace.</td>
+  </tr>
+</table>
+
+<p>
+The combination of <code>OO_INSTALL_NAMESPACE</code> and <code>OO_TARGET_NAMESPACES</code>
+values determines the <code>InstallMode</code> when installing the operator. The
+default <code>InstallMode</code> is <code>AllNamespaces</code> (the operator will
+be installed into a newly created namespace of a random name, targeting all
+namespaces).
+</p>
 
 <p>
 A user-provided test can expect to have <code>${KUBECONFIG}</code> set, with
@@ -491,7 +579,6 @@ at the time that the test begins. The following example runs a test in this mann
 
 <code>ci-operator</code> configuration:
 {{ yamlSyntax (index . "optionalOperatorTestConfig") }}
--->
 `
 
 const optionalOperatorBundleConfig = `base_images:
@@ -508,8 +595,8 @@ images:
   to: "tested-operator"
 operator:
   bundles: # entries create bundle images from Dockerfiles and an index containing all bundles
-  - dockerfile_path: path/to/Dockerfile # defaults to bundle.Dockerfile
-    context_dir: path/                  # defaults to .
+  - dockerfile_path: "path/to/Dockerfile" # defaults to bundle.Dockerfile
+    context_dir: "path/"                  # defaults to .
   substitutions:
   # replace references to the operand with the imported version (base_images stanza)
   - pullspec: "quay.io/openshift/operand:1.3"
@@ -519,11 +606,26 @@ operator:
     with: "pipeline:tested-operator"
 `
 
+const optionalOperatorIndexConsumerStep = `ref:
+  as: "step-consuming-ci-index"
+  from: "cli"
+  commands: "step-consuming-ci-index.sh"
+  dependencies:
+  - env: "OO_INDEX"
+    name: "ci-index"
+  documentation: ...
+`
+
 const optionalOperatorTestConfig = `tests:
 - as: "operator-e2e"
   steps:
-    workflow: "optional-operators-cvp-common-aws"
+    workflow: "optional-operators-ci-aws"
     cluster_profile: "aws"
+    env:
+      OO_CHANNEL: "1.2.0"
+      OO_INSTALL_NAMESPACE: "kubevirt-hyperconverged"
+      OO_PACKAGE: "kubevirt-hyperconverged"
+      OO_TARGET_NAMESPACES: '!install'
     test:
     - as: "e2e"
       from: "src"               # the end-to-end tests run in the source repository
@@ -2585,6 +2687,7 @@ func helpHandler(subPath string, w http.ResponseWriter, _ *http.Request) {
 		helpTemplate, err = helpFuncs.Parse(optionalOperatorOverviewPage)
 		data["optionalOperatorBundleConfig"] = optionalOperatorBundleConfig
 		data["optionalOperatorTestConfig"] = optionalOperatorTestConfig
+		data["optionalOperatorIndexConsumerStep"] = optionalOperatorIndexConsumerStep
 	default:
 		writeErrorPage(w, errors.New("Invalid path"), http.StatusNotImplemented)
 		return
@@ -2666,7 +2769,7 @@ func WebRegHandler(regAgent agents.RegistryAgent, confAgent agents.ConfigAgent) 
 func syntax(source string, lexer chroma.Lexer) (string, error) {
 	var output bytes.Buffer
 	style := styles.Get("dracula")
-	// hightlighted lines based on linking currently require WithClasses to be used
+	// highlighted lines based on linking currently require WithClasses to be used
 	formatter := html.New(html.Standalone(false), html.LinkableLineNumbers(true, "line"), html.WithLineNumbers(true), html.WithClasses(true))
 	iterator, err := lexer.Tokenise(nil, source)
 	if err != nil {

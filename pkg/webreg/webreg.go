@@ -806,13 +806,17 @@ a test, <code>ci-operator</code> will wait to schedule that test step until the 
 present. In some cases, however, it is necessary for a test command to refer to an image
 that was built during the test workflow but not run inside of that container image itself.
 In this case, the default scheduling algorithm needs to know that the step requires a
-valid reference to exist before running. Test workloads can declare that they require
-fully resolved pull specification as a digest for any image from the <code>pipeline</code>,
-<code>stable-&lt;name&gt;</code> or <code>release</code> <code>ImageStreams</code>.
-Tests may opt into having these environment variables present by declaring
-<code>dependencies</code> in the <code>ci-operator</code> configuration for the test.
-For instance, the example container test will be able to access the following
-environment variables:
+valid reference to exist before running.
+</p>
+
+<p>
+Test workloads can declare that they require fully resolved pull specification
+as a digest for any image from the <code>pipeline</code>,
+<code>stable-&lt;name&gt;</code> or <code>release</code>
+<code>ImageStreams</code>.  Multi-stage tests may opt into having these
+environment variables present by declaring <code>dependencies</code> in the
+<code>ci-operator</code> configuration for the test.  For instance, the example
+test below will be able to access the following environment variables:
 </p>
 
 <ul>
@@ -939,16 +943,22 @@ const ciOperatorContainerTestConfig = `tests:
 `
 const ciOperatorContainerTestWithDependenciesConfig = `tests:
 - as: "vet"
-  commands: "test-script.sh ${BINARIES} ${MACHINE_CONFIG_OPERATOR} ${LATEST_RELEASE}"
-  container:
-    from: "src"
-  dependencies:
-  - name: "machine-config-operator"
-    env: "MACHINE_CONFIG_OPERATOR"
-  - name: "bin"
-    env: "BINARIES"
-  - name: "release:latest"
-    env: "LATEST_RELEASE"
+  steps:
+    test:
+    - as: "vet"
+      from: "src"
+      commands: "test-script.sh ${BINARIES} ${MACHINE_CONFIG_OPERATOR} ${LATEST_RELEASE}"
+      resources:
+        requests:
+          cpu: 100m
+          memory: 100Mi
+      dependencies:
+      - name: "machine-config-operator"
+        env: "MACHINE_CONFIG_OPERATOR"
+      - name: "bin"
+        env: "BINARIES"
+      - name: "release:latest"
+        env: "LATEST_RELEASE"
 `
 const depsPropagation = `tests:
 - as: "example"
@@ -959,6 +969,10 @@ const depsPropagation = `tests:
     - as: "test"
       commands: "make test"
       from: "src"
+      resources:
+        requests:
+          cpu: 100m
+          memory: 100Mi
       dependencies:
       - name: "pipeline:bin" # the original definition of ${DEP}
         env: "DEP"

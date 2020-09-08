@@ -54,3 +54,7 @@ func (c *fakeClient) ReleaseOne(name, dest string) error {
 func (c *fakeClient) ReleaseAll(dest string) error {
 	return c.addCall("releaseall", dest)
 }
+
+func (*fakeClient) Metric(rtype string) (common.Metric, error) {
+	return common.NewMetric(rtype), nil
+}

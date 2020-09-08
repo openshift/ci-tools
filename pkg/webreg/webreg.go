@@ -130,6 +130,7 @@ td {
           <a class="dropdown-item" href="/help/adding-components">Adding and Changing Content</a>
           <a class="dropdown-item" href="/help/release"><code>openshift/release</code></a>
           <a class="dropdown-item" href="/help/examples">Examples</a>
+          <a class="dropdown-item" href="/help/links">Useful links</a>
         </div>
       </li>
     </ul>
@@ -1980,6 +1981,111 @@ const staticBoskosConfig = `resources:
   - "server03.prod.service.com"
 `
 
+const linksPage = `<h2 id="clusters"><a href="#clusters">Clusters</a></h2>
+<p>The clusters that currently comprise CI are:</p>
+<ul>
+  <li>
+    <a href="https://console.svc.ci.openshift.org"><code>api.ci</code></a>:
+    legacy Openshift 3.11 cluster in GCP.  Job execution is being migrated out
+    of it.
+  </li>
+  <li>
+    <a href="https://console-openshift-console.apps.ci.l2s4.p1.openshiftapps.com"><code>app.ci</code></a>:
+    Openshift Dedicated 4.x cluster containing most Prow services.
+  </li>
+  <li>
+    <a href="https://console.build01.ci.openshift.org/"><code>build01</code></a>:
+    Openshift 4.x cluster in AWS that executes a growing subset of the jobs.
+  </li>
+  <li>
+    <a href="https://console.build02.ci.openshift.org/"><code>build02</code></a>:
+    Openshift 4.x cluster in GCP that executes a growing subset of the jobs.
+  </li>
+  <li>
+    <code>vsphere</code>: external cluster used for vSphere tests, not managed
+    by DPTP.
+  </li>
+</ul>
+<p>
+Except for <code>vsphere</code>, these clusters use Github OAuth
+authentication: all members of the Openshift organization in Github can log in.
+</p>
+<h2 id="services"><a href="#services">Services</a></h2>
+<p>Below is a non-exhaustive list of CI services.</p>
+<ul>
+  <li>
+    <a href="https://prow.ci.openshift.org">https://prow.ci.openshift.org</a>:
+    main Prow dashboard with information about jobs, pull requests, the merge
+    queue, etc.
+  </li>
+  <li>
+    <a href="https://openshift-release.svc.ci.openshift.org">
+      https://openshift-release.svc.ci.openshift.org
+    </a>: OCP release status page.
+  </li>
+  <li>
+    <a href="https://origin-release.svc.ci.openshift.org">
+      https://origin-release.svc.ci.openshift.org
+    </a>: OKD release status page.
+  </li>
+  <li>
+    <a href="https://search.ci.openshift.org">https://search.ci.openshift.org</a>:
+    search tool for error messages in job logs and Bugzilla bugs.
+  </li>
+  <li>
+    <a href="https://sippy.ci.openshift.org">https://sippy.ci.openshift.org</a>:
+    CI release health summary.
+  </li>
+</ul>
+<h2 id="contact"><a href="#contact">Contact</a></h2>
+<p>DPTP maintains several means of contact:</p>
+<ul>
+  <li>
+    Slack
+    <ul>
+      <li>
+        <code>#announce-testplatform</code>: general announcements and outages.
+        Usage is limited to the DPTP team, please do not post messages there.
+      </li>
+      <li>
+        <code>#forum-testplatform</code>: general queries and discussion for
+        the test platform.  For general assistance, ping
+        <code>@dptp-helpdesk</code>. For reporting an outage, ping
+        <code>@dptp-triage</code>.
+      </li>
+      <li>
+        <code>#4-dev-triage</code>: queries and discussion for CI issues that
+        are not caused by the test platform.
+      </li>
+      <li>
+        <code>#forum-release-controller</code>: queries and discussion for the
+        <a href="https://github.com/openshift/release-controller">
+        <code>release-controller</code></a>, responsible for generating
+        Openshift release/update payloads and displaying the release status
+        pages.
+      </li>
+    </ul>
+  </li>
+  <li>
+    <a href="https://issues.redhat.com/projects/DPTP">Jira</a>
+    <ul>
+      <li>
+        <a href="https://issues.redhat.com/browse/DPTP-417">Story template</a>
+        for feature requests.
+      </li>
+      <li>
+        <a href="https://issues.redhat.com/browse/DPTP-419">Bug template</a>
+        for bugs and issues.
+      </li>
+      <li>
+        <a href="https://issues.redhat.com/browse/DPTP-897">Consulting
+        template</a> for long-term, asynchronous discussion.
+      </li>
+    </ul>
+  </li>
+</ul>
+`
+
 const workflowType = "Workflow"
 const jobType = "Job"
 
@@ -2300,6 +2406,8 @@ func helpHandler(subPath string, w http.ResponseWriter, _ *http.Request) {
 		helpTemplate, err = helpFuncs.Parse(quotasAndLeasesPage)
 		data["dynamicBoskosConfig"] = dynamicBoskosConfig
 		data["staticBoskosConfig"] = staticBoskosConfig
+	case "/links":
+		helpTemplate, err = helpFuncs.Parse(linksPage)
 	default:
 		writeErrorPage(w, errors.New("Invalid path"), http.StatusNotImplemented)
 		return

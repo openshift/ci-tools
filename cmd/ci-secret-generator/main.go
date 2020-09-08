@@ -10,11 +10,12 @@ import (
 
 	"sigs.k8s.io/yaml"
 
+	"github.com/getlantern/deepcopy"
+	"github.com/openshift/ci-tools/pkg/bitwarden"
 	"github.com/sirupsen/logrus"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/prow/logrusutil"
-
-	"github.com/openshift/ci-tools/pkg/bitwarden"
 )
 
 type options struct {
@@ -30,20 +31,18 @@ type options struct {
 }
 
 type bitWardenItem struct {
-	ItemName   string         `json:"item_name"`
-	Field      fieldGenerator `json:"field"`
-	Attachment fieldGenerator `json:"attachment"`
-	Attribute  fieldGenerator `json:"attribute"`
+	ItemName    string              `json:"item_name"`
+	Fields      []fieldGenerator    `json:"fields,omitempty"`
+	Attachments []fieldGenerator    `json:"attachments,omitempty"`
+	Password    string              `json:"password,omitempty"`
+	Notes       string              `json:"notes"`
+	Params      map[string][]string `json:"params,omitempty"`
 }
 
 type fieldGenerator struct {
 	Name string `json:"name,omitempty"`
 	Cmd  string `json:"cmd,omitempty"`
 }
-
-const (
-	attributeTypePassword string = "password"
-)
 
 func parseOptions() options {
 	var o options
@@ -97,6 +96,10 @@ func (o *options) completeOptions(secrets sets.String) error {
 	return o.validateCompletedOptions()
 }
 
+func cmdEmptyErr(itemIndex, entryIndex int, entry string) error {
+	return fmt.Errorf("config[%d].%s[%d]: empty field not allowed for cmd if name is specified", itemIndex, entry, entryIndex)
+}
+
 func (o *options) validateCompletedOptions() error {
 	if o.bwPassword == "" {
 		return fmt.Errorf("--bw-password-file was empty")
@@ -106,13 +109,21 @@ func (o *options) validateCompletedOptions() error {
 		if bwItem.ItemName == "" {
 			return fmt.Errorf("config[%d].itemName: empty key is not allowed", i)
 		}
-		if bwItem.Attribute.Name != attributeTypePassword && bwItem.Attribute.Name != "" {
-			return fmt.Errorf("config[%d].attribute: only the '%s' is supported, not %s", i, attributeTypePassword, bwItem.Attribute.Name)
+
+		for fieldIndex, field := range bwItem.Fields {
+			if field.Name != "" && field.Cmd == "" {
+				return cmdEmptyErr(i, fieldIndex, "fields")
+			}
 		}
-		if (bwItem.Field.Name != "" && bwItem.Field.Cmd == "") ||
-			(bwItem.Attribute.Name != "" && bwItem.Attribute.Cmd == "") ||
-			(bwItem.Attachment.Name != "" && bwItem.Attachment.Cmd == "") {
-			return fmt.Errorf("config[%d]: empty field not allowed for cmd if name is specified for any of attribute, field or attachment", i)
+		for attachmentIndex, attachment := range bwItem.Fields {
+			if attachment.Name != "" && attachment.Cmd == "" {
+				return cmdEmptyErr(i, attachmentIndex, "attachments")
+			}
+		}
+		for paramName, params := range bwItem.Params {
+			if len(params) == 0 {
+				return fmt.Errorf("at least one argument required for param: %s, itemName: %s", paramName, bwItem.ItemName)
+			}
 		}
 	}
 	return nil
@@ -126,59 +137,124 @@ func executeCommand(command string) ([]byte, error) {
 	return out, nil
 }
 
+func replaceParameter(paramName, param, template string) string {
+	return strings.ReplaceAll(template, fmt.Sprintf("$(%s)", paramName), param)
+}
+
+func processBwParameters(bwItems []bitWardenItem) ([]bitWardenItem, error) {
+	var errs []error
+	processedBwItems := []bitWardenItem{}
+	for _, bwItemWithParams := range bwItems {
+		hasErrors := false
+		bwItemsProcessingHolder := []bitWardenItem{bwItemWithParams}
+		for paramName, params := range bwItemWithParams.Params {
+			bwItemsProcessed := []bitWardenItem{}
+			for _, qItem := range bwItemsProcessingHolder {
+				for _, param := range params {
+					argItem := bitWardenItem{}
+					err := deepcopy.Copy(&argItem, &qItem)
+					if err != nil {
+						errs = append(errs, fmt.Errorf("error copying bitWardenItem %v: %w", bwItemWithParams, err))
+					}
+					argItem.ItemName = replaceParameter(paramName, param, argItem.ItemName)
+					for i, field := range argItem.Fields {
+						argItem.Fields[i].Name = replaceParameter(paramName, param, field.Name)
+						argItem.Fields[i].Cmd = replaceParameter(paramName, param, field.Cmd)
+					}
+					for i, attachment := range argItem.Attachments {
+						argItem.Attachments[i].Name = replaceParameter(paramName, param, attachment.Name)
+						argItem.Attachments[i].Cmd = replaceParameter(paramName, param, attachment.Cmd)
+					}
+					argItem.Password = replaceParameter(paramName, param, argItem.Password)
+					argItem.Notes = replaceParameter(paramName, param, argItem.Notes)
+					bwItemsProcessed = append(bwItemsProcessed, argItem)
+				}
+			}
+			bwItemsProcessingHolder = bwItemsProcessed
+		}
+		if !hasErrors {
+			processedBwItems = append(processedBwItems, bwItemsProcessingHolder...)
+		}
+	}
+	return processedBwItems, utilerrors.NewAggregate(errs)
+}
+
 func updateSecrets(bwItems []bitWardenItem, bwClient bitwarden.Client) error {
-	for _, bwItem := range bwItems {
+	var errs []error
+	processedBwItems, err := processBwParameters(bwItems)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("error parsing parameters: %w", err))
+	}
+	for _, bwItem := range processedBwItems {
 		logger := logrus.WithField("item", bwItem.ItemName)
-		if bwItem.Field.Name != "" {
+		for _, field := range bwItem.Fields {
 			logger = logger.WithFields(logrus.Fields{
-				"field":   bwItem.Field.Name,
-				"command": bwItem.Field.Cmd,
+				"field":   field.Name,
+				"command": field.Cmd,
 			})
 			logger.Info("processing field")
-			out, err := executeCommand(bwItem.Field.Cmd)
+			out, err := executeCommand(field.Cmd)
 			if err != nil {
-				logrus.WithError(err).Error("failed to generate field")
-				return err
+				logrus.WithError(err).Errorf("%s failed to generate field", field.Cmd)
+				errs = append(errs, fmt.Errorf("bwItem.ItemName: %s, bwItem.FieldName: %s, %s failed: %w", bwItem.ItemName, field.Name, field.Cmd, err))
+				continue
 			}
-			if err := bwClient.SetFieldOnItem(bwItem.ItemName, bwItem.Field.Name, out); err != nil {
+			if err := bwClient.SetFieldOnItem(bwItem.ItemName, field.Name, out); err != nil {
+				errs = append(errs, fmt.Errorf("bwItem.ItemName: %s, bwItem.FieldName: %s, failed to upload field: %w", bwItem.ItemName, field.Name, err))
 				logrus.WithError(err).Error("failed to upload field")
-				return err
+				continue
 			}
 		}
-		if bwItem.Attachment.Name != "" {
+		for _, attachment := range bwItem.Attachments {
 			logger = logger.WithFields(logrus.Fields{
-				"attachment": bwItem.Attachment.Name,
-				"command":    bwItem.Attachment.Cmd,
+				"attachment": attachment.Name,
+				"command":    attachment.Cmd,
 			})
 			logger.Info("processing attachment")
-			out, err := executeCommand(bwItem.Attachment.Cmd)
+			out, err := executeCommand(attachment.Cmd)
 			if err != nil {
-				logrus.WithError(err).Error("failed to generate attachment")
-				return err
+				errs = append(errs, fmt.Errorf("bwItem.ItemName: %s, bwItem.AttachmentName: %s, %s failed: %w", bwItem.ItemName, attachment.Name, attachment.Cmd, err))
+				logrus.WithError(err).Errorf("%s: failed to generate attachment", attachment.Cmd)
+				continue
 			}
-			if err := bwClient.SetAttachmentOnItem(bwItem.ItemName, bwItem.Attachment.Name, out); err != nil {
+			if err := bwClient.SetAttachmentOnItem(bwItem.ItemName, attachment.Name, out); err != nil {
+				errs = append(errs, fmt.Errorf("bwItem.ItemName: %s, bwItem.AttachmentName: %s, failed to upload attachment: %w", bwItem.ItemName, attachment.Name, err))
 				logrus.WithError(err).Error("failed to upload attachment")
-				return err
+				continue
 			}
 		}
-		if bwItem.Attribute.Name != "" {
+		if bwItem.Password != "" {
 			logger = logger.WithFields(logrus.Fields{
-				"attribute": bwItem.Attribute.Name,
-				"command":   bwItem.Attribute.Cmd,
+				"password": bwItem.Password,
 			})
-			logger.Info("processing attribute")
-			out, err := executeCommand(bwItem.Attribute.Cmd)
+			logger.Info("processing password")
+			out, err := executeCommand(bwItem.Password)
 			if err != nil {
-				logrus.WithError(err).Error("failed to generate attribute")
-				return err
+				errs = append(errs, fmt.Errorf("bwItem.ItemName: %s, bwItem.Password:, %s failed: %w", bwItem.ItemName, bwItem.Password, err))
+				logrus.WithError(err).Errorf("%s :failed to generate password", bwItem.Password)
+			} else {
+				if err := bwClient.SetPassword(bwItem.ItemName, out); err != nil {
+					errs = append(errs, fmt.Errorf("bwItem.ItemName: %s, bwItem.Password:, failed to upload password: %w", bwItem.ItemName, err))
+					logrus.WithError(err).Error("failed to upload password")
+				}
 			}
-			if err := bwClient.SetPassword(bwItem.ItemName, out); err != nil {
-				logrus.WithError(err).Error("failed to upload attribute")
-				return err
+		}
+
+		// Adding the notes not empty check here since we dont want to overwrite any notes that might already be present
+		// If notes have to be deleted, it would have to be a manual operation where the user goes to the bw web UI and removes
+		// the notes
+		if bwItem.Notes != "" {
+			logger = logger.WithFields(logrus.Fields{
+				"notes": bwItem.Notes,
+			})
+			logger.Info("adding notes")
+			if err := bwClient.UpdateNotesOnItem(bwItem.ItemName, bwItem.Notes); err != nil {
+				errs = append(errs, fmt.Errorf("bwItem.ItemName: %s,  failed to update notes: %w", bwItem.ItemName, err))
+				logrus.WithError(err).Error("failed to update notes")
 			}
 		}
 	}
-	return nil
+	return utilerrors.NewAggregate(errs)
 }
 
 func main() {

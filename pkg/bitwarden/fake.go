@@ -136,6 +136,23 @@ func (c fakeClient) SetPassword(itemName string, password []byte) error {
 	return nil
 }
 
+func (c fakeClient) UpdateNotesOnItem(itemName, notes string) error {
+	var targetItem *Item
+	for index, item := range c.items {
+		if itemName == item.Name {
+			targetItem = &c.items[index]
+			break
+		}
+	}
+	if targetItem == nil {
+		newItemID := getNewUUID()
+		c.items = append(c.items, Item{ID: newItemID, Name: itemName, Type: 1, Notes: notes})
+		targetItem = &c.items[len(c.items)-1]
+	}
+	targetItem.Notes = notes
+	return nil
+}
+
 // NewFakeClient generates a fake BitWarden client which is supposed to used only for testing
 func NewFakeClient(items []Item, attachments map[string]string) Client {
 	return fakeClient{items: items, attachments: attachments}

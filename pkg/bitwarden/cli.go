@@ -216,6 +216,20 @@ func (c *cliClient) createItemWithPassword(itemName string, password []byte, tar
 	return c.createItem(string(itemBytes), targetItem)
 }
 
+func (c *cliClient) createItemWithNotes(itemName, notes string, targetItem *Item) error {
+	item := Item{
+		Type:  1,
+		Name:  itemName,
+		Notes: notes,
+		Login: &Login{},
+	}
+	itemBytes, err := json.Marshal(item)
+	if err != nil {
+		return fmt.Errorf("failed to serialize item: %w", err)
+	}
+	return c.createItem(string(itemBytes), targetItem)
+}
+
 func (c *cliClient) editItem(targetItem Item) error {
 	targetJSON, err := json.Marshal(targetItem)
 	if err != nil {
@@ -232,6 +246,31 @@ func (c *cliClient) editItem(targetItem Item) error {
 func (c *cliClient) deleteAttachment(attachmentID, itemID string) error {
 	if _, err := c.runWithSession("delete", "attachment", attachmentID, "--itemid", itemID); err != nil {
 		return fmt.Errorf("failed to delete attachment, attachmentID: %s, itemID: %s: %w", attachmentID, itemID, err)
+	}
+	return nil
+}
+func (c *cliClient) UpdateNotesOnItem(itemName, notes string) error {
+	var targetItem *Item
+	for index, item := range c.savedItems {
+		if itemName == item.Name {
+			targetItem = &c.savedItems[index]
+			break
+		}
+	}
+	if targetItem == nil {
+		newItem := &Item{}
+		if err := c.createItemWithNotes(itemName, notes, newItem); err != nil {
+			return fmt.Errorf("failed to create new bw entry: %w", err)
+		}
+		c.savedItems = append(c.savedItems, *newItem)
+		return nil
+	}
+
+	if targetItem.Notes != notes && notes != "" {
+		targetItem.Notes = notes
+		if err := c.editItem(*targetItem); err != nil {
+			return fmt.Errorf("failed to set password for %s: %w", itemName, err)
+		}
 	}
 	return nil
 }
@@ -319,13 +358,13 @@ func (c *cliClient) SetAttachmentOnItem(itemName, attachmentName string, fileCon
 		}
 		if bytes.Equal(fileContents, existingFileContents) {
 			return nil
-		} else {
-			targetItem.Attachments = append(targetItem.Attachments[:targetAttachmentIndex], targetItem.Attachments[targetAttachmentIndex+1:]...)
-			// If attachment exists delete it
-			if err := c.deleteAttachment(targetAttachment.ID, targetItem.ID); err != nil {
-				return fmt.Errorf("failed to set new attachment on item")
-			}
 		}
+		targetItem.Attachments = append(targetItem.Attachments[:targetAttachmentIndex], targetItem.Attachments[targetAttachmentIndex+1:]...)
+		// If attachment exists delete it
+		if err := c.deleteAttachment(targetAttachment.ID, targetItem.ID); err != nil {
+			return fmt.Errorf("failed to set new attachment on item")
+		}
+
 	}
 	newAttachment := &Attachment{}
 	// attachment is also considered to be changed if it hadnt existed earlier
@@ -390,7 +429,10 @@ func (d *dryRunCliClient) SetPassword(itemName string, password []byte) error {
 	fmt.Fprintf(d.file, "ItemName: %s\n\tAttribute: \n\t\t Password: %s\n", itemName, string(password))
 	return nil
 }
-
+func (d *dryRunCliClient) UpdateNotesOnItem(itemName, notes string) error {
+	fmt.Fprintf(d.file, "ItemName: %s\n\tNotes: %s\n", itemName, notes)
+	return nil
+}
 func newDryRunClient(file *os.File) (Client, error) {
 	return &dryRunCliClient{
 		file: file,

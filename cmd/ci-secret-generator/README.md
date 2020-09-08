@@ -12,14 +12,14 @@ The output of the command is stored into bitwarden as the contents of the field/
 
 ```yaml
 - item_name: first_item
-  field:
-    name: field1
-    cmd: echo -n secret
+  fields:
+    - name: field1
+      cmd: echo -n secret
   attribute:
     name: password
     cmd: echo -n new_password
 - item_name: second_item
-  field:
+  fields:
     name: field2
     cmd: echo -n field2_contents
 ```
@@ -31,6 +31,22 @@ create two bitwarden entries - 'first_item' and 'second_item'
 
 * `field2` of `second_item`, would be `field2_contents` in Bitwarden with item-name `second_item`
 
+Parameters can be passed in to decrease repetition in the config file by adding the params dictionary in the config file.
+Eg.
+```yaml
+- item_name: item$(cluster)$(env)
+  fields:
+    - name: field1
+      cmd: echo "$(cluster) $(env)"
+  params:
+    cluster:
+      - build01
+      - build02
+    env:
+      - prod
+      - stagin
+```
+This would create four items with itemnames - itembuild01prod, itembuild02prod,itembuild01env, itembuild02env and the corresponding field1 which would contain the output of the corresponding echo, where the $(paramname) would be replaced with the values of the corresponding paramname.
 ## Run
 
 ```bash

@@ -76,7 +76,7 @@ func TestRequires(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			step := MultiStageTestStep(api.TestStepConfiguration{
 				MultiStageTestConfigurationLiteral: &tc.steps,
-			}, &tc.config, api.NewDeferredParameters(), nil, nil, nil, nil, nil, "", nil)
+			}, &tc.config, api.NewDeferredParameters(), nil, nil, nil, nil, nil, nil, "", nil)
 			ret := step.Requires()
 			if len(ret) == len(tc.req) {
 				matches := true
@@ -128,7 +128,7 @@ func TestGeneratePods(t *testing.T) {
 		},
 	}
 	jobSpec.SetNamespace("namespace")
-	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, nil, nil, nil, nil, "artifact_dir", &jobSpec)
+	step := newMultiStageTestStep(config.Tests[0], &config, nil, nil, nil, nil, nil, nil, nil, "artifact_dir", &jobSpec)
 	env := []coreapi.EnvVar{
 		{Name: "RELEASE_IMAGE_INITIAL", Value: "release:initial"},
 		{Name: "RELEASE_IMAGE_LATEST", Value: "release:latest"},
@@ -198,7 +198,7 @@ func TestGeneratePodsEnvironment(t *testing.T) {
 					Test:        test,
 					Environment: tc.env,
 				},
-			}, &api.ReleaseBuildConfiguration{}, nil, nil, nil, nil, nil, nil, "", &jobSpec)
+			}, &api.ReleaseBuildConfiguration{}, nil, nil, nil, nil, nil, nil, nil, "", &jobSpec)
 			pods, err := step.(*multiStageTestStep).generatePods(test, nil, false)
 			if err != nil {
 				t.Fatal(err)
@@ -323,7 +323,7 @@ func TestRun(t *testing.T) {
 					Post:               []api.LiteralTestStep{{As: "post0"}, {As: "post1", OptionalOnSuccess: &yes}},
 					AllowSkipOnSuccess: &yes,
 				},
-			}, &api.ReleaseBuildConfiguration{}, nil, &fakePodClient{NewPodClient(client, nil, nil)}, client, client, fakecs.RbacV1(), nil, "", &jobSpec)
+			}, &api.ReleaseBuildConfiguration{}, nil, &fakePodClient{NewPodClient(client, nil, nil)}, client, client, client, fakecs.RbacV1(), nil, "", &jobSpec)
 			if err := step.Run(context.Background()); tc.failures == nil && err != nil {
 				t.Error(err)
 				return
@@ -379,7 +379,7 @@ func TestArtifacts(t *testing.T) {
 				{As: "test1", ArtifactDir: "/path/to/artifacts"},
 			},
 		},
-	}, &api.ReleaseBuildConfiguration{}, nil, &fakePodClient{NewPodClient(client, nil, nil)}, client, client, fakecs.RbacV1(), nil, tmp, &jobSpec)
+	}, &api.ReleaseBuildConfiguration{}, nil, &fakePodClient{NewPodClient(client, nil, nil)}, client, client, client, fakecs.RbacV1(), nil, tmp, &jobSpec)
 	if err := step.Run(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -456,7 +456,7 @@ func TestJUnit(t *testing.T) {
 					Test: []api.LiteralTestStep{{As: "test0"}, {As: "test1"}},
 					Post: []api.LiteralTestStep{{As: "post0"}, {As: "post1"}},
 				},
-			}, &api.ReleaseBuildConfiguration{}, nil, &fakePodClient{NewPodClient(client, nil, nil)}, client, client, fakecs.RbacV1(), nil, "/dev/null", &jobSpec)
+			}, &api.ReleaseBuildConfiguration{}, nil, &fakePodClient{NewPodClient(client, nil, nil)}, client, client, client, fakecs.RbacV1(), nil, "/dev/null", &jobSpec)
 			if err := step.Run(context.Background()); tc.failures == nil && err != nil {
 				t.Error(err)
 				return

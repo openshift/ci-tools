@@ -4,10 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/openshift/ci-tools/pkg/results"
-	"github.com/openshift/ci-tools/pkg/steps/utils"
 	"log"
 	"time"
+
+	"github.com/openshift/ci-tools/pkg/results"
+	"github.com/openshift/ci-tools/pkg/steps/utils"
 
 	imageapi "github.com/openshift/api/image/v1"
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
@@ -50,6 +51,7 @@ type assembleReleaseStep struct {
 	resources   api.ResourceConfiguration
 	imageClient imageclientset.ImageV1Interface
 	podClient   steps.PodClient
+	eventClient coreclientset.EventsGetter
 	saGetter    coreclientset.ServiceAccountsGetter
 	rbacClient  rbacclientset.RbacV1Interface
 	artifactDir string
@@ -225,7 +227,7 @@ oc adm release extract --from=%q --to=/tmp/artifacts/release-payload-%s
 		resources = copied
 	}
 
-	step := steps.PodStep("release", podConfig, resources, s.podClient, s.artifactDir, s.jobSpec)
+	step := steps.PodStep("release", podConfig, resources, s.podClient, s.eventClient, s.artifactDir, s.jobSpec)
 
 	return results.ForReason("creating_release").ForError(step.Run(ctx))
 }
@@ -258,13 +260,14 @@ func (s *assembleReleaseStep) Description() string {
 // AssembleReleaseStep builds a new update payload image based on the cluster version operator
 // and the operators defined in the release configuration.
 func AssembleReleaseStep(name string, config *api.ReleaseTagConfiguration, resources api.ResourceConfiguration,
-	podClient steps.PodClient, imageClient imageclientset.ImageV1Interface, saGetter coreclientset.ServiceAccountsGetter,
+	podClient steps.PodClient, eventClient coreclientset.EventsGetter, imageClient imageclientset.ImageV1Interface, saGetter coreclientset.ServiceAccountsGetter,
 	rbacClient rbacclientset.RbacV1Interface, artifactDir string, jobSpec *api.JobSpec) api.Step {
 	return &assembleReleaseStep{
 		config:      config,
 		name:        name,
 		resources:   resources,
 		podClient:   podClient,
+		eventClient: eventClient,
 		imageClient: imageClient,
 		saGetter:    saGetter,
 		rbacClient:  rbacClient,

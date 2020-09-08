@@ -49,6 +49,7 @@ type templateExecutionStep struct {
 	params         api.Parameters
 	templateClient TemplateClient
 	podClient      PodClient
+	eventClient    coreclientset.EventsGetter
 	artifactDir    string
 	jobSpec        *api.JobSpec
 
@@ -168,7 +169,7 @@ func (s *templateExecutionStep) run(ctx context.Context) error {
 	for _, ref := range instance.Status.Objects {
 		switch {
 		case ref.Ref.Kind == "Pod" && ref.Ref.APIVersion == "v1":
-			err := waitForPodCompletion(context.TODO(), s.podClient.Pods(s.jobSpec.Namespace()), ref.Ref.Name, testCaseNotifier, false)
+			err := waitForPodCompletion(context.TODO(), s.podClient.Pods(s.jobSpec.Namespace()), s.eventClient.Events(s.jobSpec.Namespace()), ref.Ref.Name, testCaseNotifier, false)
 			s.subTests = append(s.subTests, testCaseNotifier.SubTests(fmt.Sprintf("%s - %s ", s.Description(), ref.Ref.Name))...)
 			if err != nil {
 				return fmt.Errorf("template pod %q failed: %w", ref.Ref.Name, err)
@@ -273,12 +274,13 @@ func (s *templateExecutionStep) Description() string {
 	return fmt.Sprintf("Run template %s", s.template.Name)
 }
 
-func TemplateExecutionStep(template *templateapi.Template, params api.Parameters, podClient PodClient, templateClient TemplateClient, artifactDir string, jobSpec *api.JobSpec, resources api.ResourceConfiguration) api.Step {
+func TemplateExecutionStep(template *templateapi.Template, params api.Parameters, podClient PodClient, eventClient coreclientset.EventsGetter, templateClient TemplateClient, artifactDir string, jobSpec *api.JobSpec, resources api.ResourceConfiguration) api.Step {
 	return &templateExecutionStep{
 		template:       template,
 		resources:      resources,
 		params:         params,
 		podClient:      podClient,
+		eventClient:    eventClient,
 		templateClient: templateClient,
 		artifactDir:    artifactDir,
 		jobSpec:        jobSpec,
@@ -473,7 +475,7 @@ func waitForCompletedPodDeletion(podClient coreclientset.PodInterface, name stri
 	return waitForPodDeletion(podClient, name, uid)
 }
 
-func waitForPodCompletion(ctx context.Context, podClient coreclientset.PodInterface, name string, notifier ContainerNotifier, skipLogs bool) error {
+func waitForPodCompletion(ctx context.Context, podClient coreclientset.PodInterface, eventClient coreclientset.EventInterface, name string, notifier ContainerNotifier, skipLogs bool) error {
 	if notifier == nil {
 		notifier = NopNotifier
 	}
@@ -481,7 +483,7 @@ func waitForPodCompletion(ctx context.Context, podClient coreclientset.PodInterf
 	notifierDone := notifier.Done(name)
 	completed := make(map[string]time.Time)
 	for {
-		retry, err := waitForPodCompletionOrTimeout(ctx, podClient, name, completed, notifier, skipLogs)
+		retry, err := waitForPodCompletionOrTimeout(ctx, podClient, eventClient, name, completed, notifier, skipLogs)
 		// continue waiting if the container notifier is not yet complete for the given pod
 		select {
 		case <-notifierDone:
@@ -507,7 +509,7 @@ func waitForPodCompletion(ctx context.Context, podClient coreclientset.PodInterf
 	return nil
 }
 
-func waitForPodCompletionOrTimeout(ctx context.Context, podClient coreclientset.PodInterface, name string, completed map[string]time.Time, notifier ContainerNotifier, skipLogs bool) (bool, error) {
+func waitForPodCompletionOrTimeout(ctx context.Context, podClient coreclientset.PodInterface, eventClient coreclientset.EventInterface, name string, completed map[string]time.Time, notifier ContainerNotifier, skipLogs bool) (bool, error) {
 	watcher, err := podClient.Watch(context.TODO(), meta.ListOptions{
 		FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String(),
 		Watch:         true,
@@ -557,7 +559,7 @@ func waitForPodCompletionOrTimeout(ctx context.Context, podClient coreclientset.
 			}
 			timeout := 15 * time.Minute
 			if !podHasStarted(pod) && time.Since(pod.CreationTimestamp.Time) > timeout {
-				message := fmt.Sprintf("pod didn't start running within %s: %s", timeout, getReasonsForUnreadyContainers(pod))
+				message := fmt.Sprintf("pod didn't start running within %s: %s\n%s", timeout, getReasonsForUnreadyContainers(pod), getEventsForPod(pod, eventClient, ctx))
 				log.Print(message)
 				notifier.Complete(name)
 				return false, errors.New(message)

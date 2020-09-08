@@ -10,8 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openshift/ci-tools/pkg/steps/utils"
-
 	"k8s.io/test-infra/prow/clonerefs"
 	"k8s.io/test-infra/prow/pod-utils/decorate"
 
@@ -23,6 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
+	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 
 	buildapi "github.com/openshift/api/build/v1"
@@ -30,6 +29,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/results"
+	"github.com/openshift/ci-tools/pkg/steps/utils"
 )
 
 const (
@@ -697,6 +697,28 @@ func getReasonsForUnreadyContainers(p *coreapi.Pod) string {
 			message = fmt.Sprintf(" and message %s", message)
 		}
 		_, _ = builder.WriteString(fmt.Sprintf("\n* Container %s is not ready with reason %s%s", c.Name, reason, message))
+	}
+	return builder.String()
+}
+
+func getEventsForPod(pod *coreapi.Pod, client coreclientset.EventInterface, ctx context.Context) string {
+	events, err := client.List(ctx, meta.ListOptions{})
+	if err != nil {
+		log.Printf("Could not fetch events: %v", err)
+	}
+	var filtered []coreapi.Event
+	for _, event := range events.Items {
+		if event.InvolvedObject.Name == pod.Name {
+			filtered = append(filtered, event)
+		}
+	}
+	if len(filtered) == 0 {
+		return ""
+	}
+	builder := &strings.Builder{}
+	_, _ = builder.WriteString(fmt.Sprintf("Found %d events for Pod %s:", len(filtered), pod.Name))
+	for _, event := range filtered {
+		_, _ = builder.WriteString(fmt.Sprintf("\n* %dx %s: %s", event.Count, event.Source.Component, event.Message))
 	}
 	return builder.String()
 }

@@ -2041,27 +2041,41 @@ authentication: all members of the Openshift organization in Github can log in.
 <p>Below is a non-exhaustive list of CI services.</p>
 <ul>
   <li>
-    <a href="https://prow.ci.openshift.org">https://prow.ci.openshift.org</a>:
+    <a href="https://prow.ci.openshift.org">prow.ci.openshift.org</a>:
     main Prow dashboard with information about jobs, pull requests, the merge
     queue, etc.
   </li>
   <li>
-    <a href="https://openshift-release.svc.ci.openshift.org">
-      https://openshift-release.svc.ci.openshift.org
-    </a>: OCP release status page.
+    <a href="https://amd64.origin.releases.ci.openshift.org">
+      amd64.origin.releases.ci.openshift.org
+    </a>: OCP AMD 64 release status page.
   </li>
   <li>
-    <a href="https://origin-release.svc.ci.openshift.org">
-      https://origin-release.svc.ci.openshift.org
+    <a href="https://pp64le.origin.releases.ci.openshift.org">
+      pp64le.origin.releases.ci.openshift.org
+    </a>: OCP PowerPC 64 LE release status page.
+  </li>
+  <li>
+    <a href="https://s390x.origin.releases.ci.openshift.org">
+      s390x.origin.releases.ci.openshift.org
+    </a>: OCP S390x release status page.
+  </li>
+  <li>
+    <a href="https://amd64.origin.releases.ci.openshift.org">
+      amd64.origin.releases.ci.openshift.org
     </a>: OKD release status page.
   </li>
   <li>
-    <a href="https://search.ci.openshift.org">https://search.ci.openshift.org</a>:
+    <a href="https://search.ci.openshift.org">search.ci.openshift.org</a>:
     search tool for error messages in job logs and Bugzilla bugs.
   </li>
   <li>
-    <a href="https://sippy.ci.openshift.org">https://sippy.ci.openshift.org</a>:
+    <a href="https://sippy.ci.openshift.org">sippy.ci.openshift.org</a>:
     CI release health summary.
+  </li>
+  <li>
+    <a href="https://bugs.ci.openshift.org">bugs.ci.openshift.org</a>:
+    Bugzilla bug overviews, backporting and release viewer.
   </li>
 </ul>
 <h2 id="contact"><a href="#contact">Contact</a></h2>

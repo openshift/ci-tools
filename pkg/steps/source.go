@@ -693,7 +693,10 @@ func getReasonsForUnreadyContainers(p *coreapi.Pod) string {
 			reason = "unknown"
 			message = "unknown"
 		}
-		_, _ = builder.WriteString(fmt.Sprintf("\n* Container %s is not ready with reason %s and message %s", c.Name, reason, message))
+		if message != "" {
+			message = fmt.Sprintf(" and message %s", message)
+		}
+		_, _ = builder.WriteString(fmt.Sprintf("\n* Container %s is not ready with reason %s%s", c.Name, reason, message))
 	}
 	return builder.String()
 }

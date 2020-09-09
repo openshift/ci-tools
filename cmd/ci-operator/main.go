@@ -545,9 +545,12 @@ func (o *options) Run() []error {
 	defer func() {
 		log.Printf("Ran for %s", time.Since(start).Truncate(time.Second))
 	}()
-
+	var leaseClient *lease.Client
+	if o.leaseServer != "" && o.leaseServerUsername != "" && o.leaseServerPasswordFile != "" {
+		leaseClient = &o.leaseClient
+	}
 	// load the graph from the configuration
-	buildSteps, postSteps, err := defaults.FromConfig(o.configSpec, o.jobSpec, o.templates, o.writeParams, o.artifactDir, o.promote, o.clusterConfig, &o.leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret)
+	buildSteps, postSteps, err := defaults.FromConfig(o.configSpec, o.jobSpec, o.templates, o.writeParams, o.artifactDir, o.promote, o.clusterConfig, leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret)
 	if err != nil {
 		return []error{results.ForReason("defaulting_config").WithError(err).Errorf("failed to generate steps from config: %v", err)}
 	}
@@ -595,7 +598,7 @@ func (o *options) Run() []error {
 	}
 
 	return interrupt.New(handler, o.saveNamespaceArtifacts).Run(func() []error {
-		if o.leaseServer != "" && o.leaseServerUsername != "" && o.leaseServerPasswordFile != "" {
+		if leaseClient != nil {
 			if err := o.initializeLeaseClient(); err != nil {
 				return []error{fmt.Errorf("failed to create the lease client: %w", err)}
 			}

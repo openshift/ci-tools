@@ -74,10 +74,10 @@ func (s *leaseStep) Run(ctx context.Context) error {
 
 func (s *leaseStep) run(ctx context.Context) error {
 	log.Printf("Acquiring lease for %q", s.leaseType)
-	client := *s.client
-	if client == nil {
+	if s.client == nil {
 		return results.ForReason("initializing_client").ForError(errors.New("step needs a lease but no lease client provided"))
 	}
+	client := *s.client
 	ctx, cancel := context.WithCancel(ctx)
 	heartbeatCtx, heartbeatCancel := context.WithCancel(ctx)
 	go heartbeatNamespace(s.namespace, s.namespaceClient, heartbeatCtx)
@@ -85,7 +85,7 @@ func (s *leaseStep) run(ctx context.Context) error {
 	if err != nil {
 		heartbeatCancel()
 		if err == lease.ErrNotFound {
-			printResourceMetrics(*s.client, s.leaseType)
+			printResourceMetrics(client, s.leaseType)
 		}
 		return results.ForReason(results.Reason("acquiring_lease:"+s.leaseType)).WithError(err).Errorf("failed to acquire lease: %v", err)
 	}

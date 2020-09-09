@@ -585,7 +585,9 @@ func (o *options) Run() []error {
 	if err := dumpGraph(o.artifactDir, nodes); err != nil {
 		return []error{fmt.Errorf("failed to dump graph to artifacts dir: %w", err)}
 	}
-
+	if err := api.ValidateGraph(nodes); err != nil {
+		return err
+	}
 	// initialize the namespace if necessary and create any resources that must
 	// exist prior to execution
 	if err := o.initializeNamespace(); err != nil {

@@ -21,6 +21,7 @@ type stepNeedsLease struct {
 func (stepNeedsLease) Inputs() (api.InputDefinition, error) {
 	return api.InputDefinition{"step", "inputs"}, nil
 }
+func (stepNeedsLease) Validate() error { return nil }
 func (s *stepNeedsLease) Run(ctx context.Context) error {
 	s.ran = true
 	if s.fail {

@@ -46,6 +46,8 @@ func (s *leaseStep) Inputs() (api.InputDefinition, error) {
 	return s.wrapped.Inputs()
 }
 
+func (s *leaseStep) Validate() error { return nil }
+
 func (s *leaseStep) Name() string             { return s.wrapped.Name() }
 func (s *leaseStep) Description() string      { return s.wrapped.Description() }
 func (s *leaseStep) Requires() []api.StepLink { return s.wrapped.Requires() }

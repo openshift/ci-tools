@@ -31,6 +31,8 @@ func (s *projectDirectoryImageBuildStep) Inputs() (api.InputDefinition, error) {
 	return nil, nil
 }
 
+func (*projectDirectoryImageBuildStep) Validate() error { return nil }
+
 func (s *projectDirectoryImageBuildStep) Run(ctx context.Context) error {
 	return results.ForReason("building_project_image").ForError(s.run(ctx))
 }

@@ -20,7 +20,8 @@ type fakeStep struct {
 	numRuns int
 }
 
-func (f *fakeStep) Inputs() (api.InputDefinition, error) { return nil, nil }
+func (*fakeStep) Inputs() (api.InputDefinition, error) { return nil, nil }
+func (*fakeStep) Validate() error                      { return nil }
 
 func (f *fakeStep) Run(ctx context.Context) error {
 	defer f.lock.Unlock()

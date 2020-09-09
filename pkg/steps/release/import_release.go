@@ -68,6 +68,8 @@ func (s *importReleaseStep) Inputs() (api.InputDefinition, error) {
 	return api.InputDefinition{s.pullSpec}, nil
 }
 
+func (*importReleaseStep) Validate() error { return nil }
+
 func (s *importReleaseStep) Run(ctx context.Context) error {
 	return results.ForReason("importing_release").ForError(s.run(ctx))
 }

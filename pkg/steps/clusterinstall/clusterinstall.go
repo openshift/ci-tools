@@ -119,6 +119,8 @@ func (s *e2eTestStep) Inputs() (api.InputDefinition, error) {
 	return nil, nil
 }
 
+func (*e2eTestStep) Validate() error { return nil }
+
 func (s *e2eTestStep) Run(ctx context.Context) error {
 	return results.ForReason("installing_cluster").ForError(s.run(ctx))
 }

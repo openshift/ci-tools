@@ -121,6 +121,8 @@ func (s *multiStageTestStep) Inputs() (api.InputDefinition, error) {
 	return nil, nil
 }
 
+func (*multiStageTestStep) Validate() error { return nil }
+
 func (s *multiStageTestStep) Run(ctx context.Context) error {
 	return results.ForReason("executing_multi_stage_test").ForError(s.run(ctx))
 }

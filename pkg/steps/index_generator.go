@@ -33,6 +33,8 @@ func (s *indexGeneratorStep) Inputs() (api.InputDefinition, error) {
 	return nil, nil
 }
 
+func (*indexGeneratorStep) Validate() error { return nil }
+
 func (s *indexGeneratorStep) Run(ctx context.Context) error {
 	return results.ForReason("building_index_generator").ForError(s.run(ctx))
 }

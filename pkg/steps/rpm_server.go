@@ -49,6 +49,8 @@ func (s *rpmServerStep) Inputs() (api.InputDefinition, error) {
 	return nil, nil
 }
 
+func (*rpmServerStep) Validate() error { return nil }
+
 func (s *rpmServerStep) Run(ctx context.Context) error {
 	return results.ForReason("serving_rpms").ForError(s.run(ctx))
 }

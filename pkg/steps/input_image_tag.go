@@ -47,6 +47,8 @@ func (s *inputImageTagStep) Inputs() (api.InputDefinition, error) {
 	return api.InputDefinition{from.Image.Name}, nil
 }
 
+func (*inputImageTagStep) Validate() error { return nil }
+
 func (s *inputImageTagStep) Run(ctx context.Context) error {
 	return results.ForReason("tagging_input_image").ForError(s.run(ctx))
 }

@@ -11,6 +11,8 @@ import (
 // build pipeline needs to do.
 type Step interface {
 	Inputs() (InputDefinition, error)
+	// Validate checks inputs of steps that are part of the execution graph.
+	Validate() error
 	Run(ctx context.Context) error
 
 	// Name is the name of the stage, used to target it.
@@ -294,6 +296,33 @@ func BuildPartialGraph(steps []Step, names []string) ([]*StepNode, error) {
 		}
 	}
 	return BuildGraph(targeted), nil
+}
+
+// ValidateGraph performs validations on each step in the graph once.
+func ValidateGraph(nodes []*StepNode) []error {
+	errs := map[Step]error{}
+	var f func([]*StepNode)
+	f = func(v []*StepNode) {
+		for _, n := range v {
+			if _, ok := errs[n.Step]; ok {
+				return
+			}
+			if err := n.Step.Validate(); err != nil {
+				errs[n.Step] = fmt.Errorf("step %q failed validation: %w", n.Step.Name(), err)
+			} else {
+				errs[n.Step] = nil
+			}
+			f(n.Children)
+		}
+	}
+	f(nodes)
+	var ret []error
+	for _, err := range errs {
+		if err != nil {
+			ret = append(ret, err)
+		}
+	}
+	return ret
 }
 
 func addToNode(parent, child *StepNode) bool {

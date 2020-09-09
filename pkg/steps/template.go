@@ -59,6 +59,8 @@ func (s *templateExecutionStep) Inputs() (api.InputDefinition, error) {
 	return nil, nil
 }
 
+func (*templateExecutionStep) Validate() error { return nil }
+
 func (s *templateExecutionStep) Run(ctx context.Context) error {
 	return results.ForReason("executing_template").ForError(s.run(ctx))
 }

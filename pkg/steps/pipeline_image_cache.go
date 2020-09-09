@@ -31,6 +31,8 @@ func (s *pipelineImageCacheStep) Inputs() (api.InputDefinition, error) {
 	return nil, nil
 }
 
+func (*pipelineImageCacheStep) Validate() error { return nil }
+
 func (s *pipelineImageCacheStep) Run(ctx context.Context) error {
 	return results.ForReason("building_cache_image").ForError(s.run(ctx))
 }

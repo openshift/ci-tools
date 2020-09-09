@@ -166,16 +166,7 @@ func rehearseMain() error {
 				return errors.New(misconfigurationOutput)
 			}
 		}
-		if _, hasAPICIKubeconfig := buildClusterConfigs["api.ci"]; !hasAPICIKubeconfig {
-			apiCIConfig, err := rest.InClusterConfig()
-			if err != nil {
-				logger.WithError(err).Error("could not load cluster clusterConfig")
-				return fmt.Errorf(misconfigurationOutput)
-			}
-			logger.Info("Got api.ci kubeconfig via in-cluster")
-			buildClusterConfigs["api.ci"] = apiCIConfig
-		}
-		prowJobConfig, err = pjKubeconfig(o.prowjobKubeconfig, buildClusterConfigs["api.ci"])
+		prowJobConfig, err = pjKubeconfig(o.prowjobKubeconfig, buildClusterConfigs["app.ci"])
 		if err != nil {
 			logger.WithError(err).Error("Could not load prowjob kubeconfig")
 			return fmt.Errorf(misconfigurationOutput)

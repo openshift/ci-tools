@@ -130,9 +130,9 @@ func (o *options) validateCompletedOptions() error {
 }
 
 func executeCommand(command string) ([]byte, error) {
-	out, err := exec.Command("bash", "-c", command).CombinedOutput()
+	out, err := exec.Command("bash", "-o", "errexit", "-o", "nounset", "-o", "pipefail", "-c", command).CombinedOutput()
 	if err != nil {
-		return nil, fmt.Errorf("command %q failed, output- %s : %w", command, string(out), err)
+		return nil, fmt.Errorf("%s : %w", string(out), err)
 	}
 	return out, nil
 }

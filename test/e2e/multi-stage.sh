@@ -14,7 +14,7 @@ os::test::junit::declare_suite_start "e2e/multi-stage"
 
 export JOB_SPEC='{"type":"presubmit","job":"pull-ci-test-test-master-success","buildid":"0","prowjobid":"uuid","refs":{"org":"test","repo":"test","base_ref":"master","base_sha":"6d231cc37652e85e0f0e25c21088b73d644d89ad","pulls":[{"number":1234,"author":"droslean","sha":"538680dfd2f6cff3b3506c80ca182dcb0dd22a58"}]}}'
 if [[ -z "${PULL_SECRET_DIR:-}" ]]; then
-  os::log::fatal "\$PULL_SECRET_DIR must point to a valid registry pull secret dir. Get the data with: oc --context api.ci --as system:admin --namespace ci get secret ci-pull-credentials -o jsonpath={.data.\.dockerconfigjson} | base64 --decode "
+  os::log::fatal "\$PULL_SECRET_DIR must point to a valid registry pull secret dir. Get the data with: oc --context api.ci --as system:admin --namespace ci get secret regcred -o 'jsonpath={.data.\.dockerconfigjson}' | base64 --decode "
 fi
 os::integration::configresolver::start "${suite_dir}/configs" "${suite_dir}/registry" "${OS_ROOT}/test/integration/ci-operator-configresolver/config.yaml" "true"
 os::cmd::expect_success "ci-operator --secret-dir ${PULL_SECRET_DIR} --artifact-dir ${BASETMPDIR} --resolver-address http://127.0.0.1:8080 --target success"

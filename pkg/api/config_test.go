@@ -1554,30 +1554,66 @@ func TestValidateImages(t *testing.T) {
 }
 
 func TestValidateOperator(t *testing.T) {
+	var goodStepLink = StepLink(&internalImageStreamLink{name: "exists"})
+	var badStepLink StepLink
 	var testCases = []struct {
-		name   string
-		input  *OperatorStepConfiguration
-		output []error
-	}{{
-		name: "missing a substitution.pullspec and a substitution.with",
-		input: &OperatorStepConfiguration{
-			Substitutions: []PullSpecSubstitution{{
-				PullSpec: "original",
-				With:     "substitute",
-			}, {
-				PullSpec: "original2",
-			}, {
-				With: "subsitute2",
-			}},
+		name           string
+		input          *OperatorStepConfiguration
+		withResolvesTo StepLink
+		output         []error
+	}{
+		{
+			name: "everything is good",
+			input: &OperatorStepConfiguration{
+				Substitutions: []PullSpecSubstitution{
+					{
+						PullSpec: "original",
+						With:     "substitute",
+					},
+				},
+			},
+			withResolvesTo: goodStepLink,
 		},
-		output: []error{
-			errors.New("operator.substitute[1].with: must be set"),
-			errors.New("operator.substitute[2].pullspec: must be set"),
+		{
+			name: "missing a substitution.pullspec and a substitution.with",
+			input: &OperatorStepConfiguration{
+				Substitutions: []PullSpecSubstitution{{
+					PullSpec: "original",
+					With:     "substitute",
+				}, {
+					PullSpec: "original2",
+				}, {
+					With: "substitute2",
+				}},
+			},
+			withResolvesTo: goodStepLink,
+			output: []error{
+				errors.New("operator.substitute[1].with: must be set"),
+				errors.New("operator.substitute[2].pullspec: must be set"),
+			},
 		},
-	}}
+		{
+			name: "everything is good",
+			input: &OperatorStepConfiguration{
+				Substitutions: []PullSpecSubstitution{
+					{
+						PullSpec: "original",
+						With:     "substitute",
+					},
+				},
+			},
+			withResolvesTo: badStepLink,
+			output: []error{
+				errors.New("operator.substitute[0].with: could not resolve 'substitute' to an image involved in the config"),
+			},
+		},
+	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			if actual, expected := validateOperator("operator", testCase.input), testCase.output; !reflect.DeepEqual(actual, expected) {
+			linkFunc := func(string) StepLink {
+				return testCase.withResolvesTo
+			}
+			if actual, expected := validateOperator("operator", testCase.input, linkFunc), testCase.output; !reflect.DeepEqual(actual, expected) {
 				t.Errorf("%s: got incorrect errors: %s", testCase.name, cmp.Diff(actual, expected, cmp.Comparer(func(x, y error) bool {
 					return x.Error() == y.Error()
 				})))

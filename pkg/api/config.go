@@ -80,7 +80,13 @@ func (config *ReleaseBuildConfiguration) validate(org, repo string, resolved boo
 	}
 
 	if config.Operator != nil {
-		validationErrors = append(validationErrors, validateOperator("operator", config.Operator)...)
+		// validateOperator needs a method that maps `substitute.with` values to image links
+		// to validate the value is meaningful in the context of the configuration
+		linkForImage := func(image string) StepLink {
+			imageStream, name, _ := config.DependencyParts(StepDependency{Name: image})
+			return LinkForImage(imageStream, name)
+		}
+		validationErrors = append(validationErrors, validateOperator("operator", config.Operator, linkForImage)...)
 	}
 
 	if config.InputConfiguration.BaseImages != nil {
@@ -304,7 +310,7 @@ func validateImages(fieldRoot string, input []ProjectDirectoryImageBuildStepConf
 	return validationErrors
 }
 
-func validateOperator(fieldRoot string, input *OperatorStepConfiguration) []error {
+func validateOperator(fieldRoot string, input *OperatorStepConfiguration, linkForImage func(string) StepLink) []error {
 	var validationErrors []error
 	for num, sub := range input.Substitutions {
 		fieldRootN := fmt.Sprintf("%s.substitute[%d]", fieldRoot, num)
@@ -313,6 +319,10 @@ func validateOperator(fieldRoot string, input *OperatorStepConfiguration) []erro
 		}
 		if sub.With == "" {
 			validationErrors = append(validationErrors, fmt.Errorf("%s.with: must be set", fieldRootN))
+		}
+
+		if link := linkForImage(sub.With); link == nil {
+			validationErrors = append(validationErrors, fmt.Errorf("%s.with: could not resolve '%s' to an image involved in the config", fieldRootN, sub.With))
 		}
 	}
 	return validationErrors

@@ -585,7 +585,7 @@ func (o *options) Run() []error {
 	if err := dumpGraph(o.artifactDir, nodes); err != nil {
 		return []error{fmt.Errorf("failed to dump graph to artifacts dir: %w", err)}
 	}
-	if err := api.ValidateGraph(nodes); err != nil {
+	if err := validateGraph(nodes); err != nil {
 		return err
 	}
 	// initialize the namespace if necessary and create any resources that must
@@ -1470,6 +1470,20 @@ func iterateAllEdges(nodes []*api.StepNode, alreadyIterated sets.String, f func(
 		f(node)
 		alreadyIterated.Insert(node.Step.Name())
 	}
+}
+
+func validateGraph(nodes []*api.StepNode) []error {
+	errs := api.ValidateGraph(nodes)
+	var noLeaseClient bool
+	for _, err := range errs {
+		if errors.Is(err, steps.NoLeaseClientErr) {
+			noLeaseClient = true
+		}
+	}
+	if noLeaseClient {
+		errs = append(errs, errors.New("a lease client was required but none was provided, add the --lease-... arguments"))
+	}
+	return errs
 }
 
 var shaRegex = regexp.MustCompile(`^[0-9a-fA-F]+$`)

@@ -20,6 +20,8 @@ import (
 
 const leaseEnv = "LEASED_RESOURCE"
 
+var NoLeaseClientErr = errors.New("step needs a lease but no lease client provided")
+
 // leaseStep wraps another step and acquires/releases a lease.
 type leaseStep struct {
 	client         *lease.Client
@@ -46,7 +48,12 @@ func (s *leaseStep) Inputs() (api.InputDefinition, error) {
 	return s.wrapped.Inputs()
 }
 
-func (s *leaseStep) Validate() error { return nil }
+func (s *leaseStep) Validate() error {
+	if s.client == nil {
+		return NoLeaseClientErr
+	}
+	return nil
+}
 
 func (s *leaseStep) Name() string             { return s.wrapped.Name() }
 func (s *leaseStep) Description() string      { return s.wrapped.Description() }
@@ -76,9 +83,6 @@ func (s *leaseStep) Run(ctx context.Context) error {
 
 func (s *leaseStep) run(ctx context.Context) error {
 	log.Printf("Acquiring lease for %q", s.leaseType)
-	if s.client == nil {
-		return results.ForReason("initializing_client").ForError(errors.New("step needs a lease but no lease client provided"))
-	}
 	client := *s.client
 	ctx, cancel := context.WithCancel(ctx)
 	heartbeatCtx, heartbeatCancel := context.WithCancel(ctx)

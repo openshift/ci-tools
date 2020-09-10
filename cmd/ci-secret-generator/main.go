@@ -297,6 +297,12 @@ func main() {
 		logrus.WithError(err).Fatal("failed to complete options.")
 	}
 	var client bitwarden.Client
+	logrus.RegisterExitHandler(func() {
+		if _, err := client.Logout(); err != nil {
+			logrus.WithError(err).Error("failed to logout.")
+		}
+	})
+	defer logrus.Exit(0)
 	if o.dryRun {
 		tmpFile, err := ioutil.TempFile("", "ci-secret-generator")
 		if err != nil {
@@ -316,12 +322,6 @@ func main() {
 			logrus.WithError(err).Fatal("failed to get Bitwarden client.")
 		}
 	}
-	logrus.RegisterExitHandler(func() {
-		if _, err := client.Logout(); err != nil {
-			logrus.WithError(err).Fatal("failed to logout.")
-		}
-	})
-	defer logrus.Exit(0)
 
 	processedBwItems, err := processBwParameters(o.config)
 	if err != nil {

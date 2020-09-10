@@ -17,19 +17,23 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/prow/logrusutil"
 
+	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
 	"github.com/openshift/ci-tools/pkg/bitwarden"
 )
 
 type options struct {
-	logLevel       string
-	configPath     string
-	bwUser         string
-	dryRun         bool
-	bwPasswordPath string
-	maxConcurrency int
+	logLevel            string
+	configPath          string
+	bootstrapConfigPath string
+	bwUser              string
+	dryRun              bool
+	validate            bool
+	bwPasswordPath      string
+	maxConcurrency      int
 
-	config     []bitWardenItem
-	bwPassword string
+	config          []bitWardenItem
+	bootstrapConfig secretbootstrap.Config
+	bwPassword      string
 }
 
 type bitWardenItem struct {
@@ -50,6 +54,8 @@ func parseOptions() options {
 	var o options
 	flag.CommandLine.BoolVar(&o.dryRun, "dry-run", true, "Whether to actually create the secrets with bw command")
 	flag.CommandLine.StringVar(&o.configPath, "config", "", "Path to the config file to use for this tool.")
+	flag.CommandLine.StringVar(&o.bootstrapConfigPath, "bootstrap-config", "", "Path to the config file used for bootstrapping cluster secrets after using this tool.")
+	flag.CommandLine.BoolVar(&o.validate, "validate", true, "Validate that the items created from this tool are used in bootstrapping")
 	flag.CommandLine.StringVar(&o.bwUser, "bw-user", "", "Username to access BitWarden.")
 	flag.CommandLine.StringVar(&o.bwPasswordPath, "bw-password-path", "", "Path to a password file to access BitWarden.")
 	flag.CommandLine.StringVar(&o.logLevel, "log-level", "info", fmt.Sprintf("Log level is one of %v.", logrus.AllLevels))
@@ -67,13 +73,16 @@ func (o *options) validateOptions() error {
 	}
 	logrus.SetLevel(level)
 	if o.bwUser == "" {
-		return fmt.Errorf("--bw-user is empty")
+		return errors.New("--bw-user is empty")
 	}
 	if o.bwPasswordPath == "" {
-		return fmt.Errorf("--bw-password-path is empty")
+		return errors.New("--bw-password-path is empty")
 	}
 	if o.configPath == "" {
-		return fmt.Errorf("--config is empty")
+		return errors.New("--config is empty")
+	}
+	if o.validate && o.bootstrapConfigPath == "" {
+		return errors.New("--bootstrap-config is required with --validate")
 	}
 	return nil
 }
@@ -94,6 +103,18 @@ func (o *options) completeOptions(secrets sets.String) error {
 	err = yaml.Unmarshal(bytes, &o.config)
 	if err != nil {
 		return err
+	}
+
+	if o.bootstrapConfigPath != "" {
+		bytes, err = ioutil.ReadFile(o.bootstrapConfigPath)
+		if err != nil {
+			return err
+		}
+
+		err = yaml.Unmarshal(bytes, &o.bootstrapConfig)
+		if err != nil {
+			return err
+		}
 	}
 	return o.validateCompletedOptions()
 }
@@ -183,11 +204,7 @@ func processBwParameters(bwItems []bitWardenItem) ([]bitWardenItem, error) {
 
 func updateSecrets(bwItems []bitWardenItem, bwClient bitwarden.Client) error {
 	var errs []error
-	processedBwItems, err := processBwParameters(bwItems)
-	if err != nil {
-		errs = append(errs, fmt.Errorf("error parsing parameters: %w", err))
-	}
-	for _, bwItem := range processedBwItems {
+	for _, bwItem := range bwItems {
 		logger := logrus.WithField("item", bwItem.ItemName)
 		for _, field := range bwItem.Fields {
 			logger = logger.WithFields(logrus.Fields{
@@ -306,9 +323,66 @@ func main() {
 	})
 	defer logrus.Exit(0)
 
+	processedBwItems, err := processBwParameters(o.config)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to parse parameters.")
+	}
+
+	bitWardenContexts := bitwardenContextsFor(processedBwItems)
+	if err := validateContexts(bitWardenContexts, o.bootstrapConfig); err != nil {
+		if o.validate {
+			logrus.WithError(err).Fatal("Failed to validate secret entries.")
+		} else {
+			logrus.WithError(err).Warn("Failed to validate secret entries.")
+		}
+	}
+
 	// Upload the output to bitwarden
-	if err := updateSecrets(o.config, client); err != nil {
-		logrus.WithError(err).Fatalf("Failed to update secrets.")
+	if err := updateSecrets(processedBwItems, client); err != nil {
+		logrus.WithError(err).Fatal("Failed to update secrets.")
 	}
 	logrus.Info("Updated secrets.")
+}
+
+func bitwardenContextsFor(items []bitWardenItem) []secretbootstrap.BitWardenContext {
+	var bitWardenContexts []secretbootstrap.BitWardenContext
+	for _, bwItem := range items {
+		for _, field := range bwItem.Fields {
+			bitWardenContexts = append(bitWardenContexts, secretbootstrap.BitWardenContext{
+				BWItem: bwItem.ItemName,
+				Field:  field.Name,
+			})
+		}
+		for _, attachment := range bwItem.Attachments {
+			bitWardenContexts = append(bitWardenContexts, secretbootstrap.BitWardenContext{
+				BWItem:     bwItem.ItemName,
+				Attachment: attachment.Name,
+			})
+		}
+		if bwItem.Password != "" {
+			bitWardenContexts = append(bitWardenContexts, secretbootstrap.BitWardenContext{
+				BWItem:    bwItem.ItemName,
+				Attribute: secretbootstrap.AttributeTypePassword,
+			})
+		}
+	}
+	return bitWardenContexts
+}
+
+func validateContexts(contexts []secretbootstrap.BitWardenContext, config secretbootstrap.Config) error {
+	var errs []error
+	for _, needle := range contexts {
+		var found bool
+		for _, secret := range config.Secrets {
+			for _, haystack := range secret.From {
+				if needle == haystack {
+					found = true
+				}
+			}
+		}
+		if !found {
+			errs = append(errs, fmt.Errorf("could not find context %v in bootstrap config", needle))
+		}
+	}
+	return utilerrors.NewAggregate(errs)
 }

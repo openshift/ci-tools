@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+
+	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
 )
 
 func TestProcessBwParameters(t *testing.T) {
@@ -341,5 +343,52 @@ func TestProcessBwParameters(t *testing.T) {
 func equal(t *testing.T, expected, actual interface{}) {
 	if diff := cmp.Diff(expected, actual); diff != "" {
 		t.Errorf("actual differs from expected:\n%s", cmp.Diff(expected, actual))
+	}
+}
+
+func TestBitwardenContextsFor(t *testing.T) {
+	var testCases = []struct {
+		in  []bitWardenItem
+		out []secretbootstrap.BitWardenContext
+	}{
+		{
+			in:  []bitWardenItem{},
+			out: nil,
+		},
+		{
+			in: []bitWardenItem{{
+				ItemName: "item1",
+				Fields: []fieldGenerator{{
+					Name: "field1",
+				}, {
+					Name: "field2",
+				}},
+			}, {
+				ItemName: "item2",
+				Attachments: []fieldGenerator{{
+					Name: "attachment1",
+				}},
+				Password: "whatever",
+			}},
+			out: []secretbootstrap.BitWardenContext{{
+				BWItem: "item1",
+				Field:  "field1",
+			}, {
+				BWItem: "item1",
+				Field:  "field2",
+			}, {
+				BWItem:     "item2",
+				Attachment: "attachment1",
+			}, {
+				BWItem:    "item2",
+				Attribute: "password",
+			}},
+		},
+	}
+
+	for _, testCase := range testCases {
+		if diff := cmp.Diff(testCase.out, bitwardenContextsFor(testCase.in)); diff != "" {
+			t.Errorf("got incorrect output: %v", diff)
+		}
 	}
 }

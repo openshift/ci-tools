@@ -366,9 +366,9 @@ func bindOptions(flag *flag.FlagSet) *options {
 func (o *options) Complete() error {
 	if o.artifactDir == "" {
 		// user did not set an artifact dir, but we can default to the Prow dir if set
-		arifactDir, ok := os.LookupEnv(artifactsEnv)
+		artifactDir, ok := os.LookupEnv(artifactsEnv)
 		if ok {
-			o.artifactDir = arifactDir
+			o.artifactDir = artifactDir
 		}
 	}
 

@@ -148,9 +148,9 @@ func (config *ReleaseBuildConfiguration) validateTestStepDependencies() []error 
 				}
 
 				if releaseName != "" {
-					implictlyConfigured := (releaseName == InitialReleaseName || releaseName == LatestReleaseName) && config.InputConfiguration.ReleaseTagConfiguration != nil
+					implicitlyConfigured := (releaseName == InitialReleaseName || releaseName == LatestReleaseName) && config.InputConfiguration.ReleaseTagConfiguration != nil
 					_, explicitlyConfigured := config.InputConfiguration.Releases[releaseName]
-					if !(implictlyConfigured || explicitlyConfigured) {
+					if !(implicitlyConfigured || explicitlyConfigured) {
 						errs = append(errs, validationError(fmt.Sprintf("this dependency requires a %q release, which is not configured", releaseName)))
 					}
 				}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -11,11 +12,12 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/getlantern/deepcopy"
-	"github.com/openshift/ci-tools/pkg/bitwarden"
 	"github.com/sirupsen/logrus"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/prow/logrusutil"
+
+	"github.com/openshift/ci-tools/pkg/bitwarden"
 )
 
 type options struct {
@@ -195,13 +197,15 @@ func updateSecrets(bwItems []bitWardenItem, bwClient bitwarden.Client) error {
 			logger.Info("processing field")
 			out, err := executeCommand(field.Cmd)
 			if err != nil {
-				logrus.WithError(err).Errorf("%s failed to generate field", field.Cmd)
-				errs = append(errs, fmt.Errorf("bwItem.ItemName: %s, bwItem.FieldName: %s, %s failed: %w", bwItem.ItemName, field.Name, field.Cmd, err))
+				msg := "failed to generate field"
+				logger.WithError(err).Error(msg)
+				errs = append(errs, errors.New(msg))
 				continue
 			}
 			if err := bwClient.SetFieldOnItem(bwItem.ItemName, field.Name, out); err != nil {
-				errs = append(errs, fmt.Errorf("bwItem.ItemName: %s, bwItem.FieldName: %s, failed to upload field: %w", bwItem.ItemName, field.Name, err))
-				logrus.WithError(err).Error("failed to upload field")
+				msg := "failed to upload field"
+				logger.WithError(err).Error(msg)
+				errs = append(errs, errors.New(msg))
 				continue
 			}
 		}
@@ -213,13 +217,15 @@ func updateSecrets(bwItems []bitWardenItem, bwClient bitwarden.Client) error {
 			logger.Info("processing attachment")
 			out, err := executeCommand(attachment.Cmd)
 			if err != nil {
-				errs = append(errs, fmt.Errorf("bwItem.ItemName: %s, bwItem.AttachmentName: %s, %s failed: %w", bwItem.ItemName, attachment.Name, attachment.Cmd, err))
-				logrus.WithError(err).Errorf("%s: failed to generate attachment", attachment.Cmd)
+				msg := "failed to generate attachment"
+				logger.WithError(err).Error(msg)
+				errs = append(errs, errors.New(msg))
 				continue
 			}
 			if err := bwClient.SetAttachmentOnItem(bwItem.ItemName, attachment.Name, out); err != nil {
-				errs = append(errs, fmt.Errorf("bwItem.ItemName: %s, bwItem.AttachmentName: %s, failed to upload attachment: %w", bwItem.ItemName, attachment.Name, err))
-				logrus.WithError(err).Error("failed to upload attachment")
+				msg := "failed to upload attachment"
+				logger.WithError(err).Error(msg)
+				errs = append(errs, errors.New(msg))
 				continue
 			}
 		}
@@ -230,12 +236,14 @@ func updateSecrets(bwItems []bitWardenItem, bwClient bitwarden.Client) error {
 			logger.Info("processing password")
 			out, err := executeCommand(bwItem.Password)
 			if err != nil {
-				errs = append(errs, fmt.Errorf("bwItem.ItemName: %s, bwItem.Password:, %s failed: %w", bwItem.ItemName, bwItem.Password, err))
-				logrus.WithError(err).Errorf("%s :failed to generate password", bwItem.Password)
+				msg := "failed to generate password"
+				logger.WithError(err).Error(msg)
+				errs = append(errs, errors.New(msg))
 			} else {
 				if err := bwClient.SetPassword(bwItem.ItemName, out); err != nil {
-					errs = append(errs, fmt.Errorf("bwItem.ItemName: %s, bwItem.Password:, failed to upload password: %w", bwItem.ItemName, err))
-					logrus.WithError(err).Error("failed to upload password")
+					msg := "failed to upload password"
+					logger.WithError(err).Error(msg)
+					errs = append(errs, errors.New(msg))
 				}
 			}
 		}
@@ -249,8 +257,9 @@ func updateSecrets(bwItems []bitWardenItem, bwClient bitwarden.Client) error {
 			})
 			logger.Info("adding notes")
 			if err := bwClient.UpdateNotesOnItem(bwItem.ItemName, bwItem.Notes); err != nil {
-				errs = append(errs, fmt.Errorf("bwItem.ItemName: %s,  failed to update notes: %w", bwItem.ItemName, err))
-				logrus.WithError(err).Error("failed to update notes")
+				msg := "failed to update notes"
+				logger.WithError(err).Error(msg)
+				errs = append(errs, errors.New(msg))
 			}
 		}
 	}

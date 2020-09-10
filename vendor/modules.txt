@@ -240,6 +240,8 @@ github.com/gophercloud/gophercloud/openstack/identity/v2/tokens
 github.com/gophercloud/gophercloud/openstack/identity/v3/tokens
 github.com/gophercloud/gophercloud/openstack/utils
 github.com/gophercloud/gophercloud/pagination
+# github.com/gorilla/websocket v1.4.2
+github.com/gorilla/websocket
 # github.com/gregjones/httpcache v0.0.0-20190212212710-3befbb6ad0cc
 github.com/gregjones/httpcache
 github.com/gregjones/httpcache/diskcache
@@ -372,6 +374,12 @@ github.com/shurcooL/graphql/internal/jsonutil
 # github.com/sirupsen/logrus v1.6.0
 github.com/sirupsen/logrus
 github.com/sirupsen/logrus/hooks/test
+# github.com/slack-go/slack v0.6.6
+github.com/slack-go/slack
+github.com/slack-go/slack/internal/errorsx
+github.com/slack-go/slack/internal/timex
+github.com/slack-go/slack/slackevents
+github.com/slack-go/slack/slackutilsx
 # github.com/spf13/afero v1.2.2
 github.com/spf13/afero
 github.com/spf13/afero/mem

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -27,12 +28,46 @@ type cliClient struct {
 func newCliClient(username, password string, addSecret func(s string)) (Client, error) {
 	return newCliClientWithRun(username, password, addSecret, func(args ...string) ([]byte, error) {
 		// bw-password is protected, session in args is not
-		logrus.WithField("args", args).Debug("running bw command ...")
-		out, err := exec.Command("bw", args...).Output()
+		logger := logrus.WithField("args", args)
+		logger.Debug("running bitwarden command ...")
+		cmd := exec.Command("bw", args...)
+
+		stderr, err := cmd.StderrPipe()
 		if err != nil {
-			logrus.WithError(err).Errorf("bw cmd failed: %v, %v", string(out), err)
+			logger.WithError(err).Error("could not open stderr pipe")
+			return nil, err
 		}
-		return out, err
+		stdout, err := cmd.StdoutPipe()
+		if err != nil {
+			logger.WithError(err).Error("could not open stdout pipe")
+			return nil, err
+		}
+
+		if err := cmd.Start(); err != nil {
+			logger.WithError(err).Error("could not start command")
+			return nil, err
+		}
+
+		stdoutContents, err := ioutil.ReadAll(stdout)
+		if err != nil {
+			logger.WithError(err).Error("could not read stdout pipe")
+			return nil, err
+		}
+		stderrContents, err := ioutil.ReadAll(stderr)
+		if err != nil {
+			logger.WithError(err).Error("could not read stdout pipe")
+			return nil, err
+		}
+		err = cmd.Wait()
+		logger = logger.WithFields(logrus.Fields{
+			"stdout": string(stdoutContents),
+			"stderr": string(stderrContents),
+		})
+		if err != nil {
+			logger.WithError(err).Error("bitwarden command failed")
+		}
+
+		return stdoutContents, err
 	})
 }
 
@@ -64,7 +99,7 @@ func (c *cliClient) loginAndListItems() error {
 	defer c.Unlock()
 	output, err := c.run("login", c.username, c.password, "--response")
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to log in: %w", err)
 	}
 	r := bwLoginResponse{}
 	if err := json.Unmarshal(output, &r); err != nil {
@@ -88,10 +123,10 @@ func (c *cliClient) loginAndListItems() error {
 			return nil
 		}
 		// should never happen
-		return fmt.Errorf("bw-login succeeded with empty '.data.raw'")
+		return errors.New("bw login succeeded with empty '.data.raw'")
 	}
 	// should never happen
-	return fmt.Errorf("bw-login failed without run's error")
+	return errors.New("bw login failed without error from CLI")
 }
 
 func (c *cliClient) GetFieldOnItem(itemName, fieldName string) ([]byte, error) {
@@ -362,7 +397,7 @@ func (c *cliClient) SetAttachmentOnItem(itemName, attachmentName string, fileCon
 		targetItem.Attachments = append(targetItem.Attachments[:targetAttachmentIndex], targetItem.Attachments[targetAttachmentIndex+1:]...)
 		// If attachment exists delete it
 		if err := c.deleteAttachment(targetAttachment.ID, targetItem.ID); err != nil {
-			return fmt.Errorf("failed to set new attachment on item")
+			return fmt.Errorf("failed to delete current attachment on item: %w", err)
 		}
 
 	}

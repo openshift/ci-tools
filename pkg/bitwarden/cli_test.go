@@ -1,6 +1,7 @@
 package bitwarden
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -149,7 +150,7 @@ func TestLoginAndListItems(t *testing.T) {
 }`),
 				},
 				"--session not-going-to-tell-you== list items": {
-					err: fmt.Errorf("some unknown error"),
+					err: errors.New("some unknown error"),
 				},
 			},
 			expectedCalls: [][]string{
@@ -157,7 +158,7 @@ func TestLoginAndListItems(t *testing.T) {
 				{"--session", "not-going-to-tell-you==", "list", "items"},
 			},
 			expectedSession: "not-going-to-tell-you==",
-			expectedError:   fmt.Errorf("some unknown error"),
+			expectedError:   errors.New("some unknown error"),
 		},
 		{
 			name:     "u/p not matching",
@@ -169,13 +170,13 @@ func TestLoginAndListItems(t *testing.T) {
   "success": false,
   "message": "Username or password is incorrect. Try again."
 }`),
-					err: fmt.Errorf("failed to login: Username or password is incorrect. Try again"),
+					err: errors.New("Username or password is incorrect. Try again"),
 				},
 			},
 			expectedCalls: [][]string{
 				{"login", "u", "p", "--response"},
 			},
-			expectedError: fmt.Errorf("failed to login: Username or password is incorrect. Try again"),
+			expectedError: errors.New("failed to log in: Username or password is incorrect. Try again"),
 		},
 		{
 			name:     "already logged in",
@@ -187,13 +188,13 @@ func TestLoginAndListItems(t *testing.T) {
   "success": false,
   "message": "You are already logged in as dptp@redhat.com."
 }`),
-					err: fmt.Errorf("failed to login: You are already logged in as dptp@redhat.com"),
+					err: errors.New("You are already logged in as dptp@redhat.com"),
 				},
 			},
 			expectedCalls: [][]string{
 				{"login", "u", "p", "--response"},
 			},
-			expectedError: fmt.Errorf("failed to login: You are already logged in as dptp@redhat.com"),
+			expectedError: errors.New("failed to log in: You are already logged in as dptp@redhat.com"),
 		},
 	}
 	for _, tc := range testCases {
@@ -293,7 +294,7 @@ func TestGetFieldOnItem(t *testing.T) {
 			},
 			itemName:    "no-item",
 			fieldName:   "API Key",
-			expectedErr: fmt.Errorf("failed to find field API Key in item no-item"),
+			expectedErr: errors.New("failed to find field API Key in item no-item"),
 		},
 		{
 			name: "field not found",
@@ -327,7 +328,7 @@ func TestGetFieldOnItem(t *testing.T) {
 			},
 			itemName:    "unsplash.com",
 			fieldName:   "no-field",
-			expectedErr: fmt.Errorf("failed to find field no-field in item unsplash.com"),
+			expectedErr: errors.New("failed to find field no-field in item unsplash.com"),
 		},
 	}
 	for _, tc := range testCases {
@@ -412,7 +413,7 @@ func TestGetPassword(t *testing.T) {
 				},
 			},
 			itemName:    "no-item",
-			expectedErr: fmt.Errorf("failed to find password in item no-item"),
+			expectedErr: errors.New("failed to find password in item no-item"),
 		},
 		{
 			name: "password not found",
@@ -445,7 +446,7 @@ func TestGetPassword(t *testing.T) {
 				},
 			},
 			itemName:    "unsplash.com",
-			expectedErr: fmt.Errorf("failed to find password in item unsplash.com"),
+			expectedErr: errors.New("failed to find password in item unsplash.com"),
 		},
 	}
 	for _, tc := range testCases {
@@ -504,7 +505,7 @@ func TestGetAttachmentOnItemToFile(t *testing.T) {
 			name: "get attachment cmd err",
 			responses: map[string]execResponse{
 				fmt.Sprintf("--session abc get attachment a-id1 --itemid id2 --output %s", file.Name()): {
-					err: fmt.Errorf("some err"),
+					err: errors.New("some err"),
 				},
 			},
 			expectedCalls: [][]string{
@@ -512,21 +513,21 @@ func TestGetAttachmentOnItemToFile(t *testing.T) {
 			},
 			itemName:       "my-credentials",
 			attachmentName: "secret.auto.vars",
-			expectedErr:    fmt.Errorf("some err"),
+			expectedErr:    errors.New("some err"),
 		},
 		{
 			name:           "item not found",
 			expectedCalls:  [][]string{},
 			itemName:       "no-item",
 			attachmentName: "secret.auto.vars",
-			expectedErr:    fmt.Errorf("failed to find attachment secret.auto.vars in item no-item"),
+			expectedErr:    errors.New("failed to find attachment secret.auto.vars in item no-item"),
 		},
 		{
 			name:           "attachment not found",
 			expectedCalls:  [][]string{},
 			itemName:       "my-credentials",
 			attachmentName: "no attachment",
-			expectedErr:    fmt.Errorf("failed to find attachment no attachment in item my-credentials"),
+			expectedErr:    errors.New("failed to find attachment no attachment in item my-credentials"),
 		},
 	}
 	for _, tc := range testCases {
@@ -571,7 +572,7 @@ func TestLogout(t *testing.T) {
 			name: "some err",
 			responses: map[string]execResponse{
 				"logout": {
-					err: fmt.Errorf("some err"),
+					err: errors.New("some err"),
 				},
 			},
 			expectedCalls: [][]string{

@@ -11,8 +11,10 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/load"
 	"github.com/sirupsen/logrus"
 	"k8s.io/test-infra/prow/repoowners"
 	"sigs.k8s.io/yaml"
@@ -40,9 +42,7 @@ func gatherOptions() (options, error) {
 }
 
 func generateMetadata(registryPath string) (api.RegistryMetadata, error) {
-	metadata := api.RegistryMetadata{
-		Metadata: make(map[string]api.RegistryInfo),
-	}
+	metadata := make(map[string]api.RegistryInfo)
 	if err := filepath.Walk(registryPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -63,7 +63,7 @@ func generateMetadata(registryPath string) (api.RegistryMetadata, error) {
 			if err != nil {
 				return fmt.Errorf("failed to unmarshal OWNERS file at %s: %w", ownersPath, err)
 			}
-			metadata.Metadata[info.Name()] = api.RegistryInfo{
+			metadata[info.Name()] = api.RegistryInfo{
 				Path:   relpath,
 				Owners: ownersConfig,
 			}
@@ -73,6 +73,20 @@ func generateMetadata(registryPath string) (api.RegistryMetadata, error) {
 		return api.RegistryMetadata{}, fmt.Errorf("Failed to update registry metadata: %w", err)
 	}
 	return metadata, nil
+}
+
+func writeMetadata(registryPath string, metadata api.RegistryMetadata) error {
+	for filename, data := range metadata {
+		metadataPath := filepath.Join(registryPath, filepath.Dir(data.Path), fmt.Sprintf("%s%s", strings.TrimSuffix(filename, ".yaml"), load.MetadataSuffix))
+		output, err := json.MarshalIndent(data, "", "\t")
+		if err != nil {
+			return fmt.Errorf("Failed to marshal metadata file `%s`: %w", metadataPath, err)
+		}
+		if err := ioutil.WriteFile(metadataPath, output, 0644); err != nil {
+			return fmt.Errorf("Failed to write metadata file `%s`: %w", metadataPath, err)
+		}
+	}
+	return nil
 }
 
 func main() {
@@ -89,13 +103,7 @@ func main() {
 		log.Fatalf("Failed to update metadata: %v", err)
 	}
 
-	output, err := json.MarshalIndent(metadata, "", "\t")
-	if err != nil {
-		log.Fatalf("Failed to marshal metadata file: %v", err)
-	}
-
-	metadataPath := filepath.Join(o.registry, api.RegistryMetadataPath)
-	if err := ioutil.WriteFile(metadataPath, output, 0644); err != nil {
-		log.Fatalf("Failed to write metadata file %s: %v", metadataPath, err)
+	if err := writeMetadata(o.registry, metadata); err != nil {
+		log.Fatalf("Failed to write metadata: %v", err)
 	}
 }

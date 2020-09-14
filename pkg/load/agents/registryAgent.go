@@ -18,7 +18,7 @@ import (
 // memory and resolve ReleaseBuildConfigurations using the registry
 type RegistryAgent interface {
 	ResolveConfig(config api.ReleaseBuildConfiguration) (api.ReleaseBuildConfiguration, error)
-	GetRegistryComponents() (registry.ReferenceByName, registry.ChainByName, registry.WorkflowByName, map[string]string, *api.RegistryMetadata)
+	GetRegistryComponents() (registry.ReferenceByName, registry.ChainByName, registry.WorkflowByName, map[string]string, api.RegistryMetadata)
 	GetGeneration() int
 	registry.Resolver
 }
@@ -34,7 +34,7 @@ type registryAgent struct {
 	chains        registry.ChainByName
 	workflows     registry.WorkflowByName
 	documentation map[string]string
-	metadata      *api.RegistryMetadata
+	metadata      api.RegistryMetadata
 }
 
 var registryReloadTimeMetric = prometheus.NewHistogram(
@@ -113,7 +113,7 @@ func (a *registryAgent) GetGeneration() int {
 	return a.generation
 }
 
-func (a *registryAgent) GetRegistryComponents() (registry.ReferenceByName, registry.ChainByName, registry.WorkflowByName, map[string]string, *api.RegistryMetadata) {
+func (a *registryAgent) GetRegistryComponents() (registry.ReferenceByName, registry.ChainByName, registry.WorkflowByName, map[string]string, api.RegistryMetadata) {
 	return a.references, a.chains, a.workflows, a.documentation, a.metadata
 }
 

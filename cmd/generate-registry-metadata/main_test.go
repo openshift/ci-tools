@@ -24,37 +24,43 @@ func TestGenerateMetadata(t *testing.T) {
 		expectedMetadata api.RegistryMetadata
 	}{{
 		name:    "Registry",
-		regPath: "../../test/multistage-registry/registry-metadata",
+		regPath: "../../test/multistage-registry/registry",
 		expectedMetadata: api.RegistryMetadata{
-			Metadata: map[string]api.RegistryInfo{
-				"ipi-deprovision-chain.yaml": {
-					Path:   "ipi/deprovision/ipi-deprovision-chain.yaml",
-					Owners: owners2,
-				},
-				"ipi-deprovision-deprovision-ref.yaml": {
-					Path:   "ipi/deprovision/deprovision/ipi-deprovision-deprovision-ref.yaml",
-					Owners: owners2,
-				},
-				"ipi-deprovision-must-gather-ref.yaml": {
-					Path:   "ipi/deprovision/must-gather/ipi-deprovision-must-gather-ref.yaml",
-					Owners: owners2,
-				},
-				"ipi-install-chain.yaml": {
-					Path:   "ipi/install/ipi-install-chain.yaml",
-					Owners: owners1,
-				},
-				"ipi-install-install-ref.yaml": {
-					Path:   "ipi/install/install/ipi-install-install-ref.yaml",
-					Owners: owners1,
-				},
-				"ipi-install-rbac-ref.yaml": {
-					Path:   "ipi/install/rbac/ipi-install-rbac-ref.yaml",
-					Owners: owners1,
-				},
-				"ipi-workflow.yaml": {
-					Path:   "ipi/ipi-workflow.yaml",
-					Owners: owners1,
-				},
+			"ipi-deprovision-chain.yaml": {
+				Path:   "ipi/deprovision/ipi-deprovision-chain.yaml",
+				Owners: owners2,
+			},
+			"ipi-deprovision-deprovision-ref.yaml": {
+				Path:   "ipi/deprovision/deprovision/ipi-deprovision-deprovision-ref.yaml",
+				Owners: owners2,
+			},
+			"ipi-deprovision-must-gather-ref.yaml": {
+				Path:   "ipi/deprovision/must-gather/ipi-deprovision-must-gather-ref.yaml",
+				Owners: owners2,
+			},
+			"ipi-install-chain.yaml": {
+				Path:   "ipi/install/ipi-install-chain.yaml",
+				Owners: owners1,
+			},
+			"ipi-install-install-ref.yaml": {
+				Path:   "ipi/install/install/ipi-install-install-ref.yaml",
+				Owners: owners1,
+			},
+			"ipi-install-rbac-ref.yaml": {
+				Path:   "ipi/install/rbac/ipi-install-rbac-ref.yaml",
+				Owners: owners1,
+			},
+			"ipi-install-empty-parameter-chain.yaml": {
+				Path:   "ipi/install/empty-parameter/ipi-install-empty-parameter-chain.yaml",
+				Owners: owners1,
+			},
+			"ipi-install-with-parameter-chain.yaml": {
+				Path:   "ipi/install/with-parameter/ipi-install-with-parameter-chain.yaml",
+				Owners: owners1,
+			},
+			"ipi-workflow.yaml": {
+				Path:   "ipi/ipi-workflow.yaml",
+				Owners: owners1,
 			},
 		},
 	}}

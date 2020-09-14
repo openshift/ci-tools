@@ -2826,7 +2826,7 @@ func referenceHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *ht
 		return
 	}
 	refMetadataName := fmt.Sprint(name, load.RefSuffix)
-	if _, ok := metadata.Metadata[refMetadataName]; !ok {
+	if _, ok := metadata[refMetadataName]; !ok {
 		writeErrorPage(w, fmt.Errorf("Could not find metadata for file `%s`. Please contact the Developer Productivity Test Platform.", refMetadataName), http.StatusInternalServerError)
 		return
 	}
@@ -2842,7 +2842,7 @@ func referenceHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *ht
 			},
 			Documentation: docs[name],
 		},
-		Metadata: metadata.Metadata[refMetadataName],
+		Metadata: metadata[refMetadataName],
 	}
 	writePage(w, "Registry Step Help Page", page, ref)
 }
@@ -2865,7 +2865,7 @@ func chainHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *http.R
 		return
 	}
 	chainMetadataName := fmt.Sprint(name, load.ChainSuffix)
-	if _, ok := metadata.Metadata[chainMetadataName]; !ok {
+	if _, ok := metadata[chainMetadataName]; !ok {
 		writeErrorPage(w, fmt.Errorf("Could not find metadata for file `%s`. Please contact the Developer Productivity Test Platform.", chainMetadataName), http.StatusInternalServerError)
 		return
 	}
@@ -2878,7 +2878,7 @@ func chainHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *http.R
 			Documentation: docs[name],
 			Steps:         chains[name].Steps,
 		},
-		Metadata: metadata.Metadata[chainMetadataName],
+		Metadata: metadata[chainMetadataName],
 	}
 	writePage(w, "Registry Chain Help Page", page, chain)
 }
@@ -2901,7 +2901,7 @@ func workflowHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *htt
 		return
 	}
 	workflowMetadataName := fmt.Sprint(name, load.WorkflowSuffix)
-	if _, ok := metadata.Metadata[workflowMetadataName]; !ok {
+	if _, ok := metadata[workflowMetadataName]; !ok {
 		writeErrorPage(w, fmt.Errorf("Could not find metadata for file `%s`. Please contact the Developer Productivity Test Platform.", workflowMetadataName), http.StatusInternalServerError)
 		return
 	}
@@ -2916,7 +2916,7 @@ func workflowHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *htt
 				Steps:         workflows[name],
 			},
 			Type: workflowType},
-		Metadata: metadata.Metadata[workflowMetadataName],
+		Metadata: metadata[workflowMetadataName],
 	}
 	writePage(w, "Registry Workflow Help Page", page, workflow)
 }

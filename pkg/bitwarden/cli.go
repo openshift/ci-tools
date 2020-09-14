@@ -394,11 +394,11 @@ func (c *cliClient) SetAttachmentOnItem(itemName, attachmentName string, fileCon
 		if bytes.Equal(fileContents, existingFileContents) {
 			return nil
 		}
-		targetItem.Attachments = append(targetItem.Attachments[:targetAttachmentIndex], targetItem.Attachments[targetAttachmentIndex+1:]...)
 		// If attachment exists delete it
 		if err := c.deleteAttachment(targetAttachment.ID, targetItem.ID); err != nil {
 			return fmt.Errorf("failed to delete current attachment on item: %w", err)
 		}
+		targetItem.Attachments = append(targetItem.Attachments[:targetAttachmentIndex], targetItem.Attachments[targetAttachmentIndex+1:]...)
 
 	}
 	newAttachment := &Attachment{}

@@ -999,6 +999,66 @@ func TestSetAttachment(t *testing.T) {
 			},
 			expectedErr: nil,
 		},
+		{
+			name: "replace an existing attachment when multiple attachments exist",
+			client: &cliClient{
+				savedItems: []Item{
+					{
+						ID:   "id1",
+						Name: "unsplash.com",
+						Type: 1,
+						Attachments: []Attachment{
+							{
+								ID:       "attachmentID1",
+								FileName: "File1",
+							},
+							{
+								ID:       "attachmentID2",
+								FileName: "File2",
+							},
+						},
+					},
+				},
+				session: "my-session",
+			},
+			bwCliResponses: map[string]execResponse{
+				"--session my-session get attachment attachmentID1 --itemid id1 --output ": {
+					out: []byte(`dont-care`),
+				},
+				"--session my-session delete attachment attachmentID1 --itemid id1": {
+					out: []byte(`{result:"true"}`),
+				},
+				"--session my-session create attachment --itemid id1 --file ": {
+					out: []byte(`{"object":"attachment","id":"attachmentID3","filename":"File1"}`),
+				},
+			},
+			expectedCalls: [][]string{
+				{"--session", "my-session", "get", "attachment", "attachmentID1", "--itemid", "id1", "--output"},
+				{"--session", "my-session", "delete", "attachment", "attachmentID1", "--itemid", "id1"},
+				{"--session", "my-session", "create", "attachment", "--itemid", "id1", "--file"},
+			},
+			itemName:     "unsplash.com",
+			fileName:     "File1",
+			fileContents: []byte("new_file_contents"),
+			expectedSavedItems: []Item{
+				{
+					ID:   "id1",
+					Name: "unsplash.com",
+					Type: 1,
+					Attachments: []Attachment{
+						{
+							ID:       "attachmentID2",
+							FileName: "File2",
+						},
+						{
+							ID:       "attachmentID3",
+							FileName: "File1",
+						},
+					},
+				},
+			},
+			expectedErr: nil,
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {

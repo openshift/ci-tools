@@ -258,11 +258,7 @@ func main() {
 		name := p.Name
 		calculateDays := len(p.Cron) > 0 || len(p.Interval) > 0
 		var dashboardType string
-		var label string
-		var exists bool
-		if label, exists = allowList[name]; !exists {
-			label = p.Labels["ci.openshift.io/release-type"]
-		}
+		label := allowList[name]
 		switch label {
 		case "informing", "blocking", "broken", "generic-informing":
 			dashboardType = label

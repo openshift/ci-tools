@@ -128,7 +128,7 @@ td {
           <a class="dropdown-item" href="/help/leases">Leases and Quota</a>
           <a class="dropdown-item" href="/help/private-repositories">Private Repositories</a>
           <a class="dropdown-item" href="/help/adding-components">Adding and Changing Content</a>
-          <a class="dropdown-item" href="/help/release"><code>openshift/release</code></a>
+          <a class="dropdown-item" href="/help/release">Contributing to <code>openshift/release</code></a>
           <a class="dropdown-item" href="/help/operators">OLM Operator Support</a>
           <a class="dropdown-item" href="/help/examples">Examples</a>
           <a class="dropdown-item" href="/help/links">Useful links</a>
@@ -148,8 +148,7 @@ const htmlPageEnd = `
 <p class="small">Source code for this page located on <a href="https://github.com/openshift/ci-tools">GitHub</a></p>
 </div>
 </body>
-</html>
-`
+</html>`
 
 const errPage = `
 {{ . }}
@@ -1503,7 +1502,7 @@ in a step will also be present at that location.
 Steps can inject custom credentials by adding configuration that identifies
 which secrets hold the credentials and where the data should be mounted in
 the step. For instance, to mount the <code>my-data</code> secret into the
-step's filesytem at <code>/var/run/my-data</code>, a step could be configured
+step's filesystem at <code>/var/run/my-data</code>, a step could be configured
 in a literal <code>ci-operator</code> configuration, or in the step's configuration
 in the registry in the following manner:
 </p>
@@ -1878,28 +1877,158 @@ as the component.
 </p>
 `
 const releasePage = `
-<h2>The <code>openshift/release</code> repository</h2>
+<h2>Contributing CI Configuration to the <code>openshift/release</code> Repository</h2>
 
-<h3 id="sharding"><a href="#sharding"><code>ci-operator</code> configuration sharding</a></h3>
+<p>
+The <a href="https://github.com/openshift/release/"><code>openshift/release</code></a>
+repository holds CI configuration for OpenShift component repositories (for both
+OKD and OCP) and for many repositories that interact with OpenShift, like
+operators. The repository also contains manifests and configuration for various
+services that together form the OpenShift CI system.
+</p>
+
+<h3 id="pull-requests"><a href="#pull-requests">Pull Requests</a></h3>
+
+<p>
+The <code>openshift/release</code> repository contains plenty of different
+types of configuration with various impact and different owners. This section
+provides the main guidelines for filing and merging pull requests to this
+repository.
+</p>
+
+<h4 id="reviews"><a href="#reviews">Reviews and Approvals</a></h4>
+
+<p>
+This repository heavily uses Prow review and approval plugins together with code
+ownership as encoded in <code>OWNERS</code> files. Although the repository's root
+<code>OWNERS</code> is the DPTP team, specific content may be owned by different
+people or teams. After a PR is filed, the bot assigns two reviewers who should
+be suitable to review the PR and are expected to do so. These people are also
+the ones to bug when a PR sits there without a review. Teams are expected to own
+their CI config, including reviews, and therefore <code>OWNERS</code> file
+presence is enforced for some sections of the repository.
+</p>
+
+<p>
+During the PR lifetime, the bot maintains a comment that summarizes the pull
+request's approval status, including the links to the <code>OWNERS</code> files
+whose members need to approve the PR. Please pay attention to this comment when
+asking for approvals.
+<!--TODO: a screenshot would be nice?-->
+</p>
+
+<p>
+Due to the pull request volume in the repository, DPTP team members review the
+pull requests asynchronously when assigned by a bot. Please do not expect a PR
+to be reviewed immediately. Unless urgent, do not ping about reviews via Slack.
+If a PR sits unreviewed for more than a day, ping via GitHub first via a
+mention. If a pull request spends some time in WIP or draft state, it is helpful
+to mention the reviewers when the PR is ready for review.
+</p>
+
+<h4 id="checks"><a href="#checks">Checks</a></h4>
+
+<h5 id="formatting-checks"><a href="#formatting-checks">Formatting and Generated Content</a></h5>
+
+<p>
+Parts of the repository content are partially or entirely managed by automation
+, and there are checks in place, enforcing that the repo stays consistent with
+respect to this automation. When these checks fail, they usually advise how to
+run the tooling (using containers) to bring the repo to the desired state:
+</p>
+
+{{ plaintextSyntax (index . "determinizeCheckExample") }}
+
+<p>
+While there are individual <code>make</code> targets for different parts of the
+repository, it is easiest to run the <code>make update</code> that runs <em>all</em>
+these tools before a pull request submission:
+</p>
+
+{{ plaintextSyntax (index . "makeUpdateExample") }}
+
+<h5 id="rehearsals"><a href="#rehearsals">Rehearsals</a></h5>
+
+<p>
+In addition to the "normal" checks executed against pull requests on <code>openshift/release</code>,
+so-called <em>"rehearsals"</em> trigger whenever a pull request would affect one
+or more CI jobs. Jobs affected by such PR are executed as if run against a
+target component repository after the changes would be merged. This provides
+pull request authors early feedback about how config changes impact CI setup.
+</p>
+
+<p>
+All pull requests trigger a <code>ci/prow/pj-rehearse</code> job that inspects
+the changes in the PR and detects affected jobs. It then submits these jobs for
+execution, and they will report to the pull request results via the GitHub
+contexts named with the <code>ci/rehearse/$org/$repo/$branch/$test</code>
+pattern. Both the "driver" job (<code>ci/prow/pj-rehearse</code>) and the
+individual rehearsals do not block merges. This allows merging changes to CI
+configuration that affect jobs that fail for reasons unrelated to the change
+(like flakes or infrastructure issues). Also, merging a failing job can be
+useful when it gives correct signal so that such merge can be followed up in the
+target repo with a pull request fixing the failing job.
+</p>
+
+<p>
+The following changes are considered when triggering rehearsals:
+</p>
+
+<ol>
+    <li>Changes to Prow jobs themselves (<code>ci-operator/jobs</code>)</li>
+    <li>Changes to <code>ci-operator</code> configuration files (<code>ci-operator/config</code>)</li>
+    <li>Changes to multi-stage steps (<code>ci-operator/step-registry</code>)</li>
+    <li>Changes to templates (<code>ci-operator/templates</code>)</li>
+    <li>Changes to cluster profiles (<code>cluster/test-deploy</code>)</li>
+</ol>
+
+<p>
+The affected jobs are further filtered down so that jobs are only rehearsed when
+it is safe. Only the jobs with <code>pj-rehearse.openshift.io/can-be-rehearsed: "true"</code>
+label are rehearsed. All presubmits and periodics generated by <code>make jobs</code>
+have this label by default. Generated postsubmits will not contain it because
+generated postsubmits are used for promoting images. Handcrafted jobs can opt
+to be rehearsable by including this label.
+</p>
+
+<p>
+It is not possible to rerun individual rehearsal jobs. They do not react to any
+trigger commands. Rerunning rehearsals must be done by rerunning the "driver"
+job: <code>ci/prow/pj-rehearse</code>, which then triggers all rehearsals of
+jobs currently affected by the PR, including the rehearsals that passed before.
+</p>
+
+<p>
+Certain changes affect many jobs. For example, when a template or a step used
+by many jobs is changed, in theory all these jobs could be affected by the change,
+but it is unrealistic to rehearse them all. In some of these cases, rehearsals
+<em>samples</em> from the set of affected jobs. Unfortunately, the sampled jobs
+are sometimes not stable between retests, so it is possible that in a retest,
+different jobs are selected for rehearsal than in the previous run. In this case,
+results from the previous runs stay on the pull request and because rehearsals
+cannot be individually triggered, they cannot be rid of. This is especially
+inconvenient when these "stuck" jobs failed. Rehearsals do not block merges, so
+these jobs do not prevent configuration changes from merging, but they can lead
+to confusing situations.
+</p>
+
+<h5 id="sharding"><a href="#sharding"><code>ci-operator</code> Configuration Sharding</a></h5>
 
 <p>
 The configuration files under <code>ci-operator/config</code> need to be stored
-in the CI cluster before they can used by jobs.  That is done using the
+in the CI cluster before jobs can use them. That is done using the
 <a href="https://github.com/kubernetes/test-infra/tree/master/prow/plugins/updateconfig"><code>updateconfig</code></a>
 Prow plugin, which maps file path globs to <code>ConfigMap</code>s.
 </p>
 
 <p>
-Because of size constraints, files are distributed across several
-<code>ConfigMap</code>s based on the name of the branch they target.  Patterns
-for the most common names already exist in the configuration for the plugin,
-but it may be necessary to add entries when adding a file for a branch with an
-unusual name.  The
-<a href="https://prow.ci.openshift.org/job-history/gs/origin-ci-test/pr-logs/directory/pull-ci-openshift-release-master-correctly-sharded-config"><code>correctly-sharded-config</code></a>
-pre-submit job guarantees that each file is added to one (and only one)
-<code>ConfigMap</code>, and will fail in case a new entry is necessary.  To add
-one, edit the top-level <code>config_updater</code> key in the
-<a href="https://github.com/openshift/release/blob/master/core-services/prow/02_config/_plugins.yaml">plugin configuration</a>.
+Because of size constraints, files are distributed across several <code>ConfigMap</code>s
+based on the name of the branch they target. Patterns for the most common names
+already exist in the plugin configuration, but it may be necessary to
+add entries when adding a file for a branch with an unusual name. The <a href="https://prow.ci.openshift.org/job-history/gs/origin-ci-test/pr-logs/directory/pull-ci-openshift-release-master-correctly-sharded-config"><code>correctly-sharded-config</code></a>
+pre-submit job guarantees that each file is added to one (and only one) <code>ConfigMap</code>,
+and will fail in case a new entry is necessary. To add one, edit the top-level
+<code>config_updater</code> key in the <a href="https://github.com/openshift/release/blob/master/core-services/prow/02_config/_plugins.yaml">plugin configuration</a>.
 Most likely, the new entry will be in the format:
 </p>
 
@@ -1907,10 +2036,241 @@ Most likely, the new entry will be in the format:
 
 <p>
 The surrounding entries that add files to <code>ci-operator-misc-configs</code>
-can be used as reference.  When adding a new glob, be careful that it does not
+can be used as reference. When adding a new glob, be careful that it does not
 unintentionally match other files by being too generic.
 </p>
+
+<h3 id="component-maintainers"><a href="#component-maintainers">Component CI Configuration</a></h3>
+
+<p>
+As an owner of a repository for which you want to maintain CI configuration in
+<code>openshift/release</code>, you mostly need to interact with the following
+locations:
+</p>
+<ul>
+    <li>
+        <code>ci-operator/config/$org/$repo/$org-$repo-$branch.yaml</code>:
+        contains your ci-operator definition, which describes how the images and
+        tests in your repo work.
+    </li>
+    <li>
+        <code>ci-operator/jobs/$org/$repo/$org-$repo-$branch-(presubmits|postsubmits|periodics).yaml</code>:
+        contains Prow job definitions for each repository that are run on PRs,
+        on merges, or periodically. In most cases, these files are generated
+        from the <code>ci-operator</code> configuration, and you do not need to
+        touch them. There are exceptions to this, which are described <a href="#component-jobs">below</a>.
+    </li>
+    <li>
+        <code>core-services/prow/02_config/_{config,plugins}.yaml</code>: contains
+        the configuration for Prow, including repository-specific configuration
+        for automated merges, plugin enablement and more. This configuration is
+        usually set up once when a repository is on-boarded, and then rarely
+        needs to be changed.
+    </li>
+</ul>
+
+<h4 id="new-repos"><a href="#new-repos">Adding CI Configuration for New Repositories</a></h4>
+
+<p>
+When adding CI configuration for new repositories, instead of manually modifying
+the files in the locations described above or copy-pasting existing configuration
+for other repos, you should use the <code>make new-repo</code> target. It walks
+you through the necessary steps and generates the configuration for you:
+</p>
+
+{{ plaintextSyntax (index . "makeNewRepoExample") }}
+
+<h4 id="component-configs"><a href="#component-configs"><code>ci-operator</code> Configuration</a></h4>
+
+<p>
+The <code>ci-operator</code> configuration files for a repository live in <code>ci-operator/config/$org/$repo</code>
+directories. For details about the configuration itself, see this <a href="/help/ci-operator">document</a>.
+There is a separate configuration file per branch, and the configuration files
+follow the <code>$org-$repo-$branch.yaml</code> pattern:
+</p>
+
+{{ plaintextSyntax (index . "ciopConfigDirExample") }}
+
+<p>
+For the repositories involved in the <a href="https://docs.google.com/document/d/1USkRjWPVxsRZNLG5BRJnm5Q1LSk-NtBgrxl2spFRRU8/edit#heading=h.3myk8y4544sk">Centralized Release Branching and Config Management</a>,
+(this includes all OCP components and some others, see the linked document
+for details) the configuration for release branches for the <em>future</em>
+releases are managed by automation and should not be changed or added by humans.
+</p>
+
+<h5 id="feature-branches"><a href="#feature-branches">Feature Branches</a></h5>
+
+<p>
+Any branch whose name has a prefix matching to any branch with a <code>ci-operator</code>
+configuration file is considered a <em>"feature branch"</em>. Pull requests to
+feature branches trigger the same CI presubmit jobs (but not postsubmits) like
+configured for the base branch, without any additional configuration. This also
+means that such <em>"feature branches"</em> cannot have a separate, different
+<code>ci-operator</code> configuration. For example, if a repo has an <code>org-repo-release-2.0.yaml</code>
+config (specifying CI config for the <code>release-2.0</code> branch of that
+repository), the same CI presubmits will trigger on pull requests to a <code>release-2.0.1</code>
+branch, and the repo cannot have an <code>org-repo-release-2.0.1.yaml</code>
+configuration file.
+</p>
+
+<h5 id="variants"><a href="#variants">Variants</a></h5>
+
+<p>
+It is possible to have multiple <code>ci-operator</code> configuration files for
+a single branch. This is useful when a component needs to be built and tested in
+multiple different ways from a single branch. In that case, the additional
+configuration files must follow the <code>org-repo-branch__VARIANT.yaml</code>
+pattern (note the double underscore separating the branch from the variant).
+</p>
+
+<h4 id="component-jobs"><a href="#component-jobs">Prowjob Configuration</a></h4>
+
+<p>
+Most jobs are generated from the <code>ci-operator</code> configuration, so the
+need to interact with actual Prowjob configuration should be quite rare.
+Modifying the Prowjob configuration is discouraged unless necessary, and can
+result in increased fragility and maintenance costs.
+</p>
+
+<h5 id="manual-job-changes"><a href="#manual-job-changes">Tolerated Changes to Generated Jobs</a></h5>
+
+<p>
+Generated jobs are enforced to stay in the generated form, so when you attempt
+to change them, a check will fail on the pull requests, requiring the jobs to be
+regenerated and changed back. However, the generator tolerates these
+modifications to allow some commonly needed customizations:
+</p>
+
+<table class="table">
+  <tr>
+    <th style="white-space: nowrap">Field</th>
+    <th>Description</th>
+    <th>Presubmit</th>
+    <th>Postsubmit</th>
+    <th>Periodic</th>
+  </tr>
+  <tr>
+    <td style="white-space: nowrap"><code>.always_run</code></td>
+    <td>Set to <code>false</code> to disable automated triggers of the job on pull requests.</td>
+    <td>✅</td>
+    <td></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td style="white-space: nowrap"><code>.run_if_changed</code></td>
+    <td>Set a regex to make the job trigger only when a pull request changes a certain path in the repository./td>
+    <td>✅</td>
+    <td></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td style="white-space: nowrap"><code>.optional</code></td>
+    <td>Set to <code>true</code> to make the job not block merges.</td>
+    <td>✅</td>
+    <td></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td style="white-space: nowrap"><code>.skip_report</code></td>
+    <td>Set to <code>true</code> to make the job not report its result to the pull request.</td>
+    <td>✅</td>
+    <td></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td style="white-space: nowrap"><code>.max_concurrency</code></td>
+    <td>Set to limit how many instances of the job can run simultaneously.</td>
+    <td>✅</td>
+    <td>✅</td>
+    <td>✅</td>
+  </tr>
+  <tr>
+    <td style="white-space: nowrap"><code>.reporter_config</code></td>
+    <td>Add this stanza to configure Slack alerts (see the <a href="https://github.com/clarketm/kubernetes_test-infra/blob/master/prow/cmd/crier/README.md#slack-reporter">upstream doc</a>).</td>
+    <td></td>
+    <td></td>
+    <td>✅</td>
+  </tr>
+</table>
+
+<h5 id="handcrafted-jobs"><a href="#handcrafted-jobs">Handcrafted Jobs</a></h5>
+
+<p>
+It is possible to add entirely handcrafted Prowjobs. The Prowjob configuration
+files' content is a YAML list, so adding a job means adding an item to one
+of these lists. Creating handcrafted jobs assumes knowledge of Prow, takes you
+out of the well-supported path, and is therefore discouraged. You are expected to
+maintain and fully own your handcrafted jobs.
+</p>
 `
+
+const determinizeCheckExample = `...
+ERROR: This check enforces Prow Job configuration YAML file format (ordering,
+ERROR: linebreaks, indentation) to be consistent over the whole repository. We have
+ERROR: automation in place that manipulates these configs and consistent formatting
+ERROR: helps reviewing the changes the automation does.
+
+ERROR: Run the following command to re-format the Prow jobs:
+ERROR: $ make jobs
+`
+
+const makeUpdateExample = `$ make update
+make jobs
+docker pull registry.svc.ci.openshift.org/ci/ci-operator-prowgen:latest
+docker run --rm <...> registry.svc.ci.openshift.org/ci/ci-operator-prowgen:latest <...>
+docker pull registry.svc.ci.openshift.org/ci/sanitize-prow-jobs:latest
+docker run --rm <...> registry.svc.ci.openshift.org/ci/sanitize-prow-jobs:latest <...>
+make ci-operator-config
+docker pull registry.svc.ci.openshift.org/ci/determinize-ci-operator:latest
+docker run --rm -v <...> registry.svc.ci.openshift.org/ci/determinize-ci-operator:latest <...>
+make prow-config
+docker pull registry.svc.ci.openshift.org/ci/determinize-prow-config:latest
+docker run --rm <...> registry.svc.ci.openshift.org/ci/determinize-prow-config:latest <...>
+make registry-metadata
+docker pull registry.svc.ci.openshift.org/ci/generate-registry-metadata:latest
+<...>
+docker run --rm -v <...> registry.svc.ci.openshift.org/ci/generate-registry-metadata:latest <...>
+`
+
+const ciopConfigDirExample = `$ ls -1 ci-operator/config/openshift/api/
+openshift-api-master.yaml
+openshift-api-release-3.11.yaml
+openshift-api-release-4.1.yaml
+openshift-api-release-4.2.yaml
+openshift-api-release-4.3.yaml
+openshift-api-release-4.4.yaml
+openshift-api-release-4.5.yaml
+openshift-api-release-4.6.yaml
+openshift-api-release-4.7.yaml
+OWNERS
+`
+
+const makeNewRepoExample = `make new-repo
+docker pull registry.svc.ci.openshift.org/ci/repo-init:latest
+<...>
+docker run --rm -it <...> registry.svc.ci.openshift.org/ci/repo-init:latest --release-repo <...>
+Welcome to the repository configuration initializer.
+In order to generate a new set of configurations, some information will be necessary.
+
+Let's start with general information about the repository...
+Enter the organization for the repository: openshift
+Enter the repository to initialize: new-repo-example
+Enter the development branch for the repository: [default: master]
+
+Now, let's determine how the repository builds output artifacts...
+Does the repository build and promote container images?  [default: no] yes
+Does the repository promote images as part of the OpenShift release?  [default: no] yes
+Do any images build on top of the OpenShift base image?  [default: no] yes
+Do any images build on top of the CentOS base image?  [default: no] no
+
+Now, let's configure how the repository is compiled...
+What version of Go does the repository build with? [default: 1.13] 1.15
+[OPTIONAL] Enter the Go import path for the repository if it uses a vanity URL (e.g. "k8s.io/my-repo"):
+[OPTIONAL] What commands are used to build binaries in the repository? (e.g. "go install ./cmd/...") make awesome
+[OPTIONAL] What commands are used to build test binaries? (e.g. "go install -race ./cmd/..." or "go test -c ./test/...") make awesome-test
+...
+`
+
 const examplesPage = `
 <h2 id="examples"><a href="#examples">Available Examples</a></h2>
 <ul>
@@ -2625,6 +2985,14 @@ func helpHandler(subPath string, w http.ResponseWriter, _ *http.Request) {
 				}
 				return template.HTML(formatted)
 			},
+			"plaintextSyntax": func(source string) template.HTML {
+				formatted, err := syntaxPlaintext(source)
+				if err != nil {
+					logrus.Errorf("Failed to format source file: %v", err)
+					return template.HTML(source)
+				}
+				return template.HTML(formatted)
+			},
 		},
 	)
 	var helpTemplate *template.Template
@@ -2650,6 +3018,10 @@ func helpHandler(subPath string, w http.ResponseWriter, _ *http.Request) {
 		helpTemplate, err = helpFuncs.Parse(addingComponentPage)
 	case "/release":
 		data["updateconfigExample"] = updateconfigExample
+		data["determinizeCheckExample"] = determinizeCheckExample
+		data["makeUpdateExample"] = makeUpdateExample
+		data["ciopConfigDirExample"] = ciopConfigDirExample
+		data["makeNewRepoExample"] = makeNewRepoExample
 		helpTemplate, err = helpFuncs.Parse(releasePage)
 	case "/private-repositories":
 		helpTemplate, err = helpFuncs.Parse(privateRepositoriesPage)
@@ -2782,6 +3154,10 @@ func syntax(source string, lexer chroma.Lexer) (string, error) {
 	output.WriteString("</style>")
 	err = formatter.Format(&output, style, iterator)
 	return output.String(), err
+}
+
+func syntaxPlaintext(source string) (string, error) {
+	return syntax(source, lexers.Get("plaintext"))
 }
 
 func syntaxYAML(source string) (string, error) {

@@ -110,7 +110,7 @@ func (s *rpmServerStep) run(ctx context.Context) error {
 							`
 #!/bin/bash
 cat <<END >>/tmp/serve.py
-import time, threading, socket, SocketServer, BaseHTTPServer, SimpleHTTPServer
+import time, threading, socket, socketserver, http, http.server
 
 # Create socket
 addr = ('', 8080)
@@ -127,14 +127,12 @@ class Thread(threading.Thread):
 		self.daemon = True
 		self.start()
 	def run(self):
-		httpd = BaseHTTPServer.HTTPServer(addr, SimpleHTTPServer.SimpleHTTPRequestHandler, False)
-
-		# Prevent the HTTP server from re-binding every handler.
-		# https://stackoverflow.com/questions/46210672/
-		httpd.socket = sock
-		httpd.server_bind = self.server_close = lambda self: None
-
-		httpd.serve_forever()
+		with socketserver.TCPServer(addr, http.server.SimpleHTTPRequestHandler, False) as httpd:
+			# Prevent the HTTP server from re-binding every handler.
+			# https://stackoverflow.com/questions/46210672/
+			httpd.socket = sock
+			httpd.server_bind = self.server_close = lambda self: None
+			httpd.serve_forever()
 [Thread(i) for i in range(100)]
 time.sleep(9e9)
 END

@@ -545,9 +545,12 @@ func (o *options) Run() []error {
 	defer func() {
 		log.Printf("Ran for %s", time.Since(start).Truncate(time.Second))
 	}()
-
+	var leaseClient *lease.Client
+	if o.leaseServer != "" && o.leaseServerUsername != "" && o.leaseServerPasswordFile != "" {
+		leaseClient = &o.leaseClient
+	}
 	// load the graph from the configuration
-	buildSteps, postSteps, err := defaults.FromConfig(o.configSpec, o.jobSpec, o.templates, o.writeParams, o.artifactDir, o.promote, o.clusterConfig, &o.leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret)
+	buildSteps, postSteps, err := defaults.FromConfig(o.configSpec, o.jobSpec, o.templates, o.writeParams, o.artifactDir, o.promote, o.clusterConfig, leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret)
 	if err != nil {
 		return []error{results.ForReason("defaulting_config").WithError(err).Errorf("failed to generate steps from config: %v", err)}
 	}
@@ -582,7 +585,9 @@ func (o *options) Run() []error {
 	if err := dumpGraph(o.artifactDir, nodes); err != nil {
 		return []error{fmt.Errorf("failed to dump graph to artifacts dir: %w", err)}
 	}
-
+	if err := validateGraph(nodes); err != nil {
+		return err
+	}
 	// initialize the namespace if necessary and create any resources that must
 	// exist prior to execution
 	if err := o.initializeNamespace(); err != nil {
@@ -595,7 +600,7 @@ func (o *options) Run() []error {
 	}
 
 	return interrupt.New(handler, o.saveNamespaceArtifacts).Run(func() []error {
-		if o.leaseServer != "" && o.leaseServerUsername != "" && o.leaseServerPasswordFile != "" {
+		if leaseClient != nil {
 			if err := o.initializeLeaseClient(); err != nil {
 				return []error{fmt.Errorf("failed to create the lease client: %w", err)}
 			}
@@ -1465,6 +1470,20 @@ func iterateAllEdges(nodes []*api.StepNode, alreadyIterated sets.String, f func(
 		f(node)
 		alreadyIterated.Insert(node.Step.Name())
 	}
+}
+
+func validateGraph(nodes []*api.StepNode) []error {
+	errs := api.ValidateGraph(nodes)
+	var noLeaseClient bool
+	for _, err := range errs {
+		if errors.Is(err, steps.NoLeaseClientErr) {
+			noLeaseClient = true
+		}
+	}
+	if noLeaseClient {
+		errs = append(errs, errors.New("a lease client was required but none was provided, add the --lease-... arguments"))
+	}
+	return errs
 }
 
 var shaRegex = regexp.MustCompile(`^[0-9a-fA-F]+$`)

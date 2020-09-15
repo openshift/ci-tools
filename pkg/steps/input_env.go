@@ -35,6 +35,8 @@ func (s *inputEnvironmentStep) Inputs() (api.InputDefinition, error) {
 	return values, nil
 }
 
+func (*inputEnvironmentStep) Validate() error { return nil }
+
 func (s *inputEnvironmentStep) Run(ctx context.Context) error {
 	return nil
 }

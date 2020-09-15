@@ -67,6 +67,8 @@ func (s *stableImagesTagStep) Inputs() (api.InputDefinition, error) {
 	return nil, nil
 }
 
+func (*stableImagesTagStep) Validate() error { return nil }
+
 func (s *stableImagesTagStep) Requires() []api.StepLink { return []api.StepLink{} }
 
 func (s *stableImagesTagStep) Creates() []api.StepLink {
@@ -98,6 +100,8 @@ type releaseImagesTagStep struct {
 func (s *releaseImagesTagStep) Inputs() (api.InputDefinition, error) {
 	return nil, nil
 }
+
+func (*releaseImagesTagStep) Validate() error { return nil }
 
 func sourceName(config api.ReleaseTagConfiguration) string {
 	return fmt.Sprintf("%s/%s:%s", config.Namespace, config.Name, api.ComponentFormatReplacement)

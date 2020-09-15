@@ -160,6 +160,8 @@ func (s *sourceStep) Inputs() (api.InputDefinition, error) {
 	return s.jobSpec.Inputs(), nil
 }
 
+func (*sourceStep) Validate() error { return nil }
+
 func (s *sourceStep) Run(ctx context.Context) error {
 	return results.ForReason("cloning_source").ForError(s.run(ctx))
 }

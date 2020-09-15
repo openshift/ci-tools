@@ -43,6 +43,8 @@ func (s *promotionStep) Inputs() (api.InputDefinition, error) {
 	return nil, nil
 }
 
+func (*promotionStep) Validate() error { return nil }
+
 var promotionRetry = wait.Backoff{
 	Steps:    20,
 	Duration: 10 * time.Millisecond,

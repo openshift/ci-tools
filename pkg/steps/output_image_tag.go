@@ -30,6 +30,8 @@ func (s *outputImageTagStep) Inputs() (api.InputDefinition, error) {
 	return nil, nil
 }
 
+func (*outputImageTagStep) Validate() error { return nil }
+
 func (s *outputImageTagStep) Run(ctx context.Context) error {
 	return results.ForReason("tagging_output_image").ForError(s.run(ctx))
 }

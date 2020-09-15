@@ -60,6 +60,8 @@ func (s *assembleReleaseStep) Inputs() (api.InputDefinition, error) {
 	return nil, nil
 }
 
+func (*assembleReleaseStep) Validate() error { return nil }
+
 func (s *assembleReleaseStep) Run(ctx context.Context) error {
 	return results.ForReason("assembling_release").ForError(s.run(ctx))
 }

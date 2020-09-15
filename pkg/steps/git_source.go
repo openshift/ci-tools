@@ -29,6 +29,8 @@ func (s *gitSourceStep) Inputs() (api.InputDefinition, error) {
 	return s.jobSpec.Inputs(), nil
 }
 
+func (*gitSourceStep) Validate() error { return nil }
+
 func (s *gitSourceStep) Run(ctx context.Context) error {
 	return results.ForReason("building_image_from_source").ForError(s.run(ctx))
 }

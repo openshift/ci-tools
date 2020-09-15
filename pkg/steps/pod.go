@@ -58,6 +58,8 @@ func (s *podStep) Inputs() (api.InputDefinition, error) {
 	return nil, nil
 }
 
+func (*podStep) Validate() error { return nil }
+
 func (s *podStep) Run(ctx context.Context) error {
 	return results.ForReason("running_pod").ForError(s.run(ctx))
 }

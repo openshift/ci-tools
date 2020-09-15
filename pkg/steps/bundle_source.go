@@ -3,6 +3,7 @@ package steps
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 
 	buildapi "github.com/openshift/api/build/v1"
@@ -94,7 +95,12 @@ func (s *bundleSourceStep) Requires() []api.StepLink {
 	links := []api.StepLink{api.InternalImageLink(api.PipelineImageStreamTagReferenceSource)}
 	for _, sub := range s.config.Substitutions {
 		imageStream, name, _ := s.releaseBuildConfig.DependencyParts(api.StepDependency{Name: sub.With})
-		links = append(links, api.LinkForImage(imageStream, name))
+		if link := api.LinkForImage(imageStream, name); link != nil {
+			links = append(links, link)
+		} else {
+			log.Printf("warning: unable to resolve image '%s' to be substituted for '%s'", sub.With, sub.PullSpec)
+		}
+
 	}
 	return links
 }

@@ -3,13 +3,14 @@ package steps
 import (
 	"context"
 	"fmt"
-	"github.com/openshift/ci-tools/pkg/steps/utils"
 	"io"
 	"log"
 	"os"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/openshift/ci-tools/pkg/steps/utils"
 
 	"k8s.io/test-infra/prow/clonerefs"
 	"k8s.io/test-infra/prow/pod-utils/decorate"
@@ -290,7 +291,7 @@ func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStrea
 						From:                    from,
 						ForcePull:               true,
 						NoCache:                 true,
-						Env:                     []coreapi.EnvVar{{Name: "foo", Value: "bar"}}, //workaround https://bugzilla.redhat.com/show_bug.cgi?id=1784163#c8
+						Env:                     []coreapi.EnvVar{{Name: "foo", Value: "bar"}}, // workaround https://bugzilla.redhat.com/show_bug.cgi?id=1784163#c8
 						ImageOptimizationPolicy: &layer,
 					},
 				},

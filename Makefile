@@ -195,3 +195,9 @@ verify-gen: generate
 update-unit:
 	UPDATE=true go test ./...
 .PHONY: update-unit
+
+validate-registry-metadata:
+	generate-registry-metadata -registry test/multistage-registry/registry
+	git status -s ./test/multistage-registry/registry
+	test -z "$$(git status -s ./test/multistage-registry/registry | grep registry)"
+.PHONY: validate-registry-metadata

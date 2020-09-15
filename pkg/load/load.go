@@ -38,6 +38,7 @@ const (
 	ChainSuffix    = "-chain.yaml"
 	WorkflowSuffix = "-workflow.yaml"
 	CommandsSuffix = "-commands.sh"
+	MetadataSuffix = ".metadata.json"
 )
 
 // ByOrgRepo maps org --> repo --> list of branched and variant configs
@@ -234,11 +235,12 @@ func literalConfigFromResolver(raw []byte, address string) (*api.ReleaseBuildCon
 
 // Registry takes the path to a registry config directory and returns the full set of references, chains,
 // and workflows that the registry's Resolver needs to resolve a user's MultiStageTestConfiguration
-func Registry(root string, flat bool) (registry.ReferenceByName, registry.ChainByName, registry.WorkflowByName, map[string]string, *api.RegistryMetadata, error) {
+func Registry(root string, flat bool) (registry.ReferenceByName, registry.ChainByName, registry.WorkflowByName, map[string]string, api.RegistryMetadata, error) {
 	references := registry.ReferenceByName{}
 	chains := registry.ChainByName{}
 	workflows := registry.WorkflowByName{}
 	documentation := map[string]string{}
+	metadata := api.RegistryMetadata{}
 	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if info != nil && strings.HasPrefix(info.Name(), "..") {
 			if info.IsDir() {
@@ -250,7 +252,7 @@ func Registry(root string, flat bool) (registry.ReferenceByName, registry.ChainB
 			return err
 		}
 		if info != nil && !info.IsDir() {
-			if filepath.Ext(info.Name()) == ".md" || filepath.Ext(info.Name()) == ".json" || info.Name() == "OWNERS" {
+			if filepath.Ext(info.Name()) == ".md" || info.Name() == "OWNERS" {
 				return nil
 			}
 			raw, err := ioutil.ReadFile(path)
@@ -311,6 +313,13 @@ func Registry(root string, flat bool) (registry.ReferenceByName, registry.ChainB
 				}
 				workflows[name] = workflow
 				documentation[name] = doc
+			} else if strings.HasSuffix(path, MetadataSuffix) {
+				var data api.RegistryInfo
+				err := json.Unmarshal(raw, &data)
+				if err != nil {
+					return fmt.Errorf("failed to load metadata file %s: %w", path, err)
+				}
+				metadata[filepath.Base(data.Path)] = data
 			} else if strings.HasSuffix(path, CommandsSuffix) {
 				// ignore
 			} else {
@@ -321,12 +330,6 @@ func Registry(root string, flat bool) (registry.ReferenceByName, registry.ChainB
 	})
 	if err != nil {
 		return nil, nil, nil, nil, nil, err
-	}
-	metadata := &api.RegistryMetadata{}
-	if metadataRaw, err := ioutil.ReadFile(filepath.Join(root, api.RegistryMetadataPath)); err != nil {
-		logrus.WithError(err).Warn("failed to load metadata file")
-	} else if err := json.Unmarshal(metadataRaw, metadata); err != nil {
-		logrus.WithError(err).Warn("failed to parse metadata file")
 	}
 	// create graph to verify that there are no cycles
 	if _, err = registry.NewGraph(references, chains, workflows); err != nil {

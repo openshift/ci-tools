@@ -546,13 +546,8 @@ type RegistryWorkflow struct {
 	Documentation string `json:"documentation,omitempty"`
 }
 
-// RegistryMetadataPath is the path to the registry metadata file relative to the step registry base directory
-const RegistryMetadataPath = "metadata.json"
-
-// RegistryMetadata contains the metadata for all registry components by name
-type RegistryMetadata struct {
-	Metadata map[string]RegistryInfo `json:"metadata,omitempty"`
-}
+// RegistryMetadata maps the registry info for each step in the registry by filename
+type RegistryMetadata map[string]RegistryInfo
 
 // RegistryInfo contains metadata about a registry component that is useful for the web UI of the step registry
 type RegistryInfo struct {

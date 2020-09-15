@@ -302,7 +302,7 @@ func (dp *diffProcessor) process() error {
 					"#aos-art.",
 					"",
 					"[1]: https://github.com/openshift/ci-tools/tree/master/cmd/ocp-build-data-enforcer",
-					"[2]: https://github.com/openshift/ocp-build-data/tree/openshift-4.6-rhel-8/images",
+					"[2]: https://github.com/openshift/ocp-build-data/tree/openshift-4.6/images",
 				}, "\n"),
 			); err != nil {
 				return fmt.Errorf("failed to create PR: %w", err)

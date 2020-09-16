@@ -555,8 +555,9 @@ func waitForPodCompletionOrTimeout(ctx context.Context, podClient coreclientset.
 				log.Printf("warning: failed to get pod %s: %v", name, err)
 				continue
 			}
-			if !podHasStarted(pod) && time.Since(pod.CreationTimestamp.Time) > 10*time.Minute {
-				message := fmt.Sprintf("pod didn't start running within 10 minutes: %s", getReasonsForUnreadyContainers(pod))
+			timeout := 15 * time.Minute
+			if !podHasStarted(pod) && time.Since(pod.CreationTimestamp.Time) > timeout {
+				message := fmt.Sprintf("pod didn't start running within %s: %s", timeout, getReasonsForUnreadyContainers(pod))
 				log.Print(message)
 				notifier.Complete(name)
 				return false, errors.New(message)

@@ -120,3 +120,28 @@ function os::integration::configresolver::check_log() {
     fi
 }
 readonly -f os::integration::configresolver::check_log
+
+__os_integration_boskos_pid=
+
+# os::integration::boskos::start starts an in-memory boskos server.
+function os::integration::boskos::start() {
+    local config=$1
+    boskos --in_memory --config "$1" &> "${LOG_DIR}/boskos.log" &
+    __os_integration_boskos_pid=$!
+}
+readonly -f os::integration::boskos::start
+
+# os::integration::boskos::stop terminates the boskos server.
+function os::integration::boskos::stop() {
+    os::log::info "Stopping boskos..."
+    if [[ -n "${__os_integration_boskos_pid}" ]]; then
+        if ! ${USE_SUDO:+sudo} kill -0 "${__os_integration_boskos_pid}"; then
+            os::log::error "boskos exited early, logs:" >&2
+            cat "${LOG_DIR}/boskos.log"
+            return 1
+        fi
+        ${USE_SUDO:+sudo} kill "${__os_integration_boskos_pid}"
+        wait "${__os_integration_boskos_pid}" || [[ "$?" == 143 ]]
+    fi
+}
+readonly -f os::integration::boskos::stop

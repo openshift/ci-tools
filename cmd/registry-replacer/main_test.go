@@ -26,7 +26,9 @@ func TestReplacer(t *testing.T) {
 		ensureCorrectPromotionDockerfileIngoredRepos sets.String
 		promotionTargetToDockerfileMapping           map[string]dockerfileLocation
 		files                                        map[string][]byte
+		credentials                                  *usernameToken
 		expectWrite                                  bool
+		epectedOpts                                  github.Opts
 	}{
 		{
 			name: "No dockerfile, does nothing",
@@ -260,6 +262,27 @@ func TestReplacer(t *testing.T) {
 			ensureCorrectPromotionDockerfile:   true,
 			promotionTargetToDockerfileMapping: map[string]dockerfileLocation{fmt.Sprintf("registry.svc.ci.openshift.org/ocp/%s:promotionTarget", majorMinor.String()): {contextDir: "some_dir", dockerfile: "Dockerfile.rhel"}},
 		},
+		{
+			name: "Username+Password get passed on",
+			config: &api.ReleaseBuildConfiguration{
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+						ContextDir:     "some_dir",
+						DockerfilePath: "Dockerfile.rhel",
+						Inputs: map[string]api.ImageBuildInputs{
+							"root": {As: []string{"ocp/builder:something"}},
+						},
+					},
+					To: "promotionTarget",
+				}},
+				PromotionConfiguration: &api.PromotionConfiguration{Namespace: "ocp", Name: majorMinor.String()},
+				Metadata:               api.Metadata{Branch: "master"},
+			},
+			ensureCorrectPromotionDockerfile:   true,
+			promotionTargetToDockerfileMapping: map[string]dockerfileLocation{fmt.Sprintf("registry.svc.ci.openshift.org/ocp/%s:promotionTarget", majorMinor.String()): {contextDir: "some_dir", dockerfile: "Dockerfile.rhel"}},
+			credentials:                        &usernameToken{username: "some-user", token: "some-token"},
+			epectedOpts:                        github.Opts{BasicAuthUser: "some-user", BasicAuthPassword: "some-token"},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -267,9 +290,10 @@ func TestReplacer(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
+			opts, fileGetter := fakeGithubFileGetterFactory(tc.files)
 			fakeWriter := &fakeWriter{}
 			if err := replacer(
-				fakeGithubFileGetterFactory(tc.files),
+				fileGetter,
 				fakeWriter.Write,
 				tc.pruneUnusedReplacementsEnabled,
 				tc.pruneOCPBuilderReplacementsEnabled,
@@ -277,6 +301,7 @@ func TestReplacer(t *testing.T) {
 				tc.ensureCorrectPromotionDockerfileIngoredRepos,
 				tc.promotionTargetToDockerfileMapping,
 				majorMinor,
+				nil,
 			)(tc.config, &config.Info{}); err != nil {
 				t.Errorf("replacer failed: %v", err)
 			}
@@ -288,6 +313,9 @@ func TestReplacer(t *testing.T) {
 				return
 			}
 
+			if diff := cmp.Diff(*opts, tc.epectedOpts); diff != "" {
+				t.Errorf("opts differ from expected opts: %s", diff)
+			}
 			testhelper.CompareWithFixture(t, fakeWriter.data)
 		})
 	}
@@ -302,8 +330,12 @@ func (fw *fakeWriter) Write(data []byte) error {
 	return nil
 }
 
-func fakeGithubFileGetterFactory(data map[string][]byte) func(string, string, string) github.FileGetter {
-	return func(_, _, _ string) github.FileGetter {
+func fakeGithubFileGetterFactory(data map[string][]byte) (*github.Opts, func(string, string, string, ...github.Opt) github.FileGetter) {
+	o := &github.Opts{}
+	return o, func(_, _, _ string, opts ...github.Opt) github.FileGetter {
+		for _, opt := range opts {
+			opt(o)
+		}
 		return func(path string) ([]byte, error) {
 			return data[path], nil
 		}

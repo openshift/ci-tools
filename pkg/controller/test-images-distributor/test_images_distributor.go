@@ -220,6 +220,17 @@ func (r *reconciler) reconcile(req reconcile.Request, log *logrus.Entry) error {
 		return fmt.Errorf("failed to get imageStreamTag %s from registry cluster: %w", decoded.String(), err)
 	}
 
+	imageStreamNameAndTag := strings.Split(decoded.Name, ":")
+	if n := len(imageStreamNameAndTag); n != 2 {
+		return fmt.Errorf("when splitting imagestreamtagname %s by : expected two results, got %d", decoded.Name, n)
+	}
+	imageStreamName, imageTag := imageStreamNameAndTag[0], imageStreamNameAndTag[1]
+	isName := types.NamespacedName{Namespace: decoded.Namespace, Name: imageStreamName}
+	sourceImageStream := &imagev1.ImageStream{}
+	if err := r.registryClient.Get(r.ctx, isName, sourceImageStream); err != nil {
+		return fmt.Errorf("failed to get imageStream %s from registry cluster: %w", isName.String(), err)
+	}
+
 	*log = *log.WithField("docker_image_reference", sourceImageStreamTag.Image.DockerImageReference)
 	if isImportForbidden(sourceImageStreamTag.Image.DockerImageReference, r.forbiddenRegistries) {
 		log.Debugf("Import from any cluster in %s is forbidden, ignoring", r.forbiddenRegistries)
@@ -241,7 +252,7 @@ func (r *reconciler) reconcile(req reconcile.Request, log *logrus.Entry) error {
 	if err := r.ensureCIOperatorRole(decoded.Namespace, client, log); err != nil {
 		return fmt.Errorf("failed to ensure role: %w", err)
 	}
-	if err := r.ensureImageStream(decoded, client, log); err != nil {
+	if err := r.ensureImageStream(sourceImageStream, client, log); err != nil {
 		return fmt.Errorf("failed to ensure imagestream: %w", err)
 	}
 
@@ -257,12 +268,6 @@ func (r *reconciler) reconcile(req reconcile.Request, log *logrus.Entry) error {
 	if err := r.ensureImagePullSecret(decoded.Namespace, client, log); err != nil {
 		return fmt.Errorf("failed to ensure imagePullSecret: %w", err)
 	}
-
-	split := strings.Split(decoded.Name, ":")
-	if n := len(split); n != 2 {
-		return fmt.Errorf("splitting imagestremtag name %s by : did not yield two but %d results", decoded.Name, n)
-	}
-	imageStreamName, imageTag := split[0], split[1]
 
 	imageStreamImport := &imagev1.ImageStreamImport{
 		ObjectMeta: metav1.ObjectMeta{
@@ -382,14 +387,25 @@ func (r *reconciler) ensureCIOperatorRoleBinding(namespace string, client ctrlru
 	return upsertObject(r.ctx, client, roleBinding, mutateFn, log)
 }
 
-func imagestream(namespace, name string) (*imagev1.ImageStream, crcontrollerutil.MutateFn) {
+// ci-operator uses the release controller configuration to determine
+// the version of OpenShift we create from the ImageStream, so we need
+// to copy the annotation if it exists
+const releaseConfigAnnotation = "release.openshift.io/config"
+
+func imagestream(imageStream *imagev1.ImageStream) (*imagev1.ImageStream, crcontrollerutil.MutateFn) {
 	stream := &imagev1.ImageStream{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: namespace,
-			Name:      name,
+			Namespace: imageStream.Namespace,
+			Name:      imageStream.Name,
 		},
 	}
 	return stream, func() error {
+		if config, set := imageStream.Annotations[releaseConfigAnnotation]; set {
+			if stream.Annotations == nil {
+				stream.Annotations = map[string]string{}
+			}
+			stream.Annotations[releaseConfigAnnotation] = config
+		}
 		stream.Spec.LookupPolicy.Local = true
 		for i := range stream.Spec.Tags {
 			stream.Spec.Tags[i].ReferencePolicy.Type = imagev1.LocalTagReferencePolicy
@@ -398,13 +414,8 @@ func imagestream(namespace, name string) (*imagev1.ImageStream, crcontrollerutil
 	}
 }
 
-func (r *reconciler) ensureImageStream(imagestreamTagName types.NamespacedName, client ctrlruntimeclient.Client, log *logrus.Entry) error {
-	colonSplit := strings.Split(imagestreamTagName.Name, ":")
-	if n := len(colonSplit); n != 2 {
-		return fmt.Errorf("when splitting imagestreamtagname %s by : expected two results, got %d", imagestreamTagName.Name, n)
-	}
-	namespace, name := imagestreamTagName.Namespace, colonSplit[0]
-	stream, mutateFn := imagestream(namespace, name)
+func (r *reconciler) ensureImageStream(imageStream *imagev1.ImageStream, client ctrlruntimeclient.Client, log *logrus.Entry) error {
+	stream, mutateFn := imagestream(imageStream)
 	return upsertObject(r.ctx, client, stream, mutateFn, log)
 }
 

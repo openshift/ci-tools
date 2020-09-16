@@ -169,6 +169,15 @@ func TestReconcile(t *testing.T) {
 			DockerImageReference: "registry.svc.ci.openshift.org/ocp/4.4@sha256:a273f5ac7f1ad8f7ffab45205ac36c8dff92d9107ef3ae429eeb135fa8057b8b",
 		},
 	}
+	referenceImageStream := &imagev1.ImageStream{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: referenceImageStreamTag.Namespace,
+			Name:      strings.Split(referenceImageStreamTag.Name, ":")[0],
+			Annotations: map[string]string{
+				"release.openshift.io/config": "bar",
+			},
+		},
+	}
 
 	imageStreamTagWithBuild01PullSpec := func() *imagev1.ImageStreamTag {
 		copy := referenceImageStreamTag.DeepCopy()
@@ -249,6 +258,9 @@ func TestReconcile(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: referenceImageStreamTag.Namespace,
 			Name:      strings.Split(referenceImageStreamTag.Name, ":")[0],
+			Annotations: map[string]string{
+				"release.openshift.io/config": "bar",
+			},
 		},
 		Spec: imagev1.ImageStreamSpec{
 			LookupPolicy: imagev1.ImageLookupPolicy{
@@ -259,13 +271,14 @@ func TestReconcile(t *testing.T) {
 	outdatedImageStream := func() *imagev1.ImageStream {
 		copy := expectedImageStream.DeepCopy()
 		copy.Spec.LookupPolicy.Local = false
+		copy.ObjectMeta.Annotations["release.openshift.io/config"] = "baz"
 		return copy
 	}
 
 	ctx := context.Background()
 	verifyEverythingCreated := func(c ctrlruntimeclient.Client) error {
 		if err := c.Get(ctx, types.NamespacedName{Name: expectedNamespace.Name}, &corev1.Namespace{}); err != nil {
-			return fmt.Errorf("expected namespace %s, but failed to get it: %w", referenceImageStreamTag.Name, err)
+			return fmt.Errorf("expected namespace %s, but failed to get it: %w", expectedNamespace.Name, err)
 		}
 
 		pullSecret := &corev1.Secret{}
@@ -360,7 +373,7 @@ func TestReconcile(t *testing.T) {
 		{
 			name:                "Request for non existent object doesn't error",
 			request:             types.NamespacedName{Namespace: "01_doesnotexist/doesnotexist"},
-			registryClient:      fakeclient.NewFakeClient(),
+			registryClient:      fakeclient.NewFakeClient(referenceImageStream.DeepCopy()),
 			buildClusterClients: map[string]ctrlruntimeclient.Client{"01": fakeclient.NewFakeClient()},
 			verify: func(_ ctrlruntimeclient.Client, _ map[string]ctrlruntimeclient.Client, err error) error {
 				if err != nil {
@@ -388,7 +401,7 @@ func TestReconcile(t *testing.T) {
 				Namespace: "01_" + referenceImageStreamTag.Namespace,
 				Name:      referenceImageStreamTag.Name,
 			},
-			registryClient:      fakeclient.NewFakeClient(imageStreamTagWithBuild01PullSpec()),
+			registryClient:      fakeclient.NewFakeClient(referenceImageStream.DeepCopy(), imageStreamTagWithBuild01PullSpec()),
 			buildClusterClients: map[string]ctrlruntimeclient.Client{"01": fakeclient.NewFakeClient()},
 			verify: func(rc ctrlruntimeclient.Client, bc map[string]ctrlruntimeclient.Client, err error) error {
 				if err != nil {
@@ -410,7 +423,7 @@ func TestReconcile(t *testing.T) {
 				Namespace: "01_" + referenceImageStreamTag.Namespace,
 				Name:      referenceImageStreamTag.Name,
 			},
-			registryClient:      fakeclient.NewFakeClient(referenceImageStreamTag.DeepCopy()),
+			registryClient:      fakeclient.NewFakeClient(referenceImageStream.DeepCopy(), referenceImageStreamTag.DeepCopy()),
 			buildClusterClients: map[string]ctrlruntimeclient.Client{"01": fakeclient.NewFakeClient(referenceImageStreamTag.DeepCopy())},
 			verify: func(rc ctrlruntimeclient.Client, bc map[string]ctrlruntimeclient.Client, err error) error {
 				if err != nil {
@@ -432,7 +445,7 @@ func TestReconcile(t *testing.T) {
 				Namespace: "01_" + referenceImageStreamTag.Namespace,
 				Name:      referenceImageStreamTag.Name,
 			},
-			registryClient:      fakeclient.NewFakeClient(referenceImageStreamTag.DeepCopy()),
+			registryClient:      fakeclient.NewFakeClient(referenceImageStream.DeepCopy(), referenceImageStreamTag.DeepCopy()),
 			buildClusterClients: map[string]ctrlruntimeclient.Client{"01": bcc(fakeclient.NewFakeClient(outdatedImageStreamTag()))},
 			verify: func(rc ctrlruntimeclient.Client, bc map[string]ctrlruntimeclient.Client, err error) error {
 				if err != nil {
@@ -447,7 +460,7 @@ func TestReconcile(t *testing.T) {
 				Namespace: "01_" + referenceImageStreamTag.Namespace,
 				Name:      referenceImageStreamTag.Name,
 			},
-			registryClient: fakeclient.NewFakeClient(referenceImageStreamTag.DeepCopy()),
+			registryClient: fakeclient.NewFakeClient(referenceImageStream.DeepCopy(), referenceImageStreamTag.DeepCopy()),
 			buildClusterClients: map[string]ctrlruntimeclient.Client{"01": bcc(fakeclient.NewFakeClient(
 				outdatedImageStreamTag(),
 				expectedNamespace.DeepCopy(),
@@ -465,7 +478,7 @@ func TestReconcile(t *testing.T) {
 				Namespace: "01_" + referenceImageStreamTag.Namespace,
 				Name:      referenceImageStreamTag.Name,
 			},
-			registryClient: fakeclient.NewFakeClient(referenceImageStreamTag.DeepCopy()),
+			registryClient: fakeclient.NewFakeClient(referenceImageStream.DeepCopy(), referenceImageStreamTag.DeepCopy()),
 			buildClusterClients: map[string]ctrlruntimeclient.Client{"01": bcc(fakeclient.NewFakeClient(
 				outdatedImageStreamTag(),
 				expectedNamespace.DeepCopy(),
@@ -484,7 +497,7 @@ func TestReconcile(t *testing.T) {
 				Namespace: "01_" + referenceImageStreamTag.Namespace,
 				Name:      referenceImageStreamTag.Name,
 			},
-			registryClient: fakeclient.NewFakeClient(referenceImageStreamTag.DeepCopy()),
+			registryClient: fakeclient.NewFakeClient(referenceImageStream.DeepCopy(), referenceImageStreamTag.DeepCopy()),
 			buildClusterClients: map[string]ctrlruntimeclient.Client{"01": bcc(fakeclient.NewFakeClient(
 				outdatedImageStreamTag(),
 				expectedNamespace.DeepCopy(),
@@ -505,7 +518,7 @@ func TestReconcile(t *testing.T) {
 				Namespace: "01_" + referenceImageStreamTag.Namespace,
 				Name:      referenceImageStreamTag.Name,
 			},
-			registryClient: fakeclient.NewFakeClient(referenceImageStreamTag.DeepCopy()),
+			registryClient: fakeclient.NewFakeClient(referenceImageStream.DeepCopy(), referenceImageStreamTag.DeepCopy()),
 			buildClusterClients: map[string]ctrlruntimeclient.Client{"01": bcc(fakeclient.NewFakeClient(
 				expectedNamespace.DeepCopy(),
 				expectedPullSecret.DeepCopy(),
@@ -525,7 +538,7 @@ func TestReconcile(t *testing.T) {
 				Namespace: "01_" + referenceImageStreamTag.Namespace,
 				Name:      referenceImageStreamTag.Name,
 			},
-			registryClient: fakeclient.NewFakeClient(referenceImageStreamTag.DeepCopy()),
+			registryClient: fakeclient.NewFakeClient(referenceImageStream.DeepCopy(), referenceImageStreamTag.DeepCopy()),
 			buildClusterClients: map[string]ctrlruntimeclient.Client{"01": bcc(fakeclient.NewFakeClient(
 				outdatedImageStreamTag(),
 				expectedNamespace.DeepCopy(),
@@ -545,7 +558,7 @@ func TestReconcile(t *testing.T) {
 				Namespace: "01_" + referenceImageStreamTag.Namespace,
 				Name:      referenceImageStreamTag.Name,
 			},
-			registryClient: fakeclient.NewFakeClient(referenceImageStreamTag.DeepCopy()),
+			registryClient: fakeclient.NewFakeClient(referenceImageStream.DeepCopy(), referenceImageStreamTag.DeepCopy()),
 			buildClusterClients: map[string]ctrlruntimeclient.Client{"01": bcc(fakeclient.NewFakeClient(
 				outdatedImageStreamTag(),
 				expectedNamespace.DeepCopy(),
@@ -568,9 +581,11 @@ func TestReconcile(t *testing.T) {
 			tc := tc
 			// Needed so the racedetector tells us if we accidentally re-use global state, e.G. by not deepcopying
 			t.Parallel()
+			log := logrus.NewEntry(logrus.StandardLogger())
+			logrus.SetLevel(logrus.TraceLevel)
 			r := &reconciler{
 				ctx:                 ctx,
-				log:                 logrus.NewEntry(logrus.StandardLogger()),
+				log:                 log,
 				registryClient:      tc.registryClient,
 				buildClusterClients: tc.buildClusterClients,
 				pullSecretGetter:    func() []byte { return pullSecretData },

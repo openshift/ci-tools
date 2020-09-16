@@ -632,17 +632,27 @@ func TestValidateTestSteps(t *testing.T) {
 				Commands:  "commands",
 				Resources: resources},
 		}},
-		errs: []error{errors.New("test[0].from: 'docker.io/library/centos:7' is not a valid Kubernetes object name")},
+		errs: []error{errors.New("test[0].from: 'docker.io/library/centos' is not a valid Kubernetes object name")},
 	}, {
 		name: "invalid image 1",
 		steps: []TestStep{{
 			LiteralTestStep: &LiteralTestStep{
 				As:        "as",
-				From:      "stable:base",
+				From:      "stable>initial:base",
 				Commands:  "commands",
 				Resources: resources},
 		}},
-		errs: []error{errors.New("test[0].from: 'stable:base' is not a valid Kubernetes object name")},
+		errs: []error{errors.New("test[0].from: 'stable>initial' is not a valid Kubernetes object name")},
+	}, {
+		name: "invalid image 2",
+		steps: []TestStep{{
+			LiteralTestStep: &LiteralTestStep{
+				As:        "as",
+				From:      "stable:initial:base",
+				Commands:  "commands",
+				Resources: resources},
+		}},
+		errs: []error{errors.New("test[0].from: 'stable:initial:base' is not a valid imagestream reference")},
 	}, {
 		name: "no commands",
 		steps: []TestStep{{

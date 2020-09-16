@@ -3,13 +3,17 @@ package dispatcher
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/prometheus/client_golang/api"
 	prometheusapi "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
 	"github.com/sirupsen/logrus"
+
+	"sigs.k8s.io/yaml"
 )
 
 type basicAuthRoundTripper struct {
@@ -59,4 +63,22 @@ func NewPrometheusClient(prometheusURL, username, password string) (api.Client, 
 		roundTripper = &basicAuthRoundTripper{username: username, password: password, originalRoundTripper: api.DefaultRoundTripper}
 	}
 	return api.NewClient(api.Config{Address: prometheusURL, RoundTripper: roundTripper})
+}
+
+func SaveJobVolumesToFile(jobVolumes map[string]float64, filename string) error {
+	bytes, err := yaml.Marshal(jobVolumes)
+	if err != nil {
+		return err
+	}
+	return ioutil.WriteFile(filename, bytes, os.FileMode(0644))
+}
+
+func LoadJobVolumesFromFile(filename string) (map[string]float64, error) {
+	var jobVolumes map[string]float64
+	bytes, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return jobVolumes, err
+	}
+	err = yaml.Unmarshal(bytes, &jobVolumes)
+	return jobVolumes, err
 }

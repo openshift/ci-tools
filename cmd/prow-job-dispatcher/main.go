@@ -33,6 +33,7 @@ type options struct {
 	prometheusUsername     string
 	prometheusPasswordPath string
 	jobVolumesPath         string
+	refreshJobVolumes      bool
 	maxConcurrency         int
 
 	prometheusPassword string
@@ -45,11 +46,12 @@ func gatherOptions() options {
 	fs.StringVar(&o.prowJobConfigDir, "prow-jobs-dir", "", "Path to a root of directory structure with Prow job config files (ci-operator/jobs in openshift/release)")
 	fs.StringVar(&o.configPath, "config-path", "", "Path to the config file (core-services/sanitize-prow-jobs/_config.yaml in openshift/release)")
 
-	fs.StringVar(&o.prometheusURL, "prometheus-url", "https://prometheus-prow-monitoring.apps.ci.l2s4.p1.openshiftapps.com", "The prometheus URL")
-	fs.StringVar(&o.prometheusUsername, "prometheus-username", "", "The Prometheus username.")
-	fs.StringVar(&o.prometheusPasswordPath, "prometheus-password-path", "", "The path to a file containing the Prometheus password")
-	fs.StringVar(&o.jobVolumesPath, "job-volumes-path", filepath.Join(os.TempDir(), "job-volumes.yaml"), "The path to a file containing the job volumes")
-	fs.IntVar(&o.maxConcurrency, "concurrency", 0, "Maximum number of concurrent in-flight goroutines to handle files.")
+	fs.StringVar(&o.prometheusURL, "prometheus-url", "https://prometheus-prow-monitoring.apps.ci.l2s4.p1.openshiftapps.com", "Prometheus URL")
+	fs.StringVar(&o.prometheusUsername, "prometheus-username", "", "Prometheus Username")
+	fs.StringVar(&o.prometheusPasswordPath, "prometheus-password-path", "", "Path to a file containing the Prometheus password")
+	fs.StringVar(&o.jobVolumesPath, "job-volumes-path", filepath.Join("core-services", "prow-job-dispatcher", "_job-volumes.yaml"), "Path to a file containing the job volumes")
+	fs.IntVar(&o.maxConcurrency, "concurrency", 0, "Maximum number of concurrent in-flight goroutines to handle files")
+	fs.BoolVar(&o.refreshJobVolumes, "refresh-job-volumes", false, "If set, query Prometheus to refresh the job volumes saved on the file specified by job-volumes-path")
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("could not parse input")
@@ -338,18 +340,27 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to complete options.")
 	}
 
-	promClient, err := dispatcher.NewPrometheusClient(o.prometheusURL, o.prometheusUsername, o.prometheusPassword)
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create prometheus client.")
+	if o.refreshJobVolumes {
+		promClient, err := dispatcher.NewPrometheusClient(o.prometheusURL, o.prometheusUsername, o.prometheusPassword)
+		if err != nil {
+			logrus.WithError(err).Fatal("Failed to create prometheus client.")
+		}
+
+		v1api := prometheusapi.NewAPI(promClient)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		jobVolumes, err := dispatcher.GetJobVolumesFromPrometheus(ctx, v1api)
+		if err != nil {
+			logrus.WithError(err).Fatal("Failed to get job volumes from Prometheus.")
+		}
+		if err = dispatcher.SaveJobVolumesToFile(jobVolumes, o.jobVolumesPath); err != nil {
+			logrus.WithError(err).Fatalf("Failed to save job volumes to file: %q.", o.jobVolumesPath)
+		}
 	}
-
-	v1api := prometheusapi.NewAPI(promClient)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	jobVolumes, err := dispatcher.GetJobVolumesFromPrometheus(ctx, v1api)
+	jobVolumes, err := dispatcher.LoadJobVolumesFromFile(o.jobVolumesPath)
 	if err != nil {
-		logrus.WithError(err).Fatal("Failed to get job volumes from Prometheus.")
+		logrus.WithError(err).Fatalf("Failed to load job volumes from file: %q.", o.jobVolumesPath)
 	}
 	logrus.WithField("jobVolumes", jobVolumes).Debug("loaded job volumes")
 

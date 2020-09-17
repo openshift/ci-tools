@@ -94,11 +94,14 @@ func main() {
 
 	// Already create the client here if needed to make sure we fail asap if there is an issue
 	var githubClient pgithub.Client
-	if opts.createPR {
-		secretAgent := &secret.Agent{}
+	var secretAgent *secret.Agent
+	if opts.TokenPath != "" {
+		secretAgent = &secret.Agent{}
 		if err := secretAgent.Start([]string{opts.TokenPath}); err != nil {
 			logrus.WithError(err).Fatal("Failed to load github token")
 		}
+	}
+	if opts.createPR {
 		var err error
 		githubClient, err = opts.GitHubClient(secretAgent, false)
 		if err != nil {
@@ -112,6 +115,14 @@ func main() {
 		promotionTargetToDockerfileMapping, err = getPromotionTargetToDockerfileMapping(opts.ocpBuildDataRepoDir, opts.currentRelease)
 		if err != nil {
 			logrus.WithError(err).Fatal("Failed to construct promotion target to dockerfile mapping")
+		}
+	}
+
+	var credentials *usernameToken
+	if secretAgent != nil {
+		credentials = &usernameToken{
+			username: opts.githubUserName,
+			token:    string(secretAgent.GetSecret(opts.TokenPath)),
 		}
 	}
 
@@ -135,6 +146,7 @@ func main() {
 					sets.NewString(opts.ensureCorrectPromotionDockerfileIngoredRepos.Strings()...),
 					promotionTargetToDockerfileMapping,
 					opts.currentRelease,
+					credentials,
 				)(config, info); err != nil {
 					errLock.Lock()
 					errs = append(errs, err)
@@ -155,16 +167,21 @@ func main() {
 		return
 	}
 
-	if err := upsertPR(githubClient, opts.configDir, opts.githubUserName, opts.TokenPath, opts.selfApprove, opts.pruneUnusedReplacements, opts.ensureCorrectPromotionDockerfile); err != nil {
+	if err := upsertPR(githubClient, opts.configDir, opts.githubUserName, secretAgent.GetSecret(opts.TokenPath), opts.selfApprove, opts.pruneUnusedReplacements, opts.ensureCorrectPromotionDockerfile); err != nil {
 		logrus.WithError(err).Fatal("Failed to create PR")
 	}
+}
+
+type usernameToken struct {
+	username string
+	token    string
 }
 
 // replacer ensures replace directives are in place. It fetches the files via http because using git
 // en masse easily kills a developer laptop whereas the http calls are cheap and can be parallelized without
 // bounds.
 func replacer(
-	githubFileGetterFactory func(org, repo, branch string) github.FileGetter,
+	githubFileGetterFactory func(org, repo, branch string, opts ...github.Opt) github.FileGetter,
 	writer func([]byte) error,
 	pruneUnusedReplacementsEnabled bool,
 	pruneOCPBuilderReplacementsEnabled bool,
@@ -172,6 +189,7 @@ func replacer(
 	ensureCorrectPromotionDockerfileIgnoredrepos sets.String,
 	promotionTargetToDockerfileMapping map[string]dockerfileLocation,
 	majorMinor ocpbuilddata.MajorMinor,
+	credentials *usernameToken,
 ) func(*api.ReleaseBuildConfiguration, *config.Info) error {
 	return func(config *api.ReleaseBuildConfiguration, info *config.Info) error {
 		if len(config.Images) == 0 {
@@ -189,7 +207,12 @@ func replacer(
 			updateDockerfilesToMatchOCPBuildData(config, promotionTargetToDockerfileMapping, majorMinor.String(), ensureCorrectPromotionDockerfileIgnoredrepos)
 		}
 
-		getter := githubFileGetterFactory(info.Org, info.Repo, info.Branch)
+		var getter github.FileGetter
+		if credentials == nil {
+			getter = githubFileGetterFactory(info.Org, info.Repo, info.Branch)
+		} else {
+			getter = githubFileGetterFactory(info.Org, info.Repo, info.Branch, github.WithAuthentication(credentials.username, credentials.token))
+		}
 		allReplacementCandidates := sets.String{}
 
 		// We have to skip pruning if we only get empty dockerfiles because it might mean
@@ -355,7 +378,7 @@ func orgRepoTagFromPullString(pullString string) (orgRepoTag, error) {
 	return res, nil
 }
 
-func upsertPR(gc pgithub.Client, dir, githubUsername, tokenFilePath string, selfApprove, pruneUnusedReplacements, ensureCorrectPromotionDockerfile bool) error {
+func upsertPR(gc pgithub.Client, dir, githubUsername string, token []byte, selfApprove, pruneUnusedReplacements, ensureCorrectPromotionDockerfile bool) error {
 	if err := os.Chdir(dir); err != nil {
 		return fmt.Errorf("failed to chdir into %s: %w", dir, err)
 	}
@@ -368,11 +391,6 @@ func upsertPR(gc pgithub.Client, dir, githubUsername, tokenFilePath string, self
 	if !changed {
 		logrus.Info("No changes, not upserting PR")
 		return nil
-	}
-
-	token, err := ioutil.ReadFile(tokenFilePath)
-	if err != nil {
-		return fmt.Errorf("failed to read tokenfile from %s: %w", tokenFilePath, err)
 	}
 
 	censor := censor{secret: token}

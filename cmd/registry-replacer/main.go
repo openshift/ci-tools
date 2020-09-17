@@ -282,7 +282,7 @@ func (ort orgRepoTag) String() string {
 func ensureReplacement(image *api.ProjectDirectoryImageBuildStepConfiguration, dockerfile []byte) ([]orgRepoTag, error) {
 	var toReplace []string
 	for _, line := range bytes.Split(dockerfile, []byte("\n")) {
-		if !bytes.Contains(line, []byte("FROM")) {
+		if !bytes.Contains(line, []byte("FROM")) && !bytes.Contains(line, []byte("COPY")) && !bytes.Contains(line, []byte("copy")) {
 			continue
 		}
 		if !bytes.Contains(line, []byte("registry.svc.ci.openshift.org")) {

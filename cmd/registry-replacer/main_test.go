@@ -97,6 +97,18 @@ func TestReplacer(t *testing.T) {
 			expectWrite: true,
 		},
 		{
+			name: "Replaces Copy --from",
+			config: &api.ReleaseBuildConfiguration{
+				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{
+					ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+						DockerfilePath: "dockerfile",
+					},
+				}},
+			},
+			files:       map[string][]byte{"dockerfile": []byte("COPY --from=registry.svc.ci.openshift.org/org/repo")},
+			expectWrite: true,
+		},
+		{
 			name: "Different registry, does nothing",
 			config: &api.ReleaseBuildConfiguration{
 				Images: []api.ProjectDirectoryImageBuildStepConfiguration{{

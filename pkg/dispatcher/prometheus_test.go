@@ -79,7 +79,7 @@ func TestGetJobVolumesFromPrometheus(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual, err := GetJobVolumesFromPrometheus(tc.ctx, &prometheusAPIForTest{tc.queryFunc})
+			actual, err := GetJobVolumesFromPrometheus(tc.ctx, &prometheusAPIForTest{tc.queryFunc}, time.Now())
 			if !reflect.DeepEqual(tc.expected, actual) {
 				t.Errorf("%s: actual differs from expected:\n%s", t.Name(), cmp.Diff(tc.expected, actual))
 			}

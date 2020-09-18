@@ -58,7 +58,7 @@ func preparePodStep(t *testing.T, namespace string) (*podStep, stepExpectation, 
 		t:       t,
 	}
 	client := NewPodClient(fakecs.Core(), nil, nil)
-	ps := PodStep(stepName, config, resources, client, artifactDir, jobSpec)
+	ps := PodStep(stepName, config, resources, client, fakecs.kubecs.CoreV1(), artifactDir, jobSpec)
 
 	specification := stepExpectation{
 		name:     podName,

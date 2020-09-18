@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/openshift/ci-tools/pkg/steps/utils"
 	"io/ioutil"
 	"log"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/openshift/ci-tools/pkg/steps/utils"
 
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -57,6 +58,7 @@ type importReleaseStep struct {
 	resources   api.ResourceConfiguration
 	imageClient imageclientset.ImageV1Interface
 	podClient   steps.PodClient
+	eventClient coreclientset.EventsGetter
 	saGetter    coreclientset.ServiceAccountsGetter
 	rbacClient  rbacclientset.RbacV1Interface
 	artifactDir string
@@ -158,7 +160,7 @@ func (s *importReleaseStep) run(ctx context.Context) error {
 	// get the CLI image from the payload (since we need it to run oc adm release extract)
 	target := fmt.Sprintf("release-images-%s", s.name)
 	targetCLI := fmt.Sprintf("%s-cli", target)
-	if err := steps.RunPod(context.TODO(), s.podClient, &coreapi.Pod{
+	if err := steps.RunPod(context.TODO(), s.podClient, s.eventClient, &coreapi.Pod{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      targetCLI,
 			Namespace: s.jobSpec.Namespace(),
@@ -247,7 +249,7 @@ oc adm release extract%s --from=%q --file=image-references > /tmp/artifacts/%s
 		copied[podConfig.As] = api.ResourceRequirements{Requests: api.ResourceList{"cpu": "50m", "memory": "400Mi"}}
 		resources = copied
 	}
-	step := steps.PodStep("release", podConfig, resources, s.podClient, artifactDir, s.jobSpec)
+	step := steps.PodStep("release", podConfig, resources, s.podClient, s.eventClient, artifactDir, s.jobSpec)
 	if err := step.Run(ctx); err != nil {
 		return err
 	}
@@ -422,7 +424,7 @@ func (s *importReleaseStep) Description() string {
 
 // ImportReleaseStep imports an existing update payload image
 func ImportReleaseStep(name, pullSpec string, append bool, resources api.ResourceConfiguration,
-	podClient steps.PodClient, imageClient imageclientset.ImageV1Interface, saGetter coreclientset.ServiceAccountsGetter,
+	podClient steps.PodClient, eventClient coreclientset.EventsGetter, imageClient imageclientset.ImageV1Interface, saGetter coreclientset.ServiceAccountsGetter,
 	rbacClient rbacclientset.RbacV1Interface, artifactDir string, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
 	return &importReleaseStep{
 		name:        name,
@@ -430,6 +432,7 @@ func ImportReleaseStep(name, pullSpec string, append bool, resources api.Resourc
 		append:      append,
 		resources:   resources,
 		podClient:   podClient,
+		eventClient: eventClient,
 		imageClient: imageClient,
 		saGetter:    saGetter,
 		rbacClient:  rbacClient,

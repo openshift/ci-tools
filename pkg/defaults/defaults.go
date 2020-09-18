@@ -68,6 +68,7 @@ func FromConfig(
 	var rbacClient rbacclientset.RbacV1Interface
 	var saGetter coreclientset.ServiceAccountsGetter
 	var namespaceClient coreclientset.NamespaceInterface
+	var eventClient coreclientset.EventsGetter
 
 	if clusterConfig != nil {
 		buildGetter, err := buildclientset.NewForConfig(clusterConfig)
@@ -116,6 +117,7 @@ func FromConfig(
 		configMapGetter = coreGetter
 		secretGetter = coreGetter
 		namespaceClient = coreGetter.Namespaces()
+		eventClient = coreGetter
 
 		podClient = steps.NewPodClient(coreGetter, clusterConfig, coreGetter.RESTClient())
 
@@ -185,9 +187,9 @@ func FromConfig(
 						return nil, nil, results.ForReason("reading_release").ForError(fmt.Errorf("failed to read input release pullSpec %s: %w", name, err))
 					}
 					log.Printf("Resolved release %s to %s", name, pullSpec)
-					releaseStep = release.ImportReleaseStep(name, pullSpec, true, config.Resources, podClient, imageClient, saGetter, rbacClient, artifactDir, jobSpec, pullSecret)
+					releaseStep = release.ImportReleaseStep(name, pullSpec, true, config.Resources, podClient, eventClient, imageClient, saGetter, rbacClient, artifactDir, jobSpec, pullSecret)
 				} else {
-					releaseStep = release.AssembleReleaseStep(name, rawStep.ReleaseImagesTagStepConfiguration, config.Resources, podClient, imageClient, saGetter, rbacClient, artifactDir, jobSpec)
+					releaseStep = release.AssembleReleaseStep(name, rawStep.ReleaseImagesTagStepConfiguration, config.Resources, podClient, eventClient, imageClient, saGetter, rbacClient, artifactDir, jobSpec)
 				}
 				buildSteps = append(buildSteps, releaseStep)
 			}
@@ -223,10 +225,10 @@ func FromConfig(
 				log.Printf("Resolved release %s to %s", resolveConfig.Name, value)
 			}
 
-			step = release.ImportReleaseStep(resolveConfig.Name, value, false, config.Resources, podClient, imageClient, saGetter, rbacClient, artifactDir, jobSpec, pullSecret)
+			step = release.ImportReleaseStep(resolveConfig.Name, value, false, config.Resources, podClient, eventClient, imageClient, saGetter, rbacClient, artifactDir, jobSpec, pullSecret)
 		} else if testStep := rawStep.TestStepConfiguration; testStep != nil {
 			if test := testStep.MultiStageTestConfigurationLiteral; test != nil {
-				step = steps.MultiStageTestStep(*testStep, config, params, podClient, secretGetter, saGetter, rbacClient, imageClient, artifactDir, jobSpec)
+				step = steps.MultiStageTestStep(*testStep, config, params, podClient, eventClient, secretGetter, saGetter, rbacClient, imageClient, artifactDir, jobSpec)
 				if test.ClusterProfile != "" {
 					step = steps.LeaseStep(leaseClient, test.ClusterProfile.LeaseType(), step, jobSpec.Namespace, namespaceClient)
 				}
@@ -242,14 +244,14 @@ func FromConfig(
 			} else if test := testStep.OpenshiftInstallerClusterTestConfiguration; test != nil {
 				if testStep.OpenshiftInstallerClusterTestConfiguration.Upgrade {
 					var err error
-					step, err = clusterinstall.E2ETestStep(*testStep.OpenshiftInstallerClusterTestConfiguration, *testStep, params, podClient, templateClient, secretGetter, artifactDir, jobSpec, config.Resources)
+					step, err = clusterinstall.E2ETestStep(*testStep.OpenshiftInstallerClusterTestConfiguration, *testStep, params, podClient, eventClient, templateClient, secretGetter, artifactDir, jobSpec, config.Resources)
 					if err != nil {
 						return nil, nil, fmt.Errorf("unable to create end to end test step: %w", err)
 					}
 					step = steps.LeaseStep(leaseClient, test.ClusterProfile.LeaseType(), step, jobSpec.Namespace, namespaceClient)
 				}
 			} else {
-				step = steps.TestStep(*testStep, config.Resources, podClient, artifactDir, jobSpec)
+				step = steps.TestStep(*testStep, config.Resources, podClient, eventClient, artifactDir, jobSpec)
 			}
 		}
 		if !isReleaseStep {
@@ -265,7 +267,7 @@ func FromConfig(
 	}
 
 	for _, template := range templates {
-		step := steps.TemplateExecutionStep(template, params, podClient, templateClient, artifactDir, jobSpec, config.Resources)
+		step := steps.TemplateExecutionStep(template, params, podClient, eventClient, templateClient, artifactDir, jobSpec, config.Resources)
 		var hasClusterType, hasUseLease bool
 		for _, p := range template.Parameters {
 			hasClusterType = hasClusterType || p.Name == "CLUSTER_TYPE"

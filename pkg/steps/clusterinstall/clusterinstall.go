@@ -40,6 +40,7 @@ func E2ETestStep(
 	testConfig api.TestStepConfiguration,
 	params api.Parameters,
 	podClient steps.PodClient,
+	eventClient coreclientset.EventsGetter,
 	templateClient steps.TemplateClient,
 	secretClient coreclientset.SecretsGetter,
 	artifactDir string,
@@ -97,7 +98,7 @@ func E2ETestStep(
 		params = api.NewOverrideParameters(params, overrides)
 	}
 
-	step := steps.TemplateExecutionStep(template, params, podClient, templateClient, artifactDir, jobSpec, resources)
+	step := steps.TemplateExecutionStep(template, params, podClient, eventClient, templateClient, artifactDir, jobSpec, resources)
 	subTests, ok := step.(nestedSubTests)
 	if !ok {
 		return nil, fmt.Errorf("unexpected %T", step)

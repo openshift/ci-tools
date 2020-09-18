@@ -51,6 +51,7 @@ type multiStageTestStep struct {
 	params             api.Parameters
 	env                api.TestEnvironment
 	podClient          PodClient
+	eventClient        coreclientset.EventsGetter
 	secretClient       coreclientset.SecretsGetter
 	saClient           coreclientset.ServiceAccountsGetter
 	rbacClient         rbacclientset.RbacV1Interface
@@ -67,6 +68,7 @@ func MultiStageTestStep(
 	config *api.ReleaseBuildConfiguration,
 	params api.Parameters,
 	podClient PodClient,
+	eventClient coreclientset.EventsGetter,
 	secretClient coreclientset.SecretsGetter,
 	saClient coreclientset.ServiceAccountsGetter,
 	rbacClient rbacclientset.RbacV1Interface,
@@ -74,7 +76,7 @@ func MultiStageTestStep(
 	artifactDir string,
 	jobSpec *api.JobSpec,
 ) api.Step {
-	return newMultiStageTestStep(testConfig, config, params, podClient, secretClient, saClient, rbacClient, isClient, artifactDir, jobSpec)
+	return newMultiStageTestStep(testConfig, config, params, podClient, eventClient, secretClient, saClient, rbacClient, isClient, artifactDir, jobSpec)
 }
 
 func newMultiStageTestStep(
@@ -82,6 +84,7 @@ func newMultiStageTestStep(
 	config *api.ReleaseBuildConfiguration,
 	params api.Parameters,
 	podClient PodClient,
+	eventClient coreclientset.EventsGetter,
 	secretClient coreclientset.SecretsGetter,
 	saClient coreclientset.ServiceAccountsGetter,
 	rbacClient rbacclientset.RbacV1Interface,
@@ -100,6 +103,7 @@ func newMultiStageTestStep(
 		params:             params,
 		env:                ms.Environment,
 		podClient:          podClient,
+		eventClient:        eventClient,
 		secretClient:       secretClient,
 		saClient:           saClient,
 		rbacClient:         rbacClient,
@@ -549,7 +553,7 @@ func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notif
 	if _, err := createOrRestartPod(s.podClient.Pods(s.jobSpec.Namespace()), pod); err != nil {
 		return fmt.Errorf("failed to create or restart %q pod: %w", pod.Name, err)
 	}
-	err := waitForPodCompletion(ctx, s.podClient.Pods(s.jobSpec.Namespace()), pod.Name, notifier, false)
+	err := waitForPodCompletion(ctx, s.podClient.Pods(s.jobSpec.Namespace()), s.eventClient.Events(s.jobSpec.Namespace()), pod.Name, notifier, false)
 	s.subTests = append(s.subTests, notifier.SubTests(fmt.Sprintf("%s - %s ", s.Description(), pod.Name))...)
 	if err != nil {
 		linksText := strings.Builder{}

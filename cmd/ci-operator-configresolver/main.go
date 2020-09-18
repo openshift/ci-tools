@@ -125,6 +125,7 @@ func resolveConfig(configAgent agents.ConfigAgent, registryAgent agents.Registry
 }
 
 func resolveLiteralConfig(registryAgent agents.RegistryAgent) http.HandlerFunc {
+	logger := logrus.NewEntry(logrus.New())
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
 			w.WriteHeader(http.StatusNotImplemented)
@@ -144,7 +145,7 @@ func resolveLiteralConfig(registryAgent agents.RegistryAgent) http.HandlerFunc {
 			_, _ = w.Write([]byte("Could not parse request body as unresolved config."))
 			return
 		}
-		resolveAndRespond(registryAgent, unresolvedConfig, w, &logrus.Entry{})
+		resolveAndRespond(registryAgent, unresolvedConfig, w, logger)
 	}
 }
 

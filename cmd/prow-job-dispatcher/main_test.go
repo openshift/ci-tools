@@ -38,8 +38,9 @@ func TestValidate(t *testing.T) {
 		{
 			name: "OK if no username and no possword",
 			given: &options{
-				prowJobConfigDir: "prow-jobs-dir",
-				configPath:       "some-path",
+				prowJobConfigDir:     "prow-jobs-dir",
+				configPath:           "some-path",
+				prometheusDaysBefore: 1,
 			},
 		},
 		{
@@ -59,6 +60,15 @@ func TestValidate(t *testing.T) {
 				prometheusPasswordPath: "some-path",
 			},
 			expected: fmt.Errorf("--prometheus-username and --prometheus-password-path must be specified together"),
+		},
+		{
+			name: "prometheus days before cannot be 16",
+			given: &options{
+				prowJobConfigDir:     "prow-jobs-dir",
+				configPath:           "some-path",
+				prometheusDaysBefore: 16,
+			},
+			expected: fmt.Errorf("--prometheus-days-before must be between 1 and 15"),
 		},
 	}
 	for _, tc := range testCases {

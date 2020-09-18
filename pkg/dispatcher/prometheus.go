@@ -29,9 +29,9 @@ type PrometheusAPI interface {
 	Query(ctx context.Context, query string, ts time.Time) (model.Value, prometheusapi.Warnings, error)
 }
 
-// GetJobVolumesFromPrometheus gets job volumes from a Prometheus server
-func GetJobVolumesFromPrometheus(ctx context.Context, prometheusAPI PrometheusAPI) (map[string]float64, error) {
-	result, warnings, err := prometheusAPI.Query(ctx, `sum(increase(prowjob_state_transitions{state="pending"}[7d])) by (job_name)`, time.Now())
+// GetJobVolumesFromPrometheus gets job volumes from a Prometheus server for the given time
+func GetJobVolumesFromPrometheus(ctx context.Context, prometheusAPI PrometheusAPI, ts time.Time) (map[string]float64, error) {
+	result, warnings, err := prometheusAPI.Query(ctx, `sum(increase(prowjob_state_transitions{state="pending"}[7d])) by (job_name)`, ts)
 	if err != nil {
 		return nil, err
 	}

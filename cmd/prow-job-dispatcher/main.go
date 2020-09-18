@@ -32,7 +32,7 @@ type options struct {
 	prometheusURL          string
 	prometheusUsername     string
 	prometheusPasswordPath string
-	jobVolumesPath         string
+	prometheusDaysBefore   int
 	maxConcurrency         int
 
 	prometheusPassword string
@@ -48,7 +48,7 @@ func gatherOptions() options {
 	fs.StringVar(&o.prometheusURL, "prometheus-url", "https://prometheus-prow-monitoring.apps.ci.l2s4.p1.openshiftapps.com", "The prometheus URL")
 	fs.StringVar(&o.prometheusUsername, "prometheus-username", "", "The Prometheus username.")
 	fs.StringVar(&o.prometheusPasswordPath, "prometheus-password-path", "", "The path to a file containing the Prometheus password")
-	fs.StringVar(&o.jobVolumesPath, "job-volumes-path", filepath.Join(os.TempDir(), "job-volumes.yaml"), "The path to a file containing the job volumes")
+	fs.IntVar(&o.prometheusDaysBefore, "prometheus-days-before", 1, "Number [1,15] of days before. Time 00-00-00 of that day will be used as time to query Prometheus. E.g., 1 means 00-00-00 of yesterday.")
 	fs.IntVar(&o.maxConcurrency, "concurrency", 0, "Maximum number of concurrent in-flight goroutines to handle files.")
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
@@ -67,6 +67,9 @@ func (o *options) validate() error {
 
 	if (o.prometheusUsername == "") != (o.prometheusPasswordPath == "") {
 		return fmt.Errorf("--prometheus-username and --prometheus-password-path must be specified together")
+	}
+	if o.prometheusDaysBefore < 1 || o.prometheusDaysBefore > 15 {
+		return fmt.Errorf("--prometheus-days-before must be between 1 and 15")
 	}
 	return nil
 }
@@ -347,7 +350,10 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	jobVolumes, err := dispatcher.GetJobVolumesFromPrometheus(ctx, v1api)
+	y, m, d := time.Now().Add(-time.Duration(24*o.prometheusDaysBefore) * time.Hour).Date()
+	ts := time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
+	jobVolumes, err := dispatcher.GetJobVolumesFromPrometheus(ctx, v1api, ts)
+	logrus.Debugf("we use %s as now to query prometheus", ts.UTC())
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to get job volumes from Prometheus.")
 	}

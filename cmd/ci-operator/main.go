@@ -734,7 +734,8 @@ func (o *options) initializeNamespace() error {
 	ctx := context.Background()
 
 	log.Printf("Creating namespace %s", o.namespace)
-	retries := 5
+	authTimeout := 15 * time.Second
+	initBeginning := time.Now()
 	for {
 		project, err := projectGetter.ProjectV1().ProjectRequests().Create(context.TODO(), &projectapi.ProjectRequest{
 			ObjectMeta: meta.ObjectMeta{
@@ -753,12 +754,11 @@ func (o *options) initializeNamespace() error {
 					continue
 				}
 				// wait a few seconds for auth caches to catch up
-				if kerrors.IsForbidden(err) && retries > 0 {
-					retries--
+				if kerrors.IsForbidden(err) && time.Since(initBeginning) < authTimeout {
 					time.Sleep(time.Second)
 					continue
 				}
-				return fmt.Errorf("cannot retrieve test namespace: %w", err)
+				return fmt.Errorf("failed to wait for authentication cache to warm up after %s: %w", authTimeout, err)
 			}
 		}
 		if project.Status.Phase == coreapi.NamespaceTerminating {

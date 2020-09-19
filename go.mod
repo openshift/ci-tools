@@ -46,6 +46,7 @@ require (
 	github.com/prometheus/common v0.9.1
 	github.com/shurcooL/githubv4 v0.0.0-20191102174205-af46314aec7b
 	github.com/sirupsen/logrus v1.6.0
+	github.com/slack-go/slack v0.6.6
 	github.com/spf13/afero v1.2.2
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
 	golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208

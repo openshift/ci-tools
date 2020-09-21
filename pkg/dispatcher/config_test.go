@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/test-infra/prow/config"
 	prowconfig "k8s.io/test-infra/prow/config"
 )
@@ -290,6 +291,17 @@ func TestDetermineClusterForJob(t *testing.T) {
 			name:     "Vsphere job",
 			jobBase:  config.JobBase{Agent: "kubernetes", Name: "yalayala-vsphere"},
 			expected: "vsphere",
+		},
+		{
+			name: "applyconfig job for vsphere",
+			jobBase: config.JobBase{Agent: "kubernetes", Name: "pull-ci-openshift-release-master-vsphere-dry", Spec: &v1.PodSpec{
+				Containers: []v1.Container{
+					{Image: "registry.svc.ci.openshift.org/ci/applyconfig:latest"},
+				},
+			},
+			},
+			expected:               "api.ci",
+			expectedCanBeRelocated: true,
 		},
 	}
 	for _, tc := range testCases {

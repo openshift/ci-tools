@@ -51,7 +51,7 @@ func generatePodSpec(info *ProwgenInfo, secrets []*cioperatorapi.Secret) *corev1
 		{
 			Name: "pull-secret",
 			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{SecretName: "regcred"},
+				Secret: &corev1.SecretVolumeSource{SecretName: "registry-pull-credentials"},
 			},
 		},
 		{

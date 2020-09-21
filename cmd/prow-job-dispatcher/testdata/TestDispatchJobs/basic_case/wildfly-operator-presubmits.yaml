@@ -49,7 +49,7 @@ postsubmits:
           secretName: apici-ci-operator-credentials
       - name: pull-secret
         secret:
-          secretName: regcred
+          secretName: registry-pull-credentials
       - name: result-aggregator
         secret:
           secretName: result-aggregator

@@ -48,7 +48,7 @@ const (
 
 	OauthSecretKey = "oauth-token"
 
-	PullSecretName = "regcred"
+	PullSecretName = "registry-pull-credentials"
 )
 
 type CloneAuthType string

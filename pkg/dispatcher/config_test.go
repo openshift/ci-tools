@@ -258,43 +258,43 @@ func TestDetermineClusterForJob(t *testing.T) {
 	}{
 		{
 			name:     "some job",
-			config:   &configWithBuildFarmWithJobs,
 			jobBase:  config.JobBase{Agent: "kubernetes", Name: "some-job"},
 			path:     "org/repo/some-postsubmits.yaml",
 			expected: "api.ci",
 		},
 		{
 			name:     "job must on build01",
-			config:   &configWithBuildFarmWithJobs,
 			jobBase:  config.JobBase{Agent: "kubernetes", Name: "periodic-build01-upgrade"},
 			expected: "build01",
 		},
 		{
 			name:     "some periodic job in release repo",
-			config:   &configWithBuildFarmWithJobs,
 			jobBase:  config.JobBase{Agent: "kubernetes", Name: "promote-release-openshift-machine-os-content-e2e-aws-4.1"},
 			path:     "ci-operator/jobs/openshift/release/openshift-release-release-4.1-periodics.yaml",
 			expected: "api.ci",
 		},
 		{
 			name:     "some jenkins job",
-			config:   &configWithBuildFarmWithJobs,
 			jobBase:  config.JobBase{Agent: "jenkins", Name: "test_branch_wildfly_images"},
 			path:     "ci-operator/jobs/openshift-s2i/s2i-wildfly/openshift-s2i-s2i-wildfly-master-postsubmits.yaml",
 			expected: "app.ci",
 		},
 		{
 			name:                   "some job in build farm",
-			config:                 &configWithBuildFarmWithJobs,
 			jobBase:                config.JobBase{Agent: "kubernetes", Name: "some-build-farm-job"},
 			path:                   "org/repo/some-build-farm-presubmits.yaml",
 			expected:               "build01",
 			expectedCanBeRelocated: true,
 		},
+		{
+			name:     "Vsphere job",
+			jobBase:  config.JobBase{Agent: "kubernetes", Name: "yalayala-vsphere"},
+			expected: "vsphere",
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual, canBeRelocated := tc.config.DetermineClusterForJob(tc.jobBase, tc.path)
+			actual, canBeRelocated := configWithBuildFarmWithJobs.DetermineClusterForJob(tc.jobBase, tc.path)
 			if !reflect.DeepEqual(tc.expected, actual) {
 				t.Errorf("%s: actual differs from expected:\n%s", t.Name(), cmp.Diff(tc.expected, actual))
 			}

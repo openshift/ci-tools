@@ -3,6 +3,7 @@ package dispatcher
 import (
 	"io/ioutil"
 	"regexp"
+	"strings"
 
 	"github.com/pkg/errors"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -48,6 +49,7 @@ const (
 	ClusterBuild01 ClusterName = "build01"
 	// ClusterBuild02 is the cluster build02 in the build farm
 	ClusterBuild02 ClusterName = "build02"
+	ClusterVSphere ClusterName = "vsphere"
 )
 
 // JobGroups maps a group of jobs to a cluster
@@ -70,9 +72,12 @@ func (config *Config) GetClusterForJob(jobBase prowconfig.JobBase, path string) 
 }
 
 // DetermineClusterForJob return the cluster for a prow job and if it can be relocated to a cluster in build farm
-func (config *Config) DetermineClusterForJob(jobBase prowconfig.JobBase, path string) (ClusterName, bool) {
+func (config *Config) DetermineClusterForJob(jobBase prowconfig.JobBase, path string) (_ ClusterName, mayBeRelocated bool) {
 	if jobBase.Agent != "kubernetes" {
 		return config.NonKubernetes, false
+	}
+	if strings.Contains(jobBase.Name, "vsphere") {
+		return ClusterVSphere, false
 	}
 	if isSSHBastionJob(jobBase) {
 		return config.SSHBastion, false

@@ -71,12 +71,24 @@ func (config *Config) GetClusterForJob(jobBase prowconfig.JobBase, path string) 
 	return cluster
 }
 
+func isApplyConfigJob(jobBase prowconfig.JobBase) bool {
+	if jobBase.Spec == nil {
+		return false
+	}
+	containers := jobBase.Spec.Containers
+	// exclude applyconfig jobs
+	if len(containers) == 1 && strings.Contains(containers[0].Image, "ci/applyconfig") {
+		return true
+	}
+	return false
+}
+
 // DetermineClusterForJob return the cluster for a prow job and if it can be relocated to a cluster in build farm
 func (config *Config) DetermineClusterForJob(jobBase prowconfig.JobBase, path string) (_ ClusterName, mayBeRelocated bool) {
 	if jobBase.Agent != "kubernetes" {
 		return config.NonKubernetes, false
 	}
-	if strings.Contains(jobBase.Name, "vsphere") {
+	if strings.Contains(jobBase.Name, "vsphere") && !isApplyConfigJob(jobBase) {
 		return ClusterVSphere, false
 	}
 	if isSSHBastionJob(jobBase) {

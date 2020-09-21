@@ -17,6 +17,7 @@ import (
 
 	"github.com/GoogleCloudPlatform/testgrid/pb/config"
 	"github.com/sirupsen/logrus"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/yaml"
 
@@ -29,6 +30,7 @@ type options struct {
 	testGridConfigDir string
 	prowJobConfigDir  string
 	jobsAllowListFile string
+	validationOnlyRun bool
 }
 
 func (o *options) Validate() error {
@@ -52,6 +54,7 @@ func gatherOptions() options {
 	fs.StringVar(&o.releaseConfigDir, "release-config", "", "Path to Release Controller configuration directory.")
 	fs.StringVar(&o.testGridConfigDir, "testgrid-config", "", "Path to TestGrid configuration directory.")
 	fs.StringVar(&o.jobsAllowListFile, "allow-list", "", "Path to file containing jobs to be overridden to informing jobs")
+	fs.BoolVar(&o.validationOnlyRun, "validate", false, "Validate entries in file specified by allow-list (if allow_list is not specified validation would succeed)")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("could not parse input")
 	}
@@ -150,6 +153,7 @@ func (d *dashboard) add(name string, description string, daysOfResults int32) {
 
 func getAllowList(data []byte) (map[string]string, error) {
 	var allowList map[string]string
+	var errs []error
 	if err := yaml.Unmarshal(data, &allowList); err != nil {
 		return nil, fmt.Errorf("could not unmarshal allow-list: %w", err)
 	}
@@ -157,10 +161,12 @@ func getAllowList(data []byte) (map[string]string, error) {
 	// since blocking jobs must be in the release controller configuration
 	for jobName, releaseType := range allowList {
 		if releaseType == "blocking" {
-			return nil, fmt.Errorf("release_type \"blocking\" not permitted in the allow-list for %s, blocking jobs must be in the release controller configuration", jobName)
+			errs = append(errs, fmt.Errorf("release_type 'blocking' not permitted in the allow-list for %s, blocking jobs must be in the release controller configuration", jobName))
+		} else if releaseType != "informing" && releaseType != "broken" && releaseType != "generic-informing" {
+			errs = append(errs, fmt.Errorf("%s: release_type must be one of 'informing', 'broken' or 'generic-informing'", jobName))
 		}
 	}
-	return allowList, nil
+	return allowList, utilerrors.NewAggregate(errs)
 }
 
 // release is a subset of fields from the release controller's config
@@ -188,6 +194,23 @@ var reVersion = regexp.MustCompile(`-(\d+\.\d+)(-|$)`)
 // upgraded from informing to blocking if the job is set to informing.
 func main() {
 	o := gatherOptions()
+
+	// read the list of jobs from the allow list along with its release-type
+	var allowList map[string]string
+	if o.jobsAllowListFile != "" {
+		data, err := ioutil.ReadFile(o.jobsAllowListFile)
+		if err != nil {
+			logrus.WithError(err).Fatalf("could not read allow-list at %s", o.jobsAllowListFile)
+		}
+		allowList, err = getAllowList(data)
+		if err != nil {
+			logrus.WithError(err).Fatalf("failed to build allow-list dictionary")
+		}
+		if o.validationOnlyRun {
+			os.Exit(0)
+		}
+	}
+
 	if err := o.Validate(); err != nil {
 		logrus.Fatalf("Invalid options: %v", err)
 	}
@@ -242,18 +265,6 @@ func main() {
 		logrus.WithError(err).Fatalf("Failed to load Prow jobs %s", o.prowJobConfigDir)
 	}
 
-	// read the list of jobs from the allow list along with its release-type
-	var allowList map[string]string
-	if o.jobsAllowListFile != "" {
-		data, err := ioutil.ReadFile(o.jobsAllowListFile)
-		if err != nil {
-			logrus.WithError(err).Fatalf("could not read allow-list at %s", o.jobsAllowListFile)
-		}
-		allowList, err = getAllowList(data)
-		if err != nil {
-			logrus.WithError(err).Fatalf("failed to build allow-list dictionary")
-		}
-	}
 	for _, p := range jobConfig.Periodics {
 		name := p.Name
 		calculateDays := len(p.Cron) > 0 || len(p.Interval) > 0

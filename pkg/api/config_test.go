@@ -398,13 +398,13 @@ func TestValidateTests(t *testing.T) {
 
 func TestValidateBuildRoot(t *testing.T) {
 	for _, tc := range []struct {
-		id                   string
+		name                 string
 		buildRootImageConfig *BuildRootImageConfiguration
 		hasImages            bool
 		expectedValid        bool
 	}{
 		{
-			id: "both project_image and image_stream_tag in build_root defined causes error",
+			name: "both project_image and image_stream_tag in build_root defined causes error",
 			buildRootImageConfig: &BuildRootImageConfiguration{
 				ImageStreamTagReference: &ImageStreamTagReference{
 					Namespace: "test_namespace",
@@ -419,27 +419,50 @@ func TestValidateBuildRoot(t *testing.T) {
 			expectedValid: false,
 		},
 		{
-			id:                   "build root without any content causes an error",
+			name: "Both project_image and from_repository causes error",
+			buildRootImageConfig: &BuildRootImageConfiguration{
+				ProjectImageBuild: &ProjectDirectoryImageBuildInputs{
+					ContextDir:     "/",
+					DockerfilePath: "Dockerfile.test",
+				},
+				FromRepository: true,
+			},
+			expectedValid: false,
+		},
+		{
+			name: "Both image_stream_tag and from_repository causes error",
+			buildRootImageConfig: &BuildRootImageConfiguration{
+				ImageStreamTagReference: &ImageStreamTagReference{
+					Namespace: "test_namespace",
+					Name:      "test_name",
+					Tag:       "test",
+				},
+				FromRepository: true,
+			},
+			expectedValid: false,
+		},
+		{
+			name:                 "build root without any content causes an error",
 			buildRootImageConfig: &BuildRootImageConfiguration{},
 			expectedValid:        false,
 		},
 		{
-			id:                   "nil build root is allowed when no images",
+			name:                 "nil build root is allowed when no images",
 			buildRootImageConfig: nil,
 			hasImages:            false,
 			expectedValid:        true,
 		},
 		{
-			id:                   "nil build root is not allowed when images defined",
+			name:                 "nil build root is not allowed when images defined",
 			buildRootImageConfig: nil,
 			hasImages:            true,
 			expectedValid:        false,
 		},
 	} {
-		t.Run(tc.id, func(t *testing.T) {
-			if errs := validateBuildRootImageConfiguration("build_root", tc.buildRootImageConfig, tc.hasImages); len(errs) > 0 && tc.expectedValid {
-				t.Errorf("expected to be valid, got: %v", errs)
-			} else if !tc.expectedValid && len(errs) == 0 {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := validateBuildRootImageConfiguration("build_root", tc.buildRootImageConfig, tc.hasImages); (err != nil) && tc.expectedValid {
+				t.Errorf("expected to be valid, got: %v", err)
+			} else if !tc.expectedValid && err == nil {
 				t.Error("expected to be invalid, but returned valid")
 			}
 		})

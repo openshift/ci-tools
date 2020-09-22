@@ -27,6 +27,13 @@ tests:
             requests:
               cpu: 100m
               memory: 200Mi
+        - as: step-with-imagestreamtag
+          commands: test $( cat ${SHARED_DIR}/file ) = message
+          from: pipeline:os
+          resources:
+            requests:
+              cpu: 100m
+              memory: 200Mi
   - as: with-references
     steps:
       test:

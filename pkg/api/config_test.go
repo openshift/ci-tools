@@ -654,6 +654,16 @@ func TestValidateTestSteps(t *testing.T) {
 		}},
 		errs: []error{errors.New("test[0].from: 'stable:initial:base' is not a valid imagestream reference")},
 	}, {
+		name: "invalid image 3",
+		steps: []TestStep{{
+			LiteralTestStep: &LiteralTestStep{
+				As:        "as",
+				From:      "no-such-imagestream:base",
+				Commands:  "commands",
+				Resources: resources},
+		}},
+		errs: []error{errors.New("test[0].from: unknown imagestream 'no-such-imagestream'")},
+	}, {
 		name: "no commands",
 		steps: []TestStep{{
 			LiteralTestStep: &LiteralTestStep{

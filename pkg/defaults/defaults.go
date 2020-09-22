@@ -2,6 +2,7 @@ package defaults
 
 import (
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"strings"
@@ -137,7 +138,11 @@ func FromConfig(
 
 	var imageStepLinks []api.StepLink
 	var hasReleaseStep bool
-	for _, rawStep := range stepConfigsForBuild(config, jobSpec) {
+	rawSteps, err := stepConfigsForBuild(config, jobSpec, ioutil.ReadFile)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get stepConfigsForBuild: %w", err)
+	}
+	for _, rawStep := range rawSteps {
 		var step api.Step
 		var isReleaseStep bool
 		var additional []api.Step
@@ -349,7 +354,9 @@ func promotionDefaults(configSpec *api.ReleaseBuildConfiguration) (*api.Promotio
 	return config, nil
 }
 
-func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.JobSpec) []api.StepConfiguration {
+type readFile func(string) ([]byte, error)
+
+func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.JobSpec, readFile readFile) ([]api.StepConfiguration, error) {
 	var buildSteps []api.StepConfiguration
 
 	if config.InputConfiguration.BaseImages == nil {
@@ -370,6 +377,13 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.Job
 	}
 
 	if target := config.InputConfiguration.BuildRootImage; target != nil {
+		if target.FromRepository {
+			istTagRef, err := buildRootImageStreamFromRepository(readFile)
+			if err != nil {
+				return nil, fmt.Errorf("failed to read buildRootImageStream from repository: %w", err)
+			}
+			target.ImageStreamTagReference = istTagRef
+		}
 		if isTagRef := target.ImageStreamTagReference; isTagRef != nil {
 			buildSteps = append(buildSteps, createStepConfigForTagRefImage(*isTagRef, jobSpec))
 		} else if gitSourceRef := target.ProjectImageBuild; gitSourceRef != nil {
@@ -528,7 +542,7 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.Job
 
 	buildSteps = append(buildSteps, config.RawSteps...)
 
-	return buildSteps
+	return buildSteps, nil
 }
 
 func createStepConfigForTagRefImage(target api.ImageStreamTagReference, jobSpec *api.JobSpec) api.StepConfiguration {
@@ -590,4 +604,28 @@ func defaultImageFromReleaseTag(base api.ImageStreamTagReference, release *api.R
 	base.Name = release.Name
 	base.Namespace = release.Namespace
 	return base
+}
+
+func buildRootImageStreamFromRepository(readFile readFile) (*api.ImageStreamTagReference, error) {
+	dataRaw, err := readFile(api.BuildRootImageFileName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read %s file: %w", api.BuildRootImageFileName, err)
+	}
+	data := strings.TrimSpace(string(dataRaw))
+	slashsplit := strings.Split(data, "/")
+	if n := len(slashsplit); n != 2 {
+		return nil, fmt.Errorf("expected exactly two results when slashsplitting imagestreamtag %q, got %d", data, n)
+	}
+
+	namespace := slashsplit[0]
+	name := slashsplit[1]
+	tag := "latest"
+	if colonSplit := strings.Split(name, ":"); len(colonSplit) > 1 {
+		if n := len(colonSplit); n != 2 {
+			return nil, fmt.Errorf("expected exactly one or two elements when splitting imagestreamname %s by ':', got %d", name, n)
+		}
+		name = colonSplit[0]
+		tag = colonSplit[1]
+	}
+	return &api.ImageStreamTagReference{Namespace: namespace, Name: name, Tag: tag}, nil
 }

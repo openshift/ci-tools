@@ -21,7 +21,11 @@ func TestGetAllowList(t *testing.T) {
 key1: informing
 key2: blocking
 `,
-			expectedError: fmt.Errorf("release_type \"blocking\" not permitted in the allow-list for key2, blocking jobs must be in the release controller configuration"),
+			expectedError: fmt.Errorf("release_type 'blocking' not permitted in the allow-list for key2, blocking jobs must be in the release controller configuration"),
+			expectedOut: map[string]string{
+				"key1": "informing",
+				"key2": "blocking",
+			},
 		},
 		{
 			name: "Release type blocking",
@@ -31,6 +35,18 @@ key2: informing
 `,
 			expectedOut: map[string]string{
 				"key1": "informing",
+				"key2": "informing",
+			},
+		},
+		{
+			name: "Release type empty",
+			input: `
+key1: 
+key2: informing
+`,
+			expectedError: fmt.Errorf("key1: release_type must be one of 'informing', 'broken' or 'generic-informing'"),
+			expectedOut: map[string]string{
+				"key1": "",
 				"key2": "informing",
 			},
 		},

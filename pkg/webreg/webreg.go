@@ -471,6 +471,15 @@ image. The index image is named <code>ci-index</code> and can be exposed to test
 steps via the <a href="/help/ci-operator#literal-references"><code>dependencies</code></a> feature.
 </p>
 
+<p>
+The ephemeral index is built from scratch and only the bundles built in the
+current <code>ci-operator</code> run will be added to it, nothing else. The
+bundles are added to the index using the <code>semver</code> mode, which means
+that the <code>spec.version</code> stanza in the CSV must be a valid semantic
+version. Also, if the CSV has a <code>spec.replaces</code> stanza, it is
+ignored, because the index will not contain a bundle with the replaced version.
+</p>
+
 <h4 id="ci-index-jobs"><a href="#ci-index-jobs">Validating Bundle and Index Builds</a></h4>
 
 <p>

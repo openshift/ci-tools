@@ -27,8 +27,6 @@ const (
 type Config struct {
 	// the cluster cluster name if no other condition matches
 	Default ClusterName `json:"default"`
-	// the cluster cluster name for non Kubernetes jobs
-	NonKubernetes ClusterName `json:"nonKubernetes"`
 	// the cluster cluster name for ssh bastion jobs
 	SSHBastion ClusterName `json:"sshBastion"`
 	// Groups maps a group of jobs to a cluster
@@ -85,8 +83,8 @@ func isApplyConfigJob(jobBase prowconfig.JobBase) bool {
 
 // DetermineClusterForJob return the cluster for a prow job and if it can be relocated to a cluster in build farm
 func (config *Config) DetermineClusterForJob(jobBase prowconfig.JobBase, path string) (_ ClusterName, mayBeRelocated bool) {
-	if jobBase.Agent != "kubernetes" {
-		return config.NonKubernetes, false
+	if jobBase.Agent != "kubernetes" && jobBase.Agent != "" {
+		return "", false
 	}
 	if strings.Contains(jobBase.Name, "vsphere") && !isApplyConfigJob(jobBase) {
 		return ClusterVSphere, false

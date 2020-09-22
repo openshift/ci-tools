@@ -15,8 +15,7 @@ import (
 
 var (
 	c = Config{
-		Default:       "api.ci",
-		NonKubernetes: "app.ci",
+		Default: "api.ci",
 		Groups: map[ClusterName]Group{
 			"api.ci": {
 				Paths: []string{
@@ -54,8 +53,7 @@ var (
 	}
 
 	configWithBuildFarm = Config{
-		Default:       "api.ci",
-		NonKubernetes: "app.ci",
+		Default: "api.ci",
 		BuildFarm: map[CloudProvider]JobGroups{
 			CloudAWS: {
 				ClusterBuild01: {},
@@ -101,8 +99,7 @@ var (
 	}
 
 	configWithBuildFarmWithJobs = Config{
-		Default:       "api.ci",
-		NonKubernetes: "app.ci",
+		Default: "api.ci",
 		BuildFarm: map[CloudProvider]JobGroups{
 			CloudAWS: {
 				ClusterBuild01: {
@@ -230,11 +227,10 @@ func TestGetClusterForJob(t *testing.T) {
 			expected: "api.ci",
 		},
 		{
-			name:     "some jenkins job",
-			config:   &c,
-			jobBase:  config.JobBase{Agent: "jenkins", Name: "test_branch_wildfly_images"},
-			path:     "ci-operator/jobs/openshift-s2i/s2i-wildfly/openshift-s2i-s2i-wildfly-master-postsubmits.yaml",
-			expected: "app.ci",
+			name:    "some jenkins job",
+			config:  &c,
+			jobBase: config.JobBase{Agent: "jenkins", Name: "test_branch_wildfly_images"},
+			path:    "ci-operator/jobs/openshift-s2i/s2i-wildfly/openshift-s2i-s2i-wildfly-master-postsubmits.yaml",
 		},
 	}
 	for _, tc := range testCases {
@@ -278,7 +274,13 @@ func TestDetermineClusterForJob(t *testing.T) {
 			name:     "some jenkins job",
 			jobBase:  config.JobBase{Agent: "jenkins", Name: "test_branch_wildfly_images"},
 			path:     "ci-operator/jobs/openshift-s2i/s2i-wildfly/openshift-s2i-s2i-wildfly-master-postsubmits.yaml",
-			expected: "app.ci",
+			expected: "",
+		},
+		{
+			name:     "some job without agent",
+			jobBase:  config.JobBase{Name: "no-agent-job"},
+			path:     "ci-operator/jobs/openshift-s2i/s2i-wildfly/openshift-s2i-s2i-wildfly-master-postsubmits.yaml",
+			expected: "api.ci",
 		},
 		{
 			name:                   "some job in build farm",

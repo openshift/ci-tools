@@ -143,8 +143,7 @@ func TestComplete(t *testing.T) {
 
 var (
 	c = dispatcher.Config{
-		Default:       "api.ci",
-		NonKubernetes: "app.ci",
+		Default: "api.ci",
 		BuildFarm: map[dispatcher.CloudProvider]dispatcher.JobGroups{
 			dispatcher.CloudAWS: {
 				dispatcher.ClusterBuild01: {},

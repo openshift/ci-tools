@@ -1,5 +1,4 @@
 default: api.ci
-nonKubernetes: app.ci
 groups:
   "api.ci":
     paths:

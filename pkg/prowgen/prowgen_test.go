@@ -172,6 +172,7 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 		test       string
 		repoInfo   *ProwgenInfo
 		jobRelease string
+		clone      bool
 	}{{
 		description: "presubmit for standard test",
 		test:        "testname",
@@ -188,10 +189,18 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
 			jobRelease:  "4.6",
 		},
+		{
+			description: "presubmit with job release specified and clone",
+			test:        "testname",
+			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
+			jobRelease:  "4.6",
+			clone:       true,
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.description, func(t *testing.T) {
-			testhelper.CompareWithFixture(t, generatePresubmitForTest(tc.test, tc.repoInfo, jobconfig.Generated, nil, nil, tc.jobRelease)) // podSpec tested in generatePodSpec
+			// podSpec tested in generatePodSpec
+			testhelper.CompareWithFixture(t, generatePresubmitForTest(tc.test, tc.repoInfo, jobconfig.Generated, nil, nil, tc.jobRelease, !tc.clone))
 		})
 	}
 }
@@ -203,6 +212,7 @@ func TestGeneratePeriodicForTest(t *testing.T) {
 		test       string
 		repoInfo   *ProwgenInfo
 		jobRelease string
+		clone      bool
 	}{{
 		description: "periodic for standard test",
 		test:        "testname",
@@ -219,10 +229,18 @@ func TestGeneratePeriodicForTest(t *testing.T) {
 			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
 			jobRelease:  "4.6",
 		},
+		{
+			description: "periodic for specific release and clone: true",
+			test:        "testname",
+			repoInfo:    &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
+			jobRelease:  "4.6",
+			clone:       true,
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.description, func(t *testing.T) {
-			testhelper.CompareWithFixture(t, generatePeriodicForTest(tc.test, tc.repoInfo, jobconfig.Generated, nil, true, "@yearly", nil, tc.jobRelease)) // podSpec tested in generatePodSpec
+			// podSpec tested in generatePodSpec
+			testhelper.CompareWithFixture(t, generatePeriodicForTest(tc.test, tc.repoInfo, jobconfig.Generated, nil, true, "@yearly", nil, tc.jobRelease, !tc.clone))
 		})
 	}
 }
@@ -232,9 +250,10 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 		name       string
 		repoInfo   *ProwgenInfo
 		jobRelease string
+		clone      bool
 	}{
 		{
-			name: "first",
+			name: "Lowercase org repo and branch",
 			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
 				Org:    "organization",
 				Repo:   "repository",
@@ -242,7 +261,7 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 			}},
 		},
 		{
-			name: "second",
+			name: "Uppercase org, repo and branch",
 			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
 				Org:    "Organization",
 				Repo:   "Repository",
@@ -250,15 +269,16 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 			}},
 		},
 		{
-			name: "third",
+			name: "Uppercase org, repo and branch with clone: true",
 			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
 				Org:    "Organization",
 				Repo:   "Repository",
 				Branch: "Branch",
 			}},
+			clone: true,
 		},
 		{
-			name: "fourth",
+			name: "Lowercase org repo and branch with release",
 			repoInfo: &ProwgenInfo{Metadata: ciop.Metadata{
 				Org:    "organization",
 				Repo:   "repository",
@@ -269,7 +289,8 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			testhelper.CompareWithFixture(t, generatePostsubmitForTest(tc.name, tc.repoInfo, jobconfig.Generated, nil, nil, tc.jobRelease)) // podSpec tested in TestGeneratePodSpec
+			// podSpec tested in generatePodSpec
+			testhelper.CompareWithFixture(t, generatePostsubmitForTest(tc.name, tc.repoInfo, jobconfig.Generated, nil, nil, tc.jobRelease, !tc.clone))
 		})
 	}
 }
@@ -442,6 +463,7 @@ func TestGenerateJobBase(t *testing.T) {
 		podSpec     *corev1.PodSpec
 		rehearsable bool
 		pathAlias   *string
+		clone       bool
 	}{
 		{
 			testName: "no special options",
@@ -510,11 +532,23 @@ func TestGenerateJobBase(t *testing.T) {
 			label:   jobconfig.Generated,
 			podSpec: &corev1.PodSpec{Containers: []corev1.Container{{Name: "test"}}},
 		},
+		{
+			testName: "expose option set but not private with clone: true",
+			name:     "test",
+			prefix:   "pull",
+			info: &ProwgenInfo{
+				Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
+				Config:   config.Prowgen{Private: false, Expose: true},
+			},
+			label:   jobconfig.Generated,
+			podSpec: &corev1.PodSpec{Containers: []corev1.Container{{Name: "test"}}},
+			clone:   true,
+		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.testName, func(t *testing.T) {
-			testhelper.CompareWithFixture(t, generateJobBase(testCase.name, testCase.prefix, testCase.info, testCase.label, testCase.podSpec, testCase.rehearsable, testCase.pathAlias, ""))
+			testhelper.CompareWithFixture(t, generateJobBase(testCase.name, testCase.prefix, testCase.info, testCase.label, testCase.podSpec, testCase.rehearsable, testCase.pathAlias, "", !testCase.clone))
 		})
 	}
 }

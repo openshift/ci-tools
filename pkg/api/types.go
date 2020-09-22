@@ -305,6 +305,10 @@ const (
 	ReleaseChannelStable    ReleaseChannel = "stable"
 	ReleaseChannelFast      ReleaseChannel = "fast"
 	ReleaseChannelCandidate ReleaseChannel = "candidate"
+
+	// BuildRootImageFileName is the name of the file that contains the build root images
+	// pullspec.
+	BuildRootImageFileName = ".build_root_image"
 )
 
 // BuildRootImageConfiguration holds the two ways of using a base image
@@ -312,6 +316,8 @@ const (
 type BuildRootImageConfiguration struct {
 	ImageStreamTagReference *ImageStreamTagReference          `json:"image_stream_tag,omitempty"`
 	ProjectImageBuild       *ProjectDirectoryImageBuildInputs `json:"project_image,omitempty"`
+	// If the BuildRoot images pullspec should be read from a file in the repository (BuildRootImageFileName).
+	FromRepository bool `json:"from_repository"`
 }
 
 // ImageStreamTagReference identifies an ImageStreamTag

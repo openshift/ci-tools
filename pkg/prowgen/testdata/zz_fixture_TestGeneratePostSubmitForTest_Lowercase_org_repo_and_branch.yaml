@@ -6,4 +6,4 @@ decoration_config:
   skip_cloning: true
 labels:
   ci-operator.openshift.io/prowgen-controlled: "true"
-name: branch-ci-organization-repository-branch-first
+name: branch-ci-organization-repository-branch-Lowercase org repo and branch

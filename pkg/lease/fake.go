@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 
@@ -24,7 +25,11 @@ func NewFakeClient(owner, url string, retries int, failures sets.String, calls *
 	randId = func() string {
 		return "random"
 	}
-	return newClient(&fakeClient{owner: owner, failures: failures, calls: calls}, retries)
+	return newClient(&fakeClient{
+		owner:    owner,
+		failures: failures,
+		calls:    calls,
+	}, retries, time.Duration(0))
 }
 
 func (c *fakeClient) addCall(call string, args ...string) error {

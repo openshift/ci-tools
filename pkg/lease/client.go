@@ -56,7 +56,7 @@ type Client interface {
 }
 
 // NewClient creates a client that leases resources with the specified owner.
-func NewClient(owner, url, username, passwordFile string, retries int) (Client, error) {
+func NewClient(owner, url, username, passwordFile string, retries int, acquireTimeout time.Duration) (Client, error) {
 	randId = func() string {
 		return strconv.Itoa(rand.Int())
 	}
@@ -64,25 +64,27 @@ func NewClient(owner, url, username, passwordFile string, retries int) (Client, 
 	if err != nil {
 		return nil, err
 	}
-	return newClient(c, retries), nil
+	return newClient(c, retries, acquireTimeout), nil
 }
 
 // for test mocking
 var randId func() string
 
-func newClient(boskos boskosClient, retries int) Client {
+func newClient(boskos boskosClient, retries int, acquireTimeout time.Duration) Client {
 	return &client{
-		boskos:  boskos,
-		retries: retries,
-		leases:  make(map[string]*lease),
+		boskos:         boskos,
+		retries:        retries,
+		acquireTimeout: acquireTimeout,
+		leases:         make(map[string]*lease),
 	}
 }
 
 type client struct {
 	sync.RWMutex
-	boskos  boskosClient
-	retries int
-	leases  map[string]*lease
+	boskos         boskosClient
+	retries        int
+	acquireTimeout time.Duration
+	leases         map[string]*lease
 }
 
 type lease struct {
@@ -96,7 +98,7 @@ type lease struct {
 
 func (c *client) Acquire(rtype string, ctx context.Context, cancel context.CancelFunc) (string, error) {
 	var cancelAcquire context.CancelFunc
-	ctx, cancelAcquire = context.WithTimeout(ctx, 120*time.Minute)
+	ctx, cancelAcquire = context.WithTimeout(ctx, c.acquireTimeout)
 	defer cancelAcquire()
 	r, err := c.boskos.AcquireWaitWithPriority(ctx, rtype, freeState, leasedState, randId())
 	if err != nil {

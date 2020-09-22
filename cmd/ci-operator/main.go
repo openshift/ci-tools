@@ -157,6 +157,7 @@ const (
 	annotationCleanupDurationTTL = "ci.openshift.io/ttl.hard"
 	// leaseServerUsername is the default lease server username in api.ci
 	leaseServerUsername = "ci"
+	leaseAcquireTimeout = 120 * time.Minute
 
 	// where Prow wants us to put artifacts
 	artifactsEnv = "ARTIFACTS"
@@ -275,6 +276,7 @@ type options struct {
 	leaseServer             string
 	leaseServerUsername     string
 	leaseServerPasswordFile string
+	leaseAcquireTimeout     time.Duration
 	leaseClient             lease.Client
 
 	givePrAuthorAccessToNamespace bool
@@ -315,6 +317,7 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.StringVar(&opt.leaseServer, "lease-server", leaseServerAddress, "Address of the server that manages leases. Required if any test is configured to acquire a lease.")
 	flag.StringVar(&opt.leaseServerUsername, "lease-server-username", leaseServerUsername, "Username used to access the lease server")
 	flag.StringVar(&opt.leaseServerPasswordFile, "lease-server-password-file", "", "The path to password file used to access the lease server")
+	flag.DurationVar(&opt.leaseAcquireTimeout, "lease-acquire-timeout", leaseAcquireTimeout, "Maximum amount of time to wait for lease acquisition")
 	flag.StringVar(&opt.registryPath, "registry", "", "Path to the step registry directory")
 	flag.StringVar(&opt.configSpecPath, "config", "", "The configuration file. If not specified the CONFIG_SPEC environment variable or the configresolver will be used.")
 	flag.StringVar(&opt.unresolvedConfigPath, "unresolved-config", "", "The configuration file, before resolution. If not specified the UNRESOLVED_CONFIG environment variable will be used, if set.")
@@ -1241,7 +1244,7 @@ func (o *options) saveNamespaceArtifacts() {
 func (o *options) initializeLeaseClient() error {
 	var err error
 	owner := o.namespace + "-" + o.jobSpec.JobNameHash()
-	if o.leaseClient, err = lease.NewClient(owner, o.leaseServer, o.leaseServerUsername, o.leaseServerPasswordFile, 60); err != nil {
+	if o.leaseClient, err = lease.NewClient(owner, o.leaseServer, o.leaseServerUsername, o.leaseServerPasswordFile, 60, o.leaseAcquireTimeout); err != nil {
 		return fmt.Errorf("failed to create the lease client: %w", err)
 	}
 	t := time.NewTicker(30 * time.Second)

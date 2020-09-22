@@ -29,6 +29,7 @@ func TestGenerateRepositories(t *testing.T) {
 			AllowMergeCommit: pntrBool(false),
 			AllowRebaseMerge: pntrBool(false),
 			Description:      pntrString("Test Repo: repo1"),
+			Private:          pntrBool(true),
 		},
 		"repo2": {
 			HasProjects:      pntrBool(false),
@@ -36,6 +37,7 @@ func TestGenerateRepositories(t *testing.T) {
 			AllowMergeCommit: pntrBool(false),
 			AllowRebaseMerge: pntrBool(false),
 			Description:      pntrString("Test Repo: repo2"),
+			Private:          pntrBool(true),
 		},
 		"repo3": {
 			HasProjects:      pntrBool(false),
@@ -43,6 +45,7 @@ func TestGenerateRepositories(t *testing.T) {
 			AllowMergeCommit: pntrBool(false),
 			AllowRebaseMerge: pntrBool(false),
 			Description:      pntrString("Test Repo: repo3"),
+			Private:          pntrBool(true),
 		},
 		"repo4": {
 			HasProjects:      pntrBool(false),
@@ -50,6 +53,7 @@ func TestGenerateRepositories(t *testing.T) {
 			AllowMergeCommit: pntrBool(false),
 			AllowRebaseMerge: pntrBool(false),
 			Description:      pntrString("Test Repo: repo4"),
+			Private:          pntrBool(true),
 		},
 	}
 

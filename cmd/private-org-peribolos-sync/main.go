@@ -134,6 +134,7 @@ func main() {
 
 func generateRepositories(gc gitHubClient, orgRepos map[string]sets.String, logger *logrus.Entry) map[string]org.Repo {
 	peribolosRepos := make(map[string]org.Repo)
+	yes := true
 
 	for orgName, repos := range orgRepos {
 		for repo := range repos {
@@ -147,7 +148,7 @@ func generateRepositories(gc gitHubClient, orgRepos map[string]sets.String, logg
 			peribolosRepos[fullRepo.Name] = org.PruneRepoDefaults(org.Repo{
 				Description:      &fullRepo.Description,
 				HomePage:         &fullRepo.Homepage,
-				Private:          &fullRepo.Private,
+				Private:          &yes, // all repositories in private org should be private
 				HasIssues:        &fullRepo.HasIssues,
 				HasProjects:      &fullRepo.HasProjects,
 				HasWiki:          &fullRepo.HasWiki,
@@ -163,7 +164,7 @@ func generateRepositories(gc gitHubClient, orgRepos map[string]sets.String, logg
 	return peribolosRepos
 }
 
-// getReposForPrivateOrg itterates through the release repository directory and creates a map of
+// getReposForPrivateOrg iterates through the release repository directory and creates a map of
 // repository sets by organization that promote official images.
 func getReposForPrivateOrg(releaseRepoPath string, whitelist map[string][]string, onlyOrg string) (map[string]sets.String, error) {
 	ret := make(map[string]sets.String)

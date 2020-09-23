@@ -49,9 +49,9 @@ func (stepNeedsLease) SubTests() []*junit.TestCase {
 }
 
 func TestLeaseStepForward(t *testing.T) {
-	name := "lease_name"
+	leases := []api.StepLease{{ResourceType: "lease_name"}}
 	step := stepNeedsLease{}
-	withLease := LeaseStep(nil, name, &step, func() string { return "" }, nil)
+	withLease := LeaseStep(nil, leases, &step, func() string { return "" }, nil)
 	t.Run("Inputs", func(t *testing.T) {
 		s, err := step.Inputs()
 		if err != nil {
@@ -109,6 +109,10 @@ func TestLeaseStepForward(t *testing.T) {
 }
 
 func TestError(t *testing.T) {
+	leases := []api.StepLease{
+		{ResourceType: "rtype0"},
+		{ResourceType: "rtype1"},
+	}
 	ctx := context.Background()
 	for _, tc := range []struct {
 		name     string
@@ -116,29 +120,50 @@ func TestError(t *testing.T) {
 		failures sets.String
 		expected []string
 	}{{
-		name:     "acquire fails",
-		failures: sets.NewString("acquire owner rtype free leased random"),
-		expected: []string{"acquire owner rtype free leased random"},
+		name:     "first acquire fails",
+		failures: sets.NewString("acquire owner rtype0 free leased random"),
+		expected: []string{"acquire owner rtype0 free leased random"},
 	}, {
-		name:     "release fails",
-		failures: sets.NewString("releaseone owner rtype0 free"),
+		name:     "second acquire fails",
+		failures: sets.NewString("acquire owner rtype1 free leased random"),
 		expected: []string{
-			"acquire owner rtype free leased random",
-			"releaseone owner rtype0 free",
+			"acquire owner rtype0 free leased random",
+			"acquire owner rtype1 free leased random",
+			"releaseone owner rtype0_0 free",
+		},
+	}, {
+		name:     "first release fails",
+		failures: sets.NewString("releaseone owner rtype0_0 free"),
+		expected: []string{
+			"acquire owner rtype0 free leased random",
+			"acquire owner rtype1 free leased random",
+			"releaseone owner rtype0_0 free",
+			"releaseone owner rtype1_1 free",
+		},
+	}, {
+		name:     "second release fails",
+		failures: sets.NewString("releaseone owner rtype1_1 free"),
+		expected: []string{
+			"acquire owner rtype0 free leased random",
+			"acquire owner rtype1 free leased random",
+			"releaseone owner rtype0_0 free",
+			"releaseone owner rtype1_1 free",
 		},
 	}, {
 		name:     "run fails",
 		runFails: true,
 		expected: []string{
-			"acquire owner rtype free leased random",
-			"releaseone owner rtype0 free",
+			"acquire owner rtype0 free leased random",
+			"acquire owner rtype1 free leased random",
+			"releaseone owner rtype0_0 free",
+			"releaseone owner rtype1_1 free",
 		},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			var calls []string
 			client := lease.NewFakeClient("owner", "url", 0, tc.failures, &calls)
 			s := stepNeedsLease{fail: tc.runFails}
-			if LeaseStep(&client, "rtype", &s, func() string { return "" }, nil).Run(ctx) == nil {
+			if LeaseStep(&client, leases, &s, func() string { return "" }, nil).Run(ctx) == nil {
 				t.Fatalf("unexpected success, calls: %#v", calls)
 			}
 			if !reflect.DeepEqual(calls, tc.expected) {
@@ -151,8 +176,9 @@ func TestError(t *testing.T) {
 func TestAcquireRelease(t *testing.T) {
 	var calls []string
 	client := lease.NewFakeClient("owner", "url", 0, nil, &calls)
+	leases := []api.StepLease{{ResourceType: "rtype0"}, {ResourceType: "rtype1"}}
 	step := stepNeedsLease{}
-	withLease := LeaseStep(&client, "rtype", &step, func() string { return "" }, nil)
+	withLease := LeaseStep(&client, leases, &step, func() string { return "" }, nil)
 	if err := withLease.Run(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -160,8 +186,10 @@ func TestAcquireRelease(t *testing.T) {
 		t.Fatal("step was not executed")
 	}
 	expected := []string{
-		"acquire owner rtype free leased random",
-		"releaseone owner rtype0 free",
+		"acquire owner rtype0 free leased random",
+		"acquire owner rtype1 free leased random",
+		"releaseone owner rtype0_0 free",
+		"releaseone owner rtype1_1 free",
 	}
 	if !reflect.DeepEqual(calls, expected) {
 		t.Fatalf("wrong calls to the lease client: %s", diff.ObjectDiff(calls, expected))

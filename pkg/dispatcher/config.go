@@ -75,7 +75,7 @@ func isApplyConfigJob(jobBase prowconfig.JobBase) bool {
 	}
 	containers := jobBase.Spec.Containers
 	// exclude applyconfig jobs
-	if len(containers) == 1 && strings.Contains(containers[0].Image, "ci/applyconfig") {
+	if len(containers) == 1 && strings.Contains(containers[0].Image, "applyconfig") {
 		return true
 	}
 	return false

@@ -353,8 +353,9 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 		if link, ok := step.FromImageTag(); ok {
 			image = fmt.Sprintf("%s:%s", api.PipelineImageStream, link)
 		} else {
-			stream, _ := s.config.ImageStreamFor(image)
-			image = fmt.Sprintf("%s:%s", stream, image)
+			dep := api.StepDependency{Name: image}
+			stream, tag, _ := s.config.DependencyParts(dep)
+			image = fmt.Sprintf("%s:%s", stream, tag)
 		}
 		resources, err := resourcesFor(step.Resources)
 		if err != nil {

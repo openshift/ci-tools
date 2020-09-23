@@ -666,8 +666,22 @@ func validateLiteralTestStepCommon(fieldRoot string, step LiteralTestStep, seen 
 		if step.FromImage.Tag == "" {
 			ret = append(ret, fmt.Errorf("%s.from_image: `tag` is required", fieldRoot))
 		}
-	} else if len(validation.IsDNS1123Subdomain(step.From)) != 0 {
-		ret = append(ret, fmt.Errorf("%s.from: '%s' is not a valid Kubernetes object name", fieldRoot, step.From))
+	} else {
+		imageParts := strings.Split(step.From, ":")
+		if len(imageParts) > 2 {
+			ret = append(ret, fmt.Errorf("%s.from: '%s' is not a valid imagestream reference", fieldRoot, step.From))
+		}
+		for i, obj := range imageParts {
+			if len(validation.IsDNS1123Subdomain(obj)) != 0 {
+				ret = append(ret, fmt.Errorf("%s.from: '%s' is not a valid Kubernetes object name", fieldRoot, obj))
+			} else if i == 0 && len(imageParts) == 2 {
+				switch obj {
+				case PipelineImageStream, ReleaseStreamFor(LatestReleaseName), ReleaseStreamFor(InitialReleaseName), ReleaseImageStream:
+				default:
+					ret = append(ret, fmt.Errorf("%s.from: unknown imagestream '%s'", fieldRoot, imageParts[0]))
+				}
+			}
+		}
 	}
 	if len(step.Commands) == 0 {
 		ret = append(ret, fmt.Errorf("%s: `commands` is required", fieldRoot))

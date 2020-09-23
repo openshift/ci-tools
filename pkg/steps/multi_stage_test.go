@@ -108,6 +108,8 @@ func TestGeneratePods(t *testing.T) {
 					From:        "image1",
 					Commands:    "command1",
 					ArtifactDir: "/artifact/dir",
+				}, {
+					As: "step2", From: "stable-initial:installer", Commands: "command2",
 				}},
 			},
 		}},

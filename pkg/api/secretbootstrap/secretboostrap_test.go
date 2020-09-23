@@ -1,6 +1,8 @@
 package secretbootstrap
 
 import (
+	"fmt"
+	"path/filepath"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -81,6 +83,68 @@ func TestResolving(t *testing.T) {
 			}
 
 			if diff := cmp.Diff(tc.expectedConfig, tc.config); diff != "" {
+				t.Errorf("expected config differs from actual config: %s", diff)
+			}
+		})
+	}
+}
+
+func TestLoadConfigFromFile(t *testing.T) {
+	testCases := []struct {
+		name string
+
+		configPath    string
+		expected      Config
+		expectedError error
+	}{
+		{
+			name:          "file not exist",
+			expectedError: fmt.Errorf("open testdata/TestLoadConfigFromFile/file_not_exist.yaml: no such file or directory"),
+		},
+		{
+			name: "basic base",
+			expected: Config{
+				ClusterGroups: map[string][]string{"build_farm": {"app.ci", "build01", "build02"}},
+				Secrets: []SecretConfig{
+					{
+						From: map[string]BitWardenContext{
+							"ops-mirror.pem": {BWItem: "mirror.openshift.com", Attachment: "cert-key.pem"},
+							"rh-cdn.pem":     {BWItem: "rh-cdn", Attachment: "rh-cdn.pem"},
+						},
+						To: []SecretContext{{
+							Cluster:   "app.ci",
+							Namespace: "ocp",
+							Name:      "mirror.openshift.com",
+						}, {
+							Cluster:   "build01",
+							Namespace: "ocp",
+							Name:      "mirror.openshift.com",
+						}, {
+							Cluster:   "build02",
+							Namespace: "ocp",
+							Name:      "mirror.openshift.com",
+						}},
+					},
+				},
+			},
+		},
+		{
+			name:          "dup key",
+			expectedError: fmt.Errorf("error converting YAML to JSON: yaml: unmarshal errors:\n  line 16: key \"rh-cdn.pem\" already set in map"),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var actual Config
+			actualError := LoadConfigFromFile(filepath.Join("testdata", fmt.Sprintf("%s.yaml", t.Name())), &actual)
+			if (tc.expectedError == nil) != (actualError == nil) {
+				t.Errorf("%s: expecting error \"%v\", got \"%v\"", t.Name(), tc.expectedError, actualError)
+			}
+			if tc.expectedError != nil && actualError != nil && tc.expectedError.Error() != actualError.Error() {
+				t.Errorf("%s: expecting error msg %q, got %q", t.Name(), tc.expectedError.Error(), actualError.Error())
+			}
+			if diff := cmp.Diff(tc.expected, actual); diff != "" {
 				t.Errorf("expected config differs from actual config: %s", diff)
 			}
 		})

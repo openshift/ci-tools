@@ -321,7 +321,7 @@ type BuildRootImageConfiguration struct {
 	ImageStreamTagReference *ImageStreamTagReference          `json:"image_stream_tag,omitempty"`
 	ProjectImageBuild       *ProjectDirectoryImageBuildInputs `json:"project_image,omitempty"`
 	// If the BuildRoot images pullspec should be read from a file in the repository (BuildRootImageFileName).
-	FromRepository bool `json:"from_repository"`
+	FromRepository bool `json:"from_repository,omitempty"`
 }
 
 // ImageStreamTagReference identifies an ImageStreamTag

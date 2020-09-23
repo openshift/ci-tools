@@ -44,9 +44,39 @@ func (o *PRCreationOptions) Finalize() error {
 	return nil
 }
 
+// PrOptions allows optional parameters to upsertPR
+type PrOptions struct {
+	prBody     string
+	matchTitle string
+}
+
+// PrOption is the type for Optional Parameters
+type PrOption func(*PrOptions)
+
+// PrBody is the wrapper to pass in PrBody as a parameter
+func PrBody(prBody string) PrOption {
+	return func(args *PrOptions) {
+		args.prBody = prBody
+	}
+}
+
+// MatchTitle is the wrapper to pass in MatchTitle as a parameter
+func MatchTitle(matchTitle string) PrOption {
+	return func(args *PrOptions) {
+		args.matchTitle = matchTitle
+	}
+}
+
 // UpsertPR upserts a PR. The PRTitle must be alphanumeric except for spaces, as it will be used as the
 // branchname on the bots fork.
-func (o *PRCreationOptions) UpsertPR(localSourceDir, org, repo, branch, prTitle, prBody string) error {
+func (o *PRCreationOptions) UpsertPR(localSourceDir, org, repo, branch, prTitle string, setters ...PrOption) error {
+	prArgs := &PrOptions{}
+	for _, setter := range setters {
+		setter(prArgs)
+	}
+	if prArgs.matchTitle == "" {
+		prArgs.matchTitle = prTitle
+	}
 	if err := os.Chdir(localSourceDir); err != nil {
 		return fmt.Errorf("failed to chdir into %s: %w", localSourceDir, err)
 	}
@@ -71,7 +101,7 @@ func (o *PRCreationOptions) UpsertPR(localSourceDir, org, repo, branch, prTitle,
 	stdout := bumper.HideSecretsWriter{Delegate: os.Stdout, Censor: o.secretAgent}
 	stderr := bumper.HideSecretsWriter{Delegate: os.Stderr, Censor: o.secretAgent}
 
-	sourceBranchName := strings.ReplaceAll(strings.ToLower(prTitle), " ", "-")
+	sourceBranchName := strings.ReplaceAll(strings.ToLower(prArgs.matchTitle), " ", "-")
 	o.GithubClient.SetMax404Retries(0)
 	if _, err := o.GithubClient.GetRepo(username, repo); err != nil {
 		// Somehow github.IsNotFound doesn't recognize this?
@@ -102,7 +132,7 @@ func (o *PRCreationOptions) UpsertPR(localSourceDir, org, repo, branch, prTitle,
 		sourceBranchName,
 		username,
 		fmt.Sprintf("%s@users.noreply.github.com", username),
-		prTitle+"\n\n"+prBody,
+		prTitle+"\n\n"+prArgs.prBody,
 		stdout,
 		stderr,
 	); err != nil {
@@ -120,8 +150,8 @@ func (o *PRCreationOptions) UpsertPR(localSourceDir, org, repo, branch, prTitle,
 		org,
 		repo,
 		prTitle,
-		prBody,
-		prTitle,
+		prArgs.prBody,
+		prArgs.matchTitle,
 		username+":"+sourceBranchName,
 		branch,
 		true,

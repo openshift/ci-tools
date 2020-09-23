@@ -4,22 +4,22 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
+	"strings"
 	"time"
 
+	"github.com/openshift/ci-tools/pkg/github/prcreation"
 	"github.com/sirupsen/logrus"
-
 	"k8s.io/test-infra/experiment/autobumper/bumper"
-	"k8s.io/test-infra/prow/config/secret"
-	"k8s.io/test-infra/prow/flagutil"
 )
 
 const (
-	githubOrg    = "kubernetes"
-	githubRepo   = "test-infra"
-	githubLogin  = "openshift-bot"
-	githubTeam   = "openshift/openshift-team-developer-productivity-test-platform"
-	matchTitle   = "Update OpenShift testgrid definitions"
-	remoteBranch = "auto-testgrid-generator"
+	githubOrg      = "kubernetes"
+	githubRepo     = "test-infra"
+	githubLogin    = "openshift-bot"
+	githubTeam     = "openshift/openshift-team-developer-productivity-test-platform"
+	matchTitle     = "Update OpenShift testgrid definitions by auto-testgrid-generator job"
+	upstreamBranch = "master"
 )
 
 type options struct {
@@ -31,8 +31,8 @@ type options struct {
 	allowList         string
 	githubLogin       string
 	githubOrg         string
+	prcreation.PRCreationOptions
 	bumper.GitAuthorOptions
-	flagutil.GitHubOptions
 }
 
 func parseOptions() options {
@@ -48,7 +48,7 @@ func parseOptions() options {
 	fs.StringVar(&o.githubOrg, "github-org", githubOrg, "The github org to use for testing with a dummy repository.")
 
 	o.GitAuthorOptions.AddFlags(fs)
-	o.GitHubOptions.AddFlags(fs)
+	o.PRCreationOptions.GitHubOptions.AddFlags(fs)
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Errorf("cannot parse args: '%s'", os.Args[1:])
 	}
@@ -67,20 +67,9 @@ func main() {
 	if err := validateOptions(o); err != nil {
 		logrus.WithError(err).Fatal("Invalid arguments.")
 	}
-
-	sa := &secret.Agent{}
-	if err := sa.Start([]string{o.GitHubOptions.TokenPath}); err != nil {
-		logrus.WithError(err).Fatal("Failed to start secrets agent")
+	if err := o.PRCreationOptions.Finalize(); err != nil {
+		logrus.WithError(err).Fatal("failed to finalize PR creation options")
 	}
-
-	gc, err := o.GitHubOptions.GitHubClient(sa, false)
-	if err != nil {
-		logrus.WithError(err).Fatal("error getting GitHub client")
-	}
-
-	stdout := bumper.HideSecretsWriter{Delegate: os.Stdout, Censor: sa}
-	stderr := bumper.HideSecretsWriter{Delegate: os.Stderr, Censor: sa}
-	author := fmt.Sprintf("%s <%s>", o.GitName, o.GitEmail)
 
 	command := "/usr/bin/testgrid-config-generator"
 	arguments := []string{
@@ -89,23 +78,21 @@ func main() {
 		"-prow-jobs-dir", o.prowJobsDir,
 		"-allow-list", o.allowList,
 	}
-	committed, err := bumper.RunAndCommitIfNeeded(stdout, stderr, author, command, arguments, o.workingDir)
+
+	fullCommand := fmt.Sprintf("%s %s", command, strings.Join(arguments, " "))
+	logrus.Infof("Running: %s", fullCommand)
+	logrus.WithField("cmd", command).
+		WithField("args", arguments).
+		Info("running command")
+
+	c := exec.Command(command, arguments...)
+	err := c.Run()
 	if err != nil {
-		logrus.WithError(err).Fatal("failed to run command and commit the changes")
+		logrus.WithError(err).Fatalf("failed to run %s", fullCommand)
 	}
-
-	if !committed {
-		logrus.Info("no new commits, exiting ...")
-		os.Exit(0)
-	}
-
-	title := fmt.Sprintf("%s by auto-testgrid-generator job at %s", matchTitle, time.Now().Format(time.RFC1123))
-	if err := bumper.GitPush(fmt.Sprintf("https://%s:%s@github.com/%s/%s.git", o.githubLogin, string(sa.GetTokenGenerator(o.GitHubOptions.TokenPath)()), o.githubLogin, githubRepo), remoteBranch, stdout, stderr, o.workingDir); err != nil {
-		logrus.WithError(err).Fatal("Failed to push changes.")
-	}
-
-	if err := bumper.UpdatePullRequest(gc, o.githubOrg, githubRepo, title, fmt.Sprintf("/cc @%s", o.assign),
-		matchTitle, o.githubLogin+":"+remoteBranch, "master", true); err != nil {
-		logrus.WithError(err).Fatal("PR creation failed.")
+	title := fmt.Sprintf("%s at %s", matchTitle, time.Now().Format(time.RFC1123))
+	err = o.PRCreationOptions.UpsertPR(o.workingDir, o.githubOrg, githubRepo, upstreamBranch, title, prcreation.PrBody(fmt.Sprintf("/cc @%s", o.assign)), prcreation.MatchTitle(matchTitle))
+	if err != nil {
+		logrus.WithError(err).Fatalf("failed to upsert PR")
 	}
 }

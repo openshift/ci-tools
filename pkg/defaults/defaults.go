@@ -18,6 +18,7 @@ import (
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	rbacclientset "k8s.io/client-go/kubernetes/typed/rbac/v1"
 	"k8s.io/client-go/rest"
+	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/lease"
@@ -607,25 +608,13 @@ func defaultImageFromReleaseTag(base api.ImageStreamTagReference, release *api.R
 }
 
 func buildRootImageStreamFromRepository(readFile readFile) (*api.ImageStreamTagReference, error) {
-	dataRaw, err := readFile(api.BuildRootImageFileName)
+	data, err := readFile(api.CIOperatorInrepoConfigFileName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read %s file: %w", api.BuildRootImageFileName, err)
+		return nil, fmt.Errorf("failed to read %s file: %w", api.CIOperatorInrepoConfigFileName, err)
 	}
-	data := strings.TrimSpace(string(dataRaw))
-	slashsplit := strings.Split(data, "/")
-	if n := len(slashsplit); n != 2 {
-		return nil, fmt.Errorf("expected exactly two results when slashsplitting imagestreamtag %q, got %d", data, n)
+	config := api.CIOperatorInrepoConfig{}
+	if err := yaml.Unmarshal(data, &config); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal %s: %w", api.CIOperatorInrepoConfigFileName, err)
 	}
-
-	namespace := slashsplit[0]
-	name := slashsplit[1]
-	tag := "latest"
-	if colonSplit := strings.Split(name, ":"); len(colonSplit) > 1 {
-		if n := len(colonSplit); n != 2 {
-			return nil, fmt.Errorf("expected exactly one or two elements when splitting imagestreamname %s by ':', got %d", name, n)
-		}
-		name = colonSplit[0]
-		tag = colonSplit[1]
-	}
-	return &api.ImageStreamTagReference{Namespace: namespace, Name: name, Tag: tag}, nil
+	return &config.BuildRootImage, nil
 }

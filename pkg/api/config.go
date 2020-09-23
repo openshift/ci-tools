@@ -273,7 +273,7 @@ func (config *ReleaseBuildConfiguration) DependencyParts(dependency StepDependen
 func validateBuildRootImageConfiguration(fieldRoot string, input *BuildRootImageConfiguration, hasImages bool) error {
 	if input == nil {
 		if hasImages {
-			return errors.New("when 'images' are specified 'build_root' is required and must have image_stream_tag or project_image")
+			return errors.New("when 'images' are specified 'build_root' is required and must have image_stream_tag, project_image or from_repository set")
 		}
 		return nil
 	}

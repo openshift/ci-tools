@@ -95,50 +95,13 @@ func TestStepConfigsForBuild(t *testing.T) {
 				},
 			}},
 			readFile: func(filename string) ([]byte, error) {
-				if filename != ".build_root_image" {
-					return nil, fmt.Errorf("expected '.build_root_image' as file for the build_root_image, got %s", filename)
+				if filename != ".ci-operator.yaml" {
+					return nil, fmt.Errorf("expected '.ci-operator.yaml' as file for the build_root_image, got %s", filename)
 				}
-				return []byte("stream-namespace/stream-name:stream-tag"), nil
-			},
-		},
-		{
-			name: "minimal information provided with build_root_image from repo, tag gets defaulted",
-			input: &api.ReleaseBuildConfiguration{
-				InputConfiguration: api.InputConfiguration{
-					BuildRootImage: &api.BuildRootImageConfiguration{
-						FromRepository: true,
-					},
-				},
-			},
-			jobSpec: &api.JobSpec{
-				JobSpec: downwardapi.JobSpec{
-					Refs: &prowapi.Refs{
-						Org:  "org",
-						Repo: "repo",
-					},
-				},
-				BaseNamespace: "base-1",
-			},
-			output: []api.StepConfiguration{{
-				SourceStepConfiguration: addCloneRefs(&api.SourceStepConfiguration{
-					From: api.PipelineImageStreamTagReferenceRoot,
-					To:   api.PipelineImageStreamTagReferenceSource,
-				}),
-			}, {
-				InputImageTagStepConfiguration: &api.InputImageTagStepConfiguration{
-					BaseImage: api.ImageStreamTagReference{
-						Namespace: "stream-namespace",
-						Name:      "stream-name",
-						Tag:       "latest",
-					},
-					To: api.PipelineImageStreamTagReferenceRoot,
-				},
-			}},
-			readFile: func(filename string) ([]byte, error) {
-				if filename != ".build_root_image" {
-					return nil, fmt.Errorf("expected '.build_root_image' as file for the build_root_image, got %s", filename)
-				}
-				return []byte("stream-namespace/stream-name"), nil
+				return []byte(`build_root_image:
+  namespace: stream-namespace
+  name: stream-name
+  tag: stream-tag`), nil
 			},
 		},
 		{

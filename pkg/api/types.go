@@ -306,10 +306,14 @@ const (
 	ReleaseChannelFast      ReleaseChannel = "fast"
 	ReleaseChannelCandidate ReleaseChannel = "candidate"
 
-	// BuildRootImageFileName is the name of the file that contains the build root images
+	// CIOperatorInrepoConfigFileName is the name of the file that contains the build root images
 	// pullspec.
-	BuildRootImageFileName = ".build_root_image"
+	CIOperatorInrepoConfigFileName = ".ci-operator.yaml"
 )
+
+type CIOperatorInrepoConfig struct {
+	BuildRootImage ImageStreamTagReference `json:"build_root_image"`
+}
 
 // BuildRootImageConfiguration holds the two ways of using a base image
 // that the pipeline will caches on.

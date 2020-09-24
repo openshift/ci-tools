@@ -12,7 +12,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
 
 	"golang.org/x/sync/semaphore"
@@ -109,13 +108,8 @@ func (o *options) completeOptions(secrets *sets.String) error {
 		}
 	}
 
-	bytes, err = ioutil.ReadFile(o.configPath)
-	if err != nil {
-		return err
-	}
 	var config secretbootstrap.Config
-	err = yaml.Unmarshal(bytes, &config)
-	if err != nil {
+	if err := secretbootstrap.LoadConfigFromFile(o.configPath, &config); err != nil {
 		return err
 	}
 

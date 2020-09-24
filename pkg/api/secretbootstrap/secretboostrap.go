@@ -3,6 +3,8 @@ package secretbootstrap
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"sigs.k8s.io/yaml"
 
 	corev1 "k8s.io/api/core/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -38,6 +40,19 @@ func (sc SecretContext) String() string {
 type SecretConfig struct {
 	From map[string]BitWardenContext `json:"from"`
 	To   []SecretContext             `json:"to"`
+}
+
+//LoadConfigFromFile renders a Config object loaded from the given file
+func LoadConfigFromFile(file string, config *Config) error {
+	bytes, err := ioutil.ReadFile(file)
+	if err != nil {
+		return err
+	}
+	err = yaml.UnmarshalStrict(bytes, config)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // Config is what we version in our repository

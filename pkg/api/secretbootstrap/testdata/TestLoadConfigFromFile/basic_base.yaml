@@ -1,0 +1,19 @@
+
+cluster_groups:
+  build_farm:
+    - app.ci
+    - build01
+    - build02
+secret_configs:
+  - from:
+      ops-mirror.pem:
+        bw_item: mirror.openshift.com
+        attachment: cert-key.pem
+      rh-cdn.pem:
+        bw_item: rh-cdn
+        attachment: rh-cdn.pem
+    to:
+      - cluster_groups:
+          - build_farm
+        namespace: ocp
+        name: mirror.openshift.com

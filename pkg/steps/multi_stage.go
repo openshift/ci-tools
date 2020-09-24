@@ -371,7 +371,10 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 		delete(pod.Labels, ProwJobIdLabel)
 		pod.Annotations[annotationSaveContainerLogs] = "true"
 		pod.Labels[MultiStageTestLabel] = s.name
+		pod.Spec.ActiveDeadlineSeconds = step.ActiveDeadlineSeconds
 		pod.Spec.ServiceAccountName = s.name
+		pod.Spec.TerminationGracePeriodSeconds = step.TerminationGracePeriodSeconds
+
 		addSecretWrapper(pod)
 		container := &pod.Spec.Containers[0]
 		container.Env = append(container.Env, []coreapi.EnvVar{

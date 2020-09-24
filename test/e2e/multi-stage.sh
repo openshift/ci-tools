@@ -27,6 +27,7 @@ os::cmd::expect_success "ci-operator ${namespace} --secret-dir ${PULL_SECRET_DIR
 os::cmd::expect_success "ci-operator ${namespace} --artifact-dir ${BASETMPDIR} --resolver-address http://127.0.0.1:8080 --target without-references --unresolved-config ${suite_dir}/config.yaml"
 os::cmd::expect_success "ci-operator ${namespace} --artifact-dir ${BASETMPDIR} --resolver-address http://127.0.0.1:8080 --target with-references --unresolved-config ${suite_dir}/config.yaml"
 os::cmd::expect_success "ci-operator ${namespace} --artifact-dir ${BASETMPDIR} --resolver-address http://127.0.0.1:8080 --target skip-on-success --unresolved-config ${suite_dir}/config.yaml"
+os::cmd::expect_code_and_text "ci-operator ${namespace} --artifact-dir ${BASETMPDIR} --resolver-address http://127.0.0.1:8080 --target timeout --unresolved-config ${suite_dir}/config.yaml" 1 fixme-error-message
 UNRESOLVED_CONFIG="$( cat "${suite_dir}/config.yaml" )"
 export UNRESOLVED_CONFIG
 os::cmd::expect_success "ci-operator ${namespace} --artifact-dir ${BASETMPDIR} --resolver-address http://127.0.0.1:8080 --target with-references"

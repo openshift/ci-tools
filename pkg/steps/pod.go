@@ -44,6 +44,12 @@ type PodStepConfiguration struct {
 	ServiceAccountName string
 	Secrets            []*api.Secret
 	MemoryBackedVolume *api.MemoryBackedVolume
+
+	// ActiveDeadlineSeconds is passed directly through to the step's Pod.
+	ActiveDeadlineSeconds *int64
+
+	// TerminationGracePeriodSeconds is passed directly through to the step's Pod.
+	TerminationGracePeriodSeconds *int64
 }
 
 type podStep struct {
@@ -157,12 +163,14 @@ func TestStep(config api.TestStepConfiguration, resources api.ResourceConfigurat
 	return PodStep(
 		"test",
 		PodStepConfiguration{
-			As:                 config.As,
-			From:               api.ImageStreamTagReference{Name: api.PipelineImageStream, Tag: string(config.ContainerTestConfiguration.From)},
-			Commands:           config.Commands,
-			ArtifactDir:        config.ArtifactDir,
-			Secrets:            config.Secrets,
-			MemoryBackedVolume: config.ContainerTestConfiguration.MemoryBackedVolume,
+			As:                            config.As,
+			From:                          api.ImageStreamTagReference{Name: api.PipelineImageStream, Tag: string(config.ContainerTestConfiguration.From)},
+			Commands:                      config.Commands,
+			ActiveDeadlineSeconds:         config.ActiveDeadlineSeconds,
+			ArtifactDir:                   config.ArtifactDir,
+			Secrets:                       config.Secrets,
+			MemoryBackedVolume:            config.ContainerTestConfiguration.MemoryBackedVolume,
+			TerminationGracePeriodSeconds: config.TerminationGracePeriodSeconds,
 		},
 		resources,
 		podClient,
@@ -231,7 +239,9 @@ func (s *podStep) generatePodForStep(image string, containerResources coreapi.Re
 	if err != nil {
 		return nil, err
 	}
+	pod.Spec.ActiveDeadlineSeconds = s.config.ActiveDeadlineSeconds
 	pod.Spec.ServiceAccountName = s.config.ServiceAccountName
+	pod.Spec.TerminationGracePeriodSeconds = s.config.TerminationGracePeriodSeconds
 	container := &pod.Spec.Containers[0]
 	for _, secret := range s.config.Secrets {
 		container.VolumeMounts = append(container.VolumeMounts, getSecretVolumeMountFromSecret(secret.MountPath)...)

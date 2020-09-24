@@ -579,11 +579,15 @@ type LiteralTestStep struct {
 	FromImage *ImageStreamTagReference `json:"from_image,omitempty"`
 	// Commands is the command(s) that will be run inside the image.
 	Commands string `json:"commands,omitempty"`
+	// ActiveDeadlineSeconds is passed directly through to the step's Pod.
+	ActiveDeadlineSeconds *int64 `json:"active_deadline_seconds,omitempty"`
 	// ArtifactDir is the directory from which artifacts will be extracted
 	// when the command finishes. Defaults to "/tmp/artifacts"
 	ArtifactDir string `json:"artifact_dir,omitempty"`
 	// Resources defines the resource requirements for the step.
 	Resources ResourceRequirements `json:"resources,omitempty"`
+	// TerminationGracePeriodSeconds is passed directly through to the step's Pod.
+	TerminationGracePeriodSeconds *int64 `json:"termination_grace_period_seconds,omitempty"`
 	// Credentials defines the credentials we'll mount into this step.
 	Credentials []CredentialReference `json:"credentials,omitempty"`
 	// Environment lists parameters that should be set by the test.

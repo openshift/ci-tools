@@ -53,6 +53,9 @@ func (o *Options) Reporter(spec *api.JobSpec, consoleHost string) (Reporter, err
 	if o.address == "" {
 		return &noopReporter{}, nil
 	}
+	if o.password == "" {
+		return nil, errors.New("mandatory flag -report-password-file is unset")
+	}
 	raw, err := ioutil.ReadFile(o.password)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file %q: %w", o.password, err)

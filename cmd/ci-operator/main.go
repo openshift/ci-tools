@@ -1356,6 +1356,9 @@ func nodeNames(nodes []*api.StepNode) []string {
 func topologicalSort(nodes []*api.StepNode) ([]*api.StepNode, error) {
 	var sortedNodes []*api.StepNode
 	var satisfied []api.StepLink
+	iterateAllEdges(nodes, sets.String{}, func(inner *api.StepNode) {
+		satisfied = append(satisfied, inner.Step.Creates()...)
+	})
 	seen := make(map[api.Step]struct{})
 	for len(nodes) > 0 {
 		var changed bool
@@ -1373,7 +1376,6 @@ func topologicalSort(nodes []*api.StepNode) ([]*api.StepNode, error) {
 				waiting = append(waiting, node)
 				continue
 			}
-			satisfied = append(satisfied, node.Step.Creates()...)
 			sortedNodes = append(sortedNodes, node)
 			seen[node.Step] = struct{}{}
 			changed = true

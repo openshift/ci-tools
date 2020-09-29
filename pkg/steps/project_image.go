@@ -132,7 +132,7 @@ func (s *projectDirectoryImageBuildStep) Requires() []api.StepLink {
 		links = append(links, api.InternalImageLink(api.PipelineImageStreamTagReferenceIndexImageGenerator))
 	}
 	for name := range s.config.Inputs {
-		links = append(links, api.InternalImageLink(api.PipelineImageStreamTagReference(name)))
+		links = append(links, api.InternalImageLink(api.PipelineImageStreamTagReference(name), api.StepLinkWithUnsatisfiableErrorMessage(fmt.Sprintf("%q is neither an imported nor a built image", name))))
 	}
 	return links
 }

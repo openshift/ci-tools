@@ -391,7 +391,7 @@ func TestBuildPartialGraph(t *testing.T) {
 					fakeimageclientset.NewSimpleClientset(&imagev1.ImageStreamTag{ObjectMeta: metav1.ObjectMeta{Name: ":"}}).ImageV1(),
 					nil,
 				),
-				steps.SourceStep(api.SourceStepConfiguration{}, api.ResourceConfiguration{}, nil, nil, "", &api.JobSpec{}, nil, nil),
+				steps.SourceStep(api.SourceStepConfiguration{From: api.PipelineImageStreamTagReferenceRoot, To: api.PipelineImageStreamTagReferenceSource}, api.ResourceConfiguration{}, nil, nil, "", &api.JobSpec{}, nil, nil),
 				steps.ProjectDirectoryImageBuildStep(
 					api.ProjectDirectoryImageBuildStepConfiguration{
 						From: api.PipelineImageStreamTagReferenceSource,
@@ -417,7 +417,7 @@ func TestBuildPartialGraph(t *testing.T) {
 				t.Fatalf("failed to build graph: %v", err)
 			}
 
-			// Apparently we only conicidentally validate the graph when printing it
+			// Apparently we only coincidentally validate the graph during the topologicalSort we do prior to printing it
 			_, err = topologicalSort(steps)
 			if err == nil {
 				return

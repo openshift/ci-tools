@@ -36,6 +36,11 @@ type StepLink interface {
 	// the requirements of this one, either partially or
 	// fully. If so, the other step will be executed first.
 	SatisfiedBy(other StepLink) bool
+	// UnsatisfiableError returns a human-understandable explanation
+	// of where exactly in the config the requirement came from and
+	// what needs to be done to satisfy it. It must be checked for
+	// emptyness and only be used when non-empty.
+	UnsatisfiableError() string
 }
 
 // internalImageStreamLink describes all tags in
@@ -55,10 +60,14 @@ func (l *internalImageStreamLink) SatisfiedBy(other StepLink) bool {
 	}
 }
 
+func (l *internalImageStreamLink) UnsatisfiableError() string {
+	return ""
+}
+
 // internalImageStreamTagLink describes a specific tag in
 // an ImageStream in the test's namespace
 type internalImageStreamTagLink struct {
-	name, tag string
+	name, tag, unsatisfiableError string
 }
 
 func (l *internalImageStreamTagLink) SatisfiedBy(other StepLink) bool {
@@ -75,6 +84,10 @@ func (l *internalImageStreamTagLink) SatisfiedBy(other StepLink) bool {
 	}
 }
 
+func (l *internalImageStreamTagLink) UnsatisfiableError() string {
+	return l.unsatisfiableError
+}
+
 func AllStepsLink() StepLink {
 	return allStepsLink{}
 }
@@ -83,6 +96,10 @@ type allStepsLink struct{}
 
 func (_ allStepsLink) SatisfiedBy(_ StepLink) bool {
 	return true
+}
+
+func (_ allStepsLink) UnsatisfiableError() string {
+	return ""
 }
 
 func ExternalImageLink(ref ImageStreamTagReference) StepLink {
@@ -108,11 +125,35 @@ func (l *externalImageLink) SatisfiedBy(other StepLink) bool {
 	}
 }
 
+func (l *externalImageLink) UnsatisfiableError() string {
+	return ""
+}
+
+type StepLinkOptions struct {
+	// UnsatisfiableError holds a human-understandable explanation
+	// of where exactly in the config the requirement came from and
+	// what needs to be done to satisfy it.
+	UnsatisfiableError string
+}
+
+type StepLinkOption func(*StepLinkOptions)
+
+func StepLinkWithUnsatisfiableErrorMessage(msg string) StepLinkOption {
+	return func(slo *StepLinkOptions) {
+		slo.UnsatisfiableError = msg
+	}
+}
+
 // InternalImageLink describes a dependency on a tag in the pipeline stream
-func InternalImageLink(tag PipelineImageStreamTagReference) StepLink {
+func InternalImageLink(tag PipelineImageStreamTagReference, o ...StepLinkOption) StepLink {
+	opts := StepLinkOptions{}
+	for _, o := range o {
+		o(&opts)
+	}
 	return &internalImageStreamTagLink{
-		name: PipelineImageStream,
-		tag:  string(tag),
+		name:               PipelineImageStream,
+		tag:                string(tag),
+		unsatisfiableError: opts.UnsatisfiableError,
 	}
 }
 
@@ -138,6 +179,10 @@ func (l *imagesReadyLink) SatisfiedBy(other StepLink) bool {
 	}
 }
 
+func (l *imagesReadyLink) UnsatisfiableError() string {
+	return ""
+}
+
 func RPMRepoLink() StepLink {
 	return &rpmRepoLink{}
 }
@@ -151,6 +196,10 @@ func (l *rpmRepoLink) SatisfiedBy(other StepLink) bool {
 	default:
 		return false
 	}
+}
+
+func (l *rpmRepoLink) UnsatisfiableError() string {
+	return ""
 }
 
 // ReleaseImagesLink describes the content of a stable(-foo)?

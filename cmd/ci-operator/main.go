@@ -1383,14 +1383,18 @@ func topologicalSort(nodes []*api.StepNode) ([]*api.StepNode, error) {
 		if !changed && len(waiting) > 0 {
 			errMessages := sets.String{}
 			for _, node := range waiting {
-				var missing []string
+				missing := sets.String{}
 				for _, link := range node.Step.Requires() {
 					if !api.HasAllLinks([]api.StepLink{link}, satisfied) {
-						missing = append(missing, fmt.Sprintf("<%#v>", link))
+						if msg := link.UnsatisfiableError(); msg != "" {
+							missing.Insert(msg)
+						} else {
+							missing.Insert(fmt.Sprintf("<%#v>", link))
+						}
 					}
 				}
 				// De-Duplicate errors
-				errMessages.Insert(fmt.Sprintf("step <%T> is missing dependencies: %s", node.Step, strings.Join(missing, ", ")))
+				errMessages.Insert(fmt.Sprintf("step <%T> is missing dependencies: %s", node.Step, strings.Join(missing.List(), ", ")))
 			}
 			for _, message := range errMessages.List() {
 				log.Print(message)

@@ -1379,6 +1379,7 @@ func topologicalSort(nodes []*api.StepNode) ([]*api.StepNode, error) {
 			changed = true
 		}
 		if !changed && len(waiting) > 0 {
+			errMessages := sets.String{}
 			for _, node := range waiting {
 				var missing []string
 				for _, link := range node.Step.Requires() {
@@ -1386,7 +1387,11 @@ func topologicalSort(nodes []*api.StepNode) ([]*api.StepNode, error) {
 						missing = append(missing, fmt.Sprintf("<%#v>", link))
 					}
 				}
-				log.Printf("step <%T> is missing dependencies: %s", node.Step, strings.Join(missing, ", "))
+				// De-Duplicate errors
+				errMessages.Insert(fmt.Sprintf("step <%T> is missing dependencies: %s", node.Step, strings.Join(missing, ", ")))
+			}
+			for _, message := range errMessages.List() {
+				log.Print(message)
 			}
 			return nil, errors.New("steps are missing dependencies")
 		}

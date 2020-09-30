@@ -762,6 +762,22 @@ current <code>HEAD</code> of the given branch, even if ci-operator runs in the
 context of a PR that updates that <code>Dockerfile</code>.
 </p>
 
+<p>
+A third option is to configure the <code>build_root</code> in your repo
+alongside the code instead of inside the <code>ci-operator</code> config. The main advantage
+of this is that it allows to atomically change both code and the <code>build_root</code>.
+To do so, set the <code>from_repo: true</code> in your <code>ci-operator</code> config:
+</p>
+
+{{ yamlSyntax (index . "ciOperatorBuildRootFromRepo") }}
+
+<p>
+Afterwards, create a file named <code>.ci-operator.yaml</code> in your repository
+that contains the imagestream you want to use for your <code>build_root</code>:
+</p>
+
+{{ yamlSyntax (index . "ciOperatorBuildRootInRepo" ) }}
+
 <h4 id="artifacts"><a href="#artifacts">Building Artifacts</a></h4>
 
 <p>
@@ -1107,18 +1123,15 @@ environment variable in the <code>test</code> step to point to the pull specific
 
 const ciOperatorInputConfig = `base_images:
   base: # provides the OpenShift universal base image for other builds to use when they reference "base"
-    cluster: "https://api.ci.openshift.org"
     name: "4.5"
     namespace: "ocp"
     tag: "base"
   cli: # provides an image with the OpenShift CLI for other builds to use when they reference "cli"
-    cluster: "https://api.ci.openshift.org"
     name: "4.5"
     namespace: "ocp"
     tag: "cli"
 build_root: # declares that the release:golang-1.13 image has the build-time dependencies
   image_stream_tag:
-    cluster: "https://api.ci.openshift.org"
     name: "release"
     namespace: "openshift"
     tag: "golang-1.13"
@@ -1261,6 +1274,16 @@ const ciOperatorPeriodicTestConfig = `tests:
 const ciOperatorProjectImageBuildroot = `build_root:
   project_image:
     dockerfile_path: images/build-root/Dockerfile # Dockerfile for building the build root image
+`
+
+const ciOperatorBuildRootFromRepo = `build_root:
+  from_repo: true
+`
+
+const ciOperatorBuildRootInRepo = `build_root_image:
+  namespace: openshift
+  name: release
+  tag: golang-1.15
 `
 
 const gettingStartedPage = `
@@ -3141,6 +3164,8 @@ func helpHandler(subPath string, w http.ResponseWriter, _ *http.Request) {
 		data["ciOperatorPostsubmitTestConfig"] = ciOperatorPostsubmitTestConfig
 		data["ciOperatorPeriodicTestConfig"] = ciOperatorPeriodicTestConfig
 		data["ciOperatorProjectImageBuildroot"] = ciOperatorProjectImageBuildroot
+		data["ciOperatorBuildRootFromRepo"] = ciOperatorBuildRootFromRepo
+		data["ciOperatorBuildRootInRepo"] = ciOperatorBuildRootInRepo
 		data["ciOperatorContainerTestWithDependenciesConfig"] = ciOperatorContainerTestWithDependenciesConfig
 		data["depsPropagation"] = depsPropagation
 	case "/leases":

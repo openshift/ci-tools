@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
+	utilpointer "k8s.io/utils/pointer"
 
 	"github.com/openshift/ci-tools/pkg/config"
 	jc "github.com/openshift/ci-tools/pkg/jobconfig"
@@ -125,6 +126,11 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 	if release, found := configSpec.Releases[cioperatorapi.LatestReleaseName]; found && release.Candidate != nil {
 		jobRelease = release.Candidate.Version
 	}
+
+	skipCloning := true
+	if configSpec.BuildRootImage != nil && configSpec.BuildRootImage.FromRepository {
+		skipCloning = false
+	}
 	for _, element := range configSpec.Tests {
 		var podSpec *corev1.PodSpec
 		if element.Secret != nil {
@@ -143,13 +149,13 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 		}
 
 		if element.Cron != nil {
-			periodics = append(periodics, *generatePeriodicForTest(element.As, info, label, podSpec, true, *element.Cron, configSpec.CanonicalGoRepository, jobRelease))
+			periodics = append(periodics, *generatePeriodicForTest(element.As, info, label, podSpec, true, *element.Cron, configSpec.CanonicalGoRepository, jobRelease, skipCloning))
 		} else if element.Postsubmit {
-			postsubmit := generatePostsubmitForTest(element.As, info, label, podSpec, configSpec.CanonicalGoRepository, jobRelease)
+			postsubmit := generatePostsubmitForTest(element.As, info, label, podSpec, configSpec.CanonicalGoRepository, jobRelease, skipCloning)
 			postsubmit.MaxConcurrency = 1
 			postsubmits[orgrepo] = append(postsubmits[orgrepo], *postsubmit)
 		} else {
-			presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(element.As, info, label, podSpec, configSpec.CanonicalGoRepository, jobRelease))
+			presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest(element.As, info, label, podSpec, configSpec.CanonicalGoRepository, jobRelease, skipCloning))
 		}
 	}
 
@@ -171,12 +177,12 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 			presubmitTargets = append(presubmitTargets, "[release:latest]")
 		}
 		podSpec := generateCiOperatorPodSpec(info, nil, presubmitTargets)
-		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest("images", info, label, podSpec, configSpec.CanonicalGoRepository, jobRelease))
+		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest("images", info, label, podSpec, configSpec.CanonicalGoRepository, jobRelease, skipCloning))
 
 		if configSpec.PromotionConfiguration != nil {
 
 			podSpec := generateCiOperatorPodSpec(info, nil, imageTargets.List(), []string{"--promote"}...)
-			postsubmit := generatePostsubmitForTest("images", info, label, podSpec, configSpec.CanonicalGoRepository, jobRelease)
+			postsubmit := generatePostsubmitForTest("images", info, label, podSpec, configSpec.CanonicalGoRepository, jobRelease, skipCloning)
 			postsubmit.MaxConcurrency = 1
 			if postsubmit.Labels == nil {
 				postsubmit.Labels = map[string]string{}
@@ -188,7 +194,7 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 
 	if configSpec.Operator != nil {
 		podSpec := generateCiOperatorPodSpec(info, nil, []string{"ci-index"})
-		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest("ci-index", info, label, podSpec, configSpec.CanonicalGoRepository, jobRelease))
+		presubmits[orgrepo] = append(presubmits[orgrepo], *generatePresubmitForTest("ci-index", info, label, podSpec, configSpec.CanonicalGoRepository, jobRelease, skipCloning))
 	}
 
 	return &prowconfig.JobConfig{
@@ -401,9 +407,9 @@ func addLeaseClient(s *corev1.PodSpec) {
 	})
 }
 
-func generatePresubmitForTest(name string, info *ProwgenInfo, label jc.ProwgenLabel, podSpec *corev1.PodSpec, pathAlias *string, jobRelease string) *prowconfig.Presubmit {
+func generatePresubmitForTest(name string, info *ProwgenInfo, label jc.ProwgenLabel, podSpec *corev1.PodSpec, pathAlias *string, jobRelease string, skipCloning bool) *prowconfig.Presubmit {
 	shortName := info.TestName(name)
-	base := generateJobBase(name, jc.PresubmitPrefix, info, label, podSpec, true, pathAlias, jobRelease)
+	base := generateJobBase(name, jc.PresubmitPrefix, info, label, podSpec, true, pathAlias, jobRelease, skipCloning)
 	return &prowconfig.Presubmit{
 		JobBase:   base,
 		AlwaysRun: true,
@@ -416,16 +422,16 @@ func generatePresubmitForTest(name string, info *ProwgenInfo, label jc.ProwgenLa
 	}
 }
 
-func generatePostsubmitForTest(name string, info *ProwgenInfo, label jc.ProwgenLabel, podSpec *corev1.PodSpec, pathAlias *string, jobRelease string) *prowconfig.Postsubmit {
-	base := generateJobBase(name, jc.PostsubmitPrefix, info, label, podSpec, false, pathAlias, jobRelease)
+func generatePostsubmitForTest(name string, info *ProwgenInfo, label jc.ProwgenLabel, podSpec *corev1.PodSpec, pathAlias *string, jobRelease string, skipCloning bool) *prowconfig.Postsubmit {
+	base := generateJobBase(name, jc.PostsubmitPrefix, info, label, podSpec, false, pathAlias, jobRelease, skipCloning)
 	return &prowconfig.Postsubmit{
 		JobBase:  base,
 		Brancher: prowconfig.Brancher{Branches: []string{makeBranchExplicit(info.Branch)}},
 	}
 }
 
-func generatePeriodicForTest(name string, info *ProwgenInfo, label jc.ProwgenLabel, podSpec *corev1.PodSpec, rehearsable bool, cron string, pathAlias *string, jobRelease string) *prowconfig.Periodic {
-	base := generateJobBase(name, jc.PeriodicPrefix, info, label, podSpec, rehearsable, nil, jobRelease)
+func generatePeriodicForTest(name string, info *ProwgenInfo, label jc.ProwgenLabel, podSpec *corev1.PodSpec, rehearsable bool, cron string, pathAlias *string, jobRelease string, skipCloning bool) *prowconfig.Periodic {
+	base := generateJobBase(name, jc.PeriodicPrefix, info, label, podSpec, rehearsable, nil, jobRelease, skipCloning)
 	// periodics are not associated with a repo per se, but we can add in an
 	// extra ref so that periodics which want to access the repo tha they are
 	// defined for can have that information
@@ -509,7 +515,7 @@ func generateConfigMapVolume(name string, templates []string) corev1.Volume {
 	return ret
 }
 
-func generateJobBase(name, prefix string, info *ProwgenInfo, label jc.ProwgenLabel, podSpec *corev1.PodSpec, rehearsable bool, pathAlias *string, jobRelease string) prowconfig.JobBase {
+func generateJobBase(name, prefix string, info *ProwgenInfo, label jc.ProwgenLabel, podSpec *corev1.PodSpec, rehearsable bool, pathAlias *string, jobRelease string, skipCloning bool) prowconfig.JobBase {
 	labels := map[string]string{jc.ProwJobLabelGenerated: string(label)}
 
 	if rehearsable {
@@ -523,16 +529,19 @@ func generateJobBase(name, prefix string, info *ProwgenInfo, label jc.ProwgenLab
 	if jobRelease != "" {
 		labels[jc.JobReleaseKey] = jobRelease
 	}
-	newTrue := true
-	dc := &prowv1.DecorationConfig{SkipCloning: &newTrue}
+
+	var decorationConfig *prowv1.DecorationConfig
+	if skipCloning {
+		decorationConfig = &prowv1.DecorationConfig{SkipCloning: utilpointer.BoolPtr(true)}
+	}
 	base := prowconfig.JobBase{
 		Agent:  string(prowv1.KubernetesAgent),
 		Labels: labels,
 		Name:   jobName,
 		Spec:   podSpec,
 		UtilityConfig: prowconfig.UtilityConfig{
-			DecorationConfig: dc,
-			Decorate:         func(b bool) *bool { return &b }(true),
+			DecorationConfig: decorationConfig,
+			Decorate:         utilpointer.BoolPtr(true),
 		},
 	}
 	if pathAlias != nil {

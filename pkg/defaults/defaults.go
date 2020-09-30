@@ -2,6 +2,7 @@ package defaults
 
 import (
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"strings"
@@ -17,6 +18,7 @@ import (
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	rbacclientset "k8s.io/client-go/kubernetes/typed/rbac/v1"
 	"k8s.io/client-go/rest"
+	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/lease"
@@ -139,7 +141,11 @@ func FromConfig(
 
 	var imageStepLinks []api.StepLink
 	var hasReleaseStep bool
-	for _, rawStep := range stepConfigsForBuild(config, jobSpec) {
+	rawSteps, err := stepConfigsForBuild(config, jobSpec, ioutil.ReadFile)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get stepConfigsForBuild: %w", err)
+	}
+	for _, rawStep := range rawSteps {
 		var step api.Step
 		var isReleaseStep bool
 		var additional []api.Step
@@ -368,7 +374,9 @@ func promotionDefaults(configSpec *api.ReleaseBuildConfiguration) (*api.Promotio
 	return config, nil
 }
 
-func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.JobSpec) []api.StepConfiguration {
+type readFile func(string) ([]byte, error)
+
+func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.JobSpec, readFile readFile) ([]api.StepConfiguration, error) {
 	var buildSteps []api.StepConfiguration
 
 	if config.InputConfiguration.BaseImages == nil {
@@ -389,6 +397,13 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.Job
 	}
 
 	if target := config.InputConfiguration.BuildRootImage; target != nil {
+		if target.FromRepository {
+			istTagRef, err := buildRootImageStreamFromRepository(readFile)
+			if err != nil {
+				return nil, fmt.Errorf("failed to read buildRootImageStream from repository: %w", err)
+			}
+			target.ImageStreamTagReference = istTagRef
+		}
 		if isTagRef := target.ImageStreamTagReference; isTagRef != nil {
 			buildSteps = append(buildSteps, createStepConfigForTagRefImage(*isTagRef, jobSpec))
 		} else if gitSourceRef := target.ProjectImageBuild; gitSourceRef != nil {
@@ -547,7 +562,7 @@ func stepConfigsForBuild(config *api.ReleaseBuildConfiguration, jobSpec *api.Job
 
 	buildSteps = append(buildSteps, config.RawSteps...)
 
-	return buildSteps
+	return buildSteps, nil
 }
 
 func createStepConfigForTagRefImage(target api.ImageStreamTagReference, jobSpec *api.JobSpec) api.StepConfiguration {
@@ -609,4 +624,16 @@ func defaultImageFromReleaseTag(base api.ImageStreamTagReference, release *api.R
 	base.Name = release.Name
 	base.Namespace = release.Namespace
 	return base
+}
+
+func buildRootImageStreamFromRepository(readFile readFile) (*api.ImageStreamTagReference, error) {
+	data, err := readFile(api.CIOperatorInrepoConfigFileName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read %s file: %w", api.CIOperatorInrepoConfigFileName, err)
+	}
+	config := api.CIOperatorInrepoConfig{}
+	if err := yaml.Unmarshal(data, &config); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal %s: %w", api.CIOperatorInrepoConfigFileName, err)
+	}
+	return &config.BuildRootImage, nil
 }

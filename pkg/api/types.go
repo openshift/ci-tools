@@ -305,13 +305,23 @@ const (
 	ReleaseChannelStable    ReleaseChannel = "stable"
 	ReleaseChannelFast      ReleaseChannel = "fast"
 	ReleaseChannelCandidate ReleaseChannel = "candidate"
+
+	// CIOperatorInrepoConfigFileName is the name of the file that contains the build root images
+	// pullspec.
+	CIOperatorInrepoConfigFileName = ".ci-operator.yaml"
 )
+
+type CIOperatorInrepoConfig struct {
+	BuildRootImage ImageStreamTagReference `json:"build_root_image"`
+}
 
 // BuildRootImageConfiguration holds the two ways of using a base image
 // that the pipeline will caches on.
 type BuildRootImageConfiguration struct {
 	ImageStreamTagReference *ImageStreamTagReference          `json:"image_stream_tag,omitempty"`
 	ProjectImageBuild       *ProjectDirectoryImageBuildInputs `json:"project_image,omitempty"`
+	// If the BuildRoot images pullspec should be read from a file in the repository (BuildRootImageFileName).
+	FromRepository bool `json:"from_repository,omitempty"`
 }
 
 // ImageStreamTagReference identifies an ImageStreamTag

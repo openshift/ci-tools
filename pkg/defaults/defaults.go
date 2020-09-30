@@ -28,7 +28,6 @@ import (
 	"github.com/openshift/ci-tools/pkg/steps/clusterinstall"
 	"github.com/openshift/ci-tools/pkg/steps/release"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
-	"github.com/openshift/ci-tools/pkg/util"
 )
 
 // FromConfig interprets the human-friendly fields in
@@ -47,7 +46,6 @@ func FromConfig(
 	requiredTargets []string,
 	cloneAuthConfig *steps.CloneAuthConfig,
 	pullSecret *coreapi.Secret,
-	promoteKubeConfigPath string,
 
 ) ([]api.Step, []api.Step, error) {
 	var buildSteps []api.Step
@@ -309,24 +307,7 @@ func FromConfig(
 		if err != nil {
 			return nil, nil, fmt.Errorf("could not determine promotion defaults: %w", err)
 		}
-
-		dstImageClient := imageClient
-
-		if promoteKubeConfigPath != "" {
-			kubeConfigs, currentContext, err := util.LoadKubeConfigs(promoteKubeConfigPath)
-			if err != nil {
-				return nil, nil, fmt.Errorf("failed to load promote kubeconfigs from file %s: %w", promoteKubeConfigPath, err)
-			}
-			promoteKubeConfig, ok := kubeConfigs[currentContext]
-			if !ok {
-				return nil, nil, fmt.Errorf("failed to get config for context %s from file: %s", currentContext, promoteKubeConfigPath)
-			}
-			dstImageClient, err = imageclientset.NewForConfig(promoteKubeConfig)
-			if err != nil {
-				return nil, nil, fmt.Errorf("failed to get the image client to promote images: %w", err)
-			}
-		}
-		postSteps = append(postSteps, release.PromotionStep(*cfg, config.Images, requiredNames, imageClient, dstImageClient, jobSpec))
+		postSteps = append(postSteps, release.PromotionStep(*cfg, config.Images, requiredNames, imageClient, imageClient, jobSpec))
 	}
 
 	return buildSteps, postSteps, nil

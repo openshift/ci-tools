@@ -298,8 +298,6 @@ type options struct {
 	cloneAuthConfig *steps.CloneAuthConfig
 
 	resultsOptions results.Options
-
-	promoteKubeConfigPath string
 }
 
 func bindOptions(flag *flag.FlagSet) *options {
@@ -361,7 +359,6 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.StringVar(&opt.variant, "variant", "", "Variant of the project's ci-operator config (used by configresolver)")
 
 	flag.String("kubeconfig", "", "Legecay flag kept for compatibility reasons. Doesn't do anything.")
-	flag.StringVar(&opt.promoteKubeConfigPath, "promote-kubeconfig-path", "", "The Path to a kubeconfig file to promote images. InClusterConfig will be used if not set.")
 
 	flag.StringVar(&opt.pullSecretPath, "image-import-pull-secret", "", "A set of dockercfg credentials used to import images for the tag_specification.")
 
@@ -524,7 +521,6 @@ func (o *options) Complete() error {
 			return fmt.Errorf("could not get pull secret from path %s: %w", o.pullSecretPath, err)
 		}
 	}
-
 	return nil
 }
 
@@ -557,7 +553,7 @@ func (o *options) Run() []error {
 		leaseClient = &o.leaseClient
 	}
 	// load the graph from the configuration
-	buildSteps, postSteps, err := defaults.FromConfig(o.configSpec, o.jobSpec, o.templates, o.writeParams, o.artifactDir, o.promote, o.clusterConfig, leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret, o.promoteKubeConfigPath)
+	buildSteps, postSteps, err := defaults.FromConfig(o.configSpec, o.jobSpec, o.templates, o.writeParams, o.artifactDir, o.promote, o.clusterConfig, leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret)
 	if err != nil {
 		return []error{results.ForReason("defaulting_config").WithError(err).Errorf("failed to generate steps from config: %v", err)}
 	}

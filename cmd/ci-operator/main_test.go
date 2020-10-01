@@ -12,6 +12,9 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
+	imagev1 "github.com/openshift/api/image/v1"
+	fakeimageclientset "github.com/openshift/client-go/image/clientset/versioned/fake"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
@@ -20,6 +23,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/load"
 	"github.com/openshift/ci-tools/pkg/results"
+	"github.com/openshift/ci-tools/pkg/steps"
 )
 
 func TestProwMetadata(t *testing.T) {
@@ -369,5 +373,58 @@ func TestErrWroteJUnit(t *testing.T) {
 	}
 	if results.FullReason(defaulted) != "something" {
 		t.Errorf(`expected full reason for error to be "something", but got %q"`, results.FullReason(defaulted))
+	}
+}
+
+func TestBuildPartialGraph(t *testing.T) {
+	testCases := []struct {
+		name             string
+		input            []api.Step
+		targetName       string
+		expectedErrorMsg string
+	}{
+		{
+			name: "Missing input image results in human-readable error",
+			input: []api.Step{
+				steps.InputImageTagStep(
+					api.InputImageTagStepConfiguration{To: api.PipelineImageStreamTagReferenceRoot},
+					fakeimageclientset.NewSimpleClientset(&imagev1.ImageStreamTag{ObjectMeta: metav1.ObjectMeta{Name: ":"}}).ImageV1(),
+					nil,
+				),
+				steps.SourceStep(api.SourceStepConfiguration{From: api.PipelineImageStreamTagReferenceRoot, To: api.PipelineImageStreamTagReferenceSource}, api.ResourceConfiguration{}, nil, nil, "", &api.JobSpec{}, nil, nil),
+				steps.ProjectDirectoryImageBuildStep(
+					api.ProjectDirectoryImageBuildStepConfiguration{
+						From: api.PipelineImageStreamTagReferenceSource,
+						ProjectDirectoryImageBuildInputs: api.ProjectDirectoryImageBuildInputs{
+							Inputs: map[string]api.ImageBuildInputs{"cli": {Paths: []api.ImageSourcePath{{DestinationDir: ".", SourcePath: "/usr/bin/oc"}}}},
+						},
+						To: api.PipelineImageStreamTagReference("oc-bin-image"),
+					},
+					api.ResourceConfiguration{}, nil, nil, nil, "", nil, nil,
+				),
+				steps.OutputImageTagStep(api.OutputImageTagStepConfiguration{From: api.PipelineImageStreamTagReference("oc-bin-image")}, nil, nil, nil),
+				steps.ImagesReadyStep(steps.OutputImageTagStep(api.OutputImageTagStepConfiguration{From: api.PipelineImageStreamTagReference("oc-bin-image")}, nil, nil, nil).Creates()),
+			},
+			targetName:       "[images]",
+			expectedErrorMsg: "steps are missing dependencies",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			steps, err := api.BuildPartialGraph(tc.input, []string{tc.targetName})
+			if err != nil {
+				t.Fatalf("failed to build graph: %v", err)
+			}
+
+			// Apparently we only coincidentally validate the graph during the topologicalSort we do prior to printing it
+			_, err = topologicalSort(steps)
+			if err == nil {
+				return
+			}
+			if err.Error() != tc.expectedErrorMsg {
+				t.Errorf("expected error message %q, got %q", tc.expectedErrorMsg, err.Error())
+			}
+		})
 	}
 }

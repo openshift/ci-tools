@@ -1356,6 +1356,9 @@ func nodeNames(nodes []*api.StepNode) []string {
 func topologicalSort(nodes []*api.StepNode) ([]*api.StepNode, error) {
 	var sortedNodes []*api.StepNode
 	var satisfied []api.StepLink
+	iterateAllEdges(nodes, sets.String{}, func(inner *api.StepNode) {
+		satisfied = append(satisfied, inner.Step.Creates()...)
+	})
 	seen := make(map[api.Step]struct{})
 	for len(nodes) > 0 {
 		var changed bool
@@ -1373,20 +1376,28 @@ func topologicalSort(nodes []*api.StepNode) ([]*api.StepNode, error) {
 				waiting = append(waiting, node)
 				continue
 			}
-			satisfied = append(satisfied, node.Step.Creates()...)
 			sortedNodes = append(sortedNodes, node)
 			seen[node.Step] = struct{}{}
 			changed = true
 		}
 		if !changed && len(waiting) > 0 {
+			errMessages := sets.String{}
 			for _, node := range waiting {
-				var missing []string
+				missing := sets.String{}
 				for _, link := range node.Step.Requires() {
 					if !api.HasAllLinks([]api.StepLink{link}, satisfied) {
-						missing = append(missing, fmt.Sprintf("<%#v>", link))
+						if msg := link.UnsatisfiableError(); msg != "" {
+							missing.Insert(msg)
+						} else {
+							missing.Insert(fmt.Sprintf("<%#v>", link))
+						}
 					}
 				}
-				log.Printf("step <%T> is missing dependencies: %s", node.Step, strings.Join(missing, ", "))
+				// De-Duplicate errors
+				errMessages.Insert(fmt.Sprintf("step <%T> is missing dependencies: %s", node.Step, strings.Join(missing.List(), ", ")))
+			}
+			for _, message := range errMessages.List() {
+				log.Print(message)
 			}
 			return nil, errors.New("steps are missing dependencies")
 		}

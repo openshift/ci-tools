@@ -274,7 +274,7 @@ func TestReconcile(t *testing.T) {
   },
   "Created": "2020-04-15T21:42:11Z",
   "DockerVersion": "1.13.1",
-  "Id": "sha256:b30dd86077b7f7e70ec31d06cf51f0394ccab4b85d0abbaea80f1bbb71ef2fe9",
+  "Identifier": "sha256:b30dd86077b7f7e70ec31d06cf51f0394ccab4b85d0abbaea80f1bbb71ef2fe9",
   "Size": 113678077,
   "apiVersion": "1.0",
   "kind": "DockerImage"

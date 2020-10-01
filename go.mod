@@ -23,6 +23,7 @@ replace (
 require (
 	github.com/GoogleCloudPlatform/testgrid v0.0.13
 	github.com/alecthomas/chroma v0.7.1
+	github.com/andygrunwald/go-jira v1.12.0
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/docker/distribution v2.7.1+incompatible
 	github.com/docker/spdystream v0.0.0-20181023171402-6480d4af844c // indirect

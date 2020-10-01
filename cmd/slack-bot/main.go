@@ -14,7 +14,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/slackevents"
-	"k8s.io/test-infra/prow/simplifypath"
 
 	"k8s.io/test-infra/pkg/flagutil"
 	"k8s.io/test-infra/prow/config"
@@ -24,6 +23,11 @@ import (
 	"k8s.io/test-infra/prow/logrusutil"
 	"k8s.io/test-infra/prow/metrics"
 	"k8s.io/test-infra/prow/pjutil"
+	"k8s.io/test-infra/prow/simplifypath"
+
+	"github.com/openshift/ci-tools/pkg/jira"
+	"github.com/openshift/ci-tools/pkg/slack/interactions"
+	"github.com/openshift/ci-tools/pkg/slack/interactions/router"
 )
 
 type options struct {
@@ -32,6 +36,7 @@ type options struct {
 	logLevel               string
 	gracePeriod            time.Duration
 	instrumentationOptions prowflagutil.InstrumentationOptions
+	jiraOptions            prowflagutil.JiraOptions
 
 	slackTokenPath         string
 	slackSigningSecretPath string
@@ -51,6 +56,12 @@ func (o *options) Validate() error {
 		return fmt.Errorf("--slack-signing-secret-path is required")
 	}
 
+	for _, group := range []flagutil.OptionGroup{&o.instrumentationOptions, &o.jiraOptions} {
+		if err := group.Validate(false); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -60,12 +71,13 @@ func gatherOptions(fs *flag.FlagSet, args ...string) options {
 
 	fs.StringVar(&o.logLevel, "log-level", "info", "Level at which to log output.")
 	fs.DurationVar(&o.gracePeriod, "grace-period", 180*time.Second, "On shutdown, try to handle remaining events for the specified duration. ")
-	for _, group := range []flagutil.OptionGroup{&o.instrumentationOptions} {
+	for _, group := range []flagutil.OptionGroup{&o.instrumentationOptions, &o.jiraOptions} {
 		group.AddFlags(fs)
 	}
 
-	fs.StringVar(&o.slackTokenPath, "slack-token-path", "", "Path to the path containing the Slack token to use.")
-	fs.StringVar(&o.slackSigningSecretPath, "slack-signing-secret-path", "", "Path to the path containing the Slack signing secret to use.")
+	fs.StringVar(&o.slackTokenPath, "slack-token-path", "", "Path to the file containing the Slack token to use.")
+	fs.StringVar(&o.slackSigningSecretPath, "slack-signing-secret-path", "", "Path to the file containing the Slack signing secret to use.")
+
 	if err := fs.Parse(args); err != nil {
 		logrus.WithError(err).Fatal("Could not parse args.")
 	}
@@ -96,10 +108,20 @@ func main() {
 		logrus.WithError(err).Fatal("Error starting secrets agent.")
 	}
 
+	jiraClient, err := o.jiraOptions.Client(secretAgent)
+	if err != nil {
+		logrus.WithError(err).Fatal("Could not initialize Jira client.")
+	}
+
 	slackClient := slack.New(string(secretAgent.GetSecret(o.slackTokenPath)))
+	issueFiler, err := jira.NewIssueFiler(slackClient, jiraClient.JiraClient())
+	if err != nil {
+		logrus.WithError(err).Fatal("Could not initialize Jira issue filer.")
+	}
 
 	metrics.ExposeMetrics("slack-bot", config.PushGateway{}, o.instrumentationOptions.MetricsPort)
 	simplifier := simplifypath.NewSimplifier(l("", // shadow element mimicing the root
+		l(""), // for black-box health checks
 		l("slack",
 			l("interactive-endpoint"),
 			l("events-endpoint"),
@@ -111,8 +133,10 @@ func main() {
 	health := pjutil.NewHealth()
 
 	mux := http.NewServeMux()
-	mux.Handle("/slack/interactive-endpoint", handler(handleInteraction(secretAgent.GetTokenGenerator(o.slackSigningSecretPath), slackClient)))
-	mux.Handle("/slack/events-endpoint", handler(handleEvent(secretAgent.GetTokenGenerator(o.slackSigningSecretPath), slackClient)))
+	// handle the root to allow for a simple uptime probe
+	mux.Handle("/", handler(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) { writer.WriteHeader(http.StatusOK) })))
+	mux.Handle("/slack/interactive-endpoint", handler(handleInteraction(secretAgent.GetTokenGenerator(o.slackSigningSecretPath), router.ForModals(issueFiler, slackClient))))
+	mux.Handle("/slack/events-endpoint", handler(handleEvent(secretAgent.GetTokenGenerator(o.slackSigningSecretPath))))
 	server := &http.Server{Addr: ":" + strconv.Itoa(o.port), Handler: mux}
 
 	health.ServeReady()
@@ -150,7 +174,7 @@ func verifiedBody(logger *logrus.Entry, request *http.Request, signingSecret fun
 	return body, true
 }
 
-func handleEvent(signingSecret func() []byte, _ *slack.Client) http.HandlerFunc {
+func handleEvent(signingSecret func() []byte) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		logger := logrus.WithField("api", "events")
 		logger.Debug("Got an event payload.")
@@ -168,7 +192,7 @@ func handleEvent(signingSecret func() []byte, _ *slack.Client) http.HandlerFunc 
 			writer.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		logger.WithField("event", event).Debug("Read an event payload.")
+		logger.WithField("event", event).Trace("Read an event payload.")
 
 		if event.Type == slackevents.URLVerification {
 			var response *slackevents.ChallengeResponse
@@ -185,7 +209,7 @@ func handleEvent(signingSecret func() []byte, _ *slack.Client) http.HandlerFunc 
 	}
 }
 
-func handleInteraction(signingSecret func() []byte, _ *slack.Client) http.HandlerFunc {
+func handleInteraction(signingSecret func() []byte, handler interactions.Handler) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		logger := logrus.WithField("api", "interactions")
 		logger.Debug("Got an interaction payload.")
@@ -194,13 +218,37 @@ func handleInteraction(signingSecret func() []byte, _ *slack.Client) http.Handle
 			return
 		}
 
-		var interaction slack.InteractionCallback
+		var callback slack.InteractionCallback
 		payload := request.FormValue("payload")
-		if err := json.Unmarshal([]byte(payload), &interaction); err != nil {
+		if err := json.Unmarshal([]byte(payload), &callback); err != nil {
 			logger.WithError(err).WithField("payload", payload).Error("Failed to unmarshal an interaction payload.")
 			writer.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		logger.WithField("interaction", interaction).Debug("Read an event payload.")
+		logger.WithField("interaction", callback).Trace("Read an interaction payload.")
+		logger = logger.WithFields(fieldsFor(&callback))
+		response, err := handler.Handle(&callback, logger)
+		if err != nil {
+			logger.WithError(err).Error("Failed to handle interaction payload.")
+		}
+		if len(response) == 0 {
+			writer.WriteHeader(http.StatusOK)
+			return
+		}
+		logger.WithField("body", string(response)).Trace("Sending interaction payload response.")
+		writer.Header().Set("Content-Type", "application/json")
+		writer.Header().Set("Content-Length", strconv.Itoa(len(response)))
+		if _, err := writer.Write(response); err != nil {
+			logger.WithError(err).Error("Failed to send interaction payload response.")
+		}
+	}
+}
+
+func fieldsFor(interactionCallback *slack.InteractionCallback) logrus.Fields {
+	return logrus.Fields{
+		"trigger_id":  interactionCallback.TriggerID,
+		"callback_id": interactionCallback.CallbackID,
+		"action_id":   interactionCallback.ActionID,
+		"type":        interactionCallback.Type,
 	}
 }

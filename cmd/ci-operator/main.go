@@ -1356,7 +1356,7 @@ func nodeNames(nodes []*api.StepNode) []string {
 func topologicalSort(nodes []*api.StepNode) ([]*api.StepNode, error) {
 	var sortedNodes []*api.StepNode
 	var satisfied []api.StepLink
-	iterateAllEdges(nodes, sets.String{}, func(inner *api.StepNode) {
+	api.IterateAllEdges(nodes, func(inner *api.StepNode) {
 		satisfied = append(satisfied, inner.Step.Creates()...)
 	})
 	seen := make(map[api.Step]struct{})
@@ -1438,11 +1438,11 @@ func dumpGraph(artifactsDir string, nodes []*api.StepNode) error {
 	}
 
 	var result api.CIOperatorStepGraph
-	iterateAllEdges(nodes, sets.String{}, func(n *api.StepNode) {
+	api.IterateAllEdges(nodes, func(n *api.StepNode) {
 		r := api.CIOperatorStepWithDependencies{StepName: n.Step.Name()}
-		for _, requiment := range n.Step.Requires() {
-			iterateAllEdges(nodes, sets.String{}, func(inner *api.StepNode) {
-				if satisfiedBy(requiment, inner.Step) {
+		for _, requirement := range n.Step.Requires() {
+			api.IterateAllEdges(nodes, func(inner *api.StepNode) {
+				if api.HasAnyLinks([]api.StepLink{requirement}, inner.Step.Creates()) {
 					r.Dependencies = append(r.Dependencies, inner.Step.Name())
 				}
 			})
@@ -1461,29 +1461,6 @@ func dumpGraph(artifactsDir string, nodes []*api.StepNode) error {
 	}
 
 	return nil
-}
-
-func satisfiedBy(requirement api.StepLink, step api.Step) bool {
-	for _, creates := range step.Creates() {
-		if requirement.SatisfiedBy(creates) {
-			return true
-		}
-	}
-	return false
-}
-
-func iterateAllEdges(nodes []*api.StepNode, alreadyIterated sets.String, f func(*api.StepNode)) {
-	for _, node := range nodes {
-		if alreadyIterated.Has(node.Step.Name()) {
-			continue
-		}
-		iterateAllEdges(node.Children, alreadyIterated, f)
-		if alreadyIterated.Has(node.Step.Name()) {
-			continue
-		}
-		f(node)
-		alreadyIterated.Insert(node.Step.Name())
-	}
 }
 
 func validateGraph(nodes []*api.StepNode) []error {

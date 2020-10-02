@@ -3,8 +3,10 @@ package api
 import (
 	"context"
 	"fmt"
-	"github.com/google/go-cmp/cmp"
 	"strings"
+
+	"github.com/google/go-cmp/cmp"
+	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 // Step is a self-contained bit of work that the
@@ -349,29 +351,32 @@ func BuildPartialGraph(steps []Step, names []string) ([]*StepNode, error) {
 
 // ValidateGraph performs validations on each step in the graph once.
 func ValidateGraph(nodes []*StepNode) []error {
-	errs := map[Step]error{}
-	var f func([]*StepNode)
-	f = func(v []*StepNode) {
-		for _, n := range v {
-			if _, ok := errs[n.Step]; ok {
-				return
-			}
-			if err := n.Step.Validate(); err != nil {
-				errs[n.Step] = fmt.Errorf("step %q failed validation: %w", n.Step.Name(), err)
-			} else {
-				errs[n.Step] = nil
-			}
-			f(n.Children)
+	var errs []error
+	IterateAllEdges(nodes, func(n *StepNode) {
+		if err := n.Step.Validate(); err != nil {
+			errs = append(errs, fmt.Errorf("step %q failed validation: %w", n.Step.Name(), err))
 		}
-	}
-	f(nodes)
-	var ret []error
-	for _, err := range errs {
-		if err != nil {
-			ret = append(ret, err)
+	})
+	return errs
+}
+
+// IterateAllEdges applies an operation to every node in the graph once.
+func IterateAllEdges(nodes []*StepNode, f func(*StepNode)) {
+	iterateAllEdges(nodes, sets.NewString(), f)
+}
+
+func iterateAllEdges(nodes []*StepNode, alreadyIterated sets.String, f func(*StepNode)) {
+	for _, node := range nodes {
+		if alreadyIterated.Has(node.Step.Name()) {
+			continue
 		}
+		iterateAllEdges(node.Children, alreadyIterated, f)
+		if alreadyIterated.Has(node.Step.Name()) {
+			continue
+		}
+		f(node)
+		alreadyIterated.Insert(node.Step.Name())
 	}
-	return ret
 }
 
 func addToNode(parent, child *StepNode) bool {

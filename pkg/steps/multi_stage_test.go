@@ -96,6 +96,8 @@ func TestRequires(t *testing.T) {
 }
 
 func TestGeneratePods(t *testing.T) {
+	activeDeadlineSeconds := int64(10)
+	terminationGracePeriodSeconds := int64(20)
 	config := api.ReleaseBuildConfiguration{
 		Tests: []api.TestStepConfiguration{{
 			As: "test",
@@ -110,6 +112,10 @@ func TestGeneratePods(t *testing.T) {
 					ArtifactDir: "/artifact/dir",
 				}, {
 					As: "step2", From: "stable-initial:installer", Commands: "command2",
+				}, {
+					As: "step3", From: "src", Commands: "command2", ActiveDeadlineSeconds: &activeDeadlineSeconds,
+				}, {
+					As: "step4", From: "src", Commands: "command3", TerminationGracePeriodSeconds: &terminationGracePeriodSeconds,
 				}},
 			},
 		}},

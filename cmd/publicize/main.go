@@ -24,6 +24,7 @@ import (
 	"k8s.io/test-infra/prow/githubeventserver"
 	"k8s.io/test-infra/prow/interrupts"
 	"k8s.io/test-infra/prow/logrusutil"
+	"k8s.io/test-infra/prow/pjutil"
 )
 
 type Config struct {
@@ -219,6 +220,9 @@ func main() {
 			logrus.WithError(err).Error("Could not clean up git client cache.")
 		}
 	})
+
+	health := pjutil.NewHealth()
+	health.ServeReady()
 
 	interrupts.ListenAndServe(eventServer, time.Second*30)
 	interrupts.WaitForGracefulShutdown()

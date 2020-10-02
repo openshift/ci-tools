@@ -15,6 +15,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/results"
+	"github.com/openshift/ci-tools/pkg/steps/utils"
 	"github.com/openshift/ci-tools/pkg/util"
 )
 
@@ -129,7 +130,10 @@ func (s *inputImageTagStep) Creates() []api.StepLink {
 }
 
 func (s *inputImageTagStep) Provides() api.ParameterMap {
-	return nil
+	tag := s.config.To
+	return api.ParameterMap{
+		utils.PipelineImageEnvFor(tag): utils.ImageDigestFor(s.client, s.jobSpec.Namespace, api.PipelineImageStream, string(tag)),
+	}
 }
 
 func (s *inputImageTagStep) Name() string { return fmt.Sprintf("[input:%s]", s.config.To) }

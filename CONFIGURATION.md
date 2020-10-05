@@ -179,14 +179,14 @@ the branch targeted by the pull request under test.
 ## `build_root.project_image.context_dir`
 `context_dir` is the relative directory in the repository from which the container
 build will be run. This field is used to populate the `build.spec.source.contextDir`.
-See the [upstream documentation](https://docs.okd.io/latest/rest_api/apis-build.openshift.io/v1.Build.html#object-schema)
+See the [upstream documentation](https://docs.okd.io/latest/rest_api/workloads_apis/build-build-openshift-io-v1.html#specification)
 for more detail.
 
 ## `build_root.project_image.dockerfile_path`
 `dockerfile_path` is the `Dockerfile` location in the repository which
 the container build will use to run. This field is used to populate the
 `build.spec.strategy.dockerStrategy.dockerfilePath`. See the
-[upstream documentation](https://docs.okd.io/latest/rest_api/apis-build.openshift.io/v1.Build.html#object-schema)
+[upstream documentation](https://docs.okd.io/latest/rest_api/workloads_apis/build-build-openshift-io-v1.html#specification)
 for more detail.
 
 # `canonical_go_repository`
@@ -237,20 +237,20 @@ repository, or any of the images tagged in using `base_image` or `base_rpm_image
 ## `images.$name.context_dir`
 `context_dir` is the relative directory in the repository from which the container
 build will be run. This field is used to populate the `build.spec.source.contextDir`.
-See the [upstream documentation](https://docs.okd.io/latest/rest_api/apis-build.openshift.io/v1.Build.html#object-schema)
+See the [upstream documentation](https://docs.okd.io/latest/rest_api/workloads_apis/build-build-openshift-io-v1.html#specification)
 for more detail.
 
 ## `images.$name.dockerfile_path`
 `dockerfile_path` is the `Dockerfile` location in the repository which
 the container build will use to run. This field is used to populate the
 `build.spec.strategy.dockerStrategy.dockerfilePath`. See the
-[upstream documentation](https://docs.okd.io/latest/rest_api/apis-build.openshift.io/v1.Build.html#object-schema)
+[upstream documentation](https://docs.okd.io/latest/rest_api/workloads_apis/build-build-openshift-io-v1.html#specification)
 for more detail.
 
 ## `images.$name.inputs`
 `inputs` maps pipeline image tags to image input specifications for
 use in the build. The fields here will populate the `build.spec.source.images`.
-See the [upstream documentation](https://docs.okd.io/latest/dev_guide/builds/build_inputs.html#image-source)
+See the [upstream documentation](https://docs.okd.io/latest/rest_api/workloads_apis/build-build-openshift-io-v1.html#specification)
 for more detail.
 
 ## `images.$name.inputs.$tag.as`

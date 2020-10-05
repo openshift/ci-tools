@@ -2726,15 +2726,15 @@ const linksPage = `<h2 id="clusters"><a href="#clusters">Clusters</a></h2>
     of it.
   </li>
   <li>
-    <a href="https://console-openshift-console.apps.ci.l2s4.p1.openshiftapps.com"><code>app.ci</code></a>:
+    <a href="https://console.app.ci.openshift.org"><code>app.ci</code></a>:
     Openshift Dedicated 4.x cluster containing most Prow services.
   </li>
   <li>
-    <a href="https://console.build01.ci.openshift.org/"><code>build01</code></a>:
+    <a href="https://console.build01.ci.openshift.org"><code>build01</code></a>:
     Openshift 4.x cluster in AWS that executes a growing subset of the jobs.
   </li>
   <li>
-    <a href="https://console.build02.ci.openshift.org/"><code>build02</code></a>:
+    <a href="https://console.build02.ci.openshift.org"><code>build02</code></a>:
     Openshift 4.x cluster in GCP that executes a growing subset of the jobs.
   </li>
   <li>

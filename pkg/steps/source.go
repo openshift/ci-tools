@@ -433,6 +433,7 @@ func isInfraReason(reason buildapi.StatusReason) bool {
 		buildapi.StatusReasonFailedContainer,
 		buildapi.StatusReasonOutOfMemoryKilled,
 		buildapi.StatusReasonCannotRetrieveServiceAccount,
+		buildapi.StatusReasonFetchImageContentFailed,
 		buildapi.StatusReason("BuildPodEvicted"), // vendoring to get this is so hard
 	}
 	for _, option := range infraReasons {

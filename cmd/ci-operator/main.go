@@ -155,6 +155,9 @@ const (
 	annotationIdleCleanupDurationTTL = "ci.openshift.io/ttl.soft"
 	// annotationCleanupDurationTTL is the annotation for requesting namespace cleanup after the namespace has been active
 	annotationCleanupDurationTTL = "ci.openshift.io/ttl.hard"
+	// annotationNamespaceLastActive contains time.RFC3339 timestamp at which the namespace was last in active use. We
+	// update this every ten minutes.
+	annotationNamespaceLastActive = "ci.openshift.io/active"
 	// leaseServerUsername is the default lease server username in api.ci
 	leaseServerUsername = "ci"
 	leaseAcquireTimeout = 120 * time.Minute
@@ -815,7 +818,7 @@ func (o *options) initializeNamespace() error {
 
 	// This label makes sure that the namespace is active, and the value will be updated
 	// if the namespace will be reused.
-	updates["ci.openshift.io/active"] = time.Now().Format(time.RFC3339)
+	updates[annotationNamespaceLastActive] = time.Now().Format(time.RFC3339)
 
 	if len(updates) > 0 {
 		if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
@@ -852,6 +855,31 @@ func (o *options) initializeNamespace() error {
 			return fmt.Errorf("could not update namespace to add TTLs and active annotations: %w", err)
 		}
 	}
+
+	go func() {
+		ticker := time.NewTicker(10 * time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				ns := &coreapi.Namespace{}
+				if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Name: o.namespace}, ns); err != nil {
+					log.Printf("warning: Failed to get namespace %s for heartbeating: %v", o.namespace, err)
+					continue
+				}
+				originalNS := ns.DeepCopy()
+				if ns.Annotations == nil {
+					ns.Annotations = map[string]string{}
+				}
+				ns.Annotations[annotationNamespaceLastActive] = time.Now().Format(time.RFC3339)
+				if err := client.Patch(ctx, ns, ctrlruntimeclient.MergeFrom(originalNS)); err != nil {
+					log.Printf("warning: Failed to patch the %s namespace to update the %s annotation: %v", o.namespace, annotationNamespaceLastActive, err)
+				}
+			}
+		}
+	}()
 
 	log.Printf("Setting up pipeline imagestream for the test")
 

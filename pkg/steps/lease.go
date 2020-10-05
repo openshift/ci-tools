@@ -3,14 +3,10 @@ package steps
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log"
-	"time"
 
-	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
-	"k8s.io/client-go/util/retry"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/junit"
@@ -85,17 +81,13 @@ func (s *leaseStep) run(ctx context.Context) error {
 	log.Printf("Acquiring lease for %q", s.leaseType)
 	client := *s.client
 	ctx, cancel := context.WithCancel(ctx)
-	heartbeatCtx, heartbeatCancel := context.WithCancel(ctx)
-	go heartbeatNamespace(s.namespace, s.namespaceClient, heartbeatCtx)
 	resource, err := client.Acquire(s.leaseType, ctx, cancel)
 	if err != nil {
-		heartbeatCancel()
 		if err == lease.ErrNotFound {
 			printResourceMetrics(client, s.leaseType)
 		}
 		return results.ForReason(results.Reason("acquiring_lease:"+s.leaseType)).WithError(err).Errorf("failed to acquire lease: %v", err)
 	}
-	heartbeatCancel()
 	log.Printf("Acquired lease %q for %q", resource, s.leaseType)
 	s.leasedResource = resource
 	wrappedErr := results.ForReason("executing_test").ForError(s.wrapped.Run(ctx))
@@ -110,39 +102,6 @@ func (s *leaseStep) run(ctx context.Context) error {
 		return releaseErr
 	} else {
 		return utilerrors.NewAggregate([]error{wrappedErr, releaseErr})
-	}
-}
-
-func heartbeatNamespace(namespace func() string, client coreclientset.NamespaceInterface, ctx context.Context) {
-	ticker := time.NewTicker(10 * time.Minute)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			// we got cancelled
-			return
-		case <-ticker.C:
-			// do work
-			if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				ns, err := client.Get(context.TODO(), namespace(), meta.GetOptions{})
-				if err != nil {
-					return fmt.Errorf("get failed: %w", err)
-				}
-
-				if ns.Annotations == nil {
-					ns.Annotations = make(map[string]string)
-				}
-				ns.ObjectMeta.Annotations["ci.openshift.io/active"] = time.Now().Format(time.RFC3339)
-
-				_, err = client.Update(context.TODO(), ns, meta.UpdateOptions{})
-				if err != nil {
-					return fmt.Errorf("update failed: %w", err)
-				}
-				return nil
-			}); err != nil {
-				log.Printf("warning: Could not sent heart-beat while acquiring lease, will retry (details: %v)", err)
-			}
-		}
 	}
 }
 

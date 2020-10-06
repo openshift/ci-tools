@@ -793,6 +793,13 @@ func podLogNewFailedContainers(podClient coreclientset.PodInterface, pod *coreap
 
 		log.Printf("Container %s in pod %s failed, exit code %d, reason %s", status.Name, pod.Name, status.State.Terminated.ExitCode, status.State.Terminated.Reason)
 	}
+	// Workaround for https://github.com/kubernetes/kubernetes/issues/88611
+	// Pods may be terminated with DeadlineExceeded with spec.ActiveDeadlineSeconds is set
+	// however this doesn't change container statuses, so len(podRunningContainers(pod) is never 0
+	// notify the test is complete if ActiveDeadlineSeconds is set and pod has failed
+	if pod.Status.Phase == coreapi.PodFailed && pod.Spec.ActiveDeadlineSeconds != nil {
+		notifier.Complete(pod.Name)
+	}
 	// if there are no running containers and we're in a terminal state, mark the pod complete
 	if (pod.Status.Phase == coreapi.PodFailed || pod.Status.Phase == coreapi.PodSucceeded) && len(podRunningContainers(pod)) == 0 {
 		notifier.Complete(pod.Name)

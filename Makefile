@@ -93,7 +93,7 @@ update-vendor:
 		-w /go/src/github.com/openshift/ci-tools \
 		-e GO111MODULE=on \
 		-e GOPROXY=https://proxy.golang.org \
-		golang:1.14 \
+		golang:1.15 \
 		/bin/bash -c "go mod tidy && go mod vendor"
 .PHONY: update-vendor
 SHELL=/usr/bin/env bash -o pipefail

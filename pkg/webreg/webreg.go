@@ -2755,18 +2755,18 @@ authentication: all members of the Openshift organization in Github can log in.
     queue, etc.
   </li>
   <li>
-    <a href="https://amd64.origin.releases.ci.openshift.org">
-      amd64.origin.releases.ci.openshift.org
+    <a href="https://amd64.ocp.releases.ci.openshift.org">
+      amd64.ocp.releases.ci.openshift.org
     </a>: OCP AMD 64 release status page.
   </li>
   <li>
-    <a href="https://pp64le.origin.releases.ci.openshift.org">
-      pp64le.origin.releases.ci.openshift.org
+    <a href="https://ppc64le.ocp.releases.ci.openshift.org">
+      ppc64le.ocp.releases.ci.openshift.org
     </a>: OCP PowerPC 64 LE release status page.
   </li>
   <li>
-    <a href="https://s390x.origin.releases.ci.openshift.org">
-      s390x.origin.releases.ci.openshift.org
+    <a href="https://s390x.ocp.releases.ci.openshift.org">
+      s390x.ocp.releases.ci.openshift.org
     </a>: OCP S390x release status page.
   </li>
   <li>

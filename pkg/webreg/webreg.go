@@ -766,7 +766,7 @@ context of a PR that updates that <code>Dockerfile</code>.
 A third option is to configure the <code>build_root</code> in your repo
 alongside the code instead of inside the <code>ci-operator</code> config. The main advantage
 of this is that it allows to atomically change both code and the <code>build_root</code>.
-To do so, set the <code>from_repo: true</code> in your <code>ci-operator</code> config:
+To do so, set the <code>from_repository: true</code> in your <code>ci-operator</code> config:
 </p>
 
 {{ yamlSyntax (index . "ciOperatorBuildRootFromRepo") }}
@@ -1277,7 +1277,7 @@ const ciOperatorProjectImageBuildroot = `build_root:
 `
 
 const ciOperatorBuildRootFromRepo = `build_root:
-  from_repo: true
+  from_repository: true
 `
 
 const ciOperatorBuildRootInRepo = `build_root_image:

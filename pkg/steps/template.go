@@ -39,6 +39,7 @@ const (
 	RefsOrgLabel    = "ci.openshift.io/refs.org"
 	RefsRepoLabel   = "ci.openshift.io/refs.repo"
 	RefsBranchLabel = "ci.openshift.io/refs.branch"
+	finalizer       = "ci.openshift.io/read-final-status"
 
 	TestContainerName = "test"
 )
@@ -514,7 +515,7 @@ func waitForPodCompletion(ctx context.Context, podClient coreclientset.PodInterf
 	return pod, nil
 }
 
-func waitForPodCompletionOrTimeout(ctx context.Context, podClient coreclientset.PodInterface, eventClient coreclientset.EventInterface, name string, completed map[string]time.Time, notifier ContainerNotifier, skipLogs bool) (*coreapi.Pod, bool, error) {
+func waitForPodCompletionOrTimeout(ctx context.Context, podClient coreclientset.PodInterface, eventClient coreclientset.EventInterface, name string, completed map[string]time.Time, notifier ContainerNotifier, skipLogs bool) (pod *coreapi.Pod, retry bool, err error) {
 	watcher, err := podClient.Watch(ctx, meta.ListOptions{
 		FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String(),
 		Watch:         true,
@@ -534,7 +535,13 @@ func waitForPodCompletionOrTimeout(ctx context.Context, podClient coreclientset.
 			" (usually a result of a race or resource pressure. re-running the job should help)", name)
 		return nil, false, fmt.Errorf("pod was deleted while ci-operator step was waiting for it")
 	}
-	pod := &list.Items[0]
+	pod = &list.Items[0]
+	defer func() {
+		if !retry || err != nil {
+			removeFinalizer(ctx, podClient, pod, finalizer)
+		}
+	}()
+
 	if pod.Spec.RestartPolicy == coreapi.RestartPolicyAlways {
 		return pod, false, nil
 	}
@@ -594,6 +601,38 @@ func waitForPodCompletionOrTimeout(ctx context.Context, podClient coreclientset.
 			if event.Type == watch.Deleted {
 				return pod, false, appendLogToError(fmt.Errorf("the pod %s/%s was deleted without completing after %s (failed containers: %s)", pod.Namespace, pod.Name, podDuration(pod).Truncate(time.Second), strings.Join(failedContainerNames(pod), ", ")), podMessages(pod))
 			}
+		}
+	}
+}
+
+func removeFinalizer(ctx context.Context, podClient coreclientset.PodInterface, pod *coreapi.Pod, finalizer string) {
+	if ctx.Err() != nil {
+		// give ourselves a bit of a grace period to remove the finalizer
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+	}
+
+	nextFinalizers := make([]string, 0, len(pod.ObjectMeta.Finalizers))
+	for _, entry := range pod.ObjectMeta.Finalizers {
+		if entry != finalizer {
+			nextFinalizers = append(nextFinalizers, entry)
+		}
+	}
+	if len(nextFinalizers) != len(pod.ObjectMeta.Finalizers) {
+		data, err := json.Marshal(map[string]interface{}{
+			"op":    "replace",
+			"path":  "/metadata/finalizers",
+			"value": nextFinalizers,
+		})
+		if err != nil {
+			log.Printf("Failed to marshal patch for removing finalizer %s from pod %s: %v", finalizer, pod.Name, err)
+			return
+		}
+		if _, err = podClient.Patch(ctx, pod.Name, types.JSONPatchType, data, meta.PatchOptions{}); err == nil {
+			log.Printf("Finished watching pod %s; removed finalizer %s", pod.Name, finalizer)
+		} else {
+			log.Printf("Finished watching pod %s; failed to remove finalizer %s: %v", pod.Name, finalizer, err)
 		}
 	}
 }

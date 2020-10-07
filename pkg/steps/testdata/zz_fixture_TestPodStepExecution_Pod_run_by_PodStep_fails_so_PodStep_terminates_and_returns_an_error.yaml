@@ -3,6 +3,8 @@ metadata:
     ci-operator.openshift.io/container-sub-tests: StepName
     ci.openshift.io/job-spec: ""
   creationTimestamp: null
+  finalizers:
+  - ci.openshift.io/read-final-status
   labels:
     OPENSHIFT_CI: "true"
     build-id: test-build-id

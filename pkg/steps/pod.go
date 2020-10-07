@@ -205,6 +205,7 @@ func generateBasePod(
 				JobSpecAnnotation:                     jobSpec.RawSpec(),
 				annotationContainersForSubTestResults: containerName,
 			},
+			Finalizers: []string{finalizer}, // ensure we notice before the pod is deleted
 		},
 		Spec: coreapi.PodSpec{
 			RestartPolicy: coreapi.RestartPolicyNever,

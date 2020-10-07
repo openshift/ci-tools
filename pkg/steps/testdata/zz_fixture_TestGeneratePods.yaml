@@ -4,6 +4,8 @@
       ci-operator.openshift.io/save-container-logs: "true"
       ci.openshift.io/job-spec: ""
     creationTimestamp: null
+    finalizers:
+    - ci.openshift.io/read-final-status
     labels:
       OPENSHIFT_CI: "true"
       build-id: build id
@@ -112,6 +114,8 @@
       ci-operator.openshift.io/save-container-logs: "true"
       ci.openshift.io/job-spec: ""
     creationTimestamp: null
+    finalizers:
+    - ci.openshift.io/read-final-status
     labels:
       OPENSHIFT_CI: "true"
       build-id: build id
@@ -236,6 +240,8 @@
       ci-operator.openshift.io/save-container-logs: "true"
       ci.openshift.io/job-spec: ""
     creationTimestamp: null
+    finalizers:
+    - ci.openshift.io/read-final-status
     labels:
       OPENSHIFT_CI: "true"
       build-id: build id

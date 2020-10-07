@@ -19,6 +19,7 @@ import (
 	"github.com/sirupsen/logrus"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
+	prowconfig "k8s.io/test-infra/prow/config"
 	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -182,6 +183,97 @@ type release struct {
 	} `json:"verify"`
 }
 
+// e2ePresubmitJobsByBranch collects statically-defined e2e presubmit jobs (e2e,
+// serial and upgrade) grouped by the targeted branch.
+func e2ePresubmitJobsByBranch(presubmitBranches []string, jobConfig *prowconfig.JobConfig) map[string][]string {
+	presubmitJobs := map[string][]string{}
+	for _, p := range jobConfig.AllStaticPresubmits(nil) {
+		// Limit the scope of collection to jobs that are likely to be run on
+		// every revision. Jobs marked as optional or on-demand are likely to
+		// clutter up dashboards and potentially slow down testgrid collection
+		// for little increase in signal.
+		if !p.AlwaysRun || p.Optional {
+			continue
+		}
+		// Only track presubmits for repos in the openshift org. This is intended
+		// to minimize the cost of testgrid collection and can be relaxed if
+		// necessary. openshift-priv should not be collected as it rarely sees
+		// presubmit activity.
+		if !strings.HasPrefix(p.Name, "pull-ci-openshift-") ||
+			strings.HasPrefix(p.Name, "pull-ci-openshift-priv") {
+
+			continue
+		}
+		// Group jobs by branch
+		for _, branch := range presubmitBranches {
+			// The convention for naming e2e jobs defined by a shared workflow is
+			// the prefix 'e2e' (i.e. <branch-name>-e2e should appear in the job
+			// name). Other uses of e2e are likely to represent repo-specific
+			// jobs.
+			if strings.Contains(p.Name, branch+"-e2e") {
+				jobs, ok := presubmitJobs[branch]
+				if !ok {
+					jobs = []string{}
+				}
+				presubmitJobs[branch] = append(jobs, p.Name)
+			}
+		}
+	}
+	return presubmitJobs
+}
+
+// shardedDashboardsForJobs shards jobs across multiple dashboards per branch to
+// minimize the chances of hitting testgrid timeouts.
+func shardedDashboardsForJobs(jobsByBranch map[string][]string, dashboardPrefix string, daysOfResults int32, maxJobsPerDashboard int) map[string]*dashboard {
+	dashboards := map[string]*dashboard{}
+	for branchName, jobs := range jobsByBranch {
+		// Ensure relatively stable placement across shards
+		sort.Strings(jobs)
+
+		dashboardIndex := -1
+		var currentDashboard *dashboard
+		for i, job := range jobs {
+			newDashboardIndex := i / maxJobsPerDashboard
+
+			// Initialize a new dashboard when the index changes
+			if dashboardIndex != newDashboardIndex {
+				dashboardIndex = newDashboardIndex
+				dashboardName := fmt.Sprintf("%s-%s-%d", dashboardPrefix, branchName, dashboardIndex)
+				currentDashboard = genericDashboardFor(dashboardName)
+				dashboards[dashboardName] = currentDashboard
+			}
+
+			currentDashboard.add(job, "", daysOfResults)
+		}
+	}
+	return dashboards
+}
+
+// dashboardsForPresubmits returns a map of presubmit dashboards keyed by name.
+func dashboardsForPresubmits(jobConfig *prowconfig.JobConfig) map[string]*dashboard {
+	// Presubmit branches to create e2e dashboards for
+	//
+	// TODO(marun) Configure this with data sourced from the release repo?
+	presubmitBranches := []string{
+		// Start with just master to validate the sharding
+		"master",
+	}
+	presubmitJobs := e2ePresubmitJobsByBranch(presubmitBranches, jobConfig)
+
+	// Collect 2 weeks to allow comparison between the current and previous week.
+	daysOfResults := int32(14)
+
+	// Shard jobs across dashboards to ensure the duration of collection for any
+	// one dashboard does not run into testgrid timeouts.
+	maxJobsPerDashboard := 50
+
+	// Choose a name that will be ordered after other periodic dashboards to
+	// minimize clutter for existing users.
+	dashboardPrefix := "presubmits-e2e"
+
+	return shardedDashboardsForJobs(presubmitJobs, dashboardPrefix, daysOfResults, maxJobsPerDashboard)
+}
+
 var reVersion = regexp.MustCompile(`-(\d+\.\d+)(-|$)`)
 
 // This tool is intended to make the process of maintaining TestGrid dashboards for
@@ -341,6 +433,12 @@ func main() {
 			}
 		}
 		current.add(p.Name, p.Annotations["description"], daysOfResults)
+	}
+
+	// Add dashboards for e2e presubmits
+	presubmitDashboards := dashboardsForPresubmits(jobConfig)
+	for _, presubmitDashboard := range presubmitDashboards {
+		dashboards[presubmitDashboard.Name] = presubmitDashboard
 	}
 
 	// first, update the overall list of dashboards that exist for the redhat group

@@ -160,7 +160,7 @@ func (s *importReleaseStep) run(ctx context.Context) error {
 	// get the CLI image from the payload (since we need it to run oc adm release extract)
 	target := fmt.Sprintf("release-images-%s", s.name)
 	targetCLI := fmt.Sprintf("%s-cli", target)
-	if err := steps.RunPod(context.TODO(), s.podClient, s.eventClient, &coreapi.Pod{
+	if _, err := steps.RunPod(context.TODO(), s.podClient, s.eventClient, &coreapi.Pod{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      targetCLI,
 			Namespace: s.jobSpec.Namespace(),

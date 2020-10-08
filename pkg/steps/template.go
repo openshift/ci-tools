@@ -407,6 +407,7 @@ func createOrRestartPod(podClient coreclientset.PodInterface, pod *coreapi.Pod) 
 		return nil, fmt.Errorf("unable to delete completed pod: %w", err)
 	}
 	var created *coreapi.Pod
+	log.Printf("Executing pod %q", pod.Name)
 	// creating a pod in close proximity to namespace creation can result in forbidden errors due to
 	// initializing secrets or policy - use a short backoff to mitigate flakes
 	if err := wait.ExponentialBackoff(wait.Backoff{Steps: 4, Factor: 2, Duration: time.Second}, func() (bool, error) {

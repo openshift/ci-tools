@@ -522,7 +522,6 @@ func (s *multiStageTestStep) runPods(ctx context.Context, pods []coreapi.Pod, sh
 	namePrefix := s.name + "-"
 	var errs []error
 	for _, pod := range pods {
-		log.Printf("Executing %q", pod.Name)
 		var notifier ContainerNotifier = NopNotifier
 		for _, c := range pod.Spec.Containers {
 			if c.Name == "artifacts" {

@@ -556,7 +556,10 @@ func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notif
 	if _, err := createOrRestartPod(s.podClient.Pods(s.jobSpec.Namespace()), pod); err != nil {
 		return fmt.Errorf("failed to create or restart %q pod: %w", pod.Name, err)
 	}
-	_, err := waitForPodCompletion(ctx, s.podClient.Pods(s.jobSpec.Namespace()), s.eventClient.Events(s.jobSpec.Namespace()), pod.Name, notifier, false)
+	newPod, err := waitForPodCompletion(ctx, s.podClient.Pods(s.jobSpec.Namespace()), s.eventClient.Events(s.jobSpec.Namespace()), pod.Name, notifier, false)
+	if newPod != nil {
+		pod = newPod
+	}
 	s.subTests = append(s.subTests, notifier.SubTests(fmt.Sprintf("%s - %s ", s.Description(), pod.Name))...)
 	if err != nil {
 		linksText := strings.Builder{}
@@ -565,7 +568,14 @@ func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notif
 		if s.config.Metadata.Variant != "" {
 			linksText.WriteString(fmt.Sprintf("&variant=%s", s.config.Metadata.Variant))
 		}
-		return fmt.Errorf("%q pod %q failed: %w\n%s", s.name, pod.Name, err, linksText.String())
+		status := "failed"
+		if pod != nil && pod.Status.Phase == coreapi.PodFailed && pod.Status.Reason == "DeadlineExceeded" {
+			status = "exceeded the configured timeout"
+			if pod.Spec.ActiveDeadlineSeconds != nil {
+				status = fmt.Sprintf("%s activeDeadlineSeconds=%d", status, *pod.Spec.ActiveDeadlineSeconds)
+			}
+		}
+		return fmt.Errorf("%q pod %q %s: %w\n%s", s.name, pod.Name, status, err, linksText.String())
 	}
 	return nil
 }

@@ -67,6 +67,8 @@ github.com/alecthomas/chroma/lexers/y
 github.com/alecthomas/chroma/styles
 # github.com/andygrunwald/go-gerrit v0.0.0-20190120104749-174420ebee6c
 github.com/andygrunwald/go-gerrit
+# github.com/andygrunwald/go-jira v1.12.0
+github.com/andygrunwald/go-jira
 # github.com/aws/aws-sdk-go v1.31.12
 github.com/aws/aws-sdk-go/aws
 github.com/aws/aws-sdk-go/aws/arn
@@ -179,6 +181,8 @@ github.com/docker/spdystream/spdy
 github.com/evanphx/json-patch
 # github.com/fatih/color v1.9.0
 github.com/fatih/color
+# github.com/fatih/structs v1.0.0
+github.com/fatih/structs
 # github.com/fsnotify/fsnotify v1.4.9
 github.com/fsnotify/fsnotify
 # github.com/fsouza/go-dockerclient v1.6.3
@@ -248,8 +252,12 @@ github.com/gregjones/httpcache/diskcache
 github.com/gregjones/httpcache/redis
 # github.com/hashicorp/errwrap v1.0.0
 github.com/hashicorp/errwrap
+# github.com/hashicorp/go-cleanhttp v0.5.1
+github.com/hashicorp/go-cleanhttp
 # github.com/hashicorp/go-multierror v1.1.0
 github.com/hashicorp/go-multierror
+# github.com/hashicorp/go-retryablehttp v0.6.6
+github.com/hashicorp/go-retryablehttp
 # github.com/hashicorp/golang-lru v0.5.4
 github.com/hashicorp/golang-lru
 github.com/hashicorp/golang-lru/simplelru
@@ -399,6 +407,9 @@ github.com/tektoncd/pipeline/pkg/contexts
 github.com/tektoncd/pipeline/pkg/list
 github.com/tektoncd/pipeline/pkg/reconciler/pipeline/dag
 github.com/tektoncd/pipeline/pkg/substitution
+# github.com/trivago/tgo v1.0.1
+github.com/trivago/tgo/tcontainer
+github.com/trivago/tgo/treflect
 # go.opencensus.io v0.22.4
 go.opencensus.io
 go.opencensus.io/internal

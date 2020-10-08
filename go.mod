@@ -23,6 +23,7 @@ replace (
 require (
 	github.com/GoogleCloudPlatform/testgrid v0.0.13
 	github.com/alecthomas/chroma v0.7.1
+	github.com/andygrunwald/go-jira v1.12.0
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/docker/distribution v2.7.1+incompatible
 	github.com/docker/spdystream v0.0.0-20181023171402-6480d4af844c // indirect
@@ -30,6 +31,7 @@ require (
 	github.com/ghodss/yaml v1.0.0
 	github.com/google/go-cmp v0.5.0
 	github.com/google/gofuzz v1.1.0
+	github.com/hashicorp/go-retryablehttp v0.6.6
 	github.com/kataras/tablewriter v0.0.0-20180708051242-e063d29b7c23
 	github.com/mattn/go-zglob v0.0.2
 	github.com/montanaflynn/stats v0.6.3

@@ -9,11 +9,12 @@ import (
 	"os"
 	"strings"
 
-	"github.com/openshift/ci-tools/pkg/api"
 	githubql "github.com/shurcooL/githubv4"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/oauth2"
+	"k8s.io/apimachinery/pkg/util/sets"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/promotion"
 )
@@ -65,7 +66,7 @@ func main() {
 	if err := o.OperateOnCIOperatorConfigDir(o.ConfigDir, func(configuration *api.ReleaseBuildConfiguration, repoInfo *config.Info) error {
 		logger := config.LoggerForInfo(*repoInfo)
 
-		var branches []string
+		branches := sets.NewString()
 		for _, futureRelease := range o.FutureReleases.Strings() {
 			futureBranch, err := promotion.DetermineReleaseBranch(o.CurrentRelease, futureRelease, repoInfo.Branch)
 			if err != nil {
@@ -78,7 +79,7 @@ func main() {
 				continue
 			}
 
-			branches = append(branches, futureBranch)
+			branches.Insert(futureBranch)
 		}
 
 		if len(branches) == 0 {
@@ -86,12 +87,12 @@ func main() {
 		}
 
 		var branchTokens []string
-		for _, branch := range branches {
+		for branch := range branches {
 			branchTokens = append(branchTokens, fmt.Sprintf("branch:%s", branch))
 		}
 		title := fmt.Sprintf("Future Release Branches Frozen For Merging | %s", strings.Join(branchTokens, " "))
 		body := fmt.Sprintf("The following branches are being fast-forwarded from the current development branch (%s) as placeholders for future releases. No merging is allowed into these release branches until they are unfrozen for production release.\n\n", repoInfo.Branch)
-		for _, branch := range branches {
+		for branch := range branches {
 			body += fmt.Sprintf(" - `%s`\n", branch)
 		}
 		body += "\nContact the [Test Platform](https://coreos.slack.com/messages/CBN38N3MW) or [Automated Release](https://coreos.slack.com/messages/CB95J6R4N) teams for more information."

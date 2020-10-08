@@ -157,7 +157,7 @@ objects:
             kill $watcherpid
             exit 0
           fi
-          sleep 60 & 
+          sleep 60 &
           sleeppid=$!
           wait $sleeppid
         done
@@ -975,6 +975,10 @@ objects:
           mkdir -p /tmp/artifacts/must-gather
           queue /tmp/artifacts/must-gather/must-gather.log oc --insecure-skip-tls-verify adm must-gather --dest-dir /tmp/artifacts/must-gather
 
+          echo "Gathering audit logs..."
+          mkdir -p /tmp/artifacts/audit-logs
+          queue /tmp/artifacts/audit-logs/must-gather.log oc --insecure-skip-tls-verify adm must-gather --dest-dir /tmp/artifacts/audit-logs -- /usr/bin/gather_audit_logs
+
           echo "Waiting for logs ..."
           wait
 
@@ -982,8 +986,10 @@ objects:
           echo "Detect known failures from symptoms (experimental) ..."
           curl -f https://gist.githubusercontent.com/smarterclayton/03b50c8f9b6351b2d9903d7fb35b342f/raw/symptom.sh 2>/dev/null | bash -s /tmp/artifacts > /tmp/artifacts/junit/junit_symptoms.xml
 
-          tar -czC /tmp/artifacts/must-gather -f /tmp/artifacts/must-gather.tar.gz . &&
-          rm -rf /tmp/artifacts/must-gather
+          for artifact in must-gather audit-logs ; do
+            tar -czC /tmp/artifacts/${artifact} -f /tmp/artifacts/${artifact}.tar.gz . &&
+            rm -rf /tmp/artifacts/${artifact}
+          done
 
           echo "Deprovisioning cluster ..."
           openshift-install --dir /tmp/artifacts/installer destroy cluster

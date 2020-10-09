@@ -1,0 +1,11 @@
+ref:
+  as: timeout
+  from: os
+  commands: timeout-commands.sh
+  active_deadline_seconds: 10
+  resources:
+    requests:
+      cpu: 10m
+      memory: 10Mi
+  documentation: |-
+    This step will sleep and be killed after active_deadline_seconds.

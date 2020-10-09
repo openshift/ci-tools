@@ -1731,6 +1731,8 @@ const refExample = `ref:
   as: ipi-conf                   # name of the step
   from: base                     # image to run the commands in
   commands: ipi-conf-commands.sh # script file containing the command(s) to be run
+  active_deadline_seconds: 7200  # optional duration in seconds that the step pod may be active before it is killed.
+  termination_grace_period_seconds: 20 # optional duration in seconds the pod needs to terminate gracefully.
   resources:
     requests:
       cpu: 1000m

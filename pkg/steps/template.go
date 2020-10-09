@@ -407,7 +407,11 @@ func createOrRestartPod(podClient coreclientset.PodInterface, pod *coreapi.Pod) 
 		return nil, fmt.Errorf("unable to delete completed pod: %w", err)
 	}
 	var created *coreapi.Pod
-	log.Printf("Executing pod %q", pod.Name)
+	if pod.Spec.ActiveDeadlineSeconds == nil {
+		log.Printf("Executing pod %q", pod.Name)
+	} else {
+		log.Printf("Executing pod %q with activeDeadlineSeconds=%d", pod.Name, pod.Spec.ActiveDeadlineSeconds)
+	}
 	// creating a pod in close proximity to namespace creation can result in forbidden errors due to
 	// initializing secrets or policy - use a short backoff to mitigate flakes
 	if err := wait.ExponentialBackoff(wait.Backoff{Steps: 4, Factor: 2, Duration: time.Second}, func() (bool, error) {
@@ -799,6 +803,13 @@ func podLogNewFailedContainers(podClient coreclientset.PodInterface, pod *coreap
 		}
 
 		log.Printf("Container %s in pod %s failed, exit code %d, reason %s", status.Name, pod.Name, status.State.Terminated.ExitCode, status.State.Terminated.Reason)
+	}
+	// Workaround for https://github.com/kubernetes/kubernetes/issues/88611
+	// Pods may be terminated with DeadlineExceeded with spec.ActiveDeadlineSeconds is set.
+	// However this doesn't change container statuses, so len(podRunningContainers(pod) is never 0.
+	// Notify the test is complete if ActiveDeadlineSeconds is set and pod has failed.
+	if pod.Status.Phase == coreapi.PodFailed && pod.Spec.ActiveDeadlineSeconds != nil {
+		notifier.Complete(pod.Name)
 	}
 	// if there are no running containers and we're in a terminal state, mark the pod complete
 	if (pod.Status.Phase == coreapi.PodFailed || pod.Status.Phase == coreapi.PodSucceeded) && len(podRunningContainers(pod)) == 0 {

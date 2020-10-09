@@ -79,6 +79,10 @@ tests:
             requests:
               cpu: 100m
               memory: 200Mi
+  - as: timeout
+    steps:
+      test:
+        - ref: timeout
 
 zz_generated_metadata:
   branch: master

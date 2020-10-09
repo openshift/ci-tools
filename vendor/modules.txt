@@ -67,6 +67,8 @@ github.com/alecthomas/chroma/lexers/y
 github.com/alecthomas/chroma/styles
 # github.com/andygrunwald/go-gerrit v0.0.0-20190120104749-174420ebee6c
 github.com/andygrunwald/go-gerrit
+# github.com/andygrunwald/go-jira v1.12.0
+github.com/andygrunwald/go-jira
 # github.com/aws/aws-sdk-go v1.31.12
 github.com/aws/aws-sdk-go/aws
 github.com/aws/aws-sdk-go/aws/arn
@@ -179,6 +181,8 @@ github.com/docker/spdystream/spdy
 github.com/evanphx/json-patch
 # github.com/fatih/color v1.9.0
 github.com/fatih/color
+# github.com/fatih/structs v1.0.0
+github.com/fatih/structs
 # github.com/fsnotify/fsnotify v1.4.9
 github.com/fsnotify/fsnotify
 # github.com/fsouza/go-dockerclient v1.6.3
@@ -248,8 +252,12 @@ github.com/gregjones/httpcache/diskcache
 github.com/gregjones/httpcache/redis
 # github.com/hashicorp/errwrap v1.0.0
 github.com/hashicorp/errwrap
+# github.com/hashicorp/go-cleanhttp v0.5.1
+github.com/hashicorp/go-cleanhttp
 # github.com/hashicorp/go-multierror v1.1.0
 github.com/hashicorp/go-multierror
+# github.com/hashicorp/go-retryablehttp v0.6.6
+github.com/hashicorp/go-retryablehttp
 # github.com/hashicorp/golang-lru v0.5.4
 github.com/hashicorp/golang-lru
 github.com/hashicorp/golang-lru/simplelru
@@ -399,6 +407,9 @@ github.com/tektoncd/pipeline/pkg/contexts
 github.com/tektoncd/pipeline/pkg/list
 github.com/tektoncd/pipeline/pkg/reconciler/pipeline/dag
 github.com/tektoncd/pipeline/pkg/substitution
+# github.com/trivago/tgo v1.0.1
+github.com/trivago/tgo/tcontainer
+github.com/trivago/tgo/treflect
 # go.opencensus.io v0.22.4
 go.opencensus.io
 go.opencensus.io/internal
@@ -930,7 +941,7 @@ k8s.io/klog/v2
 k8s.io/kube-openapi/pkg/util/proto
 # k8s.io/kubernetes v1.14.7
 k8s.io/kubernetes/pkg/apis/core
-# k8s.io/test-infra v0.0.0-20201005212219-829abe0f7668
+# k8s.io/test-infra v0.0.0-20201009150907-1504f659a79a
 k8s.io/test-infra/experiment/autobumper/bumper
 k8s.io/test-infra/experiment/image-bumper/bumper
 k8s.io/test-infra/ghproxy/ghcache
@@ -968,6 +979,7 @@ k8s.io/test-infra/prow/initupload
 k8s.io/test-infra/prow/interrupts
 k8s.io/test-infra/prow/io
 k8s.io/test-infra/prow/io/providers
+k8s.io/test-infra/prow/jira
 k8s.io/test-infra/prow/kube
 k8s.io/test-infra/prow/labels
 k8s.io/test-infra/prow/logrusutil
@@ -997,6 +1009,7 @@ k8s.io/test-infra/prow/plugins/heart
 k8s.io/test-infra/prow/plugins/help
 k8s.io/test-infra/prow/plugins/hold
 k8s.io/test-infra/prow/plugins/invalidcommitmsg
+k8s.io/test-infra/prow/plugins/jira
 k8s.io/test-infra/prow/plugins/label
 k8s.io/test-infra/prow/plugins/lgtm
 k8s.io/test-infra/prow/plugins/lifecycle

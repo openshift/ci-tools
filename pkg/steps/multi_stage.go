@@ -563,13 +563,16 @@ func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notif
 	s.subTests = append(s.subTests, notifier.SubTests(fmt.Sprintf("%s - %s ", s.Description(), pod.Name))...)
 	if err != nil {
 		linksText := strings.Builder{}
+		if pod == nil {
+			return fmt.Errorf("waitForPodCompletion didn't return a pod")
+		}
 		linksText.WriteString(fmt.Sprintf("Link to step on registry info site: https://steps.ci.openshift.org/reference/%s", strings.TrimPrefix(pod.Name, s.name+"-")))
 		linksText.WriteString(fmt.Sprintf("\nLink to job on registry info site: https://steps.ci.openshift.org/job?org=%s&repo=%s&branch=%s&test=%s", s.config.Metadata.Org, s.config.Metadata.Repo, s.config.Metadata.Branch, s.name))
 		if s.config.Metadata.Variant != "" {
 			linksText.WriteString(fmt.Sprintf("&variant=%s", s.config.Metadata.Variant))
 		}
 		status := "failed"
-		if pod != nil && pod.Status.Phase == coreapi.PodFailed && pod.Status.Reason == "DeadlineExceeded" {
+		if pod.Status.Phase == coreapi.PodFailed && pod.Status.Reason == "DeadlineExceeded" {
 			status = "exceeded the configured timeout"
 			if pod.Spec.ActiveDeadlineSeconds != nil {
 				status = fmt.Sprintf("%s activeDeadlineSeconds=%d", status, *pod.Spec.ActiveDeadlineSeconds)

@@ -1063,6 +1063,7 @@ const (
 // a GenericCommentEvent because these events don't actually remove the comment content from GH.
 type GenericCommentEvent struct {
 	ID           int `json:"id"`
+	CommentID    *int
 	IsPR         bool
 	Action       GenericCommentEventAction
 	Body         string
@@ -1073,6 +1074,7 @@ type GenericCommentEvent struct {
 	IssueAuthor  User
 	Assignees    []User
 	IssueState   string
+	IssueTitle   string
 	IssueBody    string
 	IssueHTMLURL string
 	GUID         string

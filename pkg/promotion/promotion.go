@@ -5,10 +5,11 @@ import (
 	"flag"
 	"fmt"
 
-	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
-	"github.com/openshift/ci-tools/pkg/config"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/prow/flagutil"
+
+	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/config"
 )
 
 const (
@@ -99,13 +100,14 @@ func IsBumpable(branch, currentRelease string) bool {
 // DetermineReleaseBranch determines the branch that will be used to the future release,
 // based on the branch that is currently promoting to the current release.
 func DetermineReleaseBranch(currentRelease, futureRelease, currentBranch string) (string, error) {
-	if currentBranch == "master" {
+	switch currentBranch {
+	case "master", "main":
 		return fmt.Sprintf("release-%s", futureRelease), nil
-	} else if currentBranch == fmt.Sprintf("openshift-%s", currentRelease) {
+	case fmt.Sprintf("openshift-%s", currentRelease):
 		return fmt.Sprintf("openshift-%s", futureRelease), nil
-	} else if currentBranch == fmt.Sprintf("release-%s", currentRelease) {
+	case fmt.Sprintf("release-%s", currentRelease):
 		return fmt.Sprintf("release-%s", futureRelease), nil
-	} else {
+	default:
 		return "", fmt.Errorf("invalid branch %q promoting to current release", currentBranch)
 	}
 }

@@ -8,9 +8,10 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	"k8s.io/test-infra/prow/flagutil"
+
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
-	"k8s.io/test-infra/prow/flagutil"
 )
 
 func TestPromotesOfficialImages(t *testing.T) {
@@ -180,6 +181,14 @@ func TestDetermineReleaseBranches(t *testing.T) {
 			currentRelease:       "4.0",
 			futureRelease:        "4.1",
 			currentBranch:        "master",
+			expectedFutureBranch: "release-4.1",
+			expectedError:        false,
+		},
+		{
+			name:                 "promotion from main makes a release branch",
+			currentRelease:       "4.0",
+			futureRelease:        "4.1",
+			currentBranch:        "main",
 			expectedFutureBranch: "release-4.1",
 			expectedError:        false,
 		},

@@ -114,7 +114,7 @@ func (s *rpmServerStep) run(ctx context.Context) error {
 
 if which python3 2> /dev/null; then
 	# If python3 is available, use it
-	cat <<END >>/tmp/serve.py
+	cat <<END >/tmp/serve.py
 import time, threading, socket, socketserver, http, http.server
 
 # Create socket
@@ -144,7 +144,7 @@ END
 	python3 /tmp/serve.py
 else
 	# Else, fallback to python2
-	cat <<END >>/tmp/serve.py
+	cat <<END >/tmp/serve.py
 import time, threading, socket, SocketServer, BaseHTTPServer, SimpleHTTPServer
 # Create socket
 addr = ('', 8080)

@@ -50,11 +50,8 @@ func (o *Options) Validate() error {
 
 // Client returns an HTTP or HTTPs client, based on the options
 func (o *Options) Reporter(spec *api.JobSpec, consoleHost string) (Reporter, error) {
-	if o.address == "" {
+	if o.address == "" || o.password == "" {
 		return &noopReporter{}, nil
-	}
-	if o.password == "" {
-		return nil, errors.New("mandatory flag -report-password-file is unset")
 	}
 	raw, err := ioutil.ReadFile(o.password)
 	if err != nil {

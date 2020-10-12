@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	v1 "github.com/openshift/api/route/v1"
 	"github.com/sirupsen/logrus"
 
 	authapi "k8s.io/api/authorization/v1"
@@ -705,10 +706,25 @@ func (o *options) resolveInputs(steps []api.Step) error {
 	if routeGetter, err := routeclientset.NewForConfig(o.clusterConfig); err != nil {
 		log.Printf("could not get route client for cluster config")
 	} else {
-		if consoleRoute, err := routeGetter.Routes("openshift-console").Get(context.TODO(), "console", meta.GetOptions{}); err != nil {
-			log.Printf("could not get route console in namespace openshift-console")
+		if consoleRoutes, err := routeGetter.Routes("openshift-console").List(context.TODO(), meta.ListOptions{}); err != nil {
+			log.Printf("could not get routes in namespace openshift-console")
 		} else {
-			o.consoleHost = consoleRoute.Spec.Host
+			hostForRoute := func(name string, routes []v1.Route) string {
+				for _, route := range routes {
+					if route.Name == name {
+						return route.Spec.Host
+					}
+				}
+				return ""
+			}
+			// the canonical route for the console may be in one of two routes,
+			// and we want to prefer the custom one if it is present
+			for _, routeName := range []string{"console-custom", "console"} {
+				if host := hostForRoute(routeName, consoleRoutes.Items); host != "" {
+					o.consoleHost = host
+					break
+				}
+			}
 		}
 	}
 

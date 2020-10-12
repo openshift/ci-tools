@@ -91,7 +91,7 @@ func main() {
 		logrus.WithError(err).Fatalf("failed to run %s", fullCommand)
 	}
 	title := fmt.Sprintf("%s at %s", matchTitle, time.Now().Format(time.RFC1123))
-	err = o.PRCreationOptions.UpsertPR(o.workingDir, o.githubOrg, githubRepo, upstreamBranch, title, prcreation.PrBody(fmt.Sprintf("/cc @%s", o.assign)), prcreation.MatchTitle(matchTitle))
+	err = o.PRCreationOptions.UpsertPR(o.workingDir, o.githubOrg, githubRepo, upstreamBranch, title, prcreation.PrAssignee(o.assign), prcreation.MatchTitle(matchTitle))
 	if err != nil {
 		logrus.WithError(err).Fatalf("failed to upsert PR")
 	}

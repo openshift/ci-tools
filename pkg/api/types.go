@@ -760,7 +760,7 @@ const (
 	ClusterProfileLibvirtPpc64le     ClusterProfile = "libvirt-ppc64le"
 	ClusterProfileLibvirtS390x       ClusterProfile = "libvirt-s390x"
 	ClusterProfileOpenStack          ClusterProfile = "openstack"
-	ClusterProfileOpenStackOSUOSL    ClusterProfile = "openstack-OSUOSL"
+	ClusterProfileOpenStackOsuosl    ClusterProfile = "openstack-osuosl"
 	ClusterProfileOpenStackVexxhost  ClusterProfile = "openstack-vexxhost"
 	ClusterProfileOpenStackPpc64le   ClusterProfile = "openstack-ppc64le"
 	ClusterProfileOvirt              ClusterProfile = "ovirt"
@@ -788,7 +788,7 @@ func ClusterProfiles() []ClusterProfile {
 		ClusterProfileLibvirtPpc64le,
 		ClusterProfileLibvirtS390x,
 		ClusterProfileOpenStack,
-		ClusterProfileOpenStackOSUOSL,
+		ClusterProfileOpenStackOsuosl,
 		ClusterProfileOpenStackVexxhost,
 		ClusterProfileOpenStackPpc64le,
 		ClusterProfileOvirt,
@@ -825,8 +825,8 @@ func (p ClusterProfile) ClusterType() string {
 		return "libvirt-s390x"
 	case ClusterProfileOpenStack:
 		return "openstack"
-	case ClusterProfileOpenStackOSUOSL:
-		return "openstack-OSUOSL"
+	case ClusterProfileOpenStackOsuosl:
+		return "openstack-osuosl"
 	case ClusterProfileOpenStackVexxhost:
 		return "openstack-vexxhost"
 	case ClusterProfileOpenStackPpc64le:
@@ -870,8 +870,8 @@ func (p ClusterProfile) LeaseType() string {
 		return "libvirt-s390x-quota-slice"
 	case ClusterProfileOpenStack:
 		return "openstack-quota-slice"
-	case ClusterProfileOpenStackOSUOSL:
-		return "openstack-OSUOSL-quota-slice"
+	case ClusterProfileOpenStackOsuosl:
+		return "openstack-osuosl-quota-slice"
 	case ClusterProfileOpenStackVexxhost:
 		return "openstack-vexxhost-quota-slice"
 	case ClusterProfileOpenStackPpc64le:
@@ -890,7 +890,7 @@ func (p ClusterProfile) LeaseType() string {
 // LeaseTypeFromClusterType maps cluster types to lease types
 func LeaseTypeFromClusterType(t string) (string, error) {
 	switch t {
-	case "aws", "azure4", "gcp", "libvirt-ppc64le", "libvirt-s390x", "openstack", "openstack-OSUOSL", "openstack-vexxhost", "openstack-ppc64le", "vsphere", "ovirt", "packet":
+	case "aws", "azure4", "gcp", "libvirt-ppc64le", "libvirt-s390x", "openstack", "openstack-osuosl", "openstack-vexxhost", "openstack-ppc64le", "vsphere", "ovirt", "packet":
 		return t + "-quota-slice", nil
 	default:
 		return "", fmt.Errorf("invalid cluster type %q", t)

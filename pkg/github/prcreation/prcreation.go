@@ -48,6 +48,7 @@ func (o *PRCreationOptions) Finalize() error {
 type PrOptions struct {
 	prBody     string
 	matchTitle string
+	prAssignee string
 }
 
 // PrOption is the type for Optional Parameters
@@ -64,6 +65,13 @@ func PrBody(prBody string) PrOption {
 func MatchTitle(matchTitle string) PrOption {
 	return func(args *PrOptions) {
 		args.matchTitle = matchTitle
+	}
+}
+
+// PrAssignee is the user to whom the PR is assigned
+func PrAssignee(assignee string) PrOption {
+	return func(args *PrOptions) {
+		args.prAssignee = assignee
 	}
 }
 
@@ -150,7 +158,7 @@ func (o *PRCreationOptions) UpsertPR(localSourceDir, org, repo, branch, prTitle 
 		org,
 		repo,
 		prTitle,
-		prArgs.prBody,
+		prArgs.prBody+"\n/cc @"+prArgs.prAssignee,
 		prArgs.matchTitle,
 		username+":"+sourceBranchName,
 		branch,

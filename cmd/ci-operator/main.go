@@ -707,7 +707,7 @@ func (o *options) resolveInputs(steps []api.Step) error {
 		log.Printf("could not get route client for cluster config")
 	} else {
 		if consoleRoutes, err := routeGetter.Routes("openshift-console").List(context.TODO(), meta.ListOptions{}); err != nil {
-			log.Printf("could not get routes in namespace openshift-console")
+			log.Printf("could not get routes in namespace openshift-console: %v", err)
 		} else {
 			hostForRoute := func(name string, routes []v1.Route) string {
 				for _, route := range routes {

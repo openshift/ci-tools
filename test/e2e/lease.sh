@@ -22,7 +22,10 @@ mkdir -p "${cluster_profiles}" "${cluster_profiles}"/success-cluster-profile "${
 touch "${cluster_profiles}/success-cluster-profile/data" "${cluster_profiles}/invalid-lease-cluster-profile/data"
 
 namespace=
-if [[ -z "${CI:-}" && -n "${NAMESPACE:-}" ]]; then
+if [[ "${CI:-}" ]]; then
+    # Set by the parent ci-operator
+    unset NAMESPACE
+elif [[ -n "${NAMESPACE:-}" ]]; then
     namespace="--namespace ${NAMESPACE}"
 fi
 
@@ -33,6 +36,8 @@ os::integration::boskos::start "${suite_dir}/boskos.yaml"
 os::cmd::expect_failure "ci-operator ${namespace} --image-import-pull-secret ${IMPORT_SECRET_DIR}/.dockerconfigjson --secret-dir ${PULL_SECRET_DIR} --artifact-dir ${BASETMPDIR} --config ${suite_dir}/config.yaml --target success"
 os::cmd::expect_success "ci-operator ${namespace} --image-import-pull-secret ${IMPORT_SECRET_DIR}/.dockerconfigjson --secret-dir ${PULL_SECRET_DIR} --artifact-dir ${BASETMPDIR} --config ${suite_dir}/config.yaml --lease-server http://localhost:8080 --lease-server-password-file /dev/null --lease-acquire-timeout 2s --target success --secret-dir ${cluster_profiles}/success-cluster-profile"
 os::cmd::expect_failure "ci-operator ${namespace} --image-import-pull-secret ${IMPORT_SECRET_DIR}/.dockerconfigjson --secret-dir ${PULL_SECRET_DIR} --artifact-dir ${BASETMPDIR} --config ${suite_dir}/config.yaml --lease-server http://localhost:8080 --lease-server-password-file /dev/null --lease-acquire-timeout 2s --target invalid-lease --secret-dir ${cluster_profiles}/invalid-lease-cluster-profile"
+os::cmd::expect_success "CLUSTER_TYPE=aws ci-operator ${namespace} --config ${suite_dir}/config.yaml --lease-server http://localhost:8080 --lease-server-password-file /dev/null --lease-acquire-timeout 2s --target template --template ${suite_dir}/template.yaml"
+
 os::integration::boskos::stop
 
 os::test::junit::declare_suite_end

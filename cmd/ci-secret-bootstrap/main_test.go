@@ -861,6 +861,122 @@ func TestValidateCompletedOptions(t *testing.T) {
 			},
 			expected: errors.New("config[1].to[0]: secret namespace-1/prod-secret-1 in cluster default listed more than once in the config"),
 		},
+		{
+			name: "happy dockerconfigJSON configuration",
+			given: options{
+				logLevel:   "info",
+				bwPassword: "topSecret",
+				config: secretbootstrap.Config{
+					Secrets: []secretbootstrap.SecretConfig{
+						{
+							From: map[string]secretbootstrap.BitWardenContext{
+								"key-name-1": {
+									DockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{
+										{
+											BWItem:                    "bitwarden-item",
+											RegistryURLBitwardenField: "registryURL",
+											AuthBitwardenField:        "auth",
+											EmailBitwardenField:       "email",
+										},
+										{
+											BWItem:                    "bitwarden-item2",
+											RegistryURLBitwardenField: "registryURL",
+											AuthBitwardenField:        "auth",
+											EmailBitwardenField:       "email",
+										},
+									},
+								},
+							},
+							To: []secretbootstrap.SecretContext{
+								{
+									Cluster:   "default",
+									Name:      "docker-config-json-secret",
+									Namespace: "namespace-1",
+									Type:      "kubernetes.io/dockerconfigjson",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "sad dockerconfigJSON configuration",
+			given: options{
+				logLevel:   "info",
+				bwPassword: "topSecret",
+				config: secretbootstrap.Config{
+					Secrets: []secretbootstrap.SecretConfig{
+						{
+							From: map[string]secretbootstrap.BitWardenContext{
+								"key-name-1": {
+									DockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{
+										{
+											BWItem:                    "bitwarden-item",
+											RegistryURLBitwardenField: "registryURL",
+										},
+										{
+											BWItem:                    "bitwarden-item2",
+											RegistryURLBitwardenField: "registryURL",
+											AuthBitwardenField:        "auth",
+											EmailBitwardenField:       "email",
+										},
+									},
+								},
+							},
+							To: []secretbootstrap.SecretContext{
+								{
+									Cluster:   "default",
+									Name:      "docker-config-json-secret",
+									Namespace: "namespace-1",
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: fmt.Errorf("config[0].from[key-name-1]: auth field is missing"),
+		},
+
+		{
+			name: "dockerconfigJSON configuration with wrong secret type in the destination secret",
+			given: options{
+				logLevel:   "info",
+				bwPassword: "topSecret",
+				config: secretbootstrap.Config{
+					Secrets: []secretbootstrap.SecretConfig{
+						{
+							From: map[string]secretbootstrap.BitWardenContext{
+								"key-name-1": {
+									DockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{
+										{
+											BWItem:                    "bitwarden-item",
+											RegistryURLBitwardenField: "registryURL",
+											AuthBitwardenField:        "auth",
+										},
+										{
+											BWItem:                    "bitwarden-item2",
+											RegistryURLBitwardenField: "registryURL",
+											AuthBitwardenField:        "auth",
+											EmailBitwardenField:       "email",
+										},
+									},
+								},
+							},
+							To: []secretbootstrap.SecretContext{
+								{
+									Cluster:   "default",
+									Name:      "docker-config-json-secret",
+									Namespace: "namespace-1",
+									Type:      "wrong-type",
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: fmt.Errorf("config[0].from[key-name-1]: dockerconfigJSON config should generate a 'kubernetes.io/dockerconfigjson' type secret"),
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1731,5 +1847,152 @@ func equalError(t *testing.T, expected, actual error) {
 func equal(t *testing.T, what string, expected, actual interface{}) {
 	if !reflect.DeepEqual(expected, actual) {
 		t.Errorf("%s differs from expected:\n%s", what, cmp.Diff(expected, actual))
+	}
+}
+
+func TestConstructDockerConfigJSON(t *testing.T) {
+	testCases := []struct {
+		id                   string
+		bwClient             bitwarden.Client
+		dockerConfigJSONData []secretbootstrap.DockerConfigJSONData
+		expectedJSON         []byte
+		expectedError        string
+	}{
+		{
+			id: "happy case",
+			dockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{
+				{
+					BWItem:                    "item-name-1",
+					RegistryURLBitwardenField: "registryURL",
+					AuthBitwardenField:        "auth",
+					EmailBitwardenField:       "email",
+				},
+			},
+			bwClient: bitwarden.NewFakeClient(
+				[]bitwarden.Item{
+					{
+						ID:   "1",
+						Name: "item-name-1",
+						Fields: []bitwarden.Field{
+							{
+								Name:  "registryURL",
+								Value: "quay.io",
+							},
+							{
+								Name:  "auth",
+								Value: "123456789",
+							},
+							{
+								Name:  "email",
+								Value: "test@test.com",
+							},
+						},
+					},
+				}, nil),
+			expectedJSON: []byte(`{"auths":{"quay.io":{"auth":"123456789","email":"test@test.com"}}}`),
+		},
+		{
+			id: "happy multiple case",
+			dockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{
+				{
+					BWItem:                    "item-name-1",
+					RegistryURLBitwardenField: "registryURL",
+					AuthBitwardenField:        "auth",
+					EmailBitwardenField:       "email",
+				},
+				{
+					BWItem:                    "item-name-2",
+					RegistryURLBitwardenField: "registryURL",
+					AuthBitwardenField:        "auth",
+					EmailBitwardenField:       "email",
+				},
+			},
+			bwClient: bitwarden.NewFakeClient(
+				[]bitwarden.Item{
+					{
+						ID:   "1",
+						Name: "item-name-1",
+						Fields: []bitwarden.Field{
+							{
+								Name:  "registryURL",
+								Value: "quay.io",
+							},
+							{
+								Name:  "auth",
+								Value: "123456789",
+							},
+							{
+								Name:  "email",
+								Value: "test@test.com",
+							},
+						},
+					},
+					{
+						ID:   "1",
+						Name: "item-name-2",
+						Fields: []bitwarden.Field{
+							{
+								Name:  "registryURL",
+								Value: "cloud.redhat.com",
+							},
+							{
+								Name:  "auth",
+								Value: "987654321",
+							},
+							{
+								Name:  "email",
+								Value: "foo@bar.com",
+							},
+						},
+					},
+				}, nil),
+			expectedJSON: []byte(`{"auths":{"cloud.redhat.com":{"auth":"987654321","email":"foo@bar.com"},"quay.io":{"auth":"123456789","email":"test@test.com"}}}`),
+		},
+		{
+			id: "sad case, field is missing",
+			dockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{
+				{
+					BWItem:                    "item-name-1",
+					RegistryURLBitwardenField: "registryURL",
+					AuthBitwardenField:        "auth",
+					EmailBitwardenField:       "email",
+				},
+			},
+			bwClient: bitwarden.NewFakeClient(
+				[]bitwarden.Item{
+					{
+						ID:   "1",
+						Name: "item-name-1",
+						Fields: []bitwarden.Field{
+							{
+								Name:  "registryURL",
+								Value: "quay.io",
+							},
+							{
+								Name:  "email",
+								Value: "test@test.com",
+							},
+						},
+					},
+				}, nil),
+			expectedError: "couldn't get the auth field 'auth' from bw item item-name-1: failed to find field auth in item item-name-1",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.id, func(t *testing.T) {
+			actual, err := constructDockerConfigJSON(tc.bwClient, tc.dockerConfigJSONData)
+			if tc.expectedError != "" && err != nil {
+				if !reflect.DeepEqual(err.Error(), tc.expectedError) {
+					t.Fatal(cmp.Diff(err.Error(), tc.expectedError))
+				}
+			} else if tc.expectedError == "" && err != nil {
+				t.Fatalf("Error not expected: %v", err)
+			} else {
+				if !reflect.DeepEqual(actual, tc.expectedJSON) {
+					t.Fatal(cmp.Diff(actual, tc.expectedJSON))
+				}
+			}
+		})
 	}
 }

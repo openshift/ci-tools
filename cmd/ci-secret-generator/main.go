@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"reflect"
 	"strings"
 
 	"sigs.k8s.io/yaml"
@@ -375,7 +376,7 @@ func validateContexts(contexts []secretbootstrap.BitWardenContext, config secret
 		var found bool
 		for _, secret := range config.Secrets {
 			for _, haystack := range secret.From {
-				if needle == haystack {
+				if reflect.DeepEqual(needle, haystack) {
 					found = true
 				}
 			}

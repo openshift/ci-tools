@@ -34,6 +34,12 @@ const (
 	SecretMountEnv = "SHARED_DIR"
 	// ClusterProfileMountEnv is the env we use to expose the cluster profile dir
 	ClusterProfileMountEnv = "CLUSTER_PROFILE_DIR"
+	// CliMountPath is where we mount the cli in a pod
+	CliMountPath = "/cli"
+	// CliEnv if the env we use to expose the path to the cli
+	CliEnv = "CLI_DIR"
+	// CommandPrefix is the prefix we add to a user's commands
+	CommandPrefix = "#!/bin/bash\nset -eu\n"
 )
 
 var envForProfile = []string{
@@ -194,6 +200,12 @@ func (s *multiStageTestStep) Requires() (ret []api.StepLink) {
 		for _, dependency := range step.Dependencies {
 			// we validate that the link will exist at config load time
 			// so we can safely ignore the case where !ok
+			imageStream, name, _ := s.config.DependencyParts(dependency)
+			ret = append(ret, api.LinkForImage(imageStream, name))
+		}
+
+		if step.Cli != "" {
+			dependency := api.StepDependency{Name: fmt.Sprintf("%s:cli", api.ReleaseStreamFor(step.Cli))}
 			imageStream, name, _ := s.config.DependencyParts(dependency)
 			ret = append(ret, api.LinkForImage(imageStream, name))
 		}
@@ -363,7 +375,7 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 			continue
 		}
 		name := fmt.Sprintf("%s-%s", s.name, step.As)
-		pod, err := generateBasePod(s.jobSpec, name, "test", []string{"/bin/bash", "-c", "#!/bin/bash\nset -eu\n" + step.Commands}, image, resources, step.ArtifactDir)
+		pod, err := generateBasePod(s.jobSpec, name, "test", []string{"/bin/bash", "-c", CommandPrefix + step.Commands}, image, resources, step.ArtifactDir)
 		if err != nil {
 			errs = append(errs, err)
 			continue
@@ -398,6 +410,9 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 			container.Env = append(container.Env, []coreapi.EnvVar{
 				{Name: "KUBECONFIG", Value: filepath.Join(SecretMountPath, "kubeconfig")},
 			}...)
+		}
+		if step.Cli != "" {
+			addCliInjector(step.Cli, pod)
 		}
 		addSecret(s.name, pod)
 		addCredentials(step.Credentials, pod)
@@ -518,6 +533,44 @@ func addProfile(name string, profile api.ClusterProfile, pod *coreapi.Pod) {
 		Name:  ClusterProfileMountEnv,
 		Value: ClusterProfileMountPath,
 	}}...)
+}
+
+func addCliInjector(release string, pod *coreapi.Pod) {
+	volumeName := "cli"
+	pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{
+		Name: volumeName,
+		VolumeSource: coreapi.VolumeSource{
+			EmptyDir: &coreapi.EmptyDirVolumeSource{},
+		},
+	})
+	pod.Spec.InitContainers = append(pod.Spec.InitContainers, coreapi.Container{
+		Name:    "inject-cli",
+		Image:   fmt.Sprintf("%s:cli", api.ReleaseStreamFor(release)),
+		Command: []string{"/bin/cp"},
+		Args:    []string{"/usr/bin/oc", CliMountPath},
+		VolumeMounts: []coreapi.VolumeMount{{
+			Name:      volumeName,
+			MountPath: CliMountPath,
+		}},
+	})
+	container := &pod.Spec.Containers[0]
+	var args []string
+	for _, arg := range container.Args {
+		if strings.HasPrefix(arg, CommandPrefix) {
+			args = append(args, fmt.Sprintf("%s%s\n%s", CommandPrefix, `export PATH="${PATH}:${CLI_DIR}"`, strings.TrimPrefix(arg, CommandPrefix)))
+		} else {
+			args = append(args, arg)
+		}
+	}
+	container.Args = args
+	container.VolumeMounts = append(container.VolumeMounts, coreapi.VolumeMount{
+		Name:      volumeName,
+		MountPath: CliMountPath,
+	})
+	container.Env = append(container.Env, coreapi.EnvVar{
+		Name:  CliEnv,
+		Value: CliMountPath,
+	})
 }
 
 func (s *multiStageTestStep) runPods(ctx context.Context, pods []coreapi.Pod, shortCircuit bool) error {

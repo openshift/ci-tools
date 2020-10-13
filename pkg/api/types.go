@@ -600,6 +600,9 @@ type LiteralTestStep struct {
 	// flag is set to true in MultiStageTestConfiguration. This option is
 	// applicable to `post` steps.
 	OptionalOnSuccess *bool `json:"optional_on_success,omitempty"`
+	// Cli is the (optional) name of the release from which the `oc` binary
+	// will be injected into this step.
+	Cli string `json:"cli,omitempty"`
 }
 
 // StepParameter is a variable set by the test, with an optional default.

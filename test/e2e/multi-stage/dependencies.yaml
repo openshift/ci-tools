@@ -70,6 +70,17 @@ tests:
             env: "COMMAND"
           - name: "release:custom"
             env: "RELEASE"
+  - as: with-cli
+    steps:
+      test:
+        - as: use-cli
+          commands: oc adm policy add-role-to-user --help
+          from: os
+          cli: custom
+          resources:
+            requests:
+              cpu: 100m
+              memory: 200Mi
 zz_generated_metadata:
   branch: master
   org: test

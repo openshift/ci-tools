@@ -11,8 +11,38 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
+// WriteToFixture reads an input fixture file and returns the data
+func WriteToFixture(t *testing.T, identifier string, data []byte) {
+	golden, err := golden(t, &Options{Suffix: identifier})
+	if err != nil {
+		t.Fatalf("failed to get absolute path to testdata file: %v", err)
+	}
+
+	if err := os.MkdirAll(filepath.Dir(golden), 0755); err != nil {
+		t.Fatalf("failed to create fixture directory: %v", err)
+	}
+	if err := ioutil.WriteFile(golden, data, 0644); err != nil {
+		t.Fatalf("failed to write testdata file: %v", err)
+	}
+}
+
+// ReadFromFixture reads an input fixture file and returns the data
+func ReadFromFixture(t *testing.T, identifier string) []byte {
+	golden, err := golden(t, &Options{Suffix: identifier})
+	if err != nil {
+		t.Fatalf("failed to get absolute path to testdata file: %v", err)
+	}
+
+	data, err := ioutil.ReadFile(golden)
+	if err != nil {
+		t.Fatalf("failed to read testdata file: %v", err)
+	}
+	return data
+}
+
 type Options struct {
 	Prefix string
+	Suffix string
 }
 
 type Option func(*Options)
@@ -21,6 +51,17 @@ func WithPrefix(prefix string) Option {
 	return func(o *Options) {
 		o.Prefix = prefix
 	}
+}
+
+func WithSuffix(suffix string) Option {
+	return func(o *Options) {
+		o.Suffix = suffix
+	}
+}
+
+// golden determines the golden file to use
+func golden(t *testing.T, opts *Options) (string, error) {
+	return filepath.Abs(filepath.Join("testdata", sanitizeFilename(opts.Prefix+t.Name()+opts.Suffix)) + ".yaml")
 }
 
 // CompareWithFixture will compare output with a test fixture and allows to automatically update them
@@ -47,11 +88,14 @@ func CompareWithFixture(t *testing.T, output interface{}, opts ...Option) {
 		serializedOutput = serialized
 	}
 
-	golden, err := filepath.Abs(filepath.Join("testdata", sanitizeFilename(options.Prefix+t.Name())) + ".yaml")
+	golden, err := golden(t, options)
 	if err != nil {
 		t.Fatalf("failed to get absolute path to testdata file: %v", err)
 	}
 	if os.Getenv("UPDATE") != "" {
+		if err := os.MkdirAll(filepath.Dir(golden), 0755); err != nil {
+			t.Fatalf("failed to create fixture directory: %v", err)
+		}
 		if err := ioutil.WriteFile(golden, serializedOutput, 0644); err != nil {
 			t.Fatalf("failed to write updated fixture: %v", err)
 		}

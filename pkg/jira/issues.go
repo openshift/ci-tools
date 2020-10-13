@@ -98,7 +98,7 @@ func (f *filer) resolveRequester(reporter string, logger *logrus.Entry) (string,
 	slackUser, err := f.slackClient.GetUserInfo(reporter)
 	if err != nil {
 		logger.WithError(err).Warn("could not search Slack for requester")
-		suffix = fmt.Sprintf("[a Slack user|%s/team/%s]", slackutil.CoreOSHost, reporter)
+		suffix = fmt.Sprintf("[a Slack user|%s/team/%s]", slackutil.CoreOSURL, reporter)
 	} else {
 		jiraUsers, response, err := f.jiraClient.FindUser(slackUser.RealName)
 		if err := jirautil.JiraError(response, err); err != nil {
@@ -107,7 +107,7 @@ func (f *filer) resolveRequester(reporter string, logger *logrus.Entry) (string,
 		if len(jiraUsers) != 0 {
 			requester = &jiraUsers[0]
 		}
-		suffix = fmt.Sprintf("Slack user [%s|%s/team/%s]", slackUser.RealName, slackutil.CoreOSHost, slackUser.ID)
+		suffix = fmt.Sprintf("Slack user [%s|%s/team/%s]", slackUser.RealName, slackutil.CoreOSURL, slackUser.ID)
 	}
 
 	if requester == nil {

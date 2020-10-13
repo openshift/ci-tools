@@ -1,0 +1,34 @@
+trigger_id: 1416756610774.1377252349923.ff1a76bce3db8f1d6f892f75bcb25f58
+type: view_submission
+user:
+  id: U01B31ARZDG
+view:
+  app_id: A01BJF00CAD
+  hash: 1602538261.7V8X4IBr
+  id: V01CU3D2A73
+  private_metadata: consultation
+  root_view_id: V01CU3D2A73
+  state:
+    values:
+      acceptance_criteria:
+        ec8:
+          type: plain_text_input
+          value: |-
+            something simple is done
+            I didn't have to do anything to achieve it
+      additional:
+        aPFdZ:
+          type: plain_text_input
+          value: I'll bug you forever while we work on this.
+      previous:
+        XwW0:
+          type: plain_text_input
+          value: I have tried nothing and looked at no docs.
+      requirement:
+        6v7u:
+          type: plain_text_input
+          value: I would like to do something really simple.
+      title:
+        xFGTt:
+          type: plain_text_input
+          value: Please Help Me

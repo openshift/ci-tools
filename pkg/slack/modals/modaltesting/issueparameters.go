@@ -7,9 +7,12 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/slack-go/slack"
+
 	"k8s.io/apimachinery/pkg/util/sets"
+	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/slack/modals"
+	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
 // ValidateBlockIds ensures that all the fields are present as block identifiers in the view
@@ -35,7 +38,6 @@ func ValidateBlockIds(t *testing.T, view slack.ModalViewRequest, fields ...strin
 
 type ProcessTestCase struct {
 	Name          string
-	Callback      []byte
 	ExpectedTitle string
 	ExpectedBody  string
 }
@@ -43,11 +45,7 @@ type ProcessTestCase struct {
 func ValidateParameterProcessing(t *testing.T, parameters modals.JiraIssueParameters, testCases []ProcessTestCase) {
 	for _, testCase := range testCases {
 		t.Run(testCase.Name, func(t *testing.T) {
-			var callback slack.InteractionCallback
-			if err := json.Unmarshal(testCase.Callback, &callback); err != nil {
-				t.Errorf("%s: failed to unmarshal payload: %v", testCase.Name, err)
-				return
-			}
+			callback := ReadCallbackFixture(t)
 			title, body, err := parameters.Process(&callback)
 			if diff := cmp.Diff(testCase.ExpectedTitle, title); diff != "" {
 				t.Errorf("%s: got incorrect title: %v", testCase.Name, diff)
@@ -60,4 +58,31 @@ func ValidateParameterProcessing(t *testing.T, parameters modals.JiraIssueParame
 			}
 		})
 	}
+}
+
+func WriteCallbackFixture(t *testing.T, data []byte) {
+	var callback slack.InteractionCallback
+	if err := json.Unmarshal(data, &callback); err != nil {
+		t.Errorf("failed to unmarshal payload: %v", err)
+		return
+	}
+
+	data, err := yaml.Marshal(callback)
+	if err != nil {
+		t.Errorf("failed to marshal payload: %v", err)
+		return
+	}
+
+	testhelper.WriteToFixture(t, "_callback", data)
+}
+
+func ReadCallbackFixture(t *testing.T) slack.InteractionCallback {
+	data := testhelper.ReadFromFixture(t, "_callback")
+	var callback slack.InteractionCallback
+	if err := yaml.Unmarshal(data, &callback); err != nil {
+		t.Errorf("failed to unmarshal payload: %v", err)
+		return callback
+	}
+
+	return callback
 }

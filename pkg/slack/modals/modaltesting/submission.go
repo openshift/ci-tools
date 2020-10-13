@@ -1,22 +1,19 @@
 package modaltesting
 
 import (
-	"encoding/json"
 	"testing"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
 	"github.com/sirupsen/logrus"
-	"github.com/slack-go/slack"
 
 	"github.com/openshift/ci-tools/pkg/jira"
 	"github.com/openshift/ci-tools/pkg/slack/interactions"
 	"github.com/openshift/ci-tools/pkg/slack/modals"
+	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
 type SubmissionTestCase struct {
 	Name            string
-	Callback        []byte
 	Filer           *jira.Fake
 	Updater         *modals.FakeViewUpdater
 	ExpectedPayload []byte
@@ -27,11 +24,7 @@ type SubmissionTestCase struct {
 func ValidateSubmission(t *testing.T, handler interactions.Handler, testCases ...SubmissionTestCase) {
 	for _, testCase := range testCases {
 		t.Run(testCase.Name, func(t *testing.T) {
-			var callback slack.InteractionCallback
-			if err := json.Unmarshal(testCase.Callback, &callback); err != nil {
-				t.Errorf("%s: failed to unmarshal payload: %v", testCase.Name, err)
-				return
-			}
+			callback := ReadCallbackFixture(t)
 			out, err := handler.Handle(&callback, logrus.WithField("test", testCase.Name))
 			select {
 			case <-time.After(1 * time.Second):
@@ -39,9 +32,7 @@ func ValidateSubmission(t *testing.T, handler interactions.Handler, testCases ..
 			case <-testCase.Updater.Called().Done():
 				// all good, continue
 			}
-			if diff := cmp.Diff(string(testCase.ExpectedPayload), string(out)); diff != "" {
-				t.Errorf("%s: got incorrect payload: %v", testCase.Name, diff)
-			}
+			testhelper.CompareWithFixture(t, out)
 			if testCase.ExpectedError && err == nil {
 				t.Errorf("%s: expected an error but got none", testCase.Name)
 			}

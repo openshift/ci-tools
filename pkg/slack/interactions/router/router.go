@@ -57,7 +57,7 @@ type modalRouter struct {
 func (r *modalRouter) Handle(callback *slack.InteractionCallback, logger *logrus.Entry) (output []byte, err error) {
 	switch callback.Type {
 	case slack.InteractionTypeShortcut:
-		return r.openView(callback, logger)
+		return nil, r.openView(callback, logger)
 	default:
 		return r.delegate(callback, logger)
 	}
@@ -69,14 +69,14 @@ type slackClient interface {
 
 // openView reacts to the original shortcut action from the user
 // to open the first modal view for them
-func (r *modalRouter) openView(callback *slack.InteractionCallback, logger *logrus.Entry) (output []byte, err error) {
+func (r *modalRouter) openView(callback *slack.InteractionCallback, logger *logrus.Entry) error {
 	id := modals.Identifier(callback.CallbackID)
 	logger = logger.WithField("view_id", id)
 	logger.Infof("Opening modal view %s.", id)
 	view, exists := r.viewsById[id]
 	if id != "" && !exists {
 		logger.Debug("Unknown callback ID.")
-		return nil, nil
+		return nil
 	}
 
 	response, err := r.slackClient.OpenView(callback.TriggerID, view)
@@ -84,7 +84,7 @@ func (r *modalRouter) openView(callback *slack.InteractionCallback, logger *logr
 		logger.WithError(err).Warn("Failed to open a modal flow.")
 	}
 	logger.WithField("response", response).Trace("Got a modal response.")
-	return nil, nil
+	return err
 }
 
 // delegate routes the interaction callback to the appropriate handler

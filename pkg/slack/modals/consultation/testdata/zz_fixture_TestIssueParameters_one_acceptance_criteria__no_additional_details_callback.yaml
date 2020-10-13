@@ -1,0 +1,30 @@
+trigger_id: 1429676731732.1377252349923.55259e6c220e0f2b07ab17ced3a30ea7
+type: view_submission
+view:
+  app_id: A01BJF00CAD
+  hash: 1602539357.f6DHe3XD
+  id: V01CCCHC7U5
+  private_metadata: consultation
+  root_view_id: V01CCCHC7U5
+  state:
+    values:
+      acceptance_criteria:
+        BCC:
+          type: plain_text_input
+          value: Dinner is ordered and tasty
+      additional:
+        S47AD:
+          type: plain_text_input
+          value: ""
+      previous:
+        Y4r7m:
+          type: plain_text_input
+          value: Dinner has to be tasty and I can't make up my mind. Help?
+      requirement:
+        y1+:
+          type: plain_text_input
+          value: I need to order dinner.
+      title:
+        8YZh:
+          type: plain_text_input
+          value: Give Me a Consult

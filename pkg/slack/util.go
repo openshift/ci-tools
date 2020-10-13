@@ -1,4 +1,4 @@
 package slack
 
-// CoreOSHost is the hostname for the CoreOS Slack
-const CoreOSHost = "https://coreos.slack.com"
+// CoreOSURL is the hostname for the CoreOS Slack
+const CoreOSURL = "https://coreos.slack.com"

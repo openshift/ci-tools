@@ -519,7 +519,7 @@ func waitForPodCompletion(ctx context.Context, podClient coreclientset.PodInterf
 }
 
 func waitForPodCompletionOrTimeout(ctx context.Context, podClient coreclientset.PodInterface, eventClient coreclientset.EventInterface, name string, completed map[string]time.Time, notifier ContainerNotifier, skipLogs bool) (*coreapi.Pod, bool, error) {
-	watcher, err := podClient.Watch(ctx, meta.ListOptions{
+	watcher, err := podClient.Watch(context.Background(), meta.ListOptions{
 		FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String(),
 		Watch:         true,
 	})
@@ -528,7 +528,7 @@ func waitForPodCompletionOrTimeout(ctx context.Context, podClient coreclientset.
 	}
 	defer watcher.Stop()
 
-	list, err := podClient.List(ctx, meta.ListOptions{FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String()})
+	list, err := podClient.List(context.Background(), meta.ListOptions{FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String()})
 	if err != nil {
 		return nil, false, fmt.Errorf("could not list pod: %w", err)
 	}
@@ -561,7 +561,7 @@ func waitForPodCompletionOrTimeout(ctx context.Context, podClient coreclientset.
 			return pod, false, ctx.Err()
 		// Check minutely if we ran into the pod timeout
 		case <-podCheckTicker.C:
-			newPod, err := podClient.Get(ctx, name, meta.GetOptions{})
+			newPod, err := podClient.Get(context.Background(), name, meta.GetOptions{})
 			if err != nil {
 				log.Printf("warning: failed to get pod %s: %v", name, err)
 				continue

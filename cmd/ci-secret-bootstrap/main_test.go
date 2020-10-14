@@ -975,7 +975,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 					},
 				},
 			},
-			expected: fmt.Errorf("config[0].from[key-name-1]: dockerconfigJSON config should generate a 'kubernetes.io/dockerconfigjson' type secret"),
+			expected: fmt.Errorf("config[0].to[0]: key: 'key-name-1' is a dockerconfigJSON config and it should be a 'kubernetes.io/dockerconfigjson' type secret"),
 		},
 	}
 	for _, tc := range testCases {

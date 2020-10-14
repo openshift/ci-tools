@@ -1,0 +1,43 @@
+trigger_id: 1414625255638.1377252349923.b936c322ff12440681d95c4d9d202a60
+type: view_submission
+view:
+  app_id: A01BJF00CAD
+  hash: 1602467948.iWjOP1Z9
+  id: V01BYJ3JXN3
+  private_metadata: bug
+  root_view_id: V01BYJ3JXN3
+  state:
+    values:
+      category:
+        Ceww:
+          selected_option:
+            text:
+              emoji: true
+              text: Other
+              type: plain_text
+            value: Other
+          type: static_select
+      expected:
+        BFSg5:
+          type: plain_text_input
+          value: input
+      impact:
+        +2dWl:
+          type: plain_text_input
+          value: input
+      optional:
+        DCgA:
+          type: plain_text_input
+          value: component
+      reproduction:
+        Cv9:
+          type: plain_text_input
+          value: input
+      symptom:
+        G=Vl:
+          type: plain_text_input
+          value: input
+      title:
+        EU7e8:
+          type: plain_text_input
+          value: input

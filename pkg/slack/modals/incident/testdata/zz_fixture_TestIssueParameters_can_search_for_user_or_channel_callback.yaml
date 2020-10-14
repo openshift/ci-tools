@@ -1,0 +1,37 @@
+trigger_id: 1416811719878.1377252349923.7aa108d6c2287f7dcc2e6b381c31faaf
+type: view_submission
+view:
+  app_id: A01BJF00CAD
+  hash: 1602540226.eEIQjfOU
+  id: V01C0PGEYS3
+  private_metadata: incident
+  root_view_id: V01C0PGEYS3
+  state:
+    values:
+      additional:
+        3rP+:
+          type: plain_text_input
+          value: So surprising!
+      bugzilla:
+        up8:
+          type: plain_text_input
+          value: https://bugzilla.redhat.com/show_bug.cgi?id=123123123213123
+      impact:
+        mSYg:
+          type: plain_text_input
+          value: Nodes are not ready and no jobs run.
+      selectors:
+        Os7y:
+          selected_user: U01AZU9H0BG
+          type: users_select
+        XeNO:
+          selected_channel: C01B31AT7K5
+          type: channels_select
+      summary:
+        vZs:
+          type: plain_text_input
+          value: The bootstrap node auto-approver is down for the fiftieth time.
+      title:
+        fm9x:
+          type: plain_text_input
+          value: api.ci Is Broken Again

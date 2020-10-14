@@ -1,0 +1,43 @@
+trigger_id: 1445212076624.1377252349923.6db817174c902b85a7eac0d8f5613d3e
+type: view_submission
+view:
+  app_id: A01BJF00CAD
+  hash: 1602467948.iWjOP1Z9
+  id: V01BYJ3JXN3
+  private_metadata: bug
+  root_view_id: V01BYJ3JXN3
+  state:
+    values:
+      category:
+        Ceww:
+          selected_option:
+            text:
+              emoji: true
+              text: Release Controller
+              type: plain_text
+            value: Release Controller
+          type: static_select
+      expected:
+        BFSg5:
+          type: plain_text_input
+          value: Something right!
+      impact:
+        +2dWl:
+          type: plain_text_input
+          value: I'm on fire.
+      optional:
+        DCgA:
+          type: plain_text_input
+          value: My Component
+      reproduction:
+        Cv9:
+          type: plain_text_input
+          value: Every time, just push the button.
+      symptom:
+        G=Vl:
+          type: plain_text_input
+          value: Something wrong!
+      title:
+        EU7e8:
+          type: plain_text_input
+          value: My Title

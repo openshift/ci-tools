@@ -1,0 +1,44 @@
+trigger_id: 1447326995184.1377252349923.75cfec20fd2f655085f20b540fb23448
+type: view_submission
+view:
+  app_id: A01BJF00CAD
+  hash: 1602538163.qm2wjmgG
+  id: V01C8N3BWAJ
+  private_metadata: enhancement
+  root_view_id: V01C8N3BWAJ
+  state:
+    values:
+      acceptance_criteria:
+        7NY0:
+          type: plain_text_input
+          value: |-
+            I can fly
+            Nobody else can fly
+      as_a:
+        vq6zO:
+          type: plain_text_input
+          value: person
+      i_want:
+        jLZ:
+          type: plain_text_input
+          value: to fly
+      impact:
+        ts1Y:
+          type: plain_text_input
+          value: Only I benefit.
+      implementation:
+        962bw:
+          type: plain_text_input
+          value: It needs to be done quickly.
+      so_that:
+        0PktF:
+          type: plain_text_input
+          value: I can be cool
+      summary:
+        nNIA/:
+          type: plain_text_input
+          value: This is really important for me.
+      title:
+        XSf+:
+          type: plain_text_input
+          value: I Need Something

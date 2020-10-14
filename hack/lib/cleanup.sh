@@ -55,7 +55,7 @@ function os::cleanup::tmpdir() {
     fi
 
     # delete any sub directory underneath BASETMPDIR
-    for directory in $( find "${BASETMPDIR}" -mindepth 2 -maxdepth 2 ); do
+    for directory in $( find "${BASETMPDIR}" -mindepth 1 -maxdepth 1 -type d ); do
         ${USE_SUDO:+sudo} rm -rf "${directory}"
     done
 }

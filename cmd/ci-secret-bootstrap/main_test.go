@@ -875,13 +875,13 @@ func TestValidateCompletedOptions(t *testing.T) {
 										{
 											BWItem:                    "bitwarden-item",
 											RegistryURLBitwardenField: "registryURL",
-											AuthBitwardenField:        "auth",
+											AuthBitwardenAttachment:   "auth",
 											EmailBitwardenField:       "email",
 										},
 										{
 											BWItem:                    "bitwarden-item2",
 											RegistryURLBitwardenField: "registryURL",
-											AuthBitwardenField:        "auth",
+											AuthBitwardenAttachment:   "auth",
 											EmailBitwardenField:       "email",
 										},
 									},
@@ -918,7 +918,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 										{
 											BWItem:                    "bitwarden-item2",
 											RegistryURLBitwardenField: "registryURL",
-											AuthBitwardenField:        "auth",
+											AuthBitwardenAttachment:   "auth",
 											EmailBitwardenField:       "email",
 										},
 									},
@@ -935,7 +935,7 @@ func TestValidateCompletedOptions(t *testing.T) {
 					},
 				},
 			},
-			expected: fmt.Errorf("config[0].from[key-name-1]: auth field is missing"),
+			expected: fmt.Errorf("config[0].from[key-name-1]: auth_bw_attachment is missing"),
 		},
 
 		{
@@ -952,12 +952,12 @@ func TestValidateCompletedOptions(t *testing.T) {
 										{
 											BWItem:                    "bitwarden-item",
 											RegistryURLBitwardenField: "registryURL",
-											AuthBitwardenField:        "auth",
+											AuthBitwardenAttachment:   "auth",
 										},
 										{
 											BWItem:                    "bitwarden-item2",
 											RegistryURLBitwardenField: "registryURL",
-											AuthBitwardenField:        "auth",
+											AuthBitwardenAttachment:   "auth",
 											EmailBitwardenField:       "email",
 										},
 									},
@@ -1851,20 +1851,33 @@ func equal(t *testing.T, what string, expected, actual interface{}) {
 }
 
 func TestConstructDockerConfigJSON(t *testing.T) {
+	type attachment struct {
+		bwItem   string
+		filename string
+		contents []byte
+	}
 	testCases := []struct {
 		id                   string
 		bwClient             bitwarden.Client
 		dockerConfigJSONData []secretbootstrap.DockerConfigJSONData
+		attachments          []attachment
 		expectedJSON         []byte
 		expectedError        string
 	}{
 		{
 			id: "happy case",
+			attachments: []attachment{
+				{
+					bwItem:   "item-name-1",
+					filename: "auth",
+					contents: []byte("123456789"),
+				},
+			},
 			dockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{
 				{
 					BWItem:                    "item-name-1",
 					RegistryURLBitwardenField: "registryURL",
-					AuthBitwardenField:        "auth",
+					AuthBitwardenAttachment:   "auth",
 					EmailBitwardenField:       "email",
 				},
 			},
@@ -1873,14 +1886,16 @@ func TestConstructDockerConfigJSON(t *testing.T) {
 					{
 						ID:   "1",
 						Name: "item-name-1",
+						Attachments: []bitwarden.Attachment{
+							{
+								ID:       "12345678",
+								FileName: "auth",
+							},
+						},
 						Fields: []bitwarden.Field{
 							{
 								Name:  "registryURL",
 								Value: "quay.io",
-							},
-							{
-								Name:  "auth",
-								Value: "123456789",
 							},
 							{
 								Name:  "email",
@@ -1888,22 +1903,34 @@ func TestConstructDockerConfigJSON(t *testing.T) {
 							},
 						},
 					},
-				}, nil),
+				}, make(map[string]string)),
 			expectedJSON: []byte(`{"auths":{"quay.io":{"auth":"123456789","email":"test@test.com"}}}`),
 		},
 		{
 			id: "happy multiple case",
+			attachments: []attachment{
+				{
+					bwItem:   "item-name-1",
+					filename: "auth",
+					contents: []byte("123456789"),
+				},
+				{
+					bwItem:   "item-name-2",
+					filename: "auth",
+					contents: []byte("987654321"),
+				},
+			},
 			dockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{
 				{
 					BWItem:                    "item-name-1",
 					RegistryURLBitwardenField: "registryURL",
-					AuthBitwardenField:        "auth",
+					AuthBitwardenAttachment:   "auth",
 					EmailBitwardenField:       "email",
 				},
 				{
 					BWItem:                    "item-name-2",
 					RegistryURLBitwardenField: "registryURL",
-					AuthBitwardenField:        "auth",
+					AuthBitwardenAttachment:   "auth",
 					EmailBitwardenField:       "email",
 				},
 			},
@@ -1928,7 +1955,7 @@ func TestConstructDockerConfigJSON(t *testing.T) {
 						},
 					},
 					{
-						ID:   "1",
+						ID:   "2",
 						Name: "item-name-2",
 						Fields: []bitwarden.Field{
 							{
@@ -1945,7 +1972,7 @@ func TestConstructDockerConfigJSON(t *testing.T) {
 							},
 						},
 					},
-				}, nil),
+				}, make(map[string]string)),
 			expectedJSON: []byte(`{"auths":{"cloud.redhat.com":{"auth":"987654321","email":"foo@bar.com"},"quay.io":{"auth":"123456789","email":"test@test.com"}}}`),
 		},
 		{
@@ -1954,7 +1981,7 @@ func TestConstructDockerConfigJSON(t *testing.T) {
 				{
 					BWItem:                    "item-name-1",
 					RegistryURLBitwardenField: "registryURL",
-					AuthBitwardenField:        "auth",
+					AuthBitwardenAttachment:   "auth",
 					EmailBitwardenField:       "email",
 				},
 			},
@@ -1975,12 +2002,19 @@ func TestConstructDockerConfigJSON(t *testing.T) {
 						},
 					},
 				}, nil),
-			expectedError: "couldn't get the auth field 'auth' from bw item item-name-1: failed to find field auth in item item-name-1",
+			expectedError: "couldn't get attachment 'auth' from bw item item-name-1: failed to find attachment auth in item item-name-1",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.id, func(t *testing.T) {
+			if len(tc.attachments) > 0 {
+				for _, attachment := range tc.attachments {
+					if err := tc.bwClient.SetAttachmentOnItem(attachment.bwItem, attachment.filename, attachment.contents); err != nil {
+						t.Fatalf("couldn't create attachments: %v", err)
+					}
+				}
+			}
 			actual, err := constructDockerConfigJSON(tc.bwClient, tc.dockerConfigJSONData)
 			if tc.expectedError != "" && err != nil {
 				if !reflect.DeepEqual(err.Error(), tc.expectedError) {

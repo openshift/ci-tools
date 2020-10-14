@@ -28,7 +28,7 @@ type BitWardenContext struct {
 type DockerConfigJSONData struct {
 	BWItem                    string `json:"bw_item"`
 	RegistryURLBitwardenField string `json:"registry_url_bw_field"`
-	AuthBitwardenField        string `json:"auth_bw_field"`
+	AuthBitwardenAttachment   string `json:"auth_bw_attachment"`
 	EmailBitwardenField       string `json:"email_bw_field,omitempty"`
 }
 

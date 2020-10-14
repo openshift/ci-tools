@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"flag"
@@ -188,13 +189,13 @@ func (o *options) validateCompletedOptions() error {
 			if len(bwContext.DockerConfigJSONData) > 0 {
 				for _, data := range bwContext.DockerConfigJSONData {
 					if data.BWItem == "" {
-						return fmt.Errorf("config[%d].from[%s]: bitwarden item is missing", i, key)
+						return fmt.Errorf("config[%d].from[%s]: bw_item is missing", i, key)
 					}
 					if data.RegistryURLBitwardenField == "" {
-						return fmt.Errorf("config[%d].from[%s]: registry_url field is missing", i, key)
+						return fmt.Errorf("config[%d].from[%s]: registry_url_bw_field is missing", i, key)
 					}
-					if data.AuthBitwardenField == "" {
-						return fmt.Errorf("config[%d].from[%s]: auth field is missing", i, key)
+					if data.AuthBitwardenAttachment == "" {
+						return fmt.Errorf("config[%d].from[%s]: auth_bw_attachment is missing", i, key)
 					}
 					if secretConfig.To[i].Type == "" {
 						secretConfig.To[i].Type = "kubernetes.io/dockerconfigjson"
@@ -262,11 +263,11 @@ func constructDockerConfigJSON(bwClient bitwarden.Client, dockerConfigJSONData [
 
 		}
 
-		authBWField, err := bwClient.GetFieldOnItem(data.BWItem, data.AuthBitwardenField)
+		authBWAttachmentValue, err := bwClient.GetAttachmentOnItem(data.BWItem, data.AuthBitwardenAttachment)
 		if err != nil {
-			return nil, fmt.Errorf("couldn't get the auth field '%s' from bw item %s: %w", data.AuthBitwardenField, data.BWItem, err)
+			return nil, fmt.Errorf("couldn't get attachment '%s' from bw item %s: %w", data.AuthBitwardenAttachment, data.BWItem, err)
 		}
-		authData.Auth = string(authBWField)
+		authData.Auth = string(bytes.TrimSpace(authBWAttachmentValue))
 
 		if data.EmailBitwardenField != "" {
 			emailValue, err := bwClient.GetFieldOnItem(data.BWItem, data.EmailBitwardenField)

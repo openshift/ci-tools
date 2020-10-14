@@ -85,7 +85,7 @@ func TestLeaseStepForward(t *testing.T) {
 			t.Errorf("not properly forwarded: %s", diff.ObjectDiff(l, s))
 		}
 	})
-	t.Run("Provides", func(t *testing.T) {
+	t.Run("Provides includes parameters from wrapped step", func(t *testing.T) {
 		sParam := step.Provides()
 		sRet, err := sParam["parameter"]()
 		if err != nil {
@@ -98,6 +98,19 @@ func TestLeaseStepForward(t *testing.T) {
 		}
 		if !reflect.DeepEqual(lRet, sRet) {
 			t.Errorf("not properly forwarded (param): %s", diff.ObjectDiff(lParam, sParam))
+		}
+	})
+	t.Run("Provides includes sanitized lease name", func(t *testing.T) {
+		rawLeaseStep := withLease.(*leaseStep)
+		rawLeaseStep.leasedResource = "whatever--01"
+		expected := "whatever"
+		lParam := withLease.Provides()
+		actual, err := lParam[leaseEnv]()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if actual != expected {
+			t.Errorf("got %q for %s, expected %q", actual, leaseEnv, expected)
 		}
 	})
 	t.Run("SubTests", func(T *testing.T) {

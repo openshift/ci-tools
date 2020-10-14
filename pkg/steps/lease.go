@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"strings"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -61,7 +62,8 @@ func (s *leaseStep) Provides() api.ParameterMap {
 		parameters = api.ParameterMap{}
 	}
 	parameters[leaseEnv] = func() (string, error) {
-		return s.leasedResource, nil
+		chunks := strings.SplitN(s.leasedResource, "--", 2)
+		return chunks[0], nil
 	}
 	return parameters
 }

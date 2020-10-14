@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+
+	"github.com/hashicorp/go-retryablehttp"
 )
 
 type Opts struct {
@@ -35,6 +37,8 @@ func FileGetterFactory(org, repo, branch string, opts ...Opt) FileGetter {
 	for _, opt := range opts {
 		opt(&o)
 	}
+	client := retryablehttp.NewClient()
+	client.Logger = nil
 	return func(path string) ([]byte, error) {
 		url := fmt.Sprintf("https://raw.githubusercontent.com/%s/%s/%s/%s", org, repo, branch, path)
 		req, err := http.NewRequest(http.MethodGet, url, nil)
@@ -44,7 +48,7 @@ func FileGetterFactory(org, repo, branch string, opts ...Opt) FileGetter {
 		if o.BasicAuthUser != "" {
 			req.SetBasicAuth(o.BasicAuthUser, o.BasicAuthPassword)
 		}
-		resp, err := http.DefaultClient.Do(req)
+		resp, err := client.StandardClient().Do(req)
 		if err != nil {
 			return nil, fmt.Errorf("failed to GET %s: %w", url, err)
 		}

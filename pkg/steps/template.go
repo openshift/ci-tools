@@ -519,6 +519,17 @@ func waitForPodCompletion(ctx context.Context, podClient coreclientset.PodInterf
 }
 
 func waitForPodCompletionOrTimeout(ctx context.Context, podClient coreclientset.PodInterface, eventClient coreclientset.EventInterface, name string, completed map[string]time.Time, notifier ContainerNotifier, skipLogs bool) (*coreapi.Pod, bool, error) {
+	// Warning: this is extremely fragile, inherited legacy code.  Please be
+	// careful and test thoroughly when making changes, as they very frequently
+	// lead to systemic production failures.  Some guidance:
+	// - There is a complex interaction between this code and the container
+	//   notifier.  Updates to the state of the pod are received via the watch
+	//   and communicated to the notifier.  Even in case of interruption (i.e.
+	//   cancellation of `ctx`) and/or failure, events should continue to be
+	//   processed until the notifier signals that it is done.  This ensures
+	//   the state of the pod is correctly reported, artifacts are gathered,
+	//   and termination happens deterministically for both success and failure
+	//   scenarios.
 	watcher, err := podClient.Watch(context.Background(), meta.ListOptions{
 		FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String(),
 		Watch:         true,

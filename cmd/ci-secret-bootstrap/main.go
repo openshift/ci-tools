@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -20,7 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/serializer/json"
+	kubejson "k8s.io/apimachinery/pkg/runtime/serializer/json"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -175,29 +176,55 @@ func (o *options) validateCompletedOptions() error {
 			if key == "" {
 				return fmt.Errorf("config[%d].from: empty key is not allowed", i)
 			}
-			if bwContext.BWItem == "" {
+
+			if bwContext.BWItem == "" && len(bwContext.DockerConfigJSONData) == 0 {
 				return fmt.Errorf("config[%d].from[%s]: empty value is not allowed", i, key)
 			}
-			switch bwContext.Attribute {
-			case secretbootstrap.AttributeTypePassword, "":
-			default:
-				return fmt.Errorf("config[%d].from[%s].attribute: only the '%s' is supported, not %s", i, key, secretbootstrap.AttributeTypePassword, bwContext.Attribute)
+
+			if bwContext.BWItem != "" && len(bwContext.DockerConfigJSONData) > 0 {
+				return fmt.Errorf("config[%d].from[%s]: both bitwarden dockerconfigJSON items are not allowed.", i, key)
 			}
-			nonEmptyFields := 0
-			if bwContext.Field != "" {
-				nonEmptyFields++
-			}
-			if bwContext.Attachment != "" {
-				nonEmptyFields++
-			}
-			if bwContext.Attribute != "" {
-				nonEmptyFields++
-			}
-			if nonEmptyFields == 0 {
-				return fmt.Errorf("config[%d].from[%s]: one of [field, attachment, attribute] must be set", i, key)
-			}
-			if nonEmptyFields > 1 {
-				return fmt.Errorf("config[%d].from[%s]: cannot use more than one in [field, attachment, attribute]", i, key)
+
+			if len(bwContext.DockerConfigJSONData) > 0 {
+				for _, data := range bwContext.DockerConfigJSONData {
+					if data.BWItem == "" {
+						return fmt.Errorf("config[%d].from[%s]: bitwarden item is missing", i, key)
+					}
+					if data.RegistryURLBitwardenField == "" {
+						return fmt.Errorf("config[%d].from[%s]: registry_url field is missing", i, key)
+					}
+					if data.AuthBitwardenField == "" {
+						return fmt.Errorf("config[%d].from[%s]: auth field is missing", i, key)
+					}
+					if secretConfig.To[i].Type == "" {
+						secretConfig.To[i].Type = "kubernetes.io/dockerconfigjson"
+					}
+					if secretConfig.To[i].Type != "kubernetes.io/dockerconfigjson" {
+						return fmt.Errorf("config[%d].from[%s]: dockerconfigJSON config should generate a 'kubernetes.io/dockerconfigjson' type secret", i, key)
+					}
+				}
+			} else if bwContext.BWItem != "" {
+				switch bwContext.Attribute {
+				case secretbootstrap.AttributeTypePassword, "":
+				default:
+					return fmt.Errorf("config[%d].from[%s].attribute: only the '%s' is supported, not %s", i, key, secretbootstrap.AttributeTypePassword, bwContext.Attribute)
+				}
+				nonEmptyFields := 0
+				if bwContext.Field != "" {
+					nonEmptyFields++
+				}
+				if bwContext.Attachment != "" {
+					nonEmptyFields++
+				}
+				if bwContext.Attribute != "" {
+					nonEmptyFields++
+				}
+				if nonEmptyFields == 0 {
+					return fmt.Errorf("config[%d].from[%s]: one of [field, attachment, attribute] must be set", i, key)
+				}
+				if nonEmptyFields > 1 {
+					return fmt.Errorf("config[%d].from[%s]: cannot use more than one in [field, attachment, attribute]", i, key)
+				}
 			}
 		}
 		for j, secretContext := range secretConfig.To {
@@ -221,6 +248,43 @@ func (o *options) validateCompletedOptions() error {
 		}
 	}
 	return nil
+}
+
+func constructDockerConfigJSON(bwClient bitwarden.Client, dockerConfigJSONData []secretbootstrap.DockerConfigJSONData) ([]byte, error) {
+	auths := make(map[string]secretbootstrap.DockerAuth)
+
+	for _, data := range dockerConfigJSONData {
+		authData := secretbootstrap.DockerAuth{}
+
+		registryURLBitwardenField, err := bwClient.GetFieldOnItem(data.BWItem, data.RegistryURLBitwardenField)
+		if err != nil {
+			return nil, fmt.Errorf("couldn't get the entry name from bw item %s: %w", data.BWItem, err)
+
+		}
+
+		authBWField, err := bwClient.GetFieldOnItem(data.BWItem, data.AuthBitwardenField)
+		if err != nil {
+			return nil, fmt.Errorf("couldn't get the auth field '%s' from bw item %s: %w", data.AuthBitwardenField, data.BWItem, err)
+		}
+		authData.Auth = string(authBWField)
+
+		if data.EmailBitwardenField != "" {
+			emailValue, err := bwClient.GetFieldOnItem(data.BWItem, data.EmailBitwardenField)
+			if err != nil {
+				return nil, fmt.Errorf("couldn't get email field '%s' from bw item %s: %w", data.EmailBitwardenField, data.BWItem, err)
+			}
+			authData.Email = string(emailValue)
+		}
+
+		auths[string(registryURLBitwardenField)] = authData
+	}
+
+	b, err := json.Marshal(&secretbootstrap.DockerConfigJSON{Auths: auths})
+	if err != nil {
+		return nil, fmt.Errorf("couldn't marshal to json %w", err)
+	}
+
+	return b, nil
 }
 
 func constructSecrets(ctx context.Context, config secretbootstrap.Config, bwClient bitwarden.Client, maxConcurrency int) (map[string][]*coreapi.Secret, error) {
@@ -264,6 +328,8 @@ func constructSecrets(ctx context.Context, config secretbootstrap.Config, bwClie
 						value, err = bwClient.GetFieldOnItem(bwContext.BWItem, bwContext.Field)
 					} else if bwContext.Attachment != "" {
 						value, err = bwClient.GetAttachmentOnItem(bwContext.BWItem, bwContext.Attachment)
+					} else if len(bwContext.DockerConfigJSONData) > 0 {
+						value, err = constructDockerConfigJSON(bwClient, bwContext.DockerConfigJSONData)
 					} else {
 						switch bwContext.Attribute {
 						case secretbootstrap.AttributeTypePassword:
@@ -373,8 +439,8 @@ func writeSecrets(secretsMap map[string][]*coreapi.Secret, w io.Writer) error {
 			if _, err := fmt.Fprintln(w, "---"); err != nil {
 				return err
 			}
-			s := json.NewSerializerWithOptions(json.DefaultMetaFactory, scheme.Scheme,
-				scheme.Scheme, json.SerializerOptions{Yaml: true, Pretty: true, Strict: true})
+			s := kubejson.NewSerializerWithOptions(kubejson.DefaultMetaFactory, scheme.Scheme,
+				scheme.Scheme, kubejson.SerializerOptions{Yaml: true, Pretty: true, Strict: true})
 			if err := s.Encode(secret, w); err != nil {
 				return err
 			}

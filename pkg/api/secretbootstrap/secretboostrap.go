@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+
 	"sigs.k8s.io/yaml"
 
 	corev1 "k8s.io/api/core/v1"
@@ -17,10 +18,27 @@ const (
 )
 
 type BitWardenContext struct {
-	BWItem     string        `json:"bw_item"`
-	Field      string        `json:"field,omitempty"`
-	Attachment string        `json:"attachment,omitempty"`
-	Attribute  AttributeType `json:"attribute,omitempty"`
+	BWItem               string                 `json:"bw_item"`
+	Field                string                 `json:"field,omitempty"`
+	Attachment           string                 `json:"attachment,omitempty"`
+	Attribute            AttributeType          `json:"attribute,omitempty"`
+	DockerConfigJSONData []DockerConfigJSONData `json:"dockerconfigJSON,omitempty"`
+}
+
+type DockerConfigJSONData struct {
+	BWItem                    string `json:"bw_item"`
+	RegistryURLBitwardenField string `json:"registry_url_bw_field"`
+	AuthBitwardenField        string `json:"auth_bw_field"`
+	EmailBitwardenField       string `json:"email_bw_field,omitempty"`
+}
+
+type DockerConfigJSON struct {
+	Auths map[string]DockerAuth `json:"auths"`
+}
+
+type DockerAuth struct {
+	Auth  string `json:"auth"`
+	Email string `json:"email,omitempty"`
 }
 
 type SecretContext struct {

@@ -542,7 +542,7 @@ func validateTestConfigurationType(fieldRoot string, test TestStepConfiguration,
 			validationErrors = append(validationErrors, fmt.Errorf("%s: non-literal test found in fully-resolved configuration", fieldRoot))
 		}
 		typeCount++
-		if testConfig.Workflow == nil && testConfig.ClusterProfile != "" {
+		if testConfig.ClusterProfile != "" {
 			validationErrors = append(validationErrors, validateClusterProfile(fieldRoot, testConfig.ClusterProfile)...)
 		}
 		seen := sets.NewString()

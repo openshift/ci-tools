@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"github.com/slack-go/slack"
 
 	"github.com/openshift/ci-tools/pkg/jira"
 	"github.com/openshift/ci-tools/pkg/slack/interactions"
@@ -24,7 +25,8 @@ type SubmissionTestCase struct {
 func ValidateSubmission(t *testing.T, handler interactions.Handler, testCases ...SubmissionTestCase) {
 	for _, testCase := range testCases {
 		t.Run(testCase.Name, func(t *testing.T) {
-			callback := ReadCallbackFixture(t)
+			var callback slack.InteractionCallback
+			ReadCallbackFixture(t, &callback)
 			out, err := handler.Handle(&callback, logrus.WithField("test", testCase.Name))
 			select {
 			case <-time.After(1 * time.Second):

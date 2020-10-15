@@ -1,0 +1,17 @@
+- text:
+    text: 'It looks like you''re trying to do one of the following:'
+    type: plain_text
+  type: section
+- type: divider
+- accessory:
+    text:
+      text: File a Bug
+      type: plain_text
+    type: button
+    value: bug
+  text:
+    text: |-
+      *File a Bug*
+      Record a defect in the test infrastructure, providing a reproducer where possible.
+    type: mrkdwn
+  type: section

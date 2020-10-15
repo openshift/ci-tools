@@ -520,7 +520,7 @@ func (o *options) Complete() error {
 	o.clusterConfig = clusterConfig
 
 	if len(o.pullSecretPath) > 0 {
-		o.pullSecret, err = getPullSecretFromFile(o.pullSecretPath)
+		o.pullSecret, err = getPullSecret(steps.PullSecretName, o.pullSecretPath)
 		if err != nil {
 			return fmt.Errorf("could not get pull secret from path %s: %w", o.pullSecretPath, err)
 		}
@@ -815,6 +815,14 @@ func (o *options) initializeNamespace() error {
 		if err := client.Create(ctx, o.pullSecret); err != nil && !kerrors.IsAlreadyExists(err) {
 			return fmt.Errorf("couldn't create pull secret %s: %w", o.pullSecret.Name, err)
 		}
+	}
+
+	pushSecret, err := getPullSecret(api.RegistryPushCredentialsCICentralSecret, filepath.Join(api.RegistryPushCredentialsCICentralSecretMountPath, coreapi.DockerConfigJsonKey))
+	if err != nil {
+		return fmt.Errorf("could not get push secret: %w", err)
+	}
+	if err := client.Create(ctx, pushSecret); err != nil && !kerrors.IsAlreadyExists(err) {
+		return fmt.Errorf("couldn't create push secret %s: %w", pushSecret.Name, err)
 	}
 
 	updates := map[string]string{}
@@ -1604,11 +1612,11 @@ func getHashFromBytes(b []byte) string {
 	return oneWayNameEncoding.EncodeToString(hash.Sum(nil)[:5])
 }
 
-func getPullSecretFromFile(filename string) (*coreapi.Secret, error) {
+func getPullSecret(name, filename string) (*coreapi.Secret, error) {
 	secret := &coreapi.Secret{
 		Data: make(map[string][]byte),
 		ObjectMeta: meta.ObjectMeta{
-			Name: steps.PullSecretName,
+			Name: name,
 		},
 		Type: coreapi.SecretTypeDockerConfigJson,
 	}

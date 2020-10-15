@@ -126,7 +126,7 @@ func cmdEmptyErr(itemIndex, entryIndex int, entry string) error {
 
 func (o *options) validateCompletedOptions() error {
 	if o.bwPassword == "" {
-		return fmt.Errorf("--bw-password-file was empty")
+		return fmt.Errorf("--bw-password-path was empty")
 	}
 
 	for i, bwItem := range o.config {

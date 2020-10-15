@@ -901,6 +901,80 @@ func TestValidateCompletedOptions(t *testing.T) {
 			},
 		},
 		{
+			name: "happy dockerconfigJSON configuration: use RegistryURL",
+			given: options{
+				logLevel:   "info",
+				bwPassword: "topSecret",
+				config: secretbootstrap.Config{
+					Secrets: []secretbootstrap.SecretConfig{
+						{
+							From: map[string]secretbootstrap.BitWardenContext{
+								"key-name-1": {
+									DockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{
+										{
+											BWItem:                  "bitwarden-item",
+											RegistryURL:             "quay.io",
+											AuthBitwardenAttachment: "auth",
+											EmailBitwardenField:     "email",
+										},
+										{
+											BWItem:                    "bitwarden-item2",
+											RegistryURLBitwardenField: "registryURL",
+											AuthBitwardenAttachment:   "auth",
+											EmailBitwardenField:       "email",
+										},
+									},
+								},
+							},
+							To: []secretbootstrap.SecretContext{
+								{
+									Cluster:   "default",
+									Name:      "docker-config-json-secret",
+									Namespace: "namespace-1",
+									Type:      "kubernetes.io/dockerconfigjson",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "sad dockerconfigJSON configuration: cannot set both RegistryURL and RegistryURLBitwardenField",
+			given: options{
+				logLevel:   "info",
+				bwPassword: "topSecret",
+				config: secretbootstrap.Config{
+					Secrets: []secretbootstrap.SecretConfig{
+						{
+							From: map[string]secretbootstrap.BitWardenContext{
+								"key-name-1": {
+									DockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{
+										{
+											BWItem:                    "bitwarden-item",
+											RegistryURL:               "quay.io",
+											RegistryURLBitwardenField: "registryURL",
+											AuthBitwardenAttachment:   "auth",
+											EmailBitwardenField:       "email",
+										},
+									},
+								},
+							},
+							To: []secretbootstrap.SecretContext{
+								{
+									Cluster:   "default",
+									Name:      "docker-config-json-secret",
+									Namespace: "namespace-1",
+									Type:      "kubernetes.io/dockerconfigjson",
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: fmt.Errorf("config[0].from[key-name-1]: registry_url_bw_field and registry_url are mutualy exclusive"),
+		},
+		{
 			name: "sad dockerconfigJSON configuration",
 			given: options{
 				logLevel:   "info",
@@ -937,7 +1011,38 @@ func TestValidateCompletedOptions(t *testing.T) {
 			},
 			expected: fmt.Errorf("config[0].from[key-name-1]: auth_bw_attachment is missing"),
 		},
-
+		{
+			name: "sad dockerconfigJSON configuration: cannot determine registry URL",
+			given: options{
+				logLevel:   "info",
+				bwPassword: "topSecret",
+				config: secretbootstrap.Config{
+					Secrets: []secretbootstrap.SecretConfig{
+						{
+							From: map[string]secretbootstrap.BitWardenContext{
+								"key-name-1": {
+									DockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{
+										{
+											BWItem:                  "bitwarden-item2",
+											AuthBitwardenAttachment: "auth",
+											EmailBitwardenField:     "email",
+										},
+									},
+								},
+							},
+							To: []secretbootstrap.SecretContext{
+								{
+									Cluster:   "default",
+									Name:      "docker-config-json-secret",
+									Namespace: "namespace-1",
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: fmt.Errorf("config[0].from[key-name-1]: either registry_url_bw_field or registry_url must be set"),
+		},
 		{
 			name: "dockerconfigJSON configuration with wrong secret type in the destination secret",
 			given: options{
@@ -1905,6 +2010,49 @@ func TestConstructDockerConfigJSON(t *testing.T) {
 					},
 				}, make(map[string]string)),
 			expectedJSON: []byte(`{"auths":{"quay.io":{"auth":"123456789","email":"test@test.com"}}}`),
+		},
+		{
+			id: "RegistryURL overrides RegistryURLBitwardenField",
+			attachments: []attachment{
+				{
+					bwItem:   "item-name-1",
+					filename: "auth",
+					contents: []byte("123456789"),
+				},
+			},
+			dockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{
+				{
+					BWItem:                    "item-name-1",
+					RegistryURLBitwardenField: "registryURL",
+					AuthBitwardenAttachment:   "auth",
+					EmailBitwardenField:       "email",
+					RegistryURL:               "cool-url",
+				},
+			},
+			bwClient: bitwarden.NewFakeClient(
+				[]bitwarden.Item{
+					{
+						ID:   "1",
+						Name: "item-name-1",
+						Attachments: []bitwarden.Attachment{
+							{
+								ID:       "12345678",
+								FileName: "auth",
+							},
+						},
+						Fields: []bitwarden.Field{
+							{
+								Name:  "registryURL",
+								Value: "quay.io",
+							},
+							{
+								Name:  "email",
+								Value: "test@test.com",
+							},
+						},
+					},
+				}, make(map[string]string)),
+			expectedJSON: []byte(`{"auths":{"cool-url":{"auth":"123456789","email":"test@test.com"}}}`),
 		},
 		{
 			id: "happy multiple case",

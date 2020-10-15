@@ -45,7 +45,8 @@ type ProcessTestCase struct {
 func ValidateParameterProcessing(t *testing.T, parameters modals.JiraIssueParameters, testCases []ProcessTestCase) {
 	for _, testCase := range testCases {
 		t.Run(testCase.Name, func(t *testing.T) {
-			callback := ReadCallbackFixture(t)
+			var callback slack.InteractionCallback
+			ReadCallbackFixture(t, &callback)
 			title, body, err := parameters.Process(&callback)
 			if diff := cmp.Diff(testCase.ExpectedTitle, title); diff != "" {
 				t.Errorf("%s: got incorrect title: %v", testCase.Name, diff)
@@ -76,13 +77,9 @@ func WriteCallbackFixture(t *testing.T, data []byte) {
 	testhelper.WriteToFixture(t, "_callback", data)
 }
 
-func ReadCallbackFixture(t *testing.T) slack.InteractionCallback {
+func ReadCallbackFixture(t *testing.T, callback interface{}) {
 	data := testhelper.ReadFromFixture(t, "_callback")
-	var callback slack.InteractionCallback
-	if err := yaml.Unmarshal(data, &callback); err != nil {
+	if err := yaml.Unmarshal(data, callback); err != nil {
 		t.Errorf("failed to unmarshal payload: %v", err)
-		return callback
 	}
-
-	return callback
 }

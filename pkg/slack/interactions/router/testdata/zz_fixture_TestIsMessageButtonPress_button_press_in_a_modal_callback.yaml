@@ -1,0 +1,46 @@
+actions:
+- action_id: uHi
+  action_ts: "1602721077.927021"
+  block_id: ReiWk
+  type: button
+  value: question
+token: Rn1sVT099UjUeKclB3PkLT8t
+trigger_id: 1414746070679.1377252349923.d013e2bf51ca9cd492f125285356c8ec
+type: block_actions
+view:
+  app_id: A01BJF00CAD
+  bot_id: B01B63T6ZFD
+  hash: 1602721048.8I2Iugsv
+  id: V01D03D0257
+  private_metadata: bug
+  root_view_id: V01D03D0257
+  state:
+    values:
+      category:
+        BtO:
+          type: static_select
+          value: ""
+      expected:
+        uE2k:
+          type: plain_text_input
+          value: ""
+      impact:
+        Au7:
+          type: plain_text_input
+          value: ""
+      optional:
+        v5u/:
+          type: plain_text_input
+          value: ""
+      reproduction:
+        m1dJb:
+          type: plain_text_input
+          value: ""
+      symptom:
+        UsOZt:
+          type: plain_text_input
+          value: ""
+      title:
+        3Gi:
+          type: plain_text_input
+          value: ""

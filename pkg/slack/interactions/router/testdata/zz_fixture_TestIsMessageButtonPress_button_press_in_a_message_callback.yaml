@@ -1,0 +1,14 @@
+actions:
+- action_id: zm/x
+  action_ts: "1602718811.967465"
+  block_id: 9SYKg
+  type: button
+  value: incident
+message:
+  text: This content can't be displayed.
+  ts: "1602718788.001800"
+  type: message
+  user: U01BVNGTY4Q
+token: Rn1sVT099UjUeKclB3PkLT8t
+trigger_id: 1453277082384.1377252349923.284fae7a31c31795c67c87d6603044b0
+type: block_actions

@@ -39,7 +39,8 @@ func TestValidateSubmissionHandler(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			callback := modaltesting.ReadCallbackFixture(t)
+			var callback slack.InteractionCallback
+			modaltesting.ReadCallbackFixture(t, &callback)
 			handled, out, err := validateSubmissionHandler().Handle(&callback, logrus.WithField("test", testCase.name))
 			if expected, actual := testCase.expectedHandled, handled; expected != actual {
 				t.Errorf("%s: expected handled %v but got %v", testCase.name, expected, actual)

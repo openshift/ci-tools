@@ -26,8 +26,10 @@ import (
 	"k8s.io/test-infra/prow/simplifypath"
 
 	"github.com/openshift/ci-tools/pkg/jira"
-	"github.com/openshift/ci-tools/pkg/slack/interactions"
-	"github.com/openshift/ci-tools/pkg/slack/interactions/router"
+	eventhandler "github.com/openshift/ci-tools/pkg/slack/events"
+	eventrouter "github.com/openshift/ci-tools/pkg/slack/events/router"
+	interactionhandler "github.com/openshift/ci-tools/pkg/slack/interactions"
+	interactionrouter "github.com/openshift/ci-tools/pkg/slack/interactions/router"
 )
 
 type options struct {
@@ -135,8 +137,8 @@ func main() {
 	mux := http.NewServeMux()
 	// handle the root to allow for a simple uptime probe
 	mux.Handle("/", handler(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) { writer.WriteHeader(http.StatusOK) })))
-	mux.Handle("/slack/interactive-endpoint", handler(handleInteraction(secretAgent.GetTokenGenerator(o.slackSigningSecretPath), router.ForModals(issueFiler, slackClient))))
-	mux.Handle("/slack/events-endpoint", handler(handleEvent(secretAgent.GetTokenGenerator(o.slackSigningSecretPath))))
+	mux.Handle("/slack/interactive-endpoint", handler(handleInteraction(secretAgent.GetTokenGenerator(o.slackSigningSecretPath), interactionrouter.ForModals(issueFiler, slackClient))))
+	mux.Handle("/slack/events-endpoint", handler(handleEvent(secretAgent.GetTokenGenerator(o.slackSigningSecretPath), eventrouter.ForEvents(slackClient))))
 	server := &http.Server{Addr: ":" + strconv.Itoa(o.port), Handler: mux}
 
 	health.ServeReady()
@@ -174,7 +176,7 @@ func verifiedBody(logger *logrus.Entry, request *http.Request, signingSecret fun
 	return body, true
 }
 
-func handleEvent(signingSecret func() []byte) http.HandlerFunc {
+func handleEvent(signingSecret func() []byte, handler eventhandler.Handler) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		logger := logrus.WithField("api", "events")
 		logger.Debug("Got an event payload.")
@@ -206,12 +208,22 @@ func handleEvent(signingSecret func() []byte) http.HandlerFunc {
 				logger.WithError(err).Warn("Failed to write response.")
 			}
 		}
+
+		// we always want to respond with 200 immediately
+		writer.WriteHeader(http.StatusOK)
+
+		// we don't really care how long this takes
+		go func() {
+			if err := handler.Handle(&event, logger); err != nil {
+				logger.WithError(err).Error("Failed to handle event")
+			}
+		}()
 	}
 }
 
-func handleInteraction(signingSecret func() []byte, handler interactions.Handler) http.HandlerFunc {
+func handleInteraction(signingSecret func() []byte, handler interactionhandler.Handler) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
-		logger := logrus.WithField("api", "interactions")
+		logger := logrus.WithField("api", "interactionhandler")
 		logger.Debug("Got an interaction payload.")
 		if _, ok := verifiedBody(logger, request, signingSecret); !ok {
 			writer.WriteHeader(http.StatusInternalServerError)

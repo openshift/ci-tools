@@ -53,4 +53,4 @@ os::log::info "Sending production traffic from Slack to the reverse proxy..."
 ssh -N -T root@127.0.0.1 -p 2222 -R "8888:127.0.0.1:8888" &
 
 os::log::info "Running the slack-bot server..."
-http_proxy=localhost:7777 https_proxy=localhost:7777 slack-bot --port 6666 --slack-token-path "${data}/oauth_token" --slack-signing-secret-path="${data}/signing_secret" --jira-username=skuznets --jira-password-file="${data}/password" --jira-endpoint https://issues.redhat.com --log-level=trace
+http_proxy=localhost:7777 https_proxy=localhost:7777 slack-bot --port 6666 --slack-token-path "${data}/oauth_token" --slack-signing-secret-path="${data}/signing_secret" --jira-username=dptp-bot --jira-password-file="${data}/password" --jira-endpoint https://issues.redhat.com --log-level=trace

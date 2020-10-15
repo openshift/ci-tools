@@ -57,20 +57,41 @@ type modalRouter struct {
 func (r *modalRouter) Handle(callback *slack.InteractionCallback, logger *logrus.Entry) (output []byte, err error) {
 	switch callback.Type {
 	case slack.InteractionTypeShortcut:
-		return nil, r.openView(callback, logger)
+		return nil, r.viewForShortcut(callback, logger)
+	case slack.InteractionTypeBlockActions:
+		if isMessageButtonPress(callback) {
+			return nil, r.viewForButton(callback, logger)
+		}
+		return r.delegate(callback, logger)
 	default:
 		return r.delegate(callback, logger)
 	}
+}
+
+// isMessageButtonPress determines if an interaction callback is for a button press in a message
+func isMessageButtonPress(callback *slack.InteractionCallback) bool {
+	return callback.View.ID == "" && callback.Message.Text != "" && len(callback.ActionCallback.BlockActions) > 0 && callback.ActionCallback.BlockActions[0].Type == "button"
 }
 
 type slackClient interface {
 	OpenView(triggerID string, view slack.ModalViewRequest) (*slack.ViewResponse, error)
 }
 
-// openView reacts to the original shortcut action from the user
+// viewForShortcut reacts to the original shortcut action from the user
 // to open the first modal view for them
-func (r *modalRouter) openView(callback *slack.InteractionCallback, logger *logrus.Entry) error {
+func (r *modalRouter) viewForShortcut(callback *slack.InteractionCallback, logger *logrus.Entry) error {
 	id := modals.Identifier(callback.CallbackID)
+	return r.openModal(id, callback.TriggerID, logger)
+}
+
+// viewForButton reacts to the a user pressing a button in a bot message
+// to open the a modal view for them
+func (r *modalRouter) viewForButton(callback *slack.InteractionCallback, logger *logrus.Entry) error {
+	id := modals.Identifier(callback.ActionCallback.BlockActions[0].Value)
+	return r.openModal(id, callback.TriggerID, logger)
+}
+
+func (r *modalRouter) openModal(id modals.Identifier, triggerID string, logger *logrus.Entry) error {
 	logger = logger.WithField("view_id", id)
 	logger.Infof("Opening modal view %s.", id)
 	view, exists := r.viewsById[id]
@@ -79,7 +100,7 @@ func (r *modalRouter) openView(callback *slack.InteractionCallback, logger *logr
 		return nil
 	}
 
-	response, err := r.slackClient.OpenView(callback.TriggerID, view)
+	response, err := r.slackClient.OpenView(triggerID, view)
 	if err != nil {
 		logger.WithError(err).Warn("Failed to open a modal flow.")
 	}

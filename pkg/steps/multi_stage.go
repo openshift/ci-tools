@@ -66,6 +66,7 @@ type multiStageTestStep struct {
 	pre, test, post    []api.LiteralTestStep
 	subTests           []*junit.TestCase
 	allowSkipOnSuccess *bool
+	leases             []api.StepLease
 }
 
 func MultiStageTestStep(
@@ -76,8 +77,9 @@ func MultiStageTestStep(
 	client ctrlruntimeclient.Client,
 	artifactDir string,
 	jobSpec *api.JobSpec,
+	leases []api.StepLease,
 ) api.Step {
-	return newMultiStageTestStep(testConfig, config, params, podClient, client, artifactDir, jobSpec)
+	return newMultiStageTestStep(testConfig, config, params, podClient, client, artifactDir, jobSpec, leases)
 }
 
 func newMultiStageTestStep(
@@ -88,6 +90,7 @@ func newMultiStageTestStep(
 	client ctrlruntimeclient.Client,
 	artifactDir string,
 	jobSpec *api.JobSpec,
+	leases []api.StepLease,
 ) *multiStageTestStep {
 	if artifactDir != "" {
 		artifactDir = filepath.Join(artifactDir, testConfig.As)
@@ -107,6 +110,7 @@ func newMultiStageTestStep(
 		test:               ms.Test,
 		post:               ms.Post,
 		allowSkipOnSuccess: ms.AllowSkipOnSuccess,
+		leases:             leases,
 	}
 }
 
@@ -125,23 +129,9 @@ func (s *multiStageTestStep) Run(ctx context.Context) error {
 }
 
 func (s *multiStageTestStep) run(ctx context.Context) error {
-	var env []coreapi.EnvVar
-	if s.profile != "" {
-		if err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: s.jobSpec.Namespace(), Name: s.profileSecretName()}, &coreapi.Secret{}); err != nil {
-			return fmt.Errorf("could not find secret %q: %w", s.profileSecretName(), err)
-		}
-		for _, e := range envForProfile {
-			val, err := s.params.Get(e)
-			if err != nil {
-				return err
-			}
-			env = append(env, coreapi.EnvVar{Name: e, Value: val})
-		}
-		if optionalOperator, err := resolveOptionalOperator(s.params); err != nil {
-			return err
-		} else if optionalOperator != nil {
-			env = append(env, optionalOperator.asEnv()...)
-		}
+	env, err := s.environment(ctx)
+	if err != nil {
+		return err
 	}
 	if err := s.createSecret(ctx); err != nil {
 		return fmt.Errorf("failed to create secret: %w", err)
@@ -259,6 +249,36 @@ func (s *multiStageTestStep) setupRBAC() error {
 		return err
 	}
 	return nil
+}
+
+func (s *multiStageTestStep) environment(ctx context.Context) ([]coreapi.EnvVar, error) {
+	var ret []coreapi.EnvVar
+	for _, l := range s.leases {
+		val, err := s.params.Get(l.Env)
+		if err != nil {
+			return nil, err
+		}
+		ret = append(ret, coreapi.EnvVar{Name: l.Env, Value: val})
+	}
+	if s.profile != "" {
+		secret := s.profileSecretName()
+		if err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: s.jobSpec.Namespace(), Name: secret}, &coreapi.Secret{}); err != nil {
+			return nil, fmt.Errorf("could not find secret %q: %w", secret, err)
+		}
+		for _, e := range envForProfile {
+			val, err := s.params.Get(e)
+			if err != nil {
+				return nil, err
+			}
+			ret = append(ret, coreapi.EnvVar{Name: e, Value: val})
+		}
+		if optionalOperator, err := resolveOptionalOperator(s.params); err != nil {
+			return nil, err
+		} else if optionalOperator != nil {
+			ret = append(ret, optionalOperator.asEnv()...)
+		}
+	}
+	return ret, nil
 }
 
 func (s *multiStageTestStep) createSecret(ctx context.Context) error {

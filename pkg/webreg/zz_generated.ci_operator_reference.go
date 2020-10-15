@@ -345,6 +345,12 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            # Environment has the values of parameters for the steps.\n" +
 	"            env:\n" +
 	"                \"\": \"\"\n" +
+	"            # Leases lists resources that should be acquired for the test.\n" +
+	"            leases:\n" +
+	"                - # Env is the environment variable that will contain the resource name.\n" +
+	"                  env: ' '\n" +
+	"                  # ResourceType is the type of resource that will be leased.\n" +
+	"                  resource_type: ' '\n" +
 	"            # Observers are the observers that need to be run\n" +
 	"            observers:\n" +
 	"                - # Commands is the command(s) that will be run inside the image.\n" +
@@ -407,6 +413,12 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    name: ' '\n" +
 	"                    namespace: ' '\n" +
 	"                    tag: ' '\n" +
+	"                  # Leases lists resources that should be acquired for the test.\n" +
+	"                  leases:\n" +
+	"                    - # Env is the environment variable that will contain the resource name.\n" +
+	"                      env: ' '\n" +
+	"                      # ResourceType is the type of resource that will be leased.\n" +
+	"                      resource_type: ' '\n" +
 	"                  # Observers are the observers that should be running\n" +
 	"                  observers:\n" +
 	"                    - \"\"\n" +
@@ -469,6 +481,12 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    name: ' '\n" +
 	"                    namespace: ' '\n" +
 	"                    tag: ' '\n" +
+	"                  # Leases lists resources that should be acquired for the test.\n" +
+	"                  leases:\n" +
+	"                    - # Env is the environment variable that will contain the resource name.\n" +
+	"                      env: ' '\n" +
+	"                      # ResourceType is the type of resource that will be leased.\n" +
+	"                      resource_type: ' '\n" +
 	"                  # Observers are the observers that should be running\n" +
 	"                  observers:\n" +
 	"                    - \"\"\n" +
@@ -531,6 +549,12 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    name: ' '\n" +
 	"                    namespace: ' '\n" +
 	"                    tag: ' '\n" +
+	"                  # Leases lists resources that should be acquired for the test.\n" +
+	"                  leases:\n" +
+	"                    - # Env is the environment variable that will contain the resource name.\n" +
+	"                      env: ' '\n" +
+	"                      # ResourceType is the type of resource that will be leased.\n" +
+	"                      resource_type: ' '\n" +
 	"                  # Observers are the observers that should be running\n" +
 	"                  observers:\n" +
 	"                    - \"\"\n" +
@@ -599,6 +623,12 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            # Environment has the values of parameters for the steps.\n" +
 	"            env:\n" +
 	"                \"\": \"\"\n" +
+	"            # Leases lists resources that should be acquired for the test.\n" +
+	"            leases:\n" +
+	"                - # Env is the environment variable that will contain the resource name.\n" +
+	"                  env: ' '\n" +
+	"                  # ResourceType is the type of resource that will be leased.\n" +
+	"                  resource_type: ' '\n" +
 	"            # Observers are the observers that should be running\n" +
 	"            observers:\n" +
 	"                # Disable is a list of named observers that should be disabled\n" +
@@ -642,6 +672,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    name: ' '\n" +
 	"                    namespace: ' '\n" +
 	"                    tag: ' '\n" +
+	"                  leases:\n" +
+	"                    # LiteralTestStep is a full test step definition.\n" +
+	"                    - env: ' '\n" +
+	"                      resource_type: ' '\n" +
 	"                  observers:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    - \"\"\n" +
@@ -691,6 +725,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    name: ' '\n" +
 	"                    namespace: ' '\n" +
 	"                    tag: ' '\n" +
+	"                  leases:\n" +
+	"                    # LiteralTestStep is a full test step definition.\n" +
+	"                    - env: ' '\n" +
+	"                      resource_type: ' '\n" +
 	"                  observers:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    - \"\"\n" +
@@ -740,6 +778,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    name: ' '\n" +
 	"                    namespace: ' '\n" +
 	"                    tag: ' '\n" +
+	"                  leases:\n" +
+	"                    # LiteralTestStep is a full test step definition.\n" +
+	"                    - env: ' '\n" +
+	"                      resource_type: ' '\n" +
 	"                  observers:\n" +
 	"                    # LiteralTestStep is a full test step definition.\n" +
 	"                    - \"\"\n" +
@@ -874,6 +916,12 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # Environment has the values of parameters for the steps.\n" +
 	"        env:\n" +
 	"            \"\": \"\"\n" +
+	"        # Leases lists resources that should be acquired for the test.\n" +
+	"        leases:\n" +
+	"            - # Env is the environment variable that will contain the resource name.\n" +
+	"              env: ' '\n" +
+	"              # ResourceType is the type of resource that will be leased.\n" +
+	"              resource_type: ' '\n" +
 	"        # Observers are the observers that need to be run\n" +
 	"        observers:\n" +
 	"            - # Commands is the command(s) that will be run inside the image.\n" +
@@ -936,6 +984,12 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                name: ' '\n" +
 	"                namespace: ' '\n" +
 	"                tag: ' '\n" +
+	"              # Leases lists resources that should be acquired for the test.\n" +
+	"              leases:\n" +
+	"                - # Env is the environment variable that will contain the resource name.\n" +
+	"                  env: ' '\n" +
+	"                  # ResourceType is the type of resource that will be leased.\n" +
+	"                  resource_type: ' '\n" +
 	"              # Observers are the observers that should be running\n" +
 	"              observers:\n" +
 	"                - \"\"\n" +
@@ -998,6 +1052,12 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                name: ' '\n" +
 	"                namespace: ' '\n" +
 	"                tag: ' '\n" +
+	"              # Leases lists resources that should be acquired for the test.\n" +
+	"              leases:\n" +
+	"                - # Env is the environment variable that will contain the resource name.\n" +
+	"                  env: ' '\n" +
+	"                  # ResourceType is the type of resource that will be leased.\n" +
+	"                  resource_type: ' '\n" +
 	"              # Observers are the observers that should be running\n" +
 	"              observers:\n" +
 	"                - \"\"\n" +
@@ -1060,6 +1120,12 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                name: ' '\n" +
 	"                namespace: ' '\n" +
 	"                tag: ' '\n" +
+	"              # Leases lists resources that should be acquired for the test.\n" +
+	"              leases:\n" +
+	"                - # Env is the environment variable that will contain the resource name.\n" +
+	"                  env: ' '\n" +
+	"                  # ResourceType is the type of resource that will be leased.\n" +
+	"                  resource_type: ' '\n" +
 	"              # Observers are the observers that should be running\n" +
 	"              observers:\n" +
 	"                - \"\"\n" +
@@ -1128,6 +1194,12 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # Environment has the values of parameters for the steps.\n" +
 	"        env:\n" +
 	"            \"\": \"\"\n" +
+	"        # Leases lists resources that should be acquired for the test.\n" +
+	"        leases:\n" +
+	"            - # Env is the environment variable that will contain the resource name.\n" +
+	"              env: ' '\n" +
+	"              # ResourceType is the type of resource that will be leased.\n" +
+	"              resource_type: ' '\n" +
 	"        # Observers are the observers that should be running\n" +
 	"        observers:\n" +
 	"            # Disable is a list of named observers that should be disabled\n" +
@@ -1171,6 +1243,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                name: ' '\n" +
 	"                namespace: ' '\n" +
 	"                tag: ' '\n" +
+	"              leases:\n" +
+	"                # LiteralTestStep is a full test step definition.\n" +
+	"                - env: ' '\n" +
+	"                  resource_type: ' '\n" +
 	"              observers:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
 	"                - \"\"\n" +
@@ -1220,6 +1296,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                name: ' '\n" +
 	"                namespace: ' '\n" +
 	"                tag: ' '\n" +
+	"              leases:\n" +
+	"                # LiteralTestStep is a full test step definition.\n" +
+	"                - env: ' '\n" +
+	"                  resource_type: ' '\n" +
 	"              observers:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
 	"                - \"\"\n" +
@@ -1269,6 +1349,10 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                name: ' '\n" +
 	"                namespace: ' '\n" +
 	"                tag: ' '\n" +
+	"              leases:\n" +
+	"                # LiteralTestStep is a full test step definition.\n" +
+	"                - env: ' '\n" +
+	"                  resource_type: ' '\n" +
 	"              observers:\n" +
 	"                # LiteralTestStep is a full test step definition.\n" +
 	"                - \"\"\n" +

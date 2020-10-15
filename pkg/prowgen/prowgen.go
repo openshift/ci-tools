@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 
-	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -15,6 +14,7 @@ import (
 	prowconfig "k8s.io/test-infra/prow/config"
 	utilpointer "k8s.io/utils/pointer"
 
+	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
 	jc "github.com/openshift/ci-tools/pkg/jobconfig"
 	"github.com/openshift/ci-tools/pkg/promotion"
@@ -182,6 +182,17 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 		if configSpec.PromotionConfiguration != nil {
 
 			podSpec := generateCiOperatorPodSpec(info, nil, imageTargets.List(), []string{"--promote"}...)
+			podSpec.Containers[0].VolumeMounts = append(podSpec.Containers[0].VolumeMounts, corev1.VolumeMount{
+				Name:      "push-secret",
+				MountPath: cioperatorapi.RegistryPushCredentialsCICentralSecretMountPath,
+				ReadOnly:  true,
+			})
+			podSpec.Volumes = append(podSpec.Volumes, corev1.Volume{
+				Name: "push-secret",
+				VolumeSource: corev1.VolumeSource{
+					Secret: &corev1.SecretVolumeSource{SecretName: cioperatorapi.RegistryPushCredentialsCICentralSecret},
+				},
+			})
 			postsubmit := generatePostsubmitForTest("images", info, label, podSpec, configSpec.CanonicalGoRepository, jobRelease, skipCloning)
 			postsubmit.MaxConcurrency = 1
 			if postsubmit.Labels == nil {

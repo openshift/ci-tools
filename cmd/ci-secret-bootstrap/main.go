@@ -191,8 +191,11 @@ func (o *options) validateCompletedOptions() error {
 					if data.BWItem == "" {
 						return fmt.Errorf("config[%d].from[%s]: bw_item is missing", i, key)
 					}
-					if data.RegistryURLBitwardenField == "" {
-						return fmt.Errorf("config[%d].from[%s]: registry_url_bw_field is missing", i, key)
+					if data.RegistryURLBitwardenField == "" && data.RegistryURL == "" {
+						return fmt.Errorf("config[%d].from[%s]: either registry_url_bw_field or registry_url must be set", i, key)
+					}
+					if data.RegistryURLBitwardenField != "" && data.RegistryURL != "" {
+						return fmt.Errorf("config[%d].from[%s]: registry_url_bw_field and registry_url are mutualy exclusive", i, key)
 					}
 					if data.AuthBitwardenAttachment == "" {
 						return fmt.Errorf("config[%d].from[%s]: auth_bw_attachment is missing", i, key)
@@ -258,10 +261,13 @@ func constructDockerConfigJSON(bwClient bitwarden.Client, dockerConfigJSONData [
 	for _, data := range dockerConfigJSONData {
 		authData := secretbootstrap.DockerAuth{}
 
-		registryURLBitwardenField, err := bwClient.GetFieldOnItem(data.BWItem, data.RegistryURLBitwardenField)
-		if err != nil {
-			return nil, fmt.Errorf("couldn't get the entry name from bw item %s: %w", data.BWItem, err)
-
+		registryURL := data.RegistryURL
+		if registryURL == "" {
+			registryURLBitwardenField, err := bwClient.GetFieldOnItem(data.BWItem, data.RegistryURLBitwardenField)
+			if err != nil {
+				return nil, fmt.Errorf("couldn't get the entry name from bw item %s: %w", data.BWItem, err)
+			}
+			registryURL = string(registryURLBitwardenField)
 		}
 
 		authBWAttachmentValue, err := bwClient.GetAttachmentOnItem(data.BWItem, data.AuthBitwardenAttachment)
@@ -278,7 +284,7 @@ func constructDockerConfigJSON(bwClient bitwarden.Client, dockerConfigJSONData [
 			authData.Email = string(emailValue)
 		}
 
-		auths[string(registryURLBitwardenField)] = authData
+		auths[registryURL] = authData
 	}
 
 	b, err := json.Marshal(&secretbootstrap.DockerConfigJSON{Auths: auths})

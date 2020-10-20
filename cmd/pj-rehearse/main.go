@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
@@ -67,7 +68,7 @@ func gatherOptions() (options, error) {
 	fs.BoolVar(&o.noRegistry, "no-registry", false, "If true, do not attempt to compare step registry content")
 	fs.BoolVar(&o.noClusterProfiles, "no-cluster-profiles", false, "If true, do not attempt to compare cluster profiles")
 
-	fs.IntVar(&o.rehearsalLimit, "rehearsal-limit", 15, "Upper limit of jobs attempted to rehearse (if more jobs would be rehearsed, none will)")
+	fs.IntVar(&o.rehearsalLimit, "rehearsal-limit", 15, "Upper limit of jobs attempted to rehearse (if more jobs are being touched, only this many will be rehearsed)")
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		return o, fmt.Errorf("failed to parse flags: %w", err)
@@ -320,8 +321,13 @@ func rehearseMain() error {
 	}
 	apihelper.MergeImageStreamTagMaps(imagestreamtags, periodicImageStreamTags)
 
-	rehearsals := len(presubmitsToRehearse) + len(periodicsToRehearse)
-	if rehearsals == 0 {
+	periodicPresubmits, err := jobConfigurer.ConvertPeriodicsToPresubmits(periodicsToRehearse)
+	if err != nil {
+		return err
+	}
+	presubmitsToRehearse = append(presubmitsToRehearse, periodicPresubmits...)
+
+	if rehearsals := len(presubmitsToRehearse); rehearsals == 0 {
 		logger.Info("no jobs to rehearse have been found")
 		return nil
 	} else if rehearsals > o.rehearsalLimit {
@@ -329,15 +335,13 @@ func rehearseMain() error {
 			"rehearsal-threshold": o.rehearsalLimit,
 			"rehearsal-jobs":      rehearsals,
 		}
-		logger.WithFields(jobCountFields).Info("Would rehearse too many jobs, will not proceed")
-		return nil
+		logger.WithFields(jobCountFields).Info("Would rehearse too many jobs, randomly selecting a subset")
+		rand.Shuffle(len(presubmitsToRehearse), func(i, j int) {
+			presubmitsToRehearse[i], presubmitsToRehearse[j] = presubmitsToRehearse[j], presubmitsToRehearse[i]
+		})
+		presubmitsToRehearse = presubmitsToRehearse[0:o.rehearsalLimit]
 	}
 
-	periodicPresubmits, err := jobConfigurer.ConvertPeriodicsToPresubmits(periodicsToRehearse)
-	if err != nil {
-		return err
-	}
-	presubmitsToRehearse = append(presubmitsToRehearse, periodicPresubmits...)
 	if prConfig.Prow.JobConfig.PresubmitsStatic == nil {
 		prConfig.Prow.JobConfig.PresubmitsStatic = map[string][]prowconfig.Presubmit{}
 	}

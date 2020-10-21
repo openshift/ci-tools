@@ -68,7 +68,7 @@ func gatherOptions() (options, error) {
 	fs.BoolVar(&o.noRegistry, "no-registry", false, "If true, do not attempt to compare step registry content")
 	fs.BoolVar(&o.noClusterProfiles, "no-cluster-profiles", false, "If true, do not attempt to compare cluster profiles")
 
-	fs.IntVar(&o.rehearsalLimit, "rehearsal-limit", 15, "Upper limit of jobs attempted to rehearse (if more jobs are being touched, only this many will be rehearsed)")
+	fs.IntVar(&o.rehearsalLimit, "rehearsal-limit", 35, "Upper limit of jobs attempted to rehearse (if more jobs are being touched, only this many will be rehearsed)")
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		return o, fmt.Errorf("failed to parse flags: %w", err)

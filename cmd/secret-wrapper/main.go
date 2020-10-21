@@ -5,7 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -14,6 +14,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	coreapi "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -98,6 +99,9 @@ func (o *options) run() error {
 		return fmt.Errorf("failed to copy secret mount: %w", err)
 	}
 	var errs []error
+	if err := createWriteableKubeconfig(); err != nil {
+		errs = append(errs, fmt.Errorf("failed to create writeable kubeconfig: %w", err))
+	}
 	if err := execCmd(o.cmd); err != nil {
 		errs = append(errs, fmt.Errorf("failed to execute wrapped command: %w", err))
 	}
@@ -200,5 +204,33 @@ func createSecret(client coreclientset.SecretInterface, name, dir string, dry bo
 	} else if _, err := client.Update(context.TODO(), secret, metav1.UpdateOptions{}); err != nil {
 		return fmt.Errorf("failed to update secret: %w", err)
 	}
+	return nil
+}
+
+func createWriteableKubeconfig() error {
+	original := os.Getenv("KUBECONFIG")
+	if original == "" {
+		return nil
+	}
+
+	target, err := ioutil.TempFile("", "kubeconfig")
+	if err != nil {
+		return fmt.Errorf("failed to create tempfile: %w", err)
+	}
+	defer target.Close()
+
+	content, err := ioutil.ReadFile(original)
+	if err != nil {
+		return fmt.Errorf("failed to read original kubeconfig: %w", err)
+	}
+
+	if _, err := target.Write(content); err != nil {
+		return fmt.Errorf("failed to write kubeconfig: %w", err)
+	}
+
+	if err := os.Setenv("KUBECONFIG", target.Name()); err != nil {
+		return fmt.Errorf("failed to set KUBECONFIG environment variable: %w", err)
+	}
+
 	return nil
 }

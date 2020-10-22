@@ -409,6 +409,7 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 			addProfile(s.profileSecretName(), s.profile, pod)
 			container.Env = append(container.Env, []coreapi.EnvVar{
 				{Name: "KUBECONFIG", Value: filepath.Join(SecretMountPath, "kubeconfig")},
+				{Name: "KUBEADMIN_PASSWORD_FILE", Value: filepath.Join(SecretMountPath, "kubeadmin-password")},
 			}...)
 		}
 		if step.Cli != "" {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"sort"
 	"strings"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -118,8 +119,17 @@ func acquireLeases(
 	cancel context.CancelFunc,
 	leases []stepLease,
 ) error {
+	// Sort by resource type to avoid a(n unlikely and temporary) deadlock.
+	var sorted []int
+	for i := range leases {
+		sorted = append(sorted, i)
+	}
+	sort.Slice(sorted, func(i, j int) bool {
+		return leases[i].ResourceType < leases[j].ResourceType
+	})
 	var errs []error
-	for i, l := range leases {
+	for _, i := range sorted {
+		l := &leases[i]
 		log.Printf("Acquiring lease for %q", l.ResourceType)
 		name, err := client.Acquire(l.ResourceType, ctx, cancel)
 		if err != nil {
@@ -130,7 +140,7 @@ func acquireLeases(
 			break
 		}
 		log.Printf("Acquired lease %q for %q", name, l.ResourceType)
-		leases[i].resource = name
+		l.resource = name
 	}
 	if errs != nil {
 		if err := releaseLeases(client, leases); err != nil {

@@ -195,7 +195,7 @@ func TestError(t *testing.T) {
 func TestAcquireRelease(t *testing.T) {
 	var calls []string
 	client := lease.NewFakeClient("owner", "url", 0, nil, &calls)
-	leases := []api.StepLease{{ResourceType: "rtype0"}, {ResourceType: "rtype1"}}
+	leases := []api.StepLease{{ResourceType: "rtype1"}, {ResourceType: "rtype0"}}
 	step := stepNeedsLease{}
 	withLease := LeaseStep(&client, leases, &step, func() string { return "" }, nil)
 	if err := withLease.Run(context.Background()); err != nil {
@@ -207,8 +207,8 @@ func TestAcquireRelease(t *testing.T) {
 	expected := []string{
 		"acquire owner rtype0 free leased random",
 		"acquire owner rtype1 free leased random",
-		"releaseone owner rtype0_0 free",
 		"releaseone owner rtype1_1 free",
+		"releaseone owner rtype0_0 free",
 	}
 	if !reflect.DeepEqual(calls, expected) {
 		t.Fatalf("wrong calls to the lease client: %s", diff.ObjectDiff(calls, expected))

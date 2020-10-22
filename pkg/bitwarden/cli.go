@@ -142,6 +142,10 @@ func (c *cliClient) GetFieldOnItem(itemName, fieldName string) ([]byte, error) {
 	return nil, fmt.Errorf("failed to find field %s in item %s", fieldName, itemName)
 }
 
+func (c *cliClient) GetAllItems() []Item {
+	return c.savedItems
+}
+
 func (c *cliClient) GetAttachmentOnItem(itemName, attachmentName string) (bytes []byte, retErr error) {
 	file, err := ioutil.TempFile("", "attachmentName")
 	if err != nil {
@@ -442,6 +446,11 @@ type dryRunCliClient struct {
 func (d *dryRunCliClient) GetFieldOnItem(itemName, fieldName string) ([]byte, error) {
 	return nil, nil
 }
+
+func (d *dryRunCliClient) GetAllItems() []Item {
+	return nil
+}
+
 func (d *dryRunCliClient) GetAttachmentOnItem(itemName, attachmentName string) ([]byte, error) {
 	return nil, nil
 }

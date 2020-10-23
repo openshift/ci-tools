@@ -416,6 +416,8 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("couldn't get the list of org/repos that promote official images")
 	}
+	// Reset this so pluginconfigs from removed repos get removed
+	pluginsConfig = cleanStalePluginConfigs(pluginsConfig)
 
 	injectPrivateBranchProtection(prowConfig.BranchProtection, orgRepos)
 	injectPrivateTideOrgContextPolicy(prowConfig.Tide.ContextOptions, orgRepos)
@@ -436,4 +438,17 @@ func main() {
 	if err := updateProwPlugins(pluginsConfigFile, pluginsConfig); err != nil {
 		logrus.WithError(err).Fatal("couldn't update prow plugins file")
 	}
+}
+
+func cleanStalePluginConfigs(config *plugins.Configuration) *plugins.Configuration {
+	cleanedPlugins := map[string][]string{}
+	for orgOrRepo, val := range config.Plugins {
+		if strings.HasPrefix(orgOrRepo, openshiftPrivOrg) {
+			continue
+		}
+		cleanedPlugins[orgOrRepo] = val
+	}
+	config.Plugins = cleanedPlugins
+
+	return config
 }

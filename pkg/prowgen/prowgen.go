@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -384,18 +383,6 @@ func generatePodSpecTemplate(info *ProwgenInfo, release string, test *cioperator
 				Value: conf.PreviousRPMDeps},
 			corev1.EnvVar{Name: "PREVIOUS_RPM_REPO",
 				Value: fmt.Sprintf("%s/openshift-origin-v%s/", cioperatorapi.URLForService(cioperatorapi.ServiceRPMs), conf.PreviousVersion)})
-	}
-	if conf := test.OpenshiftInstallerCustomTestImageClusterTestConfiguration; conf != nil {
-		if conf.EnableNestedVirt {
-			container.Env = append(
-				container.Env,
-				corev1.EnvVar{Name: "CLUSTER_ENABLE_NESTED_VIRT", Value: strconv.FormatBool(conf.EnableNestedVirt)})
-			if conf.NestedVirtImage != "" {
-				container.Env = append(
-					container.Env,
-					corev1.EnvVar{Name: "CLUSTER_NESTED_VIRT_IMAGE", Value: conf.NestedVirtImage})
-			}
-		}
 	}
 	return podSpec
 }

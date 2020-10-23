@@ -18,8 +18,6 @@ containers:
     value: commands
   - name: TEST_IMAGESTREAM_TAG
     value: pipeline:kubevirt-test
-  - name: CLUSTER_ENABLE_NESTED_VIRT
-    value: "true"
   image: ci-operator:latest
   imagePullPolicy: Always
   name: ""

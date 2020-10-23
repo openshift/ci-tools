@@ -256,7 +256,7 @@ func generatePodSpecMultiStage(info *ProwgenInfo, test *cioperatorapi.TestStepCo
 		// and that is OK. We just need it to exist in the test namespace so
 		// that the image import controller can use it.
 		secrets = append(secrets, &cioperatorapi.Secret{
-			Name: "ci-pull-credentials",
+			Name: "ci-pull-credentials-pack",
 		})
 	}
 	podSpec := generateCiOperatorPodSpec(info, secrets, []string{test.As})

@@ -4,7 +4,7 @@ containers:
   - --report-username=ci
   - --report-password-file=/etc/report/password.txt
   - --target=test
-  - --secret-dir=/secrets/ci-pull-credentials
+  - --secret-dir=/secrets/ci-pull-credentials-pack
   - --secret-dir=/usr/local/test-cluster-profile
   - --lease-server-password-file=/etc/boskos/password
   command:
@@ -22,8 +22,8 @@ containers:
   - mountPath: /etc/report
     name: result-aggregator
     readOnly: true
-  - mountPath: /secrets/ci-pull-credentials
-    name: ci-pull-credentials
+  - mountPath: /secrets/ci-pull-credentials-pack
+    name: ci-pull-credentials-pack
     readOnly: true
   - mountPath: /usr/local/test-cluster-profile
     name: cluster-profile
@@ -38,9 +38,9 @@ volumes:
 - name: result-aggregator
   secret:
     secretName: result-aggregator
-- name: ci-pull-credentials
+- name: ci-pull-credentials-pack
   secret:
-    secretName: ci-pull-credentials
+    secretName: ci-pull-credentials-pack
 - name: cluster-profile
   projected:
     sources:

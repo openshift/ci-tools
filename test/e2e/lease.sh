@@ -2,7 +2,7 @@
 source "$(dirname "${BASH_SOURCE}")/../../hack/lib/init.sh"
 
 if [[ -z "${PULL_SECRET_DIR:-}" ]]; then
-  os::log::fatal "\$PULL_SECRET_DIR must point to a valid registry pull secret dir. Get the data with: oc --context api.ci --as system:admin --namespace ci get secret ci-pull-credentials -o jsonpath={.data.\.dockerconfigjson} | base64 --decode "
+  os::log::fatal "\$PULL_SECRET_DIR must point to a valid registry pull secret dir. Get the data with: oc --context api.ci --as system:admin --namespace ci get secret ci-pull-credentials-pack -o jsonpath={.data.\.dockerconfigjson} | base64 --decode "
 fi
 if [[ -z "${IMPORT_SECRET_DIR:-}" ]]; then
   os::log::fatal "\$IMPORT_SECRET_DIR must point to a valid registry pull secret dir. Get the data with: oc --context api.ci --as system:admin --namespace ci get secret ci-pull-secret -o jsonpath={.data.\.dockerconfigjson} | base64 --decode "

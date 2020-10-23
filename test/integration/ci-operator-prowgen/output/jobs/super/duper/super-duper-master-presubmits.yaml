@@ -236,7 +236,7 @@ presubmits:
         - --image-import-pull-secret=/etc/pull-secret/.dockerconfigjson
         - --report-password-file=/etc/report/password.txt
         - --report-username=ci
-        - --secret-dir=/secrets/ci-pull-credentials
+        - --secret-dir=/secrets/ci-pull-credentials-pack
         - --target=steps
         command:
         - ci-operator
@@ -247,8 +247,8 @@ presubmits:
           requests:
             cpu: 10m
         volumeMounts:
-        - mountPath: /secrets/ci-pull-credentials
-          name: ci-pull-credentials
+        - mountPath: /secrets/ci-pull-credentials-pack
+          name: ci-pull-credentials-pack
           readOnly: true
         - mountPath: /etc/pull-secret
           name: pull-secret
@@ -258,9 +258,9 @@ presubmits:
           readOnly: true
       serviceAccountName: ci-operator
       volumes:
-      - name: ci-pull-credentials
+      - name: ci-pull-credentials-pack
         secret:
-          secretName: ci-pull-credentials
+          secretName: ci-pull-credentials-pack
       - name: pull-secret
         secret:
           secretName: registry-pull-credentials

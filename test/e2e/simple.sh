@@ -5,7 +5,7 @@ if [[ -z "${PULL_SECRET_DIR:-}" ]]; then
   os::log::fatal "\$PULL_SECRET_DIR must point to a valid registry pull secret dir. Get the data with: oc --context api.ci --as system:admin --namespace ci get secret registry-pull-credentials -o jsonpath={.data.\.dockerconfigjson} | base64 --decode "
 fi
 if [[ -z "${IMPORT_SECRET_DIR:-}" ]]; then
-  os::log::fatal "\$IMPORT_SECRET_DIR must point to a valid registry pull secret dir. Get the data with: oc --context api.ci --as system:admin --namespace ci get secret ci-pull-credentials -o jsonpath={.data.\.dockerconfigjson} | base64 --decode "
+  os::log::fatal "\$IMPORT_SECRET_DIR must point to a valid registry pull secret dir. Get the data with: oc --context api.ci --as system:admin --namespace ci get secret ci-pull-credentials-pack -o jsonpath={.data.\.dockerconfigjson} | base64 --decode "
 fi
 PARENT_JOBSPEC="${JOB_SPEC}"
 if [[ -z "${PARENT_JOBSPEC:-}" ]]; then

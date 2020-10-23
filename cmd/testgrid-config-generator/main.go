@@ -29,8 +29,10 @@ type options struct {
 	releaseConfigDir  string
 	testGridConfigDir string
 	prowJobConfigDir  string
-	jobsAllowListFile string
+
 	validationOnlyRun bool
+	jobsAllowListFile string
+	withoutAllowList  bool
 }
 
 func (o *options) Validate() error {
@@ -44,6 +46,14 @@ func (o *options) Validate() error {
 		return errors.New("--testgrid-config is required")
 	}
 
+	if o.jobsAllowListFile == "" && !o.withoutAllowList {
+		return errors.New("--allow-list is required (possible to override with --no-allow-list)")
+	}
+
+	if o.jobsAllowListFile != "" && o.withoutAllowList {
+		return errors.New("--allow-list and --no-allow-list cannot be set together")
+	}
+
 	return nil
 }
 
@@ -54,6 +64,7 @@ func gatherOptions() options {
 	fs.StringVar(&o.releaseConfigDir, "release-config", "", "Path to Release Controller configuration directory.")
 	fs.StringVar(&o.testGridConfigDir, "testgrid-config", "", "Path to TestGrid configuration directory.")
 	fs.StringVar(&o.jobsAllowListFile, "allow-list", "", "Path to file containing jobs to be overridden to informing jobs")
+	fs.BoolVar(&o.withoutAllowList, "no-allow-list", false, "If set, --allow-list does not need to be set")
 	fs.BoolVar(&o.validationOnlyRun, "validate", false, "Validate entries in file specified by allow-list (if allow_list is not specified validation would succeed)")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		logrus.WithError(err).Fatal("could not parse input")

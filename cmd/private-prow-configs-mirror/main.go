@@ -119,7 +119,13 @@ func getOrgReposWithOfficialImages(releaseRepoPath string, whitelist map[string]
 	}
 
 	callback := func(c *api.ReleaseBuildConfiguration, i *config.Info) error {
+
 		if !promotion.BuildsOfficialImages(c) {
+			return nil
+		}
+
+		if i.Org != "openshift" {
+			logrus.WithField("org", i.Org).WithField("repo", i.Repo).Warn("Dropping repo in non-openshift org, this is currently not supported")
 			return nil
 		}
 

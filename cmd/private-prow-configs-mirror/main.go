@@ -184,7 +184,7 @@ func injectPrivateTideOrgContextPolicy(contextOptions prowconfig.TideContextPoli
 	}
 }
 
-func injectPrivateReposTideQueries(tideQueries []prowconfig.TideQuery, orgRepos orgReposWithOfficialImages) {
+func setPrivateReposTideQueries(tideQueries []prowconfig.TideQuery, orgRepos orgReposWithOfficialImages) {
 	logrus.Info("Processing...")
 
 	for index, tideQuery := range tideQueries {
@@ -196,6 +196,8 @@ func injectPrivateReposTideQueries(tideQueries []prowconfig.TideQuery, orgRepos 
 
 				logrus.WithField("repo", repo).Info("Found")
 				repos.Insert(privateOrgRepo(repo))
+			} else if strings.HasPrefix(orgRepo, openshiftPrivOrg) {
+				repos.Delete(orgRepo)
 			}
 		}
 
@@ -416,11 +418,13 @@ func main() {
 	if err != nil {
 		logrus.WithError(err).Fatal("couldn't get the list of org/repos that promote official images")
 	}
+	// Reset this so pluginconfigs from removed repos get removed
+	pluginsConfig = cleanStalePluginConfigs(pluginsConfig)
 
 	injectPrivateBranchProtection(prowConfig.BranchProtection, orgRepos)
 	injectPrivateTideOrgContextPolicy(prowConfig.Tide.ContextOptions, orgRepos)
 	injectPrivateMergeType(prowConfig.Tide.MergeType, orgRepos)
-	injectPrivateReposTideQueries(prowConfig.Tide.Queries, orgRepos)
+	setPrivateReposTideQueries(prowConfig.Tide.Queries, orgRepos)
 	injectPrivatePRStatusBaseURLs(prowConfig.Tide.PRStatusBaseURLs, orgRepos)
 	injectPrivatePlankDefaultDecorationConfigs(prowConfig.Plank.DefaultDecorationConfigs, orgRepos)
 	injectPrivateJobURLPrefixConfig(prowConfig.Plank.JobURLPrefixConfig, orgRepos)
@@ -436,4 +440,17 @@ func main() {
 	if err := updateProwPlugins(pluginsConfigFile, pluginsConfig); err != nil {
 		logrus.WithError(err).Fatal("couldn't update prow plugins file")
 	}
+}
+
+func cleanStalePluginConfigs(config *plugins.Configuration) *plugins.Configuration {
+	cleanedPlugins := map[string][]string{}
+	for orgOrRepo, val := range config.Plugins {
+		if strings.HasPrefix(orgOrRepo, openshiftPrivOrg) {
+			continue
+		}
+		cleanedPlugins[orgOrRepo] = val
+	}
+	config.Plugins = cleanedPlugins
+
+	return config
 }

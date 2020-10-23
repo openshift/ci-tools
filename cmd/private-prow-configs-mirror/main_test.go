@@ -209,7 +209,7 @@ func TestInjectPrivateReposTideQueries(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.id, func(t *testing.T) {
-			injectPrivateReposTideQueries(tc.tideQueries, orgRepos)
+			setPrivateReposTideQueries(tc.tideQueries, orgRepos)
 			if !reflect.DeepEqual(tc.tideQueries, tc.expected) {
 				t.Fatal(cmp.Diff(tc.tideQueries, tc.expected))
 			}

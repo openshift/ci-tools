@@ -184,7 +184,7 @@ func injectPrivateTideOrgContextPolicy(contextOptions prowconfig.TideContextPoli
 	}
 }
 
-func injectPrivateReposTideQueries(tideQueries []prowconfig.TideQuery, orgRepos orgReposWithOfficialImages) {
+func setPrivateReposTideQueries(tideQueries []prowconfig.TideQuery, orgRepos orgReposWithOfficialImages) {
 	logrus.Info("Processing...")
 
 	for index, tideQuery := range tideQueries {
@@ -196,6 +196,8 @@ func injectPrivateReposTideQueries(tideQueries []prowconfig.TideQuery, orgRepos 
 
 				logrus.WithField("repo", repo).Info("Found")
 				repos.Insert(privateOrgRepo(repo))
+			} else if strings.HasPrefix(orgRepo, openshiftPrivOrg) {
+				repos.Delete(orgRepo)
 			}
 		}
 
@@ -422,7 +424,7 @@ func main() {
 	injectPrivateBranchProtection(prowConfig.BranchProtection, orgRepos)
 	injectPrivateTideOrgContextPolicy(prowConfig.Tide.ContextOptions, orgRepos)
 	injectPrivateMergeType(prowConfig.Tide.MergeType, orgRepos)
-	injectPrivateReposTideQueries(prowConfig.Tide.Queries, orgRepos)
+	setPrivateReposTideQueries(prowConfig.Tide.Queries, orgRepos)
 	injectPrivatePRStatusBaseURLs(prowConfig.Tide.PRStatusBaseURLs, orgRepos)
 	injectPrivatePlankDefaultDecorationConfigs(prowConfig.Plank.DefaultDecorationConfigs, orgRepos)
 	injectPrivateJobURLPrefixConfig(prowConfig.Plank.JobURLPrefixConfig, orgRepos)

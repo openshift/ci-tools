@@ -1043,45 +1043,6 @@ func TestValidateCompletedOptions(t *testing.T) {
 			},
 			expected: fmt.Errorf("config[0].from[key-name-1]: either registry_url_bw_field or registry_url must be set"),
 		},
-		{
-			name: "dockerconfigJSON configuration with wrong secret type in the destination secret",
-			given: options{
-				logLevel:   "info",
-				bwPassword: "topSecret",
-				config: secretbootstrap.Config{
-					Secrets: []secretbootstrap.SecretConfig{
-						{
-							From: map[string]secretbootstrap.BitWardenContext{
-								"key-name-1": {
-									DockerConfigJSONData: []secretbootstrap.DockerConfigJSONData{
-										{
-											BWItem:                    "bitwarden-item",
-											RegistryURLBitwardenField: "registryURL",
-											AuthBitwardenAttachment:   "auth",
-										},
-										{
-											BWItem:                    "bitwarden-item2",
-											RegistryURLBitwardenField: "registryURL",
-											AuthBitwardenAttachment:   "auth",
-											EmailBitwardenField:       "email",
-										},
-									},
-								},
-							},
-							To: []secretbootstrap.SecretContext{
-								{
-									Cluster:   "default",
-									Name:      "docker-config-json-secret",
-									Namespace: "namespace-1",
-									Type:      "wrong-type",
-								},
-							},
-						},
-					},
-				},
-			},
-			expected: fmt.Errorf("config[0].to[0]: key: 'key-name-1' is a dockerconfigJSON config and it should be a 'kubernetes.io/dockerconfigjson' type secret"),
-		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {

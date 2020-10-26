@@ -200,13 +200,6 @@ func (o *options) validateCompletedOptions() error {
 					if data.AuthBitwardenAttachment == "" {
 						return fmt.Errorf("config[%d].from[%s]: auth_bw_attachment is missing", i, key)
 					}
-					for j, to := range o.config.Secrets[i].To {
-						if to.Type == "" {
-							o.config.Secrets[i].To[j].Type = "kubernetes.io/dockerconfigjson"
-						} else if to.Type != "kubernetes.io/dockerconfigjson" {
-							return fmt.Errorf("config[%d].to[%d]: key: '%s' is a dockerconfigJSON config and it should be a 'kubernetes.io/dockerconfigjson' type secret", i, j, key)
-						}
-					}
 				}
 			} else if bwContext.BWItem != "" {
 				switch bwContext.Attribute {

@@ -11,9 +11,11 @@ import (
 	"strconv"
 	"time"
 
+	"cloud.google.com/go/storage"
 	"github.com/sirupsen/logrus"
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/slackevents"
+	"google.golang.org/api/option"
 
 	"k8s.io/test-infra/pkg/flagutil"
 	"k8s.io/test-infra/prow/config"
@@ -40,6 +42,9 @@ type options struct {
 	instrumentationOptions prowflagutil.InstrumentationOptions
 	jiraOptions            prowflagutil.JiraOptions
 
+	prowConfigPath    string
+	prowJobConfigPath string
+
 	slackTokenPath         string
 	slackSigningSecretPath string
 }
@@ -56,6 +61,14 @@ func (o *options) Validate() error {
 
 	if o.slackSigningSecretPath == "" {
 		return fmt.Errorf("--slack-signing-secret-path is required")
+	}
+
+	if o.prowConfigPath == "" {
+		return fmt.Errorf("--prow-config-path is required")
+	}
+
+	if o.prowJobConfigPath == "" {
+		return fmt.Errorf("--prow-job-config-path is required")
 	}
 
 	for _, group := range []flagutil.OptionGroup{&o.instrumentationOptions, &o.jiraOptions} {
@@ -76,6 +89,9 @@ func gatherOptions(fs *flag.FlagSet, args ...string) options {
 	for _, group := range []flagutil.OptionGroup{&o.instrumentationOptions, &o.jiraOptions} {
 		group.AddFlags(fs)
 	}
+
+	fs.StringVar(&o.prowConfigPath, "prow-config-path", "", "Path to Prow configuration.")
+	fs.StringVar(&o.prowJobConfigPath, "prow-job-config-path", "", "Path to Prow job configs.")
 
 	fs.StringVar(&o.slackTokenPath, "slack-token-path", "", "Path to the file containing the Slack token to use.")
 	fs.StringVar(&o.slackSigningSecretPath, "slack-signing-secret-path", "", "Path to the file containing the Slack signing secret to use.")
@@ -105,6 +121,11 @@ func main() {
 	level, _ := logrus.ParseLevel(o.logLevel)
 	logrus.SetLevel(level)
 
+	configAgent := &config.Agent{}
+	if err := configAgent.Start(o.prowConfigPath, o.prowJobConfigPath); err != nil {
+		logrus.WithError(err).Fatal("Error starting Prow config agent.")
+	}
+
 	secretAgent := &secret.Agent{}
 	if err := secretAgent.Start([]string{o.slackTokenPath, o.slackSigningSecretPath}); err != nil {
 		logrus.WithError(err).Fatal("Error starting secrets agent.")
@@ -119,6 +140,11 @@ func main() {
 	issueFiler, err := jira.NewIssueFiler(slackClient, jiraClient.JiraClient())
 	if err != nil {
 		logrus.WithError(err).Fatal("Could not initialize Jira issue filer.")
+	}
+
+	gcsClient, err := storage.NewClient(interrupts.Context(), option.WithoutAuthentication())
+	if err != nil {
+		logrus.WithError(err).Fatal("Could not initialize GCS client.")
 	}
 
 	metrics.ExposeMetrics("slack-bot", config.PushGateway{}, o.instrumentationOptions.MetricsPort)
@@ -138,7 +164,7 @@ func main() {
 	// handle the root to allow for a simple uptime probe
 	mux.Handle("/", handler(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) { writer.WriteHeader(http.StatusOK) })))
 	mux.Handle("/slack/interactive-endpoint", handler(handleInteraction(secretAgent.GetTokenGenerator(o.slackSigningSecretPath), interactionrouter.ForModals(issueFiler, slackClient))))
-	mux.Handle("/slack/events-endpoint", handler(handleEvent(secretAgent.GetTokenGenerator(o.slackSigningSecretPath), eventrouter.ForEvents(slackClient))))
+	mux.Handle("/slack/events-endpoint", handler(handleEvent(secretAgent.GetTokenGenerator(o.slackSigningSecretPath), eventrouter.ForEvents(slackClient, configAgent.Config, gcsClient))))
 	server := &http.Server{Addr: ":" + strconv.Itoa(o.port), Handler: mux}
 
 	health.ServeReady()

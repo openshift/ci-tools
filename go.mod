@@ -21,6 +21,7 @@ replace (
 )
 
 require (
+	cloud.google.com/go/storage v1.10.0
 	github.com/GoogleCloudPlatform/testgrid v0.0.13
 	github.com/alecthomas/chroma v0.7.1
 	github.com/andygrunwald/go-jira v1.12.0
@@ -52,6 +53,7 @@ require (
 	github.com/spf13/afero v1.2.2
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
 	golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208
+	google.golang.org/api v0.29.0
 	gopkg.in/fsnotify.v1 v1.4.7
 	k8s.io/api v0.18.7-rc.0
 	k8s.io/apimachinery v0.18.7-rc.0

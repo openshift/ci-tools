@@ -100,9 +100,8 @@ func CompletePrimaryRefs(refs pjapi.Refs, jb prowconfig.JobBase) *pjapi.Refs {
 	return &refs
 }
 
-func getTrimmedBranch(branches []string) string {
+func BranchFromRegexes(branches []string) string {
 	return strings.TrimPrefix(strings.TrimSuffix(branches[0], "$"), "^")
-
 }
 
 func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber int, refs *pjapi.Refs) (*prowconfig.Presubmit, error) {
@@ -117,7 +116,7 @@ func makeRehearsalPresubmit(source *prowconfig.Presubmit, repo string, prNumber 
 	var context string
 
 	if len(source.Branches) > 0 {
-		branch = getTrimmedBranch(source.Branches)
+		branch = BranchFromRegexes(source.Branches)
 		if len(repo) > 0 {
 			orgRepo := strings.Split(repo, "/")
 			jobOrg := orgRepo[0]
@@ -351,7 +350,7 @@ func NewJobConfigurer(ciopConfigs config.DataByFilename, resolver registry.Resol
 	}
 }
 
-func variantFromLabels(labels map[string]string) string {
+func VariantFromLabels(labels map[string]string) string {
 	variant := ""
 	if variantLabel, ok := labels[jobconfig.ProwJobLabelVariant]; ok {
 		variant = variantLabel
@@ -368,7 +367,7 @@ func (jc *JobConfigurer) ConfigurePeriodicRehearsals(periodics config.Periodics)
 	for _, job := range filteredPeriodics {
 		jobLogger := jc.loggers.Job.WithField("target-job", job.Name)
 		metadata := api.Metadata{
-			Variant: variantFromLabels(job.Labels),
+			Variant: VariantFromLabels(job.Labels),
 		}
 		if len(job.ExtraRefs) != 0 {
 			metadata.Org = job.ExtraRefs[0].Org
@@ -411,8 +410,8 @@ func (jc *JobConfigurer) ConfigurePresubmitRehearsals(presubmits config.Presubmi
 			metadata := api.Metadata{
 				Org:     splitOrgRepo[0],
 				Repo:    splitOrgRepo[1],
-				Branch:  getTrimmedBranch(job.Branches),
-				Variant: variantFromLabels(job.Labels),
+				Branch:  BranchFromRegexes(job.Branches),
+				Variant: VariantFromLabels(job.Labels),
 			}
 			testname := metadata.TestNameFromJobName(job.Name, jobconfig.PresubmitPrefix)
 

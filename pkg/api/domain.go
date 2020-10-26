@@ -20,6 +20,7 @@ const (
 	ServiceRPMs     Service = "rpms"
 	ServiceProw     Service = "prow"
 	ServiceConfig   Service = "config"
+	ServiceGCSWeb   Service = "gcsweb-ci"
 )
 
 // URLForService returns the URL for the service including scheme
@@ -31,7 +32,7 @@ func URLForService(service Service) string {
 func DomainForService(service Service) string {
 	var serviceDomain string
 	switch service {
-	case ServiceBoskos:
+	case ServiceBoskos, ServiceGCSWeb:
 		serviceDomain = ServiceDomainAPPCI
 	case ServiceRPMs, ServiceRegistry:
 		serviceDomain = ServiceDomainAPICI

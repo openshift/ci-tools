@@ -1,6 +1,6 @@
 module github.com/openshift/ci-tools
 
-go 1.13
+go 1.15
 
 replace (
 	github.com/Azure/go-autorest => github.com/Azure/go-autorest v12.2.0+incompatible
@@ -56,7 +56,7 @@ require (
 	k8s.io/api v0.18.7-rc.0
 	k8s.io/apimachinery v0.18.7-rc.0
 	k8s.io/client-go v11.0.1-0.20190805182717-6502b5e7b1b5+incompatible
-	k8s.io/test-infra v0.0.0-20201015140224-f27a4061f856
+	k8s.io/test-infra v0.0.0-20201026133301-f7d653694b18
 	k8s.io/utils v0.0.0-20200603063816-c1c6865ac451
 	sigs.k8s.io/boskos v0.0.0-20200617235605-f289ba6555ba
 	sigs.k8s.io/controller-runtime v0.6.2

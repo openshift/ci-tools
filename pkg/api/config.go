@@ -569,9 +569,6 @@ func validateTestConfigurationType(fieldRoot string, test TestStepConfiguration,
 			validationErrors = append(validationErrors, validateLiteralTestStepPost(fieldRootI, s, seen, testConfig.Environment)...)
 		}
 	}
-	if test.OpenshiftInstallerRandomClusterTestConfiguration != nil {
-		typeCount++
-	}
 	if typeCount == 0 {
 		validationErrors = append(validationErrors, fmt.Errorf("%s has no type, you may want to specify 'container' for a container based test", fieldRoot))
 	} else if typeCount == 1 {

@@ -299,6 +299,8 @@ type options struct {
 	pullSecretPath string
 	pullSecret     *coreapi.Secret
 
+	pushSecretPath string
+
 	cloneAuthConfig *steps.CloneAuthConfig
 
 	resultsOptions results.Options
@@ -365,6 +367,7 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.String("kubeconfig", "", "Legecay flag kept for compatibility reasons. Doesn't do anything.")
 
 	flag.StringVar(&opt.pullSecretPath, "image-import-pull-secret", "", "A set of dockercfg credentials used to import images for the tag_specification.")
+	flag.StringVar(&opt.pushSecretPath, "image-mirror-push-secret", "", "A set of dockercfg credentials used to mirror images for the promotion.")
 
 	opt.resultsOptions.Bind(flag)
 	return opt

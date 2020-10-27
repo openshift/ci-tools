@@ -20,6 +20,7 @@ postsubmits:
         - --promote
         - --target=[images]
         - --target=out-1
+        - --image-mirror-push-secret=/etc/push-secret/.dockerconfigjson
         command:
         - ci-operator
         image: ci-operator:latest

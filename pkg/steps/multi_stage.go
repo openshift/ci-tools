@@ -42,7 +42,9 @@ const (
 	CommandPrefix = "#!/bin/bash\n" +
 		"set -eu\n" +
 		// provide a writeable kubeconfig so ppl can for example set a namespace, but do not pass it on to subsequent steps to limit the amount of possible footshooting
-		"if [[ -e ${KUBECONFIG:-} ]]; then WRITEABLE_KUBECONFIG_LOCATION=$(mktemp) && cp $KUBECONFIG $WRITEABLE_KUBECONFIG_LOCATION && export KUBECONFIG=$WRITEABLE_KUBECONFIG_LOCATION && unset WRITEABLE_KUBECONFIG_LOCATION; fi\n"
+		"if [[ -e ${KUBECONFIG:-} ]]; then WRITEABLE_KUBECONFIG_LOCATION=$(mktemp) && cp $KUBECONFIG $WRITEABLE_KUBECONFIG_LOCATION && export KUBECONFIG=$WRITEABLE_KUBECONFIG_LOCATION && unset WRITEABLE_KUBECONFIG_LOCATION; fi\n" +
+		// provide a home so kubectl discovery can be cached
+		"if ! [[ -d ${HOME:-} ]]; then export HOME=/alabama; fi\n"
 )
 
 var envForProfile = []string{
@@ -354,6 +356,8 @@ func (s *multiStageTestStep) runSteps(
 	return utilerrors.NewAggregate(errs)
 }
 
+const multiStageTestStepContainerName = "test"
+
 func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []coreapi.EnvVar,
 	hasPrevErrs bool) ([]coreapi.Pod, error) {
 	var ret []coreapi.Pod
@@ -378,7 +382,7 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 			continue
 		}
 		name := fmt.Sprintf("%s-%s", s.name, step.As)
-		pod, err := generateBasePod(s.jobSpec, name, "test", []string{"/bin/bash", "-c", CommandPrefix + step.Commands}, image, resources, step.ArtifactDir)
+		pod, err := generateBasePod(s.jobSpec, name, multiStageTestStepContainerName, []string{"/bin/bash", "-c", CommandPrefix + step.Commands}, image, resources, step.ArtifactDir)
 		if err != nil {
 			errs = append(errs, err)
 			continue
@@ -389,6 +393,13 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 		pod.Spec.ActiveDeadlineSeconds = step.ActiveDeadlineSeconds
 		pod.Spec.ServiceAccountName = s.name
 		pod.Spec.TerminationGracePeriodSeconds = step.TerminationGracePeriodSeconds
+		pod.Spec.Volumes = append(pod.Spec.Volumes, coreapi.Volume{Name: homeVolumeName, VolumeSource: coreapi.VolumeSource{EmptyDir: &coreapi.EmptyDirVolumeSource{}}})
+		for idx := range pod.Spec.Containers {
+			if pod.Spec.Containers[idx].Name != multiStageTestStepContainerName {
+				continue
+			}
+			pod.Spec.Containers[idx].VolumeMounts = append(pod.Spec.Containers[idx].VolumeMounts, coreapi.VolumeMount{Name: homeVolumeName, MountPath: "/alabama"})
+		}
 
 		addSecretWrapper(pod)
 		container := &pod.Spec.Containers[0]

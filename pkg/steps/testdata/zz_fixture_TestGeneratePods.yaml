@@ -23,6 +23,7 @@
         #!/bin/bash
         set -eu
         if [[ -e ${KUBECONFIG:-} ]]; then WRITEABLE_KUBECONFIG_LOCATION=$(mktemp) && cp $KUBECONFIG $WRITEABLE_KUBECONFIG_LOCATION && export KUBECONFIG=$WRITEABLE_KUBECONFIG_LOCATION && unset WRITEABLE_KUBECONFIG_LOCATION; fi
+        if ! [[ -d ${HOME:-} ]]; then export HOME=/alabama; fi
         command0
       command:
       - /tmp/secret-wrapper/secret-wrapper
@@ -78,6 +79,8 @@
       resources: {}
       terminationMessagePolicy: FallbackToLogsOnError
       volumeMounts:
+      - mountPath: /alabama
+        name: home
       - mountPath: /tmp/secret-wrapper
         name: secret-wrapper
       - mountPath: /var/run/secrets/ci.openshift.io/cluster-profile
@@ -100,6 +103,8 @@
     restartPolicy: Never
     serviceAccountName: test
     volumes:
+    - emptyDir: {}
+      name: home
     - emptyDir: {}
       name: secret-wrapper
     - name: cluster-profile
@@ -134,6 +139,7 @@
         #!/bin/bash
         set -eu
         if [[ -e ${KUBECONFIG:-} ]]; then WRITEABLE_KUBECONFIG_LOCATION=$(mktemp) && cp $KUBECONFIG $WRITEABLE_KUBECONFIG_LOCATION && export KUBECONFIG=$WRITEABLE_KUBECONFIG_LOCATION && unset WRITEABLE_KUBECONFIG_LOCATION; fi
+        if ! [[ -d ${HOME:-} ]]; then export HOME=/alabama; fi
         command1
       command:
       - /tmp/secret-wrapper/secret-wrapper
@@ -193,6 +199,8 @@
       volumeMounts:
       - mountPath: /artifact/dir
         name: artifacts
+      - mountPath: /alabama
+        name: home
       - mountPath: /tmp/secret-wrapper
         name: secret-wrapper
       - mountPath: /var/run/secrets/ci.openshift.io/cluster-profile
@@ -228,6 +236,8 @@
     - emptyDir: {}
       name: artifacts
     - emptyDir: {}
+      name: home
+    - emptyDir: {}
       name: secret-wrapper
     - name: cluster-profile
       secret:
@@ -261,6 +271,7 @@
         #!/bin/bash
         set -eu
         if [[ -e ${KUBECONFIG:-} ]]; then WRITEABLE_KUBECONFIG_LOCATION=$(mktemp) && cp $KUBECONFIG $WRITEABLE_KUBECONFIG_LOCATION && export KUBECONFIG=$WRITEABLE_KUBECONFIG_LOCATION && unset WRITEABLE_KUBECONFIG_LOCATION; fi
+        if ! [[ -d ${HOME:-} ]]; then export HOME=/alabama; fi
         command2
       command:
       - /tmp/secret-wrapper/secret-wrapper
@@ -316,6 +327,8 @@
       resources: {}
       terminationMessagePolicy: FallbackToLogsOnError
       volumeMounts:
+      - mountPath: /alabama
+        name: home
       - mountPath: /tmp/secret-wrapper
         name: secret-wrapper
       - mountPath: /var/run/secrets/ci.openshift.io/cluster-profile
@@ -338,6 +351,8 @@
     restartPolicy: Never
     serviceAccountName: test
     volumes:
+    - emptyDir: {}
+      name: home
     - emptyDir: {}
       name: secret-wrapper
     - name: cluster-profile

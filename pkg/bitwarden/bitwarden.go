@@ -1,6 +1,8 @@
 package bitwarden
 
-import "os"
+import (
+	"os"
+)
 
 // Field represents a field in BitWarden
 type Field struct {
@@ -35,6 +37,7 @@ type Item struct {
 // Client is used to communicate with BitWarden
 type Client interface {
 	GetFieldOnItem(itemName, fieldName string) ([]byte, error)
+	GetAllItems() []Item
 	GetAttachmentOnItem(itemName, attachmentName string) ([]byte, error)
 	GetPassword(itemName string) ([]byte, error)
 	Logout() ([]byte, error)

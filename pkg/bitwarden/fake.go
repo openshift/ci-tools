@@ -23,6 +23,9 @@ func (c fakeClient) GetFieldOnItem(itemName, fieldName string) ([]byte, error) {
 	return nil, fmt.Errorf("failed to find field %s in item %s", fieldName, itemName)
 }
 
+func (f fakeClient) GetAllItems() []Item {
+	return f.items
+}
 func (c fakeClient) GetAttachmentOnItem(itemName, attachmentName string) ([]byte, error) {
 	for _, item := range c.items {
 		if itemName == item.Name {

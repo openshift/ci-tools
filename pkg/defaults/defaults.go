@@ -61,31 +61,29 @@ func FromConfig(
 	var podClient steps.PodClient
 	var client ctrlruntimeclient.Client
 
-	if clusterConfig != nil {
-		var err error
-		client, err = ctrlruntimeclient.New(clusterConfig, ctrlruntimeclient.Options{})
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to construct client: %w", err)
-		}
-		buildGetter, err := buildclientset.NewForConfig(clusterConfig)
-		if err != nil {
-			return nil, nil, fmt.Errorf("could not get build client for cluster config: %w", err)
-		}
-		buildClient = steps.NewBuildClient(client, buildGetter.RESTClient())
-
-		templateGetter, err := templateclientset.NewForConfig(clusterConfig)
-		if err != nil {
-			return nil, nil, fmt.Errorf("could not get template client for cluster config: %w", err)
-		}
-		templateClient = steps.NewTemplateClient(client, templateGetter.RESTClient())
-
-		coreGetter, err := coreclientset.NewForConfig(clusterConfig)
-		if err != nil {
-			return nil, nil, fmt.Errorf("could not get core client for cluster config: %w", err)
-		}
-
-		podClient = steps.NewPodClient(coreGetter, clusterConfig, coreGetter.RESTClient())
+	var err error
+	client, err = ctrlruntimeclient.New(clusterConfig, ctrlruntimeclient.Options{})
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to construct client: %w", err)
 	}
+	buildGetter, err := buildclientset.NewForConfig(clusterConfig)
+	if err != nil {
+		return nil, nil, fmt.Errorf("could not get build client for cluster config: %w", err)
+	}
+	buildClient = steps.NewBuildClient(client, buildGetter.RESTClient())
+
+	templateGetter, err := templateclientset.NewForConfig(clusterConfig)
+	if err != nil {
+		return nil, nil, fmt.Errorf("could not get template client for cluster config: %w", err)
+	}
+	templateClient = steps.NewTemplateClient(client, templateGetter.RESTClient())
+
+	coreGetter, err := coreclientset.NewForConfig(clusterConfig)
+	if err != nil {
+		return nil, nil, fmt.Errorf("could not get core client for cluster config: %w", err)
+	}
+
+	podClient = steps.NewPodClient(coreGetter, clusterConfig, coreGetter.RESTClient())
 
 	params := api.NewDeferredParameters()
 	params.Add("JOB_NAME", func() (string, error) { return jobSpec.Job, nil })

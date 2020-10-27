@@ -941,7 +941,7 @@ k8s.io/klog/v2
 k8s.io/kube-openapi/pkg/util/proto
 # k8s.io/kubernetes v1.14.7
 k8s.io/kubernetes/pkg/apis/core
-# k8s.io/test-infra v0.0.0-20201015140224-f27a4061f856
+# k8s.io/test-infra v0.0.0-20201027073559-f0200e6a57c6
 k8s.io/test-infra/experiment/autobumper/bumper
 k8s.io/test-infra/experiment/image-bumper/bumper
 k8s.io/test-infra/ghproxy/ghcache
@@ -985,6 +985,7 @@ k8s.io/test-infra/prow/labels
 k8s.io/test-infra/prow/logrusutil
 k8s.io/test-infra/prow/metrics
 k8s.io/test-infra/prow/pjutil
+k8s.io/test-infra/prow/pkg/layeredsets
 k8s.io/test-infra/prow/pluginhelp
 k8s.io/test-infra/prow/pluginhelp/externalplugins
 k8s.io/test-infra/prow/pluginhelp/hook

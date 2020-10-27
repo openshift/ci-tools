@@ -994,9 +994,7 @@ type OpenshiftInstallerCustomTestImageClusterTestConfiguration struct {
 	ClusterTestConfiguration `json:",inline"`
 	// From defines the imagestreamtag that will be used to run the
 	// provided test command.  e.g. stable:console-test
-	From             string `json:"from"`
-	EnableNestedVirt bool   `json:"enable_nested_virt,omitempty"`
-	NestedVirtImage  string `json:"nested_virt_image,omitempty"`
+	From string `json:"from"`
 }
 
 // OpenshiftInstallerGCPNestedVirtCustomTestImageClusterTestConfiguration describes a

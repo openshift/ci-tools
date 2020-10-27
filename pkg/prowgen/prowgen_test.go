@@ -112,8 +112,6 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 				OpenshiftInstallerCustomTestImageClusterTestConfiguration: &ciop.OpenshiftInstallerCustomTestImageClusterTestConfiguration{
 					ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: "gcp"},
 					From:                     "pipeline:kubevirt-test",
-					EnableNestedVirt:         true,
-					NestedVirtImage:          "nested-virt-image-name",
 				},
 			},
 		},
@@ -126,7 +124,6 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 				OpenshiftInstallerCustomTestImageClusterTestConfiguration: &ciop.OpenshiftInstallerCustomTestImageClusterTestConfiguration{
 					ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: "gcp"},
 					From:                     "pipeline:kubevirt-test",
-					EnableNestedVirt:         true,
 				},
 			},
 		},
@@ -139,8 +136,6 @@ func TestGeneratePodSpecTemplate(t *testing.T) {
 				OpenshiftInstallerCustomTestImageClusterTestConfiguration: &ciop.OpenshiftInstallerCustomTestImageClusterTestConfiguration{
 					ClusterTestConfiguration: ciop.ClusterTestConfiguration{ClusterProfile: "gcp"},
 					From:                     "pipeline:kubevirt-test",
-					NestedVirtImage:          "",
-					EnableNestedVirt:         false,
 				},
 			},
 		},

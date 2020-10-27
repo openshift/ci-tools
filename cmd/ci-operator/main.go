@@ -300,6 +300,7 @@ type options struct {
 	pullSecret     *coreapi.Secret
 
 	pushSecretPath string
+	pushSecret     *coreapi.Secret
 
 	cloneAuthConfig *steps.CloneAuthConfig
 
@@ -522,10 +523,14 @@ func (o *options) Complete() error {
 
 	o.clusterConfig = clusterConfig
 
-	if len(o.pullSecretPath) > 0 {
-		o.pullSecret, err = getPullSecretFromFile(o.pullSecretPath)
-		if err != nil {
-			return fmt.Errorf("could not get pull secret from path %s: %w", o.pullSecretPath, err)
+	if o.pullSecretPath != "" {
+		if o.pullSecret, err = getSecret(steps.PullSecretName, o.pullSecretPath); err != nil {
+			return fmt.Errorf("could not get pull secret %s from path %s: %w", steps.PullSecretName, o.pullSecretPath, err)
+		}
+	}
+	if o.pushSecretPath != "" {
+		if o.pushSecret, err = getSecret(api.RegistryPushCredentialsCICentralSecret, o.pushSecretPath); err != nil {
+			return fmt.Errorf("could not get push secret %s from path %s: %w", api.RegistryPushCredentialsCICentralSecret, o.pushSecretPath, err)
 		}
 	}
 	return nil
@@ -560,7 +565,7 @@ func (o *options) Run() []error {
 		leaseClient = &o.leaseClient
 	}
 	// load the graph from the configuration
-	buildSteps, postSteps, err := defaults.FromConfig(o.configSpec, o.jobSpec, o.templates, o.writeParams, o.artifactDir, o.promote, o.clusterConfig, leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret)
+	buildSteps, postSteps, err := defaults.FromConfig(o.configSpec, o.jobSpec, o.templates, o.writeParams, o.artifactDir, o.promote, o.clusterConfig, leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret, o.pushSecret)
 	if err != nil {
 		return []error{results.ForReason("defaulting_config").WithError(err).Errorf("failed to generate steps from config: %v", err)}
 	}
@@ -814,9 +819,11 @@ func (o *options) initializeNamespace() error {
 		}
 	}
 
-	if o.pullSecret != nil {
-		if err := client.Create(ctx, o.pullSecret); err != nil && !kerrors.IsAlreadyExists(err) {
-			return fmt.Errorf("couldn't create pull secret %s: %w", o.pullSecret.Name, err)
+	for _, secret := range []*coreapi.Secret{o.pullSecret, o.pushSecret} {
+		if secret != nil {
+			if err := client.Create(ctx, secret); err != nil && !kerrors.IsAlreadyExists(err) {
+				return fmt.Errorf("couldn't create secret %s: %w", secret.Name, err)
+			}
 		}
 	}
 
@@ -1607,21 +1614,20 @@ func getHashFromBytes(b []byte) string {
 	return oneWayNameEncoding.EncodeToString(hash.Sum(nil)[:5])
 }
 
-func getPullSecretFromFile(filename string) (*coreapi.Secret, error) {
-	secret := &coreapi.Secret{
-		Data: make(map[string][]byte),
-		ObjectMeta: meta.ObjectMeta{
-			Name: steps.PullSecretName,
-		},
-		Type: coreapi.SecretTypeDockerConfigJson,
-	}
-
+func getSecret(name, filename string) (*coreapi.Secret, error) {
 	src, err := ioutil.ReadFile(filename)
 	if err != nil {
-		return nil, fmt.Errorf("could not read file %s for secret: %w", filename, err)
+		return nil, fmt.Errorf("could not read file %s for secret %s: %w", filename, name, err)
 	}
-	secret.Data[coreapi.DockerConfigJsonKey] = src
-	return secret, nil
+	return &coreapi.Secret{
+		Data: map[string][]byte{
+			coreapi.DockerConfigJsonKey: src,
+		},
+		ObjectMeta: meta.ObjectMeta{
+			Name: name,
+		},
+		Type: coreapi.SecretTypeDockerConfigJson,
+	}, nil
 }
 
 func (o *options) getResolverInfo(jobSpec *api.JobSpec) *load.ResolverInfo {

@@ -47,7 +47,7 @@ func FromConfig(
 	leaseClient *lease.Client,
 	requiredTargets []string,
 	cloneAuthConfig *steps.CloneAuthConfig,
-	pullSecret *coreapi.Secret,
+	pullSecret, pushSecret *coreapi.Secret,
 
 ) ([]api.Step, []api.Step, error) {
 	var buildSteps []api.Step
@@ -313,7 +313,7 @@ func FromConfig(
 		if err != nil {
 			return nil, nil, fmt.Errorf("could not determine promotion defaults: %w", err)
 		}
-		postSteps = append(postSteps, release.PromotionStep(*cfg, config.Images, requiredNames, imageClient, imageClient, jobSpec))
+		postSteps = append(postSteps, release.PromotionStep(*cfg, config.Images, requiredNames, imageClient, imageClient, jobSpec, podClient, eventClient, pushSecret))
 	}
 
 	return buildSteps, postSteps, nil

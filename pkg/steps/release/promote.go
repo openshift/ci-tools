@@ -4,13 +4,17 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
+	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
+	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/util/retry"
 
 	imageapi "github.com/openshift/api/image/v1"
@@ -18,6 +22,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/results"
+	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/steps/utils"
 )
 
@@ -30,6 +35,9 @@ type promotionStep struct {
 	srcClient      imageclientset.ImageV1Interface
 	dstClient      imageclientset.ImageV1Interface
 	jobSpec        *api.JobSpec
+	podClient      steps.PodClient
+	eventClient    coreclientset.EventsGetter
+	pushSecret     *coreapi.Secret
 }
 
 func targetName(config api.PromotionConfiguration) string {
@@ -68,6 +76,19 @@ func (s *promotionStep) run(ctx context.Context) error {
 	pipeline, err := s.srcClient.ImageStreams(s.jobSpec.Namespace()).Get(ctx, api.PipelineImageStream, meta.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("could not resolve pipeline imagestream: %w", err)
+	}
+
+	if s.pushSecret != nil {
+		imageMirrorTarget := getImageMirrorTarget(s.config, tags, pipeline)
+		if len(imageMirrorTarget) == 0 {
+			log.Println("Nothing to promote, skipping...")
+			return nil
+		}
+
+		if _, err := steps.RunPod(ctx, s.podClient, s.eventClient, getPromotionPod(imageMirrorTarget, s.jobSpec.Namespace())); err != nil {
+			return fmt.Errorf("unable to run promotion pod: %w", err)
+		}
+		return nil
 	}
 
 	if len(s.config.Name) > 0 {
@@ -153,6 +174,118 @@ func (s *promotionStep) run(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+func getImageMirrorTarget(config api.PromotionConfiguration, tags map[string]string, pipeline *imageapi.ImageStream) map[string]string {
+	if pipeline == nil {
+		return nil
+	}
+	imageMirror := map[string]string{}
+	if len(config.Name) > 0 {
+		for dst, src := range tags {
+			dockerImageReference := findDockerImageReference(pipeline, src)
+			if dockerImageReference == "" {
+				continue
+			}
+			dockerImageReference = getPublicImageReference(dockerImageReference, pipeline.Status.PublicDockerImageRepository)
+			imageMirror[dockerImageReference] = fmt.Sprintf("%s/%s/%s:%s", api.DomainForService(api.ServiceRegistry), config.Namespace, config.Name, dst)
+		}
+	} else {
+		for dst, src := range tags {
+			dockerImageReference := findDockerImageReference(pipeline, src)
+			if dockerImageReference == "" {
+				continue
+			}
+			dockerImageReference = getPublicImageReference(dockerImageReference, pipeline.Status.PublicDockerImageRepository)
+			imageMirror[dockerImageReference] = fmt.Sprintf("%s/%s/%s:%s", api.DomainForService(api.ServiceRegistry), config.Namespace, dst, config.Tag)
+		}
+	}
+	if len(imageMirror) == 0 {
+		return nil
+	}
+	return imageMirror
+}
+
+func getPublicImageReference(dockerImageReference, publicDockerImageRepository string) string {
+	if !strings.Contains(dockerImageReference, ":5000") {
+		return dockerImageReference
+	}
+	splits := strings.Split(publicDockerImageRepository, "/")
+	if len(splits) < 2 {
+		// This should never happen
+		log.Println(fmt.Sprintf("Failed to get hostname from publicDockerImageRepository: %s.", publicDockerImageRepository))
+		return dockerImageReference
+	}
+	publicHost := splits[0]
+	splits = strings.Split(dockerImageReference, "/")
+	if len(splits) < 2 {
+		// This should never happen
+		log.Println(fmt.Sprintf("Failed to get hostname from dockerImageReference: %s.", dockerImageReference))
+		return dockerImageReference
+	}
+	return strings.Replace(dockerImageReference, splits[0], publicHost, 1)
+}
+
+func getPromotionPod(imageMirrorTarget map[string]string, namespace string) *coreapi.Pod {
+	var ocCommands []string
+	keys := make([]string, 0, len(imageMirrorTarget))
+	for k := range imageMirrorTarget {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, k := range keys {
+		ocCommands = append(ocCommands, fmt.Sprintf("oc image mirror --registry-config=%s %s %s", filepath.Join(api.RegistryPushCredentialsCICentralSecretMountPath, coreapi.DockerConfigJsonKey), k, imageMirrorTarget[k]))
+	}
+	command := []string{"/bin/sh", "-c"}
+	args := []string{strings.Join(ocCommands, " && ")}
+	return &coreapi.Pod{
+		ObjectMeta: meta.ObjectMeta{
+			Name:      "promotion",
+			Namespace: namespace,
+		},
+		Spec: coreapi.PodSpec{
+			RestartPolicy: coreapi.RestartPolicyNever,
+			Containers: []coreapi.Container{
+				{
+					Name:    "promotion",
+					Image:   fmt.Sprintf("%s/ocp/4.6:cli", api.DomainForService(api.ServiceRegistry)),
+					Command: command,
+					Args:    args,
+					VolumeMounts: []coreapi.VolumeMount{
+						{
+							Name:      "push-secret",
+							MountPath: "/etc/push-secret",
+							ReadOnly:  true,
+						},
+					},
+				},
+			},
+			Volumes: []coreapi.Volume{
+				{
+					Name: "push-secret",
+					VolumeSource: coreapi.VolumeSource{
+						Secret: &coreapi.SecretVolumeSource{SecretName: api.RegistryPushCredentialsCICentralSecret},
+					},
+				},
+			},
+		},
+	}
+}
+
+// findDockerImageReference returns DockerImageReference, the string that can be used to pull this image,
+// to a tag if it exists in the ImageStream's Spec
+func findDockerImageReference(is *imageapi.ImageStream, tag string) string {
+	for _, t := range is.Status.Tags {
+		if t.Tag != tag {
+			continue
+		}
+		if len(t.Items) == 0 {
+			return ""
+		}
+		return t.Items[0].DockerImageReference
+	}
+	return ""
 }
 
 // toPromote determines the mapping of local tag to external tag which should be promoted
@@ -243,7 +376,7 @@ func (s *promotionStep) Description() string {
 
 // PromotionStep copies tags from the pipeline image stream to the destination defined in the promotion config.
 // If the source tag does not exist it is silently skipped.
-func PromotionStep(config api.PromotionConfiguration, images []api.ProjectDirectoryImageBuildStepConfiguration, requiredImages sets.String, srcClient, dstClient imageclientset.ImageV1Interface, jobSpec *api.JobSpec) api.Step {
+func PromotionStep(config api.PromotionConfiguration, images []api.ProjectDirectoryImageBuildStepConfiguration, requiredImages sets.String, srcClient, dstClient imageclientset.ImageV1Interface, jobSpec *api.JobSpec, podClient steps.PodClient, eventClient coreclientset.EventsGetter, pushSecret *coreapi.Secret) api.Step {
 	return &promotionStep{
 		config:         config,
 		images:         images,
@@ -251,5 +384,8 @@ func PromotionStep(config api.PromotionConfiguration, images []api.ProjectDirect
 		srcClient:      srcClient,
 		dstClient:      dstClient,
 		jobSpec:        jobSpec,
+		podClient:      podClient,
+		eventClient:    eventClient,
+		pushSecret:     pushSecret,
 	}
 }

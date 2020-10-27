@@ -4,21 +4,21 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"path/filepath"
-	"sort"
 	"strings"
+	"time"
 
-	coreapi "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
-	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/util/retry"
 
 	imageapi "github.com/openshift/api/image/v1"
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/results"
-	"github.com/openshift/ci-tools/pkg/steps"
+	"github.com/openshift/ci-tools/pkg/steps/utils"
 )
 
 // promotionStep will tag a full release suite
@@ -28,8 +28,7 @@ type promotionStep struct {
 	images         []api.ProjectDirectoryImageBuildStepConfiguration
 	requiredImages sets.String
 	srcClient      imageclientset.ImageV1Interface
-	podClient      steps.PodClient
-	eventClient    coreclientset.EventsGetter
+	dstClient      imageclientset.ImageV1Interface
 	jobSpec        *api.JobSpec
 }
 
@@ -45,6 +44,13 @@ func (s *promotionStep) Inputs() (api.InputDefinition, error) {
 }
 
 func (*promotionStep) Validate() error { return nil }
+
+var promotionRetry = wait.Backoff{
+	Steps:    20,
+	Duration: 10 * time.Millisecond,
+	Factor:   1.2,
+	Jitter:   0.1,
+}
 
 func (s *promotionStep) Run(ctx context.Context) error {
 	return results.ForReason("promoting_images").ForError(s.run(ctx))
@@ -64,129 +70,89 @@ func (s *promotionStep) run(ctx context.Context) error {
 		return fmt.Errorf("could not resolve pipeline imagestream: %w", err)
 	}
 
-	imageMirrorTarget := getImageMirrorTarget(s.config, tags, pipeline)
-	if len(imageMirrorTarget) == 0 {
-		log.Println("Nothing to promote, skipping...")
-		return nil
-	}
-
-	if _, err := steps.RunPod(ctx, s.podClient, s.eventClient, getPromotionPod(imageMirrorTarget, s.jobSpec.Namespace())); err != nil {
-		return fmt.Errorf("unable to run promotion pod: %w", err)
-	}
-	return nil
-}
-
-func getImageMirrorTarget(config api.PromotionConfiguration, tags map[string]string, pipeline *imageapi.ImageStream) map[string]string {
-	if pipeline == nil {
-		return nil
-	}
-	imageMirror := map[string]string{}
-	if len(config.Name) > 0 {
-		for dst, src := range tags {
-			dockerImageReference := findDockerImageReference(pipeline, src)
-			if dockerImageReference == "" {
-				continue
-			}
-			dockerImageReference = getPublicImageReference(dockerImageReference, pipeline.Status.PublicDockerImageRepository)
-			imageMirror[dockerImageReference] = fmt.Sprintf("%s/%s/%s:%s", api.DomainForService(api.ServiceRegistry), config.Namespace, config.Name, dst)
-		}
-	} else {
-		for dst, src := range tags {
-			dockerImageReference := findDockerImageReference(pipeline, src)
-			if dockerImageReference == "" {
-				continue
-			}
-			dockerImageReference = getPublicImageReference(dockerImageReference, pipeline.Status.PublicDockerImageRepository)
-			imageMirror[dockerImageReference] = fmt.Sprintf("%s/%s/%s:%s", api.DomainForService(api.ServiceRegistry), config.Namespace, dst, config.Tag)
-		}
-	}
-	if len(imageMirror) == 0 {
-		return nil
-	}
-	return imageMirror
-}
-
-func getPublicImageReference(dockerImageReference, publicDockerImageRepository string) string {
-	if !strings.Contains(dockerImageReference, ":5000") {
-		return dockerImageReference
-	}
-	splits := strings.Split(publicDockerImageRepository, "/")
-	if len(splits) < 2 {
-		// This should never happen
-		log.Println(fmt.Sprintf("Failed to get hostname from publicDockerImageRepository: %s.", publicDockerImageRepository))
-		return dockerImageReference
-	}
-	publicHost := splits[0]
-	splits = strings.Split(dockerImageReference, "/")
-	if len(splits) < 2 {
-		// This should never happen
-		log.Println(fmt.Sprintf("Failed to get hostname from dockerImageReference: %s.", dockerImageReference))
-		return dockerImageReference
-	}
-	return strings.Replace(dockerImageReference, splits[0], publicHost, 1)
-}
-
-func getPromotionPod(imageMirrorTarget map[string]string, namespace string) *coreapi.Pod {
-	var ocCommands []string
-	keys := make([]string, 0, len(imageMirrorTarget))
-	for k := range imageMirrorTarget {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-
-	for _, k := range keys {
-		ocCommands = append(ocCommands, fmt.Sprintf("oc image mirror --registry-config=%s %s %s", filepath.Join(api.RegistryPushCredentialsCICentralSecretMountPath, coreapi.DockerConfigJsonKey), k, imageMirrorTarget[k]))
-	}
-	command := []string{"/bin/sh", "-c"}
-	args := []string{strings.Join(ocCommands, " && ")}
-	return &coreapi.Pod{
-		ObjectMeta: meta.ObjectMeta{
-			Name:      "promotion",
-			Namespace: namespace,
-		},
-		Spec: coreapi.PodSpec{
-			RestartPolicy: coreapi.RestartPolicyNever,
-			Containers: []coreapi.Container{
-				{
-					Name: "promotion",
-					// TODO use local image image-registry.openshift-image-registry.svc:5000/ocp/4.6:cli after migrating promotion jobs to OCP4 clusters
-					Image:   fmt.Sprintf("%s/ocp/4.6:cli", api.DomainForService(api.ServiceRegistry)),
-					Command: command,
-					Args:    args,
-					VolumeMounts: []coreapi.VolumeMount{
-						{
-							Name:      "push-secret",
-							MountPath: "/etc/push-secret",
-							ReadOnly:  true,
-						},
+	if len(s.config.Name) > 0 {
+		return retry.RetryOnConflict(promotionRetry, func() error {
+			is, err := s.dstClient.ImageStreams(s.config.Namespace).Get(ctx, s.config.Name, meta.GetOptions{})
+			if errors.IsNotFound(err) {
+				is, err = s.dstClient.ImageStreams(s.config.Namespace).Create(ctx, &imageapi.ImageStream{
+					ObjectMeta: meta.ObjectMeta{
+						Name:      s.config.Name,
+						Namespace: s.config.Namespace,
 					},
-				},
-			},
-			Volumes: []coreapi.Volume{
-				{
-					Name: "push-secret",
-					VolumeSource: coreapi.VolumeSource{
-						Secret: &coreapi.SecretVolumeSource{SecretName: api.RegistryPushCredentialsCICentralSecret},
-					},
-				},
-			},
-		},
-	}
-}
+				}, meta.CreateOptions{})
+			}
+			if err != nil {
+				return fmt.Errorf("could not retrieve target imagestream: %w", err)
+			}
 
-// findDockerImageReference returns DockerImageReference, the string that can be used to pull this image,
-// to a tag if it exists in the ImageStream's Spec
-func findDockerImageReference(is *imageapi.ImageStream, tag string) string {
-	for _, t := range is.Status.Tags {
-		if t.Tag != tag {
+			for dst, src := range tags {
+				if valid, _ := utils.FindStatusTag(pipeline, src); valid != nil {
+					is.Spec.Tags = append(is.Spec.Tags, imageapi.TagReference{
+						Name: dst,
+						From: valid,
+					})
+				}
+			}
+
+			if _, err := s.dstClient.ImageStreams(s.config.Namespace).Update(ctx, is, meta.UpdateOptions{}); err != nil {
+				if errors.IsConflict(err) {
+					return err
+				}
+				return fmt.Errorf("could not promote image streams: %w", err)
+			}
+			return nil
+		})
+	}
+
+	client := s.dstClient.ImageStreamTags(s.config.Namespace)
+	for dst, src := range tags {
+		valid, _ := utils.FindStatusTag(pipeline, src)
+		if valid == nil {
 			continue
 		}
-		if len(t.Items) == 0 {
-			return ""
+
+		err := retry.RetryOnConflict(promotionRetry, func() error {
+			_, err := s.dstClient.ImageStreams(s.config.Namespace).Get(ctx, dst, meta.GetOptions{})
+			if errors.IsNotFound(err) {
+				_, err = s.dstClient.ImageStreams(s.config.Namespace).Create(ctx, &imageapi.ImageStream{
+					ObjectMeta: meta.ObjectMeta{
+						Name:      dst,
+						Namespace: s.config.Namespace,
+					},
+					Spec: imageapi.ImageStreamSpec{
+						LookupPolicy: imageapi.ImageLookupPolicy{
+							Local: true,
+						},
+					},
+				}, meta.CreateOptions{})
+			}
+			if err != nil {
+				return fmt.Errorf("could not ensure target imagestream: %w", err)
+			}
+
+			ist := &imageapi.ImageStreamTag{
+				ObjectMeta: meta.ObjectMeta{
+					Name:      fmt.Sprintf("%s:%s", dst, s.config.Tag),
+					Namespace: s.config.Namespace,
+				},
+				Tag: &imageapi.TagReference{
+					Name: s.config.Tag,
+					From: valid,
+				},
+			}
+			if _, err := client.Update(ctx, ist, meta.UpdateOptions{}); err != nil {
+				if errors.IsConflict(err) {
+					return err
+				}
+				return fmt.Errorf("could not promote imagestreamtag %s: %w", dst, err)
+			}
+			return nil
+		})
+		if err != nil {
+			return err
 		}
-		return t.Items[0].DockerImageReference
 	}
-	return ""
+	return nil
 }
 
 // toPromote determines the mapping of local tag to external tag which should be promoted
@@ -277,14 +243,13 @@ func (s *promotionStep) Description() string {
 
 // PromotionStep copies tags from the pipeline image stream to the destination defined in the promotion config.
 // If the source tag does not exist it is silently skipped.
-func PromotionStep(config api.PromotionConfiguration, images []api.ProjectDirectoryImageBuildStepConfiguration, requiredImages sets.String, srcClient imageclientset.ImageV1Interface, podClient steps.PodClient, eventClient coreclientset.EventsGetter, jobSpec *api.JobSpec) api.Step {
+func PromotionStep(config api.PromotionConfiguration, images []api.ProjectDirectoryImageBuildStepConfiguration, requiredImages sets.String, srcClient, dstClient imageclientset.ImageV1Interface, jobSpec *api.JobSpec) api.Step {
 	return &promotionStep{
 		config:         config,
 		images:         images,
 		requiredImages: requiredImages,
 		srcClient:      srcClient,
-		podClient:      podClient,
-		eventClient:    eventClient,
+		dstClient:      dstClient,
 		jobSpec:        jobSpec,
 	}
 }

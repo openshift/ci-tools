@@ -46,7 +46,6 @@ func FromConfig(
 	requiredTargets []string,
 	cloneAuthConfig *steps.CloneAuthConfig,
 	pullSecret, pushSecret *coreapi.Secret,
-
 ) ([]api.Step, []api.Step, error) {
 	var buildSteps []api.Step
 	var postSteps []api.Step
@@ -98,9 +97,17 @@ func FromConfig(
 		return nil, nil, fmt.Errorf("failed to get stepConfigsForBuild: %w", err)
 	}
 	for _, rawStep := range rawSteps {
+		if testStep := rawStep.TestStepConfiguration; testStep != nil {
+			steps, err := stepForTest(config, params, podClient, leaseClient, templateClient, client, artifactDir, jobSpec, testStep)
+			if err != nil {
+				return nil, nil, err
+			}
+			buildSteps = append(buildSteps, steps...)
+			addProvidesForStep(steps[0], params)
+			continue
+		}
 		var step api.Step
 		var isReleaseStep bool
-		var additional []api.Step
 		var stepLinks []api.StepLink
 		if rawStep.InputImageTagStepConfiguration != nil {
 			step = steps.InputImageTagStep(*rawStep.InputImageTagStepConfiguration, client, jobSpec)
@@ -186,41 +193,6 @@ func FromConfig(
 			}
 
 			step = release.ImportReleaseStep(resolveConfig.Name, value, false, config.Resources, podClient, client, artifactDir, jobSpec, pullSecret)
-		} else if testStep := rawStep.TestStepConfiguration; testStep != nil {
-			if test := testStep.MultiStageTestConfigurationLiteral; test != nil {
-				step = steps.MultiStageTestStep(*testStep, config, params, podClient, client, artifactDir, jobSpec)
-				if test.ClusterProfile != "" {
-					leases := []api.StepLease{{
-						ResourceType: test.ClusterProfile.LeaseType(),
-						Env:          steps.DefaultLeaseEnv,
-					}}
-					step = steps.LeaseStep(leaseClient, leases, step, jobSpec.Namespace)
-				}
-				for _, subStep := range append(append(test.Pre, test.Test...), test.Post...) {
-					if link, ok := subStep.FromImageTag(); ok {
-						config := api.InputImageTagStepConfiguration{
-							BaseImage: *subStep.FromImage,
-							To:        link,
-						}
-						additional = append(additional, steps.InputImageTagStep(config, client, jobSpec))
-					}
-				}
-			} else if test := testStep.OpenshiftInstallerClusterTestConfiguration; test != nil {
-				if testStep.OpenshiftInstallerClusterTestConfiguration.Upgrade {
-					var err error
-					step, err = clusterinstall.E2ETestStep(*testStep.OpenshiftInstallerClusterTestConfiguration, *testStep, params, podClient, templateClient, artifactDir, jobSpec, config.Resources)
-					if err != nil {
-						return nil, nil, fmt.Errorf("unable to create end to end test step: %w", err)
-					}
-					leases := []api.StepLease{{
-						ResourceType: test.ClusterProfile.LeaseType(),
-						Env:          steps.DefaultLeaseEnv,
-					}}
-					step = steps.LeaseStep(leaseClient, leases, step, jobSpec.Namespace)
-				}
-			} else {
-				step = steps.TestStep(*testStep, config.Resources, podClient, client, artifactDir, jobSpec)
-			}
 		}
 		if !isReleaseStep {
 			step, ok := checkForFullyQualifiedStep(step, params)
@@ -231,7 +203,6 @@ func FromConfig(
 			}
 		}
 		buildSteps = append(buildSteps, step)
-		buildSteps = append(buildSteps, additional...)
 	}
 
 	for _, template := range templates {
@@ -283,6 +254,62 @@ func FromConfig(
 	}
 
 	return buildSteps, postSteps, nil
+}
+
+// stepForTest creates the appropriate step for each test type.
+func stepForTest(
+	config *api.ReleaseBuildConfiguration,
+	params *api.DeferredParameters,
+	podClient steps.PodClient,
+	leaseClient *lease.Client,
+	templateClient steps.TemplateClient,
+	client ctrlruntimeclient.Client,
+	artifactDir string,
+	jobSpec *api.JobSpec,
+	c *api.TestStepConfiguration,
+) ([]api.Step, error) {
+	if test := c.MultiStageTestConfigurationLiteral; test != nil {
+		step := steps.MultiStageTestStep(*c, config, params, podClient, client, artifactDir, jobSpec)
+		if test.ClusterProfile != "" {
+			step = steps.LeaseStep(leaseClient, []api.StepLease{{
+				ResourceType: test.ClusterProfile.LeaseType(),
+				Env:          steps.DefaultLeaseEnv,
+			}}, step, jobSpec.Namespace)
+		}
+		return append([]api.Step{step}, stepsForStepImages(client, jobSpec, test)...), nil
+	}
+	if test := c.OpenshiftInstallerClusterTestConfiguration; test != nil {
+		if !test.Upgrade {
+			return nil, nil
+		}
+		step, err := clusterinstall.E2ETestStep(*c.OpenshiftInstallerClusterTestConfiguration, *c, params, podClient, templateClient, artifactDir, jobSpec, config.Resources)
+		if err != nil {
+			return nil, fmt.Errorf("unable to create end to end test step: %w", err)
+		}
+		return []api.Step{steps.LeaseStep(leaseClient, []api.StepLease{{
+			ResourceType: test.ClusterProfile.LeaseType(),
+			Env:          steps.DefaultLeaseEnv,
+		}}, step, jobSpec.Namespace)}, nil
+	}
+	return []api.Step{steps.TestStep(*c, config.Resources, podClient, client, artifactDir, jobSpec)}, nil
+}
+
+// stepsForStepImages creates steps that import images referenced in test steps.
+func stepsForStepImages(
+	client ctrlruntimeclient.Client,
+	jobSpec *api.JobSpec,
+	test *api.MultiStageTestConfigurationLiteral,
+) (ret []api.Step) {
+	for _, subStep := range append(append(test.Pre, test.Test...), test.Post...) {
+		if link, ok := subStep.FromImageTag(); ok {
+			config := api.InputImageTagStepConfiguration{
+				BaseImage: *subStep.FromImage,
+				To:        link,
+			}
+			ret = append(ret, steps.InputImageTagStep(config, client, jobSpec))
+		}
+	}
+	return
 }
 
 // addProvidesForStep adds any required parameters to the deferred parameters map.

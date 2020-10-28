@@ -245,3 +245,135 @@ func TestMigrateOpenshiftInstallerCustomTestImageTemplates(t *testing.T) {
 		})
 	}
 }
+
+func TestMigrateOpenshiftOpenshiftInstallerUPIClusterTestConfiguration(t *testing.T) {
+	t.Parallel()
+	testCases := []struct {
+		name                                                string
+		configuration                                       *config.DataWithInfo
+		allowedBranches, allowedOrgs, allowedCloudproviders sets.String
+		expectedConfig                                      *config.DataWithInfo
+		expectedMigrationCount                              int
+	}{
+		{
+			name: "Template gets migrated for non-upgrade test",
+			configuration: &config.DataWithInfo{Configuration: api.ReleaseBuildConfiguration{
+				Tests: []api.TestStepConfiguration{{
+					Commands: "TEST_SUITE=openshift/conformance/parallel run-tests",
+					OpenshiftInstallerUPIClusterTestConfiguration: &api.OpenshiftInstallerUPIClusterTestConfiguration{
+						ClusterTestConfiguration: api.ClusterTestConfiguration{ClusterProfile: api.ClusterProfileAWS},
+					},
+				}},
+			}},
+			expectedConfig: &config.DataWithInfo{Configuration: api.ReleaseBuildConfiguration{
+				Tests: []api.TestStepConfiguration{{
+					MultiStageTestConfiguration: &api.MultiStageTestConfiguration{
+						ClusterProfile: "aws",
+						Environment: api.TestEnvironment{
+							"TEST_SUITE": "openshift/conformance/parallel",
+						},
+						Workflow: utilpointer.StringPtr("openshift-e2e-aws-upi"),
+					},
+				}},
+			}},
+			expectedMigrationCount: 1,
+		},
+		{
+			name: "Template gets migrated for upgrade test",
+			configuration: &config.DataWithInfo{Configuration: api.ReleaseBuildConfiguration{
+				Tests: []api.TestStepConfiguration{{
+					Commands: "TEST_SUITE=openshift/conformance/parallel run-upgrade",
+					OpenshiftInstallerUPIClusterTestConfiguration: &api.OpenshiftInstallerUPIClusterTestConfiguration{
+						ClusterTestConfiguration: api.ClusterTestConfiguration{ClusterProfile: api.ClusterProfileAWS},
+					},
+				}},
+			}},
+			expectedConfig: &config.DataWithInfo{Configuration: api.ReleaseBuildConfiguration{
+				Tests: []api.TestStepConfiguration{{
+					MultiStageTestConfiguration: &api.MultiStageTestConfiguration{
+						ClusterProfile: "aws",
+						Environment: api.TestEnvironment{
+							"TEST_SUITE":   "openshift/conformance/parallel",
+							"TEST_COMMAND": "run-upgrade",
+						},
+						Workflow: utilpointer.StringPtr("openshift-e2e-aws-upi"),
+					},
+				}},
+			}},
+			expectedMigrationCount: 1,
+		},
+		{
+			name: "Config excluded via branches, nothing happens",
+			configuration: &config.DataWithInfo{Configuration: api.ReleaseBuildConfiguration{
+				Tests: []api.TestStepConfiguration{{
+					Commands: "TEST_SUITE=openshift/conformance/parallel run-tests",
+					OpenshiftInstallerUPIClusterTestConfiguration: &api.OpenshiftInstallerUPIClusterTestConfiguration{
+						ClusterTestConfiguration: api.ClusterTestConfiguration{ClusterProfile: api.ClusterProfileAWS},
+					},
+				}},
+			}},
+			allowedBranches: sets.NewString("some-branch"),
+			expectedConfig: &config.DataWithInfo{Configuration: api.ReleaseBuildConfiguration{
+				Tests: []api.TestStepConfiguration{{
+					Commands: "TEST_SUITE=openshift/conformance/parallel run-tests",
+					OpenshiftInstallerUPIClusterTestConfiguration: &api.OpenshiftInstallerUPIClusterTestConfiguration{
+						ClusterTestConfiguration: api.ClusterTestConfiguration{ClusterProfile: api.ClusterProfileAWS},
+					},
+				}},
+			}},
+		},
+		{
+			name: "Config excluded via orgs, nothing happens",
+			configuration: &config.DataWithInfo{Configuration: api.ReleaseBuildConfiguration{
+				Tests: []api.TestStepConfiguration{{
+					Commands: "TEST_SUITE=openshift/conformance/parallel run-tests",
+					OpenshiftInstallerUPIClusterTestConfiguration: &api.OpenshiftInstallerUPIClusterTestConfiguration{
+						ClusterTestConfiguration: api.ClusterTestConfiguration{ClusterProfile: api.ClusterProfileAWS},
+					},
+				}},
+			}},
+			allowedOrgs: sets.NewString("some-org"),
+			expectedConfig: &config.DataWithInfo{Configuration: api.ReleaseBuildConfiguration{
+				Tests: []api.TestStepConfiguration{{
+					Commands: "TEST_SUITE=openshift/conformance/parallel run-tests",
+					OpenshiftInstallerUPIClusterTestConfiguration: &api.OpenshiftInstallerUPIClusterTestConfiguration{
+						ClusterTestConfiguration: api.ClusterTestConfiguration{ClusterProfile: api.ClusterProfileAWS},
+					},
+				}},
+			}},
+		},
+		{
+			name: "Config excluded via cloudprovider, nothing happens",
+			configuration: &config.DataWithInfo{Configuration: api.ReleaseBuildConfiguration{
+				Tests: []api.TestStepConfiguration{{
+					Commands: "TEST_SUITE=openshift/conformance/parallel run-tests",
+					OpenshiftInstallerUPIClusterTestConfiguration: &api.OpenshiftInstallerUPIClusterTestConfiguration{
+						ClusterTestConfiguration: api.ClusterTestConfiguration{ClusterProfile: api.ClusterProfileAWS},
+					},
+				}},
+			}},
+			allowedCloudproviders: sets.NewString("gcp"),
+			expectedConfig: &config.DataWithInfo{Configuration: api.ReleaseBuildConfiguration{
+				Tests: []api.TestStepConfiguration{{
+					Commands: "TEST_SUITE=openshift/conformance/parallel run-tests",
+					OpenshiftInstallerUPIClusterTestConfiguration: &api.OpenshiftInstallerUPIClusterTestConfiguration{
+						ClusterTestConfiguration: api.ClusterTestConfiguration{ClusterProfile: api.ClusterProfileAWS},
+					},
+				}},
+			}},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actualMigrationCount := migrateOpenshiftOpenshiftInstallerUPIClusterTestConfiguration(tc.configuration, tc.allowedOrgs, tc.allowedBranches, tc.allowedCloudproviders)
+			if actualMigrationCount != tc.expectedMigrationCount {
+				t.Errorf("expected %d migrated tests, got %d", tc.expectedMigrationCount, actualMigrationCount)
+			}
+
+			if diff := cmp.Diff(tc.configuration, tc.expectedConfig); diff != "" {
+				t.Errorf("Configuration differs from expected configuration: %s", diff)
+			}
+		})
+	}
+}

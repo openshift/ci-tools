@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -17,9 +18,10 @@ import (
 const (
 	openshiftInstallerSRCTemplateName             = "openshift_installer_src"
 	openshiftInstallerCustomTestImageTemplateName = "openshift_installer_custom_test_image"
+	OpenshiftInstallerUPITemplateName             = "openshift_installer_upi"
 )
 
-var validTemplateMigrations = sets.NewString(openshiftInstallerSRCTemplateName, openshiftInstallerCustomTestImageTemplateName)
+var validTemplateMigrations = sets.NewString(openshiftInstallerSRCTemplateName, openshiftInstallerCustomTestImageTemplateName, OpenshiftInstallerUPITemplateName)
 
 type options struct {
 	config.ConfirmableOptions
@@ -75,6 +77,9 @@ func main() {
 		}
 		if sets.NewString(o.enabledTemplateMigrations.Strings()...).Has(openshiftInstallerCustomTestImageTemplateName) && migratedCount <= o.templateMigrationCeiling {
 			migratedCount += migrateOpenshiftInstallerCustomTestImageTemplates(&output, o.templateMigrationAllowedBranches.StringSet(), o.templateMigrationAllowedOrgs.StringSet(), o.templateMigrationAllowedClusterProfiles.StringSet())
+		}
+		if o.enabledTemplateMigrations.StringSet().Has(OpenshiftInstallerUPITemplateName) && migratedCount <= o.templateMigrationCeiling {
+			migratedCount += migrateOpenshiftOpenshiftInstallerUPIClusterTestConfiguration(&output, o.templateMigrationAllowedBranches.StringSet(), o.templateMigrationAllowedOrgs.StringSet(), o.templateMigrationAllowedClusterProfiles.StringSet())
 		}
 
 		// we treat the filepath as the ultimate source of truth for this
@@ -180,10 +185,78 @@ func migrateOpenshiftInstallerCustomTestImageTemplates(
 	return migratedCount
 }
 
-func ipiWorkflowForClusterProfile(clusterProfile api.ClusterProfile) string {
-	suffix := string(clusterProfile)
+func providerNameForProfile(clusterProfile api.ClusterProfile) string {
 	if clusterProfile == api.ClusterProfileAzure4 {
-		suffix = "azure"
+		return "azure"
 	}
-	return fmt.Sprintf("ipi-%s", suffix)
+	return string(clusterProfile)
+}
+
+func ipiWorkflowForClusterProfile(clusterProfile api.ClusterProfile) string {
+	return fmt.Sprintf("ipi-%s", providerNameForProfile(clusterProfile))
+}
+
+func migrateOpenshiftOpenshiftInstallerUPIClusterTestConfiguration(
+	configuration *config.DataWithInfo,
+	allowedBranches sets.String,
+	allowedOrgs sets.String,
+	allowedCloudproviders sets.String,
+) (migratedCount int) {
+	if (len(allowedBranches) != 0 && !allowedBranches.Has(configuration.Info.Branch)) || (len(allowedOrgs) != 0 && !allowedOrgs.Has(configuration.Info.Org)) {
+		return 0
+	}
+
+	log := logrus.WithField("file", configuration.Info.Filename)
+
+	for idx, test := range configuration.Configuration.Tests {
+		if test.OpenshiftInstallerUPIClusterTestConfiguration == nil ||
+			(len(allowedCloudproviders) != 0 && !allowedCloudproviders.Has(string(test.OpenshiftInstallerUPIClusterTestConfiguration.ClusterProfile))) {
+			continue
+		}
+		log := log.WithField("field", fmt.Sprintf("tests.%d", idx))
+
+		commandFields := strings.Fields(test.Commands)
+		if n := len(commandFields); n != 2 {
+			log.Warnf("command %q didn't have exactly two fields, skipping migration of openshift_installer_upi template", test.Commands)
+			continue
+		}
+		equalSignSplit := strings.Split(commandFields[0], "=")
+		if n := len(equalSignSplit); n != 2 {
+			log.Warnf("splitting first field of command %q by = didn't yield exactly two results, skipping migration of openshift_installer_upi template", test.Commands)
+			continue
+		}
+
+		var testCommandEnv string
+		switch commandFields[1] {
+		case "run-tests":
+			testCommandEnv = ""
+		case "run-upgrade":
+			testCommandEnv = "run-upgrade"
+		default:
+			log.Warnf("command %q has unrecognized command element %q, known elements: ['run-tests', 'run-upgrade'], skipping migration of openshift_installer_upi template", test.Commands, commandFields[1])
+			continue
+		}
+
+		clusterProfile := test.OpenshiftInstallerUPIClusterTestConfiguration.ClusterProfile
+		test.OpenshiftInstallerUPIClusterTestConfiguration = nil
+		test.MultiStageTestConfiguration = &api.MultiStageTestConfiguration{
+			ClusterProfile: clusterProfile,
+			Environment: api.TestEnvironment{
+				// https://github.com/openshift/release/blob/ea3cc4842843c941e9fa1e71ce8a4dc3ce841184/ci-operator/step-registry/openshift/e2e/test/openshift-e2e-test-ref.yaml#L10
+				"TEST_SUITE": equalSignSplit[1],
+			},
+			Workflow: utilpointer.StringPtr(fmt.Sprintf("openshift-e2e-%s-upi", providerNameForProfile(clusterProfile))),
+		}
+		if testCommandEnv != "" {
+			// https://github.com/openshift/release/blob/ea3cc4842843c941e9fa1e71ce8a4dc3ce841184/ci-operator/step-registry/openshift/e2e/test/openshift-e2e-test-ref.yaml#L7
+			test.MultiStageTestConfiguration.Environment["TEST_COMMAND"] = testCommandEnv
+		}
+		test.Commands = ""
+
+		configuration.Configuration.Tests[idx] = test
+		migratedCount++
+
+	}
+
+	return migratedCount
 }

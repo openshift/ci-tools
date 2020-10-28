@@ -8,6 +8,8 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"path"
+	"strings"
 	"time"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -20,6 +22,7 @@ import (
 	"k8s.io/test-infra/prow/pjutil"
 	"k8s.io/test-infra/prow/simplifypath"
 
+	"github.com/openshift/ci-tools/pkg/load"
 	"github.com/openshift/ci-tools/pkg/load/agents"
 	"github.com/openshift/ci-tools/pkg/webreg"
 )
@@ -158,18 +161,99 @@ func resolveAndRespond(registryAgent agents.RegistryAgent, config api.ReleaseBui
 		logger.WithError(err).Warning("failed to resolve config with registry")
 		return
 	}
-	jsonConfig, err := json.MarshalIndent(config, "", "  ")
+	writeJSON(w, logger, config)
+}
+
+func writeJSON(w http.ResponseWriter, logger *logrus.Entry, data interface{}) {
+	jsonData, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
-		metrics.RecordError("failed to marshal config", configresolverMetrics.ErrorRate)
+		metrics.RecordError("failed to marshal JSON", configresolverMetrics.ErrorRate)
 		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, "failed to marshal config to JSON: %v", err)
-		logger.WithError(err).Errorf("failed to marshal config to JSON")
+		fmt.Fprintf(w, "failed to marshal JSON: %v", err)
+		logger.WithError(err).Errorf("failed to marshal JSON")
 		return
 	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	if _, err := w.Write(jsonConfig); err != nil {
+	if _, err := w.Write(jsonData); err != nil {
 		logrus.WithError(err).Error("Failed to write response")
 	}
+}
+
+func writeErrorPage(w http.ResponseWriter, pageErr error, status int) {
+	w.Header().Set("Content-Type", "text/plain;charset=UTF-8")
+	w.WriteHeader(status)
+	fmt.Fprintf(w, "%v\n", pageErr)
+}
+
+func resolveStepRegistry(regAgent agents.RegistryAgent, confAgent agents.ConfigAgent) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		trimmedPath := strings.TrimPrefix(req.URL.Path, req.URL.Host)
+		// remove leading path prefix
+		trimmedPath = strings.TrimPrefix(trimmedPath, "/step-registry/")
+		// remove trailing slash
+		trimmedPath = strings.TrimSuffix(trimmedPath, "/")
+		splitURI := strings.Split(trimmedPath, "/")
+		if len(splitURI) == 1 {
+			switch splitURI[0] {
+			//case "search":
+			//	searchHandler(confAgent, w, req)
+			//case "job":
+			//	jobHandler(regAgent, confAgent, w, req)
+			default:
+				writeErrorPage(w, errors.New("Invalid path"), http.StatusNotImplemented)
+			}
+			return
+		} else if len(splitURI) == 2 {
+			switch splitURI[0] {
+			case "reference":
+				referenceHandler(regAgent, w, req)
+				return
+			//case "chain":
+			//	chainHandler(regAgent, w, req)
+			//	return
+			//case "workflow":
+			//	workflowHandler(regAgent, w, req)
+			//	return
+			default:
+				writeErrorPage(w, fmt.Errorf("Component type %s not found", splitURI[0]), http.StatusNotFound)
+				return
+			}
+		}
+		writeErrorPage(w, errors.New("Invalid path"), http.StatusNotImplemented)
+	}
+}
+
+func referenceHandler(agent agents.RegistryAgent, w http.ResponseWriter, req *http.Request) {
+	start := time.Now()
+	defer func() { logrus.Infof("rendered in %s", time.Since(start)) }()
+	name := path.Base(req.URL.Path)
+
+	refs, _, _, docs, metadata := agent.GetRegistryComponents()
+	if _, ok := refs[name]; !ok {
+		writeErrorPage(w, fmt.Errorf("Could not find reference `%s`.", name), http.StatusNotFound)
+		return
+	}
+	refMetadataName := fmt.Sprint(name, load.RefSuffix)
+	if _, ok := metadata[refMetadataName]; !ok {
+		writeErrorPage(w, fmt.Errorf("Could not find metadata for file `%s`. Please contact the Developer Productivity Test Platform.", refMetadataName), http.StatusInternalServerError)
+		return
+	}
+	ref := struct {
+		Reference api.RegistryReference
+		Metadata  api.RegistryInfo
+	}{
+		Reference: api.RegistryReference{
+			LiteralTestStep: api.LiteralTestStep{
+				As:       name,
+				Commands: refs[name].Commands,
+				From:     refs[name].From,
+			},
+			Documentation: docs[name],
+		},
+		Metadata: metadata[refMetadataName],
+	}
+	writeJSON(w, logrus.NewEntry(logrus.New()), ref)
 }
 
 func getConfigGeneration(agent agents.ConfigAgent) http.HandlerFunc {
@@ -244,6 +328,7 @@ func main() {
 	http.HandleFunc("/", handler(http.HandlerFunc(http.NotFound)).ServeHTTP)
 	http.HandleFunc("/config", handler(resolveConfig(configAgent, registryAgent)).ServeHTTP)
 	http.HandleFunc("/resolve", handler(resolveLiteralConfig(registryAgent)).ServeHTTP)
+	http.HandleFunc("/step-registry", handler(resolveStepRegistry(registryAgent, configAgent)).ServeHTTP)
 	http.HandleFunc("/configGeneration", handler(getConfigGeneration(configAgent)).ServeHTTP)
 	http.HandleFunc("/registryGeneration", handler(getRegistryGeneration(registryAgent)).ServeHTTP)
 	interrupts.ListenAndServe(&http.Server{Addr: o.address}, o.gracePeriod)

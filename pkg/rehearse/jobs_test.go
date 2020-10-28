@@ -1112,7 +1112,7 @@ func TestGetTrimmedBranch(t *testing.T) {
 		expected: "release-4.2",
 	}}
 	for _, testCase := range testCases {
-		branch := getTrimmedBranch(testCase.input)
+		branch := BranchFromRegexes(testCase.input)
 		if branch != testCase.expected {
 			t.Errorf("%s: getTrimmedBranches returned %s, expected %s", testCase.name, branch, testCase.expected)
 		}
@@ -1143,9 +1143,9 @@ func TestVariantFromLabels(t *testing.T) {
 		expected: "v2",
 	}}
 	for _, testCase := range testCases {
-		variant := variantFromLabels(testCase.input)
+		variant := VariantFromLabels(testCase.input)
 		if variant != testCase.expected {
-			t.Errorf("%s: variantFromLabels returned %s, expected %s", testCase.name, variant, testCase.expected)
+			t.Errorf("%s: VariantFromLabels returned %s, expected %s", testCase.name, variant, testCase.expected)
 		}
 	}
 }

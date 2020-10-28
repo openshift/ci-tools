@@ -306,10 +306,13 @@ func main() {
 
 	bitWardenContexts := bitwardenContextsFor(processedBwItems)
 	if err := validateContexts(bitWardenContexts, o.bootstrapConfig); err != nil {
+		for _, err := range err.Errors() {
+			logrus.WithError(err).Error("Invalid entry")
+		}
 		if o.validate {
-			logrus.WithError(err).Fatal("Failed to validate secret entries.")
+			logrus.Fatal("Failed to validate secret entries.")
 		} else {
-			logrus.WithError(err).Warn("Failed to validate secret entries.")
+			logrus.Warn("Failed to validate secret entries.")
 		}
 	}
 	if o.validateOnly {
@@ -376,7 +379,7 @@ func bitwardenContextsFor(items []bitWardenItem) []secretbootstrap.BitWardenCont
 	return bitWardenContexts
 }
 
-func validateContexts(contexts []secretbootstrap.BitWardenContext, config secretbootstrap.Config) error {
+func validateContexts(contexts []secretbootstrap.BitWardenContext, config secretbootstrap.Config) utilerrors.Aggregate {
 	var errs []error
 	for _, needle := range contexts {
 		var found bool

@@ -29,6 +29,7 @@ type options struct {
 	bwUser              string
 	dryRun              bool
 	validate            bool
+	validateOnly        bool
 	bwPasswordPath      string
 	maxConcurrency      int
 
@@ -57,6 +58,7 @@ func parseOptions() options {
 	flag.CommandLine.StringVar(&o.configPath, "config", "", "Path to the config file to use for this tool.")
 	flag.CommandLine.StringVar(&o.bootstrapConfigPath, "bootstrap-config", "", "Path to the config file used for bootstrapping cluster secrets after using this tool.")
 	flag.CommandLine.BoolVar(&o.validate, "validate", true, "Validate that the items created from this tool are used in bootstrapping")
+	flag.CommandLine.BoolVar(&o.validateOnly, "validate-only", false, "If the tool should exit after the validation")
 	flag.CommandLine.StringVar(&o.bwUser, "bw-user", "", "Username to access BitWarden.")
 	flag.CommandLine.StringVar(&o.bwPasswordPath, "bw-password-path", "", "Path to a password file to access BitWarden.")
 	flag.CommandLine.StringVar(&o.logLevel, "log-level", "info", fmt.Sprintf("Log level is one of %v.", logrus.AllLevels))
@@ -297,6 +299,24 @@ func main() {
 	if err := o.completeOptions(secrets); err != nil {
 		logrus.WithError(err).Fatal("failed to complete options.")
 	}
+	processedBwItems, err := processBwParameters(o.config)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to parse parameters.")
+	}
+
+	bitWardenContexts := bitwardenContextsFor(processedBwItems)
+	if err := validateContexts(bitWardenContexts, o.bootstrapConfig); err != nil {
+		if o.validate {
+			logrus.WithError(err).Fatal("Failed to validate secret entries.")
+		} else {
+			logrus.WithError(err).Warn("Failed to validate secret entries.")
+		}
+	}
+	if o.validateOnly {
+		logrus.Info("Validation succeeded and --validate-only is set, exiting")
+		return
+	}
+
 	var client bitwarden.Client
 	logrus.RegisterExitHandler(func() {
 		if _, err := client.Logout(); err != nil {
@@ -321,20 +341,6 @@ func main() {
 		})
 		if err != nil {
 			logrus.WithError(err).Fatal("failed to get Bitwarden client.")
-		}
-	}
-
-	processedBwItems, err := processBwParameters(o.config)
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to parse parameters.")
-	}
-
-	bitWardenContexts := bitwardenContextsFor(processedBwItems)
-	if err := validateContexts(bitWardenContexts, o.bootstrapConfig); err != nil {
-		if o.validate {
-			logrus.WithError(err).Fatal("Failed to validate secret entries.")
-		} else {
-			logrus.WithError(err).Warn("Failed to validate secret entries.")
 		}
 	}
 

@@ -154,6 +154,16 @@ func Handler(client messagePoster, config JobGetter, gcsClient *storage.Client) 
 	})
 }
 
+func rehearsalFromName(name string) (string, string) {
+	var rehearsalPR string
+	if trimmed := strings.TrimPrefix(name, "rehearse-"); trimmed != name {
+		idx := strings.Index(trimmed, "-")
+		rehearsalPR = trimmed[:idx]
+		name = trimmed[idx+1:]
+	}
+	return name, rehearsalPR
+}
+
 func contextFor(logger *logrus.Entry, infos []*jobInfo, config JobGetter, gcsClient *storage.Client) []slack.Block {
 	blocks := []slack.Block{&slack.SectionBlock{
 		Type: slack.MBTSection,
@@ -168,6 +178,8 @@ func contextFor(logger *logrus.Entry, infos []*jobInfo, config JobGetter, gcsCli
 			"job": info.Name,
 			"id":  info.Id,
 		})
+		var rehearsalPR string
+		info.Name, rehearsalPR = rehearsalFromName(info.Name)
 		job := config.JobForName(info.Name)
 		if job == nil {
 			continue
@@ -205,13 +217,16 @@ func contextFor(logger *logrus.Entry, infos []*jobInfo, config JobGetter, gcsCli
 		}
 		text := bytes.Buffer{}
 		text.WriteString("*" + job.metadata.TestNameFromJobName(info.Name, prefix) + ":*")
+		if rehearsalPR != "" {
+			text.WriteString("\n- This job is a rehearsal for <https://github.com/openshift/release/pulls/" + rehearsalPR + "|PR " + rehearsalPR + ">.")
+		}
 		if generated {
 			text.WriteString("\n - `ci-operator` <https://github.com/openshift/release/tree/master/ci-operator/config/" + job.metadata.RelativePath() + "|config>.")
 		} else {
 			text.WriteString("\n - This job is not generated from `ci-operator` configuration; DPTP may not be able to support questions for it.")
 		}
 
-		if info.Id != "" {
+		if info.Id != "" && rehearsalPR == "" {
 			var path string
 			dspec := downwardapi.NewJobSpec(spec, info.Id, "")
 			if alias := gcsutil.AliasForSpec(&dspec); alias != "" {

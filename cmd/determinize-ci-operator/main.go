@@ -15,10 +15,11 @@ import (
 )
 
 const (
-	openshiftInstallerSRCTemplateName = "openshift_installer_src"
+	openshiftInstallerSRCTemplateName             = "openshift_installer_src"
+	openshiftInstallerCustomTestImageTemplateName = "openshift_installer_custom_test_image"
 )
 
-var validTemplateMigrations = sets.NewString(openshiftInstallerSRCTemplateName)
+var validTemplateMigrations = sets.NewString(openshiftInstallerSRCTemplateName, openshiftInstallerCustomTestImageTemplateName)
 
 type options struct {
 	config.ConfirmableOptions
@@ -72,6 +73,9 @@ func main() {
 		if sets.NewString(o.enabledTemplateMigrations.Strings()...).Has(openshiftInstallerSRCTemplateName) && migratedCount <= o.templateMigrationCeiling {
 			migratedCount += migrateOpenshiftInstallerSRCTemplates(&output, o.templateMigrationAllowedBranches.StringSet(), o.templateMigrationAllowedOrgs.StringSet(), o.templateMigrationAllowedClusterProfiles.StringSet())
 		}
+		if sets.NewString(o.enabledTemplateMigrations.Strings()...).Has(openshiftInstallerCustomTestImageTemplateName) && migratedCount <= o.templateMigrationCeiling {
+			migratedCount += migrateOpenshiftInstallerCustomTestImageTemplates(&output, o.templateMigrationAllowedBranches.StringSet(), o.templateMigrationAllowedOrgs.StringSet(), o.templateMigrationAllowedClusterProfiles.StringSet())
+		}
 
 		// we treat the filepath as the ultimate source of truth for this
 		// data, but we record it in the configuration files to ensure that
@@ -116,6 +120,48 @@ func migrateOpenshiftInstallerSRCTemplates(
 			Test: []api.TestStep{{LiteralTestStep: &api.LiteralTestStep{
 				As:       "test",
 				From:     string(api.PipelineImageStreamTagReferenceSource),
+				Commands: test.Commands,
+				Cli:      api.LatestReleaseName,
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "100m"},
+				},
+			}}},
+			Workflow: utilpointer.StringPtr(ipiWorkflowForClusterProfile(clusterProfile)),
+		}
+		test.Commands = ""
+
+		configuration.Configuration.Tests[idx] = test
+		migratedCount++
+
+	}
+
+	return migratedCount
+}
+
+func migrateOpenshiftInstallerCustomTestImageTemplates(
+	configuration *config.DataWithInfo,
+	allowedBranches sets.String,
+	allowedOrgs sets.String,
+	allowedCloudproviders sets.String,
+) (migratedCount int) {
+	if (len(allowedBranches) != 0 && !allowedBranches.Has(configuration.Info.Branch)) || (len(allowedOrgs) != 0 && !allowedOrgs.Has(configuration.Info.Org)) {
+		return 0
+	}
+
+	for idx, test := range configuration.Configuration.Tests {
+		if test.OpenshiftInstallerCustomTestImageClusterTestConfiguration == nil ||
+			(len(allowedCloudproviders) != 0 && !allowedCloudproviders.Has(string(test.OpenshiftInstallerCustomTestImageClusterTestConfiguration.ClusterProfile))) {
+			continue
+		}
+
+		clusterProfile := test.OpenshiftInstallerCustomTestImageClusterTestConfiguration.ClusterProfile
+		fromImage := test.OpenshiftInstallerCustomTestImageClusterTestConfiguration.From
+		test.OpenshiftInstallerCustomTestImageClusterTestConfiguration = nil
+		test.MultiStageTestConfiguration = &api.MultiStageTestConfiguration{
+			ClusterProfile: clusterProfile,
+			Test: []api.TestStep{{LiteralTestStep: &api.LiteralTestStep{
+				As:       "test",
+				From:     fromImage,
 				Commands: test.Commands,
 				Cli:      api.LatestReleaseName,
 				Resources: api.ResourceRequirements{

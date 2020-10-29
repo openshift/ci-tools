@@ -68,3 +68,31 @@ func TestExtractInfo(t *testing.T) {
 		}
 	}
 }
+
+func TestRehearsalFromName(t *testing.T) {
+	var testCases = []struct {
+		job       string
+		name      string
+		rehearsal string
+	}{
+		{
+			job:       "branch-ci-openshift-k8s-prometheus-adapter-release-4.8-images",
+			name:      "branch-ci-openshift-k8s-prometheus-adapter-release-4.8-images",
+			rehearsal: "",
+		},
+		{
+			job:       "rehearse-13070-pull-ci-jianzhangbjz-learn-operator-master-learn-oo-test-aws",
+			name:      "pull-ci-jianzhangbjz-learn-operator-master-learn-oo-test-aws",
+			rehearsal: "13070",
+		},
+	}
+	for _, testCase := range testCases {
+		name, rehearsal := rehearsalFromName(testCase.job)
+		if name != testCase.name {
+			t.Errorf("got incorrect name, wanted %s got %s", testCase.name, name)
+		}
+		if rehearsal != testCase.rehearsal {
+			t.Errorf("got incorrect rehearsal, wanted %s got %s", testCase.rehearsal, rehearsal)
+		}
+	}
+}

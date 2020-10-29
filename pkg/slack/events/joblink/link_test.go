@@ -52,6 +52,10 @@ func TestExtractInfo(t *testing.T) {
 			link:     "https://prow.ci.openshift.org/view/gs/origin-ci-test/logs/branch-ci-openshift-k8s-prometheus-adapter-release-4.8-images/1319705916215398400",
 			expected: &jobInfo{Name: "branch-ci-openshift-k8s-prometheus-adapter-release-4.8-images", Id: "1319705916215398400"},
 		},
+		{
+			link:     "https://github.com/openshift/release/pull/13221",
+			expected: nil,
+		},
 	}
 
 	for _, testCase := range testCases {

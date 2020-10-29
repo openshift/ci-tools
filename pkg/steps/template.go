@@ -410,7 +410,7 @@ func createOrRestartPod(podClient coreclientset.PodInterface, pod *coreapi.Pod) 
 	if pod.Spec.ActiveDeadlineSeconds == nil {
 		log.Printf("Executing pod %q", pod.Name)
 	} else {
-		log.Printf("Executing pod %q with activeDeadlineSeconds=%d", pod.Name, pod.Spec.ActiveDeadlineSeconds)
+		log.Printf("Executing pod %q with activeDeadlineSeconds=%d", pod.Name, *pod.Spec.ActiveDeadlineSeconds)
 	}
 	// creating a pod in close proximity to namespace creation can result in forbidden errors due to
 	// initializing secrets or policy - use a short backoff to mitigate flakes

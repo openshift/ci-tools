@@ -139,12 +139,16 @@ func Handler(client messagePoster, config JobGetter, gcsClient *storage.Client) 
 		if len(infos) == 0 {
 			return false, nil
 		}
+		blocks := contextFor(logger, infos, config, gcsClient)
+		if blocks == nil {
+			return false, nil
+		}
 		logger.Info("Handling new message with job links...")
 		timestamp := event.TimeStamp
 		if event.ThreadTimeStamp != "" {
 			timestamp = event.ThreadTimeStamp
 		}
-		responseChannel, responseTimestamp, err := client.PostMessage(event.Channel, slack.MsgOptionBlocks(contextFor(logger, infos, config, gcsClient)...), slack.MsgOptionTS(timestamp))
+		responseChannel, responseTimestamp, err := client.PostMessage(event.Channel, slack.MsgOptionBlocks(blocks...), slack.MsgOptionTS(timestamp))
 		if err != nil {
 			logger.WithError(err).Warn("Failed to post response to comment")
 		} else {
@@ -165,22 +169,17 @@ func rehearsalFromName(name string) (string, string) {
 }
 
 func contextFor(logger *logrus.Entry, infos []*jobInfo, config JobGetter, gcsClient *storage.Client) []slack.Block {
-	blocks := []slack.Block{&slack.SectionBlock{
-		Type: slack.MBTSection,
-		Text: &slack.TextBlockObject{
-			Type: slack.PlainTextType,
-			Text: "It looks like you mentioned a job result in your message. Here is some helpful information:",
-		},
-	}}
-
+	var blocks []slack.Block
 	for _, info := range infos {
 		logger = logger.WithFields(logrus.Fields{
 			"job": info.Name,
 			"id":  info.Id,
 		})
-		var rehearsalPR string
-		info.Name, rehearsalPR = rehearsalFromName(info.Name)
-		job := config.JobForName(info.Name)
+		name, rehearsalPR := rehearsalFromName(info.Name)
+		if rehearsalPR != "" {
+			logger.Debugf("Job is a rehearsal of %s for PR %s", name, rehearsalPR)
+		}
+		job := config.JobForName(name)
 		if job == nil {
 			continue
 		}
@@ -216,7 +215,7 @@ func contextFor(logger *logrus.Entry, infos []*jobInfo, config JobGetter, gcsCli
 			continue
 		}
 		text := bytes.Buffer{}
-		text.WriteString("*" + job.metadata.TestNameFromJobName(info.Name, prefix) + ":*")
+		text.WriteString("*" + job.metadata.TestNameFromJobName(name, prefix) + ":*")
 		if rehearsalPR != "" {
 			text.WriteString("\n- This job is a rehearsal for <https://github.com/openshift/release/pulls/" + rehearsalPR + "|PR " + rehearsalPR + ">.")
 		}
@@ -269,7 +268,16 @@ func contextFor(logger *logrus.Entry, infos []*jobInfo, config JobGetter, gcsCli
 			},
 		})
 	}
-	return blocks
+	if blocks == nil {
+		return nil
+	}
+	return append([]slack.Block{&slack.SectionBlock{
+		Type: slack.MBTSection,
+		Text: &slack.TextBlockObject{
+			Type: slack.PlainTextType,
+			Text: "It looks like you mentioned a job result in your message. Here is some helpful information:",
+		},
+	}}, blocks...)
 }
 
 type jobInfo struct {

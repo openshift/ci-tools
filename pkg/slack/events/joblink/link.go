@@ -292,7 +292,9 @@ func extractInfo(event *slackevents.EventsAPIEvent) ([]*jobInfo, error) {
 			for _, subElement := range element.Elements {
 				if subElement.Url != "" {
 					if url, err := url.Parse(subElement.Url); err == nil {
-						infos = append(infos, infoFromUrl(url))
+						if info := infoFromUrl(url); info != nil {
+							infos = append(infos, info)
+						}
 					}
 				}
 			}
@@ -303,7 +305,6 @@ func extractInfo(event *slackevents.EventsAPIEvent) ([]*jobInfo, error) {
 }
 
 func infoFromUrl(url *url.URL) *jobInfo {
-	var info jobInfo
 	switch url.Host {
 	case api.DomainForService(api.ServiceProw):
 		switch strings.Split(url.Path, "/")[1] {
@@ -317,7 +318,7 @@ func infoFromUrl(url *url.URL) *jobInfo {
 	case api.DomainForService(api.ServiceGCSWeb):
 		return infoForArtifact(url)
 	}
-	return &info
+	return nil
 }
 
 // infoForJobHistory handles URLs like:

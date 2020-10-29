@@ -5,6 +5,8 @@
 #   build: Build code.
 #   test: Run all tests.
 #   clean: Clean up.
+#
+SHELL = /bin/bash
 
 OUT_DIR = _output
 OS_OUTPUT_GOPATH ?= 1
@@ -186,6 +188,7 @@ check-breaking-changes:
 .PHONY: generate
 generate:
 	hack/update-codegen.sh
+	hack/generate-ci-op-reference.sh
 
 .PHONY: verify-gen
 verify-gen: generate

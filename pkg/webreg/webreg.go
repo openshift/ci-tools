@@ -23,6 +23,16 @@ import (
 	"github.com/openshift/ci-tools/pkg/registry"
 )
 
+var ciOperatorRefRendered []byte
+
+func init() {
+	if renderedString, err := syntaxYAML(ciOperatorReferenceYaml); err != nil {
+		panic(fmt.Sprintf("Failed to render the ci-operator config as yaml: %v", err))
+	} else {
+		ciOperatorRefRendered = []byte("<style>body {background-color: #282a36;}</style>" + renderedString)
+	}
+}
+
 const (
 	OrgQuery     = "org"
 	RepoQuery    = "repo"
@@ -120,6 +130,9 @@ td {
       </li>
       <li class="nav-item">
         <a class="nav-link" href="http://docs.ci.openshift.org">Help</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/ci-operator-reference">CI-Operator Reference</a>
       </li>
     </ul>
     <form class="form-inline my-2 my-lg-0" role="search" action="/search" method="get">
@@ -666,6 +679,8 @@ func WebRegHandler(regAgent agents.RegistryAgent, confAgent agents.ConfigAgent) 
 				searchHandler(confAgent, w, req)
 			case "job":
 				jobHandler(regAgent, confAgent, w, req)
+			case "ci-operator-reference":
+				ciOpConfigRefHandler(w)
 			default:
 				writeErrorPage(w, errors.New("Invalid path"), http.StatusNotImplemented)
 			}
@@ -694,7 +709,7 @@ func syntax(source string, lexer chroma.Lexer) (string, error) {
 	var output bytes.Buffer
 	style := styles.Get("dracula")
 	// highlighted lines based on linking currently require WithClasses to be used
-	formatter := html.New(html.Standalone(false), html.LinkableLineNumbers(true, "line"), html.WithLineNumbers(true), html.WithClasses(true))
+	formatter := html.New(html.Standalone(false), html.LinkableLineNumbers(true, "line"), html.WithLineNumbers(true), html.LineNumbersInTable(true), html.WithClasses(true))
 	iterator, err := lexer.Tokenise(nil, source)
 	if err != nil {
 		return "", fmt.Errorf("failed to tokenise source: %w", err)
@@ -706,6 +721,10 @@ func syntax(source string, lexer chroma.Lexer) (string, error) {
 	output.WriteString("</style>")
 	err = formatter.Format(&output, style, iterator)
 	return output.String(), err
+}
+
+func syntaxYAML(source string) (string, error) {
+	return syntax(source, lexers.Get("yaml"))
 }
 
 func syntaxBash(source string) (string, error) {
@@ -1093,4 +1112,10 @@ func searchJobs(jobs *Jobs, search string) *Jobs {
 		}
 	}
 	return matches
+}
+
+func ciOpConfigRefHandler(w http.ResponseWriter) {
+	if _, err := w.Write(ciOperatorRefRendered); err != nil {
+		logrus.WithError(err).Error("Failed to write ci-operator config")
+	}
 }

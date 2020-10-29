@@ -54,7 +54,6 @@ verify:
 #   make lint
 lint:
 	./hack/lint.sh
-	make validate-ci-operator-reference
 .PHONY: lint
 
 # Run unit tests.

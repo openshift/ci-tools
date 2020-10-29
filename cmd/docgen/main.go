@@ -28,9 +28,9 @@ func main() {
 	// We have to go through this hassle because its not possible to escape backticks in a backtick literal string
 	reference = strings.ReplaceAll(reference, `"`, `\"`)
 	referenceLines := strings.Split(reference, "\n")
-	reference = "package webreg\n\nconst ciOperatorReferenceYaml = \"" + strings.Join(referenceLines, "\" + \n	\"") + `"`
+	reference = "package webreg\n\nconst ciOperatorReferenceYaml = \"" + strings.Join(referenceLines, "\\n\" +\n\"") + `"`
 
 	if err := ioutil.WriteFile("./pkg/webreg/zz_generated.ci_operator_reference.go", []byte(reference), 0644); err != nil {
-		logrus.WithError(err).Fatal("Failed to write generated file: %v", err)
+		logrus.WithError(err).Fatalf("Failed to write generated file: %v", err)
 	}
 }

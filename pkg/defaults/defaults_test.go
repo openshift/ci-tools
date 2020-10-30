@@ -893,7 +893,7 @@ func TestFromConfig(t *testing.T) {
 				},
 			}
 			jobSpec.SetNamespace(ns)
-			params := api.NewDeferredParameters()
+			params := api.NewDeferredParameters(nil)
 			for k, v := range tc.params {
 				params.Add(k, func() (string, error) { return v, nil })
 			}

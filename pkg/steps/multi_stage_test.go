@@ -77,7 +77,7 @@ func TestRequires(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			step := MultiStageTestStep(api.TestStepConfiguration{
 				MultiStageTestConfigurationLiteral: &tc.steps,
-			}, &tc.config, api.NewDeferredParameters(), nil, nil, "", nil)
+			}, &tc.config, api.NewDeferredParameters(nil), nil, nil, "", nil)
 			ret := step.Requires()
 			if len(ret) == len(tc.req) {
 				matches := true

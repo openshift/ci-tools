@@ -71,7 +71,7 @@ func FromConfig(
 	}
 
 	podClient := steps.NewPodClient(coreGetter, clusterConfig, coreGetter.RESTClient())
-	return fromConfig(config, jobSpec, templates, paramFile, artifactDir, promote, client, buildClient, templateClient, podClient, leaseClient, &http.Client{}, requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters())
+	return fromConfig(config, jobSpec, templates, paramFile, artifactDir, promote, client, buildClient, templateClient, podClient, leaseClient, &http.Client{}, requiredTargets, cloneAuthConfig, pullSecret, pushSecret, api.NewDeferredParameters(nil))
 }
 
 func fromConfig(

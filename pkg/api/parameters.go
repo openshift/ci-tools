@@ -46,12 +46,14 @@ func NewOverrideParameters(params Parameters, overrides map[string]string) Param
 
 type DeferredParameters struct {
 	lock   sync.Mutex
+	params Parameters
 	fns    ParameterMap
 	values map[string]string
 }
 
-func NewDeferredParameters() *DeferredParameters {
+func NewDeferredParameters(params Parameters) *DeferredParameters {
 	return &DeferredParameters{
+		params: params,
 		fns:    make(ParameterMap),
 		values: make(map[string]string),
 	}
@@ -60,7 +62,7 @@ func NewDeferredParameters() *DeferredParameters {
 func (p *DeferredParameters) Map() (map[string]string, error) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
-	m := make(map[string]string)
+	m := make(map[string]string, len(p.fns))
 	for k, fn := range p.fns {
 		if v, ok := p.values[k]; ok {
 			m[k] = v
@@ -102,6 +104,13 @@ func (p *DeferredParameters) Add(name string, fn func() (string, error)) {
 // HasInput returns true if the named parameter is an input from outside the graph, rather
 // than provided either by the graph caller or another node.
 func (p *DeferredParameters) HasInput(name string) bool {
+	if p.hasInput(name) {
+		return true
+	}
+	return p.params != nil && p.params.HasInput(name)
+}
+
+func (p *DeferredParameters) hasInput(name string) bool {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 	_, ok := os.LookupEnv(name)
@@ -111,17 +120,36 @@ func (p *DeferredParameters) HasInput(name string) bool {
 // Has returns true if the named parameter exists. Use HasInput if you need to know whether
 // the value comes from outside the graph.
 func (p *DeferredParameters) Has(name string) bool {
+	if p.has(name) {
+		return true
+	}
+	if p.params != nil && p.params.Has(name) {
+		return true
+	}
+	_, ok := os.LookupEnv(name)
+	return ok
+}
+
+func (p *DeferredParameters) has(name string) bool {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 	_, ok := p.fns[name]
-	if ok {
-		return true
-	}
-	_, ok = os.LookupEnv(name)
 	return ok
 }
 
 func (p *DeferredParameters) Get(name string) (string, error) {
+	if ret, err := p.get(name); ret != "" {
+		return ret, nil
+	} else if err != nil {
+		return ret, err
+	}
+	if p.params != nil {
+		return p.params.Get(name)
+	}
+	return "", nil
+}
+
+func (p *DeferredParameters) get(name string) (string, error) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 	if value, ok := p.values[name]; ok {

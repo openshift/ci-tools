@@ -112,7 +112,6 @@ func fromConfig(
 				return nil, nil, err
 			}
 			buildSteps = append(buildSteps, steps...)
-			addProvidesForStep(steps[0], params)
 			continue
 		}
 		if resolveConfig := rawStep.ResolvedReleaseImagesStepConfiguration; resolveConfig != nil {
@@ -269,6 +268,9 @@ func fromConfig(
 }
 
 // stepForTest creates the appropriate step for each test type.
+// Test steps are always leaves and often pruned.  Each one is given its own
+// copy of `params` and their values from `Provides` only affect themselves,
+// thus avoiding conflicts with other tests pre-pruning.
 func stepForTest(
 	config *api.ReleaseBuildConfiguration,
 	params *api.DeferredParameters,
@@ -281,12 +283,16 @@ func stepForTest(
 	c *api.TestStepConfiguration,
 ) ([]api.Step, error) {
 	if test := c.MultiStageTestConfigurationLiteral; test != nil {
+		if test.ClusterProfile != "" {
+			params = api.NewDeferredParameters(params)
+		}
 		step := steps.MultiStageTestStep(*c, config, params, podClient, client, artifactDir, jobSpec)
 		if test.ClusterProfile != "" {
 			step = steps.LeaseStep(leaseClient, []api.StepLease{{
 				ResourceType: test.ClusterProfile.LeaseType(),
 				Env:          steps.DefaultLeaseEnv,
 			}}, step, jobSpec.Namespace)
+			addProvidesForStep(step, params)
 		}
 		return append([]api.Step{step}, stepsForStepImages(client, jobSpec, test)...), nil
 	}
@@ -294,14 +300,17 @@ func stepForTest(
 		if !test.Upgrade {
 			return nil, nil
 		}
+		params = api.NewDeferredParameters(params)
 		step, err := clusterinstall.E2ETestStep(*c.OpenshiftInstallerClusterTestConfiguration, *c, params, podClient, templateClient, artifactDir, jobSpec, config.Resources)
 		if err != nil {
 			return nil, fmt.Errorf("unable to create end to end test step: %w", err)
 		}
-		return []api.Step{steps.LeaseStep(leaseClient, []api.StepLease{{
+		step = steps.LeaseStep(leaseClient, []api.StepLease{{
 			ResourceType: test.ClusterProfile.LeaseType(),
 			Env:          steps.DefaultLeaseEnv,
-		}}, step, jobSpec.Namespace)}, nil
+		}}, step, jobSpec.Namespace)
+		addProvidesForStep(step, params)
+		return []api.Step{step}, nil
 	}
 	return []api.Step{steps.TestStep(*c, config.Resources, podClient, client, artifactDir, jobSpec)}, nil
 }

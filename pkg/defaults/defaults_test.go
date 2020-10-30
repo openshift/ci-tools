@@ -882,8 +882,7 @@ func TestFromConfig(t *testing.T) {
 				},
 			}},
 		},
-		expectedSteps:  []string{"test", "[output-images]", "[images]"},
-		expectedParams: map[string]string{steps.DefaultLeaseEnv: ""},
+		expectedSteps: []string{"test", "[output-images]", "[images]"},
 	}, {
 		name: "multi-stage test",
 		config: api.ReleaseBuildConfiguration{
@@ -903,8 +902,7 @@ func TestFromConfig(t *testing.T) {
 				},
 			}},
 		},
-		expectedSteps:  []string{"test", "[output-images]", "[images]"},
-		expectedParams: map[string]string{steps.DefaultLeaseEnv: ""},
+		expectedSteps: []string{"test", "[output-images]", "[images]"},
 	}, {
 		name: "template test",
 		templates: []*templateapi.Template{

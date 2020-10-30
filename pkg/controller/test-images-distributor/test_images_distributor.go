@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	imagev1 "github.com/openshift/api/image/v1"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
+
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -23,7 +23,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	"github.com/openshift/ci-tools/pkg/util/imagestreamtagwrapper"
+	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	apihelper "github.com/openshift/ci-tools/pkg/api/helper"
@@ -32,6 +32,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/load/agents"
 	"github.com/openshift/ci-tools/pkg/registry"
 	"github.com/openshift/ci-tools/pkg/util/imagestreamtagmapper"
+	"github.com/openshift/ci-tools/pkg/util/imagestreamtagwrapper"
 )
 
 const ControllerName = "test_images_distributor"

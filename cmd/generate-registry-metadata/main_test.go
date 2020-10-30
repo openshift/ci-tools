@@ -5,8 +5,10 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/openshift/ci-tools/pkg/api"
+
 	"k8s.io/test-infra/prow/repoowners"
+
+	"github.com/openshift/ci-tools/pkg/api"
 )
 
 func TestGenerateMetadata(t *testing.T) {

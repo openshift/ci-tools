@@ -7,11 +7,6 @@ import (
 	"log"
 	"time"
 
-	"github.com/openshift/ci-tools/pkg/results"
-	"github.com/openshift/ci-tools/pkg/steps/utils"
-
-	imageapi "github.com/openshift/api/image/v1"
-	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 	coreapi "k8s.io/api/core/v1"
 	rbacapi "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -20,8 +15,13 @@ import (
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	rbacclientset "k8s.io/client-go/kubernetes/typed/rbac/v1"
 
+	imageapi "github.com/openshift/api/image/v1"
+	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
+
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps"
+	"github.com/openshift/ci-tools/pkg/steps/utils"
 	"github.com/openshift/ci-tools/pkg/util"
 )
 

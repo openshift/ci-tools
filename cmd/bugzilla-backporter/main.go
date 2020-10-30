@@ -9,8 +9,8 @@ import (
 	"sort"
 	"time"
 
-	"github.com/openshift/ci-tools/pkg/backporter"
 	"github.com/sirupsen/logrus"
+
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/pkg/flagutil"
 	prowConfig "k8s.io/test-infra/prow/config"
@@ -22,6 +22,8 @@ import (
 	"k8s.io/test-infra/prow/plugins"
 	"k8s.io/test-infra/prow/simplifypath"
 	"sigs.k8s.io/yaml"
+
+	"github.com/openshift/ci-tools/pkg/backporter"
 )
 
 var (

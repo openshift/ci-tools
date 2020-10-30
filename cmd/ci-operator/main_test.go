@@ -12,13 +12,14 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	imagev1 "github.com/openshift/api/image/v1"
-	fakeimageclientset "github.com/openshift/client-go/image/clientset/versioned/fake"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 	"k8s.io/utils/diff"
+
+	imagev1 "github.com/openshift/api/image/v1"
+	fakeimageclientset "github.com/openshift/client-go/image/clientset/versioned/fake"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/load"

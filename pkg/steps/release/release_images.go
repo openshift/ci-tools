@@ -6,21 +6,17 @@ import (
 	"log"
 	"strings"
 
-	"github.com/openshift/ci-tools/pkg/results"
-
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"github.com/openshift/ci-tools/pkg/steps/utils"
-
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 
 	imageapi "github.com/openshift/api/image/v1"
-
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 	routeclientset "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/results"
+	"github.com/openshift/ci-tools/pkg/steps/utils"
 	"github.com/openshift/ci-tools/pkg/util"
 )
 

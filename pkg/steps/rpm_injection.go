@@ -4,11 +4,12 @@ import (
 	"context"
 	"fmt"
 
+	coreapi "k8s.io/api/core/v1"
+	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	buildapi "github.com/openshift/api/build/v1"
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 	routeclientset "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
-	coreapi "k8s.io/api/core/v1"
-	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/results"

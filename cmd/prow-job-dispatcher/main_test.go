@@ -11,10 +11,12 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/openshift/ci-tools/pkg/dispatcher"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	prowconfig "k8s.io/test-infra/prow/config"
+
+	"github.com/openshift/ci-tools/pkg/dispatcher"
 )
 
 func TestValidate(t *testing.T) {

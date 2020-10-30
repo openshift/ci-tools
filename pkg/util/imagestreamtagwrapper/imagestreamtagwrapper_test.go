@@ -5,12 +5,14 @@ import (
 	"io/ioutil"
 	"testing"
 
-	imagev1 "github.com/openshift/api/image/v1"
 	"github.com/pmezard/go-difflib/difflib"
+
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/yaml"
+
+	imagev1 "github.com/openshift/api/image/v1"
 )
 
 func TestGetImageStreamTag(t *testing.T) {

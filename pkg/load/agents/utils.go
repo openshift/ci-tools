@@ -7,6 +7,7 @@ import (
 	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/fsnotify.v1"
+
 	"k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/interrupts"
 )

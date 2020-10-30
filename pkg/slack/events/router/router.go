@@ -3,6 +3,7 @@ package router
 import (
 	"cloud.google.com/go/storage"
 	"github.com/slack-go/slack"
+
 	"k8s.io/test-infra/prow/config"
 
 	"github.com/openshift/ci-tools/pkg/slack/events"

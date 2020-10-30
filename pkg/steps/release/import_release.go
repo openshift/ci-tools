@@ -11,8 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openshift/ci-tools/pkg/steps/utils"
-
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -28,6 +26,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps"
+	"github.com/openshift/ci-tools/pkg/steps/utils"
 )
 
 // importReleaseStep is responsible for importing release images from

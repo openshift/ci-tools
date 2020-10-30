@@ -19,12 +19,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/test-infra/prow/config/org"
 
 	userv1 "github.com/openshift/api/user/v1"
 	v1 "github.com/openshift/api/user/v1"
 	userV1 "github.com/openshift/client-go/user/clientset/versioned/typed/user/v1"
-
-	"k8s.io/test-infra/prow/config/org"
 
 	"github.com/openshift/ci-tools/pkg/util"
 )

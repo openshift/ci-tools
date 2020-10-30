@@ -5,10 +5,9 @@ import (
 	"fmt"
 	"io/ioutil"
 
-	"sigs.k8s.io/yaml"
-
 	corev1 "k8s.io/api/core/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"sigs.k8s.io/yaml"
 )
 
 type AttributeType string

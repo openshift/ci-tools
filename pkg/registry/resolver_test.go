@@ -6,9 +6,11 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/openshift/ci-tools/pkg/api"
+
 	"k8s.io/apimachinery/pkg/util/diff"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+
+	"github.com/openshift/ci-tools/pkg/api"
 )
 
 func TestResolve(t *testing.T) {

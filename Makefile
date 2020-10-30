@@ -189,6 +189,7 @@ check-breaking-changes:
 generate:
 	hack/update-codegen.sh
 	hack/generate-ci-op-reference.sh
+	go run  ./vendor/github.com/coreydaley-redhat/osgoimports/ -m github.com/openshift/ci-tools
 
 .PHONY: verify-gen
 verify-gen: generate

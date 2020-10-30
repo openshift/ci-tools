@@ -6,19 +6,17 @@ import (
 	"log"
 	"path/filepath"
 
-	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
-
-	"github.com/openshift/ci-tools/pkg/results"
-
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/test-infra/prow/pod-utils/decorate"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/junit"
+	"github.com/openshift/ci-tools/pkg/results"
 )
 
 const (

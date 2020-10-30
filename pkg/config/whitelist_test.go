@@ -1,8 +1,9 @@
 package config
 
 import (
-	"github.com/openshift/ci-tools/pkg/api"
 	"testing"
+
+	"github.com/openshift/ci-tools/pkg/api"
 )
 
 func TestIsWhiteListed(t *testing.T) {

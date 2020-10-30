@@ -8,9 +8,10 @@ import (
 	"strings"
 	"testing"
 
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	apiimagev1 "github.com/openshift/api/image/v1"
 	fakeimageclientset "github.com/openshift/client-go/image/clientset/versioned/fake"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 )

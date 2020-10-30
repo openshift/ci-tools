@@ -7,9 +7,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/openshift/api/image/docker10"
-	imagev1 "github.com/openshift/api/image/v1"
 	"github.com/sirupsen/logrus"
+
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/github"
@@ -18,6 +17,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+
+	"github.com/openshift/api/image/docker10"
+	imagev1 "github.com/openshift/api/image/v1"
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/controller/promotionreconciler/prowjobreconciler"

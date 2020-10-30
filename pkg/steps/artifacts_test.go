@@ -10,11 +10,9 @@ import (
 	"time"
 
 	coreapi "k8s.io/api/core/v1"
-
 	"k8s.io/apimachinery/pkg/api/equality"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/diff"
-
 	"k8s.io/client-go/kubernetes/fake"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/tools/remotecommand"

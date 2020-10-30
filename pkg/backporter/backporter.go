@@ -11,8 +11,8 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
-	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/prow/bugzilla"
 	"k8s.io/test-infra/prow/metrics"

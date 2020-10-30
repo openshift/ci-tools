@@ -4,9 +4,10 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/openshift/ci-tools/pkg/api"
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+
+	"github.com/openshift/ci-tools/pkg/api"
 )
 
 // ImageStreamTagMap is a map [types.NamespacedName.String()]types.NamespacedName of

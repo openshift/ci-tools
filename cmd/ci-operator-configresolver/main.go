@@ -10,9 +10,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/openshift/ci-tools/pkg/api"
-
 	"github.com/sirupsen/logrus"
+
 	prowConfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/interrupts"
@@ -20,6 +19,7 @@ import (
 	"k8s.io/test-infra/prow/pjutil"
 	"k8s.io/test-infra/prow/simplifypath"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/load/agents"
 	"github.com/openshift/ci-tools/pkg/webreg"
 )

@@ -10,13 +10,13 @@ import (
 	"reflect"
 	"strings"
 
-	"sigs.k8s.io/yaml"
-
 	"github.com/getlantern/deepcopy"
 	"github.com/sirupsen/logrus"
+
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/prow/logrusutil"
+	"sigs.k8s.io/yaml"
 
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
 	"github.com/openshift/ci-tools/pkg/bitwarden"

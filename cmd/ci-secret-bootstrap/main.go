@@ -15,22 +15,18 @@ import (
 	"sync"
 
 	"github.com/sirupsen/logrus"
-
 	"golang.org/x/sync/semaphore"
 
 	coreapi "k8s.io/api/core/v1"
-
 	"k8s.io/apimachinery/pkg/api/equality"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubejson "k8s.io/apimachinery/pkg/runtime/serializer/json"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
-
 	"k8s.io/client-go/kubernetes/scheme"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
-
 	"k8s.io/test-infra/prow/flagutil"
 	"k8s.io/test-infra/prow/logrusutil"
 

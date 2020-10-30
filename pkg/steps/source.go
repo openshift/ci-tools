@@ -10,11 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"k8s.io/test-infra/prow/clonerefs"
-	"k8s.io/test-infra/prow/pod-utils/decorate"
-
 	coreapi "k8s.io/api/core/v1"
-
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -23,6 +19,8 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
+	"k8s.io/test-infra/prow/clonerefs"
+	"k8s.io/test-infra/prow/pod-utils/decorate"
 
 	buildapi "github.com/openshift/api/build/v1"
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"

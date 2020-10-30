@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/test-infra/prow/config"
 	prowconfig "k8s.io/test-infra/prow/config"

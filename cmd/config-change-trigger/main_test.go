@@ -2,15 +2,16 @@ package main
 
 import (
 	"fmt"
-	"github.com/openshift/ci-tools/pkg/api"
 	"reflect"
 	"testing"
 
 	"github.com/pkg/errors"
+
 	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
 
+	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/diffs"
 )
 

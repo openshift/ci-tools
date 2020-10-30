@@ -11,13 +11,15 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/openshift/imagebuilder"
-	dockercmd "github.com/openshift/imagebuilder/dockerfile/command"
 	"github.com/pmezard/go-difflib/difflib"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
+
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	git "k8s.io/test-infra/prow/git/v2"
+
+	"github.com/openshift/imagebuilder"
+	dockercmd "github.com/openshift/imagebuilder/dockerfile/command"
 
 	"github.com/openshift/ci-tools/pkg/api/ocpbuilddata"
 	"github.com/openshift/ci-tools/pkg/github"

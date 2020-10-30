@@ -5,8 +5,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/openshift/ci-tools/pkg/api"
 	"k8s.io/apimachinery/pkg/util/diff"
+
+	"github.com/openshift/ci-tools/pkg/api"
 )
 
 func TestWriteParamsStep(t *testing.T) {

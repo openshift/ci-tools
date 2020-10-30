@@ -7,11 +7,11 @@ import (
 	"testing"
 	"time"
 
-	"k8s.io/apimachinery/pkg/util/sets"
-
 	"github.com/google/go-cmp/cmp"
 	prometheusapi "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
+
+	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 type prometheusAPIForTest struct {

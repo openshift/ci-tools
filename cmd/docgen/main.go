@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
+
 	"k8s.io/test-infra/pkg/genyaml"
 
 	"github.com/openshift/ci-tools/pkg/api"

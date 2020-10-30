@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+
 	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/test-infra/prow/plugins"
 )

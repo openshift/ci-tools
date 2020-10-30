@@ -176,13 +176,13 @@ func TestInlineCiopConfig(t *testing.T) {
 	}
 
 	testCases := []struct {
-		description              string
-		testname                 string
-		sourceEnv                []v1.EnvVar
-		configs                  config.DataByFilename
-		expectedEnv              []v1.EnvVar
-		expectedError            bool
-		expectedImageStramTagMap apihelper.ImageStreamTagMap
+		description               string
+		testname                  string
+		sourceEnv                 []v1.EnvVar
+		configs                   config.DataByFilename
+		expectedEnv               []v1.EnvVar
+		expectedError             bool
+		expectedImageStreamTagMap apihelper.ImageStreamTagMap
 	}{{
 		description: "empty env -> no changes",
 		configs:     config.DataByFilename{},
@@ -202,12 +202,12 @@ func TestInlineCiopConfig(t *testing.T) {
 		configs:     config.DataByFilename{},
 		expectedEnv: []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference("test-cm", "key")}},
 	}, {
-		description:              "CM reference to ci-operator-configs -> cm content inlined; test1",
-		testname:                 "test1",
-		sourceEnv:                []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference(testCiopConfigInfo.ConfigMapName(), "filename")}},
-		configs:                  config.DataByFilename{"filename": {Info: config.Info{Metadata: testCiopConfigInfo}, Configuration: testCiopConfig}},
-		expectedEnv:              []v1.EnvVar{{Name: "T", Value: string(testCiopConfigContentTest1)}},
-		expectedImageStramTagMap: apihelper.ImageStreamTagMap{"fancy/willem:first": types.NamespacedName{Namespace: "fancy", Name: "willem:first"}},
+		description:               "CM reference to ci-operator-configs -> cm content inlined; test1",
+		testname:                  "test1",
+		sourceEnv:                 []v1.EnvVar{{Name: "T", ValueFrom: makeCMReference(testCiopConfigInfo.ConfigMapName(), "filename")}},
+		configs:                   config.DataByFilename{"filename": {Info: config.Info{Metadata: testCiopConfigInfo}, Configuration: testCiopConfig}},
+		expectedEnv:               []v1.EnvVar{{Name: "T", Value: string(testCiopConfigContentTest1)}},
+		expectedImageStreamTagMap: apihelper.ImageStreamTagMap{"fancy/willem:first": types.NamespacedName{Namespace: "fancy", Name: "willem:first"}},
 	}, {
 		description: "CM reference to ci-operator-configs -> cm content inlined; test2",
 		testname:    "test2",
@@ -243,7 +243,7 @@ func TestInlineCiopConfig(t *testing.T) {
 					t.Fatalf("Unexpected error returned by inlineCiOpConfig(): %v", err)
 				}
 
-				if diff := cmp.Diff(imageStreamTags, tc.expectedImageStramTagMap, cmpopts.EquateEmpty()); diff != "" {
+				if diff := cmp.Diff(imageStreamTags, tc.expectedImageStreamTagMap, cmpopts.EquateEmpty()); diff != "" {
 					t.Errorf("returned imageStreamTags differ from expected: %s", diff)
 				}
 
@@ -405,7 +405,7 @@ func makeTestData() (int, string, string, *pjapi.Refs) {
 	return testPrNumber, testNamespace, testReleasePath, testRefs
 }
 
-func setSuccessCreateRactor(in runtime.Object) error {
+func setSuccessCreateReactor(in runtime.Object) error {
 	pj := in.(*pjapi.ProwJob)
 	pj.Status.State = pjapi.SuccessState
 	return nil
@@ -452,7 +452,7 @@ func TestExecuteJobsErrors(t *testing.T) {
 					}
 					return nil
 				},
-				setSuccessCreateRactor,
+				setSuccessCreateReactor,
 			)
 
 			jc := NewJobConfigurer(testCiopConfigs, resolver, testPrNumber, testLoggers, nil, nil, makeBaseRefs())
@@ -550,10 +550,10 @@ func TestExecuteJobsPositive(t *testing.T) {
 	testCiopConfigs := generateTestConfigFiles()
 
 	testCases := []struct {
-		description              string
-		jobs                     map[string][]prowconfig.Presubmit
-		expectedJobs             []pjapi.ProwJobSpec
-		expectedImageStramTagMap apihelper.ImageStreamTagMap
+		description               string
+		jobs                      map[string][]prowconfig.Presubmit
+		expectedJobs              []pjapi.ProwJobSpec
+		expectedImageStreamTagMap apihelper.ImageStreamTagMap
 	}{
 		{
 			description: "two jobs in a single repo",
@@ -571,7 +571,7 @@ func TestExecuteJobsPositive(t *testing.T) {
 					fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "master", "job2"),
 					testRefs, targetOrg, targetRepo, "master", testingCiOpCfgJob2YAML).Spec,
 			},
-			expectedImageStramTagMap: apihelper.ImageStreamTagMap{"fancy/willem:first": types.NamespacedName{Namespace: "fancy", Name: "willem:first"}},
+			expectedImageStreamTagMap: apihelper.ImageStreamTagMap{"fancy/willem:first": types.NamespacedName{Namespace: "fancy", Name: "willem:first"}},
 		}, {
 			description: "two jobs in a single repo, same context but different branch",
 			jobs: map[string][]prowconfig.Presubmit{targetOrgRepo: {
@@ -588,7 +588,7 @@ func TestExecuteJobsPositive(t *testing.T) {
 					fmt.Sprintf(rehearseJobContextTemplate, targetOrgRepo, "not-master", "job2"),
 					testRefs, targetOrg, targetRepo, "not-master", testingCiOpCfgJob2YAML).Spec,
 			},
-			expectedImageStramTagMap: apihelper.ImageStreamTagMap{"fancy/willem:first": types.NamespacedName{Namespace: "fancy", Name: "willem:first"}},
+			expectedImageStreamTagMap: apihelper.ImageStreamTagMap{"fancy/willem:first": types.NamespacedName{Namespace: "fancy", Name: "willem:first"}},
 		},
 		{
 			description: "two jobs in a separate repos",
@@ -606,7 +606,7 @@ func TestExecuteJobsPositive(t *testing.T) {
 					fmt.Sprintf(rehearseJobContextTemplate, anotherTargetOrgRepo, "master", "job2"),
 					testRefs, anotherTargetOrg, anotherTargetRepo, "master", testingCiOpCfgJob2YAML).Spec,
 			},
-			expectedImageStramTagMap: apihelper.ImageStreamTagMap{"fancy/willem:first": types.NamespacedName{Namespace: "fancy", Name: "willem:first"}},
+			expectedImageStreamTagMap: apihelper.ImageStreamTagMap{"fancy/willem:first": types.NamespacedName{Namespace: "fancy", Name: "willem:first"}},
 		}, {
 			description:  "no jobs",
 			jobs:         map[string][]prowconfig.Presubmit{},
@@ -623,14 +623,14 @@ func TestExecuteJobsPositive(t *testing.T) {
 		t.Run(tc.description, func(t *testing.T) {
 			testLoggers := Loggers{logrus.New(), logrus.New()}
 			client := newTC()
-			client.createReactors = append(client.createReactors, setSuccessCreateRactor)
+			client.createReactors = append(client.createReactors, setSuccessCreateReactor)
 
 			jc := NewJobConfigurer(testCiopConfigs, resolver, testPrNumber, testLoggers, nil, nil, makeBaseRefs())
 			imageStreamTags, presubmits, err := jc.ConfigurePresubmitRehearsals(tc.jobs)
 			if err != nil {
 				t.Errorf("Expected to get no error, but got one: %v", err)
 			}
-			if diff := cmp.Diff(imageStreamTags, tc.expectedImageStramTagMap, cmpopts.EquateEmpty()); diff != "" {
+			if diff := cmp.Diff(imageStreamTags, tc.expectedImageStreamTagMap, cmpopts.EquateEmpty()); diff != "" {
 				t.Errorf("returned imageStreamTags do not match expected: %s", diff)
 			}
 			executor := NewExecutor(presubmits, testPrNumber, testRepoPath, testRefs, true, testLoggers, client, testNamespace)

@@ -75,11 +75,13 @@ func (o *options) validateOptions() error {
 		return fmt.Errorf("invalid log level specified: %w", err)
 	}
 	logrus.SetLevel(level)
-	if o.bwUser == "" {
-		return errors.New("--bw-user is empty")
-	}
-	if o.bwPasswordPath == "" {
-		return errors.New("--bw-password-path is empty")
+	if !o.validateOnly {
+		if o.bwUser == "" {
+			return errors.New("--bw-user is empty")
+		}
+		if o.bwPasswordPath == "" {
+			return errors.New("--bw-password-path is empty")
+		}
 	}
 	if o.configPath == "" {
 		return errors.New("--config is empty")
@@ -91,20 +93,21 @@ func (o *options) validateOptions() error {
 }
 
 func (o *options) completeOptions(secrets sets.String) error {
-	bytes, err := ioutil.ReadFile(o.bwPasswordPath)
+	if !o.validateOnly {
+		bytes, err := ioutil.ReadFile(o.bwPasswordPath)
+		if err != nil {
+			return err
+		}
+		o.bwPassword = strings.TrimSpace(string(bytes))
+		secrets.Insert(o.bwPassword)
+	}
+
+	bytes, err := ioutil.ReadFile(o.configPath)
 	if err != nil {
 		return err
 	}
-	o.bwPassword = strings.TrimSpace(string(bytes))
-	secrets.Insert(o.bwPassword)
 
-	bytes, err = ioutil.ReadFile(o.configPath)
-	if err != nil {
-		return err
-	}
-
-	err = yaml.Unmarshal(bytes, &o.config)
-	if err != nil {
+	if err := yaml.Unmarshal(bytes, &o.config); err != nil {
 		return err
 	}
 
@@ -114,22 +117,18 @@ func (o *options) completeOptions(secrets sets.String) error {
 			return err
 		}
 
-		err = yaml.Unmarshal(bytes, &o.bootstrapConfig)
-		if err != nil {
+		if err := yaml.Unmarshal(bytes, &o.bootstrapConfig); err != nil {
 			return err
 		}
 	}
-	return o.validateCompletedOptions()
+	return o.validateConfig()
 }
 
 func cmdEmptyErr(itemIndex, entryIndex int, entry string) error {
 	return fmt.Errorf("config[%d].%s[%d]: empty field not allowed for cmd if name is specified", itemIndex, entry, entryIndex)
 }
 
-func (o *options) validateCompletedOptions() error {
-	if o.bwPassword == "" {
-		return fmt.Errorf("--bw-password-path was empty")
-	}
+func (o *options) validateConfig() error {
 
 	for i, bwItem := range o.config {
 		if bwItem.ItemName == "" {

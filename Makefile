@@ -6,10 +6,10 @@
 #   test: Run all tests.
 #   clean: Clean up.
 #
-SHELL = /bin/bash
 
 OUT_DIR = _output
 OS_OUTPUT_GOPATH ?= 1
+SHELL=/usr/bin/env bash -eo pipefail
 
 export GOFLAGS
 export TESTFLAGS
@@ -98,7 +98,6 @@ update-vendor:
 		golang:1.15 \
 		/bin/bash -c "go mod tidy && go mod vendor"
 .PHONY: update-vendor
-SHELL=/usr/bin/env bash -o pipefail
 
 # Validate vendored code and manifests to ensure formatting.
 #
@@ -193,8 +192,8 @@ generate:
 
 .PHONY: verify-gen
 verify-gen: generate
-	@if !(git diff --quiet HEAD); then \
-		git diff; \
+	@# Don't add --quiet here, it disables --exit code in the git 1.7 we have in CI, making this unusuable
+	if  ! git diff --exit-code; then \
 		echo "generated files are out of date, run make generate"; exit 1; \
 	fi
 

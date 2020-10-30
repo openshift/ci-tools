@@ -15,6 +15,7 @@ metadata:
   name: TestName
   namespace: TestNamespace
 spec:
+  automountServiceAccountToken: false
   containers:
   - command:
     - /bin/bash

@@ -15,6 +15,7 @@
       job: job
     name: test-step0
   spec:
+    automountServiceAccountToken: false
     containers:
     - args:
       - /bin/bash
@@ -131,6 +132,7 @@
       job: job
     name: test-step1
   spec:
+    automountServiceAccountToken: false
     containers:
     - args:
       - /bin/bash
@@ -263,6 +265,7 @@
       job: job
     name: test-step2
   spec:
+    automountServiceAccountToken: false
     containers:
     - args:
       - /bin/bash

@@ -16,6 +16,7 @@ import (
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/test-infra/prow/pod-utils/decorate"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
+	utilpointer "k8s.io/utils/pointer"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/junit"
@@ -208,7 +209,8 @@ func generateBasePod(
 			},
 		},
 		Spec: coreapi.PodSpec{
-			RestartPolicy: coreapi.RestartPolicyNever,
+			RestartPolicy:                coreapi.RestartPolicyNever,
+			AutomountServiceAccountToken: utilpointer.BoolPtr(false),
 			Containers: []coreapi.Container{
 				{
 					Image:                    image,

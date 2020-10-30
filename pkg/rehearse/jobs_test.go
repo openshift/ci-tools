@@ -1194,3 +1194,46 @@ func threetimesTryingPoller(_, _ time.Duration, cf wait.ConditionFunc) error {
 	}
 	return wait.ErrWaitTimeout
 }
+
+func TestUsesConfigMap(t *testing.T) {
+	cmName := "config-map"
+
+	testCases := []struct {
+		description string
+		volumes     []v1.Volume
+		expected    bool
+	}{
+		{
+			description: "no volumes",
+		},
+		{
+			description: "used in projected volume",
+			volumes:     []v1.Volume{projectedCmVolume("volume", cmName)},
+			expected:    true,
+		},
+		{
+			description: "used directly",
+			volumes:     []v1.Volume{cmVolume("volume", cmName)},
+			expected:    true,
+		},
+		{
+			description: "not used by any volume",
+			volumes: []v1.Volume{
+				cmVolume("volume-1", "not-this-cm"),
+				projectedCmVolume("volume-2", "neither-this-cm"),
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			job := prowconfig.JobBase{
+				Spec: &v1.PodSpec{
+					Volumes: append([]v1.Volume{}, tc.volumes...),
+				},
+			}
+			if uses := UsesConfigMap(job, cmName); uses != tc.expected {
+				t.Errorf("%s: expected %t, got %t", tc.description, tc.expected, uses)
+			}
+		})
+	}
+}

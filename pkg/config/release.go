@@ -8,6 +8,7 @@ import (
 
 	"github.com/mattn/go-zglob"
 	"github.com/sirupsen/logrus"
+
 	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/plugins"

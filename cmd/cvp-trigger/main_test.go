@@ -9,6 +9,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/spf13/afero"
+
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/config"

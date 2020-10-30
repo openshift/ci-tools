@@ -9,18 +9,20 @@ import (
 
 	"github.com/docker/distribution/manifest/schema1"
 	"github.com/docker/distribution/manifest/schema2"
-	imagegroup "github.com/openshift/api/image"
-	imagev1 "github.com/openshift/api/image/v1"
-	"github.com/openshift/library-go/pkg/image/imageutil"
-	"github.com/openshift/library-go/pkg/image/reference"
-	imageapi "github.com/openshift/openshift-apiserver/pkg/image/apis/image"
-	dockerapi10 "github.com/openshift/openshift-apiserver/pkg/image/apis/image/docker10"
+
 	kapierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	cache "sigs.k8s.io/controller-runtime/pkg/cache"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+
+	imagegroup "github.com/openshift/api/image"
+	imagev1 "github.com/openshift/api/image/v1"
+	"github.com/openshift/library-go/pkg/image/imageutil"
+	"github.com/openshift/library-go/pkg/image/reference"
+	imageapi "github.com/openshift/openshift-apiserver/pkg/image/apis/image"
+	dockerapi10 "github.com/openshift/openshift-apiserver/pkg/image/apis/image/docker10"
 )
 
 // New returns a new imagestreamtagwrapper. Only use with a caching client

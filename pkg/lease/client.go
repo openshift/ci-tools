@@ -10,7 +10,6 @@ import (
 	"time"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
-
 	boskos "sigs.k8s.io/boskos/client"
 	"sigs.k8s.io/boskos/common"
 )

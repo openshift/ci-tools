@@ -3,8 +3,9 @@ package webreg
 import (
 	"testing"
 
-	"github.com/openshift/ci-tools/pkg/load"
 	"k8s.io/apimachinery/pkg/util/diff"
+
+	"github.com/openshift/ci-tools/pkg/load"
 )
 
 const ipiWorkflow = `digraph Webreg {

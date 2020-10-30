@@ -1,11 +1,12 @@
 package config
 
 import (
-	"github.com/openshift/ci-tools/pkg/api"
 	"reflect"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/util/diff"
+
+	"github.com/openshift/ci-tools/pkg/api"
 )
 
 func TestExtractRepoElementsFromPath(t *testing.T) {

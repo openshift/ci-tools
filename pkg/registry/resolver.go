@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/openshift/ci-tools/pkg/api"
 	"k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
+
+	"github.com/openshift/ci-tools/pkg/api"
 )
 
 type Resolver interface {

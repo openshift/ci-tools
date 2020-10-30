@@ -11,6 +11,7 @@ import (
 	"path"
 
 	"github.com/sirupsen/logrus"
+
 	prowconfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/plugins"
 	"sigs.k8s.io/yaml"

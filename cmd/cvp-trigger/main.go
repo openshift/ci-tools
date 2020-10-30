@@ -5,17 +5,14 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/openshift/ci-tools/pkg/api"
-	"github.com/openshift/ci-tools/pkg/steps/utils"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/ghodss/yaml"
-	"github.com/openshift/ci-tools/pkg/steps"
-	"github.com/openshift/ci-tools/pkg/util"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/afero"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	pjapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
@@ -26,6 +23,11 @@ import (
 	"k8s.io/test-infra/prow/pjutil"
 	"k8s.io/test-infra/prow/pod-utils/decorate"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
+
+	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/steps"
+	"github.com/openshift/ci-tools/pkg/steps/utils"
+	"github.com/openshift/ci-tools/pkg/util"
 )
 
 const (

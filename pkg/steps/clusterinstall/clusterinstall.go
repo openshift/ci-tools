@@ -3,7 +3,6 @@ package clusterinstall
 import (
 	"context"
 	"fmt"
-	"github.com/openshift/ci-tools/pkg/steps/utils"
 	"strings"
 
 	"github.com/ghodss/yaml"
@@ -17,6 +16,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/junit"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps"
+	"github.com/openshift/ci-tools/pkg/steps/utils"
 )
 
 type e2eTestStep struct {

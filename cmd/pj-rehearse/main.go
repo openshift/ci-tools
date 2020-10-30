@@ -12,9 +12,9 @@ import (
 	"sync"
 	"time"
 
-	imagev1 "github.com/openshift/api/image/v1"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
+
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -28,6 +28,8 @@ import (
 	prowplugins "k8s.io/test-infra/prow/plugins"
 	pjdwapi "k8s.io/test-infra/prow/pod-utils/downwardapi"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+
+	imagev1 "github.com/openshift/api/image/v1"
 
 	apihelper "github.com/openshift/ci-tools/pkg/api/helper"
 	testimagestreamtagimportv1 "github.com/openshift/ci-tools/pkg/api/testimagestreamtagimport/v1"

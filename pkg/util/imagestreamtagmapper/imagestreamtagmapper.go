@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"reflect"
 
-	imagev1 "github.com/openshift/api/image/v1"
 	"github.com/sirupsen/logrus"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -13,6 +13,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	imagev1 "github.com/openshift/api/image/v1"
 )
 
 // New returns a new ImageStreamTagMapper. Its purpose is to extract all ImageStreamTag events

@@ -8,6 +8,9 @@ import (
 	"path"
 	"path/filepath"
 
+	"github.com/mattn/go-zglob"
+	"github.com/sirupsen/logrus"
+
 	"k8s.io/api/core/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/validation/field"
@@ -15,9 +18,6 @@ import (
 	prowconfig "k8s.io/test-infra/prow/config"
 	_ "k8s.io/test-infra/prow/hook"
 	"k8s.io/test-infra/prow/plugins"
-
-	"github.com/mattn/go-zglob"
-	"github.com/sirupsen/logrus"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"

@@ -22,16 +22,15 @@ import (
 	"strings"
 	"time"
 
-	v1 "github.com/openshift/api/route/v1"
+	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
 
 	authapi "k8s.io/api/authorization/v1"
 	coreapi "k8s.io/api/core/v1"
+	policyv1beta1 "k8s.io/api/policy/v1beta1"
 	rbacapi "k8s.io/api/rbac/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	policyv1beta1 "k8s.io/api/policy/v1beta1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -47,10 +46,9 @@ import (
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	crcontrollerutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	"github.com/ghodss/yaml"
-
 	imageapi "github.com/openshift/api/image/v1"
 	projectapi "github.com/openshift/api/project/v1"
+	v1 "github.com/openshift/api/route/v1"
 	templateapi "github.com/openshift/api/template/v1"
 	buildclientset "github.com/openshift/client-go/build/clientset/versioned/typed/build/v1"
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"

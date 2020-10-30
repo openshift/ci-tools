@@ -4,14 +4,13 @@ import (
 	"context"
 	"testing"
 
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
+	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/diff"
+
 	imagev1 "github.com/openshift/api/image/v1"
 	fakeimageclientset "github.com/openshift/client-go/image/clientset/versioned/fake"
-
-	corev1 "k8s.io/api/core/v1"
-	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"k8s.io/apimachinery/pkg/api/equality"
-	"k8s.io/apimachinery/pkg/util/diff"
 
 	"github.com/openshift/ci-tools/pkg/api"
 )

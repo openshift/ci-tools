@@ -13,11 +13,13 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/openshift/ci-tools/pkg/api"
-	"github.com/openshift/ci-tools/pkg/load"
 	"github.com/sirupsen/logrus"
+
 	"k8s.io/test-infra/prow/repoowners"
 	"sigs.k8s.io/yaml"
+
+	"github.com/openshift/ci-tools/pkg/api"
+	"github.com/openshift/ci-tools/pkg/load"
 )
 
 type options struct {

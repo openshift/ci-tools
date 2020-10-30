@@ -10,6 +10,7 @@ import (
 
 	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
+
 	prowconfig "k8s.io/test-infra/prow/config"
 
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"

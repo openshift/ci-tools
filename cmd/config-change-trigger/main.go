@@ -6,13 +6,10 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/openshift/ci-tools/pkg/util"
-
 	"github.com/sirupsen/logrus"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/rest"
-
 	v1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/config/secret"
 	"k8s.io/test-infra/prow/flagutil"
@@ -24,6 +21,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/config"
 	"github.com/openshift/ci-tools/pkg/diffs"
+	"github.com/openshift/ci-tools/pkg/util"
 )
 
 type options struct {

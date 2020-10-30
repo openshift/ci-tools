@@ -13,11 +13,12 @@ import (
 
 	"github.com/ghodss/yaml"
 	"github.com/google/go-cmp/cmp"
+
+	"k8s.io/apimachinery/pkg/util/diff"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/registry"
-	"k8s.io/apimachinery/pkg/util/diff"
 )
 
 const rawConfig = `tag_specification:

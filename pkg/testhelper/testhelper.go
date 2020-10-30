@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/pmezard/go-difflib/difflib"
+
 	"sigs.k8s.io/yaml"
 )
 

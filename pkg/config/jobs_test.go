@@ -1,10 +1,10 @@
 package config
 
 import (
-	"k8s.io/apimachinery/pkg/util/diff"
 	"reflect"
 	"testing"
 
+	"k8s.io/apimachinery/pkg/util/diff"
 	prowconfig "k8s.io/test-infra/prow/config"
 )
 

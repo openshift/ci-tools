@@ -7,6 +7,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
+
 	utilpointer "k8s.io/utils/pointer"
 
 	"github.com/openshift/ci-tools/pkg/api"

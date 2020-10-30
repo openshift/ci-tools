@@ -12,10 +12,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/openshift/builder/pkg/build/builder/util/dockerfile"
-	"github.com/openshift/imagebuilder"
-	dockercmd "github.com/openshift/imagebuilder/dockerfile/command"
 	"github.com/sirupsen/logrus"
+
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/test-infra/experiment/autobumper/bumper"
@@ -24,6 +22,10 @@ import (
 	pgithub "k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/labels"
 	"sigs.k8s.io/yaml"
+
+	"github.com/openshift/builder/pkg/build/builder/util/dockerfile"
+	"github.com/openshift/imagebuilder"
+	dockercmd "github.com/openshift/imagebuilder/dockerfile/command"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/api/ocpbuilddata"

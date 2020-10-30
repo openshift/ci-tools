@@ -26,6 +26,7 @@ require (
 	github.com/alecthomas/chroma v0.7.1
 	github.com/andygrunwald/go-jira v1.12.0
 	github.com/blang/semver v3.5.1+incompatible
+	github.com/coreydaley-redhat/osgoimports v0.0.0-20201029204054-eab74506eec3
 	github.com/docker/distribution v2.7.1+incompatible
 	github.com/docker/spdystream v0.0.0-20181023171402-6480d4af844c // indirect
 	github.com/getlantern/deepcopy v0.0.0-20160317154340-7f45deb8130a
@@ -38,9 +39,9 @@ require (
 	github.com/montanaflynn/stats v0.6.3
 	github.com/openshift/api v0.0.0-20200521101457-60c476765272
 	github.com/openshift/builder v0.0.0-20200325182657-6a52122d21e0
-	github.com/openshift/client-go v0.0.0-20200521150516-05eb9880269c
+	github.com/openshift/client-go v3.9.0+incompatible
 	github.com/openshift/imagebuilder v1.1.1
-	github.com/openshift/library-go v0.0.0-20190904120025-7d4acc018c61
+	github.com/openshift/library-go v0.0.0-20200127110935-527e40ed17d9
 	github.com/openshift/openshift-apiserver v0.0.0-alpha.0
 	github.com/pkg/errors v0.9.1
 	github.com/pmezard/go-difflib v1.0.0
@@ -50,7 +51,7 @@ require (
 	github.com/shurcooL/githubv4 v0.0.0-20191102174205-af46314aec7b
 	github.com/sirupsen/logrus v1.6.0
 	github.com/slack-go/slack v0.6.6
-	github.com/spf13/afero v1.2.2
+	github.com/spf13/afero v1.4.1
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
 	golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208
 	google.golang.org/api v0.29.0

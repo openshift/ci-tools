@@ -27,6 +27,7 @@ func TestResolve(t *testing.T) {
 		stepMap               ReferenceByName
 		chainMap              ChainByName
 		workflowMap           WorkflowByName
+		observerMap           ObserverByName
 		expectedRes           api.MultiStageTestConfigurationLiteral
 		expectedErr           error
 		expectedValidationErr error
@@ -64,7 +65,8 @@ func TestResolve(t *testing.T) {
 					Resources: api.ResourceRequirements{
 						Requests: api.ResourceList{"cpu": "1000m"},
 						Limits:   api.ResourceList{"memory": "2Gi"},
-					}},
+					},
+				},
 			}},
 		},
 		expectedRes: api.MultiStageTestConfigurationLiteral{
@@ -98,6 +100,76 @@ func TestResolve(t *testing.T) {
 				},
 			}},
 		},
+	}, {
+		name: "Test with observers",
+		config: api.MultiStageTestConfiguration{
+			ClusterProfile: api.ClusterProfileAWS,
+			Test: []api.TestStep{{
+				Reference: &reference1,
+			}},
+			Observers: &api.Observers{
+				Enable:  []string{"yes"},
+				Disable: []string{"no"},
+			},
+		},
+		stepMap: ReferenceByName{
+			reference1: {
+				As:       "generic-unit-test",
+				From:     "my-image",
+				Commands: "make test/unit",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				},
+				Observers: []string{"no", "other"},
+			},
+		},
+		observerMap: map[string]api.Observer{
+			"yes":   {Name: "yes"},
+			"no":    {Name: "no"},
+			"other": {Name: "other"},
+		},
+		expectedRes: api.MultiStageTestConfigurationLiteral{
+			ClusterProfile: api.ClusterProfileAWS,
+			Test: []api.LiteralTestStep{{
+				As:       "generic-unit-test",
+				From:     "my-image",
+				Commands: "make test/unit",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				},
+				Observers: []string{"no", "other"},
+			}},
+			Observers: []api.Observer{{Name: "other"}, {Name: "yes"}},
+		},
+	}, {
+		name: "Test with broken observer",
+		config: api.MultiStageTestConfiguration{
+			ClusterProfile: api.ClusterProfileAWS,
+			Test: []api.TestStep{{
+				Reference: &reference1,
+			}},
+			Observers: &api.Observers{
+				Enable:  []string{"yes"},
+				Disable: []string{"no"},
+			},
+		},
+		stepMap: ReferenceByName{
+			reference1: {
+				As:       "generic-unit-test",
+				From:     "my-image",
+				Commands: "make test/unit",
+				Resources: api.ResourceRequirements{
+					Requests: api.ResourceList{"cpu": "1000m"},
+					Limits:   api.ResourceList{"memory": "2Gi"},
+				},
+				Observers: []string{"no"},
+			},
+		},
+		observerMap: map[string]api.Observer{},
+		expectedRes: api.MultiStageTestConfigurationLiteral{},
+		expectedErr: errors.New("observer \"yes\" is referenced but no such observer is configured"),
 	}, {
 		name: "Test with reference",
 		config: api.MultiStageTestConfiguration{
@@ -622,11 +694,11 @@ func TestResolve(t *testing.T) {
 		expectedValidationErr: errors.New(`ipi-aws: no step declares parameter "NOT_THE_STEP_ENV"`),
 	}} {
 		t.Run(testCase.name, func(t *testing.T) {
-			err := Validate(testCase.stepMap, testCase.chainMap, testCase.workflowMap)
+			err := Validate(testCase.stepMap, testCase.chainMap, testCase.workflowMap, testCase.observerMap)
 			if !reflect.DeepEqual(err, utilerrors.NewAggregate([]error{testCase.expectedValidationErr})) {
 				t.Errorf("got incorrect validation error: %s", cmp.Diff(err, testCase.expectedValidationErr))
 			}
-			ret, err := NewResolver(testCase.stepMap, testCase.chainMap, testCase.workflowMap).Resolve("test", testCase.config)
+			ret, err := NewResolver(testCase.stepMap, testCase.chainMap, testCase.workflowMap, testCase.observerMap).Resolve("test", testCase.config)
 			if !reflect.DeepEqual(err, utilerrors.NewAggregate([]error{testCase.expectedErr})) {
 				t.Errorf("got incorrect error: %s", cmp.Diff(err, testCase.expectedErr))
 			}
@@ -708,6 +780,7 @@ func TestResolveParameters(t *testing.T) {
 			},
 		},
 	}
+	observers := ObserverByName{}
 	for _, tc := range []struct {
 		name           string
 		test           api.MultiStageTestConfiguration
@@ -841,7 +914,7 @@ func TestResolveParameters(t *testing.T) {
 		err: errors.New("test: step: unresolved parameter: UNRESOLVED"),
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			ret, err := NewResolver(refs, chains, workflows).Resolve("test", tc.test)
+			ret, err := NewResolver(refs, chains, workflows, observers).Resolve("test", tc.test)
 			if tc.err != nil {
 				if err == nil {
 					t.Fatal("unexpected success")

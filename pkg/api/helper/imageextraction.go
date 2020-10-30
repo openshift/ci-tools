@@ -82,6 +82,9 @@ func insertTagReferencesFromSteps(config api.MultiStageTestConfigurationLiteral,
 			insert(*subStep.FromImage, m)
 		}
 	}
+	for _, observer := range config.Observers {
+		insert(*observer.FromImage, m)
+	}
 }
 
 func insert(item api.ImageStreamTagReference, m map[string]types.NamespacedName) {

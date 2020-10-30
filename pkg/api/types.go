@@ -555,6 +555,20 @@ type RegistryWorkflow struct {
 	Documentation string `json:"documentation,omitempty"`
 }
 
+// RegistryObserverConfig is the struct that observer configs are unmarshalled into
+type RegistryObserverConfig struct {
+	// Observer is the top level field of an observer config
+	Observer RegistryObserver `json:"observer,omitempty"`
+}
+
+// RegistryObserver contains the configuration and documentation for an observer
+type RegistryObserver struct {
+	// Observer defines the observer pod
+	Observer `json:",inline"`
+	// Documentation describes what the observer being configured does.
+	Documentation string `json:"documentation,omitempty"`
+}
+
 // RegistryMetadata maps the registry info for each step in the registry by filename
 type RegistryMetadata map[string]RegistryInfo
 
@@ -564,6 +578,28 @@ type RegistryInfo struct {
 	Path string `json:"path,omitempty"`
 	// Owners is the OWNERS config for the registry component
 	Owners repoowners.Config `json:"owners,omitempty"`
+}
+
+// Observer is the configuration for an observer Pod that will run in parallel
+// with a multi-stage test job.
+type Observer struct {
+	// Name is the name of this observer
+	Name string `json:"name"`
+	// From is the container image that will be used for this observer.
+	From string `json:"from,omitempty"`
+	// FromImage is a literal ImageStreamTag reference to use for this observer.
+	FromImage *ImageStreamTagReference `json:"from_image,omitempty"`
+	// Commands is the command(s) that will be run inside the image.
+	Commands string `json:"commands,omitempty"`
+}
+
+// Observers is a configuration for which observer pods should and should not
+// be run during a job
+type Observers struct {
+	// Enable is a list of named observer that should be enabled
+	Enable []string `json:"enable,omitempty"`
+	// Disable is a list of named observers that should be disabled
+	Disable []string `json:"disable,omitempty"`
 }
 
 // LiteralTestStep is the external representation of a test step allowing users
@@ -602,6 +638,8 @@ type LiteralTestStep struct {
 	// Cli is the (optional) name of the release from which the `oc` binary
 	// will be injected into this step.
 	Cli string `json:"cli,omitempty"`
+	// Observers are the observers that should be running
+	Observers []string `json:"observers,omitempty"`
 }
 
 // StepParameter is a variable set by the test, with an optional default.
@@ -678,6 +716,8 @@ type MultiStageTestConfiguration struct {
 	// all previous `pre` and `test` steps were successful. The given step must explicitly
 	// ask for being skipped by setting the OptionalOnSuccess flag to true.
 	AllowSkipOnSuccess *bool `json:"allow_skip_on_success,omitempty"`
+	// Observers are the observers that should be running
+	Observers *Observers `json:"observers,omitempty"`
 }
 
 // MultiStageTestConfigurationLiteral is a form of the MultiStageTestConfiguration that does not include
@@ -701,6 +741,8 @@ type MultiStageTestConfigurationLiteral struct {
 	// all previous `pre` and `test` steps were successful. The given step must explicitly
 	// ask for being skipped by setting the OptionalOnSuccess flag to true.
 	AllowSkipOnSuccess *bool `json:"allow_skip_on_success,omitempty"`
+	// Observers are the observers that need to be run
+	Observers []Observer `json:"observers,omitempty"`
 }
 
 // TestEnvironment has the values of parameters for multi-stage tests.

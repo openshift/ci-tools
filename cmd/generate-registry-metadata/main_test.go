@@ -62,6 +62,10 @@ func TestGenerateMetadata(t *testing.T) {
 				Path:   "ipi/ipi-workflow.yaml",
 				Owners: owners1,
 			},
+			"resourcewatcher-observer.yaml": {
+				Path:   "resourcewatcher/resourcewatcher-observer.yaml",
+				Owners: owners1,
+			},
 		},
 	}}
 	for _, testCase := range testCases {

@@ -210,9 +210,10 @@ func rehearseMain() error {
 	var refs registry.ReferenceByName
 	var chains registry.ChainByName
 	var workflows registry.WorkflowByName
+	var observers registry.ObserverByName
 
 	if !o.noRegistry {
-		refs, chains, workflows, _, _, err = load.Registry(filepath.Join(o.releaseRepoPath, config.RegistryPath), false)
+		refs, chains, workflows, _, _, observers, err = load.Registry(filepath.Join(o.releaseRepoPath, config.RegistryPath), false)
 		if err != nil {
 			logger.WithError(err).Error("could not load step registry")
 			return fmt.Errorf(misconfigurationOutput)
@@ -309,7 +310,7 @@ func rehearseMain() error {
 	presubmitsWithChangedRegistry := rehearse.AddRandomJobsForChangedRegistry(changedRegistrySteps, prConfig.Prow.JobConfig.PresubmitsStatic, filepath.Join(o.releaseRepoPath, config.CiopConfigInRepoPath), loggers)
 	toRehearse.AddAll(presubmitsWithChangedRegistry)
 
-	resolver := registry.NewResolver(refs, chains, workflows)
+	resolver := registry.NewResolver(refs, chains, workflows, observers)
 	jobConfigurer := rehearse.NewJobConfigurer(prConfig.CiOperator, resolver, prNumber, loggers, rehearsalTemplates.Names, rehearsalClusterProfiles.Names, jobSpec.Refs)
 	imagestreamtags, presubmitsToRehearse, err := jobConfigurer.ConfigurePresubmitRehearsals(toRehearse)
 	if err != nil {

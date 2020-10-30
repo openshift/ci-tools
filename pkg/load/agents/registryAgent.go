@@ -123,7 +123,7 @@ func (a *registryAgent) loadRegistry() error {
 		a.lock.Lock()
 		defer a.lock.Unlock()
 		startTime := time.Now()
-		references, chains, workflows, documentation, metadata, err := load.Registry(a.registryPath, a.flatRegistry)
+		references, chains, workflows, documentation, metadata, observers, err := load.Registry(a.registryPath, a.flatRegistry)
 		if err != nil {
 			a.recordError("failed to load ci-operator registry")
 			return time.Duration(0), fmt.Errorf("failed to load ci-operator registry (%w)", err)
@@ -133,7 +133,7 @@ func (a *registryAgent) loadRegistry() error {
 		a.workflows = workflows
 		a.documentation = documentation
 		a.metadata = metadata
-		a.resolver = registry.NewResolver(references, chains, workflows)
+		a.resolver = registry.NewResolver(references, chains, workflows, observers)
 		a.generation++
 		return time.Since(startTime), nil
 	}()

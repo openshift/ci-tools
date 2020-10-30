@@ -434,25 +434,6 @@ func mergePostsubmits(old, new *prowconfig.Postsubmit) prowconfig.Postsubmit {
 
 	if _, ok := merged.Labels[cioperatorapi.PromotionJobLabelKey]; !ok {
 		merged.MaxConcurrency = old.MaxConcurrency
-	} else {
-		var oldHas, mergedHas bool
-		if old.Spec != nil && len(old.Spec.Containers) > 0 {
-			for _, arg := range old.Spec.Containers[0].Args {
-				if arg == "--image-mirror-push-secret=/etc/push-secret/.dockerconfigjson" {
-					oldHas = true
-				}
-			}
-		}
-		if merged.Spec != nil && len(merged.Spec.Containers) > 0 {
-			for _, arg := range merged.Spec.Containers[0].Args {
-				if arg == "--image-mirror-push-secret=/etc/push-secret/.dockerconfigjson" {
-					mergedHas = true
-				}
-			}
-			if oldHas && !mergedHas {
-				merged.Spec.Containers[0].Args = append(merged.Spec.Containers[0].Args, "--image-mirror-push-secret=/etc/push-secret/.dockerconfigjson")
-			}
-		}
 	}
 	if old.Cluster != "" {
 		merged.Cluster = old.Cluster

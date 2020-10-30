@@ -402,7 +402,9 @@ func (s *multiStageTestStep) generatePods(steps []api.LiteralTestStep, env []cor
 			pod.Spec.Containers[idx].VolumeMounts = append(pod.Spec.Containers[idx].VolumeMounts, coreapi.VolumeMount{Name: homeVolumeName, MountPath: "/alabama"})
 		}
 
-		addSecretWrapper(pod)
+		if !step.ReadonlySharedDir {
+			addSecretWrapper(pod)
+		}
 		container := &pod.Spec.Containers[0]
 		container.Env = append(container.Env, []coreapi.EnvVar{
 			{Name: "NAMESPACE", Value: s.jobSpec.Namespace()},

@@ -599,6 +599,9 @@ type LiteralTestStep struct {
 	// flag is set to true in MultiStageTestConfiguration. This option is
 	// applicable to `post` steps.
 	OptionalOnSuccess *bool `json:"optional_on_success,omitempty"`
+	// ReadonlySharedDir reduces the run time of steps that do not update the
+	// shared directory.
+	ReadonlySharedDir bool `json:"readonly_shared_dir,omitempty"`
 	// Cli is the (optional) name of the release from which the `oc` binary
 	// will be injected into this step.
 	Cli string `json:"cli,omitempty"`

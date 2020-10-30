@@ -72,7 +72,7 @@ func (b blockedJobs) Union(other blockedJobs) blockedJobs {
 
 type deprecatedTemplateBlocker struct {
 	Description string      `json:"description"`
-	Jobs        blockedJobs `json:"jobs"`
+	Jobs        blockedJobs `json:"jobs,omitempty"`
 }
 
 type deprecatedTemplate struct {

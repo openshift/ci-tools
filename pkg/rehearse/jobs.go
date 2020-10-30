@@ -659,7 +659,7 @@ func getClusterTypes(jobs map[string][]prowconfig.Presubmit) []string {
 func isAlreadyRehearsed(toBeRehearsed config.Presubmits, clusterType, templateFile string) bool {
 	for _, jobs := range toBeRehearsed {
 		for _, job := range jobs {
-			if hasClusterType(job, clusterType) && usesConfigMap(job, templateFile) {
+			if hasClusterType(job, clusterType) && UsesConfigMap(job.JobBase, templateFile) {
 				return true
 			}
 		}
@@ -679,7 +679,7 @@ func pickTemplateJob(presubmits map[string][]prowconfig.Presubmit, templateFile,
 				continue
 			}
 
-			if hasClusterType(job, clusterType) && usesConfigMap(job, templateFile) {
+			if hasClusterType(job, clusterType) && UsesConfigMap(job.JobBase, templateFile) {
 				return repo, &job
 			}
 		}
@@ -696,8 +696,8 @@ func hasClusterType(job prowconfig.Presubmit, clusterType string) bool {
 	return false
 }
 
-func usesConfigMap(job prowconfig.Presubmit, cm string) bool {
-	if job.Spec.Volumes != nil {
+func UsesConfigMap(job prowconfig.JobBase, cm string) bool {
+	if job.Spec != nil {
 		for _, volume := range job.Spec.Volumes {
 			switch {
 			case volume.Projected != nil:

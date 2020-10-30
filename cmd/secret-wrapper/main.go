@@ -6,11 +6,15 @@ import (
 	"fmt"
 	"io"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"log"
 	"os"
 	"os/exec"
 	"os/signal"
+	"path"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	coreapi "k8s.io/api/core/v1"
@@ -98,9 +102,15 @@ func (o *options) run() error {
 		return fmt.Errorf("failed to copy secret mount: %w", err)
 	}
 	var errs []error
+	ctx, cancel := context.WithCancel(context.Background())
+	go uploadKubeconfig(ctx, o.client, o.name, o.dstPath, o.dry)
 	if err := execCmd(o.cmd); err != nil {
 		errs = append(errs, fmt.Errorf("failed to execute wrapped command: %w", err))
 	}
+	// we will upload the secret from the post-execution state, so we know
+	// that the best-effort upload of the kubeconfig can exit now and so as
+	// not to race with the post-execution one
+	cancel()
 	if err := createSecret(o.client, o.name, o.dstPath, o.dry); err != nil {
 		errs = append(errs, fmt.Errorf("failed to create/update secret: %w", err))
 	}
@@ -201,4 +211,24 @@ func createSecret(client coreclientset.SecretInterface, name, dir string, dry bo
 		return fmt.Errorf("failed to update secret: %w", err)
 	}
 	return nil
+}
+
+// uploadKubeconfig will do a best-effort attempt at uploading a kubeconfig
+// file if one does not exist at the time we start running but one does get
+// created while executing the command
+func uploadKubeconfig(ctx context.Context, client coreclientset.SecretInterface, name, dir string, dry bool) {
+	if _, err := os.Stat(path.Join(dir, "kubeconfig")); err == nil {
+		// kubeconfig already exists, no need to do anything
+		return
+	}
+	if err := wait.PollUntil(time.Second, func() (done bool, err error) {
+		if _, err := os.Stat(path.Join(dir, "kubeconfig")); err != nil {
+			return false, nil
+		}
+		// kubeconfig exists, we can upload it
+		uploadErr := createSecret(client, name, dir, dry)
+		return uploadErr == nil, nil // retry errors
+	}, ctx.Done()); err != nil {
+		log.Printf("Failed to upload $KUBECONFIG: %v\n", err)
+	}
 }

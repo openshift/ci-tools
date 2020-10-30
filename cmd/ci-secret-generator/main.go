@@ -387,6 +387,15 @@ func validateContexts(contexts []secretbootstrap.BitWardenContext, config secret
 				if reflect.DeepEqual(needle, haystack) {
 					found = true
 				}
+				for _, dc := range haystack.DockerConfigJSONData {
+					ctx := secretbootstrap.BitWardenContext{
+						BWItem:     dc.BWItem,
+						Attachment: dc.AuthBitwardenAttachment,
+					}
+					if reflect.DeepEqual(needle, ctx) {
+						found = true
+					}
+				}
 			}
 		}
 		if !found {

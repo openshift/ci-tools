@@ -70,6 +70,7 @@ func golden(t *testing.T, opts *Options) (string, error) {
 // If output is not a []byte or string, it will get serialized as yaml prior to the comparison.
 // The fixtures are stored in $PWD/testdata/prefix${testName}.yaml
 func CompareWithFixture(t *testing.T, output interface{}, opts ...Option) {
+	t.Helper()
 	options := &Options{}
 	for _, opt := range opts {
 		opt(options)
@@ -109,7 +110,7 @@ func CompareWithFixture(t *testing.T, output interface{}, opts ...Option) {
 	diff := difflib.UnifiedDiff{
 		A:        difflib.SplitLines(string(expected)),
 		B:        difflib.SplitLines(string(serializedOutput)),
-		FromFile: "Fixture",
+		FromFile: golden,
 		ToFile:   "Current",
 		Context:  3,
 	}

@@ -181,6 +181,8 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 		if configSpec.PromotionConfiguration != nil {
 
 			podSpec := generateCiOperatorPodSpec(info, nil, imageTargets.List(), []string{"--promote"}...)
+			podSpec.Containers[0].Args = append(podSpec.Containers[0].Args,
+				fmt.Sprintf("--image-mirror-push-secret=%s", filepath.Join(cioperatorapi.RegistryPushCredentialsCICentralSecretMountPath, corev1.DockerConfigJsonKey)))
 			podSpec.Containers[0].VolumeMounts = append(podSpec.Containers[0].VolumeMounts, corev1.VolumeMount{
 				Name:      "push-secret",
 				MountPath: cioperatorapi.RegistryPushCredentialsCICentralSecretMountPath,

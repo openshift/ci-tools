@@ -636,6 +636,16 @@ type StepDependency struct {
 	Env string `json:"env"`
 }
 
+// StepLease defines a resource that needs to be acquired prior to execution.
+// The resource name will be exposed to the step via the specificed environment
+// variable.
+type StepLease struct {
+	// ResourceType is the type of resource that will be leased.
+	ResourceType string `json:"resource_type"`
+	// Env is the environment variable that will contain the resource name.
+	Env string `json:"env"`
+}
+
 // FromImageTag returns the internal name for the image tag that will be used
 // for this step, if one is configured.
 func (s *LiteralTestStep) FromImageTag() (PipelineImageStreamTagReference, bool) {

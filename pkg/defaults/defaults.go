@@ -237,7 +237,11 @@ func FromConfig(
 			if test := testStep.MultiStageTestConfigurationLiteral; test != nil {
 				step = steps.MultiStageTestStep(*testStep, config, params, podClient, eventClient, secretGetter, saGetter, rbacClient, imageClient, artifactDir, jobSpec)
 				if test.ClusterProfile != "" {
-					step = steps.LeaseStep(leaseClient, test.ClusterProfile.LeaseType(), step, jobSpec.Namespace, namespaceClient)
+					leases := []api.StepLease{{
+						ResourceType: test.ClusterProfile.LeaseType(),
+						Env:          steps.DefaultLeaseEnv,
+					}}
+					step = steps.LeaseStep(leaseClient, leases, step, jobSpec.Namespace, namespaceClient)
 				}
 				for _, subStep := range append(append(test.Pre, test.Test...), test.Post...) {
 					if link, ok := subStep.FromImageTag(); ok {
@@ -255,7 +259,11 @@ func FromConfig(
 					if err != nil {
 						return nil, nil, fmt.Errorf("unable to create end to end test step: %w", err)
 					}
-					step = steps.LeaseStep(leaseClient, test.ClusterProfile.LeaseType(), step, jobSpec.Namespace, namespaceClient)
+					leases := []api.StepLease{{
+						ResourceType: test.ClusterProfile.LeaseType(),
+						Env:          steps.DefaultLeaseEnv,
+					}}
+					step = steps.LeaseStep(leaseClient, leases, step, jobSpec.Namespace, namespaceClient)
 				}
 			} else {
 				step = steps.TestStep(*testStep, config.Resources, podClient, eventClient, artifactDir, jobSpec)
@@ -288,7 +296,11 @@ func FromConfig(
 				if err != nil {
 					return nil, nil, fmt.Errorf("cannot resolve lease type from cluster type: %w", err)
 				}
-				step = steps.LeaseStep(leaseClient, lease, step, jobSpec.Namespace, namespaceClient)
+				leases := []api.StepLease{{
+					ResourceType: lease,
+					Env:          steps.DefaultLeaseEnv,
+				}}
+				step = steps.LeaseStep(leaseClient, leases, step, jobSpec.Namespace, namespaceClient)
 				break
 			}
 		}

@@ -55,7 +55,6 @@ var envForProfile = []string{
 }
 
 type multiStageTestStep struct {
-	dry     bool
 	name    string
 	profile api.ClusterProfile
 	config  *api.ReleaseBuildConfiguration
@@ -345,10 +344,8 @@ func (s *multiStageTestStep) runSteps(
 	select {
 	case <-ctx.Done():
 		log.Printf("cleanup: Deleting pods with label %s=%s", MultiStageTestLabel, s.name)
-		if !s.dry {
-			if err := deletePods(s.podClient.Pods(s.jobSpec.Namespace()), s.name); err != nil {
-				errs = append(errs, fmt.Errorf("failed to delete pods with label %s=%s: %w", MultiStageTestLabel, s.name, err))
-			}
+		if err := deletePods(s.podClient.Pods(s.jobSpec.Namespace()), s.name); err != nil {
+			errs = append(errs, fmt.Errorf("failed to delete pods with label %s=%s: %w", MultiStageTestLabel, s.name, err))
 		}
 		errs = append(errs, fmt.Errorf("cancelled"))
 	default:

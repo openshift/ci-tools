@@ -147,7 +147,7 @@ func (s *multiStageTestStep) run(ctx context.Context) error {
 	var env []coreapi.EnvVar
 	if s.profile != "" {
 		secret := s.profileSecretName()
-		if _, err := s.secretClient.Secrets(s.jobSpec.Namespace()).Get(context.TODO(), secret, meta.GetOptions{}); err != nil {
+		if _, err := s.secretClient.Secrets(s.jobSpec.Namespace()).Get(ctx, secret, meta.GetOptions{}); err != nil {
 			return fmt.Errorf("could not find secret %q: %w", secret, err)
 		}
 		for _, e := range envForProfile {
@@ -163,7 +163,7 @@ func (s *multiStageTestStep) run(ctx context.Context) error {
 			env = append(env, optionalOperator.asEnv()...)
 		}
 	}
-	if err := s.createSecret(); err != nil {
+	if err := s.createSecret(ctx); err != nil {
 		return fmt.Errorf("failed to create secret: %w", err)
 	}
 	if err := s.createCredentials(); err != nil {
@@ -281,14 +281,14 @@ func (s *multiStageTestStep) setupRBAC() error {
 	return nil
 }
 
-func (s *multiStageTestStep) createSecret() error {
+func (s *multiStageTestStep) createSecret(ctx context.Context) error {
 	log.Printf("Creating multi-stage test secret %q", s.name)
 	secret := coreapi.Secret{ObjectMeta: meta.ObjectMeta{Name: s.name}}
 	client := s.secretClient.Secrets(s.jobSpec.Namespace())
-	if err := client.Delete(context.TODO(), s.name, meta.DeleteOptions{}); err != nil && !errors.IsNotFound(err) {
+	if err := client.Delete(ctx, s.name, meta.DeleteOptions{}); err != nil && !errors.IsNotFound(err) {
 		return fmt.Errorf("cannot delete secret %q: %w", s.name, err)
 	}
-	_, err := client.Create(context.TODO(), &secret, meta.CreateOptions{})
+	_, err := client.Create(ctx, &secret, meta.CreateOptions{})
 	return err
 }
 

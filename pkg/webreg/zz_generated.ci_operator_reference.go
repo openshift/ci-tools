@@ -329,6 +329,21 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            # Environment has the values of parameters for the steps.\n" +
 	"            env:\n" +
 	"                \"\": \"\"\n" +
+	"            # Observers are the observers that need to be run\n" +
+	"            observers:\n" +
+	"              - # Commands is the command(s) that will be run inside the image.\n" +
+	"                commands: ' '\n" +
+	"                # From is the container image that will be used for this observer.\n" +
+	"                from: ' '\n" +
+	"                # FromImage is a literal ImageStreamTag reference to use for this observer.\n" +
+	"                from_image:\n" +
+	"                    # As is an optional string to use as the intermediate name for this reference.\n" +
+	"                    as: ' '\n" +
+	"                    name: ' '\n" +
+	"                    namespace: ' '\n" +
+	"                    tag: ' '\n" +
+	"                # Name is the name of this observer\n" +
+	"                name: ' '\n" +
 	"            # Post is the array of test steps run after the tests finish and teardown/deprovision resources.\n" +
 	"            # Post steps always run, even if previous steps fail.\n" +
 	"            post:\n" +
@@ -376,6 +391,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    name: ' '\n" +
 	"                    namespace: ' '\n" +
 	"                    tag: ' '\n" +
+	"                # Observers are the observers that should be running\n" +
+	"                observers:\n" +
+	"                  - \"\"\n" +
 	"                # OptionalOnSuccess defines if this step should be skipped as long\n" +
 	"                # as all `pre` and `test` steps were successful and AllowSkipOnSuccess\n" +
 	"                # flag is set to true in MultiStageTestConfiguration. This option is\n" +
@@ -435,6 +453,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    name: ' '\n" +
 	"                    namespace: ' '\n" +
 	"                    tag: ' '\n" +
+	"                # Observers are the observers that should be running\n" +
+	"                observers:\n" +
+	"                  - \"\"\n" +
 	"                # OptionalOnSuccess defines if this step should be skipped as long\n" +
 	"                # as all `pre` and `test` steps were successful and AllowSkipOnSuccess\n" +
 	"                # flag is set to true in MultiStageTestConfiguration. This option is\n" +
@@ -494,6 +515,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    name: ' '\n" +
 	"                    namespace: ' '\n" +
 	"                    tag: ' '\n" +
+	"                # Observers are the observers that should be running\n" +
+	"                observers:\n" +
+	"                  - \"\"\n" +
 	"                # OptionalOnSuccess defines if this step should be skipped as long\n" +
 	"                # as all `pre` and `test` steps were successful and AllowSkipOnSuccess\n" +
 	"                # flag is set to true in MultiStageTestConfiguration. This option is\n" +
@@ -565,6 +589,14 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"            # Environment has the values of parameters for the steps.\n" +
 	"            env:\n" +
 	"                \"\": \"\"\n" +
+	"            # Observers are the observers that should be running\n" +
+	"            observers:\n" +
+	"                # Disable is a list of named observers that should be disabled\n" +
+	"                disable:\n" +
+	"                  - \"\"\n" +
+	"                # Enable is a list of named observer that should be enabled\n" +
+	"                enable:\n" +
+	"                  - \"\"\n" +
 	"            # Post is the array of test steps run after the tests finish and teardown/deprovision resources.\n" +
 	"            # Post steps always run, even if previous steps fail. However, they have an option to skip\n" +
 	"            # execution if previous Pre and Test steps passed.\n" +
@@ -600,6 +632,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    name: ' '\n" +
 	"                    namespace: ' '\n" +
 	"                    tag: ' '\n" +
+	"                observers:\n" +
+	"                  # LiteralTestStep is a full test step definition.\n" +
+	"                  - \"\"\n" +
 	"                optional_on_success: false\n" +
 	"                # Reference is the name of a step reference.\n" +
 	"                ref: \"\"\n" +
@@ -646,6 +681,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    name: ' '\n" +
 	"                    namespace: ' '\n" +
 	"                    tag: ' '\n" +
+	"                observers:\n" +
+	"                  # LiteralTestStep is a full test step definition.\n" +
+	"                  - \"\"\n" +
 	"                optional_on_success: false\n" +
 	"                # Reference is the name of a step reference.\n" +
 	"                ref: \"\"\n" +
@@ -692,6 +730,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                    name: ' '\n" +
 	"                    namespace: ' '\n" +
 	"                    tag: ' '\n" +
+	"                observers:\n" +
+	"                  # LiteralTestStep is a full test step definition.\n" +
+	"                  - \"\"\n" +
 	"                optional_on_success: false\n" +
 	"                # Reference is the name of a step reference.\n" +
 	"                ref: \"\"\n" +
@@ -823,6 +864,21 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # Environment has the values of parameters for the steps.\n" +
 	"        env:\n" +
 	"            \"\": \"\"\n" +
+	"        # Observers are the observers that need to be run\n" +
+	"        observers:\n" +
+	"          - # Commands is the command(s) that will be run inside the image.\n" +
+	"            commands: ' '\n" +
+	"            # From is the container image that will be used for this observer.\n" +
+	"            from: ' '\n" +
+	"            # FromImage is a literal ImageStreamTag reference to use for this observer.\n" +
+	"            from_image:\n" +
+	"                # As is an optional string to use as the intermediate name for this reference.\n" +
+	"                as: ' '\n" +
+	"                name: ' '\n" +
+	"                namespace: ' '\n" +
+	"                tag: ' '\n" +
+	"            # Name is the name of this observer\n" +
+	"            name: ' '\n" +
 	"        # Post is the array of test steps run after the tests finish and teardown/deprovision resources.\n" +
 	"        # Post steps always run, even if previous steps fail.\n" +
 	"        post:\n" +
@@ -870,6 +926,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                name: ' '\n" +
 	"                namespace: ' '\n" +
 	"                tag: ' '\n" +
+	"            # Observers are the observers that should be running\n" +
+	"            observers:\n" +
+	"              - \"\"\n" +
 	"            # OptionalOnSuccess defines if this step should be skipped as long\n" +
 	"            # as all `pre` and `test` steps were successful and AllowSkipOnSuccess\n" +
 	"            # flag is set to true in MultiStageTestConfiguration. This option is\n" +
@@ -929,6 +988,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                name: ' '\n" +
 	"                namespace: ' '\n" +
 	"                tag: ' '\n" +
+	"            # Observers are the observers that should be running\n" +
+	"            observers:\n" +
+	"              - \"\"\n" +
 	"            # OptionalOnSuccess defines if this step should be skipped as long\n" +
 	"            # as all `pre` and `test` steps were successful and AllowSkipOnSuccess\n" +
 	"            # flag is set to true in MultiStageTestConfiguration. This option is\n" +
@@ -988,6 +1050,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                name: ' '\n" +
 	"                namespace: ' '\n" +
 	"                tag: ' '\n" +
+	"            # Observers are the observers that should be running\n" +
+	"            observers:\n" +
+	"              - \"\"\n" +
 	"            # OptionalOnSuccess defines if this step should be skipped as long\n" +
 	"            # as all `pre` and `test` steps were successful and AllowSkipOnSuccess\n" +
 	"            # flag is set to true in MultiStageTestConfiguration. This option is\n" +
@@ -1059,6 +1124,14 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # Environment has the values of parameters for the steps.\n" +
 	"        env:\n" +
 	"            \"\": \"\"\n" +
+	"        # Observers are the observers that should be running\n" +
+	"        observers:\n" +
+	"            # Disable is a list of named observers that should be disabled\n" +
+	"            disable:\n" +
+	"              - \"\"\n" +
+	"            # Enable is a list of named observer that should be enabled\n" +
+	"            enable:\n" +
+	"              - \"\"\n" +
 	"        # Post is the array of test steps run after the tests finish and teardown/deprovision resources.\n" +
 	"        # Post steps always run, even if previous steps fail. However, they have an option to skip\n" +
 	"        # execution if previous Pre and Test steps passed.\n" +
@@ -1094,6 +1167,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                name: ' '\n" +
 	"                namespace: ' '\n" +
 	"                tag: ' '\n" +
+	"            observers:\n" +
+	"              # LiteralTestStep is a full test step definition.\n" +
+	"              - \"\"\n" +
 	"            optional_on_success: false\n" +
 	"            # Reference is the name of a step reference.\n" +
 	"            ref: \"\"\n" +
@@ -1140,6 +1216,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                name: ' '\n" +
 	"                namespace: ' '\n" +
 	"                tag: ' '\n" +
+	"            observers:\n" +
+	"              # LiteralTestStep is a full test step definition.\n" +
+	"              - \"\"\n" +
 	"            optional_on_success: false\n" +
 	"            # Reference is the name of a step reference.\n" +
 	"            ref: \"\"\n" +
@@ -1186,6 +1265,9 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"                name: ' '\n" +
 	"                namespace: ' '\n" +
 	"                tag: ' '\n" +
+	"            observers:\n" +
+	"              # LiteralTestStep is a full test step definition.\n" +
+	"              - \"\"\n" +
 	"            optional_on_success: false\n" +
 	"            # Reference is the name of a step reference.\n" +
 	"            ref: \"\"\n" +

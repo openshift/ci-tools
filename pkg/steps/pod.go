@@ -89,7 +89,7 @@ func (s *podStep) run(ctx context.Context) error {
 	// when the test container terminates and artifact directory has been set, grab everything under the directory
 	var notifier ContainerNotifier = NopNotifier
 	if s.gatherArtifacts() {
-		artifacts := NewArtifactWorker(s.podClient, filepath.Join(s.artifactDir, s.config.As), s.jobSpec.Namespace())
+		artifacts := NewArtifactWorker(s.podClient, filepath.Join(s.artifactDir, s.config.As), s.jobSpec.Namespace(), ctx)
 		artifacts.CollectFromPod(pod.Name, []string{s.name}, nil)
 		notifier = artifacts
 	}
@@ -101,7 +101,6 @@ func (s *podStep) run(ctx context.Context) error {
 
 	go func() {
 		<-ctx.Done()
-		notifier.Cancel()
 		log.Printf("cleanup: Deleting %s pod %s", s.name, s.config.As)
 		if err := s.podClient.Pods(s.jobSpec.Namespace()).Delete(context.TODO(), s.config.As, meta.DeleteOptions{}); err != nil && !errors.IsNotFound(err) {
 			log.Printf("error: Could not delete %s pod: %v", s.name, err)

@@ -1,6 +1,7 @@
 package steps
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"io/ioutil"
@@ -553,7 +554,7 @@ func TestArtifactWorker(t *testing.T) {
 		namespace: "namespace",
 		name:      pod,
 	}
-	w := NewArtifactWorker(podClient, tmp, podClient.namespace)
+	w := NewArtifactWorker(podClient, tmp, podClient.namespace, context.Background())
 	w.CollectFromPod(pod, []string{"container"}, nil)
 	w.Complete(pod)
 	select {

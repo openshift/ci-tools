@@ -592,7 +592,6 @@ func addCliInjector(release string, pod *coreapi.Pod) {
 }
 
 func (s *multiStageTestStep) runPods(ctx context.Context, pods []coreapi.Pod, shortCircuit bool) error {
-	done := ctx.Done()
 	namePrefix := s.name + "-"
 	var errs []error
 	for _, pod := range pods {
@@ -601,18 +600,13 @@ func (s *multiStageTestStep) runPods(ctx context.Context, pods []coreapi.Pod, sh
 			if c.Name == "artifacts" {
 				container := pod.Spec.Containers[0].Name
 				dir := filepath.Join(s.artifactDir, strings.TrimPrefix(pod.Name, namePrefix))
-				artifacts := NewArtifactWorker(s.podClient, dir, s.jobSpec.Namespace())
+				artifacts := NewArtifactWorker(s.podClient, dir, s.jobSpec.Namespace(), ctx)
 				artifacts.CollectFromPod(pod.Name, []string{container}, nil)
 				notifier = artifacts
 				break
 			}
 		}
 		err := s.runPod(ctx, &pod, NewTestCaseNotifier(notifier))
-		select {
-		case <-done:
-			notifier.Cancel()
-		default:
-		}
 		if err != nil {
 			errs = append(errs, err)
 			if shortCircuit {

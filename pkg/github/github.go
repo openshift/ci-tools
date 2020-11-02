@@ -57,10 +57,10 @@ func FileGetterFactory(org, repo, branch string, opts ...Opt) FileGetter {
 		}
 		body, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read response body: %w", err)
+			return nil, fmt.Errorf("failed to read response body when getting %s: %w", url, err)
 		}
 		if resp.StatusCode != http.StatusOK {
-			return nil, fmt.Errorf("got unexpected http status code %d, response body: %s", resp.StatusCode, string(body))
+			return nil, fmt.Errorf("got unexpected http status code %d when getting %s, response body: %s", resp.StatusCode, url, string(body))
 		}
 		return body, nil
 	}

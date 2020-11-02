@@ -1,0 +1,9 @@
+observer:
+  name: resourcewatcher
+  commands: resourcewatcher-commands.sh
+  from_image:
+    name: resourcewatcher
+    namespace: ocp
+    tag: latest
+  documentation: |-
+    The resourceatcher observer runs in parallel with the test execution and watches resources.

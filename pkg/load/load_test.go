@@ -711,6 +711,7 @@ func TestRegistry(t *testing.T) {
 				Environment: []api.StepParameter{
 					{Name: "TEST_PARAMETER", Default: &defaultStr},
 				},
+				Observers: []string{"resourcewatcher"},
 			},
 			"ipi-install-rbac": {
 				As:       "ipi-install-rbac",
@@ -776,6 +777,15 @@ func TestRegistry(t *testing.T) {
 				Post: []api.TestStep{{
 					Chain: &deprovisionChain,
 				}},
+				Observers: &api.Observers{Disable: []string{"resourcewatcher"}},
+			},
+		}
+
+		expectedObservers = registry.ObserverByName{
+			"resourcewatcher": {
+				Name:      "resourcewatcher",
+				FromImage: &api.ImageStreamTagReference{Namespace: "ocp", Name: "resourcewatcher", Tag: "latest"},
+				Commands:  "#!/bin/bash\n\nsleep 300",
 			},
 		}
 
@@ -786,6 +796,7 @@ func TestRegistry(t *testing.T) {
 			references    registry.ReferenceByName
 			chains        registry.ChainByName
 			workflows     registry.WorkflowByName
+			observers     registry.ObserverByName
 			expectedError bool
 		}{{
 			name:          "Read registry",
@@ -794,16 +805,28 @@ func TestRegistry(t *testing.T) {
 			references:    expectedReferences,
 			chains:        expectedChains,
 			workflows:     expectedWorkflows,
+			observers:     expectedObservers,
 			expectedError: false,
 		}, {
 			name:         "Read configmap style registry",
 			registryDir:  "../../test/multistage-registry/configmap",
 			flatRegistry: true,
 			references: registry.ReferenceByName{
-				installRef: expectedReferences[installRef],
+				"ipi-install-install": {
+					As:       "ipi-install-install",
+					From:     "installer",
+					Commands: "openshift-cluster install\n",
+					Resources: api.ResourceRequirements{
+						Requests: api.ResourceList{"cpu": "1000m", "memory": "2Gi"},
+					},
+					Environment: []api.StepParameter{
+						{Name: "TEST_PARAMETER", Default: &defaultStr},
+					},
+				},
 			},
 			chains:        registry.ChainByName{},
 			workflows:     registry.WorkflowByName{},
+			observers:     registry.ObserverByName{},
 			expectedError: false,
 		}, {
 			name:          "Read registry with ref where name and filename don't match",
@@ -825,7 +848,7 @@ func TestRegistry(t *testing.T) {
 	)
 
 	for _, testCase := range testCases {
-		references, chains, workflows, _, _, err := Registry(testCase.registryDir, testCase.flatRegistry)
+		references, chains, workflows, _, _, observers, err := Registry(testCase.registryDir, testCase.flatRegistry)
 		if err == nil && testCase.expectedError == true {
 			t.Errorf("%s: got no error when error was expected", testCase.name)
 		}
@@ -840,6 +863,9 @@ func TestRegistry(t *testing.T) {
 		}
 		if !reflect.DeepEqual(workflows, testCase.workflows) {
 			t.Errorf("%s: output workflows different from expected: %s", testCase.name, diff.ObjectReflectDiff(workflows, testCase.workflows))
+		}
+		if !reflect.DeepEqual(observers, testCase.observers) {
+			t.Errorf("%s: output observers different from expected: %s", testCase.name, diff.ObjectReflectDiff(observers, testCase.observers))
 		}
 	}
 	// set up a temporary directory registry with a broken component
@@ -867,7 +893,7 @@ func TestRegistry(t *testing.T) {
 	if err := ioutil.WriteFile(filepath.Join(path, deprovisionGatherRef), fileData, 0664); err != nil {
 		t.Fatalf("failed to populate temp reference file: %v", err)
 	}
-	_, _, _, _, _, err = Registry(temp, false)
+	_, _, _, _, _, _, err = Registry(temp, false)
 	if err == nil {
 		t.Error("got no error when expecting error on incorrect reference name")
 	}

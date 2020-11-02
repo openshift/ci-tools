@@ -17,12 +17,13 @@ type Resolver interface {
 type ReferenceByName map[string]api.LiteralTestStep
 type ChainByName map[string]api.RegistryChain
 type WorkflowByName map[string]api.MultiStageTestConfiguration
+type ObserverByName map[string]api.Observer
 
 // Validate verifies the internal consistency of steps, chains, and workflows.
 // A superset of this validation is performed later when actual test
 // configurations are resolved.
-func Validate(stepsByName ReferenceByName, chainsByName ChainByName, workflowsByName WorkflowByName) error {
-	reg := registry{stepsByName, chainsByName, workflowsByName}
+func Validate(stepsByName ReferenceByName, chainsByName ChainByName, workflowsByName WorkflowByName, observersByName ObserverByName) error {
+	reg := registry{stepsByName, chainsByName, workflowsByName, observersByName}
 	var ret []error
 	for k := range chainsByName {
 		if _, err := reg.process([]api.TestStep{{Chain: &k}}, sets.NewString(), stackForChain()); err != nil {
@@ -48,13 +49,15 @@ type registry struct {
 	stepsByName     ReferenceByName
 	chainsByName    ChainByName
 	workflowsByName WorkflowByName
+	observersByName ObserverByName
 }
 
-func NewResolver(stepsByName ReferenceByName, chainsByName ChainByName, workflowsByName WorkflowByName) Resolver {
+func NewResolver(stepsByName ReferenceByName, chainsByName ChainByName, workflowsByName WorkflowByName, observersByName ObserverByName) Resolver {
 	return &registry{
 		stepsByName:     stepsByName,
 		chainsByName:    chainsByName,
 		workflowsByName: workflowsByName,
+		observersByName: observersByName,
 	}
 }
 
@@ -113,6 +116,23 @@ func (r *registry) Resolve(name string, config api.MultiStageTestConfiguration) 
 	expandedFlow.Post = append(expandedFlow.Post, post...)
 	resolveErrors = append(resolveErrors, errs...)
 	resolveErrors = append(resolveErrors, stack.records[0].checkUnused(&stack)...)
+
+	observerNames := sets.NewString()
+	for _, step := range append(pre, append(test, post...)...) {
+		observerNames = observerNames.Union(sets.NewString(step.Observers...))
+	}
+	if config.Observers != nil {
+		observerNames = observerNames.Union(sets.NewString(config.Observers.Enable...)).Delete(config.Observers.Disable...)
+	}
+	var observers []api.Observer
+	for _, name := range observerNames.List() {
+		observer, exists := r.observersByName[name]
+		if !exists {
+			resolveErrors = append(resolveErrors, fmt.Errorf("observer %q is referenced but no such observer is configured", name))
+		}
+		observers = append(observers, observer)
+	}
+	expandedFlow.Observers = observers
 	if resolveErrors != nil {
 		return api.MultiStageTestConfigurationLiteral{}, errors.NewAggregate(resolveErrors)
 	}

@@ -38,6 +38,7 @@ const (
 	RefSuffix      = "-ref.yaml"
 	ChainSuffix    = "-chain.yaml"
 	WorkflowSuffix = "-workflow.yaml"
+	ObserverSuffix = "-observer.yaml"
 	CommandsSuffix = "-commands.sh"
 	MetadataSuffix = ".metadata.json"
 )
@@ -156,11 +157,11 @@ func Config(path, unresolvedPath, registryPath string, info *ResolverInfo) (*api
 		return nil, fmt.Errorf("invalid configuration: %w\nvalue:\n%s", err, raw)
 	}
 	if registryPath != "" {
-		refs, chains, workflows, _, _, err := Registry(registryPath, false)
+		refs, chains, workflows, _, _, observers, err := Registry(registryPath, false)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load registry: %w", err)
 		}
-		configSpec, err = registry.ResolveConfig(registry.NewResolver(refs, chains, workflows), configSpec)
+		configSpec, err = registry.ResolveConfig(registry.NewResolver(refs, chains, workflows, observers), configSpec)
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve configuration: %w", err)
 		}
@@ -236,10 +237,11 @@ func literalConfigFromResolver(raw []byte, address string) (*api.ReleaseBuildCon
 
 // Registry takes the path to a registry config directory and returns the full set of references, chains,
 // and workflows that the registry's Resolver needs to resolve a user's MultiStageTestConfiguration
-func Registry(root string, flat bool) (registry.ReferenceByName, registry.ChainByName, registry.WorkflowByName, map[string]string, api.RegistryMetadata, error) {
+func Registry(root string, flat bool) (registry.ReferenceByName, registry.ChainByName, registry.WorkflowByName, map[string]string, api.RegistryMetadata, registry.ObserverByName, error) {
 	references := registry.ReferenceByName{}
 	chains := registry.ChainByName{}
 	workflows := registry.WorkflowByName{}
+	observers := registry.ObserverByName{}
 	documentation := map[string]string{}
 	metadata := api.RegistryMetadata{}
 	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
@@ -270,7 +272,7 @@ func Registry(root string, flat bool) (registry.ReferenceByName, registry.ChainB
 				prefix = strings.ReplaceAll(filepath.Dir(relpath), "/", "-")
 				// Verify that file prefix is correct based on directory path
 				if !strings.HasPrefix(filepath.Base(relpath), prefix) {
-					return fmt.Errorf("ile %s has incorrect prefix. Prefix should be %s", path, prefix)
+					return fmt.Errorf("file %s has incorrect prefix. Prefix should be %s", path, prefix)
 				}
 			}
 			if strings.HasSuffix(path, RefSuffix) {
@@ -321,6 +323,29 @@ func Registry(root string, flat bool) (registry.ReferenceByName, registry.ChainB
 					return fmt.Errorf("failed to load metadata file %s: %w", path, err)
 				}
 				metadata[filepath.Base(data.Path)] = data
+			} else if strings.HasSuffix(path, ObserverSuffix) {
+				var observer api.RegistryObserverConfig
+				err := yaml.UnmarshalStrict(raw, &observer)
+				if err != nil {
+					return fmt.Errorf("failed to load registry file %s: %w", path, err)
+				}
+				if !flat && observer.Observer.Name != prefix {
+					return fmt.Errorf("name of observer in file %s should be %s", path, prefix)
+				}
+				if strings.TrimSuffix(filepath.Base(path), ObserverSuffix) != observer.Observer.Name {
+					return fmt.Errorf("filename %s does not match name of chain; filename should be %s", filepath.Base(path), fmt.Sprint(prefix, ObserverSuffix))
+				}
+				if !flat && observer.Observer.Commands != fmt.Sprintf("%s%s", prefix, CommandsSuffix) {
+					return fmt.Errorf("observer %s has invalid command file path; command should be set to %s", observer.Observer.Name, fmt.Sprintf("%s%s", prefix, CommandsSuffix))
+				}
+				command, err := ioutil.ReadFile(filepath.Join(dir, observer.Observer.Commands))
+				if err != nil {
+					return err
+				}
+				observer.Observer.Commands = string(command)
+				documentation[observer.Observer.Name] = observer.Observer.Documentation
+				observer.Observer.Documentation = ""
+				observers[observer.Observer.Name] = observer.Observer.Observer
 			} else if strings.HasSuffix(path, CommandsSuffix) {
 				// ignore
 			} else {
@@ -330,14 +355,14 @@ func Registry(root string, flat bool) (registry.ReferenceByName, registry.ChainB
 		return nil
 	})
 	if err != nil {
-		return nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, err
 	}
 	// create graph to verify that there are no cycles
 	if _, err = registry.NewGraph(references, chains, workflows); err != nil {
-		return nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, err
 	}
-	err = registry.Validate(references, chains, workflows)
-	return references, chains, workflows, documentation, metadata, err
+	err = registry.Validate(references, chains, workflows, observers)
+	return references, chains, workflows, documentation, metadata, observers, err
 }
 
 func loadReference(bytes []byte, baseDir, prefix string, flat bool) (string, string, api.LiteralTestStep, error) {

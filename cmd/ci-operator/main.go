@@ -306,8 +306,6 @@ type options struct {
 }
 
 func bindOptions(flag *flag.FlagSet) *options {
-	// for backwards compatibility
-	var dry, determinize bool
 	opt := &options{
 		idleCleanupDuration: 1 * time.Hour,
 		cleanupDuration:     12 * time.Hour,
@@ -327,7 +325,6 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.StringVar(&opt.configSpecPath, "config", "", "The configuration file. If not specified the CONFIG_SPEC environment variable or the configresolver will be used.")
 	flag.StringVar(&opt.unresolvedConfigPath, "unresolved-config", "", "The configuration file, before resolution. If not specified the UNRESOLVED_CONFIG environment variable will be used, if set.")
 	flag.Var(&opt.targets, "target", "One or more targets in the configuration to build. Only steps that are required for this target will be run.")
-	flag.BoolVar(&dry, "dry-run", dry, "DEPRECATED: DO NOT USE")
 	flag.BoolVar(&opt.print, "print-graph", opt.print, "Print a directed graph of the build steps and exit. Intended for use with the golang digraph utility.")
 
 	// add to the graph of things we run or create
@@ -354,7 +351,6 @@ func bindOptions(flag *flag.FlagSet) *options {
 	flag.StringVar(&opt.gitRef, "git-ref", "", "Populate the job spec from this local Git reference. If JOB_SPEC is set, the refs field will be overwritten.")
 	flag.BoolVar(&opt.givePrAuthorAccessToNamespace, "give-pr-author-access-to-namespace", true, "Give view access to the temporarily created namespace to the PR author.")
 	flag.StringVar(&opt.impersonateUser, "as", "", "Username to impersonate")
-	flag.BoolVar(&determinize, "determinize-output", false, "DEPRECATED: DO NOT USE")
 
 	// flags needed for the configresolver
 	flag.StringVar(&opt.resolverAddress, "resolver-address", configResolverAddress, "Address of configresolver")

@@ -189,6 +189,11 @@ func getReposForPrivateOrg(releaseRepoPath string, allowlist map[string][]string
 			return nil
 		}
 
+		if i.Org != "openshift" {
+			logrus.WithField("org", i.Org).WithField("repo", i.Repo).Warn("Dropping repo in non-openshift org, this is currently not supported")
+			return nil
+		}
+
 		repos, exist := ret[i.Org]
 		if !exist {
 			repos = sets.NewString()

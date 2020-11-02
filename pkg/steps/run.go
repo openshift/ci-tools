@@ -16,9 +16,10 @@ type message struct {
 	duration        time.Duration
 	err             error
 	additionalTests []*junit.TestCase
+	stepDetails     api.CIOperatorStepWithDependencies
 }
 
-func Run(ctx context.Context, graph []*api.StepNode) (*junit.TestSuites, []error) {
+func Run(ctx context.Context, graph []*api.StepNode) (*junit.TestSuites, []api.CIOperatorStepWithDependencies, []error) {
 	var seen []api.StepLink
 	executionResults := make(chan message)
 	done := make(chan bool)
@@ -43,6 +44,7 @@ func Run(ctx context.Context, graph []*api.StepNode) (*junit.TestSuites, []error
 	}
 	suite := suites.Suites[0]
 	var executionErrors []error
+	var stepDetails []api.CIOperatorStepWithDependencies
 	for {
 		select {
 		case <-ctxDone:
@@ -51,6 +53,7 @@ func Run(ctx context.Context, graph []*api.StepNode) (*junit.TestSuites, []error
 			ctxDone = nil
 		case out := <-executionResults:
 			testCase := &junit.TestCase{Name: out.node.Step.Description(), Duration: out.duration.Seconds()}
+			stepDetails = append(stepDetails, out.stepDetails)
 			if out.err != nil {
 				testCase.FailureOutput = &junit.FailureOutput{Output: out.err.Error()}
 				executionErrors = append(executionErrors, results.ForReason("step_failed").WithError(out.err).Errorf("step %s failed: %v", out.node.Step.Name(), out.err))
@@ -94,7 +97,7 @@ func Run(ctx context.Context, graph []*api.StepNode) (*junit.TestSuites, []error
 			close(executionResults)
 			close(done)
 			suite.Duration = time.Since(start).Seconds()
-			return suites, executionErrors
+			return suites, stepDetails, executionErrors
 		}
 	}
 }
@@ -113,10 +116,20 @@ func runStep(ctx context.Context, node *api.StepNode, out chan<- message) {
 		additionalTests = reporter.SubTests()
 	}
 	duration := time.Since(start)
+	failed := err != nil
+
 	out <- message{
 		node:            node,
 		duration:        duration,
 		err:             err,
 		additionalTests: additionalTests,
+		stepDetails: api.CIOperatorStepWithDependencies{
+			StepName:    node.Step.Name(),
+			Description: node.Step.Description(),
+			StartedAt:   &start,
+			FinishedAt:  func() *time.Time { start.Add(duration); return &start }(),
+			Duration:    &duration,
+			Failed:      &failed,
+		},
 	}
 }

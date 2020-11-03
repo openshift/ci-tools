@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 	"unicode/utf8"
 
 	"github.com/dlclark/regexp2"
@@ -160,12 +161,29 @@ func Tokenise(lexer Lexer, options *TokeniseOptions, text string) ([]Token, erro
 // Rules maps from state to a sequence of Rules.
 type Rules map[string][]Rule
 
+// Rename clones rules then a rule.
+func (r Rules) Rename(old, new string) Rules {
+	r = r.Clone()
+	r[new] = r[old]
+	delete(r, old)
+	return r
+}
+
 // Clone returns a clone of the Rules.
 func (r Rules) Clone() Rules {
 	out := map[string][]Rule{}
 	for key, rules := range r {
 		out[key] = make([]Rule, len(rules))
 		copy(out[key], rules)
+	}
+	return out
+}
+
+// Merge creates a clone of "r" then merges "rules" into the clone.
+func (r Rules) Merge(rules Rules) Rules {
+	out := r.Clone()
+	for k, v := range rules.Clone() {
+		out[k] = v
 	}
 	return out
 }
@@ -376,6 +394,7 @@ func (r *RegexLexer) maybeCompile() (err error) {
 				if err != nil {
 					return fmt.Errorf("failed to compile rule %s.%d: %s", state, i, err)
 				}
+				rule.Regexp.MatchTimeout = time.Millisecond * 250
 			}
 		}
 	}
@@ -410,6 +429,9 @@ func (r *RegexLexer) Tokenise(options *TokeniseOptions, text string) (Iterator, 
 	if options == nil {
 		options = defaultOptions
 	}
+	if options.EnsureLF {
+		text = ensureLF(text)
+	}
 	if !options.Nested && r.config.EnsureNL && !strings.HasSuffix(text, "\n") {
 		text += "\n"
 	}
@@ -436,4 +458,23 @@ func matchRules(text []rune, pos int, rules []*CompiledRule) (int, *CompiledRule
 		}
 	}
 	return 0, &CompiledRule{}, nil
+}
+
+// replace \r and \r\n with \n
+// same as strings.ReplaceAll but more efficient
+func ensureLF(text string) string {
+	buf := make([]byte, len(text))
+	var j int
+	for i := 0; i < len(text); i++ {
+		c := text[i]
+		if c == '\r' {
+			if i < len(text)-1 && text[i+1] == '\n' {
+				continue
+			}
+			c = '\n'
+		}
+		buf[j] = c
+		j++
+	}
+	return string(buf[:j])
 }

@@ -36,7 +36,7 @@ github.com/Microsoft/go-winio
 github.com/Microsoft/go-winio/pkg/guid
 # github.com/Nvveen/Gotty v0.0.0-20120604004816-cd527374f1e5
 github.com/Nvveen/Gotty
-# github.com/alecthomas/chroma v0.7.1
+# github.com/alecthomas/chroma v0.8.2-0.20201103103104-ab61726cdb54
 ## explicit
 github.com/alecthomas/chroma
 github.com/alecthomas/chroma/formatters/html
@@ -67,6 +67,7 @@ github.com/alecthomas/chroma/lexers/v
 github.com/alecthomas/chroma/lexers/w
 github.com/alecthomas/chroma/lexers/x
 github.com/alecthomas/chroma/lexers/y
+github.com/alecthomas/chroma/lexers/z
 github.com/alecthomas/chroma/styles
 # github.com/andygrunwald/go-gerrit v0.0.0-20190120104749-174420ebee6c
 github.com/andygrunwald/go-gerrit
@@ -145,7 +146,7 @@ github.com/danwakefield/fnmatch
 github.com/davecgh/go-spew/spew
 # github.com/dgrijalva/jwt-go v3.2.0+incompatible
 github.com/dgrijalva/jwt-go
-# github.com/dlclark/regexp2 v1.1.6
+# github.com/dlclark/regexp2 v1.2.0
 github.com/dlclark/regexp2
 github.com/dlclark/regexp2/syntax
 # github.com/docker/distribution v2.7.1+incompatible

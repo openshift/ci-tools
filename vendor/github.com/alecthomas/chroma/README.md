@@ -1,4 +1,4 @@
-# Chroma — A general purpose syntax highlighter in pure Go [![Golang Documentation](https://godoc.org/github.com/alecthomas/chroma?status.svg)](https://godoc.org/github.com/alecthomas/chroma) [![Build Status](https://travis-ci.org/alecthomas/chroma.svg)](https://travis-ci.org/alecthomas/chroma) [![Gitter chat](https://badges.gitter.im/alecthomas.svg)](https://gitter.im/alecthomas/Lobby)
+# Chroma — A general purpose syntax highlighter in pure Go [![Golang Documentation](https://godoc.org/github.com/alecthomas/chroma?status.svg)](https://godoc.org/github.com/alecthomas/chroma) [![CircleCI](https://img.shields.io/circleci/project/github/alecthomas/chroma.svg)](https://circleci.com/gh/alecthomas/chroma) [![Go Report Card](https://goreportcard.com/badge/github.com/alecthomas/chroma)](https://goreportcard.com/report/github.com/alecthomas/chroma) [![Slack chat](https://img.shields.io/static/v1?logo=slack&style=flat&label=slack&color=green&message=gophers)](https://gophers.slack.com/messages/CN9DS8YF3)
 
 > **NOTE:** As Chroma has just been released, its API is still in flux. That said, the high-level interface should not change significantly.
 
@@ -183,7 +183,7 @@ following constructor options:
 - `ClassPrefix(prefix)` - prefix each generated CSS class.
 - `TabWidth(width)` - Set the rendered tab width, in characters.
 - `WithLineNumbers()` - Render line numbers (style with `LineNumbers`).
-- `LinkableLineNumbers()` - Make the line numbers linkable.
+- `LinkableLineNumbers()` - Make the line numbers linkable and be a link to themselves.
 - `HighlightLines(ranges)` - Highlight lines in these ranges (style with `LineHighlight`).
 - `LineNumbersInTable()` - Use a table for formatting line numbers and code, rather than spans.
 

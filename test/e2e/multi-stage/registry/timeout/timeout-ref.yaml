@@ -2,7 +2,7 @@ ref:
   as: timeout
   from: os
   commands: timeout-commands.sh
-  active_deadline_seconds: 10
+  active_deadline_seconds: 120
   resources:
     requests:
       cpu: 10m

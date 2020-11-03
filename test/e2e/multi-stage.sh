@@ -27,7 +27,7 @@ os::cmd::expect_success "ci-operator ${namespace} --secret-dir ${PULL_SECRET_DIR
 os::cmd::expect_success "ci-operator ${namespace} --artifact-dir ${BASETMPDIR} --resolver-address http://127.0.0.1:8080 --target without-references --unresolved-config ${suite_dir}/config.yaml"
 os::cmd::expect_success "ci-operator ${namespace} --artifact-dir ${BASETMPDIR} --resolver-address http://127.0.0.1:8080 --target with-references --unresolved-config ${suite_dir}/config.yaml"
 os::cmd::expect_success "ci-operator ${namespace} --artifact-dir ${BASETMPDIR} --resolver-address http://127.0.0.1:8080 --target skip-on-success --unresolved-config ${suite_dir}/config.yaml"
-os::cmd::expect_code_and_text "ci-operator ${namespace} --artifact-dir ${BASETMPDIR} --resolver-address http://127.0.0.1:8080 --target timeout --unresolved-config ${suite_dir}/config.yaml" 1 '"timeout" pod "timeout-timeout" exceeded the configured timeout activeDeadlineSeconds=10: the pod [^ ]* failed after 1[0-5]s \(failed containers: \): DeadlineExceeded Pod was active on the node longer than the specified deadline'
+os::cmd::expect_code_and_text "ci-operator ${namespace} --artifact-dir ${BASETMPDIR} --resolver-address http://127.0.0.1:8080 --target timeout --unresolved-config ${suite_dir}/config.yaml" 1 '"timeout" pod "timeout-timeout" exceeded the configured timeout activeDeadlineSeconds=120: the pod [^ ]* failed after .* \(failed containers: \): DeadlineExceeded Pod was active on the node longer than the specified deadline'
 UNRESOLVED_CONFIG="$( cat "${suite_dir}/config.yaml" )"
 export UNRESOLVED_CONFIG
 os::cmd::expect_success "ci-operator ${namespace} --artifact-dir ${BASETMPDIR} --resolver-address http://127.0.0.1:8080 --target with-references"

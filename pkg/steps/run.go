@@ -16,10 +16,10 @@ type Message struct {
 	duration        time.Duration
 	err             error
 	additionalTests []*junit.TestCase
-	stepDetails     api.CIOperatorStepWithDependencies
+	stepDetails     api.CIOperatorStepDetailsWithSubSteps
 }
 
-func Run(ctx context.Context, graph []*api.StepNode) (*junit.TestSuites, []api.CIOperatorStepWithDependencies, []error) {
+func Run(ctx context.Context, graph []*api.StepNode) (*junit.TestSuites, []api.CIOperatorStepDetailsWithSubSteps, []error) {
 	var seen []api.StepLink
 	executionResults := make(chan Message)
 	done := make(chan bool)
@@ -44,7 +44,7 @@ func Run(ctx context.Context, graph []*api.StepNode) (*junit.TestSuites, []api.C
 	}
 	suite := suites.Suites[0]
 	var executionErrors []error
-	var stepDetails []api.CIOperatorStepWithDependencies
+	var stepDetails []api.CIOperatorStepDetailsWithSubSteps
 	for {
 		select {
 		case <-ctxDone:
@@ -123,13 +123,15 @@ func runStep(ctx context.Context, node *api.StepNode, out chan<- Message) {
 		duration:        duration,
 		err:             err,
 		additionalTests: additionalTests,
-		stepDetails: api.CIOperatorStepWithDependencies{
-			StepName:    node.Step.Name(),
-			Description: node.Step.Description(),
-			StartedAt:   &start,
-			FinishedAt:  func() *time.Time { start.Add(duration); return &start }(),
-			Duration:    &duration,
-			Failed:      &failed,
+		stepDetails: api.CIOperatorStepDetailsWithSubSteps{
+			CIOperatorStepDetails: api.CIOperatorStepDetails{
+				StepName:    node.Step.Name(),
+				Description: node.Step.Description(),
+				StartedAt:   &start,
+				FinishedAt:  func() *time.Time { start.Add(duration); return &start }(),
+				Duration:    &duration,
+				Failed:      &failed,
+			},
 		},
 	}
 }

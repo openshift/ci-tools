@@ -427,7 +427,7 @@ func TestCIOperatorStepGraphMergeFromKeepsAllData(t *testing.T) {
 			for i := 0; i < 100; i++ {
 				t.Run(strconv.Itoa(i), func(t *testing.T) {
 					existinGraphCopy := append(CIOperatorStepGraph{}, tc.existinGraph...)
-					step := CIOperatorStepWithDependencies{}
+					step := CIOperatorStepDetailsWithSubSteps{}
 					fuzz.New().Funcs(func(r *runtime.Object, _ fuzz.Continue) { *r = &corev1.Pod{} }).Fuzz(&step)
 					if len(existinGraphCopy) == 1 {
 						existinGraphCopy[0].StepName = step.StepName

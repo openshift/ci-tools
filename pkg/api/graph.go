@@ -418,12 +418,12 @@ func HasAllLinks(needles, haystack []StepLink) bool {
 	return true
 }
 
-type CIOperatorStepGraph []CIOperatorStepWithDependencies
+type CIOperatorStepGraph []CIOperatorStepDetailsWithSubSteps
 
 // MergeFrom merges to CIOperatorStepGraphs together using StepNames as merge keys.
 // The merging logic will never ovewrwrite data and only set unset fields.
 // Steps that do not exist in the first graph get appended.
-func (graph *CIOperatorStepGraph) MergeFrom(from ...CIOperatorStepWithDependencies) {
+func (graph *CIOperatorStepGraph) MergeFrom(from ...CIOperatorStepDetailsWithSubSteps) {
 	for _, step := range from {
 		var found bool
 		for idx, existing := range *graph {
@@ -440,7 +440,7 @@ func (graph *CIOperatorStepGraph) MergeFrom(from ...CIOperatorStepWithDependenci
 
 }
 
-func mergeSteps(into, from CIOperatorStepWithDependencies) CIOperatorStepWithDependencies {
+func mergeSteps(into, from CIOperatorStepDetailsWithSubSteps) CIOperatorStepDetailsWithSubSteps {
 	if into.Description == "" {
 		into.Description = from.Description
 	}
@@ -468,11 +468,19 @@ func mergeSteps(into, from CIOperatorStepWithDependencies) CIOperatorStepWithDep
 	if into.Failed == nil {
 		into.Failed = from.Failed
 	}
+	if into.SubSteps == nil {
+		into.SubSteps = from.SubSteps
+	}
 
 	return into
 }
 
-type CIOperatorStepWithDependencies struct {
+type CIOperatorStepDetailsWithSubSteps struct {
+	CIOperatorStepDetails `json:",inline"`
+	SubSteps              []CIOperatorStepDetails `json:"substeps,omitempty"`
+}
+
+type CIOperatorStepDetails struct {
 	StepName     string           `json:"name"`
 	Description  string           `json:"description"`
 	Dependencies []string         `json:"dependencies"`

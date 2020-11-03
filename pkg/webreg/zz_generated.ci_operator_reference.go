@@ -257,21 +257,37 @@ const ciOperatorReferenceYaml = "# The list of base images describe\n" +
 	"        # job are tagged from.\n" +
 	"        namespace: ' '\n" +
 	"    resolved_release_images_step:\n" +
+	"        # Candidate describes a candidate release payload\n" +
 	"        candidate:\n" +
+	"            # Architecture is the architecture for the product.\n" +
+	"            # Defaults to amd64.\n" +
 	"            architecture: ' '\n" +
+	"            # Product is the name of the product being released\n" +
 	"            product: ' '\n" +
+	"            # ReleaseStream is the stream from which we pick the latest candidate\n" +
 	"            stream: ' '\n" +
+	"            # Version is the minor version to search for\n" +
 	"            version: ' '\n" +
 	"        name: ' '\n" +
+	"        # Prerelease describes a yet-to-be released payload\n" +
 	"        prerelease:\n" +
+	"            # Architecture is the architecture for the product.\n" +
+	"            # Defaults to amd64.\n" +
 	"            architecture: ' '\n" +
+	"            # Product is the name of the product being released\n" +
 	"            product: ' '\n" +
+	"            # VersionBounds describe the allowable version bounds to search in\n" +
 	"            version_bounds:\n" +
 	"                lower: ' '\n" +
 	"                upper: ' '\n" +
+	"        # Release describes a released payload\n" +
 	"        release:\n" +
+	"            # Architecture is the architecture for the release.\n" +
+	"            # Defaults to amd64.\n" +
 	"            architecture: ' '\n" +
+	"            # Channel is the release channel to search in\n" +
 	"            channel: ' '\n" +
+	"            # Version is the minor version to search for\n" +
 	"            version: ' '\n" +
 	"    rpm_image_injection_step:\n" +
 	"        from: ' '\n" +

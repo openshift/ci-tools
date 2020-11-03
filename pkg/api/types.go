@@ -358,8 +358,8 @@ type ReleaseTagConfiguration struct {
 // that was set at startup. This will be cleaner when we refactor
 // release dependencies.
 type ReleaseConfiguration struct {
-	Name string `json:"name"`
-	UnresolvedRelease
+	Name              string `json:"name"`
+	UnresolvedRelease `json:",inline"`
 }
 
 // PromotionConfiguration describes where images created by this
@@ -620,7 +620,7 @@ type LiteralTestStep struct {
 	// when the command finishes. Defaults to "/tmp/artifacts"
 	ArtifactDir string `json:"artifact_dir,omitempty"`
 	// Resources defines the resource requirements for the step.
-	Resources ResourceRequirements `json:"resources,omitempty"`
+	Resources ResourceRequirements `json:"resources"`
 	// TerminationGracePeriodSeconds is passed directly through to the step's Pod.
 	TerminationGracePeriodSeconds *int64 `json:"termination_grace_period_seconds,omitempty"`
 	// Credentials defines the credentials we'll mount into this step.

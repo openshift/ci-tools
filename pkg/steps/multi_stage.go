@@ -6,15 +6,18 @@ import (
 	"log"
 	"path/filepath"
 	"strings"
+	"time"
 
 	coreapi "k8s.io/api/core/v1"
 	rbacapi "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/runtime"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	rbacclientset "k8s.io/client-go/kubernetes/typed/rbac/v1"
+	utilpointer "k8s.io/utils/pointer"
 
 	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 
@@ -72,6 +75,7 @@ type multiStageTestStep struct {
 	jobSpec            *api.JobSpec
 	pre, test, post    []api.LiteralTestStep
 	subTests           []*junit.TestCase
+	subSteps           []api.CIOperatorStepDetails
 	allowSkipOnSuccess *bool
 }
 
@@ -624,6 +628,7 @@ func (s *multiStageTestStep) runPods(ctx context.Context, pods []coreapi.Pod, sh
 }
 
 func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notifier *TestCaseNotifier) error {
+	start := time.Now()
 	if _, err := createOrRestartPod(s.podClient.Pods(s.jobSpec.Namespace()), pod); err != nil {
 		return fmt.Errorf("failed to create or restart %q pod: %w", pod.Name, err)
 	}
@@ -631,6 +636,19 @@ func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notif
 	if newPod != nil {
 		pod = newPod
 	}
+	finished := time.Now()
+	duration := finished.Sub(start)
+	s.subSteps = append(s.subSteps, api.CIOperatorStepDetails{
+		StepName:    pod.Name,
+		Description: fmt.Sprintf("Run pod %s", pod.Name),
+		StartedAt:   &start,
+		FinishedAt:  &finished,
+		Duration:    &duration,
+		Failed:      utilpointer.BoolPtr(err != nil),
+		CIOperatorStepInfo: api.CIOperatorStepInfo{
+			Manifests: []runtime.Object{pod},
+		},
+	})
 	s.subTests = append(s.subTests, notifier.SubTests(fmt.Sprintf("%s - %s ", s.Description(), pod.Name))...)
 	if err != nil {
 		linksText := strings.Builder{}
@@ -649,6 +667,10 @@ func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notif
 		return fmt.Errorf("%q pod %q %s: %w\n%s", s.name, pod.Name, status, err, linksText.String())
 	}
 	return nil
+}
+
+func (s *multiStageTestStep) SubSteps() []api.CIOperatorStepDetails {
+	return s.subSteps
 }
 
 func deletePods(client coreclientset.PodInterface, test string) error {

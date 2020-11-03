@@ -108,6 +108,10 @@ type subtestReporter interface {
 	SubTests() []*junit.TestCase
 }
 
+type subStepReporter interface {
+	SubSteps() []api.CIOperatorStepDetails
+}
+
 func runStep(ctx context.Context, node *api.StepNode, out chan<- Message) {
 	start := time.Now()
 	err := node.Step.Run(ctx)
@@ -121,6 +125,12 @@ func runStep(ctx context.Context, node *api.StepNode, out chan<- Message) {
 	var stepInfo api.CIOperatorStepInfo
 	if x, ok := node.Step.(interface{ StepInfo() api.CIOperatorStepInfo }); ok {
 		stepInfo = x.StepInfo()
+	}
+
+	// TODO: Make this part of the subtestReporter interface
+	var subSteps []api.CIOperatorStepDetails
+	if x, ok := node.Step.(subStepReporter); ok {
+		subSteps = x.SubSteps()
 	}
 	duration := time.Since(start)
 	failed := err != nil
@@ -140,6 +150,7 @@ func runStep(ctx context.Context, node *api.StepNode, out chan<- Message) {
 				Failed:             &failed,
 				CIOperatorStepInfo: stepInfo,
 			},
+			SubSteps: subSteps,
 		},
 	}
 }

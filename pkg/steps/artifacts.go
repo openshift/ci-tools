@@ -58,8 +58,6 @@ type ContainerNotifier interface {
 	Complete(podName string)
 	// Done returns a channel that can be used to wait for the specified pod name to complete the work it has pending.
 	Done(podName string) <-chan struct{}
-	// Cancel indicates that any actions the notifier is taking should be aborted immediately.
-	Cancel()
 }
 
 // NopNotifier takes no action when notified.
@@ -74,7 +72,6 @@ func (nopNotifier) Done(string) <-chan struct{} {
 	close(ret)
 	return ret
 }
-func (nopNotifier) Cancel() {}
 
 // TestCaseNotifier allows a caller to generate per container JUnit test
 // reports that provide better granularity for debugging problems when
@@ -101,7 +98,6 @@ func (n *TestCaseNotifier) Notify(pod *coreapi.Pod, containerName string) {
 
 func (n *TestCaseNotifier) Complete(podName string)             { n.nested.Complete(podName) }
 func (n *TestCaseNotifier) Done(podName string) <-chan struct{} { return n.nested.Done(podName) }
-func (n *TestCaseNotifier) Cancel()                             { n.nested.Cancel() }
 
 // SubTests returns one junit test for each terminated container with a name
 // in the annotation 'ci-operator.openshift.io/container-sub-tests' in the pod.
@@ -427,7 +423,7 @@ type ArtifactWorker struct {
 	hasArtifacts sets.String
 }
 
-func NewArtifactWorker(podClient PodClient, artifactDir, namespace string) *ArtifactWorker {
+func NewArtifactWorker(podClient PodClient, artifactDir, namespace string, ctx context.Context) *ArtifactWorker {
 	// stream artifacts in the background
 	w := &ArtifactWorker{
 		podClient: podClient,
@@ -440,6 +436,10 @@ func NewArtifactWorker(podClient PodClient, artifactDir, namespace string) *Arti
 
 		podsToDownload: make(chan string, 4),
 	}
+	go func() {
+		<-ctx.Done()
+		w.cancel()
+	}()
 	go w.run()
 	return w
 }
@@ -540,7 +540,7 @@ func (w *ArtifactWorker) Complete(podName string) {
 	}
 }
 
-func (w *ArtifactWorker) Cancel() {
+func (w *ArtifactWorker) cancel() {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 	for podName := range w.remaining {

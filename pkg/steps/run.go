@@ -115,6 +115,13 @@ func runStep(ctx context.Context, node *api.StepNode, out chan<- Message) {
 	if reporter, ok := node.Step.(subtestReporter); ok {
 		additionalTests = reporter.SubTests()
 	}
+
+	// TODO: Implement this for all steps and make it a mandatory part of the
+	// Step interface
+	var stepInfo api.CIOperatorStepInfo
+	if x, ok := node.Step.(interface{ StepInfo() api.CIOperatorStepInfo }); ok {
+		stepInfo = x.StepInfo()
+	}
 	duration := time.Since(start)
 	failed := err != nil
 
@@ -125,12 +132,13 @@ func runStep(ctx context.Context, node *api.StepNode, out chan<- Message) {
 		additionalTests: additionalTests,
 		stepDetails: api.CIOperatorStepDetailsWithSubSteps{
 			CIOperatorStepDetails: api.CIOperatorStepDetails{
-				StepName:    node.Step.Name(),
-				Description: node.Step.Description(),
-				StartedAt:   &start,
-				FinishedAt:  func() *time.Time { start.Add(duration); return &start }(),
-				Duration:    &duration,
-				Failed:      &failed,
+				StepName:           node.Step.Name(),
+				Description:        node.Step.Description(),
+				StartedAt:          &start,
+				FinishedAt:         func() *time.Time { start.Add(duration); return &start }(),
+				Duration:           &duration,
+				Failed:             &failed,
+				CIOperatorStepInfo: stepInfo,
 			},
 		},
 	}

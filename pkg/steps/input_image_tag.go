@@ -31,6 +31,7 @@ type inputImageTagStep struct {
 	config  api.InputImageTagStepConfiguration
 	client  imageclientset.ImageV1Interface
 	jobSpec *api.JobSpec
+	info    api.CIOperatorStepInfo
 
 	imageName string
 }
@@ -78,8 +79,10 @@ func (s *inputImageTagStep) run(ctx context.Context) error {
 			},
 		},
 	}
+	s.info.Manifests = append(s.info.Manifests, ist)
 
-	if _, err := s.client.ImageStreamTags(s.jobSpec.Namespace()).Create(context.TODO(), ist, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
+	ist, err := s.client.ImageStreamTags(s.jobSpec.Namespace()).Create(context.TODO(), ist, metav1.CreateOptions{})
+	if err != nil && !errors.IsAlreadyExists(err) {
 		return fmt.Errorf("failed to create imagestreamtag for input image: %w", err)
 	}
 	// Wait image is ready
@@ -100,6 +103,10 @@ func (s *inputImageTagStep) run(ctx context.Context) error {
 		return err
 	}
 	return nil
+}
+
+func (s *inputImageTagStep) StepInfo() api.CIOperatorStepInfo {
+	return s.info
 }
 
 func istObjectReference(client imageclientset.ImageV1Interface, reference api.ImageStreamTagReference) (coreapi.ObjectReference, error) {

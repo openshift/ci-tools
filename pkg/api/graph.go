@@ -481,15 +481,19 @@ type CIOperatorStepDetailsWithSubSteps struct {
 }
 
 type CIOperatorStepDetails struct {
-	StepName     string           `json:"name"`
-	Description  string           `json:"description"`
-	Dependencies []string         `json:"dependencies"`
-	StartedAt    *time.Time       `json:"started_at"`
-	FinishedAt   *time.Time       `json:"finished_at"`
-	Duration     *time.Duration   `json:"duration,omitempty"`
-	Manifests    []runtime.Object `json:"manifests"`
-	LogURL       string           `json:"log_url,omitempty"`
-	Failed       *bool            `json:"failed,omitempty"`
+	StepName           string         `json:"name"`
+	Description        string         `json:"description"`
+	Dependencies       []string       `json:"dependencies"`
+	StartedAt          *time.Time     `json:"started_at"`
+	FinishedAt         *time.Time     `json:"finished_at"`
+	Duration           *time.Duration `json:"duration,omitempty"`
+	LogURL             string         `json:"log_url,omitempty"`
+	Failed             *bool          `json:"failed,omitempty"`
+	CIOperatorStepInfo `json:",inline"`
+}
+
+type CIOperatorStepInfo struct {
+	Manifests []runtime.Object `json:"manifests"`
 }
 
 const CIOperatorStepGraphJSONFilename = "ci-operator-step-graph.json"

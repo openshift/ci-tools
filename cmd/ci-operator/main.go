@@ -688,13 +688,22 @@ func runStep(ctx context.Context, step api.Step) (api.CIOperatorStepDetailsWithS
 	duration := time.Since(start)
 	failed := err != nil
 
+	// TODO: Implement this for all steps and make it a mandatory part of the
+	// Step interface
+	var stepInfo api.CIOperatorStepInfo
+	if x, ok := step.(interface{ StepInfo() api.CIOperatorStepInfo }); ok {
+		stepInfo = x.StepInfo()
+	}
 	return api.CIOperatorStepDetailsWithSubSteps{
-		StepName:    step.Name(),
-		Description: step.Description(),
-		StartedAt:   &start,
-		FinishedAt:  func() *time.Time { start.Add(duration); return &start }(),
-		Duration:    &duration,
-		Failed:      &failed,
+		CIOperatorStepDetails: api.CIOperatorStepDetails{
+			StepName:           step.Name(),
+			Description:        step.Description(),
+			StartedAt:          &start,
+			FinishedAt:         func() *time.Time { start.Add(duration); return &start }(),
+			Duration:           &duration,
+			Failed:             &failed,
+			CIOperatorStepInfo: stepInfo,
+		},
 	}, err
 }
 
@@ -1520,7 +1529,9 @@ func printExecutionOrder(nodes []*api.StepNode) error {
 func calculateGraph(nodes []*api.StepNode) *api.CIOperatorStepGraph {
 	var result api.CIOperatorStepGraph
 	api.IterateAllEdges(nodes, func(n *api.StepNode) {
-		r := api.CIOperatorStepDetailsWithSubSteps{StepName: n.Step.Name(), Description: n.Step.Description()}
+		r := api.CIOperatorStepDetailsWithSubSteps{
+			CIOperatorStepDetails: api.CIOperatorStepDetails{StepName: n.Step.Name(), Description: n.Step.Description()},
+		}
 		for _, requirement := range n.Step.Requires() {
 			api.IterateAllEdges(nodes, func(inner *api.StepNode) {
 				if api.HasAnyLinks([]api.StepLink{requirement}, inner.Step.Creates()) {

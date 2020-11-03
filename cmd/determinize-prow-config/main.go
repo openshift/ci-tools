@@ -3,15 +3,18 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
+	"sort"
 
 	"github.com/sirupsen/logrus"
 
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	prowconfig "k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/plugins"
 	"sigs.k8s.io/yaml"
@@ -61,12 +64,108 @@ func updateProwConfig(configDir string) error {
 	if err := agent.Start(configPath, ""); err != nil {
 		return fmt.Errorf("could not load Prow configuration: %w", err)
 	}
-	data, err := yaml.Marshal(agent.Config())
+
+	config := agent.Config()
+	var err error
+	config.Tide.Queries, err = deduplicateTideQueries(config.Tide.Queries)
+	if err != nil {
+		return fmt.Errorf("failed to deduplicate Tide queries: %w", err)
+	}
+
+	data, err := yaml.Marshal(config)
 	if err != nil {
 		return fmt.Errorf("could not marshal Prow configuration: %w", err)
 	}
 
 	return ioutil.WriteFile(configPath, data, 0644)
+}
+
+type tideQueryConfig struct {
+	Author                 string
+	ExcludedBranches       []string
+	IncludedBranches       []string
+	Labels                 []string
+	MissingLabels          []string
+	Milestone              string
+	ReviewApprovedRequired bool
+}
+
+type tideQueryTarget struct {
+	Orgs          []string
+	Repos         []string
+	ExcludedRepos []string
+}
+
+// tideQueryMap is a map[tideQueryConfig]*tideQueryTarget. Because slices are not comparable, they
+// or structs containing them are not allowed as map keys. We sidestep this by using a json serialization
+// of the object as key instead. This is horribly inefficient, but will never be able to beat the
+// inefficiency of our Python validation scripts.
+type tideQueryMap map[string]*tideQueryTarget
+
+func (tm tideQueryMap) queries() (prowconfig.TideQueries, error) {
+	var result prowconfig.TideQueries
+	for k, v := range tm {
+		var queryConfig tideQueryConfig
+		if err := json.Unmarshal([]byte(k), &queryConfig); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal %q: %w", k, err)
+		}
+		result = append(result, prowconfig.TideQuery{
+			Orgs:                   v.Orgs,
+			Repos:                  v.Repos,
+			ExcludedRepos:          v.ExcludedRepos,
+			Author:                 queryConfig.Author,
+			ExcludedBranches:       queryConfig.ExcludedBranches,
+			IncludedBranches:       queryConfig.IncludedBranches,
+			Labels:                 queryConfig.Labels,
+			MissingLabels:          queryConfig.MissingLabels,
+			Milestone:              queryConfig.Milestone,
+			ReviewApprovedRequired: queryConfig.ReviewApprovedRequired,
+		})
+
+	}
+	var errs []error
+	sort.SliceStable(result, func(i, j int) bool {
+		iSerialized, err := json.Marshal(result[i])
+		if err != nil {
+			errs = append(errs, fmt.Errorf("failed to marshal %+v: %w", result[i], err))
+		}
+		jSerialized, err := json.Marshal(result[j])
+		if err != nil {
+			errs = append(errs, fmt.Errorf("failed to marshal %+v: %w", result[j], err))
+		}
+		return string(iSerialized) < string(jSerialized)
+	})
+
+	return result, utilerrors.NewAggregate(errs)
+}
+
+func deduplicateTideQueries(queries prowconfig.TideQueries) (prowconfig.TideQueries, error) {
+	m := tideQueryMap{}
+	for _, query := range queries {
+		key := tideQueryConfig{
+			Author:                 query.Author,
+			ExcludedBranches:       query.ExcludedBranches,
+			IncludedBranches:       query.IncludedBranches,
+			Labels:                 query.Labels,
+			MissingLabels:          query.MissingLabels,
+			Milestone:              query.Milestone,
+			ReviewApprovedRequired: query.ReviewApprovedRequired,
+		}
+		keyRaw, err := json.Marshal(key)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal %+v: %w", key, err)
+		}
+		val, ok := m[string(keyRaw)]
+		if !ok {
+			val = &tideQueryTarget{}
+			m[string(keyRaw)] = val
+		}
+		val.Orgs = append(val.Orgs, query.Orgs...)
+		val.Repos = append(val.Repos, query.Repos...)
+		val.ExcludedRepos = append(val.ExcludedRepos, query.ExcludedRepos...)
+	}
+
+	return m.queries()
 }
 
 func updatePluginConfig(configDir string) error {

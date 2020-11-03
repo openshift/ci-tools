@@ -23,7 +23,7 @@ replace (
 require (
 	cloud.google.com/go/storage v1.10.0
 	github.com/GoogleCloudPlatform/testgrid v0.0.13
-	github.com/alecthomas/chroma v0.7.1
+	github.com/alecthomas/chroma v0.8.2-0.20201103103104-ab61726cdb54
 	github.com/andygrunwald/go-jira v1.12.0
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/coreydaley-redhat/osgoimports v0.0.0-20201029204054-eab74506eec3

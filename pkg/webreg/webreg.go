@@ -7,7 +7,6 @@ import (
 	"html/template"
 	"net/http"
 	"path"
-	"regexp"
 	"strings"
 	"time"
 
@@ -707,8 +706,6 @@ func WebRegHandler(regAgent agents.RegistryAgent, confAgent agents.ConfigAgent) 
 	}
 }
 
-var codeLineRegex = regexp.MustCompile(`id="line(\d+)">(\s*)\d+\s*`)
-
 func syntax(source string, lexer chroma.Lexer) (string, error) {
 	var output bytes.Buffer
 	style := styles.Get("dracula")
@@ -726,10 +723,7 @@ func syntax(source string, lexer chroma.Lexer) (string, error) {
 	if err := formatter.Format(&output, style, iterator); err != nil {
 		return "", err
 	}
-
-	// Make the line numbers clickable and return a link to themselves
-	output.WriteString("<style> a.code {outline: none; text-decoration:none; color:inherit;}</style>")
-	return codeLineRegex.ReplaceAllString(output.String(), "id=\"line$1\"><a class=\"code\" href=\"#line$1\">$2$1</a>\n"), nil
+	return output.String(), nil
 }
 
 func syntaxYAML(source string) (string, error) {

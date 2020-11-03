@@ -22,6 +22,9 @@ func ClassPrefix(prefix string) Option { return func(f *Formatter) { f.prefix = 
 // WithClasses emits HTML using CSS classes, rather than inline styles.
 func WithClasses(b bool) Option { return func(f *Formatter) { f.Classes = b } }
 
+// WithAllClasses disables an optimisation that omits redundant CSS classes.
+func WithAllClasses(b bool) Option { return func(f *Formatter) { f.allClasses = b } }
+
 // TabWidth sets the number of characters for a tab. Defaults to 8.
 func TabWidth(width int) Option { return func(f *Formatter) { f.tabWidth = width } }
 
@@ -141,6 +144,7 @@ type Formatter struct {
 	standalone          bool
 	prefix              string
 	Classes             bool // Exported field to detect when classes are being used
+	allClasses          bool
 	preWrapper          PreWrapper
 	tabWidth            int
 	lineNumbers         bool
@@ -188,7 +192,7 @@ func (f *Formatter) writeHTML(w io.Writer, style *chroma.Style, tokens []chroma.
 	wrapInTable := f.lineNumbers && f.lineNumbersInTable
 
 	lines := chroma.SplitTokensIntoLines(tokens)
-	lineDigits := len(fmt.Sprintf("%d", len(lines)))
+	lineDigits := len(fmt.Sprintf("%d", f.baseLineNumber+len(lines)-1))
 	highlightIndex := 0
 
 	if wrapInTable {
@@ -207,7 +211,7 @@ func (f *Formatter) writeHTML(w io.Writer, style *chroma.Style, tokens []chroma.
 				fmt.Fprintf(w, "<span%s>", f.styleAttr(css, chroma.LineHighlight))
 			}
 
-			fmt.Fprintf(w, "<span%s%s>%*d\n</span>", f.styleAttr(css, chroma.LineNumbersTable), f.lineIDAttribute(line), lineDigits, line)
+			fmt.Fprintf(w, "<span%s%s>%s\n</span>", f.styleAttr(css, chroma.LineNumbersTable), f.lineIDAttribute(line), f.lineTitleWithLinkIfNeeded(lineDigits, line))
 
 			if highlight {
 				fmt.Fprintf(w, "</span>")
@@ -233,7 +237,7 @@ func (f *Formatter) writeHTML(w io.Writer, style *chroma.Style, tokens []chroma.
 		}
 
 		if f.lineNumbers && !wrapInTable {
-			fmt.Fprintf(w, "<span%s%s>%*d</span>", f.styleAttr(css, chroma.LineNumbers), f.lineIDAttribute(line), lineDigits, line)
+			fmt.Fprintf(w, "<span%s%s>%s</span>", f.styleAttr(css, chroma.LineNumbers), f.lineIDAttribute(line), f.lineTitleWithLinkIfNeeded(lineDigits, line))
 		}
 
 		for _, token := range tokens {
@@ -268,7 +272,19 @@ func (f *Formatter) lineIDAttribute(line int) string {
 	if !f.linkableLineNumbers {
 		return ""
 	}
-	return fmt.Sprintf(" id=\"%s%d\"", f.lineNumbersIDPrefix, line)
+	return fmt.Sprintf(" id=\"%s\"", f.lineID(line))
+}
+
+func (f *Formatter) lineTitleWithLinkIfNeeded(lineDigits, line int) string {
+	title := fmt.Sprintf("%*d", lineDigits, line)
+	if !f.linkableLineNumbers {
+		return title
+	}
+	return fmt.Sprintf("<a style=\"outline: none; text-decoration:none; color:inherit\" href=\"#%s\">%s</a>", f.lineID(line), title)
+}
+
+func (f *Formatter) lineID(line int) string {
+	return fmt.Sprintf("%s%d", f.lineNumbersIDPrefix, line)
 }
 
 func (f *Formatter) shouldHighlight(highlightIndex, line int) (bool, bool) {
@@ -362,8 +378,12 @@ func (f *Formatter) WriteCSS(w io.Writer, style *chroma.Style) error {
 		if tt == chroma.Background {
 			continue
 		}
+		class := f.class(tt)
+		if class == "" {
+			continue
+		}
 		styles := css[tt]
-		if _, err := fmt.Fprintf(w, "/* %s */ .%schroma .%s { %s }\n", tt, f.prefix, f.class(tt), styles); err != nil {
+		if _, err := fmt.Fprintf(w, "/* %s */ .%schroma .%s { %s }\n", tt, f.prefix, class, styles); err != nil {
 			return err
 		}
 	}
@@ -379,7 +399,7 @@ func (f *Formatter) styleToCSS(style *chroma.Style) map[chroma.TokenType]string 
 		if t != chroma.Background {
 			entry = entry.Sub(bg)
 		}
-		if entry.IsZero() {
+		if !f.allClasses && entry.IsZero() {
 			continue
 		}
 		classes[t] = StyleEntryToCSS(entry)

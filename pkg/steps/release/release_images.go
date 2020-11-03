@@ -134,10 +134,10 @@ func (s *releaseImagesTagStep) run(ctx context.Context) error {
 	if raw, ok := is.ObjectMeta.Annotations[releaseConfigAnnotation]; ok {
 		newIS.ObjectMeta.Annotations[releaseConfigAnnotation] = raw
 	}
-	for _, tag := range is.Spec.Tags {
-		if valid, _ := utils.FindStatusTag(is, tag.Name); valid != nil {
+	for _, tag := range is.Status.Tags {
+		if valid, _ := utils.FindStatusTag(is, tag.Tag); valid != nil {
 			newIS.Spec.Tags = append(newIS.Spec.Tags, imageapi.TagReference{
-				Name:            tag.Name,
+				Name:            tag.Tag,
 				From:            valid,
 				ReferencePolicy: imageapi.TagReferencePolicy{Type: imageapi.LocalTagReferencePolicy},
 			})

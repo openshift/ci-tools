@@ -47,9 +47,6 @@ func FromConfig(
 	cloneAuthConfig *steps.CloneAuthConfig,
 	pullSecret, pushSecret *coreapi.Secret,
 ) ([]api.Step, []api.Step, error) {
-	var buildSteps []api.Step
-	var postSteps []api.Step
-
 	requiredNames := sets.NewString()
 	for _, target := range requiredTargets {
 		requiredNames.Insert(target)
@@ -89,7 +86,7 @@ func FromConfig(
 	params.Add("JOB_NAME_HASH", func() (string, error) { return jobSpec.JobNameHash(), nil })
 	params.Add("JOB_NAME_SAFE", func() (string, error) { return strings.Replace(jobSpec.Job, "_", "-", -1), nil })
 	params.Add("NAMESPACE", func() (string, error) { return jobSpec.Namespace(), nil })
-
+	var overridableSteps, buildSteps, postSteps []api.Step
 	var imageStepLinks []api.StepLink
 	var hasReleaseStep bool
 	rawSteps, err := stepConfigsForBuild(config, jobSpec, ioutil.ReadFile)
@@ -106,8 +103,38 @@ func FromConfig(
 			addProvidesForStep(steps[0], params)
 			continue
 		}
+		if resolveConfig := rawStep.ResolvedReleaseImagesStepConfiguration; resolveConfig != nil {
+			// we need to expose the release step as 'step' so that it's in the
+			// graph and can be targeted with '--target', but we can't let it get
+			// removed via env-var, since release steps are apparently not subject
+			// to that mechanism ...
+			//
+			// this is a disgusting hack but the simplest implementation until we
+			// factor release steps into something more reusable
+			hasReleaseStep = true
+			value := os.Getenv(utils.ReleaseImageEnv(resolveConfig.Name))
+			if value != "" {
+				log.Printf("Using explicitly provided pull-spec for release %s (%s)", resolveConfig.Name, value)
+			} else {
+				switch {
+				case resolveConfig.Candidate != nil:
+					value, err = candidate.ResolvePullSpec(*resolveConfig.Candidate)
+				case resolveConfig.Release != nil:
+					value, err = official.ResolvePullSpec(*resolveConfig.Release)
+				case resolveConfig.Prerelease != nil:
+					value, err = prerelease.ResolvePullSpec(*resolveConfig.Prerelease)
+				}
+				if err != nil {
+					return nil, nil, results.ForReason("resolving_release").ForError(fmt.Errorf("failed to resolve release %s: %w", resolveConfig.Name, err))
+				}
+				log.Printf("Resolved release %s to %s", resolveConfig.Name, value)
+			}
+			step := release.ImportReleaseStep(resolveConfig.Name, value, false, config.Resources, podClient, client, artifactDir, jobSpec, pullSecret)
+			buildSteps = append(buildSteps, step)
+			addProvidesForStep(step, params)
+			continue
+		}
 		var step api.Step
-		var isReleaseStep bool
 		var stepLinks []api.StepLink
 		if rawStep.InputImageTagStepConfiguration != nil {
 			step = steps.InputImageTagStep(*rawStep.InputImageTagStepConfiguration, client, jobSpec)
@@ -158,51 +185,17 @@ func FromConfig(
 				} else {
 					releaseStep = release.AssembleReleaseStep(name, rawStep.ReleaseImagesTagStepConfiguration, config.Resources, podClient, client, artifactDir, jobSpec)
 				}
-				buildSteps = append(buildSteps, releaseStep)
-			}
-		} else if rawStep.ResolvedReleaseImagesStepConfiguration != nil {
-			// this is a disgusting hack but the simplest implementation until we
-			// factor release steps into something more reusable
-			hasReleaseStep = true
-			// we need to expose the release step as 'step' so that it's in the
-			// graph and can be targeted with '--target', but we can't let it get
-			// removed via env-var, since release steps are apparently not subject
-			// to that mechanism ...
-			isReleaseStep = true
-
-			var value string
-			resolveConfig := rawStep.ResolvedReleaseImagesStepConfiguration
-			envVar := utils.ReleaseImageEnv(resolveConfig.Name)
-			if current := os.Getenv(envVar); current != "" {
-				value = current
-				log.Printf("Using explicitly provided pull-spec for release %s (%s)", resolveConfig.Name, value)
-			} else {
-				var err error
-				switch {
-				case resolveConfig.Candidate != nil:
-					value, err = candidate.ResolvePullSpec(*resolveConfig.Candidate)
-				case resolveConfig.Release != nil:
-					value, err = official.ResolvePullSpec(*resolveConfig.Release)
-				case resolveConfig.Prerelease != nil:
-					value, err = prerelease.ResolvePullSpec(*resolveConfig.Prerelease)
-				}
-				if err != nil {
-					return nil, nil, results.ForReason("resolving_release").ForError(fmt.Errorf("failed to resolve release %s: %w", resolveConfig.Name, err))
-				}
-				log.Printf("Resolved release %s to %s", resolveConfig.Name, value)
-			}
-
-			step = release.ImportReleaseStep(resolveConfig.Name, value, false, config.Resources, podClient, client, artifactDir, jobSpec, pullSecret)
-		}
-		if !isReleaseStep {
-			step, ok := checkForFullyQualifiedStep(step, params)
-			if ok {
-				log.Printf("Task %s is satisfied by environment variables and will be skipped", step.Name())
-			} else {
-				imageStepLinks = append(imageStepLinks, stepLinks...)
+				overridableSteps = append(overridableSteps, releaseStep)
+				addProvidesForStep(releaseStep, params)
 			}
 		}
-		buildSteps = append(buildSteps, step)
+		step, ok := checkForFullyQualifiedStep(step, params)
+		if ok {
+			log.Printf("Task %s is satisfied by environment variables and will be skipped", step.Name())
+		} else {
+			imageStepLinks = append(imageStepLinks, stepLinks...)
+		}
+		overridableSteps = append(overridableSteps, step)
 	}
 
 	for _, template := range templates {
@@ -229,21 +222,24 @@ func FromConfig(
 			}
 		}
 		buildSteps = append(buildSteps, step)
+		addProvidesForStep(step, params)
 	}
 
 	if len(paramFile) > 0 {
-		buildSteps = append(buildSteps, steps.WriteParametersStep(params, paramFile))
+		step := steps.WriteParametersStep(params, paramFile)
+		buildSteps = append(buildSteps, step)
+		addProvidesForStep(step, params)
 	}
 
 	if !hasReleaseStep {
-		buildSteps = append(buildSteps, release.StableImagesTagStep(client, jobSpec))
-	}
-
-	buildSteps = append(buildSteps, steps.ImagesReadyStep(imageStepLinks))
-
-	for _, step := range buildSteps {
+		step := release.StableImagesTagStep(client, jobSpec)
+		buildSteps = append(buildSteps, step)
 		addProvidesForStep(step, params)
 	}
+
+	step := steps.ImagesReadyStep(imageStepLinks)
+	buildSteps = append(buildSteps, step)
+	addProvidesForStep(step, params)
 
 	if promote {
 		cfg, err := promotionDefaults(config)
@@ -253,7 +249,7 @@ func FromConfig(
 		postSteps = append(postSteps, release.PromotionStep(*cfg, config.Images, requiredNames, client, client, jobSpec, podClient, pushSecret))
 	}
 
-	return buildSteps, postSteps, nil
+	return append(overridableSteps, buildSteps...), postSteps, nil
 }
 
 // stepForTest creates the appropriate step for each test type.

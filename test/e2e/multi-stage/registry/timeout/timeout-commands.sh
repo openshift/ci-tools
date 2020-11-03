@@ -1,3 +1,3 @@
 #!/bin/sh
 
-exec sleep 60
+exec sleep 360

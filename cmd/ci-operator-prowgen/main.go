@@ -94,7 +94,7 @@ func readProwgenConfig(path string) (*config.Prowgen, error) {
 // appropriate location, and either stored a pointer to the parsed config if if was
 // successfully read, or stored `nil` when the prowgen config could not be read (usually
 // because the drop-in is not there).
-func generateJobsToDir(dir string, label jc.ProwgenLabel) func(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *config.Info) error {
+func generateJobsToDir(dir string) func(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *config.Info) error {
 	// Return a closure so the cache is shared among callback calls
 	cache := map[string]*config.Prowgen{}
 	return func(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *config.Info) error {
@@ -125,7 +125,7 @@ func generateJobsToDir(dir string, label jc.ProwgenLabel) func(configSpec *ciope
 			pInfo.Config = *repoConfig
 		}
 
-		return jc.WriteToDir(dir, info.Org, info.Repo, prowgen.GenerateJobs(configSpec, pInfo, label))
+		return jc.WriteToDir(dir, info.Org, info.Repo, prowgen.GenerateJobs(configSpec, pInfo))
 	}
 }
 
@@ -137,65 +137,9 @@ func getReleaseRepoDir(directory string) (string, error) {
 	return "", fmt.Errorf("%s is not an existing directory", tentative)
 }
 
-func isStale(job prowconfig.JobBase) bool {
-	genLabel, generated := job.Labels[jc.ProwJobLabelGenerated]
-	return generated && genLabel != string(jc.New)
-}
-
-func prune(jobConfig *prowconfig.JobConfig) *prowconfig.JobConfig {
-	var pruned prowconfig.JobConfig
-
-	for repo, jobs := range jobConfig.PresubmitsStatic {
-		for _, job := range jobs {
-			if isStale(job.JobBase) {
-				continue
-			}
-
-			if prowgen.IsGenerated(job.JobBase) {
-				job.Labels[jc.ProwJobLabelGenerated] = string(jc.Generated)
-			}
-
-			if pruned.PresubmitsStatic == nil {
-				pruned.PresubmitsStatic = map[string][]prowconfig.Presubmit{}
-			}
-
-			pruned.PresubmitsStatic[repo] = append(pruned.PresubmitsStatic[repo], job)
-		}
-	}
-
-	for repo, jobs := range jobConfig.PostsubmitsStatic {
-		for _, job := range jobs {
-			if isStale(job.JobBase) {
-				continue
-			}
-			if prowgen.IsGenerated(job.JobBase) {
-				job.Labels[jc.ProwJobLabelGenerated] = string(jc.Generated)
-			}
-			if pruned.PostsubmitsStatic == nil {
-				pruned.PostsubmitsStatic = map[string][]prowconfig.Postsubmit{}
-			}
-
-			pruned.PostsubmitsStatic[repo] = append(pruned.PostsubmitsStatic[repo], job)
-		}
-	}
-
-	for _, job := range jobConfig.Periodics {
-		if isStale(job.JobBase) {
-			continue
-		}
-		if prowgen.IsGenerated(job.JobBase) {
-			job.Labels[jc.ProwJobLabelGenerated] = string(jc.Generated)
-		}
-
-		pruned.Periodics = append(pruned.Periodics, job)
-	}
-
-	return &pruned
-}
-
 func pruneStaleJobs(jobDir, subDir string) error {
 	if err := jc.OperateOnJobConfigSubdir(jobDir, subDir, func(jobConfig *prowconfig.JobConfig, info *jc.Info) error {
-		pruned := prune(jobConfig)
+		pruned := prowgen.Prune(jobConfig)
 
 		if len(pruned.PresubmitsStatic) == 0 && len(pruned.PostsubmitsStatic) == 0 && len(pruned.Periodics) == 0 {
 			if err := os.Remove(info.Filename); err != nil && !os.IsNotExist(err) {
@@ -235,7 +179,7 @@ func main() {
 	if len(args) == 0 {
 		args = append(args, "")
 	}
-	genJobs := generateJobsToDir(opt.toDir, jc.New)
+	genJobs := generateJobsToDir(opt.toDir)
 	for _, subDir := range args {
 		if err := config.OperateOnCIOperatorConfigSubdir(opt.fromDir, subDir, genJobs); err != nil {
 			fields := logrus.Fields{"target": opt.toDir, "source": opt.fromDir, "subdir": subDir}

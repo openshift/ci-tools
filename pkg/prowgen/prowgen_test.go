@@ -6,12 +6,14 @@ import (
 	"log"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+
 	corev1 "k8s.io/api/core/v1"
 	prowconfig "k8s.io/test-infra/prow/config"
 
 	ciop "github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/config"
-	"github.com/openshift/ci-tools/pkg/jobconfig"
 	"github.com/openshift/ci-tools/pkg/testhelper"
 )
 
@@ -195,7 +197,7 @@ func TestGeneratePresubmitForTest(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.description, func(t *testing.T) {
 			// podSpec tested in generatePodSpec
-			testhelper.CompareWithFixture(t, generatePresubmitForTest(tc.test, tc.repoInfo, jobconfig.Generated, nil, nil, tc.jobRelease, !tc.clone))
+			testhelper.CompareWithFixture(t, generatePresubmitForTest(tc.test, tc.repoInfo, nil, nil, tc.jobRelease, !tc.clone))
 		})
 	}
 }
@@ -235,7 +237,7 @@ func TestGeneratePeriodicForTest(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.description, func(t *testing.T) {
 			// podSpec tested in generatePodSpec
-			testhelper.CompareWithFixture(t, generatePeriodicForTest(tc.test, tc.repoInfo, jobconfig.Generated, nil, true, "@yearly", nil, tc.jobRelease, !tc.clone))
+			testhelper.CompareWithFixture(t, generatePeriodicForTest(tc.test, tc.repoInfo, nil, true, "@yearly", nil, tc.jobRelease, !tc.clone))
 		})
 	}
 }
@@ -285,7 +287,7 @@ func TestGeneratePostSubmitForTest(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			// podSpec tested in generatePodSpec
-			testhelper.CompareWithFixture(t, generatePostsubmitForTest(tc.name, tc.repoInfo, jobconfig.Generated, nil, nil, tc.jobRelease, !tc.clone))
+			testhelper.CompareWithFixture(t, generatePostsubmitForTest(tc.name, tc.repoInfo, nil, nil, tc.jobRelease, !tc.clone))
 		})
 	}
 }
@@ -438,7 +440,7 @@ func TestGenerateJobs(t *testing.T) {
 	log.SetOutput(ioutil.Discard)
 	for _, tc := range tests {
 		t.Run(tc.id, func(t *testing.T) {
-			jobConfig := GenerateJobs(tc.config, tc.repoInfo, jobconfig.Generated)
+			jobConfig := GenerateJobs(tc.config, tc.repoInfo)
 			if !tc.keep {
 				pruneForTests(jobConfig) // prune the fields that are tested in TestGeneratePre/PostsubmitForTest
 			}
@@ -454,7 +456,6 @@ func TestGenerateJobBase(t *testing.T) {
 		name        string
 		prefix      string
 		info        *ProwgenInfo
-		label       jobconfig.ProwgenLabel
 		podSpec     *corev1.PodSpec
 		rehearsable bool
 		pathAlias   *string
@@ -465,7 +466,6 @@ func TestGenerateJobBase(t *testing.T) {
 			name:     "test",
 			prefix:   "pull",
 			info:     &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
-			label:    jobconfig.Generated,
 			podSpec:  &corev1.PodSpec{Containers: []corev1.Container{{Name: "test"}}},
 		},
 		{
@@ -473,7 +473,6 @@ func TestGenerateJobBase(t *testing.T) {
 			name:        "test",
 			prefix:      "pull",
 			info:        &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"}},
-			label:       jobconfig.Generated,
 			podSpec:     &corev1.PodSpec{Containers: []corev1.Container{{Name: "test"}}},
 			rehearsable: true,
 		},
@@ -482,7 +481,6 @@ func TestGenerateJobBase(t *testing.T) {
 			name:     "test",
 			prefix:   "pull",
 			info:     &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch", Variant: "whatever"}},
-			label:    jobconfig.Generated,
 			podSpec:  &corev1.PodSpec{Containers: []corev1.Container{{Name: "test"}}},
 		},
 		{
@@ -490,7 +488,6 @@ func TestGenerateJobBase(t *testing.T) {
 			name:      "test",
 			prefix:    "pull",
 			info:      &ProwgenInfo{Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch", Variant: "whatever"}},
-			label:     jobconfig.Generated,
 			podSpec:   &corev1.PodSpec{Containers: []corev1.Container{{Name: "test"}}},
 			pathAlias: &path,
 		},
@@ -502,7 +499,6 @@ func TestGenerateJobBase(t *testing.T) {
 				Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
 				Config:   config.Prowgen{Private: true},
 			},
-			label:   jobconfig.Generated,
 			podSpec: &corev1.PodSpec{Containers: []corev1.Container{{Name: "test"}}},
 		},
 		{
@@ -513,7 +509,6 @@ func TestGenerateJobBase(t *testing.T) {
 				Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
 				Config:   config.Prowgen{Private: true, Expose: true},
 			},
-			label:   jobconfig.Generated,
 			podSpec: &corev1.PodSpec{Containers: []corev1.Container{{Name: "test"}}},
 		},
 		{
@@ -524,7 +519,6 @@ func TestGenerateJobBase(t *testing.T) {
 				Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
 				Config:   config.Prowgen{Private: false, Expose: true},
 			},
-			label:   jobconfig.Generated,
 			podSpec: &corev1.PodSpec{Containers: []corev1.Container{{Name: "test"}}},
 		},
 		{
@@ -535,7 +529,6 @@ func TestGenerateJobBase(t *testing.T) {
 				Metadata: ciop.Metadata{Org: "org", Repo: "repo", Branch: "branch"},
 				Config:   config.Prowgen{Private: false, Expose: true},
 			},
-			label:   jobconfig.Generated,
 			podSpec: &corev1.PodSpec{Containers: []corev1.Container{{Name: "test"}}},
 			clone:   true,
 		},
@@ -543,7 +536,7 @@ func TestGenerateJobBase(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.testName, func(t *testing.T) {
-			testhelper.CompareWithFixture(t, generateJobBase(testCase.name, testCase.prefix, testCase.info, testCase.label, testCase.podSpec, testCase.rehearsable, testCase.pathAlias, "", !testCase.clone))
+			testhelper.CompareWithFixture(t, generateJobBase(testCase.name, testCase.prefix, testCase.info, testCase.podSpec, testCase.rehearsable, testCase.pathAlias, "", !testCase.clone))
 		})
 	}
 }
@@ -586,7 +579,7 @@ func TestIsGenerated(t *testing.T) {
 		},
 		{
 			description: "job with the generated label is generated",
-			labels:      map[string]string{jobconfig.ProwJobLabelGenerated: "any-value"},
+			labels:      map[string]string{prowJobLabelGenerated: "any-value"},
 			expected:    true,
 		},
 	}
@@ -595,6 +588,98 @@ func TestIsGenerated(t *testing.T) {
 		t.Run(tc.description, func(t *testing.T) {
 			if generated := IsGenerated(prowconfig.JobBase{Labels: tc.labels}); generated != tc.expected {
 				t.Errorf("%s: expected %t, got %t", tc.description, tc.expected, generated)
+			}
+		})
+	}
+}
+
+var unexportedFields = []cmp.Option{
+	cmpopts.IgnoreUnexported(prowconfig.Presubmit{}),
+	cmpopts.IgnoreUnexported(prowconfig.Periodic{}),
+	cmpopts.IgnoreUnexported(prowconfig.Brancher{}),
+	cmpopts.IgnoreUnexported(prowconfig.RegexpChangeMatcher{}),
+}
+
+func TestPruneStaleJobs(t *testing.T) {
+	testCases := []struct {
+		name           string
+		jobconfig      *prowconfig.JobConfig
+		expectedPruned bool
+	}{
+		{
+			name: "stale generated presubmit is pruned",
+			jobconfig: &prowconfig.JobConfig{
+				PresubmitsStatic: map[string][]prowconfig.Presubmit{
+					"repo": {{JobBase: prowconfig.JobBase{Labels: map[string]string{prowJobLabelGenerated: string(generated)}}}},
+				},
+			},
+			expectedPruned: true,
+		},
+		{
+			name: "stale generated postsubmit is pruned",
+			jobconfig: &prowconfig.JobConfig{
+				PostsubmitsStatic: map[string][]prowconfig.Postsubmit{
+					"repo": {{JobBase: prowconfig.JobBase{Labels: map[string]string{prowJobLabelGenerated: string(generated)}}}},
+				},
+			},
+			expectedPruned: true,
+		},
+		{
+			name: "not stale generated presubmit is kept",
+			jobconfig: &prowconfig.JobConfig{
+				PresubmitsStatic: map[string][]prowconfig.Presubmit{
+					"repo": {{JobBase: prowconfig.JobBase{Labels: map[string]string{prowJobLabelGenerated: string(newlyGenerated)}}}},
+				},
+			},
+			expectedPruned: false,
+		},
+		{
+			name: "not stale generated postsubmit is kept",
+			jobconfig: &prowconfig.JobConfig{
+				PostsubmitsStatic: map[string][]prowconfig.Postsubmit{
+					"repo": {{JobBase: prowconfig.JobBase{Labels: map[string]string{prowJobLabelGenerated: string(newlyGenerated)}}}},
+				},
+			},
+			expectedPruned: false,
+		},
+		{
+			name: "not generated presubmit is kept",
+			jobconfig: &prowconfig.JobConfig{
+				PresubmitsStatic: map[string][]prowconfig.Presubmit{
+					"repo": {{JobBase: prowconfig.JobBase{Name: "job"}}},
+				},
+			},
+			expectedPruned: false,
+		},
+		{
+			name: "not generated postsubmit is kept",
+			jobconfig: &prowconfig.JobConfig{
+				PostsubmitsStatic: map[string][]prowconfig.Postsubmit{
+					"repo": {{JobBase: prowconfig.JobBase{Name: "job"}}},
+				},
+			},
+			expectedPruned: false,
+		},
+		{
+			name: "periodics are kept",
+			jobconfig: &prowconfig.JobConfig{
+				Periodics: []prowconfig.Periodic{{JobBase: prowconfig.JobBase{Name: "job"}}},
+			},
+			expectedPruned: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Expect either unchanged or empty JobConfig
+			expected := tc.jobconfig
+			if tc.expectedPruned {
+				expected = &prowconfig.JobConfig{}
+			}
+
+			pruned := Prune(tc.jobconfig)
+			if diff := cmp.Diff(expected, pruned, unexportedFields...); diff != "" {
+				t.Errorf("Pruned config differs:\n%s", diff)
 			}
 		})
 	}

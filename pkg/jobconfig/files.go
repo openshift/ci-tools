@@ -19,19 +19,15 @@ import (
 	cioperatorapi "github.com/openshift/ci-tools/pkg/api"
 )
 
-type ProwgenLabel string
-
 const (
-	ProwJobLabelGenerated              = "ci-operator.openshift.io/prowgen-controlled"
-	CanBeRehearsedLabel                = "pj-rehearse.openshift.io/can-be-rehearsed"
-	SSHBastionLabel                    = "dptp.openshift.io/ssh-bastion"
-	ProwJobLabelVariant                = "ci-operator.openshift.io/variant"
-	JobReleaseKey                      = "job-release"
-	Generated             ProwgenLabel = "true"
-	New                   ProwgenLabel = "newly-generated"
-	PresubmitPrefix                    = "pull"
-	PostsubmitPrefix                   = "branch"
-	PeriodicPrefix                     = "periodic"
+	CanBeRehearsedLabel = "pj-rehearse.openshift.io/can-be-rehearsed"
+	CanBeRehearsedValue = "true"
+	SSHBastionLabel     = "dptp.openshift.io/ssh-bastion"
+	ProwJobLabelVariant = "ci-operator.openshift.io/variant"
+	JobReleaseKey       = "job-release"
+	PresubmitPrefix     = "pull"
+	PostsubmitPrefix    = "branch"
+	PeriodicPrefix      = "periodic"
 )
 
 // DataWithInfo describes the metadata for a Prow job configuration file

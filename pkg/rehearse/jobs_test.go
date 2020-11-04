@@ -1127,16 +1127,16 @@ func TestVariantFromLabels(t *testing.T) {
 		input:    map[string]string{},
 		expected: "",
 	}, {
-		name: "generated label",
+		name: "unrelated label",
 		input: map[string]string{
-			jobconfig.ProwJobLabelGenerated: "true",
+			"unrelated-label": "true",
 		},
 		expected: "",
 	}, {
 		name: "generated and variant labels",
 		input: map[string]string{
-			jobconfig.ProwJobLabelGenerated: "true",
-			jobconfig.ProwJobLabelVariant:   "v2",
+			"unrelated-label":             "true",
+			jobconfig.ProwJobLabelVariant: "v2",
 		},
 		expected: "v2",
 	}}

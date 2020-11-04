@@ -23,7 +23,7 @@ import (
 
 var testArtifactsContainer = coreapi.Container{
 	Name:  "artifacts",
-	Image: "busybox",
+	Image: "quay.io/prometheus/busybox:latest",
 	VolumeMounts: []coreapi.VolumeMount{
 		{Name: "artifacts", MountPath: "/tmp/artifacts"},
 	},

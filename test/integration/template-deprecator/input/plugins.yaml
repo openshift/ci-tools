@@ -1,0 +1,7 @@
+config_updater:
+  maps:
+    ci-operator/templates/template.yaml:
+      clusters:
+        app.ci:
+        - ci
+      name: testing-template

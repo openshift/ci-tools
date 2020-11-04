@@ -570,3 +570,32 @@ func pruneForTests(jobConfig *prowconfig.JobConfig) {
 		}
 	}
 }
+
+func TestIsGenerated(t *testing.T) {
+	testCases := []struct {
+		description string
+		labels      map[string]string
+		expected    bool
+	}{
+		{
+			description: "job without any labels is not generated",
+		},
+		{
+			description: "job without the generated label is not generated",
+			labels:      map[string]string{"some-label": "some-value"},
+		},
+		{
+			description: "job with the generated label is generated",
+			labels:      map[string]string{jobconfig.ProwJobLabelGenerated: "any-value"},
+			expected:    true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			if generated := IsGenerated(prowconfig.JobBase{Labels: tc.labels}); generated != tc.expected {
+				t.Errorf("%s: expected %t, got %t", tc.description, tc.expected, generated)
+			}
+		})
+	}
+}

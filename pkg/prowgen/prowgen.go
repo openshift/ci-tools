@@ -568,3 +568,8 @@ func makeBranchExplicit(branch string) string {
 	}
 	return fmt.Sprintf("^%s$", regexp.QuoteMeta(branch))
 }
+
+func IsGenerated(job prowconfig.JobBase) bool {
+	_, generated := job.Labels[jc.ProwJobLabelGenerated]
+	return generated
+}

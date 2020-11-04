@@ -1,0 +1,12 @@
+templates:
+  testing-template:
+    template_name: testing-template
+    unknown_blocker:
+      description: unknown
+      jobs:
+        periodic-job-1:
+          generated: false
+          kind: periodic
+        periodic-job-2:
+          generated: false
+          kind: periodic

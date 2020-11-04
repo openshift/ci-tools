@@ -1,0 +1,55 @@
+periodics:
+- agent: kubernetes
+  cluster: api.ci
+  decorate: true
+  interval: 4h
+  labels:
+    job-release: "4.8"
+  name: periodic-job-1
+  spec:
+    containers:
+    - args:
+      - do-stuff
+      command:
+      - ci-operator
+      image: ci-operator:latest
+      imagePullPolicy: Always
+      name: ""
+      resources:
+        requests:
+          cpu: 10m
+      volumeMounts:
+      - mountPath: /usr/local/e2e-aws
+        name: job-definition
+    serviceAccountName: ci-operator
+    volumes:
+    - configMap:
+        name: testing-template
+      name: job-definition
+- agent: kubernetes
+  cluster: api.ci
+  decorate: true
+  interval: 4h
+  labels:
+    job-release: "4.8"
+  name: periodic-job-2
+  spec:
+    containers:
+    - args:
+      - do-stuff
+      command:
+      - ci-operator
+      image: ci-operator:latest
+      imagePullPolicy: Always
+      name: ""
+      resources:
+        requests:
+          cpu: 10m
+      volumeMounts:
+      - mountPath: /usr/local/e2e-aws
+        name: job-definition
+    serviceAccountName: ci-operator
+    volumes:
+    - configMap:
+        name: testing-template
+      name: job-definition

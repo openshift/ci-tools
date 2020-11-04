@@ -26,6 +26,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/jobconfig"
+	"github.com/openshift/ci-tools/pkg/prowgen"
 	"github.com/openshift/ci-tools/pkg/rehearse"
 	"github.com/openshift/ci-tools/pkg/slack/events"
 )
@@ -195,19 +196,19 @@ func contextFor(logger *logrus.Entry, infos []jobInfo, config JobGetter, gcsClie
 		if job.presubmit != nil {
 			spec = pjutil.PresubmitSpec(*job.presubmit, prowapi.Refs{})
 			options = job.presubmit.DecorationConfig.GCSConfiguration
-			_, generated = job.presubmit.Labels[jobconfig.ProwJobLabelGenerated]
+			generated = prowgen.IsGenerated(job.presubmit.JobBase)
 			job.metadata.Variant = rehearse.VariantFromLabels(job.presubmit.Labels)
 			prefix = jobconfig.PresubmitPrefix
 		} else if job.postsubmit != nil {
 			spec = pjutil.PostsubmitSpec(*job.postsubmit, prowapi.Refs{})
 			options = job.postsubmit.DecorationConfig.GCSConfiguration
-			_, generated = job.postsubmit.Labels[jobconfig.ProwJobLabelGenerated]
+			generated = prowgen.IsGenerated(job.postsubmit.JobBase)
 			job.metadata.Variant = rehearse.VariantFromLabels(job.postsubmit.Labels)
 			prefix = jobconfig.PostsubmitPrefix
 		} else if job.periodic != nil {
 			spec = pjutil.PeriodicSpec(*job.periodic)
 			options = job.periodic.DecorationConfig.GCSConfiguration
-			_, generated = job.periodic.Labels[jobconfig.ProwJobLabelGenerated]
+			generated = prowgen.IsGenerated(job.periodic.JobBase)
 			job.metadata.Variant = rehearse.VariantFromLabels(job.periodic.Labels)
 			prefix = jobconfig.PeriodicPrefix
 		} else {

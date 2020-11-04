@@ -13,6 +13,7 @@ import (
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	rbacclientset "k8s.io/client-go/kubernetes/typed/rbac/v1"
 	"k8s.io/client-go/rest"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
 	templateapi "github.com/openshift/api/template/v1"
@@ -72,8 +73,14 @@ func FromConfig(
 	var saGetter coreclientset.ServiceAccountsGetter
 	var namespaceClient coreclientset.NamespaceInterface
 	var eventClient coreclientset.EventsGetter
+	var client ctrlruntimeclient.Client
 
 	if clusterConfig != nil {
+		var err error
+		client, err = ctrlruntimeclient.New(clusterConfig, ctrlruntimeclient.Options{})
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to construct client: %w", err)
+		}
 		buildGetter, err := buildclientset.NewForConfig(clusterConfig)
 		if err != nil {
 			return nil, nil, fmt.Errorf("could not get build client for cluster config: %w", err)
@@ -150,17 +157,17 @@ func FromConfig(
 		var additional []api.Step
 		var stepLinks []api.StepLink
 		if rawStep.InputImageTagStepConfiguration != nil {
-			step = steps.InputImageTagStep(*rawStep.InputImageTagStepConfiguration, imageClient, jobSpec)
+			step = steps.InputImageTagStep(*rawStep.InputImageTagStepConfiguration, client, jobSpec)
 		} else if rawStep.PipelineImageCacheStepConfiguration != nil {
-			step = steps.PipelineImageCacheStep(*rawStep.PipelineImageCacheStepConfiguration, config.Resources, buildClient, imageClient, artifactDir, jobSpec, pullSecret)
+			step = steps.PipelineImageCacheStep(*rawStep.PipelineImageCacheStepConfiguration, config.Resources, buildClient, client, artifactDir, jobSpec, pullSecret)
 		} else if rawStep.SourceStepConfiguration != nil {
-			step = steps.SourceStep(*rawStep.SourceStepConfiguration, config.Resources, buildClient, imageClient, artifactDir, jobSpec, cloneAuthConfig, pullSecret)
+			step = steps.SourceStep(*rawStep.SourceStepConfiguration, config.Resources, buildClient, client, artifactDir, jobSpec, cloneAuthConfig, pullSecret)
 		} else if rawStep.BundleSourceStepConfiguration != nil {
-			step = steps.BundleSourceStep(*rawStep.BundleSourceStepConfiguration, config, config.Resources, buildClient, imageClient, imageClient, artifactDir, jobSpec, pullSecret)
+			step = steps.BundleSourceStep(*rawStep.BundleSourceStepConfiguration, config, config.Resources, buildClient, client, artifactDir, jobSpec, pullSecret)
 		} else if rawStep.IndexGeneratorStepConfiguration != nil {
-			step = steps.IndexGeneratorStep(*rawStep.IndexGeneratorStepConfiguration, config, config.Resources, buildClient, imageClient, imageClient, artifactDir, jobSpec, pullSecret)
+			step = steps.IndexGeneratorStep(*rawStep.IndexGeneratorStepConfiguration, config, config.Resources, buildClient, client, artifactDir, jobSpec, pullSecret)
 		} else if rawStep.ProjectDirectoryImageBuildStepConfiguration != nil {
-			step = steps.ProjectDirectoryImageBuildStep(*rawStep.ProjectDirectoryImageBuildStepConfiguration, config.Resources, buildClient, imageClient, imageClient, artifactDir, jobSpec, pullSecret)
+			step = steps.ProjectDirectoryImageBuildStep(*rawStep.ProjectDirectoryImageBuildStepConfiguration, config.Resources, buildClient, client, artifactDir, jobSpec, pullSecret)
 		} else if rawStep.ProjectDirectoryImageBuildInputs != nil {
 			step = steps.GitSourceStep(*rawStep.ProjectDirectoryImageBuildInputs, config.Resources, buildClient, imageClient, artifactDir, jobSpec, cloneAuthConfig, pullSecret)
 		} else if rawStep.RPMImageInjectionStepConfiguration != nil {
@@ -168,7 +175,7 @@ func FromConfig(
 		} else if rawStep.RPMServeStepConfiguration != nil {
 			step = steps.RPMServerStep(*rawStep.RPMServeStepConfiguration, deploymentGetter, routeGetter, serviceGetter, imageClient, jobSpec)
 		} else if rawStep.OutputImageTagStepConfiguration != nil {
-			step = steps.OutputImageTagStep(*rawStep.OutputImageTagStepConfiguration, imageClient, imageClient, jobSpec)
+			step = steps.OutputImageTagStep(*rawStep.OutputImageTagStepConfiguration, client, jobSpec)
 			// all required or non-optional output images are considered part of [images]
 			if requiredNames.Has(string(rawStep.OutputImageTagStepConfiguration.From)) || !rawStep.OutputImageTagStepConfiguration.Optional {
 				stepLinks = append(stepLinks, step.Creates()...)
@@ -194,9 +201,9 @@ func FromConfig(
 						return nil, nil, results.ForReason("reading_release").ForError(fmt.Errorf("failed to read input release pullSpec %s: %w", name, err))
 					}
 					log.Printf("Resolved release %s to %s", name, pullSpec)
-					releaseStep = release.ImportReleaseStep(name, pullSpec, true, config.Resources, podClient, eventClient, imageClient, saGetter, rbacClient, artifactDir, jobSpec, pullSecret)
+					releaseStep = release.ImportReleaseStep(name, pullSpec, true, config.Resources, podClient, eventClient, client, artifactDir, jobSpec, pullSecret)
 				} else {
-					releaseStep = release.AssembleReleaseStep(name, rawStep.ReleaseImagesTagStepConfiguration, config.Resources, podClient, eventClient, imageClient, saGetter, rbacClient, artifactDir, jobSpec)
+					releaseStep = release.AssembleReleaseStep(name, rawStep.ReleaseImagesTagStepConfiguration, config.Resources, podClient, eventClient, client, artifactDir, jobSpec)
 				}
 				buildSteps = append(buildSteps, releaseStep)
 			}
@@ -232,10 +239,10 @@ func FromConfig(
 				log.Printf("Resolved release %s to %s", resolveConfig.Name, value)
 			}
 
-			step = release.ImportReleaseStep(resolveConfig.Name, value, false, config.Resources, podClient, eventClient, imageClient, saGetter, rbacClient, artifactDir, jobSpec, pullSecret)
+			step = release.ImportReleaseStep(resolveConfig.Name, value, false, config.Resources, podClient, eventClient, client, artifactDir, jobSpec, pullSecret)
 		} else if testStep := rawStep.TestStepConfiguration; testStep != nil {
 			if test := testStep.MultiStageTestConfigurationLiteral; test != nil {
-				step = steps.MultiStageTestStep(*testStep, config, params, podClient, eventClient, secretGetter, saGetter, rbacClient, imageClient, artifactDir, jobSpec)
+				step = steps.MultiStageTestStep(*testStep, config, params, podClient, eventClient, secretGetter, saGetter, rbacClient, client, artifactDir, jobSpec)
 				if test.ClusterProfile != "" {
 					leases := []api.StepLease{{
 						ResourceType: test.ClusterProfile.LeaseType(),
@@ -249,7 +256,7 @@ func FromConfig(
 							BaseImage: *subStep.FromImage,
 							To:        link,
 						}
-						additional = append(additional, steps.InputImageTagStep(config, imageClient, jobSpec))
+						additional = append(additional, steps.InputImageTagStep(config, client, jobSpec))
 					}
 				}
 			} else if test := testStep.OpenshiftInstallerClusterTestConfiguration; test != nil {

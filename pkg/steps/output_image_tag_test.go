@@ -2,18 +2,28 @@ package steps
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
-	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/diff"
+	"k8s.io/client-go/kubernetes/scheme"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	imagev1 "github.com/openshift/api/image/v1"
-	fakeimageclientset "github.com/openshift/client-go/image/clientset/versioned/fake"
 
 	"github.com/openshift/ci-tools/pkg/api"
 )
+
+func init() {
+	if err := imagev1.AddToScheme(scheme.Scheme); err != nil {
+		panic(fmt.Sprintf("failed to add imagev1 to scheme: %v", err))
+	}
+}
 
 func TestOutputImageStep(t *testing.T) {
 	config := api.OutputImageTagStepConfiguration{
@@ -44,12 +54,12 @@ func TestOutputImageStep(t *testing.T) {
 	}
 
 	pipelineRoot := &imagev1.ImageStreamTag{
-		ObjectMeta: meta.ObjectMeta{Name: "pipeline:root", Namespace: jobspec.Namespace()},
-		Image:      imagev1.Image{ObjectMeta: meta.ObjectMeta{Name: "fromImageName"}},
+		ObjectMeta: metav1.ObjectMeta{Name: "pipeline:root", Namespace: jobspec.Namespace()},
+		Image:      imagev1.Image{ObjectMeta: metav1.ObjectMeta{Name: "fromImageName"}},
 	}
 
 	outputImageStream := &imagev1.ImageStream{
-		ObjectMeta: meta.ObjectMeta{Name: config.To.Name, Namespace: config.To.Namespace},
+		ObjectMeta: metav1.ObjectMeta{Name: config.To.Name, Namespace: config.To.Namespace},
 		Status: imagev1.ImageStreamStatus{
 			PublicDockerImageRepository: "uri://somewhere",
 			Tags: []imagev1.NamedTagEventList{{
@@ -61,7 +71,7 @@ func TestOutputImageStep(t *testing.T) {
 		},
 	}
 	outputImageStreamTag := &imagev1.ImageStreamTag{
-		ObjectMeta: meta.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Name:      "configToName:configToTag",
 			Namespace: "configToNamespace",
 		},
@@ -76,19 +86,16 @@ func TestOutputImageStep(t *testing.T) {
 	}
 
 	tests := []struct {
-		name            string
-		imageStreams    []*imagev1.ImageStream
-		imageStreamTags []*imagev1.ImageStreamTag
+		name  string
+		input []runtime.Object
 
 		execSpecification      executionExpectation
 		expectedImageStreamTag *imagev1.ImageStreamTag
 	}{
 		{
 			name: "image stream exists and creates new image stream",
-			imageStreams: []*imagev1.ImageStream{
+			input: []runtime.Object{
 				outputImageStream,
-			},
-			imageStreamTags: []*imagev1.ImageStreamTag{
 				pipelineRoot,
 			},
 			expectedImageStreamTag: outputImageStreamTag,
@@ -100,10 +107,8 @@ func TestOutputImageStep(t *testing.T) {
 		},
 		{
 			name: "image stream and desired image stream tag exists",
-			imageStreams: []*imagev1.ImageStream{
+			input: []runtime.Object{
 				outputImageStream,
-			},
-			imageStreamTags: []*imagev1.ImageStreamTag{
 				pipelineRoot,
 				outputImageStreamTag,
 			},
@@ -118,39 +123,26 @@ func TestOutputImageStep(t *testing.T) {
 		},
 	}
 
+	ctx := context.Background()
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			fakecs := ciopTestingClient{
-				kubecs:  nil,
-				imagecs: fakeimageclientset.NewSimpleClientset(),
-				t:       t,
-			}
+			client := fakectrlruntimeclient.NewFakeClient(tt.input...)
 
-			client := fakecs.imagecs.ImageV1()
-
-			for _, is := range tt.imageStreams {
-				if _, err := client.ImageStreams(is.Namespace).Create(context.TODO(), is, meta.CreateOptions{}); err != nil {
-					t.Errorf("Could not set up testing ImageStream: %v", err)
-				}
-			}
-
-			for _, ist := range tt.imageStreamTags {
-				if _, err := client.ImageStreamTags(ist.Namespace).Create(context.TODO(), ist, meta.CreateOptions{}); err != nil {
-					t.Errorf("Could not set up testing ImageStreamTag: %v", err)
-				}
-			}
-
-			oits := OutputImageTagStep(config, client, client, jobspec)
+			oits := OutputImageTagStep(config, client, jobspec)
 
 			examineStep(t, oits, stepSpec)
 			executeStep(t, oits, tt.execSpecification, nil)
 
-			targetImageStreamTag, err := client.ImageStreamTags(tt.expectedImageStreamTag.Namespace).Get(context.TODO(), tt.expectedImageStreamTag.Name, meta.GetOptions{})
-			if err != nil {
+			targetImageStreamTag := &imagev1.ImageStreamTag{}
+			if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{
+				Namespace: tt.expectedImageStreamTag.Namespace,
+				Name:      tt.expectedImageStreamTag.Name}, targetImageStreamTag); err != nil {
 				t.Errorf("Failed to get ImageStreamTag '%s/%s' after step execution: %v", tt.expectedImageStreamTag.Namespace, tt.expectedImageStreamTag, err)
 			}
 
+			targetImageStreamTag.TypeMeta = metav1.TypeMeta{}
+			targetImageStreamTag.ResourceVersion = ""
 			if !equality.Semantic.DeepEqual(tt.expectedImageStreamTag, targetImageStreamTag) {
 				t.Errorf("Different ImageStreamTag 'pipeline:TO' after step execution:\n%s", diff.ObjectReflectDiff(tt.expectedImageStreamTag, targetImageStreamTag))
 			}

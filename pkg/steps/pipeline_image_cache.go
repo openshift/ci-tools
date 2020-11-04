@@ -6,9 +6,9 @@ import (
 	"strconv"
 
 	coreapi "k8s.io/api/core/v1"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	buildapi "github.com/openshift/api/build/v1"
-	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/results"
@@ -24,7 +24,7 @@ type pipelineImageCacheStep struct {
 	config      api.PipelineImageCacheStepConfiguration
 	resources   api.ResourceConfiguration
 	buildClient BuildClient
-	imageClient imageclientset.ImageV1Interface
+	client      ctrlruntimeclient.Client
 	artifactDir string
 	jobSpec     *api.JobSpec
 	pullSecret  *coreapi.Secret
@@ -67,7 +67,7 @@ func (s *pipelineImageCacheStep) Provides() api.ParameterMap {
 		return nil
 	}
 	return api.ParameterMap{
-		utils.PipelineImageEnvFor(s.config.To): utils.ImageDigestFor(s.imageClient, s.jobSpec.Namespace, api.PipelineImageStream, string(s.config.To)),
+		utils.PipelineImageEnvFor(s.config.To): utils.ImageDigestFor(s.client, s.jobSpec.Namespace, api.PipelineImageStream, string(s.config.To)),
 	}
 }
 
@@ -77,12 +77,12 @@ func (s *pipelineImageCacheStep) Description() string {
 	return fmt.Sprintf("Store build results into a layer on top of %s and save as %s", s.config.From, s.config.To)
 }
 
-func PipelineImageCacheStep(config api.PipelineImageCacheStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, imageClient imageclientset.ImageV1Interface, artifactDir string, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
+func PipelineImageCacheStep(config api.PipelineImageCacheStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, client ctrlruntimeclient.Client, artifactDir string, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
 	return &pipelineImageCacheStep{
 		config:      config,
 		resources:   resources,
 		buildClient: buildClient,
-		imageClient: imageClient,
+		client:      client,
 		artifactDir: artifactDir,
 		jobSpec:     jobSpec,
 		pullSecret:  pullSecret,

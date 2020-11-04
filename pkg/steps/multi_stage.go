@@ -15,8 +15,7 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	rbacclientset "k8s.io/client-go/kubernetes/typed/rbac/v1"
-
-	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/junit"
@@ -66,7 +65,7 @@ type multiStageTestStep struct {
 	secretClient       coreclientset.SecretsGetter
 	saClient           coreclientset.ServiceAccountsGetter
 	rbacClient         rbacclientset.RbacV1Interface
-	isClient           imageclientset.ImageStreamsGetter
+	client             ctrlruntimeclient.Client
 	artifactDir        string
 	jobSpec            *api.JobSpec
 	pre, test, post    []api.LiteralTestStep
@@ -83,11 +82,11 @@ func MultiStageTestStep(
 	secretClient coreclientset.SecretsGetter,
 	saClient coreclientset.ServiceAccountsGetter,
 	rbacClient rbacclientset.RbacV1Interface,
-	isClient imageclientset.ImageStreamsGetter,
+	client ctrlruntimeclient.Client,
 	artifactDir string,
 	jobSpec *api.JobSpec,
 ) api.Step {
-	return newMultiStageTestStep(testConfig, config, params, podClient, eventClient, secretClient, saClient, rbacClient, isClient, artifactDir, jobSpec)
+	return newMultiStageTestStep(testConfig, config, params, podClient, eventClient, secretClient, saClient, rbacClient, client, artifactDir, jobSpec)
 }
 
 func newMultiStageTestStep(
@@ -99,7 +98,7 @@ func newMultiStageTestStep(
 	secretClient coreclientset.SecretsGetter,
 	saClient coreclientset.ServiceAccountsGetter,
 	rbacClient rbacclientset.RbacV1Interface,
-	isClient imageclientset.ImageStreamsGetter,
+	client ctrlruntimeclient.Client,
 	artifactDir string,
 	jobSpec *api.JobSpec,
 ) *multiStageTestStep {
@@ -118,7 +117,7 @@ func newMultiStageTestStep(
 		secretClient:       secretClient,
 		saClient:           saClient,
 		rbacClient:         rbacClient,
-		isClient:           isClient,
+		client:             client,
 		artifactDir:        artifactDir,
 		jobSpec:            jobSpec,
 		pre:                ms.Pre,
@@ -441,7 +440,7 @@ func (s *multiStageTestStep) envForDependencies(step api.LiteralTestStep) ([]cor
 	var errs []error
 	for _, dependency := range step.Dependencies {
 		imageStream, name, _ := s.config.DependencyParts(dependency)
-		ref, err := utils.ImageDigestFor(s.isClient, s.jobSpec.Namespace, imageStream, name)()
+		ref, err := utils.ImageDigestFor(s.client, s.jobSpec.Namespace, imageStream, name)()
 		if err != nil {
 			errs = append(errs, fmt.Errorf("could not determine image pull spec for image %s on step %s", dependency.Name, step.As))
 			continue

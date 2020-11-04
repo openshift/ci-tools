@@ -7,12 +7,12 @@ import (
 	"time"
 
 	coreapi "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
-	imageapi "github.com/openshift/api/image/v1"
-	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
+	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/results"
@@ -29,7 +29,7 @@ var (
 // the base image
 type inputImageTagStep struct {
 	config  api.InputImageTagStepConfiguration
-	client  imageclientset.ImageV1Interface
+	client  ctrlruntimeclient.Client
 	jobSpec *api.JobSpec
 
 	imageName string
@@ -39,8 +39,11 @@ func (s *inputImageTagStep) Inputs() (api.InputDefinition, error) {
 	if len(s.imageName) > 0 {
 		return api.InputDefinition{s.imageName}, nil
 	}
-	from, err := s.client.ImageStreamTags(s.config.BaseImage.Namespace).Get(context.TODO(), fmt.Sprintf("%s:%s", s.config.BaseImage.Name, s.config.BaseImage.Tag), metav1.GetOptions{})
-	if err != nil {
+	from := imagev1.ImageStreamTag{}
+	if err := s.client.Get(context.TODO(), ctrlruntimeclient.ObjectKey{
+		Namespace: s.config.BaseImage.Namespace,
+		Name:      fmt.Sprintf("%s:%s", s.config.BaseImage.Name, s.config.BaseImage.Tag),
+	}, &from); err != nil {
 		return nil, fmt.Errorf("could not resolve base image: %w", err)
 	}
 
@@ -62,14 +65,14 @@ func (s *inputImageTagStep) run(ctx context.Context) error {
 		return fmt.Errorf("could not resolve inputs for image tag step: %w", err)
 	}
 
-	ist := &imageapi.ImageStreamTag{
+	ist := &imagev1.ImageStreamTag{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s:%s", api.PipelineImageStream, s.config.To),
 			Namespace: s.jobSpec.Namespace(),
 		},
-		Tag: &imageapi.TagReference{
-			ReferencePolicy: imageapi.TagReferencePolicy{
-				Type: imageapi.LocalTagReferencePolicy,
+		Tag: &imagev1.TagReference{
+			ReferencePolicy: imagev1.TagReferencePolicy{
+				Type: imagev1.LocalTagReferencePolicy,
 			},
 			From: &coreapi.ObjectReference{
 				Kind:      "ImageStreamImage",
@@ -79,15 +82,16 @@ func (s *inputImageTagStep) run(ctx context.Context) error {
 		},
 	}
 
-	if _, err := s.client.ImageStreamTags(s.jobSpec.Namespace()).Create(context.TODO(), ist, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
+	if err := s.client.Create(ctx, ist); err != nil && !kerrors.IsAlreadyExists(err) {
 		return fmt.Errorf("failed to create imagestreamtag for input image: %w", err)
 	}
+
 	// Wait image is ready
 	importCtx, cancel := context.WithTimeout(ctx, 35*time.Minute)
 	defer cancel()
 	if err := wait.PollImmediateUntil(10*time.Second, func() (bool, error) {
-		pipeline, err := s.client.ImageStreams(s.jobSpec.Namespace()).Get(context.TODO(), api.PipelineImageStream, metav1.GetOptions{})
-		if err != nil {
+		pipeline := &imagev1.ImageStream{}
+		if err := s.client.Get(importCtx, ctrlruntimeclient.ObjectKey{Namespace: s.jobSpec.Namespace(), Name: api.PipelineImageStream}, pipeline); err != nil {
 			return false, err
 		}
 		_, exists := util.ResolvePullSpec(pipeline, string(s.config.To), true)
@@ -100,26 +104,6 @@ func (s *inputImageTagStep) run(ctx context.Context) error {
 		return err
 	}
 	return nil
-}
-
-func istObjectReference(client imageclientset.ImageV1Interface, reference api.ImageStreamTagReference) (coreapi.ObjectReference, error) {
-	is, err := client.ImageStreams(reference.Namespace).Get(context.TODO(), reference.Name, metav1.GetOptions{})
-	if err != nil {
-		return coreapi.ObjectReference{}, fmt.Errorf("could not resolve remote image stream: %w", err)
-	}
-	var repo string
-	if len(is.Status.PublicDockerImageRepository) > 0 {
-		repo = is.Status.PublicDockerImageRepository
-	} else if len(is.Status.DockerImageRepository) > 0 {
-		repo = is.Status.DockerImageRepository
-	} else {
-		return coreapi.ObjectReference{}, fmt.Errorf("remote image stream %s has no accessible image registry value", reference.Name)
-	}
-	ist, err := client.ImageStreamTags(reference.Namespace).Get(context.TODO(), fmt.Sprintf("%s:%s", reference.Name, reference.Tag), metav1.GetOptions{})
-	if err != nil {
-		return coreapi.ObjectReference{}, fmt.Errorf("could not resolve remote image stream tag: %w", err)
-	}
-	return coreapi.ObjectReference{Kind: "DockerImage", Name: fmt.Sprintf("%s@%s", repo, ist.Image.Name)}, nil
 }
 
 func (s *inputImageTagStep) Requires() []api.StepLink {
@@ -143,7 +127,7 @@ func (s *inputImageTagStep) Description() string {
 	return fmt.Sprintf("Find the input image %s and tag it into the pipeline", s.config.To)
 }
 
-func InputImageTagStep(config api.InputImageTagStepConfiguration, client imageclientset.ImageV1Interface, jobSpec *api.JobSpec) api.Step {
+func InputImageTagStep(config api.InputImageTagStepConfiguration, client ctrlruntimeclient.Client, jobSpec *api.JobSpec) api.Step {
 	// when source and destination client are the same, we don't need to use external imports
 	return &inputImageTagStep{
 		config:  config,

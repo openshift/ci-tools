@@ -5,16 +5,15 @@ import (
 	"fmt"
 
 	coreapi "k8s.io/api/core/v1"
-	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
-	imageapi "github.com/openshift/api/image/v1"
-	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
+	imagev1 "github.com/openshift/api/image/v1"
 )
 
-func ImageDigestFor(client imageclientset.ImageStreamsGetter, namespace func() string, name, tag string) func() (string, error) {
+func ImageDigestFor(client ctrlruntimeclient.Client, namespace func() string, name, tag string) func() (string, error) {
 	return func() (string, error) {
-		is, err := client.ImageStreams(namespace()).Get(context.TODO(), name, meta.GetOptions{})
-		if err != nil {
+		is := &imagev1.ImageStream{}
+		if err := client.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Namespace: namespace(), Name: name}, is); err != nil {
 			return "", fmt.Errorf("could not retrieve output imagestream: %w", err)
 		}
 		var registry string
@@ -36,7 +35,7 @@ func ImageDigestFor(client imageclientset.ImageStreamsGetter, namespace func() s
 	}
 }
 
-func findSpecTag(is *imageapi.ImageStream, tag string) *coreapi.ObjectReference {
+func findSpecTag(is *imagev1.ImageStream, tag string) *coreapi.ObjectReference {
 	for _, t := range is.Spec.Tags {
 		if t.Name != tag {
 			continue
@@ -48,7 +47,7 @@ func findSpecTag(is *imageapi.ImageStream, tag string) *coreapi.ObjectReference 
 
 // FindStatusTag returns an object reference to a tag if
 // it exists in the ImageStream's Spec
-func FindStatusTag(is *imageapi.ImageStream, tag string) (*coreapi.ObjectReference, string) {
+func FindStatusTag(is *imagev1.ImageStream, tag string) (*coreapi.ObjectReference, string) {
 	for _, t := range is.Status.Tags {
 		if t.Tag != tag {
 			continue

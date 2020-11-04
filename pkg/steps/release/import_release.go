@@ -12,16 +12,15 @@ import (
 	"time"
 
 	coreapi "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
-	rbacclientset "k8s.io/client-go/kubernetes/typed/rbac/v1"
 	"k8s.io/client-go/util/retry"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
-	imageapi "github.com/openshift/api/image/v1"
-	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
+	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/results"
@@ -55,11 +54,9 @@ type importReleaseStep struct {
 	// append determines if we wait for other processes to create images first
 	append      bool
 	resources   api.ResourceConfiguration
-	imageClient imageclientset.ImageV1Interface
+	client      ctrlruntimeclient.Client
 	podClient   steps.PodClient
 	eventClient coreclientset.EventsGetter
-	saGetter    coreclientset.ServiceAccountsGetter
-	rbacClient  rbacclientset.RbacV1Interface
 	artifactDir string
 	jobSpec     *api.JobSpec
 	pullSecret  *coreapi.Secret
@@ -76,7 +73,7 @@ func (s *importReleaseStep) Run(ctx context.Context) error {
 }
 
 func (s *importReleaseStep) run(ctx context.Context) error {
-	_, err := setupReleaseImageStream(s.jobSpec.Namespace(), s.saGetter, s.rbacClient, s.imageClient)
+	_, err := setupReleaseImageStream(s.jobSpec.Namespace(), s.client)
 	if err != nil {
 		return err
 	}
@@ -86,17 +83,18 @@ func (s *importReleaseStep) run(ctx context.Context) error {
 	log.Printf("Importing release image %s", s.name)
 
 	// create the stable image stream with lookup policy so we have a place to put our imported images
-	_, err = s.imageClient.ImageStreams(s.jobSpec.Namespace()).Create(context.TODO(), &imageapi.ImageStream{
+	err = s.client.Create(ctx, &imagev1.ImageStream{
 		ObjectMeta: meta.ObjectMeta{
-			Name: streamName,
+			Namespace: s.jobSpec.Namespace(),
+			Name:      streamName,
 		},
-		Spec: imageapi.ImageStreamSpec{
-			LookupPolicy: imageapi.ImageLookupPolicy{
+		Spec: imagev1.ImageStreamSpec{
+			LookupPolicy: imagev1.ImageLookupPolicy{
 				Local: true,
 			},
 		},
-	}, meta.CreateOptions{})
-	if err != nil && !errors.IsAlreadyExists(err) {
+	})
+	if err != nil && !kerrors.IsAlreadyExists(err) {
 		return fmt.Errorf("could not create stable imagestreamtag: %w", err)
 	}
 	// tag the release image in and let it import
@@ -104,42 +102,43 @@ func (s *importReleaseStep) run(ctx context.Context) error {
 
 	// retry importing the image a few times because we might race against establishing credentials/roles
 	// and be unable to import images on the same cluster
-	if err := wait.ExponentialBackoff(wait.Backoff{Steps: 4, Duration: 1 * time.Second, Factor: 2}, func() (bool, error) {
-		result, err := s.imageClient.ImageStreamImports(s.jobSpec.Namespace()).Create(ctx, &imageapi.ImageStreamImport{
-			ObjectMeta: meta.ObjectMeta{
-				Name: "release",
-			},
-			Spec: imageapi.ImageStreamImportSpec{
-				Import: true,
-				Images: []imageapi.ImageImportSpec{
-					{
-						To: &coreapi.LocalObjectReference{
-							Name: s.name,
-						},
-						From: coreapi.ObjectReference{
-							Kind: "DockerImage",
-							Name: s.pullSpec,
-						},
+	streamImport := &imagev1.ImageStreamImport{
+		ObjectMeta: meta.ObjectMeta{
+			Namespace: s.jobSpec.Namespace(),
+			Name:      "release",
+		},
+		Spec: imagev1.ImageStreamImportSpec{
+			Import: true,
+			Images: []imagev1.ImageImportSpec{
+				{
+					To: &coreapi.LocalObjectReference{
+						Name: s.name,
+					},
+					From: coreapi.ObjectReference{
+						Kind: "DockerImage",
+						Name: s.pullSpec,
 					},
 				},
 			},
-		}, meta.CreateOptions{})
-		if err != nil {
-			if errors.IsConflict(err) {
+		},
+	}
+	if err := wait.ExponentialBackoff(wait.Backoff{Steps: 4, Duration: 1 * time.Second, Factor: 2}, func() (bool, error) {
+		if err := s.client.Create(ctx, streamImport); err != nil {
+			if kerrors.IsConflict(err) {
 				return false, nil
 			}
-			if errors.IsForbidden(err) {
+			if kerrors.IsForbidden(err) {
 				// the ci-operator expects to have POST /imagestreamimports in the namespace of the job
 				log.Printf("warning: Unable to lock %s to an image digest pull spec, you don't have permission to access the necessary API.", utils.ReleaseImageEnv(s.name))
 				return false, nil
 			}
 			return false, err
 		}
-		image := result.Status.Images[0]
+		image := streamImport.Status.Images[0]
 		if image.Image == nil {
 			return false, nil
 		}
-		pullSpec = result.Status.Images[0].Image.DockerImageReference
+		pullSpec = streamImport.Status.Images[0].Image.DockerImageReference
 		return true, nil
 	}); err != nil {
 		return fmt.Errorf("unable to import %s release image: %w", s.name, err)
@@ -188,21 +187,21 @@ func (s *importReleaseStep) run(ctx context.Context) error {
 
 	// tag the cli image into stable so we use the correct pull secrets from the namespace
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		_, err := s.imageClient.ImageStreamTags(s.jobSpec.Namespace()).Update(context.TODO(), &imageapi.ImageStreamTag{
+		return s.client.Update(ctx, &imagev1.ImageStreamTag{
 			ObjectMeta: meta.ObjectMeta{
-				Name: fmt.Sprintf("%s:cli", streamName),
+				Namespace: s.jobSpec.Namespace(),
+				Name:      fmt.Sprintf("%s:cli", streamName),
 			},
-			Tag: &imageapi.TagReference{
-				ReferencePolicy: imageapi.TagReferencePolicy{
-					Type: imageapi.LocalTagReferencePolicy,
+			Tag: &imagev1.TagReference{
+				ReferencePolicy: imagev1.TagReferencePolicy{
+					Type: imagev1.LocalTagReferencePolicy,
 				},
 				From: &coreapi.ObjectReference{
 					Kind: "DockerImage",
 					Name: cliImage,
 				},
 			},
-		}, meta.UpdateOptions{})
-		return err
+		})
 	}); err != nil {
 		return fmt.Errorf("unable to tag the 'cli' image into the stable stream: %w", err)
 	}
@@ -258,7 +257,7 @@ oc adm release extract%s --from=%q --file=image-references > /tmp/artifacts/%s
 	if err != nil {
 		return fmt.Errorf("unable to read release image stream: %w", err)
 	}
-	var releaseIS imageapi.ImageStream
+	var releaseIS imagev1.ImageStream
 	if err := json.Unmarshal(isContents, &releaseIS); err != nil {
 		return fmt.Errorf("unable to decode release image stream: %w", err)
 	}
@@ -268,16 +267,16 @@ oc adm release extract%s --from=%q --file=image-references > /tmp/artifacts/%s
 
 	// update the stable image stream to have all of the tags from the payload
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		stable, err := s.imageClient.ImageStreams(s.jobSpec.Namespace()).Get(context.TODO(), streamName, meta.GetOptions{})
-		if err != nil {
+		stable := &imagev1.ImageStream{}
+		if err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: s.jobSpec.Namespace(), Name: streamName}, stable); err != nil {
 			return fmt.Errorf("could not resolve imagestream %s: %w", streamName, err)
 		}
 
 		existing := sets.NewString()
-		tags := make([]imageapi.TagReference, 0, len(releaseIS.Spec.Tags)+len(stable.Spec.Tags))
+		tags := make([]imagev1.TagReference, 0, len(releaseIS.Spec.Tags)+len(stable.Spec.Tags))
 		for _, tag := range releaseIS.Spec.Tags {
 			existing.Insert(tag.Name)
-			tag.ReferencePolicy.Type = imageapi.LocalTagReferencePolicy
+			tag.ReferencePolicy.Type = imagev1.LocalTagReferencePolicy
 			tags = append(tags, tag)
 		}
 		for _, tag := range stable.Spec.Tags {
@@ -285,13 +284,12 @@ oc adm release extract%s --from=%q --file=image-references > /tmp/artifacts/%s
 				continue
 			}
 			existing.Insert(tag.Name)
-			tag.ReferencePolicy.Type = imageapi.LocalTagReferencePolicy
+			tag.ReferencePolicy.Type = imagev1.LocalTagReferencePolicy
 			tags = append(tags, tag)
 		}
 		stable.Spec.Tags = tags
 
-		_, err = s.imageClient.ImageStreams(s.jobSpec.Namespace()).Update(context.TODO(), stable, meta.UpdateOptions{})
-		return err
+		return s.client.Update(ctx, stable)
 	}); err != nil {
 		return fmt.Errorf("unable to update stable image stream with release tags: %w", err)
 	}
@@ -299,11 +297,9 @@ oc adm release extract%s --from=%q --file=image-references > /tmp/artifacts/%s
 	// loop until we observe all images have successfully imported, kicking import if a particular
 	// tag fails
 	var waiting map[string]int64
-	var stable *imageapi.ImageStream
+	stable := &imagev1.ImageStream{}
 	if err := wait.Poll(3*time.Second, 15*time.Minute, func() (bool, error) {
-		var err error
-		stable, err = s.imageClient.ImageStreams(s.jobSpec.Namespace()).Get(context.TODO(), streamName, meta.GetOptions{})
-		if err != nil {
+		if err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: s.jobSpec.Namespace(), Name: streamName}, stable); err != nil {
 			return false, fmt.Errorf("could not resolve imagestream %s: %w", streamName, err)
 		}
 		generations := make(map[string]int64)
@@ -330,8 +326,7 @@ oc adm release extract%s --from=%q --file=image-references > /tmp/artifacts/%s
 			}
 		}
 		if updates {
-			stable, err = s.imageClient.ImageStreams(s.jobSpec.Namespace()).Update(context.TODO(), stable, meta.UpdateOptions{})
-			if err != nil {
+			if err = s.client.Update(ctx, stable); err != nil {
 				log.Printf("error requesting re-import of failed release image stream: %v", err)
 			}
 			return false, nil
@@ -361,7 +356,7 @@ oc adm release extract%s --from=%q --file=image-references > /tmp/artifacts/%s
 	return nil
 }
 
-func findSpecTagReference(is *imageapi.ImageStream, tag string) *imageapi.TagReference {
+func findSpecTagReference(is *imagev1.ImageStream, tag string) *imagev1.TagReference {
 	for i, t := range is.Spec.Tags {
 		if t.Name != tag {
 			continue
@@ -371,9 +366,9 @@ func findSpecTagReference(is *imageapi.ImageStream, tag string) *imageapi.TagRef
 	return nil
 }
 
-func hasFailedImportCondition(conditions []imageapi.TagEventCondition, generation int64) bool {
+func hasFailedImportCondition(conditions []imagev1.TagEventCondition, generation int64) bool {
 	for _, condition := range conditions {
-		if condition.Generation >= generation && condition.Type == imageapi.ImportSuccess && condition.Status == coreapi.ConditionFalse {
+		if condition.Generation >= generation && condition.Type == imagev1.ImportSuccess && condition.Status == coreapi.ConditionFalse {
 			return true
 		}
 	}
@@ -409,7 +404,7 @@ func (s *importReleaseStep) Creates() []api.StepLink {
 
 func (s *importReleaseStep) Provides() api.ParameterMap {
 	return api.ParameterMap{
-		utils.ReleaseImageEnv(s.name): utils.ImageDigestFor(s.imageClient, s.jobSpec.Namespace, api.ReleaseImageStream, s.name),
+		utils.ReleaseImageEnv(s.name): utils.ImageDigestFor(s.client, s.jobSpec.Namespace, api.ReleaseImageStream, s.name),
 	}
 }
 
@@ -423,8 +418,8 @@ func (s *importReleaseStep) Description() string {
 
 // ImportReleaseStep imports an existing update payload image
 func ImportReleaseStep(name, pullSpec string, append bool, resources api.ResourceConfiguration,
-	podClient steps.PodClient, eventClient coreclientset.EventsGetter, imageClient imageclientset.ImageV1Interface, saGetter coreclientset.ServiceAccountsGetter,
-	rbacClient rbacclientset.RbacV1Interface, artifactDir string, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
+	podClient steps.PodClient, eventClient coreclientset.EventsGetter, client ctrlruntimeclient.Client,
+	artifactDir string, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
 	return &importReleaseStep{
 		name:        name,
 		pullSpec:    pullSpec,
@@ -432,9 +427,7 @@ func ImportReleaseStep(name, pullSpec string, append bool, resources api.Resourc
 		resources:   resources,
 		podClient:   podClient,
 		eventClient: eventClient,
-		imageClient: imageClient,
-		saGetter:    saGetter,
-		rbacClient:  rbacClient,
+		client:      client,
 		artifactDir: artifactDir,
 		jobSpec:     jobSpec,
 		pullSecret:  pullSecret,

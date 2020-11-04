@@ -22,12 +22,14 @@ import (
 	"k8s.io/test-infra/prow/pjutil"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	ctrlruntimelog "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/yaml"
 
 	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api/secretbootstrap"
 	"github.com/openshift/ci-tools/pkg/controller/promotionreconciler"
+	"github.com/openshift/ci-tools/pkg/controller/registrysyncer"
 	"github.com/openshift/ci-tools/pkg/controller/secretsyncer"
 	secretsyncerconfig "github.com/openshift/ci-tools/pkg/controller/secretsyncer/config"
 	testimagesdistributor "github.com/openshift/ci-tools/pkg/controller/test-images-distributor"
@@ -44,6 +46,7 @@ var allControllers = sets.NewString(
 	promotionreconciler.ControllerName,
 	testimagesdistributor.ControllerName,
 	secretsyncer.ControllerName,
+	registrysyncer.ControllerName,
 )
 
 type options struct {
@@ -60,6 +63,7 @@ type options struct {
 	blockProfileRate             time.Duration
 	testImagesDistributorOptions testImagesDistributorOptions
 	secretSyncerConfigOptions    secretSyncerConfigOptions
+	registrySyncerOptions        registrySyncerOptions
 	*flagutil.GitHubOptions
 }
 
@@ -77,6 +81,10 @@ type testImagesDistributorOptions struct {
 	additionalImageStreamNamespaces    sets.String
 	forbiddenRegistriesRaw             flagutil.Strings
 	forbiddenRegistries                sets.String
+}
+
+type registrySyncerOptions struct {
+	imagePullSecretPath string
 }
 
 type secretSyncerConfigOptions struct {
@@ -110,6 +118,7 @@ func newOpts() (*options, error) {
 	flag.Var(&opts.testImagesDistributorOptions.additionalImageStreamsRaw, "testImagesDistributorOptions.additional-image-stream", "An imagestream that will be distributed even if no test explicitly references it. It must be in namespace/name format (e.G `ci/clonerefs`). Can be passed multiple times.")
 	flag.Var(&opts.testImagesDistributorOptions.additionalImageStreamNamespacesRaw, "testImagesDistributorOptions.additional-image-stream-namespace", "A namespace in which imagestreams will be distributed even if no test explicitly references them (e.G `ci`). Can be passed multiple times.")
 	flag.Var(&opts.testImagesDistributorOptions.forbiddenRegistriesRaw, "testImagesDistributorOptions.forbidden-registry", "The hostname of an image registry from which there is no synchronization of its images. Can be passed multiple times.")
+	flag.StringVar(&opts.registrySyncerOptions.imagePullSecretPath, "registrySyncerOptions.imagePullSecretPath", "", "A file to use for reading an ImagePullSecret that will be bound to all `default` ServiceAccounts in all namespaces that have a test ImageStream on all build clusters")
 	flag.StringVar(&opts.secretSyncerConfigOptions.configFile, "secretSyncerConfigOptions.config", "", "The config file for the secret syncer controller")
 	flag.StringVar(&opts.secretSyncerConfigOptions.secretBoostrapConfigFile, "secretSyncerConfigOptions.secretBoostrapConfigFile", "", "The config file for ci-secret-boostrap")
 	flag.DurationVar(&opts.blockProfileRate, "block-profile-rate", time.Duration(0), "The block profile rate. Set to non-zero to enable.")
@@ -279,6 +288,9 @@ func main() {
 	if opts.testImagesDistributorOptions.imagePullSecretPath != "" {
 		secretPaths = append(secretPaths, opts.testImagesDistributorOptions.imagePullSecretPath)
 	}
+	if opts.registrySyncerOptions.imagePullSecretPath != "" {
+		secretPaths = append(secretPaths, opts.registrySyncerOptions.imagePullSecretPath)
+	}
 	secretAgent := &secret.Agent{}
 	if err := secretAgent.Start(secretPaths); err != nil {
 		logrus.WithError(err).Fatal("Failed to start secret agent")
@@ -388,6 +400,19 @@ func main() {
 		}
 		if err := secretsyncer.AddToManager(mgr, allManagers[apiCIContextName], targetClusters, secretSyncerConfigAgent.Config, secretBootstrapConfig); err != nil {
 			logrus.WithError(err).Fatal("failed to add secret syncer controller")
+		}
+	}
+
+	if opts.enabledControllersSet.Has(registrysyncer.ControllerName) {
+		if opts.registrySyncerOptions.imagePullSecretPath == "" {
+			logrus.Fatal("The registrysyncer requires the --registrysyncer.imagePullSecretPath flag to be set ")
+		}
+		if err := registrysyncer.AddToManager(
+			mgr,
+			map[string]manager.Manager{apiCIContextName: allManagers[apiCIContextName], appCIContextName: allManagers[appCIContextName]},
+			secretAgent.GetTokenGenerator(opts.registrySyncerOptions.imagePullSecretPath),
+		); err != nil {
+			logrus.WithError(err).Fatal("failed to add registrysyncer")
 		}
 	}
 

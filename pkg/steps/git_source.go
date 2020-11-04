@@ -8,7 +8,6 @@ import (
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 
 	buildapi "github.com/openshift/api/build/v1"
-	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/results"
@@ -17,7 +16,6 @@ import (
 type gitSourceStep struct {
 	config          api.ProjectDirectoryImageBuildInputs
 	resources       api.ResourceConfiguration
-	imageClient     imageclientset.ImageV1Interface
 	buildClient     BuildClient
 	artifactDir     string
 	jobSpec         *api.JobSpec
@@ -96,12 +94,11 @@ func determineRefsWorkdir(refs *prowapi.Refs, extraRefs []prowapi.Refs) *prowapi
 }
 
 // GitSourceStep returns gitSourceStep that holds all the required information to create a build from a git source.
-func GitSourceStep(config api.ProjectDirectoryImageBuildInputs, resources api.ResourceConfiguration, buildClient BuildClient, imageClient imageclientset.ImageV1Interface, artifactDir string, jobSpec *api.JobSpec, cloneAuthConfig *CloneAuthConfig, pullSecret *coreapi.Secret) api.Step {
+func GitSourceStep(config api.ProjectDirectoryImageBuildInputs, resources api.ResourceConfiguration, buildClient BuildClient, artifactDir string, jobSpec *api.JobSpec, cloneAuthConfig *CloneAuthConfig, pullSecret *coreapi.Secret) api.Step {
 	return &gitSourceStep{
 		config:          config,
 		resources:       resources,
 		buildClient:     buildClient,
-		imageClient:     imageClient,
 		artifactDir:     artifactDir,
 		jobSpec:         jobSpec,
 		cloneAuthConfig: cloneAuthConfig,

@@ -53,9 +53,8 @@ func preparePodStep(t *testing.T, namespace string) (*podStep, stepExpectation, 
 	jobSpec.SetNamespace(namespace)
 
 	fakecs := ciopTestingClient{
-		kubecs:  fake.NewSimpleClientset(),
-		imagecs: nil,
-		t:       t,
+		kubecs: fake.NewSimpleClientset(),
+		t:      t,
 	}
 	client := NewPodClient(fakecs.Core(), nil, nil)
 	ps := PodStep(stepName, config, resources, client, fakecs.kubecs.CoreV1(), artifactDir, jobSpec)

@@ -18,10 +18,6 @@ import (
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	fakecorev1 "k8s.io/client-go/kubernetes/typed/core/v1/fake"
 
-	fakeimageclientset "github.com/openshift/client-go/image/clientset/versioned/fake"
-	imagev1 "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
-	fakeimagev1 "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1/fake"
-
 	"github.com/openshift/ci-tools/pkg/api"
 )
 
@@ -39,18 +35,13 @@ func init() {
 // and return our fake CoreV1 API (=ciopTestingCore)
 
 type ciopTestingClient struct {
-	kubecs  *fake.Clientset
-	imagecs *fakeimageclientset.Clientset
-	t       *testing.T
+	kubecs *fake.Clientset
+	t      *testing.T
 }
 
 func (c *ciopTestingClient) Core() corev1.CoreV1Interface {
 	fc := c.kubecs.CoreV1().(*fakecorev1.FakeCoreV1)
 	return &ciopTestingCore{*fc, c.t}
-}
-
-func (c *ciopTestingClient) ImageV1() imagev1.ImageV1Interface {
-	return c.imagecs.ImageV1().(*fakeimagev1.FakeImageV1)
 }
 
 // Fake CoreV1, created so we can override its `Pods()` method

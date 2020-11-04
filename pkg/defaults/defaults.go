@@ -9,6 +9,7 @@ import (
 
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/client-go/kubernetes/scheme"
 	appsclientset "k8s.io/client-go/kubernetes/typed/apps/v1"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	rbacclientset "k8s.io/client-go/kubernetes/typed/rbac/v1"
@@ -16,9 +17,9 @@ import (
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
+	imagev1 "github.com/openshift/api/image/v1"
 	templateapi "github.com/openshift/api/template/v1"
 	buildclientset "github.com/openshift/client-go/build/clientset/versioned/typed/build/v1"
-	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 	routeclientset "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
 	templateclientset "github.com/openshift/client-go/template/clientset/versioned/typed/template/v1"
 
@@ -52,6 +53,9 @@ func FromConfig(
 	pullSecret, pushSecret *coreapi.Secret,
 
 ) ([]api.Step, []api.Step, error) {
+	if err := addSchemes(); err != nil {
+		return nil, nil, fmt.Errorf("failed to add schemes: %w", err)
+	}
 	var buildSteps []api.Step
 	var postSteps []api.Step
 
@@ -61,7 +65,6 @@ func FromConfig(
 	}
 
 	var buildClient steps.BuildClient
-	var imageClient imageclientset.ImageV1Interface
 	var routeGetter routeclientset.RoutesGetter
 	var deploymentGetter appsclientset.DeploymentsGetter
 	var templateClient steps.TemplateClient
@@ -86,21 +89,6 @@ func FromConfig(
 			return nil, nil, fmt.Errorf("could not get build client for cluster config: %w", err)
 		}
 		buildClient = steps.NewBuildClient(buildGetter, buildGetter.RESTClient())
-
-		var imageConfig *rest.Config
-		// Hack for integration test
-		if clusterConfig.Host == "" {
-			imageConfig = rest.AnonymousClientConfig(clusterConfig)
-			imageConfig.TLSClientConfig = rest.TLSClientConfig{}
-			imageConfig.Host = "https://api.ci.openshift.org"
-		} else {
-			imageConfig = clusterConfig
-		}
-		imageGetter, err := imageclientset.NewForConfig(imageConfig)
-		if err != nil {
-			return nil, nil, fmt.Errorf("could not get image client for cluster config: %w", err)
-		}
-		imageClient = imageGetter
 
 		routeGetter, err = routeclientset.NewForConfig(clusterConfig)
 		if err != nil {
@@ -169,11 +157,11 @@ func FromConfig(
 		} else if rawStep.ProjectDirectoryImageBuildStepConfiguration != nil {
 			step = steps.ProjectDirectoryImageBuildStep(*rawStep.ProjectDirectoryImageBuildStepConfiguration, config.Resources, buildClient, client, artifactDir, jobSpec, pullSecret)
 		} else if rawStep.ProjectDirectoryImageBuildInputs != nil {
-			step = steps.GitSourceStep(*rawStep.ProjectDirectoryImageBuildInputs, config.Resources, buildClient, imageClient, artifactDir, jobSpec, cloneAuthConfig, pullSecret)
+			step = steps.GitSourceStep(*rawStep.ProjectDirectoryImageBuildInputs, config.Resources, buildClient, artifactDir, jobSpec, cloneAuthConfig, pullSecret)
 		} else if rawStep.RPMImageInjectionStepConfiguration != nil {
-			step = steps.RPMImageInjectionStep(*rawStep.RPMImageInjectionStepConfiguration, config.Resources, buildClient, routeGetter, imageClient, artifactDir, jobSpec, pullSecret)
+			step = steps.RPMImageInjectionStep(*rawStep.RPMImageInjectionStepConfiguration, config.Resources, buildClient, routeGetter, artifactDir, jobSpec, pullSecret)
 		} else if rawStep.RPMServeStepConfiguration != nil {
-			step = steps.RPMServerStep(*rawStep.RPMServeStepConfiguration, deploymentGetter, routeGetter, serviceGetter, imageClient, jobSpec)
+			step = steps.RPMServerStep(*rawStep.RPMServeStepConfiguration, deploymentGetter, routeGetter, serviceGetter, client, jobSpec)
 		} else if rawStep.OutputImageTagStepConfiguration != nil {
 			step = steps.OutputImageTagStep(*rawStep.OutputImageTagStepConfiguration, client, jobSpec)
 			// all required or non-optional output images are considered part of [images]
@@ -183,7 +171,7 @@ func FromConfig(
 		} else if rawStep.ReleaseImagesTagStepConfiguration != nil {
 			// if the user has specified a tag_specification we always
 			// will import those images to the stable stream
-			step = release.ReleaseImagesTagStep(*rawStep.ReleaseImagesTagStepConfiguration, imageClient, routeGetter, configMapGetter, params, jobSpec)
+			step = release.ReleaseImagesTagStep(*rawStep.ReleaseImagesTagStepConfiguration, client, routeGetter, configMapGetter, params, jobSpec)
 			stepLinks = append(stepLinks, step.Creates()...)
 
 			hasReleaseStep = true
@@ -319,7 +307,7 @@ func FromConfig(
 	}
 
 	if !hasReleaseStep {
-		buildSteps = append(buildSteps, release.StableImagesTagStep(imageClient, jobSpec))
+		buildSteps = append(buildSteps, release.StableImagesTagStep(client, jobSpec))
 	}
 
 	buildSteps = append(buildSteps, steps.ImagesReadyStep(imageStepLinks))
@@ -333,7 +321,7 @@ func FromConfig(
 		if err != nil {
 			return nil, nil, fmt.Errorf("could not determine promotion defaults: %w", err)
 		}
-		postSteps = append(postSteps, release.PromotionStep(*cfg, config.Images, requiredNames, imageClient, imageClient, jobSpec, podClient, eventClient, pushSecret))
+		postSteps = append(postSteps, release.PromotionStep(*cfg, config.Images, requiredNames, client, client, jobSpec, podClient, eventClient, pushSecret))
 	}
 
 	return buildSteps, postSteps, nil
@@ -637,4 +625,12 @@ func buildRootImageStreamFromRepository(readFile readFile) (*api.ImageStreamTagR
 		return nil, fmt.Errorf("failed to unmarshal %s: %w", api.CIOperatorInrepoConfigFileName, err)
 	}
 	return &config.BuildRootImage, nil
+}
+
+func addSchemes() error {
+	if err := imagev1.AddToScheme(scheme.Scheme); err != nil {
+		return fmt.Errorf("failed to add imagev1 to scheme: %w", err)
+	}
+
+	return nil
 }

@@ -111,7 +111,7 @@ func setupReleaseImageStream(namespace string, client ctrlruntimeclient.Client) 
 	if err := client.Create(ctx, role); err != nil && !kerrors.IsAlreadyExists(err) {
 		return "", results.ForReason("creating_roles").WithError(err).Errorf("could not create role 'ci-operator-image' for: %v", err)
 	}
-	if err := client.Create(ctx, roleBinding); err != nil && !kerrors.IsNotFound(err) {
+	if err := client.Create(ctx, roleBinding); err != nil && !kerrors.IsAlreadyExists(err) {
 		return "", results.ForReason("binding_roles").WithError(err).Errorf("could not create role binding 'ci-operator-image' for: %v", err)
 	}
 

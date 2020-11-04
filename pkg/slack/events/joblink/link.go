@@ -169,7 +169,7 @@ func rehearsalFromName(name string) (string, string) {
 	return name, rehearsalPR
 }
 
-func contextFor(logger *logrus.Entry, infos []*jobInfo, config JobGetter, gcsClient *storage.Client) []slack.Block {
+func contextFor(logger *logrus.Entry, infos []jobInfo, config JobGetter, gcsClient *storage.Client) []slack.Block {
 	var blocks []slack.Block
 	for _, info := range infos {
 		logger = logger.WithFields(logrus.Fields{
@@ -291,7 +291,7 @@ type jobInfo struct {
 
 // extractInfo extracts information about any jobs that were
 // linked in a comment body on Slack
-func extractInfo(event *slackevents.EventsAPIEvent) ([]*jobInfo, error) {
+func extractInfo(event *slackevents.EventsAPIEvent) ([]jobInfo, error) {
 	raw, ok := event.Data.(*slackevents.EventsAPICallbackEvent)
 	if !ok {
 		return nil, errors.New("could not get raw event content")
@@ -310,14 +310,14 @@ func extractInfo(event *slackevents.EventsAPIEvent) ([]*jobInfo, error) {
 		return nil, errors.New("could not get blocks from event data")
 	}
 
-	var infos []*jobInfo
+	infos := map[jobInfo]interface{}{}
 	for _, block := range data.Blocks {
 		for _, element := range block.Elements {
 			for _, subElement := range element.Elements {
 				if subElement.Url != "" {
 					if url, err := url.Parse(subElement.Url); err == nil {
 						if info := infoFromUrl(url); info != nil {
-							infos = append(infos, info)
+							infos[*info] = nil
 						}
 					}
 				}
@@ -325,7 +325,12 @@ func extractInfo(event *slackevents.EventsAPIEvent) ([]*jobInfo, error) {
 		}
 	}
 
-	return infos, nil
+	var infoList []jobInfo
+	for info := range infos {
+		infoList = append(infoList, info)
+	}
+
+	return infoList, nil
 }
 
 func infoFromUrl(url *url.URL) *jobInfo {

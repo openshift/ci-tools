@@ -11,18 +11,13 @@ import (
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/config"
 
-	jc "github.com/openshift/ci-tools/pkg/jobconfig"
+	"github.com/openshift/ci-tools/pkg/prowgen"
 )
 
 const (
 	release = "release"
 	unknown = "unknown"
 )
-
-func isGenerated(job config.JobBase) bool {
-	_, generated := job.Labels[jc.ProwJobLabelGenerated]
-	return generated
-}
 
 func getKind(job config.JobBase) string {
 	if strings.HasPrefix(job.Name, "pull-ci") {
@@ -54,7 +49,7 @@ func (b blockedJobs) Has(job config.JobBase) bool {
 
 func (b blockedJobs) Insert(job config.JobBase) {
 	b[job.Name] = blockedJob{
-		Generated: isGenerated(job),
+		Generated: prowgen.IsGenerated(job),
 		Kind:      getKind(job),
 	}
 }

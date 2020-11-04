@@ -142,11 +142,6 @@ func isStale(job prowconfig.JobBase) bool {
 	return generated && genLabel != string(jc.New)
 }
 
-func isGenerated(job prowconfig.JobBase) bool {
-	_, generated := job.Labels[jc.ProwJobLabelGenerated]
-	return generated
-}
-
 func prune(jobConfig *prowconfig.JobConfig) *prowconfig.JobConfig {
 	var pruned prowconfig.JobConfig
 
@@ -156,7 +151,7 @@ func prune(jobConfig *prowconfig.JobConfig) *prowconfig.JobConfig {
 				continue
 			}
 
-			if isGenerated(job.JobBase) {
+			if prowgen.IsGenerated(job.JobBase) {
 				job.Labels[jc.ProwJobLabelGenerated] = string(jc.Generated)
 			}
 
@@ -173,9 +168,8 @@ func prune(jobConfig *prowconfig.JobConfig) *prowconfig.JobConfig {
 			if isStale(job.JobBase) {
 				continue
 			}
-			if isGenerated(job.JobBase) {
+			if prowgen.IsGenerated(job.JobBase) {
 				job.Labels[jc.ProwJobLabelGenerated] = string(jc.Generated)
-
 			}
 			if pruned.PostsubmitsStatic == nil {
 				pruned.PostsubmitsStatic = map[string][]prowconfig.Postsubmit{}
@@ -189,9 +183,8 @@ func prune(jobConfig *prowconfig.JobConfig) *prowconfig.JobConfig {
 		if isStale(job.JobBase) {
 			continue
 		}
-		if isGenerated(job.JobBase) {
+		if prowgen.IsGenerated(job.JobBase) {
 			job.Labels[jc.ProwJobLabelGenerated] = string(jc.Generated)
-
 		}
 
 		pruned.Periodics = append(pruned.Periodics, job)

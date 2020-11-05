@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -44,6 +45,9 @@ var subs = []api.PullSpecSubstitution{
 }
 
 func TestReplaceCommand(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skipf("skipping test on %s OS", runtime.GOOS)
+	}
 	temp, err := ioutil.TempDir("", "")
 	if err != nil {
 		t.Fatalf("Failed to create temporary directory for unit test: %v", err)

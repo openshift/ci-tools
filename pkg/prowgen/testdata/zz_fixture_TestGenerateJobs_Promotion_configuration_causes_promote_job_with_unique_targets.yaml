@@ -21,6 +21,7 @@ postsubmits:
         - --target=[images]
         - --target=out-1
         - --image-mirror-push-secret=/etc/push-secret/.dockerconfigjson
+        - --image-creator-kubeconfig=/etc/image-creator-kubeconfig/sa.image-creator.config
         command:
         - ci-operator
         image: ci-operator:latest
@@ -39,6 +40,9 @@ postsubmits:
         - mountPath: /etc/push-secret
           name: push-secret
           readOnly: true
+        - mountPath: /etc/image-creator-kubeconfig
+          name: image-creator-kubeconfig
+          readOnly: true
       serviceAccountName: ci-operator
       volumes:
       - name: pull-secret
@@ -50,6 +54,9 @@ postsubmits:
       - name: push-secret
         secret:
           secretName: registry-push-credentials-ci-central
+      - name: image-creator-kubeconfig
+        secret:
+          secretName: image-creator-kubeconfig
 presubmits:
   organization/repository:
   - agent: kubernetes

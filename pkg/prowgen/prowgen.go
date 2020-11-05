@@ -193,18 +193,36 @@ func GenerateJobs(configSpec *cioperatorapi.ReleaseBuildConfiguration, info *Pro
 
 			podSpec := generateCiOperatorPodSpec(info, nil, imageTargets.List(), []string{"--promote"}...)
 			podSpec.Containers[0].Args = append(podSpec.Containers[0].Args,
-				fmt.Sprintf("--image-mirror-push-secret=%s", filepath.Join(cioperatorapi.RegistryPushCredentialsCICentralSecretMountPath, corev1.DockerConfigJsonKey)))
-			podSpec.Containers[0].VolumeMounts = append(podSpec.Containers[0].VolumeMounts, corev1.VolumeMount{
-				Name:      "push-secret",
-				MountPath: cioperatorapi.RegistryPushCredentialsCICentralSecretMountPath,
-				ReadOnly:  true,
-			})
-			podSpec.Volumes = append(podSpec.Volumes, corev1.Volume{
-				Name: "push-secret",
-				VolumeSource: corev1.VolumeSource{
-					Secret: &corev1.SecretVolumeSource{SecretName: cioperatorapi.RegistryPushCredentialsCICentralSecret},
+				[]string{
+					fmt.Sprintf("--image-mirror-push-secret=%s", filepath.Join(cioperatorapi.RegistryPushCredentialsCICentralSecretMountPath, corev1.DockerConfigJsonKey)),
+					fmt.Sprintf("--image-creator-kubeconfig=%s", filepath.Join(cioperatorapi.ImageCreatorKubeconfigSecretMountPath, cioperatorapi.FilenameImageCreatorKubeConfig)),
+				}...)
+			podSpec.Containers[0].VolumeMounts = append(podSpec.Containers[0].VolumeMounts, []corev1.VolumeMount{
+				{
+					Name:      "push-secret",
+					MountPath: cioperatorapi.RegistryPushCredentialsCICentralSecretMountPath,
+					ReadOnly:  true,
 				},
-			})
+				{
+					Name:      "image-creator-kubeconfig",
+					MountPath: cioperatorapi.ImageCreatorKubeconfigSecretMountPath,
+					ReadOnly:  true,
+				},
+			}...)
+			podSpec.Volumes = append(podSpec.Volumes, []corev1.Volume{
+				{
+					Name: "push-secret",
+					VolumeSource: corev1.VolumeSource{
+						Secret: &corev1.SecretVolumeSource{SecretName: cioperatorapi.RegistryPushCredentialsCICentralSecret},
+					},
+				},
+				{
+					Name: "image-creator-kubeconfig",
+					VolumeSource: corev1.VolumeSource{
+						Secret: &corev1.SecretVolumeSource{SecretName: cioperatorapi.ImageCreatorKubeconfigSecret},
+					},
+				},
+			}...)
 			postsubmit := generatePostsubmitForTest("images", info, podSpec, configSpec.CanonicalGoRepository, jobRelease, skipCloning)
 			postsubmit.MaxConcurrency = 1
 			if postsubmit.Labels == nil {

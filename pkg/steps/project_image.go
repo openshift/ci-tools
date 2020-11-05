@@ -6,11 +6,11 @@ import (
 	"fmt"
 
 	coreapi "k8s.io/api/core/v1"
-	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	buildapi "github.com/openshift/api/build/v1"
 	"github.com/openshift/api/image/docker10"
-	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
+	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/results"
@@ -21,8 +21,7 @@ type projectDirectoryImageBuildStep struct {
 	config      api.ProjectDirectoryImageBuildStepConfiguration
 	resources   api.ResourceConfiguration
 	buildClient BuildClient
-	imageClient imageclientset.ImageStreamsGetter
-	istClient   imageclientset.ImageStreamTagsGetter
+	client      ctrlruntimeclient.Client
 	jobSpec     *api.JobSpec
 	artifactDir string
 	pullSecret  *coreapi.Secret
@@ -44,7 +43,7 @@ func (s *projectDirectoryImageBuildStep) run(ctx context.Context) error {
 	// If image being built is an operator bundle, use the bundle source instead of original source
 	if api.IsBundleImage(string(s.config.To)) {
 		source := fmt.Sprintf("%s:%s", api.PipelineImageStream, api.PipelineImageStreamTagReferenceBundleSource)
-		workingDir, err := getWorkingDir(s.istClient, source, s.jobSpec.Namespace())
+		workingDir, err := getWorkingDir(s.client, source, s.jobSpec.Namespace())
 		if err != nil {
 			return fmt.Errorf("failed to get workingDir: %w", err)
 		}
@@ -60,7 +59,7 @@ func (s *projectDirectoryImageBuildStep) run(ctx context.Context) error {
 		})
 	} else if s.config.To == api.PipelineImageStreamTagReferenceIndexImage {
 		source := fmt.Sprintf("%s:%s", api.PipelineImageStream, api.PipelineImageStreamTagReferenceIndexImageGenerator)
-		workingDir, err := getWorkingDir(s.istClient, source, s.jobSpec.Namespace())
+		workingDir, err := getWorkingDir(s.client, source, s.jobSpec.Namespace())
 		if err != nil {
 			return fmt.Errorf("failed to get workingDir: %w", err)
 		}
@@ -76,7 +75,7 @@ func (s *projectDirectoryImageBuildStep) run(ctx context.Context) error {
 		})
 	} else if _, ok := s.config.Inputs["src"]; !ok {
 		source := fmt.Sprintf("%s:%s", api.PipelineImageStream, api.PipelineImageStreamTagReferenceSource)
-		workingDir, err := getWorkingDir(s.istClient, source, s.jobSpec.Namespace())
+		workingDir, err := getWorkingDir(s.client, source, s.jobSpec.Namespace())
 		if err != nil {
 			return fmt.Errorf("failed to get workingDir: %w", err)
 		}
@@ -104,9 +103,9 @@ func (s *projectDirectoryImageBuildStep) run(ctx context.Context) error {
 	return handleBuild(ctx, s.buildClient, build, s.artifactDir)
 }
 
-func getWorkingDir(istClient imageclientset.ImageStreamTagsGetter, source, namespace string) (string, error) {
-	ist, err := istClient.ImageStreamTags(namespace).Get(context.TODO(), source, meta.GetOptions{})
-	if err != nil {
+func getWorkingDir(client ctrlruntimeclient.Client, source, namespace string) (string, error) {
+	ist := &imagev1.ImageStreamTag{}
+	if err := client.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: source}, ist); err != nil {
 		return "", fmt.Errorf("could not fetch source ImageStreamTag: %w", err)
 	}
 	metadata := &docker10.DockerImage{}
@@ -147,7 +146,7 @@ func (s *projectDirectoryImageBuildStep) Provides() api.ParameterMap {
 		return nil
 	}
 	return api.ParameterMap{
-		utils.PipelineImageEnvFor(s.config.To): utils.ImageDigestFor(s.imageClient, s.jobSpec.Namespace, api.PipelineImageStream, string(s.config.To)),
+		utils.PipelineImageEnvFor(s.config.To): utils.ImageDigestFor(s.client, s.jobSpec.Namespace, api.PipelineImageStream, string(s.config.To)),
 	}
 }
 
@@ -157,13 +156,12 @@ func (s *projectDirectoryImageBuildStep) Description() string {
 	return fmt.Sprintf("Build image %s from the repository", s.config.To)
 }
 
-func ProjectDirectoryImageBuildStep(config api.ProjectDirectoryImageBuildStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, imageClient imageclientset.ImageStreamsGetter, istClient imageclientset.ImageStreamTagsGetter, artifactDir string, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
+func ProjectDirectoryImageBuildStep(config api.ProjectDirectoryImageBuildStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, client ctrlruntimeclient.Client, artifactDir string, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
 	return &projectDirectoryImageBuildStep{
 		config:      config,
 		resources:   resources,
 		buildClient: buildClient,
-		imageClient: imageClient,
-		istClient:   istClient,
+		client:      client,
 		artifactDir: artifactDir,
 		jobSpec:     jobSpec,
 		pullSecret:  pullSecret,

@@ -6,16 +6,16 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	apiimagev1 "github.com/openshift/api/image/v1"
-	fakeimageclientset "github.com/openshift/client-go/image/clientset/versioned/fake"
 
 	"github.com/openshift/ci-tools/pkg/api"
 )
 
 func TestIndexGenDockerfile(t *testing.T) {
-	fakeClientSet := ciopTestingClient{
-		imagecs: fakeimageclientset.NewSimpleClientset(&apiimagev1.ImageStream{
+	fakeClientSet := fakectrlruntimeclient.NewFakeClient(
+		&apiimagev1.ImageStream{
 			ObjectMeta: v1.ObjectMeta{
 				Namespace: "target-namespace",
 				Name:      api.PipelineImageStream,
@@ -34,9 +34,7 @@ func TestIndexGenDockerfile(t *testing.T) {
 					}},
 				}},
 			},
-		}),
-		t: t,
-	}
+		})
 
 	var expectedDockerfileSingleBundle = `FROM quay.io/operator-framework/upstream-opm-builder AS builder
 COPY .dockerconfigjson .
@@ -50,8 +48,8 @@ COPY --from=builder /database/ database`
 		config: api.IndexGeneratorStepConfiguration{
 			OperatorIndex: []string{"ci-bundle0"},
 		},
-		jobSpec:     &api.JobSpec{},
-		imageClient: fakeClientSet.ImageV1(),
+		jobSpec: &api.JobSpec{},
+		client:  fakeClientSet,
 	}
 	stepSingleBundle.jobSpec.SetNamespace("target-namespace")
 	generatedDockerfile, err := stepSingleBundle.indexGenDockerfile()
@@ -74,8 +72,8 @@ COPY --from=builder /database/ database`
 		config: api.IndexGeneratorStepConfiguration{
 			OperatorIndex: []string{"ci-bundle0", "ci-bundle1"},
 		},
-		jobSpec:     &api.JobSpec{},
-		imageClient: fakeClientSet.ImageV1(),
+		jobSpec: &api.JobSpec{},
+		client:  fakeClientSet,
 	}
 	stepMultiBundle.jobSpec.SetNamespace("target-namespace")
 	generatedDockerfile, err = stepMultiBundle.indexGenDockerfile()

@@ -22,9 +22,10 @@ import (
 	appsclientset "k8s.io/client-go/kubernetes/typed/apps/v1"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	v1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
+	imagev1 "github.com/openshift/api/image/v1"
 	routeapi "github.com/openshift/api/route/v1"
-	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 	routeclientset "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -42,7 +43,7 @@ type rpmServerStep struct {
 	deploymentClient appsclientset.DeploymentsGetter
 	routeClient      routeclientset.RoutesGetter
 	serviceClient    coreclientset.ServicesGetter
-	istClient        imageclientset.ImageStreamTagsGetter
+	client           ctrlruntimeclient.Client
 	jobSpec          *api.JobSpec
 }
 
@@ -57,8 +58,11 @@ func (s *rpmServerStep) Run(ctx context.Context) error {
 }
 
 func (s *rpmServerStep) run(ctx context.Context) error {
-	ist, err := s.istClient.ImageStreamTags(s.jobSpec.Namespace()).Get(ctx, fmt.Sprintf("%s:%s", api.PipelineImageStream, s.config.From), meta.GetOptions{})
-	if err != nil {
+	ist := &imagev1.ImageStreamTag{}
+	if err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{
+		Namespace: s.jobSpec.Namespace(),
+		Name:      fmt.Sprintf("%s:%s", api.PipelineImageStream, s.config.From)},
+		ist); err != nil {
 		return fmt.Errorf("could not find source ImageStreamTag for RPM repo deployment: %w", err)
 	}
 
@@ -458,14 +462,14 @@ func RPMServerStep(
 	deploymentClient appsclientset.DeploymentsGetter,
 	routeClient routeclientset.RoutesGetter,
 	serviceClient coreclientset.ServicesGetter,
-	istClient imageclientset.ImageStreamTagsGetter,
+	client ctrlruntimeclient.Client,
 	jobSpec *api.JobSpec) api.Step {
 	return &rpmServerStep{
 		config:           config,
 		deploymentClient: deploymentClient,
 		routeClient:      routeClient,
 		serviceClient:    serviceClient,
-		istClient:        istClient,
+		client:           client,
 		jobSpec:          jobSpec,
 	}
 }

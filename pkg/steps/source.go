@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	coreapi "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	corev1 "k8s.io/api/core/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
-	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
@@ -21,9 +21,10 @@ import (
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/clonerefs"
 	"k8s.io/test-infra/prow/pod-utils/decorate"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	buildapi "github.com/openshift/api/build/v1"
-	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
+	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/results"
@@ -57,7 +58,7 @@ var (
 )
 
 type CloneAuthConfig struct {
-	Secret *coreapi.Secret
+	Secret *corev1.Secret
 	Type   CloneAuthType
 }
 
@@ -84,7 +85,7 @@ func sourceDockerfile(fromTag api.PipelineImageStreamTagReference, workingDir st
 		switch cloneAuthConfig.Type {
 		case CloneAuthTypeSSH:
 			dockerCommands = append(dockerCommands, fmt.Sprintf("ADD %s /etc/ssh/ssh_config", sshConfig))
-			dockerCommands = append(dockerCommands, fmt.Sprintf("COPY ./%s %s", coreapi.SSHAuthPrivateKey, sshPrivateKey))
+			dockerCommands = append(dockerCommands, fmt.Sprintf("COPY ./%s %s", corev1.SSHAuthPrivateKey, sshPrivateKey))
 			secretPath = sshPrivateKey
 		case CloneAuthTypeOAuth:
 			dockerCommands = append(dockerCommands, fmt.Sprintf("COPY ./%s %s", OauthSecretKey, oauthToken))
@@ -148,11 +149,11 @@ type sourceStep struct {
 	config          api.SourceStepConfiguration
 	resources       api.ResourceConfiguration
 	buildClient     BuildClient
-	imageClient     imageclientset.ImageV1Interface
+	client          ctrlruntimeclient.Client
 	artifactDir     string
 	jobSpec         *api.JobSpec
 	cloneAuthConfig *CloneAuthConfig
-	pullSecret      *coreapi.Secret
+	pullSecret      *corev1.Secret
 }
 
 func (s *sourceStep) Inputs() (api.InputDefinition, error) {
@@ -166,7 +167,7 @@ func (s *sourceStep) Run(ctx context.Context) error {
 }
 
 func (s *sourceStep) run(ctx context.Context) error {
-	clonerefsRef, err := istObjectReference(s.imageClient, s.config.ClonerefsImage)
+	clonerefsRef, err := istObjectReference(ctx, s.client, s.config.ClonerefsImage)
 	if err != nil {
 		return fmt.Errorf("could not resolve clonerefs source: %w", err)
 	}
@@ -174,7 +175,7 @@ func (s *sourceStep) run(ctx context.Context) error {
 	return handleBuild(ctx, s.buildClient, createBuild(s.config, s.jobSpec, clonerefsRef, s.resources, s.cloneAuthConfig, s.pullSecret), s.artifactDir)
 }
 
-func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clonerefsRef coreapi.ObjectReference, resources api.ResourceConfiguration, cloneAuthConfig *CloneAuthConfig, pullSecret *coreapi.Secret) *buildapi.Build {
+func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clonerefsRef corev1.ObjectReference, resources api.ResourceConfiguration, cloneAuthConfig *CloneAuthConfig, pullSecret *corev1.Secret) *buildapi.Build {
 	var refs []prowv1.Refs
 	if jobSpec.Refs != nil {
 		r := *jobSpec.Refs
@@ -245,21 +246,21 @@ func createBuild(config api.SourceStepConfiguration, jobSpec *api.JobSpec, clone
 	build := buildFromSource(jobSpec, config.From, config.To, buildSource, "", resources, pullSecret)
 	build.Spec.CommonSpec.Strategy.DockerStrategy.Env = append(
 		build.Spec.CommonSpec.Strategy.DockerStrategy.Env,
-		coreapi.EnvVar{Name: clonerefs.JSONConfigEnvVar, Value: optionsJSON},
+		corev1.EnvVar{Name: clonerefs.JSONConfigEnvVar, Value: optionsJSON},
 	)
 
 	return build
 }
 
-func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStreamTagReference, source buildapi.BuildSource, dockerfilePath string, resources api.ResourceConfiguration, pullSecret *coreapi.Secret) *buildapi.Build {
+func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStreamTagReference, source buildapi.BuildSource, dockerfilePath string, resources api.ResourceConfiguration, pullSecret *corev1.Secret) *buildapi.Build {
 	log.Printf("Building %s", toTag)
 	buildResources, err := resourcesFor(resources.RequirementsForStep(string(toTag)))
 	if err != nil {
 		panic(fmt.Errorf("unable to parse resource requirement for build %s: %w", toTag, err))
 	}
-	var from *coreapi.ObjectReference
+	var from *corev1.ObjectReference
 	if len(fromTag) > 0 {
-		from = &coreapi.ObjectReference{
+		from = &corev1.ObjectReference{
 			Kind:      "ImageStreamTag",
 			Namespace: jobSpec.Namespace(),
 			Name:      fmt.Sprintf("%s:%s", api.PipelineImageStream, fromTag),
@@ -270,7 +271,7 @@ func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStrea
 	labels := defaultPodLabels(jobSpec)
 	labels[CreatesLabel] = string(toTag)
 	build := &buildapi.Build{
-		ObjectMeta: meta.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Name:      string(toTag),
 			Namespace: jobSpec.Namespace(),
 			Labels:    labels,
@@ -289,12 +290,12 @@ func buildFromSource(jobSpec *api.JobSpec, fromTag, toTag api.PipelineImageStrea
 						From:                    from,
 						ForcePull:               true,
 						NoCache:                 true,
-						Env:                     []coreapi.EnvVar{{Name: "foo", Value: "bar"}}, // workaround https://bugzilla.redhat.com/show_bug.cgi?id=1784163#c8
+						Env:                     []corev1.EnvVar{{Name: "foo", Value: "bar"}}, // workaround https://bugzilla.redhat.com/show_bug.cgi?id=1784163#c8
 						ImageOptimizationPolicy: &layer,
 					},
 				},
 				Output: buildapi.BuildOutput{
-					To: &coreapi.ObjectReference{
+					To: &corev1.ObjectReference{
 						Kind:      "ImageStreamTag",
 						Namespace: jobSpec.Namespace(),
 						Name:      fmt.Sprintf("%s:%s", api.PipelineImageStream, toTag),
@@ -331,7 +332,7 @@ func buildInputsFromStep(inputs map[string]api.ImageBuildInputs) []buildapi.Imag
 			continue
 		}
 		refs = append(refs, buildapi.ImageSource{
-			From: coreapi.ObjectReference{
+			From: corev1.ObjectReference{
 				Kind: "ImageStreamTag",
 				Name: fmt.Sprintf("%s:%s", api.PipelineImageStream, name),
 			},
@@ -353,11 +354,11 @@ func isBuildPhaseTerminated(phase buildapi.BuildPhase) bool {
 }
 
 func handleBuild(ctx context.Context, buildClient BuildClient, build *buildapi.Build, artifactDir string) error {
-	if _, err := buildClient.Builds(build.Namespace).Create(ctx, build, meta.CreateOptions{}); err != nil {
-		if !errors.IsAlreadyExists(err) {
+	if _, err := buildClient.Builds(build.Namespace).Create(ctx, build, metav1.CreateOptions{}); err != nil {
+		if !kerrors.IsAlreadyExists(err) {
 			return fmt.Errorf("could not create build %s: %w", build.Name, err)
 		}
-		b, err := buildClient.Builds(build.Namespace).Get(ctx, build.Name, meta.GetOptions{})
+		b, err := buildClient.Builds(build.Namespace).Get(ctx, build.Name, metav1.GetOptions{})
 		if err != nil {
 			return fmt.Errorf("could not get build %s: %w", build.Name, err)
 		}
@@ -366,19 +367,19 @@ func handleBuild(ctx context.Context, buildClient BuildClient, build *buildapi.B
 			(isInfraReason(b.Status.Reason) || hintsAtInfraReason(b.Status.LogSnippet)) {
 			log.Printf("Build %s previously failed from an infrastructure error (%s), retrying...\n", b.Name, b.Status.Reason)
 			zero := int64(0)
-			foreground := meta.DeletePropagationForeground
-			opts := meta.DeleteOptions{
+			foreground := metav1.DeletePropagationForeground
+			opts := metav1.DeleteOptions{
 				GracePeriodSeconds: &zero,
-				Preconditions:      &meta.Preconditions{UID: &b.UID},
+				Preconditions:      &metav1.Preconditions{UID: &b.UID},
 				PropagationPolicy:  &foreground,
 			}
-			if err := buildClient.Builds(build.Namespace).Delete(ctx, build.Name, opts); err != nil && !errors.IsNotFound(err) && !errors.IsConflict(err) {
+			if err := buildClient.Builds(build.Namespace).Delete(ctx, build.Name, opts); err != nil && !kerrors.IsNotFound(err) && !kerrors.IsConflict(err) {
 				return fmt.Errorf("could not delete build %s: %w", build.Name, err)
 			}
 			if err := waitForBuildDeletion(ctx, buildClient, build.Namespace, build.Name); err != nil {
 				return fmt.Errorf("could not wait for build %s to be deleted: %w", build.Name, err)
 			}
-			if _, err := buildClient.Builds(build.Namespace).Create(ctx, build, meta.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
+			if _, err := buildClient.Builds(build.Namespace).Create(ctx, build, metav1.CreateOptions{}); err != nil && !kerrors.IsAlreadyExists(err) {
 				return fmt.Errorf("could not recreate build %s: %w", build.Name, err)
 			}
 		}
@@ -401,8 +402,8 @@ func waitForBuildDeletion(ctx context.Context, client BuildClient, ns, name stri
 		ch <- wait.ExponentialBackoff(wait.Backoff{
 			Duration: 10 * time.Millisecond, Factor: 2, Steps: 10,
 		}, func() (done bool, err error) {
-			if _, err := client.Builds(ns).Get(ctx, name, meta.GetOptions{}); err != nil {
-				if errors.IsNotFound(err) {
+			if _, err := client.Builds(ns).Get(ctx, name, metav1.GetOptions{}); err != nil {
+				if kerrors.IsNotFound(err) {
 					return true, nil
 				}
 				return false, err
@@ -477,7 +478,7 @@ func waitForBuildOrTimeout(ctx context.Context, buildClient BuildClient, namespa
 
 	// First we set up a watcher to catch all events that happen while we check
 	// the build status
-	watcher, err := buildClient.Builds(namespace).Watch(ctx, meta.ListOptions{
+	watcher, err := buildClient.Builds(namespace).Watch(ctx, metav1.ListOptions{
 		FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String(),
 		Watch:         true,
 	})
@@ -486,7 +487,7 @@ func waitForBuildOrTimeout(ctx context.Context, buildClient BuildClient, namespa
 	}
 	defer watcher.Stop()
 
-	list, err := buildClient.Builds(namespace).List(ctx, meta.ListOptions{FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String()})
+	list, err := buildClient.Builds(namespace).List(ctx, metav1.ListOptions{FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String()})
 	if err != nil {
 		return false, fmt.Errorf("could not list builds: %w", err)
 	}
@@ -574,7 +575,7 @@ func buildDuration(build *buildapi.Build) time.Duration {
 	}
 	end := build.Status.CompletionTimestamp
 	if end == nil {
-		end = &meta.Time{Time: time.Now()}
+		end = &metav1.Time{Time: time.Now()}
 	}
 	duration := end.Sub(start.Time)
 	return duration
@@ -593,27 +594,27 @@ func printBuildLogs(buildClient BuildClient, namespace, name string) {
 	}
 }
 
-func resourcesFor(req api.ResourceRequirements) (coreapi.ResourceRequirements, error) {
-	apireq := coreapi.ResourceRequirements{}
+func resourcesFor(req api.ResourceRequirements) (corev1.ResourceRequirements, error) {
+	apireq := corev1.ResourceRequirements{}
 	for name, value := range req.Requests {
 		q, err := resource.ParseQuantity(value)
 		if err != nil {
-			return coreapi.ResourceRequirements{}, fmt.Errorf("invalid resource request: %w", err)
+			return corev1.ResourceRequirements{}, fmt.Errorf("invalid resource request: %w", err)
 		}
 		if apireq.Requests == nil {
-			apireq.Requests = make(coreapi.ResourceList)
+			apireq.Requests = make(corev1.ResourceList)
 		}
-		apireq.Requests[coreapi.ResourceName(name)] = q
+		apireq.Requests[corev1.ResourceName(name)] = q
 	}
 	for name, value := range req.Limits {
 		q, err := resource.ParseQuantity(value)
 		if err != nil {
-			return coreapi.ResourceRequirements{}, fmt.Errorf("invalid resource limit: %w", err)
+			return corev1.ResourceRequirements{}, fmt.Errorf("invalid resource limit: %w", err)
 		}
 		if apireq.Limits == nil {
-			apireq.Limits = make(coreapi.ResourceList)
+			apireq.Limits = make(corev1.ResourceList)
 		}
-		apireq.Limits[coreapi.ResourceName(name)] = q
+		apireq.Limits[corev1.ResourceName(name)] = q
 	}
 	return apireq, nil
 }
@@ -628,7 +629,7 @@ func (s *sourceStep) Creates() []api.StepLink {
 
 func (s *sourceStep) Provides() api.ParameterMap {
 	return api.ParameterMap{
-		utils.PipelineImageEnvFor(s.config.To): utils.ImageDigestFor(s.imageClient, s.jobSpec.Namespace, api.PipelineImageStream, string(s.config.To)),
+		utils.PipelineImageEnvFor(s.config.To): utils.ImageDigestFor(s.client, s.jobSpec.Namespace, api.PipelineImageStream, string(s.config.To)),
 	}
 }
 
@@ -639,13 +640,13 @@ func (s *sourceStep) Description() string {
 }
 
 func SourceStep(config api.SourceStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient,
-	imageClient imageclientset.ImageV1Interface,
-	artifactDir string, jobSpec *api.JobSpec, cloneAuthConfig *CloneAuthConfig, pullSecret *coreapi.Secret) api.Step {
+	client ctrlruntimeclient.Client,
+	artifactDir string, jobSpec *api.JobSpec, cloneAuthConfig *CloneAuthConfig, pullSecret *corev1.Secret) api.Step {
 	return &sourceStep{
 		config:          config,
 		resources:       resources,
 		buildClient:     buildClient,
-		imageClient:     imageClient,
+		client:          client,
 		artifactDir:     artifactDir,
 		jobSpec:         jobSpec,
 		cloneAuthConfig: cloneAuthConfig,
@@ -664,14 +665,14 @@ func trimLabels(labels map[string]string) map[string]string {
 	return labels
 }
 
-func getSourceSecretFromName(secretName string) *coreapi.LocalObjectReference {
+func getSourceSecretFromName(secretName string) *corev1.LocalObjectReference {
 	if len(secretName) == 0 {
 		return nil
 	}
-	return &coreapi.LocalObjectReference{Name: secretName}
+	return &corev1.LocalObjectReference{Name: secretName}
 }
 
-func getReasonsForUnreadyContainers(p *coreapi.Pod) string {
+func getReasonsForUnreadyContainers(p *corev1.Pod) string {
 	builder := &strings.Builder{}
 	for _, c := range p.Status.ContainerStatuses {
 		if c.Ready {
@@ -700,12 +701,12 @@ func getReasonsForUnreadyContainers(p *coreapi.Pod) string {
 	return builder.String()
 }
 
-func getEventsForPod(pod *coreapi.Pod, client coreclientset.EventInterface, ctx context.Context) string {
-	events, err := client.List(ctx, meta.ListOptions{})
+func getEventsForPod(pod *corev1.Pod, client coreclientset.EventInterface, ctx context.Context) string {
+	events, err := client.List(ctx, metav1.ListOptions{})
 	if err != nil {
 		log.Printf("Could not fetch events: %v", err)
 	}
-	var filtered []coreapi.Event
+	var filtered []corev1.Event
 	for _, event := range events.Items {
 		if event.InvolvedObject.Name == pod.Name {
 			filtered = append(filtered, event)
@@ -764,4 +765,27 @@ func addLabelsToBuild(refs *prowv1.Refs, build *buildapi.Build, contextDir strin
 	sort.Slice(build.Spec.Output.ImageLabels, func(i, j int) bool {
 		return build.Spec.Output.ImageLabels[i].Name < build.Spec.Output.ImageLabels[j].Name
 	})
+}
+
+func istObjectReference(ctx context.Context, client ctrlruntimeclient.Client, reference api.ImageStreamTagReference) (corev1.ObjectReference, error) {
+	is := &imagev1.ImageStream{}
+	if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: reference.Namespace, Name: reference.Name}, is); err != nil {
+		return corev1.ObjectReference{}, fmt.Errorf("could not resolve remote image stream: %w", err)
+	}
+	var repo string
+	if len(is.Status.PublicDockerImageRepository) > 0 {
+		repo = is.Status.PublicDockerImageRepository
+	} else if len(is.Status.DockerImageRepository) > 0 {
+		repo = is.Status.DockerImageRepository
+	} else {
+		return corev1.ObjectReference{}, fmt.Errorf("remote image stream %s has no accessible image registry value", reference.Name)
+	}
+	ist := &imagev1.ImageStreamTag{}
+	if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{
+		Namespace: reference.Namespace,
+		Name:      fmt.Sprintf("%s:%s", reference.Name, reference.Tag),
+	}, ist); err != nil {
+		return corev1.ObjectReference{}, fmt.Errorf("could not resolve remote image stream tag: %w", err)
+	}
+	return corev1.ObjectReference{Kind: "DockerImage", Name: fmt.Sprintf("%s@%s", repo, ist.Image.Name)}, nil
 }

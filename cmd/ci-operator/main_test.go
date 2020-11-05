@@ -14,18 +14,25 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/client-go/kubernetes/scheme"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
 	"k8s.io/utils/diff"
+	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	imagev1 "github.com/openshift/api/image/v1"
-	fakeimageclientset "github.com/openshift/client-go/image/clientset/versioned/fake"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/load"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps"
 )
+
+func init() {
+	if err := imagev1.AddToScheme(scheme.Scheme); err != nil {
+		panic(fmt.Sprintf("failed to add imagev1 to scheme: %v", err))
+	}
+}
 
 func TestProwMetadata(t *testing.T) {
 	tests := []struct {
@@ -389,7 +396,7 @@ func TestBuildPartialGraph(t *testing.T) {
 			input: []api.Step{
 				steps.InputImageTagStep(
 					api.InputImageTagStepConfiguration{To: api.PipelineImageStreamTagReferenceRoot},
-					fakeimageclientset.NewSimpleClientset(&imagev1.ImageStreamTag{ObjectMeta: metav1.ObjectMeta{Name: ":"}}).ImageV1(),
+					fakectrlruntimeclient.NewFakeClient(&imagev1.ImageStreamTag{ObjectMeta: metav1.ObjectMeta{Name: ":"}}),
 					nil,
 				),
 				steps.SourceStep(api.SourceStepConfiguration{From: api.PipelineImageStreamTagReferenceRoot, To: api.PipelineImageStreamTagReferenceSource}, api.ResourceConfiguration{}, nil, nil, "", &api.JobSpec{}, nil, nil),
@@ -401,10 +408,10 @@ func TestBuildPartialGraph(t *testing.T) {
 						},
 						To: api.PipelineImageStreamTagReference("oc-bin-image"),
 					},
-					api.ResourceConfiguration{}, nil, nil, nil, "", nil, nil,
+					api.ResourceConfiguration{}, nil, nil, "", nil, nil,
 				),
-				steps.OutputImageTagStep(api.OutputImageTagStepConfiguration{From: api.PipelineImageStreamTagReference("oc-bin-image")}, nil, nil, nil),
-				steps.ImagesReadyStep(steps.OutputImageTagStep(api.OutputImageTagStepConfiguration{From: api.PipelineImageStreamTagReference("oc-bin-image")}, nil, nil, nil).Creates()),
+				steps.OutputImageTagStep(api.OutputImageTagStepConfiguration{From: api.PipelineImageStreamTagReference("oc-bin-image")}, nil, nil),
+				steps.ImagesReadyStep(steps.OutputImageTagStep(api.OutputImageTagStepConfiguration{From: api.PipelineImageStreamTagReference("oc-bin-image")}, nil, nil).Creates()),
 			},
 			targetName:       "[images]",
 			expectedErrorMsg: "steps are missing dependencies",

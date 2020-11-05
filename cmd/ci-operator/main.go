@@ -51,7 +51,6 @@ import (
 	v1 "github.com/openshift/api/route/v1"
 	templateapi "github.com/openshift/api/template/v1"
 	buildclientset "github.com/openshift/client-go/build/clientset/versioned/typed/build/v1"
-	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 	projectclientset "github.com/openshift/client-go/project/clientset/versioned"
 	routeclientset "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
 	templatescheme "github.com/openshift/client-go/template/clientset/versioned/scheme"
@@ -1270,8 +1269,9 @@ func (o *options) saveNamespaceArtifacts() {
 		}
 	}
 
-	if imageClient, err := imageclientset.NewForConfig(o.clusterConfig); err == nil {
-		imagestreams, _ := imageClient.ImageStreams(o.namespace).List(context.TODO(), meta.ListOptions{})
+	if client, err := ctrlruntimeclient.New(o.clusterConfig, ctrlruntimeclient.Options{}); err == nil {
+		imagestreams := &imageapi.ImageStreamList{}
+		_ = client.List(context.TODO(), imagestreams, ctrlruntimeclient.InNamespace(o.namespace))
 		data, _ := json.MarshalIndent(imagestreams, "", "  ")
 		path := filepath.Join(namespaceDir, "imagestreams.json")
 		if err := ioutil.WriteFile(path, data, 0644); err != nil {

@@ -8,10 +8,10 @@ import (
 	"strings"
 	"testing"
 
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	apiimagev1 "github.com/openshift/api/image/v1"
-	fakeimageclientset "github.com/openshift/client-go/image/clientset/versioned/fake"
+	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 )
@@ -92,65 +92,64 @@ RUN find . -type f -regex ".*\.\(yaml\|yml\)" -exec sed -i s?quay.io/openshift/o
 RUN find . -type f -regex ".*\.\(yaml\|yml\)" -exec sed -i s?quay.io/openshift/origin-metering-hadoop:4.6?some-reg/target-namespace/stable@metering-hadoop?g {} +
 RUN find . -type f -regex ".*\.\(yaml\|yml\)" -exec sed -i s?quay.io/openshift/origin-ghostunnel:4.6?some-reg/target-namespace/stable@ghostunnel?g {} +`
 
-	fakeClientSet := ciopTestingClient{
-		imagecs: fakeimageclientset.NewSimpleClientset(&apiimagev1.ImageStream{
-			ObjectMeta: v1.ObjectMeta{
+	client := fakectrlruntimeclient.NewFakeClient(
+		&imagev1.ImageStream{
+			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "target-namespace",
 				Name:      api.StableImageStream,
 			},
-			Status: apiimagev1.ImageStreamStatus{
+			Status: imagev1.ImageStreamStatus{
 				PublicDockerImageRepository: "some-reg/target-namespace/stable",
-				Tags: []apiimagev1.NamedTagEventList{{
+				Tags: []imagev1.NamedTagEventList{{
 					Tag: "metering-presto",
-					Items: []apiimagev1.TagEvent{{
+					Items: []imagev1.TagEvent{{
 						Image: "metering-presto",
 					}},
 				}, {
 					Tag: "metering-hive",
-					Items: []apiimagev1.TagEvent{{
+					Items: []imagev1.TagEvent{{
 						Image: "metering-hive",
 					}},
 				}, {
 					Tag: "metering-hadoop",
-					Items: []apiimagev1.TagEvent{{
+					Items: []imagev1.TagEvent{{
 						Image: "metering-hadoop",
 					}},
 				}, {
 					Tag: "ghostunnel",
-					Items: []apiimagev1.TagEvent{{
+					Items: []imagev1.TagEvent{{
 						Image: "ghostunnel",
 					}},
 				}},
 			},
-		}, &apiimagev1.ImageStream{
-			ObjectMeta: v1.ObjectMeta{
+		},
+		&imagev1.ImageStream{
+			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "target-namespace",
 				Name:      api.PipelineImageStream,
 			},
-			Status: apiimagev1.ImageStreamStatus{
+			Status: imagev1.ImageStreamStatus{
 				PublicDockerImageRepository: "some-reg/target-namespace/pipeline",
-				Tags: []apiimagev1.NamedTagEventList{{
+				Tags: []imagev1.NamedTagEventList{{
 					Tag: "metering-ansible-operator",
-					Items: []apiimagev1.TagEvent{{
+					Items: []imagev1.TagEvent{{
 						Image: "metering-ansible-operator",
 					}},
 				}, {
 					Tag: "metering-reporting-operator",
-					Items: []apiimagev1.TagEvent{{
+					Items: []imagev1.TagEvent{{
 						Image: "metering-reporting-operator",
 					}},
 				}},
 			},
-		}),
-		t: t,
-	}
+		})
 
 	s := bundleSourceStep{
 		config: api.BundleSourceStepConfiguration{
 			Substitutions: subs,
 		},
-		jobSpec:     &api.JobSpec{},
-		imageClient: fakeClientSet.ImageV1(),
+		jobSpec: &api.JobSpec{},
+		client:  client,
 	}
 	s.jobSpec.SetNamespace("target-namespace")
 	generatedDockerfile, err := s.bundleSourceDockerfile()

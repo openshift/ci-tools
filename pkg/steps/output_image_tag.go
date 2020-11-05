@@ -7,11 +7,11 @@ import (
 
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/retry"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
-	imageapi "github.com/openshift/api/image/v1"
-	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
+	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/results"
@@ -22,10 +22,9 @@ import (
 // in the named ImageStream that resolves to the built
 // pipeline image
 type outputImageTagStep struct {
-	config    api.OutputImageTagStepConfiguration
-	istClient imageclientset.ImageStreamTagsGetter
-	isClient  imageclientset.ImageStreamsGetter
-	jobSpec   *api.JobSpec
+	config  api.OutputImageTagStepConfiguration
+	client  ctrlruntimeclient.Client
+	jobSpec *api.JobSpec
 }
 
 func (s *outputImageTagStep) Inputs() (api.InputDefinition, error) {
@@ -45,8 +44,11 @@ func (s *outputImageTagStep) run(ctx context.Context) error {
 	} else {
 		log.Printf("Tagging %s into %s/%s:%s", s.config.From, toNamespace, s.config.To.Name, s.config.To.Tag)
 	}
-	from, err := s.istClient.ImageStreamTags(s.jobSpec.Namespace()).Get(context.TODO(), fmt.Sprintf("%s:%s", api.PipelineImageStream, s.config.From), meta.GetOptions{})
-	if err != nil {
+	from := &imagev1.ImageStreamTag{}
+	if err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{
+		Namespace: s.jobSpec.Namespace(),
+		Name:      fmt.Sprintf("%s:%s", api.PipelineImageStream, s.config.From),
+	}, from); err != nil {
 		return fmt.Errorf("could not resolve base image: %w", err)
 	}
 	ist := s.imageStreamTag(from.Image.Name)
@@ -54,9 +56,9 @@ func (s *outputImageTagStep) run(ctx context.Context) error {
 	// ensure that the image stream tag points to the correct input, retry
 	// on conflict, and do nothing if another user creates before us
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		_, err := s.istClient.ImageStreamTags(toNamespace).Update(ctx, ist, meta.UpdateOptions{})
+		err := s.client.Update(ctx, ist)
 		if errors.IsNotFound(err) {
-			_, err = s.istClient.ImageStreamTags(toNamespace).Create(ctx, ist, meta.CreateOptions{})
+			err = s.client.Create(ctx, ist)
 		}
 		return err
 	}); err != nil && !errors.IsAlreadyExists(err) {
@@ -91,7 +93,7 @@ func (s *outputImageTagStep) Provides() api.ParameterMap {
 		return nil
 	}
 	return api.ParameterMap{
-		utils.StableImageEnv(s.config.To.As): utils.ImageDigestFor(s.isClient, func() string {
+		utils.StableImageEnv(s.config.To.As): utils.ImageDigestFor(s.client, func() string {
 			return s.config.To.Namespace
 		}, s.config.To.Name, s.config.To.Tag),
 	}
@@ -118,15 +120,15 @@ func (s *outputImageTagStep) namespace() string {
 	return s.jobSpec.Namespace()
 }
 
-func (s *outputImageTagStep) imageStreamTag(fromImage string) *imageapi.ImageStreamTag {
-	return &imageapi.ImageStreamTag{
-		ObjectMeta: meta.ObjectMeta{
+func (s *outputImageTagStep) imageStreamTag(fromImage string) *imagev1.ImageStreamTag {
+	return &imagev1.ImageStreamTag{
+		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s:%s", s.config.To.Name, s.config.To.Tag),
 			Namespace: s.namespace(),
 		},
-		Tag: &imageapi.TagReference{
-			ReferencePolicy: imageapi.TagReferencePolicy{
-				Type: imageapi.LocalTagReferencePolicy,
+		Tag: &imagev1.TagReference{
+			ReferencePolicy: imagev1.TagReferencePolicy{
+				Type: imagev1.LocalTagReferencePolicy,
 			},
 			From: &coreapi.ObjectReference{
 				Kind:      "ImageStreamImage",
@@ -137,11 +139,10 @@ func (s *outputImageTagStep) imageStreamTag(fromImage string) *imageapi.ImageStr
 	}
 }
 
-func OutputImageTagStep(config api.OutputImageTagStepConfiguration, istClient imageclientset.ImageStreamTagsGetter, isClient imageclientset.ImageStreamsGetter, jobSpec *api.JobSpec) api.Step {
+func OutputImageTagStep(config api.OutputImageTagStepConfiguration, client ctrlruntimeclient.Client, jobSpec *api.JobSpec) api.Step {
 	return &outputImageTagStep{
-		config:    config,
-		istClient: istClient,
-		isClient:  isClient,
-		jobSpec:   jobSpec,
+		config:  config,
+		client:  client,
+		jobSpec: jobSpec,
 	}
 }

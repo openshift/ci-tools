@@ -7,11 +7,12 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
-	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/diff"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	apiimagev1 "github.com/openshift/api/image/v1"
-	fakeimageclientset "github.com/openshift/client-go/image/clientset/versioned/fake"
+	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 )
@@ -28,31 +29,23 @@ func TestInputImageTagStep(t *testing.T) {
 		To:        "TO",
 		BaseImage: baseImage,
 	}
-	istag := &apiimagev1.ImageStreamTag{
-		ObjectMeta: meta.ObjectMeta{
-			Name:      fmt.Sprintf("%s:%s", baseImage.Name, baseImage.Tag),
-			Namespace: baseImage.Namespace,
-		},
-		Image: apiimagev1.Image{ObjectMeta: meta.ObjectMeta{Name: "ddc0de"}},
-	}
 
-	fakecs := ciopTestingClient{
-		kubecs: nil,
-		imagecs: fakeimageclientset.NewSimpleClientset(&apiimagev1.ImageStream{
-			ObjectMeta: meta.ObjectMeta{
+	client := fakectrlruntimeclient.NewFakeClient(
+		&imagev1.ImageStream{
+			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "target-namespace",
 				Name:      api.PipelineImageStream,
 			},
-			Spec: apiimagev1.ImageStreamSpec{
+			Spec: imagev1.ImageStreamSpec{
 				// pipeline:* will now be directly referenceable
-				LookupPolicy: apiimagev1.ImageLookupPolicy{Local: true},
+				LookupPolicy: imagev1.ImageLookupPolicy{Local: true},
 			},
-			Status: apiimagev1.ImageStreamStatus{
+			Status: imagev1.ImageStreamStatus{
 				PublicDockerImageRepository: "some-reg/target-namespace/pipeline",
-				Tags: []apiimagev1.NamedTagEventList{
+				Tags: []imagev1.NamedTagEventList{
 					{
 						Tag: "TO",
-						Items: []apiimagev1.TagEvent{
+						Items: []imagev1.TagEvent{
 							{
 								Image: "sha256:47e2f82dbede8ff990e6e240f82d78830e7558f7b30df7bd8c0693992018b1e3",
 							},
@@ -60,15 +53,14 @@ func TestInputImageTagStep(t *testing.T) {
 					},
 				},
 			},
-		}),
-		t: t,
-	}
-
-	client := fakecs.ImageV1()
-
-	if _, err := client.ImageStreamTags(baseImage.Namespace).Create(context.TODO(), istag, meta.CreateOptions{}); err != nil {
-		t.Errorf("Could not set up testing ImageStreamTag: %v", err)
-	}
+		},
+		&imagev1.ImageStreamTag{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      fmt.Sprintf("%s:%s", baseImage.Name, baseImage.Tag),
+				Namespace: baseImage.Namespace,
+			},
+			Image: imagev1.Image{ObjectMeta: metav1.ObjectMeta{Name: "ddc0de"}},
+		})
 
 	// Make a step instance
 	jobspec := &api.JobSpec{}
@@ -107,28 +99,32 @@ func TestInputImageTagStep(t *testing.T) {
 
 	// Test that executing the step resulted in an expected ImageStreamTag
 	// created
-	expectedImageStreamTag := &apiimagev1.ImageStreamTag{
-		ObjectMeta: meta.ObjectMeta{
-			Name:      "pipeline:TO",
-			Namespace: jobspec.Namespace(),
+	expectedImageStreamTag := &imagev1.ImageStreamTag{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            "pipeline:TO",
+			Namespace:       jobspec.Namespace(),
+			ResourceVersion: "1",
 		},
-		Tag: &apiimagev1.TagReference{
+		TypeMeta: metav1.TypeMeta{Kind: "ImageStreamTag", APIVersion: "image.openshift.io/v1"},
+		Tag: &imagev1.TagReference{
 			From: &corev1.ObjectReference{
 				Kind:      "ImageStreamImage",
 				Namespace: baseImage.Namespace,
 				Name:      "BASE@ddc0de",
 			},
-			ReferencePolicy: apiimagev1.TagReferencePolicy{
-				Type: apiimagev1.LocalTagReferencePolicy,
+			ReferencePolicy: imagev1.TagReferencePolicy{
+				Type: imagev1.LocalTagReferencePolicy,
 			},
 		},
 	}
 
-	targetImageStreamTag, err := client.ImageStreamTags(jobspec.Namespace()).Get(context.TODO(), "pipeline:TO", meta.GetOptions{})
+	targetImageStreamTag := &imagev1.ImageStreamTag{}
+	if err := client.Get(context.Background(), ctrlruntimeclient.ObjectKey{Namespace: jobspec.Namespace(), Name: "pipeline:TO"}, targetImageStreamTag); err != nil {
+
+		t.Errorf("Failed to get ImageStreamTag 'pipeline:TO' after step execution: %v", err)
+	}
+
 	if !equality.Semantic.DeepEqual(expectedImageStreamTag, targetImageStreamTag) {
 		t.Errorf("Different ImageStreamTag 'pipeline:TO' after step execution:\n%s", diff.ObjectReflectDiff(expectedImageStreamTag, targetImageStreamTag))
-	}
-	if err != nil {
-		t.Errorf("Failed to get ImageStreamTag 'pipeline:TO' after step execution: %v", err)
 	}
 }

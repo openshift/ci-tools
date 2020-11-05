@@ -6,9 +6,9 @@ import (
 	"strings"
 
 	coreapi "k8s.io/api/core/v1"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	buildapi "github.com/openshift/api/build/v1"
-	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/results"
@@ -20,8 +20,7 @@ type indexGeneratorStep struct {
 	releaseBuildConfig *api.ReleaseBuildConfiguration
 	resources          api.ResourceConfiguration
 	buildClient        BuildClient
-	imageClient        imageclientset.ImageStreamsGetter
-	istClient          imageclientset.ImageStreamTagsGetter
+	client             ctrlruntimeclient.Client
 	jobSpec            *api.JobSpec
 	artifactDir        string
 	pullSecret         *coreapi.Secret
@@ -42,7 +41,7 @@ func (s *indexGeneratorStep) Run(ctx context.Context) error {
 
 func (s *indexGeneratorStep) run(ctx context.Context) error {
 	source := fmt.Sprintf("%s:%s", api.PipelineImageStream, api.PipelineImageStreamTagReferenceSource)
-	workingDir, err := getWorkingDir(s.istClient, source, s.jobSpec.Namespace())
+	workingDir, err := getWorkingDir(s.client, source, s.jobSpec.Namespace())
 	if err != nil {
 		return fmt.Errorf("failed to get workingDir: %w", err)
 	}
@@ -90,7 +89,7 @@ func (s *indexGeneratorStep) indexGenDockerfile() (string, error) {
 	dockerCommands = append(dockerCommands, "RUN mkdir $HOME/.docker && mv .dockerconfigjson $HOME/.docker/config.json")
 	var bundles []string
 	for _, bundleName := range s.config.OperatorIndex {
-		fullSpec, err := utils.ImageDigestFor(s.imageClient, s.jobSpec.Namespace, api.PipelineImageStream, bundleName)()
+		fullSpec, err := utils.ImageDigestFor(s.client, s.jobSpec.Namespace, api.PipelineImageStream, bundleName)()
 		if err != nil {
 			return "", fmt.Errorf("failed to get image digest for bundle `%s`: %w", bundleName, err)
 		}
@@ -127,14 +126,13 @@ func (s *indexGeneratorStep) Description() string {
 	return fmt.Sprintf("Build image %s from the repository", s.config.To)
 }
 
-func IndexGeneratorStep(config api.IndexGeneratorStepConfiguration, releaseBuildConfig *api.ReleaseBuildConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, imageClient imageclientset.ImageStreamsGetter, istClient imageclientset.ImageStreamTagsGetter, artifactDir string, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
+func IndexGeneratorStep(config api.IndexGeneratorStepConfiguration, releaseBuildConfig *api.ReleaseBuildConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, client ctrlruntimeclient.Client, artifactDir string, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
 	return &indexGeneratorStep{
 		config:             config,
 		releaseBuildConfig: releaseBuildConfig,
 		resources:          resources,
 		buildClient:        buildClient,
-		imageClient:        imageClient,
-		istClient:          istClient,
+		client:             client,
 		artifactDir:        artifactDir,
 		jobSpec:            jobSpec,
 		pullSecret:         pullSecret,

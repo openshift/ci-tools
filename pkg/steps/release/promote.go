@@ -16,9 +16,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/util/retry"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
-	imageapi "github.com/openshift/api/image/v1"
-	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
+	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/results"
@@ -32,8 +32,8 @@ type promotionStep struct {
 	config         api.PromotionConfiguration
 	images         []api.ProjectDirectoryImageBuildStepConfiguration
 	requiredImages sets.String
-	srcClient      imageclientset.ImageV1Interface
-	dstClient      imageclientset.ImageV1Interface
+	srcClient      ctrlruntimeclient.Client
+	dstClient      ctrlruntimeclient.Client
 	jobSpec        *api.JobSpec
 	podClient      steps.PodClient
 	eventClient    coreclientset.EventsGetter
@@ -72,9 +72,11 @@ func (s *promotionStep) run(ctx context.Context) error {
 	}
 
 	log.Printf("Promoting tags to %s: %s", targetName(s.config), strings.Join(names.List(), ", "))
-
-	pipeline, err := s.srcClient.ImageStreams(s.jobSpec.Namespace()).Get(ctx, api.PipelineImageStream, meta.GetOptions{})
-	if err != nil {
+	pipeline := &imagev1.ImageStream{}
+	if err := s.srcClient.Get(ctx, ctrlruntimeclient.ObjectKey{
+		Namespace: s.jobSpec.Namespace(),
+		Name:      api.PipelineImageStream,
+	}, pipeline); err != nil {
 		return fmt.Errorf("could not resolve pipeline imagestream: %w", err)
 	}
 
@@ -93,29 +95,26 @@ func (s *promotionStep) run(ctx context.Context) error {
 
 	if len(s.config.Name) > 0 {
 		return retry.RetryOnConflict(promotionRetry, func() error {
-			is, err := s.dstClient.ImageStreams(s.config.Namespace).Get(ctx, s.config.Name, meta.GetOptions{})
+			is := &imagev1.ImageStream{}
+			err := s.dstClient.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: s.config.Namespace, Name: s.config.Name}, is)
 			if errors.IsNotFound(err) {
-				is, err = s.dstClient.ImageStreams(s.config.Namespace).Create(ctx, &imageapi.ImageStream{
-					ObjectMeta: meta.ObjectMeta{
-						Name:      s.config.Name,
-						Namespace: s.config.Namespace,
-					},
-				}, meta.CreateOptions{})
-			}
-			if err != nil {
-				return fmt.Errorf("could not retrieve target imagestream: %w", err)
+				is.Namespace = s.config.Namespace
+				is.Name = s.config.Name
+				if err := s.dstClient.Create(ctx, is); err != nil {
+					return fmt.Errorf("could not retrieve target imagestream: %w", err)
+				}
 			}
 
 			for dst, src := range tags {
 				if valid, _ := utils.FindStatusTag(pipeline, src); valid != nil {
-					is.Spec.Tags = append(is.Spec.Tags, imageapi.TagReference{
+					is.Spec.Tags = append(is.Spec.Tags, imagev1.TagReference{
 						Name: dst,
 						From: valid,
 					})
 				}
 			}
 
-			if _, err := s.dstClient.ImageStreams(s.config.Namespace).Update(ctx, is, meta.UpdateOptions{}); err != nil {
+			if err := s.dstClient.Update(ctx, is); err != nil {
 				if errors.IsConflict(err) {
 					return err
 				}
@@ -125,7 +124,6 @@ func (s *promotionStep) run(ctx context.Context) error {
 		})
 	}
 
-	client := s.dstClient.ImageStreamTags(s.config.Namespace)
 	for dst, src := range tags {
 		valid, _ := utils.FindStatusTag(pipeline, src)
 		if valid == nil {
@@ -133,35 +131,35 @@ func (s *promotionStep) run(ctx context.Context) error {
 		}
 
 		err := retry.RetryOnConflict(promotionRetry, func() error {
-			_, err := s.dstClient.ImageStreams(s.config.Namespace).Get(ctx, dst, meta.GetOptions{})
+			err := s.dstClient.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: s.config.Namespace, Name: dst}, &imagev1.ImageStream{})
 			if errors.IsNotFound(err) {
-				_, err = s.dstClient.ImageStreams(s.config.Namespace).Create(ctx, &imageapi.ImageStream{
+				err = s.dstClient.Create(ctx, &imagev1.ImageStream{
 					ObjectMeta: meta.ObjectMeta{
 						Name:      dst,
 						Namespace: s.config.Namespace,
 					},
-					Spec: imageapi.ImageStreamSpec{
-						LookupPolicy: imageapi.ImageLookupPolicy{
+					Spec: imagev1.ImageStreamSpec{
+						LookupPolicy: imagev1.ImageLookupPolicy{
 							Local: true,
 						},
 					},
-				}, meta.CreateOptions{})
+				})
 			}
 			if err != nil {
 				return fmt.Errorf("could not ensure target imagestream: %w", err)
 			}
 
-			ist := &imageapi.ImageStreamTag{
+			ist := &imagev1.ImageStreamTag{
 				ObjectMeta: meta.ObjectMeta{
 					Name:      fmt.Sprintf("%s:%s", dst, s.config.Tag),
 					Namespace: s.config.Namespace,
 				},
-				Tag: &imageapi.TagReference{
+				Tag: &imagev1.TagReference{
 					Name: s.config.Tag,
 					From: valid,
 				},
 			}
-			if _, err := client.Update(ctx, ist, meta.UpdateOptions{}); err != nil {
+			if err := s.dstClient.Update(ctx, ist); err != nil {
 				if errors.IsConflict(err) {
 					return err
 				}
@@ -176,7 +174,7 @@ func (s *promotionStep) run(ctx context.Context) error {
 	return nil
 }
 
-func getImageMirrorTarget(config api.PromotionConfiguration, tags map[string]string, pipeline *imageapi.ImageStream) map[string]string {
+func getImageMirrorTarget(config api.PromotionConfiguration, tags map[string]string, pipeline *imagev1.ImageStream) map[string]string {
 	if pipeline == nil {
 		return nil
 	}
@@ -275,7 +273,7 @@ func getPromotionPod(imageMirrorTarget map[string]string, namespace string) *cor
 
 // findDockerImageReference returns DockerImageReference, the string that can be used to pull this image,
 // to a tag if it exists in the ImageStream's Spec
-func findDockerImageReference(is *imageapi.ImageStream, tag string) string {
+func findDockerImageReference(is *imagev1.ImageStream, tag string) string {
 	for _, t := range is.Status.Tags {
 		if t.Tag != tag {
 			continue
@@ -376,7 +374,7 @@ func (s *promotionStep) Description() string {
 
 // PromotionStep copies tags from the pipeline image stream to the destination defined in the promotion config.
 // If the source tag does not exist it is silently skipped.
-func PromotionStep(config api.PromotionConfiguration, images []api.ProjectDirectoryImageBuildStepConfiguration, requiredImages sets.String, srcClient, dstClient imageclientset.ImageV1Interface, jobSpec *api.JobSpec, podClient steps.PodClient, eventClient coreclientset.EventsGetter, pushSecret *coreapi.Secret) api.Step {
+func PromotionStep(config api.PromotionConfiguration, images []api.ProjectDirectoryImageBuildStepConfiguration, requiredImages sets.String, srcClient, dstClient ctrlruntimeclient.Client, jobSpec *api.JobSpec, podClient steps.PodClient, eventClient coreclientset.EventsGetter, pushSecret *coreapi.Secret) api.Step {
 	return &promotionStep{
 		config:         config,
 		images:         images,

@@ -6,12 +6,12 @@ import (
 	"log"
 	"strings"
 
-	"k8s.io/apimachinery/pkg/api/errors"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
-	imageapi "github.com/openshift/api/image/v1"
-	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
+	imagev1 "github.com/openshift/api/image/v1"
 	routeclientset "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -25,10 +25,10 @@ const releaseConfigAnnotation = "release.openshift.io/config"
 // stableImagesTagStep is used when no release configuration is necessary
 type stableImagesTagStep struct {
 	jobSpec   *api.JobSpec
-	dstClient imageclientset.ImageV1Interface
+	dstClient ctrlruntimeclient.Client
 }
 
-func StableImagesTagStep(dstClient imageclientset.ImageV1Interface, jobSpec *api.JobSpec) api.Step {
+func StableImagesTagStep(dstClient ctrlruntimeclient.Client, jobSpec *api.JobSpec) api.Step {
 	return &stableImagesTagStep{
 		dstClient: dstClient,
 		jobSpec:   jobSpec,
@@ -42,18 +42,18 @@ func (s *stableImagesTagStep) Run(ctx context.Context) error {
 func (s *stableImagesTagStep) run(ctx context.Context) error {
 	log.Printf("Will output images to %s:%s", api.StableImageStream, api.ComponentFormatReplacement)
 
-	newIS := &imageapi.ImageStream{
+	newIS := &imagev1.ImageStream{
 		ObjectMeta: meta.ObjectMeta{
-			Name: api.StableImageStream,
+			Namespace: s.jobSpec.Namespace(),
+			Name:      api.StableImageStream,
 		},
-		Spec: imageapi.ImageStreamSpec{
-			LookupPolicy: imageapi.ImageLookupPolicy{
+		Spec: imagev1.ImageStreamSpec{
+			LookupPolicy: imagev1.ImageLookupPolicy{
 				Local: true,
 			},
 		},
 	}
-	_, err := s.dstClient.ImageStreams(s.jobSpec.Namespace()).Create(ctx, newIS, meta.CreateOptions{})
-	if err != nil && !errors.IsAlreadyExists(err) {
+	if err := s.dstClient.Create(ctx, newIS); err != nil && !kerrors.IsAlreadyExists(err) {
 		return fmt.Errorf("could not create stable imagestreamtag: %w", err)
 	}
 	return nil
@@ -86,7 +86,7 @@ func (s *stableImagesTagStep) Description() string {
 // a later point, selectively
 type releaseImagesTagStep struct {
 	config          api.ReleaseTagConfiguration
-	client          imageclientset.ImageV1Interface
+	client          ctrlruntimeclient.Client
 	routeClient     routeclientset.RoutesGetter
 	configMapClient coreclientset.ConfigMapsGetter
 	params          *api.DeferredParameters
@@ -114,19 +114,20 @@ func (s *releaseImagesTagStep) run(ctx context.Context) error {
 		log.Printf("Tagged shared images from %s", sourceName(s.config))
 	}
 
-	is, err := s.client.ImageStreams(s.config.Namespace).Get(ctx, s.config.Name, meta.GetOptions{})
-	if err != nil {
+	is := &imagev1.ImageStream{}
+	if err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: s.config.Namespace, Name: s.config.Name}, is); err != nil {
 		return fmt.Errorf("could not resolve stable imagestream: %w", err)
 	}
 
 	is.UID = ""
-	newIS := &imageapi.ImageStream{
+	newIS := &imagev1.ImageStream{
 		ObjectMeta: meta.ObjectMeta{
+			Namespace:   s.jobSpec.Namespace(),
 			Name:        api.ReleaseStreamFor(api.LatestReleaseName),
 			Annotations: map[string]string{},
 		},
-		Spec: imageapi.ImageStreamSpec{
-			LookupPolicy: imageapi.ImageLookupPolicy{
+		Spec: imagev1.ImageStreamSpec{
+			LookupPolicy: imagev1.ImageLookupPolicy{
 				Local: true,
 			},
 		},
@@ -136,10 +137,10 @@ func (s *releaseImagesTagStep) run(ctx context.Context) error {
 	}
 	for _, tag := range is.Status.Tags {
 		if valid, _ := utils.FindStatusTag(is, tag.Tag); valid != nil {
-			newIS.Spec.Tags = append(newIS.Spec.Tags, imageapi.TagReference{
+			newIS.Spec.Tags = append(newIS.Spec.Tags, imagev1.TagReference{
 				Name:            tag.Tag,
 				From:            valid,
-				ReferencePolicy: imageapi.TagReferencePolicy{Type: imageapi.LocalTagReferencePolicy},
+				ReferencePolicy: imagev1.TagReferencePolicy{Type: imagev1.LocalTagReferencePolicy},
 			})
 		}
 	}
@@ -147,13 +148,11 @@ func (s *releaseImagesTagStep) run(ctx context.Context) error {
 	initialIS := newIS.DeepCopy()
 	initialIS.Name = api.ReleaseStreamFor(api.InitialReleaseName)
 
-	_, err = s.client.ImageStreams(s.jobSpec.Namespace()).Create(ctx, newIS, meta.CreateOptions{})
-	if err != nil && !errors.IsAlreadyExists(err) {
+	if err := s.client.Create(ctx, newIS); err != nil && !kerrors.IsAlreadyExists(err) {
 		return fmt.Errorf("could not copy stable imagestreamtag: %w", err)
 	}
 
-	is, err = s.client.ImageStreams(s.jobSpec.Namespace()).Create(ctx, initialIS, meta.CreateOptions{})
-	if err != nil && !errors.IsAlreadyExists(err) {
+	if err := s.client.Create(ctx, initialIS); err != nil && !kerrors.IsAlreadyExists(err) {
 		return fmt.Errorf("could not copy stable-initial imagestreamtag: %w", err)
 	}
 
@@ -196,8 +195,8 @@ func (s *releaseImagesTagStep) imageFormat() (string, error) {
 }
 
 func (s *releaseImagesTagStep) repositoryPullSpec() (string, error) {
-	is, err := s.client.ImageStreams(s.jobSpec.Namespace()).Get(context.TODO(), api.PipelineImageStream, meta.GetOptions{})
-	if err != nil {
+	is := &imagev1.ImageStream{}
+	if err := s.client.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Namespace: s.jobSpec.Namespace(), Name: api.PipelineImageStream}, is); err != nil {
 		return "", err
 	}
 	if len(is.Status.PublicDockerImageRepository) > 0 {
@@ -215,7 +214,7 @@ func (s *releaseImagesTagStep) Description() string {
 	return fmt.Sprintf("Find all of the input images from %s and tag them into the output image stream", sourceName(s.config))
 }
 
-func ReleaseImagesTagStep(config api.ReleaseTagConfiguration, client imageclientset.ImageV1Interface, routeClient routeclientset.RoutesGetter, configMapClient coreclientset.ConfigMapsGetter, params *api.DeferredParameters, jobSpec *api.JobSpec) api.Step {
+func ReleaseImagesTagStep(config api.ReleaseTagConfiguration, client ctrlruntimeclient.Client, routeClient routeclientset.RoutesGetter, configMapClient coreclientset.ConfigMapsGetter, params *api.DeferredParameters, jobSpec *api.JobSpec) api.Step {
 	return &releaseImagesTagStep{
 		config:          config,
 		client:          client,

@@ -9,14 +9,14 @@ import (
 
 	coreapi "k8s.io/api/core/v1"
 	rbacapi "k8s.io/api/rbac/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
-	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
-	rbacclientset "k8s.io/client-go/kubernetes/typed/rbac/v1"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	imageapi "github.com/openshift/api/image/v1"
-	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
+	imagev1 "github.com/openshift/api/image/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/results"
@@ -49,11 +49,9 @@ type assembleReleaseStep struct {
 	config      *api.ReleaseTagConfiguration
 	name        string
 	resources   api.ResourceConfiguration
-	imageClient imageclientset.ImageV1Interface
+	client      ctrlruntimeclient.Client
 	podClient   steps.PodClient
 	eventClient coreclientset.EventsGetter
-	saGetter    coreclientset.ServiceAccountsGetter
-	rbacClient  rbacclientset.RbacV1Interface
 	artifactDir string
 	jobSpec     *api.JobSpec
 }
@@ -68,16 +66,16 @@ func (s *assembleReleaseStep) Run(ctx context.Context) error {
 	return results.ForReason("assembling_release").ForError(s.run(ctx))
 }
 
-func setupReleaseImageStream(namespace string, saGetter coreclientset.ServiceAccountsGetter, rbacClient rbacclientset.RbacV1Interface, imageClient imageclientset.ImageV1Interface) (string, error) {
+func setupReleaseImageStream(namespace string, client ctrlruntimeclient.Client) (string, error) {
 	sa := &coreapi.ServiceAccount{
-		ObjectMeta: meta.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Name:      "ci-operator",
 			Namespace: namespace,
 		},
 	}
 
 	role := &rbacapi.Role{
-		ObjectMeta: meta.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Name:      "ci-operator-image",
 			Namespace: namespace,
 		},
@@ -96,7 +94,7 @@ func setupReleaseImageStream(namespace string, saGetter coreclientset.ServiceAcc
 	}
 
 	roleBinding := &rbacapi.RoleBinding{
-		ObjectMeta: meta.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Name:      "ci-operator-image",
 			Namespace: namespace,
 		},
@@ -106,31 +104,24 @@ func setupReleaseImageStream(namespace string, saGetter coreclientset.ServiceAcc
 			Name: "ci-operator-image",
 		},
 	}
-
-	if _, err := saGetter.ServiceAccounts(namespace).Create(context.TODO(), sa, meta.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
+	ctx := context.TODO()
+	if err := client.Create(ctx, sa); err != nil && !kerrors.IsAlreadyExists(err) {
 		return "", results.ForReason("creating_service_account").WithError(err).Errorf("could not create service account 'ci-operator' for: %v", err)
 	}
-
-	if _, err := rbacClient.Roles(namespace).Create(context.TODO(), role, meta.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
+	if err := client.Create(ctx, role); err != nil && !kerrors.IsAlreadyExists(err) {
 		return "", results.ForReason("creating_roles").WithError(err).Errorf("could not create role 'ci-operator-image' for: %v", err)
 	}
-
-	if _, err := rbacClient.RoleBindings(namespace).Create(context.TODO(), roleBinding, meta.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
+	if err := client.Create(ctx, roleBinding); err != nil && !kerrors.IsAlreadyExists(err) {
 		return "", results.ForReason("binding_roles").WithError(err).Errorf("could not create role binding 'ci-operator-image' for: %v", err)
 	}
 
 	// ensure the image stream exists
-	release, err := imageClient.ImageStreams(namespace).Create(context.TODO(), &imageapi.ImageStream{
-		ObjectMeta: meta.ObjectMeta{
-			Name: "release",
-		},
-	}, meta.CreateOptions{})
-	if err != nil {
-		if !errors.IsAlreadyExists(err) {
+	release := &imagev1.ImageStream{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: "release"}}
+	if err := client.Create(ctx, release); err != nil {
+		if !kerrors.IsAlreadyExists(err) {
 			return "", err
 		}
-		release, err = imageClient.ImageStreams(namespace).Get(context.TODO(), "release", meta.GetOptions{})
-		if err != nil {
+		if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: "release"}, release); err != nil {
 			return "", results.ForReason("creating_release_stream").ForError(err)
 		}
 	}
@@ -138,13 +129,13 @@ func setupReleaseImageStream(namespace string, saGetter coreclientset.ServiceAcc
 }
 
 func (s *assembleReleaseStep) run(ctx context.Context) error {
-	releaseImageStreamRepo, err := setupReleaseImageStream(s.jobSpec.Namespace(), s.saGetter, s.rbacClient, s.imageClient)
+	releaseImageStreamRepo, err := setupReleaseImageStream(s.jobSpec.Namespace(), s.client)
 	if err != nil {
 		return err
 	}
 
 	streamName := api.ReleaseStreamFor(s.name)
-	var stable *imageapi.ImageStream
+	stable := &imageapi.ImageStream{}
 	var cvo string
 	cvoExists := false
 	cliExists := false
@@ -153,8 +144,7 @@ func (s *assembleReleaseStep) run(ctx context.Context) error {
 	importCtx, cancel := context.WithTimeout(ctx, 15*time.Minute)
 	defer cancel()
 	if err := wait.PollImmediateUntil(10*time.Second, func() (bool, error) {
-		stable, err = s.imageClient.ImageStreams(s.jobSpec.Namespace()).Get(ctx, streamName, meta.GetOptions{})
-		if err != nil {
+		if err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: s.jobSpec.Namespace(), Name: streamName}, stable); err != nil {
 			return false, err
 		}
 		cvo, cvoExists = util.ResolvePullSpec(stable, "cluster-version-operator", true)
@@ -171,7 +161,7 @@ func (s *assembleReleaseStep) run(ctx context.Context) error {
 			}
 			log.Printf("No %s release image necessary, %s image stream does not include a cluster-version-operator image", s.name, streamName)
 			return nil
-		} else if errors.IsNotFound(err) {
+		} else if kerrors.IsNotFound(err) {
 			// if a user sets IMAGE_FORMAT=... we skip importing the image stream contents, which prevents us from
 			// generating a release image.
 			log.Printf("No %s release image can be generated when the %s image stream was skipped", s.name, streamName)
@@ -245,7 +235,7 @@ func (s *assembleReleaseStep) Creates() []api.StepLink {
 
 func (s *assembleReleaseStep) Provides() api.ParameterMap {
 	return api.ParameterMap{
-		utils.ReleaseImageEnv(s.name): utils.ImageDigestFor(s.imageClient, s.jobSpec.Namespace, api.ReleaseImageStream, s.name),
+		utils.ReleaseImageEnv(s.name): utils.ImageDigestFor(s.client, s.jobSpec.Namespace, api.ReleaseImageStream, s.name),
 	}
 }
 
@@ -260,17 +250,15 @@ func (s *assembleReleaseStep) Description() string {
 // AssembleReleaseStep builds a new update payload image based on the cluster version operator
 // and the operators defined in the release configuration.
 func AssembleReleaseStep(name string, config *api.ReleaseTagConfiguration, resources api.ResourceConfiguration,
-	podClient steps.PodClient, eventClient coreclientset.EventsGetter, imageClient imageclientset.ImageV1Interface, saGetter coreclientset.ServiceAccountsGetter,
-	rbacClient rbacclientset.RbacV1Interface, artifactDir string, jobSpec *api.JobSpec) api.Step {
+	podClient steps.PodClient, eventClient coreclientset.EventsGetter, client ctrlruntimeclient.Client,
+	artifactDir string, jobSpec *api.JobSpec) api.Step {
 	return &assembleReleaseStep{
 		config:      config,
 		name:        name,
 		resources:   resources,
 		podClient:   podClient,
 		eventClient: eventClient,
-		imageClient: imageClient,
-		saGetter:    saGetter,
-		rbacClient:  rbacClient,
+		client:      client,
 		artifactDir: artifactDir,
 		jobSpec:     jobSpec,
 	}

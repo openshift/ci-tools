@@ -8,7 +8,6 @@ import (
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	buildapi "github.com/openshift/api/build/v1"
-	imageclientset "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
 	routeclientset "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
@@ -25,7 +24,6 @@ type rpmImageInjectionStep struct {
 	resources   api.ResourceConfiguration
 	buildClient BuildClient
 	routeClient routeclientset.RoutesGetter
-	istClient   imageclientset.ImageStreamTagsGetter
 	artifactDir string
 	jobSpec     *api.JobSpec
 	pullSecret  *coreapi.Secret
@@ -78,13 +76,12 @@ func (s *rpmImageInjectionStep) Description() string {
 	return "Inject an RPM repository that will point at the RPM server"
 }
 
-func RPMImageInjectionStep(config api.RPMImageInjectionStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, routeClient routeclientset.RoutesGetter, istClient imageclientset.ImageStreamTagsGetter, artifactDir string, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
+func RPMImageInjectionStep(config api.RPMImageInjectionStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, routeClient routeclientset.RoutesGetter, artifactDir string, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
 	return &rpmImageInjectionStep{
 		config:      config,
 		resources:   resources,
 		buildClient: buildClient,
 		routeClient: routeClient,
-		istClient:   istClient,
 		artifactDir: artifactDir,
 		jobSpec:     jobSpec,
 		pullSecret:  pullSecret,

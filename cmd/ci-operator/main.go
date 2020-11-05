@@ -299,6 +299,8 @@ type options struct {
 	pushSecretPath string
 	pushSecret     *coreapi.Secret
 
+	imageCreatorKubeconfigPath string
+
 	cloneAuthConfig *steps.CloneAuthConfig
 
 	resultsOptions results.Options
@@ -362,6 +364,7 @@ func bindOptions(flag *flag.FlagSet) *options {
 
 	flag.StringVar(&opt.pullSecretPath, "image-import-pull-secret", "", "A set of dockercfg credentials used to import images for the tag_specification.")
 	flag.StringVar(&opt.pushSecretPath, "image-mirror-push-secret", "", "A set of dockercfg credentials used to mirror images for the promotion.")
+	flag.StringVar(&opt.imageCreatorKubeconfigPath, "image-creator-kubeconfig", "", "The path to a kubeconfig file which as permissions to create namespaces and imagestream in the clsuter where the central CI registry is hosted.")
 
 	opt.resultsOptions.Bind(flag)
 	return opt

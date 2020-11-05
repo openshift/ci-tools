@@ -295,11 +295,17 @@ func validateBuildRootImageConfiguration(fieldRoot string, input *BuildRootImage
 
 func validateImages(fieldRoot string, input []ProjectDirectoryImageBuildStepConfiguration) []error {
 	var validationErrors []error
+	seenNames := map[PipelineImageStreamTagReference]int{}
 	for num, image := range input {
 		fieldRootN := fmt.Sprintf("%s[%d]", fieldRoot, num)
 		if image.To == "" {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: `to` must be set", fieldRootN))
 		}
+		if idx, seen := seenNames[image.To]; seen {
+			fieldRootIdx := fmt.Sprintf("%s[%d]", fieldRoot, idx)
+			validationErrors = append(validationErrors, fmt.Errorf("%s: duplicate image name '%s' (previously seen in %s)", fieldRootN, string(image.To), fieldRootIdx))
+		}
+		seenNames[image.To] = num
 		if image.To == PipelineImageStreamTagReferenceBundleSource {
 			validationErrors = append(validationErrors, fmt.Errorf("%s: `to` cannot be %s", fieldRootN, PipelineImageStreamTagReferenceBundleSource))
 		}

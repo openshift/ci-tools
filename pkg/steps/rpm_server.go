@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+
 	appsapi "k8s.io/api/apps/v1"
 	coreapi "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -18,8 +19,7 @@ import (
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
-	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
-	v1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
+	"k8s.io/test-infra/prow/apis/prowjobs/v1"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	imagev1 "github.com/openshift/api/image/v1"
@@ -37,10 +37,9 @@ const (
 )
 
 type rpmServerStep struct {
-	config        api.RPMServeStepConfiguration
-	serviceClient coreclientset.ServicesGetter
-	client        ctrlruntimeclient.Client
-	jobSpec       *api.JobSpec
+	config  api.RPMServeStepConfiguration
+	client  ctrlruntimeclient.Client
+	jobSpec *api.JobSpec
 }
 
 func (s *rpmServerStep) Inputs() (api.InputDefinition, error) {
@@ -217,7 +216,7 @@ fi
 		service.OwnerReferences = append(service.OwnerReferences, *owner)
 	}
 
-	if _, err := s.serviceClient.Services(s.jobSpec.Namespace()).Create(context.TODO(), service, meta.CreateOptions{}); err != nil && !kerrors.IsAlreadyExists(err) {
+	if err := s.client.Create(ctx, service); err != nil && !kerrors.IsAlreadyExists(err) {
 		return fmt.Errorf("could not create RPM repo server service: %w", err)
 	}
 	route := &routev1.Route{
@@ -432,13 +431,11 @@ func admittedRoute(route *routev1.Route) (string, bool) {
 
 func RPMServerStep(
 	config api.RPMServeStepConfiguration,
-	serviceClient coreclientset.ServicesGetter,
 	client ctrlruntimeclient.Client,
 	jobSpec *api.JobSpec) api.Step {
 	return &rpmServerStep{
-		config:        config,
-		serviceClient: serviceClient,
-		client:        client,
-		jobSpec:       jobSpec,
+		config:  config,
+		client:  client,
+		jobSpec: jobSpec,
 	}
 }

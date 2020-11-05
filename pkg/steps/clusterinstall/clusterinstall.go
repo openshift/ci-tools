@@ -7,8 +7,9 @@ import (
 
 	"github.com/ghodss/yaml"
 
-	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	corev1 "k8s.io/api/core/v1"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	templateapi "github.com/openshift/api/template/v1"
 
@@ -23,8 +24,8 @@ type e2eTestStep struct {
 	config     api.OpenshiftInstallerClusterTestConfiguration
 	testConfig api.TestStepConfiguration
 
-	secretClient coreclientset.SecretsGetter
-	jobSpec      *api.JobSpec
+	client  ctrlruntimeclient.Client
+	jobSpec *api.JobSpec
 
 	step api.Step
 	nestedSubTests
@@ -42,7 +43,7 @@ func E2ETestStep(
 	podClient steps.PodClient,
 	eventClient coreclientset.EventsGetter,
 	templateClient steps.TemplateClient,
-	secretClient coreclientset.SecretsGetter,
+	client ctrlruntimeclient.Client,
 	artifactDir string,
 	jobSpec *api.JobSpec,
 	resources api.ResourceConfiguration,
@@ -108,8 +109,8 @@ func E2ETestStep(
 		config:     config,
 		testConfig: testConfig,
 
-		secretClient: secretClient,
-		jobSpec:      jobSpec,
+		client:  client,
+		jobSpec: jobSpec,
 
 		step:           step,
 		nestedSubTests: subTests,
@@ -127,7 +128,7 @@ func (s *e2eTestStep) Run(ctx context.Context) error {
 }
 
 func (s *e2eTestStep) run(ctx context.Context) error {
-	if _, err := s.secretClient.Secrets(s.jobSpec.Namespace()).Get(context.TODO(), fmt.Sprintf("%s-cluster-profile", s.testConfig.As), meta.GetOptions{}); err != nil {
+	if err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: s.jobSpec.Namespace(), Name: fmt.Sprintf("%s-cluster-profile", s.testConfig.As)}, &corev1.Secret{}); err != nil {
 		return results.ForReason("missing_cluster_profile").WithError(err).Errorf("could not find required secret: %v", err)
 	}
 	return s.step.Run(ctx)

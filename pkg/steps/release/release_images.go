@@ -8,7 +8,6 @@ import (
 
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
-	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	imagev1 "github.com/openshift/api/image/v1"
@@ -84,11 +83,10 @@ func (s *stableImagesTagStep) Description() string {
 // expected that builds will overwrite these tags at
 // a later point, selectively
 type releaseImagesTagStep struct {
-	config          api.ReleaseTagConfiguration
-	client          ctrlruntimeclient.Client
-	configMapClient coreclientset.ConfigMapsGetter
-	params          *api.DeferredParameters
-	jobSpec         *api.JobSpec
+	config  api.ReleaseTagConfiguration
+	client  ctrlruntimeclient.Client
+	params  *api.DeferredParameters
+	jobSpec *api.JobSpec
 }
 
 func (s *releaseImagesTagStep) Inputs() (api.InputDefinition, error) {
@@ -212,12 +210,11 @@ func (s *releaseImagesTagStep) Description() string {
 	return fmt.Sprintf("Find all of the input images from %s and tag them into the output image stream", sourceName(s.config))
 }
 
-func ReleaseImagesTagStep(config api.ReleaseTagConfiguration, client ctrlruntimeclient.Client, configMapClient coreclientset.ConfigMapsGetter, params *api.DeferredParameters, jobSpec *api.JobSpec) api.Step {
+func ReleaseImagesTagStep(config api.ReleaseTagConfiguration, client ctrlruntimeclient.Client, params *api.DeferredParameters, jobSpec *api.JobSpec) api.Step {
 	return &releaseImagesTagStep{
-		config:          config,
-		client:          client,
-		configMapClient: configMapClient,
-		params:          params,
-		jobSpec:         jobSpec,
+		config:  config,
+		client:  client,
+		params:  params,
+		jobSpec: jobSpec,
 	}
 }

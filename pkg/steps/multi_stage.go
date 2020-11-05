@@ -62,7 +62,6 @@ type multiStageTestStep struct {
 	env                api.TestEnvironment
 	podClient          PodClient
 	eventClient        coreclientset.EventsGetter
-	secretClient       coreclientset.SecretsGetter
 	saClient           coreclientset.ServiceAccountsGetter
 	rbacClient         rbacclientset.RbacV1Interface
 	client             ctrlruntimeclient.Client
@@ -79,14 +78,13 @@ func MultiStageTestStep(
 	params api.Parameters,
 	podClient PodClient,
 	eventClient coreclientset.EventsGetter,
-	secretClient coreclientset.SecretsGetter,
 	saClient coreclientset.ServiceAccountsGetter,
 	rbacClient rbacclientset.RbacV1Interface,
 	client ctrlruntimeclient.Client,
 	artifactDir string,
 	jobSpec *api.JobSpec,
 ) api.Step {
-	return newMultiStageTestStep(testConfig, config, params, podClient, eventClient, secretClient, saClient, rbacClient, client, artifactDir, jobSpec)
+	return newMultiStageTestStep(testConfig, config, params, podClient, eventClient, saClient, rbacClient, client, artifactDir, jobSpec)
 }
 
 func newMultiStageTestStep(
@@ -95,7 +93,6 @@ func newMultiStageTestStep(
 	params api.Parameters,
 	podClient PodClient,
 	eventClient coreclientset.EventsGetter,
-	secretClient coreclientset.SecretsGetter,
 	saClient coreclientset.ServiceAccountsGetter,
 	rbacClient rbacclientset.RbacV1Interface,
 	client ctrlruntimeclient.Client,
@@ -114,7 +111,6 @@ func newMultiStageTestStep(
 		env:                ms.Environment,
 		podClient:          podClient,
 		eventClient:        eventClient,
-		secretClient:       secretClient,
 		saClient:           saClient,
 		rbacClient:         rbacClient,
 		client:             client,
@@ -144,9 +140,8 @@ func (s *multiStageTestStep) Run(ctx context.Context) error {
 func (s *multiStageTestStep) run(ctx context.Context) error {
 	var env []coreapi.EnvVar
 	if s.profile != "" {
-		secret := s.profileSecretName()
-		if _, err := s.secretClient.Secrets(s.jobSpec.Namespace()).Get(context.TODO(), secret, meta.GetOptions{}); err != nil {
-			return fmt.Errorf("could not find secret %q: %w", secret, err)
+		if err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: s.jobSpec.Namespace(), Name: s.profileSecretName()}, &coreapi.Secret{}); err != nil {
+			return fmt.Errorf("could not find secret %q: %w", s.profileSecretName(), err)
 		}
 		for _, e := range envForProfile {
 			val, err := s.params.Get(e)
@@ -281,13 +276,11 @@ func (s *multiStageTestStep) setupRBAC() error {
 
 func (s *multiStageTestStep) createSecret() error {
 	log.Printf("Creating multi-stage test secret %q", s.name)
-	secret := coreapi.Secret{ObjectMeta: meta.ObjectMeta{Name: s.name}}
-	client := s.secretClient.Secrets(s.jobSpec.Namespace())
-	if err := client.Delete(context.TODO(), s.name, meta.DeleteOptions{}); err != nil && !errors.IsNotFound(err) {
+	secret := &coreapi.Secret{ObjectMeta: meta.ObjectMeta{Namespace: s.jobSpec.Namespace(), Name: s.name}}
+	if err := s.client.Delete(context.TODO(), secret); err != nil && !errors.IsNotFound(err) {
 		return fmt.Errorf("cannot delete secret %q: %w", s.name, err)
 	}
-	_, err := client.Create(context.TODO(), &secret, meta.CreateOptions{})
-	return err
+	return s.client.Create(context.TODO(), secret)
 }
 
 func (s *multiStageTestStep) createCredentials() error {
@@ -300,8 +293,8 @@ func (s *multiStageTestStep) createCredentials() error {
 			// chance we get a second-level collision (ns-a, name) and (ns, a-name) is
 			// small, so we can get away with this string prefixing
 			name := fmt.Sprintf("%s-%s", credential.Namespace, credential.Name)
-			raw, err := s.secretClient.Secrets(credential.Namespace).Get(context.TODO(), credential.Name, meta.GetOptions{})
-			if err != nil {
+			raw := &coreapi.Secret{}
+			if err := s.client.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Namespace: credential.Namespace, Name: credential.Name}, raw); err != nil {
 				return fmt.Errorf("could not read source credential: %w", err)
 			}
 			toCreate[name] = &coreapi.Secret{
@@ -318,7 +311,7 @@ func (s *multiStageTestStep) createCredentials() error {
 	}
 
 	for name := range toCreate {
-		if _, err := s.secretClient.Secrets(s.jobSpec.Namespace()).Create(context.TODO(), toCreate[name], meta.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
+		if err := s.client.Create(context.TODO(), toCreate[name]); err != nil && !errors.IsAlreadyExists(err) {
 			return fmt.Errorf("could not create source credential: %w", err)
 		}
 	}

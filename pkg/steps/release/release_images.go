@@ -12,7 +12,6 @@ import (
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	imagev1 "github.com/openshift/api/image/v1"
-	routeclientset "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/results"
@@ -87,7 +86,6 @@ func (s *stableImagesTagStep) Description() string {
 type releaseImagesTagStep struct {
 	config          api.ReleaseTagConfiguration
 	client          ctrlruntimeclient.Client
-	routeClient     routeclientset.RoutesGetter
 	configMapClient coreclientset.ConfigMapsGetter
 	params          *api.DeferredParameters
 	jobSpec         *api.JobSpec
@@ -214,11 +212,10 @@ func (s *releaseImagesTagStep) Description() string {
 	return fmt.Sprintf("Find all of the input images from %s and tag them into the output image stream", sourceName(s.config))
 }
 
-func ReleaseImagesTagStep(config api.ReleaseTagConfiguration, client ctrlruntimeclient.Client, routeClient routeclientset.RoutesGetter, configMapClient coreclientset.ConfigMapsGetter, params *api.DeferredParameters, jobSpec *api.JobSpec) api.Step {
+func ReleaseImagesTagStep(config api.ReleaseTagConfiguration, client ctrlruntimeclient.Client, configMapClient coreclientset.ConfigMapsGetter, params *api.DeferredParameters, jobSpec *api.JobSpec) api.Step {
 	return &releaseImagesTagStep{
 		config:          config,
 		client:          client,
-		routeClient:     routeClient,
 		configMapClient: configMapClient,
 		params:          params,
 		jobSpec:         jobSpec,

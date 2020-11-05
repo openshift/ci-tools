@@ -5,10 +5,10 @@ import (
 	"fmt"
 
 	coreapi "k8s.io/api/core/v1"
-	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	buildapi "github.com/openshift/api/build/v1"
-	routeclientset "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
+	routev1 "github.com/openshift/api/route/v1"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/results"
@@ -23,7 +23,7 @@ type rpmImageInjectionStep struct {
 	config      api.RPMImageInjectionStepConfiguration
 	resources   api.ResourceConfiguration
 	buildClient BuildClient
-	routeClient routeclientset.RoutesGetter
+	client      ctrlruntimeclient.Client
 	artifactDir string
 	jobSpec     *api.JobSpec
 	pullSecret  *coreapi.Secret
@@ -40,8 +40,8 @@ func (s *rpmImageInjectionStep) Run(ctx context.Context) error {
 }
 
 func (s *rpmImageInjectionStep) run(ctx context.Context) error {
-	route, err := s.routeClient.Routes(s.jobSpec.Namespace()).Get(ctx, RPMRepoName, meta.GetOptions{})
-	if err != nil {
+	route := &routev1.Route{}
+	if err := s.client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: s.jobSpec.Namespace(), Name: RPMRepoName}, route); err != nil {
 		return fmt.Errorf("could not get Route for RPM server: %w", err)
 	}
 
@@ -76,12 +76,12 @@ func (s *rpmImageInjectionStep) Description() string {
 	return "Inject an RPM repository that will point at the RPM server"
 }
 
-func RPMImageInjectionStep(config api.RPMImageInjectionStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, routeClient routeclientset.RoutesGetter, artifactDir string, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
+func RPMImageInjectionStep(config api.RPMImageInjectionStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, client ctrlruntimeclient.Client, artifactDir string, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
 	return &rpmImageInjectionStep{
 		config:      config,
 		resources:   resources,
 		buildClient: buildClient,
-		routeClient: routeClient,
+		client:      client,
 		artifactDir: artifactDir,
 		jobSpec:     jobSpec,
 		pullSecret:  pullSecret,

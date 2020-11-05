@@ -57,6 +57,9 @@ func resolvePullSpec(endpoint string, release api.Release) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to unmarshal response: %w", err)
 	}
+	if len(response.Nodes) == 0 {
+		return "", errors.New("failed to request latest release: server returned empty list of releases (despite status code 200)")
+	}
 	return latestPullSpec(response.Nodes), nil
 }
 

@@ -1585,7 +1585,18 @@ func TestValidateImages(t *testing.T) {
 		output: []error{
 			errors.New("images[0]: `to` cannot be ci-index"),
 		},
-	}}
+	},
+		{
+			name: "two items cannot have identical `to`",
+			input: []ProjectDirectoryImageBuildStepConfiguration{
+				{To: "same-thing"},
+				{To: "same-thing"},
+			},
+			output: []error{
+				errors.New("images[1]: duplicate image name 'same-thing' (previously seen in images[0])"),
+			},
+		},
+	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			if actual, expected := validateImages("images", testCase.input), testCase.output; !reflect.DeepEqual(actual, expected) {

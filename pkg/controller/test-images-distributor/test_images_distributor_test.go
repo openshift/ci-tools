@@ -758,8 +758,10 @@ func TestTestInputImageStreamTagFilterFactory(t *testing.T) {
 	}
 }
 
+var _ registryResolver = noOpRegistryResolver{}
+
 type noOpRegistryResolver struct{}
 
-func (noOpRegistryResolver) Resolve(_ string, _ api.MultiStageTestConfiguration) (api.MultiStageTestConfigurationLiteral, error) {
-	return api.MultiStageTestConfigurationLiteral{}, nil
+func (noOpRegistryResolver) ResolveConfig(cfg api.ReleaseBuildConfiguration) (api.ReleaseBuildConfiguration, error) {
+	return cfg, nil
 }

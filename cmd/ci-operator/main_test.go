@@ -26,10 +26,11 @@ import (
 	"github.com/openshift/ci-tools/pkg/load"
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps"
+	"github.com/openshift/ci-tools/pkg/util/imageapiregistration"
 )
 
 func init() {
-	if err := imagev1.AddToScheme(scheme.Scheme); err != nil {
+	if err := imageapiregistration.AddToScheme(scheme.Scheme); err != nil {
 		panic(fmt.Sprintf("failed to add imagev1 to scheme: %v", err))
 	}
 }

@@ -59,9 +59,6 @@ func FromConfig(
 
 	var buildClient steps.BuildClient
 	var templateClient steps.TemplateClient
-	var configMapGetter coreclientset.ConfigMapsGetter
-	var serviceGetter coreclientset.ServicesGetter
-	var secretGetter coreclientset.SecretsGetter
 	var podClient steps.PodClient
 	var rbacClient rbacclientset.RbacV1Interface
 	var saGetter coreclientset.ServiceAccountsGetter
@@ -91,9 +88,6 @@ func FromConfig(
 		if err != nil {
 			return nil, nil, fmt.Errorf("could not get core client for cluster config: %w", err)
 		}
-		serviceGetter = coreGetter
-		configMapGetter = coreGetter
-		secretGetter = coreGetter
 		namespaceClient = coreGetter.Namespaces()
 		eventClient = coreGetter
 
@@ -141,7 +135,7 @@ func FromConfig(
 		} else if rawStep.RPMImageInjectionStepConfiguration != nil {
 			step = steps.RPMImageInjectionStep(*rawStep.RPMImageInjectionStepConfiguration, config.Resources, buildClient, client, artifactDir, jobSpec, pullSecret)
 		} else if rawStep.RPMServeStepConfiguration != nil {
-			step = steps.RPMServerStep(*rawStep.RPMServeStepConfiguration, serviceGetter, client, jobSpec)
+			step = steps.RPMServerStep(*rawStep.RPMServeStepConfiguration, client, jobSpec)
 		} else if rawStep.OutputImageTagStepConfiguration != nil {
 			step = steps.OutputImageTagStep(*rawStep.OutputImageTagStepConfiguration, client, jobSpec)
 			// all required or non-optional output images are considered part of [images]
@@ -151,7 +145,7 @@ func FromConfig(
 		} else if rawStep.ReleaseImagesTagStepConfiguration != nil {
 			// if the user has specified a tag_specification we always
 			// will import those images to the stable stream
-			step = release.ReleaseImagesTagStep(*rawStep.ReleaseImagesTagStepConfiguration, client, configMapGetter, params, jobSpec)
+			step = release.ReleaseImagesTagStep(*rawStep.ReleaseImagesTagStepConfiguration, client, params, jobSpec)
 			stepLinks = append(stepLinks, step.Creates()...)
 
 			hasReleaseStep = true
@@ -210,7 +204,7 @@ func FromConfig(
 			step = release.ImportReleaseStep(resolveConfig.Name, value, false, config.Resources, podClient, eventClient, client, artifactDir, jobSpec, pullSecret)
 		} else if testStep := rawStep.TestStepConfiguration; testStep != nil {
 			if test := testStep.MultiStageTestConfigurationLiteral; test != nil {
-				step = steps.MultiStageTestStep(*testStep, config, params, podClient, eventClient, secretGetter, saGetter, rbacClient, client, artifactDir, jobSpec)
+				step = steps.MultiStageTestStep(*testStep, config, params, podClient, eventClient, saGetter, rbacClient, client, artifactDir, jobSpec)
 				if test.ClusterProfile != "" {
 					leases := []api.StepLease{{
 						ResourceType: test.ClusterProfile.LeaseType(),
@@ -230,7 +224,7 @@ func FromConfig(
 			} else if test := testStep.OpenshiftInstallerClusterTestConfiguration; test != nil {
 				if testStep.OpenshiftInstallerClusterTestConfiguration.Upgrade {
 					var err error
-					step, err = clusterinstall.E2ETestStep(*testStep.OpenshiftInstallerClusterTestConfiguration, *testStep, params, podClient, eventClient, templateClient, secretGetter, artifactDir, jobSpec, config.Resources)
+					step, err = clusterinstall.E2ETestStep(*testStep.OpenshiftInstallerClusterTestConfiguration, *testStep, params, podClient, eventClient, templateClient, client, artifactDir, jobSpec, config.Resources)
 					if err != nil {
 						return nil, nil, fmt.Errorf("unable to create end to end test step: %w", err)
 					}

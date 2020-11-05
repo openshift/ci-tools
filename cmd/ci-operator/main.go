@@ -25,8 +25,6 @@ import (
 	"github.com/ghodss/yaml"
 	"github.com/sirupsen/logrus"
 
-	imagev1 "github.com/openshift/api/image/v1"
-	routev1 "github.com/openshift/api/route/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	authapi "k8s.io/api/authorization/v1"
 	coreapi "k8s.io/api/core/v1"
@@ -51,6 +49,7 @@ import (
 
 	imageapi "github.com/openshift/api/image/v1"
 	projectapi "github.com/openshift/api/project/v1"
+	routev1 "github.com/openshift/api/route/v1"
 	v1 "github.com/openshift/api/route/v1"
 	templateapi "github.com/openshift/api/template/v1"
 	buildclientset "github.com/openshift/client-go/build/clientset/versioned/typed/build/v1"
@@ -67,6 +66,7 @@ import (
 	"github.com/openshift/ci-tools/pkg/results"
 	"github.com/openshift/ci-tools/pkg/steps"
 	"github.com/openshift/ci-tools/pkg/util"
+	"github.com/openshift/ci-tools/pkg/util/imageapiregistration"
 	"github.com/openshift/ci-tools/pkg/util/namespacewrapper"
 )
 
@@ -1704,7 +1704,7 @@ func monitorNamespace(ctx context.Context, cancel func(), namespace string, clie
 }
 
 func addSchemes() error {
-	if err := imagev1.AddToScheme(scheme.Scheme); err != nil {
+	if err := imageapiregistration.AddToScheme(scheme.Scheme); err != nil {
 		return fmt.Errorf("failed to add imagev1 to scheme: %w", err)
 	}
 	if err := routev1.AddToScheme(scheme.Scheme); err != nil {

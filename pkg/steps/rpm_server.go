@@ -10,16 +10,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	appsapi "k8s.io/api/apps/v1"
 	coreapi "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/apimachinery/pkg/watch"
-	appsclientset "k8s.io/client-go/kubernetes/typed/apps/v1"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	v1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -29,6 +27,7 @@ import (
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/results"
+	"github.com/openshift/ci-tools/pkg/util/namespacewrapper"
 )
 
 const (
@@ -38,11 +37,10 @@ const (
 )
 
 type rpmServerStep struct {
-	config           api.RPMServeStepConfiguration
-	deploymentClient appsclientset.DeploymentsGetter
-	serviceClient    coreclientset.ServicesGetter
-	client           ctrlruntimeclient.Client
-	jobSpec          *api.JobSpec
+	config        api.RPMServeStepConfiguration
+	serviceClient coreclientset.ServicesGetter
+	client        ctrlruntimeclient.Client
+	jobSpec       *api.JobSpec
 }
 
 func (s *rpmServerStep) Inputs() (api.InputDefinition, error) {
@@ -200,7 +198,7 @@ fi
 		deployment.OwnerReferences = append(deployment.OwnerReferences, *owner)
 	}
 
-	if _, err := s.deploymentClient.Deployments(s.jobSpec.Namespace()).Create(context.TODO(), deployment, meta.CreateOptions{}); err != nil && !kerrors.IsAlreadyExists(err) {
+	if err := s.client.Create(ctx, deployment); err != nil && !kerrors.IsAlreadyExists(err) {
 		return fmt.Errorf("could not create RPM repo server deployment: %w", err)
 	}
 
@@ -240,24 +238,14 @@ fi
 	if err := s.client.Create(ctx, route); err != nil && !kerrors.IsAlreadyExists(err) {
 		return fmt.Errorf("could not create RPM repo server route: %w", err)
 	}
-	if err := waitForDeployment(ctx, s.deploymentClient.Deployments(s.jobSpec.Namespace()), deployment.Name); err != nil {
+	if err := waitForDeployment(ctx, namespacewrapper.New(s.client, s.jobSpec.Namespace()), deployment.Name); err != nil {
 		return fmt.Errorf("could not wait for RPM repo server to deploy: %w", err)
 	}
 	return waitForRouteReachable(ctx, s.client, s.jobSpec.Namespace(), route.Name, "http")
 }
 
-func waitForDeployment(ctx context.Context, client appsclientset.DeploymentInterface, name string) error {
-	for {
-		retry, err := waitForDeploymentOrTimeout(ctx, client, name)
-		if err != nil {
-			return fmt.Errorf("could not wait for deployment: %w", err)
-		}
-		if !retry {
-			break
-		}
-	}
-
-	return nil
+func waitForDeployment(ctx context.Context, client ctrlruntimeclient.Client, name string) error {
+	return waitForDeploymentOrTimeout(ctx, client, name)
 }
 
 func deploymentOK(b *appsapi.Deployment) bool {
@@ -287,62 +275,49 @@ func deploymentReason(b *appsapi.Deployment) string {
 	return ""
 }
 
-func waitForDeploymentOrTimeout(ctx context.Context, client appsclientset.DeploymentInterface, name string) (bool, error) {
-	// First we set up a watcher to catch all events that happen while we check
-	// the deployment status
-	watcher, err := client.Watch(context.TODO(), meta.ListOptions{
-		FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String(),
-		Watch:         true,
-	})
-	if err != nil {
-		return false, fmt.Errorf("could not create watcher for deploymentconfig %s: %w", name, err)
-	}
-	defer watcher.Stop()
-
+func waitForDeploymentOrTimeout(ctx context.Context, client ctrlruntimeclient.Client, name string) error {
 	done, err := currentDeploymentStatus(client, name)
 	if err != nil {
-		return false, fmt.Errorf("could not determine current deployment status: %w", err)
+		return fmt.Errorf("could not determine current deployment status: %w", err)
 	}
 	if done {
-		return false, nil
+		return nil
 	}
-	ctxDone := ctx.Done()
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
 	for {
-		var event watch.Event
-		var ok bool
 		select {
-		case <-ctxDone:
-			return false, ctx.Err()
-		case event, ok = <-watcher.ResultChan():
-		}
-		if !ok {
-			// restart
-			return true, nil
-		}
-		if deployment, ok := event.Object.(*appsapi.Deployment); ok {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			deployment := &appsapi.Deployment{}
+			if err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Name: name}, deployment); err != nil {
+				logrus.WithError(err).Error("Failed to get deployment")
+			}
 			if deploymentOK(deployment) {
-				return false, nil
+				return nil
 			}
 			if deploymentFailed(deployment) {
-				return false, fmt.Errorf("the deployment config %s/%s failed with status %q", deployment.Namespace, deployment.Name, deploymentReason(deployment))
+				return fmt.Errorf("the deployment config %s/%s failed with status %q", deployment.Namespace, deployment.Name, deploymentReason(deployment))
 			}
 		}
 	}
 }
 
-func currentDeploymentStatus(client appsclientset.DeploymentInterface, name string) (bool, error) {
-	list, err := client.List(context.TODO(), meta.ListOptions{FieldSelector: fields.Set{"metadata.name": name}.AsSelector().String()})
-	if err != nil {
-		return false, fmt.Errorf("could not list DeploymentConfigs: %w", err)
+func currentDeploymentStatus(client ctrlruntimeclient.Client, name string) (bool, error) {
+	deployment := &appsapi.Deployment{}
+	if err := client.Get(context.TODO(), ctrlruntimeclient.ObjectKey{Name: name}, deployment); err != nil {
+		if kerrors.IsNotFound(err) {
+			return false, fmt.Errorf("could not find Deployment %s", name)
+		}
+		return false, fmt.Errorf("could not get Deployment %s: %w", name, err)
 	}
-	if len(list.Items) != 1 {
-		return false, fmt.Errorf("could not find DeploymentConfig %s", name)
-	}
-	if deploymentOK(&list.Items[0]) {
+	if deploymentOK(deployment) {
 		return true, nil
 	}
-	if deploymentFailed(&list.Items[0]) {
-		return false, fmt.Errorf("the deployment config %s/%s failed with status %q", list.Items[0].Namespace, list.Items[0].Name, deploymentReason(&list.Items[0]))
+	if deploymentFailed(deployment) {
+		return false, fmt.Errorf("the deployment config %s/%s failed with status %q", deployment.Namespace, deployment.Name, deploymentReason(deployment))
 	}
 
 	return false, nil
@@ -457,15 +432,13 @@ func admittedRoute(route *routev1.Route) (string, bool) {
 
 func RPMServerStep(
 	config api.RPMServeStepConfiguration,
-	deploymentClient appsclientset.DeploymentsGetter,
 	serviceClient coreclientset.ServicesGetter,
 	client ctrlruntimeclient.Client,
 	jobSpec *api.JobSpec) api.Step {
 	return &rpmServerStep{
-		config:           config,
-		deploymentClient: deploymentClient,
-		serviceClient:    serviceClient,
-		client:           client,
-		jobSpec:          jobSpec,
+		config:        config,
+		serviceClient: serviceClient,
+		client:        client,
+		jobSpec:       jobSpec,
 	}
 }

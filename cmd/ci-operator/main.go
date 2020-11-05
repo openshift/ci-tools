@@ -27,6 +27,7 @@ import (
 
 	imagev1 "github.com/openshift/api/image/v1"
 	routev1 "github.com/openshift/api/route/v1"
+	appsv1 "k8s.io/api/apps/v1"
 	authapi "k8s.io/api/authorization/v1"
 	coreapi "k8s.io/api/core/v1"
 	policyv1beta1 "k8s.io/api/policy/v1beta1"
@@ -1708,6 +1709,9 @@ func addSchemes() error {
 	}
 	if err := routev1.AddToScheme(scheme.Scheme); err != nil {
 		return fmt.Errorf("failed to add routev1 to scheme: %w", err)
+	}
+	if err := appsv1.AddToScheme(scheme.Scheme); err != nil {
+		return fmt.Errorf("failed to add appsv1 to scheme: %w", err)
 	}
 
 	return nil

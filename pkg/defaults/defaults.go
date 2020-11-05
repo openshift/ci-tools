@@ -9,7 +9,6 @@ import (
 
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
-	appsclientset "k8s.io/client-go/kubernetes/typed/apps/v1"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	rbacclientset "k8s.io/client-go/kubernetes/typed/rbac/v1"
 	"k8s.io/client-go/rest"
@@ -59,7 +58,6 @@ func FromConfig(
 	}
 
 	var buildClient steps.BuildClient
-	var deploymentGetter appsclientset.DeploymentsGetter
 	var templateClient steps.TemplateClient
 	var configMapGetter coreclientset.ConfigMapsGetter
 	var serviceGetter coreclientset.ServicesGetter
@@ -88,12 +86,6 @@ func FromConfig(
 			return nil, nil, fmt.Errorf("could not get template client for cluster config: %w", err)
 		}
 		templateClient = steps.NewTemplateClient(templateGetter, templateGetter.RESTClient())
-
-		appsGetter, err := appsclientset.NewForConfig(clusterConfig)
-		if err != nil {
-			return nil, nil, fmt.Errorf("could not get apps client for cluster config: %w", err)
-		}
-		deploymentGetter = appsGetter
 
 		coreGetter, err := coreclientset.NewForConfig(clusterConfig)
 		if err != nil {
@@ -149,7 +141,7 @@ func FromConfig(
 		} else if rawStep.RPMImageInjectionStepConfiguration != nil {
 			step = steps.RPMImageInjectionStep(*rawStep.RPMImageInjectionStepConfiguration, config.Resources, buildClient, client, artifactDir, jobSpec, pullSecret)
 		} else if rawStep.RPMServeStepConfiguration != nil {
-			step = steps.RPMServerStep(*rawStep.RPMServeStepConfiguration, deploymentGetter, serviceGetter, client, jobSpec)
+			step = steps.RPMServerStep(*rawStep.RPMServeStepConfiguration, serviceGetter, client, jobSpec)
 		} else if rawStep.OutputImageTagStepConfiguration != nil {
 			step = steps.OutputImageTagStep(*rawStep.OutputImageTagStepConfiguration, client, jobSpec)
 			// all required or non-optional output images are considered part of [images]

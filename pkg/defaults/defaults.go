@@ -51,6 +51,7 @@ func FromConfig(
 	requiredTargets []string,
 	cloneAuthConfig *steps.CloneAuthConfig,
 	pullSecret, pushSecret *coreapi.Secret,
+	imageCreatorKubeconfig *rest.Config,
 
 ) ([]api.Step, []api.Step, error) {
 	if err := addSchemes(); err != nil {
@@ -125,6 +126,15 @@ func FromConfig(
 		}
 		rbacClient = rbacGetter
 		saGetter = coreGetter
+	}
+
+	var imageCreatorClient ctrlruntimeclient.Client
+	if imageCreatorKubeconfig != nil {
+		var err error
+		imageCreatorClient, err = ctrlruntimeclient.New(imageCreatorKubeconfig, ctrlruntimeclient.Options{})
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to construct image-creator client: %w", err)
+		}
 	}
 
 	params := api.NewDeferredParameters()
@@ -321,7 +331,7 @@ func FromConfig(
 		if err != nil {
 			return nil, nil, fmt.Errorf("could not determine promotion defaults: %w", err)
 		}
-		postSteps = append(postSteps, release.PromotionStep(*cfg, config.Images, requiredNames, client, client, jobSpec, podClient, eventClient, pushSecret))
+		postSteps = append(postSteps, release.PromotionStep(*cfg, config.Images, requiredNames, client, client, jobSpec, podClient, eventClient, pushSecret, imageCreatorClient))
 	}
 
 	return buildSteps, postSteps, nil

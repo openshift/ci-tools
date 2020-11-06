@@ -1,13 +1,16 @@
 package release
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
 	coreapi "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/utils/diff"
+	fakeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	imageapi "github.com/openshift/api/image/v1"
 
@@ -271,7 +274,7 @@ func TestGetPromotionPod(t *testing.T) {
 	}
 }
 
-func TestGetImageMirror(t *testing.T) {
+func TestGetImageMirrorTarget(t *testing.T) {
 	var testCases = []struct {
 		name     string
 		config   api.PromotionConfiguration
@@ -361,7 +364,7 @@ func TestGetImageMirror(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			if actual, expected := getImageMirrorTarget(testCase.config, testCase.tags, testCase.pipeline), testCase.expected; !reflect.DeepEqual(actual, expected) {
+			if actual, expected := getImageMirrorTarget(context.TODO(), fakeclient.NewFakeClientWithScheme(scheme.Scheme), testCase.config, testCase.tags, testCase.pipeline), testCase.expected; !reflect.DeepEqual(actual, expected) {
 				t.Errorf("%s: got incorrect ImageMirror mapping: %v", testCase.name, diff.ObjectDiff(actual, expected))
 			}
 		})

@@ -12,6 +12,7 @@ import (
 	coreapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -29,15 +30,16 @@ import (
 // promotionStep will tag a full release suite
 // of images out to the configured namespace.
 type promotionStep struct {
-	config         api.PromotionConfiguration
-	images         []api.ProjectDirectoryImageBuildStepConfiguration
-	requiredImages sets.String
-	srcClient      ctrlruntimeclient.Client
-	dstClient      ctrlruntimeclient.Client
-	jobSpec        *api.JobSpec
-	podClient      steps.PodClient
-	eventClient    coreclientset.EventsGetter
-	pushSecret     *coreapi.Secret
+	config             api.PromotionConfiguration
+	images             []api.ProjectDirectoryImageBuildStepConfiguration
+	requiredImages     sets.String
+	srcClient          ctrlruntimeclient.Client
+	dstClient          ctrlruntimeclient.Client
+	jobSpec            *api.JobSpec
+	podClient          steps.PodClient
+	eventClient        coreclientset.EventsGetter
+	pushSecret         *coreapi.Secret
+	imageCreatorClient ctrlruntimeclient.Client
 }
 
 func targetName(config api.PromotionConfiguration) string {
@@ -81,7 +83,21 @@ func (s *promotionStep) run(ctx context.Context) error {
 	}
 
 	if s.pushSecret != nil {
-		imageMirrorTarget := getImageMirrorTarget(s.config, tags, pipeline)
+		if s.imageCreatorClient != nil {
+			// This should never happen
+			return fmt.Errorf("image-creator client is nil")
+		}
+
+		if err := s.imageCreatorClient.Get(ctx, types.NamespacedName{Name: s.config.Namespace}, &coreapi.Namespace{}); err != nil {
+			if !errors.IsNotFound(err) {
+				return fmt.Errorf("failed to check if namespace %s exists: %w", s.config.Namespace, err)
+			}
+			if err := s.imageCreatorClient.Create(ctx, &coreapi.Namespace{ObjectMeta: meta.ObjectMeta{Name: s.config.Namespace}}); err != nil && !errors.IsAlreadyExists(err) {
+				return fmt.Errorf("failed to create namespace %s: %w", s.config.Namespace, err)
+			}
+		}
+
+		imageMirrorTarget := getImageMirrorTarget(ctx, s.imageCreatorClient, s.config, tags, pipeline)
 		if len(imageMirrorTarget) == 0 {
 			log.Println("Nothing to promote, skipping...")
 			return nil
@@ -174,7 +190,7 @@ func (s *promotionStep) run(ctx context.Context) error {
 	return nil
 }
 
-func getImageMirrorTarget(config api.PromotionConfiguration, tags map[string]string, pipeline *imagev1.ImageStream) map[string]string {
+func getImageMirrorTarget(ctx context.Context, client ctrlruntimeclient.Client, config api.PromotionConfiguration, tags map[string]string, pipeline *imagev1.ImageStream) map[string]string {
 	if pipeline == nil {
 		return nil
 	}
@@ -187,6 +203,9 @@ func getImageMirrorTarget(config api.PromotionConfiguration, tags map[string]str
 			}
 			dockerImageReference = getPublicImageReference(dockerImageReference, pipeline.Status.PublicDockerImageRepository)
 			imageMirror[dockerImageReference] = fmt.Sprintf("%s/%s/%s:%s", api.DomainForService(api.ServiceRegistry), config.Namespace, config.Name, dst)
+			if err := createIfNotFound(ctx, client, config.Namespace, config.Name); err != nil {
+				log.Println(fmt.Sprintf("failed to ensure imagestream %s/%s: %v", config.Namespace, config.Name, err))
+			}
 		}
 	} else {
 		for dst, src := range tags {
@@ -196,12 +215,28 @@ func getImageMirrorTarget(config api.PromotionConfiguration, tags map[string]str
 			}
 			dockerImageReference = getPublicImageReference(dockerImageReference, pipeline.Status.PublicDockerImageRepository)
 			imageMirror[dockerImageReference] = fmt.Sprintf("%s/%s/%s:%s", api.DomainForService(api.ServiceRegistry), config.Namespace, dst, config.Tag)
+			if err := createIfNotFound(ctx, client, config.Namespace, dst); err != nil {
+				log.Println(fmt.Sprintf("failed to ensure imagestream %s/%s: %v", config.Namespace, dst, err))
+			}
 		}
 	}
 	if len(imageMirror) == 0 {
 		return nil
 	}
 	return imageMirror
+}
+
+func createIfNotFound(ctx context.Context, client ctrlruntimeclient.Client, namespace, name string) error {
+	is := &imagev1.ImageStream{}
+	err := client.Get(ctx, ctrlruntimeclient.ObjectKey{Namespace: namespace, Name: name}, is)
+	if errors.IsNotFound(err) {
+		is.Namespace = namespace
+		is.Name = name
+		if err := client.Create(ctx, is); err != nil {
+			return fmt.Errorf("could not create target imagestream: %w", err)
+		}
+	}
+	return err
 }
 
 func getPublicImageReference(dockerImageReference, publicDockerImageRepository string) string {
@@ -374,16 +409,17 @@ func (s *promotionStep) Description() string {
 
 // PromotionStep copies tags from the pipeline image stream to the destination defined in the promotion config.
 // If the source tag does not exist it is silently skipped.
-func PromotionStep(config api.PromotionConfiguration, images []api.ProjectDirectoryImageBuildStepConfiguration, requiredImages sets.String, srcClient, dstClient ctrlruntimeclient.Client, jobSpec *api.JobSpec, podClient steps.PodClient, eventClient coreclientset.EventsGetter, pushSecret *coreapi.Secret) api.Step {
+func PromotionStep(config api.PromotionConfiguration, images []api.ProjectDirectoryImageBuildStepConfiguration, requiredImages sets.String, srcClient, dstClient ctrlruntimeclient.Client, jobSpec *api.JobSpec, podClient steps.PodClient, eventClient coreclientset.EventsGetter, pushSecret *coreapi.Secret, imageCreatorClient ctrlruntimeclient.Client) api.Step {
 	return &promotionStep{
-		config:         config,
-		images:         images,
-		requiredImages: requiredImages,
-		srcClient:      srcClient,
-		dstClient:      dstClient,
-		jobSpec:        jobSpec,
-		podClient:      podClient,
-		eventClient:    eventClient,
-		pushSecret:     pushSecret,
+		config:             config,
+		images:             images,
+		requiredImages:     requiredImages,
+		srcClient:          srcClient,
+		dstClient:          dstClient,
+		jobSpec:            jobSpec,
+		podClient:          podClient,
+		eventClient:        eventClient,
+		pushSecret:         pushSecret,
+		imageCreatorClient: imageCreatorClient,
 	}
 }

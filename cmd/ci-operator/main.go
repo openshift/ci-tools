@@ -300,6 +300,7 @@ type options struct {
 	pushSecret     *coreapi.Secret
 
 	imageCreatorKubeconfigPath string
+	imageCreatorKubeconfig     *rest.Config
 
 	cloneAuthConfig *steps.CloneAuthConfig
 
@@ -529,6 +530,13 @@ func (o *options) Complete() error {
 			return fmt.Errorf("could not get push secret %s from path %s: %w", api.RegistryPushCredentialsCICentralSecret, o.pushSecretPath, err)
 		}
 	}
+	if o.imageCreatorKubeconfigPath != "" {
+		configs, currentContext, err := util.LoadKubeConfigs(o.imageCreatorKubeconfigPath)
+		if err != nil {
+			return fmt.Errorf("could not get kubeconfig from path %s: %w", o.imageCreatorKubeconfigPath, err)
+		}
+		o.imageCreatorKubeconfig = configs[currentContext]
+	}
 	return nil
 }
 
@@ -561,7 +569,7 @@ func (o *options) Run() []error {
 		leaseClient = &o.leaseClient
 	}
 	// load the graph from the configuration
-	buildSteps, postSteps, err := defaults.FromConfig(o.configSpec, o.jobSpec, o.templates, o.writeParams, o.artifactDir, o.promote, o.clusterConfig, leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret, o.pushSecret)
+	buildSteps, postSteps, err := defaults.FromConfig(o.configSpec, o.jobSpec, o.templates, o.writeParams, o.artifactDir, o.promote, o.clusterConfig, leaseClient, o.targets.values, o.cloneAuthConfig, o.pullSecret, o.pushSecret, o.imageCreatorKubeconfig)
 	if err != nil {
 		return []error{results.ForReason("defaulting_config").WithError(err).Errorf("failed to generate steps from config: %v", err)}
 	}

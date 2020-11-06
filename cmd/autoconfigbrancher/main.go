@@ -178,6 +178,10 @@ func main() {
 			}(),
 		},
 		{
+			command:   "/usr/bin/determinize-prow-config",
+			arguments: []string{"--prow-config-dir", "./core-services/prow/02_config/"},
+		},
+		{
 			command:   "/usr/bin/sanitize-prow-jobs",
 			arguments: []string{"--prow-jobs-dir", "./ci-operator/jobs", "--config-path", "./core-services/sanitize-prow-jobs/_config.yaml"},
 		},
@@ -210,7 +214,7 @@ func main() {
 
 	var labelsToAdd []string
 	if o.selfApprove {
-		logrus.Infof("Self-aproving PR by adding the %q and %q labels", labels.Approved, labels.LGTM)
+		logrus.Infof("Self-approving PR by adding the %q and %q labels", labels.Approved, labels.LGTM)
 		labelsToAdd = append(labelsToAdd, labels.Approved, labels.LGTM)
 	}
 	if err := bumper.UpdatePullRequestWithLabels(gc, githubOrg, githubRepo, title, fmt.Sprintf("/cc @%s", o.assign),

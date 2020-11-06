@@ -7,6 +7,7 @@ ADD autoconfigbrancher /usr/bin/autoconfigbrancher
 ADD ci-operator-config-mirror /usr/bin/ci-operator-config-mirror
 ADD private-prow-configs-mirror /usr/bin/private-prow-configs-mirror
 ADD sanitize-prow-jobs /usr/bin/sanitize-prow-jobs
+ADD determinize-prow-config /usr/bin/determinize-prow-config
 
 RUN dnf install -y git && \
     dnf clean all && \

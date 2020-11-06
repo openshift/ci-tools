@@ -82,6 +82,17 @@ func TestResolvePullSpec(t *testing.T) {
 			expected:    "",
 			expectedErr: true,
 		},
+		{
+			name: "handle empty response",
+			release: api.Release{
+				Architecture: api.ReleaseArchitectureAMD64,
+				Channel:      api.ReleaseChannelStable,
+				Version:      "4.4",
+			},
+			raw:         []byte(`{"nodes":[]}`),
+			expected:    "",
+			expectedErr: true,
+		},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {

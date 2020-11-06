@@ -59,7 +59,6 @@ func FromConfig(
 	var buildClient steps.BuildClient
 	var templateClient steps.TemplateClient
 	var podClient steps.PodClient
-	var saGetter coreclientset.ServiceAccountsGetter
 	var namespaceClient coreclientset.NamespaceInterface
 	var eventClient coreclientset.EventsGetter
 	var client ctrlruntimeclient.Client
@@ -90,8 +89,6 @@ func FromConfig(
 		eventClient = coreGetter
 
 		podClient = steps.NewPodClient(coreGetter, clusterConfig, coreGetter.RESTClient())
-
-		saGetter = coreGetter
 	}
 
 	params := api.NewDeferredParameters()
@@ -197,7 +194,7 @@ func FromConfig(
 			step = release.ImportReleaseStep(resolveConfig.Name, value, false, config.Resources, podClient, eventClient, client, artifactDir, jobSpec, pullSecret)
 		} else if testStep := rawStep.TestStepConfiguration; testStep != nil {
 			if test := testStep.MultiStageTestConfigurationLiteral; test != nil {
-				step = steps.MultiStageTestStep(*testStep, config, params, podClient, eventClient, saGetter, client, artifactDir, jobSpec)
+				step = steps.MultiStageTestStep(*testStep, config, params, podClient, eventClient, client, artifactDir, jobSpec)
 				if test.ClusterProfile != "" {
 					leases := []api.StepLease{{
 						ResourceType: test.ClusterProfile.LeaseType(),

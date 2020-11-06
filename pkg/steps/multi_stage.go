@@ -61,7 +61,6 @@ type multiStageTestStep struct {
 	env                api.TestEnvironment
 	podClient          PodClient
 	eventClient        coreclientset.EventsGetter
-	saClient           coreclientset.ServiceAccountsGetter
 	client             ctrlruntimeclient.Client
 	artifactDir        string
 	jobSpec            *api.JobSpec
@@ -76,12 +75,11 @@ func MultiStageTestStep(
 	params api.Parameters,
 	podClient PodClient,
 	eventClient coreclientset.EventsGetter,
-	saClient coreclientset.ServiceAccountsGetter,
 	client ctrlruntimeclient.Client,
 	artifactDir string,
 	jobSpec *api.JobSpec,
 ) api.Step {
-	return newMultiStageTestStep(testConfig, config, params, podClient, eventClient, saClient, client, artifactDir, jobSpec)
+	return newMultiStageTestStep(testConfig, config, params, podClient, eventClient, client, artifactDir, jobSpec)
 }
 
 func newMultiStageTestStep(
@@ -90,7 +88,6 @@ func newMultiStageTestStep(
 	params api.Parameters,
 	podClient PodClient,
 	eventClient coreclientset.EventsGetter,
-	saClient coreclientset.ServiceAccountsGetter,
 	client ctrlruntimeclient.Client,
 	artifactDir string,
 	jobSpec *api.JobSpec,
@@ -107,7 +104,6 @@ func newMultiStageTestStep(
 		env:                ms.Environment,
 		podClient:          podClient,
 		eventClient:        eventClient,
-		saClient:           saClient,
 		client:             client,
 		artifactDir:        artifactDir,
 		jobSpec:            jobSpec,
@@ -257,7 +253,7 @@ func (s *multiStageTestStep) setupRBAC() error {
 	check := func(err error) bool {
 		return err == nil || errors.IsAlreadyExists(err)
 	}
-	if _, err := s.saClient.ServiceAccounts(s.jobSpec.Namespace()).Create(context.TODO(), sa, meta.CreateOptions{}); !check(err) {
+	if err := s.client.Create(context.TODO(), sa); !check(err) {
 		return err
 	}
 	if err := s.client.Create(context.TODO(), role); !check(err) {

@@ -22,8 +22,7 @@ RUN echo $'[built]\nname = Built RPMs\nbaseurl = http://%s/\ngpgcheck = 0\nenabl
 type rpmImageInjectionStep struct {
 	config      api.RPMImageInjectionStepConfiguration
 	resources   api.ResourceConfiguration
-	buildClient BuildClient
-	client      ctrlruntimeclient.Client
+	client      BuildClient
 	artifactDir string
 	jobSpec     *api.JobSpec
 	pullSecret  *coreapi.Secret
@@ -46,7 +45,7 @@ func (s *rpmImageInjectionStep) run(ctx context.Context) error {
 	}
 
 	dockerfile := rpmInjectionDockerfile(s.config.From, route.Spec.Host)
-	return handleBuild(ctx, s.buildClient, buildFromSource(
+	return handleBuild(ctx, s.client, buildFromSource(
 		s.jobSpec, s.config.From, s.config.To,
 		buildapi.BuildSource{
 			Type:       buildapi.BuildSourceDockerfile,
@@ -76,12 +75,11 @@ func (s *rpmImageInjectionStep) Description() string {
 	return "Inject an RPM repository that will point at the RPM server"
 }
 
-func RPMImageInjectionStep(config api.RPMImageInjectionStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, client ctrlruntimeclient.Client, artifactDir string, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
+func RPMImageInjectionStep(config api.RPMImageInjectionStepConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, artifactDir string, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
 	return &rpmImageInjectionStep{
 		config:      config,
 		resources:   resources,
-		buildClient: buildClient,
-		client:      client,
+		client:      buildClient,
 		artifactDir: artifactDir,
 		jobSpec:     jobSpec,
 		pullSecret:  pullSecret,

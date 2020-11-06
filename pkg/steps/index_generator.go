@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	coreapi "k8s.io/api/core/v1"
-	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	buildapi "github.com/openshift/api/build/v1"
 
@@ -19,8 +18,7 @@ type indexGeneratorStep struct {
 	config             api.IndexGeneratorStepConfiguration
 	releaseBuildConfig *api.ReleaseBuildConfiguration
 	resources          api.ResourceConfiguration
-	buildClient        BuildClient
-	client             ctrlruntimeclient.Client
+	client             BuildClient
 	jobSpec            *api.JobSpec
 	artifactDir        string
 	pullSecret         *coreapi.Secret
@@ -74,7 +72,7 @@ func (s *indexGeneratorStep) run(ctx context.Context) error {
 		s.resources,
 		s.pullSecret,
 	)
-	err = handleBuild(ctx, s.buildClient, build, s.artifactDir)
+	err = handleBuild(ctx, s.client, build, s.artifactDir)
 	if err != nil && strings.Contains(err.Error(), "error checking provided apis") {
 		return results.ForReason("generating_index").WithError(err).Errorf("failed to generate operator index due to invalid bundle info: %v", err)
 	}
@@ -126,13 +124,12 @@ func (s *indexGeneratorStep) Description() string {
 	return fmt.Sprintf("Build image %s from the repository", s.config.To)
 }
 
-func IndexGeneratorStep(config api.IndexGeneratorStepConfiguration, releaseBuildConfig *api.ReleaseBuildConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, client ctrlruntimeclient.Client, artifactDir string, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
+func IndexGeneratorStep(config api.IndexGeneratorStepConfiguration, releaseBuildConfig *api.ReleaseBuildConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, artifactDir string, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
 	return &indexGeneratorStep{
 		config:             config,
 		releaseBuildConfig: releaseBuildConfig,
 		resources:          resources,
-		buildClient:        buildClient,
-		client:             client,
+		client:             buildClient,
 		artifactDir:        artifactDir,
 		jobSpec:            jobSpec,
 		pullSecret:         pullSecret,

@@ -47,6 +47,7 @@ import (
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	crcontrollerutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
+	buildv1 "github.com/openshift/api/build/v1"
 	imageapi "github.com/openshift/api/image/v1"
 	projectapi "github.com/openshift/api/project/v1"
 	routev1 "github.com/openshift/api/route/v1"
@@ -1713,6 +1714,8 @@ func addSchemes() error {
 	if err := appsv1.AddToScheme(scheme.Scheme); err != nil {
 		return fmt.Errorf("failed to add appsv1 to scheme: %w", err)
 	}
-
+	if err := buildv1.AddToScheme(scheme.Scheme); err != nil {
+		return fmt.Errorf("failed to add buildv1 to scheme: %w", err)
+	}
 	return nil
 }

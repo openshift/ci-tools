@@ -71,7 +71,7 @@ func FromConfig(
 		if err != nil {
 			return nil, nil, fmt.Errorf("could not get build client for cluster config: %w", err)
 		}
-		buildClient = steps.NewBuildClient(buildGetter, buildGetter.RESTClient())
+		buildClient = steps.NewBuildClient(client, buildGetter.RESTClient())
 
 		templateGetter, err := templateclientset.NewForConfig(clusterConfig)
 		if err != nil {
@@ -107,19 +107,19 @@ func FromConfig(
 		if rawStep.InputImageTagStepConfiguration != nil {
 			step = steps.InputImageTagStep(*rawStep.InputImageTagStepConfiguration, client, jobSpec)
 		} else if rawStep.PipelineImageCacheStepConfiguration != nil {
-			step = steps.PipelineImageCacheStep(*rawStep.PipelineImageCacheStepConfiguration, config.Resources, buildClient, client, artifactDir, jobSpec, pullSecret)
+			step = steps.PipelineImageCacheStep(*rawStep.PipelineImageCacheStepConfiguration, config.Resources, buildClient, artifactDir, jobSpec, pullSecret)
 		} else if rawStep.SourceStepConfiguration != nil {
-			step = steps.SourceStep(*rawStep.SourceStepConfiguration, config.Resources, buildClient, client, artifactDir, jobSpec, cloneAuthConfig, pullSecret)
+			step = steps.SourceStep(*rawStep.SourceStepConfiguration, config.Resources, buildClient, artifactDir, jobSpec, cloneAuthConfig, pullSecret)
 		} else if rawStep.BundleSourceStepConfiguration != nil {
-			step = steps.BundleSourceStep(*rawStep.BundleSourceStepConfiguration, config, config.Resources, buildClient, client, artifactDir, jobSpec, pullSecret)
+			step = steps.BundleSourceStep(*rawStep.BundleSourceStepConfiguration, config, config.Resources, buildClient, artifactDir, jobSpec, pullSecret)
 		} else if rawStep.IndexGeneratorStepConfiguration != nil {
-			step = steps.IndexGeneratorStep(*rawStep.IndexGeneratorStepConfiguration, config, config.Resources, buildClient, client, artifactDir, jobSpec, pullSecret)
+			step = steps.IndexGeneratorStep(*rawStep.IndexGeneratorStepConfiguration, config, config.Resources, buildClient, artifactDir, jobSpec, pullSecret)
 		} else if rawStep.ProjectDirectoryImageBuildStepConfiguration != nil {
-			step = steps.ProjectDirectoryImageBuildStep(*rawStep.ProjectDirectoryImageBuildStepConfiguration, config.Resources, buildClient, client, artifactDir, jobSpec, pullSecret)
+			step = steps.ProjectDirectoryImageBuildStep(*rawStep.ProjectDirectoryImageBuildStepConfiguration, config.Resources, buildClient, artifactDir, jobSpec, pullSecret)
 		} else if rawStep.ProjectDirectoryImageBuildInputs != nil {
 			step = steps.GitSourceStep(*rawStep.ProjectDirectoryImageBuildInputs, config.Resources, buildClient, artifactDir, jobSpec, cloneAuthConfig, pullSecret)
 		} else if rawStep.RPMImageInjectionStepConfiguration != nil {
-			step = steps.RPMImageInjectionStep(*rawStep.RPMImageInjectionStepConfiguration, config.Resources, buildClient, client, artifactDir, jobSpec, pullSecret)
+			step = steps.RPMImageInjectionStep(*rawStep.RPMImageInjectionStepConfiguration, config.Resources, buildClient, artifactDir, jobSpec, pullSecret)
 		} else if rawStep.RPMServeStepConfiguration != nil {
 			step = steps.RPMServerStep(*rawStep.RPMServeStepConfiguration, client, jobSpec)
 		} else if rawStep.OutputImageTagStepConfiguration != nil {

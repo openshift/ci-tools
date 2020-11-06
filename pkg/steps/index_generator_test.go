@@ -49,7 +49,7 @@ COPY --from=builder /database/ database`
 			OperatorIndex: []string{"ci-bundle0"},
 		},
 		jobSpec: &api.JobSpec{},
-		client:  fakeClientSet,
+		client:  &buildClient{Client: fakeClientSet},
 	}
 	stepSingleBundle.jobSpec.SetNamespace("target-namespace")
 	generatedDockerfile, err := stepSingleBundle.indexGenDockerfile()
@@ -73,7 +73,7 @@ COPY --from=builder /database/ database`
 			OperatorIndex: []string{"ci-bundle0", "ci-bundle1"},
 		},
 		jobSpec: &api.JobSpec{},
-		client:  fakeClientSet,
+		client:  &buildClient{Client: fakeClientSet},
 	}
 	stepMultiBundle.jobSpec.SetNamespace("target-namespace")
 	generatedDockerfile, err = stepMultiBundle.indexGenDockerfile()

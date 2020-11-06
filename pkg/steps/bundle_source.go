@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	coreapi "k8s.io/api/core/v1"
-	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	buildapi "github.com/openshift/api/build/v1"
 
@@ -20,8 +19,7 @@ type bundleSourceStep struct {
 	config             api.BundleSourceStepConfiguration
 	releaseBuildConfig *api.ReleaseBuildConfiguration
 	resources          api.ResourceConfiguration
-	buildClient        BuildClient
-	client             ctrlruntimeclient.Client
+	client             BuildClient
 	jobSpec            *api.JobSpec
 	artifactDir        string
 	pullSecret         *coreapi.Secret
@@ -69,7 +67,7 @@ func (s *bundleSourceStep) run(ctx context.Context) error {
 		s.resources,
 		s.pullSecret,
 	)
-	return handleBuild(ctx, s.buildClient, build, s.artifactDir)
+	return handleBuild(ctx, s.client, build, s.artifactDir)
 }
 
 func replaceCommand(pullSpec, with string) string {
@@ -121,12 +119,11 @@ func (s *bundleSourceStep) Description() string {
 	return fmt.Sprintf("Build image %s from the repository", api.PipelineImageStreamTagReferenceBundleSource)
 }
 
-func BundleSourceStep(config api.BundleSourceStepConfiguration, releaseBuildConfig *api.ReleaseBuildConfiguration, resources api.ResourceConfiguration, buildClient BuildClient, client ctrlruntimeclient.Client, artifactDir string, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
+func BundleSourceStep(config api.BundleSourceStepConfiguration, releaseBuildConfig *api.ReleaseBuildConfiguration, resources api.ResourceConfiguration, client BuildClient, artifactDir string, jobSpec *api.JobSpec, pullSecret *coreapi.Secret) api.Step {
 	return &bundleSourceStep{
 		config:             config,
 		releaseBuildConfig: releaseBuildConfig,
 		resources:          resources,
-		buildClient:        buildClient,
 		client:             client,
 		artifactDir:        artifactDir,
 		jobSpec:            jobSpec,

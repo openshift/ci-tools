@@ -10,9 +10,9 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
-	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/test-infra/prow/pod-utils/decorate"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/junit"
@@ -50,7 +50,7 @@ type podStep struct {
 	config      PodStepConfiguration
 	resources   api.ResourceConfiguration
 	podClient   PodClient
-	eventClient coreclientset.EventsGetter
+	client      ctrlruntimeclient.Client
 	artifactDir string
 	jobSpec     *api.JobSpec
 
@@ -116,7 +116,7 @@ func (s *podStep) run(ctx context.Context) error {
 		s.subTests = testCaseNotifier.SubTests(s.Description() + " - ")
 	}()
 
-	if _, err := waitForPodCompletion(context.TODO(), s.podClient.Pods(s.jobSpec.Namespace()), s.eventClient.Events(s.jobSpec.Namespace()), pod.Name, testCaseNotifier, s.config.SkipLogs); err != nil {
+	if _, err := waitForPodCompletion(context.TODO(), s.podClient.Pods(s.jobSpec.Namespace()), s.client, pod.Name, testCaseNotifier, s.config.SkipLogs); err != nil {
 		return fmt.Errorf("%s %q failed: %w", s.name, pod.Name, err)
 	}
 	return nil
@@ -151,7 +151,7 @@ func (s *podStep) Description() string {
 	return fmt.Sprintf("Run test %s", s.config.As)
 }
 
-func TestStep(config api.TestStepConfiguration, resources api.ResourceConfiguration, podClient PodClient, eventClient coreclientset.EventsGetter, artifactDir string, jobSpec *api.JobSpec) api.Step {
+func TestStep(config api.TestStepConfiguration, resources api.ResourceConfiguration, podClient PodClient, client ctrlruntimeclient.Client, artifactDir string, jobSpec *api.JobSpec) api.Step {
 	return PodStep(
 		"test",
 		PodStepConfiguration{
@@ -164,19 +164,19 @@ func TestStep(config api.TestStepConfiguration, resources api.ResourceConfigurat
 		},
 		resources,
 		podClient,
-		eventClient,
+		client,
 		artifactDir,
 		jobSpec,
 	)
 }
 
-func PodStep(name string, config PodStepConfiguration, resources api.ResourceConfiguration, podClient PodClient, eventClient coreclientset.EventsGetter, artifactDir string, jobSpec *api.JobSpec) api.Step {
+func PodStep(name string, config PodStepConfiguration, resources api.ResourceConfiguration, podClient PodClient, client ctrlruntimeclient.Client, artifactDir string, jobSpec *api.JobSpec) api.Step {
 	return &podStep{
 		name:        name,
 		config:      config,
 		resources:   resources,
 		podClient:   podClient,
-		eventClient: eventClient,
+		client:      client,
 		artifactDir: artifactDir,
 		jobSpec:     jobSpec,
 	}
@@ -290,10 +290,10 @@ func getSecretVolumeMountFromSecret(secretMountPath string) []coreapi.VolumeMoun
 // PodStep and is intended for other steps that may need to run transient actions.
 // This pod will not be able to gather artifacts, nor will it report log messages
 // unless it fails.
-func RunPod(ctx context.Context, podClient PodClient, eventClient coreclientset.EventsGetter, pod *coreapi.Pod) (*coreapi.Pod, error) {
+func RunPod(ctx context.Context, podClient PodClient, client ctrlruntimeclient.Client, pod *coreapi.Pod) (*coreapi.Pod, error) {
 	pod, err := createOrRestartPod(podClient.Pods(pod.Namespace), pod)
 	if err != nil {
 		return pod, err
 	}
-	return waitForPodCompletion(ctx, podClient.Pods(pod.Namespace), eventClient.Events(pod.Namespace), pod.Name, nil, true)
+	return waitForPodCompletion(ctx, podClient.Pods(pod.Namespace), client, pod.Name, nil, true)
 }

@@ -56,7 +56,7 @@ func TestLeaseStepForward(t *testing.T) {
 		ResourceType: "lease_name",
 	}}
 	step := stepNeedsLease{}
-	withLease := LeaseStep(nil, leases, &step, emptyNamespace, nil)
+	withLease := LeaseStep(nil, leases, &step, emptyNamespace)
 	t.Run("Inputs", func(t *testing.T) {
 		s, err := step.Inputs()
 		if err != nil {
@@ -115,7 +115,7 @@ func TestLeaseStepForward(t *testing.T) {
 
 func TestProvidesStripsSuffix(t *testing.T) {
 	leases := []api.StepLease{{Env: DefaultLeaseEnv, ResourceType: "rtype"}}
-	withLease := LeaseStep(nil, leases, &stepNeedsLease{}, emptyNamespace, nil)
+	withLease := LeaseStep(nil, leases, &stepNeedsLease{}, emptyNamespace)
 	withLease.(*leaseStep).leases[0].resource = "whatever--01"
 	expected := "whatever"
 	actual, err := withLease.Provides()[DefaultLeaseEnv]()
@@ -182,7 +182,7 @@ func TestError(t *testing.T) {
 			var calls []string
 			client := lease.NewFakeClient("owner", "url", 0, tc.failures, &calls)
 			s := stepNeedsLease{fail: tc.runFails}
-			if LeaseStep(&client, leases, &s, func() string { return "" }, nil).Run(ctx) == nil {
+			if LeaseStep(&client, leases, &s, func() string { return "" }).Run(ctx) == nil {
 				t.Fatalf("unexpected success, calls: %#v", calls)
 			}
 			if !reflect.DeepEqual(calls, tc.expected) {
@@ -197,7 +197,7 @@ func TestAcquireRelease(t *testing.T) {
 	client := lease.NewFakeClient("owner", "url", 0, nil, &calls)
 	leases := []api.StepLease{{ResourceType: "rtype1"}, {ResourceType: "rtype0"}}
 	step := stepNeedsLease{}
-	withLease := LeaseStep(&client, leases, &step, func() string { return "" }, nil)
+	withLease := LeaseStep(&client, leases, &step, func() string { return "" })
 	if err := withLease.Run(context.Background()); err != nil {
 		t.Fatal(err)
 	}

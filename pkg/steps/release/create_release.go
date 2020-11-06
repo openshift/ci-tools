@@ -12,7 +12,6 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
-	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	imageapi "github.com/openshift/api/image/v1"
@@ -51,7 +50,6 @@ type assembleReleaseStep struct {
 	resources   api.ResourceConfiguration
 	client      ctrlruntimeclient.Client
 	podClient   steps.PodClient
-	eventClient coreclientset.EventsGetter
 	artifactDir string
 	jobSpec     *api.JobSpec
 }
@@ -217,7 +215,7 @@ oc adm release extract --from=%q --to=/tmp/artifacts/release-payload-%s
 		resources = copied
 	}
 
-	step := steps.PodStep("release", podConfig, resources, s.podClient, s.eventClient, s.artifactDir, s.jobSpec)
+	step := steps.PodStep("release", podConfig, resources, s.podClient, s.client, s.artifactDir, s.jobSpec)
 
 	return results.ForReason("creating_release").ForError(step.Run(ctx))
 }
@@ -250,14 +248,13 @@ func (s *assembleReleaseStep) Description() string {
 // AssembleReleaseStep builds a new update payload image based on the cluster version operator
 // and the operators defined in the release configuration.
 func AssembleReleaseStep(name string, config *api.ReleaseTagConfiguration, resources api.ResourceConfiguration,
-	podClient steps.PodClient, eventClient coreclientset.EventsGetter, client ctrlruntimeclient.Client,
+	podClient steps.PodClient, client ctrlruntimeclient.Client,
 	artifactDir string, jobSpec *api.JobSpec) api.Step {
 	return &assembleReleaseStep{
 		config:      config,
 		name:        name,
 		resources:   resources,
 		podClient:   podClient,
-		eventClient: eventClient,
 		client:      client,
 		artifactDir: artifactDir,
 		jobSpec:     jobSpec,

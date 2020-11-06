@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
+	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	templateapi "github.com/openshift/api/template/v1"
 	templateclientset "github.com/openshift/client-go/template/clientset/versioned/typed/template/v1"
@@ -47,7 +48,7 @@ type templateExecutionStep struct {
 	params         api.Parameters
 	templateClient TemplateClient
 	podClient      PodClient
-	eventClient    coreclientset.EventsGetter
+	client         ctrlruntimeclient.Client
 	artifactDir    string
 	jobSpec        *api.JobSpec
 
@@ -166,7 +167,7 @@ func (s *templateExecutionStep) run(ctx context.Context) error {
 	for _, ref := range instance.Status.Objects {
 		switch {
 		case ref.Ref.Kind == "Pod" && ref.Ref.APIVersion == "v1":
-			_, err := waitForPodCompletion(context.TODO(), s.podClient.Pods(s.jobSpec.Namespace()), s.eventClient.Events(s.jobSpec.Namespace()), ref.Ref.Name, testCaseNotifier, false)
+			_, err := waitForPodCompletion(context.TODO(), s.podClient.Pods(s.jobSpec.Namespace()), s.client, ref.Ref.Name, testCaseNotifier, false)
 			s.subTests = append(s.subTests, testCaseNotifier.SubTests(fmt.Sprintf("%s - %s ", s.Description(), ref.Ref.Name))...)
 			if err != nil {
 				return fmt.Errorf("template pod %q failed: %w", ref.Ref.Name, err)
@@ -271,13 +272,13 @@ func (s *templateExecutionStep) Description() string {
 	return fmt.Sprintf("Run template %s", s.template.Name)
 }
 
-func TemplateExecutionStep(template *templateapi.Template, params api.Parameters, podClient PodClient, eventClient coreclientset.EventsGetter, templateClient TemplateClient, artifactDir string, jobSpec *api.JobSpec, resources api.ResourceConfiguration) api.Step {
+func TemplateExecutionStep(template *templateapi.Template, params api.Parameters, podClient PodClient, client ctrlruntimeclient.Client, templateClient TemplateClient, artifactDir string, jobSpec *api.JobSpec, resources api.ResourceConfiguration) api.Step {
 	return &templateExecutionStep{
 		template:       template,
 		resources:      resources,
 		params:         params,
 		podClient:      podClient,
-		eventClient:    eventClient,
+		client:         client,
 		templateClient: templateClient,
 		artifactDir:    artifactDir,
 		jobSpec:        jobSpec,
@@ -477,7 +478,7 @@ func waitForCompletedPodDeletion(podClient coreclientset.PodInterface, name stri
 	return waitForPodDeletion(podClient, name, uid)
 }
 
-func waitForPodCompletion(ctx context.Context, podClient coreclientset.PodInterface, eventClient coreclientset.EventInterface, name string, notifier ContainerNotifier, skipLogs bool) (*coreapi.Pod, error) {
+func waitForPodCompletion(ctx context.Context, podClient coreclientset.PodInterface, client ctrlruntimeclient.Client, name string, notifier ContainerNotifier, skipLogs bool) (*coreapi.Pod, error) {
 	if notifier == nil {
 		notifier = NopNotifier
 	}
@@ -486,7 +487,7 @@ func waitForPodCompletion(ctx context.Context, podClient coreclientset.PodInterf
 	completed := make(map[string]time.Time)
 	var pod *coreapi.Pod
 	for {
-		newPod, retry, err := waitForPodCompletionOrTimeout(ctx, podClient, eventClient, name, completed, notifier, skipLogs)
+		newPod, retry, err := waitForPodCompletionOrTimeout(ctx, podClient, client, name, completed, notifier, skipLogs)
 		if newPod != nil {
 			pod = newPod
 		}
@@ -515,7 +516,7 @@ func waitForPodCompletion(ctx context.Context, podClient coreclientset.PodInterf
 	return pod, nil
 }
 
-func waitForPodCompletionOrTimeout(ctx context.Context, podClient coreclientset.PodInterface, eventClient coreclientset.EventInterface, name string, completed map[string]time.Time, notifier ContainerNotifier, skipLogs bool) (*coreapi.Pod, bool, error) {
+func waitForPodCompletionOrTimeout(ctx context.Context, podClient coreclientset.PodInterface, client ctrlruntimeclient.Client, name string, completed map[string]time.Time, notifier ContainerNotifier, skipLogs bool) (*coreapi.Pod, bool, error) {
 	// Warning: this is extremely fragile, inherited legacy code.  Please be
 	// careful and test thoroughly when making changes, as they very frequently
 	// lead to systemic production failures.  Some guidance:
@@ -577,7 +578,7 @@ func waitForPodCompletionOrTimeout(ctx context.Context, podClient coreclientset.
 			pod = newPod
 			timeout := 15 * time.Minute
 			if !podHasStarted(pod) && time.Since(pod.CreationTimestamp.Time) > timeout {
-				message := fmt.Sprintf("pod didn't start running within %s: %s\n%s", timeout, getReasonsForUnreadyContainers(pod), getEventsForPod(pod, eventClient, ctx))
+				message := fmt.Sprintf("pod didn't start running within %s: %s\n%s", timeout, getReasonsForUnreadyContainers(pod), getEventsForPod(ctx, pod, client))
 				log.Print(message)
 				notifier.Complete(name)
 				return pod, false, errors.New(message)

@@ -17,7 +17,6 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
-	coreclientset "k8s.io/client-go/kubernetes/typed/core/v1"
 	prowv1 "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/clonerefs"
 	"k8s.io/test-infra/prow/pod-utils/decorate"
@@ -701,23 +700,19 @@ func getReasonsForUnreadyContainers(p *corev1.Pod) string {
 	return builder.String()
 }
 
-func getEventsForPod(pod *corev1.Pod, client coreclientset.EventInterface, ctx context.Context) string {
-	events, err := client.List(ctx, metav1.ListOptions{})
-	if err != nil {
+func getEventsForPod(ctx context.Context, pod *corev1.Pod, client ctrlruntimeclient.Client) string {
+	events := &corev1.EventList{}
+	listOpts := &ctrlruntimeclient.ListOptions{
+		Namespace:     pod.Namespace,
+		FieldSelector: fields.OneTermEqualSelector("involvedObject.uid", string(pod.GetUID())),
+	}
+	if err := client.List(ctx, events, listOpts); err != nil {
 		log.Printf("Could not fetch events: %v", err)
-	}
-	var filtered []corev1.Event
-	for _, event := range events.Items {
-		if event.InvolvedObject.Name == pod.Name {
-			filtered = append(filtered, event)
-		}
-	}
-	if len(filtered) == 0 {
 		return ""
 	}
 	builder := &strings.Builder{}
-	_, _ = builder.WriteString(fmt.Sprintf("Found %d events for Pod %s:", len(filtered), pod.Name))
-	for _, event := range filtered {
+	_, _ = builder.WriteString(fmt.Sprintf("Found %d events for Pod %s:", len(events.Items), pod.Name))
+	for _, event := range events.Items {
 		_, _ = builder.WriteString(fmt.Sprintf("\n* %dx %s: %s", event.Count, event.Source.Component, event.Message))
 	}
 	return builder.String()

@@ -60,7 +60,6 @@ type multiStageTestStep struct {
 	params             api.Parameters
 	env                api.TestEnvironment
 	podClient          PodClient
-	eventClient        coreclientset.EventsGetter
 	client             ctrlruntimeclient.Client
 	artifactDir        string
 	jobSpec            *api.JobSpec
@@ -74,12 +73,11 @@ func MultiStageTestStep(
 	config *api.ReleaseBuildConfiguration,
 	params api.Parameters,
 	podClient PodClient,
-	eventClient coreclientset.EventsGetter,
 	client ctrlruntimeclient.Client,
 	artifactDir string,
 	jobSpec *api.JobSpec,
 ) api.Step {
-	return newMultiStageTestStep(testConfig, config, params, podClient, eventClient, client, artifactDir, jobSpec)
+	return newMultiStageTestStep(testConfig, config, params, podClient, client, artifactDir, jobSpec)
 }
 
 func newMultiStageTestStep(
@@ -87,7 +85,6 @@ func newMultiStageTestStep(
 	config *api.ReleaseBuildConfiguration,
 	params api.Parameters,
 	podClient PodClient,
-	eventClient coreclientset.EventsGetter,
 	client ctrlruntimeclient.Client,
 	artifactDir string,
 	jobSpec *api.JobSpec,
@@ -103,7 +100,6 @@ func newMultiStageTestStep(
 		params:             params,
 		env:                ms.Environment,
 		podClient:          podClient,
-		eventClient:        eventClient,
 		client:             client,
 		artifactDir:        artifactDir,
 		jobSpec:            jobSpec,
@@ -601,7 +597,7 @@ func (s *multiStageTestStep) runPod(ctx context.Context, pod *coreapi.Pod, notif
 	if _, err := createOrRestartPod(s.podClient.Pods(s.jobSpec.Namespace()), pod); err != nil {
 		return fmt.Errorf("failed to create or restart %q pod: %w", pod.Name, err)
 	}
-	newPod, err := waitForPodCompletion(ctx, s.podClient.Pods(s.jobSpec.Namespace()), s.eventClient.Events(s.jobSpec.Namespace()), pod.Name, notifier, false)
+	newPod, err := waitForPodCompletion(ctx, s.podClient.Pods(s.jobSpec.Namespace()), s.client, pod.Name, notifier, false)
 	if newPod != nil {
 		pod = newPod
 	}

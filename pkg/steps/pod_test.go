@@ -9,6 +9,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	prowapi "k8s.io/test-infra/prow/apis/prowjobs/v1"
 	"k8s.io/test-infra/prow/pod-utils/downwardapi"
+	fakectrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/openshift/ci-tools/pkg/api"
 	"github.com/openshift/ci-tools/pkg/testhelper"
@@ -57,7 +58,7 @@ func preparePodStep(t *testing.T, namespace string) (*podStep, stepExpectation, 
 		t:      t,
 	}
 	client := NewPodClient(fakecs.Core(), nil, nil)
-	ps := PodStep(stepName, config, resources, client, fakecs.kubecs.CoreV1(), artifactDir, jobSpec)
+	ps := PodStep(stepName, config, resources, client, fakectrlruntimeclient.NewFakeClient(), artifactDir, jobSpec)
 
 	specification := stepExpectation{
 		name:     podName,
